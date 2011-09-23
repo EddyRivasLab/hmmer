@@ -42,6 +42,8 @@ typedef struct {
   P7_PIPELINE      *pli;         /* work pipeline                           */
   P7_TOPHITS       *th;          /* top hit results                         */
   P7_OPROFILE      *om;          /* optimized query profile                 */
+  FM_CFG           *fm_cfg;      /* global data for FM-index for fast MSV */
+  FM_HMMDATA       *fm_hmmdata;  /* hmm-specific data for FM-index for fast MSV */
 } WORKER_INFO;
 
 #define REPOPTS     "-E,-T,--cut_ga,--cut_nc,--cut_tc"
@@ -92,6 +94,7 @@ static ESL_OPTIONS options[] = {
   { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",          7 },
 
 /* Other options */
+  { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert target <seqdb> is in format <s>>: no autodetection",     12 },
   { "--nonull2",    eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,  NULL,            "turn off biased composition score corrections",                 12 },
   { "-Z",           eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set database size (Megabases) to <x> for E-value calculations", 12 },
   { "--seed",       eslARG_INT,          "42", NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",           12 },
@@ -106,7 +109,7 @@ static ESL_OPTIONS options[] = {
   { "--incdomT",    eslARG_REAL,        FALSE, NULL, NULL,    NULL,  NULL,  INCDOMOPTS,      "Not used",      99 },
 /* will eventually bring these back, but store in group 99 for now, so they don't print to help*/
   { "--qformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert query <seqfile> is in format <s>: no autodetection",   99 },
-  { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert target <seqdb> is in format <s>>: no autodetection", 99 },
+
 
 
 #ifdef HMMER_THREADS 
@@ -285,12 +288,13 @@ main(int argc, char **argv)
   p7_FLogsumInit();        /* we're going to use table-driven Logsum() approximations at times */
   process_commandline(argc, argv, &go, &cfg.hmmfile, &cfg.dbfile);    
 
-      status = serial_master(go, &cfg);
+  status = serial_master(go, &cfg);
 
   esl_getopts_Destroy(go);
 
   return status;
 }
+
 
 
 /* serial_master()
@@ -305,7 +309,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   FILE            *ofp      = stdout;            /* results output file (-o)                        */
   FILE            *afp      = NULL;              /* alignment output file (-A)                      */
   FILE            *tblfp    = NULL;              /* output stream for tabular  (--tblout)    */
-  FILE            *dfamtblfp    = NULL;              /* output stream for tabular Dfam format (--dfamtblout)    */
+  FILE            *dfamtblfp    = NULL;          /* output stream for tabular Dfam format (--dfamtblout)    */
 
 
   P7_HMMFILE      *hfp      = NULL;              /* open input HMM file                             */
@@ -315,11 +319,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   //ESL_SQFILE      *qfp      = NULL;          /* open qfile                                       */
   //ESL_SQ          *qsq      = NULL;               /* query sequence                                   */
 
-  int              dbformat = eslSQFILE_UNKNOWN;  /* format of dbfile                                 */
+  //int              dbformat = eslSQFILE_FMINDEX; // eslSQFILE_UNKNOWN;  /* format of dbfile                                 */
+  int              dbformat =  eslSQFILE_UNKNOWN;  /* format of dbfile                                 */
   ESL_SQFILE      *dbfp     = NULL;              /* open input sequence file                        */
 
   ESL_ALPHABET    *abc      = NULL;              /* digital alphabet                                */
-  //int              dbfmt    = eslSQFILE_UNKNOWN; /* format code for sequence database file          */
   ESL_STOPWATCH   *w;
   //int              seed;
   int              textw    = 0;
@@ -328,6 +332,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              qhstatus  = eslOK;
   int              sstatus  = eslOK;
   int              i;
+
+  /* these variables are only used if db type is FM-index*/
+  void        *fm_cfg_mem      = NULL; //used to ensure cfg is 16-byte aligned, which matters since, for sse/vmx implementations, elements within cfg need to be aligned thusly
+  FM_CFG      *fm_cfg       = NULL;
+  FM_METADATA *fm_meta      = NULL;
+  FM_HMMDATA  *fm_hmmdata   = NULL;
+  /* end FM-index-specific variables */
 
   int              ncpus    = 0;
 
@@ -361,13 +372,27 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if (dbformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
 
-  /* Open the target sequence database */
-  status = esl_sqfile_Open(cfg->dbfile, dbformat, p7_SEQDBENV, &dbfp);
-  if      (status == eslENOTFOUND) p7_Fail("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
-  else if (status == eslEFORMAT)   p7_Fail("Target sequence database file %s is empty or misformatted\n",   cfg->dbfile);
-  else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
-  else if (status != eslOK)        p7_Fail("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
+  if (dbformat == eslSQFILE_FMINDEX) {
+    //For now, this is a separate path from the typical esl_sqfile_Open() function call
+    //TODO: create esl_sqio_fmindex.c, analogous to esl_sqio_ascii.c,
+    if((fm_meta->fp = fopen(cfg->dbfile, "rb")) == NULL)
+      esl_fatal("Cannot open file `%s': ", cfg->dbfile);
 
+    fm_configAlloc(&fm_cfg_mem, &fm_cfg);
+    fm_meta = fm_cfg->meta;
+
+    readFMmeta(fm_meta);
+    fm_initConfig(fm_cfg);
+    fm_createAlphabet(fm_meta, NULL); // don't override charBits
+
+  } else {
+    /* Open the target sequence database */
+    status = esl_sqfile_Open(cfg->dbfile, dbformat, p7_SEQDBENV, &dbfp);
+    if      (status == eslENOTFOUND) p7_Fail("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
+    else if (status == eslEFORMAT)   p7_Fail("Target sequence database file %s is empty or misformatted\n",   cfg->dbfile);
+    else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
+    else if (status != eslOK)        p7_Fail("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
+  }
 
   /* Open the query profile HMM file */
   status = p7_hmmfile_OpenE(cfg->hmmfile, NULL, &hfp, errbuf);
@@ -398,20 +423,35 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* <abc> is not known 'til first HMM is read.   Could be DNA or RNA*/
   qhstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
+
+
+  if (! (abc->type == eslRNA || abc->type == eslDNA))
+    p7_Fail("Invalid alphabet type in hmm for nhmmer. Expect DNA or RNA\n");
+  /* if using FM-index, verify that the alphabets are in agreement */
+  if (dbformat == eslSQFILE_FMINDEX) {
+    if (abc->type == eslDNA && ! (fm_meta->alph_type == fm_DNA || fm_meta->alph_type == fm_DNA_full  ) )
+      p7_Fail("Alphabet type of hmm (dna) and database (not dna) disagree.\n");
+    if (abc->type == eslRNA && ! (fm_meta->alph_type == fm_RNA || fm_meta->alph_type == fm_RNA_full  ) )
+      p7_Fail("Alphabet type of hmm (rna) and database (not rna) disagree.\n");
+  }
+
   if (qhstatus == eslOK) {
       /* One-time initializations after alphabet <abc> becomes known */
       output_header(ofp, go, cfg->hmmfile, cfg->dbfile);
       dbfp->abc = abc;
 
       for (i = 0; i < infocnt; ++i)    {
-          info[i].pli   = NULL;
-          info[i].th    = NULL;
-          info[i].om    = NULL;
-          info[i].bg    = p7_bg_Create(abc);
+          info[i].pli    = NULL;
+          info[i].th     = NULL;
+          info[i].om     = NULL;
+          info[i].bg     = p7_bg_Create(abc);
+          info[i].fm_cfg = NULL;
 #ifdef HMMER_THREADS
           info[i].queue = queue;
 #endif
       }
+
+
 
 #ifdef HMMER_THREADS
       for (i = 0; i < ncpus * 2; ++i) {
@@ -447,12 +487,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (hmm->acc)  fprintf(ofp, "Accession:   %s\n", hmm->acc);
       if (hmm->desc) fprintf(ofp, "Description: %s\n", hmm->desc);
 
+
       /* Convert to an optimized model */
       gm = p7_profile_Create (hmm->M, abc);
       om = p7_oprofile_Create(hmm->M, abc);
       p7_ProfileConfig(hmm, info->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
       p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
 
+      if (dbformat == eslSQFILE_FMINDEX)
+        fm_hmmdata = fm_hmmdataCreate(gm);
 
 
       for (i = 0; i < infocnt; ++i) {
@@ -462,7 +505,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
           p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
           info[i].pli->single_strand = esl_opt_IsUsed(go, "--single");
-
+          info[i].fm_cfg = fm_cfg;
+          info[i].fm_hmmdata = fm_hmmdata; //TODO: do I need to clone this? I don't think so
 #ifdef HMMER_THREADS
           if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
 #endif
@@ -552,6 +596,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           esl_msa_Destroy(msa);
       }
 
+      fm_hmmdataDestroy(fm_hmmdata);
+
       p7_pipeline_Destroy(info->pli);
       p7_tophits_Destroy(info->th);
       p7_oprofile_Destroy(info->om);
@@ -597,6 +643,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   esl_sqfile_Close(dbfp);
   esl_alphabet_Destroy(abc);
   esl_stopwatch_Destroy(w);
+
+  if (dbformat == eslSQFILE_FMINDEX) {
+    fm_destroyConfig(fm_cfg);
+    free (fm_cfg->meta);
+    free(fm_cfg_mem); //16-byte aligned memory in which cfg is found
+  }
 
   if (ofp != stdout) fclose(ofp);
   if (afp)           fclose(afp);

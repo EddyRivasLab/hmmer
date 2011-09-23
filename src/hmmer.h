@@ -764,7 +764,9 @@ typedef struct p7_tophits_s {
 enum fm_alphabettypes_e {
   fm_DNA        = 0,  //acgt,  2 bit
   fm_DNA_full   = 1,  //includes ambiguity codes, 4 bit
-  fm_AMINO      = 2,  // 5 bit
+  fm_RNA        = 2,  //acgu,  2 bit
+  fm_RNA_full   = 3,  //includes ambiguity codes, 4 bit
+  fm_AMINO      = 4,  // 5 bit
 };
 
 enum fm_direction_e {
@@ -797,21 +799,30 @@ typedef struct fm_seqdata_s {
 
 
 typedef struct fm_metadata_s {
-  uint8_t fwd_only;
-  uint8_t alph_type;
-  uint8_t alph_size;
-  uint8_t charBits;
+  uint8_t  fwd_only;
+  uint8_t  alph_type;
+  uint8_t  alph_size;
+  uint8_t  charBits;
   uint32_t freq_SA; //frequency with which SA is sampled
   uint32_t freq_cnt_sb; //frequency with which full cumulative counts are captured
   uint32_t freq_cnt_b; //frequency with which intermittent counts are captured
-  uint8_t SA_shift;
-  uint8_t cnt_shift_sb;
-  uint8_t cnt_shift_b;
+  uint8_t  SA_shift;
+  uint8_t  cnt_shift_sb;
+  uint8_t  cnt_shift_b;
   uint16_t block_count;
   uint32_t seq_count;
-  FM_SEQDATA   *seq_data;
+  char     *alph;
+  char     *inv_alph;
+  FILE       *fp;
+  FM_SEQDATA *seq_data;
 } FM_METADATA;
 
+
+typedef struct fm_hmm_data_s {
+  float    **scores;
+  float    **opt_ext_fwd;
+  float    **opt_ext_rev;
+} FM_HMMDATA;
 
 
 typedef struct fm_data_s {
@@ -1360,17 +1371,24 @@ extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
 
 
 /* fm_alphabet.c */
-extern int fm_createAlphabet (int alph_type, char **alph, char **inv_alph, uint8_t *alph_size, uint8_t *alph_bits);
+extern int fm_createAlphabet (FM_METADATA *meta, uint8_t *alph_bits);
 extern int fm_reverseString (char* str, int N);
 
 /* fm_general.c */
 extern uint32_t computeSequenceOffset (FM_DATA *fms, FM_METADATA *meta, int block, int pos);
-extern int readFMmeta( FILE *fp, FM_METADATA *meta);
-extern int readFM( FILE *fp, FM_DATA *fm, FM_METADATA *meta, int getAll );
+extern int readFMmeta( FM_METADATA *meta);
+extern int readFM( FM_DATA *fm, FM_METADATA *meta, int getAll );
 extern void freeFM ( FM_DATA *fm, int isMainFM);
 extern uint8_t getChar(uint8_t alph_type, int j, const uint8_t *B );
 extern int getSARangeReverse( FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
 extern int getSARangeForward(FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
+extern FM_HMMDATA *fm_hmmdataCreate(P7_PROFILE *gm);
+extern void fm_hmmdataDestroy(FM_HMMDATA *data );
+extern int fm_configAlloc(void **mem, FM_CFG **cfg);
+
+/* fm_msv.c */
+int p7_FM_MSV(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt);
+
 
 
 

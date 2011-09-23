@@ -321,8 +321,8 @@ main(int argc, char *argv[]) {
   uint16_t *occCnts_b  = NULL; // this is logically a 2D array, but will be indexed as occ_cnts[alph_size*index + char]  (instead of occ_cnts[index][char])
   uint16_t *cnts_b     = NULL;
   FM_METADATA *meta    = NULL;
-  char *inv_alph       = NULL;
-  char *alph           = NULL;
+  //char *inv_alph       = NULL;
+  //char *alph           = NULL;
 
   clock_t t1, t2;
   struct tms ts1, ts2;
@@ -380,21 +380,21 @@ main(int argc, char *argv[]) {
 
   meta->fwd_only =  (esl_opt_IsOn(go, "--fwd_only")) ? 1 : 0;
 
-  if (esl_opt_IsOn(go, "--alph")) { alph    = esl_opt_GetString(go, "--alph") ; }
+  if (esl_opt_IsOn(go, "--alph")) { meta->alph    = esl_opt_GetString(go, "--alph") ; }
 
-  if ( esl_strcmp(alph, "dna")==0) {
+  if ( esl_strcmp(meta->alph, "dna")==0) {
     meta->alph_type = fm_DNA;
     alphatype = eslDNA;
-  } else if (esl_strcmp(alph, "dna_full")==0) {
+  } else if (esl_strcmp(meta->alph, "dna_full")==0) {
     meta->alph_type = fm_DNA_full;
     alphatype = eslDNA;
-  } else if (esl_strcmp(alph, "amino")==0) {
+  } else if (esl_strcmp(meta->alph, "amino")==0) {
     meta->alph_type = fm_AMINO;
     alphatype = eslAMINO;
   } else {
     esl_fatal("Unknown alphabet type. Try 'dna', 'dna_full', or 'amino'\n%s", "");
   }
-  alph = NULL;
+  meta->alph = NULL;
 
   if (esl_opt_IsOn(go, "--bin_length")) meta->freq_cnt_b = esl_opt_GetInteger(go, "--bin_length");
   if ( meta->freq_cnt_b < 32 || meta->freq_cnt_b >4096 ||  (meta->freq_cnt_b & (meta->freq_cnt_b - 1))  ) // test power of 2
@@ -420,13 +420,13 @@ main(int argc, char *argv[]) {
 
 
   //getInverseAlphabet
-  fm_createAlphabet(meta->alph_type, &alph, &inv_alph, &(meta->alph_size), &(meta->charBits));
+  fm_createAlphabet(meta, &(meta->charBits));
   chars_per_byte = 8/meta->charBits;
 
     //shift inv_alph up one, to make space for '$' at 0
   for (i=0; i<256; i++)
-    if ( inv_alph[i] >= 0)
-      inv_alph[i]++;
+    if ( meta->inv_alph[i] >= 0)
+      meta->inv_alph[i]++;
 
 
   if (esl_opt_GetString(go, "--informat") != NULL) {
@@ -534,7 +534,7 @@ main(int argc, char *argv[]) {
       for (j=1; j<=block->list[i].n; j++) {
         c = abc->sym[block->list[i].dsq[j]];
         if ( meta->alph_type == fm_DNA) {
-          if (inv_alph[c] == -1) {
+          if (meta->inv_alph[c] == -1) {
             if (!reported_N) {
               printf ("You have selected alph_type 'dna', but your sequence database contains an ambiguity code.\n");
               printf ("The database will be built, but seeds will not be formed around these positions.\n");
@@ -558,11 +558,11 @@ main(int argc, char *argv[]) {
 
             continue;
           }
-        } else if (inv_alph[c] == -1) {
+        } else if (meta->inv_alph[c] == -1) {
           esl_fatal("requested alphabet doesn't match input text\n");
         }
 
-        T[block_length] = inv_alph[c];
+        T[block_length] = meta->inv_alph[c];
 
         block_length++;
         if (j>block->list[i].C) total_char_count++; // add to total count, only if it's not redundant with earlier read
@@ -706,12 +706,12 @@ main(int argc, char *argv[]) {
   free(cnts_b);
   free(occCnts_sb);
   free(cnts_sb);
-  free(inv_alph);
-  free(alph);
 
   for (i=0; i<numseqs; i++)
     free(meta->seq_data[i].name);
   free(meta->seq_data);
+  free(meta->inv_alph);
+  free(meta->alph);
   free(meta);
 
 
@@ -742,13 +742,13 @@ ERROR:
   if (cnts_b)     free(cnts_b);
   if (occCnts_sb) free(occCnts_sb);
   if (cnts_sb)    free(cnts_sb);
-  if (inv_alph)   free(inv_alph);
-  if (alph)       free(alph);
 
   if (meta) {
     for (i=0; i<numseqs; i++)
       free(meta->seq_data[i].name);
     free(meta->seq_data);
+    free(meta->inv_alph);
+    free(meta->alph);
     free(meta);
   }
 

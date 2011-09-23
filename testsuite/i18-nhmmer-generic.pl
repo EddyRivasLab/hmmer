@@ -64,7 +64,7 @@ do_cmd ( "tail -1 $tmppfx.B >> $database" );
 do_cmd ( "tail -20000 $tmppfx.A >> $database" );
 
 # perform nhmmer search
-$cmd = "$builddir/src/nhmmer $tmppfx.hmm $database";
+$cmd = "$builddir/src/nhmmer --tformat fasta $tmppfx.hmm $database";
 $output = do_cmd($cmd);
 
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
@@ -85,7 +85,7 @@ if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 2\n";
 }
 
-$cmd = "$builddir/src/nhmmer --single $tmppfx.hmm $database";
+$cmd = "$builddir/src/nhmmer --tformat fasta --single $tmppfx.hmm $database";
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = q[Target sequences:                  1  \(4499979 residues\)

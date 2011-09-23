@@ -197,8 +197,6 @@ main(int argc,  char *argv[]) {
   struct tms ts1, ts2;
   char *fname_fm      = NULL;
   char *fname_queries = NULL;
-  char *inv_alph      = NULL;
-  char *alph          = NULL;
   FM_HIT *hits        = NULL;
   char *line          = NULL;
   int status        = eslOK;
@@ -250,22 +248,23 @@ main(int argc,  char *argv[]) {
     esl_fatal("Cannot open file `%s': ", fname_fm);
 
 
-  ESL_ALLOC(cfg_mem, sizeof(FM_CFG)+ 15 );
-    cfg =   (FM_CFG *) (((unsigned long int)(cfg_mem) + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
-  ESL_ALLOC(cfg->meta, sizeof(FM_METADATA));
-  meta = cfg->meta;
+  fm_configAlloc(&cfg_mem, &cfg);
   cfg->occCallCnt = 0;
+  meta = cfg->meta;
+  meta->fp = fp_fm;
 
-  readFMmeta( fp_fm, cfg->meta);
+
+
+  readFMmeta( meta);
 
   //read in FM-index blocks
   ESL_ALLOC(fmsf, cfg->meta->block_count * sizeof(FM_DATA) );
   for (i=0; i<meta->block_count; i++) {
-    readFM( fp_fm, fmsf+i, cfg->meta, 1 );
+    readFM( fmsf+i,meta, 1 );
 
     if (!meta->fwd_only) {
       ESL_ALLOC(fmsb, meta->block_count * sizeof(FM_DATA) );
-      readFM( fp_fm, fmsb+i, cfg->meta, 0 );
+      readFM(fmsb+i, meta, 0 );
       fmsb[i].SA = fmsf[i].SA;
       fmsb[i].T = fmsf[i].T;
     }
@@ -283,7 +282,7 @@ main(int argc,  char *argv[]) {
   fm_initConfig(cfg);
 
 
-  fm_createAlphabet(meta->alph_type, &alph, &inv_alph, &(meta->alph_size), NULL); // don't override charBits
+  fm_createAlphabet(meta, NULL); // don't override charBits
 
 
   fp = fopen(fname_queries,"r");
@@ -303,10 +302,9 @@ main(int argc,  char *argv[]) {
 
     hit_num = 0;
 
-
     for (i=0; i<meta->block_count; i++) {
 
-      getSARangeForward(fmsb+i, cfg, line, inv_alph, &interval);// yes, use the backward fm to produce a forward search on the forward fm
+      getSARangeForward(fmsb+i, cfg, line, meta->inv_alph, &interval);// yes, use the backward fm to produce a forward search on the forward fm
       if (interval.lower>0 && interval.lower <= interval.upper) {
         int new_hit_num =  interval.upper - interval.lower + 1;
         hit_num += new_hit_num;
@@ -324,7 +322,7 @@ main(int argc,  char *argv[]) {
 
       /* find reverse hits, using backward search on the forward FM*/
       if (!meta->fwd_only) {
-        getSARangeReverse(fmsf+i, cfg, line, inv_alph, &interval);
+        getSARangeReverse(fmsf+i, cfg, line, meta->inv_alph, &interval);
         if (interval.lower>0 && interval.lower <= interval.upper) {
           int new_hit_num =  interval.upper - interval.lower + 1;
           hit_num += new_hit_num;
@@ -429,13 +427,15 @@ main(int argc,  char *argv[]) {
     free (meta->seq_data[i].name);
 
   free (meta->seq_data);
-  free (meta);
+
   free (hits);
   free (line);
-
   fclose(fp);
+
   fm_destroyConfig(cfg);
-  free(cfg_mem);
+  free (cfg->meta);
+  free(cfg_mem); //16-byte aligned memory in which cfg is found
+
 
   // compute and print the elapsed time in millisec
   t2 = times(&ts2);

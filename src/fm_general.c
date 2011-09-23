@@ -147,7 +147,7 @@ freeFM ( FM_DATA *fm, int isMainFM)
  *            then read it in.
  */
 int
-readFM( FILE *fp, FM_DATA *fm, FM_METADATA *meta, int getAll )
+readFM( FM_DATA *fm, FM_METADATA *meta, int getAll )
 {
   //shortcut variables
   int *C               = NULL;
@@ -167,11 +167,11 @@ readFM( FILE *fp, FM_DATA *fm, FM_METADATA *meta, int getAll )
   int chars_per_byte = 8/meta->charBits;
 
 
-  if(fread(&(fm->N), sizeof(uint32_t), 1, fp) !=  1)
+  if(fread(&(fm->N), sizeof(uint32_t), 1, meta->fp) !=  1)
     esl_fatal( "%s: Error reading block_length in FM index.\n", __FILE__);
-  if(fread(&(fm->term_loc), sizeof(uint32_t), 1, fp) !=  1)
+  if(fread(&(fm->term_loc), sizeof(uint32_t), 1, meta->fp) !=  1)
     esl_fatal( "%s: Error reading terminal location in FM index.\n", __FILE__);
-  if(fread(&(fm->seq_offset), sizeof(uint16_t), 1, fp) !=  1)
+  if(fread(&(fm->seq_offset), sizeof(uint16_t), 1, meta->fp) !=  1)
     esl_fatal( "%s: Error reading seq_offset in FM index.\n", __FILE__);
 
 
@@ -190,16 +190,16 @@ readFM( FILE *fp, FM_DATA *fm, FM_METADATA *meta, int getAll )
   ESL_ALLOC (fm->occCnts_sb,  num_freq_cnts_sb *  (meta->alph_size ) * sizeof(uint32_t)); // every freq_cnt positions, store an array of ints
 
 
-  if(getAll && fread(fm->T, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
+  if(getAll && fread(fm->T, sizeof(uint8_t), compressed_bytes, meta->fp) != compressed_bytes)
     esl_fatal( "%s: Error reading T in FM index.\n", __FILE__);
-  if(fread(fm->BWT, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
+  if(fread(fm->BWT, sizeof(uint8_t), compressed_bytes, meta->fp) != compressed_bytes)
     esl_fatal( "%s: Error reading BWT in FM index.\n", __FILE__);
-  if(getAll && fread(fm->SA, sizeof(uint32_t), (size_t)num_SA_samples, fp) != (size_t)num_SA_samples)
+  if(getAll && fread(fm->SA, sizeof(uint32_t), (size_t)num_SA_samples, meta->fp) != (size_t)num_SA_samples)
     esl_fatal( "%s: Error reading SA in FM index.\n", __FILE__);
 
-  if(fread(fm->occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, fp) != (size_t)num_freq_cnts_b)
+  if(fread(fm->occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, meta->fp) != (size_t)num_freq_cnts_b)
     esl_fatal( "%s: Error reading occCnts_b in FM index.\n", __FILE__);
-  if(fread(fm->occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, fp) != (size_t)num_freq_cnts_sb)
+  if(fread(fm->occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, meta->fp) != (size_t)num_freq_cnts_sb)
     esl_fatal( "%s: Error reading occCnts_sb in FM index.\n", __FILE__);
 
 
@@ -245,23 +245,23 @@ ERROR:
  * Output: return filled meta struct
  */
 int
-readFMmeta( FILE *fp, FM_METADATA *meta)
+readFMmeta( FM_METADATA *meta)
 {
   int status;
   int i;
 
-  if( fread(&(meta->fwd_only),     sizeof(meta->fwd_only),     1, fp) != 1 ||
-      fread(&(meta->alph_type),    sizeof(meta->alph_type),    1, fp) != 1 ||
-      fread(&(meta->alph_size),    sizeof(meta->alph_size),    1, fp) != 1 ||
-      fread(&(meta->charBits),     sizeof(meta->charBits),     1, fp) != 1 ||
-      fread(&(meta->freq_SA),      sizeof(meta->freq_SA),      1, fp) != 1 ||
-      fread(&(meta->freq_cnt_sb),  sizeof(meta->freq_cnt_sb),  1, fp) != 1 ||
-      fread(&(meta->freq_cnt_b),   sizeof(meta->freq_cnt_b),   1, fp) != 1 ||
-      fread(&(meta->SA_shift),     sizeof(meta->SA_shift),     1, fp) != 1 ||
-      fread(&(meta->cnt_shift_sb), sizeof(meta->cnt_shift_sb), 1, fp) != 1 ||
-      fread(&(meta->cnt_shift_b),  sizeof(meta->cnt_shift_b),  1, fp) != 1 ||
-      fread(&(meta->block_count),  sizeof(meta->block_count),  1, fp) != 1 ||
-      fread(&(meta->seq_count),    sizeof(meta->seq_count),    1, fp) != 1
+  if( fread(&(meta->fwd_only),     sizeof(meta->fwd_only),     1, meta->fp) != 1 ||
+      fread(&(meta->alph_type),    sizeof(meta->alph_type),    1, meta->fp) != 1 ||
+      fread(&(meta->alph_size),    sizeof(meta->alph_size),    1, meta->fp) != 1 ||
+      fread(&(meta->charBits),     sizeof(meta->charBits),     1, meta->fp) != 1 ||
+      fread(&(meta->freq_SA),      sizeof(meta->freq_SA),      1, meta->fp) != 1 ||
+      fread(&(meta->freq_cnt_sb),  sizeof(meta->freq_cnt_sb),  1, meta->fp) != 1 ||
+      fread(&(meta->freq_cnt_b),   sizeof(meta->freq_cnt_b),   1, meta->fp) != 1 ||
+      fread(&(meta->SA_shift),     sizeof(meta->SA_shift),     1, meta->fp) != 1 ||
+      fread(&(meta->cnt_shift_sb), sizeof(meta->cnt_shift_sb), 1, meta->fp) != 1 ||
+      fread(&(meta->cnt_shift_b),  sizeof(meta->cnt_shift_b),  1, meta->fp) != 1 ||
+      fread(&(meta->block_count),  sizeof(meta->block_count),  1, meta->fp) != 1 ||
+      fread(&(meta->seq_count),    sizeof(meta->seq_count),    1, meta->fp) != 1
   )
     esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
 
@@ -272,17 +272,17 @@ readFMmeta( FILE *fp, FM_METADATA *meta)
 
 
   for (i=0; i<meta->seq_count; i++) {
-    if( fread(&(meta->seq_data[i].id),          sizeof(meta->seq_data[i].id),          1, fp) != 1 ||
-        fread(&(meta->seq_data[i].start),       sizeof(meta->seq_data[i].start),       1, fp) != 1 ||
-        fread(&(meta->seq_data[i].length),      sizeof(meta->seq_data[i].length),      1, fp) != 1 ||
-        fread(&(meta->seq_data[i].offset),      sizeof(meta->seq_data[i].offset),      1, fp) != 1 ||
-        fread(&(meta->seq_data[i].name_length), sizeof(meta->seq_data[i].name_length), 1, fp) != 1
+    if( fread(&(meta->seq_data[i].id),          sizeof(meta->seq_data[i].id),          1, meta->fp) != 1 ||
+        fread(&(meta->seq_data[i].start),       sizeof(meta->seq_data[i].start),       1, meta->fp) != 1 ||
+        fread(&(meta->seq_data[i].length),      sizeof(meta->seq_data[i].length),      1, meta->fp) != 1 ||
+        fread(&(meta->seq_data[i].offset),      sizeof(meta->seq_data[i].offset),      1, meta->fp) != 1 ||
+        fread(&(meta->seq_data[i].name_length), sizeof(meta->seq_data[i].name_length), 1, meta->fp) != 1
         )
       esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
 
     ESL_ALLOC (meta->seq_data[i].name, (1+meta->seq_data[i].name_length) * sizeof(char));
 
-    if( fread(meta->seq_data[i].name,  sizeof(char), meta->seq_data[i].name_length+1  , fp) !=  meta->seq_data[i].name_length+1 )
+    if( fread(meta->seq_data[i].name,  sizeof(char), meta->seq_data[i].name_length+1  , meta->fp) !=  meta->seq_data[i].name_length+1 )
       esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
 
   }
@@ -343,4 +343,135 @@ computeSequenceOffset (FM_DATA *fms, FM_METADATA *meta, int block, int pos)
 
 }
 
+
+
+int
+get_Score_Arrays(P7_PROFILE *gm, FM_HMMDATA *data ) {
+  int i, j, status;
+
+  //gather values from gm->rsc into a succinct 2D array
+  float *max_scores;
+  float sc_fwd, sc_rev;
+
+  ESL_ALLOC(data->scores, (gm->M + 1) * sizeof(float*));
+  ESL_ALLOC(max_scores, (gm->M + 1) * sizeof(float));
+  for (i = 1; i <= gm->M; i++) {
+    ESL_ALLOC(data->scores[i], gm->abc->Kp * sizeof(float));
+    for (j=0; j<gm->abc->Kp; j++) {
+      data->scores[i][j] = gm->rsc[j][(i) * p7P_NR     + p7P_MSC];
+      if (data->scores[i][j] > max_scores[i]) max_scores[i] = data->scores[i][j];
+    }
+  }
+  //for each position in the query, what's the highest possible score achieved by extending X positions, for X=1..10
+  ESL_ALLOC(data->opt_ext_fwd, (gm->M + 1) * sizeof(float*));
+  ESL_ALLOC(data->opt_ext_rev, (gm->M + 1) * sizeof(float*));
+
+  for (i=1; i<=gm->M; i++) {
+    ESL_ALLOC(data->opt_ext_fwd[i], 10 * sizeof(float));
+    ESL_ALLOC(data->opt_ext_rev[i], 10 * sizeof(float));
+    sc_fwd = 0;
+    sc_rev = 0;
+    for (j=0; j<10 && i+j+1<=gm->M; j++) {
+      sc_fwd += max_scores[i+j+1];
+      data->opt_ext_fwd[i][j] = sc_fwd;
+
+      sc_rev += max_scores[gm->M-i-j];
+      data->opt_ext_rev[i][j] = sc_rev;
+    }
+    for ( ; j<10; j++) { //fill in empty values
+      data->opt_ext_fwd[i][j] = data->opt_ext_fwd[i][j-1];
+      data->opt_ext_rev[i][j] = data->opt_ext_rev[i][j-1];
+    }
+
+  }
+
+
+  return eslOK;
+
+ERROR:
+  return eslFAIL;
+}
+
+/* Function:  fm_hmmdataDestroy()
+ * Synopsis:  Destroy a <FM_HMMDATA> model object.
+ *
+ */
+void
+fm_hmmdataDestroy(FM_HMMDATA *data )
+{
+
+  if (data != NULL) {
+    if (data->scores != NULL)      free( data->scores);
+    if (data->opt_ext_fwd != NULL) free( data->opt_ext_fwd);
+    if (data->opt_ext_rev != NULL) free( data->opt_ext_rev);
+    free(data);
+  }
+
+}
+
+
+/* Function:  fm_hmmdataCreate()
+ * Synopsis:  Create a <FM_HMMDATA> model object.
+ *
+ * Purpose:   Allocate a <FM_HMMDATA> object for the FM-index-based
+ *            fast MSV function, and populate it with data based on
+ *            the given gm
+ *
+ * Throws:    <NULL> on allocation failure.
+ */
+FM_HMMDATA *
+fm_hmmdataCreate(P7_PROFILE *gm)
+{
+  FM_HMMDATA *data = NULL;
+  int    status;
+
+  ESL_ALLOC(data, sizeof(FM_HMMDATA));
+
+  data->scores         = NULL;
+  data->opt_ext_fwd    = NULL;
+  data->opt_ext_rev    = NULL;
+
+  get_Score_Arrays(gm, data ); /* for FM-index string tree traversal */
+
+
+  return data;
+
+ERROR:
+ fm_hmmdataDestroy(data);
+ return NULL;
+}
+
+
+
+/* Function:  fm_configAlloc()
+ * Synopsis:  Allocate a 16-byte-aligned <FM_CFG> model object, and it's FM_METADATA
+ *
+ */
+int
+fm_configAlloc(void **mem, FM_CFG **cfg)
+{
+  int status;
+
+  if (mem == NULL || cfg == NULL)
+    esl_fatal("null pointer when allocating FM configuration\n");
+
+  *mem = NULL;
+  *cfg = NULL;
+
+  ESL_ALLOC(*mem, sizeof(FM_CFG)+ 15 );
+    *cfg =   (FM_CFG *) (((unsigned long int)(*mem) + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
+
+  ESL_ALLOC((*cfg)->meta, sizeof(FM_METADATA));
+
+  return eslOK;
+
+ERROR:
+  if (*cfg != NULL)
+   if ((*cfg)->meta != NULL) free ((*cfg)->meta);
+
+  if (*mem != NULL)
+    free (*mem);
+
+  return eslEMEM;
+}
 
