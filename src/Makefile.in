@@ -124,7 +124,8 @@ OBJS =  build.o\
 	p7_tophits.o\
 	p7_trace.o\
 	fm_alphabet.o\
-	fm_general.o
+	fm_general.o\
+	fm_msv.o
 #	island.o\
 
 STATS = \

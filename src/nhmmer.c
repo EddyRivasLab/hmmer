@@ -141,6 +141,8 @@ static char banner[] = "search a DNA model against a DNA database";
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp);
+static int  serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp);
+
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
 
@@ -375,11 +377,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (dbformat == eslSQFILE_FMINDEX) {
     //For now, this is a separate path from the typical esl_sqfile_Open() function call
     //TODO: create esl_sqio_fmindex.c, analogous to esl_sqio_ascii.c,
-    if((fm_meta->fp = fopen(cfg->dbfile, "rb")) == NULL)
-      esl_fatal("Cannot open file `%s': ", cfg->dbfile);
 
     fm_configAlloc(&fm_cfg_mem, &fm_cfg);
     fm_meta = fm_cfg->meta;
+
+    if((fm_meta->fp = fopen(cfg->dbfile, "rb")) == NULL)
+      esl_fatal("Cannot open file `%s': ", cfg->dbfile);
 
     readFMmeta(fm_meta);
     fm_initConfig(fm_cfg);
@@ -429,16 +432,19 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     p7_Fail("Invalid alphabet type in hmm for nhmmer. Expect DNA or RNA\n");
   /* if using FM-index, verify that the alphabets are in agreement */
   if (dbformat == eslSQFILE_FMINDEX) {
-    if (abc->type == eslDNA && ! (fm_meta->alph_type == fm_DNA || fm_meta->alph_type == fm_DNA_full  ) )
-      p7_Fail("Alphabet type of hmm (dna) and database (not dna) disagree.\n");
-    if (abc->type == eslRNA && ! (fm_meta->alph_type == fm_RNA || fm_meta->alph_type == fm_RNA_full  ) )
-      p7_Fail("Alphabet type of hmm (rna) and database (not rna) disagree.\n");
+    if ( ! (fm_meta->alph_type == fm_DNA ||
+            fm_meta->alph_type == fm_DNA_full  ||
+            fm_meta->alph_type == fm_RNA ||
+            fm_meta->alph_type == fm_RNA_full  ) )
+      p7_Fail("Alphabet type of hmm and database disagree.\n");
   }
 
   if (qhstatus == eslOK) {
       /* One-time initializations after alphabet <abc> becomes known */
       output_header(ofp, go, cfg->hmmfile, cfg->dbfile);
-      dbfp->abc = abc;
+
+      if (dbformat != eslSQFILE_FMINDEX)
+        dbfp->abc = abc;
 
       for (i = 0; i < infocnt; ++i)    {
           info[i].pli    = NULL;
@@ -513,10 +519,18 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       }
 
 #ifdef HMMER_THREADS
-      if (ncpus > 0)  sstatus = thread_loop(info, threadObj, queue, dbfp);
-      else            sstatus = serial_loop(info, dbfp);
+      if (dbformat == eslSQFILE_FMINDEX) {
+        if (ncpus > 0)  sstatus = thread_loop(info, threadObj, queue, dbfp);
+        else            sstatus = serial_loop_FM(info, dbfp);
+      } else {
+        if (ncpus > 0)  sstatus = thread_loop(info, threadObj, queue, dbfp);
+        else            sstatus = serial_loop(info, dbfp);
+      }
 #else
-      sstatus = serial_loop(info, dbfp);
+      if (dbformat == eslSQFILE_FMINDEX)
+        sstatus = serial_loop_FM(info, dbfp);
+      else
+        sstatus = serial_loop(info, dbfp);
 #endif
       switch(sstatus) {
         case eslEFORMAT:
@@ -662,7 +676,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 }
 
 //TODO: MPI code needs to be added here
-
 static int
 serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 {
@@ -671,21 +684,23 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
   int i;
   int prev_hit_cnt;
   ESL_SQ   *dbsq   =  esl_sq_CreateDigital(info->om->abc);
+  wstatus = esl_sqio_ReadWindow(dbfp, 0, NHMMER_MAX_RESIDUE_COUNT, dbsq);
 #ifdef eslAUGMENT_ALPHABET
   ESL_SQ   *dbsq_revcmp;
   if (dbsq->abc->complement != NULL)
-      dbsq_revcmp =  esl_sq_CreateDigital(info->om->abc);
+    dbsq_revcmp =  esl_sq_CreateDigital(info->om->abc);
 #endif /*eslAUGMENT_ALPHABET*/
 
 
-  wstatus = esl_sqio_ReadWindow(dbfp, 0, NHMMER_MAX_RESIDUE_COUNT, dbsq);
 
   while (wstatus == eslOK ) {
 
       p7_pli_NewSeq(info->pli, dbsq);
       info->pli->nres -= dbsq->C; // to account for overlapping region of windows
       prev_hit_cnt = info->th->N;
+
       p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq, info->th, info->pli->nseqs);
+
       p7_pipeline_Reuse(info->pli); // prepare for next search
 
 
@@ -737,6 +752,49 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
     }
 
   if (dbsq) esl_sq_Destroy(dbsq);
+
+  return wstatus;
+
+}
+
+static int
+serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp)
+{
+
+  int      wstatus;
+//  int i;
+//  int prev_hit_cnt;
+ // ESL_SQ   *dbsq   =  esl_sq_CreateDigital(info->om->abc);
+
+  FM_DATA  fmf;
+  FM_DATA  fmb;
+
+  wstatus = readFM( &fmf, info->fm_cfg->meta, 1 );
+  if (wstatus != eslOK) return wstatus;
+  wstatus = readFM( &fmb, info->fm_cfg->meta, 0 );
+  if (wstatus != eslOK) return wstatus;
+
+  fmb.SA = fmf.SA;
+  fmb.T  = fmf.T;
+
+  p7_Pipeline_FM(info->pli, info->om, info->bg, info->th, info->pli->nseqs,
+      &fmf, &fmb, info->fm_cfg, info->fm_hmmdata);
+
+
+  /*
+  P7_DOMAIN *dcl;
+  // modify hit positions to account for the position of the window in the full sequence
+  for (i=0; i < info->th->N ; i++) {
+      dcl = info->th->unsrt[i].dcl;
+      dcl->ienv += dbsq->start - 1;
+      dcl->jenv += dbsq->start - 1;
+      dcl->iali += dbsq->start - 1;
+      dcl->jali += dbsq->start - 1;
+      dcl->ad->sqfrom += dbsq->start - 1;
+      dcl->ad->sqto += dbsq->start - 1;
+  }
+*/
+  info->pli->nres += 2 * fmf.N;
 
   return wstatus;
 

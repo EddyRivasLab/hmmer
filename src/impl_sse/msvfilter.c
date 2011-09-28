@@ -459,6 +459,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   p7_bg_SetLength(bg, om->max_length);
   p7_oprofile_ReconfigMSVLength(om, om->max_length);
   p7_bg_NullOne  (bg, dsq, om->max_length, &nullsc);
+
   int sc_thresh = (int) ceil( ( ( nullsc  + (invP * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b );
   sc_threshv = _mm_set1_epi8((int8_t) 255 - sc_thresh);
 

@@ -838,7 +838,25 @@ typedef struct fm_data_s {
   uint16_t *occCnts_b;
 } FM_DATA;
 
+typedef struct fm_dp_pair_s {
+  uint16_t    pos;  // position of the diagonal in the model.
+  float       score;
+  float       max_score;
+  uint8_t     max_score_len; // how long was the diagonal when the maximum observed score was seen?
+  uint8_t     consec_pos;
+  uint8_t     max_consec_pos;
+  uint8_t     direction;
+} FM_DP_PAIR;
 
+
+typedef struct fm_diag_s {
+  uint16_t    k;  // position of the model at which the diagonal begins
+  float       score;
+  union {
+      FM_INTERVAL interval;
+      uint32_t    p;
+  };
+} FM_DIAG;
 
 /*****************************************************************
  * 13. The optimized implementation.
@@ -1257,6 +1275,10 @@ extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
 extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
 extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
 extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th, int64_t seqidx);
+extern int p7_Pipeline_FM           (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
+                                     const FM_DATA *fmf, const FM_DATA *fmb, const FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata);
+
+
 
 extern int p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w);
 
@@ -1387,7 +1409,8 @@ extern void fm_hmmdataDestroy(FM_HMMDATA *data );
 extern int fm_configAlloc(void **mem, FM_CFG **cfg);
 
 /* fm_msv.c */
-int p7_FM_MSV(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt);
+extern int p7_FM_MSV(P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt,
+                     const FM_DATA *fmf, const FM_DATA *fmb, const FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata);
 
 
 

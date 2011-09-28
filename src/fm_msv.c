@@ -26,6 +26,229 @@
  *****************************************************************/
 
 
+int
+FM_Recurse( int depth, int M,
+            const FM_DATA *fmf, const FM_DATA *fmb,
+            const FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata,
+            int first, int last, float sc_threshFM,
+            FM_DP_PAIR *dp_pairs, FM_INTERVAL *interval,
+            int **starts, int **ends, int *hit_cnt,
+            long *node_cnts, long *diag_cnts,
+            char *seq
+          )
+{
+
+
+  //bounding cutoffs
+  int max_depth = 16;
+  int ssv_req = 16;
+  int neg_len_limit = 4;
+  int consec_pos_req = 5; //6
+  float score_ratio_req = 0.45; //.49
+
+  float sc, next_score;
+
+  int max_k;
+  int c, i, k;
+
+  FM_INTERVAL interval_new;
+  interval_new.lower = -1;
+
+  for (c=0; c< fm_cfg->meta->alph_size; c++) {//acgt
+    int dppos = last;
+
+    seq[depth-1] = fm_cfg->meta->alph[c];
+    seq[depth] = '\0';
+
+    float max_sc = 0.0;
+
+    for (i=first; i<=last; i++) { // for each surviving diagonal from the previous round
+
+        k = dp_pairs[i].pos + 1;  // forward
+        next_score = fm_hmmdata->scores[k][c];
+        sc = dp_pairs[i].score + next_score;
+        if (sc > max_sc) {
+          max_sc = sc;
+          max_k = k;
+        }
+
+        /*
+        if (sc >= sc_threshFM) { // hit threshold, so mark it as a seed and stop extending
+          diags[diag_end].k = dp_pairs[i].pos - depth + 1;
+          diags[diag_end].score = dp_pairs[i].score;
+          diags[diag_end].interval = interval;
+          diag_end++;
+
+          (*hit_cnt)++;
+          continue;
+            //printf("hit %4d, depth %2d\n", *hit_cnt, depth);
+        }
+        */
+
+//        if ( ) // forward condition
+//          continue; // not possible to hit threshold
+
+        if (  (sc < sc_threshFM && ( depth == ssv_req || k == M ))                                        //didn't hit threshold
+           || (depth > ssv_req - 10 &&  sc + fm_hmmdata->opt_ext_fwd[k][ssv_req-depth-1] < sc_threshFM )  //can't hit threshold, even with best possible extension up to length ssv_req
+           || (depth == dp_pairs[i].max_score_len + neg_len_limit)                                        //too many consecutive positions with a negative total score contribution (sort of like Xdrop)
+           || (sc/depth < score_ratio_req)                                                                //score density is too low
+           || (dp_pairs[i].max_consec_pos < consec_pos_req  &&                                            //a seed is expected to have at least one consec_pos_req-long run of positive-scoring matches;  if it hasn't,  (see Tue Nov 23 09:39:54 EST 2010)
+                  ( (depth >= max_depth/2 &&  sc/depth < sc_threshFM/max_depth)                              // if we're close to the end of the sequence, abort -- if that end does have sufficiently long all-positive run, I'll find it on the reverse sweep
+                  || depth == max_depth-consec_pos_req+1 )                                                   // if we're at least half way across the sequence, and score density is too low, abort -- if the density on the other side is high enough, I'll find it on the reverse sweep
+              )
+         )
+        {
+        //do nothing - it's been pruned
+
+        } else if ( sc>0 && ( k < M || sc >= sc_threshFM) ) { // if either (a) score is above threshold, or it's non-negative and
+                               //there are more positions in the model after this one, add it to the list of extendable diagonals
+            dppos++;
+            dp_pairs[dppos].pos = k;
+            dp_pairs[dppos].score = sc;
+
+            if (sc > dp_pairs[i].max_score) {
+              dp_pairs[dppos].max_score = sc;
+              dp_pairs[dppos].max_score_len = depth;
+            } else {
+              dp_pairs[dppos].max_score = dp_pairs[i].max_score;
+              dp_pairs[dppos].max_score_len = dp_pairs[i].max_score_len;
+            }
+
+            dp_pairs[dppos].consec_pos =  (next_score > 0 ? dp_pairs[i].consec_pos + 1 : 0);
+            dp_pairs[dppos].max_consec_pos = ESL_MAX( dp_pairs[dppos].consec_pos, dp_pairs[i].max_consec_pos);
+
+
+        }
+    }
+
+/*
+    if (dppos > last ){  // at least one useful extension
+
+
+      node_cnts[depth-1]++;
+      diag_cnts[depth-1]+=dppos-last;
+
+      if ( depth == max_depth ) {
+//      if ( max_sc  >= sc_thresh50) {
+        // this is a bit aggressive - if there are multiple existing diagonals, I should
+        // probably only approve the ones above thresh, and keep extending others.
+        (*hit_cnt)++;
+      } else {
+
+
+        //node_cnts[18]++; // counting the number of interval computations
+
+        int count;
+        if (interval->lower > 0 && interval->lower <= interval->upper) {
+//          count = bwt_getOccCount (meta, fmindex->occCnts_sb, fmindex->occCnts_b, fmindex->BWT, interval->lower-1, c);
+          count = bwt_getOccCount_SSE (meta, fmindex->occCnts_sb, fmindex->occCnts_b, fmindex->BWT, interval->lower-1, c);
+          interval_new.lower = fmindex->C[c] + count;
+
+
+//          count = bwt_getOccCount (meta, fmindex->occCnts_sb, fmindex->occCnts_b, fmindex->BWT, interval->upper, c);
+          count = bwt_getOccCount_SSE (meta, fmindex->occCnts_sb, fmindex->occCnts_b, fmindex->BWT, interval->upper, c);
+          interval_new.upper = fmindex->C[c] + count - 1;
+        }
+
+        //printf ("%-18s : %d, %d, (%.2f, %d)\n", seq, interval_new.lower, interval_new.upper, max_sc, dppos-last );
+
+        if ( interval_new.lower < 0 || interval_new.lower > interval_new.upper  )  //that suffix doesn't exist
+          continue;
+
+
+        p7_BWT_Recurse ( depth+1, M, fmf, fmb, fm_cfg, fm_hmmdata,
+                    last+1, dppos, sc_threshFM, dp_pairs, &interval,
+                   starts, ends, hit_cnt, node_cnts, diag_cnts
+                   , seq
+              );
+
+      }
+
+    } else {
+      //printf ("internal stop: %d\n", depth);
+    }
+*/
+  }
+
+  return eslOK;
+}
+
+
+int FM_getSeeds (const P7_OPROFILE *gm, P7_GMX *gx, float sc_threshFM,
+                int **starts, int** ends, int *hit_cnt,
+                const FM_DATA *fmf, const FM_DATA *fmb,
+                const FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata )
+{
+  FM_INTERVAL interval;
+  //ESL_DSQ c;
+  int i, k;
+  int status;
+  float sc;
+  char         *seq;
+
+  FM_DP_PAIR dp_pairs[10000]; // should always be more than enough
+
+  long node_cnts[20];
+  long diag_cnts[20];
+  for (i=0; i<20; i++) {
+    node_cnts[i] = diag_cnts[i] = 0;
+  }
+
+
+
+  ESL_ALLOC(seq, 50*sizeof(char));
+
+
+  for (i=0; i<fm_cfg->meta->alph_size; i++) {//skip '$'
+    int cnt=0;
+
+    interval.lower = fmf->C[i];
+    interval.upper  = abs(fmf->C[i+1])-1;
+
+    if (interval.lower<0 ) //none of that character found
+      continue;
+
+
+    //c = i - (i <= gm->abc->K ? 1 : 0);  // shift to the easel alphabet
+    seq[0] = fm_cfg->meta->alph[i];//gm->abc->sym[i];
+    seq[1] = '\0';
+
+    // fill in a DP column for the character c, (compressed so that only positive-scoring entries are kept
+    for (k = 1; k < gm->M; k++) // there's no need to bother keeping an entry starting at the last position (gm->M)
+    {
+      sc = fm_hmmdata->scores[k][i];
+      if (sc>0) { // we'll extend any positive-scoring diagonal
+        dp_pairs[cnt].pos = k;
+        dp_pairs[cnt].score = sc;
+        dp_pairs[cnt].max_score = sc;
+        dp_pairs[cnt].max_score_len = 1;
+        dp_pairs[cnt].consec_pos = 1;
+        dp_pairs[cnt].max_consec_pos = 1;
+        cnt++;
+      }
+
+//      printf ("%2d : %2d : %.2f (scores[%d][%d])\n", 1, k, sc, k, c );
+
+    }
+
+
+    printf ("char: %d: cnt:%d\n", i, cnt);
+    node_cnts[0]++;
+    diag_cnts[0]+=cnt;
+
+
+    FM_Recurse ( 2, gm->M, fmf, fmb, fm_cfg, fm_hmmdata,
+                 0, cnt-1, sc_threshFM, dp_pairs, &interval,
+                 starts, ends, hit_cnt, node_cnts, diag_cnts
+                 ,seq
+            );
+  }
+
+ERROR:
+  ESL_EXCEPTION(eslEMEM, "Error allocating memory for hit list\n");
+
+}
+
 /* Function:  p7_FM_MSV()
  * Synopsis:  Finds windows with MSV scores above given threshold
  *
@@ -56,33 +279,28 @@
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_FM_MSV(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt)
+p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt,
+         const FM_DATA *fmf, const FM_DATA *fmb, const FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata)
 {
 
-  /* A couple differences between this MSV and the standard one:
-   *
-   * - the transitions are parameterized based on window length (gm->max_length), not target length.
-   * - because we're scanning along a sequence with the implicit assumption that each
-   *   point we're inspecting is part of a window, but we don't know where that window starts/ends,
-   *   we don't use the tloop cost in its proper form. Instead of incuring the tloop cost for
-   *   each pass through the N/C states, we simply build the whole chunk of loop cost into the
-   *   threshold (treating it as though it would've been added at the end of computation)
-   *
-   */
+  float P_fm = 0.5;
+  float nullsc, sc_thresh, sc_threshFM;
+  float invP, invP_FM;
 
-
-
-  float      **dp    = gx->dp;
-  float       *xmx   = gx->xmx;
-  float        tloop = logf((float) gm->max_length / (float) (gm->max_length+3));
-  float        tmove = logf(     3.0f / (float) (gm->max_length+3));
-  float        tbmk  = logf(     2.0f / ((float) gm->M * (float) (gm->M+1)));
-  float        tej   = logf((nu - 1.0f) / nu);
-  float        tec   = logf(1.0f / nu);
-  int          i,k;
+  int i;
+//  float      **dp    = gx->dp;
+//  float       *xmx   = gx->xmx;
+  float      tloop = logf((float) om->max_length / (float) (om->max_length+3));
+  float      tloop_total = tloop * om->max_length;
+  float      tmove = logf(     3.0f / (float) (om->max_length+3));
+  float      tbmk  = logf(     2.0f / ((float) om->M * (float) (om->M+1)));
+//  float    tej   = logf((nu - 1.0f) / nu);
+  float      tec   = logf(1.0f / nu);
+//  int          i,k;
   int          status;
+  int hit_arr_size = 50; // arbitrary size - it, and the hit lists it relates to, will be increased as necessary
 
-  float      tloop_total = tloop * gm->max_length;
+
   /*
    * Computing the score required to let P meet the F1 prob threshold
    * In original code, converting from an MSV score S (the score getting
@@ -100,73 +318,29 @@ p7_FM_MSV(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_B
    *  really matter - in any case, both the bg and om models will change with roughly
    *  1 bit for each doubling of the length model, so they offset.
    */
-  float nullsc;
-  float invP = esl_gumbel_invsurv(P, gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
-  p7_bg_SetLength(bg, gm->max_length);
-  p7_ReconfigLength(gm, gm->max_length);
-  p7_bg_NullOne  (bg, dsq, gm->max_length, &nullsc);
+  p7_bg_SetLength(bg, om->max_length);
+  p7_oprofile_ReconfigMSVLength(om, om->max_length);
+  p7_bg_NullOne  (bg, NULL, om->max_length, &nullsc);
 
-  float sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total;
+  invP = esl_gumbel_invsurv(P, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total;
+
+  invP_FM = esl_gumbel_invsurv(P_fm, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  sc_threshFM =   nullsc  + (invP_FM * eslCONST_LOG2) - tmove - tloop_total - tmove - tbmk - tec;
+
 
   /* stuff used to keep track of hits (regions passing the p-threshold)*/
-  void* tmp_void; // why doesn't ESL_RALLOC just declare its own tmp ptr?
-  int hit_arr_size = 50; // arbitrary size - it, and the hit lists it relates to, will be increased as necessary
   ESL_ALLOC(*starts, hit_arr_size * sizeof(int));
   ESL_ALLOC(*ends, hit_arr_size * sizeof(int));
   (*starts)[0] = (*ends)[0] = -1;
   *hit_cnt = 0;
 
 
-  XMX(0,p7G_N) = 0;
-  XMX(0,p7G_B) = tmove;                                      /* S->N->B, no N-tail   */
-  XMX(0,p7G_E) = XMX(0,p7G_C) = XMX(0,p7G_J) =-eslINFINITY;  /* need seq to get here */
-  for (k = 0; k <= gm->M; k++)
-  MMX(0,k) = -eslINFINITY;                                 /* need seq to get here */
-
-  for (i = 1; i <= L; i++)
-  {
-    float const *rsc = gm->rsc[dsq[i]];
-
-    MMX(i,0)     = -eslINFINITY;
-    XMX(i,p7G_E) = -eslINFINITY;
-
-    for (k = 1; k <= gm->M; k++)
-    {
-      MMX(i,k)     = MSC(k) + ESL_MAX(MMX(i-1,k-1), XMX(i-1,p7G_B) + tbmk);
-      XMX(i,p7G_E) = ESL_MAX(XMX(i,p7G_E), MMX(i,k));
-    }
-
-      XMX(i,p7G_J) = ESL_MAX( XMX(i-1,p7G_J) /*+ tloop*/,     XMX(i, p7G_E) + tej);
-      XMX(i,p7G_C) = ESL_MAX( XMX(i-1,p7G_C) /*+ tloop*/,     XMX(i, p7G_E) + tec);
-      XMX(i,p7G_N) =          XMX(i-1,p7G_N) /*+ tloop*/;
-      XMX(i,p7G_B) = ESL_MAX( XMX(i,  p7G_N) + tmove,     XMX(i, p7G_J) + tmove);
+  FM_getSeeds(om, gx, sc_threshFM, starts, ends, hit_cnt, fmf, fmb, fm_cfg, fm_hmmdata);
 
 
-    if (XMX(i,p7G_C) > sc_thresh)
-    {
-      //ensure hit list is large enough
-      if (*hit_cnt == hit_arr_size ) {
-        hit_arr_size *= 10;
-        ESL_RALLOC(*starts, tmp_void, hit_arr_size * sizeof(int));
-        ESL_RALLOC(*ends, tmp_void, hit_arr_size * sizeof(int));
-      }
-      (*starts)[*hit_cnt] = i -  gm->max_length + 1;
-      (*ends)[*hit_cnt] = i + gm->max_length - 1;
-      (*hit_cnt)++;
 
-      //start the search all over again
-      XMX(i,p7G_N) = 0;
-      XMX(i,p7G_B) = tmove;                                      /* S->N->B, no N-tail   */
-      XMX(i,p7G_E) = XMX(i,p7G_C) = XMX(i,p7G_J) =-eslINFINITY;  /* need seq to get here */
-      for (k = 0; k <= gm->M; k++)
-        MMX(i,k) = -eslINFINITY;
-
-    }
-
-
-  }
-
-
+  int L;  //shouldn't be here
   /*
    * merge overlapping windows, compressing list in place.
    */
@@ -201,7 +375,7 @@ p7_FM_MSV(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_B
 
   }
   return eslOK;
-  ERROR:
+ERROR:
   ESL_EXCEPTION(eslEMEM, "Error allocating memory for hit list\n");
 
 }

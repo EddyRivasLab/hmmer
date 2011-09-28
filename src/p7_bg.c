@@ -349,6 +349,9 @@ p7_bg_Write(FILE *fp, P7_BG *bg)
  *            same as the background used to calculate residue
  *            scores in profiles and null models, all we have to
  *            do here is score null model transitions.
+ *
+ *            Can accept a NULL for *dsq, in which case the returned
+ *            value will be (float) L * log(bg->p1) + log(1.-bg->p1);
  */
 int
 p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)

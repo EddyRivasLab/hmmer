@@ -341,7 +341,6 @@ fm_getOccCountLT (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq,
 
   int i,j;
 
-  int cnt;
   const int b_pos          = (pos+1) >> meta->cnt_shift_b; //floor(pos/b_size)   : the b count element preceding pos
   const uint16_t * occCnts_b  = fm->occCnts_b;
   const uint32_t * occCnts_sb = fm->occCnts_sb;
