@@ -7,6 +7,7 @@ typedef struct {
   int64_t  n;                      /* length of dsq                         */
   int64_t  idx;	                   /* ctr for this seq                      */
   uint64_t db_key;                 /* flag for included databases           */
+  char    *desc;                   /* description                           */
 } HMMER_SEQ;
 
 typedef struct {

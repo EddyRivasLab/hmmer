@@ -160,7 +160,7 @@ cache_SeqDb(char *seqfile, SEQ_CACHE **ret_cache)
 
   char              *hdr_ptr;
   char              *res_ptr;
-
+  char              *desc_ptr;
   char              *ptr;
   char               buffer[512];
   off_t              offset;
@@ -266,8 +266,15 @@ cache_SeqDb(char *seqfile, SEQ_CACHE **ret_cache)
     if (sq->n + 1 > res_size) { printf("inx: %d size %d %d\n", inx, (int)sq->n + 1, (int)res_size); return eslEFORMAT; }
     if (hdr_size <= 0)        { printf("inx: %d hdr %d\n", inx, (int)hdr_size); return eslEFORMAT; }
 
-    /* generate the database key */
-    ptr = sq->desc;
+    /* generate the database key - modified to take the first word in the desc line.
+     * The remaining part of the desc is then cached as the description.  */
+
+    ptr = sq->desc;;
+    desc_ptr = strchr(sq->desc, ' ');
+    if(desc_ptr != NULL) {
+    	*desc_ptr= '\0';
+    	++desc_ptr;
+    }
     val = 1;
     db_key = 0;
     while (*ptr) {
@@ -276,6 +283,7 @@ cache_SeqDb(char *seqfile, SEQ_CACHE **ret_cache)
       ++ptr;
     }
 
+
     if (db_key >= (1 << (db_cnt + 1))) { printf("inx: %d db %d %s\n", inx, db_key, sq->desc); return eslEFORMAT; }
 
     cache->list[inx].name   = hdr_ptr;
@@ -283,6 +291,7 @@ cache_SeqDb(char *seqfile, SEQ_CACHE **ret_cache)
     cache->list[inx].n      = sq->n;
     cache->list[inx].idx    = inx;
     cache->list[inx].db_key = db_key;
+    if(desc_ptr != NULL) esl_strdup(desc_ptr, -1, &(cache->list[inx].desc));
 
     /* copy the digitized sequence */
     memcpy(res_ptr, sq->dsq, sq->n + 1);
