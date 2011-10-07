@@ -300,6 +300,10 @@ main(int argc,  char *argv[]) {
     while (line[qlen] != '\0' && line[qlen] != '\n')  qlen++;
     if (line[qlen] == '\n')  line[qlen] = '\0';
 
+    //fm_reverseString (line, qlen);
+    //for (i=0; i<qlen; i++)
+    //  line[i] = ( line[i] == 'A' ? 'T' : (line[i] == 'C' ? 'G' : (line[i] == 'G' ? 'C' : 'A')));
+
     hit_num = 0;
 
     for (i=0; i<meta->block_count; i++) {
@@ -390,7 +394,7 @@ main(int argc,  char *argv[]) {
           if (out != NULL) {
             fprintf (out, "%s\n",line);
             //fprintf (out, "\t%10s (%8d %s)\n",meta->seq_data[ hits[i].block ].name, hits[i].start, (hits[i].direction==fm_forward?"+":"-"));
-            fprintf (out, "    %8d %s %10s\n", hits[i].start, (hits[i].direction==fm_forward?"1":"0"), meta->seq_data[ hits[i].block ].name);
+            fprintf (out, "    %8d %s %10s\n", hits[i].start, (hits[i].direction==fm_forward?"f":"b"), meta->seq_data[ hits[i].block ].name);
           }
           hit_indiv_cnt++;
           i++; // skip the first one, since I'll be comparing each to the previous
@@ -402,7 +406,7 @@ main(int argc,  char *argv[]) {
             {
               if (out != NULL)
                 //fprintf (out, "\t%10s (%8d %s)\n",meta->seq_data[ hits[i].block ].name, hits[i].start, (hits[i].direction==fm_forward?"+":"-"));
-                fprintf (out, "    %8d %s %10s\n", hits[i].start, (hits[i].direction==fm_forward?"1":"0"), meta->seq_data[ hits[i].block ].name);
+                fprintf (out, "    %8d %s %10s\n", hits[i].start, (hits[i].direction==fm_forward?"f":"b"), meta->seq_data[ hits[i].block ].name);
               hit_indiv_cnt++;
             }
           }

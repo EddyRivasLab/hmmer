@@ -538,6 +538,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
                     dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
           break;
         case eslEOF:
+        case eslOK:
           /* do nothing */
           break;
         default:
@@ -777,7 +778,7 @@ serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp)
   fmb.SA = fmf.SA;
   fmb.T  = fmf.T;
 
-  p7_Pipeline_FM(info->pli, info->om, info->bg, info->th, info->pli->nseqs,
+  wstatus = p7_Pipeline_FM(info->pli, info->om, info->bg, info->th, info->pli->nseqs,
       &fmf, &fmb, info->fm_cfg, info->fm_hmmdata);
 
 

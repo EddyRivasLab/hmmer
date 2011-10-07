@@ -760,7 +760,6 @@ typedef struct p7_tophits_s {
  */
 #define FM_OCC_CNT( type, i, c)  ( occCnts_##type[(meta->alph_size)*(i) + (c)])
 
-
 enum fm_alphabettypes_e {
   fm_DNA        = 0,  //acgt,  2 bit
   fm_DNA_full   = 1,  //includes ambiguity codes, 4 bit
@@ -772,6 +771,11 @@ enum fm_alphabettypes_e {
 enum fm_direction_e {
   fm_forward    = 0,
   fm_backward   = 1,
+};
+
+enum fm_complementarity_e {
+  fm_nocomplement    = 0,
+  fm_complement   = 1,
 };
 
 typedef struct fm_interval_s {
@@ -845,18 +849,28 @@ typedef struct fm_dp_pair_s {
   uint8_t     max_score_len; // how long was the diagonal when the maximum observed score was seen?
   uint8_t     consec_pos;
   uint8_t     max_consec_pos;
-  uint8_t     direction;
+  uint8_t     model_direction;
+  uint8_t     complementarity;
 } FM_DP_PAIR;
 
 
 typedef struct fm_diag_s {
-  uint16_t    k;  // position of the model at which the diagonal begins
-  float       score;
-  union {
-      FM_INTERVAL interval;
-      uint32_t    p;
-  };
+  uint32_t    n;  //position of the database sequence at which the diagonal ends
+  int         length;
+  uint16_t    k;  //position of the model at which the diagonal ends
+  //uint8_t     complementarity;
+  //uint8_t     fm_direction;
+  //uint8_t     model_direction;
+
+//  float       score;
 } FM_DIAG;
+
+
+typedef struct fm_diaglist_s {
+  FM_DIAG   *diags;
+  int       count;
+  int       size;
+} FM_DIAGLIST;
 
 /*****************************************************************
  * 13. The optimized implementation.
@@ -1276,7 +1290,8 @@ extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
 extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
 extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th, int64_t seqidx);
 extern int p7_Pipeline_FM           (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
-                                     const FM_DATA *fmf, const FM_DATA *fmb, const FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata);
+                                     const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata);
+
 
 
 
@@ -1395,6 +1410,7 @@ extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
 /* fm_alphabet.c */
 extern int fm_createAlphabet (FM_METADATA *meta, uint8_t *alph_bits);
 extern int fm_reverseString (char* str, int N);
+extern int fm_getComplement (char c, uint8_t alph_type);
 
 /* fm_general.c */
 extern uint32_t computeSequenceOffset (FM_DATA *fms, FM_METADATA *meta, int block, int pos);
@@ -1402,15 +1418,20 @@ extern int readFMmeta( FM_METADATA *meta);
 extern int readFM( FM_DATA *fm, FM_METADATA *meta, int getAll );
 extern void freeFM ( FM_DATA *fm, int isMainFM);
 extern uint8_t getChar(uint8_t alph_type, int j, const uint8_t *B );
-extern int getSARangeReverse( FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
-extern int getSARangeForward(FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
+extern int getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
+extern int getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
 extern FM_HMMDATA *fm_hmmdataCreate(P7_PROFILE *gm);
 extern void fm_hmmdataDestroy(FM_HMMDATA *data );
 extern int fm_configAlloc(void **mem, FM_CFG **cfg);
+extern int updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_f, FM_INTERVAL *interval_bk);
+extern int updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval);
+extern int fm_initSeeds (FM_DIAGLIST *list) ;
+extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
+
 
 /* fm_msv.c */
 extern int p7_FM_MSV(P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt,
-                     const FM_DATA *fmf, const FM_DATA *fmb, const FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata);
+                     const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata);
 
 
 

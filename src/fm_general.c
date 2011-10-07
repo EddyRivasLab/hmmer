@@ -2,7 +2,52 @@
 //#include "easel.h"
 //#include <string.h>
 
+int
+fm_initSeeds (FM_DIAGLIST *list) {
+  int status;
+  list->size = 1000;
+  ESL_ALLOC(list->diags, list->size * sizeof(FM_DIAG));
+  list->count = 0;
 
+  return eslOK;
+
+ERROR:
+  return eslEMEM;
+
+}
+
+
+FM_DIAG *
+fm_newSeed (FM_DIAGLIST *list) {
+  int status;
+
+  if (list->count == list->size) {
+    list->size *= 4;
+    ESL_REALLOC(list->diags, list->size * sizeof(FM_DIAG));
+  }
+  list->count++;
+  return list->diags + (list->count - 1);
+
+ERROR:
+  return NULL;
+}
+
+
+int
+updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_bk, FM_INTERVAL *interval_f) {
+  uint32_t occLT_l, occLT_u, occ_l, occ_u;
+
+  fm_getOccCountLT (fm, cfg, interval_bk->lower - 1, c, &occ_l, &occLT_l);
+  fm_getOccCountLT (fm, cfg, interval_bk->upper,     c, &occ_u, &occLT_u);
+
+  interval_f->lower += (occLT_u - occLT_l);
+  interval_f->upper = interval_f->lower + (occ_u - occ_l) - 1;
+
+  interval_bk->lower = abs(fm->C[(int)c]) + occ_l;
+  interval_bk->upper = abs(fm->C[(int)c]) + occ_u - 1;
+
+  return eslOK;
+}
 
 /* Function:  getSARangeForward()
  * Synopsis:  For a given query sequence, find its interval in the FM-index, using forward search
@@ -16,38 +61,52 @@
  *            do a forward search
  */
 int
-getSARangeForward(FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval)
+getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval)
 {
 
-  uint32_t occLT_l, occLT_u, occ_l, occ_u;
   int i=0;
-  int lower_b, upper_b;
+  FM_INTERVAL interval_bk;
 
   uint8_t c = inv_alph[(int)query[0]];
-  interval->lower  = lower_b = abs(fm->C[c]);
-  interval->upper  = upper_b = abs(fm->C[c+1])-1;
+  interval->lower  = interval_bk.lower = abs(fm->C[c]);
+  interval->upper  = interval_bk.upper = abs(fm->C[c+1])-1;
 
-  while (lower_b>0 && lower_b <= upper_b) {
+//  fprintf (stderr, "%d: %ld -> %ld, %ld -> %ld\n", c, (long)interval_bk.lower, (long)interval_bk.upper, (long)interval->lower, (long)interval->upper);
+
+
+  while (interval_bk.lower>0 && interval_bk.lower <= interval_bk.upper) {
     c = query[++i];
     if (c == '\0')  // end of query - the current range defines the hits
       break;
 
     c = inv_alph[c];
 
-    fm_getOccCountLT (fm, cfg, lower_b-1, c, &occ_l, &occLT_l);
-    fm_getOccCountLT (fm, cfg, upper_b,   c, &occ_u, &occLT_u);
+    updateIntervalForward( fm, cfg, c, &interval_bk, interval);
 
-    interval->lower += (occLT_u - occLT_l);
-    interval->upper = interval->lower + (occ_u - occ_l) - 1;
 
-    lower_b = abs(fm->C[c]) + occ_l;
-    upper_b = abs(fm->C[c]) + occ_u - 1;
+//    fprintf (stderr, "%d: %ld -> %ld, %ld -> %ld\n", c, (long)interval_bk.lower, (long)interval_bk.upper, (long)interval->lower, (long)interval->upper);
 
     cfg->occCallCnt+=2;
   }
 
   return eslOK;
 }
+
+
+int
+updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval) {
+  int count1, count2;
+  //TODO: counting in these calls will often overlap
+    // - might get acceleration by merging to a single redundancy-avoiding call
+  count1 = fm_getOccCount (fm, cfg, interval->lower-1, c);
+  count2 = fm_getOccCount (fm, cfg, interval->upper, c);
+
+  interval->lower = abs(fm->C[(int)c]) + count1;
+  interval->upper = abs(fm->C[(int)c]) + count2 - 1;
+
+  return eslOK;
+}
+
 
 
 /* Function:  getSARangeReverse()
@@ -58,30 +117,25 @@ getSARangeForward(FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTE
  *            depends on compilation choices.
  */
 int
-getSARangeReverse( FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval)
+getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval)
 {
 
-  int count1, count2;
+
   int i=0;
 
-  uint8_t c = inv_alph[(int)query[0]];
-  interval->lower  = abs(fm->C[c]);
-  interval->upper  = abs(fm->C[c+1])-1;
+  char c = inv_alph[(int)query[0]];
+  interval->lower  = abs(fm->C[(int)c]);
+  interval->upper  = abs(fm->C[(int)c+1])-1;
 
   while (interval->lower>0 && interval->lower <= interval->upper) {
     c = query[++i];
     if (c == '\0')  // end of query - the current range defines the hits
       break;
 
-    c = inv_alph[c];
+    c = inv_alph[(int)c];
 
-    //TODO: counting in these calls will often overlap
-      // - might get acceleration by merging to a single redundancy-avoiding call
-    count1 = fm_getOccCount (fm, cfg, interval->lower-1, c);
-    count2 = fm_getOccCount (fm, cfg, interval->upper, c);
+    updateIntervalReverse(fm, cfg, c, interval);
 
-    interval->lower = abs(fm->C[c]) + count1;
-    interval->upper = abs(fm->C[c]) + count2 - 1;
 
     cfg->occCallCnt+=2;
   }

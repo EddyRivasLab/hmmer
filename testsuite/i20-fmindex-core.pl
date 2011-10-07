@@ -114,49 +114,49 @@ sub get_expected {
 	my $expected = <<EOF;
 
 GATCTGATAAGT
-           0 1       seq1
-           0 1       seq2
-         880 1       seq3
-         904 1       seq3
+           0 f       seq1
+           0 f       seq2
+         880 f       seq3
+         904 f       seq3
 
 TGATAAGTCCCA
-           4 1       seq1
-           4 1       seq2
-         884 1       seq3
+           4 f       seq1
+           4 f       seq2
+         884 f       seq3
 
 AGTCCCAGGACT
-           9 1       seq1
-           9 1       seq2
-         889 1       seq3
+           9 f       seq1
+           9 f       seq2
+         889 f       seq3
 
 CAGGACTTCAGA
-          14 1       seq1
-          14 1       seq2
-         894 1       seq3
+          14 f       seq1
+          14 f       seq2
+         894 f       seq3
 
 AGGACTTCAGAA
-          15 1       seq1
-          15 1       seq2
+          15 f       seq1
+          15 f       seq2
 
 TGAATAGTCTAG
-          11 0       seq1
-          11 0       seq2
-         891 0       seq3
-         915 0       seq3
+          11 b       seq1
+          11 b       seq2
+         891 b       seq3
+         915 b       seq3
 
 CTGAATAGTCTA
-          12 0       seq1
-          12 0       seq2
-         892 0       seq3
+          12 b       seq1
+          12 b       seq2
+         892 b       seq3
 
 GACTTCAGGACC
-          24 0       seq1
-          24 0       seq2
-         904 0       seq3
+          24 b       seq1
+          24 b       seq2
+         904 b       seq3
 
 AAGACTTCAGGA
-          26 0       seq1
-          26 0       seq2
+          26 b       seq1
+          26 b       seq2
 EOF
 
 

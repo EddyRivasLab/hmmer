@@ -92,3 +92,23 @@ fm_reverseString (char* str, int N)
 
   return eslOK;
 }
+
+
+int
+fm_getComplement (char c, uint8_t alph_type)
+{
+    if ( alph_type ==  fm_DNA) {
+        return 3-c;
+    } else if ( alph_type ==  fm_RNA) {
+        return 3-c;
+    } else if ( alph_type ==  fm_DNA_full) {
+        esl_fatal("complement for DNA_full not yet implemented\n");
+    } else if ( alph_type ==  fm_RNA_full) {
+        esl_fatal("complement for RNA_full not yet implemented\n");
+    } else if ( alph_type ==  fm_AMINO) {
+        esl_fatal("complement for amino acids is undefined\n");
+    } else {
+        esl_fatal("Unknown alphabet type\n%s", "");
+    }
+    return -1;
+}

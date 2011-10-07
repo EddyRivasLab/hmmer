@@ -57,6 +57,12 @@ typedef struct {
   /*counter, to compute FM-index speed*/
   int occCallCnt;
 
+  /*bounding cutoffs*/
+  int max_depth;
+  int neg_len_limit;
+  int consec_pos_req;
+  float score_ratio_req;
+
   /*pointer to FM-index metadata*/
   FM_METADATA *meta;
 
@@ -149,8 +155,8 @@ extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 /*fm.c */
 extern int fm_initConfig      (FM_CFG *cfg );
 extern int fm_destroyConfig   (FM_CFG *cfg );
-extern int fm_getOccCount     (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c);
-extern int fm_getOccCountLT   (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
+extern int fm_getOccCount     (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c);
+extern int fm_getOccCountLT   (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
 
 /*****************************************************************
  * 5. Implementation specific initialization

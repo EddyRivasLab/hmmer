@@ -11,6 +11,12 @@ fm_initConfig( FM_CFG *cfg ) {
   cfg->maskSA       =  cfg->meta->freq_SA - 1;
   cfg->shiftSA      =  cfg->meta->SA_shift;
 
+  //bounding cutoffs
+  cfg->max_depth = 16;
+  cfg->neg_len_limit = 4;
+  cfg->consec_pos_req = 5; //6
+  cfg->score_ratio_req = 0.45; //.49
+
   return eslOK;
 }
 
@@ -38,7 +44,7 @@ fm_destroyConfig(FM_CFG *cfg ) {
  *            just a slow (and correct) implementation
  */
 int
-fm_getOccCount (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c) {
+fm_getOccCount (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c) {
 
   int i;
   FM_METADATA *meta = cfg->meta;
@@ -149,7 +155,7 @@ fm_getOccCount (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c) {
  *            just a slow (and correct) implementation
  */
 int
-fm_getOccCountLT (FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt) {
+fm_getOccCountLT (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt) {
 
 
   if (c == 0 && pos >= fm->term_loc)// < 'A'?  cntlt depends on relationship of pos and the position where the '$' was replaced by 'A'
