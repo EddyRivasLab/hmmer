@@ -823,6 +823,7 @@ typedef struct fm_metadata_s {
 
 
 typedef struct fm_hmm_data_s {
+  int      M;
   float    **scores;
   float    **opt_ext_fwd;
   float    **opt_ext_rev;
@@ -858,9 +859,10 @@ typedef struct fm_diag_s {
   uint32_t    n;  //position of the database sequence at which the diagonal ends
   int         length;
   uint16_t    k;  //position of the model at which the diagonal ends
+  float       sortkey;
   //uint8_t     complementarity;
-  //uint8_t     fm_direction;
-  //uint8_t     model_direction;
+//  uint8_t     fm_direction;
+//  uint8_t     model_direction;
 
 //  float       score;
 } FM_DIAG;
@@ -1427,7 +1429,7 @@ extern int updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INT
 extern int updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval);
 extern int fm_initSeeds (FM_DIAGLIST *list) ;
 extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
-
+extern int FM_convertRange2DSQ(uint8_t alph_type, int first, int last, const uint8_t *B, ESL_SQ *sq );
 
 /* fm_msv.c */
 extern int p7_FM_MSV(P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt,

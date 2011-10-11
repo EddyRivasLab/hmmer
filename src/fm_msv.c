@@ -24,6 +24,10 @@
 /*****************************************************************
  * 1. MSV implementation.
  *****************************************************************/
+
+
+
+
 /* hit_sorter(): qsort's pawn, below */
 static int
 hit_sorter(const void *a, const void *b)
@@ -31,37 +35,41 @@ hit_sorter(const void *a, const void *b)
     FM_DIAG *d1 = (FM_DIAG*)a;
     FM_DIAG *d2 = (FM_DIAG*)b;
 
-    //overlapping diagonals will share the same value of (n - k), so sort by that ...
-    if      ( (d1->n - d1->k) > (d2->n - d2->k)) return 1;
-    else if ( (d1->n - d1->k) < (d2->n - d2->k)) return -1;
-    else {
-      // ... and if both on same diagonal, order from top to bottom on y axis
-      if  (d1->k > d2->k)    return  1;
-      else                   return -1;
-    }
+    return 2 * (d1->sortkey > d2->sortkey) - 1;  // same as the test below
+//    if      ( d1->sortkey > d2->sortkey) return 1;
+//    else                                 return -1;
 
 }
 
 int
-mergeSeeds(FM_DIAGLIST *seeds) {
+mergeSeeds(FM_DIAGLIST *seeds, int N) {
   int i;
   int j = 0;
   FM_DIAG *diags = seeds->diags;
   FM_DIAG next = diags[0];
 
   int tmp;
+  int next_is_complement;
 
-  int curr_n       = next.n;
-  int curr_k       = next.k;
-  int curr_len     = next.length;
-  int curr_end     = curr_n + curr_len - 1;
-  int curr_diagval = next.n - next.k;
+  int curr_is_complement = next.sortkey > N;
+  int compl_mult         = curr_is_complement ? 1 : -1;
+  int curr_n             = next.n;
+  int curr_k             = next.k;
+  int curr_len           = next.length;
+  int curr_end           = curr_n + curr_len - 1;
+  int curr_diagval       = next.n + next.k * compl_mult;
+
 
   for( i=1; i<seeds->count; i++) {
 
     next = diags[i];
-    //overlapping diagonals will share the same value of (n + length - k)
-    if (next.n - next.k == curr_diagval) {
+    next_is_complement = next.sortkey > N;
+    compl_mult         = next_is_complement ? 1 : -1;
+
+    //overlapping diagonals will share the same value of (n - k) for non-complement hits, and (n+k) for complement hits
+    if (  next_is_complement == curr_is_complement
+          && ( next.n + next.k * compl_mult) == curr_diagval) {
+
       //overlapping diags; extend, if appropriate
       tmp = next.n + next.length - 1;
       if (tmp > curr_end) {
@@ -73,13 +81,16 @@ mergeSeeds(FM_DIAGLIST *seeds) {
       diags[j].n      = curr_n;
       diags[j].k      = curr_k;
       diags[j].length = curr_end - curr_n + 1;
+//      diags[j].complementarity = diags[i].complementarity;
+      diags[j].sortkey = 0;
 
       // ... then start up a new one
       curr_n   = next.n;
       curr_k   = next.k;
       curr_len = next.length;
       curr_end = curr_n + curr_len - 1;
-      curr_diagval = next.n - next.k;
+      curr_diagval = next.n + next.k * compl_mult;
+      curr_is_complement = next_is_complement;
 
       j++;
     }
@@ -88,7 +99,7 @@ mergeSeeds(FM_DIAGLIST *seeds) {
   diags[j].n      = curr_n;
   diags[j].k      = curr_k;
   diags[j].length = curr_end - curr_n + 1;
-
+  diags[j].sortkey = 0;
 
   seeds->count = j+1;
   return eslOK;
@@ -114,7 +125,7 @@ FM_backtrackSeed(const FM_DATA *fmf, FM_CFG *fm_cfg, int i, FM_DIAG *seed) {
 
 int
 FM_getPassingDiags(const FM_DATA *fmf, FM_CFG *fm_cfg,
-            int k, float sc, int depth, int fm_direction,
+            int k, int M, float sc, int depth, int fm_direction,
             int model_direction, int complementarity,
             FM_INTERVAL *interval,
             FM_DIAGLIST *seeds
@@ -127,12 +138,14 @@ FM_getPassingDiags(const FM_DATA *fmf, FM_CFG *fm_cfg,
   //iterate over the forward interval, for each entry backtrack until hitting a sampled suffix array entry
   for (i = interval->lower;  i<= interval->upper; i++) {
     seed = fm_newSeed(seeds);
-//    seed->fm_direction    = fm_direction;
-//    seed->model_direction = model_direction;
-//    seed->complementarity = complementarity;
     seed->k      = k;
     seed->length = depth;
     seed->n      = FM_backtrackSeed(fmf, fm_cfg, i, seed);
+
+//        seed->fm_direction    = fm_direction;
+//        seed->model_direction = model_direction;
+//        seed->complementarity = complementarity;
+
 
     /*  In both fm_forward and fm_backward cases, seed->n corresponds to the start
      * of the seed in terms of the target sequence, in a forward direction. But the meaning of
@@ -140,11 +153,14 @@ FM_getPassingDiags(const FM_DATA *fmf, FM_CFG *fm_cfg,
      * in fm_forward, k holds the model position aligned to the last character of the seed.
      * So ... shift k over in the forward case.  Doing this will mean
      */
-    if(fm_direction == fm_forward) // reverse the orientation of the seed
-      seed->k -= depth - 1;
 
-    //fprintf(stderr, "            %ld (%s)\n", (long)(seed->n), fm_direction == fm_forward ? "forward" : "reverse");
+    if(fm_direction == fm_forward) //
+      seed->k += (depth - 1) * (model_direction == fm_forward ? -1 : 1) ;
 
+    seed->sortkey =   ( complementarity == fm_complement ? fmf->N + 1 : 0)   // makes complement seeds cover a different score range than non-complements
+                    + (seed->n + ( seed->k * (complementarity == fm_complement ? 1 : -1)))                                          // unique diagonal within the complement/non-complement score range
+                    + ((float)seed->k/(M+1))                                     // fractional part, used to sort seeds sharing a diagonal
+                    ;
   }
 
   return eslOK;
@@ -208,7 +224,7 @@ FM_Recurse( int depth, int M, int fm_direction,
               updateIntervalForward( fmb, fm_cfg, c, &interval_1_new, &interval_2_new);
 
             if ( interval_1_new.lower >= 0 && interval_1_new.lower <= interval_1_new.upper  )  //no use extending a non-existent string
-              FM_getPassingDiags(fmf, fm_cfg, k, sc, depth, fm_forward,
+              FM_getPassingDiags(fmf, fm_cfg, k, M, sc, depth, fm_forward,
                                  dp_pairs[i].model_direction, dp_pairs[i].complementarity,
                                  &interval_2_new, seeds);
 
@@ -218,7 +234,7 @@ FM_Recurse( int depth, int M, int fm_direction,
               updateIntervalReverse( fmf, fm_cfg, c, &interval_1_new);
 
             if ( interval_1_new.lower >= 0 && interval_1_new.lower <= interval_1_new.upper  )  //no use extending a non-existent string
-              FM_getPassingDiags(fmf, fm_cfg, k, sc, depth, fm_backward,
+              FM_getPassingDiags(fmf, fm_cfg, k, M, sc, depth, fm_backward,
                                  dp_pairs[i].model_direction, dp_pairs[i].complementarity,
                                  &interval_1_new, seeds);
 
@@ -362,7 +378,7 @@ int FM_getSeeds (const P7_OPROFILE *gm, P7_GMX *gx, float sc_threshFM,
     for (k = 1; k <= gm->M; k++) // there's no need to bother keeping an entry starting at the last position (gm->M)
     {
 
-      /*
+
       sc = fm_hmmdata->scores[k][i];
       if (sc>0) { // we'll extend any positive-scoring diagonal
         if (k < gm->M-2) { // don't bother starting a forward diagonal so close to the end of the model
@@ -389,7 +405,6 @@ int FM_getSeeds (const P7_OPROFILE *gm, P7_GMX *gx, float sc_threshFM,
           rev_cnt++;
         }
       }
-      */
 
 
       sc = fm_hmmdata->scores[k][fm_getComplement(i, fm_cfg->meta->alph_type)];
@@ -445,11 +460,12 @@ int FM_getSeeds (const P7_OPROFILE *gm, P7_GMX *gx, float sc_threshFM,
 
   }
 
+
   //now sort, first by direction, then N (position on database sequence), then K (model position)
   qsort(seeds->diags, seeds->count, sizeof(FM_DIAG), hit_sorter);
 
   //merge duplicates
-  mergeSeeds(seeds);
+  mergeSeeds(seeds, fmf->N);
 
   return eslOK;
 
@@ -457,6 +473,59 @@ ERROR:
   ESL_EXCEPTION(eslEMEM, "Error allocating memory for hit list\n");
 
 }
+
+
+
+int
+FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CFG *cfg, float sc_thresh, ESL_SQ   *tmp_sq)
+{
+  //extend seed in both diagonal directions,
+   // use n and k to store the beginning and end
+   // and sortkey to hold the score (so I don't have to run MSV again in pipeline)
+
+  int k,n;
+  int model_start, model_end, target_start, target_end;
+  int hit_start, hit_end, max_hit_start, max_hit_end;
+  float sc;
+  float max_sc = 0;
+
+  model_start      = ESL_MAX(1, diag->k + diag->length - cfg->msv_length + 1 );
+  model_end        = ESL_MIN(hmmdata->M, diag->k + cfg->msv_length - 1 );
+  target_start     = diag->n - (diag->k - model_start);
+  target_end       = target_start + (model_end-model_start);
+
+  k = model_start;
+  n = 1;
+  sc = 0;
+
+  FM_convertRange2DSQ(cfg->meta->alph_type, target_start, target_end, fm->T, tmp_sq );
+
+  hit_start = n;
+  for (  ; k <= model_end; k++, n++) {
+      sc  += hmmdata->scores[k][(int)tmp_sq->dsq[n]];
+
+      if (sc < 0) {
+        sc = 0;
+        hit_start = n+1;
+      }
+      hit_end = n;
+
+      if (sc > max_sc) {
+          max_sc = sc;
+          max_hit_start = hit_start;
+          max_hit_end   = hit_end;
+      }
+  }
+
+  diag->n       = target_start + max_hit_start - 1;
+  diag->k       = target_start + max_hit_end - 1;
+  diag->length  = max_hit_end - max_hit_start + 1;
+  diag->sortkey = max_sc;
+
+
+  return eslOK;
+}
+
 
 /* Function:  p7_FM_MSV()
  * Synopsis:  Finds windows with MSV scores above given threshold
@@ -496,7 +565,7 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, int **sta
   float nullsc, sc_thresh, sc_threshFM;
   float invP, invP_FM;
 
-  int i;
+  int i, j;
 //  float      **dp    = gx->dp;
 //  float       *xmx   = gx->xmx;
   float      tloop = logf((float) om->max_length / (float) (om->max_length+3));
@@ -535,7 +604,7 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, int **sta
   p7_bg_NullOne  (bg, NULL, om->max_length, &nullsc);
 
   invP = esl_gumbel_invsurv(P, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-  sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total;
+  sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total - tmove - tbmk - tec;
 
   invP_FM = esl_gumbel_invsurv(P_fm, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   sc_threshFM =   nullsc  + (invP_FM * eslCONST_LOG2) - tmove - tloop_total - tmove - tbmk - tec;
@@ -551,15 +620,32 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, int **sta
   FM_getSeeds(om, gx, sc_threshFM, &seeds, fmf, fmb, fm_cfg, fm_hmmdata);
 
 
-  //now extend those diagonals to find ones scoring above sc_thresh (
+  ESL_SQ   *tmp_sq   =  esl_sq_CreateDigital(om->abc);
+  //now extend those diagonals to find ones scoring above sc_thresh
+  for(i=0; i<seeds.count; i++) {
+    FM_extendSeed( seeds.diags+i, fmf, fm_hmmdata, fm_cfg, sc_thresh, tmp_sq);
+  }
 
+  //simple SSV filter
+  j=0;
+  for(i=0; i<seeds.count; i++) {
+    if (seeds.diags[i].sortkey >= sc_thresh)
+      seeds.diags[j++] = seeds.diags[i];
+  }
+  seeds.count = j;
+
+
+  printf("seed count: %d\n", j);
+
+  //for each one, need to find its place in the genomic sequence, then build a proper
+  //window around that
 
 
   int L;  //shouldn't be here
   /*
    * merge overlapping windows, compressing list in place.
    */
-  if ( *hit_cnt > 0 ) {
+if ( *hit_cnt > 0 ) {
     int merged = 0;
     do {
       merged = 0;

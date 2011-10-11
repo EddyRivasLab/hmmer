@@ -178,6 +178,49 @@ getChar(uint8_t alph_type, int j, const uint8_t *B )
 }
 
 
+/* Function:  getChar()
+ * Synopsis:  Find the character c residing at a given position in the BWT.
+ * Purpose:   The returned char is used by getFMHits(), to seed a call to
+ *            bwt_getOccCount().
+ */
+//#ifndef FMDEBUG
+//inline
+//#endif
+int
+FM_convertRange2DSQ(uint8_t alph_type, int first, int last, const uint8_t *B, ESL_SQ *sq )
+{
+  int i;
+  uint8_t c;
+  esl_sq_GrowTo(sq, last-first+1);
+
+  if (alph_type == fm_DNA || alph_type == fm_RNA) {
+    /*
+     *  B[j>>2] is the byte of B in which j is found (j/4)
+     *
+     *  Let j' be the final two bits of j (j&0x2)
+     *  The char bits are the two starting at position 2*j'.
+     *  Without branching, grab them by shifting B[j>>2] right 6-2*j' bits,
+     *  then masking to keep the final two bits
+     */
+    for (i = first; i<= last; i++)
+      sq->dsq[i-first+1] = (B[i>>2] >> ( 0x6 - ((i&0x3)<<1) ) & 0x3);
+
+    sq->dsq[last-first+2] = eslDSQ_SENTINEL;
+
+  } else if (alph_type == fm_DNA_full || alph_type == fm_RNA_full ) {
+    for (i = first; i<= last; i++) {
+      c = (B[i>>1] >> (((i&0x1)^0x1)<<2) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
+      sq->dsq[i-first+1] = c + (c < 4 ? 0 : 1);
+    }
+    sq->dsq[last-first+2] = eslDSQ_SENTINEL;
+  } else {
+    esl_fatal("Invalid alphabet type\n");
+  }
+
+  return eslOK;
+}
+
+
 /* Function:  freeFM()
  * Synopsis:  release the memory required to store an individual FM-index
  */
@@ -406,6 +449,8 @@ get_Score_Arrays(P7_PROFILE *gm, FM_HMMDATA *data ) {
   //gather values from gm->rsc into a succinct 2D array
   float *max_scores;
   float sc_fwd, sc_rev;
+
+  data->M = gm->M;
 
   ESL_ALLOC(data->scores, (gm->M + 1) * sizeof(float*));
   ESL_ALLOC(max_scores, (gm->M + 1) * sizeof(float));

@@ -287,6 +287,7 @@ typedef struct {
   int neg_len_limit;
   int consec_pos_req; //6
   float score_ratio_req; //.49
+  int msv_length;
 
   /*pointer to FM-index metadata*/
   FM_METADATA *meta;

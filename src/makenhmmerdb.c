@@ -168,7 +168,14 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint16_t seq_offset,
     FM_OCC_CNT(b, 0, c ) = 0;
   }
 
-  BWT[0] =  SA[0]==0 ? 0 /* '$' */ : T[ SA[0]-1]-1 ; //move values down so 'a'=0...'t'=3; store 'a' in place of '$'
+
+  for(j=0; j < N-1; ++j) {
+    T[j]--;  //move values down so 'a'=0...'t'=3; store 'a' in place of '$'
+  }
+  T[N-1]=0;
+
+
+  BWT[0] =  SA[0]==0 ? 0 /* '$' */ : T[ SA[0]-1] ;
 
 
   cnts_sb[BWT[0]]++;
@@ -180,7 +187,7 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint16_t seq_offset,
       term_loc = j;
       BWT[j] =  0; //store 'a' in place of '$'
     } else {
-        BWT[j] =  T[ SA[j]-1]-1 ; //move values down so 'a'=0...'t'=3;
+        BWT[j] =  T[ SA[j]-1] ;
     }
 
     //sample the SA
@@ -207,6 +214,8 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint16_t seq_offset,
     }
   }
 
+
+
 /*
 printf("BWT (termloc: %d): \n", term_loc);
 for(j=0; j < N; ++j) {
@@ -232,22 +241,22 @@ for(j=0; j < N; ++j) {
       for(i=0; i < N-3; i+=4) {
         BWT[i>>2]           = BWT[i]<<6 | BWT[i+1]<<4 | BWT[i+2]<<2 | BWT[i+3];
         if (SAsamp != NULL)
-          Tcompressed[i>>2] =   T[i]<<6 |   T[i+1]<<4 |   T[i+2]<<2 | T[i+3];
+          Tcompressed[i>>2] =  T[i]<<6 |   T[i+1]<<4 |   T[i+2]<<2 | T[i+3];
       }
       if (i <= N-1) {
         BWT[i>>2]           =  BWT[i]<<6;
         if (SAsamp != NULL)
-          Tcompressed[i>>2] =    T[i]<<6;
+          Tcompressed[i>>2] =   T[i]<<6;
       }
       if (i+1 <= N-1) {
         BWT[i>>2]           =  BWT[i+1]<<4;
         if (SAsamp != NULL)
-          Tcompressed[i>>2] =    T[i+1]<<4;
+          Tcompressed[i>>2] =   T[i+1]<<4;
       }
       if (i+2 <= N-1)  {
         BWT[i>>2]           =  BWT[i+2]<<2;
         if (SAsamp != NULL)
-          Tcompressed[i>>2] =    T[i+2]<<2;
+          Tcompressed[i>>2] =   T[i+2]<<2;
       }
 
   } else if (meta->alph_type == fm_DNA_full) {
@@ -264,13 +273,17 @@ for(j=0; j < N; ++j) {
       }
   }
 
+  for(j=0; j < N-1; ++j) {
+      T[j]++;  //move values back up, in case the reverse FM needs to be built
+  }
+  T[N-1] = 0;
 
   // Write the FM-index meta data
-  if(fwrite(&N, sizeof(uint32_t), 1, fp) !=  1)
+  if(fwrite(&N, sizeof(N), 1, fp) !=  1)
     esl_fatal( "buildAndWriteFMIndex: Error writing block_length in FM index.\n");
-  if(fwrite(&term_loc, sizeof(uint32_t), 1, fp) !=  1)
+  if(fwrite(&term_loc, sizeof(term_loc), 1, fp) !=  1)
     esl_fatal( "buildAndWriteFMIndex: Error writing terminal location in FM index.\n");
-  if(fwrite(&seq_offset, sizeof(uint16_t), 1, fp) !=  1)
+  if(fwrite(&seq_offset, sizeof(seq_offset), 1, fp) !=  1)
     esl_fatal( "buildAndWriteFMIndex: Error writing seq_offset in FM index.\n");
 
 

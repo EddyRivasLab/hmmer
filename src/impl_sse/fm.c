@@ -51,10 +51,17 @@ fm_initConfig( FM_CFG *cfg ) {
   int trim_chunk_count;
 
   //bounding cutoffs
-  cfg->max_depth = 16;
-  cfg->neg_len_limit = 4;
-  cfg->consec_pos_req = 5; //6
-  cfg->score_ratio_req = 0.45; //.49
+  cfg->max_depth       = 16;
+  cfg->neg_len_limit   = 4;
+  cfg->consec_pos_req  = 5;
+  cfg->score_ratio_req = 0.45;
+  cfg->msv_length      = 45;
+
+  cfg->max_depth       = 14;
+  cfg->neg_len_limit   = 3;
+  cfg->consec_pos_req  = 6;
+  cfg->score_ratio_req = 0.49;
+  cfg->msv_length      = 40;
 
 
   cfg->maskSA       =  cfg->meta->freq_SA - 1;
