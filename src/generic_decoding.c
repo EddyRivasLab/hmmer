@@ -7,16 +7,11 @@
  *   4. Test driver.
  *   5. Example.
  *   6. Copyright and license information.
- *   
- * SRE, Sun Aug 17 08:24:13 2008 [Janelia]
- * SVN $Id$
  */
 #include "p7_config.h"
 
 #include <math.h>
-
 #include "easel.h"
-
 #include "hmmer.h"
 
 /*****************************************************************
@@ -25,7 +20,6 @@
 
 /* Function:  p7_GDecoding()
  * Synopsis:  Posterior decoding of residue assignments.
- * Incept:    SRE, Fri Feb 29 10:16:21 2008 [Janelia]
  *
  * Purpose:   Calculates a posterior decoding of the residues in a
  *            target sequence, given profile <gm> and filled Forward
@@ -136,7 +130,6 @@ p7_GDecoding(const P7_PROFILE *gm, const P7_GMX *fwd, P7_GMX *bck, P7_GMX *pp)
 
 /* Function:  p7_GDomainDecoding()
  * Synopsis:  Posterior decoding of domain location.
- * Incept:    SRE, Fri Feb  8 10:44:30 2008 [Janelia]
  *
  * Purpose:   The caller has calculated Forward and Backward matrices
  *            <fwd> and <bck> for model <gm> aligned to a target
@@ -362,6 +355,126 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7GENERIC_DECODING_EXAMPLE
 
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_sq.h"
+#include "esl_sqio.h"
+
+#include "hmmer.h"
+
+#define STYLES     "--fs,--sw,--ls,--s"	  /* Exclusive choice for alignment mode     */
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "--fs",      eslARG_NONE,"default",NULL, NULL, STYLES,  NULL, NULL, "multihit local alignment",                         0 },
+  { "--sw",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit local alignment",                           0 },
+  { "--ls",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "multihit glocal alignment",                        0 },
+  { "--s",       eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit glocal alignment",                          0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile> <seqfile>";
+static char banner[] = "example of posterior decoding, generic implementation";
+
+static void dump_matrix_csv(FILE *fp, P7_GMX *pp, int istart, int iend, int kstart, int kend);
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  char           *seqfile = esl_opt_GetArg(go, 2);
+  ESL_ALPHABET   *abc     = NULL;
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_BG          *bg      = NULL;
+  P7_PROFILE     *gm      = NULL;
+  P7_GMX         *fwd     = NULL;
+  P7_GMX         *bck     = NULL;
+  ESL_SQ         *sq      = NULL;
+  ESL_SQFILE     *sqfp    = NULL;
+  int             format  = eslSQFILE_UNKNOWN;
+  float           fsc, bsc;
+
+  /* Read in one query profile */
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  p7_hmmfile_Close(hfp);
+ 
+  /* Read in one target sequence */
+  sq     = esl_sq_CreateDigital(abc);
+  if (esl_sqfile_Open(seqfile, format, NULL, &sqfp) != eslOK) p7_Fail("Failed to open sequence file %s", seqfile);
+  if (esl_sqio_Read(sqfp, sq)                       != eslOK) p7_Fail("Failed to read sequence");
+  esl_sqfile_Close(sqfp);
+ 
+  /* Configure a profile from the HMM */
+  bg = p7_bg_Create(abc);
+  gm = p7_profile_Create(hmm->M, abc);
+
+  /* Now reconfig the model however we were asked to */
+  if      (esl_opt_GetBoolean(go, "--fs"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  else if (esl_opt_GetBoolean(go, "--sw"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNILOCAL);
+  else if (esl_opt_GetBoolean(go, "--ls"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_GLOCAL);
+  else if (esl_opt_GetBoolean(go, "--s"))   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNIGLOCAL);
+  
+  /* Allocate matrices */
+  fwd = p7_gmx_Create(gm->M, sq->n);
+  bck = p7_gmx_Create(gm->M, sq->n);
+
+  /* Set the profile and null model's target length models */
+  p7_bg_SetLength(bg,   sq->n);
+  p7_ReconfigLength(gm, sq->n);
+
+  /* Run Forward, Backward */
+  p7_GForward (sq->dsq, sq->n, gm, fwd, &fsc);
+  p7_GBackward(sq->dsq, sq->n, gm, bck, &bsc);
+
+  /* Decoding: <bck> becomes the posterior probability mx */
+  p7_GDecoding(gm, fwd, bck, bck);
+
+  //p7_gmx_Dump(stdout, bck, p7_DEFAULT);
+  dump_matrix_csv(stdout, bck, 1, sq->n, 1, gm->M);
+
+  /* Cleanup */
+  esl_sq_Destroy(sq);
+  p7_profile_Destroy(gm);
+  p7_gmx_Destroy(fwd);
+  p7_gmx_Destroy(bck);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+
+static void
+dump_matrix_csv(FILE *fp, P7_GMX *pp, int istart, int iend, int kstart, int kend)
+{
+  int   width     = 7;
+  int   precision = 5;
+  int   i, k;
+  float val;
+
+  printf("i,");
+  for (k = kstart; k <= kend; k++)
+    printf("%-d%s", k, k==kend ? "\n" : ",");
+
+  for (i = istart; i <= iend; i++)
+    {
+      printf("%-d,", i);
+      for (k = kstart; k <= kend; k++)
+	{
+	  val = pp->dp[i][k * p7G_NSCELLS + p7G_M] + 
+	    pp->dp[i][k * p7G_NSCELLS + p7G_I] + 
+	    pp->dp[i][k * p7G_NSCELLS + p7G_D];
+
+	  fprintf(fp, "%*.*f%s", width, precision, val, k==kend ? "\n" : ", ");
+	}
+    }
+}  
 #endif /*p7GENERIC_DECODING_EXAMPLE*/
 /*------------------------ example ------------------------------*/
 
@@ -369,4 +482,7 @@ main(int argc, char **argv)
 
 /*****************************************************************
  * @LICENSE@
+ *   
+ * SVN $URL$
+ * SVN $Id$
  *****************************************************************/

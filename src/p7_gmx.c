@@ -16,6 +16,7 @@
  *****************************************************************/
 
 /* Function:  p7_gmx_Create()
+ * Synopsis:  Allocate a new <P7_GMX>.
  *
  * Purpose:   Allocate a reusable, resizeable <P7_GMX> for models up to
  *            size <allocM> and sequences up to length <allocL>.

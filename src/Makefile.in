@@ -168,6 +168,7 @@ EXAMPLES = \
 	emit_example\
 	generic_fwdback_example\
 	generic_msv_example\
+	generic_decoding_example\
 	generic_optacc_example\
 	generic_stotrace_example\
 	generic_viterbi_example\

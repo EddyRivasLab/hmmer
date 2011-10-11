@@ -16,9 +16,6 @@
  *   4. Test driver.
  *   5. Example.
  *   6. Copyright and license information
- * 
- * SRE, Thu Jul 31 20:32:25 2008 [Casa de Gatos]
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -109,7 +106,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
   /* -infinity is -32768 */
   negInfv = _mm_set1_epi16(-32768);
-  negInfv = _mm_srli_si128(negInfv, 14);
+  negInfv = _mm_srli_si128(negInfv, 14);  /* negInfv = 16-byte vector, 14 0 bytes + 2-byte value=-32768, for an OR operation. */
 
   /* Initialization. In unsigned arithmetic, -infinity is -32768
    */
@@ -672,5 +669,8 @@ main(int argc, char **argv)
 
 /*****************************************************************
  * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
  *****************************************************************/
 

@@ -1,3 +1,28 @@
+ID              h92
+TITLE           jackhmmer fails: backconverted subseq didn't end at expected length
+AFFECTS         3.0
+FIXED_IN        -
+STATUS          CLOSED
+XREF            SRE J8/117
+REPORTED_BY     Mustafa Adel <mustafa.adel@aucegypt.edu>
+OPENED_DATE     SRE, Tue Oct 11 10:12:39 2011
+CLOSED_DATE     SRE, Tue Oct 11 10:12:40 2011
+DESCRIPTION     
+  jackhmmer fails in a late iteration on a large db containing
+  translated ORFs with many * characters with the following:
+    Fatal exception (source file ../../src/p7_alidisplay.c, line 429):
+    backconverted subseq didn't end at expected length (GKCLLH401BTHCR_1/A9HXI5_BORPD-i4)
+    Abort trap
+  Same apparent phenotype as #h57, but #h57 was recorded closed 1 Jul
+  09 in the 3.0b3 release.  Does not affect current dev trunk, meaning
+  it was fixed somehow.  Tracked to r3316, when bug #h82 was
+  patched. Bug #h82 repaired a flaw in map_new_msa() in profile
+  construction, when a sequence in an alignment gets defined as
+  all-insert, which the routine wasn't expecting; memory corruption
+  resulted. Unclear how exactly this manifested itself like #h57.
+  Recording as a separate bug, even though it was magically already
+  fixed, so we have a record of the distinct phenotype.
+//
 ID              h91
 TITLE           hmmscan floating point exception, is actually database corruption
 AFFECTS         3.0
