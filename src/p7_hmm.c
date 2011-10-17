@@ -376,7 +376,7 @@ p7_hmm_DecodeStatetype(char st)
   case p7T_X: return "X";
   default:    break;
   }
-  esl_exception(eslEINVAL, __FILE__, __LINE__, "no such statetype code %d", st);
+  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such statetype code %d", st);
   return NULL;
 }
 

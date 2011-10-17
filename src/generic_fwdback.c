@@ -35,6 +35,9 @@
  *            bitscore, the caller needs to subtract a null model lod
  *            score, then convert to bits.
  *           
+ *            Caller must have initialized the log-sum calculation
+ *            with a call to <p7_FLogsumInit()>.
+ *
  * Args:      dsq    - sequence in digitized form, 1..L
  *            L      - length of dsq
  *            gm     - profile. 
@@ -53,15 +56,14 @@ p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
   int          i, k;  
   float        esc  = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
 
-  /* Initialization of the zero row, and the lookup table of the log
-   * sum routine.
-   */
+  p7_FLogsumInit();		/* Would like to get rid of this -- have main()'s all initialize instead, more efficient */
+
+  /* Initialization of the zero row. */
   XMX(0,p7G_N) = 0;                                           /* S->N, p=1            */
   XMX(0,p7G_B) = gm->xsc[p7P_N][p7P_MOVE];                    /* S->N->B, no N-tail   */
   XMX(0,p7G_E) = XMX(0,p7G_C) = XMX(0,p7G_J) = -eslINFINITY;  /* need seq to get here */
   for (k = 0; k <= M; k++)
     MMX(0,k) = IMX(0,k) = DMX(0,k) = -eslINFINITY;            /* need seq to get here */
-  p7_FLogsumInit();
 
   /* Recursion. Done as a pull.
    * Note some slightly wasteful boundary conditions:  
@@ -559,8 +561,7 @@ utest_enumeration(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, int M)
   double total_p;
   char   *seq;
     
-  /* Sample an enumerable HMM & profile of length M.
-   */
+  /* Sample an enumerable HMM & profile of length M.  */
   if (p7_hmm_SampleEnumerable(r, M, abc, &hmm)      != eslOK) esl_fatal("failed to sample an enumerable HMM");
   if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
   if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal("failed to create profile");
@@ -663,6 +664,8 @@ main(int argc, char **argv)
   int             nseq = 20;
   char            errbuf[eslERRBUFSIZE];
 
+  p7_FLogsumInit();
+
   if ((abc = esl_alphabet_Create(eslAMINO))         == NULL)  esl_fatal("failed to create alphabet");
   if (p7_hmm_Sample(r, M, abc, &hmm)                != eslOK) esl_fatal("failed to sample an HMM");
   if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
@@ -737,6 +740,9 @@ main(int argc, char **argv)
   float           fsc, bsc;
   float           nullsc;
   int             status;
+
+  /* Initialize log-sum calculator */
+  p7_FLogsumInit();
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);

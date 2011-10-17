@@ -500,12 +500,8 @@ main(int argc, char *argv[]) {
     }
 
     status = esl_sqio_ReadBlock(sqfp, block, block_size, TRUE);
-    if (status == eslEOF)
-      continue;
-    if (status != eslOK) {
-        esl_exception(eslEMEM, __FILE__, __LINE__, "failure reading sequence block");
-        goto ERROR;
-    }
+    if (status == eslEOF) continue;
+    if (status != eslOK)  ESL_XEXCEPTION(status, "failure reading sequence block");
 
     seq_offset = numseqs;
 

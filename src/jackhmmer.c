@@ -1,11 +1,5 @@
 /* jackhmmer: iterative search of a protein sequence against a protein database
  */
-
-/* Wish list:
- *   1. Should work on .gz files; "rewind" by close/reopen of the cmd pipe.
- *      (See esl_buffer.) [Zasha Weinberg, 2 Apr 2011]
- */
-
 #include "p7_config.h"
 
 #include <stdio.h>
@@ -193,169 +187,174 @@ static void checkpoint_msa(int nquery, ESL_MSA *msa, char *basename, int iterati
  * Take argc, argv, and options; parse the command line;
  * display help/usage info.
  */
-static void 
+static int
 process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_qfile, char **ret_dbfile)
 {
-  ESL_GETOPTS *go = NULL;
+  ESL_GETOPTS *go = esl_getopts_Create(options);
+  int          status;
 
-  if ((go = esl_getopts_Create(options))     == NULL)     p7_Fail("Internal failure creating options object");
-  if (esl_opt_ProcessEnvironment(go)         != eslOK)  { printf("Failed to process environment: %s\n", go->errbuf); goto ERROR; }
-  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK)  { printf("Failed to parse command line: %s\n",  go->errbuf); goto ERROR; }
-  if (esl_opt_VerifyConfig(go)               != eslOK)  { printf("Failed to parse command line: %s\n",  go->errbuf); goto ERROR; }
+  if (esl_opt_ProcessEnvironment(go)         != eslOK)  { if (printf("Failed to process environment: %s\n", go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK)  { if (printf("Failed to parse command line: %s\n",  go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if (esl_opt_VerifyConfig(go)               != eslOK)  { if (printf("Failed to parse command line: %s\n",  go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
 
   /* help format: */
   if (esl_opt_GetBoolean(go, "-h") == TRUE) 
     {
       p7_banner(stdout, argv[0], banner);
       esl_usage(stdout, argv[0], usage);
-      puts("\nBasic options:");
+      if (puts("\nBasic options:")                                                            < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 120=textwidth*/
 
-      puts("\nOptions directing output:");
+      if (puts("\nOptions directing output:")                                                 < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 2, 2, 80); 
 
-      puts("\nOptions controlling scoring system in first iteration:");
+      if (puts("\nOptions controlling scoring system in first iteration:")                    < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 3, 2, 80); 
 
-      puts("\nOptions controlling reporting thresholds:");
+      if (puts("\nOptions controlling reporting thresholds:")                                 < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 4, 2, 80); 
 
-      puts("\nOptions controlling significance thresholds for inclusion in next round:");
+      if (puts("\nOptions controlling significance thresholds for inclusion in next round:")  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 5, 2, 80); 
 
-      puts("\nOptions controlling acceleration heuristics:");
+      if (puts("\nOptions controlling acceleration heuristics:")                              < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 7, 2, 80); 
 
-      puts("\nOptions controlling model construction after first iteration:");
+      if (puts("\nOptions controlling model construction after first iteration:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 8, 2, 80); 
 
-      puts("\nOptions controlling relative weights in models after first iteration:");
+      if (puts("\nOptions controlling relative weights in models after first iteration:")     < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 9, 2, 80); 
 
-      puts("\nOptions controlling effective seq number in models after first iteration:");
+      if (puts("\nOptions controlling effective seq number in models after first iteration:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 10, 2, 80); 
 
-      puts("\nOptions controlling prior strategy in models after first iteration:");
+      if (puts("\nOptions controlling prior strategy in models after first iteration:")       < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 13, 2, 80); 
 
-      puts("\nOptions controlling E value calibration:");
+      if (puts("\nOptions controlling E value calibration:")                                  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 11, 2, 80); 
 
-      puts("\nOther expert options:");
+      if (puts("\nOther expert options:")                                                     < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 12, 2, 80); 
       exit(0);
     }
 
-  if (esl_opt_ArgNumber(go)                 != 2)    { puts("Incorrect number of command line arguments.");      goto ERROR; }
-  if ((*ret_qfile  = esl_opt_GetArg(go, 1)) == NULL) { puts("Failed to get <seqfile> argument on command line"); goto ERROR; }
-  if ((*ret_dbfile = esl_opt_GetArg(go, 2)) == NULL) { puts("Failed to get <seqdb> argument on command line");   goto ERROR; }
+  if (esl_opt_ArgNumber(go)                 != 2)    { if (puts("Incorrect number of command line arguments.")      < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");      goto FAILURE; }
+  if ((*ret_qfile  = esl_opt_GetArg(go, 1)) == NULL) { if (puts("Failed to get <seqfile> argument on command line") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if ((*ret_dbfile = esl_opt_GetArg(go, 2)) == NULL) { if (puts("Failed to get <seqdb> argument on command line")   < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");   goto FAILURE; }
 
   /* Validate any attempted use of stdin streams */
-  if (strcmp(*ret_dbfile, "-") == 0) {
-    puts("jackhmmer cannot read <seqdb> from stdin stream");
-    goto ERROR;
-  }
+  if (strcmp(*ret_dbfile, "-") == 0) 
+    { if (puts("jackhmmer cannot read <seqdb> from stdin stream") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
 
   *ret_go = go;
-  return;
+  return eslOK;
   
- ERROR:  /* all errors handled here are user errors, so be polite.  */
+ FAILURE:  /* all errors handled here are user errors, so be polite.  */
   esl_usage(stdout, argv[0], usage);
-  puts("\nwhere basic options are:");
+  if (puts("\nwhere basic options are:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
   esl_opt_DisplayHelp(stdout, go, 1, 2, 120); /* 1= group; 2 = indentation; 120=textwidth*/
-  printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
+  if (printf("\nTo see more help on available options, do %s -h\n\n", argv[0]) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+  esl_getopts_Destroy(go);
   exit(1);  
+
+ ERROR:
+  if (go) esl_getopts_Destroy(go);
+  exit(status);
 }
 
 static int
 output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
 {
+  int status;
+
   p7_banner(ofp, go->argv[0], banner);
   
-  fprintf(ofp, "# query sequence file:             %s\n", qfile);
-  fprintf(ofp, "# target sequence database:        %s\n", dbfile);
-  if (esl_opt_IsUsed(go, "-N"))          fprintf(ofp, "# maximum iterations set to:       %d\n",      esl_opt_GetInteger(go, "-N"));
-  if (esl_opt_IsUsed(go, "-o"))          fprintf(ofp, "# output directed to file:         %s\n",      esl_opt_GetString(go, "-o"));
-  if (esl_opt_IsUsed(go, "-A"))          fprintf(ofp, "# MSA of hits saved to file:       %s\n",      esl_opt_GetString(go, "-A"));
-  if (esl_opt_IsUsed(go, "--tblout"))    fprintf(ofp, "# per-seq hits tabular output:     %s\n",      esl_opt_GetString(go, "--tblout"));
-  if (esl_opt_IsUsed(go, "--domtblout")) fprintf(ofp, "# per-dom hits tabular output:     %s\n",      esl_opt_GetString(go, "--domtblout"));
-  if (esl_opt_IsUsed(go, "--chkhmm"))    fprintf(ofp, "# HMM checkpoint files output:     %s-<i>.hmm\n", esl_opt_GetString(go, "--chkhmm"));
-  if (esl_opt_IsUsed(go, "--chkali"))    fprintf(ofp, "# MSA checkpoint files output:     %s-<i>.sto\n", esl_opt_GetString(go, "--chkali"));
-  if (esl_opt_IsUsed(go, "--acc"))       fprintf(ofp, "# prefer accessions over names:    yes\n");
-  if (esl_opt_IsUsed(go, "--noali"))     fprintf(ofp, "# show alignments in output:       no\n");
-  if (esl_opt_IsUsed(go, "--notextw"))   fprintf(ofp, "# max ASCII text line length:      unlimited\n");
-  if (esl_opt_IsUsed(go, "--textw"))     fprintf(ofp, "# max ASCII text line length:      %d\n",             esl_opt_GetInteger(go, "--textw"));  
-  if (esl_opt_IsUsed(go, "--popen"))     fprintf(ofp, "# gap open probability:            %f\n",             esl_opt_GetReal   (go, "--popen"));
-  if (esl_opt_IsUsed(go, "--pextend"))   fprintf(ofp, "# gap extend probability:          %f\n",             esl_opt_GetReal   (go, "--pextend"));
-  if (esl_opt_IsUsed(go, "--mx"))        fprintf(ofp, "# subst score matrix (built-in):   %s\n",             esl_opt_GetString (go, "--mx"));
-  if (esl_opt_IsUsed(go, "--mxfile"))    fprintf(ofp, "# subst score matrix (file):       %s\n",             esl_opt_GetString (go, "--mxfile"));
-  if (esl_opt_IsUsed(go, "-E"))          fprintf(ofp, "# sequence reporting threshold:    E-value <= %g\n",  esl_opt_GetReal   (go, "-E"));
-  if (esl_opt_IsUsed(go, "-T"))          fprintf(ofp, "# sequence reporting threshold:    score <= %g\n",    esl_opt_GetReal   (go, "-T"));
-  if (esl_opt_IsUsed(go, "--domE"))      fprintf(ofp, "# domain reporting threshold:      E-value <= %g\n",  esl_opt_GetReal   (go, "--domE"));
-  if (esl_opt_IsUsed(go, "--domT"))      fprintf(ofp, "# domain reporting threshold:      score <= %g\n",    esl_opt_GetReal   (go, "--domT"));
-  if (esl_opt_IsUsed(go, "--incE"))      fprintf(ofp, "# sequence inclusion threshold:    E-value <= %g\n",  esl_opt_GetReal   (go, "--incE"));
-  if (esl_opt_IsUsed(go, "--incT"))      fprintf(ofp, "# sequence inclusion threshold:    score >= %g\n",    esl_opt_GetReal   (go, "--incT"));
-  if (esl_opt_IsUsed(go, "--incdomE"))   fprintf(ofp, "# domain inclusion threshold:      E-value <= %g\n",  esl_opt_GetReal   (go, "--incdomE"));
-  if (esl_opt_IsUsed(go, "--incdomT"))   fprintf(ofp, "# domain inclusion threshold:      score >= %g\n",    esl_opt_GetReal   (go, "--incdomT"));
-//if (esl_opt_IsUsed(go, "--cut_ga"))    fprintf(ofp, "# model-specific thresholding:     GA cutoffs\n"); 
-//if (esl_opt_IsUsed(go, "--cut_nc"))    fprintf(ofp, "# model-specific thresholding:     NC cutoffs\n"); 
-//if (esl_opt_IsUsed(go, "--cut_tc"))    fprintf(ofp, "# model-specific thresholding:     TC cutoffs\n"); 
-  if (esl_opt_IsUsed(go, "--max"))       fprintf(ofp, "# Max sensitivity mode:            on [all heuristic filters off]\n");
-  if (esl_opt_IsUsed(go, "--F1"))        fprintf(ofp, "# MSV filter P threshold:       <= %g\n",      esl_opt_GetReal(go, "--F1"));
-  if (esl_opt_IsUsed(go, "--F2"))        fprintf(ofp, "# Vit filter P threshold:       <= %g\n",      esl_opt_GetReal(go, "--F2"));
-  if (esl_opt_IsUsed(go, "--F3"))        fprintf(ofp, "# Fwd filter P threshold:       <= %g\n",      esl_opt_GetReal(go, "--F3"));
-  if (esl_opt_IsUsed(go, "--nobias"))    fprintf(ofp, "# biased composition HMM filter:   off\n");
-  if (esl_opt_IsUsed(go, "--fast"))      fprintf(ofp, "# model architecture construction: fast/heuristic\n");
-  if (esl_opt_IsUsed(go, "--hand"))      fprintf(ofp, "# model architecture construction: hand-specified by RF annotation\n");
-  if (esl_opt_IsUsed(go, "--symfrac"))   fprintf(ofp, "# sym frac for model structure:    %.3f\n", esl_opt_GetReal(go, "--symfrac"));
-  if (esl_opt_IsUsed(go, "--fragthresh"))fprintf(ofp, "# define fragments if <= x*alen:   %.3f\n", esl_opt_GetReal(go, "--fragthresh"));
-  if (esl_opt_IsUsed(go, "--wpb"))       fprintf(ofp, "# relative weighting scheme:       Henikoff PB\n");
-  if (esl_opt_IsUsed(go, "--wgsc"))      fprintf(ofp, "# relative weighting scheme:       G/S/C\n");
-  if (esl_opt_IsUsed(go, "--wblosum"))   fprintf(ofp, "# relative weighting scheme:       BLOSUM filter\n");
-  if (esl_opt_IsUsed(go, "--wnone"))     fprintf(ofp, "# relative weighting scheme:       none\n");
-  if (esl_opt_IsUsed(go, "--wid"))       fprintf(ofp, "# frac id cutoff for BLOSUM wgts:  %f\n",   esl_opt_GetReal(go, "--wid"));
-  if (esl_opt_IsUsed(go, "--eent"))      fprintf(ofp, "# effective seq number scheme:     entropy weighting\n");
-  if (esl_opt_IsUsed(go, "--eclust"))    fprintf(ofp, "# effective seq number scheme:     single linkage clusters\n");
-  if (esl_opt_IsUsed(go, "--enone"))     fprintf(ofp, "# effective seq number scheme:     none\n");
-  if (esl_opt_IsUsed(go, "--eset"))      fprintf(ofp, "# effective seq number:            set to %f\n", esl_opt_GetReal(go, "--eset"));
-  if (esl_opt_IsUsed(go, "--ere") )      fprintf(ofp, "# minimum rel entropy target:      %f bits\n",   esl_opt_GetReal(go, "--ere"));
-  if (esl_opt_IsUsed(go, "--esigma") )   fprintf(ofp, "# entropy target sigma parameter:  %f bits\n",   esl_opt_GetReal(go, "--esigma"));
-  if (esl_opt_IsUsed(go, "--eid") )      fprintf(ofp, "# frac id cutoff for --eclust:     %f\n",        esl_opt_GetReal(go, "--eid"));
-  if (esl_opt_IsUsed(go, "--pnone") )    fprintf(ofp, "# prior scheme:                    none\n");
-  if (esl_opt_IsUsed(go, "--plaplace") ) fprintf(ofp, "# prior scheme:                    Laplace +1\n");
-  if (esl_opt_IsUsed(go, "--EmL") )      fprintf(ofp, "# seq length, MSV Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EmL"));
-  if (esl_opt_IsUsed(go, "--EmN") )      fprintf(ofp, "# seq number, MSV Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EmN"));
-  if (esl_opt_IsUsed(go, "--EvL") )      fprintf(ofp, "# seq length, Vit Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EvL"));
-  if (esl_opt_IsUsed(go, "--EvN") )      fprintf(ofp, "# seq number, Vit Gumbel mu fit:   %d\n",     esl_opt_GetInteger(go, "--EvN"));
-  if (esl_opt_IsUsed(go, "--EfL") )      fprintf(ofp, "# seq length, Fwd exp tau fit:     %d\n",     esl_opt_GetInteger(go, "--EfL"));
-  if (esl_opt_IsUsed(go, "--EfN") )      fprintf(ofp, "# seq number, Fwd exp tau fit:     %d\n",     esl_opt_GetInteger(go, "--EfN"));
-  if (esl_opt_IsUsed(go, "--Eft") )      fprintf(ofp, "# tail mass for Fwd exp tau fit:   %f\n",     esl_opt_GetReal   (go, "--Eft"));
-  if (esl_opt_IsUsed(go, "--nonull2"))   fprintf(ofp, "# null2 bias corrections:          off\n");
-  if (esl_opt_IsUsed(go, "-Z"))          fprintf(ofp, "# sequence search space set to:    %.0f\n",    esl_opt_GetReal(go, "-Z"));
-  if (esl_opt_IsUsed(go, "--domZ"))      fprintf(ofp, "# domain search space set to:      %.0f\n",    esl_opt_GetReal(go, "--domZ"));
-  if (esl_opt_IsUsed(go, "--seed"))  {
-    if (esl_opt_GetInteger(go, "--seed") == 0) fprintf(ofp, "# random number seed:              one-time arbitrary\n");
-    else                                       fprintf(ofp, "# random number seed set to:       %d\n", esl_opt_GetInteger(go, "--seed"));
-  }
-  if (esl_opt_IsUsed(go, "--qformat"))   fprintf(ofp, "# query <seqfile> format asserted: %s\n",     esl_opt_GetString(go, "--qformat"));
-  if (esl_opt_IsUsed(go, "--tformat"))   fprintf(ofp, "# target <seqdb> format asserted:  %s\n",     esl_opt_GetString(go, "--tformat"));
+  if (fprintf(ofp, "# query sequence file:             %s\n", qfile)                                                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (fprintf(ofp, "# target sequence database:        %s\n", dbfile)                                                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "-N")           && fprintf(ofp, "# maximum iterations set to:       %d\n",             esl_opt_GetInteger(go, "-N"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "-o")           && fprintf(ofp, "# output directed to file:         %s\n",             esl_opt_GetString(go, "-o"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "-A")           && fprintf(ofp, "# MSA of hits saved to file:       %s\n",             esl_opt_GetString(go, "-A"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--tblout")     && fprintf(ofp, "# per-seq hits tabular output:     %s\n",             esl_opt_GetString(go, "--tblout"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--domtblout")  && fprintf(ofp, "# per-dom hits tabular output:     %s\n",             esl_opt_GetString(go, "--domtblout")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--chkhmm")     && fprintf(ofp, "# HMM checkpoint files output:     %s-<i>.hmm\n",     esl_opt_GetString(go, "--chkhmm"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--chkali")     && fprintf(ofp, "# MSA checkpoint files output:     %s-<i>.sto\n",     esl_opt_GetString(go, "--chkali"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--acc")        && fprintf(ofp, "# prefer accessions over names:    yes\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--noali")      && fprintf(ofp, "# show alignments in output:       no\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--notextw")    && fprintf(ofp, "# max ASCII text line length:      unlimited\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--textw")      && fprintf(ofp, "# max ASCII text line length:      %d\n",             esl_opt_GetInteger(go, "--textw"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--popen")      && fprintf(ofp, "# gap open probability:            %f\n",             esl_opt_GetReal   (go, "--popen"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--pextend")    && fprintf(ofp, "# gap extend probability:          %f\n",             esl_opt_GetReal   (go, "--pextend"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--mx")         && fprintf(ofp, "# subst score matrix (built-in):   %s\n",             esl_opt_GetString (go, "--mx"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--mxfile")     && fprintf(ofp, "# subst score matrix (file):       %s\n",             esl_opt_GetString (go, "--mxfile"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "-E")           && fprintf(ofp, "# sequence reporting threshold:    E-value <= %g\n",  esl_opt_GetReal   (go, "-E"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "-T")           && fprintf(ofp, "# sequence reporting threshold:    score <= %g\n",    esl_opt_GetReal   (go, "-T"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--domE")       && fprintf(ofp, "# domain reporting threshold:      E-value <= %g\n",  esl_opt_GetReal   (go, "--domE"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--domT")       && fprintf(ofp, "# domain reporting threshold:      score <= %g\n",    esl_opt_GetReal   (go, "--domT"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--incE")       && fprintf(ofp, "# sequence inclusion threshold:    E-value <= %g\n",  esl_opt_GetReal   (go, "--incE"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--incT")       && fprintf(ofp, "# sequence inclusion threshold:    score >= %g\n",    esl_opt_GetReal   (go, "--incT"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--incdomE")    && fprintf(ofp, "# domain inclusion threshold:      E-value <= %g\n",  esl_opt_GetReal   (go, "--incdomE"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--incdomT")    && fprintf(ofp, "# domain inclusion threshold:      score >= %g\n",    esl_opt_GetReal   (go, "--incdomT"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+//if (esl_opt_IsUsed(go, "--cut_ga")     && fprintf(ofp, "# model-specific thresholding:     GA cutoffs\n")                                           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); 
+//if (esl_opt_IsUsed(go, "--cut_nc")     && fprintf(ofp, "# model-specific thresholding:     NC cutoffs\n")                                           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); 
+//if (esl_opt_IsUsed(go, "--cut_tc")     && fprintf(ofp, "# model-specific thresholding:     TC cutoffs\n")                                           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--max")        && fprintf(ofp, "# Max sensitivity mode:            on [all heuristic filters off]\n")                       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--F1")         && fprintf(ofp, "# MSV filter P threshold:       <= %g\n",             esl_opt_GetReal(go, "--F1"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--F2")         && fprintf(ofp, "# Vit filter P threshold:       <= %g\n",             esl_opt_GetReal(go, "--F2"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--F3")         && fprintf(ofp, "# Fwd filter P threshold:       <= %g\n",             esl_opt_GetReal(go, "--F3"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--nobias")     && fprintf(ofp, "# biased composition HMM filter:   off\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fast")       && fprintf(ofp, "# model architecture construction: fast/heuristic\n")                                       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--hand")       && fprintf(ofp, "# model architecture construction: hand-specified by RF annotation\n")                      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--symfrac")    && fprintf(ofp, "# sym frac for model structure:    %.3f\n",           esl_opt_GetReal(go, "--symfrac"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fragthresh") && fprintf(ofp, "# define fragments if <= x*alen:   %.3f\n",           esl_opt_GetReal(go, "--fragthresh"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--wpb")        && fprintf(ofp, "# relative weighting scheme:       Henikoff PB\n")                                          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--wgsc")       && fprintf(ofp, "# relative weighting scheme:       G/S/C\n")                                                < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--wblosum")    && fprintf(ofp, "# relative weighting scheme:       BLOSUM filter\n")                                        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--wnone")      && fprintf(ofp, "# relative weighting scheme:       none\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--wid")        && fprintf(ofp, "# frac id cutoff for BLOSUM wgts:  %f\n",             esl_opt_GetReal(go, "--wid"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--eent")       && fprintf(ofp, "# effective seq number scheme:     entropy weighting\n")                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--eclust")     && fprintf(ofp, "# effective seq number scheme:     single linkage clusters\n")                              < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--enone")      && fprintf(ofp, "# effective seq number scheme:     none\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--eset")       && fprintf(ofp, "# effective seq number:            set to %f\n",      esl_opt_GetReal(go, "--eset"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--ere")        && fprintf(ofp, "# minimum rel entropy target:      %f bits\n",        esl_opt_GetReal(go, "--ere"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--esigma")     && fprintf(ofp, "# entropy target sigma parameter:  %f bits\n",        esl_opt_GetReal(go, "--esigma"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--eid")        && fprintf(ofp, "# frac id cutoff for --eclust:     %f\n",             esl_opt_GetReal(go, "--eid"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--pnone")      && fprintf(ofp, "# prior scheme:                    none\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--plaplace")   && fprintf(ofp, "# prior scheme:                    Laplace +1\n")                                           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--EmL")        && fprintf(ofp, "# seq length, MSV Gumbel mu fit:   %d\n",             esl_opt_GetInteger(go, "--EmL"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--EmN")        && fprintf(ofp, "# seq number, MSV Gumbel mu fit:   %d\n",             esl_opt_GetInteger(go, "--EmN"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--EvL")        && fprintf(ofp, "# seq length, Vit Gumbel mu fit:   %d\n",             esl_opt_GetInteger(go, "--EvL"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--EvN")        && fprintf(ofp, "# seq number, Vit Gumbel mu fit:   %d\n",             esl_opt_GetInteger(go, "--EvN"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--EfL")        && fprintf(ofp, "# seq length, Fwd exp tau fit:     %d\n",             esl_opt_GetInteger(go, "--EfL"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--EfN")        && fprintf(ofp, "# seq number, Fwd exp tau fit:     %d\n",             esl_opt_GetInteger(go, "--EfN"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--Eft")        && fprintf(ofp, "# tail mass for Fwd exp tau fit:   %f\n",             esl_opt_GetReal   (go, "--Eft"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--nonull2")    && fprintf(ofp, "# null2 bias corrections:          off\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "-Z")           && fprintf(ofp, "# sequence search space set to:    %.0f\n",           esl_opt_GetReal(go, "-Z"))            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--domZ")       && fprintf(ofp, "# domain search space set to:      %.0f\n",           esl_opt_GetReal(go, "--domZ"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--seed"))
+    {
+      if (esl_opt_GetInteger(go, "--seed") == 0  && fprintf(ofp, "# random number seed:              one-time arbitrary\n")                           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+      else if                                      (fprintf(ofp, "# random number seed set to:       %d\n",       esl_opt_GetInteger(go, "--seed"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+    }
+  if (esl_opt_IsUsed(go, "--qformat")    && fprintf(ofp, "# query <seqfile> format asserted: %s\n",             esl_opt_GetString(go, "--qformat"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--tformat")    && fprintf(ofp, "# target <seqdb> format asserted:  %s\n",             esl_opt_GetString(go, "--tformat"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 #ifdef HMMER_THREADS
-  if (esl_opt_IsUsed(go, "--cpu"))       fprintf(ofp, "# number of worker threads:        %d\n", esl_opt_GetInteger(go, "--cpu"));  
+  if (esl_opt_IsUsed(go, "--cpu")        && fprintf(ofp, "# number of worker threads:        %d\n",             esl_opt_GetInteger(go, "--cpu"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 #endif
 #ifdef HAVE_MPI
-  if (esl_opt_IsUsed(go, "--mpi"))       fprintf(ofp, "# MPI:                             on\n");
+  if (esl_opt_IsUsed(go, "--mpi")        && fprintf(ofp, "# MPI:                             on\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 #endif 
-  fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
+  if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   return eslOK;
 }
 
 int
 main(int argc, char **argv)
 {
-  int              status   = eslOK;
-
-  ESL_GETOPTS     *go  = NULL;	/* command line processing                 */
-  struct cfg_s     cfg;         /* configuration data                      */
+  ESL_GETOPTS     *go      = NULL;	/* command line processing                 */
+  struct cfg_s     cfg;                 /* configuration data                      */
+  int              status  = eslOK;
 
   /* Set processor specific flags */
   impl_Init();
@@ -364,7 +363,6 @@ main(int argc, char **argv)
    */
   cfg.qfile      = NULL;
   cfg.dbfile     = NULL;
-
   cfg.do_mpi     = FALSE;	           /* this gets reset below, if we init MPI */
   cfg.nproc      = 0;		           /* this gets reset below, if we init MPI */
   cfg.my_rank    = 0;		           /* this gets reset below, if we init MPI */
@@ -571,10 +569,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       nquery++;
       if (qsq->n == 0) continue; /* skip zero length queries as if they aren't even present. */
 
-      fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n);
-      if (qsq->acc[0]  != '\0') fprintf(ofp, "Accession:   %s\n", qsq->acc);
-      if (qsq->desc[0] != '\0') fprintf(ofp, "Description: %s\n", qsq->desc);  
-      fprintf(ofp, "\n");
+      if (fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+      if (qsq->acc[0]  != '\0' && fprintf(ofp, "Accession:   %s\n", qsq->acc)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); 
+      if (qsq->desc[0] != '\0' && fprintf(ofp, "Description: %s\n", qsq->desc) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
+      if (fprintf(ofp, "\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
       for (iteration = 1; iteration <= maxiterations; iteration++)
 	{       /* We enter each iteration with an optimized profile. */
@@ -599,12 +597,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      else if (status == eslEFORMAT)   p7_Fail("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status != eslOK)        p7_Fail("Unexpected error constructing new model at iteration %d:",     iteration);
 
-	      fprintf(ofp, "@@\n");
-	      fprintf(ofp, "@@ Round:                  %d\n", iteration);
-	      fprintf(ofp, "@@ Included in MSA:        %d subsequences (query + %d subseqs from %d targets)\n",
-		      msa->nseq, msa->nseq-1, kh->nkeys);
-	      fprintf(ofp, "@@ Model size:             %d positions\n", om->M);
-	      fprintf(ofp, "@@\n\n");
+	      if (fprintf(ofp, "@@\n")                                               < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
+	      if (fprintf(ofp, "@@ Round:                  %d\n", iteration)         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+		  if (fprintf(ofp, "@@ Included in MSA:        %d subsequences (query + %d subseqs from %d targets)\n",
+		      msa->nseq, msa->nseq-1, kh->nkeys)                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	      if (fprintf(ofp, "@@ Model size:             %d positions\n", om->M)   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	      if (fprintf(ofp, "@@\n\n")                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 	      prv_msa_nseq = msa->nseq;
 	      esl_msa_Destroy(msa);
@@ -665,8 +663,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  p7_tophits_SortBySortkey(info->th);
 	  p7_tophits_Threshold(info->th, info->pli);
 	  p7_tophits_CompareRanking(info->th, kh, &nnew_targets);
-	  p7_tophits_Targets(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
-	  p7_tophits_Domains(ofp, info->th, info->pli, textw); fprintf(ofp, "\n\n");
+	  p7_tophits_Targets(ofp, info->th, info->pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	  p7_tophits_Domains(ofp, info->th, info->pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 	  /* Create alignment of the top hits */
 	  p7_tophits_Alignment(info->th, abc, &qsq, &qtr, 1, p7_ALL_CONSENSUS_COLS, &msa);
@@ -678,21 +676,22 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	  esl_stopwatch_Stop(w);
 	  p7_pli_Statistics(ofp, info->pli, w);
-	  fprintf(ofp, "\n");
+
 
 	  /* Convergence test */
-	  fprintf(ofp, "@@ New targets included:   %d\n", nnew_targets);
-	  fprintf(ofp, "@@ New alignment includes: %d subseqs (was %d), including original query\n",
-		  msa->nseq, prv_msa_nseq);
+	  if (fprintf(ofp, "\n")                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	  if (fprintf(ofp, "@@ New targets included:   %d\n", nnew_targets)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	  if (fprintf(ofp, "@@ New alignment includes: %d subseqs (was %d), including original query\n",
+		  msa->nseq, prv_msa_nseq)                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 	  if (nnew_targets == 0 && msa->nseq <= prv_msa_nseq)
 	    {
-	      fprintf(ofp, "@@\n");
-	      fprintf(ofp, "@@ CONVERGED (in %d rounds). \n", iteration);
-	      fprintf(ofp, "@@\n\n");
+	      if (fprintf(ofp, "@@\n")                                       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	      if (fprintf(ofp, "@@ CONVERGED (in %d rounds). \n", iteration) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	      if (fprintf(ofp, "@@\n\n")                                     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 	      break;
 	    }
 	  else if (iteration < maxiterations)
-	    { fprintf(ofp, "@@ Continuing to next round.\n\n"); }
+	    { if (fprintf(ofp, "@@ Continuing to next round.\n\n")           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
 
 	  esl_sqfile_Position(dbfp, 0);
 	} /* end iteration loop */
@@ -708,9 +707,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  if (textw > 0) eslx_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	  else           eslx_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 
-	  fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A"));
+	  if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 	}
-      fprintf(ofp, "//\n");
+      if (fprintf(ofp, "//\n")  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
       p7_pipeline_Destroy(info->pli);
       p7_tophits_Destroy(info->th);
@@ -736,23 +735,19 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    */
   if (tblfp)    p7_tophits_TabularTail(tblfp,    "jackhmmer", p7_SEARCH_SEQS, cfg->qfile, cfg->dbfile, go);
   if (domtblfp) p7_tophits_TabularTail(domtblfp, "jackhmmer", p7_SEARCH_SEQS, cfg->qfile, cfg->dbfile, go);
-  if (ofp)      fprintf(ofp, "[ok]\n");
+  if (ofp &&    fprintf(ofp, "[ok]\n")  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   /* Cleanup - prepare for successful exit
    */
   for (i = 0; i < infocnt; ++i)
-    {
-      p7_bg_Destroy(info[i].bg);
-    }
+    p7_bg_Destroy(info[i].bg);
 
 #ifdef HMMER_THREADS
   if (ncpus > 0)
     {
       esl_workqueue_Reset(queue);
       while (esl_workqueue_Remove(queue, (void **) &block) == eslOK)
-	{
-	  esl_sq_DestroyBlock(block);
-	}
+	esl_sq_DestroyBlock(block);
       esl_workqueue_Destroy(queue);
       esl_threads_Destroy(threadObj);
     }
@@ -839,9 +834,9 @@ mpi_failure(char *format, ...)
   /* if the caller is the master, print the results and abort */
   if (rank == 0)
     {
-      fprintf(stderr, "\nError: ");
-      fprintf(stderr, "%s", str);
-      fprintf(stderr, "\n");
+      if (fprintf(stderr, "\nError: ") < 0) exit(eslEWRITE);
+      if (fprintf(stderr, "%s", str)   < 0) exit(eslEWRITE);
+      if (fprintf(stderr, "\n")        < 0) exit(eslEWRITE);
       fflush(stderr);
 
       MPI_Abort(MPI_COMM_WORLD, status);
@@ -1090,10 +1085,10 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       nquery++;
       if (qsq->n == 0) continue; /* skip zero length queries as if they aren't even present. */
 
-      fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n);
-      if (qsq->acc[0]  != '\0') fprintf(ofp, "Accession:   %s\n", qsq->acc);
-      if (qsq->desc[0] != '\0') fprintf(ofp, "Description: %s\n", qsq->desc);  
-      fprintf(ofp, "\n");
+      if (fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+      if (qsq->acc[0]  != '\0' && fprintf(ofp, "Accession:   %s\n", qsq->acc)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+      if (qsq->desc[0] != '\0' && fprintf(ofp, "Description: %s\n", qsq->desc) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
+      if (fprintf(ofp, "\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
       for (iteration = 1; iteration <= maxiterations; iteration++)
 	{       /* We enter each iteration with an optimized profile. */
@@ -1120,12 +1115,12 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      else if (status == eslEFORMAT)   mpi_failure("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status != eslOK)        mpi_failure("Unexpected error constructing new model at iteration %d:",     iteration);
 
-	      fprintf(ofp, "@@\n");
-	      fprintf(ofp, "@@ Round:                  %d\n", iteration);
-	      fprintf(ofp, "@@ Included in MSA:        %d subsequences (query + %d subseqs from %d targets)\n",
-		      msa->nseq, msa->nseq-1, kh->nkeys);
-	      fprintf(ofp, "@@ Model size:             %d positions\n", om->M);
-	      fprintf(ofp, "@@\n\n");
+	      if (fprintf(ofp, "@@\n")                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	      if (fprintf(ofp, "@@ Round:                  %d\n", iteration)       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	      if (fprintf(ofp, "@@ Included in MSA:        %d subsequences (query + %d subseqs from %d targets)\n",
+			  msa->nseq, msa->nseq-1, kh->nkeys)                       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	      if (fprintf(ofp, "@@ Model size:             %d positions\n", om->M) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	      if (fprintf(ofp, "@@\n\n")                                           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 	      prv_msa_nseq = msa->nseq;
 	      esl_msa_Destroy(msa);
@@ -1219,8 +1214,8 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  p7_tophits_SortBySortkey(th);
 	  p7_tophits_Threshold(th, pli);
 	  p7_tophits_CompareRanking(th, kh, &nnew_targets);
-	  p7_tophits_Targets(ofp, th, pli, textw); fprintf(ofp, "\n\n");
-	  p7_tophits_Domains(ofp, th, pli, textw); fprintf(ofp, "\n\n");
+	  p7_tophits_Targets(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	  p7_tophits_Domains(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 	  /* Create alignment of the top hits */
 	  p7_tophits_Alignment(th, abc, &qsq, &qtr, 1, p7_ALL_CONSENSUS_COLS, &msa);
@@ -1232,22 +1227,22 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	  esl_stopwatch_Stop(w);
 	  p7_pli_Statistics(ofp, pli, w);
-	  fprintf(ofp, "\n");
 
 	  /* Convergence test */
-	  fprintf(ofp, "@@ New targets included:   %d\n", nnew_targets);
-	  fprintf(ofp, "@@ New alignment includes: %d subseqs (was %d), including original query\n",
-		  msa->nseq, prv_msa_nseq);
+	  if (fprintf(ofp, "\n")                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	  if (fprintf(ofp, "@@ New targets included:   %d\n", nnew_targets)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	  if (fprintf(ofp, "@@ New alignment includes: %d subseqs (was %d), including original query\n",
+		      msa->nseq, prv_msa_nseq)                               < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 	  if (nnew_targets == 0 && msa->nseq <= prv_msa_nseq)
 	    {
-	      fprintf(ofp, "@@\n");
-	      fprintf(ofp, "@@ CONVERGED (in %d rounds). \n", iteration);
-	      fprintf(ofp, "@@\n\n");
+	      if (fprintf(ofp, "@@\n")                                       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	      if (fprintf(ofp, "@@ CONVERGED (in %d rounds). \n", iteration) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	      if (fprintf(ofp, "@@\n\n")                                     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 	      break;
 	    }
 	  else if (iteration < maxiterations)
 	    {
-	      fprintf(ofp, "@@ Continuing to next round.\n\n");
+	      if (fprintf(ofp, "@@ Continuing to next round.\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 	      /* send all the workers a CONTINUE signal */
 	      for (dest = 1; dest < cfg->nproc; ++dest)
@@ -1276,9 +1271,9 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  if (textw > 0) eslx_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	  else           eslx_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 
-	  fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A"));
+	  if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 	}
-      fprintf(ofp, "//\n");
+      if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
       p7_pipeline_Destroy(pli);
       p7_tophits_Destroy(th);
@@ -1322,11 +1317,9 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    */
   if (tblfp)    p7_tophits_TabularTail(tblfp,    "jackhmmer", p7_SEARCH_SEQS, cfg->qfile, cfg->dbfile, go);
   if (domtblfp) p7_tophits_TabularTail(domtblfp, "jackhmmer", p7_SEARCH_SEQS, cfg->qfile, cfg->dbfile, go);
-  if (ofp)      fprintf(ofp, "[ok]\n");
+  if (ofp &&    fprintf(ofp, "[ok]\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
-  /* Cleanup - prepare for successful exit
-   */
-
+  /* Cleanup - prepare for successful exit  */
   free(list);
   if (mpi_buf != NULL) free(mpi_buf);
 
@@ -1540,7 +1533,6 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
 /* checkpoint_hmm()
- * Incept:    SRE, Tue Jun  2 10:20:08 2009 [Janelia]
  *
  * Purpose:   Save <hmm> to a file <basename>-<iteration>.hmm.
  *            If <nquery == 1>, start a new checkpoint file;
@@ -1564,7 +1556,6 @@ checkpoint_hmm(int nquery, P7_HMM *hmm, char *basename, int iteration)
 
 
 /* checkpoint_msa()
- * Incept:    SRE, Tue Jun  2 10:35:38 2009 [Janelia]
  *
  * Purpose:   Save <msa> to a file <basename>-<iteration>.sto.
  *            If <nquery == 1>, start a new checkpoint file;
