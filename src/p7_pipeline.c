@@ -839,42 +839,26 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
  * Xref:      J4/25.
  */
 int
-postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx ,
-    int window_start, int window_len, ESL_SQ *tmpseq, P7_DOMAINDEF *ddef_app
+postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx ,
+    int window_start, int window_len, ESL_SQ *tmpseq, P7_DOMAINDEF *ddef_app,
+    ESL_DSQ *subseq, int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
+    float nullsc, float usc
 )
 {
   P7_HIT          *hit     = NULL;     /* ptr to the current hit output data      */
-  float            usc, vfsc, fwdsc;   /* filter scores                           */
+  float            vfsc, fwdsc;   /* filter scores                           */
   float            filtersc;           /* HMM null filter score                   */
   float            bias_filtersc;           /* HMM null filter score                   */
-  float            nullsc;             /* null model score                        */
   float            seq_score;          /* the corrected per-seq bit score */
   double           P;               /* P-value of a hit */
   int              d;
   int              status;
-  ESL_DSQ* subseq;
 
 
   int F1_L = ESL_MIN( window_len,  pli->B1);
   int F2_L = ESL_MIN( window_len,  pli->B2);
   int F3_L = ESL_MIN( window_len,  pli->B3);
 
-
-  subseq = sq->dsq + window_start - 1;
-  p7_bg_SetLength(bg, window_len);
-  p7_bg_NullOne  (bg, subseq, window_len, &nullsc);
-
-
-  // To ensure that msv filter stats make sense in the context of no_bias, have
-  // to run msv again, this time on just a short window. (this is also necessary
-  //if bias filtering is used.
-  p7_oprofile_ReconfigMSVLength(om, window_len);
-  p7_MSVFilter(subseq, window_len, om, pli->oxf, &usc);
-  P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-  if (P > pli->F1 ) return eslOK;
-
-  pli->n_past_msv++;
-  pli->pos_past_msv += window_len;
 
   if (pli->do_biasfilter) {
       p7_bg_FilterScore(bg, subseq, window_len, &bias_filtersc);
@@ -922,10 +906,10 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *s
 
 
   /*now that almost everything has been filtered away, set up seq object for domaindef function*/
-  if ((status = esl_sq_SetName     (tmpseq, sq->name))   != eslOK) goto ERROR;
-  if ((status = esl_sq_SetSource   (tmpseq, sq->source)) != eslOK) goto ERROR;
-  if ((status = esl_sq_SetAccession(tmpseq, sq->acc))    != eslOK) goto ERROR;
-  if ((status = esl_sq_SetDesc     (tmpseq, sq->desc))   != eslOK) goto ERROR;
+  if ((status = esl_sq_SetName     (tmpseq, seq_name))   != eslOK) goto ERROR;
+  if ((status = esl_sq_SetSource   (tmpseq, seq_source)) != eslOK) goto ERROR;
+  if ((status = esl_sq_SetAccession(tmpseq, seq_acc))    != eslOK) goto ERROR;
+  if ((status = esl_sq_SetDesc     (tmpseq, seq_desc))   != eslOK) goto ERROR;
   if ((status = esl_sq_GrowTo      (tmpseq, window_len)) != eslOK) goto ERROR;
   tmpseq->n = window_len;
   memcpy((void*)(tmpseq->dsq), subseq, (window_len+1) * sizeof(uint8_t) ); // len+1 to account for the 0 position plus len others
@@ -988,7 +972,7 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *s
 
         hit->window_length = loc_window_length;
         hit->seqidx = seqidx;
-        hit->subseq_start = sq->start;
+        hit->subseq_start = seq_start;
 
         ESL_ALLOC(hit->dcl, sizeof(P7_DOMAIN) );
         hit->dcl[0] = pli->ddef->dcl[d];
@@ -1009,8 +993,8 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *s
 
         if (pli->mode == p7_SEARCH_SEQS)
         {
-          if (                       (status  = esl_strdup(sq->name, -1, &(hit->name)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
-          if (sq->acc[0]  != '\0' && (status  = esl_strdup(sq->acc,  -1, &(hit->acc)))   != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+          if (                       (status  = esl_strdup(seq_name, -1, &(hit->name)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+          if (seq_acc[0]  != '\0' && (status  = esl_strdup(seq_acc,  -1, &(hit->acc)))   != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
         } else {
           if ((status  = esl_strdup(om->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
           if ((status  = esl_strdup(om->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
@@ -1067,7 +1051,11 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
   int* window_ends;
   int hit_cnt;
   int status;
-
+  float            nullsc;   /* null model score                        */
+  float            usc;      /* msv score  */
+  float            P;
+  ESL_DSQ          *subseq;
+  ESL_SQ           *tmpseq;
 
   P7_DOMAINDEF *ddef_app = p7_domaindef_Create(pli->r);  /* single allocation of a domaindef object that will be used
                                                          to compute mocc poserior probs for single-domain segments */
@@ -1093,10 +1081,28 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
     return eslOK;
   }
 
-  ESL_SQ *tmpseq = esl_sq_CreateDigital(sq->abc);
+  tmpseq = esl_sq_CreateDigital(sq->abc);
   for (i=0; i<hit_cnt; i++){
     int window_len = window_ends[i] - window_starts[i] + 1;
-    status = postMSV_LongTarget(pli, om, bg, sq, hitlist, seqidx , window_starts[i], window_len, tmpseq, ddef_app);
+
+    subseq = sq->dsq + window_starts[i] - 1;
+    p7_bg_SetLength(bg, window_len);
+    p7_bg_NullOne  (bg, subseq, window_len, &nullsc);
+
+    // To ensure that msv filter stats make sense in the context of no_bias, have
+    // to run msv again, this time on just a short window. (this is also necessary
+    //if bias filtering is used.
+    p7_oprofile_ReconfigMSVLength(om, window_len);
+    p7_MSVFilter(subseq, window_len, om, pli->oxf, &usc);
+    P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+    if (P > pli->F1 ) continue;
+
+    pli->n_past_msv++;
+    pli->pos_past_msv += window_len;
+
+    status = postMSV_LongTarget(pli, om, bg, hitlist, seqidx, window_starts[i], window_len, tmpseq, ddef_app,
+                      subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc);
+
     if (status != eslOK) return status;
 
     pli->ddef->ndom = 0; // reset for next use
@@ -1152,16 +1158,25 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
     const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata)
 {
 
-  int* window_starts;
-  int* window_ends;
-  int hit_cnt;
-  //int status;
-  //ESL_SQ *tmpseq;
+  int window_start, window_end, window_len;
+  int i;
+  int status;
+  float nullsc;
+  ESL_SQ        *tmpseq;
+  ESL_DSQ       *subseq;
+  FM_WINDOW     *window;
+  FM_WINDOWLIST windowlist;
+  FM_SEQDATA    *seqdata;
 
-  //P7_DOMAINDEF *ddef_app = p7_domaindef_Create(pli->r);  /* single allocation of a domaindef object that will be used
-  //                                                       to compute mocc poserior probs for single-domain segments */
+  P7_DOMAINDEF *ddef_app = p7_domaindef_Create(pli->r);  /* single allocation of a domaindef object that will be used
+                                                         to compute mocc poserior probs for single-domain segments */
 
   if (fmf->N == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
+
+  fm_initWindows(&windowlist);
+
+  seqdata = fm_cfg->meta->seq_data;
+
 
 
   p7_omx_GrowTo(pli->oxf, om->M, 0, 0);    /* expand the one-row omx if needed */
@@ -1169,36 +1184,50 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
   /* Set false target length. This is a conservative estimate of the length of window that'll
    * soon be passed on to later phases of the pipeline;  used to recover some bits of the score
    * that we would miss if we left length parameters set to the full target length */
+  p7_bg_SetLength(bg, om->max_length);
   p7_oprofile_ReconfigMSVLength(om, om->max_length);
+  p7_bg_NullOne  (bg, NULL, om->max_length, &nullsc);
+
 
   /* First level filter: the MSV filter, multihit with <om>.
    * This variant of MSV will scan a long sequence and find
    * short high-scoring regions.
    * */
-  p7_FM_MSV(om, (P7_GMX*)(pli->oxf), 2.0, bg, pli->F1,
-             &window_starts, &window_ends, &hit_cnt,
-             fmf, fmb, fm_cfg, fm_hmmdata);
+  p7_FM_MSV(om, (P7_GMX*)(pli->oxf), 2.0, bg, pli->F1, nullsc,
+             fmf, fmb, fm_cfg, fm_hmmdata, &windowlist );
 
-  if (hit_cnt == 0 ) {
-    free(window_starts);
-    free(window_ends);
-    return eslOK;
-  }
 
-  /*
+
   tmpseq = esl_sq_CreateDigital(om->abc);
-  for (i=0; i<hit_cnt; i++){
-    int window_len = window_ends[i] - window_starts[i] + 1;
-    status = postMSV_LongTarget(pli, om, bg, sq, hitlist, seqidx , window_starts[i], window_len, tmpseq, ddef_app);
+  for (i=0; i<windowlist.count; i++){
+
+
+    window =  windowlist.windows + i;
+
+    //pretty liberal allowance for window ranges.
+    window_start = window->fm_n - om->max_length + fm_cfg->msv_length + 1;
+    window_end   = window->fm_n + window->length + om->max_length - fm_cfg->msv_length - 1;
+    window_len   = window_end - window_start + 1;
+
+    fm_convertRange2DSQ(fm_cfg->meta->alph_type, window_start, window_end, fmf->T, tmpseq );
+    subseq = tmpseq->dsq;
+
+    pli->n_past_msv++;
+    pli->pos_past_msv += window_len;
+
+    status = postMSV_LongTarget(pli, om, bg, hitlist, seqidx, window_start, window_len, tmpseq, ddef_app,
+                      subseq, window->n, seqdata[window->id].name, NULL /*source*/, NULL /*acc*/, NULL /*desc*/,
+                      nullsc, window->score);
+
     if (status != eslOK) return status;
 
     pli->ddef->ndom = 0; // reset for next use
 
   }
+
   esl_sq_Destroy(tmpseq);
-  */
-  free(window_starts);
-  free(window_ends);
+  free(windowlist.windows);
+  return eslOK;
 
   return eslOK;
 

@@ -32,9 +32,50 @@ ERROR:
   return NULL;
 }
 
+int
+fm_initWindows (FM_WINDOWLIST *list) {
+  int status;
+  list->size = 1000;
+  ESL_ALLOC(list->windows, list->size * sizeof(FM_WINDOW));
+  list->count = 0;
+
+  return eslOK;
+
+ERROR:
+  return eslEMEM;
+
+}
+
+FM_WINDOW *
+fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, FM_DIAG *seed) {
+  int status;
+  FM_WINDOW *window;
+
+  if (list->count == list->size) {
+    list->size *= 4;
+    ESL_REALLOC(list->windows, list->size * sizeof(FM_WINDOW));
+  }
+  window = list->windows + list->count;
+
+  window->id      = id;
+  window->n       = pos;
+  window->fm_n    = seed->n;
+  window->k       = seed->k;
+  window->length  = seed->length;
+  window->score   = seed->sortkey;
+  window->complementarity  = seed->complementarity;
+
+  list->count++;
+
+  return window;
+
+ERROR:
+  return NULL;
+}
+
 
 int
-updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_bk, FM_INTERVAL *interval_f) {
+fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_bk, FM_INTERVAL *interval_f) {
   uint32_t occLT_l, occLT_u, occ_l, occ_u;
 
   fm_getOccCountLT (fm, cfg, interval_bk->lower - 1, c, &occ_l, &occLT_l);
@@ -61,7 +102,7 @@ updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *inte
  *            do a forward search
  */
 int
-getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval)
+fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval)
 {
 
   int i=0;
@@ -81,7 +122,7 @@ getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, 
 
     c = inv_alph[c];
 
-    updateIntervalForward( fm, cfg, c, &interval_bk, interval);
+    fm_updateIntervalForward( fm, cfg, c, &interval_bk, interval);
 
 
 //    fprintf (stderr, "%d: %ld -> %ld, %ld -> %ld\n", c, (long)interval_bk.lower, (long)interval_bk.upper, (long)interval->lower, (long)interval->upper);
@@ -94,7 +135,7 @@ getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, 
 
 
 int
-updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval) {
+fm_updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval) {
   int count1, count2;
   //TODO: counting in these calls will often overlap
     // - might get acceleration by merging to a single redundancy-avoiding call
@@ -117,7 +158,7 @@ updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *inte
  *            depends on compilation choices.
  */
 int
-getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval)
+fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval)
 {
 
 
@@ -134,7 +175,7 @@ getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, 
 
     c = inv_alph[(int)c];
 
-    updateIntervalReverse(fm, cfg, c, interval);
+    fm_updateIntervalReverse(fm, cfg, c, interval);
 
 
     cfg->occCallCnt+=2;
@@ -154,7 +195,7 @@ getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, 
 //inline
 //#endif
 uint8_t
-getChar(uint8_t alph_type, int j, const uint8_t *B )
+fm_getChar(uint8_t alph_type, int j, const uint8_t *B )
 {
   uint8_t c = -1;
 
@@ -187,7 +228,7 @@ getChar(uint8_t alph_type, int j, const uint8_t *B )
 //inline
 //#endif
 int
-FM_convertRange2DSQ(uint8_t alph_type, int first, int last, const uint8_t *B, ESL_SQ *sq )
+fm_convertRange2DSQ(uint8_t alph_type, int first, int last, const uint8_t *B, ESL_SQ *sq )
 {
   int i;
   uint8_t c;
@@ -225,7 +266,7 @@ FM_convertRange2DSQ(uint8_t alph_type, int first, int last, const uint8_t *B, ES
  * Synopsis:  release the memory required to store an individual FM-index
  */
 void
-freeFM ( FM_DATA *fm, int isMainFM)
+fm_freeFM ( FM_DATA *fm, int isMainFM)
 {
 
   if (fm->BWT_mem)      free (fm->BWT_mem);
@@ -244,7 +285,7 @@ freeFM ( FM_DATA *fm, int isMainFM)
  *            then read it in.
  */
 int
-readFM( FM_DATA *fm, FM_METADATA *meta, int getAll )
+fm_readFM( FM_DATA *fm, FM_METADATA *meta, int getAll )
 {
   //shortcut variables
   int *C               = NULL;
@@ -264,12 +305,14 @@ readFM( FM_DATA *fm, FM_METADATA *meta, int getAll )
   int chars_per_byte = 8/meta->charBits;
 
 
-  if(fread(&(fm->N), sizeof(uint32_t), 1, meta->fp) !=  1)
+  if(fread(&(fm->N), sizeof(fm->N), 1, meta->fp) !=  1)
     esl_fatal( "%s: Error reading block_length in FM index.\n", __FILE__);
-  if(fread(&(fm->term_loc), sizeof(uint32_t), 1, meta->fp) !=  1)
+  if(fread(&(fm->term_loc), sizeof(fm->term_loc), 1, meta->fp) !=  1)
     esl_fatal( "%s: Error reading terminal location in FM index.\n", __FILE__);
-  if(fread(&(fm->seq_offset), sizeof(uint16_t), 1, meta->fp) !=  1)
+  if(fread(&(fm->seq_offset), sizeof(fm->seq_offset), 1, meta->fp) !=  1)
     esl_fatal( "%s: Error reading seq_offset in FM index.\n", __FILE__);
+  if(fread(&(fm->seq_cnt), sizeof(fm->seq_cnt), 1, meta->fp) !=  1)
+    esl_fatal( "%s: Error reading seq_cnt in FM index.\n", __FILE__);
 
 
   compressed_bytes =   ((chars_per_byte-1+fm->N)/chars_per_byte);
@@ -329,7 +372,7 @@ readFM( FM_DATA *fm, FM_METADATA *meta, int getAll )
   return eslOK;
 
 ERROR:
-  freeFM(fm, getAll);
+  fm_freeFM(fm, getAll);
   esl_fatal("Error allocating memory in %s\n", "readFM");
   return eslFAIL;
 }
@@ -342,7 +385,7 @@ ERROR:
  * Output: return filled meta struct
  */
 int
-readFMmeta( FM_METADATA *meta)
+fm_readFMmeta( FM_METADATA *meta)
 {
   int status;
   int i;
@@ -411,11 +454,11 @@ ERROR:
  */
 //inline
 uint32_t
-computeSequenceOffset (FM_DATA *fms, FM_METADATA *meta, int block, int pos)
+fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int pos)
 {
 
   uint32_t lo = fms[block].seq_offset;
-  uint32_t hi  = (block == meta->block_count-1 ? meta->seq_count : fms[block+1].seq_offset) - 1;
+  uint32_t hi  = lo + fms[block].seq_cnt - 1;
   uint32_t mid;
 
   /*  //linear scan
@@ -438,6 +481,45 @@ computeSequenceOffset (FM_DATA *fms, FM_METADATA *meta, int block, int pos)
   }
 
 
+}
+
+
+
+/* Function:  FM_getOriginalPosition()
+ * Synopsis:  find
+ * Purpose:   Given:
+ *            fms       - an array of FM-indexes
+ *            meta      - the fm metadata
+ *            fm_id     - index of the fm-index in which a hit is sought
+ *            length    - length of the hit in question
+ *            direction - direction of the hit in question
+ *            fm_pos    - position in the fm-index
+ *
+ *            Returns
+ *            *segment_id - index of the sequence segment captured in the FM-index
+ *            *seg_pos    - position in the original sequence, as compressed in the FM binary data structure
+ */
+int
+fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,
+                  uint32_t *segment_id, uint32_t *seg_pos
+) {
+  *segment_id = fm_computeSequenceOffset( fms, meta, fm_id, fm_pos);
+  *seg_pos    =  ( fm_pos - meta->seq_data[ *segment_id ].offset) + meta->seq_data[ *segment_id ].start - 1;
+
+  //verify that the hit doesn't extend beyond the bounds of the target sequence
+  if (direction == fm_forward) {
+    if (*seg_pos + length > meta->seq_data[ *segment_id ].length ) {
+      *segment_id  = *seg_pos  = -1;  // goes into the next sequence, so it should be ignored
+      return eslOK;
+    }
+  } else { //backward
+    if ((int)*seg_pos - length + 1 < 0 ) {
+      *segment_id  = *seg_pos  = -1; // goes into the previous sequence, so it should be ignored
+      return eslOK;
+    }
+  }
+
+  return eslOK;
 }
 
 

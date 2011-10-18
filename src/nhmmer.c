@@ -381,7 +381,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if((fm_meta->fp = fopen(cfg->dbfile, "rb")) == NULL)
       esl_fatal("Cannot open file `%s': ", cfg->dbfile);
 
-    readFMmeta(fm_meta);
+    fm_readFMmeta(fm_meta);
     fm_initConfig(fm_cfg);
     fm_createAlphabet(fm_meta, NULL); // don't override charBits
 
@@ -766,9 +766,9 @@ serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp)
   FM_DATA  fmf;
   FM_DATA  fmb;
 
-  wstatus = readFM( &fmf, info->fm_cfg->meta, 1 );
+  wstatus = fm_readFM( &fmf, info->fm_cfg->meta, 1 );
   if (wstatus != eslOK) return wstatus;
-  wstatus = readFM( &fmb, info->fm_cfg->meta, 0 );
+  wstatus = fm_readFM( &fmb, info->fm_cfg->meta, 0 );
   if (wstatus != eslOK) return wstatus;
 
   fmb.SA = fmf.SA;

@@ -113,7 +113,7 @@ FM_backtrackSeed(const FM_DATA *fmf, FM_CFG *fm_cfg, int i, FM_DIAG *seed) {
   int c;
 
   while ( j != fmf->term_loc && (j & fm_cfg->maskSA)) { //go until we hit a position in the full SA that was sampled during FM index construction
-    c = getChar( fm_cfg->meta->alph_type, j, fmf->BWT);
+    c = fm_getChar( fm_cfg->meta->alph_type, j, fmf->BWT);
     j = fm_getOccCount (fmf, fm_cfg, j-1, c);
     j += abs(fmf->C[c]);
     len++;
@@ -141,10 +141,9 @@ FM_getPassingDiags(const FM_DATA *fmf, FM_CFG *fm_cfg,
     seed->k      = k;
     seed->length = depth;
     seed->n      = FM_backtrackSeed(fmf, fm_cfg, i, seed);
-
+    seed->complementarity = complementarity;
 //        seed->fm_direction    = fm_direction;
 //        seed->model_direction = model_direction;
-//        seed->complementarity = complementarity;
 
 
     /*  In both fm_forward and fm_backward cases, seed->n corresponds to the start
@@ -221,7 +220,7 @@ FM_Recurse( int depth, int M, int fm_direction,
             interval_2_new.lower = interval_2->lower;
             interval_2_new.upper = interval_2->upper;
             if ( interval_1_new.lower >= 0 && interval_1_new.lower <= interval_1_new.upper  )  //no use extending a non-existent string
-              updateIntervalForward( fmb, fm_cfg, c, &interval_1_new, &interval_2_new);
+              fm_updateIntervalForward( fmb, fm_cfg, c, &interval_1_new, &interval_2_new);
 
             if ( interval_1_new.lower >= 0 && interval_1_new.lower <= interval_1_new.upper  )  //no use extending a non-existent string
               FM_getPassingDiags(fmf, fm_cfg, k, M, sc, depth, fm_forward,
@@ -231,7 +230,7 @@ FM_Recurse( int depth, int M, int fm_direction,
           } else {
             //searching for reverse matches on the FM-index
             if ( interval_1_new.lower >= 0 && interval_1_new.lower <= interval_1_new.upper  )  //no use extending a non-existent string
-              updateIntervalReverse( fmf, fm_cfg, c, &interval_1_new);
+              fm_updateIntervalReverse( fmf, fm_cfg, c, &interval_1_new);
 
             if ( interval_1_new.lower >= 0 && interval_1_new.lower <= interval_1_new.upper  )  //no use extending a non-existent string
               FM_getPassingDiags(fmf, fm_cfg, k, M, sc, depth, fm_backward,
@@ -296,7 +295,7 @@ FM_Recurse( int depth, int M, int fm_direction,
         interval_2_new.lower = interval_2->lower;
         interval_2_new.upper = interval_2->upper;
         if ( interval_1_new.lower >= 0 && interval_1_new.lower <= interval_1_new.upper  )  //no use extending a non-existent string
-          updateIntervalForward( fmb, fm_cfg, c, &interval_1_new, &interval_2_new);
+          fm_updateIntervalForward( fmb, fm_cfg, c, &interval_1_new, &interval_2_new);
 
         if (  interval_1_new.lower < 0 || interval_1_new.lower > interval_1_new.upper )  //that string doesn't exist in fwd index
             continue;
@@ -313,7 +312,7 @@ FM_Recurse( int depth, int M, int fm_direction,
       } else {
 
         if ( interval_1_new.lower >= 0 && interval_1_new.lower <= interval_1_new.upper  )  //no use extending a non-existent string
-          updateIntervalReverse( fmf, fm_cfg, c, &interval_1_new);
+          fm_updateIntervalReverse( fmf, fm_cfg, c, &interval_1_new);
 
         if (  interval_1_new.lower < 0 || interval_1_new.lower > interval_1_new.upper )  //that string doesn't exist in reverse index
             continue;
@@ -498,7 +497,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CF
   n = 1;
   sc = 0;
 
-  FM_convertRange2DSQ(cfg->meta->alph_type, target_start, target_end, fm->T, tmp_sq );
+  fm_convertRange2DSQ(cfg->meta->alph_type, target_start, target_end, fm->T, tmp_sq );
 
   hit_start = n;
   for (  ; k <= model_end; k++, n++) {
@@ -518,7 +517,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CF
   }
 
   diag->n       = target_start + max_hit_start - 1;
-  diag->k       = target_start + max_hit_end - 1;
+  diag->k       = model_start  + max_hit_start - 1;
   diag->length  = max_hit_end - max_hit_start + 1;
   diag->sortkey = max_sc;
 
@@ -557,30 +556,30 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CF
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt,
-         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata)
+p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, float nullsc,
+         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata,
+         FM_WINDOWLIST *windowlist)
 {
 
   float P_fm = 0.5;
-  float nullsc, sc_thresh, sc_threshFM;
+  float sc_thresh, sc_threshFM, j_thresh;
   float invP, invP_FM;
 
   int i, j;
-//  float      **dp    = gx->dp;
-//  float       *xmx   = gx->xmx;
   float      tloop = logf((float) om->max_length / (float) (om->max_length+3));
   float      tloop_total = tloop * om->max_length;
   float      tmove = logf(     3.0f / (float) (om->max_length+3));
   float      tbmk  = logf(     2.0f / ((float) om->M * (float) (om->M+1)));
-//  float    tej   = logf((nu - 1.0f) / nu);
   float      tec   = logf(1.0f / nu);
-//  int          i,k;
-  int          status;
-  int hit_arr_size = 50; // arbitrary size - it, and the hit lists it relates to, will be increased as necessary
+  uint32_t tmp_id, tmp_n;
+  uint32_t prev_n = 0;
+  uint32_t prev_id = 0;
+  uint32_t prev_nstart = 0;
+  float prev_sc = 0.0;
 
   FM_DIAGLIST seeds;
-
   fm_initSeeds(&seeds);
+
 
   /*
    * Computing the score required to let P meet the F1 prob threshold
@@ -599,22 +598,13 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, int **sta
    *  really matter - in any case, both the bg and om models will change with roughly
    *  1 bit for each doubling of the length model, so they offset.
    */
-  p7_bg_SetLength(bg, om->max_length);
-  p7_oprofile_ReconfigMSVLength(om, om->max_length);
-  p7_bg_NullOne  (bg, NULL, om->max_length, &nullsc);
 
   invP = esl_gumbel_invsurv(P, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total - tmove - tbmk - tec;
+  j_thresh  =   0 - tmove - tbmk - tec; //the score required to make it worth appending a diagonal to another diagonal
 
   invP_FM = esl_gumbel_invsurv(P_fm, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   sc_threshFM =   nullsc  + (invP_FM * eslCONST_LOG2) - tmove - tloop_total - tmove - tbmk - tec;
-
-
-  /* stuff used to keep track of hits (regions passing the p-threshold)*/
-  ESL_ALLOC(*starts, hit_arr_size * sizeof(int));
-  ESL_ALLOC(*ends, hit_arr_size * sizeof(int));
-  (*starts)[0] = (*ends)[0] = -1;
-  *hit_cnt = 0;
 
   //get diagonals that score above sc_threshFM
   FM_getSeeds(om, gx, sc_threshFM, &seeds, fmf, fmb, fm_cfg, fm_hmmdata);
@@ -626,59 +616,109 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, int **sta
     FM_extendSeed( seeds.diags+i, fmf, fm_hmmdata, fm_cfg, sc_thresh, tmp_sq);
   }
 
-  //simple SSV filter
-  j=0;
-  for(i=0; i<seeds.count; i++) {
-    if (seeds.diags[i].sortkey >= sc_thresh)
-      seeds.diags[j++] = seeds.diags[i];
-  }
-  seeds.count = j;
 
 
-  printf("seed count: %d\n", j);
+  if ( sc_thresh <= j_thresh) {
+    //no use doing MSV filter, just use a simple SSV filter, but with a little extra complexity to handle window merging
+    for(i=0; i<seeds.count; i++) {
+      float score = seeds.diags[i].sortkey;
 
-  //for each one, need to find its place in the genomic sequence, then build a proper
-  //window around that
+
+      if (score >= sc_thresh) {
+        //then convert to positions in the original sequence used to produce the db
+        fm_getOriginalPosition (fmf, fm_cfg->meta, 0, seeds.diags[i].length, fm_forward, seeds.diags[i].n, &(tmp_id), &(tmp_n) );
+        if (tmp_id == -1) continue; // crosses over a barrier between sequences in the digital data structure
+
+        if ( prev_n!=0 && tmp_id==prev_id && tmp_n <= prev_n + om->max_length ) { //we're close to the previous diagonal
+            //extend existing [SM]SV
+            windowlist->windows[windowlist->count-1].length = tmp_n - prev_nstart + seeds.diags[i].length; // widen the window
+
+            prev_sc = ESL_MAX (score, ESL_MAX (prev_sc, score + prev_sc - j_thresh) );
+            windowlist->windows[windowlist->count-1].score =  prev_sc;
+            prev_n = tmp_n;
 
 
-  int L;  //shouldn't be here
-  /*
-   * merge overlapping windows, compressing list in place.
-   */
-if ( *hit_cnt > 0 ) {
-    int merged = 0;
-    do {
-      merged = 0;
+        } else { // start a new diagonal
 
-      int new_hit_cnt = 0;
-      for (i=1; i<*hit_cnt; i++) {
-        if ((*starts)[i] <= (*ends)[new_hit_cnt]) {
-          //merge windows
-          merged = 1;
-          if ( (*ends)[i] > (*ends)[new_hit_cnt] )
-            (*ends)[new_hit_cnt] = (*ends)[i];
+          fm_newWindow(windowlist, fm_cfg->meta->seq_data[ tmp_id ].id, tmp_n, seeds.diags+i);
 
-        } else {
-          //new window
-          new_hit_cnt++;
-          (*starts)[new_hit_cnt] = (*starts)[i];
-          (*ends)[new_hit_cnt] = (*ends)[i];
+          //capture the n position of the diagonal and above-j_thresh contribution, whether it produced an SSV hit or not,
+          //and keep for the next iteration
+          prev_id = tmp_id;
+          prev_nstart = prev_n = tmp_n;
+          prev_sc = score;
         }
       }
-      *hit_cnt = new_hit_cnt + 1;
-    } while (merged > 0);
 
-    if ((*starts)[0] <  1)
-      (*starts)[0] =  1;
+    }
 
-    if ((*ends)[*hit_cnt - 1] >  L)
-      (*ends)[*hit_cnt - 1] =  L;
+  } else {
+    //use MSV filter
+
+    //first filter away diagonals that don't meet j_thresh
+    j=0;
+    for(i=0; i<seeds.count; i++) {
+      if (seeds.diags[i].sortkey >= j_thresh)
+        seeds.diags[j++] = seeds.diags[i];
+    }
+    seeds.count = j;
+
+
+    /*
+     * Then sweep through and look for diagonals or near-neighbor-sets that meet sc_thresh
+     * The result of this approach is that overlapping windows are merged in place
+     */
+
+    for(i=0; i<seeds.count; i++) {
+      float score = seeds.diags[i].sortkey;
+
+      fm_getOriginalPosition (fmf, fm_cfg->meta, 0, seeds.diags[i].length, fm_forward, seeds.diags[i].n, &(tmp_id), &(tmp_n) );
+      if (tmp_id == -1) continue; // crosses over a barrier between sequences in the digital data structure
+
+      if ( prev_n!=0 && tmp_id==prev_id && tmp_n <= prev_n + om->max_length ) { //we're close to the previous diagonal
+
+        if ( prev_sc >= sc_thresh) { // extending an MSV window that's already passed sc_thresh
+          //extend existing [SM]SV
+          windowlist->windows[windowlist->count-1].length = tmp_n - prev_nstart + seeds.diags[i].length; // widen the window
+          windowlist->windows[windowlist->count-1].score += score - j_thresh ;
+
+        } else if ( prev_sc + score >= sc_thresh) { // here's an MSV window, finally above sc_thresh
+          //create MSV
+          fm_newWindow(windowlist, fm_cfg->meta->seq_data[ tmp_id ].id, prev_nstart, seeds.diags+i);
+          windowlist->windows[windowlist->count-1].length = tmp_n - prev_nstart + seeds.diags[i].length; // widen the window
+          windowlist->windows[windowlist->count-1].score += prev_sc - j_thresh ;
+
+        }
+        // allow hits or candidates to keep getting extended
+        prev_n = tmp_n;
+        prev_sc += score;
+
+
+      } else { // not close to the previous diagonal
+
+        if (score >= sc_thresh) { // this diagonal doesn't need any help from another. Make a window based on just this seed
+          //create SSV
+          fm_newWindow(windowlist, fm_cfg->meta->seq_data[ tmp_id ].id, tmp_n, seeds.diags+i);
+
+        }
+
+        //capture the n position of the diagonal and above-j_thresh contribution, whether it produced an SSV hit or not,
+        //and keep for the next iteration
+        prev_id = tmp_id;
+        prev_nstart = prev_n = tmp_n;
+        prev_sc = seeds.diags[i].sortkey;
+
+
+      }
+
+    }
 
   }
+
   return eslEOF;
 
-ERROR:
-  ESL_EXCEPTION(eslEMEM, "Error allocating memory for hit list\n");
+//ERROR:
+//  ESL_EXCEPTION(eslEMEM, "Error allocating memory for hit list\n");
 
 }
 /*------------------ end, p7_FM_MSV() ------------------------*/

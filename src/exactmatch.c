@@ -141,7 +141,7 @@ getFMHits( FM_DATA *fm, FM_CFG *cfg, FM_INTERVAL *interval, int block_id, int hi
     len = 0;
 
     while ( j != fm->term_loc && (j & cfg->maskSA)) { //go until we hit a position in the full SA that was sampled during FM index construction
-      uint8_t c = getChar( cfg->meta->alph_type, j, fm->BWT);
+      uint8_t c = fm_getChar( cfg->meta->alph_type, j, fm->BWT);
       j = fm_getOccCount (fm, cfg, j-1, c);
       j += abs(fm->C[c]);
       len++;
@@ -255,16 +255,16 @@ main(int argc,  char *argv[]) {
 
 
 
-  readFMmeta( meta);
+  fm_readFMmeta( meta);
 
   //read in FM-index blocks
   ESL_ALLOC(fmsf, cfg->meta->block_count * sizeof(FM_DATA) );
   for (i=0; i<meta->block_count; i++) {
-    readFM( fmsf+i,meta, 1 );
+    fm_readFM( fmsf+i,meta, 1 );
 
     if (!meta->fwd_only) {
       ESL_ALLOC(fmsb, meta->block_count * sizeof(FM_DATA) );
-      readFM(fmsb+i, meta, 0 );
+      fm_readFM(fmsb+i, meta, 0 );
       fmsb[i].SA = fmsf[i].SA;
       fmsb[i].T = fmsf[i].T;
     }
@@ -308,7 +308,7 @@ main(int argc,  char *argv[]) {
 
     for (i=0; i<meta->block_count; i++) {
 
-      getSARangeForward(fmsb+i, cfg, line, meta->inv_alph, &interval);// yes, use the backward fm to produce a forward search on the forward fm
+      fm_getSARangeForward(fmsb+i, cfg, line, meta->inv_alph, &interval);// yes, use the backward fm to produce a forward search on the forward fm
       if (interval.lower>0 && interval.lower <= interval.upper) {
         int new_hit_num =  interval.upper - interval.lower + 1;
         hit_num += new_hit_num;
@@ -326,7 +326,7 @@ main(int argc,  char *argv[]) {
 
       /* find reverse hits, using backward search on the forward FM*/
       if (!meta->fwd_only) {
-        getSARangeReverse(fmsf+i, cfg, line, meta->inv_alph, &interval);
+        fm_getSARangeReverse(fmsf+i, cfg, line, meta->inv_alph, &interval);
         if (interval.lower>0 && interval.lower <= interval.upper) {
           int new_hit_num =  interval.upper - interval.lower + 1;
           hit_num += new_hit_num;
@@ -352,28 +352,13 @@ main(int argc,  char *argv[]) {
 
         //for each hit, identify the sequence id and position within that sequence
         for (i = 0; i< hit_num; i++) {
-          int block = hits[i].block;
-          int seq_offset = computeSequenceOffset( fmsf, meta, block, hits[i].start);
-          int pos =  ( hits[i].start - meta->seq_data[ seq_offset ].offset) + meta->seq_data[ seq_offset ].start - 1;
 
-          //verify that the hit doesn't extend beyond the bounds of the target sequence
-          if (hits[i].direction == fm_forward) {
-            if (pos + hits[i].length > meta->seq_data[ seq_offset ].length ) {
-              hits[i].block  = hits[i].sortkey  = hits[i].start  = -1;  // goes into the next sequence, so it should be ignored
-              continue;
-            }
-          } else { //backward
-            if (pos - hits[i].length + 1 < 0 ) {
-              hits[i].block  = hits[i].sortkey  = hits[i].start  = -1; // goes into the previous sequence, so it should be ignored
-              continue;
-            }
-          }
-          hit_num2++; // legitimate hit
+          fm_getOriginalPosition (fmsf, meta, hits[i].block, hits[i].length, hits[i].direction, hits[i].start,  &(hits[i].block), &(hits[i].start) );
+          hits[i].sortkey = hits[i].block == -1 ? -1 : meta->seq_data[ hits[i].block ].id;
 
-          //reuse hit variables.  Now "block" has the index into the matching sequence (in meta), and "start" has the pos within that sequence
-          hits[i].block   = seq_offset;
-          hits[i].start   = pos;
-          hits[i].sortkey = meta->seq_data[ seq_offset ].id;
+          if (hits[i].sortkey != -1)
+            hit_num2++; // legitimate hit
+
         }
         if (hit_num2 > 0)
           hit_cnt++;
@@ -422,9 +407,9 @@ main(int argc,  char *argv[]) {
   }
 
   for (i=0; i<meta->block_count; i++) {
-    freeFM( fmsb+i, 1 );
+    fm_freeFM( fmsb+i, 1 );
     if (!meta->fwd_only)
-      freeFM( fmsf+i, 0 );
+      fm_freeFM( fmsf+i, 0 );
   }
 
   for (i=0; i<meta->seq_count; i++)

@@ -131,7 +131,7 @@ ERROR:
  *
  *            if SAsamp == NULL, don't store/write T or SAsamp
  */
-int buildAndWriteFMIndex (FM_METADATA *meta, uint16_t seq_offset,
+int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_cnt,
     uint8_t *T, uint8_t *BWT,
     int *SA, uint32_t *SAsamp,
     uint32_t *occCnts_sb, uint32_t *cnts_sb,
@@ -285,6 +285,8 @@ for(j=0; j < N; ++j) {
     esl_fatal( "buildAndWriteFMIndex: Error writing terminal location in FM index.\n");
   if(fwrite(&seq_offset, sizeof(seq_offset), 1, fp) !=  1)
     esl_fatal( "buildAndWriteFMIndex: Error writing seq_offset in FM index.\n");
+  if(fwrite(&seq_cnt, sizeof(seq_cnt), 1, fp) !=  1)
+    esl_fatal( "buildAndWriteFMIndex: Error writing seq_cnt in FM index.\n");
 
 
   // don't write Tcompressed or SAsamp if SAsamp == NULL
@@ -370,9 +372,10 @@ main(int argc, char *argv[]) {
 
 
   int numblocks = 0;
-  int numseqs;
+  uint32_t numseqs;
   int allocedseqs = 1000;
-  uint16_t seq_offset = 0;
+  uint32_t seq_offset = 0;
+  uint16_t seq_cnt;
 
   int compressed_bytes;
   int term_loc;
@@ -509,8 +512,8 @@ main(int argc, char *argv[]) {
         use_tmpsq = FALSE;
     } else {
         /* The final sequence on the block was a probably-incomplete window of the active sequence.
-         * We won't use it on this pass through block-construction, but will save it for the
-         * next pass.
+         * Grab a copy of the end for use in the next pass, to ensure we don't miss hits crossing
+         * the boundary between two blocks.
          */
         esl_sq_Copy(block->list + (block->count - 1) , tmpsq);
         use_tmpsq = TRUE;
@@ -583,16 +586,16 @@ main(int argc, char *argv[]) {
     T[block_length] = 0; // last character 0 is effectively '$' for suffix array
     block_length++;
 
-
+    seq_cnt = numseqs-seq_offset;
     //build and write FM-index for T
-    buildAndWriteFMIndex(meta, seq_offset, T, BWT, SA, SAsamp,
+    buildAndWriteFMIndex(meta, seq_offset, seq_cnt, T, BWT, SA, SAsamp,
         occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);
 
 
     if ( ! meta->fwd_only ) {
       //build and write FM-index for reversed T
       fm_reverseString ((char*)T, block_length-1);
-      buildAndWriteFMIndex(meta, seq_offset, T, BWT, SA, NULL,
+      buildAndWriteFMIndex(meta, seq_offset, seq_cnt, T, BWT, SA, NULL,
           occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);
     }
 
@@ -651,12 +654,15 @@ main(int argc, char *argv[]) {
 
     for(j=0; j< (meta->fwd_only?1:2); j++ ) { //do this once or twice, once for forward-T index, and possibly once for reversed
     //first, read
-    if(fread(&block_length, sizeof(uint32_t), 1, fptmp) !=  1)
+    if(fread(&block_length, sizeof(block_length), 1, fptmp) !=  1)
       esl_fatal( "%s: Error reading block_length in FM index.\n", argv[0]);
-    if(fread(&term_loc, sizeof(uint32_t), 1, fptmp) !=  1)
+    if(fread(&term_loc, sizeof(term_loc), 1, fptmp) !=  1)
       esl_fatal( "%s: Error reading terminal location in FM index.\n", argv[0]);
-    if(fread(&seq_offset, sizeof(uint16_t), 1, fptmp) !=  1)
+    if(fread(&seq_offset, sizeof(seq_offset), 1, fptmp) !=  1)
       esl_fatal( "%s: Error reading seq_offset in FM index.\n", argv[0]);
+    if(fread(&seq_cnt, sizeof(seq_cnt), 1, fptmp) !=  1)
+      esl_fatal( "%s: Error reading seq_cnt in FM index.\n", argv[0]);
+
 
     compressed_bytes =   ((chars_per_byte-1+block_length)/chars_per_byte);
     num_freq_cnts_b  = 1+ceil((float)block_length/meta->freq_cnt_b);
@@ -679,12 +685,15 @@ main(int argc, char *argv[]) {
 
 
     //then, write
-    if(fwrite(&block_length, sizeof(uint32_t), 1, fp) !=  1)
+    if(fwrite(&block_length, sizeof(block_length), 1, fp) !=  1)
       esl_fatal( "%s: Error writing block_length in FM index.\n", argv[0]);
-    if(fwrite(&term_loc, sizeof(uint32_t), 1, fp) !=  1)
+    if(fwrite(&term_loc, sizeof(term_loc), 1, fp) !=  1)
       esl_fatal( "%s: Error writing terminal location in FM index.\n", argv[0]);
-    if(fwrite(&seq_offset, sizeof(uint16_t), 1, fp) !=  1)
+    if(fwrite(&seq_offset, sizeof(seq_offset), 1, fp) !=  1)
       esl_fatal( "%s: Error writing seq_offset in FM index.\n", argv[0]);
+    if(fwrite(&seq_cnt, sizeof(seq_cnt), 1, fp) !=  1)
+      esl_fatal( "%s: Error writing seq_cnt in FM index.\n", argv[0]);
+
 
     if(j==0 && fwrite(T, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
       esl_fatal( "%s: Error writing T in FM index.\n", argv[0]);

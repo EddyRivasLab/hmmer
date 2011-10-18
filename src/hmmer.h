@@ -784,11 +784,11 @@ typedef struct fm_interval_s {
 } FM_INTERVAL;
 
 typedef struct fm_hit_s {
-  int      start;
-  int      block;
-  int      direction;
-  int      length;
-  int      sortkey;
+  uint32_t  start;
+  uint32_t  block;
+  int       direction;
+  int       length;
+  int       sortkey;
 } FM_HIT;
 
 
@@ -834,6 +834,7 @@ typedef struct fm_data_s {
   uint32_t N; //length of text
   uint32_t term_loc; // location in the BWT at which the '$' char is found (replaced in the sequence with 'a')
   uint32_t seq_offset;
+  uint16_t seq_cnt;
   uint8_t  *T;  //text corresponding to the BWT
   uint8_t  *BWT_mem;
   uint8_t  *BWT;
@@ -856,23 +857,36 @@ typedef struct fm_dp_pair_s {
 
 
 typedef struct fm_diag_s {
-  uint32_t    n;  //position of the database sequence at which the diagonal ends
-  int         length;
-  uint16_t    k;  //position of the model at which the diagonal ends
+  uint32_t    n;  //position of the database sequence at which the diagonal starts
   float       sortkey;
-  //uint8_t     complementarity;
-//  uint8_t     fm_direction;
-//  uint8_t     model_direction;
-
-//  float       score;
+  uint16_t    k;  //position of the model at which the diagonal starts
+  uint8_t     length;
+  uint8_t     complementarity;
 } FM_DIAG;
-
 
 typedef struct fm_diaglist_s {
   FM_DIAG   *diags;
   int       count;
   int       size;
 } FM_DIAGLIST;
+
+typedef struct fm_window_s {
+  float       score;
+  uint32_t    id; //sequence id of the database sequence hit
+  uint32_t    n;  //position in database sequence (see id above) at which the diagonal starts
+  uint32_t    fm_n;  //position in the concatenated fm-index sequence at which the diagonal starts
+  uint32_t    length;
+  uint16_t    k;  //position of the model at which the diagonal starts
+  uint8_t     complementarity;
+} FM_WINDOW;
+
+typedef struct fm_window_list_s {
+  FM_WINDOW *windows;
+  int       count;
+  int       size;
+} FM_WINDOWLIST;
+
+
 
 /*****************************************************************
  * 13. The optimized implementation.
@@ -1415,26 +1429,32 @@ extern int fm_reverseString (char* str, int N);
 extern int fm_getComplement (char c, uint8_t alph_type);
 
 /* fm_general.c */
-extern uint32_t computeSequenceOffset (FM_DATA *fms, FM_METADATA *meta, int block, int pos);
-extern int readFMmeta( FM_METADATA *meta);
-extern int readFM( FM_DATA *fm, FM_METADATA *meta, int getAll );
-extern void freeFM ( FM_DATA *fm, int isMainFM);
-extern uint8_t getChar(uint8_t alph_type, int j, const uint8_t *B );
-extern int getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
-extern int getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
+extern uint32_t fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int pos);
+extern int fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,
+                                    uint32_t *segment_id, uint32_t *seg_pos);
+extern int fm_readFMmeta( FM_METADATA *meta);
+extern int fm_readFM( FM_DATA *fm, FM_METADATA *meta, int getAll );
+extern void fm_freeFM ( FM_DATA *fm, int isMainFM);
+extern uint8_t fm_getChar(uint8_t alph_type, int j, const uint8_t *B );
+extern int fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
+extern int fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
 extern FM_HMMDATA *fm_hmmdataCreate(P7_PROFILE *gm);
 extern void fm_hmmdataDestroy(FM_HMMDATA *data );
 extern int fm_configAlloc(void **mem, FM_CFG **cfg);
-extern int updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_f, FM_INTERVAL *interval_bk);
-extern int updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval);
+extern int fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_f, FM_INTERVAL *interval_bk);
+extern int fm_updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval);
 extern int fm_initSeeds (FM_DIAGLIST *list) ;
 extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
-extern int FM_convertRange2DSQ(uint8_t alph_type, int first, int last, const uint8_t *B, ESL_SQ *sq );
+extern int fm_initWindows (FM_WINDOWLIST *list);
+extern FM_WINDOW *fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, FM_DIAG *seed);
+extern int fm_convertRange2DSQ(uint8_t alph_type, int first, int last, const uint8_t *B, ESL_SQ *sq );
+
+
 
 /* fm_msv.c */
-extern int p7_FM_MSV(P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt,
-                     const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata);
-
+extern int p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, float nullsc,
+         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata,
+         FM_WINDOWLIST *windowlist);
 
 
 
