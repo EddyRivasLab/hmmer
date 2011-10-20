@@ -98,7 +98,8 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *seqfile, char *fmfile)
  *            in the FM-index metadata.
  */
 int
-allocateSeqdata (FM_METADATA *meta, int namelength, int numseqs, int *allocedseqs) {
+allocateSeqdata (FM_METADATA *meta, ESL_SQ *sq, int numseqs, int *allocedseqs) {
+  int length;
   int status = eslOK;
   if (numseqs == *allocedseqs) {
     *allocedseqs *= 2; // we've bumped up against allocation limit, double allocation.
@@ -110,12 +111,26 @@ allocateSeqdata (FM_METADATA *meta, int namelength, int numseqs, int *allocedseq
       esl_fatal("unable to allocate memory to store FM meta data\n");
   }
 
-  //allocate space for the name of the sequence source for the block
-  meta->seq_data[numseqs].name_length = namelength;
-  ESL_ALLOC (meta->seq_data[numseqs].name, (1+namelength) * sizeof(char));
-  if (meta->seq_data[numseqs].name == NULL )
-    esl_fatal("unable to allocate memory to store FM meta data\n");
+  //allocate space for the name, source, acc, and desc of the sequence source for the block
+  length = strlen(sq->name);
+  meta->seq_data[numseqs].name_length = length;
+  ESL_ALLOC (meta->seq_data[numseqs].name, (1+length) * sizeof(char));
 
+  length = strlen(sq->acc);
+  meta->seq_data[numseqs].acc_length = length;
+  ESL_ALLOC (meta->seq_data[numseqs].acc, (1+length) * sizeof(char));
+
+  length = strlen(sq->source);
+  meta->seq_data[numseqs].source_length = length;
+  ESL_ALLOC (meta->seq_data[numseqs].source, (1+length) * sizeof(char));
+
+  length = strlen(sq->desc);
+  meta->seq_data[numseqs].desc_length = length;
+  ESL_ALLOC (meta->seq_data[numseqs].desc, (1+length) * sizeof(char));
+
+
+  if (meta->seq_data[numseqs].name == NULL || meta->seq_data[numseqs].acc == NULL || meta->seq_data[numseqs].source == NULL || meta->seq_data[numseqs].desc == NULL)
+    esl_fatal("unable to allocate memory to store FM meta data\n");
 
   return eslOK;
 
@@ -132,11 +147,11 @@ ERROR:
  *            if SAsamp == NULL, don't store/write T or SAsamp
  */
 int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_cnt,
-    uint8_t *T, uint8_t *BWT,
-    int *SA, uint32_t *SAsamp,
-    uint32_t *occCnts_sb, uint32_t *cnts_sb,
-    uint16_t *occCnts_b, uint16_t *cnts_b,
-    int N, FILE *fp
+                        uint8_t *T, uint8_t *BWT,
+                        int *SA, uint32_t *SAsamp,
+                        uint32_t *occCnts_sb, uint32_t *cnts_sb,
+                        uint16_t *occCnts_b, uint16_t *cnts_b,
+                        int N, FILE *fp
     ) {
 
 
@@ -534,14 +549,20 @@ main(int argc, char *argv[]) {
     for (i=0; i<block->count; i++) {
 
       //start a new block, with space for the name
-      allocateSeqdata(meta, strlen(block->list[i].name), numseqs, &allocedseqs);
+      allocateSeqdata(meta, block->list+i, numseqs, &allocedseqs);
 
       //meta data
       meta->seq_data[numseqs].id   = block->first_seqidx + i ;
       meta->seq_data[numseqs].start = block->list[i].start;
       meta->seq_data[numseqs].offset =  block_length; //meta->seq_data[numseqs-1].length + ( numseqs == 0 ? 0 : meta->seq_data[numseqs-1].offset);
       if (block->list[i].name == NULL) meta->seq_data[numseqs].name[0] = '\0';
-      else  strcpy(meta->seq_data[numseqs].name, block->list[i].name );
+          else  strcpy(meta->seq_data[numseqs].name, block->list[i].name );
+      if (block->list[i].acc == NULL) meta->seq_data[numseqs].acc[0] = '\0';
+          else  strcpy(meta->seq_data[numseqs].acc, block->list[i].acc );
+      if (block->list[i].source == NULL) meta->seq_data[numseqs].source[0] = '\0';
+          else  strcpy(meta->seq_data[numseqs].source, block->list[i].source );
+      if (block->list[i].desc == NULL) meta->seq_data[numseqs].desc[0] = '\0';
+          else  strcpy(meta->seq_data[numseqs].desc, block->list[i].desc );
 
       for (j=1; j<=block->list[i].n; j++) {
         c = abc->sym[block->list[i].dsq[j]];
@@ -557,13 +578,20 @@ main(int argc, char *argv[]) {
             if (meta->seq_data[numseqs].length > 0) {
               //start a new sequence if the one I'm currently working on isn't empty
               numseqs++;
-              allocateSeqdata(meta, strlen(block->list[i].name), numseqs, &allocedseqs);
+              allocateSeqdata(meta, block->list+i, numseqs, &allocedseqs);
               //meta data
               meta->seq_data[numseqs].id   = block->first_seqidx + i ;
               meta->seq_data[numseqs].start = block->list[i].start + j;
               meta->seq_data[numseqs].offset =  meta->seq_data[numseqs-1].length + ( numseqs == 0 ? 0 : meta->seq_data[numseqs-1].offset);
               if (block->list[i].name == NULL) meta->seq_data[numseqs].name[0] = '\0';
-              else  strcpy(meta->seq_data[numseqs].name, block->list[i].name );
+                  else  strcpy(meta->seq_data[numseqs].name, block->list[i].name );
+              if (block->list[i].acc == NULL) meta->seq_data[numseqs].acc[0] = '\0';
+                  else  strcpy(meta->seq_data[numseqs].acc, block->list[i].acc );
+              if (block->list[i].source == NULL) meta->seq_data[numseqs].source[0] = '\0';
+                  else  strcpy(meta->seq_data[numseqs].source, block->list[i].source );
+              if (block->list[i].desc == NULL) meta->seq_data[numseqs].desc[0] = '\0';
+                  else  strcpy(meta->seq_data[numseqs].desc, block->list[i].desc );
+
             } else {
               meta->seq_data[numseqs].start++;
             }
@@ -633,12 +661,18 @@ main(int argc, char *argv[]) {
 
 
   for (i=0; i<numseqs; i++) {
-    if( fwrite(&(meta->seq_data[i].id),          sizeof(meta->seq_data[i].id),          1, fp) != 1 ||
-        fwrite(&(meta->seq_data[i].start),       sizeof(meta->seq_data[i].start),       1, fp) != 1 ||
-        fwrite(&(meta->seq_data[i].length),      sizeof(meta->seq_data[i].length),      1, fp) != 1 ||
-        fwrite(&(meta->seq_data[i].offset),      sizeof(meta->seq_data[i].offset),      1, fp) != 1 ||
-        fwrite(&(meta->seq_data[i].name_length), sizeof(meta->seq_data[i].name_length), 1, fp) != 1 ||
-        fwrite(meta->seq_data[i].name,           sizeof(char),    meta->seq_data[i].name_length+1  , fp) !=  meta->seq_data[i].name_length+1
+    if( fwrite(&(meta->seq_data[i].id),           sizeof(meta->seq_data[i].id),          1, fp) != 1 ||
+        fwrite(&(meta->seq_data[i].start),        sizeof(meta->seq_data[i].start),       1, fp) != 1 ||
+        fwrite(&(meta->seq_data[i].length),       sizeof(meta->seq_data[i].length),      1, fp) != 1 ||
+        fwrite(&(meta->seq_data[i].offset),       sizeof(meta->seq_data[i].offset),      1, fp) != 1 ||
+        fwrite(&(meta->seq_data[i].name_length),  sizeof(meta->seq_data[i].name_length), 1, fp) != 1 ||
+        fwrite(&(meta->seq_data[i].acc_length),   sizeof(meta->seq_data[i].acc_length), 1, fp) != 1 ||
+        fwrite(&(meta->seq_data[i].source_length),sizeof(meta->seq_data[i].source_length), 1, fp) != 1 ||
+        fwrite(&(meta->seq_data[i].desc_length),  sizeof(meta->seq_data[i].desc_length), 1, fp) != 1 ||
+        fwrite(meta->seq_data[i].name,            sizeof(char),    meta->seq_data[i].name_length+1  , fp) !=  meta->seq_data[i].name_length+1 ||
+        fwrite(meta->seq_data[i].acc,             sizeof(char),    meta->seq_data[i].acc_length+1   , fp) !=  meta->seq_data[i].acc_length+1 ||
+        fwrite(meta->seq_data[i].source,          sizeof(char),    meta->seq_data[i].source_length+1, fp) !=  meta->seq_data[i].source_length+1 ||
+        fwrite(meta->seq_data[i].desc,            sizeof(char),    meta->seq_data[i].desc_length+1  , fp) !=  meta->seq_data[i].desc_length+1
     )
       esl_fatal( "%s: Error writing meta data for FM index.\n", argv[0]);
   }

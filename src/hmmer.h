@@ -798,7 +798,13 @@ typedef struct fm_seqdata_s {
   uint32_t length;
   uint32_t offset;
   uint16_t name_length;
+  uint16_t source_length;
+  uint16_t acc_length;
+  uint16_t desc_length;
   char     *name;
+  char     *source;
+  char     *acc;
+  char     *desc;
 } FM_SEQDATA;
 
 
@@ -872,6 +878,7 @@ typedef struct fm_diaglist_s {
 
 typedef struct fm_window_s {
   float       score;
+  float       null_sc;
   uint32_t    id; //sequence id of the database sequence hit
   uint32_t    n;  //position in database sequence (see id above) at which the diagonal starts
   uint32_t    fm_n;  //position in the concatenated fm-index sequence at which the diagonal starts
@@ -1448,14 +1455,14 @@ extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
 extern int fm_initWindows (FM_WINDOWLIST *list);
 extern FM_WINDOW *fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, FM_DIAG *seed);
 extern int fm_convertRange2DSQ(uint8_t alph_type, int first, int last, const uint8_t *B, ESL_SQ *sq );
+extern int fm_initConfigGeneric( FM_CFG *cfg );
 
 
 
 /* fm_msv.c */
-extern int p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, float nullsc,
+extern int p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
          const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata,
          FM_WINDOWLIST *windowlist);
-
 
 
 /* seqmodel.c */

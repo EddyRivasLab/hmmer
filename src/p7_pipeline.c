@@ -854,6 +854,19 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   int              d;
   int              status;
 
+/*
+  printf("start:  %ld\n", window_start);
+  printf("len:    %ld\n", window_len);
+  printf("name:   %s\n", seq_name);
+  printf("usc:    %.2f\n", usc);
+  printf("nullsc: %.2f\n", nullsc);
+  printf("sc:     %.2f\n", usc-nullsc);
+  printf("seq:    ");
+  for (d=1; d<=window_len; d++)
+    printf("%d", subseq[d]);
+  printf("\n\n");
+//  return eslOK;
+*/
 
   int F1_L = ESL_MIN( window_len,  pli->B1);
   int F2_L = ESL_MIN( window_len,  pli->B2);
@@ -861,6 +874,7 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
 
 
   if (pli->do_biasfilter) {
+      p7_bg_SetLength(bg, window_len);
       p7_bg_FilterScore(bg, subseq, window_len, &bias_filtersc);
       bias_filtersc -= nullsc;
       filtersc =  nullsc + (bias_filtersc * (float)F1_L/window_len);
@@ -1094,11 +1108,14 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
     //if bias filtering is used.
     p7_oprofile_ReconfigMSVLength(om, window_len);
     p7_MSVFilter(subseq, window_len, om, pli->oxf, &usc);
+
+
     P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
     if (P > pli->F1 ) continue;
 
     pli->n_past_msv++;
     pli->pos_past_msv += window_len;
+
 
     status = postMSV_LongTarget(pli, om, bg, hitlist, seqidx, window_starts[i], window_len, tmpseq, ddef_app,
                       subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc);
@@ -1158,13 +1175,11 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
     const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata)
 {
 
-  int window_start, window_end, window_len;
   int i;
   int status;
-  float nullsc;
   ESL_SQ        *tmpseq;
   ESL_DSQ       *subseq;
-  FM_WINDOW     *window;
+  FM_WINDOW     window;
   FM_WINDOWLIST windowlist;
   FM_SEQDATA    *seqdata;
 
@@ -1181,19 +1196,13 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
 
   p7_omx_GrowTo(pli->oxf, om->M, 0, 0);    /* expand the one-row omx if needed */
 
-  /* Set false target length. This is a conservative estimate of the length of window that'll
-   * soon be passed on to later phases of the pipeline;  used to recover some bits of the score
-   * that we would miss if we left length parameters set to the full target length */
-  p7_bg_SetLength(bg, om->max_length);
-  p7_oprofile_ReconfigMSVLength(om, om->max_length);
-  p7_bg_NullOne  (bg, NULL, om->max_length, &nullsc);
 
 
   /* First level filter: the MSV filter, multihit with <om>.
    * This variant of MSV will scan a long sequence and find
    * short high-scoring regions.
    * */
-  p7_FM_MSV(om, (P7_GMX*)(pli->oxf), 2.0, bg, pli->F1, nullsc,
+  p7_FM_MSV(om, (P7_GMX*)(pli->oxf), 2.0, bg, pli->F1,
              fmf, fmb, fm_cfg, fm_hmmdata, &windowlist );
 
 
@@ -1201,23 +1210,19 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
   tmpseq = esl_sq_CreateDigital(om->abc);
   for (i=0; i<windowlist.count; i++){
 
+    window =  windowlist.windows[i] ;
 
-    window =  windowlist.windows + i;
-
-    //pretty liberal allowance for window ranges.
-    window_start = window->fm_n - om->max_length + fm_cfg->msv_length + 1;
-    window_end   = window->fm_n + window->length + om->max_length - fm_cfg->msv_length - 1;
-    window_len   = window_end - window_start + 1;
-
-    fm_convertRange2DSQ(fm_cfg->meta->alph_type, window_start, window_end, fmf->T, tmpseq );
+    fm_convertRange2DSQ(fm_cfg->meta->alph_type, window.fm_n, ( window.fm_n+window.length-1 ), fmf->T, tmpseq );
     subseq = tmpseq->dsq;
 
     pli->n_past_msv++;
-    pli->pos_past_msv += window_len;
+    pli->pos_past_msv += window.length;
+    p7_oprofile_ReconfigMSVLength(om, window.length);
 
-    status = postMSV_LongTarget(pli, om, bg, hitlist, seqidx, window_start, window_len, tmpseq, ddef_app,
-                      subseq, window->n, seqdata[window->id].name, NULL /*source*/, NULL /*acc*/, NULL /*desc*/,
-                      nullsc, window->score);
+    status = postMSV_LongTarget(pli, om, bg, hitlist, seqidx, window.n, window.length, tmpseq, ddef_app,
+                      subseq, 1, seqdata[window.id].name, seqdata[window.id].source,
+                      seqdata[window.id].acc, seqdata[window.id].desc,
+                      window.null_sc, window.score);
 
     if (status != eslOK) return status;
 
@@ -1227,7 +1232,6 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
 
   esl_sq_Destroy(tmpseq);
   free(windowlist.windows);
-  return eslOK;
 
   return eslOK;
 

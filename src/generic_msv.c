@@ -220,7 +220,7 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
 	  {
 		  MMX(i,k)     = MSC(k) + ESL_MAX(MMX(i-1,k-1), XMX(i-1,p7G_B) + tbmk);
 		  XMX(i,p7G_E) = ESL_MAX(XMX(i,p7G_E), MMX(i,k));
-	  }
+ 	  }
 
       XMX(i,p7G_J) = ESL_MAX( XMX(i-1,p7G_J) /*+ tloop*/,     XMX(i, p7G_E) + tej);
       XMX(i,p7G_C) = ESL_MAX( XMX(i-1,p7G_C) /*+ tloop*/,     XMX(i, p7G_E) + tec);
@@ -248,7 +248,6 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
 			  MMX(i,k) = -eslINFINITY;
 
 	  }
-
 
   }
 

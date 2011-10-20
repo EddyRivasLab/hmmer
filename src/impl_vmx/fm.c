@@ -51,15 +51,7 @@ fm_initConfig( FM_CFG *cfg ) {
   int i,j;
   int trim_chunk_count;
 
-  //bounding cutoffs
-  cfg->max_depth       = 16;
-  cfg->neg_len_limit   = 4;
-  cfg->consec_pos_req  = 5; //6
-  cfg->score_ratio_req = 0.45; //.49
-  cfg->msv_length      = 45;
-
-  cfg->maskSA       =  cfg->meta->freq_SA - 1;
-  cfg->shiftSA      =  cfg->meta->SA_shift;
+  fm_initConfigGeneric(cfg);
 
   cfg->fm_allones_v = esl_vmx_set_u8((unsigned char) 0xff);
   cfg->fm_neg128_v  = esl_vmx_set_u8((int8_t) -128);

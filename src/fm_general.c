@@ -261,6 +261,37 @@ fm_convertRange2DSQ(uint8_t alph_type, int first, int last, const uint8_t *B, ES
   return eslOK;
 }
 
+int
+fm_initConfigGeneric( FM_CFG *cfg ) {
+
+  cfg->maskSA       =  cfg->meta->freq_SA - 1;
+  cfg->shiftSA      =  cfg->meta->SA_shift;
+
+
+  //bounding cutoffs
+
+  cfg->max_depth       = 18;
+  cfg->neg_len_limit   = 4;
+  cfg->consec_pos_req  = 5;
+  cfg->score_ratio_req = 0.40;
+  cfg->msv_length      = 50;
+
+  /*
+  cfg->max_depth       = 16;
+  cfg->neg_len_limit   = 4;
+  cfg->consec_pos_req  = 5;
+  cfg->score_ratio_req = 0.45;
+  cfg->msv_length      = 45;
+*/
+  /*
+  cfg->max_depth       = 14;
+  cfg->neg_len_limit   = 3;
+  cfg->consec_pos_req  = 6;
+  cfg->score_ratio_req = 0.49;
+  cfg->msv_length      = 40;
+  */
+  return eslOK;
+}
 
 /* Function:  freeFM()
  * Synopsis:  release the memory required to store an individual FM-index
@@ -412,17 +443,27 @@ fm_readFMmeta( FM_METADATA *meta)
 
 
   for (i=0; i<meta->seq_count; i++) {
-    if( fread(&(meta->seq_data[i].id),          sizeof(meta->seq_data[i].id),          1, meta->fp) != 1 ||
-        fread(&(meta->seq_data[i].start),       sizeof(meta->seq_data[i].start),       1, meta->fp) != 1 ||
-        fread(&(meta->seq_data[i].length),      sizeof(meta->seq_data[i].length),      1, meta->fp) != 1 ||
-        fread(&(meta->seq_data[i].offset),      sizeof(meta->seq_data[i].offset),      1, meta->fp) != 1 ||
-        fread(&(meta->seq_data[i].name_length), sizeof(meta->seq_data[i].name_length), 1, meta->fp) != 1
+    if( fread(&(meta->seq_data[i].id),           sizeof(meta->seq_data[i].id),           1, meta->fp) != 1 ||
+        fread(&(meta->seq_data[i].start),        sizeof(meta->seq_data[i].start),        1, meta->fp) != 1 ||
+        fread(&(meta->seq_data[i].length),       sizeof(meta->seq_data[i].length),       1, meta->fp) != 1 ||
+        fread(&(meta->seq_data[i].offset),       sizeof(meta->seq_data[i].offset),       1, meta->fp) != 1 ||
+        fread(&(meta->seq_data[i].name_length),  sizeof(meta->seq_data[i].name_length),  1, meta->fp) != 1 ||
+        fread(&(meta->seq_data[i].acc_length),   sizeof(meta->seq_data[i].acc_length),   1, meta->fp) != 1 ||
+        fread(&(meta->seq_data[i].source_length),sizeof(meta->seq_data[i].source_length),1, meta->fp) != 1 ||
+        fread(&(meta->seq_data[i].desc_length),  sizeof(meta->seq_data[i].desc_length),  1, meta->fp) != 1
         )
       esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
 
-    ESL_ALLOC (meta->seq_data[i].name, (1+meta->seq_data[i].name_length) * sizeof(char));
+    ESL_ALLOC (meta->seq_data[i].name,  (1+meta->seq_data[i].name_length)   * sizeof(char));
+    ESL_ALLOC (meta->seq_data[i].acc,   (1+meta->seq_data[i].acc_length)    * sizeof(char));
+    ESL_ALLOC (meta->seq_data[i].source,(1+meta->seq_data[i].source_length) * sizeof(char));
+    ESL_ALLOC (meta->seq_data[i].desc,  (1+meta->seq_data[i].desc_length)   * sizeof(char));
 
-    if( fread(meta->seq_data[i].name,  sizeof(char), meta->seq_data[i].name_length+1  , meta->fp) !=  meta->seq_data[i].name_length+1 )
+    if(
+        fread(meta->seq_data[i].name,   sizeof(char), meta->seq_data[i].name_length+1   , meta->fp) !=  meta->seq_data[i].name_length+1  ||
+        fread(meta->seq_data[i].acc,    sizeof(char), meta->seq_data[i].acc_length+1    , meta->fp) !=  meta->seq_data[i].acc_length+1  ||
+        fread(meta->seq_data[i].source, sizeof(char), meta->seq_data[i].source_length+1 , meta->fp) !=  meta->seq_data[i].source_length+1  ||
+        fread(meta->seq_data[i].desc,   sizeof(char), meta->seq_data[i].desc_length+1   , meta->fp) !=  meta->seq_data[i].desc_length+1 )
       esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
 
   }

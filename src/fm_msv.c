@@ -239,8 +239,6 @@ FM_Recurse( int depth, int M, int fm_direction,
 
           }
 
-
-
         } else if (  sc <= 0                                                                                        //some other path in the string enumeration tree will do the job
             || depth == fm_cfg->max_depth                                                                            //can't extend anymore, 'cause we've reached the pruning length
             || (depth == dp_pairs[i].max_score_len + fm_cfg->neg_len_limit)                                        //too many consecutive positions with a negative total score contribution (sort of like Xdrop)
@@ -556,16 +554,20 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CF
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, float nullsc,
+p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
          const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata,
          FM_WINDOWLIST *windowlist)
 {
-
+  float P;
   float P_fm = 0.5;
   float sc_thresh, sc_threshFM, j_thresh;
   float invP, invP_FM;
+  float nullsc;
 
   int i, j;
+  float window_tmove;
+  float window_tloop;
+
   float      tloop = logf((float) om->max_length / (float) (om->max_length+3));
   float      tloop_total = tloop * om->max_length;
   float      tmove = logf(     3.0f / (float) (om->max_length+3));
@@ -580,6 +582,13 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, float nul
   FM_DIAGLIST seeds;
   fm_initSeeds(&seeds);
 
+  /* Set false target length. This is a conservative estimate of the length of window that'll
+   * soon be passed on to later phases of the pipeline;  used to recover some bits of the score
+   * that we would miss if we left length parameters set to the full target length */
+  p7_oprofile_ReconfigMSVLength(om, om->max_length);
+  p7_bg_SetLength(bg, om->max_length);
+  p7_bg_NullOne  (bg, NULL, om->max_length, &nullsc);
+
 
   /*
    * Computing the score required to let P meet the F1 prob threshold
@@ -588,23 +597,24 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, float nul
    *  S = XMX(L,p7G_C)
    *  usc = S + tmove + tloop_total
    *  P = f ( (usc - nullsc) / eslCONST_LOG2 , mu, lambda)
+   *  and XMX(C) was the diagonal score + tmove + tbmk + tec
    * and we're computing the threshold score S, so reverse it:
    *  (usc - nullsc) /  eslCONST_LOG2 = inv_f( P, mu, lambda)
    *  usc = nullsc + eslCONST_LOG2 * inv_f( P, mu, lambda)
-   *  S = usc - tmove - tloop_total
+   *  S = usc - tmove - tloop_total - tmove - tbmk - tec
+   *
    *
    *  Here, I compute threshold with length model based on max_length.  Usually, the
    *  length of a window returned by this scan will be 2*max_length-1 or longer.  Doesn't
    *  really matter - in any case, both the bg and om models will change with roughly
    *  1 bit for each doubling of the length model, so they offset.
    */
-
-  invP = esl_gumbel_invsurv(P, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-  sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total - tmove - tbmk - tec;
+  invP = esl_gumbel_invsurv(F1, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  sc_thresh =   (invP * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec);
   j_thresh  =   0 - tmove - tbmk - tec; //the score required to make it worth appending a diagonal to another diagonal
 
   invP_FM = esl_gumbel_invsurv(P_fm, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-  sc_threshFM =   nullsc  + (invP_FM * eslCONST_LOG2) - tmove - tloop_total - tmove - tbmk - tec;
+  sc_threshFM =  (invP_FM * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec);
 
   //get diagonals that score above sc_threshFM
   FM_getSeeds(om, gx, sc_threshFM, &seeds, fmf, fmb, fm_cfg, fm_hmmdata);
@@ -714,6 +724,64 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double P, float nul
     }
 
   }
+
+
+  //update window size and corresponding score. Filter away windows now below threshold, compressing list
+  j=0;
+  for(i=0; i<windowlist->count; i++) {
+    FM_WINDOW *window  =  windowlist->windows + i;
+    int   diag_len     = window->length;
+
+    int window_start = window->fm_n - om->max_length + fm_cfg->msv_length + 1;
+    int window_end   = window->fm_n + window->length + om->max_length - fm_cfg->msv_length - 1;
+
+    window->length    = window_end - window_start + 1;
+    window->n        -= (window->fm_n - window_start)  - 1 ; // final -1 to shift n up one, accounting for difference between 0-based fm-index and 1-based DSQ
+    window->fm_n      = window_start;
+
+    window_tmove = logf(     3.0f / (float) (window->length+3));
+    window_tloop = logf((float)window->length / (float) (window->length+3));
+
+    window->score    += tbmk + tec
+                    + 2*window_tmove
+                    + ( (window->length - diag_len) * window_tloop );
+
+    p7_bg_SetLength(bg, om->max_length);
+    p7_bg_NullOne  (bg, NULL, om->max_length, &(window->null_sc));
+
+    P = esl_gumbel_surv( (window->score - window->null_sc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+    if (P <= F1 )
+      windowlist->windows[j++] = windowlist->windows[i];
+
+  }
+  windowlist->count = j;
+
+
+  //Now merge overlapping windows again.
+  //Most overlapping seeds will already have been merged earlier, but because we've
+  //expanded window since then, there may be some overlap
+  j=1;
+  for(i=1; i<windowlist->count; i++) {
+    FM_WINDOW *prev_window  =  windowlist->windows + i-1;
+    FM_WINDOW *window  =  windowlist->windows + i;
+
+    if (window->id == prev_window->id &&
+        window->complementarity == prev_window->complementarity &&
+        window->n <= prev_window->n + prev_window->length - 1
+        ) { //overlap , so extend the previous window, and update it's score
+
+        prev_window->length = window->n - prev_window->n + 1 + window->length;
+        prev_window->score = ESL_MAX(prev_window->score, window->score);
+
+    } else {
+      //no overlap, so shift the current window over to the next active slot
+      windowlist->windows[j++] = windowlist->windows[i];
+
+    }
+
+  }
+  windowlist->count = j;
+
 
   return eslEOF;
 

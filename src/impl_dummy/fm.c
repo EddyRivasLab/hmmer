@@ -8,15 +8,9 @@
  */
 int
 fm_initConfig( FM_CFG *cfg ) {
-  cfg->maskSA       =  cfg->meta->freq_SA - 1;
-  cfg->shiftSA      =  cfg->meta->SA_shift;
 
-  //bounding cutoffs
-  cfg->max_depth       = 16;
-  cfg->neg_len_limit   = 4;
-  cfg->consec_pos_req  = 5; //6
-  cfg->score_ratio_req = 0.45; //.49
-  cfg->msv_length      = 45;
+  fm_initConfigGeneric(cfg);
+
 
   return eslOK;
 }
