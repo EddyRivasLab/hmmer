@@ -899,6 +899,7 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
 
   /* Second level filter: ViterbiFilter(), multihit with <om> */
   filtersc =  nullsc + (bias_filtersc * (float)F2_L/window_len);
+  p7_omx_GrowTo(pli->oxf, om->M, 0, window_len);
   p7_ViterbiFilter(subseq, window_len, om, pli->oxf, &vfsc);
   seq_score = (vfsc - filtersc) / eslCONST_LOG2;
   P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
@@ -1075,7 +1076,8 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
                                                          to compute mocc poserior probs for single-domain segments */
 
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
-  p7_omx_GrowTo(pli->oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
+  //p7_omx_GrowTo(pli->oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
+  p7_omx_GrowTo(pli->oxf, om->M, 0, om->max_length);    /* expand the one-row omx if needed */
 
   /* Set false target length. This is a conservative estimate of the length of window that'll
    * soon be passed on to later phases of the pipeline;  used to recover some bits of the score

@@ -621,6 +621,8 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
 
 
   ESL_SQ   *tmp_sq   =  esl_sq_CreateDigital(om->abc);
+
+
   //now extend those diagonals to find ones scoring above sc_thresh
   for(i=0; i<seeds.count; i++) {
     FM_extendSeed( seeds.diags+i, fmf, fm_hmmdata, fm_cfg, sc_thresh, tmp_sq);

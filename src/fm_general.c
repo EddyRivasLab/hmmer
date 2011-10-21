@@ -276,20 +276,20 @@ fm_initConfigGeneric( FM_CFG *cfg ) {
   cfg->score_ratio_req = 0.40;
   cfg->msv_length      = 50;
 
-  /*
+/*
   cfg->max_depth       = 16;
   cfg->neg_len_limit   = 4;
   cfg->consec_pos_req  = 5;
   cfg->score_ratio_req = 0.45;
   cfg->msv_length      = 45;
 */
-  /*
+/*
   cfg->max_depth       = 14;
   cfg->neg_len_limit   = 3;
   cfg->consec_pos_req  = 6;
   cfg->score_ratio_req = 0.49;
   cfg->msv_length      = 40;
-  */
+*/
   return eslOK;
 }
 
