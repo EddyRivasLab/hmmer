@@ -969,7 +969,6 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   int    descw;
   char  *showname;
   int    have_printed_incthresh = FALSE;
-  int    status;
 
   /* when --acc is on, we'll show accession if available, and fall back to name */
   if (pli->show_accessions) namew = ESL_MAX(8, p7_tophits_GetMaxShownLength(th));
@@ -1413,7 +1412,6 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
   int taccw  = ESL_MAX(10, p7_tophits_GetMaxAccessionLength(th));
   int posw   = (pli->long_targets ? ESL_MAX(7, p7_tophits_GetMaxPositionLength(th)) : 0);
   int h,d;
-  int status;
 
   if (show_header)
     {
@@ -1518,7 +1516,6 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
   int taccw  = ESL_MAX(10, p7_tophits_GetMaxAccessionLength(th));
   int tlen, qlen;
   int h,d,nd;
-  int status;
 
   if (show_header)
     {

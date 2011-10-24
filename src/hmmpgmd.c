@@ -86,75 +86,68 @@ write_pid(ESL_GETOPTS *go)
   fclose(fp);
 }
 
-static void
+static int
 process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go)
 {
-  int n;
-  int status;
-  ESL_GETOPTS *go = NULL;
-
-  FILE *fp;
-
-  if ((go = esl_getopts_Create(cmdlineOpts)) == NULL)    p7_Die("Internal failure creating options object");
+  ESL_GETOPTS *go = esl_getopts_Create(cmdlineOpts);
+  int          status;
 
   /* if there are no command line arguments, let's try to read /etc/hmmpgmd.conf
    * for any configuration data.
    */
-  if (argc == 1) {
-    if ((fp = fopen(CONF_FILE, "r")) == NULL) {
-      puts("Options --master or --worker must be specified.");
-      goto ERROR; 
-    }
-    status = esl_opt_ProcessConfigfile(go, CONF_FILE, fp);
-    fclose(fp);
+  if (argc == 1) 
+    {
+      FILE        *fp = NULL;
 
-    if (status != eslOK) {
-      printf("Failed to parse configuration file %s: %s\n",  CONF_FILE, go->errbuf); 
-      goto ERROR; 
-    }
-  } else {
-    if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) { 
-      printf("Failed to parse command line: %s\n",  go->errbuf); 
-      goto ERROR; 
-    }
-  }
+      if ((fp = fopen(CONF_FILE, "r")) == NULL) 
+	{ if (puts("Options --master or --worker must be specified.") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
 
-  if (esl_opt_VerifyConfig(go) != eslOK) { 
-    printf("Failed to parse command line: %s\n", go->errbuf); 
-    goto ERROR; 
-  }
+      if ((status = esl_opt_ProcessConfigfile(go, CONF_FILE, fp) ) != eslOK)
+	{ if (printf("Failed to parse configuration file %s: %s\n",  CONF_FILE, go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+      fclose(fp);
+    } 
+  else 
+    {
+      if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) 
+	{ if (printf("Failed to parse command line: %s\n",  go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+    }
+
+  if (esl_opt_VerifyConfig(go) != eslOK) { if (printf("Failed to parse command line: %s\n", go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
  
   /* help format: */
-  if (esl_opt_GetBoolean(go, "-h") == TRUE) {
-    p7_banner(stdout, argv[0], banner);
-    esl_usage(stdout, argv[0], usage);
+  if (esl_opt_GetBoolean(go, "-h") == TRUE) 
+    {
+      p7_banner(stdout, argv[0], banner);
+      esl_usage(stdout, argv[0], usage);
 
-    puts("\nBasic options:");
-    esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
+      if (puts("\nBasic options:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+      esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
 
-    puts("\nOther expert options:");
-    esl_opt_DisplayHelp(stdout, go, 12, 2, 80); 
-    exit(0);
-  }
+      if (puts("\nOther expert options:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+      esl_opt_DisplayHelp(stdout, go, 12, 2, 80); 
+      exit(0);
+    }
 
-  n = esl_opt_ArgNumber(go);
-  if (n != 0) { puts("Incorrect number of command line arguments."); goto ERROR; }
 
-  if (esl_opt_IsUsed(go, "--master") && !(esl_opt_IsUsed(go, "--seqdb") || esl_opt_IsUsed(go, "--hmmdb"))) {
-    puts("At least one --seqdb or --hmmdb must be specified."); 
-    goto ERROR;
-  }
+  if (esl_opt_ArgNumber(go) != 0) { if (puts("Incorrect number of command line arguments.") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+
+  if (esl_opt_IsUsed(go, "--master") && !(esl_opt_IsUsed(go, "--seqdb") || esl_opt_IsUsed(go, "--hmmdb"))) 
+    { if (puts("At least one --seqdb or --hmmdb must be specified.") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
 
   *ret_go = go;
-  return;
+  return eslOK;
   
- ERROR:  /* all errors handled here are user errors, so be polite.  */
+ FAILURE:  /* all errors handled here are user errors, so be polite.  */
   esl_usage(stdout, argv[0], usage);
   puts("\nwhere most common options are:");
   esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
   printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
   esl_getopts_Destroy(go);
   exit(0);  
+
+ ERROR:
+  if (go) esl_getopts_Destroy(go);
+  exit(status);
 }
 
 int

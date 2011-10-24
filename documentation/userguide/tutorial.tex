@@ -314,17 +314,23 @@ bit score doesn't depend on the size of the sequence database, only on
 the profile HMM and the target sequence.
 
 The next number, the \emph{bias}, is a correction term for biased
-sequence composition that's been applied to the sequence bit
+sequence composition that has been applied to the sequence bit
 score.\footnote{The method that HMMER3 uses to compensate for biased
-composition is unpublished, and different from HMMER2. We will write
-it up when there's a chance.} The only time you really need to pay
-attention to this value is when it's large, and on the same order of
-magnitude as the sequence bit score. This might be a sign that the
-target sequence isn't really a homolog, but merely shares a similar
-strong biased composition with the query model.  The biased
-composition correction usually works well, but occasionally will not
-knock down a falsely ``significant'' nonhomologous hit as far as it
-should.
+  composition is unpublished, and different from HMMER2. We will write
+  it up when there's a chance.} For instance, for the top hit
+\prog{MYG\_PHYCA} that scored 222.7 bits, the bias of 3.2 bits means
+that this sequence originally scored 225.9 bits, which was adjusted by
+the slight 3.2 bit biased-composition correction. The only time you
+really need to pay attention to the bias value is when it's large, on
+the same order of magnitude as the sequence bit score. Sometimes
+(rarely) the bias correction isn't aggressive enough, and allows a
+non-homolog to retain too much score. Conversely, the bias correction
+can be too aggressive sometimes, causing you to miss homologs. You can
+turn the biased-composition score correction off with the
+\prog{--nonull2} option (and if you're doing that, you may also want
+to set \prog{--nobias}, to turn off another biased composition step
+called the bias filter, which affects which sequences get scored at
+all).
 
 The next three numbers are again an E-value, score, and bias, but only
 for the single best-scoring domain in the sequence, rather than the

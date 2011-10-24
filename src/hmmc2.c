@@ -1,7 +1,4 @@
 /* hmmd: hmmc2 deamon client.
- * 
- * MSF, Tue Aug 10, 2010 [Janelia]
- * SVN $Id$
  */
 
 #include <stdio.h>
@@ -97,61 +94,64 @@ sig_int(int signo)
 static int
 output_header(FILE *ofp, const ESL_GETOPTS *sopt, char *seqfile, char *banner)
 {
-  p7_banner(ofp, "hmm client", banner);
+  int status;
+
+  p7_banner(ofp, "hmmpgmd client", banner);
   
-  fprintf(ofp, "# target sequence database:        %s\n", seqfile);
-  if (esl_opt_IsUsed(sopt, "--acc"))       fprintf(ofp, "# prefer accessions over names:    yes\n");
-  if (esl_opt_IsUsed(sopt, "--noali"))     fprintf(ofp, "# show alignments in output:       no\n");
-  if (esl_opt_IsUsed(sopt, "--notextw"))   fprintf(ofp, "# max ASCII text line length:      unlimited\n");
-  if (esl_opt_IsUsed(sopt, "--textw"))     fprintf(ofp, "# max ASCII text line length:      %d\n",             esl_opt_GetInteger(sopt, "--textw"));  
-  if (esl_opt_IsUsed(sopt, "--popen"))     fprintf(ofp, "# gap open probability:            %f\n",             esl_opt_GetReal   (sopt, "--popen"));
-  if (esl_opt_IsUsed(sopt, "--pextend"))   fprintf(ofp, "# gap extend probability:          %f\n",             esl_opt_GetReal   (sopt, "--pextend"));
-  if (esl_opt_IsUsed(sopt, "--mx"))        fprintf(ofp, "# subst score matrix (built-in):   %s\n",             esl_opt_GetString (sopt, "--mx"));
-  if (esl_opt_IsUsed(sopt, "--mxfile"))    fprintf(ofp, "# subst score matrix (file):       %s\n",             esl_opt_GetString (sopt, "--mxfile"));
-  if (esl_opt_IsUsed(sopt, "-E"))          fprintf(ofp, "# sequence reporting threshold:    E-value <= %g\n",  esl_opt_GetReal   (sopt, "-E"));
-  if (esl_opt_IsUsed(sopt, "-T"))          fprintf(ofp, "# sequence reporting threshold:    score >= %g\n",    esl_opt_GetReal   (sopt, "-T"));
-  if (esl_opt_IsUsed(sopt, "--domE"))      fprintf(ofp, "# domain reporting threshold:      E-value <= %g\n",  esl_opt_GetReal   (sopt, "--domE"));
-  if (esl_opt_IsUsed(sopt, "--domT"))      fprintf(ofp, "# domain reporting threshold:      score >= %g\n",    esl_opt_GetReal   (sopt, "--domT"));
-  if (esl_opt_IsUsed(sopt, "--incE"))      fprintf(ofp, "# sequence inclusion threshold:    E-value <= %g\n",  esl_opt_GetReal   (sopt, "--incE"));
-  if (esl_opt_IsUsed(sopt, "--incT"))      fprintf(ofp, "# sequence inclusion threshold:    score >= %g\n",    esl_opt_GetReal   (sopt, "--incT"));
-  if (esl_opt_IsUsed(sopt, "--incdomE"))   fprintf(ofp, "# domain inclusion threshold:      E-value <= %g\n",  esl_opt_GetReal   (sopt, "--incdomE"));
-  if (esl_opt_IsUsed(sopt, "--incdomT"))   fprintf(ofp, "# domain inclusion threshold:      score >= %g\n",    esl_opt_GetReal   (sopt, "--incdomT"));
-  if (esl_opt_IsUsed(sopt, "--cut_ga"))    fprintf(ofp, "# model-specific thresholding:     GA cutoffs\n"); 
-  if (esl_opt_IsUsed(sopt, "--cut_nc"))    fprintf(ofp, "# model-specific thresholding:     NC cutoffs\n"); 
-  if (esl_opt_IsUsed(sopt, "--cut_tc"))    fprintf(ofp, "# model-specific thresholding:     TC cutoffs\n"); 
-  if (esl_opt_IsUsed(sopt, "--max"))       fprintf(ofp, "# Max sensitivity mode:            on [all heuristic filters off]\n");
-  if (esl_opt_IsUsed(sopt, "--F1"))        fprintf(ofp, "# MSV filter P threshold:       <= %g\n", esl_opt_GetReal(sopt, "--F1"));
-  if (esl_opt_IsUsed(sopt, "--F2"))        fprintf(ofp, "# Vit filter P threshold:       <= %g\n", esl_opt_GetReal(sopt, "--F2"));
-  if (esl_opt_IsUsed(sopt, "--F3"))        fprintf(ofp, "# Fwd filter P threshold:       <= %g\n", esl_opt_GetReal(sopt, "--F3"));
-  if (esl_opt_IsUsed(sopt, "--nobias"))    fprintf(ofp, "# biased composition HMM filter:   off\n");
-  if (esl_opt_IsUsed(sopt, "--nonull2"))   fprintf(ofp, "# null2 bias corrections:          off\n");
-  if (esl_opt_IsUsed(sopt, "--EmL") )      fprintf(ofp, "# seq length, MSV Gumbel mu fit:   %d\n",     esl_opt_GetInteger(sopt, "--EmL"));
-  if (esl_opt_IsUsed(sopt, "--EmN") )      fprintf(ofp, "# seq number, MSV Gumbel mu fit:   %d\n",     esl_opt_GetInteger(sopt, "--EmN"));
-  if (esl_opt_IsUsed(sopt, "--EvL") )      fprintf(ofp, "# seq length, Vit Gumbel mu fit:   %d\n",     esl_opt_GetInteger(sopt, "--EvL"));
-  if (esl_opt_IsUsed(sopt, "--EvN") )      fprintf(ofp, "# seq number, Vit Gumbel mu fit:   %d\n",     esl_opt_GetInteger(sopt, "--EvN"));
-  if (esl_opt_IsUsed(sopt, "--EfL") )      fprintf(ofp, "# seq length, Fwd exp tau fit:     %d\n",     esl_opt_GetInteger(sopt, "--EfL"));
-  if (esl_opt_IsUsed(sopt, "--EfN") )      fprintf(ofp, "# seq number, Fwd exp tau fit:     %d\n",     esl_opt_GetInteger(sopt, "--EfN"));
-  if (esl_opt_IsUsed(sopt, "--Eft") )      fprintf(ofp, "# tail mass for Fwd exp tau fit:   %f\n",     esl_opt_GetReal   (sopt, "--Eft"));
-  if (esl_opt_IsUsed(sopt, "-Z"))          fprintf(ofp, "# sequence search space set to:    %.0f\n",   esl_opt_GetReal   (sopt, "-Z"));
-  if (esl_opt_IsUsed(sopt, "--domZ"))      fprintf(ofp, "# domain search space set to:      %.0f\n",   esl_opt_GetReal   (sopt, "--domZ"));
+  if (fprintf(ofp, "# target sequence database:        %s\n", seqfile) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+
+  if (esl_opt_IsUsed(sopt, "--acc")       && fprintf(ofp, "# prefer accessions over names:    yes\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--noali")     && fprintf(ofp, "# show alignments in output:       no\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--notextw")   && fprintf(ofp, "# max ASCII text line length:      unlimited\n")                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--textw")     && fprintf(ofp, "# max ASCII text line length:      %d\n",             esl_opt_GetInteger(sopt, "--textw"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
+  if (esl_opt_IsUsed(sopt, "--popen")     && fprintf(ofp, "# gap open probability:            %f\n",             esl_opt_GetReal   (sopt, "--popen"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--pextend")   && fprintf(ofp, "# gap extend probability:          %f\n",             esl_opt_GetReal   (sopt, "--pextend")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--mx")        && fprintf(ofp, "# subst score matrix (built-in):   %s\n",             esl_opt_GetString (sopt, "--mx"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--mxfile")    && fprintf(ofp, "# subst score matrix (file):       %s\n",             esl_opt_GetString (sopt, "--mxfile"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "-E")          && fprintf(ofp, "# sequence reporting threshold:    E-value <= %g\n",  esl_opt_GetReal   (sopt, "-E"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "-T")          && fprintf(ofp, "# sequence reporting threshold:    score >= %g\n",    esl_opt_GetReal   (sopt, "-T"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--domE")      && fprintf(ofp, "# domain reporting threshold:      E-value <= %g\n",  esl_opt_GetReal   (sopt, "--domE"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--domT")      && fprintf(ofp, "# domain reporting threshold:      score >= %g\n",    esl_opt_GetReal   (sopt, "--domT"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--incE")      && fprintf(ofp, "# sequence inclusion threshold:    E-value <= %g\n",  esl_opt_GetReal   (sopt, "--incE"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--incT")      && fprintf(ofp, "# sequence inclusion threshold:    score >= %g\n",    esl_opt_GetReal   (sopt, "--incT"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--incdomE")   && fprintf(ofp, "# domain inclusion threshold:      E-value <= %g\n",  esl_opt_GetReal   (sopt, "--incdomE")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--incdomT")   && fprintf(ofp, "# domain inclusion threshold:      score >= %g\n",    esl_opt_GetReal   (sopt, "--incdomT")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--cut_ga")    && fprintf(ofp, "# model-specific thresholding:     GA cutoffs\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--cut_nc")    && fprintf(ofp, "# model-specific thresholding:     NC cutoffs\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--cut_tc")    && fprintf(ofp, "# model-specific thresholding:     TC cutoffs\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); 
+  if (esl_opt_IsUsed(sopt, "--max")       && fprintf(ofp, "# Max sensitivity mode:            on [all heuristic filters off]\n")                        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--F1")        && fprintf(ofp, "# MSV filter P threshold:       <= %g\n",            esl_opt_GetReal(sopt, "--F1"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--F2")        && fprintf(ofp, "# Vit filter P threshold:       <= %g\n",            esl_opt_GetReal(sopt, "--F2"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--F3")        && fprintf(ofp, "# Fwd filter P threshold:       <= %g\n",            esl_opt_GetReal(sopt, "--F3"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--nobias")    && fprintf(ofp, "# biased composition HMM filter:   off\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--nonull2")   && fprintf(ofp, "# null2 bias corrections:          off\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--EmL")       && fprintf(ofp, "# seq length, MSV Gumbel mu fit:   %d\n",            esl_opt_GetInteger(sopt, "--EmL"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--EmN")       && fprintf(ofp, "# seq number, MSV Gumbel mu fit:   %d\n",            esl_opt_GetInteger(sopt, "--EmN"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--EvL")       && fprintf(ofp, "# seq length, Vit Gumbel mu fit:   %d\n",            esl_opt_GetInteger(sopt, "--EvL"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--EvN")       && fprintf(ofp, "# seq number, Vit Gumbel mu fit:   %d\n",            esl_opt_GetInteger(sopt, "--EvN"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--EfL")       && fprintf(ofp, "# seq length, Fwd exp tau fit:     %d\n",            esl_opt_GetInteger(sopt, "--EfL"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--EfN")       && fprintf(ofp, "# seq number, Fwd exp tau fit:     %d\n",            esl_opt_GetInteger(sopt, "--EfN"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--Eft")       && fprintf(ofp, "# tail mass for Fwd exp tau fit:   %f\n",            esl_opt_GetReal   (sopt, "--Eft"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "-Z")          && fprintf(ofp, "# sequence search space set to:    %.0f\n",          esl_opt_GetReal   (sopt, "-Z"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(sopt, "--domZ")      && fprintf(ofp, "# domain search space set to:      %.0f\n",          esl_opt_GetReal   (sopt, "--domZ"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(sopt, "--seed"))  {
-    if (esl_opt_GetInteger(sopt, "--seed") == 0) fprintf(ofp, "# random number seed:              one-time arbitrary\n");
-    else                                         fprintf(ofp, "# random number seed set to:       %d\n", esl_opt_GetInteger(sopt, "--seed"));
+    if (esl_opt_GetInteger(sopt, "--seed") == 0  && fprintf(ofp, "# random number seed:              one-time arbitrary\n")                           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+    else if (                              fprintf(ofp, "# random number seed set to:       %d\n",            esl_opt_GetInteger(sopt, "--seed"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   }
 
-  fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
+  if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   return eslOK;
 }
 #endif /*0; SRE removed to silence compiler warning, looks like MSF wasn't using it*/
 
-static void 
+static int
 usage(char *pgm)
 {
-  fprintf(stderr, "Usage: %s [-i addr] [-p port] [-A] [-S]\n", pgm);
-  fprintf(stderr, "    -S      : print sequence scores\n");
-  fprintf(stderr, "    -A      : print sequence alignments\n");
-  fprintf(stderr, "    -i addr : ip address running daemon (default: 127.0.0.1)\n");
-  fprintf(stderr, "    -p port : port daemon listens to clients on (default: 51371)\n");
+  if (fprintf(stderr, "Usage: %s [-i addr] [-p port] [-A] [-S]\n", pgm)                     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (fprintf(stderr, "    -S      : print sequence scores\n")                              < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (fprintf(stderr, "    -A      : print sequence alignments\n")                          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (fprintf(stderr, "    -i addr : ip address running daemon (default: 127.0.0.1)\n")     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (fprintf(stderr, "    -p port : port daemon listens to clients on (default: 51371)\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   exit(1);
 }
 
@@ -580,3 +580,12 @@ int main(int argc, char *argv[])
   close(sock);
   return 0;
 }
+
+/*****************************************************************
+ * @LICENSE@
+ *
+ * SVN $Id$
+ * SVN $URL$
+ *****************************************************************/
+
+

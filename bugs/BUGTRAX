@@ -1,3 +1,22 @@
+ID              h93
+TITLE           Running out of disk space corrupts outputs
+AFFECTS         HMMER 3.0 and earlier
+FIXED_IN        -
+STATUS          CLOSED
+XREF            SRE:J8/118-119
+REPORTED_BY     Maarten Hekkelman <m.hekkelman@cmbi.ru.nl>
+OPENED_DATE     SRE, 13 Oct 2011
+CLOSED_DATE     SRE, Mon Oct 24 13:09:28 2011
+DESCRIPTION     
+  jackhmmer corrupted an output file. Tracked to the user's disk
+  filling up. Return status of fprintf(), fputs(), etc. calls was not
+  being checked, so Easel/HMMER were not detecting the problem.
+
+  Systematically added error return status checking to most printing
+  calls, using ESL_{X}EXCEPTION_SYS(), returning eslEWRITE Easel error
+  codes. Easel _Write() interface is now documented to require such
+  checking.
+//
 ID              h92
 TITLE           jackhmmer fails: backconverted subseq didn't end at expected length
 AFFECTS         3.0

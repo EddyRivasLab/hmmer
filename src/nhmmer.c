@@ -217,8 +217,6 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
 static int
 output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
 {
-  int status;
-
   p7_banner(ofp, go->argv[0], banner);
   
   if (fprintf(ofp, "# query HMM file:                  %s\n", hmmfile)                                                                                < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");

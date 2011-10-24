@@ -323,14 +323,16 @@ p7_bg_Read(char *bgfile, P7_BG *bg, char *errbuf)
  *            biased composition score correction.)
  *            
  * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEWRITE> on any write error, such as filling the disk.
  */
 int
 p7_bg_Write(FILE *fp, P7_BG *bg)
 {
   int x;
-  fprintf(fp, "%s\n", esl_abc_DecodeType(bg->abc->type));
+  if (fprintf(fp, "%s\n", esl_abc_DecodeType(bg->abc->type)) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "bg model write failed");
   for (x = 0; x < bg->abc->K; x++)
-    fprintf(fp, "%c  %.5f\n", bg->abc->sym[x], bg->f[x]);
+    { if (fprintf(fp, "%c  %.5f\n", bg->abc->sym[x], bg->f[x]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "bg model write failed"); }
   return eslOK;
 }
 /*---------------- end, i/o of P7_BG object ---------------------*/

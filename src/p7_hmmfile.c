@@ -11,7 +11,6 @@
  *     8. Test driver.
  *     9. Example.
  *    10. Copyright and license.
- * 
  */
 #include "p7_config.h"
 
@@ -76,7 +75,6 @@ static int open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_a
 
 /* Function:  p7_hmmfile_OpenE()
  * Synopsis:  Open an HMM file <filename>. 
- * Incept:    SRE, Tue Dec 21 10:44:38 2010 [Zaragoza]
  *
  * Purpose:   Open an HMM file <filename>, and prepare to read the first
  *            HMM from it.
@@ -132,7 +130,6 @@ p7_hmmfile_OpenE(char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf)
 
 /* Function:  p7_hmmfile_Open()
  * Synopsis:  Open an HMM file. (Deprecated version with less error handling)
- * Incept:    SRE, Wed Jan  3 18:38:10 2007 [Casa de Gatos]
  *
  * Purpose:   Same as <p7_hmmfile_OpenE()>, above, but without the <errbuf>.
  *            This older version is now deprecated. Use <p7_hmmfile_OpenE()>.
@@ -148,7 +145,6 @@ p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
 
 /* Function:  p7_hmmfile_OpenENoDB()
  * Synopsis:  Open only an HMM flatfile, even if pressed db exists.
- * Incept:    SRE, Tue Dec 21 10:52:35 2010 [Zaragoza]
  *
  * Purpose:   Same as <p7_hmmfile_OpenE()> except that if a pressed
  *            database exists for <filename>, it is ignored. Only
@@ -167,7 +163,6 @@ p7_hmmfile_OpenENoDB(char *filename, char *env, P7_HMMFILE **ret_hfp, char *errb
 
 /* Function:  p7_hmmfile_OpenNoDB()
  * Synopsis:  Open only an HMM flatfile, even if pressed db exists. (Deprecated)
- * Incept:    SRE, Thu Nov 12 09:26:04 2009 [Janelia]
  *
  * Purpose:   Same as <p7_hmmfile_OpenENoDB()>, 
  *            database exists for <filename>, it is ignored. Only
@@ -184,7 +179,6 @@ p7_hmmfile_OpenNoDB(char *filename, char *env, P7_HMMFILE **ret_hfp)
 
 
 /* Function:  p7_hmmfile_OpenBuffer()
- * Incept:    MSF, Thu Aug 19 2010 [Janelia]
  *
  * Purpose:   Perparse a buffer containing an ascii HMM for parsing.
  *            
@@ -480,7 +474,6 @@ open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only, 
 }
 
 /* Function:  p7_hmmfile_Close()
- * Incept:    SRE, Wed Jan  3 18:48:44 2007 [Casa de Gatos]
  *
  * Purpose:   Closes an open HMM file <hfp>.
  *
@@ -508,9 +501,8 @@ p7_hmmfile_Close(P7_HMMFILE *hfp)
 
 #ifdef HMMER_THREADS
 /* Function:  p7_hmmfile_CreateLock()
- * Incept:    MSF, Wed July 15 2009
  *
- * Purpose:   Create a lock to syncronize readers
+ * Purpose:   Create a lock to synchronize readers
  *
  * Returns:   <eslOK> on success.
  */
@@ -543,13 +535,12 @@ p7_hmmfile_CreateLock(P7_HMMFILE *hfp)
 /*****************************************************************
  * 2. Writing HMMER3 HMM files.
  *****************************************************************/
-static void multiline(FILE *fp, const char *pfx, char *s);
-static void printprob(FILE *fp, int fieldwidth, float p);
+static int multiline(FILE *fp, const char *pfx, char *s);
+static int printprob(FILE *fp, int fieldwidth, float p);
 
 
 /* Function:  p7_hmmfile_WriteASCII()
  * Synopsis:  Write a HMMER3 ASCII save file.
- * Incept:    SRE, Tue May 19 09:39:31 2009 [Janelia]
  *
  * Purpose:   Write a profile HMM <hmm> in an ASCII save file format to
  *            an open stream <fp>.
@@ -567,102 +558,116 @@ static void printprob(FILE *fp, int fieldwidth, float p);
  * Returns:   <eslOK> on success.
  *
  * Throws:    <eslEINVAL> if <format> isn't a valid 3.0 format code.
+ *            <eslEWRITE> on write error.
  */
 int
 p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
 {
   int k, x;
+  int status;
   
   if (format == -1) format = p7_HMMFILE_3e;
 
-  if      (format == p7_HMMFILE_3e)  fprintf(fp, "HMMER3/e [%s | %s]\n",                             HMMER_VERSION, HMMER_DATE);
-  else if (format == p7_HMMFILE_3d)  fprintf(fp, "HMMER3/d [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE);
-  else if (format == p7_HMMFILE_3c)  fprintf(fp, "HMMER3/c [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE);
-  else if (format == p7_HMMFILE_3b)  fprintf(fp, "HMMER3/b [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE);
-  else if (format == p7_HMMFILE_3a)  fprintf(fp, "HMMER3/a [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE);
+  if      (format == p7_HMMFILE_3e)  { if (fprintf(fp, "HMMER3/e [%s | %s]\n",                             HMMER_VERSION, HMMER_DATE) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");}
+  else if (format == p7_HMMFILE_3d)  { if (fprintf(fp, "HMMER3/d [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
+  else if (format == p7_HMMFILE_3c)  { if (fprintf(fp, "HMMER3/c [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
+  else if (format == p7_HMMFILE_3b)  { if (fprintf(fp, "HMMER3/b [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
+  else if (format == p7_HMMFILE_3a)  { if (fprintf(fp, "HMMER3/a [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
   else ESL_EXCEPTION(eslEINVAL, "invalid HMM file format code");
   
-  fprintf(fp, "NAME  %s\n", hmm->name);
-  if (hmm->acc)  fprintf(fp, "ACC   %s\n", hmm->acc);
-  if (hmm->desc) fprintf(fp, "DESC  %s\n", hmm->desc);
-  fprintf(fp, "LENG  %d\n", hmm->M);
-  if (format >= p7_HMMFILE_3c && hmm->max_length > 0) fprintf(fp, "MAXL  %d\n", hmm->max_length);
-  fprintf(fp, "ALPH  %s\n", esl_abc_DecodeType(hmm->abc->type));
-  fprintf(fp, "RF    %s\n", (hmm->flags & p7H_RF)    ? "yes" : "no");
-  if (format >= p7_HMMFILE_3e) fprintf(fp, "CONS  %s\n", (hmm->flags & p7H_CONS)  ? "yes" : "no");
-  fprintf(fp, "CS    %s\n", (hmm->flags & p7H_CS)    ? "yes" : "no");
-  fprintf(fp, "MAP   %s\n", (hmm->flags & p7H_MAP)   ? "yes" : "no");
+  if (fprintf(fp, "NAME  %s\n", hmm->name)                                                          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  if (hmm->acc  && fprintf(fp, "ACC   %s\n", hmm->acc)                                              < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  if (hmm->desc && fprintf(fp, "DESC  %s\n", hmm->desc)                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  if (fprintf(fp, "LENG  %d\n", hmm->M)                                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  if (format >= p7_HMMFILE_3c && hmm->max_length > 0 && fprintf(fp, "MAXL  %d\n", hmm->max_length)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  if (fprintf(fp, "ALPH  %s\n", esl_abc_DecodeType(hmm->abc->type))                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  if (fprintf(fp, "RF    %s\n", (hmm->flags & p7H_RF)    ? "yes" : "no")                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  if (format >= p7_HMMFILE_3e && fprintf(fp, "CONS  %s\n", (hmm->flags & p7H_CONS)  ? "yes" : "no") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  if (fprintf(fp, "CS    %s\n", (hmm->flags & p7H_CS)    ? "yes" : "no")                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  if (fprintf(fp, "MAP   %s\n", (hmm->flags & p7H_MAP)   ? "yes" : "no")                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
 
-  if (hmm->ctime    != NULL)   fprintf  (fp, "DATE  %s\n", hmm->ctime);
-  if (hmm->comlog   != NULL)   multiline(fp, "COM  ",      hmm->comlog);
-  if (hmm->nseq     >= 0)      fprintf  (fp, "NSEQ  %d\n", hmm->nseq);
-  if (hmm->eff_nseq >= 0)      fprintf  (fp, "EFFN  %f\n", hmm->eff_nseq);
-  if (hmm->flags & p7H_CHKSUM) fprintf  (fp, "CKSUM %u\n", hmm->checksum); /* unsigned 32-bit */
+  if (hmm->ctime    != NULL)   { if (           fprintf  (fp, "DATE  %s\n", hmm->ctime)        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
+  if (hmm->comlog   != NULL)   { if ( (status = multiline(fp, "COM  ",      hmm->comlog)) != eslOK) return status; }
+  if (hmm->nseq     >= 0)      { if (           fprintf  (fp, "NSEQ  %d\n", hmm->nseq)         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
+  if (hmm->eff_nseq >= 0)      { if (           fprintf  (fp, "EFFN  %f\n", hmm->eff_nseq)     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
+  if (hmm->flags & p7H_CHKSUM) { if (           fprintf  (fp, "CKSUM %u\n", hmm->checksum)     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); } /* unsigned 32-bit */
 
-  if (hmm->flags & p7H_GA)  fprintf(fp, "GA    %.2f %.2f\n", hmm->cutoff[p7_GA1], hmm->cutoff[p7_GA2]);
-  if (hmm->flags & p7H_TC)  fprintf(fp, "TC    %.2f %.2f\n", hmm->cutoff[p7_TC1], hmm->cutoff[p7_TC2]);
-  if (hmm->flags & p7H_NC)  fprintf(fp, "NC    %.2f %.2f\n", hmm->cutoff[p7_NC1], hmm->cutoff[p7_NC2]);
+  if ((hmm->flags & p7H_GA)  && fprintf(fp, "GA    %.2f %.2f\n", hmm->cutoff[p7_GA1], hmm->cutoff[p7_GA2]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  if ((hmm->flags & p7H_TC)  && fprintf(fp, "TC    %.2f %.2f\n", hmm->cutoff[p7_TC1], hmm->cutoff[p7_TC2]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  if ((hmm->flags & p7H_NC)  && fprintf(fp, "NC    %.2f %.2f\n", hmm->cutoff[p7_NC1], hmm->cutoff[p7_NC2]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
 
   if (format == p7_HMMFILE_3a) 
     {				/* reverse compatibility */
       if (hmm->flags & p7H_STATS) {
-	fprintf(fp, "STATS LOCAL     VLAMBDA %f\n", hmm->evparam[p7_MLAMBDA]);
-	fprintf(fp, "STATS LOCAL         VMU %f\n", hmm->evparam[p7_MMU]);
-	fprintf(fp, "STATS LOCAL        FTAU %f\n", hmm->evparam[p7_FTAU]);
+	if (fprintf(fp, "STATS LOCAL     VLAMBDA %f\n", hmm->evparam[p7_MLAMBDA]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+	if (fprintf(fp, "STATS LOCAL         VMU %f\n", hmm->evparam[p7_MMU])     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+	if (fprintf(fp, "STATS LOCAL        FTAU %f\n", hmm->evparam[p7_FTAU])    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
       }
     } 
   else 
     {				/* default stats lines */
       if (hmm->flags & p7H_STATS) {
-	fprintf(fp, "STATS LOCAL MSV      %8.4f %8.5f\n", hmm->evparam[p7_MMU],  hmm->evparam[p7_MLAMBDA]);
-	fprintf(fp, "STATS LOCAL VITERBI  %8.4f %8.5f\n", hmm->evparam[p7_VMU],  hmm->evparam[p7_VLAMBDA]);
-	fprintf(fp, "STATS LOCAL FORWARD  %8.4f %8.5f\n", hmm->evparam[p7_FTAU], hmm->evparam[p7_FLAMBDA]);
+	if (fprintf(fp, "STATS LOCAL MSV      %8.4f %8.5f\n", hmm->evparam[p7_MMU],  hmm->evparam[p7_MLAMBDA]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+	if (fprintf(fp, "STATS LOCAL VITERBI  %8.4f %8.5f\n", hmm->evparam[p7_VMU],  hmm->evparam[p7_VLAMBDA]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+	if (fprintf(fp, "STATS LOCAL FORWARD  %8.4f %8.5f\n", hmm->evparam[p7_FTAU], hmm->evparam[p7_FLAMBDA]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
       }
     }
 
-  fprintf(fp, "HMM     ");
-  for (x = 0; x < hmm->abc->K; x++) fprintf(fp, "     %c   ", hmm->abc->sym[x]);
-  fputc('\n', fp);
-  fprintf(fp, "        %8s %8s %8s %8s %8s %8s %8s\n",
-          "m->m", "m->i", "m->d", "i->m", "i->i", "d->m", "d->d");
+  if (fprintf(fp, "HMM     ")                                         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  for (x = 0; x < hmm->abc->K; x++) 
+    { if (fprintf(fp, "     %c   ", hmm->abc->sym[x])                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
+  if (fputc('\n', fp)                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  if (fprintf(fp, "        %8s %8s %8s %8s %8s %8s %8s\n",
+	      "m->m", "m->i", "m->d", "i->m", "i->i", "d->m", "d->d") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
   
   if (hmm->flags & p7H_COMPO) {
-    fprintf(fp, "  COMPO ");
-    for (x = 0; x < hmm->abc->K; x++) printprob(fp, 8, hmm->compo[x]);
-    fputc('\n', fp);
+    if (fprintf(fp, "  COMPO ") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+    for (x = 0; x < hmm->abc->K; x++) 
+      { if ( (status = printprob(fp, 8, hmm->compo[x])) != eslOK) return status; }
+    if (fputc('\n', fp)         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
   }
 
   /* node 0 is special: insert emissions, and B-> transitions */
-  fputs("        ", fp);  for (x = 0; x < hmm->abc->K;      x++) printprob(fp, 8, hmm->ins[0][x]);  fputc('\n', fp);
-  fputs("        ", fp);  for (x = 0; x < p7H_NTRANSITIONS; x++) printprob(fp, 8, hmm->t[0][x]);    fputc('\n', fp);
+  if (fputs("        ", fp) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  for (x = 0; x < hmm->abc->K;      x++) 
+    { if ( (status = printprob(fp, 8, hmm->ins[0][x])) != eslOK) return status; }  
+  if (fputc('\n', fp)       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+
+  if (fputs("        ", fp) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  for (x = 0; x < p7H_NTRANSITIONS; x++) 
+    { if ( (status = printprob(fp, 8, hmm->t[0][x])) != eslOK) return status; }    
+  if (fputc('\n', fp)       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
   
   for (k = 1; k <= hmm->M; k++)
     {
       /* Line 1: k; match emissions; optional map, RF, CS */ 
-      fprintf(fp, " %6d ",  k);
-      for (x = 0; x < hmm->abc->K; x++) printprob(fp, 8, hmm->mat[k][x]);
-      if (hmm->flags & p7H_MAP) fprintf(fp, " %6d", hmm->map[k]); 
-      else                      fprintf(fp, " %6s", "-");
-      if (format >= p7_HMMFILE_3e) fprintf(fp, " %c",   (hmm->flags & p7H_CONS) ? hmm->consensus[k] : '-');
-      fprintf(fp, " %c",   (hmm->flags & p7H_RF)   ? hmm->rf[k]        : '-');
-      fprintf(fp, " %c\n", (hmm->flags & p7H_CS)   ? hmm->cs[k]        : '-');
+      if (fprintf(fp, " %6d ",  k) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+      for (x = 0; x < hmm->abc->K; x++)
+	{ if ( (status = printprob(fp, 8, hmm->mat[k][x])) != eslOK) return status; }
+      if (hmm->flags & p7H_MAP) { if (fprintf(fp, " %6d", hmm->map[k]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
+      else                      { if (fprintf(fp, " %6s", "-")         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
+
+      if (format >= p7_HMMFILE_3e) { if (fprintf(fp, " %c",   (hmm->flags & p7H_CONS) ? hmm->consensus[k] : '-') < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
+      if (fprintf(fp, " %c",   (hmm->flags & p7H_RF)   ? hmm->rf[k]        : '-') < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+      if (fprintf(fp, " %c\n", (hmm->flags & p7H_CS)   ? hmm->cs[k]        : '-') < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
 
       /* Line 2:   insert emissions */
-      fputs("        ", fp);
-      for (x = 0; x < hmm->abc->K; x++) printprob(fp, 8, hmm->ins[k][x]);
+      if (fputs("        ", fp) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+      for (x = 0; x < hmm->abc->K; x++) 
+	{ if ( (status = printprob(fp, 8, hmm->ins[k][x])) != eslOK) return status; }
 
       /* Line 3:   transitions */
-      fputs("\n        ", fp);
-      for (x = 0; x < p7H_NTRANSITIONS; x++) printprob(fp, 8, hmm->t[k][x]);
-      fputc('\n', fp);
+      if (fputs("\n        ", fp) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+      for (x = 0; x < p7H_NTRANSITIONS; x++) 
+	{ if ( (status = printprob(fp, 8, hmm->t[k][x])) != eslOK) return status; }
+      if (fputc('\n', fp) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
     }
-  fputs("//\n", fp);
+  if (fputs("//\n", fp) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
   return eslOK;
 }
 
 
 /* Function:  p7_hmmfile_WriteBinary()
- * Incept:    SRE, Wed Jan  3 13:50:26 2007 [Janelia]			
  * 
  * Purpose:   Writes an HMM to a file in HMMER3 binary format.
  *
@@ -673,15 +678,15 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
  *            binary format.
  *
  * Returns:   <eslOK> on success.
- *            <eslFAIL> if any writes fail (for instance,
- *            if disk fills up, which did happen during testing!).
  *
  * Throws:    <eslEINVAL> if <format> isn't a valid 3.0 format code.
+ *            <eslEWRITE> on write error.
  */
 int
 p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm)
 {
   int k;
+  int status;
 
   if (format == -1) format = p7_HMMFILE_3e;
 
@@ -706,44 +711,44 @@ p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm)
   if (hmm->acc  == NULL) hmm->flags &= ~p7H_ACC;   else hmm->flags |= p7H_ACC;
 
   /* ye olde magic number */
-  if      (format == p7_HMMFILE_3e) { if (fwrite((char *) &(v3e_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
-  else if (format == p7_HMMFILE_3d) { if (fwrite((char *) &(v3d_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
-  else if (format == p7_HMMFILE_3c) { if (fwrite((char *) &(v3c_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
-  else if (format == p7_HMMFILE_3b) { if (fwrite((char *) &(v3b_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
-  else if (format == p7_HMMFILE_3a) { if (fwrite((char *) &(v3a_magic), sizeof(uint32_t), 1, fp) != 1) return eslFAIL; }
+  if      (format == p7_HMMFILE_3e) { if (fwrite((char *) &(v3e_magic), sizeof(uint32_t), 1, fp) != 1) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed"); }
+  else if (format == p7_HMMFILE_3d) { if (fwrite((char *) &(v3d_magic), sizeof(uint32_t), 1, fp) != 1) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed"); }
+  else if (format == p7_HMMFILE_3c) { if (fwrite((char *) &(v3c_magic), sizeof(uint32_t), 1, fp) != 1) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed"); }
+  else if (format == p7_HMMFILE_3b) { if (fwrite((char *) &(v3b_magic), sizeof(uint32_t), 1, fp) != 1) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed"); }
+  else if (format == p7_HMMFILE_3a) { if (fwrite((char *) &(v3a_magic), sizeof(uint32_t), 1, fp) != 1) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed"); }
   else ESL_EXCEPTION(eslEINVAL, "invalid HMM file format code");
 
   /* info necessary for sizes of things
    */
-  if (fwrite((char *) &(hmm->flags),      sizeof(int),  1,   fp) != 1) return eslFAIL;
-  if (fwrite((char *) &(hmm->M),          sizeof(int),  1,   fp) != 1) return eslFAIL;
-  if (fwrite((char *) &(hmm->abc->type),  sizeof(int),  1,   fp) != 1) return eslFAIL;
+  if (fwrite((char *) &(hmm->flags),      sizeof(int),  1,   fp) != 1) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed"); 
+  if (fwrite((char *) &(hmm->M),          sizeof(int),  1,   fp) != 1) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed"); 
+  if (fwrite((char *) &(hmm->abc->type),  sizeof(int),  1,   fp) != 1) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
 
   /* The core model probabilities
    */
   for (k = 1; k <= hmm->M; k++)	/* match emissions (0) 1..M */
-    if (fwrite((char *) hmm->mat[k], sizeof(float), hmm->abc->K, fp) != hmm->abc->K) return eslFAIL;
+    if (fwrite((char *) hmm->mat[k], sizeof(float), hmm->abc->K, fp) != hmm->abc->K) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
   for (k = 0; k <= hmm->M; k++)	/* insert emissions 0..M */
-    if (fwrite((char *) hmm->ins[k], sizeof(float), hmm->abc->K, fp) != hmm->abc->K) return eslFAIL;
+    if (fwrite((char *) hmm->ins[k], sizeof(float), hmm->abc->K, fp) != hmm->abc->K) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
   for (k = 0; k <= hmm->M; k++)	/* note: start from 0, to include B state */
-    if (fwrite((char *) hmm->t[k], sizeof(float), 7, fp)             != 7)           return eslFAIL;
+    if (fwrite((char *) hmm->t[k], sizeof(float), 7, fp)             != 7)           ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
 
   /* annotation section
    */
-  if (                            write_bin_string(fp, hmm->name) != eslOK)                                 return eslFAIL;
-  if ((hmm->flags & p7H_ACC)  && (write_bin_string(fp, hmm->acc)  != eslOK))                                return eslFAIL;             
-  if ((hmm->flags & p7H_DESC) && (write_bin_string(fp, hmm->desc) != eslOK))                                return eslFAIL;
-  if ((hmm->flags & p7H_RF)   && (fwrite((char *) hmm->rf,        sizeof(char), hmm->M+2, fp) != hmm->M+2)) return eslFAIL; /* +2: 1..M and trailing \0 */
-  if ((hmm->flags & p7H_CONS) && (fwrite((char *) hmm->consensus, sizeof(char), hmm->M+2, fp) != hmm->M+2)) return eslFAIL; /* don't need to test for >=3e format; p7H_CONS flag suffices (didn't exist pre-3e) */
-  if ((hmm->flags & p7H_CS)   && (fwrite((char *) hmm->cs,        sizeof(char), hmm->M+2, fp) != hmm->M+2)) return eslFAIL;
-  if ((hmm->flags & p7H_CA)   && (fwrite((char *) hmm->ca,        sizeof(char), hmm->M+2, fp) != hmm->M+2)) return eslFAIL;
-  if (write_bin_string(fp, hmm->comlog) != eslOK)                                                     return eslFAIL;
-  if (                            fwrite((char *) &(hmm->nseq),       sizeof(int),    1,   fp) != 1)  return eslFAIL;
-  if (                            fwrite((char *) &(hmm->eff_nseq),   sizeof(float),  1,   fp) != 1)  return eslFAIL;
-  if (format >= p7_HMMFILE_3c &&  fwrite((char *) &(hmm->max_length), sizeof(int),    1,   fp) != 1)  return eslFAIL;
-  if (write_bin_string(fp, hmm->ctime) != eslOK)                                                      return eslFAIL;
-  if ((hmm->flags & p7H_MAP) && (fwrite((char *) hmm->map, sizeof(int), hmm->M+1, fp) != hmm->M+1))   return eslFAIL;
-  if (fwrite((char *) &(hmm->checksum), sizeof(uint32_t),1,  fp) != 1)                                return eslFAIL;
+  if (                           (status = write_bin_string(fp, hmm->name))                   != eslOK)     return status;                  
+  if ((hmm->flags & p7H_ACC)  && (status = write_bin_string(fp, hmm->acc))                    != eslOK)     return status;
+  if ((hmm->flags & p7H_DESC) && (status = write_bin_string(fp, hmm->desc))                   != eslOK)     return status;
+  if ((hmm->flags & p7H_RF)   && (fwrite((char *) hmm->rf,        sizeof(char), hmm->M+2, fp) != hmm->M+2)) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed"); /* +2: 1..M and trailing \0 */
+  if ((hmm->flags & p7H_CONS) && (fwrite((char *) hmm->consensus, sizeof(char), hmm->M+2, fp) != hmm->M+2)) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed"); /* don't need to test for >=3e format; p7H_CONS flag suffices (didn't exist pre-3e) */
+  if ((hmm->flags & p7H_CS)   && (fwrite((char *) hmm->cs,        sizeof(char), hmm->M+2, fp) != hmm->M+2)) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
+  if ((hmm->flags & p7H_CA)   && (fwrite((char *) hmm->ca,        sizeof(char), hmm->M+2, fp) != hmm->M+2)) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
+  if ( (status = write_bin_string(fp, hmm->comlog))                                           != eslOK)     return status;                                          
+  if (                            fwrite((char *) &(hmm->nseq),       sizeof(int),    1,  fp) != 1)         ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
+  if (                            fwrite((char *) &(hmm->eff_nseq),   sizeof(float),  1,  fp) != 1)         ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
+  if (format >= p7_HMMFILE_3c &&  fwrite((char *) &(hmm->max_length), sizeof(int),    1,  fp) != 1)         ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
+  if ( (status = write_bin_string(fp, hmm->ctime))                                            != eslOK)     return status;
+  if ((hmm->flags & p7H_MAP)  && (fwrite((char *) hmm->map,       sizeof(int),  hmm->M+1, fp) != hmm->M+1)) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
+  if (                            fwrite((char *)&(hmm->checksum),sizeof(uint32_t),   1,  fp) != 1)         ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
 
   /* E-value parameters and Pfam cutoffs */
   if (format == p7_HMMFILE_3a)
@@ -752,14 +757,14 @@ p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm)
       oldparam[0] = hmm->evparam[p7_MLAMBDA];
       oldparam[1] = hmm->evparam[p7_MMU];
       oldparam[2] = hmm->evparam[p7_FTAU];
-      if (fwrite((char *) oldparam, sizeof(float), 3, fp) != 3) return eslFAIL;
+      if (fwrite((char *) oldparam, sizeof(float), 3, fp) != 3) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
     }
   else
     {				/* default stats values */
-      if (fwrite((char *) hmm->evparam, sizeof(float), p7_NEVPARAM, fp) != p7_NEVPARAM) return eslFAIL;
+      if (fwrite((char *) hmm->evparam, sizeof(float), p7_NEVPARAM, fp) != p7_NEVPARAM) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
     }
-  if (fwrite((char *) hmm->cutoff,  sizeof(float), p7_NCUTOFFS, fp) != p7_NCUTOFFS) return eslFAIL;
-  if ((hmm->flags & p7H_COMPO) && (fwrite((char *) hmm->compo, sizeof(float), hmm->abc->K, fp) != hmm->abc->K)) return eslFAIL;
+  if (fwrite((char *) hmm->cutoff,  sizeof(float), p7_NCUTOFFS, fp) != p7_NCUTOFFS) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
+  if ((hmm->flags & p7H_COMPO) && (fwrite((char *) hmm->compo, sizeof(float), hmm->abc->K, fp) != hmm->abc->K)) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
   
   return eslOK;
 }
@@ -772,7 +777,6 @@ p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm)
  *****************************************************************/
 
 /* Function:  p7_hmmfile_Read()
- * Incept:    SRE, Sat Jan  6 18:04:58 2007 [Casa de Gatos]
  *
  * Purpose:   Read the next HMM from open save file <hfp>, and
  *            optionally return this newly allocated HMM in <opt_hmm>.
@@ -837,7 +841,6 @@ p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **opt_hmm)
 
 /* Function:  p7_hmmfile_PositionByKey()
  * Synopsis:  Use SSI to reposition file to start of named HMM.
- * Incept:    SRE, Mon Jun 18 10:57:15 2007 [Janelia]
  *
  * Purpose:   Reposition <hfp> so tha next HMM we read will be the
  *            one named (or accessioned) <key>.
@@ -876,7 +879,6 @@ p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key)
 
 /* Function:  p7_hmmfile_Position()
  * Synopsis:  Reposition file to start of named HMM.
- * Incept:    MSF Wed Nov 4, 2009 [Janelia]
  *
  * Purpose:   Reposition <hfp> so tha start of the requested HMM.
  *
@@ -1645,7 +1647,6 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
 
 
 /* multiline()
- * Mon Jan  5 14:57:50 1998 [StL]
  * 
  * Used to print the command log to ASCII save files.
  *
@@ -1665,8 +1666,12 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
  * Args:     fp:   FILE to print to
  *           pfx:  prefix for each line
  *           s:    line to break up and print; tolerates a NULL
+ *
+ * Returns: <eslOK> on success.
+ *
+ * Throws:  <eslEWRITE> on write error.
  */
-static void
+static int
 multiline(FILE *fp, const char *pfx, char *s)
 {
   char *sptr  = s;
@@ -1680,37 +1685,38 @@ multiline(FILE *fp, const char *pfx, char *s)
     if (end != NULL) 		             /* if there's no \n left, end == NULL */
       {
 	n = end - sptr;	                     /* n chars exclusive of \n */
-	fprintf(fp, "%s [%d] ", pfx, nline++);
-	fwrite(sptr, sizeof(char), n, fp);   /* using fwrite lets us write fixed # of chars   */
-	fprintf(fp, "\n");                   /* while writing \n w/ printf allows newline conversion */
+	if (fprintf(fp, "%s [%d] ", pfx, nline++) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+	if (fwrite(sptr, sizeof(char), n, fp)    != n) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");  /* using fwrite lets us write fixed # of chars   */
+	if (fprintf(fp, "\n")                     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");  /* while writing \n w/ printf allows newline conversion */
 	sptr += n + 1;	                     /* +1 to get past \n */
       } 
     else 
       {
-	fprintf(fp, "%s [%d] %s\n", pfx, nline++, sptr); /* last line */
+	if (fprintf(fp, "%s [%d] %s\n", pfx, nline++, sptr) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); /* last line */
       }
   } while (end != NULL  && *sptr != '\0');   /* *sptr == 0 if <s> terminates with a \n */
+  return eslOK;
 }
 
-static void
+static int
 printprob(FILE *fp, int fieldwidth, float p)
 {
-  if      (p == 0.0) fprintf(fp, " %*s",   fieldwidth, "*");
-  else if (p == 1.0) fprintf(fp, " %*.5f", fieldwidth, 0.0);
-  else               fprintf(fp, " %*.5f", fieldwidth, -logf(p));
+  if      (p == 0.0) { if (fprintf(fp, " %*s",   fieldwidth, "*")      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
+  else if (p == 1.0) { if (fprintf(fp, " %*.5f", fieldwidth, 0.0)      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
+  else               { if (fprintf(fp, " %*.5f", fieldwidth, -logf(p)) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
+  return eslOK;
 }
 
 
 /* Function: write_bin_string()
- * Date:     SRE, Wed Oct 29 13:49:27 1997 [TWA 721 over Canada]
  * 
  * Purpose:  Write a string in binary save format: an integer
  *           for the string length (including \0), followed by
  *           the string.
  *           
  * Return:   <eslOK> on success;
- *           <eslFAIL> if a write fails due to system error, such
- *           as a filled disk (as happened in testing).           
+ * 
+ * Throw:    <eslEWRITE> on write error, such as a filled disk.
  */
 static int
 write_bin_string(FILE *fp, char *s)
@@ -1719,19 +1725,18 @@ write_bin_string(FILE *fp, char *s)
   if (s != NULL) 
     {
       len = strlen(s) + 1;
-      if (fwrite((char *) &len, sizeof(int),  1,   fp) != 1)   return eslFAIL;
-      if (fwrite((char *) s,    sizeof(char), len, fp) != len) return eslFAIL;
+      if (fwrite((char *) &len, sizeof(int),  1,   fp) != 1)   ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
+      if (fwrite((char *) s,    sizeof(char), len, fp) != len) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
     }
   else
     {
       len = 0;
-      if (fwrite((char *) &len, sizeof(int), 1, fp) != 1)      return eslFAIL;
+      if (fwrite((char *) &len, sizeof(int), 1, fp) != 1)      ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
     }
   return eslOK;
 }
 
 /* Function: read_bin_string()
- * Date:     SRE, Wed Oct 29 14:03:23 1997 [TWA 721]
  * 
  * Purpose:  Read in a string from a binary file, where
  *           the first integer is the length (including '\0').

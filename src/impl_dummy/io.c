@@ -70,26 +70,24 @@ static uint32_t  v3a_pmagic = 0xe8b3f0e4; /* 3/a binary profile file, dummy: "h3
  *
  * Returns:   <eslOK> on success.
  *
- *            Returns <eslFAIL> on any write failure; for example,
+ * Throws:    <eslEWRITE> on any write failure; for example,
  *            if disk is full. 
- *
- * Throws:    (no abnormal error conditions)
  */
 int
 p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
 {
   /* <ffp> is the part of the oprofile that MSVFilter() needs */
-  if (fwrite((char *) &(v3e_fmagic),    sizeof(uint32_t), 1,           ffp) != 1)           return eslFAIL;
-  if (fwrite((char *) &(om->M),         sizeof(int),      1,           ffp) != 1)           return eslFAIL;
-  if (fwrite((char *) &(om->abc->type), sizeof(int),      1,           ffp) != 1)           return eslFAIL;
-  if (fwrite((char *) om->offs,         sizeof(off_t),    p7_NOFFSETS, ffp) != p7_NOFFSETS) return eslFAIL;
-  if (fwrite((char *) &(v3e_fmagic),    sizeof(uint32_t), 1,           ffp) != 1)           return eslFAIL; /* sentinel */
+  if (fwrite((char *) &(v3e_fmagic),    sizeof(uint32_t), 1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+  if (fwrite((char *) &(om->M),         sizeof(int),      1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+  if (fwrite((char *) &(om->abc->type), sizeof(int),      1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+  if (fwrite((char *) om->offs,         sizeof(off_t),    p7_NOFFSETS, ffp) != p7_NOFFSETS) ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+  if (fwrite((char *) &(v3e_fmagic),    sizeof(uint32_t), 1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed"); /* sentinel */
 
   /* <pfp> gets the rest of the oprofile */
-  if (fwrite((char *) &(v3e_pmagic),    sizeof(uint32_t), 1,           pfp) != 1)           return eslFAIL;
-  if (fwrite((char *) &(om->M),         sizeof(int),      1,           pfp) != 1)           return eslFAIL;
-  if (fwrite((char *) &(om->abc->type), sizeof(int),      1,           pfp) != 1)           return eslFAIL;
-  if (fwrite((char *) &(v3e_pmagic),    sizeof(uint32_t), 1,           pfp) != 1)           return eslFAIL; /* sentinel */
+  if (fwrite((char *) &(v3e_pmagic),    sizeof(uint32_t), 1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+  if (fwrite((char *) &(om->M),         sizeof(int),      1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+  if (fwrite((char *) &(om->abc->type), sizeof(int),      1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+  if (fwrite((char *) &(v3e_pmagic),    sizeof(uint32_t), 1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed"); /* sentinel */
   
   return eslOK;
 }

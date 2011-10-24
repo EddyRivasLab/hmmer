@@ -585,6 +585,10 @@ p7_alidisplay_DecodePostProb(char pc)
  *            As a special case, if <linewidth> is negative or 0, then
  *            alignments are formatted in a single block of unlimited
  *            line length.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEWRITE> on write error, such as filling the disk.
  */
 int
 p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, int show_accessions)
@@ -620,7 +624,7 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
   k1 = ad->hmmfrom;
   for (pos = 0; pos < ad->N; pos += aliwidth)
     {
-      if (pos > 0) fprintf(fp, "\n"); /* blank line betweeen blocks */
+      if (pos > 0) { if (fprintf(fp, "\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); } /* blank line betweeen blocks */
 
       ni = nk = 0; 
       for (z = pos; z < pos + aliwidth && z < ad->N; z++) {
@@ -629,36 +633,31 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
       }
 
       k2 = k1+nk-1;
-      if (ad->sqfrom < ad->sqto) {
-          i2 = i1+ni-1;
-      } else { // revcomp hit for DNA
-          i2 = i1-ni+1;
-      }
-      if (ad->csline != NULL) { strncpy(buf, ad->csline+pos, aliwidth); fprintf(fp, "  %*s %s CS\n", namewidth+coordwidth+1, "", buf); }
-      if (ad->rfline != NULL) { strncpy(buf, ad->rfline+pos, aliwidth); fprintf(fp, "  %*s %s RF\n", namewidth+coordwidth+1, "", buf); }
+      if (ad->sqfrom < ad->sqto) i2 = i1+ni-1;
+      else                       i2 = i1-ni+1; // revcomp hit for DNA
 
-      strncpy(buf, ad->model+pos, aliwidth); fprintf(fp, "  %*s %*d %s %-*d\n", namewidth,  show_hmmname, coordwidth, k1, buf, coordwidth, k2);
-      strncpy(buf, ad->mline+pos, aliwidth); fprintf(fp, "  %*s %s\n", namewidth+coordwidth+1, " ", buf);
+      if (ad->csline != NULL) { strncpy(buf, ad->csline+pos, aliwidth); if (fprintf(fp, "  %*s %s CS\n", namewidth+coordwidth+1, "", buf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); } 
+      if (ad->rfline != NULL) { strncpy(buf, ad->rfline+pos, aliwidth); if (fprintf(fp, "  %*s %s RF\n", namewidth+coordwidth+1, "", buf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); } 
 
-      if (ni > 0) { strncpy(buf, ad->aseq+pos, aliwidth); fprintf(fp, "  %*s %*ld %s %-*ld\n", namewidth, show_seqname, coordwidth, i1,  buf, coordwidth, i2);  }
-      else        { strncpy(buf, ad->aseq+pos, aliwidth); fprintf(fp, "  %*s %*s %s %*s\n",    namewidth, show_seqname, coordwidth, "-", buf, coordwidth, "-"); }
+      strncpy(buf, ad->model+pos, aliwidth); if (fprintf(fp, "  %*s %*d %s %-*d\n", namewidth,  show_hmmname, coordwidth, k1, buf, coordwidth, k2) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); 
+      strncpy(buf, ad->mline+pos, aliwidth); if (fprintf(fp, "  %*s %s\n", namewidth+coordwidth+1, " ", buf)                                       < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); 
 
-      if (ad->ppline != NULL)  { strncpy(buf, ad->ppline+pos, aliwidth); fprintf(fp, "  %*s %s PP\n", namewidth+coordwidth+1, "", buf); }
-      if (ad->appline != NULL) { strncpy(buf, ad->appline+pos, aliwidth); fprintf(fp, "  %*s %s APP\n", namewidth+coordwidth+1, "", buf); }
+      if (ni > 0) { strncpy(buf, ad->aseq+pos, aliwidth); if (fprintf(fp, "  %*s %*ld %s %-*ld\n", namewidth, show_seqname, coordwidth, i1,  buf, coordwidth, i2)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");  }
+      else        { strncpy(buf, ad->aseq+pos, aliwidth); if (fprintf(fp, "  %*s %*s %s %*s\n",    namewidth, show_seqname, coordwidth, "-", buf, coordwidth, "-") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");  }
+
+      if (ad->ppline != NULL)  { strncpy(buf, ad->ppline+pos, aliwidth);  if (fprintf(fp, "  %*s %s PP\n", namewidth+coordwidth+1, "", buf)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");  }
+      if (ad->appline != NULL) { strncpy(buf, ad->appline+pos, aliwidth); if (fprintf(fp, "  %*s %s APP\n", namewidth+coordwidth+1, "", buf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");  }
 
       k1 += nk;
-      if (ad->sqfrom < ad->sqto) {
-          i1 += ni;
-      }  else { // revcomp hit for DNA
-          i1 -= ni;
-      }
+      if   (ad->sqfrom < ad->sqto)  i1 += ni;
+      else                          i1 -= ni;  // revcomp hit for DNA
     }
   fflush(fp);
   free(buf);
   return eslOK;
 
  ERROR:
-  if (buf != NULL) free(buf);
+  if (buf) free(buf);
   return status;
 }  
 

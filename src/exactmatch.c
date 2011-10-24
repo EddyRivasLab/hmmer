@@ -19,48 +19,53 @@ static char usage[]  = "[options] <fmfile> <qfile>";
 static char banner[] = "Find all instances of each <qfile> sequence in the database represented by <fmfile>";
 
 
-static void
+static int
 process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_fmfile, char **ret_qfile)
 {
-  ESL_GETOPTS *go = NULL;
+  ESL_GETOPTS *go = esl_getopts_Create(options);
+  int          status;
 
-  if ((go = esl_getopts_Create(options))     == NULL)     p7_Die("Internal failure creating options object");
-  if (esl_opt_ProcessEnvironment(go)         != eslOK)  { printf("Failed to process environment: %s\n", go->errbuf); goto ERROR; }
-  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK)  { printf("Failed to parse command line: %s\n", go->errbuf); goto ERROR; }
-  if (esl_opt_VerifyConfig(go)               != eslOK)  { printf("Failed to parse command line: %s\n", go->errbuf); goto ERROR; }
+  if (esl_opt_ProcessEnvironment(go)         != eslOK)  { if (printf("Failed to process environment: %s\n", go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK)  { if (printf("Failed to parse command line: %s\n", go->errbuf)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if (esl_opt_VerifyConfig(go)               != eslOK)  { if (printf("Failed to parse command line: %s\n", go->errbuf)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
 
   /* help format: */
-  if (esl_opt_GetBoolean(go, "-h") == TRUE) {
+  if (esl_opt_GetBoolean(go, "-h") == TRUE) 
+    {
       p7_banner(stdout, argv[0], banner);
       esl_usage(stdout, argv[0], usage);
-      puts("\nBasic options:");
+
+      if (puts("\nBasic options:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 120=textwidth*/
 
-      puts("\nSpecial options:");
+      if (puts("\nSpecial options:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 2, 2, 80); /* 2= group; 2 = indentation; 120=textwidth*/
 
       exit(0);
   }
 
-  if (esl_opt_ArgNumber(go)                  != 2)     { puts("Incorrect number of command line arguments.");      goto ERROR; }
-  if ((*ret_fmfile = esl_opt_GetArg(go, 1)) == NULL)  { puts("Failed to get <fmfile> argument on command line"); goto ERROR; }
-  if ((*ret_qfile  = esl_opt_GetArg(go, 2)) == NULL)  { puts("Failed to get <qfile> argument on command line");   goto ERROR; }
+  if (esl_opt_ArgNumber(go)                  != 2)    { if (puts("Incorrect number of command line arguments.")     < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if ((*ret_fmfile = esl_opt_GetArg(go, 1)) == NULL)  { if (puts("Failed to get <fmfile> argument on command line") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if ((*ret_qfile  = esl_opt_GetArg(go, 2)) == NULL)  { if (puts("Failed to get <qfile> argument on command line")  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
 
   /* Validate any attempted use of stdin streams */
-  if (esl_strcmp(*ret_fmfile, "-") == 0 && esl_strcmp(*ret_qfile, "-") == 0) {
-    puts("Either <fmfile> or <qfile> may be '-' (to read from stdin), but not both.");
-    goto ERROR;
-  }
+  if (esl_strcmp(*ret_fmfile, "-") == 0 && esl_strcmp(*ret_qfile, "-") == 0) 
+    { if (puts("Either <fmfile> or <qfile> may be '-' (to read from stdin), but not both.") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
 
   *ret_go = go;
-  return;
+  return eslOK;
 
-ERROR:  /* all errors handled here are user errors, so be polite.  */
+ FAILURE:  /* all errors handled here are user errors, so be polite.  */
   esl_usage(stdout, argv[0], usage);
   puts("\nwhere basic options are:");
   esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
   printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
+  esl_getopts_Destroy(go);
   exit(1);
+
+ ERROR:
+  if (go) esl_getopts_Destroy(go);
+  exit(status);
 }
 
 //see: http://c-faq.com/stdio/commaprint.html
@@ -87,35 +92,28 @@ commaprint(unsigned long n)
 static int
 output_header(FM_METADATA *meta, FILE *ofp, const ESL_GETOPTS *go, char *fmfile, char *qfile)
 {
+  char *alph;
+
+  if      (meta->alph_type == fm_DNA)       alph = "dna";
+  else if (meta->alph_type == fm_DNA_full)  alph = "dna_full";
+  else if (meta->alph_type == fm_AMINO)     alph = "amino";
+
   p7_banner(ofp, go->argv[0], banner);
 
-  fprintf(ofp, "# input binary-formatted HMMER database:   %s\n", fmfile);
-  fprintf(ofp, "# input file of query sequences:           %s\n", qfile);
+  if (fprintf(ofp, "# input binary-formatted HMMER database:   %s\n", fmfile) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (fprintf(ofp, "# input file of query sequences:           %s\n", qfile)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--out")) {
-    fprintf(ofp, "# output file containing list of hits:     ");
     char *outfile = esl_opt_GetString(go, "--out");
-    if (esl_strcmp(outfile, "-"))
-      fprintf(ofp, "stdout\n");
-    else
-      fprintf(ofp, "%s\n", outfile);
+    if (fprintf(ofp, "# output file containing list of hits:     %s\n", (esl_strcmp(outfile, "-") == 0 ? "stdout" : outfile)) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); 
   }
 
-  if (esl_opt_IsUsed(go, "--count_only"))
-    fprintf(ofp, "# output only counts, not hit locations\n");
+  if (esl_opt_IsUsed(go, "--count_only") && fprintf(ofp, "# output only counts, not hit locations\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
-  char *alph;
-  if (meta->alph_type == fm_DNA)
-    alph = "dna";
-  else if (meta->alph_type == fm_DNA_full)
-    alph = "dna_full";
-  else if (meta->alph_type == fm_AMINO)
-      alph = "amino";
-  fprintf(ofp, "# alphabet     :                           %s\n", alph);
-
-  fprintf(ofp, "# bin_length   :                           %d\n", meta->freq_cnt_b);
-  fprintf(ofp, "# suffix array sample rate:                %d\n", meta->freq_SA);
-  fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
+  if (fprintf(ofp, "# alphabet     :                           %s\n", alph)                         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (fprintf(ofp, "# bin_length   :                           %d\n", meta->freq_cnt_b)             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (fprintf(ofp, "# suffix array sample rate:                %d\n", meta->freq_SA)                < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   return eslOK;
 }
 

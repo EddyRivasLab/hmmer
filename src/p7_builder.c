@@ -384,9 +384,9 @@ static int    make_post_msa        (P7_BUILDER *bld, const ESL_MSA *premsa, cons
  *            bg          - null model
  *            opt_hmm     - optRETURN: new HMM
  *            opt_trarr   - optRETURN: array of faux tracebacks, <0..nseq-1>
- *            opt_postmsa - optRETURN: RF-annotated, possibly modified MSA 
  *            opt_gm      - optRETURN: profile corresponding to <hmm>
  *            opt_om      - optRETURN: optimized profile corresponding to <gm>
+ *            opt_postmsa - optRETURN: RF-annotated, possibly modified MSA 
  *
  * Returns:   <eslOK> on success. The new HMM is optionally returned in
  *            <*opt_hmm>, along with optional returns of an array of faux tracebacks
