@@ -756,40 +756,37 @@ static int
 serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp)
 {
 
-  int      wstatus;
-//  int i;
-//  int prev_hit_cnt;
- // ESL_SQ   *dbsq   =  esl_sq_CreateDigital(info->om->abc);
+  int      wstatus = eslOK;
+  int i;
 
   FM_DATA  fmf;
   FM_DATA  fmb;
 
-  wstatus = fm_readFM( &fmf, info->fm_cfg->meta, 1 );
-  if (wstatus != eslOK) return wstatus;
-  wstatus = fm_readFM( &fmb, info->fm_cfg->meta, 0 );
-  if (wstatus != eslOK) return wstatus;
+  FM_METADATA *meta = info->fm_cfg->meta;
+  int total_chars = 2 * (meta->seq_data[ meta->seq_count - 1 ].start + meta->seq_data[ meta->seq_count - 1 ].length - 1);
 
-  fmb.SA = fmf.SA;
-  fmb.T  = fmf.T;
+  for ( i=0; i<info->fm_cfg->meta->block_count; i++ ) {
 
-  wstatus = p7_Pipeline_FM(info->pli, info->om, info->bg, info->th, info->pli->nseqs,
-      &fmf, &fmb, info->fm_cfg, info->fm_hmmdata);
+    wstatus = fm_readFM( &fmf, meta, 1 );
+    if (wstatus != eslOK) return wstatus;
+    wstatus = fm_readFM( &fmb, meta, 0 );
+    if (wstatus != eslOK) return wstatus;
 
+    fmb.SA = fmf.SA;
+    fmb.T  = fmf.T;
 
-  /*
-  P7_DOMAIN *dcl;
-  // modify hit positions to account for the position of the window in the full sequence
-  for (i=0; i < info->th->N ; i++) {
-      dcl = info->th->unsrt[i].dcl;
-      dcl->ienv += dbsq->start - 1;
-      dcl->jenv += dbsq->start - 1;
-      dcl->iali += dbsq->start - 1;
-      dcl->jali += dbsq->start - 1;
-      dcl->ad->sqfrom += dbsq->start - 1;
-      dcl->ad->sqto += dbsq->start - 1;
+    wstatus = p7_Pipeline_FM(info->pli, info->om, info->bg, info->th, info->pli->nseqs,
+        &fmf, &fmb, info->fm_cfg, info->fm_hmmdata);
+    if (wstatus != eslOK) return wstatus;
+
+    info->pli->nres += 2 * (fmf.N - fmf.overlap);  // this counts the number of characters from the alphabet in use (which doesn't count N's for 2-bit dna)
   }
-*/
-  info->pli->nres += 2 * fmf.N;
+
+  if (info->pli->nres > total_chars)
+    return eslFAIL; // it should either be the same (no ambiguity codes) or smaller (ambiguity codes)
+
+  info->pli->nres = total_chars; //make book keeping agreeable
+
 
   return wstatus;
 

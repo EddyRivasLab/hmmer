@@ -842,7 +842,7 @@ int
 postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx ,
     int window_start, int window_len, ESL_SQ *tmpseq, P7_DOMAINDEF *ddef_app,
     ESL_DSQ *subseq, int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
-    float nullsc, float usc
+    float nullsc, float usc, int complementarity
 )
 {
   P7_HIT          *hit     = NULL;     /* ptr to the current hit output data      */
@@ -854,19 +854,11 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   int              d;
   int              status;
 
-/*
-  printf("start:  %ld\n", window_start);
-  printf("len:    %ld\n", window_len);
-  printf("name:   %s\n", seq_name);
-  printf("usc:    %.2f\n", usc);
-  printf("nullsc: %.2f\n", nullsc);
-  printf("sc:     %.2f\n", usc-nullsc);
-  printf("seq:    ");
-  for (d=1; d<=window_len; d++)
-    printf("%d", subseq[d]);
-  printf("\n\n");
-//  return eslOK;
-*/
+
+
+  int   loc_window_length = ESL_MIN(om->max_length, window_len); //see notes, ~/notebook/20100716_hmmer_score_v_eval_bug/, end of Thu Jul 22 13:36:49 EDT 2010
+  float nullsc2           =  (float)loc_window_length * log((float)loc_window_length/(loc_window_length+1)) + log(1./(loc_window_length+1));
+
 
   int F1_L = ESL_MIN( window_len,  pli->B1);
   int F2_L = ESL_MIN( window_len,  pli->B2);
@@ -953,11 +945,6 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
    * in nhmmer context, they'll just get thrown away later, so
    * drop them now, if possible.
    */
-
-  int loc_window_length = ESL_MIN(om->max_length, window_len); //see notes, ~/notebook/20100716_hmmer_score_v_eval_bug/, end of Thu Jul 22 13:36:49 EDT 2010
-  float nullsc2 =  (float)loc_window_length * log((float)loc_window_length/(loc_window_length+1)) + log(1./(loc_window_length+1));
-
-
   for (d = 0; d < pli->ddef->ndom; d++)
   {
 
@@ -992,12 +979,21 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
         ESL_ALLOC(hit->dcl, sizeof(P7_DOMAIN) );
         hit->dcl[0] = pli->ddef->dcl[d];
 
-        hit->dcl[0].ienv += window_start - 1; // represents the real position within the sequence handed to the pipeline
-        hit->dcl[0].jenv += window_start - 1;
-        hit->dcl[0].iali += window_start - 1;
-        hit->dcl[0].jali += window_start - 1;
-        hit->dcl[0].ad->sqfrom += window_start - 1;
-        hit->dcl[0].ad->sqto += window_start - 1;
+        if (complementarity == fm_nocomplement) {
+          hit->dcl[0].ienv += window_start - 1; // represents the real position within the sequence handed to the pipeline
+          hit->dcl[0].jenv += window_start - 1;
+          hit->dcl[0].iali += window_start - 1;
+          hit->dcl[0].jali += window_start - 1;
+          hit->dcl[0].ad->sqfrom += window_start - 1;
+          hit->dcl[0].ad->sqto += window_start - 1;
+        } else {
+          hit->dcl[0].ienv = window_start + window_len - 1 - hit->dcl[0].ienv + 1; // represents the real position within the sequence handed to the pipeline
+          hit->dcl[0].jenv = window_start + window_len - 1 - hit->dcl[0].jenv + 1;
+          hit->dcl[0].iali = window_start + window_len - 1 - hit->dcl[0].iali + 1;
+          hit->dcl[0].jali = window_start + window_len - 1 - hit->dcl[0].jali + 1;
+          hit->dcl[0].ad->sqfrom = window_start + window_len - 1 - hit->dcl[0].ad->sqfrom + 1;
+          hit->dcl[0].ad->sqto   = window_start + window_len - 1 - hit->dcl[0].ad->sqto + 1;
+        }
 
         hit->pre_score = bitscore  / eslCONST_LOG2;
             hit->pre_lnP   = esl_exp_logsurv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
@@ -1120,7 +1116,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
 
 
     status = postMSV_LongTarget(pli, om, bg, hitlist, seqidx, window_starts[i], window_len, tmpseq, ddef_app,
-                      subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc);
+                      subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc, fm_nocomplement);
 
     if (status != eslOK) return status;
 
@@ -1215,6 +1211,10 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
     window =  windowlist.windows[i] ;
 
     fm_convertRange2DSQ(fm_cfg->meta->alph_type, window.fm_n, ( window.fm_n+window.length-1 ), fmf->T, tmpseq );
+
+    if (window.complementarity == fm_complement)
+      esl_sq_ReverseComplement(tmpseq);
+
     subseq = tmpseq->dsq;
 
     pli->n_past_msv++;
@@ -1224,7 +1224,7 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
     status = postMSV_LongTarget(pli, om, bg, hitlist, seqidx, window.n, window.length, tmpseq, ddef_app,
                       subseq, 1, seqdata[window.id].name, seqdata[window.id].source,
                       seqdata[window.id].acc, seqdata[window.id].desc,
-                      window.null_sc, window.score);
+                      window.null_sc, window.score, window.complementarity);
 
     if (status != eslOK) return status;
 

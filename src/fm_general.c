@@ -168,6 +168,8 @@ fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
   interval->lower  = abs(fm->C[(int)c]);
   interval->upper  = abs(fm->C[(int)c+1])-1;
 
+//  fprintf (stderr, "%d : %12d..%12d\n", c, interval->lower, interval->upper );
+
   while (interval->lower>0 && interval->lower <= interval->upper) {
     c = query[++i];
     if (c == '\0')  // end of query - the current range defines the hits
@@ -177,6 +179,7 @@ fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
 
     fm_updateIntervalReverse(fm, cfg, c, interval);
 
+    fprintf (stderr, "%d : %12d..%12d\n", c, interval->lower, interval->upper );
 
     cfg->occCallCnt+=2;
   }
@@ -233,6 +236,7 @@ fm_convertRange2DSQ(uint8_t alph_type, int first, int last, const uint8_t *B, ES
   int i;
   uint8_t c;
   esl_sq_GrowTo(sq, last-first+1);
+  sq->n = last-first+1;
 
   if (alph_type == fm_DNA || alph_type == fm_RNA) {
     /*
@@ -269,20 +273,26 @@ fm_initConfigGeneric( FM_CFG *cfg ) {
 
 
   //bounding cutoffs
-
-  cfg->max_depth       = 18;
-  cfg->neg_len_limit   = 4;
-  cfg->consec_pos_req  = 5;
-  cfg->score_ratio_req = 0.40;
-  cfg->msv_length      = 50;
+  cfg->max_depth       = 22;
+  cfg->neg_len_limit   = 3;
+  cfg->consec_pos_req  = 3;
+  cfg->score_ratio_req = 0.30;
+  cfg->msv_length      = 60;
 
 /*
+  cfg->max_depth       = 18;
+  cfg->neg_len_limit   = 4;
+  cfg->consec_pos_req  = 4;
+  cfg->score_ratio_req = 0.40;
+  cfg->msv_length      = 50;
+*/
+
   cfg->max_depth       = 16;
   cfg->neg_len_limit   = 4;
   cfg->consec_pos_req  = 5;
   cfg->score_ratio_req = 0.45;
   cfg->msv_length      = 45;
-*/
+
 /*
   cfg->max_depth       = 14;
   cfg->neg_len_limit   = 3;
@@ -342,6 +352,8 @@ fm_readFM( FM_DATA *fm, FM_METADATA *meta, int getAll )
     esl_fatal( "%s: Error reading terminal location in FM index.\n", __FILE__);
   if(fread(&(fm->seq_offset), sizeof(fm->seq_offset), 1, meta->fp) !=  1)
     esl_fatal( "%s: Error reading seq_offset in FM index.\n", __FILE__);
+  if(fread(&(fm->overlap), sizeof(fm->overlap), 1, meta->fp) !=  1)
+    esl_fatal( "%s: Error reading overlap in FM index.\n", __FILE__);
   if(fread(&(fm->seq_cnt), sizeof(fm->seq_cnt), 1, meta->fp) !=  1)
     esl_fatal( "%s: Error reading seq_cnt in FM index.\n", __FILE__);
 
@@ -549,7 +561,7 @@ fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int le
 
   //verify that the hit doesn't extend beyond the bounds of the target sequence
   if (direction == fm_forward) {
-    if (*seg_pos + length > meta->seq_data[ *segment_id ].length ) {
+    if (*seg_pos + length > meta->seq_data[ *segment_id ].start + meta->seq_data[ *segment_id ].length ) {
       *segment_id  = *seg_pos  = -1;  // goes into the next sequence, so it should be ignored
       return eslOK;
     }

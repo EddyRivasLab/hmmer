@@ -257,11 +257,13 @@ main(int argc,  char *argv[]) {
 
   //read in FM-index blocks
   ESL_ALLOC(fmsf, cfg->meta->block_count * sizeof(FM_DATA) );
+  if (!meta->fwd_only)
+    ESL_ALLOC(fmsb, meta->block_count * sizeof(FM_DATA) );
+
   for (i=0; i<meta->block_count; i++) {
     fm_readFM( fmsf+i,meta, 1 );
 
     if (!meta->fwd_only) {
-      ESL_ALLOC(fmsb, meta->block_count * sizeof(FM_DATA) );
       fm_readFM(fmsb+i, meta, 0 );
       fmsb[i].SA = fmsf[i].SA;
       fmsb[i].T = fmsf[i].T;
@@ -298,10 +300,6 @@ main(int argc,  char *argv[]) {
     while (line[qlen] != '\0' && line[qlen] != '\n')  qlen++;
     if (line[qlen] == '\n')  line[qlen] = '\0';
 
-    //fm_reverseString (line, qlen);
-    //for (i=0; i<qlen; i++)
-    //  line[i] = ( line[i] == 'A' ? 'T' : (line[i] == 'C' ? 'G' : (line[i] == 'G' ? 'C' : 'A')));
-
     hit_num = 0;
 
     for (i=0; i<meta->block_count; i++) {
@@ -323,6 +321,7 @@ main(int argc,  char *argv[]) {
 
 
       /* find reverse hits, using backward search on the forward FM*/
+
       if (!meta->fwd_only) {
         fm_getSARangeReverse(fmsf+i, cfg, line, meta->inv_alph, &interval);
         if (interval.lower>0 && interval.lower <= interval.upper) {
@@ -337,6 +336,7 @@ main(int argc,  char *argv[]) {
           }
         }
       }
+
     }
 
 

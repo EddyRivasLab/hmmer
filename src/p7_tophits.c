@@ -707,7 +707,7 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th)
   dir_i = (s_i < e_i ? 1 : -1);
   len_i = 1 + dir_i * (e_i - s_i) ;
 
-  for (i = 1; i < th->N - 1; i++) 
+  for (i = 1; i < th->N; i++)
     {
       sub_j = sub_i;
       p_j   = p_i;
@@ -724,7 +724,7 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th)
       len_i = 1 + dir_i * (e_i - s_i) ;
 
       if ( th->hit[i]->seqidx ==  th->hit[i-1]->seqidx  && //same source sequence
-           sub_i != sub_j && // not from the same subsequence ... if they are, then domaindef already split them up
+         //  sub_i != sub_j && // not from the same subsequence ... if they are, then domaindef already split them up
            dir_i == dir_j && // only bother removing if the overlapping hits are on the same strand
 	   (
 	    ( s_i >= s_j-2 && s_i <= s_j+2) ||  // at least one side is essentially flush (

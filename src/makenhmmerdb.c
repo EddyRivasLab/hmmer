@@ -150,7 +150,7 @@ ERROR:
  *
  *            if SAsamp == NULL, don't store/write T or SAsamp
  */
-int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_cnt,
+int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_cnt, uint32_t overlap,
                         uint8_t *T, uint8_t *BWT,
                         int *SA, uint32_t *SAsamp,
                         uint32_t *occCnts_sb, uint32_t *cnts_sb,
@@ -304,6 +304,8 @@ for(j=0; j < N; ++j) {
     esl_fatal( "buildAndWriteFMIndex: Error writing terminal location in FM index.\n");
   if(fwrite(&seq_offset, sizeof(seq_offset), 1, fp) !=  1)
     esl_fatal( "buildAndWriteFMIndex: Error writing seq_offset in FM index.\n");
+  if(fwrite(&overlap, sizeof(overlap), 1, fp) !=  1)
+    esl_fatal( "buildAndWriteFMIndex: Error writing overlap in FM index.\n");
   if(fwrite(&seq_cnt, sizeof(seq_cnt), 1, fp) !=  1)
     esl_fatal( "buildAndWriteFMIndex: Error writing seq_cnt in FM index.\n");
 
@@ -394,6 +396,7 @@ main(int argc, char *argv[]) {
   uint32_t numseqs;
   int allocedseqs = 1000;
   uint32_t seq_offset = 0;
+  uint32_t overlap = 0;
   uint16_t seq_cnt;
 
   int compressed_bytes;
@@ -620,14 +623,15 @@ main(int argc, char *argv[]) {
 
     seq_cnt = numseqs-seq_offset;
     //build and write FM-index for T
-    buildAndWriteFMIndex(meta, seq_offset, seq_cnt, T, BWT, SA, SAsamp,
+
+    buildAndWriteFMIndex(meta, seq_offset, seq_cnt, (uint32_t)block->list[0].C, T, BWT, SA, SAsamp,
         occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);
 
 
     if ( ! meta->fwd_only ) {
       //build and write FM-index for reversed T
       fm_reverseString ((char*)T, block_length-1);
-      buildAndWriteFMIndex(meta, seq_offset, seq_cnt, T, BWT, SA, NULL,
+      buildAndWriteFMIndex(meta, seq_offset, seq_cnt, 0, T, BWT, SA, NULL,
           occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);
     }
 
@@ -698,6 +702,8 @@ main(int argc, char *argv[]) {
       esl_fatal( "%s: Error reading terminal location in FM index.\n", argv[0]);
     if(fread(&seq_offset, sizeof(seq_offset), 1, fptmp) !=  1)
       esl_fatal( "%s: Error reading seq_offset in FM index.\n", argv[0]);
+    if(fread(&overlap, sizeof(overlap), 1, fptmp) !=  1)
+      esl_fatal( "%s: Error reading overlap in FM index.\n", argv[0]);
     if(fread(&seq_cnt, sizeof(seq_cnt), 1, fptmp) !=  1)
       esl_fatal( "%s: Error reading seq_cnt in FM index.\n", argv[0]);
 
@@ -729,6 +735,8 @@ main(int argc, char *argv[]) {
       esl_fatal( "%s: Error writing terminal location in FM index.\n", argv[0]);
     if(fwrite(&seq_offset, sizeof(seq_offset), 1, fp) !=  1)
       esl_fatal( "%s: Error writing seq_offset in FM index.\n", argv[0]);
+    if(fwrite(&overlap, sizeof(overlap), 1, fp) !=  1)
+      esl_fatal( "%s: Error writing overlap in FM index.\n", argv[0]);
     if(fwrite(&seq_cnt, sizeof(seq_cnt), 1, fp) !=  1)
       esl_fatal( "%s: Error writing seq_cnt in FM index.\n", argv[0]);
 
