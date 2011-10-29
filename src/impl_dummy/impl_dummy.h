@@ -63,6 +63,7 @@ typedef struct {
   int consec_pos_req;
   float score_ratio_req;
   int msv_length;
+  float max_scthreshFM;
 
   /*pointer to FM-index metadata*/
   FM_METADATA *meta;

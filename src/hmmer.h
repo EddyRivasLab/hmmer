@@ -865,7 +865,7 @@ typedef struct fm_dp_pair_s {
 
 typedef struct fm_diag_s {
   uint32_t    n;  //position of the database sequence at which the diagonal starts
-  float       sortkey;
+  double       sortkey;
   uint16_t    k;  //position of the model at which the diagonal starts
   uint16_t    length;
   uint8_t     complementarity;

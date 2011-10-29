@@ -179,7 +179,7 @@ fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
 
     fm_updateIntervalReverse(fm, cfg, c, interval);
 
-    fprintf (stderr, "%d : %12d..%12d\n", c, interval->lower, interval->upper );
+//    fprintf (stderr, "%d : %12d..%12d\n", c, interval->lower, interval->upper );
 
     cfg->occCallCnt+=2;
   }
@@ -271,13 +271,16 @@ fm_initConfigGeneric( FM_CFG *cfg ) {
   cfg->maskSA       =  cfg->meta->freq_SA - 1;
   cfg->shiftSA      =  cfg->meta->SA_shift;
 
+  cfg->max_scthreshFM  = 10.5;
 
   //bounding cutoffs
+/*
   cfg->max_depth       = 22;
   cfg->neg_len_limit   = 3;
   cfg->consec_pos_req  = 3;
   cfg->score_ratio_req = 0.30;
   cfg->msv_length      = 60;
+*/
 
 /*
   cfg->max_depth       = 18;
