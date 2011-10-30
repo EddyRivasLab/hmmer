@@ -85,9 +85,9 @@ p7_gmxchk_Create(int M, int L, int ramlimit)
   /* Set allocR, R{abc}, L{abc} fields: row layout, full vs. checkpointed */
   gxc->R0          = 3;	                  /* fwd[0]; bck[prv,cur] */
   gxc->allocW      = M + 1;               /* allocM+1 because we're [0..allocM] in DP columns in generic mx. */
-  gxc->ncell_limit = (ramlimit * 1048576L) / (p7G_NSCELLS *  sizeof(float))
+  gxc->ncell_limit = (ramlimit * 1048576L) / (p7G_NSCELLS *  sizeof(float));
   maxR             = gxc->ncell_limit / gxc->allocW;  /* this int32 calculation is why ramlimit must be <= 2000 (2GB) */
-  set_row_layout(gxc, M, L, maxR);
+  set_row_layout(gxc, L, maxR);
   gxc->allocR      = gxc->R0 + gxc->Ra + gxc->Rb + gxc->Rc;
   gxc->validR      = gxc->allocR;
 
@@ -141,12 +141,14 @@ p7_gmxchk_GrowTo(P7_GMXCHK *gxc, int M, int L)
   int minR_chk      = (int) ceil(minimum_rows(L)) + gxc->R0; /* minimum number of DP rows needed  */
   int reset_dp_ptrs = FALSE;
   int maxR;
+  int r;
+  int status;
 
   /* Are the current allocations sufficient for the new problem? */
   if (M + 1 <= gxc->allocW &&  L + 1 <= gxc->allocXR &&  gxc->ncells <= gxc->ncell_limit)
     {
       if      (L + gxc->R0 <= gxc->validR) { set_full        (gxc, L);              return eslOK; }
-      else if (minR <=  gxc->validR)       { set_checkpointed(gxc, L, gxc->validR); return eslOK; }
+      else if (minR_chk   <=  gxc->validR) { set_checkpointed(gxc, L, gxc->validR); return eslOK; }
     }
 
   /* Do individual matrix rows need to expand? */
@@ -162,7 +164,7 @@ p7_gmxchk_GrowTo(P7_GMXCHK *gxc, int M, int L)
   if ( (gxc->ncells > gxc->ncell_limit && minR_chk <= maxR) ||  /* we were redlined, and recommended alloc will work: so downsize */
        minR_chk > gxc->validR)				        /* not enough memory for needed rows: so upsize                   */
     {
-      set_row_layout(gxc, M, L, maxR); 
+      set_row_layout(gxc, L, maxR); 
       gxc->validR = gxc->R0 + gxc->Ra + gxc->Rb + gxc->Rc; /* this may be > allocR now; we'll reallocate dp[] next, if so     */
       gxc->ncells = gxc->validR * gxc->allocW;
       ESL_REALLOC(gxc->dp_mem, sizeof(float) * gxc->ncells * p7G_NSCELLS);
@@ -189,9 +191,9 @@ p7_gmxchk_GrowTo(P7_GMXCHK *gxc, int M, int L)
       gxc->allocXR = L+1;
     }
 
-  gx->M = 0;
-  gx->L = 0;
-  gx->R = 0;
+  gxc->M = 0;
+  gxc->L = 0;
+  gxc->R = 0;
   return eslOK;
 
  ERROR:
@@ -253,13 +255,14 @@ static int
 set_row_layout(P7_GMXCHK *gxc, int allocL, int maxR)
 {
   double Rbc      = minimum_rows(allocL);               
-  double Rc       = floor(Rbc);	                          /* remainder goes to an incomplete (Rb) segment  */
   int    minR_chk = gxc->R0 + (int) ceil(Rbc);	          /* min # rows we need for checkpointing          */
   int    minR_all = gxc->R0 + allocL;		          /* min # rows we need for full matrix            */
 
   if      (minR_all <= maxR) set_full        (gxc, allocL);
   else if (minR_chk <= maxR) set_checkpointed(gxc, allocL, maxR);
   else                       set_redlined    (gxc, allocL, Rbc);
+
+  return eslOK;
 }
 
 static void
@@ -284,7 +287,7 @@ set_checkpointed(P7_GMXCHK *gxc, int L, int R)
   gxc->Ra     = R - gxc->Rb - gxc->Rc - gxc->R0;
   gxc->Lc     = ((gxc->Rc + 2) * (gxc->Rc + 1)) / 2 - 1;
   gxc->La     = gxc->Ra;
-  gxc->Lb     = allocL - gxc->La - gxc->Lc;
+  gxc->Lb     = L - gxc->La - gxc->Lc;
 }   
 
 static void

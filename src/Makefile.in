@@ -82,7 +82,10 @@ PROGOBJS =\
 	makenhmmerdb.o\
 	exactmatch.o
 
-HDRS =  hmmer.h 
+HDRS =  hmmer.h \
+	p7_gbands.h\
+	p7_gmxb.h\
+	p7_gmxchk.h
 
 OBJS =  build.o\
 	cachedb.o\
@@ -92,6 +95,8 @@ OBJS =  build.o\
 	eweight.o\
 	generic_decoding.o\
 	generic_fwdback.o\
+	generic_fwdback_chk.o\
+	generic_fwdback_banded.o\
 	generic_null2.o\
 	generic_msv.o\
 	generic_optacc.o\
@@ -114,7 +119,10 @@ OBJS =  build.o\
 	p7_bg.o\
 	p7_builder.o\
 	p7_domaindef.o\
+	p7_gbands.o\
 	p7_gmx.o\
+	p7_gmxb.o\
+	p7_gmxchk.o\
 	p7_hmm.o\
 	p7_hmmfile.o\
 	p7_pipeline.o\

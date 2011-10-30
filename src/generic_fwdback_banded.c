@@ -31,7 +31,7 @@ p7_GForwardBanded(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXB *gxb,
   float        dc;				 /* precalculated D(i,k+1) value on current row */
   float        sc;				 /* temporary score calculation M(i,k)          */
   int          g, i, k;				 /* indices running over segments, residues (rows) x_i, model positions (cols) k  */
-  float        esc  = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
+  //float        esc  = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
   
   xN      = 0.0f;
   xJ      = -eslINFINITY;
