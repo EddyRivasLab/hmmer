@@ -279,7 +279,7 @@ main(int argc,  char *argv[]) {
    */
   cfg->maskSA       =  meta->freq_SA - 1;
   cfg->shiftSA      =  meta->SA_shift;
-  fm_initConfig(cfg);
+  fm_initConfig(cfg, NULL);
 
 
   fm_createAlphabet(meta, NULL); // don't override charBits

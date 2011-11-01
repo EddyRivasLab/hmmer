@@ -961,6 +961,7 @@ typedef struct p7_pipeline_s {
   int     do_biasfilter;	/* TRUE to use biased comp HMM filter       */
   int     do_null2;		/* TRUE to use null2 score corrections      */
 
+
   /* Accounting. (reduceable in threaded/MPI parallel version)              */
   uint64_t      nmodels;        /* # of HMMs searched                       */
   uint64_t      nseqs;	        /* # of sequences searched                  */
@@ -1456,7 +1457,7 @@ extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
 extern int fm_initWindows (FM_WINDOWLIST *list);
 extern FM_WINDOW *fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, FM_DIAG *seed);
 extern int fm_convertRange2DSQ(uint8_t alph_type, int first, int last, const uint8_t *B, ESL_SQ *sq );
-extern int fm_initConfigGeneric( FM_CFG *cfg );
+extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
 
 
 

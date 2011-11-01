@@ -7,10 +7,9 @@
  * a function that does something in _sse and _vmx code
  */
 int
-fm_initConfig( FM_CFG *cfg ) {
+fm_initConfig( FM_CFG *cfg, ESL_GETOPTS *go ) {
 
-  fm_initConfigGeneric(cfg);
-
+  fm_initConfigGeneric(cfg, go);
 
   return eslOK;
 }

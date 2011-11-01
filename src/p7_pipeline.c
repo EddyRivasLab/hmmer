@@ -207,6 +207,7 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
 	  pli->B1 = pli->B2 = pli->B3 = -1;
   }
 
+
   if (go && esl_opt_GetBoolean(go, "--max")) 
     {
       pli->do_max        = TRUE;

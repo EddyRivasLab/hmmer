@@ -46,12 +46,12 @@ fm_print_vec_rev (vector unsigned char in) {
  * Purpose:   Initialize vector masks used in VMX FMindex implementation
  */
 int
-fm_initConfig( FM_CFG *cfg ) {
+fm_initConfig( FM_CFG *cfg, ESL_GETOPTS *go ) {
   int status;
   int i,j;
   int trim_chunk_count;
 
-  fm_initConfigGeneric(cfg);
+  fm_initConfigGeneric(cfg, go);
 
   cfg->fm_allones_v = esl_vmx_set_u8((unsigned char) 0xff);
   cfg->fm_neg128_v  = esl_vmx_set_u8((int8_t) -128);

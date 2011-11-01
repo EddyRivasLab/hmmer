@@ -45,12 +45,12 @@ fm_print_m128_rev (__m128i in) {
  * Purpose:   Initialize vector masks used in SSE FMindex implementation
  */
 int
-fm_initConfig( FM_CFG *cfg ) {
+fm_initConfig( FM_CFG *cfg, ESL_GETOPTS *go ) {
   int status;
   int i,j;
   int trim_chunk_count;
 
-  fm_initConfigGeneric(cfg);
+  fm_initConfigGeneric(cfg, go);
 
   cfg->fm_allones_v = _mm_set1_epi8(0xff);
   cfg->fm_neg128_v  = _mm_set1_epi8((int8_t) -128);

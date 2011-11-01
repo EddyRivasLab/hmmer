@@ -93,6 +93,14 @@ static ESL_OPTIONS options[] = {
   { "--B2",         eslARG_INT,         "240", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Vit)",          7 },
   { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",          7 },
 
+  /* Control of FM pruning/extension */
+  { "--fm_msv_length",   eslARG_INT,          "45", NULL, NULL,    NULL,  NULL, NULL,          "max length used when extending seed for MSV",                8 },
+  { "--fm_max_depth",    eslARG_INT,          "16", NULL, NULL,    NULL,  NULL, NULL,          "seed length at which bit threshold must be met",             8 },
+  { "--fm_max_neg_len",  eslARG_INT,           "4", NULL, NULL,    NULL,  NULL, NULL,          "maximum number consecutive negative scores in seed",         8 },
+  { "--fm_req_pos",      eslARG_INT,           "5", NULL, NULL,    NULL,  NULL, NULL,          "minimum number consecutive positive scores in seed" ,        8 },
+  { "--fm_sc_ratio",     eslARG_REAL,       "0.45", NULL, NULL,    NULL,  NULL, NULL,          "seed must maintain this bit ratio from one of two ends",     8 },
+  { "--fm_max_scthresh", eslARG_REAL,       "10.5", NULL, NULL,    NULL,  NULL, NULL,          "max total bits required in seed of length fm_max_depth",     8 },
+
 /* Other options */
   { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert target <seqdb> is in format <s>>: no autodetection",     12 },
   { "--nonull2",    eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,  NULL,            "turn off biased composition score corrections",                 12 },
@@ -184,6 +192,9 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
       if (puts("\nOptions controlling acceleration heuristics:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 7, 2, 80);
 
+      if (puts("\nControl of FM pruning and extension:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+      esl_opt_DisplayHelp(stdout, go, 8, 2, 80);
+
       if (puts("\nOther expert options:")                                    < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 12, 2, 80); 
       exit(0);
@@ -249,6 +260,23 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--F2")         && fprintf(ofp, "# Vit filter P threshold:       <= %g\n",             esl_opt_GetReal(go, "--F2"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--F3")         && fprintf(ofp, "# Fwd filter P threshold:       <= %g\n",             esl_opt_GetReal(go, "--F3"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--nobias")     && fprintf(ofp, "# biased composition HMM filter:   off\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+
+  if (esl_opt_IsUsed(go, "--B1")         && fprintf(ofp, "# biased comp MSV window len:      %d\n",             esl_opt_GetInteger(go, "--B1"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--B2")         && fprintf(ofp, "# biased comp Viterbi window len:  %d\n",             esl_opt_GetInteger(go, "--B2"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--B3")         && fprintf(ofp, "# biased comp Forward window len:  %d\n",             esl_opt_GetInteger(go, "--B3"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+
+
+
+  if (esl_opt_IsUsed(go, "--fm_msv_length")   && fprintf(ofp, "# seed extension max length:       %d\n",             esl_opt_GetInteger(go, "--fm_msv_length"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fm_max_depth")    && fprintf(ofp, "# seed length:                     %d\n",             esl_opt_GetInteger(go, "--fm_max_depth"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fm_max_neg_len")  && fprintf(ofp, "# max consec neg score in seed:    %d\n",             esl_opt_GetInteger(go, "--fm_max_neg_len"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fm_req_pos")      && fprintf(ofp, "# min consec pos score in seed:    %d\n",             esl_opt_GetInteger(go, "--fm_req_pos"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fm_sc_ratio")     && fprintf(ofp, "# min seed bit ratio:              %.2f\n",           esl_opt_GetReal(go, "--fm_sc_ratio"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fm_max_scthresh") && fprintf(ofp, "# max bits in seed:                %.2f\n",           esl_opt_GetReal(go, "--fm_max_scthresh"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+
+
+
+
   if (esl_opt_IsUsed(go, "--nonull2")    && fprintf(ofp, "# null2 bias corrections:          off\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--single")     && fprintf(ofp, "# search reverse complement:       off\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-Z")           && fprintf(ofp, "# database size is set to:         %.1f Mb\n",        esl_opt_GetReal(go, "-Z"))            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -380,7 +408,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_fatal("Cannot open file `%s': ", cfg->dbfile);
 
     fm_readFMmeta(fm_meta);
-    fm_initConfig(fm_cfg);
+    fm_initConfig(fm_cfg, go);
     fm_createAlphabet(fm_meta, NULL); // don't override charBits
 
   } else {
@@ -497,7 +525,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       if (dbformat == eslSQFILE_FMINDEX)
         fm_hmmdata = fm_hmmdataCreate(gm);
-
 
       for (i = 0; i < infocnt; ++i) {
           /* Create processing pipeline and hit list */

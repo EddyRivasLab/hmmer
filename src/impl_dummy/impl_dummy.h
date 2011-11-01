@@ -155,7 +155,7 @@ extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 
 
 /*fm.c */
-extern int fm_initConfig      (FM_CFG *cfg );
+extern int fm_initConfig      (FM_CFG *cfg, ESL_GETOPTS *go );
 extern int fm_destroyConfig   (FM_CFG *cfg );
 extern int fm_getOccCount     (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c);
 extern int fm_getOccCountLT   (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
