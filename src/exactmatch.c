@@ -15,7 +15,7 @@ static ESL_OPTIONS options[] = {
 };
 
 
-static char usage[]  = "[options] <fmfile> <qfile>";
+static char usage[]  = "[options] <qfile> <fmfile>";
 static char banner[] = "Find all instances of each <qfile> sequence in the database represented by <fmfile>";
 
 
@@ -45,8 +45,8 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_fmfi
   }
 
   if (esl_opt_ArgNumber(go)                  != 2)    { if (puts("Incorrect number of command line arguments.")     < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
-  if ((*ret_fmfile = esl_opt_GetArg(go, 1)) == NULL)  { if (puts("Failed to get <fmfile> argument on command line") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
-  if ((*ret_qfile  = esl_opt_GetArg(go, 2)) == NULL)  { if (puts("Failed to get <qfile> argument on command line")  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if ((*ret_qfile  = esl_opt_GetArg(go, 1)) == NULL)  { if (puts("Failed to get <qfile> argument on command line")  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if ((*ret_fmfile = esl_opt_GetArg(go, 2)) == NULL)  { if (puts("Failed to get <fmfile> argument on command line") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
 
   /* Validate any attempted use of stdin streams */
   if (esl_strcmp(*ret_fmfile, "-") == 0 && esl_strcmp(*ret_qfile, "-") == 0) 
@@ -238,8 +238,6 @@ main(int argc,  char *argv[]) {
 
   if (esl_opt_IsOn(go, "--count_only"))
     count_only = 1;
-
-
 
 
   if((fp_fm = fopen(fname_fm, "rb")) == NULL)

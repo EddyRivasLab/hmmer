@@ -363,6 +363,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   FM_CFG      *fm_cfg       = NULL;
   FM_METADATA *fm_meta      = NULL;
   FM_HMMDATA  *fm_hmmdata   = NULL;
+  fpos_t       fm_basepos;
   /* end FM-index-specific variables */
 
   int              ncpus    = 0;
@@ -410,6 +411,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     fm_readFMmeta(fm_meta);
     fm_initConfig(fm_cfg, go);
     fm_createAlphabet(fm_meta, NULL); // don't override charBits
+    fgetpos( fm_meta->fp, &fm_basepos);
 
   } else {
     /* Open the target sequence database */
@@ -493,6 +495,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
   }
 
+
   /* Outer loop: over each query HMM in <hmmfile>. */
   while (qhstatus == eslOK) {
       P7_PROFILE      *gm      = NULL;
@@ -507,9 +510,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       /* seqfile may need to be rewound (multiquery mode) */
       if (nquery > 1) {
+        if (dbformat == eslSQFILE_FMINDEX) {
+          //rewind
+          if (fsetpos(fm_meta->fp, &fm_basepos) != 0)  ESL_EXCEPTION(eslESYS, "rewind via fsetpos() failed");
+
+        } else {
           if (! esl_sqfile_IsRewindable(dbfp))
             esl_fatal("Target sequence file %s isn't rewindable; can't search it with multiple queries", cfg->dbfile);
           esl_sqfile_Position(dbfp, 0);
+        }
       }
 
       if (fprintf(ofp, "Query:       %s  [M=%d]\n", hmm->name, hmm->M) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -790,7 +799,6 @@ serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp)
   FM_DATA  fmb;
 
   FM_METADATA *meta = info->fm_cfg->meta;
-  int total_chars = 2 * (meta->seq_data[ meta->seq_count - 1 ].start + meta->seq_data[ meta->seq_count - 1 ].length - 1);
 
   for ( i=0; i<info->fm_cfg->meta->block_count; i++ ) {
 
@@ -806,14 +814,9 @@ serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp)
         &fmf, &fmb, info->fm_cfg, info->fm_hmmdata);
     if (wstatus != eslOK) return wstatus;
 
-    info->pli->nres += 2 * (fmf.N - fmf.overlap);  // this counts the number of characters from the alphabet in use (which doesn't count N's for 2-bit dna)
   }
 
-  if (info->pli->nres > total_chars)
-    return eslFAIL; // it should either be the same (no ambiguity codes) or smaller (ambiguity codes)
-
-  info->pli->nres = total_chars; //make book keeping agreeable
-
+  info->pli->nres = 2 * meta->char_count;
 
   return wstatus;
 

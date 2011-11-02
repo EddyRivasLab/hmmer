@@ -663,7 +663,8 @@ main(int argc, char *argv[]) {
       fwrite(&(meta->cnt_shift_sb), sizeof(meta->cnt_shift_sb), 1, fp) != 1 ||
       fwrite(&(meta->cnt_shift_b),  sizeof(meta->cnt_shift_b),  1, fp) != 1 ||
       fwrite(&(meta->block_count),  sizeof(meta->block_count),  1, fp) != 1 ||
-      fwrite(&(meta->seq_count),    sizeof(meta->seq_count),    1, fp) != 1
+      fwrite(&(meta->seq_count),    sizeof(meta->seq_count),    1, fp) != 1 ||
+      fwrite(&total_char_count,     sizeof(total_char_count),   1, fp) != 1
   )
     esl_fatal( "%s: Error writing meta data for FM index.\n", argv[0]);
 

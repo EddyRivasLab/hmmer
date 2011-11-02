@@ -454,7 +454,8 @@ fm_readFMmeta( FM_METADATA *meta)
       fread(&(meta->cnt_shift_sb), sizeof(meta->cnt_shift_sb), 1, meta->fp) != 1 ||
       fread(&(meta->cnt_shift_b),  sizeof(meta->cnt_shift_b),  1, meta->fp) != 1 ||
       fread(&(meta->block_count),  sizeof(meta->block_count),  1, meta->fp) != 1 ||
-      fread(&(meta->seq_count),    sizeof(meta->seq_count),    1, meta->fp) != 1
+      fread(&(meta->seq_count),    sizeof(meta->seq_count),    1, meta->fp) != 1 ||
+      fread(&(meta->char_count),   sizeof(meta->char_count),   1, meta->fp) != 1
   )
     esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
 

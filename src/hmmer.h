@@ -821,6 +821,7 @@ typedef struct fm_metadata_s {
   uint8_t  cnt_shift_b;
   uint16_t block_count;
   uint32_t seq_count;
+  uint64_t char_count; //total count of characters including those in and out of the alphabet
   char     *alph;
   char     *inv_alph;
   FILE       *fp;

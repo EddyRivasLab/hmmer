@@ -42,7 +42,7 @@ if ($output !~ /# alphabet     :                           dna/ ||
 &create_search_file("$tmppfx.test");
 
 # Search for hits
-$cmd = "$builddir/src/exactmatch --out=- $tmppfx.fm $tmppfx.test 2>&1";
+$cmd = "$builddir/src/exactmatch --out=- $tmppfx.test $tmppfx.fm 2>&1";
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: exactmatch failed unexpectedly\n"; }
 $expect = &get_expected();              
