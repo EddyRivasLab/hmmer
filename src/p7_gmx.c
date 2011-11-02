@@ -148,6 +148,23 @@ p7_gmx_GrowTo(P7_GMX *gx, int M, int L)
   return status;
 }
 
+/* Function:  p7_gmx_Sizeof()
+ * Synopsis:  Returns the allocation size of DP matrix, in bytes.
+ */
+size_t 
+p7_gmx_Sizeof(P7_GMX *gx)
+{
+  size_t n = 0;
+  
+  n += sizeof(P7_GMX);
+  n += gx->ncells * p7G_NSCELLS * sizeof(float); /* main dp cells: gx->dp_mem */
+  n += gx->allocR * sizeof(float *);		 /* row ptrs:      gx->dp[]   */
+  n += gx->allocR * p7G_NXCELLS * sizeof(float); /* specials:      gx->xmx    */
+  return n;
+}
+
+
+
 /* Function:  p7_gmx_Reuse()
  * Synopsis:  Recycle a generic DP matrix.
  *
@@ -265,7 +282,8 @@ p7_gmx_DumpWindow(FILE *ofp, P7_GMX *gx, int istart, int iend, int kstart, int k
   if (! (flags & p7_HIDE_SPECIALS)) fprintf(ofp, "%*s %*s %*s %*s %*s\n", width, "E", width, "N", width, "J", width, "B", width, "C");
   fprintf(ofp, "      ");
   for (k = kstart; k <= kend; k++)  fprintf(ofp, "%*.*s ", width, width, "----------");
-  if (! (flags & p7_HIDE_SPECIALS)) fprintf(ofp, "%*.*s ", width, width, "----------");
+  if (! (flags & p7_HIDE_SPECIALS)) 
+    for (x = 0; x < 5; x++) fprintf(ofp, "%*.*s ", width, width, "----------");
   fprintf(ofp, "\n");
   
   /* DP matrix data */

@@ -144,6 +144,7 @@ BENCHMARKS = \
 	logsum_benchmark\
 	generic_decoding_benchmark\
 	generic_fwdback_benchmark\
+	generic_fwdback_chk_benchmark\
 	generic_msv_benchmark\
 	generic_null2_benchmark\
 	generic_optacc_benchmark\
@@ -162,6 +163,7 @@ UTESTS =\
 	p7_alidisplay_utest\
 	p7_bg_utest\
 	p7_gmx_utest\
+	p7_gmxchk_utest\
 	p7_hmm_utest\
 	p7_hmmfile_utest\
 	p7_profile_utest\
@@ -175,6 +177,7 @@ EXAMPLES = \
 	build_example\
 	emit_example\
 	generic_fwdback_example\
+	generic_fwdback_chk_example\
 	generic_msv_example\
 	generic_decoding_example\
 	generic_optacc_example\

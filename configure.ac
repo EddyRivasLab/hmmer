@@ -1,10 +1,9 @@
 # Process this file with autoconf to produce the HMMER configure script.
 #
-# Note that this is synchronized with Easel's configure script,
-# so that HMMER configures Easel in addition to itself; this saves
-# having to do a separate ./configure in Easel. That is,
-# everything that appears in Easel's configure script must also
-# appear here. 
+# This is synchronized with Easel's configure script, so that HMMER
+# configures Easel in addition to itself. This saves having to do a
+# separate ./configure in Easel. That means that everything that
+# appears in Easel's configure script must also appear here.
 #
 # reminders to save re-reading autoconf manual for the n'th time:
 #    output variables:
@@ -19,10 +18,6 @@
 #      -  then #undef FOO in easel.h.in becomes #define FOO, #define FOO 42
 #         I think this only happens in header files that we assign
 #         w/ AC_CONFIG_HEADERS -- which means, easel.h.in
-#
-# SRE, Mon Oct  5 14:55:45 1998
-# SVN $Id$
-# xref autoconf macro archive: //www.gnu.org/software/ac-archive/
 #
 # GNU recommends the following order:
 #   1. autoconf requirements
@@ -42,7 +37,7 @@
 
 # Autoconf 2.61 has a bug in AC_FUNC_FSEEKO; don't use it.
 AC_PREREQ(2.63)
-AC_INIT(HMMER, 3.0, eddys@janelia.hhmi.org, hmmer)
+AC_INIT(HMMER, 3.1dev, eddys@janelia.hhmi.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -73,15 +68,15 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="March 2010"
-HMMER_COPYRIGHT="Copyright (C) 2010 Howard Hughes Medical Institute."
+HMMER_DATE="November 2011"
+HMMER_COPYRIGHT="Copyright (C) 2011 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
-EASEL_DATE="March 2010"
+EASEL_DATE="November 2011"
 EASEL_COPYRIGHT="Copyright (C) 2010 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the Janelia Farm Software License."
 EASEL_VERSION="h$PACKAGE_VERSION"
@@ -694,5 +689,11 @@ if test "$impl_choice" = "dummy"; then
 fi
 
 
-
+#################################################################
+# @LICENSE@
+# 
+# SVN $Id$
+# SVN $URL$ 
+# xref autoconf macro archive: //www.gnu.org/software/ac-archive/
+#################################################################
 

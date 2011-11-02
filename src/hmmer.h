@@ -1237,9 +1237,10 @@ extern int p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
 
 
 /* p7_gmx.c */
-extern P7_GMX *p7_gmx_Create(int allocM, int allocL);
-extern int     p7_gmx_GrowTo(P7_GMX *gx, int allocM, int allocL);
-extern int     p7_gmx_Reuse(P7_GMX *gx);
+extern P7_GMX *p7_gmx_Create (int allocM, int allocL);
+extern int     p7_gmx_GrowTo (P7_GMX *gx, int allocM, int allocL);
+extern size_t  p7_gmx_Sizeof (P7_GMX *gx);
+extern int     p7_gmx_Reuse  (P7_GMX *gx);
 extern void    p7_gmx_Destroy(P7_GMX *gx);
 extern int     p7_gmx_Compare(P7_GMX *gx1, P7_GMX *gx2, float tolerance);
 extern int     p7_gmx_Dump(FILE *fp, P7_GMX *gx, int flags);
