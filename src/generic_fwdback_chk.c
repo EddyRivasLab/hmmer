@@ -2,10 +2,11 @@
  * 
  * Contents:
  *    1. Forwards:  checkpointed fill, Forwards nat score.
- *    2. Backwards: linear-memory back pass, recovering posterior-decoded bands
- *    3. Benchmark driver
+ *    2. Backwards: linear-memory back pass, recovering posterior-decoded bands.
+ *    3. Benchmark driver.
  *    4. Example main().
- *    5. Copyright and license information.
+ *    5. References.
+ *    6. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -28,70 +29,67 @@
 static inline void
 forward_row(const ESL_DSQ *dsq, const P7_PROFILE *gm, P7_GMXCHK *gxc, const float *dpp, float *dpc, int i)
 {
-  float const *tsc = gm->tsc;
-  float const *rsc = gm->rsc[dsq[i]];
-  float       *xmx = gxc->xmx;
-  int            M = gm->M;
-  float        esc = p7_profile_IsLocal(gm) ? 0. : -eslINFINITY;
-  int            k;
-  float         sc;
+  const float *tsc = gm->tsc;
+  const float *rsc = gm->rsc[dsq[i]] + p7P_NR; /* +NR skips _0, ahead to _1 */
+  int      M = gm->M;
+  float  esc = p7_profile_IsLocal(gm) ? 0. : -eslINFINITY;
+  int      k;
+  float    sc, dc;
+  float   xB = *(dpp + (M+1)*p7G_NSCELLS + p7G_B);
+  float   xE = -eslINFINITY;
+  float   xN, xJ;
+  float   mvp, ivp, dvp;
 
-  MMR(dpc,0) = IMR(dpc,0) = DMR(dpc,0) = -eslINFINITY;
-  XMX(i,p7G_E) = -eslINFINITY;
+  *dpc++ = -eslINFINITY;  /* M_0 */
+  *dpc++ = -eslINFINITY;  /* I_0 */
+  *dpc++ = -eslINFINITY;  /* D_0 */
+  dc     = -eslINFINITY;
+
+  mvp = *dpp++; ivp = *dpp++; dvp = *dpp++;
+
   for (k = 1; k < M; k++)
     {
       /* match state */
-      sc = p7_FLogsum(p7_FLogsum(MMR(dpp,k-1)   + TSC(p7P_MM,k-1), 
-				 IMR(dpp,k-1)   + TSC(p7P_IM,k-1)),
-		      p7_FLogsum(XMX(i-1,p7G_B) + TSC(p7P_BM,k-1),
-				 DMR(dpp,k-1)   + TSC(p7P_DM,k-1)));
-      MMR(dpc,k) = sc + MSC(k);
+      *dpc++ = sc = *rsc++                                           /* emission(M_k, x_i)           */
+   	            + p7_FLogsum(p7_FLogsum( mvp + *(tsc+p7P_MM),    /* M(i-1,k-1) * t_M(k-1)->M(k)  */
+					     ivp + *(tsc+p7P_IM)),   /* I(i-1,k-1) * t_I(k-1)->M(k)  */
+				 p7_FLogsum( dvp + *(tsc+p7P_DM),    /* D(i-1,k-1) * t_D(k-1)->M(k)  */
+					     xB  + *(tsc+p7P_BM)));  /* B(i-1)     * t_B->M_k        */
+      tsc += p7P_NTRANS;	/* advance to the t_X(k) transitions now */
 
+      /* pick up values from prev row, (k)... at next loop iteration they're magically the k-1 values we need for M calc */
+      mvp = *dpp++; ivp = *dpp++; dvp = *dpp++;
+      
       /* insert state */
-      sc = p7_FLogsum(MMR(dpp,k) + TSC(p7P_MI,k),
-		      IMR(dpp,k) + TSC(p7P_II,k));
-      IMR(dpc,k) = sc + ISC(k);
+      *dpc++ = *rsc++                               /* emission(I_k, x_i)      */
+  	        + p7_FLogsum( mvp + *(tsc+p7P_MI),  /* M(i-1,k) * t_M(k)->I(k) */
+			      ivp + *(tsc+p7P_II)); /* I(i-1,k) * t_I(k)->I(k) */
 
-      /* delete state */
-      DMR(dpc,k) = p7_FLogsum(MMR(dpc,k-1) + TSC(p7P_MD,k-1),
-			      DMR(dpc,k-1) + TSC(p7P_DD,k-1));
+      /* E state accumulation */
+      xE = p7_FLogsum( p7_FLogsum(sc + esc, dc + esc), xE);
 
-      /* E state update */
-      XMX(i,p7G_E) = p7_FLogsum(p7_FLogsum(MMR(dpc,k) + esc,
-					   DMR(dpc,k) + esc),
-				XMX(i,p7G_E));
+      /* delayed store of delete state; then calculate/push NEXT D_k+1 */
+      *dpc++  = dc; 
+      dc      = p7_FLogsum( sc + *(tsc+p7P_MD),     /* M(i,k) * t_M(k)->D(k+1) */
+			    dc + *(tsc+p7P_DD));    /* D(i,k) * t_D(k)->D(k+1) */
     }
 
   /* unrolled match state M_M */
-  sc = p7_FLogsum(p7_FLogsum(MMR(dpp,M-1)   + TSC(p7P_MM,M-1), 
-			     IMR(dpp,M-1)   + TSC(p7P_IM,M-1)),
-		  p7_FLogsum(XMX(i-1,p7G_B) + TSC(p7P_BM,M-1),
-			     DMR(dpp,M-1)   + TSC(p7P_DM,M-1)));
-  MMR(dpc,M) = sc + MSC(M);
-  IMR(dpc,M) = -eslINFINITY;
+  *dpc++ = sc = *rsc++                                             /* emission(M_M, x_i)  */
+                + p7_FLogsum(p7_FLogsum( mvp + *(tsc + p7P_MM),    /* M(i-1,M-1) * t_MM   */
+					 ivp + *(tsc + p7P_IM)),   /* I(i-1,M-1) * t_IM   */
+			     p7_FLogsum( dvp + *(tsc + p7P_DM),    /* D(i-1,M-1) * t_DM   */
+					 xB  + *(tsc + p7P_BM)));  /* B(i-1)     * t_BM_M */
+  *dpc++ = -eslINFINITY;       /* I_M: no such state   */
+  *dpc++ = dc;		       /* delayed store of D_M */
+  dpp += 3;
 
-  /* unrolled delete state D_M */
-  DMR(dpc,M) = p7_FLogsum(MMR(dpc,M-1) + TSC(p7P_MD,M-1),
-			  DMR(dpc,M-1) + TSC(p7P_DD,M-1));
-
-  /* unrolled E state update */
-  XMX(i,p7G_E) = p7_FLogsum(p7_FLogsum(MMR(dpc,M),
-	 		               DMR(dpc,M)),
-				       XMX(i,p7G_E));
-
-  /* J state */
-  XMX(i,p7G_J) = p7_FLogsum(XMX(i-1,p7G_J) + gm->xsc[p7P_J][p7P_LOOP],
-	                    XMX(i,  p7G_E) + gm->xsc[p7P_E][p7P_LOOP]);
-
-  /* C state */
-  XMX(i,p7G_C) = p7_FLogsum(XMX(i-1,p7G_C) + gm->xsc[p7P_C][p7P_LOOP],
- 			    XMX(i,  p7G_E) + gm->xsc[p7P_E][p7P_MOVE]);
-  /* N state */
- XMX(i,p7G_N) = XMX(i-1,p7G_N) + gm->xsc[p7P_N][p7P_LOOP];
-
- /* B state */
- XMX(i,p7G_B) = p7_FLogsum(XMX(i,  p7G_N) + gm->xsc[p7P_N][p7P_MOVE],
-			   XMX(i,  p7G_J) + gm->xsc[p7P_J][p7P_MOVE]);
+  /* now dpc and dpp are sitting on [ENJBC] special state arrays for current, prev row. */
+  *dpc++ = xE = p7_FLogsum( p7_FLogsum(sc, dc), xE);                                         dpp++;   /* E state update */
+  *dpc++ = xN = *dpp + gm->xsc[p7P_N][p7P_LOOP];                                             dpp++;   /* N state */
+  *dpc++ = xJ = p7_FLogsum( *dpp + gm->xsc[p7P_J][p7P_LOOP], xE + gm->xsc[p7P_E][p7P_LOOP]); dpp++;   /* J state */
+  *dpc++      = p7_FLogsum(   xN + gm->xsc[p7P_N][p7P_MOVE], xJ + gm->xsc[p7P_J][p7P_MOVE]); dpp++;   /* B state */
+  *dpc        = p7_FLogsum( *dpp + gm->xsc[p7P_C][p7P_LOOP], xE + gm->xsc[p7P_E][p7P_MOVE]);          /* C state */
 }
   
 
@@ -126,7 +124,6 @@ forward_row(const ESL_DSQ *dsq, const P7_PROFILE *gm, P7_GMXCHK *gxc, const floa
 int
 p7_GForwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXCHK *gxc, float *opt_sc)
 {
-  float       *xmx = gxc->xmx;
   float *dpc;			/* ptr to current row  */
   float *dpp;			/* ptr to previous row */
   int    M   = gm->M;
@@ -134,15 +131,18 @@ p7_GForwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXC
   int    b;			/* counts down over segment number (Rb+Rc..1); each segment has r+1 rows */
   int    i,k;
 
-  /* Initialization of the zero row, fwd[0] */
-  dpc = gxc->dp[gxc->R0-1];	/* i.e., dp[2], the reserved fwd[0] row; 0,1 are reserved for tmp space and backwards calculation */
-  XMX(0,p7G_N) = 0;
-  XMX(0,p7G_B) = gm->xsc[p7P_N][p7P_MOVE];                    /* S->N->B, no N-tail   */
-  XMX(0,p7G_E) = XMX(0,p7G_C) = XMX(0,p7G_J) = -eslINFINITY;  /* need seq to get here */
-  for (k = 0; k <= M; k++)
-    MMR(dpc,k) = IMR(dpc,k) = DMR(dpc,k) = -eslINFINITY;
-  dpp = dpc;
-  
+  /* Initialization of the zero row, fwd[0], inc. ENJBC */
+  dpc = dpp = gxc->dp[gxc->R0-1]; 	  /* i.e., dp[2], the reserved fwd[0] row; 0,1 are reserved for tmp space and backwards calculation */
+  for (k = 0; k < (M+1)*p7G_NSCELLS; k++) /* MID[0..M] are all impossible */
+    *dpc++ = -eslINFINITY;
+  *dpc++ = -eslINFINITY;	     /* E; need seq to get here */
+  *dpc++ = 0;			     /* N                       */
+  *dpc++ = -eslINFINITY;	     /* J; need seq to get here */
+  *dpc++ = gm->xsc[p7P_N][p7P_MOVE]; /* B; from N->B only       */
+  *dpc   = -eslINFINITY;	     /* C; need seq to get here */
+
+
+
   /* Phase one: "a" region: uncheckpointed rows of matrix */
   for (i = 1; i <= gxc->La; i++)
     {
@@ -171,7 +171,7 @@ p7_GForwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXC
   gxc->M = M;
   gxc->L = L;
   gxc->R = gxc->Ra + gxc->Rb + gxc->Rc;
-  if (opt_sc) *opt_sc = XMX(L,p7G_C) + gm->xsc[p7P_C][p7P_MOVE];
+  if (opt_sc) *opt_sc = gxc->dp[gxc->R0+gxc->R-1][(M+1)*p7G_NSCELLS + p7G_C] + gm->xsc[p7P_C][p7P_MOVE];
   return eslOK;
 }
 /*-------------------- end, forwards ----------------------------*/
@@ -181,40 +181,141 @@ p7_GForwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXC
  *= 2. Backwards: linear-memory back pass, recovering posterior-decoded bands
  *****************************************************************/
 
-#if 0				/* WORK IN PROGRESS */
-int
-p7_GBackwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXCHK *gxc)
+static inline void
+backward_row(const ESL_DSQ *dsq, const P7_PROFILE *gm, P7_GMXCHK *gxc, const float *dpp, float *dpc, int i)
 {
-  float *bck;
+  const float const *tsc = gm->tsc;
+  const float const *rsc = gm->rsc[dsq[i+1]];
+  int                M   = gm->M;
+  float              esc = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
+  int                k;
+  
+  XMR(dpc,p7G_C) = XMR(dpp,p7G_C) + gm->xsc[p7P_C][p7P_LOOP];
+
+  XMR(dpc,p7G_B) = MMR(dpp,1) + TSC(p7P_BM,0) + MSC(1); /* t_BM index = 0 because it's stored off by one */
+  for (k = 2; k <= M; k++)
+    XMR(dpc,p7G_B) = p7_FLogsum( XMR(dpc,p7G_B), MMR(dpp,k) + TSC(p7P_BM,k-1) + MSC(k));
+
+  XMR(dpc,p7G_J) = p7_FLogsum( XMR(dpp,p7G_J) + gm->xsc[p7P_J][p7P_LOOP],  XMR(dpc,p7G_B) + gm->xsc[p7P_J][p7P_MOVE]);
+  XMR(dpc,p7G_N) = p7_FLogsum( XMR(dpp,p7G_N) + gm->xsc[p7P_N][p7P_LOOP],  XMR(dpc,p7G_B) + gm->xsc[p7P_N][p7P_MOVE]);
+  XMR(dpc,p7G_E) = p7_FLogsum( XMR(dpc,p7G_J) + gm->xsc[p7P_E][p7P_LOOP],  XMR(dpc,p7G_C) + gm->xsc[p7P_E][p7P_MOVE]);
+
+  DMR(dpc,M) = XMR(dpc,p7G_E);
+  IMR(dpc,M) = -eslINFINITY;
+  MMR(dpc,M) = XMR(dpc,p7G_E);
+
+  for (k = M-1; k >= 1; k--)
+    {
+      DMR(dpc,k) = p7_FLogsum( p7_FLogsum( DMR(dpc,  k+1)  + TSC(p7P_DD,k),
+					   XMR(dpc, p7G_E) + esc),
+			       MMR(dpp,k+1) + TSC(p7P_DM,k) + MSC(k+1));
+
+      IMR(dpc,k) = p7_FLogsum( MMR(dpp,k+1) + TSC(p7P_IM,k) + MSC(k+1),
+			       IMR(dpp,k)   + TSC(p7P_II,k) + ISC(k));
+
+      MMR(dpc,k) = p7_FLogsum( p7_FLogsum(MMR(dpp,k+1) + TSC(p7P_MM,k) + MSC(k+1),
+					  IMR(dpp,k)   + TSC(p7P_MI,k) + ISC(k)),
+			       p7_FLogsum(XMR(dpc,p7G_E) + esc,
+					  DMR(dpc,k+1) + TSC(p7P_MD,k)));
+    }
+}
+
+/* worry about small seq cases: L=0..2 */
+int
+p7_GBackwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXCHK *gxc, float *opt_sc)
+{
+  float const *tsc  = gm->tsc;
+  float const *rsc  = NULL;
+  int          M    = gm->M;
+  float        esc  = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
+  float       *fwd;
+  float       *bck;
+  float       *dpp;		/* "previous" row (i-1 for forward, i+1 for backward) */
+  int          i,i2,k,b,w,s;
+
+#ifdef p7_DEBUGGING
+  if (gxc->do_debugging) p7_gmxchk_DumpHeader(gxc->dfp, gxc, 0, gxc->M, gxc->dbg_flags);
+#endif
+
+  /* this initialization could be in gmxchk: nothing else touches these boundary cells */
+  for (s = 0; s < p7G_NSCELLS; s++) gxc->dp[0][s] = gxc->dp[1][s] = -eslINFINITY;
 
   /* We have to handle the first block b=1 as a special case (rows L-1, L)
    * because row L is a special case.
    */
   
   /* Initialize backwards row L */
-  
+  i = L;
+  gxc->R--;
+  fwd = gxc->dp[gxc->R0+gxc->R];			    /* pop row for fwd[L] off "stack"  */
+  bck = gxc->dp[L%2];					    /* get tmp space for bck[L] */
+  XMR(bck, p7G_C) = gm->xsc[p7P_C][p7P_MOVE];      /* C<-T */
+  XMR(bck, p7G_B) = -eslINFINITY;		   /* B */
+  XMR(bck, p7G_J) = -eslINFINITY;		   /* J */
+  XMR(bck, p7G_N) = -eslINFINITY;		   /* N */
+  XMR(bck, p7G_E) = XMR(bck, p7G_C) + gm->xsc[p7P_E][p7P_MOVE]; /* E<-C, no tail */
 
+  DMR(bck, M) = XMR(bck, p7G_E);              /* D_M <- E (t = 1.0) */
+  IMR(bck, M) = -eslINFINITY;		      /* I_M nonexistent */
+  MMR(bck, M) = XMR(bck, p7G_E);              /* M_M <- E */
 
-  /* init i=L row for backwards, in dpc */
-  dpp = dpc;
-
-  for (i = L, b = 1; b <= gxc->Rb+gxc->Rc; b++)
+  for (k = M-1; k >= 1; k--)
     {
+      DMR(bck, k) = p7_FLogsum( XMR(bck, p7G_E) + esc,
+				DMR(bck, k+1)   + TSC(p7P_DD, k));
+      IMR(bck, k) = -eslINFINITY;
+      MMR(bck, k) = p7_FLogsum( XMR(bck, p7G_E) + esc,
+				DMR(bck, k+1)   + TSC(p7P_MD, k));
+    }
+#ifdef p7_DEBUGGING
+  if (gxc->do_debugging) p7_gmxchk_DumpRow(gxc->dfp, gxc, bck, i, 0, gxc->M, gxc->dbg_flags);
+#endif
+  //posterior_decode(fwd, bck, &band);
+  i--;				/* i is now L-1 */
+  dpp = bck;
+
+  /* If there's any checkpointing at all, there's an L-1 row to fill in */
+  if (gxc->Rb+gxc->Rc > 0)
+    {				/* i=L-1 as we enter */
+      /* Compute forwards from last checkpoint (which we know is L-2) */
+      dpp = gxc->dp[gxc->R0+gxc->R-1];
+      fwd = gxc->dp[gxc->R0+gxc->R];    /* new row, from top of stack */
+      forward_row(dsq, gm, gxc, dpp, fwd, i);
+
+      /* Compute backwards: L-1 row from L row */
+      dpp = bck;
+      bck = gxc->dp[(L-1)%2];
+      backward_row(dsq, gm, gxc, dpp, bck, i);
+#ifdef p7_DEBUGGING
+      if (gxc->do_debugging) p7_gmxchk_DumpRow(gxc->dfp, gxc, bck, i, 0, gxc->M, gxc->dbg_flags);
+#endif
+
+      //posterior_decode(fwd, bck, &band);
+      dpp = bck;
+      i--;			/* i is now L-2 if there was any checkpointing; L-1 if not. */
+    }
+
+  /* Checkpointed regions (b,c) */
+  for (b = 2; b <= gxc->Rb+gxc->Rc; b++)
+    {				/* i=L-2 as we enter here. */
       w = (b <= gxc->Rc ? b+1 : gxc->Lb);
 
       /* current row i (r=R0+R-1) ends a block and is checkpointed. */
       gxc->R--;
       fwd = gxc->dp[gxc->R0+gxc->R]; /* pop last forward row off "stack" */
       bck = gxc->dp[i%2];
-      backward_row(bck, dpp);
-      posterior_decode(fwd, bck, &band);
+      backward_row(dsq, gm, gxc, dpp, bck, i);
+#ifdef p7_DEBUGGING
+      if (gxc->do_debugging) p7_gmxchk_DumpRow(gxc->dfp, gxc, bck, i, 0, gxc->M, gxc->dbg_flags);
+#endif
+      //posterior_decode(fwd, bck, &band);
       
       /* compute Forwards from last checkpoint */
       dpp = gxc->dp[gxc->R0+gxc->R-1];
       for (i2 = i-w+1; i2 <= i-1; i2++)
 	{
 	  fwd = gxc->dp[gxc->R0+gxc->R]; gxc->R++; /* push new forward row on "stack" */
-	  forward_row(dsq, gm, gxc, dpp, fwd, i);
+	  forward_row(dsq, gm, gxc, dpp, fwd, i2);
 	  dpp = fwd;	  
 	}
 
@@ -226,28 +327,54 @@ p7_GBackwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX
 	  fwd = gxc->dp[gxc->R0+gxc->R]; /* pop last forward row off "stack" */
 	  bck = gxc->dp[i2%2];
 
-	  backward_row(bck, dpp);
-	  posterior_decode(fwd, bck);
-
+	  backward_row(dsq, gm, gxc, dpp, bck, i2);
+#ifdef p7_DEBUGGING
+	  if (gxc->do_debugging) p7_gmxchk_DumpRow(gxc->dfp, gxc, bck, i, 0, gxc->M, gxc->dbg_flags);
+#endif
+	  //posterior_decode(fwd, bck);
 	  dpp = bck;
 	}
 
+      i -= w;
     }
-  /* now i=La */
+  /* now i=La as we leave the checkpointed regions; or i=L-1 if there was no checkpointing */
 
+
+  /* The uncheckpointed "a" region */
   for (; i >= 1; i--)
     {
       gxc->R--; 
       fwd = gxc->dp[gxc->R0+gxc->R];
       bck = gxc->dp[i%2];
 
-      backward_row(bck, i);
-      posterior_decoding(fwd, bck);
+      backward_row(dsq, gm, gxc, dpp, bck, i);
+#ifdef p7_DEBUGGING
+	  if (gxc->do_debugging) p7_gmxchk_DumpRow(gxc->dfp, gxc, bck, i, 0, gxc->M, gxc->dbg_flags);
+#endif
+      //posterior_decoding(fwd, bck);
 
       dpp = bck;
     }
-#endif /*WORK IN PROGRESS*/
 
+  /* now i=0. At i=0, only N,B states are reachable. */
+  bck = gxc->dp[0];
+  rsc = gm->rsc[dsq[1]];
+  XMR(bck,p7G_B) = MMR(dpp,1) + TSC(p7P_BM,0) + MSC(1); /* t_BM index is 0 because it's stored off-by-one. */
+  for (k = 2; k <= M; k++)
+    XMR(bck,p7G_B) = p7_FLogsum(XMR(bck,p7G_B), MMR(dpp,k) + TSC(p7P_BM,k-1) + MSC(k));
+  XMR(bck,p7G_J) = -eslINFINITY;
+  XMR(bck,p7G_C) = -eslINFINITY;
+  XMR(bck,p7G_E) = -eslINFINITY;
+  XMR(bck,p7G_N) = p7_FLogsum( XMR(dpp, p7G_N) + gm->xsc[p7P_N][p7P_LOOP],
+			       XMR(bck, p7G_B) + gm->xsc[p7P_N][p7P_MOVE]);
+  for (k = M; k >= 1; k--)
+    MMR(bck,k) = IMR(bck,k) = DMR(bck,k) = -eslINFINITY;
+#ifdef p7_DEBUGGING
+  if (gxc->do_debugging) p7_gmxchk_DumpRow(gxc->dfp, gxc, bck, i, 0, gxc->M, gxc->dbg_flags);
+#endif
+  if (opt_sc != NULL) *opt_sc = XMR(bck,p7G_N);
+  return eslOK;
+}
 /*--------------------- end, backwards --------------------------*/
 
 
@@ -279,6 +406,7 @@ static ESL_OPTIONS options[] = {
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                   0 },
   { "-N",        eslARG_INT,   "2000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                   0 },
+  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "only benchmark GForwardCheckpointed()",          0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -312,7 +440,7 @@ main(int argc, char **argv)
   gm = p7_profile_Create(hmm->M, abc);
   p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
 
-  gxc = p7_gmxchk_Create(gm->M, L, 32);
+  gxc = p7_gmxchk_Create(gm->M, L, ESL_MBYTES(32));
 
   /* Baseline time. */
   esl_stopwatch_Start(w);
@@ -326,6 +454,8 @@ main(int argc, char **argv)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
       p7_GForwardCheckpointed (dsq, L, gm, gxc, &sc);
+      if (! esl_opt_GetBoolean(go, "-F"))
+	p7_GBackwardCheckpointed(dsq, L, gm, gxc, &sc);
       
       p7_gmxchk_Reuse(gxc);
     }
@@ -390,11 +520,13 @@ main(int argc, char **argv)
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
   P7_GMX         *fwd     = NULL;
-  P7_GMXCHK      *fwdc    = NULL;
+  P7_GMX         *bck     = NULL;
+  P7_GMXCHK      *gxc     = NULL;
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
   float           fsc, fsc2;
+  float           bsc, bsc2;
   float           nullsc;
   int             status;
 
@@ -419,8 +551,9 @@ main(int argc, char **argv)
   p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
 
   /* Allocate matrices */
-  fwd  = p7_gmx_Create(gm->M, 400);
-  fwdc = p7_gmxchk_Create(gm->M, 400, 32);
+  fwd = p7_gmx_Create(gm->M, 400);
+  bck = p7_gmx_Create(gm->M, 400);
+  gxc = p7_gmxchk_Create(gm->M, 400, ESL_MBYTES(32));
 
   while ( (status = esl_sqio_Read(sqfp, sq)) != eslEOF)
     {
@@ -428,8 +561,9 @@ main(int argc, char **argv)
       else if (status != eslOK)      p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
 
       /* Resize the DP matrices if necessary */
-      p7_gmx_GrowTo   (fwd,  gm->M, sq->n);
-      p7_gmxchk_GrowTo(fwdc, gm->M, sq->n);
+      p7_gmx_GrowTo   (fwd, gm->M, sq->n);
+      p7_gmx_GrowTo   (bck, gm->M, sq->n);
+      p7_gmxchk_GrowTo(gxc, gm->M, sq->n);
 
       //printf("Allocation: %ld\n", p7_gmxchk_Sizeof(fwdc));
 
@@ -439,24 +573,35 @@ main(int argc, char **argv)
 
       /* Run Forward in both modes */
       p7_GForward            (sq->dsq, sq->n, gm, fwd,  &fsc);
-      p7_GForwardCheckpointed(sq->dsq, sq->n, gm, fwdc, &fsc2);
+      p7_GForwardCheckpointed(sq->dsq, sq->n, gm, gxc, &fsc2);
 
       /* Dump the DP matrices. (Voluminous; only small examples are reasonable) */
-      //p7_gmx_Dump(stdout,    fwd,  p7_DEFAULT);
-      //p7_gmxchk_Dump(stdout, fwdc, p7_DEFAULT);
+      //p7_gmx_Dump(stdout,    fwd, p7_DEFAULT);
+      //p7_gmxchk_Dump(stdout, gxc, p7_DEFAULT);
+
+      /* Run Backward in both modes */
+      p7_GBackward            (sq->dsq, sq->n, gm, bck, &bsc);
+      //p7_gmx_Dump(stdout,    bck, p7_DEFAULT);
+
+      //p7_gmxchk_SetDumpMode(gxc, stdout, p7_DEFAULT);
+      p7_GBackwardCheckpointed(sq->dsq, sq->n, gm, gxc, &bsc2);
+      //p7_gmxchk_SetDumpMode(gxc, NULL, 0);
 
       /* Those scores are partial log-odds likelihoods in nats.
        * Subtract off the rest of the null model, convert to bits.
        */
       p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
 
-      printf("%-30s   %10.4f %10.4f   %10.4f %10.4f\n", 
+      printf("%-30s   %10.4f %10.4f   %10.4f %10.4f     %10.4f %10.4f   %10.4f %10.4f\n",
 	     sq->name, 
 	     fsc, fsc2, 
-	     (fsc - nullsc) / eslCONST_LOG2, (fsc2 - nullsc) / eslCONST_LOG2);
+	     (fsc - nullsc) / eslCONST_LOG2, (fsc2 - nullsc) / eslCONST_LOG2,
+	     bsc, bsc2,
+	     (bsc - nullsc) / eslCONST_LOG2, (bsc2 - nullsc) / eslCONST_LOG2);
 
       p7_gmx_Reuse(fwd);
-      p7_gmxchk_Reuse(fwdc);
+      p7_gmx_Reuse(bck);
+      p7_gmxchk_Reuse(gxc);
       esl_sq_Reuse(sq);
     }
 
@@ -464,7 +609,8 @@ main(int argc, char **argv)
   esl_sqfile_Close(sqfp);
   esl_sq_Destroy(sq);
   p7_gmx_Destroy(fwd);
-  p7_gmxchk_Destroy(fwdc);
+  p7_gmx_Destroy(bck);
+  p7_gmxchk_Destroy(gxc);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);
@@ -476,12 +622,13 @@ main(int argc, char **argv)
 /*------------------- end, example main() -----------------------*/
       
 
+/* References:
+ *    SRE J8/109-112, Oct 2011: implementation plan.
+ */
+
 /*****************************************************************
  * @LICENSE@
  *    
- * References:
- *    SRE J8/109-112, Oct 2011: implementation plan.
- * 
  * SVN $Id$
  * SVN $URL$
  *****************************************************************/

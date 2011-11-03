@@ -1,6 +1,23 @@
 /* P7_GMXCHK implementation
+ *
  * Checkpointed forward/backward dynamic programming matrix.
+ *
+ * Contents:
+ *   1. Exegesis: layout of rows in a checkpointed matrix.
+ *   2. Exegesis: layout of cells in a single DP row.
+ *   3. The P7_GMXCHK data structure.
+ *   4. Declarations for the p7_gmxchk API
+ *   5. References. 
+ *   6. Copyright and license.
  */
+#ifndef P7_GMXCHK_INCLUDED
+#define P7_GMXCHK_INCLUDED
+
+#include "p7_config.h"
+
+/*****************************************************************
+ * 1. Exegesis: layout of rows in a checkpointed matrix.
+ *****************************************************************/
 
 /* 
  * One P7_GMXCHK data structure is used for both Forward and
@@ -55,10 +72,29 @@
  * The special states (ENJBC) are kept in xmx for all rows 1..L, just
  * as in a normal (uncheckpointed) P7_GMX.
  */
-#ifndef P7_GMXCHK_INCLUDED
-#define P7_GMXCHK_INCLUDED
 
-#include "p7_config.h"
+
+
+/*****************************************************************
+ * 2. Exegesis: layout of rows in a checkpointed matrix.
+ *****************************************************************/
+
+/* Layout of memory in a single DP row:
+ * 
+ *  dpc:   [M  I  D] [M  I  D] [M  I  D]  ...  [M  I  D]  [E  N  J  B  C]
+ *    k:   |-- 0 --| |-- 1 --| |-- 2 --|  ...  |-- M --|  
+ *         |------------- (M+1)*p7G_NSCELLS -----------| |- p7G_NXCELLS -|
+ *
+ *  Row dp[r] = gxc->dp_mem+(r*allocW) = dpc
+ *  Main state s={MID} at node k={0..M}: dpc[k*p7G_NSCELLS+s]   
+ *  Special state s={ENJBC}:             dpc[(M+1)*p7G_NSCELLS+s]
+ */
+
+
+
+/*****************************************************************
+ * 3. The P7_GMXCHK data structure.
+ *****************************************************************/
 
 typedef struct p7_gmxchk_s {
   int      M;	        /* actual query model dimension of current comparison                 */
@@ -74,39 +110,55 @@ typedef struct p7_gmxchk_s {
   int      Lb;      	/* residues La+1..La+Lb are in "between" region                       */
   int      Lc;	        /* residues La+Lb+1..La+Lb+Lc=L are in "checkpointed" region          */
 
-  int      allocW;	/* allocated width per row, in supercells (M+1 <= allocW)             */
+  float   *dp_mem;	/* raw memory allocation, that dp[] rows point into                         */
+  int      allocW;	/* allocated width/row, in cells ((M+1)*p7G_NSCELLS+p7G_NXCELLS) <= allocW) */
+  int64_t  ncells;	/* total # of alloc'ed cells: ncells >= (validR)(allocW)                    */
+  int64_t  ncell_limit;	/* recommended RAM limit on dp_mem; can temporarily exceed it               */
 
-  float   *dp_mem;	/* raw memory allocation, that dp[] rows point into                   */
-  int64_t  ncells;	/* total # of alloc'ed supercells: ncells >= (validR)(allocW)         */
-  int64_t  ncell_limit;	/* recommended RAM limit on dp_mem; can temporarily exceed it         */
+  float  **dp;		/* DP row pointers, dp[0..R0-1,R0..R0+R-1]. See note above for layout.      */
+  int      allocR;	/* allocated size of dp[]. R+R0 <= R0+Ra+Rb+Rc <= validR <= allocR          */
+  int      validR;	/* # of rows pointing at DP memory; may be < allocR after a GrowTo() call   */ 
 
-  float  **dp;		/* dp[0..R0-1,R0..R0+R-1][0.1..M][0..p7G_NSCELLS-1]; indexed [r][k*p7G_NSCELLS+s] */
-  int      allocR;	/* allocated size of dp[]. R+R0 <= R0+Ra+Rb+Rc <= validR <= allocR                */
-  int      validR;	/* # of rows pointing at DP memory; may be < allocR after a GrowTo() call         */ 
-
-  float   *xmx;		/* logically [0.1..L][p7G_NXCELLS-1]; indexed [i*p7G_NXCELLS+s]       */
-  int      allocXR;	/* allocated # of rows for special states. L+1 <= allocXR             */
+  /* Info for debugging mode (conditionally compiled)                              */
+#ifdef p7_DEBUGGING 
+  int      do_debugging;	/* TRUE if we're in debugging mode                 */
+  FILE    *dfp;			/* output stream for debugging diagnostics         */
+  int      dbg_width;		/* cell values in diagnostic output are fprintf'ed */
+  int      dbg_precision;       /*     dfp, "%*.*f", dbg_width, dbg_precision, val */ 
+  int      dbg_flags;		/* p7_DEFAULT | p7_HIDE_SPECIALS | p7_SHOW_LOG     */
+#endif
 } P7_GMXCHK;
 
 #define MMR(p, k) ((p)[(k)* p7G_NSCELLS + p7G_M])
 #define IMR(p, k) ((p)[(k)* p7G_NSCELLS + p7G_I])
 #define DMR(p, k) ((p)[(k)* p7G_NSCELLS + p7G_D])
+#define XMR(p, s) ((p)[(M+1)* p7G_NSCELLS + s])
 
-extern P7_GMXCHK *p7_gmxchk_Create (int M, int L, int ramlimit);
+/*****************************************************************
+ * 4. Declarations of the p7_gmxchk API
+ *****************************************************************/
+
+extern P7_GMXCHK *p7_gmxchk_Create (int M, int L, int64_t ramlimit);
 extern int        p7_gmxchk_GrowTo (P7_GMXCHK *gxc, int M, int L);
 extern size_t     p7_gmxchk_Sizeof (const P7_GMXCHK *gxc);
 extern int        p7_gmxchk_Reuse  (P7_GMXCHK *gxc);
 extern void       p7_gmxchk_Destroy(P7_GMXCHK *gxc);
 
 extern int        p7_gmxchk_Dump(FILE *ofp, P7_GMXCHK *gxc, int flags);
+extern int        p7_gmxchk_SetDumpMode(P7_GMXCHK *gxc, FILE *ofp, int flags);
+extern int        p7_gmxchk_DumpHeader(FILE *ofp, P7_GMXCHK *gxc,  int kstart, int kend, int flags);
+extern int        p7_gmxchk_DumpRow(FILE *ofp, P7_GMXCHK *gxc, float *dpc, int i, int kstart, int kend, int flags);
 
-#endif /*P7_GMXCHK_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
+/* 
  * References:
  *    SRE:J8/109-112, Oct 2011: Implementation plan
+ */
+
+/*****************************************************************
+ * @LICENSE@
  * 
  * SVN $Id$
  * SVN $URL$
  *****************************************************************/
+
+#endif /*P7_GMXCHK_INCLUDED*/

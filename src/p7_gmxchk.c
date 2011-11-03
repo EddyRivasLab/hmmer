@@ -1,4 +1,5 @@
 /* P7_GMXCHK implementation
+ *
  * Checkpointed forward/backward dynamic programming matrix.
  * Derived from P7_GMX structure; see p7_gmx.[ch]
  * 
@@ -8,10 +9,8 @@
  *   3. Internal (static) routines.
  *   4. Unit tests.
  *   5. Test driver.
+ *   6. References.
  *   7. Copyright and license information.
- *   
- * References:
- *   SRE J8/109-112, Oct 2011: implementation plan.
  */
 #include "p7_config.h"
 
@@ -43,68 +42,69 @@ static double checkpointed_rows(int L, int R);
  *            DP matrices for a comparison of a query model of
  *            length <M> and a target sequence of length <L>.
  *            
- *            Try to keep allocation within <ramlimit> MB in memory.
- *            <ramlimit=128>, for example, means a recommended RAM
- *            limit of 128MB. The allocation can exceed this, if the
- *            <MxL> comparison requires it (if so, the matrix is fully
- *            checkpointed, minimizing the allocation); but any
- *            subsequent <p7_gmxchk_GrowTo()> call attempting to reuse
- *            the matrix will try to reallocate it back downwards to
- *            the <ramlimit>.
+ *            Try to keep allocation within <ramlimit> bytes in
+ *            memory.  <ramlimit=ESL_MBYTES(128)>, for example, means
+ *            a recommended RAM limit of 128 MiB. The allocation can
+ *            exceed this, if the <MxL> comparison requires it (if so,
+ *            the matrix is fully checkpointed, minimizing the
+ *            allocation); but any subsequent <p7_gmxchk_GrowTo()>
+ *            call attempting to reuse the matrix will try to
+ *            reallocate it back downwards to the <ramlimit>.
  *            
- *            Choice for <ramlimit> should take into account how many
- *            parallel threads there are, each with its own
+ *            Your choice for <ramlimit> should take into account how
+ *            many parallel threads there are, each with its own
  *            <P7_GMXCHK> matrix allocation.
  *            
- *            By design spec, <M> and <L> are $\leq$ 100000.  Because
- *            some size calculations are in int32, <ramlimit> must be
- *            $\leq$ 2000 (2 GB).
+ *            By design spec, <M> and <L> are $\leq$ 100000. 
  *
  * Args:      M         - query profile size in consensus positions (<=100000)
  *            L         - target sequence length in residues (<=100000)
- *            ramlimit  - recommended memory limit in MB (<=2000)
+ *            ramlimit  - recommended memory limit in bytes
  *
  * Returns:   ptr to new <P7_GMXCHK> object on success.
  *
  * Throws:    <NULL> on allocation failure.
  */
 P7_GMXCHK *
-p7_gmxchk_Create(int M, int L, int ramlimit)
+p7_gmxchk_Create(int M, int L, int64_t ramlimit)
 {
   P7_GMXCHK *gxc = NULL;
   int        maxR;
   int        r;
   int        status;
 
-  /* Validity of integer variable ranges may depend on design spec:                   */
-  ESL_DASSERT1( (M        <= 100000) ); /* design spec says, model length M <= 100000 */
-  ESL_DASSERT1( (L        <= 100000) ); /*           ... and,  seq length L <= 100000 */
-  ESL_DASSERT1( (ramlimit <= 2000)   ); /* this, because calculations are in int32    */
+  /* Validity of integer variable ranges may depend on design spec:                         */
+  ESL_DASSERT1( (M        <= 100000) );       /* design spec says, model length M <= 100000 */
+  ESL_DASSERT1( (L        <= 100000) );       /*           ... and,  seq length L <= 100000 */
 
   /* Level 1 allocation: the structure itself */
   ESL_ALLOC(gxc, sizeof(P7_GMXCHK));
   gxc->dp      = NULL;
-  gxc->xmx     = NULL;
   gxc->dp_mem  = NULL;
 
   /* Set allocR, R{abc}, L{abc} fields: row layout, full vs. checkpointed */
-  gxc->R0          = 3;	                  /* fwd[0]; bck[prv,cur] */
-  gxc->allocW      = M + 1;               /* allocM+1 because we're [0..allocM] in DP columns in generic mx. */
-  gxc->ncell_limit = (ramlimit * 1048576L) / (p7G_NSCELLS *  sizeof(float));
-  maxR             = gxc->ncell_limit / gxc->allocW;  /* this int32 calculation is why ramlimit must be <= 2000 (2GB) */
+  gxc->R0          = 3;	                                 /* fwd[0]; bck[prv,cur] */
+  gxc->allocW      = (M+1) * p7G_NSCELLS + p7G_NXCELLS;  /* M+1 because we're [0..M] in DP columns in generic mx. */
+  gxc->ncell_limit = ramlimit / sizeof(float);
+  maxR             = (int) (gxc->ncell_limit / (int64_t) gxc->allocW); 
   set_row_layout(gxc, L, maxR);
   gxc->allocR      = gxc->R0 + gxc->Ra + gxc->Rb + gxc->Rc;
   gxc->validR      = gxc->allocR;
 
   /* Level 2 allocations: row pointers and dp cell memory */
   gxc->ncells = gxc->allocR * gxc->allocW;
-  ESL_ALLOC( gxc->dp_mem, sizeof(float)   * gxc->ncells * p7G_NSCELLS);
+  ESL_ALLOC( gxc->dp_mem, sizeof(float)   * gxc->ncells);
   ESL_ALLOC( gxc->dp,     sizeof(float *) * gxc->allocR);
   for (r = 0; r < gxc->allocR; r++) 
-    gxc->dp[r] = gxc->dp_mem + (r * gxc->allocW * p7G_NSCELLS);
+    gxc->dp[r] = gxc->dp_mem + (r * gxc->allocW);
 
-  ESL_ALLOC( gxc->xmx, sizeof(float) * (L+1) * p7G_NXCELLS);
-  gxc->allocXR = L+1;
+#ifdef p7_DEBUGGING
+  gxc->do_debugging  = FALSE;
+  gxc->dfp           = NULL;
+  gxc->dbg_width     = 9;
+  gxc->dbg_precision = 4;
+  gxc->dbg_flags     = p7_DEFAULT;
+#endif
 
   gxc->M      = 0;
   gxc->L      = 0;
@@ -117,7 +117,7 @@ p7_gmxchk_Create(int M, int L, int ramlimit)
 }
 
 /* Function:  p7_gmxchk_GrowTo()
- * Synopsis:  Resize a checkpointed matrix structure for new comparison.
+ * Synopsis:  Resize checkpointed matrix structure for new comparison.
  *
  * Purpose:   Given an existing checkpointed matrix structure <gxc>,
  *            and the dimensions <M> and <L> of a new comparison,
@@ -143,36 +143,37 @@ p7_gmxchk_Create(int M, int L, int ramlimit)
 int
 p7_gmxchk_GrowTo(P7_GMXCHK *gxc, int M, int L)
 {
+  int W             = (M+1)*p7G_NSCELLS + p7G_NXCELLS;       /* actual row width in cells; <= allocW */
   int minR_chk      = (int) ceil(minimum_rows(L)) + gxc->R0; /* minimum number of DP rows needed  */
   int reset_dp_ptrs = FALSE;
   int maxR;
   int r;
   int status;
 
-  /* Are the current allocations sufficient for the new problem? */
-  if (M + 1 <= gxc->allocW &&  L + 1 <= gxc->allocXR &&  gxc->ncells <= gxc->ncell_limit)
+  /* Are the current allocations satisfactory ? */
+  if (W <= gxc->allocW && gxc->ncells <= gxc->ncell_limit)
     {
       if      (L + gxc->R0 <= gxc->validR) { set_full        (gxc, L);              return eslOK; }
       else if (minR_chk   <=  gxc->validR) { set_checkpointed(gxc, L, gxc->validR); return eslOK; }
     }
 
   /* Do individual matrix rows need to expand? */
-  if (M+1 > gxc->allocW) 
+  if ( W > gxc->allocW) 
     {
-      gxc->allocW   = M+1;
-      gxc->validR   = gxc->ncells / gxc->allocW; /* validR must be <= allocR */
+      gxc->allocW   = W;
+      gxc->validR   = (int) (gxc->ncells / (int64_t) gxc->allocW); /* validR must be <= allocR */
       reset_dp_ptrs = TRUE;
     }
 
-  /* Does matrix need reallocation, either up or down? */
-  maxR  = gxc->ncell_limit / gxc->allocW;                       /* max rows if we use up to the recommended allocation size.      */
+  /* Does matrix dp_mem need reallocation, either up or down? */
+  maxR  = (int) (gxc->ncell_limit / (int64_t) gxc->allocW);     /* max rows if we use up to the recommended allocation size.      */
   if ( (gxc->ncells > gxc->ncell_limit && minR_chk <= maxR) ||  /* we were redlined, and recommended alloc will work: so downsize */
        minR_chk > gxc->validR)				        /* not enough memory for needed rows: so upsize                   */
     {
       set_row_layout(gxc, L, maxR); 
       gxc->validR = gxc->R0 + gxc->Ra + gxc->Rb + gxc->Rc; /* this may be > allocR now; we'll reallocate dp[] next, if so     */
       gxc->ncells = gxc->validR * gxc->allocW;
-      ESL_REALLOC(gxc->dp_mem, sizeof(float) * gxc->ncells * p7G_NSCELLS);
+      ESL_REALLOC(gxc->dp_mem, sizeof(float) * gxc->ncells);
       reset_dp_ptrs = TRUE;
     }
   else  /* current validR will suffice, either full or checkpointed; we still need to calculate a layout */
@@ -192,14 +193,7 @@ p7_gmxchk_GrowTo(P7_GMXCHK *gxc, int M, int L)
   /* Do the row ptrs need to be reset? */
   if (reset_dp_ptrs)
     for (r = 0; r < gxc->validR; r++)
-      gxc->dp[r] = gxc->dp_mem + (r * gxc->allocW * p7G_NSCELLS);
-
-  /* Does the xmx special array need reallocation? */
-  if (L+1 > gxc->allocXR)
-    {
-      ESL_REALLOC( gxc->xmx, sizeof(float) * (L+1) * p7G_NXCELLS);
-      gxc->allocXR = L+1;
-    }
+      gxc->dp[r] = gxc->dp_mem + (r * gxc->allocW);
 
   gxc->M = 0;
   gxc->L = 0;
@@ -220,9 +214,8 @@ p7_gmxchk_Sizeof(const P7_GMXCHK *gxc)
   size_t n = 0;
 
   n += sizeof(P7_GMXCHK);
-  n += gxc->ncells  * p7G_NSCELLS * sizeof(float); /* main DP cells  */
-  n += gxc->allocR  * sizeof(float *);		   /* row ptrs       */
-  n += gxc->allocXR * p7G_NXCELLS * sizeof(float); /* special states */
+  n += gxc->ncells  * sizeof(float);      /* main DP cells  */
+  n += gxc->allocR  * sizeof(float *);	  /* row ptrs       */
   return n;
 }
 
@@ -275,7 +268,6 @@ p7_gmxchk_Destroy(P7_GMXCHK *gxc)
     {
       if (gxc->dp_mem) free(gxc->dp_mem);
       if (gxc->dp)     free(gxc->dp);
-      if (gxc->xmx)    free(gxc->xmx);
       free(gxc);
     }
 }
@@ -287,29 +279,122 @@ p7_gmxchk_Destroy(P7_GMXCHK *gxc)
 /*****************************************************************
  *= 2. Debugging and testing tools
  *****************************************************************/
-static int gmxchk_dump_row(FILE *ofp, P7_GMXCHK *gxc, int i, int r, int kstart, int kend, int flags);
+#if p7_DEBUGGING
 
 /* Function:  p7_gmxchk_Dump()
  * Synopsis:  Dump a checkpointed DP matrix to a stream.
  *
- * Purpose:   Dump checkpointed DP matrix <gxc> to stream <fp> for diagnostics.
+ * Purpose:   Dump checkpointed DP Forward matrix <gxc> to stream <fp>
+ *            for diagnostics.
+ *
+ *            Caller first calls <p7_GForwardCheckpointed()> to create
+ *            the checkpointed matrix <gxc>; then <p7_gmxchk_Dump()> 
+ *            to dump all or part of it.
  *            
  *            <flags> control some optional output behavior, as follows:
  *            | <p7_HIDE_SPECIALS> | don't show scores for <ENJBC> states |
- *            | <p7_SHOW_LOG>      | <gxc> is in probs; show as low probs |
+ *            | <p7_SHOW_LOG>      | <gxc> is in probs; show as log probs |
+ *            Or, passing <p7_DEFAULT> means no flags.
  *
  * Returns:   <eslOK> on success.
  */
 int
 p7_gmxchk_Dump(FILE *ofp, P7_GMXCHK *gxc, int flags)
 {
-  int   width     = 9;
   int   kstart    = 0;		/* kstart,kend: make it easy to convert to a DumpWindow() sometime */
   int   kend      = gxc->M;
-  int   i, r, b, w, k, x;
+  int   i, r, b, w;
   int   status;
   
-  /* Header */
+  p7_gmxchk_DumpHeader(ofp, gxc, kstart, kend, flags);
+
+  for (i = 0, r = gxc->R0-1; i <= gxc->La; i++, r++)
+    if ((status = p7_gmxchk_DumpRow(ofp, gxc, gxc->dp[r], i, kstart, kend, flags)) != eslOK) return status;
+
+  for (b = gxc->Rb + gxc->Rc, w = gxc->Lb; i <= gxc->L; i++)
+    {
+      if (!(--w)) { 
+	w = b--;
+	if ((status = p7_gmxchk_DumpRow(ofp, gxc, gxc->dp[r], i, kstart, kend, flags)) != eslOK) return status;
+	r++;
+      }
+    }
+  return eslOK;
+}
+
+/* Function:  p7_gmxchk_SetDumpMode()
+ * Synopsis:  Set matrix to be dumped one row at a time in Backwards pass.
+ *
+ * Purpose:   Set matrix <gxc> so that Backwards pass will dump it one
+ *            row at a time, in reverse order. (The Backwards pass only
+ *            keeps two rows of the Backward matrix in memory at any 
+ *            time, so you can't calculate first then dump the whole thing,
+ *            as you can with the Forward matrix.)
+ *
+ *            Caller first calls <p7_gmxchk_SetDumpMode()>, then calls the
+ *            <p7_GBackwardCheckpointed()> calculation. <p7_BackwardCheckpointed()> 
+ *            will then dump the header and each row to <ofp>.
+ *
+ *            If <ofp> is <NULL>, dumping is turned off.
+ *
+ *            <flags> control some optional output behavior, as follows:
+ *            | <p7_HIDE_SPECIALS> | don't show scores for <ENJBC> states |
+ *            | <p7_SHOW_LOG>      | <gxc> is in probs; show as log probs |
+ *            Or, passing <p7_DEFAULT> means no flags.
+ *            If <ofp> is <NULL>, <flags> has no effect.
+ *
+ * Args:      gxc   - checkpointed dp matrix we want to be dumping
+ *            ofp   - open stream for diagnostics, to set;
+ *                    or <NULL>, to unset dumping.
+ *            flags - see above.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_gmxchk_SetDumpMode(P7_GMXCHK *gxc, FILE *ofp, int flags)
+{
+  if (ofp) {
+    gxc->do_debugging = TRUE;
+    gxc->dfp          = ofp;
+    gxc->dbg_flags    = flags;
+  } else {
+    gxc->do_debugging = FALSE;
+    gxc->dfp          = NULL;
+    gxc->dbg_flags    = 0;
+  }
+  return eslOK;
+}
+
+
+/* Function:  p7_gmxchk_DumpHeader()
+ * Synopsis:  Dump the header for a dumped checkpointed DP mx to stream.
+ *
+ * Purpose:   Write the header (matrix column labels) for checkpointed
+ *            DP matrix <gxc> to stream <fp> for diagnostics.
+ *
+ *            This either gets called by <p7_gmxchk_Dump()> for a Forward
+ *            matrix, or by <p7_GBackwardCheckpointed()> when debugging
+ *            and about to start dumping a backwards matrix one row at a 
+ *            time.
+ *
+ *            <flags> control some optional output behavior, as follows:
+ *            | <p7_HIDE_SPECIALS> | don't show scores for <ENJBC> states |
+ *            | <p7_SHOW_LOG>      | <gxc> is in probs; show as log probs |
+ *
+ * Args:      ofp     - stream we're dumping diagnostics to (typically stdout)
+ *            gxc     - checkpointed matrix we're dumping
+ *            kstart  - start on profile columns 0..M (typically 0)
+ *            kend    - end on profile columns 0..M (typically M)
+ *            flags   - see above (typically <p7_DEFAULT>)
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_gmxchk_DumpHeader(FILE *ofp, P7_GMXCHK *gxc,  int kstart, int kend, int flags)
+{
+  int width = gxc->dbg_width;
+  int k,x;
+
   fprintf(ofp, "     ");
   for (k = kstart; k <= kend;  k++) fprintf(ofp, "%*d ", width, k);
   if (! (flags & p7_HIDE_SPECIALS)) fprintf(ofp, "%*s %*s %*s %*s %*s\n", width, "E", width, "N", width, "J", width, "B", width, "C");
@@ -318,46 +403,43 @@ p7_gmxchk_Dump(FILE *ofp, P7_GMXCHK *gxc, int flags)
   if (! (flags & p7_HIDE_SPECIALS)) 
     for (x = 0; x < 5; x++) fprintf(ofp, "%*.*s ", width, width, "----------");
   fprintf(ofp, "\n");
-
-  for (i = 0, r = gxc->R0-1; i <= gxc->La; i++, r++)
-    {
-      if ((status = gmxchk_dump_row(ofp, gxc, i, r, kstart, kend, flags)) != eslOK) return status;
-    }
-
-  for (b = gxc->Rb + gxc->Rc, w = gxc->Lb; i <= gxc->L; i++)
-    {
-      if (!(--w))
-	{ 
-	  w = b--;
-	  if ((status = gmxchk_dump_row(ofp, gxc, i, r, kstart, kend, flags)) != eslOK) return status;
-	  r++;
-	}
-    }
   return eslOK;
 }
 
-/* gmxchk_dump_row():
- * Dump one row of P7_GMXCHK, same format as p7_gmx_Dump().
- *    ofp    - stream to dump output to
- *    gxc    - checkpointed DP matrix
- *    i      - row index 1..gxc->L
- *    r      - row's index in checkpointed storage, gxc->R0..gxc->R0+gxc->R-1
- *    kstart - start of dump window on query profile coords: 1..gxc->M
- *    kend   - end of dump window on query profile coords:  1..gxc->M
- *    flags  - option flags passed in from <p7_gmxchk_Dump()>
+
+/* Function:  p7_gmxchk_DumpRow()
+ * Synopsis:  Dump one row of a checkpointed DP matrix for diagnostics.
+ *
+ * Purpose:   Dump the row that <dpc> points to, from checkpointed
+ *            matrix <gxc>, to stream <ofp> for debugging/diagnostics.
+ *            Label the row by position <i> (typically 0..L+1) in
+ *            the target. 
+ *
+ *            The meaning of <flags> is the same as in <p7_gmxchk_Dump()>.
+ *
+ * Args:     ofp    - stream to dump output to
+ *           gxc    - checkpointed DP matrix
+ *           dpc    - ptr to DP matrix row: gxc->dp[r] or gxc->dp[0|1]
+ *           i      - position on target sequence (0,1..L,L+1)
+ *           kstart - start of dump window on query profile coords: 1..gxc->M
+ *           kend   - end of dump window on query profile coords:  1..gxc->M
+ *           flags  - option flags passed in from <p7_gmxchk_Dump()>
+ *
+ * Returns:  <eslOK> on success. 
  */
-static int
-gmxchk_dump_row(FILE *ofp, P7_GMXCHK *gxc, int i, int r, int kstart, int kend, int flags)
+int
+p7_gmxchk_DumpRow(FILE *ofp, P7_GMXCHK *gxc, float *dpc, int i, int kstart, int kend, int flags)
 {
-  int   width     = 9;
-  int   precision = 4;
+  int   width     = gxc->dbg_width;
+  int   precision = gxc->dbg_precision;
   float val;
   int   k, x;
+  int   xoffset   = (gxc->M+1)*p7G_NSCELLS; /* [ENJBC] cells start at this offset on each row. */
   
   fprintf(ofp, "%3d M ", i);
   for (k = kstart; k <= kend;        k++)  
     {
-      val = gxc->dp[r][k * p7G_NSCELLS + p7G_M];
+      val = dpc[k * p7G_NSCELLS + p7G_M];
       if (flags & p7_SHOW_LOG) val = log(val);
       fprintf(ofp, "%*.*f ", width, precision, val);
     }
@@ -366,7 +448,7 @@ gmxchk_dump_row(FILE *ofp, P7_GMXCHK *gxc, int i, int r, int kstart, int kend, i
     {
       for (x = 0;  x <  p7G_NXCELLS; x++) 
 	{
-	  val = gxc->xmx[  i * p7G_NXCELLS + x];
+	  val = dpc[xoffset + x];
 	  if (flags & p7_SHOW_LOG) val = log(val);
 	  fprintf(ofp, "%*.*f ", width, precision, val);
 	}
@@ -376,7 +458,7 @@ gmxchk_dump_row(FILE *ofp, P7_GMXCHK *gxc, int i, int r, int kstart, int kend, i
   fprintf(ofp, "%3d I ", i);
   for (k = kstart; k <= kend;        k++) 
     {
-      val = gxc->dp[r][k * p7G_NSCELLS + p7G_I];
+      val = dpc[k * p7G_NSCELLS + p7G_I];
       if (flags & p7_SHOW_LOG) val = log(val);
       fprintf(ofp, "%*.*f ", width, precision, val);
     }
@@ -385,13 +467,14 @@ gmxchk_dump_row(FILE *ofp, P7_GMXCHK *gxc, int i, int r, int kstart, int kend, i
   fprintf(ofp, "%3d D ", i);
   for (k = kstart; k <= kend;        k++) 
     {
-      val =  gxc->dp[r][k * p7G_NSCELLS + p7G_D];
+      val =  dpc[k * p7G_NSCELLS + p7G_D];
       if (flags & p7_SHOW_LOG) val = log(val);
       fprintf(ofp, "%*.*f ", width, precision, val);
     }
   fprintf(ofp, "\n\n");		
   return eslOK;
 }
+#endif /* p7_DEBUGGING */
 /*------------- end, debugging and testing tools ----------------*/
 
 
@@ -545,8 +628,7 @@ checkpointed_rows(int L, int R)
 /* Use the "idiomatic" traversal patterns for Forward and Backward to
  * write a test pattern into a DP matrix on the Forward pass, then
  * read it back in the Backwards pass. The test pattern numbers each
- * cell 0..ntot-1, for <ntot> total cells used in the DP matrix 
- * (including both MDI rows in dp[], and special EBNCJ values in xmx[]).
+ * cell 0..ntot-1, for <ntot> total cells used in the DP matrix.
  * 
  * This test pattern can catch a variety of bad layout issues in
  * p7_gmxchk_GrowTo() and p7_gmxchk_Create(), and also serves as 
@@ -559,37 +641,34 @@ utest_testpattern(P7_GMXCHK *gxc, int M, int L)
   char   msg[] = "testpattern failed";
   int    n;
   int    ntot;
-  int    b, w, i, k, s;
-  int    i2;
+  int    b, w, i, k, s, r;
   float *dpc;
 
   if (L != gxc->La + gxc->Lb + gxc->Lc) esl_fatal(msg);
   
   /* The test pattern will count cells in the checkpointed matrix,
-   * including row 0/col 0 boundary conditions
+   * including bck rows 0,1 and row 0/col 0 boundary conditions
    */
-  ntot = (M+1)*(gxc->Ra+gxc->Rb+gxc->Rc+1)*p7G_NSCELLS + (L+1)*p7G_NXCELLS;
+  ntot = (gxc->R0+gxc->Ra+gxc->Rb+gxc->Rc) * ( (M+1)*p7G_NSCELLS + p7G_NXCELLS);
   n    = 0;
 
   /* Write a test pattern, via idiomatic forward traversal */
-
-  /* The zero row, boundary condition */
-  dpc = gxc->dp[gxc->R0-1];	/* gxc->R0-1 is always the initialization row, i=0 */
-  for (k = 0; k <= M; k++) 
-    for (s = 0; s < p7G_NSCELLS; s++)
-      dpc[k*p7G_NSCELLS+s] = n++;
-  for (s = 0; s < p7G_NXCELLS; s++)
-    gxc->xmx[s] = n++;
+  /* The Backwards and initialization rows 0..2 */
+  for (r = 0; r < gxc->R0; r++)
+    {
+      dpc = gxc->dp[r]; 
+      for (k = 0; k <= M; k++) 
+	for (s = 0; s < p7G_NSCELLS; s++)  { *dpc = n++; dpc++; }
+      for (s = 0; s < p7G_NXCELLS; s++)    { *dpc = n++; dpc++; }
+    }
 
   /* Phase one: "a" region; uncheckpointed rows of the matrix */
   for (i = 1, gxc->R = 0; i <= gxc->La; i++)
     {
       dpc = gxc->dp[gxc->R0+gxc->R]; gxc->R++;
       for (k = 0; k <= M; k++)
-	for (s = 0; s < p7G_NSCELLS; s++)
-	  dpc[k*p7G_NSCELLS+s] = n++;
-      for (s = 0; s < p7G_NXCELLS; s++)
-	gxc->xmx[i*p7G_NXCELLS+s] = n++;
+	for (s = 0; s < p7G_NSCELLS; s++) { *dpc = n++; dpc++;  }
+      for (s = 0; s < p7G_NXCELLS; s++)   { *dpc = n++; dpc++;  }
     }
   if (gxc->R != gxc->Ra)   esl_fatal(msg);
 
@@ -603,13 +682,9 @@ utest_testpattern(P7_GMXCHK *gxc, int M, int L)
 
 	  /* A checkpointed row: write test pattern */
 	  for (k = 0; k <= M; k++)
-	    for (s = 0; s < p7G_NSCELLS; s++)
-	      dpc[k*p7G_NSCELLS+s] = n++;
+	    for (s = 0; s < p7G_NSCELLS; s++) { *dpc = n++; dpc++; }
+	  for (s = 0; s < p7G_NXCELLS; s++)   { *dpc = n++; dpc++; }
 	}
-
-      /* xmx[] cells are saved on every row: write test pattern */
-      for (s = 0; s < p7G_NXCELLS; s++)
-	gxc->xmx[i*p7G_NXCELLS+s] = n++;
     }
   if (i      != L+1)                     esl_fatal(msg);
   if (gxc->R != gxc->Ra+gxc->Rb+gxc->Rc) esl_fatal(msg);
@@ -624,26 +699,20 @@ utest_testpattern(P7_GMXCHK *gxc, int M, int L)
       /* The current row ends a block and is checkpointed: 
        *  read backwards in both xmx and the checkpointed row
        */
-      dpc = gxc->dp[gxc->R0+gxc->R-1];
-      for (s = p7G_NXCELLS-1; s >= 0; s--)
-	if (gxc->xmx[i*p7G_NXCELLS+s] != --n) esl_fatal(msg);
+      gxc->R--;
+      dpc = gxc->dp[gxc->R0+gxc->R] + (M+1)*p7G_NSCELLS + p7G_NXCELLS - 1; /* dpc now on last cell in row */
+      for (s = p7G_NXCELLS-1; s >= 0; s--)   { if (*dpc != --n) esl_fatal(msg); dpc--; }
       for (k = M; k >= 0; k--)
-	for (s = p7G_NSCELLS-1; s >= 0; s--)
-	  if (dpc[k*p7G_NSCELLS+s] != --n)    esl_fatal(msg);
-      gxc->R--;			/* release fwd row r */
+	for (s = p7G_NSCELLS-1; s >= 0; s--) { if (*dpc != --n) esl_fatal(msg); dpc--; }
       
-      /* in most backwards traversals, here we'd compute
-       * Forwards rows from i2=i-w+1..i-1
+      /* in most backwards traversals, now we'd compute
+       * Forwards rows from i2=i-w+1..i-1... 
        */
 
-      /* backward pass from rows i-1 up to i-w+1: 
-       * no checkpoint rows, so xmx[] only 
+      /* and then we'd compute a Backwards pass from rows
+       * i-1 up to i-w+1.
        */
-      for (i2 = i-1; i2 >= i-w+1; i2--)
-	{
-	  for (s = p7G_NXCELLS-1; s >= 0; s--)
-	    if (gxc->xmx[i2*p7G_NXCELLS+s] != --n) esl_fatal(msg);
-	}
+
       i -= w;	/* a checkpointed block of width <w> is done. */
     }
   if (i != gxc->La) esl_fatal(msg);
@@ -651,22 +720,21 @@ utest_testpattern(P7_GMXCHK *gxc, int M, int L)
   /* The "a" region of the backwards traversal: every row is saved. */
   for ( ; i >= 1; i--)
     {
-      dpc = gxc->dp[gxc->R0+gxc->R-1];
-      for (s = p7G_NXCELLS-1; s >= 0; s--)
-	if (gxc->xmx[i*p7G_NXCELLS+s] != --n) esl_fatal(msg);
+      gxc->R--;			
+      dpc = gxc->dp[gxc->R0+gxc->R] + (M+1)*p7G_NSCELLS + p7G_NXCELLS - 1; /* dpc now on last cell in row */
+      for (s = p7G_NXCELLS-1; s >= 0; s--)   { if (*dpc != --n) esl_fatal(msg); dpc--; }
       for (k = M; k >= 0; k--)
-	for (s = p7G_NSCELLS-1; s >= 0; s--)
-	  if (dpc[k*p7G_NSCELLS+s] != --n)    esl_fatal(msg);
-      gxc->R--;			/* release fwd row r */
+	for (s = p7G_NSCELLS-1; s >= 0; s--) { if (*dpc != --n) esl_fatal(msg); dpc--; }
     }
   
-  /* The 0 row, boundary condition. */
-  dpc = gxc->dp[gxc->R0-1];
-  for (s = p7G_NXCELLS-1; s >= 0; s--)
-    if (gxc->xmx[s] != --n) esl_fatal(msg);
-  for (k = M; k >= 0; k--)
-    for (s = p7G_NSCELLS-1; s >= 0; s--)
-      if (dpc[k*p7G_NSCELLS+s] != --n)    esl_fatal(msg);
+  /* The R0 rows, boundary condition. */
+  for (r = gxc->R0-1; r >= 0; r--)
+    {
+      dpc = gxc->dp[r] + (M+1)*p7G_NSCELLS + p7G_NXCELLS - 1; /* dpc now on last cell in row */
+      for (s = p7G_NXCELLS-1; s >= 0; s--)   { if (*dpc != --n) esl_fatal(msg); dpc--; }
+      for (k = M; k >= 0; k--)
+	for (s = p7G_NSCELLS-1; s >= 0; s--) { if (*dpc != --n) esl_fatal(msg); dpc--; }
+    }
 }
 
 /* utest_GrowTo()
@@ -688,7 +756,7 @@ utest_GrowTo(void)
   M = 100; L = 100; p7_gmxchk_GrowTo(gxc, M, L);     utest_testpattern(gxc, M, L);
   p7_gmxchk_Destroy(gxc);
 
-  M = 20;  L = 20;  gxc = p7_gmxchk_Create(M, L, 32); utest_testpattern(gxc, M, L);
+  M = 20;  L = 20;  gxc = p7_gmxchk_Create(M, L, ESL_MBYTES(32)); utest_testpattern(gxc, M, L);
   M = 40;  L = 20;  p7_gmxchk_GrowTo(gxc, M, L);      utest_testpattern(gxc, M, L);
   M = 40;  L = 40;  p7_gmxchk_GrowTo(gxc, M, L);      utest_testpattern(gxc, M, L);
   M = 80;  L = 10;  p7_gmxchk_GrowTo(gxc, M, L);      utest_testpattern(gxc, M, L);
@@ -765,6 +833,10 @@ main(int argc, char **argv)
 #endif /*p7GMXCHK_TESTDRIVE*/
 /*---------------------- end, test driver  ----------------------*/
 
+/* 
+ * References:
+ *   SRE J8/109-112, Oct 2011: implementation plan.
+ */
 
 /*****************************************************************
  * @LICENSE@
@@ -772,5 +844,6 @@ main(int argc, char **argv)
  * SVN $Id$
  * SVN $URL$
  *****************************************************************/
+
 
 
