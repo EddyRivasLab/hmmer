@@ -583,6 +583,7 @@ fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int le
     }
   }
 
+
   return eslOK;
 }
 

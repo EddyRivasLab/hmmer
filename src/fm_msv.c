@@ -687,7 +687,8 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
 
         } else { // start a new diagonal
 
-          fm_newWindow(windowlist, fm_cfg->meta->seq_data[ tmp_id ].id, tmp_n, seeds.diags+i);
+          //fm_newWindow(windowlist, fm_cfg->meta->seq_data[ tmp_id ].id, tmp_n, seeds.diags+i);
+          fm_newWindow(windowlist, tmp_id, tmp_n, seeds.diags+i);
 
           //capture the n position of the diagonal and above-j_thresh contribution, whether it produced an SSV hit or not,
           //and keep for the next iteration
