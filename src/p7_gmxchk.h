@@ -20,12 +20,11 @@
  *****************************************************************/
 
 /* 
- * One P7_GMXCHK data structure is used for both Forward and
- * Backward computations on a target sequence. The result is
- * a Forward score and a posterior-decoded set of DP bands.
- * 
- * The Forward matrix may be checkpointed. The Backwards matrix is
- * linear-memory with two rows.
+ * One P7_GMXCHK data structure is used for both Forward and Backward
+ * computations on a target sequence. The Forward calculation is
+ * checkpointed. The Backward calculation is linear memory in two
+ * rows. The end result is a Forward score and a posterior-decoded set
+ * of DP bands.
  *
  * In the diagram below, showing the row layout for the main matrix (MDI states):
  *   O = a checkpointed row; 
@@ -60,7 +59,7 @@
  *    Rb = 1  La = 2
  *    Rc = 4  Lc = 14
  *                                                             
- * In checkpointed regions, we will refer to "blocks", often indexed
+ * In checkpointed regions, we refer to "blocks", often indexed
  * <b>.  There are Rb+Rc blocks, and each block ends in a checkpointed
  * row. The "width" of each block, often called <w>, decrements from
  * Rc+1 down to 2 in the fully checkpointed region.
@@ -81,20 +80,48 @@
 
 /* Layout of memory in a single DP row:
  * 
- *  dpc:   [M  I  D] [M  I  D] [M  I  D]  ...  [M  I  D]  [E  N  J  B  C]
+ *  dpc:   [M  I  D] [M  I  D] [M  I  D]  ...  [M  I  D]  [E  N  JJ  J  B  CC  C]
  *    k:   |-- 0 --| |-- 1 --| |-- 2 --|  ...  |-- M --|  
- *         |------------- (M+1)*p7G_NSCELLS -----------| |- p7G_NXCELLS -|
+ *         |------------- (M+1)*p7G_NSCELLS -----------|  |---- p7GC_NXCELLS ---|
  *
  *  Row dp[r] = gxc->dp_mem+(r*allocW) = dpc
  *  Main state s={MID} at node k={0..M}: dpc[k*p7G_NSCELLS+s]   
- *  Special state s={ENJBC}:             dpc[(M+1)*p7G_NSCELLS+s]
+ *  Special state s={ENJBC,CC,JJ}:       dpc[(M+1)*p7G_NSCELLS+s]
+ *  
+ *  We need to store "JJ" and "CC" states -- the partial path
+ *  probabilities from C(i-1)->C and J(i-1)->J -- because the
+ *  checkpointed implementation does not necessarily have access to
+ *  values on row i-1 when it does posterior decoding. <p7G_NXCELLS>
+ *  from <P7_GMX> is replaced by <p7GC_NXCELLS> in <P7_GMXCHK>, and
+ *  <enum p7g_xcells_e> from 0..4 {ENJBC} with <p7gc_xcells_e> from
+ *  0..6 {E,N,JJ,J,B,CC,C}.
  */
-
 
 
 /*****************************************************************
  * 3. The P7_GMXCHK data structure.
  *****************************************************************/
+
+/* p7GC_NXCELLS and p7gc_xcells_e
+ * 
+ * For main states we share p7G_NSCELLS and p7G_{MID} with P7_GMX.
+ * For special states, we replace <enum p7g_xcells_e> with an array
+ * that inserts CC and JJ cells, which the checkpointed implementation
+ * needs. (See note 2 above.) Note that the order of the p7GC_{X}
+ * special states is not the same as p7G_{X}, so they should not be
+ * mixed.
+ */
+enum p7gc_xcells_e {
+  p7GC_E  = 0,
+  p7GC_N  = 1,
+  p7GC_JJ = 2,
+  p7GC_J  = 3,
+  p7GC_B  = 4,
+  p7GC_CC = 5,
+  p7GC_C  = 6
+};
+#define p7GC_NXCELLS 7
+
 
 typedef struct p7_gmxchk_s {
   int      M;	        /* actual query model dimension of current comparison                 */

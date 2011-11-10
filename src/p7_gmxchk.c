@@ -83,8 +83,8 @@ p7_gmxchk_Create(int M, int L, int64_t ramlimit)
   gxc->dp_mem  = NULL;
 
   /* Set allocR, R{abc}, L{abc} fields: row layout, full vs. checkpointed */
-  gxc->R0          = 3;	                                 /* fwd[0]; bck[prv,cur] */
-  gxc->allocW      = (M+1) * p7G_NSCELLS + p7G_NXCELLS;  /* M+1 because we're [0..M] in DP columns in generic mx. */
+  gxc->R0          = 3;	                                  /* fwd[0]; bck[prv,cur] */
+  gxc->allocW      = (M+1) * p7G_NSCELLS + p7GC_NXCELLS;  /* M+1 because we're [0..M] in DP columns in generic mx. */
   gxc->ncell_limit = ramlimit / sizeof(float);
   maxR             = (int) (gxc->ncell_limit / (int64_t) gxc->allocW); 
   set_row_layout(gxc, L, maxR);
@@ -143,7 +143,7 @@ p7_gmxchk_Create(int M, int L, int64_t ramlimit)
 int
 p7_gmxchk_GrowTo(P7_GMXCHK *gxc, int M, int L)
 {
-  int W             = (M+1)*p7G_NSCELLS + p7G_NXCELLS;       /* actual row width in cells; <= allocW */
+  int W             = (M+1)*p7G_NSCELLS + p7GC_NXCELLS;      /* actual row width in cells; <= allocW */
   int minR_chk      = (int) ceil(minimum_rows(L)) + gxc->R0; /* minimum number of DP rows needed  */
   int reset_dp_ptrs = FALSE;
   int maxR;
@@ -397,7 +397,7 @@ p7_gmxchk_DumpHeader(FILE *ofp, P7_GMXCHK *gxc,  int kstart, int kend, int flags
 
   fprintf(ofp, "     ");
   for (k = kstart; k <= kend;  k++) fprintf(ofp, "%*d ", width, k);
-  if (! (flags & p7_HIDE_SPECIALS)) fprintf(ofp, "%*s %*s %*s %*s %*s\n", width, "E", width, "N", width, "J", width, "B", width, "C");
+  if (! (flags & p7_HIDE_SPECIALS)) fprintf(ofp, "%*s %*s %*s %*s %*s %*s %*s\n", width, "E", width, "N", width, "JJ", width, "J", width, "B", width, "CC", width, "C");
   fprintf(ofp, "      ");
   for (k = kstart; k <= kend; k++)  fprintf(ofp, "%*.*s ", width, width, "----------");
   if (! (flags & p7_HIDE_SPECIALS)) 
@@ -446,7 +446,7 @@ p7_gmxchk_DumpRow(FILE *ofp, P7_GMXCHK *gxc, float *dpc, int i, int kstart, int 
 
   if (! (flags & p7_HIDE_SPECIALS))
     {
-      for (x = 0;  x <  p7G_NXCELLS; x++) 
+      for (x = 0; x < p7GC_NXCELLS; x++) 
 	{
 	  val = dpc[xoffset + x];
 	  if (flags & p7_SHOW_LOG) val = log(val);
@@ -456,7 +456,7 @@ p7_gmxchk_DumpRow(FILE *ofp, P7_GMXCHK *gxc, float *dpc, int i, int kstart, int 
   fprintf(ofp, "\n");
 
   fprintf(ofp, "%3d I ", i);
-  for (k = kstart; k <= kend;        k++) 
+  for (k = kstart; k <= kend; k++) 
     {
       val = dpc[k * p7G_NSCELLS + p7G_I];
       if (flags & p7_SHOW_LOG) val = log(val);
@@ -465,7 +465,7 @@ p7_gmxchk_DumpRow(FILE *ofp, P7_GMXCHK *gxc, float *dpc, int i, int kstart, int 
   fprintf(ofp, "\n");
   
   fprintf(ofp, "%3d D ", i);
-  for (k = kstart; k <= kend;        k++) 
+  for (k = kstart; k <= kend; k++) 
     {
       val =  dpc[k * p7G_NSCELLS + p7G_D];
       if (flags & p7_SHOW_LOG) val = log(val);
@@ -649,7 +649,7 @@ utest_testpattern(P7_GMXCHK *gxc, int M, int L)
   /* The test pattern will count cells in the checkpointed matrix,
    * including bck rows 0,1 and row 0/col 0 boundary conditions
    */
-  ntot = (gxc->R0+gxc->Ra+gxc->Rb+gxc->Rc) * ( (M+1)*p7G_NSCELLS + p7G_NXCELLS);
+  ntot = (gxc->R0+gxc->Ra+gxc->Rb+gxc->Rc) * ( (M+1)*p7G_NSCELLS + p7GC_NXCELLS);
   n    = 0;
 
   /* Write a test pattern, via idiomatic forward traversal */
@@ -659,7 +659,7 @@ utest_testpattern(P7_GMXCHK *gxc, int M, int L)
       dpc = gxc->dp[r]; 
       for (k = 0; k <= M; k++) 
 	for (s = 0; s < p7G_NSCELLS; s++)  { *dpc = n++; dpc++; }
-      for (s = 0; s < p7G_NXCELLS; s++)    { *dpc = n++; dpc++; }
+      for (s = 0; s < p7GC_NXCELLS; s++)    { *dpc = n++; dpc++; }
     }
 
   /* Phase one: "a" region; uncheckpointed rows of the matrix */
@@ -668,7 +668,7 @@ utest_testpattern(P7_GMXCHK *gxc, int M, int L)
       dpc = gxc->dp[gxc->R0+gxc->R]; gxc->R++;
       for (k = 0; k <= M; k++)
 	for (s = 0; s < p7G_NSCELLS; s++) { *dpc = n++; dpc++;  }
-      for (s = 0; s < p7G_NXCELLS; s++)   { *dpc = n++; dpc++;  }
+      for (s = 0; s < p7GC_NXCELLS; s++)   { *dpc = n++; dpc++;  }
     }
   if (gxc->R != gxc->Ra)   esl_fatal(msg);
 
@@ -683,7 +683,7 @@ utest_testpattern(P7_GMXCHK *gxc, int M, int L)
 	  /* A checkpointed row: write test pattern */
 	  for (k = 0; k <= M; k++)
 	    for (s = 0; s < p7G_NSCELLS; s++) { *dpc = n++; dpc++; }
-	  for (s = 0; s < p7G_NXCELLS; s++)   { *dpc = n++; dpc++; }
+	  for (s = 0; s < p7GC_NXCELLS; s++)   { *dpc = n++; dpc++; }
 	}
     }
   if (i      != L+1)                     esl_fatal(msg);
@@ -700,8 +700,8 @@ utest_testpattern(P7_GMXCHK *gxc, int M, int L)
        *  read backwards in both xmx and the checkpointed row
        */
       gxc->R--;
-      dpc = gxc->dp[gxc->R0+gxc->R] + (M+1)*p7G_NSCELLS + p7G_NXCELLS - 1; /* dpc now on last cell in row */
-      for (s = p7G_NXCELLS-1; s >= 0; s--)   { if (*dpc != --n) esl_fatal(msg); dpc--; }
+      dpc = gxc->dp[gxc->R0+gxc->R] + (M+1)*p7G_NSCELLS + p7GC_NXCELLS - 1; /* dpc now on last cell in row */
+      for (s = p7GC_NXCELLS-1; s >= 0; s--)   { if (*dpc != --n) esl_fatal(msg); dpc--; }
       for (k = M; k >= 0; k--)
 	for (s = p7G_NSCELLS-1; s >= 0; s--) { if (*dpc != --n) esl_fatal(msg); dpc--; }
       
@@ -721,8 +721,8 @@ utest_testpattern(P7_GMXCHK *gxc, int M, int L)
   for ( ; i >= 1; i--)
     {
       gxc->R--;			
-      dpc = gxc->dp[gxc->R0+gxc->R] + (M+1)*p7G_NSCELLS + p7G_NXCELLS - 1; /* dpc now on last cell in row */
-      for (s = p7G_NXCELLS-1; s >= 0; s--)   { if (*dpc != --n) esl_fatal(msg); dpc--; }
+      dpc = gxc->dp[gxc->R0+gxc->R] + (M+1)*p7G_NSCELLS + p7GC_NXCELLS - 1; /* dpc now on last cell in row */
+      for (s = p7GC_NXCELLS-1; s >= 0; s--)   { if (*dpc != --n) esl_fatal(msg); dpc--; }
       for (k = M; k >= 0; k--)
 	for (s = p7G_NSCELLS-1; s >= 0; s--) { if (*dpc != --n) esl_fatal(msg); dpc--; }
     }
@@ -730,8 +730,8 @@ utest_testpattern(P7_GMXCHK *gxc, int M, int L)
   /* The R0 rows, boundary condition. */
   for (r = gxc->R0-1; r >= 0; r--)
     {
-      dpc = gxc->dp[r] + (M+1)*p7G_NSCELLS + p7G_NXCELLS - 1; /* dpc now on last cell in row */
-      for (s = p7G_NXCELLS-1; s >= 0; s--)   { if (*dpc != --n) esl_fatal(msg); dpc--; }
+      dpc = gxc->dp[r] + (M+1)*p7G_NSCELLS + p7GC_NXCELLS - 1; /* dpc now on last cell in row */
+      for (s = p7GC_NXCELLS-1; s >= 0; s--)   { if (*dpc != --n) esl_fatal(msg); dpc--; }
       for (k = M; k >= 0; k--)
 	for (s = p7G_NSCELLS-1; s >= 0; s--) { if (*dpc != --n) esl_fatal(msg); dpc--; }
     }

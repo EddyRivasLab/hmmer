@@ -108,9 +108,7 @@ p7_FLogsum(float a, float b)
   const float max = ESL_MAX(a, b);
   const float min = ESL_MIN(a, b);
 
-#if 0			
-  return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + log(1.0 + exp(min-max));  /* SRE: While debugging SSE impl. Remember to remove! */
-#endif
+  //return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + log(1.0 + exp(min-max));  /* SRE: While debugging SSE impl. Remember to remove! */
   return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + flogsum_lookup[(int)((max-min)*p7_LOGSUM_SCALE)];
 } 
 

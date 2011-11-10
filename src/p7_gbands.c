@@ -1,6 +1,7 @@
 #include "p7_config.h"
 
 #include "easel.h"
+#include "esl_vectorops.h"
 
 #include "p7_gbands.h"
 
@@ -96,6 +97,56 @@ p7_gbands_Append(P7_GBANDS *bnd, int i, int ka, int kb)
 
  ERROR:
   return status;
+}
+
+
+/* 
+ * Build the band structure backwards. Caller will need to
+ * call <p7_gbands_Reverse()> when done.
+ */
+int
+p7_gbands_Prepend(P7_GBANDS *bnd, int i, int ka, int kb)
+{
+  int status;
+
+  if (! bnd->nseg ||
+      i < bnd->imem[(bnd->nseg-1)*2+1] - 1) /* i < ia[cur_g]-1; start a new segment */
+    {
+      if (bnd->nseg == bnd->segalloc && (status = p7_gbands_GrowSegs(bnd)) != eslOK) return status;
+      bnd->imem[bnd->nseg*2]   = i; /* ib */
+      bnd->imem[bnd->nseg*2+1] = i; /* ia */
+      bnd->nseg++;
+    }
+  else				       /* else, prepend i to prev segment by decrementing its ia */
+    bnd->imem[(bnd->nseg-1)*2+1] -= 1; /* equiv to setting ia[g] = i */
+
+  if (bnd->nrow == bnd->rowalloc && (status = p7_gbands_GrowRows(bnd)) != eslOK) return status;
+  bnd->kmem[bnd->nrow*p7_GBANDS_NK]   = kb;
+  bnd->kmem[bnd->nrow*p7_GBANDS_NK+1] = ka;
+  bnd->nrow  += 1;
+  bnd->ncell += kb-ka+1;
+  return eslOK;
+}
+
+/* Function:  p7_gbands_Reverse()
+ * Synopsis:  Reverse the band structure arrays, after a backwards DP pass.
+ *
+ * Purpose:   Our checkpointed DP posterior decoding algorithms that make a
+ *            band structure work backwards in rows from L..1, and so they
+ *            construct a <P7_GBANDS> structure that has its data elements
+ *            in reversed order. Before we can use that structure, we have 
+ *            to reverse these arrays. 
+ *
+ * Args:      bnd -  band list to reverse. 
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_gbands_Reverse(P7_GBANDS *bnd)
+{
+  esl_vec_IReverse(bnd->imem, bnd->imem, 2*bnd->nseg);
+  esl_vec_IReverse(bnd->kmem, bnd->kmem, 2*bnd->nrow);
+  return eslOK;
 }
 
 

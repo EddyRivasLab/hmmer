@@ -154,6 +154,7 @@ BENCHMARKS = \
 UTESTS =\
 	build_utest\
 	generic_fwdback_utest\
+	generic_fwdback_chk_utest\
 	generic_msv_utest\
 	generic_stotrace_utest\
 	generic_viterbi_utest\
