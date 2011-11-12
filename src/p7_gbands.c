@@ -6,7 +6,7 @@
 #include "p7_gbands.h"
 
 P7_GBANDS *
-p7_gbands_Create(int L, int M)
+p7_gbands_Create(void)
 {
   P7_GBANDS *bnd           = NULL;
   int        init_segalloc = 4;
@@ -16,8 +16,8 @@ p7_gbands_Create(int L, int M)
   ESL_ALLOC(bnd, sizeof(P7_GBANDS));
   bnd->nseg  = 0;
   bnd->nrow  = 0;
-  bnd->L     = L;
-  bnd->M     = M;
+  bnd->L     = 0;
+  bnd->M     = 0;
   bnd->ncell = 0;
   bnd->imem  = NULL;
   bnd->kmem  = NULL;
@@ -33,18 +33,6 @@ p7_gbands_Create(int L, int M)
  ERROR:
   p7_gbands_Destroy(bnd);
   return NULL;
-}
-
-int
-p7_gbands_Reinit(P7_GBANDS *bnd, int L, int M)
-{
-  /* Currently, no allocation depends on L, M; we just keep copies of them */
-  bnd->nseg  = 0;
-  bnd->nrow  = 0;
-  bnd->L     = L;
-  bnd->M     = M;
-  bnd->ncell = 0;
-  return eslOK;
 }
 
 int
@@ -229,6 +217,12 @@ p7_gbands_Dump(FILE *ofp, P7_GBANDS *bnd)
 	}
     }
   if (i <= bnd->L) fprintf(ofp, "...\n");
+
+  printf("%" PRId64 " cells banded, %" PRId64 " total; fraction = %f\n",
+	 bnd->ncell, 
+	 (int64_t) bnd->L * (int64_t) bnd->M, 
+	 (double) bnd->ncell / ((double) bnd->L * (double) bnd->M));
+
   return eslOK;
 }
 

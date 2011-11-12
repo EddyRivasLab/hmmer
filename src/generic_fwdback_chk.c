@@ -14,8 +14,9 @@
 
 #include "hmmer.h"
 #include "p7_gmxchk.h"
+#include "p7_gbands.h"
 
-static inline void posterior_decode_row(int rowi, float *fwd, float *bck, int M, float overall_sc);
+static inline void posterior_decode_row(int rowi, float *fwd, float *bck, int M, float overall_sc, P7_GBANDS *bnd);
 
 /*****************************************************************
  *= 1. Forwards: checkpointed fill, Forwards nat score
@@ -226,7 +227,7 @@ backward_row(const ESL_DSQ *dsq, const P7_PROFILE *gm, P7_GMXCHK *gxc, const flo
 
 /* worry about small seq cases: L=0..2 */
 int
-p7_GBackwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXCHK *gxc, float *opt_sc)
+p7_GBackwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXCHK *gxc, P7_GBANDS *bnd, float *opt_sc)
 {
   float const *tsc  = gm->tsc;
   float const *rsc  = NULL;
@@ -277,7 +278,7 @@ p7_GBackwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX
 #ifdef p7_DEBUGGING
   if (gxc->do_debugging) p7_gmxchk_DumpRow(gxc->dfp, gxc, bck, i, 0, gxc->M, gxc->dbg_flags);
 #endif
-  posterior_decode_row(i, fwd, bck, M, overall_sc);
+  posterior_decode_row(i, fwd, bck, M, overall_sc, bnd);
   i--;				/* i is now L-1 */
   dpp = bck;
 
@@ -297,7 +298,7 @@ p7_GBackwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX
       if (gxc->do_debugging) p7_gmxchk_DumpRow(gxc->dfp, gxc, bck, i, 0, gxc->M, gxc->dbg_flags);
 #endif
 
-      posterior_decode_row(i, fwd, bck, M, overall_sc);
+      posterior_decode_row(i, fwd, bck, M, overall_sc, bnd);
       dpp = bck;
       i--;			/* i is now L-2 if there was any checkpointing; L-1 if not. */
     }
@@ -315,7 +316,7 @@ p7_GBackwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX
 #ifdef p7_DEBUGGING
       if (gxc->do_debugging) p7_gmxchk_DumpRow(gxc->dfp, gxc, bck, i, 0, gxc->M, gxc->dbg_flags);
 #endif
-      posterior_decode_row(i, fwd, bck, M, overall_sc);
+      posterior_decode_row(i, fwd, bck, M, overall_sc, bnd);
       
       /* compute Forwards from last checkpoint */
       dpp = gxc->dp[gxc->R0+gxc->R-1];
@@ -339,7 +340,7 @@ p7_GBackwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX
 	  if (gxc->do_debugging) p7_gmxchk_DumpRow(gxc->dfp, gxc, bck, i2, 0, gxc->M, gxc->dbg_flags);
 #endif
 
-	  posterior_decode_row(i2, fwd, bck, M, overall_sc);
+	  posterior_decode_row(i2, fwd, bck, M, overall_sc, bnd);
 	  dpp = bck;
 	}
 
@@ -359,7 +360,7 @@ p7_GBackwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX
 #ifdef p7_DEBUGGING
       if (gxc->do_debugging) p7_gmxchk_DumpRow(gxc->dfp, gxc, bck, i, 0, gxc->M, gxc->dbg_flags);
 #endif
-      posterior_decode_row(i, fwd, bck, M, overall_sc);
+      posterior_decode_row(i, fwd, bck, M, overall_sc, bnd);
 
       dpp = bck;
     }
@@ -381,6 +382,10 @@ p7_GBackwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX
 #ifdef p7_DEBUGGING
   if (gxc->do_debugging) p7_gmxchk_DumpRow(gxc->dfp, gxc, bck, i, 0, gxc->M, gxc->dbg_flags);
 #endif
+
+  bnd->L = L;
+  bnd->M = M;
+  p7_gbands_Reverse(bnd);
   if (opt_sc != NULL) *opt_sc = XMR(bck,p7GC_N);
   return eslOK;
 }
@@ -398,37 +403,31 @@ p7_GBackwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX
  */
 
 static inline void
-posterior_decode_row(int rowi, float *fwd, float *bck, int M, float overall_sc)
+posterior_decode_row(int rowi, float *fwd, float *bck, int M, float overall_sc, P7_GBANDS *bnd)
 {
-  float denom = 0.0;
-  float outp;
   int   k;
-  int   kl, kr;
+  int   ka, kb;
   
+  XMR(fwd, p7GC_N)  = expf(XMR(fwd, p7GC_N) +  XMR(bck, p7GC_N)  - overall_sc);  
+  XMR(fwd, p7GC_JJ) = expf(XMR(fwd, p7GC_JJ) + XMR(bck, p7GC_JJ) - overall_sc);  
+  XMR(fwd, p7GC_CC) = expf(XMR(fwd, p7GC_CC) + XMR(bck, p7GC_CC) - overall_sc);  
+
+  if (XMR(fwd, p7GC_N) + XMR(fwd, p7GC_JJ) + XMR(fwd, p7GC_CC) >= 0.9) return;
 
   for (k = 1; k < M; k++)
     {
-      MMR(fwd, k) = expf(MMR(fwd,k) + MMR(bck,k) - overall_sc);   denom += MMR(fwd, k);
-      IMR(fwd, k) = expf(IMR(fwd,k) + IMR(bck,k) - overall_sc);   denom += IMR(fwd, k);
+      MMR(fwd, k) = expf(MMR(fwd,k) + MMR(bck,k) - overall_sc);   
+      IMR(fwd, k) = expf(IMR(fwd,k) + IMR(bck,k) - overall_sc);   
     }
-  MMR(fwd, M) = expf(MMR(fwd, M) + MMR(bck,M) - overall_sc);      denom += MMR(fwd, M);
+  MMR(fwd, M) = expf(MMR(fwd, M) + MMR(bck,M) - overall_sc);      
   IMR(fwd, M) = 0.0f;
   
-  XMR(fwd, p7GC_N)  = expf(XMR(fwd, p7GC_N) +  XMR(bck, p7GC_N)  - overall_sc);  denom += XMR(fwd, p7GC_N);
-  XMR(fwd, p7GC_JJ) = expf(XMR(fwd, p7GC_JJ) + XMR(bck, p7GC_JJ) - overall_sc);  denom += XMR(fwd, p7GC_JJ);
-  XMR(fwd, p7GC_CC) = expf(XMR(fwd, p7GC_CC) + XMR(bck, p7GC_CC) - overall_sc);  denom += XMR(fwd, p7GC_CC);
+  for (ka = 1; ka <= M; ka++) if (MMR(fwd, ka) + IMR(fwd, ka) >= 0.02) break;
+  if (ka == M+1) return;
+  for (kb = M; kb >= 1; kb--) if (MMR(fwd, kb) + IMR(fwd, kb) >= 0.02) break;
 
-  outp = XMR(fwd, p7GC_N) + XMR(fwd, p7GC_JJ) + XMR(fwd, p7GC_CC);
-
-  if (outp >= 0.9) return;
-  
-  for (kl = 1; kl <= M; kl++)
-    if (MMR(fwd, kl) + IMR(fwd, kl) >= 0.02) break;
-  if (kl == M+1)   return;
-  for (kr = M; kr >= 1; kr--)
-    if (MMR(fwd, kr) + IMR(fwd, kr) >= 0.02) break;
-
-  printf("%4d %.4f %.4f %.4f  %4d %4d\n", rowi, 1-outp, outp, denom, kl, kr);
+  p7_gbands_Prepend(bnd, rowi, ka, kb);
+  //printf("%4d %.4f %.4f %.4f  %4d %4d\n", rowi, 1-outp, outp, denom, ka, kb);
 }
 
 
@@ -478,6 +477,7 @@ main(int argc, char **argv)
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
   P7_GMXCHK      *gxc     = NULL;
+  P7_GBANDS      *bnd     = NULL;
   int             L       = esl_opt_GetInteger(go, "-L");
   int             N       = esl_opt_GetInteger(go, "-N");
   ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
@@ -494,6 +494,7 @@ main(int argc, char **argv)
   p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
 
   gxc = p7_gmxchk_Create(gm->M, L, ESL_MBYTES(32));
+  bnd = p7_gbands_Create();
 
   /* Baseline time. */
   esl_stopwatch_Start(w);
@@ -508,9 +509,10 @@ main(int argc, char **argv)
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
       p7_GForwardCheckpointed (dsq, L, gm, gxc, &sc);
       if (! esl_opt_GetBoolean(go, "-F"))
-	p7_GBackwardCheckpointed(dsq, L, gm, gxc, &sc);
+	p7_GBackwardCheckpointed(dsq, L, gm, gxc, bnd, &sc);
       
       p7_gmxchk_Reuse(gxc);
+      p7_gbands_Reuse(bnd);
     }
   esl_stopwatch_Stop(w);
   bench_time = w->user - base_time;
@@ -521,6 +523,7 @@ main(int argc, char **argv)
 
   free(dsq);
   p7_gmxchk_Destroy(gxc);
+  p7_gbands_Destroy(bnd);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);
@@ -544,7 +547,7 @@ main(int argc, char **argv)
 #include "esl_randomseq.h"
 
 static void
-scoring_comparison(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, P7_GMXCHK *gxc)
+scoring_comparison(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, P7_GMXCHK *gxc, P7_GBANDS *bnd)
 {
   char  msg[]     = "generic_fwdback_chk: score comparison test failure";
   float tolerance = 0.01;	/* nats (absolute score difference) */
@@ -554,11 +557,11 @@ scoring_comparison(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, P7_GMXCHK *g
   if ( p7_gmx_GrowTo(gx, gm->M, L)                      != eslOK) esl_fatal(msg);
   if ( p7_gmxchk_GrowTo(gxc, gm->M, L)                  != eslOK) esl_fatal(msg);
 
-  if ( p7_GForward(dsq, L, gm, gx, &fsc1)               != eslOK) esl_fatal(msg);
-  if ( p7_gmx_Reuse(gx)                                 != eslOK) esl_fatal(msg);
-  if ( p7_GBackward(dsq, L, gm, gx, &bsc1)              != eslOK) esl_fatal(msg);
-  if ( p7_GForwardCheckpointed (dsq, L, gm, gxc, &fsc2) != eslOK) esl_fatal(msg);
-  if ( p7_GBackwardCheckpointed(dsq, L, gm, gxc, &bsc2) != eslOK) esl_fatal(msg);
+  if ( p7_GForward(dsq, L, gm, gx, &fsc1)                    != eslOK) esl_fatal(msg);
+  if ( p7_gmx_Reuse(gx)                                      != eslOK) esl_fatal(msg);
+  if ( p7_GBackward(dsq, L, gm, gx, &bsc1)                   != eslOK) esl_fatal(msg);
+  if ( p7_GForwardCheckpointed (dsq, L, gm, gxc,      &fsc2) != eslOK) esl_fatal(msg);
+  if ( p7_GBackwardCheckpointed(dsq, L, gm, gxc, bnd, &bsc2) != eslOK) esl_fatal(msg);
 
   if ( fabs(fsc1-bsc1) > tolerance) esl_fatal(msg);
   if ( fabs(fsc1-fsc2) > tolerance) esl_fatal(msg);
@@ -566,6 +569,7 @@ scoring_comparison(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, P7_GMXCHK *g
 
   if ( p7_gmx_Reuse(gx)     != eslOK) esl_fatal(msg);
   if ( p7_gmxchk_Reuse(gxc) != eslOK) esl_fatal(msg);
+  if ( p7_gbands_Reuse(bnd) != eslOK) esl_fatal(msg);
 }
 
 static void
@@ -576,16 +580,18 @@ utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc,
   ESL_DSQ   *dsq   = malloc(sizeof(ESL_DSQ) * (L+2));
   P7_GMX    *gx    = p7_gmx_Create(gm->M, 100);
   P7_GMXCHK *gxc   = p7_gmxchk_Create(gm->M, 100, ESL_MBYTES(32));
+  P7_GBANDS *bnd   = p7_gbands_Create();
   int        idx;
 
   for (idx = 0; idx < nseq; idx++)
     {
       if (esl_rsq_xfIID(rng, bg->f, abc->K, L, dsq) != eslOK) esl_fatal(msg);
-      scoring_comparison(dsq, L, gm, gx, gxc);
+      scoring_comparison(dsq, L, gm, gx, gxc, bnd);
     }
 
   p7_gmxchk_Destroy(gxc);
   p7_gmx_Destroy(gx);
+  p7_gbands_Destroy(bnd);
   free(dsq);
 }
 
@@ -597,17 +603,19 @@ utest_emitseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc,
   ESL_SQ    *sq    = esl_sq_CreateDigital(abc);
   P7_GMX    *gx    = p7_gmx_Create(gm->M, 100);
   P7_GMXCHK *gxc   = p7_gmxchk_Create(gm->M, 100, ESL_MBYTES(32));
+  P7_GBANDS *bnd   = p7_gbands_Create();
   int        idx;
 
   for (idx = 0; idx < nseq; idx++)
     {
       if ( p7_ProfileEmit(rng, hmm, gm, bg, sq, NULL) != eslOK) esl_fatal(msg);
       
-      scoring_comparison(sq->dsq, sq->n, gm, gx, gxc);
+      scoring_comparison(sq->dsq, sq->n, gm, gx, gxc, bnd);
     }
 
   p7_gmxchk_Destroy(gxc);
   p7_gmx_Destroy(gx);
+  p7_gbands_Destroy(bnd);
   esl_sq_Destroy(sq);
 }
 
@@ -721,6 +729,7 @@ main(int argc, char **argv)
   P7_GMX         *fwd     = NULL;
   P7_GMX         *bck     = NULL;
   P7_GMXCHK      *gxc     = NULL;
+  P7_GBANDS      *bnd     = NULL;
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
@@ -753,6 +762,7 @@ main(int argc, char **argv)
   fwd = p7_gmx_Create(gm->M, 400);
   bck = p7_gmx_Create(gm->M, 400);
   gxc = p7_gmxchk_Create(gm->M, 400, ESL_MBYTES(32));
+  bnd = p7_gbands_Create();
 
   while ( (status = esl_sqio_Read(sqfp, sq)) != eslEOF)
     {
@@ -783,8 +793,10 @@ main(int argc, char **argv)
       //p7_gmx_Dump(stdout,    bck, p7_DEFAULT);
 
       //p7_gmxchk_SetDumpMode(gxc, stdout, p7_DEFAULT);
-      p7_GBackwardCheckpointed(sq->dsq, sq->n, gm, gxc, &bsc2);
+      p7_GBackwardCheckpointed(sq->dsq, sq->n, gm, gxc, bnd, &bsc2);
       //p7_gmxchk_SetDumpMode(gxc, NULL, 0);
+
+      p7_gbands_Dump(stdout, bnd);
 
       /* Those scores are partial log-odds likelihoods in nats.
        * Subtract off the rest of the null model, convert to bits.
@@ -801,6 +813,7 @@ main(int argc, char **argv)
       p7_gmx_Reuse(fwd);
       p7_gmx_Reuse(bck);
       p7_gmxchk_Reuse(gxc);
+      p7_gbands_Reuse(bnd);
       esl_sq_Reuse(sq);
     }
 
@@ -810,6 +823,7 @@ main(int argc, char **argv)
   p7_gmx_Destroy(fwd);
   p7_gmx_Destroy(bck);
   p7_gmxchk_Destroy(gxc);
+  p7_gbands_Destroy(bnd);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);

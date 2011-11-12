@@ -775,7 +775,7 @@ main(int argc, char **argv)
   bck = p7_gmx_Create(gm->M, sq->n);
 
   printf("%-30s   %-10s %-10s   %-10s %-10s\n", "# seq name",      "fwd (raw)",   "bck (raw) ",  "fwd (bits)",  "bck (bits)");
-  printf("%30s   %10s %10s   %10s %10s\n",      "#--------------", "----------",  "----------",  "----------",  "----------");
+  printf("%-30s   %10s %10s   %10s %10s\n",     "#--------------", "----------",  "----------",  "----------",  "----------");
 
   while ( (status = esl_sqio_Read(sqfp, sq)) != eslEOF)
     {
