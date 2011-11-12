@@ -482,19 +482,45 @@ ERROR:
 
 
 
+/* Function:  FM_extendSeed()
+ * Synopsis:  Finds windows with MSV scores above given threshold
+ *
+ * Details:  Starting with a short FM-based seed, tally up scores along
+ *           a stretch of the corresponding diagonal close to the seed.
+ *           As scores are tallied, create a window each time the score
+ *           threshold is met, just like the full-DP-MSV approach does.
+ *           Note that this actually wastes an opportunity to use the
+ *           full-length diagonal seed to produce more constrained
+ *           windows;  this is done for consistency between the two
+ *           methods - a change in windowing strategy leads to differences
+ *           in window size, thus subtle differences in domain envelopes,
+ *           meaning different scores/e-values
+ *           See ~/wheelert/notebook/2011/1101_fmindex_benchmarking/00NOTES, (Nov 7 and 8)
+ *
+ * Args:
+ *
+ * Note:
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:
+ */
 int
-FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CFG *cfg, float sc_thresh, ESL_SQ   *tmp_sq)
+FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CFG *cfg,
+              float sc_thresh, float j_thresh, ESL_SQ  *tmp_sq, FM_WINDOWLIST *windowlist)
 {
-  //extend seed in both diagonal directions,
-   // use n and k to store the beginning and end
-   // and sortkey to hold the score (so I don't have to run MSV again in pipeline)
+
+  // use n and k to store the beginning and end
+  // and sortkey to hold the score (so I don't have to run MSV again in pipeline)
 
   int k,n;
   int model_start, model_end, target_start, target_end;
-  int hit_start, hit_end, max_hit_start, max_hit_end;
+  int hit_start, hit_end;
   float sc;
-  float max_sc = 0;
   int c;
+  uint32_t tmp_id;
+  uint32_t tmp_n;
+  uint32_t fm_pos;
 
   if (diag->complementarity == fm_complement) {
     // complementary diagonal is reverse, so K is the last model position of the diag, not the first
@@ -514,41 +540,104 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CF
   n = 1;
   sc = 0;
 
-  fm_convertRange2DSQ(cfg->meta->alph_type, target_start, target_end, fm->T, tmp_sq );
+  tmp_id = fm_computeSequenceOffset( fm, cfg->meta, 0, target_start);
+  fm_convertRange2DSQ(cfg->meta->alph_type, tmp_id, target_start, target_end-target_start+1, fm->T, tmp_sq );
 
   if (diag->complementarity == fm_complement)
     esl_sq_ReverseComplement(tmp_sq);
 
   hit_start = n;
-  for (  ; k <= model_end; k++, n++) {
-      c = tmp_sq->dsq[n];
-//      if (diag->complementarity == fm_complement) c = fm_getComplement(c, cfg->meta->alph_type);
 
-      sc  += hmmdata->scores[k][c];
+  if (sc_thresh <= j_thresh) {
+    //SSV.  Just capture diags passing the sc_thresh, as is done in SIMD-MSV
 
-      if (sc < 0) {
-        sc = 0;
-        hit_start = n+1;
-      }
-      hit_end = n;
+    for (  ; k <= model_end; k++, n++) {
 
-      if (sc > max_sc) {
-          max_sc = sc;
-          max_hit_start = hit_start;
-          max_hit_end   = hit_end;
-      }
+        c = tmp_sq->dsq[n];
+
+        sc  += hmmdata->scores[k][c];
+
+        if (sc < 0) {
+          sc = 0;
+          hit_start = n+1;
+        }
+        hit_end = n;
+
+
+        if (sc > sc_thresh) {
+          //grab the target position at which the threshold was reached
+          if (diag->complementarity == fm_complement)
+            fm_pos = target_end - hit_end + 1;
+          else
+            fm_pos = target_start +  hit_end - 1;
+
+          //then convert to positions in the original sequence used to produce the db
+          fm_getOriginalPosition (fm, cfg->meta, 0, hit_end-hit_start+1, fm_forward, fm_pos, &(tmp_id), &(tmp_n) );
+          if (tmp_id == -1) continue; // crosses over a barrier between sequences in the digital data structure
+
+          if (windowlist == NULL) //this is used by the MSV merging step, to figure out when the necessary score was reached.
+            return tmp_n;
+          else
+            fm_newWindow(windowlist, tmp_id, tmp_n, fm_pos, k, /*hit_end-hit_start+1, */ sc, diag->complementarity );
+          sc = 0;
+          hit_start = n+1;
+        }
+    }
+
+  } else { //sc_thresh > j_thresh ... which calls for MSV
+    //  Capture a diagonal if score >= j_thresh, but keep appending to that diagonal
+    //  if score is increased (until sc_thresh is reached ... then start over)
+    // The task of merging sub-sc_thresh diagonals is left to calling function
+    int active_diag = FALSE;
+    int compl_dir =  (diag->complementarity == fm_complement ? -1 : 1);
+
+    for (  ; k <= model_end; k++, n++) {
+
+         c = tmp_sq->dsq[n];
+
+         sc  += hmmdata->scores[k][c];
+
+         hit_end = n;
+         if (sc < 0) {
+           sc = 0;
+           active_diag = FALSE;
+           hit_start = n+1;
+         } else if (sc > j_thresh) {
+           if (active_diag) { // just tack on to the active diagonal (if score is improved)
+
+             if (sc > windowlist->windows[windowlist->count-1].score) {
+               windowlist->windows[windowlist->count-1].fm_n  += compl_dir;
+               windowlist->windows[windowlist->count-1].n += compl_dir;
+               windowlist->windows[windowlist->count-1].k ++;
+               windowlist->windows[windowlist->count-1].score = sc;
+             }
+
+           } else { // start a new diagonal
+             //grab the target position at which the threshold was reached
+             if (diag->complementarity == fm_complement)
+               fm_pos = target_end - hit_end + 1;
+             else
+               fm_pos = target_start +  hit_end - 1;
+
+             //then convert to positions in the original sequence used to produce the db
+             fm_getOriginalPosition (fm, cfg->meta, 0, hit_end-hit_start+1, fm_forward, fm_pos, &(tmp_id), &(tmp_n));
+             if (tmp_id == -1) continue; // crosses over a barrier between sequences in the digital data structure
+
+             fm_newWindow(windowlist, tmp_id, tmp_n, fm_pos, k, /* hit_end-hit_start+1,*/ sc, diag->complementarity );
+             active_diag = TRUE;
+           }
+
+           if (sc > sc_thresh) { // done with that diagonal, start a new one
+             sc = 0;
+             active_diag = FALSE;
+             hit_start = n+1;
+           }
+
+         }
+     }
+
+
   }
-
-  if (diag->complementarity == fm_complement) {
-    diag->n       = target_end  - max_hit_end + 1;
-    diag->k       = max_hit_end;
-  } else {
-    diag->n       = target_start + max_hit_start - 1;
-    diag->k       = model_start  + max_hit_start - 1;
-  }
-  diag->length  = max_hit_end - max_hit_start + 1;
-  diag->sortkey = max_sc;
-
 
   return eslOK;
 }
@@ -588,30 +677,36 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
          const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata,
          FM_WINDOWLIST *windowlist)
 {
-  float P;
   float P_fm = 0.5;
   float sc_thresh, sc_threshFM, j_thresh;
   float invP, invP_FM;
   float nullsc;
 
-  int i, j;
-  float window_tmove;
-  float window_tloop;
+  int i, j, k;
+  int window_start;
+  int window_end;
+  int window_start_fm;
+  int window_end_fm;
+
+  ESL_SQ   *tmp_sq;
+  FM_WINDOW *window;
+  FM_WINDOW *prev_window;
+  FM_WINDOW *prev;
+  FM_WINDOW *curr;
+  int active_diagonal;
+  int target_len;
+
+  FM_DIAGLIST seeds;
 
   float      tloop = logf((float) om->max_length / (float) (om->max_length+3));
   float      tloop_total = tloop * om->max_length;
   float      tmove = logf(     3.0f / (float) (om->max_length+3));
   float      tbmk  = logf(     2.0f / ((float) om->M * (float) (om->M+1)));
   float      tec   = logf(1.0f / nu);
-  uint32_t tmp_id, tmp_n;
-  uint32_t prev_n = 0;
-  uint32_t prev_id = 0;
-  uint32_t prev_nstart = 0;
-  float prev_sc = 0.0;
 
-  ESL_SQ   *tmp_sq;
+  FM_METADATA *meta = fm_cfg->meta;
 
-  FM_DIAGLIST seeds;
+
   fm_initSeeds(&seeds);
 
   /* Set false target length. This is a conservative estimate of the length of window that'll
@@ -648,115 +743,52 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
 
   invP_FM = esl_gumbel_invsurv(P_fm, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   sc_threshFM = ESL_MIN(fm_cfg->max_scthreshFM,  (invP_FM * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec) ) ;
-/*
-  sc_threshFM = (invP_FM * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec)  ;
-  fprintf (stderr, "%.2f", sc_threshFM);
-  exit(0);
-*/
 
 
   //get diagonals that score above sc_threshFM
   FM_getSeeds(om, gx, sc_threshFM, &seeds, fmf, fmb, fm_cfg, fm_hmmdata);
 
-  //now extend those diagonals to find ones scoring above sc_thresh
+  //now extend those diagonals to find ones scoring above sc_thresh (or if MSV is required, capture diagonals scoring at least j_thresh)
   for(i=0; i<seeds.count; i++) {
-    FM_extendSeed( seeds.diags+i, fmf, fm_hmmdata, fm_cfg, sc_thresh, tmp_sq);
+    FM_extendSeed( seeds.diags+i, fmf, fm_hmmdata, fm_cfg, sc_thresh, j_thresh , tmp_sq, windowlist);
   }
 
+  if (sc_thresh >= j_thresh) {
+    // MSV, so join up neighboring diags that reach sc_thresh only in combination
+    // this will require repeating a pass over each diagonal that finally causes score to meet threshold
+    active_diagonal = FALSE;
 
-  if ( sc_thresh <= j_thresh) {
-    //no use doing MSV filter, just use a simple SSV filter, but with a little extra complexity to handle window merging
-    for(i=0; i<seeds.count; i++) {
+    for(i=0; i<windowlist->count; i++) {
+      window  =  windowlist->windows + i;
+      if (active_diagonal &&
+          meta->seq_data[prev_window->id].id == meta->seq_data[window->id].id &&
+          prev_window->complementarity == window->complementarity &&
+          prev_window->n + prev_window->length + om->max_length <= window->id  // windows are close enough to bother merging
+       ) {
+        if ( prev_window->score + window->score < sc_thresh ) {
+          // failed to hit threshold.  update cumulative score and position, and move along
+          prev_window->score += window->score - j_thresh;
+          prev_window->length = window->n - prev_window->n + 1; //use the length field to keep track of the range between the 1st peak and the final peak
+        } else {
+          // hit threshold. need to backtrack to figure out exactly when sc_thresh was actually hit, to mirror SIMD-MSV
+          float req_score = sc_thresh - prev_window->score - j_thresh; // score required to push window.score + prev_window.score - j_thresh above sc_thresh
+          int pos = FM_extendSeed( seeds.diags+i, fmf, fm_hmmdata, fm_cfg, req_score, 10000 , tmp_sq, NULL); // 1000 ensures that sc_thresh < j_thresh, so SSV-like extension is done
 
-      float score = (float)seeds.diags[i].sortkey;
-
-
-      if (score >= sc_thresh) {
-        //then convert to positions in the original sequence used to produce the db
-        fm_getOriginalPosition (fmf, fm_cfg->meta, 0, seeds.diags[i].length, fm_forward, seeds.diags[i].n, &(tmp_id), &(tmp_n) );
-        if (tmp_id == -1) continue; // crosses over a barrier between sequences in the digital data structure
-
-        if ( prev_n!=0 && tmp_id==prev_id && tmp_n <= prev_n + om->max_length ) { //we're close to the previous diagonal
-            //extend existing [SM]SV
-            windowlist->windows[windowlist->count-1].length = tmp_n - prev_nstart + seeds.diags[i].length; // widen the window
-
-            prev_sc = ESL_MAX (score, ESL_MAX (prev_sc, score + prev_sc - j_thresh) );
-            windowlist->windows[windowlist->count-1].score =  prev_sc;
-            prev_n = tmp_n;
-
-
-        } else { // start a new diagonal
-
-          //fm_newWindow(windowlist, fm_cfg->meta->seq_data[ tmp_id ].id, tmp_n, seeds.diags+i);
-          fm_newWindow(windowlist, tmp_id, tmp_n, seeds.diags+i);
-
-          //capture the n position of the diagonal and above-j_thresh contribution, whether it produced an SSV hit or not,
-          //and keep for the next iteration
-          prev_id = tmp_id;
-          prev_nstart = prev_n = tmp_n;
-          prev_sc = score;
+          prev_window->length =  pos - prev_window->n + 1; //use the length field to keep track of the range between the 1st peak and the final peak
+          windowlist->windows[i] = *prev_window;
+          active_diagonal = FALSE;
         }
-      }
-
-    }
-
-  } else {
-    //use MSV filter
-
-    //first filter away diagonals that don't meet j_thresh
-    j=0;
-    for(i=0; i<seeds.count; i++) {
-      if (seeds.diags[i].sortkey >= j_thresh)
-        seeds.diags[j++] = seeds.diags[i];
-    }
-    seeds.count = j;
-
-
-    /*
-     * Then sweep through and look for diagonals or near-neighbor-sets that meet sc_thresh
-     * The result of this approach is that overlapping windows are merged in place
-     */
-
-    for(i=0; i<seeds.count; i++) {
-      float score = (float)seeds.diags[i].sortkey;
-
-      fm_getOriginalPosition (fmf, fm_cfg->meta, 0, seeds.diags[i].length, fm_forward, seeds.diags[i].n, &(tmp_id), &(tmp_n) );
-      if (tmp_id == -1) continue; // crosses over a barrier between sequences in the digital data structure
-
-      if ( prev_n!=0 && tmp_id==prev_id && tmp_n <= prev_n + om->max_length ) { //we're close to the previous diagonal
-
-        if ( prev_sc >= sc_thresh) { // extending an MSV window that's already passed sc_thresh
-          //extend existing [SM]SV
-          windowlist->windows[windowlist->count-1].length = tmp_n - prev_nstart + seeds.diags[i].length; // widen the window
-          windowlist->windows[windowlist->count-1].score += score - j_thresh ;
-
-        } else if ( prev_sc + score >= sc_thresh) { // here's an MSV window, finally above sc_thresh
-          //create MSV
-          fm_newWindow(windowlist, fm_cfg->meta->seq_data[ tmp_id ].id, prev_nstart, seeds.diags+i);
-          windowlist->windows[windowlist->count-1].length = tmp_n - prev_nstart + seeds.diags[i].length; // widen the window
-          windowlist->windows[windowlist->count-1].score += prev_sc - j_thresh ;
-
+      } else {
+        //starting a new diagonal
+        if (window->score > sc_thresh) {
+          // single diagonal hit threshold
+          windowlist->windows[i] = *window;
+          active_diagonal = FALSE;
+        } else {
+          //didn't hit threshold, wait for the next one
+          prev_window = window;
+          active_diagonal = TRUE;
         }
-        // allow hits or candidates to keep getting extended
-        prev_n = tmp_n;
-        prev_sc += score;
-
-
-      } else { // not close to the previous diagonal
-
-        if (score >= sc_thresh) { // this diagonal doesn't need any help from another. Make a window based on just this seed
-          //create SSV
-          fm_newWindow(windowlist, fm_cfg->meta->seq_data[ tmp_id ].id, tmp_n, seeds.diags+i);
-
-        }
-
-        //capture the n position of the diagonal and above-j_thresh contribution, whether it produced an SSV hit or not,
-        //and keep for the next iteration
-        prev_id = tmp_id;
-        prev_nstart = prev_n = tmp_n;
-        prev_sc = (float)seeds.diags[i].sortkey;
-
-
       }
 
     }
@@ -764,53 +796,73 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
   }
 
 
-  //update window size and corresponding score. Filter away windows now below threshold, compressing list
+  //filter for biased composition here?
+
+  //update window sizes
   j=0;
   for(i=0; i<windowlist->count; i++) {
-    FM_WINDOW *window  =  windowlist->windows + i;
-    int   diag_len     = window->length;
+    int skipped_cnt_rev = 0;
+    int skipped_cnt_fwd = 0;
+    window  =  windowlist->windows + i;
 
-    int window_start = window->fm_n - om->max_length + fm_cfg->msv_length + 1;
-    int window_end   = window->fm_n + window->length + om->max_length - fm_cfg->msv_length - 1;
+    //coordinates in the target sequence db
+    k = window->id;
+    while ( meta->seq_data[k].id == meta->seq_data[window->id].id)
+      k++;
 
-    window->length    = window_end - window_start + 1;
-    window->n        -= (window->fm_n - window_start)  - 1 ; // final -1 to shift n up one, accounting for difference between 0-based fm-index and 1-based DSQ
-    window->fm_n      = window_start;
+    target_len = meta->seq_data[k-1].start + meta->seq_data[k-1].length - 1;
 
-    window_tmove = logf(     3.0f / (float) (window->length+3));
-    window_tloop = logf((float)window->length / (float) (window->length+3));
+    window_start = ESL_MAX( 1,            window->n + window->length - om->max_length) ;
+    window_end   = ESL_MIN( target_len ,  window->n + window->length + om->max_length - 2);
 
-    window->score    += tbmk + tec
-                    + 2*window_tmove
-                    + ( (window->length - diag_len) * window_tloop );
 
-    p7_bg_SetLength(bg, om->max_length);
-    p7_bg_NullOne  (bg, NULL, om->max_length, &(window->null_sc));
+    //Then scan backward to figure out how many characters in the fm index correspond to the window
+    // (if a window spans more than one seq_data block, there will need to be a bunch of inserted Ns in the final sequence)
+    k = window->id;
+    while (window_start < meta->seq_data[window->id].start) {
+      skipped_cnt_rev += meta->seq_data[k].start - (meta->seq_data[k-1].start + meta->seq_data[k-1].length - 1);
+      k--;
+    }
 
-    P = esl_gumbel_surv( (window->score - window->null_sc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-    if (P <= F1 )
-      windowlist->windows[j++] = windowlist->windows[i];
+    //Then scan forward to figure out how many characters in the fm index correspond to the window
+    k = window->id;
+    while (meta->seq_data[k].start + meta->seq_data[k].length < window_end) {
+      skipped_cnt_fwd += meta->seq_data[k+1].start - (meta->seq_data[k].start + meta->seq_data[k].length - 1);
+      k++;
+    }
+
+    //Step back along the sequence segments, until finding the first one that contains the character that starts the sequence
+    while (window_start < meta->seq_data[window->id].start)
+      window->id--;
+
+
+    //switch coordinates to fm_index
+    window_start_fm =   window->fm_n - (window->n - window_start) + skipped_cnt_rev ;
+    window_end_fm   =   window->fm_n + (window_end - window->n) - skipped_cnt_fwd;
+
+    window->n      = window_start;
+    window->length = window_end - window_start + 1;
+    window->fm_n   = window_start_fm;
+
 
   }
-  windowlist->count = j;
 
+  //filter for biased composition here?
 
-  //Now merge overlapping windows again.
-  //Most overlapping seeds will already have been merged earlier, but because we've
-  //expanded window since then, there may be some overlap
+  //Merge overlapping windows
   if (windowlist->count > 0) {
     j=1;
     for(i=1; i<windowlist->count; i++) {
-      FM_WINDOW *prev_window  =  windowlist->windows + i-1;
-      FM_WINDOW *window  =  windowlist->windows + i;
+      prev  =  windowlist->windows + i-1;
+      curr  =  windowlist->windows + i;
 
-      if (window->id == prev_window->id &&
-          window->complementarity == prev_window->complementarity &&
-          window->n <= prev_window->n + prev_window->length - 1
-          ) { //overlap , so extend the previous window, and update it's score
+      if ( prev->n + prev->length - 1 >= curr->n  &&
+           prev->complementarity == curr->complementarity &&
+           meta->seq_data[prev->id].id == meta->seq_data[curr->id].id
 
-          prev_window->length = window->n - prev_window->n + 1 + window->length;
-          prev_window->score = ESL_MAX(prev_window->score, window->score);
+          ) { //overlap , so extend the previous window, and update its score
+
+          prev->length = curr->n - prev->n + 1 + curr->length;
 
       } else {
         //no overlap, so shift the current window over to the next active slot

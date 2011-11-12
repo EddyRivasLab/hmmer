@@ -401,76 +401,76 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
   triggered = FALSE;
   for (j = 1; j <= sq->n; j++)
   {
-      if (! triggered) 
-	{			/* xref J2/101 for what the logic below is: */
-	  if       (ddef->mocc[j] - (ddef->btot[j] - ddef->btot[j-1]) <  ddef->rt2) i = j;
-	  else if  (i == -1)                                                        i = j;
-	  if       (ddef->mocc[j]                                     >= ddef->rt1) triggered = TRUE;  
-	} 
-      else if (ddef->mocc[j] - (ddef->etot[j] - ddef->etot[j-1])  <  ddef->rt2) 
-	{
-	  /* We have a region i..j to evaluate. */
-	  p7_omx_GrowTo(fwd, om->M, j-i+1, j-i+1);
-	  p7_omx_GrowTo(bck, om->M, j-i+1, j-i+1);
-	  ddef->nregions++;
-	  if (is_multidomain_region(ddef, i, j))
-	    {
-	      /* This region appears to contain more than one domain, so we have to 
-               * resolve it by cluster analysis of posterior trace samples, to define
-               * one or more domain envelopes.
-	       */
-	      ddef->nclustered++;
+    if (! triggered)
+    {			/* xref J2/101 for what the logic below is: */
+      if       (ddef->mocc[j] - (ddef->btot[j] - ddef->btot[j-1]) <  ddef->rt2) i = j;
+      else if  (i == -1)                                                        i = j;
+      if       (ddef->mocc[j]                                     >= ddef->rt1) triggered = TRUE;
+    }
+    else if (ddef->mocc[j] - (ddef->etot[j] - ddef->etot[j-1])  <  ddef->rt2)
+    {
+        /* We have a region i..j to evaluate. */
+        p7_omx_GrowTo(fwd, om->M, j-i+1, j-i+1);
+        p7_omx_GrowTo(bck, om->M, j-i+1, j-i+1);
+        ddef->nregions++;
+        if (is_multidomain_region(ddef, i, j))
+        {
+            /* This region appears to contain more than one domain, so we have to
+                   * resolve it by cluster analysis of posterior trace samples, to define
+                   * one or more domain envelopes.
+             */
+            ddef->nclustered++;
 
-	      /* Resolve the region into domains by stochastic trace
-	       * clustering; assign position-specific null2 model by
-	       * stochastic trace clustering; there is redundancy
-	       * here; we will consolidate later if null2 strategy
-	       * works
-	       */
-	      p7_oprofile_ReconfigMultihit(om, saveL);
-	      p7_Forward(sq->dsq+i-1, j-i+1, om, fwd, NULL);
-	      region_trace_ensemble(ddef, om, sq->dsq, i, j, fwd, bck, &nc);
-	      p7_oprofile_ReconfigUnihit(om, saveL);
-	      /* ddef->n2sc is now set on i..j by the traceback-dependent method */
+            /* Resolve the region into domains by stochastic trace
+             * clustering; assign position-specific null2 model by
+             * stochastic trace clustering; there is redundancy
+             * here; we will consolidate later if null2 strategy
+             * works
+             */
+            p7_oprofile_ReconfigMultihit(om, saveL);
+            p7_Forward(sq->dsq+i-1, j-i+1, om, fwd, NULL);
+            region_trace_ensemble(ddef, om, sq->dsq, i, j, fwd, bck, &nc);
+            p7_oprofile_ReconfigUnihit(om, saveL);
+            /* ddef->n2sc is now set on i..j by the traceback-dependent method */
 
-	      last_j2 = 0;
-	      for (d = 0; d < nc; d++) {
-              p7_spensemble_GetClusterCoords(ddef->sp, d, &i2, &j2, NULL, NULL, NULL);
-              if (i2 <= last_j2) ddef->noverlaps++;
+            last_j2 = 0;
+            for (d = 0; d < nc; d++) {
+                  p7_spensemble_GetClusterCoords(ddef->sp, d, &i2, &j2, NULL, NULL, NULL);
+                  if (i2 <= last_j2) ddef->noverlaps++;
 
-              /* Note that k..m coords on model are available, but
-                 * we're currently ignoring them.  This leads to a
-                 * rare clustering bug that we eventually need to fix
-                 * properly [xref J3/32]: two different regions in one
-                 * profile HMM might have hit same seq domain, and
-                 * when we now go to calculate an OA trace, nothing
-                 * constrains us to find the two different alignments
-                 * to the HMM; in fact, because OA is optimal, we'll
-                 * find one and the *same* alignment, leading to an
-                 * apparent duplicate alignment in the output.
-                 * 
-                 * Registered as #h74, Dec 2009, after EBI finds and
-                 * reports it.  #h74 is worked around in p7_tophits.c
-                 * by hiding all but one envelope with an identical
-                 * alignment, in the rare event that this
-                 * happens. [xref J5/130].
-              */
-              ddef->nenvelopes++;
-              if (rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i2, j2, TRUE) == eslOK)
-                   last_j2 = j2;
-	      }
-	      p7_spensemble_Reuse(ddef->sp);
-	      p7_trace_Reuse(ddef->tr);
-	    }
-	  else 
-	    {
-	      /* The region looks simple, single domain; convert the region to an envelope. */
-	      ddef->nenvelopes++;
-	      rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i, j, FALSE);
-	    }
-	  i     = -1;
-	  triggered = FALSE;
-	}
+                  /* Note that k..m coords on model are available, but
+                     * we're currently ignoring them.  This leads to a
+                     * rare clustering bug that we eventually need to fix
+                     * properly [xref J3/32]: two different regions in one
+                     * profile HMM might have hit same seq domain, and
+                     * when we now go to calculate an OA trace, nothing
+                     * constrains us to find the two different alignments
+                     * to the HMM; in fact, because OA is optimal, we'll
+                     * find one and the *same* alignment, leading to an
+                     * apparent duplicate alignment in the output.
+                     *
+                     * Registered as #h74, Dec 2009, after EBI finds and
+                     * reports it.  #h74 is worked around in p7_tophits.c
+                     * by hiding all but one envelope with an identical
+                     * alignment, in the rare event that this
+                     * happens. [xref J5/130].
+                  */
+                  ddef->nenvelopes++;
+                  if (rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i2, j2, TRUE) == eslOK)
+                       last_j2 = j2;
+            }
+            p7_spensemble_Reuse(ddef->sp);
+            p7_trace_Reuse(ddef->tr);
+        }
+        else
+        {
+            /* The region looks simple, single domain; convert the region to an envelope. */
+            ddef->nenvelopes++;
+            rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i, j, FALSE);
+        }
+        i     = -1;
+        triggered = FALSE;
+    }
   }
 
   /* Restore model to uni/multihit mode, and to its original length model */

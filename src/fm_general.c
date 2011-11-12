@@ -46,8 +46,9 @@ ERROR:
 
 }
 
+
 FM_WINDOW *
-fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, FM_DIAG *seed) {
+fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, /*uint32_t length,*/ float score, uint8_t complementarity) {
   int status;
   FM_WINDOW *window;
 
@@ -59,11 +60,11 @@ fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, FM_DIAG *seed) {
 
   window->id      = id;
   window->n       = pos;
-  window->fm_n    = seed->n;
-  window->k       = seed->k;
-  window->length  = seed->length;
-  window->score   = seed->sortkey;
-  window->complementarity  = seed->complementarity;
+  window->fm_n    = fm_pos;
+  window->k       = k;
+  window->score   = score;
+  window->complementarity  = complementarity;
+  window->length  = 1;
 
   list->count++;
 
@@ -231,12 +232,12 @@ fm_getChar(uint8_t alph_type, int j, const uint8_t *B )
 //inline
 //#endif
 int
-fm_convertRange2DSQ(uint8_t alph_type, int first, int last, const uint8_t *B, ESL_SQ *sq )
+fm_convertRange2DSQ(uint8_t alph_type, int id, int first, int length, const uint8_t *B, ESL_SQ *sq )
 {
   int i;
   uint8_t c;
-  esl_sq_GrowTo(sq, last-first+1);
-  sq->n = last-first+1;
+  esl_sq_GrowTo(sq, length);
+  sq->n = length;
 
   if (alph_type == fm_DNA || alph_type == fm_RNA) {
     /*
@@ -247,17 +248,17 @@ fm_convertRange2DSQ(uint8_t alph_type, int first, int last, const uint8_t *B, ES
      *  Without branching, grab them by shifting B[j>>2] right 6-2*j' bits,
      *  then masking to keep the final two bits
      */
-    for (i = first; i<= last; i++)
+    for (i = first; i<= first+length-1; i++)
       sq->dsq[i-first+1] = (B[i>>2] >> ( 0x6 - ((i&0x3)<<1) ) & 0x3);
 
-    sq->dsq[last-first+2] = eslDSQ_SENTINEL;
+    sq->dsq[length+1] = eslDSQ_SENTINEL;
 
   } else if (alph_type == fm_DNA_full || alph_type == fm_RNA_full ) {
-    for (i = first; i<= last; i++) {
+    for (i = first; i<= first+length-1; i++) {
       c = (B[i>>1] >> (((i&0x1)^0x1)<<2) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
       sq->dsq[i-first+1] = c + (c < 4 ? 0 : 1);
     }
-    sq->dsq[last-first+2] = eslDSQ_SENTINEL;
+    sq->dsq[length+1] = eslDSQ_SENTINEL;
   } else {
     esl_fatal("Invalid alphabet type\n");
   }
@@ -546,7 +547,6 @@ fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int 
 
 
 }
-
 
 
 /* Function:  FM_getOriginalPosition()

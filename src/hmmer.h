@@ -884,6 +884,7 @@ typedef struct fm_window_s {
   uint32_t    id; //sequence id of the database sequence hit
   uint32_t    n;  //position in database sequence (see id above) at which the diagonal starts
   uint32_t    fm_n;  //position in the concatenated fm-index sequence at which the diagonal starts
+  int         first_seq_data;
   uint32_t    length;
   uint16_t    k;  //position of the model at which the diagonal starts
   uint8_t     complementarity;
@@ -1457,8 +1458,8 @@ extern int fm_updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_
 extern int fm_initSeeds (FM_DIAGLIST *list) ;
 extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
 extern int fm_initWindows (FM_WINDOWLIST *list);
-extern FM_WINDOW *fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, FM_DIAG *seed);
-extern int fm_convertRange2DSQ(uint8_t alph_type, int first, int last, const uint8_t *B, ESL_SQ *sq );
+extern FM_WINDOW *fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, /* uint32_t length,*/ float score, uint8_t complementarity);
+extern int fm_convertRange2DSQ(uint8_t alph_type, int id, int first, int length, const uint8_t *B, ESL_SQ *sq );
 extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
 
 

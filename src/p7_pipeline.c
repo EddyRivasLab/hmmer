@@ -855,7 +855,12 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   int              d;
   int              status;
 
-
+  int env_len;
+  int ali_len;
+  float bitscore;
+  float dom_bias;
+  float dom_score;
+  double dom_lnP;
 
   int   loc_window_length = ESL_MIN(om->max_length, window_len); //see notes, ~/notebook/20100716_hmmer_score_v_eval_bug/, end of Thu Jul 22 13:36:49 EDT 2010
   float nullsc2           =  (float)loc_window_length * log((float)loc_window_length/(loc_window_length+1)) + log(1./(loc_window_length+1));
@@ -893,6 +898,7 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   /* Second level filter: ViterbiFilter(), multihit with <om> */
   filtersc =  nullsc + (bias_filtersc * (float)F2_L/window_len);
   p7_omx_GrowTo(pli->oxf, om->M, 0, window_len);
+
   p7_ViterbiFilter(subseq, window_len, om, pli->oxf, &vfsc);
   seq_score = (vfsc - filtersc) / eslCONST_LOG2;
   P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
@@ -929,6 +935,10 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   p7_omx_GrowTo(pli->oxb, om->M, 0, window_len);
   p7_BackwardParser(tmpseq->dsq, window_len, om, pli->oxf, pli->oxb, NULL);
 
+  if (window_start == 414668 || window_start == 414877) {
+    printf(".");
+  }
+
   status = p7_domaindef_ByPosteriorHeuristics(tmpseq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef, ddef_app);
   if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen */
   if (pli->ddef->nregions   == 0)  return eslOK; /* score passed threshold but there's no discrete domains here       */
@@ -950,9 +960,9 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   {
 
       //adjust the score of a hit to account for the full length model - the characters outside the envelope but in the window
-      int env_len = pli->ddef->dcl[d].jenv - pli->ddef->dcl[d].ienv + 1;
-      int ali_len = pli->ddef->dcl[d].jali - pli->ddef->dcl[d].iali + 1;
-      float bitscore = pli->ddef->dcl[d].envsc ;
+      env_len = pli->ddef->dcl[d].jenv - pli->ddef->dcl[d].ienv + 1;
+      ali_len = pli->ddef->dcl[d].jali - pli->ddef->dcl[d].iali + 1;
+      bitscore = pli->ddef->dcl[d].envsc ;
       //For these modifications, see notes, ~/notebook/20100716_hmmer_score_v_eval_bug/, end of Thu Jul 22 13:36:49 EDT 2010
       bitscore -= 2 * log(2. / (window_len+2))          +   (env_len-ali_len)            * log((float)window_len / (window_len+2));
       bitscore += 2 * log(2. / (loc_window_length+2)) ;
@@ -960,9 +970,9 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
       bitscore +=  (ESL_MAX(loc_window_length, env_len) - ali_len) * log((float)loc_window_length / (float) (loc_window_length+2));
 
       //compute scores used to decide if we should keep this "domain" as a hit.
-      float dom_bias   = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + pli->ddef->dcl[d].domcorrection) : 0.0);
-      float dom_score  = (bitscore - (nullsc2 + dom_bias))  / eslCONST_LOG2;
-      double dom_lnP   = esl_exp_logsurv(dom_score, om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+      dom_bias   = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + pli->ddef->dcl[d].domcorrection) : 0.0);
+      dom_score  = (bitscore - (nullsc2 + dom_bias))  / eslCONST_LOG2;
+      dom_lnP   = esl_exp_logsurv(dom_score, om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
       //note: this test is conservative: it uses just the nres from the current pipeline, while the final filters
       //will add up nres from all threads, over all windows, which will increase stringency
@@ -996,8 +1006,9 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
           hit->dcl[0].ad->sqto   = window_start + window_len - 1 - hit->dcl[0].ad->sqto + 1;
         }
 
+
         hit->pre_score = bitscore  / eslCONST_LOG2;
-            hit->pre_lnP   = esl_exp_logsurv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+        hit->pre_lnP   = esl_exp_logsurv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
         hit->dcl[0].dombias  = dom_bias;
         hit->sum_score  = hit->score  = hit->dcl[0].bitscore = dom_score;
@@ -1069,8 +1080,11 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
   ESL_DSQ          *subseq;
   ESL_SQ           *tmpseq;
 
-  P7_DOMAINDEF *ddef_app = p7_domaindef_Create(pli->r);  /* single allocation of a domaindef object that will be used
-                                                         to compute mocc poserior probs for single-domain segments */
+  P7_DOMAINDEF *ddef_app;
+
+  ddef_app = p7_domaindef_Create(pli->r);  /* single allocation of a domaindef object that will be used
+                                                         to compute mocc posterior probs for hit segments */
+
 
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
   //p7_omx_GrowTo(pli->oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
@@ -1181,9 +1195,12 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
   FM_WINDOW     window;
   FM_WINDOWLIST windowlist;
   FM_SEQDATA    *seqdata;
+  P7_DOMAINDEF *ddef_app;
 
-  P7_DOMAINDEF *ddef_app = p7_domaindef_Create(pli->r);  /* single allocation of a domaindef object that will be used
-                                                         to compute mocc poserior probs for single-domain segments */
+
+
+  ddef_app = p7_domaindef_Create(pli->r);  /* single allocation of a domaindef object that will be used
+                                                         to compute mocc posterior probs for hit segments */
 
   if (fmf->N == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
@@ -1191,10 +1208,7 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
 
   seqdata = fm_cfg->meta->seq_data;
 
-
-
   p7_omx_GrowTo(pli->oxf, om->M, 0, 0);    /* expand the one-row omx if needed */
-
 
 
   /* First level filter: the MSV filter, multihit with <om>.
@@ -1204,19 +1218,16 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
   p7_FM_MSV(om, (P7_GMX*)(pli->oxf), 2.0, bg, pli->F1,
              fmf, fmb, fm_cfg, fm_hmmdata, &windowlist );
 
-
-
-  tmpseq = esl_sq_CreateDigital(om->abc);
   for (i=0; i<windowlist.count; i++){
 
     window =  windowlist.windows[i] ;
 
-    fm_convertRange2DSQ(fm_cfg->meta->alph_type, window.fm_n, ( window.fm_n+window.length-1 ), fmf->T, tmpseq );
+    fm_convertRange2DSQ(fm_cfg->meta->alph_type, window.id, window.fm_n, window.length, fmf->T, tmpseq );
 
     if (window.complementarity == fm_complement)
       esl_sq_ReverseComplement(tmpseq);
 
-    subseq = tmpseq->dsq;
+    subseq = tmpseq->dsq;  // so subseq is just a pointer to tmpseq's dsq
 
     pli->n_past_msv++;
     pli->pos_past_msv += window.length;
@@ -1237,8 +1248,6 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
   free(windowlist.windows);
 
   return eslOK;
-
-
 }
 
 

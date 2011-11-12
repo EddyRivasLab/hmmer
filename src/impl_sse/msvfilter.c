@@ -658,6 +658,8 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   }
 
 
+  //filter for biased composition here?
+
   /* whether the window list comes from SSV or MSV computations, we now
    * merge overlapping windows, compressing list in place.
    */
