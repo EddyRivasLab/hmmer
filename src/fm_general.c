@@ -48,7 +48,7 @@ ERROR:
 
 
 FM_WINDOW *
-fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, /*uint32_t length,*/ float score, uint8_t complementarity) {
+fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity) {
   int status;
   FM_WINDOW *window;
 
@@ -62,9 +62,9 @@ fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, u
   window->n       = pos;
   window->fm_n    = fm_pos;
   window->k       = k;
+  window->length  = length;
   window->score   = score;
   window->complementarity  = complementarity;
-  window->length  = 1;
 
   list->count++;
 
@@ -232,14 +232,15 @@ fm_getChar(uint8_t alph_type, int j, const uint8_t *B )
 //inline
 //#endif
 int
-fm_convertRange2DSQ(uint8_t alph_type, int id, int first, int length, const uint8_t *B, ESL_SQ *sq )
+fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint8_t *B, ESL_SQ *sq )
 {
   int i;
   uint8_t c;
+
   esl_sq_GrowTo(sq, length);
   sq->n = length;
 
-  if (alph_type == fm_DNA || alph_type == fm_RNA) {
+  if (meta->alph_type == fm_DNA || meta->alph_type == fm_RNA) {
     /*
      *  B[j>>2] is the byte of B in which j is found (j/4)
      *
@@ -253,7 +254,7 @@ fm_convertRange2DSQ(uint8_t alph_type, int id, int first, int length, const uint
 
     sq->dsq[length+1] = eslDSQ_SENTINEL;
 
-  } else if (alph_type == fm_DNA_full || alph_type == fm_RNA_full ) {
+  } else if (meta->alph_type == fm_DNA_full || meta->alph_type == fm_RNA_full ) {
     for (i = first; i<= first+length-1; i++) {
       c = (B[i>>1] >> (((i&0x1)^0x1)<<2) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
       sq->dsq[i-first+1] = c + (c < 4 ? 0 : 1);
@@ -590,7 +591,7 @@ fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int le
 
 
 int
-get_Score_Arrays(P7_PROFILE *gm, FM_HMMDATA *data ) {
+get_Score_Arrays(P7_PROFILE *gm, P7_OPROFILE *om, FM_HMMDATA *data ) {
   int i, j, status;
 
   //gather values from gm->rsc into a succinct 2D array
@@ -599,38 +600,50 @@ get_Score_Arrays(P7_PROFILE *gm, FM_HMMDATA *data ) {
 
   data->M = gm->M;
 
-  ESL_ALLOC(data->scores, (gm->M + 1) * sizeof(float*));
-  ESL_ALLOC(max_scores, (gm->M + 1) * sizeof(float));
+  if (om != NULL) {
+    ESL_ALLOC(data->s.scores_b, (gm->M + 1) * sizeof(uint8_t*));
+  } else {
+    ESL_ALLOC(data->s.scores_f, (gm->M + 1) * sizeof(float*));
+    ESL_ALLOC(max_scores, (gm->M + 1) * sizeof(float));
+  }
   for (i = 1; i <= gm->M; i++) {
-    ESL_ALLOC(data->scores[i], gm->abc->Kp * sizeof(float));
+    ESL_ALLOC(data->s.scores_f[i], gm->abc->Kp * sizeof(float));
     for (j=0; j<gm->abc->Kp; j++) {
-      data->scores[i][j] = gm->rsc[j][(i) * p7P_NR     + p7P_MSC];
-      if (data->scores[i][j] > max_scores[i]) max_scores[i] = data->scores[i][j];
+      if (om != NULL) {
+        //based on p7_oprofile's biased_byteify()
+        float x =  -1.0f * roundf(om->scale_b * gm->rsc[j][(i) * p7P_NR     + p7P_MSC]);
+        data->s.scores_b[i][j] = (x > 255 - om->bias_b) ? 255 : (uint8_t) x + om->bias_b;
+      } else {
+        data->s.scores_f[i][j] = gm->rsc[j][(i) * p7P_NR     + p7P_MSC];
+        if (data->s.scores_f[i][j] > max_scores[i]) max_scores[i] = data->s.scores_f[i][j];
+      }
     }
   }
-  //for each position in the query, what's the highest possible score achieved by extending X positions, for X=1..10
-  ESL_ALLOC(data->opt_ext_fwd, (gm->M + 1) * sizeof(float*));
-  ESL_ALLOC(data->opt_ext_rev, (gm->M + 1) * sizeof(float*));
 
-  for (i=1; i<=gm->M; i++) {
-    ESL_ALLOC(data->opt_ext_fwd[i], 10 * sizeof(float));
-    ESL_ALLOC(data->opt_ext_rev[i], 10 * sizeof(float));
-    sc_fwd = 0;
-    sc_rev = 0;
-    for (j=0; j<10 && i+j+1<=gm->M; j++) {
-      sc_fwd += max_scores[i+j+1];
-      data->opt_ext_fwd[i][j] = sc_fwd;
+  if (om == NULL) {
+    //for each position in the query, what's the highest possible score achieved by extending X positions, for X=1..10
+    ESL_ALLOC(data->opt_ext_fwd, (gm->M + 1) * sizeof(float*));
+    ESL_ALLOC(data->opt_ext_rev, (gm->M + 1) * sizeof(float*));
 
-      sc_rev += max_scores[gm->M-i-j];
-      data->opt_ext_rev[i][j] = sc_rev;
+    for (i=1; i<=gm->M; i++) {
+      ESL_ALLOC(data->opt_ext_fwd[i], 10 * sizeof(float));
+      ESL_ALLOC(data->opt_ext_rev[i], 10 * sizeof(float));
+      sc_fwd = 0;
+      sc_rev = 0;
+      for (j=0; j<10 && i+j+1<=gm->M; j++) {
+        sc_fwd += max_scores[i+j+1];
+        data->opt_ext_fwd[i][j] = sc_fwd;
+
+        sc_rev += max_scores[gm->M-i-j];
+        data->opt_ext_rev[i][j] = sc_rev;
+      }
+      for ( ; j<10; j++) { //fill in empty values
+        data->opt_ext_fwd[i][j] = data->opt_ext_fwd[i][j-1];
+        data->opt_ext_rev[i][j] = data->opt_ext_rev[i][j-1];
+      }
+
     }
-    for ( ; j<10; j++) { //fill in empty values
-      data->opt_ext_fwd[i][j] = data->opt_ext_fwd[i][j-1];
-      data->opt_ext_rev[i][j] = data->opt_ext_rev[i][j-1];
-    }
-
   }
-
 
   return eslOK;
 
@@ -647,7 +660,7 @@ fm_hmmdataDestroy(FM_HMMDATA *data )
 {
 
   if (data != NULL) {
-    if (data->scores != NULL)      free( data->scores);
+    if (data->s.scores_b != NULL)  free( data->s.scores_b);
     if (data->opt_ext_fwd != NULL) free( data->opt_ext_fwd);
     if (data->opt_ext_rev != NULL) free( data->opt_ext_rev);
     free(data);
@@ -666,18 +679,22 @@ fm_hmmdataDestroy(FM_HMMDATA *data )
  * Throws:    <NULL> on allocation failure.
  */
 FM_HMMDATA *
-fm_hmmdataCreate(P7_PROFILE *gm)
+fm_hmmdataCreate(P7_PROFILE *gm, P7_OPROFILE *om)
 {
   FM_HMMDATA *data = NULL;
   int    status;
 
   ESL_ALLOC(data, sizeof(FM_HMMDATA));
 
-  data->scores         = NULL;
+  if (om == NULL)
+    data->s.scores_f     = NULL;
+  else
+    data->s.scores_b     = NULL;
+
   data->opt_ext_fwd    = NULL;
   data->opt_ext_rev    = NULL;
 
-  get_Score_Arrays(gm, data ); /* for FM-index string tree traversal */
+  get_Score_Arrays(gm, om,  data ); /* for FM-index string tree traversal */
 
 
   return data;

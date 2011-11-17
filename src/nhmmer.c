@@ -452,7 +452,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* <abc> is not known 'til first HMM is read.   Could be DNA or RNA*/
   qhstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
 
-
   if (! (abc->type == eslRNA || abc->type == eslDNA))
     p7_Fail("Invalid alphabet type in hmm for nhmmer. Expect DNA or RNA\n");
   /* if using FM-index, verify that the alphabets are in agreement */
@@ -533,7 +532,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
 
       if (dbformat == eslSQFILE_FMINDEX)
-        fm_hmmdata = fm_hmmdataCreate(gm);
+        fm_hmmdata = fm_hmmdataCreate(gm, NULL);
+      else
+        fm_hmmdata = fm_hmmdataCreate(gm, om);
 
       for (i = 0; i < infocnt; ++i) {
           /* Create processing pipeline and hit list */
@@ -730,7 +731,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
       info->pli->nres -= dbsq->C; // to account for overlapping region of windows
       prev_hit_cnt = info->th->N;
 
-      p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq, info->th, info->pli->nseqs);
+      p7_Pipeline_LongTarget(info->pli, info->om, info->fm_hmmdata, info->bg, dbsq, info->th, info->pli->nseqs);
 
       p7_pipeline_Reuse(info->pli); // prepare for next search
 
@@ -754,7 +755,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
           prev_hit_cnt = info->th->N;
           esl_sq_Copy(dbsq,dbsq_revcmp);
           esl_sq_ReverseComplement(dbsq_revcmp);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq_revcmp, info->th, info->pli->nseqs);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->fm_hmmdata, info->bg, dbsq_revcmp, info->th, info->pli->nseqs);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (i=prev_hit_cnt; i < info->th->N ; i++) {
@@ -953,7 +954,7 @@ pipeline_thread(void *arg)
       info->pli->nres -= dbsq->C; // to account for overlapping region of windows
 
       prev_hit_cnt = info->th->N;
-      p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq, info->th, block->first_seqidx + i);
+      p7_Pipeline_LongTarget(info->pli, info->om, info->fm_hmmdata, info->bg, dbsq, info->th, block->first_seqidx + i);
       p7_pipeline_Reuse(info->pli); // prepare for next search
 
 
@@ -976,7 +977,7 @@ pipeline_thread(void *arg)
       {
           prev_hit_cnt = info->th->N;
           esl_sq_ReverseComplement(dbsq);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->bg, dbsq, info->th, block->first_seqidx + i);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->fm_hmmdata, info->bg, dbsq, info->th, block->first_seqidx + i);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (j=prev_hit_cnt; j < info->th->N ; ++j) {

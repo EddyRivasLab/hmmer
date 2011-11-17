@@ -831,7 +831,10 @@ typedef struct fm_metadata_s {
 
 typedef struct fm_hmm_data_s {
   int      M;
-  float    **scores;
+  union {
+    float    **scores_f;   //M*K matrix, where M = # states, and K = # characters in alphabet
+    uint8_t  **scores_b;
+  } s;
   float    **opt_ext_fwd;
   float    **opt_ext_rev;
 } FM_HMMDATA;
@@ -1316,7 +1319,7 @@ extern int p7_pli_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7
 extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
 extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
 extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
-extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th, int64_t seqidx);
+extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, FM_HMMDATA *hmmdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx);
 extern int p7_Pipeline_FM           (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
                                      const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata);
 
@@ -1450,7 +1453,7 @@ extern void fm_freeFM ( FM_DATA *fm, int isMainFM);
 extern uint8_t fm_getChar(uint8_t alph_type, int j, const uint8_t *B );
 extern int fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
 extern int fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
-extern FM_HMMDATA *fm_hmmdataCreate(P7_PROFILE *gm);
+extern FM_HMMDATA *fm_hmmdataCreate(P7_PROFILE *gm, P7_OPROFILE *om);
 extern void fm_hmmdataDestroy(FM_HMMDATA *data );
 extern int fm_configAlloc(void **mem, FM_CFG **cfg);
 extern int fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_f, FM_INTERVAL *interval_bk);
@@ -1458,8 +1461,8 @@ extern int fm_updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_
 extern int fm_initSeeds (FM_DIAGLIST *list) ;
 extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
 extern int fm_initWindows (FM_WINDOWLIST *list);
-extern FM_WINDOW *fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, /* uint32_t length,*/ float score, uint8_t complementarity);
-extern int fm_convertRange2DSQ(uint8_t alph_type, int id, int first, int length, const uint8_t *B, ESL_SQ *sq );
+extern FM_WINDOW *fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity);
+extern int fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint8_t *B, ESL_SQ *sq );
 extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
 
 

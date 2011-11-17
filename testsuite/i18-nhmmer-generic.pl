@@ -71,9 +71,9 @@ if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = q[
 Target sequences:                  1  \(8999958 residues\)
 Windows passing MSV filter:              1182  \(0.02003\); expected \(0.02\)
-Windows passing bias filter:             1074  \(0.01819\); expected \(0.02\)
-Windows passing Vit filter:                47  \(0.0008044\); expected \(0.001\)
-Windows passing Fwd filter:                 2  \(3.4e-05\); expected \(1e-05\)
+Windows passing bias filter:             1073  \(0.01817\); expected \(0.02\)
+Windows passing Vit filter:                47  \(0.0008037\); expected \(0.001\)
+Windows passing Fwd filter:                 2  \(3.311e-05\); expected \(1e-05\)
 Total hits:                                 2  \(4.222e-06\)];
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 1\n";
@@ -91,8 +91,8 @@ if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = q[Target sequences:                  1  \(4499979 residues\)
 Windows passing MSV filter:               593  \(0.02002\); expected \(0.02\)
 Windows passing bias filter:              542  \(0.0183\); expected \(0.02\)
-Windows passing Vit filter:                28  \(0.0009318\); expected \(0.001\)
-Windows passing Fwd filter:                 2  \(6.8e-05\); expected \(1e-05\)
+Windows passing Vit filter:                28  \(0.00093\); expected \(0.001\)
+Windows passing Fwd filter:                 2  \(6.622e-05\); expected \(1e-05\)
 Total hits:                                 2  \(8.444e-06\)];
 
 if ($output !~ /$expect/s) {

@@ -210,9 +210,9 @@ FM_Recurse( int depth, int M, int fm_direction,
           k = dp_pairs[i].pos - 1;
 
         if (dp_pairs[i].complementarity == fm_complement) {
-          next_score = fm_hmmdata->scores[k][ fm_getComplement(c,fm_cfg->meta->alph_type) ];
+          next_score = fm_hmmdata->s.scores_f[k][ fm_getComplement(c,fm_cfg->meta->alph_type) ];
         } else
-          next_score = fm_hmmdata->scores[k][c];
+          next_score = fm_hmmdata->s.scores_f[k][c];
 
         sc = dp_pairs[i].score + next_score;
 
@@ -385,7 +385,7 @@ int FM_getSeeds (const P7_OPROFILE *gm, P7_GMX *gx, float sc_threshFM,
     {
 
 
-      sc = fm_hmmdata->scores[k][i];
+      sc = fm_hmmdata->s.scores_f[k][i];
       if (sc>0) { // we'll extend any positive-scoring diagonal
         if (k < gm->M-2) { // don't bother starting a forward diagonal so close to the end of the model
           //Forward pass on the FM-index
@@ -413,7 +413,7 @@ int FM_getSeeds (const P7_OPROFILE *gm, P7_GMX *gx, float sc_threshFM,
       }
 
 
-      sc = fm_hmmdata->scores[k][fm_getComplement(i, fm_cfg->meta->alph_type)];
+      sc = fm_hmmdata->s.scores_f[k][fm_getComplement(i, fm_cfg->meta->alph_type)];
       if (sc>0) { // we'll extend any positive-scoring diagonal
 
         //forward on the FM, reverse on the model
@@ -510,9 +510,6 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CF
               float sc_thresh, float j_thresh, ESL_SQ  *tmp_sq, FM_WINDOWLIST *windowlist)
 {
 
-  // use n and k to store the beginning and end
-  // and sortkey to hold the score (so I don't have to run MSV again in pipeline)
-
   int k,n;
   int model_start, model_end, target_start, target_end;
   int hit_start, hit_end;
@@ -541,7 +538,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CF
   sc = 0;
 
   tmp_id = fm_computeSequenceOffset( fm, cfg->meta, 0, target_start);
-  fm_convertRange2DSQ(cfg->meta->alph_type, tmp_id, target_start, target_end-target_start+1, fm->T, tmp_sq );
+  fm_convertRange2DSQ(cfg->meta, tmp_id, target_start, target_end-target_start+1, fm->T, tmp_sq );
 
   if (diag->complementarity == fm_complement)
     esl_sq_ReverseComplement(tmp_sq);
@@ -555,7 +552,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CF
 
         c = tmp_sq->dsq[n];
 
-        sc  += hmmdata->scores[k][c];
+        sc  += hmmdata->s.scores_f[k][c];
 
         if (sc < 0) {
           sc = 0;
@@ -578,7 +575,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CF
           if (windowlist == NULL) //this is used by the MSV merging step, to figure out when the necessary score was reached.
             return tmp_n;
           else
-            fm_newWindow(windowlist, tmp_id, tmp_n, fm_pos, k, /*hit_end-hit_start+1, */ sc, diag->complementarity );
+            fm_newWindow(windowlist, tmp_id, tmp_n, fm_pos, k, hit_end-hit_start+1,  sc, diag->complementarity );
           sc = 0;
           hit_start = n+1;
         }
@@ -595,7 +592,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CF
 
          c = tmp_sq->dsq[n];
 
-         sc  += hmmdata->scores[k][c];
+         sc  += hmmdata->s.scores_f[k][c];
 
          hit_end = n;
          if (sc < 0) {
@@ -623,7 +620,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CF
              fm_getOriginalPosition (fm, cfg->meta, 0, hit_end-hit_start+1, fm_forward, fm_pos, &(tmp_id), &(tmp_n));
              if (tmp_id == -1) continue; // crosses over a barrier between sequences in the digital data structure
 
-             fm_newWindow(windowlist, tmp_id, tmp_n, fm_pos, k, /* hit_end-hit_start+1,*/ sc, diag->complementarity );
+             fm_newWindow(windowlist, tmp_id, tmp_n, fm_pos, k,  hit_end-hit_start+1, sc, diag->complementarity );
              active_diag = TRUE;
            }
 
@@ -704,6 +701,8 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
   float      tbmk  = logf(     2.0f / ((float) om->M * (float) (om->M+1)));
   float      tec   = logf(1.0f / nu);
 
+  float score_modifier =  tmove + tbmk + tec + tmove + tloop_total;
+
   FM_METADATA *meta = fm_cfg->meta;
 
 
@@ -718,6 +717,9 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
 
   tmp_sq   =  esl_sq_CreateDigital(om->abc);
 
+
+
+
   /*
    * Computing the score required to let P meet the F1 prob threshold
    * In original code, converting from an MSV score S (the score getting
@@ -730,6 +732,10 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
    *  (usc - nullsc) /  eslCONST_LOG2 = inv_f( P, mu, lambda)
    *  usc = nullsc + eslCONST_LOG2 * inv_f( P, mu, lambda)
    *  S = usc - tmove - tloop_total - tmove - tbmk - tec
+   *
+   *
+   *  when I'm done gathering a diagonal, the score S will be back-converted to usc:
+   *    usc = S + tmove + tbmk + tec + tmove + tloop_total
    *
    *
    *  Here, I compute threshold with length model based on max_length.  Usually, the
@@ -752,6 +758,7 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
   for(i=0; i<seeds.count; i++) {
     FM_extendSeed( seeds.diags+i, fmf, fm_hmmdata, fm_cfg, sc_thresh, j_thresh , tmp_sq, windowlist);
   }
+
 
   if (sc_thresh >= j_thresh) {
     // MSV, so join up neighboring diags that reach sc_thresh only in combination
@@ -794,6 +801,10 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
     }
 
   }
+
+
+  for(i=0; i<windowlist->count; i++)
+    windowlist->windows[i].score += score_modifier;
 
 
   //filter for biased composition here?

@@ -255,7 +255,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, __m128i sc_threshv, int **starts, int** ends, int *hit_cnt)
+p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const FM_HMMDATA *hmmdata, uint8_t sc_thresh, __m128i sc_threshv, FM_WINDOWLIST *windowlist)
 {
 
   register __m128i mpv;            /* previous row values                                       */
@@ -274,17 +274,25 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   __m128i basev;                   /* offset for scores                                         */
   __m128i ceilingv;                /* saturateed simd value used to test for overflow           */
   __m128i tempv;                   /* work vector                                               */
-
   int cmp;
   int status;
+  int k;
+  int n;
+  int end;
+  int rem_sc;
+  int start;
+  int target_end;
+  int target_start;
+  int max_end;
+  int max_sc;
+  int sc;
+  int pos_since_max;
+  float ret_sc;
 
-  /* stuff used to keep track of hits (regions passing the p-threshold)*/
-  void* tmp_void; // why doesn't ESL_RALLOC just declare its own tmp ptr?
-  int hit_arr_size = 50; // arbitrary size - it, and the hit lists it relates to, will be increased as necessary
-  ESL_ALLOC(*starts, hit_arr_size * sizeof(int));
-  ESL_ALLOC(*ends, hit_arr_size * sizeof(int));
-  (*starts)[0] = (*ends)[0] = -1;
-  *hit_cnt = 0;
+  union { __m128i v; uint8_t b[16]; } u;
+  uint8_t *scores = NULL;
+
+  ESL_ALLOC(scores, (1+16*Q) * sizeof(uint8_t) );
 
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
@@ -332,35 +340,81 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  cmp = _mm_movemask_epi8(tempv);
 
 	  if (cmp != 0) {  //hit pthresh, so add position to list and reset values
-		  //ensure hit list is large enough
-		  if (*hit_cnt == hit_arr_size ) {
-			  hit_arr_size *= 10;
-			  ESL_RALLOC(*starts, tmp_void, hit_arr_size * sizeof(int));
-			  ESL_RALLOC(*ends, tmp_void, hit_arr_size * sizeof(int));
-		  }
 
-		  (*starts)[*hit_cnt] = i -  om->max_length + 1;
-		  (*ends)[*hit_cnt] = i + om->max_length - 1;
-		  (*hit_cnt)++;
+	    //figure out which model state hit threshold
+	    end = -1;
+	    rem_sc = -1;
+	    for (q = 0; q < Q; q++) {  /// Unpack and unstripe, so we can find the state that exceeded pthresh
+          u.v = dp[q];
+          for (k = 0; k < 16; k++) scores[q+Q*k+1] = u.b[k]; // unstripe
+          dp[q] = _mm_set1_epi8(0); // while we're here ... this will cause values to get reset to xB in next dp iteration
+	    }
+	    for (k = 1; k <= om->M; k++) {
+          if (scores[k] >= sc_thresh && scores[k] > rem_sc) {
+            end = k;
+            rem_sc = scores[k];
+          }
+	    }
+	    //recover the diagonal that hit threshold
+	    start = end;
+	    target_end = target_start = i;
+	    sc = rem_sc;
+	    while (rem_sc >= om->base_b - om->tjb_b - om->tbm_b) {
+	      rem_sc -= om->bias_b -  hmmdata->s.scores_b[start][dsq[target_start]];
+	      --start;
+	      --target_start;
+	      if ( start == 0 || target_start==0)    break;
+	    }
+	    start++;
+	    target_start++;
 
-		  //we've captured that window, so skip over a bunch of it to avoid redundancy
-		  //TODO: I think this won't result in loss of hits, though it should be further tested to be sure
-		 // i += om->max_length - om->M - 1;
 
-		  // this will cause values to get reset to xB in next iteration
-		  for (q = 0; q < Q; q++)
-			  dp[q] = _mm_setzero_si128();
+
+	    //extend diagonal further with single diagonal extension
+	    k = end+1;
+	    n = target_end+1;
+	    max_end = target_end;
+	    max_sc = sc;
+	    pos_since_max = 0;
+	    while (k<om->M && n<=L) {
+	      sc += om->bias_b -  hmmdata->s.scores_b[start][dsq[k]];
+	      if (sc >= max_sc) {
+	        max_sc = sc;
+	        max_end = n;
+	        pos_since_max=0;
+	      } else {
+	        pos_since_max++;
+	        if (pos_since_max == 4)
+	          break;
+	      }
+	      k++;
+	      n++;
+	    }
+
+	    end  +=  (max_end - target_end);
+	    k    +=  (max_end - target_end);
+      target_end = max_end;
+
+
+      ret_sc = ((float) (max_sc - om->tjb_b) - (float) om->base_b);
+      ret_sc /= om->scale_b;
+      ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
+
+      fm_newWindow(windowlist, 0, target_start, k, end, end-start+1 , ret_sc, fm_nocomplement );
+
+      i = target_end; // skip forward
 
 	  }
 
   } /* end loop over sequence residues 1..L */
 
+
+  free(scores);
   return eslOK;
 
-
-  ERROR:
-  ESL_EXCEPTION(eslEMEM, "Error allocating memory for hit list\n");
-
+ERROR:
+  if (scores != NULL) free(scores);
+  return eslEMEM;
 }
 /*------------------ end, p7_SSVFilter_longtarget() ------------------------*/
 
@@ -408,7 +462,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const FM_HMMDATA *hmmdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist)
 {
   register __m128i mpv;        /* previous row values                                       */
   register __m128i xEv;		   /* E state: keeps max for Mk->E as we go                     */
@@ -432,6 +486,10 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   __m128i ceilingv;                /* saturateed simd value used to test for overflow           */
   __m128i tempv;                   /* work vector                                               */
 
+  FM_WINDOW *prev_window;
+  FM_WINDOW *curr_window;
+  int window_start;
+  int window_end;
 
   float nullsc;
 
@@ -460,38 +518,32 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   p7_oprofile_ReconfigMSVLength(om, om->max_length);
   p7_bg_NullOne  (bg, dsq, om->max_length, &nullsc);
 
-  int sc_thresh = (int) ceil( ( ( nullsc  + (invP * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b );
+  uint8_t sc_thresh = (int) ceil( ( ( nullsc  + (invP * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b );
   sc_threshv = _mm_set1_epi8((int8_t) 255 - sc_thresh);
 
-  int jthresh = om->base_b + om->tjb_b + om->tec_b + 1;  //+1 because the score of a pass through the model must be positive to contribute to MSV score
+  uint8_t jthresh = om->base_b + om->tjb_b + om->tec_b + 1;  //+1 because the score of a pass through the model must be positive to contribute to MSV score
   jthreshv = _mm_set1_epi8((int8_t) 255 - (int)jthresh);
 
 
   if ( sc_thresh < jthresh) {
-	   p7_SSVFilter_longtarget(dsq, L, om, ox, sc_threshv, starts, ends, hit_cnt);
+
+    p7_SSVFilter_longtarget(dsq, L, om, ox, hmmdata, (uint8_t)sc_thresh, sc_threshv, windowlist);
+
   } else {
 	  /*e.g. if base=190, tec=3, tjb=22 then a score of 217 would be required for a
 	   * second ssv-hit to improve the score of an earlier one. Usually,
-	   * sc_thresh < base. So only bother with msv if sc thresh is surprisingly
+	   * sc_thresh < base. So only bother with msv if sc thresh is uncommonly
 	   *  high. This will require mu of something in the neighborhood of -6.4 bits
 	   *  (see TJW notes Mon Jun  7 10:19:34 EDT 2010 for details)
 	   */
 	  int hit_pthresh;
 	  int e_unchanged;
-	  int      status;
 
 	  //used to track neighboring MSV peaks
 	  int first_peak = -1;
 	  int last_peak = -1;
 	  int hit_jthresh;
 
-	  /* stuff used to keep track of hits (regions passing the p-threshold)*/
-	  void* tmp_void; // why doesn't ESL_RALLOC just declare its own tmp ptr?
-	  int hit_arr_size = 50; // arbitrary size - it, and the hit lists it relates to, will be increased as necessary
-	  ESL_ALLOC(*starts, hit_arr_size * sizeof(int));
-	  ESL_ALLOC(*ends, hit_arr_size * sizeof(int));
-	  (*starts)[0] = (*ends)[0] = -1;
-	  *hit_cnt = 0;
 
 	  /* Check that the DP matrix is ok for us. */
 	  if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
@@ -600,17 +652,9 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 				  if (hit_pthresh != 0)
 				  {
 
-					  //ensure hit list is large enough
-					  if (*hit_cnt == hit_arr_size ) {
-						  hit_arr_size *= 10;
-						  ESL_RALLOC(*starts, tmp_void, hit_arr_size * sizeof(int));
-						  ESL_RALLOC(*ends, tmp_void, hit_arr_size * sizeof(int));
-					  }
-
-					  //add to hit list
-					  (*starts)[*hit_cnt] = first_peak - om->max_length + 1 ;
-					  (*ends)[*hit_cnt] = i + om->max_length - 1;
-					  (*hit_cnt)++;
+			      int start = first_peak - om->max_length + 1;
+			      int length = i-first_peak+1 + 2 * om->max_length;
+			      fm_newWindow(windowlist, 0, start, -1, -1, length , -1, fm_nocomplement );
 
 					  //we've captured that window, so skip over a bunch of it to avoid redundancy
 					  //TODO: I think this won't result in loss of hits, though it should be further tested to be sure
@@ -657,46 +701,48 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  } /* end loop over sequence residues 1..L */
   }
 
+  if ( windowlist->count > 0 ) {
 
   //filter for biased composition here?
 
-  /* whether the window list comes from SSV or MSV computations, we now
-   * merge overlapping windows, compressing list in place.
-   */
-  if ( *hit_cnt > 0 ) {
-	  int merged = 0;
-	  do {
-		  merged = 0;
+    //widen window
+    for (i=0; i<windowlist->count; i++) {
+      curr_window = windowlist->windows+i;
+      window_start = ESL_MAX( 1,   curr_window->n + curr_window->length - om->max_length) ;
+      window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + om->max_length - 2);
+      curr_window->n = window_start;
+      curr_window->length = window_end - window_start + 1;
+    }
 
-		  int new_hit_cnt = 0;
-		  for (i=1; i<*hit_cnt; i++) {
-			  if ((*starts)[i] <= (*ends)[new_hit_cnt]) {
-				  //merge windows
-				  merged = 1;
-				  if ( (*ends)[i] > (*ends)[new_hit_cnt] )
-					  (*ends)[new_hit_cnt] = (*ends)[i];
-			  } else {
-				  //new window
-				  new_hit_cnt++;
-				  (*starts)[new_hit_cnt] = (*starts)[i];
-				  (*ends)[new_hit_cnt] = (*ends)[i];
-			  }
-		  }
-		  *hit_cnt = new_hit_cnt + 1;
-	  } while (merged > 0);
 
-	  if ((*starts)[0] <  1)
-		  (*starts)[0] =  1;
+    // merge overlapping windows, compressing list in place.
 
-	  if ((*ends)[*hit_cnt - 1] >  L)
-		  (*ends)[*hit_cnt - 1] =  L;
+    int new_hit_cnt = 0;
+    for (i=1; i<windowlist->count; i++) {
+      prev_window = windowlist->windows+new_hit_cnt;
+      curr_window = windowlist->windows+i;
+      if (curr_window->n <= prev_window->n + prev_window->length ) {
+        //merge windows
+        if (  curr_window->n + curr_window->length >  prev_window->n + prev_window->length )
+          prev_window->length = curr_window->n + curr_window->length - prev_window->n;
+
+      } else {
+        new_hit_cnt++;
+        windowlist->windows[new_hit_cnt] = windowlist->windows[i];
+      }
+    }
+    windowlist->count = new_hit_cnt+1;
+
+
+	  if ( windowlist->windows[0].n  <  1)
+	    windowlist->windows[0].n =  1;
+
+	  if ( windowlist->windows[windowlist->count].n + windowlist->windows[windowlist->count].length - 1  >  L)
+	    windowlist->windows[windowlist->count].length =  L - windowlist->windows[windowlist->count].n + 1;
 
   }
   return eslOK;
 
-
-  ERROR:
-  ESL_EXCEPTION(eslEMEM, "Error allocating memory for hit list\n");
 
 }
 /*------------------ end, p7_MSVFilter_longtarget() ------------------------*/

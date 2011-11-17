@@ -589,7 +589,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
 
 
-
   /* First level filter: the MSV filter, multihit with <om> */
   p7_MSVFilter(sq->dsq, sq->n, om, pli->oxf, &usc);
   seq_score = (usc - nullsc) / eslCONST_LOG2;
@@ -625,6 +624,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
       if (P > pli->F2) return eslOK;
     }
   pli->n_past_vit++;
+
 
   /* Parse it with Forward and obtain its real Forward score. */
   p7_ForwardParser(sq->dsq, sq->n, om, pli->oxf, &fwdsc);
@@ -886,6 +886,7 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   pli->n_past_bias++;
   pli->pos_past_bias += window_len;
 
+
   p7_oprofile_ReconfigRestLength(om, window_len);
 
   /* In scan mode, if it passes the MSV filter, read the rest of the profile */
@@ -934,10 +935,6 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
    * In this case "domains" will end up being translated as independent "hits" */
   p7_omx_GrowTo(pli->oxb, om->M, 0, window_len);
   p7_BackwardParser(tmpseq->dsq, window_len, om, pli->oxf, pli->oxb, NULL);
-
-  if (window_start == 414668 || window_start == 414877) {
-    printf(".");
-  }
 
   status = p7_domaindef_ByPosteriorHeuristics(tmpseq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef, ddef_app);
   if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen */
@@ -1067,12 +1064,9 @@ ERROR:
  * Xref:      J4/25.
  */
 int
-p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx)
+p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, FM_HMMDATA *hmmdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx)
 {
   int              i;
-  int* window_starts;
-  int* window_ends;
-  int hit_cnt;
   int status;
   float            nullsc;   /* null model score                        */
   float            usc;      /* msv score  */
@@ -1081,7 +1075,9 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
   ESL_SQ           *tmpseq;
 
   P7_DOMAINDEF *ddef_app;
+  FM_WINDOWLIST windowlist;
 
+  fm_initWindows(&windowlist);
   ddef_app = p7_domaindef_Create(pli->r);  /* single allocation of a domaindef object that will be used
                                                          to compute mocc posterior probs for hit segments */
 
@@ -1095,24 +1091,23 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
    * that we would miss if we left length parameters set to the full target length */
   p7_oprofile_ReconfigMSVLength(om, om->max_length);
 
+
   /* First level filter: the MSV filter, multihit with <om>.
    * This variant of MSV will scan a long sequence and find
    * short high-scoring regions.
-   * */
+   */
+  p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, hmmdata, bg, pli->F1, &windowlist);
 
-  p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, bg, pli->F1, &window_starts, &window_ends, &hit_cnt);
-
-  if (hit_cnt == 0 ) {
-    free(window_starts);
-    free(window_ends);
+  if (windowlist.count == 0) {
+    free (windowlist.windows);
     return eslOK;
   }
 
   tmpseq = esl_sq_CreateDigital(sq->abc);
-  for (i=0; i<hit_cnt; i++){
-    int window_len = window_ends[i] - window_starts[i] + 1;
+  for (i=0; i<windowlist.count; i++){
+    int window_len = windowlist.windows[i].length;
 
-    subseq = sq->dsq + window_starts[i] - 1;
+    subseq = sq->dsq + windowlist.windows[i].n - 1;
     p7_bg_SetLength(bg, window_len);
     p7_bg_NullOne  (bg, subseq, window_len, &nullsc);
 
@@ -1130,7 +1125,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
     pli->pos_past_msv += window_len;
 
 
-    status = postMSV_LongTarget(pli, om, bg, hitlist, seqidx, window_starts[i], window_len, tmpseq, ddef_app,
+    status = postMSV_LongTarget(pli, om, bg, hitlist, seqidx, windowlist.windows[i].n, window_len, tmpseq, ddef_app,
                       subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc, fm_nocomplement);
 
     if (status != eslOK) return status;
@@ -1140,8 +1135,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_S
   }
 
   esl_sq_Destroy(tmpseq);
-  free(window_starts);
-  free(window_ends);
+  free (windowlist.windows);
 
   return eslOK;
 
@@ -1197,7 +1191,7 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
   FM_SEQDATA    *seqdata;
   P7_DOMAINDEF *ddef_app;
 
-
+  tmpseq = esl_sq_CreateDigital(om->abc);
 
   ddef_app = p7_domaindef_Create(pli->r);  /* single allocation of a domaindef object that will be used
                                                          to compute mocc posterior probs for hit segments */
@@ -1222,7 +1216,7 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
 
     window =  windowlist.windows[i] ;
 
-    fm_convertRange2DSQ(fm_cfg->meta->alph_type, window.id, window.fm_n, window.length, fmf->T, tmpseq );
+    fm_convertRange2DSQ( fm_cfg->meta, window.id, window.fm_n, window.length, fmf->T, tmpseq );
 
     if (window.complementarity == fm_complement)
       esl_sq_ReverseComplement(tmpseq);
