@@ -460,6 +460,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   vector unsigned char biasv;	   /* emission bias in a vector                                 */
   uint8_t  xJ;                 /* special states' scores                                    */
   int i;			           /* counter over sequence positions 1..L                      */
+  int j;
   int q;			           /* counter over vectors 0..nq-1                              */
   int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
   vector unsigned char *dp  = ox->dpb[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
@@ -531,13 +532,6 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  int last_peak = -1;
 	  int hit_jthresh = FALSE;
 
-	  /* stuff used to keep track of hits (regions passing the p-threshold)*/
-	  void* tmp_void; // why doesn't ESL_RALLOC just declare its own tmp ptr?
-	  int hit_arr_size = 50; // arbitrary size - it, and the hit lists it relates to, will be increased as necessary
-	  ESL_ALLOC(*starts, hit_arr_size * sizeof(int));
-	  ESL_ALLOC(*ends, hit_arr_size * sizeof(int));
-	  (*starts)[0] = (*ends)[0] = -1;
-	  *hit_cnt = 0;
 
 	  /* Check that the DP matrix is ok for us. */
 	  if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
@@ -623,21 +617,9 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
 				  //check if we've hit sc_thresh.  If so, reset values and add this region to the list of hits
 				  if (vec_any_gt(xEv, sc_threshv) ) {
-					  //ensure hit list is large enough
-					  if (*hit_cnt == hit_arr_size ) {
-						  hit_arr_size *= 10;
-						  ESL_RALLOC(*starts, tmp_void, hit_arr_size * sizeof(int));
-						  ESL_RALLOC(*ends, tmp_void, hit_arr_size * sizeof(int));
-					  }
-
-					  //add to hit list
-					  (*starts)[*hit_cnt] = first_peak - om->max_length + 1 ;
-					  (*ends)[*hit_cnt] = i + om->max_length - 1;
-					  (*hit_cnt)++;
-
-					  //we've captured that window, so skip over a bunch of it to avoid redundancy
-					  //TODO: I think this won't result in loss of hits, though it should be further tested to be sure
-					  //i += om->max_length - om->M - 1;
+                                          int start = first_peak - om->max_length + 1;
+                                          int length = i-first_peak+1 + 2 * om->max_length;
+                                          fm_newWindow(windowlist, 0, start, -1, -1, length , -1, fm_nocomplement );
 
 					  // got one peak.  Start scanning for the next one, as though starting from scratch
 					  first_peak = last_peak = -1;
