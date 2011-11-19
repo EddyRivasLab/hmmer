@@ -16,7 +16,7 @@ BEGIN {
     $tmppfx    = shift;
 }
 
-$verbose = 0;
+$verbose = 1;
 
 # The test makes use of the following file:
 #
@@ -70,9 +70,9 @@ $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = q[
 Target sequences:                  1  \(8999958 residues\)
-Windows passing MSV filter:              1182  \(0.02003\); expected \(0.02\)
-Windows passing bias filter:             1073  \(0.01817\); expected \(0.02\)
-Windows passing Vit filter:                47  \(0.0008037\); expected \(0.001\)
+Windows passing MSV filter:              1038  \(0.01746\); expected \(0.02\)
+Windows passing bias filter:              932  \(0.01568\); expected \(0.02\)
+Windows passing Vit filter:                39  \(0.0006548\); expected \(0.001\)
 Windows passing Fwd filter:                 2  \(3.311e-05\); expected \(1e-05\)
 Total hits:                                 2  \(4.222e-06\)];
 if ($output !~ /$expect/s) {
@@ -89,9 +89,9 @@ $cmd = "$builddir/src/nhmmer --tformat fasta --single $tmppfx.hmm $database";
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = q[Target sequences:                  1  \(4499979 residues\)
-Windows passing MSV filter:               593  \(0.02002\); expected \(0.02\)
-Windows passing bias filter:              542  \(0.0183\); expected \(0.02\)
-Windows passing Vit filter:                28  \(0.00093\); expected \(0.001\)
+Windows passing MSV filter:               528  \(0.01771\); expected \(0.02\)
+Windows passing bias filter:              477  \(0.01601\); expected \(0.02\)
+Windows passing Vit filter:                24  \(0.0007947\); expected \(0.001\)
 Windows passing Fwd filter:                 2  \(6.622e-05\); expected \(1e-05\)
 Total hits:                                 2  \(8.444e-06\)];
 

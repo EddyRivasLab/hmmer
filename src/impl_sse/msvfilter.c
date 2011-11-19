@@ -272,7 +272,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   __m128i tecv;                    /* vector for E->C  cost                                     */
   __m128i tjbmv;                   /* vector for J->B move cost + B->M move costs               */
   __m128i basev;                   /* offset for scores                                         */
-  __m128i ceilingv;                /* saturateed simd value used to test for overflow           */
+  __m128i ceilingv;                /* saturated simd value used to test for overflow           */
   __m128i tempv;                   /* work vector                                               */
   int cmp;
   int status;
@@ -384,7 +384,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	        pos_since_max=0;
 	      } else {
 	        pos_since_max++;
-	        if (pos_since_max == 4)
+	        if (pos_since_max == 5)
 	          break;
 	      }
 	      k++;
@@ -401,9 +401,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
       fm_newWindow(windowlist, 0, target_start, k, end, end-start+1 , ret_sc, fm_nocomplement );
 
-
       i = target_end; // skip forward
-
 	  }
 
 
@@ -702,9 +700,8 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  } /* end loop over sequence residues 1..L */
   }
 
-  //filter for biased composition here?
+  //filter for biased composition here
   if ( windowlist->count > 0 ) {
-
 
     if (do_biasfilter) {
       j = 0;
@@ -713,16 +710,18 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
         curr_window = windowlist->windows+i;
 
         p7_bg_FilterScore(bg, dsq+curr_window->n, curr_window->length, &bias_sc);
-//        printf("bias: %.2f, ", bias_sc);
+//        printf("bias: %7.2f, ", bias_sc);
         bias_sc = (curr_window->score - bias_sc) / eslCONST_LOG2;
-//        printf("sc: %.2f, ", bias_sc);
+ //       printf("sc: %7.2f, ", bias_sc);
         biasP = esl_gumbel_surv(bias_sc,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
 //        printf("P: %.2f, ", biasP);
 
         if (biasP <= P ) { // keep it
+//          printf ("%8d -> %8d", curr_window->n, curr_window->n + curr_window->length - 1 );
           windowlist->windows[j] = windowlist->windows[i];
           j++;
         }
+  //      printf ("\n");
       }
       windowlist->count = j;
     }
@@ -741,7 +740,6 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
 
     // merge overlapping windows, compressing list in place.
-
     int new_hit_cnt = 0;
     for (i=1; i<windowlist->count; i++) {
       prev_window = windowlist->windows+new_hit_cnt;
@@ -757,6 +755,8 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       }
     }
     windowlist->count = new_hit_cnt+1;
+
+
 
 	  if ( windowlist->windows[0].n  <  1)
 	    windowlist->windows[0].n =  1;

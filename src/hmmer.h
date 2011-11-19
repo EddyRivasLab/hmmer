@@ -884,13 +884,13 @@ typedef struct fm_diaglist_s {
 typedef struct fm_window_s {
   float       score;
   float       null_sc;
-  uint32_t    id; //sequence id of the database sequence hit
-  uint32_t    n;  //position in database sequence (see id above) at which the diagonal starts
-  uint32_t    fm_n;  //position in the concatenated fm-index sequence at which the diagonal starts
+  int32_t    id; //sequence id of the database sequence hit
+  int32_t    n;  //position in database sequence (see id above) at which the diagonal starts
+  int32_t    fm_n;  //position in the concatenated fm-index sequence at which the diagonal starts
   int         first_seq_data;
-  uint32_t    length;
-  uint16_t    k;  //position of the model at which the diagonal starts
-  uint8_t     complementarity;
+  int32_t    length;
+  int16_t    k;  //position of the model at which the diagonal starts
+  int8_t     complementarity;
 } FM_WINDOW;
 
 typedef struct fm_window_list_s {
