@@ -201,7 +201,7 @@ main(int argc, char **argv)
  * Valgrind debugging
  * generate a small test seq database:
  *     esl-shuffle -G --amino -N 10 -L 400 > foo.fa
- *     fasta2daemon foo.fa                 > foo.d
+ *     fasta2daemon.pl foo.fa              > foo.d
  *     
  * in three separate terminal windows    
  *     valgrind --dsymutil=yes --leak-check=yes --show-reachable=yes src/hmmpgmd --master --seqdb foo.d 
@@ -209,6 +209,8 @@ main(int argc, char **argv)
  *     valgrind                --leak-check=yes --show-reachable=yes src/hmmc2 -S
  *     
  * copy/paste tutorial/M1.hmm as an example hmmsearch    
+ * or any HMM. On Mac OS/X, to "copy" a file my.hmm to the clipboard:
+ *    cat my.hmm | pbcopy   
  */
 
 

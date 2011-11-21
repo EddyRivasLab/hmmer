@@ -36,6 +36,7 @@
 #include "hmmer.h"
 #include "hmmpgmd.h"
 #include "cachedb.h"
+#include "p7_hmmcache.h"
 
 #define MAX_WORKERS  64
 #define MAX_BUFFER   4096
@@ -74,8 +75,8 @@ typedef struct {
   pthread_cond_t   complete_cond;
 
   int              db_version;
-  SEQ_CACHE       *seq_db;
-  HMM_CACHE       *hmm_db;
+  P7_SEQCACHE     *seq_db;
+  P7_HMMCACHE     *hmm_db;
 
   int              ready;
   int              failed;
@@ -305,7 +306,7 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
   if (query->cmd_type == HMMD_CMD_SEARCH) {
     cnt = args->seq_db->db[query->dbx].count;
   } else {
-    cnt = args->hmm_db->count;
+    cnt = args->hmm_db->n;
   }
 
   init_results(&results);
@@ -475,25 +476,23 @@ process_reset(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
 static void
 process_load(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
 {
-  int n;
-  int cnt;
-  int status;
-
-  void        *tmp;
-  SEQ_CACHE   *seq_db  = NULL;
-  HMM_CACHE   *hmm_db  = NULL;
-
-  HMMD_COMMAND cmd;
-
-  WORKER_DATA *worker  = NULL;
+  void          *tmp;
+  P7_SEQCACHE   *seq_db  = NULL;
+  P7_HMMCACHE   *hmm_db  = NULL;
+  WORKER_DATA   *worker  = NULL;
+  HMMD_COMMAND   cmd;
+  int            n, cnt;
+  char           errbuf[eslERRBUFSIZE];
+  int            status;
 
   client_msg(query->sock, eslOK, "Loading databases...\n");
 
   if (query->cmd->init.seqdb_off) {
     char *name = (char *)&query->cmd;
     name += query->cmd->init.seqdb_off;
-    if ((status = cache_SeqDb(name, &seq_db)) != eslOK) {
-      client_msg(query->sock, status, "Failed to load sequence database %s\n", name);
+
+    if ((status = p7_seqcache_Open(name, &seq_db, errbuf)) != eslOK) {
+      client_msg(query->sock, status, "Failed to load sequence database %s\n  %s", name, errbuf);
       return;
     }
   }
@@ -501,11 +500,17 @@ process_load(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
   if (query->cmd->init.hmmdb_off) {
     char *name = (char *)&query->cmd;
     name += query->cmd->init.hmmdb_off;
-    if ((status = cache_HmmDb(name, &hmm_db)) != eslOK) {
-      client_msg(query->sock, status, "Failed to load hmm database %s\n", name);
-      if (seq_db != NULL) cache_SeqDestroy(seq_db);
-      return;
-    }
+
+    status = p7_hmmcache_Open(name, &hmm_db, errbuf);
+    if      (status == eslENOTFOUND) { client_msg(query->sock, status, "Failed to open profile database %s\n  %s\n",    name, errbuf); goto ERROR; }
+    else if (status == eslEFORMAT)   { client_msg(query->sock, status, "Failed to parse profile database %s\n  %s\n",   name, errbuf); goto ERROR; }
+    else if (status == eslEINCOMPAT) { client_msg(query->sock, status, "Mismatched alphabets in profile db %s\n  %s\n", name, errbuf); goto ERROR; }
+    else if (status != eslOK)        { client_msg(query->sock, status, "Failed to load profile db %s : code %d\n",      name, status); goto ERROR; }
+
+    if ( (status = p7_hmmcache_SetNumericNames(hmm_db)) != eslOK) goto ERROR;
+
+    client_msg(query->sock, eslOK, "Loaded profile db %s;  models: %d  memory: %" PRId64 "\n", 
+	       name, hmm_db->n, p7_hmmcache_Sizeof(hmm_db));
   }
 
   /* process any changes to the available workers */
@@ -576,10 +581,16 @@ process_load(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
   if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 
   /* free up the old copies */
-  if (seq_db != NULL) cache_SeqDestroy(seq_db);
-  if (hmm_db != NULL) cache_HmmDestroy(hmm_db);
+  if (seq_db != NULL) p7_seqcache_Close(seq_db);
+  if (hmm_db != NULL) p7_hmmcache_Close(hmm_db);
 
   client_msg(query->sock, eslOK, "Load complete\n");
+  return;
+
+ ERROR:
+  if (seq_db) p7_seqcache_Close(seq_db);
+  if (hmm_db) p7_hmmcache_Close(hmm_db);
+  return;
 }
 
 static void
@@ -652,29 +663,39 @@ process_shutdown(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
 void
 master_process(ESL_GETOPTS *go)
 {
-  int                 n;
-  int                 status     = eslOK;
-  int                 shutdown;
-
-  SEQ_CACHE          *seq_db     = NULL;
-  HMM_CACHE          *hmm_db     = NULL;
+  P7_SEQCACHE        *seq_db     = NULL;
+  P7_HMMCACHE        *hmm_db     = NULL;
   ESL_STACK          *cmdstack   = NULL; /* stack of commands that clients want done */
   QUEUE_DATA         *query      = NULL;
-
   CLIENTSIDE_ARGS     client_comm;
   WORKERSIDE_ARGS     worker_comm;
+  int                 n;
+  int                 shutdown;
+  char                errbuf[eslERRBUFSIZE]; 
+  int                 status     = eslOK;
 
   impl_Init();
   p7_FLogsumInit();     /* we're going to use table-driven Logsum() approximations at times */
 
   if (esl_opt_IsUsed(go, "--seqdb")) {
     char *name = esl_opt_GetString(go, "--seqdb");
-    if ((status = cache_SeqDb(name, &seq_db)) != eslOK) p7_Fail("Failed to cache %s (%d)", name, status);
+    if ((status = p7_seqcache_Open(name, &seq_db, errbuf)) != eslOK) 
+      p7_Fail("Failed to cache %s (%d)", name, status);
   }
 
   if (esl_opt_IsUsed(go, "--hmmdb")) {
     char *name = esl_opt_GetString(go, "--hmmdb");
-    if ((status = cache_HmmDb(name, &hmm_db)) != eslOK) p7_Fail("Failed to cache %s (%d)", name, status);
+
+    status = p7_hmmcache_Open(name, &hmm_db, errbuf);
+    if      (status == eslENOTFOUND) p7_Fail("Failed to open profile database %s\n  %s\n",    name, errbuf);
+    else if (status == eslEFORMAT)   p7_Fail("Failed to parse profile database %s\n  %s\n",   name, errbuf); 
+    else if (status == eslEINCOMPAT) p7_Fail("Mismatched alphabets in profile db %s\n  %s\n", name, errbuf);
+    else if (status != eslOK)        p7_Fail("Failed to load profile db %s : code %d\n",      name, status);
+
+    p7_hmmcache_SetNumericNames(hmm_db);
+
+    printf("Loaded profile db %s;  models: %d  memory: %" PRId64 "\n", 
+	   name, hmm_db->n, (uint64_t) p7_hmmcache_Sizeof(hmm_db));
   }
 
   /* initialize the search stack, set it up for interthread communication  */
@@ -735,8 +756,8 @@ master_process(ESL_GETOPTS *go)
 
   esl_stack_ReleaseCond(cmdstack);
 
-  if (hmm_db) cache_HmmDestroy(hmm_db);
-  if (seq_db) cache_SeqDestroy(seq_db);
+  if (hmm_db) p7_hmmcache_Close(hmm_db);
+  if (seq_db) p7_seqcache_Close(seq_db);
 
   esl_stack_Destroy(cmdstack);
 
@@ -848,7 +869,7 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
     results->stats.nseqs   = comm->seq_db->db[query->dbx].K;
   } else {
     results->stats.nseqs   = 1;
-    results->stats.nmodels = comm->hmm_db->count;
+    results->stats.nmodels = comm->hmm_db->n;
   }
     
   if (results->stats.Z_setby == p7_ZSETBY_NTARGETS) {
@@ -1857,7 +1878,7 @@ workerside_thread(void *arg)
 
     if (parent->hmm_db != NULL) {
       cmd->init.hmm_cnt     = 1;
-      cmd->init.model_cnt   = parent->hmm_db->count;
+      cmd->init.model_cnt   = parent->hmm_db->n;
       cmd->init.hmmdb_off   = p - cmd->init.data;
 
       //strncpy(cmd->init.hid, parent->hmm_db->id, sizeof(cmd->init.hid));

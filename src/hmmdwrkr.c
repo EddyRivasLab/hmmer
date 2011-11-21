@@ -30,6 +30,7 @@
 #include "hmmer.h"
 #include "hmmpgmd.h"
 #include "cachedb.h"
+#include "p7_hmmcache.h"
 
 #define MAX_WORKERS  64
 #define MAX_BUFFER   4096
@@ -67,8 +68,8 @@ typedef struct {
   int fd;                        /* socket connection to server      */
   int ncpus;                     /* number of cpus to use            */
 
-  SEQ_CACHE *seq_db;             /* cached sequence database         */
-  HMM_CACHE *hmm_db;             /* cached hmm database              */
+  P7_SEQCACHE *seq_db;           /* cached sequence database         */
+  P7_HMMCACHE *hmm_db;           /* cached hmm database              */
 } WORKER_ENV;
 
 static void process_InitCmd(HMMD_COMMAND *cmd, WORKER_ENV *env);
@@ -166,8 +167,8 @@ worker_process(ESL_GETOPTS *go)
       cmd = NULL;
     }
 
-  if (env.hmm_db) cache_HmmDestroy(env.hmm_db);
-  if (env.seq_db) cache_SeqDestroy(env.seq_db);
+  if (env.hmm_db) p7_hmmcache_Close(env.hmm_db);
+  if (env.seq_db) p7_seqcache_Close(env.seq_db);
   if (env.fd != -1) close(env.fd);
   return;
 }
@@ -420,24 +421,24 @@ process_Shutdown(HMMD_COMMAND *cmd, WORKER_ENV  *env)
 static void
 process_InitCmd(HMMD_COMMAND *cmd, WORKER_ENV  *env)
 {
-  int            n;
-  int            status;
+  char *p;
+  int   n;
+  int   status;
 
-  char          *p;
-
-  if (env->hmm_db != NULL) cache_HmmDestroy(env->hmm_db);
-  if (env->seq_db != NULL) cache_SeqDestroy(env->seq_db);
+  if (env->hmm_db != NULL) p7_hmmcache_Close(env->hmm_db);
+  if (env->seq_db != NULL) p7_seqcache_Close(env->seq_db);
 
   env->hmm_db = NULL;
   env->seq_db = NULL;
 
   /* load the sequence database */
   if (cmd->init.db_cnt != 0) {
-    SEQ_CACHE *sdb = NULL;
+    P7_SEQCACHE *sdb = NULL;
 
     p  = cmd->init.data + cmd->init.seqdb_off;
-    if ((status = cache_SeqDb(p, &sdb)) != eslOK) {
-      p7_syslog(LOG_ERR,"[%s:%d] - cache_SeqDb %s error %d\n", __FILE__, __LINE__, p, status);
+    status = p7_seqcache_Open(p, &sdb, NULL);
+    if (status != eslOK) {
+      p7_syslog(LOG_ERR,"[%s:%d] - p7_seqcache_Open %s error %d\n", __FILE__, __LINE__, p, status);
       LOG_FATAL_MSG("cache seqdb error", status);
     }
 
@@ -453,23 +454,25 @@ process_InitCmd(HMMD_COMMAND *cmd, WORKER_ENV  *env)
 
   /* load the hmm database */
   if (cmd->init.hmm_cnt != 0) {
-    HMM_CACHE *hdb = NULL;
+    P7_HMMCACHE *hcache = NULL;
 
     p  = cmd->init.data + cmd->init.hmmdb_off;
-    if ((status = cache_HmmDb(p, &hdb)) != eslOK) {
-      p7_syslog(LOG_ERR,"[%s:%d] - cache_HmmDb %s error %d\n", __FILE__, __LINE__, p, status);
+
+    status = p7_hmmcache_Open(p, &hcache, NULL);
+    if (status != eslOK) {
+      p7_syslog(LOG_ERR,"[%s:%d] - p7_hmmcache_Open %s error %d\n", __FILE__, __LINE__, p, status);
       LOG_FATAL_MSG("cache hmmdb error", status);
     }
 
     /* validate the hmm database */
     cmd->init.hid[MAX_INIT_DESC-1] = 0;
     /* TODO: come up with a new pressed format with an id to compare - strcmp (cmd->init.hid, hdb->id) != 0 */
-    if (cmd->init.hmm_cnt != 1 || cmd->init.model_cnt != hdb->count) {
+    if (cmd->init.hmm_cnt != 1 || cmd->init.model_cnt != hcache->n) {
       p7_syslog(LOG_ERR,"[%s:%d] - hmm db %s: integrity error\n", __FILE__, __LINE__, p);
       LOG_FATAL_MSG("database integrity error", 0);
     }
 
-    env->hmm_db = hdb;
+    env->hmm_db = hcache;
   }
 
   /* write back to the master that we are on line */
