@@ -388,8 +388,8 @@ process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
     memcpy(*hmm->ins, p, n);   p += n;
 
     if (thmm.name) { hmm->name = strdup(p); p += strlen(hmm->name) + 1; }
-    if (thmm.acc)  { hmm->acc  = strdup(p); p += strlen(hmm->name) + 1; }
-    if (thmm.desc) { hmm->desc = strdup(p); p += strlen(hmm->name) + 1; }
+    if (thmm.acc)  { hmm->acc  = strdup(p); p += strlen(hmm->acc)  + 1; }
+    if (thmm.desc) { hmm->desc = strdup(p); p += strlen(hmm->desc) + 1; }
 
     n = hmm->M + 2;
     if (hmm->flags & p7H_RF)   { memcpy(hmm->rf,        p, n); p += n; }

@@ -206,7 +206,7 @@ main(int argc, char **argv)
  * in three separate terminal windows    
  *     valgrind --dsymutil=yes --leak-check=yes --show-reachable=yes src/hmmpgmd --master --seqdb foo.d 
  *     valgrind                --leak-check=yes --show-reachable=yes src/hmmpgmd --worker 127.0.0.1 --cpu 1 
- *     valgrind                --leak-check=yes --show-reachable=yes src/hmmc2 -S
+ *     valgrind --dsymutil=yes --leak-check=yes --show-reachable=yes src/hmmc2 -S
  *     
  * copy/paste tutorial/M1.hmm as an example hmmsearch    
  * or any HMM. On Mac OS/X, to "copy" a file my.hmm to the clipboard:
