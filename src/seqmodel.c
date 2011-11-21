@@ -58,30 +58,35 @@ p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
 
   if ((hmm = p7_hmm_Create(M, abc)) == NULL) { status = eslEMEM; goto ERROR; }
   
-  for (k = 0; k <= M; k++)
+  for (k = 0; k <= M; k++) /* loop through nodes */
     {
-      /* Use rows of P matrix as source of match emission vectors */
+      /* Use rows of P matrix as source of match emission vectors */ /* M0 and D0 do not exist */
       if (k > 0) esl_vec_D2F(Q->mx[(int) dsq[k]], abc->K, hmm->mat[k]);
 
-      /* Set inserts to background for now. This will be improved. */
+      /* Set inserts to background for now. This will be improved.
+       * bld->bg->f are SW50 or the original frequences
+       * from the score matrix (if --consistent is on)
+       */
       esl_vec_FCopy(f, abc->K, hmm->ins[k]);
 
-      hmm->t[k][p7H_MM] = 1.0 - 2 * popen;
-      hmm->t[k][p7H_MI] = popen;
-      hmm->t[k][p7H_MD] = popen;
-      hmm->t[k][p7H_IM] = 1.0 - pextend;
-      hmm->t[k][p7H_II] = pextend;
-      hmm->t[k][p7H_DM] = 1.0 - pextend;
-      hmm->t[k][p7H_DD] = pextend;
+      /* Search mode is set in profile, so do not touch anything here! */
+
+      hmm->t[k][p7H_MM] = 1.0 - 2 * popen; /* k = 0, tBM_1 */ /* B = M_0 */
+      hmm->t[k][p7H_MI] = popen;           /* k = 0, tBI_0 */
+      hmm->t[k][p7H_MD] = popen;           /* k = 0; tBD_1 */
+      hmm->t[k][p7H_IM] = 1.0 - pextend;   /* k = 0; tI_0M_1 */
+      hmm->t[k][p7H_II] = pextend;         /* k = 0; tI_0I_0 */
+      hmm->t[k][p7H_DM] = 1.0 - pextend;   /* k = 0; tD_0M_1 */ /* UNUSED (STATE DOES NOT EXIST) */
+      hmm->t[k][p7H_DD] = pextend;         /* k = 0; tD_0D_0 */ /* UNUSED (STATE DOES NOT EXIST) */
     }
 
   /* Deal w/ special stuff at node M, overwriting a little of what we
    * just did. 
    */
-  hmm->t[M][p7H_MM] = 1.0 - popen;
-  hmm->t[M][p7H_MD] = 0.;
-  hmm->t[M][p7H_DM] = 1.0;
-  hmm->t[M][p7H_DD] = 0.;
+  hmm->t[M][p7H_MM] = 1.0 - popen; /* tM_ME */ /* E = M_M+1 */
+  hmm->t[M][p7H_MD] = 0.;          /* UNUSED (STATE DOES NOT EXIST) */
+  hmm->t[M][p7H_DM] = 1.0;         /* tD_ME */
+  hmm->t[M][p7H_DD] = 0.;          /* UNUSED (STATE DOES NOT EXIST) */
   
   /* Add mandatory annotation
    */

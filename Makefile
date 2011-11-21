@@ -44,7 +44,7 @@ manext      = .1
 # Compiler configuration
 #
 CC        = gcc -std=gnu99
-CFLAGS    = -g -O3 -fomit-frame-pointer -fstrict-aliasing -mpentiumpro
+CFLAGS    = -O3 -fomit-frame-pointer -fstrict-aliasing -mpentiumpro
 LDFLAGS   = -static 
 SIMDFLAGS = -msse2
 CPPFLAGS  = 
@@ -94,8 +94,6 @@ PROGS = \
 	hmmsearch\
 	hmmsim\
 	hmmstat\
-	jackhmmer\
-	phmmer\
 	shmmer
 
 # all: Compile all documented executables.

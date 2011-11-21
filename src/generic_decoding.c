@@ -102,16 +102,17 @@ p7_GDecoding(const P7_PROFILE *gm, const P7_GMX *fwd, P7_GMX *bck, P7_GMX *pp)
   for (k = 0; k <= M; k++)
     MMX(0,k) = IMX(0,k) = DMX(0,k) = 0.0;
   
-  for (i = 1; i <= L; i++)
+  for (i = 1; i <= L; i++)  /* target sequence */
     {
       denom = 0.0;
       MMX(i,0) = IMX(i,0) = DMX(i,0) = 0.0;
-      for (k = 1; k < M; k++)
+      for (k = 1; k < M; k++)  /* states */
 	{
 	  MMX(i,k) = expf(fwd->dp[i][k*p7G_NSCELLS + p7G_M] + bck->dp[i][k*p7G_NSCELLS + p7G_M] - overall_sc); denom += MMX(i,k);
 	  IMX(i,k) = expf(fwd->dp[i][k*p7G_NSCELLS + p7G_I] + bck->dp[i][k*p7G_NSCELLS + p7G_I] - overall_sc); denom += IMX(i,k);
 	  DMX(i,k) = 0.;
 	}
+      /* Last state */
       MMX(i,M)     = expf(fwd->dp[i][M*p7G_NSCELLS + p7G_M] + bck->dp[i][M*p7G_NSCELLS + p7G_M] - overall_sc); denom += MMX(i,M);
       IMX(i,M)     = 0.;
       DMX(i,M)     = 0.;

@@ -829,6 +829,7 @@ typedef struct p7_builder_s {
   P7_BG               *bg;               /* marginals from Q or SwissProt frequencies              */
   double               popen;         	 /* gap open probability                                   */
   double               pextend;          /* gap extend probability                                 */
+  double               scale;            /* scale of the score system                              */
   const ESL_ALPHABET  *abc;		         /* COPY of alphabet                                       */
   char errbuf[eslERRBUFSIZE];            /* informative message on model construction failure      */
 } P7_BUILDER;

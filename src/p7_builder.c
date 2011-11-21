@@ -23,6 +23,7 @@
 #include "esl_msaweight.h"
 #include "esl_random.h"
 #include "esl_vectorops.h"
+#include "esl_scorematrix.h"
 
 #include "hmmer.h"
 
@@ -171,8 +172,6 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
  * Args:      bld      - <P7_BUILDER> to initialize
  *            mxfile   - score matrix file to use, or NULL for BLOSUM62 default
  *            env      - env variable containing directory list where <mxfile> may reside
- *            popen    - gap open probability
- *            pextend  - gap extend probability
  *
  * Returns:   <eslOK> on success.
  *            
@@ -193,13 +192,23 @@ int
 p7_builder_SetScoreSystem(P7_BUILDER *bld, const ESL_GETOPTS *go, const char *env)
 {
   ESL_FILEPARSER  *efp      = NULL;
-  double          *fa       = NULL;
-  double          *fb       = NULL;
+  double          *fa       = NULL; /* original background frequencies */
+  double          *fb       = NULL; /* original background frequencies */
+  ESL_DMATRIX  *Qu   = NULL; /* joint probabilities from ungapped equation */
   double           open;
   double           extend;
   double           slambda;
+  double           rlambda;
+  double           clambda;
+  double           ulambda; /* ungapped lambda */
+  double           glambda; /* gapped lambda   */
+  double           flambda; /* final lambda    */
   int              a,b;
   int              status;
+  int              i,j;
+  int              mode;
+  double           *freq;
+  double           D = 0;
 
   const char *mxfile = esl_opt_GetString(go, "--mxfile");
 
@@ -224,69 +233,346 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const ESL_GETOPTS *go, const char *en
   if (! esl_scorematrix_IsSymmetric(bld->S)) 
     ESL_XFAIL(eslEINVAL, bld->errbuf, "Matrix isn't symmetric");
 
-  if (esl_opt_GetBoolean(go, "--collapse"))
+  if (( Qu  = esl_dmatrix_Create(bld->S->Kp, bld->S->Kp)) == NULL) {status = eslEMEM; goto ERROR; }
+
+  /* Compute probabilistic basis of the score system
+   *
+   * Set builder with:
+   *
+   * Target frequencies from the original matrix (freq. of aa pairs in homologous seq.)
+   * Ungapped lambda using original bg (consistent) or query/target bg (inconsistent)
+   *
+   */
+
+  if (esl_opt_GetBoolean(go, "--swlike")) /* probabilistic interpretation of sw scores */
+     {
+   	  open   = esl_opt_GetReal(go, "--sopen");
+   	  extend = esl_opt_GetReal(go, "--sextend");
+
+   	  /* Choose random model: BLOSUM62 or SW50 backgroounds */
+
+   	if (esl_opt_GetBoolean(go, "--bl62")) /* BLOSUM62 */
+   	{
+   		mode = 0;
+   	}
+   	else /* SW50 */
+   	{
+   		mode = 1;
+   	}
+
+ 	  /* Compute ungapped lambda and target frequencies
+ 	   * from the ungapped equation
+ 	   */
+ 	  if ((status = esl_sco_ProbifyGivenBG_SC(bld->S, mode, &(bld->Q), &fa, &fb, &ulambda)) != eslOK)
+ 	  		  ESL_XFAIL(eslEINVAL, bld->errbuf, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
+
+ 	  /* Set gap open and extension */
+ 	  bld->popen   = exp(ulambda * open) / (1 - exp(ulambda * extend) + 2 * exp(ulambda * open));
+ 	  bld->pextend = exp(ulambda * extend);
+
+   	  /* Compute conditional targets                        */
+ 	  for (a = 0; a < bld->abc->K; a++)
+ 		  for (b = 0; b < bld->abc->K; b++)
+ 			  bld->Q->mx[a][b] = bld->Q->mx[a][b] / fa[a];	   /* Q->mx[a][b] is now P(b | a) */ /* Pij for degenerate residues is 0 */
+
+ 	  /* Set background */
+ 	  for (a = 0; a < bld->abc->K; a++)
+ 		  bld->bg->f[a] = (float)fa[a];           /* bld->bg->f[a] is now P(a) */
+
+ 	  /* Set scale in builder */
+ 	 if (esl_opt_GetBoolean(go, "--scale"))
+ 	 {
+ 	  bld->scale = ulambda; /* scaled to original substitution matrix e.g. half-bits for blosum62 */
+ 	 }
+ 	 else
+ 	 {
+ 		bld->scale = eslCONST_LOG2; /* scaled to bits */
+
+ 	 }
+ 	  /* Print Results */
+ //	  printf("Results: %f %f %f %f %f %f %f %f \n\n", open, extend, bld->popen, bld->pextend, ulambda, glambda, ulambda - (glambda - ulambda), D / eslCONST_LOG2); /* print also ulambda and glambda */
+
+
+     } /* End of final parameterixation*/
+
+
+  else if (esl_opt_GetBoolean(go, "--final")) /* final parameterization with collapse gap open and extension scores */
+    {
+  	  open   = esl_opt_GetReal(go, "--sopen");
+  	  extend = esl_opt_GetReal(go, "--sextend");
+
+  	  /* Choose random model: BLOSUM62 or SW50 backgroounds */
+
+  	if (esl_opt_GetBoolean(go, "--bl62")) /* BLOSUM62 */
+  	{
+  		mode = 0;
+  	}
+
+  	else /* SW50 */
+  	{
+  		mode = 1;
+  	}
+
+	  /* Compute ungapped lambda and target frequencies
+	   * from the ungapped equation
+	   */
+	  if ((status = esl_sco_ProbifyGivenBG_SC(bld->S, mode, &Qu, NULL, NULL, &ulambda)) != eslOK)
+	  		  ESL_XFAIL(eslEINVAL, bld->errbuf, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
+
+  	  /* Compute gapped lambda and target frequencies
+  	   * from the gapped equation
+  	   */
+	  if ((status = esl_sco_gap_ProbifyGivenBG(bld->S, open, extend, mode, &(bld->Q), NULL, NULL, &fa, &fb, &glambda)) != eslOK)
+		  ESL_XFAIL(eslEINVAL, bld->errbuf, "Castellano/Eddy method with backgrounds (based on Yu/Altschul method) failed to backcalculate probabilistic basis of Smith-Waterman score system");
+
+  	  /* Compute tMI and tII                                */
+	  //bld->popen   = exp(glambda * open) / (1 - exp(glambda * extend) + 2 * exp(glambda * open));
+	  //bld->pextend = exp(glambda * extend);
+
+	  bld->popen   = exp(ulambda * open) / (1 - exp(ulambda * extend) + 2 * exp(ulambda * open));
+	  bld->pextend = exp(ulambda * extend);
+
+	  /* Compute Relative Entropy between
+	   * ungapped and gapped targets
+	   */
+	  for (i = 0; i < bld->S->K; i++)
+	      for (j = 0; j < bld->S->K; j++)
+	    	  D +=  bld->Q->mx[i][j] * log(bld->Q->mx[i][j] / Qu->mx[i][j]);
+
+  	  /* Compute conditional targets                        */
+	  for (a = 0; a < bld->abc->K; a++)
+		  for (b = 0; b < bld->abc->K; b++)
+			  bld->Q->mx[a][b] = Qu->mx[a][b] / fa[a];	   /* Q->mx[a][b] is now P(b | a) */ /* NOW USING UNGAPPED LAMBDA PROB. BASIS!!! */
+
+	  /* Set background */
+	  for (a = 0; a < bld->abc->K; a++)
+		  bld->bg->f[a] = (float)fa[a];           /* bld->bg->f[a] is now P(a) */
+
+
+
+	  /* Print Results */
+	  printf("Results: %f %f %f %f %f %f %f %f \n\n", open, extend, bld->popen, bld->pextend, ulambda, glambda, ulambda - (glambda - ulambda), D / eslCONST_LOG2); /* print also ulambda and glambda */
+
+
+    } /* End of final parameterixation*/
+
+
+
+
+  else if (esl_opt_GetBoolean(go, "--collapse")) /* collapse gap open and extension scores */
   {
 	  open   = esl_opt_GetReal(go, "--sopen");
 	  extend = esl_opt_GetReal(go, "--sextend");
 
-	  /* Compute score system lambda */
-	  if ((status = esl_sco_gap_Probify(bld->S, open, extend, &(bld->Q), &(bld->popen), &(bld->pextend), &fa, &fb, &slambda)) != eslOK)
-		  ESL_XFAIL(eslEINVAL, bld->errbuf, "Castellano/Eddy method (based on Yu/Altschul method) failed to backcalculate probabilistic basis of Smith-Waterman score system");
+	  if (esl_opt_GetBoolean(go, "--original"))
+	  {
 
-	  printf("Uncorrected lambda %f\n", slambda);
+		  /* original background (high-precision) used to derive BLOSUM62 */
+		  ESL_ALLOC(freq, sizeof(double) * bld->abc->K);
+		  esl_background_BLOSUM62(freq);
 
-	  /* Set popen/pextend probabilities in bld */
-	  bld->popen   = exp(slambda * open) / (1 - exp(slambda * extend) + 2 * exp(slambda * open)); /* IS THIS CORRECT??? IS THIS THE LAMBDA I WANT TO USE??? */
-	  bld->pextend = exp(slambda * extend);
+		  /* original target (high-precision) used to derive BLOSUM62     */
 
-	  /* Set probabilities in bld */
-	   for (a = 0; a < bld->abc->K; a++)
-	 	  for (b = 0; b < bld->abc->K; b++)
-	 		  bld->Q->mx[a][b] /= fa[a];	   /* Q->mx[a][b] is now P(b | a) */
+		  if (( bld->Q = esl_dmatrix_Create(bld->S->Kp, bld->S->Kp)) == NULL) {status = eslEMEM; goto ERROR; }
 
-	   /* Set background probabilities in bld */
-	   if (! esl_opt_GetBoolean(go, "--inconsistent"))
-	 	  for (b = 0; b < bld->abc->K; b++)
-	 		  bld->bg->f[b] = (float)fb[b];           /* bld->bg->f[b] is now  P(b) */
-  }
+		  esl_target_BLOSUM62(bld->Q);
 
-  else
+		  for (a = 0; a < bld->abc->K; a++)
+		  		  for (b = 0; b < bld->abc->K; b++)
+		  			  bld->Q->mx[a][b] /= freq[a];	   /* Q->mx[a][b] is now P(b | a) */
+
+		  if (esl_opt_GetBoolean(go, "--consistent")) /* original substitution score matrix bg frequencies (CONSISTENT SCORE SYSTEM) */
+		  	  {
+		  		  /* Reset bg probabilities
+		  		   * They were set to SW50 before (INCONSISTENT SCORE SYSTEM)
+		  		   * pinfo->bg is still set to SW50
+		  		   */
+		  		  for (a = 0; a < bld->abc->K; a++)
+		  			  bld->bg->f[a] = (float)freq[a];           /* bld->bg->f[a] is now P(a) */
+		  	  }
+
+	  }
+
+	  else
+	  {
+
+	  /* Compute original target, bg and lambda scale of the score matrix */
+//	  if ((status = esl_sco_ProbifyGivenBG_SC(bld->S, &(bld->Q), &fa, &fb, &slambda)) != eslOK)
+		  ESL_XFAIL(eslEINVAL, bld->errbuf, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix"); /* I should compute this with the original BLOSUM backgrounds */
+//	  if ((status = esl_sco_ProbifyGivenBG(bld->S, fa, fb, &slambda, &(bld->Q))) != eslOK)
+
+	  /* Set backvalculated target probabilities in
+	   * score matrix Q to conditional probabilities
+	   * using the matrix backgrounds (marginals)
+	   */
+	  for (a = 0; a < bld->abc->K; a++)
+		  for (b = 0; b < bld->abc->K; b++)
+			  bld->Q->mx[a][b] /= fa[a];	   /* Q->mx[a][b] is now P(b | a) */
+
+	  /* Set background probabilities in bld */
+	  if (esl_opt_GetBoolean(go, "--consistent")) /* original substitution score matrix bg frequencies (CONSISTENT SCORE SYSTEM) */
+	  {
+		  /* Reset bg probabilities
+		   * They were set to SW50 before (INCONSISTENT SCORE SYSTEM)
+		   * pinfo->bg is still set to SW50
+		   */
+		  for (a = 0; a < bld->abc->K; a++)
+			  bld->bg->f[a] = (float)fa[a];           /* bld->bg->f[a] is now P(a) */
+	  }
+
+	  }
+
+	  /* Compute gapped lambda */
+	  if (esl_opt_GetBoolean(go, "--bg")) /* SW50 bg frequencies */
+	  {
+//		  if ((status = esl_sco_gap_ProbifyGivenBG(bld->S, open, extend, NULL, NULL, NULL, NULL, NULL, &slambda)) != eslOK)
+//			  ESL_XFAIL(eslEINVAL, bld->errbuf, "Castellano/Eddy method with backgrounds (based on Yu/Altschul method) failed to backcalculate probabilistic basis of Smith-Waterman score system");
+	  }
+
+	  else /* Original bg frequencies from score matrix (although not used in the calculation) */
+	  {
+		  if ((status = esl_sco_gap_Probify(bld->S, open, extend, NULL, NULL, NULL, NULL, NULL, &slambda)) != eslOK)
+			  ESL_XFAIL(eslEINVAL, bld->errbuf, "Castellano/Eddy method (based on Yu/Altschul method) failed to backcalculate probabilistic basis of Smith-Waterman score system");
+
+	  }
+
+	  /* Set popen/pextend probabilities in bld
+	   * Round off lambda to three significant digits
+	   */
+	  if (esl_opt_GetBoolean(go, "--log2lambda"))
+	  {
+		  rlambda = 0.6931; /* up to 4 significant digits */
+	  }
+	  else
+	  {
+//	  rlambda = round(slambda * 1000.) / 1000.; /* up to 3 significant digits */
+
+		  rlambda = slambda;
+	  }
+//	  clambda = round((rlambda + 1.90 * (1/400. + 1/400.)) * 1000.) / 1000.;
+//
+//	  bld->popen   = round((exp(clambda * open) / (1 - exp(clambda * extend) + 2 * exp(clambda * open))) * 1000.) / 1000.; /* up to 3 significant digits using the rounded off lambda (GOOD IDEA?) */
+//	  bld->pextend = round(exp(clambda * extend) * 1000.) / 1000.;
+//
+//	  printf("hi\n");
+//	  printf("Results: %f %f %f %f %f\n\n", open, extend, bld->popen, bld->pextend, clambda);
+
+//	  bld->popen   = round((exp(rlambda * open) / (1 - exp(rlambda * extend) + 2 * exp(rlambda * open))) * 10000.) / 10000.; /* up to 3 significant digits using the rounded off lambda (GOOD IDEA?) */
+//	  bld->pextend = round(exp(rlambda * extend) * 1000.) / 1000.;
+
+
+	  bld->popen   = exp(rlambda * open) / (1 - exp(rlambda * extend) + 2 * exp(rlambda * open)); /* up to 3 significant digits using the rounded off lambda (GOOD IDEA?) */
+	  bld->pextend = exp(rlambda * extend);
+
+
+
+	  printf("Results: %f %f %f %f %f %f\n\n", open, extend, bld->popen, bld->pextend, rlambda, slambda);
+
+  } /* end collapse gap open and extension scores */
+
+  else if (esl_opt_GetBoolean(go, "--convert")) /* convert gap open and extension scores */
   {
-	  /* Compute score matrix lambda */
+	  open   = esl_opt_GetReal(go, "--sopen");
+	  extend = esl_opt_GetReal(go, "--sextend");
+
+	  /* Compute original target, bg and lambda scale of the score matrix */
 	  if ((status = esl_sco_Probify(bld->S, &(bld->Q), &fa, &fb, &slambda)) != eslOK)
 		  ESL_XFAIL(eslEINVAL, bld->errbuf, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
 
-	  /* Set popen/pextend probabilities in bld */
-	  if (esl_opt_GetBoolean(go, "--convert"))
+	  /* Set popen/pextend probabilities in bld
+	   * Round off lambda to three significant digits
+	   */
+	  if (esl_opt_GetBoolean(go, "--log2lambda"))
 	  {
-		  open   = esl_opt_GetReal(go, "--sopen");
-		  extend = esl_opt_GetReal(go, "--sextend");
-
-		  bld->popen   = exp(slambda * open);    /* this is the backcalculated lambda from the score matrix */
-		  bld->pextend = exp(slambda * extend);
+		  rlambda = 0.6931; /* up to 4 significant digits */
+	  }
+	  else
+	  {
+	  rlambda = round(slambda * 1000.) / 1000.; /* up to 3 significant digits */
 	  }
 
-	  else /* specify popen and pextend directly */
-	  {
-		  open   = esl_opt_GetReal(go, "--popen");
-		  extend = esl_opt_GetReal(go, "--pextend");
+	  bld->popen   = round(exp(rlambda * open) * 10000.) / 10000.;    /* this is the backcalculated ungapped lambda from the score matrix */
+	  bld->pextend = round(exp(rlambda * extend) * 1000.) / 1000.;
 
-		  /* Set popen/pextend probabilities in bld */
-		  bld->popen   = open;
-		  bld->pextend = extend;
-	  }
+	  printf("Results: %f %f %f %f %f\n\n", open, extend, bld->popen, bld->pextend, rlambda);
 
-	  /* Set probabilities in bld */
+	  /* Set original target probabilities in bld */
 	   for (a = 0; a < bld->abc->K; a++)
 	 	  for (b = 0; b < bld->abc->K; b++)
 	 		  bld->Q->mx[a][b] /= fa[a];	   /* Q->mx[a][b] is now P(b | a) */
 
 	   /* Set background probabilities in bld */
+	   if (esl_opt_GetBoolean(go, "--consistent")) /* substitution score matrix bg frequencies (CONSISTENT SCORE SYSTEM) */
+	   {
+		   /* Reset bg probabilities
+		    * They were set to SW50 before (INCONSISTENT SCORE SYSTEM)
+		    */
+		   for (a = 0; a < bld->abc->K; a++)
+			   bld->bg->f[a] = (float)fa[a];           /* bld->bg->f[a] is now  P(a) */
+	   }
+  } /* end convert gap open and extension scores */
 
-	   if (! esl_opt_GetBoolean(go, "--inconsistent"))
-	 	  for (a = 0; a < bld->abc->K; a++)
-	 		  bld->bg->f[a] = (float)fa[a];           /* bld->bg->f[a] is now  P(a) */
-  }
+  else /* use command-line gap open and extend probabilities (DEFAULT) */
+  {
+	  open   = esl_opt_GetReal(go, "--popen");
+	  extend = esl_opt_GetReal(go, "--pextend");
+
+	  /* Set popen/pextend probabilities in bld */
+	  bld->popen   = open;
+	  bld->pextend = extend;
+
+	  if (esl_opt_GetBoolean(go, "--original"))
+	  {
+
+		  /* original background (high-precision) used to derive BLOSUM62 */
+		  ESL_ALLOC(freq, sizeof(double) * bld->abc->K);
+		  esl_background_BLOSUM62(freq);
+
+		  /* original target (high-precision) used to derive BLOSUM62     */
+
+		  if (( bld->Q = esl_dmatrix_Create(bld->S->Kp, bld->S->Kp)) == NULL) {status = eslEMEM; goto ERROR; }
+
+		  esl_target_BLOSUM62(bld->Q);
+
+		  for (a = 0; a < bld->abc->K; a++)
+		  		  for (b = 0; b < bld->abc->K; b++)
+		  			  bld->Q->mx[a][b] /= freq[a];	   /* Q->mx[a][b] is now P(b | a) */
+
+		  if (esl_opt_GetBoolean(go, "--consistent")) /* original substitution score matrix bg frequencies (CONSISTENT SCORE SYSTEM) */
+		  	  {
+		  		  /* Reset bg probabilities
+		  		   * They were set to SW50 before (INCONSISTENT SCORE SYSTEM)
+		  		   * pinfo->bg is still set to SW50
+		  		   */
+		  		  for (a = 0; a < bld->abc->K; a++)
+		  			  bld->bg->f[a] = (float)freq[a];           /* bld->bg->f[a] is now P(a) */
+		  	  }
+	  }
+
+	  else
+	  {
+
+		  /* Compute original target, bg and lambda scale of the score matrix */
+		  if ((status = esl_sco_Probify(bld->S, &(bld->Q), &fa, &fb, &slambda)) != eslOK)
+			  ESL_XFAIL(eslEINVAL, bld->errbuf, "Yu/Altschul method failed to backcalculate probabilistic basis of score matrix");
+
+		  /* Set original target probabilities in bld */
+		  for (a = 0; a < bld->abc->K; a++)
+			  for (b = 0; b < bld->abc->K; b++)
+				  bld->Q->mx[a][b] /= fa[a];	   /* Q->mx[a][b] is now P(b | a) */
+
+		  /* Set background probabilities in bld */
+		  if (esl_opt_GetBoolean(go, "--consistent")) /* substitution score matrix bg frequencies (CONSISTENT SCORE SYSTEM) */
+		  {
+			  /* Reset bg probabilities
+			   * They were set to SW50 before (INCONSISTENT SCORE SYSTEM)
+			   */
+			  for (a = 0; a < bld->abc->K; a++)
+				  bld->bg->f[a] = (float)fa[a];           /* bld->bg->f[a] is now  P(a) */
+		  }
+
+	  }
+  } /* end command-line gap open and extend probabilities (DEFAULT) */
 
    /* Check range */
    if ( !(bld->popen >= 0 && bld->popen < 0.5) )
@@ -637,7 +923,12 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
   bld->errbuf[0] = '\0';
   if (! bld->Q) ESL_XEXCEPTION(eslEINVAL, "score system not initialized");
 
-  if ((status = p7_Seqmodel(bld->abc, sq->dsq, sq->n, sq->name, bld->Q, bg->f, bld->popen, bld->pextend, &hmm)) != eslOK) goto ERROR;
+  /* Set HMM with the bld configuration */
+  if ((status = p7_Seqmodel(bld->abc, sq->dsq, sq->n, sq->name, bld->Q, bg->f, bld->popen, bld->pextend, &hmm)) != eslOK) goto ERROR; /* bg->f are SW50 or the original frequences from the score matrix (if --consistent is on) */
+
+  /* Set profile and optimize profile
+   * from the bld configuration and HMM
+   */
   if ((status = calibrate(bld, hmm, bg, opt_gm, opt_om))                                                        != eslOK) goto ERROR;
 
   /* build a faux trace: relative to core model (B->M_1..M_L->E) */

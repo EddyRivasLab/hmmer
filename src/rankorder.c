@@ -40,7 +40,7 @@ extern double
 rank_order(float random_scores[], float sc)
 {
 	int          num;                               /* number of random sequence scores >= sc */
-	double       P = 0;                                 /* P-value of a score                     */
+	double       P = 0;                             /* P-value of a score                     */
 
 	num = binary_search(random_scores, LEFT, RIGHT, sc);
 	if (num == -eslFAIL) esl_fatal("Failed to compute rank order statistics");

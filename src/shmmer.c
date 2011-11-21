@@ -50,6 +50,7 @@ typedef struct {
   double          E;                    /* per-target E-value threshold      */
   int             by_E;		            /* use E-value as threshold          */
   enum            p7_evsetby_e E_setby; /* --Erank or --Edist                */
+  double          scale;                /* scale of the score system         */
 } WORKER_PINFO;
 
 /* Worker information
@@ -61,10 +62,12 @@ typedef struct {
   P7_SCORESYS    *sm;
   P7_TOPHITS     *th;
   int             ntargets;             /* number of target sequences        */
-  int             by_E;		            /* use E-value as threshold          */
-  double          E;                    /* per-target E-value threshold      */
-  enum            p7_evsetby_e E_setby; /* --Erank only                      */
   double          T;                    /* per-target score threshold        */
+  double          E;                    /* per-target E-value threshold      */
+  int             by_E;		            /* use E-value as threshold          */
+  enum            p7_evsetby_e E_setby; /* --Erank only                      */
+  double          imu;                  /* input mu                          */
+  double          ilambda;              /* input lambda                      */
 } WORKER_SINFO;
 
 #define ALGORITHMS  "--fwd,--vit,--sw,--miy"
@@ -113,8 +116,7 @@ static ESL_OPTIONS options[] = {
   /* Control of output */
   { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL,  NULL,              "direct output to file <f>, not stdout",                        2 },
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  "--textw",         "unlimit ASCII text output line width",                         2 },
-  { "--textw",      eslARG_INT,    "120", NULL, "n>=120",  NULL,  NULL,  "--notextw",       "set max width of ASCII text output lines",                     2 },
-// --verbose --prints query running and number to standard error
+  { "--textw",      eslARG_INT,    "180", NULL, "n>=180",  NULL,  NULL,  "--notextw",       "set max width of ASCII text output lines",                     2 },
   /* Control of headers */
 //  { "--options",    eslARG_NONE,  NULL, NULL, NULL,      NULL,  NULL,  NULL,              "print all running options including defaults",                 3 }, /* NOT IMPLEMENTED */
   { "--stats",      eslARG_NONE,    NULL, NULL, NULL,      NULL,  NULL,  SALGORITHMS,       "print model statistics (h, lambda, mu/tau)",                   3 }, /* Should it work with Erank? */
@@ -129,19 +131,31 @@ static ESL_OPTIONS options[] = {
   /* Control of scoring system */
   { "--popen",      eslARG_REAL,  "0.02", NULL,"0<=x<0.5", NULL,  NULL,  SGAPS,             "gap open probability",                                         6 },
   { "--pextend",    eslARG_REAL,   "0.4", NULL,"0<=x<1",   NULL,  NULL,  SGAPS,             "gap extend probability",                                       6 },
-  { "--sopen",      eslARG_REAL,  "-7.0",  NULL, "-100<=x<=0",NULL,  NULL,  PGAPS,           "gap open score",                                               6 }, /* default in ssearch (unihit)*/
-  { "--sextend",    eslARG_REAL,   "-1.0", NULL, "-100<=x<=0",NULL,  NULL,  PGAPS,           "gap extend score",                                             6 }, /* default in ssearch (unihit)*/
-  { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,      NULL,  NULL,   NULL,             "substitution score matrix [BLOSUM62]",                         6 }, /* default in ssearch (unihit) */
+  { "--sopen",      eslARG_REAL,  "-12.0",  NULL,"-1000<=x<=0",NULL, NULL, PGAPS,           "gap open score",                                               6 },
+  { "--sextend",    eslARG_REAL,  "-1.0", NULL, "-1000<=x<0", NULL,  NULL,  PGAPS,          "gap extend score",                                             6 },
+  { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,      NULL,  NULL,   NULL,             "substitution score matrix [BLOSUM62]",                         6 },
   { "--convert",    eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  PGAPS,             "convert gap open/extension scores into probabilities",         6 }, /* See J2 page 129. Should print the result of the conversion */
-  { "--inconsistent",eslARG_NONE,  FALSE, NULL, NULL,      NULL,  NULL,  SALGORITHMS,       "use background frequencies from SwissProt",                    6 },
   { "--collapse",   eslARG_NONE,    FALSE,NULL, NULL,      NULL,  NULL,  PGAPS,             "collapse gap open/extension scores into probability model",    6 },
+  { "--bg",   eslARG_NONE,    FALSE,NULL, NULL,      NULL,  "--collapse",  PGAPS,           "use query/target backgrounds to compute lambda in collapse model", 6 }, /* this bg will be used for random model unless --consistent is on */
+  { "--consistent",eslARG_NONE,  FALSE, NULL, NULL,      NULL,  NULL,  SALGORITHMS,         "use substitution score matrix background for random model",   6 },
+  { "--original",eslARG_NONE,  FALSE, NULL, NULL,      NULL,  NULL,  SALGORITHMS,         "use original (high-precision) targets and backgrounds from BLOSUM62",   6 },
+  { "--glambda",eslARG_NONE,  FALSE, NULL, NULL,      NULL,  NULL,  SALGORITHMS,         "compute gapped lambda",   6 },
+  { "--sw50",eslARG_NONE,  FALSE, "default", NULL,      NULL,  NULL,  SALGORITHMS,         "SW50 random model",   6 },
+  { "--bl62",eslARG_NONE,  FALSE, NULL, NULL,      NULL,  NULL,  SALGORITHMS,         "BLOSUM62 random model",   6 },
+  {"--log2lambda",   eslARG_NONE,    FALSE,NULL, NULL,      NULL,  NULL,  PGAPS,    "use log2 lambda to compute gap open and extend probabilities", 6 },
+  {"--swlike",   eslARG_NONE,    FALSE,NULL, NULL,      NULL,  NULL,  SALGORITHMS,    "use new equations for scores", 6 },
+  {"--scale",   eslARG_NONE,    FALSE,NULL, NULL,      NULL,  NULL,  SALGORITHMS,    "use original Smith-Waterman scale for scores", 6 },
+  {"--round",   eslARG_NONE,    FALSE,NULL, NULL,      NULL,  NULL,  SALGORITHMS,    "round use Smith-Waterman scaled for scores", 6 },
+//  { "--normalize",  eslARG_NONE,    FALSE,NULL, NULL,      NULL,  NULL,  PGAPS,             "normalize substitution matrix to bits",                        6 },
   /* Control of reporting thresholds */
   { "-T",           eslARG_REAL,  "-500", NULL,  NULL,   REPOPTS,  NULL,  NULL,             "report sequences >= this score threshold in output",           7 },
   { "-E",           eslARG_REAL,  FALSE, NULL, "x>0",    REPOPTS,  NULL,  NULL,             "report sequences <= this E-value threshold in output",         7 },
   /* Control of E-value calculation */
   { "--Erank",      eslARG_NONE,   "default" ,NULL, NULL, "--Edist","-E,--Efile",NULL,      "use rank order statistics to compute E-values",                8 },
-  { "--Edist",      eslARG_NONE,   FALSE, NULL, NULL, "--Erank",  "-E",  SALGORITHMS,       "use theoretical lambda to compute E-values",                   8 },
+  { "--Edist",      eslARG_NONE,   FALSE, NULL, NULL, "--Erank",  "-E",  NULL,              "use theoretical lambda to compute E-values",                   8 },
   { "--Efile",      eslARG_INFILE,  NULL, NULL, NULL,      NULL,  "-E,--Erank",  "--Edist", "scores from random sequences",                                 8 },
+  { "--Emu",      eslARG_REAL,   FALSE, NULL, NULL, "--Erank",  "--Edist",  PALGORITHMS,     "use fitted mu to compute E-values",                            8 },
+  { "--Elambda",      eslARG_REAL,   FALSE, NULL, NULL, "--Erank",  "--Edist",  PALGORITHMS, "use fitted lambda to compute E-values",                        8 },
   { "--EvL",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,              "length of sequences for Viterbi Gumbel mu fit",                8 },
   { "--EvN",        eslARG_INT,    "200", NULL,"n>0",      NULL,  NULL,  NULL,              "number of sequences for Viterbi Gumbel mu fit",                8 },
   { "--EfL",        eslARG_INT,    "100", NULL,"n>0",      NULL,  NULL,  NULL,              "length of sequences for Forward exp tail tau fit",             8 },
@@ -281,8 +295,11 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--sextend"))   fprintf(ofp, "# gap extend score:                %f\n",             esl_opt_GetReal  (go, "--sextend"));
   if (esl_opt_IsUsed(go, "--mxfile"))    fprintf(ofp, "# subst score matrix:              %s\n",             esl_opt_GetString(go, "--mxfile"));
   if (esl_opt_IsUsed(go, "--convert"))   fprintf(ofp, "# converting gap open/extension scores into probabilities      \n");
-  if (esl_opt_IsUsed(go, "--inconsistent"))   fprintf(ofp, "# Using inconsistent background frequencies from SwissProt      \n");
   if (esl_opt_IsUsed(go, "--collapse"))  fprintf(ofp, "# collapse gap open/extension scores into probability model \n");
+  if (esl_opt_IsUsed(go, "--bg"))   fprintf(ofp, "# Using query/target backgrounds to compute lambda in collapse model     \n");
+  if (esl_opt_IsUsed(go, "--consistent"))   fprintf(ofp, "# Using substitution score matrix background for random model      \n");
+  if (esl_opt_IsUsed(go, "--original"))   fprintf(ofp, "# Using (high-precision) bg and targets used to derive the original BLOSUM62      \n");
+
   /* Control of reporting thresholds */
   if (esl_opt_IsUsed(go, "-T"))          fprintf(ofp, "# sequence reporting threshold:    score >= %g\n",    esl_opt_GetReal(go, "-T"));
   if (esl_opt_IsUsed(go, "-E"))          fprintf(ofp, "# sequence reporting threshold:    E-value <= %g\n",  esl_opt_GetReal(go, "-E"));
@@ -430,26 +447,37 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  if (esl_opt_GetBoolean(go, "--unihit")) bld->mode = p7_UNILOCAL; /* unihit   */
 	  else                                    bld->mode = p7_LOCAL;    /* multihit */
 
-	  /* Set inconsistent background for now */
-	  bld->bg = p7_bg_Create(abc);
+	  /* Set inconsistent background for now (SW50)
+	   * It means that bg do not match their target frequencies
+	   * This will be changed if the --consistent
+	   * option is on
+	   */
+	  bld->bg = p7_bg_Create(abc); /* SW50 by default (INCONSISTENT SCORE SYSTEM) */
 
 	  /* Set score system in builder
 	   * It only sets emissions and
 	   * transitions int the core model
 	   * Set bg to matrix marginals
-	   * unless --inconsistent is on.
+	   * if --consistent is on
 	   */
 	  status = p7_builder_SetScoreSystem(bld, go, NULL);
 	  if (status != eslOK) esl_fatal("Failed to set single query seq score system:\n%s\n", bld->errbuf);
 
+	  /* Initialize pinfo
+	   * In case --consistent is on
+	   * bld->bg is set to the original bg in the
+	   * substitution score matrix and so will pinfo->bg
+	   * be set. Otherwise, both are the SW50 frequencies
+	   *
+	   */
+
 	  /* Allocate pinfo */
 	  ESL_ALLOC(pinfo, sizeof(*pinfo));
-
-	  /* Initialize pinfo */
-	  pinfo->bg = bld->bg;   /* We'll need it to reconfig length in random model */
-
 	  if (esl_opt_GetBoolean(go, "--fwd")) pinfo->alg_mode = FWD;
 	  else                                 pinfo->alg_mode = VIT;
+
+	  pinfo->bg = bld->bg;
+	  pinfo->scale = bld->scale; /* bits or the scale of the original substitution matrix e.g. half-bits for blosum62 */
 
 	  pinfo->ntargets   = 0;
 	  if ( esl_opt_IsOn(go,"-T") )                           /* set threshold to scores   */
@@ -466,11 +494,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 		  {
 			  pinfo->E_setby = RANK_ORDER;
 
+			  printf("Opening random scores\n");
+
 			  /* Open random scores file */
 			  if (esl_opt_IsOn(go, "--Efile")) if ((rsfp = fopen(esl_opt_GetString(go, "--Efile"), "r")) == NULL) esl_fatal("Failed to open random scores file %s for reading\n", esl_opt_GetString(go, "--Efile"));
 
+			  printf("Reading random scores\n");
+
 			  /* read scores from random sequences */
 			  while (fscanf(rsfp, " %f", &random_scores[i]) != EOF) ++i;
+
+			  printf("Checking random scores\n");
 
 			  /* Check we have read the expected
 			   * number random scores
@@ -536,7 +570,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    			if (i != p7_RANKORDER_LIMIT) esl_fatal("Unexpected number of random scores for rank order statistics");
    		}
 
-   		else sinfo->E_setby = FIT_DIST; /* THIS CANNOT HAPPEN WITH CURRENT PROGRAM OPTIONS */
+   		else
+   		{
+   			sinfo->E_setby = FIT_DIST;
+   			sinfo->imu = esl_opt_GetReal(go, "--Emu");
+   			sinfo->ilambda = esl_opt_GetReal(go, "--Elambda");
+   		}
    	}
   }
 
@@ -593,6 +632,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (esl_opt_GetBoolean(go, "--fwd") || esl_opt_GetBoolean(go, "--vit"))
       {
       	pinfo->th = p7_tophits_Create();
+
+      	/* Remember, pinfo->bg and bld->bg
+      	 * have the same frequencies: SW50
+      	 * or the original marginals from
+      	 * the score matrix if --consistent is on
+      	 */
       	p7_SingleBuilder(bld, qsq, pinfo->bg, &hmm, NULL, &pinfo->gm, &pinfo->om); /* bld->mode is already set to p7_UNILOCAL or p7_LOCAL (command-line option); gm->nj is then set accordingly */
 																				   /* target length model is set to the length of the random seq. used to calibrate the profile                 */
       	/* Report stats */
@@ -601,9 +646,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       		H = p7_MeanMatchRelativeEntropy(hmm, pinfo->bg);
 
       		if (esl_opt_GetBoolean(go, "--fwd"))
-      			fprintf(ofp, "  [H=%g]  [lambda=%g] [tau=%g]\n", H, pinfo->gm->evparam[p7_FLAMBDA], pinfo->gm->evparam[p7_FTAU]);
+      			fprintf(ofp, "  [H=%g]  [lambda=%g] [tau=%g] [scale=%g] [popen=%g] [pextend=%g]\n", H, pinfo->gm->evparam[p7_FLAMBDA], pinfo->gm->evparam[p7_FTAU], pinfo->scale, bld->popen, bld->pextend);
       		else
-      			fprintf(ofp, "  [H=%g]  [lambda=%g] [mu=%g]\n", H, pinfo->gm->evparam[p7_FLAMBDA], pinfo->gm->evparam[p7_VMU]);
+      			fprintf(ofp, "  [H=%g]  [lambda=%g] [mu=%g] [scale=%g] [popen=%g] [pextend=%g]\n", H, pinfo->gm->evparam[p7_FLAMBDA], pinfo->gm->evparam[p7_VMU], pinfo->scale, bld->popen, bld->pextend);
       	}
 
       	/* Run search */
@@ -754,7 +799,12 @@ serial_ploop(WORKER_PINFO *info, float random_scores[], ESL_SQFILE *dbfp)
 	float           sc;                  /* final lod sequence score in bits                                  */
 	float 					sc2;
 	double           P;                  /* P-value of a score (in bits)                                      */
+	P7_TRACE       *tr      = NULL;
 
+	/* Viterbi trace */
+	tr  = p7_trace_Create();
+
+	/* target sequence */
 	dbsq = esl_sq_CreateDigital(info->gm->abc);
 
 	/* Restart target count for each query */
@@ -774,7 +824,7 @@ serial_ploop(WORKER_PINFO *info, float random_scores[], ESL_SQFILE *dbfp)
 
 		/* Reconfig dp matrices using target length */
 		p7_gmx_GrowTo(gx, info->gm->M, dbsq->n);
-		p7_omx_GrowTo(ox, info->om->M, 0, dbsq->n);         /* NOT SURE I NEED TO DO THIS FOR ox */
+		p7_omx_GrowTo(ox, info->om->M, 0, dbsq->n);
 
 		/* Reconfig query models using target length */
 		p7_ReconfigLength(info->gm, dbsq->n);
@@ -785,9 +835,12 @@ serial_ploop(WORKER_PINFO *info, float random_scores[], ESL_SQFILE *dbfp)
 
 		if (info->alg_mode == FWD)
 		{
-			cstatus = p7_ForwardParser(dbsq->dsq, dbsq->n, info->om, ox, &rsc); /* rsc is in nats */
-			if (cstatus == eslERANGE) cstatus = p7_GForward(dbsq->dsq, dbsq->n, info->gm, gx, &rsc); /* if a filter overflows, failover to slow versions */
-			else if (cstatus != eslOK) esl_fatal ("Failed to compute Forward scores!\n");
+//			cstatus = p7_ForwardParser(dbsq->dsq, dbsq->n, info->om, ox, &rsc); /* rsc is in nats */
+//			if (cstatus == eslERANGE) cstatus = p7_GForward(dbsq->dsq, dbsq->n, info->gm, gx, &rsc); /* if a filter overflows, failover to slow versions */
+//			else if (cstatus != eslOK) esl_fatal ("Failed to compute Forward scores!\n");
+
+			cstatus = p7_GForward(dbsq->dsq, dbsq->n, info->gm, gx, &rsc); /* if a filter overflows, failover to slow versions */
+			if (cstatus != eslOK) esl_fatal ("Failed to compute Forward scores!\n");
 
 			/* Base null model score */
 			p7_bg_NullOne(info->bg, dbsq->dsq, dbsq->n, &nullsc); /* nullsc is in nats? only scores transitions!!! */
@@ -801,7 +854,9 @@ serial_ploop(WORKER_PINFO *info, float random_scores[], ESL_SQFILE *dbfp)
 			 */
 
 			/* Score (in bits) */
-			sc = (rsc - nullsc) / eslCONST_LOG2;
+			sc = (rsc - nullsc) / info->scale; /* scaled to bits or the scale of the original substitution matrix e.g. half-bits for blosum62 */
+
+//			printf("Final score: %f Raw score: %f Transition score: %f scale: %f\n", sc, rsc / info->scale, nullsc / info->scale, info->scale);
 
 			/* Calculate P-value */
 			if (info->by_E == TRUE)
@@ -813,14 +868,23 @@ serial_ploop(WORKER_PINFO *info, float random_scores[], ESL_SQFILE *dbfp)
 
 		else /* VIT */
 		{
-			cstatus = p7_ViterbiFilter(dbsq->dsq, dbsq->n, info->om, ox, &rsc); /* rsc is in nats */
-			if (cstatus == eslERANGE) cstatus = p7_GViterbi(dbsq->dsq, dbsq->n, info->gm, gx, &rsc); /* if a filter overflows, failover to slow versions */
-			else if (cstatus != eslOK) esl_fatal ("Failed to compute Viterbi scores!\n");
+//			cstatus = p7_ViterbiFilter(dbsq->dsq, dbsq->n, info->om, ox, &rsc); /* rsc is in nats */
+//			if (cstatus == eslERANGE) cstatus = p7_GViterbi(dbsq->dsq, dbsq->n, info->gm, gx, &rsc); /* if a filter overflows, failover to slow versions */
+//			else if (cstatus != eslOK) esl_fatal ("Failed to compute Viterbi scores!\n");
+
+			cstatus = p7_GViterbi(dbsq->dsq, dbsq->n, info->gm, gx, &rsc); /* if a filter overflows, failover to slow versions */
+			if (cstatus != eslOK) esl_fatal ("Failed to compute Viterbi scores!\n");
+
+			/* Get trace */
+//			p7_GTrace(dbsq->dsq, dbsq->n, info->gm, gx, tr);
+
+			/* Dump trace */
+//			p7_trace_Dump(stdout, tr, info->gm, dbsq->dsq);
 
 			/* Base null model score
 			 * Only transitions
 			 */
-			p7_bg_NullOne(info->bg, dbsq->dsq, dbsq->n, &nullsc);
+//			p7_bg_NullOne(info->bg, dbsq->dsq, dbsq->n, &nullsc);
 
 			/* Biased composition HMM filtering
 			 * DISABLED
@@ -831,13 +895,15 @@ serial_ploop(WORKER_PINFO *info, float random_scores[], ESL_SQFILE *dbfp)
 			 */
 
 			/* Score (in bits) */
-			sc = (rsc - nullsc) / eslCONST_LOG2;
+			sc = (rsc - nullsc) / info->scale; /* scaled to bits or the scale of the original substitution matrix e.g. half-bits for blosum62 */
+
+//			printf("Final score: %f Raw score: %f Transition score: %f scale: %f\n", sc, rsc / info->scale, nullsc / info->scale, info->scale);
 
 			/* Calculate P-value */
 			if (info->by_E == TRUE)
 			{
 				if (info->E_setby == RANK_ORDER) P = rank_order(random_scores, sc);
-				else P = esl_gumbel_surv(sc, info->gm->evparam[p7_VMU], info->gm->evparam[p7_VLAMBDA]);  /* ARE MU AND LAMBDA THE SAME FOR gm AND om??? they should be! */ /* GOT THE CORRECTED LAMBDA??? */
+				else P = esl_gumbel_surv(sc, info->gm->evparam[p7_VMU], info->gm->evparam[p7_VLAMBDA]);
 			}
 		} /* end viterbi computation */
 
@@ -870,10 +936,12 @@ serial_ploop(WORKER_PINFO *info, float random_scores[], ESL_SQFILE *dbfp)
 		esl_sq_Reuse(dbsq);
 		p7_gmx_Reuse(gx);
 		p7_omx_Reuse(ox);
+		p7_trace_Reuse(tr);
 
 	} /* end loop over seq. targets */
 
 	/* Cleanup */
+	p7_trace_Destroy(tr);
 	esl_sq_Destroy(dbsq);
 	p7_gmx_Destroy(gx);
 	p7_omx_Destroy(ox);
@@ -921,8 +989,7 @@ serial_sloop(WORKER_SINFO *info, float random_scores[], ESL_SQFILE *dbfp)
 		if (info->alg_mode == SW)
 		{
 
-			/* Fast sse S/W implementation here (I could use Farrar's implementation)
-			 */
+			/* Fast sse S/W implementation here (I could use Farrar's implementation) */
 
 			/* Slow S/W implementation (it will do for now!) */
 			cstatus = p7_GSmithWaterman(dbsq->dsq, dbsq->n, info->sm, gx, &rsc);
@@ -935,7 +1002,10 @@ serial_sloop(WORKER_SINFO *info, float random_scores[], ESL_SQFILE *dbfp)
 			if (info->by_E == TRUE)
 			{
 				if (info->E_setby == RANK_ORDER) P = rank_order(random_scores, sc);
-				else P = 1;
+				else {
+
+					P = esl_gumbel_surv(sc, info->imu, info->ilambda);
+				}
 			}
 		}
 

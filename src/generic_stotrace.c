@@ -37,6 +37,8 @@
  *            caller must have at least made an initial allocation of
  *            (the <tr> will be grown as needed here).
  *
+ *            It can be used for posterior sampling.
+ *
  * Args:      r      - source of random numbers
  *            dsq    - digital sequence aligned to, 1..L 
  *            L      - length of dsq
@@ -67,7 +69,7 @@ p7_GStochasticTrace(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int L, const P7_PROFI
   if ((status = p7_trace_Append(tr, p7T_T, k, i)) != eslOK) goto ERROR;
   if ((status = p7_trace_Append(tr, p7T_C, k, i)) != eslOK) goto ERROR;
   sprv = p7T_C;
-  while (sprv != p7T_S) 
+  while (sprv != p7T_S) /* going backward */
     {
       switch (tr->st[tr->N-1]) {
       /* C(i) comes from C(i-1) or E(i) */

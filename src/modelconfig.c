@@ -61,6 +61,7 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   float  sc[p7_MAXCODE];
   float  mthresh;
   float  Z;
+  double scale = 1.; //0.320738 for bl62 with original backgrounds /* use it to obtain substitution, gap open and extension scores equivalent to S/W */
  
   /* Contract checks */
   if (gm->abc->type != hmm->abc->type) ESL_XEXCEPTION(eslEINVAL, "HMM and profile alphabet don't match");
@@ -68,7 +69,7 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
 
   /* Copy some pointer references and other info across from HMM  */
   gm->M      = hmm->M;
-  gm->mode   = mode;
+  gm->mode   = mode; /* search mode in the builder */
   gm->roff   = -1;
   gm->eoff   = -1;
   gm->offs[p7_MOFFSET] = -1;
@@ -101,6 +102,7 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   gm->consensus[hmm->M+1] = '\0';
 
   /* Entry scores. */
+  /* LOCAL */
   if (p7_profile_IsLocal(gm))
     {
       /* Local mode entry:  occ[k] /( \sum_i occ[i] * (M-i+1))
@@ -112,27 +114,38 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
       for (k = 1; k <= hmm->M; k++) 
 	Z += occ[k] * (float) (hmm->M-k+1);
       for (k = 1; k <= hmm->M; k++) 
-	p7P_TSC(gm, k-1, p7P_BM) = log(occ[k] / Z); /* note off-by-one: entry at Mk stored as [k-1][BM] */
+	p7P_TSC(gm, k-1, p7P_BM) = log(occ[k] / Z); /* note off-by-one: entry at Mk stored as [k-1][BM] */ /* BM at node 0 is also set */
 
       free(occ);
     }
+  /* GLOCAL */
   else	/* glocal modes: left wing retraction; must be in log space for precision */
     {
-      Z = log(hmm->t[0][p7H_MD]);
-      p7P_TSC(gm, 0, p7P_BM) = log(1.0 - hmm->t[0][p7H_MD]);
+      Z = log(hmm->t[0][p7H_MD]); /* tBD */
+      p7P_TSC(gm, 0, p7P_BM) = log(1.0 - hmm->t[0][p7H_MD]); /* 1 - popen */
       for (k = 1; k < hmm->M; k++) 
 	{
-	   p7P_TSC(gm, k, p7P_BM) = Z + log(hmm->t[k][p7H_DM]);
+	   p7P_TSC(gm, k, p7P_BM) = Z + log(hmm->t[k][p7H_DM]); /* Going through the DD transitions */
 	   Z += log(hmm->t[k][p7H_DD]);
 	}
     }
+
+/* GLOBAL
+ *
+ *
+ *
+ *
+ *
+ *
+ */
+
 
   /* E state loop/move probabilities: nonzero for MOVE allows loops/multihits
    * N,C,J transitions are set later by length config 
    */
   if (p7_profile_IsMultihit(gm)) {
-    gm->xsc[p7P_E][p7P_MOVE] = -eslCONST_LOG2;   
-    gm->xsc[p7P_E][p7P_LOOP] = -eslCONST_LOG2;   
+    gm->xsc[p7P_E][p7P_MOVE] = -eslCONST_LOG2; /* 0.5 probability in nats */
+    gm->xsc[p7P_E][p7P_LOOP] = -eslCONST_LOG2; /* 0.5 probability in nats */
     gm->nj                   = 1.0f;
   } else {
     gm->xsc[p7P_E][p7P_MOVE] = 0.0f;   
@@ -143,14 +156,28 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   /* Transition scores. */
   for (k = 1; k < gm->M; k++) {
     tp = gm->tsc + k * p7P_NTRANS;
-    tp[p7P_MM] = log(hmm->t[k][p7H_MM]);
-    tp[p7P_MI] = log(hmm->t[k][p7H_MI]);
-    tp[p7P_MD] = log(hmm->t[k][p7H_MD]);
-    tp[p7P_IM] = log(hmm->t[k][p7H_IM]);
-    tp[p7P_II] = log(hmm->t[k][p7H_II]);
-    tp[p7P_DM] = log(hmm->t[k][p7H_DM]);
-    tp[p7P_DD] = log(hmm->t[k][p7H_DD]);
+
+    tp[p7P_MM] = (1. / scale) * log(hmm->t[k][p7H_MM]);
+    tp[p7P_MI] = (1. / scale) * log(hmm->t[k][p7H_MI]); /* No transition score for M_M -> I_M*/
+    tp[p7P_MD] = (1. / scale) * log(hmm->t[k][p7H_MD]);
+    tp[p7P_IM] = (1. / scale) * log(hmm->t[k][p7H_IM]);
+    tp[p7P_II] = (1. / scale) * log(hmm->t[k][p7H_II]);
+    tp[p7P_DM] = (1. / scale) * log(hmm->t[k][p7H_DM]);
+    tp[p7P_DD] = (1. / scale) * log(hmm->t[k][p7H_DD]);
   }
+
+//    for (k = 1; k < gm->M; k++) {
+//      tp = gm->tsc + k * p7P_NTRANS;
+//      tp[p7P_MM] = (1. / 0.368637) * log(hmm->t[k][p7H_MM]);
+//      tp[p7P_MI] = (1. / 0.368637) * log(hmm->t[k][p7H_MI]); /* No transition score for M_M -> I_M*/
+//      tp[p7P_MD] = (1. / 0.368637) * log(hmm->t[k][p7H_MD]);
+//      tp[p7P_IM] = (1. / 0.368637) * log(hmm->t[k][p7H_IM]);
+//      tp[p7P_II] = (1. / 0.368637) * log(hmm->t[k][p7H_II]);
+//      tp[p7P_DM] = (1. / 0.368637) * log(hmm->t[k][p7H_DM]);
+//      tp[p7P_DD] = (1. / 0.368637) * log(hmm->t[k][p7H_DD]);
+//    }
+
+
   
   /* Match emission scores. */
   sc[hmm->abc->K]     = -eslINFINITY; /* gap character */
@@ -158,7 +185,7 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   sc[hmm->abc->Kp-1]  = -eslINFINITY; /* missing data character */
   for (k = 1; k <= hmm->M; k++) {
     for (x = 0; x < hmm->abc->K; x++) 
-      sc[x] = log(hmm->mat[k][x] / bg->f[x]);
+      sc[x] = (1. / scale) * log(hmm->mat[k][x] / bg->f[x]) - tp[p7P_MM]; /* rounding up and substracting tMM transition from substitution score */
     esl_abc_FExpectScVec(hmm->abc, sc, bg->f); 
     for (x = 0; x < hmm->abc->Kp; x++) {
       rp = gm->rsc[x] + k * p7P_NR;

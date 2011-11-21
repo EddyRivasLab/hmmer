@@ -84,7 +84,7 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
   }
 
   if (bg == NULL) {
-    if ((bg = p7_bg_Create(hmm->abc)) == NULL)  ESL_XFAIL(eslEMEM, errbuf, "failed to allocate background");
+    if ((bg = p7_bg_Create(hmm->abc)) == NULL)  ESL_XFAIL(eslEMEM, errbuf, "failed to allocate background"); /* It creates SW50 background*/
   }
 
   /* there's an odd case where the <om> is provided and a <gm> isn't going to be returned
@@ -94,7 +94,7 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
    */
   if ((esl_byp_IsInternal(byp_gm) && ! esl_byp_IsProvided(byp_om)) || esl_byp_IsReturned(byp_gm)) {
     if  ( (gm     = p7_profile_Create(hmm->M, hmm->abc))          == NULL)  ESL_XFAIL(eslEMEM, errbuf, "failed to allocate profile");
-    if  ( (status = p7_ProfileConfig(hmm, bg, gm, EvL, cfg_b->mode)) != eslOK) ESL_XFAIL(status,  errbuf, "failed to configure profile"); /* cfg_b->mode is the search mode; Evl is the target length */
+    if  ( (status = p7_ProfileConfig(hmm, bg, gm, EvL, cfg_b->mode)) != eslOK) ESL_XFAIL(status,  errbuf, "failed to configure profile"); /* cfg_b->mode is the search mode (bld->mode); Evl is the target length */
   }
 
   if (om == NULL) {

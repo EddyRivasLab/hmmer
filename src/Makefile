@@ -8,7 +8,7 @@ srcdir     = .
 VPATH      =  ..
 
 CC       = gcc -std=gnu99
-CFLAGS   = -g -O3 -fomit-frame-pointer -fstrict-aliasing -mpentiumpro 
+CFLAGS   = -O3 -fomit-frame-pointer -fstrict-aliasing -mpentiumpro 
 SIMDFLAGS= -msse2
 CPPFLAGS = 
 LDFLAGS  = 
@@ -45,8 +45,6 @@ PROGS = hmmalign\
 	hmmsearch\
 	hmmsim\
 	hmmstat\
-	jackhmmer\
-	phmmer\
 	shmmer
 
 HDRS =  hmmer.h\

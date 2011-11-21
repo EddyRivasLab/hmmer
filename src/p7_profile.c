@@ -83,11 +83,14 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
   /* Initialize some edge pieces of memory that are never used,
    * and are only present for indexing convenience.
    */
-  esl_vec_FSet(gm->tsc, p7P_NTRANS, -eslINFINITY);     /* node 0 nonexistent, has no transitions  */
+  esl_vec_FSet(gm->tsc, p7P_NTRANS, -eslINFINITY);     /* node 0 nonexistent, has no transitions  */ /* BM will be reinitialized later! */
   if (allocM > 1) {
     p7P_TSC(gm, 1, p7P_DM) = -eslINFINITY;             /* delete state D_1 is wing-retracted      */
     p7P_TSC(gm, 1, p7P_DD) = -eslINFINITY;
   }
+
+  /* Transitions to and from I_M could also be set to -eslINFINITY, as they should not be used! */
+
   for (x = 0; x < abc->Kp; x++) {        
     p7P_MSC(gm, 0,      x) = -eslINFINITY;             /* no emissions from nonexistent M_0... */
     p7P_ISC(gm, 0,      x) = -eslINFINITY;             /* or I_0... */
