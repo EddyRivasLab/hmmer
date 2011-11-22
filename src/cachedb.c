@@ -1,8 +1,10 @@
 /* Sequence and profile caches, used by the hmmpgmd daemon.
  * 
- * MSF, Thu Aug 12, 2010 [Janelia]
- * SVN $URL$
- * SVN $Id$
+ * Contents:
+ *   2. P7_CACHEDB_SEQS: a daemon's cached sequence database
+ *   x. Benchmark driver
+ *   x. Unit tests
+ *   x. License and copyright information.
  */
 #include "p7_config.h"
 
@@ -22,111 +24,6 @@
 #include "cachedb.h"
 #include "hmmpgmd.h"
 
-int
-cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache)
-{
-  int              i;
-  int              status;
-
-  int              count;
-  int              inx = 0;
-
-  P7_OPROFILE     *om       = NULL;        /* target profile            */
-  P7_OPROFILE    **list     = NULL;        /* list of profiles          */
-  ESL_ALPHABET    *abc      = NULL;        /* target profile            */
-  P7_HMMFILE      *hfp      = NULL;        /* open HMM database file    */
-
-  void            *tmp;
-  HMM_CACHE       *cache    = NULL;
-
-  uint64_t         total_mem = 0;
-  char             buffer[16];
-
-  /* Open the target profile database */
-  if ((status = p7_hmmfile_Open(hmmfile, NULL, &hfp)) != eslOK) return status;
-
-  count = 4096;
-  ESL_ALLOC(list, sizeof(char *) * count);
-
-  ESL_ALLOC(cache, sizeof(HMM_CACHE));
-  memset(cache, 0, sizeof(HMM_CACHE));
-
-  if (esl_strdup(hmmfile, -1, &cache->name) != eslOK) goto ERROR;
-
-  total_mem = sizeof(HMM_CACHE) + sizeof(char *) * count;
-
-  strcpy(buffer, "000000000");
-
-  while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK) {
-    p7_oprofile_ReadRest(hfp, om);
-    total_mem += p7_oprofile_Sizeof(om);
-
-    if (inx >= count) {
-      ESL_RALLOC(list, tmp, sizeof(char *) * count * 2);
-      count *= 2;
-    }
-
-    /* increment the buffer string */
-    ++buffer[8];
-    for (i = 8; i > 0; --i) {
-      if (buffer[i] > '9') {
-        buffer[i] = '0';
-        buffer[i-1]++;
-      }
-    }
-    if (om->name == NULL || strlen(om->name) < sizeof(buffer)) {
-      char *tmp;
-      ESL_RALLOC(om->name, tmp, sizeof(buffer));
-    }
-    strcpy(om->name, buffer);
-
-    list[inx++] = om;
-    om = NULL;
-  }
-  if (status != eslEOF) { printf("Unexpected error %d at %d\n", status, inx); goto ERROR; }
-
-  printf("\nfinal:: %d  memory %" PRId64 "\n", inx, total_mem);
-
-  cache->abc    = abc;
-  cache->count  = inx;
-  cache->list   = list;
-
-  *ret_cache = cache;
-
-  return eslOK;
-
- ERROR:
-  if (abc   != NULL) esl_alphabet_Destroy(abc);
-  if (cache != NULL) {
-    if (cache->name != NULL) free(cache->name);
-    if (cache->id   != NULL) free(cache->id);
-    free(cache);
-  }
-  if (list  != NULL) {
-    for (i = 0; i < inx; ++i) p7_oprofile_Destroy(list[i]);
-    free(list);
-  }
-  return status;
-}
-
-void
-cache_HmmDestroy(HMM_CACHE *cache)
-{
-  int            i;
-  P7_OPROFILE  **list;
-
-  list = cache->list;
-
-  esl_alphabet_Destroy(cache->abc);
-  for (i = 0; i < cache->count; ++i) p7_oprofile_Destroy(list[i]);
-  free(list);
-
-  if (cache->name != NULL) free(cache->name);
-  if (cache->id   != NULL) free(cache->id);
-  free(cache);
-
-  return;
-}
 
 /* sort routines */
 static int
@@ -141,9 +38,8 @@ sort_seq(const void *p1, const void *p2)
 }
 
 int
-cache_SeqDb(char *seqfile, SEQ_CACHE **ret_cache)
+p7_seqcache_Open(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
 {
-
   int                i;
   int                inx;
   int                val;
@@ -168,13 +64,15 @@ cache_SeqDb(char *seqfile, SEQ_CACHE **ret_cache)
   uint64_t           total_mem;
 
   SEQ_DB            *db         = NULL;
-  SEQ_CACHE         *cache      = NULL;
+  P7_SEQCACHE       *cache      = NULL;
 
   ESL_RANDOMNESS    *rnd        = NULL;
   ESL_SQFILE        *sqfp       = NULL;
   ESL_SQ            *sq         = NULL;
   ESL_ALPHABET      *abc        = NULL;
   ESL_SQASCII_DATA  *ascii      = NULL;
+
+  if (errbuf) errbuf[0] = '\0';	/* CURRENTLY UNUSED. FIXME */
 
   /* Open the target sequence database */
   if ((status = esl_sqfile_Open(seqfile, eslSQFILE_FASTA, NULL, &sqfp)) != eslOK) return status;
@@ -202,9 +100,9 @@ cache_SeqDb(char *seqfile, SEQ_CACHE **ret_cache)
 
   if (db_cnt > (sizeof(db_inx)/sizeof(db_inx[0])))      return eslEFORMAT;
 
-  total_mem = sizeof(SEQ_CACHE);
-  ESL_ALLOC(cache, sizeof(SEQ_CACHE));
-  memset(cache, 0, sizeof(SEQ_CACHE));
+  total_mem = sizeof(P7_SEQCACHE);
+  ESL_ALLOC(cache, sizeof(P7_SEQCACHE));
+  memset(cache, 0, sizeof(P7_SEQCACHE));
 
   if (esl_strdup(seqfile, -1, &cache->name) != eslOK)   goto ERROR;
 
@@ -381,7 +279,7 @@ cache_SeqDb(char *seqfile, SEQ_CACHE **ret_cache)
 }
 
 void
-cache_SeqDestroy(SEQ_CACHE *cache)
+p7_seqcache_Close(P7_SEQCACHE *cache)
 {
   int i;
 
@@ -401,8 +299,11 @@ cache_SeqDestroy(SEQ_CACHE *cache)
   free(cache);
 }
 
+
+
+
 /*****************************************************************
- * 2. Unit test
+ * x. Unit test
  *****************************************************************/
 
 #ifdef CACHEDB_UTEST1
@@ -643,7 +544,7 @@ main(int argc, char **argv)
   if (ofp != stdout) fclose(ofp);
 
   if (esl_opt_IsOn(go, "-o")) { 
-    SEQ_CACHE *cache = NULL;
+    P7_CACHEDB_SEQS *cache = NULL;
     printf("Reading cache %s\n", esl_opt_GetString(go, "-o"));
     if ((status = cache_SeqDb(esl_opt_GetString(go, "-o"), &cache)) != eslOK) {
       printf("ERROR %d\n", status);
@@ -716,7 +617,7 @@ main(int argc, char **argv)
   int             status;
 
   ESL_GETOPTS    *go      = NULL;
-  SEQ_CACHE      *cache   = NULL;
+  P7_CACHEDB_SEQS      *cache   = NULL;
 
 
   if ((go = esl_getopts_Create(options)) == NULL) { 
@@ -758,4 +659,7 @@ main(int argc, char **argv)
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SVN $URL$
+ * SVN $Id$
  *****************************************************************/

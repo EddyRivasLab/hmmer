@@ -248,7 +248,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, vector unsigned char sc_threshv, int **starts, int** ends, int *hit_cnt)
+p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const FM_HMMDATA *hmmdata, uint8_t sc_thresh, vector unsigned char sc_threshv, FM_WINDOWLIST *windowlist)
 {
 
   vector unsigned char mpv;        /* previous row values                                       */
@@ -270,13 +270,23 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
   int status;
 
-  /* stuff used to keep track of hits (regions passing the p-threshold)*/
-  void* tmp_void; // why doesn't ESL_RALLOC just declare its own tmp ptr?
-  int hit_arr_size = 50; // arbitrary size - it, and the hit lists it relates to, will be increased as necessary
-  ESL_ALLOC(*starts, hit_arr_size * sizeof(int));
-  ESL_ALLOC(*ends, hit_arr_size * sizeof(int));
-  (*starts)[0] = (*ends)[0] = -1;
-  *hit_cnt = 0;
+  int k;
+  int n;
+  int end;
+  int rem_sc;
+  int start;
+  int target_end;
+  int target_start;
+  int max_end;
+  int max_sc;
+  int sc;
+  int pos_since_max;
+  float ret_sc;
+
+  union { vector unsigned char v; uint8_t b[16]; } u;
+  uint8_t *scores = NULL;
+
+  ESL_ALLOC(scores, (1+16*Q) * sizeof(uint8_t) );
 
 
   /* Check that the DP matrix is ok for us. */
@@ -321,24 +331,69 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
 
 	  if (vec_any_gt(xEv, sc_threshv) ) { //hit pthresh, so add position to list and reset values
-		  //ensure hit list is large enough
-		  if (*hit_cnt == hit_arr_size ) {
-			  hit_arr_size *= 10;
-			  ESL_RALLOC(*starts, tmp_void, hit_arr_size * sizeof(int));
-			  ESL_RALLOC(*ends, tmp_void, hit_arr_size * sizeof(int));
-		  }
+      //figure out which model state hit threshold
+      end = -1;
+      rem_sc = -1;
+      for (q = 0; q < Q; q++) {  /// Unpack and unstripe, so we can find the state that exceeded pthresh
+          u.v = dp[q];
+          for (k = 0; k < 16; k++) scores[q+Q*k+1] = u.b[k]; // unstripe
+          dp[q] = vec_splat_u8(0); // while we're here ... this will cause values to get reset to xB in next dp iteration
 
-		  (*starts)[*hit_cnt] = i -  om->max_length + 1;
-		  (*ends)[*hit_cnt] = i + om->max_length - 1;
-		  (*hit_cnt)++;
+      }
+      for (k = 1; k <= om->M; k++) {
+          if (scores[k] >= sc_thresh && scores[k] > rem_sc) {
+            end = k;
+            rem_sc = scores[k];
+          }
+      }
+      //recover the diagonal that hit threshold
+      start = end;
+      target_end = target_start = i;
+      sc = rem_sc;
+      while (rem_sc >= om->base_b - om->tjb_b - om->tbm_b) {
+        rem_sc -= om->bias_b -  hmmdata->s.scores_b[start][dsq[target_start]];
+        --start;
+        --target_start;
+        if ( start == 0 || target_start==0)    break;
+      }
+      start++;
+      target_start++;
 
-		  //we've captured that window, so skip over a bunch of it to avoid redundancy
-		  //TODO: I think this won't result in loss of hits, though it should be further tested to be sure
-		 // i += om->max_length - om->M - 1;
 
-		  // this will cause values to get reset to xB in next iteration
-		  for (q = 0; q < Q; q++)
-			  dp[q] = vec_splat_u8(0); // this will cause values to get reset to xB in next iteration
+
+      //extend diagonal further with single diagonal extension
+      k = end+1;
+      n = target_end+1;
+      max_end = target_end;
+      max_sc = sc;
+      pos_since_max = 0;
+      while (k<om->M && n<=L) {
+        sc += om->bias_b -  hmmdata->s.scores_b[start][dsq[k]];
+        if (sc >= max_sc) {
+          max_sc = sc;
+          max_end = n;
+          pos_since_max=0;
+        } else {
+          pos_since_max++;
+          if (pos_since_max == 5)
+            break;
+        }
+        k++;
+        n++;
+      }
+
+      end  +=  (max_end - target_end);
+      k    +=  (max_end - target_end);
+      target_end = max_end;
+
+      ret_sc = ((float) (max_sc - om->tjb_b) - (float) om->base_b);
+      ret_sc /= om->scale_b;
+      ret_sc -= 3.0; // that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ
+
+      fm_newWindow(windowlist, 0, target_start, k, end, end-start+1 , ret_sc, fm_nocomplement );
+
+      i = target_end; // skip forward
+
 
 	  }
 
@@ -396,7 +451,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const FM_HMMDATA *hmmdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist, int do_biasfilter)
 {
   vector unsigned char mpv;        /* previous row values                                       */
   vector unsigned char xEv;		   /* E state: keeps max for Mk->E as we go                     */
@@ -405,6 +460,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   vector unsigned char biasv;	   /* emission bias in a vector                                 */
   uint8_t  xJ;                 /* special states' scores                                    */
   int i;			           /* counter over sequence positions 1..L                      */
+  int j;
   int q;			           /* counter over vectors 0..nq-1                              */
   int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
   vector unsigned char *dp  = ox->dpb[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
@@ -420,7 +476,15 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   vector unsigned char jthreshv;                /* pushes value to saturation if it's above pthresh  */
   vector unsigned char tempv;                   /* work vector                                               */
 
+
+  FM_WINDOW *prev_window;
+  FM_WINDOW *curr_window;
+  int window_start;
+  int window_end;
+
   float nullsc;
+  float bias_sc;
+  float biasP;
 
   /*
    * Computing the score required to let P meet the F1 prob threshold
@@ -453,7 +517,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   jthreshv = esl_vmx_set_u8( (int8_t)jthresh - 1);
 
   if ( sc_thresh < jthresh) {
-	   p7_SSVFilter_longtarget(dsq, L, om, ox, sc_threshv, starts, ends, hit_cnt);
+	   p7_SSVFilter_longtarget(dsq, L, om, ox, hmmdata, (uint8_t)sc_thresh, sc_threshv, windowlist);
   } else {
 	  /*e.g. if base=190, tec=3, tjb=22 then a score of 217 would be required for a
 	   * second ssv-hit to improve the score of an earlier one. Usually,
@@ -468,13 +532,6 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  int last_peak = -1;
 	  int hit_jthresh = FALSE;
 
-	  /* stuff used to keep track of hits (regions passing the p-threshold)*/
-	  void* tmp_void; // why doesn't ESL_RALLOC just declare its own tmp ptr?
-	  int hit_arr_size = 50; // arbitrary size - it, and the hit lists it relates to, will be increased as necessary
-	  ESL_ALLOC(*starts, hit_arr_size * sizeof(int));
-	  ESL_ALLOC(*ends, hit_arr_size * sizeof(int));
-	  (*starts)[0] = (*ends)[0] = -1;
-	  *hit_cnt = 0;
 
 	  /* Check that the DP matrix is ok for us. */
 	  if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
@@ -560,21 +617,9 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
 				  //check if we've hit sc_thresh.  If so, reset values and add this region to the list of hits
 				  if (vec_any_gt(xEv, sc_threshv) ) {
-					  //ensure hit list is large enough
-					  if (*hit_cnt == hit_arr_size ) {
-						  hit_arr_size *= 10;
-						  ESL_RALLOC(*starts, tmp_void, hit_arr_size * sizeof(int));
-						  ESL_RALLOC(*ends, tmp_void, hit_arr_size * sizeof(int));
-					  }
-
-					  //add to hit list
-					  (*starts)[*hit_cnt] = first_peak - om->max_length + 1 ;
-					  (*ends)[*hit_cnt] = i + om->max_length - 1;
-					  (*hit_cnt)++;
-
-					  //we've captured that window, so skip over a bunch of it to avoid redundancy
-					  //TODO: I think this won't result in loss of hits, though it should be further tested to be sure
-					  //i += om->max_length - om->M - 1;
+                                          int start = first_peak - om->max_length + 1;
+                                          int length = i-first_peak+1 + 2 * om->max_length;
+                                          fm_newWindow(windowlist, 0, start, -1, -1, length , -1, fm_nocomplement );
 
 					  // got one peak.  Start scanning for the next one, as though starting from scratch
 					  first_peak = last_peak = -1;
@@ -616,37 +661,59 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  } /* end loop over sequence residues 1..L */
   }
 
+  //filter for biased composition here
+  if ( windowlist->count > 0 ) {
 
-  /* whether the window list comes from SSV or MSV computations, we now
-   * merge overlapping windows, compressing list in place.
-   */
-  if ( *hit_cnt > 0 ) {
-	  int merged = 0;
-	  do {
-		  merged = 0;
+    if (do_biasfilter) {
+      j = 0;
+      for (i=0; i<windowlist->count; i++) {
+        curr_window = windowlist->windows+i;
+        p7_bg_FilterScore(bg, dsq+curr_window->n, curr_window->length, &bias_sc);
+        bias_sc = (curr_window->score - bias_sc) / eslCONST_LOG2;
+        biasP = esl_gumbel_surv(bias_sc,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
 
-		  int new_hit_cnt = 0;
-		  for (i=1; i<*hit_cnt; i++) {
-			  if ((*starts)[i] <= (*ends)[new_hit_cnt]) {
-				  //merge windows
-				  merged = 1;
-				  if ( (*ends)[i] > (*ends)[new_hit_cnt] )
-					  (*ends)[new_hit_cnt] = (*ends)[i];
-			  } else {
-				  //new window
-				  new_hit_cnt++;
-				  (*starts)[new_hit_cnt] = (*starts)[i];
-				  (*ends)[new_hit_cnt] = (*ends)[i];
-			  }
-		  }
-		  *hit_cnt = new_hit_cnt + 1;
-	  } while (merged > 0);
+        if (biasP <= P ) { // keep it
+          windowlist->windows[j] = windowlist->windows[i];
+          j++;
+        }
+      }
+      windowlist->count = j;
+    }
 
-	  if ((*starts)[0] <  1)
-		  (*starts)[0] =  1;
 
-	  if ((*ends)[*hit_cnt - 1] >  L)
-		  (*ends)[*hit_cnt - 1] =  L;
+
+    //widen window
+
+    for (i=0; i<windowlist->count; i++) {
+      curr_window = windowlist->windows+i;
+      window_start = ESL_MAX( 1,   curr_window->n + curr_window->length - om->max_length) ;
+      window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + om->max_length - 2);
+      curr_window->n = window_start;
+      curr_window->length = window_end - window_start + 1;
+    }
+
+    // merge overlapping windows, compressing list in place.
+    int new_hit_cnt = 0;
+    for (i=1; i<windowlist->count; i++) {
+      prev_window = windowlist->windows+new_hit_cnt;
+      curr_window = windowlist->windows+i;
+      if (curr_window->n <= prev_window->n + prev_window->length ) {
+        //merge windows
+        if (  curr_window->n + curr_window->length >  prev_window->n + prev_window->length )
+          prev_window->length = curr_window->n + curr_window->length - prev_window->n;
+
+      } else {
+        new_hit_cnt++;
+        windowlist->windows[new_hit_cnt] = windowlist->windows[i];
+      }
+    }
+    windowlist->count = new_hit_cnt+1;
+
+    if ( windowlist->windows[0].n  <  1)
+      windowlist->windows[0].n =  1;
+
+    if ( windowlist->windows[windowlist->count].n + windowlist->windows[windowlist->count].length - 1  >  L)
+      windowlist->windows[windowlist->count].length =  L - windowlist->windows[windowlist->count].n + 1;
 
   }
   return eslOK;

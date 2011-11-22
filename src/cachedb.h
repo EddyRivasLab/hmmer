@@ -31,23 +31,12 @@ typedef struct {
 
   uint64_t            res_size;    /* size of residue memory allocation     */
   uint64_t            hdr_size;    /* size of header memory allocation      */
-} SEQ_CACHE;
-
-typedef struct {
-  char               *name;        /* name of the hmm database              */
-  char               *id;          /* unique identifier string              */
-  ESL_ALPHABET       *abc;         /* alphabet for database                 */
-
-  uint32_t            count;       /* number of entries                     */
-  P7_OPROFILE       **list;        /* list of profiles [0 .. count-1]       */
-} HMM_CACHE;
+} P7_SEQCACHE;
 
 
-int  cache_HmmDb(char *hmmfile, HMM_CACHE **ret_cache);
-void cache_HmmDestroy(HMM_CACHE *cache);
 
-int  cache_SeqDb(char *seqfile, SEQ_CACHE **ret_cache);
-void cache_SeqDestroy(SEQ_CACHE *cache);
+extern int    p7_seqcache_Open(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf);
+extern void   p7_seqcache_Close(P7_SEQCACHE *cache);
 
 #endif /*P7_CACHEDB_INCLUDED*/
 

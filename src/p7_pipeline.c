@@ -1096,7 +1096,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, FM_HMMDATA *hmmdata, P
    * This variant of MSV will scan a long sequence and find
    * short high-scoring regions.
    */
-  p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, hmmdata, bg, pli->F1, &windowlist);
+  p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, hmmdata, bg, pli->F1, &windowlist, pli->do_biasfilter);
 
   if (windowlist.count == 0) {
     free (windowlist.windows);
@@ -1120,6 +1120,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, FM_HMMDATA *hmmdata, P
 
     P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
     if (P > pli->F1 ) continue;
+
 
     pli->n_past_msv++;
     pli->pos_past_msv += window_len;

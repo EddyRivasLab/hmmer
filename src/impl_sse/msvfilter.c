@@ -272,7 +272,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   __m128i tecv;                    /* vector for E->C  cost                                     */
   __m128i tjbmv;                   /* vector for J->B move cost + B->M move costs               */
   __m128i basev;                   /* offset for scores                                         */
-  __m128i ceilingv;                /* saturateed simd value used to test for overflow           */
+  __m128i ceilingv;                /* saturated simd value used to test for overflow           */
   __m128i tempv;                   /* work vector                                               */
   int cmp;
   int status;
@@ -384,7 +384,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	        pos_since_max=0;
 	      } else {
 	        pos_since_max++;
-	        if (pos_since_max == 4)
+	        if (pos_since_max == 5)
 	          break;
 	      }
 	      k++;
@@ -395,16 +395,15 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	    k    +=  (max_end - target_end);
       target_end = max_end;
 
-
       ret_sc = ((float) (max_sc - om->tjb_b) - (float) om->base_b);
       ret_sc /= om->scale_b;
-      ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
+      ret_sc -= 3.0; // that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ
 
       fm_newWindow(windowlist, 0, target_start, k, end, end-start+1 , ret_sc, fm_nocomplement );
 
       i = target_end; // skip forward
-
 	  }
+
 
   } /* end loop over sequence residues 1..L */
 
@@ -462,8 +461,10 @@ ERROR:
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const FM_HMMDATA *hmmdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const FM_HMMDATA *hmmdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist, int do_biasfilter)
 {
+
+
   register __m128i mpv;        /* previous row values                                       */
   register __m128i xEv;		   /* E state: keeps max for Mk->E as we go                     */
   register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
@@ -471,6 +472,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   register __m128i biasv;	   /* emission bias in a vector                                 */
   uint8_t  xJ;                 /* special states' scores                                    */
   int i;			           /* counter over sequence positions 1..L                      */
+  int j;
   int q;			           /* counter over vectors 0..nq-1                              */
   int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
   __m128i *dp  = ox->dpb[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
@@ -492,7 +494,8 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   int window_end;
 
   float nullsc;
-
+  float bias_sc;
+  float biasP;
   /*
    * Computing the score required to let P meet the F1 prob threshold
    * In original code, converting from a scaled int MSV
@@ -656,10 +659,6 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 			      int length = i-first_peak+1 + 2 * om->max_length;
 			      fm_newWindow(windowlist, 0, start, -1, -1, length , -1, fm_nocomplement );
 
-					  //we've captured that window, so skip over a bunch of it to avoid redundancy
-					  //TODO: I think this won't result in loss of hits, though it should be further tested to be sure
-					  //i += om->max_length - om->M - 1;
-
 					  // got one peak.  Start scanning for the next one, as though starting from scratch
 					  first_peak = last_peak = -1;
 
@@ -701,11 +700,36 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  } /* end loop over sequence residues 1..L */
   }
 
+  //filter for biased composition here
   if ( windowlist->count > 0 ) {
 
-  //filter for biased composition here?
+    if (do_biasfilter) {
+      j = 0;
+      for (i=0; i<windowlist->count; i++) {
+
+        curr_window = windowlist->windows+i;
+
+        p7_bg_FilterScore(bg, dsq+curr_window->n, curr_window->length, &bias_sc);
+//        printf("bias: %7.2f, ", bias_sc);
+        bias_sc = (curr_window->score - bias_sc) / eslCONST_LOG2;
+ //       printf("sc: %7.2f, ", bias_sc);
+        biasP = esl_gumbel_surv(bias_sc,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+//        printf("P: %.2f, ", biasP);
+
+        if (biasP <= P ) { // keep it
+//          printf ("%8d -> %8d", curr_window->n, curr_window->n + curr_window->length - 1 );
+          windowlist->windows[j] = windowlist->windows[i];
+          j++;
+        }
+  //      printf ("\n");
+      }
+      windowlist->count = j;
+    }
+
+
 
     //widen window
+
     for (i=0; i<windowlist->count; i++) {
       curr_window = windowlist->windows+i;
       window_start = ESL_MAX( 1,   curr_window->n + curr_window->length - om->max_length) ;
@@ -716,7 +740,6 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
 
     // merge overlapping windows, compressing list in place.
-
     int new_hit_cnt = 0;
     for (i=1; i<windowlist->count; i++) {
       prev_window = windowlist->windows+new_hit_cnt;
@@ -732,6 +755,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       }
     }
     windowlist->count = new_hit_cnt+1;
+
 
 
 	  if ( windowlist->windows[0].n  <  1)
