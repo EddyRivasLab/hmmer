@@ -204,7 +204,7 @@ p7_GForwardOdds(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, flo
 	  /* match state */
 	  sc =   MMX(i-1,k-1)   * TSC(p7P_MM,k-1) 
 	       + IMX(i-1,k-1)   * TSC(p7P_IM,k-1)
-	       + XMX(i-1,p7G_B) * TSC(p7P_BM,k-1)
+	       + XMX(i-1,p7G_B) * TSC(p7P_BLM,k-1)
 	       + DMX(i-1,k-1)   * TSC(p7P_DM,k-1);
 	  MMX(i,k) = sc * MSC(k);
 
@@ -224,7 +224,7 @@ p7_GForwardOdds(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, flo
       /* unrolled match state M_M */
       sc =   MMX(i-1,M-1)   * TSC(p7P_MM,M-1) 
 	   + IMX(i-1,M-1)   * TSC(p7P_IM,M-1)
-	   + XMX(i-1,p7G_B) * TSC(p7P_BM,M-1)
+	   + XMX(i-1,p7G_B) * TSC(p7P_BLM,M-1)
 	   + DMX(i-1,M-1)   * TSC(p7P_DM,M-1);
       MMX(i,M) = sc * MSC(M);
       IMX(i,M) = 0.0f;
@@ -359,12 +359,12 @@ p7_profile_ConfigInOdds(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int 
   /* Some initializations assumed log space. Change them to probspace.  */
   esl_vec_FSet(gm->tsc, p7P_NTRANS, 0.0f);     /* node 0 nonexistent, has no transitions  */
   if (gm->M > 1) {
-    p7P_TSC(gm, 1, p7P_DM) = 0.0f;             /* delete state D_1 is wing-retracted      */
-    p7P_TSC(gm, 1, p7P_DD) = 0.0f;
+    P7P_TSC(gm, 1, p7P_DM) = 0.0f;             /* delete state D_1 is wing-retracted      */
+    P7P_TSC(gm, 1, p7P_DD) = 0.0f;
   }
   for (x = 0; x < gm->abc->Kp; x++) {        
-    p7P_MSC(gm, 0,      x) = 0.0f;             /* no emissions from nonexistent M_0... */
-    p7P_ISC(gm, 0,      x) = 0.0f;             /* or I_0... */
+    P7P_MSC(gm, 0,      x) = 0.0f;             /* no emissions from nonexistent M_0... */
+    P7P_ISC(gm, 0,      x) = 0.0f;             /* or I_0... */
     /* I_M is initialized in profile config, when we know actual M, not just allocated max M   */
   }
   x = esl_abc_XGetGap(gm->abc);	                       /* no emission can emit/score gap characters */
@@ -374,7 +374,7 @@ p7_profile_ConfigInOdds(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int 
 
 
   /* Entry scores. Recall k-1,k off-by-one storage issue here. 
-   * p7P_TSC(gm, k-1, p7P_BM) is the t_BMk transition 
+   * P7P_TSC(gm, k-1, p7P_BLM) is the t_BMk local entry transition 
    */
   if (p7_profile_IsLocal(gm))
     {
@@ -387,19 +387,19 @@ p7_profile_ConfigInOdds(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int 
       for (k = 1; k <= hmm->M; k++) 
 	Z += occ[k] * (float) (hmm->M-k+1);
       for (k = 1; k <= hmm->M; k++) 
-	p7P_TSC(gm, k-1, p7P_BM) = occ[k] / Z; /* note off-by-one: entry at Mk stored as [k-1][BM] */
+	P7P_TSC(gm, k-1, p7P_BLM) = occ[k] / Z; /* note off-by-one: entry at Mk stored as [k-1][BM] */
       free(occ);
     }
   else	/* glocal modes: left wing retraction. Check for underflow. */
     {	
       Z = hmm->t[0][p7H_MD];
-      p7P_TSC(gm, 0, p7P_BM) = 1.0 - Z;
+      P7P_TSC(gm, 0, p7P_BGM) = 1.0 - Z;
       for (k = 1; k < hmm->M; k++) 
 	{
-	  p7P_TSC(gm, k, p7P_BM) =  Z * hmm->t[k][p7H_DM];
+	  P7P_TSC(gm, k, p7P_BGM) =  Z * hmm->t[k][p7H_DM];
 	  Z *= hmm->t[k][p7H_DD];
 	}
-      if (p7P_TSC(gm, hmm->M-1, p7P_BM) == 0.0f) did_underflow = TRUE;
+      if (P7P_TSC(gm, hmm->M-1, p7P_BGM) == 0.0f) did_underflow = TRUE;
     }
 
   /* E state loop/move probabilities: nonzero for MOVE allows loops/multihits
@@ -441,19 +441,19 @@ p7_profile_ConfigInOdds(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int 
     esl_abc_FExpectScVec(hmm->abc, sc, bg->f); 
     for (x = 0; x < hmm->abc->Kp; x++) {
       rp = gm->rsc[x] + k * p7P_NR;
-      rp[p7P_MSC] = exp(sc[x]);
+      rp[p7P_M] = exp(sc[x]);
     }
   }
 
   /* insert residue scores, hardwired to odds ratio of 1.0 */
   for (x = 0; x < gm->abc->Kp; x++)
     {
-      for (k = 1; k < hmm->M; k++) p7P_ISC(gm, k, x) = 1.0f;
-      p7P_ISC(gm, hmm->M, x) = 0.0f;   /* init I_M to impossible.   */
+      for (k = 1; k < hmm->M; k++) P7P_ISC(gm, k, x) = 1.0f;
+      P7P_ISC(gm, hmm->M, x) = 0.0f;   /* init I_M to impossible.   */
     }
-  for (k = 1; k <= hmm->M; k++) p7P_ISC(gm, k, gm->abc->K)    = 0.0f; /* gap symbol */
-  for (k = 1; k <= hmm->M; k++) p7P_ISC(gm, k, gm->abc->Kp-2) = 0.0f; /* nonresidue symbol */
-  for (k = 1; k <= hmm->M; k++) p7P_ISC(gm, k, gm->abc->Kp-1) = 0.0f; /* missing data symbol */
+  for (k = 1; k <= hmm->M; k++) P7P_ISC(gm, k, gm->abc->K)    = 0.0f; /* gap symbol */
+  for (k = 1; k <= hmm->M; k++) P7P_ISC(gm, k, gm->abc->Kp-2) = 0.0f; /* nonresidue symbol */
+  for (k = 1; k <= hmm->M; k++) P7P_ISC(gm, k, gm->abc->Kp-1) = 0.0f; /* missing data symbol */
 
 
   /* Remaining specials, [NCJ][MOVE | LOOP] are set by ReconfigLengthInOdds() */
@@ -489,12 +489,12 @@ p7_profile_ConfigInOdds_DDScaled(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE 
    */
   esl_vec_FSet(gm->tsc, p7P_NTRANS, 0.0f);     /* node 0 nonexistent, has no transitions  */
   if (gm->M > 1) {
-    p7P_TSC(gm, 1, p7P_DM) = 0.0f;             /* delete state D_1 is wing-retracted      */
-    p7P_TSC(gm, 1, p7P_DD) = 0.0f;
+    P7P_TSC(gm, 1, p7P_DM) = 0.0f;             /* delete state D_1 is wing-retracted      */
+    P7P_TSC(gm, 1, p7P_DD) = 0.0f;
   }
   for (x = 0; x < gm->abc->Kp; x++) {        
-    p7P_MSC(gm, 0,      x) = 0.0f;             /* no emissions from nonexistent M_0... */
-    p7P_ISC(gm, 0,      x) = 0.0f;             /* or I_0... */
+    P7P_MSC(gm, 0,      x) = 0.0f;             /* no emissions from nonexistent M_0... */
+    P7P_ISC(gm, 0,      x) = 0.0f;             /* or I_0... */
     /* I_M is initialized in profile config, when we know actual M, not just allocated max M   */
   }
   x = esl_abc_XGetGap(gm->abc);	                       /* no emission can emit/score gap characters */
@@ -504,9 +504,9 @@ p7_profile_ConfigInOdds_DDScaled(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE 
 
 
   /* glocal mode BMk entries, DD-scaled */
-  p7P_TSC(gm, 0, p7P_BM) = 1.0 - hmm->t[0][p7H_MD];
+  P7P_TSC(gm, 0, p7P_BM) = 1.0 - hmm->t[0][p7H_MD];
   for (k = 1; k < hmm->M; k++) 
-    p7P_TSC(gm, k, p7P_BM) =  hmm->t[0][p7H_MD] * hmm->t[k][p7H_DM] / hmm->t[k][p7H_DD];
+    P7P_TSC(gm, k, p7P_BM) =  hmm->t[0][p7H_MD] * hmm->t[k][p7H_DM] / hmm->t[k][p7H_DD];
 
   /* unihit E state loop/move probabilities */
   gm->xsc[p7P_E][p7P_MOVE] = 1.0f;   
@@ -549,19 +549,19 @@ p7_profile_ConfigInOdds_DDScaled(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE 
     esl_abc_FExpectScVec(hmm->abc, sc, bg->f); 
     for (x = 0; x < hmm->abc->Kp; x++) {
       rp = gm->rsc[x] + k * p7P_NR;
-      rp[p7P_MSC] = exp(sc[x]);
+      rp[p7P_M] = exp(sc[x]);
     }
   }
 
   /* insert residue scores, hardwired to odds ratio of 1.0 */
   for (x = 0; x < gm->abc->Kp; x++)
     {
-      for (k = 1; k < hmm->M; k++) p7P_ISC(gm, k, x) = 1.0f;
-      p7P_ISC(gm, hmm->M, x) = 0.0f;   /* init I_M to impossible.   */
+      for (k = 1; k < hmm->M; k++) P7P_ISC(gm, k, x) = 1.0f;
+      P7P_ISC(gm, hmm->M, x) = 0.0f;   /* init I_M to impossible.   */
     }
-  for (k = 1; k <= hmm->M; k++) p7P_ISC(gm, k, gm->abc->K)    = 0.0f; /* gap symbol */
-  for (k = 1; k <= hmm->M; k++) p7P_ISC(gm, k, gm->abc->Kp-2) = 0.0f; /* nonresidue symbol */
-  for (k = 1; k <= hmm->M; k++) p7P_ISC(gm, k, gm->abc->Kp-1) = 0.0f; /* missing data symbol */
+  for (k = 1; k <= hmm->M; k++) P7P_ISC(gm, k, gm->abc->K)    = 0.0f; /* gap symbol */
+  for (k = 1; k <= hmm->M; k++) P7P_ISC(gm, k, gm->abc->Kp-2) = 0.0f; /* nonresidue symbol */
+  for (k = 1; k <= hmm->M; k++) P7P_ISC(gm, k, gm->abc->Kp-1) = 0.0f; /* missing data symbol */
 
 
   /* Remaining specials, [NCJ][MOVE | LOOP] are set by ReconfigLengthInOdds() */

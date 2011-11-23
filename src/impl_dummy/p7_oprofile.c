@@ -365,8 +365,8 @@ p7_profile_SameAsMF(const P7_OPROFILE *om, P7_PROFILE *gm)
 
   /* Transitions */
   esl_vec_FSet(gm->tsc, p7P_NTRANS * gm->M, -eslINFINITY);
-  for (k = 1; k <  gm->M; k++) p7P_TSC(gm, k, p7P_MM) = 0.0f;
-  for (k = 0; k <  gm->M; k++) p7P_TSC(gm, k, p7P_BM) = tbm;
+  for (k = 1; k <  gm->M; k++) P7P_TSC(gm, k, p7P_MM) = 0.0f;
+  for (k = 0; k <  gm->M; k++) P7P_TSC(gm, k, p7P_BLM) = tbm;
   
   return eslOK;
 }

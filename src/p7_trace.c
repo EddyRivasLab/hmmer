@@ -746,8 +746,8 @@ p7_trace_Dump(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ 
 	    xi = dsq[tr->i[z]];
 
 	    if (tr->st[z] == p7T_M) {
-	      fprintf(fp, " %8.4f", p7P_MSC(gm, tr->k[z], xi));
-	      sc += p7P_MSC(gm, tr->k[z], xi);
+	      fprintf(fp, " %8.4f", P7P_MSC(gm, tr->k[z], xi));
+	      sc += P7P_MSC(gm, tr->k[z], xi);
 	      if (tr->pp != NULL) {
 		fprintf(fp, " %8.4f", tr->pp[z]);
 		accuracy += tr->pp[z];
@@ -755,8 +755,8 @@ p7_trace_Dump(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ 
 	      fprintf(fp, " %c", gm->abc->sym[xi]);
 	    } 
 	    else if (tr->st[z] == p7T_I) {
-	      fprintf(fp, " %8.4f", p7P_ISC(gm, tr->k[z], xi));
-	      sc += p7P_ISC(gm, tr->k[z], xi);
+	      fprintf(fp, " %8.4f", P7P_ISC(gm, tr->k[z], xi));
+	      sc += P7P_ISC(gm, tr->k[z], xi);
 	      if (tr->pp != NULL) {
 		fprintf(fp, " %8.4f", tr->pp[z]);
 		accuracy += tr->pp[z];
@@ -883,8 +883,8 @@ p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, float *ret_sc)
   for (z = 0; z < tr->N-1; z++) {
     xi = dsq[tr->i[z]];
 
-    if      (tr->st[z] == p7T_M) sc += p7P_MSC(gm, tr->k[z], xi);
-    else if (tr->st[z] == p7T_I) sc += p7P_ISC(gm, tr->k[z], xi);
+    if      (tr->st[z] == p7T_M) sc += P7P_MSC(gm, tr->k[z], xi);
+    else if (tr->st[z] == p7T_I) sc += P7P_ISC(gm, tr->k[z], xi);
 
     if ((status = p7_profile_GetT(gm, tr->st[z], tr->k[z], 
 				  tr->st[z+1], tr->k[z+1], &tsc)) != eslOK) goto ERROR;

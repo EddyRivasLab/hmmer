@@ -100,7 +100,7 @@ p7_GOptimalAccuracy(const P7_PROFILE *gm, const P7_GMX *pp, P7_GMX *gx, float *r
 	  MMX(i,k)     = ESL_MAX(ESL_MAX(TSCDELTA(p7P_MM, k-1) * (MMX(i-1,k-1)  + pp->dp[i][k*p7G_NSCELLS + p7G_M]),
 					 TSCDELTA(p7P_IM, k-1) * (IMX(i-1,k-1)  + pp->dp[i][k*p7G_NSCELLS + p7G_M])),
 				 ESL_MAX(TSCDELTA(p7P_DM, k-1) * (DMX(i-1,k-1)  + pp->dp[i][k*p7G_NSCELLS + p7G_M]),
-					 TSCDELTA(p7P_BM, k-1) * (XMX(i-1,p7G_B)+ pp->dp[i][k*p7G_NSCELLS + p7G_M])));
+					 TSCDELTA(p7P_BLM, k-1) * (XMX(i-1,p7G_B)+ pp->dp[i][k*p7G_NSCELLS + p7G_M])));
 
 	  XMX(i,p7G_E) = ESL_MAX(XMX(i,p7G_E), 
 				 esc * MMX(i,k));
@@ -116,7 +116,7 @@ p7_GOptimalAccuracy(const P7_PROFILE *gm, const P7_GMX *pp, P7_GMX *gx, float *r
       MMX(i,M)     = ESL_MAX(ESL_MAX(TSCDELTA(p7P_MM, M-1) * (MMX(i-1,M-1)  + pp->dp[i][M*p7G_NSCELLS + p7G_M]),
 				     TSCDELTA(p7P_IM, M-1) * (IMX(i-1,M-1)  + pp->dp[i][M*p7G_NSCELLS + p7G_M])),
 			     ESL_MAX(TSCDELTA(p7P_DM, M-1) * (DMX(i-1,M-1)  + pp->dp[i][M*p7G_NSCELLS + p7G_M]),
-				     TSCDELTA(p7P_BM, M-1) * (XMX(i-1,p7G_B)+ pp->dp[i][M*p7G_NSCELLS + p7G_M])));
+				     TSCDELTA(p7P_BLM, M-1) * (XMX(i-1,p7G_B)+ pp->dp[i][M*p7G_NSCELLS + p7G_M])));
 
       DMX(i,M)     = ESL_MAX(TSCDELTA(p7P_MD, M-1) * MMX(i,M-1),
 			     TSCDELTA(p7P_DD, M-1) * DMX(i,M-1));
@@ -267,7 +267,7 @@ select_m(const P7_PROFILE *gm, const P7_GMX *gx, int i, int k)
   path[0] = TSCDELTA(p7P_MM, k-1) * MMX(i-1,k-1);
   path[1] = TSCDELTA(p7P_MM, k-1) * IMX(i-1,k-1);
   path[2] = TSCDELTA(p7P_DM, k-1) * DMX(i-1,k-1);
-  path[3] = TSCDELTA(p7P_BM, k-1) * XMX(i-1,p7G_B);
+  path[3] = TSCDELTA(p7P_BLM, k-1) * XMX(i-1,p7G_B);
   return state[esl_vec_FArgMax(path, 4)];
 }
 

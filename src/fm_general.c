@@ -611,10 +611,10 @@ get_Score_Arrays(P7_PROFILE *gm, P7_OPROFILE *om, FM_HMMDATA *data ) {
     for (j=0; j<gm->abc->Kp; j++) {
       if (om != NULL) {
         //based on p7_oprofile's biased_byteify()
-        float x =  -1.0f * roundf(om->scale_b * gm->rsc[j][(i) * p7P_NR     + p7P_MSC]);
+        float x =  -1.0f * roundf(om->scale_b * gm->rsc[j][(i) * p7P_NR + p7P_M]);
         data->s.scores_b[i][j] = (x > 255. - om->bias_b) ? 255 : (uint8_t) (x + om->bias_b);
       } else {
-        data->s.scores_f[i][j] = gm->rsc[j][(i) * p7P_NR     + p7P_MSC];
+        data->s.scores_f[i][j] = gm->rsc[j][(i) * p7P_NR + p7P_M];
         if (data->s.scores_f[i][j] > max_scores[i]) max_scores[i] = data->s.scores_f[i][j];
       }
     }

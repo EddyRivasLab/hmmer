@@ -35,18 +35,15 @@
  *            
  *            Because this function might be in the critical path (in
  *            hmmscan, for example), we leave much of the model
- *            unintialized, including scores and length model
+ *            uninitialized, including scores and length model
  *            probabilities. The <p7_ProfileConfig()> call is what
- *            sets these. 
+ *            sets these.
  *            
- *            The alignment mode is set to <p7_NO_MODE>.  The
- *            reference pointer <gm->abc> is set to <abc>.
+ *            The reference pointer <gm->abc> is set to <abc>.
  *
- * Returns:   a pointer to the new profile.
+ * Returns:   a pointer to the newly allocated profile.
  *
  * Throws:    <NULL> on allocation error.
- *
- * Xref:      STL11/125.
  */
 P7_PROFILE *
 p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
@@ -59,6 +56,9 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
   ESL_ALLOC(gm, sizeof(P7_PROFILE));
   gm->tsc       = NULL;
   gm->rsc       = NULL;
+  gm->name      = NULL;
+  gm->acc       = NULL;
+  gm->desc      = NULL;
   gm->rf        = NULL;
   gm->cs        = NULL;
   gm->consensus = NULL;
@@ -80,13 +80,9 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
    * and are only present for indexing convenience.
    */
   esl_vec_FSet(gm->tsc, p7P_NTRANS, -eslINFINITY);     /* node 0 nonexistent, has no transitions  */
-  if (allocM > 1) {
-    p7P_TSC(gm, 1, p7P_DM) = -eslINFINITY;             /* delete state D_1 is wing-retracted      */
-    p7P_TSC(gm, 1, p7P_DD) = -eslINFINITY;
-  }
   for (x = 0; x < abc->Kp; x++) {        
-    p7P_MSC(gm, 0,      x) = -eslINFINITY;             /* no emissions from nonexistent M_0... */
-    p7P_ISC(gm, 0,      x) = -eslINFINITY;             /* or I_0... */
+    P7P_MSC(gm, 0, x) = -eslINFINITY;                  /* no emissions from nonexistent M_0... */
+    P7P_ISC(gm, 0, x) = -eslINFINITY;                  /* nor I_0...                           */
     /* I_M is initialized in profile config, when we know actual M, not just allocated max M   */
   }
   x = esl_abc_XGetGap(abc);	                       /* no emission can emit/score gap characters */
@@ -95,31 +91,28 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
   esl_vec_FSet(gm->rsc[x], (allocM+1)*p7P_NR, -eslINFINITY);
 
   /* Set remaining info  */
-  gm->mode             = p7_NO_MODE;
-  gm->L                = 0;
-  gm->allocM           = allocM;
   gm->M                = 0;
-  gm->max_length       = -1;
-  gm->nj               = 0.0f;
+  gm->allocM           = allocM;
+  gm->L                = -1;  	   /* "unset" flag */
+  gm->nj               = -1.0f;    /* "unset" flag */
+  gm->pglocal          = -1.0f;    /* "unset" flag */
 
-  gm->roff             = -1;
-  gm->eoff             = -1;
-  gm->offs[p7_MOFFSET] = -1;
-  gm->offs[p7_FOFFSET] = -1;
-  gm->offs[p7_POFFSET] = -1;
-
-  gm->name             = NULL;
-  gm->acc              = NULL;
-  gm->desc             = NULL;
-  gm->rf[0]            = 0;     /* RF line is optional annotation; this flags that it's not set yet */
-  gm->cs[0]            = 0;     /* likewise for CS annotation line */
-  gm->consensus[0]     = 0;
-  
+  gm->rf[0]            = '\0';     /* RF line is optional annotation; this flags that it's not set yet */
+  gm->cs[0]            = '\0';     /* likewise for CS annotation line */
+  gm->consensus[0]     = '\0';
   for (x = 0; x < p7_NEVPARAM; x++) gm->evparam[x] = p7_EVPARAM_UNSET;
   for (x = 0; x < p7_NCUTOFFS; x++) gm->cutoff[x]  = p7_CUTOFF_UNSET;
   for (x = 0; x < p7_MAXABET;  x++) gm->compo[x]   = p7_COMPO_UNSET;
 
+  gm->offs[p7_MOFFSET] = -1;	/* "unset" */
+  gm->offs[p7_FOFFSET] = -1;
+  gm->offs[p7_POFFSET] = -1;
+  gm->roff             = -1;
+  gm->eoff             = -1;
+
+  gm->max_length  = -1;		/* "unset" */
   gm->abc         = abc;
+
   return gm;
 
  ERROR:
@@ -132,12 +125,13 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
  * Synopsis:  Copy a profile.
  *
  * Purpose:   Copies profile <src> to profile <dst>, where <dst>
- *            has already been allocated to be of sufficient size.
+ *            has already been allocated to be of sufficient size,
+ *            and has the same alphabet.
  *
  * Returns:   <eslOK> on success.
  * 
  * Throws:    <eslEMEM> on allocation error; <eslEINVAL> if <dst> is too small 
- *            to fit <src>.
+ *            to fit <src> or is for a different alphabet.
  */
 int
 p7_profile_Copy(const P7_PROFILE *src, P7_PROFILE *dst)
@@ -145,30 +139,21 @@ p7_profile_Copy(const P7_PROFILE *src, P7_PROFILE *dst)
   int x,z;
   int status;
 
-  if (src->M > dst->allocM) ESL_EXCEPTION(eslEINVAL, "destination profile is too small to hold a copy of source profile");
+  if (src->M         >   dst->allocM)   ESL_EXCEPTION(eslEINVAL, "destination profile is too small to hold a copy of source profile");
+  if (src->abc->type != dst->abc->type) ESL_EXCEPTION(eslEINVAL, "destination profile has different alphabet than source");
 
+  dst->M = src->M;
   esl_vec_FCopy(src->tsc, src->M*p7P_NTRANS, dst->tsc);
   for (x = 0; x < src->abc->Kp;   x++) esl_vec_FCopy(src->rsc[x], (src->M+1)*p7P_NR, dst->rsc[x]);
   for (x = 0; x < p7P_NXSTATES;   x++) esl_vec_FCopy(src->xsc[x], p7P_NXTRANS,       dst->xsc[x]);
 
-  dst->mode        = src->mode;
   dst->L           = src->L;
-  dst->allocM      = src->allocM;
-  dst->M           = src->M;
-  dst->max_length  = src->max_length;
   dst->nj          = src->nj;
+  dst->pglocal     = src->pglocal;
 
-  dst->roff        = src->roff;
-  dst->eoff        = src->eoff;
-  for (x = 0; x < p7_NOFFSETS; ++x) dst->offs[x] = src->offs[x];
-
-  if (dst->name != NULL) free(dst->name);
-  if (dst->acc  != NULL) free(dst->acc);
-  if (dst->desc != NULL) free(dst->desc);
-
-  if ((status = esl_strdup(src->name,      -1, &(dst->name)))      != eslOK) return status;
-  if ((status = esl_strdup(src->acc,       -1, &(dst->acc)))       != eslOK) return status;
-  if ((status = esl_strdup(src->desc,      -1, &(dst->desc)))      != eslOK) return status;
+  if (dst->name) { free(dst->name);   if ((status = esl_strdup(src->name,      -1, &(dst->name)))      != eslOK) return status; }
+  if (dst->acc)  { free(dst->acc);    if ((status = esl_strdup(src->acc,       -1, &(dst->acc)))       != eslOK) return status; }
+  if (dst->desc) { free(dst->desc);   if ((status = esl_strdup(src->desc,      -1, &(dst->desc)))      != eslOK) return status; }
 
   strcpy(dst->rf,        src->rf);         /* RF is optional: if it's not set, *rf=0, and strcpy still works fine */
   strcpy(dst->cs,        src->cs);         /* CS is also optional annotation */
@@ -177,6 +162,12 @@ p7_profile_Copy(const P7_PROFILE *src, P7_PROFILE *dst)
   for (z = 0; z < p7_NEVPARAM; z++) dst->evparam[z] = src->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) dst->cutoff[z]  = src->cutoff[z];
   for (z = 0; z < p7_MAXABET;  z++) dst->compo[z]   = src->compo[z];
+
+  for (x = 0; x < p7_NOFFSETS; ++x) dst->offs[x] = src->offs[x];
+  dst->roff        = src->roff;
+  dst->eoff        = src->eoff;
+
+  dst->max_length  = src->max_length;
   return eslOK;
 }
 
@@ -186,6 +177,10 @@ p7_profile_Copy(const P7_PROFILE *src, P7_PROFILE *dst)
  *
  * Purpose:   Duplicate profile <gm>; return a pointer
  *            to the newly allocated copy.
+ *            
+ * Returns:   ptr to new clone.
+ * 
+ * Throws:    <NULL> on allocation failure.
  */
 P7_PROFILE *
 p7_profile_Clone(const P7_PROFILE *gm)
@@ -204,30 +199,6 @@ p7_profile_Clone(const P7_PROFILE *gm)
 
 
 
-/* Function:  p7_profile_SetNullEmissions()
- * Synopsis:  Set all emission scores to zero (experimental).
- *
- * Purpose:   Set all emission scores in profile <gm> to zero.
- *            This makes the profile a null model, with all the same
- *            length distributions as the original model, but
- *            the emission probabilities of the background.
- *            
- *            Written to test the idea that score statistics will be
- *            even better behaved when using a null model with the
- *            same length distribution as the search model.
- *
- * Returns:   <eslOK> on success.
- */
-int
-p7_profile_SetNullEmissions(P7_PROFILE *gm)
-{
-  int x;
-  for (x = 0; x <= gm->abc->K; x++)                esl_vec_FSet(gm->rsc[x], (gm->M+1)*p7P_NR, 0.0);   /* canonicals    */
-  for (x = gm->abc->K+1; x <= gm->abc->Kp-3; x++)  esl_vec_FSet(gm->rsc[x], (gm->M+1)*p7P_NR, 0.0);   /* noncanonicals */
-  return eslOK;
-}
-
-
 /* Function:  p7_profile_Reuse()
  * Synopsis:  Prepare profile to be re-used for a new HMM.
  *
@@ -243,22 +214,23 @@ p7_profile_Reuse(P7_PROFILE *gm)
   if (gm->desc != NULL) { free(gm->desc); gm->desc = NULL; }
 
   /* set annotations to empty strings */
-  gm->rf[0]        = 0;
-  gm->cs[0]        = 0;
-  gm->consensus[0] = 0;
+  gm->rf[0]        = '\0';
+  gm->cs[0]        = '\0';
+  gm->consensus[0] = '\0';
       
   /* reset some other things, but leave the rest alone. */
-  gm->mode = p7_NO_MODE;
-  gm->L    = 0;
-  gm->M    = 0;
-  gm->nj   = 0.0f;
+  gm->M       = 0;
+  gm->L       = -1;
+  gm->nj      = -1.0f;
+  gm->pglocal = -1.0f;
 
-  gm->roff             = -1;
-  gm->eoff             = -1;
   gm->offs[p7_MOFFSET] = -1;
   gm->offs[p7_FOFFSET] = -1;
   gm->offs[p7_POFFSET] = -1;
+  gm->roff             = -1;
+  gm->eoff             = -1;
 
+  gm->max_length       = -1;
   return eslOK;
 }
 
@@ -267,6 +239,15 @@ p7_profile_Reuse(P7_PROFILE *gm)
  * Synopsis:  Return the allocated size of a P7_PROFILE.
  *
  * Purpose:   Return the allocated size of a <P7_PROFILE>, in bytes.
+ * 
+ *            Because we don't know the allocated size of some
+ *            annotation fields (name, acc, desc), we actually
+ *            calculate the minimum allocation size, counting these
+ *            strings as strlen(s)+1. This suffices because Sizeof()'s
+ *            most critical use is in determining the minimum
+ *            necessary size of a serialized structure. When we
+ *            instead use Sizeof() to report memory consumption, a
+ *            rough number is adequate.
  */
 size_t
 p7_profile_Sizeof(P7_PROFILE *gm)
@@ -275,13 +256,16 @@ p7_profile_Sizeof(P7_PROFILE *gm)
 
   /* these mirror malloc()'s in p7_profile_Create(); maintain one:one correspondence for maintainability */
   n += sizeof(P7_PROFILE);
-  n += sizeof(float)   * gm->allocM * p7P_NTRANS;             /* gm->tsc       */
-  n += sizeof(float *) * gm->abc->Kp;	                      /* gm->rsc       */
-  n += sizeof(char)    * (gm->allocM+2);	              /* gm->rf        */
-  n += sizeof(char)    * (gm->allocM+2);	              /* gm->cs        */
-  n += sizeof(char)    * (gm->allocM+2);	              /* gm->consensus */
+  n += sizeof(float)   * gm->allocM * p7P_NTRANS;               /* gm->tsc       */
+  n += sizeof(float *) * gm->abc->Kp;	                        /* gm->rsc       */
+  n += sizeof(float)   * gm->abc->Kp * (gm->allocM+1) * p7P_NR; /* gm->rsc[0]    */
+  n += sizeof(char)    * (gm->allocM+2);	                /* gm->rf        */
+  n += sizeof(char)    * (gm->allocM+2);	                /* gm->cs        */
+  n += sizeof(char)    * (gm->allocM+2);	                /* gm->consensus */
 
-  n += sizeof(float) * gm->abc->Kp * (gm->allocM+1) * p7P_NR; /* gm->rsc[0]    */
+  if (gm->name) n += sizeof(char) * (strlen(gm->name) + 1);
+  if (gm->acc)  n += sizeof(char) * (strlen(gm->acc)  + 1);
+  if (gm->desc) n += sizeof(char) * (strlen(gm->desc) + 1);
 
   return n;
 }
@@ -293,8 +277,6 @@ p7_profile_Sizeof(P7_PROFILE *gm)
  * Purpose:   Frees a profile <gm>.
  *
  * Returns:   (void).
- *
- * Xref:      STL11/125.
  */
 void
 p7_profile_Destroy(P7_PROFILE *gm)
@@ -327,7 +309,7 @@ p7_profile_Destroy(P7_PROFILE *gm)
 int
 p7_profile_IsLocal(const P7_PROFILE *gm)
 {
-  if (gm->mode == p7_UNILOCAL || gm->mode == p7_LOCAL) return TRUE;
+  if (gm->pglocal == 0.0f) return TRUE;
   return FALSE;
 }
 
@@ -339,7 +321,7 @@ p7_profile_IsLocal(const P7_PROFILE *gm)
 int
 p7_profile_IsMultihit(const P7_PROFILE *gm)
 {
-  if (gm->mode == p7_LOCAL || gm->mode == p7_GLOCAL) return TRUE;
+  if (gm->nj > 0.0) return TRUE;
   return FALSE;
 }
 
@@ -404,16 +386,16 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
 
   case p7T_B:
     switch (st2) {
-    case p7T_M: tsc = p7P_TSC(gm, k2-1, p7P_BM); break; /* remember, B->Mk is stored in [k-1][p7P_BM] */
+    case p7T_M: tsc = P7P_TSC(gm, k2-1, p7P_BLM); break; /* remember, B->Mk is stored in [k-1][p7P_BLM] */
     default:    ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
     }
     break;
 
   case p7T_M:
     switch (st2) {
-    case p7T_M: tsc = p7P_TSC(gm, k1, p7P_MM); break;
-    case p7T_I: tsc = p7P_TSC(gm, k1, p7P_MI); break;
-    case p7T_D: tsc = p7P_TSC(gm, k1, p7P_MD); break;
+    case p7T_M: tsc = P7P_TSC(gm, k1, p7P_MM); break;
+    case p7T_I: tsc = P7P_TSC(gm, k1, p7P_MI); break;
+    case p7T_D: tsc = P7P_TSC(gm, k1, p7P_MD); break;
     case p7T_E: 
       if (k1 != gm->M && ! p7_profile_IsLocal(gm)) ESL_EXCEPTION(eslEINVAL, "local end transition (M%d of %d) in non-local model", k1, gm->M);
       tsc = 0.0f;		/* by def'n in H3 local alignment */
@@ -424,8 +406,8 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
 
   case p7T_D:
     switch (st2) {
-    case p7T_M: tsc = p7P_TSC(gm, k1, p7P_DM); break;
-    case p7T_D: tsc = p7P_TSC(gm, k1, p7P_DD); break;
+    case p7T_M: tsc = P7P_TSC(gm, k1, p7P_DM); break;
+    case p7T_D: tsc = P7P_TSC(gm, k1, p7P_DD); break;
     case p7T_E: 
       if (k1 != gm->M && ! p7_profile_IsLocal(gm)) ESL_EXCEPTION(eslEINVAL, "local end transition (D%d of %d) in non-local model", k1, gm->M);
       tsc = 0.0f;		/* by def'n in H3 local alignment */
@@ -436,8 +418,8 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
 
   case p7T_I:
     switch (st2) {
-    case p7T_M: tsc = p7P_TSC(gm, k1, p7P_IM); break;
-    case p7T_I: tsc = p7P_TSC(gm, k1, p7P_II); break;
+    case p7T_M: tsc = P7P_TSC(gm, k1, p7P_IM); break;
+    case p7T_I: tsc = P7P_TSC(gm, k1, p7P_II); break;
     default:    ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DecodeStatetype(st1), k1, p7_hmm_DecodeStatetype(st2));
     }
     break;
@@ -514,12 +496,12 @@ p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol)
   if (p7_profile_IsLocal(gm))
     {				/* the code block below is also in emit.c:sample_endpoints */
       for (k = 1; k <= gm->M; k++)
-	pstart[k] = exp(p7P_TSC(gm, k-1, p7P_BM)) * (gm->M - k + 1); /* multiply p_ij by the number of exits j */
+	pstart[k] = exp(P7P_TSC(gm, k-1, p7P_BLM)) * (gm->M - k + 1); /* multiply p_ij by the number of exits j */
     }
   else
     {
       for (k = 1; k <= gm->M; k++)
-	pstart[k] = exp(p7P_TSC(gm, k-1, p7P_BM));
+	pstart[k] = exp(P7P_TSC(gm, k-1, p7P_BGM));
     }
 
   if (esl_vec_DValidate(pstart, gm->M+1, tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "profile entry distribution is not normalized properly");

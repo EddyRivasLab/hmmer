@@ -83,7 +83,7 @@ p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
 	  /* match state */
 	  sc = p7_FLogsum(p7_FLogsum(MMX(i-1,k-1)   + TSC(p7P_MM,k-1), 
 				     IMX(i-1,k-1)   + TSC(p7P_IM,k-1)),
-			  p7_FLogsum(XMX(i-1,p7G_B) + TSC(p7P_BM,k-1),
+			  p7_FLogsum(XMX(i-1,p7G_B) + TSC(p7P_BLM,k-1),
 				     DMX(i-1,k-1)   + TSC(p7P_DM,k-1)));
 	  MMX(i,k) = sc + MSC(k);
 
@@ -104,7 +104,7 @@ p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
       /* unrolled match state M_M */
       sc = p7_FLogsum(p7_FLogsum(MMX(i-1,M-1)   + TSC(p7P_MM,M-1), 
 				 IMX(i-1,M-1)   + TSC(p7P_IM,M-1)),
-		      p7_FLogsum(XMX(i-1,p7G_B) + TSC(p7P_BM,M-1),
+		      p7_FLogsum(XMX(i-1,p7G_B) + TSC(p7P_BLM,M-1),
 				 DMX(i-1,M-1)   + TSC(p7P_DM,M-1)));
       MMX(i,M) = sc + MSC(M);
       IMX(i,M) = -eslINFINITY;
@@ -198,9 +198,9 @@ p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float 
     {
       rsc = gm->rsc[dsq[i+1]];
 
-      XMX(i,p7G_B) = MMX(i+1,1) + TSC(p7P_BM,0) + MSC(1); /* t_BM index is 0 because it's stored off-by-one. */
+      XMX(i,p7G_B) = MMX(i+1,1) + TSC(p7P_BLM,0) + MSC(1); /* t_BM index is 0 because it's stored off-by-one. */
       for (k = 2; k <= M; k++)
-	XMX(i,p7G_B) = p7_FLogsum(XMX(i, p7G_B), MMX(i+1,k) + TSC(p7P_BM,k-1) + MSC(k));
+	XMX(i,p7G_B) = p7_FLogsum(XMX(i, p7G_B), MMX(i+1,k) + TSC(p7P_BLM,k-1) + MSC(k));
 
       XMX(i,p7G_J) = p7_FLogsum( XMX(i+1,p7G_J) + gm->xsc[p7P_J][p7P_LOOP],
 				 XMX(i,  p7G_B) + gm->xsc[p7P_J][p7P_MOVE]);
@@ -234,9 +234,9 @@ p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float 
 
   /* At i=0, only N,B states are reachable. */
   rsc = gm->rsc[dsq[1]];
-  XMX(0,p7G_B) = MMX(1,1) + TSC(p7P_BM,0) + MSC(1); /* t_BM index is 0 because it's stored off-by-one. */
+  XMX(0,p7G_B) = MMX(1,1) + TSC(p7P_BLM,0) + MSC(1); /* t_BM index is 0 because it's stored off-by-one. */
   for (k = 2; k <= M; k++)
-    XMX(0,p7G_B) = p7_FLogsum(XMX(0, p7G_B), MMX(1,k) + TSC(p7P_BM,k-1) + MSC(k));
+    XMX(0,p7G_B) = p7_FLogsum(XMX(0, p7G_B), MMX(1,k) + TSC(p7P_BLM,k-1) + MSC(k));
   XMX(i,p7G_J) = -eslINFINITY;
   XMX(i,p7G_C) = -eslINFINITY;
   XMX(i,p7G_E) = -eslINFINITY;

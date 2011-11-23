@@ -78,7 +78,7 @@ p7_GForwardBanded(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXB *gxb,
 	    {
 	      *dpc++ = sc = MSC(k) + p7_FLogsum( p7_FLogsum(mvp + TSC(p7P_MM, k-1), ivp + TSC(p7P_IM, k-1)),
 						 dvp + TSC(p7P_DM, k-1));
-						 //p7_FLogsum(dvp + TSC(p7P_DM, k-1), xB  + TSC(p7P_BM, k-1)));
+						 //p7_FLogsum(dvp + TSC(p7P_DM, k-1), xB  + TSC(p7P_BLM, k-1)));
 	      
 
 	      if (k >= kap && k <= kbp) {  mvp = *dpp++;       ivp = *dpp++;        dvp = *dpp++;       } 	      // an if seems unavoidable. alternatively, might unroll 
@@ -97,7 +97,7 @@ p7_GForwardBanded(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXB *gxb,
 	  if (kbc2 < kbc) /* i.e., if kbc==M and we need to do the final M column: */
 	    {
 	      *dpc++ = sc = MSC(k) + p7_FLogsum( p7_FLogsum(mvp + TSC(p7P_MM, k-1), ivp + TSC(p7P_IM, k-1)),
-						 p7_FLogsum(dvp + TSC(p7P_DM, k-1), xB  + TSC(p7P_BM, k-1)));
+						 p7_FLogsum(dvp + TSC(p7P_DM, k-1), xB  + TSC(p7P_BLM, k-1)));
 	      *dpc++ = -eslINFINITY; 
 	      *dpc++ = dc;           
 	      xE     = p7_FLogsum( p7_FLogsum(sc, dc), xE);

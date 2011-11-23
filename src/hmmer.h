@@ -150,9 +150,13 @@ enum p7h_transitions_e {
  *      To simplify some normalization code, we adopt a convention that these are set
  *      to valid probability distributions: 1.0 for t[0][TDM] and mat[0][0],
  *      and 0 for the rest.
- *   2. t[M] is also special: TMD and TDD are 0 because there is no next delete state;
- *      TDM is therefore 1.0 by definition. TMM and TDM are interpreted as the
- *      M->E and D->E end transitions. t[M][TDM] must be 1.0, therefore.
+ *                      MM     MI    MD     IM    II     DM   DD
+ *              t[0]  B->M1  B->I0  B->D1 I0->M1 I0->I0  (1)  (0)
+ *   2. t[M] is also special: there is no next M/D, only E. So TMD and
+ *      TDD are 0; TMM, TIM, and TDM are interpreted as transitions to
+ *      E; and thus t[M][TDM] must be 1.0 and [TMD] must be 0:
+ *                      MM     MI    MD    IM    II    DM   DD
+ *              t[M]  Mm->E  Mm->Im   0  Im->E Im->Im   1    0
  */
 typedef struct p7_hmm_s {
   /*::cexcerpt::plan7_core::begin::*/
@@ -195,68 +199,160 @@ typedef struct p7_hmm_s {
  * 2. P7_PROFILE: a scoring profile, and its implicit model.
  *****************************************************************/
 
-/* Indices for special state types in the length model, gm->xsc[x][]
+/* The profile has nine additional states, relative to the core HMM:
+ *   S->N->B-->L ... -->E->C->T
+ *         ^\_>G ... _/ |
+ *         |            |
+ *         |____ J _____|
+ *
+ * These nine states control the "algorithm-dependent" configuration
+ * of the profile and of our alignment/scoring algorithms (Viterbi or 
+ * Forward). There are three components to this configuration:
+ *     1. The length model:
+ *          N,C,J transitions control the expected length of
+ *          nonhomologous sequence segments. The length model is
+ *          typically reset for each new target sequence length L.
+ *     2. Multihit vs. unihit
+ *          The E transitions control whether the model is allowed
+ *          to loop around for multiple homology segments per
+ *          target sequence.
+ *     3. Search mode: local vs. glocal
+ *          The B->L, B->G probabilities control whether the model
+ *          only allows local alignment, only allows glocal alignment,
+ *          or a mixture of the two.
+ *         
+ * For efficiency, four of the nine states (S,T,L,G) only show up in our
+ * formal state diagrams, and are not explicitly represented in the
+ * P7_PROFILE parameters that DP calculations use:
+ *     1. The S->N probability is always 1.0, so our DP codes 
+ *        initialize on the N state and don't store anything for S.
+ *     2. The C->T log probability is added on to any final 
+ *        lod score. We know the T state only has nonzero probability
+ *        at position i=L in the target, so DP algorithms don't
+ *        bother to store it in their matrix.
+ *     3. The B->{LG} log probability is included in the B->L->Mk
+ *        and B->G->Mk "entry distributions" (BLM, BGM), so DP
+ *        algorithms effectively look at direct B->Mk(L) and B->Mk(G) 
+ *        transitions, without storing L and G states explicitly.
+ *        
+ * Alignment/scoring implementations are allowed to override the
+ * length model, multihit mode, or the search mode (so long as they
+ * document it):
+ *     1. For the length model, we sometimes make the approximation
+ *          that there are ~L NN/CC/JJ transitions (assuming the
+ *          target sequence length is large enough that the sum 
+ *          of homologous segment lengths is negligible). This
+ *          allows what the code calls the "3 nat" or "2 nat"
+ *          approximation: L \log \frac{L}{L+3} ~ 3.0 (multihit mode),
+ *          L \log \frac{L}{L+2} ~ 2.0 (unihit mode).
+ *     2. To override multihit/unihit mode: Multihit vs. unihit mode
+ *          also affects the length model parameters, so the
+ *          algorithm must not only replace tEC/tEJ parameters, but
+ *          must also use appropriate N,C,J parameters. The MSV
+ *          filter (impl_xxx/msvfilter.c) is an example where the
+ *          algorithm is always multihit, and where NN,CC,JJ 
+ *          parameters are handled implicitly w/ the 3-nat approximation.
+ *     3. To override search mode and use only one path (local or
+ *          glocal): The algorithm just needs to subtract back the
+ *          tBL/tBG log probability that is added to the tBLMk/tBGMk
+ *          entry distributions. A good place to do this is in the
+ *          initialization of the B cell. To facilitate this,
+ *          the P7_PROFILE stores xsc[p7P_B][0=L,1=G] scores.
+ *          
+ * The full (dual-mode, two-path, local/glocal) model is only
+ * implemented in P7_PROFILE, not in a vectorized P7_OPROFILE. Vector
+ * implementations are always and only in local alignment mode,
+ * because of numeric range limitations. Vector implementations are
+ * only used for fast filtering before a final banded calculation with
+ * the full model.
+ *          
+ * Wing retraction:        
+ *   For the local submodel, all algorithms must use the BLMk entry
+ *   distribution, and assume that all Mk->E and Dk->E are 1.0. This is
+ *   the "implicit probabilitistic model" of local alignment [Eddy08].
+ *   The D_1 and I_M states don't exist on the local path, and
+ *   algorithms set them to zero probability.
+ * 
+ *   For the glocal submodel, there is no "entry distribution" per se.
+ *   The submodel starts with a G->M1 or G->D1 transition probability,
+ *   and ends with Mm->E and Dm->E transitions of prob=1.0. However,
+ *   in a banded DP calculation, the band only covers DP matrix
+ *   regions involving M and I emitting states, not D paths. It is
+ *   therefore convenient to fold a G->D1..Dk-1->Mk entry path into a
+ *   B->Mk entry, and a Mk->Dk+1..Dm->E exit path into a Mk->E
+ *   exit. This process of precalculating entire exit/entry paths
+ *   including D1 and Dm is called "wing retraction". The B->Mk entry
+ *   parameter includes both the B->G probability (search mode) and
+ *   the G->Mk wing retraction.
+ * 
+ *   Using B->Mk and Mk->E wing retractions in the glocal submodel
+ *   imposes a computational cost because these parameters are
+ *   evaluated in the innermost DP loop (at each Mk cell) It is more
+ *   computationally efficient to use the G->{M1,D1} and (M_m,D_m}->E
+ *   paths. To allow algorithms to choose the version that they want
+ *   to use, the P7_PROFILE stores both parameterizations redundantly.
+ *   The wing-retracted parameters are in the transition parameters
+ *   p7_BGM and p7_MGE for each state k. The base parameters are in
+ *   xsc[p7P_G][0,1]. Both wing-retracted and base parameters include
+ *   the B->{LG} contribution.
+ *   
+ *   When an algorithm is using the base glocal entry parameters,
+ *   state D_1 does exist on the glocal submodel path. With the
+ *   wing-retracted parameters, D_1 does not exist. In either case,
+ *   I_m does not exist, same as the local path.
  */
-enum p7p_xstates_e { 
-  p7P_E = 0,
-  p7P_N = 1,
-  p7P_J = 2,
-  p7P_C = 3
-};
-#define p7P_NXSTATES 4
 
-/* Indices for transitions from the length modeling scores gm->xsc[][x]
+
+/* Indices for six special state types x that have transition parameters
+ * in gm->xsc[x][y], where all of them have two choices y.
  */
-enum p7p_xtransitions_e {
-  p7P_LOOP = 0,
-  p7P_MOVE = 1
-};
-#define p7P_NXTRANS 2
+#define p7P_NXSTATES 6
+#define p7P_NXTRANS  2
+#define p7P_LOOP 0              /* gm->xsc[x][p7P_LOOP]    gm->xsc[x][p7P_MOVE] */        
+#define p7P_MOVE 1              /* -------------------     -------------------- */
+#define p7P_E  0            	/*     E->J                       E->C          */
+#define p7P_N  1		/*     N->N                       N->B          */
+#define p7P_J  2                /*     J->J                       J->B          */
+#define p7P_C  3		/*     C->C                       C->T          */
+#define p7P_B  4		/*     B->L                       B->G          */
+#define p7P_G  5		/*     G->M1                      G->D1         */
 
-/* Indices for transition scores gm->tsc[k][] */
-/* order is optimized for dynamic programming */
-enum p7p_tsc_e {
-  p7P_MM  = 0, 
-  p7P_IM  = 1, 
-  p7P_DM  = 2, 
-  p7P_BMG = 3,    // global begin. B->BG transition, and wing-retracted B->(D..D)->Mk path
-  p7P_BML = 4;	  // local begin.  B->BL transition, and local entry from implicit probability model of local alignment.
-  p7P_MD  = 5, 
-  p7P_DD  = 6, 
-  p7P_MI  = 7, 
-  p7P_II  = 8, 
-  p7P_MEG = 9,	  // global exit: a wing-retracted Mk->{Dk+1..D_M}->E path. Local exits are all Mk->E = 1.0 probability.
-};
+/* Indices x for main model transition scores gm->tsc[k][x] 
+ * Order is optimized for dynamic programming algorithms.
+ */
 #define p7P_NTRANS 10
+#define p7P_MM   0
+#define p7P_IM   1
+#define p7P_DM   2
+#define p7P_BLM  3	/* local entry, including B->L search mode parameter */
+#define p7P_BGM  4	/* wing-retracted glocal entry, including B->G param */
+#define p7P_MD   5  
+#define p7P_DD   6
+#define p7P_MI   7
+#define p7P_II   8
+#define p7P_MGE  9	/* wing-retracted glocal exit Mk->Dk+1..Dm->E        */
 
-/* Indices for residue emission score vectors
- */
-enum p7p_rsc_e {
-  p7P_MSC = 0, 
-  p7P_ISC = 1
-};
-#define p7P_NR 2
-
-/* Accessing transition, emission scores */
-/* _BM is specially stored off-by-one: [k-1][p7P_BM] is score for entering at Mk */
-#define p7P_TSC(gm, k, s) ((gm)->tsc[(k) * p7P_NTRANS + (s)])
-#define p7P_MSC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_MSC])
-#define p7P_ISC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_ISC])
-
+/* Indices for residue emission score vectors */
+#define p7P_NR   2
+#define p7P_M    0
+#define p7P_I    1
 
 typedef struct p7_profile_s {
-  float  *tsc;          /* transitions  [0.1..M-1][0..p7P_NTRANS-1], hand-indexed  */
-  float **rsc;          /* emissions [0..Kp-1][0.1..M][p7P_NR], hand-indexed       */
-  float   xsc[p7P_NXSTATES][p7P_NXTRANS]; /* special transitions [NECJ][LOOP,MOVE] */
+  /* Model parameters:                                                               */
+  int     M;		/* number of nodes in the model                              */
+  float  *tsc;          /* transitions  [0.1..M-1][0..p7P_NTRANS-1], hand-indexed    */
+  float **rsc;          /* emissions [0..Kp-1][0.1..M][p7P_NR], hand-indexed         */
+  float   xsc[p7P_NXSTATES][p7P_NXTRANS]; /* special transitions [ENJCBG][LOOP,MOVE] */
 
-  int     mode;        	/* configured algorithm mode (e.g. p7_LOCAL)               */ 
-  int     L;		/* current configured target seq length                    */
-  int     allocM;	/* max # of nodes allocated in this structure              */
-  int     M;		/* number of nodes in the model                            */
-  int     max_length;	/* calculated upper bound on emitted seq length            */
-  float   nj;		/* expected # of uses of J; precalculated from loop config */
+  /* Memory allocation:                                                              */
+  int     allocM;	/* max # of nodes allocated in this structure                */
 
-  /* Info, most of which is a copy from parent HMM:                                       */
+  /* Configuration: length model, multi vs unihit, local vs glocal:                  */
+  int     L;		/* current configured target seq length           (unset:-1) */
+  float   nj;           /* exp # of J's; 0.0=unihit 1.0=standard multihit (unset:-1) */
+  float   pglocal;	/* base B->G; 0.0=local; 0.5=dual; 1.0=glocal     (unset=-1) */
+
+  /* Annotation copied from parent HMM:                                                   */
   char  *name;			/* unique name of model                                   */
   char  *acc;			/* unique accession of model, or NULL                     */
   char  *desc;                  /* brief (1-line) description of model, or NULL           */
@@ -267,14 +363,24 @@ typedef struct p7_profile_s {
   float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-domain bit score cutoffs, or UNSET         */
   float  compo[p7_MAXABET];	/* per-model HMM filter composition, or UNSET             */
 
-  /* Disk offset information for hmmpfam's fast model retrieval                           */
+  /* Disk offset information supporting fast model retrieval:                             */
   off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET, or -1                                  */
-
   off_t  roff;                  /* record offset (start of record); -1 if none            */
   off_t  eoff;                  /* offset to last byte of record; -1 if unknown           */
 
+  /* Derived information:                                                                 */
+  int     max_length;	/* calc'ed upper bound on emitted seq length (nhmmer) (unset:-1)  */
+
+  /* Associated objects:                                                                  */
   const ESL_ALPHABET *abc;	/* copy of pointer to appropriate alphabet                */
 } P7_PROFILE;
+
+
+/* Convenience macros for accessing transition, emission scores */
+/* _BM is specially stored off-by-one: [k-1][p7P_B{LG}M] is score for entering at Mk */
+#define P7P_TSC(gm, k, s) ((gm)->tsc[(k) * p7P_NTRANS + (s)])
+#define P7P_MSC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_M])
+#define P7P_ISC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_I])
 
 
 /*****************************************************************
@@ -491,8 +597,8 @@ typedef struct p7_gmx_s {
 #define XMX(i,s) (xmx[(i) * p7G_NXCELLS + (s)])
 
 #define TSC(s,k) (tsc[(k) * p7P_NTRANS + (s)])
-#define MSC(k)   (rsc[(k) * p7P_NR     + p7P_MSC])
-#define ISC(k)   (rsc[(k) * p7P_NR     + p7P_ISC])
+#define MSC(k)   (rsc[(k) * p7P_NR     + p7P_M])
+#define ISC(k)   (rsc[(k) * p7P_NR     + p7P_I])
 
 /* Flags that control P7_GMX debugging dumps */
 #define p7_HIDE_SPECIALS (1<<0)

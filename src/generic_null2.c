@@ -109,10 +109,10 @@ p7_GNull2_ByExpectation(const P7_PROFILE *gm, P7_GMX *pp, float *null2)
     { 
       for (k = 1; k < M; k++)
 	{
-	  null2[x] = p7_FLogsum(null2[x], MMX(0,k) + p7P_MSC(gm, k, x));
-	  null2[x] = p7_FLogsum(null2[x], IMX(0,k) + p7P_ISC(gm, k, x));
+	  null2[x] = p7_FLogsum(null2[x], MMX(0,k) + P7P_MSC(gm, k, x));
+	  null2[x] = p7_FLogsum(null2[x], IMX(0,k) + P7P_ISC(gm, k, x));
 	}
-      null2[x] = p7_FLogsum(null2[x], MMX(0,M) + p7P_MSC(gm, k, x));
+      null2[x] = p7_FLogsum(null2[x], MMX(0,M) + P7P_MSC(gm, k, x));
       null2[x] = p7_FLogsum(null2[x], xfactor);
     }
 
@@ -200,10 +200,10 @@ p7_GNull2_ByTrace(const P7_PROFILE *gm, const P7_TRACE *tr, int zstart, int zend
     {
       for (k = 1; k < M; k++)
 	{
-	  null2[x] += MMX(0,k) * expf(p7P_MSC(gm, k, x));
-	  null2[x] += IMX(0,k) * expf(p7P_ISC(gm, k, x));
+	  null2[x] += MMX(0,k) * expf(P7P_MSC(gm, k, x));
+	  null2[x] += IMX(0,k) * expf(P7P_ISC(gm, k, x));
 	}
-      null2[x] += MMX(0,M) * expf(p7P_MSC(gm, M, x));
+      null2[x] += MMX(0,M) * expf(P7P_MSC(gm, M, x));
       null2[x] += xfactor;
     }
   /* now null2[x] = \frac{f_d(x)}{f_0(x)} odds ratios for all x in alphabet,
