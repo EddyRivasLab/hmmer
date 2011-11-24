@@ -837,6 +837,8 @@ typedef struct fm_hmm_data_s {
   } s;
   float    **opt_ext_fwd;
   float    **opt_ext_rev;
+  float    *prefix_lengths;
+  float    *suffix_lengths;
 } FM_HMMDATA;
 
 
@@ -1453,7 +1455,7 @@ extern void fm_freeFM ( FM_DATA *fm, int isMainFM);
 extern uint8_t fm_getChar(uint8_t alph_type, int j, const uint8_t *B );
 extern int fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
 extern int fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
-extern FM_HMMDATA *fm_hmmdataCreate(P7_PROFILE *gm, P7_OPROFILE *om);
+extern FM_HMMDATA *fm_hmmdataCreate(P7_PROFILE *gm, P7_OPROFILE *om, P7_HMM *hmm);
 extern void fm_hmmdataDestroy(FM_HMMDATA *data );
 extern int fm_configAlloc(void **mem, FM_CFG **cfg);
 extern int fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_f, FM_INTERVAL *interval_bk);
