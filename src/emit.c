@@ -472,15 +472,16 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
 
-  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  p7_profile_Config   (gm, hmm, bg);
+  p7_profile_SetLength(gm, 400);
 
   for (i = 0; i < n; i++) 
     {
       p7_ProfileEmit(r, hmm, gm, bg, sq, tr);
       p7_trace_GetStateUseCounts(tr, counts);
 
-      p7_ReconfigLength(gm, sq->n);
-      p7_bg_SetLength(bg, sq->n);
+      p7_profile_SetLength(gm, sq->n);
+      p7_bg_SetLength     (bg, sq->n);
       p7_trace_Score(tr, sq->dsq, gm, &sc);
       p7_bg_NullOne (bg, sq->dsq, sq->n, &nullsc);
       bitscore = (sc - nullsc)/ eslCONST_LOG2;
@@ -563,8 +564,13 @@ main(int argc, char **argv)
 
   p7_hmmfile_Close(hfp);
 
-  bg = p7_bg_Create(abc);                p7_bg_SetLength(bg, L);
-  gm = p7_profile_Create(hmm->M, abc);   p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  bg = p7_bg_Create(abc);                
+  gm = p7_profile_Create(hmm->M, abc);   
+
+  p7_profile_Config(gm, hmm, bg); 
+  p7_profile_SetLength(gm, L);
+  p7_bg_SetLength     (bg, L);
+
   sq = esl_sq_CreateDigital(abc);
 
   for (i = 0; i < N; i++)

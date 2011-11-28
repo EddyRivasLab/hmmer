@@ -876,7 +876,7 @@ main(int argc, char **argv)
   p7_bg_SetLength(bg, sq->n);
   gm = p7_profile_Create(hmm->M, abc);
   om = p7_oprofile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, sq->n);
   p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, sq->n);
 
@@ -1000,8 +1000,9 @@ main(int argc, char **argv)
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L0);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L0, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, L0);
 
   /* Other initial allocations */
   sq   = esl_sq_CreateDigital(abc);
@@ -1015,13 +1016,13 @@ main(int argc, char **argv)
   esl_stopwatch_Start(w);
   for (idx = 0; idx < N; idx++)
     {
-      p7_ReconfigLength(gm, L0);
+      p7_profile_SetLength(gm, L0);
       p7_bg_SetLength(bg, L0);
       p7_ProfileEmit(r, hmm, gm, bg, sq, tr); /* sample a sequence from the profile */
       p7_trace_Index(tr);                      /* tr->ndom is the "true" domain number emitted */
       tot_true += tr->ndom;
 
-      p7_ReconfigLength(gm, sq->n);
+      p7_profile_SetLength(gm, sq->n);
       p7_bg_SetLength(bg, sq->n);
       p7_gmx_GrowTo(fwd, gm->M, sq->n);
       p7_gmx_GrowTo(bck, gm->M, sq->n);

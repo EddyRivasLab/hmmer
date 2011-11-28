@@ -678,7 +678,7 @@ utest_oprofileSendRecv(int my_rank, int nproc)
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
   om = p7_oprofile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, L);
   p7_oprofile_Convert(gm, om);
   p7_bg_SetLength  (bg, L);
 

@@ -205,7 +205,7 @@ main(int argc, char **argv)
   gm = p7_profile_Create (hmm->M, abc);
   om = p7_oprofile_Create(hmm->M, abc);
 
-  p7_ProfileConfig(hmm, bg, gm, sq[mapseq]->n, p7_UNILOCAL);
+  p7_profile_ConfigUnilocal(gm, hmm, bg, sq[mapseq]->n);
   p7_oprofile_Convert(gm, om); 
 
   oxf = p7_omx_Create(hmm->M, sq[mapseq]->n, sq[mapseq]->n);
@@ -262,7 +262,7 @@ main(int argc, char **argv)
 	  if (gxb == NULL) gxb = p7_gmx_Create(hmm->M, sq[idx]->n);
 	  else             p7_gmx_GrowTo(gxb,  hmm->M, sq[idx]->n);
 
-	  p7_ReconfigLength(gm, sq[idx]->n);
+	  p7_profile_SetLength(gm, sq[idx]->n);
 
 	  p7_GForward (sq[idx]->dsq, sq[idx]->n, gm, gxf, &fwdsc);
 	  p7_GBackward(sq[idx]->dsq, sq[idx]->n, gm, gxb, NULL);

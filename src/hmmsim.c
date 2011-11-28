@@ -636,7 +636,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
 
   /* First pass: configure gm, om for local until after we've determined mu, lambda, tau params */
   gm = p7_profile_Create(hmm->M, cfg->abc);
-  p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, cfg->bg, L);
   om = p7_oprofile_Create(gm->M, cfg->abc);
   p7_oprofile_Convert(gm, om);
 
@@ -648,10 +648,10 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   else    mu = 0.0;		/* undetermined, for Hybrid, at least for now. */
 
   /* Now reconfig the models however we were asked to */
-  if      (esl_opt_GetBoolean(go, "--fs"))  p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_LOCAL);
-  else if (esl_opt_GetBoolean(go, "--sw"))  p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_UNILOCAL);
-  else if (esl_opt_GetBoolean(go, "--ls"))  p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_GLOCAL);
-  else if (esl_opt_GetBoolean(go, "--s"))   p7_ProfileConfig(hmm, cfg->bg, gm, L, p7_UNIGLOCAL);
+  if      (esl_opt_GetBoolean(go, "--fs"))  p7_profile_ConfigLocal    (gm, hmm, cfg->bg, L);
+  else if (esl_opt_GetBoolean(go, "--sw"))  p7_profile_ConfigUnilocal (gm, hmm, cfg->bg, L);
+  else if (esl_opt_GetBoolean(go, "--ls"))  p7_profile_ConfigGlocal   (gm, hmm, cfg->bg, L);
+  else if (esl_opt_GetBoolean(go, "--s"))   p7_profile_ConfigUniglocal(gm, hmm, cfg->bg, L);
 
   if (esl_opt_GetBoolean(go, "--x-no-lengthmodel")) elide_length_model(gm, cfg->bg);
 

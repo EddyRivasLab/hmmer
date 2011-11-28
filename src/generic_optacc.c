@@ -434,8 +434,10 @@ main(int argc, char **argv)
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
+  p7_profile_ConfigUnilocal(gm, hmm, bg, L);
+
   gx1 = p7_gmx_Create(gm->M, L);
   gx2 = p7_gmx_Create(gm->M, L);
   tr  = p7_trace_CreateWithPP();
@@ -568,8 +570,9 @@ main(int argc, char **argv)
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, sq->n);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL); /* multihit local: H3 default */
+  p7_profile_ConfigLocal(gm, hmm, bg, sq->n); /* multihit local */
   
   /* Allocations */
   gx1 = p7_gmx_Create(gm->M, sq->n);

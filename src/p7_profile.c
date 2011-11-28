@@ -36,7 +36,7 @@
  *            Because this function might be in the critical path (in
  *            hmmscan, for example), we leave much of the model
  *            uninitialized, including scores and length model
- *            probabilities. The <p7_ProfileConfig()> call is what
+ *            probabilities. The <p7_profile_Config()> call is what
  *            sets these.
  *            
  *            The reference pointer <gm->abc> is set to <abc>.
@@ -528,8 +528,10 @@ p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol)
 {
   int x;
 
-  if (gm1->mode != gm2->mode) return eslFAIL;
-  if (gm1->M    != gm2->M)    return eslFAIL;
+  if (gm1->M       != gm2->M)       return eslFAIL;
+  if (gm1->L       != gm2->L)       return eslFAIL;
+  if (gm1->nj      != gm2->nj)      return eslFAIL;
+  if (gm1->pglocal != gm2->pglocal) return eslFAIL;
 
   if (esl_vec_FCompare(gm1->tsc, gm2->tsc, gm1->M*p7P_NTRANS, tol)         != eslOK) return eslFAIL;
   for (x = 0; x < gm1->abc->Kp; x++) 
@@ -564,12 +566,15 @@ utest_Compare(void)
 
   p7_hmm_Sample(r, M, abc, &hmm); /* master and worker's sampled profiles are identical */
   bg  = p7_bg_Create(abc);
+
   gm  = p7_profile_Create(hmm->M, abc);
   gm2 = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm,  400, p7_LOCAL);
-  p7_ProfileConfig(hmm, bg, gm2, 400, p7_LOCAL);
-  p7_ReconfigLength(gm,  L);
-  p7_ReconfigLength(gm2, L);
+
+  p7_profile_Config(gm,  hmm, bg);
+  p7_profile_Config(gm2, hmm, bg);
+
+  p7_profile_SetLength(gm,  L);
+  p7_profile_SetLength(gm2, L);
 
   if (p7_profile_Compare(gm, gm2, 0.001) != eslOK) p7_Die("identical profile comparison failed");
   

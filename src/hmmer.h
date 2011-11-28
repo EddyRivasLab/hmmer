@@ -54,7 +54,6 @@
 #include "esl_stopwatch.h"      /* ESL_STOPWATCH         */
 
 
-
 /* Search modes. */
 #define p7_NO_MODE   0
 #define p7_LOCAL     1		/* multihit local:  "fs" mode   */
@@ -350,7 +349,7 @@ typedef struct p7_profile_s {
   /* Configuration: length model, multi vs unihit, local vs glocal:                  */
   int     L;		/* current configured target seq length           (unset:-1) */
   float   nj;           /* exp # of J's; 0.0=unihit 1.0=standard multihit (unset:-1) */
-  float   pglocal;	/* base B->G; 0.0=local; 0.5=dual; 1.0=glocal     (unset=-1) */
+  float   pglocal;	/* base B->G; 0.0=local; 0.5=dual; 1.0=glocal     (unset:-1) */
 
   /* Annotation copied from parent HMM:                                                   */
   char  *name;			/* unique name of model                                   */
@@ -1256,10 +1255,14 @@ extern int   p7_ILogsum(int s1, int s2);
 
 
 /* modelconfig.c */
-extern int p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int mode);
-extern int p7_ReconfigLength  (P7_PROFILE *gm, int L);
-extern int p7_ReconfigMultihit(P7_PROFILE *gm, int L);
-extern int p7_ReconfigUnihit  (P7_PROFILE *gm, int L);
+extern int p7_profile_Config         (P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg);
+extern int p7_profile_ConfigLocal    (P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int L);
+extern int p7_profile_ConfigUnilocal (P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int L);
+extern int p7_profile_ConfigGlocal   (P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int L);
+extern int p7_profile_ConfigUniglocal(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int L);
+extern int p7_profile_ConfigCustom   (P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int L, float nj, float pglocal);
+extern int p7_profile_SetLength      (P7_PROFILE *gm, int L);
+
 
 /* modelstats.c */
 extern double p7_MeanMatchInfo           (const P7_HMM *hmm, const P7_BG *bg);

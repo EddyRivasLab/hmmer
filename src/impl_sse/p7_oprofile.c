@@ -770,15 +770,19 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
   int status, z;
 
+  if (gm->abc->type != om->abc->type)  ESL_EXCEPTION(eslEINVAL, "alphabets of the two profiles don't match");  
+  if (gm->M         >  om->allocM)     ESL_EXCEPTION(eslEINVAL, "oprofile is too small");  
+
   /* Set these first so they are available in the following calls */
-  om->mode       = gm->mode;
+  /* om->mode may only be unilocal or local! FIXME */
+  if      (gm->nj == 0.0) om->mode = p7_UNILOCAL;
+  else if (gm->nj == 1.0) om->mode = p7_LOCAL;
+  else    ESL_EXCEPTION(eslEINVAL, "oprofile must be unilocal or local");
+
   om->L          = gm->L;
   om->M          = gm->M;
   om->nj         = gm->nj;
   om->max_length = gm->max_length;
-
-  if (gm->abc->type != om->abc->type)  ESL_EXCEPTION(eslEINVAL, "alphabets of the two profiles don't match");  
-  if (gm->M         >  om->allocM)     ESL_EXCEPTION(eslEINVAL, "oprofile is too small");  
 
   if ((status =  mf_conversion(gm, om)) != eslOK) return status;   /* MSVFilter()'s information     */
   if ((status =  vf_conversion(gm, om)) != eslOK) return status;   /* ViterbiFilter()'s information */
@@ -1323,10 +1327,10 @@ p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, 
   if ((gm = p7_profile_Create (M, abc)) == NULL)  { status = eslEMEM; goto ERROR; }
   if ((om = p7_oprofile_Create(M, abc)) == NULL)  { status = eslEMEM; goto ERROR; }
 
-  if ((status = p7_hmm_Sample(r, M, abc, &hmm))             != eslOK) goto ERROR;
-  if ((status = p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL)) != eslOK) goto ERROR;
-  if ((status = p7_oprofile_Convert(gm, om))                != eslOK) goto ERROR;
-  if ((status = p7_oprofile_ReconfigLength(om, L))          != eslOK) goto ERROR;
+  if ((status = p7_hmm_Sample(r, M, abc, &hmm))         != eslOK) goto ERROR;
+  if ((status = p7_profile_ConfigLocal(gm, hmm, bg, L)) != eslOK) goto ERROR;
+  if ((status = p7_oprofile_Convert(gm, om))            != eslOK) goto ERROR;
+  if ((status = p7_oprofile_ReconfigLength(om, L))      != eslOK) goto ERROR;
 
   if (opt_hmm != NULL) *opt_hmm = hmm; else p7_hmm_Destroy(hmm);
   if (opt_gm  != NULL) *opt_gm  = gm;  else p7_profile_Destroy(gm);
@@ -1614,7 +1618,7 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, L);
   om = p7_oprofile_Create(gm->M, abc);
 
   esl_stopwatch_Start(w);
@@ -1703,7 +1707,8 @@ main(int argc, char **argv)
   bg  = p7_bg_Create(abc);
   gm  = p7_profile_Create(hmm->M, abc);   
   om1 = p7_oprofile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
+
+  p7_profile_ConfigLocal(gm, hmm, bg, 400);
   p7_oprofile_Convert(gm, om1);
   
   p7_oprofile_Dump(stdout, om1);

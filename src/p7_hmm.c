@@ -963,9 +963,8 @@ p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM 
  *            
  *            To achieve this in the profile as well as the core HMM,
  *            the caller must configure a unihit mode
- *            (<p7_ProfileConfig(hmm, bg, gm, p7_UNILOCAL)> or
- *            <p7_UNIGLOCAL>), and a target length of zero
- *            (<p7_ReconfigLength(gm, 0)>).
+ *            (<p7_profile_ConfigUnilocal(gm, hmm, bg, 0)> or
+ *            <_ConfigUniglocal()>, with a target length of zero.
  *            
  *            Useful for debugging and validating Forward/Viterbi
  *            algorithms.

@@ -961,7 +961,8 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
+  p7_profile_ConfigUnilocal(gm, hmm, bg, L); /* unihit local */
+
   gx = p7_gmx_Create(gm->M, L);
 
   /* Baseline time. */
@@ -1087,13 +1088,14 @@ main(int argc, char **argv)
   int             nseq = 20;
   char            errbuf[eslERRBUFSIZE];
 
-  if ((abc = esl_alphabet_Create(eslAMINO))         == NULL)  esl_fatal("failed to create alphabet");
-  if (p7_hmm_Sample(r, M, abc, &hmm)                != eslOK) esl_fatal("failed to sample an HMM");
-  if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
-  if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal("failed to create profile");
-  if (p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL)    != eslOK) esl_fatal("failed to config profile");
-  if (p7_hmm_Validate    (hmm, errbuf, 0.0001)      != eslOK) esl_fatal("whoops, HMM is bad!: %s", errbuf);
-  if (p7_profile_Validate(gm,  errbuf, 0.0001)      != eslOK) esl_fatal("whoops, profile is bad!: %s", errbuf);
+  if ((abc = esl_alphabet_Create(eslAMINO))    == NULL)  esl_fatal("failed to create alphabet");
+  if (p7_hmm_Sample(r, M, abc, &hmm)           != eslOK) esl_fatal("failed to sample an HMM");
+  if ((bg = p7_bg_Create(abc))                 == NULL)  esl_fatal("failed to create null model");
+  if ((gm = p7_profile_Create(hmm->M, abc))    == NULL)  esl_fatal("failed to create profile");
+  if (p7_profile_Config   (gm, hmm, bg)        != eslOK) esl_fatal("failed to config profile");
+  if (p7_profile_SetLength(gm, L)              != eslOK) esl_fatal("failed to config profile length model");
+  if (p7_hmm_Validate    (hmm, errbuf, 0.0001) != eslOK) esl_fatal("whoops, HMM is bad!: %s", errbuf);
+  if (p7_profile_Validate(gm,  errbuf, 0.0001) != eslOK) esl_fatal("whoops, profile is bad!: %s", errbuf);
 
   utest_msv(go, r, abc, bg, gm, nseq, L);
 
@@ -1173,15 +1175,15 @@ main(int argc, char **argv)
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, 400);
 
   /* Allocate matrix */
   fwd = p7_gmx_Create(gm->M, sq->n);
 
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
-      p7_ReconfigLength(gm,  sq->n);
-      p7_bg_SetLength(bg,    sq->n);
+      p7_profile_SetLength(gm,  sq->n);
+      p7_bg_SetLength     (bg,  sq->n);
       p7_gmx_GrowTo(fwd, gm->M, sq->n); 
 
       /* Run MSV */

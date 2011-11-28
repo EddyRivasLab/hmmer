@@ -1425,7 +1425,7 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
   om = p7_oprofile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, 400);
   p7_oprofile_Convert(gm, om);     /* <om> is now p7_LOCAL, multihit */
   p7_pli_NewModel(pli, om, bg);
 

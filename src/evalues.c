@@ -89,12 +89,12 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
 
   /* there's an odd case where the <om> is provided and a <gm> isn't going to be returned
    * where we don't need a <gm> at all, and <gm> stays <NULL> after the next block.
-   * Note that the <EvL> length in the ProfileConfig doesn't matter; the individual
-   * calibration routines MSVMu(), etc. contain their own length reconfig calls.
+   * Note that the <EvL> length doesn't matter to the profile config; the individual
+   * calibration routines MSVMu(), etc. contain their own length setting calls.
    */
   if ((esl_byp_IsInternal(byp_gm) && ! esl_byp_IsProvided(byp_om)) || esl_byp_IsReturned(byp_gm)) {
-    if  ( (gm     = p7_profile_Create(hmm->M, hmm->abc))          == NULL)  ESL_XFAIL(eslEMEM, errbuf, "failed to allocate profile");
-    if  ( (status = p7_ProfileConfig(hmm, bg, gm, EvL, p7_LOCAL)) != eslOK) ESL_XFAIL(status,  errbuf, "failed to configure profile");
+    if  ( (gm     = p7_profile_Create(hmm->M, hmm->abc))         == NULL)  ESL_XFAIL(eslEMEM, errbuf, "failed to allocate profile");
+    if  ( (status = p7_profile_ConfigLocal(gm, hmm, bg, EvL))   != eslOK)  ESL_XFAIL(status,  errbuf, "failed to configure profile");
   }
 
   if (om == NULL) {
@@ -549,7 +549,8 @@ main(int argc, char **argv)
     {
       if (bg == NULL) bg = p7_bg_Create(abc);
       gm = p7_profile_Create(hmm->M, abc);
-      p7_ProfileConfig(hmm, bg, gm, EvL, p7_LOCAL); /* the EvL doesn't matter */
+      p7_profile_Config(gm, hmm, bg); /* doesn't need a length model */
+
       om = p7_oprofile_Create(hmm->M, abc);
       p7_oprofile_Convert(gm, om);
 

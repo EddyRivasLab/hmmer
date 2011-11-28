@@ -384,8 +384,11 @@ main(int argc, char **argv)
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
+  p7_profile_Config(gm, hmm, bg);
+  p7_profile_SetLength(gm, L);
+
   fwd = p7_gmx_Create(gm->M, L);
   bck = p7_gmx_Create(gm->M, L);
 
@@ -565,16 +568,17 @@ utest_enumeration(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, int M)
   char   *seq;
     
   /* Sample an enumerable HMM & profile of length M.  */
-  if (p7_hmm_SampleEnumerable(r, M, abc, &hmm)      != eslOK) esl_fatal("failed to sample an enumerable HMM");
-  if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
-  if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal("failed to create profile");
-  if (p7_ProfileConfig(hmm, bg, gm, 0, p7_UNILOCAL) != eslOK) esl_fatal("failed to config profile");
-  if (p7_hmm_Validate    (hmm, errbuf, 0.0001)      != eslOK) esl_fatal("whoops, HMM is bad!: %s", errbuf);
-  if (p7_profile_Validate(gm, errbuf, 0.0001)       != eslOK) esl_fatal("whoops, profile is bad!: %s", errbuf);
+  if (p7_hmm_SampleEnumerable(r, M, abc, &hmm)   != eslOK) esl_fatal("failed to sample an enumerable HMM");
+  if ((bg = p7_bg_Create(abc))                   == NULL)  esl_fatal("failed to create null model");
+  if ((gm = p7_profile_Create(hmm->M, abc))      == NULL)  esl_fatal("failed to create profile");
+  if (p7_profile_ConfigUnilocal(gm, hmm, bg, 0)  != eslOK) esl_fatal("failed to config profile"); /* unilocal model with L=0 */
 
-  if (  (dsq = malloc(sizeof(ESL_DSQ) * (M+3)))     == NULL)  esl_fatal("allocation failed");
-  if (  (seq = malloc(sizeof(char)    * (M+2)))     == NULL)  esl_fatal("allocation failed");
-  if ((gx     = p7_gmx_Create(hmm->M, M+3))         == NULL)  esl_fatal("matrix creation failed");
+  if (p7_hmm_Validate    (hmm, errbuf, 0.0001)   != eslOK) esl_fatal("whoops, HMM is bad!: %s", errbuf);
+  if (p7_profile_Validate(gm, errbuf, 0.0001)    != eslOK) esl_fatal("whoops, profile is bad!: %s", errbuf);
+
+  if (  (dsq = malloc(sizeof(ESL_DSQ) * (M+3)))  == NULL)  esl_fatal("allocation failed");
+  if (  (seq = malloc(sizeof(char)    * (M+2)))  == NULL)  esl_fatal("allocation failed");
+  if ((gx     = p7_gmx_Create(hmm->M, M+3))      == NULL)  esl_fatal("matrix creation failed");
 
   /* Enumerate all sequences of length L <= M
    */
@@ -673,7 +677,8 @@ main(int argc, char **argv)
   if (p7_hmm_Sample(r, M, abc, &hmm)                != eslOK) esl_fatal("failed to sample an HMM");
   if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
   if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal("failed to create profile");
-  if (p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL)    != eslOK) esl_fatal("failed to config profile");
+  if (p7_profile_Config(gm, hmm, bg)                != eslOK) esl_fatal("failed to config profile");
+  if (p7_profile_SetLength(gm, L)                   != eslOK) esl_fatal("failed to config profile length model");
   if (p7_hmm_Validate    (hmm, errbuf, 0.0001)      != eslOK) esl_fatal("whoops, HMM is bad!: %s", errbuf);
   if (p7_profile_Validate(gm,  errbuf, 0.0001)      != eslOK) esl_fatal("whoops, profile is bad!: %s", errbuf);
 
@@ -765,10 +770,10 @@ main(int argc, char **argv)
   gm = p7_profile_Create(hmm->M, abc);
 
   /* Now reconfig the models however we were asked to */
-  if      (esl_opt_GetBoolean(go, "--fs"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
-  else if (esl_opt_GetBoolean(go, "--sw"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNILOCAL);
-  else if (esl_opt_GetBoolean(go, "--ls"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_GLOCAL);
-  else if (esl_opt_GetBoolean(go, "--s"))   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNIGLOCAL);
+  if      (esl_opt_GetBoolean(go, "--fs"))  p7_profile_ConfigLocal    (gm, hmm, bg, sq->n);
+  else if (esl_opt_GetBoolean(go, "--sw"))  p7_profile_ConfigUnilocal (gm, hmm, bg, sq->n);
+  else if (esl_opt_GetBoolean(go, "--ls"))  p7_profile_ConfigGlocal   (gm, hmm, bg, sq->n);
+  else if (esl_opt_GetBoolean(go, "--s"))   p7_profile_ConfigUniglocal(gm, hmm, bg, sq->n);
   
   /* Allocate matrices */
   fwd = p7_gmx_Create(gm->M, sq->n);
@@ -787,8 +792,8 @@ main(int argc, char **argv)
       p7_gmx_GrowTo(bck, gm->M, sq->n);
 
       /* Set the profile and null model's target length models */
-      p7_bg_SetLength(bg,   sq->n);
-      p7_ReconfigLength(gm, sq->n);
+      p7_bg_SetLength     (bg, sq->n);
+      p7_profile_SetLength(gm, sq->n);
 
       /* Run Forward, Backward */
       p7_GForward (sq->dsq, sq->n, gm, fwd, &fsc);

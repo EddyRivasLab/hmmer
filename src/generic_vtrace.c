@@ -226,14 +226,16 @@ main(int argc, char **argv)
   else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
   else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+
   if  (esl_sqio_Read(sqfp, sq) != eslOK) p7_Fail("Failed to read sequence");
   esl_sqfile_Close(sqfp);
  
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, sq->n);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, sq->n);
   
   /* Allocate matrix and a trace */
   fwd = p7_gmx_Create(gm->M, sq->n);

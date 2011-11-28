@@ -253,8 +253,10 @@ main(int argc, char **argv)
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
+  p7_profile_ConfigUnilocal(gm, hmm, bg, L);
+
   fwd = p7_gmx_Create(gm->M, L);
   tr  = p7_trace_Create();
   esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
@@ -379,11 +381,11 @@ main(int argc, char **argv)
   int             L      = 10;
   int             ntrace = 1000;
 
-  if ((abc = esl_alphabet_Create(eslAMINO))         == NULL)  esl_fatal("failed to create alphabet");
-  if (p7_hmm_Sample(r, M, abc, &hmm)                != eslOK) esl_fatal("failed to sample an HMM");
-  if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
-  if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal("failed to create profile");
-  if (p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL)    != eslOK) esl_fatal("failed to config profile");
+  if ((abc = esl_alphabet_Create(eslAMINO))   == NULL)  esl_fatal("failed to create alphabet");
+  if (p7_hmm_Sample(r, M, abc, &hmm)          != eslOK) esl_fatal("failed to sample an HMM");
+  if ((bg = p7_bg_Create(abc))                == NULL)  esl_fatal("failed to create null model");
+  if ((gm = p7_profile_Create(hmm->M, abc))   == NULL)  esl_fatal("failed to create profile");
+  if (p7_profile_ConfigLocal(gm, hmm, bg, L)  != eslOK) esl_fatal("failed to config profile");
 
   /* Test with randomly generated (iid) sequence */
   if ((dsq = malloc(sizeof(ESL_DSQ) *(L+2)))  == NULL)  esl_fatal("malloc failed");
@@ -477,6 +479,7 @@ main(int argc, char **argv)
   else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
   else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+
   if  (esl_sqio_Read(sqfp, sq) != eslOK) p7_Fail("Failed to read sequence");
   esl_sqfile_Close(sqfp);
  
@@ -484,7 +487,7 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, sq->n);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, sq->n);
 
   fwd = p7_gmx_Create(gm->M, sq->n);
   tr  = p7_trace_Create();

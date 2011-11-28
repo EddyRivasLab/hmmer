@@ -810,8 +810,10 @@ main(int argc, char **argv)
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  p7_profile_Config(gm, hmm, bg);
+
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
@@ -1104,10 +1106,10 @@ main(int argc, char **argv)
   gm = p7_profile_Create(hmm->M, abc); 
 
   /* Now reconfig the models however we were asked to */
-  if      (esl_opt_GetBoolean(go, "--fs"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
-  else if (esl_opt_GetBoolean(go, "--sw"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNILOCAL);
-  else if (esl_opt_GetBoolean(go, "--ls"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_GLOCAL);
-  else if (esl_opt_GetBoolean(go, "--s"))   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNIGLOCAL);
+  if      (esl_opt_GetBoolean(go, "--fs"))  p7_profile_ConfigLocal    (gm, hmm, bg, sq->n);
+  else if (esl_opt_GetBoolean(go, "--sw"))  p7_profile_ConfigUnilocal (gm, hmm, bg, sq->n);
+  else if (esl_opt_GetBoolean(go, "--ls"))  p7_profile_ConfigGlocal   (gm, hmm, bg, sq->n);
+  else if (esl_opt_GetBoolean(go, "--s"))   p7_profile_ConfigUniglocal(gm, hmm, bg, sq->n);
 
   /* now the optimized profile */
   om = p7_oprofile_Create(gm->M, abc);
@@ -1129,7 +1131,7 @@ main(int argc, char **argv)
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
       p7_oprofile_ReconfigLength(om, sq->n);
-      p7_ReconfigLength(gm,          sq->n);
+      p7_profile_SetLength(gm,       sq->n);
       p7_bg_SetLength(bg,            sq->n);
       p7_omx_GrowTo(fwd, om->M, 0,   sq->n); 
       p7_omx_GrowTo(bck, om->M, 0,   sq->n); 

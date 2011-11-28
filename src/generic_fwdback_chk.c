@@ -111,7 +111,7 @@ forward_row(const ESL_DSQ *dsq, const P7_PROFILE *gm, P7_GMXCHK *gxc, const floa
  *            
  *            The caller has also already configured the length model
  *            in <gm> for the target sequence length <L>, for example
- *            by calling <p7_ReconfigLength()>.
+ *            by calling <p7_profile_SetLength()>.
  *            
  * Args:      dsq    : digital sequence target
  *            L      : length of <dsq> in residues
@@ -490,8 +490,10 @@ main(int argc, char **argv)
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
+  p7_profile_Config(gm, hmm, bg);
+  p7_profile_SetLength(gm, L);
 
   gxc = p7_gmxchk_Create(gm->M, L, ESL_MBYTES(32));
   bnd = p7_gbands_Create();
@@ -668,7 +670,7 @@ main(int argc, char **argv)
   if (p7_hmm_Sample(rng, M, abc, &hmm)              != eslOK) esl_fatal("failed to sample an HMM");
   if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
   if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal("failed to create profile");
-  if (p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL)    != eslOK) esl_fatal("failed to config profile");
+  if (p7_profile_ConfigLocal(gm, hmm, bg, L)        != eslOK) esl_fatal("failed to config profile");
   if (p7_hmm_Validate    (hmm, errbuf, 0.0001)      != eslOK) esl_fatal("whoops, HMM is bad!: %s", errbuf);
   if (p7_profile_Validate(gm,  errbuf, 0.0001)      != eslOK) esl_fatal("whoops, profile is bad!: %s", errbuf);
 
@@ -756,7 +758,7 @@ main(int argc, char **argv)
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, gm, 400);
 
   /* Allocate matrices */
   fwd = p7_gmx_Create(gm->M, 400);
@@ -777,8 +779,8 @@ main(int argc, char **argv)
       //printf("Allocation: %ld\n", p7_gmxchk_Sizeof(fwdc));
 
       /* Set the profile and null model's target length models */
-      p7_bg_SetLength(bg,   sq->n);
-      p7_ReconfigLength(gm, sq->n);
+      p7_bg_SetLength    (bg,  sq->n);
+      p7_profile_SetLength(gm, sq->n);
 
       /* Run Forward in both modes */
       p7_GForward            (sq->dsq, sq->n, gm, fwd,  &fsc);

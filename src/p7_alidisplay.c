@@ -937,7 +937,7 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, 0);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, 0, p7_UNIGLOCAL); /* that sets N,C,J to generate nothing */
+  p7_profile_ConfigUniglocal(gm, hmm, bg, 0); /* uniglocal w. L=0; sets N,C,J to generate nothing */
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
 
@@ -1320,7 +1320,7 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, 0);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, 0, p7_UNILOCAL); 
+  p7_profile_ConfigUnilocal(gm, hmm, bg, 0);
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
 

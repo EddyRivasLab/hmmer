@@ -281,8 +281,12 @@ main(int argc, char **argv)
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
 
-  bg = p7_bg_Create(abc);                 p7_bg_SetLength(bg, L);
-  gm = p7_profile_Create(hmm->M, abc);    p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  bg = p7_bg_Create(abc);                
+  p7_bg_SetLength(bg, L);
+
+  gm = p7_profile_Create(hmm->M, abc);   
+  p7_profile_ConfigLocal(gm, hmm, bg, L);
+
   gx1 = p7_gmx_Create(gm->M, L);  
   gx2 = p7_gmx_Create(gm->M, L);
 
@@ -406,8 +410,9 @@ main(int argc, char **argv)
   /* Configure a profile from the sampled HMM */
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, L);
 
   /* Other initial allocations */
   dsq  = malloc(sizeof(ESL_DSQ) * (L+2));

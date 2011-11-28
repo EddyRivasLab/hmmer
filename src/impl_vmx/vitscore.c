@@ -288,7 +288,7 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, L);
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
@@ -515,7 +515,7 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, sq->n);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, sq->n);
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
   p7_oprofile_Logify(om);

@@ -3,7 +3,8 @@
 # Contents:
 #    1. Overview
 #    2. Obtaining a fresh working copy of dev trunk
-#    3. Creating a branch, keeping it in sync w/ trunk, re-merging 
+#    3. Using svn keywords and properties.
+#    4. Creating a branch, keeping it in sync w/ trunk, re-merging 
 
 
 #================================================================
@@ -52,10 +53,42 @@ things you need to do besides the svn checkout.
 Now you can ./configure and make.
 
 
+#================================================================
+# 3. Using svn keywords and properties.
+#================================================================
+
+We have SVN stamp "URL" and "Id" strings in the LICENSE section of
+most source files, including all .c and .h files.
+
+- To set keyword replacement on a new module foo:
+    svn propset svn:keywords "Id URL" foo.[ch]
+
+- To see which keywords are set on a file foo.c:
+    svn propget svn:keywords foo.c
+
+- To use "find" to set keyword replacement on lots of files in one command:
+    find . -name "Makefile.in" -exec svn propset svn:keywords "Id URL" {} \;
+
+
+
+You need to set the executable property on scripts:
+    svn propset svn:executable foo.pl
+    svn propget svn:executable foo.pl
+
+
+We use svn:externals to automatically pull Easel into a HMMER working
+copy.
+
+- Example of editing the svn:externals:
+    svn propedit svn:externals hmmer
+
+- Listing properties that are set:
+    svn proplist foo
+
 
 
 #================================================================
-# 3. Creating a branch, keeping it in sync w/ trunk, re-merging
+# 4. Creating a branch, keeping it in sync w/ trunk, re-merging
 #================================================================
 
 ## Create a new branch "mybranch" in the repository.

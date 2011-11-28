@@ -226,21 +226,19 @@ emit_sequences(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM
   int         do_profile   = esl_opt_GetBoolean(go, "-p");
   int         N            = esl_opt_GetInteger(go, "-N");
   int         L            = esl_opt_GetInteger(go, "-L");
-  int         mode;
   int         nseq;
   int         status;
-
-  if      (esl_opt_GetBoolean(go, "--local"))     mode = p7_LOCAL;
-  else if (esl_opt_GetBoolean(go, "--unilocal"))  mode = p7_UNILOCAL;
-  else if (esl_opt_GetBoolean(go, "--glocal"))    mode = p7_GLOCAL;
-  else if (esl_opt_GetBoolean(go, "--uniglocal")) mode = p7_UNIGLOCAL;
 
   if ((sq = esl_sq_CreateDigital(hmm->abc))      == NULL)  esl_fatal("failed to allocate sequence");
   if ((tr = p7_trace_Create())                   == NULL)  esl_fatal("failed to allocate trace");
   if ((bg = p7_bg_Create(hmm->abc))              == NULL)  esl_fatal("failed to create null model");
   if ((gm = p7_profile_Create(hmm->M, hmm->abc)) == NULL)  esl_fatal("failed to create profile");
 
-  if (p7_ProfileConfig(hmm, bg, gm, L, mode)     != eslOK) esl_fatal("failed to configure profile");
+  if      (esl_opt_GetBoolean(go, "--local"))     { if (p7_profile_ConfigLocal    (gm, hmm, bg, L) != eslOK) esl_fatal("failed to configure profile"); }
+  else if (esl_opt_GetBoolean(go, "--unilocal"))  { if (p7_profile_ConfigUnilocal (gm, hmm, bg, L) != eslOK) esl_fatal("failed to configure profile"); }
+  else if (esl_opt_GetBoolean(go, "--glocal"))    { if (p7_profile_ConfigGlocal   (gm, hmm, bg, L) != eslOK) esl_fatal("failed to configure profile"); }
+  else if (esl_opt_GetBoolean(go, "--uniglocal")) { if (p7_profile_ConfigUniglocal(gm, hmm, bg, L) != eslOK) esl_fatal("failed to configure profile"); }
+
   if (p7_bg_SetLength(bg, L)                     != eslOK) esl_fatal("failed to reconfig null model length");
   if (p7_hmm_Validate    (hmm, NULL, 0.0001)     != eslOK) esl_fatal("whoops, HMM is bad!");
   if (p7_profile_Validate(gm,  NULL, 0.0001)     != eslOK) esl_fatal("whoops, profile is bad!");

@@ -194,7 +194,7 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
 
   bg  = p7_bg_Create(hmm->abc);
   gm = p7_profile_Create(hmm->M, hmm->abc);
-  p7_ProfileConfig(hmm, bg, gm, hmm->M, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, hmm->M);
   om = p7_oprofile_Create(hmm->M, abc);
 
   if ((status = p7_oprofile_Convert(gm, om)) != eslOK) goto ERROR;
@@ -838,7 +838,7 @@ main(int argc, char **argv)
       totM += hmm->M;
 
       gm = p7_profile_Create(hmm->M, abc);
-      p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
+      p7_profile_ConfigLocal(gm, hmm, bg, 400);
       om = p7_oprofile_Create(gm->M, abc);
       p7_oprofile_Convert(gm, om);
       
