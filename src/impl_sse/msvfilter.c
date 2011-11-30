@@ -369,7 +369,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	    target_start++;
 
 
-
 	    //extend diagonal further with single diagonal extension
 	    k = end+1;
 	    n = target_end+1;
@@ -377,7 +376,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	    max_sc = sc;
 	    pos_since_max = 0;
 	    while (k<om->M && n<=L) {
-	      sc += om->bias_b -  hmmdata->s.scores_b[start][dsq[k]];
+	      sc += om->bias_b -  hmmdata->s.scores_b[start][dsq[n]];
 	      if (sc >= max_sc) {
 	        max_sc = sc;
 	        max_end = n;
@@ -703,25 +702,23 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   //filter for biased composition here
   if ( windowlist->count > 0 ) {
 
+
+
     if (do_biasfilter) {
       j = 0;
       for (i=0; i<windowlist->count; i++) {
-
         curr_window = windowlist->windows+i;
 
         p7_bg_FilterScore(bg, dsq+curr_window->n, curr_window->length, &bias_sc);
-//        printf("bias: %7.2f, ", bias_sc);
         bias_sc = (curr_window->score - bias_sc) / eslCONST_LOG2;
- //       printf("sc: %7.2f, ", bias_sc);
         biasP = esl_gumbel_surv(bias_sc,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-//        printf("P: %.2f, ", biasP);
+
+//        printf ("%d -> %d  (%.2f, %.2f, %.2f)\n", curr_window->n, curr_window->n + curr_window->length-1, biasP, curr_window->score, bias_sc);
 
         if (biasP <= P ) { // keep it
-//          printf ("%8d -> %8d", curr_window->n, curr_window->n + curr_window->length - 1 );
           windowlist->windows[j] = windowlist->windows[i];
           j++;
         }
-  //      printf ("\n");
       }
       windowlist->count = j;
     }
@@ -732,8 +729,21 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
     for (i=0; i<windowlist->count; i++) {
       curr_window = windowlist->windows+i;
-      window_start = ESL_MAX( 1,   curr_window->n + curr_window->length - om->max_length) ;
-      window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + om->max_length - 2);
+
+//      printf ("%d -> %d  ||| ", curr_window->n, curr_window->n + curr_window->length-1);
+
+//      window_start = ESL_MAX( 1,   curr_window->n + curr_window->length - om->max_length) ;
+//      window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + om->max_length - 2);
+
+      window_start = ESL_MAX( 1,   curr_window->n - om->max_length * hmmdata->prefix_lengths[curr_window->k - curr_window->length + 1] + 1 - 10)  ;
+      window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + om->max_length * hmmdata->suffix_lengths[curr_window->k] - 1 + 10)  ;
+
+//      window_start = ESL_MAX( 1,   ( curr_window->n + curr_window->length )  - (om->max_length * hmmdata->prefix_lengths[curr_window->k ]) )  ;
+//      window_end   = ESL_MIN( L ,  ( curr_window->n )                        + (om->max_length * hmmdata->suffix_lengths[curr_window->k - curr_window->length + 1]))   ;
+
+
+
+//printf ("%d -> %d\n", window_start, window_end);
       curr_window->n = window_start;
       curr_window->length = window_end - window_start + 1;
     }

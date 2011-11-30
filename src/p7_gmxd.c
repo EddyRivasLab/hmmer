@@ -1,4 +1,21 @@
+/* P7_GMXD implementation: dynamic programming matrix for generic dual-mode (local/glocal)
+ * See also: generic_fwdback_dual.c
+ * 
+ * Contents:
+ *   1. The <P7_GMXD> object
+ *   2. Debugging aids
+ *   3. Copyright and license information.
+ */
 
+#include "p7_config.h"
+
+#include "hmmer.h"
+#include "p7_gmxd.h"
+
+
+/*****************************************************************
+ * 1. The <P7_GMXD> object
+ *****************************************************************/
 
 P7_GMXD *
 p7_gmxd_Create(int M, int L)
@@ -84,6 +101,30 @@ p7_gmxd_GrowTo(P7_GMXD *gxd, int M, int L)
 }
 	
 
+char *
+p7_gmxd_DecodeSpecial(int type)
+{
+  switch (type) {
+  case p7GD_E: return "E";
+  case p7GD_N: return "N";
+  case p7GD_J: return "J";
+  case p7GD_B: return "B";
+  case p7GD_L: return "L";
+  case p7GD_G: return "G";
+  case p7GD_C: return "C";
+  }
+  return NULL;
+}
+
+int
+p7_gmxd_Reuse(P7_GMXD *gxd)
+{
+  gxd->M = 0;
+  gxd->L = 0;
+  return eslOK;
+}
+
+
 void
 p7_gmxd_Destroy(P7_GMXD *gxd)
 {
@@ -92,3 +133,74 @@ p7_gmxd_Destroy(P7_GMXD *gxd)
   if (gxd->dp)     free(gxd->dp);
   free(gxd);
 }
+
+
+/*****************************************************************
+ * 2. Debugging aids
+ *****************************************************************/
+
+
+int
+p7_gmxd_Dump(FILE *ofp, P7_GMXD *gxd)
+{
+  return p7_gmxd_DumpWindow(ofp, gxd, 0, gxd->L, 0, gxd->M);
+}
+
+int
+p7_gmxd_DumpWindow(FILE *ofp, P7_GMXD *gxd, int istart, int iend, int kstart, int kend)
+{
+  int   width     = 9;
+  int   precision = 4;
+  int   i,k,x;
+
+  /* Header */
+  fprintf(ofp, "     ");
+  for (k = kstart; k <= kend;        k++) fprintf(ofp, "%*d ", width, k);
+  for (x = 0;      x < p7GD_NXCELLS; x++) fprintf(ofp, "%*s ", width, p7_gmxd_DecodeSpecial(x));
+  fprintf(ofp, "\n");
+
+  fprintf(ofp, "      ");
+  for (k = kstart; k <= kend; k++)   fprintf(ofp, "%*.*s ", width, width, "----------");
+  for (x = 0; x < p7GD_NXCELLS; x++) fprintf(ofp, "%*.*s ", width, width, "----------");
+  fprintf(ofp, "\n");
+
+   /* DP matrix data */
+  for (i = istart; i <= iend; i++)
+    {
+      fprintf(ofp, "%3d ML ", i);
+      for (k = kstart; k <= kend;     k++)  fprintf(ofp, "%*.*f ", width, precision, gxd->dp[i][k * p7GD_NSCELLS + p7GD_ML]);
+      for (x = 0;  x <  p7GD_NXCELLS; x++)  fprintf(ofp, "%*.*f ", width, precision, gxd->dp[i][ (gxd->M+1) * p7GD_NSCELLS + x]);
+      fprintf(ofp, "\n");
+
+      fprintf(ofp, "%3d IL ", i);
+      for (k = kstart; k <= kend;     k++)  fprintf(ofp, "%*.*f ", width, precision, gxd->dp[i][k * p7GD_NSCELLS + p7GD_IL]);
+      fprintf(ofp, "\n");
+
+      fprintf(ofp, "%3d DL ", i);
+      for (k = kstart; k <= kend;     k++)  fprintf(ofp, "%*.*f ", width, precision, gxd->dp[i][k * p7GD_NSCELLS + p7GD_DL]);
+      fprintf(ofp, "\n");
+
+      fprintf(ofp, "%3d MG ", i);
+      for (k = kstart; k <= kend;     k++)  fprintf(ofp, "%*.*f ", width, precision, gxd->dp[i][k * p7GD_NSCELLS + p7GD_MG]);
+      fprintf(ofp, "\n");
+
+      fprintf(ofp, "%3d IG ", i);
+      for (k = kstart; k <= kend;     k++)  fprintf(ofp, "%*.*f ", width, precision, gxd->dp[i][k * p7GD_NSCELLS + p7GD_IG]);
+      fprintf(ofp, "\n");
+
+      fprintf(ofp, "%3d DG ", i);
+      for (k = kstart; k <= kend;     k++)  fprintf(ofp, "%*.*f ", width, precision, gxd->dp[i][k * p7GD_NSCELLS + p7GD_DG]);
+      fprintf(ofp, "\n\n");
+  }
+  return eslOK;
+}
+
+
+
+
+/*****************************************************************
+ * @LICENSE@
+ * 
+ * SVN $URL$
+ * SVN $Id$
+ *****************************************************************/

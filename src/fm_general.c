@@ -679,12 +679,16 @@ fm_hmmdataDestroy(FM_HMMDATA *data )
  * Throws:    <NULL> on allocation failure.
  */
 FM_HMMDATA *
-fm_hmmdataCreate(P7_PROFILE *gm, P7_OPROFILE *om)
+fm_hmmdataCreate(P7_PROFILE *gm, P7_OPROFILE *om, P7_HMM *hmm)
 {
   FM_HMMDATA *data = NULL;
   int    status;
+  int i;
+  float sum;
 
   ESL_ALLOC(data, sizeof(FM_HMMDATA));
+  ESL_ALLOC(data->prefix_lengths, gm->M * sizeof(float));
+  ESL_ALLOC(data->suffix_lengths, gm->M * sizeof(float));
 
   if (om == NULL)
     data->s.scores_f     = NULL;
@@ -695,6 +699,20 @@ fm_hmmdataCreate(P7_PROFILE *gm, P7_OPROFILE *om)
   data->opt_ext_rev    = NULL;
 
   get_Score_Arrays(gm, om,  data ); /* for FM-index string tree traversal */
+
+  sum = 0;
+  for (i=1; i < om->M; i++) {
+    data->prefix_lengths[i] = 2 + (int)(log(p7_DEFAULT_WINDOW_BETA / hmm->t[i][p7H_MI] )/log(hmm->t[i][p7H_II]));
+    sum += data->prefix_lengths[i];
+  }
+  for (i=1; i < om->M; i++)
+    data->prefix_lengths[i] /=  sum;
+
+  data->suffix_lengths[om->M] = data->prefix_lengths[om->M-1];
+  for (i=om->M - 1; i >= 1; i--)
+    data->suffix_lengths[i] = data->suffix_lengths[i+1] + data->prefix_lengths[i-1];
+  for (i=2; i < om->M; i++)
+    data->prefix_lengths[i] += data->prefix_lengths[i-1];
 
 
   return data;

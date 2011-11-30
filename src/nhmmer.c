@@ -532,9 +532,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_oprofile_Convert(gm, om);                    /* <om> is now p7_LOCAL, multihit */
 
       if (dbformat == eslSQFILE_FMINDEX)
-        fm_hmmdata = fm_hmmdataCreate(gm, NULL);
+        fm_hmmdata = fm_hmmdataCreate(gm, NULL, hmm);
       else
-        fm_hmmdata = fm_hmmdataCreate(gm, om);
+        fm_hmmdata = fm_hmmdataCreate(gm, om, hmm);
 
       for (i = 0; i < infocnt; ++i) {
           /* Create processing pipeline and hit list */

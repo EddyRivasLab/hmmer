@@ -220,7 +220,7 @@ typedef struct p7_hmm_s {
  *          only allows local alignment, only allows glocal alignment,
  *          or a mixture of the two.
  *         
- * For efficiency, four of the nine states (S,T,L,G) only show up in our
+ * For efficiency, two of the nine states (S,T) only show up in our
  * formal state diagrams, and are not explicitly represented in the
  * P7_PROFILE parameters that DP calculations use:
  *     1. The S->N probability is always 1.0, so our DP codes 
@@ -229,10 +229,6 @@ typedef struct p7_hmm_s {
  *        lod score. We know the T state only has nonzero probability
  *        at position i=L in the target, so DP algorithms don't
  *        bother to store it in their matrix.
- *     3. The B->{LG} log probability is included in the B->L->Mk
- *        and B->G->Mk "entry distributions" (BLM, BGM), so DP
- *        algorithms effectively look at direct B->Mk(L) and B->Mk(G) 
- *        transitions, without storing L and G states explicitly.
  *        
  * Alignment/scoring implementations are allowed to override the
  * length model, multihit mode, or the search mode (so long as they
@@ -252,11 +248,8 @@ typedef struct p7_hmm_s {
  *          algorithm is always multihit, and where NN,CC,JJ 
  *          parameters are handled implicitly w/ the 3-nat approximation.
  *     3. To override search mode and use only one path (local or
- *          glocal): The algorithm just needs to subtract back the
- *          tBL/tBG log probability that is added to the tBLMk/tBGMk
- *          entry distributions. A good place to do this is in the
- *          initialization of the B cell. To facilitate this,
- *          the P7_PROFILE stores xsc[p7P_B][0=L,1=G] scores.
+ *          glocal): The algorithm just needs to ignore the 
+ *          tBL/tBG log probability and evaluate the path it wants.
  *          
  * The full (dual-mode, two-path, local/glocal) model is only
  * implemented in P7_PROFILE, not in a vectorized P7_OPROFILE. Vector
@@ -323,8 +316,8 @@ typedef struct p7_hmm_s {
 #define p7P_MM   0
 #define p7P_IM   1
 #define p7P_DM   2
-#define p7P_BLM  3	/* local entry, including B->L search mode parameter */
-#define p7P_BGM  4	/* wing-retracted glocal entry, including B->G param */
+#define p7P_BLM  3	/* local submodel entry L->Mk                 */
+#define p7P_BGM  4	/* wing-retracted glocal submodel entry G->Mk */
 #define p7P_MD   5  
 #define p7P_DD   6
 #define p7P_MI   7
@@ -381,6 +374,8 @@ typedef struct p7_profile_s {
 #define P7P_MSC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_M])
 #define P7P_ISC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_I])
 
+/* requires variable initialization: float *tsc = gm->tsc */
+#define P7P_TSC2(k,s)  (tsc[(k) * p7P_NTRANS + (s)])
 
 /*****************************************************************
  * 3. P7_BG: a null (background) model.
@@ -946,6 +941,8 @@ typedef struct fm_hmm_data_s {
   } s;
   float    **opt_ext_fwd;
   float    **opt_ext_rev;
+  float    *prefix_lengths;
+  float    *suffix_lengths;
 } FM_HMMDATA;
 
 
@@ -1566,7 +1563,7 @@ extern void fm_freeFM ( FM_DATA *fm, int isMainFM);
 extern uint8_t fm_getChar(uint8_t alph_type, int j, const uint8_t *B );
 extern int fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
 extern int fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
-extern FM_HMMDATA *fm_hmmdataCreate(P7_PROFILE *gm, P7_OPROFILE *om);
+extern FM_HMMDATA *fm_hmmdataCreate(P7_PROFILE *gm, P7_OPROFILE *om, P7_HMM *hmm);
 extern void fm_hmmdataDestroy(FM_HMMDATA *data );
 extern int fm_configAlloc(void **mem, FM_CFG **cfg);
 extern int fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_f, FM_INTERVAL *interval_bk);

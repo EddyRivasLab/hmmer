@@ -7,6 +7,10 @@
  * The main code path uses a more complicated variant, P7_GMXB,
  * which is a banded DP dual-mode matrix; see p7_gmxb.[ch].
  */          
+#ifndef p7GMXD_INCLUDED
+#define p7GMXD_INCLUDED
+
+#include "hmmer.h"
 
 #define p7GD_NSCELLS 6
 #define p7GD_ML 0
@@ -38,6 +42,29 @@ typedef struct p7_gmxd_s {
   int      validR;
 } P7_GMXD;
 
+/* using these macros requires some variable initialization:
+ *    float **dp = gm->dp
+ *    int     M  = gm->M
+ */
+#define P7_GMXD_XMX(i,s) (dp[(i)][ (M+1) * p7GD_NSCELLS + (s)];
+
+
+
+/* from p7_gmxd.c */
+extern P7_GMXD *p7_gmxd_Create(int M, int L);
+extern int      p7_gmxd_GrowTo (P7_GMXD *gxd, int M, int L);
+extern int      p7_gmxd_Reuse  (P7_GMXD *gxd);
+extern void     p7_gmxd_Destroy(P7_GMXD *gxd);
+
+extern int      p7_gmxd_Dump(FILE *ofp, P7_GMXD *gxd);
+extern int      p7_gmxd_DumpWindow(FILE *ofp, P7_GMXD *gxd, int istart, int iend, int kstart, int kend);
+
+/* from generic_fwdback_dual.c */
+extern int      p7_GForwardDual(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXD *gxd, float *opt_sc);
+
+
+
+#endif /*p7GMXD_INCLUDED*/
 
 /*****************************************************************
  * @LICENSE@

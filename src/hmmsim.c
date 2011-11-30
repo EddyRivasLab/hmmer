@@ -30,9 +30,10 @@
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
+#include "p7_gmxd.h"
 
 #define ALGORITHMS "--fwd,--vit,--hyb,--msv"           /* Exclusive choice for scoring algorithms */
-#define STYLES     "--fs,--sw,--ls,--s"	               /* Exclusive choice for alignment mode     */
+#define STYLES     "--fs,--sw,--ls,--s,--dual"         /* Exclusive choice for alignment mode     */
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp  help   docgroup*/
@@ -55,6 +56,7 @@ static ESL_OPTIONS options[] = {
   { "--sw",      eslARG_NONE,   FALSE, NULL, NULL,    STYLES,  NULL, NULL, "unihit local alignment",                            3 },
   { "--ls",      eslARG_NONE,   FALSE, NULL, NULL,    STYLES,  NULL, NULL, "multihit glocal alignment",                         3 },
   { "--s",       eslARG_NONE,   FALSE, NULL, NULL,    STYLES,  NULL, NULL, "unihit glocal alignment",                           3 },
+  { "--dual",    eslARG_NONE,   FALSE, NULL, NULL,    STYLES,"--fwd",NULL, "dual local/glocal, multihit alignment (--fwd only)",3 },
 
   { "--vit",     eslARG_NONE,"default",NULL, NULL, ALGORITHMS, NULL, NULL, "score seqs with the Viterbi algorithm",             4 },
   { "--fwd",     eslARG_NONE,   FALSE, NULL, NULL, ALGORITHMS, NULL, NULL, "score seqs with the Forward algorithm",             4 },
@@ -604,6 +606,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   P7_PROFILE     *gm  = NULL;
   P7_OPROFILE    *om  = NULL;
   P7_GMX         *gx  = NULL;
+  P7_GMXD        *gxd = NULL;
   P7_OMX         *ox  = NULL;
   P7_TRACE       *tr  = NULL;
   ESL_DSQ        *dsq = NULL;
@@ -636,7 +639,10 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
 
   /* First pass: configure gm, om for local until after we've determined mu, lambda, tau params */
   gm = p7_profile_Create(hmm->M, cfg->abc);
-  p7_profile_ConfigLocal(gm, hmm, cfg->bg, L);
+  p7_profile_Config(gm, hmm, cfg->bg);
+  p7_profile_SetLength  (gm, L);
+
+#if 0
   om = p7_oprofile_Create(gm->M, cfg->abc);
   p7_oprofile_Convert(gm, om);
 
@@ -648,19 +654,23 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   else    mu = 0.0;		/* undetermined, for Hybrid, at least for now. */
 
   /* Now reconfig the models however we were asked to */
-  if      (esl_opt_GetBoolean(go, "--fs"))  p7_profile_ConfigLocal    (gm, hmm, cfg->bg, L);
-  else if (esl_opt_GetBoolean(go, "--sw"))  p7_profile_ConfigUnilocal (gm, hmm, cfg->bg, L);
-  else if (esl_opt_GetBoolean(go, "--ls"))  p7_profile_ConfigGlocal   (gm, hmm, cfg->bg, L);
-  else if (esl_opt_GetBoolean(go, "--s"))   p7_profile_ConfigUniglocal(gm, hmm, cfg->bg, L);
+  if      (esl_opt_GetBoolean(go, "--fs"))    p7_profile_ConfigLocal    (gm, hmm, cfg->bg, L);
+  else if (esl_opt_GetBoolean(go, "--sw"))    p7_profile_ConfigUnilocal (gm, hmm, cfg->bg, L);
+  else if (esl_opt_GetBoolean(go, "--ls"))    p7_profile_ConfigGlocal   (gm, hmm, cfg->bg, L);
+  else if (esl_opt_GetBoolean(go, "--s"))     p7_profile_ConfigUniglocal(gm, hmm, cfg->bg, L);
+  else if (esl_opt_GetBoolean(go, "--dual"))  p7_profile_Config         (gm, hmm, cfg->bg); /* unnecessary - we're already this way - but just in case code path changes */
 
+  p7_profile_SetLength(gm,      L);
+  p7_bg_SetLength     (cfg->bg, L);
   if (esl_opt_GetBoolean(go, "--x-no-lengthmodel")) elide_length_model(gm, cfg->bg);
-
   p7_oprofile_Convert(gm, om);
-  p7_bg_SetLength    (cfg->bg, L);
 
   /* Remaining allocations */
-  gx = p7_gmx_Create(gm->M, L);
+  if (esl_opt_GetBoolean(go, "--dual")) gxd = p7_gmxd_Create(gm->M, L);
+  else                                  gx  = p7_gmx_Create(gm->M, L);
   ox = p7_omx_Create(gm->M, 0, L);
+#endif
+  gxd  = p7_gmxd_Create(gm->M, L);
   ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
   tr = p7_trace_Create();
 
@@ -668,7 +678,11 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   for (i = 0; i < cfg->N; i++)
     {
       esl_rsq_xfIID(cfg->r, cfg->bg->f, cfg->abc->K, L, dsq);
+      sc = eslINFINITY;
 
+      p7_GForwardDual(dsq, L, gm, gxd,      &sc); /* SRE */
+
+#if 0
       if (esl_opt_GetBoolean(go, "--fast")) 
 	{
 	  if      (esl_opt_GetBoolean(go, "--vit")) p7_ViterbiFilter(dsq, L, om, ox, &sc);
@@ -676,13 +690,15 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
 	  else if (esl_opt_GetBoolean(go, "--msv")) p7_MSVFilter    (dsq, L, om, ox, &sc);
 	} 
 
-      if (! esl_opt_GetBoolean(go, "--fast") || sc == eslINFINITY) /* note, if a filter overflows, failover to slow versions */
+      if (! esl_opt_GetBoolean(go, "--fast") || sc == eslINFINITY) /* note, if a fast filter overflows, failover to slow versions */
 	{
-	  if      (esl_opt_GetBoolean(go, "--vit")) p7_GViterbi(dsq, L, gm, gx,       &sc);
-	  else if (esl_opt_GetBoolean(go, "--fwd")) p7_GForward(dsq, L, gm, gx,       &sc);
-	  else if (esl_opt_GetBoolean(go, "--hyb")) p7_GHybrid (dsq, L, gm, gx, NULL, &sc);
-	  else if (esl_opt_GetBoolean(go, "--msv")) p7_GMSV    (dsq, L, gm, gx, nu,   &sc);
+	  if      (esl_opt_GetBoolean(go, "--dual")) p7_GForwardDual(dsq, L, gm, gxd,      &sc);
+	  else if (esl_opt_GetBoolean(go, "--vit"))  p7_GViterbi    (dsq, L, gm, gx,       &sc);
+	  else if (esl_opt_GetBoolean(go, "--fwd"))  p7_GForward    (dsq, L, gm, gx,       &sc);
+	  else if (esl_opt_GetBoolean(go, "--hyb"))  p7_GHybrid     (dsq, L, gm, gx, NULL, &sc);
+	  else if (esl_opt_GetBoolean(go, "--msv"))  p7_GMSV        (dsq, L, gm, gx, nu,   &sc);
 	}
+#endif
 
       /* Optional: get Viterbi alignment length too. */
       if (esl_opt_GetBoolean(go, "-a"))  /* -a only works with Viterbi; getopts has checked this already */
@@ -714,6 +730,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_gmx_Destroy(gx);
+  p7_gmxd_Destroy(gxd);
   p7_trace_Destroy(tr);
   if (status == eslEMEM) sprintf(errbuf, "allocation failure");
   return status;
@@ -804,6 +821,7 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
       double  tpoints   = (double) esl_opt_GetInteger(go, "--tpoints");
       int     do_linear = esl_opt_GetBoolean(go, "--tlinear");
       double *xv;
+      double  tau;
       int     n;
 
       esl_histogram_GetRank(h, 10, &x10);
@@ -819,6 +837,8 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
 	E10fix = cfg->N * tailp * esl_exp_surv(x10, mu,  0.693147);
 	E10p   = cfg->N * esl_exp_surv(x10, pmu, plambda); /* the pmu is relative to a P=1.0 tail origin. */
 	
+	tau    = mu + log(tailp) / lambda;
+
 	fprintf(cfg->ofp, "%-20s  %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f\n", 
 		hmm->name, tailp, mu, lambda, E10, mufix, E10fix, pmu, plambda, E10p);
 
@@ -830,8 +850,9 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
       if (cfg->survfp) 
 	{
 	  esl_histogram_PlotSurvival(cfg->survfp, h);
-	  esl_exp_Plot(cfg->survfp, mu,    lambda,     esl_exp_surv, mu, h->xmax + 5., 0.1);
-	  esl_exp_Plot(cfg->survfp, mu,    0.693147,   esl_exp_surv, mu, h->xmax + 5., 0.1);
+	  esl_exp_Plot(cfg->survfp, hmm->evparam[p7_FTAU], hmm->evparam[p7_FLAMBDA], esl_exp_surv, hmm->evparam[p7_FTAU], h->xmax + 5., 0.1);
+	  esl_exp_Plot(cfg->survfp, tau,                   lambda,                   esl_exp_surv, tau,                   h->xmax + 5., 0.1);
+	  esl_exp_Plot(cfg->survfp, tau,                   0.693147,                 esl_exp_surv, tau,                   h->xmax + 5., 0.1);
 	}
 
       if (cfg->efp != NULL) {

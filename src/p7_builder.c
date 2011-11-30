@@ -635,6 +635,7 @@ p7_Builder_MaxLength (P7_HMM *hmm, double emit_thresh)
     return eslOK;
   }
 
+
   //    double I[model_len+1][2], M[model_len+1][2], D[model_len+1][2]; //2 columns for each way of ending a subpath
   ESL_ALLOC(I, (model_len+1) * sizeof(double*)); 
   ESL_ALLOC(M, (model_len+1) * sizeof(double*)); 
@@ -685,11 +686,14 @@ p7_Builder_MaxLength (P7_HMM *hmm, double emit_thresh)
       D[k][col_ptr] = hmm->t[k-1][p7H_MD] * M[k-1][col_ptr]  +  hmm->t[k-1][p7H_DD] * D[k-1][col_ptr];
 
       if (k<=model_len) {
-	surv +=  I[k][col_ptr] +
-	  M[k][col_ptr] * ( 1 - hmm->t[k][p7H_MD] ) +  //this much of M[k]'s mass will bleed into D[k+1], and thus be added to surv then
-	  D[k][col_ptr] * ( 1 - hmm->t[k][p7H_DD] )  ; //this much of D[k]'s mass will bleed into D[k+1], and thus be added to surv then
+        surv +=  I[k][col_ptr] +
+     	           M[k][col_ptr] * ( 1 - hmm->t[k][p7H_MD] ) +  //this much of M[k]'s mass will bleed into D[k+1], and thus be added to surv then
+                 D[k][col_ptr] * ( 1 - hmm->t[k][p7H_DD] )  ; //this much of D[k]'s mass will bleed into D[k+1], and thus be added to surv then
       }
     }
+    surv +=    M[model_len][col_ptr] * ( hmm->t[model_len][p7H_MD] )   //the final state doesn't pass on to the next D state
+             + D[model_len][col_ptr] * ( hmm->t[model_len][p7H_DD] )  // the final state doesn't pass on to the next D state
+             - I[model_len][col_ptr] ;  // no I state for final position
 
     p_sum += M[model_len][col_ptr] + D[model_len][col_ptr];
     surv /= surv + p_sum;

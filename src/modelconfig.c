@@ -22,8 +22,8 @@
 
 #include "hmmer.h"
 
-static int set_local_entry (P7_PROFILE *gm, const P7_HMM *hmm, float pglocal);
-static int set_glocal_entry(P7_PROFILE *gm, const P7_HMM *hmm, float pglocal);
+static int set_local_entry (P7_PROFILE *gm, const P7_HMM *hmm);
+static int set_glocal_entry(P7_PROFILE *gm, const P7_HMM *hmm);
 static int set_glocal_exit (P7_PROFILE *gm, const P7_HMM *hmm);
 
 
@@ -172,9 +172,9 @@ p7_profile_ConfigCustom(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int 
   gm->xsc[p7P_G][0]        = logf(1.0 - hmm->t[0][p7H_MD]);    /* not p7H_MM, because we're absorbing core model's I0 state and p7H_MI I*/
   gm->xsc[p7P_G][1]        = logf(hmm->t[0][p7H_MD]);
 
-  if (( status = set_local_entry (gm, hmm, pglocal)) != eslOK) return status;   // BLMk params: uniform fragment length parameterization 
-  if (( status = set_glocal_entry(gm, hmm, pglocal)) != eslOK) return status;   // BGMk params: left wing retraction, and base xsc[G] params 
-  if (( status = set_glocal_exit (gm, hmm))          != eslOK) return status;   // MkGE params: right wing retraction
+  if (( status = set_local_entry (gm, hmm)) != eslOK) return status;   // BLMk params: uniform fragment length parameterization 
+  if (( status = set_glocal_entry(gm, hmm)) != eslOK) return status;   // BGMk params: left wing retraction : glocal entry
+  if (( status = set_glocal_exit (gm, hmm)) != eslOK) return status;   // MkGE params: right wing retraction : glocal exit
 
   /* Remaining transition scores (BLM, BGM, MGE entries/exits were just set, above) */
   for (k = 1; k < gm->M; k++) {
@@ -220,6 +220,8 @@ p7_profile_ConfigCustom(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int 
   for (k = 1; k <= hmm->M; k++) P7P_ISC(gm, k, gm->abc->Kp-1) = -eslINFINITY; /* missing data symbol */
 
   /* Remaining specials, [NCJ][MOVE | LOOP] are set by length model */
+  gm->nj      = nj;
+  gm->pglocal = pglocal;
   return p7_profile_SetLength(gm, L);
 }
 
@@ -271,14 +273,8 @@ p7_profile_SetLength(P7_PROFILE *gm, int L)
  * correction for match state occupancy probability [Eddy08]:
  *    L->Mk = occ[k] /( \sum_i occ[i] * (M-i+1))
  *    
- * The BLMk entry parameter folds in the B->L transition:
- *    tBLMk = log(B->L) + log(L->Mk)
- *    
  * and we store these params off-by-one, with tBLMk stored in TSC(gm,
  * k-1, p7P_BLM), for DP efficiency reasons.
- * 
- * If pglocal == 1.0, profile is fully glocal, local mode is
- * prohibited, and all local entry params are set to -infinity.
  * 
  * We need space for an M+1 occ[k] array of match occupancy.  We save
  * a malloc by using gm->rsc[0]'s space, which we know is >= M+1, and
@@ -286,28 +282,18 @@ p7_profile_SetLength(P7_PROFILE *gm, int L)
  * parameterized yet.
  */
 static int
-set_local_entry(P7_PROFILE *gm, const P7_HMM *hmm, float pglocal)
+set_local_entry(P7_PROFILE *gm, const P7_HMM *hmm)
 {
   float *occ = gm->rsc[0];	/* a safe, malloc-saving hack; see note above  */
   float  Z   = 0.;
   int    k;
   int    status;
 
-  if (pglocal == 1.0)		/* local mode impossible */
-    {
-      for (k = 1; k <= hmm->M; k++) 
-	P7P_TSC(gm, k-1, p7P_BLM) = -eslINFINITY;
-    }
-  else 
-    {
-      float  tbl = logf(1.0-pglocal);
-
-      if (( status  = p7_hmm_CalculateOccupancy(hmm, occ, NULL)) != eslOK) return status; /* NULL=iocc[k], I state expected uses, which we don't need here */
-      for (k = 1; k <= hmm->M; k++) 
-	Z += occ[k] * (float) (hmm->M-k+1);
-      for (k = 1; k <= hmm->M; k++) 
-	P7P_TSC(gm, k-1, p7P_BLM) = tbl + logf(occ[k] / Z); /* note off-by-one: entry at Mk stored as [k-1][BM] */
-    }
+  if (( status  = p7_hmm_CalculateOccupancy(hmm, occ, NULL)) != eslOK) return status; /* NULL=iocc[k], I state expected uses, which we don't need here */
+  for (k = 1; k <= hmm->M; k++) 
+    Z += occ[k] * (float) (hmm->M-k+1);
+  for (k = 1; k <= hmm->M; k++) 
+    P7P_TSC(gm, k-1, p7P_BLM) = logf(occ[k] / Z); /* note off-by-one: entry at Mk stored as [k-1][BM] */
   return eslOK;
 }
 
@@ -322,20 +308,11 @@ set_local_entry(P7_PROFILE *gm, const P7_HMM *hmm, float pglocal)
  *
  * Here, for left wing retraction, we compute the cost of a complete B->..->Mk
  * path, either B->G->M1 for k=1 or, for k>1, B->G->D1..Dk-1->Mk:
- *   tBGM1 = log(B->G) + log(G->M1)
- *   tBGMk = B->G, B->D1..Dk-1->Mk = log(B->G) + log t(G->D1) + \sum_j=1.k-2 log t(Dj->Dj+1) + log t(Dk-1 -> Mk)
+ *   tBGM1 = log(G->M1)
+ *   tBGMk = B->G, B->D1..Dk-1->Mk = log t(G->D1) + \sum_j=1.k-2 log t(Dj->Dj+1) + log t(Dk-1 -> Mk)
  * and for technical/efficiency reasons, these params are stored
  * off-by-one in the profile: BGMk is stored at TSC(k-1, p7P_BGM).
  * 
- * Note that the B->G transition is folded into the wing-retracted
- * entry parameters, but stored separatedly (xsc[p7B][1=G]) for the
- * base parameters.
- * 
- * If pglocal = 0.0, profile is fully local; xsc[p7B][1=G] is
- * -infinity, and all tBGMk wing-retracted params are -infinity;
- * xsc[p7G][0=M,1=D] are still set, though they won't have any effect
- * in a DP algorithm because of the -infinity for B->G.
- *
  * pedantic nit: as drawn, a glocal multihit model has a mute cycle
  * G->D1...Dm->E->J->B->G. Mute cycles aren't allowed in HMMs. Our DP
  * algorithms avoid the mute cycle, though.  A DP algorithm that uses
@@ -347,28 +324,18 @@ set_local_entry(P7_PROFILE *gm, const P7_HMM *hmm, float pglocal)
  * that this mass is negligible.
  */
 static int
-set_glocal_entry(P7_PROFILE *gm, const P7_HMM *hmm, float pglocal)
+set_glocal_entry(P7_PROFILE *gm, const P7_HMM *hmm)
 {
   float Z;   
   int   k;
 
-  if (pglocal == 0.0)
+  /* Wing-retracted parameterization stored in tsc(k,p7P_BGM) off-by-one (BGMk stored at k-1, p7P_BGM) */
+  P7P_TSC(gm, 0, p7P_BGM) = gm->xsc[p7P_G][0];        
+  Z                       = gm->xsc[p7P_G][1];
+  for (k = 1; k < hmm->M; k++) 
     {
-      for (k = 0; k < hmm->M; k++) 
-	P7P_TSC(gm, k, p7P_BGM) = -eslINFINITY;
-    }
-  else
-    {
-      float tbg = logf(pglocal);
-
-      /* Wing-retracted parameterization stored in tsc(k,p7P_BGM) off-by-one (BGMk stored at k-1, p7P_BGM) */
-      P7P_TSC(gm, 0, p7P_BGM) = tbg + gm->xsc[p7P_G][0];        
-      Z                       = tbg + gm->xsc[p7P_G][1];
-      for (k = 1; k < hmm->M; k++) 
-	{
-	  P7P_TSC(gm, k, p7P_BGM) = Z + logf(hmm->t[k][p7H_DM]);
-	  Z += logf(hmm->t[k][p7H_DD]);
-	}
+      P7P_TSC(gm, k, p7P_BGM) = Z + logf(hmm->t[k][p7H_DM]);
+      Z += logf(hmm->t[k][p7H_DD]);
     }
   return eslOK;
 }
