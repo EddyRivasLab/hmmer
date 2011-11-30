@@ -359,11 +359,12 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	    start = end;
 	    target_end = target_start = i;
 	    sc = rem_sc;
-	    while (rem_sc >= om->base_b - om->tjb_b - om->tbm_b) {
+	    while (rem_sc > om->base_b - om->tjb_b - om->tbm_b) {
+	      //printf("%d (%d)\n", rem_sc, om->bias_b -  hmmdata->s.scores_b[start][dsq[target_start]] );
 	      rem_sc -= om->bias_b -  hmmdata->s.scores_b[start][dsq[target_start]];
 	      --start;
 	      --target_start;
-	      if ( start == 0 || target_start==0)    break;
+	      //if ( start == 0 || target_start==0)    break;
 	    }
 	    start++;
 	    target_start++;
@@ -532,6 +533,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
     p7_SSVFilter_longtarget(dsq, L, om, ox, hmmdata, (uint8_t)sc_thresh, sc_threshv, windowlist);
 
   } else {
+
 	  /*e.g. if base=190, tec=3, tjb=22 then a score of 217 would be required for a
 	   * second ssv-hit to improve the score of an earlier one. Usually,
 	   * sc_thresh < base. So only bother with msv if sc thresh is uncommonly
@@ -699,10 +701,9 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  } /* end loop over sequence residues 1..L */
   }
 
+
   //filter for biased composition here
   if ( windowlist->count > 0 ) {
-
-
 
     if (do_biasfilter) {
       j = 0;
@@ -713,8 +714,6 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
         bias_sc = (curr_window->score - bias_sc) / eslCONST_LOG2;
         biasP = esl_gumbel_surv(bias_sc,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
 
-//        printf ("%d -> %d  (%.2f, %.2f, %.2f)\n", curr_window->n, curr_window->n + curr_window->length-1, biasP, curr_window->score, bias_sc);
-
         if (biasP <= P ) { // keep it
           windowlist->windows[j] = windowlist->windows[i];
           j++;
@@ -722,8 +721,6 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       }
       windowlist->count = j;
     }
-
-
 
     //widen window
 
@@ -765,8 +762,6 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       }
     }
     windowlist->count = new_hit_cnt+1;
-
-
 
 	  if ( windowlist->windows[0].n  <  1)
 	    windowlist->windows[0].n =  1;

@@ -701,17 +701,17 @@ fm_hmmdataCreate(P7_PROFILE *gm, P7_OPROFILE *om, P7_HMM *hmm)
   get_Score_Arrays(gm, om,  data ); /* for FM-index string tree traversal */
 
   sum = 0;
-  for (i=1; i < om->M; i++) {
+  for (i=1; i < gm->M; i++) {
     data->prefix_lengths[i] = 2 + (int)(log(p7_DEFAULT_WINDOW_BETA / hmm->t[i][p7H_MI] )/log(hmm->t[i][p7H_II]));
     sum += data->prefix_lengths[i];
   }
-  for (i=1; i < om->M; i++)
+  for (i=1; i < gm->M; i++)
     data->prefix_lengths[i] /=  sum;
 
-  data->suffix_lengths[om->M] = data->prefix_lengths[om->M-1];
-  for (i=om->M - 1; i >= 1; i--)
+  data->suffix_lengths[gm->M] = data->prefix_lengths[gm->M-1];
+  for (i=gm->M - 1; i >= 1; i--)
     data->suffix_lengths[i] = data->suffix_lengths[i+1] + data->prefix_lengths[i-1];
-  for (i=2; i < om->M; i++)
+  for (i=2; i < gm->M; i++)
     data->prefix_lengths[i] += data->prefix_lengths[i-1];
 
 
