@@ -361,7 +361,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	    sc = rem_sc;
 	    while (rem_sc > om->base_b - om->tjb_b - om->tbm_b) {
 	      //printf("%d (%d)\n", rem_sc, om->bias_b -  hmmdata->s.scores_b[start][dsq[target_start]] );
-	      rem_sc -= om->bias_b -  hmmdata->s.scores_b[start][dsq[target_start]];
+	      rem_sc -= om->bias_b -  hmmdata->scores_b[start][dsq[target_start]];
 	      --start;
 	      --target_start;
 	      //if ( start == 0 || target_start==0)    break;
@@ -377,7 +377,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	    max_sc = sc;
 	    pos_since_max = 0;
 	    while (k<om->M && n<=L) {
-	      sc += om->bias_b -  hmmdata->s.scores_b[start][dsq[n]];
+	      sc += om->bias_b -  hmmdata->scores_b[start][dsq[n]];
 	      if (sc >= max_sc) {
 	        max_sc = sc;
 	        max_end = n;

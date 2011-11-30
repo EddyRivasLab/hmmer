@@ -834,7 +834,7 @@ typedef struct fm_hmm_data_s {
   union {
     float    **scores_f;   //M*K matrix, where M = # states, and K = # characters in alphabet
     uint8_t  **scores_b;
-  } s;
+  } ;
   float    **opt_ext_fwd;
   float    **opt_ext_rev;
   float    *prefix_lengths;

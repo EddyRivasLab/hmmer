@@ -601,21 +601,21 @@ get_Score_Arrays(P7_PROFILE *gm, P7_OPROFILE *om, FM_HMMDATA *data ) {
   data->M = gm->M;
 
   if (om != NULL) {
-    ESL_ALLOC(data->s.scores_b, (gm->M + 1) * sizeof(uint8_t*));
+    ESL_ALLOC(data->scores_b, (gm->M + 1) * sizeof(uint8_t*));
   } else {
-    ESL_ALLOC(data->s.scores_f, (gm->M + 1) * sizeof(float*));
+    ESL_ALLOC(data->scores_f, (gm->M + 1) * sizeof(float*));
     ESL_ALLOC(max_scores, (gm->M + 1) * sizeof(float));
   }
   for (i = 1; i <= gm->M; i++) {
-    ESL_ALLOC(data->s.scores_f[i], gm->abc->Kp * sizeof(float));
+    ESL_ALLOC(data->scores_f[i], gm->abc->Kp * sizeof(float));
     for (j=0; j<gm->abc->Kp; j++) {
       if (om != NULL) {
         //based on p7_oprofile's biased_byteify()
         float x =  -1.0f * roundf(om->scale_b * gm->rsc[j][(i) * p7P_NR     + p7P_MSC]);
-        data->s.scores_b[i][j] = (x > 255. - om->bias_b) ? 255 : (uint8_t) (x + om->bias_b);
+        data->scores_b[i][j] = (x > 255. - om->bias_b) ? 255 : (uint8_t) (x + om->bias_b);
       } else {
-        data->s.scores_f[i][j] = gm->rsc[j][(i) * p7P_NR     + p7P_MSC];
-        if (data->s.scores_f[i][j] > max_scores[i]) max_scores[i] = data->s.scores_f[i][j];
+        data->scores_f[i][j] = gm->rsc[j][(i) * p7P_NR     + p7P_MSC];
+        if (data->scores_f[i][j] > max_scores[i]) max_scores[i] = data->scores_f[i][j];
       }
     }
   }
@@ -658,9 +658,8 @@ ERROR:
 void
 fm_hmmdataDestroy(FM_HMMDATA *data )
 {
-
   if (data != NULL) {
-    if (data->s.scores_b != NULL)  free( data->s.scores_b);
+    if (data->scores_b != NULL)  free( data->scores_b);
     if (data->opt_ext_fwd != NULL) free( data->opt_ext_fwd);
     if (data->opt_ext_rev != NULL) free( data->opt_ext_rev);
     free(data);
@@ -687,14 +686,10 @@ fm_hmmdataCreate(P7_PROFILE *gm, P7_OPROFILE *om, P7_HMM *hmm)
   float sum;
 
   ESL_ALLOC(data, sizeof(FM_HMMDATA));
-  ESL_ALLOC(data->prefix_lengths, gm->M * sizeof(float));
-  ESL_ALLOC(data->suffix_lengths, gm->M * sizeof(float));
+  ESL_ALLOC(data->prefix_lengths, (gm->M+1) * sizeof(float));
+  ESL_ALLOC(data->suffix_lengths, (gm->M+1) * sizeof(float));
 
-  if (om == NULL)
-    data->s.scores_f     = NULL;
-  else
-    data->s.scores_b     = NULL;
-
+  data->scores_b     = NULL;
   data->opt_ext_fwd    = NULL;
   data->opt_ext_rev    = NULL;
 

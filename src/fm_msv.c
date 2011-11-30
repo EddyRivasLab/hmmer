@@ -210,9 +210,9 @@ FM_Recurse( int depth, int M, int fm_direction,
           k = dp_pairs[i].pos - 1;
 
         if (dp_pairs[i].complementarity == fm_complement) {
-          next_score = fm_hmmdata->s.scores_f[k][ fm_getComplement(c,fm_cfg->meta->alph_type) ];
+          next_score = fm_hmmdata->scores_f[k][ fm_getComplement(c,fm_cfg->meta->alph_type) ];
         } else
-          next_score = fm_hmmdata->s.scores_f[k][c];
+          next_score = fm_hmmdata->scores_f[k][c];
 
         sc = dp_pairs[i].score + next_score;
 
@@ -385,7 +385,7 @@ int FM_getSeeds (const P7_OPROFILE *gm, P7_GMX *gx, float sc_threshFM,
     {
 
 
-      sc = fm_hmmdata->s.scores_f[k][i];
+      sc = fm_hmmdata->scores_f[k][i];
       if (sc>0) { // we'll extend any positive-scoring diagonal
         if (k < gm->M-2) { // don't bother starting a forward diagonal so close to the end of the model
           //Forward pass on the FM-index
@@ -413,7 +413,7 @@ int FM_getSeeds (const P7_OPROFILE *gm, P7_GMX *gx, float sc_threshFM,
       }
 
 
-      sc = fm_hmmdata->s.scores_f[k][fm_getComplement(i, fm_cfg->meta->alph_type)];
+      sc = fm_hmmdata->scores_f[k][fm_getComplement(i, fm_cfg->meta->alph_type)];
       if (sc>0) { // we'll extend any positive-scoring diagonal
 
         //forward on the FM, reverse on the model
@@ -526,7 +526,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CF
   for (  ; k <= model_end; k++, n++) {
       c = tmp_sq->dsq[n];
 
-      sc  += hmmdata->s.scores_f[k][c];
+      sc  += hmmdata->scores_f[k][c];
       //printf ("%d: %.2f (%.2f)\n", k, sc, hmmdata->s.scores_f[k][c] );
 
       if (sc < 0) {
