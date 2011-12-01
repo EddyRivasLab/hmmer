@@ -194,6 +194,8 @@ main(int argc, char **argv)
   /* Initialize configuration shared across all kinds of masters
    * and workers in this .c file.
    */
+  p7_FLogsumInit();
+
   cfg.hmmfile  = esl_opt_GetArg(go, 1);
   cfg.r        = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
   cfg.abc      = esl_alphabet_Create(eslAMINO);
@@ -674,13 +676,26 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
   tr = p7_trace_Create();
 
+  //p7_profile_Dump(stdout, gm); 
+
+  //This is temporary code while debugging!
+  char *seq = malloc(L+1);
+  esl_rsq_xfIID(cfg->r, cfg->bg->f, cfg->abc->K, L, dsq);
+  p7_GForwardDual(dsq, L, gm, gxd,      &sc);
+  p7_gmxd_Dump(stdout, gxd);
+  printf("raw score = %.4f nats\n", sc);
+  esl_abc_Textize(cfg->abc, dsq, L, seq);
+  printf(">test\n");
+  printf("%s\n", seq);
+  exit(0);
+
   /* Collect scores from N random sequences of length L  */
   for (i = 0; i < cfg->N; i++)
     {
       esl_rsq_xfIID(cfg->r, cfg->bg->f, cfg->abc->K, L, dsq);
       sc = eslINFINITY;
 
-      p7_GForwardDual(dsq, L, gm, gxd,      &sc); /* SRE */
+
 
 #if 0
       if (esl_opt_GetBoolean(go, "--fast")) 

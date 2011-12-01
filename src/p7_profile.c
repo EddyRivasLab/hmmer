@@ -2,9 +2,11 @@
  *                                         
  *    1. The P7_PROFILE object: allocation, initialization, destruction.
  *    2. Access methods.
- *    3. Debugging and development code.
+ *    3. Debugging and development tools.
  *    4. Unit tests.
  *    5. Test driver.
+ *    6. Example.
+ *    7. Copyright and license information.
  *
  * See also: 
  *   modelconfig.c : routines that configure a profile given an HMM
@@ -12,6 +14,7 @@
 
 #include "p7_config.h"
 
+#include <stdio.h>
 #include <string.h>
 #ifdef HAVE_MPI
 #include <mpi.h>
@@ -328,6 +331,7 @@ p7_profile_IsMultihit(const P7_PROFILE *gm)
 
 
 
+
 /* Function:  p7_profile_GetT()
  *
  * Purpose:   Convenience function that looks up a transition score in
@@ -461,8 +465,166 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
 
 
 /*****************************************************************
- * 3. Debugging and development code.
+ * 3. Debugging and development tools.
  *****************************************************************/
+
+/* Function:  p7_profile_Dump()
+ * Synopsis:  Dump a P7_PROFILE structure to stream, for examination.
+ *
+ * Purpose:   Write the contents of <gm> in terse
+ *            debugging/examination tabular format, to the open output
+ *            stream <fp>.
+ */
+int
+p7_profile_Dump(FILE *fp, P7_PROFILE *gm)
+{
+  int width     = 9;
+  int precision = 4;
+  int k;
+  int x;
+
+  fputs("# profile object dump\n", fp);
+  fprintf(fp, "   name      = %s\n", gm->name);
+  fprintf(fp, "   length M  = %d\n", gm->M);
+  fprintf(fp, "   alloc M   = %d\n", gm->allocM);
+  fprintf(fp, "   accession = %s\n", gm->acc  ? gm->acc  : "[null accession]");
+  fprintf(fp, "   desc      = %s\n", gm->desc ? gm->desc : "[null description]");
+  fprintf(fp, "   alphabet  = %s\n", esl_abc_DecodeType(gm->abc->type));
+  fputs("\n", fp);
+
+  fputs("# configuration parameters\n", fp);
+  fprintf(fp, "   length model L  = %d\n",   gm->L);
+  fprintf(fp, "   multihit     nj = %.1f\n", gm->nj);
+  fprintf(fp, "   glocal       pg = %.2f\n", gm->pglocal);
+  fputs("\n", fp);
+
+  fputs("# special profile states\n", fp);
+  fprintf(fp, "state  %*s  %*s\n", width,  "LOOP/0", width,  "MOVE/1");
+  fprintf(fp, "-----  %*s  %*s\n", width, "-------", width, "-------");
+  fprintf(fp, "E      %*.*f  %*.*f\n",                 width, precision, gm->xsc[p7P_E][0], width, precision, gm->xsc[p7P_E][1]);
+  fprintf(fp, "N      %*.*f  %*.*f\n",                 width, precision, gm->xsc[p7P_N][0], width, precision, gm->xsc[p7P_N][1]);
+  fprintf(fp, "J      %*.*f  %*.*f\n",                 width, precision, gm->xsc[p7P_J][0], width, precision, gm->xsc[p7P_J][1]);
+  fprintf(fp, "C      %*.*f  %*.*f\n",                 width, precision, gm->xsc[p7P_C][0], width, precision, gm->xsc[p7P_C][1]);
+  fprintf(fp, "B      %*.*f  %*.*f  // B->L  B->G\n",  width, precision, gm->xsc[p7P_B][0], width, precision, gm->xsc[p7P_B][1]);
+  fprintf(fp, "G      %*.*f  %*.*f  // G->M1 G->D1\n", width, precision, gm->xsc[p7P_G][0], width, precision, gm->xsc[p7P_G][1]);
+  fputs("\n", fp);
+
+  fputs("# state transition parameters\n", fp);
+  fputs("pos   cons ", fp);
+  for (x = 0; x < p7P_NTRANS; x++) fprintf(fp, "%*s ", width, p7_profile_DecodeT(x));
+  fputs("\n", fp);
+
+  fputs("----- ---- ", fp);
+  for (x = 0; x < p7P_NTRANS; x++) fprintf(fp, "%*s ", width, "-------");
+  fputs("\n", fp);
+
+  for (k = 1; k < gm->M; k++) 	/* transitions are valid for k=1..M-1 */
+    {
+      fprintf(fp, "%5d    %c ", k, gm->consensus[k]);
+      for (x = 0; x < p7P_NTRANS; x++) fprintf(fp, "%*.*f ", width, precision, P7P_TSC(gm, k, x));
+      fputs("\n", fp);
+    }
+  fputs("\n", fp);
+
+  fputs("# match state emission parameters\n", fp);
+  fputs("pos   cons   rf   cs ", fp);
+  for (x = 0; x < gm->abc->K; x++) fprintf(fp, "%*s%c ", width-1, " ", gm->abc->sym[x]);
+  fputs("\n", fp);
+
+  fputs("----- ---- ---- ---- ", fp);
+  for (x = 0; x < gm->abc->K; x++) fprintf(fp, "%*s ", width, "-------");
+  fputs("\n", fp);
+
+  for (k = 1; k <= gm->M; k++) 
+    {
+      fprintf(fp, "%5d    %c    %c    %c ", k, gm->consensus[k], gm->rf[0] ? gm->rf[k] : '-', gm->cs[0] ? gm->cs[k] : '-');
+      for (x = 0; x < gm->abc->K; x++) fprintf(fp, "%*.*f ", width, precision, P7P_MSC(gm, k, x));
+      fputs("\n", fp);
+    }
+  fputs("\n", fp);
+
+  fputs("# insert state emission parameters\n", fp);
+  fputs("# pos cons ", fp);
+  for (x = 0; x < gm->abc->K; x++) fprintf(fp, "%*s%c ", width-1, " ", gm->abc->sym[x]);
+  fputs("\n", fp);
+
+  fputs("----- ---- ", fp);
+  for (x = 0; x < gm->abc->K; x++) fprintf(fp, "%*s ", width, "-------");
+  fputs("\n", fp);
+
+  for (k = 1; k < gm->M; k++) 	/* no insert state I_M, so k=1..M-1 */
+    {
+      fprintf(fp, "%5d    %c ", k, gm->consensus[k]);
+      for (x = 0; x < gm->abc->K; x++) fprintf(fp, "%*.*f ", width, precision, P7P_ISC(gm, k, x));
+      fputs("\n", fp);
+    }
+  fputs("\n", fp);
+
+
+  fputs("# model composition\n", fp);
+  for (x = 0; x < gm->abc->K; x++) fprintf(fp, "%*s%c ", width-1, " ", gm->abc->sym[x]);
+  fputs("\n", fp);
+  for (x = 0; x < gm->abc->K; x++) fprintf(fp, "%*s ", width, "-------");
+  fputs("\n", fp);
+  for (x = 0; x < gm->abc->K; x++) fprintf(fp, "%*.*f ", width, precision, gm->compo[x]);
+  fputs("\n\n", fp);
+
+  if (gm->evparam[0] == p7_EVPARAM_UNSET) 
+    fputs("# statistical parameters: UNSET\n", fp);
+  else 
+    {
+      fputs("# statistical parameters\n", fp);
+      fprintf(fp, "   msv mu     = %.4f\n", gm->evparam[p7_MMU]);
+      fprintf(fp, "   msv lambda = %.4f\n", gm->evparam[p7_MLAMBDA]);
+      fprintf(fp, "   vit mu     = %.4f\n", gm->evparam[p7_VMU]);
+      fprintf(fp, "   vit lambda = %.4f\n", gm->evparam[p7_VLAMBDA]);
+      fprintf(fp, "   fwd tau    = %.4f\n", gm->evparam[p7_FTAU]);
+      fprintf(fp, "   fwd lambda = %.4f\n", gm->evparam[p7_FLAMBDA]);
+    }
+  fputs("\n", fp);
+  
+  fputs("# bit score cutoffs\n", fp);
+  if (gm->cutoff[p7_GA1] == p7_CUTOFF_UNSET) fprintf(fp, " GA1 = %6s   GA2 = %6s\n",   "unset", "unset");
+  else                                       fprintf(fp, " GA1 = %6.1f GA2 = %6.1f\n", gm->cutoff[p7_GA1], gm->cutoff[p7_GA2]);
+  if (gm->cutoff[p7_TC1] == p7_CUTOFF_UNSET) fprintf(fp, " TC1 = %6s   TC2 = %6s\n",   "unset", "unset");
+  else                                       fprintf(fp, " TC1 = %6.1f TC2 = %6.1f\n", gm->cutoff[p7_TC1], gm->cutoff[p7_TC2]);
+  if (gm->cutoff[p7_NC1] == p7_CUTOFF_UNSET) fprintf(fp, " NC1 = %6s   NC2 = %6s\n",   "unset", "unset");
+  else                                       fprintf(fp, " NC1 = %6.1f NC2 = %6.1f\n", gm->cutoff[p7_NC1], gm->cutoff[p7_NC2]);
+  fputs("\n", fp);
+  
+  fputs("# derived calculations\n", fp);
+  fprintf(fp, "   max_length (nhmmer) = %d\n", gm->max_length);
+  fputs("\n", fp);
+  
+  fputs("#### END\n", fp);
+  return eslOK;
+}
+
+
+/* Function:  p7_profile_DecodeT()
+ * Synopsis:  Returns printable string representation of transition parameter index code.
+ */
+char *
+p7_profile_DecodeT(int tidx)
+{
+  switch (tidx) {
+  case p7P_MM:  return "tMM";
+  case p7P_IM:  return "tIM";
+  case p7P_DM:  return "tDM";
+  case p7P_BLM: return "tLMk";
+  case p7P_BGM: return "tGMk";
+  case p7P_MD:  return "tMD";
+  case p7P_DD:  return "tDD";
+  case p7P_MI:  return "tMI";
+  case p7P_II:  return "tII";   
+  case p7P_MGE: return "tMgE";
+  }
+  return NULL;
+}
+
+
+  
+
 
 /* Function:  p7_profile_Validate()
  *
@@ -619,6 +781,75 @@ main(int argc, char **argv)
   return 0;
 }
 #endif /*p7PROFILE_TESTDRIVE*/
+
+
+/*****************************************************************
+ * 6. Example
+ *****************************************************************/
+#ifdef p7PROFILE_EXAMPLE
+
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_sq.h"
+#include "esl_sqio.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "--vv",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "very verbose: dump profile object",                0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile>";
+static char banner[] = "example for profile object code";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  ESL_ALPHABET   *abc     = NULL;
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_BG          *bg      = NULL;
+  P7_PROFILE     *gm      = NULL;
+  float           ftol    = 1e-4;        /* floating-point tolerance for checking parameters against expected probs or summing to 1 */
+  char            errbuf[eslERRBUFSIZE];
+
+  /* Read in one HMM; sets alphabet to the HMM's alphabet */
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  p7_hmmfile_Close(hfp);
+
+  /* Set up a null model */
+  bg = p7_bg_Create(abc);
+
+  /* Allocate and configure a profile from HMM and null model */
+  gm = p7_profile_Create(hmm->M, abc);
+  p7_profile_Config(gm, hmm, bg);
+  p7_profile_SetLength(gm, 400);    /* 400 is arbitrary here; this is whatever your target seq length L is */
+  
+  printf("profile memory consumed: %" PRId64 " bytes\n", (int64_t) p7_profile_Sizeof(gm));
+
+  /* Debugging tools allow dumping, validating the object */
+  if (p7_profile_Validate(gm, errbuf, ftol) != eslOK) p7_Fail("profile validation failed\n  %s\n", errbuf);
+  
+  if (esl_opt_GetBoolean(go, "--vv"))
+    p7_profile_Dump(stdout, gm);
+
+  p7_profile_Destroy(gm);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /* p7PROFILE_EXAMPLE */
+
 
 /*****************************************************************
  * @LICENSE@

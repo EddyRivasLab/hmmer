@@ -951,23 +951,29 @@ p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM 
   return status;
 }
 
-/* Function:  esl_hmm_SampleEnumerable()
- * Synopsis:  Sample an random HMM with no nonzero insertion transitions.
+/* Function:  p7_hmm_SampleEnumerable()
+ * Synopsis:  Sample an random HMM with no nonzero transitions to insert.
  *
  * Purpose:   Sample a random HMM with random emission and 
  *            transition probabilities with the exception that
  *            all transitions to insert are zero. This makes
  *            it possible to create a model with a finite,
  *            easily enumerable sequence space (all seqs of
- *            length $\leq M).
+ *            length $0..M$).
  *            
- *            To achieve this in the profile as well as the core HMM,
- *            the caller must configure a unihit mode
+ *            To achieve finite enumerability in the profile as well
+ *            as the core HMM, the caller must configure a unihit mode
  *            (<p7_profile_ConfigUnilocal(gm, hmm, bg, 0)> or
- *            <_ConfigUniglocal()>, with a target length of zero.
+ *            <p7_profile_ConfigUniglocal()>, with a target length of
+ *            zero.
  *            
  *            Useful for debugging and validating Forward/Viterbi
  *            algorithms.
+ *
+ *            Compare <p7_hmm_SampleEnumerable2()>, which only makes
+ *            tII transitions zero, and thus enumerates a space consisting
+ *            of sequences of length 0..2M+1 (and for an enumerable profile,
+ *            1..2M-1).
  *            
  * Returns:   <eslOK> on success. The newly allocated hmm is returned through
  *            <ret_hmm>. The caller is responsible for freeing this object
@@ -1027,6 +1033,94 @@ p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HM
   *ret_hmm = NULL;
   return status;
 }
+
+
+
+/* Function:  p7_hmm_SampleEnumerable2()
+ * Synopsis:  Sample an random HMM with no nonzero insert-insert transitions.
+ *
+ * Purpose:   Sample a random HMM with random emission and 
+ *            transition probabilities with the exception that
+ *            all insert-insert transitions are zero. This makes
+ *            it possible to create a model with a finite,
+ *            easily enumerable sequence space (all seqs of
+ *            length $\leq 2M+1).
+ *            
+ *            To achieve this in the profile as well as the core HMM,
+ *            the caller must configure a unihit mode
+ *            (<p7_profile_ConfigUnilocal(gm, hmm, bg, 0)> or
+ *            <p7_profile_ConfigUniglocal()>, with a target length of
+ *            zero.  The enumerable sequence space of the profile has
+ *            $L=1..2M-1$, because I0 and IM are normalized away, and
+ *            the B->D1..DM->E mute path (for a sequence of length 0)
+ *            is also normalized away.
+ *
+ *            Useful for debugging and validating Forward/Viterbi
+ *            algorithms. 
+ *
+ *            Compare <p7_hmm_SampleEnumerable()>, which makes all
+ *            transitions to insert 0, and thus enumerates a smaller
+ *            space.
+ *            
+ * Returns:   <eslOK> on success. The newly allocated hmm is returned through
+ *            <ret_hmm>. The caller is responsible for freeing this object
+ *            with <p7_hmm_Destroy()>.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ */
+int
+p7_hmm_SampleEnumerable2(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
+{
+  P7_HMM *hmm      = NULL;
+  char   *logmsg   = "[random enumerable HMM, all II=0, created by sampling]";
+  int     k;
+  int     status;
+  
+  if (( hmm = p7_hmm_Create(M, abc)) == NULL) { status = eslEMEM; goto ERROR; }
+
+  for (k = 0; k < M; k++)
+    {
+      if (k > 0) esl_dirichlet_FSampleUniform(r, abc->K, hmm->mat[k]); /* match emission probs  */
+      esl_dirichlet_FSampleUniform(r, abc->K, hmm->ins[k]);            /* insert emission probs */
+      esl_dirichlet_FSampleUniform(r, 3,      hmm->t[k]);              /* match transitions     */
+      hmm->t[k][p7H_IM] = 1.;	                                       /* tIM hardwired */
+      hmm->t[k][p7H_II] = 0.;	                                       /* tII hardwired */
+      if (k > 0) esl_dirichlet_FSampleUniform(r, 2,      hmm->t[k]+5); /* delete transitions */
+    }
+
+  /* Node M is special: no transitions to D, transitions to M
+   * are interpreted as transitions to E. Overwrite a little of
+   * what we just did in node M.
+   */
+  esl_dirichlet_FSampleUniform(r, abc->K, hmm->mat[M]); /* match emission probs  */
+  esl_dirichlet_FSampleUniform(r, abc->K, hmm->ins[M]); /* insert emission probs */
+  esl_dirichlet_FSampleUniform(r, 2, hmm->mat[M]);	/* DEPENDS ON ORDER OF TRANSITIONS: MM, MI, MD */
+  hmm->t[M][p7H_MD] = 0.0;
+  hmm->t[k][p7H_IM] = 1.;	                                       
+  hmm->t[k][p7H_II] = 0.;	                                       
+  hmm->t[M][p7H_DM] = 1.;
+  hmm->t[M][p7H_DD] = 0.;
+  
+  /* Add mandatory annotation */
+  p7_hmm_SetName(hmm, "sampled-hmm");
+  p7_hmm_AppendComlog(hmm, 1, &logmsg);
+  p7_hmm_SetCtime(hmm);
+  p7_hmm_SetConsensus(hmm, NULL);
+
+#ifdef p7_DEBUGGING
+  p7_hmm_Validate(hmm, NULL, 0.0001);
+#endif
+
+  *ret_hmm = hmm;
+  return eslOK;
+  
+ ERROR:
+  if (hmm != NULL) p7_hmm_Destroy(hmm);
+  *ret_hmm = NULL;
+  return status;
+}
+
+
 
 /* Function:  p7_hmm_SampleUniform()
  * Synopsis:  Sample a model that uses fixed (given) transition probs.

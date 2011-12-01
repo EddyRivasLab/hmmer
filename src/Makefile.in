@@ -163,6 +163,7 @@ UTESTS =\
 	build_utest\
 	generic_fwdback_utest\
 	generic_fwdback_chk_utest\
+	generic_fwdback_dual_utest\
 	generic_msv_utest\
 	generic_stotrace_utest\
 	generic_viterbi_utest\
@@ -201,6 +202,7 @@ EXAMPLES = \
 	p7_domaindef_example\
 	p7_hmmfile_example\
 	p7_pipeline_example\
+	p7_profile_example\
 	p7_spensemble_example
 
 # beautification magic stolen from git

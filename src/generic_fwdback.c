@@ -1,4 +1,13 @@
 /* Forward/Backward algorithms; generic (non-SIMD) versions.
+ *
+ * As of Dec 2011, a dual-mode profile has replaced the previous
+ * profile architecture. The functions here ONLY look at the local
+ * alignment paths of the new profile, REGARDLESS of the alignment
+ * mode of the model. These functions have been retained, at least
+ * temporarily, for regression testing and validation purposes.  They
+ * may soon be deprecated or even removed. See p7_GForwardDual() for
+ * the new implementation that handles the new dual-mode profile.
+ * 
  * 
  * Contents:
  *   1. Forward, Backward, Hybrid implementations.  
@@ -27,9 +36,10 @@
  *
  *            Given a digital sequence <dsq> of length <L>, a profile
  *            <gm>, and DP matrix <gx> allocated for at least <gm->M>
- *            by <L> cells; calculate the probability of the sequence
- *            given the model using the Forward algorithm; return the
- *            Forward matrix in <gx>, and the Forward score in <ret_sc>.
+ *            by <L> cells; calculate the local alignment probability
+ *            of the sequence given the model using the Forward
+ *            algorithm; return the Forward matrix in <gx>, and the
+ *            Forward score in <ret_sc>.
  *           
  *            The Forward score is in lod score form.  To convert to a
  *            bitscore, the caller needs to subtract a null model lod
@@ -37,12 +47,19 @@
  *           
  *            Caller must have initialized the log-sum calculation
  *            with a call to <p7_FLogsumInit()>.
+ *            
+ *            With the advent of dual-mode profiles, this function now
+ *            (Dec 2011) has been downgraded to compute ONLY local
+ *            alignment scores, <emph> regardless of the local/glocal
+ *            configuration of the profile </emph>. It may soon be
+ *            deprecated.  See <p7_GForwardDual()> for the newer
+ *            implementation.
  *
  * Args:      dsq    - sequence in digitized form, 1..L
  *            L      - length of dsq
  *            gm     - profile. 
  *            gx     - DP matrix with room for an MxL alignment
- *            opt_sc - optRETURN: Forward lod score in nats
+ *            opt_sc - optRETURN: Forward lod local alignment score in nats
  *           
  * Return:    <eslOK> on success.
  */
@@ -54,9 +71,8 @@ p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
   float       *xmx  = gx->xmx; 			    
   int          M    = gm->M;
   int          i, k;  
-  float        esc  = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
 
-  p7_FLogsumInit();		/* Would like to get rid of this -- have main()'s all initialize instead, more efficient */
+  p7_FLogsumInit();
 
   /* Initialization of the zero row. */
   XMX(0,p7G_N) = 0;                                           /* S->N, p=1            */
@@ -97,9 +113,7 @@ p7_GForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
 				DMX(i,k-1) + TSC(p7P_DD,k-1));
 
 	  /* E state update */
-	  XMX(i,p7G_E) = p7_FLogsum(p7_FLogsum(MMX(i,k) + esc,
-					       DMX(i,k) + esc),
-				               XMX(i,p7G_E));
+	  XMX(i,p7G_E) = p7_FLogsum(p7_FLogsum(MMX(i,k), DMX(i,k)), XMX(i,p7G_E));
 	}
       /* unrolled match state M_M */
       sc = p7_FLogsum(p7_FLogsum(MMX(i-1,M-1)   + TSC(p7P_MM,M-1), 
@@ -171,7 +185,6 @@ p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float 
   float       *xmx  = gx->xmx; 			    
   int          M    = gm->M;
   int          i, k;  
-  float        esc  = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
 
   /* Note: backward calculates the probability we can get *out* of
    * cell i,k; exclusive of emitting residue x_i.
@@ -186,9 +199,9 @@ p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float 
   MMX(L,M) = DMX(L,M) = XMX(L,p7G_E); /* {MD}_M <- E (prob 1.0) */
   IMX(L,M) = -eslINFINITY;	      /* no I_M state        */
   for (k = M-1; k >= 1; k--) {
-    MMX(L,k) = p7_FLogsum( XMX(L,p7G_E) + esc,
+    MMX(L,k) = p7_FLogsum( XMX(L,p7G_E),
 			   DMX(L, k+1)  + TSC(p7P_MD,k));
-    DMX(L,k) = p7_FLogsum( XMX(L,p7G_E) + esc,
+    DMX(L,k) = p7_FLogsum( XMX(L,p7G_E),
 			   DMX(L, k+1)  + TSC(p7P_DD,k));
     IMX(L,k) = -eslINFINITY;
   }
@@ -220,7 +233,7 @@ p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float 
 	{
 	  MMX(i,k) = p7_FLogsum( p7_FLogsum(MMX(i+1,k+1) + TSC(p7P_MM,k) + MSC(k+1),
 					    IMX(i+1,k)   + TSC(p7P_MI,k) + ISC(k)),
-				 p7_FLogsum(XMX(i,p7G_E) + esc,
+				 p7_FLogsum(XMX(i,p7G_E),
 					    DMX(i,  k+1) + TSC(p7P_MD,k)));
       
 	  IMX(i,k) = p7_FLogsum( MMX(i+1,k+1) + TSC(p7P_IM,k) + MSC(k+1),
@@ -228,7 +241,7 @@ p7_GBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float 
 	  
 	  DMX(i,k) = p7_FLogsum( MMX(i+1,k+1) + TSC(p7P_DM,k) + MSC(k+1),
 				 p7_FLogsum( DMX(i,  k+1)  + TSC(p7P_DD,k),
-					     XMX(i, p7G_E) + esc));
+					     XMX(i, p7G_E)));
 	}
     }
 
