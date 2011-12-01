@@ -350,11 +350,11 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       start = end;
       target_end = target_start = i;
       sc = rem_sc;
-      while (rem_sc >= om->base_b - om->tjb_b - om->tbm_b) {
-        rem_sc -= om->bias_b -  hmmdata->s.scores_b[start][dsq[target_start]];
+      while (rem_sc > om->base_b - om->tjb_b - om->tbm_b) {
+        rem_sc -= om->bias_b -  hmmdata->scores_b[start][dsq[target_start]];
         --start;
         --target_start;
-        if ( start == 0 || target_start==0)    break;
+        //if ( start == 0 || target_start==0)    break;
       }
       start++;
       target_start++;
@@ -368,7 +368,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       max_sc = sc;
       pos_since_max = 0;
       while (k<om->M && n<=L) {
-        sc += om->bias_b -  hmmdata->s.scores_b[start][dsq[k]];
+        sc += om->bias_b -  hmmdata->scores_b[start][dsq[n]];
         if (sc >= max_sc) {
           max_sc = sc;
           max_end = n;
@@ -617,9 +617,9 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
 				  //check if we've hit sc_thresh.  If so, reset values and add this region to the list of hits
 				  if (vec_any_gt(xEv, sc_threshv) ) {
-                                          int start = first_peak - om->max_length + 1;
-                                          int length = i-first_peak+1 + 2 * om->max_length;
-                                          fm_newWindow(windowlist, 0, start, -1, -1, length , -1, fm_nocomplement );
+				    int start = first_peak - om->max_length + 1;
+				    int length = i-first_peak+1 + 2 * om->max_length;
+				    fm_newWindow(windowlist, 0, start, -1, -1, length , -1, fm_nocomplement );
 
 					  // got one peak.  Start scanning for the next one, as though starting from scratch
 					  first_peak = last_peak = -1;
@@ -686,8 +686,11 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
     for (i=0; i<windowlist->count; i++) {
       curr_window = windowlist->windows+i;
-      window_start = ESL_MAX( 1,   curr_window->n + curr_window->length - om->max_length) ;
-      window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + om->max_length - 2);
+//      window_start = ESL_MAX( 1,   curr_window->n + curr_window->length - om->max_length) ;
+//      window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + om->max_length - 2);
+      window_start = ESL_MAX( 1,   curr_window->n - om->max_length * hmmdata->prefix_lengths[curr_window->k - curr_window->length + 1] + 1 - 10)  ;
+      window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + om->max_length * hmmdata->suffix_lengths[curr_window->k] - 1 + 10)  ;
+
       curr_window->n = window_start;
       curr_window->length = window_end - window_start + 1;
     }
