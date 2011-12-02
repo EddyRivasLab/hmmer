@@ -710,7 +710,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       for (i=0; i<windowlist->count; i++) {
         curr_window = windowlist->windows+i;
 
-        p7_bg_FilterScore(bg, dsq+curr_window->n, curr_window->length, &bias_sc);
+        p7_bg_FilterScore(bg, dsq+curr_window->n-1, curr_window->length, &bias_sc);
         bias_sc = (curr_window->score - bias_sc) / eslCONST_LOG2;
         biasP = esl_gumbel_surv(bias_sc,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
 
