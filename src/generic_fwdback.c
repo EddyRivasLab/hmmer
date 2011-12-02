@@ -794,7 +794,7 @@ main(int argc, char **argv)
       p7_GForward (sq->dsq, sq->n, gm, fwd, &fsc);
       p7_GBackward(sq->dsq, sq->n, gm, bck, &bsc);
 
-      //p7_gmx_Dump(stdout, fwd, p7_DEFAULT);
+      p7_gmx_Dump(stdout, fwd, p7_DEFAULT);
 
       /* Those scores are partial log-odds likelihoods in nats.
        * Subtract off the rest of the null model, convert to bits.
