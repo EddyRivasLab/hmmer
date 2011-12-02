@@ -32,59 +32,60 @@
 #include "hmmer.h"
 #include "p7_gmxd.h"
 
-#define ALGORITHMS "--fwd,--vit,--hyb,--msv"           /* Exclusive choice for scoring algorithms */
-#define STYLES     "--fs,--sw,--ls,--s,--dual"         /* Exclusive choice for alignment mode     */
-
 static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range     toggles   reqs   incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "show brief help on version and usage",              1 },
-  { "-a",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,"--vit",NULL, "obtain alignment length statistics too",            1 },
-  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "verbose: print scores",                             1 },
-  { "-L",        eslARG_INT,    "100", NULL, "n>0",     NULL,  NULL, NULL, "length of random target seqs",                      1 },
-  { "-N",        eslARG_INT,   "1000", NULL, "n>0",     NULL,  NULL, NULL, "number of random target seqs",                      1 },
+  /* name           type      default   env  range  toggles                   reqs    incomp  help                                  docgroup*/
+  { "-h",        eslARG_NONE,   FALSE,  NULL, NULL,  NULL,                     NULL,   NULL, "show brief help on version and usage",      1 },
+  { "-a",        eslARG_NONE,   FALSE,  NULL, NULL,  NULL,                     "--vit",NULL, "obtain alignment length statistics too",    1 },
+  { "-v",        eslARG_NONE,   FALSE,  NULL, NULL,  NULL,                     NULL,   NULL, "verbose: print scores",                     1 },
+  { "-L",        eslARG_INT,    "100",  NULL, "n>0", NULL,                     NULL,   NULL, "length of random target seqs",              1 },
+  { "-N",        eslARG_INT,   "1000",  NULL, "n>0", NULL,                     NULL,   NULL, "number of random target seqs",              1 },
 #ifdef HAVE_MPI
-  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "run as an MPI parallel program",                    1 },
+  { "--mpi",     eslARG_NONE,   FALSE,  NULL, NULL,  NULL,                     NULL,   NULL, "run as an MPI parallel program",            1 },
 #endif
-  { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "direct output to file <f>, not stdout",             2 },
-  { "--afile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL, "-a",  NULL, "output alignment lengths to file <f>",              2 },
-  { "--efile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output E vs. E plots to <f> in xy format",          2 },
-  { "--ffile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output filter fraction: # seqs passing P thresh",   2 },
-  { "--pfile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output P(S>x) plots to <f> in xy format",           2 },
-  { "--xfile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output bitscores as binary double vector to <f>",   2 },
+  { "--fwd",     eslARG_NONE,"default", NULL, NULL, "--fwd,--vit,--msv,--hyb", NULL,   NULL, "calculate Forward scores",                  2 },
+  { "--vit",     eslARG_NONE,   FALSE,  NULL, NULL, "--fwd,--vit,--msv,--hyb", NULL,   NULL, "calculate Viterbi scores",                  2 },
+  { "--msv",     eslARG_NONE,   FALSE,  NULL, NULL, "--fwd,--vit,--msv,--hyb", NULL,   NULL, "calculate MSV/SSV scores",                  2 },
+  { "--hyb",     eslARG_NONE,   FALSE,  NULL, NULL, "--fwd,--vit,--msv,--hyb", NULL,   NULL, "calculate Hybrid scores",                   2 },
 
-  { "--fs",      eslARG_NONE,"default",NULL, NULL,    STYLES,  NULL, NULL, "multihit local alignment",                          3 },
-  { "--sw",      eslARG_NONE,   FALSE, NULL, NULL,    STYLES,  NULL, NULL, "unihit local alignment",                            3 },
-  { "--ls",      eslARG_NONE,   FALSE, NULL, NULL,    STYLES,  NULL, NULL, "multihit glocal alignment",                         3 },
-  { "--s",       eslARG_NONE,   FALSE, NULL, NULL,    STYLES,  NULL, NULL, "unihit glocal alignment",                           3 },
-  { "--dual",    eslARG_NONE,   FALSE, NULL, NULL,    STYLES,"--fwd",NULL, "dual local/glocal, multihit alignment (--fwd only)",3 },
+  { "--dual",    eslARG_NONE,"default", NULL, NULL, "--dual,--local,--glocal", NULL,   NULL, "config model in dual local/glocal mode",    3 },
+  { "--local",   eslARG_NONE,    FALSE, NULL, NULL, "--dual,--local,--glocal", NULL,   NULL, "config model in local alignment mode",      3 },
+  { "--glocal",  eslARG_NONE,    FALSE, NULL, NULL, "--dual,--local,--glocal", NULL,   NULL, "config model in glocal alignment mode",     3 },
 
-  { "--vit",     eslARG_NONE,"default",NULL, NULL, ALGORITHMS, NULL, NULL, "score seqs with the Viterbi algorithm",             4 },
-  { "--fwd",     eslARG_NONE,   FALSE, NULL, NULL, ALGORITHMS, NULL, NULL, "score seqs with the Forward algorithm",             4 },
-  { "--hyb",     eslARG_NONE,   FALSE, NULL, NULL, ALGORITHMS, NULL, NULL, "score seqs with the Hybrid algorithm",              4 },
-  { "--msv",     eslARG_NONE,   FALSE, NULL, NULL, ALGORITHMS, NULL, NULL, "score seqs with the MSV algorithm",                 4 },
-  { "--fast",    eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "use the optimized versions of the above",           4 },
+  { "--multi",   eslARG_NONE,"default", NULL, NULL, "--multi,--uni",           NULL,   NULL, "multihit config",                           4 },
+  { "--uni",     eslARG_NONE,    FALSE, NULL, NULL, "--multi,--uni",           NULL,   NULL, "unihit config",                             4 },
 
-  { "--tmin",    eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, NULL, "set lower bound tail mass for fwd,island",          5 },
-  { "--tmax",    eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, NULL, "set lower bound tail mass for fwd,island",          5 },
-  { "--tpoints", eslARG_INT,      "1", NULL, NULL,      NULL,  NULL, NULL, "set number of tail probs to try",                   5 },
-  { "--tlinear", eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "use linear not log spacing of tail probs",          5 },
+  { "--generic", eslARG_NONE,"default", NULL, NULL, "--generic,--vector",      NULL,   NULL, "use generic DP code (full accuracy; slow)", 5 },
+  { "--vector",  eslARG_NONE,"  FALSE", NULL, NULL, "--generic,--vector",      NULL,   NULL, "use vector DP code (fast; less precision)", 5 },
 
-  { "--EmL",    eslARG_INT,     "200", NULL, "n>0",     NULL,  NULL, NULL, "length of sequences for MSV Gumbel mu fit",         6 },   
-  { "--EmN",    eslARG_INT,     "200", NULL, "n>0",     NULL,  NULL, NULL, "number of sequences for MSV Gumbel mu fit",         6 },   
-  { "--EvL",    eslARG_INT,     "200", NULL, "n>0",     NULL,  NULL, NULL, "length of sequences for Viterbi Gumbel mu fit",     6 },   
-  { "--EvN",    eslARG_INT,     "200", NULL, "n>0",     NULL,  NULL, NULL, "number of sequences for Viterbi Gumbel mu fit",     6 },   
-  { "--EfL",    eslARG_INT,     "100", NULL, "n>0",     NULL,  NULL, NULL, "length of sequences for Forward exp tail tau fit",  6 },   
-  { "--EfN",    eslARG_INT,     "200", NULL, "n>0",     NULL,  NULL, NULL, "number of sequences for Forward exp tail tau fit",  6 },   
-  { "--Eft",    eslARG_REAL,   "0.04", NULL, "0<x<1",   NULL,  NULL, NULL, "tail mass for Forward exponential tail tau fit",    6 },   
+  { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "direct output to file <f>, not stdout",             6 },
+  { "--afile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL, "-a",  NULL, "output alignment lengths to file <f>",              6 },
+  { "--efile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output E vs. E plots to <f> in xy format",          6 },
+  { "--ffile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output filter fraction: # seqs passing P thresh",   6 },
+  { "--pfile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output P(S>x) plots to <f> in xy format",           6 },
+  { "--xfile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "output bitscores as binary double vector to <f>",   6 },
 
-  { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "arrest after start: for debugging MPI under gdb",   7 },  
-  { "--seed",    eslARG_INT,      "0", NULL, NULL,      NULL,  NULL, NULL, "set random number seed to <n>",                     7 },  
+  { "--tmin",    eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, NULL, "set lower bound tail mass for fwd,island",          7 },
+  { "--tmax",    eslARG_REAL,  "0.02", NULL, NULL,      NULL,  NULL, NULL, "set lower bound tail mass for fwd,island",          7 },
+  { "--tpoints", eslARG_INT,      "1", NULL, NULL,      NULL,  NULL, NULL, "set number of tail probs to try",                   7 },
+  { "--tlinear", eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "use linear not log spacing of tail probs",          7 },
 
-  { "--bgflat",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set uniform background frequencies",                8 },  
-  { "--bgcomp",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set bg frequencies to model's average composition", 8 },
-  { "--x-no-lengthmodel", eslARG_NONE, FALSE,NULL,NULL, NULL,  NULL, NULL, "turn the H3 length model off",                      8 },
-  { "--nu",      eslARG_REAL,   "2.0", NULL, NULL,     NULL,"--msv","--fast", "set nu parameter (# expected HSPs) for GMSV",    8 },  
-  { "--pthresh", eslARG_REAL,   "0.02",NULL, NULL,     NULL,"--ffile", NULL, "set P-value threshold for --ffile",               8 },  
+  { "--recal",  eslARG_NONE,    FALSE, NULL,  NULL,     NULL,     NULL, NULL, "Recalibrate, replacing HMM's existing stat params", 8 },
+  { "--EmL",    eslARG_INT,     "200", NULL, "n>0",     NULL,"--recal", NULL, "length of sequences for MSV Gumbel mu fit",         8 },   
+  { "--EmN",    eslARG_INT,     "200", NULL, "n>0",     NULL,"--recal", NULL, "number of sequences for MSV Gumbel mu fit",         8 },   
+  { "--EvL",    eslARG_INT,     "200", NULL, "n>0",     NULL,"--recal", NULL, "length of sequences for Viterbi Gumbel mu fit",     8 },   
+  { "--EvN",    eslARG_INT,     "200", NULL, "n>0",     NULL,"--recal", NULL, "number of sequences for Viterbi Gumbel mu fit",     8 },   
+  { "--EfL",    eslARG_INT,     "100", NULL, "n>0",     NULL,"--recal", NULL, "length of sequences for Forward exp tail tau fit",  8 },   
+  { "--EfN",    eslARG_INT,     "200", NULL, "n>0",     NULL,"--recal", NULL, "number of sequences for Forward exp tail tau fit",  8 },   
+  { "--Eft",    eslARG_REAL,   "0.04", NULL, "0<x<1",   NULL,"--recal", NULL, "tail mass for Forward exponential tail tau fit",    8 },   
+
+  { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "arrest after start: for debugging MPI under gdb",   9 },  
+  { "--seed",    eslARG_INT,      "0", NULL, NULL,      NULL,  NULL, NULL, "set random number seed to <n>",                     9 },  
+
+  { "--bgflat",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set uniform background frequencies",                10 },  
+  { "--bgcomp",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set bg frequencies to model's average composition", 10 },
+  { "--x-no-lengthmodel", eslARG_NONE, FALSE,NULL,NULL, NULL,  NULL, NULL, "turn the H3 length model off",                      10 },
+  { "--nu",      eslARG_REAL,   "2.0", NULL, NULL,     NULL,"--msv","--fast", "set nu parameter (# expected HSPs) for GMSV",    10 },  
+  { "--pthresh", eslARG_REAL,   "0.02",NULL, NULL,     NULL,"--ffile", NULL, "set P-value threshold for --ffile",               10 },  
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -129,9 +130,10 @@ static void serial_master  (ESL_GETOPTS *go, struct cfg_s *cfg);
 static void mpi_master     (ESL_GETOPTS *go, struct cfg_s *cfg);
 static void mpi_worker     (ESL_GETOPTS *go, struct cfg_s *cfg);
 #endif 
-static int process_workunit   (ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens, double *ret_mu, double *ret_lambda);
-static int output_result      (ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens, double mu, double lambda);
-static int output_filter_power(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, double mu, double lambda);
+static int recalibrate_model  (ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm);
+static int process_workunit   (ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens);
+static int output_result      (ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens);
+static int output_filter_power(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores);
 
 #ifdef HAVE_MPI
 static int minimum_mpi_working_buffer(ESL_GETOPTS *go, int N, int *ret_wn);
@@ -146,9 +148,7 @@ main(int argc, char **argv)
   ESL_STOPWATCH   *w       = esl_stopwatch_Create();
   struct cfg_s     cfg;
 
-
-  /* Process command line options.
-   */
+  /* Process command line options.  */
   go = esl_getopts_Create(options);
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK || 
       esl_opt_VerifyConfig(go)               != eslOK)
@@ -164,20 +164,24 @@ main(int argc, char **argv)
       esl_usage(stdout, argv[0], usage);
       puts("\nCommon options:");
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1=docgroup, 2 = indentation; 80=textwidth*/
-      puts("\nOutput options (only in serial mode, for single HMM input):");
+      puts("\nChoice of score type :");
       esl_opt_DisplayHelp(stdout, go, 2, 2, 80); 
-      puts("\nAlternative alignment styles :");
-      esl_opt_DisplayHelp(stdout, go, 3, 2, 80);
-      puts("\nAlternative scoring algorithms :");
-      esl_opt_DisplayHelp(stdout, go, 4, 2, 80);
+      puts("\nChoice of alignment mode :");
+      esl_opt_DisplayHelp(stdout, go, 3, 2, 80); 
+      puts("\nChoice of multi vs. unihit config :");
+      esl_opt_DisplayHelp(stdout, go, 4, 2, 80); 
+      puts("\nChoice of generic vs. vector DP implementation :");
+      esl_opt_DisplayHelp(stdout, go, 5, 2, 80); 
+      puts("\nOutput options (use only in serial mode, for single HMM input):");
+      esl_opt_DisplayHelp(stdout, go, 6, 2, 80); 
       puts("\nControlling range of fitted tail masses :");
-      esl_opt_DisplayHelp(stdout, go, 5, 2, 80);
-      puts("\nControlling E-value calibration :");
-      esl_opt_DisplayHelp(stdout, go, 6, 2, 80);
-      puts("\nDebugging :");
       esl_opt_DisplayHelp(stdout, go, 7, 2, 80);
-      puts("\nExperiments :");
+      puts("\nRecalibrating E-values, and replacing HMM's existing parameters :");
       esl_opt_DisplayHelp(stdout, go, 8, 2, 80);
+      puts("\nDebugging :");
+      esl_opt_DisplayHelp(stdout, go, 9, 2, 80);
+      puts("\nExperiments :");
+      esl_opt_DisplayHelp(stdout, go, 10, 2, 80);
       exit(0);
     }
   if (esl_opt_ArgNumber(go) != 1) 
@@ -190,6 +194,11 @@ main(int argc, char **argv)
       exit(1);
     }
 
+  /* Validate combinations of score/config/implementation (4x3x2x2, score x mode x hit x DPimpl: 20 of 48 possible combos valid */
+  if (esl_opt_GetBoolean(go, "--vector") && ! esl_opt_GetBoolean(go, "--local")) p7_Fail("SIMD vector implementations only work for local alignment.");    /* -16/48 */
+  if (esl_opt_GetBoolean(go, "--msv")    && ! esl_opt_GetBoolean(go, "--local")) p7_Fail("MSV scoring is local by definition: use --local.");              /*  -4/48 */
+  if (esl_opt_GetBoolean(go, "--vit")    && ! esl_opt_GetBoolean(go, "--local")) p7_Fail("no p7_GViterbiDual for new dual-mode profile implemented yet");  /*  -4/48 */
+  if (esl_opt_GetBoolean(go, "--hyb")    && ! esl_opt_GetBoolean(go, "--local")) p7_Fail("hybrid scores only implemented for local-only: use --local");    /*  -4/48 */
 
   /* Initialize configuration shared across all kinds of masters
    * and workers in this .c file.
@@ -369,7 +378,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   P7_HMM     *hmm = NULL;     
   double     *xv  = NULL;	/* results: array of N scores */
   int        *av  = NULL;	/* optional results: array of N alignment lengths */
-  double      mu, lambda;
   char        errbuf[eslERRBUFSIZE];
   int         status;
 
@@ -386,8 +394,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       else if (status == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   cfg->hmmfile);
       else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s",   cfg->hmmfile);
 
-      if (process_workunit(go, cfg, errbuf, hmm, xv, av, &mu, &lambda) != eslOK) p7_Fail(errbuf);
-      if (output_result   (go, cfg, errbuf, hmm, xv, av,  mu,  lambda) != eslOK) p7_Fail(errbuf);
+      if (esl_opt_GetBoolean(go, "--recal")) {
+	if (recalibrate_model(go, cfg, errbuf, hmm)      != eslOK) p7_Fail(errbuf);
+      }
+      if (process_workunit(go, cfg, errbuf, hmm, xv, av) != eslOK) p7_Fail(errbuf);
+      if (output_result   (go, cfg, errbuf, hmm, xv, av) != eslOK) p7_Fail(errbuf);
 
       p7_hmm_Destroy(hmm);      
     }
@@ -544,7 +555,6 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   int             wn      = 0;
   char            errbuf[eslERRBUFSIZE];
   int             pos;
-  double          mu, lambda;
  
   /* Worker initializes */
   if ((status = minimum_mpi_working_buffer(go, cfg->N, &wn)) != eslOK) xstatus = status;
@@ -556,16 +566,19 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* Main worker loop */
   while (p7_hmm_MPIRecv(0, 0, MPI_COMM_WORLD, &wbuf, &wn, &(cfg->abc), &hmm) == eslOK) 
     {
-      if ((status = process_workunit(go, cfg, errbuf, hmm, xv, av, &mu, &lambda)) != eslOK) goto CLEANERROR;
+      if (esl_opt_GetBoolean(go, "--recal")) {
+	if (( status = recalibrate_model(go, cfg, errbuf, hmm))     != eslOK) goto CLEANERROR;
+      }
+      if ((status = process_workunit(go, cfg, errbuf, hmm, xv, av)) != eslOK) goto CLEANERROR;
 
       pos = 0;
       MPI_Pack(&status, 1,      MPI_INT,    wbuf, wn, &pos, MPI_COMM_WORLD);
       MPI_Pack(xv,      cfg->N, MPI_DOUBLE, wbuf, wn, &pos, MPI_COMM_WORLD);
       if (esl_opt_GetBoolean(go, "-a"))
 	MPI_Pack(av,    cfg->N, MPI_INT,    wbuf, wn, &pos, MPI_COMM_WORLD);
+      MPI_Send(wbuf, pos, MPI_PACKED, 0, 0, MPI_COMM_WORLD);
       MPI_Pack(&mu,     1,      MPI_DOUBLE, wbuf, wn, &pos, MPI_COMM_WORLD);
       MPI_Pack(&lambda, 1,      MPI_DOUBLE, wbuf, wn, &pos, MPI_COMM_WORLD);
-      MPI_Send(wbuf, pos, MPI_PACKED, 0, 0, MPI_COMM_WORLD);
 
       p7_hmm_Destroy(hmm);
     }
@@ -592,6 +605,55 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif /*HAVE_MPI*/
 
 
+/* recalibrate_model()
+ * 
+ * Optionally, user can choose (with --recal) to replace the
+ * statistical parameters of the HMM.  The calibrated params are used
+ * to generate "expected" distributions in output plots.  see
+ * p7_Calibrate(), which this is a partial copy of. (p7_Calibrate()
+ * requires a P7_BUILDER object that we don't have.)
+ * 
+ * On success, returns <eslOK> and the statistical parameters of the
+ * <hmm> have been recalibrated and replaced.
+ */
+static int
+recalibrate_model(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm)
+{
+  P7_PROFILE  *gm   = NULL;
+  P7_OPROFILE *om   = NULL;
+  int          EmL  = esl_opt_GetInteger(go, "--EmL");
+  int          EmN  = esl_opt_GetInteger(go, "--EmN");
+  int          EvL  = esl_opt_GetInteger(go, "--EvL");
+  int          EvN  = esl_opt_GetInteger(go, "--EvN");
+  int          EfL  = esl_opt_GetInteger(go, "--EfL");
+  int          EfN  = esl_opt_GetInteger(go, "--EfN");
+  double       Eft  = esl_opt_GetReal   (go, "--Eft");
+  double       lambda, mmu, vmu, ftau;
+
+  gm = p7_profile_Create(hmm->M, cfg->abc);
+  p7_profile_Config(gm, hmm, cfg->bg);      /* dual-mode multihit; L=0 (no length model needed right now) */
+
+  om = p7_oprofile_Create(gm->M, cfg->abc);
+  p7_oprofile_Convert(gm, om);	/* om is now *local* multihit */
+
+  p7_Lambda(hmm, cfg->bg, &lambda);
+  p7_MSVMu    (cfg->r, om, cfg->bg, EmL, EmN, lambda,      &mmu);
+  p7_ViterbiMu(cfg->r, om, cfg->bg, EvL, EvN, lambda,      &vmu);
+  p7_Tau      (cfg->r, om, cfg->bg, EfL, EfN, lambda, Eft, &ftau);
+
+  hmm->evparam[p7_MLAMBDA] = lambda;
+  hmm->evparam[p7_VLAMBDA] = lambda;
+  hmm->evparam[p7_FLAMBDA] = lambda;
+  hmm->evparam[p7_MMU]     = mmu;
+  hmm->evparam[p7_VMU]     = vmu;
+  hmm->evparam[p7_FTAU]    = ftau;
+  hmm->flags              |= p7H_STATS;
+
+  p7_profile_Destroy(gm);
+  p7_oprofile_Destroy(om);
+  return eslOK;
+}
+
 /* process_workunit()
  *
  * This is the routine that actually does the work.
@@ -602,7 +664,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
  * How those scores are generated is controlled by the application configuration in <cfg>.
  */
 static int
-process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens, double *ret_mu, double *ret_lambda)
+process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens)
 {
   int             L   = esl_opt_GetInteger(go, "-L");
   P7_PROFILE     *gm  = NULL;
@@ -613,19 +675,11 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   P7_TRACE       *tr  = NULL;
   ESL_DSQ        *dsq = NULL;
   int             i;
+  float           nu  = esl_opt_GetReal   (go, "--nu");
+  int             scounts[p7T_NSTATETYPES]; /* state usage counts from a trace */
+  float           sc;
+  float           nullsc;
   int             status;
-  int    scounts[p7T_NSTATETYPES]; /* state usage counts from a trace */
-  float  sc;
-  float  nullsc;
-  double mu, lambda;
-  int    EmL          = esl_opt_GetInteger(go, "--EmL");
-  int    EmN          = esl_opt_GetInteger(go, "--EmN");
-  int    EvL          = esl_opt_GetInteger(go, "--EvL");
-  int    EvN          = esl_opt_GetInteger(go, "--EvN");
-  int    EfL          = esl_opt_GetInteger(go, "--EfL");
-  int    EfN          = esl_opt_GetInteger(go, "--EfN");
-  double Eft          = esl_opt_GetReal   (go, "--Eft");
-  float  nu           = esl_opt_GetReal   (go, "--nu");
 
   /* Optionally set a custom background, determined by model composition;
    * an experimental hack. 
@@ -639,55 +693,47 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
       esl_vec_FCopy(p, cfg->abc->K, cfg->bg->f);
     }
 
-  /* First pass: configure gm, om for local until after we've determined mu, lambda, tau params */
+  /* Create and configure our generic profile, as requested */
   gm = p7_profile_Create(hmm->M, cfg->abc);
-  p7_profile_Config(gm, hmm, cfg->bg);
-  p7_profile_SetLength  (gm, L);
+  if (esl_opt_GetBoolean(go, "--multi")) 
+    {
+      if      (esl_opt_GetBoolean(go, "--dual"))   { p7_profile_Config      (gm, hmm, cfg->bg);    }
+      else if (esl_opt_GetBoolean(go, "--local"))  { p7_profile_ConfigLocal (gm, hmm, cfg->bg, L); }
+      else if (esl_opt_GetBoolean(go, "--glocal")) { p7_profile_ConfigGlocal(gm, hmm, cfg->bg, L); }
+    }
+  else if (esl_opt_GetBoolean(go, "--uni")) 
+    {
+      if      (esl_opt_GetBoolean(go, "--dual"))   { p7_profile_ConfigCustom   (gm, hmm, cfg->bg, L, 0.0, 0.5); }
+      else if (esl_opt_GetBoolean(go, "--local"))  { p7_profile_ConfigUnilocal (gm, hmm, cfg->bg, L);           }
+      else if (esl_opt_GetBoolean(go, "--glocal")) { p7_profile_ConfigUniglocal(gm, hmm, cfg->bg, L);           }
+    }
+  p7_profile_SetLength(gm, L);
+  p7_bg_SetLength(cfg->bg, L);  
 
-#if 0
-  om = p7_oprofile_Create(gm->M, cfg->abc);
-  p7_oprofile_Convert(gm, om);
-
-  /* Determine E-value parameters (in addition to any that are already in the HMM structure)  */
-  p7_Lambda(hmm, cfg->bg, &lambda);
-  if      (esl_opt_GetBoolean(go, "--vit"))  p7_ViterbiMu(cfg->r, om, cfg->bg, EvL, EvN, lambda,      &mu);
-  else if (esl_opt_GetBoolean(go, "--msv"))  p7_MSVMu    (cfg->r, om, cfg->bg, EmL, EmN, lambda,      &mu);
-  else if (esl_opt_GetBoolean(go, "--fwd"))  p7_Tau      (cfg->r, om, cfg->bg, EfL, EfN, lambda, Eft, &mu);
-  else    mu = 0.0;		/* undetermined, for Hybrid, at least for now. */
-
-  /* Now reconfig the models however we were asked to */
-  if      (esl_opt_GetBoolean(go, "--fs"))    p7_profile_ConfigLocal    (gm, hmm, cfg->bg, L);
-  else if (esl_opt_GetBoolean(go, "--sw"))    p7_profile_ConfigUnilocal (gm, hmm, cfg->bg, L);
-  else if (esl_opt_GetBoolean(go, "--ls"))    p7_profile_ConfigGlocal   (gm, hmm, cfg->bg, L);
-  else if (esl_opt_GetBoolean(go, "--s"))     p7_profile_ConfigUniglocal(gm, hmm, cfg->bg, L);
-  else if (esl_opt_GetBoolean(go, "--dual"))  p7_profile_Config         (gm, hmm, cfg->bg); /* unnecessary - we're already this way - but just in case code path changes */
-
-  p7_profile_SetLength(gm,      L);
-  p7_bg_SetLength     (cfg->bg, L);
   if (esl_opt_GetBoolean(go, "--x-no-lengthmodel")) elide_length_model(gm, cfg->bg);
-  p7_oprofile_Convert(gm, om);
 
-  /* Remaining allocations */
-  if (esl_opt_GetBoolean(go, "--dual")) gxd = p7_gmxd_Create(gm->M, L);
-  else                                  gx  = p7_gmx_Create(gm->M, L);
-  ox = p7_omx_Create(gm->M, 0, L);
-#endif
-  gxd  = p7_gmxd_Create(gm->M, L);
+  /* Allocate DP matrix for <gm>.
+   * For DP calculations with the profile, we need a GMXD for Forward,
+   * but a legacy GMX for Viterbi or MSV, at least until we update
+   * Viterbi and MSV to be able to handle the new P7_PROFILE's
+   * dual-mode parameters.
+   */
+  if (esl_opt_GetBoolean(go, "--fwd"))  gxd = p7_gmxd_Create(gm->M, L);
+  else                                  gx  = p7_gmx_Create (gm->M, L);
+
+  /* Create and configure the vectorized profile, if needed;
+   * and allocate its DP matrix
+   */
+  if (esl_opt_GetBoolean(go, "--vector"))
+    {
+      om = p7_oprofile_Create(gm->M, cfg->abc);
+      p7_oprofile_Convert(gm, om);
+      ox = p7_omx_Create(gm->M, 0, L);
+    }
+  
+  /* Remaining allocation */
   ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
   tr = p7_trace_Create();
-
-  //p7_profile_Dump(stdout, gm); 
-
-  //This is temporary code while debugging!
-  char *seq = malloc(L+1);
-  esl_rsq_xfIID(cfg->r, cfg->bg->f, cfg->abc->K, L, dsq);
-  p7_GForwardDual(dsq, L, gm, gxd,      &sc);
-  p7_gmxd_Dump(stdout, gxd);
-  printf("raw score = %.4f nats\n", sc);
-  esl_abc_Textize(cfg->abc, dsq, L, seq);
-  printf(">test\n");
-  printf("%s\n", seq);
-  exit(0);
 
   /* Collect scores from N random sequences of length L  */
   for (i = 0; i < cfg->N; i++)
@@ -695,25 +741,29 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
       esl_rsq_xfIID(cfg->r, cfg->bg->f, cfg->abc->K, L, dsq);
       sc = eslINFINITY;
 
-
-
-#if 0
-      if (esl_opt_GetBoolean(go, "--fast")) 
+      /* Vectorized implementations of Viterbi, MSV may overflow.
+       * In this case, they'll leave sc=eslINFINITY.
+       * Then we fail over to the nonvector "generic" implementation.
+       * That's why this next block isn't an if/else.
+       */
+      if (esl_opt_GetBoolean(go, "--vector")) 
 	{
 	  if      (esl_opt_GetBoolean(go, "--vit")) p7_ViterbiFilter(dsq, L, om, ox, &sc);
 	  else if (esl_opt_GetBoolean(go, "--fwd")) p7_ForwardParser(dsq, L, om, ox, &sc);
 	  else if (esl_opt_GetBoolean(go, "--msv")) p7_MSVFilter    (dsq, L, om, ox, &sc);
 	} 
 
-      if (! esl_opt_GetBoolean(go, "--fast") || sc == eslINFINITY) /* note, if a fast filter overflows, failover to slow versions */
+      /* If we tried a vector calculation above but it overflowed,
+       * or if we're to do --generic DP calculations, sc==eslINFINITY now;
+       * hence the if condition here:
+       */
+      if (sc == eslINFINITY)
 	{
-	  if      (esl_opt_GetBoolean(go, "--dual")) p7_GForwardDual(dsq, L, gm, gxd,      &sc);
-	  else if (esl_opt_GetBoolean(go, "--vit"))  p7_GViterbi    (dsq, L, gm, gx,       &sc);
-	  else if (esl_opt_GetBoolean(go, "--fwd"))  p7_GForward    (dsq, L, gm, gx,       &sc);
-	  else if (esl_opt_GetBoolean(go, "--hyb"))  p7_GHybrid     (dsq, L, gm, gx, NULL, &sc);
+	  if      (esl_opt_GetBoolean(go, "--fwd"))  p7_GForwardDual(dsq, L, gm, gxd,      &sc); /* any mode: dual,local,glocal; gm's config takes care of this */
+	  else if (esl_opt_GetBoolean(go, "--vit"))  p7_GViterbi    (dsq, L, gm, gx,       &sc); /* local-only mode. cmdline opts processing has already assured that --local set */
 	  else if (esl_opt_GetBoolean(go, "--msv"))  p7_GMSV        (dsq, L, gm, gx, nu,   &sc);
+	  else if (esl_opt_GetBoolean(go, "--hyb"))  p7_GHybrid     (dsq, L, gm, gx, NULL, &sc);
 	}
-#endif
 
       /* Optional: get Viterbi alignment length too. */
       if (esl_opt_GetBoolean(go, "-a"))  /* -a only works with Viterbi; getopts has checked this already */
@@ -734,11 +784,8 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
       p7_bg_NullOne(cfg->bg, dsq, L, &nullsc);
       scores[i] = (sc - nullsc) / eslCONST_LOG2;
     }
-
-  *ret_mu     = mu;
-  *ret_lambda = lambda;
   status      = eslOK;
-
+  /* deliberate flowthru */
  ERROR:
   if (dsq != NULL) free(dsq);
   p7_omx_Destroy(ox);
@@ -753,7 +800,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
 
 
 static int 
-output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens, double pmu, double plambda)
+output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens)
 {
   ESL_HISTOGRAM *h = NULL;
   int            i;
@@ -764,17 +811,22 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
   double         mufix2, E10fix2;
   double         E10p;
   double         almean, alvar;	/* alignment length mean and variance (optional output) */
+  double         pmu, plambda;
   int            status;
 
+  /* fetch statistical params from HMM for expected distribution */
+  if       (esl_opt_GetBoolean(go, "--vit")) { pmu = hmm->evparam[p7_VMU];  plambda = hmm->evparam[p7_VLAMBDA]; }
+  else if  (esl_opt_GetBoolean(go, "--msv")) { pmu = hmm->evparam[p7_MMU];  plambda = hmm->evparam[p7_MLAMBDA]; }
+  else if  (esl_opt_GetBoolean(go, "--fwd")) { pmu = hmm->evparam[p7_FTAU]; plambda = hmm->evparam[p7_FLAMBDA]; }
+  else if  (esl_opt_GetBoolean(go, "--hyb")) { pmu = hmm->evparam[p7_VMU];  plambda = hmm->evparam[p7_VLAMBDA]; } /* we don't have hybrid stats */
 
-  /* Optional output of scores/alignment lengths:
-   */
+  /* Optional output of scores/alignment lengths: */
   if (cfg->xfp)                      fwrite(scores, sizeof(double), cfg->N, cfg->xfp);
   if (cfg->alfp)                     for (i = 0; i < cfg->N; i++) fprintf(cfg->alfp, "%d  %.3f\n", alilens[i], scores[i]);
   if (esl_opt_GetBoolean(go, "-v"))  for (i = 0; i < cfg->N; i++) printf("%.3f\n", scores[i]);
 
   /* optional "filter power" data file: <hmm name> <# seqs <= P threshold> <fraction of seqs <= P threshold>  */
-  if (cfg->ffp)                      output_filter_power(go, cfg, errbuf, hmm, scores, pmu, plambda);
+  if (cfg->ffp)                      output_filter_power(go, cfg, errbuf, hmm, scores);
 
   /* Count the scores into a histogram object.  */
   if ((h = esl_histogram_CreateFull(-50., 50., 0.2)) == NULL) ESL_XFAIL(eslEMEM, errbuf, "allocation failed");
@@ -786,7 +838,7 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
       esl_histogram_GetRank(h, 10, &x10);
       tailp  = 1.0;
 
-      /* mu, lambda, E10 fields: ML Gumbel fit to the observed data */
+      /* mu, lambda, E10 fields are for ML Gumbel fit to the observed data */
       esl_gumbel_FitComplete(scores, cfg->N, &mu, &lambda);
       E10    = cfg->N * esl_gumbel_surv(x10, mu, lambda); 
 
@@ -794,12 +846,12 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
       esl_gumbel_FitCompleteLoc(scores, cfg->N, 0.693147, &mufix);
       E10fix = cfg->N * esl_gumbel_surv(x10, mufix, 0.693147); 
 
-      /* mufix2, E10fix2 fields: assume edge-corrected H3 lambda estimate; fit ML mu */
+      /* mufix2, E10fix2 fields: assume H3's own lambda estimate; fit ML mu */
       esl_gumbel_FitCompleteLoc(scores, cfg->N, plambda, &mufix2);
       E10fix2 = cfg->N * esl_gumbel_surv(x10, mufix2, plambda); 
       
-      /* pmu, plambda, E10p:     use H3 estimates (pmu, plambda) */
-      E10p    = cfg->N * esl_gumbel_surv(x10, pmu,   plambda); 
+      /* pmu, plambda, E10p:  use H3 expectation estimates (pmu, plambda) */
+      E10p    = cfg->N * esl_gumbel_surv(x10, pmu,  plambda); 
       
       fprintf(cfg->ofp, "%-20s  %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f", 
               hmm->name, tailp, mu, lambda, E10, mufix, E10fix, mufix2, E10fix2, pmu, plambda, E10p);
@@ -812,6 +864,7 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
 
       if (cfg->survfp != NULL) {
 	esl_histogram_PlotSurvival(cfg->survfp, h);
+	esl_gumbel_Plot(cfg->survfp, pmu,   plambda,  esl_gumbel_surv, h->xmin - 5., h->xmax + 5., 0.1);
 	esl_gumbel_Plot(cfg->survfp, mu,    lambda,   esl_gumbel_surv, h->xmin - 5., h->xmax + 5., 0.1);
 	esl_gumbel_Plot(cfg->survfp, mufix, 0.693147, esl_gumbel_surv, h->xmin - 5., h->xmax + 5., 0.1);
       }
@@ -865,9 +918,9 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
       if (cfg->survfp) 
 	{
 	  esl_histogram_PlotSurvival(cfg->survfp, h);
-	  esl_exp_Plot(cfg->survfp, hmm->evparam[p7_FTAU], hmm->evparam[p7_FLAMBDA], esl_exp_surv, hmm->evparam[p7_FTAU], h->xmax + 5., 0.1);
-	  esl_exp_Plot(cfg->survfp, tau,                   lambda,                   esl_exp_surv, tau,                   h->xmax + 5., 0.1);
-	  esl_exp_Plot(cfg->survfp, tau,                   0.693147,                 esl_exp_surv, tau,                   h->xmax + 5., 0.1);
+	  esl_exp_Plot(cfg->survfp, pmu,  plambda, esl_exp_surv, pmu, h->xmax + 5., 0.1);
+	  esl_exp_Plot(cfg->survfp, tau,   lambda, esl_exp_surv, tau, h->xmax + 5., 0.1);
+	  esl_exp_Plot(cfg->survfp, tau, 0.693147, esl_exp_surv, tau, h->xmax + 5., 0.1);
 	}
 
       if (cfg->efp != NULL) {
@@ -882,7 +935,6 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
       }
 
     }
-
 
   /* fallthrough: both normal, error cases execute same cleanup code */
   status = eslOK;
@@ -907,7 +959,7 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
  * SRE, Thu Apr  9 08:57:32 2009 [Janelia] xref J4/133
  */
 static int
-output_filter_power(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, double pmu, double plambda)
+output_filter_power(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores)
 {
   double pthresh = esl_opt_GetReal(go, "--pthresh"); /* P-value threshold set for the filter score       */
   double P;					     /* calculated P-value (using HMM's own calibration) */
@@ -915,10 +967,11 @@ output_filter_power(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hm
   double fpass;					     /* fraction of scores that pass the P threshold     */
   int    i;					     /* counter over scores                              */
   int    do_gumbel;				     /* flag for how to determine P values               */
+  double pmu, plambda;
 
-  if       (esl_opt_GetBoolean(go, "--vit")) do_gumbel = TRUE;
-  else if  (esl_opt_GetBoolean(go, "--msv")) do_gumbel = TRUE; 
-  else if  (esl_opt_GetBoolean(go, "--hyb")) do_gumbel = FALSE;
+  if       (esl_opt_GetBoolean(go, "--vit")) { pmu = hmm->evparam[p7_VMU];  plambda = hmm->evparam[p7_VLAMBDA]; do_gumbel = TRUE;  }
+  else if  (esl_opt_GetBoolean(go, "--msv")) { pmu = hmm->evparam[p7_MMU];  plambda = hmm->evparam[p7_MLAMBDA]; do_gumbel = TRUE;  }
+  else if  (esl_opt_GetBoolean(go, "--fwd")) { pmu = hmm->evparam[p7_FTAU]; plambda = hmm->evparam[p7_FLAMBDA]; do_gumbel = FALSE; }
   else     ESL_FAIL(eslEINVAL, errbuf, "can only use --ffile with viterbi, msv, or fwd scores");
 
   for (i = 0; i < cfg->N; i++)
