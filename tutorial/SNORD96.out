@@ -13,70 +13,59 @@ Description: Small nucleolar RNA SNORD96 family
 Scores for complete hits:
     E-value  score  bias  Sequence   start     end Description
     ------- ------ -----  --------   -----   ----- -----------
-    4.2e-22   78.5   0.0  chr22    1856705 1856612 
-     0.0019   18.7   0.0  chr22     189909  189968 
+    4.2e-22   78.5   0.0  chr22    1846605 1846512 
   ------ inclusion threshold ------
-       0.04   14.5   0.0  chr22    1207842 1207773 
+      0.037   14.6   0.0  chr22    1197742 1197673 
 
 
 Annotation for each hit  (and alignments):
 >> chr22  
     score  bias    Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
    ------ ----- --------- ------- -------    ------- -------    ------- -------    ----
- !   78.5   0.0   4.2e-22       2      95 .. 1856705 1856612 .. 1856706 1856611 .. 0.97
+ !   78.5   0.0   4.2e-22       2      95 .. 1846605 1846512 .. 1846606 1846511 .. 0.97
 
   Alignment:
   score: 78.5 bits
                   <<<<_____________________________________________________.._________________________________>> CS
   SNORD96       2 ggccggugaugaaauccgauauaaaaaaacaccaucuuucgggacugauuuggcgcc..ucugcggcaaugaugcuacuucugcaauucugagg 93     
                   ggccgguga gaaa+cc + au+aaaaa caccaucuuucggg+cugau +g+cgcc  uc gcggc+aug+ugc+a uucugcaauucugagg
-    chr22 1856705 GGCCGGUGAAGAAAACCUCGAUUAAAAA-CACCAUCUUUCGGGGCUGAUCGGCCGCCgcUCGGCGGCCAUGCUGCCA-UUCUGCAAUUCUGAGG 1856614
+    chr22 1846605 GGCCGGUGAAGAAAACCUCGAUUAAAAA-CACCAUCUUUCGGGGCUGAUCGGCCGCCgcUCGGCGGCCAUGCUGCCA-UUCUGCAAUUCUGAGG 1846514
                   789**********************999.***************************9999*****************.***************9 PP
+                  0689************************.************************************************.***************9 APP
 
                   >> CS
   SNORD96      94 cc 95     
                   cc
-    chr22 1856613 CC 1856612
+    chr22 1846513 CC 1846512
                   87 PP
+                  50 APP
 
 >> chr22  
     score  bias    Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
    ------ ----- --------- ------- -------    ------- -------    ------- -------    ----
- !   18.7   0.0    0.0019       9      83 ..  189909  189968 ..  189903  189983 .. 0.67
+ ?   14.6   0.0     0.037       6      71 .. 1197742 1197673 .. 1197746 1197645 .. 0.76
 
   Alignment:
-  score: 18.7 bits
-                 ___________________________________________________________________________ CS
-  SNORD96      9 gaugaaauccgauauaaaaaaacaccaucuuucgggacugauuuggcgccucugcggcaaugaugcuacuucugc 83    
-                 gauga+ ucc  u    aa   +accaucuuucggg cuga uu+          +g + ug+ug+ua uu ug 
-    chr22 189909 GAUGAUUUCCCUU----AAUUUUACCAUCUUUCGGGUCUGAAUUA----------AGAUGUGUUGAUA-UUAUGG 189968
-                 5555555544333....344459*****************98877..........4556677777777.554443 PP
-
->> chr22  
-    score  bias    Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
-   ------ ----- --------- ------- -------    ------- -------    ------- -------    ----
- ?   14.5   0.0      0.04       6      71 .. 1207842 1207773 .. 1207846 1207749 .. 0.76
-
-  Alignment:
-  score: 14.5 bits
+  score: 14.6 bits
                   ________________________..____________________._________._____________ CS
   SNORD96       6 ggugaugaaauccgauauaaaaaa..acaccaucuuucgggacuga.uuuggcgcc.ucugcggcaauga 71     
                   ggug +ga+au + ++a aaaaa   a a   ucu  cggg+cuga uu++gc++c u  g  gc+auga
-    chr22 1207842 GGUGUGGAUAUUUUCAACAAAAAUaaAAAUGCUCUCCCGGGGCUGAaUUGAGCUUCgUGGGUUGCUAUGA 1207773
-                  589999***9998888887776540034455589999********7355556666557777778888775 PP
+    chr22 1197742 GGUGUGGAUAUUUUCAACAAAAAUaaAAAUGCUCUCCCGGGGCUGAaUUGAGCUUCgUGGGUUGCUAUGA 1197673
+                  689999***9998888887776540034455589999********7355556666667777778888875 PP
+                  047899999999**************************************99999988887776665420 APP
 
 
 
 Internal pipeline statistics summary:
 -------------------------------------
 Query model(s):                    1  (96 nodes)
-Target sequences:                  1  (3738212 residues)
-Windows passing MSV filter:               265  (0.02766); expected (0.02)
-Windows passing bias filter:              265  (0.02766); expected (0.02)
-Windows passing Vit filter:                 6  (0.0006953); expected (0.001)
-Windows passing Fwd filter:                 3  (0.0003927); expected (1e-05)
-Total hits:                                 3  (5.992e-05)
-# CPU time: 0.11u 0.00s 00:00:00.11 Elapsed: 00:00:00.07
-# Mc/sec: 5126.69
+Target sequences:                  1  (3718012 residues)
+Windows passing MSV filter:               421  (0.02134); expected (0.02)
+Windows passing bias filter:              409  (0.02076); expected (0.02)
+Windows passing Vit filter:                13  (0.0006538); expected (0.001)
+Windows passing Fwd filter:                 2  (0.0001017); expected (1e-05)
+Total hits:                                 2  (4.411e-05)
+# CPU time: 0.59u 0.01s 00:00:00.60 Elapsed: 00:00:01.04
+# Mc/sec: 343.20
 //
 [ok]

@@ -56,12 +56,14 @@ if ($output !~ /MAXL  75/) {
 # Create a roughly 4.5MB database against which to search
 $database   = "$tmppfx.fa";
 do_cmd ( "$builddir/easel/miniapps/esl-shuffle --seed 1 --dna -G -N 1 -L 4500000 -o $tmppfx.A" );
-do_cmd ( "$builddir/src/hmmemit -N 2 --seed 4 -o $tmppfx.B $tmppfx.hmm" ); 
+do_cmd ( "$builddir/src/hmmemit -N 2 --seed 4 $tmppfx.hmm >  $tmppfx.B " );
+do_cmd ( "$builddir/src/hmmemit -N 1 --seed 3 $tmppfx.hmm >> $tmppfx.B" ); 
 do_cmd ( "head -n 33000 $tmppfx.A > $database" );
 do_cmd ( "head -2 $tmppfx.B | tail -1 >> $database" );
-do_cmd ( "head -n 55000 $tmppfx.A | tail -22000 >> $database");
-do_cmd ( "tail -1 $tmppfx.B >> $database" );
+do_cmd ( "tail -n +33001 $tmppfx.A | head -n 22000 >> $database");
+do_cmd ( "head -4 $tmppfx.B | tail -1 >> $database" );
 do_cmd ( "tail -20000 $tmppfx.A >> $database" );
+do_cmd ( "tail -1 $tmppfx.B >> $database" );
 
 # perform nhmmer search
 $cmd = "$builddir/src/nhmmer --tformat fasta $tmppfx.hmm $database";
@@ -69,17 +71,18 @@ $output = do_cmd($cmd);
 
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = q[
-Target sequences:                  1  \(8999958 residues\)
-Windows passing MSV filter:              1901  \(0.01301\); expected \(0.02\)
-Windows passing bias filter:             1772  \(0.01208\); expected \(0.02\)
-Windows passing Vit filter:                87  \(0.0006137\); expected \(0.001\)
-Windows passing Fwd filter:                 2  \(1.344e-05\); expected \(1e-05\)
-Total hits:                                 2  \(4.222e-06\)];
+Target sequences:                  1  \(9000000 residues\)
+Windows passing MSV filter:              1845  \(0.01555\); expected \(0.02\)
+Windows passing bias filter:             1645  \(0.01384\); expected \(0.02\)
+Windows passing Vit filter:                73  \(0.0006124\); expected \(0.001\)
+Windows passing Fwd filter:                 3  \(2.033e-05\); expected \(1e-05\)
+Total hits:                                 3  \(6.444e-06\)];
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 1\n";
 }
 $expect = 
-     q[0.06   16.8   0.2  random   3299961 3299978 
+    q[0.012   19.5   1.2  random   4499980 4499999 
+      0.077   15.9   0.2  random   3299961 3299978 
        0.09   15.8   0.6  random   1979941 1979960]; 
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 2\n";
@@ -88,18 +91,20 @@ if ($output !~ /$expect/s) {
 $cmd = "$builddir/src/nhmmer --tformat fasta --single $tmppfx.hmm $database";
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
-$expect = q[Target sequences:                  1  \(4499979 residues\)
-Windows passing MSV filter:               971  \(0.01329\); expected \(0.02\)
-Windows passing bias filter:              905  \(0.01231\); expected \(0.02\)
-Windows passing Vit filter:                52  \(0.0007184\); expected \(0.001\)
-Windows passing Fwd filter:                 2  \(2.689e-05\); expected \(1e-05\)
-Total hits:                                 2  \(8.444e-06\)];
+$expect = q[Target sequences:                  1  \(4500000 residues\)
+Windows passing MSV filter:               940  \(0.01586\); expected \(0.02\)
+Windows passing bias filter:              839  \(0.0141\); expected \(0.02\)
+Windows passing Vit filter:                42  \(0.000688\); expected \(0.001\)
+Windows passing Fwd filter:                 3  \(4.067e-05\); expected \(1e-05\)
+Total hits:                                 3  \(1.289e-05\)];
 
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 3\n";
 }
 $expect = 
-    q[0.03   16.8   0.2  random   3299961 3299978 
+   q[0.0058   19.5   1.2  random   4499980 4499999 
+  ------ inclusion threshold ------
+      0.039   15.9   0.2  random   3299961 3299978 
       0.045   15.8   0.6  random   1979941 1979960 ]; 
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 4\n";

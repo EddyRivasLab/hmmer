@@ -870,6 +870,7 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   int F2_L = ESL_MIN( window_len,  pli->B2);
   int F3_L = ESL_MIN( window_len,  pli->B3);
 
+//  printf ("m: %d -> %d\n", window_start, window_start + window_len-1);
 
   if (pli->do_biasfilter) {
       p7_bg_SetLength(bg, window_len);
@@ -886,6 +887,7 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   pli->n_past_bias++;
   pli->pos_past_bias += window_len;
 
+//  printf ("b: %d -> %d\n", window_start, window_start + window_len-1);
 
   p7_oprofile_ReconfigRestLength(om, window_len);
 
@@ -908,6 +910,9 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   pli->n_past_vit++;
   pli->pos_past_vit += window_len;
 
+
+  //printf ("v: %d -> %d\n", window_start, window_start + window_len-1);
+
   /* Parse it with Forward and obtain its real Forward score. */
   p7_ForwardParser(subseq, window_len, om, pli->oxf, &fwdsc);
   filtersc =  nullsc + (bias_filtersc * (float)F3_L/window_len);
@@ -919,6 +924,8 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   pli->n_past_fwd++;
   pli->pos_past_fwd += window_len;
 
+
+ // printf ("f: %d -> %d\n", window_start, window_start + window_len-1);
 
   /*now that almost everything has been filtered away, set up seq object for domaindef function*/
   if ((status = esl_sq_SetName     (tmpseq, seq_name))   != eslOK) goto ERROR;
@@ -1098,11 +1105,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, FM_HMMDATA *hmmdata, P
    */
   p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, hmmdata, bg, pli->F1, &windowlist, pli->do_biasfilter);
 
-  if (windowlist.count == 0) {
-    free (windowlist.windows);
-    return eslOK;
-  }
-
   tmpseq = esl_sq_CreateDigital(sq->abc);
   for (i=0; i<windowlist.count; i++){
     int window_len = windowlist.windows[i].length;
@@ -1218,6 +1220,7 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
     window =  windowlist.windows[i] ;
 
     fm_convertRange2DSQ( fm_cfg->meta, window.id, window.fm_n, window.length, fmf->T, tmpseq );
+
 
     if (window.complementarity == fm_complement)
       esl_sq_ReverseComplement(tmpseq);

@@ -106,6 +106,7 @@ copy.
   cd ~/src/hmmer/branches/mybranch
   svn update
   svn merge https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk
+# the merge will tell you what revs it merged; use this in the commit message...
 # resolve any conflicts and commit. Message might look like "sync: merged 3750..3758 trunk to branch"
   svn commit
 # do your work

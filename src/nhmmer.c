@@ -94,7 +94,7 @@ static ESL_OPTIONS options[] = {
   { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",          7 },
 
   /* Control of FM pruning/extension */
-  { "--fm_msv_length",   eslARG_INT,          "45", NULL, NULL,    NULL,  NULL, NULL,          "max length used when extending seed for MSV",                8 },
+  { "--fm_msv_length",   eslARG_INT,          "70", NULL, NULL,    NULL,  NULL, NULL,          "max length used when extending seed for MSV",                8 },
   { "--fm_max_depth",    eslARG_INT,          "16", NULL, NULL,    NULL,  NULL, NULL,          "seed length at which bit threshold must be met",             8 },
   { "--fm_max_neg_len",  eslARG_INT,           "4", NULL, NULL,    NULL,  NULL, NULL,          "maximum number consecutive negative scores in seed",         8 },
   { "--fm_req_pos",      eslARG_INT,           "5", NULL, NULL,    NULL,  NULL, NULL,          "minimum number consecutive positive scores in seed" ,        8 },
@@ -544,7 +544,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
           info[i].pli->single_strand = esl_opt_IsUsed(go, "--single");
           info[i].fm_cfg = fm_cfg;
-          info[i].fm_hmmdata = fm_hmmdata; //TODO: do I need to clone this? I don't think so
+          info[i].fm_hmmdata = fm_hmmdata;
 #ifdef HMMER_THREADS
           if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
 #endif

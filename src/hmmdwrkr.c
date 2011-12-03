@@ -464,6 +464,11 @@ process_InitCmd(HMMD_COMMAND *cmd, WORKER_ENV  *env)
       LOG_FATAL_MSG("cache hmmdb error", status);
     }
 
+    if ( (status = p7_hmmcache_SetNumericNames(hcache)) != eslOK){
+      p7_syslog(LOG_ERR,"[%s:%d] - p7_hmmcache_SetNumericNames %s error %d\n", __FILE__, __LINE__, p, status);
+      LOG_FATAL_MSG("cache hmmdb error", status);
+    }
+
     /* validate the hmm database */
     cmd->init.hid[MAX_INIT_DESC-1] = 0;
     /* TODO: come up with a new pressed format with an id to compare - strcmp (cmd->init.hid, hdb->id) != 0 */

@@ -193,6 +193,8 @@ main(int argc, char **argv)
  *     !shutdown
  *     //
  *     
+ * Or, for hmmscan against the hmm db, replace @--seqdb 1 with @--hmmdb 1.
+ *
  * For debugging, start two of the three processes on cmdline, and the
  * one to be debugged under gdb.
  *    in worker: break process_SearchCmd
