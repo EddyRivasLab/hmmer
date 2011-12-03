@@ -188,11 +188,11 @@ p7_GForwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXC
 static inline void
 backward_row(const ESL_DSQ *dsq, const P7_PROFILE *gm, P7_GMXCHK *gxc, const float *dpp, float *dpc, int i)
 {
-  const float const *tsc = gm->tsc;
-  const float const *rsc = gm->rsc[dsq[i+1]];
-  int                M   = gm->M;
-  float              esc = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
-  int                k;
+  const float * const tsc = gm->tsc;             /* both the parameters and the pointer itself are constant */
+  const float * const rsc = gm->rsc[dsq[i+1]];
+  int                 M   = gm->M;
+  float               esc = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
+  int                 k;
   
   XMR(dpc,p7GC_C) =  XMR(dpc,p7GC_CC) =  XMR(dpp,p7GC_C) + gm->xsc[p7P_C][p7P_LOOP];
 
