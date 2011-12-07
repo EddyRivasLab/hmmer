@@ -142,7 +142,7 @@ p7_GMSV(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float nu, f
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt)
+p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, FM_WINDOWLIST *windowlist, int do_biasfilter)
 {
 
   /* A couple differences between this MSV and the standard one:
@@ -165,10 +165,23 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
   float        tbmk  = logf(     2.0f / ((float) gm->M * (float) (gm->M+1)));
   float        tej   = logf((nu - 1.0f) / nu);
   float        tec   = logf(1.0f / nu);
-  int          i,k;
-  int 	  	   status;
+  int          i,j,k;
 
   float 	   tloop_total = tloop * gm->max_length;
+
+  int target_end;
+  int target_start;
+
+  FM_WINDOW *prev_window;
+  FM_WINDOW *curr_window;
+
+
+  float sc_thresh;
+  float nullsc;
+  float bias_sc;
+  float biasP;
+
+
   /*
    * Computing the score required to let P meet the F1 prob threshold
    * In original code, converting from an MSV score S (the score getting
@@ -186,21 +199,12 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
    *  really matter - in any case, both the bg and om models will change with roughly
    *  1 bit for each doubling of the length model, so they offset.
    */
-  float nullsc;
   float invP = esl_gumbel_invsurv(P, gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
   p7_bg_SetLength(bg, gm->max_length);
   p7_ReconfigLength(gm, gm->max_length);
   p7_bg_NullOne  (bg, dsq, gm->max_length, &nullsc);
 
-  float sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total;
-
-  /* stuff used to keep track of hits (regions passing the p-threshold)*/
-  void* tmp_void; // why doesn't ESL_RALLOC just declare its own tmp ptr?
-  int hit_arr_size = 50; // arbitrary size - it, and the hit lists it relates to, will be increased as necessary
-  ESL_ALLOC(*starts, hit_arr_size * sizeof(int));
-  ESL_ALLOC(*ends, hit_arr_size * sizeof(int));
-  (*starts)[0] = (*ends)[0] = -1;
-  *hit_cnt = 0;
+  sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total;
 
 
   XMX(0,p7G_N) = 0;
@@ -230,15 +234,9 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
 
 	  if (XMX(i,p7G_C) > sc_thresh)
 	  {
-		  //ensure hit list is large enough
-		  if (*hit_cnt == hit_arr_size ) {
-			  hit_arr_size *= 10;
-			  ESL_RALLOC(*starts, tmp_void, hit_arr_size * sizeof(int));
-			  ESL_RALLOC(*ends, tmp_void, hit_arr_size * sizeof(int));
-		  }
-		  (*starts)[*hit_cnt] = i -  gm->max_length + 1;
-		  (*ends)[*hit_cnt] = i + gm->max_length - 1;
-		  (*hit_cnt)++;
+	    target_start =  ESL_MAX(1, i - gm->max_length + 1);
+	    target_end   =  ESL_MIN(L, i + gm->max_length - 1);
+      fm_newWindow(windowlist, 0, target_start, 0, 0, target_end-target_start+1, XMX(i,p7G_C), fm_nocomplement );
 
 		  //start the search all over again
 		  XMX(i,p7G_N) = 0;
@@ -252,47 +250,68 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
   }
 
 
-  /*
-   * merge overlapping windows, compressing list in place.
-   */
-  if ( *hit_cnt > 0 ) {
-	  int merged = 0;
-	  do {
-		  merged = 0;
+  //filter for biased composition
+  if ( windowlist->count > 0 ) {
 
-		  int new_hit_cnt = 0;
-		  for (i=1; i<*hit_cnt; i++) {
-			  if ((*starts)[i] <= (*ends)[new_hit_cnt]) {
-				  //merge windows
-				  merged = 1;
-				  if ( (*ends)[i] > (*ends)[new_hit_cnt] )
-					  (*ends)[new_hit_cnt] = (*ends)[i];
+    if (do_biasfilter) {
+      j = 0;
+      for (i=0; i<windowlist->count; i++) {
+        curr_window = windowlist->windows+i;
 
-			  } else {
-				  //new window
-				  new_hit_cnt++;
-				  (*starts)[new_hit_cnt] = (*starts)[i];
-				  (*ends)[new_hit_cnt] = (*ends)[i];
-			  }
-		  }
-		  *hit_cnt = new_hit_cnt + 1;
-	  } while (merged > 0);
+        p7_bg_FilterScore(bg, dsq+curr_window->n-1, curr_window->length, &bias_sc);
+        bias_sc = (curr_window->score - bias_sc) / eslCONST_LOG2;
+        biasP = esl_gumbel_surv(bias_sc,  gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
 
-	  if ((*starts)[0] <  1)
-		  (*starts)[0] =  1;
+        if (biasP <= P ) { // keep it
+          windowlist->windows[j] = windowlist->windows[i];
+          j++;
+        }
+      }
+      windowlist->count = j;
+    }
 
-	  if ((*ends)[*hit_cnt - 1] >  L)
-		  (*ends)[*hit_cnt - 1] =  L;
+
+
+    //widen window
+    /*
+    for (i=0; i<windowlist->count; i++) {
+      curr_window = windowlist->windows+i;
+
+      window_start = ESL_MAX( 1,   curr_window->n - gm->max_length * hmmdata->prefix_lengths[curr_window->k - curr_window->length + 1] + 1 - 10)  ;
+      window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + gm->max_length * hmmdata->suffix_lengths[curr_window->k] - 1 + 10)  ;
+
+      curr_window->n = window_start;
+      curr_window->length = window_end - window_start + 1;
+    }
+    */
+    // merge overlapping windows, compressing list in place.
+    int new_hit_cnt = 0;
+    for (i=1; i<windowlist->count; i++) {
+      prev_window = windowlist->windows+new_hit_cnt;
+      curr_window = windowlist->windows+i;
+      if (curr_window->n <= prev_window->n + prev_window->length ) {
+        //merge windows
+        if (  curr_window->n + curr_window->length >  prev_window->n + prev_window->length )
+          prev_window->length = curr_window->n + curr_window->length - prev_window->n;
+
+      } else {
+        new_hit_cnt++;
+        windowlist->windows[new_hit_cnt] = windowlist->windows[i];
+      }
+    }
+    windowlist->count = new_hit_cnt+1;
+
+    if ( windowlist->windows[0].n  <  1)
+      windowlist->windows[0].n =  1;
+
+    if ( windowlist->windows[windowlist->count].n + windowlist->windows[windowlist->count].length - 1  >  L)
+      windowlist->windows[windowlist->count].length =  L - windowlist->windows[windowlist->count].n + 1;
 
   }
   return eslOK;
-  ERROR:
-  ESL_EXCEPTION(eslEMEM, "Error allocating memory for hit list\n");
 
 }
 /*------------------ end, p7_GMSV_longtarget() ------------------------*/
-
-
 
 
 /*****************************************************************

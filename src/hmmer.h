@@ -273,6 +273,20 @@ typedef struct p7_profile_s {
 } P7_PROFILE;
 
 
+/* This contains a compact representation of 8-bit bias-shifted scores for use in
+ * diagonal recovery (standard [MS]SV) and extension (standard and FM-[MS]SV),
+ * along with MAXL-associated prefix- and suffix-lengths, and optimal extensions
+ * for FM-MSV.
+ */
+typedef struct p7_msvdata_s {
+  int      M;
+  uint8_t  *scores;  //implicit M*K matrix, where M = # states, and K = # characters in alphabet
+  uint8_t    **opt_ext_fwd;
+  uint8_t    **opt_ext_rev;
+  uint8_t    *prefix_lengths;
+  uint8_t    *suffix_lengths;
+} P7_MSVDATA;
+
 /*****************************************************************
  * 3. P7_BG: a null (background) model.
  *****************************************************************/
@@ -829,18 +843,6 @@ typedef struct fm_metadata_s {
 } FM_METADATA;
 
 
-typedef struct fm_hmm_data_s {
-  int      M;
-  union {
-    float    **scores_f;   //M*K matrix, where M = # states, and K = # characters in alphabet
-    uint8_t  **scores_b;
-  } ;
-  float    **opt_ext_fwd;
-  float    **opt_ext_rev;
-  float    *prefix_lengths;
-  float    *suffix_lengths;
-} FM_HMMDATA;
-
 
 typedef struct fm_data_s {
   uint32_t N; //length of text
@@ -1096,7 +1098,9 @@ extern int p7_GHybrid      (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,    
 
 /* generic_msv.c */
 extern int p7_GMSV           (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float nu, float *ret_sc);
-extern int p7_GMSV_longtarget(const ESL_DSQ *dsq, int L,       P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, int **starts, int** ends, int *hit_cnt);
+extern int p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, FM_WINDOWLIST *windowlist, int do_biasfilter);
+extern P7_MSVDATA *p7_hmm_MSVDataCreate(P7_PROFILE *gm, P7_HMM *hmm, int do_opt_ext, float scale, int bias );
+extern void p7_hmm_MSVDataDestroy( P7_MSVDATA *data );
 
 /* generic_null2.c */
 extern int p7_GNull2_ByExpectation(const P7_PROFILE *gm, P7_GMX *pp, float *null2);
@@ -1321,9 +1325,9 @@ extern int p7_pli_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7
 extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
 extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
 extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
-extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, FM_HMMDATA *hmmdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx);
+extern int p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx);
 extern int p7_Pipeline_FM           (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
-                                     const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata);
+                                     const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata);
 
 
 
@@ -1455,8 +1459,6 @@ extern void fm_freeFM ( FM_DATA *fm, int isMainFM);
 extern uint8_t fm_getChar(uint8_t alph_type, int j, const uint8_t *B );
 extern int fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
 extern int fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
-extern FM_HMMDATA *fm_hmmdataCreate(P7_PROFILE *gm, P7_OPROFILE *om, P7_HMM *hmm);
-extern void fm_hmmdataDestroy(FM_HMMDATA *data );
 extern int fm_configAlloc(void **mem, FM_CFG **cfg);
 extern int fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_f, FM_INTERVAL *interval_bk);
 extern int fm_updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval);
@@ -1471,7 +1473,7 @@ extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
 
 /* fm_msv.c */
 extern int p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
-         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata,
+         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata,
          FM_WINDOWLIST *windowlist);
 
 

@@ -123,17 +123,17 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 
 #if p7_DEBUGGING
   if (ox->debugging)
-    { 
+  {
       uint8_t xB;
       xB = _mm_extract_epi16(xBv, 0);
       xJ = _mm_extract_epi16(xJv, 0);
       p7_omx_DumpMFRow(ox, 0, 0, 0, xJ, xB, xJ);
-    }
+  }
 #endif
 
 
   for (i = 1; i <= L; i++)
-    {
+  {
       rsc = om->rbv[dsq[i]];
       xEv = _mm_setzero_si128();      
 
@@ -143,16 +143,16 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
        */
       mpv = _mm_slli_si128(dp[Q-1], 1);   
       for (q = 0; q < Q; q++)
-	{
-	  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
-	  sv   = _mm_max_epu8(mpv, xBv);
-	  sv   = _mm_adds_epu8(sv, biasv);      
-	  sv   = _mm_subs_epu8(sv, *rsc);   rsc++;
-	  xEv  = _mm_max_epu8(xEv, sv);	
+      {
+        /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
+        sv   = _mm_max_epu8(mpv, xBv);
+        sv   = _mm_adds_epu8(sv, biasv);
+        sv   = _mm_subs_epu8(sv, *rsc);   rsc++;
+        xEv  = _mm_max_epu8(xEv, sv);
 
-	  mpv   = dp[q];   	  /* Load {MDI}(i-1,q) into mpv */
-	  dp[q] = sv;       	  /* Do delayed store of M(i,q) now that memory is usable */
-	}	  
+        mpv   = dp[q];   	  /* Load {MDI}(i-1,q) into mpv */
+        dp[q] = sv;       	  /* Do delayed store of M(i,q) now that memory is usable */
+      }
 
       /* test for the overflow condition */
       tempv = _mm_adds_epu8(xEv, biasv);
@@ -177,10 +177,10 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 
       /* immediately detect overflow */
       if (cmp != 0x0000)
-	{ 
-	  *ret_sc = eslINFINITY; 
-	  return eslERANGE; 
-	}
+      {
+        *ret_sc = eslINFINITY;
+        return eslERANGE;
+      }
 
       xEv = _mm_subs_epu8(xEv, tecv);
       xJv = _mm_max_epu8(xJv,xEv);
@@ -190,15 +190,15 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 	  
 #if p7_DEBUGGING
       if (ox->debugging)
-	{
-	  uint8_t xB, xE;
-	  xB = _mm_extract_epi16(xBv, 0);
-	  xE = _mm_extract_epi16(xEv, 0);
-	  xJ = _mm_extract_epi16(xJv, 0);
-	  p7_omx_DumpMFRow(ox, i, xE, 0, xJ, xB, xJ);   
-	}
+      {
+        uint8_t xB, xE;
+        xB = _mm_extract_epi16(xBv, 0);
+        xE = _mm_extract_epi16(xEv, 0);
+        xJ = _mm_extract_epi16(xJv, 0);
+        p7_omx_DumpMFRow(ox, i, xE, 0, xJ, xB, xJ);
+      }
 #endif
-    } /* end loop over sequence residues 1..L */
+  } /* end loop over sequence residues 1..L */
 
   xJ = (uint8_t) _mm_extract_epi16(xJv, 0);
 
@@ -255,7 +255,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const FM_HMMDATA *hmmdata, uint8_t sc_thresh, __m128i sc_threshv, FM_WINDOWLIST *windowlist)
+p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, uint8_t sc_thresh, __m128i sc_threshv, FM_WINDOWLIST *windowlist)
 {
 
   register __m128i mpv;            /* previous row values                                       */
@@ -292,7 +292,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   union { __m128i v; uint8_t b[16]; } u;
   uint8_t *scores = NULL;
 
-  ESL_ALLOC(scores, (1+16*Q) * sizeof(uint8_t) );
+  ESL_ALLOC(scores, ((om->abc->Kp)*Q) * sizeof(uint8_t) );
 
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
@@ -313,8 +313,8 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   xBv = _mm_subs_epu8(basev, tjbmv);
 
   for (i = 1; i <= L; i++) {
-	  rsc = om->rbv[dsq[i]];
-	  xEv = _mm_setzero_si128();
+    rsc = om->rbv[dsq[i]];
+    xEv = _mm_setzero_si128();
 
 	  /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12.
 	   * Because ia32 is littlendian, this means a left bit shift.
@@ -331,7 +331,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 		  mpv   = dp[q];   	  /* Load {MDI}(i-1,q) into mpv */
 		  dp[q] = sv;       	  /* Do delayed store of M(i,q) now that memory is usable */
 	  }
-
 
 	  /* test if the pthresh significance threshold has been reached;
 	   * note: don't use _mm_cmpgt_epi8, because it's a signed comparison, which won't work on uint8s */
@@ -355,16 +354,15 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
             rem_sc = scores[k];
           }
 	    }
+
 	    //recover the diagonal that hit threshold
 	    start = end;
 	    target_end = target_start = i;
 	    sc = rem_sc;
 	    while (rem_sc > om->base_b - om->tjb_b - om->tbm_b) {
-	      //printf("%d (%d)\n", rem_sc, om->bias_b -  hmmdata->s.scores_b[start][dsq[target_start]] );
-	      rem_sc -= om->bias_b -  hmmdata->scores_b[start][dsq[target_start]];
+	      rem_sc -= om->bias_b -  msvdata->scores[start*om->abc->Kp + dsq[target_start]];
 	      --start;
 	      --target_start;
-	      //if ( start == 0 || target_start==0)    break;
 	    }
 	    start++;
 	    target_start++;
@@ -377,7 +375,8 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	    max_sc = sc;
 	    pos_since_max = 0;
 	    while (k<om->M && n<=L) {
-	      sc += om->bias_b -  hmmdata->scores_b[start][dsq[n]];
+	      sc += om->bias_b -  msvdata->scores[start*om->abc->Kp + dsq[n]];
+
 	      if (sc >= max_sc) {
 	        max_sc = sc;
 	        max_end = n;
@@ -406,7 +405,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
 
   } /* end loop over sequence residues 1..L */
-
 
   free(scores);
   return eslOK;
@@ -461,7 +459,7 @@ ERROR:
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const FM_HMMDATA *hmmdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist, int do_biasfilter)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist, int do_biasfilter)
 {
 
 
@@ -530,7 +528,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
   if ( sc_thresh < jthresh) {
 
-    p7_SSVFilter_longtarget(dsq, L, om, ox, hmmdata, (uint8_t)sc_thresh, sc_threshv, windowlist);
+    p7_SSVFilter_longtarget(dsq, L, om, ox, msvdata, (uint8_t)sc_thresh, sc_threshv, windowlist);
 
   } else {
 
@@ -701,7 +699,6 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  } /* end loop over sequence residues 1..L */
   }
 
-
   //filter for biased composition here
   if ( windowlist->count > 0 ) {
 
@@ -722,8 +719,9 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       windowlist->count = j;
     }
 
-    //widen window
 
+
+    //widen window
     for (i=0; i<windowlist->count; i++) {
       curr_window = windowlist->windows+i;
 
@@ -732,15 +730,12 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 //      window_start = ESL_MAX( 1,   curr_window->n + curr_window->length - om->max_length) ;
 //      window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + om->max_length - 2);
 
-      window_start = ESL_MAX( 1,   curr_window->n - om->max_length * hmmdata->prefix_lengths[curr_window->k - curr_window->length + 1] + 1 - 10)  ;
-      window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + om->max_length * hmmdata->suffix_lengths[curr_window->k] - 1 + 10)  ;
+      window_start = ESL_MAX( 1,   curr_window->n - om->max_length * msvdata->prefix_lengths[curr_window->k - curr_window->length + 1] + 1 - 100)  ;
+      window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + om->max_length * msvdata->suffix_lengths[curr_window->k] - 1 + 100)  ;
 
 //      window_start = ESL_MAX( 1,   ( curr_window->n + curr_window->length )  - (om->max_length * hmmdata->prefix_lengths[curr_window->k ]) )  ;
 //      window_end   = ESL_MIN( L ,  ( curr_window->n )                        + (om->max_length * hmmdata->suffix_lengths[curr_window->k - curr_window->length + 1]))   ;
 
-
-
-//printf ("%d -> %d\n", window_start, window_end);
       curr_window->n = window_start;
       curr_window->length = window_end - window_start + 1;
     }
@@ -1170,11 +1165,11 @@ main(int argc, char **argv)
 
       if (esl_opt_GetBoolean(go, "-1"))
 	{
-	  printf("%-30s\t%-20s\t%9.2g\t%7.2f\t%9.2g\t%7.2f\n", sq->name, hmm->name, P, msvscore, gP, gscore);
+	  printf("%-30s  %-20s  %9.2g  %7.2f  %9.2g  %7.2f\n", sq->name, hmm->name, P, msvscore, gP, gscore);
 	}
       else if (esl_opt_GetBoolean(go, "-P"))
 	{ /* output suitable for direct use in profmark benchmark postprocessors: */
-	  printf("%g\t%.2f\t%s\t%s\n", P, msvscore, sq->name, hmm->name);
+	  printf("%g  %.2f  %s  %s\n", P, msvscore, sq->name, hmm->name);
 	}
       else
 	{

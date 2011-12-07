@@ -391,7 +391,7 @@ main(int argc, char *argv[]) {
 
   int max_block_size;
 
-
+  int namelengths;
   int numblocks = 0;
   uint32_t numseqs;
   int allocedseqs = 1000;
@@ -686,7 +686,7 @@ main(int argc, char *argv[]) {
       esl_fatal( "%s: Error writing meta data for FM index.\n", argv[0]);
   }
 
-  int namelengths = 0;
+  namelengths = 0;
 
   for (i=0; i<numseqs; i++)
     namelengths += meta->seq_data[i].name_length + 1;

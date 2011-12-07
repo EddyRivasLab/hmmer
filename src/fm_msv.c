@@ -179,7 +179,7 @@ FM_getPassingDiags(const FM_DATA *fmf, FM_CFG *fm_cfg,
 int
 FM_Recurse( int depth, int M, int fm_direction,
             const FM_DATA *fmf, const FM_DATA *fmb,
-            FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata,
+            FM_CFG *fm_cfg, const P7_MSVDATA *msvdata,
             int first, int last, float sc_threshFM,
             FM_DP_PAIR *dp_pairs,
             FM_INTERVAL *interval_1, FM_INTERVAL *interval_2,
@@ -189,7 +189,7 @@ FM_Recurse( int depth, int M, int fm_direction,
 {
 
 
-  float sc, next_score;
+  int sc, next_score;
 
   //int max_k;
   int c, i, k;
@@ -210,9 +210,9 @@ FM_Recurse( int depth, int M, int fm_direction,
           k = dp_pairs[i].pos - 1;
 
         if (dp_pairs[i].complementarity == fm_complement) {
-          next_score = fm_hmmdata->scores_f[k][ fm_getComplement(c,fm_cfg->meta->alph_type) ];
+          next_score = msvdata->scores[k*fm_cfg->meta->alph_size + fm_getComplement(c,fm_cfg->meta->alph_type) ];
         } else
-          next_score = fm_hmmdata->scores_f[k][c];
+          next_score = msvdata->scores[k*fm_cfg->meta->alph_size + c];
 
         sc = dp_pairs[i].score + next_score;
 
@@ -258,11 +258,11 @@ FM_Recurse( int depth, int M, int fm_direction,
                )
             || (dp_pairs[i].model_direction == fm_forward  &&
                    ( (k == M)                                                                                                          //can't extend anymore, 'cause we're at the end of the model, going forward
-                  || (depth > (fm_cfg->max_depth - 10) &&  sc + fm_hmmdata->opt_ext_fwd[k][fm_cfg->max_depth-depth-1] < sc_threshFM)   //can't hit threshold, even with best possible forward extension up to length ssv_req
+                  || (depth > (fm_cfg->max_depth - 10) &&  sc + msvdata->opt_ext_fwd[k][fm_cfg->max_depth-depth-1] < sc_threshFM)   //can't hit threshold, even with best possible forward extension up to length ssv_req
                   ))
             || (dp_pairs[i].model_direction == fm_backward &&
                    ( (k == 1)                                                                                                          //can't extend anymore, 'cause we're at the beginning of the model, going backwards
-                  || (depth > (fm_cfg->max_depth - 10) &&  sc + fm_hmmdata->opt_ext_rev[k][fm_cfg->max_depth-depth-1] < sc_threshFM )  //can't hit threshold, even with best possible extension up to length ssv_req
+                  || (depth > (fm_cfg->max_depth - 10) &&  sc + msvdata->opt_ext_rev[k][fm_cfg->max_depth-depth-1] < sc_threshFM )  //can't hit threshold, even with best possible extension up to length ssv_req
                   ))
          )
         {
@@ -308,7 +308,7 @@ FM_Recurse( int depth, int M, int fm_direction,
             continue;
 
         FM_Recurse(depth+1, M, fm_direction,
-                  fmf, fmb, fm_cfg, fm_hmmdata,
+                  fmf, fmb, fm_cfg, msvdata,
                   last+1, dppos, sc_threshFM, dp_pairs,
                   &interval_1_new, &interval_2_new,
                   seeds,
@@ -325,7 +325,7 @@ FM_Recurse( int depth, int M, int fm_direction,
             continue;
 
         FM_Recurse(depth+1, M, fm_direction,
-                  fmf, fmb, fm_cfg, fm_hmmdata,
+                  fmf, fmb, fm_cfg, msvdata,
                   last+1, dppos, sc_threshFM, dp_pairs,
                   &interval_1_new, NULL,
                   seeds,
@@ -346,7 +346,7 @@ FM_Recurse( int depth, int M, int fm_direction,
 int FM_getSeeds (const P7_OPROFILE *gm, P7_GMX *gx, float sc_threshFM,
                 FM_DIAGLIST *seeds,
                 const FM_DATA *fmf, const FM_DATA *fmb,
-                FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata )
+                FM_CFG *fm_cfg, const P7_MSVDATA *msvdata )
 {
   FM_INTERVAL interval_f1, interval_f2, interval_bk;
   //ESL_DSQ c;
@@ -385,7 +385,7 @@ int FM_getSeeds (const P7_OPROFILE *gm, P7_GMX *gx, float sc_threshFM,
     {
 
 
-      sc = fm_hmmdata->scores_f[k][i];
+      sc = msvdata->scores[k*fm_cfg->meta->alph_size + i];
       if (sc>0) { // we'll extend any positive-scoring diagonal
         if (k < gm->M-2) { // don't bother starting a forward diagonal so close to the end of the model
           //Forward pass on the FM-index
@@ -413,7 +413,7 @@ int FM_getSeeds (const P7_OPROFILE *gm, P7_GMX *gx, float sc_threshFM,
       }
 
 
-      sc = fm_hmmdata->scores_f[k][fm_getComplement(i, fm_cfg->meta->alph_type)];
+      sc = msvdata->scores[k*fm_cfg->meta->alph_size + fm_getComplement(i, fm_cfg->meta->alph_type)];
       if (sc>0) { // we'll extend any positive-scoring diagonal
 
         //forward on the FM, reverse on the model
@@ -448,7 +448,7 @@ int FM_getSeeds (const P7_OPROFILE *gm, P7_GMX *gx, float sc_threshFM,
     }
 
     FM_Recurse ( 2, gm->M, fm_forward,
-                fmf, fmb, fm_cfg, fm_hmmdata,
+                fmf, fmb, fm_cfg, msvdata,
                  0, fwd_cnt-1, sc_threshFM, dp_pairs_fwd,
                  &interval_f1, &interval_f2,
                  seeds
@@ -457,7 +457,7 @@ int FM_getSeeds (const P7_OPROFILE *gm, P7_GMX *gx, float sc_threshFM,
 
 
     FM_Recurse ( 2, gm->M, fm_backward,
-                fmf, fmb, fm_cfg, fm_hmmdata,
+                fmf, fmb, fm_cfg, msvdata,
                  0, rev_cnt-1, sc_threshFM, dp_pairs_rev,
                  &interval_bk, NULL,
                  seeds
@@ -483,7 +483,7 @@ ERROR:
 
 
 int
-FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CFG *cfg, float sc_thresh, ESL_SQ   *tmp_sq)
+FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const P7_MSVDATA *msvdata, FM_CFG *cfg, float sc_thresh, ESL_SQ   *tmp_sq)
 {
   //extend seed in both diagonal directions,
    // use n and k to store the beginning and end
@@ -500,12 +500,12 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CF
   if (diag->complementarity == fm_complement) {
     // complementary diagonal is reverse, so K is the last model position of the diag, not the first
     model_start      = ESL_MAX(1, diag->k - diag->length - cfg->msv_length + 1 + 1 );
-    model_end        = ESL_MIN(hmmdata->M, diag->k  - diag->length + cfg->msv_length ); //+1 and -1 cancel
+    model_end        = ESL_MIN(msvdata->M, diag->k  - diag->length + cfg->msv_length ); //+1 and -1 cancel
     target_start     = diag->n - (model_end - diag->k);
     target_end       = diag->n + (diag->k - model_start);
   } else {
     model_start      = ESL_MIN( diag->k, ESL_MAX(1, diag->k + diag->length - cfg->msv_length  )) ; //-1 and +1 cancel
-    model_end        = ESL_MIN(hmmdata->M, diag->k + cfg->msv_length - 1 );
+    model_end        = ESL_MIN(msvdata->M, diag->k + cfg->msv_length - 1 );
     target_start     = diag->n - (diag->k - model_start);
     target_end       = diag->n + (model_end - diag->k);
   }
@@ -526,7 +526,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CF
   for (  ; k <= model_end; k++, n++) {
       c = tmp_sq->dsq[n];
 
-      sc  += hmmdata->scores_f[k][c];
+      sc  += msvdata->scores[k*cfg->meta->alph_size + c];
       //printf ("%d: %.2f (%.2f)\n", k, sc, hmmdata->s.scores_f[k][c] );
 
       if (sc < 0) {
@@ -588,7 +588,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const FM_HMMDATA *hmmdata, FM_CF
  */
 int
 p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
-         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata,
+         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata,
          FM_WINDOWLIST *windowlist)
 {
   float P;
@@ -665,11 +665,11 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
 
 
   //get diagonals that score above sc_threshFM
-  FM_getSeeds(om, gx, sc_threshFM, &seeds, fmf, fmb, fm_cfg, fm_hmmdata);
+  FM_getSeeds(om, gx, sc_threshFM, &seeds, fmf, fmb, fm_cfg, msvdata);
 
   //now extend those diagonals to find ones scoring above sc_thresh
   for(i=0; i<seeds.count; i++) {
-    FM_extendSeed( seeds.diags+i, fmf, fm_hmmdata, fm_cfg, sc_thresh, tmp_sq);
+    FM_extendSeed( seeds.diags+i, fmf, msvdata, fm_cfg, sc_thresh, tmp_sq);
   }
 
 
@@ -715,8 +715,8 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
 
       if (tmp_id == -1) continue; // crosses over a barrier between sequences in the digital data structure
 
-      left_edge       = tmp_n  - fm_hmmdata->prefix_lengths[diag->k - diag->length + 1] + 1;
-      prev_right_edge = prev_n + fm_hmmdata->suffix_lengths[prev_k ] - 1;
+      left_edge       = tmp_n  - msvdata->prefix_lengths[diag->k - diag->length + 1] + 1;
+      prev_right_edge = prev_n + msvdata->suffix_lengths[prev_k ] - 1;
 
       if ( prev_n!=0 && tmp_id==prev_id && left_edge <= prev_right_edge ) { //we're close to the previous diagonal
 
@@ -773,8 +773,8 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
 //    int window_start = window->fm_n - om->max_length + fm_cfg->msv_length + 1;
 //    int window_end   = window->fm_n + window->length + om->max_length - fm_cfg->msv_length - 1;
 
-    int window_start = window->fm_n - (om->max_length * fm_hmmdata->prefix_lengths[window->k]) - 10;
-    int window_end   = window->fm_n + window->length + (om->max_length * fm_hmmdata->suffix_lengths[window->k + window->length - 1])  + 10;
+    int window_start = window->fm_n - (om->max_length * msvdata->prefix_lengths[window->k]) - 100;
+    int window_end   = window->fm_n + window->length + (om->max_length * msvdata->suffix_lengths[window->k + window->length - 1])  + 100;
 
     window->length    = window_end - window_start + 1;
     window->n        -= (window->fm_n - window_start)  - 1 ; // final -1 to shift n up one, accounting for difference between 0-based fm-index and 1-based DSQ
