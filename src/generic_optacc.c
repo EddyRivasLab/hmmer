@@ -265,7 +265,7 @@ select_m(const P7_PROFILE *gm, const P7_GMX *gx, int i, int k)
   int   state[4] = { p7T_M, p7T_I, p7T_D, p7T_B };
 
   path[0] = TSCDELTA(p7P_MM, k-1) * MMX(i-1,k-1);
-  path[1] = TSCDELTA(p7P_MM, k-1) * IMX(i-1,k-1);
+  path[1] = TSCDELTA(p7P_IM, k-1) * IMX(i-1,k-1);
   path[2] = TSCDELTA(p7P_DM, k-1) * DMX(i-1,k-1);
   path[3] = TSCDELTA(p7P_BLM, k-1) * XMX(i-1,p7G_B);
   return state[esl_vec_FArgMax(path, 4)];

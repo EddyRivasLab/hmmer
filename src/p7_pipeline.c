@@ -1071,7 +1071,7 @@ ERROR:
  * Xref:      J4/25.
  */
 int
-p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, FM_HMMDATA *hmmdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx)
+p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx)
 {
   int              i;
   int status;
@@ -1103,7 +1103,9 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, FM_HMMDATA *hmmdata, P
    * This variant of MSV will scan a long sequence and find
    * short high-scoring regions.
    */
-  p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, hmmdata, bg, pli->F1, &windowlist, pli->do_biasfilter);
+  p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, msvdata, bg, pli->F1, &windowlist, pli->do_biasfilter);
+
+
 
   tmpseq = esl_sq_CreateDigital(sq->abc);
   for (i=0; i<windowlist.count; i++){
@@ -1182,7 +1184,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, FM_HMMDATA *hmmdata, P
  */
 int
 p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
-    const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const FM_HMMDATA *fm_hmmdata)
+    const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata)
 {
 
   int i;
@@ -1213,7 +1215,7 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
    * short high-scoring regions.
    * */
   p7_FM_MSV(om, (P7_GMX*)(pli->oxf), 2.0, bg, pli->F1,
-             fmf, fmb, fm_cfg, fm_hmmdata, &windowlist );
+             fmf, fmb, fm_cfg, msvdata, &windowlist );
 
   for (i=0; i<windowlist.count; i++){
 

@@ -43,7 +43,7 @@ typedef struct {
   P7_TOPHITS       *th;          /* top hit results                         */
   P7_OPROFILE      *om;          /* optimized query profile                 */
   FM_CFG           *fm_cfg;      /* global data for FM-index for fast MSV */
-  FM_HMMDATA       *fm_hmmdata;  /* hmm-specific data for FM-index for fast MSV */
+  P7_MSVDATA       *msvdata;     /* hmm-specific data for FM-index for fast MSV */
 } WORKER_INFO;
 
 #define REPOPTS     "-E,-T,--cut_ga,--cut_nc,--cut_tc"
@@ -339,6 +339,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   P7_HMMFILE      *hfp      = NULL;              /* open input HMM file                             */
   P7_HMM          *hmm      = NULL;              /* one HMM query                                   */
+  P7_MSVDATA      *msvdata  = NULL;
   /*either the two above or ones below will be used*/
   //int              qhformat  = eslSQFILE_UNKNOWN;  /* format of qfile                                  */
   //ESL_SQFILE      *qfp      = NULL;          /* open qfile                                       */
@@ -358,11 +359,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              sstatus  = eslOK;
   int              i;
 
+
+
   /* these variables are only used if db type is FM-index*/
   void        *fm_cfg_mem      = NULL; //used to ensure cfg is 16-byte aligned, which matters since, for sse/vmx implementations, elements within cfg need to be aligned thusly
   FM_CFG      *fm_cfg       = NULL;
   FM_METADATA *fm_meta      = NULL;
-  FM_HMMDATA  *fm_hmmdata   = NULL;
   fpos_t       fm_basepos;
   /* end FM-index-specific variables */
 
@@ -531,10 +533,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_profile_ConfigLocal(gm, hmm, info->bg, 100); /* 100 is a dummy length for now; and MSVFilter requires local mode */
       p7_oprofile_Convert(gm, om);                    /* <om> is now p7_LOCAL, multihit */
 
-      if (dbformat == eslSQFILE_FMINDEX)
-        fm_hmmdata = fm_hmmdataCreate(gm, NULL, hmm);
-      else
-        fm_hmmdata = fm_hmmdataCreate(gm, om, hmm);
+#ifdef P7_IMPL_DUMMY_INCLUDED
+      msvdata = NULL;  // This is a hack to get dummy to compile. It'll go away when we drop the dummy implementation (soon)
+#else
+      msvdata = p7_hmm_MSVDataCreate(gm, hmm, FALSE, om->scale_b, om->bias_b);
+#endif
 
       for (i = 0; i < infocnt; ++i) {
           /* Create processing pipeline and hit list */
@@ -544,7 +547,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
           info[i].pli->single_strand = esl_opt_IsUsed(go, "--single");
           info[i].fm_cfg = fm_cfg;
-          info[i].fm_hmmdata = fm_hmmdata;
+          info[i].msvdata = msvdata;
 #ifdef HMMER_THREADS
           if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
 #endif
@@ -642,7 +645,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           esl_msa_Destroy(msa);
       }
 
-      fm_hmmdataDestroy(fm_hmmdata);
+      p7_hmm_MSVDataDestroy(msvdata);
 
       p7_pipeline_Destroy(info->pli);
       p7_tophits_Destroy(info->th);
@@ -731,7 +734,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
       info->pli->nres -= dbsq->C; // to account for overlapping region of windows
       prev_hit_cnt = info->th->N;
 
-      p7_Pipeline_LongTarget(info->pli, info->om, info->fm_hmmdata, info->bg, dbsq, info->th, info->pli->nseqs);
+      p7_Pipeline_LongTarget(info->pli, info->om, info->msvdata, info->bg, dbsq, info->th, info->pli->nseqs);
 
       p7_pipeline_Reuse(info->pli); // prepare for next search
 
@@ -755,7 +758,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
           prev_hit_cnt = info->th->N;
           esl_sq_Copy(dbsq,dbsq_revcmp);
           esl_sq_ReverseComplement(dbsq_revcmp);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->fm_hmmdata, info->bg, dbsq_revcmp, info->th, info->pli->nseqs);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->msvdata, info->bg, dbsq_revcmp, info->th, info->pli->nseqs);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (i=prev_hit_cnt; i < info->th->N ; i++) {
@@ -812,7 +815,7 @@ serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp)
     fmb.T  = fmf.T;
 
     wstatus = p7_Pipeline_FM(info->pli, info->om, info->bg, info->th, info->pli->nseqs,
-        &fmf, &fmb, info->fm_cfg, info->fm_hmmdata);
+        &fmf, &fmb, info->fm_cfg, info->msvdata);
     if (wstatus != eslOK) return wstatus;
 
   }
@@ -954,7 +957,7 @@ pipeline_thread(void *arg)
       info->pli->nres -= dbsq->C; // to account for overlapping region of windows
 
       prev_hit_cnt = info->th->N;
-      p7_Pipeline_LongTarget(info->pli, info->om, info->fm_hmmdata, info->bg, dbsq, info->th, block->first_seqidx + i);
+      p7_Pipeline_LongTarget(info->pli, info->om, info->msvdata, info->bg, dbsq, info->th, block->first_seqidx + i);
       p7_pipeline_Reuse(info->pli); // prepare for next search
 
 
@@ -977,7 +980,7 @@ pipeline_thread(void *arg)
       {
           prev_hit_cnt = info->th->N;
           esl_sq_ReverseComplement(dbsq);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->fm_hmmdata, info->bg, dbsq, info->th, block->first_seqidx + i);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->msvdata, info->bg, dbsq, info->th, block->first_seqidx + i);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (j=prev_hit_cnt; j < info->th->N ; ++j) {
