@@ -55,7 +55,7 @@ static ESL_OPTIONS options[] = {
   { "--uni",     eslARG_NONE,    FALSE, NULL, NULL, "--multi,--uni",           NULL,   NULL, "unihit config",                             4 },
 
   { "--generic", eslARG_NONE,"default", NULL, NULL, "--generic,--vector",      NULL,   NULL, "use generic DP code (full accuracy; slow)", 5 },
-  { "--vector",  eslARG_NONE,"  FALSE", NULL, NULL, "--generic,--vector",      NULL,   NULL, "use vector DP code (fast; less precision)", 5 },
+  { "--vector",  eslARG_NONE,   FALSE,  NULL, NULL, "--generic,--vector",      NULL,   NULL, "use vector DP code (fast; less precision)", 5 },
 
   { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "direct output to file <f>, not stdout",             6 },
   { "--afile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL, "-a",  NULL, "output alignment lengths to file <f>",              6 },
@@ -86,6 +86,7 @@ static ESL_OPTIONS options[] = {
   { "--x-no-lengthmodel", eslARG_NONE, FALSE,NULL,NULL, NULL,  NULL, NULL, "turn the H3 length model off",                      10 },
   { "--nu",      eslARG_REAL,   "2.0", NULL, NULL,     NULL,"--msv","--fast", "set nu parameter (# expected HSPs) for GMSV",    10 },  
   { "--pthresh", eslARG_REAL,   "0.02",NULL, NULL,     NULL,"--ffile", NULL, "set P-value threshold for --ffile",               10 },  
+  { "--xmax",    eslARG_REAL,   FALSE, NULL, NULL,      NULL, "--pfile", NULL, "plot fitted survival plots out to here on x-axis", 10 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -863,10 +864,12 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
 	fprintf(cfg->ofp, "\n");
 
       if (cfg->survfp != NULL) {
+	double xmax = esl_opt_IsOn(go, "--xmax") ? esl_opt_GetReal(go, "--xmax") : h->xmax + 5.;
+
 	esl_histogram_PlotSurvival(cfg->survfp, h);
-	esl_gumbel_Plot(cfg->survfp, pmu,   plambda,  esl_gumbel_surv, h->xmin - 5., h->xmax + 5., 0.1);
-	esl_gumbel_Plot(cfg->survfp, mu,    lambda,   esl_gumbel_surv, h->xmin - 5., h->xmax + 5., 0.1);
-	esl_gumbel_Plot(cfg->survfp, mufix, 0.693147, esl_gumbel_surv, h->xmin - 5., h->xmax + 5., 0.1);
+	esl_gumbel_Plot(cfg->survfp, pmu,   plambda,  esl_gumbel_surv, h->xmin - 5., xmax, 0.1);
+	esl_gumbel_Plot(cfg->survfp, mu,    lambda,   esl_gumbel_surv, h->xmin - 5., xmax, 0.1);
+	esl_gumbel_Plot(cfg->survfp, mufix, 0.693147, esl_gumbel_surv, h->xmin - 5., xmax, 0.1);
       }
 
       if (cfg->efp != NULL) {
@@ -917,10 +920,12 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
 
       if (cfg->survfp) 
 	{
+	  double xmax = esl_opt_IsOn(go, "--xmax") ? esl_opt_GetReal(go, "--xmax") : h->xmax + 5.;
+
 	  esl_histogram_PlotSurvival(cfg->survfp, h);
-	  esl_exp_Plot(cfg->survfp, pmu,  plambda, esl_exp_surv, pmu, h->xmax + 5., 0.1);
-	  esl_exp_Plot(cfg->survfp, tau,   lambda, esl_exp_surv, tau, h->xmax + 5., 0.1);
-	  esl_exp_Plot(cfg->survfp, tau, 0.693147, esl_exp_surv, tau, h->xmax + 5., 0.1);
+	  esl_exp_Plot(cfg->survfp, pmu,  plambda, esl_exp_surv, pmu, xmax, 0.1);
+	  esl_exp_Plot(cfg->survfp, tau,   lambda, esl_exp_surv, tau, xmax, 0.1);
+	  esl_exp_Plot(cfg->survfp, tau, 0.693147, esl_exp_surv, tau, xmax, 0.1);
 	}
 
       if (cfg->efp != NULL) {
