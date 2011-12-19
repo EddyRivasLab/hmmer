@@ -834,8 +834,6 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
   int          status  = eslOK;
   int          sstatus = eslOK;
   int          eofCount = 0;
-  int          use_tmpsq = FALSE;
-  ESL_SQ       *tmpsq   =  esl_sq_CreateDigital(info->om->abc);
   ESL_SQ_BLOCK *block;
   void         *newBlock;
   int i;
@@ -853,31 +851,15 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
       block = (ESL_SQ_BLOCK *) newBlock;
 
       //reset block as an empty vessel
-      for (i=0; i<block->count; i++)
+      if (block->complete) // don't want to reset the first sequence if it's about to be used to set the prefix for the next read.
+        esl_sq_Reuse(block->list + 0);
+      for (i=1; i<block->count; i++)
           esl_sq_Reuse(block->list + i);
-
-      if (use_tmpsq) {
-          esl_sq_Copy(tmpsq , block->list);
-          block->complete = FALSE;  //this lets ReadBlock know that it needs to append to a small bit of previously-read seqeunce
-          block->list->C = info->om->max_length; // overload the ->C value, which ReadBlock uses to determine how much
-                                                 // overlap should be retained in the ReadWindow step
-      }
 
       sstatus = esl_sqio_ReadBlock(dbfp, block, NHMMER_MAX_RESIDUE_COUNT, TRUE);
 
-      if (block->complete || block->count == 0) {
-          use_tmpsq = FALSE;
-      } else {
-          /* the final sequence on the block was a probably-incomplete window of the active sequence,
-           * so capture a copy of that window to use as a template on which the next ReadWindow() call
-           * (internal to ReadBlock) will be based
-           */
-          esl_sq_Copy(block->list + (block->count - 1) , tmpsq);
-          use_tmpsq = TRUE;
-      }
-
       block->first_seqidx = info->pli->nseqs;
-      info->pli->nseqs += block->count - (use_tmpsq ? 1 : 0);// if there's an incomplete sequence read into the block wait to count it until it's complete.
+      info->pli->nseqs += block->count  - (block->complete ? 0 : 1);// if there's an incomplete sequence read into the block wait to count it until it's complete.
       if (sstatus == eslEOF) {
           if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
           ++eofCount;
@@ -886,17 +868,25 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
       if (sstatus == eslOK) {
           status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
           if (status != eslOK) esl_fatal("Work queue reader failed");
-      }
 
-      //newBlock needs all this information so the next ReadBlock call will know what to do
-      ((ESL_SQ_BLOCK *)newBlock)->complete = block->complete;
-      if (!block->complete) {
-          // the final sequence on the block was a probably-incomplete window of the active sequence,
-          // so prep the next block to read in the next window
-          esl_sq_Copy(block->list + (block->count - 1) , ((ESL_SQ_BLOCK *)newBlock)->list);
-          ((ESL_SQ_BLOCK *)newBlock)->list->C = info->om->max_length;
-      }
+          //newBlock needs all this information so the next ReadBlock call will know what to do
+          ((ESL_SQ_BLOCK *)newBlock)->complete = block->complete;
+          if (!block->complete) {
+              // the final sequence on the block was an incomplete window of the active sequence,
+              // so prep the next block to read in the next window
+              esl_sq_Copy(block->list + (block->count - 1) , ((ESL_SQ_BLOCK *)newBlock)->list);
+//              ((ESL_SQ_BLOCK *)newBlock)->list->C = ESL_MIN( info->om->max_length, ((ESL_SQ_BLOCK *)newBlock)->list->n);
 
+              if (  ((ESL_SQ_BLOCK *)newBlock)->list->n < info->om->max_length ) {
+                //no reason to search the final partial sequence on the block, as the next block will search this whole chunk
+                ((ESL_SQ_BLOCK *)newBlock)->list->C = ((ESL_SQ_BLOCK *)newBlock)->list->n;
+                (((ESL_SQ_BLOCK *)newBlock)->count)--;
+              } else {
+                ((ESL_SQ_BLOCK *)newBlock)->list->C = info->om->max_length;
+              }
+
+          }
+      }
   }
 
   status = esl_workqueue_ReaderUpdate(queue, block, NULL);
@@ -907,8 +897,6 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
       esl_threads_WaitForFinish(obj);
       esl_workqueue_Complete(queue);  
     }
-
-  if (tmpsq) esl_sq_Destroy(tmpsq);
 
   return sstatus;
 }
@@ -947,7 +935,7 @@ pipeline_thread(void *arg)
   /* loop until all blocks have been processed */
   block = (ESL_SQ_BLOCK *) newBlock;
   while (block->count > 0)
-    {
+  {
       /* Main loop: */
       for (i = 0; i < block->count; ++i)
     {
@@ -1006,7 +994,7 @@ pipeline_thread(void *arg)
       if (status != eslOK) esl_fatal("Work queue worker failed");
 
       block = (ESL_SQ_BLOCK *) newBlock;
-    }
+  }
 
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
   if (status != eslOK) esl_fatal("Work queue worker failed");

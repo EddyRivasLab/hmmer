@@ -42,7 +42,7 @@ hit_sorter(const void *a, const void *b)
 
 }
 
-int
+static int
 mergeSeeds(FM_DIAGLIST *seeds, int N, int msv_length) {
   int i;
   int j = 0;
@@ -118,7 +118,7 @@ mergeSeeds(FM_DIAGLIST *seeds, int N, int msv_length) {
 
 }
 
-uint32_t
+static uint32_t
 FM_backtrackSeed(const FM_DATA *fmf, FM_CFG *fm_cfg, int i, FM_DIAG *seed) {
   int j = i;
   int len = 0;
@@ -135,7 +135,7 @@ FM_backtrackSeed(const FM_DATA *fmf, FM_CFG *fm_cfg, int i, FM_DIAG *seed) {
 
 }
 
-int
+static int
 FM_getPassingDiags(const FM_DATA *fmf, FM_CFG *fm_cfg,
             int k, int M, float sc, int depth, int fm_direction,
             int model_direction, int complementarity,
@@ -176,7 +176,7 @@ FM_getPassingDiags(const FM_DATA *fmf, FM_CFG *fm_cfg,
 }
 
 
-int
+static int
 FM_Recurse( int depth, int M, int fm_direction,
             const FM_DATA *fmf, const FM_DATA *fmb,
             FM_CFG *fm_cfg, const P7_MSVDATA *msvdata,
@@ -343,7 +343,7 @@ FM_Recurse( int depth, int M, int fm_direction,
 }
 
 
-int FM_getSeeds (const P7_OPROFILE *gm, P7_GMX *gx, float sc_threshFM,
+static int FM_getSeeds (const P7_OPROFILE *gm, P7_GMX *gx, float sc_threshFM,
                 FM_DIAGLIST *seeds,
                 const FM_DATA *fmf, const FM_DATA *fmb,
                 FM_CFG *fm_cfg, const P7_MSVDATA *msvdata )
@@ -482,7 +482,7 @@ ERROR:
 
 
 
-int
+static int
 FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const P7_MSVDATA *msvdata, FM_CFG *cfg, float sc_thresh, ESL_SQ   *tmp_sq)
 {
   //extend seed in both diagonal directions,

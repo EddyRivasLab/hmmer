@@ -1098,14 +1098,11 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
    * that we would miss if we left length parameters set to the full target length */
   p7_oprofile_ReconfigMSVLength(om, om->max_length);
 
-
   /* First level filter: the MSV filter, multihit with <om>.
    * This variant of MSV will scan a long sequence and find
    * short high-scoring regions.
    */
   p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, msvdata, bg, pli->F1, &windowlist, pli->do_biasfilter);
-
-
 
   tmpseq = esl_sq_CreateDigital(sq->abc);
   for (i=0; i<windowlist.count; i++){
@@ -1272,37 +1269,44 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
   fprintf(ofp, "-------------------------------------\n");
   if (pli->mode == p7_SEARCH_SEQS) {
     fprintf(ofp,   "Query model(s):      %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
-    fprintf(ofp,   "Target sequences:    %15" PRId64 "  (%" PRId64 " residues)\n",  pli->nseqs,   pli->nres);
+    fprintf(ofp,   "Target sequences:    %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
     ntargets = pli->nseqs;
   } else {
-    fprintf(ofp, "Query sequence(s):           %15" PRId64 "  (%" PRId64 " residues)\n",  pli->nseqs,   pli->nres);
+    fprintf(ofp, "Query sequence(s):           %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
     fprintf(ofp, "Target model(s):             %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
     ntargets = pli->nmodels;
   }
 
   if (pli->long_targets) {
-
-      fprintf(ofp, "Windows passing MSV filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          pli->n_past_msv,
+      fprintf(ofp, "Residues passing MSV filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
+      //fprintf(ofp, "Windows passing MSV filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
+          //pli->n_past_msv,
+          pli->pos_past_msv,
           (double)pli->pos_past_msv / pli->nres ,
           pli->F1);
 
-      fprintf(ofp, "Windows passing bias filter:  %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          pli->n_past_bias,
+      fprintf(ofp, "Residues passing bias filter:  %15" PRId64 "  (%.3g); expected (%.3g)\n",
+      //fprintf(ofp, "Windows passing bias filter:  %15" PRId64 "  (%.4g); expected (%.4g)\n",
+          //pli->n_past_bias,
+          pli->pos_past_bias,
           (double)pli->pos_past_bias / pli->nres ,
           pli->F1);
 
-      fprintf(ofp, "Windows passing Vit filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          pli->n_past_vit,
+      fprintf(ofp, "Residues passing Vit filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
+      //fprintf(ofp, "Windows passing Vit filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
+          //pli->n_past_vit,
+          pli->pos_past_vit,
           (double)pli->pos_past_vit / pli->nres ,
           pli->F2);
 
-      fprintf(ofp, "Windows passing Fwd filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          pli->n_past_fwd,
+      fprintf(ofp, "Residues passing Fwd filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
+      //fprintf(ofp, "Windows passing Fwd filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
+          //pli->n_past_fwd,
+          pli->pos_past_fwd,
           (double)pli->pos_past_fwd / pli->nres ,
           pli->F3);
 
-      fprintf(ofp, "Total hits:                   %15d  (%.4g)\n",
+      fprintf(ofp, "Total number of hits:          %15d  (%.3g)\n",
           (int)pli->n_output,
           (double)pli->pos_output / pli->nres );
 
