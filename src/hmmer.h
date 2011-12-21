@@ -13,12 +13,13 @@
  *    9. P7_ALIDISPLAY:  an alignment formatted for printing
  *   10. P7_DOMAINDEF:   reusably managing workflow in annotating domains
  *   11. P7_TOPHITS:     ranking lists of top-scoring hits
- *   12. FM:             FM-index
- *   13. Inclusion of the architecture-specific optimized implementation.
- *   14. P7_PIPELINE:    H3's accelerated seq/profile comparison pipeline
- *   15. P7_BUILDER:     configuration options for new HMM construction.
- *   16. Declaration of functions in HMMER's exposed API.
- *   17. Copyright and license information.
+ *   12. P7_MSVDATA:     data used in diagonal recovery and extension
+ *   13. FM:             FM-index
+ *   14. Inclusion of the architecture-specific optimized implementation.
+ *   15. P7_PIPELINE:    H3's accelerated seq/profile comparison pipeline
+ *   16. P7_BUILDER:     configuration options for new HMM construction.
+ *   17. Declaration of functions in HMMER's exposed API.
+ *   18. Copyright and license information.
  *   
  * Also, see impl_{sse,vmx}/impl_{sse,vmx}.h for additional API
  * specific to the acceleration layer; in particular, the P7_OPROFILE
@@ -84,6 +85,7 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 
 /* Option flags when creating faux traces with p7_trace_FauxFromMSA() */
 #define p7_MSA_COORDS	       (1<<0) /* default: i = unaligned seq residue coords     */
+
 
 /*****************************************************************
  * 1. P7_HMM: a core model.
@@ -273,19 +275,6 @@ typedef struct p7_profile_s {
 } P7_PROFILE;
 
 
-/* This contains a compact representation of 8-bit bias-shifted scores for use in
- * diagonal recovery (standard [MS]SV) and extension (standard and FM-[MS]SV),
- * along with MAXL-associated prefix- and suffix-lengths, and optimal extensions
- * for FM-MSV.
- */
-typedef struct p7_msvdata_s {
-  int      M;
-  uint8_t  *scores;  //implicit M*K matrix, where M = # states, and K = # characters in alphabet
-  uint8_t    **opt_ext_fwd;
-  uint8_t    **opt_ext_rev;
-  uint8_t    *prefix_lengths;
-  uint8_t    *suffix_lengths;
-} P7_MSVDATA;
 
 /*****************************************************************
  * 3. P7_BG: a null (background) model.
@@ -395,6 +384,7 @@ typedef struct p7_trace_s {
   int   ndomalloc;	/* current allocated size of these stacks            */
 
 } P7_TRACE;
+
 
 
 /*****************************************************************
@@ -565,6 +555,7 @@ typedef struct p7_spensemble_s {
   int                  nsigc;	    /* number of "significant" clusters, domains            */
   int                  nsigc_alloc; /* current allocated max for nsigc                      */
 } P7_SPENSEMBLE;
+
 
 
 /*****************************************************************
@@ -759,8 +750,30 @@ typedef struct p7_tophits_s {
 
 
 
+
+
 /*****************************************************************
- * 12. FM:  FM-index implementation (architecture-specific code found in impl_**)
+ * 12. P7_MSVDATA: data used in diagonal recovery and extension
+ *****************************************************************/
+
+/* This contains a compact representation of 8-bit bias-shifted scores for use in
+ * diagonal recovery (standard [MS]SV) and extension (standard and FM-[MS]SV),
+ * along with MAXL-associated prefix- and suffix-lengths, and optimal extensions
+ * for FM-MSV.
+ */
+typedef struct p7_msvdata_s {
+  int      M;
+  uint8_t  *scores;  //implicit M*K matrix, where M = # states, and K = # characters in alphabet
+  uint8_t    **opt_ext_fwd;
+  uint8_t    **opt_ext_rev;
+  uint8_t    *prefix_lengths;
+  uint8_t    *suffix_lengths;
+} P7_MSVDATA;
+
+
+
+/*****************************************************************
+ * 13. FM:  FM-index implementation (architecture-specific code found in impl_**)
  *****************************************************************/
 // fm.c
 
@@ -906,7 +919,7 @@ typedef struct fm_window_list_s {
 
 
 /*****************************************************************
- * 13. The optimized implementation.
+ * 14. The optimized implementation.
  *****************************************************************/
 #if   defined (p7_IMPL_SSE)
 #include "impl_sse/impl_sse.h"
@@ -916,9 +929,8 @@ typedef struct fm_window_list_s {
 #include "impl_dummy/impl_dummy.h"
 #endif
 
-
 /*****************************************************************
- * 14. P7_PIPELINE: H3's accelerated seq/profile comparison pipeline
+ * 15. P7_PIPELINE: H3's accelerated seq/profile comparison pipeline
  *****************************************************************/
 
 enum p7_pipemodes_e { p7_SEARCH_SEQS = 0, p7_SCAN_MODELS = 1 };
@@ -1002,7 +1014,7 @@ typedef struct p7_pipeline_s {
 
 
 /*****************************************************************
- * 15. P7_BUILDER: pipeline for new HMM construction
+ * 16. P7_BUILDER: pipeline for new HMM construction
  *****************************************************************/
 
 #define p7_DEFAULT_WINDOW_BETA  1e-7
@@ -1060,7 +1072,7 @@ typedef struct p7_builder_s {
 
 
 /*****************************************************************
- * 16. Routines in HMMER's exposed API.
+ * 17. Routines in HMMER's exposed API.
  *****************************************************************/
 
 /* build.c */
