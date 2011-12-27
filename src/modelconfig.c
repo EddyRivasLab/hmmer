@@ -273,8 +273,8 @@ p7_profile_SetLength(P7_PROFILE *gm, int L)
  * correction for match state occupancy probability [Eddy08]:
  *    L->Mk = occ[k] /( \sum_i occ[i] * (M-i+1))
  *    
- * and we store these params off-by-one, with tBLMk stored in TSC(gm,
- * k-1, p7P_BLM), for DP efficiency reasons.
+ * and we store these params off-by-one, with tLMk stored in TSC(gm,
+ * k-1, p7P_LM), for DP efficiency reasons.
  * 
  * We need space for an M+1 occ[k] array of match occupancy.  We save
  * a malloc by using gm->rsc[0]'s space, which we know is >= M+1, and
@@ -293,7 +293,7 @@ set_local_entry(P7_PROFILE *gm, const P7_HMM *hmm)
   for (k = 1; k <= hmm->M; k++) 
     Z += occ[k] * (float) (hmm->M-k+1);
   for (k = 1; k <= hmm->M; k++) 
-    P7P_TSC(gm, k-1, p7P_BLM) = logf(occ[k] / Z); /* note off-by-one: entry at Mk stored as [k-1][BM] */
+    P7P_TSC(gm, k-1, p7P_LM) = logf(occ[k] / Z); /* note off-by-one: entry at Mk stored as [k-1][BM] */
   return eslOK;
 }
 
@@ -311,7 +311,7 @@ set_local_entry(P7_PROFILE *gm, const P7_HMM *hmm)
  *   tBGM1 = log(G->M1)
  *   tBGMk = B->G, B->D1..Dk-1->Mk = log t(G->D1) + \sum_j=1.k-2 log t(Dj->Dj+1) + log t(Dk-1 -> Mk)
  * and for technical/efficiency reasons, these params are stored
- * off-by-one in the profile: BGMk is stored at TSC(k-1, p7P_BGM).
+ * off-by-one in the profile: tGMk is stored at TSC(k-1, p7P_GM).
  * 
  * pedantic nit: as drawn, a glocal multihit model has a mute cycle
  * G->D1...Dm->E->J->B->G. Mute cycles aren't allowed in HMMs. Our DP
@@ -329,12 +329,12 @@ set_glocal_entry(P7_PROFILE *gm, const P7_HMM *hmm)
   float Z;   
   int   k;
 
-  /* Wing-retracted parameterization stored in tsc(k,p7P_BGM) off-by-one (BGMk stored at k-1, p7P_BGM) */
-  P7P_TSC(gm, 0, p7P_BGM) = gm->xsc[p7P_G][0];        
-  Z                       = gm->xsc[p7P_G][1];
+  /* Wing-retracted parameterization stored in tsc(k,p7P_GM) off-by-one (tGMk stored at k-1, p7P_GM) */
+  P7P_TSC(gm, 0, p7P_GM) = gm->xsc[p7P_G][0];        
+  Z                      = gm->xsc[p7P_G][1];
   for (k = 1; k < hmm->M; k++) 
     {
-      P7P_TSC(gm, k, p7P_BGM) = Z + logf(hmm->t[k][p7H_DM]);
+      P7P_TSC(gm, k, p7P_GM) = Z + logf(hmm->t[k][p7H_DM]);
       Z += logf(hmm->t[k][p7H_DD]);
     }
   return eslOK;

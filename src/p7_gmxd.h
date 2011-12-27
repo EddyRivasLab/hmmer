@@ -29,18 +29,34 @@
 #define p7GD_G  5
 #define p7GD_C  6
 
+
+/* Layout of each row dp[i] of the P7_GMXD dynamic programming matrix:
+ * dp[i]:   [ML MG IL IG DL DG] [ML MG IL IG DL DG] [ML MG IL IG DL DG]  ...  [ML MG IL IG DL DG]  [E  N  J  B  L  G  C]
+ *     k:   |------- 0 -------| |------- 1 -------| |------- 2 -------|  ...  |------- M -------|  
+ *          |--------------------------------- (M+1)*p7GD_NSCELLS ------------------------------|  |--- p7GD_NXCELLS --|
+ * Initializations: * = -inf, . = calculated value, 0 = 0:
+ *     0:    *  *  *  *  *  *    *  *  *  *  *  *    *  *  *  *  *  *          *  *  *  *  *  *     *  0  *  .  .  .  *
+ *     i:    *  *  *  *  *  *    .  .  .  .  *  .    .  .  .  .  .  .          .  .  *  *  .  .     .  .  .  .  .  .  .
+ * Access:
+ *  Row dp[r]:                     gxd->dp_mem+(r*allocW) = dpc
+ *  Main state s at node k={0..M}: dpc[k*p7GD_NSCELLS+s]   
+ *  Special state s={ENJBLGC}:     dpc[(M+1)*p7GD_NSCELLS+s]
+ */
 typedef struct p7_gmxd_s {
-  int      M;
-  int      L; 
+  int      M;	     /* current DP matrix values valid for model of length M   */
+  int      L;	     /* current DP matrix values valid for seq of length L     */
 
-  float   *dp_mem;
-  int64_t  allocN;
+  float   *dp_mem;   /* matrix memory available. dp[i] rows point into this    */
+  int64_t  allocN;   /* # DP cells (floats) allocated. allocN >= allocR*allocW */
 
-  float  **dp;
-  int      allocR;
-  int      allocW;
-  int      validR;
+  float  **dp;	     /* dp[i] rows of matrix. 0..i..L; L+1 <= validR <= allocR */
+  int      allocR;   /* # of allocated rows, dp[]                              */
+  int      allocW;   /* width of each dp[i] row, in floats.                    */
+  int      validR;   /* # of dp[] ptrs validly placed in dp_mem                */
 } P7_GMXD;
+
+
+
 
 /* using these macros requires some variable initialization:
  *    float **dp = gm->dp
@@ -53,6 +69,7 @@ typedef struct p7_gmxd_s {
 /* from p7_gmxd.c */
 extern P7_GMXD *p7_gmxd_Create(int M, int L);
 extern int      p7_gmxd_GrowTo (P7_GMXD *gxd, int M, int L);
+extern char *   p7_gmxd_DecodeSpecial(int type);
 extern int      p7_gmxd_Reuse  (P7_GMXD *gxd);
 extern void     p7_gmxd_Destroy(P7_GMXD *gxd);
 

@@ -56,7 +56,7 @@ forward_row(const ESL_DSQ *dsq, const P7_PROFILE *gm, P7_GMXCHK *gxc, const floa
    	            + p7_FLogsum(p7_FLogsum( mvp + *(tsc+p7P_MM),    /* M(i-1,k-1) * t_M(k-1)->M(k)  */
 					     ivp + *(tsc+p7P_IM)),   /* I(i-1,k-1) * t_I(k-1)->M(k)  */
 				 p7_FLogsum( dvp + *(tsc+p7P_DM),    /* D(i-1,k-1) * t_D(k-1)->M(k)  */
-					     xB  + *(tsc+p7P_BLM)));  /* B(i-1)     * t_B->M_k        */
+					     xB  + *(tsc+p7P_LM)));  /* B(i-1)     * t_B->M_k        */
       tsc += p7P_NTRANS;	/* advance to the t_X(k) transitions now */
 
       /* pick up values from prev row, (k)... at next loop iteration they're magically the k-1 values we need for M calc */
@@ -81,7 +81,7 @@ forward_row(const ESL_DSQ *dsq, const P7_PROFILE *gm, P7_GMXCHK *gxc, const floa
                 + p7_FLogsum(p7_FLogsum( mvp + *(tsc + p7P_MM),    /* M(i-1,M-1) * t_MM   */
 					 ivp + *(tsc + p7P_IM)),   /* I(i-1,M-1) * t_IM   */
 			     p7_FLogsum( dvp + *(tsc + p7P_DM),    /* D(i-1,M-1) * t_DM   */
-					 xB  + *(tsc + p7P_BLM)));  /* B(i-1)     * t_BM_M */
+					 xB  + *(tsc + p7P_LM)));  /* B(i-1)     * t_BM_M */
   *dpc++ = -eslINFINITY;       /* I_M: no such state   */
   *dpc++ = dc;		       /* delayed store of D_M */
   dpp += 3;
@@ -196,9 +196,9 @@ backward_row(const ESL_DSQ *dsq, const P7_PROFILE *gm, P7_GMXCHK *gxc, const flo
   
   XMR(dpc,p7GC_C) =  XMR(dpc,p7GC_CC) =  XMR(dpp,p7GC_C) + gm->xsc[p7P_C][p7P_LOOP];
 
-  XMR(dpc,p7GC_B) = MMR(dpp,1) + TSC(p7P_BLM,0) + MSC(1); /* t_BM index = 0 because it's stored off by one */
+  XMR(dpc,p7GC_B) = MMR(dpp,1) + TSC(p7P_LM,0) + MSC(1); /* t_BM index = 0 because it's stored off by one */
   for (k = 2; k <= M; k++)
-    XMR(dpc,p7GC_B) = p7_FLogsum( XMR(dpc,p7GC_B), MMR(dpp,k) + TSC(p7P_BLM,k-1) + MSC(k));
+    XMR(dpc,p7GC_B) = p7_FLogsum( XMR(dpc,p7GC_B), MMR(dpp,k) + TSC(p7P_LM,k-1) + MSC(k));
 
   XMR(dpc,p7GC_J)  = XMR(dpc,p7GC_JJ) = p7_FLogsum( XMR(dpp,p7GC_J) + gm->xsc[p7P_J][p7P_LOOP],  XMR(dpc,p7GC_B) + gm->xsc[p7P_J][p7P_MOVE]);
 
@@ -368,9 +368,9 @@ p7_GBackwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX
   /* now i=0. At i=0, only N,B states are reachable. */
   bck = gxc->dp[0];
   rsc = gm->rsc[dsq[1]];
-  XMR(bck,p7GC_B) = MMR(dpp,1) + TSC(p7P_BLM,0) + MSC(1); /* t_BM index is 0 because it's stored off-by-one. */
+  XMR(bck,p7GC_B) = MMR(dpp,1) + TSC(p7P_LM,0) + MSC(1); /* t_BM index is 0 because it's stored off-by-one. */
   for (k = 2; k <= M; k++)
-    XMR(bck,p7GC_B) = p7_FLogsum(XMR(bck,p7GC_B), MMR(dpp,k) + TSC(p7P_BLM,k-1) + MSC(k));
+    XMR(bck,p7GC_B) = p7_FLogsum(XMR(bck,p7GC_B), MMR(dpp,k) + TSC(p7P_LM,k-1) + MSC(k));
   XMR(bck,p7GC_J) = -eslINFINITY;
   XMR(bck,p7GC_C) = -eslINFINITY;
   XMR(bck,p7GC_N) = p7_FLogsum( XMR(dpp, p7GC_N) + gm->xsc[p7P_N][p7P_LOOP],

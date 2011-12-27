@@ -448,7 +448,7 @@ utest_msv(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, P7_P
   /* Make g2's scores appropriate for simulating the MSV algorithm in Viterbi */
   esl_vec_FSet(g2->tsc, p7P_NTRANS * g2->M, -eslINFINITY);
   for (k = 1; k <  g2->M; k++) P7P_TSC(g2, k, p7P_MM)  = 0.0f;
-  for (k = 0; k <  g2->M; k++) P7P_TSC(g2, k, p7P_BLM) = log(2.0f / ((float) g2->M * (float) (g2->M+1)));
+  for (k = 0; k <  g2->M; k++) P7P_TSC(g2, k, p7P_LM) = log(2.0f / ((float) g2->M * (float) (g2->M+1)));
 
   for (idx = 0; idx < nseq; idx++)
     {

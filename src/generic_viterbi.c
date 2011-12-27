@@ -93,7 +93,7 @@ p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
 	  sc       = ESL_MAX(    MMX(i-1,k-1)   + TSC(p7P_MM,k-1), 
 				 IMX(i-1,k-1)   + TSC(p7P_IM,k-1));
 	  sc       = ESL_MAX(sc, DMX(i-1,k-1)   + TSC(p7P_DM,k-1));
-	  sc       = ESL_MAX(sc, XMX(i-1,p7G_B) + TSC(p7P_BLM,k-1));
+	  sc       = ESL_MAX(sc, XMX(i-1,p7G_B) + TSC(p7P_LM,k-1));
 	  MMX(i,k) = sc + MSC(k);
 
 	  /* E state update */
@@ -116,7 +116,7 @@ p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
       sc       = ESL_MAX(    MMX(i-1,M-1)   + TSC(p7P_MM,M-1),
 			     IMX(i-1,M-1)   + TSC(p7P_IM,M-1));
       sc       = ESL_MAX(sc, DMX(i-1,M-1 )  + TSC(p7P_DM,M-1));
-      sc       = ESL_MAX(sc, XMX(i-1,p7G_B) + TSC(p7P_BLM,M-1));
+      sc       = ESL_MAX(sc, XMX(i-1,p7G_B) + TSC(p7P_LM,M-1));
       MMX(i,M) = sc + MSC(M);
       
       /* Unrolled delete state D_M 

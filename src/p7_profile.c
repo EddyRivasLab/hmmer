@@ -390,7 +390,7 @@ p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float 
 
   case p7T_B:
     switch (st2) {
-    case p7T_M: tsc = P7P_TSC(gm, k2-1, p7P_BLM); break; /* remember, B->Mk is stored in [k-1][p7P_BLM] */
+    case p7T_M: tsc = P7P_TSC(gm, k2-1, p7P_LM); break; /* remember, B->Mk is stored in [k-1][p7P_LM] */
     default:    ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
     }
     break;
@@ -611,8 +611,8 @@ p7_profile_DecodeT(int tidx)
   case p7P_MM:  return "tMM";
   case p7P_IM:  return "tIM";
   case p7P_DM:  return "tDM";
-  case p7P_BLM: return "tLMk";
-  case p7P_BGM: return "tGMk";
+  case p7P_LM:  return "tLMk";
+  case p7P_GM:  return "tGMk";
   case p7P_MD:  return "tMD";
   case p7P_DD:  return "tDD";
   case p7P_MI:  return "tMI";
@@ -658,12 +658,12 @@ p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol)
   if (p7_profile_IsLocal(gm))
     {				/* the code block below is also in emit.c:sample_endpoints */
       for (k = 1; k <= gm->M; k++)
-	pstart[k] = exp(P7P_TSC(gm, k-1, p7P_BLM)) * (gm->M - k + 1); /* multiply p_ij by the number of exits j */
+	pstart[k] = exp(P7P_TSC(gm, k-1, p7P_LM)) * (gm->M - k + 1); /* multiply p_ij by the number of exits j */
     }
   else
     {
       for (k = 1; k <= gm->M; k++)
-	pstart[k] = exp(P7P_TSC(gm, k-1, p7P_BGM));
+	pstart[k] = exp(P7P_TSC(gm, k-1, p7P_GM));
     }
 
   if (esl_vec_DValidate(pstart, gm->M+1, tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "profile entry distribution is not normalized properly");

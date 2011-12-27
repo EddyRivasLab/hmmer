@@ -204,7 +204,7 @@ p7_GForwardOdds(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, flo
 	  /* match state */
 	  sc =   MMX(i-1,k-1)   * TSC(p7P_MM,k-1) 
 	       + IMX(i-1,k-1)   * TSC(p7P_IM,k-1)
-	       + XMX(i-1,p7G_B) * TSC(p7P_BLM,k-1)
+	       + XMX(i-1,p7G_B) * TSC(p7P_LM,k-1)
 	       + DMX(i-1,k-1)   * TSC(p7P_DM,k-1);
 	  MMX(i,k) = sc * MSC(k);
 
@@ -224,7 +224,7 @@ p7_GForwardOdds(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, flo
       /* unrolled match state M_M */
       sc =   MMX(i-1,M-1)   * TSC(p7P_MM,M-1) 
 	   + IMX(i-1,M-1)   * TSC(p7P_IM,M-1)
-	   + XMX(i-1,p7G_B) * TSC(p7P_BLM,M-1)
+	   + XMX(i-1,p7G_B) * TSC(p7P_LM,M-1)
 	   + DMX(i-1,M-1)   * TSC(p7P_DM,M-1);
       MMX(i,M) = sc * MSC(M);
       IMX(i,M) = 0.0f;
@@ -374,7 +374,8 @@ p7_profile_ConfigInOdds(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int 
 
 
   /* Entry scores. Recall k-1,k off-by-one storage issue here. 
-   * P7P_TSC(gm, k-1, p7P_BLM) is the t_BMk local entry transition 
+   * P7P_TSC(gm, k-1, p7P_LM) is the t_LMk local entry transition 
+   * P7P_TSC(gm, k-1, p7P_GM) is the t_GMk glocal entry transition 
    */
   if (p7_profile_IsLocal(gm))
     {
@@ -387,19 +388,19 @@ p7_profile_ConfigInOdds(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int 
       for (k = 1; k <= hmm->M; k++) 
 	Z += occ[k] * (float) (hmm->M-k+1);
       for (k = 1; k <= hmm->M; k++) 
-	P7P_TSC(gm, k-1, p7P_BLM) = occ[k] / Z; /* note off-by-one: entry at Mk stored as [k-1][BM] */
+	P7P_TSC(gm, k-1, p7P_LM) = occ[k] / Z; /* note off-by-one: entry at Mk stored as [k-1][BM] */
       free(occ);
     }
   else	/* glocal modes: left wing retraction. Check for underflow. */
     {	
       Z = hmm->t[0][p7H_MD];
-      P7P_TSC(gm, 0, p7P_BGM) = 1.0 - Z;
+      P7P_TSC(gm, 0, p7P_GM) = 1.0 - Z;
       for (k = 1; k < hmm->M; k++) 
 	{
-	  P7P_TSC(gm, k, p7P_BGM) =  Z * hmm->t[k][p7H_DM];
+	  P7P_TSC(gm, k, p7P_GM) =  Z * hmm->t[k][p7H_DM];
 	  Z *= hmm->t[k][p7H_DD];
 	}
-      if (P7P_TSC(gm, hmm->M-1, p7P_BGM) == 0.0f) did_underflow = TRUE;
+      if (P7P_TSC(gm, hmm->M-1, p7P_GM) == 0.0f) did_underflow = TRUE;
     }
 
   /* E state loop/move probabilities: nonzero for MOVE allows loops/multihits

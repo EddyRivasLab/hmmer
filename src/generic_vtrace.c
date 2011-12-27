@@ -103,7 +103,7 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
     case p7T_M:			/* M connects from i-1,k-1, or B */
       if (MMX(i,k) == -eslINFINITY) ESL_EXCEPTION(eslFAIL, "impossible M reached at k=%d,i=%d", k,i);
 
-      if      (esl_FCompare(MMX(i,k), XMX(i-1,p7G_B) + TSC(p7P_BLM, k-1) + MSC(k), tol) == eslOK) scur = p7T_B;
+      if      (esl_FCompare(MMX(i,k), XMX(i-1,p7G_B) + TSC(p7P_LM, k-1) + MSC(k), tol) == eslOK) scur = p7T_B;
       else if (esl_FCompare(MMX(i,k), MMX(i-1,k-1)   + TSC(p7P_MM, k-1) + MSC(k), tol) == eslOK) scur = p7T_M;
       else if (esl_FCompare(MMX(i,k), IMX(i-1,k-1)   + TSC(p7P_IM, k-1) + MSC(k), tol) == eslOK) scur = p7T_I;
       else if (esl_FCompare(MMX(i,k), DMX(i-1,k-1)   + TSC(p7P_DM, k-1) + MSC(k), tol) == eslOK) scur = p7T_D;

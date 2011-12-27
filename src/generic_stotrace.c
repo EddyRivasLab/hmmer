@@ -105,7 +105,7 @@ p7_GStochasticTrace(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int L, const P7_PROFI
       case p7T_M:
 	if (MMX(i,k) == -eslINFINITY) ESL_XEXCEPTION(eslFAIL, "impossible M reached at k=%d,i=%d", k,i);
 	
-	sc[0] = XMX(i-1,p7G_B) + TSC(p7P_BLM, k-1);
+	sc[0] = XMX(i-1,p7G_B) + TSC(p7P_LM, k-1);
 	sc[1] = MMX(i-1,k-1)   + TSC(p7P_MM, k-1);
 	sc[2] = IMX(i-1,k-1)   + TSC(p7P_IM, k-1);
 	sc[3] = DMX(i-1,k-1)   + TSC(p7P_DM, k-1);

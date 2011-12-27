@@ -55,7 +55,7 @@ static ESL_OPTIONS options[] = {
   { "--uni",     eslARG_NONE,    FALSE, NULL, NULL, "--multi,--uni",           NULL,   NULL, "unihit config",                             4 },
 
   { "--generic", eslARG_NONE,"default", NULL, NULL, "--generic,--vector",      NULL,   NULL, "use generic DP code (full accuracy; slow)", 5 },
-  { "--vector",  eslARG_NONE,   FALSE,  NULL, NULL, "--generic,--vector",      NULL,   NULL, "use vector DP code (fast; less precision)", 5 },
+  { "--vector",  eslARG_NONE,    FALSE, NULL, NULL, "--generic,--vector",      NULL,   NULL, "use vector DP code (fast; less precision)", 5 },
 
   { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "direct output to file <f>, not stdout",             6 },
   { "--afile",   eslARG_OUTFILE, NULL, NULL, NULL,      NULL, "-a",  NULL, "output alignment lengths to file <f>",              6 },

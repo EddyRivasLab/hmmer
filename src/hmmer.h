@@ -316,8 +316,8 @@ typedef struct p7_hmm_s {
 #define p7P_MM   0
 #define p7P_IM   1
 #define p7P_DM   2
-#define p7P_BLM  3	/* local submodel entry L->Mk                 */
-#define p7P_BGM  4	/* wing-retracted glocal submodel entry G->Mk */
+#define p7P_LM   3	/* local submodel entry L->Mk                 */
+#define p7P_GM   4	/* wing-retracted glocal submodel entry G->Mk */
 #define p7P_MD   5  
 #define p7P_DD   6
 #define p7P_MI   7

@@ -619,7 +619,7 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
       for (t = p7O_BM; t <= p7O_II; t++) /* this loop of 7 transitions depends on the order in p7o_tsc_e */
 	{
 	  switch (t) {
-	  case p7O_BM: tg = p7P_BLM; kb = k-1; maxval =  0; break; /* gm has tBMk stored off by one! start from k=0 not 1   */
+	  case p7O_BM: tg = p7P_LM;  kb = k-1; maxval =  0; break; /* gm has tLMk stored off by one! start from k=0 not 1   */
 	  case p7O_MM: tg = p7P_MM;  kb = k-1; maxval =  0; break; /* MM, DM, IM vectors are rotated by -1, start from k=0  */
 	  case p7O_IM: tg = p7P_IM;  kb = k-1; maxval =  0; break;
 	  case p7O_DM: tg = p7P_DM;  kb = k-1; maxval =  0; break;
@@ -669,7 +669,7 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
     {
       ddtmp         = (int) wordify(om, P7P_TSC(gm, k,   p7P_DD));
       ddtmp        += (int) wordify(om, P7P_TSC(gm, k+1, p7P_DM));
-      ddtmp        -= (int) wordify(om, P7P_TSC(gm, k+1, p7P_BLM));
+      ddtmp        -= (int) wordify(om, P7P_TSC(gm, k+1, p7P_LM));
       om->ddbound_w = ESL_MAX(om->ddbound_w, ddtmp);
     }
 
@@ -712,7 +712,7 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
       for (t = p7O_BM; t <= p7O_II; t++) /* this loop of 7 transitions depends on the order in the definition of p7o_tsc_e */
 	{
 	  switch (t) {
-	  case p7O_BM: tg = p7P_BLM; kb = k-1; break; /* gm has tBMk stored off by one! start from k=0 not 1 */
+	  case p7O_BM: tg = p7P_LM;  kb = k-1; break; /* gm has tBMk stored off by one! start from k=0 not 1 */
 	  case p7O_MM: tg = p7P_MM;  kb = k-1; break; /* MM, DM, IM quads are rotated by -1, start from k=0  */
 	  case p7O_IM: tg = p7P_IM;  kb = k-1; break;
 	  case p7O_DM: tg = p7P_DM;  kb = k-1; break;
@@ -1475,7 +1475,7 @@ p7_profile_SameAsMF(const P7_OPROFILE *om, P7_PROFILE *gm)
   /* Transitions */
   esl_vec_FSet(gm->tsc, p7P_NTRANS * gm->M, -eslINFINITY);
   for (k = 1; k <  gm->M; k++) P7P_TSC(gm, k, p7P_MM)  = 0.0f;
-  for (k = 0; k <  gm->M; k++) P7P_TSC(gm, k, p7P_BLM) = tbm;
+  for (k = 0; k <  gm->M; k++) P7P_TSC(gm, k, p7P_LM) = tbm;
   
   /* Emissions */
   for (x = 0; x < gm->abc->Kp; x++)

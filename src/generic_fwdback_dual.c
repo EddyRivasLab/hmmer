@@ -1,16 +1,17 @@
 /* Forward/Backward implementation variant:
- *   dual-mode, local/glocal alignment;
+ *   dual-mode alignment (local/glocal);
  *   quadratic memory (simplest variant; not banded, not checkpointed);
  *   "generic" (standard C code; not striped/vectorized);
  *   using P7_GMXD DP matrix structure.
  *   
  * Contents:  
- *   1. Forward, Backward implementations.
- *   2. Benchmark driver.
- *   3. Unit tests.
- *   4. Test driver.
- *   5. Example.
- *   6. Copyright and license information.
+ *   1. Forward implementation.
+ *   2. Backward implementation.
+ *   3. Benchmark driver.
+ *   4. Unit tests.
+ *   5. Test driver.
+ *   6. Example.
+ *   7. Copyright and license information.
  */
 
 
@@ -23,23 +24,31 @@
 
 
 /*****************************************************************
- * 1. Forward, Backward implementations
+ * 1. Forward implementation
  *****************************************************************/
 
-/* Function:  
- * Synopsis:  
+/* Function:  p7_GForwardDual()
+ * Synopsis:  Forward, dual-mode, quadratic memory, generic profile
  *
- * Purpose:   
- * 
- *            This function uses <p7_FLogsum()>. Caller must have
- *            initialized its static lookup table with a
- *            <p7_FLogsumInit()> call.
+ * Purpose:   The Forward algorithm, comparing profile <gm> to target
+ *            sequence <dsq> of length <L>. Caller provides an
+ *            allocated <P7_GMXD> DP matrix <gxd>, sized for an
+ *            <gm->M> by <L> problem. 
  *            
+ *            Caller also has initialized with a <p7_FLogsumInit()>
+ *            call; this function will use <p7_FLogsum()>.
  *            
+ *            Upon successful return, the raw Forward score (in nats)
+ *            is optionally returned in <*opt_sc>, and the DP matrix
+ *            <gxd> is filled in.
  *
- * Args:      
+ * Args:      dsq    : digital target sequence of length <L>
+ *            L      : length of the target sequence
+ *            gm     : query profile 
+ *            gxd    : allocated DP matrix
+ *            opt_sc : optRETURN: raw Forward score in nats
  *
- * Returns:   
+ * Returns:   <eslOK> on success.
  *
  * Throws:    (no abnormal error conditions)
  *
@@ -97,23 +106,23 @@ p7_GForwardDual(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXD *gxd, f
 	  mlv = *dpc++ = *rsc + p7_FLogsum( p7_FLogsum(*(dpp+p7GD_ML) + *(tsc + p7P_MM),
 						       *(dpp+p7GD_IL) + *(tsc + p7P_IM)),
 					    p7_FLogsum(*(dpp+p7GD_DL) + *(tsc + p7P_DM),
-						       xL             + *(tsc + p7P_BLM)));
+						       xL             + *(tsc + p7P_LM)));
 
 	  mgv = *dpc++ = *rsc + p7_FLogsum( p7_FLogsum(*(dpp+p7GD_MG) + *(tsc + p7P_MM),
 						       *(dpp+p7GD_IG) + *(tsc + p7P_IM)),
  					    p7_FLogsum(*(dpp+p7GD_DG) + *(tsc + p7P_DM),
-						       xG             + *(tsc + p7P_BGM)));
+						       xG             + *(tsc + p7P_GM)));
 
 	  rsc++;                /* rsc advances to insert score for position k */
 	  tsc += p7P_NTRANS;    /* tsc advances to transitions in states k     */
 	  dpp += p7GD_NSCELLS;	/* dpp advances to cells for states k          */
 
-	  /* Insert state calculations ILl, IGk. */
+	  /* Insert state calculations ILk, IGk. */
 	  *dpc++ = *rsc + p7_FLogsum( *(dpp + p7GD_ML) + *(tsc + p7P_MI), *(dpp + p7GD_IL) + *(tsc + p7P_II));
 	  *dpc++ = *rsc + p7_FLogsum( *(dpp + p7GD_MG) + *(tsc + p7P_MI), *(dpp + p7GD_IG) + *(tsc + p7P_II));
 	  rsc++;		/* rsc advances to next match state emission   */
 
-	  /* E state update; local paths only, DLk->E, MLk->E */
+	  /* E state update; local paths only, DLk->E, MLk->E; transition prob 1.0 in implicit probability model */
 	  xE  = p7_FLogsum( p7_FLogsum(mlv, dlv), xE);
 
 	  /* Delete state, deferred storage trick */
@@ -127,7 +136,7 @@ p7_GForwardDual(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXD *gxd, f
       mlv = *dpc++ = *rsc + p7_FLogsum( p7_FLogsum(*(dpp+p7GD_ML) + *(tsc + p7P_MM),
 						   *(dpp+p7GD_IL) + *(tsc + p7P_IM)),
 					p7_FLogsum(*(dpp+p7GD_DL) + *(tsc + p7P_DM),
-						   xL             + *(tsc + p7P_BLM)));
+						   xL             + *(tsc + p7P_LM)));
 
       mgv = *dpc++ = *rsc + p7_FLogsum( p7_FLogsum(*(dpp+p7GD_MG) + *(tsc + p7P_MM),
 						   *(dpp+p7GD_IG) + *(tsc + p7P_IM)),
@@ -138,7 +147,7 @@ p7_GForwardDual(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXD *gxd, f
       *dpc++ = -eslINFINITY;	/* IL */
       *dpc++ = -eslINFINITY;	/* IG */
 
-      /* E state update now includes glocal exits */
+      /* E state update now includes glocal exits: transition prob 1.0 from MG_m, DG_m */
       xE  = p7_FLogsum( xE, p7_FLogsum( p7_FLogsum(mlv, dlv), p7_FLogsum(mgv, dgv)));
       
       /* D_M state: deferred storage only */
@@ -163,10 +172,260 @@ p7_GForwardDual(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXD *gxd, f
   gxd->L = L;
   return eslOK;
 }
+/*-----------  end, Forwards implementation ---------------------*/
+
 
 
 /*****************************************************************
- * 2. Benchmark driver.
+ * 2. Backwards implementation
+ *****************************************************************/
+
+/* Function:  p7_GBackwardDual()
+ * Synopsis:  Backward, dual-mode, quadratic memory, generic profile
+ *
+ * Purpose:   The Backward algorithm, comparing profile <gm> to target
+ *            sequence <dsq> of length <L>. Caller provides an
+ *            allocated <P7_GMXD> DP matrix <gxd>, sized for an
+ *            <gm->M> by <L> problem. 
+ *            
+ *            Caller also has initialized with a <p7_FLogsumInit()>
+ *            call; this function will use <p7_FLogsum()>.
+ *            
+ *            Upon successful return, the raw Backward score (in nats)
+ *            is optionally returned in <*opt_sc>, and the DP matrix
+ *            <gxd> is filled in.
+ *
+ * Args:      dsq    : digital target sequence of length <L>
+ *            L      : length of the target sequence
+ *            gm     : query profile 
+ *            gxd    : allocated DP matrix
+ *            opt_sc : optRETURN: raw Backward score in nats
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Notes:     In <gm->rsc>, assumes p7P_NR = 2 and order [M I]
+ *            In <gm->tsc>, does not make assumptions about p7P_NTRANS or order of values
+ *            in <gxd->dp[i]>, assumes p7GD_NSCELLS=6 in order [ ML MG IL IG DL DG]
+ *                             assumes p7GD_NXCELLS=7 in order [ E N J B L G C ]
+ *                             
+ *            Order of evaluation in the code is pretty carefully
+ *            arranged to guarantee that dpc,dpn could be pointing
+ *            into the same row of memory in a memory-efficient
+ *            one-row DP implementation... even though this particular
+ *            function, working with a <gxd>, knows it has rows
+ *            <0,1..L>. This is so this code could be cribbed for a
+ *            one-row implementation.
+ */
+int
+p7_GBackwardDual(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXD *gxd, float *opt_sc)
+{
+  float *dpc;			/* ptr into current DP row, gxd->dp[i]                    */
+  float *dpn;	            	/* ptr into next DP row, gxd->dp[i+1]                     */   // dpc, dpn could point to same row, in a single-row implementation.
+  const float *rsc;		/* ptr to current row's residue score x_i vector in <gm>  */
+  const float *rsn;		/* ptr to next row's residue score x_{i+1} vector in <gm> */
+  const float *tsc;		/* ptr to model transition score vector gm->tsc[]         */
+  float dgc, dlc;	        /* DG,DL tmp values on current row, [i,?,DG], [i,?,DL]    */
+  float mgc, mlc;
+  float mgn, mln;
+  float ign, iln;
+  float xN, xJ, xC, xE, xG, xL, xB;	/* temp vars for special state values                     */
+  int   i;			/* counter over sequence positions 1..L */
+  int   k;			/* counter over model positions 1..M    */
+  const int M  = gm->M;
+
+  /* Initialize row L. */
+  /* Specials are in order ENJBLGC: step backwards thru them */
+  dpc  = gxd->dp[L] + (M+1)*p7GD_NSCELLS + p7GD_C;
+  rsc  = gm->rsc[dsq[L]] + M*p7P_NR;
+
+  *dpc-- = xC = gm->xsc[p7P_C][p7P_MOVE];      /* C : C<-T */
+  *dpc--      = -eslINFINITY;                  /* G : impossible w/o residues after it */
+  *dpc--      = -eslINFINITY;	               /* L : ditto, impossible */
+  *dpc--      = -eslINFINITY;	               /* B : ditto, impossible */
+  *dpc--      = -eslINFINITY;	               /* J : ditto, impossible */
+  *dpc--      = -eslINFINITY;	               /* N : ditto, impossible */
+  *dpc-- = xE = xC + gm->xsc[p7P_E][p7P_MOVE]; /* E: E<-C<-T, no tail */
+  /* dpc is now sitting on [M][DG] */
+  
+  /* dpc main cells for k=M*/
+  tsc = gm->tsc + (M-1)*p7P_NTRANS;
+  
+  xG   = xE + *rsc + *(tsc + p7P_GM);
+  xL   = xE + *rsc + *(tsc + p7P_LM);
+  rsc -= p7P_NR;
+
+  *dpc-- = dgc = xE;		/* DG: D_M->E (transition prob 1.0)  */
+  *dpc-- = dlc = xE;		/* DL: ditto */
+  *dpc-- = -eslINFINITY;	/* IG_M: no such state: always init'ed to -inf */
+  *dpc-- = -eslINFINITY;	/* IL_M: no such state: always init'ed to -inf */
+  *dpc-- = xE;			/* MG: M_M->E (transition prob 1.0)  */
+  *dpc-- = xE;			/* ML: ditto */
+  /* dpc is now sitting on [M-1][DG] */
+
+  /* initialize main cells [k=1..M-1] on row i=L*/
+  for (k = M-1; k >= 1; k--)
+    {
+      mgc =                 dgc + *(tsc + p7P_MD);
+      mlc =  p7_FLogsum(xE, dlc + *(tsc + p7P_MD));
+
+      xG   = p7_FLogsum(xG, mgc + *rsc + *(tsc + p7P_GM - p7P_NTRANS)); /* off-by-one: tGMk stored as [k-1,GM] */
+      xL   = p7_FLogsum(xL, mlc + *rsc + *(tsc + p7P_LM - p7P_NTRANS));
+      rsc -= p7P_NR;
+
+      *dpc-- = dgc =                dgc + *(tsc + p7P_DD);  /* DG: only D->D path is possible */
+      *dpc-- = dlc = p7_FLogsum(xE, dlc + *(tsc + p7P_DD)); /* DL: Dk->Dk+1 or Dk->E */
+      *dpc--       = -eslINFINITY;  	                    /* IG impossible w/o residues following it */
+      *dpc--       = -eslINFINITY;	                    /* IL, ditto */
+      *dpc--       = mgc;
+      *dpc--       = mlc;
+      tsc -= p7P_NTRANS;
+    }
+
+  /* k=0 cells are -inf */
+
+
+  /* The main recursion over rows i=L-1 down to 1. (residues x_{L-1} down to x_1) */
+  for (i = L-1; i >= 1; i--)
+    {
+                                                        /* ...xG,xL inherited from previous loop...               */
+      rsn = gm->rsc[dsq[i+1]] + M * p7P_NR;        	/* residue x_{i+1} scores in *next* row:  start at end, M */
+      rsc = gm->rsc[dsq[i]]   + M * p7P_NR;	        /* residue x_{i} scores in *current* row: start at end, M */
+      dpc = gxd->dp[i]   + (M+1)*p7GD_NSCELLS + p7GD_C;	/* dpc is on [i,(M),C]   : end of current row's specials  */
+      dpn = gxd->dp[i+1] + (M+1)*p7GD_NSCELLS;	        /* dpn is on [i+1,(M),0] : start of next row's specials   */
+      tsc = gm->tsc + M * p7P_NTRANS;		        /* tsc is on t[M,0]: vector [MM IM DM LM GM MD DD MI II]  */
+
+      /* Calculation of the special states. */
+      /* dpc is on dp[i][C] special, will now step backwards thru [E N J B L G C ] */
+      *dpc-- = xC = *(dpn + p7GD_C) + gm->xsc[p7P_C][p7P_LOOP]; /* C = C<-C */
+
+      *dpc-- = xG;     /* G was calculated during prev row (G->Mk wing unfolded) */
+      *dpc-- = xL;     /* L was calculated during prev row */
+
+      *dpc-- = xB = p7_FLogsum( xG + gm->xsc[p7P_B][1],    /* B<-G */
+				xL + gm->xsc[p7P_B][0]);   /* B<-L */
+      
+      *dpc-- = xJ = p7_FLogsum( *(dpn + p7GD_J) + gm->xsc[p7P_J][p7P_LOOP],   /* J<-J */
+				xB              + gm->xsc[p7P_J][p7P_MOVE]);  /* J<-B */
+      
+      *dpc--      = p7_FLogsum( *(dpn + p7GD_N) + gm->xsc[p7P_N][p7P_LOOP],  /* N<-N */
+				xB              + gm->xsc[p7P_N][p7P_MOVE]); /* N<-B */
+
+      *dpc-- = xE = p7_FLogsum( xC + gm->xsc[p7P_E][p7P_MOVE],
+				xJ + gm->xsc[p7P_E][p7P_LOOP]);
+      dpn -= 5;		      /* backs dpn up to [i+1,M,MG], skipping [IL IG DL DG] at k=M */
+      
+
+      /* Initialization of the k=M states */
+      /* dpc on [i,k=M,DG], init at k=M, step back thru [ ML MG IL IG DL DG] */
+      /* dpn on [i+1,k=M,MG] */
+      mgn = *rsn + *dpn--;	/* pick up MG(i+1,k=M) + s(x_i+1,k=M, M) */
+      mln = *rsn + *dpn--;	/* pick up ML(i+1,k=M) + s(x_i+1,k=M, M) */
+      rsn--;			/* rsn now on s(x_i+1, k=M-1, I)         */
+
+      xG     = xE + *rsc + *(tsc + p7P_GM - p7P_NTRANS); /* t[k-1][GM] is G->Mk wing-folded entry, recall off-by-one storage   */
+      xL     = xE + *rsc + *(tsc + p7P_LM - p7P_NTRANS); /* t[k-1][LM] is L->Mk uniform local entry */
+      rsc -= p7P_NR;		/* rsc now on s[x_{i},M-1,M] */
+      tsc -= p7P_NTRANS;	/* tsc now on t[M-1,0]       */
+
+      *dpc-- = dgc = xE;		/* DGm->E */
+      *dpc-- = dlc = xE;		/* DLm->E */
+      *dpc--       = -eslINFINITY;	/* IGm nonexistent */
+      *dpc--       = -eslINFINITY;	/* ILm nonexistent */
+      *dpc--       = xE;		/* MGm->E */
+      *dpc--       = xE;		/* MLm->E */
+      /* dpc on [i,M-1,DG]; dpn on [i+1,M-1,DG] */
+
+
+      /* The main recursion over model positions k=M-1 down to 1. */
+      for (k = M-1; k >= 1; k--)
+	{
+                             	    /* rsn is on residue score [x_{i+1},k,I]    */
+	                            /* dpn is on [i+1,k,DG]                     */
+	  dpn -= 2;	   	    /* skip DG/DL values on next row            */
+	  ign = *dpn--;		    /* pick up IG value from dp[i+1]            */ // if inserts had nonzero score: + *rsn 
+	  iln = *dpn--;		    /* pick up IL value                         */ // if inserts had nonzero score: + *rsn
+	  rsn--;		    /* skip residue score for I (zero)          */ 
+	                            /* dpn is now sitting on dp[i+1,k,MG]       */
+
+                                                                 /* tsc is on tsc[k,0] */
+	  mgc =  p7_FLogsum( p7_FLogsum(mgn + *(tsc + p7P_MM),   /* mgn = [i+1,k+1,MG] */
+					ign + *(tsc + p7P_MI)),  /* ign = [i+1,k,  IG] */
+ 			                dgc + *(tsc + p7P_MD));  /* dgc = [i,  k+1,DG] */
+
+	  mlc =  p7_FLogsum( p7_FLogsum(mln + *(tsc + p7P_MM),   /* mln = [i+1,k+1,ML] */
+					iln + *(tsc + p7P_MI)),  /* iln = [i+1,k,  IL] */
+			     p7_FLogsum(dlc + *(tsc + p7P_MD),   /* dlc = [i,  k+1,DL] */
+					xE));                    /* ML->E trans = 1.0  */
+
+	  xG   = p7_FLogsum(xG, mgc + *rsc + *(tsc + p7P_GM - p7P_NTRANS)); /* t[k-1][GM] is G->Mk wing-retracted glocal entry */
+	  xL   = p7_FLogsum(xL, mlc + *rsc + *(tsc + p7P_LM - p7P_NTRANS)); /* t[k-1][LM] is L->Mk uniform local entry         */
+	  rsc -= p7P_NR;				       /* rsc now on s[x_i, k-1, M] */
+
+	  /* dpc is on [i,k,DG] and will now step backwards thru: [ ML MG IL IG DL DG ] */
+	  *dpc-- = dgc = p7_FLogsum( mgn + *(tsc + p7P_DM),   /* dgc picked up for next loop of k */
+				     dgc + *(tsc + p7P_DD));
+	  *dpc-- = dlc = p7_FLogsum( p7_FLogsum( mln + *(tsc + p7P_DM),   /* dlc picked up for next loop of k */
+						 dlc + *(tsc + p7P_DD)),
+				     xE);
+
+	  *dpc-- = p7_FLogsum( mgn + *(tsc + p7P_IM),
+			       ign + *(tsc + p7P_II));
+	  *dpc-- = p7_FLogsum( mln + *(tsc + p7P_IM),
+			       iln + *(tsc + p7P_II));
+
+                                /* recall that dpn is on dp[i+1][k,MG]    */
+	  mgn = *rsn + *dpn--;	/* pick up M[i+1,k]; add score[x_i+1,k,M] */
+	  mln = *rsn + *dpn--;
+	  rsn--;		/* rsn is now on score[i+1,k-1,I] */
+
+	  *dpc-- = mgc;		/* delayed store of [i,k,MG] value enables dpc,dpn to point into same single row */
+	  *dpc-- = mlc;
+
+	  tsc -= p7P_NTRANS;
+
+	  /* as we loop around now and decrement k:
+           *   dpn is on [i+1,k-1,DG] which becomes [i+1,k,DG] 
+           *   dpc is on [i,k-1,DG]   which becomes [i,k,DG] 
+	   *   tsc is on tsc[k-1,0]   which becomes tsc[k,0]
+	   *   rsn is on s[i+1,k-1,I] which becomes s[i+1,k,I]
+	   *   rsc is on s[i,  k-1,M] which becomes s[i,k,M]
+	   *   dgc is [i,k,DG],   which becomes [i,k+1,DG] value  (and analog. for dlc,DL)
+	   *   mgn is [i+1,k,MG], which becomes [i+1,k+1,MG] value (and analog. for ML)
+	   */
+	} /* end of loop over model positions k */
+
+      /* k=0 cells are -inf */
+
+      /* xG,xL values are now ready for next row */
+    } /* end of loop over rows i. */
+  /* now on row i=0. Only N,B,G,L states are reachable on this initial row. G,L values are already done. */
+  
+  dpc = gxd->dp[0] + (M+1)*p7GD_NSCELLS + p7GD_C;	/* dpc is on [0,(M),C] : end of row 0 specials  */
+  dpn = gxd->dp[1] + (M+1)*p7GD_NSCELLS;	        /* dpn is on [1,(M),0] : start of row 1 specials   */
+
+  *dpc--      = -eslINFINITY;                                           /* C */
+  *dpc--      = xG;                                                     /* G */
+  *dpc--      = xL;                                                     /* L */
+  *dpc-- = xB = p7_FLogsum( xG + gm->xsc[p7P_B][1],                     /* B */
+			    xL + gm->xsc[p7P_B][0]);   
+  *dpc--      = -eslINFINITY;                                           /* J */
+  *dpc-- = xN = p7_FLogsum( *(dpn + p7GD_N) + gm->xsc[p7P_N][p7P_LOOP],	/* N */
+			    xB              + gm->xsc[p7P_N][p7P_MOVE]); 
+  *dpc--      = -eslINFINITY;                                           /* E */
+
+  gxd->M = M;
+  gxd->L = L;
+  if (opt_sc) *opt_sc = xN;
+  return eslOK;
+}
+/*-------------- end, backwards implementation ------------------*/
+
+
+
+/*****************************************************************
+ * 3. Benchmark driver.
  *****************************************************************/
 #ifdef p7GENERIC_FWDBACK_DUAL_BENCHMARK
 #include "p7_config.h"
@@ -240,10 +499,10 @@ main(int argc, char **argv)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
       if (! esl_opt_GetBoolean(go, "-B"))  p7_GForwardDual (dsq, L, gm, fwd, &sc);
-      //if (! esl_opt_GetBoolean(go, "-F"))  p7_GBackward(dsq, L, gm, bck, NULL);
+      if (! esl_opt_GetBoolean(go, "-F"))  p7_GBackwardDual(dsq, L, gm, bck, NULL);
 
       p7_gmxd_Reuse(fwd);
-      //p7_gmxd_Reuse(bck);
+      p7_gmxd_Reuse(bck);
     }
   esl_stopwatch_Stop(w);
   bench_time = w->user - base_time;
@@ -271,7 +530,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 3. Unit tests
+ * 4. Unit tests
  *****************************************************************/
 #ifdef p7GENERIC_FWDBACK_DUAL_TESTDRIVE
 #include "esl_getopts.h"
@@ -537,8 +796,10 @@ utest_enumeration(ESL_GETOPTS *go, ESL_RANDOMNESS *rng)
 /*----------------- end, unit tests -----------------------------*/
 
 
+
+
 /*****************************************************************
- * 4. Test driver
+ * 5. Test driver
  *****************************************************************/
 #ifdef p7GENERIC_FWDBACK_DUAL_TESTDRIVE
 
@@ -585,8 +846,9 @@ main(int argc, char **argv)
 
 
 
+
 /*****************************************************************
- * 5. Example
+ * 6. Example
  *****************************************************************/
 #ifdef p7GENERIC_FWDBACK_DUAL_EXAMPLE
 #include "p7_config.h"
@@ -664,6 +926,7 @@ main(int argc, char **argv)
 
   /* Allocate matrices */
   fwd = p7_gmxd_Create(gm->M, sq->n);
+  bck = p7_gmxd_Create(gm->M, sq->n);
 
   printf("%-30s   %-10s %-10s   %-10s %-10s\n", "# seq name",      "fwd (raw)",   "bck (raw) ",  "fwd (bits)",  "bck (bits)");
   printf("%-30s   %10s %10s   %10s %10s\n",     "#--------------", "----------",  "----------",  "----------",  "----------");
@@ -675,6 +938,7 @@ main(int argc, char **argv)
 
       /* Resize the DP matrices if necessary */
       p7_gmxd_GrowTo(fwd, gm->M, sq->n);
+      p7_gmxd_GrowTo(bck, gm->M, sq->n);
 
       /* Set the profile and null model's target length models */
       p7_bg_SetLength     (bg, sq->n);
@@ -684,11 +948,9 @@ main(int argc, char **argv)
 
       /* Run Forward, Backward */
       p7_GForwardDual (sq->dsq, sq->n, gm, fwd, &fsc);
-      bsc = 0.0;
+      p7_GBackwardDual(sq->dsq, sq->n, gm, bck, &bsc);
 
-      p7_gmxd_Dump(stdout, fwd);
-
-      if (esl_opt_GetBoolean(go, "--vv")) p7_gmxd_Dump(stdout, fwd);
+      if (esl_opt_GetBoolean(go, "--vv")) p7_gmxd_Dump(stdout, bck);
 
       /* Those scores are partial log-odds likelihoods in nats.
        * Subtract off the rest of the null model, convert to bits.
@@ -701,7 +963,7 @@ main(int argc, char **argv)
 	     (fsc - nullsc) / eslCONST_LOG2, (bsc - nullsc) / eslCONST_LOG2);
 
       p7_gmxd_Reuse(fwd);
-      //p7_gmxd_Reuse(bck);
+      p7_gmxd_Reuse(bck);
       esl_sq_Reuse(sq);
     }
 

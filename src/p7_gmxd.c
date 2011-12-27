@@ -1,4 +1,6 @@
-/* P7_GMXD implementation: dynamic programming matrix for generic dual-mode (local/glocal)
+/* P7_GMXD implementation: dynamic programming matrix for generic dual-mode 
+ * (local/glocal) alignment.
+ *
  * See also: generic_fwdback_dual.c
  * 
  * Contents:
@@ -17,13 +19,27 @@
  * 1. The <P7_GMXD> object
  *****************************************************************/
 
+
+/* Function:  p7_gmxd_Create()
+ * Synopsis:  Create a new <P7_GMXD> DP matrix.
+ *
+ * Purpose:   Create a new <P7_GMXD> matrix for a model of
+ *            length <M> and a target sequence of length
+ *            <L>.
+ *
+ * Args:      M - model length
+ *            L - target sequence length
+ * 
+ * Returns:   ptr to the new <P7_GMXD>.
+ *
+ * Throws:    <NULL> on any allocation failure.
+ */
 P7_GMXD *
 p7_gmxd_Create(int M, int L)
 {
   P7_GMXD *gxd = NULL;
   int      r;
   int      status;
-
 
   ESL_ALLOC(gxd, sizeof(P7_GMXD));
   gxd->dp_mem = NULL;
@@ -48,6 +64,22 @@ p7_gmxd_Create(int M, int L)
   return NULL;
 }
 
+/* Function:  p7_gmxd_GrowTo()
+ * Synopsis:  Efficiently reallocate a <P7_GMXD>.
+ *
+ * Purpose:   Efficiently reallocate the matrix <gxd> to a new
+ *            DP problem size, for model length <M> and target 
+ *            sequence length <L>. Reuse the existing allocation
+ *            as much as possible, to minimize reallocation calls.
+ *
+ * Args:      gxd - existing DP matrix
+ *            M   - new model length
+ *            L   - new target sequence length
+ *
+ * Returns:   <eslOK> on success
+ *
+ * Throws:    <eslEMEM> on memory allocation failure.
+ */
 int
 p7_gmxd_GrowTo(P7_GMXD *gxd, int M, int L)
 {
@@ -101,21 +133,23 @@ p7_gmxd_GrowTo(P7_GMXD *gxd, int M, int L)
 }
 	
 
-char *
-p7_gmxd_DecodeSpecial(int type)
-{
-  switch (type) {
-  case p7GD_E: return "E";
-  case p7GD_N: return "N";
-  case p7GD_J: return "J";
-  case p7GD_B: return "B";
-  case p7GD_L: return "L";
-  case p7GD_G: return "G";
-  case p7GD_C: return "C";
-  }
-  return NULL;
-}
 
+
+/* Function:  p7_gmxd_Reuse()
+ * Synopsis:  Finish using a <P7_GMXD> without deallocation.
+ *
+ * Purpose:   Caller says it is done using <gxd> for now, but is
+ *            soon going to use it again for a new problem;
+ *            so reinitialize, saving deallocation/reallocation.
+ *            Equiv to <p7_gmxd_Destroy(); p7_gmxd_Create()> in 
+ *            effect, but far faster.
+ *
+ * Args:      gxd - matrix that will be reused.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
 int
 p7_gmxd_Reuse(P7_GMXD *gxd)
 {
@@ -125,6 +159,11 @@ p7_gmxd_Reuse(P7_GMXD *gxd)
 }
 
 
+/* Function:  p7_gmxd_Destroy()
+ * Synopsis:  Free a <P7_GMXD>.
+ *
+ * Purpose:   Free the matrix <gxd>.
+ */
 void
 p7_gmxd_Destroy(P7_GMXD *gxd)
 {
@@ -140,6 +179,39 @@ p7_gmxd_Destroy(P7_GMXD *gxd)
  *****************************************************************/
 
 
+/* Function:  p7_gmxd_DecodeSpecial()
+ * Synopsis:  Convert special state code to string for debugging output.
+ *
+ * Purpose:   Given a special state code (such as <p7GD_E>), return a
+ *            string label, suitable for state label in debugging output.
+ *
+ * Args:      type  - special state code, such as <p7GD_E>
+ *
+ * Returns:   ptr to a static string representation
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+char *
+p7_gmxd_DecodeSpecial(int type)
+{
+  switch (type) {
+  case p7GD_E: return "E";
+  case p7GD_N: return "N";
+  case p7GD_J: return "J";
+  case p7GD_B: return "B";
+  case p7GD_L: return "L";
+  case p7GD_G: return "G";
+  case p7GD_C: return "C";
+  }
+  return NULL;
+}
+
+/* Function:  p7_gmxd_Dump()
+ * Synopsis:  Dump a <P7_GMXD> for examination.
+ *
+ * Purpose:   Print the contents of <gxd> to stream <ofp>, for
+ *            examination/debugging.
+ */
 int
 p7_gmxd_Dump(FILE *ofp, P7_GMXD *gxd)
 {
