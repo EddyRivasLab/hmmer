@@ -5,19 +5,22 @@
  *   using P7_GMXD DP matrix structure.
  *   
  * Contents:  
- *   1. Forward implementation.
- *   2. Backward implementation.
- *   3. Benchmark driver.
- *   4. Unit tests.
- *   5. Test driver.
- *   6. Example.
- *   7. Copyright and license information.
+ *   1. Forwards.
+ *   2. Backwards.
+ *   3. Posterior decoding.
+ *   4. Gamma-centroid MGE alignment.
+ *   5. Benchmark driver.
+ *   6. Unit tests.
+ *   7. Test driver.
+ *   8. Example.
+ *   9. Copyright and license information.
  */
 
 
 #include "p7_config.h"
 
 #include "easel.h"
+#include "esl_vectorops.h"
 
 #include "hmmer.h"
 #include "p7_gmxd.h"
@@ -423,9 +426,440 @@ p7_GBackwardDual(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXD *gxd, 
 /*-------------- end, backwards implementation ------------------*/
 
 
+/*****************************************************************
+ * 3. Posterior decoding
+ *****************************************************************/
+
+int
+p7_GDecodingDual(const P7_PROFILE *gm, const P7_GMXD *fwd, P7_GMXD *bck, P7_GMXD *pp)
+{
+  const int L = fwd->L;
+  const int M = fwd->M;
+  float xN, xJ, xC;
+  float    *fwdp;
+  float    *bckp;
+  float    *ppp;
+  float     denom;
+  float     sc = P7_GMXD_XMX(fwd,L,p7GD_C) + gm->xsc[p7P_C][p7P_MOVE];
+  int       i;
+  int       k;
+  int       x;
+
+  ppp  = pp->dp[i];
+  for (x = 0; x < p7GD_NSCELLS * (M+1) + p7GD_NXCELLS; x++) *ppp++ = 0.0;
+
+  for (i = 1; i <= L; i++)
+    {
+      fwdp = fwd->dp[i] + p7GD_NSCELLS;
+      bckp = bck->dp[i] + p7GD_NSCELLS;
+      ppp  = pp->dp[i];
+      for (x = 0; x < p7GD_NSCELLS; x++) *ppp++ = 0.0;
+      
+      for (k = 1; k < M; k++)
+	{
+	  /* [ ML MG IL IG DL DG] */
+	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* ML */
+	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* MG */
+	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* IL */
+	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp;   ppp+=3; fwdp+=3; bckp+=3; /* IG; skip DL,DG */
+	}
+      *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* ML_m */
+      *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* MG_m */
+      *ppp++ = 0.0;
+      *ppp++ = 0.0;
+      *ppp++ = 0.0; 
+      *ppp++ = 0.0; fwdp += 5; bckp += 5; /* fwd,bck now on N */
+
+      /* [ E N J B L G C ] */
+      *ppp++ = 0.0;		/* E */
+      *ppp   = expf(xN + *bckp + gm->xsc[p7P_N][p7P_LOOP] - sc); denom += *ppp; xN = *fwdp++; bckp++; /* N */
+      *ppp   = expf(xJ + *bckp + gm->xsc[p7P_J][p7P_LOOP] - sc); denom += *ppp; xJ = *fwdp++; bckp++; /* J */
+      *ppp++ = 0.0;		/* B */
+      *ppp++ = 0.0;		/* L */
+      *ppp++ = 0.0;		/* G */
+      *ppp++ = expf(xC + *bckp + gm->xsc[p7P_C][p7P_LOOP] - sc); denom += *ppp; xC = *fwdp++; bckp++; /* C */
+      /* note delayed store for N/J/C, because it's fwd[i-1][X] + bck[i-1][X] + tXX */
+
+      denom = 1.0 / denom;	/* multiplication faster than division... */
+      ppp = pp->dp[i] + p7GD_NSCELLS;
+      for (k = 1; k < M; k++) { 
+	*ppp++ *= denom;
+	*ppp++ *= denom;
+	*ppp++ *= denom;
+	*ppp   *= denom;
+	ppp += 3;
+      }
+      *ppp++ *= denom;
+      *ppp++ *= denom;
+      ppp += 5;
+      
+      *(ppp + p7GD_N) *= denom;
+      *(ppp + p7GD_J) *= denom;
+      *(ppp + p7GD_C) *= denom;
+    }
+  
+  pp->M = M;
+  pp->L = L;
+  return eslOK;
+}
+/*-------------- end, posterior decoding ------------------------*/
+
+
 
 /*****************************************************************
- * 3. Benchmark driver.
+ * 4. Gamma-centroid MGE alignment: fill
+ *****************************************************************/
+
+#define P7_DELTAT(val, tsc) ( ((tsc) == -eslINFINITY) ? -eslINFINITY : (val))
+
+/* Function:  p7_GCentroidAlignDual()
+ * Synopsis:  Gamma centroid MGE alignment against a dual mode model
+ *
+ * Purpose:   
+ *
+ * Args:      
+ *
+ * Returns:   <eslOK> on success
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      [HamadaAsai11] for details of gamma-centroid estimators
+ *            [Kall05] for more on why the delta function on transitions is needed
+ */
+int
+p7_GCentroidAlignDual(float gamma, const P7_PROFILE *gm, const P7_GMXD *pp, P7_GMXD *gxd)
+{
+  float       *dpp;		     /* ptr into previous DP row in <gxd> */
+  float       *dpc;		     /* ptr into current DP row in <gxd> */
+  const float *tsc;		     /* ptr into transition scores in <gm> */
+  const float *ppp;		     /* ptr into decoded posterior probs in <pp> */
+  const float  gam1 = gamma + 1.0;   /* residue score is  pp(x_i) * (gamma + 1.0) - 1.0 */
+  const int    L    = pp->L;
+  const int    M    = pp->M;
+  float        dlv, dgv;
+  float        mlv, mgv;
+  float        xE,xG,xL,xN,xJ,xB;
+  int          i,k,s;
+
+  /* Initialization of the zero row. 
+   * Main states    [ ML MG IL IG DL DG] 0..M; then special states [E N J B L G C] 
+   * Gamma-centroid values can be negative, so "impossible" is -eslINFINITY.
+   * P7_DELTAT() causes impossible transitions to result in impossible-scoring paths
+   */
+  dpc = gxd->dp[0];
+  for (s = 0; s < (M+1) * p7GD_NSCELLS; s++) *dpc++ = -eslINFINITY;   /* all M,I,D; k=0..M */
+  *dpc++ = -eslINFINITY;	               /* E */
+  *dpc++ = 0.0;			               /* N */
+  *dpc++ = -eslINFINITY;                       /* J */
+  *dpc++ = 0.0;				       /* B  assumes tNB > 0.0, which must be true */
+  *dpc++ = P7_DELTAT( 0.0, gm->xsc[p7P_B][0]); /* L */
+  *dpc++ = P7_DELTAT( 0.0, gm->xsc[p7P_B][1]); /* G */
+  *dpc   = -eslINFINITY;		       /* C */
+
+  /* Main DP recursion for rows 1..L */
+  for (i = 1; i <= L; i++)
+    {
+      ppp = pp->dp[i] + p7GD_NSCELLS; /* positioned at pp[i,k=1,ML]     */
+      tsc = gm->tsc;		      /* model on k=0 transitions (k-1 as we enter loop) */
+      dpp = gxd->dp[i-1];	      /* prev row on k=0 (k-1 as we enter loop) */
+      dpc = gxd->dp[i];		      
+      for (s = 0; s < p7GD_NSCELLS; s++) *dpc++ = -eslINFINITY;
+
+      dlv = dgv = xE = -eslINFINITY;
+
+      for (k = 1; k < M; k++)
+	{ /* main states [ ML MG IL IG DL DG] */ 	 
+	  /* ML calculation */   
+	  mlv = *dpc++ = (*ppp++ * gam1 - 1.) + 
+	    ESL_MAX( ESL_MAX( P7_DELTAT(*(dpp + p7GD_ML), *(tsc + p7P_MM)),
+			      P7_DELTAT(*(dpp + p7GD_IL), *(tsc + p7P_IM))),
+		     ESL_MAX( P7_DELTAT(*(dpp + p7GD_DL), *(tsc + p7P_DM)),
+			      P7_DELTAT( xL,              *(tsc + p7P_LM))));
+
+	  /* MG calculation */
+	  mgv = *dpc++ = (*ppp++ * gam1 - 1.) + 
+	    ESL_MAX( ESL_MAX( P7_DELTAT(*(dpp + p7GD_MG), *(tsc + p7P_MM)),
+			      P7_DELTAT(*(dpp + p7GD_IG), *(tsc + p7P_IM))),
+		     ESL_MAX( P7_DELTAT(*(dpp + p7GD_DG), *(tsc + p7P_DM)),
+			      P7_DELTAT( xG,              *(tsc + p7P_GM))));
+
+	  tsc += p7P_NTRANS;	/* transition scores now on gm->tsc[k] transitions */
+	  dpp += p7GD_NSCELLS;	/* prev row now on dp[i-1][k] cells       */
+
+	  /* IL/IG calculation. */
+	  *dpc++ = (*ppp++ * gam1 - 1.) +
+	    ESL_MAX( P7_DELTAT(*(dpp + p7GD_ML), *(tsc + p7P_MI)),
+		     P7_DELTAT(*(dpp + p7GD_IL), *(tsc + p7P_II)));
+
+	  *dpc++ = (*ppp++ * gam1 - 1.) +
+	    ESL_MAX( P7_DELTAT(*(dpp + p7GD_MG), *(tsc + p7P_MI)),
+		     P7_DELTAT(*(dpp + p7GD_IG), *(tsc + p7P_II)));
+
+	  /* E state update with ML->E and DL->E local exits k<M */
+	  xE = ESL_MAX(xE, ESL_MAX(mlv, dlv));
+
+	  /* Delete states: delayed storage trick */
+	  *dpc++ = dlv;
+	  *dpc++ = dgv;
+
+	  dlv = ESL_MAX( P7_DELTAT( mlv, *(tsc + p7P_MD)),
+			 P7_DELTAT( dlv, *(tsc + p7P_DD)));
+	  dgv = ESL_MAX( P7_DELTAT( mgv, *(tsc + p7P_MD)),
+			 P7_DELTAT( dgv, *(tsc + p7P_DD)));
+
+	  ppp += 2;		/* skip pp past DL/DG, which are zero and unused */
+	}
+
+      /* k=M is unrolled: no I state, and glocal exits. */
+      mlv = *dpc++ = (*ppp++ * gam1 - 1.) + 
+	ESL_MAX( ESL_MAX( P7_DELTAT(*(dpp + p7GD_ML), *(tsc + p7P_MM)),
+			  P7_DELTAT(*(dpp + p7GD_IL), *(tsc + p7P_IM))),
+		 ESL_MAX( P7_DELTAT(*(dpp + p7GD_DL), *(tsc + p7P_DM)),
+			  P7_DELTAT( xL,              *(tsc + p7P_LM))));
+      mgv = *dpc++ = (*ppp++ * gam1 - 1.) + 
+	ESL_MAX( ESL_MAX( P7_DELTAT(*(dpp + p7GD_MG), *(tsc + p7P_MM)),
+			  P7_DELTAT(*(dpp + p7GD_IG), *(tsc + p7P_IM))),
+		 ESL_MAX( P7_DELTAT(*(dpp + p7GD_DG), *(tsc + p7P_DM)),
+			  P7_DELTAT( xG,              *(tsc + p7P_GM))));
+      *dpc++ = 0.0;	/* IL */
+      *dpc++ = 0.0;	/* IG */
+      *dpc++ = dlv;
+      *dpc++ = dgv;
+      ppp += 2;
+
+      /* Special states [E N J B L G C] */
+      /* row i main states finished; dpc, ppp are now on first special state, E */
+      dpp += 2*p7GD_NSCELLS;	/* and now dpp is too */
+      
+      *dpc++ = ESL_MAX( xE, ESL_MAX( ESL_MAX(mlv, dlv),    /* E */
+				     ESL_MAX(mgv, dgv)));
+
+      *dpc++ = xN =          P7_DELTAT( *(dpp + p7GD_N) + *(ppp + p7GD_N) * gam1 - 1., gm->xsc[p7P_N][p7P_LOOP]);
+      
+      *dpc++ = xJ = ESL_MAX( P7_DELTAT( *(dpp + p7GD_J) + *(ppp + p7GD_J) * gam1 - 1., gm->xsc[p7P_J][p7P_LOOP]),
+			     P7_DELTAT( xE,                                            gm->xsc[p7P_E][p7P_LOOP]));
+      
+      *dpc++ = xB = ESL_MAX( P7_DELTAT( xN, gm->xsc[p7P_N][p7P_MOVE]),
+			     P7_DELTAT( xJ, gm->xsc[p7P_J][p7P_MOVE]));
+      
+      *dpc++ = xL = P7_DELTAT(xB, gm->xsc[p7P_B][0]);
+      *dpc++ = xG = P7_DELTAT(xB, gm->xsc[p7P_B][1]);
+      *dpc        = ESL_MAX( P7_DELTAT( *(dpp + p7GD_C) + *(ppp + p7GD_C) * gam1 - 1., gm->xsc[p7P_C][p7P_LOOP]), 
+			     P7_DELTAT( xE,                                            gm->xsc[p7P_E][p7P_MOVE]));
+    }
+  return eslOK;
+}
+/*--------------- end, MGE alignment DP -------------------------*/
+
+
+/*****************************************************************
+ * 5. Gamma-centroid alignment: traceback
+ *****************************************************************/
+
+
+static inline int
+select_mg(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, int k)
+{
+  int   state[4] = { p7GD_MG, p7GD_IG, p7GD_DG, p7GD_G };
+  float path[4];
+
+  path[0] = P7_DELTAT( P7_GMXD_MX(gxd, i-1, k-1, p7GD_MG), P7P_TSC(gm, k-1, p7P_MM));
+  path[1] = P7_DELTAT( P7_GMXD_MX(gxd, i-1, k-1, p7GD_IG), P7P_TSC(gm, k-1, p7P_IM));
+  path[2] = P7_DELTAT( P7_GMXD_MX(gxd, i-1, k-1, p7GD_DG), P7P_TSC(gm, k-1, p7P_DM));
+  path[3] = P7_DELTAT( P7_GMXD_XMX(gxd, i-1, p7GD_G),      P7P_TSC(gm, k-1, p7P_GM));
+  return state[esl_vec_FArgMax(path, 4)];
+}
+
+static inline int
+select_ml(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, int k)
+{
+  int   state[4] = { p7GD_ML, p7GD_IL, p7GD_DL, p7GD_L };
+  float path[4];
+
+  path[0] = P7_DELTAT( P7_GMXD_MX(gxd, i-1, k-1, p7GD_ML), P7P_TSC(gm, k-1, p7P_MM));
+  path[1] = P7_DELTAT( P7_GMXD_MX(gxd, i-1, k-1, p7GD_IL), P7P_TSC(gm, k-1, p7P_IM));
+  path[2] = P7_DELTAT( P7_GMXD_MX(gxd, i-1, k-1, p7GD_DL), P7P_TSC(gm, k-1, p7P_DM));
+  path[3] = P7_DELTAT( P7_GMXD_XMX(gxd, i-1, p7GD_L),      P7P_TSC(gm, k-1, p7P_LM));
+  return state[esl_vec_FArgMax(path, 4)];
+}
+
+static inline int
+select_ig(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, int k)
+{
+  float path[2];
+
+  path[0] = P7_DELTAT( P7_GMXD_MX(gxd, i-1, k, p7GD_MG), P7P_TSC(gm, k, p7P_MI));
+  path[1] = P7_DELTAT( P7_GMXD_MX(gxd, i-1, k, p7GD_IG), P7P_TSC(gm, k, p7P_II));
+  return ( (path[0] >= path[1]) ? p7GD_MG : p7GD_IG);
+}
+
+static inline int
+select_il(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, int k)
+{
+  float path[2];
+
+  path[0] = P7_DELTAT( P7_GMXD_MX(gxd, i-1, k, p7GD_ML), P7P_TSC(gm, k, p7P_MI));
+  path[1] = P7_DELTAT( P7_GMXD_MX(gxd, i-1, k, p7GD_IL), P7P_TSC(gm, k, p7P_II));
+  return ( (path[0] >= path[1]) ? p7GD_ML : p7GD_IL);
+}
+
+static inline int
+select_dg(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, int k)
+{
+  float path[2];
+
+  path[0] = P7_DELTAT( P7_GMXD_MX(gxd, i, k-1, p7GD_MG), P7P_TSC(gm, k-1, p7P_MD));
+  path[1] = P7_DELTAT( P7_GMXD_MX(gxd, i, k-1, p7GD_DG), P7P_TSC(gm, k-1, p7P_DD));
+  return ( (path[0] >= path[1]) ? p7GD_MG : p7GD_DG);
+}
+
+static inline int
+select_dl(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, int k)
+{
+  float path[2];
+
+  path[0] = P7_DELTAT( P7_GMXD_MX(gxd, i, k-1, p7GD_ML), P7P_TSC(gm, k-1, p7P_MD));
+  path[1] = P7_DELTAT( P7_GMXD_MX(gxd, i, k-1, p7GD_DL), P7P_TSC(gm, k-1, p7P_DD));
+  return ( (path[0] >= path[1]) ? p7GD_ML : p7GD_DL);
+}
+
+static inline int
+select_e(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, int *ret_k)
+{
+  float *dpc = gxd->dp[i] + p7GD_NSCELLS; /* position at k=1, ML */
+  float max  = -eslINFINITY;
+  int   smax = -1;
+  int   kmax = -1;
+  int   k;
+
+  for (k = 1; k < gm->M; k++)
+    { /* [ML MG IL IG DL DG] */
+      if (*dpc >= max) { max = *dpc; smax = p7GD_ML; kmax = k; }   dpc+=4;
+      if (*dpc >= max) { max = *dpc; smax = p7GD_DL; kmax = k; }   dpc+=2;
+    }
+  if (*dpc >= max) { max = *dpc; smax = p7GD_ML; kmax = k; }       dpc++;
+  if (*dpc >= max) { max = *dpc; smax = p7GD_MG; kmax = k; }       dpc+=3;
+  if (*dpc >= max) { max = *dpc; smax = p7GD_DL; kmax = k; }       dpc++;
+  if (*dpc >= max) { max = *dpc; smax = p7GD_DG; kmax = k; }       
+
+  *ret_k = kmax;
+  return smax;
+}
+
+static inline int
+select_n(int i)
+{
+  return ((i==0) ? -1 : p7GD_N);
+}
+
+static inline int
+select_j(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, const P7_GMXD *pp, float gamma)
+{
+  float path[2];
+  float rsc = P7_GMXD_XMX(pp, i, p7GD_J) * (gamma + 1.) - 1.0;
+
+  path[0] = P7_DELTAT ( rsc + P7_GMXD_XMX(gxd, i-1, p7GD_J), gm->xsc[p7P_J][p7P_LOOP]);
+  path[1] = P7_DELTAT (       P7_GMXD_XMX(gxd, i,   p7GD_E), gm->xsc[p7P_E][p7P_LOOP]);
+  return ( (path[0] > path[1]) ? p7GD_J : p7GD_E);
+}
+
+static inline int
+select_b( const P7_PROFILE *gm, const P7_GMXD *gxd, int i)
+{
+  float path[2];
+
+  path[0] = P7_DELTAT( P7_GMXD_XMX(gxd, i, p7GD_N), gm->xsc[p7P_N][p7P_MOVE]);
+  path[1] = P7_DELTAT( P7_GMXD_XMX(gxd, i, p7GD_J), gm->xsc[p7P_J][p7P_MOVE]);
+  return ( (path[0] > path[1]) ? p7GD_N : p7GD_J);
+}
+
+static inline int
+select_c(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, const P7_GMXD *pp, float gamma)
+{
+  float path[2];
+  float rsc = P7_GMXD_XMX(pp, i, p7GD_C) * (gamma + 1.) - 1.0;
+
+  path[0] = P7_DELTAT ( rsc + P7_GMXD_XMX(gxd, i-1, p7GD_C), gm->xsc[p7P_C][p7P_LOOP]);
+  path[1] = P7_DELTAT (       P7_GMXD_XMX(gxd, i,   p7GD_E), gm->xsc[p7P_E][p7P_MOVE]);
+  return ( (path[0] > path[1]) ? p7GD_C : p7GD_E);
+}
+
+
+int
+p7_GCentroidTrace(float gamma, const P7_PROFILE *gm, const P7_GMXD *pp, const P7_GMXD *gxd, P7_TRACE *tr)
+{
+  int   i    = gxd->L;
+  int   k    = 0;
+  int   sprv = p7GD_C;
+  int   scur, tcur;
+  float ppv;
+  int   status;
+
+  if ((status = p7_trace_AppendWithPP(tr, p7T_T, k, i, 0.0)) != eslOK) return status;
+  if ((status = p7_trace_AppendWithPP(tr, p7T_C, k, i, 0.0)) != eslOK) return status;
+
+  while (sprv != -1)
+    {
+      switch (sprv) {
+      case p7GD_ML: scur = select_ml(gm, gxd, i, k); k--; i--; break;
+      case p7GD_MG: scur = select_mg(gm, gxd, i, k); k--; i--; break;
+      case p7GD_IL: scur = select_il(gm, gxd, i, k);      i--; break;
+      case p7GD_IG: scur = select_ig(gm, gxd, i, k);      i--; break;
+      case p7GD_DL: scur = select_dl(gm, gxd, i, k); k--;      break;
+      case p7GD_DG: scur = select_dg(gm, gxd, i, k); k--;      break;
+      case p7GD_E:  scur = select_e (gm, gxd, i, &k);          break;
+      case p7GD_N:  scur = select_n (         i    );          break;
+      case p7GD_J:  scur = select_j (gm, gxd, i, pp, gamma);   break;
+      case p7GD_B:  scur = select_b (gm, gxd, i);              break;
+      case p7GD_L:  scur = p7GD_B;                             break;
+      case p7GD_G:  scur = p7GD_B;                             break;
+      case p7GD_C:  scur = select_c (gm, gxd, i, pp, gamma);   break;
+      default: ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in traceback");
+      }
+
+      switch (scur) {
+      case -1:      tcur = p7T_S;  ppv = 0.0; break;
+      case p7GD_ML: tcur = p7T_M;  ppv = P7_GMXD_MX(gxd, i, k, p7GD_ML) + P7_GMXD_MX(gxd, i, k, p7GD_MG); break;
+      case p7GD_MG: tcur = p7T_M;  ppv = P7_GMXD_MX(gxd, i, k, p7GD_ML) + P7_GMXD_MX(gxd, i, k, p7GD_MG); break;
+      case p7GD_IL: tcur = p7T_I;  ppv = P7_GMXD_MX(gxd, i, k, p7GD_IL) + P7_GMXD_MX(gxd, i, k, p7GD_IG); break;
+      case p7GD_IG: tcur = p7T_I;  ppv = P7_GMXD_MX(gxd, i, k, p7GD_IL) + P7_GMXD_MX(gxd, i, k, p7GD_IG); break;
+      case p7GD_DL: tcur = p7T_D;  ppv = 0.0;  break;                      
+      case p7GD_DG: tcur = p7T_D;  ppv = 0.0;  break;                      
+      case p7GD_E:  tcur = p7T_E;  ppv = 0.0;  break;
+      case p7GD_N:  tcur = p7T_N;  ppv = (sprv==scur ? P7_GMXD_XMX(gxd, i, p7GD_N) : 0.0); break;
+      case p7GD_J:  tcur = p7T_J;  ppv = (sprv==scur ? P7_GMXD_XMX(gxd, i, p7GD_J) : 0.0); break;
+      case p7GD_B:  tcur = p7T_B;  ppv = 0.0;  break;
+      case p7GD_L:  tcur = -1;     ppv = 0.0;  break;
+      case p7GD_G:  tcur = -1;     ppv = 0.0;  break;
+      case p7GD_C:  tcur = p7T_C;  ppv = (sprv==scur ? P7_GMXD_XMX(gxd, i, p7GD_C) : 0.0); break;
+      default: ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in traceback");
+      }
+
+      /* A glocal B->G->Mk wing-retraction entry: unfold it */
+      if (scur == p7GD_G) {
+	while (k > 1) {
+	  if ( (status = p7_trace_AppendWithPP(tr, p7T_D, k-1, i, 0.0)) != eslOK) return status;
+	  k--;
+	}
+      }
+
+      if (tcur != -1) {
+	if ( (status = p7_trace_AppendWithPP(tr, tcur, k, i, ppv)) != eslOK) return status;
+      }
+
+      /* For NCJ, we had to defer i decrement. */
+      if ( (scur == p7GD_N || scur == p7GD_J || scur == p7GD_C) && scur == sprv) i--;
+      sprv = scur;
+    }
+  
+  tr->M = gxd->M;
+  tr->L = gxd->L;
+  return p7_trace_Reverse(tr);
+}
+/*-------------- end, MGE alignment traceback -------------------*/
+
+/*****************************************************************
+ * 6. Benchmark driver.
  *****************************************************************/
 #ifdef p7GENERIC_FWDBACK_DUAL_BENCHMARK
 #include "p7_config.h"
@@ -530,7 +964,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 4. Unit tests
+ * 6. Unit tests
  *****************************************************************/
 #ifdef p7GENERIC_FWDBACK_DUAL_TESTDRIVE
 #include "esl_getopts.h"
@@ -799,7 +1233,7 @@ utest_enumeration(ESL_GETOPTS *go, ESL_RANDOMNESS *rng)
 
 
 /*****************************************************************
- * 5. Test driver
+ * 7. Test driver
  *****************************************************************/
 #ifdef p7GENERIC_FWDBACK_DUAL_TESTDRIVE
 
@@ -848,7 +1282,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 6. Example
+ * 8. Example
  *****************************************************************/
 #ifdef p7GENERIC_FWDBACK_DUAL_EXAMPLE
 #include "p7_config.h"

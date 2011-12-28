@@ -31,6 +31,7 @@
 #define DMX(i,k)      (dp[(i)][(k) * p7G_NSCELLS + p7G_D])
 #define XMX(i,s)      (xmx[(i) * p7G_NXCELLS + (s)])
 #define TSCDELTA(s,k) ( (tsc[(k) * p7P_NTRANS + (s)] == -eslINFINITY) ? FLT_MIN : 1.0)
+/* note: TSCDELTA is inefficient, deprecated; see P7_DELTAT for better alternative */
 
 /* The TSCDELTA is used to make impossible paths impossible in the
  * optimal accuracy decoding algorithm; see Kall et al (2005). What we

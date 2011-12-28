@@ -58,11 +58,14 @@ typedef struct p7_gmxd_s {
 
 
 
-/* using these macros requires some variable initialization:
- *    float **dp = gm->dp
- *    int     M  = gm->M
+/* Usually we access the matrix values by stepping pointers thru,
+ * exploiting detailed knowledge of their order. Sometimes, either for
+ * code clarity or robustness against layout changes, it's worth
+ * having access macros, though we can expect these to be relatively
+ * expensive to evaluate:
  */
-#define P7_GMXD_XMX(i,s) (dp[(i)][ (M+1) * p7GD_NSCELLS + (s)];
+#define P7_GMXD_XMX(gxd,i,s)  ( (gxd)->dp[(i)][ ( ((gxd)->M) +1) * p7GD_NSCELLS + (s)] )
+#define P7_GMXD_MX(gxd,i,k,s) ( (gxd)->dp[(i)][ (k)              * p7GD_NSCELLS + (s)] )
 
 
 
