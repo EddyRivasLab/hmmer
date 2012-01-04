@@ -602,7 +602,7 @@ main(int argc, char **argv)
 
   p7_GViterbi(sq->dsq, sq->n, gm, gx1, &vsc);
   p7_GTrace  (sq->dsq, sq->n, gm, gx1, tr);
-  p7_trace_SetPP(tr, gx2);
+  p7_gmx_SetPP(tr, gx2);
   p7_trace_Dump(stdout, tr, gm, sq->dsq);
 
   printf("vit = %.4f nats\n", vsc);

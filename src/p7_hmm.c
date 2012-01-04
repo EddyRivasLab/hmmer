@@ -323,65 +323,6 @@ p7_hmm_Zero(P7_HMM *hmm)
 
 
 
-/* Function:  p7_hmm_EncodeStatetype()
- * Synopsis:  Convert a state type string to internal code.
- *
- * Purpose:   Converts state type string <typestring> case insensitively to
- *            an internal code, and returns the code. For example,
- *            <p7_hmm_DecodeStatetype("M")> returns <p7T_M>.
- *            
- *            If the string isn't recognized, returns <p7T_BOGUS>.
- */
-char
-p7_hmm_EncodeStatetype(char *typestring)
-{
-  if      (strcasecmp(typestring, "M") == 0) return p7T_M;
-  else if (strcasecmp(typestring, "D") == 0) return p7T_D;
-  else if (strcasecmp(typestring, "I") == 0) return p7T_I;
-  else if (strcasecmp(typestring, "S") == 0) return p7T_S;
-  else if (strcasecmp(typestring, "N") == 0) return p7T_N;
-  else if (strcasecmp(typestring, "B") == 0) return p7T_B;
-  else if (strcasecmp(typestring, "E") == 0) return p7T_E;
-  else if (strcasecmp(typestring, "C") == 0) return p7T_C;
-  else if (strcasecmp(typestring, "T") == 0) return p7T_T;
-  else if (strcasecmp(typestring, "J") == 0) return p7T_J;
-  else if (strcasecmp(typestring, "X") == 0) return p7T_X;
-  else return p7T_BOGUS;
-}
-
-/* Function:  p7_hmm_DecodeStatetype()
- * Synopsis:  Convert an internal state type code to a string.
- *
- * Purpose:   Returns the state type in text, as a string of length 1 
- *            (2 if you count <NUL>). For example, <p7_DecodeStatetype(p7T_S)>
- *            returns "S".
- *            
- * Throws:    an internal <eslEINVAL> exception if the code doesn't 
- *            exist, and returns <NULL>.           
- */
-char *
-p7_hmm_DecodeStatetype(char st)
-{
-  switch (st) {
-  case p7T_M: return "M";
-  case p7T_D: return "D";
-  case p7T_I: return "I";
-  case p7T_S: return "S";
-  case p7T_N: return "N";
-  case p7T_B: return "B";
-  case p7T_E: return "E";
-  case p7T_C: return "C";
-  case p7T_T: return "T";
-  case p7T_J: return "J";
-  case p7T_X: return "X";
-  default:    break;
-  }
-  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such statetype code %d", st);
-  return NULL;
-}
-
-
-
 
 /*****************************************************************
  * 2. Convenience routines for setting fields in an HMM.

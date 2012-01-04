@@ -334,133 +334,58 @@ p7_profile_IsMultihit(const P7_PROFILE *gm)
 
 /* Function:  p7_profile_GetT()
  *
- * Purpose:   Convenience function that looks up a transition score in
- *            profile <gm> for a transition from state type <st1> in
- *            node <k1> to state type <st2> in node <k2>. For unique
- *            state types that aren't in nodes (<p7T_S>, for example), the
- *            <k> value is ignored, though it would be customarily passed as 0.
- *            Return the transition score in <ret_tsc>.
- *            
- *            This function would almost always be called on profile
- *            traces, of course, but it's possible to call it
- *            on core traces (for example, if you were to try to 
- *            trace_Dump() during HMM construction, and you wanted
- *            to see detailed profile scores for that trace). Core traces
- *            can contain <p7T_X> "states" used solely to signal
- *            a sequence fragment, treated as missing data. Transitions
- *            involving <p7T_X> states are assigned zero score here.
- *            Other transitions that occur only in core traces
- *            (B->I0, B->D1, I_M->E) also silently get a zero score.
- *            This is safe, because we would only ever use this number
- *            for display, not as a log probability somewhere.
+ * Purpose:   Convenience function that looks up and returns a
+ *            transition score in profile <gm> for a transition from
+ *            state type <st1> in node <k1> to state type <st2> in
+ *            node <k2>. For unique state types that aren't in nodes
+ *            (<p7T_S>, for example), the <k> value is ignored, and
+ *            it is customarily passed as 0.
  *
- * Returns:   <eslOK> on success, and <*ret_tsc> contains the requested
- *            transition score.            
- * 
- * Throws:    <eslEINVAL> if a nonexistent transition is requested. Now
- *            <*ret_tsc> is set to $-\infty$.
+ *            Assumes that the transition is valid. If caller has any
+ *            question about this, it needs to validate the transition
+ *            itself. 
  *            
+ *            Shouldn't be used in time-critical code.
  */
-int
-p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2, float *ret_tsc)
+float
+p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2)
 {
-  float tsc = 0.0f;
-  int   status;
-
-  /* Detect transitions that can only come from core traces;
-   * return 0.0 as a special case (this is only done for displaying
-   * "scores" in trace dumps, during debugging.)
-   */
-  if (st1 == p7T_X || st2 == p7T_X) return eslOK;
-  if (st1 == p7T_B && st2 == p7T_I) return eslOK;
-  if (st1 == p7T_B && st2 == p7T_D) return eslOK;
-  if (st1 == p7T_I && st1 == p7T_E) return eslOK;
-
-  /* Now we're sure this is a profile trace, as it should usually be. */
   switch (st1) {
-  case p7T_S:  break;
-  case p7T_T:  break;
-  case p7T_N:
+  case p7T_S: return 0.0;
+  case p7T_N: return (st2 == p7T_B  ? gm->xsc[p7P_N][p7P_MOVE] : gm->xsc[p7P_N][p7P_LOOP]);
+  case p7T_B: return (st2 == p7T_L  ? gm->xsc[p7P_B][0]        : gm->xsc[p7P_B][1]);
+  case p7T_L: return P7P_TSC(gm, k2-1, p7P_LM);
+  case p7T_G: return (st2 == p7T_MG ? gm->xsc[p7P_G][0]        : gm->xsc[p7P_G][1]);
+  case p7T_E: return (st2 == p7T_C  ? gm->xsc[p7P_E][p7P_MOVE] : gm->xsc[p7P_E][p7P_LOOP]); 
+  case p7T_C: return (st2 == p7T_T  ? gm->xsc[p7P_C][p7P_MOVE] : gm->xsc[p7P_C][p7P_LOOP]); 
+  case p7T_J: return (st2 == p7T_B  ? gm->xsc[p7P_J][p7P_MOVE] : gm->xsc[p7P_J][p7P_LOOP]); 
+
+  case p7T_ML: 
+  case p7T_MG:
     switch (st2) {
-    case p7T_B: tsc =  gm->xsc[p7P_N][p7P_MOVE]; break;
-    case p7T_N: tsc =  gm->xsc[p7P_N][p7P_LOOP]; break;
-    default:    ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
+    case p7T_ML: case p7T_MG: return P7P_TSC(gm, k1, p7P_MM);
+    case p7T_IL: case p7T_IG: return P7P_TSC(gm, k1, p7P_MI);
+    case p7T_DL: case p7T_DG: return P7P_TSC(gm, k1, p7P_MD);
+    case p7T_E:               return 0.0;
     }
-    break;
 
-  case p7T_B:
+  case p7T_DL:
+  case p7T_DG:
     switch (st2) {
-    case p7T_M: tsc = P7P_TSC(gm, k2-1, p7P_LM); break; /* remember, B->Mk is stored in [k-1][p7P_LM] */
-    default:    ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
+    case p7T_ML: case p7T_MG:  return P7P_TSC(gm, k1, p7P_DM);
+    case p7T_DL: case p7T_DG:  return P7P_TSC(gm, k1, p7P_DD);
+    case p7T_E:                return 0.0;
     }
-    break;
 
-  case p7T_M:
+  case p7T_IL: 
+  case p7T_IG:  
     switch (st2) {
-    case p7T_M: tsc = P7P_TSC(gm, k1, p7P_MM); break;
-    case p7T_I: tsc = P7P_TSC(gm, k1, p7P_MI); break;
-    case p7T_D: tsc = P7P_TSC(gm, k1, p7P_MD); break;
-    case p7T_E: 
-      if (k1 != gm->M && ! p7_profile_IsLocal(gm)) ESL_EXCEPTION(eslEINVAL, "local end transition (M%d of %d) in non-local model", k1, gm->M);
-      tsc = 0.0f;		/* by def'n in H3 local alignment */
-      break;
-    default:    ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DecodeStatetype(st1), k1, p7_hmm_DecodeStatetype(st2));
+    case p7T_ML: case p7T_MG: return P7P_TSC(gm, k1, p7P_IM);
+    case p7T_IL: case p7T_IG: return P7P_TSC(gm, k1, p7P_II);
     }
-    break;
-
-  case p7T_D:
-    switch (st2) {
-    case p7T_M: tsc = P7P_TSC(gm, k1, p7P_DM); break;
-    case p7T_D: tsc = P7P_TSC(gm, k1, p7P_DD); break;
-    case p7T_E: 
-      if (k1 != gm->M && ! p7_profile_IsLocal(gm)) ESL_EXCEPTION(eslEINVAL, "local end transition (D%d of %d) in non-local model", k1, gm->M);
-      tsc = 0.0f;		/* by def'n in H3 local alignment */
-      break;
-    default:    ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DecodeStatetype(st1), k1, p7_hmm_DecodeStatetype(st2));
-    }
-    break;
-
-  case p7T_I:
-    switch (st2) {
-    case p7T_M: tsc = P7P_TSC(gm, k1, p7P_IM); break;
-    case p7T_I: tsc = P7P_TSC(gm, k1, p7P_II); break;
-    default:    ESL_XEXCEPTION(eslEINVAL, "bad transition %s_%d->%s", p7_hmm_DecodeStatetype(st1), k1, p7_hmm_DecodeStatetype(st2));
-    }
-    break;
-
-  case p7T_E:
-    switch (st2) {
-    case p7T_C: tsc = gm->xsc[p7P_E][p7P_MOVE]; break;
-    case p7T_J: tsc = gm->xsc[p7P_E][p7P_LOOP]; break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
-    }
-    break;
-
-  case p7T_J:
-    switch (st2) {
-    case p7T_B: tsc = gm->xsc[p7P_J][p7P_MOVE]; break;
-    case p7T_J: tsc = gm->xsc[p7P_J][p7P_LOOP]; break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
-    }
-    break;
-
-  case p7T_C:
-    switch (st2) {
-    case p7T_T:  tsc = gm->xsc[p7P_C][p7P_MOVE]; break;
-    case p7T_C:  tsc = gm->xsc[p7P_C][p7P_LOOP]; break;
-    default:     ESL_XEXCEPTION(eslEINVAL, "bad transition %s->%s", p7_hmm_DecodeStatetype(st1), p7_hmm_DecodeStatetype(st2));
-    }
-    break;
-
-  default: ESL_XEXCEPTION(eslEINVAL, "bad state type %d in traceback", st1);
-  }
-
-  *ret_tsc = tsc;
-  return eslOK;
-
- ERROR:
-  *ret_tsc = -eslINFINITY;
-  return status;
+  }    
+  /*NOTREACHED*/
+  return 0.0;
 }
 
 

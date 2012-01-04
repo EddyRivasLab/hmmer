@@ -203,7 +203,8 @@ EXAMPLES = \
 	p7_hmmfile_example\
 	p7_pipeline_example\
 	p7_profile_example\
-	p7_spensemble_example
+	p7_spensemble_example\
+	p7_trace_example
 
 # beautification magic stolen from git
 QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c

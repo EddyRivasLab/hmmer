@@ -667,7 +667,7 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
 #endif
       if (p7_GOATrace(gm, gx2, gx1, trg)                  != eslOK) esl_fatal(msg);
 
-      if (p7_trace_SetPP(tro, gx2)                        != eslOK) esl_fatal(msg);
+      if (p7_gmx_SetPP(tro, gx2)                          != eslOK) esl_fatal(msg);
 
       if (esl_opt_GetBoolean(go, "--traces"))
 	{
@@ -680,7 +680,7 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
       if (p7_trace_Validate(trg, abc, sq->dsq, NULL)      != eslOK) esl_fatal(msg);
       if (p7_trace_Compare(tr, trg, pptol)                != eslOK) esl_fatal(msg);
 
-      accscore_o  = p7_trace_GetExpectedAccuracy(tro); /* according to gx2; see p7_trace_SetPP() call above */
+      accscore_o  = p7_trace_GetExpectedAccuracy(tro); /* according to gx2; see p7_gmx_SetPP() call above */
       accscore_g2 = p7_trace_GetExpectedAccuracy(trg);
 
 #if 0

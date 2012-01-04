@@ -328,6 +328,65 @@ p7_gmx_DumpWindow(FILE *ofp, P7_GMX *gx, int istart, int iend, int kstart, int k
   return eslOK;
 }
 
+/* Function:  p7_gmx_SetPP()
+ * Synopsis:  Set posterior probs of an arbitrary trace.
+ *
+ * Purpose:   Set the posterior probability fields of an arbitrary
+ *            trace <tr>, by accessing posterior residue probabilities
+ *            in decoding matrix <pp>. 
+ *            
+ *            In general, <pp> was created by <p7_GDecoding()> 
+ *            or converted from the optimized matrix created by
+ *            <p7_Decoding()>.
+ *
+ *            Because we're using <P7_GMX>, a deprecated local-only
+ *            matrix, the trace may only contain local paths: 
+ *            no G, MG, DG, or IG states.
+ *            
+ *            This is classed as a debugging function, because in
+ *            general traces with posterior probabilities are created
+ *            directly during gamma centroid alignment tracebacks.
+ *            This function allows us to add PP annotation to any
+ *            trace, including suboptimal samples or Viterbi
+ *            aligments.
+ * 
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ *            <eslEINVAL> on internal corruptions.
+ */
+int
+p7_gmx_SetPP(P7_TRACE *tr, const P7_GMX *pp)
+{
+  float **dp  = pp->dp;		/* so {MDI}MX() macros work */
+  float  *xmx = pp->xmx;	/* so XMX() macro works     */
+  int z;
+  int status;
+
+  if (tr->pp == NULL) ESL_ALLOC(tr->pp, sizeof(float) * tr->nalloc);
+
+  for (z = 0; z < tr->N; z++)
+    {
+      if (tr->i[z] > 0)		/* an emitting state? */
+	{
+	  switch (tr->st[z]) {
+	  case p7T_ML:  tr->pp[z] = MMX(tr->i[z], tr->k[z]); break;
+	  case p7T_IL:  tr->pp[z] = IMX(tr->i[z], tr->k[z]); break;
+	  case p7T_N:   tr->pp[z] = XMX(tr->i[z], p7G_N);    break;
+	  case p7T_C:   tr->pp[z] = XMX(tr->i[z], p7G_C);    break;
+	  case p7T_J:   tr->pp[z] = XMX(tr->i[z], p7G_J);    break;
+	  default:      ESL_EXCEPTION(eslEINVAL, "no such emitting state");
+	  }
+	}
+      else
+	tr->pp[z] = 0.0;
+    }
+  return eslOK;
+       
+ ERROR:
+  return status;
+}
+
 
 /*****************************************************************
  * 3. Unit tests

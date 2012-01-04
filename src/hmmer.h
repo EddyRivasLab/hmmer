@@ -432,53 +432,56 @@ typedef struct p7_bg_s {
  * A traceback only makes sense in a triplet (tr, gm, dsq), for a
  * given profile or HMM (with nodes 1..M) and a given digital sequence
  * (with positions 1..L).
- * 
- * A traceback may be relative to a profile (usually) or to a core
- * model (as a special case in model construction; see build.c). You
- * can tell the difference by looking at the first statetype,
- * tr->st[0]; if it's a p7T_S, it's for a profile, and if it's p7T_B,
- * it's for a core model.
- * 
- * A "profile" trace uniquely has S,N,C,T,J states and their
- * transitions; it also can have B->Mk and Mk->E internal entry/exit
- * transitions for local alignments. It may not contain X states.
  *
- * A "core" trace may contain I0, IM, and D1 states and their
- * transitions. A "core" trace can also have B->X->{MDI}k and
- * {MDI}k->X->E transitions as a special hack in a build procedure, to
- * deal with the case of a local alignment fragment implied by an
- * input alignment, which is "impossible" for a core model.
- * X "states" only appear in core traces, and only at these
- * entry/exit places; some code depends on this.
+ * A traceback is always relative to the complete profile search model:
+ * so minimally, S->N->B->{GL}->...->E->C->T.
+ * 
+ * It may not contain I0 or IM states.
+ * D1 state can only occur as a G->D1 glocal entry.
+ * 
+ * State [3] in a trace is always G or L; if you know this is a
+ * single-domain trace (no J states), you can test glocal vs. local by
+ * looking at [3].
  *   
- * A profile's N,C,J states emit on transition, not on state, so a
- * path of N emits 0 residues, NN emits 1 residue, NNN emits 2
- * residues, and so on. By convention, the trace always associates an
- * emission-on-transition with the trailing (destination) state, so
- * the first N, C, or J is stored in a trace as a nonemitter (i=0).
+ * N,C,J states emit on transition, not on state, so a path of N emits
+ * 0 residues, NN emits 1 residue, NNN emits 2 residues, and so on. By
+ * convention, the trace always associates an emission-on-transition
+ * with the trailing (destination) state, so the first N, C, or J is
+ * stored in a trace as a nonemitter (i=0).
  *
  * A i coords in a traceback are usually 1..L with respect to an
  * unaligned digital target sequence, but in the special case of
  * traces faked from existing MSAs (as in hmmbuild), the coords may
- * be 1..alen relative to an MSA's columns.
+ * be 1..alen relative to an MSA's columns. 
+ * 
+ * tr->i[] and tr->pp[] values are only nonzero for an emitted residue
+ * x_i; so nonemitting states {DG,DL,S,B,L,G,E,T} always have i[]=0
+ * and pp[] = 0.0.
+ * 
+ * tr->k[] values are only nonzero for a main model state; so special
+ * states {SNBLGECJT} always have k[] = 0.
  */
 
 /* State types */
 enum p7t_statetype_e {
-  p7T_BOGUS =  0,
-  p7T_M     =  1,
-  p7T_D     =  2,
-  p7T_I     =  3,
-  p7T_S     =  4,
-  p7T_N     =  5,
-  p7T_B     =  6, 
-  p7T_E     =  7,
-  p7T_C     =  8, 
-  p7T_T     =  9, 
-  p7T_J     = 10,
-  p7T_X     = 11, 	/* missing data: used esp. for local entry/exits */
+  p7T_BOGUS =  0,	/* only needed once: in _EncodeStatetype() as an error code  */
+  p7T_ML    =  1,
+  p7T_MG    =  2,
+  p7T_IL    =  3,
+  p7T_IG    =  4,
+  p7T_DL    =  5,
+  p7T_DG    =  6,
+  p7T_S     =  7,
+  p7T_N     =  8,
+  p7T_B     =  9, 
+  p7T_L     = 10,
+  p7T_G     = 11,
+  p7T_E     = 12,
+  p7T_C     = 13, 
+  p7T_J     = 14,
+  p7T_T     = 15, 
 };
-#define p7T_NSTATETYPES 12
+#define p7T_NSTATETYPES 16	/* used when we collect statetype usage counts, for example */
 
 typedef struct p7_trace_s {
   int    N;		/* length of traceback                       */
@@ -498,6 +501,7 @@ typedef struct p7_trace_s {
   int   ndomalloc;	/* current allocated size of these stacks            */
 
 } P7_TRACE;
+
 
 
 /*****************************************************************
@@ -1363,6 +1367,7 @@ extern void    p7_gmx_Destroy(P7_GMX *gx);
 extern int     p7_gmx_Compare(P7_GMX *gx1, P7_GMX *gx2, float tolerance);
 extern int     p7_gmx_Dump(FILE *fp, P7_GMX *gx, int flags);
 extern int     p7_gmx_DumpWindow(FILE *fp, P7_GMX *gx, int istart, int iend, int kstart, int kend, int show_specials);
+extern int     p7_gmx_SetPP(P7_TRACE *tr, const P7_GMX *pp);
 
 
 /* p7_hmm.c */
@@ -1374,8 +1379,6 @@ extern void    p7_hmm_Destroy(P7_HMM *hmm);
 extern int     p7_hmm_CopyParameters(const P7_HMM *src, P7_HMM *dest);
 extern P7_HMM *p7_hmm_Clone(const P7_HMM *hmm);
 extern int     p7_hmm_Zero(P7_HMM *hmm);
-extern char    p7_hmm_EncodeStatetype(char *typestring);
-extern char   *p7_hmm_DecodeStatetype(char st);
 /*      2. Convenience routines for setting fields in an HMM. */
 extern int     p7_hmm_SetName       (P7_HMM *hmm, char *name);
 extern int     p7_hmm_SetAccession  (P7_HMM *hmm, char *acc);
@@ -1461,8 +1464,7 @@ extern size_t      p7_profile_Sizeof(P7_PROFILE *gm);
 extern void        p7_profile_Destroy(P7_PROFILE *gm);
 extern int         p7_profile_IsLocal(const P7_PROFILE *gm);
 extern int         p7_profile_IsMultihit(const P7_PROFILE *gm);
-extern int         p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, 
-				   char st2, int k2, float *ret_tsc);
+extern float       p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2);
 extern int         p7_profile_Dump(FILE *fp, P7_PROFILE *gm);
 extern int         p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol);
 extern char       *p7_profile_DecodeT(int tidx);
@@ -1535,11 +1537,12 @@ extern int  p7_trace_GetStateUseCounts(const P7_TRACE *tr, int *counts);
 extern int  p7_trace_GetDomainCoords  (const P7_TRACE *tr, int which, int *ret_i1, int *ret_i2,
 				       int *ret_k1, int *ret_k2);
 
+extern char *p7_trace_DecodeStatetype(char st);
 extern int   p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *dsq, char *errbuf);
-extern int   p7_trace_Dump(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ *dsq);
+extern int   p7_trace_Dump(FILE *fp, const P7_TRACE *tr);
+extern int   p7_trace_DumpAnnotated(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ *dsq);
 extern int   p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol);
 extern int   p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, float *ret_sc);
-extern int   p7_trace_SetPP(P7_TRACE *tr, const P7_GMX *pp);
 extern float p7_trace_GetExpectedAccuracy(const P7_TRACE *tr);
 
 extern int  p7_trace_Append(P7_TRACE *tr, char st, int k, int i);
