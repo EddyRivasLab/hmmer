@@ -514,9 +514,10 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
 
 
 /* Function:  p7_Builder_MaxLength()
- * Synopsis:  Compute the maximum likely length of an emitted sequence
  *
- * Computes a fairly tight upper bound on domain length, by computing the
+ * Purpose:  Compute the maximum likely length of an emitted sequence
+ *
+ * Synopsis:   Computes a fairly tight upper bound on domain length, by computing the
  * probability of the model emitting sequences of all lengths up to some
  * threshold, based on a dynamic-programming approach.  See TJW 01/14/2010 notes (p1)
  *

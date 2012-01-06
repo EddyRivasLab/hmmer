@@ -363,11 +363,16 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
  *            calculations) and obtain an optimal accuracy alignment,
  *            using <fwd> and <bck> matrices as workspace for the
  *            necessary full-matrix DP calculations. Caller provides a
- *            new or reused <ddef> object to hold these results.
+ *            new or reused <ddef> object to hold these results, and
+ *            optionally provides a new or reused <ddef_app> object to
+ *            hold details required by nhmmer to produce the APP
+ *            (posterior probability of being aligned) line in
+ *            alignment printout.
  *            
  *            Upon return, <ddef> contains the definitions of all the
  *            domains: their bounds, their null-corrected Forward
  *            scores, and their optimal posterior accuracy alignments.
+ *            If <ddef_app> is not null, it is now prepared for reuse.
  *            
  * Returns:   <eslOK> on success.           
  *            
@@ -416,8 +421,8 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
         if (is_multidomain_region(ddef, i, j))
         {
             /* This region appears to contain more than one domain, so we have to
-                   * resolve it by cluster analysis of posterior trace samples, to define
-                   * one or more domain envelopes.
+             * resolve it by cluster analysis of posterior trace samples, to define
+             * one or more domain envelopes.
              */
             ddef->nclustered++;
 
@@ -686,9 +691,13 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *
  * space to hold Forward and Backward calculations for this domain
  * against the model. (The caller will typically already have matrices
  * sufficient for the complete sequence lying around, and can just use
- * those.) The caller also provides a <P7_DOMAINDEF> object which is
- * (efficiently, we trust) managing any necessary temporary working
- * space and heuristic thresholds.
+ * those.) The caller also provides a <P7_DOMAINDEF> object (ddef)
+ * which is (efficiently, we trust) managing any necessary temporary
+ * working space and heuristic thresholds. The caller also optionally
+ * provides a second <P7_DOMAINDEF> object (ddef_app) which if
+ * provided is used to hold details required by nhmmer to produce the
+ * APP (posterior probability of being aligned) line in alignment
+ * printout.
  * 
  * Returns <eslOK> if a domain was successfully identified, scored,
  * and aligned in the envelope; if so, the per-domain information is
@@ -699,6 +708,8 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *
  * <ddef>: <ddef->tr> has been used, and possibly reallocated, for
  *         the OA trace of the domain. Before exit, we called
  *         <Reuse()> on it.
+ *
+ * <ddef_app>: if not null, it is now prepared for reuse.
  * 
  * <ox1> : happens to be holding OA score matrix for the domain
  *         upon return, but that's not part of the spec; officially

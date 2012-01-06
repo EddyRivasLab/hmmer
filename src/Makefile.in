@@ -174,7 +174,8 @@ UTESTS =\
 	p7_hmmfile_utest\
 	p7_profile_utest\
 	p7_tophits_utest\
-	p7_trace_utest
+	p7_trace_utest\
+	p7_msvdata_utest
 
 ITESTS = \
 	itest_brute

@@ -39,7 +39,14 @@
  *            and FM-MSV diagonal scoring. The extension scores are used in
  *            FM-MSV's pruning step.
  *
- * Returns:   eslEMEM on allocation failure, eslOK otherwise.
+ * Args:      gm         - P7_PROFILE containing scores used to produce MSVDATA contents
+ *            data       - where scores and will be stored
+ *            do_opt_ext - boolean, TRUE if optimal-extension scores are required (for FM-MSV)
+ *            scale      - used to produce 8-bit extracted scores
+ *            bias       - used to produce 8-bit extracted scores
+ *
+ * Returns:   data->scores and possibly ->opt_ext_(fwd|rev) are filled in;
+ *            return eslEMEM on allocation failure, eslOK otherwise.
  */
 static int
 p7_hmm_GetScoreArrays(P7_PROFILE *gm, P7_MSVDATA *data, int do_opt_ext, float scale, uint bias ) {
@@ -99,8 +106,8 @@ ERROR:
 
 
 /* Function:  p7_hmm_MSVDataDestroy()
- * Synopsis:  Destroy a <P7_MSVDATA> object.
  *
+ * Synopsis:  Destroy a <P7_MSVDATA> object.
  */
 void
 p7_hmm_MSVDataDestroy(P7_MSVDATA *data )
@@ -140,6 +147,14 @@ p7_hmm_MSVDataDestroy(P7_MSVDATA *data )
  *            length L_i for each position i at which all but
  *            (1-p7_DEFAULT_WINDOW_BETA) of position i's match- and
  *            insert-state emissions are length L_i or shorter.
+ *
+ * Args:      gm         - P7_PROFILE containing scores used to produce MSVDATA contents
+ *            hmm        - P7_HMM containing transitions probabilities used to compute (pre|suf)fix lengths
+ *            do_opt_ext - boolean, TRUE if optimal-extension scores are required (for FM-MSV)
+ *            scale      - used to produce 8-bit extracted scores
+ *            bias       - used to produce 8-bit extracted scores
+ *
+ * Returns:   a pointer to the new <P7_MSVDATA> object.
  *
  * Throws:    <NULL> on allocation failure.
  */
@@ -187,6 +202,81 @@ ERROR:
 }
 
 
+
+/*****************************************************************
+ * 2. Unit tests
+ *****************************************************************/
+#ifdef p7MSVDATA_TESTDRIVE
+
+static void
+utest_createMSVData(ESL_GETOPTS *go, ESL_RANDOMNESS *r )
+{
+  char          msg[]       = "create MSVData unit test failed";
+  P7_HMM        *hmm        = NULL;
+  ESL_ALPHABET  *abc        = NULL;
+  P7_PROFILE    *gm         = NULL;
+  P7_OPROFILE   *om         = NULL;
+  P7_MSVDATA    *msvdata    = NULL;
+
+  if ( (abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal(msg);
+
+  if (  p7_hmm_Sample(r, 100, abc, &hmm)        != eslOK) esl_fatal(msg);
+  if (  (gm = p7_profile_Create (hmm->M, abc))  == NULL ) esl_fatal(msg);
+  if (  (om = p7_oprofile_Create(hmm->M, abc))  == NULL ) esl_fatal(msg);
+
+  if (  (msvdata = p7_hmm_MSVDataCreate(gm, hmm, FALSE, om->scale_b, om->bias_b))  == NULL ) esl_fatal(msg);
+
+  p7_hmm_MSVDataDestroy(msvdata);
+  p7_oprofile_Destroy(om);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+
+}
+#endif /*p7BG_TESTDRIVE*/
+
+
+/*****************************************************************
+ * 3. Test driver
+ *****************************************************************/
+
+#ifdef p7MSVDATA_TESTDRIVE
+#include "esl_config.h"
+
+#include <stdio.h>
+
+#include "easel.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+   /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
+  {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                            0},
+  {"-s",  eslARG_INT,       "0", NULL, NULL, NULL, NULL, NULL, "set random number seed to <n>",                  0},
+  {"-v",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show verbose commentary/output",                 0},
+  { 0,0,0,0,0,0,0,0,0,0},
+};
+static char usage[]  = "[-options]";
+static char banner[] = "test driver for p7_bg";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go          = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *rng         = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  int             be_verbose  = esl_opt_GetBoolean(go, "-v");
+
+  if (be_verbose) printf("p7_msvdata unit test: rng seed %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+
+  utest_createMSVData(go, rng);
+
+  esl_randomness_Destroy(rng);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /* p7BG_TESTDRIVE */
 
 /************************************************************
  * @LICENSE@

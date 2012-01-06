@@ -43,10 +43,11 @@
  *           
  *            However, even without an index, the routine will work fine.
  *
- * Args:      tr     - traceback
- *            which  - domain number, 0..tr->ndom-1
- *            om     - optimized profile (query)
- *            sq     - digital sequence (target)
+ * Args:      tr       - traceback
+ *            which    - domain number, 0..tr->ndom-1
+ *            om       - optimized profile (query)
+ *            sq       - digital sequence (target)
+ *            ddef_app - optional posterior prob alignment line; only nhmmer sends a not-NULL value
  *
  * Returns:   <eslOK> on success.
  *

@@ -42,6 +42,7 @@
 1 exercise p7_profile         @src/p7_profile_utest@
 1 exercise p7_tophits         @src/p7_tophits_utest@
 1 exercise p7_trace           @src/p7_trace_utest@
+1 exercise p7_msvdata         @src/p7_msvdata_utest@
 
 1 exercise decoding           @src/impl/decoding_utest@
 1 exercise fwdback            @src/impl/fwdback_utest@
@@ -264,7 +265,30 @@
 # --cpu: threads only
 # --mpi: MPI only
 
-
+# nhmmer    xxxxxxxxxxxxxxxxxxxx
+1 prep      rnddb                @easel/miniapps/esl-shuffle@ -G --dna   -L 10000 -N 2 -o %RNDDB%
+1 exercise  nhmmer               @src/nhmmer@                             !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/-h            @src/nhmmer@  -h
+1 exercise  nhmmer/-o            @src/nhmmer@  -o           %nhmmer.out%  !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/-A            @src/nhmmer@  -A           %nhmmer.sto%  !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/--tblout      @src/nhmmer@  --tblout     %nhmmer.tbl%  !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/--dfamtblout  @src/nhmmer@  --dfamtblout %nhmmer.dtbl% !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/--acc         @src/nhmmer@  --acc                      !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/--noali       @src/nhmmer@  --noali                    !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/--notextw     @src/nhmmer@  --notextw                  !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/--textw       @src/nhmmer@  --textw 256                !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/-E            @src/nhmmer@  -E 0.01                    !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/-T            @src/nhmmer@  -T 20                      !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/--incE        @src/nhmmer@  --incE 0.01                !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/--incT        @src/nhmmer@  --incT 20                  !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/--max         @src/nhmmer@  --max                      !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/--F1          @src/nhmmer@  --F1 0.03                  !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/--F2          @src/nhmmer@  --F2 0.002                 !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/--F3          @src/nhmmer@  --F3 0.0002                !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/--nobias      @src/nhmmer@  --nobias                   !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/--nonull2     @src/nhmmer@  --nonull2                  !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/-Z            @src/nhmmer@  -Z 45000000                !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmer/--seed        @src/nhmmer@  --seed 42                  !tutorial/SNORD96.hmm! %RNDDB%
 
 ################################################################
 # Integration tests

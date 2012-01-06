@@ -809,24 +809,38 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
  * Synopsis:  the part of the LongTarget P7 search Pipeline downstream
  *            of the MSV filter
  *
- * Purpose:   This is called by either the standard (SIMD-MSV) pipeline
- *            or the FM-index pipeline, and runs the post-MSV part of H3's
+ * Purpose:   This is called by either the standard (SIMD-MSV) long-target
+ *            pipeline (p7_Pipeline_LongTarget) or the FM-index long-target
+ *            pipeline (p7_Pipeline_FM), and runs the post-MSV part of H3's
  *            accelerated pipeline to compare profile <om> against
  *            sequence <sq>. If a significant hit is found,
  *            information about it is added to the <hitlist>.
- *            This is a variant of p7_Pipeline that runs the
- *            versions of the MSV/SSV filters that scan a long
- *            sequence and find high-scoring regions (windows), then pass
- *            those to the remainder of the pipeline. The pipeline
- *            accumulates beancounting information about how many comparisons
- *            flow through the pipeline while it's active.
+ *            The pipeline accumulates beancounting information
+ *            about how many comparisons (and residues) flow through
+ *            the pipeline while it's active.
+ *
+ * Args:      pli             - the main pipeline object
+ *            om              - optimized profile (query)
+ *            bg              - background model
+ *            hitlist         - pointer to hit storage bin
+ *            seqidx          - the id # of the sequence from which the current window was extracted
+ *            window_start    - the starting position of the extracted window (offset from the first
+ *                              position of the block of a possibly longer sequence)
+ *            window_len      - the length of the extracted window
+ *            tmpseq          - a new or reused digital sequence object used for "domain" definition
+ *            ddef_app        - a new or reused DOMAINDEF object used for capturing and printing APP values
+ *            subseq          - digital sequence of the extracted window
+ *            seq_start       - first position of the sequence block passed in to the calling pipeline function
+ *            seq_name        - name of the sequence the window comes from
+ *            seq_source      - source of the sequence the window comes from
+ *            seq_acc         - acc of the sequence the window comes from
+ *            seq_desc        - desc of the sequence the window comes from
+ *            nullsc          - score of the passed window vs the bg model
+ *            usc             - msv score of the passed window
+ *            complementarity - boolean; is the passed window sourced from a complementary sequence block
  *
  * Returns:   <eslOK> on success. If a significant hit is obtained,
  *            its information is added to the growing <hitlist>.
- *
- *            <eslEINVAL> if (in a scan pipeline) we're supposed to
- *            set GA/TC/NC bit score thresholds but the model doesn't
- *            have any.
  *
  *            <eslERANGE> on numerical overflow errors in the
  *            optimized vector implementations; particularly in
@@ -839,7 +853,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
  *
  * Xref:      J4/25.
  */
-int
+static int
 postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx ,
     int window_start, int window_len, ESL_SQ *tmpseq, P7_DOMAINDEF *ddef_app,
     ESL_DSQ *subseq, int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
