@@ -1,13 +1,11 @@
 /* Emitting (sampling) sequences from an HMM, in either core or
  * profile form.
  * 
- *    1. Exported API: sequence emission routines.
- *    2. Private functions.
- *    3. Stats driver.
- *    4. Copyright and license.
- * 
- * SRE, Tue Jan  9 08:55:53 2007 [Janelia] [The Crystal Method, Vegas]
- * SVN $Id$
+ *    1. Exported API: sequence emission routines
+ *    2. Private functions
+ *    3. Stats driver
+ *    4. Example
+ *    5. Copyright and license
  */
 
 #include "p7_config.h"
@@ -27,7 +25,7 @@ static int sample_endpoints(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int *ret_ks
  *****************************************************************/
 
 /* Function:  p7_CoreEmit()
- * Incept:    SRE, Tue Jan  9 10:20:51 2007 [Janelia]
+ * Synopsis:  Sample a sequence from a core HMM.
  *
  * Purpose:   Generate (sample) a sequence from a core HMM <hmm>.
  *            
@@ -42,9 +40,12 @@ static int sample_endpoints(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int *ret_ks
  *            sequence itself. Caller must set the name, and any other
  *            annotation it wants to add.
  *
- *            Trace is relative to the core model: it may include
- *            I_0 and I_M states, B->DD->M entry is explicit, and a
- *            0 length generated sequence is possible.
+ *            H3 traces are relative to an H3 profile, not a core HMM,
+ *            so the trace involves some translation.  I_0 and I_m
+ *            state usage is translated to profile N, C states.  All
+ *            emitted paths are glocal, B->G->{MD}1. A zero length
+ *            generated sequence is possible, via B->G->D1...Dm->E
+ *            path. 
  *            
  * Args:      r     -  source of randomness
  *            hmm   -  core HMM to generate from
@@ -72,41 +73,68 @@ p7_CoreEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr)
 {
   int       k   = 0;		/* position in model nodes 1..M */
   int       i   = 0;		/* position in sequence 1..L */
-  char      st  = p7T_B;	/* state type */
+  char      st  = p7T_S;	/* state type */
   int       x;			/* sampled residue */
+  int       showk, showi;
   int       status;
 
-  if (sq != NULL) esl_sq_Reuse(sq);    
-  if (tr != NULL) {
-    if ((status = p7_trace_Reuse(tr))            != eslOK) goto ERROR;
-    if ((status = p7_trace_Append(tr, st, k, i)) != eslOK) goto ERROR;
+  if (sq) esl_sq_Reuse(sq);    
+
+  if (tr) {
+    if ((status = p7_trace_Reuse(tr))               != eslOK) goto ERROR;
+    if ((status = p7_trace_Append(tr, p7T_S, 0, 0)) != eslOK) goto ERROR;
+    if ((status = p7_trace_Append(tr, p7T_N, 0, 0)) != eslOK) goto ERROR;
   }
-  while (st != p7T_E)
+
+  while (st != p7T_T)
     {
       /* Sample next state type, given current state type (and current k) */
       switch (st) {
-      case p7T_B:
-      case p7T_M:
+      case p7T_S:
+	switch (esl_rnd_FChoose(r, hmm->t[0], 3)) {
+	case 0:  st = p7T_MG; break;
+	case 1:  st = p7T_N;  break;	/* I0 mapped to NN transitions */
+	case 2:  st = p7T_DG; break;
+	default: ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible.");  	    	
+	}
+	break;
+	
+      case p7T_N:
+	switch (esl_rnd_FChoose(r, hmm->t[0]+3, 2)) {
+	case 0: st = p7T_MG; break;
+	case 1: st = p7T_N;  break;
+	default: ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible.");  	    
+	}
+	
+      case p7T_MG:
 	switch (esl_rnd_FChoose(r, hmm->t[k], 3)) {
-	case 0:  st = p7T_M; break;
-	case 1:  st = p7T_I; break;
-	case 2:  st = p7T_D; break;
+	case 0:  st = p7T_MG; break;
+	case 1:  st = p7T_IG; break;
+	case 2:  st = p7T_DG; break;
 	default: ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible.");  	    
 	}
 	break;
 
-      case p7T_I:
+      case p7T_IG:
 	switch (esl_rnd_FChoose(r, hmm->t[k]+3, 2)) {
-	case 0: st = p7T_M; break;
-	case 1: st = p7T_I; break;
+	case 0: st = p7T_MG; break;
+	case 1: st = p7T_IG; break;
 	default: ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible.");  	    
 	}
 	break;
 
-      case p7T_D:
+      case p7T_DG:
 	switch (esl_rnd_FChoose(r, hmm->t[k]+5, 2)) {
-	case 0: st = p7T_M; break;
-	case 1: st = p7T_D; break;
+	case 0: st = p7T_MG; break;
+	case 1: st = p7T_DG; break;
+	default: ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible.");  	    
+	}
+	break;
+
+      case p7T_C:
+	switch (esl_rnd_FChoose(r, hmm->t[hmm->M]+3, 2)) {
+	case 0: st = p7T_T; break; 
+	case 1: st = p7T_C; break;
 	default: ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible.");  	    
 	}
 	break;
@@ -115,32 +143,58 @@ p7_CoreEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr)
       }
 
       /* Bump k,i if needed, depending on new state type */
-      if (st == p7T_M || st == p7T_D) k++;
-      if (st == p7T_M || st == p7T_I) i++;
+      if (st == p7T_MG || st == p7T_DG) k++;
+      if (st == p7T_MG || st == p7T_IG || st == p7T_N || st == p7T_C) i++;
 
-      /* a transit to M_M+1 is a transit to the E state */
-      if (k == hmm->M+1) {
-	if   (st == p7T_M) { st = p7T_E; k = 0; }
-	else ESL_XEXCEPTION(eslECORRUPT, "failed to reach E state properly");
+      /* a transit to {MD}1 means we're clear of I0 and starting the core */
+      if (k == 1 && (st == p7T_MG || st == p7T_DG))
+	{
+	  if (tr && (status = p7_trace_Append(tr, p7T_B, 0, 0)) != eslOK) goto ERROR;
+	  if (tr && (status = p7_trace_Append(tr, p7T_G, 0, 0)) != eslOK) goto ERROR;
+	}
+
+      /* a transit to M_M+1 means we have no I_m and we're done */
+      if (k == hmm->M+1 && st == p7T_MG)
+	{
+	  if (tr) {
+	    if ((status = p7_trace_Append(tr, p7T_E, 0, 0)) != eslOK) goto ERROR;
+	    if ((status = p7_trace_Append(tr, p7T_C, 0, 0)) != eslOK) goto ERROR;
+	  }
+	  st = p7T_T;
       }
 
+      /* a transit to I_M gets mapped over to C */
+      if (k == hmm->M && st == p7T_IG)
+	{
+	  if (tr) {
+	    if ((status = p7_trace_Append(tr, p7T_E, 0, 0)) != eslOK) goto ERROR;
+	    if ((status = p7_trace_Append(tr, p7T_C, 0, 0)) != eslOK) goto ERROR;
+	  }
+	  st = p7T_C;
+	}
+      
       /* Sample new residue x if in match or insert */
-      if      (st == p7T_M) x = esl_rnd_FChoose(r, hmm->mat[k], hmm->abc->K);
-      else if (st == p7T_I) x = esl_rnd_FChoose(r, hmm->ins[k], hmm->abc->K);
+      if      (st == p7T_MG) x = esl_rnd_FChoose(r, hmm->mat[k], hmm->abc->K);
+      else if (st == p7T_IG) x = esl_rnd_FChoose(r, hmm->ins[k], hmm->abc->K);
+      else if (st == p7T_N)  x = esl_rnd_FChoose(r, hmm->ins[k], hmm->abc->K);
+      else if (st == p7T_C)  x = esl_rnd_FChoose(r, hmm->ins[k], hmm->abc->K);
       else                   x = eslDSQ_SENTINEL;
 
       /* Add state to trace */
-      if (tr != NULL) {
-	if ((status = p7_trace_Append(tr, st, k, i)) != eslOK) goto ERROR;
+      if (tr) {
+	showk = (st == p7T_MG || st == p7T_IG || st == p7T_DG) ? k : 0;
+	showi = (x != eslDSQ_SENTINEL) ? i : 0;
+	if ((status = p7_trace_Append(tr, st, showk, showi)) != eslOK) goto ERROR;
       }
+
       /* Add x to sequence */
-      if (sq != NULL && x != eslDSQ_SENTINEL) 
+      if (sq && x != eslDSQ_SENTINEL) 
 	if ((status = esl_sq_XAddResidue(sq, x)) != eslOK) goto ERROR;
     }
 
   /* Terminate the trace and sequence (both are optional, remember) */
-  if (tr != NULL) {  tr->M = hmm->M; tr->L = i; }
-  if (sq != NULL && (status = esl_sq_XAddResidue(sq, eslDSQ_SENTINEL)) != eslOK) goto ERROR;
+  if (tr) {  tr->M = hmm->M; tr->L = i; }
+  if (sq && (status = esl_sq_XAddResidue(sq, eslDSQ_SENTINEL)) != eslOK) goto ERROR;
   return eslOK;
 
 ERROR:
@@ -149,8 +203,7 @@ ERROR:
 
 
 /* Function:  p7_ProfileEmit()
- * Synopsis:  Sample a sequence from the search form of the model.
- * Incept:    SRE, Mon Jan 22 10:23:28 2007 [Janelia]
+ * Synopsis:  Sample a sequence from a profile.
  *
  * Purpose:   Sample a sequence from the implicit 
  *            probabilistic model of a Plan7 profile <gm>. This
@@ -190,6 +243,7 @@ p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE *gm, const
   int       i = 0;		/* position in sequence 1..L */
   int       x;			/* sampled residue */
   int       kend = hmm->M;      /* predestined end node */
+  int       showi;
   int       status;
   float     xt[p7P_NXSTATES][p7P_NXTRANS];
 
@@ -198,8 +252,9 @@ p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE *gm, const
     for (x = 0; x < p7P_NXTRANS; x++)
       xt[i][x] = exp(gm->xsc[i][x]);
 
-  if (sq != NULL) esl_sq_Reuse(sq);    
-  if (tr != NULL) {
+  if (sq) esl_sq_Reuse(sq);    
+
+  if (tr) {
     if ((status = p7_trace_Reuse(tr))               != eslOK) goto ERROR;
     if ((status = p7_trace_Append(tr, p7T_S, k, i)) != eslOK) goto ERROR;
     if ((status = p7_trace_Append(tr, p7T_N, k, i)) != eslOK) goto ERROR;
@@ -213,57 +268,55 @@ p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE *gm, const
        */
       prv = st;
       switch (st) {
-      case p7T_B:  
-	if (p7_profile_IsLocal(gm)) 
-	  { /* local mode: enter the implicit profile: choose our entry and our predestined exit */
-	    if ((status = sample_endpoints(r, gm, &k, &kend)) != eslOK) goto ERROR;
-	    st = p7T_M;		/* must be, because left wing is retracted */
-	  }
-	else
-	  { /* glocal mode: treat B as M_0, use its transitions to MID. */
-	    /* FIXME: this is wrong. It should sample from B->Mk distribution! */
-	    switch (esl_rnd_FChoose(r, P7H_TMAT(hmm, 0), p7H_NTMAT)) {
-	    case 0:  st = p7T_M; k = 1; break;
-	    case 1:  st = p7T_I; k = 0; break;
-	    case 2:  st = p7T_D; k = 1; break;
-	    default: ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible.");  	    
-	    }
-	  }
-	break;
 	
-      case p7T_M:
-	if (k == kend) st = p7T_E; /* check our preordained fate */
+      case p7T_L:
+	if ((status = sample_endpoints(r, gm, &k, &kend)) != eslOK) goto ERROR; /* implicit probabilistic model over local fragment endpoints */
+	st = p7T_ML;	/* L->Mk entry */
+	break;
+				   
+      case p7T_ML: 
+      case p7T_MG:
+	if (k == kend) st = p7T_E; /* check our preordained local Mk->E fate or glocal Mm->E */
 	else {
 	  switch (esl_rnd_FChoose(r, P7H_TMAT(hmm, k), p7H_NTMAT)) {
-	  case 0:  st = p7T_M; break;
-	  case 1:  st = p7T_I; break;
-	  case 2:  st = p7T_D; break;
+	  case 0:  st = (st == p7T_ML ? p7T_ML : p7T_MG); break;
+	  case 1:  st = (st == p7T_ML ? p7T_IL : p7T_IG); break;
+	  case 2:  st = (st == p7T_ML ? p7T_DL : p7T_DG); break;
 	  default: ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible.");  	    
 	  }
 	}
 	break;
 
-      case p7T_D:
-	if (k == kend) st = p7T_E; 
-	else           st = (esl_rnd_FChoose(r, P7H_TDEL(hmm, k), p7H_NTDEL) == 0) ? p7T_M : p7T_D; 
+      case p7T_DL:
+	if (k == kend) st = p7T_E; /* preordained Dk->E local end fate */
+	else           st = (esl_rnd_FChoose(r, P7H_TDEL(hmm, k), p7H_NTDEL) == 0) ? p7T_ML : p7T_DL; 
 	break;
 
-      case p7T_I: st = (esl_rnd_FChoose(r, P7H_TINS(hmm, k), p7H_NTINS) == 0)        ? p7T_M : p7T_I;  break;
-      case p7T_N: st = (esl_rnd_FChoose(r, xt[p7P_N],     p7P_NXTRANS)  == p7P_MOVE) ? p7T_B : p7T_N;  break;
-      case p7T_E: st = (esl_rnd_FChoose(r, xt[p7P_E],     p7P_NXTRANS)  == p7P_MOVE) ? p7T_C : p7T_J;  break;
-      case p7T_C: st = (esl_rnd_FChoose(r, xt[p7P_C],     p7P_NXTRANS)  == p7P_MOVE) ? p7T_T : p7T_C;  break;
-      case p7T_J: st = (esl_rnd_FChoose(r, xt[p7P_J],     p7P_NXTRANS)  == p7P_MOVE) ? p7T_B : p7T_J;  break;
-      default:     ESL_XEXCEPTION(eslECORRUPT, "impossible state reached during emission");
+      case p7T_DG:
+	if (k == kend) st = p7T_E; 
+	else           st = (esl_rnd_FChoose(r, P7H_TDEL(hmm, k), p7H_NTDEL) == 0) ? p7T_MG : p7T_DG; 
+	break;
+
+      case p7T_IL: st = (esl_rnd_FChoose(r, P7H_TINS(hmm, k), p7H_NTINS)    == 0)        ? p7T_ML : p7T_IL;  break;
+      case p7T_IG: st = (esl_rnd_FChoose(r, P7H_TINS(hmm, k), p7H_NTINS)    == 0)        ? p7T_MG : p7T_IG;  break;
+      case p7T_B:  st = (esl_rnd_FChoose(r, xt[p7P_B],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_G  : p7T_L;   break;
+      case p7T_G:  st = (esl_rnd_FChoose(r, xt[p7P_G],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_DG : p7T_MG;  break;
+      case p7T_N:  st = (esl_rnd_FChoose(r, xt[p7P_N],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_B  : p7T_N;   break;
+      case p7T_E:  st = (esl_rnd_FChoose(r, xt[p7P_E],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_C  : p7T_J;   break;
+      case p7T_C:  st = (esl_rnd_FChoose(r, xt[p7P_C],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_T  : p7T_C;   break;
+      case p7T_J:  st = (esl_rnd_FChoose(r, xt[p7P_J],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_B  : p7T_J;   break;
+      default:     ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible state reached during emission");
       }
      
       /* Based on the transition we just sampled, update k. */
-      if      (st == p7T_E)                 k = 0;
-      else if (st == p7T_M && prv != p7T_B) k++;    /* be careful about B->Mk, where we already set k */
-      else if (st == p7T_D)                 k++;
+      if      (st == p7T_E)                  k = 0;
+      else if (st == p7T_ML && prv != p7T_L) k++;    /* be careful about L->Mk, where we already set k */
+      else if (st == p7T_MG)                 k++;
+      else if (st == p7T_DG || st == p7T_DL) k++;
 
       /* Based on the transition we just sampled, generate a residue. */
-      if      (st == p7T_M)                                            x = esl_rnd_FChoose(r, hmm->mat[k], hmm->abc->K);
-      else if (st == p7T_I)                                            x = esl_rnd_FChoose(r, hmm->ins[k], hmm->abc->K);
+      if      (st == p7T_ML || st == p7T_MG)                           x = esl_rnd_FChoose(r, hmm->mat[k], hmm->abc->K);
+      else if (st == p7T_IL || st == p7T_IG)                           x = esl_rnd_FChoose(r, hmm->ins[k], hmm->abc->K);
       else if ((st == p7T_N || st == p7T_C || st == p7T_J) && prv==st) x = esl_rnd_FChoose(r, bg->f,       hmm->abc->K);
       else    x = eslDSQ_SENTINEL;
 
@@ -273,22 +326,24 @@ p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE *gm, const
       if (sq != NULL && x != eslDSQ_SENTINEL && (status = esl_sq_XAddResidue(sq, x)) != eslOK) goto ERROR;
 
       /* Add state to trace. */
-      if (tr != NULL) {
-	if ((status = p7_trace_Append(tr, st, k, i)) != eslOK) goto ERROR;
+      if (tr) {
+	showi = (x != eslDSQ_SENTINEL) ? i : 0;
+	if ((status = p7_trace_Append(tr, st, k, showi)) != eslOK) goto ERROR;
       } 
     }
   /* Terminate the trace and sequence (both are optional, remember) */
-  if (tr != NULL) {  tr->M = hmm->M; tr->L = i; }
-  if (sq != NULL && (status = esl_sq_XAddResidue(sq, eslDSQ_SENTINEL)) != eslOK) goto ERROR;
+  if (tr) {  tr->M = hmm->M; tr->L = i; }
+  if (sq && (status = esl_sq_XAddResidue(sq, eslDSQ_SENTINEL)) != eslOK) goto ERROR;
   return eslOK;
 
  ERROR:
+  if (tr) p7_trace_Reuse(tr);
+  if (sq) esl_sq_Reuse(sq);
   return status;
 }
 
 /* Function:  p7_emit_SimpleConsensus()
- * Synopsis:  Generate simple consensus: ML residue in each match state
- * Incept:    SRE, Mon Sep  1 09:10:47 2008 [Janelia]
+ * Synopsis:  Generate simple consensus: max likelihood residue in each match state
  *
  * Purpose:   Generate a simple consensus sequence for model <hmm>
  *            consisting of the maximum probability residue in each
@@ -320,7 +375,6 @@ p7_emit_SimpleConsensus(const P7_HMM *hmm, ESL_SQ *sq)
 
 /* Function:  p7_emit_FancyConsensus()
  * Synopsis:  Emit a fancier consensus with upper/lower case and N/X's.
- * Incept:    SRE, Fri May 14 09:33:10 2010 [Janelia]
  *
  * Purpose:   Generate a consensus sequence for model <hmm>, consisting
  *            of the maximum probability residue in each match state;
@@ -373,7 +427,6 @@ p7_emit_FancyConsensus(const P7_HMM *hmm, float min_lower, float min_upper, ESL_
  *****************************************************************/
 
 /* sample_endpoints()
- * Incept:    SRE, Mon Jan 22 10:43:20 2007 [Janelia]
  *
  * Purpose:   Given a profile <gm> and random number source <r>, sample
  *            a begin transition from the implicit probabilistic profile
@@ -508,9 +561,7 @@ main(int argc, char **argv)
  * x. Example
  *****************************************************************/
 #ifdef p7EMIT_EXAMPLE
-/* 
-   gcc -g -Wall -o emit_example -Dp7EMIT_EXAMPLE -I. -I../easel -L. -L../easel emit.c -lhmmer -leasel -lm
- */
+
 #include "p7_config.h"
 
 #include "easel.h"
@@ -603,6 +654,9 @@ main(int argc, char **argv)
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SRE, Tue Jan  9 08:55:53 2007 [Janelia] [The Crystal Method, Vegas]
+ * SVN $Id$
  *****************************************************************/
 
 

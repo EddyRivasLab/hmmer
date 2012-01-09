@@ -69,18 +69,18 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
    * we're going to represent, and how big it is.
    */
   if (tr->ndom > 0) {		/* if we have an index, this is a little faster: */
-    for (z1 = tr->tfrom[which]; z1 < tr->N; z1++) if (tr->st[z1] == p7T_M) break;  /* find next M state      */
-    if (z1 == tr->N) return NULL;                                                  /* no M? corrupt trace    */
-    for (z2 = tr->tto[which];   z2 >= 0 ;   z2--) if (tr->st[z2] == p7T_M) break;  /* find prev M state      */
-    if (z2 == -1) return NULL;                                                     /* no M? corrupt trace    */
-  } else {			/* without an index, we can still do it fine:    */
-    for (z1 = 0; which >= 0 && z1 < tr->N; z1++) if (tr->st[z1] == p7T_B) which--; /* find the right B state */
-    if (z1 == tr->N) return NULL;                                                  /* no such domain <which> */
-    for (; z1 < tr->N; z1++) if (tr->st[z1] == p7T_M) break;                       /* find next M state      */
-    if (z1 == tr->N) return NULL;                                                  /* no M? corrupt trace    */
-    for (z2 = z1; z2 < tr->N; z2++) if (tr->st[z2] == p7T_E) break;                /* find the next E state  */
-    for (; z2 >= 0;    z2--) if (tr->st[z2] == p7T_M) break;                       /* find prev M state      */
-    if (z2 == -1) return NULL;                                                     /* no M? corrupt trace    */
+    for (z1 = tr->tfrom[which]; z1 < tr->N; z1++) if (tr->st[z1] == p7T_ML || tr->st[z1] == p7T_MG) break;  /* find next M state      */
+    if (z1 == tr->N) return NULL;                                                                           /* no M? corrupt trace    */
+    for (z2 = tr->tto[which];   z2 >= 0 ;   z2--) if (tr->st[z2] == p7T_ML || tr->st[z2] == p7T_MG) break;  /* find prev M state      */
+    if (z2 == -1) return NULL;                                                                              /* no M? corrupt trace    */
+  } else {			/* without an index, we can still do it fine, we just have to find the domain's B,E states first */
+    for (z1 = 0; which >= 0 && z1 < tr->N; z1++) if (tr->st[z1] == p7T_B) which--;        /* find the right B state */
+    if (z1 == tr->N) return NULL;                                                         /* no such domain <which> */
+    for (; z1 < tr->N; z1++) if (tr->st[z1] == p7T_ML || tr->st[z1] == p7T_MG)) break;    /* find next M state      */
+    if (z1 == tr->N) return NULL;                                                         /* no M? corrupt trace    */
+    for (z2 = z1; z2 < tr->N; z2++) if (tr->st[z2] == p7T_E) break;                       /* find the next E state  */
+    for (; z2 >= 0;    z2--) if (tr->st[z2] == p7T_ML || tr->st[z2] == p7T_MG) break;     /* find prev M state      */
+    if (z2 == -1) return NULL;                                                            /* no M? corrupt trace    */
   }
 
   /* Now we know that z1..z2 in the trace will be represented in the

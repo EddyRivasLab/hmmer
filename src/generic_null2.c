@@ -134,7 +134,6 @@ p7_GNull2_ByExpectation(const P7_PROFILE *gm, P7_GMX *pp, float *null2)
 
 /* Function:  p7_GNull2_ByTrace()
  * Synopsis:  Assign null2 scores to an envelope by the sampling method.
- * Incept:    SRE, Thu May  1 10:00:43 2008 [Janelia]
  *
  * Purpose:   Given a traceback <tr> for an alignment of model <gm> to
  *            some target sequence; calculate null2 odds ratios $\frac{f'{x}}{f{x}}$ 
@@ -180,8 +179,8 @@ p7_GNull2_ByTrace(const P7_PROFILE *gm, const P7_TRACE *tr, int zstart, int zend
   for (z = zstart; z <= zend; z++) 
     {
       switch (tr->st[z]) {
-      case p7T_M:  Ld++; MMX(0,tr->k[z]) += 1.0; break;
-      case p7T_I:  Ld++; IMX(0,tr->k[z]) += 1.0; break;
+      case p7T_ML: Ld++; MMX(0,tr->k[z]) += 1.0; break;
+      case p7T_IL: Ld++; IMX(0,tr->k[z]) += 1.0; break;
       case p7T_N:  if (tr->st[z-1] == p7T_N) { Ld++; XMX(0,p7G_N) += 1.0; } break;
       case p7T_C:  if (tr->st[z-1] == p7T_C) { Ld++; XMX(0,p7G_C) += 1.0; } break;
       case p7T_J:  if (tr->st[z-1] == p7T_J) { Ld++; XMX(0,p7G_J) += 1.0; } break;

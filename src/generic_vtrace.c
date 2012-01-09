@@ -75,6 +75,8 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
     float const *rsc = (i>0 ? gm->rsc[dsq[i]] : NULL);
 
     switch (sprv) {
+    case p7T_L: scur = p7T_B; break;
+
     case p7T_C:		/* C(i) comes from C(i-1) or E(i) */
       if   (XMX(i,p7G_C) == -eslINFINITY) ESL_EXCEPTION(eslFAIL, "impossible C reached at i=%d", i);
 
@@ -86,45 +88,36 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
     case p7T_E:		/* E connects from any M state. k set here */
       if (XMX(i, p7G_E) == -eslINFINITY) ESL_EXCEPTION(eslFAIL, "impossible E reached at i=%d", i);
 
-      if (p7_profile_IsLocal(gm))
-	{
-	  scur = p7T_M;		/* can't come from D, in a *local* Viterbi trace. */
-	  for (k = M; k >= 1; k--) if (esl_FCompare(XMX(i, p7G_E), MMX(i,k), tol) == eslOK) break;
-	  if (k == 0) ESL_EXCEPTION(eslFAIL, "E at i=%d couldn't be traced", i);
-	}
-      else 			/* glocal mode: we either come from D_M or M_M */
-	{
-	  if      (esl_FCompare(XMX(i, p7G_E), MMX(i,M), tol) == eslOK) { scur = p7T_M; k = M; }
-	  else if (esl_FCompare(XMX(i, p7G_E), DMX(i,M), tol) == eslOK) { scur = p7T_D; k = M; }
-	  else    ESL_EXCEPTION(eslFAIL, "E at i=%d couldn't be traced", i);
-	}
+      scur = p7T_ML;		/* can't come from D, in a *local* Viterbi trace. */
+      for (k = M; k >= 1; k--) if (esl_FCompare(XMX(i, p7G_E), MMX(i,k), tol) == eslOK) break;
+      if (k == 0) ESL_EXCEPTION(eslFAIL, "E at i=%d couldn't be traced", i);
       break;      
 
-    case p7T_M:			/* M connects from i-1,k-1, or B */
+    case p7T_ML:		/* M connects from i-1,k-1, or L */
       if (MMX(i,k) == -eslINFINITY) ESL_EXCEPTION(eslFAIL, "impossible M reached at k=%d,i=%d", k,i);
 
-      if      (esl_FCompare(MMX(i,k), XMX(i-1,p7G_B) + TSC(p7P_LM, k-1) + MSC(k), tol) == eslOK) scur = p7T_B;
-      else if (esl_FCompare(MMX(i,k), MMX(i-1,k-1)   + TSC(p7P_MM, k-1) + MSC(k), tol) == eslOK) scur = p7T_M;
-      else if (esl_FCompare(MMX(i,k), IMX(i-1,k-1)   + TSC(p7P_IM, k-1) + MSC(k), tol) == eslOK) scur = p7T_I;
-      else if (esl_FCompare(MMX(i,k), DMX(i-1,k-1)   + TSC(p7P_DM, k-1) + MSC(k), tol) == eslOK) scur = p7T_D;
-      else ESL_EXCEPTION(eslFAIL, "M at k=%d,i=%d couldn't be traced", k,i);
+      if      (esl_FCompare(MMX(i,k), XMX(i-1,p7G_B) + TSC(p7P_LM, k-1) + MSC(k), tol) == eslOK) scur = p7T_L;
+      else if (esl_FCompare(MMX(i,k), MMX(i-1,k-1)   + TSC(p7P_MM, k-1) + MSC(k), tol) == eslOK) scur = p7T_ML;
+      else if (esl_FCompare(MMX(i,k), IMX(i-1,k-1)   + TSC(p7P_IM, k-1) + MSC(k), tol) == eslOK) scur = p7T_IL;
+      else if (esl_FCompare(MMX(i,k), DMX(i-1,k-1)   + TSC(p7P_DM, k-1) + MSC(k), tol) == eslOK) scur = p7T_DL;
+      else ESL_EXCEPTION(eslFAIL, "ML at k=%d,i=%d couldn't be traced", k,i);
       k--; i--;
       break;
 
-    case p7T_D:			/* D connects from M,D at i,k-1 */
+    case p7T_DL:			/* D connects from M,D at i,k-1 */
       if (DMX(i, k) == -eslINFINITY) ESL_EXCEPTION(eslFAIL, "impossible D reached at k=%d,i=%d", k,i);
 
-      if      (esl_FCompare(DMX(i,k), MMX(i, k-1) + TSC(p7P_MD, k-1), tol) == eslOK) scur = p7T_M;
-      else if (esl_FCompare(DMX(i,k), DMX(i, k-1) + TSC(p7P_DD, k-1), tol) == eslOK) scur = p7T_D;
-      else ESL_EXCEPTION(eslFAIL, "D at k=%d,i=%d couldn't be traced", k,i);
+      if      (esl_FCompare(DMX(i,k), MMX(i, k-1) + TSC(p7P_MD, k-1), tol) == eslOK) scur = p7T_ML;
+      else if (esl_FCompare(DMX(i,k), DMX(i, k-1) + TSC(p7P_DD, k-1), tol) == eslOK) scur = p7T_DL;
+      else ESL_EXCEPTION(eslFAIL, "DL at k=%d,i=%d couldn't be traced", k,i);
       k--;
       break;
 
-    case p7T_I:			/* I connects from M,I at i-1,k*/
+    case p7T_IL:			/* I connects from M,I at i-1,k*/
       if (IMX(i,k) == -eslINFINITY) ESL_EXCEPTION(eslFAIL, "impossible I reached at k=%d,i=%d", k,i);
 
-      if      (esl_FCompare(IMX(i,k), MMX(i-1,k) + TSC(p7P_MI, k) + ISC(k), tol) == eslOK) scur = p7T_M;
-      else if (esl_FCompare(IMX(i,k), IMX(i-1,k) + TSC(p7P_II, k) + ISC(k), tol) == eslOK) scur = p7T_I;
+      if      (esl_FCompare(IMX(i,k), MMX(i-1,k) + TSC(p7P_MI, k) + ISC(k), tol) == eslOK) scur = p7T_ML;
+      else if (esl_FCompare(IMX(i,k), IMX(i-1,k) + TSC(p7P_II, k) + ISC(k), tol) == eslOK) scur = p7T_IL;
       else ESL_EXCEPTION(eslFAIL, "I at k=%d,i=%d couldn't be traced", k,i);
       i--;
       break;

@@ -683,7 +683,7 @@ typedef struct p7_spensemble_s {
  * Alignment of a sequence domain to an HMM, formatted for printing.
  * 
  * For an alignment of L residues and names C chars long, requires
- * 6L + 2C + 30 bytes; for typical case of L=100,C=10, that's
+ * 6L + 2C + 31 bytes; for typical case of L=100,C=10, that's
  * <0.7 Kb.
  */
 typedef struct p7_alidisplay_s {
@@ -692,9 +692,9 @@ typedef struct p7_alidisplay_s {
   char *model;                  /* aligned query consensus sequence     */
   char *mline;                  /* "identities", conservation +'s, etc. */
   char *aseq;                   /* aligned target sequence              */
-  char *ppline;			        /* posterior prob annotation; or NULL   */
-  char *appline;			    /* posterior prob of being aligned to the model (mocc) annotation; or NULL   */
-  int   N;			            /* length of strings                    */
+  char *ppline;		        /* posterior prob annotation; or NULL   */
+  char *appline; 	        /* posterior prob of being aligned to the model (mocc) annotation; or NULL   */
+  int   N;                      /* length of strings                    */
 
   char *hmmname;		/* name of HMM                          */
   char *hmmacc;			/* accession of HMM; or [0]='\0'        */
@@ -702,6 +702,7 @@ typedef struct p7_alidisplay_s {
   int   hmmfrom;		/* start position on HMM (1..M, or -1)  */
   int   hmmto;			/* end position on HMM (1..M, or -1)    */
   int   M;			/* length of model                      */
+  char  is_glocal;		/* TRUE if this is a glocal alignment   */
 
   char *sqname;			/* name of target sequence              */
   char *sqacc;			/* accession of target seq; or [0]='\0' */

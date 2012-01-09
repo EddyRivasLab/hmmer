@@ -801,44 +801,44 @@ p7_GCentroidTrace(float gamma, const P7_PROFILE *gm, const P7_GMXD *pp, const P7
   while (sprv != -1)
     {
       switch (sprv) {
-      case p7GD_ML: scur = select_ml(gm, gxd, i, k); k--; i--; break;
-      case p7GD_MG: scur = select_mg(gm, gxd, i, k); k--; i--; break;
-      case p7GD_IL: scur = select_il(gm, gxd, i, k);      i--; break;
-      case p7GD_IG: scur = select_ig(gm, gxd, i, k);      i--; break;
-      case p7GD_DL: scur = select_dl(gm, gxd, i, k); k--;      break;
-      case p7GD_DG: scur = select_dg(gm, gxd, i, k); k--;      break;
-      case p7GD_E:  scur = select_e (gm, gxd, i, &k);          break;
-      case p7GD_N:  scur = select_n (         i    );          break;
-      case p7GD_J:  scur = select_j (gm, gxd, i, pp, gamma);   break;
-      case p7GD_B:  scur = select_b (gm, gxd, i);              break;
-      case p7GD_L:  scur = p7GD_B;                             break;
-      case p7GD_G:  scur = p7GD_B;                             break;
-      case p7GD_C:  scur = select_c (gm, gxd, i, pp, gamma);   break;
+      case p7T_ML: scur = select_ml(gm, gxd, i, k); k--; i--; break;
+      case p7T_MG: scur = select_mg(gm, gxd, i, k); k--; i--; break;
+      case p7T_IL: scur = select_il(gm, gxd, i, k);      i--; break;
+      case p7T_IG: scur = select_ig(gm, gxd, i, k);      i--; break;
+      case p7T_DL: scur = select_dl(gm, gxd, i, k); k--;      break;
+      case p7T_DG: scur = select_dg(gm, gxd, i, k); k--;      break;
+      case p7T_E:  scur = select_e (gm, gxd, i, &k);          break;
+      case p7T_N:  scur = select_n (         i    );          break;
+      case p7T_J:  scur = select_j (gm, gxd, i, pp, gamma);   break;
+      case p7T_B:  scur = select_b (gm, gxd, i);              break;
+      case p7T_L:  scur = p7GD_B;                             break;
+      case p7T_G:  scur = p7GD_B;                             break;
+      case p7T_C:  scur = select_c (gm, gxd, i, pp, gamma);   break;
       default: ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in traceback");
       }
 
       switch (scur) {
-      case -1:      tcur = p7T_S;  ppv = 0.0; break;
-      case p7GD_ML: tcur = p7T_M;  ppv = P7_GMXD_MX(gxd, i, k, p7GD_ML) + P7_GMXD_MX(gxd, i, k, p7GD_MG); break;
-      case p7GD_MG: tcur = p7T_M;  ppv = P7_GMXD_MX(gxd, i, k, p7GD_ML) + P7_GMXD_MX(gxd, i, k, p7GD_MG); break;
-      case p7GD_IL: tcur = p7T_I;  ppv = P7_GMXD_MX(gxd, i, k, p7GD_IL) + P7_GMXD_MX(gxd, i, k, p7GD_IG); break;
-      case p7GD_IG: tcur = p7T_I;  ppv = P7_GMXD_MX(gxd, i, k, p7GD_IL) + P7_GMXD_MX(gxd, i, k, p7GD_IG); break;
-      case p7GD_DL: tcur = p7T_D;  ppv = 0.0;  break;                      
-      case p7GD_DG: tcur = p7T_D;  ppv = 0.0;  break;                      
-      case p7GD_E:  tcur = p7T_E;  ppv = 0.0;  break;
-      case p7GD_N:  tcur = p7T_N;  ppv = (sprv==scur ? P7_GMXD_XMX(gxd, i, p7GD_N) : 0.0); break;
-      case p7GD_J:  tcur = p7T_J;  ppv = (sprv==scur ? P7_GMXD_XMX(gxd, i, p7GD_J) : 0.0); break;
-      case p7GD_B:  tcur = p7T_B;  ppv = 0.0;  break;
-      case p7GD_L:  tcur = -1;     ppv = 0.0;  break;
-      case p7GD_G:  tcur = -1;     ppv = 0.0;  break;
-      case p7GD_C:  tcur = p7T_C;  ppv = (sprv==scur ? P7_GMXD_XMX(gxd, i, p7GD_C) : 0.0); break;
+      case -1:     tcur = p7T_S;  ppv = 0.0; break;
+      case p7T_ML: tcur = p7T_ML; ppv = P7_GMXD_MX(gxd, i, k, p7GD_ML) + P7_GMXD_MX(gxd, i, k, p7GD_MG); break;
+      case p7T_MG: tcur = p7T_MG; ppv = P7_GMXD_MX(gxd, i, k, p7GD_ML) + P7_GMXD_MX(gxd, i, k, p7GD_MG); break;
+      case p7T_IL: tcur = p7T_IL; ppv = P7_GMXD_MX(gxd, i, k, p7GD_IL) + P7_GMXD_MX(gxd, i, k, p7GD_IG); break;
+      case p7T_IG: tcur = p7T_IG; ppv = P7_GMXD_MX(gxd, i, k, p7GD_IL) + P7_GMXD_MX(gxd, i, k, p7GD_IG); break;
+      case p7T_DL: tcur = p7T_DL; ppv = 0.0;  break;                      
+      case p7T_DG: tcur = p7T_DG; ppv = 0.0;  break;                      
+      case p7T_E:  tcur = p7T_E;  ppv = 0.0;  break;
+      case p7T_N:  tcur = p7T_N;  ppv = (sprv==scur ? P7_GMXD_XMX(gxd, i, p7GD_N) : 0.0); break;
+      case p7T_J:  tcur = p7T_J;  ppv = (sprv==scur ? P7_GMXD_XMX(gxd, i, p7GD_J) : 0.0); break;
+      case p7T_B:  tcur = p7T_B;  ppv = 0.0;  break;
+      case p7T_L:  tcur = -1;     ppv = 0.0;  break;
+      case p7T_G:  tcur = -1;     ppv = 0.0;  break;
+      case p7T_C:  tcur = p7T_C;  ppv = (sprv==scur ? P7_GMXD_XMX(gxd, i, p7GD_C) : 0.0); break;
       default: ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in traceback");
       }
 
       /* A glocal B->G->Mk wing-retraction entry: unfold it */
-      if (scur == p7GD_G) {
+      if (scur == p7T_G) {
 	while (k > 1) {
-	  if ( (status = p7_trace_AppendWithPP(tr, p7T_D, k-1, i, 0.0)) != eslOK) return status;
+	  if ( (status = p7_trace_AppendWithPP(tr, p7T_DG, k-1, i, 0.0)) != eslOK) return status;
 	  k--;
 	}
       }
