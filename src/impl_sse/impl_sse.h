@@ -14,6 +14,7 @@
 
 #include <xmmintrin.h>    /* SSE  */
 #include <emmintrin.h>    /* SSE2 */
+#include <pmmintrin.h>   /* DENORMAL_MODE */
 
 #include "hmmer.h"
 
@@ -562,6 +563,30 @@ impl_Init(void)
 }
 
 
+static inline void
+impl_ThreadInit(void)
+{
+#ifdef HAVE_FLUSH_ZERO_MODE
+  /* In order to avoid the performance penalty dealing with sub-normal
+   * values in the floating point calculations, set the processor flag
+   * so sub-normals are "flushed" immediately to zero.
+   * On OS X, need to reset this flag for each thread
+   * (see TW notes 05/08/10 for details)
+   */
+  _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+#endif
+
+#ifdef _MM_DENORMALS_ZERO_ON
+  /*
+   * FLUSH_ZERO doesn't necessarily work in non-SIMD calculations
+   * (yes on 64-bit, maybe not of 32-bit). This ensures that those
+   * scalar calculations will agree across architectures.
+   * (See TW notes  2012/0106_printf_underflow_bug/00NOTES for details)
+   */
+  _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
+#endif
+
+}
 
 #endif /* P7_IMPL_SSE_INCLUDED */
 

@@ -542,6 +542,12 @@ static inline void
 impl_Init(void)
 {
 }
+
+
+static inline void
+impl_ThreadInit(void)
+{
+}
   
 
 #endif /* P7_IMPL_VMX_INCLUDED */

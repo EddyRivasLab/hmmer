@@ -968,7 +968,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   int    posw;
   int    descw;
   char  *showname;
-  double P;
+
   int    have_printed_incthresh = FALSE;
 
   /* when --acc is on, we'll show accession if available, and fall back to name */
@@ -1030,12 +1030,11 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
         else if (th->hit[h]->flags & p7_IS_DROPPED) newness = '-';
         else                                        newness = ' ';
 
-        P =  th->hit[h]->lnP < -700 ? 0 : exp(th->hit[h]->lnP); // see ~wheelert/notebook/2012/0106_printf_underflow_bug
         if (pli->long_targets) 
         {
           if (fprintf(ofp, "%c %9.2g %6.1f %5.1f  %-*s %*d %*d ",
           newness,
-          P, //exp(th->hit[h]->lnP), // * pli->Z,
+          exp(th->hit[h]->lnP), // * pli->Z,
           th->hit[h]->score,
           eslCONST_LOG2R * th->hit[h]->dcl[d].dombias, // domain bias - seems like the right one to use, no?
           //th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
@@ -1048,7 +1047,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
         {
           if (fprintf(ofp, "%c %9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d  %-*s ",
           newness,
-          P * pli->Z, //exp(th->hit[h]->lnP) * pli->Z,
+          exp(th->hit[h]->lnP) * pli->Z,
           th->hit[h]->score,
           th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
           exp(th->hit[h]->dcl[d].lnP) * pli->Z,
@@ -1107,7 +1106,6 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   int   namew, descw;
   char *showname;
   int   status;
-  double P;
 
   if (pli->long_targets) 
   {
@@ -1180,7 +1178,6 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
           if (th->hit[h]->dcl[d].is_reported)
           {
             nd++;
-            P =  th->hit[h]->dcl[d].lnP < -700 ? 0 : exp(th->hit[h]->dcl[d].lnP); // see ~wheelert/notebook/2012/0106_printf_underflow_bug
             if (pli->long_targets)
             {
 
@@ -1189,7 +1186,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                     th->hit[h]->dcl[d].is_included ? '!' : '?',
                     th->hit[h]->dcl[d].bitscore,
                     th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
-                    P,
+                    exp(th->hit[h]->dcl[d].lnP),
                     th->hit[h]->dcl[d].ad->hmmfrom,
                     th->hit[h]->dcl[d].ad->hmmto,
                     (th->hit[h]->dcl[d].ad->hmmfrom == 1) ? '[' : '.',
@@ -1213,8 +1210,8 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                     th->hit[h]->dcl[d].is_included ? '!' : '?',
                     th->hit[h]->dcl[d].bitscore,
                     th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
-                    P * pli->domZ,
-                    P * pli->Z,
+                    exp(th->hit[h]->dcl[d].lnP) * pli->domZ,
+                    exp(th->hit[h]->dcl[d].lnP) * pli->Z,
                     th->hit[h]->dcl[d].ad->hmmfrom,
                     th->hit[h]->dcl[d].ad->hmmto,
                     (th->hit[h]->dcl[d].ad->hmmfrom == 1) ? '[' : '.',
