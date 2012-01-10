@@ -14,7 +14,9 @@
 
 #include <xmmintrin.h>    /* SSE  */
 #include <emmintrin.h>    /* SSE2 */
+#ifdef _PMMINTRIN_H_INCLUDED
 #include <pmmintrin.h>   /* DENORMAL_MODE */
+#endif
 
 #include "hmmer.h"
 
@@ -576,7 +578,7 @@ impl_ThreadInit(void)
   _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
 #endif
 
-#ifdef _MM_DENORMALS_ZERO_ON
+#ifdef _PMMINTRIN_H_INCLUDED
   /*
    * FLUSH_ZERO doesn't necessarily work in non-SIMD calculations
    * (yes on 64-bit, maybe not of 32-bit). This ensures that those
