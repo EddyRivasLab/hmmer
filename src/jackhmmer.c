@@ -665,6 +665,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  p7_tophits_Domains(ofp, info->th, info->pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 	  /* Create alignment of the top hits */
+	  /* <&qsq, &qtr, 1> included in p7_tophits_Alignment args here => initial query is added to the msa at each round. */
 	  p7_tophits_Alignment(info->th, abc, &qsq, &qtr, 1, p7_ALL_CONSENSUS_COLS, &msa);
 	  esl_msa_Digitize(abc,msa,NULL);
 	  esl_msa_FormatName(msa, "%s-i%d", qsq->name, iteration);
