@@ -222,6 +222,11 @@ p7_builder_LoadScoreSystem(P7_BUILDER *bld, const char *matrix, double popen, do
     for (b = 0; b < bld->abc->K; b++)
       bld->Q->mx[a][b] /= f[a];	/* Q->mx[a][b] is now P(b | a) */
 
+  /* Normalize mx, so the values P(b|a) for row a sum to 1 */
+  for (a = 0; a < bld->abc->K; a++)
+    esl_vec_DNorm(bld->Q->mx[a],  bld->abc->K);
+
+
   bld->popen   = popen;
   bld->pextend = pextend;
   free(f);
@@ -319,6 +324,11 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, 
   for (a = 0; a < bld->abc->K; a++)
     for (b = 0; b < bld->abc->K; b++)
       bld->Q->mx[a][b] /= f[a];	/* Q->mx[a][b] is now P(b | a) */
+
+  /* Normalize mx, so the values P(b|a) for row a sum to 1 */
+  for (a = 0; a < bld->abc->K; a++)
+    esl_vec_DNorm(bld->Q->mx[a],  bld->abc->K);
+
 
   bld->popen   = popen;
   bld->pextend = pextend;
