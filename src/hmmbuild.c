@@ -828,6 +828,7 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
   int           sz, n;		        /* size of a packed message */
   int           pos;
   char          errmsg[eslERRBUFSIZE];
+  ESL_SQ     *sq          = NULL;
 
   /* After master initialization: master broadcasts its status.
    */
