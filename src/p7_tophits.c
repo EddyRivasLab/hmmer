@@ -975,19 +975,18 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   if (pli->show_accessions) namew = ESL_MAX(8, p7_tophits_GetMaxShownLength(th));
   else                      namew = ESL_MAX(8, p7_tophits_GetMaxNameLength(th));
 
-  if (textw >  0)           descw = ESL_MAX(32, textw - namew - 61); /* 61 chars excluding desc is from the format: 2 + 22+2 +22+2 +8+2 +<name>+1 */
+  if (textw >  0)           descw = ESL_MAX(32, textw - namew - 2*posw - 32); /* 32 chars excluding desc and two posw's is from the format: 2 + 9+2 +6+2 +5+2 +<name>+1 +<startpos>+1 +<endpos>+1 +1 */
   else                      descw = 0;                               /* unlimited desc length is handled separately */
-
-  if (pli->long_targets)    posw = ESL_MAX(6, p7_tophits_GetMaxPositionLength(th));
 
   if (pli->long_targets) 
   {
+      posw = ESL_MAX(6, p7_tophits_GetMaxPositionLength(th));
       if (fprintf(ofp, "Scores for complete hit%s:\n",     pli->mode == p7_SEARCH_SEQS ? "s" : "") < 0)
         ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
-      if (fprintf(ofp, "  %9s %6s %5s  %-*s %*s %*s %s\n", 
+      if (fprintf(ofp, "  %9s %6s %5s  %-*s %*s %*s  %s\n",
       "E-value", " score", " bias", namew, (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), posw, "start", posw, "end", "Description") < 0)
         ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
-      if (fprintf(ofp, "  %9s %6s %5s  %-*s %*s %*s %s\n", 
+      if (fprintf(ofp, "  %9s %6s %5s  %-*s %*s %*s  %s\n",
       "-------", "------", "-----", namew, "--------", posw, "-----", posw, "-----", "-----------") < 0)
         ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
   }
@@ -1061,12 +1060,12 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 
         if (textw > 0) 
         {
-          if (fprintf(ofp, "%-.*s\n", descw, th->hit[h]->desc == NULL ? "" : th->hit[h]->desc) < 0)
+          if (fprintf(ofp, " %-.*s\n", descw, th->hit[h]->desc == NULL ? "" : th->hit[h]->desc) < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
         }
         else 
         {
-          if (fprintf(ofp, "%s\n",           th->hit[h]->desc == NULL ? "" : th->hit[h]->desc) < 0)
+          if (fprintf(ofp, " %s\n",           th->hit[h]->desc == NULL ? "" : th->hit[h]->desc) < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
         }
         /* do NOT use *s with unlimited (INT_MAX) line length. Some systems

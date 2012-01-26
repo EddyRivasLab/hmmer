@@ -98,7 +98,7 @@ static ESL_OPTIONS options[] = {
   { "--pnone",   eslARG_NONE,  FALSE,  NULL, NULL,       NULL,  NULL,"--plaplace", "don't use any prior; parameters are frequencies",      9 },
   { "--plaplace",eslARG_NONE,  FALSE,  NULL, NULL,       NULL,  NULL,   "--pnone", "use a Laplace +1 prior",                               9 },
 /* Single sequence methods */
-  { "--single",  eslARG_NONE,   FALSE, NULL,   NULL,   NULL,  NULL,            "",   "use substitution score matrix for single-sequence inputs",     10 },
+  { "--single",  eslARG_NONE,   FALSE, NULL,   NULL,   NULL,  NULL,            "",   "use substitution score matrix for single-sequence protein inputs",     10 },
   { "--popen",    eslARG_REAL,   "0.02", NULL,"0<=x<0.5",NULL, NULL,           "",   "gap open probability (with --single)",                         10 },
   { "--pextend",  eslARG_REAL,    "0.4", NULL, "0<=x<1", NULL, NULL,           "",   "gap extend probability (with --single)",                       10 },
   { "--mx",     eslARG_STRING, "BLOSUM62", NULL, NULL,   NULL, NULL,   "--mxfile",   "substitution score matrix (built-in matrices, with --single)", 10 },

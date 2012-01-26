@@ -102,7 +102,7 @@ static ESL_OPTIONS options[] = {
   { "--fm_max_scthresh", eslARG_REAL,       "10.5", NULL, NULL,    NULL,  NULL, NULL,          "max total bits required in seed of length fm_max_depth",     8 },
 
 /* Other options */
-  { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert target <seqdb> is in format <s>>: no autodetection",     12 },
+  { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert target <seqdb> is in format <s>: no autodetection",     12 },
   { "--nonull2",    eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,  NULL,            "turn off biased composition score corrections",                 12 },
   { "-Z",           eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set database size (Megabases) to <x> for E-value calculations", 12 },
   { "--seed",       eslARG_INT,          "42", NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",           12 },
@@ -175,28 +175,28 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
       p7_banner(stdout, argv[0], banner);
       esl_usage(stdout, argv[0], usage);
       if (puts("\nBasic options:")                                           < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 120=textwidth*/
+      esl_opt_DisplayHelp(stdout, go, 1, 2, 100); /* 1= group; 2 = indentation; 120=textwidth*/
 
       if (puts("\nOptions directing output:")                                < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 2, 2, 80); 
+      esl_opt_DisplayHelp(stdout, go, 2, 2, 100);
 
 //    if (puts("\nOptions controlling scoring system:")                      < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
 //     esl_opt_DisplayHelp(stdout, go, 3, 2, 80);
 
       if (puts("\nOptions controlling reporting thresholds:")                < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 4, 2, 80); 
+      esl_opt_DisplayHelp(stdout, go, 4, 2, 100);
 
       if (puts("\nOptions controlling inclusion (significance) thresholds:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 5, 2, 80); 
+      esl_opt_DisplayHelp(stdout, go, 5, 2, 100);
 
       if (puts("\nOptions controlling acceleration heuristics:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 7, 2, 80);
+      esl_opt_DisplayHelp(stdout, go, 7, 2, 100);
 
       if (puts("\nControl of FM pruning and extension:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 8, 2, 80);
+      esl_opt_DisplayHelp(stdout, go, 8, 2, 100);
 
       if (puts("\nOther expert options:")                                    < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 12, 2, 80); 
+      esl_opt_DisplayHelp(stdout, go, 12, 2, 100);
       exit(0);
 
   }
