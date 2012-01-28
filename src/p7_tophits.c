@@ -975,11 +975,12 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   if (pli->show_accessions) namew = ESL_MAX(8, p7_tophits_GetMaxShownLength(th));
   else                      namew = ESL_MAX(8, p7_tophits_GetMaxNameLength(th));
 
-  if (textw >  0)           descw = ESL_MAX(32, textw - namew - 2*posw - 32); /* 32 chars excluding desc and two posw's is from the format: 2 + 9+2 +6+2 +5+2 +<name>+1 +<startpos>+1 +<endpos>+1 +1 */
-  else                      descw = 0;                               /* unlimited desc length is handled separately */
 
   if (pli->long_targets) 
   {
+      if (textw >  0)           descw = ESL_MAX(32, textw - namew - 2*posw - 32); /* 32 chars excluding desc and two posw's is from the format: 2 + 9+2 +6+2 +5+2 +<name>+1 +<startpos>+1 +<endpos>+1 +1 */
+      else                      descw = 0;                               /* unlimited desc length is handled separately */
+
       posw = ESL_MAX(6, p7_tophits_GetMaxPositionLength(th));
       if (fprintf(ofp, "Scores for complete hit%s:\n",     pli->mode == p7_SEARCH_SEQS ? "s" : "") < 0)
         ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
@@ -992,6 +993,11 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   }
   else 
   {
+
+      if (textw >  0)           descw = ESL_MAX(32, textw - namew - 61); /* 61 chars excluding desc is from the format: 2 + 22+2 +22+2 +8+2 +<name>+1 */
+      else                      descw = 0;                               /* unlimited desc length is handled separately */
+
+
       /* The minimum width of the target table is 111 char: 47 from fields, 8 from min name, 32 from min desc, 13 spaces */
       if (fprintf(ofp, "Scores for complete sequence%s (score includes all domains):\n", pli->mode == p7_SEARCH_SEQS ? "s" : "") < 0) 
         ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
@@ -1035,8 +1041,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
           newness,
           exp(th->hit[h]->lnP), // * pli->Z,
           th->hit[h]->score,
-          eslCONST_LOG2R * th->hit[h]->dcl[d].dombias, // domain bias - seems like the right one to use, no?
-          //th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
+          eslCONST_LOG2R * th->hit[h]->dcl[d].dombias, // an nhmmer hit is really a domain, so this is the hit's bias correction
           namew, showname,
           posw, th->hit[h]->dcl[d].iali,
           posw, th->hit[h]->dcl[d].jali) < 0)
