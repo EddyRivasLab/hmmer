@@ -504,7 +504,7 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
       if ((tr = p7_trace_Create())                      == NULL)  goto ERROR;
       if ((status = p7_trace_Append(tr, p7T_B, 0, 0))   != eslOK) goto ERROR; 
       for (k = 1; k <= sq->n; k++)
-	if ((status = p7_trace_Append(tr, p7T_M, k, k)) != eslOK) goto ERROR;
+        if ((status = p7_trace_Append(tr, p7T_M, k, k)) != eslOK) goto ERROR;
       if ((status = p7_trace_Append(tr, p7T_E, 0, 0))   != eslOK) goto ERROR; 
       tr->M = sq->n;
       tr->L = sq->n;

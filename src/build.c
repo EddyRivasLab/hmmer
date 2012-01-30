@@ -173,11 +173,11 @@ p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***opt
     {  
       r = totwgt = 0.;
       for (idx = 0; idx < msa->nseq; idx++) 
-	{
-	  if       (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos])) { r += msa->wgt[idx]; totwgt += msa->wgt[idx]; }
-	  else if  (esl_abc_XIsGap(msa->abc,     msa->ax[idx][apos])) {                     totwgt += msa->wgt[idx]; }
-	  else if  (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos])) continue;
-	}
+      {
+        if       (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos])) { r += msa->wgt[idx]; totwgt += msa->wgt[idx]; }
+        else if  (esl_abc_XIsGap(msa->abc,     msa->ax[idx][apos])) {                     totwgt += msa->wgt[idx]; }
+        else if  (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos])) continue;
+      }
       if (r > 0. && r / totwgt >= symfrac) matassign[apos] = TRUE;
       else                                 matassign[apos] = FALSE;
     }
