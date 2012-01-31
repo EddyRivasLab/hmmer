@@ -17,12 +17,12 @@
 
 
 /******************************************************************************
- *# 1. The <esl_msa_hmmpgmd2msa> function
+ *# 1. The <hmmpgmd2msa> function
  *****************************************************************************/
 
 
 
-/* Function:  esl_msa_hmmpgmd2msa()
+/* Function:  hmmpgmd2msa()
  * Synopsis:  Convert an HMMPGMD-derived data stream to an MSA, based
  *            on the corresponding hmm
  *
