@@ -1,7 +1,8 @@
-/* The Plan7 core HMM data structure.
+/* The Plan7 MSVDATA data structure, which holds a compact representation
+ * of substitution scores and maximal extensions, used by nhmmer.
  *
  * Contents:
- *   1. The P7_HMM object: allocation, initialization, destruction.
+ *   1. The P7_MSVDATA object: allocation, initialization, destruction.
  *   2. Unit tests.
  *   3. Test driver.
  *   4. Copyright and license.
@@ -28,7 +29,7 @@
  *********************************************************************/
 
 /* Function:  p7_hmm_GetScoreArrays()
- * Synopsis:  Get compact representation of substitution scores and maximal extenstions
+ * Synopsis:  Get compact representation of substitution scores and maximal extensions
  *
  * Purpose:   Extract 8-bit (MSV-style) substitution scores from gm, and
  *            for each position in the model capture the maximum possible
