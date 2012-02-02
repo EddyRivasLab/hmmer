@@ -69,15 +69,14 @@ do_cmd ( "tail -1 $tmppfx.B >> $database" );
 $cmd = "$builddir/src/nhmmer --tformat fasta $tmppfx.hmm $database";
 $output = do_cmd($cmd);
 
-
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = 
 q[
 Target sequences:                  1  \(9000000 residues searched\)
-Residues passing MSV filter:            167184  \(0.0186\); expected \(0.02\)
-Residues passing bias filter:           149925  \(0.0167\); expected \(0.02\)
-Residues passing Vit filter:              5883  \(0.000654\); expected \(0.001\)
-Residues passing Fwd filter:               548  \(6.09e-05\); expected \(1e-05\)
+Residues passing MSV filter:            141762  \(0.0158\); expected \(0.02\)
+Residues passing bias filter:           140508  \(0.0156\); expected \(0.02\)
+Residues passing Vit filter:              6574  \(0.00073\); expected \(0.001\)
+Residues passing Fwd filter:               633  \(7.03e-05\); expected \(1e-05\)
 Total number of hits:                        3  \(6.44e-06\)];
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 1\n";
@@ -96,10 +95,10 @@ $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = 
 q[Target sequences:                  1  \(4500000 residues searched\)
-Residues passing MSV filter:             86894  \(0.0193\); expected \(0.02\)
-Residues passing bias filter:            78675  \(0.0175\); expected \(0.02\)
-Residues passing Vit filter:              3479  \(0.000773\); expected \(0.001\)
-Residues passing Fwd filter:               548  \(0.000122\); expected \(1e-05\)
+Residues passing MSV filter:             73870  \(0.0164\); expected \(0.02\)
+Residues passing bias filter:            72863  \(0.0162\); expected \(0.02\)
+Residues passing Vit filter:              3915  \(0.00087\); expected \(0.001\)
+Residues passing Fwd filter:               633  \(0.000141\); expected \(1e-05\)
 Total number of hits:                        3  \(1.29e-05\)];
 
 if ($output !~ /$expect/s) {
