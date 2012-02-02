@@ -137,6 +137,7 @@ OBJS =  build.o\
 	p7_spensemble.o\
 	p7_tophits.o\
 	p7_trace.o\
+	p7_msvdata.o\
 	fm_alphabet.o\
 	fm_general.o\
 	fm_msv.o
@@ -178,7 +179,8 @@ UTESTS =\
 	p7_hmmfile_utest\
 	p7_profile_utest\
 	p7_tophits_utest\
-	p7_trace_utest
+	p7_trace_utest\
+	p7_msvdata_utest
 
 ITESTS = \
 	itest_brute

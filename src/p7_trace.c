@@ -698,8 +698,8 @@ p7_trace_DumpAnnotated(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const
 
   if (tr == NULL) { fprintf(fp, "[null trace]\n"); return eslOK; }
 
-  fprintf(fp, "z     st   k     i   x_i  transit  emission postprob");
-  fprintf(fp, "----- -- ----- ----- ---  -------- -------- --------");
+  fprintf(fp, "z     st   k     i   x_i  transit  emission postprob\n");
+  fprintf(fp, "----- -- ----- ----- ---  -------- -------- --------\n");
 
   for (z = 0; z < tr->N-1; z++)	/* not including T state at end: */
     {

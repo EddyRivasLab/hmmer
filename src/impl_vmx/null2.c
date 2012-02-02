@@ -172,7 +172,7 @@ p7_Null2_ByTrace(const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend
       Ld++;
       if (tr->k[z] > 0)	/* must be an M or I */
 	{ /* surely there's an easier way? but our workspace is striped, interleaved quads... */
-	  s = ( (tr->st[z] == p7T_M) ?  p7X_M : p7X_I);
+	  s = ( (tr->st[z] == p7T_ML) ?  p7X_M : p7X_I);
 	  q = p7X_NSCELLS * ( (tr->k[z] - 1) % Q) + p7X_M;
 	  r = (tr->k[z] - 1) / Q;
 	  u.v            = wrk->dpf[0][q];

@@ -594,7 +594,7 @@ main(int argc, char **argv)
       for (i = 0; i < msa->nseq; i++)
 	{
 	  printf("Trace %d: %s\n", i+1, msa->sqname[i]);
-	  p7_trace_Dump(stdout, trarr[i], gm, msa->ax[i]);
+	  p7_trace_DumpAnnotated(stdout, trarr[i], gm, msa->ax[i]);
 	}
       
       /* Create an MSA from the individual traces */

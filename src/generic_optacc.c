@@ -264,7 +264,7 @@ select_m(const P7_PROFILE *gm, const P7_GMX *gx, int i, int k)
   float       *xmx  = gx->xmx;	/* so XMX() macro works           */
   float const *tsc  = gm->tsc;	/* so TSCDELTA() macro works */
   float path[4];
-  int   state[4] = { p7T_ML, p7T_IL, p7T_DL, p7T_B };
+  int   state[4] = { p7T_ML, p7T_IL, p7T_DL, p7T_L };
 
   path[0] = TSCDELTA(p7P_MM, k-1) * MMX(i-1,k-1);
   path[1] = TSCDELTA(p7P_IM, k-1) * IMX(i-1,k-1);
@@ -586,7 +586,7 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "-d")) p7_gmx_Dump(stdout, gx2, p7_DEFAULT);
   if (esl_opt_GetBoolean(go, "-m")) p7_gmx_Dump(stdout, gx1, p7_DEFAULT);
 
-  p7_trace_Dump(stdout, tr, gm, sq->dsq);
+  p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
   if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) p7_Die("trace fails validation:\n%s\n", errbuf);
 
   printf("fwd = %.4f nats\n", fsc);
@@ -598,7 +598,7 @@ main(int argc, char **argv)
   p7_GViterbi(sq->dsq, sq->n, gm, gx1, &vsc);
   p7_GTrace  (sq->dsq, sq->n, gm, gx1, tr);
   p7_gmx_SetPP(tr, gx2);
-  p7_trace_Dump(stdout, tr, gm, sq->dsq);
+  p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 
   printf("vit = %.4f nats\n", vsc);
   printf("acc = %.4f\n", p7_trace_GetExpectedAccuracy(tr));

@@ -279,7 +279,7 @@ main(int argc, char **argv)
 
 #if 0
   for (idx = 0; idx < nseq; idx++)
-    p7_trace_Dump(stdout, tr[idx], gm, sq[idx]->dsq);
+    p7_trace_DumpAnnotated(stdout, tr[idx], gm, sq[idx]->dsq);
 #endif
 
   p7_tracealign_Seqs(sq, tr, totseq, om->M, msaopts, &msa);

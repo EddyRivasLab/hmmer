@@ -1,8 +1,6 @@
 /* SSE optimized implementation of various MSV, Viterbi, and Forward
  * routines: structures, declarations, and macros.
  * 
- * SRE, Sun Nov 25 11:23:02 2007
- * SVN $Id$
  */
 #ifndef P7_IMPL_SSE_INCLUDED
 #define P7_IMPL_SSE_INCLUDED
@@ -14,8 +12,25 @@
 
 #include <xmmintrin.h>    /* SSE  */
 #include <emmintrin.h>    /* SSE2 */
+#ifdef _PMMINTRIN_H_INCLUDED
+#include <pmmintrin.h>   /* DENORMAL_MODE */
+#endif
 
 #include "hmmer.h"
+#include "p7_filtermx.h"
+
+/* The following constants define our SIMD vector layout and memory
+ * alignment.  Although SSE, Altivec/VMX are 128b/16B vectors, we must
+ * anticipate different vector sizes.  For example, Intel AVX is
+ * already roadmapped out to 1024b/128B vectors.  See note [1]
+ * below on memory alignment, SIMD vectors, and malloc().
+ */
+#define p7_VALIGN   16		/* Vector memory must be aligned on 16-byte boundaries   */
+#define p7_VNF      4		/* Number of floats per SIMD vector (Forward, Backward)  */
+#define p7_VNW      8		/* Number of shorts (words) per SIMD vector (Viterbi)    */
+#define p7_VNB      16		/* Number of bytes per SIMD vector (SSV, MSV)            */
+#define p7_VALIMASK (~0xf)      /* Ptrs are aligned using & p7_VALIMASK                  */
+
 
 /* In calculating Q, the number of vectors we need in a row, we have
  * to make sure there's at least 2, or a striped implementation fails.
@@ -503,6 +518,9 @@ extern int p7_ForwardParser (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,  
 extern int p7_Backward      (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
 extern int p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
 
+/* fwdfilter.c */
+extern int p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *opt_sc);
+
 /* io.c */
 extern int p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om);
 extern int p7_oprofile_ReadMSV (P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
@@ -562,67 +580,75 @@ impl_Init(void)
 }
 
 
+static inline void
+impl_ThreadInit(void)
+{
+#ifdef HAVE_FLUSH_ZERO_MODE
+  /* In order to avoid the performance penalty dealing with sub-normal
+   * values in the floating point calculations, set the processor flag
+   * so sub-normals are "flushed" immediately to zero.
+   * On OS X, need to reset this flag for each thread
+   * (see TW notes 05/08/10 for details)
+   */
+  _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+#endif
+
+#ifdef _PMMINTRIN_H_INCLUDED
+  /*
+   * FLUSH_ZERO doesn't necessarily work in non-SIMD calculations
+   * (yes on 64-bit, maybe not of 32-bit). This ensures that those
+   * scalar calculations will agree across architectures.
+   * (See TW notes  2012/0106_printf_underflow_bug/00NOTES for details)
+   */
+  _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
+#endif
+
+}
 
 #endif /* P7_IMPL_SSE_INCLUDED */
 
 
 /*****************************************************************
- * @LICENSE@
+ * x. Notes.
  *****************************************************************/
 
-/* 
- * Currently (and this remains in flux as of 14 Dec 07) an optimized
- * implementation is required to provide an MSVFilter(),
- * ViterbiFilter() and a ForwardFilter() implementation. A call to
- * p7_oprofile_Convert() makes an optimized profile that works for
- * all filters.
+/* [1]. On memory alignment, SIMD vectors, and malloc(): 
  * 
- * Any "Filter" returns a score may be an approximation (with
- * characterized or at least characterizable error), and which may
- * have limited upper range, such that high scores are returned as
- * eslINFINITY. Additionally, Filters might only work on local
- * alignment modes, because they are allowed to make assumptions about
- * the range of scores.
+ * Yes, the C99 standard says malloc() mustreturn a pointer "suitably
+ * aligned so that it may be aligned to a pointer of any type of
+ * object" (C99 7.20.3). Yes, __m128 vectors are 16 bytes. Yes, you'd
+ * think malloc() ought to be required return a pointer aligned on a
+ * 16-byte boundary. But, no, malloc() doesn't have to do this;
+ * malloc() will return improperly aligned memory on many systems.
+ * Reason: vectors are officially considered "out of scope" of the C99
+ * language.
  * 
- * Here, MSVFilter() and ViterbiFilter() are 8-bit lspace
- * implementations with limited precision and limited range (max 20
- * bits); ForwardFilter() is a pspace float implementation with
- * correct precision and limited range (max ~127 bits). Both require
- * local mode models.
+ * So vector memory has to be manually aligned. For 16-byte alignment,
+ * the idiom looks like the following, where for any to-be-aligned
+ * ptr, we first allocate a raw (unaligned) memory space that's 15
+ * bytes larger than we need, then set the aligned ptr into that space;
+ * and when we free, we free the raw memory ptr:
  * 
- * An optimized implementation may also provide other optimized
- * routines. It provides specialized Convert*() functions for these,
- * which may no-op (if the OPROFILE already suffices), or may
- * overwrite parts of the OPROFILE that Filters or other routines
- * might need. Therefore, after using a "bonus" function, a fresh
- * Convert() will be needed before a Filter() is called again. This
- * API is tentative.
+ *   raw_mem = malloc(n + 15);
+ *   ptr     = (__m128 *) ( ((uintptr_t) raw_mem + 15) & (~0xf));
+ *   
+ * To allow for arbitrary byte alignment (e.g. AVX), instead of
+ * hard-coding 16-byte alignment with constants 15 and 0xf, we use
+ * p7_VALIGN, (p7_VALIGN-1) and p7_VALIMASK.
  * 
- * For example, here, ViterbiScore() is a 32-bit lspace float SSE
- * implementation of the Viterbi algorithm.
- *
- * A "Score" function might be an additional target for optimization,
- * for example. A "Score" function returns a correct score with full
- * floating-point precision and range, and works for any mode model.
+ * Technically, the result of casting a non-NULL pointer to an integer
+ * type is undefined (C99 6.3.2.3), but this idiom for manual memory
+ * alignment is in widespread use so seems generally safe.
  * 
- * In the generic implementation, profile scores are 32-bit floating
- * point log-odds scores. In an optimized implementation, internally,
- * profile scores can be of any type, and may be in log space (lspace)
- * or probability space (pspace). (Calculations in probability space
- * are useful in the Forward algorithm, but always limit range.)  A
- * shorthand of "lspace uchar" means log-odds scores stored as
- * unsigned chars, for example; "pspace float" means odds ratios
- * stored as floats.
- * 
- * A note on memory alignment: malloc() is required to return a
- * pointer "suitably aligned so that it may be aligned to a pointer of
- * any type of object" (C99 7.20.3). __m128 vectors are 128-bits wide,
- * so malloc() ought to return a pointer aligned on a 16-byte
- * boundary.  However, this is not the case for glibc, and apparently
- * other system libraries. Google turns up threads of arguments
- * between glibc and gcc developers over whose problem this is; this
- * argument has apparently not been resolved, and is of no help.
- * Here, we manually align the relevant pointers by overallocating in
- * *_mem with malloc, then arithmetically manipulating the address to
- * mask off (~0xf).
+ * See also: posix_memalign(), as an alternative.
  */
+
+
+/*****************************************************************
+ * @LICENSE@
+ *
+ * SVN $Id$
+ * SVN $URL$
+ *****************************************************************/
+
+

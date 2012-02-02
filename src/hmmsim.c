@@ -777,8 +777,8 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
            * score vs al would gives us relative entropy / model position.
 	   */
 	  /* alilens[i] = scounts[p7T_D] + scounts[p7T_I]; SRE: temporarily testing this instead */
-	  alilens[i] = scounts[p7T_M] + scounts[p7T_D] + scounts[p7T_I];
-
+	  alilens[i] = scounts[p7T_ML] + scounts[p7T_DL] + scounts[p7T_IL] +
+	    scounts[p7T_MG] + scounts[p7T_DG] + scounts[p7T_IG];
 	  p7_trace_Reuse(tr);
 	}
 

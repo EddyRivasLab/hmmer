@@ -78,6 +78,7 @@ extern void     p7_gmxd_Destroy(P7_GMXD *gxd);
 
 extern int      p7_gmxd_Dump(FILE *ofp, P7_GMXD *gxd);
 extern int      p7_gmxd_DumpWindow(FILE *ofp, P7_GMXD *gxd, int istart, int iend, int kstart, int kend);
+extern int      p7_gmxd_DumpCSV(FILE *fp, P7_GMXD *pp, int istart, int iend, int kstart, int kend);
 
 /* from generic_fwdback_dual.c */
 extern int      p7_GForwardDual(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXD *gxd, float *opt_sc);

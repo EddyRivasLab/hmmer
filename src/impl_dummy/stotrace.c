@@ -381,7 +381,7 @@ main(int argc, char **argv)
       p7_StochasticTrace(rng, sq->dsq, sq->n, om, fwd, tr);
       p7_trace_Score(tr, sq->dsq, gm, &tsc);
   
-      if (esl_opt_GetBoolean(go, "-t") == TRUE) p7_trace_Dump(stdout, tr, gm, sq->dsq);
+      if (esl_opt_GetBoolean(go, "-t") == TRUE) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
       if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK)  p7_Die("trace %d fails validation:\n%s\n", i, errbuf);
 
       printf("Sampled trace:  %.4f nats\n", tsc);

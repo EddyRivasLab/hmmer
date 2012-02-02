@@ -13,12 +13,13 @@
  *    9. P7_ALIDISPLAY:  an alignment formatted for printing
  *   10. P7_DOMAINDEF:   reusably managing workflow in annotating domains
  *   11. P7_TOPHITS:     ranking lists of top-scoring hits
- *   12. FM:             FM-index
- *   13. Inclusion of the architecture-specific optimized implementation.
- *   14. P7_PIPELINE:    H3's accelerated seq/profile comparison pipeline
- *   15. P7_BUILDER:     configuration options for new HMM construction.
- *   16. Declaration of functions in HMMER's exposed API.
- *   17. Copyright and license information.
+ *   12. P7_MSVDATA:     data used in diagonal recovery and extension
+ *   13. FM:             FM-index
+ *   14. Inclusion of the architecture-specific optimized implementation.
+ *   15. P7_PIPELINE:    H3's accelerated seq/profile comparison pipeline
+ *   16. P7_BUILDER:     configuration options for new HMM construction.
+ *   17. Declaration of functions in HMMER's exposed API.
+ *   18. Copyright and license information.
  *   
  * Also, see impl_{sse,vmx}/impl_{sse,vmx}.h for additional API
  * specific to the acceleration layer; in particular, the P7_OPROFILE
@@ -85,6 +86,7 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 
 /* Option flags when creating faux traces with p7_trace_FauxFromMSA() */
 #define p7_MSA_COORDS	       (1<<0) /* default: i = unaligned seq residue coords     */
+
 
 /*****************************************************************
  * 1. P7_HMM: a core model.
@@ -373,23 +375,6 @@ typedef struct p7_profile_s {
 #define P7P_MSC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_M])
 #define P7P_ISC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_I])
 
-/* requires variable initialization: float *tsc = gm->tsc */
-#define P7P_TSC2(k,s)  (tsc[(k) * p7P_NTRANS + (s)])
-
-/* This contains a compact representation of 8-bit bias-shifted scores for use in
- * diagonal recovery (standard [MS]SV) and extension (standard and FM-[MS]SV),
- * along with MAXL-associated prefix- and suffix-lengths, and optimal extensions
- * for FM-MSV.
- */
-typedef struct p7_msvdata_s {
-  int      M;
-  uint8_t  *scores;  //implicit M*K matrix, where M = # states, and K = # characters in alphabet
-  uint8_t    **opt_ext_fwd;
-  uint8_t    **opt_ext_rev;
-  uint8_t    *prefix_lengths;
-  uint8_t    *suffix_lengths;
-} P7_MSVDATA;
-
 /*****************************************************************
  * 3. P7_BG: a null (background) model.
  *****************************************************************/
@@ -429,20 +414,16 @@ typedef struct p7_bg_s {
 
 /* Traceback structure for alignment of a model to a sequence.
  *
- * A traceback only makes sense in a triplet (tr, gm, dsq), for a
- * given profile or HMM (with nodes 1..M) and a given digital sequence
- * (with positions 1..L).
+ * A traceback usually only makes sense in a triplet (tr, gm, dsq),
+ * for a given profile or HMM (with nodes 1..M) and a given digital
+ * sequence (with positions 1..L).
  *
- * A traceback is always relative to the complete profile search model:
+ * A traceback is always relative to a profile model (not a core HMM):
  * so minimally, S->N->B->{GL}->...->E->C->T.
  * 
- * It may not contain I0 or IM states.
+ * It does not contain I0 or IM states.
  * D1 state can only occur as a G->D1 glocal entry.
  * 
- * State [3] in a trace is always G or L; if you know this is a
- * single-domain trace (no J states), you can test glocal vs. local by
- * looking at [3].
- *   
  * N,C,J states emit on transition, not on state, so a path of N emits
  * 0 residues, NN emits 1 residue, NNN emits 2 residues, and so on. By
  * convention, the trace always associates an emission-on-transition
@@ -497,9 +478,8 @@ typedef struct p7_trace_s {
   int   ndom;		/* number of domains in trace (= # of B or E states) */
   int  *tfrom,   *tto;	/* locations of B/E states in trace (0..tr->N-1)     */
   int  *sqfrom,  *sqto;	/* first/last M-emitted residue on sequence (1..L)   */
-  int  *hmmfrom, *hmmto;/* first/last M state on model (1..M)                */
+  int  *hmmfrom, *hmmto;/* first/last M/D state on model (1..M)              */
   int   ndomalloc;	/* current allocated size of these stacks            */
-
 } P7_TRACE;
 
 
@@ -674,6 +654,7 @@ typedef struct p7_spensemble_s {
 } P7_SPENSEMBLE;
 
 
+
 /*****************************************************************
  * 9. P7_ALIDISPLAY: an alignment formatted for printing
  *****************************************************************/
@@ -682,9 +663,34 @@ typedef struct p7_spensemble_s {
  * 
  * Alignment of a sequence domain to an HMM, formatted for printing.
  * 
- * For an alignment of L residues and names C chars long, requires
- * 6L + 2C + 31 bytes; for typical case of L=100,C=10, that's
- * <0.7 Kb.
+ * A homology domain produces a chunk of P7_TRACE:
+ *     ... B -> {GL} -> {MD}k1 -> ... {MD}k2 -> E ...
+ * There may be more than one per trace. Number them d, d=0..ndom-1.
+ * For a given d, a trace's index tells us:
+ *    tfrom[d]   = position of B in the trace's arrays (0..tr->N-1)
+ *    tto[d]     = position of E (0..tr->N-1)
+ *    sqfrom[d]  = position of first seq residue accounted for (1..L)
+ *    sqto[d]    = position of last seq residue (1..L)
+ *    hmmfrom[d] = k1
+ *    hmmto[d]   = k2
+ *    
+ * A P7_ALIDISPLAY is an annotated text representation of such a chunk
+ * of trace. From tfrom[d]+2 to tto[d]-1 (skipping the B, {GL}, and
+ * {E}), we have a series of {MDI} states: each is converted to an
+ * aligned symbol pair. These strings are tto[d]-1 - (tfrom[d]+2) + 1 = 
+ * tto[d] - tfrom[d] - 2 symbols long. (That's ad->N.)
+ * 
+ * The alidisplay also records whether state tfrom[d]+1 was G or L
+ * by setting the is_glocal flag. We need this, for instance, to backconvert
+ * an alidisplay to a trace.
+ * 
+ * Memory in this structure may either be serialized or deserialized.
+ * If serialized, ad->mem is non-NULL, ad->memsize is >0, and all the ptrs
+ * point into that memory. If not, ad->mem is NULL, ad->memsize is 0,
+ * and all the ptrs have their own allocation as NUL-terminated strings.
+ *
+ * For an alignment of L residues and names C chars long, requires 6L
+ * + 2C + 31 bytes; for typical case of L=100,C=10, that's <0.7 Kb.
  */
 typedef struct p7_alidisplay_s {
   char *rfline;                 /* reference coord info; or NULL        */
@@ -867,8 +873,30 @@ typedef struct p7_tophits_s {
 
 
 
+
+
 /*****************************************************************
- * 12. FM:  FM-index implementation (architecture-specific code found in impl_**)
+ * 12. P7_MSVDATA: data used in diagonal recovery and extension
+ *****************************************************************/
+
+/* This contains a compact representation of 8-bit bias-shifted scores for use in
+ * diagonal recovery (standard [MS]SV) and extension (standard and FM-[MS]SV),
+ * along with MAXL-associated prefix- and suffix-lengths, and optimal extensions
+ * for FM-MSV.
+ */
+typedef struct p7_msvdata_s {
+  int      M;
+  uint8_t  *scores;  //implicit M*K matrix, where M = # states, and K = # characters in alphabet
+  uint8_t    **opt_ext_fwd;
+  uint8_t    **opt_ext_rev;
+  uint8_t    *prefix_lengths;
+  uint8_t    *suffix_lengths;
+} P7_MSVDATA;
+
+
+
+/*****************************************************************
+ * 13. FM:  FM-index implementation (architecture-specific code found in impl_**)
  *****************************************************************/
 // fm.c
 
@@ -1014,7 +1042,7 @@ typedef struct fm_window_list_s {
 
 
 /*****************************************************************
- * 13. The optimized implementation.
+ * 14. The optimized implementation.
  *****************************************************************/
 #if   defined (p7_IMPL_SSE)
 #include "impl_sse/impl_sse.h"
@@ -1024,9 +1052,8 @@ typedef struct fm_window_list_s {
 #include "impl_dummy/impl_dummy.h"
 #endif
 
-
 /*****************************************************************
- * 14. P7_PIPELINE: H3's accelerated seq/profile comparison pipeline
+ * 15. P7_PIPELINE: H3's accelerated seq/profile comparison pipeline
  *****************************************************************/
 
 enum p7_pipemodes_e { p7_SEARCH_SEQS = 0, p7_SCAN_MODELS = 1 };
@@ -1110,7 +1137,7 @@ typedef struct p7_pipeline_s {
 
 
 /*****************************************************************
- * 15. P7_BUILDER: pipeline for new HMM construction
+ * 16. P7_BUILDER: pipeline for new HMM construction
  *****************************************************************/
 
 #define p7_DEFAULT_WINDOW_BETA  1e-7
@@ -1168,7 +1195,7 @@ typedef struct p7_builder_s {
 
 
 /*****************************************************************
- * 16. Routines in HMMER's exposed API.
+ * 17. Routines in HMMER's exposed API.
  *****************************************************************/
 
 /* build.c */

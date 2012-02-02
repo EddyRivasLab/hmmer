@@ -88,14 +88,15 @@ p7_StochasticTrace(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPRO
   while (s0 != p7T_S)
     {
       switch (s0) {
-      case p7T_M: s1 = select_m(rng, om, ox, i, k);  k--; i--; break;
-      case p7T_D: s1 = select_d(rng, om, ox, i, k);  k--;      break;
-      case p7T_I: s1 = select_i(rng, om, ox, i, k);       i--; break;
-      case p7T_N: s1 = select_n(i);                            break;
-      case p7T_C: s1 = select_c(rng, om, ox, i);               break;
-      case p7T_J: s1 = select_j(rng, om, ox, i);               break;
-      case p7T_E: s1 = select_e(rng, om, ox, i, &k);           break;
-      case p7T_B: s1 = select_b(rng, om, ox, i);               break;
+      case p7T_ML: s1 = select_m(rng, om, ox, i, k);  k--; i--; break;
+      case p7T_DL: s1 = select_d(rng, om, ox, i, k);  k--;      break;
+      case p7T_IL: s1 = select_i(rng, om, ox, i, k);       i--; break;
+      case p7T_N:  s1 = select_n(i);                            break;
+      case p7T_C:  s1 = select_c(rng, om, ox, i);               break;
+      case p7T_J:  s1 = select_j(rng, om, ox, i);               break;
+      case p7T_E:  s1 = select_e(rng, om, ox, i, &k);           break;
+      case p7T_L:  s1 = p7T_B;                                  break;
+      case p7T_B:  s1 = select_b(rng, om, ox, i);               break;
       default: ESL_EXCEPTION(eslEINVAL, "bogus state in traceback");
       }
       if (s1 == -1) ESL_EXCEPTION(eslEINVAL, "Stochastic traceback choice failed");
@@ -135,7 +136,7 @@ select_m(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   __m128  mpv, dpv, ipv;
   union { __m128 v; float p[4]; } u;
   float   path[4];
-  int     state[4] = { p7T_B, p7T_M, p7T_I, p7T_D };
+  int     state[4] = { p7T_L, p7T_ML, p7T_IL, p7T_DL };
   
   if (q > 0) {
     mpv = ox->dpf[i-1][(q-1)*3 + p7X_M];
@@ -167,7 +168,7 @@ select_d(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   __m128  tmdv, tddv;
   union { __m128 v; float p[4]; } u;
   float   path[2];
-  int     state[2] = { p7T_M, p7T_D };
+  int     state[2] = { p7T_ML, p7T_DL };
 
   if (q > 0) {
     mpv  = ox->dpf[i][(q-1)*3 + p7X_M];
@@ -199,7 +200,7 @@ select_i(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   __m128 *tp   = om->tfv + 7*q + p7O_MI;
   union { __m128 v; float p[4]; } u;
   float   path[2];
-  int     state[2] = { p7T_M, p7T_I };
+  int     state[2] = { p7T_ML, p7T_IL };
 
   u.v = _mm_mul_ps(mpv, *tp); tp++;  path[0] = u.p[r];
   u.v = _mm_mul_ps(ipv, *tp);        path[1] = u.p[r];
@@ -265,13 +266,13 @@ select_e(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
 	u.v = _mm_mul_ps(ox->dpf[i][q*3 + p7X_M], xEv);
 	for (r = 0; r < 4; r++) {
 	  sum += u.p[r];
-	  if (roll < sum) { *ret_k = r*Q + q + 1; return p7T_M;}
+	  if (roll < sum) { *ret_k = r*Q + q + 1; return p7T_ML;}
 	}
 
 	u.v = _mm_mul_ps(ox->dpf[i][q*3 + p7X_D], xEv);
 	for (r = 0; r < 4; r++) {
 	  sum += u.p[r];
-	  if (roll < sum) { *ret_k = r*Q + q + 1; return p7T_D;}
+	  if (roll < sum) { *ret_k = r*Q + q + 1; return p7T_DL;}
 	}
       }
     ESL_DASSERT1((sum > 0.99));
@@ -439,8 +440,8 @@ utest_stotrace(ESL_GETOPTS *go, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_PROFI
 
       maxsc = ESL_MAX(sc, maxsc);
       if (sc > vsc + 0.001){	/* need a little tolerance of floating point math here  */
-	//p7_trace_Dump(stdout, vtr, gm, dsq);
-	//p7_trace_Dump(stdout, tr,  gm, dsq);
+	//p7_trace_DumpAnnotated(stdout, vtr, gm, dsq);
+	//p7_trace_DumpAnnotated(stdout, tr,  gm, dsq);
 	esl_fatal("sampled trace has score > optimal Viterbi path; not possible (%f > %f)", sc, vsc);
       }
       p7_trace_Reuse(tr);
@@ -621,7 +622,7 @@ main(int argc, char **argv)
       p7_StochasticTrace(rng, sq->dsq, sq->n, om, fwd, tr);
       p7_trace_Score(tr, sq->dsq, gm, &tsc);
   
-      if (esl_opt_GetBoolean(go, "-t") == TRUE) p7_trace_Dump(stdout, tr, gm, sq->dsq);
+      if (esl_opt_GetBoolean(go, "-t") == TRUE) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
       if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK)  p7_Die("trace %d fails validation:\n%s\n", i, errbuf);
 
       printf("Sampled trace:  %.4f nats\n", tsc);

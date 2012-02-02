@@ -102,7 +102,7 @@ static ESL_OPTIONS options[] = {
   { "--fm_max_scthresh", eslARG_REAL,       "10.5", NULL, NULL,    NULL,  NULL, NULL,          "max total bits required in seed of length fm_max_depth",     8 },
 
 /* Other options */
-  { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert target <seqdb> is in format <s>>: no autodetection",     12 },
+  { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert target <seqdb> is in format <s>: no autodetection",     12 },
   { "--nonull2",    eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,  NULL,            "turn off biased composition score corrections",                 12 },
   { "-Z",           eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set database size (Megabases) to <x> for E-value calculations", 12 },
   { "--seed",       eslARG_INT,          "42", NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",           12 },
@@ -175,28 +175,28 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
       p7_banner(stdout, argv[0], banner);
       esl_usage(stdout, argv[0], usage);
       if (puts("\nBasic options:")                                           < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 120=textwidth*/
+      esl_opt_DisplayHelp(stdout, go, 1, 2, 100); /* 1= group; 2 = indentation; 120=textwidth*/
 
       if (puts("\nOptions directing output:")                                < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 2, 2, 80); 
+      esl_opt_DisplayHelp(stdout, go, 2, 2, 100);
 
 //    if (puts("\nOptions controlling scoring system:")                      < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
 //     esl_opt_DisplayHelp(stdout, go, 3, 2, 80);
 
       if (puts("\nOptions controlling reporting thresholds:")                < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 4, 2, 80); 
+      esl_opt_DisplayHelp(stdout, go, 4, 2, 100);
 
       if (puts("\nOptions controlling inclusion (significance) thresholds:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 5, 2, 80); 
+      esl_opt_DisplayHelp(stdout, go, 5, 2, 100);
 
       if (puts("\nOptions controlling acceleration heuristics:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 7, 2, 80);
+      esl_opt_DisplayHelp(stdout, go, 7, 2, 100);
 
       if (puts("\nControl of FM pruning and extension:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 8, 2, 80);
+      esl_opt_DisplayHelp(stdout, go, 8, 2, 100);
 
       if (puts("\nOther expert options:")                                    < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 12, 2, 80); 
+      esl_opt_DisplayHelp(stdout, go, 12, 2, 100);
       exit(0);
 
   }
@@ -834,8 +834,6 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
   int          status  = eslOK;
   int          sstatus = eslOK;
   int          eofCount = 0;
-  int          use_tmpsq = FALSE;
-  ESL_SQ       *tmpsq   =  esl_sq_CreateDigital(info->om->abc);
   ESL_SQ_BLOCK *block;
   void         *newBlock;
   int i;
@@ -853,31 +851,15 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
       block = (ESL_SQ_BLOCK *) newBlock;
 
       //reset block as an empty vessel
-      for (i=0; i<block->count; i++)
+      if (block->complete) // don't want to reset the first sequence if it's about to be used to set the prefix for the next read.
+        esl_sq_Reuse(block->list + 0);
+      for (i=1; i<block->count; i++)
           esl_sq_Reuse(block->list + i);
-
-      if (use_tmpsq) {
-          esl_sq_Copy(tmpsq , block->list);
-          block->complete = FALSE;  //this lets ReadBlock know that it needs to append to a small bit of previously-read seqeunce
-          block->list->C = info->om->max_length; // overload the ->C value, which ReadBlock uses to determine how much
-                                                 // overlap should be retained in the ReadWindow step
-      }
 
       sstatus = esl_sqio_ReadBlock(dbfp, block, NHMMER_MAX_RESIDUE_COUNT, TRUE);
 
-      if (block->complete || block->count == 0) {
-          use_tmpsq = FALSE;
-      } else {
-          /* the final sequence on the block was a probably-incomplete window of the active sequence,
-           * so capture a copy of that window to use as a template on which the next ReadWindow() call
-           * (internal to ReadBlock) will be based
-           */
-          esl_sq_Copy(block->list + (block->count - 1) , tmpsq);
-          use_tmpsq = TRUE;
-      }
-
       block->first_seqidx = info->pli->nseqs;
-      info->pli->nseqs += block->count - (use_tmpsq ? 1 : 0);// if there's an incomplete sequence read into the block wait to count it until it's complete.
+      info->pli->nseqs += block->count  - (block->complete ? 0 : 1);// if there's an incomplete sequence read into the block wait to count it until it's complete.
       if (sstatus == eslEOF) {
           if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
           ++eofCount;
@@ -886,17 +868,25 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
       if (sstatus == eslOK) {
           status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
           if (status != eslOK) esl_fatal("Work queue reader failed");
-      }
 
-      //newBlock needs all this information so the next ReadBlock call will know what to do
-      ((ESL_SQ_BLOCK *)newBlock)->complete = block->complete;
-      if (!block->complete) {
-          // the final sequence on the block was a probably-incomplete window of the active sequence,
-          // so prep the next block to read in the next window
-          esl_sq_Copy(block->list + (block->count - 1) , ((ESL_SQ_BLOCK *)newBlock)->list);
-          ((ESL_SQ_BLOCK *)newBlock)->list->C = info->om->max_length;
-      }
+          //newBlock needs all this information so the next ReadBlock call will know what to do
+          ((ESL_SQ_BLOCK *)newBlock)->complete = block->complete;
+          if (!block->complete) {
+              // the final sequence on the block was an incomplete window of the active sequence,
+              // so prep the next block to read in the next window
+              esl_sq_Copy(block->list + (block->count - 1) , ((ESL_SQ_BLOCK *)newBlock)->list);
+//              ((ESL_SQ_BLOCK *)newBlock)->list->C = ESL_MIN( info->om->max_length, ((ESL_SQ_BLOCK *)newBlock)->list->n);
 
+              if (  ((ESL_SQ_BLOCK *)newBlock)->list->n < info->om->max_length ) {
+                //no reason to search the final partial sequence on the block, as the next block will search this whole chunk
+                ((ESL_SQ_BLOCK *)newBlock)->list->C = ((ESL_SQ_BLOCK *)newBlock)->list->n;
+                (((ESL_SQ_BLOCK *)newBlock)->count)--;
+              } else {
+                ((ESL_SQ_BLOCK *)newBlock)->list->C = info->om->max_length;
+              }
+
+          }
+      }
   }
 
   status = esl_workqueue_ReaderUpdate(queue, block, NULL);
@@ -907,8 +897,6 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
       esl_threads_WaitForFinish(obj);
       esl_workqueue_Complete(queue);  
     }
-
-  if (tmpsq) esl_sq_Destroy(tmpsq);
 
   return sstatus;
 }
@@ -926,15 +914,7 @@ pipeline_thread(void *arg)
   ESL_SQ_BLOCK  *block = NULL;
   void          *newBlock;
   
-#ifdef HAVE_FLUSH_ZERO_MODE
-  /* In order to avoid the performance penalty dealing with sub-normal
-   * values in the floating point calculations, set the processor flag
-   * so sub-normals are "flushed" immediately to zero.
-   * On OS X, need to reset this flag for each thread.
-   * (see TW notes 05/08/10 for details)
-   */
-  _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
-#endif
+  impl_ThreadInit();
 
   obj = (ESL_THREADS *) arg;
   esl_threads_Started(obj, &workeridx);
@@ -947,7 +927,7 @@ pipeline_thread(void *arg)
   /* loop until all blocks have been processed */
   block = (ESL_SQ_BLOCK *) newBlock;
   while (block->count > 0)
-    {
+  {
       /* Main loop: */
       for (i = 0; i < block->count; ++i)
     {
@@ -1006,7 +986,7 @@ pipeline_thread(void *arg)
       if (status != eslOK) esl_fatal("Work queue worker failed");
 
       block = (ESL_SQ_BLOCK *) newBlock;
-    }
+  }
 
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
   if (status != eslOK) esl_fatal("Work queue worker failed");

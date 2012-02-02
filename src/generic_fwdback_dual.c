@@ -445,39 +445,45 @@ p7_GDecodingDual(const P7_PROFILE *gm, const P7_GMXD *fwd, P7_GMXD *bck, P7_GMXD
   int       k;
   int       x;
 
-  ppp  = pp->dp[i];
+  ppp  = pp->dp[0];
   for (x = 0; x < p7GD_NSCELLS * (M+1) + p7GD_NXCELLS; x++) *ppp++ = 0.0;
+  xN = 0.0;
+  xJ = xC = -eslINFINITY;
 
   for (i = 1; i <= L; i++)
     {
-      fwdp = fwd->dp[i] + p7GD_NSCELLS;
-      bckp = bck->dp[i] + p7GD_NSCELLS;
-      ppp  = pp->dp[i];
+      fwdp  = fwd->dp[i] + p7GD_NSCELLS;
+      bckp  = bck->dp[i] + p7GD_NSCELLS;
+      ppp   = pp->dp[i];
+      denom = 0.0;
       for (x = 0; x < p7GD_NSCELLS; x++) *ppp++ = 0.0;
-      
+
       for (k = 1; k < M; k++)
 	{
 	  /* [ ML MG IL IG DL DG] */
 	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* ML */
 	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* MG */
 	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* IL */
-	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp;   ppp+=3; fwdp+=3; bckp+=3; /* IG; skip DL,DG */
+	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp+=3; bckp+=3; /* IG; skip DL,DG */
+	  *ppp++ = 0.0;		/* DL */
+	  *ppp++ = 0.0;		/* DG */
 	}
       *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* ML_m */
       *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* MG_m */
       *ppp++ = 0.0;
       *ppp++ = 0.0;
       *ppp++ = 0.0; 
-      *ppp++ = 0.0; fwdp += 5; bckp += 5; /* fwd,bck now on N */
+      *ppp++ = 0.0; fwdp += 5; bckp += 5; /* +4, +1 to skip E; fwd,bck now on N */
 
       /* [ E N J B L G C ] */
       *ppp++ = 0.0;		/* E */
-      *ppp   = expf(xN + *bckp + gm->xsc[p7P_N][p7P_LOOP] - sc); denom += *ppp; xN = *fwdp++; bckp++; /* N */
-      *ppp   = expf(xJ + *bckp + gm->xsc[p7P_J][p7P_LOOP] - sc); denom += *ppp; xJ = *fwdp++; bckp++; /* J */
+      *ppp   = expf(xN + *bckp + gm->xsc[p7P_N][p7P_LOOP] - sc); denom += *ppp++; xN = *fwdp++;  bckp++;  /* N */
+      *ppp   = expf(xJ + *bckp + gm->xsc[p7P_J][p7P_LOOP] - sc); denom += *ppp++; xJ = *fwdp++;  bckp++; /* J; fwdp, bckp advance to C */
       *ppp++ = 0.0;		/* B */
       *ppp++ = 0.0;		/* L */
-      *ppp++ = 0.0;		/* G */
-      *ppp++ = expf(xC + *bckp + gm->xsc[p7P_C][p7P_LOOP] - sc); denom += *ppp; xC = *fwdp++; bckp++; /* C */
+      *ppp++ = 0.0; 	        /* G */
+      fwdp += 3; bckp += 3;
+      *ppp   = expf(xC + *bckp + gm->xsc[p7P_C][p7P_LOOP] - sc); denom += *ppp;   xC = *fwdp;  /* C */
       /* note delayed store for N/J/C, because it's fwd[i-1][X] + bck[i-1][X] + tXX */
 
       denom = 1.0 / denom;	/* multiplication faster than division... */
@@ -625,14 +631,14 @@ p7_GCentroidAlignDual(float gamma, const P7_PROFILE *gm, const P7_GMXD *pp, P7_G
       *dpc++ = 0.0;	/* IG */
       *dpc++ = dlv;
       *dpc++ = dgv;
-      ppp += 2;
+      ppp   += 4;
 
       /* Special states [E N J B L G C] */
       /* row i main states finished; dpc, ppp are now on first special state, E */
       dpp += 2*p7GD_NSCELLS;	/* and now dpp is too */
       
-      *dpc++ = ESL_MAX( xE, ESL_MAX( ESL_MAX(mlv, dlv),    /* E */
-				     ESL_MAX(mgv, dgv)));
+      *dpc++ = xE = ESL_MAX( xE, ESL_MAX( ESL_MAX(mlv, dlv),    /* E */
+			    	          ESL_MAX(mgv, dgv)));
 
       *dpc++ = xN =          P7_DELTAT( *(dpp + p7GD_N) + *(ppp + p7GD_N) * gam1 - 1., gm->xsc[p7P_N][p7P_LOOP]);
       
@@ -660,7 +666,7 @@ p7_GCentroidAlignDual(float gamma, const P7_PROFILE *gm, const P7_GMXD *pp, P7_G
 static inline int
 select_mg(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, int k)
 {
-  int   state[4] = { p7GD_MG, p7GD_IG, p7GD_DG, p7GD_G };
+  int   state[4] = { p7T_MG, p7T_IG, p7T_DG, p7T_G };
   float path[4];
 
   path[0] = P7_DELTAT( P7_GMXD_MX(gxd, i-1, k-1, p7GD_MG), P7P_TSC(gm, k-1, p7P_MM));
@@ -673,7 +679,7 @@ select_mg(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, int k)
 static inline int
 select_ml(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, int k)
 {
-  int   state[4] = { p7GD_ML, p7GD_IL, p7GD_DL, p7GD_L };
+  int   state[4] = { p7T_ML, p7T_IL, p7T_DL, p7T_L };
   float path[4];
 
   path[0] = P7_DELTAT( P7_GMXD_MX(gxd, i-1, k-1, p7GD_ML), P7P_TSC(gm, k-1, p7P_MM));
@@ -690,7 +696,7 @@ select_ig(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, int k)
 
   path[0] = P7_DELTAT( P7_GMXD_MX(gxd, i-1, k, p7GD_MG), P7P_TSC(gm, k, p7P_MI));
   path[1] = P7_DELTAT( P7_GMXD_MX(gxd, i-1, k, p7GD_IG), P7P_TSC(gm, k, p7P_II));
-  return ( (path[0] >= path[1]) ? p7GD_MG : p7GD_IG);
+  return ( (path[0] >= path[1]) ? p7T_MG : p7T_IG);
 }
 
 static inline int
@@ -700,7 +706,7 @@ select_il(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, int k)
 
   path[0] = P7_DELTAT( P7_GMXD_MX(gxd, i-1, k, p7GD_ML), P7P_TSC(gm, k, p7P_MI));
   path[1] = P7_DELTAT( P7_GMXD_MX(gxd, i-1, k, p7GD_IL), P7P_TSC(gm, k, p7P_II));
-  return ( (path[0] >= path[1]) ? p7GD_ML : p7GD_IL);
+  return ( (path[0] >= path[1]) ? p7T_ML : p7T_IL);
 }
 
 static inline int
@@ -710,7 +716,7 @@ select_dg(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, int k)
 
   path[0] = P7_DELTAT( P7_GMXD_MX(gxd, i, k-1, p7GD_MG), P7P_TSC(gm, k-1, p7P_MD));
   path[1] = P7_DELTAT( P7_GMXD_MX(gxd, i, k-1, p7GD_DG), P7P_TSC(gm, k-1, p7P_DD));
-  return ( (path[0] >= path[1]) ? p7GD_MG : p7GD_DG);
+  return ( (path[0] >= path[1]) ? p7T_MG : p7T_DG);
 }
 
 static inline int
@@ -720,7 +726,7 @@ select_dl(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, int k)
 
   path[0] = P7_DELTAT( P7_GMXD_MX(gxd, i, k-1, p7GD_ML), P7P_TSC(gm, k-1, p7P_MD));
   path[1] = P7_DELTAT( P7_GMXD_MX(gxd, i, k-1, p7GD_DL), P7P_TSC(gm, k-1, p7P_DD));
-  return ( (path[0] >= path[1]) ? p7GD_ML : p7GD_DL);
+  return ( (path[0] >= path[1]) ? p7T_ML : p7T_DL);
 }
 
 static inline int
@@ -734,13 +740,13 @@ select_e(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, int *ret_k)
 
   for (k = 1; k < gm->M; k++)
     { /* [ML MG IL IG DL DG] */
-      if (*dpc >= max) { max = *dpc; smax = p7GD_ML; kmax = k; }   dpc+=4;
-      if (*dpc >= max) { max = *dpc; smax = p7GD_DL; kmax = k; }   dpc+=2;
+      if (*dpc > max) { max = *dpc; smax = p7T_ML; kmax = k; }   dpc+=4;
+      if (*dpc > max) { max = *dpc; smax = p7T_DL; kmax = k; }   dpc+=2;
     }
-  if (*dpc >= max) { max = *dpc; smax = p7GD_ML; kmax = k; }       dpc++;
-  if (*dpc >= max) { max = *dpc; smax = p7GD_MG; kmax = k; }       dpc+=3;
-  if (*dpc >= max) { max = *dpc; smax = p7GD_DL; kmax = k; }       dpc++;
-  if (*dpc >= max) { max = *dpc; smax = p7GD_DG; kmax = k; }       
+  if (*dpc > max) { max = *dpc; smax = p7T_ML; kmax = k; }       dpc++;
+  if (*dpc > max) { max = *dpc; smax = p7T_MG; kmax = k; }       dpc+=3;
+  if (*dpc > max) { max = *dpc; smax = p7T_DL; kmax = k; }       dpc++;
+  if (*dpc > max) { max = *dpc; smax = p7T_DG; kmax = k; }       
 
   *ret_k = kmax;
   return smax;
@@ -749,7 +755,7 @@ select_e(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, int *ret_k)
 static inline int
 select_n(int i)
 {
-  return ((i==0) ? -1 : p7GD_N);
+  return ((i==0) ? p7T_S : p7T_N);
 }
 
 static inline int
@@ -760,7 +766,7 @@ select_j(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, const P7_GMXD *pp, flo
 
   path[0] = P7_DELTAT ( rsc + P7_GMXD_XMX(gxd, i-1, p7GD_J), gm->xsc[p7P_J][p7P_LOOP]);
   path[1] = P7_DELTAT (       P7_GMXD_XMX(gxd, i,   p7GD_E), gm->xsc[p7P_E][p7P_LOOP]);
-  return ( (path[0] > path[1]) ? p7GD_J : p7GD_E);
+  return ( (path[0] > path[1]) ? p7T_J : p7T_E);
 }
 
 static inline int
@@ -770,7 +776,7 @@ select_b( const P7_PROFILE *gm, const P7_GMXD *gxd, int i)
 
   path[0] = P7_DELTAT( P7_GMXD_XMX(gxd, i, p7GD_N), gm->xsc[p7P_N][p7P_MOVE]);
   path[1] = P7_DELTAT( P7_GMXD_XMX(gxd, i, p7GD_J), gm->xsc[p7P_J][p7P_MOVE]);
-  return ( (path[0] > path[1]) ? p7GD_N : p7GD_J);
+  return ( (path[0] > path[1]) ? p7T_N : p7T_J);
 }
 
 static inline int
@@ -781,7 +787,7 @@ select_c(const P7_PROFILE *gm, const P7_GMXD *gxd, int i, const P7_GMXD *pp, flo
 
   path[0] = P7_DELTAT ( rsc + P7_GMXD_XMX(gxd, i-1, p7GD_C), gm->xsc[p7P_C][p7P_LOOP]);
   path[1] = P7_DELTAT (       P7_GMXD_XMX(gxd, i,   p7GD_E), gm->xsc[p7P_E][p7P_MOVE]);
-  return ( (path[0] > path[1]) ? p7GD_C : p7GD_E);
+  return ( (path[0] > path[1]) ? p7T_C : p7T_E);
 }
 
 
@@ -790,15 +796,15 @@ p7_GCentroidTrace(float gamma, const P7_PROFILE *gm, const P7_GMXD *pp, const P7
 {
   int   i    = gxd->L;
   int   k    = 0;
-  int   sprv = p7GD_C;
-  int   scur, tcur;
+  int   sprv = p7T_C;
+  int   scur;
   float ppv;
   int   status;
 
   if ((status = p7_trace_AppendWithPP(tr, p7T_T, k, i, 0.0)) != eslOK) return status;
   if ((status = p7_trace_AppendWithPP(tr, p7T_C, k, i, 0.0)) != eslOK) return status;
 
-  while (sprv != -1)
+  while (sprv != p7T_S)
     {
       switch (sprv) {
       case p7T_ML: scur = select_ml(gm, gxd, i, k); k--; i--; break;
@@ -811,28 +817,21 @@ p7_GCentroidTrace(float gamma, const P7_PROFILE *gm, const P7_GMXD *pp, const P7
       case p7T_N:  scur = select_n (         i    );          break;
       case p7T_J:  scur = select_j (gm, gxd, i, pp, gamma);   break;
       case p7T_B:  scur = select_b (gm, gxd, i);              break;
-      case p7T_L:  scur = p7GD_B;                             break;
-      case p7T_G:  scur = p7GD_B;                             break;
+      case p7T_L:  scur = p7T_B;                              break;
+      case p7T_G:  scur = p7T_B;                              break;
       case p7T_C:  scur = select_c (gm, gxd, i, pp, gamma);   break;
       default: ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in traceback");
       }
 
-      switch (scur) {
-      case -1:     tcur = p7T_S;  ppv = 0.0; break;
-      case p7T_ML: tcur = p7T_ML; ppv = P7_GMXD_MX(gxd, i, k, p7GD_ML) + P7_GMXD_MX(gxd, i, k, p7GD_MG); break;
-      case p7T_MG: tcur = p7T_MG; ppv = P7_GMXD_MX(gxd, i, k, p7GD_ML) + P7_GMXD_MX(gxd, i, k, p7GD_MG); break;
-      case p7T_IL: tcur = p7T_IL; ppv = P7_GMXD_MX(gxd, i, k, p7GD_IL) + P7_GMXD_MX(gxd, i, k, p7GD_IG); break;
-      case p7T_IG: tcur = p7T_IG; ppv = P7_GMXD_MX(gxd, i, k, p7GD_IL) + P7_GMXD_MX(gxd, i, k, p7GD_IG); break;
-      case p7T_DL: tcur = p7T_DL; ppv = 0.0;  break;                      
-      case p7T_DG: tcur = p7T_DG; ppv = 0.0;  break;                      
-      case p7T_E:  tcur = p7T_E;  ppv = 0.0;  break;
-      case p7T_N:  tcur = p7T_N;  ppv = (sprv==scur ? P7_GMXD_XMX(gxd, i, p7GD_N) : 0.0); break;
-      case p7T_J:  tcur = p7T_J;  ppv = (sprv==scur ? P7_GMXD_XMX(gxd, i, p7GD_J) : 0.0); break;
-      case p7T_B:  tcur = p7T_B;  ppv = 0.0;  break;
-      case p7T_L:  tcur = -1;     ppv = 0.0;  break;
-      case p7T_G:  tcur = -1;     ppv = 0.0;  break;
-      case p7T_C:  tcur = p7T_C;  ppv = (sprv==scur ? P7_GMXD_XMX(gxd, i, p7GD_C) : 0.0); break;
-      default: ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in traceback");
+      switch (scur) {		/* posterior probs of residues are marginalized over glocal/local path choice */
+      case p7T_ML:  ppv = P7_GMXD_MX(pp, i, k, p7GD_ML) + P7_GMXD_MX(pp, i, k, p7GD_MG); break; 
+      case p7T_MG:  ppv = P7_GMXD_MX(pp, i, k, p7GD_ML) + P7_GMXD_MX(pp, i, k, p7GD_MG); break;
+      case p7T_IL:  ppv = P7_GMXD_MX(pp, i, k, p7GD_IL) + P7_GMXD_MX(pp, i, k, p7GD_IG); break;
+      case p7T_IG:  ppv = P7_GMXD_MX(pp, i, k, p7GD_IL) + P7_GMXD_MX(pp, i, k, p7GD_IG); break;
+      case p7T_N:   ppv = (sprv==scur ? P7_GMXD_XMX(pp, i, p7GD_N) : 0.0); break;
+      case p7T_J:   ppv = (sprv==scur ? P7_GMXD_XMX(pp, i, p7GD_J) : 0.0); break;
+      case p7T_C:   ppv = (sprv==scur ? P7_GMXD_XMX(pp, i, p7GD_C) : 0.0); break;
+      default:      ppv = 0.0;  break;
       }
 
       /* A glocal B->G->Mk wing-retraction entry: unfold it */
@@ -843,12 +842,10 @@ p7_GCentroidTrace(float gamma, const P7_PROFILE *gm, const P7_GMXD *pp, const P7
 	}
       }
 
-      if (tcur != -1) {
-	if ( (status = p7_trace_AppendWithPP(tr, tcur, k, i, ppv)) != eslOK) return status;
-      }
+      if ( (status = p7_trace_AppendWithPP(tr, scur, k, i, ppv)) != eslOK) return status;
 
       /* For NCJ, we had to defer i decrement. */
-      if ( (scur == p7GD_N || scur == p7GD_J || scur == p7GD_C) && scur == sprv) i--;
+      if ( (scur == p7T_N || scur == p7T_J || scur == p7T_C) && scur == sprv) i--;
       sprv = scur;
     }
   
@@ -1306,6 +1303,7 @@ static ESL_OPTIONS options[] = {
   { "--ls",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "multihit glocal alignment",                        0 },
   { "--s",       eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit glocal alignment",                          0 },
   { "--vv",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "very verbose debugging output: inc. DP matrix",    0 },
+  { "--csv",  eslARG_OUTFILE,   NULL,  NULL, NULL,   NULL,  NULL, NULL, "output CSV file of decoding matrix, for heat map", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -1317,6 +1315,7 @@ main(int argc, char **argv)
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
+  char           *csvfile = esl_opt_GetString(go, "--csv");
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
@@ -1324,6 +1323,7 @@ main(int argc, char **argv)
   P7_PROFILE     *gm      = NULL;
   P7_GMXD        *fwd     = NULL;
   P7_GMXD        *bck     = NULL;
+  P7_TRACE       *tr      = NULL;
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
@@ -1361,6 +1361,7 @@ main(int argc, char **argv)
   /* Allocate matrices */
   fwd = p7_gmxd_Create(gm->M, sq->n);
   bck = p7_gmxd_Create(gm->M, sq->n);
+  tr  = p7_trace_CreateWithPP();
 
   printf("%-30s   %-10s %-10s   %-10s %-10s\n", "# seq name",      "fwd (raw)",   "bck (raw) ",  "fwd (bits)",  "bck (bits)");
   printf("%-30s   %10s %10s   %10s %10s\n",     "#--------------", "----------",  "----------",  "----------",  "----------");
@@ -1382,9 +1383,49 @@ main(int argc, char **argv)
 
       /* Run Forward, Backward */
       p7_GForwardDual (sq->dsq, sq->n, gm, fwd, &fsc);
+
+      if (esl_opt_GetBoolean(go, "--vv")) p7_gmxd_Dump(stdout, fwd);
+
       p7_GBackwardDual(sq->dsq, sq->n, gm, bck, &bsc);
+      p7_GDecodingDual(gm, fwd, bck, bck);                   /* <bck> now becomes the pp matrix */
+
+      // quickie check added in a hurry, for a lab mtg stat
+      printf("Total cells: %" PRId64 "\n", (int64_t) sq->n * (int64_t) gm->M);
+      {
+	int   i,k;
+	float val;
+	int64_t ncells = 0;
+	float pthresh = 0.001;
+	P7_GMXD *pp = bck;
+
+	for (i = 1; i <= sq->n; i++)
+	  for (k = 1; k <= gm->M; k++)
+	    {
+	      val =  
+		pp->dp[i][k * p7GD_NSCELLS + p7GD_ML] + pp->dp[i][k * p7GD_NSCELLS + p7GD_MG] + 
+		pp->dp[i][k * p7GD_NSCELLS + p7GD_IL] + pp->dp[i][k * p7GD_NSCELLS + p7GD_IG] + 
+		pp->dp[i][k * p7GD_NSCELLS + p7GD_DL] + pp->dp[i][k * p7GD_NSCELLS + p7GD_DG];
+	      if (val >= pthresh) ncells++;
+	    }
+	printf("cells over thresh: %" PRId64 "\n", ncells);
+      }
+
+
+      if (csvfile) {
+	FILE *csvfp = fopen(csvfile, "w");
+	p7_gmxd_DumpCSV(csvfp, bck, 1, sq->n, 1, gm->M);
+	fclose(csvfp);
+      }
 
       if (esl_opt_GetBoolean(go, "--vv")) p7_gmxd_Dump(stdout, bck);
+
+      p7_GCentroidAlignDual(/*gamma=*/0.5, gm, bck, fwd);    /* <fwd> is now the centroid DP alignment fill */
+
+      if (esl_opt_GetBoolean(go, "--vv")) p7_gmxd_Dump(stdout, fwd);
+
+      p7_GCentroidTrace(/*gamma=*/0.5, gm, bck, fwd, tr);
+
+      p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 
       /* Those scores are partial log-odds likelihoods in nats.
        * Subtract off the rest of the null model, convert to bits.
@@ -1398,12 +1439,14 @@ main(int argc, char **argv)
 
       p7_gmxd_Reuse(fwd);
       p7_gmxd_Reuse(bck);
+      p7_trace_Reuse(tr);
       esl_sq_Reuse(sq);
     }
 
   /* Cleanup */
   esl_sqfile_Close(sqfp);
   esl_sq_Destroy(sq);
+  p7_trace_Destroy(tr);
   p7_gmxd_Destroy(fwd);
   p7_gmxd_Destroy(bck);
   p7_profile_Destroy(gm);

@@ -222,6 +222,11 @@ p7_builder_LoadScoreSystem(P7_BUILDER *bld, const char *matrix, double popen, do
     for (b = 0; b < bld->abc->K; b++)
       bld->Q->mx[a][b] /= f[a];	/* Q->mx[a][b] is now P(b | a) */
 
+  /* Normalize mx, so the values P(b|a) for row a sum to 1 */
+  for (a = 0; a < bld->abc->K; a++)
+    esl_vec_DNorm(bld->Q->mx[a],  bld->abc->K);
+
+
   bld->popen   = popen;
   bld->pextend = pextend;
   free(f);
@@ -319,6 +324,11 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, 
   for (a = 0; a < bld->abc->K; a++)
     for (b = 0; b < bld->abc->K; b++)
       bld->Q->mx[a][b] /= f[a];	/* Q->mx[a][b] is now P(b | a) */
+
+  /* Normalize mx, so the values P(b|a) for row a sum to 1 */
+  for (a = 0; a < bld->abc->K; a++)
+    esl_vec_DNorm(bld->Q->mx[a],  bld->abc->K);
+
 
   bld->popen   = popen;
   bld->pextend = pextend;
@@ -488,14 +498,19 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
   if ((status = p7_hmm_SetConsensus(hmm, sq))                                                                   != eslOK) goto ERROR; 
   if ((status = calibrate(bld, hmm, bg, opt_gm, opt_om))                                                        != eslOK) goto ERROR;
 
-  /* build a faux trace: relative to core model (B->M_1..M_L->E) */
-  if (opt_tr != NULL) 
+  /* build a faux glocal trace */
+  if (opt_tr)
     {
       if ((tr = p7_trace_Create())                      == NULL)  goto ERROR;
+      if ((status = p7_trace_Append(tr, p7T_S, 0, 0))   != eslOK) goto ERROR; 
+      if ((status = p7_trace_Append(tr, p7T_N, 0, 0))   != eslOK) goto ERROR; 
       if ((status = p7_trace_Append(tr, p7T_B, 0, 0))   != eslOK) goto ERROR; 
+      if ((status = p7_trace_Append(tr, p7T_G, 0, 0))   != eslOK) goto ERROR; 
       for (k = 1; k <= sq->n; k++)
-	if ((status = p7_trace_Append(tr, p7T_M, k, k)) != eslOK) goto ERROR;
+	if ((status = p7_trace_Append(tr, p7T_MG, k, k)) != eslOK) goto ERROR;
       if ((status = p7_trace_Append(tr, p7T_E, 0, 0))   != eslOK) goto ERROR; 
+      if ((status = p7_trace_Append(tr, p7T_C, 0, 0))   != eslOK) goto ERROR; 
+      if ((status = p7_trace_Append(tr, p7T_T, 0, 0))   != eslOK) goto ERROR; 
       tr->M = sq->n;
       tr->L = sq->n;
     }
@@ -514,9 +529,10 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
 
 
 /* Function:  p7_Builder_MaxLength()
- * Synopsis:  Compute the maximum likely length of an emitted sequence
  *
- * Computes a fairly tight upper bound on domain length, by computing the
+ * Purpose:  Compute the maximum likely length of an emitted sequence
+ *
+ * Synopsis:   Computes a fairly tight upper bound on domain length, by computing the
  * probability of the model emitting sequences of all lengths up to some
  * threshold, based on a dynamic-programming approach.  See TJW 01/14/2010 notes (p1)
  *

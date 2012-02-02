@@ -320,7 +320,7 @@ utest_basic(ESL_GETOPTS *go)
 
   p7_GTrace     (dsq, L, gm, gx, tr);
   p7_trace_Score(tr, dsq, gm, &vsc2);
-  if (esl_opt_GetBoolean(go, "-v")) p7_trace_Dump(stdout, tr, gm, dsq);
+  if (esl_opt_GetBoolean(go, "-v")) p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
   
   if (esl_FCompare(vsc, vsc2, 1e-5) != eslOK)  esl_fatal("trace score and Viterbi score don't agree.");
 
@@ -535,7 +535,7 @@ main(int argc, char **argv)
   p7_GTrace   (sq->dsq, sq->n, gm, fwd, tr);
 
   /* Dump and validate the trace. */
-  p7_trace_Dump(stdout, tr, gm, sq->dsq);
+  p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
   if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) p7_Die("trace fails validation:\n%s\n", errbuf);
 
   /* Domain info in the trace. */

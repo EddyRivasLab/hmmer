@@ -314,9 +314,9 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
 
       if (esl_opt_GetBoolean(go, "--traces"))
 	{
-	  p7_trace_Dump(stdout, tro, gm, sq->dsq);
-	  p7_trace_Dump(stdout, tr,  gm, sq->dsq);
-	  p7_trace_Dump(stdout, trg, gm, sq->dsq);
+	  p7_trace_DumpAnnotated(stdout, tro, gm, sq->dsq);
+	  p7_trace_DumpAnnotated(stdout, tr,  gm, sq->dsq);
+	  p7_trace_DumpAnnotated(stdout, trg, gm, sq->dsq);
 	}
 
       if (p7_trace_Validate(tr,  abc, sq->dsq, NULL)      != eslOK) esl_fatal(msg);
@@ -539,7 +539,7 @@ main(int argc, char **argv)
  
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);                 p7_bg_SetLength(bg, sq->n);
-  gm = p7_profile_Create(hmm->M, abc);    p7_profile_ConfigLocal(gm, hmm, bg, sq->n;
+  gm = p7_profile_Create(hmm->M, abc);    p7_profile_ConfigLocal(gm, hmm, bg, sq->n);
   om = p7_oprofile_Create(gm->M, abc);    p7_oprofile_Convert(gm, om);
 
   /* Allocations */
@@ -558,7 +558,7 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "-d")) p7_gmx_Dump(stdout, ox2, p7_DEFAULT);
   if (esl_opt_GetBoolean(go, "-m")) p7_gmx_Dump(stdout, ox1, p7_DEFAULT);
 
-  p7_trace_Dump(stdout, tr, gm, sq->dsq);
+  p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 
   if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) p7_Die("trace fails validation:\n%s\n", errbuf);
 

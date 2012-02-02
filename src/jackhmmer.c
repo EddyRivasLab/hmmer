@@ -665,6 +665,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  p7_tophits_Domains(ofp, info->th, info->pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 	  /* Create alignment of the top hits */
+	  /* <&qsq, &qtr, 1> included in p7_tophits_Alignment args here => initial query is added to the msa at each round. */
 	  p7_tophits_Alignment(info->th, abc, &qsq, &qtr, 1, p7_ALL_CONSENSUS_COLS, &msa);
 	  esl_msa_Digitize(abc,msa,NULL);
 	  esl_msa_FormatName(msa, "%s-i%d", qsq->name, iteration);
@@ -1660,16 +1661,8 @@ pipeline_thread(void *arg)
 
   ESL_SQ_BLOCK  *block = NULL;
   void          *newBlock;
-  
-#ifdef HAVE_FLUSH_ZERO_MODE
-  /* In order to avoid the performance penalty dealing with sub-normal
-   * values in the floating point calculations, set the processor flag
-   * so sub-normals are "flushed" immediately to zero.
-   * On OS X, need to reset this flag for each thread
-   * (see TW notes 05/08/10 for details)
-   */
-  _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
-#endif
+
+  impl_ThreadInit();
 
 
   obj = (ESL_THREADS *) arg;

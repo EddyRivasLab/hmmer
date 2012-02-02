@@ -809,24 +809,38 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
  * Synopsis:  the part of the LongTarget P7 search Pipeline downstream
  *            of the MSV filter
  *
- * Purpose:   This is called by either the standard (SIMD-MSV) pipeline
- *            or the FM-index pipeline, and runs the post-MSV part of H3's
+ * Purpose:   This is called by either the standard (SIMD-MSV) long-target
+ *            pipeline (p7_Pipeline_LongTarget) or the FM-index long-target
+ *            pipeline (p7_Pipeline_FM), and runs the post-MSV part of H3's
  *            accelerated pipeline to compare profile <om> against
  *            sequence <sq>. If a significant hit is found,
  *            information about it is added to the <hitlist>.
- *            This is a variant of p7_Pipeline that runs the
- *            versions of the MSV/SSV filters that scan a long
- *            sequence and find high-scoring regions (windows), then pass
- *            those to the remainder of the pipeline. The pipeline
- *            accumulates beancounting information about how many comparisons
- *            flow through the pipeline while it's active.
+ *            The pipeline accumulates beancounting information
+ *            about how many comparisons (and residues) flow through
+ *            the pipeline while it's active.
+ *
+ * Args:      pli             - the main pipeline object
+ *            om              - optimized profile (query)
+ *            bg              - background model
+ *            hitlist         - pointer to hit storage bin
+ *            seqidx          - the id # of the sequence from which the current window was extracted
+ *            window_start    - the starting position of the extracted window (offset from the first
+ *                              position of the block of a possibly longer sequence)
+ *            window_len      - the length of the extracted window
+ *            tmpseq          - a new or reused digital sequence object used for "domain" definition
+ *            ddef_app        - a new or reused DOMAINDEF object used for capturing and printing APP values
+ *            subseq          - digital sequence of the extracted window
+ *            seq_start       - first position of the sequence block passed in to the calling pipeline function
+ *            seq_name        - name of the sequence the window comes from
+ *            seq_source      - source of the sequence the window comes from
+ *            seq_acc         - acc of the sequence the window comes from
+ *            seq_desc        - desc of the sequence the window comes from
+ *            nullsc          - score of the passed window vs the bg model
+ *            usc             - msv score of the passed window
+ *            complementarity - boolean; is the passed window sourced from a complementary sequence block
  *
  * Returns:   <eslOK> on success. If a significant hit is obtained,
  *            its information is added to the growing <hitlist>.
- *
- *            <eslEINVAL> if (in a scan pipeline) we're supposed to
- *            set GA/TC/NC bit score thresholds but the model doesn't
- *            have any.
  *
  *            <eslERANGE> on numerical overflow errors in the
  *            optimized vector implementations; particularly in
@@ -839,7 +853,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
  *
  * Xref:      J4/25.
  */
-int
+static int
 postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx ,
     int window_start, int window_len, ESL_SQ *tmpseq, P7_DOMAINDEF *ddef_app,
     ESL_DSQ *subseq, int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
@@ -1022,9 +1036,11 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
         {
           if (                       (status  = esl_strdup(seq_name, -1, &(hit->name)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
           if (seq_acc[0]  != '\0' && (status  = esl_strdup(seq_acc,  -1, &(hit->acc)))   != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+          if (seq_desc[0] != '\0' && (status  = esl_strdup(seq_desc, -1, &(hit->desc)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
         } else {
           if ((status  = esl_strdup(om->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
           if ((status  = esl_strdup(om->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
+          if ((status  = esl_strdup(om->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
         }
       }
   }
@@ -1098,14 +1114,11 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
    * that we would miss if we left length parameters set to the full target length */
   p7_oprofile_ReconfigMSVLength(om, om->max_length);
 
-
   /* First level filter: the MSV filter, multihit with <om>.
    * This variant of MSV will scan a long sequence and find
    * short high-scoring regions.
    */
   p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, msvdata, bg, pli->F1, &windowlist, pli->do_biasfilter);
-
-
 
   tmpseq = esl_sq_CreateDigital(sq->abc);
   for (i=0; i<windowlist.count; i++){
@@ -1272,37 +1285,44 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
   fprintf(ofp, "-------------------------------------\n");
   if (pli->mode == p7_SEARCH_SEQS) {
     fprintf(ofp,   "Query model(s):      %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
-    fprintf(ofp,   "Target sequences:    %15" PRId64 "  (%" PRId64 " residues)\n",  pli->nseqs,   pli->nres);
+    fprintf(ofp,   "Target sequences:    %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
     ntargets = pli->nseqs;
   } else {
-    fprintf(ofp, "Query sequence(s):           %15" PRId64 "  (%" PRId64 " residues)\n",  pli->nseqs,   pli->nres);
+    fprintf(ofp, "Query sequence(s):           %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
     fprintf(ofp, "Target model(s):             %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
     ntargets = pli->nmodels;
   }
 
   if (pli->long_targets) {
-
-      fprintf(ofp, "Windows passing MSV filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          pli->n_past_msv,
+      fprintf(ofp, "Residues passing MSV filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
+      //fprintf(ofp, "Windows passing MSV filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
+          //pli->n_past_msv,
+          pli->pos_past_msv,
           (double)pli->pos_past_msv / pli->nres ,
           pli->F1);
 
-      fprintf(ofp, "Windows passing bias filter:  %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          pli->n_past_bias,
+      fprintf(ofp, "Residues passing bias filter:  %15" PRId64 "  (%.3g); expected (%.3g)\n",
+      //fprintf(ofp, "Windows passing bias filter:  %15" PRId64 "  (%.4g); expected (%.4g)\n",
+          //pli->n_past_bias,
+          pli->pos_past_bias,
           (double)pli->pos_past_bias / pli->nres ,
           pli->F1);
 
-      fprintf(ofp, "Windows passing Vit filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          pli->n_past_vit,
+      fprintf(ofp, "Residues passing Vit filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
+      //fprintf(ofp, "Windows passing Vit filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
+          //pli->n_past_vit,
+          pli->pos_past_vit,
           (double)pli->pos_past_vit / pli->nres ,
           pli->F2);
 
-      fprintf(ofp, "Windows passing Fwd filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          pli->n_past_fwd,
+      fprintf(ofp, "Residues passing Fwd filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
+      //fprintf(ofp, "Windows passing Fwd filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
+          //pli->n_past_fwd,
+          pli->pos_past_fwd,
           (double)pli->pos_past_fwd / pli->nres ,
           pli->F3);
 
-      fprintf(ofp, "Total hits:                   %15d  (%.4g)\n",
+      fprintf(ofp, "Total number of hits:          %15d  (%.3g)\n",
           (int)pli->n_output,
           (double)pli->pos_output / pli->nres );
 

@@ -247,7 +247,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  *
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
-int
+static int
 p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, uint8_t sc_thresh, vector unsigned char sc_threshv, FM_WINDOWLIST *windowlist)
 {
 

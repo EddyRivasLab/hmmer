@@ -268,7 +268,34 @@ p7_gmxd_DumpWindow(FILE *ofp, P7_GMXD *gxd, int istart, int iend, int kstart, in
 }
 
 
+/* a private hack for making heatmaps */
+int
+p7_gmxd_DumpCSV(FILE *fp, P7_GMXD *pp, int istart, int iend, int kstart, int kend)
+{
+  int   width     = 7;
+  int   precision = 5;
+  int   i, k;
+  float val;
 
+  fprintf(fp, "i,");
+  for (k = kend; k >= kstart; k--)
+    fprintf(fp, "%-d%s", k, k==kstart ? "\n" : ",");
+
+  for (i = istart; i <= iend; i++)
+    {
+      fprintf(fp, "%-d,", i);
+      for (k = kend; k >= kstart; k--)
+	{
+	  val = 
+	    pp->dp[i][k * p7GD_NSCELLS + p7GD_ML] + pp->dp[i][k * p7GD_NSCELLS + p7GD_MG] + 
+ 	    pp->dp[i][k * p7GD_NSCELLS + p7GD_IL] + pp->dp[i][k * p7GD_NSCELLS + p7GD_IG] + 
+	    pp->dp[i][k * p7GD_NSCELLS + p7GD_DL] + pp->dp[i][k * p7GD_NSCELLS + p7GD_DG];
+
+	  fprintf(fp, "%*.*f%s", width, precision, val, k==kstart ? "\n" : ", ");
+	}
+    }
+  return eslOK;
+}
 
 /*****************************************************************
  * @LICENSE@

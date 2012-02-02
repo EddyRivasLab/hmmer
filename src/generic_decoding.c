@@ -440,8 +440,8 @@ main(int argc, char **argv)
   /* Decoding: <bck> becomes the posterior probability mx */
   p7_GDecoding(gm, fwd, bck, bck);
 
-  p7_gmx_Dump(stdout, bck, p7_DEFAULT);
-  //dump_matrix_csv(stdout, bck, 1, sq->n, 1, gm->M);
+  //p7_gmx_Dump(stdout, bck, p7_DEFAULT);
+  dump_matrix_csv(stdout, bck, 1, sq->n, 1, gm->M);
 
   /* Cleanup */
   esl_sq_Destroy(sq);
