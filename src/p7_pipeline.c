@@ -876,15 +876,13 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   float dom_score;
   double dom_lnP;
 
-  int   loc_window_length = ESL_MIN(om->max_length, window_len); //see notes, ~/notebook/20100716_hmmer_score_v_eval_bug/, end of Thu Jul 22 13:36:49 EDT 2010
+  int   loc_window_length = om->max_length;
   float nullsc2           =  (float)loc_window_length * log((float)loc_window_length/(loc_window_length+1)) + log(1./(loc_window_length+1));
 
 
   int F1_L = ESL_MIN( window_len,  pli->B1);
   int F2_L = ESL_MIN( window_len,  pli->B2);
   int F3_L = ESL_MIN( window_len,  pli->B3);
-
-//  printf ("m: %d -> %d\n", window_start, window_start + window_len-1);
 
   if (pli->do_biasfilter) {
       p7_bg_SetLength(bg, window_len);
@@ -900,8 +898,6 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   }
   pli->n_past_bias++;
   pli->pos_past_bias += window_len;
-
-//  printf ("b: %d -> %d\n", window_start, window_start + window_len-1);
 
   p7_oprofile_ReconfigRestLength(om, window_len);
 
@@ -925,8 +921,6 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   pli->pos_past_vit += window_len;
 
 
-  //printf ("v: %d -> %d\n", window_start, window_start + window_len-1);
-
   /* Parse it with Forward and obtain its real Forward score. */
   p7_ForwardParser(subseq, window_len, om, pli->oxf, &fwdsc);
   filtersc =  nullsc + (bias_filtersc * (float)F3_L/window_len);
@@ -938,8 +932,6 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   pli->n_past_fwd++;
   pli->pos_past_fwd += window_len;
 
-
- // printf ("f: %d -> %d\n", window_start, window_start + window_len-1);
 
   /*now that almost everything has been filtered away, set up seq object for domaindef function*/
   if ((status = esl_sq_SetName     (tmpseq, seq_name))   != eslOK) goto ERROR;
@@ -977,6 +969,12 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   for (d = 0; d < pli->ddef->ndom; d++)
   {
 
+     /* note: the initial bitscore of a hit depends on the window_len of the
+      * current window. Here, the score is modified (reduced) by treating
+      * all passing windows as though they came from windows of length
+      * om->max_length. For details, see
+      * ~wheelert/notebook/2012/0130_bits_v_evalues/00NOTES (Feb 1)
+      */
       //adjust the score of a hit to account for the full length model - the characters outside the envelope but in the window
       env_len = pli->ddef->dcl[d].jenv - pli->ddef->dcl[d].ienv + 1;
       ali_len = pli->ddef->dcl[d].jali - pli->ddef->dcl[d].iali + 1;

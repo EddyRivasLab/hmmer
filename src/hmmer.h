@@ -763,11 +763,11 @@ typedef struct p7_tophits_s {
  */
 typedef struct p7_msvdata_s {
   int      M;
-  uint8_t  *scores;  //implicit M*K matrix, where M = # states, and K = # characters in alphabet
-  uint8_t    **opt_ext_fwd;
-  uint8_t    **opt_ext_rev;
-  uint8_t    *prefix_lengths;
-  uint8_t    *suffix_lengths;
+  uint8_t    *scores;  //implicit M*K matrix, where M = # states, and K = # characters in alphabet
+  uint8_t   **opt_ext_fwd;
+  uint8_t   **opt_ext_rev;
+  float      *prefix_lengths;
+  float      *suffix_lengths;
 } P7_MSVDATA;
 
 
@@ -1099,6 +1099,38 @@ extern int p7_Tau       (ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, i
 /* eweight.c */
 extern int p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_PRIOR *pri, double infotarget, double *ret_Neff);
 
+/* fm_alphabet.c */
+extern int fm_createAlphabet (FM_METADATA *meta, uint8_t *alph_bits);
+extern int fm_reverseString (char* str, int N);
+extern int fm_getComplement (char c, uint8_t alph_type);
+
+/* fm_general.c */
+extern uint32_t fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int pos);
+extern int fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,
+                                    uint32_t *segment_id, uint32_t *seg_pos);
+extern int fm_readFMmeta( FM_METADATA *meta);
+extern int fm_readFM( FM_DATA *fm, FM_METADATA *meta, int getAll );
+extern void fm_freeFM ( FM_DATA *fm, int isMainFM);
+extern uint8_t fm_getChar(uint8_t alph_type, int j, const uint8_t *B );
+extern int fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
+extern int fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
+extern int fm_configAlloc(void **mem, FM_CFG **cfg);
+extern int fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_f, FM_INTERVAL *interval_bk);
+extern int fm_updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval);
+extern int fm_initSeeds (FM_DIAGLIST *list) ;
+extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
+extern int fm_initWindows (FM_WINDOWLIST *list);
+extern FM_WINDOW *fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity);
+extern int fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint8_t *B, ESL_SQ *sq );
+extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
+
+
+/* fm_msv.c */
+extern int p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
+         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata,
+         FM_WINDOWLIST *windowlist);
+
+
 /* generic_decoding.c */
 extern int p7_GDecoding      (const P7_PROFILE *gm, const P7_GMX *fwd,       P7_GMX *bck, P7_GMX *pp);
 extern int p7_GDomainDecoding(const P7_PROFILE *gm, const P7_GMX *fwd, const P7_GMX *bck, P7_DOMAINDEF *ddef);
@@ -1143,6 +1175,11 @@ extern int    dmx_Visualize(FILE *fp, ESL_DMATRIX *D, double min, double max);
 extern void p7_openlog(const char *ident, int option, int facility);
 extern void p7_syslog(int priority, const char *format, ...);
 extern void p7_closelog(void);
+
+/* hmmpgmd2msa.c */
+extern ESL_MSA * hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq);
+
+
 
 /* island.c */
 extern int   p7_island_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, ESL_HISTOGRAM *h);
@@ -1405,7 +1442,7 @@ extern int         p7_tophits_GetMaxAccessionLength(P7_TOPHITS *h);
 extern int         p7_tophits_GetMaxShownLength(P7_TOPHITS *h);
 extern void        p7_tophits_Destroy(P7_TOPHITS *h);
 
-extern int p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N);
+extern int p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N, int W);
 extern int p7_tophits_RemoveDuplicates(P7_TOPHITS *th);
 extern int p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli);
 extern int p7_tophits_CompareRanking(P7_TOPHITS *th, ESL_KEYHASH *kh, int *opt_nnew);
@@ -1453,40 +1490,6 @@ extern int  p7_trace_FauxFromMSA(ESL_MSA *msa, int *matassign, int optflags, P7_
 extern int  p7_trace_Doctor(P7_TRACE *tr, int *opt_ndi, int *opt_nid);
 
 extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
-
-
-
-/* fm_alphabet.c */
-extern int fm_createAlphabet (FM_METADATA *meta, uint8_t *alph_bits);
-extern int fm_reverseString (char* str, int N);
-extern int fm_getComplement (char c, uint8_t alph_type);
-
-/* fm_general.c */
-extern uint32_t fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int pos);
-extern int fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,
-                                    uint32_t *segment_id, uint32_t *seg_pos);
-extern int fm_readFMmeta( FM_METADATA *meta);
-extern int fm_readFM( FM_DATA *fm, FM_METADATA *meta, int getAll );
-extern void fm_freeFM ( FM_DATA *fm, int isMainFM);
-extern uint8_t fm_getChar(uint8_t alph_type, int j, const uint8_t *B );
-extern int fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
-extern int fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
-extern int fm_configAlloc(void **mem, FM_CFG **cfg);
-extern int fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_f, FM_INTERVAL *interval_bk);
-extern int fm_updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval);
-extern int fm_initSeeds (FM_DIAGLIST *list) ;
-extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
-extern int fm_initWindows (FM_WINDOWLIST *list);
-extern FM_WINDOW *fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity);
-extern int fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint8_t *B, ESL_SQ *sq );
-extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
-
-
-
-/* fm_msv.c */
-extern int p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
-         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata,
-         FM_WINDOWLIST *windowlist);
 
 
 /* seqmodel.c */

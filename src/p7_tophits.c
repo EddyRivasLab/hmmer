@@ -654,22 +654,25 @@ workaround_bug_h74(P7_TOPHITS *th)
 /* Function:  p7_tophits_ComputeNhmmerEvalues()
  * Synopsis:  Compute e-values based on pvalues and window sizes.
  *
- * Purpose:   After nhmmer pipeline has completed, the TopHits object contains
- *               objects with p-values that haven't yet been converted to e-values.
- *               That modification is different for each sequence, and depends on the
- *               size of the window the hit was found in. Set it here, and also
- *               set the sortkey so the output will be sorted correctly.
+ * Purpose:   After nhmmer pipeline has completed, the th object contains
+ *               hits where the p-values haven't yet been converted to
+ *               e-values. That modification depends on an established
+ *               number of sequences. In nhmmer, this is computed as N/W,
+ *               for a database of N residues, where W is some standardized
+ *               window length (nhmmer passes om->max_length). E-values are
+ *               set here based on that formula. We also set the sortkey so
+ *               the output will be sorted correctly.
  *
  * Returns:   <eslOK> on success.
  */
 int
-p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N)
+p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N, int W)
 {
   int i;    /* counters over hits */
 
   for (i = 0; i < th->N ; i++)
   {
-    th->unsrt[i].lnP        += log((float)N / (float)(th->unsrt[i].window_length));
+    th->unsrt[i].lnP        += log((float)N / (float)W);
     th->unsrt[i].dcl[0].lnP  = th->unsrt[i].lnP;
     th->unsrt[i].sortkey     = -1.0 * th->unsrt[i].lnP;
   }
@@ -978,10 +981,11 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 
   if (pli->long_targets) 
   {
+      posw = ESL_MAX(6, p7_tophits_GetMaxPositionLength(th));
+
       if (textw >  0)           descw = ESL_MAX(32, textw - namew - 2*posw - 32); /* 32 chars excluding desc and two posw's is from the format: 2 + 9+2 +6+2 +5+2 +<name>+1 +<startpos>+1 +<endpos>+1 +1 */
       else                      descw = 0;                               /* unlimited desc length is handled separately */
 
-      posw = ESL_MAX(6, p7_tophits_GetMaxPositionLength(th));
       if (fprintf(ofp, "Scores for complete hit%s:\n",     pli->mode == p7_SEARCH_SEQS ? "s" : "") < 0)
         ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
       if (fprintf(ofp, "  %9s %6s %5s  %-*s %*s %*s  %s\n",

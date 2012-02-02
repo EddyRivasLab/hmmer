@@ -589,7 +589,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     		  resCnt += info[i].pli->nres;
 
       for (i = 0; i < infocnt; ++i)
-          p7_tophits_ComputeNhmmerEvalues(info[i].th, resCnt);
+          p7_tophits_ComputeNhmmerEvalues(info[i].th, resCnt, info[i].om->max_length);
 
 
       /* merge the results of the search results */
