@@ -74,10 +74,7 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq) {
   P7_ALIDISPLAY     *ad;
   ESL_MSA           *msa   = NULL;
 
-
-  void              *p     = data;
-
-
+  char              *p     = (char*)data;        /*pointer used to walk along data, must be char* to allow pointer arithmetic */
 
   /* optionally build a faux trace for the query sequence: relative to core model (B->M_1..M_L->E) */
   if (qsq != NULL) {
