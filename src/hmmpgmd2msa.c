@@ -91,9 +91,9 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq) {
   }
 
   /* get search stats + hit info */
-  stats = p;
+  stats = (HMMD_SEARCH_STATS*)p;
   p    += sizeof(HMMD_SEARCH_STATS);
-  hits  = p;
+  hits  = (P7_HIT*)p;
   p    += sizeof(P7_HIT) * stats->nhits;
 
   /* create a tophits object, to be passed to p7_tophits_Alignment() */
@@ -117,7 +117,7 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq) {
     }
     /* then grab the P7_ALIDISPLAYs for the hit */
     for (j=0; j < th.hit[i]->ndom; j++) {
-      th.hit[i]->dcl[j].ad = p;
+      th.hit[i]->dcl[j].ad = (P7_ALIDISPLAY*)p;
       ad = th.hit[i]->dcl[j].ad;
       p += sizeof(P7_ALIDISPLAY);
 
