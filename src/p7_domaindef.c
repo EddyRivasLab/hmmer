@@ -367,7 +367,9 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
  *            optionally provides a new or reused <ddef_app> object to
  *            hold details required by nhmmer to produce the APP
  *            (posterior probability of being aligned) line in
- *            alignment printout.
+ *            alignment printout. A boolean <long_target> argument
+ *            is provided to allow nhmmer-specific modifications
+ *            to the behavior of this function (TRUE -> from nhmmer)
  *            
  *            Upon return, <ddef> contains the definitions of all the
  *            domains: their bounds, their null-corrected Forward
@@ -383,7 +385,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
 int
 p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om, 
 				   P7_OMX *oxf, P7_OMX *oxb, P7_OMX *fwd, P7_OMX *bck, 
-				   P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app)
+				   P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, int long_target)
 {
   int i, j;
   int triggered;
@@ -434,6 +436,13 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
              */
             p7_oprofile_ReconfigMultihit(om, saveL);
             p7_Forward(sq->dsq+i-1, j-i+1, om, fwd, NULL);
+
+            /* for long_target (nhmmmer) inputs, we stand a decent chance of having
+             * a lot (e.g >50 ... or even 100) of expected domains. The default
+             * of 200 traces won't be enough to figure out domains and boundaries.
+             */
+            if (long_target)  ddef->nsamples = ESL_MAX(200, 20 * ceil(ddef->nexpected));
+
             region_trace_ensemble(ddef, om, sq->dsq, i, j, fwd, bck, &nc);
             p7_oprofile_ReconfigUnihit(om, saveL);
             /* ddef->n2sc is now set on i..j by the traceback-dependent method */
@@ -461,7 +470,10 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
                      * happens. [xref J5/130].
                   */
                   ddef->nenvelopes++;
-                  if (rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i2, j2, TRUE) == eslOK)
+
+                  /*the !long_target argument will cause the function to recompute null2
+                   * scores if this is part of a long_target (nhmmer) pipeline */
+                  if (rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i2, j2, !long_target) == eslOK)
                        last_j2 = j2;
             }
             p7_spensemble_Reuse(ddef->sp);
@@ -746,10 +758,12 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
   status = p7_Decoding(om, ox1, ox2, ox2);      /* <ox2> is now overwritten with post probabilities     */
   if (status == eslERANGE) return eslFAIL;      /* rare: numeric overflow; domain is assumed to be repetitive garbage [J3/119-212] */
 
-  /* Is null2 set already for this i..j? (It is, if we're in a domain that
-   * was defined by stochastic traceback clustering in a multidomain region;
-   * it isn't yet, if we're in a simple one-domain region). If it isn't,
-   * do it now, by the expectation (posterior decoding) method.
+  /* Is null2 set already for this i..j?  It isn't yet if we're in a
+   * simple one-domain region, or we're dealing with long-target (nhmmer)
+   * search; otherwise, it is (i.e. if we're in a non-long-target domain
+   * that was defined by stochastic traceback clustering in a
+   * multidomain region). If it isn't, do it now, by the expectation
+   * (posterior decoding) method.
    */
   if (! null2_is_done) {
     p7_Null2_ByExpectation(om, ox2, null2);
@@ -757,7 +771,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
       ddef->n2sc[pos]  = logf(null2[sq->dsq[pos]]);
   }
     
-  for (pos = i; pos <= j; pos++) 
+  for (pos = i; pos <= j; pos++)
     domcorrection   += ddef->n2sc[pos];	        /* domcorrection is in units of NATS */
 
   /* Find an optimal accuracy alignment */
