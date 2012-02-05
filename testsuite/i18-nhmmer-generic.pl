@@ -16,7 +16,7 @@ BEGIN {
     $tmppfx    = shift;
 }
 
-$verbose = 1;
+$verbose = 0;
 
 # The test makes use of the following file:
 #
@@ -112,7 +112,7 @@ if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 4\n";
 }
 
-print "ok\n";
+print "ok.\n";
 unlink "$tmppfx.hmm";
 unlink "$tmppfx.A";
 unlink "$tmppfx.B";
