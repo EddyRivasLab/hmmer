@@ -651,6 +651,7 @@ workaround_bug_h74(P7_TOPHITS *th)
 }
 
 
+
 /* Function:  p7_tophits_ComputeNhmmerEvalues()
  * Synopsis:  Compute e-values based on pvalues and window sizes.
  *
@@ -1170,9 +1171,10 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
         */
 
       if (pli->long_targets) {
-        if (fprintf(ofp, "   %6s %5s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "score",  "bias",  "  Evalue", "hmmfrom",  "hmm to", "  ", "alifrom",  "ali to", "  ", "envfrom",  "env to", "  ",  "acc")  < 0)
+
+        if (fprintf(ofp, "   %6s %5s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "score",  "bias",  "  Evalue", "hmmfrom",  "hmm to", "  ", "alifrom",  "ali to", "  ", "envfrom",  "env to", "  ", "hqfrom",  "hq to", "  ",  "acc")  < 0)
           ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-        if (fprintf(ofp, "   %6s %5s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "------", "-----", "---------", "-------", "-------", "  ", "-------", "-------", "  ", "-------", "-------", "  ", "----") < 0)
+        if (fprintf(ofp, "   %6s %5s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "------", "-----", "---------", "-------", "-------", "  ", "-------", "-------", "  ", "-------", "-------", "  ", "-------", "-------", "  ", "----") < 0)
           ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
       } else {
         if (fprintf(ofp, " %3s   %6s %5s %9s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",    "#",  "score",  "bias",  "c-Evalue",  "i-Evalue", "hmmfrom",  "hmm to", "  ", "alifrom",  "ali to", "  ", "envfrom",  "env to", "  ",  "acc")  < 0)
@@ -1189,7 +1191,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
             if (pli->long_targets)
             {
 
-               if (fprintf(ofp, " %c %6.1f %5.1f %9.2g %7d %7d %c%c %7ld %7ld %c%c %7d %7d %c%c %4.2f\n",
+               if (fprintf(ofp, " %c %6.1f %5.1f %9.2g %7d %7d %c%c %7ld %7ld %c%c %7d %7d %c%c %7d %7d    %4.2f\n",
                     //nd,
                     th->hit[h]->dcl[d].is_included ? '!' : '?',
                     th->hit[h]->dcl[d].bitscore,
@@ -1207,6 +1209,8 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                     th->hit[h]->dcl[d].jenv,
                     (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
                     (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
+                    th->hit[h]->dcl[d].ihq,
+                    th->hit[h]->dcl[d].jhq,
                     (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv))))) < 0)
                          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
 

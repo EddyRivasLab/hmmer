@@ -437,12 +437,6 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
             p7_oprofile_ReconfigMultihit(om, saveL);
             p7_Forward(sq->dsq+i-1, j-i+1, om, fwd, NULL);
 
-            /* for long_target (nhmmmer) inputs, we stand a decent chance of having
-             * a lot (e.g >50 ... or even 100) of expected domains. The default
-             * of 200 traces won't be enough to figure out domains and boundaries.
-             */
-            if (long_target)  ddef->nsamples = ESL_MAX(200, 20 * ceil(ddef->nexpected));
-
             region_trace_ensemble(ddef, om, sq->dsq, i, j, fwd, bck, &nc);
             p7_oprofile_ReconfigUnihit(om, saveL);
             /* ddef->n2sc is now set on i..j by the traceback-dependent method */
@@ -784,8 +778,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
 
   /* get ptr to next empty domain structure in domaindef's results */
   if (ddef->ndom == ddef->nalloc) {
-    void *p;
-    ESL_RALLOC(ddef->dcl, p, sizeof(P7_DOMAIN) * (ddef->nalloc*2));
+    ESL_REALLOC(ddef->dcl, sizeof(P7_DOMAIN) * (ddef->nalloc*2));
     ddef->nalloc *= 2;    
   }
   dom = &(ddef->dcl[ddef->ndom]);
@@ -804,6 +797,8 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
   dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq, ddef_app);
   dom->iali          = dom->ad->sqfrom;
   dom->jali          = dom->ad->sqto;
+  dom->ihq           = dom->ad->hqfrom;
+  dom->jhq           = dom->ad->hqto;
 
   ddef->ndom++;
 

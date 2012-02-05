@@ -979,7 +979,7 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
       env_len = pli->ddef->dcl[d].jenv - pli->ddef->dcl[d].ienv + 1;
       ali_len = pli->ddef->dcl[d].jali - pli->ddef->dcl[d].iali + 1;
       bitscore = pli->ddef->dcl[d].envsc ;
-      //For these modifications, see notes, ~/notebook/20100716_hmmer_score_v_eval_bug/, end of Thu Jul 22 13:36:49 EDT 2010
+      //For these modifications, see notes, ~/notebook/2010/0716_hmmer_score_v_eval_bug/, end of Thu Jul 22 13:36:49 EDT 2010
       bitscore -= 2 * log(2. / (window_len+2))          +   (env_len-ali_len)            * log((float)window_len / (window_len+2));
       bitscore += 2 * log(2. / (loc_window_length+2)) ;
       //the ESL_MAX test handles the extremely rare case that the env_len is actually larger than om->max_length
@@ -1011,13 +1011,18 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
           hit->dcl[0].jenv += window_start - 1;
           hit->dcl[0].iali += window_start - 1;
           hit->dcl[0].jali += window_start - 1;
+          hit->dcl[0].ihq  += window_start - 1;
+          hit->dcl[0].jhq  += window_start - 1;
           hit->dcl[0].ad->sqfrom += window_start - 1;
           hit->dcl[0].ad->sqto += window_start - 1;
         } else {
+
           hit->dcl[0].ienv = window_start + window_len - 1 - hit->dcl[0].ienv + 1; // represents the real position within the sequence handed to the pipeline
           hit->dcl[0].jenv = window_start + window_len - 1 - hit->dcl[0].jenv + 1;
           hit->dcl[0].iali = window_start + window_len - 1 - hit->dcl[0].iali + 1;
           hit->dcl[0].jali = window_start + window_len - 1 - hit->dcl[0].jali + 1;
+          hit->dcl[0].ihq  = window_start + window_len - 1 - hit->dcl[0].ihq  + 1;
+          hit->dcl[0].jhq  = window_start + window_len - 1 - hit->dcl[0].jhq  + 1;
           hit->dcl[0].ad->sqfrom = window_start + window_len - 1 - hit->dcl[0].ad->sqfrom + 1;
           hit->dcl[0].ad->sqto   = window_start + window_len - 1 - hit->dcl[0].ad->sqto + 1;
         }
@@ -1095,12 +1100,19 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
   ESL_DSQ          *subseq;
   ESL_SQ           *tmpseq;
 
+
+
   P7_DOMAINDEF *ddef_app;
   FM_WINDOWLIST windowlist;
 
   fm_initWindows(&windowlist);
   ddef_app = p7_domaindef_Create(pli->r);  /* single allocation of a domaindef object that will be used
                                                          to compute mocc posterior probs for hit segments */
+
+  ddef_app->show_app = pli->show_app;
+  ddef_app->app_hi   = pli->app_hi;
+  ddef_app->app_med  = pli->app_med;
+  ddef_app->app_lo   = pli->app_lo;
 
 
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */

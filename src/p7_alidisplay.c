@@ -26,6 +26,92 @@
  * 1. The P7_ALIDISPLAY object
  *****************************************************************/
 
+/* Function:  p7_alidisplay_pickHqBounds()
+ * Synopsis:  Compute conservative (high-quality) alignment boundaries
+ *            based aligned posterior probabilities (APP).
+ *
+ * Purpose:   Each hit coming from the nhmmer pipeline brings with it
+ *            an APP array (in ddef->mocc) that indicates the confidence
+ *            nhmmer has that each position in the alignment is supposed
+ *            to be aligned to *some* state of the model. There are
+ *            typically only a few bases on either end that fall below
+ *             a threshold of, say 80% or 90%, though in some cases, the
+ *            length of such a low-quality terminal run can be pretty
+ *            long.
+ *
+ *            This function a scans along from the left end to the right
+ *            until a position i with mocc matching <thresh> is found, then:
+ *            (a) if position i represents a positive-scoring match
+ *                to the model, it scans back left until the first
+ *                negative-scoring "mismatch" to the model at position j,
+ *                and sets ihq (the hq start) to j+1;
+ *            (b) if position i is a negative-scoring "mismatch", it
+ *                scans to the right until the first positive-scoring
+ *                match at position j, and sets ihq to j.
+ *            The symmetric computation is done from the right end of APP
+ *            to compute jhq.
+ *
+ *            The result of the function is then to update the ihq and jhq
+ *            values for all hits in the <th> object.
+ *
+ *            This function assumes the hits are found in th->hit, i.e.
+ *            that deduplication and sorting have already taken place
+ *
+ *            For details about offsets into mocc, see
+ *            ~wheelert/notebook/2012/0203_app_hq_bounds/, (Feb 5)
+ *
+ * Args:      ddef     - object housing the mocc posterior probability array
+ *            ad       - object holding the mline values used for the final edge
+ *                       settlement and into which the hq-bounds will be stored
+ *            tr       - trace, used in the position stepping
+ *            z1       - envelope start
+ *            z2       - envelope end
+ *            thresh   - P-value threshold used in trimming
+ *
+ * Returns:   <eslOK> on success.
+ */
+static int
+p7_alidisplay_pickHqBounds(P7_DOMAINDEF *ddef, P7_ALIDISPLAY *ad, const P7_TRACE *tr, int z1, int z2, float thresh)
+{
+  int z, i;    /* counter over positions in the alignment */
+
+  /*scan left to right to find left boundary*/
+  i = z1-2;
+  for (z = z1 ; z < z2; z++) {
+    if ( tr->st[z] != p7T_D ) {  //skip delete states in the trace
+      if (ddef->mocc[i++] >= thresh) break;
+    }
+  }
+  if (z==z2) { /* no confidence!, set values to 0 */
+    ad->hqto = ad->hqfrom = 0;
+    return eslOK;
+  }
+  //walk left or right to add good terminal positions or trim bad ones.
+  i=z-z1;
+  while (i>0 && ad->mline[i] != ' ')   i--; // positive score, so move out to the left
+  while (ad->mline[i] == ' ')          i++; // negative score, move back to right
+  ad->hqfrom = tr->i[z1+i];
+
+
+
+  /*scan right to left to find right boundary*/
+  i = ddef->L + 1 - (tr->N - z2 - 3);
+  for (z = z2 ; z > z1; z--) {
+    if ( tr->st[z] != p7T_D ) {  //skip delete states in the trace
+      if (ddef->mocc[i--] >= thresh) break;
+    }
+  }
+
+  //walk left or right to add good terminal positions or trim bad ones.
+  i=z-z1;
+  while (i<z2-z1 && ad->mline[i] != ' ')   i++; // positive score, so move out to the right
+  while (ad->mline[i] == ' ')              i--; // negative score, move back to left
+  ad->hqto = tr->i[z1+i];
+
+
+  return eslOK;
+}
+
 /* Function:  p7_alidisplay_Create()
  * Synopsis:  Create an alignment display, from trace and oprofile.
  *
@@ -142,6 +228,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   ad->sqto    = tr->i[z2];
   ad->L       = sq->n;
 
+
   /* optional rf line */
   if (ad->rfline != NULL) {
     for (z = z1; z <= z2; z++) ad->rfline[z-z1] = ((tr->st[z] == p7T_I) ? '.' : om->rf[tr->k[z]]);
@@ -161,9 +248,12 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   }
 
 
-  if (ddef_app != NULL) {
-     for (z = z1, s = z-2  ; z <= z2; z++)  ad->appline[z-z1] = ( (tr->st[z] == p7T_D) ? '.' : p7_alidisplay_EncodeAliPostProb(ddef_app->mocc[s++]));
-     ad->appline[z-z1] = '\0';
+  /* optional app line */
+  if (ddef_app != NULL && ddef_app->show_app) {
+    for (z = z1, s = z-2  ; z <= z2; z++)  ad->appline[z-z1] = ( (tr->st[z] == p7T_D) ? '.' : p7_alidisplay_EncodeAliPostProb(ddef_app->mocc[s++], ddef_app->app_hi, ddef_app->app_med, ddef_app->app_lo ));
+    ad->appline[z-z1] = '\0';
+  } else {
+    ad->appline = NULL;
   }
 
 
@@ -177,24 +267,24 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
 
       switch (s) {
       case p7T_M:
-	ad->model[z-z1] = om->consensus[k]; 
-	if      (x == esl_abc_DigitizeSymbol(om->abc, om->consensus[k])) ad->mline[z-z1] = ad->model[z-z1];
-	else if (p7_oprofile_FGetEmission(om, k, x) > 1.0)               ad->mline[z-z1] = '+'; /* >1 not >0; om has odds ratios, not scores */
-	else                                                             ad->mline[z-z1] = ' ';
-	ad->aseq  [z-z1] = toupper(Alphabet[x]);
-	break;
+        ad->model[z-z1] = om->consensus[k];
+        if      (x == esl_abc_DigitizeSymbol(om->abc, om->consensus[k])) ad->mline[z-z1] = ad->model[z-z1];
+        else if (p7_oprofile_FGetEmission(om, k, x) > 1.0)               ad->mline[z-z1] = '+'; /* >1 not >0; om has odds ratios, not scores */
+        else                                                             ad->mline[z-z1] = ' ';
+        ad->aseq  [z-z1] = toupper(Alphabet[x]);
+        break;
 	
       case p7T_I:
-	ad->model [z-z1] = '.';
-	ad->mline [z-z1] = ' ';
-	ad->aseq  [z-z1] = tolower(Alphabet[x]);
-	break;
+        ad->model [z-z1] = '.';
+        ad->mline [z-z1] = ' ';
+        ad->aseq  [z-z1] = tolower(Alphabet[x]);
+        break;
 	
       case p7T_D:
-	ad->model [z-z1] = om->consensus[k]; 
-	ad->mline [z-z1] = ' ';
-	ad->aseq  [z-z1] = '-';
-	break;
+        ad->model [z-z1] = om->consensus[k];
+        ad->mline [z-z1] = ' ';
+        ad->aseq  [z-z1] = '-';
+        break;
 
       default: ESL_XEXCEPTION(eslEINVAL, "invalid state in trace: not M,D,I");
       }
@@ -203,6 +293,15 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   ad->mline [z2-z1+1] = '\0';
   ad->aseq  [z2-z1+1] = '\0';
   ad->N = z2-z1+1;
+
+
+  if (ddef_app != NULL) {
+    /* pick APP-based hq bounds.  This is done after mline is created,
+     * as mline is used in the trimming process
+     */
+    p7_alidisplay_pickHqBounds(ddef_app, ad, tr, z1, z2, ddef_app->app_med);
+  }
+
   return ad;
 
  ERROR:
@@ -517,10 +616,10 @@ integer_textwidth(long n)
  * Returns:   the encoded character.
  */
 char
-p7_alidisplay_EncodeAliPostProb(float p)
+p7_alidisplay_EncodeAliPostProb(float p, float hi, float med, float lo)
 {
-  return (p >= 0.97) ? '*' : (p<0.7? '0' : (char) ((p-.67) * (100.0/3)) + '0');
- 
+  //return (p >= 0.97) ? '*' : (p<0.7? '0' : (char) ((p-.67) * (100.0/3)) + '0');
+  return (p >= hi ) ? 'H' : (p>med ? 'M' : (p>lo ? 'L' : '-'));
 }
 
 /* Function:  p7_alidisplay_EncodePostProb()
@@ -612,9 +711,10 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
   /* dynamically size the output lines */
   namewidth  = ESL_MAX(strlen(show_hmmname), strlen(show_seqname));
   coordwidth = ESL_MAX(ESL_MAX(integer_textwidth(ad->hmmfrom),
-			       integer_textwidth(ad->hmmto)),
-		       ESL_MAX(integer_textwidth(ad->sqfrom),
-			       integer_textwidth(ad->sqto)));
+                              integer_textwidth(ad->hmmto)),
+                      ESL_MAX(integer_textwidth(ad->sqfrom),
+                              integer_textwidth(ad->sqto)));
+
   aliwidth   = (linewidth > 0) ? linewidth - namewidth - 2*coordwidth - 5 : ad->N;
   if (aliwidth < ad->N && aliwidth < min_aliwidth) aliwidth = min_aliwidth; /* at least, regardless of some silly linewidth setting */
   ESL_ALLOC(buf, sizeof(char) * (aliwidth+1));
@@ -629,8 +729,8 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
 
       ni = nk = 0; 
       for (z = pos; z < pos + aliwidth && z < ad->N; z++) {
-	if (ad->model[z] != '.') nk++; /* k advances except on insert states */
-	if (ad->aseq[z]  != '-') ni++; /* i advances except on delete states */
+        if (ad->model[z] != '.') nk++; /* k advances except on insert states */
+        if (ad->aseq[z]  != '-') ni++; /* i advances except on delete states */
       }
 
       k2 = k1+nk-1;
