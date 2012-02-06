@@ -151,12 +151,15 @@ extern void         p7_filtermx_Destroy(P7_FILTERMX *ox);
  * checkpointed.
  */
 
+
+
+
 /*****************************************************************
  * 3. Exegesis part 2: layout of an individual row: striped vectors
  ***************************************************************** 
  *
  *  [1 5 9 13][1 5 9 13][1 5 9 13] [2 6 10 14][2 6 10 14][2 6 10 14] [3 7 11 x][3 7 11 x][3 7 11 x] [4 8 12 x][4 8 12 x][4 8 12 x] [E N JJ J B CC C SCALE]
- *  |-- M ---||-- I ---||-- D ---| |--- M ---||--- I ---||--- D ---| |-- M ---||-- I ---||-- D ---| |-- M ---||-- I ---||-- D ---| 
+ *  |-- M ---||-- D ---||-- I ---| |--- M ---||--- D ---||--- I ---| |-- M ---||-- D ---||-- I ---| |-- M ---||-- D ---||-- I ---| 
  *  |---------- q=0 -------------| |------------ q=1 --------------| |---------- q=2 -------------| |---------- q=3 -------------|
  *  |----------------------------------- P7F_NQF(M) * p7F_NSCELLS ---------------------------------------------------------------| |---- p7F_NXCELLS ----|
  *  
@@ -166,13 +169,6 @@ extern void         p7_filtermx_Destroy(P7_FILTERMX *ox);
  *  Number of special state vals   = p7F_NXCELLS =  8  (e.g. E, N, JJ, J, B, CC, C, SCALE)
  *  Total size of row              = sizeof(float) * (P7F_NQF(M) * P7F_NSCELLS * p7F_NVF + p7F_NXCELLS)
  *
- *  Because p7F_NXCELLS*4 is a multiple of 16 bytes, we know that subsequent rows will be 16-byte memory aligned.
- *  If we changed p7F_NXCELLS to something other than a multiple of 4, 
- * 
- *  
- *
- * 
-
  */
 
 
@@ -180,7 +176,6 @@ extern void         p7_filtermx_Destroy(P7_FILTERMX *ox);
 
 
 #endif /*P7_FILTERMX_INCLUDED*/
-
 /*****************************************************************
  * @LICENSE@
  * 
