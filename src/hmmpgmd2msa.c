@@ -67,14 +67,14 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq) {
   /* vars used to read from the binary data */
   HMMD_SEARCH_STATS *stats   = NULL;              /* pointer to a single stats object, at the beginning of data */
   P7_HIT            *hits    = NULL;              /* an array of hits, at the appropriate offset in data */
-  P7_HIT           **tophits = NULL;
 
   /* vars used in msa construction */
   P7_TOPHITS         th;
-  P7_ALIDISPLAY     *ad;
+  P7_ALIDISPLAY     *ad, *ad2;
   ESL_MSA           *msa   = NULL;
+  P7_DOMAIN         *dom   = NULL;
 
-  char              *p     = (char*)data;        /*pointer used to walk along data, must be char* to allow pointer arithmetic */
+  void              *p     = data;        /*pointer used to walk along data, must be char* to allow pointer arithmetic */
 
   /* optionally build a faux trace for the query sequence: relative to core model (B->M_1..M_L->E) */
   if (qsq != NULL) {
@@ -97,37 +97,65 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq) {
   p    += sizeof(P7_HIT) * stats->nhits;
 
   /* create a tophits object, to be passed to p7_tophits_Alignment() */
-  ESL_ALLOC( tophits, sizeof(P7_HIT *) * stats->nhits);
-  th.hit = tophits;
-  th.unsrt     = NULL;
+  ESL_ALLOC( th.unsrt, sizeof(P7_HIT) * stats->nhits);
+  memcpy( th.unsrt, hits, sizeof(P7_HIT) * stats->nhits);
+  ESL_ALLOC( th.hit, sizeof(P7_HIT*) * stats->nhits);
+  for (i=0; i<stats->nhits; i++)  th.hit[i] = &(th.unsrt[i]);
+
+//  th.unsrt     = NULL;
   th.N         = stats->nhits;
   th.nreported = 0;
   th.nincluded = 0;
   th.is_sorted_by_sortkey = 0;
   th.is_sorted_by_seqidx  = 0;
+
   for (i = 0; i < th.N; i++) {
-    th.hit[i] = hits + i;
 
     ESL_ALLOC( th.hit[i]->dcl, sizeof(P7_DOMAIN) *  th.hit[i]->ndom);
 
     /* first grab all the P7_DOMAINs for the hit */
     for (j=0; j < th.hit[i]->ndom; j++) {
-      th.hit[i]->dcl[j] = ((P7_DOMAIN*)p)[0];
+      dom = th.hit[i]->dcl + j;
+      memcpy(dom , (P7_DOMAIN*)p, sizeof(P7_DOMAIN));
       p += sizeof(P7_DOMAIN);
     }
     /* then grab the P7_ALIDISPLAYs for the hit */
     for (j=0; j < th.hit[i]->ndom; j++) {
-      th.hit[i]->dcl[j].ad = (P7_ALIDISPLAY*)p;
-      ad = th.hit[i]->dcl[j].ad;
+      ad = (P7_ALIDISPLAY*)p;
+      ESL_ALLOC(th.hit[i]->dcl[j].ad, sizeof(P7_ALIDISPLAY));
+      ad2 = th.hit[i]->dcl[j].ad;
+
+      ad2->memsize = ad->memsize;
+      ad2->rfline = ad->rfline;
+      ad2->csline = ad->csline ;
+      ad2->model  = ad->model ;
+      ad2->mline  = ad->mline ;
+      ad2->aseq   = ad->aseq ;
+      ad2->ppline = ad->ppline;
+      ad2->N      = ad->N;
+
+      ad2->hmmname = ad->hmmname;
+      ad2->hmmacc  = ad->hmmacc ;
+      ad2->hmmdesc = ad->hmmdesc;
+      ad2->hmmfrom = ad->hmmfrom;
+      ad2->hmmto   = ad->hmmto;
+      ad2->M       = ad->M;
+
+      ad2->sqname  = ad->sqname;
+      ad2->sqacc   = ad->sqacc ;
+      ad2->sqdesc  = ad->sqdesc;
+      ad2->sqfrom  = ad->sqfrom;
+      ad2->sqto    = ad->sqto;
+      ad2->L       = ad->L;
+
       p += sizeof(P7_ALIDISPLAY);
 
-      ESL_ALLOC(ad->mem, ad->memsize);
-      memcpy(ad->mem, p, ad->memsize);
-      p += ad->memsize;
-      p7_alidisplay_Deserialize(ad);
+      ESL_ALLOC(ad2->mem, ad2->memsize);
+      memcpy(ad2->mem, p, ad->memsize);
+      p += ad2->memsize;
+      p7_alidisplay_Deserialize(ad2);
     }
   }
-
 
   /* use the tophits and trace info above to produce an alignment */
   if ( (status = p7_tophits_Alignment(&th, hmm->abc, &qsq, &qtr, extra_sqcnt, p7_ALL_CONSENSUS_COLS, &msa)) != eslOK) goto ERROR;
@@ -135,28 +163,30 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq) {
 
   /* free memory */
   if (qtr != NULL) free(qtr);
-  if (tophits != NULL) {
-    for (i = 0; i < th.N; i++) {
-        if (tophits[i]->dcl != NULL) free (tophits[i]->dcl);
-        for (j=0; j < tophits[i]->ndom; j++)
-          if (ad->mem != NULL) free (ad->mem);
-    }
-    free(tophits);
+  for (i = 0; i < th.N; i++) {
+    for (j=0; j < th.hit[i]->ndom; j++)
+      p7_alidisplay_Destroy(th.hit[i]->dcl[j].ad);
+
+    if (th.hit[i]->dcl != NULL) free (th.hit[i]->dcl);
   }
+  if (th.unsrt != NULL) free (th.unsrt);
+  if (th.hit != NULL) free (th.hit);
+
 
   return msa;
 
 ERROR:
   /* free memory */
   if (qtr != NULL) free(qtr);
-  if (tophits != NULL) {
-    for (i = 0; i < th.N; i++) {
-        if (tophits[i]->dcl != NULL) free (tophits[i]->dcl);
-        for (j=0; j < tophits[i]->ndom; j++)
-          if (ad->mem != NULL) free (ad->mem);
-    }
-    free(tophits);
+  for (i = 0; i < th.N; i++) {
+    for (j=0; j < th.hit[i]->ndom; j++)
+      p7_alidisplay_Destroy(th.hit[i]->dcl[j].ad);
+
+    if (th.hit[i]->dcl != NULL) free (th.hit[i]->dcl);
   }
+  if (th.unsrt != NULL) free (th.unsrt);
+  if (th.hit != NULL) free (th.hit);
+
 
   return NULL;
 }
