@@ -1435,11 +1435,11 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
   {
       if (pli->long_targets) 
       {
-        if (fprintf(ofp, "#%-*s %-*s %-*s %-*s %s %s %*s %*s %*s %*s %6s %9s %6s %5s  %s\n",
-          tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession", "hmmfrom", "hmm to", posw, "alifrom", posw, "ali to", posw, "envfrom", posw, "env to", "strand", "  E-value", " score", " bias", "description of target") < 0)
+        if (fprintf(ofp, "#%-*s %-*s %-*s %-*s %s %s %*s %*s %*s %*s %*s %*s %6s %9s %6s %5s  %s\n",
+          tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession", "hmmfrom", "hmm to", posw, "alifrom", posw, "ali to", posw, "envfrom", posw, "env to", posw, "hq from", posw, "hq to", "strand", "  E-value", " score", " bias", "description of target") < 0)
           ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-sequence hit list: write failed");
-        if (fprintf(ofp, "#%*s %*s %*s %*s %s %s %*s %*s %*s %*s %6s %9s %6s %5s %s\n",
-          tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "-------", "-------", posw, "-------", posw, "-------",  posw, "-------", posw, "-------", "------", "---------", "------", "-----", "---------------------") < 0)
+        if (fprintf(ofp, "#%*s %*s %*s %*s %s %s %*s %*s %*s %*s %*s %*s %6s %9s %6s %5s %s\n",
+          tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "-------", "-------", posw, "-------", posw, "-------",  posw, "-------", posw, "-------", posw, "-------", posw, "-------", "------", "---------", "------", "-----", "---------------------") < 0)
           ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-per-sequence hit list: write failed");
       }
       else
@@ -1461,7 +1461,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
         d    = th->hit[h]->best_domain;
         if (pli->long_targets) 
         {
-            if (fprintf(ofp, "%-*s %-*s %-*s %-*s %7d %7d %*d %*d %*d %*d %6s %9.2g %6.1f %5.1f  %s\n",
+            if (fprintf(ofp, "%-*s %-*s %-*s %-*s %7d %7d %*d %*d %*d %*d %*d %*d %6s %9.2g %6.1f %5.1f  %s\n",
                 tnamew, th->hit[h]->name,
                 taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
                 qnamew, qname,
@@ -1472,6 +1472,8 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
                 posw, th->hit[h]->dcl[d].jali,
                 posw, th->hit[h]->dcl[d].ienv,
                 posw, th->hit[h]->dcl[d].jenv,
+                posw, th->hit[h]->dcl[d].ihq,
+                posw, th->hit[h]->dcl[d].jhq,
                 (th->hit[h]->dcl[d].iali < th->hit[h]->dcl[d].jali ? "   +  "  :  "   -  "),
                 exp(th->hit[h]->lnP),
                 th->hit[h]->score,
@@ -1637,18 +1639,18 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
   {
       if (fprintf(ofp, "# Hit scores\n# ----------\n#\n") < 0)
         ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
-      if (fprintf(ofp, "# %-*s %6s %9s %5s  %s  %s %6s %*s %*s %*s %*s   %s\n",
-      tnamew-1, "name", " bits", "  E-value", " bias", "hmm-st", "hmm-en", "strand", posw, "ali-st", posw, "ali-en", posw, "env-st", posw, "env-en", "description of target") < 0)
+      if (fprintf(ofp, "# %-*s %6s %9s %5s  %s  %s %6s %*s %*s %*s %*s %*s %*s   %s\n",
+      tnamew-1, "name", " bits", "  E-value", " bias", "hmm-st", "hmm-en", "strand", posw, "ali-st", posw, "ali-en", posw, "env-st", posw, "env-en", posw, "hq-st", posw, "hq-en", "description of target") < 0)
         ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
-      if (fprintf(ofp, "# %*s %6s %9s %5s %s %s %6s %*s %*s %*s %*s   %s\n",
-      tnamew-1, "-------------------",  "------",  "---------", "-----", "-------", "-------", "------", posw, "-------", posw, "-------",  posw, "-------", posw, "-------", "---------------------") < 0)
+      if (fprintf(ofp, "# %*s %6s %9s %5s %s %s %6s %*s %*s %*s %*s %*s %*s   %s\n",
+      tnamew-1, "-------------------",  "------",  "---------", "-----", "-------", "-------", "------", posw, "-------", posw, "-------",  posw, "-------", posw, "-------", posw, "-------", posw, "-------", "---------------------") < 0)
         ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
 
       for (h = 0; h < th->N; h++) 
         if (th->hit[h]->flags & p7_IS_REPORTED)
         {
             d    = th->hit[h]->best_domain;
-            if (fprintf(ofp, "%-*s  %6.1f %9.2g %5.1f %7d %7d %s %*d %*d %*d %*d   %s\n",
+            if (fprintf(ofp, "%-*s  %6.1f %9.2g %5.1f %7d %7d %s %*d %*d %*d %*d %*d %*d   %s\n",
             tnamew, th->hit[h]->name,
             th->hit[h]->score,
             exp(th->hit[h]->lnP),
@@ -1660,6 +1662,8 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
             posw, th->hit[h]->dcl[d].jali,
             posw, th->hit[h]->dcl[d].ienv,
             posw, th->hit[h]->dcl[d].jenv,
+            posw, th->hit[h]->dcl[d].ihq,
+            posw, th->hit[h]->dcl[d].jhq,
             th->hit[h]->desc == NULL ?  "-" : th->hit[h]->desc) < 0)
               ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
         }

@@ -659,9 +659,9 @@ typedef struct p7_domaindef_s {
   
   /* Heuristic thresholds for APP labeling (posterior probability of being aligned to a model, based on mocc */
   int    show_app; /* default FALSE,  if TRUE, the APP of an nhmmer 'domain' should be printed */
-  float  app_hi;  /* default 0.9 */
-  float  app_med; /* default 0.8 */
-  float  app_lo;  /* default 0.7 */
+  float  app_hi;  /* default 0.95 */
+  float  app_med; /* default 0.85 */
+  float  app_lo;  /* default 0.75 */
 
   /* Heuristic thresholds that control the stochastic traceback/clustering process */
   int    nsamples;	/* collect ensemble of this many stochastic traces */
@@ -1017,9 +1017,9 @@ typedef struct p7_pipeline_s {
 
   /* Preferences for APP labeling (posterior probability of being aligned to a model, based on mocc) in output */
   int    show_app; /* default FALSE,  if TRUE, the APP */
-  float  app_hi;  /* default 0.9 */
-  float  app_med; /* default 0.8 */
-  float  app_lo;  /* default 0.7 */
+  float  app_hi;  /* default 0.95 */
+  float  app_med; /* default 0.85 */
+  float  app_lo;  /* default 0.75 */
 
 
   P7_HMMFILE   *hfp;		/* COPY of open HMM database (if scan mode) */
