@@ -745,15 +745,15 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
       pli->ddef->dcl   = NULL;
       hit->best_domain = 0;
       for (d = 0; d < hit->ndom; d++)
-	{
-	  Ld = hit->dcl[d].jenv - hit->dcl[d].ienv + 1;
-	  hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); /* NATS, for the moment... */
-	  hit->dcl[d].dombias  = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + hit->dcl[d].domcorrection) : 0.0); /* NATS, and will stay so */
-	  hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + hit->dcl[d].dombias)) / eslCONST_LOG2; /* now BITS, as it should be */
-	  hit->dcl[d].lnP      = esl_exp_logsurv (hit->dcl[d].bitscore,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+      {
+        Ld = hit->dcl[d].jenv - hit->dcl[d].ienv + 1;
+        hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); /* NATS, for the moment... */
+        hit->dcl[d].dombias  = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + hit->dcl[d].domcorrection) : 0.0); /* NATS, and will stay so */
+        hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + hit->dcl[d].dombias)) / eslCONST_LOG2; /* now BITS, as it should be */
+        hit->dcl[d].lnP      = esl_exp_logsurv (hit->dcl[d].bitscore,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
-	  if (hit->dcl[d].bitscore > hit->dcl[hit->best_domain].bitscore) hit->best_domain = d;
-	}
+        if (hit->dcl[d].bitscore > hit->dcl[hit->best_domain].bitscore) hit->best_domain = d;
+      }
 
       /* If we're using model-specific bit score thresholds (GA | TC |
        * NC) and we're in an hmmscan pipeline (mode = p7_SCAN_MODELS),
@@ -780,24 +780,24 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
        * [xref J5/92]
        */
       if (pli->use_bit_cutoffs)
-	{
-	  if (p7_pli_TargetReportable(pli, hit->score, hit->lnP))
-	    {
-	      hit->flags |= p7_IS_REPORTED;
-	      if (p7_pli_TargetIncludable(pli, hit->score, hit->lnP))
-		hit->flags |= p7_IS_INCLUDED;
-	    }
+      {
+        if (p7_pli_TargetReportable(pli, hit->score, hit->lnP))
+        {
+          hit->flags |= p7_IS_REPORTED;
+          if (p7_pli_TargetIncludable(pli, hit->score, hit->lnP))
+            hit->flags |= p7_IS_INCLUDED;
+        }
 
-	  for (d = 0; d < hit->ndom; d++)
-	    {
-	      if (p7_pli_DomainReportable(pli, hit->dcl[d].bitscore, hit->dcl[d].lnP))
-		{
-		  hit->dcl[d].is_reported = TRUE;
-		  if (p7_pli_DomainIncludable(pli, hit->dcl[d].bitscore, hit->dcl[d].lnP))
-		    hit->dcl[d].is_included = TRUE;
-		}
-	    }
-	}
+        for (d = 0; d < hit->ndom; d++)
+        {
+          if (p7_pli_DomainReportable(pli, hit->dcl[d].bitscore, hit->dcl[d].lnP))
+          {
+            hit->dcl[d].is_reported = TRUE;
+            if (p7_pli_DomainIncludable(pli, hit->dcl[d].bitscore, hit->dcl[d].lnP))
+              hit->dcl[d].is_included = TRUE;
+          }
+        }
+      }
     }
 
   return eslOK;
@@ -1045,8 +1045,35 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
           if ((status  = esl_strdup(om->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
           if ((status  = esl_strdup(om->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
         }
+
+
+
+        /* If using model-specific thresholds, filter now.  See notes in front
+         * of the analogous piece of code in p7_Pipeline() for further explanation
+         * of timing.
+         */
+        if (pli->use_bit_cutoffs)
+        {
+          if (p7_pli_TargetReportable(pli, hit->score, hit->lnP))
+          {
+            hit->flags |= p7_IS_REPORTED;
+            if (p7_pli_TargetIncludable(pli, hit->score, hit->lnP))
+              hit->flags |= p7_IS_INCLUDED;
+          }
+
+          if (p7_pli_DomainReportable(pli, hit->dcl[0].bitscore, hit->dcl[0].lnP))
+          {
+            hit->dcl[0].is_reported = TRUE;
+            if (p7_pli_DomainIncludable(pli, hit->dcl[0].bitscore, hit->dcl[0].lnP))
+              hit->dcl[0].is_included = TRUE;
+          }
+
+        }
+
       }
   }
+
+
 
   return eslOK;
 
