@@ -11,7 +11,7 @@ libdir      = @libdir@
 includedir  = @includedir@
 
 CC          = @CC@
-CFLAGS      = @CFLAGS@ @PTHREAD_CFLAGS@
+CFLAGS      = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
 SIMDFLAGS   = @SIMD_CFLAGS@
 CPPFLAGS    = @CPPFLAGS@
 LDFLAGS     = @LDFLAGS@

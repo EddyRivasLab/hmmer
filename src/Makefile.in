@@ -20,7 +20,7 @@ man1dir     = ${mandir}/man1
 man1ext     = .1
 
 CC        = @CC@
-CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@
+CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
 SIMDFLAGS = @SIMD_CFLAGS@
 CPPFLAGS  = @CPPFLAGS@
 LDFLAGS   = @LDFLAGS@
