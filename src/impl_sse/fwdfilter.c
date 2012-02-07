@@ -10,9 +10,8 @@
  *                                           ^^^^^^^^^
  *                                        (you are here)
  * Contents:
- *    1. Forward implementation.
- *    2. Backward implementation, with posterior decoding to bands.
- *    3. Internal function.
+ *    1. Forward and Backward API calls.
+ *    2. Internal functions: inlined fwd/bck/decoding recursions.
  *    x. Copyright and license information.
  */
 #include "p7_config.h"
@@ -24,17 +23,25 @@
 #include "esl_sse.h"
 
 #include "hmmer.h"
+#include "p7_gbands.h"
+
 #include "impl_sse.h"
 #include "p7_filtermx.h"
 
-/*****************************************************************
- * 1. Forward implementation
- *****************************************************************/
-static inline float forward_row(int Q, const P7_OPROFILE *om, const __m128 *rp, const __m128 *dpp, __m128 *dpc);
 
+static inline float forward_row(int Q, const P7_OPROFILE *om, const __m128 *rp, const __m128 *dpp, __m128 *dpc);
+static inline void  backward_row_L     (const P7_OPROFILE *om,  __m128 *dpc, int Q);
+static inline void  backward_row_main  (const P7_OPROFILE *om, const __m128 *rp, const __m128 *dpp, __m128 *dpc, int Q);
+static inline void  backward_row_finish(const P7_OPROFILE *om, __m128 xEv, __m128 *dpc, int Q);
+static inline void  backward_row_rescale(float *xc, __m128 *dpc, int Q);
+static inline void  posterior_decode_row(int rowi, const __m128 *fwd, const __m128 *bck, int Q, P7_GBANDS *bnd);
+
+/*****************************************************************
+ * 1. Forward and Backward API calls
+ *****************************************************************/
 
 /* Function:  p7_ForwardFilter()
- * Synopsis:  Checkpointed, SIMD striped vector Forward calculation.
+ * Synopsis:  Checkpointed striped vector Forward calculation.
  *
  * Purpose:   Calculate the Forward algorithm for target sequence <dsq>
  *            of <L> residues aligned to query profile <om>, using the
@@ -109,6 +116,133 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   if (opt_sc) *opt_sc = totsc + logf(xc[p7F_C] * om->xf[p7O_C][p7O_MOVE]);
   return eslOK;
 }
+
+
+/* Function:  p7_BackwardFilter()
+ * Synopsis:  
+ *
+ * Purpose:   
+ *
+ * Args:      
+ *
+ * Returns:   
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      
+ */
+int
+p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, P7_GBANDS *bnd, float *opt_sc)
+{
+  int Q = P7F_NQF(om->M);
+  __m128 *fwd;
+  __m128 *bck;
+  __m128 *dpp;
+  __m128 *rp;
+  int     i, b, w, i2;
+  
+  /* Row L is a special case for Backwards; so in checkpointed Backward,
+   * we have to special-case the last block, rows L-1 and L
+   */
+  i = L;
+  ox->R--;
+  fwd = (__m128 *) ox->dpf[ox->R0 + ox->R]; /* pop row for fwd[L] off the checkpointed stack */
+  bck = (__m128 *) ox->dpf[i%2];	    /* get tmp space for bck[L]                      */
+  backward_row_L(om, bck, Q);		    /* calculate bck[L] row                          */
+  posterior_decode_row(i, fwd, bck, Q, bnd);
+  i--;
+  dpp = bck;
+
+  /* If there's any checkpointing, there's an L-1 row to fill now. */
+  if (ox->Rb+ox->Rc > 0)
+    {
+      /* Compute bck[L-1] from bck[L]. */
+      bck = (__m128 *) ox->dpf[i%2];             /* get space for bck[L-1]                */
+      rp  = om->rfv[dsq[i+1]];			 /* emission scores on row i+1, for bck   */
+      backward_row_main(om, rp, dpp, bck, Q);
+
+      /* Compute fwd[L-1] from last checkpoint, which we know is fwd[L-2] */
+      dpp = (__m128 *) ox->dpf[ox->R0+ox->R-1];  /* fwd[L-2] values, already known        */
+      fwd = (__m128 *) ox->dpf[ox->R0+ox->R];    /* get free row memory from top of stack */
+      rp  = om->rfv[dsq[i]];			 /* emission scores on row i, for fwd     */
+      forward_row(Q, om, rp, dpp, fwd);          /* calculate fwd[L-1]                    */
+
+      /* And decode. */
+      posterior_decode_row(i, fwd, bck, Q, bnd);
+      dpp = bck;
+      i--;			/* i is now L-2 if there's checkpointing; else it's L-1 */
+    }
+
+  /* Main loop for checkpointed regions (b,c) */
+   for (b = 2; b <= ox->Rb+ox->Rc; b++)
+    {				/* i=L-2 as we enter here, and <dpp> is on bck[L-1] */
+      w = (b <= ox->Rc ? b+1 : ox->Lb);
+
+      /* Calculate bck[i]; <dpp> is bck[i+1] */
+      bck = (__m128 *) ox->dpf[i%2];	    /* get available tmp memory for row     */
+      rp  = om->rfv[dsq[i+1]];	            /* emission scores for row i+1, for bck */
+      backward_row_main(om, rp, dpp, bck, Q);
+
+      /* We know current row i (r=R0+R-1) ends a block and is checkpointed in fwd. */
+      ox->R--;
+      fwd = (__m128 *) ox->dpf[ox->R0+ox->R];      /* pop checkpointed forward row off "stack" */
+
+      /* And decode checkpointed row i. */
+      posterior_decode_row(i, fwd, bck, Q, bnd);
+      
+      /* The rest of the rows in the block weren't checkpointed.
+       * Compute Forwards from last checkpoint ...
+       */
+      dpp = (__m128 *) ox->dpf[ox->R0+ox->R-1];       /* get last Fwd checkpoint. */
+      for (i2 = i-w+1; i2 <= i-1; i2++)
+	{
+	  fwd = (__m128 *) ox->dpf[ox->R0+ox->R]; ox->R++;  /* push new forward row on "stack"     */
+	  rp  = om->rfv[dsq[i2]];		            /* emission scores for row i2, for fwd */
+	  forward_row(Q, om, rp, dpp, fwd);
+	  dpp = fwd;	  
+	}
+
+      /* ... and compute Backwards over the block we just calculated, while decoding. */
+      dpp = bck;
+      for (i2 = i-1; i2 >= i-w+1; i2--)
+	{
+	  ox->R--;
+	  fwd = (__m128 *) ox->dpf[ox->R0+ox->R]; /* pop just-calculated forward row i2 off "stack" */
+	  bck = (__m128 *) ox->dpf[i2%2];	  /* get available for calculating bck[i2]          */
+	  rp  = om->rfv[dsq[i2+1]];               /* emission scores for row i2+1, for bck          */
+	  backward_row_main(om, rp, dpp, bck, Q);
+	  posterior_decode_row(i2, fwd, bck, Q, bnd);
+	  dpp = bck;
+	}
+      i -= w;
+    }
+   /* now i=La as we leave the checkpointed regions; or i=L-1 if there was no checkpointing */
+   
+
+   /* The uncheckpointed "a" region */
+   for (; i >= 1; i--)
+     {
+       ox->R--; 
+       fwd = (__m128 *) ox->dpf[ox->R0+ox->R]; /* pop off calculated row fwd[i]           */
+       bck = (__m128 *) ox->dpf[i%2];	       /* get open space for bck[i]               */
+       rp  = om->rfv[dsq[i+1]];		       /* emission scores for row i+1, for bck[i] */
+       backward_row_main(om, rp, dpp, bck, Q);
+       posterior_decode_row(i, fwd, bck, Q, bnd);
+       dpp = bck;
+    }
+
+   
+
+
+
+}
+/*----------- end forward/backward API calls --------------------*/
+
+
+
+/*****************************************************************
+ * 2. Internal functions: inlined recursions
+ *****************************************************************/
 
 static inline float
 forward_row(int Q, const P7_OPROFILE *om, const __m128 *rp, const __m128 *dpp, __m128 *dpc)
@@ -251,146 +385,16 @@ forward_row(int Q, const P7_OPROFILE *om, const __m128 *rp, const __m128 *dpp, _
 
   return logf(xc[p7F_SCALE]);
 }
-/*----------------- end, forward calculation --------------------*/
-
-
-/*****************************************************************
- * 2. Backward implementation, with posterior decoding to bands.
- *****************************************************************/
-static inline void  backward_row_L     (const P7_OPROFILE *om,  __m128 *dpc, int Q);
-static inline void  backward_row_main  (const P7_OPROFILE *om, const __m128 *rp, const __m128 *dpp, __m128 **dpc, int Q);
-static inline void  backward_row_rescale(float *xc, __m128 *dpc, int Q);
-static inline void  backward_row_rescale(float *xc, __m128 *dpc, int Q);
-
-/* Function:  p7_BackwardFilter()
- * Synopsis:  
- *
- * Purpose:   
- *
- * Args:      
- *
- * Returns:   
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      
- */
-int
-p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, P7_BANDS *bnd, float *opt_sc)
-{
-  int Q = P7F_NQF(om->M);
-  __m128 *fwd;
-  __m128 *bck;
-  __m128 *dpp;
-  __m128 *rp;
-  
-  /* Row L is a special case for Backwards; so in checkpointed Backward,
-   * we have to special-case the last block, rows L-1 and L
-   */
-  i = L;
-  ox->R--;
-  fwd = (__m128 *) ox->dpf[ox->R0 + ox->R]; /* pop row for fwd[L] off the checkpointed stack */
-  bck = (__m128 *) ox->dpf[i%2];	    /* get tmp space for bck[L]                      */
-  backward_row_L(om, bck, Q);		    /* calculate bck[L] row                          */
-  posterior_decode_row(i, fwd, bck, Q, bnd);
-  i--;
-  dpp = bck;
-
-  /* If there's any checkpointing, there's an L-1 row to fill now. */
-  if (ox->Rb+ox->Rc > 0)
-    {
-      /* Compute bck[L-1] from bck[L]. */
-      bck = (__m128 *) ox->dpf[i%2];             /* get space for bck[L-1]                */
-      rp  = om->rfv[dsq[i+1]];			 /* emission scores on row i+1, for bck   */
-      backward_row_main(om, rp, dpp, bck, Q);
-
-      /* Compute fwd[L-1] from last checkpoint, which we know is fwd[L-2] */
-      dpp = (__m128 *) ox->dpf[ox->R0+ox->R-1];  /* fwd[L-2] values, already known        */
-      fwd = (__m128 *) ox->dpf[ox->R0+ox->R];    /* get free row memory from top of stack */
-      rp  = om->rfv[dsq[i]];			 /* emission scores on row i, for fwd     */
-      forward_row(Q, om, rp, dpp, fwd);          /* calculate fwd[L-1]                    */
-
-      /* And decode. */
-      posterior_decode_row(i, fwd, bck, Q, bnd);
-      dpp = bck;
-      i--;			/* i is now L-2 if there's checkpointing; else it's L-1 */
-    }
-
-  /* Main loop for checkpointed regions (b,c) */
-   for (b = 2; b <= ox->Rb+ox->Rc; b++)
-    {				/* i=L-2 as we enter here, and <dpp> is on bck[L-1] */
-      w = (b <= ox->Rc ? b+1 : ox->Lb);
-
-      /* Calculate bck[i]; <dpp> is bck[i+1] */
-      bck = gxc->dp[i%2];	            /* get available tmp memory for row     */
-      rp  = om->rfv[dsq[i+1]];	            /* emission scores for row i+1, for bck */
-      backward_row(om, rp, dpp, bck, i);
-
-      /* We know current row i (r=R0+R-1) ends a block and is checkpointed in fwd. */
-      ox->R--;
-      fwd = ox->dpf[ox->R0+ox->R];      /* pop checkpointed forward row off "stack" */
-
-      /* And decode checkpointed row i. */
-      posterior_decode_row(i, fwd, bck, M, bnd);
-      
-      /* The rest of the rows in the block weren't checkpointed.
-       * Compute Forwards from last checkpoint ...
-       */
-      dpp = (__m128 *) ox->dpf[ox->R0+ox->R-1];       /* get last Fwd checkpoint. */
-      for (i2 = i-w+1; i2 <= i-1; i2++)
-	{
-	  fwd = ox->dpf[ox->R0+ox->R]; oxc->R++;     /* push new forward row on "stack"     */
-	  rp  = om->rfv[dsq[i2]];		     /* emission scores for row i2, for fwd */
-	  forward_row(Q, om, rp, dpp, fwd);
-	  dpp = fwd;	  
-	}
-
-      /* ... and compute Backwards over the block we just calculated, while decoding. */
-      dpp = bck;
-      for (i2 = i-1; i2 >= i-w+1; i2--)
-	{
-	  ox->R--;
-	  fwd = (__m128 *) ox->dpf[ox->R0+ox->R]; /* pop just-calculated forward row i2 off "stack" */
-	  bck = ox->dp[i2%2];			  /* get available for calculating bck[i2]          */
-	  rp  = om->rfv[dsq[i2+1]];               /* emission scores for row i2+1, for bck          */
-	  backward_row(om, rp, dpp, bck, Q);
-	  posterior_decode_row(i2, fwd, bck, Q, bnd);
-	  dpp = bck;
-	}
-      i -= w;
-    }
-   /* now i=La as we leave the checkpointed regions; or i=L-1 if there was no checkpointing */
-   
-
-   /* The uncheckpointed "a" region */
-   for (; i >= 1; i--)
-     {
-       ox->R--; 
-       fwd = (__m128 *) ox->dpf[ox->R0+ox->R]; /* pop off calculated row fwd[i]           */
-       bck = (__m128 *) ox->dpf[i%2];	       /* get open space for bck[i]               */
-       rp  = om->rfv[dsq[i+1]];		       /* emission scores for row i+1, for bck[i] */
-       backward_row(om, rp, dpp, bck, Q);
-       posterior_decode_row(i, fwd, bck, Q, bnd);
-       dpp = bck;
-    }
-
-   
-
-
-
-}
-
-
 
 
 static inline void
-backward_row_main(const P7_OPROFILE *om, const __m128 *rp, const __m128 *dpp, __m128 **dpc, int Q)
+backward_row_main(const P7_OPROFILE *om, const __m128 *rp, const __m128 *dpp, __m128 *dpc, int Q)
 {
   const __m128  zerov = _mm_setzero_ps();
   float        *xc    = (float *) (dpc + Q * p7F_NSCELLS); /* special states on current row i      */
   float        *xp    = (float *) (dpp + Q * p7F_NSCELLS); /* special states on "previous" row i+1 */
   const __m128 *tp;					   /* <tp> will step backwards thru transition prob quads */
-  __m128 mcv, dcv, icv;					   /* MDI values for current quad */
+  __m128 mcv;					           /* M value for current quad */
   __m128 mpv, ipv;					   /* MI values for quads on i+1 row we're connecting to */
   __m128 tmmv, timv, tdmv;				   /* copies of transition prob quads; a leftshift is needed as boundary cond */
   __m128 xBv, xEv;					   /* splatted B, E values */
@@ -409,9 +413,9 @@ backward_row_main(const P7_OPROFILE *om, const __m128 *rp, const __m128 *dpp, __
   for (q = Q-1; q >= 0; q--)     /* backwards stride */
     {
       ipv = P7F_IQ(dpp,q); /* assumes emission odds ratio of 1.0; i+1's IMO(q) now free */
-      P7_IQ(dpc,q) = _mm_add_ps(_mm_mul_ps(ipv, *tp), _mm_mul_ps(mpv, timv));   tp--;
-      P7_DQ(dpc,q) =                                  _mm_mul_ps(mpv, tdmv); 
-      mcv          = _mm_add_ps(_mm_mul_ps(ipv, *tp), _mm_mul_ps(mpv, tmmv));   tp-= 2;
+      P7F_IQ(dpc,q) = _mm_add_ps(_mm_mul_ps(ipv, *tp), _mm_mul_ps(mpv, timv));   tp--;
+      P7F_DQ(dpc,q) =                                  _mm_mul_ps(mpv, tdmv); 
+      mcv           = _mm_add_ps(_mm_mul_ps(ipv, *tp), _mm_mul_ps(mpv, tmmv));   tp-= 2;
 	  
       mpv           = _mm_mul_ps(P7F_MQ(dpp,q), *rp);  rp--;  /* obtain mpv for next q. i+1's MMO(q) is freed  */
       P7F_MQ(dpc,q) = mcv;
@@ -508,7 +512,7 @@ backward_row_finish(const P7_OPROFILE *om, __m128 xEv, __m128 *dpc, int Q)
     {				/* full serialization */
       for (j = 1; j < 4; j++)	/* three passes: we've already done 1 segment, we need 4 total */
 	{
-	  dcv = esl_sse_leftshift(dcv, zerov);  
+	  dcv = esl_sse_leftshift_ps(dcv, zerov);  
 	  tp  = om->tfv + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
 	  for (q = Q-1; q >= 0; q--)
 	    {
@@ -523,7 +527,7 @@ backward_row_finish(const P7_OPROFILE *om, __m128 xEv, __m128 *dpc, int Q)
       __m128 cv;			/* keeps track of whether any DD addition changes DQ(q) value */
       for (j = 1; j < 4; j++)
 	{
-	  dcv = esl_sse_leftshift(dcv, zerov);
+	  dcv = esl_sse_leftshift_ps(dcv, zerov);
 	  tp  = om->tfv + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
 	  cv  = zerov;
 	  for (q = Q-1; q >= 0; q--)
@@ -533,13 +537,13 @@ backward_row_finish(const P7_OPROFILE *om, __m128 xEv, __m128 *dpc, int Q)
 	      cv            = _mm_or_ps(cv, _mm_cmpgt_ps(sv, P7F_DQ(dpc,q))); /* if DD path changed DQ(dpc,q), cv knows it now */
 	      P7F_DQ(dpc,q) = sv;
 	    }
-	  if (! __mm_movemask_ps(cv)) break; /* if no DD path changed DQ(q) in this segment, then done, no more segments needed */
+	  if (! _mm_movemask_ps(cv)) break; /* if no DD path changed DQ(q) in this segment, then done, no more segments needed */
 	}
     }
  
   /* Finally, we can add the Mk<-Dk+1 path */   
   tp  = om->tfv + 7*Q - 3;	                        /* <*tp> now the [4 8 12 x] Mk->Dk+1 quad    */
-  dcv = esl_sse_leftshift(P7F_DQ(dpc, 0), zerov);	/* leftshift: [1 5 9 13] -> [5 9 13 x]       */
+  dcv = esl_sse_leftshift_ps(P7F_DQ(dpc, 0), zerov);	/* leftshift: [1 5 9 13] -> [5 9 13 x]       */
   for (q = Q-1; q >= 0; q--)
     {
       P7F_MQ(dpc,q) = _mm_add_ps(P7F_MQ(dpc,q), _mm_mul_ps(dcv, *tp)); tp -= 7;
@@ -580,16 +584,16 @@ backward_row_rescale(float *xc, __m128 *dpc, int Q)
 
 
 static inline void
-posterior_decode_row(int rowi, const __m128 *fwd, const __m128 *bck, int Q, P7_BANDS *bnd)
+posterior_decode_row(int rowi, const __m128 *fwd, const __m128 *bck, int Q, P7_GBANDS *bnd)
 {
-  const  float *xf = fwd + Q*p7F_NSCELLS;
-  const  float *xb = bck + Q*p7F_NSCELLS;
-  __m128 totscv    = _mm_set1_ps(overall_sc);
+  const  float *xf = (float *) (fwd + Q*p7F_NSCELLS);
+  const  float *xb = (float *) (bck + Q*p7F_NSCELLS);
   __m128 threshv   = _mm_set1_ps(0.02);
   __m128 onev      = _mm_set1_ps(1.0);
   __m128 kv        = _mm_set_ps((float) 3*Q, (float) 2*Q, (float) Q, 0.0f); /* iv is going to contain current i coord in each vector cell */
   __m128 minkv     = _mm_set1_ps( (float) Q*4.0+1);
   __m128 maxkv     = _mm_set1_ps( 0.0f);
+  __m128 mask;
   __m128 pv;
   int    q;
   float  ktmp;
@@ -626,8 +630,11 @@ posterior_decode_row(int rowi, const __m128 *fwd, const __m128 *bck, int Q, P7_B
   esl_sse_hmax_ps(maxkv, &ktmp); kb = (int) ktmp;
   esl_sse_hmin_ps(minkv, &ktmp); ka = (int) ktmp;
 
-  if (ka) p7_bands_Prepend(bnd, rowi, ka, kb);
+  if (ka) p7_gbands_Prepend(bnd, rowi, ka, kb);
 }
+/*------------------ end, inlined recursions -------------------*/
+
+
 
 
 
