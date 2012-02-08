@@ -52,7 +52,7 @@ man1ext     = .1
 # Compiler configuration
 #
 CC        = @CC@
-CFLAGS    = @CFLAGS@
+CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
 LDFLAGS   = -static @LDFLAGS@
 SIMDFLAGS = @SIMD_CFLAGS@
 CPPFLAGS  = @CPPFLAGS@

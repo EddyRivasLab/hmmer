@@ -3,7 +3,7 @@
 # xref J7/84
 #
 . /usr/local/intel-2012/bin/compilervars.sh ia32
-. /usr/local/intel-2012/impi/4.0.3.008/bin/mpivars.sh ia32
+. /usr/local/intel-2012/impi/4.0.3.008/bin/mpivars.sh 
 export INTEL_LICENSE_FILE="28518@flexlm.int.janelia.org"
 
 ../configure CC=icc LDFLAGS=-static-intel --enable-mpi
