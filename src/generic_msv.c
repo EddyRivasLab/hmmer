@@ -599,8 +599,8 @@ main(int argc, char **argv)
 
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
-      p7_profileSetLength(gm,   sq->n);
-      p7_bg_SetLength    (bg,   sq->n);
+      p7_profile_SetLength(gm,   sq->n);
+      p7_bg_SetLength     (bg,   sq->n);
       p7_gmx_GrowTo(fwd, gm->M, sq->n); 
 
       /* Run MSV */

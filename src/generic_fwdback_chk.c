@@ -758,7 +758,7 @@ main(int argc, char **argv)
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_profile_ConfigLocal(gm, hmm, bg, gm, 400);
+  p7_profile_ConfigLocal(gm, hmm, bg, 400);
 
   /* Allocate matrices */
   fwd = p7_gmx_Create(gm->M, 400);

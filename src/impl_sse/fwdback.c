@@ -803,6 +803,7 @@ main(int argc, char **argv)
   float           fsc2, bsc2;
   double          base_time, bench_time, Mcs;
 
+  impl_Init();
   p7_FLogsumInit();
 
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);

@@ -202,7 +202,6 @@ main(int argc, char **argv)
   ESL_STOPWATCH  *w       = esl_stopwatch_Create();
   int             N       = esl_opt_GetInteger(go, "-N");
   int             i;
-  float           x, z;
   float          *A, *B, *C;
 
   p7_FLogsumInit();
