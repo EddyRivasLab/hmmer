@@ -379,6 +379,8 @@ static ESL_OPTIONS options[] = {
   { "--sw",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit local alignment",                           0 },
   { "--ls",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "multihit glocal alignment",                        0 },
   { "--s",       eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit glocal alignment",                          0 },
+  { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump decoding matrix for examination (verbose)",   0 },
+  { "--csv",  eslARG_OUTFILE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "write matrix to file <f> in csv, for heatmaps",    0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -440,8 +442,13 @@ main(int argc, char **argv)
   /* Decoding: <bck> becomes the posterior probability mx */
   p7_GDecoding(gm, fwd, bck, bck);
 
-  //p7_gmx_Dump(stdout, bck, p7_DEFAULT);
-  dump_matrix_csv(stdout, bck, 1, sq->n, 1, gm->M);
+  if (esl_opt_GetBoolean(go, "-D")) p7_gmx_Dump(stdout, bck, p7_DEFAULT);
+  if (esl_opt_IsOn(go, "--csv")) {
+    char *outfile = esl_opt_GetString(go, "--csv");
+    FILE *ofp     = fopen(outfile, "w");
+    dump_matrix_csv(ofp, bck, 1, sq->n, 1, gm->M);
+    fclose(ofp);
+  }
 
   /* Cleanup */
   esl_sq_Destroy(sq);

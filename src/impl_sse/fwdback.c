@@ -1061,6 +1061,8 @@ static ESL_OPTIONS options[] = {
   { "--sw",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit local alignment",                           0 },
   { "--ls",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "multihit glocal alignment",                        0 },
   { "--s",       eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit glocal alignment",                          0 },
+  { "-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward matrix for examination (verbose)",   0 },
+  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward matrix for examination (verbose)",    0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -1126,8 +1128,9 @@ main(int argc, char **argv)
   /* fwd = p7_omx_Create(gm->M, sq->n, sq->n); */
   /* bck = p7_omx_Create(gm->M, sq->n, sq->n); */
 
-  /* p7_omx_SetDumpMode(stdout, fwd, TRUE); */     /* makes the fast DP algorithms dump their matrices */
-  /* p7_omx_SetDumpMode(stdout, bck, TRUE); */  
+  /* makes the fast DP algorithms dump their matrices */
+  if (esl_opt_GetBoolean(go, "-F")) p7_omx_SetDumpMode(stdout, fwd, TRUE); 
+  if (esl_opt_GetBoolean(go, "-B")) p7_omx_SetDumpMode(stdout, bck, TRUE); 
 
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {

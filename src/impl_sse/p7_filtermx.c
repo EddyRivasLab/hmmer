@@ -284,6 +284,7 @@ p7_filtermx_SetDumpMode(P7_FILTERMX *ox, FILE *dfp, int truefalse)
   return eslOK;
 }
 
+#ifdef p7_DEBUGGING
 char *
 p7_filtermx_DecodeX(enum p7f_xcells_e xcode)
 {
@@ -295,7 +296,7 @@ p7_filtermx_DecodeX(enum p7f_xcells_e xcode)
   case p7F_B:     return "B"; 
   case p7F_CC:    return "CC"; 
   case p7F_C:     return "C"; 
-  case p7F_SCALE: return "SCA"; 
+  case p7F_SCALE: return "SCALE"; 
   default:        return "?";
   }
 }
@@ -314,7 +315,8 @@ p7_filtermx_DumpFBHeader(P7_FILTERMX *ox)
   for (k = 0; k < p7F_NXCELLS; k++) fprintf(ox->dfp, " %*s", width, p7_filtermx_DecodeX(k));
   fputc('\n', ox->dfp);
 
-  fprintf(ox->dfp, "     ");
+  fprintf(ox->dfp, "%*s", maxpfx, "");
+  fprintf(ox->dfp, "      ");
   for (k = 0; k <= M+p7F_NXCELLS;  k++) fprintf(ox->dfp, " %*s", width, "--------");
   fputc('\n', ox->dfp);
 
@@ -334,6 +336,7 @@ p7_filtermx_DumpFBRow(P7_FILTERMX *ox, int rowi, __m128 *dpc, char *pfx)
   int    width     = ox->dbg_width;
   int    precision = ox->dbg_precision;
   int    k,q,z;
+  int    status;
 
   ESL_ALLOC(v, sizeof(float) * ( (Q*p7_VNF) + 1));
   v[0] = 0.;
@@ -377,6 +380,7 @@ p7_filtermx_DumpFBRow(P7_FILTERMX *ox, int rowi, __m128 *dpc, char *pfx)
   if (v) free(v);
   return status;
 }
+#endif /*p7_DEBUGGING*/
 /*---------------- end, debugging -------------------------------*/
 
 /*****************************************************************

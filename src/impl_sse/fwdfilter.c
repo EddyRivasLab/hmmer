@@ -35,7 +35,7 @@ static inline void  backward_row_L     (const P7_OPROFILE *om,                  
 static inline float backward_row_zero  (const P7_OPROFILE *om, const __m128 *rp, const __m128 *dpp, __m128 *dpc, int Q);
 static inline void  backward_row_finish(const P7_OPROFILE *om, __m128 xEv, __m128 *dpc, int Q);
 static inline void  backward_row_rescale(float *xc, __m128 *dpc, int Q, float scalefactor);
-static inline void  posterior_decode_row(int rowi, const __m128 *fwd, const __m128 *bck, int Q, P7_GBANDS *bnd);
+static inline void  posterior_decode_row(int rowi, const __m128 *fwd, const __m128 *bck, int Q, P7_GBANDS *bnd, float scaleterm);
 
 static inline void  alt_backward_row_main(const P7_OPROFILE *om, const __m128 *rp, __m128 *dpp, __m128 *dpc, int Q, float scalefactor);
 static inline void  alt_backward_row_L(const P7_OPROFILE *om,  __m128 *dpc, int Q, float scalefactor);
@@ -85,8 +85,13 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   int     b;			/* counter down through checkpointed blocks, Rb+Rc..1 */
   int     w;			/* counter down through rows in a checkpointed block  */
 
+  /* Set the size of the problem in <ox> now; debugging dumps may use this information, for example */
+  ox->M  = om->M;
+  ox->L  = L;
+  ox->Qf = Q;
 #if p7_DEBUGGING
-  if (ox->debugging) p7_filtermx_DumpFBHeader(ox)
+  ox->dbg_flags |= p7_SHOW_LOG;
+  if (ox->do_debug) p7_filtermx_DumpFBHeader(ox);
 #endif
 
   /* Initialization of the zero row, including specials */
@@ -96,7 +101,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   xc[p7F_E]     = xc[p7F_JJ] = xc[p7F_J]  = xc[p7F_CC] = xc[p7F_C]  = 0.;			
   xc[p7F_SCALE] = 1.;			   
 #if p7_DEBUGGING
-  if (ox->debugging) p7_filtermx_DumpFBRow(ox, 0, dpp, "fwd O");
+  if (ox->do_debug) p7_filtermx_DumpFBRow(ox, 0, dpp, "f1 O");
 #endif
 
   /* Phase one: the "a" region: all rows in this region are saved */
@@ -105,7 +110,11 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
       dpc = (__m128 *) ox->dpf[ox->R0+ox->R]; ox->R++; /* idiomatic for "get next save/checkpoint row" */
       totsc += forward_row(Q, om, om->rfv[dsq[i]], dpp, dpc);
       dpp = dpc;	    	           /* current row becomes prev row */
+#if p7_DEBUGGING
+      if (ox->do_debug) p7_filtermx_DumpFBRow(ox, i, dpc, "f1 O");
+#endif
     }
+
 
   /* Phase two: "b" and "c" regions: partially and fully checkpointed */
   for (b = ox->Rb + ox->Rc, w = (ox->Rb ? ox->Lb : ox->Rc+1); i <= L; i++)
@@ -118,11 +127,12 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
       
       totsc += forward_row(Q, om, om->rfv[dsq[i]], dpp, dpc);
       dpp = dpc;
+#if p7_DEBUGGING
+      if (ox->do_debug) p7_filtermx_DumpFBRow(ox, i, dpc, w ? "f1 X" : "f1 O");
+#endif
     }
 
-  ox->M = om->M;
-  ox->L = L;
-  xc    = (float *) (dpc + Q*p7F_NSCELLS);
+  xc     = (float *) (dpc + Q*p7F_NSCELLS);
 
   ESL_DASSERT1( (ox->R == ox->Ra+ox->Rb+ox->Rc) );
   ESL_DASSERT1( ( (! isnan(xc[p7F_C])) && (! isinf(xc[p7F_C]))) );
@@ -148,13 +158,14 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 int
 p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, P7_GBANDS *bnd, float *opt_sc)
 {
-  int Q = P7F_NQF(om->M);
+  int Q = ox->Qf;
   __m128 *fwd;
   __m128 *bck;
   __m128 *dpp;
   __m128 *rp;
   float  *xf;
   float   totsc = 0.;
+  float   scaleterm;
   int     i, b, w, i2;
   
   /* Row L is a special case for Backwards; so in checkpointed Backward,
@@ -164,9 +175,13 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
   ox->R--;
   fwd = (__m128 *) ox->dpf[ox->R0 + ox->R];   /* pop row for fwd[L] off the checkpointed stack */
   xf  = (float *) (fwd + Q*p7F_NSCELLS);
-  bck = (__m128 *) ox->dpf[i%2];	      /* get tmp space for bck[L]                      */
-  alt_backward_row_L(om, bck, Q, xf[p7F_SCALE]);  /* calculate bck[L] row                          */
-  posterior_decode_row(i, fwd, bck, Q, bnd);
+  scaleterm = xf[p7F_C] * om->xf[p7O_C][p7O_MOVE]; /* i.e. the scaled cell value for fwd[L] at T state: the scaled overall score */
+  bck = (__m128 *) ox->dpf[i%2];	           /* get tmp space for bck[L]                      */
+  alt_backward_row_L(om, bck, Q, xf[p7F_SCALE]);   /* calculate bck[L] row                          */
+#if p7_DEBUGGING
+  if (ox->do_debug) p7_filtermx_DumpFBRow(ox, L, bck, "bck");
+#endif
+  posterior_decode_row(i, fwd, bck, Q, bnd, xf[p7F_SCALE]/scaleterm );
   totsc += logf(xf[p7F_SCALE]);
   i--;
   dpp = bck;
@@ -180,6 +195,9 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
       fwd = (__m128 *) ox->dpf[ox->R0+ox->R];    /* get free row memory from top of stack */
       rp  = om->rfv[dsq[i]];			 /* emission scores on row i, for fwd     */
       forward_row(Q, om, rp, dpp, fwd);          /* calculate fwd[L-1]                    */
+#if p7_DEBUGGING
+      if (ox->do_debug) p7_filtermx_DumpFBRow(ox, i, fwd, "f2 X");
+#endif
 
       /* Compute bck[L-1] from bck[L]. */
       xf  = (float *) (fwd + Q*p7F_NSCELLS);
@@ -187,9 +205,12 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
       bck = (__m128 *) ox->dpf[i%2];             /* get space for bck[L-1]                */
       rp  = om->rfv[dsq[i+1]];			 /* emission scores on row i+1, for bck   */
       alt_backward_row_main(om, rp, dpp, bck, Q, xf[p7F_SCALE]);
+#if p7_DEBUGGING
+      if (ox->do_debug) p7_filtermx_DumpFBRow(ox, i, bck, "bck");
+#endif
 
       /* And decode. */
-      posterior_decode_row(i, fwd, bck, Q, bnd);
+      posterior_decode_row(i, fwd, bck, Q, bnd, xf[p7F_SCALE]/scaleterm);
       totsc += logf(xf[p7F_SCALE]);
       dpp = bck;
       i--;			/* i is now L-2 if there's checkpointing; else it's L-1 */
@@ -210,9 +231,14 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
       rp  = om->rfv[dsq[i+1]];	            /* emission scores for row i+1, for bck */
       alt_backward_row_main(om, rp, dpp, bck, Q, xf[p7F_SCALE]);
       totsc += logf(xf[p7F_SCALE]);
-
+#if p7_DEBUGGING
+      if (ox->do_debug) {
+	p7_filtermx_DumpFBRow(ox, i, fwd, "f2 O");
+	p7_filtermx_DumpFBRow(ox, i, bck, "bck");
+      }
+#endif
       /* And decode checkpointed row i. */
-      posterior_decode_row(i, fwd, bck, Q, bnd);
+      posterior_decode_row(i, fwd, bck, Q, bnd, xf[p7F_SCALE]/scaleterm);
       
       /* The rest of the rows in the block weren't checkpointed.
        * Compute Forwards from last checkpoint ...
@@ -236,7 +262,13 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
 	  bck = (__m128 *) ox->dpf[i2%2];	  /* get available for calculating bck[i2]          */
 	  rp  = om->rfv[dsq[i2+1]];               /* emission scores for row i2+1, for bck          */
 	  alt_backward_row_main(om, rp, dpp, bck, Q, xf[p7F_SCALE]);
-	  posterior_decode_row(i2, fwd, bck, Q, bnd);
+#if p7_DEBUGGING
+	  if (ox->do_debug) {
+	    p7_filtermx_DumpFBRow(ox, i, fwd, "f2 X");
+	    p7_filtermx_DumpFBRow(ox, i, bck, "bck");
+	  }
+#endif
+	  posterior_decode_row(i2, fwd, bck, Q, bnd, xf[p7F_SCALE]/scaleterm);
 	  totsc += logf(xf[p7F_SCALE]);
 	  dpp = bck;
 	}
@@ -254,7 +286,13 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
        bck = (__m128 *) ox->dpf[i%2];	       /* get open space for bck[i]               */
        rp  = om->rfv[dsq[i+1]];		       /* emission scores for row i+1, for bck[i] */
        alt_backward_row_main(om, rp, dpp, bck, Q, xf[p7F_SCALE]);
-       posterior_decode_row(i, fwd, bck, Q, bnd);
+#if p7_DEBUGGING
+      if (ox->do_debug) {
+	p7_filtermx_DumpFBRow(ox, i, fwd, "f2 O");
+	p7_filtermx_DumpFBRow(ox, i, bck, "bck");
+      }
+#endif
+       posterior_decode_row(i, fwd, bck, Q, bnd, xf[p7F_SCALE]/scaleterm);
        totsc += logf(xf[p7F_SCALE]);
        dpp = bck;
     }
@@ -268,6 +306,13 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
    bck = (__m128 *) ox->dpf[0];
    rp  = om->rfv[dsq[1]];
    totsc += alt_backward_row_zero(om, rp, dpp, bck, Q);
+#if p7_DEBUGGING
+   if (ox->do_debug) p7_filtermx_DumpFBRow(ox, 0, bck, "bck");
+#endif
+
+   bnd->L = L;
+   bnd->M = om->M;
+   p7_gbands_Reverse(bnd);
 
    if (opt_sc) *opt_sc = totsc;
    return eslOK;
@@ -391,7 +436,7 @@ forward_row(int Q, const P7_OPROFILE *om, const __m128 *rp, const __m128 *dpp, _
   esl_sse_hsum_ps(xEv, &xc[p7F_E]);  
   xc[p7F_N]  =                                       xp[p7F_N] * om->xf[p7O_N][p7O_LOOP];
   xc[p7F_JJ] =                                       xp[p7F_J] * om->xf[p7O_J][p7O_LOOP];
-  xc[p7F_J]  = xc[p7F_JJ]                          + xp[p7F_E] * om->xf[p7O_E][p7O_LOOP];
+  xc[p7F_J]  = xc[p7F_JJ]                          + xc[p7F_E] * om->xf[p7O_E][p7O_LOOP];
   xc[p7F_B]  = xc[p7F_N] * om->xf[p7O_N][p7O_MOVE] + xc[p7F_J] * om->xf[p7O_J][p7O_MOVE];
   xc[p7F_CC] =                                       xp[p7F_C] * om->xf[p7O_C][p7O_LOOP];
   xc[p7F_C]  = xc[p7F_CC]                          + xc[p7F_E] * om->xf[p7O_E][p7O_MOVE];
@@ -430,7 +475,7 @@ alt_backward_row_main(const P7_OPROFILE *om, const __m128 *rp, __m128 *dpp, __m1
   const float * const xp = (float *) (dpp + Q * p7F_NSCELLS);
   const __m128 *tp, *tpdd;
   const __m128  zerov = _mm_set1_ps(0.0f);
-  __m128        xBv   = zerov;
+  __m128        xBv;
   __m128       *dp;
   __m128        xEv;
   __m128        dcv, mcv, ipv, mpv;
@@ -439,10 +484,12 @@ alt_backward_row_main(const P7_OPROFILE *om, const __m128 *rp, __m128 *dpp, __m1
  
   /* On "previous" row i+1: include emission prob, and sum to get xBv, xB. */
   dp  = dpp;
+  xBv = zerov;
+  tp  = om->tfv;		/* on first transition vector */
   for (q = 0; q < Q; q++)
     {
       *dp = _mm_mul_ps(*dp, *rp); rp++;
-      xBv = _mm_add_ps(xBv, *dp); dp+= p7F_NSCELLS;
+      xBv = _mm_add_ps(xBv, _mm_mul_ps(*dp, *tp)); dp+= p7F_NSCELLS; tp += 7;
     }
 
   /* Specials. Dependencies dictate partial order C,CC,B < N,J,JJ < E */
@@ -541,7 +588,7 @@ alt_backward_row_L(const P7_OPROFILE *om,  __m128 *dpc, int Q, float scalefactor
 {
   const __m128  zerov = _mm_setzero_ps();
   float        *xc    = (float *) (dpc + Q * p7F_NSCELLS);
-  const __m128 *tpdd  = om->tfv + 8*Q - 1;
+  const __m128 *tpdd;
   __m128       *dp;
   __m128       xEv, dcv;
   int          q;
@@ -553,13 +600,15 @@ alt_backward_row_L(const P7_OPROFILE *om,  __m128 *dpc, int Q, float scalefactor
   xc[p7F_B] = xc[p7F_J] = xc[p7F_JJ] = xc[p7F_N] = 0.0;
   xc[p7F_E] = xc[p7F_C] * om->xf[p7O_E][p7O_MOVE];
 
-  xEv = _mm_set1_ps(xc[p7F_E]);
-  dp = dpc;
+  xEv  = _mm_set1_ps(xc[p7F_E]);
+  dp   = dpc + Q*p7F_NSCELLS - 1;
+  tpdd = om->tfv + 8*Q - 1;
+  dcv  = zerov;
   for (q = Q-1; q >= 0; q--) 
     {
-      *dp++       = xEv; 	                                      /* M */
-      *dp++ = dcv = _mm_add_ps(xEv, _mm_mul_ps(dcv, *tpdd)); tpdd--;  /* D */
-      *dp++       = zerov;		                              /* I */
+      *dp--       = zerov;		                              /* I */
+      *dp-- = dcv = _mm_add_ps(xEv, _mm_mul_ps(dcv, *tpdd)); tpdd--;  /* D */
+      *dp--       = xEv; 	                                      /* M */
     }
   alt_backward_row_finish(om, dpc, Q, dcv);
   alt_backward_row_rescale(xc, dpc, Q, scalefactor);
@@ -573,15 +622,17 @@ alt_backward_row_zero(const P7_OPROFILE *om, const __m128 *rp, __m128 *dpp, __m1
   float        *xc   = (float *) (dpc + Q * p7F_NSCELLS); /* special states on current row i      */
   float        *xp   = (float *) (dpp + Q * p7F_NSCELLS); /* special states on "previous" row i+1 */
   __m128       *dp;
+  __m128       *tp;
   __m128        xBv  = zerov;
   int           q;
 
   /* On "previous" row i+1: include emission prob, and sum to get xBv, xB. */
   dp  = dpp;
+  tp  = om->tfv;
   for (q = 0; q < Q; q++)
     {
       *dp = _mm_mul_ps(*dp, *rp); rp++;
-      xBv = _mm_add_ps(xBv, *dp); dp+= p7F_NSCELLS;
+      xBv = _mm_add_ps(xBv, _mm_mul_ps(*dp, *tp)); dp+= p7F_NSCELLS; tp += 7;
     }
 
   xc[p7F_C] = xc[p7F_CC] = 0.0f;
@@ -851,8 +902,14 @@ backward_row_rescale(float *xc, __m128 *dpc, int Q, float scalefactor)
 }
 
 
+/* 
+ * 
+ * scaleterm = fwd[L, T] * scale[rowi].
+ * 
+ *             scaled(fwd(i)) * scaled(bck(i)) = Fwd(i) * Bck(i) * scale(i)
+ */
 static inline void
-posterior_decode_row(int rowi, const __m128 *fwd, const __m128 *bck, int Q, P7_GBANDS *bnd)
+posterior_decode_row(int rowi, const __m128 *fwd, const __m128 *bck, int Q, P7_GBANDS *bnd, float scaleterm)
 {
   const  float *xf = (float *) (fwd + Q*p7F_NSCELLS);
   const  float *xb = (float *) (bck + Q*p7F_NSCELLS);
@@ -863,12 +920,13 @@ posterior_decode_row(int rowi, const __m128 *fwd, const __m128 *bck, int Q, P7_G
   __m128 maxkv     = _mm_set1_ps( 0.0f);
   __m128 mask;
   __m128 pv;
+  __m128 cv;
   int    q;
   float  ktmp;
   int    ka, kb;
   
-  if (xf[p7F_N] * xb[p7F_N] + xf[p7F_JJ] * xb[p7F_JJ] + xf[p7F_CC] * xb[p7F_CC] >= 0.9) return;
-
+  if ( (xf[p7F_N] * xb[p7F_N] + xf[p7F_JJ] * xb[p7F_JJ] + xf[p7F_CC] * xb[p7F_CC]) * scaleterm >= 0.9) return;
+  
   /* ka = min k that satisfies threshold posterior prob; kb = max k.
    * Because of striping, identifying ka..kb is slightly nonobvious.
    * What we do is collect min_k, max_k in each vector cell; these are
@@ -885,20 +943,22 @@ posterior_decode_row(int rowi, const __m128 *fwd, const __m128 *bck, int Q, P7_G
    * range up to 2^24: 16.77M, more than enough for our design limit
    * of L<=100K.
    */
+  cv = _mm_set1_ps(scaleterm);
   for (q = 0; q < Q; q++)
     {
       pv   =                _mm_mul_ps(P7F_MQ(fwd, q), P7F_MQ(bck, q));
       pv   = _mm_add_ps(pv, _mm_mul_ps(P7F_IQ(fwd, q), P7F_IQ(bck, q)));
+      pv   = _mm_mul_ps(pv, cv);
       mask = _mm_cmpge_ps(pv, threshv);
 
       kv    = _mm_add_ps(kv, onev);
-      minkv = _mm_min_ps( minkv, _mm_and_ps(kv, mask));
-      maxkv = _mm_max_ps( maxkv, _mm_and_ps(kv, mask));
+      minkv = _mm_min_ps( minkv, esl_sse_select_ps(minkv, kv, mask));
+      maxkv = _mm_max_ps( maxkv, esl_sse_select_ps(maxkv, kv, mask));
     }
   esl_sse_hmax_ps(maxkv, &ktmp); kb = (int) ktmp;
   esl_sse_hmin_ps(minkv, &ktmp); ka = (int) ktmp;
 
-  if (ka) p7_gbands_Prepend(bnd, rowi, ka, kb);
+  if (kb) p7_gbands_Prepend(bnd, rowi, ka, kb);
 }
 /*------------------ end, inlined recursions -------------------*/
 
@@ -1042,6 +1102,10 @@ main(int argc, char **argv)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-1",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "output in one line awkable format",                0 },
+#if p7_DEBUGGING
+  { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump DP matrices for examination (verbose)",       0 },
+#endif
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -1066,7 +1130,7 @@ main(int argc, char **argv)
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
   float           fraw, braw, nullsc, fsc, bsc;
-  float           gfraw, gfsc;
+  float           gfraw, gbraw, gfsc, gbsc;
   float           gmem, cmem;
   double          P, gP;
   int             status;
@@ -1105,23 +1169,48 @@ main(int argc, char **argv)
       if (!gx) gx = p7_gmx_Create     (gm->M, sq->n);
       else          p7_gmx_GrowTo     (gx, gm->M, sq->n); 
 
+#if p7_DEBUGGING
+      if (esl_opt_GetBoolean(go, "-D")) p7_filtermx_SetDumpMode(ox, stdout, TRUE);
+#endif
+
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
     
       p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fraw);
       p7_BackwardFilter(sq->dsq, sq->n, om, ox, bnd, &braw);
 
       p7_GForward     (sq->dsq, sq->n, gm, gx, &gfraw);
+      p7_GBackward    (sq->dsq, sq->n, gm, gx, &gbraw);
 
       fsc  =  (fraw-nullsc) / eslCONST_LOG2;
       bsc  =  (braw-nullsc) / eslCONST_LOG2;
       gfsc = (gfraw-nullsc) / eslCONST_LOG2;
+      gbsc = (gbraw-nullsc) / eslCONST_LOG2;
       P  = esl_exp_surv(fsc,   om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
       gP = esl_exp_surv(gfsc,  gm->evparam[p7_FTAU],  gm->evparam[p7_FLAMBDA]);
 
       gmem = (float) p7_gmx_Sizeof(gx) / 1000000.;
       cmem = (float) p7_filtermx_Sizeof(ox) / 1000000.;
 
-      printf("%-30s\t%-20s\t%9.2g\t%6.1f\t%6.1f\t%9.2g\t%6.1f\t%6.2fM\t%6.2fM\n", sq->name, hmm->name, P, fsc, bsc, gP, gfsc, gmem, cmem);
+      p7_gbands_Dump(stdout, bnd);	  
+
+      if (esl_opt_GetBoolean(go, "-1")) 
+	printf("%-30s\t%-20s\t%9.2g\t%6.1f\t%6.1f\t%9.2g\t%6.1f\t%6.2fM\t%6.2fM\n", sq->name, hmm->name, P, fsc, bsc, gP, gfsc, gmem, cmem);
+      else
+	{
+	  
+	  printf("target sequence:      %s\n",        sq->name);
+	  printf("fwd filter raw score: %.2f nats\n", fraw);
+	  printf("bck filter raw score: %.2f nats\n", braw);
+	  printf("null score:           %.2f nats\n", nullsc);
+	  printf("per-seq score:        %.2f bits\n", fsc);
+	  printf("P-value:              %g\n",        P);
+	  printf("GForward raw score:   %.2f nats\n", gfraw);
+	  printf("GBackward raw score:  %.2f nats\n", gbraw);
+	  printf("GForward seq score:   %.2f bits\n", gfsc);
+	  printf("GForward P-value:     %g\n",        gP);
+	  printf("RAM, f/b filter:      %6.2fM\n",    cmem);
+	  printf("RAM, generic:         %6.2fM\n",    gmem);
+	}
 
       esl_sq_Reuse(sq);
       p7_gmx_Reuse(gx);
