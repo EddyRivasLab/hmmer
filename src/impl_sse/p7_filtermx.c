@@ -25,7 +25,7 @@ static double minimum_rows     (int L);
 static double checkpointed_rows(int L, int R);
 
 /*****************************************************************
- *= 1. API for the <P7_FILTERMX> object
+ * 1. API for the <P7_FILTERMX> object
  *****************************************************************/
 
 /* Function:  p7_filtermx_Create()
@@ -101,14 +101,16 @@ p7_filtermx_Create(int M, int L, int64_t ramlimit)
 #ifdef p7_DEBUGGING
   ox->do_debug      = FALSE;
   ox->dfp           = NULL;
+  ox->dbg_maxpfx    = 5;	/* as in "fwd", "bck", "fwd*" */
   ox->dbg_width     = 9;
   ox->dbg_precision = 4;
   ox->dbg_flags     = p7_DEFAULT;
 #endif
 
-  ox->M      = 0;
-  ox->L      = 0;
-  ox->R      = 0;
+  ox->M  = 0;
+  ox->L  = 0;
+  ox->R  = 0;
+  ox->Qf = 0;
   return ox;
 
  ERROR:
@@ -242,9 +244,10 @@ p7_filtermx_Sizeof(const P7_FILTERMX *ox)
 int
 p7_filtermx_Reuse(P7_FILTERMX *ox)
 {
-  ox->M = 0;
-  ox->L = 0;
-  ox->R = 0;
+  ox->M  = 0;
+  ox->L  = 0;
+  ox->R  = 0;
+  ox->Qf = 0;
   return eslOK;
 }
 
@@ -266,6 +269,115 @@ p7_filtermx_Destroy(P7_FILTERMX *ox)
 }
 /*--------------- end, P7_FILTERMX object -----------------------*/
 
+
+/*****************************************************************
+ * 2. Debugging, development routines
+ *****************************************************************/
+
+int
+p7_filtermx_SetDumpMode(P7_FILTERMX *ox, FILE *dfp, int truefalse)
+{
+#if p7_DEBUGGING
+  ox->do_debug      = truefalse;
+  ox->dfp           = dfp;
+#endif
+  return eslOK;
+}
+
+char *
+p7_filtermx_DecodeX(enum p7f_xcells_e xcode)
+{
+  switch (xcode) {
+  case p7F_E:     return "E"; 
+  case p7F_N:     return "N"; 
+  case p7F_JJ:    return "JJ"; 
+  case p7F_J:     return "J"; 
+  case p7F_B:     return "B"; 
+  case p7F_CC:    return "CC"; 
+  case p7F_C:     return "C"; 
+  case p7F_SCALE: return "SCA"; 
+  default:        return "?";
+  }
+}
+
+int
+p7_filtermx_DumpFBHeader(P7_FILTERMX *ox)
+{
+  int maxpfx = ox->dbg_maxpfx;
+  int width  = ox->dbg_width;
+  int M      = ox->M;
+  int k;
+
+  fprintf(ox->dfp, "%*s", maxpfx, "");
+  fprintf(ox->dfp, "      ");
+  for (k = 0; k <= M;          k++) fprintf(ox->dfp, " %*d", width, k);
+  for (k = 0; k < p7F_NXCELLS; k++) fprintf(ox->dfp, " %*s", width, p7_filtermx_DecodeX(k));
+  fputc('\n', ox->dfp);
+
+  fprintf(ox->dfp, "     ");
+  for (k = 0; k <= M+p7F_NXCELLS;  k++) fprintf(ox->dfp, " %*s", width, "--------");
+  fputc('\n', ox->dfp);
+
+  return eslOK;
+}
+
+int
+p7_filtermx_DumpFBRow(P7_FILTERMX *ox, int rowi, __m128 *dpc, char *pfx)
+{
+  union { __m128 v; float x[p7_VNF]; } u;
+  float *v         = NULL;		/*  */
+  int    Q         = ox->Qf;
+  int    M         = ox->M;
+  float *xc        = (float *) (dpc + Q*p7F_NSCELLS);
+  int    logify    = (ox->dbg_flags & p7_SHOW_LOG) ? TRUE : FALSE;
+  int    maxpfx    = ox->dbg_maxpfx;
+  int    width     = ox->dbg_width;
+  int    precision = ox->dbg_precision;
+  int    k,q,z;
+
+  ESL_ALLOC(v, sizeof(float) * ( (Q*p7_VNF) + 1));
+  v[0] = 0.;
+
+  /* Line 1. M cells: unpack, unstripe, print */
+  for (q = 0; q < Q; q++) {
+    u.v = P7F_MQ(dpc, q);
+    for (z = 0; z < p7_VNF; z++) v[q+Q*z+1] = u.x[z];
+  }
+  fprintf(ox->dfp, "%*s %3d M", maxpfx, pfx, rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, " %*.*f", width, precision, (logify ? esl_logf(v[k]) : v[k]));
+
+  /* Line 1 end: Specials */
+  for (z = 0; z < p7F_NXCELLS; z++)
+    fprintf(ox->dfp, " %*.*f", width, precision, (logify ? esl_logf(xc[z]) : xc[z]));
+  fputc('\n', ox->dfp);
+
+  /* Line 2: I cells: unpack, unstripe, print */
+  for (q = 0; q < Q; q++) {
+    u.v = P7F_IQ(dpc, q);
+    for (z = 0; z < p7_VNF; z++) v[q+Q*z+1] = u.x[z];
+  }
+  fprintf(ox->dfp, "%*s %3d I", maxpfx, pfx, rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, " %*.*f", width, precision, (logify ? esl_logf(v[k]) : v[k]));
+  fputc('\n', ox->dfp);
+
+  /* Line 3. D cells: unpack, unstripe, print */
+  for (q = 0; q < Q; q++) {
+    u.v = P7F_DQ(dpc, q);
+    for (z = 0; z < p7_VNF; z++) v[q+Q*z+1] = u.x[z];
+  }
+  fprintf(ox->dfp, "%*s %3d D", maxpfx, pfx, rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, " %*.*f", width, precision, (logify ? esl_logf(v[k]) : v[k]));
+  fputc('\n', ox->dfp);
+  fputc('\n', ox->dfp);
+
+  free(v);
+  return eslOK;
+
+ ERROR:
+  if (v) free(v);
+  return status;
+}
+/*---------------- end, debugging -------------------------------*/
 
 /*****************************************************************
  * 3. Internal routines

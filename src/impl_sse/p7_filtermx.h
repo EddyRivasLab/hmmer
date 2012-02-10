@@ -49,6 +49,7 @@ typedef struct p7_filtermx_s {
   int M;	/* current actual query model dimension (consensus positions)         */
   int L;	/* current actual target seq dimension (residues)                     */
   int R;	/* current actual number of rows (<=Ra+Rb+Rc), excluding R0           */
+  int Qf;	/* current actual number of fb vectors = P7F_NQF(M)                   */
 
   /* Checkpointed layout, mapping rows 1..R to residues 1..L:                         */
   int R0;	/* # of extra rows: one for fwd[0] boundary, two for bck[prv,cur]     */
@@ -74,6 +75,7 @@ typedef struct p7_filtermx_s {
   /* Info for dumping debugging info, conditionally compiled                        */
   int      do_debug;		/* TRUE if matrix is in dumping mode                */
   FILE    *dfp;			/* open output stream for debug dumps               */
+  int      dbg_maxpfx;		/* each line prefixed by tag of up to this # chars  */
   int      dbg_width;		/* cell values in diagnostic output are fprintf'ed: */
   int      dbg_precision;	/*   dfp, "%*.*f", dbg_width, dbg_precision, val    */
   uint32_t dbg_flags;		/* p7_DEFAULT | p7_HIDE_SPECIALS | p7_SHOW_LOG      */

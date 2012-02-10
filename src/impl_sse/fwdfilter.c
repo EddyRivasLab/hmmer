@@ -85,12 +85,19 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   int     b;			/* counter down through checkpointed blocks, Rb+Rc..1 */
   int     w;			/* counter down through rows in a checkpointed block  */
 
+#if p7_DEBUGGING
+  if (ox->debugging) p7_filtermx_DumpFBHeader(ox)
+#endif
+
   /* Initialization of the zero row, including specials */
   for (q = 0; q < p7F_NSCELLS*Q; q++) dpp[q] = zerov;
   xc[p7F_N]     = 1.;
   xc[p7F_B]     = om->xf[p7O_N][p7O_MOVE]; 
   xc[p7F_E]     = xc[p7F_JJ] = xc[p7F_J]  = xc[p7F_CC] = xc[p7F_C]  = 0.;			
   xc[p7F_SCALE] = 1.;			   
+#if p7_DEBUGGING
+  if (ox->debugging) p7_filtermx_DumpFBRow(ox, 0, dpp, "fwd O");
+#endif
 
   /* Phase one: the "a" region: all rows in this region are saved */
   for (i = 1; i <= ox->La; i++)
