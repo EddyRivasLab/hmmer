@@ -124,6 +124,7 @@
 /* Debugging hooks
  */
 #undef p7_DEBUGGING
+#undef p7_LOGSUM_SLOWEXACT	/* replace fast FLogsum() with slow exact one. Testing purposes only! 20x slower. */
 
 #endif /*P7_CONFIGH_INCLUDED*/
 /*****************************************************************

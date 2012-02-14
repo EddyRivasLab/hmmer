@@ -279,7 +279,7 @@ p7_gmxchk_Destroy(P7_GMXCHK *gxc)
 /*****************************************************************
  *= 2. Debugging and testing tools
  *****************************************************************/
-#if p7_DEBUGGING
+#ifdef p7_DEBUGGING
 
 /* Function:  p7_gmxchk_Dump()
  * Synopsis:  Dump a checkpointed DP matrix to a stream.

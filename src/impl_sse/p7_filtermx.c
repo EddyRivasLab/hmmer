@@ -99,12 +99,15 @@ p7_filtermx_Create(int M, int L, int64_t ramlimit)
     ox->dpf[r] = ox->dpf[0] + r * ox->allocW;
 
 #ifdef p7_DEBUGGING
-  ox->do_debug      = FALSE;
-  ox->dfp           = NULL;
-  ox->dbg_maxpfx    = 5;	/* as in "fwd", "bck", "fwd*" */
-  ox->dbg_width     = 9;
-  ox->dbg_precision = 4;
-  ox->dbg_flags     = p7_DEFAULT;
+  ox->do_dumping     = FALSE;
+  ox->dfp            = NULL;
+  ox->dump_maxpfx    = 5;	
+  ox->dump_width     = 9;
+  ox->dump_precision = 4;
+  ox->dump_flags     = p7_DEFAULT;
+  ox->fwd            = NULL;
+  ox->bck            = NULL;
+  ox->pp             = NULL;
 #endif
 
   ox->M  = 0;
@@ -153,6 +156,16 @@ p7_filtermx_GrowTo(P7_FILTERMX *ox, int M, int L)
   int64_t W;			/* minimum row width needed, bytes */
   int     r;
   int     status;
+
+  /* If we're debugging and we have stored copies of any matrices,
+   * grow them too.  Must do this first, because we have an early exit
+   * condition coming below.
+   */
+#ifdef p7_DEBUGGING
+  if (ox->fwd && (status = p7_gmx_GrowTo(ox->fwd, M, L)) != eslOK) goto ERROR;
+  if (ox->bck && (status = p7_gmx_GrowTo(ox->bck, M, L)) != eslOK) goto ERROR;
+  if (ox->pp  && (status = p7_gmx_GrowTo(ox->pp,  M, L)) != eslOK) goto ERROR;
+#endif
 
   /* Calculate W, the minimum row width needed, in bytes */
   W  = sizeof(float) * P7F_NQF(M) * p7F_NSCELLS * p7_VNF;    /* vector part of row (MDI)     */
@@ -205,6 +218,7 @@ p7_filtermx_GrowTo(P7_FILTERMX *ox, int M, int L)
       for (r = 1; r < ox->validR; r++)
 	ox->dpf[r] = ox->dpf[0] + (r * ox->allocW);
     }
+
   return eslOK;
 
  ERROR:
@@ -214,6 +228,17 @@ p7_filtermx_GrowTo(P7_FILTERMX *ox, int M, int L)
 
 /* Function:  p7_filtermx_Sizeof()
  * Synopsis:  Returns size of checkpointed vector DP matrix, in bytes.
+ * 
+ * Purpose:   Returns the size of the checkpointed vector DP matrix
+ *            in bytes. 
+ *            
+ *            If code has been compiled in debugging mode, this size
+ *            includes a negligible amount of extra space for
+ *            debugging fields in the structure (about 5 ints and 4
+ *            pointers - around 52 bytes). The returned size does not
+ *            include the use of any full Forward, Backward, or
+ *            decoding matrices in the debugging part of the
+ *            structure.
  */
 size_t
 p7_filtermx_Sizeof(const P7_FILTERMX *ox)
@@ -244,10 +269,19 @@ p7_filtermx_Sizeof(const P7_FILTERMX *ox)
 int
 p7_filtermx_Reuse(P7_FILTERMX *ox)
 {
+  int status;
+
   ox->M  = 0;
   ox->L  = 0;
   ox->R  = 0;
   ox->Qf = 0;
+
+#ifdef p7_DEBUGGING
+  if (ox->fwd && (status = p7_gmx_Reuse(ox->fwd)) != eslOK) return status;
+  if (ox->bck && (status = p7_gmx_Reuse(ox->bck)) != eslOK) return status;
+  if (ox->pp  && (status = p7_gmx_Reuse(ox->pp))  != eslOK) return status;
+#endif
+
   return eslOK;
 }
 
@@ -264,6 +298,11 @@ p7_filtermx_Destroy(P7_FILTERMX *ox)
  if (ox) {
    if (ox->dp_mem) free(ox->dp_mem);
    if (ox->dpf)    free(ox->dpf);
+#ifdef p7_DEBUGGING
+   if (ox->fwd)    p7_gmx_Destroy(ox->fwd);
+   if (ox->bck)    p7_gmx_Destroy(ox->bck);
+   if (ox->pp)     p7_gmx_Destroy(ox->pp);
+#endif
    free(ox);
  }
 }
@@ -277,8 +316,8 @@ p7_filtermx_Destroy(P7_FILTERMX *ox)
 int
 p7_filtermx_SetDumpMode(P7_FILTERMX *ox, FILE *dfp, int truefalse)
 {
-#if p7_DEBUGGING
-  ox->do_debug      = truefalse;
+#ifdef p7_DEBUGGING
+  ox->do_dumping    = truefalse;
   ox->dfp           = dfp;
 #endif
   return eslOK;
@@ -304,8 +343,8 @@ p7_filtermx_DecodeX(enum p7f_xcells_e xcode)
 int
 p7_filtermx_DumpFBHeader(P7_FILTERMX *ox)
 {
-  int maxpfx = ox->dbg_maxpfx;
-  int width  = ox->dbg_width;
+  int maxpfx = ox->dump_maxpfx;
+  int width  = ox->dump_width;
   int M      = ox->M;
   int k;
 
@@ -331,10 +370,10 @@ p7_filtermx_DumpFBRow(P7_FILTERMX *ox, int rowi, __m128 *dpc, char *pfx)
   int    Q         = ox->Qf;
   int    M         = ox->M;
   float *xc        = (float *) (dpc + Q*p7F_NSCELLS);
-  int    logify    = (ox->dbg_flags & p7_SHOW_LOG) ? TRUE : FALSE;
-  int    maxpfx    = ox->dbg_maxpfx;
-  int    width     = ox->dbg_width;
-  int    precision = ox->dbg_precision;
+  int    logify    = (ox->dump_flags & p7_SHOW_LOG) ? TRUE : FALSE;
+  int    maxpfx    = ox->dump_maxpfx;
+  int    width     = ox->dump_width;
+  int    precision = ox->dump_precision;
   int    k,q,z;
   int    status;
 

@@ -242,7 +242,7 @@ main(int argc, char **argv)
   p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
 
-  if (esl_opt_GetBoolean(go, "-x") && p7_FLogsumError(-0.4, -0.5) > 0.0001)
+  if (esl_opt_GetBoolean(go, "-x") && ! p7_logsum_IsSlowExact())
     p7_Fail("-x here requires p7_Logsum() recompiled in slow exact mode");
 
   if (esl_opt_GetBoolean(go, "-P")) {
@@ -335,8 +335,7 @@ utest_fwdback(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int
   float generic_sc;
 
   p7_FLogsumInit();
-  if (p7_FLogsumError(-0.4, -0.5) > 0.0001) tolerance = 1.0;  /* weaker test against GForward()   */
-  else tolerance = 0.001;   /* stronger test: FLogsum() is in slow exact mode. */
+  tolerance = ( p7_logsum_IsSlowExact() ? 0.001 : 1.0 );
 
   p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om);
   while (N--)

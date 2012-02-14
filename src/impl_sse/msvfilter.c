@@ -121,7 +121,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   xJv = _mm_subs_epu8(biasv, biasv);
   xBv = _mm_subs_epu8(basev, tjbmv);
 
-#if p7_DEBUGGING
+#ifdef p7_DEBUGGING
   if (ox->debugging)
   {
       uint8_t xB;
@@ -188,7 +188,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
       xBv = _mm_max_epu8(basev, xJv);
       xBv = _mm_subs_epu8(xBv, tjbmv);
 	  
-#if p7_DEBUGGING
+#ifdef p7_DEBUGGING
       if (ox->debugging)
       {
         uint8_t xB, xE;
@@ -572,7 +572,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  xEv_prev = _mm_setzero_si128();
 
 
-	#if p7_DEBUGGING
+	#ifdef p7_DEBUGGING
 	  if (ox->debugging)
 		{
 		  uint8_t xB;

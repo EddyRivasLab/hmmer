@@ -505,7 +505,7 @@ main(int argc, char **argv)
   om = p7_oprofile_Create(gm->M, abc);    p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
 
-  if (esl_opt_GetBoolean(go, "-x") && p7_FLogsumError(-0.4, -0.5) > 0.0001)
+  if (esl_opt_GetBoolean(go, "-x") && ! p7_logsum_IsSlowExact())
     p7_Fail("-x here requires p7_Logsum() recompiled in slow exact mode");
 
   ox1 = p7_omx_Create(gm->M, L, L);
@@ -617,7 +617,7 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
   float        gtol;
 
   p7_FLogsumInit();
-  gtol = ( (p7_FLogsumError(-0.4, -0.5) > 0.0001) ?  0.1 : 0.001);
+  gtol = ( p7_logsum_IsSlowExact() ?  0.001 : 0.1);
 
   if (p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om)!= eslOK) esl_fatal(msg);
   while (N--)

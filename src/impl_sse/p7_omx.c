@@ -355,7 +355,7 @@ p7_omx_Destroy(P7_OMX *ox)
 int
 p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox, int truefalse)
 {
-#if p7_DEBUGGING
+#ifdef p7_DEBUGGING
   ox->debugging = truefalse;
   ox->dfp       = fp;
 #endif

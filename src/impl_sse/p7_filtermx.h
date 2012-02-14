@@ -3,14 +3,18 @@
  * Backwards).
  * 
  * Contents:
- *    x.
- *    x. Notes.
- * 
+ *    1. The P7_FILTERMX object
+ *    2. Function declarations
+ *    3. Notes:
+ *       [1] Layout of the matrix, in checkpointed rows
+ *       [2] Layout of one row, in vectors and floats
+ *    4. Copyright and license information.
  */
 #ifndef P7_FILTERMX_INCLUDED
 #define P7_FILTERMX_INCLUDED
-
-
+#include "p7_config.h"
+#include "hmmer.h"
+#include "impl_sse.h"
 
 #define P7F_NQF(M)  ( ESL_MAX(2, ((((M)-1) / p7_VNF) + 1)))
 #define P7F_NQW(M)  ( ESL_MAX(2, ((((M)-1) / p7_VNW) + 1)))
@@ -39,10 +43,8 @@ enum p7f_xcells_e {
 #define P7F_DQ(dp, q) ((dp)[(q) * p7F_NSCELLS + p7F_D])
 #define P7F_IQ(dp, q) ((dp)[(q) * p7F_NSCELLS + p7F_I])
 
-
-
 /*****************************************************************
- * 1. P7_FILTERMX: checkpointed, striped vector DP matrix
+ * 1. P7_FILTERMX
  *****************************************************************/
 
 typedef struct p7_filtermx_s {
@@ -73,18 +75,21 @@ typedef struct p7_filtermx_s {
 
 #ifdef p7_DEBUGGING
   /* Info for dumping debugging info, conditionally compiled                        */
-  int      do_debug;		/* TRUE if matrix is in dumping mode                */
+  int      do_dumping;		/* TRUE if matrix is in dumping mode                */
   FILE    *dfp;			/* open output stream for debug dumps               */
-  int      dbg_maxpfx;		/* each line prefixed by tag of up to this # chars  */
-  int      dbg_width;		/* cell values in diagnostic output are fprintf'ed: */
-  int      dbg_precision;	/*   dfp, "%*.*f", dbg_width, dbg_precision, val    */
-  uint32_t dbg_flags;		/* p7_DEFAULT | p7_HIDE_SPECIALS | p7_SHOW_LOG      */
+  int      dump_maxpfx;		/* each line prefixed by tag of up to this # chars  */
+  int      dump_width;		/* cell values in diagnostic output are fprintf'ed: */
+  int      dump_precision;	/*   dfp, "%*.*f", dbg_width, dbg_precision, val    */
+  uint32_t dump_flags;		/* p7_DEFAULT | p7_HIDE_SPECIALS | p7_SHOW_LOG      */
+  P7_GMX  *fwd;			/* full Forward matrix, saved for unit test diffs   */
+  P7_GMX  *bck;			/* ... full Backward matrix, ditto                  */
+  P7_GMX  *pp;			/* ... full posterior probability matrix, ditto     */
 #endif
 } P7_FILTERMX;
 
 
 /*****************************************************************
- * x. Function declarations
+ * 2. Function declarations
  *****************************************************************/
 
 extern P7_FILTERMX *p7_filtermx_Create (int M, int L, int64_t ramlimit);
@@ -94,15 +99,17 @@ extern int          p7_filtermx_Reuse  (P7_FILTERMX *ox);
 extern void         p7_filtermx_Destroy(P7_FILTERMX *ox);
 
 extern int          p7_filtermx_SetDumpMode(P7_FILTERMX *ox, FILE *dfp, int truefalse);
+#ifdef p7_DEBUGGING
 extern char *       p7_filtermx_DecodeX(enum p7f_xcells_e xcode);
 extern int          p7_filtermx_DumpFBHeader(P7_FILTERMX *ox);
 extern int          p7_filtermx_DumpFBRow(P7_FILTERMX *ox, int rowi, __m128 *dpc, char *pfx);
+#endif
 
 /*****************************************************************
- * x. Notes
+ * 3. Notes
  *****************************************************************/
 
-/* [1]. On checkpointing and rows:
+/* [a] Layout of the matrix, in checkpointed rows
  * 
  * One P7_FILTERMX data structure is used for both Forward and Backward
  * computations on a target sequence. The Forward calculation is
@@ -158,11 +165,7 @@ extern int          p7_filtermx_DumpFBRow(P7_FILTERMX *ox, int rowi, __m128 *dpc
  */
 
 
-
-
-/*****************************************************************
- * 3. Exegesis part 2: layout of an individual row: striped vectors
- ***************************************************************** 
+/* [b] Layout of one row, in striped vectors and floats
  *
  *  [1 5 9 13][1 5 9 13][1 5 9 13] [2 6 10 14][2 6 10 14][2 6 10 14] [3 7 11 x][3 7 11 x][3 7 11 x] [4 8 12 x][4 8 12 x][4 8 12 x] [E N JJ J B CC C SCALE]
  *  |-- M ---||-- D ---||-- I ---| |--- M ---||--- D ---||--- I ---| |-- M ---||-- D ---||-- I ---| |-- M ---||-- D ---||-- I ---| 

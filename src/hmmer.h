@@ -1281,9 +1281,7 @@ extern int          p7_AminoFrequencies(float *f);
 /* logsum.c */
 extern int   p7_FLogsumInit(void);
 extern float p7_FLogsum(float a, float b);
-extern float p7_FLogsumError(float a, float b);
-extern int   p7_ILogsumInit(void);
-extern int   p7_ILogsum(int s1, int s2);
+extern int   p7_logsum_IsSlowExact(void);
 
 
 /* modelconfig.c */
