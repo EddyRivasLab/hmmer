@@ -1192,7 +1192,7 @@ extern void p7_syslog(int priority, const char *format, ...);
 extern void p7_closelog(void);
 
 /* hmmpgmd2msa.c */
-extern ESL_MSA * hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq);
+extern ESL_MSA * hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq,  int *incl, int incl_size, int *excl, int excl_size);
 
 
 

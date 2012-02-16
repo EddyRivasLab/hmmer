@@ -39,6 +39,9 @@
  *            ... optionally adding a sequence with length matching
  *            that of the hmm, which will be included in the alignment.
  *
+ *			  A further extension has been the ability to include or exclude
+ *            sequences form the list of hits.
+ *
  *            This function's expected use is as a helper function for
  *            the hmmer website, which gets the above data stream from
  *            hmmpgmd.
@@ -51,14 +54,29 @@
  *                  must have the same number of residues as the hmm
  *                  has states, as each residue i will be aligned to
  *                  state i.
+ *            incl: optional array of sequence names, in the case of
+ *            		hmmpgmd a list of ints, which are are excluded due
+ *            		to the sequence threshold, but have been selected
+ *            		to be included in the alignment.  This ties in
+ *            		with the way jackhmmer is implemented on the
+ *            		HMMER website.
+ *       incl_size: required size of the incl array. zero if incl is null.
+ *       	  excl: optional array of sequence names, in the case of
+ *            		hmmpgmd a list of ints, which are are included as they
+ *            		score above threshold, but have been selected
+ *            		to be excluded from the alignment.
+ *       excl_size: required size of the excl array. zero if excl is null.
+ *
  *
  * Returns:   Pointer to completed MSA object. NULL on error
  *
  */
 ESL_MSA *
-hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq) {
+hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int *excl, int excl_size) {
   int i, j;
+  int c;
   int status;
+  int set_included;
 
   /* trace of the query sequence with N residues onto model with N match states */
   P7_TRACE          *qtr         = NULL;
@@ -110,13 +128,36 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq) {
   th.is_sorted_by_seqidx  = 0;
 
   for (i = 0; i < th.N; i++) {
-
     ESL_ALLOC( th.hit[i]->dcl, sizeof(P7_DOMAIN) *  th.hit[i]->ndom);
-
+    /* Go through the hits and set to be excluded or included as necessary */
+    set_included = 0;
+    if(th.hit[i]->flags & p7_IS_INCLUDED){
+      if(excl_size > 0){
+        for( c = 0; c < excl_size; c++){
+          if(excl[c] == (long)(th.hit[i]->name) ){
+            th.hit[i]->flags = p7_IS_DROPPED;
+            th.hit[i]->nincluded = 0;
+            break;
+          }
+        }
+      }
+    }else{
+      if(incl_size > 0){
+    	for( c = 0; c < incl_size; c++){
+          if(incl[c] == (long)th.hit[i]->name ){
+            th.hit[i]->flags = p7_IS_INCLUDED;
+            set_included = 1;
+          }
+        }
+      }
+    }
     /* first grab all the P7_DOMAINs for the hit */
     for (j=0; j < th.hit[i]->ndom; j++) {
       dom = th.hit[i]->dcl + j;
       memcpy(dom , (P7_DOMAIN*)p, sizeof(P7_DOMAIN));
+      /* Possibly set domains to be include if being
+       * externally set via incl list*/
+      if(set_included) th.hit[i]->dcl[j].is_included = 1;
       p += sizeof(P7_DOMAIN);
     }
     /* then grab the P7_ALIDISPLAYs for the hit */
@@ -156,6 +197,7 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq) {
       p7_alidisplay_Deserialize(ad2);
     }
   }
+
 
   /* use the tophits and trace info above to produce an alignment */
   if ( (status = p7_tophits_Alignment(&th, hmm->abc, &qsq, &qtr, extra_sqcnt, p7_ALL_CONSENSUS_COLS, &msa)) != eslOK) goto ERROR;
