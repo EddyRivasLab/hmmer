@@ -39,9 +39,9 @@ enum p7f_xcells_e {
   p7F_SCALE = 7
 };
 
-#define P7F_MQ(dp, q) ((dp)[(q) * p7F_NSCELLS + p7F_M])
-#define P7F_DQ(dp, q) ((dp)[(q) * p7F_NSCELLS + p7F_D])
-#define P7F_IQ(dp, q) ((dp)[(q) * p7F_NSCELLS + p7F_I])
+#define P7F_MQ(dp, q)     ((dp)[(q) * p7F_NSCELLS + p7F_M])
+#define P7F_DQ(dp, q)     ((dp)[(q) * p7F_NSCELLS + p7F_D])
+#define P7F_IQ(dp, q)     ((dp)[(q) * p7F_NSCELLS + p7F_I])
 
 /*****************************************************************
  * 1. P7_FILTERMX
@@ -84,6 +84,7 @@ typedef struct p7_filtermx_s {
   P7_GMX  *fwd;			/* full Forward matrix, saved for unit test diffs   */
   P7_GMX  *bck;			/* ... full Backward matrix, ditto                  */
   P7_GMX  *pp;			/* ... full posterior probability matrix, ditto     */
+  float    bcksc;		/* Backwards score: which we check against Forward  */
 #endif
 } P7_FILTERMX;
 

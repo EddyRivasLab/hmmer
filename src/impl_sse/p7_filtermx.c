@@ -108,6 +108,7 @@ p7_filtermx_Create(int M, int L, int64_t ramlimit)
   ox->fwd            = NULL;
   ox->bck            = NULL;
   ox->pp             = NULL;
+  ox->bcksc          = 0.0f;
 #endif
 
   ox->M  = 0;
@@ -280,6 +281,7 @@ p7_filtermx_Reuse(P7_FILTERMX *ox)
   if (ox->fwd && (status = p7_gmx_Reuse(ox->fwd)) != eslOK) return status;
   if (ox->bck && (status = p7_gmx_Reuse(ox->bck)) != eslOK) return status;
   if (ox->pp  && (status = p7_gmx_Reuse(ox->pp))  != eslOK) return status;
+  ox->bcksc = 0.0f;
 #endif
 
   return eslOK;
