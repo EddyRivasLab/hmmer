@@ -48,7 +48,7 @@
 static int is_multidomain_region  (P7_DOMAINDEF *ddef, int i, int j);
 static int region_trace_ensemble  (P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *dsq, int ireg, int jreg, const P7_OMX *fwd, P7_OMX *wrk, int *ret_nc);
 static int rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPROFILE *om, const ESL_SQ *sq, P7_OMX *ox1, P7_OMX *ox2,
-				   int i, int j, int null2_is_done);
+				   int i, int j, int null2_is_done, P7_BG *bg, int long_target);
 
 
 /*****************************************************************
@@ -341,7 +341,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
   p7_ReconfigUnihit(gm, 0);	  /* process each domain in unihit L=0 mode */
 
   for (d = 0; d < ddef->gtr->ndom; d++)
-    rescore_isolated_domain(ddef, gm, sq, gx1, gx2, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], FALSE);
+    rescore_isolated_domain(ddef, gm, sq, gx1, gx2, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], FALSE, NULL, FALSE);
 
   /* Restore original model configuration, including length */
   if (p7_IsMulti(save_mode))  p7_ReconfigMultihit(gm, saveL); 
@@ -367,9 +367,11 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
  *            optionally provides a new or reused <ddef_app> object to
  *            hold details required by nhmmer to produce the APP
  *            (posterior probability of being aligned) line in
- *            alignment printout. A boolean <long_target> argument
- *            is provided to allow nhmmer-specific modifications
- *            to the behavior of this function (TRUE -> from nhmmer)
+ *            alignment printout. A <bg> is provided for (possible) use
+ *            in null3 score correction (used in nhmmer), and a boolean
+ *            <long_target> argument is provided to allow nhmmer-
+ *            specific modifications to the behavior of this function
+ *            (TRUE -> from nhmmer).
  *            
  *            Upon return, <ddef> contains the definitions of all the
  *            domains: their bounds, their null-corrected Forward
@@ -385,7 +387,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
 int
 p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om, 
 				   P7_OMX *oxf, P7_OMX *oxb, P7_OMX *fwd, P7_OMX *bck, 
-				   P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, int long_target)
+				   P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, P7_BG *bg, int long_target)
 {
   int i, j;
   int triggered;
@@ -467,7 +469,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
 
                   /*the !long_target argument will cause the function to recompute null2
                    * scores if this is part of a long_target (nhmmer) pipeline */
-                  if (rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i2, j2, !long_target) == eslOK)
+                  if (rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i2, j2, TRUE, bg, long_target) == eslOK)
                        last_j2 = j2;
             }
             p7_spensemble_Reuse(ddef->sp);
@@ -477,7 +479,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
         {
             /* The region looks simple, single domain; convert the region to an envelope. */
             ddef->nenvelopes++;
-            rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i, j, FALSE);
+            rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i, j, FALSE, bg, long_target);
         }
         i     = -1;
         triggered = FALSE;
@@ -704,6 +706,10 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *
  * provided is used to hold details required by nhmmer to produce the
  * APP (posterior probability of being aligned) line in alignment
  * printout.
+ *
+ * If <long_target> is TRUE, null3 biased-composition score correction
+ * is used, and <bg> is required. Otherwise null2 is used, and <bg>
+ * may be NULL.
  * 
  * Returns <eslOK> if a domain was successfully identified, scored,
  * and aligned in the envelope; if so, the per-domain information is
@@ -728,7 +734,7 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *
  */
 static int
 rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPROFILE *om, const ESL_SQ *sq,
-			P7_OMX *ox1, P7_OMX *ox2, int i, int j, int null2_is_done)
+			P7_OMX *ox1, P7_OMX *ox2, int i, int j, int null2_is_done, P7_BG *bg, int long_target)
 {
   P7_DOMAIN     *dom           = NULL;
   int            Ld            = j-i+1;
@@ -752,21 +758,29 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
   status = p7_Decoding(om, ox1, ox2, ox2);      /* <ox2> is now overwritten with post probabilities     */
   if (status == eslERANGE) return eslFAIL;      /* rare: numeric overflow; domain is assumed to be repetitive garbage [J3/119-212] */
 
-  /* Is null2 set already for this i..j?  It isn't yet if we're in a
-   * simple one-domain region, or we're dealing with long-target (nhmmer)
-   * search; otherwise, it is (i.e. if we're in a non-long-target domain
-   * that was defined by stochastic traceback clustering in a
-   * multidomain region). If it isn't, do it now, by the expectation
-   * (posterior decoding) method.
-   */
-  if (! null2_is_done) {
-    p7_Null2_ByExpectation(om, ox2, null2);
-    for (pos = i; pos <= j; pos++) 
-      ddef->n2sc[pos]  = logf(null2[sq->dsq[pos]]);
+  if (long_target) {
+    /* for long_target case, use null3 correction, even if null2 was already
+     * computed in the trace stage (null2_is_done == TRUE)
+     */
+    p7_null3_score(om->abc, sq->dsq, i, j, bg, &domcorrection);  /* domcorrection is in units of NATS */
+  } else {
+    /* For non-longtarget cases, use the null2 correction
+     * Is null2 set already for this i..j? (It is, if we're in a domain that
+     * was defined by stochastic traceback clustering in a multidomain region;
+     * it isn't yet, if we're in a simple one-domain region). If it isn't,
+     * do it now, by the expectation (posterior decoding) method.
+     */
+    if (! null2_is_done) {
+      p7_Null2_ByExpectation(om, ox2, null2);
+      for (pos = i; pos <= j; pos++)
+        ddef->n2sc[pos]  = logf(null2[sq->dsq[pos]]);
+    }
+    for (pos = i; pos <= j; pos++)
+      domcorrection   += ddef->n2sc[pos];         /* domcorrection is in units of NATS */
+
   }
-    
-  for (pos = i; pos <= j; pos++)
-    domcorrection   += ddef->n2sc[pos];	        /* domcorrection is in units of NATS */
+
+
 
   /* Find an optimal accuracy alignment */
   p7_OptimalAccuracy(om, ox2, ox1, &oasc);      /* <ox1> is now overwritten with OA scores              */

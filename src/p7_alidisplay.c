@@ -597,21 +597,11 @@ integer_textwidth(long n)
  *            confidence that a position should be included 
  *            at the boundary of an alignment.
  *
- *            Because it is important to distinguish values at 
- *            the high end, this breaks the range of interest up 
- *            into 10 bins from 70% up to 90%
- *             * : >97%
- *             9 : >94%
- *             8 : >91%
- *             7 : >88%
- *             6 : >85%
- *             5 : >82%
- *             4 : >79%
- *             3 : >76%
- *             2 : >73%
- *             1 : >70%
- *             0 : <70%
- *             i.e. int((p-0.67) * (100/3))
+ *            Returns a character from the class [HML-],
+ *            with 'H' if <p>   >= <hi>
+ *                 'M' if <hi>  >  <p>   >= <med>
+ *                 'L' if <med> >  <p>   >= <lo>
+ *                 '-' if <p> < <lo>
  *
  * Returns:   the encoded character.
  */

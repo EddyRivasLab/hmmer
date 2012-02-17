@@ -128,6 +128,7 @@ OBJS =  build.o\
 	p7_hmm.o\
 	p7_hmmcache.o\
 	p7_hmmfile.o\
+	p7_null3.o\
 	p7_pipeline.o\
 	p7_prior.o\
 	p7_profile.o\
@@ -138,7 +139,7 @@ OBJS =  build.o\
 	fm_alphabet.o\
 	fm_general.o\
 	fm_msv.o\
-        hmmpgmd2msa.o
+    hmmpgmd2msa.o
 #	island.o\
 
 STATS = \
