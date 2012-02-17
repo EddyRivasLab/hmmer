@@ -577,7 +577,7 @@ typedef struct p7_alidisplay_s {
   char *mline;                  /* "identities", conservation +'s, etc. */
   char *aseq;                   /* aligned target sequence              */
   char *ppline;			        /* posterior prob annotation; or NULL   */
-  char *appline;			    /* posterior prob of being aligned to the model (mocc) annotation; or NULL   */
+  char *appline;	  		    /* posterior prob of being aligned to the model (mocc) annotation; or NULL   */
   int   N;			            /* length of strings                    */
 
   char *hmmname;		/* name of HMM                          */
@@ -1308,7 +1308,7 @@ extern void          p7_domaindef_Destroy(P7_DOMAINDEF *ddef);
 
 extern int p7_domaindef_ByViterbi            (P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, P7_DOMAINDEF *ddef);
 extern int p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om, P7_OMX *oxf, P7_OMX *oxb, P7_OMX *fwd, P7_OMX *bck,
-				   P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, int long_target);
+				   P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, P7_BG *bg, int long_target);
 
 
 /* p7_gmx.c */
@@ -1374,6 +1374,9 @@ extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **o
 extern int  p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key);
 extern int  p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset);
 
+/* p7_null3.c */
+extern void p7_null3_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, int start, int stop, P7_BG *bg, float *ret_sc);
+
 /* p7_pipeline.c */
 extern P7_PIPELINE *p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, enum p7_pipemodes_e mode);
 extern int          p7_pipeline_Reuse  (P7_PIPELINE *pli);
@@ -1392,9 +1395,6 @@ extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *b
 extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx);
 extern int p7_Pipeline_FM           (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
                                      const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata);
-
-
-
 
 extern int p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w);
 
