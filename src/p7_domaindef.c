@@ -763,7 +763,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
      * computed in the trace stage (null2_is_done == TRUE)
      */
     //p7_null3_score(om->abc, sq->dsq, i, j, bg, &domcorrection);  /* domcorrection is in units of NATS */
-    p7_null3_windowed_score(om->abc, sq->dsq, i, j, bg, 20, &domcorrection);  /* domcorrection is in units of NATS */
+    p7_null3_windowed_score(om->abc, sq->dsq, i, j, bg, 15, &domcorrection);  /* domcorrection is in units of NATS */
   } else {
     /* For non-longtarget cases, use the null2 correction
      * Is null2 set already for this i..j? (It is, if we're in a domain that
@@ -930,7 +930,7 @@ main(int argc, char **argv)
 
   p7_Forward (sq->dsq, sq->n, om,      fwd, &overall_sc); 
   p7_Backward(sq->dsq, sq->n, om, fwd, bck, &sc);       
-  p7_domaindef_ByPosteriorHeuristics(sq, om, oxf, oxb, fwd, bck, ddef, NULL, FALSE);
+  p7_domaindef_ByPosteriorHeuristics(sq, om, oxf, oxb, fwd, bck, ddef, NULL, NULL, FALSE);
 
   printf("Overall raw likelihood score: %.2f nats\n", overall_sc);
 
@@ -1072,7 +1072,7 @@ main(int argc, char **argv)
 	  p7_GForward (sq->dsq, sq->n, gm, fwd, &overall_sc); 
 	  if (! do_baseline) {
 	    p7_GBackward(sq->dsq, sq->n, gm, bck, &sc);       
-	    p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, ddef, NULL, FALSE);
+	    p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, ddef, NULL,  NULL, FALSE);
 	  }
 	}
 
