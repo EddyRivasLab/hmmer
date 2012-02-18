@@ -762,7 +762,8 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
     /* for long_target case, use null3 correction, even if null2 was already
      * computed in the trace stage (null2_is_done == TRUE)
      */
-    p7_null3_score(om->abc, sq->dsq, i, j, bg, &domcorrection);  /* domcorrection is in units of NATS */
+    //p7_null3_score(om->abc, sq->dsq, i, j, bg, &domcorrection);  /* domcorrection is in units of NATS */
+    p7_null3_windowed_score(om->abc, sq->dsq, i, j, bg, 20, &domcorrection);  /* domcorrection is in units of NATS */
   } else {
     /* For non-longtarget cases, use the null2 correction
      * Is null2 set already for this i..j? (It is, if we're in a domain that
