@@ -146,7 +146,7 @@ p7_null3_windowed_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, int start, 
 {
   float score = 0.;
   int status;
-  int i;
+  int i, j;
   float *freq;
 
   ESL_ALLOC(freq, sizeof(float) * abc->K);
@@ -162,29 +162,55 @@ p7_null3_windowed_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, int start, 
     start = stop;
     stop = i;
   }
-  if (stop<start+width-1)  width = stop-start;
+  if (stop<start+width)  width = stop-start; //intentionally not start+width+1
 
+  //check sequence validity
+  for (i = start; i <= stop; i++)
+    if(esl_abc_XIsGap(abc, dsq[i])) esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "in p7_null3_score(), res %d is a gap!%s\n", "");
+
+if (start==105)
+  printf(".");
 
   /* tally frequencies for first base */
   i = start;
-  for (i = start; i <= stop; i++)
-  {
-      if(esl_abc_XIsGap(abc, dsq[i])) esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "in p7_null3_score(), res %d is a gap!%s\n", "");
-      esl_abc_FCount(abc, freq, dsq[i], 1.);
-  }
-
-
-  for (i = start; i <= stop; i++)
-  {
-    if(esl_abc_XIsGap(abc, dsq[i])) esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "in p7_null3_score(), res %d is a gap!%s\n", "");
-    esl_abc_FCount(abc, freq, dsq[i], 1.);
-  }
+  for (j = start; j <= start + width ; j++)
+      esl_abc_FCount(abc, freq, dsq[j], 1.);
   esl_vec_FNorm(freq, abc->K);
+  /* score modifier for position i, in nats */
+  score += freq[dsq[i]]==0 ? 0.0 : esl_logf( freq[dsq[i]]/bg->f[dsq[i]] ) ;
 
 
-  /* now compute score modifier (nats)*/
-  for (i = 0; i < abc->K; i++)
-    score += freq[i]==0 ? 0.0 : esl_logf( freq[i]/bg->f[i] ) * freq[i] * (stop-start+1) ;
+  /* add the next character onto the frequency stack, without removing a preceding char */
+  i++;
+  while (i<= start+width ) {
+    if (j<=stop) { /* ok, so don't really add a character ... 'cause there isn't one */
+      esl_vec_FScale(freq, abc->K, (width+(i-start)) );
+      esl_abc_FCount(abc, freq, dsq[j], 1.);
+      esl_vec_FNorm(freq, abc->K );
+    }
+    score += freq[dsq[i]]==0 ? 0.0 : esl_logf( freq[dsq[i]]/bg->f[dsq[i]] ) ;
+    i++;
+    j++;
+  }
+
+  /* remove a preceding character and add a new one */
+  while (j<=stop) {
+    esl_abc_FCount(abc, freq, dsq[i-width-1], (-1.)/(1+2*width));
+    esl_abc_FCount(abc, freq, dsq[j], 1./(1+2*width));
+    score += freq[dsq[i]]==0 ? 0.0 : esl_logf( freq[dsq[i]]/bg->f[dsq[i]] ) ;
+    i++;
+    j++;
+  }
+
+  /*finally, pull off the leading characters as the edge cases shrink*/
+  while (i<=stop) {
+    esl_vec_FScale(freq, abc->K, (width+2+(stop-i)) );
+    esl_abc_FCount(abc, freq, dsq[i-width-1], -1.);
+    esl_vec_FNorm(freq, abc->K );
+    score += freq[dsq[i]]>0 ? esl_logf( freq[dsq[i]]/bg->f[dsq[i]] )  : 0 ;
+    i++;
+  }
+
 
   /* Return the correction to the bit score. */
   score = p7_FLogsum(0., score);

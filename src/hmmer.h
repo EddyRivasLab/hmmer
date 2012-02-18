@@ -1376,6 +1376,7 @@ extern int  p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset);
 
 /* p7_null3.c */
 extern void p7_null3_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, int start, int stop, P7_BG *bg, float *ret_sc);
+extern void p7_null3_windowed_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, int start, int stop, P7_BG *bg, int width, float *ret_sc);
 
 /* p7_pipeline.c */
 extern P7_PIPELINE *p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, enum p7_pipemodes_e mode);
