@@ -744,6 +744,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
   int            pos;
   float          null2[p7_MAXCODE];
   int            status;
+  float          null3_corr;
 
   p7_Forward (sq->dsq + i-1, Ld, om,      ox1, &envsc);
   p7_Backward(sq->dsq + i-1, Ld, om, ox1, ox2, NULL);
@@ -758,35 +759,40 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
   status = p7_Decoding(om, ox1, ox2, ox2);      /* <ox2> is now overwritten with post probabilities     */
   if (status == eslERANGE) return eslFAIL;      /* rare: numeric overflow; domain is assumed to be repetitive garbage [J3/119-212] */
 
+
+  /* Find an optimal accuracy alignment */
+  p7_OptimalAccuracy(om, ox2, ox1, &oasc);      /* <ox1> is now overwritten with OA scores              */
+  p7_OATrace        (om, ox2, ox1, ddef->tr);   /* <tr>'s seq coords are offset by i-1, rel to orig dsq */
+
+  /* Is null2 set already for this i..j? (It is, if we're in a domain that
+   * was defined by stochastic traceback clustering in a multidomain region;
+   * it isn't yet, if we're in a simple one-domain region). If it isn't,
+   * do it now, by the expectation (posterior decoding) method.
+   */
+  if (! null2_is_done) {
+    p7_Null2_ByExpectation(om, ox2, null2);
+    for (pos = i; pos <= j; pos++)
+      ddef->n2sc[pos]  = logf(null2[sq->dsq[pos]]);
+  }
+  for (pos = i; pos <= j; pos++)
+    domcorrection   += ddef->n2sc[pos];         /* domcorrection is in units of NATS */
+
+
   if (long_target) {
     /* for long_target case, use null3 correction, even if null2 was already
      * computed in the trace stage (null2_is_done == TRUE)
      */
-    //p7_null3_score(om->abc, sq->dsq, i, j, bg, &domcorrection);  /* domcorrection is in units of NATS */
-    p7_null3_windowed_score(om->abc, sq->dsq, i, j, bg, 15, &domcorrection);  /* domcorrection is in units of NATS */
-  } else {
-    /* For non-longtarget cases, use the null2 correction
-     * Is null2 set already for this i..j? (It is, if we're in a domain that
-     * was defined by stochastic traceback clustering in a multidomain region;
-     * it isn't yet, if we're in a simple one-domain region). If it isn't,
-     * do it now, by the expectation (posterior decoding) method.
-     */
-    if (! null2_is_done) {
-      p7_Null2_ByExpectation(om, ox2, null2);
-      for (pos = i; pos <= j; pos++)
-        ddef->n2sc[pos]  = logf(null2[sq->dsq[pos]]);
-    }
-    for (pos = i; pos <= j; pos++)
-      domcorrection   += ddef->n2sc[pos];         /* domcorrection is in units of NATS */
+    //p7_null3_score(om->abc, sq->dsq, ddef->tr, i, j, bg, &null3_corr);
+    p7_null3_score(om->abc, sq->dsq, NULL /*don't use trace*/, i, j, bg, &null3_corr);
+    domcorrection = p7_FLogsum (domcorrection, null3_corr);
+
+    p7_null3_windowed_score(om->abc, sq->dsq, i, j, bg, 20, &null3_corr);
+    domcorrection = p7_FLogsum (domcorrection, null3_corr);
 
   }
 
 
 
-  /* Find an optimal accuracy alignment */
-  p7_OptimalAccuracy(om, ox2, ox1, &oasc);      /* <ox1> is now overwritten with OA scores              */
-  p7_OATrace        (om, ox2, ox1, ddef->tr);   /* <tr>'s seq coords are offset by i-1, rel to orig dsq */
-  
   /* hack the trace's sq coords to be correct w.r.t. original dsq */
   for (z = 0; z < ddef->tr->N; z++)
     if (ddef->tr->i[z] > 0) ddef->tr->i[z] += i-1;

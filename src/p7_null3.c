@@ -50,6 +50,8 @@
  *
  * Args:     abc   - alphabet for hit (only used to get alphabet size)
  *           dsq   - the sequence the hit resides in
+ *           tr   - trace of the alignment, used to find the match states
+ *                  (non-match chars are ignored in computing freq, not used if NULL)
  *           start - start position of hit in dsq
  *           stop  - end  position of hit in dsq
  *           bg    - background, used for the default null model's emission freq
@@ -59,12 +61,14 @@
  * Return:   void, ret_sc: the log-odds score correction (in NATS).
  */
 void
-p7_null3_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, int start, int stop, P7_BG *bg, float *ret_sc)
+p7_null3_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, P7_TRACE *tr, int start, int stop, P7_BG *bg, float *ret_sc)
 {
   float score = 0.;
   int status;
   int i;
   float *freq;
+  int dir;
+  int tr_pos;
 
   ESL_ALLOC(freq, sizeof(float) * abc->K);
   esl_vec_FSet(freq, abc->K, 0.0);
@@ -74,23 +78,43 @@ p7_null3_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, int start, int stop,
   if(dsq == NULL) esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "p7_null3_score() dsq alphabet is NULL.%s\n", "");
   if(abc->type != eslRNA && abc->type != eslDNA) esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "p7_null3_score() expects alphabet of RNA or DNA.%s\n", "");
 
-  /* tally frequencies */
-  if (start > stop) {
+  dir = start < stop ? 1 : -1;
+
+  if (tr != NULL) {
+    /* skip the parts of the trace that precede the first match state */
+    tr_pos = 2;
     i = start;
-    start = stop;
-    stop = i;
+    while (tr->st[tr_pos] != p7T_M) {
+      if (tr->st[tr_pos] == p7T_N)
+        i += dir;
+      tr_pos++;
+    }
+
+    /* tally frequencies from characters hitting match state*/
+    while (tr->st[tr_pos] != p7T_E) {
+      if (tr->st[tr_pos] == p7T_M) {
+        if(esl_abc_XIsGap(abc, dsq[i])) esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "in p7_null3_score(), res %d is a gap!%s\n", "");
+        esl_abc_FCount(abc, freq, dsq[i], 1.);
+      }
+      if (tr->st[tr_pos] != p7T_D )
+        i += dir;
+      tr_pos++;
+    }
+  } else {
+    /* tally frequencies from the full envelope */
+    for (i=ESL_MIN(start,stop); i <= ESL_MAX(start,stop); i++)
+    {
+      if(esl_abc_XIsGap(abc, dsq[i])) esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "in p7_null3_score(), res %d is a gap!%s\n", "");
+      esl_abc_FCount(abc, freq, dsq[i], 1.);
+    }
   }
-  for (i = start; i <= stop; i++)
-  {
-    if(esl_abc_XIsGap(abc, dsq[i])) esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "in p7_null3_score(), res %d is a gap!%s\n", "");
-    esl_abc_FCount(abc, freq, dsq[i], 1.);
-  }
+
   esl_vec_FNorm(freq, abc->K);
 
 
-  /* now compute score modifier (nats)*/
+  /* now compute score modifier (nats) - note: even with tr!=NULL, this includes the unmatched characters*/
   for (i = 0; i < abc->K; i++)
-    score += freq[i]==0 ? 0.0 : esl_logf( freq[i]/bg->f[i] ) * freq[i] * (stop-start+1) ;
+    score += freq[i]==0 ? 0.0 : esl_logf( freq[i]/bg->f[i] ) * freq[i] * ( (stop-start)*dir +1) ;
 
   /* Return the correction to the bit score. */
   score = p7_FLogsum(0., score);
@@ -149,6 +173,7 @@ p7_null3_windowed_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, int start, 
   int i, j;
   float *freq;
 
+
   ESL_ALLOC(freq, sizeof(float) * abc->K);
   esl_vec_FSet(freq, abc->K, 0.0);
 
@@ -157,19 +182,18 @@ p7_null3_windowed_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, int start, 
   if(dsq == NULL) esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "p7_null3_score() dsq alphabet is NULL.%s\n", "");
   if(abc->type != eslRNA && abc->type != eslDNA) esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "p7_null3_score() expects alphabet of RNA or DNA.%s\n", "");
 
+
   if (start > stop) {
     i = start;
     start = stop;
     stop = i;
   }
-  if (stop<start+width)  width = stop-start; //intentionally not start+width+1
+  if (  (stop-start) < width)  width = (stop-start); //intentionally not start+width+1
 
   //check sequence validity
   for (i = start; i <= stop; i++)
     if(esl_abc_XIsGap(abc, dsq[i])) esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "in p7_null3_score(), res %d is a gap!%s\n", "");
 
-if (start==105)
-  printf(".");
 
   /* tally frequencies for first base */
   i = start;
@@ -183,7 +207,7 @@ if (start==105)
   /* add the next character onto the frequency stack, without removing a preceding char */
   i++;
   while (i<= start+width ) {
-    if (j<=stop) { /* ok, so don't really add a character ... 'cause there isn't one */
+    if (j<=stop) { /* if j>stop, don't really add a character ... 'cause there isn't one */
       esl_vec_FScale(freq, abc->K, (width+(i-start)) );
       esl_abc_FCount(abc, freq, dsq[j], 1.);
       esl_vec_FNorm(freq, abc->K );
