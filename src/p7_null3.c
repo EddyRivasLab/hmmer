@@ -154,25 +154,26 @@ p7_null3_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, P7_TRACE *tr, int st
  *           dsq  - the sequence the hit resides in
  *           start- start position of hit in dsq
  *           stop  - end  position of hit in dsq
- *           bg    - background, used for the default null model's emission freq
- *           width - number of residues on either side of position i that
- *                   are used to construct i's window, for i's null model
- *                   (so internal positions will contain 1+(2*width)
- *                   residues, while positions within 'width' of the ends
- *                   of the envelope will have fewer residues)
+ *           bg    - background, used for the default null model's emission freq.
+ *                   Also provides the 'width' value - the number of residues
+ *                   on either side of position i that are used to construct i's
+ *                   window, for i's null model (so internal positions will
+ *                   contain 1+(2*width) residues, while positions within 'width'
+ *                   of the ends of the envelope will have fewer residues)
  *           ret_sc- RETURN: the correction to the score (in NATS);
  *                   caller subtracts this from hit score to get
  *                   corrected score.
  * Return:   void, ret_sc: the log-odds score correction (in NATS).
  */
 void
-p7_null3_windowed_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, int start, int stop, P7_BG *bg, int width, float *ret_sc)
+p7_null3_windowed_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, int start, int stop, P7_BG *bg, float *ret_sc)
 {
   float score = 0.;
   int status;
   int i, j;
   float *freq;
 
+  int width = bg->null3_wlen;
 
   ESL_ALLOC(freq, sizeof(float) * abc->K);
   esl_vec_FSet(freq, abc->K, 0.0);
