@@ -304,7 +304,10 @@ typedef struct p7_bg_s {
 
   ESL_HMM *fhmm;	/* bias filter: p7_bg_SetFilter() sets this, from model's mean composition */
 
-  float    omega;	/* null2's "prior": set at initialization                                  */
+  float    omega;	/* the "prior" on null2/null3: set at initialization (one omega for both null types)  */
+  int      use_null3;  /* use null3 in addition to null2 ?*/
+  int      use_null3w; /* use windowed-null3 in addition to null2 ?   (compatible with use_null3) */
+  int      null3_wlen; /* if use_null3w==TRUE, this is the width to be used by p7_null3_windowed_score()*/
 
   const ESL_ALPHABET *abc;	/* reference to alphabet in use: set at initialization             */
 } P7_BG;
@@ -1376,7 +1379,7 @@ extern int  p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset);
 
 /* p7_null3.c */
 extern void p7_null3_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, P7_TRACE *tr, int start, int stop, P7_BG *bg, float *ret_sc);
-extern void p7_null3_windowed_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, int start, int stop, P7_BG *bg, int width, float *ret_sc);
+extern void p7_null3_windowed_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, int start, int stop, P7_BG *bg, float *ret_sc);
 
 /* p7_pipeline.c */
 extern P7_PIPELINE *p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, enum p7_pipemodes_e mode);

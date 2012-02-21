@@ -16,7 +16,7 @@ BEGIN {
     $tmppfx    = shift;
 }
 
-$verbose = 1;
+$verbose = 0;
 
 # The test makes use of the following file:
 #
@@ -83,9 +83,9 @@ if ($output !~ /$expect/s) {
 }
 
 $expect = 
-    q[0.11   15.5   0.6  random   3299961 3299978\s+
-       0.13   15.2   3.6  random   4499980 4499999\s+
-       0.29   14.1   2.2  random   1979941 1979960];
+    q[0.021   17.7   1.2  random   4499980 4499999\s+
+      0.077   15.9   0.2  random   3299961 3299978\s+
+      0.092   15.7   0.6  random   1979941 1979960];
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 2\n";
 }
@@ -105,9 +105,9 @@ if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 3\n";
 }
 $expect = 
-    q[0.054   15.5   0.6  random   3299961 3299978\s+
-      0.065   15.2   3.6  random   4499980 4499999\s+
-       0.15   14.1   2.2  random   1979941 1979960]; 
+    q[0.011   17.7   1.2  random   4499980 4499999\s+
+      0.038   15.9   0.2  random   3299961 3299978\s+
+      0.046   15.7   0.6  random   1979941 1979960]; 
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 4\n";
 }

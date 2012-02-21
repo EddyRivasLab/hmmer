@@ -779,16 +779,17 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
 
 
   if (long_target) {
-    /* for long_target case, use null3 correction, even if null2 was already
-     * computed in the trace stage (null2_is_done == TRUE)
+    /* for long_target case, merge in the results of two null3 correction
+     * see ~/notebook/2012/0214_Dfam_false_positives/00NOTES 02/19 for details
      */
-    //p7_null3_score(om->abc, sq->dsq, ddef->tr, i, j, bg, &null3_corr);
-    p7_null3_score(om->abc, sq->dsq, NULL /*don't use trace*/, i, j, bg, &null3_corr);
-    domcorrection = p7_FLogsum (domcorrection, null3_corr);
-
-    p7_null3_windowed_score(om->abc, sq->dsq, i, j, bg, 20, &null3_corr);
-    domcorrection = p7_FLogsum (domcorrection, null3_corr);
-
+    if (bg->use_null3) {
+      p7_null3_score(om->abc, sq->dsq, NULL /*don't use trace*/, i, j, bg, &null3_corr);
+      domcorrection = p7_FLogsum (domcorrection, null3_corr);
+    }
+    if (bg->use_null3w) {
+      p7_null3_windowed_score(om->abc, sq->dsq, i, j, bg, &null3_corr);
+      domcorrection = p7_FLogsum (domcorrection, null3_corr);
+    }
   }
 
 
