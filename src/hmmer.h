@@ -318,13 +318,13 @@ typedef struct p7_hmm_s {
 #define p7P_MM   0
 #define p7P_IM   1
 #define p7P_DM   2
-#define p7P_LM   3	/* local submodel entry L->Mk                 */
-#define p7P_GM   4	/* wing-retracted glocal submodel entry G->Mk */
+#define p7P_LM   3	/* local submodel entry L->Mk; stored off-by-one, tsc[k-1][LM] = L->Mk */
+#define p7P_GM   4	/* wing-retracted glocal submodel entry G->Mk;    tsc[k-1][GM] = G->Mk */
 #define p7P_MD   5  
 #define p7P_DD   6
 #define p7P_MI   7
 #define p7P_II   8
-#define p7P_MGE  9	/* wing-retracted glocal exit Mk->Dk+1..Dm->E        */
+#define p7P_MGE  9	/* wing-retracted glocal exit Mk->(Dk+1..Dm)->E */
 
 /* Indices for residue emission score vectors */
 #define p7P_NR   2
@@ -334,7 +334,7 @@ typedef struct p7_hmm_s {
 typedef struct p7_profile_s {
   /* Model parameters:                                                               */
   int     M;		/* number of nodes in the model                              */
-  float  *tsc;          /* transitions  [0.1..M-1][0..p7P_NTRANS-1], hand-indexed    */
+  float  *tsc;          /* transitions  [0.1..M][0..p7P_NTRANS-1], hand-indexed      */
   float **rsc;          /* emissions [0..Kp-1][0.1..M][p7P_NR], hand-indexed         */
   float   xsc[p7P_NXSTATES][p7P_NXTRANS]; /* special transitions [ENJCBG][LOOP,MOVE] */
 
@@ -370,7 +370,7 @@ typedef struct p7_profile_s {
 } P7_PROFILE;
 
 /* Convenience macros for accessing transition, emission scores */
-/* _BM is specially stored off-by-one: [k-1][p7P_B{LG}M] is score for *entering* at Mk */
+/* _LM,GM are specially stored off-by-one: [k-1][p7P_{LG}M] is score for *entering* at Mk */
 #define P7P_TSC(gm, k, s) ((gm)->tsc[(k) * p7P_NTRANS + (s)])
 #define P7P_MSC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_M])
 #define P7P_ISC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_I])

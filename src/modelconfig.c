@@ -169,12 +169,18 @@ p7_profile_ConfigCustom(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int 
   gm->xsc[p7P_B][0]        = logf(1.0 - pglocal);              // B->L
   gm->xsc[p7P_B][1]        = logf(pglocal);                    // B->G
 
-  gm->xsc[p7P_G][0]        = logf(1.0 - hmm->t[0][p7H_MD]);    /* not p7H_MM, because we're absorbing core model's I0 state and p7H_MI I*/
+  gm->xsc[p7P_G][0]        = logf(1.0 - hmm->t[0][p7H_MD]);    // not p7H_MM, because we're absorbing core model's I0 state and p7H_MI I
   gm->xsc[p7P_G][1]        = logf(hmm->t[0][p7H_MD]);
 
-  if (( status = set_local_entry (gm, hmm)) != eslOK) return status;   // BLMk params: uniform fragment length parameterization 
-  if (( status = set_glocal_entry(gm, hmm)) != eslOK) return status;   // BGMk params: left wing retraction : glocal entry
-  if (( status = set_glocal_exit (gm, hmm)) != eslOK) return status;   // MkGE params: right wing retraction : glocal exit
+  /* Initialize tsc[k=M] boundary condition to -inf; 
+   * will overwrite as needed in set_ functions below
+   */
+  esl_vec_FSet( gm->tsc + gm->M*p7P_NTRANS, p7P_NTRANS, -eslINFINITY);
+
+  /* Entry and exit distributions: L->MLk, G->MGk, MGk->E */
+  if (( status = set_local_entry (gm, hmm)) != eslOK) return status;   // L->MLk params: uniform fragment length parameterization 
+  if (( status = set_glocal_entry(gm, hmm)) != eslOK) return status;   // G->MGk params: left wing retraction : glocal entry
+  if (( status = set_glocal_exit (gm, hmm)) != eslOK) return status;   // MGk->E params: right wing retraction : glocal exit
 
   /* Remaining transition scores (BLM, BGM, MGE entries/exits were just set, above) */
   for (k = 1; k < gm->M; k++) {
@@ -187,7 +193,7 @@ p7_profile_ConfigCustom(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int 
     tp[p7P_MI] = logf(hmm->t[k][p7H_MI]);
     tp[p7P_II] = logf(hmm->t[k][p7H_II]);
   }
-			      
+  
   /* Match emission scores. */
   sc[hmm->abc->K]     = -eslINFINITY; /* gap character */
   sc[hmm->abc->Kp-2]  = -eslINFINITY; /* nonresidue character */
@@ -293,7 +299,8 @@ set_local_entry(P7_PROFILE *gm, const P7_HMM *hmm)
   for (k = 1; k <= hmm->M; k++) 
     Z += occ[k] * (float) (hmm->M-k+1);
   for (k = 1; k <= hmm->M; k++) 
-    P7P_TSC(gm, k-1, p7P_LM) = logf(occ[k] / Z); /* note off-by-one: entry at Mk stored as [k-1][BM] */
+    P7P_TSC(gm, k-1, p7P_LM) = logf(occ[k] / Z); /* note off-by-one: entry at Mk stored as [k-1][LM] */
+  /* leave tsc[M,LM] as -inf, as we'd already initialized it */
   return eslOK;
 }
 
@@ -337,13 +344,14 @@ set_glocal_entry(P7_PROFILE *gm, const P7_HMM *hmm)
       P7P_TSC(gm, k, p7P_GM) = Z + logf(hmm->t[k][p7H_DM]);
       Z += logf(hmm->t[k][p7H_DD]);
     }
+  /* leave tsc[M,GM] as -inf, as we'd already initialized it */
   return eslOK;
 }
 
 /* set_glocal_exit()
  * 
  * Right wing retraction.
- *   t(Mm->E) = 1.0 implicitly (no storage)
+ *   t(Mm->E) = 0.0 
  *   t(Mk->E) = t(Mk->Dk+1) * \prod_j=k+1..m-1 t(Dj->Dj+1)
  *   
  */
@@ -353,6 +361,7 @@ set_glocal_exit(P7_PROFILE *gm, const P7_HMM *hmm)
   float Z = 0.0;		/* accumulated Dk+1..Dm part of the path */
   int   k;
 
+  P7P_TSC(gm, gm->M, p7P_MGE) = Z;
   for (k = hmm->M-1; k >= 1; k--)
     {
       P7P_TSC(gm, k, p7P_MGE) = Z + logf(hmm->t[k][p7H_MD]);

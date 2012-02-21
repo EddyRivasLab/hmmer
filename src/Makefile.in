@@ -90,7 +90,8 @@ HDRS =  hmmer.h \
 	p7_gmxd.h \
 	p7_hmmcache.h
 
-OBJS =  build.o\
+OBJS =  banded_fwdback.o\
+	build.o\
 	cachedb.o\
 	emit.o\
 	errors.o\
@@ -120,6 +121,7 @@ OBJS =  build.o\
 	seqmodel.o\
 	tracealign.o\
 	p7_alidisplay.o\
+	p7_bandmx.o\
 	p7_bg.o\
 	p7_builder.o\
 	p7_domaindef.o\

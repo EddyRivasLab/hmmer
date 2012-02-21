@@ -67,7 +67,7 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
   gm->consensus = NULL;
 
   /* level 1 */
-  ESL_ALLOC(gm->tsc,       sizeof(float)   * allocM * p7P_NTRANS); 
+  ESL_ALLOC(gm->tsc,       sizeof(float)   * (allocM+1) * p7P_NTRANS); /* 0..M */
   ESL_ALLOC(gm->rsc,       sizeof(float *) * abc->Kp);
   ESL_ALLOC(gm->rf,        sizeof(char)    * (allocM+2)); /* yes, +2: each is (0)1..M, +trailing \0  */
   ESL_ALLOC(gm->cs,        sizeof(char)    * (allocM+2));
@@ -82,7 +82,8 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
   /* Initialize some edge pieces of memory that are never used,
    * and are only present for indexing convenience.
    */
-  esl_vec_FSet(gm->tsc, p7P_NTRANS, -eslINFINITY);     /* node 0 nonexistent, has no transitions  */
+  esl_vec_FSet(gm->tsc, p7P_NTRANS, -eslINFINITY);     /* tsc[k-1,LM],tsc[k-1,GM] will be configured + overwritten  */
+                                                       /* tsc[M] initialized when we know actual M */
   for (x = 0; x < abc->Kp; x++) {        
     P7P_MSC(gm, 0, x) = -eslINFINITY;                  /* no emissions from nonexistent M_0... */
     P7P_ISC(gm, 0, x) = -eslINFINITY;                  /* nor I_0...                           */
@@ -146,7 +147,7 @@ p7_profile_Copy(const P7_PROFILE *src, P7_PROFILE *dst)
   if (src->abc->type != dst->abc->type) ESL_EXCEPTION(eslEINVAL, "destination profile has different alphabet than source");
 
   dst->M = src->M;
-  esl_vec_FCopy(src->tsc, src->M*p7P_NTRANS, dst->tsc);
+  esl_vec_FCopy(src->tsc, (src->M+1)*p7P_NTRANS, dst->tsc);
   for (x = 0; x < src->abc->Kp;   x++) esl_vec_FCopy(src->rsc[x], (src->M+1)*p7P_NR, dst->rsc[x]);
   for (x = 0; x < p7P_NXSTATES;   x++) esl_vec_FCopy(src->xsc[x], p7P_NXTRANS,       dst->xsc[x]);
 
@@ -259,7 +260,7 @@ p7_profile_Sizeof(P7_PROFILE *gm)
 
   /* these mirror malloc()'s in p7_profile_Create(); maintain one:one correspondence for maintainability */
   n += sizeof(P7_PROFILE);
-  n += sizeof(float)   * gm->allocM * p7P_NTRANS;               /* gm->tsc       */
+  n += sizeof(float)   * (gm->allocM+1) * p7P_NTRANS;           /* gm->tsc       */
   n += sizeof(float *) * gm->abc->Kp;	                        /* gm->rsc       */
   n += sizeof(float)   * gm->abc->Kp * (gm->allocM+1) * p7P_NR; /* gm->rsc[0]    */
   n += sizeof(char)    * (gm->allocM+2);	                /* gm->rf        */
@@ -567,31 +568,50 @@ int
 p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol)
 {
   int     status;
-  int     k;
+  int     k,z;
+  int     M      = gm->M;
   double *pstart = NULL;
 
   ESL_ALLOC(pstart, sizeof(double) * (gm->M+1));
-  pstart[0] = 0.0;
 
-  /* Validate the entry distribution.
-   * In a glocal model, this is an explicit probability distribution,
-   * corresponding to left wing retraction.
-   * In a local model, this is an implicit probability distribution,
+  /* Validate tsc[0] boundary condition: 
+   * tLM, tGM are only valid transitions at nonexistent node k=0, 
+   * because of their off-by-one storage (i.e. tsc[k-1,LM] = tLk->M)
+   */
+  if (P7P_TSC(gm, 0, p7P_MM)  != -eslINFINITY ||
+      P7P_TSC(gm, 0, p7P_IM)  != -eslINFINITY ||
+      P7P_TSC(gm, 0, p7P_DM)  != -eslINFINITY ||
+      P7P_TSC(gm, 0, p7P_MD)  != -eslINFINITY ||
+      P7P_TSC(gm, 0, p7P_DD)  != -eslINFINITY ||
+      P7P_TSC(gm, 0, p7P_MI)  != -eslINFINITY ||
+      P7P_TSC(gm, 0, p7P_II)  != -eslINFINITY ||
+      P7P_TSC(gm, 0, p7P_MGE) != -eslINFINITY)    ESL_XFAIL(eslFAIL, errbuf, "transition probs at 0 not set properly");
+      
+
+  /* Validate tsc[M] boundary condition: 
+   * tMGkE is the only valid transition for k=M */
+  for (z = 0; z < p7P_NTRANS-1; z++) /* i.e. for tMM..tII, excluding tMGE */
+    if (P7P_TSC(gm, M, z) != -eslINFINITY) ESL_XFAIL(eslFAIL, errbuf, "transition probs at M not set properly");
+  if (P7P_TSC(gm, M, p7P_MGE) != 0.0f)     ESL_XFAIL(eslFAIL, errbuf, "transition probs at M not set properly");
+
+  /* Validate local entry distribution.
+   * this is an implicit probability distribution,
    * corresponding to the implicit local alignment model, and we have
    * to calculate the M(M+1)/2 fragment probabilities accordingly.
    */
-  if (p7_profile_IsLocal(gm))
-    {				/* the code block below is also in emit.c:sample_endpoints */
-      for (k = 1; k <= gm->M; k++)
-	pstart[k] = exp(P7P_TSC(gm, k-1, p7P_LM)) * (gm->M - k + 1); /* multiply p_ij by the number of exits j */
-    }
-  else
-    {
-      for (k = 1; k <= gm->M; k++)
-	pstart[k] = exp(P7P_TSC(gm, k-1, p7P_GM));
-    }
+  pstart[0] = 0.0;
+  for (k = 1; k <= gm->M; k++)
+    pstart[k] = exp(P7P_TSC(gm, k-1, p7P_LM)) * (gm->M - k + 1); /* multiply p_ij by the number of exits j; note off-by-one storage, L->Mk in tsc[k-1] */
+  if (esl_vec_DValidate(pstart, gm->M+1, tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "local entry distribution is not normalized properly");
 
-  if (esl_vec_DValidate(pstart, gm->M+1, tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "profile entry distribution is not normalized properly");
+  /* Validate the glocal entry distribution.
+   * This is an explicit probability distribution,
+   * corresponding to left wing retraction.
+   */
+  for (k = 1; k <= gm->M; k++)
+    pstart[k] = exp(P7P_TSC(gm, k-1, p7P_GM));
+  if (esl_vec_DValidate(pstart, gm->M+1, tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "glocal entry distribution is not normalized properly");
+
   free(pstart);
   return eslOK;
 
@@ -620,7 +640,7 @@ p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol)
   if (gm1->nj      != gm2->nj)      return eslFAIL;
   if (gm1->pglocal != gm2->pglocal) return eslFAIL;
 
-  if (esl_vec_FCompare(gm1->tsc, gm2->tsc, gm1->M*p7P_NTRANS, tol)         != eslOK) return eslFAIL;
+  if (esl_vec_FCompare(gm1->tsc, gm2->tsc, (gm1->M+1)*p7P_NTRANS, tol)     != eslOK) return eslFAIL;
   for (x = 0; x < gm1->abc->Kp; x++) 
     if (esl_vec_FCompare(gm1->rsc[x], gm2->rsc[x], (gm1->M+1)*p7P_NR, tol) != eslOK) return eslFAIL;
 

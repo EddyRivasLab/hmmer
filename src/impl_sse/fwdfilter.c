@@ -492,7 +492,7 @@ forward_row(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dpc, i
 	}
     }
   
-  /* Add D's to xEv */
+  /* Add Dk's to xEv */
   for (q = 0; q < Q; q++) xEv = _mm_add_ps(P7F_DQ(dpc,q), xEv);
 
   /* Specials, in order: E N JJ J B CC C */
