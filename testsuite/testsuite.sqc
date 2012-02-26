@@ -17,9 +17,6 @@
 #   !foo!  = data files in the source directory => top_srcdir/foo
 #   %FOO%  = tmp files, created, managed, cleaned up by sqc itself
 #
-# SRE, Sat Feb 16 10:38:21 2008 [Janelia]
-# SVN $Id$
-# SVN $URL$
 
 
 ################################################################
@@ -34,6 +31,7 @@
 1 exercise generic_viterbi    @src/generic_viterbi_utest@
 1 exercise logsum             @src/logsum_utest@
 1 exercise modelconfig        @src/modelconfig_utest@
+1 exercise seqmodel           @src/seqmodel_utest@
 1 exercise p7_alidisplay      @src/p7_alidisplay_utest@
 1 exercise p7_bg              @src/p7_bg_utest@
 1 exercise p7_gmx             @src/p7_gmx_utest@
@@ -67,7 +65,6 @@
 #   p7_domaindef.c
 #   p7_prior.c
 #   p7_spensemble.c
-#   seqmodel.c
 
 
 ################################################################
@@ -400,3 +397,9 @@
 #1 prep     minifam               rm -f %MINIFAM.HMM%.h3f %MINIFAM.HMM%.h3p %MINIFAM.HMM%.h3m %MINIFAM.HMM%.h3i 
 
 
+#################################################################
+# @LICENSE@
+#
+# SVN $Id$
+# SVN $URL$
+################################################################

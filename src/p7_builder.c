@@ -77,8 +77,6 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
       if      (esl_opt_GetBoolean(go, "--fast"))    bld->arch_strategy = p7_ARCH_FAST;
       else if (esl_opt_GetBoolean(go, "--hand"))    bld->arch_strategy = p7_ARCH_HAND;
 
-      
-
       if      (esl_opt_GetBoolean(go, "--wpb"))     bld->wgt_strategy = p7_WGT_PB;
       else if (esl_opt_GetBoolean(go, "--wgsc"))    bld->wgt_strategy = p7_WGT_GSC;
       else if (esl_opt_GetBoolean(go, "--wblosum")) bld->wgt_strategy = p7_WGT_BLOSUM;
@@ -191,7 +189,6 @@ p7_builder_LoadScoreSystem(P7_BUILDER *bld, const char *matrix, double popen, do
 {
   double  *f = NULL;
   double   slambda;
-  int      a,b;
   int      status;
 
   bld->errbuf[0] = '\0';
@@ -218,14 +215,7 @@ p7_builder_LoadScoreSystem(P7_BUILDER *bld, const char *matrix, double popen, do
   else if (status != eslOK)      ESL_XFAIL(eslEINVAL, bld->errbuf, "unexpected error in solving score matrix %s for probability parameters", matrix);
 
   /* Convert joint probabilities P(ab) to conditionals P(b|a) */
-  for (a = 0; a < bld->abc->K; a++)
-    for (b = 0; b < bld->abc->K; b++)
-      bld->Q->mx[a][b] /= f[a];	/* Q->mx[a][b] is now P(b | a) */
-
-  /* Normalize mx, so the values P(b|a) for row a sum to 1 */
-  for (a = 0; a < bld->abc->K; a++)
-    esl_vec_DNorm(bld->Q->mx[a],  bld->abc->K);
-
+  esl_scorematrix_JointToConditionalOnQuery(bld->abc, bld->Q);
 
   bld->popen   = popen;
   bld->pextend = pextend;
@@ -287,7 +277,6 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, 
   ESL_FILEPARSER  *efp = NULL;
   double          *f   = NULL;
   double           slambda;
-  int              a,b;
   int              status;
 
   bld->errbuf[0] = '\0';
@@ -320,15 +309,8 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, 
   else if (status == eslENOHALT) ESL_XFAIL(eslEINVAL, bld->errbuf, "failed to solve input score matrix %s for lambda: are you sure it's valid?", mxfile);
   else if (status != eslOK)      ESL_XFAIL(eslEINVAL, bld->errbuf, "unexpected error in solving input score matrix %s for probability parameters", mxfile);
 
-  /* Convert joint probs P(ab) to conditionals P(b | a) */
-  for (a = 0; a < bld->abc->K; a++)
-    for (b = 0; b < bld->abc->K; b++)
-      bld->Q->mx[a][b] /= f[a];	/* Q->mx[a][b] is now P(b | a) */
-
-  /* Normalize mx, so the values P(b|a) for row a sum to 1 */
-  for (a = 0; a < bld->abc->K; a++)
-    esl_vec_DNorm(bld->Q->mx[a],  bld->abc->K);
-
+  /* Convert joint probabilities P(ab) to conditionals P(b|a) */
+  esl_scorematrix_JointToConditionalOnQuery(bld->abc, bld->Q);
 
   bld->popen   = popen;
   bld->pextend = pextend;

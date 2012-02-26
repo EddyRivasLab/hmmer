@@ -168,6 +168,7 @@ UTESTS =\
 	hmmer_utest\
 	logsum_utest\
 	modelconfig_utest\
+	seqmodel_utest\
 	p7_alidisplay_utest\
 	p7_bg_utest\
 	p7_gmx_utest\

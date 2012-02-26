@@ -1396,7 +1396,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
-static char banner[] = "unit test driver for the p7_hmm.c: core model routines";
+static char banner[] = "unit test driver for p7_hmm.c core model routines";
 
 int
 main(int argc, char **argv)
