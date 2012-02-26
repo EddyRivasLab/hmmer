@@ -59,11 +59,11 @@ do_cmd ( "$builddir/easel/miniapps/esl-shuffle --seed 1 --dna -G -N 1 -L 4500000
 do_cmd ( "$builddir/src/hmmemit -N 2 --seed 4 $tmppfx.hmm >  $tmppfx.B " );
 do_cmd ( "$builddir/src/hmmemit -N 1 --seed 3 $tmppfx.hmm >> $tmppfx.B" ); 
 do_cmd ( "head -n 33000 $tmppfx.A > $database" );
-do_cmd ( "head -2 $tmppfx.B | tail -1 >> $database" );
+do_cmd ( "head -n 2 $tmppfx.B | tail -n 1 >> $database" );
 do_cmd ( "tail -n +33001 $tmppfx.A | head -n 22000 >> $database");
-do_cmd ( "head -4 $tmppfx.B | tail -1 >> $database" );
-do_cmd ( "tail -20000 $tmppfx.A >> $database" );
-do_cmd ( "tail -1 $tmppfx.B >> $database" );
+do_cmd ( "head -n 4 $tmppfx.B | tail -n 1 >> $database" );
+do_cmd ( "tail -n 20000 $tmppfx.A >> $database" );
+do_cmd ( "tail -n 1 $tmppfx.B >> $database" );
 
 # perform nhmmer search
 $cmd = "$builddir/src/nhmmer --tformat fasta $tmppfx.hmm $database";
