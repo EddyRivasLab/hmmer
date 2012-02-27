@@ -29,6 +29,11 @@
 #define p7B_G  5
 #define p7B_C  6
 
+#define p7B_FORWARD  1		
+#define p7B_BACKWARD 2		
+#define p7B_DECODING 3
+#define p7B_ALIGN    4
+
 /* The P7_BANDMX object.
  *                          dp1       dp2
  * p7_BandedForward()       Fwd        -
@@ -52,6 +57,10 @@ extern size_t     p7_bandmx_Sizeof (P7_BANDMX *bmx);
 extern int        p7_bandmx_GrowTo (P7_BANDMX *bmx, P7_GBANDS *bnd);
 extern int        p7_bandmx_Reuse  (P7_BANDMX *bmx);
 extern void       p7_bandmx_Destroy(P7_BANDMX *bmx);
+
+
+extern char *p7_bandmx_DecodeSpecial(int type);
+extern int   p7_bandmx_Dump(FILE *ofp, P7_BANDMX *bmx, int which);
 
 #endif /*P7_BANDMX_INCLUDED*/
 /*****************************************************************

@@ -149,10 +149,12 @@ STATS = \
 	evalues_stats
 
 BENCHMARKS = \
+	banded_fwdback_benchmark\
 	evalues_benchmark\
 	logsum_benchmark\
 	generic_decoding_benchmark\
 	generic_fwdback_benchmark\
+	generic_fwdback_banded_benchmark\
 	generic_fwdback_chk_benchmark\
 	generic_fwdback_dual_benchmark\
 	generic_msv_benchmark\
@@ -188,6 +190,7 @@ ITESTS = \
 	itest_brute
 
 EXAMPLES = \
+	banded_fwdback_example\
 	build_example\
 	emit_example\
 	generic_fwdback_example\

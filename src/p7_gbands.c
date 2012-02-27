@@ -5,6 +5,19 @@
 
 #include "p7_gbands.h"
 
+/* Function:  p7_gbands_Create()
+ * Synopsis:  Create a <P7_GBANDS> structure.
+ *
+ * Purpose:   
+ *
+ * Args:      
+ *
+ * Returns:   
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      
+ */
 P7_GBANDS *
 p7_gbands_Create(void)
 {
@@ -35,16 +48,19 @@ p7_gbands_Create(void)
   return NULL;
 }
 
+
 int
-p7_gbands_Reuse(P7_GBANDS *bnd)
+p7_gbands_SetFull(P7_GBANDS *bnd, int M, int L)
 {
-  bnd->nseg  = 0;
-  bnd->nrow  = 0;
-  bnd->L     = 0;
-  bnd->M     = 0;
-  bnd->ncell = 0;
+  int i;
+
+  for (i = 1; i <= L; i++)
+    p7_gbands_Append(bnd, i, 1, M);
+  bnd->L = L;
+  bnd->M = M;
   return eslOK;
 }
+
 
 /* Function:  
  * Synopsis:  
@@ -165,6 +181,18 @@ p7_gbands_GrowRows(P7_GBANDS *bnd)
  ERROR:
   return status;
 }
+
+int
+p7_gbands_Reuse(P7_GBANDS *bnd)
+{
+  bnd->nseg  = 0;
+  bnd->nrow  = 0;
+  bnd->L     = 0;
+  bnd->M     = 0;
+  bnd->ncell = 0;
+  return eslOK;
+}
+
 
 void
 p7_gbands_Destroy(P7_GBANDS *bnd)

@@ -160,6 +160,16 @@ case $enable_debugging in
      *)  AC_MSG_ERROR([Unknown argument to --enable-debugging: $enable_debugging]);;
 esac
 
+# --enable-exact-logsum  - turn on p7_LOGSUM_SLOWEXACT flag (should only be used in debugging)
+# 
+AC_ARG_ENABLE(exact-logsum,
+  [AS_HELP_STRING( [--enable-exact-logsum],[use slow/exact lse2 log-sum-exp calculations])],
+  ok=$enableval, ok=no)
+if test "$ok" = "yes"; then
+  AC_MSG_NOTICE([Compiling with slow/exact lse2 log-sum-exp calculations.])
+  AC_DEFINE(p7_LOGSUM_SLOWEXACT)
+fi
+
 
 # --enable-gcov      - compile for code coverage testing
 #

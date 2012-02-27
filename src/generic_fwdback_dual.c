@@ -143,7 +143,8 @@ p7_GForwardDual(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXD *gxd, f
 
       mgv = *dpc++ = *rsc + p7_FLogsum( p7_FLogsum(*(dpp+p7GD_MG) + *(tsc + p7P_MM),
 						   *(dpp+p7GD_IG) + *(tsc + p7P_IM)),
-                    				   *(dpp+p7GD_DG) + *(tsc + p7P_DM));
+					p7_FLogsum(*(dpp+p7GD_DG) + *(tsc + p7P_DM),
+						   xG             + *(tsc + p7P_GM)));
       dpp  += p7GD_NSCELLS; 
 
       /* I_M state doesn't exist      */
@@ -1302,7 +1303,11 @@ static ESL_OPTIONS options[] = {
   { "--sw",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit local alignment",                           0 },
   { "--ls",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "multihit glocal alignment",                        0 },
   { "--s",       eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit glocal alignment",                          0 },
-  { "--vv",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "very verbose debugging output: inc. DP matrix",    0 },
+  { "-A",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump OA alignment DP matrix for examination",      0 },
+  { "-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward DP matrix for examination",          0 },
+  { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump posterior Decoding matrix for examination",   0 },
+  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward DP matrix for examination",           0 },
+  { "-T",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump OA traceback for examination",                0 },
   { "--csv",  eslARG_OUTFILE,   NULL,  NULL, NULL,   NULL,  NULL, NULL, "output CSV file of decoding matrix, for heat map", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -1381,51 +1386,21 @@ main(int argc, char **argv)
 
       //p7_profile_Dump(stdout, gm);
 
-      /* Run Forward, Backward */
-      p7_GForwardDual (sq->dsq, sq->n, gm, fwd, &fsc);
-
-      if (esl_opt_GetBoolean(go, "--vv")) p7_gmxd_Dump(stdout, fwd);
-
-      p7_GBackwardDual(sq->dsq, sq->n, gm, bck, &bsc);
-      p7_GDecodingDual(gm, fwd, bck, bck);                   /* <bck> now becomes the pp matrix */
-
-      // quickie check added in a hurry, for a lab mtg stat
-      printf("Total cells: %" PRId64 "\n", (int64_t) sq->n * (int64_t) gm->M);
-      {
-	int   i,k;
-	float val;
-	int64_t ncells = 0;
-	float pthresh = 0.001;
-	P7_GMXD *pp = bck;
-
-	for (i = 1; i <= sq->n; i++)
-	  for (k = 1; k <= gm->M; k++)
-	    {
-	      val =  
-		pp->dp[i][k * p7GD_NSCELLS + p7GD_ML] + pp->dp[i][k * p7GD_NSCELLS + p7GD_MG] + 
-		pp->dp[i][k * p7GD_NSCELLS + p7GD_IL] + pp->dp[i][k * p7GD_NSCELLS + p7GD_IG] + 
-		pp->dp[i][k * p7GD_NSCELLS + p7GD_DL] + pp->dp[i][k * p7GD_NSCELLS + p7GD_DG];
-	      if (val >= pthresh) ncells++;
-	    }
-	printf("cells over thresh: %" PRId64 "\n", ncells);
-      }
-
+      /* Run Forward, Backward, Decoding; 
+       * after decoding, <bck> becomes the pp matrix;
+       * after alignment, <fwd> becomes the OA alignment DP matrix
+       */
+      p7_GForwardDual (sq->dsq, sq->n, gm, fwd, &fsc);    if (esl_opt_GetBoolean(go, "-F")) p7_gmxd_Dump(stdout, fwd);
+      p7_GBackwardDual(sq->dsq, sq->n, gm, bck, &bsc);    if (esl_opt_GetBoolean(go, "-B")) p7_gmxd_Dump(stdout, bck);
+      p7_GDecodingDual(gm, fwd, bck, bck);                if (esl_opt_GetBoolean(go, "-D")) p7_gmxd_Dump(stdout, bck);
+      p7_GCentroidAlignDual(/*gamma=*/0.5, gm, bck, fwd); if (esl_opt_GetBoolean(go, "-A")) p7_gmxd_Dump(stdout, bck);
+      p7_GCentroidTrace(/*gamma=*/0.5, gm, bck, fwd, tr); if (esl_opt_GetBoolean(go, "-T")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 
       if (csvfile) {
 	FILE *csvfp = fopen(csvfile, "w");
 	p7_gmxd_DumpCSV(csvfp, bck, 1, sq->n, 1, gm->M);
 	fclose(csvfp);
       }
-
-      if (esl_opt_GetBoolean(go, "--vv")) p7_gmxd_Dump(stdout, bck);
-
-      p7_GCentroidAlignDual(/*gamma=*/0.5, gm, bck, fwd);    /* <fwd> is now the centroid DP alignment fill */
-
-      if (esl_opt_GetBoolean(go, "--vv")) p7_gmxd_Dump(stdout, fwd);
-
-      p7_GCentroidTrace(/*gamma=*/0.5, gm, bck, fwd, tr);
-
-      p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 
       /* Those scores are partial log-odds likelihoods in nats.
        * Subtract off the rest of the null model, convert to bits.

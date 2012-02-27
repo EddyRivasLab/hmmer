@@ -324,7 +324,7 @@ typedef struct p7_hmm_s {
 #define p7P_DD   6
 #define p7P_MI   7
 #define p7P_II   8
-#define p7P_MGE  9	/* wing-retracted glocal exit Mk->(Dk+1..Dm)->E */
+#define p7P_DGE  9	/* wing-retracted glocal exit, DD component, tDGEk = Dk+1..Dm->E, 0.0 for k=M-1,M */
 
 /* Indices for residue emission score vectors */
 #define p7P_NR   2

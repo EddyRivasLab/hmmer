@@ -31,7 +31,7 @@ p7_GForwardBanded(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXB *gxb,
   float        dc;				 /* precalculated D(i,k+1) value on current row */
   float        sc;				 /* temporary score calculation M(i,k)          */
   int          g, i, k;				 /* indices running over segments, residues (rows) x_i, model positions (cols) k  */
-  //float        esc  = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
+  float        esc  = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
   
   xN      = 0.0f;
   xJ      = -eslINFINITY;
@@ -76,10 +76,12 @@ p7_GForwardBanded(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXB *gxb,
 
 	  for (k = kac; k <= kbc2; k++)
 	    {
-	      *dpc++ = sc = MSC(k) + p7_FLogsum( p7_FLogsum(mvp + TSC(p7P_MM, k-1), ivp + TSC(p7P_IM, k-1)),
-						 dvp + TSC(p7P_DM, k-1));
-						 //p7_FLogsum(dvp + TSC(p7P_DM, k-1), xB  + TSC(p7P_LM, k-1)));
-	      
+	      *dpc++ = sc = MSC(k) + p7_FLogsum( p7_FLogsum(mvp + TSC(p7P_MM, k-1), 
+							    ivp + TSC(p7P_IM, k-1)),
+						 p7_FLogsum(dvp + TSC(p7P_DM, k-1), 
+						            xB  + TSC(p7P_LM, k-1)));
+	      //dvp + TSC(p7P_DM, k-1));
+
 
 	      if (k >= kap && k <= kbp) {  mvp = *dpp++;       ivp = *dpp++;        dvp = *dpp++;       } 	      // an if seems unavoidable. alternatively, might unroll 
 	      else                      {  mvp = -eslINFINITY; ivp = -eslINFINITY;  dvp = -eslINFINITY; }	      // all possible (kap,kac)..(kbp,kbc) orderings, but this 
@@ -87,7 +89,7 @@ p7_GForwardBanded(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXB *gxb,
 
 	      *dpc++ = ISC(k) + p7_FLogsum( mvp + TSC(p7P_MI, k), ivp + TSC(p7P_II, k));
 
-	      //xE     = p7_FLogsum( p7_FLogsum(sc + esc, dc + esc), xE);/* Mk->E accumulation      */
+	      xE     = p7_FLogsum( p7_FLogsum(sc + esc, dc + esc), xE);/* Mk->E accumulation      */
 
 	      /* next D_k+1 */
 	      *dpc++ = dc;
@@ -178,14 +180,18 @@ main(int argc, char **argv)
   p7_bg_SetLength(bg, L);
 
   gm = p7_profile_Create(hmm->M, abc);
-  p7_profile_ConfigGlocal(gm, hmm, bg, gm, L); /* multihit glocal */
+  p7_profile_ConfigLocal(gm, hmm, bg, L);
 
   /* Contrive bands: one length M band of width W */
-  bnd = p7_gbands_Create(L, gm->M);
+  bnd = p7_gbands_Create();
+  p7_gbands_SetFull(bnd, gm->M, L);
+
+#if 0
   if (L < gm->M) p7_Fail("for now, L must be >=M, because we make a single band");
   base = (L-gm->M) / 2;
   for (k = 1; k <= gm->M; k++)
     p7_gbands_Append(bnd, k+base, ESL_MAX(1,k-W), ESL_MIN(gm->M,k+W));
+#endif
 
   fwd = p7_gmxb_Create(bnd);
 

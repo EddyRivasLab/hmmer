@@ -543,7 +543,7 @@ p7_profile_DecodeT(int tidx)
   case p7P_DD:  return "tDD";
   case p7P_MI:  return "tMI";
   case p7P_II:  return "tII";   
-  case p7P_MGE: return "tMgE";
+  case p7P_DGE: return "tDgE";
   }
   return NULL;
 }
@@ -567,15 +567,15 @@ p7_profile_DecodeT(int tidx)
 int
 p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol)
 {
-  int     status;
-  int     k,z;
+  int     k;
   int     M      = gm->M;
   double *pstart = NULL;
+  int     status;
 
   ESL_ALLOC(pstart, sizeof(double) * (gm->M+1));
 
   /* Validate tsc[0] boundary condition: 
-   * tLM, tGM are only valid transitions at nonexistent node k=0, 
+   * tLM, tGM, tDGE are only valid transitions at nonexistent node k=0, 
    * because of their off-by-one storage (i.e. tsc[k-1,LM] = tLk->M)
    */
   if (P7P_TSC(gm, 0, p7P_MM)  != -eslINFINITY ||
@@ -584,15 +584,28 @@ p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol)
       P7P_TSC(gm, 0, p7P_MD)  != -eslINFINITY ||
       P7P_TSC(gm, 0, p7P_DD)  != -eslINFINITY ||
       P7P_TSC(gm, 0, p7P_MI)  != -eslINFINITY ||
-      P7P_TSC(gm, 0, p7P_II)  != -eslINFINITY ||
-      P7P_TSC(gm, 0, p7P_MGE) != -eslINFINITY)    ESL_XFAIL(eslFAIL, errbuf, "transition probs at 0 not set properly");
+      P7P_TSC(gm, 0, p7P_II)  != -eslINFINITY) ESL_XFAIL(eslFAIL, errbuf, "transition probs at 0 not set properly");
       
 
-  /* Validate tsc[M] boundary condition: 
-   * tMGkE is the only valid transition for k=M */
-  for (z = 0; z < p7P_NTRANS-1; z++) /* i.e. for tMM..tII, excluding tMGE */
-    if (P7P_TSC(gm, M, z) != -eslINFINITY) ESL_XFAIL(eslFAIL, errbuf, "transition probs at M not set properly");
-  if (P7P_TSC(gm, M, p7P_MGE) != 0.0f)     ESL_XFAIL(eslFAIL, errbuf, "transition probs at M not set properly");
+  /* Validate tsc[M] boundary conditions.
+   *  t(Mm->D) = 0   as an initialization condition to make Backward work
+   *  t(Dm->D) = 0   ditto
+   *  t(DGE,k) = t(Dk+1->..->Dm->E) = 0 at k=M and k=M-1
+   */  
+  if (P7P_TSC(gm, M, p7P_MM)  != -eslINFINITY ||
+      P7P_TSC(gm, M, p7P_IM)  != -eslINFINITY ||
+      P7P_TSC(gm, M, p7P_DM)  != -eslINFINITY ||
+      P7P_TSC(gm, M, p7P_LM)  != -eslINFINITY ||
+      P7P_TSC(gm, M, p7P_GM)  != -eslINFINITY ||
+      /*... MD DD ... */
+      P7P_TSC(gm, M, p7P_MI)  != -eslINFINITY ||
+      P7P_TSC(gm, M, p7P_II)  != -eslINFINITY) ESL_XFAIL(eslFAIL, errbuf, "transition probs at M not set properly");
+
+  if (P7P_TSC(gm, M, p7P_MD)  != 0.0f ||  
+      P7P_TSC(gm, M, p7P_DD)  != 0.0f ||  
+      P7P_TSC(gm, M, p7P_DGE) != 0.0f)  ESL_XFAIL(eslFAIL, errbuf, "transition probs at M not set properly");
+
+  if (M>1 && P7P_TSC(gm, M-1, p7P_DGE) != 0.0f)  ESL_XFAIL(eslFAIL, errbuf, "transition probs at M not set properly");
 
   /* Validate local entry distribution.
    * this is an implicit probability distribution,

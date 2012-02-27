@@ -194,7 +194,12 @@ p7_profile_ConfigCustom(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int 
     tp[p7P_II] = logf(hmm->t[k][p7H_II]);
   }
   
-  /* Match emission scores. */
+  /* All transition scores at k=M are special cases for DP boundary conditions */
+  tp = gm->tsc + gm->M * (p7P_NTRANS);
+  tp[p7P_MD] = 0.0;		/* glocal Forward and Backwards rely on this  */
+  tp[p7P_DD] = 0.0;		/* ditto */
+
+  /* match emission scores. */
   sc[hmm->abc->K]     = -eslINFINITY; /* gap character */
   sc[hmm->abc->Kp-2]  = -eslINFINITY; /* nonresidue character */
   sc[hmm->abc->Kp-1]  = -eslINFINITY; /* missing data character */
@@ -350,10 +355,16 @@ set_glocal_entry(P7_PROFILE *gm, const P7_HMM *hmm)
 
 /* set_glocal_exit()
  * 
- * Right wing retraction.
- *   t(Mm->E) = 0.0 
- *   t(Mk->E) = t(Mk->Dk+1) * \prod_j=k+1..m-1 t(Dj->Dj+1)
- *   
+ * Right wing retraction, DGE
+ *   TSC(k,DGE) = t(Dk+1->...Dm->E) 
+ *              = [\prod_j=k+1..m-1 t(Dj->Dj+1)] * Dm->E
+ *              = \prod_j=k+1..m-1 t(Dj->Dj+1)              | because Dm->E=1.0
+ *  valid for k=0..M
+ *  boundaries: TSC(M,DGE)   = 0
+ *              TSC(M-1,DGE) = 0
+ * note off by one. 
+ * to get the glocal exit path from an Mk: t(k,MD) + t(k,DGE)
+ * to get the glocal exit path from a Dk:  t(k,DD) + t(k,DGE)
  */
 static int
 set_glocal_exit(P7_PROFILE *gm, const P7_HMM *hmm)
@@ -361,10 +372,10 @@ set_glocal_exit(P7_PROFILE *gm, const P7_HMM *hmm)
   float Z = 0.0;		/* accumulated Dk+1..Dm part of the path */
   int   k;
 
-  P7P_TSC(gm, gm->M, p7P_MGE) = Z;
+  P7P_TSC(gm, gm->M, p7P_DGE) = Z;
   for (k = hmm->M-1; k >= 1; k--)
     {
-      P7P_TSC(gm, k, p7P_MGE) = Z + logf(hmm->t[k][p7H_MD]);
+      P7P_TSC(gm, k, p7P_DGE) = Z;
       Z += logf(hmm->t[k][p7H_DD]);
     }
   return eslOK;
