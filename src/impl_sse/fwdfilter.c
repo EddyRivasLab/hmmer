@@ -875,12 +875,13 @@ posterior_decode_row(P7_FILTERMX *ox, int rowi, P7_GBANDS *bnd, float overall_sc
     {
       pv   =                _mm_mul_ps(P7F_MQ(fwd, q), P7F_MQ(bck, q));
       pv   = _mm_add_ps(pv, _mm_mul_ps(P7F_IQ(fwd, q), P7F_IQ(bck, q)));
+      pv   = _mm_add_ps(pv, _mm_mul_ps(P7F_DQ(fwd, q), P7F_DQ(bck, q)));
       pv   = _mm_mul_ps(pv, cv);
       mask = _mm_cmpge_ps(pv, threshv);
 
 #ifdef p7_DEBUGGING
       P7F_MQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7F_MQ(fwd, q), P7F_MQ(bck, q)));
-      P7F_DQ(fwd, q) = _mm_set1_ps(0.0f);
+      P7F_DQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7F_DQ(fwd, q), P7F_DQ(bck, q)));
       P7F_IQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7F_IQ(fwd, q), P7F_IQ(bck, q)));
 #endif
 

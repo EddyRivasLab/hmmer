@@ -76,7 +76,7 @@ p7_BandedForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bmx
 	  kbc      = *bnd_kp++; 
 
 	  /* dpp must advance by any left overhang of previous row; but no more than the entire row */
-	  dpp += (kac-1 > kap ? ESL_MIN(kac-kap-1, kbp-kap+1) : 0);
+	  dpp += (kac-1 > kap ? ESL_MIN(kac-kap-1, kbp-kap+1) * p7B_NSCELLS : 0);
 
 	  if (kac > kap && kac-1 <= kbp) { mlp = *dpp++; mgp = *dpp++; ilp = *dpp++; igp = *dpp++; dlp = *dpp++; dgp = *dpp++;       }
 	  else                           { mlp =         mgp =         ilp =         igp =         dlp =         dgp = -eslINFINITY; }
@@ -224,7 +224,7 @@ p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bm
            *        ...  ooo kbn]          : -(kbn-kbc-1), and dpp points at [ooo]
            *             xxx [kan ... kbn] : -(kbn-kan+1), and dpp points at [kbc] on cur row; dpp decrement won't happen
 	   */
-	  dpn -= (kbn > kbc+1 ?  : p7B_NSCELLS * ESL_MIN(kbn-kbc-1, kbn-kan+1), 0);
+	  dpn -= (kbn > kbc+1 ? p7B_NSCELLS * ESL_MIN(kbn-kbc-1, kbn-kan+1) : 0);
 
 	  /* if k+1 exists on next row, pick up mln, mgn, and move dpp back one supercell.
 	   * i.e.:    kbc]      but not   kbc]
@@ -320,8 +320,8 @@ p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bm
       
       /* As we terminate a segment, we need to leave xN/xC/xJ calculated for row ia-1 */
       xB = p7_FLogsum( xL + gm->xsc[p7P_B][0], xG + gm->xsc[p7P_B][1]);
-      xJ = p7_FLogsum( xJ,       		   xB + gm->xsc[p7P_J][p7P_MOVE]);
-      xN = p7_FLogsum( xN,			   xB + gm->xsc[p7P_N][p7P_MOVE]);
+      xJ = p7_FLogsum( xJ,       	       xB + gm->xsc[p7P_J][p7P_MOVE]);
+      xN = p7_FLogsum( xN,		       xB + gm->xsc[p7P_N][p7P_MOVE]);
       last_ia = ia;
     }
 
