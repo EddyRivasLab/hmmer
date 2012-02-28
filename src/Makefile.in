@@ -165,6 +165,7 @@ BENCHMARKS = \
 	p7_hmmcache_benchmark
 
 UTESTS =\
+	banded_fwdback_utest\
 	build_utest\
 	generic_fwdback_utest\
 	generic_fwdback_chk_utest\

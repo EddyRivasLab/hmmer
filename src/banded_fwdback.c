@@ -58,12 +58,12 @@ p7_BandedForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bmx
       
       /* re-initialization: specials for previous row ia-1 just outside banded segment:  */
       xE  = -eslINFINITY;
-      xN  = xN + (ia - last_ib - 1) * gm->xsc[p7P_N][p7P_LOOP];
-      xJ  = xJ + (ia - last_ib - 1) * gm->xsc[p7P_J][p7P_LOOP];
+      xN  = xN + ( ia == last_ib+1 ? 0.0f : (ia - last_ib - 1) * gm->xsc[p7P_N][p7P_LOOP]); /* watch out for 0*-inf special case */
+      xJ  = xJ + ( ia == last_ib+1 ? 0.0f : (ia - last_ib - 1) * gm->xsc[p7P_J][p7P_LOOP]);
       xB  = p7_FLogsum( xN + gm->xsc[p7P_N][p7P_MOVE], xJ + gm->xsc[p7P_J][p7P_MOVE]);
       xL  = xB + gm->xsc[p7P_B][0]; /* B->L */
       xG  = xB + gm->xsc[p7P_B][1]; /* B->G */
-      xC  = xC + (ia - last_ib - 1) * gm->xsc[p7P_C][p7P_LOOP];
+      xC  = xC + ( ia == last_ib+1 ? 0.0f : (ia - last_ib - 1) * gm->xsc[p7P_C][p7P_LOOP]);
 
       for (i = ia; i <= ib; i++)
 	{
@@ -125,7 +125,7 @@ p7_BandedForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bmx
     }
 
   /* last_ib+1..L is outside any band segment, so it can only run through xC. */
-  if (opt_sc != NULL) *opt_sc = xC + (L-last_ib) *  gm->xsc[p7P_C][p7P_LOOP] + gm->xsc[p7P_C][p7P_MOVE];
+  if (opt_sc != NULL) *opt_sc = xC + ( L-last_ib ? (L-last_ib) *  gm->xsc[p7P_C][p7P_LOOP] : 0.0f) + gm->xsc[p7P_C][p7P_MOVE];
   return eslOK;
 }
 
@@ -164,7 +164,7 @@ p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bm
   last_ia = L+2;		/* assure a boundary condition (last_ia - L - 2) = 0, when first ib==L     */
 
   /* To get i==L boundary condition to work, we initialize as follows: */
-  xC = gm->xsc[p7P_C][p7P_MOVE] - gm->xsc[p7P_C][p7P_LOOP];   /* t(C->T) - t(C->C); it happens that we'll add C->C back on at row L */
+  xC = gm->xsc[p7P_C][p7P_MOVE];
   xJ = -eslINFINITY;
   xN = -eslINFINITY;
 
@@ -192,12 +192,12 @@ p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bm
        *     ib] ib+1 ... ... last_ia-1 [last_ia ... ... ]
        *            <-  <-  <-  xC
        *             x   x   x    : (last_ia-1) - (ib+1) 
-       * note the boundary condition, if ib==L, (last_ia - ib - 1) must be 0; this
+       * note the boundary condition, if ib==L, (last_ia - ib - 2) must be 0; this
        * dictates initialization of last_ia to L+2.
        */
-      xC = xC + (last_ia - ib - 2) * gm->xsc[p7P_C][p7P_LOOP];
-      xJ = xJ + (last_ia - ib - 2) * gm->xsc[p7P_J][p7P_LOOP];
-      xN = xN + (last_ia - ib - 2) * gm->xsc[p7P_N][p7P_LOOP];
+      xC = xC + ( (last_ia - ib - 2) ? (last_ia - ib - 2) * gm->xsc[p7P_C][p7P_LOOP] : 0.0f); /* watch out for 0*-inf=NaN */
+      xJ = xJ + ( (last_ia - ib - 2) ? (last_ia - ib - 2) * gm->xsc[p7P_J][p7P_LOOP] : 0.0f);
+      xN = xN + ( (last_ia - ib - 2) ? (last_ia - ib - 2) * gm->xsc[p7P_N][p7P_LOOP] : 0.0f);
       xG = xL = xB = xE = -eslINFINITY;
 
       /* xE was reachable from xJ, xC on prev row ib+1, but this will
@@ -235,7 +235,7 @@ p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bm
 	  if (kbn>kbc && kbc+1 >= kan) { mgn = *(dpn-4) + *rsn; mln = *(dpn-5) + *rsn; dpn -= p7B_NSCELLS;  rsn -= p7P_NR; } 
 	  else                         { mgn = mln = -eslINFINITY; }
 	  
-	  *xc-- = xC =             xC + gm->xsc[p7P_C][p7P_LOOP];
+	  *xc-- = xC = (ib == L ? xC : xC + gm->xsc[p7P_C][p7P_LOOP]); /* ib==L has to be special cased. */
 	  *xc-- = xG;					 // delayed store; was calculated on prv row i+1
 	  *xc-- = xL;					 // delayed store, ditto
 	  *xc-- = xB = p7_FLogsum( xL + gm->xsc[p7P_B][0],
@@ -328,7 +328,7 @@ p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bm
     }
 
   /* 1..last_ia-1 is outside any band segment; (last_ia-1) residues that must go thru N; S->N transition prob = 1.0 */
-  if (opt_sc) *opt_sc = xN + (last_ia-1) * gm->xsc[p7P_N][p7P_LOOP];
+  if (opt_sc) *opt_sc = xN + (last_ia > 1 ? (last_ia-1) * gm->xsc[p7P_N][p7P_LOOP] : 0.0f);
   return eslOK;
 }
 
@@ -460,6 +460,109 @@ main(int argc, char **argv)
 /*------------------ end, benchmark -----------------------------*/
 
 
+/*****************************************************************
+ * x. Unit tests
+ *****************************************************************/
+#ifdef p7BANDED_FWDBACK_TESTDRIVE
+#include "esl_random.h"
+#include "esl_sq.h"
+
+static void
+utest_single_paths(ESL_GETOPTS *go)
+{
+  char            msg[] = "single path unit test failed";
+  int             M     = esl_opt_GetInteger(go, "-M");
+  ESL_ALPHABET   *abc   = esl_alphabet_Create(eslCOINS);
+  ESL_RANDOMNESS *rng   = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  P7_HMM         *hmm   = NULL;
+  P7_BG          *bg    = p7_bg_Create(abc);
+  P7_PROFILE     *gm    = p7_profile_Create(M, abc);
+  ESL_SQ         *sq    = esl_sq_CreateDigital(abc);
+  P7_TRACE       *tr    = p7_trace_Create();
+  P7_GBANDS      *bnd   = p7_gbands_Create();
+  P7_BANDMX      *bmx   = p7_bandmx_Create(NULL);	  
+  float           tsc,fsc,bsc;
+
+  /* Create a profile that has only a single possible path thru it */
+  p7_hmm_SampleSinglePathed(rng, M, abc, &hmm);
+  p7_profile_ConfigUniglocal(gm, hmm, bg, 0); 
+
+  /* Sample that sequence */
+  p7_ProfileEmit(rng, hmm, gm, bg, sq, tr);
+
+  /* Initialize bands, banded matrix */
+  p7_gbands_SetFull(bnd, M, sq->n);
+  p7_bandmx_GrowTo(bmx, bnd);
+
+  /* Since all the probability mass is in a single path,
+   * the trace score is equal to the forward and backward scores.
+   */
+  p7_trace_Score(tr, sq->dsq, gm, &tsc);
+  p7_BandedForward (sq->dsq, sq->n, gm, bmx, &fsc);
+  p7_BandedBackward(sq->dsq, sq->n, gm, bmx, &bsc);
+
+  printf("n   = %" PRId64 "\n", sq->n);
+  printf("tsc = %.2f nats\n",   tsc);
+  printf("fsc = %.2f nats\n",   fsc);
+  printf("bsc = %.2f nats\n",   bsc);
+
+
+  if ( esl_FCompareAbs(fsc, tsc, 0.0001) != eslOK) esl_fatal(msg);
+  if ( esl_FCompareAbs(bsc, tsc, 0.0001) != eslOK) esl_fatal(msg);
+
+  p7_bandmx_Destroy(bmx);
+  p7_gbands_Destroy(bnd);
+  p7_trace_Destroy(tr);
+  esl_sq_Destroy(sq);
+  p7_profile_Destroy(gm);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  esl_randomness_Destroy(rng);
+  esl_alphabet_Destroy(abc);
+}
+
+#endif /*p7BANDED_FWDBACK_TESTDRIVE*/
+
+/*---------------- end, unit tests ------------------------------*/
+
+/*****************************************************************
+ * x. Test driver
+ *****************************************************************/
+#ifdef p7BANDED_FWDBACK_TESTDRIVE
+
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_getopts.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-M",        eslARG_INT,     "10", NULL, NULL,  NULL,  NULL, NULL, "set length of sampled models <n>",               0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "unit test driver for banded Forward/Backward dual-mode implementation";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+
+  p7_FLogsumInit();
+
+  utest_single_paths(go);
+
+  esl_getopts_Destroy(go);
+  return 0;
+}
+
+
+#endif /*p7BANDED_FWDBACK_TESTDRIVE*/
+/*---------------- end, test driver -----------------------------*/
 
 /*****************************************************************
  * x. Example
@@ -485,7 +588,13 @@ static ESL_OPTIONS options[] = {
   { "-A",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump OA alignment DP matrix for examination",     0 },
   { "-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward DP matrix for examination",         0 },
   { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward DP matrix for examination",          0 },
+  { "-G",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump DP bands for examination",                   0 },
   { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump posterior Decoding matrix for examination",  0 },
+#ifdef p7_DEBUGGING
+  { "--fF",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward filter matrix for examination",      0 },
+  { "--fB",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward filter matrix for examination",     0 },
+  { "--fD",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Decoding filter matrix for examination",     0 },
+#endif
   { "--fs",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "config model for multihit local mode only",       0 },
   { "--sw",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "config model for unihit local mode only",         0 },
   { "--ls",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "config model for multihit glocal mode only",      0 },
@@ -555,6 +664,13 @@ main(int argc, char **argv)
   bmx = p7_bandmx_Create(NULL);	
   ox  = p7_filtermx_Create(om->M, 400, ESL_MBYTES(32));
 
+#ifdef p7_DEBUGGING
+  /* Under debugging mode only, we can also dump internals of the ForwardFilter/BackwardFilter vector calculations */
+  if (esl_opt_GetBoolean(go, "--fF")) ox->fwd = p7_gmx_Create(gm->M, 100);
+  if (esl_opt_GetBoolean(go, "--fB")) ox->bck = p7_gmx_Create(gm->M, 100);
+  if (esl_opt_GetBoolean(go, "--fD")) ox->pp  = p7_gmx_Create(gm->M, 100);
+#endif
+
   if (esl_opt_GetBoolean(go, "-1")) {
     printf("%-30s   %-10s %-10s   %-10s %-10s\n", "# seq name",      "fwd (raw)",   "bck (raw) ",  "fwd (bits)",  "bck (bits)");
     printf("%-30s   %10s %10s   %10s %10s\n",     "#--------------", "----------",  "----------",  "----------",  "----------");
@@ -566,8 +682,9 @@ main(int argc, char **argv)
       else if (status != eslOK)      p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
 
       /* Set the profile and null model's target length models */
-      p7_bg_SetLength     (bg, sq->n);
-      p7_profile_SetLength(gm, sq->n);
+      p7_bg_SetLength           (bg, sq->n);
+      p7_profile_SetLength      (gm, sq->n);
+      p7_oprofile_ReconfigLength(om, sq->n);
 
       /* Determine bands */
       if (esl_opt_GetBoolean(go, "--full"))
@@ -578,6 +695,14 @@ main(int argc, char **argv)
 	  p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fsc);
 	  p7_BackwardFilter(sq->dsq, sq->n, om, ox, bnd);
 	}
+
+#ifdef p7_DEBUGGING
+      if (esl_opt_GetBoolean(go, "--fF")) p7_gmx_Dump(stdout, ox->fwd, p7_DEFAULT);
+      if (esl_opt_GetBoolean(go, "--fB")) p7_gmx_Dump(stdout, ox->bck, p7_DEFAULT);
+      if (esl_opt_GetBoolean(go, "--fD")) p7_gmx_Dump(stdout, ox->pp,  p7_DEFAULT);
+#endif
+
+      if (esl_opt_GetBoolean(go, "-G")) p7_gbands_Dump(stdout, bnd);
 
       /* Resize banded DP matrix if necessary */
       p7_bandmx_GrowTo(bmx, bnd);
@@ -622,6 +747,8 @@ main(int argc, char **argv)
   esl_sq_Destroy(sq);
   p7_gbands_Destroy(bnd);
   p7_bandmx_Destroy(bmx);
+  p7_filtermx_Destroy(ox);
+  p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);

@@ -1133,6 +1133,84 @@ p7_hmm_SampleUniform(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,
 }
 
 
+/* Function:  p7_hmm_SampleSinglePathed()
+ * Synopsis:  Sample a random HMM with only a single P=1.0 path possible.
+ *
+ * Purpose:   Sample a random HMM that only has 1.0 or 0.0 for its
+ *            transition and emission probabilities. This makes it possible
+ *            to create a profile that has only a single alignment path --
+ *            a useful case for unambiguous testing and debugging.
+ *            
+ *            To do this, the caller also needs to configure unihit
+ *            glocal mode and a target length of zero:
+ *            <p7_profile_ConfigUniglocal(gm, hmm, bg, 0)>.
+ *            
+ * Returns:   <eslOK> on success, and the new HMM is returned through
+ *            <ret_hmm>. Caller is responsible for freeing it with 
+ *            <p7_hmm_Destroy()>.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ */
+int
+p7_hmm_SampleSinglePathed(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
+{
+  P7_HMM *hmm = NULL;
+  char   *logmsg   = "[random single-pathed HMM, all t/e probs 0 or 1, created by sampling]";
+  int     k;
+  int     status;
+  
+  if ( (hmm = p7_hmm_Create(M, abc)) == NULL) { status = eslEMEM; goto ERROR; }
+  if ( (status = p7_hmm_Zero(hmm))  != eslOK) goto ERROR;
+
+  /* At node k=0 boundary:
+   *    t[0][MM,MI,MD] = B->{MID} distribution
+   *    t[0][IM,II] = a normal I transition distribution (I0 exists)
+   *    t[0][DM,DD] = 1.0,0.0 by convention (no D0 state)
+   *    mat[0][...] = {1.0,0.0...} by convention (no M_0 state)
+   *    ins[0][...] = a normal I emission distribution (I0 exists)
+   * At node k=M boundary: 
+   *    t[M][MM,MI,MD] = ME,MI, 0.0    
+   *    t[M][IM,II]    = IE,II
+   *    t[M][DM,DD]    = 1.0(DE), 0.0
+   *    mat[M],ins[M] as usual
+   * [xref hmmer.h::P7_HMM documentation]
+   */
+  for (k = 0; k <= M; k++)
+    {
+      hmm->mat[k][(k==0 ? 0 : esl_rnd_Roll(r,abc->K))] = 1.0f;
+      hmm->ins[k][            esl_rnd_Roll(r,abc->K)]  = 1.0f;
+      
+      /* code below relies on partial transition order, vectors 
+       * starting at 0, 3, 5: MM MI MD {IM II} DM DD 
+       */
+      hmm->t[k][esl_rnd_Roll(r, (k==M ? 2 : 3))]          = 1.0f; /* at k==M, MD=0.0 */
+      hmm->t[k][p7H_IM]                                   = 1.0f; /* can't set II to 1.0; infinite loop */
+      hmm->t[k][p7H_DM + (k==M ? 0 : esl_rnd_Roll(r, 2))] = 1.0f; /* at k==M, DM=1.0, DD=0.0 */
+    }
+
+  /* Add mandatory annotation */
+  p7_hmm_SetName(hmm, "single-pathed-hmm");
+  p7_hmm_AppendComlog(hmm, 1, &logmsg);
+  p7_hmm_SetCtime(hmm);
+  p7_hmm_SetConsensus(hmm, NULL);
+
+#ifdef p7_DEBUGGING
+  p7_hmm_Validate(hmm, NULL, 0.0001);
+#endif
+
+  *ret_hmm = hmm;
+  return eslOK;
+
+  return eslOK;
+
+ ERROR:
+  p7_hmm_Destroy(hmm);
+  *ret_hmm = NULL;
+  return status;
+}
+
+
+
 
 /* Function:  p7_hmm_Compare()
  * Synopsis:  Compare two HMMs for equality.
