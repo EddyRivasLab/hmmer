@@ -161,12 +161,15 @@ p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bm
   bnd_kp  = bmx->bnd->kmem + (p7_GBANDS_NK * bmx->bnd->nrow - 1);   /* ditto                               */
   dpc     = bmx->dp2  + (p7B_NSCELLS * bmx->bnd->ncell - 1);        /* Backwards scores go to <dp2> matrix */
   xc      = bmx->xmx2 + (p7B_NXCELLS * bmx->bnd->nrow - 1);         /* last elem in xmx2                   */
-  last_ia = L+2;		/* assure a boundary condition (last_ia - L - 2) = 0, when first ib==L     */
 
-  /* To get i==L boundary condition to work, we initialize as follows: */
-  xC = gm->xsc[p7P_C][p7P_MOVE];
-  xJ = -eslINFINITY;
-  xN = -eslINFINITY;
+  /* Initialization condition for xC/xN/xJ follows from a convention
+   * that as we start row i, they already include all contribution
+   * from row i+1... as we start, that's L+1.
+   */
+  xC      = gm->xsc[p7P_C][p7P_MOVE];
+  xJ      = -eslINFINITY;
+  xN      = -eslINFINITY;
+  last_ia = L+1;		/* assure a boundary condition (last_ia - L - 1) = 0, when first ib==L     */
 
   /* Traversing banded rows takes two loops: <g> over segments ia..ib, then <i> over ib..ia rows */
   for (g = bmx->bnd->nseg-1; g >= 0; g--)
@@ -182,29 +185,25 @@ p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bm
       kan = kbn = 0;
       dpn = dpc;
 
-      /* reinitialization of the specials, for next row ib+1 just
-       * outside the banded segment we're about to start. We last left
-       * xN/xJ/xC set for row (last_ia-1). The number of residues in
-       * in the intersegment gap is (last_ia - ib - 1). This is at
-       * least 1; when it is 1, we're going to just use xN/xJ/xC as
-       * they are. When it's more, we have to account for an additional
-       * (last_ia - ib - 2) transitions.
-       *     ib] ib+1 ... ... last_ia-1 [last_ia ... ... ]
-       *            <-  <-  <-  xC
-       *             x   x   x    : (last_ia-1) - (ib+1) 
-       * note the boundary condition, if ib==L, (last_ia - ib - 2) must be 0; this
-       * dictates initialization of last_ia to L+2.
+      /* reinitialization of the specials, for this row i=ib as we
+       * start a banded segment. We last left xN/xJ/xC set for row
+       * (last_ia-1). The number of residues in the intersegment
+       * gap is (last_ia - ib - 1). Because we defined segments to be
+       * separated by at least 1 row, (last_ia-ib-1) is at least 1,
+       * except when we're at ib=L where it's 0. We have to account
+       * for (last_ia-ib-1) transitions (CC,NN,JJ) to reset the
+       * xC/xN/xJ values for row ib. To avoid a pathological case
+       * where ib=L, last_ia-ib-1, and a loop penalty happens to be
+       * -inf, we have to avoid multiplying 0*-inf (=NaN), so we 
+       * wrap in a (last_ia-ib-1 > 0) test.
        */
-      xC = xC + ( (last_ia - ib - 2) ? (last_ia - ib - 2) * gm->xsc[p7P_C][p7P_LOOP] : 0.0f); /* watch out for 0*-inf=NaN */
-      xJ = xJ + ( (last_ia - ib - 2) ? (last_ia - ib - 2) * gm->xsc[p7P_J][p7P_LOOP] : 0.0f);
-      xN = xN + ( (last_ia - ib - 2) ? (last_ia - ib - 2) * gm->xsc[p7P_N][p7P_LOOP] : 0.0f);
+      if (last_ia-ib-1) {
+	xC += (last_ia - ib - 1) * gm->xsc[p7P_C][p7P_LOOP];
+	xJ += (last_ia - ib - 1) * gm->xsc[p7P_J][p7P_LOOP];
+	xN += (last_ia - ib - 1) * gm->xsc[p7P_N][p7P_LOOP];
+      }
       xG = xL = xB = xE = -eslINFINITY;
 
-      /* xE was reachable from xJ, xC on prev row ib+1, but this will
-       * have no effect when we calculate first row i=ib below, so may
-       * as well set it to -eslINFINITY instead of wasting calculation
-       * on it.
-       */
       for (i = ib; i >= ia; i--)
 	{
 	  kbc      = *bnd_kp--;	       /* pick up kac..kbc band on row i; b before a    */
@@ -235,22 +234,27 @@ p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bm
 	  if (kbn>kbc && kbc+1 >= kan) { mgn = *(dpn-4) + *rsn; mln = *(dpn-5) + *rsn; dpn -= p7B_NSCELLS;  rsn -= p7P_NR; } 
 	  else                         { mgn = mln = -eslINFINITY; }
 	  
-	  *xc-- = xC = (ib == L ? xC : xC + gm->xsc[p7P_C][p7P_LOOP]); /* ib==L has to be special cased. */
+	  /* xC,xJ,xN,xL,xG already contain their contribution from next row i+1 */
+	  *xc-- = xC;
 	  *xc-- = xG;					 // delayed store; was calculated on prv row i+1
 	  *xc-- = xL;					 // delayed store, ditto
 	  *xc-- = xB = p7_FLogsum( xL + gm->xsc[p7P_B][0],
 				   xG + gm->xsc[p7P_B][1]);
-	  *xc-- = xJ = p7_FLogsum( xJ + gm->xsc[p7P_J][p7P_LOOP],
+	  *xc-- = xJ = p7_FLogsum( xJ,
 				   xB + gm->xsc[p7P_J][p7P_MOVE]);
-	  *xc-- = xN = p7_FLogsum( xN + gm->xsc[p7P_N][p7P_LOOP],
+	  *xc-- = xN = p7_FLogsum( xN,
 				   xB + gm->xsc[p7P_N][p7P_MOVE]);
 	  *xc-- = xE = p7_FLogsum( xJ + gm->xsc[p7P_E][p7P_LOOP],
 				   xC + gm->xsc[p7P_E][p7P_MOVE]);
 
-	  dlc = -eslINFINITY;             /* initialize: DL(i,kb+1) is out of band, so -inf */
-	  dgc = xE + TSC(p7P_DGE,kbc);    /*      whereas the DG(kbc) is reachable on a glocal path. This sets dgc to D(i,k+1), Dk+1->...->Dm->E wing retracted prob. At kbc=M, TSC(DGE,M) = 0.  */
+	  xC += gm->xsc[p7P_C][p7P_LOOP];
+	  xJ += gm->xsc[p7P_J][p7P_LOOP];
+	  xN += gm->xsc[p7P_N][p7P_LOOP];
 	  xG  = -eslINFINITY;
 	  xL  = -eslINFINITY;
+
+	  dlc = -eslINFINITY;             /* initialize: DL(i,kb+1) is out of band, so -inf */
+	  dgc = xE + TSC(p7P_DGE,kbc);    /*      whereas the DG(kbc) is reachable on a glocal path. This sets dgc to D(i,k+1), Dk+1->...->Dm->E wing retracted prob. At kbc=M, TSC(DGE,M) = 0.  */
 	  for (k = kbc; k >= kac; k--)
 	    {
 	      /* Pick up iln, ign from (k,i+1) 
@@ -309,26 +313,19 @@ p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bm
 	      *dpc-- = mgc;
 	      *dpc-- = mlc;
 	    }
-
 	  kbn = kbc;
 	  kan = kac;
 	  dpn = last_dpc;	/* skips any remaining right overhang on row i+1 */
 	}
-
-      /* as we finish a segment, we have to compute specials xN/xC/xJ
-       * on row ia-1 (which may be i=0), without storage. If there's 
-       * another segment ending on a new ib, we will reinitialize starting
-       * from xN/xC/xJ across the (last_ia - ib - 1) residues in the gap.
-       */
-      xC =             xC + gm->xsc[p7P_C][p7P_LOOP];
-      xB = p7_FLogsum( xL + gm->xsc[p7P_B][0],         xG + gm->xsc[p7P_B][1]);        /* xL,xG were precomputed when we did row i=1      */
-      xJ = p7_FLogsum( xJ + gm->xsc[p7P_J][p7P_LOOP],  xB + gm->xsc[p7P_J][p7P_MOVE]);
-      xN = p7_FLogsum( xN + gm->xsc[p7P_N][p7P_LOOP],  xB + gm->xsc[p7P_N][p7P_MOVE]);
+      
+      /* As we terminate a segment, we need to leave xN/xC/xJ calculated for row ia-1 */
+      xB = p7_FLogsum( xL + gm->xsc[p7P_B][0], xG + gm->xsc[p7P_B][1]);
+      xJ = p7_FLogsum( xJ,       		   xB + gm->xsc[p7P_J][p7P_MOVE]);
+      xN = p7_FLogsum( xN,			   xB + gm->xsc[p7P_N][p7P_MOVE]);
       last_ia = ia;
     }
 
-  /* 1..last_ia-1 is outside any band segment; (last_ia-1) residues that must go thru N; S->N transition prob = 1.0 */
-  if (opt_sc) *opt_sc = xN + (last_ia > 1 ? (last_ia-1) * gm->xsc[p7P_N][p7P_LOOP] : 0.0f);
+  if (opt_sc) *opt_sc = xN + ((last_ia-1) ? (last_ia-1) * gm->xsc[p7P_N][p7P_LOOP] : 0.0f);
   return eslOK;
 }
 
@@ -729,8 +726,8 @@ main(int argc, char **argv)
       else
 	{
 	  printf("target sequence:      %s\n",        sq->name);
-	  printf("fwd raw score:        %.2f nats\n", fsc);
-	  printf("bck raw score:        %.2f nats\n", bsc);
+	  printf("fwd raw score:        %.4f nats\n", fsc);
+	  printf("bck raw score:        %.4f nats\n", bsc);
 	  printf("null score:           %.2f nats\n", nullsc);
 	  printf("per-seq score:        %.2f bits\n", (fsc - nullsc) / eslCONST_LOG2);
 	  printf("RAM usage in DP:      %.3fM\n",     (double) (p7_bandmx_Sizeof(bmx) / 1000000));

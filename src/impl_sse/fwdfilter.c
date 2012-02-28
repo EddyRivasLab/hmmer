@@ -1415,7 +1415,7 @@ main(int argc, char **argv)
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
-  float           fraw, braw, nullsc, fsc, bsc;
+  float           fraw, nullsc, fsc, bsc;
   float           gfraw, gbraw, gfsc, gbsc;
   float           gmem, cmem;
   double          P, gP;
@@ -1480,7 +1480,7 @@ main(int argc, char **argv)
       if (esl_opt_GetBoolean(go, "-F")) p7_gmx_Dump(stdout, ox->fwd, p7_DEFAULT);
       if (esl_opt_GetBoolean(go, "-B")) p7_gmx_Dump(stdout, ox->bck, p7_DEFAULT);
       if (esl_opt_GetBoolean(go, "-P")) p7_gmx_Dump(stdout, ox->pp, p7_DEFAULT);
-      bsc  =  (braw-nullsc) / eslCONST_LOG2;
+      bsc  =  (ox->bcksc-nullsc) / eslCONST_LOG2;
 #endif
 
       fsc  =  (fraw-nullsc) / eslCONST_LOG2;
@@ -1495,14 +1495,14 @@ main(int argc, char **argv)
       p7_gbands_Dump(stdout, bnd);	  
 
       if (esl_opt_GetBoolean(go, "-1")) 
-	printf("%-30s\t%-20s\t%9.2g\t%6.1f\t%6.1f\t%9.2g\t%6.1f\t%6.2fM\t%6.2fM\n", sq->name, hmm->name, P, fsc, bsc, gP, gfsc, gmem, cmem);
+	printf("%-30s\t%-20s\t%9.2g\t%7.4f\t%7.4f\t%9.2g\t%6.1f\t%6.2fM\t%6.2fM\n", sq->name, hmm->name, P, fsc, bsc, gP, gfsc, gmem, cmem);
       else
 	{
 	  
 	  printf("target sequence:      %s\n",        sq->name);
-	  printf("fwd filter raw score: %.2f nats\n", fraw);
+	  printf("fwd filter raw score: %.4f nats\n", fraw);
 #ifdef p7_DEBUGGING
-	  printf("bck filter raw score: %.2f nats\n", braw);
+	  printf("bck filter raw score: %.4f nats\n", ox->bcksc);
 #endif
 	  printf("null score:           %.2f nats\n", nullsc);
 	  printf("per-seq score:        %.2f bits\n", fsc);
