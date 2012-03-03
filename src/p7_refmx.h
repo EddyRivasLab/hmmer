@@ -1,46 +1,50 @@
-/* P7_GMXD : dynamic programming matrix for dual-mode (local/glocal) alignment;
- *           full (quadratic memory, not banded, not checkpointed);
- *           "generic" (standard C code, not vectorized).
+/* P7_REFMX :
+ *  dynamic programming matrix for dual-mode (local/glocal) alignment;
+ *  full (quadratic memory, not banded, not checkpointed);
+ *  "reference implementation", baseline for comparison to the
+ *  production code.
  *           
- * This structure is not part of H3's main code path.
- * It is used as an example, and for testing.
- * The main code path uses a more complicated variant, P7_GMXB,
- * which is a banded DP dual-mode matrix; see p7_gmxb.[ch].
+ * This structure is not part of H3's main code path.  It is used as
+ * an example and for testing. Production code uses two other
+ * Forward/Backward implementations: a vectorized banding filter (see
+ * impl_{xxx}/fwdfilter.c) and a banded local/glocal alignment (see
+ * banded_fwdback.c).
+ * 
  */          
-#ifndef p7GMXD_INCLUDED
-#define p7GMXD_INCLUDED
+#ifndef p7REFMX_INCLUDED
+#define p7REFMX_INCLUDED
 
 #include "hmmer.h"
 
-#define p7GD_NSCELLS 6
-#define p7GD_ML 0
-#define p7GD_MG 1
-#define p7GD_IL 2
-#define p7GD_IG 3
-#define p7GD_DL 4
-#define p7GD_DG 5
+#define p7R_NSCELLS 6
+#define p7R_ML 0
+#define p7R_MG 1
+#define p7R_IL 2
+#define p7R_IG 3
+#define p7R_DL 4
+#define p7R_DG 5
 
-#define p7GD_NXCELLS 7
-#define p7GD_E  0
-#define p7GD_N  1
-#define p7GD_J  2
-#define p7GD_B  3
-#define p7GD_L  4
-#define p7GD_G  5
-#define p7GD_C  6
+#define p7R_NXCELLS 7
+#define p7R_E  0
+#define p7R_N  1
+#define p7R_J  2
+#define p7R_B  3
+#define p7R_L  4
+#define p7R_G  5
+#define p7R_C  6
 
 
-/* Layout of each row dp[i] of the P7_GMXD dynamic programming matrix:
+/* Layout of each row dp[i] of the P7_REFMX dynamic programming matrix:
  * dp[i]:   [ML MG IL IG DL DG] [ML MG IL IG DL DG] [ML MG IL IG DL DG]  ...  [ML MG IL IG DL DG]  [E  N  J  B  L  G  C]
  *     k:   |------- 0 -------| |------- 1 -------| |------- 2 -------|  ...  |------- M -------|  
- *          |--------------------------------- (M+1)*p7GD_NSCELLS ------------------------------|  |--- p7GD_NXCELLS --|
+ *          |--------------------------------- (M+1)*p7R_NSCELLS -------------------------------|  |--- p7R_NXCELLS --|
  * Initializations: * = -inf, . = calculated value, 0 = 0:
  *     0:    *  *  *  *  *  *    *  *  *  *  *  *    *  *  *  *  *  *          *  *  *  *  *  *     *  0  *  .  .  .  *
  *     i:    *  *  *  *  *  *    .  .  .  .  *  .    .  .  .  .  .  .          .  .  *  *  .  .     .  .  .  .  .  .  .
  * Access:
  *  Row dp[r]:                     gxd->dp_mem+(r*allocW) = dpc
- *  Main state s at node k={0..M}: dpc[k*p7GD_NSCELLS+s]   
- *  Special state s={ENJBLGC}:     dpc[(M+1)*p7GD_NSCELLS+s]
+ *  Main state s at node k={0..M}: dpc[k*p7R_NSCELLS+s]   
+ *  Special state s={ENJBLGC}:     dpc[(M+1)*p7R_NSCELLS+s]
  */
 typedef struct p7_gmxd_s {
   int      M;	     /* current DP matrix values valid for model of length M   */
@@ -53,9 +57,7 @@ typedef struct p7_gmxd_s {
   int      allocR;   /* # of allocated rows, dp[]                              */
   int      allocW;   /* width of each dp[i] row, in floats.                    */
   int      validR;   /* # of dp[] ptrs validly placed in dp_mem                */
-} P7_GMXD;
-
-
+} P7_REFMX;
 
 
 /* Usually we access the matrix values by stepping pointers thru,
@@ -64,28 +66,25 @@ typedef struct p7_gmxd_s {
  * having access macros, though we can expect these to be relatively
  * expensive to evaluate:
  */
-#define P7_GMXD_XMX(gxd,i,s)  ( (gxd)->dp[(i)][ ( ((gxd)->M) +1) * p7GD_NSCELLS + (s)] )
-#define P7_GMXD_MX(gxd,i,k,s) ( (gxd)->dp[(i)][ (k)              * p7GD_NSCELLS + (s)] )
+#define P7R_XMX(gxd,i,s)  ( (gxd)->dp[(i)][ ( ((gxd)->M) +1) * p7R_NSCELLS + (s)] )
+#define P7R_MX(gxd,i,k,s) ( (gxd)->dp[(i)][ (k)              * p7R_NSCELLS + (s)] )
+
+/* from p7_refmx.c */
+extern P7_REFMX *p7_refmx_Create(int M, int L);
+extern int       p7_refmx_GrowTo (P7_REFMX *gxd, int M, int L);
+extern char *    p7_refmx_DecodeSpecial(int type);
+extern int       p7_refmx_Reuse  (P7_REFMX *gxd);
+extern void      p7_refmx_Destroy(P7_REFMX *gxd);
+
+extern int       p7_refmx_Dump(FILE *ofp, P7_REFMX *gxd);
+extern int       p7_refmx_DumpWindow(FILE *ofp, P7_REFMX *gxd, int istart, int iend, int kstart, int kend);
+extern int       p7_refmx_DumpCSV(FILE *fp, P7_REFMX *pp, int istart, int iend, int kstart, int kend);
+
+/* from reference_fwdback.c */
+extern int      p7_GForwardDual(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, float *opt_sc);
 
 
-
-/* from p7_gmxd.c */
-extern P7_GMXD *p7_gmxd_Create(int M, int L);
-extern int      p7_gmxd_GrowTo (P7_GMXD *gxd, int M, int L);
-extern char *   p7_gmxd_DecodeSpecial(int type);
-extern int      p7_gmxd_Reuse  (P7_GMXD *gxd);
-extern void     p7_gmxd_Destroy(P7_GMXD *gxd);
-
-extern int      p7_gmxd_Dump(FILE *ofp, P7_GMXD *gxd);
-extern int      p7_gmxd_DumpWindow(FILE *ofp, P7_GMXD *gxd, int istart, int iend, int kstart, int kend);
-extern int      p7_gmxd_DumpCSV(FILE *fp, P7_GMXD *pp, int istart, int iend, int kstart, int kend);
-
-/* from generic_fwdback_dual.c */
-extern int      p7_GForwardDual(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMXD *gxd, float *opt_sc);
-
-
-
-#endif /*p7GMXD_INCLUDED*/
+#endif /*p7REFMX_INCLUDED*/
 
 /*****************************************************************
  * @LICENSE@
