@@ -87,8 +87,8 @@ HDRS =  hmmer.h \
 	p7_gbands.h \
 	p7_gmxb.h \
 	p7_gmxchk.h \
-	p7_gmxd.h \
-	p7_hmmcache.h
+	p7_hmmcache.h\
+	p7_refmx.h
 
 OBJS =  banded_fwdback.o\
 	build.o\
@@ -101,7 +101,6 @@ OBJS =  banded_fwdback.o\
 	generic_fwdback.o\
 	generic_fwdback_banded.o\
 	generic_fwdback_chk.o\
-	generic_fwdback_dual.o\
 	generic_null2.o\
 	generic_msv.o\
 	generic_optacc.o\
@@ -118,6 +117,8 @@ OBJS =  banded_fwdback.o\
 	modelconfig.o\
 	modelstats.o\
 	mpisupport.o\
+	reference_fwdback.o\
+	reference_viterbi.o\
 	seqmodel.o\
 	tracealign.o\
 	p7_alidisplay.o\
@@ -129,13 +130,13 @@ OBJS =  banded_fwdback.o\
 	p7_gmx.o\
 	p7_gmxb.o\
 	p7_gmxchk.o\
-	p7_gmxd.o\
 	p7_hmm.o\
 	p7_hmmcache.o\
 	p7_hmmfile.o\
 	p7_pipeline.o\
 	p7_prior.o\
 	p7_profile.o\
+	p7_refmx.o\
 	p7_spensemble.o\
 	p7_tophits.o\
 	p7_trace.o\

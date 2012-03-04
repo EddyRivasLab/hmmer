@@ -30,7 +30,7 @@
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
-#include "p7_gmxd.h"
+#include "p7_refmx.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default   env  range  toggles                   reqs    incomp  help                                  docgroup*/
@@ -671,7 +671,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   P7_PROFILE     *gm  = NULL;
   P7_OPROFILE    *om  = NULL;
   P7_GMX         *gx  = NULL;
-  P7_GMXD        *gxd = NULL;
+  P7_REFMX       *rmx = NULL;
   P7_OMX         *ox  = NULL;
   P7_TRACE       *tr  = NULL;
   ESL_DSQ        *dsq = NULL;
@@ -719,7 +719,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
    * Viterbi and MSV to be able to handle the new P7_PROFILE's
    * dual-mode parameters.
    */
-  if (esl_opt_GetBoolean(go, "--fwd"))  gxd = p7_gmxd_Create(gm->M, L);
+  if (esl_opt_GetBoolean(go, "--fwd"))  rmx = p7_refmx_Create(gm->M, L);
   else                                  gx  = p7_gmx_Create (gm->M, L);
 
   /* Create and configure the vectorized profile, if needed;
@@ -760,7 +760,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
        */
       if (sc == eslINFINITY)
 	{
-	  if      (esl_opt_GetBoolean(go, "--fwd"))  p7_GForwardDual(dsq, L, gm, gxd,      &sc); /* any mode: dual,local,glocal; gm's config takes care of this */
+	  if      (esl_opt_GetBoolean(go, "--fwd"))  p7_ReferenceForward(dsq, L, gm, rmx,      &sc); /* any mode: dual,local,glocal; gm's config takes care of this */
 	  else if (esl_opt_GetBoolean(go, "--vit"))  p7_GViterbi    (dsq, L, gm, gx,       &sc); /* local-only mode. cmdline opts processing has already assured that --local set */
 	  else if (esl_opt_GetBoolean(go, "--msv"))  p7_GMSV        (dsq, L, gm, gx, nu,   &sc);
 	  else if (esl_opt_GetBoolean(go, "--hyb"))  p7_GHybrid     (dsq, L, gm, gx, NULL, &sc);
@@ -793,7 +793,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_gmx_Destroy(gx);
-  p7_gmxd_Destroy(gxd);
+  p7_refmx_Destroy(rmx);
   p7_trace_Destroy(tr);
   if (status == eslEMEM) sprintf(errbuf, "allocation failure");
   return status;

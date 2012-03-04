@@ -81,11 +81,15 @@ extern int       p7_refmx_DumpWindow(FILE *ofp, P7_REFMX *gxd, int istart, int i
 extern int       p7_refmx_DumpCSV(FILE *fp, P7_REFMX *pp, int istart, int iend, int kstart, int kend);
 
 /* from reference_fwdback.c */
-extern int      p7_GForwardDual(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, float *opt_sc);
+extern int      p7_ReferenceForward (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, float *opt_sc);
+extern int      p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, float *opt_sc);
+extern int      p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, P7_REFMX *bck, P7_REFMX *pp);
+extern int      p7_ReferenceAlignMEA(const P7_PROFILE *gm, const P7_REFMX *pp,  P7_REFMX *rmx, P7_TRACE *tr);
 
+/* from reference_viterbi.c */
+extern int      p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, P7_TRACE *opt_tr, float *opt_sc);
 
 #endif /*p7REFMX_INCLUDED*/
-
 /*****************************************************************
  * @LICENSE@
  * 
