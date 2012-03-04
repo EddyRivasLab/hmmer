@@ -528,7 +528,7 @@ p7_trace_DecodeStatetype(char st)
  *            
  * Args:      tr     - trace to validate
  *            abc    - alphabet corresponding to sequence <sq>
- *            sq     - digital sequence that <tr> is explaining
+ *            dsq    - digital sequence that <tr> is explaining
  *            errbuf - NULL, or an error message buffer allocated
  *                     for at least eslERRBUFSIZE chars.           
  *
@@ -608,7 +608,11 @@ p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *ds
 	  if (tr->k[z] < 1 || tr->k[z] > tr->M) ESL_FAIL(eslFAIL, errbuf, "invalid k[] at %d", z);
 	  if (tr->k[z] != k)                    ESL_FAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
 	}
-      else  if (tr->k[z] != 0)                  ESL_FAIL(eslFAIL, errbuf, "invalid k[z] at %d", z);
+      else
+	{
+	  k = 0;		/* reset expected k */
+	  if (tr->k[z] != 0)                  ESL_FAIL(eslFAIL, errbuf, "invalid k[z] at %d", z);
+	}
 
       /* Validate emission data, i[] and pp[] */
       if (is_memitter[(int) tr->st[z]] || (is_temitter[(int) tr->st[z]] && tr->st[z-1] == tr->st[z]))

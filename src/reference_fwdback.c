@@ -1434,8 +1434,8 @@ main(int argc, char **argv)
       p7_ReferenceForward (sq->dsq, sq->n, gm, fwd, &fsc);    if (esl_opt_GetBoolean(go, "-F")) p7_refmx_Dump(stdout, fwd);
       p7_ReferenceBackward(sq->dsq, sq->n, gm, bck, &bsc);    if (esl_opt_GetBoolean(go, "-B")) p7_refmx_Dump(stdout, bck);
       p7_ReferenceDecoding(gm, fwd, bck, bck);                if (esl_opt_GetBoolean(go, "-D")) p7_refmx_Dump(stdout, bck);
-      p7_ReferenceAlignMEA(/*gamma=*/0.5, gm, bck, fwd); if (esl_opt_GetBoolean(go, "-A")) p7_refmx_Dump(stdout, bck);
-      p7_GCentroidTrace(/*gamma=*/0.5, gm, bck, fwd, tr); if (esl_opt_GetBoolean(go, "-T")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
+      p7_ReferenceAlignMEA(gm, bck, fwd, tr);                 if (esl_opt_GetBoolean(go, "-A")) p7_refmx_Dump(stdout, bck);
+      /*                                    */                if (esl_opt_GetBoolean(go, "-T")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 
       if (csvfile) {
 	FILE *csvfp = fopen(csvfile, "w");

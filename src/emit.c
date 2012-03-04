@@ -4,8 +4,10 @@
  *    1. Exported API: sequence emission routines
  *    2. Private functions
  *    3. Stats driver
- *    4. Example
- *    5. Copyright and license
+ *    4. Unit tests
+ *    5. Test driver
+ *    6. Example
+ *    5. Copyright and license information.
  */
 
 #include "p7_config.h"
@@ -34,7 +36,8 @@ static int sample_endpoints(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int *ret_ks
  *            allocated. Having the caller provide these reusable
  *            objects allows re-use of both <sq> and <tr> in repeated
  *            calls, saving malloc/free wastage. Either can be passed
- *            as <NULL> if it isn't needed.
+ *            as <NULL> if it isn't needed. If <sq> is provided, it
+ *            must be digital mode, not text.
  *            
  *            This does not set any fields in the <sq> except for the
  *            sequence itself. Caller must set the name, and any other
@@ -93,7 +96,7 @@ p7_CoreEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr)
       case p7T_S:
 	switch (esl_rnd_FChoose(r, hmm->t[0], 3)) {
 	case 0:  st = p7T_MG; break;
-	case 1:  st = p7T_N;  break;	/* I0 mapped to NN transitions */
+	case 1:  st = p7T_N;  break;	/* I0 mapped to NN transitions. We've already added one C. */
 	case 2:  st = p7T_DG; break;
 	default: ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible.");  	    	
 	}
@@ -105,6 +108,7 @@ p7_CoreEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr)
 	case 1: st = p7T_N;  break;
 	default: ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible.");  	    
 	}
+	break;
 	
       case p7T_MG:
 	switch (esl_rnd_FChoose(r, hmm->t[k], 3)) {
@@ -142,9 +146,9 @@ p7_CoreEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr)
       default: ESL_XEXCEPTION(eslECORRUPT, "impossible state reached during emission");
       }
 
-      /* Bump k,i if needed, depending on new state type */
+      /* Bump k if needed, depending on new state type */
       if (st == p7T_MG || st == p7T_DG) k++;
-      if (st == p7T_MG || st == p7T_IG || st == p7T_N || st == p7T_C) i++;
+      /* now, using new k, translate some details to a profile trace */
 
       /* a transit to {MD}1 means we're clear of I0 and starting the core */
       if (k == 1 && (st == p7T_MG || st == p7T_DG))
@@ -173,11 +177,15 @@ p7_CoreEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, ESL_SQ *sq, P7_TRACE *tr)
 	  st = p7T_C;
 	}
       
+      /* Bump i if needed, depending on state type */
+      if (st == p7T_MG || st == p7T_IG || st == p7T_N || st == p7T_C) i++;
+
+
       /* Sample new residue x if in match or insert */
       if      (st == p7T_MG) x = esl_rnd_FChoose(r, hmm->mat[k], hmm->abc->K);
       else if (st == p7T_IG) x = esl_rnd_FChoose(r, hmm->ins[k], hmm->abc->K);
-      else if (st == p7T_N)  x = esl_rnd_FChoose(r, hmm->ins[k], hmm->abc->K);
-      else if (st == p7T_C)  x = esl_rnd_FChoose(r, hmm->ins[k], hmm->abc->K);
+      else if (st == p7T_N)  x = esl_rnd_FChoose(r, hmm->ins[k], hmm->abc->K); // k=0 
+      else if (st == p7T_C)  x = esl_rnd_FChoose(r, hmm->ins[k], hmm->abc->K); // k=M 
       else                   x = eslDSQ_SENTINEL;
 
       /* Add state to trace */
@@ -216,21 +224,22 @@ ERROR:
  *            both of these, though they may get reallocated/grown
  *            here. Either can be passed as <NULL> if unneeded.
  *            
- *            Only the sequence field is set in the <sq>. Caller must
- *            set the name, plus any other fields it wants to set. If
- *            the <sq> was created in digital mode, this is the <sq->dsq>;
- *            if the <sq> was created in text mode, this is <sq->seq>.
+ *            Only the digital sequence field is set in the
+ *            <sq>. Caller must provide a digital sequence object, not
+ *            a text one. Caller must set the name, plus any other
+ *            fields it wants to set, if it's going to use it as a
+ *            valid <ESL_SQ> object.
  *            
  *            <p7_ProfileEmit()> deliberately uses an <ESL_SQ> object
  *            instead of a plain <ESL_DSQ *> or <char *> string, to
  *            take advantage of the object's support for dynamic
- *            reallocation of seq length, and to allow both digital and
- *            text mode generation.
+ *            reallocation of seq length.
  *
  * Args:      r    - source of randomness
  *            hmm  - core probabilities of the profile
  *            gm   - configured search profile
- *            sq   - optRETURN: sampled sequence
+ *            bg   - background model (for I,N,C,J emission probs)
+ *            sq   - optRETURN: sampled digital sequence 
  *            tr   - optRETURN: sampled trace
  *
  * Throws:    (no abnormal error conditions)
@@ -297,14 +306,14 @@ p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE *gm, const
 	else           st = (esl_rnd_FChoose(r, P7H_TDEL(hmm, k), p7H_NTDEL) == 0) ? p7T_MG : p7T_DG; 
 	break;
 
-      case p7T_IL: st = (esl_rnd_FChoose(r, P7H_TINS(hmm, k), p7H_NTINS)    == 0)        ? p7T_ML : p7T_IL;  break;
-      case p7T_IG: st = (esl_rnd_FChoose(r, P7H_TINS(hmm, k), p7H_NTINS)    == 0)        ? p7T_MG : p7T_IG;  break;
-      case p7T_B:  st = (esl_rnd_FChoose(r, xt[p7P_B],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_G  : p7T_L;   break;
-      case p7T_G:  st = (esl_rnd_FChoose(r, xt[p7P_G],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_DG : p7T_MG;  break;
-      case p7T_N:  st = (esl_rnd_FChoose(r, xt[p7P_N],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_B  : p7T_N;   break;
-      case p7T_E:  st = (esl_rnd_FChoose(r, xt[p7P_E],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_C  : p7T_J;   break;
-      case p7T_C:  st = (esl_rnd_FChoose(r, xt[p7P_C],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_T  : p7T_C;   break;
-      case p7T_J:  st = (esl_rnd_FChoose(r, xt[p7P_J],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_B  : p7T_J;   break;
+      case p7T_IL: st = (esl_rnd_FChoose(r, P7H_TINS(hmm, k), p7H_NTINS)    == 0)        ? p7T_ML : p7T_IL;                 break;
+      case p7T_IG: st = (esl_rnd_FChoose(r, P7H_TINS(hmm, k), p7H_NTINS)    == 0)        ? p7T_MG : p7T_IG;                 break;
+      case p7T_B:  st = (esl_rnd_FChoose(r, xt[p7P_B],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_G  : p7T_L;                  break;
+      case p7T_G:  st = (esl_rnd_FChoose(r, xt[p7P_G],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_DG : p7T_MG; kend = hmm->M;  break;
+      case p7T_N:  st = (esl_rnd_FChoose(r, xt[p7P_N],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_B  : p7T_N;                  break;
+      case p7T_E:  st = (esl_rnd_FChoose(r, xt[p7P_E],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_C  : p7T_J;                  break;
+      case p7T_C:  st = (esl_rnd_FChoose(r, xt[p7P_C],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_T  : p7T_C;                  break;
+      case p7T_J:  st = (esl_rnd_FChoose(r, xt[p7P_J],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_B  : p7T_J;                  break;
       default:     ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible state reached during emission");
       }
      
@@ -557,8 +566,114 @@ main(int argc, char **argv)
 /*-------------------- end, stats driver ------------------------*/
 
 
+
 /*****************************************************************
- * x. Example
+ * 4. Unit tests
+ *****************************************************************/
+#ifdef p7EMIT_TESTDRIVE
+
+static void
+utest_core_emit(ESL_RANDOMNESS *rng, P7_HMM *hmm, int N)
+{
+  char      msg[] = "core emit test failed";
+  P7_TRACE *tr    = p7_trace_Create();
+  ESL_SQ   *sq    = esl_sq_CreateDigital(hmm->abc);
+  char      errbuf[eslERRBUFSIZE];
+
+  while (N--)
+    {
+      if ( p7_CoreEmit(rng, hmm, sq, tr)                    != eslOK) esl_fatal(msg);
+      if ( p7_trace_Validate(tr, hmm->abc, sq->dsq, errbuf) != eslOK) esl_fatal(msg);
+      esl_sq_Reuse(sq);
+      p7_trace_Reuse(tr);
+    }
+  esl_sq_Destroy(sq);
+  p7_trace_Destroy(tr);
+}
+
+static void
+utest_profile_emit(ESL_RANDOMNESS *rng, P7_HMM *hmm, P7_PROFILE *gm, P7_BG *bg, int N)
+{
+  char      msg[] = "profile emit test failed";
+  P7_TRACE *tr    = p7_trace_Create();
+  ESL_SQ   *sq    = esl_sq_CreateDigital(hmm->abc);
+  char      errbuf[eslERRBUFSIZE];
+
+  while (N--)
+    {
+      if ( p7_ProfileEmit(rng, hmm, gm, bg, sq, tr)         != eslOK) esl_fatal(msg);
+      if ( p7_trace_Validate(tr, hmm->abc, sq->dsq, errbuf) != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+      esl_sq_Reuse(sq);
+      p7_trace_Reuse(tr);
+    }
+
+  esl_sq_Destroy(sq);
+  p7_trace_Destroy(tr);
+}
+
+
+
+#endif /*p7EMIT_TESTDRIVE*/
+/*------------------ end, unit tests ----------------------------*/
+
+/*****************************************************************
+ * 5. Test driver
+ *****************************************************************/
+#ifdef p7EMIT_TESTDRIVE
+
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-M",        eslARG_INT,    "145", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
+  { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "test driver for sequence emission from HMMs and profiles";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go           = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  int             M            = esl_opt_GetInteger(go, "-M");
+  int             L            = M; /* configured length model for profile. arbitrarily set to M, same as profile length */
+  int             N            = esl_opt_GetInteger(go, "-N");
+  ESL_RANDOMNESS *rng          = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET   *abc          = esl_alphabet_Create(eslAMINO);
+  P7_BG          *bg           = p7_bg_Create(abc);
+  P7_HMM         *hmm          = NULL;
+  P7_PROFILE     *gm           = p7_profile_Create(M, abc);
+  
+  p7_hmm_Sample(rng, M, abc, &hmm);
+  p7_profile_Config   (gm, hmm, bg);   
+  p7_profile_SetLength(gm, L);
+
+  utest_core_emit   (rng, hmm,         N);
+  utest_profile_emit(rng, hmm, gm, bg, N);
+
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+  p7_bg_Destroy(bg);
+  esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(rng);
+  esl_getopts_Destroy(go);
+}
+#endif /*p7EMIT_TESTDRIVE*/
+/*------------------ end, test driver ---------------------------*/
+
+
+/*****************************************************************
+ * 6. Example
  *****************************************************************/
 #ifdef p7EMIT_EXAMPLE
 
@@ -647,15 +762,12 @@ main(int argc, char **argv)
   return 0;
 }
 #endif /*p7EMIT_EXAMPLE*/
-
-
-
 /*---------------------- end, example ---------------------------*/
 
 /*****************************************************************
  * @LICENSE@
  *
- * SRE, Tue Jan  9 08:55:53 2007 [Janelia] [The Crystal Method, Vegas]
+ * SVN $URL$
  * SVN $Id$
  *****************************************************************/
 
