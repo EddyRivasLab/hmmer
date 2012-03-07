@@ -764,35 +764,6 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
   p7_OptimalAccuracy(om, ox2, ox1, &oasc);      /* <ox1> is now overwritten with OA scores              */
   p7_OATrace        (om, ox2, ox1, ddef->tr);   /* <tr>'s seq coords are offset by i-1, rel to orig dsq */
 
-  /* Is null2 set already for this i..j? (It is, if we're in a domain that
-   * was defined by stochastic traceback clustering in a multidomain region;
-   * it isn't yet, if we're in a simple one-domain region). If it isn't,
-   * do it now, by the expectation (posterior decoding) method.
-   */
-  if (! null2_is_done) {
-    p7_Null2_ByExpectation(om, ox2, null2);
-    for (pos = i; pos <= j; pos++)
-      ddef->n2sc[pos]  = logf(null2[sq->dsq[pos]]);
-  }
-  for (pos = i; pos <= j; pos++)
-    domcorrection   += ddef->n2sc[pos];         /* domcorrection is in units of NATS */
-
-
-  if (long_target) {
-    /* for long_target case, merge in the results of two null3 correction
-     * see ~/notebook/2012/0214_Dfam_false_positives/00NOTES 02/19 for details
-     */
-    if (bg->use_null3) {
-      p7_null3_score(om->abc, sq->dsq, NULL /*don't use trace*/, i, j, bg, &null3_corr);
-      domcorrection = p7_FLogsum (domcorrection, null3_corr);
-    }
-    if (bg->use_null3w) {
-      p7_null3_windowed_score(om->abc, sq->dsq, i, j, bg, &null3_corr);
-      domcorrection = p7_FLogsum (domcorrection, null3_corr);
-    }
-  }
-
-
 
   /* hack the trace's sq coords to be correct w.r.t. original dsq */
   for (z = 0; z < ddef->tr->N; z++)
@@ -806,21 +777,55 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
   dom = &(ddef->dcl[ddef->ndom]);
 
   /* store the results in it */
+  dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq, ddef_app);
+  dom->iali          = dom->ad->sqfrom;
+  dom->jali          = dom->ad->sqto;
+  dom->ihq           = dom->ad->hqfrom;
+  dom->jhq           = dom->ad->hqto;
   dom->ienv          = i;
   dom->jenv          = j;
   dom->envsc         = envsc;         /* in units of NATS */
-  dom->domcorrection = domcorrection; /* in units of NATS */
   dom->oasc          = oasc;	      /* in units of expected # of correctly aligned residues */
   dom->dombias       = 0.0;	/* gets set later, using bg->omega and dombias */
   dom->bitscore      = 0.0;	/* gets set later by caller, using envsc, null score, and dombias */
   dom->lnP           = 0.0;	/* gets set later by caller, using bitscore */
   dom->is_reported   = FALSE;	/* gets set later by caller */
   dom->is_included   = FALSE;	/* gets set later by caller */
-  dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq, ddef_app);
-  dom->iali          = dom->ad->sqfrom;
-  dom->jali          = dom->ad->sqto;
-  dom->ihq           = dom->ad->hqfrom;
-  dom->jhq           = dom->ad->hqto;
+
+
+
+  /* Compute bias correction
+   *
+   * Is null2 set already for this i..j? (It is, if we're in a domain that
+   * was defined by stochastic traceback clustering in a multidomain region;
+   * it isn't yet, if we're in a simple one-domain region). If it isn't,
+   * do it now, by the expectation (posterior decoding) method.
+   */
+  if (! null2_is_done) {
+    p7_Null2_ByExpectation(om, ox2, null2);
+    for (pos = i; pos <= j; pos++)
+      ddef->n2sc[pos]  = logf(null2[sq->dsq[pos]]);
+  }
+  for (pos = i; pos <= j; pos++)
+    domcorrection   += ddef->n2sc[pos];         /* domcorrection is in units of NATS */
+
+  if (long_target) {
+    /* for long_target case, merge in the results of two null3 correction
+     * see ~/notebook/2012/0214_Dfam_false_positives/00NOTES 02/19 for details
+     *
+     * bias composition is based only on the aligned positions:
+     */
+    if (bg->use_null3) {
+      p7_null3_score(om->abc, sq->dsq, NULL /*don't use trace*/, dom->iali, dom->jali, bg, &null3_corr);
+      domcorrection = p7_FLogsum (domcorrection, null3_corr);
+    }
+    if (bg->use_null3w) {
+      p7_null3_windowed_score(om->abc, sq->dsq, dom->iali, dom->jali, bg, &null3_corr);
+      domcorrection = p7_FLogsum (domcorrection, null3_corr);
+    }
+  }
+
+  dom->domcorrection = domcorrection; /* in units of NATS */
 
   ddef->ndom++;
 
