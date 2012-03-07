@@ -3,11 +3,18 @@
 
 /* Function:  fm_createAlphabet()
  *
+ * Synopsis:   Produce an alphabet for FMindex.
+ *
  * Purpose:   Produce an alphabet for FMindex. This may end up being
  *            replaced with easel alphabet functions, but the easel
  *            requirement of having a gap-character between
  *            cannonical and degenerate symbols poses a problem
  *            from a bit-packing perspective
+ *
+ * Args:      meta      - metadata object already initialized with the alphabet type.
+ *                        meta's alphabet (and corresponding size) are set here
+ *            alph_bits - pointer to an int that this function sets equal to the
+ *                        number of bits required to store the alphabet (log of alph size)
  *
  * Returns:   <eslOK> on success.
  */
@@ -68,11 +75,10 @@ ERROR:
 
 /* Function:  fm_reverseString()
  *
- * Purpose:   Take as input a string and its length, and reverse the
- *            string in place.
- *            TODO: this file is probably not the best place for
- *            this function.
- * Returns:   <eslOK> on success.
+ * Synopsis:   Take as input a string and its length, and reverse the
+ *             string in place.
+ *
+ * Returns:    <eslOK> on success.
  */
 int
 fm_reverseString (char* str, int N)
@@ -93,7 +99,12 @@ fm_reverseString (char* str, int N)
   return eslOK;
 }
 
-
+/* Function:  fm_getComplement()
+ *
+ * Synopsis:  convert a character c to its complement
+ *
+ * Returns:   <eslOK> on success.
+ */
 int
 fm_getComplement (char c, uint8_t alph_type)
 {

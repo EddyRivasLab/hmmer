@@ -1,7 +1,28 @@
+/* Architecture-independent functions used in FM-index range compuations
+ * and list management.
+ *
+ * Contents:
+ *   1. List management
+ *   2. Interval / range computation
+ *   3. Functions related to the original sequence
+ *   4. FM data initialization, configuration, and reading from file
+ *
+ *  # 5. Unit tests.
+ *  # 6. Test driver.
+ *  # 7. Copyright and license.
+ *
+ */
 #include "hmmer.h"
-//#include "easel.h"
-//#include <string.h>
 
+
+
+
+/* Function:  fm_initSeeds()
+ *
+ * Synopsis:  initialize the object used to store a list of seed diagonals
+ *
+ * Returns:   eslEMEM in event of allocation failure, otherwise eslOK
+ */
 int
 fm_initSeeds (FM_DIAGLIST *list) {
   int status;
@@ -16,7 +37,14 @@ ERROR:
 
 }
 
-
+/* Function:  fm_newSeed()
+ *
+ * Synopsis:  return a pointer to the next seed element on the list,
+ *            increasing the size of the list, if necessary.
+ *
+ * Returns:   NULL in event of allocation failure, otherwise pointer to
+ *            the next seed diagonal
+ */
 FM_DIAG *
 fm_newSeed (FM_DIAGLIST *list) {
   int status;
@@ -32,6 +60,12 @@ ERROR:
   return NULL;
 }
 
+/* Function:  fm_initWindows()
+ *
+ * Synopsis:  initialize the object used to store a list of windows around seeds
+ *
+ * Returns:   eslEMEM in event of allocation failure, otherwise eslOK
+ */
 int
 fm_initWindows (FM_WINDOWLIST *list) {
   int status;
@@ -46,7 +80,18 @@ ERROR:
 
 }
 
-
+/* Function:  fm_newWindow()
+ *
+ * Synopsis:  return a pointer to the next window element on the list,
+ *            increasing the size of the list, if necessary.
+ *
+ * Purpose:   accepts <id>, <pos>, <fm_pos>, <k>, <length>, <score>,
+ *            and <complementarity>, assigns those to the next window
+ *            element, then returns it.
+ *
+ * Returns:   NULL in event of allocation failure, otherwise pointer to
+ *            the next seed diagonal
+ */
 FM_WINDOW *
 fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity) {
   int status;
@@ -75,6 +120,20 @@ ERROR:
 }
 
 
+
+/*********************************************************************
+ *# 2. Interval / range computation
+ *********************************************************************/
+
+/* Function:  fm_updateIntervalForward()
+ *
+ * Synopsis:  return a pointer to the next window element on the list,
+ *            increasing the size of the list, if necessary.
+ *
+ * Purpose:   Implement Algorithm 4 (i371) of Simpson (Bioinformatics 2010)
+ *
+ * Returns:   eslOK
+ */
 int
 fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_bk, FM_INTERVAL *interval_f) {
   uint32_t occLT_l, occLT_u, occ_l, occ_u;
@@ -93,7 +152,7 @@ fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *i
 
 /* Function:  getSARangeForward()
  * Synopsis:  For a given query sequence, find its interval in the FM-index, using forward search
- * Purpose:   Implement Algorithm 4 (i371) of Simpson (Bioinformatics 2010). I's the forward
+ * Purpose:   Implement Algorithm 4 (i371) of Simpson (Bioinformatics 2010). It's the forward
  *            search on a bi-directional BWT, as described by Lam 2009.
  *            All the meat is in the method of counting characters - bwt_getOccCount, which
  *            depends on compilation choices.
@@ -113,21 +172,13 @@ fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
   interval->lower  = interval_bk.lower = abs(fm->C[c]);
   interval->upper  = interval_bk.upper = abs(fm->C[c+1])-1;
 
-//  fprintf (stderr, "%d: %ld -> %ld, %ld -> %ld\n", c, (long)interval_bk.lower, (long)interval_bk.upper, (long)interval->lower, (long)interval->upper);
-
-
   while (interval_bk.lower>0 && interval_bk.lower <= interval_bk.upper) {
     c = query[++i];
     if (c == '\0')  // end of query - the current range defines the hits
       break;
 
     c = inv_alph[c];
-
     fm_updateIntervalForward( fm, cfg, c, &interval_bk, interval);
-
-
-//    fprintf (stderr, "%d: %ld -> %ld, %ld -> %ld\n", c, (long)interval_bk.lower, (long)interval_bk.upper, (long)interval->lower, (long)interval->upper);
-
     cfg->occCallCnt+=2;
   }
 
@@ -188,6 +239,11 @@ fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
   return eslOK;
 }
 
+
+
+/*********************************************************************
+ *# 3. Functions related to the original sequence
+ *********************************************************************/
 
 
 /* Function:  getChar()
@@ -267,6 +323,91 @@ fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint
   return eslOK;
 }
 
+
+
+/* Function:  computeSequenceOffset()
+ * Synopsis:  Search in the meta->seq_data array for the sequence id corresponding to the
+ *            requested position. The matching entry is the one with the largest index i
+ *            such that seq_data[i].offset < pos
+ *
+ *
+ * Input: file pointer to binary file
+ * Output: return filled meta struct
+ */
+//inline
+uint32_t
+fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int pos)
+{
+
+  uint32_t lo = fms[block].seq_offset;
+  uint32_t hi  = lo + fms[block].seq_cnt - 1;
+  uint32_t mid;
+
+  /*  //linear scan
+  for (mid=lo+1; i<=hi; i++) {
+    if (meta->seq_data[i].offset > pos) // the position of interest belongs to the previous sequence
+      break;
+  }
+  return i-1;
+    */
+
+  //binary search, first handling edge cases
+  if (lo==hi)                           return lo;
+  if (meta->seq_data[hi].offset <= pos) return hi;
+
+  while (1) {
+    mid = (lo + hi + 1) / 2;  /* round up */
+    if      (meta->seq_data[mid].offset <= pos) lo = mid; /* too far left  */
+    else if (meta->seq_data[mid-1].offset > pos) hi = mid; /* too far right */
+    else return mid-1;                 /* found it */
+  }
+
+
+}
+
+
+/* Function:  FM_getOriginalPosition()
+ * Synopsis:  find
+ * Purpose:   Given:
+ *            fms       - an array of FM-indexes
+ *            meta      - the fm metadata
+ *            fm_id     - index of the fm-index in which a hit is sought
+ *            length    - length of the hit in question
+ *            direction - direction of the hit in question
+ *            fm_pos    - position in the fm-index
+ *
+ *            Returns
+ *            *segment_id - index of the sequence segment captured in the FM-index
+ *            *seg_pos    - position in the original sequence, as compressed in the FM binary data structure
+ */
+int
+fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,
+                  uint32_t *segment_id, uint32_t *seg_pos
+) {
+  *segment_id = fm_computeSequenceOffset( fms, meta, fm_id, fm_pos);
+  *seg_pos    =  ( fm_pos - meta->seq_data[ *segment_id ].offset) + meta->seq_data[ *segment_id ].start - 1;
+
+  //verify that the hit doesn't extend beyond the bounds of the target sequence
+  if (direction == fm_forward) {
+    if (*seg_pos + length > meta->seq_data[ *segment_id ].start + meta->seq_data[ *segment_id ].length ) {
+      *segment_id  = *seg_pos  = -1;  // goes into the next sequence, so it should be ignored
+      return eslOK;
+    }
+  } else { //backward
+    if ((int)*seg_pos - length + 1 < 0 ) {
+      *segment_id  = *seg_pos  = -1; // goes into the previous sequence, so it should be ignored
+      return eslOK;
+    }
+  }
+
+
+  return eslOK;
+}
+
+/*********************************************************************
+ *# 4. FM data initialization, configuration, and reading from file
+ *********************************************************************/
+
 int
 fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go ) {
 
@@ -286,31 +427,12 @@ fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go ) {
   //bounding cutoffs
   cfg->max_scthreshFM  = 10.5;
 
-
-  cfg->max_depth       = 22;
-  cfg->neg_len_limit   = 3;
-  cfg->consec_pos_req  = 3;
-  cfg->score_ratio_req = 0.30;
-  cfg->msv_length      = 60;
-
-
   cfg->max_depth       = 18;
   cfg->neg_len_limit   = 4;
   cfg->consec_pos_req  = 4;
   cfg->score_ratio_req = 0.40;
   cfg->msv_length      = 50;
 
-  cfg->max_depth       = 16;
-  cfg->neg_len_limit   = 4;
-  cfg->consec_pos_req  = 5;
-  cfg->score_ratio_req = 0.45;
-  cfg->msv_length      = 45;
-
-  cfg->max_depth       = 14;
-  cfg->neg_len_limit   = 3;
-  cfg->consec_pos_req  = 6;
-  cfg->score_ratio_req = 0.49;
-  cfg->msv_length      = 40;
 */
   return eslOK;
 }
@@ -509,86 +631,6 @@ ERROR:
 }
 
 
-/* Function:  computeSequenceOffset()
- * Synopsis:  Search in the meta->seq_data array for the sequence id corresponding to the
- *            requested position. The matching entry is the one with the largest index i
- *            such that seq_data[i].offset < pos
- *
- *
- * Input: file pointer to binary file
- * Output: return filled meta struct
- */
-//inline
-uint32_t
-fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int pos)
-{
-
-  uint32_t lo = fms[block].seq_offset;
-  uint32_t hi  = lo + fms[block].seq_cnt - 1;
-  uint32_t mid;
-
-  /*  //linear scan
-  for (mid=lo+1; i<=hi; i++) {
-    if (meta->seq_data[i].offset > pos) // the position of interest belongs to the previous sequence
-      break;
-  }
-  return i-1;
-    */
-
-  //binary search, first handling edge cases
-  if (lo==hi)                           return lo;
-  if (meta->seq_data[hi].offset <= pos) return hi;
-
-  while (1) {
-    mid = (lo + hi + 1) / 2;  /* round up */
-    if      (meta->seq_data[mid].offset <= pos) lo = mid; /* too far left  */
-    else if (meta->seq_data[mid-1].offset > pos) hi = mid; /* too far right */
-    else return mid-1;                 /* found it */
-  }
-
-
-}
-
-
-/* Function:  FM_getOriginalPosition()
- * Synopsis:  find
- * Purpose:   Given:
- *            fms       - an array of FM-indexes
- *            meta      - the fm metadata
- *            fm_id     - index of the fm-index in which a hit is sought
- *            length    - length of the hit in question
- *            direction - direction of the hit in question
- *            fm_pos    - position in the fm-index
- *
- *            Returns
- *            *segment_id - index of the sequence segment captured in the FM-index
- *            *seg_pos    - position in the original sequence, as compressed in the FM binary data structure
- */
-int
-fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,
-                  uint32_t *segment_id, uint32_t *seg_pos
-) {
-  *segment_id = fm_computeSequenceOffset( fms, meta, fm_id, fm_pos);
-  *seg_pos    =  ( fm_pos - meta->seq_data[ *segment_id ].offset) + meta->seq_data[ *segment_id ].start - 1;
-
-  //verify that the hit doesn't extend beyond the bounds of the target sequence
-  if (direction == fm_forward) {
-    if (*seg_pos + length > meta->seq_data[ *segment_id ].start + meta->seq_data[ *segment_id ].length ) {
-      *segment_id  = *seg_pos  = -1;  // goes into the next sequence, so it should be ignored
-      return eslOK;
-    }
-  } else { //backward
-    if ((int)*seg_pos - length + 1 < 0 ) {
-      *segment_id  = *seg_pos  = -1; // goes into the previous sequence, so it should be ignored
-      return eslOK;
-    }
-  }
-
-
-  return eslOK;
-}
-
-
 
 
 
@@ -623,4 +665,12 @@ ERROR:
 
   return eslEMEM;
 }
+
+
+/************************************************************
+ * @LICENSE@
+ *
+ * SVN $Id: fm_general.c 3784 2011-12-07 21:51:25Z wheelert $
+ * SVN $URL: https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk/src/fm_general.c $
+ ************************************************************/
 
