@@ -33,7 +33,7 @@
 
 #include "hmmer.h"
 
-
+static int do_haircut(P7_BUILDER *bld, ESL_MSA *msa, int *matassign);
 static int matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***opt_tr);
 static int annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
 
@@ -62,7 +62,8 @@ static int annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
  *           Models must have at least one node, so if the <msa> defined 
  *           no consensus columns, a <eslENORESULT> error is returned.
  *           
- * Args:     msa     - multiple sequence alignment          
+ * Args:     msa     - multiple sequence alignment
+ *           bld       - holds information on regions requiring masking, optionally NULL -> no masking
  *           ret_hmm - RETURN: counts-form HMM
  *           opt_tr  - optRETURN: array of tracebacks for aseq's
  *           
@@ -79,7 +80,7 @@ static int annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
  *           isn't in digital mode.
  */            
 int
-p7_Handmodelmaker(ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
+p7_Handmodelmaker(ESL_MSA *msa, P7_BUILDER *bld, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
 {
   int        status;
   int       *matassign = NULL;    /* MAT state assignments if 1; 1..alen */
@@ -93,6 +94,13 @@ p7_Handmodelmaker(ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
   /* Watch for off-by-one. rf is [0..alen-1]; matassign is [1..alen] */
   for (apos = 1; apos <= msa->alen; apos++)
     matassign[apos] = (esl_abc_CIsGap(msa->abc, msa->rf[apos-1])? FALSE : TRUE);
+
+  if (bld != NULL && bld->hc_start != -1)
+    if ( (status = do_haircut(bld, msa, matassign) != eslOK) ) {
+      fprintf (stderr, "invalid hmm haircut start/end positions\n");
+      goto ERROR;
+    }
+
 
   /* matassign2hmm leaves ret_hmm, opt_tr in their proper state: */
   if ((status = matassign2hmm(msa, matassign, ret_hmm, opt_tr)) != eslOK) goto ERROR;
@@ -138,6 +146,7 @@ p7_Handmodelmaker(ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
  *           
  * Args:     msa       - multiple sequence alignment
  *           symfrac   - threshold for residue occupancy; >= assigns MATCH
+ *           bld       - holds information on regions requiring masking, optionally NULL -> no masking
  *           ret_hmm   - RETURN: counts-form HMM
  *           opt_tr    - optRETURN: array of tracebacks for aseq's
  *           
@@ -152,13 +161,13 @@ p7_Handmodelmaker(ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
  *           <msa> isn't in digital mode.
  */
 int
-p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
+p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_BUILDER *bld, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
 {
   int      status;	     /* return status flag                  */
   int     *matassign = NULL; /* MAT state assignments if 1; 1..alen */
   int      idx;              /* counter over sequences              */
   int      apos;             /* counter for aligned columns         */
-  float    r;		     /* weighted residue count              */
+  float    r;		         /* weighted residue count              */
   float    totwgt;	     /* weighted residue+gap count          */
 
   if (! (msa->flags & eslMSA_DIGITAL)) ESL_XEXCEPTION(eslEINVAL, "need digital MSA");
@@ -182,11 +191,18 @@ p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***opt
       else                                 matassign[apos] = FALSE;
     }
 
+  if (bld != NULL && bld->hc_start != -1)
+    if ( (status = do_haircut(bld, msa, matassign) != eslOK) ) goto ERROR;
+
+
   /* Once we have matassign calculated, modelmakers behave
    * the same; matassign2hmm() does this stuff (traceback construction,
    * trace counting) and sets up ret_hmm and opt_tr.
    */
-  if ((status = matassign2hmm(msa, matassign, ret_hmm, opt_tr)) != eslOK) goto ERROR;
+  if ((status = matassign2hmm(msa, matassign, ret_hmm, opt_tr)) != eslOK) {
+    fprintf (stderr, "invalid hmm haircut start/end positions\n");
+    goto ERROR;
+  }
 
   free(matassign);
   return eslOK;
@@ -204,6 +220,54 @@ p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***opt
 /*****************************************************************
  * 2. Private functions used in constructing models.
  *****************************************************************/ 
+
+
+/* Function: do_haircut()
+ *
+ * Purpose:  Given an <msa>, a <matassign> boolean array indicating
+ *           which msa columns correspond to match columns, and
+ *           a haircut range (bld->hc_start/end), modify all
+ *           residues in the msa positions associated with the
+ *           hmm range hc_start .. hc_end to the degenerate 'any character'
+ *
+ * Return:   <eslOK> on success.
+ *           <eslENORESULT> if error.
+ */
+static int
+do_haircut(P7_BUILDER *bld, ESL_MSA *msa, int *matassign)
+{
+  int i,j;
+  int match_cnt = 0;
+  int msa_start = -1;
+  int msa_end   = -1;
+
+  /* figure out which positions in the msa correspond to the range bld->hc_start/end */
+  for (i=1; i < msa->alen; i++ ) {
+    if (matassign[i]) match_cnt ++;
+    if (match_cnt == bld->hc_start)
+      msa_start = i;
+    if (match_cnt == bld->hc_end) {
+      msa_end = i;
+      break;
+    }
+  }
+
+  if (msa_start == -1 || msa_end == -1)
+    return eslFAIL; //those positions don't exist ...
+
+  for (i=msa_start; i <= msa_end; i++ ) {
+    for (j = 0; j < msa->nseq; j++) {
+#ifdef eslAUGMENT_ALPHABET
+      if (msa->ax[j][i] != msa->abc->K && msa->ax[j][i] != msa->abc->Kp-1) // if not gap
+        msa->ax[j][i] = msa->abc->Kp-3; //that's the degenerate "any character" (N for DNA, X for protein)
+#else
+      if (msa->aseq[j][i] != '-' && msa->aseq[j][i] != '.') // if not gap
+        msa->aseq[j][i] = 'N';
+#endif
+    }
+  }
+  return eslOK;
+}
 
 /* Function: matassign2hmm()
  * 
@@ -384,7 +448,7 @@ utest_basic(void)
 
   if (eslx_msafile_Open(&abc, msafile, NULL, eslMSAFILE_UNKNOWN, NULL, &afp) != eslOK) esl_fatal(failmsg);
   if (eslx_msafile_Read(afp, &msa)                                           != eslOK) esl_fatal(failmsg);
-  if (p7_Fastmodelmaker(msa, symfrac, &hmm, NULL)                            != eslOK) esl_fatal(failmsg);
+  if (p7_Fastmodelmaker(msa, symfrac, NULL, &hmm, NULL)                      != eslOK) esl_fatal(failmsg);
   
   p7_hmm_Destroy(hmm);
   esl_msa_Destroy(msa);
@@ -451,7 +515,7 @@ utest_fragments(void)
   if ((dmsa = esl_msa_Clone(msa))                                           == NULL)  esl_fatal(failmsg);
   if (esl_msa_Digitize(abc, dmsa, NULL)                                     != eslOK) esl_fatal(failmsg);
 
-  if (p7_Handmodelmaker(dmsa, &hmm, &trarr)                                 != eslOK) esl_fatal(failmsg);
+  if (p7_Handmodelmaker(dmsa, NULL, &hmm, &trarr)                                 != eslOK) esl_fatal(failmsg);
   for (i = 0; i < dmsa->nseq; i++)
     if (p7_trace_Validate(trarr[i], abc, dmsa->ax[i], NULL)                 != eslOK) esl_fatal(failmsg);
 
@@ -571,7 +635,7 @@ main(int argc, char **argv)
       if (status != eslOK) eslx_msafile_ReadFailure(afp, status);
 
       /* The modelmakers collect counts in an HMM structure */
-      status = p7_Handmodelmaker(msa, &hmm, &trarr);
+      status = p7_Handmodelmaker(msa, NULL, &hmm, &trarr);
       if      (status == eslENORESULT) esl_fatal("no consensus columns in alignment %s\n",  msa->name);
       else if (status != eslOK)        esl_fatal("failed to build HMM from alignment %s\n", msa->name);
 

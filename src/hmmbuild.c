@@ -125,6 +125,8 @@ static ESL_OPTIONS options[] = {
   { "--seed",     eslARG_INT,   "42", NULL, "n>=0",     NULL,      NULL,    NULL, "set RNG seed to <n> (if 0: one-time arbitrary seed)",   8 },
   { "--w_beta",   eslARG_REAL,  NULL, NULL, NULL,       NULL,      NULL,    NULL, "tail mass at which window length is determined",        8 },
   { "--w_length", eslARG_INT,   NULL, NULL, NULL,       NULL,      NULL,    NULL, "window length ",                                        8 },
+  { "--hc_start", eslARG_INT,   NULL, NULL, NULL,       NULL, "--hc_end",   NULL, "haircut-start (all hc_start..hc_end -> degenerate)", 8 },
+  { "--hc_end",   eslARG_INT,   NULL, NULL, NULL,       NULL, "--hc_start", NULL, "haircut-end (all hc_start..hc_end -> degenerate)", 8 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -370,6 +372,7 @@ main(int argc, char **argv)
     if (cfg.fmt == eslMSAFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--informat"));
   }
 
+
   /* This is our stall point, if we need to wait until we get a
    * debugger attached to this process for debugging (especially
    * useful for MPI):
@@ -504,6 +507,8 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
       info[i].bg = p7_bg_Create(cfg->abc);
       info[i].bld = p7_builder_Create(go, cfg->abc);
 
+      if (info[i].bld == NULL)  p7_Fail("p7_builder_Create failed");
+
       /* Default matrix is stored in the --mx option, so it's always IsOn().
        * Check --mxfile first; then go to the --mx option and the default.
        */
@@ -518,7 +523,11 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
       info[i].bld->w_beta     = (go != NULL && esl_opt_IsOn (go, "--w_beta"))   ?  esl_opt_GetReal   (go, "--w_beta")    : p7_DEFAULT_WINDOW_BETA;
       if ( info[i].bld->w_beta < 0 || info[i].bld->w_beta > 1  ) esl_fatal("Invalid window-length beta value\n");
 
-      if (info[i].bld == NULL)  p7_Fail("p7_builder_Create failed");
+      /* haircut range */
+      if (esl_opt_IsOn(go, "--hc_start")) { //--hc_end must also be on
+        info[i].bld->hc_start = esl_opt_GetInteger(go, "--hc_start");
+        info[i].bld->hc_end   = esl_opt_GetInteger(go, "--hc_end");
+      }
 #ifdef HMMER_THREADS
       info[i].queue = queue;
       if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);

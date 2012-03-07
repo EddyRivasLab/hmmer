@@ -64,6 +64,8 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
   bld->Q            = NULL;
   bld->eset         = -1.0;	/* -1.0 = unset; must be set if effn_strategy is p7_EFFN_SET */
   bld->re_target    = -1.0;
+  bld->hc_start     = -1;
+  bld->hc_end       = -1;
 
   if (go == NULL) 
     {
@@ -795,14 +797,14 @@ build_model(P7_BUILDER *bld, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
 
   if      (bld->arch_strategy == p7_ARCH_FAST)
     {
-      status = p7_Fastmodelmaker(msa, bld->symfrac, ret_hmm, opt_tr);
+      status = p7_Fastmodelmaker( msa, bld->symfrac, bld, ret_hmm, opt_tr);
       if      (status == eslENORESULT) ESL_XFAIL(status, bld->errbuf, "Alignment %s has no consensus columns w/ > %d%% residues - can't build a model.\n", msa->name != NULL ? msa->name : "", (int) (100 * bld->symfrac));
       else if (status == eslEMEM)      ESL_XFAIL(status, bld->errbuf, "Memory allocation failure in model construction.\n");
       else if (status != eslOK)        ESL_XFAIL(status, bld->errbuf, "internal error in model construction.\n");      
     }
   else if (bld->arch_strategy == p7_ARCH_HAND)
     {
-      status = p7_Handmodelmaker(msa, ret_hmm, opt_tr);
+      status = p7_Handmodelmaker( msa, bld, ret_hmm, opt_tr);
       if      (status == eslENORESULT) ESL_XFAIL(status, bld->errbuf, "Alignment %s has no annotated consensus columns - can't build a model.\n", msa->name != NULL ? msa->name : "");
       else if (status == eslEFORMAT)   ESL_XFAIL(status, bld->errbuf, "Alignment %s has no reference annotation line\n", msa->name != NULL ? msa->name : "");            
       else if (status == eslEMEM)      ESL_XFAIL(status, bld->errbuf, "Memory allocation failure in model construction.\n");

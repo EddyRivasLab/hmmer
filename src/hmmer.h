@@ -1074,6 +1074,10 @@ typedef struct p7_builder_s {
   /* Choice of prior                                                                               */
   P7_PRIOR            *prior;	         /* choice of prior when parameterizing from counts        */
 
+  /* Haircut: treat the given range as uninformative, turning all match state residues in that range to 'N' */
+  int                 hc_start;
+  int                 hc_end;
+
   /* Optional: information used for parameterizing single sequence queries                         */
   ESL_SCOREMATRIX     *S;		 /* residue score matrix                                   */
   ESL_DMATRIX         *Q;	         /* Q->mx[a][b] = P(b|a) residue probabilities             */
@@ -1094,8 +1098,8 @@ typedef struct p7_builder_s {
  *****************************************************************/
 
 /* build.c */
-extern int p7_Handmodelmaker(ESL_MSA *msa,                P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
-extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
+extern int p7_Handmodelmaker(ESL_MSA *msa,                P7_BUILDER *bld, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
+extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_BUILDER *bld, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 
 /* emit.c */
 extern int p7_CoreEmit   (ESL_RANDOMNESS *r, const P7_HMM *hmm,                                        ESL_SQ *sq, P7_TRACE *tr);
@@ -1160,8 +1164,9 @@ extern int p7_GHybrid      (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,    
 
 /* generic_msv.c */
 extern int p7_GMSV           (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float nu, float *ret_sc);
-extern int p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, FM_WINDOWLIST *windowlist, int do_biasfilter);
+extern int p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, FM_WINDOWLIST *windowlist);
 extern P7_MSVDATA *p7_hmm_MSVDataCreate(P7_PROFILE *gm, P7_HMM *hmm, int do_opt_ext, float scale, int bias );
+extern int p7_hmm_MSVDataComputeRest(P7_OPROFILE *om, P7_MSVDATA *data );
 extern void p7_hmm_MSVDataDestroy( P7_MSVDATA *data );
 
 /* generic_null2.c */
