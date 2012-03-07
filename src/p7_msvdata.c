@@ -136,21 +136,18 @@ p7_hmm_MSVDataDestroy(P7_MSVDATA *data )
 }
 
 /* Function:  p7_hmm_MSVDataCreate()
- * Synopsis:  Create a <P7_MSVDATA> model object.
+ * Synopsis:  Create a <P7_MSVDATA> model object, based on MSV-filter
+ *            part of profile
  *
  * Purpose:   Allocate a <P7_MSVDATA> object used in both FM-MSV and
  *            MSV_LongTarget diagonal recovery/extension, then populate
- *            it with data based on the given gm and hmm.
+ *            it with data based on the given gm.
  *
- *            This approach of computing the prefix/suffix length, used
- *            in establishing windows around a seed diagonal, is very fast
- *            by virtue of using a simple closed-form computation of the
- *            length L_i for each position i at which all but
- *            (1-p7_DEFAULT_WINDOW_BETA) of position i's match- and
- *            insert-state emissions are length L_i or shorter.
+ *            Once a hit passes the MSV filter, and the prefix/suffix
+ *            values of P7_MSVDATA are required, p7_hmm_MSVDataComputeRest()
+ *            must be called.
  *
  * Args:      gm         - P7_PROFILE containing scores used to produce MSVDATA contents
- *            hmm        - P7_HMM containing transitions probabilities used to compute (pre|suf)fix lengths
  *            do_opt_ext - boolean, TRUE if optimal-extension scores are required (for FM-MSV)
  *            scale      - used to produce 8-bit extracted scores
  *            bias       - used to produce 8-bit extracted scores
@@ -164,36 +161,14 @@ p7_hmm_MSVDataCreate(P7_PROFILE *gm, P7_HMM *hmm, int do_opt_ext, float scale, i
 {
   P7_MSVDATA *data = NULL;
   int    status;
-  int i;
-  float sum;
 
   ESL_ALLOC(data, sizeof(P7_MSVDATA));
-  ESL_ALLOC(data->prefix_lengths, (gm->M+1) * sizeof(float));
-  ESL_ALLOC(data->suffix_lengths, (gm->M+1) * sizeof(float));
 
   data->scores         = NULL;
   data->opt_ext_fwd    = NULL;
   data->opt_ext_rev    = NULL;
 
   p7_hmm_GetScoreArrays(gm, data, do_opt_ext, scale, bias ); /* for FM-index string tree traversal */
-
-  sum = 0;
-  for (i=1; i < gm->M; i++) {
-    //TODO: this requires that the full HMM be read before performing MSV. If that's
-    // a problem for speed, e.g. for hmmscan, I'll need to preprocess these prefix/suffix
-    // values, and store them in the hmm file
-    data->prefix_lengths[i] = 2 + (int)(log(p7_DEFAULT_WINDOW_BETA / hmm->t[i][p7H_MI] )/log(hmm->t[i][p7H_II]));
-    sum += data->prefix_lengths[i];
-  }
-  for (i=1; i < gm->M; i++)
-    data->prefix_lengths[i] /=  sum;
-
-  data->suffix_lengths[gm->M] = data->prefix_lengths[gm->M-1];
-  for (i=gm->M - 1; i >= 1; i--)
-    data->suffix_lengths[i] = data->suffix_lengths[i+1] + data->prefix_lengths[i-1];
-  for (i=2; i < gm->M; i++)
-    data->prefix_lengths[i] += data->prefix_lengths[i-1];
-
 
   return data;
 
@@ -202,6 +177,76 @@ ERROR:
  return NULL;
 }
 
+
+
+/* Function:  p7_hmm_MSVDataComputeRest()
+ * Synopsis:  Compute prefix_ and suffix_ lengths for a <P7_MSVDATA>
+ *            model object that was created by p7_hmm_MSVDataCreate.
+ *
+ * Purpose:   This approach of computing the prefix/suffix length, used
+ *            in establishing windows around a seed diagonal, is fast
+ *            becuse it uses a simple closed-form computation of the
+ *            length L_i for each position i at which all but
+ *            (1-p7_DEFAULT_WINDOW_BETA) of position i's match- and
+ *            insert-state emissions are length L_i or shorter.
+ *
+ * Args:      om         - P7_OPROFILE containing transitions probabilities used to compute (pre|suf)fix lengths
+ *            data       - P7_MSVDATA into which the computed prefix/suffix values are placed
+ *
+ * Returns:   eslEMEM on failure, else eslOK
+ *
+ * Throws:    <NULL> on allocation failure.
+ */
+int
+p7_hmm_MSVDataComputeRest(P7_OPROFILE *om, P7_MSVDATA *data )
+{
+  int    status;
+  int i;
+  float sum;
+
+
+  float *t_mis;
+  float *t_iis;
+
+  ESL_ALLOC(t_mis, sizeof(float) * (om->M+1));
+  p7_oprofile_GetFwdTransitionArray(om, p7O_MI, t_mis );
+
+  ESL_ALLOC(t_iis, sizeof(float) * (om->M+1));
+  p7_oprofile_GetFwdTransitionArray(om, p7O_II, t_iis );
+
+
+  ESL_ALLOC(data->prefix_lengths, (om->M+1) * sizeof(float));
+  ESL_ALLOC(data->suffix_lengths, (om->M+1) * sizeof(float));
+
+
+  sum = 0;
+  for (i=1; i < om->M; i++) {
+
+    data->prefix_lengths[i] = 2 + (int)(log(p7_DEFAULT_WINDOW_BETA / t_mis[i] )/log(t_iis[i]));
+    sum += data->prefix_lengths[i];
+  }
+
+
+  for (i=1; i < om->M; i++)
+    data->prefix_lengths[i] /=  sum;
+
+  data->suffix_lengths[om->M] = data->prefix_lengths[om->M-1];
+  for (i=om->M - 1; i >= 1; i--)
+    data->suffix_lengths[i] = data->suffix_lengths[i+1] + data->prefix_lengths[i-1];
+  for (i=2; i < om->M; i++)
+    data->prefix_lengths[i] += data->prefix_lengths[i-1];
+
+  free(t_mis);
+  free(t_iis);
+
+  return eslOK;
+
+  ERROR:
+   if (t_mis) free(t_mis);
+   if (t_iis) free(t_iis);
+   p7_hmm_MSVDataDestroy(data);
+   return eslEMEM;
+}
 
 
 /*****************************************************************
@@ -219,13 +264,24 @@ utest_createMSVData(ESL_GETOPTS *go, ESL_RANDOMNESS *r )
   P7_OPROFILE   *om         = NULL;
   P7_MSVDATA    *msvdata    = NULL;
 
+  uint8_t scale = 3.0 / eslCONST_LOG2;                    /* scores in units of third-bits */
+  uint8_t bias;
+  int x;
+  float max = 0.0;
+
   if ( (abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal(msg);
 
   if (  p7_hmm_Sample(r, 100, abc, &hmm)        != eslOK) esl_fatal(msg);
   if (  (gm = p7_profile_Create (hmm->M, abc))  == NULL ) esl_fatal(msg);
   if (  (om = p7_oprofile_Create(hmm->M, abc))  == NULL ) esl_fatal(msg);
 
-  if (  (msvdata = p7_hmm_MSVDataCreate(gm, hmm, FALSE, om->scale_b, om->bias_b))  == NULL ) esl_fatal(msg);
+  for (x = 0; x < gm->abc->K; x++)  max = ESL_MAX(max, esl_vec_FMax(gm->rsc[x], (gm->M+1)*2));
+  //based on unbiased_byteify
+  max  = -1.0f * roundf(scale * max);
+  bias   = (max > 255.) ? 255 : (uint8_t) max;
+
+
+  if (  (msvdata = p7_hmm_MSVDataCreate(gm, hmm, FALSE, scale, bias))  == NULL ) esl_fatal(msg);
 
   p7_hmm_MSVDataDestroy(msvdata);
   p7_oprofile_Destroy(om);

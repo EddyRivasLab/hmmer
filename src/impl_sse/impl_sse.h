@@ -305,6 +305,7 @@ typedef union {
         __m128i m128;
         } byte_m128;
 
+
 /* Gather the sum of all counts in a 16x8-bit element into a single 16-bit
  *  element of the register (the 0th element)
  *
@@ -494,7 +495,7 @@ extern int          p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFIL
 extern int          p7_profile_SameAsMF(const P7_OPROFILE *om, P7_PROFILE *gm);
 extern int          p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm);
 
-
+extern int          p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr );
 
 /* decoding.c */
 extern int p7_Decoding      (const P7_OPROFILE *om, const P7_OMX *oxf,       P7_OMX *oxb, P7_OMX *pp);
@@ -522,7 +523,7 @@ extern int p7_SSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, fl
 
 /* msvfilter.c */
 extern int p7_MSVFilter           (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
-extern int p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist, int do_biasfilter);
+extern int p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist);
 
 
 /* null2.c */

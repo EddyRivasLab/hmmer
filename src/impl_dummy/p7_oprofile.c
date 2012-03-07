@@ -407,6 +407,35 @@ p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm)
   return eslOK;
 }
 
+/* Function:  p7_oprofile_GetFwdTransitionArray()
+ * Synopsis:  Retrieve full 32-bit float transition probabilities from an
+ *            optimized profile into a flat array
+ *
+ * Purpose:   Extract an array of <type> (e.g. p7O_II) transition probabilities
+ *            from the underlying <om> profile. In SIMD implementations,
+ *            these are striped and interleaved, making them difficult to
+ *            directly access. Here, this is trivial
+ *
+ * Args:      <om>   - optimized profile, containing transition information
+ *            <type> - transition type (e.g. p7O_II)
+ *            <arr>  - preallocated array into which floats will be placed
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
+{
+  int i;
+
+  for (i=0; i<om->M; i++) {
+    arr[i] = p7P_TSC(om, i, type);
+  }
+
+  return eslOK;
+
+}
 
 /*****************************************************************
  * 4. Benchmark driver.

@@ -29,6 +29,7 @@
 
 /* set the max residue count to 1 meg when reading a block */
 #ifdef P7_IMPL_DUMMY_INCLUDED
+#include "esl_vectorops.h"
 #define NHMMER_MAX_RESIDUE_COUNT (1024 * 100)
 #else
 #define NHMMER_MAX_RESIDUE_COUNT MAX_RESIDUE_COUNT   /*from esl_sqio_(ascii|ncbi).c*/
@@ -558,10 +559,22 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
 
 #ifdef P7_IMPL_DUMMY_INCLUDED
-      msvdata = NULL;  // This is a hack to get dummy to compile. It'll go away when we drop the dummy implementation (soon)
+      // In dummy, the gm doesn't have a precomuted scale/bias, so do it here:
+      uint8_t scale = 3.0 / eslCONST_LOG2;                    /* scores in units of third-bits */
+      uint8_t bias;
+      float max = 0.0;
+
+      for (i = 0; i < gm->abc->K; i++)  max = ESL_MAX(max, esl_vec_FMax(gm->rsc[i], (gm->M+1)*2));
+      //based on unbiased_byteify
+      max  = -1.0f * roundf(scale* max);
+      bias   = (max > 255.) ? 255 : (uint8_t) max;
+
+      msvdata = p7_hmm_MSVDataCreate(gm, hmm, FALSE, scale, bias);
 #else
       msvdata = p7_hmm_MSVDataCreate(gm, hmm, FALSE, om->scale_b, om->bias_b);
 #endif
+
+
 
       for (i = 0; i < infocnt; ++i) {
           /* Create processing pipeline and hit list */
@@ -612,6 +625,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         default:
           esl_fatal("Unexpected error %d reading sequence file %s", sstatus, dbfp->filename);
       }
+
 
       //need to re-compute e-values before merging (when list will be sorted)
       double resCnt = 0;

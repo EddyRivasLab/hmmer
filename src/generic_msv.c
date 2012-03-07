@@ -130,10 +130,8 @@ p7_GMSV(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float nu, f
  *            nu      - configuration: expected number of hits (use 2.0 as a default)
  *            bg      - the background model, required for translating a P-value threshold into a score threshold
  *            P       - p-value below which a region is captured as being above threshold
- *            starts  - RETURN: array of start positions for windows surrounding above-threshold areas
- *            ends    - RETURN: array of end positions for windows surrounding above-threshold areas
- *			  hit_cnt - RETURN: count of entries in the above two arrays
- *
+ *            windowlist - RETURN: array of hit windows (start and end of diagonal) for the above-threshold areas
+ * *
  *
  * Note:      Not worried about speed here. Based on p7_GMSV
  *
@@ -142,7 +140,7 @@ p7_GMSV(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float nu, f
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, FM_WINDOWLIST *windowlist, int do_biasfilter)
+p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, FM_WINDOWLIST *windowlist)
 {
 
   /* A couple differences between this MSV and the standard one:
@@ -156,8 +154,6 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
    *
    */
 
-
-
   float      **dp    = gx->dp;
   float       *xmx   = gx->xmx;
   float        tloop = logf((float) gm->max_length / (float) (gm->max_length+3));
@@ -165,21 +161,16 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
   float        tbmk  = logf(     2.0f / ((float) gm->M * (float) (gm->M+1)));
   float        tej   = logf((nu - 1.0f) / nu);
   float        tec   = logf(1.0f / nu);
-  int          i,j,k;
+  int          i,k;
 
   float 	   tloop_total = tloop * gm->max_length;
 
   int target_end;
   int target_start;
 
-  FM_WINDOW *prev_window;
-  FM_WINDOW *curr_window;
-
 
   float sc_thresh;
   float nullsc;
-  float bias_sc;
-  float biasP;
 
 
   /*
@@ -195,7 +186,7 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
    *  S = usc - tmove - tloop_total
    *
    *  Here, I compute threshold with length model based on max_length.  Usually, the
-   *  length of a window returned by this scan will be 2*max_length-1 or longer.  Doesn't
+   *  length of a window returned by this scan will be longer than max_length.  Doesn't
    *  really matter - in any case, both the bg and om models will change with roughly
    *  1 bit for each doubling of the length model, so they offset.
    */
@@ -250,64 +241,6 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
   }
 
 
-  //filter for biased composition
-  if ( windowlist->count > 0 ) {
-
-    if (do_biasfilter) {
-      j = 0;
-      for (i=0; i<windowlist->count; i++) {
-        curr_window = windowlist->windows+i;
-
-        p7_bg_FilterScore(bg, dsq+curr_window->n-1, curr_window->length, &bias_sc);
-        bias_sc = (curr_window->score - bias_sc) / eslCONST_LOG2;
-        biasP = esl_gumbel_surv(bias_sc,  gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
-
-        if (biasP <= P ) { // keep it
-          windowlist->windows[j] = windowlist->windows[i];
-          j++;
-        }
-      }
-      windowlist->count = j;
-    }
-
-
-
-    //widen window
-    /*
-    for (i=0; i<windowlist->count; i++) {
-      curr_window = windowlist->windows+i;
-
-      window_start = ESL_MAX( 1,   curr_window->n - gm->max_length * hmmdata->prefix_lengths[curr_window->k - curr_window->length + 1] + 1 - 10)  ;
-      window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + gm->max_length * hmmdata->suffix_lengths[curr_window->k] - 1 + 10)  ;
-
-      curr_window->n = window_start;
-      curr_window->length = window_end - window_start + 1;
-    }
-    */
-    // merge overlapping windows, compressing list in place.
-    int new_hit_cnt = 0;
-    for (i=1; i<windowlist->count; i++) {
-      prev_window = windowlist->windows+new_hit_cnt;
-      curr_window = windowlist->windows+i;
-      if (curr_window->n <= prev_window->n + prev_window->length ) {
-        //merge windows
-        if (  curr_window->n + curr_window->length >  prev_window->n + prev_window->length )
-          prev_window->length = curr_window->n + curr_window->length - prev_window->n;
-
-      } else {
-        new_hit_cnt++;
-        windowlist->windows[new_hit_cnt] = windowlist->windows[i];
-      }
-    }
-    windowlist->count = new_hit_cnt+1;
-
-    if ( windowlist->windows[0].n  <  1)
-      windowlist->windows[0].n =  1;
-
-    if ( windowlist->windows[windowlist->count].n + windowlist->windows[windowlist->count].length - 1  >  L)
-      windowlist->windows[windowlist->count].length =  L - windowlist->windows[windowlist->count].n + 1;
-
-  }
   return eslOK;
 
 }

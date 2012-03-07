@@ -70,14 +70,12 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  *
  * Args:      dsq     - digital target sequence, 1..L
  *            L       - length of dsq in residues
- *            gm      - profile (can be in any mode)
- *            gx      - DP matrix
- *            nu      - configuration: expected number of hits (use 2.0 as a default)
+ *            om      - optimized profile
+ *            ox      - DP matrix
+ *            msvdata - compact representation of substitution scores, for backtracking diagonals
  *            bg      - the background model, required for translating a P-value threshold into a score threshold
  *            P       - p-value below which a region is captured as being above threshold
- *            starts  - RETURN: array of start positions for windows surrounding above-threshold areas
- *            ends    - RETURN: array of end positions for windows surrounding above-threshold areas
- *			  hit_cnt - RETURN: count of entries in the above two arrays
+ *            windowlist - RETURN: array of hit windows (start and end of diagonal) for the above-threshold areas
  *
  *
  * Note:      Not worried about speed here. Based on p7_GMSV
@@ -87,11 +85,11 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist, int do_biasfilter)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist)
 {
 	  int status;
 	  if ((status = p7_gmx_GrowTo(ox, om->M, L)) != eslOK) return status;
-	  return p7_GMSV_longtarget(dsq, L, om, ox, 2.0, bg, P, windowlist, do_biasfilter);
+	  return p7_GMSV_longtarget(dsq, L, om, ox, 2.0, bg, P, windowlist);
 }
 
 

@@ -441,11 +441,10 @@ ERROR:
  *            L       - length of dsq in residues
  *            om      - optimized profile
  *            ox      - DP matrix
+ *            msvdata - compact representation of substitution scores, for backtracking diagonals
  *            bg      - the background model, required for translating a P-value threshold into a score threshold
  *            P       - p-value below which a region is captured as being above threshold
- *            starts  - RETURN: array of start positions for windows surrounding above-threshold areas
- *            ends    - RETURN: array of end positions for windows surrounding above-threshold areas
- *			  hit_cnt - RETURN: count of entries in the above two arrays
+ *            windowlist - RETURN: array of hit windows (start and end of diagonal) for the above-threshold areas
  *
  * Note:      We misuse the matrix <ox> here, using only a third of the
  *            first dp row, accessing it as <dp[0..Q-1]> rather than
@@ -459,7 +458,7 @@ ERROR:
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist, int do_biasfilter)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist)
 {
 
 
@@ -470,7 +469,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   register __m128i biasv;	   /* emission bias in a vector                                 */
   uint8_t  xJ;                 /* special states' scores                                    */
   int i;			           /* counter over sequence positions 1..L                      */
-  int j;
+//  int j;
   int q;			           /* counter over vectors 0..nq-1                              */
   int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
   __m128i *dp  = ox->dpb[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
@@ -483,17 +482,11 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   __m128i basev;                   /* offset for scores                                         */
   __m128i sc_threshv;               /* pushes value to saturation if it's above pthresh  */
   __m128i jthreshv;                /* pushes value to saturation if it's above pthresh  */
-  __m128i ceilingv;                /* saturateed simd value used to test for overflow           */
+  __m128i ceilingv;                /* saturated simd value used to test for overflow           */
   __m128i tempv;                   /* work vector                                               */
 
-  FM_WINDOW *prev_window;
-  FM_WINDOW *curr_window;
-  int window_start;
-  int window_end;
-
   float nullsc;
-  float bias_sc;
-  float biasP;
+
   /*
    * Computing the score required to let P meet the F1 prob threshold
    * In original code, converting from a scaled int MSV
@@ -510,7 +503,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
    *  S = usc + om->tec_b + om->tjb_b + om->base_b
    *
    *  Here, I compute threshold with length model based on max_length.  Usually, the
-   *  length of a window returned by this scan will be 2*max_length-1 or longer.  Doesn't
+   *  length of a window returned by this scan will be longer than max_length.  Doesn't
    *  really matter - in any case, both the bg and om models will change with roughly
    *  1 bit for each doubling of the length model, so they offset.
    */
@@ -699,72 +692,6 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  } /* end loop over sequence residues 1..L */
   }
 
-  //filter for biased composition here
-  if ( windowlist->count > 0 ) {
-
-    if (do_biasfilter) {
-      j = 0;
-      for (i=0; i<windowlist->count; i++) {
-        curr_window = windowlist->windows+i;
-
-        p7_bg_FilterScore(bg, dsq+curr_window->n-1, curr_window->length, &bias_sc);
-        bias_sc = (curr_window->score - bias_sc) / eslCONST_LOG2;
-        biasP = esl_gumbel_surv(bias_sc,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-
-        if (biasP <= P ) { // keep it
-          windowlist->windows[j] = windowlist->windows[i];
-          j++;
-        }
-      }
-      windowlist->count = j;
-    }
-
-
-
-    //widen window
-    for (i=0; i<windowlist->count; i++) {
-      curr_window = windowlist->windows+i;
-
-//      printf ("%d -> %d  ||| ", curr_window->n, curr_window->n + curr_window->length-1);
-
-//      window_start = ESL_MAX( 1,   curr_window->n + curr_window->length - om->max_length) ;
-//      window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + om->max_length - 2);
-
-      window_start = ESL_MAX( 1,   curr_window->n - om->max_length * msvdata->prefix_lengths[curr_window->k - curr_window->length + 1] + 1 - 100)  ;
-      window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + om->max_length * msvdata->suffix_lengths[curr_window->k] - 1 + 100)  ;
-
-//      window_start = ESL_MAX( 1,   ( curr_window->n + curr_window->length )  - (om->max_length * hmmdata->prefix_lengths[curr_window->k ]) )  ;
-//      window_end   = ESL_MIN( L ,  ( curr_window->n )                        + (om->max_length * hmmdata->suffix_lengths[curr_window->k - curr_window->length + 1]))   ;
-
-      curr_window->n = window_start;
-      curr_window->length = window_end - window_start + 1;
-    }
-
-
-    // merge overlapping windows, compressing list in place.
-    int new_hit_cnt = 0;
-    for (i=1; i<windowlist->count; i++) {
-      prev_window = windowlist->windows+new_hit_cnt;
-      curr_window = windowlist->windows+i;
-      if (curr_window->n <= prev_window->n + prev_window->length ) {
-        //merge windows
-        if (  curr_window->n + curr_window->length >  prev_window->n + prev_window->length )
-          prev_window->length = curr_window->n + curr_window->length - prev_window->n;
-
-      } else {
-        new_hit_cnt++;
-        windowlist->windows[new_hit_cnt] = windowlist->windows[i];
-      }
-    }
-    windowlist->count = new_hit_cnt+1;
-
-	  if ( windowlist->windows[0].n  <  1)
-	    windowlist->windows[0].n =  1;
-
-	  if ( windowlist->windows[windowlist->count].n + windowlist->windows[windowlist->count].length - 1  >  L)
-	    windowlist->windows[windowlist->count].length =  L - windowlist->windows[windowlist->count].n + 1;
-
-  }
   return eslOK;
 
 

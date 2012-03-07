@@ -1556,6 +1556,43 @@ p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm)
 
   return eslOK;
 }
+
+
+/* Function:  p7_oprofile_GetFwdTransitionArray()
+ * Synopsis:  Retrieve full 32-bit float transition probabilities from an
+ *            optimized profile into a flat array
+ *
+ * Purpose:   Extract an array of <type> (e.g. p7O_II) transition probabilities
+ *            from the underlying <om> profile. In SIMD implementations,
+ *            these are striped and interleaved, making them difficult to
+ *            directly access.
+ *
+ * Args:      <om>   - optimized profile, containing transition information
+ *            <type> - transition type (e.g. p7O_II)
+ *            <arr>  - preallocated array into which floats will be placed
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
+{
+  int     nq  = p7O_NQF(om->M);     /* # of striped vectors needed            */
+  int i, j;
+  union { __m128 v; float x[4]; } tmp; /* used to align and read simd minivectors               */
+
+
+  for (i=0; i<nq; i++) {
+    tmp.v = om->tfv[ type  + 7 * i ];
+    for (j=0; j<4; j++)
+      arr[i+1+ j*nq]      = tmp.x[j];
+  }
+
+  return eslOK;
+
+}
+
 /*------------ end, P7_OPROFILE debugging tools  ----------------*/
 
 

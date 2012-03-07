@@ -901,12 +901,7 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
 
   p7_oprofile_ReconfigRestLength(om, window_len);
 
-  /* In scan mode, if it passes the MSV filter, read the rest of the profile */
-  if (pli->hfp)
-    {
-    p7_oprofile_ReadRest(pli->hfp, om);
-      if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) return status; /* pli->errbuf has err msg set */
-    }
+
 
   /* Second level filter: ViterbiFilter(), multihit with <om> */
   filtersc =  nullsc + (bias_filtersc * (float)F2_L/window_len);
@@ -1125,14 +1120,20 @@ int
 p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx)
 {
   int              i;
-  int status;
+//  int              j;
+  int              status;
   float            nullsc;   /* null model score                        */
   float            usc;      /* msv score  */
   float            P;
   ESL_DSQ          *subseq;
   ESL_SQ           *tmpseq;
+  FM_WINDOW        *prev_window;
+  FM_WINDOW        *curr_window;
+  int              window_start;
+  int              window_end;
 
-
+//  float bias_sc;
+//  float biasP;
 
   P7_DOMAINDEF *ddef_app;
   FM_WINDOWLIST windowlist;
@@ -1160,8 +1161,89 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
    * This variant of MSV will scan a long sequence and find
    * short high-scoring regions.
    */
-  p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, msvdata, bg, pli->F1, &windowlist, pli->do_biasfilter);
+  p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, msvdata, bg, pli->F1, &windowlist);
 
+
+
+  /* convert hits to windows, possibly filtering based on composition bias,
+   * definitely merging neighboring windows, and
+   * TODO: splitting overly-large windows
+   */
+  if ( windowlist.count > 0 ) {
+
+    /* In scan mode, if it passes the MSV filter, read the rest of the profile */
+    if (pli->hfp)
+    {
+      p7_oprofile_ReadRest(pli->hfp, om);
+      if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) return status; /* pli->errbuf has err msg set */
+    }
+
+    p7_hmm_MSVDataComputeRest(om, msvdata);
+
+    /*
+    //filter for biased composition here
+    if (pli->do_biasfilter) {
+      j = 0;
+      for (i=0; i<windowlist.count; i++) {
+        curr_window = windowlist.windows + i;
+        p7_bg_FilterScore(bg, sq->dsq + curr_window->n-1, curr_window->length, &bias_sc);
+        bias_sc = (curr_window->score - bias_sc) / eslCONST_LOG2;
+        biasP = esl_gumbel_surv(bias_sc,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+
+        if (biasP <= pli->F1 ) { // keep it
+          windowlist.windows[j] = windowlist.windows[i];
+          j++;
+        }
+      }
+      windowlist.count = j;
+    }
+*/
+
+    //widen window
+    for (i=0; i<windowlist.count; i++) {
+      curr_window = windowlist.windows+i;
+
+      // the 0.1 multiplier provides for a small buffer in excess of the predefined prefix/suffix lengths - one proportional to max_length
+      window_start = ESL_MAX( 1,   curr_window->n - ( om->max_length * (0.1 + msvdata->prefix_lengths[curr_window->k - curr_window->length + 1]  )) ) ;
+      window_end   = ESL_MIN( sq->n ,  curr_window->n + curr_window->length + (om->max_length * (0.1 + msvdata->suffix_lengths[curr_window->k] ) ) )   ;
+
+
+      curr_window->n = window_start;
+      curr_window->length = window_end - window_start + 1;
+    }
+
+
+    // merge overlapping windows, compressing list in place.
+    int new_hit_cnt = 0;
+    for (i=1; i<windowlist.count; i++) {
+      prev_window = windowlist.windows+new_hit_cnt;
+      curr_window = windowlist.windows+i;
+      if (curr_window->n <= prev_window->n + prev_window->length ) {
+        //merge windows
+        if (  curr_window->n + curr_window->length >  prev_window->n + prev_window->length )
+          prev_window->length = curr_window->n + curr_window->length - prev_window->n;
+
+      } else {
+        new_hit_cnt++;
+        windowlist.windows[new_hit_cnt] = windowlist.windows[i];
+      }
+    }
+    windowlist.count = new_hit_cnt+1;
+
+    // ensure that window start and end are within target sequence bounds
+    if ( windowlist.windows[0].n  <  1)
+      windowlist.windows[0].n =  1;
+
+    if ( windowlist.windows[windowlist.count].n + windowlist.windows[windowlist.count].length - 1  >  sq->n)
+      windowlist.windows[windowlist.count].length =  sq->n - windowlist.windows[windowlist.count].n + 1;
+
+  }
+
+
+
+  /*
+   * pass each remaining window on to the remaining pipeline
+   */
   tmpseq = esl_sq_CreateDigital(sq->abc);
   for (i=0; i<windowlist.count; i++){
     int window_len = windowlist.windows[i].length;
