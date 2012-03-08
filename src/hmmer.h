@@ -1165,9 +1165,6 @@ extern int p7_GHybrid      (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,    
 /* generic_msv.c */
 extern int p7_GMSV           (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float nu, float *ret_sc);
 extern int p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, FM_WINDOWLIST *windowlist);
-extern P7_MSVDATA *p7_hmm_MSVDataCreate(P7_PROFILE *gm, P7_HMM *hmm, int do_opt_ext, float scale, int bias );
-extern int p7_hmm_MSVDataComputeRest(P7_OPROFILE *om, P7_MSVDATA *data );
-extern void p7_hmm_MSVDataDestroy( P7_MSVDATA *data );
 
 /* generic_null2.c */
 extern int p7_GNull2_ByExpectation(const P7_PROFILE *gm, P7_GMX *pp, float *null2);
@@ -1383,6 +1380,11 @@ extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **o
 extern int  p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key);
 extern int  p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset);
 
+/* p7_msvdata.c */
+extern P7_MSVDATA *p7_hmm_MSVDataCreate(P7_PROFILE *gm, P7_HMM *hmm, int do_opt_ext, float scale, int bias );
+extern int         p7_hmm_MSVDataComputeRest(P7_OPROFILE *om, P7_MSVDATA *data );
+extern void        p7_hmm_MSVDataDestroy( P7_MSVDATA *data );
+
 /* p7_null3.c */
 extern void p7_null3_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, P7_TRACE *tr, int start, int stop, P7_BG *bg, float *ret_sc);
 extern void p7_null3_windowed_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, int start, int stop, P7_BG *bg, float *ret_sc);
@@ -1393,6 +1395,7 @@ extern int          p7_pipeline_Reuse  (P7_PIPELINE *pli);
 extern void         p7_pipeline_Destroy(P7_PIPELINE *pli);
 extern int          p7_pipeline_Merge  (P7_PIPELINE *p1, P7_PIPELINE *p2);
 
+extern int p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, P7_MSVDATA *msvdata, FM_WINDOWLIST *windowlist, int L);
 extern int p7_pli_TargetReportable  (P7_PIPELINE *pli, float score,     double lnP);
 extern int p7_pli_DomainReportable  (P7_PIPELINE *pli, float dom_score, double lnP);
 

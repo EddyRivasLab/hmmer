@@ -2,11 +2,10 @@
  *  
  * Contents:
  *   1. P7_PIPELINE: allocation, initialization, destruction
- *   2. Internal functions
- *   3. Pipeline API
- *   4. Example 1: search mode (in a sequence db)
- *   5. Example 2: scan mode (in an HMM db)
- *   6. Copyright and license information
+ *   2. Pipeline API
+ *   3. Example 1: search mode (in a sequence db)
+ *   4. Example 2: scan mode (in an HMM db)
+ *   5. Copyright and license information
  * 
  */
 #include "p7_config.h"
@@ -292,7 +291,7 @@ p7_pipeline_Destroy(P7_PIPELINE *pli)
 
 
 /*****************************************************************
- * 2. Internal functions
+ * 2. The pipeline API.
  *****************************************************************/
 
 /* Function:  p7_pli_ExtendAndMergeWindows
@@ -307,7 +306,7 @@ p7_pipeline_Destroy(P7_PIPELINE *pli)
  *
  * Returns:   <eslOK>
  */
-static int
+int
 p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, P7_MSVDATA *msvdata, FM_WINDOWLIST *windowlist, int L) {
 
   int i;
@@ -358,11 +357,6 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, P7_MSVDATA *msvdata, FM_WINDOWLIS
 
   return eslOK;
 }
-
-
-/*****************************************************************
- * 3. The pipeline API.
- *****************************************************************/
 
 /* Function:  p7_pli_TargetReportable
  * Synopsis:  Returns TRUE if target score meets reporting threshold.
@@ -1186,7 +1180,6 @@ int
 p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx)
 {
   int              i;
-//  int              j;
   int              status;
   float            nullsc;   /* null model score                        */
   float            usc;      /* msv score  */
@@ -1198,8 +1191,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
   int              window_start;
   int              window_end;
 
-//  float bias_sc;
-//  float biasP;
 
   P7_DOMAINDEF *ddef_app;
   FM_WINDOWLIST windowlist;
@@ -1521,7 +1512,7 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
 
 
 /*****************************************************************
- * 4. Example 1: "search mode" in a sequence db
+ * 3. Example 1: "search mode" in a sequence db
  *****************************************************************/
 
 #ifdef p7PIPELINE_EXAMPLE
@@ -1661,7 +1652,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 5. Example 2: "scan mode" in an HMM db
+ * 4. Example 2: "scan mode" in an HMM db
  *****************************************************************/
 #ifdef p7PIPELINE_EXAMPLE2
 /* gcc -o pipeline_example2 -g -Wall -I../easel -L../easel -I. -L. -Dp7PIPELINE_EXAMPLE2 p7_pipeline.c -lhmmer -leasel -lm
