@@ -1199,11 +1199,14 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
   P7_GMX      *bck    = p7_gmx_Create(M, L);
   P7_GMX      *pp     = p7_gmx_Create(M, L);
   P7_GBANDS   *bnd    = p7_gbands_Create();
-  float        tol1   = 0.0001;	                                     /* forward and backward scores from same implementation type should agree with high tolerance */
   float        tol2   = ( p7_logsum_IsSlowExact() ? 0.001  : 0.1);   /* absolute agreement of reference (log-space) and vector (prob-space) depends on whether we're using LUT-based logsum() */
-  float        ptol   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01);  /* posterior decoding values differ by no more than this */
   float fsc1, fsc2;
-  float bsc1, bsc2;
+  float bsc2;
+#ifdef p7_DEBUGGING
+  float        bsc1;
+  float        tol1   = 0.0001;	                                     /* forward and backward scores from same implementation type should agree with high tolerance */
+  float        ptol   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01);  /* posterior decoding values differ by no more than this */
+#endif
 
 #ifdef p7_DEBUGGING
   /* We set the debugging tools to record full pp, fwd, bck matrices

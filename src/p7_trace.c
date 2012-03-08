@@ -569,9 +569,11 @@ p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *ds
   int  z, i, k;			/* position in trace, sequence, model */
 
   /* minimum trace length is 8, S->N->B->L->Mk->E->C->T. If we don't have at least that,
-   * we're definitely in trouble
+   * we're definitely in trouble. Exception: N=0 can happen in the case of an "impossible"
+   * trace.
    */
   if (tr == NULL)         return eslOK;
+  if (tr->N == 0)         return eslOK;
   if (tr->N < 8)          ESL_FAIL(eslFAIL, errbuf, "trace is too short");
   if (tr->N > tr->nalloc) ESL_FAIL(eslFAIL, errbuf, "N of %d isn't sensible", tr->N);
 
@@ -660,7 +662,8 @@ p7_trace_Dump(FILE *fp, const P7_TRACE *tr)
 {
   int z;
 
-  if (tr == NULL) { fprintf(fp, "[null trace]\n"); return eslOK; }
+  if (tr == NULL) { fprintf(fp, "[null trace]\n");                     return eslOK; }
+  if (tr->N == 0) { fprintf(fp, "[no trace: all paths impossible]\n"); return eslOK; }
 
   fprintf(fp, "z     st   k     i  \n");  
   fprintf(fp, "----- -- ----- -----\n"); 
@@ -700,7 +703,8 @@ p7_trace_DumpAnnotated(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const
   float esc, tsc;
   int   z;
 
-  if (tr == NULL) { fprintf(fp, "[null trace]\n"); return eslOK; }
+  if (tr == NULL) { fprintf(fp, "[null trace]\n");                     return eslOK; }
+  if (tr->N == 0) { fprintf(fp, "[no trace: all paths impossible]\n"); return eslOK; }
 
   fprintf(fp, "z     st   k     i   x_i  transit  emission postprob\n");
   fprintf(fp, "----- -- ----- ----- ---  -------- -------- --------\n");
@@ -797,7 +801,13 @@ p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol)
  *
  * Purpose:   Score path <tr> for digital target sequence <dsq> 
  *            using profile <gm>. Return the lod score in
- *            <ret_sc>.
+ *            <*ret_sc>.
+ *            
+ *            If <tr> is empty (an 'impossible' trace, with <tr->N=0>),
+ *            then <*ret_sc = -eslINFINITY>. This can arise for example
+ *            when there is no possible path at all that can generate
+ *            a sequence, hence the sequence correctly scores <-eslINFINITY>;
+ *            by convention, traces in this situation have <tr->N=0>.
  *
  * Args:      tr     - traceback path to score
  *            dsq    - digitized sequence
@@ -817,7 +827,7 @@ p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, float *ret_sc)
   int    z;             /* position in tr */
   int    xi;		/* digitized symbol in dsq */
 
-  sc = 0.0f;
+  sc = (tr->N ? 0.0f : -eslINFINITY);
   for (z = 0; z < tr->N-1; z++) {
     xi = dsq[tr->i[z]];
 

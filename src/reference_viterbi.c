@@ -50,6 +50,13 @@ static int reference_viterbi_traceback(const P7_PROFILE *gm, const P7_REFMX *rmx
  *            opt_sc  - optRETURN: Viterbi raw score in nats, or NULL
  *
  * Returns:   <eslOK> on success. <rmx> contains the Viterbi matrix.
+ * 
+ * Throws:    When <p7_DEBUGGING> flag is on at compile-time (only), we
+ *            do some extra checking of the inputs to catch some
+ *            typical coding errors. Throws <eslEINVAL> if caller
+ *            forgot to size the matrix <rmx> appropriately, or if the
+ *            profile <gm>'s length model wasn't set to <L> (or 0,
+ *            which some unit tests will do).
  */
 int
 p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, P7_TRACE *opt_tr, float *opt_sc)
@@ -63,6 +70,12 @@ p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
   float  dlv, dgv; 	      /* pushed-ahead DL,DG cell k+1 values */
   float  xE, xN, xJ, xB, xL, xG;
   
+#ifdef p7_DEBUGGING
+  if (L+1 > rmx->allocR)                           ESL_EXCEPTION(eslEINVAL, "matrix allocR too small; missing a p7_refmx_GrowTo() initialization call?");
+  if ((M+1)*p7R_NSCELLS+p7R_NXCELLS < rmx->allocW) ESL_EXCEPTION(eslEINVAL, "matrix allocW too small; missing a p7_refmx_GrowTo() initialization call?");
+  if (gm->L != L && gm->L != 0)                    ESL_EXCEPTION(eslEINVAL, "length model in profile wasn't set to L (or 0)");
+#endif
+
   /* Initialization of the zero row. */
   dpc = rmx->dp[0];
   for (s = 0; s < (M+1) * p7R_NSCELLS; s++)
@@ -161,10 +174,11 @@ p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
   /* Done with all rows i. As we leave, dpc is still sitting on the xC value for i=L ... including even the L=0 case */
   
   if (opt_sc) *opt_sc = *dpc + gm->xsc[p7P_C][p7P_MOVE];
-  rmx->M = M;
-  rmx->L = L;
-  if (opt_tr) return reference_viterbi_traceback(gm, rmx, opt_tr);
-  else        return eslOK;
+  rmx->M    = M;
+  rmx->L    = L;
+  rmx->type = p7R_VITERBI;
+  if (opt_tr && *opt_sc != -eslINFINITY) return reference_viterbi_traceback(gm, rmx, opt_tr);  // if no paths are possible at all: leave tr->N=0, our convention for impossible trace
+  else                                   return eslOK;
 }
 /*------------------ end, viterbi DP fill -----------------------*/
 
@@ -380,6 +394,8 @@ utest_randomseq(ESL_RANDOMNESS *rng, P7_PROFILE *gm, P7_BG *bg, int nseq, int L)
       if (p7_trace_Validate(tr, gm->abc, dsq, errbuf)    != eslOK) esl_fatal("%s:\n%s", msg, errbuf);
       if (p7_trace_Score(tr, dsq, gm, &sc2)              != eslOK) esl_fatal(msg);
       if (esl_FCompareAbs(sc1, sc2, 1e-6)                != eslOK) esl_fatal(msg);
+      if (! isfinite(sc1))                                         esl_fatal(msg);
+      if (! isfinite(sc2))                                         esl_fatal(msg);
 
       p7_trace_Reuse(tr);
       p7_refmx_Reuse(rmx);
@@ -428,6 +444,9 @@ utest_generation(ESL_RANDOMNESS *rng, P7_HMM *hmm, P7_PROFILE *gm, P7_BG *bg, in
       if (p7_trace_Validate(tr, gm->abc, sq->dsq, errbuf)        != eslOK) esl_fatal("%s:\n%s", msg, errbuf);
       if (p7_trace_Score(tr, sq->dsq, gm, &sc3)                  != eslOK) esl_fatal(msg);
 
+      if (! isfinite(sc1))                            esl_fatal(msg);
+      if (! isfinite(sc2))                            esl_fatal(msg);
+      if (! isfinite(sc3))                            esl_fatal(msg);
       if (sc1 > sc2)                                  esl_fatal(msg); /* score of generated trace should be <= Viterbi score */
       if (esl_FCompareAbs(sc2, sc3, 0.0001) != eslOK) esl_fatal(msg);
 

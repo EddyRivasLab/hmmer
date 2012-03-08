@@ -60,6 +60,7 @@
 #define p7_LOGSUM_TBL   16000
 
 static float flogsum_lookup[p7_LOGSUM_TBL]; /* p7_LOGSUM_TBL=16000: (A-B) = 0..16 nats, steps of 0.001 */
+static int   logsum_initialized = FALSE;
 
 /*****************************************************************
  *# 1. floating point log-sum-exp-2arg: LSE2
@@ -80,13 +81,13 @@ static float flogsum_lookup[p7_LOGSUM_TBL]; /* p7_LOGSUM_TBL=16000: (A-B) = 0..1
 int
 p7_FLogsumInit(void)
 {
-  static int firsttime = TRUE;
-  if (!firsttime) return eslOK;
-  firsttime = FALSE;
-
   int i;
+
+  if (logsum_initialized) return eslOK;
+
   for (i = 0; i < p7_LOGSUM_TBL; i++) 
     flogsum_lookup[i] = log(1. + exp((double) -i / p7_LOGSUM_SCALE));
+  logsum_initialized = TRUE;
   return eslOK;
 }
 
@@ -111,6 +112,9 @@ p7_FLogsum(float a, float b)
 {
   const float max = ESL_MAX(a, b);
   const float min = ESL_MIN(a, b);
+#ifdef p7_DEBUGGING
+  if (! logsum_initialized) esl_fatal("p7_FLogsumInit() was not called");
+#endif
 #ifdef p7_LOGSUM_SLOWEXACT
   return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + log(1.0 + exp(min-max));  
 #else

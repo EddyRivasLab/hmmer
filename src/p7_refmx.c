@@ -37,7 +37,7 @@ P7_REFMX *
 p7_refmx_Create(int M, int L)
 {
   P7_REFMX *rmx = NULL;
-  int      r;
+  int      r,x;
   int      status;
 
   ESL_ALLOC(rmx, sizeof(P7_REFMX));
@@ -53,9 +53,15 @@ p7_refmx_Create(int M, int L)
   for (r = 0; r < rmx->allocR; r++)
     rmx->dp[r] = rmx->dp_mem + (r * rmx->allocW);
 
+  /* Initialize all k=0 cells to -inf. */
+  for (r = 0; r < rmx->allocR; r++)
+    for (x = 0; x < p7R_NSCELLS; x++)
+      rmx->dp[r][x] = -eslINFINITY;
+
   rmx->validR = rmx->allocR;
   rmx->M      = 0;
   rmx->L      = 0;
+  rmx->type   = p7R_UNSET;
   return rmx;
 
  ERROR:
@@ -86,7 +92,7 @@ p7_refmx_GrowTo(P7_REFMX *rmx, int M, int L)
   int      R        = L+1;
   uint64_t N        = (int64_t) R * (int64_t) W;
   int      do_reset = FALSE;
-  int      r;
+  int      r,x;
   int      status;
 
   /* are we already big enough? */
@@ -120,9 +126,12 @@ p7_refmx_GrowTo(P7_REFMX *rmx, int M, int L)
       rmx->allocW = W;
       rmx->validR = ESL_MIN(rmx->allocR, (int) ( rmx->allocN / (uint64_t) rmx->allocW));
       for (r = 0; r < rmx->validR; r++)
-	rmx->dp[r] = rmx->dp_mem + (r * rmx->allocW);
+	{
+	  rmx->dp[r] = rmx->dp_mem + (r * rmx->allocW);
+	  for (x = 0; x < p7R_NSCELLS; x++)  
+	    rmx->dp[r][x] = -eslINFINITY;
+	}
     }
-
   rmx->M = 0;
   rmx->L = 0;
   return eslOK;
@@ -152,8 +161,9 @@ p7_refmx_GrowTo(P7_REFMX *rmx, int M, int L)
 int
 p7_refmx_Reuse(P7_REFMX *rmx)
 {
-  rmx->M = 0;
-  rmx->L = 0;
+  rmx->M    = 0;
+  rmx->L    = 0;
+  rmx->type = p7R_UNSET;
   return eslOK;
 }
 
@@ -176,7 +186,6 @@ p7_refmx_Destroy(P7_REFMX *rmx)
 /*****************************************************************
  * 2. Debugging aids
  *****************************************************************/
-
 
 /* Function:  p7_refmx_DecodeSpecial()
  * Synopsis:  Convert special state code to string for debugging output.
@@ -202,8 +211,36 @@ p7_refmx_DecodeSpecial(int type)
   case p7R_G: return "G";
   case p7R_C: return "C";
   }
+  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such P7_REFMX special state code %d\n", type);
   return NULL;
 }
+
+/* Function:  p7_refmx_DecodeState()
+ * Synopsis:  Convert main state code to string for debugging output.
+ *
+ * Purpose:   Given a main state code (such as <p7R_MG>), return a
+ *            string label, suitable as a state label in debugging
+ *            output.
+ *
+ * Args:      type - main state code, such as <p7R_MG>
+ *
+ * Returns:   ptr to static string representation.
+ */
+char *
+p7_refmx_DecodeState(int type)
+{
+  switch (type) {
+  case p7R_ML: return "ML";
+  case p7R_MG: return "MG";
+  case p7R_IL: return "IL";
+  case p7R_IG: return "IG";
+  case p7R_DL: return "DL";
+  case p7R_DG: return "DG";
+  }
+  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such P7_REFMX main state code %d\n", type);
+  return NULL;
+}
+    
 
 /* Function:  p7_refmx_Dump()
  * Synopsis:  Dump a <P7_REFMX> for examination.
@@ -295,6 +332,219 @@ p7_refmx_DumpCSV(FILE *fp, P7_REFMX *pp, int istart, int iend, int kstart, int k
     }
   return eslOK;
 }
+/*------------- end, (most) debugging tools ---------------------*/
+
+
+/*****************************************************************
+ * 3. Validation of matrices.
+ *****************************************************************/
+/* Gets its own section because it's a little fiddly and detailed.
+ * See p7_refmx.h for notes on the patterns that get tested.
+ */
+
+static inline int
+validate_dimensions(P7_REFMX *rmx, char *errbuf)
+{
+  if ( rmx->M <= 0)               ESL_FAIL(eslFAIL, errbuf, "nonpositive M");
+  if ( rmx->L <= 0)               ESL_FAIL(eslFAIL, errbuf, "nonpositive L");
+  if ( rmx->L+1    > rmx->validR) ESL_FAIL(eslFAIL, errbuf, "L+1 is larger than validR");
+  if ( rmx->validR > rmx->allocR) ESL_FAIL(eslFAIL, errbuf, "validR larger than allocR");
+  if ( (rmx->M+1)*p7R_NSCELLS+p7R_NXCELLS < rmx->allocW) ESL_FAIL(eslFAIL, errbuf, "M is too large for allocW");
+  return eslOK;
+}
+
+static inline int 
+validate_mainstate(P7_REFMX *rmx, int i, int k, int s, float val, char *errbuf)
+{
+  if (P7R_MX(rmx, i, k, s) != val) ESL_FAIL(eslFAIL, errbuf, "expected %f at i=%d, k=%d, %s", val, i, k, p7_refmx_DecodeState(s));
+  return eslOK;
+}
+
+static inline int
+validate_special(P7_REFMX *rmx, int i, int s, float val, char *errbuf)
+{
+  if (P7R_XMX(rmx, i, s) != val) ESL_FAIL(eslFAIL, errbuf, "expected %f at i=%d, %s", val, i, p7_refmx_DecodeSpecial(s));
+  return eslOK;
+}
+
+static inline int
+validate_no_nan(P7_REFMX *rmx, char *errbuf)
+{
+  int i,k,s;
+  for (i = 0; i <= rmx->L; i++)
+    for (k = 0; k <= rmx->M; k++)
+      {
+	for (s = 0; s < p7R_NSCELLS; s++)
+	  if (isnan(P7R_MX(rmx, i, k, s))) ESL_FAIL(eslFAIL, errbuf, "found NaN at i=%d, k=%d, %s", i, k, p7_refmx_DecodeState(s));      
+	for (s = 0; s < p7R_NXCELLS; s++)
+	  if (isnan(P7R_XMX(rmx, i, s)))   ESL_FAIL(eslFAIL, errbuf, "found NaN at i=%d, %s", i, p7_refmx_DecodeSpecial(s));      
+      }
+  return eslOK;
+}
+
+static inline int
+validate_column_zero(P7_REFMX *rmx, float val, char *errbuf)
+{
+  int i, s, status;
+  for (i = 0; i <= rmx->L; i++)
+    for (s = 0; s < p7R_NSCELLS; s++)
+      if (( status = validate_mainstate(rmx, i, 0, s, val, errbuf)) != eslOK) return status;
+  return eslOK;
+}
+
+
+static inline int
+validate_forward(P7_REFMX *rmx, char *errbuf)
+{
+  int i,k,s;
+  int status;
+
+  if (( status = validate_column_zero(rmx, -eslINFINITY, errbuf)) != eslOK) return status;
+
+  /* Row i=0 */
+  for (k = 1; k <= rmx->M; k++)
+    for (s = 0; s <= p7R_NSCELLS; s++)
+      if ( (status = validate_mainstate(rmx, 0, k, s, -eslINFINITY, errbuf)) != eslOK) return status;
+  if ( ( status = validate_special(rmx, 0, p7R_E,     -eslINFINITY, errbuf)) != eslOK) return status;
+  if ( ( status = validate_special(rmx, 0, p7R_N,     0.0f,         errbuf)) != eslOK) return status;
+  if ( ( status = validate_special(rmx, 0, p7R_J,     -eslINFINITY, errbuf)) != eslOK) return status;
+  if ( ( status = validate_special(rmx, 0, p7R_C,     -eslINFINITY, errbuf)) != eslOK) return status;
+
+  /* Row i=1 has some additional expected -inf's, different from the remaining rows 2..L */
+  for (k = 1; k <= rmx->M; k++) {
+    if ( (status = validate_mainstate(rmx, 1, k, p7R_IL, -eslINFINITY, errbuf)) != eslOK) return status;
+    if ( (status = validate_mainstate(rmx, 1, k, p7R_IG, -eslINFINITY, errbuf)) != eslOK) return status;
+  }
+
+  /* Rows 2..L, plus the row i=1 cells we didn't just check */
+  for (i = 1; i <= rmx->L; i++)
+    {
+      if ((status =    validate_mainstate(rmx, i,      1, p7R_DL, -eslINFINITY, errbuf)) != eslOK) return status;
+      if ((status =    validate_mainstate(rmx, i,      1, p7R_DG, -eslINFINITY, errbuf)) != eslOK) return status;
+      if ((status =    validate_mainstate(rmx, i, rmx->M, p7R_IL, -eslINFINITY, errbuf)) != eslOK) return status;
+      if ((status =    validate_mainstate(rmx, i, rmx->M, p7R_IG, -eslINFINITY, errbuf)) != eslOK) return status;
+    }
+  return eslOK;
+}
+
+static inline int
+validate_backward(P7_REFMX *rmx, char *errbuf)
+{
+  int i,k,s;
+  int status;
+
+  if (( status = validate_column_zero(rmx, -eslINFINITY, errbuf)) != eslOK) return status;  
+
+  /* Row i=0 */
+  for (k = 1; k <= rmx->M; k++)
+    for (s = 0; s <= p7R_NSCELLS; s++)
+      if ( (status = validate_mainstate(rmx, 0, k, s, -eslINFINITY, errbuf)) != eslOK) return status;
+  if ( ( status = validate_special(rmx, 0, p7R_E,     -eslINFINITY, errbuf)) != eslOK) return status;
+  if ( ( status = validate_special(rmx, 0, p7R_J,     -eslINFINITY, errbuf)) != eslOK) return status;
+  if ( ( status = validate_special(rmx, 0, p7R_C,     -eslINFINITY, errbuf)) != eslOK) return status;
+
+  /* Rows 1..L */
+  for (i = 1; i <= rmx->L; i++)
+    {
+      if ((status = validate_mainstate(rmx, i, rmx->M, p7R_IL, -eslINFINITY, errbuf)) != eslOK) return status;
+      if ((status = validate_mainstate(rmx, i, rmx->M, p7R_IG, -eslINFINITY, errbuf)) != eslOK) return status;
+    }
+
+  /* Row i=L has some additional expected -inf's, different from the remaining rows */
+  for (k = 1; k <= rmx->M; k++) {
+    if ( (status = validate_mainstate(rmx, rmx->L, k, p7R_IL, -eslINFINITY, errbuf)) != eslOK) return status;
+    if ( (status = validate_mainstate(rmx, rmx->L, k, p7R_IG, -eslINFINITY, errbuf)) != eslOK) return status;
+  }
+  if ( (status = validate_special  (rmx, rmx->L,    p7R_N,  -eslINFINITY, errbuf)) != eslOK) return status;
+  if ( (status = validate_special  (rmx, rmx->L,    p7R_J,  -eslINFINITY, errbuf)) != eslOK) return status;
+  if ( (status = validate_special  (rmx, rmx->L,    p7R_B,  -eslINFINITY, errbuf)) != eslOK) return status;
+  if ( (status = validate_special  (rmx, rmx->L,    p7R_L,  -eslINFINITY, errbuf)) != eslOK) return status;
+  if ( (status = validate_special  (rmx, rmx->L,    p7R_G,  -eslINFINITY, errbuf)) != eslOK) return status;
+  return eslOK;
+}
+
+static inline int
+validate_decoding(P7_REFMX *rmx, char *errbuf)
+{
+  int i,k,s;
+  int status;
+
+  if (( status = validate_column_zero(rmx, 0.0, errbuf)) != eslOK) return status;  
+
+  /* Row i=0 is all 0.0 */
+  for (k = 1; k <= rmx->M; k++)
+    for (s = 0; s <= p7R_NSCELLS; s++)
+      if ( (status = validate_mainstate(rmx, 0, k, s, 0.0f, errbuf)) != eslOK) return status;
+  for (s = 0; s <= p7R_NXCELLS; s++)
+    if ( ( status = validate_special(rmx, 0, s, 0.0f, errbuf)) != eslOK) return status;
+
+  /* Rows 1..L */
+  for (i = 1; i <= rmx->L; i++)
+    {
+      if ((status = validate_mainstate(rmx, i,      1, p7R_DL, 0.0f, errbuf)) != eslOK) return status;
+      if ((status = validate_mainstate(rmx, i,      1, p7R_DG, 0.0f, errbuf)) != eslOK) return status;
+      if ((status = validate_mainstate(rmx, i, rmx->M, p7R_IL, 0.0f, errbuf)) != eslOK) return status;
+      if ((status = validate_mainstate(rmx, i, rmx->M, p7R_IG, 0.0f, errbuf)) != eslOK) return status;
+      if ((status = validate_special  (rmx, i,         p7R_E,  0.0f, errbuf)) != eslOK) return status;
+      if ((status = validate_special  (rmx, i,         p7R_B,  0.0f, errbuf)) != eslOK) return status;
+      if ((status = validate_special  (rmx, i,         p7R_L,  0.0f, errbuf)) != eslOK) return status;
+      if ((status = validate_special  (rmx, i,         p7R_G,  0.0f, errbuf)) != eslOK) return status;
+    }
+
+  /* Rows i=1,L have some additional zeros */
+  for (k = 1; k < rmx->M; k++) {
+    if ((status = validate_mainstate(rmx,      1, k, p7R_IL, 0.0f, errbuf)) != eslOK) return status;
+    if ((status = validate_mainstate(rmx,      1, k, p7R_IG, 0.0f, errbuf)) != eslOK) return status;
+    if ((status = validate_mainstate(rmx, rmx->L, k, p7R_IL, 0.0f, errbuf)) != eslOK) return status;
+    if ((status = validate_mainstate(rmx, rmx->L, k, p7R_IG, 0.0f, errbuf)) != eslOK) return status;
+  }
+  if ((status = validate_special  (rmx, 1,      p7R_J,  0.0f, errbuf)) != eslOK) return status;
+  if ((status = validate_special  (rmx, 1,      p7R_C,  0.0f, errbuf)) != eslOK) return status;
+  if ((status = validate_special  (rmx, rmx->L, p7R_N,  0.0f, errbuf)) != eslOK) return status;
+  if ((status = validate_special  (rmx, rmx->L, p7R_J,  0.0f, errbuf)) != eslOK) return status;
+  return eslOK;
+}
+
+
+/* Function:  p7_refmx_Validate()
+ * Synopsis:  Validates a reference DP matrix.
+ *
+ * Purpose:   Validates the internals of the
+ *            DP matrix <rmx>. Returns <eslOK> if
+ *            it passes. Returns <eslFAIL> if it fails,
+ *            and sets <errbuf> to contain an explanation,
+ *            if caller provided an <errbuf>
+ *
+ * Args:      rmx    - reference DP matrix to validate.
+ *            errbuf - allocated space for err msg, or NULL
+ *
+ * Returns:   <eslOK> on success; <eslFAIL> on failure, and
+ *            <errbuf> (if provided) contains explanation.
+ *
+ * Xref:      See notes in <p7_refmx.h> for an explanation
+ *            of the particular patterns we're checking.
+ */
+int
+p7_refmx_Validate(P7_REFMX *rmx, char *errbuf)
+{
+  int status;
+
+  if ( (status = validate_dimensions(rmx, errbuf)) != eslOK) return status;
+  if ( (status = validate_no_nan    (rmx, errbuf)) != eslOK) return status;
+  
+  switch (rmx->type) {
+  case p7R_FORWARD:   if ( (status = validate_forward    (rmx,               errbuf)) != eslOK) return status;  break;
+  case p7R_VITERBI:   if ( (status = validate_forward    (rmx,               errbuf)) != eslOK) return status;  break; // Viterbi has same pattern as Forward
+  case p7R_BACKWARD:  if ( (status = validate_backward   (rmx,               errbuf)) != eslOK) return status;  break;
+  case p7R_DECODING:  if ( (status = validate_decoding   (rmx,               errbuf)) != eslOK) return status;  break;     
+  case p7R_MEA:       if ( (status = validate_decoding   (rmx,               errbuf)) != eslOK) return status;  break; // MEA has same pattern as Decoding
+  case p7R_UNSET:     if ( (status = validate_column_zero(rmx, -eslINFINITY, errbuf)) != eslOK) return status;  break;
+  default:            ESL_FAIL(eslFAIL, errbuf, "no such reference DP algorithm type %d", rmx->type);
+  }
+  return eslOK;
+}
+/*------------------ end, validation ----------------------------*/
+
 
 /*****************************************************************
  * @LICENSE@

@@ -173,6 +173,7 @@ p7_profile_ConfigCustom(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int 
   gm->xsc[p7P_G][1]        = logf(hmm->t[0][p7H_MD]);
 
   /* Initialize tsc[k=M] boundary condition to -inf; 
+   * this deletes Im state;
    * will overwrite as needed in set_ functions below
    */
   esl_vec_FSet( gm->tsc + gm->M*p7P_NTRANS, p7P_NTRANS, -eslINFINITY);
@@ -182,7 +183,9 @@ p7_profile_ConfigCustom(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int 
   if (( status = set_glocal_entry(gm, hmm)) != eslOK) return status;   // G->MGk params: left wing retraction : glocal entry
   if (( status = set_glocal_exit (gm, hmm)) != eslOK) return status;   // MGk->E params: right wing retraction : glocal exit
 
-  /* Remaining transition scores (BLM, BGM, MGE entries/exits were just set, above) */
+  /* Remaining transition scores (BLM, BGM, MGE entries/exits were
+   * just set, above). 
+   */
   for (k = 1; k < gm->M; k++) {
     tp = gm->tsc + k * p7P_NTRANS;
     tp[p7P_MM] = logf(hmm->t[k][p7H_MM]);
@@ -194,9 +197,9 @@ p7_profile_ConfigCustom(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int 
     tp[p7P_II] = logf(hmm->t[k][p7H_II]);
   }
   
-  /* All transition scores at k=M are special cases for DP boundary conditions */
+  /* All transition scores at k=M are special cases for DP boundary conditions! */
   tp = gm->tsc + gm->M * (p7P_NTRANS);
-  tp[p7P_MD] = 0.0;		/* glocal Forward and Backwards rely on this  */
+  tp[p7P_MD] = 0.0;		/* glocal Forward and Backwards rely on this    */
   tp[p7P_DD] = 0.0;		/* ditto */
 
   /* match emission scores. */
@@ -311,29 +314,22 @@ set_local_entry(P7_PROFILE *gm, const P7_HMM *hmm)
 
 /* set_glocal_entry()
  * 
- * glocal entry parameterization is stored two ways (nonoverlapping),
- * allowing an algorithm to choose which representation is more
- * suitable: either "wing-retracted", or not. 
- * 
- * Unretracted "base" transition parameters G->{M1,D1} were already stored in
- * xsc[p7G][0=M,1=D]. 
+ * glocal entry is "wing retracted" into a G->Mk entry distribution.
  *
- * Here, for left wing retraction, we compute the cost of a complete B->..->Mk
- * path, either B->G->M1 for k=1 or, for k>1, B->G->D1..Dk-1->Mk:
- *   tBGM1 = log(G->M1)
- *   tBGMk = B->G, B->D1..Dk-1->Mk = log t(G->D1) + \sum_j=1.k-2 log t(Dj->Dj+1) + log t(Dk-1 -> Mk)
+ * Wing retraction removes the B->G->D1..Dm->E->J->B mute cycle, by
+ * removing the D1 state. In a profile, all entries start at an Mk
+ * state. As a result, a (usually negligible) amount of probability is
+ * unaccounted for (see p7_profile_GetMutePathLogProb(), if you need
+ * to know what that neglected mass is).
+ *
+ * Unretracted "base" transition parameters G->{M1,D1} are in
+ * xsc[p7G][0=M,1=D].
+ *
+ * We compute the wing-retracted entries G->{D1..Dk-1}->Mk as follows:
+ *      tGM1 = log t(G->M1) 
+ *      tGMk = log t(G->D1) + \sum_j={1..k-2} log t(Dj->Dj+1) + log t(Dk-1->Mk)
  * and for technical/efficiency reasons, these params are stored
  * off-by-one in the profile: tGMk is stored at TSC(k-1, p7P_GM).
- * 
- * pedantic nit: as drawn, a glocal multihit model has a mute cycle
- * G->D1...Dm->E->J->B->G. Mute cycles aren't allowed in HMMs. Our DP
- * algorithms avoid the mute cycle, though.  A DP algorithm that uses
- * wing retraction explicitly avoids the mute cycle by forcing entry
- * at an Mk. A DP algorithm using unretracted parameters avoids it
- * implicitly by not evaluating past the final B of the
- * B->D1...Dm->E->J->B path on any given row. But either way, we're
- * neglecting the probability mass for this path; it is almost certain
- * that this mass is negligible.
  */
 static int
 set_glocal_entry(P7_PROFILE *gm, const P7_HMM *hmm)
@@ -341,9 +337,8 @@ set_glocal_entry(P7_PROFILE *gm, const P7_HMM *hmm)
   float Z;   
   int   k;
 
-  /* Wing-retracted parameterization stored in tsc(k,p7P_GM) off-by-one (tGMk stored at k-1, p7P_GM) */
-  P7P_TSC(gm, 0, p7P_GM) = gm->xsc[p7P_G][0];        
-  Z                      = gm->xsc[p7P_G][1];
+  P7P_TSC(gm, 0, p7P_GM) = gm->xsc[p7P_G][0];  // i.e. G->M1, stored at TSC(0,GM)
+  Z                      = gm->xsc[p7P_G][1];  // i.e. G->D1
   for (k = 1; k < hmm->M; k++) 
     {
       P7P_TSC(gm, k, p7P_GM) = Z + logf(hmm->t[k][p7H_DM]);

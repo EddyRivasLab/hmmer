@@ -200,10 +200,14 @@ typedef struct p7_hmm_s {
  * 2. P7_PROFILE: a scoring profile, and its implicit model.
  *****************************************************************/
 
-/* The profile has nine additional states, relative to the core HMM:
+/* Whereas the core HMM is a model of a single global alignment to a
+ * homologous domain, a profile is a model of local and glocal homologous
+ * alignments embedded in a longer sequence. The profile is constructed
+ * from the core HMM by adding nine additional states: 
+ *
  *   S->N->B-->L ... -->E->C->T
- *         ^\_>G ... _/ |
- *         |            |
+ *          \_>G ... _/ |
+ *         ^            |
  *         |____ J _____|
  *
  * These nine states control the "algorithm-dependent" configuration
@@ -216,14 +220,15 @@ typedef struct p7_hmm_s {
  *     2. Multihit vs. unihit
  *          The E transitions control whether the model is allowed
  *          to loop around for multiple homology segments per
- *          target sequence.
- *     3. Search mode: local vs. glocal
+ *          target sequence. Usually we're multihit.
+ *     3. Search mode: local vs. glocal paths
  *          The B->L, B->G probabilities control whether the model
  *          only allows local alignment, only allows glocal alignment,
- *          or a mixture of the two.
+ *          or a mixture of the two. Usually we're "dual-mode"
+ *          with 50/50 probability of local vs. glocal.
  *         
- * For efficiency, two of the nine states (S,T) only show up in our
- * formal state diagrams, and are not explicitly represented in the
+ * For efficiency, two of the nine states (S,T) only appear in our
+ * formal state diagrams. They are not explicitly represented in the
  * P7_PROFILE parameters that DP calculations use:
  *     1. The S->N probability is always 1.0, so our DP codes 
  *        initialize on the N state and don't store anything for S.
@@ -232,9 +237,17 @@ typedef struct p7_hmm_s {
  *        at position i=L in the target, so DP algorithms don't
  *        bother to store it in their matrix.
  *        
- * Alignment/scoring implementations are allowed to override the
+ * The profile is missing some states of the core HMM:
+ *     1. The D1 state is removed by "wing retraction".
+ *     2. The I0 and Im states aren't present.
+ * Transition costs from the I0/Im states are initialized to -inf.
+ * Transition costs from the D1 state are present in the P7_PROFILE
+ * data structure, but unused by DP algorithms; see the "wing 
+ * retraction" section below for an explanation.
+ *     
+ * Some alignment/scoring DP implementations may implicitly override the
  * length model, multihit mode, or the search mode (so long as they
- * document it):
+ * document it). Examples:
  *     1. For the length model, we sometimes make the approximation
  *          that there are ~L NN/CC/JJ transitions (assuming the
  *          target sequence length is large enough that the sum 
@@ -250,50 +263,59 @@ typedef struct p7_hmm_s {
  *          algorithm is always multihit, and where NN,CC,JJ 
  *          parameters are handled implicitly w/ the 3-nat approximation.
  *     3. To override search mode and use only one path (local or
- *          glocal): The algorithm just needs to ignore the 
- *          tBL/tBG log probability and evaluate the path it wants.
+ *          glocal): The algorithm ignores the tBL/tBG log probability
+ *          and evaluates the path it wants as if it had B->L or B->G
+ *          set to 1.0.
  *          
- * The full (dual-mode, two-path, local/glocal) model is only
- * implemented in P7_PROFILE, not in a vectorized P7_OPROFILE. Vector
- * implementations are always and only in local alignment mode,
- * because of numeric range limitations. Vector implementations are
- * only used for fast filtering before a final banded calculation with
- * the full model.
+ * The full (dual-mode, local/glocal) model is only implemented in
+ * P7_PROFILE, not in a vectorized P7_OPROFILE. Vector implementations
+ * are always and only in local alignment mode, because of numeric
+ * range limitations. Vector implementations are only used for fast
+ * filtering before a final banded calculation with the full model.
  *          
  * Wing retraction:        
- *   For the local submodel, all algorithms must use the BLMk entry
- *   distribution, and assume that all Mk->E and Dk->E are 1.0. This is
- *   the "implicit probabilitistic model" of local alignment [Eddy08].
- *   The D_1 and I_M states don't exist on the local path, and
- *   algorithms set them to zero probability.
+ *   For the local path, all algorithms must use the L->Mk "uniform"
+ *   entry distribution, and assume that all Mk->E and Dk->E are
+ *   1.0. The L->Mk entry distribution supercedes all paths involving
+ *   terminal deletion. This is the "implicit probabilitistic model"
+ *   of local alignment [Eddy08].  The D_1 and I_M states don't exist
+ *   on the local path, and algorithms must treat them as zero probability.
  * 
- *   For the glocal submodel, there is no "entry distribution" per se.
- *   The submodel starts with a G->M1 or G->D1 transition probability,
- *   and ends with Mm->E and Dm->E transitions of prob=1.0. However,
- *   in a banded DP calculation, the band only covers DP matrix
- *   regions involving M and I emitting states, not D paths. It is
- *   therefore convenient to fold a G->D1..Dk-1->Mk entry path into a
- *   B->Mk entry, and a Mk->Dk+1..Dm->E exit path into a Mk->E
- *   exit. This process of precalculating entire exit/entry paths
- *   including D1 and Dm is called "wing retraction". The B->Mk entry
- *   parameter includes both the B->G probability (search mode) and
- *   the G->Mk wing retraction.
- * 
- *   Using B->Mk and Mk->E wing retractions in the glocal submodel
- *   imposes a computational cost because these parameters are
- *   evaluated in the innermost DP loop (at each Mk cell) It is more
- *   computationally efficient to use the G->{M1,D1} and (M_m,D_m}->E
- *   paths. To allow algorithms to choose the version that they want
- *   to use, the P7_PROFILE stores both parameterizations redundantly.
- *   The wing-retracted parameters are in the transition parameters
- *   p7_BGM and p7_MGE for each state k. The base parameters are in
- *   xsc[p7P_G][0,1]. Both wing-retracted and base parameters include
- *   the B->{LG} contribution.
+ *   For the glocal path, all algorithms must use a G->Mk "wing
+ *   retracted" entry distribution <p7P_GM>, and some algorithms may
+ *   optionally use a DGk+1->E wing retracted exit distribution
+ *   <p7P_DGE>. Wing retracted entry G->Mk is required, because this is
+ *   the way we remove a mute cycle (B->G->D1..Dm->E->J->B) from the
+ *   profile: by removing the D1 state and neglecting the probability
+ *   of the mute cycle in all DP calculations.
+ *      
+ *   Wing retracted entry, see modelconfig.c::set_glocal_entry()
+ *      tGM1 = log t(G->M1) 
+ *      tGMk = log t(G->D1) + \sum_j={1..k-2} log t(Dj->Dj+1) + log t(Dk-1->Mk)
+ *      stored off-by-one: tGMk is stored at TSC(k-1, p7P_GM) in profile structure.
+ *      
+ *   Wing retracted exit, see modelconfig.c::set_glocal_exit()
+ *      tDGkE = log t(Dk+1->...Dm->E)
+ *            = \sum_j={k+1..m-1} log t(Dj->Dj+1)    (recall that Dm->E = 1.0)
+ *      valid for k=0..M: 
+ *      boundary conditions:
+ *      TSC(M,DGE) = TSC(M-1,DGE) = 0    
  *   
- *   When an algorithm is using the base glocal entry parameters,
- *   state D_1 does exist on the glocal submodel path. With the
- *   wing-retracted parameters, D_1 does not exist. In either case,
- *   I_m does not exist, same as the local path.
+ *   Wing retracted exits are used in banded DP calculations: see
+ *   banded_fwdback.c. A DP calculation may also use Mm->E and Dm->E
+ *   (both 1.0) explicitly, rather than using the DGE wing retracted
+ *   exit.  The reference implementation does this, for example (see
+ *   reference_fwdback.c or reference_viterbi.c).
+ *
+ *   Wing retraction is only used internally in DP implementations.
+ *   Any resulting tracebacks (alignments) still represent a
+ *   G->D1...Dk-1->Mk entry explicitly; you'll see this in traceback
+ *   code, where it adds k-1 delete states to a trace whenever it sees
+ *   a G->Mk entry.  Thus we may still need the D1->{DM}
+ *   parameterization, to call p7_trace_Score() for example; and so,
+ *   even though the D1 state is implicitly removed by all DP
+ *   implementations, on both the local and glocal paths, its
+ *   parameterization is still present in the P7_PROFILE.
  */
 
 
@@ -465,7 +487,7 @@ enum p7t_statetype_e {
 #define p7T_NSTATETYPES 16	/* used when we collect statetype usage counts, for example */
 
 typedef struct p7_trace_s {
-  int    N;		/* length of traceback                       */
+  int    N;		/* length of traceback                       */  // N=0 means "no traceback": viterbi score = -inf and no possible path, for example.
   int    nalloc;        /* allocated length of traceback             */
   char  *st;		/* state type code                   [0..N-1]*/
   int   *k;		/* node index; 1..M if M,D,I; else 0 [0..N-1]*/
@@ -1495,6 +1517,7 @@ extern float       p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char 
 extern int         p7_profile_Dump(FILE *fp, P7_PROFILE *gm);
 extern int         p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol);
 extern char       *p7_profile_DecodeT(int tidx);
+extern int         p7_profile_GetMutePathLogProb(const P7_PROFILE *gm, double *ret_mute_lnp);
 extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol);
 
 /* p7_spensemble.c */

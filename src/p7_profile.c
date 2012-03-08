@@ -79,11 +79,10 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
   for (x = 1; x < abc->Kp; x++) 
     gm->rsc[x] = gm->rsc[0] + x * (allocM+1) * p7P_NR;
 
-  /* Initialize some edge pieces of memory that are never used,
-   * and are only present for indexing convenience.
-   */
-  esl_vec_FSet(gm->tsc, p7P_NTRANS, -eslINFINITY);     /* tsc[k-1,LM],tsc[k-1,GM] will be configured + overwritten  */
-                                                       /* tsc[M] initialized when we know actual M */
+  /* Initialization of tsc[0], including removal of I0.  tsc[k-1,LM],tsc[k-1,GM] will be configured + overwritten later */
+  esl_vec_FSet(gm->tsc, p7P_NTRANS, -eslINFINITY);  
+  /* tsc[M] initialized and Im removed when we know actual M : see modelconfig.c */
+
   for (x = 0; x < abc->Kp; x++) {        
     P7P_MSC(gm, 0, x) = -eslINFINITY;                  /* no emissions from nonexistent M_0... */
     P7P_ISC(gm, 0, x) = -eslINFINITY;                  /* nor I_0...                           */
@@ -91,8 +90,9 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
   }
   x = esl_abc_XGetGap(abc);	                       /* no emission can emit/score gap characters */
   esl_vec_FSet(gm->rsc[x], (allocM+1)*p7P_NR, -eslINFINITY);
-  x = esl_abc_XGetMissing(abc);	                      /* no emission can emit/score missing data characters */
+  x = esl_abc_XGetMissing(abc);	                       /* no emission can emit/score missing data characters */
   esl_vec_FSet(gm->rsc[x], (allocM+1)*p7P_NR, -eslINFINITY);
+
 
   /* Set remaining info  */
   gm->M                = 0;
@@ -557,9 +557,6 @@ p7_profile_DecodeT(int tidx)
  * Purpose:   Validates the internals of the generic profile structure
  *            <gm>.
  *            
- *            TODO: currently this function is incomplete, and only
- *            validates the entry distribution.
- *            
  * Returns:   <eslOK> if <gm> internals look fine. Returns <eslFAIL>
  *            if something is wrong, and leaves an error message in
  *            <errbuf> if caller passed it non-<NULL>.
@@ -575,18 +572,19 @@ p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol)
   ESL_ALLOC(pstart, sizeof(double) * (gm->M+1));
 
   /* Validate tsc[0] boundary condition: 
-   * tLM, tGM, tDGE are only valid transitions at nonexistent node k=0, 
+   * tLM, tGM, tDGE are valid transitions at nonexistent node k=0, 
    * because of their off-by-one storage (i.e. tsc[k-1,LM] = tLk->M)
    */
   if (P7P_TSC(gm, 0, p7P_MM)  != -eslINFINITY ||
       P7P_TSC(gm, 0, p7P_IM)  != -eslINFINITY ||
       P7P_TSC(gm, 0, p7P_DM)  != -eslINFINITY ||
+      // LM, GM skipped past...
       P7P_TSC(gm, 0, p7P_MD)  != -eslINFINITY ||
       P7P_TSC(gm, 0, p7P_DD)  != -eslINFINITY ||
       P7P_TSC(gm, 0, p7P_MI)  != -eslINFINITY ||
       P7P_TSC(gm, 0, p7P_II)  != -eslINFINITY) ESL_XFAIL(eslFAIL, errbuf, "transition probs at 0 not set properly");
+      // DGE skipped.
       
-
   /* Validate tsc[M] boundary conditions.
    *  t(Mm->D) = 0   as an initialization condition to make Backward work
    *  t(Dm->D) = 0   ditto
@@ -617,12 +615,18 @@ p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol)
     pstart[k] = exp(P7P_TSC(gm, k-1, p7P_LM)) * (gm->M - k + 1); /* multiply p_ij by the number of exits j; note off-by-one storage, L->Mk in tsc[k-1] */
   if (esl_vec_DValidate(pstart, gm->M+1, tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "local entry distribution is not normalized properly");
 
-  /* Validate the glocal entry distribution.
-   * This is an explicit probability distribution,
-   * corresponding to left wing retraction.
+  /* Validate the glocal entry distribution.  This is an explicit
+   * probability distribution, corresponding to left wing retraction.
+   * To make it sum to one, we also have to add in the probability
+   * of the mute cycle G->D1...Dm->E; we put this in pstart[0].
+   * [SRE:J9/98].
    */
   for (k = 1; k <= gm->M; k++)
     pstart[k] = exp(P7P_TSC(gm, k-1, p7P_GM));
+  /* mute path probability */
+  p7_profile_GetMutePathLogProb(gm, &(pstart[0]));
+  pstart[0] = exp(pstart[0]);	/* this will often underflow, but when it does, it means that path's negligible in p, and the validation of the sum will still succeed */
+
   if (esl_vec_DValidate(pstart, gm->M+1, tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "glocal entry distribution is not normalized properly");
 
   free(pstart);
@@ -632,6 +636,45 @@ p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol)
   if (pstart != NULL) free(pstart);
   return eslFAIL;
 }
+
+
+/* Function:  p7_profile_GetMutePathLogProb()
+ * Synopsis:  Get the ln prob of G->D1...Dm->E path.
+ *
+ * Purpose:   Calculate the log probability (in nats) of the mute glocal
+ *            path G->D1...Dm->E, a probability mass that profile
+ *            configuration removes from the model (by wing retraction
+ *            and removal of the D1 state).  We sometimes need to add
+ *            this term back, especially in some debugging routines
+ *            that check for perfect summation over paths.
+ *            
+ *            For example, in <p7_profile_Validate()>, we check that
+ *            the wing-retracted glocal entry probability distribution
+ *            sums to one, and in some "enumeration" unit tests, we
+ *            check that the total sum $\sum_x P(x \mid M) = 1.0$ over
+ *            sequences $x$.
+ * 
+ * Args:      gm           - configured profile
+ *            ret_mute_lnp - RETURN: log_e (nat) score of G->D1..Dm->E path.    
+ *
+ * Returns:   <eslOK> on success, and <*ret_mute_lnp> is the answer.
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      [SRE:J9/98,100].
+ */
+int
+p7_profile_GetMutePathLogProb(const P7_PROFILE *gm, double *ret_mute_lnp)
+{
+  int    k;
+  double mute_lnp = 0.0;
+
+  mute_lnp = gm->xsc[p7P_G][1];                                   /* G->D1 */
+  for (k = 1; k < gm->M; k++) mute_lnp += P7P_TSC(gm, k, p7P_DD); /* D1->D2,...Dm-1->Dm; Dm->E is 1.0 */
+  *ret_mute_lnp = mute_lnp;
+  return eslOK;
+}
+
 
 /* Function:  p7_profile_Compare()
  * Synopsis:  Compare two profiles for equality.
