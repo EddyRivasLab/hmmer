@@ -734,9 +734,9 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
   size += (hmm->flags & p7H_CHKSUM ? 7 + sprintf(buff, "%u", hmm->checksum) : 0);                           /*CKSUM line */
 
   /* Thresholds section */
-  size += ((hmm->flags & p7H_GA) ? 8 + sprintf(buff, "%.2f", hmm->cutoff[p7_GA1]),sprintf(buff, "%.2f", hmm->cutoff[p7_GA2]) : 0);
-  size += ((hmm->flags & p7H_TC) ? 8 + sprintf(buff, "%.2f", hmm->cutoff[p7_TC1]),sprintf(buff, "%.2f", hmm->cutoff[p7_TC2]) : 0);
-  size += ((hmm->flags & p7H_NC) ? 8 + sprintf(buff, "%.2f", hmm->cutoff[p7_NC1]),sprintf(buff, "%.2f", hmm->cutoff[p7_NC2]) : 0);
+  size += ((hmm->flags & p7H_GA) ? 8 + sprintf(buff, "%.2f", hmm->cutoff[p7_GA1])+sprintf(buff, "%.2f", hmm->cutoff[p7_GA2]) : 0);
+  size += ((hmm->flags & p7H_TC) ? 8 + sprintf(buff, "%.2f", hmm->cutoff[p7_TC1])+sprintf(buff, "%.2f", hmm->cutoff[p7_TC2]) : 0);
+  size += ((hmm->flags & p7H_NC) ? 8 + sprintf(buff, "%.2f", hmm->cutoff[p7_NC1])+sprintf(buff, "%.2f", hmm->cutoff[p7_NC2]) : 0);
 
   /* E-value stats */
   size += ((hmm->flags & p7H_STATS) ?
