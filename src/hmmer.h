@@ -1378,6 +1378,7 @@ extern int  p7_hmmfile_CreateLock(P7_HMMFILE *hfp);
 #endif
 extern int  p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm);
 extern int  p7_hmmfile_WriteASCII (FILE *fp, int format, P7_HMM *hmm);
+extern int  p7_hmmfile_WriteToString (char **s, int format, P7_HMM *hmm);
 extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **opt_hmm);
 extern int  p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key);
 extern int  p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset);
