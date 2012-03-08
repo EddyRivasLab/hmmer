@@ -2,10 +2,11 @@
  *  
  * Contents:
  *   1. P7_PIPELINE: allocation, initialization, destruction
- *   2. Pipeline API
- *   3. Example 1: search mode (in a sequence db)
- *   4. Example 2: scan mode (in an HMM db)
- *   5. Copyright and license information
+ *   2. Internal functions
+ *   3. Pipeline API
+ *   4. Example 1: search mode (in a sequence db)
+ *   5. Example 2: scan mode (in an HMM db)
+ *   6. Copyright and license information
  * 
  */
 #include "p7_config.h"
@@ -22,7 +23,6 @@
 
 
 #include "hmmer.h"
-
 
 /*****************************************************************
  * 1. The P7_PIPELINE object: allocation, initialization, destruction.
@@ -291,11 +291,77 @@ p7_pipeline_Destroy(P7_PIPELINE *pli)
 /*---------------- end, P7_PIPELINE object ----------------------*/
 
 
+/*****************************************************************
+ * 2. Internal functions
+ *****************************************************************/
 
+/* Function:  p7_pli_ExtendAndMergeWindows
+ * Synopsis:  Turns a list of ssv diagonals into windows, and merges
+ *            overlapping windows.
+ *
+ * Purpose:   Accepts a <windowlist> of SSV diagonals, extends those
+ *            to windows based on a combination of the max_length
+ *            value from <om> and the prefix and suffix lengths stored
+ *            in <msvdata>, then merges overlapping windows in place,
+ *            ensuring that windows stay within the bounds of 1..<L>.
+ *
+ * Returns:   <eslOK>
+ */
+static int
+p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, P7_MSVDATA *msvdata, FM_WINDOWLIST *windowlist, int L) {
+
+  int i;
+  FM_WINDOW        *prev_window;
+  FM_WINDOW        *curr_window;
+  int              window_start;
+  int              window_end;
+  int new_hit_cnt = 0;
+
+
+  /* extend windows */
+  for (i=0; i<windowlist->count; i++) {
+    curr_window = windowlist->windows+i;
+
+    // the 0.1 multiplier provides for a small buffer in excess of the predefined prefix/suffix lengths - one proportional to max_length
+    window_start = ESL_MAX( 1,   curr_window->n - ( om->max_length * (0.1 + msvdata->prefix_lengths[curr_window->k - curr_window->length + 1]  )) ) ;
+    window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + (om->max_length * (0.1 + msvdata->suffix_lengths[curr_window->k] ) ) )   ;
+
+
+    curr_window->n = window_start;
+    curr_window->length = window_end - window_start + 1;
+  }
+
+
+  /* merge overlapping windows, compressing list in place. */
+  for (i=1; i<windowlist->count; i++) {
+    prev_window = windowlist->windows+new_hit_cnt;
+    curr_window = windowlist->windows+i;
+    if (curr_window->n <= prev_window->n + prev_window->length ) {
+      //merge windows
+      if (  curr_window->n + curr_window->length >  prev_window->n + prev_window->length )
+        prev_window->length = curr_window->n + curr_window->length - prev_window->n;
+
+    } else {
+      new_hit_cnt++;
+      windowlist->windows[new_hit_cnt] = windowlist->windows[i];
+    }
+  }
+  windowlist->count = new_hit_cnt+1;
+
+  /* ensure that window start and end are within target sequence bounds */
+  if ( windowlist->windows[0].n  <  1)
+    windowlist->windows[0].n =  1;
+
+  if ( windowlist->windows[windowlist->count].n + windowlist->windows[windowlist->count].length - 1  >  L)
+    windowlist->windows[windowlist->count].length =  L - windowlist->windows[windowlist->count].n + 1;
+
+
+  return eslOK;
+}
 
 
 /*****************************************************************
- * 2. The pipeline API.
+ * 3. The pipeline API.
  *****************************************************************/
 
 /* Function:  p7_pli_TargetReportable
@@ -1181,7 +1247,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
     p7_hmm_MSVDataComputeRest(om, msvdata);
 
     /*
-    //filter for biased composition here
+    //filter for biased composition of diagonals here ?
     if (pli->do_biasfilter) {
       j = 0;
       for (i=0; i<windowlist.count; i++) {
@@ -1198,44 +1264,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
       windowlist.count = j;
     }
 */
-
-    //widen window
-    for (i=0; i<windowlist.count; i++) {
-      curr_window = windowlist.windows+i;
-
-      // the 0.1 multiplier provides for a small buffer in excess of the predefined prefix/suffix lengths - one proportional to max_length
-      window_start = ESL_MAX( 1,   curr_window->n - ( om->max_length * (0.1 + msvdata->prefix_lengths[curr_window->k - curr_window->length + 1]  )) ) ;
-      window_end   = ESL_MIN( sq->n ,  curr_window->n + curr_window->length + (om->max_length * (0.1 + msvdata->suffix_lengths[curr_window->k] ) ) )   ;
-
-
-      curr_window->n = window_start;
-      curr_window->length = window_end - window_start + 1;
-    }
-
-
-    // merge overlapping windows, compressing list in place.
-    int new_hit_cnt = 0;
-    for (i=1; i<windowlist.count; i++) {
-      prev_window = windowlist.windows+new_hit_cnt;
-      curr_window = windowlist.windows+i;
-      if (curr_window->n <= prev_window->n + prev_window->length ) {
-        //merge windows
-        if (  curr_window->n + curr_window->length >  prev_window->n + prev_window->length )
-          prev_window->length = curr_window->n + curr_window->length - prev_window->n;
-
-      } else {
-        new_hit_cnt++;
-        windowlist.windows[new_hit_cnt] = windowlist.windows[i];
-      }
-    }
-    windowlist.count = new_hit_cnt+1;
-
-    // ensure that window start and end are within target sequence bounds
-    if ( windowlist.windows[0].n  <  1)
-      windowlist.windows[0].n =  1;
-
-    if ( windowlist.windows[windowlist.count].n + windowlist.windows[windowlist.count].length - 1  >  sq->n)
-      windowlist.windows[windowlist.count].length =  sq->n - windowlist.windows[windowlist.count].n + 1;
+    p7_pli_ExtendAndMergeWindows (om, msvdata, &windowlist, sq->n);
 
   }
 
@@ -1491,10 +1520,8 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
 /*------------------- end, pipeline API -------------------------*/
 
 
-
-
 /*****************************************************************
- * 3. Example 1: "search mode" in a sequence db
+ * 4. Example 1: "search mode" in a sequence db
  *****************************************************************/
 
 #ifdef p7PIPELINE_EXAMPLE
@@ -1634,7 +1661,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 4. Example 2: "scan mode" in an HMM db
+ * 5. Example 2: "scan mode" in an HMM db
  *****************************************************************/
 #ifdef p7PIPELINE_EXAMPLE2
 /* gcc -o pipeline_example2 -g -Wall -I../easel -L../easel -I. -L. -Dp7PIPELINE_EXAMPLE2 p7_pipeline.c -lhmmer -leasel -lm
