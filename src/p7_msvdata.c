@@ -113,6 +113,7 @@ p7_hmm_MSVDataDestroy(P7_MSVDATA *data )
 {
   int i;
   if (data != NULL) {
+
     if (data->scores != NULL)  free( data->scores);
     if (data->prefix_lengths != NULL) free( data->prefix_lengths);
     if (data->suffix_lengths != NULL) free( data->suffix_lengths);
@@ -160,11 +161,14 @@ p7_hmm_MSVDataCreate(P7_OPROFILE *om, int do_opt_ext )
   P7_MSVDATA *data = NULL;
   int    status;
 
+
   ESL_ALLOC(data, sizeof(P7_MSVDATA));
 
   data->scores         = NULL;
   data->opt_ext_fwd    = NULL;
   data->opt_ext_rev    = NULL;
+  data->prefix_lengths = NULL;
+  data->suffix_lengths = NULL;
 
   p7_hmm_GetScoreArrays(om, data, do_opt_ext); /* for FM-index string tree traversal */
 
