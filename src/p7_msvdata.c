@@ -50,45 +50,43 @@
  *            return eslEMEM on allocation failure, eslOK otherwise.
  */
 static int
-p7_hmm_GetScoreArrays(P7_PROFILE *gm, P7_MSVDATA *data, int do_opt_ext, float scale, uint bias ) {
+p7_hmm_GetScoreArrays(P7_OPROFILE *om, P7_MSVDATA *data, int do_opt_ext ) {
   int i, j, status;
 
   //gather values from gm->rsc into a succinct 2D array
-  float *max_scores;
+  uint8_t *max_scores;
   float sc_fwd, sc_rev;
+  int K = om->abc->Kp;
+  data->M = om->M;
 
-  int K = gm->abc->Kp;
+  ESL_ALLOC(data->scores, (om->M + 1) * K * sizeof(uint8_t));
+  p7_oprofile_GetMSVEmissionArray(om, data->scores);
 
-  data->M = gm->M;
-
-  ESL_ALLOC(data->scores, (gm->M + 1) * K * sizeof(float));
-  ESL_ALLOC(max_scores, (gm->M + 1) * sizeof(float));
-
-  for (i = 1; i <= gm->M; i++) {
-    max_scores[i] = 0;
-    for (j=0; j<K; j++) {
-      //based on p7_oprofile's biased_byteify()
-      float x =  -1.0f * roundf(scale * gm->rsc[j][(i) * p7P_NR     + p7P_MSC]);
-      data->scores[i*K + j] = (x > 255. - bias) ? 255 : (uint8_t) (x + bias);
-      if (data->scores[i*K + j] > max_scores[i]) max_scores[i] = data->scores[i*K + j];
-    }
-  }
 
   if (do_opt_ext) {
-    //for each position in the query, what's the highest possible score achieved by extending X positions, for X=1..10
-    ESL_ALLOC(data->opt_ext_fwd, (gm->M + 1) * sizeof(uint8_t*));
-    ESL_ALLOC(data->opt_ext_rev, (gm->M + 1) * sizeof(uint8_t*));
+    ESL_ALLOC(max_scores, (om->M + 1) * sizeof(float));
+    for (i = 1; i <= om->M; i++) {
+      max_scores[i] = 0;
+      for (j=0; j<K; j++)
+        if (data->scores[i*K + j] > max_scores[i]) max_scores[i] = data->scores[i*K + j];
+    }
 
-    for (i=1; i<=gm->M; i++) {
+
+
+    //for each position in the query, what's the highest possible score achieved by extending X positions, for X=1..10
+    ESL_ALLOC(data->opt_ext_fwd, (om->M + 1) * sizeof(uint8_t*));
+    ESL_ALLOC(data->opt_ext_rev, (om->M + 1) * sizeof(uint8_t*));
+
+    for (i=1; i<=om->M; i++) {
       ESL_ALLOC(data->opt_ext_fwd[i], 10 * sizeof(uint8_t));
       ESL_ALLOC(data->opt_ext_rev[i], 10 * sizeof(uint8_t));
       sc_fwd = 0;
       sc_rev = 0;
-      for (j=0; j<10 && i+j+1<=gm->M; j++) {
+      for (j=0; j<10 && i+j+1<=om->M; j++) {
         sc_fwd += max_scores[i+j+1];
         data->opt_ext_fwd[i][j] = sc_fwd;
 
-        sc_rev += max_scores[gm->M-i-j];
+        sc_rev += max_scores[om->M-i-j];
         data->opt_ext_rev[i][j] = sc_rev;
       }
       for ( ; j<10; j++) { //fill in empty values
@@ -157,7 +155,7 @@ p7_hmm_MSVDataDestroy(P7_MSVDATA *data )
  * Throws:    <NULL> on allocation failure.
  */
 P7_MSVDATA *
-p7_hmm_MSVDataCreate(P7_PROFILE *gm, P7_HMM *hmm, int do_opt_ext, float scale, int bias )
+p7_hmm_MSVDataCreate(P7_OPROFILE *om, int do_opt_ext )
 {
   P7_MSVDATA *data = NULL;
   int    status;
@@ -168,7 +166,7 @@ p7_hmm_MSVDataCreate(P7_PROFILE *gm, P7_HMM *hmm, int do_opt_ext, float scale, i
   data->opt_ext_fwd    = NULL;
   data->opt_ext_rev    = NULL;
 
-  p7_hmm_GetScoreArrays(gm, data, do_opt_ext, scale, bias ); /* for FM-index string tree traversal */
+  p7_hmm_GetScoreArrays(om, data, do_opt_ext); /* for FM-index string tree traversal */
 
   return data;
 
@@ -281,7 +279,7 @@ utest_createMSVData(ESL_GETOPTS *go, ESL_RANDOMNESS *r )
   bias   = (max > 255.) ? 255 : (uint8_t) max;
 
 
-  if (  (msvdata = p7_hmm_MSVDataCreate(gm, hmm, FALSE, scale, bias))  == NULL ) esl_fatal(msg);
+  if (  (msvdata = p7_hmm_MSVDataCreate(om, FALSE))  == NULL ) esl_fatal(msg);
 
   p7_hmm_MSVDataDestroy(msvdata);
   p7_oprofile_Destroy(om);

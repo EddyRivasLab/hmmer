@@ -4,12 +4,13 @@
  * Contents:
  *   1. The P7_OPROFILE object: allocation, initialization, destruction.
  *   2. Conversion from generic P7_PROFILE to optimized P7_OPROFILE
- *   3. Debugging and development utilities.
- *   4. Benchmark driver.
- *   5. Unit tests.
- *   6. Test driver.
- *   7. Example.
- *   8. Copyright and license information.
+ *   3. Conversion from optimized P7_OPROFILE to compact score arrays
+ *   4. Debugging and development utilities.
+ *   5. Benchmark driver.
+ *   6. Unit tests.
+ *   7. Test driver.
+ *   8. Example.
+ *   9. Copyright and license information.
  *
  * SRE, Wed Jul 30 11:00:04 2008 [Janelia]
  * SVN $Id$
@@ -891,8 +892,91 @@ p7_oprofile_ReconfigUnihit(P7_OPROFILE *om, int L)
 
 
 
+/*******************************************************************
+*   3. Conversion from optimized P7_OPROFILE to compact score arrays
+ *******************************************************************/
+
+/* Function:  p7_oprofile_GetFwdTransitionArray()
+ * Synopsis:  Retrieve full 32-bit float transition probabilities from an
+ *            optimized profile into a flat array
+ *
+ * Purpose:   Extract an array of <type> (e.g. p7O_II) transition probabilities
+ *            from the underlying <om> profile. In SIMD implementations,
+ *            these are striped and interleaved, making them difficult to
+ *            directly access.
+ *
+ * Args:      <om>   - optimized profile, containing transition information
+ *            <type> - transition type (e.g. p7O_II)
+ *            <arr>  - preallocated array into which floats will be placed
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
+{
+  int     nq  = p7O_NQF(om->M);     /* # of striped vectors needed            */
+  int i, j;
+  union { vector float v; float x[4]; } tmp;
+
+  for (i=0; i<nq; i++) {
+    tmp.v = om->tfv[ type  + 7 * i ];
+    for (j=0; j<4; j++)
+      arr[i+1+ j*nq]      = tmp.x[j];
+  }
+
+  return eslOK;
+
+}
+
+
+/* Function:  p7_oprofile_GetMSVEmissionArray()
+ * Synopsis:  Retrieve MSV residue emission scores from an optimized
+ *            profile into an array
+ *
+ * Purpose:   Extract an implicitly 2D array of 8-bit int MSV residue
+ *            emission scores from an optimized profile <om>. <arr> must
+ *            be allocated by the calling function to be of size
+ *            ( om->abc->Kp * ( om->M  + 1 )), and indexing into the array
+ *            is done as  [om->abc->Kp * i +  c ] for character c at
+ *            position i.
+ *
+ *            In SIMD implementations, the residue scores are striped
+ *            and interleaved, making them somewhat difficult to
+ *            directly access. Faster access is desired, for example,
+ *            in SSV back-tracking of a high-scoring diagonal
+ *
+ * Args:      <om>   - optimized profile, containing transition information
+ *            <arr>  - preallocated array into which scores will be placed
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_oprofile_GetMSVEmissionArray(const P7_OPROFILE *om, uint8_t *arr )
+{
+  int     M   = om->M;    /* length of the query                                          */
+  int     nq  = p7O_NQB(M);     /* segment length; total # of striped vectors needed            */
+  int x, q, z, k;
+  union { vector v; uint8_t i[16]; } tmp; /* used to align and read simd minivectors           */
+
+  for (x = 0; x < om->abc->Kp; x++) {
+    for (q = 0, k = 1; q < nq; q++, k++) {
+      tmp.v = om->rbv[x][q];
+      for (z=0; z<16; z++)
+        arr[ om->abc->Kp * (k+z*nq) + x ] = tmp.i[z];
+
+    }
+  }
+
+  return eslOK;
+}
+/*------------ end, conversions from P7_OPROFILE ------------------*/
+
 /*****************************************************************
- * 3. Debugging and development utilities.
+ * 4. Debugging and development utilities.
  *****************************************************************/
 
 
@@ -1504,47 +1588,12 @@ p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm)
   return eslOK;
 }
 
-/* Function:  p7_oprofile_GetFwdTransitionArray()
- * Synopsis:  Retrieve full 32-bit float transition probabilities from an
- *            optimized profile into a flat array
- *
- * Purpose:   Extract an array of <type> (e.g. p7O_II) transition probabilities
- *            from the underlying <om> profile. In SIMD implementations,
- *            these are striped and interleaved, making them difficult to
- *            directly access.
- *
- * Args:      <om>   - optimized profile, containing transition information
- *            <type> - transition type (e.g. p7O_II)
- *            <arr>  - preallocated array into which floats will be placed
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    (no abnormal error conditions)
- */
-int
-p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
-{
-  int     nq  = p7O_NQF(om->M);     /* # of striped vectors needed            */
-  int i, j;
-  union { vector float v; float x[4]; } tmp;
-
-  for (i=0; i<nq; i++) {
-    tmp.v = om->tfv[ type  + 7 * i ];
-    for (j=0; j<4; j++)
-      arr[i+1+ j*nq]      = tmp.x[j];
-  }
-
-  return eslOK;
-
-}
-
-
 /*------------ end, P7_OPROFILE debugging tools  ----------------*/
 
 
 
 /*****************************************************************
- * 4. Benchmark driver.
+ * 5. Benchmark driver.
  *****************************************************************/
 
 #ifdef p7OPROFILE_BENCHMARK
@@ -1625,7 +1674,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 5. Unit tests
+ * 6. Unit tests
  *****************************************************************/
 #ifdef p7OPROFILE_TESTDRIVE
 
@@ -1637,7 +1686,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 6. Test driver
+ * 7. Test driver
  *****************************************************************/
 #ifdef p7OPROFILE_TESTDRIVE
 
@@ -1647,7 +1696,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 7. Example
+ * 8. Example
  *****************************************************************/
 #ifdef p7OPROFILE_EXAMPLE
 /* gcc -std=gnu99 -g -Wall -Dp7OPROFILE_EXAMPLE -I.. -I../../easel -L.. -L../../easel -o p7_oprofile_example p7_oprofile.c -lhmmer -leasel -lm

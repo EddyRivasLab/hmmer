@@ -558,22 +558,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_ProfileConfig(hmm, info->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
       p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
 
-#ifdef P7_IMPL_DUMMY_INCLUDED
-      // In dummy, the gm doesn't have a precomuted scale/bias, so do it here:
-      uint8_t scale = 3.0 / eslCONST_LOG2;                    /* scores in units of third-bits */
-      uint8_t bias;
-      float max = 0.0;
-
-      for (i = 0; i < gm->abc->K; i++)  max = ESL_MAX(max, esl_vec_FMax(gm->rsc[i], (gm->M+1)*2));
-      //based on unbiased_byteify
-      max  = -1.0f * roundf(scale* max);
-      bias   = (max > 255.) ? 255 : (uint8_t) max;
-
-      msvdata = p7_hmm_MSVDataCreate(gm, hmm, FALSE, scale, bias);
-#else
-      msvdata = p7_hmm_MSVDataCreate(gm, hmm, FALSE, om->scale_b, om->bias_b);
-#endif
-
+      msvdata = p7_hmm_MSVDataCreate(om, FALSE);
 
 
       for (i = 0; i < infocnt; ++i) {

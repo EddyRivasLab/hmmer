@@ -1186,10 +1186,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
   float            P;
   ESL_DSQ          *subseq;
   ESL_SQ           *tmpseq;
-  FM_WINDOW        *prev_window;
-  FM_WINDOW        *curr_window;
-  int              window_start;
-  int              window_end;
 
 
   P7_DOMAINDEF *ddef_app;

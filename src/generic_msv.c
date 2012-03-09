@@ -227,7 +227,12 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
 	  {
 	    target_start =  ESL_MAX(1, i - gm->max_length + 1);
 	    target_end   =  ESL_MIN(L, i + gm->max_length - 1);
-      fm_newWindow(windowlist, 0, target_start, 0, 0, target_end-target_start+1, XMX(i,p7G_C), fm_nocomplement );
+
+	    //TODO: this is wrong - it just pretends the hit was to the middle of the model, to get dummy to
+	    // quit crashing.  Results are definitely wrong.
+	    // Need to get diagonal backtracking implemented in dummy
+	    fm_newWindow(windowlist, 0, target_start, 0, gm->M/2, 1, XMX(i,p7G_C), fm_nocomplement );
+
 
 		  //start the search all over again
 		  XMX(i,p7G_N) = 0;
