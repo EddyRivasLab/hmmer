@@ -123,8 +123,7 @@ Specify that the output multiple alignment
 is in format 
 .I <s>.
 Currently the accepted multiple alignment sequence file formats only
-include Stockholm and SELEX. Default is to autodetect the format of
-the file.
+include Stockholm and SELEX.
 
 
 
