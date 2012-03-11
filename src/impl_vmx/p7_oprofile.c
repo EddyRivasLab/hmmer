@@ -960,7 +960,7 @@ p7_oprofile_GetMSVEmissionArray(const P7_OPROFILE *om, uint8_t *arr )
   int     M   = om->M;    /* length of the query                                          */
   int     nq  = p7O_NQB(M);     /* segment length; total # of striped vectors needed            */
   int x, q, z, k;
-  union { vector v; uint8_t i[16]; } tmp; /* used to align and read simd minivectors           */
+  union { vector unsigned char v; uint8_t i[16]; } tmp; /* used to align and read simd minivectors           */
 
   for (x = 0; x < om->abc->Kp; x++) {
     for (q = 0, k = 1; q < nq; q++, k++) {
