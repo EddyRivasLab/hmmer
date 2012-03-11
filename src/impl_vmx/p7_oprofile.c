@@ -923,7 +923,8 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
   for (i=0; i<nq; i++) {
     tmp.v = om->tfv[ type  + 7 * i ];
     for (j=0; j<4; j++)
-      arr[i+1+ j*nq]      = tmp.x[j];
+      if ( i+1+ j*nq < om->M+1) 
+        arr[i+1+ j*nq]      = tmp.x[j];
   }
 
   return eslOK;
@@ -957,17 +958,20 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
 int
 p7_oprofile_GetMSVEmissionArray(const P7_OPROFILE *om, uint8_t *arr )
 {
-  int     M   = om->M;    /* length of the query                                          */
-  int     nq  = p7O_NQB(M);     /* segment length; total # of striped vectors needed            */
   int x, q, z, k;
   union { vector unsigned char v; uint8_t i[16]; } tmp; /* used to align and read simd minivectors           */
+  int      M   = om->M;    /* length of the query                                          */
+  int      K   = om->abc->Kp;
+  int      nq  = p7O_NQB(M);     /* segment length; total # of striped vectors needed            */
+  int cell_cnt = (om->M + 1) * K;
 
-  for (x = 0; x < om->abc->Kp; x++) {
+
+  for (x = 0; x < K ; x++) {
     for (q = 0, k = 1; q < nq; q++, k++) {
       tmp.v = om->rbv[x][q];
       for (z=0; z<16; z++)
-        arr[ om->abc->Kp * (k+z*nq) + x ] = tmp.i[z];
-
+        if (  (K * (k+z*nq) + x) < cell_cnt)
+          arr[ K * (k+z*nq) + x ] = tmp.i[z];
     }
   }
 
