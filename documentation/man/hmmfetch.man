@@ -95,8 +95,7 @@ or
 .I -f
 options),
 .I <hmmfile> 
-may be 
-'-' (dash), which
+may be '-' (dash), which
 means reading input from
 .I stdin
 rather than a file.  
