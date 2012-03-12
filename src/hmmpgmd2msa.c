@@ -119,6 +119,7 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
   if (   ( stats->Z_setby != p7_ZSETBY_NTARGETS    && stats->Z_setby != p7_ZSETBY_OPTION    && stats->Z_setby != p7_ZSETBY_FILEINFO )
       || ( stats->domZ_setby != p7_ZSETBY_NTARGETS && stats->domZ_setby != p7_ZSETBY_OPTION && stats->domZ_setby != p7_ZSETBY_FILEINFO )
       ||   stats->nseqs > 1000000
+      ||   stats->nhits > 1000000
       ||   stats->elapsed > 1000000
   ) {
     goto ERROR;
@@ -133,7 +134,13 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
   ESL_ALLOC( th.unsrt, sizeof(P7_HIT) * stats->nhits);
   memcpy( th.unsrt, hits, sizeof(P7_HIT) * stats->nhits);
   ESL_ALLOC( th.hit, sizeof(P7_HIT*) * stats->nhits);
-  for (i=0; i<stats->nhits; i++)  th.hit[i] = &(th.unsrt[i]);
+  for (i=0; i<stats->nhits; i++) {
+    th.hit[i] = &(th.unsrt[i]);
+    if (   th.hit[i]->ndom > 10000
+        || th.hit[i]->flags >  p7_IS_INCLUDED + p7_IS_REPORTED + p7_IS_NEW + p7_IS_DROPPED + p7_IS_DUPLICATE
+    )
+      goto ERROR;
+  }
 
 //  th.unsrt     = NULL;
   th.N         = stats->nhits;
