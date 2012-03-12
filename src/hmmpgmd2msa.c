@@ -94,6 +94,10 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
 
   void              *p     = data;        /*pointer used to walk along data, must be char* to allow pointer arithmetic */
 
+  th.N = 0;
+  th.unsrt = NULL;
+  th.hit   = NULL;
+
   /* optionally build a faux trace for the query sequence: relative to core model (B->M_1..M_L->E) */
   if (qsq != NULL) {
     if (qsq->n != hmm->M) goto ERROR;
@@ -110,6 +114,17 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
 
   /* get search stats + hit info */
   stats = (HMMD_SEARCH_STATS*)p;
+
+  /* sanity check */
+  if (   ( stats->Z_setby != p7_ZSETBY_NTARGETS    && stats->Z_setby != p7_ZSETBY_OPTION    && stats->Z_setby != p7_ZSETBY_FILEINFO )
+      || ( stats->domZ_setby != p7_ZSETBY_NTARGETS && stats->domZ_setby != p7_ZSETBY_OPTION && stats->domZ_setby != p7_ZSETBY_FILEINFO )
+      ||   stats->nseqs > 1000000
+      ||   stats->elapsed > 1000000
+  ) {
+    goto ERROR;
+  }
+
+  /* ok, it looks legitimate */
   p    += sizeof(HMMD_SEARCH_STATS);
   hits  = (P7_HIT*)p;
   p    += sizeof(P7_HIT) * stats->nhits;
@@ -220,6 +235,7 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
 ERROR:
   /* free memory */
   if (qtr != NULL) free(qtr);
+
   for (i = 0; i < th.N; i++) {
     for (j=0; j < th.hit[i]->ndom; j++)
       p7_alidisplay_Destroy(th.hit[i]->dcl[j].ad);
@@ -228,7 +244,6 @@ ERROR:
   }
   if (th.unsrt != NULL) free (th.unsrt);
   if (th.hit != NULL) free (th.hit);
-
 
   return NULL;
 }
@@ -241,7 +256,7 @@ ERROR:
  * 2. Test driver
  *****************************************************************/
 
-//#define hmmpgmd2msa_TESTDRIVE
+#define hmmpgmd2msa_TESTDRIVE
 #ifdef hmmpgmd2msa_TESTDRIVE
 
 /* Test driver. As written, requires files that won't be released with
@@ -261,7 +276,7 @@ main(int argc, char **argv) {
 
   char   errbuf[eslERRBUFSIZE];
   int status;
-
+  char *badstring = "asdlfuhasdfuhasdfhasdfhaslidhflaishdfliasuhdfliasuhdfliasudfh";
 
 
   /* read the hmm */
@@ -276,6 +291,7 @@ main(int argc, char **argv) {
 
 
   /* get stats for the hmmd data */
+
   if ( (fp = fopen("hmmpgmd.binary.dat", "rb")) == NULL ) goto ERROR;
 
   fseek (fp , 0 , SEEK_END);
@@ -284,7 +300,12 @@ main(int argc, char **argv) {
   ESL_ALLOC(data, size);
   fread(data, size, 1, fp);
 
-  msa = hmmpgmd2msa(data, hmm, qsq);
+
+  data = (void*)badstring;
+
+  msa = hmmpgmd2msa(data, hmm, qsq, NULL,0, NULL, 0);
+
+  if (msa == NULL) goto ERROR;
 
   eslx_msafile_Write(stdout, msa, eslMSAFILE_STOCKHOLM);
 

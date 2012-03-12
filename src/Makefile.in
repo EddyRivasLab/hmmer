@@ -60,7 +60,8 @@ PROGS = hmmalign\
 	hmmpgmd\
 	hmmc2\
 	makenhmmerdb\
-	exactmatch
+	exactmatch\
+        hmmpgmd2msa
 
 
 PROGOBJS =\
@@ -80,7 +81,8 @@ PROGOBJS =\
 	hmmpgmd.o\
 	hmmc2.o\
 	makenhmmerdb.o\
-	exactmatch.o
+	exactmatch.o\
+        hmmpgmd2msa.o
 
 HDRS =  hmmer.h \
 	cachedb.h \
