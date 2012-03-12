@@ -1,3 +1,18 @@
+ID              h94
+TITLE           phmmer assigns incorrect scores to degenerate residues
+AFFECTS         3.0
+FIXED_IN        -
+STATUS          CLOSED
+XREF            SRE:J9/87; svn r3878
+REPORTED_BY     Elena Rivas
+OPENED_DATE     25 Feb 2012
+CLOSED_DATE     25 Feb 2012
+DESCRIPTION     
+  When converting joint probs p_ab to conditionals p(b|a),
+  p7_builder_{Load,Set}ScoreSystem() were only converting K canonical
+  residues, and leaving the degenerate residues as joints.  Degenerate
+  residue scores were therefore incorrect, and highly penalized.
+//
 ID              h93
 TITLE           Running out of disk space corrupts outputs
 AFFECTS         HMMER 3.0 and earlier
