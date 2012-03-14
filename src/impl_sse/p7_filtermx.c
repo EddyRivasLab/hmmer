@@ -421,6 +421,86 @@ p7_filtermx_DumpFBRow(P7_FILTERMX *ox, int rowi, __m128 *dpc, char *pfx)
   if (v) free(v);
   return status;
 }
+
+
+/* Function:  p7_filtermx_DumpMFRow()
+ * Synopsis:  Dump one row from MSV version of a DP matrix.
+ *
+ * Purpose:   Dump current row of MSV calculations from DP matrix <ox>
+ *            for diagnostics, and include the values of specials
+ *            <xE>, etc. The index <rowi> for the current row is used
+ *            as a row label. This routine has to be specialized for
+ *            the layout of the MSVFilter() row, because it's all
+ *            match scores dp[0..q..Q-1], rather than triplets of
+ *            M,D,I.
+ * 
+ *            If <rowi> is 0, print a header first too.
+ * 
+ *            The output format is coordinated with <p7_refmx_Dump()> to
+ *            facilitate comparison to a known answer.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure. 
+ */
+int
+p7_filtermx_DumpMFRow(P7_FILTERMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
+{
+  __m128i *dp = ox->dpf[0];	/* we may use up to allocW*validR bytes on our one MSV row */
+  int      Q  = P7F_NQB(ox->M);	/* and we actually use Q * sizeof(__m128i)                 */
+  int      M  = ox->M;
+  uint8_t *v  = NULL;		/* array of unstriped scores  */
+  int      q,z,k;
+  union { __m128i v; uint8_t i[16]; } tmp;
+  int      status;
+
+  ESL_ALLOC(v, sizeof(unsigned char) * ((Q*16)+1));
+  v[0] = 0;
+
+  /* Header (if we're on the 0th row)  */
+  if (rowi == 0)
+    {
+      fprintf(ox->dfp, "       ");
+      for (k = 0; k <= M;  k++) fprintf(ox->dfp, "%3d ", k);
+      fprintf(ox->dfp, "%3s %3s %3s %3s %3s\n", "E", "N", "J", "B", "C");
+      fprintf(ox->dfp, "       ");
+      for (k = 0; k <= M+5;  k++) fprintf(ox->dfp, "%3s ", "---");
+      fprintf(ox->dfp, "\n");
+    }
+
+  /* Unpack and unstripe, then print M's. */
+  for (q = 0; q < Q; q++) {
+    tmp.v = dp[q];
+    for (z = 0; z < 16; z++) v[q+Q*z+1] = tmp.i[z];
+  }
+  fprintf(ox->dfp, "%4d M ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%3d ", v[k]);
+
+  /* The specials */
+  fprintf(ox->dfp, "%3d %3d %3d %3d %3d\n", xE, xN, xJ, xB, xC);
+
+  /* I's are all 0's; print just to facilitate comparison. */
+  fprintf(ox->dfp, "%4d I ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%3d ", 0);
+  fprintf(ox->dfp, "\n");
+
+  /* D's are all 0's too */
+  fprintf(ox->dfp, "%4d D ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%3d ", 0);
+  fprintf(ox->dfp, "\n\n");
+
+  free(v);
+  return eslOK;
+
+ERROR:
+  free(v);
+  return status;
+}
+
+
+
+
+
 #endif /*p7_DEBUGGING*/
 /*---------------- end, debugging -------------------------------*/
 
