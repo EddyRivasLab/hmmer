@@ -425,7 +425,10 @@ typedef struct p7_bg_s {
 
   ESL_HMM *fhmm;	/* bias filter: p7_bg_SetFilter() sets this, from model's mean composition */
 
-  float    omega;	/* null2's "prior": set at initialization                                  */
+  float    omega;	/* the "prior" on null2/null3: set at initialization (one omega for both null types)  */
+  int      use_null3;  /* use null3 in addition to null2 ?*/
+  int      use_null3w; /* use windowed-null3 in addition to null2 ?   (compatible with use_null3) */
+  int      null3_wlen; /* if use_null3w==TRUE, this is the width to be used by p7_null3_windowed_score()*/
 
   const ESL_ALPHABET *abc;	/* reference to alphabet in use: set at initialization             */
 } P7_BG;
@@ -723,7 +726,6 @@ typedef struct p7_alidisplay_s {
   char *ppline;		        /* posterior prob annotation; or NULL   */
   char *appline; 	        /* posterior prob of being aligned to the model (mocc) annotation; or NULL   */
   int   N;                      /* length of strings                    */
-
   char *hmmname;		/* name of HMM                          */
   char *hmmacc;			/* accession of HMM; or [0]='\0'        */
   char *hmmdesc;		/* description of HMM; or [0]='\0'      */
@@ -736,7 +738,9 @@ typedef struct p7_alidisplay_s {
   char *sqacc;			/* accession of target seq; or [0]='\0' */
   char *sqdesc;			/* description of targ seq; or [0]='\0' */
   long  sqfrom;			/* start position on sequence (1..L)    */
-  long  sqto;		        /* end position on sequence   (1..L)    */
+  long  sqto;		    /* end position on sequence   (1..L)    */
+  long  hqfrom;     /* start position on sequence (1..L) of trusted alignment (per APP)  */
+  long  hqto;       /* end position on sequence   (1..L) of trusted alignment (per APP)  */
   long  L;			/* length of sequence                   */
 
   int   memsize;                /* size of allocated block of memory    */
@@ -751,6 +755,7 @@ typedef struct p7_alidisplay_s {
 typedef struct p7_dom_s { 
   int            ienv, jenv;
   int            iali, jali;
+  int            ihq, jhq; /* Stores the conservative boundaries based on APP (aligned posterior probability) */
   float          envsc;  	/* Forward score in envelope ienv..jenv; NATS; without null2 correction       */
   float          domcorrection;	/* null2 score when calculating a per-domain score; NATS                      */
   float          dombias;	/* FLogsum(0, log(bg->omega) + domcorrection): null2 score contribution; NATS */
@@ -799,6 +804,12 @@ typedef struct p7_domaindef_s {
   float  rt2;		/* controls extent of regions. regions extended until mocc[i]-{b,e}occ[i] < dt2            */
   float  rt3;		/* controls when regions are flagged for split: if expected # of E preceding B is >= dt3   */
   
+  /* Heuristic thresholds for APP labeling (posterior probability of being aligned to a model, based on mocc */
+  int    show_app; /* default FALSE,  if TRUE, the APP of an nhmmer 'domain' should be printed */
+  float  app_hi;  /* default 0.95 */
+  float  app_med; /* default 0.85 */
+  float  app_lo;  /* default 0.75 */
+
   /* Heuristic thresholds that control the stochastic traceback/clustering process */
   int    nsamples;	/* collect ensemble of this many stochastic traces */
   float  min_overlap;	/* 0.8 means >= 80% overlap of (smaller/larger) segment to link, both in seq and hmm            */
@@ -908,11 +919,11 @@ typedef struct p7_tophits_s {
  */
 typedef struct p7_msvdata_s {
   int      M;
-  uint8_t  *scores;  //implicit M*K matrix, where M = # states, and K = # characters in alphabet
-  uint8_t    **opt_ext_fwd;
-  uint8_t    **opt_ext_rev;
-  uint8_t    *prefix_lengths;
-  uint8_t    *suffix_lengths;
+  uint8_t    *scores;  //implicit M*K matrix, where M = # states, and K = # characters in alphabet
+  uint8_t   **opt_ext_fwd;
+  uint8_t   **opt_ext_rev;
+  float      *prefix_lengths;
+  float      *suffix_lengths;
 } P7_MSVDATA;
 
 
@@ -1127,7 +1138,6 @@ typedef struct p7_pipeline_s {
   int     do_biasfilter;	/* TRUE to use biased comp HMM filter       */
   int     do_null2;		/* TRUE to use null2 score corrections      */
 
-
   /* Accounting. (reduceable in threaded/MPI parallel version)              */
   uint64_t      nmodels;        /* # of HMMs searched                       */
   uint64_t      nseqs;	        /* # of sequences searched                  */
@@ -1151,6 +1161,13 @@ typedef struct p7_pipeline_s {
 
   int           show_accessions;/* TRUE to output accessions not names      */
   int           show_alignments;/* TRUE to output alignments (default)      */
+
+  /* Preferences for APP labeling (posterior probability of being aligned to a model, based on mocc) in output */
+  int    show_app; /* default FALSE,  if TRUE, the APP */
+  float  app_hi;  /* default 0.95 */
+  float  app_med; /* default 0.85 */
+  float  app_lo;  /* default 0.75 */
+
 
   P7_HMMFILE   *hfp;		/* COPY of open HMM database (if scan mode) */
   char          errbuf[eslERRBUFSIZE];
@@ -1201,6 +1218,10 @@ typedef struct p7_builder_s {
   /* Choice of prior                                                                               */
   P7_PRIOR            *prior;	         /* choice of prior when parameterizing from counts        */
 
+  /* Haircut: treat the given range as uninformative, turning all match state residues in that range to 'N' */
+  int                 hc_start;
+  int                 hc_end;
+
   /* Optional: information used for parameterizing single sequence queries                         */
   ESL_SCOREMATRIX     *S;		 /* residue score matrix                                   */
   ESL_DMATRIX         *Q;	         /* Q->mx[a][b] = P(b|a) residue probabilities             */
@@ -1221,8 +1242,8 @@ typedef struct p7_builder_s {
  *****************************************************************/
 
 /* build.c */
-extern int p7_Handmodelmaker(ESL_MSA *msa,                P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
-extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
+extern int p7_Handmodelmaker(ESL_MSA *msa,                P7_BUILDER *bld, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
+extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_BUILDER *bld, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 
 /* emit.c */
 extern int p7_CoreEmit   (ESL_RANDOMNESS *r, const P7_HMM *hmm,                                        ESL_SQ *sq, P7_TRACE *tr);
@@ -1244,6 +1265,38 @@ extern int p7_Tau       (ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, i
 /* eweight.c */
 extern int p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_PRIOR *pri, double infotarget, double *ret_Neff);
 
+/* fm_alphabet.c */
+extern int fm_createAlphabet (FM_METADATA *meta, uint8_t *alph_bits);
+extern int fm_reverseString (char* str, int N);
+extern int fm_getComplement (char c, uint8_t alph_type);
+
+/* fm_general.c */
+extern uint32_t fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int pos);
+extern int fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,
+                                    uint32_t *segment_id, uint32_t *seg_pos);
+extern int fm_readFMmeta( FM_METADATA *meta);
+extern int fm_readFM( FM_DATA *fm, FM_METADATA *meta, int getAll );
+extern void fm_freeFM ( FM_DATA *fm, int isMainFM);
+extern uint8_t fm_getChar(uint8_t alph_type, int j, const uint8_t *B );
+extern int fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
+extern int fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
+extern int fm_configAlloc(void **mem, FM_CFG **cfg);
+extern int fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_f, FM_INTERVAL *interval_bk);
+extern int fm_updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval);
+extern int fm_initSeeds (FM_DIAGLIST *list) ;
+extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
+extern int fm_initWindows (FM_WINDOWLIST *list);
+extern FM_WINDOW *fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity);
+extern int fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint8_t *B, ESL_SQ *sq );
+extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
+
+
+/* fm_msv.c */
+extern int p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
+         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata,
+         FM_WINDOWLIST *windowlist);
+
+
 /* generic_decoding.c */
 extern int p7_GDecoding      (const P7_PROFILE *gm, const P7_GMX *fwd,       P7_GMX *bck, P7_GMX *pp);
 extern int p7_GDomainDecoding(const P7_PROFILE *gm, const P7_GMX *fwd, const P7_GMX *bck, P7_DOMAINDEF *ddef);
@@ -1255,9 +1308,7 @@ extern int p7_GHybrid      (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,    
 
 /* generic_msv.c */
 extern int p7_GMSV           (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float nu, float *ret_sc);
-extern int p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, FM_WINDOWLIST *windowlist, int do_biasfilter);
-extern P7_MSVDATA *p7_hmm_MSVDataCreate(P7_PROFILE *gm, P7_HMM *hmm, int do_opt_ext, float scale, int bias );
-extern void p7_hmm_MSVDataDestroy( P7_MSVDATA *data );
+extern int p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, FM_WINDOWLIST *windowlist);
 
 /* generic_null2.c */
 extern int p7_GNull2_ByExpectation(const P7_PROFILE *gm, P7_GMX *pp, float *null2);
@@ -1288,6 +1339,11 @@ extern int    dmx_Visualize(FILE *fp, ESL_DMATRIX *D, double min, double max);
 extern void p7_openlog(const char *ident, int option, int facility);
 extern void p7_syslog(int priority, const char *format, ...);
 extern void p7_closelog(void);
+
+/* hmmpgmd2msa.c */
+extern ESL_MSA * hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq,  int *incl, int incl_size, int *excl, int excl_size);
+
+
 
 /* island.c */
 extern int   p7_island_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, ESL_HISTOGRAM *h);
@@ -1362,7 +1418,7 @@ extern int            p7_alidisplay_Deserialize(P7_ALIDISPLAY *ad);
 extern void           p7_alidisplay_Destroy(P7_ALIDISPLAY *ad);
 extern char           p7_alidisplay_EncodePostProb(float p);
 extern float          p7_alidisplay_DecodePostProb(char pc);
-extern char           p7_alidisplay_EncodeAliPostProb(float p);
+extern char           p7_alidisplay_EncodeAliPostProb(float p, float hi, float med, float lo);
 extern int            p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, int show_accessions);
 extern int            p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_SQ **ret_sq, P7_TRACE **ret_tr);
 extern int            p7_alidisplay_Dump(FILE *fp, const P7_ALIDISPLAY *ad);
@@ -1403,7 +1459,7 @@ extern void          p7_domaindef_Destroy(P7_DOMAINDEF *ddef);
 
 extern int p7_domaindef_ByViterbi            (P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, P7_DOMAINDEF *ddef);
 extern int p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om, P7_OMX *oxf, P7_OMX *oxb, P7_OMX *fwd, P7_OMX *bck,
-				   P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app);
+				   P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, P7_BG *bg, int long_target);
 
 
 /* p7_gmx.c */
@@ -1466,9 +1522,19 @@ extern int  p7_hmmfile_CreateLock(P7_HMMFILE *hfp);
 #endif
 extern int  p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm);
 extern int  p7_hmmfile_WriteASCII (FILE *fp, int format, P7_HMM *hmm);
+extern int  p7_hmmfile_WriteToString (char **s, int format, P7_HMM *hmm);
 extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **opt_hmm);
 extern int  p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key);
 extern int  p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset);
+
+/* p7_msvdata.c */
+extern P7_MSVDATA *p7_hmm_MSVDataCreate(P7_OPROFILE *om, int do_opt_ext);
+extern int         p7_hmm_MSVDataComputeRest(P7_OPROFILE *om, P7_MSVDATA *data );
+extern void        p7_hmm_MSVDataDestroy( P7_MSVDATA *data );
+
+/* p7_null3.c */
+extern void p7_null3_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, P7_TRACE *tr, int start, int stop, P7_BG *bg, float *ret_sc);
+extern void p7_null3_windowed_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, int start, int stop, P7_BG *bg, float *ret_sc);
 
 /* p7_pipeline.c */
 extern P7_PIPELINE *p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, enum p7_pipemodes_e mode);
@@ -1476,6 +1542,7 @@ extern int          p7_pipeline_Reuse  (P7_PIPELINE *pli);
 extern void         p7_pipeline_Destroy(P7_PIPELINE *pli);
 extern int          p7_pipeline_Merge  (P7_PIPELINE *p1, P7_PIPELINE *p2);
 
+extern int p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, P7_MSVDATA *msvdata, FM_WINDOWLIST *windowlist, int L);
 extern int p7_pli_TargetReportable  (P7_PIPELINE *pli, float score,     double lnP);
 extern int p7_pli_DomainReportable  (P7_PIPELINE *pli, float dom_score, double lnP);
 
@@ -1485,12 +1552,9 @@ extern int p7_pli_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7
 extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
 extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
 extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
-extern int p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx);
+extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx);
 extern int p7_Pipeline_FM           (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
                                      const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata);
-
-
-
 
 extern int p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w);
 
@@ -1555,7 +1619,7 @@ extern int         p7_tophits_GetMaxAccessionLength(P7_TOPHITS *h);
 extern int         p7_tophits_GetMaxShownLength(P7_TOPHITS *h);
 extern void        p7_tophits_Destroy(P7_TOPHITS *h);
 
-extern int p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N);
+extern int p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N, int W);
 extern int p7_tophits_RemoveDuplicates(P7_TOPHITS *th);
 extern int p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli);
 extern int p7_tophits_CompareRanking(P7_TOPHITS *th, ESL_KEYHASH *kh, int *opt_nnew);
@@ -1604,40 +1668,6 @@ extern int  p7_trace_FauxFromMSA(ESL_MSA *msa, int *matassign, int optflags, P7_
 extern int  p7_trace_Doctor(P7_TRACE *tr, int *opt_ndi, int *opt_nid);
 
 extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
-
-
-
-/* fm_alphabet.c */
-extern int fm_createAlphabet (FM_METADATA *meta, uint8_t *alph_bits);
-extern int fm_reverseString (char* str, int N);
-extern int fm_getComplement (char c, uint8_t alph_type);
-
-/* fm_general.c */
-extern uint32_t fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int pos);
-extern int fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,
-                                    uint32_t *segment_id, uint32_t *seg_pos);
-extern int fm_readFMmeta( FM_METADATA *meta);
-extern int fm_readFM( FM_DATA *fm, FM_METADATA *meta, int getAll );
-extern void fm_freeFM ( FM_DATA *fm, int isMainFM);
-extern uint8_t fm_getChar(uint8_t alph_type, int j, const uint8_t *B );
-extern int fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
-extern int fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
-extern int fm_configAlloc(void **mem, FM_CFG **cfg);
-extern int fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_f, FM_INTERVAL *interval_bk);
-extern int fm_updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval);
-extern int fm_initSeeds (FM_DIAGLIST *list) ;
-extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
-extern int fm_initWindows (FM_WINDOWLIST *list);
-extern FM_WINDOW *fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity);
-extern int fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint8_t *B, ESL_SQ *sq );
-extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
-
-
-
-/* fm_msv.c */
-extern int p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
-         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata,
-         FM_WINDOWLIST *windowlist);
 
 
 /* seqmodel.c */

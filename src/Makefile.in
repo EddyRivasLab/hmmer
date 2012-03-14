@@ -20,7 +20,7 @@ man1dir     = ${mandir}/man1
 man1ext     = .1
 
 CC        = @CC@
-CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@
+CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
 SIMDFLAGS = @SIMD_CFLAGS@
 CPPFLAGS  = @CPPFLAGS@
 LDFLAGS   = @LDFLAGS@
@@ -60,7 +60,8 @@ PROGS = hmmalign\
 	hmmpgmd\
 	hmmc2\
 	makenhmmerdb\
-	exactmatch
+	exactmatch\
+        hmmpgmd2msa
 
 
 PROGOBJS =\
@@ -80,7 +81,8 @@ PROGOBJS =\
 	hmmpgmd.o\
 	hmmc2.o\
 	makenhmmerdb.o\
-	exactmatch.o
+	exactmatch.o\
+        hmmpgmd2msa.o
 
 HDRS =  hmmer.h \
 	cachedb.h \
@@ -133,6 +135,7 @@ OBJS =  banded_fwdback.o\
 	p7_hmm.o\
 	p7_hmmcache.o\
 	p7_hmmfile.o\
+	p7_null3.o\
 	p7_pipeline.o\
 	p7_prior.o\
 	p7_profile.o\
@@ -143,7 +146,8 @@ OBJS =  banded_fwdback.o\
 	p7_msvdata.o\
 	fm_alphabet.o\
 	fm_general.o\
-	fm_msv.o
+	fm_msv.o\
+    hmmpgmd2msa.o
 #	island.o\
 
 STATS = \
@@ -179,6 +183,7 @@ UTESTS =\
 	modelconfig_utest\
 	reference_fwdback_utest\
 	reference_viterbi_utest\
+	seqmodel_utest\
 	p7_alidisplay_utest\
 	p7_bg_utest\
 	p7_gmx_utest\

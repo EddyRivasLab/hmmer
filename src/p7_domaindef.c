@@ -48,7 +48,7 @@
 static int is_multidomain_region  (P7_DOMAINDEF *ddef, int i, int j);
 static int region_trace_ensemble  (P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *dsq, int ireg, int jreg, const P7_OMX *fwd, P7_OMX *wrk, int *ret_nc);
 static int rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPROFILE *om, const ESL_SQ *sq, P7_OMX *ox1, P7_OMX *ox2,
-				   int i, int j, int null2_is_done);
+				   int i, int j, int null2_is_done, P7_BG *bg, int long_target);
 
 
 /*****************************************************************
@@ -341,7 +341,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
   p7_ReconfigUnihit(gm, 0);	  /* process each domain in unihit L=0 mode */
 
   for (d = 0; d < ddef->gtr->ndom; d++)
-    rescore_isolated_domain(ddef, gm, sq, gx1, gx2, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], FALSE);
+    rescore_isolated_domain(ddef, gm, sq, gx1, gx2, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], FALSE, NULL, FALSE);
 
   /* Restore original model configuration, including length */
   if (p7_IsMulti(save_mode))  p7_ReconfigMultihit(gm, saveL); 
@@ -367,7 +367,11 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
  *            optionally provides a new or reused <ddef_app> object to
  *            hold details required by nhmmer to produce the APP
  *            (posterior probability of being aligned) line in
- *            alignment printout.
+ *            alignment printout. A <bg> is provided for (possible) use
+ *            in null3 score correction (used in nhmmer), and a boolean
+ *            <long_target> argument is provided to allow nhmmer-
+ *            specific modifications to the behavior of this function
+ *            (TRUE -> from nhmmer).
  *            
  *            Upon return, <ddef> contains the definitions of all the
  *            domains: their bounds, their null-corrected Forward
@@ -383,7 +387,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
 int
 p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om, 
 				   P7_OMX *oxf, P7_OMX *oxb, P7_OMX *fwd, P7_OMX *bck, 
-				   P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app)
+				   P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, P7_BG *bg, int long_target)
 {
   int i, j;
   int triggered;
@@ -434,6 +438,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
              */
             p7_oprofile_ReconfigMultihit(om, saveL);
             p7_Forward(sq->dsq+i-1, j-i+1, om, fwd, NULL);
+
             region_trace_ensemble(ddef, om, sq->dsq, i, j, fwd, bck, &nc);
             p7_oprofile_ReconfigUnihit(om, saveL);
             /* ddef->n2sc is now set on i..j by the traceback-dependent method */
@@ -461,7 +466,10 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
                      * happens. [xref J5/130].
                   */
                   ddef->nenvelopes++;
-                  if (rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i2, j2, TRUE) == eslOK)
+
+                  /*the !long_target argument will cause the function to recompute null2
+                   * scores if this is part of a long_target (nhmmer) pipeline */
+                  if (rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i2, j2, TRUE, bg, long_target) == eslOK)
                        last_j2 = j2;
             }
             p7_spensemble_Reuse(ddef->sp);
@@ -471,7 +479,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
         {
             /* The region looks simple, single domain; convert the region to an envelope. */
             ddef->nenvelopes++;
-            rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i, j, FALSE);
+            rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i, j, FALSE, bg, long_target);
         }
         i     = -1;
         triggered = FALSE;
@@ -698,6 +706,10 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *
  * provided is used to hold details required by nhmmer to produce the
  * APP (posterior probability of being aligned) line in alignment
  * printout.
+ *
+ * If <long_target> is TRUE, null3 biased-composition score correction
+ * is used, and <bg> is required. Otherwise null2 is used, and <bg>
+ * may be NULL.
  * 
  * Returns <eslOK> if a domain was successfully identified, scored,
  * and aligned in the envelope; if so, the per-domain information is
@@ -722,7 +734,7 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *
  */
 static int
 rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPROFILE *om, const ESL_SQ *sq,
-			P7_OMX *ox1, P7_OMX *ox2, int i, int j, int null2_is_done)
+			P7_OMX *ox1, P7_OMX *ox2, int i, int j, int null2_is_done, P7_BG *bg, int long_target)
 {
   P7_DOMAIN     *dom           = NULL;
   int            Ld            = j-i+1;
@@ -732,6 +744,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
   int            pos;
   float          null2[p7_MAXCODE];
   int            status;
+  float          null3_corr;
 
   p7_Forward (sq->dsq + i-1, Ld, om,      ox1, &envsc);
   p7_Backward(sq->dsq + i-1, Ld, om, ox1, ox2, NULL);
@@ -746,50 +759,73 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
   status = p7_Decoding(om, ox1, ox2, ox2);      /* <ox2> is now overwritten with post probabilities     */
   if (status == eslERANGE) return eslFAIL;      /* rare: numeric overflow; domain is assumed to be repetitive garbage [J3/119-212] */
 
-  /* Is null2 set already for this i..j? (It is, if we're in a domain that
-   * was defined by stochastic traceback clustering in a multidomain region;
-   * it isn't yet, if we're in a simple one-domain region). If it isn't,
-   * do it now, by the expectation (posterior decoding) method.
-   */
-  if (! null2_is_done) {
-    p7_Null2_ByExpectation(om, ox2, null2);
-    for (pos = i; pos <= j; pos++) 
-      ddef->n2sc[pos]  = logf(null2[sq->dsq[pos]]);
-  }
-    
-  for (pos = i; pos <= j; pos++) 
-    domcorrection   += ddef->n2sc[pos];	        /* domcorrection is in units of NATS */
 
   /* Find an optimal accuracy alignment */
   p7_OptimalAccuracy(om, ox2, ox1, &oasc);      /* <ox1> is now overwritten with OA scores              */
   p7_OATrace        (om, ox2, ox1, ddef->tr);   /* <tr>'s seq coords are offset by i-1, rel to orig dsq */
-  
+
+
   /* hack the trace's sq coords to be correct w.r.t. original dsq */
   for (z = 0; z < ddef->tr->N; z++)
     if (ddef->tr->i[z] > 0) ddef->tr->i[z] += i-1;
 
   /* get ptr to next empty domain structure in domaindef's results */
   if (ddef->ndom == ddef->nalloc) {
-    void *p;
-    ESL_RALLOC(ddef->dcl, p, sizeof(P7_DOMAIN) * (ddef->nalloc*2));
+    ESL_REALLOC(ddef->dcl, sizeof(P7_DOMAIN) * (ddef->nalloc*2));
     ddef->nalloc *= 2;    
   }
   dom = &(ddef->dcl[ddef->ndom]);
 
   /* store the results in it */
+  dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq, ddef_app);
+  dom->iali          = dom->ad->sqfrom;
+  dom->jali          = dom->ad->sqto;
+  dom->ihq           = dom->ad->hqfrom;
+  dom->jhq           = dom->ad->hqto;
   dom->ienv          = i;
   dom->jenv          = j;
   dom->envsc         = envsc;         /* in units of NATS */
-  dom->domcorrection = domcorrection; /* in units of NATS */
   dom->oasc          = oasc;	      /* in units of expected # of correctly aligned residues */
   dom->dombias       = 0.0;	/* gets set later, using bg->omega and dombias */
   dom->bitscore      = 0.0;	/* gets set later by caller, using envsc, null score, and dombias */
   dom->lnP           = 0.0;	/* gets set later by caller, using bitscore */
   dom->is_reported   = FALSE;	/* gets set later by caller */
   dom->is_included   = FALSE;	/* gets set later by caller */
-  dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq, ddef_app);
-  dom->iali          = dom->ad->sqfrom;
-  dom->jali          = dom->ad->sqto;
+
+
+
+  /* Compute bias correction
+   *
+   * Is null2 set already for this i..j? (It is, if we're in a domain that
+   * was defined by stochastic traceback clustering in a multidomain region;
+   * it isn't yet, if we're in a simple one-domain region). If it isn't,
+   * do it now, by the expectation (posterior decoding) method.
+   */
+  if (! null2_is_done) {
+    p7_Null2_ByExpectation(om, ox2, null2);
+    for (pos = i; pos <= j; pos++)
+      ddef->n2sc[pos]  = logf(null2[sq->dsq[pos]]);
+  }
+  for (pos = i; pos <= j; pos++)
+    domcorrection   += ddef->n2sc[pos];         /* domcorrection is in units of NATS */
+
+  if (long_target) {
+    /* for long_target case, merge in the results of two null3 correction
+     * see ~/notebook/2012/0214_Dfam_false_positives/00NOTES 02/19 for details
+     *
+     * bias composition is based only on the aligned positions:
+     */
+    if (bg->use_null3) {
+      p7_null3_score(om->abc, sq->dsq, NULL /*don't use trace*/, dom->iali, dom->jali, bg, &null3_corr);
+      domcorrection = p7_FLogsum (domcorrection, null3_corr);
+    }
+    if (bg->use_null3w) {
+      p7_null3_windowed_score(om->abc, sq->dsq, dom->iali, dom->jali, bg, &null3_corr);
+      domcorrection = p7_FLogsum (domcorrection, null3_corr);
+    }
+  }
+
+  dom->domcorrection = domcorrection; /* in units of NATS */
 
   ddef->ndom++;
 
@@ -906,7 +942,7 @@ main(int argc, char **argv)
 
   p7_Forward (sq->dsq, sq->n, om,      fwd, &overall_sc); 
   p7_Backward(sq->dsq, sq->n, om, fwd, bck, &sc);       
-  p7_domaindef_ByPosteriorHeuristics(sq, om, oxf, oxb, fwd, bck, ddef, NULL);
+  p7_domaindef_ByPosteriorHeuristics(sq, om, oxf, oxb, fwd, bck, ddef, NULL, NULL, FALSE);
 
   printf("Overall raw likelihood score: %.2f nats\n", overall_sc);
 
@@ -1049,7 +1085,7 @@ main(int argc, char **argv)
 	  p7_GForward (sq->dsq, sq->n, gm, fwd, &overall_sc); 
 	  if (! do_baseline) {
 	    p7_GBackward(sq->dsq, sq->n, gm, bck, &sc);       
-	    p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, ddef, NULL);
+	    p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, ddef, NULL,  NULL, FALSE);
 	  }
 	}
 

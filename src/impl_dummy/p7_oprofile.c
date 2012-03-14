@@ -4,15 +4,13 @@
  * Contents:
  *   1. The P7_OPROFILE object: allocation, initialization, destruction.
  *   2. Conversion from generic P7_PROFILE to optimized P7_OPROFILE
- *   3. Debugging and development utilities.
- *   4. Benchmark driver.
- *   5. Unit tests.
- *   6. Test driver.
- *   7. Example.
- *   8. Copyright and license information.
- *   
- * MSF Tue Nov 3, 2009 [Janelia]
- * SVN $Id$
+ *   3. Conversion from optimized P7_OPROFILE to compact score arrays
+ *   4. Debugging and development utilities.
+ *   5. Benchmark driver.
+ *   6. Unit tests.
+ *   7. Test driver.
+ *   8. Example.
+ *   9. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -259,6 +257,103 @@ p7_oprofile_ReconfigUnihit(P7_OPROFILE *om, int L)
 }
 /*------------ end, conversions to P7_OPROFILE ------------------*/
 
+/*******************************************************************
+*   3. Conversion from optimized P7_OPROFILE to compact score arrays
+ *******************************************************************/
+
+
+/* Function:  p7_oprofile_GetFwdTransitionArray()
+ * Synopsis:  Retrieve full 32-bit float transition probabilities from an
+ *            optimized profile into a flat array
+ *
+ * Purpose:   Extract an array of <type> (e.g. p7O_II) transition probabilities
+ *            from the underlying <om> profile. In SIMD implementations,
+ *            these are striped and interleaved, making them difficult to
+ *            directly access. Here, this is trivial
+ *
+ * Args:      <om>   - optimized profile, containing transition information
+ *            <type> - transition type (e.g. p7O_II)
+ *            <arr>  - preallocated array into which floats will be placed
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
+{
+  int i;
+
+  for (i=0; i<om->M; i++) {
+    arr[i] = p7P_TSC(om, i, type);
+  }
+
+  return eslOK;
+
+}
+
+
+
+/* Function:  p7_oprofile_GetMSVEmissionArray()
+ * Synopsis:  Retrieve MSV residue emission scores from an optimized
+ *            profile into an array
+ *
+ * Purpose:   Extract an implicitly 2D array of 8-bit int MSV residue
+ *            emission scores from an optimized profile <om>. <arr> must
+ *            be allocated by the calling function to be of size
+ *            ( om->abc->Kp * ( om->M  + 1 )), and indexing into the array
+ *            is done as  [om->abc->Kp * i +  c ] for character c at
+ *            position i.
+ *
+ *            In the dummy implementation, we need to convert from the
+ *            float emission probabilities to 8-bit int scores. Conversion
+ *            is based on code from the function mf_conversion in impl_sse's
+ *            p7_oprofile.c
+ *
+ * Args:      <om>   - optimized profile, containing transition information
+ *            <arr>  - preallocated array into which scores will be placed
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_oprofile_GetMSVEmissionArray(const P7_OPROFILE *om, uint8_t *arr )
+{
+  int     M   = om->M;    /* length of the query                                          */
+  int i, j;
+  float x;
+  float max = 0.0;
+  float scale;
+  uint8_t bias;
+
+  /* scale and bias required for float->8bit conversion   */
+  scale = 3.0 / eslCONST_LOG2;                    /* scores in units of third-bits */
+  for (i = 0; i < om->abc->K; i++)  max = ESL_MAX(max, esl_vec_FMax(om->rsc[i], (M+1)*2));
+  max = -1.0f * roundf(scale * -1.0 * max);   //based on unbiased_byteify
+  bias   = (max > 255.) ? 255 : (uint8_t) max;
+
+
+  for (i = 1; i <= om->M; i++) {
+    for (j=0; j<om->abc->Kp; j++) {
+      //based on p7_oprofile's biased_byteify()
+      x =  -1.0f * roundf(scale * om->rsc[j][(i) * p7P_NR     + p7P_MSC]);
+      arr[i*om->abc->Kp + j] = (x > 255. - bias) ? 255 : (uint8_t) (x + bias);
+    }
+  }
+
+
+  return eslOK;
+}
+
+/*------------ end, conversions from P7_OPROFILE ------------------*/
+
+
+
+/*****************************************************************
+ * 4. Debugging and development utilities.
+ *****************************************************************/
+
 
 /* Function:  p7_oprofile_Sample()
  * Synopsis:  Sample a random profile.
@@ -407,9 +502,10 @@ p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm)
   return eslOK;
 }
 
+/*------------ end, P7_OPROFILE debugging tools  ----------------*/
 
 /*****************************************************************
- * 4. Benchmark driver.
+ * 5. Benchmark driver.
  *****************************************************************/
 
 #ifdef p7OPROFILE_BENCHMARK
@@ -490,7 +586,7 @@ main(int argc, char **argv)
 
   
 /*****************************************************************
- * 5. Unit tests
+ * 6. Unit tests
  *****************************************************************/
 #ifdef p7OPROFILE_TESTDRIVE
 
@@ -502,7 +598,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 6. Test driver
+ * 7. Test driver
  *****************************************************************/
 #ifdef p7OPROFILE_TESTDRIVE
 
@@ -512,7 +608,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 7. Example
+ * 8. Example
  *****************************************************************/
 #ifdef p7OPROFILE_EXAMPLE
 /* gcc -std=gnu99 -g -Wall -Dp7OPROFILE_EXAMPLE -I.. -I../../easel -L.. -L../../easel -o p7_oprofile_example p7_oprofile.c -lhmmer -leasel -lm

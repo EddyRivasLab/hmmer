@@ -3,7 +3,7 @@ srcdir     = @srcdir@
 VPATH      = @srcdir@ 
 
 CC       = @CC@
-CFLAGS   = @CFLAGS@ @PTHREAD_CFLAGS@
+CFLAGS   = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
 SIMDFLAGS= @SIMD_CFLAGS@
 CPPFLAGS = @CPPFLAGS@
 LDFLAGS  = @LDFLAGS@

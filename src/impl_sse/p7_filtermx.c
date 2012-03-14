@@ -446,8 +446,8 @@ p7_filtermx_DumpFBRow(P7_FILTERMX *ox, int rowi, __m128 *dpc, char *pfx)
 int
 p7_filtermx_DumpMFRow(P7_FILTERMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
-  __m128i *dp = ox->dpf[0];	/* we may use up to allocW*validR bytes on our one MSV row */
-  int      Q  = P7F_NQB(ox->M);	/* and we actually use Q * sizeof(__m128i)                 */
+  __m128i *dp = (__m128i *) ox->dpf[0];	/* we may use up to allocW*validR bytes on our one MSV row */
+  int      Q  = P7F_NQB(ox->M);	        /* and we actually use Q * sizeof(__m128i)                 */
   int      M  = ox->M;
   uint8_t *v  = NULL;		/* array of unstriped scores  */
   int      q,z,k;

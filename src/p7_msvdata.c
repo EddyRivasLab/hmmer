@@ -1,7 +1,8 @@
-/* The Plan7 core HMM data structure.
+/* The Plan7 MSVDATA data structure, which holds a compact representation
+ * of substitution scores and maximal extensions, used by nhmmer.
  *
  * Contents:
- *   1. The P7_HMM object: allocation, initialization, destruction.
+ *   1. The P7_MSVDATA object: allocation, initialization, destruction.
  *   2. Unit tests.
  *   3. Test driver.
  *   4. Copyright and license.
@@ -28,7 +29,7 @@
  *********************************************************************/
 
 /* Function:  p7_hmm_GetScoreArrays()
- * Synopsis:  Get compact representation of substitution scores and maximal extenstions
+ * Synopsis:  Get compact representation of substitution scores and maximal extensions
  *
  * Purpose:   Extract 8-bit (MSV-style) substitution scores from gm, and
  *            for each position in the model capture the maximum possible
@@ -49,45 +50,40 @@
  *            return eslEMEM on allocation failure, eslOK otherwise.
  */
 static int
-p7_hmm_GetScoreArrays(P7_PROFILE *gm, P7_MSVDATA *data, int do_opt_ext, float scale, uint bias ) {
+p7_hmm_GetScoreArrays(P7_OPROFILE *om, P7_MSVDATA *data, int do_opt_ext ) {
   int i, j, status;
 
   //gather values from gm->rsc into a succinct 2D array
-  float *max_scores;
+  uint8_t *max_scores;
   float sc_fwd, sc_rev;
+  int K = om->abc->Kp;
+  data->M = om->M;
 
-  int K = gm->abc->Kp;
-
-  data->M = gm->M;
-
-  ESL_ALLOC(data->scores, (gm->M + 1) * K * sizeof(float));
-  ESL_ALLOC(max_scores, (gm->M + 1) * sizeof(float));
-
-  for (i = 1; i <= gm->M; i++) {
-    max_scores[i] = 0;
-    for (j=0; j<K; j++) {
-      //based on p7_oprofile's biased_byteify()
-      float x =  -1.0f * roundf(scale * gm->rsc[j][(i) * p7P_NR     + p7P_M]);
-      data->scores[i*K + j] = (x > 255. - bias) ? 255 : (uint8_t) (x + bias);
-      if (data->scores[i*K + j] > max_scores[i]) max_scores[i] = data->scores[i*K + j];
-    }
-  }
+  ESL_ALLOC(data->scores, (om->M + 1) * K * sizeof(uint8_t));
+  p7_oprofile_GetMSVEmissionArray(om, data->scores);
 
   if (do_opt_ext) {
-    //for each position in the query, what's the highest possible score achieved by extending X positions, for X=1..10
-    ESL_ALLOC(data->opt_ext_fwd, (gm->M + 1) * sizeof(uint8_t*));
-    ESL_ALLOC(data->opt_ext_rev, (gm->M + 1) * sizeof(uint8_t*));
+    ESL_ALLOC(max_scores, (om->M + 1) * sizeof(float));
+    for (i = 1; i <= om->M; i++) {
+      max_scores[i] = 0;
+      for (j=0; j<K; j++)
+        if (data->scores[i*K + j] > max_scores[i]) max_scores[i] = data->scores[i*K + j];
+    }
 
-    for (i=1; i<=gm->M; i++) {
+    //for each position in the query, what's the highest possible score achieved by extending X positions, for X=1..10
+    ESL_ALLOC(data->opt_ext_fwd, (om->M + 1) * sizeof(uint8_t*));
+    ESL_ALLOC(data->opt_ext_rev, (om->M + 1) * sizeof(uint8_t*));
+
+    for (i=1; i<=om->M; i++) {
       ESL_ALLOC(data->opt_ext_fwd[i], 10 * sizeof(uint8_t));
       ESL_ALLOC(data->opt_ext_rev[i], 10 * sizeof(uint8_t));
       sc_fwd = 0;
       sc_rev = 0;
-      for (j=0; j<10 && i+j+1<=gm->M; j++) {
+      for (j=0; j<10 && i+j+1<=om->M; j++) {
         sc_fwd += max_scores[i+j+1];
         data->opt_ext_fwd[i][j] = sc_fwd;
 
-        sc_rev += max_scores[gm->M-i-j];
+        sc_rev += max_scores[om->M-i-j];
         data->opt_ext_rev[i][j] = sc_rev;
       }
       for ( ; j<10; j++) { //fill in empty values
@@ -114,6 +110,7 @@ p7_hmm_MSVDataDestroy(P7_MSVDATA *data )
 {
   int i;
   if (data != NULL) {
+
     if (data->scores != NULL)  free( data->scores);
     if (data->prefix_lengths != NULL) free( data->prefix_lengths);
     if (data->suffix_lengths != NULL) free( data->suffix_lengths);
@@ -135,21 +132,18 @@ p7_hmm_MSVDataDestroy(P7_MSVDATA *data )
 }
 
 /* Function:  p7_hmm_MSVDataCreate()
- * Synopsis:  Create a <P7_MSVDATA> model object.
+ * Synopsis:  Create a <P7_MSVDATA> model object, based on MSV-filter
+ *            part of profile
  *
  * Purpose:   Allocate a <P7_MSVDATA> object used in both FM-MSV and
  *            MSV_LongTarget diagonal recovery/extension, then populate
- *            it with data based on the given gm and hmm.
+ *            it with data based on the given gm.
  *
- *            This approach of computing the prefix/suffix length, used
- *            in establishing windows around a seed diagonal, is very fast
- *            by virtue of using a simple closed-form computation of the
- *            length L_i for each position i at which all but
- *            (1-p7_DEFAULT_WINDOW_BETA) of position i's match- and
- *            insert-state emissions are length L_i or shorter.
+ *            Once a hit passes the MSV filter, and the prefix/suffix
+ *            values of P7_MSVDATA are required, p7_hmm_MSVDataComputeRest()
+ *            must be called.
  *
  * Args:      gm         - P7_PROFILE containing scores used to produce MSVDATA contents
- *            hmm        - P7_HMM containing transitions probabilities used to compute (pre|suf)fix lengths
  *            do_opt_ext - boolean, TRUE if optimal-extension scores are required (for FM-MSV)
  *            scale      - used to produce 8-bit extracted scores
  *            bias       - used to produce 8-bit extracted scores
@@ -159,40 +153,21 @@ p7_hmm_MSVDataDestroy(P7_MSVDATA *data )
  * Throws:    <NULL> on allocation failure.
  */
 P7_MSVDATA *
-p7_hmm_MSVDataCreate(P7_PROFILE *gm, P7_HMM *hmm, int do_opt_ext, float scale, int bias )
+p7_hmm_MSVDataCreate(P7_OPROFILE *om, int do_opt_ext )
 {
   P7_MSVDATA *data = NULL;
   int    status;
-  int i;
-  float sum;
+
 
   ESL_ALLOC(data, sizeof(P7_MSVDATA));
-  ESL_ALLOC(data->prefix_lengths, (gm->M+1) * sizeof(float));
-  ESL_ALLOC(data->suffix_lengths, (gm->M+1) * sizeof(float));
 
   data->scores         = NULL;
   data->opt_ext_fwd    = NULL;
   data->opt_ext_rev    = NULL;
+  data->prefix_lengths = NULL;
+  data->suffix_lengths = NULL;
 
-  p7_hmm_GetScoreArrays(gm, data, do_opt_ext, scale, bias ); /* for FM-index string tree traversal */
-
-  sum = 0;
-  for (i=1; i < gm->M; i++) {
-    //TODO: this requires that the full HMM be read before performing MSV. If that's
-    // a problem for speed, e.g. for hmmscan, I'll need to preprocess these prefix/suffix
-    // values, and store them in the hmm file
-    data->prefix_lengths[i] = 2 + (int)(log(p7_DEFAULT_WINDOW_BETA / hmm->t[i][p7H_MI] )/log(hmm->t[i][p7H_II]));
-    sum += data->prefix_lengths[i];
-  }
-  for (i=1; i < gm->M; i++)
-    data->prefix_lengths[i] /=  sum;
-
-  data->suffix_lengths[gm->M] = data->prefix_lengths[gm->M-1];
-  for (i=gm->M - 1; i >= 1; i--)
-    data->suffix_lengths[i] = data->suffix_lengths[i+1] + data->prefix_lengths[i-1];
-  for (i=2; i < gm->M; i++)
-    data->prefix_lengths[i] += data->prefix_lengths[i-1];
-
+  p7_hmm_GetScoreArrays(om, data, do_opt_ext); /* for FM-index string tree traversal */
 
   return data;
 
@@ -201,6 +176,76 @@ ERROR:
  return NULL;
 }
 
+
+
+/* Function:  p7_hmm_MSVDataComputeRest()
+ * Synopsis:  Compute prefix_ and suffix_ lengths for a <P7_MSVDATA>
+ *            model object that was created by p7_hmm_MSVDataCreate.
+ *
+ * Purpose:   This approach of computing the prefix/suffix length, used
+ *            in establishing windows around a seed diagonal, is fast
+ *            becuse it uses a simple closed-form computation of the
+ *            length L_i for each position i at which all but
+ *            (1-p7_DEFAULT_WINDOW_BETA) of position i's match- and
+ *            insert-state emissions are length L_i or shorter.
+ *
+ * Args:      om         - P7_OPROFILE containing transitions probabilities used to compute (pre|suf)fix lengths
+ *            data       - P7_MSVDATA into which the computed prefix/suffix values are placed
+ *
+ * Returns:   eslEMEM on failure, else eslOK
+ *
+ * Throws:    <NULL> on allocation failure.
+ */
+int
+p7_hmm_MSVDataComputeRest(P7_OPROFILE *om, P7_MSVDATA *data )
+{
+  int    status;
+  int i;
+  float sum;
+
+
+  float *t_mis;
+  float *t_iis;
+
+  ESL_ALLOC(t_mis, sizeof(float) * (om->M+1));
+  p7_oprofile_GetFwdTransitionArray(om, p7O_MI, t_mis );
+
+  ESL_ALLOC(t_iis, sizeof(float) * (om->M+1));
+  p7_oprofile_GetFwdTransitionArray(om, p7O_II, t_iis );
+
+
+  ESL_ALLOC(data->prefix_lengths, (om->M+1) * sizeof(float));
+  ESL_ALLOC(data->suffix_lengths, (om->M+1) * sizeof(float));
+
+
+  sum = 0;
+  for (i=1; i < om->M; i++) {
+
+    data->prefix_lengths[i] = 2 + (int)(log(p7_DEFAULT_WINDOW_BETA / t_mis[i] )/log(t_iis[i]));
+    sum += data->prefix_lengths[i];
+  }
+
+
+  for (i=1; i < om->M; i++)
+    data->prefix_lengths[i] /=  sum;
+
+  data->suffix_lengths[om->M] = data->prefix_lengths[om->M-1];
+  for (i=om->M - 1; i >= 1; i--)
+    data->suffix_lengths[i] = data->suffix_lengths[i+1] + data->prefix_lengths[i-1];
+  for (i=2; i < om->M; i++)
+    data->prefix_lengths[i] += data->prefix_lengths[i-1];
+
+  free(t_mis);
+  free(t_iis);
+
+  return eslOK;
+
+  ERROR:
+   if (t_mis) free(t_mis);
+   if (t_iis) free(t_iis);
+   p7_hmm_MSVDataDestroy(data);
+   return eslEMEM;
+}
 
 
 /*****************************************************************
@@ -218,13 +263,24 @@ utest_createMSVData(ESL_GETOPTS *go, ESL_RANDOMNESS *r )
   P7_OPROFILE   *om         = NULL;
   P7_MSVDATA    *msvdata    = NULL;
 
+  uint8_t scale = 3.0 / eslCONST_LOG2;                    /* scores in units of third-bits */
+  uint8_t bias;
+  int x;
+  float max = 0.0;
+
   if ( (abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal(msg);
 
   if (  p7_hmm_Sample(r, 100, abc, &hmm)        != eslOK) esl_fatal(msg);
   if (  (gm = p7_profile_Create (hmm->M, abc))  == NULL ) esl_fatal(msg);
   if (  (om = p7_oprofile_Create(hmm->M, abc))  == NULL ) esl_fatal(msg);
 
-  if (  (msvdata = p7_hmm_MSVDataCreate(gm, hmm, FALSE, om->scale_b, om->bias_b))  == NULL ) esl_fatal(msg);
+  for (x = 0; x < gm->abc->K; x++)  max = ESL_MAX(max, esl_vec_FMax(gm->rsc[x], (gm->M+1)*2));
+  //based on unbiased_byteify
+  max  = -1.0f * roundf(scale * max);
+  bias   = (max > 255.) ? 255 : (uint8_t) max;
+
+
+  if (  (msvdata = p7_hmm_MSVDataCreate(om, FALSE))  == NULL ) esl_fatal(msg);
 
   p7_hmm_MSVDataDestroy(msvdata);
   p7_oprofile_Destroy(om);

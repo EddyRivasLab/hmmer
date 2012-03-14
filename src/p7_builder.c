@@ -64,6 +64,8 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
   bld->Q            = NULL;
   bld->eset         = -1.0;	/* -1.0 = unset; must be set if effn_strategy is p7_EFFN_SET */
   bld->re_target    = -1.0;
+  bld->hc_start     = -1;
+  bld->hc_end       = -1;
 
   if (go == NULL) 
     {
@@ -76,8 +78,6 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
     {
       if      (esl_opt_GetBoolean(go, "--fast"))    bld->arch_strategy = p7_ARCH_FAST;
       else if (esl_opt_GetBoolean(go, "--hand"))    bld->arch_strategy = p7_ARCH_HAND;
-
-      
 
       if      (esl_opt_GetBoolean(go, "--wpb"))     bld->wgt_strategy = p7_WGT_PB;
       else if (esl_opt_GetBoolean(go, "--wgsc"))    bld->wgt_strategy = p7_WGT_GSC;
@@ -191,7 +191,6 @@ p7_builder_LoadScoreSystem(P7_BUILDER *bld, const char *matrix, double popen, do
 {
   double  *f = NULL;
   double   slambda;
-  int      a,b;
   int      status;
 
   bld->errbuf[0] = '\0';
@@ -218,14 +217,7 @@ p7_builder_LoadScoreSystem(P7_BUILDER *bld, const char *matrix, double popen, do
   else if (status != eslOK)      ESL_XFAIL(eslEINVAL, bld->errbuf, "unexpected error in solving score matrix %s for probability parameters", matrix);
 
   /* Convert joint probabilities P(ab) to conditionals P(b|a) */
-  for (a = 0; a < bld->abc->K; a++)
-    for (b = 0; b < bld->abc->K; b++)
-      bld->Q->mx[a][b] /= f[a];	/* Q->mx[a][b] is now P(b | a) */
-
-  /* Normalize mx, so the values P(b|a) for row a sum to 1 */
-  for (a = 0; a < bld->abc->K; a++)
-    esl_vec_DNorm(bld->Q->mx[a],  bld->abc->K);
-
+  esl_scorematrix_JointToConditionalOnQuery(bld->abc, bld->Q);
 
   bld->popen   = popen;
   bld->pextend = pextend;
@@ -287,7 +279,6 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, 
   ESL_FILEPARSER  *efp = NULL;
   double          *f   = NULL;
   double           slambda;
-  int              a,b;
   int              status;
 
   bld->errbuf[0] = '\0';
@@ -320,15 +311,8 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, 
   else if (status == eslENOHALT) ESL_XFAIL(eslEINVAL, bld->errbuf, "failed to solve input score matrix %s for lambda: are you sure it's valid?", mxfile);
   else if (status != eslOK)      ESL_XFAIL(eslEINVAL, bld->errbuf, "unexpected error in solving input score matrix %s for probability parameters", mxfile);
 
-  /* Convert joint probs P(ab) to conditionals P(b | a) */
-  for (a = 0; a < bld->abc->K; a++)
-    for (b = 0; b < bld->abc->K; b++)
-      bld->Q->mx[a][b] /= f[a];	/* Q->mx[a][b] is now P(b | a) */
-
-  /* Normalize mx, so the values P(b|a) for row a sum to 1 */
-  for (a = 0; a < bld->abc->K; a++)
-    esl_vec_DNorm(bld->Q->mx[a],  bld->abc->K);
-
+  /* Convert joint probabilities P(ab) to conditionals P(b|a) */
+  esl_scorematrix_JointToConditionalOnQuery(bld->abc, bld->Q);
 
   bld->popen   = popen;
   bld->pextend = pextend;
@@ -507,7 +491,7 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
       if ((status = p7_trace_Append(tr, p7T_B, 0, 0))   != eslOK) goto ERROR; 
       if ((status = p7_trace_Append(tr, p7T_G, 0, 0))   != eslOK) goto ERROR; 
       for (k = 1; k <= sq->n; k++)
-	if ((status = p7_trace_Append(tr, p7T_MG, k, k)) != eslOK) goto ERROR;
+	if ((status = p7_trace_Append(tr, p7T_MG, k, k))!= eslOK) goto ERROR;
       if ((status = p7_trace_Append(tr, p7T_E, 0, 0))   != eslOK) goto ERROR; 
       if ((status = p7_trace_Append(tr, p7T_C, 0, 0))   != eslOK) goto ERROR; 
       if ((status = p7_trace_Append(tr, p7T_T, 0, 0))   != eslOK) goto ERROR; 
@@ -515,6 +499,7 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
       tr->L = sq->n;
     }
 
+  /* note that <opt_gm> and <opt_om> were already set by calibrate() call above. */
   if (opt_hmm   != NULL) *opt_hmm = hmm; else p7_hmm_Destroy(hmm);
   if (opt_tr    != NULL) *opt_tr  = tr;
   return eslOK;
@@ -817,14 +802,14 @@ build_model(P7_BUILDER *bld, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
 
   if      (bld->arch_strategy == p7_ARCH_FAST)
     {
-      status = p7_Fastmodelmaker(msa, bld->symfrac, ret_hmm, opt_tr);
+      status = p7_Fastmodelmaker( msa, bld->symfrac, bld, ret_hmm, opt_tr);
       if      (status == eslENORESULT) ESL_XFAIL(status, bld->errbuf, "Alignment %s has no consensus columns w/ > %d%% residues - can't build a model.\n", msa->name != NULL ? msa->name : "", (int) (100 * bld->symfrac));
       else if (status == eslEMEM)      ESL_XFAIL(status, bld->errbuf, "Memory allocation failure in model construction.\n");
       else if (status != eslOK)        ESL_XFAIL(status, bld->errbuf, "internal error in model construction.\n");      
     }
   else if (bld->arch_strategy == p7_ARCH_HAND)
     {
-      status = p7_Handmodelmaker(msa, ret_hmm, opt_tr);
+      status = p7_Handmodelmaker( msa, bld, ret_hmm, opt_tr);
       if      (status == eslENORESULT) ESL_XFAIL(status, bld->errbuf, "Alignment %s has no annotated consensus columns - can't build a model.\n", msa->name != NULL ? msa->name : "");
       else if (status == eslEFORMAT)   ESL_XFAIL(status, bld->errbuf, "Alignment %s has no reference annotation line\n", msa->name != NULL ? msa->name : "");            
       else if (status == eslEMEM)      ESL_XFAIL(status, bld->errbuf, "Memory allocation failure in model construction.\n");

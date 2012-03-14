@@ -561,7 +561,7 @@ AS_IF([test "x$impl_choice" != xno],
       [AC_MSG_CHECKING([compiler support --start-group])
        LDFLAGS_save=$LDFLAGS
        LDFLAGS="-Wl,--start-group -Wl,--end-group $LDFLAGS"
-       AC_LINK_IFELSE(AC_LANG_PROGRAM([],[]),
+       AC_LINK_IFELSE([AC_LANG_PROGRAM([],[])],
            [AC_MSG_RESULT([yes])
             AC_SUBST([GROUPHMMERLIBS], ["-Wl,--start-group -lhmmer -lhmmerimpl -Wl,--end-group"])],
            [AC_MSG_RESULT([no])

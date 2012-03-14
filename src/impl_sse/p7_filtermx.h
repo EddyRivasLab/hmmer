@@ -104,6 +104,7 @@ extern int          p7_filtermx_SetDumpMode(P7_FILTERMX *ox, FILE *dfp, int true
 extern char *       p7_filtermx_DecodeX(enum p7f_xcells_e xcode);
 extern int          p7_filtermx_DumpFBHeader(P7_FILTERMX *ox);
 extern int          p7_filtermx_DumpFBRow(P7_FILTERMX *ox, int rowi, __m128 *dpc, char *pfx);
+extern int          p7_filtermx_DumpMFRow(P7_FILTERMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
 #endif
 
 /*****************************************************************

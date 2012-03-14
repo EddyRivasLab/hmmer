@@ -29,6 +29,7 @@
 
 /* set the max residue count to 1 meg when reading a block */
 #ifdef P7_IMPL_DUMMY_INCLUDED
+#include "esl_vectorops.h"
 #define NHMMER_MAX_RESIDUE_COUNT (1024 * 100)
 #else
 #define NHMMER_MAX_RESIDUE_COUNT MAX_RESIDUE_COUNT   /*from esl_sqio_(ascii|ncbi).c*/
@@ -92,6 +93,11 @@ static ESL_OPTIONS options[] = {
   { "--B1",         eslARG_INT,         "110", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (MSV)",          7 },
   { "--B2",         eslARG_INT,         "240", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Vit)",          7 },
   { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",          7 },
+  /* Control of boundary picking based on aligned posterior probability */
+  { "--show_app",   eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,   "",             "Show aligned-posterior-probability (APP) line in tabular output",     9 },
+  { "--app_hi",     eslARG_REAL,       "0.95", NULL, NULL,    NULL,  NULL,   "",             "Set aligned-posterior-probability 'H' threshold",                     9 },
+  { "--app_med",    eslARG_REAL,       "0.85", NULL, NULL,    NULL,  NULL,   "",             "Set aligned-posterior-probability 'M' threshold (also hq_start/end)", 9 },
+  { "--app_lo",     eslARG_REAL,       "0.75", NULL, NULL,    NULL,  NULL,   "",             "Set aligned-posterior-probability 'L' threshold",                     9 },
 
   /* Control of FM pruning/extension */
   { "--fm_msv_length",   eslARG_INT,          "70", NULL, NULL,    NULL,  NULL, NULL,          "max length used when extending seed for MSV",                8 },
@@ -102,13 +108,16 @@ static ESL_OPTIONS options[] = {
   { "--fm_max_scthresh", eslARG_REAL,       "10.5", NULL, NULL,    NULL,  NULL, NULL,          "max total bits required in seed of length fm_max_depth",     8 },
 
 /* Other options */
-  { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert target <seqdb> is in format <s>: no autodetection",     12 },
-  { "--nonull2",    eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,  NULL,            "turn off biased composition score corrections",                 12 },
-  { "-Z",           eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set database size (Megabases) to <x> for E-value calculations", 12 },
-  { "--seed",       eslARG_INT,          "42", NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",           12 },
-  { "--w_beta",     eslARG_REAL,         NULL, NULL, NULL,    NULL,  NULL,  NULL,            "tail mass at which window length is determined",                12 },
-  { "--w_length",   eslARG_INT,          NULL, NULL, NULL,    NULL,  NULL,  NULL,            "window length ",                                                12 },
-  { "--single",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,  NULL,            "don't search reverse complement of database sequences ",        12 },
+  { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,     "assert target <seqdb> is in format <s>: no autodetection",      12 },
+  { "--nonull2",    eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,           NULL,     "turn off biased composition score corrections",                 12 },
+  { "--usenull3",   eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,        "--nonull2", "also use null3 for biased composition score corrections",       12 },
+  { "--usenull3w",  eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,        "--nonull2", "also use windowed-null3 for bias score corrections",            12 },
+  { "--null3wlen",  eslARG_INT,          "20", NULL, "n>=10", NULL,  "--usenull3w",  NULL,     "width on either side of position to use for windowed-null3",    12 },
+  { "-Z",           eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,           NULL,     "set database size (Megabases) to <x> for E-value calculations", 12 },
+  { "--seed",       eslARG_INT,          "42", NULL, "n>=0",  NULL,  NULL,           NULL,     "set RNG seed to <n> (if 0: one-time arbitrary seed)",           12 },
+  { "--w_beta",     eslARG_REAL,         NULL, NULL, NULL,    NULL,  NULL,           NULL,     "tail mass at which window length is determined",                12 },
+  { "--w_length",   eslARG_INT,          NULL, NULL, NULL,    NULL,  NULL,           NULL,     "window length ",                                                12 },
+  { "--single",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,           NULL,     "don't search reverse complement of database sequences ",        12 },
 /* Not used, but retained because esl option-handling code errors if it isn't kept here.  Placed in group 99 so it doesn't print to help*/
   { "--domZ",       eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "Not used",   99 },
   { "--domE",       eslARG_REAL,       "10.0", NULL, "x>0",   NULL,  NULL,  DOMREPOPTS,      "Not used",   99 },
@@ -189,8 +198,14 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
       if (puts("\nOptions controlling inclusion (significance) thresholds:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 5, 2, 100);
 
+      if (puts("\nOptions controlling model-specific thresholding:")         < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+      esl_opt_DisplayHelp(stdout, go, 6, 2, 80);
+
       if (puts("\nOptions controlling acceleration heuristics:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 7, 2, 100);
+
+      if (puts("\nOptions controlling APP-based trimming thresholds:")       < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+      esl_opt_DisplayHelp(stdout, go, 9, 2, 100);
 
       if (puts("\nControl of FM pruning and extension:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 8, 2, 100);
@@ -252,9 +267,9 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--incT")       && fprintf(ofp, "# sequence inclusion threshold:    score >= %g\n",    esl_opt_GetReal   (go, "--incT"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--incdomE")    && fprintf(ofp, "# domain inclusion threshold:      E-value <= %g\n",  esl_opt_GetReal   (go, "--incdomE"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--incdomT")    && fprintf(ofp, "# domain inclusion threshold:      score >= %g\n",    esl_opt_GetReal   (go, "--incdomT"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-//if (esl_opt_IsUsed(go, "--cut_ga")     && fprintf(ofp, "# model-specific thresholding:     GA cutoffs\n")                                           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-//if (esl_opt_IsUsed(go, "--cut_nc")     && fprintf(ofp, "# model-specific thresholding:     NC cutoffs\n")                                           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-//if (esl_opt_IsUsed(go, "--cut_tc")     && fprintf(ofp, "# model-specific thresholding:     TC cutoffs\n")                                           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--cut_ga")     && fprintf(ofp, "# model-specific thresholding:     GA cutoffs\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--cut_nc")     && fprintf(ofp, "# model-specific thresholding:     NC cutoffs\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--cut_tc")     && fprintf(ofp, "# model-specific thresholding:     TC cutoffs\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--max")        && fprintf(ofp, "# Max sensitivity mode:            on [all heuristic filters off]\n")                       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--F1")         && fprintf(ofp, "# MSV filter P threshold:       <= %g\n",             esl_opt_GetReal(go, "--F1"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--F2")         && fprintf(ofp, "# Vit filter P threshold:       <= %g\n",             esl_opt_GetReal(go, "--F2"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -265,7 +280,10 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--B2")         && fprintf(ofp, "# biased comp Viterbi window len:  %d\n",             esl_opt_GetInteger(go, "--B2"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--B3")         && fprintf(ofp, "# biased comp Forward window len:  %d\n",             esl_opt_GetInteger(go, "--B3"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
-
+  if (esl_opt_IsUsed(go, "--show_app")        && fprintf(ofp, "# Show APP line\n")                                                                         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--app_hi")          && fprintf(ofp, "# APP 'H':                      <= %g\n",             esl_opt_GetReal(go, "--app_hi"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--app_med")         && fprintf(ofp, "# APP 'M', (hq start/end base): <= %g\n",             esl_opt_GetReal(go, "--app_med"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--app_lo")          && fprintf(ofp, "# APP 'H':                      <= %g\n",             esl_opt_GetReal(go, "--app_lo"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--fm_msv_length")   && fprintf(ofp, "# seed extension max length:       %d\n",             esl_opt_GetInteger(go, "--fm_msv_length"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--fm_max_depth")    && fprintf(ofp, "# seed length:                     %d\n",             esl_opt_GetInteger(go, "--fm_max_depth"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -275,9 +293,11 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--fm_max_scthresh") && fprintf(ofp, "# max bits in seed:                %.2f\n",           esl_opt_GetReal(go, "--fm_max_scthresh"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 
+  if (esl_opt_IsUsed(go, "--nonull2")    && fprintf(ofp, "# null2 bias corrections:          off\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--usenull3")   && fprintf(ofp, "# null3 bias corrections:          on\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--usenull3w")  && fprintf(ofp, "# windowed-null3 bias corrections: width=%d\n",       esl_opt_GetInteger(go, "--null3wlen")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 
-  if (esl_opt_IsUsed(go, "--nonull2")    && fprintf(ofp, "# null2 bias corrections:          off\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--single")     && fprintf(ofp, "# search reverse complement:       off\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-Z")           && fprintf(ofp, "# database size is set to:         %.1f Mb\n",        esl_opt_GetReal(go, "-Z"))            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--seed"))  {
@@ -477,6 +497,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].th     = NULL;
           info[i].om     = NULL;
           info[i].bg     = p7_bg_Create(abc);
+
+          info[i].bg->use_null3  = esl_opt_IsUsed(go, "--usenull3");
+          info[i].bg->use_null3w = esl_opt_IsUsed(go, "--usenull3w");
+          info[i].bg->null3_wlen = esl_opt_GetInteger(go, "--null3wlen");
+
           info[i].fm_cfg = NULL;
 #ifdef HMMER_THREADS
           info[i].queue = queue;
@@ -533,11 +558,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_profile_ConfigLocal(gm, hmm, info->bg, 100); /* 100 is a dummy length for now; and MSVFilter requires local mode */
       p7_oprofile_Convert(gm, om);                    /* <om> is now p7_LOCAL, multihit */
 
-#ifdef P7_IMPL_DUMMY_INCLUDED
-      msvdata = NULL;  // This is a hack to get dummy to compile. It'll go away when we drop the dummy implementation (soon)
-#else
-      msvdata = p7_hmm_MSVDataCreate(gm, hmm, FALSE, om->scale_b, om->bias_b);
-#endif
+      msvdata = p7_hmm_MSVDataCreate(om, FALSE);
+
 
       for (i = 0; i < infocnt; ++i) {
           /* Create processing pipeline and hit list */
@@ -546,6 +568,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
           p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
           info[i].pli->single_strand = esl_opt_IsUsed(go, "--single");
+
+          info[i].pli->show_app      = esl_opt_IsUsed(go, "--show_app");
+          info[i].pli->app_hi        = esl_opt_GetReal (go, "--app_hi");
+          info[i].pli->app_med       = esl_opt_GetReal (go, "--app_med");
+          info[i].pli->app_lo        = esl_opt_GetReal (go, "--app_lo");
+          if (info[i].pli->app_med < info[i].pli->app_lo)  info[i].pli->app_med = info[i].pli->app_lo;
+          if (info[i].pli->app_hi  < info[i].pli->app_med) info[i].pli->app_hi = info[i].pli->app_med;
+
+
           info[i].fm_cfg = fm_cfg;
           info[i].msvdata = msvdata;
 #ifdef HMMER_THREADS
@@ -580,6 +611,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           esl_fatal("Unexpected error %d reading sequence file %s", sstatus, dbfp->filename);
       }
 
+
       //need to re-compute e-values before merging (when list will be sorted)
       double resCnt = 0;
       if (esl_opt_IsUsed(go, "-Z"))
@@ -589,7 +621,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     		  resCnt += info[i].pli->nres;
 
       for (i = 0; i < infocnt; ++i)
-          p7_tophits_ComputeNhmmerEvalues(info[i].th, resCnt);
+          p7_tophits_ComputeNhmmerEvalues(info[i].th, resCnt, info[i].om->max_length);
 
 
       /* merge the results of the search results */
@@ -609,6 +641,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       p7_tophits_SortBySortkey(info->th);
       p7_tophits_Threshold(info->th, info->pli);
+
+
 
       //tally up total number of hits and target coverage
       info->pli->n_output = info->pli->pos_output = 0;
@@ -747,6 +781,8 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
           dcl->jenv += dbsq->start - 1;
           dcl->iali += dbsq->start - 1;
           dcl->jali += dbsq->start - 1;
+          dcl->ihq  += dbsq->start - 1;
+          dcl->jhq  += dbsq->start - 1;
           dcl->ad->sqfrom += dbsq->start - 1;
           dcl->ad->sqto += dbsq->start - 1;
       }
@@ -768,6 +804,8 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
               dcl->jenv = dbsq_revcmp->start - dcl->jenv + 1;
               dcl->iali = dbsq_revcmp->start - dcl->iali + 1;
               dcl->jali = dbsq_revcmp->start - dcl->jali + 1;
+              dcl->ihq  = dbsq_revcmp->start - dcl->ihq + 1;
+              dcl->jhq  = dbsq_revcmp->start - dcl->jhq + 1;
               dcl->ad->sqfrom = dbsq_revcmp->start - dcl->ad->sqfrom + 1;
               dcl->ad->sqto = dbsq_revcmp->start - dcl->ad->sqto + 1;
 
@@ -949,6 +987,8 @@ pipeline_thread(void *arg)
           dcl->jenv += dbsq->start - 1;
           dcl->iali += dbsq->start - 1;
           dcl->jali += dbsq->start - 1;
+          dcl->ihq  += dbsq->start - 1;
+          dcl->jhq  += dbsq->start - 1;
           dcl->ad->sqfrom += dbsq->start - 1;
           dcl->ad->sqto += dbsq->start - 1;
       }
@@ -970,6 +1010,8 @@ pipeline_thread(void *arg)
               dcl->jenv = dbsq->start - dcl->jenv + 1;
               dcl->iali = dbsq->start - dcl->iali + 1;
               dcl->jali = dbsq->start - dcl->jali + 1;
+              dcl->ihq  = dbsq->start - dcl->ihq + 1;
+              dcl->jhq  = dbsq->start - dcl->jhq + 1;
               dcl->ad->sqfrom = dbsq->start - dcl->ad->sqfrom + 1;
               dcl->ad->sqto = dbsq->start - dcl->ad->sqto + 1;
 

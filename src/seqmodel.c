@@ -2,9 +2,10 @@
  * 
  * Contents:
  *   1. Routines in the exposed API.
- * 
- * SRE, Fri Mar 23 07:54:02 2007 [Janelia] [Decembrists, Picaresque]
- * SVN $Id$
+ *   2. Experiment driver: generating HMMs for hmmsim tests
+ *   3. Unit tests.
+ *   4. Test driver.
+ *   5. Copyright and license.
  */
 
 #include "p7_config.h"
@@ -21,7 +22,6 @@
 
 /* Function:  p7_Seqmodel()
  * Synopsis:  Make a profile HMM from a single sequence.
- * Incept:    SRE, Tue Sep  4 10:29:14 2007 [Janelia]
  *
  * Purpose:   Make a profile HMM from a single sequence, for
  *            probabilistic Smith/Waterman alignment, HMMER3-style.
@@ -102,7 +102,7 @@ p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
 
 
 /*****************************************************************
- * Experiment driver
+ * 2. Experiment driver
  *****************************************************************/
 
 #ifdef p7EXP_J2_1
@@ -188,13 +188,9 @@ main(int argc, char **argv)
   else if (status == eslENOHALT) esl_fatal("failed to solve score matrix %s for lambda", matrix);
   else if (status != eslOK)      esl_fatal("unexpected error in solving score matrix %s for probability parameters", matrix);
 
-  /* Convert joint probs to conditionals P(b|a) */
-  for (a = 0; a < abc->K; a++)
-    for (b = 0; b < abc->K; b++)
-      Q->mx[a][b] /= fa[a];	/* Q->mx[a][b] is now P(b | a) */
+  esl_scorematrix_JointToConditionalOnQuery(abc, Q);
 
-  /* Open the query sequence file in FASTA format 
-   */
+  /* Open the query sequence file in FASTA format */
   status = esl_sqfile_Open(qfile, eslSQFILE_FASTA, NULL, &qfp);
   if      (status == eslENOTFOUND) esl_fatal("No such file %s.", qfile);
   else if (status == eslEFORMAT)   esl_fatal("Format of %s unrecognized.", qfile);
@@ -233,7 +229,81 @@ main(int argc, char **argv)
 #endif /*p7EXP_J2_1*/
 
 
+/*****************************************************************
+ * x. Unit tests.
+ *****************************************************************/
+#ifdef p7SEQMODEL_TESTDRIVE
+#include <string.h>
+
+static void 
+utest_normalization(ESL_GETOPTS *go)
+{
+  char         *msg     = "seqmodel normalization utest failed";
+  ESL_ALPHABET *abc     = esl_alphabet_Create(eslAMINO);
+  char         *seq     = "ACDEFGHIKLMNPQRSTVWYBJZOUX";
+  int           L       = strlen(seq);
+  ESL_DSQ      *dsq     = NULL;
+  float         popen   = 0.1;
+  float         pextend = 0.4;
+  P7_BUILDER   *bld     = NULL;
+  P7_BG        *bg      = p7_bg_Create(abc);
+  P7_HMM       *hmm     = NULL;
+  char          errbuf[eslERRBUFSIZE];
+
+  if ( esl_abc_CreateDsq(abc, seq, &dsq)                                                 != eslOK) esl_fatal(msg);
+  if ( (bld = p7_builder_Create(NULL, abc))                                              == NULL)  esl_fatal(msg);
+  if ( p7_builder_LoadScoreSystem(bld, "BLOSUM62", popen, pextend, bg)                   != eslOK) esl_fatal(msg); 
+  if ( p7_Seqmodel(abc, dsq, L, "aatest", bld->Q, bg->f, bld->popen, bld->pextend, &hmm) != eslOK) esl_fatal(msg);
+
+  if (p7_hmm_Validate(hmm, errbuf, 0.0001) != eslOK) esl_fatal("normalization utest failed\n%s\n", errbuf);
+
+  free(dsq);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  p7_builder_Destroy(bld);
+  esl_alphabet_Destroy(abc);
+}
+
+#endif /*p7SEQMODEL_TESTDRIVE*/
+/*---------------- end, unit tests ------------------------------*/
+
+/*****************************************************************
+ * x. Test driver
+ *****************************************************************/
+#ifdef p7SEQMODEL_TESTDRIVE
+
+#include "p7_config.h"
+#include "easel.h"
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "unit test driver for seqmodel.c: single sequence query construction";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+
+  utest_normalization(go);
+
+  esl_getopts_Destroy(go);
+  exit(0); /* success */
+}
+
+#endif /*p7SEQMODEL_TESTDRIVE*/
+/*---------------- end, test driver -----------------------------*/
+
+
+
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SVN $URL$
+ * SVN $Id$
  *****************************************************************/
