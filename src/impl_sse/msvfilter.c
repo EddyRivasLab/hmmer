@@ -97,19 +97,11 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
   if (( status = p7_SSVFilter(dsq, L, om, ret_sc)) != eslENORESULT) return status;
 
 #ifdef p7_DEBUGGING
-  /* Check that the DP row dpf[0] is ok for us.  We're a little tricky
-   * here in the name of efficiency.  We know dpf[0] is properly
-   * vector-aligned; we also know that all dpf[i] point sequentially
-   * into a single allocated memory chunk, ox->dp_mem. Therefore we
-   * can get away with not only using a single row of dpf[], but
-   * actually we can use up to (at least) <validR> of them: i.e. the
-   * total row width available to the single-row MSV calculation in
-   * bytes is ox->allocW * ox->validR, not just ox->allocW. This
-   * fact lets us defer complete p7_filtermx_GrowTo() calls in the 
-   * pipeline.
-   */
+  /* see note [c] in p7_filtermx.h for explanation of tricky use of memory in single-row DP */
   if (Q * sizeof(__m128i) > ox->allocW * ox->validR) ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
 #endif
+  ox->M   = om->M;		/* This must be set early, not late: debugging dump functions will use it */
+
 
   /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
    */
@@ -204,8 +196,6 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
   *ret_sc = ((float) (xJ - om->tjb_b) - (float) om->base_b);
   *ret_sc /= om->scale_b;
   *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
-
-  ox->M   = om->M;
   return eslOK;
 }
 /*------------------ end, p7_MSVFilter() ------------------------*/
@@ -214,8 +204,6 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
 
 /* Function:  p7_SSVFilter_longtarget()
  * Synopsis:  Finds windows with SSV scores above some threshold (vewy vewy fast, in limited precision)
- * Incept:    TJW, Mon Feb 22 16:27:25 2010 [Janelia] - based on p7_MSVFilter
- *
  *
  * Purpose:   Calculates an approximation of the MSV score for regions of
  *            sequence <dsq> of length <L> residues, using optimized profile
@@ -254,7 +242,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 static int
-p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, uint8_t sc_thresh, __m128i sc_threshv, FM_WINDOWLIST *windowlist)
+p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_MSVDATA *msvdata, uint8_t sc_thresh, __m128i sc_threshv, FM_WINDOWLIST *windowlist)
 {
 
   register __m128i mpv;            /* previous row values                                       */
@@ -265,13 +253,13 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   uint8_t  xJ;                     /* special states' scores                                    */
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
-  int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
-  __m128i *dp  = ox->dpb[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
+  int Q        = P7F_NQB(om->M);   /* segment length: # of vectors                              */
+  __m128i *dp  = (__m128i *) ox->dpf[0]; /* see p7_filtermx.h note [c] for how we use a DP row  */
   __m128i *rsc;			   /* will point at om->rbv[x] for residue x[i]                 */
   __m128i tecv;                    /* vector for E->C  cost                                     */
   __m128i tjbmv;                   /* vector for J->B move cost + B->M move costs               */
   __m128i basev;                   /* offset for scores                                         */
-  __m128i ceilingv;                /* saturated simd value used to test for overflow           */
+  __m128i ceilingv;                /* saturated simd value used to test for overflow            */
   __m128i tempv;                   /* work vector                                               */
   int cmp;
   int status;
@@ -293,10 +281,11 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
   ESL_ALLOC(scores, ((om->abc->Kp)*Q) * sizeof(uint8_t) );
 
-  /* Check that the DP matrix is ok for us. */
-  if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
-  ox->M   = om->M;
-
+#ifdef p7_DEBUGGING
+  /* see note [c] in p7_filtermx.h for explanation of tricky use of memory in single-row DP */
+  if (Q * sizeof(__m128i) > ox->allocW * ox->validR) ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
+#endif
+  ox->M   = om->M;		/* This must be set early, not late: debugging dump functions will use it */
 
   /* Initialization. In offset unsigned  arithmetic, -infinity is 0, and 0 is om->base.
    */
@@ -418,7 +407,6 @@ ERROR:
 
 /* Function:  p7_MSVFilter_longtarget()
  * Synopsis:  Finds windows with MSV scores above some threshold (vewy vewy fast, in limited precision)
- * Incept:    TJW, Mon Feb 22 16:27:25 2010 [Janelia] - based on p7_MSVFilter
  *
  * Purpose:   Calculates an approximation of the MSV score for regions of
  *            sequence <dsq> of length <L> residues, using optimized profile
@@ -457,7 +445,7 @@ ERROR:
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist)
 {
 
 
@@ -470,8 +458,8 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   int i;			           /* counter over sequence positions 1..L                      */
 //  int j;
   int q;			           /* counter over vectors 0..nq-1                              */
-  int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
-  __m128i *dp  = ox->dpb[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
+  int Q        = P7F_NQB(om->M);   /* segment length: # of vectors                              */
+  __m128i *dp  = (__m128i *) ox->dpf[0];   /* see note [c] in p7_filtermx.h on single-row DP memory usage */
   __m128i *rsc;			        /* will point at om->rbv[x] for residue x[i]                 */
 
   __m128i xEv_prev;            	 /* E state: keeps the max seen up to the current position i, for window overlap test.  Note that this will always just be xJv + tecv    */
@@ -539,9 +527,12 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  int hit_jthresh;
 
 
-	  /* Check that the DP matrix is ok for us. */
-	  if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
-	  ox->M   = om->M;
+
+#ifdef p7_DEBUGGING
+	  /* see note [c] in p7_filtermx.h for explanation of tricky use of memory in single-row DP */
+	  if (Q * sizeof(__m128i) > ox->allocW * ox->validR) ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
+#endif
+	  ox->M   = om->M;		/* This must be set early, not late: debugging dump functions will use it */
 
 	  /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
 	   */
@@ -565,12 +556,12 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
 
 	#ifdef p7_DEBUGGING
-	  if (ox->debugging)
+	  if (ox->do_dumping)
 		{
 		  uint8_t xB;
 		  xB = _mm_extract_epi16(xBv, 0);
 		  xJ = _mm_extract_epi16(xJv, 0);
-		  p7_omx_DumpMFRow(ox, 0, 0, 0, xJ, xB, xJ);
+		  p7_filtermx_DumpMFRow(ox, 0, 0, 0, xJ, xB, xJ);
 		}
 	#endif
 
@@ -702,35 +693,28 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 /*****************************************************************
  * 2. Benchmark driver.
  *****************************************************************/
-/* The benchmark driver has some additional non-benchmarking options
+/* The benchmark driver an additional non-benchmarking options
  * to facilitate small-scale (by-eye) comparison of MSV scores against
  * other implementations, for debugging purposes.
- * 
- * The -c option compares against p7_GMSV() scores. This allows
- * measuring the error inherent in the SSE implementation's reduced
- * precision (p7_MSVFilter() runs in uint8_t; p7_GMSV() uses floats).
- * 
  * The -x option compares against an emulation that should give
  * exactly the same scores. The emulation is achieved by jiggering the
  * fp scores in a generic profile to disallow gaps, have the same
  * rounding and precision as the uint8_t's MSVFilter() is using, and
  * to make the same post-hoc corrections for the NN, CC, JJ
  * contributions to the final nat score; under these contrived
- * circumstances, p7_GViterbi() gives the same scores as
+ * circumstances, p7_ReferenceViterbi() gives the same scores as
  * p7_MSVFilter().
  * 
- * For using either -c or -x, you probably also want to limit the
- * number of generated target sequences, using -N10 or -N100 for
- * example.
+ * For using -x, you probably also want to limit the number of
+ * generated target sequences, using -N10 or -N100 for example.
  */
 #ifdef p7MSVFILTER_BENCHMARK
 /* 
-   gcc -o msvfilter-benchmark -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7MSVFILTER_BENCHMARK msvfilter.c -lhmmer -leasel -lm 
-   icc -o msvfilter-benchmark -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7MSVFILTER_BENCHMARK msvfilter.c -lhmmer -leasel -lm 
+   gcc -o msvfilter_benchmark -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7MSVFILTER_BENCHMARK msvfilter.c -lhmmer -leasel -lm 
+   icc -o msvfilter_benchmark -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7MSVFILTER_BENCHMARK msvfilter.c -lhmmer -leasel -lm 
 
-   ./benchmark-msvfilter <hmmfile>            runs benchmark 
-   ./benchmark-msvfilter -N100 -c <hmmfile>   compare scores to generic impl
-   ./benchmark-msvfilter -N100 -x <hmmfile>   compare scores to exact emulation
+   ./msvfilter_benchmark <hmmfile>            runs benchmark 
+   ./msvfilter_benchmark -N100 -x <hmmfile>   compare scores to exact emulation
  */
 #include "p7_config.h"
 
@@ -743,13 +727,14 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
 #include "hmmer.h"
 #include "impl_sse.h"
+#include "p7_refmx.h"
+#include "p7_filtermx.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-x", "compare scores to generic implementation (debug)", 0 }, 
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
-  { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-c", "equate scores to trusted implementation (debug)",  0 },
+  { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "equate scores to trusted implementation (debug)",  0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                     0 },
   { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -770,8 +755,8 @@ main(int argc, char **argv)
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
-  P7_OMX         *ox      = NULL;
-  P7_GMX         *gx      = NULL;
+  P7_FILTERMX    *ox      = NULL;
+  P7_REFMX       *gx      = NULL;
   int             L       = esl_opt_GetInteger(go, "-L");
   int             N       = esl_opt_GetInteger(go, "-N");
   ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
@@ -792,8 +777,8 @@ main(int argc, char **argv)
 
   if (esl_opt_GetBoolean(go, "-x")) p7_profile_SameAsMF(om, gm);
 
-  ox = p7_omx_Create(gm->M, 0, 0);
-  gx = p7_gmx_Create(gm->M, L);
+  ox = p7_filtermx_Create(gm->M, 0, 0); /* even with L=0 and ramlimit=0 at least 3 rows are always allocated */
+  gx = p7_refmx_Create(gm->M, L);
 
   /* Get a baseline time: how long it takes just to generate the sequences */
   esl_stopwatch_Start(w);
@@ -808,17 +793,10 @@ main(int argc, char **argv)
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
       p7_MSVFilter    (dsq, L, om, ox, &sc1);   
 
-      /* -c option: compare generic to fast score */
-      if (esl_opt_GetBoolean(go, "-c")) 
-	{
-	  p7_GMSV    (dsq, L, gm, gx, 2.0, &sc2); 
-	  printf("%.4f %.4f\n", sc1, sc2);  
-	}
-
       /* -x option: compare generic to fast score in a way that should give exactly the same result */
       if (esl_opt_GetBoolean(go, "-x"))
 	{
-	  p7_GViterbi(dsq, L, gm, gx, &sc2); 
+	  p7_ReferenceViterbi(dsq, L, gm, gx, NULL, &sc2); 
 	  sc2 /= om->scale_b;
 	  if (om->mode == p7_UNILOCAL)   sc2 -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
 	  else if (om->mode == p7_LOCAL) sc2 -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
@@ -833,8 +811,8 @@ main(int argc, char **argv)
   printf("# %.1f Mc/s\n", Mcs);
 
   free(dsq);
-  p7_omx_Destroy(ox);
-  p7_gmx_Destroy(gx);
+  p7_filtermx_Destroy(ox);
+  p7_refmx_Destroy(gx);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
@@ -859,50 +837,62 @@ main(int argc, char **argv)
 #include "esl_random.h"
 #include "esl_randomseq.h"
 
-/* 
- * We can check that scores are identical (within machine error) to
- * scores of generic DP with scores rounded the same way.  Do this for
- * a random model of length <M>, for <N> test sequences of length <L>.
+#include "p7_refmx.h"
+
+/* utest_comparison()
  * 
- * We assume that we don't accidentally generate a high-scoring random
- * sequence that overflows MSVFilter()'s limited range.
+ * MSV is tested against reference Viterbi, after configuring a
+ * generic profile such that its scores should match MSV scores,
+ * using p7_profile_SameAsMF().
+ *
+ * We sample a random model of length <M>, and score <N> random test
+ * sequences of length <L>. 
  * 
+ * Because MSV scores can overflow, wedon't sample high-scoring
+ * homologs for this test. Indeed, here we assume that we don't
+ * accidentally generate a high-scoring random sequence that overflows
+ * MSVFilter()'s limited range -- if we do, the score comparison will
+ * fail.
  */
 static void
-utest_msv_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
+utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
 {
   P7_HMM      *hmm = NULL;
   P7_PROFILE  *gm  = NULL;
   P7_OPROFILE *om  = NULL;
   ESL_DSQ     *dsq = malloc(sizeof(ESL_DSQ) * (L+2));
-  P7_OMX      *ox  = p7_omx_Create(M, 0, 0);
-  P7_GMX      *gx  = p7_gmx_Create(M, L);
+  P7_FILTERMX *ox  = p7_filtermx_Create(M, 0, 0);
+  P7_REFMX    *gx  = p7_refmx_Create(M, L);
   float sc1, sc2;
 
   p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om);
   p7_profile_SameAsMF(om, gm);
 #if 0
-  p7_oprofile_Dump(stdout, om);              /* dumps the optimized profile */
-  p7_omx_SetDumpMode(stdout, ox, TRUE);      /* makes the fast DP algorithms dump their matrices */
+  p7_oprofile_Dump(stdout, om);                       /* dumps the optimized profile */
+  p7_filtermx_SetDumpMode(ox, stdout, ox, TRUE);      /* makes the fast DP algorithms dump their matrices */
 #endif
 
   while (N--)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-      p7_MSVFilter(dsq, L, om, ox, &sc1);
-      p7_GViterbi (dsq, L, gm, gx, &sc2);
+
+      p7_MSVFilter        (dsq, L, om, ox,       &sc1);
+      p7_ReferenceViterbi (dsq, L, gm, gx, NULL, &sc2);
 #if 0
-      p7_gmx_Dump(stdout, gx, p7_DEFAULT);   /* dumps a generic DP matrix */
+      p7_refmx_Dump(stdout, gx);   /* dumps a generic DP matrix */
 #endif
 
       sc2 = sc2 / om->scale_b - 3.0f;
       if (fabs(sc1-sc2) > 0.001) esl_fatal("msv filter unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
+
+      p7_filtermx_Reuse(ox);
+      p7_refmx_Reuse(gx);
     }
 
   free(dsq);
   p7_hmm_Destroy(hmm);
-  p7_omx_Destroy(ox);
-  p7_gmx_Destroy(gx);
+  p7_filtermx_Destroy(ox);
+  p7_refmx_Destroy(gx);
   p7_profile_Destroy(gm);
   p7_oprofile_Destroy(om);
 }
@@ -958,9 +948,9 @@ main(int argc, char **argv)
   if ((bg = p7_bg_Create(abc))            == NULL)  esl_fatal("failed to create null model");
 
   if (esl_opt_GetBoolean(go, "-v")) printf("MSVFilter() tests, DNA\n");
-  utest_msv_filter(r, abc, bg, M, L, N);   /* normal sized models */
-  utest_msv_filter(r, abc, bg, 1, L, 10);  /* size 1 models       */
-  utest_msv_filter(r, abc, bg, M, 1, 10);  /* size 1 sequences    */
+  utest_comparison(r, abc, bg, M, L, N);   /* normal sized models */
+  utest_comparison(r, abc, bg, 1, L, 10);  /* size 1 models       */
+  utest_comparison(r, abc, bg, M, 1, 10);  /* size 1 sequences    */
 
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
@@ -969,18 +959,17 @@ main(int argc, char **argv)
   if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to create null model");
 
   if (esl_opt_GetBoolean(go, "-v")) printf("MSVFilter() tests, protein\n");
-  utest_msv_filter(r, abc, bg, M, L, N);   
-  utest_msv_filter(r, abc, bg, 1, L, 10);  
-  utest_msv_filter(r, abc, bg, M, 1, 10);  
+  utest_comparison(r, abc, bg, M, L, N);   
+  utest_comparison(r, abc, bg, 1, L, 10);  
+  utest_comparison(r, abc, bg, M, 1, 10);  
 
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
-
   esl_getopts_Destroy(go);
   esl_randomness_Destroy(r);
   return eslOK;
 }
-#endif /*VITFILTER_TESTDRIVE*/
+#endif /*p7MSVFILTER_TESTDRIVE*/
 
 
 
@@ -1006,6 +995,8 @@ main(int argc, char **argv)
 
 #include "hmmer.h"
 #include "impl_sse.h"
+#include "p7_filtermx.h"
+#include "p7_refmx.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -1029,14 +1020,12 @@ main(int argc, char **argv)
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
-  P7_OMX         *ox      = NULL;
-  P7_GMX         *gx      = NULL;
+  P7_FILTERMX    *ox      = NULL;
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
   float           msvraw, nullsc, msvscore;
-  float           graw, gscore;
-  double          P, gP;
+  double          P;
   int             status;
 
   /* Read in one HMM */
@@ -1059,39 +1048,29 @@ main(int argc, char **argv)
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
 
-  /* allocate DP matrices, both a generic and an optimized one */
-  ox = p7_omx_Create(gm->M, 0, 0); /* one row version */
-  gx = p7_gmx_Create(gm->M, sq->n);
+  ox = p7_filtermx_Create(gm->M, 0, 0); /* one row version */
 
   /* Useful to place and compile in for debugging: 
-     p7_oprofile_Dump(stdout, om);              dumps the optimized profile
-     p7_omx_SetDumpMode(stdout, ox, TRUE);      makes the fast DP algorithms dump their matrices
-     p7_gmx_Dump(stdout, gx, p7_DEFAULT);       dumps a generic DP matrix
+     p7_oprofile_Dump(stdout, om);                  dumps the optimized profile
+     p7_filtermx_SetDumpMode(ox, stdout, TRUE);     makes the fast DP algorithms dump their matrices
      p7_oprofile_SameMSV(om, gm);
   */
-  //p7_oprofile_Dump(stdout, om);
-  //p7_omx_SetDumpMode(stdout, ox, TRUE);    
 
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
       p7_oprofile_ReconfigLength(om, sq->n);
-      p7_profile_SetLength      (gm, sq->n);
       p7_bg_SetLength(bg,            sq->n);
-      p7_omx_GrowTo(ox, om->M, 0,    sq->n); 
-      p7_gmx_GrowTo(gx, gm->M,       sq->n); 
+
+      p7_filtermx_GrowTo(ox, om->M, 0) ;
 
       p7_MSVFilter   (sq->dsq, sq->n, om, ox, &msvraw);  
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
       msvscore = (msvraw - nullsc) / eslCONST_LOG2;
       P        = esl_gumbel_surv(msvscore,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
 
-      p7_GMSV(sq->dsq, sq->n, gm, gx, 2.0, &graw);
-      gscore   = (graw - nullsc) / eslCONST_LOG2;
-      gP       = esl_gumbel_surv(gscore,  gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
-
       if (esl_opt_GetBoolean(go, "-1"))
 	{
-	  printf("%-30s  %-20s  %9.2g  %7.2f  %9.2g  %7.2f\n", sq->name, hmm->name, P, msvscore, gP, gscore);
+	  printf("%-30s  %-20s  %9.2g  %7.2f\n", sq->name, hmm->name, P, msvscore);
 	}
       else if (esl_opt_GetBoolean(go, "-P"))
 	{ /* output suitable for direct use in profmark benchmark postprocessors: */
@@ -1099,24 +1078,22 @@ main(int argc, char **argv)
 	}
       else
 	{
-	  printf("target sequence:      %s\n",        sq->name);
-	  printf("msv filter raw score: %.2f nats\n", msvraw);
-	  printf("null score:           %.2f nats\n", nullsc);
-	  printf("per-seq score:        %.2f bits\n", msvscore);
-	  printf("P-value:              %g\n",        P);
-	  printf("GMSV raw score:       %.2f nats\n", graw);
-	  printf("GSMV per-seq score:   %.2f bits\n", gscore);
-	  printf("GSMV P-value:         %g\n",        gP);
+	  printf("target sequence:         %s\n",        sq->name);
+	  printf("msv filter raw score:    %.2f nats\n", msvraw);
+	  printf("null score:              %.2f nats\n", nullsc);
+	  printf("per-seq score:           %.2f bits\n", msvscore);
+	  printf("P-value:                 %g\n",        P);
+	  puts("\n");
 	}
       
+      p7_filtermx_Reuse(ox);
       esl_sq_Reuse(sq);
     }
 
   /* cleanup */
   esl_sq_Destroy(sq);
   esl_sqfile_Close(sqfp);
-  p7_omx_Destroy(ox);
-  p7_gmx_Destroy(gx);
+  p7_filtermx_Destroy(ox);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);

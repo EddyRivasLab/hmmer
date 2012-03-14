@@ -1541,11 +1541,10 @@ p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, c
 
 /* Function:  p7_profile_SameAsMF()
  * Synopsis:  Set a generic profile's scores to give MSV scores.
- * Incept:    SRE, Wed Jul 30 13:42:49 2008 [Janelia]
  *
- * Purpose:   Set a generic profile's scores so that the normal <dp_generic> DP 
- *            algorithms will give the same score as <p7_MSVFilter()>:
- *            all t_MM scores = 0; all other core transitions = -inf;
+ * Purpose:   Set a generic profile's scores so that the reference Viterbi
+ *            implementation will give the same score as <p7_MSVFilter()>.
+ *            All t_MM scores = 0; all other core transitions = -inf;
  *            multihit local mode; all <t_BMk> entries uniformly <log 2/(M(M+1))>;
  *            <tCC, tNN, tJJ> scores 0; total approximated later as -3;
  *            rounded in the same way as the 8-bit limited precision.
@@ -1585,7 +1584,6 @@ p7_profile_SameAsMF(const P7_OPROFILE *om, P7_PROFILE *gm)
 
 /* Function:  p7_profile_SameAsVF()
  * Synopsis:  Round a generic profile to match ViterbiFilter scores.
- * Incept:    SRE, Wed Jul 30 13:37:48 2008 [Janelia]
  *
  * Purpose:   Round all the scores in a generic (lspace) <P7_PROFILE> <gm> in
  *            exactly the same way that the scores in the

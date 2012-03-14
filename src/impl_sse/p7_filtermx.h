@@ -6,8 +6,9 @@
  *    1. The P7_FILTERMX object
  *    2. Function declarations
  *    3. Notes:
- *       [1] Layout of the matrix, in checkpointed rows
- *       [2] Layout of one row, in vectors and floats
+ *       [a] Layout of the matrix, in checkpointed rows
+ *       [b] Layout of one row, in vectors and floats
+ *       [c] Using P7_FILTERMX for single-row DP: MSV, Viterbi filters
  *    4. Copyright and license information.
  */
 #ifndef P7_FILTERMX_INCLUDED
@@ -105,6 +106,7 @@ extern char *       p7_filtermx_DecodeX(enum p7f_xcells_e xcode);
 extern int          p7_filtermx_DumpFBHeader(P7_FILTERMX *ox);
 extern int          p7_filtermx_DumpFBRow(P7_FILTERMX *ox, int rowi, __m128 *dpc, char *pfx);
 extern int          p7_filtermx_DumpMFRow(P7_FILTERMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
+extern int          p7_filtermx_DumpVFRow(P7_FILTERMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
 #endif
 
 /*****************************************************************
@@ -183,7 +185,27 @@ extern int          p7_filtermx_DumpMFRow(P7_FILTERMX *ox, int rowi, uint8_t xE,
  */
 
 
-
+/* [c] Using P7_FILTERMX for single-row DP: MSV and Viterbi filters.
+ * 
+ * MSVFilter() and VitFilter() only use a single row of DP memory, and
+ * no main memory for special states. They only need to make sure that
+ * they have a vector-aligned chunk of memory big enough for
+ * P7F_NQB(M) or 3*P7F_NQW(M) __m128i vectors, respectively. We know
+ * dpf[0] is vector aligned and big enough: if it's big enough for a
+ * Forward vector row, it must be big enough for MSV and Viterbi.
+ * 
+ * But we can do better than that, and avoid/defer many re-allocations
+ * (p7_filtermx_GrowTo() calls), by using even more of the allocated
+ * memory in the P7_FILTERMX. We know that the dpf[i] point
+ * sequentially into a single allocated memory chunk,
+ * dp_mem. Therefore we can use at least <validR> rows: i.e. the total
+ * row width available to a single-row calculation in bytes is
+ * allocW*allocR, not just allocW. 
+ * 
+ * So you'll see tests comparing (Q * sizeof(__m128i) against
+ * ox->allocW * ox->allocR in single-row DP implementations when
+ * they're deciding if they have enough row memory.
+ */
 
 
 #endif /*P7_FILTERMX_INCLUDED*/
