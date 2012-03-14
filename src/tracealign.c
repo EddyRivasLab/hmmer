@@ -382,7 +382,7 @@ p7_tracealign_computeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
  * Return:   eslOK if no errors
  */
 int
-p7_tracealign_getTracesAndStats(P7_HMM *hmm, ESL_SQ  **sq, int N, ESL_MSA **ret_msa, float **ret_pp, float **ret_relent, float **ret_scores )
+p7_tracealign_getMSAandStats(P7_HMM *hmm, ESL_SQ  **sq, int N, ESL_MSA **ret_msa, float **ret_pp, float **ret_relent, float **ret_scores )
 {
 
   P7_TRACE    **tr      = NULL; /* array of tracebacks             */
@@ -1099,7 +1099,6 @@ main(int argc, char **argv)
   int           totseq  = 0;  /* # of seqs in all sources        */
   ESL_ALPHABET *abc     = NULL; /* alphabet (set from the HMM file)*/
   P7_HMM       *hmm     = NULL;
-  P7_TRACE    **tr      = NULL; /* array of tracebacks             */
   ESL_MSA      *msa     = NULL; /* resulting multiple alignment    */
   int           msaopts = 0;  /* flags to p7_tracealign_Seqs()   */
   int           idx;    /* counter over seqs, traces       */
@@ -1211,11 +1210,6 @@ main(int argc, char **argv)
 
   /* Remaining initializations, including trace array allocation
    */
-  ESL_RALLOC(tr, p, sizeof(P7_TRACE *) * totseq);
-  for (idx = 0; idx < totseq; idx++)
-    tr[idx] = p7_trace_CreateWithPP();
-
-
   ESL_ALLOC(pp,     sizeof(float*) * totseq );
   ESL_ALLOC(relent, sizeof(float*) * totseq );
   ESL_ALLOC(scores, sizeof(float*) * totseq );
@@ -1225,7 +1219,7 @@ main(int argc, char **argv)
     ESL_ALLOC(scores[idx], sizeof(float) * (1+sq[idx]->L));
   }
 
-  p7_tracealign_getTracesAndStats(hmm, sq, totseq, &msa, pp, relent, scores);
+  p7_tracealign_getMSAandStats(hmm, sq, totseq, &msa, pp, relent, scores);
 
   eslx_msafile_Write(ofp, msa, outfmt);
 
@@ -1247,9 +1241,7 @@ main(int argc, char **argv)
   free(scores);
 
   for (idx = 0; idx <= totseq; idx++) esl_sq_Destroy(sq[idx]);    /* including sq[nseq] because we overallocated */
-  for (idx = 0; idx <  totseq; idx++) p7_trace_Destroy(tr[idx]);
   free(sq);
-  free(tr);
   esl_msa_Destroy(msa);
   p7_hmm_Destroy(hmm);
   if (ofp != stdout) fclose(ofp);
