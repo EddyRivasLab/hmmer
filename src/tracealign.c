@@ -426,11 +426,9 @@ p7_tracealign_getMSAandStats(P7_HMM *hmm, ESL_SQ  **sq, int N, ESL_MSA **ret_msa
 
         if (tr[i]->st[z] == p7T_M ) {
           k = tr[i]->k[z];
-
-          ret_relent[i][j] = 0.0;
           for (x=0; x<hmm->abc->K; x++) {
             p       = hmm->mat[k][x];
-            ret_relent[i][j] += p * log(p / bg->f[sq[i]->dsq[j]]) / log(2);
+            ret_relent[i][j] += p * log(p / bg->f[x]) / log(2);
           }
 
           p = hmm->mat[k][sq[i]->dsq[j]];
