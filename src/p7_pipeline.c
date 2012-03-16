@@ -351,8 +351,8 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, P7_MSVDATA *msvdata, FM_WINDOWLIS
   if ( windowlist->windows[0].n  <  1)
     windowlist->windows[0].n =  1;
 
-  if ( windowlist->windows[windowlist->count].n + windowlist->windows[windowlist->count].length - 1  >  L)
-    windowlist->windows[windowlist->count].length =  L - windowlist->windows[windowlist->count].n + 1;
+  if ( windowlist->windows[windowlist->count-1].n + windowlist->windows[windowlist->count-1].length - 1  >  L)
+    windowlist->windows[windowlist->count-1].length =  L - windowlist->windows[windowlist->count-1].n + 1;
 
 
   return eslOK;
