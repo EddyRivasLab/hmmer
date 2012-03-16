@@ -100,7 +100,10 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
 
   /* optionally build a faux trace for the query sequence: relative to core model (B->M_1..M_L->E) */
   if (qsq != NULL) {
-    if (qsq->n != hmm->M) goto ERROR;
+    if (qsq->n != hmm->M) {
+      status = eslFAIL;
+      goto ERROR;
+    }
 
     if ((qtr = p7_trace_Create())                      == NULL)  {status = eslFAIL;  goto ERROR; }
     if ((status = p7_trace_Append(qtr, p7T_B, 0, 0))   != eslOK) goto ERROR;
@@ -138,9 +141,10 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
     th.hit[i] = &(th.unsrt[i]);
     if (   th.hit[i]->ndom > 10000
         || th.hit[i]->flags >  p7_IS_INCLUDED + p7_IS_REPORTED + p7_IS_NEW + p7_IS_DROPPED + p7_IS_DUPLICATE
-    )
+    ) {
       status = eslFAIL;
       goto ERROR;
+    }
   }
 
 //  th.unsrt     = NULL;
