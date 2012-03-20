@@ -429,14 +429,15 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
  *            windows.
  *
  *
- * Args:      dsq     - digital target sequence, 1..L
- *            L       - length of dsq in residues
- *            om      - optimized profile
- *            ox      - DP matrix
- *            msvdata - compact representation of substitution scores, for backtracking diagonals
- *            bg      - the background model, required for translating a P-value threshold into a score threshold
- *            P       - p-value below which a region is captured as being above threshold
+ * Args:      dsq        - digital target sequence, 1..L
+ *            L          - length of dsq in residues
+ *            om         - optimized profile
+ *            ox         - DP matrix
+ *            msvdata    - compact representation of substitution scores, for backtracking diagonals
+ *            bg         - the background model, required for translating a P-value threshold into a score threshold
+ *            P          - p-value below which a region is captured as being above threshold
  *            windowlist - RETURN: array of hit windows (start and end of diagonal) for the above-threshold areas
+ *            force_ssv  - if TRUE, use SSV, not MSV, regardless of score threshold
  *
  * Note:      We misuse the matrix <ox> here, using only a third of the
  *            first dp row, accessing it as <dp[0..Q-1]> rather than
@@ -450,7 +451,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist, int force_ssv)
 {
   vector unsigned char mpv;        /* previous row values                                       */
   vector unsigned char xEv;		   /* E state: keeps max for Mk->E as we go                     */
@@ -515,7 +516,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   int jthresh = om->base_b + om->tjb_b + om->tec_b + 1;  //+1 because the score of a pass through the model must be positive to contribute to MSV score
   jthreshv = esl_vmx_set_u8( (int8_t)jthresh - 1);
 
-  if ( sc_thresh < jthresh) {
+  if (force_ssv || (sc_thresh < jthresh)) {
 	   p7_SSVFilter_longtarget(dsq, L, om, ox, msvdata, (uint8_t)sc_thresh, sc_threshv, windowlist);
   } else {
 	  /*e.g. if base=190, tec=3, tjb=22 then a score of 217 would be required for a

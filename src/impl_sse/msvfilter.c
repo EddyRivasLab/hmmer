@@ -437,14 +437,15 @@ ERROR:
  *            windows.
  *
  *
- * Args:      dsq     - digital target sequence, 1..L
- *            L       - length of dsq in residues
- *            om      - optimized profile
- *            ox      - DP matrix
- *            msvdata - compact representation of substitution scores, for backtracking diagonals
- *            bg      - the background model, required for translating a P-value threshold into a score threshold
- *            P       - p-value below which a region is captured as being above threshold
+ * Args:      dsq        - digital target sequence, 1..L
+ *            L          - length of dsq in residues
+ *            om         - optimized profile
+ *            ox         - DP matrix
+ *            msvdata    - compact representation of substitution scores, for backtracking diagonals
+ *            bg         - the background model, required for translating a P-value threshold into a score threshold
+ *            P          - p-value below which a region is captured as being above threshold
  *            windowlist - RETURN: array of hit windows (start and end of diagonal) for the above-threshold areas
+ *            force_ssv  - if TRUE, use SSV, not MSV, regardless of score threshold
  *
  * Note:      We misuse the matrix <ox> here, using only a third of the
  *            first dp row, accessing it as <dp[0..Q-1]> rather than
@@ -458,10 +459,8 @@ ERROR:
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist, int force_ssv)
 {
-
-
   register __m128i mpv;        /* previous row values                                       */
   register __m128i xEv;		   /* E state: keeps max for Mk->E as we go                     */
   register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
@@ -519,7 +518,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   jthreshv = _mm_set1_epi8((int8_t) 255 - (int)jthresh);
 
 
-  if ( sc_thresh < jthresh) {
+  if (force_ssv || (sc_thresh < jthresh)) {
 
     p7_SSVFilter_longtarget(dsq, L, om, ox, msvdata, (uint8_t)sc_thresh, sc_threshv, windowlist);
 
