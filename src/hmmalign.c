@@ -200,7 +200,7 @@ main(int argc, char **argv)
 
   p7_tracealign_computeTraces(hmm, sq, mapseq, totseq - mapseq, tr);
 
-  p7_tracealign_Seqs(sq, tr, totseq, hmm->M, msaopts, &msa);
+  p7_tracealign_Seqs(sq, tr, totseq, hmm->M, msaopts, hmm, &msa);
 
   eslx_msafile_Write(ofp, msa, outfmt);
 

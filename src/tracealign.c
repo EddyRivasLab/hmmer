@@ -21,6 +21,7 @@ static ESL_DSQ get_dsq_z(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int 
 static int     make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const int *matuse, const int *matmap, int M, int alen, int optflags, ESL_MSA **ret_msa);
 static int     make_text_msa   (ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const int *matuse, const int *matmap, int M, int alen, int optflags, ESL_MSA **ret_msa);
 static int     annotate_rf(ESL_MSA *msa, int M, const int *matuse, const int *matmap);
+static int     annotate_mm(ESL_MSA *msa, P7_HMM *hmm, const int *matuse, const int *matmap);
 static int     annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, const int *matmap, int M, int optflags);
 static int     rejustify_insertions_digital  (                         ESL_MSA *msa, const int *inserts, const int *matmap, const int *matuse, int M);
 static int     rejustify_insertions_text     (const ESL_ALPHABET *abc, ESL_MSA *msa, const int *inserts, const int *matmap, const int *matuse, int M);
@@ -95,7 +96,7 @@ static int     rejustify_insertions_text     (const ESL_ALPHABET *abc, ESL_MSA *
  *              argument.)
  */
 int
-p7_tracealign_Seqs(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, ESL_MSA **ret_msa)
+p7_tracealign_Seqs(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, P7_HMM *hmm, ESL_MSA **ret_msa)
 {
   ESL_MSA      *msa        = NULL;	/* RETURN: new MSA */
   const ESL_ALPHABET *abc  = sq[0]->abc;
@@ -111,7 +112,9 @@ p7_tracealign_Seqs(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, ES
   if (optflags & p7_DIGITIZE) { if ((status = make_digital_msa(sq, NULL, tr, nseq, matuse, matmap, M, alen, optflags, &msa)) != eslOK) goto ERROR; }
   else                        { if ((status = make_text_msa   (sq, NULL, tr, nseq, matuse, matmap, M, alen, optflags, &msa)) != eslOK) goto ERROR; }
 
-  if ((status = annotate_rf(msa, M, matuse, matmap))                          != eslOK) goto ERROR;
+  if ((status = annotate_rf(msa, M, matuse, matmap))                               != eslOK) goto ERROR;
+  if (hmm)
+    if ((status = annotate_mm(msa, hmm,    matuse, matmap))                          != eslOK) goto ERROR;
   if ((status = annotate_posterior_probability(msa, tr, matmap, M, optflags)) != eslOK) goto ERROR;
 
   if (optflags & p7_DIGITIZE) rejustify_insertions_digital(     msa, inscount, matmap, matuse, M);
@@ -407,7 +410,7 @@ p7_tracealign_getMSAandStats(P7_HMM *hmm, ESL_SQ  **sq, int N, ESL_MSA **ret_msa
 
 
   p7_tracealign_computeTraces(hmm, sq, 0, N, tr);
-  p7_tracealign_Seqs(sq, tr, N, hmm->M, msaopts, &msa);
+  p7_tracealign_Seqs(sq, tr, N, hmm->M, msaopts, hmm, &msa);
   *ret_msa = msa;
 
   for (i=0; i<N; i++) {
@@ -830,6 +833,49 @@ annotate_rf(ESL_MSA *msa, int M, const int *matuse, const int *matmap)
 }
   
 
+/* annotate_mm()
+ * Synopsis: Add MM reference coordinate annotation line to new MSA.
+ *
+ * Purpose:  Create an MM Model Mask annotation line that annotates the
+ *           consensus columns: the columns associated with profile match states.
+ *
+ *           Recall that msa->mm is <NULL> when unset/by default in an MSA;
+ *           msa->mm[0..alen-1] = 'm' | '.' is the simplest convention;
+ *           msa->mm is a NUL-terminated string (msa->mm[alen] = '\0')
+ *
+ * Args:     msa    - alignment to annotate (<msa->rf> is allocated, set)
+ *           M      - profile length
+ *           matuse - matuse[1..M] == TRUE | FALSE : is this match state represented
+ *                    by a column in the alignment.
+ *           matmap - matmap[1..M] == (1..alen): if matuse[k], then what alignment column
+ *                    does state k map to.
+ *
+ * Returns:  <eslOK> on success; msa->mm is set to an appropriate model mask
+ *           coordinate string.
+ *
+ * Throws:   <eslEMEM> on allocation failure.
+ */
+static int
+annotate_mm(ESL_MSA *msa, P7_HMM * hmm, const int *matuse, const int *matmap)
+{
+  int apos, k;
+  int status;
+
+  if (hmm->mm == NULL) return eslOK;  //nothing to do
+
+  ESL_ALLOC(msa->mm, sizeof(char) * (msa->alen+1));
+  for (apos = 0; apos < msa->alen; apos++)
+    msa->mm[apos] = '.';
+  msa->mm[msa->alen] = '\0';
+
+  for (k = 0; k < hmm->M; k++)
+    if (matuse[k])
+      msa->mm[matmap[k]-1] = hmm->mm[k];
+  return eslOK;
+
+ ERROR:
+  return status;
+}
 
 /* annotate_posterior_probability()
  * Synopsis:  Add posterior probability annotation lines to new MSA.

@@ -119,6 +119,7 @@ typedef struct p7_oprofile_s {
   char  *acc;      /* unique accession of model, or NULL                */
   char  *desc;                  /* brief (1-line) description of model, or NULL      */
   char  *rf;                    /* reference line           1..M; *ref=0: unused     */
+  char  *mm;                    /* modelmask line           1..M; *ref=0: unused     */
   char  *cs;                    /* consensus structure line 1..M, *cs=0: unused      */
   char  *consensus;    /* consensus residues for ali display, 1..M          */
   float  evparam[p7_NEVPARAM];   /* parameters for determining E-values, or UNSET     */

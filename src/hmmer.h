@@ -121,6 +121,7 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 #define p7H_COMPO   (1<<14)   /* model-specific residue composition available     */
 #define p7H_CHKSUM  (1<<15)   /* model has an alignment checksum                  */
 #define p7H_CONS    (1<<16)   /* consensus residue line available                 */
+#define p7H_MMASK   (1<<17)   /* #MM annotation available                        !*/
 
 /* Indices of Plan7 main model state transitions, hmm->t[k][] */
 enum p7h_transitions_e {
@@ -170,7 +171,8 @@ typedef struct p7_hmm_s {
   char    *acc;	                 /* accession number of model (Pfam)      (optional: NULL) */ /* String, \0-terminated   */
   char    *desc;                 /* brief (1-line) description of model   (optional: NULL) */ /* String, \0-terminated   */
   char    *rf;                   /* reference line from alignment 1..M    (p7H_RF)         */ /* String; 0=' ', M+1='\0' */
-  char    *consensus;		 /* consensus residue line        1..M    (p7H_CONS)       */ /* String; 0=' ', M+1='\0' */
+  char    *mm;                   /* model mask line from alignment 1..M   (p7H_MM)         */ /* String; 0=' ', M+1='\0' */
+  char    *consensus;		         /* consensus residue line        1..M    (p7H_CONS)       */ /* String; 0=' ', M+1='\0' */
   char    *cs;                   /* consensus structure line      1..M    (p7H_CS)         */ /* String; 0=' ', M+1='\0' */
   char    *ca;	                 /* consensus accessibility line  1..M    (p7H_CA)         */ /* String; 0=' ', M+1='\0' */
 
@@ -259,6 +261,7 @@ typedef struct p7_profile_s {
   char  *acc;			/* unique accession of model, or NULL                     */
   char  *desc;                  /* brief (1-line) description of model, or NULL           */
   char  *rf;                    /* reference line from alignment 1..M; *rf=0 means unused */
+  char  *mm;                    /* modelmask line           1..M; *ref=0: unused     */
   char  *cs;                    /* consensus structure line      1..M, *cs=0 means unused */
   char  *consensus;		/* consensus residues to display in alignments, 1..M      */
   float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values, or UNSET          */
@@ -404,6 +407,7 @@ enum p7_hmmfile_formats_e {
   p7_HMMFILE_3c = 3,
   p7_HMMFILE_3d = 4,
   p7_HMMFILE_3e = 5,
+  p7_HMMFILE_3f = 6,
 };
 
 typedef struct p7_hmmfile_s {
@@ -575,6 +579,7 @@ typedef struct p7_spensemble_s {
  */
 typedef struct p7_alidisplay_s {
   char *rfline;                 /* reference coord info; or NULL        */
+  char *mmline;                 /* modelmask coord info; or NULL        */
   char *csline;                 /* consensus structure info; or NULL    */
   char *model;                  /* aligned query consensus sequence     */
   char *mline;                  /* "identities", conservation +'s, etc. */
@@ -1074,10 +1079,6 @@ typedef struct p7_builder_s {
   /* Choice of prior                                                                               */
   P7_PRIOR            *prior;	         /* choice of prior when parameterizing from counts        */
 
-  /* Haircut: treat the given range as uninformative, turning all match state residues in that range to 'N' */
-  int                 hc_start;
-  int                 hc_end;
-
   /* Optional: information used for parameterizing single sequence queries                         */
   ESL_SCOREMATRIX     *S;		 /* residue score matrix                                   */
   ESL_DMATRIX         *Q;	         /* Q->mx[a][b] = P(b|a) residue probabilities             */
@@ -1260,8 +1261,8 @@ extern int p7_oprofile_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, i
 #endif /*HAVE_MPI*/
 
 /* tracealign.c */
-extern int p7_tracealign_Seqs(ESL_SQ **sq,           P7_TRACE **tr, int nseq, int M, int optflags, ESL_MSA **ret_msa);
-extern int p7_tracealign_MSA (const ESL_MSA *premsa, P7_TRACE **tr,           int M, int optflags, ESL_MSA **ret_postmsa);
+extern int p7_tracealign_Seqs(ESL_SQ **sq,           P7_TRACE **tr, int nseq, int M,  int optflags, P7_HMM *hmm, ESL_MSA **ret_msa);
+extern int p7_tracealign_MSA (const ESL_MSA *premsa, P7_TRACE **tr,           int M,  int optflags, ESL_MSA **ret_postmsa);
 extern int p7_tracealign_computeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRACE  **tr);
 extern int p7_tracealign_getMSAandStats(P7_HMM *hmm, ESL_SQ  **sq, int N, ESL_MSA **ret_msa, float **ret_pp, float **ret_relent, float **ret_scores );
 

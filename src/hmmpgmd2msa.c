@@ -92,7 +92,7 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
   ESL_MSA           *msa   = NULL;
   P7_DOMAIN         *dom   = NULL;
 
-  void              *p     = data;        /*pointer used to walk along data, must be char* to allow pointer arithmetic */
+  char              *p     = (char*)data;        /*pointer used to walk along data, must be char* to allow pointer arithmetic */
 
   th.N = 0;
   th.unsrt = NULL;
@@ -195,6 +195,7 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
 
       ad2->memsize = ad->memsize;
       ad2->rfline = ad->rfline;
+      ad2->mmline = ad->mmline;
       ad2->csline = ad->csline ;
       ad2->model  = ad->model ;
       ad2->mline  = ad->mline ;

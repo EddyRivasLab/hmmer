@@ -60,6 +60,7 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
   gm->tsc       = NULL;
   gm->rsc       = NULL;
   gm->rf        = NULL;
+  gm->mm        = NULL;
   gm->cs        = NULL;
   gm->consensus = NULL;
 
@@ -67,6 +68,7 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
   ESL_ALLOC(gm->tsc,       sizeof(float)   * allocM * p7P_NTRANS); 
   ESL_ALLOC(gm->rsc,       sizeof(float *) * abc->Kp);
   ESL_ALLOC(gm->rf,        sizeof(char)    * (allocM+2)); /* yes, +2: each is (0)1..M, +trailing \0  */
+  ESL_ALLOC(gm->mm,        sizeof(char)    * (allocM+2));
   ESL_ALLOC(gm->cs,        sizeof(char)    * (allocM+2));
   ESL_ALLOC(gm->consensus, sizeof(char)    * (allocM+2));
   gm->rsc[0] = NULL;
@@ -112,6 +114,7 @@ p7_profile_Create(int allocM, const ESL_ALPHABET *abc)
   gm->acc              = NULL;
   gm->desc             = NULL;
   gm->rf[0]            = 0;     /* RF line is optional annotation; this flags that it's not set yet */
+  gm->mm[0]            = 0;     /* likewise for MM annotation line */
   gm->cs[0]            = 0;     /* likewise for CS annotation line */
   gm->consensus[0]     = 0;
   
@@ -171,6 +174,7 @@ p7_profile_Copy(const P7_PROFILE *src, P7_PROFILE *dst)
   if ((status = esl_strdup(src->desc,      -1, &(dst->desc)))      != eslOK) return status;
 
   strcpy(dst->rf,        src->rf);         /* RF is optional: if it's not set, *rf=0, and strcpy still works fine */
+  strcpy(dst->mm,        src->mm);         /* MM is also optional annotation */
   strcpy(dst->cs,        src->cs);         /* CS is also optional annotation */
   strcpy(dst->consensus, src->consensus);  /* consensus though is always present on a valid profile */
 
@@ -244,6 +248,7 @@ p7_profile_Reuse(P7_PROFILE *gm)
 
   /* set annotations to empty strings */
   gm->rf[0]        = 0;
+  gm->mm[0]        = 0;
   gm->cs[0]        = 0;
   gm->consensus[0] = 0;
       
@@ -278,6 +283,7 @@ p7_profile_Sizeof(P7_PROFILE *gm)
   n += sizeof(float)   * gm->allocM * p7P_NTRANS;             /* gm->tsc       */
   n += sizeof(float *) * gm->abc->Kp;	                      /* gm->rsc       */
   n += sizeof(char)    * (gm->allocM+2);	              /* gm->rf        */
+  n += sizeof(char)    * (gm->allocM+2);                /* gm->mm        */
   n += sizeof(char)    * (gm->allocM+2);	              /* gm->cs        */
   n += sizeof(char)    * (gm->allocM+2);	              /* gm->consensus */
 
@@ -307,6 +313,7 @@ p7_profile_Destroy(P7_PROFILE *gm)
     if (gm->acc       != NULL) free(gm->acc);
     if (gm->desc      != NULL) free(gm->desc);
     if (gm->rf        != NULL) free(gm->rf);
+    if (gm->mm        != NULL) free(gm->mm);
     if (gm->cs        != NULL) free(gm->cs);
     if (gm->consensus != NULL) free(gm->consensus);
     free(gm);

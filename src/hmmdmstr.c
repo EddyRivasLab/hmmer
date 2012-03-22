@@ -1436,14 +1436,15 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     n = n + sizeof(float) * (hmm->M + 1) * p7H_NTRANSITIONS;
     n = n + sizeof(float) * (hmm->M + 1) * abc->K;
     n = n + sizeof(float) * (hmm->M + 1) * abc->K;
-    if (hmm->name   != NULL)   n = n + strlen(hmm->name) + 1;
-    if (hmm->acc    != NULL)   n = n + strlen(hmm->acc)  + 1;
-    if (hmm->desc   != NULL)   n = n + strlen(hmm->desc) + 1;
-    if (hmm->flags & p7H_RF)   n = n + hmm->M + 2;
-    if (hmm->flags & p7H_CONS) n = n + hmm->M + 2;
-    if (hmm->flags & p7H_CS)   n = n + hmm->M + 2;
-    if (hmm->flags & p7H_CA)   n = n + hmm->M + 2;
-    if (hmm->flags & p7H_MAP)  n = n + sizeof(int) * (hmm->M + 1);
+    if (hmm->name   != NULL)    n = n + strlen(hmm->name) + 1;
+    if (hmm->acc    != NULL)    n = n + strlen(hmm->acc)  + 1;
+    if (hmm->desc   != NULL)    n = n + strlen(hmm->desc) + 1;
+    if (hmm->flags & p7H_RF)    n = n + hmm->M + 2;
+    if (hmm->flags & p7H_MMASK) n = n + hmm->M + 2;
+    if (hmm->flags & p7H_CONS)  n = n + hmm->M + 2;
+    if (hmm->flags & p7H_CS)    n = n + hmm->M + 2;
+    if (hmm->flags & p7H_CA)    n = n + hmm->M + 2;
+    if (hmm->flags & p7H_MAP)   n = n + sizeof(int) * (hmm->M + 1);
   }
 
   if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
@@ -1497,6 +1498,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     n = hmm->M + 2;
     if (hmm->flags & p7H_RF)    { memcpy(ptr, hmm->rf,        n); ptr += n; }
+    if (hmm->flags & p7H_MMASK) { memcpy(ptr, hmm->mm,        n); ptr += n; }
     if (hmm->flags & p7H_CONS)  { memcpy(ptr, hmm->consensus, n); ptr += n; }
     if (hmm->flags & p7H_CS)    { memcpy(ptr, hmm->cs,        n); ptr += n; }
     if (hmm->flags & p7H_CA)    { memcpy(ptr, hmm->ca,        n); ptr += n; }

@@ -75,9 +75,10 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   if ((status = esl_strdup(hmm->name,   -1, &(gm->name))) != eslOK) goto ERROR;
   if ((status = esl_strdup(hmm->acc,    -1, &(gm->acc)))  != eslOK) goto ERROR;
   if ((status = esl_strdup(hmm->desc,   -1, &(gm->desc))) != eslOK) goto ERROR;
-  if (hmm->flags & p7H_RF)   strcpy(gm->rf,        hmm->rf);
-  if (hmm->flags & p7H_CONS) strcpy(gm->consensus, hmm->consensus); /* must be present, actually, so the flag test is just for symmetry w/ other optional HMM fields */
-  if (hmm->flags & p7H_CS)   strcpy(gm->cs,        hmm->cs);
+  if (hmm->flags & p7H_RF)    strcpy(gm->rf,        hmm->rf);
+  if (hmm->flags & p7H_MMASK) strcpy(gm->mm,        hmm->mm);
+  if (hmm->flags & p7H_CONS)  strcpy(gm->consensus, hmm->consensus); /* must be present, actually, so the flag test is just for symmetry w/ other optional HMM fields */
+  if (hmm->flags & p7H_CS)    strcpy(gm->cs,        hmm->cs);
   for (z = 0; z < p7_NEVPARAM; z++) gm->evparam[z] = hmm->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) gm->cutoff[z]  = hmm->cutoff[z];
   for (z = 0; z < p7_MAXABET;  z++) gm->compo[z]   = hmm->compo[z];

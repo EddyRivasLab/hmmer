@@ -206,7 +206,7 @@ emit_alignment(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM
       if (esl_sq_FormatName(sq[i], "%s-sample%d", hmm->name, i+1) != eslOK) esl_fatal("Failed to set sequence name\n");
     }
 
-  p7_tracealign_Seqs(sq, tr, N, hmm->M, optflags, &msa);
+  p7_tracealign_Seqs(sq, tr, N, hmm->M, optflags, hmm, &msa);
   eslx_msafile_Write(ofp, msa, outfmt);
   
   for (i = 0; i < N; i++) p7_trace_Destroy(tr[i]);  free(tr);
