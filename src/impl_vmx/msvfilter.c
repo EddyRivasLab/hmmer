@@ -248,7 +248,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 static int
-p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, uint8_t sc_thresh, vector unsigned char sc_threshv, FM_WINDOWLIST *windowlist)
+p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, uint8_t sc_thresh, vector unsigned char sc_threshv, P7_MSV_WINDOWLIST *windowlist)
 {
 
   vector unsigned char mpv;        /* previous row values                                       */
@@ -451,7 +451,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist, int force_ssv)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, P7_MSV_WINDOWLIST *windowlist, int force_ssv)
 {
   vector unsigned char mpv;        /* previous row values                                       */
   vector unsigned char xEv;		   /* E state: keeps max for Mk->E as we go                     */
@@ -477,8 +477,8 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   vector unsigned char tempv;                   /* work vector                                               */
 
 
-  FM_WINDOW *prev_window;
-  FM_WINDOW *curr_window;
+  P7_MSV_WINDOW *prev_window;
+  P7_MSV_WINDOW *curr_window;
   int window_start;
   int window_end;
 

@@ -589,7 +589,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const P7_MSVDATA *msvdata, FM_CF
 int
 p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
          const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata,
-         FM_WINDOWLIST *windowlist)
+         P7_MSV_WINDOWLIST *windowlist)
 {
   float P;
   float P_fm = 0.5;
@@ -766,7 +766,7 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
   //update window size and corresponding score. Filter away windows now below threshold, compressing list
   j=0;
   for(i=0; i<windowlist->count; i++) {
-    FM_WINDOW *window  =  windowlist->windows + i;
+    P7_MSV_WINDOW *window  =  windowlist->windows + i;
 
     int   diag_len     = window->length;
 
@@ -802,8 +802,8 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
   if (windowlist->count > 0) {
     j=1;
     for(i=1; i<windowlist->count; i++) {
-      FM_WINDOW *prev_window  =  windowlist->windows + i-1;
-      FM_WINDOW *window  =  windowlist->windows + i;
+      P7_MSV_WINDOW *prev_window  =  windowlist->windows + i-1;
+      P7_MSV_WINDOW *window  =  windowlist->windows + i;
 
       if (window->id == prev_window->id &&
           window->complementarity == prev_window->complementarity &&

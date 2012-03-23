@@ -67,10 +67,10 @@ ERROR:
  * Returns:   eslEMEM in event of allocation failure, otherwise eslOK
  */
 int
-fm_initWindows (FM_WINDOWLIST *list) {
+fm_initWindows (P7_MSV_WINDOWLIST *list) {
   int status;
   list->size = 1000;
-  ESL_ALLOC(list->windows, list->size * sizeof(FM_WINDOW));
+  ESL_ALLOC(list->windows, list->size * sizeof(P7_MSV_WINDOW));
   list->count = 0;
 
   return eslOK;
@@ -92,14 +92,14 @@ ERROR:
  * Returns:   NULL in event of allocation failure, otherwise pointer to
  *            the next seed diagonal
  */
-FM_WINDOW *
-fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity) {
+P7_MSV_WINDOW *
+fm_newWindow (P7_MSV_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity) {
   int status;
-  FM_WINDOW *window;
+  P7_MSV_WINDOW *window;
 
   if (list->count == list->size) {
     list->size *= 4;
-    ESL_REALLOC(list->windows, list->size * sizeof(FM_WINDOW));
+    ESL_REALLOC(list->windows, list->size * sizeof(P7_MSV_WINDOW));
   }
   window = list->windows + list->count;
 

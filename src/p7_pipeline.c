@@ -307,11 +307,11 @@ p7_pipeline_Destroy(P7_PIPELINE *pli)
  * Returns:   <eslOK>
  */
 int
-p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, P7_MSVDATA *msvdata, FM_WINDOWLIST *windowlist, int L) {
+p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, P7_MSVDATA *msvdata, P7_MSV_WINDOWLIST *windowlist, int L) {
 
   int i;
-  FM_WINDOW        *prev_window;
-  FM_WINDOW        *curr_window;
+  P7_MSV_WINDOW        *prev_window;
+  P7_MSV_WINDOW        *curr_window;
   int              window_start;
   int              window_end;
   int new_hit_cnt = 0;
@@ -1189,7 +1189,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
 
 
   P7_DOMAINDEF *ddef_app;
-  FM_WINDOWLIST windowlist;
+  P7_MSV_WINDOWLIST windowlist;
 
   fm_initWindows(&windowlist);
   ddef_app = p7_domaindef_Create(pli->r);  /* single allocation of a domaindef object that will be used
@@ -1342,12 +1342,12 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
 
   int i;
   int status;
-  ESL_SQ        *tmpseq;
-  ESL_DSQ       *subseq;
-  FM_WINDOW     window;
-  FM_WINDOWLIST windowlist;
-  FM_SEQDATA    *seqdata;
-  P7_DOMAINDEF *ddef_app;
+  ESL_SQ           *tmpseq;
+  ESL_DSQ          *subseq;
+  P7_MSV_WINDOW     window;
+  P7_MSV_WINDOWLIST windowlist;
+  FM_SEQDATA       *seqdata;
+  P7_DOMAINDEF     *ddef_app;
 
   tmpseq = esl_sq_CreateDigital(om->abc);
 

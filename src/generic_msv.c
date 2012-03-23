@@ -140,7 +140,7 @@ p7_GMSV(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float nu, f
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, FM_WINDOWLIST *windowlist)
+p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, P7_MSV_WINDOWLIST *windowlist)
 {
 
   /* A couple differences between this MSV and the standard one:
