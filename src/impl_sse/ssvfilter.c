@@ -799,7 +799,7 @@ calc_band_14(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i be
   CALC(RESET_14, STEP_BANDS_14, CONVERT_14, 14)
 }
 #endif /* MAX_BANDS > 6 */
-#if MAX_BADNS > 14
+#if MAX_BANDS > 14
 __m128i
 calc_band_15(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
@@ -851,7 +851,7 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 #if MAX_BANDS > 6
        , calc_band_7,  calc_band_8,  calc_band_9,  calc_band_10, calc_band_11, calc_band_12, calc_band_13, calc_band_14
 #endif
-#if MAX_BADNS > 14
+#if MAX_BANDS > 14
        , calc_band_15, calc_band_16, calc_band_17, calc_band_18
 #endif
   };
@@ -859,7 +859,7 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   beginv =  _mm_set1_epi8(128);
   xEv    =  beginv;
 
-  /* Use the highest number of bands but no more than MAX_BADNS */
+  /* Use the highest number of bands but no more than MAX_BANDS */
   bands = (Q + MAX_BANDS - 1) / MAX_BANDS;
 
   for (i = 0; i < bands; i++) {
