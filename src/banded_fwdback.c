@@ -1,11 +1,14 @@
 /* Banded Forward/Backward, posterior decoding, and optimal accuracy alignment,
- * with a dual-mode glocal/local model
+ * with a dual-mode glocal/local model.
  * 
  * Contents:
  *    x. Banded Forward
  *    x. Banded Backward
  *    x. Example
  *    x. Copyright and license.
+ *    
+ * See also:
+ *    p7_bandmx.[ch] : P7_BANDMX banded DP matrix structure used here.   
  */
 
 #include "easel.h"

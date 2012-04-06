@@ -45,8 +45,8 @@ typedef struct {
   float     *dp1,  *dp2;	/* main DP cells, for two banded matrices <dp1>, <dp2> */
   float     *xmx1, *xmx2;	/* special DP cells, ditto                             */
   
-  int64_t    dalloc;		/* current <dp?> allocation, denominated in "supercells" (each p7B_NSCELLS wide) */
-  int        xalloc;		/* current <xmx?> allocation, denominated in banded rows (each p7B_NXCELLS wide) */
+  int64_t    dalloc;		/* current <dp1,dp2> allocation, denominated in "supercells" (each p7B_NSCELLS wide) */
+  int        xalloc;		/* current <xmx1,xmx2> allocation, denominated in banded rows (each p7B_NXCELLS wide) */
 
   P7_GBANDS *bnd;	        /* reference copy; caller remains responsible for free'ing its bands */
 } P7_BANDMX;

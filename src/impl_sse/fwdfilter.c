@@ -186,7 +186,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 /* Function:  p7_BackwardFilter()
  * Synopsis:  Checkpointed striped vector Backward calculation, producing bands.
  *
- * Purpose: Given a target sequence <dsq> of length <L>, a query model
+ * Purpose:   Given a target sequence <dsq> of length <L>, a query model
  *            <om>, and a DP matrix <ox> resulting from a successful
  *            call to <p7_ForwardFilter()>. Calculate the Backward and
  *            posterior decoding algorithms. On each row <i=1..L>, use
