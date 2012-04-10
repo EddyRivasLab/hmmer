@@ -43,9 +43,9 @@ typedef struct {
  * 2. Functions in p7_gbands.c
  *****************************************************************/
 
-extern P7_GBANDS *p7_gbands_Create  (void);
-
-extern int        p7_gbands_SetFull (P7_GBANDS *bnd, int L, int M);
+extern P7_GBANDS *p7_gbands_Create  (int M, int L);
+extern int        p7_gbands_Reinit  (P7_GBANDS *bnd, int M, int L);
+extern int        p7_gbands_SetFull (P7_GBANDS *bnd);
 extern int        p7_gbands_Append  (P7_GBANDS *bnd, int i, int ka, int kb);
 extern int        p7_gbands_Prepend (P7_GBANDS *bnd, int i, int ka, int kb);
 extern int        p7_gbands_Reverse (P7_GBANDS *bnd);

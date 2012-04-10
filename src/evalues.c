@@ -239,15 +239,15 @@ p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda)
 int
 p7_MSVMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double *ret_mmu)
 {
-  P7_OMX  *ox      = p7_omx_Create(om->M, 0, 0); /* DP matrix: 1 row version */
-  ESL_DSQ *dsq     = NULL;
-  double  *xv      = NULL;
-  int      i;
-  float    sc, nullsc;
+  P7_FILTERMX  *ox      = p7_filtermx_Create(om->M, 0, 0); /* DP matrix: 1 row version */
+  ESL_DSQ      *dsq     = NULL;
+  double       *xv      = NULL;
+  int           i;
+  float         sc, nullsc;
 #ifndef p7_IMPL_DUMMY
-  float    maxsc   = (255 - om->base_b) / om->scale_b; /* if score overflows, use this */
+  float         maxsc   = (255 - om->base_b) / om->scale_b; /* if score overflows, use this */
 #endif
-  int      status;
+  int           status;
 
   if (ox == NULL) { status = eslEMEM; goto ERROR; }
   ESL_ALLOC(xv,  sizeof(double)  * N);
@@ -268,19 +268,21 @@ p7_MSVMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lam
       if (status != eslOK)     goto ERROR;
 
       xv[i] = (sc - nullsc) / eslCONST_LOG2;
+
+      p7_filtermx_Reuse(ox);
     }
 
   if ((status = esl_gumbel_FitCompleteLoc(xv, N, lambda, ret_mmu))  != eslOK) goto ERROR;
-  p7_omx_Destroy(ox);
+  p7_filtermx_Destroy(ox);
   free(xv);
   free(dsq);
   return eslOK;
 
  ERROR:
   *ret_mmu = 0.0;
-  if (ox  != NULL) p7_omx_Destroy(ox);
-  if (xv  != NULL) free(xv);
-  if (dsq != NULL) free(dsq);
+  if (ox) p7_filtermx_Destroy(ox);
+  if (xv) free(xv);
+  if (dsq) free(dsq);
   return status;
 
 }
@@ -312,15 +314,15 @@ p7_MSVMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lam
 int
 p7_ViterbiMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double *ret_vmu)
 {
-  P7_OMX  *ox      = p7_omx_Create(om->M, 0, 0); /* DP matrix: 1 row version */
-  ESL_DSQ *dsq     = NULL;
-  double  *xv      = NULL;
-  int      i;
-  float    sc, nullsc;
+  P7_FILTERMX  *ox      = p7_filtermx_Create(om->M, 0, 0); /* DP matrix: 1 row version */
+  ESL_DSQ      *dsq     = NULL;
+  double       *xv      = NULL;
+  int           i;
+  float         sc, nullsc;
 #ifndef p7_IMPL_DUMMY
-  float    maxsc   = (32767.0 - om->base_w) / om->scale_w; /* if score overflows, use this [J4/139] */
+  float         maxsc   = (32767.0 - om->base_w) / om->scale_w; /* if score overflows, use this [J4/139] */
 #endif
-  int      status;
+  int           status;
 
   if (ox == NULL) { status = eslEMEM; goto ERROR; }
   ESL_ALLOC(xv,  sizeof(double)  * N);
@@ -341,17 +343,19 @@ p7_ViterbiMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double
       if (status != eslOK)     goto ERROR;
 
       xv[i] = (sc - nullsc) / eslCONST_LOG2;
+
+      p7_filtermx_Reuse(ox);
     }
 
   if ((status = esl_gumbel_FitCompleteLoc(xv, N, lambda, ret_vmu))  != eslOK) goto ERROR;
-  p7_omx_Destroy(ox);
+  p7_filtermx_Destroy(ox);
   free(xv);
   free(dsq);
   return eslOK;
 
  ERROR:
   *ret_vmu = 0.0;
-  if (ox  != NULL) p7_omx_Destroy(ox);
+  if (ox  != NULL) p7_filtermx_Destroy(ox);
   if (xv  != NULL) free(xv);
   if (dsq != NULL) free(dsq);
   return status;
@@ -421,17 +425,18 @@ p7_ViterbiMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double
 int
 p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_tau)
 {
-  P7_OMX  *ox      = p7_omx_Create(om->M, 0, L);     /* DP matrix: for ForwardParser,  L rows */
-  ESL_DSQ *dsq     = NULL;
-  double  *xv      = NULL;
-  float    fsc, nullsc;		                  
-  double   gmu, glam;
-  int      status;
-  int      i;
+  P7_FILTERMX  *ox      = p7_filtermx_Create(om->M, L, ESL_MBYTES(32)); 
+  ESL_DSQ      *dsq     = NULL;
+  double       *xv      = NULL;
+  float         fsc, nullsc;		                  
+  double        gmu, glam;
+  int           i;
+  int           status;
 
+
+  if (ox == NULL) { status = eslEMEM; goto ERROR; }
   ESL_ALLOC(xv,  sizeof(double)  * N);
   ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
-  if (ox == NULL) { status = eslEMEM; goto ERROR; }
 
   p7_oprofile_ReconfigLength(om, L);
   p7_bg_SetLength(bg, L);
@@ -439,9 +444,11 @@ p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambd
   for (i = 0; i < N; i++)
     {
       if ((status = esl_rsq_xfIID(r, bg->f, om->abc->K, L, dsq)) != eslOK) goto ERROR;
-      if ((status = p7_ForwardParser(dsq, L, om, ox, &fsc))      != eslOK) goto ERROR;
+      if ((status = p7_ForwardFilter(dsq, L, om, ox, &fsc))      != eslOK) goto ERROR;
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
       xv[i] = (fsc - nullsc) / eslCONST_LOG2;
+
+      p7_filtermx_Reuse(ox);
     }
   if ((status = esl_gumbel_FitComplete(xv, N, &gmu, &glam)) != eslOK) goto ERROR;
 
@@ -454,14 +461,14 @@ p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambd
   
   free(xv);
   free(dsq);
-  p7_omx_Destroy(ox);
+  p7_filtermx_Destroy(ox);
   return eslOK;
 
  ERROR:
   *ret_tau = 0.;
   if (xv  != NULL) free(xv);
   if (dsq != NULL) free(dsq);
-  if (ox  != NULL) p7_omx_Destroy(ox);
+  if (ox  != NULL) p7_filtermx_Destroy(ox);
   return status;
 }
 /*-------------- end, determining individual parameters ---------*/

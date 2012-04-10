@@ -533,9 +533,9 @@ p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, P7_REFMX *bck, P
 	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* ML */
 	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* MG */
 	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* IL */
-	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp+=3; bckp+=3; /* IG; skip DL,DG */
-	  *ppp++ = 0.0;		/* DL */
-	  *ppp++ = 0.0;		/* DG */
+	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp+=3; bckp+=3; /* IG */
+	  *ppp++ = 0.0f;		/* DL */
+	  *ppp++ = 0.0f;		/* DG */
 	}
       *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* ML_m */
       *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* MG_m */
@@ -586,7 +586,6 @@ p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, P7_REFMX *bck, P
  * 4. MEA alignment
  *****************************************************************/
 
-#define P7_DELTAT(val, tsc) ( ((tsc) == -eslINFINITY) ? -eslINFINITY : (val))
 static int traceback_mea(const P7_PROFILE *gm, const P7_REFMX *pp, const P7_REFMX *rmx, P7_TRACE *tr);
 
 /* Function:  p7_ReferenceAlignMEA()

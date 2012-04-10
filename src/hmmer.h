@@ -87,6 +87,9 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 /* Option flags when creating faux traces with p7_trace_FauxFromMSA() */
 #define p7_MSA_COORDS	       (1<<0) /* default: i = unaligned seq residue coords     */
 
+/* MEA traceback routines have to check consistency, all path transitions must be nonzero */
+#define P7_DELTAT(val, tsc) ( ((tsc) == -eslINFINITY) ? -eslINFINITY : (val))
+
 
 /*****************************************************************
  * 1. P7_HMM: a core model.

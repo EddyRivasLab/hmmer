@@ -496,7 +496,7 @@ main(int argc, char **argv)
   p7_profile_SetLength(gm, L);
 
   gxc = p7_gmxchk_Create(gm->M, L, ESL_MBYTES(32));
-  bnd = p7_gbands_Create();
+  bnd = p7_gbands_Create(gm->M, L);
 
   /* Baseline time. */
   esl_stopwatch_Start(w);
@@ -508,6 +508,8 @@ main(int argc, char **argv)
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
+      p7_gbands_Reinit(bnd, gm->M, L);
+
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
       p7_GForwardCheckpointed (dsq, L, gm, gxc, &sc);
       if (! esl_opt_GetBoolean(go, "-F"))
@@ -556,6 +558,7 @@ scoring_comparison(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, P7_GMXCHK *g
   float fsc1, fsc2;
   float bsc1, bsc2;
 
+  if ( p7_gbands_Reinit(bnd, gm->M, L)                  != eslOK) esl_fatal(msg);
   if ( p7_gmx_GrowTo(gx, gm->M, L)                      != eslOK) esl_fatal(msg);
   if ( p7_gmxchk_GrowTo(gxc, gm->M, L)                  != eslOK) esl_fatal(msg);
 
@@ -582,7 +585,7 @@ utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc,
   ESL_DSQ   *dsq   = malloc(sizeof(ESL_DSQ) * (L+2));
   P7_GMX    *gx    = p7_gmx_Create(gm->M, 100);
   P7_GMXCHK *gxc   = p7_gmxchk_Create(gm->M, 100, ESL_MBYTES(32));
-  P7_GBANDS *bnd   = p7_gbands_Create();
+  P7_GBANDS *bnd   = p7_gbands_Create(gm->M, L);
   int        idx;
 
   for (idx = 0; idx < nseq; idx++)
@@ -605,13 +608,12 @@ utest_emitseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc,
   ESL_SQ    *sq    = esl_sq_CreateDigital(abc);
   P7_GMX    *gx    = p7_gmx_Create(gm->M, 100);
   P7_GMXCHK *gxc   = p7_gmxchk_Create(gm->M, 100, ESL_MBYTES(32));
-  P7_GBANDS *bnd   = p7_gbands_Create();
+  P7_GBANDS *bnd   = p7_gbands_Create(gm->M, 100);
   int        idx;
 
   for (idx = 0; idx < nseq; idx++)
     {
       if ( p7_ProfileEmit(rng, hmm, gm, bg, sq, NULL) != eslOK) esl_fatal(msg);
-      
       scoring_comparison(sq->dsq, sq->n, gm, gx, gxc, bnd);
     }
 
@@ -764,7 +766,7 @@ main(int argc, char **argv)
   fwd = p7_gmx_Create(gm->M, 400);
   bck = p7_gmx_Create(gm->M, 400);
   gxc = p7_gmxchk_Create(gm->M, 400, ESL_MBYTES(32));
-  bnd = p7_gbands_Create();
+  bnd = p7_gbands_Create(gm->M, 400);
 
   while ( (status = esl_sqio_Read(sqfp, sq)) != eslEOF)
     {
@@ -775,6 +777,7 @@ main(int argc, char **argv)
       p7_gmx_GrowTo   (fwd, gm->M, sq->n);
       p7_gmx_GrowTo   (bck, gm->M, sq->n);
       p7_gmxchk_GrowTo(gxc, gm->M, sq->n);
+      p7_gbands_Reinit(bnd, gm->M, sq->n);
 
       //printf("Allocation: %ld\n", p7_gmxchk_Sizeof(fwdc));
 

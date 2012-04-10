@@ -1124,7 +1124,7 @@ main(int argc, char **argv)
   p7_oprofile_Convert(gm, om);
 
   ox  = p7_filtermx_Create(om->M, L, ESL_MBYTES(32));
-  bnd = p7_gbands_Create();
+  bnd = p7_gbands_Create(om->M, L);
 
   /* Baseline time. */
   esl_stopwatch_Start(w);
@@ -1195,10 +1195,10 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
   int          tL     = 0;
   ESL_SQ      *sq     = esl_sq_CreateDigital(abc);
   P7_FILTERMX *ox     = p7_filtermx_Create(M, L, ramlimit);
-  P7_GMX      *fwd    = p7_gmx_Create(M, L);
-  P7_GMX      *bck    = p7_gmx_Create(M, L);
-  P7_GMX      *pp     = p7_gmx_Create(M, L);
-  P7_GBANDS   *bnd    = p7_gbands_Create();
+  P7_GMX      *fwd    = p7_gmx_Create   (M, L);
+  P7_GMX      *bck    = p7_gmx_Create   (M, L);
+  P7_GMX      *pp     = p7_gmx_Create   (M, L);
+  P7_GBANDS   *bnd    = p7_gbands_Create(M, L);
   float        tol2   = ( p7_logsum_IsSlowExact() ? 0.001  : 0.1);   /* absolute agreement of reference (log-space) and vector (prob-space) depends on whether we're using LUT-based logsum() */
   float fsc1, fsc2;
   float bsc2;
@@ -1450,7 +1450,7 @@ main(int argc, char **argv)
    */
   ox  = p7_filtermx_Create(gm->M, 500, ESL_MBYTES(32));  
   gx  = p7_gmx_Create     (gm->M, 500);
-  bnd = p7_gbands_Create();
+  bnd = p7_gbands_Create(gm->M, 500);
 #ifdef p7_DEBUGGING
   /* When the p7_DEBUGGING flag is up, <ox> matrix has the ability to
    * record generic, complete <fwd>, <bck>, and <pp> matrices, for
@@ -1468,8 +1468,9 @@ main(int argc, char **argv)
       p7_profile_SetLength      (gm, sq->n);
       p7_bg_SetLength(bg,            sq->n);
 
-      p7_filtermx_GrowTo(ox, om->M, sq->n); 
-      p7_gmx_GrowTo     (gx, gm->M, sq->n); 
+      p7_filtermx_GrowTo(ox,  om->M, sq->n); 
+      p7_gmx_GrowTo     (gx,  gm->M, sq->n); 
+      p7_gbands_Reinit  (bnd, gm->M, sq->n); 
 
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
     

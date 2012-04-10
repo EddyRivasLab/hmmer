@@ -29,40 +29,49 @@
 #define p7B_G  5
 #define p7B_C  6
 
-#define p7B_FORWARD  1		
-#define p7B_BACKWARD 2		
-#define p7B_DECODING 3
-#define p7B_ALIGN    4
-
 /* The P7_BANDMX object.
- *                          dp1       dp2
- * p7_BandedForward()       Fwd        -
- * p7_BandedBackward()      Fwd       Bck
- * p7_BandedDecoding()      Fwd       PP
- * p7_BandedAlignment()     OA        PP
  */
 typedef struct {
-  float     *dp1,  *dp2;	/* main DP cells, for two banded matrices <dp1>, <dp2> */
-  float     *xmx1, *xmx2;	/* special DP cells, ditto                             */
+  float     *dp;      /* main DP supercells; there are <bnd->ncell> of these, each containing p7B_NSCELLS values     */
+  float     *xmx;     /* special DP supercells; there are <bnd->nrow+bnd->nseg> of these, each w/ p7B_NXCELLS values */
   
-  int64_t    dalloc;		/* current <dp1,dp2> allocation, denominated in "supercells" (each p7B_NSCELLS wide) */
-  int        xalloc;		/* current <xmx1,xmx2> allocation, denominated in banded rows (each p7B_NXCELLS wide) */
+  int64_t    dalloc;  /* current <dp> allocation, denominated in "supercells" (each p7B_NSCELLS wide) */
+  int        xalloc;  /* current <xmx> allocation, denominated in banded rows (each p7B_NXCELLS wide) */
 
-  P7_GBANDS *bnd;	        /* reference copy; caller remains responsible for free'ing its bands */
+  P7_GBANDS *bnd;     /* reference copy; caller remains responsible for free'ing its bands */
 } P7_BANDMX;
 
 
 extern P7_BANDMX *p7_bandmx_Create (P7_GBANDS *bnd);
 extern size_t     p7_bandmx_Sizeof (P7_BANDMX *bmx);
-extern int        p7_bandmx_GrowTo (P7_BANDMX *bmx, P7_GBANDS *bnd);
+extern int        p7_bandmx_Reinit (P7_BANDMX *bmx, P7_GBANDS *bnd);
 extern int        p7_bandmx_Reuse  (P7_BANDMX *bmx);
 extern void       p7_bandmx_Destroy(P7_BANDMX *bmx);
 
 
 extern char *p7_bandmx_DecodeSpecial(int type);
-extern int   p7_bandmx_Dump(FILE *ofp, P7_BANDMX *bmx, int which);
+extern int   p7_bandmx_Dump(FILE *ofp, P7_BANDMX *bmx);
 
 #endif /*P7_BANDMX_INCLUDED*/
+
+/*****************************************************************
+ * 3. Notes
+ *****************************************************************/
+
+/* See notes in p7_gbands.h for layout of bands, and idioms for
+ * traversing bands (same idioms apply for traversing a banded
+ * matrix).
+ * 
+ * For each banded segment i..j, we store an extra xmx row i-1.  This
+ * allows us to do posterior decoding on {B,L,G,N,C,J}(i-1), values
+ * that we may want. For example, the posterior probability that a
+ * domain starts at residue i is in B(i-1); specifically that a local
+ * vs glocal alignment starts at i is in L(i-1), G(i-1) respectively;
+ * and the single per-domain score for one domain within i..j can be
+ * estimated as a function of differencing N/C/J(i-1) against N/C/J(j).
+ * xref J9/128-130.
+ */
+
 /*****************************************************************
  * @LICENSE@
  * 
