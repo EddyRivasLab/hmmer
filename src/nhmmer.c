@@ -898,12 +898,6 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
   while (sstatus == eslOK ) {
       block = (ESL_SQ_BLOCK *) newBlock;
 
-      //reset block as an empty vessel
-      if (block->complete) // don't want to reset the first sequence if it's about to be used to set the prefix for the next read.
-        esl_sq_Reuse(block->list + 0);
-      for (i=1; i<=block->count; i++)
-          esl_sq_Reuse(block->list + i);
-
       sstatus = esl_sqio_ReadBlock(dbfp, block, NHMMER_MAX_RESIDUE_COUNT, TRUE);
 
       block->first_seqidx = info->pli->nseqs;
