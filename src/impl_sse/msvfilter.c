@@ -459,8 +459,9 @@ ERROR:
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, P7_MSV_WINDOWLIST *windowlist, int force_ssv)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, P7_MSV_WINDOWLIST *windowlist)
 {
+#ifdef ALLOW_MSV
   register __m128i mpv;        /* previous row values                                       */
   register __m128i xEv;		   /* E state: keeps max for Mk->E as we go                     */
   register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
@@ -479,12 +480,11 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   __m128i tecv;                    /* vector for E->C  cost                                     */
   __m128i tjbmv;                    /* vector for [JN]->B->M move cost                                  */
   __m128i basev;                   /* offset for scores                                         */
-  __m128i sc_threshv;               /* pushes value to saturation if it's above pthresh  */
   __m128i jthreshv;                /* pushes value to saturation if it's above pthresh  */
   __m128i ceilingv;                /* saturated simd value used to test for overflow           */
   __m128i tempv;                   /* work vector                                               */
+#endif
 
-  float nullsc;
 
   /*
    * Computing the score required to let P meet the F1 prob threshold
@@ -501,27 +501,34 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
    *  usc *= om->scale_b
    *  S = usc + om->tec_b + om->tjb_b + om->base_b
    *
-   *  Here, I compute threshold with length model based on max_length.  Usually, the
-   *  length of a window returned by this scan will be longer than max_length.  Doesn't
-   *  really matter - in any case, both the bg and om models will change with roughly
+   *  Here, I compute threshold with length model based on max_length.  Doesn't
+   *  matter much - in any case, both the bg and om models will change with roughly
    *  1 bit for each doubling of the length model, so they offset.
    */
+  float nullsc;
   float invP = esl_gumbel_invsurv(P, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  __m128i sc_threshv;
+  uint8_t sc_thresh;
+
   p7_bg_SetLength(bg, om->max_length);
   p7_oprofile_ReconfigMSVLength(om, om->max_length);
   p7_bg_NullOne  (bg, dsq, om->max_length, &nullsc);
 
-  uint8_t sc_thresh = (int) ceil( ( ( nullsc  + (invP * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b );
+  sc_thresh = (int) ceil( ( ( nullsc  + (invP * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b );
   sc_threshv = _mm_set1_epi8((int8_t) 255 - sc_thresh);
 
-  uint8_t jthresh = om->base_b + om->tjb_b + om->tec_b + 1;  //+1 because the score of a pass through the model must be positive to contribute to MSV score
+#ifdef ALLOW_MSV
+  //see ~wheelert/notebook/2012/0326-nhmmer-msv-ssv/00NOTES  - notes on 'Mar 31'
+  uint8_t jthresh = om->base_b + om->tec_b + 1;
   jthreshv = _mm_set1_epi8((int8_t) 255 - (int)jthresh);
 
 
   if (force_ssv || (sc_thresh < jthresh)) {
+#endif
 
     p7_SSVFilter_longtarget(dsq, L, om, ox, msvdata, (uint8_t)sc_thresh, sc_threshv, windowlist);
 
+#ifdef ALLOW_MSV
   } else {
 
 	  /*e.g. if base=190, tec=3, tjb=22 then a score of 217 would be required for a
@@ -690,6 +697,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
 	  } /* end loop over sequence residues 1..L */
   }
+#endif
 
   return eslOK;
 

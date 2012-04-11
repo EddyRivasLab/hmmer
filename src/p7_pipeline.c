@@ -325,7 +325,6 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, P7_MSVDATA *msvdata, P7_MSV_WINDO
     window_start = ESL_MAX( 1,   curr_window->n - ( om->max_length * (0.1 + msvdata->prefix_lengths[curr_window->k - curr_window->length + 1]  )) ) ;
     window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + (om->max_length * (0.1 + msvdata->suffix_lengths[curr_window->k] ) ) )   ;
 
-
     curr_window->n = window_start;
     curr_window->length = window_end - window_start + 1;
   }
@@ -648,7 +647,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   /* Base null model score (we could calculate this in NewSeq(), for a scan pipeline) */
   p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
 
-
   /* First level filter: the MSV filter, multihit with <om> */
   p7_MSVFilter(sq->dsq, sq->n, om, pli->oxf, &usc);
   seq_score = (usc - nullsc) / eslCONST_LOG2;
@@ -947,14 +945,13 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   if (pli->do_biasfilter) {
       p7_bg_SetLength(bg, window_len);
       p7_bg_FilterScore(bg, subseq, window_len, &bias_filtersc);
-      bias_filtersc -= nullsc;
+      bias_filtersc -= nullsc; // doing this because I'll be modifying the bias part of filtersc based on length, then adding nullsc back in.
       filtersc =  nullsc + (bias_filtersc * (float)F1_L/window_len);
-
       seq_score = (usc - filtersc) / eslCONST_LOG2;
       P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
       if (P > pli->F1) return eslOK;
   } else {
-    bias_filtersc = 0;
+    bias_filtersc = 0; // mullsc will be added in later
   }
   pli->n_past_bias++;
   pli->pos_past_bias += window_len;
@@ -964,7 +961,7 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
 
 
   /* Second level filter: ViterbiFilter(), multihit with <om> */
-  filtersc =  nullsc + (bias_filtersc * (float)F2_L/window_len);
+  filtersc =  nullsc + (bias_filtersc * ( F2_L>window_len ? 1.0 : (float)F2_L/window_len) );
   p7_omx_GrowTo(pli->oxf, om->M, 0, window_len);
 
   p7_ViterbiFilter(subseq, window_len, om, pli->oxf, &vfsc);
@@ -978,7 +975,7 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
 
   /* Parse it with Forward and obtain its real Forward score. */
   p7_ForwardParser(subseq, window_len, om, pli->oxf, &fwdsc);
-  filtersc =  nullsc + (bias_filtersc * (float)F3_L/window_len);
+  filtersc =  nullsc + (bias_filtersc * ( F3_L>window_len ? 1.0 : (float)F3_L/window_len) );
   seq_score = (fwdsc - filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
   if (P > pli->F3 ) return eslOK;
@@ -1202,7 +1199,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
 
 
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
-  //p7_omx_GrowTo(pli->oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
   p7_omx_GrowTo(pli->oxf, om->M, 0, om->max_length);    /* expand the one-row omx if needed */
 
   /* Set false target length. This is a conservative estimate of the length of window that'll
@@ -1210,11 +1206,12 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
    * that we would miss if we left length parameters set to the full target length */
   p7_oprofile_ReconfigMSVLength(om, om->max_length);
 
-  /* First level filter: the MSV filter, multihit with <om>.
-   * This variant of MSV will scan a long sequence and find
+
+  /* First level filter: the SSV filter, with <om>.
+   * This variant of SSV will scan a long sequence and find
    * short high-scoring regions.
    */
-  p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, msvdata, bg, pli->F1, &windowlist, FALSE); /* FALSE: don't force SSV */
+  p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, msvdata, bg, pli->F1, &windowlist);
 
 
 
@@ -1274,14 +1271,11 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
     p7_oprofile_ReconfigMSVLength(om, window_len);
     p7_MSVFilter(subseq, window_len, om, pli->oxf, &usc);
 
-
     P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
     if (P > pli->F1 ) continue;
 
-
     pli->n_past_msv++;
     pli->pos_past_msv += window_len;
-
 
     status = postMSV_LongTarget(pli, om, bg, hitlist, seqidx, windowlist.windows[i].n, window_len, tmpseq, ddef_app,
                       subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc, fm_nocomplement);

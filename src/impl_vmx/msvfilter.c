@@ -451,8 +451,9 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, P7_MSV_WINDOWLIST *windowlist, int force_ssv)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, P7_MSV_WINDOWLIST *windowlist)
 {
+#ifdef ALLOW_MSV
   vector unsigned char mpv;        /* previous row values                                       */
   vector unsigned char xEv;		   /* E state: keeps max for Mk->E as we go                     */
   vector unsigned char xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
@@ -472,19 +473,10 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   vector unsigned char tecv;                    /* vector for E->C  cost                                     */
   vector unsigned char tjbmv;                    /* vector for [JN]->B->M move cost                                  */
   vector unsigned char basev;                   /* offset for scores                                         */
-  vector unsigned char sc_threshv;               /* pushes value to saturation if it's above pthresh  */
   vector unsigned char jthreshv;                /* pushes value to saturation if it's above pthresh  */
   vector unsigned char tempv;                   /* work vector                                               */
+#endif
 
-
-  P7_MSV_WINDOW *prev_window;
-  P7_MSV_WINDOW *curr_window;
-  int window_start;
-  int window_end;
-
-  float nullsc;
-  float bias_sc;
-  float biasP;
 
   /*
    * Computing the score required to let P meet the F1 prob threshold
@@ -501,23 +493,33 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
    *  usc *= om->scale_b
    *  S = usc + om->tec_b + om->tjb_b + om->base_b
    *
-   *  Here, I compute threshold with length model based on max_length.  Usually, the
-   *  length of a window returned by this scan will be longer than max_length.  Doesn't
-   *  really matter - in any case, both the bg and om models will change with roughly
+   *  Here, I compute threshold with length model based on max_length.  Doesn't
+   *  matter much - in any case, both the bg and om models will change with roughly
    *  1 bit for each doubling of the length model, so they offset.
    */
+  float nullsc;
   float invP = esl_gumbel_invsurv(P, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  vector unsigned char sc_threshv;               /* pushes value to saturation if it's above pthresh  */
+  int sc_thresh;
+
   p7_bg_SetLength(bg, om->max_length);
   p7_oprofile_ReconfigMSVLength(om, om->max_length);
   p7_bg_NullOne  (bg, dsq, om->max_length, &nullsc);
-  int sc_thresh = (int) ceil( ( ( nullsc  + (invP * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b  );
+
+  sc_thresh = (int) ceil( ( ( nullsc  + (invP * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b  );
   sc_threshv = esl_vmx_set_u8( (int8_t)sc_thresh - 1);
 
-  int jthresh = om->base_b + om->tjb_b + om->tec_b + 1;  //+1 because the score of a pass through the model must be positive to contribute to MSV score
+#ifdef ALLOW_MSV
+  int jthresh = om->base_b + om->tec_b + 1;  //+1 because the score of a pass through the model must be positive to contribute to MSV score
   jthreshv = esl_vmx_set_u8( (int8_t)jthresh - 1);
 
   if (force_ssv || (sc_thresh < jthresh)) {
+#endif
+
 	   p7_SSVFilter_longtarget(dsq, L, om, ox, msvdata, (uint8_t)sc_thresh, sc_threshv, windowlist);
+
+#ifdef ALLOW_MSV
+
   } else {
 	  /*e.g. if base=190, tec=3, tjb=22 then a score of 217 would be required for a
 	   * second ssv-hit to improve the score of an earlier one. Usually,
@@ -661,11 +663,10 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  } /* end loop over sequence residues 1..L */
   }
 
+#endif
+
   return eslOK;
 
-
-  ERROR:
-  ESL_EXCEPTION(eslEMEM, "Error allocating memory for hit list\n");
 
 }
 /*------------------ end, p7_MSVFilter_longtarget() ------------------------*/
