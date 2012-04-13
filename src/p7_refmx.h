@@ -24,7 +24,7 @@
 #define p7R_DL 4
 #define p7R_DG 5
 
-#define p7R_NXCELLS 7
+#define p7R_NXCELLS 9
 #define p7R_E  0
 #define p7R_N  1
 #define p7R_J  2
@@ -32,37 +32,39 @@
 #define p7R_L  4
 #define p7R_G  5
 #define p7R_C  6
+#define p7R_JJ 7	/* JJ (J emission on transition) only needed in decoding matrix */
+#define p7R_CC 8	/* CC, ditto */
 
 /* the same data structure gets used in several DP contexts.
  * the <type> field gets set by each algorithm implementation,
  * so p7_refmx_Validate() knows what type of DP matrix it is.
  */
-#define p7R_UNSET    0
-#define p7R_FORWARD  1
-#define p7R_BACKWARD 2
-#define p7R_DECODING 3
-#define p7R_MEA      4
-#define p7R_VITERBI  5
+#define p7R_UNSET     0
+#define p7R_FORWARD   1
+#define p7R_BACKWARD  2
+#define p7R_DECODING  3
+#define p7R_ALIGNMENT 4
+#define p7R_VITERBI   5
 
 
 /* Layout of each row dp[i] of the P7_REFMX dynamic programming matrix:
- * dp[i]:   [ML MG IL IG DL DG] [ML MG IL IG DL DG] [ML MG IL IG DL DG]  ...  [ML MG IL IG DL DG]  [E  N  J  B  L  G  C]
+ * dp[i]:   [ML MG IL IG DL DG] [ML MG IL IG DL DG] [ML MG IL IG DL DG]  ...  [ML MG IL IG DL DG]  [E  N  J  B  L  G  C JJ CC]
  *     k:   |------- 0 -------| |------- 1 -------| |------- 2 -------|  ...  |------- M -------|  
- *          |--------------------------------- (M+1)*p7R_NSCELLS -------------------------------|  |--- p7R_NXCELLS --|
+ *          |--------------------------------- (M+1)*p7R_NSCELLS -------------------------------|  |------ p7R_NXCELLS ------|
  * The Validate() routine checks the following pattern: where * = -inf, . = calculated value, 0 = 0:
  * Forward:
- *     0:    *  *  *  *  *  *    *  *  *  *  *  *    *  *  *  *  *  *          *  *  *  *  *  *     *  0  *  .  .  .  *     
- *     1:    *  *  *  *  *  *    .  .  *  *  *  *    .  .  *  *  .  .          .  .  *  *  .  .     .  .  .  .  .  .  . 
- *  2..L:    *  *  *  *  *  *    .  .  .  .  *  *    .  .  .  .  .  .          .  .  *  *  .  .     .  .  .  .  .  .  .
+ *     0:    *  *  *  *  *  *    *  *  *  *  *  *    *  *  *  *  *  *          *  *  *  *  *  *     *  0  *  .  .  .  *  *  *   
+ *     1:    *  *  *  *  *  *    .  .  *  *  *  *    .  .  *  *  .  .          .  .  *  *  .  .     .  .  .  .  .  .  .  *  *
+ *  2..L:    *  *  *  *  *  *    .  .  .  .  *  *    .  .  .  .  .  .          .  .  *  *  .  .     .  .  .  .  .  .  .  *  * 
  * Backward:
- *      0:   *  *  *  *  *  *    *  *  *  *  *  *    *  *  *  *  *  *          *  *  *  *  *  *     *  .  *  .  .  .  *
- * 1..L-1:   *  *  *  *  *  *    .  .  .  .  .  .    .  .  .  .  .  .          .  .  *  *  .  .     .  .  .  .  .  .  . 
- *      L:   *  *  *  *  *  *    .  .  *  *  .  .    .  .  *  *  .  .          .  .  *  *  .  .     .  *  *  *  *  *  .  
+ *      0:   *  *  *  *  *  *    *  *  *  *  *  *    *  *  *  *  *  *          *  *  *  *  *  *     *  .  *  .  .  .  *  *  *
+ * 1..L-1:   *  *  *  *  *  *    .  .  .  .  .  .    .  .  .  .  .  .          .  .  *  *  .  .     .  .  .  .  .  .  .  *  *
+ *      L:   *  *  *  *  *  *    .  .  *  *  .  .    .  .  *  *  .  .          .  .  *  *  .  .     .  *  *  *  *  *  .  *  *
  * Decoding:
- *      0:   0  0  0  0  0  0    0  0  0  0  0  0    0  0  0  0  0  0          0  0  0  0  0  0     0  0  0  0  0  0  0
- *      1:   0  0  0  0  0  0    .  .  0  0  0  0    .  .  0  0  .  .          .  .  0  0  .  .     0  .  0  0  0  0  0
- * 2..L-1:   0  0  0  0  0  0    .  .  .  .  0  0    .  .  .  .  .  .          .  .  0  0  .  .     0  .  .  0  0  0  .
- *      L:   0  0  0  0  0  0    .  .  0  0  0  0    .  .  0  0  .  .          .  .  0  0  .  .     0  0  0  0  0  0  .
+ *      0:   0  0  0  0  0  0    0  0  0  0  0  0    0  0  0  0  0  0          0  0  0  0  0  0     0  0  0  0  0  0  0  0  0 
+ *      1:   0  0  0  0  0  0    .  .  0  0  0  0    .  .  0  0  .  .          .  .  0  0  .  .     0  .  0  0  0  0  0  0  0  
+ * 2..L-1:   0  0  0  0  0  0    .  .  .  .  0  0    .  .  .  .  .  .          .  .  0  0  .  .     0  .  .  0  0  0  .  .  .
+ *      L:   0  0  0  0  0  0    .  .  0  0  0  0    .  .  0  0  .  .          .  .  0  0  .  .     0  0  0  0  0  0  .  0  .
  *
  * rationale:
  *   k=0 columns are only present for indexing k=1..M conveniently

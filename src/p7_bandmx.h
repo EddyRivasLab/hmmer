@@ -20,7 +20,7 @@
 #define p7B_DL 4
 #define p7B_DG 5
 
-#define p7B_NXCELLS 7
+#define p7B_NXCELLS 9
 #define p7B_E  0
 #define p7B_N  1
 #define p7B_J  2
@@ -28,6 +28,8 @@
 #define p7B_L  4
 #define p7B_G  5
 #define p7B_C  6
+#define p7B_JJ 7	/* in decoding (only) we separately decode J occupancy vs JJ emission */
+#define p7B_CC 8	/* ditto for C */
 
 /* The P7_BANDMX object.
  */
@@ -50,7 +52,8 @@ extern void       p7_bandmx_Destroy(P7_BANDMX *bmx);
 
 
 extern char *p7_bandmx_DecodeSpecial(int type);
-extern int   p7_bandmx_Dump(FILE *ofp, P7_BANDMX *bmx);
+extern int   p7_bandmx_Dump      (FILE *ofp, P7_BANDMX *bmx);
+extern int   p7_bandmx_DumpWindow(FILE *ofp, P7_BANDMX *bmx, int istart, int iend, int kstart, int kend);
 
 #endif /*P7_BANDMX_INCLUDED*/
 
@@ -63,7 +66,7 @@ extern int   p7_bandmx_Dump(FILE *ofp, P7_BANDMX *bmx);
  * matrix).
  * 
  * For each banded segment i..j, we store an extra xmx row i-1.  This
- * allows us to do posterior decoding on {B,L,G,N,C,J}(i-1), values
+ * allows us to do posterior decoding on {NJBLGC,JJ,CC}(i-1), values
  * that we may want. For example, the posterior probability that a
  * domain starts at residue i is in B(i-1); specifically that a local
  * vs glocal alignment starts at i is in L(i-1), G(i-1) respectively;

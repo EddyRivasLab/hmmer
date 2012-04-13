@@ -2,8 +2,11 @@
  * with a dual-mode glocal/local model.
  * 
  * Contents:
- *    x. Banded Forward
- *    x. Banded Backward
+ *    1. Banded Forward
+ *    2. Banded Backward
+ *    3. Banded posterior decoding
+ *    4. Banded alignment (MEG, gamma-centroid)
+ *    5. Banded alignment traceback 
  *    x. Example
  *    x. Copyright and license.
  *    
@@ -17,12 +20,34 @@
 #include "hmmer.h"
 #include "p7_bandmx.h"
 
-static int traceback_mea(const P7_PROFILE *gm, const P7_BANDMX *bmd, const P7_BANDMX *bma, P7_TRACE *tr);
+static int traceback(const P7_PROFILE *gm, const P7_BANDMX *bmd, const P7_BANDMX *bma, P7_TRACE *tr);
 
 /*****************************************************************
  * 1. Banded Forward
  *****************************************************************/
 
+/* Function:  p7_BandedForward()
+ * Synopsis:  Forward algorithm, in banded DP
+ *
+ * Purpose:   Compute the Forward algorithm for comparing query profile <gm>
+ *            to digitized target sequence <dsq> of length <L>, using the
+ *            caller-allocated banded DP matrix space provided in <bmf>.
+ *            
+ *            Upon return, <bmf> contains the computed Forward matrix,
+ *            and <opt_sc> optionally contains the Forward raw lod
+ *            score in nats.
+ *
+ * Args:      dsq    - target sequence, digital, 1..L
+ *            L      - length of <dsq> in residues
+ *            gm     - query profile
+ *            bmf    - RESULT:    Forward matrix (caller allocates the space)
+ *            opt_sc - optRETURN: Forward raw lod score, nats
+ *
+ * Returns:   <eslOK> on success, and <*opt_sc> is the Forward score,
+ *            and <bmf> contains the computed Forward matrix.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
 int 
 p7_BandedForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bmf, float *opt_sc)
 {
@@ -70,6 +95,8 @@ p7_BandedForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bmf
       *xpc++ = xL  = xB + gm->xsc[p7P_B][0]; /* B->L */
       *xpc++ = xG  = xB + gm->xsc[p7P_B][1]; /* B->G */
       *xpc++ = xC  = xC + ( ia == last_ib+1 ? 0.0f : (ia - last_ib - 1) * gm->xsc[p7P_C][p7P_LOOP]);
+      *xpc++       = -eslINFINITY; /* JJ: this space only used in a Decoding matrix. */
+      *xpc++       = -eslINFINITY; /* CC: this space only used in a Decoding matrix. */
 
       for (i = ia; i <= ib; i++)
 	{
@@ -122,6 +149,8 @@ p7_BandedForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bmf
 	  *xpc++ = xL = xB + gm->xsc[p7P_B][0]; 
 	  *xpc++ = xG = xB + gm->xsc[p7P_B][1]; 
 	  *xpc++ = xC = p7_FLogsum( xE + gm->xsc[p7P_E][p7P_MOVE],  xC + gm->xsc[p7P_C][p7P_LOOP]);
+	  *xpc++      = -eslINFINITY; /* JJ: this space only used in a Decoding matrix. */
+	  *xpc++      = -eslINFINITY; /* CC: this space only used in a Decoding matrix. */
 
 	  dpp = last_dpc;	/* this skips any right overhang on the previous row, so dpp advances (if necessary) to start of curr row */
 	  kap = kac;
@@ -139,6 +168,28 @@ p7_BandedForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bmf
  * 2. Banded Backward
  *****************************************************************/
 
+/* Function:  p7_BandedBackward()
+ * Synopsis:  Backward algorithm, in banded DP
+ *
+ * Purpose:   Compute the Backward algorithm for comparing query profile <gm>
+ *            to digitized target sequence <dsq> of length <L>, using the
+ *            caller-allocated banded DP matrix space provided in <bmb>.
+ *            
+ *            Upon return, <bmb> contains the computed Backward matrix,
+ *            and <opt_sc> optionally contains the Backward raw lod
+ *            score in nats.
+ *
+ * Args:      dsq    - target sequence, digital, 1..L
+ *            L      - length of <dsq> in residues
+ *            gm     - query profile
+ *            bmf    - RESULT:    Backward matrix (caller allocates the space)
+ *            opt_sc - optRETURN: Backward raw lod score, nats
+ *
+ * Returns:   <eslOK> on success, and <*opt_sc> is the Backward score,
+ *            and <bmf> contains the computed Backward matrix.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
 int
 p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bmb, float *opt_sc)
 {
@@ -241,7 +292,9 @@ p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bm
 	  else                         { mgn = mln = -eslINFINITY; }
 	  
 	  /* xC,xJ,xN,xL,xG already contain their contribution from next row i+1 */
-	  *xc-- = xC;
+	  *xc-- = -eslINFINITY;	/* CC only stored in a Decoding matrix. */
+	  *xc-- = -eslINFINITY; /* JJ only stored in a Decoding matrix. */
+	  *xc-- = xC;		
 	  *xc-- = xG;					 // delayed store; was calculated on prv row i+1
 	  *xc-- = xL;					 // delayed store, ditto
 	  *xc-- = xB = p7_FLogsum( xL + gm->xsc[p7P_B][0],
@@ -329,6 +382,8 @@ p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bm
        * Others (B,J,N,E) still need a calculation.
        * xB, xJ, xN need to be set here, to be ready for init of next segment.
        */
+      *xc-- = -eslINFINITY;	/* CC only stored in a Decoding matrix. */
+      *xc-- = -eslINFINITY; /* JJ only stored in a Decoding matrix. */
       *xc-- = xC;
       *xc-- = xG;
       *xc-- = xL;
@@ -349,19 +404,24 @@ p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bm
  *****************************************************************/
 
 /* Function:  p7_BandedDecoding()
- * Synopsis:  Posterior decoding, banded DP.
+ * Synopsis:  Posterior decoding, in banded DP.
  *
  * Purpose:   Given a banded Forward and Backward matrices <bmf> and
- *            <bmb>, compute and store a posterior decoding matrix in
- *            <bmd>.
+ *            <bmb>, for a comparison of query profile <gm> to a target
+ *            sequence that received the overall raw lod score <totsc>,
+ *            compute and store a posterior decoding matrix in
+ *            <bmd> (which caller has allocated).
  *
- * Args:      
+ * Args:      gm    - query profile
+ *            totsc - Forward (or Backward) raw lod score
+ *            bmf   - computed Forward matrix
+ *            bmb   - computed Backward matrix
+ *            bmd   - RESULT: decoding matrix, space provided by caller
  *
- * Returns:   
+ * Returns:   <eslOK> on success, and <bmd> contains the computed
+ *            posterior decoding matrix.
  *
  * Throws:    (no abnormal error conditions)
- *
- * Xref:      
  */
 int 
 p7_BandedDecoding(const P7_PROFILE *gm, float totsc, const P7_BANDMX *bmf, P7_BANDMX *bmb, P7_BANDMX *bmd)
@@ -390,20 +450,25 @@ p7_BandedDecoding(const P7_PROFILE *gm, float totsc, const P7_BANDMX *bmf, P7_BA
       ia = *bnd_ip++;
       ib = *bnd_ip++;
 
-      /* specials on row ia-1: [ E N J B L G C ] 
-       * on unbanded row, we know that N/J/C scores could only have
-       * come from prv N/C/J, not from E->{CJ} for example; so
-       * xpf+xpb works as a special case here
+      /* specials on row ia-1: [ E N J B L G C JJ CC] 
+       * 
+       * On unbanded row, we know that N/J/C scores could only have
+       * come from prv N/C/J, not from E->{CJ} for example; so xpf+xpb
+       * works as a special case here. 
        */
-      xpd[p7B_E] = 0.0f;                                
-      for (x = p7B_N; x <= p7B_C; x++)	xpd[x] = expf(xpf[x] + xpb[x] - totsc);
+      norm        = 0.0f;
+      xpd[p7B_E]  = 0.0f;                                
+      xpd[p7B_N]  = expf(xpf[p7B_N] + xpb[p7B_N] - totsc);  xN = xpf[p7B_N]; norm += xpd[p7B_N];
+      xpd[p7B_J]  = expf(xpf[p7B_J] + xpb[p7B_J] - totsc);  
+      xpd[p7B_B]  = expf(xpf[p7B_B] + xpb[p7B_B] - totsc);
+      xpd[p7B_L]  = expf(xpf[p7B_L] + xpb[p7B_L] - totsc);
+      xpd[p7B_G]  = expf(xpf[p7B_G] + xpb[p7B_G] - totsc);
+      xpd[p7B_C]  = expf(xpf[p7B_C] + xpb[p7B_C] - totsc);
+      xpd[p7B_JJ] = xpd[p7B_J];                             xJ = xpf[p7B_J]; norm += xpd[p7B_JJ];
+      xpd[p7B_CC] = xpd[p7B_C];                             xC = xpf[p7B_C]; norm += xpd[p7B_CC];
 
-      xN = xpf[p7B_N];
-      xJ = xpf[p7B_J];
-      xC = xpf[p7B_C];
-
-      norm = 1.0f / (xpd[p7B_N] + xpd[p7B_C] + xpd[p7B_J]);
-      for (x = p7B_N; x <= p7B_C; x++)	xpd[x] *= norm;
+      norm = 1.0f/norm;
+      for (x = 0; x < p7B_NXCELLS; x++)	xpd[x] *= norm;
 
       xpf += p7B_NXCELLS;
       xpb += p7B_NXCELLS;
@@ -421,21 +486,23 @@ p7_BandedDecoding(const P7_PROFILE *gm, float totsc, const P7_BANDMX *bmf, P7_BA
 	      dpd[p7B_MG] = expf(dpf[p7B_MG] + dpb[p7B_MG] - totsc); norm += dpd[p7B_MG];
 	      dpd[p7B_IL] = expf(dpf[p7B_IL] + dpb[p7B_IL] - totsc); norm += dpd[p7B_IL];
 	      dpd[p7B_IG] = expf(dpf[p7B_IG] + dpb[p7B_IG] - totsc); norm += dpd[p7B_IG];
-	      dpd[p7B_DL] = 0.0f;	                             
-	      dpd[p7B_DG] = 0.0f;	                             
+	      dpd[p7B_DL] = expf(dpf[p7B_DL] + dpb[p7B_DL] - totsc);                       // nonemitters don't count toward normalization
+	      dpd[p7B_DG] = expf(dpf[p7B_DL] + dpb[p7B_DL] - totsc);                       // the normalization term should be ~totsc, except for local numerical error in DP matrices
 
 	      dpd += p7B_NSCELLS; 
 	      dpf += p7B_NSCELLS; 
 	      dpb += p7B_NSCELLS;
 	    }
 
-	  xpd[p7B_E] = expf(xpf[p7B_E] + xpb[p7B_E] - totsc);                                  
-	  xpd[p7B_N] = expf(  xN       + xpb[p7B_N] + gm->xsc[p7P_N][p7P_LOOP] - totsc); xN = xpf[p7B_N]; norm += xpd[p7B_N];
-	  xpd[p7B_J] = expf(  xJ       + xpb[p7B_J] + gm->xsc[p7P_J][p7P_LOOP] - totsc); xJ = xpf[p7B_J]; norm += xpd[p7B_J];
-	  xpd[p7B_B] = expf(xpf[p7B_B] + xpb[p7B_B] - totsc);                                  
-	  xpd[p7B_L] = expf(xpf[p7B_L] + xpb[p7B_L] - totsc);                                  
-	  xpd[p7B_G] = expf(xpf[p7B_G] + xpb[p7B_G] - totsc);                                  
-	  xpd[p7B_C] = expf(  xC       + xpb[p7B_C] + gm->xsc[p7P_C][p7P_LOOP] - totsc); xC = xpf[p7B_C]; norm += xpd[p7B_C];
+	  xpd[p7B_E]  = expf(xpf[p7B_E] + xpb[p7B_E] - totsc);                                  
+	  xpd[p7B_N]  = expf(xpf[p7B_N] + xpb[p7B_N] - totsc); xN = xpf[p7B_N]; norm += xpd[p7B_N];
+	  xpd[p7B_J]  = expf(xpf[p7B_J] + xpb[p7B_J] - totsc);  
+	  xpd[p7B_B]  = expf(xpf[p7B_B] + xpb[p7B_B] - totsc);                                  
+	  xpd[p7B_L]  = expf(xpf[p7B_L] + xpb[p7B_L] - totsc);                                  
+	  xpd[p7B_G]  = expf(xpf[p7B_G] + xpb[p7B_G] - totsc);                                  
+	  xpd[p7B_C]  = expf(xpf[p7B_C] + xpb[p7B_C] - totsc);                                  
+	  xpd[p7B_JJ] = expf(  xJ       + xpb[p7B_J] + gm->xsc[p7P_J][p7P_LOOP] - totsc); xJ = xpf[p7B_J]; norm += xpd[p7B_J];
+	  xpd[p7B_CC] = expf(  xC       + xpb[p7B_C] + gm->xsc[p7P_C][p7P_LOOP] - totsc); xC = xpf[p7B_C]; norm += xpd[p7B_C];
 
 	  norm = 1.0f/norm;
 	  dpd -= (kb-ka+1)*p7B_NSCELLS;
@@ -456,28 +523,45 @@ p7_BandedDecoding(const P7_PROFILE *gm, float totsc, const P7_BANDMX *bmf, P7_BA
 
 
 /*****************************************************************
- * x. Banded MEA alignment.
+ * 4. Banded alignment (MEG = maximum expected gain estimator; "gamma-centroid")
  *****************************************************************/
 
-/* Function:  p7_BandedAlignMEA()
- * Synopsis:  
+/* Function:  p7_BandedAlign()
+ * Synopsis:  Gamma-centroid alignment, in banded DP
  *
- * Purpose:   
+ * Purpose:   Compute a gamma-centroid alignment of the query
+ *            profile <gm> to a target sequence, given the posterior
+ *            decoding matrix <bmd> for that query/target comparison,
+ *            using the banded DP matrix space in <bma> for storage.
+ *            Return the alignment traceback in <tr>, space preallocated
+ *            and initialized by the caller and grown here as needed.
+ *            
+ *            <gamma> is the parameter of gamma-centroid alignment.
+ *            Given posterior probabilities pp(i,x) for every state x
+ *            at every target position i in the DP matrix, the
+ *            algorithm finds a state path consistent with the model
+ *            that maximizes the sum of pp(i,x) - 1/(1+gamma).  Thus
+ *            states with posterior probabilities < 1/(1+gamma) will
+ *            be penalized, and those > 1/(1+gamma) are rewarded.
+ *            
+ *            
  *
- * Args:      gm  - query profile (we need to check consistency of alignment against nonzero transitions)
- *            bmd - banded posterior probability matrix, previously calculated by caller
- *            bma - RESULT: filled MEA alignment banded DP matrix; caller provides the allocated space
- *            tr  - RESULT: MEA alignment traceback for the entire target sequence.
+ * Args:      gm    - query profile (we need to check consistency of alignment against nonzero transitions)
+ *            gamma -
+ *            bmd   - banded posterior probability matrix, previously calculated by caller
+ *            bma   - RESULT: filled MEA alignment banded DP matrix; caller provides the allocated space
+ *            tr    - RESULT: MEA alignment traceback for the entire target sequence.
  *
  * Returns:   <eslOK> on success
  *
  * Throws:    (no abnormal error conditions)
  *
- * Xref:      SRE:J9/133 for why we use MEA not gamma-centroid
+ * Xref:      SRE:J9/137 for notes on extending Hamada/Asai gamma-centroid
+ *                       from simple residue ij alignment to full state path
  *            [Kall05] for more on why the delta function on transitions is needed
  */
 int 
-p7_BandedAlignMEA(const P7_PROFILE *gm, const P7_BANDMX *bmd, P7_BANDMX *bma, P7_TRACE *tr)
+p7_BandedAlign(const P7_PROFILE *gm, float gamma, const P7_BANDMX *bmd, P7_BANDMX *bma, P7_TRACE *tr)
 {
   int         *bnd_ip = bmd->bnd->imem;          /* ptr to current ia, ib segment band in bmx->bnd       */
   int         *bnd_kp = bmd->bnd->kmem;		 /* ptr to current ka, kb row band in bmx->bnd           */
@@ -491,11 +575,12 @@ p7_BandedAlignMEA(const P7_PROFILE *gm, const P7_BANDMX *bmd, P7_BANDMX *bma, P7
   float        mlp, mgp, ilp, igp, dlp, dgp;     /* M,I,D cell values from previous row i-1     */
   float        dlc,dgc;
   float        mlc,mgc;
-  int ia,ib;		/* banded segment of rows ia..ib   1<=ia<=ib<=L */
-  int kac,kbc;		/* band kac..kbc on current row i  1<=ka<=kb<=M */
-  int kap,kbp;		/* band kap..kbp on previous row i-1            */
-  int last_ib;
-  int g, i, k;
+  int          ia,ib;		/* banded segment of rows ia..ib   1<=ia<=ib<=L */
+  int          kac,kbc;		/* band kac..kbc on current row i  1<=ka<=kb<=M */
+  int          kap,kbp;		/* band kap..kbp on previous row i-1            */
+  int          last_ib;
+  int          g, i, k;
+  float        gammaterm = -1.0f/(1.0f + gamma);
   
   xN      = 0.0f;
   xJ      = -eslINFINITY;
@@ -516,17 +601,12 @@ p7_BandedAlignMEA(const P7_PROFILE *gm, const P7_BANDMX *bmd, P7_BANDMX *bma, P7
 
       /* Reinitialize (and store) specials on row ia-1 [E N J B L G C]*/
       /* The unbanded residues (last_ib+1)..(ia-1) must all be emitted
-       *  by N, C, or J.  [(ia-1)-(last_ib+1)+1 of them, which means
-       *  (ia-last_ib-1) of them.] Only N->N, C->C, J->J paths are
-       *  possible.  Thus we know posterior probability ppx for
-       *  N(ia-1), J(ia-1), C(ia-1) is also the post prob for all
-       *  N(last_ib+1..ia-1), etc.  Hence the
-       *  ppx[p7B_N]*(ia-last_ib-1) term.
-       *
-       * No P7_DELTAT check on tNN/tCC/tJJ is needed; if these
-       * transitions are impossible, posterior probability ppx[N,C,J]
-       * will already be -inf, and force the N/C/J terms to -inf
-       * appropriately.
+       * by N, C, or J.  [(ia-1)-(last_ib+1)+1 of them, which means
+       * (ia-last_ib-1) of them.] Only N->N, C->C, J->J paths are
+       * possible.  Thus we know posterior probability ppx for
+       * N(ia-1), J(ia-1), C(ia-1) is also the post prob for all
+       * N(last_ib+1..ia-1), etc.  Hence the
+       * ppx[p7B_N]*(ia-last_ib-1) term.
        *
        * (ia-last_ib-1) can be 0 for first segment with ia=1,
        * last_ib=0 where ia-1 overlaps our i=0 initialization case;
@@ -534,12 +614,15 @@ p7_BandedAlignMEA(const P7_PROFILE *gm, const P7_BANDMX *bmd, P7_BANDMX *bma, P7
        * (ia-last_ib-1) > 0
        */
       xc[p7B_E]      = -eslINFINITY;	                                                 
-      xc[p7B_N] = xN = xN + ( (ia-last_ib-1 == 0) ? 0.0f : ppx[p7B_N] * (ia-last_ib-1) ); 
-      xc[p7B_J] = xJ = xJ + ( (ia-last_ib-1 == 0) ? 0.0f : ppx[p7B_J] * (ia-last_ib-1) ); 
-      xc[p7B_B]      = ESL_MAX( P7_DELTAT(xN, gm->xsc[p7P_N][p7P_MOVE]), P7_DELTAT(xJ, gm->xsc[p7P_J][p7P_MOVE]));
-      xc[p7B_L] = xL = P7_DELTAT(xc[p7B_B], gm->xsc[p7P_B][0]);                                  
-      xc[p7B_G] = xG = P7_DELTAT(xc[p7B_B], gm->xsc[p7P_B][1]);                                  
-      xc[p7B_C] = xC = xC + ( (ia-last_ib-1 == 0) ? 0.0f : ppx[p7B_C] * (ia-last_ib-1) ); 
+      xc[p7B_N] = xN = P7_DELTAT( xN + ( (ia-last_ib-1 == 0) ? 0.0f : (ppx[p7B_N]+gammaterm) * (ia-last_ib-1) ), gm->xsc[p7P_N][p7P_LOOP]);
+      xc[p7B_J] = xJ = P7_DELTAT( xJ + ( (ia-last_ib-1 == 0) ? 0.0f : (ppx[p7B_J]+gammaterm) * (ia-last_ib-1) ), gm->xsc[p7P_J][p7P_LOOP]);
+      xc[p7B_B]      = ppx[p7B_B] + gammaterm + ESL_MAX( P7_DELTAT(xN, gm->xsc[p7P_N][p7P_MOVE]), P7_DELTAT(xJ, gm->xsc[p7P_J][p7P_MOVE]));
+      xc[p7B_L] = xL = ppx[p7B_L] + gammaterm + P7_DELTAT(xc[p7B_B], gm->xsc[p7P_B][0]);                                  
+      xc[p7B_G] = xG = ppx[p7B_G] + gammaterm + P7_DELTAT(xc[p7B_B], gm->xsc[p7P_B][1]);                                  
+      xc[p7B_C] = xC = P7_DELTAT( xC + ( (ia-last_ib-1 == 0) ? 0.0f : (ppx[p7B_C]+gammaterm) * (ia-last_ib-1) ), gm->xsc[p7P_C][p7P_LOOP]);
+      xc[p7B_JJ]     = -eslINFINITY;
+      xc[p7B_CC]     = -eslINFINITY;
+
       xc  += p7B_NXCELLS;
       ppx += p7B_NXCELLS;
  
@@ -559,23 +642,23 @@ p7_BandedAlignMEA(const P7_PROFILE *gm, const P7_BANDMX *bmd, P7_BANDMX *bma, P7
 
 	  for (k = kac; k <= kbc; k++)
 	    {
-	      mlc = *dpc++ = (*ppp++) + ESL_MAX( ESL_MAX( P7_DELTAT(mlp, TSC(p7P_MM, k-1)),
-				                          P7_DELTAT(ilp, TSC(p7P_IM, k-1))),
-                 		                 ESL_MAX( P7_DELTAT(dlp, TSC(p7P_DM, k-1)),
-				                          P7_DELTAT( xL, TSC(p7P_LM, k-1))));
+	      mlc = *dpc++ = (*ppp++) + gammaterm + ESL_MAX( ESL_MAX( P7_DELTAT(mlp, TSC(p7P_MM, k-1)),
+								      P7_DELTAT(ilp, TSC(p7P_IM, k-1))),
+							     ESL_MAX( P7_DELTAT(dlp, TSC(p7P_DM, k-1)),
+								      P7_DELTAT( xL, TSC(p7P_LM, k-1))));
 
-	      mgc = *dpc++ = (*ppp++) + ESL_MAX( ESL_MAX( P7_DELTAT(mgp, TSC(p7P_MM, k-1)),
-							  P7_DELTAT(igp, TSC(p7P_IM, k-1))),
-						 ESL_MAX( P7_DELTAT(dgp, TSC(p7P_DM, k-1)),
-							  P7_DELTAT( xG, TSC(p7P_GM, k-1))));
+	      mgc = *dpc++ = (*ppp++) + gammaterm + ESL_MAX( ESL_MAX( P7_DELTAT(mgp, TSC(p7P_MM, k-1)),
+								      P7_DELTAT(igp, TSC(p7P_IM, k-1))),
+							     ESL_MAX( P7_DELTAT(dgp, TSC(p7P_DM, k-1)),
+								      P7_DELTAT( xG, TSC(p7P_GM, k-1))));
 
 	      /* This "if" seems unavoidable, as we pick up vals from i-1,k on prev row */
 	      if (k >= kap && k <= kbp) { mlp = *dpp++; mgp = *dpp++; ilp = *dpp++; igp = *dpp++; dlp = *dpp++; dgp = *dpp++;       }
 	      else                      { mlp =         mgp =         ilp =         igp =         dlp =         dgp = -eslINFINITY; }
 	      
 	      /* IL/IG states */
-	      *dpc++ = (*ppp++) + ESL_MAX( P7_DELTAT(mlp, TSC(p7P_MI, k)), P7_DELTAT(ilp, TSC(p7P_II, k))); /* IL */
-	      *dpc++ = (*ppp++) + ESL_MAX( P7_DELTAT(mgp, TSC(p7P_MI, k)), P7_DELTAT(igp, TSC(p7P_II, k))); /* IG */
+	      *dpc++ = (*ppp++) + gammaterm + ESL_MAX( P7_DELTAT(mlp, TSC(p7P_MI, k)), P7_DELTAT(ilp, TSC(p7P_II, k))); /* IL */
+	      *dpc++ = (*ppp++) + gammaterm + ESL_MAX( P7_DELTAT(mgp, TSC(p7P_MI, k)), P7_DELTAT(igp, TSC(p7P_II, k))); /* IG */
 
 	      /* E state update with {ML,DL}->E local exits */
 	      xE = ESL_MAX(xE, ESL_MAX(mlc, dlc));
@@ -583,18 +666,19 @@ p7_BandedAlignMEA(const P7_PROFILE *gm, const P7_BANDMX *bmd, P7_BANDMX *bma, P7
 	      /* DL/DG states delayed storage trick */
 	      *dpc++ = dlc;
 	      *dpc++ = dgc;
-	      dlc = ESL_MAX( P7_DELTAT(mlc, TSC(p7P_MD, k)), P7_DELTAT(dlc, TSC(p7P_DD, k))); /* DL */
-	      dgc = ESL_MAX( P7_DELTAT(mgc, TSC(p7P_MD, k)), P7_DELTAT(dgc, TSC(p7P_DD, k))); /* DG */
-	      ppp   += 2;
+	      dlc = (*ppp++) + gammaterm + ESL_MAX( P7_DELTAT(mlc, TSC(p7P_MD, k)), P7_DELTAT(dlc, TSC(p7P_DD, k))); /* DL */
+	      dgc = (*ppp++) + gammaterm + ESL_MAX( P7_DELTAT(mgc, TSC(p7P_MD, k)), P7_DELTAT(dgc, TSC(p7P_DD, k))); /* DG */
 	    }
 
-	  xc[p7B_E]      =  ESL_MAX( xE,  P7_DELTAT(dgc, TSC(p7P_DGE, kbc)));
-	  xc[p7B_N] = xN =           xN + ppx[p7B_N];
-	  xc[p7B_J] = xJ =  ESL_MAX( xJ + ppx[p7B_J],  P7_DELTAT(xc[p7B_E], gm->xsc[p7P_E][p7P_LOOP]));
-	  xc[p7B_B]      =  ESL_MAX( P7_DELTAT(xc[p7B_J], gm->xsc[p7P_J][p7P_MOVE]),  P7_DELTAT(xc[p7B_N], gm->xsc[p7P_N][p7P_MOVE]));
-	  xc[p7B_L] = xL =           P7_DELTAT(xc[p7B_B], gm->xsc[p7P_B][0]);
-	  xc[p7B_G] = xG =           P7_DELTAT(xc[p7B_B], gm->xsc[p7P_B][1]);
-	  xc[p7B_C] = xC =  ESL_MAX( xC + ppx[p7B_C],  P7_DELTAT(xc[p7B_E], gm->xsc[p7P_E][p7P_MOVE]));
+	  xc[p7B_E]      =  ppx[p7B_E] + gammaterm + ESL_MAX( xE, P7_DELTAT(dgc, TSC(p7P_DGE, kbc)));
+	  xc[p7B_N] = xN =  ppx[p7B_N] + gammaterm +          P7_DELTAT(       xN, gm->xsc[p7P_N][p7P_LOOP]);
+	  xc[p7B_J] = xJ =  ppx[p7B_J] + gammaterm + ESL_MAX( P7_DELTAT(       xJ, gm->xsc[p7P_J][p7P_LOOP]),  P7_DELTAT(xc[p7B_E], gm->xsc[p7P_E][p7P_LOOP]));
+	  xc[p7B_B]      =  ppx[p7B_B] + gammaterm + ESL_MAX( P7_DELTAT(xc[p7B_J], gm->xsc[p7P_J][p7P_MOVE]),  P7_DELTAT(xc[p7B_N], gm->xsc[p7P_N][p7P_MOVE]));
+	  xc[p7B_L] = xL =  ppx[p7B_L] + gammaterm +          P7_DELTAT(xc[p7B_B], gm->xsc[p7P_B][0]);
+	  xc[p7B_G] = xG =  ppx[p7B_G] + gammaterm +          P7_DELTAT(xc[p7B_B], gm->xsc[p7P_B][1]);
+	  xc[p7B_C] = xC =  ppx[p7B_C] + gammaterm + ESL_MAX( P7_DELTAT(       xC, gm->xsc[p7P_C][p7P_LOOP]),  P7_DELTAT(xc[p7B_E], gm->xsc[p7P_E][p7P_MOVE]));
+	  xc[p7B_JJ]     =  -eslINFINITY;
+	  xc[p7B_CC]     =  -eslINFINITY;
 
 	  xc  += p7B_NXCELLS;
 	  ppx += p7B_NXCELLS;
@@ -605,11 +689,11 @@ p7_BandedAlignMEA(const P7_PROFILE *gm, const P7_BANDMX *bmd, P7_BANDMX *bma, P7
       last_ib = ib;
     }
 
-  return (tr ? traceback_mea(gm, bmd, bma, tr) : eslOK);
+  return (tr ? traceback(gm, bmd, bma, tr) : eslOK);
 }
 
 /*****************************************************************
- * x. Banded MEA alignment traceback
+ * 5. Banded MGE alignment traceback
  *****************************************************************/
 
 static inline int
@@ -621,7 +705,7 @@ select_ml(const P7_PROFILE *gm, int k, const float *dpk, const float *xp)
   path[0] = P7_DELTAT( dpk[p7B_ML], P7P_TSC(gm, k-1, p7P_MM));
   path[1] = P7_DELTAT( dpk[p7B_IL], P7P_TSC(gm, k-1, p7P_IM));
   path[2] = P7_DELTAT( dpk[p7B_DL], P7P_TSC(gm, k-1, p7P_DM));
-  path[3] = P7_DELTAT(   xp[p7B_L],  P7P_TSC(gm, k-1, p7P_LM));
+  path[3] = P7_DELTAT(   xp[p7B_L], P7P_TSC(gm, k-1, p7P_LM));
   return state[esl_vec_FArgMax(path, 4)];
 }
 static inline int
@@ -697,19 +781,19 @@ select_e(const P7_PROFILE *gm, const float *dp, int ka, int kb, int *ret_k)
   return   smax;
 }
 static inline int
-select_j(const P7_PROFILE *gm, const float *xc, const float *ppx)
+select_j(const P7_PROFILE *gm, const float *xc)
 {
   float path[2];
-  path[0] = *(xc-p7B_NXCELLS+p7B_J) + ppx[p7B_J];             /* ptr arithmetic to get xmx[i-1][p7B_J], which we know is valid, because we don't call select_j() on i<ia, and we have an xmx[ia-1] boundary */
-  path[1] = P7_DELTAT(xc[p7B_E], gm->xsc[p7P_E][p7P_LOOP]);
+  path[0] = P7_DELTAT(*(xc-p7B_NXCELLS+p7B_J), gm->xsc[p7P_J][p7P_LOOP]); /* i.e. xp[p7B_J] on prv row i-1. */
+  path[1] = P7_DELTAT( xc[p7B_E],               gm->xsc[p7P_E][p7P_LOOP]);
   return ( (path[0] > path[1]) ? p7T_J : p7T_E);
 }
 static inline int
-select_c(const P7_PROFILE *gm, const float *xc, const float *ppx)
+select_c(const P7_PROFILE *gm, const float *xc)
 {
   float path[2];
-  path[0] = *(xc-p7B_NXCELLS+p7B_C) + ppx[p7B_C];
-  path[1] = P7_DELTAT(xc[p7B_E], gm->xsc[p7P_E][p7P_MOVE]);
+  path[0] = P7_DELTAT(*(xc-p7B_NXCELLS+p7B_C), gm->xsc[p7P_C][p7P_LOOP]); /* i.e. xp[p7B_C] on prv row i-1. */
+  path[1] = P7_DELTAT(xc[p7B_E],               gm->xsc[p7P_E][p7P_MOVE]);
   return ( (path[0] > path[1]) ? p7T_C : p7T_E);
 }
 static inline int
@@ -722,7 +806,7 @@ select_b(const P7_PROFILE *gm, const float *xc)
 }
 
 static int
-traceback_mea(const P7_PROFILE *gm, const P7_BANDMX *bmd, const P7_BANDMX *bma, P7_TRACE *tr)
+traceback(const P7_PROFILE *gm, const P7_BANDMX *bmd, const P7_BANDMX *bma, P7_TRACE *tr)
 {
   int   *bnd_ip;		/* ptr into <bnd>'s array of segments ia..ib coords                   */
   int   *bnd_kp;		/* ptr into <bnd>'s array of <ka..kb> band extent on each banded row  */
@@ -805,9 +889,9 @@ traceback_mea(const P7_PROFILE *gm, const P7_BANDMX *bmd, const P7_BANDMX *bma, 
 	  case p7T_DL:  snxt = (                       (k-1>=ka) ? select_dl(gm, k, dp+(k-ka-1)*p7B_NSCELLS)                 : p7T_BOGUS); k--;                      break;                         
 	  case p7T_DG:  snxt = (                       (k-1>=ka) ? select_dg(gm, k, dp+(k-ka-1)*p7B_NSCELLS)                 : p7T_BOGUS); k--;                      break;
 
-	  case p7T_J:   snxt = select_j(gm, xc, ppx);  do_NCJ_emit = (snxt==p7T_J ? TRUE : FALSE);   break;
-	  case p7T_C:   snxt = select_c(gm, xc, ppx);  do_NCJ_emit = (snxt==p7T_C ? TRUE : FALSE);   break;
-	  case p7T_N:   snxt = p7T_N;                  do_NCJ_emit = TRUE;                           break;
+ 	  case p7T_N:   snxt = p7T_N;             do_NCJ_emit = TRUE;                           break;
+	  case p7T_J:   snxt = select_j(gm, xc);  do_NCJ_emit = (snxt==p7T_J ? TRUE : FALSE);   break;
+	  case p7T_C:   snxt = select_c(gm, xc);  do_NCJ_emit = (snxt==p7T_C ? TRUE : FALSE);   break;
 
 	  case p7T_E:   snxt = select_e (gm, dp, ka, kb, &k); break;
 	  case p7T_B:   snxt = select_b (gm, xc);             break;                             
@@ -817,22 +901,25 @@ traceback_mea(const P7_PROFILE *gm, const P7_BANDMX *bmd, const P7_BANDMX *bma, 
 	  }
 	  if (snxt == p7T_ML || snxt == p7T_MG || snxt == p7T_IL || snxt == p7T_IG) decrement_dp = TRUE;
 
-	  /* Pick up posterior probability annotation.
-	   * dp has not moved yet; it is still on the correct banded row for snxt, if snxt is a main state (M/I); and it happens that decrement_dp is TRUE in this case;
-	   * xc is still on the correct special row, deferring its decrement, if sprv->snxt is NN/JJ/CC and scur emitted; do_NCJ_emit is TRUE in this case.
+	  /* Pick up posterior probability annotation before moving
+	   * <dp> or <xc> where snxt has connected to. We annotate
+	   * only residue emission ppv on alignments, not the
+	   * fully decoded state ppv; moreover, for M/I, we marginalize over
+	   * glocal/local.
 	   */
-	  ppv = 0.0f;
-	  if (decrement_dp || do_NCJ_emit)
-	    {
-	      switch (snxt) {
-	      case p7T_ML: case p7T_MG: ppv = ppp[(k-ka)*p7B_NSCELLS+p7B_ML] + ppp[(k-ka)*p7B_NSCELLS+p7B_MG]; break;
-	      case p7T_IL: case p7T_IG: ppv = ppp[(k-ka)*p7B_NSCELLS+p7B_IL] + ppp[(k-ka)*p7B_NSCELLS+p7B_IG]; break;
-	      case p7T_N:               ppv = ppx[p7B_N]; break;
-	      case p7T_C:               ppv = ppx[p7B_C]; break;
-	      case p7T_J:               ppv = ppx[p7B_J]; break;
-	      default:     ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in traceback");
-	      }
-	    }
+	  switch (snxt) {
+	  case p7T_ML: case p7T_MG: ppv = ppp[(k-ka)*p7B_NSCELLS+p7B_ML] + ppp[(k-ka)*p7B_NSCELLS+p7B_MG]; break;  // marginalized over glocal/local
+	  case p7T_IL: case p7T_IG: ppv = ppp[(k-ka)*p7B_NSCELLS+p7B_IL] + ppp[(k-ka)*p7B_NSCELLS+p7B_IG]; break;
+	  case p7T_DL: case p7T_DG: ppv = 0.0f;                               break;
+	  case p7T_E:               ppv = 0.0f;                               break;
+	  case p7T_N:               ppv = (do_NCJ_emit ? ppx[p7B_N]  : 0.0f); break;
+	  case p7T_J:               ppv = (do_NCJ_emit ? ppx[p7B_JJ] : 0.0f); break; /* note, pick up the *residue emission* pp for annotation, not the occupancy pp */
+	  case p7T_B:               ppv = 0.0f;                               break;
+	  case p7T_L:               ppv = 0.0f;                               break;
+	  case p7T_G:               ppv = 0.0f;                               break;
+	  case p7T_C:               ppv = (do_NCJ_emit ? ppx[p7B_CC] : 0.0f); break; /* ditto */
+	  default:     ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in traceback");
+	  }
 
 	  /* Now we can decrement dp/ppp, if we're supposed to. Do this before decrementing i */
 	  if ((i>ia+1 && decrement_dp) || (i>ia && do_NCJ_emit))
@@ -881,9 +968,9 @@ traceback_mea(const P7_PROFILE *gm, const P7_BANDMX *bmd, const P7_BANDMX *bma, 
       /* as we finish the segment: i  = ia-1, xc is on specials for ia-1, dp is still on ia; snxt = NCJ, which will emit the entire intersegment with the post prob that's at this boundary row ia-1 */
       last_ia = ia;
       switch (snxt) {
-      case p7T_N: ppv = ppx[p7B_N]; break;
-      case p7T_C: ppv = ppx[p7B_C]; break;
-      case p7T_J: ppv = ppx[p7B_J]; break;
+      case p7T_N: ppv = ppx[p7B_N];  break;
+      case p7T_C: ppv = ppx[p7B_CC]; break;
+      case p7T_J: ppv = ppx[p7B_JJ]; break;
       default:    ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in traceback");
       }
     }
@@ -1139,6 +1226,7 @@ main(int argc, char **argv)
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
+#include "esl_regexp.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
@@ -1146,16 +1234,20 @@ main(int argc, char **argv)
 #include "p7_gbands.h"
 #include "p7_bandmx.h"
 
+static int parse_coord_string(const char *cstring, int *ret_start, int *ret_end);
+
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",            0 },
-  { "-1",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "1 line per sequence, tabular summary output",     0 },
-  { "-A",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump OA alignment DP matrix for examination",     0 },
-  { "-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward DP matrix for examination",         0 },
-  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward DP matrix for examination",          0 },
-  { "-G",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump DP bands for examination",                   0 },
-  { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump posterior Decoding matrix for examination",  0 },
-  { "-T",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump alignment Traceback for examination",        0 },
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",              0 },
+  { "-1",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "1 line per sequence, tabular summary output",       0 },
+  { "-i",        eslARG_STRING, FALSE, NULL, NULL,   NULL,  NULL, NULL, "when dumping, restrict dump to rows <i1>..<i2>",    0 },
+  { "-k",        eslARG_STRING, FALSE, NULL, NULL,   NULL,  NULL, NULL, "when dumping, restrict dump to columns <k1>..<k2>", 0 },
+  { "-A",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump OA alignment DP matrix for examination",       0 },
+  { "-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward DP matrix for examination",           0 },
+  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward DP matrix for examination",            0 },
+  { "-G",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump DP bands for examination",                     0 },
+  { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump posterior Decoding matrix for examination",    0 },
+  { "-T",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump alignment Traceback for examination",          0 },
 #ifdef p7_DEBUGGING
   { "--fF",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward filter matrix for examination",      0 },
   { "--fB",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward filter matrix for examination",     0 },
@@ -1195,6 +1287,8 @@ main(int argc, char **argv)
   int             format  = eslSQFILE_UNKNOWN;
   float           fsc, bsc;
   float           nullsc;
+  int             istart, iend, kstart, kend;
+  char           *cstring;
   int             status;
 
   /* Initialize log-sum calculator */
@@ -1206,6 +1300,18 @@ main(int argc, char **argv)
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
  
+  /* Determine coords of dump windows */
+  istart = iend = 0;
+  kstart = kend = 0;
+  if ( esl_opt_IsOn(go, "-i")) {
+    cstring = esl_opt_GetString(go, "-i");
+    parse_coord_string(cstring, &istart, &iend);
+  }
+  if ( esl_opt_IsOn(go, "-k")) {
+    cstring = esl_opt_GetString(go, "-k");
+    parse_coord_string(cstring, &kstart, &kend);
+  }
+
   /* Open sequence database */
   sq     = esl_sq_CreateDigital(abc);
   status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
@@ -1289,12 +1395,12 @@ main(int argc, char **argv)
       p7_BandedForward (sq->dsq, sq->n, gm, bmf, &fsc);
       p7_BandedBackward(sq->dsq, sq->n, gm, bmb, &bsc);
       p7_BandedDecoding(gm, fsc, bmf, bmb, bmd);
-      p7_BandedAlignMEA(gm, bmd, bma, tr);
+      p7_BandedAlign   (gm, /*gamma=*/1.0, bmd, bma, tr);
 
-      if (esl_opt_GetBoolean(go, "-F")) p7_bandmx_Dump(stdout, bmf);
-      if (esl_opt_GetBoolean(go, "-B")) p7_bandmx_Dump(stdout, bmb);
-      if (esl_opt_GetBoolean(go, "-D")) p7_bandmx_Dump(stdout, bmd);
-      if (esl_opt_GetBoolean(go, "-A")) p7_bandmx_Dump(stdout, bma);
+      if (esl_opt_GetBoolean(go, "-F")) p7_bandmx_DumpWindow(stdout, bmf, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
+      if (esl_opt_GetBoolean(go, "-B")) p7_bandmx_DumpWindow(stdout, bmb, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
+      if (esl_opt_GetBoolean(go, "-D")) p7_bandmx_DumpWindow(stdout, bmd, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
+      if (esl_opt_GetBoolean(go, "-A")) p7_bandmx_DumpWindow(stdout, bma, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
       if (esl_opt_GetBoolean(go, "-T")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 
       /* Those scores are partial log-odds likelihoods in nats.
@@ -1304,19 +1410,22 @@ main(int argc, char **argv)
 
       if (esl_opt_GetBoolean(go, "-1")) 
 	{
-	  printf("%-30s   %10.4f %10.4f   %10.4f %10.4f\n", 
+	  printf("%-30s   %10.4f %10.4f   %10.4f %10.4f  %10.3fM  %10.3fM\n", 
 		 sq->name, 
 		 fsc, bsc, 
-		 (fsc - nullsc) / eslCONST_LOG2, (bsc - nullsc) / eslCONST_LOG2);
+		 (fsc - nullsc) / eslCONST_LOG2, (bsc - nullsc) / eslCONST_LOG2,
+		 (double) (p7_filtermx_Sizeof(ox) / 1000000),
+		 (double) (p7_bandmx_Sizeof(bmf)  / 1000000));
 	}
       else
 	{
-	  printf("target sequence:      %s\n",        sq->name);
-	  printf("fwd raw score:        %.4f nats\n", fsc);
-	  printf("bck raw score:        %.4f nats\n", bsc);
-	  printf("null score:           %.2f nats\n", nullsc);
-	  printf("per-seq score:        %.2f bits\n", (fsc - nullsc) / eslCONST_LOG2);
-	  printf("RAM usage in DP:      %.3fM\n",     (double) (p7_bandmx_Sizeof(bmf) / 1000000));
+	  printf("target sequence:      %s\n",         sq->name);
+	  printf("fwd raw score:        %.4f nats\n",  fsc);
+	  printf("bck raw score:        %.4f nats\n",  bsc);
+	  printf("null score:           %.2f nats\n",  nullsc);
+	  printf("per-seq score:        %.2f bits\n",  (fsc - nullsc) / eslCONST_LOG2);
+	  printf("RAM usage, filter:    %.3fM\n",      (double) (p7_filtermx_Sizeof(ox) / 1000000));
+	  printf("RAM usage, bands:     %.3fM (x4)\n", (double) (p7_bandmx_Sizeof(bmf)  / 1000000));
 	}
 
       p7_trace_Reuse(tr);
@@ -1332,6 +1441,7 @@ main(int argc, char **argv)
   esl_sq_Destroy(sq);
   p7_trace_Destroy(tr);
   p7_gbands_Destroy(bnd);
+  p7_bandmx_Destroy(bma);
   p7_bandmx_Destroy(bmd);
   p7_bandmx_Destroy(bmb);
   p7_bandmx_Destroy(bmf);
@@ -1344,6 +1454,26 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
+
+static int
+parse_coord_string(const char *cstring, int *ret_start, int *ret_end)
+{
+  ESL_REGEXP *re = esl_regexp_Create();
+  char        tok1[32];
+  char        tok2[32];
+
+  if (esl_regexp_Match(re, "^(\\d+)\\D+(\\d*)$", cstring) != eslOK) esl_fatal("-c takes arg of subseq coords <from>..<to>; %s not recognized", cstring);
+  if (esl_regexp_SubmatchCopy(re, 1, tok1, 32)            != eslOK) esl_fatal("Failed to find <from> coord in %s", cstring);
+  if (esl_regexp_SubmatchCopy(re, 2, tok2, 32)            != eslOK) esl_fatal("Failed to find <to> coord in %s",   cstring);
+  
+  *ret_start = atol(tok1);
+  *ret_end   = (tok2[0] == '\0') ? 0 : atol(tok2);
+  
+  esl_regexp_Destroy(re);
+  return eslOK;
+}
+
+
 #endif /*p7BANDED_FWDBACK_EXAMPLE*/
 
 /*****************************************************************

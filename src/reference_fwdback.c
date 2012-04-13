@@ -1,19 +1,24 @@
-/* Reference implementation of Forward/Backward alignment:
- *   dual-mode alignment (local/glocal);
- *   quadratic memory (simplest variant; not banded, not checkpointed);
- *   "generic" (standard C code; not striped/vectorized);
- *   using P7_REFMX DP matrix structure.
+/* Reference implementation of Forward/Backward alignment, posterior
+ * decoding, and gamma-centroid alignment, with a dual-mode glocal/local
+ * model.
+ *
+ * This code is for testing. It is not used in HMMER3's main executables.
+ *
+ * Reference implementation of reference_fwdback/p7_refmx closely
+ * mirrors banded implementation in banded_fwdback/p7_bandmx.  The
+ * banded implementation is the production version, more complicated.
  *   
  * Contents:  
  *   1. Forwards.
  *   2. Backwards.
  *   3. Posterior decoding.
- *   4. MEA alignment.
- *   5. Benchmark driver.
- *   6. Unit tests.
- *   7. Test driver.
- *   8. Example.
- *   9. Copyright and license information.
+ *   4. Alignment (MEG, gamma-centroid)
+ *   5. Traceback.
+ *   6. Benchmark driver.
+ *   7. Unit tests.
+ *   8. Test driver.
+ *   9. Example.
+ *  10. Copyright and license information.
  */
 
 
@@ -583,7 +588,7 @@ p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, P7_REFMX *bck, P
 
 
 /*****************************************************************
- * 4. MEA alignment
+ * 4. Alignment (MEG, gamma-centroid)
  *****************************************************************/
 
 static int traceback_mea(const P7_PROFILE *gm, const P7_REFMX *pp, const P7_REFMX *rmx, P7_TRACE *tr);

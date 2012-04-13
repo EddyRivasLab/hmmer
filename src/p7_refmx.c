@@ -203,13 +203,15 @@ char *
 p7_refmx_DecodeSpecial(int type)
 {
   switch (type) {
-  case p7R_E: return "E";
-  case p7R_N: return "N";
-  case p7R_J: return "J";
-  case p7R_B: return "B";
-  case p7R_L: return "L";
-  case p7R_G: return "G";
-  case p7R_C: return "C";
+  case p7R_E:  return "E";
+  case p7R_N:  return "N";
+  case p7R_J:  return "J";
+  case p7R_B:  return "B";
+  case p7R_L:  return "L";
+  case p7R_G:  return "G";
+  case p7R_C:  return "C";
+  case p7R_JJ: return "JJ";
+  case p7R_CC: return "CC";
   }
   esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such P7_REFMX special state code %d\n", type);
   return NULL;
@@ -424,6 +426,14 @@ validate_forward(P7_REFMX *rmx, char *errbuf)
       if ((status =    validate_mainstate(rmx, i, rmx->M, p7R_IL, -eslINFINITY, errbuf)) != eslOK) return status;
       if ((status =    validate_mainstate(rmx, i, rmx->M, p7R_IG, -eslINFINITY, errbuf)) != eslOK) return status;
     }
+
+  /* CC/JJ are only for decoding; Forward matrix has them as -inf */
+  for (i = 0; i <= rmx->L; i++)
+    {
+      if ( ( status = validate_special(rmx, 0, p7R_JJ,    -eslINFINITY, errbuf)) != eslOK) return status;
+      if ( ( status = validate_special(rmx, 0, p7R_CC,    -eslINFINITY, errbuf)) != eslOK) return status;
+    }
+
   return eslOK;
 }
 
@@ -460,6 +470,14 @@ validate_backward(P7_REFMX *rmx, char *errbuf)
   if ( (status = validate_special  (rmx, rmx->L,    p7R_B,  -eslINFINITY, errbuf)) != eslOK) return status;
   if ( (status = validate_special  (rmx, rmx->L,    p7R_L,  -eslINFINITY, errbuf)) != eslOK) return status;
   if ( (status = validate_special  (rmx, rmx->L,    p7R_G,  -eslINFINITY, errbuf)) != eslOK) return status;
+
+  /* CC/JJ are only for decoding; Forward matrix has them as -inf */
+  for (i = 0; i <= rmx->L; i++)
+    {
+      if ( ( status = validate_special(rmx, 0, p7R_JJ,    -eslINFINITY, errbuf)) != eslOK) return status;
+      if ( ( status = validate_special(rmx, 0, p7R_CC,    -eslINFINITY, errbuf)) != eslOK) return status;
+    }
+
   return eslOK;
 }
 
@@ -537,7 +555,7 @@ p7_refmx_Validate(P7_REFMX *rmx, char *errbuf)
   case p7R_VITERBI:   if ( (status = validate_forward    (rmx,               errbuf)) != eslOK) return status;  break; // Viterbi has same pattern as Forward
   case p7R_BACKWARD:  if ( (status = validate_backward   (rmx,               errbuf)) != eslOK) return status;  break;
   case p7R_DECODING:  if ( (status = validate_decoding   (rmx,               errbuf)) != eslOK) return status;  break;     
-  case p7R_MEA:       if ( (status = validate_decoding   (rmx,               errbuf)) != eslOK) return status;  break; // MEA has same pattern as Decoding
+  case p7R_ALIGNMENT: if ( (status = validate_decoding   (rmx,               errbuf)) != eslOK) return status;  break; // MEA has same pattern as Decoding
   case p7R_UNSET:     if ( (status = validate_column_zero(rmx, -eslINFINITY, errbuf)) != eslOK) return status;  break;
   default:            ESL_FAIL(eslFAIL, errbuf, "no such reference DP algorithm type %d", rmx->type);
   }
