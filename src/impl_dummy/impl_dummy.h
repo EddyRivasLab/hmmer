@@ -14,7 +14,7 @@
 #include "esl_alphabet.h"
 #include "esl_random.h"
 
-#include <pmmintrin.h>   /* DENORMAL_MODE */
+//#include <pmmintrin.h>   /* DENORMAL_MODE */
 
 #include "hmmer.h"
 
