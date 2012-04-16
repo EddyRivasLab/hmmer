@@ -537,26 +537,27 @@ p7_BandedDecoding(const P7_PROFILE *gm, float totsc, const P7_BANDMX *bmf, P7_BA
  *            and initialized by the caller and grown here as needed.
  *            
  *            <gamma> is the parameter of gamma-centroid alignment.
- *            Given posterior probabilities pp(i,x) for every state x
- *            at every target position i in the DP matrix, the
- *            algorithm finds a state path consistent with the model
- *            that maximizes the sum of pp(i,x) - 1/(1+gamma).  Thus
- *            states with posterior probabilities < 1/(1+gamma) will
- *            be penalized, and those > 1/(1+gamma) are rewarded.
- *            
- *            
+ *            Higher <gamma> increases alignment sensitivity; lower
+ *            <gamma> increases specificity.  Given posterior
+ *            probabilities pp(i,x) for every state x at every target
+ *            position i in the DP matrix, the algorithm finds a state
+ *            path consistent with the model that maximizes the sum of
+ *            pp(i,x) - 1/(1+gamma).  Thus states with posterior
+ *            probabilities < 1/(1+gamma) will be penalized, and those
+ *            > 1/(1+gamma) are rewarded.
  *
  * Args:      gm    - query profile (we need to check consistency of alignment against nonzero transitions)
- *            gamma -
+ *            gamma - gamma-centroid parameter
  *            bmd   - banded posterior probability matrix, previously calculated by caller
- *            bma   - RESULT: filled MEA alignment banded DP matrix; caller provides the allocated space
- *            tr    - RESULT: MEA alignment traceback for the entire target sequence.
+ *            bma   - RESULT: filled alignment banded DP matrix; caller provides the allocated space
+ *            tr    - RESULT: alignment traceback for the entire target sequence.
  *
  * Returns:   <eslOK> on success
  *
  * Throws:    (no abnormal error conditions)
  *
- * Xref:      SRE:J9/137 for notes on extending Hamada/Asai gamma-centroid
+ * Xref:      [HamadaAsai11] for gamma-centroid estimation
+ *            SRE:J9/137 for notes on extending Hamada/Asai gamma-centroid
  *                       from simple residue ij alignment to full state path
  *            [Kall05] for more on why the delta function on transitions is needed
  */
@@ -670,7 +671,7 @@ p7_BandedAlign(const P7_PROFILE *gm, float gamma, const P7_BANDMX *bmd, P7_BANDM
 	      dgc = (*ppp++) + gammaterm + ESL_MAX( P7_DELTAT(mgc, TSC(p7P_MD, k)), P7_DELTAT(dgc, TSC(p7P_DD, k))); /* DG */
 	    }
 
-	  xc[p7B_E]      =  ppx[p7B_E] + gammaterm + ESL_MAX( xE, P7_DELTAT(dgc, TSC(p7P_DGE, kbc)));
+	  xc[p7B_E]      =  ppx[p7B_E] + gammaterm + ESL_MAX( xE, P7_DELTAT(dgc, TSC(p7P_DGE, kbc))); /* dgc includes Mkb-> exit as Mkb->Dkb+1 */
 	  xc[p7B_N] = xN =  ppx[p7B_N] + gammaterm +          P7_DELTAT(       xN, gm->xsc[p7P_N][p7P_LOOP]);
 	  xc[p7B_J] = xJ =  ppx[p7B_J] + gammaterm + ESL_MAX( P7_DELTAT(       xJ, gm->xsc[p7P_J][p7P_LOOP]),  P7_DELTAT(xc[p7B_E], gm->xsc[p7P_E][p7P_LOOP]));
 	  xc[p7B_B]      =  ppx[p7B_B] + gammaterm + ESL_MAX( P7_DELTAT(xc[p7B_J], gm->xsc[p7P_J][p7P_MOVE]),  P7_DELTAT(xc[p7B_N], gm->xsc[p7P_N][p7P_MOVE]));

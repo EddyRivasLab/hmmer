@@ -61,10 +61,15 @@
  * 1..L-1:   *  *  *  *  *  *    .  .  .  .  .  .    .  .  .  .  .  .          .  .  *  *  .  .     .  .  .  .  .  .  .  *  *
  *      L:   *  *  *  *  *  *    .  .  *  *  .  .    .  .  *  *  .  .          .  .  *  *  .  .     .  *  *  *  *  *  .  *  *
  * Decoding:
- *      0:   0  0  0  0  0  0    0  0  0  0  0  0    0  0  0  0  0  0          0  0  0  0  0  0     0  0  0  0  0  0  0  0  0 
- *      1:   0  0  0  0  0  0    .  .  0  0  0  0    .  .  0  0  .  .          .  .  0  0  .  .     0  .  0  0  0  0  0  0  0  
- * 2..L-1:   0  0  0  0  0  0    .  .  .  .  0  0    .  .  .  .  .  .          .  .  0  0  .  .     0  .  .  0  0  0  .  .  .
- *      L:   0  0  0  0  0  0    .  .  0  0  0  0    .  .  0  0  .  .          .  .  0  0  .  .     0  0  0  0  0  0  .  0  .
+ *      0:   0  0  0  0  0  0    0  0  0  0  0  0    0  0  0  0  0  0          0  0  0  0  0  0     0  .  0  .  .  .  0  0  0 
+ *      1:   0  0  0  0  0  0    .  .  0  0  0  0    .  .  0  0  .  .          .  .  0  0  .  .     .  .  .  .  .  .  .  0  0  
+ * 2..L-1:   0  0  0  0  0  0    .  .  .  .  0  0    .  .  .  .  .  .          .  .  0  0  .  .     .  .  .  .  .  .  .  .  .
+ *      L:   0  0  0  0  0  0    .  .  0  0  0  0    .  .  0  0  .  .          .  .  0  0  .  .     .  0  0  0  0  0  .  0  .
+ * Alignment:
+ *      0:   *  *  *  *  *  *    *  *  *  *  *  *    *  *  *  *  *  *          *  *  *  *  *  *     *  .  *  .  .  .  *  *  *
+ *      1:   *  *  *  *  *  *    .  .  *  *  *  *    .  .  *  *  .  .          .  .  *  *  .  .     .  .  .  .  .  .  .  *  *
+ * 2..L-1:   *  *  *  *  *  *    .  .  .  .  *  *    .  .  .  .  .  .          .  .  *  *  .  .     .  .  .  .  .  .  .  *  *
+ *      L:   *  *  *  *  *  *    .  .  *  *  *  *    .  .  *  *  .  .          .  .  *  *  .  .     .  *  *  *  *  *  .  *  *
  *
  * rationale:
  *   k=0 columns are only present for indexing k=1..M conveniently
@@ -79,6 +84,8 @@
  *     IL,IG values at i=L allowed in Forward because they can be reached, but cannot be extended; saves having to special case their nonexistence.
  *   similar for i=1; IL/IG state must be preceded by at least one M state and therefore at least one residue.
  *     IL,IG values at i=1 allowed in Backward because they can be reached, but not extended; saves special casing.
+ *   JJ,CC specials are only used in the Decoding matrix; they're decoded J->J, C->C transitions, for these states that emit on transition.
+ *     N=NN for all i>=1, and NN=0 at i=0, so we don't need to store NN decoding.
  * 
  * Access:
  *  Row dp[r]:                     gxd->dp_mem+(r*allocW) = dpc
@@ -127,8 +134,8 @@ extern int   p7_refmx_Validate(P7_REFMX *rmx, char *errbuf);
 /* from reference_fwdback.c */
 extern int p7_ReferenceForward (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, float *opt_sc);
 extern int p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, float *opt_sc);
-extern int p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, P7_REFMX *bck, P7_REFMX *pp);
-extern int p7_ReferenceAlignMEA(const P7_PROFILE *gm, const P7_REFMX *pp,  P7_REFMX *rmx, P7_TRACE *tr);
+extern int p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, const P7_REFMX *bck, P7_REFMX *pp);
+extern int p7_ReferenceAlign   (const P7_PROFILE *gm, float gamma, const P7_REFMX *pp,  P7_REFMX *rmx, P7_TRACE *tr, float *opt_gain);
 
 /* from reference_viterbi.c */
 extern int p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, P7_TRACE *opt_tr, float *opt_sc);

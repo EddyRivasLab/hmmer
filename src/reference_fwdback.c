@@ -68,7 +68,7 @@
  * Notes:     This function makes assumptions about the order
  *            of the state indices in p7_refmx.h:
  *              main states: ML MG IL IG DL DG
- *              specials:    E N J B L G C
+ *              specials:    E N J B L G C JJ CC
  *              
  *            If L=0, the score is -infinity, by construction; HMMER
  *            profiles generate sequences of L>=1.
@@ -83,7 +83,7 @@ p7_ReferenceForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
   int    i, k, s;
   float  mlv, mgv;	      /* ML,MG cell values on current row   */
   float  dlv, dgv; 	      /* pushed-ahead DL,DG cell k+1 values */
-  float  xE, xN, xJ, xB, xL, xG;
+  float  xE, xL, xG;
   
 #ifdef p7_DEBUGGING
   if (L+1 > rmx->allocR)                           ESL_EXCEPTION(eslEINVAL, "matrix allocR too small; missing a p7_refmx_GrowTo() initialization call?");
@@ -93,16 +93,17 @@ p7_ReferenceForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
 
   /* Initialization of the zero row. */
   dpc = rmx->dp[0];
-  for (s = 0; s < (M+1) * p7R_NSCELLS; s++)
-    *dpc++ = -eslINFINITY; 	                               // all M,I,D; k=0..M
-  *dpc++ = -eslINFINITY;	                               // E
-  *dpc++ = 0.0;			                               // N
-  *dpc++ = -eslINFINITY;                                       // J
-  *dpc++ = gm->xsc[p7P_N][p7P_MOVE];                           // B
-  *dpc++ = xL = gm->xsc[p7P_N][p7P_MOVE] + gm->xsc[p7P_B][0];  // L
-  *dpc++ = xG = gm->xsc[p7P_N][p7P_MOVE] + gm->xsc[p7P_B][1];  // G
-  *dpc        = -eslINFINITY;                                  // C
-  /* *dpc must end and stay on C state, to handle L=0 case where the recursion body below doesn't run */
+  for (s = 0; s < (M+1) * p7R_NSCELLS; s++) *dpc++ = -eslINFINITY; // all M,I,D; k=0..M
+  dpc[p7R_E]      = -eslINFINITY;	                           
+  dpc[p7R_N]      = 0.0;			                   
+  dpc[p7R_J]      = -eslINFINITY;                                  
+  dpc[p7R_B]      = gm->xsc[p7P_N][p7P_MOVE];                      
+  dpc[p7R_L] = xL = gm->xsc[p7P_N][p7P_MOVE] + gm->xsc[p7P_B][0];  
+  dpc[p7R_G] = xG = gm->xsc[p7P_N][p7P_MOVE] + gm->xsc[p7P_B][1];  
+  dpc[p7R_C]      = -eslINFINITY;                                  
+  dpc[p7R_JJ]     = -eslINFINITY;                             
+  dpc[p7R_CC]     = -eslINFINITY;                             
+  /* *dpc is on the specials' subrow; must be there to make L=0 case work, where loop below is skipped */
 
   /* Main DP recursion */
   for (i = 1; i <= L; i++)
@@ -177,17 +178,19 @@ p7_ReferenceForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
       /* row i is now finished, and dpc[] is positioned exactly on first special state, E */
       dpp += p7R_NSCELLS;    /* now dpp[] is also positioned exactly on first special, E */
       
-      *dpc++ = xE;		/* E */
-      *dpc++ = xN = *(dpp + p7R_N) + gm->xsc[p7P_N][p7P_LOOP]; /* N */
-      *dpc++ = xJ = p7_FLogsum( *(dpp + p7R_J) + gm->xsc[p7P_J][p7P_LOOP],  xE + gm->xsc[p7P_E][p7P_LOOP]); /* J */
-      *dpc++ = xB = p7_FLogsum(            xN  + gm->xsc[p7P_N][p7P_MOVE],  xJ + gm->xsc[p7P_J][p7P_MOVE]); /* B */
-      *dpc++ = xL = xB  + gm->xsc[p7P_B][0]; /* L */
-      *dpc++ = xG = xB  + gm->xsc[p7P_B][1]; /* G */
-      *dpc        = p7_FLogsum( *(dpp + p7R_C) + gm->xsc[p7P_C][p7P_LOOP],  xE + gm->xsc[p7P_E][p7P_MOVE]); /* C */
+      dpc[p7R_E]      = xE;		
+      dpc[p7R_N]      =             dpp[p7R_N] + gm->xsc[p7P_N][p7P_LOOP]; 
+      dpc[p7R_J]      = p7_FLogsum( dpp[p7R_J] + gm->xsc[p7P_J][p7P_LOOP], dpc[p7R_E] + gm->xsc[p7P_E][p7P_LOOP]); 
+      dpc[p7R_B]      = p7_FLogsum( dpc[p7R_N] + gm->xsc[p7P_N][p7P_MOVE], dpc[p7R_J] + gm->xsc[p7P_J][p7P_MOVE]); 
+      dpc[p7R_L] = xL =             dpc[p7R_B] + gm->xsc[p7P_B][0]; 
+      dpc[p7R_G] = xG =             dpc[p7R_B] + gm->xsc[p7P_B][1]; 
+      dpc[p7R_C]      = p7_FLogsum( dpp[p7R_C] + gm->xsc[p7P_C][p7P_LOOP], dpc[p7R_E] + gm->xsc[p7P_E][p7P_MOVE]);
+      dpc[p7R_JJ]     = -eslINFINITY;                                                                           
+      dpc[p7R_CC]     = -eslINFINITY;                                                                           
     }
-  /* Done with all rows i. As we leave, dpc is still sitting on the xC value for i=L ... including even the L=0 case */
+  /* Done with all rows i. As we leave, dpc is still sitting on the final special value for i=L ... including even the L=0 case */
   
-  if (opt_sc) *opt_sc = *dpc + gm->xsc[p7P_C][p7P_MOVE];
+  if (opt_sc) *opt_sc = dpc[p7R_C] + gm->xsc[p7P_C][p7P_MOVE]; /* C->T */
   rmx->M    = M;
   rmx->L    = L;
   rmx->type = p7R_FORWARD;
@@ -256,7 +259,7 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
   float mgc, mlc;
   float mgn, mln;
   float ign, iln;
-  float xN, xJ, xC, xE, xG, xL, xB;	/* temp vars for special state values             */
+  float xE, xG, xL;	        /* temp vars for special state values             */
   int   i;			/* counter over sequence positions 1..L */
   int   k;			/* counter over model positions 1..M    */
   const int M  = gm->M;
@@ -268,51 +271,51 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
 #endif
 
   /* Initialize row L. */
-  /* Specials are in order ENJBLGC: step backwards thru them */
-  dpc  = rmx->dp[L] + (M+1)*p7R_NSCELLS + p7R_C;
+  /* Specials are in order ENJBLGC,JJ,CC: step backwards thru them */
+  dpc  = rmx->dp[L] + (M+1)*p7R_NSCELLS;
   rsc  = gm->rsc[dsq[L]] + M*p7P_NR;
+  tsc  = gm->tsc + (M-1)*p7P_NTRANS;
 
-  *dpc-- = xC = gm->xsc[p7P_C][p7P_MOVE];      /* C : C<-T */
-  *dpc--      = -eslINFINITY;                  /* G : impossible w/o residues after it */
-  *dpc--      = -eslINFINITY;	               /* L : ditto, impossible */
-  *dpc--      = -eslINFINITY;	               /* B : ditto, impossible */
-  *dpc--      = -eslINFINITY;	               /* J : ditto, impossible */
-  *dpc--      = -eslINFINITY;	               /* N : ditto, impossible */
-  *dpc-- = xE = xC + gm->xsc[p7P_E][p7P_MOVE]; /* E: E<-C<-T, no tail */
-  /* dpc is now sitting on [M][DG] */
-  
-  /* dpc main cells for k=M*/
-  tsc = gm->tsc + (M-1)*p7P_NTRANS;
-  
+  dpc[p7R_CC]      = -eslINFINITY;                 
+  dpc[p7R_JJ]      = -eslINFINITY;                 
+  dpc[p7R_C]       = gm->xsc[p7P_C][p7P_MOVE];   
+  dpc[p7R_G]       = -eslINFINITY;                 
+  dpc[p7R_L]       = -eslINFINITY;	           
+  dpc[p7R_B]       = -eslINFINITY;	           
+  dpc[p7R_J]       = -eslINFINITY;	           
+  dpc[p7R_N]       = -eslINFINITY;	           
+  dpc[p7R_E]  = xE = dpc[p7R_C] + gm->xsc[p7P_E][p7P_MOVE]; 
+  dpc -= p7R_NSCELLS;	     /* moves dpc[] to supercell M */
+
   xG   = xE + *rsc + *(tsc + p7P_GM);
   xL   = xE + *rsc + *(tsc + p7P_LM);
+  dpc[p7R_DG] = dgc = xE;		/* DG: D_M->E (transition prob 1.0)  */
+  dpc[p7R_DL] = dlc = xE;		/* DL: ditto */
+  dpc[p7R_IG]       = -eslINFINITY;	/* IG_M: no such state: always init'ed to -inf */
+  dpc[p7R_IL]       = -eslINFINITY;	/* IL_M: no such state: always init'ed to -inf */
+  dpc[p7R_MG]       = xE;		/* MG: M_M->E (transition prob 1.0)  */
+  dpc[p7R_ML]       = xE;		/* ML: ditto */
+  dpc -= p7R_NSCELLS;
   rsc -= p7P_NR;
-
-  *dpc-- = dgc = xE;		/* DG: D_M->E (transition prob 1.0)  */
-  *dpc-- = dlc = xE;		/* DL: ditto */
-  *dpc-- = -eslINFINITY;	/* IG_M: no such state: always init'ed to -inf */
-  *dpc-- = -eslINFINITY;	/* IL_M: no such state: always init'ed to -inf */
-  *dpc-- = xE;			/* MG: M_M->E (transition prob 1.0)  */
-  *dpc-- = xE;			/* ML: ditto */
-  /* dpc is now sitting on [M-1][DG] */
 
   /* initialize main cells [k=1..M-1] on row i=L*/
   for (k = M-1; k >= 1; k--)
     {
-      mgc =                 dgc + *(tsc + p7P_MD);
-      mlc =  p7_FLogsum(xE, dlc + *(tsc + p7P_MD));
+      mgc =                 dgc + tsc[p7P_MD];
+      mlc =  p7_FLogsum(xE, dlc + tsc[p7P_MD]);
 
       xG   = p7_FLogsum(xG, mgc + *rsc + *(tsc + p7P_GM - p7P_NTRANS)); /* off-by-one: tGMk stored as [k-1,GM] */
       xL   = p7_FLogsum(xL, mlc + *rsc + *(tsc + p7P_LM - p7P_NTRANS));
       rsc -= p7P_NR;
 
-      *dpc-- = dgc =                dgc + *(tsc + p7P_DD);  /* DG: only D->D path is possible */
-      *dpc-- = dlc = p7_FLogsum(xE, dlc + *(tsc + p7P_DD)); /* DL: Dk->Dk+1 or Dk->E */
-      *dpc--       = -eslINFINITY;  	                    /* IG impossible w/o residues following it */
-      *dpc--       = -eslINFINITY;	                    /* IL, ditto */
-      *dpc--       = mgc;
-      *dpc--       = mlc;
+      dpc[p7R_DG] = dgc =                dgc + tsc[p7P_DD];  /* DG: only D->D path is possible */
+      dpc[p7R_DL] = dlc = p7_FLogsum(xE, dlc + tsc[p7P_DD]); /* DL: Dk->Dk+1 or Dk->E */
+      dpc[p7R_IG]       = -eslINFINITY;  	                    /* IG impossible w/o residues following it */
+      dpc[p7R_IL]       = -eslINFINITY;	                    /* IL, ditto */
+      dpc[p7R_MG]       = mgc;
+      dpc[p7R_ML]       = mlc;
       tsc -= p7P_NTRANS;
+      dpc -= p7R_NSCELLS;
     }
   /* k=0 cells are -inf */
 
@@ -323,36 +326,34 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
                                                         /* ...xG,xL inherited from previous loop...               */
       rsn = gm->rsc[dsq[i+1]] + M * p7P_NR;        	/* residue x_{i+1} scores in *next* row:  start at end, M */
       rsc = gm->rsc[dsq[i]]   + M * p7P_NR;	        /* residue x_{i} scores in *current* row: start at end, M */
-      dpc = rmx->dp[i]   + (M+1)*p7R_NSCELLS + p7R_C;	/* dpc is on [i,(M),C]   : end of current row's specials  */
-      dpn = rmx->dp[i+1] + (M+1)*p7R_NSCELLS;	        /* dpn is on [i+1,(M),0] : start of next row's specials   */
+      dpc = rmx->dp[i]   + (M+1)*p7R_NSCELLS;   	/* dpc is on start of current row's specials              */
+      dpn = rmx->dp[i+1] + (M+1)*p7R_NSCELLS;	        /* dpn is on start of next row's specials                 */
       tsc = gm->tsc + M * p7P_NTRANS;		        /* tsc is on t[M,0]: vector [MM IM DM LM GM MD DD MI II]  */
 
       /* Calculation of the special states. */
-      /* dpc is on dp[i][C] special, will now step backwards thru [E N J B L G C ] */
-      *dpc-- = xC = *(dpn + p7R_C) + gm->xsc[p7P_C][p7P_LOOP]; /* C = C<-C */
-
-      *dpc-- = xG;     /* G was calculated during prev row (G->Mk wing unfolded) */
-      *dpc-- = xL;     /* L was calculated during prev row */
-
-      *dpc-- = xB = p7_FLogsum( xG + gm->xsc[p7P_B][1],    /* B<-G */
-				xL + gm->xsc[p7P_B][0]);   /* B<-L */
-      
-      *dpc-- = xJ = p7_FLogsum( *(dpn + p7R_J) + gm->xsc[p7P_J][p7P_LOOP],   /* J<-J */
-				xB              + gm->xsc[p7P_J][p7P_MOVE]);  /* J<-B */
-      
-      *dpc--      = p7_FLogsum( *(dpn + p7R_N) + gm->xsc[p7P_N][p7P_LOOP],  /* N<-N */
-				xB              + gm->xsc[p7P_N][p7P_MOVE]); /* N<-B */
-
-      *dpc-- = xE = p7_FLogsum( xC + gm->xsc[p7P_E][p7P_MOVE],
-				xJ + gm->xsc[p7P_E][p7P_LOOP]);
-      dpn -= 5;		      /* backs dpn up to [i+1,M,MG], skipping [IL IG DL DG] at k=M */
+      /* dpc is on dp[i] special row, will now step backwards thru [E N J B L G C JJ CC] */
+      dpc[p7R_CC]      = -eslINFINITY;			       /* CC unused */
+      dpc[p7R_JJ]      = -eslINFINITY;			       /* JJ unused */
+      dpc[p7R_C]       = dpn[p7R_C] + gm->xsc[p7P_C][p7P_LOOP]; /* C = C<-C */
+      dpc[p7R_G]  = xG;     /* G was calculated during prev row (G->Mk wing unfolded) */
+      dpc[p7R_L]  = xL;     /* L was calculated during prev row */
+      dpc[p7R_B]       = p7_FLogsum(dpc[p7R_G] + gm->xsc[p7P_B][1],    /* B<-G */
+				    dpc[p7R_L] + gm->xsc[p7P_B][0]);   /* B<-L */
+      dpc[p7R_J]       = p7_FLogsum(dpn[p7R_J] + gm->xsc[p7P_J][p7P_LOOP],   /* J<-J */
+				    dpc[p7R_B] + gm->xsc[p7P_J][p7P_MOVE]);  /* J<-B */
+      dpc[p7R_N]       = p7_FLogsum(dpn[p7R_N] + gm->xsc[p7P_N][p7P_LOOP],   /* N<-N */
+				    dpc[p7R_B] + gm->xsc[p7P_N][p7P_MOVE]);  /* N<-B */
+      dpc[p7R_E]  = xE = p7_FLogsum(dpc[p7R_C] + gm->xsc[p7P_E][p7P_MOVE],
+				    dpc[p7R_J] + gm->xsc[p7P_E][p7P_LOOP]);
+      dpc -= p7R_NSCELLS;	/* dpc now on [i,M] supercell   */
+      dpn -= p7R_NSCELLS;	/* dpn now on [i+1,M] supercell */
       
 
       /* Initialization of the k=M states */
-      /* dpc on [i,k=M,DG], init at k=M, step back thru [ ML MG IL IG DL DG] */
-      /* dpn on [i+1,k=M,MG] */
-      mgn = *rsn + *dpn--;	/* pick up MG(i+1,k=M) + s(x_i+1,k=M, M) */
-      mln = *rsn + *dpn--;	/* pick up ML(i+1,k=M) + s(x_i+1,k=M, M) */
+      /* dpc on [i,k=M], init at k=M, step back thru [ ML MG IL IG DL DG] */
+      /* dpn on [i+1,k=M] */
+      mgn = *rsn + dpn[p7R_MG];	/* pick up MG(i+1,k=M) + s(x_i+1,k=M, M) */
+      mln = *rsn + dpn[p7R_ML];	/* pick up ML(i+1,k=M) + s(x_i+1,k=M, M) */
       rsn--;			/* rsn now on s(x_i+1, k=M-1, I)         */
 
       xG     = xE + *rsc + *(tsc + p7P_GM - p7P_NTRANS); /* t[k-1][GM] is G->Mk wing-folded entry, recall off-by-one storage   */
@@ -360,25 +361,22 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
       rsc -= p7P_NR;		/* rsc now on s[x_{i},M-1,M] */
       tsc -= p7P_NTRANS;	/* tsc now on t[M-1,0]       */
 
-      *dpc-- = dgc = xE;		/* DGm->E */
-      *dpc-- = dlc = xE;		/* DLm->E */
-      *dpc--       = -eslINFINITY;	/* IGm nonexistent */
-      *dpc--       = -eslINFINITY;	/* ILm nonexistent */
-      *dpc--       = xE;		/* MGm->E */
-      *dpc--       = xE;		/* MLm->E */
-      /* dpc on [i,M-1,DG]; dpn on [i+1,M-1,DG] */
-
+      dpc[p7R_DG] = dgc = xE;		/* DGm->E */
+      dpc[p7R_DL] = dlc = xE;		/* DLm->E */
+      dpc[p7R_IG]       = -eslINFINITY;	/* IGm nonexistent */
+      dpc[p7R_IL]       = -eslINFINITY;	/* ILm nonexistent */
+      dpc[p7R_MG]       = xE;		/* MGm->E */
+      dpc[p7R_ML]       = xE;		/* MLm->E */
+      dpc -= p7R_NSCELLS;		/* dpc now on [i,M-1]   */
+      dpn -= p7R_NSCELLS;		/* dpn now on [i+1,M-1] */
 
       /* The main recursion over model positions k=M-1 down to 1. */
       for (k = M-1; k >= 1; k--)
 	{
                              	    /* rsn is on residue score [x_{i+1},k,I]    */
-	                            /* dpn is on [i+1,k,DG]                     */
-	  dpn -= 2;	   	    /* skip DG/DL values on next row            */
-	  ign = *dpn--;		    /* pick up IG value from dp[i+1]            */ // if inserts had nonzero score: + *rsn 
-	  iln = *dpn--;		    /* pick up IL value                         */ // if inserts had nonzero score: + *rsn
+	  ign = dpn[p7R_IG];        /* pick up IG value from dp[i+1]            */ // if inserts had nonzero score: + *rsn 
+	  iln = dpn[p7R_IL];	    /* pick up IL value                         */ // if inserts had nonzero score: + *rsn
 	  rsn--;		    /* skip residue score for I (zero)          */ 
-	                            /* dpn is now sitting on dp[i+1,k,MG]       */
 
                                                                  /* tsc is on tsc[k,0] */
 	  mgc =  p7_FLogsum( p7_FLogsum(mgn + *(tsc + p7P_MM),   /* mgn = [i+1,k+1,MG] */
@@ -394,31 +392,32 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
 	  xL   = p7_FLogsum(xL, mlc + *rsc + *(tsc + p7P_LM - p7P_NTRANS)); /* t[k-1][LM] is L->Mk uniform local entry         */
 	  rsc -= p7P_NR;				       /* rsc now on s[x_i, k-1, M] */
 
-	  /* dpc is on [i,k,DG] and will now step backwards thru: [ ML MG IL IG DL DG ] */
-	  *dpc-- = dgc = p7_FLogsum( mgn + *(tsc + p7P_DM),   /* dgc picked up for next loop of k */
-				     dgc + *(tsc + p7P_DD));
-	  *dpc-- = dlc = p7_FLogsum( p7_FLogsum( mln + *(tsc + p7P_DM),   /* dlc picked up for next loop of k */
-						 dlc + *(tsc + p7P_DD)),
-				     xE);
+	  /* dpc is on [i,k] and will now step backwards thru: [ ML MG IL IG DL DG ] */
+	  dpc[p7R_DG] = dgc = p7_FLogsum( mgn + *(tsc + p7P_DM),   /* dgc picked up for next loop of k */
+					  dgc + *(tsc + p7P_DD));
+	  dpc[p7R_DL] = dlc = p7_FLogsum( p7_FLogsum( mln + *(tsc + p7P_DM),   /* dlc picked up for next loop of k */
+						      dlc + *(tsc + p7P_DD)),
+					  xE);
 
-	  *dpc-- = p7_FLogsum( mgn + *(tsc + p7P_IM),
-			       ign + *(tsc + p7P_II));
-	  *dpc-- = p7_FLogsum( mln + *(tsc + p7P_IM),
-			       iln + *(tsc + p7P_II));
+	  dpc[p7R_IG] = p7_FLogsum( mgn + *(tsc + p7P_IM),
+				    ign + *(tsc + p7P_II));
+	  dpc[p7R_IL] = p7_FLogsum( mln + *(tsc + p7P_IM),
+				    iln + *(tsc + p7P_II));
 
-                                /* recall that dpn is on dp[i+1][k,MG]    */
-	  mgn = *rsn + *dpn--;	/* pick up M[i+1,k]; add score[x_i+1,k,M] */
-	  mln = *rsn + *dpn--;
+	  mgn = *rsn + dpn[p7R_MG];	/* pick up M[i+1,k]; add score[x_i+1,k,M] */
+	  mln = *rsn + dpn[p7R_ML];
 	  rsn--;		/* rsn is now on score[i+1,k-1,I] */
 
-	  *dpc-- = mgc;		/* delayed store of [i,k,MG] value enables dpc,dpn to point into same single row */
-	  *dpc-- = mlc;
+	  dpc[p7R_MG] = mgc;		/* delayed store of [i,k,MG] value enables dpc,dpn to point into same single row */
+	  dpc[p7R_ML] = mlc;
 
 	  tsc -= p7P_NTRANS;
+	  dpn -= p7R_NSCELLS;
+	  dpc -= p7R_NSCELLS;
 
 	  /* as we loop around now and decrement k:
-           *   dpn is on [i+1,k-1,DG] which becomes [i+1,k,DG] 
-           *   dpc is on [i,k-1,DG]   which becomes [i,k,DG] 
+           *   dpn is on [i+1,k-1] which becomes [i+1,k] 
+           *   dpc is on [i,k-1]   which becomes [i,k] 
 	   *   tsc is on tsc[k-1,0]   which becomes tsc[k,0]
 	   *   rsn is on s[i+1,k-1,I] which becomes s[i+1,k,I]
 	   *   rsc is on s[i,  k-1,M] which becomes s[i,k,M]
@@ -433,18 +432,18 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
     } /* end of loop over rows i. */
   /* now on row i=0. Only N,B,G,L states are reachable on this initial row. G,L values are already done. */
   
-  dpc = rmx->dp[0] + (M+1)*p7R_NSCELLS + p7R_C;	/* dpc is on [0,(M),C] : end of row 0 specials  */
-  dpn = rmx->dp[1] + (M+1)*p7R_NSCELLS;	        /* dpn is on [1,(M),0] : start of row 1 specials   */
+  dpc = rmx->dp[0] + (M+1)*p7R_NSCELLS;	/* dpc is on start of row 0 specials  */
+  dpn = rmx->dp[1] + (M+1)*p7R_NSCELLS; /* dpn is on start of row 1 specials  */
 
-  *dpc--      = -eslINFINITY;                                           /* C */
-  *dpc--      = xG;                                                     /* G */
-  *dpc--      = xL;                                                     /* L */
-  *dpc-- = xB = p7_FLogsum( xG + gm->xsc[p7P_B][1],                     /* B */
-			    xL + gm->xsc[p7P_B][0]);   
-  *dpc--      = -eslINFINITY;                                           /* J */
-  *dpc-- = xN = p7_FLogsum( *(dpn + p7R_N) + gm->xsc[p7P_N][p7P_LOOP],	/* N */
-			    xB             + gm->xsc[p7P_N][p7P_MOVE]); 
-  *dpc--      = -eslINFINITY;                                           /* E */
+  dpc[p7R_CC] = -eslINFINITY;                                        
+  dpc[p7R_JJ] = -eslINFINITY;                                        
+  dpc[p7R_C]  = -eslINFINITY;                                        
+  dpc[p7R_G]  = xG;                                                  
+  dpc[p7R_L]  = xL;                                                  
+  dpc[p7R_B]  = p7_FLogsum( dpc[p7R_G] + gm->xsc[p7P_B][1],        dpc[p7R_L] + gm->xsc[p7P_B][0]);   
+  dpc[p7R_J]  = -eslINFINITY;                                      
+  dpc[p7R_N]  = p7_FLogsum( dpn[p7R_N] + gm->xsc[p7P_N][p7P_LOOP], dpc[p7R_B] + gm->xsc[p7P_N][p7P_MOVE]); 
+  dpc[p7R_E]  = -eslINFINITY;                                      
 
   /* for complete cleanliness: set all the main states on row 0 to -inf */
   dpc = rmx->dp[0] + p7R_NSCELLS;
@@ -454,7 +453,7 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
   rmx->M    = M;
   rmx->L    = L;
   rmx->type = p7R_BACKWARD;
-  if (opt_sc) *opt_sc = xN;
+  if (opt_sc) *opt_sc = dpc[p7R_N];
   return eslOK;
 }
 /*-------------- end, backwards implementation ------------------*/
@@ -467,18 +466,13 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
 /* Function:  p7_ReferenceDecoding()
  * Synopsis:  Reference implementation of posterior decoding.
  *
- * Purpose: Given previously calculated Forward and Backward matrices
+ * Purpose:   Given previously calculated Forward and Backward matrices
  *            <fwd> and <bck>, for query profile <gm>, perform
  *            posterior decoding for states responsible for residue
  *            emissions.  (That is, $P(s \mid x_i)$ for each state <s>
  *            that could account for each residue $x_i$.) The resulting
  *            posterior decoding matrix is left in <pp>, which has
  *            been allocated and provided by the caller.
- *            
- *            If the caller wants to save an allocation of a matrix,
- *            <bck> and <pp> can be the same matrix, in which case
- *            <bck> will be overwritten by the posterior
- *            probabilities.
  *            
  * Args:      gm  - query profile
  *            fwd - Forward matrix
@@ -495,11 +489,11 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
  *            the sizes of the <fwd> and <bck> matrices don't match.
  */
 int
-p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, P7_REFMX *bck, P7_REFMX *pp)
+p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, const P7_REFMX *bck, P7_REFMX *pp)
 {
   const int L = fwd->L;
   const int M = fwd->M;
-  float xN, xJ, xC;
+  float     xJ, xC;
   float    *fwdp;
   float    *bckp;
   float    *ppp;
@@ -519,11 +513,31 @@ p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, P7_REFMX *bck, P
   if ((fwd->M+1)*p7R_NSCELLS+p7R_NXCELLS < pp->allocW) ESL_EXCEPTION(eslEINVAL, "<pp> matrix allocW too small; missing p7_refmx_GrowTo() initialization call?");
 #endif
 
-  ppp  = pp->dp[0];
-  for (x = 0; x < p7R_NSCELLS * (M+1) + p7R_NXCELLS; x++) *ppp++ = 0.0;
-  xN = 0.0;
-  xJ = xC = -eslINFINITY;
+  /* On row 0, all main states are 0; initialize them so. set
+   * N is 1.0 by definition.
+   * Some specials (BLG) can be reached, calculate w/ fwdp,bckp on specials.
+   */
+  ppp = pp->dp[0];
+  for (x = 0; x < p7R_NSCELLS * (M+1); x++) *ppp++ = 0.0;
+  fwdp = fwd->dp[0] + (p7R_NSCELLS * (M+1)); /* position on first special of row 0 */
+  bckp = bck->dp[0] + (p7R_NSCELLS * (M+1)); 
+  ppp[p7R_E]  = -eslINFINITY; 
+  ppp[p7R_N]  = 1.0f;
+  ppp[p7R_J]  = -eslINFINITY;
+  ppp[p7R_B]  = expf(fwdp[p7R_B] + bckp[p7R_B] - bckp[p7R_N]); /* bck[0][N] is the tot score. Use it to normalize on row 0 */
+  ppp[p7R_L]  = expf(fwdp[p7R_L] + bckp[p7R_L] - bckp[p7R_N]);
+  ppp[p7R_G]  = expf(fwdp[p7R_G] + bckp[p7R_G] - bckp[p7R_N]);
+  ppp[p7R_C]  = -eslINFINITY;
+  ppp[p7R_JJ] = -eslINFINITY;
+  ppp[p7R_CC] = -eslINFINITY;
+  
+  /* xJ/xC hold the previous row i-1 values from forward matrix;
+   * needed for decoding emit-on-transition 
+   */
+  xJ = fwdp[p7R_J];     /* i.e. -inf */
+  xC = fwdp[p7R_C];	/* i.e. -inf */
 
+  /* main recursion */
   for (i = 1; i <= L; i++)
     {
       fwdp  = fwd->dp[i] + p7R_NSCELLS;
@@ -532,50 +546,36 @@ p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, P7_REFMX *bck, P
       denom = 0.0;
       for (x = 0; x < p7R_NSCELLS; x++) *ppp++ = 0.0;
 
-      for (k = 1; k < M; k++)
+      for (k = 1; k <= M; k++)
 	{
 	  /* [ ML MG IL IG DL DG] */
-	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* ML */
-	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* MG */
-	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* IL */
-	  *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp+=3; bckp+=3; /* IG */
-	  *ppp++ = 0.0f;		/* DL */
-	  *ppp++ = 0.0f;		/* DG */
+	  *ppp   = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++; bckp++;  /* ML */
+	  *ppp   = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++; bckp++;  /* MG */
+	  *ppp   = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++; bckp++;  /* IL */  // at k=M IL=0.0; made so because fwd/bck are -inf
+	  *ppp   = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++; bckp++;  /* IG */  // ditto for IG
+	  *ppp++ = expf(*fwdp + *bckp - sc);                  fwdp++; bckp++;  /* DL */
+	  *ppp++ = expf(*fwdp + *bckp - sc);                  fwdp++; bckp++;  /* DG */
 	}
-      *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* ML_m */
-      *ppp = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++;  bckp++;  /* MG_m */
-      *ppp++ = 0.0;
-      *ppp++ = 0.0;
-      *ppp++ = 0.0; 
-      *ppp++ = 0.0; fwdp += 5; bckp += 5; /* +4, +1 to skip E; fwd,bck now on N */
 
-      /* [ E N J B L G C ] */
-      *ppp++ = 0.0;		/* E */
-      *ppp   = expf(xN + *bckp + gm->xsc[p7P_N][p7P_LOOP] - sc); denom += *ppp++; xN = *fwdp++;  bckp++;  /* N */
-      *ppp   = expf(xJ + *bckp + gm->xsc[p7P_J][p7P_LOOP] - sc); denom += *ppp++; xJ = *fwdp++;  bckp++; /* J; fwdp, bckp advance to C */
-      *ppp++ = 0.0;		/* B */
-      *ppp++ = 0.0;		/* L */
-      *ppp++ = 0.0; 	        /* G */
-      fwdp += 3; bckp += 3;
-      *ppp   = expf(xC + *bckp + gm->xsc[p7P_C][p7P_LOOP] - sc); denom += *ppp;   xC = *fwdp;  /* C */
-      /* note delayed store for N/J/C, because it's fwd[i-1][X] + bck[i-1][X] + tXX */
+      /* [ E N J B L G C JJ CC ] */
+      ppp[p7R_E]  = expf(fwdp[p7R_E] + bckp[p7R_E] - sc);
+      ppp[p7R_N]  = expf(fwdp[p7R_N] + bckp[p7R_N] - sc); denom += ppp[p7R_N]; /* only NN is possible for i>=1, so N=NN */
+      ppp[p7R_J]  = expf(fwdp[p7R_J] + bckp[p7R_J] - sc);
+      ppp[p7R_B]  = expf(fwdp[p7R_B] + bckp[p7R_B] - sc);
+      ppp[p7R_L]  = expf(fwdp[p7R_L] + bckp[p7R_L] - sc);
+      ppp[p7R_G]  = expf(fwdp[p7R_G] + bckp[p7R_G] - sc);
+      ppp[p7R_C]  = expf(fwdp[p7R_C] + bckp[p7R_C] - sc);
+      ppp[p7R_JJ] = expf(xJ + gm->xsc[p7P_J][p7P_LOOP] + bckp[p7P_J] - sc); denom += ppp[p7R_JJ];
+      ppp[p7R_CC] = expf(xC + gm->xsc[p7P_C][p7P_LOOP] + bckp[p7P_C] - sc); denom += ppp[p7R_CC];
 
+      /* renormalization, to squash out some error accumulation in f/b */
       denom = 1.0 / denom;	/* multiplication faster than division... */
       ppp = pp->dp[i] + p7R_NSCELLS;
-      for (k = 1; k < M; k++) { 
+      for (x = 0; x < M*p7R_NSCELLS + p7R_NXCELLS; x++)
 	*ppp++ *= denom;
-	*ppp++ *= denom;
-	*ppp++ *= denom;
-	*ppp   *= denom;
-	ppp += 3;
-      }
-      *ppp++ *= denom;
-      *ppp++ *= denom;
-      ppp += 5;
-      
-      *(ppp + p7R_N) *= denom;
-      *(ppp + p7R_J) *= denom;
-      *(ppp + p7R_C) *= denom;
+
+      xJ = fwdp[p7R_J]; /* i.e. -inf */
+      xC = fwdp[p7R_C];	/* i.e. -inf */
     }
   
   pp->M    = M;
@@ -588,32 +588,50 @@ p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, P7_REFMX *bck, P
 
 
 /*****************************************************************
- * 4. Alignment (MEG, gamma-centroid)
+ * 4. Alignment (maximum expected gain, gamma-centroid)
  *****************************************************************/
 
-static int traceback_mea(const P7_PROFILE *gm, const P7_REFMX *pp, const P7_REFMX *rmx, P7_TRACE *tr);
+static int traceback(const P7_PROFILE *gm, const P7_REFMX *pp, const P7_REFMX *rmx, P7_TRACE *tr);
 
-/* Function:  p7_ReferenceAlignMEA()
- * Synopsis:  Reference implementation of maximum expected accuracy alignment
+/* Function:  p7_ReferenceAlign()
+ * Synopsis:  Reference implementation of gamma-centroid alignment
  *
- * Purpose:   Given a posterior decoding matrix <pp>, for query profile <gm>;
- *            perform the dynamic programming fill stage of
- *            maximum expected accuracy alignment, using matrix <rmx>
- *            for storage. Return the MEA optimal alignment in traceback
- *            <tr>, storage provided by caller.
+ * Purpose:   Compute a gamma-centroid alignment of the query
+ *            profile <gm> to a target sequence, given the computed posterior 
+ *            decoding matrix <pp> for that query/target comparison,
+ *            using DP matrix <rmx> for storage during the alignment
+ *            computation. Return the alignment traceback in
+ *            <tr>, storage provided and initialized by caller, and grown
+ *            here as needed. Also optionally return the gain score,
+ *            the total sum of pp - (1-(1+gamma)) for each state 
+ *            in the state path.
+ *            
+ *            <gamma> is the parameter of gamma-centroid alignment.
+ *            Higher <gamma> increases sensitivity; lower <gamma>
+ *            increases specificity.  Given posterior probabilities
+ *            pp(i,x) for every state x at every target position i in
+ *            the DP matrix, the algorithm finds a state path
+ *            consistent with the model that maximizes the sum of
+ *            pp(i,x) - 1/(1+gamma).  Thus states with posterior
+ *            probabilities < 1/(1+gamma) will be penalized, and those
+ *            > 1/(1+gamma) are rewarded.
  *
- * Args:      gm  - query profile
- *            pp  - posterior decoding matrix, previously calculated
- *            rmx - RESULT: filled MEA alignment DP matrix
- *            tr  - RESULT: MEA alignment traceback
+ * Args:      gm       - query profile
+ *            gamma    - gamma-centroid parameter
+ *            pp       - posterior decoding matrix, previously calculated
+ *            rmx      - RESULT: filled alignment DP matrix
+ *            tr       - RESULT: alignment traceback
+ *            opt_gain - optRETURN: gain score       
  *
  * Returns:   <eslOK> on success
  *
  * Xref:      [HamadaAsai11] for details of gamma-centroid estimators
+ *            SRE:J9/137 for notes on extending Hamada/Asai gamma-centroid
+ *                       from simple residue ij alignment to full state path
  *            [Kall05] for more on why the delta function on transitions is needed
  */
 int
-p7_ReferenceAlignMEA(const P7_PROFILE *gm, const P7_REFMX *pp, P7_REFMX *rmx, P7_TRACE *tr)
+p7_ReferenceAlign(const P7_PROFILE *gm, float gamma, const P7_REFMX *pp, P7_REFMX *rmx, P7_TRACE *tr, float *opt_gain)
 {
   float       *dpp;		     /* ptr into previous DP row in <rmx> */
   float       *dpc;		     /* ptr into current DP row in <rmx> */
@@ -623,8 +641,9 @@ p7_ReferenceAlignMEA(const P7_PROFILE *gm, const P7_REFMX *pp, P7_REFMX *rmx, P7
   const int    M    = pp->M;
   float        dlv, dgv;
   float        mlv, mgv;
-  float        xE,xG,xL,xN,xJ,xB;
+  float        xE,xG,xL;
   int          i,k,s;
+  float        gammaterm = -1.0f/(1.0f+gamma);
 
   /* Initialization of the zero row. 
    * Main states    [ ML MG IL IG DL DG] 0..M; then special states [E N J B L G C] 
@@ -633,18 +652,21 @@ p7_ReferenceAlignMEA(const P7_PROFILE *gm, const P7_REFMX *pp, P7_REFMX *rmx, P7
    */
   dpc = rmx->dp[0];
   for (s = 0; s < (M+1) * p7R_NSCELLS; s++) *dpc++ = -eslINFINITY;   /* all M,I,D; k=0..M */
-  *dpc++ = -eslINFINITY;	               /* E */
-  *dpc++ = 0.0;			               /* N */
-  *dpc++ = -eslINFINITY;                       /* J */
-  *dpc++ = 0.0;				       /* B  assumes tNB > 0.0, which must be true */
-  *dpc++ = P7_DELTAT( 0.0, gm->xsc[p7P_B][0]); /* L */
-  *dpc++ = P7_DELTAT( 0.0, gm->xsc[p7P_B][1]); /* G */
-  *dpc   = -eslINFINITY;		       /* C */
+  ppp = pp->dp[0] + (M+1)*p7R_NSCELLS;
+  dpc[p7R_E]  = -eslINFINITY;	      
+  dpc[p7R_N]  = 2.0f + 2.*gammaterm;  /* S->N always have pp=1.0 at start of any trace, by construction. */
+  dpc[p7R_J]  = -eslINFINITY;                     
+  dpc[p7R_B]  = ppp[p7R_B] + gammaterm + P7_DELTAT( dpc[p7R_N], gm->xsc[p7P_N][p7P_LOOP]);
+  dpc[p7R_L]  = ppp[p7R_L] + gammaterm + P7_DELTAT( dpc[p7R_B], gm->xsc[p7P_B][0]);
+  dpc[p7R_G]  = ppp[p7R_G] + gammaterm + P7_DELTAT( dpc[p7R_B], gm->xsc[p7P_B][1]); 
+  dpc[p7R_C]  = -eslINFINITY;		       /* C */
+  dpc[p7R_JJ] = -eslINFINITY;	/* JJ - unused in alignment, only used in decoding */
+  dpc[p7R_CC] = -eslINFINITY;	/* CC - ditto */
 
   /* Main DP recursion for rows 1..L */
   for (i = 1; i <= L; i++)
     {
-      ppp = pp->dp[i] + p7R_NSCELLS; /* positioned at pp[i,k=1,ML]     */
+      ppp = pp->dp[i] + p7R_NSCELLS;  /* positioned at pp[i,k=1,ML]     */
       tsc = gm->tsc;		      /* model on k=0 transitions (k-1 as we enter loop) */
       dpp = rmx->dp[i-1];	      /* prev row on k=0 (k-1 as we enter loop) */
       dpc = rmx->dp[i];		      
@@ -652,31 +674,31 @@ p7_ReferenceAlignMEA(const P7_PROFILE *gm, const P7_REFMX *pp, P7_REFMX *rmx, P7
 
       dlv = dgv = xE = -eslINFINITY;
 
-      for (k = 1; k < M; k++)
+      for (k = 1; k <= M; k++)
 	{ /* main states [ ML MG IL IG DL DG] */ 	 
 	  /* ML calculation */   
-	  mlv = *dpc++ = (*ppp++) + 
+	  mlv = *dpc++ = (*ppp++) + gammaterm + 
 	    ESL_MAX( ESL_MAX( P7_DELTAT(*(dpp + p7R_ML), *(tsc + p7P_MM)),
 			      P7_DELTAT(*(dpp + p7R_IL), *(tsc + p7P_IM))),
 		     ESL_MAX( P7_DELTAT(*(dpp + p7R_DL), *(tsc + p7P_DM)),
 			      P7_DELTAT( xL,             *(tsc + p7P_LM))));
 
 	  /* MG calculation */
-	  mgv = *dpc++ = (*ppp++) + 
+	  mgv = *dpc++ = (*ppp++) + gammaterm + 
 	    ESL_MAX( ESL_MAX( P7_DELTAT(*(dpp + p7R_MG), *(tsc + p7P_MM)),
 			      P7_DELTAT(*(dpp + p7R_IG), *(tsc + p7P_IM))),
 		     ESL_MAX( P7_DELTAT(*(dpp + p7R_DG), *(tsc + p7P_DM)),
-			      P7_DELTAT( xG,              *(tsc + p7P_GM))));
+			      P7_DELTAT( xG,             *(tsc + p7P_GM))));
 
 	  tsc += p7P_NTRANS;	/* transition scores now on gm->tsc[k] transitions */
 	  dpp += p7R_NSCELLS;	/* prev row now on dp[i-1][k] cells       */
 
 	  /* IL/IG calculation. */
-	  *dpc++ = (*ppp++) + 
+	  *dpc++ = (*ppp++) + gammaterm + 
 	    ESL_MAX( P7_DELTAT(*(dpp + p7R_ML), *(tsc + p7P_MI)),
 		     P7_DELTAT(*(dpp + p7R_IL), *(tsc + p7P_II)));
 
-	  *dpc++ = (*ppp++) + 
+	  *dpc++ = (*ppp++) + gammaterm + 
 	    ESL_MAX( P7_DELTAT(*(dpp + p7R_MG), *(tsc + p7P_MI)),
 		     P7_DELTAT(*(dpp + p7R_IG), *(tsc + p7P_II)));
 
@@ -687,56 +709,33 @@ p7_ReferenceAlignMEA(const P7_PROFILE *gm, const P7_REFMX *pp, P7_REFMX *rmx, P7
 	  *dpc++ = dlv;
 	  *dpc++ = dgv;
 
-	  dlv = ESL_MAX( P7_DELTAT( mlv, *(tsc + p7P_MD)),
-			 P7_DELTAT( dlv, *(tsc + p7P_DD)));
-	  dgv = ESL_MAX( P7_DELTAT( mgv, *(tsc + p7P_MD)),
-			 P7_DELTAT( dgv, *(tsc + p7P_DD)));
-
-	  ppp += 2;		/* skip pp past DL/DG, which are zero and unused */
+	  dlv = (*ppp++) + gammaterm + ESL_MAX( P7_DELTAT( mlv, *(tsc + p7P_MD)),
+						P7_DELTAT( dlv, *(tsc + p7P_DD)));
+	  dgv = (*ppp++) + gammaterm + ESL_MAX( P7_DELTAT( mgv, *(tsc + p7P_MD)),
+						P7_DELTAT( dgv, *(tsc + p7P_DD)));
 	}
-
-      /* k=M is unrolled: no I state, and glocal exits. */
-      mlv = *dpc++ = (*ppp++) + 
-	ESL_MAX( ESL_MAX( P7_DELTAT(*(dpp + p7R_ML), *(tsc + p7P_MM)),
-			  P7_DELTAT(*(dpp + p7R_IL), *(tsc + p7P_IM))),
-		 ESL_MAX( P7_DELTAT(*(dpp + p7R_DL), *(tsc + p7P_DM)),
-			  P7_DELTAT( xL,             *(tsc + p7P_LM))));
-      mgv = *dpc++ = (*ppp++) + 
-	ESL_MAX( ESL_MAX( P7_DELTAT(*(dpp + p7R_MG), *(tsc + p7P_MM)),
-			  P7_DELTAT(*(dpp + p7R_IG), *(tsc + p7P_IM))),
-		 ESL_MAX( P7_DELTAT(*(dpp + p7R_DG), *(tsc + p7P_DM)),
-			  P7_DELTAT( xG,             *(tsc + p7P_GM))));
-      *dpc++ = 0.0;	/* IL */
-      *dpc++ = 0.0;	/* IG */
-      *dpc++ = dlv;
-      *dpc++ = dgv;
-      ppp   += 4;
+      /* IL/IG prohibited at k=M; boundary conditions on tsc make that so (txn into Im =-inf) */
 
       /* Special states [E N J B L G C] */
       /* row i main states finished; dpc, ppp are now on first special state, E */
-      dpp += 2*p7R_NSCELLS;	/* and now dpp is too */
+      dpp += p7R_NSCELLS;	/* and now dpp is too */
       
-      *dpc++ = xE = ESL_MAX( xE, ESL_MAX( ESL_MAX(mlv, dlv),    /* E */
-			    	          ESL_MAX(mgv, dgv)));
-
-      *dpc++ = xN =          P7_DELTAT( *(dpp + p7R_N) + *(ppp + p7R_N), gm->xsc[p7P_N][p7P_LOOP]);
-      
-      *dpc++ = xJ = ESL_MAX( P7_DELTAT( *(dpp + p7R_J) + *(ppp + p7R_J), gm->xsc[p7P_J][p7P_LOOP]),
-			     P7_DELTAT( xE,                              gm->xsc[p7P_E][p7P_LOOP]));
-      
-      *dpc++ = xB = ESL_MAX( P7_DELTAT( xN, gm->xsc[p7P_N][p7P_MOVE]),
-			     P7_DELTAT( xJ, gm->xsc[p7P_J][p7P_MOVE]));
-      
-      *dpc++ = xL = P7_DELTAT(xB, gm->xsc[p7P_B][0]);
-      *dpc++ = xG = P7_DELTAT(xB, gm->xsc[p7P_B][1]);
-      *dpc        = ESL_MAX( P7_DELTAT( *(dpp + p7R_C) + *(ppp + p7R_C), gm->xsc[p7P_C][p7P_LOOP]), 
-			     P7_DELTAT( xE,                              gm->xsc[p7P_E][p7P_MOVE]));
+      dpc[p7R_E]      = ppp[p7R_E] + gammaterm + ESL_MAX( xE, ESL_MAX(mgv, dgv));
+      dpc[p7R_N]      = ppp[p7R_N] + gammaterm +          P7_DELTAT(dpp[p7R_N], gm->xsc[p7P_N][p7P_LOOP]);
+      dpc[p7R_J]      = ppp[p7R_J] + gammaterm + ESL_MAX( P7_DELTAT(dpp[p7R_J], gm->xsc[p7P_J][p7P_LOOP]), P7_DELTAT(dpc[p7R_E], gm->xsc[p7P_E][p7P_LOOP]));
+      dpc[p7R_B]      = ppp[p7R_B] + gammaterm + ESL_MAX( P7_DELTAT(dpc[p7R_N], gm->xsc[p7P_N][p7P_MOVE]), P7_DELTAT(dpc[p7R_J], gm->xsc[p7P_J][p7P_MOVE]));
+      dpc[p7R_L] = xL = ppp[p7R_L] + gammaterm +          P7_DELTAT(dpc[p7R_B], gm->xsc[p7P_B][0]);
+      dpc[p7R_G] = xG = ppp[p7R_G] + gammaterm +          P7_DELTAT(dpc[p7R_B], gm->xsc[p7P_B][1]);
+      dpc[p7R_C]      = ppp[p7R_C] + gammaterm + ESL_MAX( P7_DELTAT(dpp[p7R_C], gm->xsc[p7P_C][p7P_LOOP]), P7_DELTAT(dpc[p7R_E], gm->xsc[p7P_E][p7P_MOVE]));
+      dpc[p7R_JJ]     = -eslINFINITY;
+      dpc[p7R_CC]     = -eslINFINITY;
     }
 
   rmx->L    = L;
   rmx->M    = M;
-  rmx->type = p7R_MEA;
-  return traceback_mea(gm, pp, rmx, tr);
+  rmx->type = p7R_ALIGNMENT;
+  if (opt_gain) *opt_gain = dpc[p7R_C] + 1.0f + gammaterm; /* C->T; T has pp=1.0f */
+  return traceback(gm, pp, rmx, tr);
 }
 
 
@@ -836,13 +835,12 @@ select_n(int i)
 }
 
 static inline int
-select_j(const P7_PROFILE *gm, const P7_REFMX *rmx, int i, const P7_REFMX *pp)
+select_j(const P7_PROFILE *gm, const P7_REFMX *rmx, int i)
 {
   float path[2];
-  float rsc = P7R_XMX(pp, i, p7R_J);
 
-  path[0] = P7_DELTAT ( rsc + P7R_XMX(rmx, i-1, p7R_J), gm->xsc[p7P_J][p7P_LOOP]);
-  path[1] = P7_DELTAT (       P7R_XMX(rmx, i,   p7R_E), gm->xsc[p7P_E][p7P_LOOP]);
+  path[0] = P7_DELTAT ( P7R_XMX(rmx, i-1, p7R_J), gm->xsc[p7P_J][p7P_LOOP]);
+  path[1] = P7_DELTAT ( P7R_XMX(rmx, i,   p7R_E), gm->xsc[p7P_E][p7P_LOOP]);
   return ( (path[0] > path[1]) ? p7T_J : p7T_E);
 }
 
@@ -857,18 +855,17 @@ select_b( const P7_PROFILE *gm, const P7_REFMX *rmx, int i)
 }
 
 static inline int
-select_c(const P7_PROFILE *gm, const P7_REFMX *rmx, int i, const P7_REFMX *pp)
+select_c(const P7_PROFILE *gm, const P7_REFMX *rmx, int i)
 {
   float path[2];
-  float rsc = P7R_XMX(pp, i, p7R_C);
 
-  path[0] = P7_DELTAT ( rsc + P7R_XMX(rmx, i-1, p7R_C), gm->xsc[p7P_C][p7P_LOOP]);
-  path[1] = P7_DELTAT (       P7R_XMX(rmx, i,   p7R_E), gm->xsc[p7P_E][p7P_MOVE]);
+  path[0] = P7_DELTAT ( P7R_XMX(rmx, i-1, p7R_C), gm->xsc[p7P_C][p7P_LOOP]);
+  path[1] = P7_DELTAT ( P7R_XMX(rmx, i,   p7R_E), gm->xsc[p7P_E][p7P_MOVE]);
   return ( (path[0] > path[1]) ? p7T_C : p7T_E);
 }
 
 static int
-traceback_mea(const P7_PROFILE *gm, const P7_REFMX *pp, const P7_REFMX *rmx, P7_TRACE *tr)
+traceback(const P7_PROFILE *gm, const P7_REFMX *pp, const P7_REFMX *rmx, P7_TRACE *tr)
 {
   int   i    = rmx->L;
   int   k    = 0;
@@ -891,11 +888,11 @@ traceback_mea(const P7_PROFILE *gm, const P7_REFMX *pp, const P7_REFMX *rmx, P7_
       case p7T_DG: scur = select_dg(gm, rmx, i, k); k--;      break;
       case p7T_E:  scur = select_e (gm, rmx, i, &k);          break;
       case p7T_N:  scur = select_n (         i    );          break;
-      case p7T_J:  scur = select_j (gm, rmx, i, pp);          break;
+      case p7T_J:  scur = select_j (gm, rmx, i);              break;
       case p7T_B:  scur = select_b (gm, rmx, i);              break;
       case p7T_L:  scur = p7T_B;                              break;
       case p7T_G:  scur = p7T_B;                              break;
-      case p7T_C:  scur = select_c (gm, rmx, i, pp);          break;
+      case p7T_C:  scur = select_c (gm, rmx, i);              break;
       default: ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in traceback");
       }
 
@@ -2011,13 +2008,16 @@ main(int argc, char **argv)
   P7_HMM         *hmm     = NULL;
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
-  P7_REFMX        *fwd     = NULL;
-  P7_REFMX        *bck     = NULL;
+  P7_REFMX       *fwd     = NULL;
+  P7_REFMX       *bck     = NULL;
+  P7_REFMX       *pp      = NULL;
+  P7_REFMX       *mge     = NULL;
   P7_TRACE       *tr      = NULL;
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
   float           fsc, bsc;
+  float           gain;
   float           nullsc;
   int             status;
 
@@ -2051,6 +2051,8 @@ main(int argc, char **argv)
   /* Allocate matrices */
   fwd = p7_refmx_Create(gm->M, sq->n);
   bck = p7_refmx_Create(gm->M, sq->n);
+  pp  = p7_refmx_Create(gm->M, sq->n);
+  mge = p7_refmx_Create(gm->M, sq->n);
   tr  = p7_trace_CreateWithPP();
 
   printf("%-30s   %-10s %-10s   %-10s %-10s\n", "# seq name",      "fwd (raw)",   "bck (raw) ",  "fwd (bits)",  "bck (bits)");
@@ -2064,6 +2066,9 @@ main(int argc, char **argv)
       /* Resize the DP matrices if necessary */
       p7_refmx_GrowTo(fwd, gm->M, sq->n);
       p7_refmx_GrowTo(bck, gm->M, sq->n);
+      p7_refmx_GrowTo(pp,  gm->M, sq->n);
+      p7_refmx_GrowTo(mge, gm->M, sq->n);
+
 
       /* Set the profile and null model's target length models */
       p7_bg_SetLength     (bg, sq->n);
@@ -2075,15 +2080,15 @@ main(int argc, char **argv)
        * after decoding, <bck> becomes the pp matrix;
        * after alignment, <fwd> becomes the OA alignment DP matrix
        */
-      p7_ReferenceForward (sq->dsq, sq->n, gm, fwd, &fsc);    if (esl_opt_GetBoolean(go, "-F")) p7_refmx_Dump(stdout, fwd);
-      p7_ReferenceBackward(sq->dsq, sq->n, gm, bck, &bsc);    if (esl_opt_GetBoolean(go, "-B")) p7_refmx_Dump(stdout, bck);
-      p7_ReferenceDecoding(gm, fwd, bck, bck);                if (esl_opt_GetBoolean(go, "-D")) p7_refmx_Dump(stdout, bck);
-      p7_ReferenceAlignMEA(gm, bck, fwd, tr);                 if (esl_opt_GetBoolean(go, "-A")) p7_refmx_Dump(stdout, bck);
-      /*                                    */                if (esl_opt_GetBoolean(go, "-T")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
+      p7_ReferenceForward (sq->dsq, sq->n, gm, fwd, &fsc);            if (esl_opt_GetBoolean(go, "-F")) p7_refmx_Dump(stdout, fwd);
+      p7_ReferenceBackward(sq->dsq, sq->n, gm, bck, &bsc);            if (esl_opt_GetBoolean(go, "-B")) p7_refmx_Dump(stdout, bck);
+      p7_ReferenceDecoding(gm, fwd, bck, pp);                         if (esl_opt_GetBoolean(go, "-D")) p7_refmx_Dump(stdout, pp);
+      p7_ReferenceAlign   (gm, /*gamma=*/1.0, pp, mge, tr, &gain);    if (esl_opt_GetBoolean(go, "-A")) p7_refmx_Dump(stdout, mge);
+      /*                                    */                        if (esl_opt_GetBoolean(go, "-T")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 
       if (csvfile) {
 	FILE *csvfp = fopen(csvfile, "w");
-	p7_refmx_DumpCSV(csvfp, bck, 1, sq->n, 1, gm->M);
+	p7_refmx_DumpCSV(csvfp, pp, 1, sq->n, 1, gm->M);
 	fclose(csvfp);
       }
 
@@ -2092,13 +2097,18 @@ main(int argc, char **argv)
        */
       p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
 
-      printf("%-30s   %10.4f %10.4f   %10.4f %10.4f\n", 
+      printf("%-30s   %10.4f %10.4f   %10.4f %10.4f %10.4f\n", 
 	     sq->name, 
-	     fsc, bsc, 
-	     (fsc - nullsc) / eslCONST_LOG2, (bsc - nullsc) / eslCONST_LOG2);
+	     fsc, 
+	     bsc, 
+	     (fsc - nullsc) / eslCONST_LOG2,
+	     (bsc - nullsc) / eslCONST_LOG2,
+	     gain);
 
       p7_refmx_Reuse(fwd);
       p7_refmx_Reuse(bck);
+      p7_refmx_Reuse(pp);
+      p7_refmx_Reuse(mge);
       p7_trace_Reuse(tr);
       esl_sq_Reuse(sq);
     }
