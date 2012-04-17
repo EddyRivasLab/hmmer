@@ -815,8 +815,8 @@ backward_row_rescale(float *xc, __m128 *dpc, int Q, float scalefactor)
  * dump, copy, or test anything on the forward row, it must do it
  * BEFORE calling posterior_decode_row().
  */
-#define p7_BANDS_THRESH1  0.9
-#define p7_BANDS_THRESH2  0.02
+#define p7_BANDS_THRESH1  0.99
+#define p7_BANDS_THRESH2  0.01
 static inline void
 posterior_decode_row(P7_FILTERMX *ox, int rowi, P7_GBANDS *bnd, float overall_sc)
 {

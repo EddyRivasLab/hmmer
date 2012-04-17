@@ -183,8 +183,8 @@ main(int argc, char **argv)
   p7_profile_ConfigLocal(gm, hmm, bg, L);
 
   /* Contrive bands: one length M band of width W */
-  bnd = p7_gbands_Create();
-  p7_gbands_SetFull(bnd, gm->M, L);
+  bnd = p7_gbands_Create(gm->M, L);
+  p7_gbands_SetFull(bnd);
 
 #if 0
   if (L < gm->M) p7_Fail("for now, L must be >=M, because we make a single band");

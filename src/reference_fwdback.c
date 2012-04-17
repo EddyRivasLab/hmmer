@@ -9,18 +9,16 @@
  * banded implementation is the production version, more complicated.
  *   
  * Contents:  
- *   1. Forwards.
- *   2. Backwards.
+ *   1. Forward.
+ *   2. Backward.
  *   3. Posterior decoding.
  *   4. Alignment (MEG, gamma-centroid)
- *   5. Traceback.
- *   6. Benchmark driver.
- *   7. Unit tests.
- *   8. Test driver.
- *   9. Example.
- *  10. Copyright and license information.
+ *   5. Benchmark driver.
+ *   6. Unit tests.
+ *   7. Test driver.
+ *   8. Example.
+ *   9. Copyright and license information.
  */
-
 
 #include "p7_config.h"
 
@@ -32,7 +30,7 @@
 
 
 /*****************************************************************
- * 1. Forward implementation
+ * 1. Forward 
  *****************************************************************/
 
 /* Function:  p7_ReferenceForward()
@@ -44,16 +42,16 @@
  *            <gm->M> by <L> problem. 
  *            
  *            Caller also has initialized with a <p7_FLogsumInit()>
- *            call; this function will use <p7_FLogsum()>.
+ *            call, because this function will use <p7_FLogsum()>.
  *            
  *            Upon successful return, the raw Forward score (in nats)
  *            is optionally returned in <*opt_sc>, and the DP matrix
- *            <rmx> is filled in.
+ *            <rmx> is filled.
  *
  * Args:      dsq    : digital target sequence of length <L>
  *            L      : length of the target sequence
  *            gm     : query profile 
- *            rmx    : allocated DP matrix
+ *            rmx    : RESULT: DP matrix, caller allocated
  *            opt_sc : optRETURN: raw Forward score in nats
  *
  * Returns:   <eslOK> on success.
@@ -201,7 +199,7 @@ p7_ReferenceForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
 
 
 /*****************************************************************
- * 2. Backwards implementation
+ * 2. Backward
  *****************************************************************/
 
 /* Function:  p7_ReferenceBackward()
@@ -498,7 +496,7 @@ p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, const P7_REFMX *
   float    *bckp;
   float    *ppp;
   float     denom;
-  float     sc = P7R_XMX(fwd,L,p7R_C) + gm->xsc[p7P_C][p7P_MOVE];
+  float     sc;
   int       i;
   int       k;
   int       x;
@@ -521,15 +519,16 @@ p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, const P7_REFMX *
   for (x = 0; x < p7R_NSCELLS * (M+1); x++) *ppp++ = 0.0;
   fwdp = fwd->dp[0] + (p7R_NSCELLS * (M+1)); /* position on first special of row 0 */
   bckp = bck->dp[0] + (p7R_NSCELLS * (M+1)); 
-  ppp[p7R_E]  = -eslINFINITY; 
+  sc   = bckp[p7R_N]; /* bck[0][N] is the tot score. Use it to normalize */
+  ppp[p7R_E]  = 0.0f;
   ppp[p7R_N]  = 1.0f;
-  ppp[p7R_J]  = -eslINFINITY;
-  ppp[p7R_B]  = expf(fwdp[p7R_B] + bckp[p7R_B] - bckp[p7R_N]); /* bck[0][N] is the tot score. Use it to normalize on row 0 */
-  ppp[p7R_L]  = expf(fwdp[p7R_L] + bckp[p7R_L] - bckp[p7R_N]);
-  ppp[p7R_G]  = expf(fwdp[p7R_G] + bckp[p7R_G] - bckp[p7R_N]);
-  ppp[p7R_C]  = -eslINFINITY;
-  ppp[p7R_JJ] = -eslINFINITY;
-  ppp[p7R_CC] = -eslINFINITY;
+  ppp[p7R_J]  = 0.0f;
+  ppp[p7R_B]  = expf(fwdp[p7R_B] + bckp[p7R_B] - sc);
+  ppp[p7R_L]  = expf(fwdp[p7R_L] + bckp[p7R_L] - sc);
+  ppp[p7R_G]  = expf(fwdp[p7R_G] + bckp[p7R_G] - sc);
+  ppp[p7R_C]  = 0.0f;
+  ppp[p7R_JJ] = 0.0f;
+  ppp[p7R_CC] = 0.0f;
   
   /* xJ/xC hold the previous row i-1 values from forward matrix;
    * needed for decoding emit-on-transition 
@@ -543,18 +542,21 @@ p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, const P7_REFMX *
       fwdp  = fwd->dp[i] + p7R_NSCELLS;
       bckp  = bck->dp[i] + p7R_NSCELLS;
       ppp   = pp->dp[i];
-      denom = 0.0;
       for (x = 0; x < p7R_NSCELLS; x++) *ppp++ = 0.0;
+      denom = 0.0;
 
       for (k = 1; k <= M; k++)
 	{
-	  /* [ ML MG IL IG DL DG] */
-	  *ppp   = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++; bckp++;  /* ML */
-	  *ppp   = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++; bckp++;  /* MG */
-	  *ppp   = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++; bckp++;  /* IL */  // at k=M IL=0.0; made so because fwd/bck are -inf
-	  *ppp   = expf(*fwdp + *bckp - sc); denom += *ppp++; fwdp++; bckp++;  /* IG */  // ditto for IG
-	  *ppp++ = expf(*fwdp + *bckp - sc);                  fwdp++; bckp++;  /* DL */
-	  *ppp++ = expf(*fwdp + *bckp - sc);                  fwdp++; bckp++;  /* DG */
+	  ppp[p7R_ML] = expf(fwdp[p7R_ML] + bckp[p7R_ML] - sc); denom += ppp[p7R_ML]; 
+	  ppp[p7R_MG] = expf(fwdp[p7R_MG] + bckp[p7R_MG] - sc); denom += ppp[p7R_MG]; 
+	  ppp[p7R_IL] = expf(fwdp[p7R_IL] + bckp[p7R_IL] - sc); denom += ppp[p7R_IL]; // at k=M IL=0.0; made so because fwd/bck are -inf
+	  ppp[p7R_IG] = expf(fwdp[p7R_IG] + bckp[p7R_IG] - sc); denom += ppp[p7R_IG];
+	  ppp[p7R_DL] = expf(fwdp[p7R_DL] + bckp[p7R_DL] - sc);                  
+	  ppp[p7R_DG] = expf(fwdp[p7R_DG] + bckp[p7R_DG] - sc);                  
+
+	  ppp  += p7R_NSCELLS;
+	  fwdp += p7R_NSCELLS;
+	  bckp += p7R_NSCELLS;
 	}
 
       /* [ E N J B L G C JJ CC ] */
@@ -565,17 +567,14 @@ p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, const P7_REFMX *
       ppp[p7R_L]  = expf(fwdp[p7R_L] + bckp[p7R_L] - sc);
       ppp[p7R_G]  = expf(fwdp[p7R_G] + bckp[p7R_G] - sc);
       ppp[p7R_C]  = expf(fwdp[p7R_C] + bckp[p7R_C] - sc);
-      ppp[p7R_JJ] = expf(xJ + gm->xsc[p7P_J][p7P_LOOP] + bckp[p7P_J] - sc); denom += ppp[p7R_JJ];
-      ppp[p7R_CC] = expf(xC + gm->xsc[p7P_C][p7P_LOOP] + bckp[p7P_C] - sc); denom += ppp[p7R_CC];
+      ppp[p7R_JJ] = expf(xJ + gm->xsc[p7P_J][p7P_LOOP] + bckp[p7R_J] - sc); xJ = fwdp[p7R_J]; denom += ppp[p7R_JJ];
+      ppp[p7R_CC] = expf(xC + gm->xsc[p7P_C][p7P_LOOP] + bckp[p7R_C] - sc); xC = fwdp[p7R_C]; denom += ppp[p7R_CC];
 
       /* renormalization, to squash out some error accumulation in f/b */
       denom = 1.0 / denom;	/* multiplication faster than division... */
       ppp = pp->dp[i] + p7R_NSCELLS;
       for (x = 0; x < M*p7R_NSCELLS + p7R_NXCELLS; x++)
 	*ppp++ *= denom;
-
-      xJ = fwdp[p7R_J]; /* i.e. -inf */
-      xC = fwdp[p7R_C];	/* i.e. -inf */
     }
   
   pp->M    = M;
@@ -653,15 +652,15 @@ p7_ReferenceAlign(const P7_PROFILE *gm, float gamma, const P7_REFMX *pp, P7_REFM
   dpc = rmx->dp[0];
   for (s = 0; s < (M+1) * p7R_NSCELLS; s++) *dpc++ = -eslINFINITY;   /* all M,I,D; k=0..M */
   ppp = pp->dp[0] + (M+1)*p7R_NSCELLS;
-  dpc[p7R_E]  = -eslINFINITY;	      
-  dpc[p7R_N]  = 2.0f + 2.*gammaterm;  /* S->N always have pp=1.0 at start of any trace, by construction. */
-  dpc[p7R_J]  = -eslINFINITY;                     
-  dpc[p7R_B]  = ppp[p7R_B] + gammaterm + P7_DELTAT( dpc[p7R_N], gm->xsc[p7P_N][p7P_LOOP]);
-  dpc[p7R_L]  = ppp[p7R_L] + gammaterm + P7_DELTAT( dpc[p7R_B], gm->xsc[p7P_B][0]);
-  dpc[p7R_G]  = ppp[p7R_G] + gammaterm + P7_DELTAT( dpc[p7R_B], gm->xsc[p7P_B][1]); 
-  dpc[p7R_C]  = -eslINFINITY;		       /* C */
-  dpc[p7R_JJ] = -eslINFINITY;	/* JJ - unused in alignment, only used in decoding */
-  dpc[p7R_CC] = -eslINFINITY;	/* CC - ditto */
+  dpc[p7R_E]       = -eslINFINITY;	      
+  dpc[p7R_N]       = 2.0f + 2.*gammaterm;  /* S->N always have pp=1.0 at start of any trace, by construction. */
+  dpc[p7R_J]       = -eslINFINITY;                     
+  dpc[p7R_B]       = ppp[p7R_B] + gammaterm + P7_DELTAT( dpc[p7R_N], gm->xsc[p7P_N][p7P_LOOP]);
+  dpc[p7R_L]  = xL = ppp[p7R_L] + gammaterm + P7_DELTAT( dpc[p7R_B], gm->xsc[p7P_B][0]);
+  dpc[p7R_G]  = xG = ppp[p7R_G] + gammaterm + P7_DELTAT( dpc[p7R_B], gm->xsc[p7P_B][1]); 
+  dpc[p7R_C]       = -eslINFINITY;		    
+  dpc[p7R_JJ]      = -eslINFINITY;	/* JJ - unused in alignment, only used in decoding */
+  dpc[p7R_CC]      = -eslINFINITY;	/* CC - ditto */
 
   /* Main DP recursion for rows 1..L */
   for (i = 1; i <= L; i++)
@@ -669,50 +668,49 @@ p7_ReferenceAlign(const P7_PROFILE *gm, float gamma, const P7_REFMX *pp, P7_REFM
       ppp = pp->dp[i] + p7R_NSCELLS;  /* positioned at pp[i,k=1,ML]     */
       tsc = gm->tsc;		      /* model on k=0 transitions (k-1 as we enter loop) */
       dpp = rmx->dp[i-1];	      /* prev row on k=0 (k-1 as we enter loop) */
-      dpc = rmx->dp[i];		      
+      dpc = rmx->dp[i];		      /* dpc will be on k=1 as we enter the loop */
       for (s = 0; s < p7R_NSCELLS; s++) *dpc++ = -eslINFINITY;
 
       dlv = dgv = xE = -eslINFINITY;
 
       for (k = 1; k <= M; k++)
 	{ /* main states [ ML MG IL IG DL DG] */ 	 
-	  /* ML calculation */   
-	  mlv = *dpc++ = (*ppp++) + gammaterm + 
-	    ESL_MAX( ESL_MAX( P7_DELTAT(*(dpp + p7R_ML), *(tsc + p7P_MM)),
-			      P7_DELTAT(*(dpp + p7R_IL), *(tsc + p7P_IM))),
-		     ESL_MAX( P7_DELTAT(*(dpp + p7R_DL), *(tsc + p7P_DM)),
-			      P7_DELTAT( xL,             *(tsc + p7P_LM))));
+	  mlv = dpc[p7R_ML] = ppp[p7R_ML] + gammaterm + 
+	    ESL_MAX( ESL_MAX( P7_DELTAT(dpp[p7R_ML], tsc[p7P_MM]),
+			      P7_DELTAT(dpp[p7R_IL], tsc[p7P_IM])),
+		     ESL_MAX( P7_DELTAT(dpp[p7R_DL], tsc[p7P_DM]),
+			      P7_DELTAT( xL,         tsc[p7P_LM])));
 
-	  /* MG calculation */
-	  mgv = *dpc++ = (*ppp++) + gammaterm + 
-	    ESL_MAX( ESL_MAX( P7_DELTAT(*(dpp + p7R_MG), *(tsc + p7P_MM)),
-			      P7_DELTAT(*(dpp + p7R_IG), *(tsc + p7P_IM))),
-		     ESL_MAX( P7_DELTAT(*(dpp + p7R_DG), *(tsc + p7P_DM)),
-			      P7_DELTAT( xG,             *(tsc + p7P_GM))));
+	  mgv = dpc[p7R_MG] = ppp[p7R_MG] + gammaterm + 
+	    ESL_MAX( ESL_MAX( P7_DELTAT(dpp[p7R_MG], tsc[p7P_MM]),
+			      P7_DELTAT(dpp[p7R_IG], tsc[p7P_IM])),
+		     ESL_MAX( P7_DELTAT(dpp[p7R_DG], tsc[p7P_DM]),
+			      P7_DELTAT( xG,         tsc[p7P_GM])));
 
 	  tsc += p7P_NTRANS;	/* transition scores now on gm->tsc[k] transitions */
 	  dpp += p7R_NSCELLS;	/* prev row now on dp[i-1][k] cells       */
 
 	  /* IL/IG calculation. */
-	  *dpc++ = (*ppp++) + gammaterm + 
-	    ESL_MAX( P7_DELTAT(*(dpp + p7R_ML), *(tsc + p7P_MI)),
-		     P7_DELTAT(*(dpp + p7R_IL), *(tsc + p7P_II)));
+	  dpc[p7R_IL] = ppp[p7R_IL] + gammaterm + 
+	    ESL_MAX( P7_DELTAT(dpp[p7R_ML], tsc[p7P_MI]),
+		     P7_DELTAT(dpp[p7R_IL], tsc[p7P_II]));
 
-	  *dpc++ = (*ppp++) + gammaterm + 
-	    ESL_MAX( P7_DELTAT(*(dpp + p7R_MG), *(tsc + p7P_MI)),
-		     P7_DELTAT(*(dpp + p7R_IG), *(tsc + p7P_II)));
+	  dpc[p7R_IG] = ppp[p7R_IG] + gammaterm + 
+	    ESL_MAX( P7_DELTAT(dpp[p7R_MG], tsc[p7P_MI]),
+		     P7_DELTAT(dpp[p7R_IG], tsc[p7P_II]));
 
 	  /* E state update with ML->E and DL->E local exits k<M */
 	  xE = ESL_MAX(xE, ESL_MAX(mlv, dlv));
 
 	  /* Delete states: delayed storage trick */
-	  *dpc++ = dlv;
-	  *dpc++ = dgv;
+	  dpc[p7R_DL] = dlv + ppp[p7R_DL] + gammaterm;
+	  dpc[p7R_DG] = dgv + ppp[p7R_DG] + gammaterm;
 
-	  dlv = (*ppp++) + gammaterm + ESL_MAX( P7_DELTAT( mlv, *(tsc + p7P_MD)),
-						P7_DELTAT( dlv, *(tsc + p7P_DD)));
-	  dgv = (*ppp++) + gammaterm + ESL_MAX( P7_DELTAT( mgv, *(tsc + p7P_MD)),
-						P7_DELTAT( dgv, *(tsc + p7P_DD)));
+	  dlv = ESL_MAX( P7_DELTAT( mlv, tsc[p7P_MD]), P7_DELTAT( dlv, tsc[p7P_DD]));
+	  dgv = ESL_MAX( P7_DELTAT( mgv, tsc[p7P_MD]), P7_DELTAT( dgv, tsc[p7P_DD]));
+
+	  dpc += p7R_NSCELLS;
+	  ppp += p7R_NSCELLS;
 	}
       /* IL/IG prohibited at k=M; boundary conditions on tsc make that so (txn into Im =-inf) */
 
@@ -869,64 +867,64 @@ traceback(const P7_PROFILE *gm, const P7_REFMX *pp, const P7_REFMX *rmx, P7_TRAC
 {
   int   i    = rmx->L;
   int   k    = 0;
-  int   sprv = p7T_C;
-  int   scur;
+  int   scur = p7T_C;
+  int   snxt;
   float ppv;
   int   status;
 
   if ((status = p7_trace_AppendWithPP(tr, p7T_T, k, i, 0.0)) != eslOK) return status;
   if ((status = p7_trace_AppendWithPP(tr, p7T_C, k, i, 0.0)) != eslOK) return status;
 
-  while (sprv != p7T_S)
+  while (scur != p7T_S)
     {
-      switch (sprv) {
-      case p7T_ML: scur = select_ml(gm, rmx, i, k); k--; i--; break;
-      case p7T_MG: scur = select_mg(gm, rmx, i, k); k--; i--; break;
-      case p7T_IL: scur = select_il(gm, rmx, i, k);      i--; break;
-      case p7T_IG: scur = select_ig(gm, rmx, i, k);      i--; break;
-      case p7T_DL: scur = select_dl(gm, rmx, i, k); k--;      break;
-      case p7T_DG: scur = select_dg(gm, rmx, i, k); k--;      break;
-      case p7T_E:  scur = select_e (gm, rmx, i, &k);          break;
-      case p7T_N:  scur = select_n (         i    );          break;
-      case p7T_J:  scur = select_j (gm, rmx, i);              break;
-      case p7T_B:  scur = select_b (gm, rmx, i);              break;
-      case p7T_L:  scur = p7T_B;                              break;
-      case p7T_G:  scur = p7T_B;                              break;
-      case p7T_C:  scur = select_c (gm, rmx, i);              break;
+      switch (scur) {
+      case p7T_ML: snxt = select_ml(gm, rmx, i, k); k--; i--; break;
+      case p7T_MG: snxt = select_mg(gm, rmx, i, k); k--; i--; break;
+      case p7T_IL: snxt = select_il(gm, rmx, i, k);      i--; break;
+      case p7T_IG: snxt = select_ig(gm, rmx, i, k);      i--; break;
+      case p7T_DL: snxt = select_dl(gm, rmx, i, k); k--;      break;
+      case p7T_DG: snxt = select_dg(gm, rmx, i, k); k--;      break;
+      case p7T_E:  snxt = select_e (gm, rmx, i, &k);          break;
+      case p7T_N:  snxt = select_n (         i    );          break;
+      case p7T_J:  snxt = select_j (gm, rmx, i);              break;
+      case p7T_B:  snxt = select_b (gm, rmx, i);              break;
+      case p7T_L:  snxt = p7T_B;                              break;
+      case p7T_G:  snxt = p7T_B;                              break;
+      case p7T_C:  snxt = select_c (gm, rmx, i);              break;
       default: ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in traceback");
       }
 
-      switch (scur) {		/* posterior probs of residues are marginalized over glocal/local path choice */
+      switch (snxt) {		/* posterior probs of residues are marginalized over glocal/local path choice */
       case p7T_ML:  ppv = P7R_MX(pp, i, k, p7R_ML) + P7R_MX(pp, i, k, p7R_MG); break; 
       case p7T_MG:  ppv = P7R_MX(pp, i, k, p7R_ML) + P7R_MX(pp, i, k, p7R_MG); break;
       case p7T_IL:  ppv = P7R_MX(pp, i, k, p7R_IL) + P7R_MX(pp, i, k, p7R_IG); break;
       case p7T_IG:  ppv = P7R_MX(pp, i, k, p7R_IL) + P7R_MX(pp, i, k, p7R_IG); break;
-      case p7T_N:   ppv = (sprv==scur ? P7R_XMX(pp, i, p7R_N) : 0.0); break;
-      case p7T_J:   ppv = (sprv==scur ? P7R_XMX(pp, i, p7R_J) : 0.0); break;
-      case p7T_C:   ppv = (sprv==scur ? P7R_XMX(pp, i, p7R_C) : 0.0); break;
+      case p7T_N:   ppv = (scur==snxt ? P7R_XMX(pp, i, p7R_N)  : 0.0); break;
+      case p7T_J:   ppv = (scur==snxt ? P7R_XMX(pp, i, p7R_JJ) : 0.0); break;
+      case p7T_C:   ppv = (scur==snxt ? P7R_XMX(pp, i, p7R_CC) : 0.0); break;
       default:      ppv = 0.0;  break;
       }
 
       /* A glocal B->G->Mk wing-retraction entry: unfold it */
-      if (scur == p7T_G) {
+      if (snxt == p7T_G) {
 	while (k > 1) {
 	  if ( (status = p7_trace_AppendWithPP(tr, p7T_DG, k-1, i, 0.0)) != eslOK) return status;
 	  k--;
 	}
       }
 
-      if ( (status = p7_trace_AppendWithPP(tr, scur, k, i, ppv)) != eslOK) return status;
+      if ( (status = p7_trace_AppendWithPP(tr, snxt, k, i, ppv)) != eslOK) return status;
 
       /* For NCJ, we had to defer i decrement. */
-      if ( (scur == p7T_N || scur == p7T_J || scur == p7T_C) && scur == sprv) i--;
-      sprv = scur;
+      if ( (snxt == p7T_N || snxt == p7T_J || snxt == p7T_C) && snxt == scur) i--;
+      scur = snxt;
     }
   
   tr->M = rmx->M;
   tr->L = rmx->L;
   return p7_trace_Reverse(tr);
 }
-/*-------------- end, MEA alignment traceback -------------------*/
+/*----------- end, gamma-centroid alignment traceback ----------*/
 
 
 
@@ -1890,14 +1888,14 @@ utest_brute(ESL_RANDOMNESS *rng, int N)
 	  if (esl_FCompareAbs(bsc[L], brute_fwd[L], fprecision) != eslOK) esl_fatal(msg);
 
 	  p7_trace_Reuse(vtr);
-
 	}
+
+      p7_profile_Destroy(gm);
+      p7_hmm_Destroy(hmm);
     }
 
   p7_trace_Destroy(vtr);
   p7_refmx_Destroy(rmx);
-  p7_profile_Destroy(gm);
-  p7_hmm_Destroy(hmm);
   p7_bg_Destroy(bg);
   esl_alphabet_Destroy(abc);
 }
@@ -1953,8 +1951,6 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-
-
 #endif /*p7REFERENCE_FWDBACK_TESTDRIVE*/
 /*---------------- end, test driver -----------------------------*/
 
@@ -1970,6 +1966,7 @@ main(int argc, char **argv)
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
+#include "esl_regexp.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
@@ -1978,9 +1975,13 @@ main(int argc, char **argv)
 
 #define STYLES     "--fs,--sw,--ls,--s"	               /* Exclusive choice for alignment mode     */
 
+static int parse_coord_string(const char *cstring, int *ret_start, int *ret_end);
+
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-i",        eslARG_STRING, FALSE, NULL, NULL,   NULL,  NULL, NULL, "when dumping, restrict dump to rows <i1>..<i2>",    0 },
+  { "-k",        eslARG_STRING, FALSE, NULL, NULL,   NULL,  NULL, NULL, "when dumping, restrict dump to columns <k1>..<k2>", 0 },
   { "--fs",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "multihit local alignment",                         0 },
   { "--sw",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit local alignment",                           0 },
   { "--ls",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "multihit glocal alignment",                        0 },
@@ -2019,10 +2020,24 @@ main(int argc, char **argv)
   float           fsc, bsc;
   float           gain;
   float           nullsc;
+  char           *cstring;
+  int             istart, iend, kstart, kend;
   int             status;
 
   /* Initialize log-sum calculator */
   p7_FLogsumInit();
+
+ /* Determine coords of dump windows, if any */
+  istart = iend = 0;
+  kstart = kend = 0;
+  if ( esl_opt_IsOn(go, "-i")) {
+    cstring = esl_opt_GetString(go, "-i");
+    parse_coord_string(cstring, &istart, &iend);
+  }
+  if ( esl_opt_IsOn(go, "-k")) {
+    cstring = esl_opt_GetString(go, "-k");
+    parse_coord_string(cstring, &kstart, &kend);
+  }
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
@@ -2080,10 +2095,10 @@ main(int argc, char **argv)
        * after decoding, <bck> becomes the pp matrix;
        * after alignment, <fwd> becomes the OA alignment DP matrix
        */
-      p7_ReferenceForward (sq->dsq, sq->n, gm, fwd, &fsc);            if (esl_opt_GetBoolean(go, "-F")) p7_refmx_Dump(stdout, fwd);
-      p7_ReferenceBackward(sq->dsq, sq->n, gm, bck, &bsc);            if (esl_opt_GetBoolean(go, "-B")) p7_refmx_Dump(stdout, bck);
-      p7_ReferenceDecoding(gm, fwd, bck, pp);                         if (esl_opt_GetBoolean(go, "-D")) p7_refmx_Dump(stdout, pp);
-      p7_ReferenceAlign   (gm, /*gamma=*/1.0, pp, mge, tr, &gain);    if (esl_opt_GetBoolean(go, "-A")) p7_refmx_Dump(stdout, mge);
+      p7_ReferenceForward (sq->dsq, sq->n, gm, fwd, &fsc);            if (esl_opt_GetBoolean(go, "-F")) p7_refmx_DumpWindow(stdout, fwd, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
+      p7_ReferenceBackward(sq->dsq, sq->n, gm, bck, &bsc);            if (esl_opt_GetBoolean(go, "-B")) p7_refmx_DumpWindow(stdout, bck, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
+      p7_ReferenceDecoding(gm, fwd, bck, pp);                         if (esl_opt_GetBoolean(go, "-D")) p7_refmx_DumpWindow(stdout, pp,  (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
+      p7_ReferenceAlign   (gm, /*gamma=*/1.0, pp, mge, tr, &gain);    if (esl_opt_GetBoolean(go, "-A")) p7_refmx_DumpWindow(stdout, mge, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
       /*                                    */                        if (esl_opt_GetBoolean(go, "-T")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 
       if (csvfile) {
@@ -2117,6 +2132,8 @@ main(int argc, char **argv)
   esl_sqfile_Close(sqfp);
   esl_sq_Destroy(sq);
   p7_trace_Destroy(tr);
+  p7_refmx_Destroy(mge);
+  p7_refmx_Destroy(pp);
   p7_refmx_Destroy(fwd);
   p7_refmx_Destroy(bck);
   p7_profile_Destroy(gm);
@@ -2126,6 +2143,27 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
+
+
+static int
+parse_coord_string(const char *cstring, int *ret_start, int *ret_end)
+{
+  ESL_REGEXP *re = esl_regexp_Create();
+  char        tok1[32];
+  char        tok2[32];
+
+  if (esl_regexp_Match(re, "^(\\d+)\\D+(\\d*)$", cstring) != eslOK) esl_fatal("-c takes arg of subseq coords <from>..<to>; %s not recognized", cstring);
+  if (esl_regexp_SubmatchCopy(re, 1, tok1, 32)            != eslOK) esl_fatal("Failed to find <from> coord in %s", cstring);
+  if (esl_regexp_SubmatchCopy(re, 2, tok2, 32)            != eslOK) esl_fatal("Failed to find <to> coord in %s",   cstring);
+  
+  *ret_start = atol(tok1);
+  *ret_end   = (tok2[0] == '\0') ? 0 : atol(tok2);
+  
+  esl_regexp_Destroy(re);
+  return eslOK;
+}
+
+
 #endif /*p7REFERENCE_FWDBACK_EXAMPLE*/
 /*-------------------- end, example -----------------------------*/
 

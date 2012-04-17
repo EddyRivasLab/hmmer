@@ -265,41 +265,40 @@ p7_bandmx_DumpWindow(FILE *ofp, P7_BANDMX *bmx, int istart, int iend, int kstart
 	  if (i >= istart && i <= iend) 
 	    {
 	      fprintf(ofp, "%3d ML ", i);
-	      for (k = kstart;             k <  ESL_MAX(kstart,ka); k++) fprintf(ofp, "%*s ",   width, ".....");
-	      for (k = ESL_MAX(kstart,ka); k <= ESL_MIN(kend,  kb); k++) fprintf(ofp, "%*.*f ", width, precision, dp[(k-ka)*p7B_NSCELLS + p7B_ML]);
-	      for (k = ESL_MIN(kend,kb)+1; k <= kend;               k++) fprintf(ofp, "%*s ",   width, ".....");
-
+	      for (k = kstart; k <= ESL_MIN(kend,ka-1); k++) fprintf(ofp, "%*s ",   width, ".....");
+	      for (          ; k <= ESL_MIN(kend,  kb); k++) fprintf(ofp, "%*.*f ", width, precision, dp[(k-ka)*p7B_NSCELLS + p7B_ML]);
+	      for (          ; k <= kend;               k++) fprintf(ofp, "%*s ",   width, ".....");
 	      for (x = 0; x < p7B_NXCELLS; x++) fprintf(ofp, "%*.*f ", width, precision, xp[x]);
 	      fputc('\n', ofp);
 
 	      fprintf(ofp, "%3d IL ", i);
-	      for (k = kstart;             k <  ESL_MAX(kstart,ka); k++) fprintf(ofp, "%*s ",   width, ".....");
-	      for (k = ESL_MAX(kstart,ka); k <= ESL_MIN(kend,  kb); k++) fprintf(ofp, "%*.*f ", width, precision, dp[(k-ka)*p7B_NSCELLS + p7B_IL]);
-	      for (k = ESL_MIN(kend,kb)+1; k <= kend;               k++) fprintf(ofp, "%*s ",   width, ".....");
+	      for (k = kstart; k <= ESL_MIN(kend,ka-1); k++) fprintf(ofp, "%*s ",   width, ".....");
+	      for (          ; k <= ESL_MIN(kend,  kb); k++) fprintf(ofp, "%*.*f ", width, precision, dp[(k-ka)*p7B_NSCELLS + p7B_IL]);
+	      for (          ; k <= kend;               k++) fprintf(ofp, "%*s ",   width, ".....");
 	      fputc('\n', ofp);
 
 	      fprintf(ofp, "%3d DL ", i);
-	      for (k = kstart;             k <  ESL_MAX(kstart,ka); k++) fprintf(ofp, "%*s ",   width, ".....");
-	      for (k = ESL_MAX(kstart,ka); k <= ESL_MIN(kend,  kb); k++) fprintf(ofp, "%*.*f ", width, precision, dp[(k-ka)*p7B_NSCELLS + p7B_DL]);
-	      for (k = ESL_MIN(kend,kb)+1; k <= kend;               k++) fprintf(ofp, "%*s ",   width, ".....");
+	      for (k = kstart; k <= ESL_MIN(kend,ka-1); k++) fprintf(ofp, "%*s ",   width, ".....");
+	      for (          ; k <= ESL_MIN(kend,  kb); k++) fprintf(ofp, "%*.*f ", width, precision, dp[(k-ka)*p7B_NSCELLS + p7B_DL]);
+	      for (          ; k <= kend;               k++) fprintf(ofp, "%*s ",   width, ".....");
 	      fputc('\n', ofp);
 
 	      fprintf(ofp, "%3d MG ", i);
-	      for (k = kstart;             k <  ESL_MAX(kstart,ka); k++) fprintf(ofp, "%*s ",   width, ".....");
-	      for (k = ESL_MAX(kstart,ka); k <= ESL_MIN(kend,  kb); k++) fprintf(ofp, "%*.*f ", width, precision, dp[(k-ka)*p7B_NSCELLS + p7B_MG]);
-	      for (k = ESL_MIN(kend,kb)+1; k <= kend;               k++) fprintf(ofp, "%*s ",   width, ".....");
+	      for (k = kstart; k <= ESL_MIN(kend,ka-1); k++) fprintf(ofp, "%*s ",   width, ".....");
+	      for (          ; k <= ESL_MIN(kend,  kb); k++) fprintf(ofp, "%*.*f ", width, precision, dp[(k-ka)*p7B_NSCELLS + p7B_MG]);
+	      for (          ; k <= kend;               k++) fprintf(ofp, "%*s ",   width, ".....");
 	      fputc('\n', ofp);
 
 	      fprintf(ofp, "%3d IG ", i);
-	      for (k = kstart;             k <  ESL_MAX(kstart,ka); k++) fprintf(ofp, "%*s ",   width, ".....");
-	      for (k = ESL_MAX(kstart,ka); k <= ESL_MIN(kend,  kb); k++) fprintf(ofp, "%*.*f ", width, precision, dp[(k-ka)*p7B_NSCELLS + p7B_IG]);
-	      for (k = ESL_MIN(kend,kb)+1; k <= kend;               k++) fprintf(ofp, "%*s ",   width, ".....");
+	      for (k = kstart; k <= ESL_MIN(kend,ka-1); k++) fprintf(ofp, "%*s ",   width, ".....");
+	      for (          ; k <= ESL_MIN(kend,  kb); k++) fprintf(ofp, "%*.*f ", width, precision, dp[(k-ka)*p7B_NSCELLS + p7B_IG]);
+	      for (          ; k <= kend;               k++) fprintf(ofp, "%*s ",   width, ".....");
 	      fputc('\n', ofp);
 
 	      fprintf(ofp, "%3d DG ", i);
-	      for (k = kstart;             k <  ESL_MAX(kstart,ka); k++) fprintf(ofp, "%*s ",   width, ".....");
-	      for (k = ESL_MAX(kstart,ka); k <= ESL_MIN(kend,  kb); k++) fprintf(ofp, "%*.*f ", width, precision, dp[(k-ka)*p7B_NSCELLS + p7B_DG]);
-	      for (k = ESL_MIN(kend,kb)+1; k <= kend;               k++) fprintf(ofp, "%*s ",   width, ".....");
+	      for (k = kstart; k <= ESL_MIN(kend,ka-1); k++) fprintf(ofp, "%*s ",   width, ".....");
+	      for (          ; k <= ESL_MIN(kend,  kb); k++) fprintf(ofp, "%*.*f ", width, precision, dp[(k-ka)*p7B_NSCELLS + p7B_DG]);
+	      for (          ; k <= kend;               k++) fprintf(ofp, "%*s ",   width, ".....");
 	      fputs("\n\n", ofp);
 
 	      show_interseg = TRUE;
