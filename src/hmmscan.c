@@ -1,4 +1,9 @@
 /* hmmscan: search sequence(s) against a profile HMM database
+ *
+ * To do:
+ *  - in MPI mode, add a check to make sure ncpus >= 2. If 1, then we
+ *    only have a master, no workers. See Infernal commit r3972 on the
+ *    same point; and same note in hmmsearch.c's to do list.
  */
 #include "p7_config.h"
 

@@ -526,6 +526,7 @@ int main(int argc, char *argv[])
                         
             /* readjust all the pointers to the new memory block */
             if (ad->rfline  != NULL) ad->rfline  = base + (ad->rfline  - (char *)NULL);
+            if (ad->mmline  != NULL) ad->mmline  = base + (ad->mmline  - (char *)NULL);
             if (ad->csline  != NULL) ad->csline  = base + (ad->csline  - (char *)NULL);
             if (ad->model   != NULL) ad->model   = base + (ad->model   - (char *)NULL);
             if (ad->mline   != NULL) ad->mline   = base + (ad->mline   - (char *)NULL);

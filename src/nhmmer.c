@@ -442,6 +442,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     else if (status == eslEFORMAT)   p7_Fail("Target sequence database file %s is empty or misformatted\n",   cfg->dbfile);
     else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
     else if (status != eslOK)        p7_Fail("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
+
+    if (dbfp->format > 100) // breaking the law!  That range is reserved for msa, for aligned formats
+      p7_Fail("%s contains a multiple sequence alignment; expect unaligned sequences, like FASTA\n",   cfg->dbfile);
   }
 
   /* Open the query profile HMM file */
@@ -753,7 +756,6 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
   int i;
   int prev_hit_cnt;
   ESL_SQ   *dbsq   =  esl_sq_CreateDigital(info->om->abc);
-  wstatus = esl_sqio_ReadWindow(dbfp, 0, NHMMER_MAX_RESIDUE_COUNT, dbsq);
 #ifdef eslAUGMENT_ALPHABET
   ESL_SQ   *dbsq_revcmp;
   if (dbsq->abc->complement != NULL)
@@ -761,6 +763,10 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 #endif /*eslAUGMENT_ALPHABET*/
 
 
+  wstatus = esl_sqio_ReadWindow(dbfp, 0, NHMMER_MAX_RESIDUE_COUNT, dbsq);
+
+//  while (wstatus == eslEOD ) //skip empty sequences
+//    wstatus = esl_sqio_ReadWindow(dbfp, 0, NHMMER_MAX_RESIDUE_COUNT, dbsq);
 
   while (wstatus == eslOK ) {
 
@@ -821,6 +827,10 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
           info->pli->nseqs++;
           esl_sq_Reuse(dbsq);
           wstatus = esl_sqio_ReadWindow(dbfp, 0, NHMMER_MAX_RESIDUE_COUNT, dbsq);
+
+//          while (wstatus == eslEOD ) //skip empty sequences
+//            wstatus = esl_sqio_ReadWindow(dbfp, 0, NHMMER_MAX_RESIDUE_COUNT, dbsq);
+
       }
     }
 
@@ -888,12 +898,6 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
   while (sstatus == eslOK ) {
       block = (ESL_SQ_BLOCK *) newBlock;
 
-      //reset block as an empty vessel
-      if (block->complete) // don't want to reset the first sequence if it's about to be used to set the prefix for the next read.
-        esl_sq_Reuse(block->list + 0);
-      for (i=1; i<block->count; i++)
-          esl_sq_Reuse(block->list + i);
-
       sstatus = esl_sqio_ReadBlock(dbfp, block, NHMMER_MAX_RESIDUE_COUNT, TRUE);
 
       block->first_seqidx = info->pli->nseqs;
@@ -913,7 +917,6 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
               // the final sequence on the block was an incomplete window of the active sequence,
               // so prep the next block to read in the next window
               esl_sq_Copy(block->list + (block->count - 1) , ((ESL_SQ_BLOCK *)newBlock)->list);
-//              ((ESL_SQ_BLOCK *)newBlock)->list->C = ESL_MIN( info->om->max_length, ((ESL_SQ_BLOCK *)newBlock)->list->n);
 
               if (  ((ESL_SQ_BLOCK *)newBlock)->list->n < info->om->max_length ) {
                 //no reason to search the final partial sequence on the block, as the next block will search this whole chunk

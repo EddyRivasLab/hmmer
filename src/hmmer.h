@@ -125,6 +125,7 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 #define p7H_COMPO   (1<<14)   /* model-specific residue composition available     */
 #define p7H_CHKSUM  (1<<15)   /* model has an alignment checksum                  */
 #define p7H_CONS    (1<<16)   /* consensus residue line available                 */
+#define p7H_MMASK   (1<<17)   /* #MM annotation available                        !*/
 
 /* Indices of Plan7 main model state transitions, hmm->t[k][] */
 enum p7h_transitions_e {
@@ -178,7 +179,8 @@ typedef struct p7_hmm_s {
   char    *acc;	                 /* accession number of model (Pfam)      (optional: NULL) */ /* String, \0-terminated   */
   char    *desc;                 /* brief (1-line) description of model   (optional: NULL) */ /* String, \0-terminated   */
   char    *rf;                   /* reference line from alignment 1..M    (p7H_RF)         */ /* String; 0=' ', M+1='\0' */
-  char    *consensus;		 /* consensus residue line        1..M    (p7H_CONS)       */ /* String; 0=' ', M+1='\0' */
+  char    *mm;                   /* model mask line from alignment 1..M   (p7H_MM)         */ /* String; 0=' ', M+1='\0' */
+  char    *consensus;		         /* consensus residue line        1..M    (p7H_CONS)       */ /* String; 0=' ', M+1='\0' */
   char    *cs;                   /* consensus structure line      1..M    (p7H_CS)         */ /* String; 0=' ', M+1='\0' */
   char    *ca;	                 /* consensus accessibility line  1..M    (p7H_CA)         */ /* String; 0=' ', M+1='\0' */
 
@@ -376,6 +378,7 @@ typedef struct p7_profile_s {
   char  *acc;			/* unique accession of model, or NULL                     */
   char  *desc;                  /* brief (1-line) description of model, or NULL           */
   char  *rf;                    /* reference line from alignment 1..M; *rf=0 means unused */
+  char  *mm;                    /* modelmask line           1..M; *ref=0: unused     */
   char  *cs;                    /* consensus structure line      1..M, *cs=0 means unused */
   char  *consensus;		/* consensus residues to display in alignments, 1..M      */
   float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values, or UNSET          */
@@ -526,6 +529,7 @@ enum p7_hmmfile_formats_e {
   p7_HMMFILE_3c = 3,
   p7_HMMFILE_3d = 4,
   p7_HMMFILE_3e = 5,
+  p7_HMMFILE_3f = 6,
 };
 
 typedef struct p7_hmmfile_s {
@@ -722,6 +726,7 @@ typedef struct p7_spensemble_s {
  */
 typedef struct p7_alidisplay_s {
   char *rfline;                 /* reference coord info; or NULL        */
+  char *mmline;                 /* modelmask coord info; or NULL        */
   char *csline;                 /* consensus structure info; or NULL    */
   char *model;                  /* aligned query consensus sequence     */
   char *mline;                  /* "identities", conservation +'s, etc. */
@@ -930,6 +935,23 @@ typedef struct p7_msvdata_s {
 } P7_MSVDATA;
 
 
+typedef struct msv_window_s {
+  float      score;
+  float      null_sc;
+  int32_t    id;    //sequence id of the database sequence hit
+  int32_t    n;     //position in database sequence at which the diagonal/window starts
+  int32_t    fm_n;  //position in the concatenated fm-index sequence at which the diagonal starts
+  int32_t    length; // length of the diagonal/window
+  int16_t    k;  //position of the model at which the diagonal ends
+  int8_t     complementarity;
+} P7_MSV_WINDOW;
+
+typedef struct msv_window_list_s {
+  P7_MSV_WINDOW *windows;
+  int       count;
+  int       size;
+} P7_MSV_WINDOWLIST;
+
 
 /*****************************************************************
  * 13. FM:  FM-index implementation (architecture-specific code found in impl_**)
@@ -1056,24 +1078,6 @@ typedef struct fm_diaglist_s {
   int       count;
   int       size;
 } FM_DIAGLIST;
-
-typedef struct fm_window_s {
-  float       score;
-  float       null_sc;
-  int32_t    id; //sequence id of the database sequence hit
-  int32_t    n;  //position in database sequence (see id above) at which the diagonal starts
-  int32_t    fm_n;  //position in the concatenated fm-index sequence at which the diagonal starts
-  int         first_seq_data;
-  int32_t    length;
-  int16_t    k;  //position of the model at which the diagonal starts
-  int8_t     complementarity;
-} FM_WINDOW;
-
-typedef struct fm_window_list_s {
-  FM_WINDOW *windows;
-  int       count;
-  int       size;
-} FM_WINDOWLIST;
 
 
 
@@ -1221,10 +1225,6 @@ typedef struct p7_builder_s {
   /* Choice of prior                                                                               */
   P7_PRIOR            *prior;	         /* choice of prior when parameterizing from counts        */
 
-  /* Haircut: treat the given range as uninformative, turning all match state residues in that range to 'N' */
-  int                 hc_start;
-  int                 hc_end;
-
   /* Optional: information used for parameterizing single sequence queries                         */
   ESL_SCOREMATRIX     *S;		 /* residue score matrix                                   */
   ESL_DMATRIX         *Q;	         /* Q->mx[a][b] = P(b|a) residue probabilities             */
@@ -1288,8 +1288,8 @@ extern int fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_
 extern int fm_updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval);
 extern int fm_initSeeds (FM_DIAGLIST *list) ;
 extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
-extern int fm_initWindows (FM_WINDOWLIST *list);
-extern FM_WINDOW *fm_newWindow (FM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity);
+extern int fm_initWindows (P7_MSV_WINDOWLIST *list);
+extern P7_MSV_WINDOW *fm_newWindow (P7_MSV_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity);
 extern int fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint8_t *B, ESL_SQ *sq );
 extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
 
@@ -1297,7 +1297,7 @@ extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
 /* fm_msv.c */
 extern int p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
          const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata,
-         FM_WINDOWLIST *windowlist);
+         P7_MSV_WINDOWLIST *windowlist);
 
 
 /* generic_decoding.c */
@@ -1311,7 +1311,7 @@ extern int p7_GHybrid      (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,    
 
 /* generic_msv.c */
 extern int p7_GMSV           (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float nu, float *ret_sc);
-extern int p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, FM_WINDOWLIST *windowlist);
+extern int p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, P7_MSV_WINDOWLIST *windowlist);
 
 /* generic_null2.c */
 extern int p7_GNull2_ByExpectation(const P7_PROFILE *gm, P7_GMX *pp, float *null2);
@@ -1344,7 +1344,7 @@ extern void p7_syslog(int priority, const char *format, ...);
 extern void p7_closelog(void);
 
 /* hmmpgmd2msa.c */
-extern ESL_MSA * hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq,  int *incl, int incl_size, int *excl, int excl_size);
+extern int hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq,  int *incl, int incl_size, int *excl, int excl_size, ESL_MSA **ret_msa);
 
 
 
@@ -1409,8 +1409,10 @@ extern int p7_oprofile_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, i
 #endif /*HAVE_MPI*/
 
 /* tracealign.c */
-extern int p7_tracealign_Seqs(ESL_SQ **sq,           P7_TRACE **tr, int nseq, int M, int optflags, ESL_MSA **ret_msa);
-extern int p7_tracealign_MSA (const ESL_MSA *premsa, P7_TRACE **tr,           int M, int optflags, ESL_MSA **ret_postmsa);
+extern int p7_tracealign_Seqs(ESL_SQ **sq,           P7_TRACE **tr, int nseq, int M,  int optflags, P7_HMM *hmm, ESL_MSA **ret_msa);
+extern int p7_tracealign_MSA (const ESL_MSA *premsa, P7_TRACE **tr,           int M,  int optflags, ESL_MSA **ret_postmsa);
+extern int p7_tracealign_computeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRACE  **tr);
+extern int p7_tracealign_getMSAandStats(P7_HMM *hmm, ESL_SQ  **sq, int N, ESL_MSA **ret_msa, float **ret_pp, float **ret_relent, float **ret_scores );
 
 /* p7_alidisplay.c */
 extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq, P7_DOMAINDEF *app_ddef);
@@ -1545,7 +1547,7 @@ extern int          p7_pipeline_Reuse  (P7_PIPELINE *pli);
 extern void         p7_pipeline_Destroy(P7_PIPELINE *pli);
 extern int          p7_pipeline_Merge  (P7_PIPELINE *p1, P7_PIPELINE *p2);
 
-extern int p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, P7_MSVDATA *msvdata, FM_WINDOWLIST *windowlist, int L);
+extern int p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, P7_MSVDATA *msvdata, P7_MSV_WINDOWLIST *windowlist, int L);
 extern int p7_pli_TargetReportable  (P7_PIPELINE *pli, float score,     double lnP);
 extern int p7_pli_DomainReportable  (P7_PIPELINE *pli, float dom_score, double lnP);
 

@@ -20,6 +20,7 @@
 
 static int map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_sq, P7_TRACE ***ret_tr, int *ret_ntot);
 
+
 #define ALPHOPTS "--amino,--dna,--rna"                         /* Exclusive options for alphabet choice */
 
 static ESL_OPTIONS options[] = {
@@ -39,6 +40,9 @@ static ESL_OPTIONS options[] = {
 
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
 static char banner[] = "align sequences to a profile HMM";
+
+
+
 
 static void
 cmdline_failure(char *argv0, char *format, ...) 
@@ -67,6 +71,8 @@ cmdline_help(char *argv0, ESL_GETOPTS *go)
   exit(0);
 }
 
+
+
 int
 main(int argc, char **argv)
 {
@@ -86,20 +92,11 @@ main(int argc, char **argv)
   int           mapseq  = 0;	/* # of sequences in mapped MSA    */
   int           totseq  = 0;	/* # of seqs in all sources        */
   ESL_ALPHABET *abc     = NULL;	/* alphabet (set from the HMM file)*/
-  P7_BG        *bg      = NULL;
   P7_HMM       *hmm     = NULL;
-  P7_PROFILE   *gm      = NULL;
-  P7_OPROFILE  *om      = NULL;
-  P7_OMX       *oxf     = NULL;	/* optimized Forward matrix        */
-  P7_OMX       *oxb     = NULL;	/* optimized Backward matrix       */
-  P7_GMX       *gxf     = NULL;	/* generic Forward mx for failover */
-  P7_GMX       *gxb     = NULL;	/* generic Backward mx for failover*/
   P7_TRACE    **tr      = NULL;	/* array of tracebacks             */
   ESL_MSA      *msa     = NULL;	/* resulting multiple alignment    */
   int           msaopts = 0;	/* flags to p7_tracealign_Seqs()   */
   int           idx;		/* counter over seqs, traces       */
-  float         fwdsc;		/* Forward score                   */
-  float         oasc;		/* optimal accuracy score          */
   int           status;		/* easel/hmmer return code         */
   char          errbuf[eslERRBUFSIZE];
 
@@ -133,10 +130,10 @@ main(int argc, char **argv)
 
   /* Open output stream */
   if ( (outfile = esl_opt_GetString(go, "-o")) != NULL) 
-    {
-      if ((ofp = fopen(outfile, "w")) == NULL)
-	cmdline_failure(argv[0], "failed to open -o output file %s for writing\n", outfile);
-    }
+  {
+    if ((ofp = fopen(outfile, "w")) == NULL)
+      cmdline_failure(argv[0], "failed to open -o output file %s for writing\n", outfile);
+  }
 
 
   /* If caller forced an alphabet on us, create the one the caller wants  
@@ -167,9 +164,9 @@ main(int argc, char **argv)
    * If --mapali option is chosen, the first set of sequences/traces is from the provided alignment
    */
   if ( (mapfile = esl_opt_GetString(go, "--mapali")) != NULL)
-    {
-      map_alignment(mapfile, hmm, &sq, &tr, &mapseq);
-    }
+  {
+    map_alignment(mapfile, hmm, &sq, &tr, &mapseq);
+  }
   totseq = mapseq;
 
   /* Read digital sequences into an array (possibly concat'ed onto mapped seqs)
@@ -183,11 +180,11 @@ main(int argc, char **argv)
   sq[totseq] = esl_sq_CreateDigital(abc);
   nseq = 0;
   while ((status = esl_sqio_Read(sqfp, sq[totseq+nseq])) == eslOK)
-    {
-      nseq++;
-      ESL_RALLOC(sq, p, sizeof(ESL_SQ *) * (totseq+nseq+1));
-      sq[totseq+nseq] = esl_sq_CreateDigital(abc);
-    }
+  {
+    nseq++;
+    ESL_RALLOC(sq, p, sizeof(ESL_SQ *) * (totseq+nseq+1));
+    sq[totseq+nseq] = esl_sq_CreateDigital(abc);
+  }
   if      (status == eslEFORMAT) esl_fatal("Parse failed (sequence file %s):\n%s\n", 
 					   sqfp->filename, esl_sqfile_GetErrorBuf(sqfp));
   else if (status != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s", status, sqfp->filename);
@@ -201,88 +198,9 @@ main(int argc, char **argv)
   for (idx = mapseq; idx < totseq; idx++)
     tr[idx] = p7_trace_CreateWithPP();
 
-  bg = p7_bg_Create(abc);
-  gm = p7_profile_Create (hmm->M, abc);
-  om = p7_oprofile_Create(hmm->M, abc);
+  p7_tracealign_computeTraces(hmm, sq, mapseq, totseq - mapseq, tr);
 
-  p7_profile_ConfigUnilocal(gm, hmm, bg, sq[mapseq]->n);
-  p7_oprofile_Convert(gm, om); 
-
-  oxf = p7_omx_Create(hmm->M, sq[mapseq]->n, sq[mapseq]->n);
-  oxb = p7_omx_Create(hmm->M, sq[mapseq]->n, sq[mapseq]->n);	
-  
-
-  /* Collect an OA trace for each sequence that needs to be aligned
-   */
-  for (idx = mapseq; idx < totseq; idx++)
-    {
-      p7_omx_GrowTo(oxf, hmm->M, sq[idx]->n, sq[idx]->n);
-      p7_omx_GrowTo(oxb, hmm->M, sq[idx]->n, sq[idx]->n);
-      
-      p7_oprofile_ReconfigLength(om, sq[idx]->n);
-
-      p7_Forward (sq[idx]->dsq, sq[idx]->n, om,      oxf, &fwdsc);
-      p7_Backward(sq[idx]->dsq, sq[idx]->n, om, oxf, oxb, NULL);
-
-      status = p7_Decoding(om, oxf, oxb, oxb);      /* <oxb> is now overwritten with post probabilities     */
-
-      if (status == eslOK) 
-	{
-	  p7_OptimalAccuracy(om, oxb, oxf, &oasc);      /* <oxf> is now overwritten with OA scores              */
-	  p7_OATrace        (om, oxb, oxf, tr[idx]);    /* tr[idx] is now an OA traceback for seq #idx          */
-	}
-      else if (status == eslERANGE)
-	{	
-	  /* Work around the numeric overflow problem in Decoding()
-	   * xref J3/119-121 for commentary;
-	   * also the note in impl_sse/decoding.c::p7_Decoding().
-	   * 
-	   * In short: p7_Decoding() can overflow in cases where the
-	   * model is in unilocal mode (expects to see a single
-	   * "domain") but the target contains more than one domain.
-	   * In searches, I believe this only happens on repetitive
-	   * garbage, because the domain postprocessor is very good
-	   * about identifying single domains before doing posterior
-	   * decoding. But in hmmalign, we're in unilocal mode
-	   * to begin with, and the user can definitely give us a
-	   * multidomain protein.
-	   * 
-	   * We need to make this far more robust; but that's probably
-	   * an issue to deal with when we really spend some time
-	   * looking hard at hmmalign performance. For now (Nov 2009;
-	   * in beta tests leading up to 3.0 release) I'm more
-	   * concerned with stabilizing the search programs.
-	   * 
-	   * The workaround is to detect the overflow and fail over to
-	   * slow generic routines.
-	   */
-	  if (gxf == NULL) gxf = p7_gmx_Create(hmm->M, sq[idx]->n);
-	  else             p7_gmx_GrowTo(gxf,  hmm->M, sq[idx]->n);
-
-	  if (gxb == NULL) gxb = p7_gmx_Create(hmm->M, sq[idx]->n);
-	  else             p7_gmx_GrowTo(gxb,  hmm->M, sq[idx]->n);
-
-	  p7_profile_SetLength(gm, sq[idx]->n);
-
-	  p7_GForward (sq[idx]->dsq, sq[idx]->n, gm, gxf, &fwdsc);
-	  p7_GBackward(sq[idx]->dsq, sq[idx]->n, gm, gxb, NULL);
-	  p7_GDecoding(gm, gxf, gxb, gxb);
-	  p7_GOptimalAccuracy(gm, gxb, gxf, &oasc);
-	  p7_GOATrace        (gm, gxb, gxf, tr[idx]);
-	  p7_gmx_Reuse(gxf);
-	  p7_gmx_Reuse(gxb);
-	}
- 
-      p7_omx_Reuse(oxf);
-      p7_omx_Reuse(oxb);
-    }
-
-#if 0
-  for (idx = 0; idx < nseq; idx++)
-    p7_trace_DumpAnnotated(stdout, tr[idx], gm, sq[idx]->dsq);
-#endif
-
-  p7_tracealign_Seqs(sq, tr, totseq, om->M, msaopts, &msa);
+  p7_tracealign_Seqs(sq, tr, totseq, hmm->M, msaopts, hmm, &msa);
 
   eslx_msafile_Write(ofp, msa, outfmt);
 
@@ -291,13 +209,6 @@ main(int argc, char **argv)
   free(sq);
   free(tr);
   esl_msa_Destroy(msa);
-  p7_bg_Destroy(bg);
-  p7_profile_Destroy(gm);
-  p7_oprofile_Destroy(om);
-  p7_omx_Destroy(oxf);
-  p7_omx_Destroy(oxb);
-  p7_gmx_Destroy(gxf);
-  p7_gmx_Destroy(gxb);
   p7_hmm_Destroy(hmm);
   if (ofp != stdout) fclose(ofp);
   esl_alphabet_Destroy(abc);
@@ -308,6 +219,11 @@ main(int argc, char **argv)
   return status;
 }
 
+
+
+/*****************************************************************
+ * Internal functions used by main and API
+ *****************************************************************/
 
 static int
 map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_sq, P7_TRACE ***ret_tr, int *ret_ntot)
@@ -370,6 +286,8 @@ map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_sq, P7_TRACE
   if (matassign != NULL) free(matassign);
   return status;
 }
+
+
 
 
 /*****************************************************************

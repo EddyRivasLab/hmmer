@@ -392,10 +392,11 @@ process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
     if (thmm.desc) { hmm->desc = strdup(p); p += strlen(hmm->desc) + 1; }
 
     n = hmm->M + 2;
-    if (hmm->flags & p7H_RF)   { memcpy(hmm->rf,        p, n); p += n; }
-    if (hmm->flags & p7H_CONS) { memcpy(hmm->consensus, p, n); p += n; }
-    if (hmm->flags & p7H_CS)   { memcpy(hmm->cs,        p, n); p += n; }
-    if (hmm->flags & p7H_CA)   { memcpy(hmm->ca,        p, n); p += n; }
+    if (hmm->flags & p7H_RF)    { memcpy(hmm->rf,        p, n); p += n; }
+    if (hmm->flags & p7H_MMASK) { memcpy(hmm->mm,        p, n); p += n; }
+    if (hmm->flags & p7H_CONS)  { memcpy(hmm->consensus, p, n); p += n; }
+    if (hmm->flags & p7H_CS)    { memcpy(hmm->cs,        p, n); p += n; }
+    if (hmm->flags & p7H_CA)    { memcpy(hmm->ca,        p, n); p += n; }
 
     n = sizeof(int) * (hmm->M + 1);
     if (hmm->flags & p7H_MAP) {  memcpy(hmm->map,       p, n); p += n; }
@@ -823,6 +824,7 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
       /* readjust all the pointers to the new memory block */
       ad = dcl->ad;
       if (ad->rfline  != NULL) ad->rfline  = base + (ad->rfline  - ad->mem);
+      if (ad->mmline  != NULL) ad->mmline  = base + (ad->mmline  - ad->mem);
       if (ad->csline  != NULL) ad->csline  = base + (ad->csline  - ad->mem);
       if (ad->model   != NULL) ad->model   = base + (ad->model   - ad->mem);
       if (ad->mline   != NULL) ad->mline   = base + (ad->mline   - ad->mem);

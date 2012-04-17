@@ -71,8 +71,8 @@
  * Returns:   Pointer to completed MSA object. NULL on error
  *
  */
-ESL_MSA *
-hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int *excl, int excl_size) {
+int
+hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int *excl, int excl_size, ESL_MSA **ret_msa) {
   int i, j;
   int c;
   int status;
@@ -92,7 +92,7 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
   ESL_MSA           *msa   = NULL;
   P7_DOMAIN         *dom   = NULL;
 
-  void              *p     = data;        /*pointer used to walk along data, must be char* to allow pointer arithmetic */
+  char              *p     = (char*)data;        /*pointer used to walk along data, must be char* to allow pointer arithmetic */
 
   th.N = 0;
   th.unsrt = NULL;
@@ -100,9 +100,12 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
 
   /* optionally build a faux trace for the query sequence: relative to core model (B->M_1..M_L->E) */
   if (qsq != NULL) {
-    if (qsq->n != hmm->M) goto ERROR;
+    if (qsq->n != hmm->M) {
+      status = eslFAIL;
+      goto ERROR;
+    }
 
-    if ((qtr = p7_trace_Create())                      == NULL)  goto ERROR;
+    if ((qtr = p7_trace_Create())                      == NULL)  {status = eslFAIL;  goto ERROR; }
     if ((status = p7_trace_Append(qtr, p7T_B, 0, 0))   != eslOK) goto ERROR;
     for (i = 1; i <= qsq->n; i++)
       if ((status = p7_trace_Append(qtr, p7T_MG, i, i))!= eslOK) goto ERROR;
@@ -118,10 +121,10 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
   /* sanity check */
   if (   ( stats->Z_setby != p7_ZSETBY_NTARGETS    && stats->Z_setby != p7_ZSETBY_OPTION    && stats->Z_setby != p7_ZSETBY_FILEINFO )
       || ( stats->domZ_setby != p7_ZSETBY_NTARGETS && stats->domZ_setby != p7_ZSETBY_OPTION && stats->domZ_setby != p7_ZSETBY_FILEINFO )
-      ||   stats->nseqs > 1000000
-      ||   stats->nhits > 1000000
+      ||   stats->nhits > 10000000
       ||   stats->elapsed > 1000000
   ) {
+    status = eslFAIL;
     goto ERROR;
   }
 
@@ -138,8 +141,10 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
     th.hit[i] = &(th.unsrt[i]);
     if (   th.hit[i]->ndom > 10000
         || th.hit[i]->flags >  p7_IS_INCLUDED + p7_IS_REPORTED + p7_IS_NEW + p7_IS_DROPPED + p7_IS_DUPLICATE
-    )
+    ) {
+      status = eslFAIL;
       goto ERROR;
+    }
   }
 
 //  th.unsrt     = NULL;
@@ -190,6 +195,7 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
 
       ad2->memsize = ad->memsize;
       ad2->rfline = ad->rfline;
+      ad2->mmline = ad->mmline;
       ad2->csline = ad->csline ;
       ad2->model  = ad->model ;
       ad2->mline  = ad->mline ;
@@ -236,8 +242,8 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
   if (th.unsrt != NULL) free (th.unsrt);
   if (th.hit != NULL) free (th.hit);
 
-
-  return msa;
+  *ret_msa = msa;
+  return eslOK;
 
 ERROR:
   /* free memory */
@@ -252,7 +258,7 @@ ERROR:
   if (th.unsrt != NULL) free (th.unsrt);
   if (th.hit != NULL) free (th.hit);
 
-  return NULL;
+  return status;
 }
 
 
@@ -283,15 +289,36 @@ main(int argc, char **argv) {
 
   char   errbuf[eslERRBUFSIZE];
   int status;
-  char *badstring = "asdlfuhasdfuhasdfhasdfhaslidhflaishdfliasuhdfliasuhdfliasudfh";
+  //char *badstring = "asdlfuhasdfuhasdfhasdfhaslidhflaishdfliasuhdfliasuhdfliasudfh";
+
+  char *hmm_file = "esl_align.hmm";
+  char *fa_file  = "esl_align.fa";
+  char *dat_file = "esl_align.big.bin";
+
+
+
+  if (argc > 1 ) {
+    ESL_ALLOC(hmm_file, sizeof(char) * (strlen(argv[1])+1) );
+    strcpy(hmm_file, argv[1]);
+  }
+  if (argc > 2 ) {
+    ESL_ALLOC(fa_file, sizeof(char) * (strlen(argv[2])+1) );
+    strcpy(fa_file, argv[2]);
+  }
+  if (argc > 3 ) {
+    ESL_ALLOC(dat_file, sizeof(char) * (strlen(argv[3])+1) );
+    strcpy(dat_file, argv[3]);
+  }
+
+  printf("hmmpgmd2msa:\nhmm: %s\nfa:  %s\ndat: %s\n", hmm_file, fa_file, dat_file);
 
 
   /* read the hmm */
-  if ( (status = p7_hmmfile_OpenE("tyrosine_kinase.hmm", NULL, &hfp, errbuf)) != 0 ) goto ERROR;
+  if ( (status = p7_hmmfile_OpenE(hmm_file, NULL, &hfp, errbuf)) != 0 ) goto ERROR;
   if ( (status = p7_hmmfile_Read(hfp, &abc, &hmm)) != 0 ) goto ERROR;
 
   /* read the query sequence */
-  if ( (status = esl_sqfile_OpenDigital(abc, "tyrosine_kinase.fa", eslSQFILE_UNKNOWN, NULL, &qfp)) != 0) goto ERROR;
+  if ( (status = esl_sqfile_OpenDigital(abc, fa_file, eslSQFILE_UNKNOWN, NULL, &qfp)) != 0) goto ERROR;
   qsq = esl_sq_CreateDigital(abc);
   if ( (status = esl_sqio_Read(qfp, qsq)) != eslOK)  goto ERROR;
 
@@ -299,7 +326,7 @@ main(int argc, char **argv) {
 
   /* get stats for the hmmd data */
 
-  if ( (fp = fopen("hmmpgmd.binary.dat", "rb")) == NULL ) goto ERROR;
+  if ( (fp = fopen(dat_file, "rb")) == NULL ) goto ERROR;
 
   fseek (fp , 0 , SEEK_END);
   size = ftell (fp);
@@ -307,12 +334,9 @@ main(int argc, char **argv) {
   ESL_ALLOC(data, size);
   fread(data, size, 1, fp);
 
+  status = hmmpgmd2msa(data, hmm, qsq, NULL,0, NULL, 0, &msa);
 
-  data = (void*)badstring;
-
-  msa = hmmpgmd2msa(data, hmm, qsq, NULL,0, NULL, 0);
-
-  if (msa == NULL) goto ERROR;
+  if (status != eslOK) goto ERROR;
 
   eslx_msafile_Write(stdout, msa, eslMSAFILE_STOCKHOLM);
 

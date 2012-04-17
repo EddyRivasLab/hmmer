@@ -127,10 +127,12 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
    * we initialize all this memory to zeros to shut valgrind up about 
    * fwrite'ing uninitialized memory in the io functions.
    */
-  ESL_ALLOC(om->rf,          sizeof(char) * (allocM+2)); 
+  ESL_ALLOC(om->rf,          sizeof(char) * (allocM+2));
+  ESL_ALLOC(om->mm,          sizeof(char) * (allocM+2));
   ESL_ALLOC(om->cs,          sizeof(char) * (allocM+2));
   ESL_ALLOC(om->consensus,   sizeof(char) * (allocM+2));
-  memset(om->rf,      '\0',  sizeof(char) * (allocM+2));
+  memset(om->rf,       '\0', sizeof(char) * (allocM+2));
+  memset(om->mm,       '\0', sizeof(char) * (allocM+2));
   memset(om->cs,       '\0', sizeof(char) * (allocM+2));
   memset(om->consensus,'\0', sizeof(char) * (allocM+2));
 
@@ -186,6 +188,7 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
       if (om->acc       != NULL) free(om->acc);
       if (om->desc      != NULL) free(om->desc);
       if (om->rf        != NULL) free(om->rf);
+      if (om->mm        != NULL) free(om->mm);
       if (om->cs        != NULL) free(om->cs);
       if (om->consensus != NULL) free(om->consensus);
     }
@@ -229,6 +232,7 @@ p7_oprofile_Sizeof(P7_OPROFILE *om)
   n  += sizeof(__m128  *) * om->abc->Kp;          /* om->rfv       */
   
   n  += sizeof(char) * (om->allocM+2);            /* om->rf        */
+  n  += sizeof(char) * (om->allocM+2);            /* om->mm        */
   n  += sizeof(char) * (om->allocM+2);            /* om->cs        */
   n  += sizeof(char) * (om->allocM+2);            /* om->consensus */
 
@@ -353,11 +357,13 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
    * we initialize all this memory to zeros to shut valgrind up about 
    * fwrite'ing uninitialized memory in the io functions.
    */
-  ESL_ALLOC(om2->rf,          size); 
+  ESL_ALLOC(om2->rf,          size);
+  ESL_ALLOC(om2->mm,          size);
   ESL_ALLOC(om2->cs,          size);
   ESL_ALLOC(om2->consensus,   size);
 
   memcpy(om2->rf,        om1->rf,        size);
+  memcpy(om2->mm,        om1->mm,        size);
   memcpy(om2->cs,        om1->cs,        size);
   memcpy(om2->consensus, om1->consensus, size);
 
@@ -796,6 +802,7 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
   if ((status = esl_strdup(gm->acc,  -1, &(om->acc)))  != eslOK) goto ERROR;
   if ((status = esl_strdup(gm->desc, -1, &(om->desc))) != eslOK) goto ERROR;
   strcpy(om->rf,        gm->rf);
+  strcpy(om->mm,        gm->mm);
   strcpy(om->cs,        gm->cs);
   strcpy(om->consensus, gm->consensus);
   for (z = 0; z < p7_NEVPARAM; z++) om->evparam[z] = gm->evparam[z];
@@ -1528,6 +1535,7 @@ p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, c
    if (esl_strcmp(om1->acc,       om2->acc)       != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: acc");
    if (esl_strcmp(om1->desc,      om2->desc)      != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: desc");
    if (esl_strcmp(om1->rf,        om2->rf)        != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: ref");
+   if (esl_strcmp(om1->mm,        om2->mm)        != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: mm");
    if (esl_strcmp(om1->cs,        om2->cs)        != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: cs");
    if (esl_strcmp(om1->consensus, om2->consensus) != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: consensus");
    

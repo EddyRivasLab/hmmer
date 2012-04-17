@@ -158,6 +158,7 @@ p7_oprofile_MPIPackSize(P7_OPROFILE *om, MPI_Comm comm, int *ret_n)
   if (om->acc       != NULL) len += strlen(om->acc)       + 1;
   if (om->desc      != NULL) len += strlen(om->desc)      + 1;
   if (om->rf        != NULL) len += strlen(om->rf)        + 1;
+  if (om->mm        != NULL) len += strlen(om->mm)        + 1;
   if (om->cs        != NULL) len += strlen(om->cs)        + 1;
   if (om->consensus != NULL) len += strlen(om->consensus) + 1;
   if (MPI_Pack_size(6,           MPI_INT, comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");   n += sz;
@@ -273,6 +274,10 @@ p7_oprofile_MPIPack(P7_OPROFILE *om, char *buf, int n, int *pos, MPI_Comm comm)
   if (MPI_Pack(&len,              1,                      MPI_INT, buf, n, pos, comm) != 0) ESL_EXCEPTION(eslESYS, "pack failed");
   if (len > 0)
     if (MPI_Pack( om->rf,         len,                   MPI_CHAR, buf, n, pos, comm) != 0) ESL_EXCEPTION(eslESYS, "pack failed");
+  len = (om->mm != NULL)        ? strlen(om->mm)+1 : 0;
+  if (MPI_Pack(&len,              1,                      MPI_INT, buf, n, pos, comm) != 0) ESL_EXCEPTION(eslESYS, "pack failed");
+  if (len > 0)
+    if (MPI_Pack( om->mm,         len,                   MPI_CHAR, buf, n, pos, comm) != 0) ESL_EXCEPTION(eslESYS, "pack failed");
   len = (om->cs != NULL)        ? strlen(om->cs)+1 : 0;
   if (MPI_Pack(&len,              1,                      MPI_INT, buf, n, pos, comm) != 0) ESL_EXCEPTION(eslESYS, "pack failed");
   if (len > 0)
@@ -423,6 +428,12 @@ p7_oprofile_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **
     ESL_ALLOC(om->rf, len);
     if (MPI_Unpack(buf, n, pos,  om->rf,         len,                   MPI_CHAR, comm) != 0) ESL_EXCEPTION(eslESYS, "mpi unpack failed");
     om->rf[len-1] = '\0';
+  }
+  if (MPI_Unpack(buf, n, pos, &len,              1,                      MPI_INT, comm) != 0) ESL_EXCEPTION(eslESYS, "mpi unpack failed");
+  if (len > 0) {
+    ESL_ALLOC(om->mm, len);
+    if (MPI_Unpack(buf, n, pos,  om->mm,         len,                   MPI_CHAR, comm) != 0) ESL_EXCEPTION(eslESYS, "mpi unpack failed");
+    om->mm[len-1] = '\0';
   }
   if (MPI_Unpack(buf, n, pos, &len,              1,                      MPI_INT, comm) != 0) ESL_EXCEPTION(eslESYS, "mpi unpack failed");
   if (len > 0) {

@@ -91,6 +91,7 @@ p7_hmm_CreateShell(void)
   hmm->acc        = NULL;
   hmm->desc       = NULL;
   hmm->rf         = NULL;
+  hmm->mm         = NULL;
   hmm->consensus  = NULL;
   hmm->cs         = NULL;
   hmm->ca         = NULL;
@@ -163,6 +164,7 @@ p7_hmm_CreateBody(P7_HMM *hmm, int M, const ESL_ALPHABET *abc)
 
   /* Optional allocation, status flag dependent */
   if (hmm->flags & p7H_RF)    ESL_ALLOC(hmm->rf,         (M+2) * sizeof(char));
+  if (hmm->flags & p7H_MMASK) ESL_ALLOC(hmm->mm,         (M+2) * sizeof(char));
   if (hmm->flags & p7H_CONS)  ESL_ALLOC(hmm->consensus,  (M+2) * sizeof(char));
   if (hmm->flags & p7H_CS)    ESL_ALLOC(hmm->cs,         (M+2) * sizeof(char));
   if (hmm->flags & p7H_CA)    ESL_ALLOC(hmm->ca,         (M+2) * sizeof(char));
@@ -200,6 +202,7 @@ p7_hmm_Destroy(P7_HMM *hmm)
   if (hmm->acc)       free(hmm->acc);
   if (hmm->desc)      free(hmm->desc);
   if (hmm->rf)        free(hmm->rf);
+  if (hmm->mm)        free(hmm->mm);
   if (hmm->consensus) free(hmm->consensus);
   if (hmm->cs)        free(hmm->cs);
   if (hmm->ca)        free(hmm->ca);
@@ -268,12 +271,13 @@ p7_hmm_Clone(const P7_HMM *hmm)
   if ((status = esl_strdup(hmm->acc,    -1, &(new->acc)))    != eslOK) goto ERROR;
   if ((status = esl_strdup(hmm->desc,   -1, &(new->desc)))   != eslOK) goto ERROR;
 
-  if ((hmm->flags & p7H_RF)   && (status = esl_strdup(hmm->rf,        -1, &(new->rf)))        != eslOK) goto ERROR;
-  if ((hmm->flags & p7H_CONS) && (status = esl_strdup(hmm->consensus, -1, &(new->consensus))) != eslOK) goto ERROR;
-  if ((hmm->flags & p7H_CS)   && (status = esl_strdup(hmm->cs,        -1, &(new->cs)))        != eslOK) goto ERROR;
-  if ((hmm->flags & p7H_CA)   && (status = esl_strdup(hmm->ca,        -1, &(new->ca)))        != eslOK) goto ERROR;
-  if ((hmm->comlog != NULL)   && (status = esl_strdup(hmm->comlog,    -1, &(new->comlog)))    != eslOK) goto ERROR;
-  if ((hmm->ctime  != NULL)   && (status = esl_strdup(hmm->ctime,     -1, &(new->ctime)))     != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_RF)    && (status = esl_strdup(hmm->rf,        -1, &(new->rf)))        != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_MMASK) && (status = esl_strdup(hmm->mm,        -1, &(new->mm)))        != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_CONS)  && (status = esl_strdup(hmm->consensus, -1, &(new->consensus))) != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_CS)    && (status = esl_strdup(hmm->cs,        -1, &(new->cs)))        != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_CA)    && (status = esl_strdup(hmm->ca,        -1, &(new->ca)))        != eslOK) goto ERROR;
+  if ((hmm->comlog != NULL)    && (status = esl_strdup(hmm->comlog,    -1, &(new->comlog)))    != eslOK) goto ERROR;
+  if ((hmm->ctime  != NULL)    && (status = esl_strdup(hmm->ctime,     -1, &(new->ctime)))     != eslOK) goto ERROR;
   if (hmm->flags & p7H_MAP) {
     ESL_ALLOC(new->map, sizeof(int) * (hmm->M+1));
     esl_vec_ICopy(hmm->map, hmm->M+1, new->map);
@@ -1248,11 +1252,12 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
   if (esl_strcmp(h1->acc,  h2->acc)  != 0) return eslFAIL;
   if (esl_strcmp(h1->desc, h2->desc) != 0) return eslFAIL;
 
-  if ((h1->flags & p7H_RF)   && esl_strcmp(h1->rf,        h2->rf)           != 0) return eslFAIL;
-  if ((h1->flags & p7H_CONS) && esl_strcmp(h1->consensus, h2->consensus)    != 0) return eslFAIL;
-  if ((h1->flags & p7H_CS)   && esl_strcmp(h1->cs,        h2->cs)           != 0) return eslFAIL;
-  if ((h1->flags & p7H_CA)   && esl_strcmp(h1->ca,        h2->ca)           != 0) return eslFAIL;
-  if ((h1->flags & p7H_MAP)  && esl_vec_ICompare(h1->map, h2->map, h1->M+1) != 0) return eslFAIL;
+  if ((h1->flags & p7H_RF)    && esl_strcmp(h1->rf,        h2->rf)           != 0) return eslFAIL;
+  if ((h1->flags & p7H_MMASK) && esl_strcmp(h1->mm,        h2->mm)           != 0) return eslFAIL;
+  if ((h1->flags & p7H_CONS)  && esl_strcmp(h1->consensus, h2->consensus)    != 0) return eslFAIL;
+  if ((h1->flags & p7H_CS)    && esl_strcmp(h1->cs,        h2->cs)           != 0) return eslFAIL;
+  if ((h1->flags & p7H_CA)    && esl_strcmp(h1->ca,        h2->ca)           != 0) return eslFAIL;
+  if ((h1->flags & p7H_MAP)   && esl_vec_ICompare(h1->map, h2->map, h1->M+1) != 0) return eslFAIL;
 
   if (h1->flags & p7H_GA) {
     if (esl_FCompare(h1->cutoff[p7_GA1], h2->cutoff[p7_GA1], tol) != eslOK) return eslFAIL;
@@ -1321,6 +1326,9 @@ p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol)
 
   if (hmm->flags & p7H_RF)   { if (hmm->rf == NULL        || strlen(hmm->rf)        != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7H_RF flag up, but rf string is invalid");            }
   else if (hmm->rf)          {                                                                   ESL_XFAIL(eslFAIL, errbuf, "p7H_RF flag down, but rf string is present");          }
+
+  if (hmm->flags & p7H_MMASK) { if (hmm->mm == NULL        || strlen(hmm->mm)        != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7H_MMASK flag up, but mm string is invalid");            }
+  else if (hmm->mm)           {                                                                   ESL_XFAIL(eslFAIL, errbuf, "p7H_MMASK flag down, but mm string is present");          }
 
   if (hmm->flags & p7H_CONS) { if (hmm->consensus == NULL || strlen(hmm->consensus) != hmm->M+1) ESL_XFAIL(eslFAIL, errbuf, "p7H_CONS flag up, but consensus string is invalid");   } 
   else if (hmm->consensus)   {                                                                   ESL_XFAIL(eslFAIL, errbuf, "p7H_CONS flag down, but consensus string is present"); }

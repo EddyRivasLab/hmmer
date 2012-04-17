@@ -1875,9 +1875,9 @@ utest_faux_tracealign(ESL_MSA *msa, int *matassign, int M)
   esl_msa_Destroy(msa2);
   for (i = 0; i < msa->nseq; i++) p7_trace_Destroy(tr[i]);
 
-  if (p7_trace_FauxFromMSA(msa, matassign, p7_DEFAULT, tr)      != eslOK) esl_fatal(msg);
-  if (p7_tracealign_Seqs(sq, tr, msa->nseq, M, optflags, &msa2) != eslOK) esl_fatal(msg);
-  if (esl_msa_Compare(msa, msa2)                                != eslOK) esl_fatal(msg);
+  if (p7_trace_FauxFromMSA(msa, matassign, p7_DEFAULT, tr)            != eslOK) esl_fatal(msg);
+  if (p7_tracealign_Seqs(sq, tr, msa->nseq, M, optflags, NULL, &msa2) != eslOK) esl_fatal(msg);
+  if (esl_msa_Compare(msa, msa2)                                      != eslOK) esl_fatal(msg);
 
   esl_msa_Destroy(msa2);
   for (i = 0; i < msa->nseq; i++) p7_trace_Destroy(tr[i]);

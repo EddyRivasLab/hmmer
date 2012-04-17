@@ -46,6 +46,9 @@
 #include "hmmer.h"
 #include "impl_vmx.h"
 
+static uint32_t  v3f_fmagic = 0xb3e6e6f6; /* 3/f binary MSV file, VMX:     "3ffv" = 0x 33 66 66 76  + 0x80808080 */
+static uint32_t  v3f_pmagic = 0xb3e6f0f6; /* 3/f binary profile file, VMX: "3fpv" = 0x 33 66 70 76  + 0x80808080 */
+
 static uint32_t  v3e_fmagic = 0xb3e5e6f6; /* 3/e binary MSV file, VMX:     "3efv" = 0x 33 65 66 76  + 0x80808080 */
 static uint32_t  v3e_pmagic = 0xb3e5f0f6; /* 3/e binary profile file, VMX: "3epv" = 0x 33 65 70 76  + 0x80808080 */
 
@@ -97,7 +100,7 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   int x;
 
   /* <ffp> is the part of the oprofile that MSVFilter() needs */
-  if (fwrite((char *) &(v3e_fmagic),    sizeof(uint32_t),   1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+  if (fwrite((char *) &(v3f_fmagic),    sizeof(uint32_t),   1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   if (fwrite((char *) &(om->M),         sizeof(int),        1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   if (fwrite((char *) &(om->abc->type), sizeof(int),        1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   if (fwrite((char *) &n,               sizeof(int),        1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
@@ -116,10 +119,10 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   if (fwrite((char *) om->evparam,      sizeof(float),      p7_NEVPARAM, ffp) != p7_NEVPARAM) ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   if (fwrite((char *) om->offs,         sizeof(off_t),      p7_NOFFSETS, ffp) != p7_NOFFSETS) ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   if (fwrite((char *) om->compo,        sizeof(float),      p7_MAXABET,  ffp) != p7_MAXABET)  ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &(v3e_fmagic),    sizeof(uint32_t),   1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+  if (fwrite((char *) &(v3f_fmagic),    sizeof(uint32_t),   1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
 
   /* <pfp> gets the rest of the oprofile */
-  if (fwrite((char *) &(v3e_pmagic),    sizeof(uint32_t),   1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+  if (fwrite((char *) &(v3f_pmagic),    sizeof(uint32_t),   1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   if (fwrite((char *) &(om->M),         sizeof(int),        1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   if (fwrite((char *) &(om->abc->type), sizeof(int),        1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   if (fwrite((char *) &n,               sizeof(int),        1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
@@ -144,6 +147,7 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   }
   
   if (fwrite((char *) om->rf,           sizeof(char),       om->M+2,     pfp) != om->M+2)     ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+  if (fwrite((char *) om->mm,           sizeof(char),       om->M+2,     pfp) != om->M+2)     ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   if (fwrite((char *) om->cs,           sizeof(char),       om->M+2,     pfp) != om->M+2)     ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   if (fwrite((char *) om->consensus,    sizeof(char),       om->M+2,     pfp) != om->M+2)     ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
 
@@ -169,7 +173,7 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   if (fwrite((char *) &(om->nj),        sizeof(float),      1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   if (fwrite((char *) &(om->mode),      sizeof(int),        1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   if (fwrite((char *) &(om->L)   ,      sizeof(int),        1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &(v3e_pmagic),    sizeof(uint32_t),   1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+  if (fwrite((char *) &(v3f_pmagic),    sizeof(uint32_t),   1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   return eslOK;
 }
 /*---------------- end, writing oprofile ------------------------*/
@@ -250,7 +254,8 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   if (magic == v3b_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database format (3/b); please hmmpress your HMM file again");
   if (magic == v3c_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database format (3/c); please hmmpress your HMM file again");
   if (magic == v3d_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database format (3/d); please hmmpress your HMM file again");
-  if (magic != v3e_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
+  if (magic == v3e_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database format (3/e); please hmmpress your HMM file again");
+  if (magic != v3f_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
 
   if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
@@ -288,7 +293,7 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   if (! fread((char *) om->compo,         sizeof(float),      p7_MAXABET,    hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model composition");
   if (! fread( (char *) &magic,           sizeof(uint32_t),   1,             hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no sentinel magic: .h3f file corrupted?");
 
-  if (magic != v3e_fmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad sentinel magic; .h3f file corrupted?");
+  if (magic != v3f_fmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad sentinel magic; .h3f file corrupted?");
 
   /* keep track of the ending offset of the MSV model */
   om->eoff = ftello(hfp->ffp) - 1;;
@@ -366,7 +371,8 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
   if (magic == v3b_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database format (3/b); please hmmpress your HMM file again");
   if (magic == v3c_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database format (3/c); please hmmpress your HMM file again");
   if (magic == v3d_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database format (3/d); please hmmpress your HMM file again");
-  if (magic != v3e_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
+  if (magic == v3e_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database format (3/e); please hmmpress your HMM file again");
+  if (magic != v3f_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
 
   if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
@@ -508,7 +514,8 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
   if (magic == v3b_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database format (3/b); please hmmpress your HMM file again");
   if (magic == v3c_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database format (3/c); please hmmpress your HMM file again");
   if (magic == v3d_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database format (3/d); please hmmpress your HMM file again");
-  if (magic != v3e_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database file?");
+  if (magic == v3e_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "this is an outdated HMM database format (3/e); please hmmpress your HMM file again");
+  if (magic != v3f_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database file?");
 
   if (! fread( (char *) &M,              sizeof(int),           1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype,      sizeof(int),           1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
@@ -532,6 +539,7 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
   }
 
   if (! fread((char *) om->rf,           sizeof(char),          M+2,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read rf annotation");
+  if (! fread((char *) om->mm,           sizeof(char),          M+2,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read mm annotation");
   if (! fread((char *) om->cs,           sizeof(char),          M+2,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read cs annotation");
   if (! fread((char *) om->consensus,    sizeof(char),          M+2,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read consensus annotation");
 
@@ -560,7 +568,7 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
   if (! fread((char *) &(om->L)   ,      sizeof(int),           1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read L");
   if (! fread( (char *) &magic,          sizeof(uint32_t),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no sentinel magic: .h3p file corrupted?");
 
-  if (magic != v3e_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad sentinel magic; .h3p file corrupted?");
+  if (magic != v3f_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad sentinel magic; .h3p file corrupted?");
 
 #ifdef HMMER_THREADS
   if (hfp->syncRead)

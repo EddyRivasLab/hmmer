@@ -64,8 +64,6 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
   bld->Q            = NULL;
   bld->eset         = -1.0;	/* -1.0 = unset; must be set if effn_strategy is p7_EFFN_SET */
   bld->re_target    = -1.0;
-  bld->hc_start     = -1;
-  bld->hc_end       = -1;
 
   if (go == NULL) 
     {

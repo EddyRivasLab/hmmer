@@ -1,6 +1,6 @@
 # nhmmer :: search a DNA model against a DNA database
-# HMMER 3.0 (March 2010); http://hmmer.org/
-# Copyright (C) 2010 Howard Hughes Medical Institute.
+# HMMER 3.1dev (November 2011); http://hmmer.org/
+# Copyright (C) 2011 Howard Hughes Medical Institute.
 # Freely distributed under the GNU General Public License (GPLv3).
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # query HMM file:                  tutorial/SNORD96.hmm
@@ -11,18 +11,19 @@ Query:       SNORD96  [M=96]
 Accession:   RF00055
 Description: Small nucleolar RNA SNORD96 family
 Scores for complete hits:
-    E-value  score  bias  Sequence   start     end Description
-    ------- ------ -----  --------   -----   ----- -----------
-    4.2e-22   78.5   0.0  chr22    1846605 1846512 
+    E-value  score  bias  Sequence   start     end  Description
+    ------- ------ -----  --------   -----   -----  -----------
+    4.2e-22   78.5   0.0  chr22    1846605 1846512  
+     0.0019   18.7   0.1  chr22     189909  189969  
   ------ inclusion threshold ------
-      0.037   14.6   0.0  chr22    1197742 1197673 
+      0.039   14.5   0.0  chr22    1197742 1197673  
 
 
 Annotation for each hit  (and alignments):
 >> chr22  
-    score  bias    Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
-   ------ ----- --------- ------- -------    ------- -------    ------- -------    ----
- !   78.5   0.0   4.2e-22       2      95 .. 1846605 1846512 .. 1846606 1846511 .. 0.97
+    score  bias    Evalue hmmfrom  hmm to     alifrom    ali to      envfrom    env to       hqfrom    hq to       acc
+   ------ ----- --------- ------- -------    --------- ---------    --------- ---------    --------- ---------    ----
+ !   78.5   0.0   4.2e-22         2        95 ..   1846605   1846512 ..   1846606   1846511 ..   1846605   1846512    0.97
 
   Alignment:
   score: 78.5 bits
@@ -31,41 +32,51 @@ Annotation for each hit  (and alignments):
                   ggccgguga gaaa+cc + au+aaaaa caccaucuuucggg+cugau +g+cgcc  uc gcggc+aug+ugc+a uucugcaauucugagg
     chr22 1846605 GGCCGGUGAAGAAAACCUCGAUUAAAAA-CACCAUCUUUCGGGGCUGAUCGGCCGCCgcUCGGCGGCCAUGCUGCCA-UUCUGCAAUUCUGAGG 1846514
                   789**********************999.***************************9999*****************.***************9 PP
-                  0689************************.************************************************.***************9 APP
 
                   >> CS
   SNORD96      94 cc 95     
                   cc
     chr22 1846513 CC 1846512
                   87 PP
-                  50 APP
 
 >> chr22  
-    score  bias    Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
-   ------ ----- --------- ------- -------    ------- -------    ------- -------    ----
- ?   14.6   0.0     0.037       6      71 .. 1197742 1197673 .. 1197746 1197645 .. 0.76
+    score  bias    Evalue hmmfrom  hmm to     alifrom    ali to      envfrom    env to       hqfrom    hq to       acc
+   ------ ----- --------- ------- -------    --------- ---------    --------- ---------    --------- ---------    ----
+ !   18.7   0.1    0.0019         9        84 ..    189909    189969 ..    189903    189982 ..    189927    189964    0.67
 
   Alignment:
-  score: 14.6 bits
+  score: 18.7 bits
+                 ____________________________________________________________________________ CS
+  SNORD96      9 gaugaaauccgauauaaaaaaacaccaucuuucgggacugauuuggcgccucugcggcaaugaugcuacuucugca 84    
+                 gauga+ ucc  u    aa   +accaucuuucggg cuga uu+          +g + ug+ug+ua uu ug +
+    chr22 189909 GAUGAUUUCCCUU----AAUUUUACCAUCUUUCGGGUCUGAAUUA----------AGAUGUGUUGAUA-UUAUGGG 189969
+                 5555555544333....344459*****************98877..........4566677777777.5555443 PP
+
+>> chr22  
+    score  bias    Evalue hmmfrom  hmm to     alifrom    ali to      envfrom    env to       hqfrom    hq to       acc
+   ------ ----- --------- ------- -------    --------- ---------    --------- ---------    --------- ---------    ----
+ ?   14.5   0.0     0.039         6        71 ..   1197742   1197673 ..   1197746   1197646 ..   1197742   1197673    0.76
+
+  Alignment:
+  score: 14.5 bits
                   ________________________..____________________._________._____________ CS
   SNORD96       6 ggugaugaaauccgauauaaaaaa..acaccaucuuucgggacuga.uuuggcgcc.ucugcggcaauga 71     
                   ggug +ga+au + ++a aaaaa   a a   ucu  cggg+cuga uu++gc++c u  g  gc+auga
     chr22 1197742 GGUGUGGAUAUUUUCAACAAAAAUaaAAAUGCUCUCCCGGGGCUGAaUUGAGCUUCgUGGGUUGCUAUGA 1197673
-                  689999***9998888887776540034455589999********7355556666667777778888875 PP
-                  047899999999**************************************99999988887776665420 APP
+                  589999***9998888887776540034455589999********7355556666667777778888875 PP
 
 
 
 Internal pipeline statistics summary:
 -------------------------------------
 Query model(s):                    1  (96 nodes)
-Target sequences:                  1  (3718012 residues)
-Windows passing MSV filter:               421  (0.02134); expected (0.02)
-Windows passing bias filter:              409  (0.02076); expected (0.02)
-Windows passing Vit filter:                13  (0.0006538); expected (0.001)
-Windows passing Fwd filter:                 2  (0.0001017); expected (1e-05)
-Total hits:                                 2  (4.411e-05)
-# CPU time: 0.59u 0.01s 00:00:00.60 Elapsed: 00:00:01.04
-# Mc/sec: 343.20
+Target sequences:                  1  (3718012 residues searched)
+Residues passing MSV filter:             99668  (0.0268); expected (0.02)
+Residues passing bias filter:            95863  (0.0258); expected (0.02)
+Residues passing Vit filter:              2686  (0.000722); expected (0.001)
+Residues passing Fwd filter:               634  (0.000171); expected (1e-05)
+Total number of hits:                        3  (6.05e-05)
+# CPU time: 0.11u 0.00s 00:00:00.11 Elapsed: 00:00:00.07
+# Mc/sec: 5098.99
 //
 [ok]

@@ -132,6 +132,7 @@ typedef struct p7_oprofile_s {
   char  *acc;      /* unique accession of model, or NULL                */
   char  *desc;                  /* brief (1-line) description of model, or NULL      */
   char  *rf;                    /* reference line           1..M; *ref=0: unused     */
+  char  *mm;                    /* modelmask line           1..M; *ref=0: unused     */
   char  *cs;                    /* consensus structure line 1..M, *cs=0: unused      */
   char  *consensus;    /* consensus residues for ali display, 1..M          */
   float  evparam[p7_NEVPARAM];   /* parameters for determining E-values, or UNSET     */
@@ -540,8 +541,7 @@ extern int p7_SSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, fl
 
 /* msvfilter.c */
 extern int p7_MSVFilter           (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc);
-extern int p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L,       P7_OPROFILE *om, P7_FILTERMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, FM_WINDOWLIST *windowlist);
-
+extern int p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, P7_MSV_WINDOWLIST *windowlist);
 
 /* null2.c */
 extern int p7_Null2_ByExpectation(const P7_OPROFILE *om, const P7_OMX *pp, float *null2);

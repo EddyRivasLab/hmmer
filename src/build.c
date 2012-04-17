@@ -33,7 +33,7 @@
 
 #include "hmmer.h"
 
-static int do_haircut(P7_BUILDER *bld, ESL_MSA *msa, int *matassign);
+static int do_modelmask( ESL_MSA *msa);
 static int matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***opt_tr);
 static int annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
 
@@ -94,13 +94,6 @@ p7_Handmodelmaker(ESL_MSA *msa, P7_BUILDER *bld, P7_HMM **ret_hmm, P7_TRACE ***o
   /* Watch for off-by-one. rf is [0..alen-1]; matassign is [1..alen] */
   for (apos = 1; apos <= msa->alen; apos++)
     matassign[apos] = (esl_abc_CIsGap(msa->abc, msa->rf[apos-1])? FALSE : TRUE);
-
-  if (bld != NULL && bld->hc_start != -1)
-    if ( (status = do_haircut(bld, msa, matassign) != eslOK) ) {
-      fprintf (stderr, "invalid hmm haircut start/end positions\n");
-      goto ERROR;
-    }
-
 
   /* matassign2hmm leaves ret_hmm, opt_tr in their proper state: */
   if ((status = matassign2hmm(msa, matassign, ret_hmm, opt_tr)) != eslOK) goto ERROR;
@@ -191,9 +184,6 @@ p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_BUILDER *bld, P7_HMM **ret_hmm
       else                                 matassign[apos] = FALSE;
     }
 
-  if (bld != NULL && bld->hc_start != -1)
-    if ( (status = do_haircut(bld, msa, matassign) != eslOK) ) goto ERROR;
-
 
   /* Once we have matassign calculated, modelmakers behave
    * the same; matassign2hmm() does this stuff (traceback construction,
@@ -222,48 +212,33 @@ p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_BUILDER *bld, P7_HMM **ret_hmm
  *****************************************************************/ 
 
 
-/* Function: do_haircut()
+/* Function: do_modelmask()
  *
- * Purpose:  Given an <msa>, a <matassign> boolean array indicating
- *           which msa columns correspond to match columns, and
- *           a haircut range (bld->hc_start/end), modify all
- *           residues in the msa positions associated with the
- *           hmm range hc_start .. hc_end to the degenerate 'any character'
+ * Purpose:  If the given <msa> has a MM CS line, mask (turn to
+ *           degenerate) residues in the msa positions associated
+ *           with the marked position in the MM (marked with 'm')
  *
  * Return:   <eslOK> on success.
  *           <eslENORESULT> if error.
  */
 static int
-do_haircut(P7_BUILDER *bld, ESL_MSA *msa, int *matassign)
+do_modelmask( ESL_MSA *msa)
 {
   int i,j;
-  int match_cnt = 0;
-  int msa_start = -1;
-  int msa_end   = -1;
 
-  /* figure out which positions in the msa correspond to the range bld->hc_start/end */
-  for (i=1; i < msa->alen; i++ ) {
-    if (matassign[i]) match_cnt ++;
-    if (match_cnt == bld->hc_start)
-      msa_start = i;
-    if (match_cnt == bld->hc_end) {
-      msa_end = i;
-      break;
-    }
-  }
+  if (msa->mm == NULL)  return eslOK;  //nothing to do
 
-  if (msa_start == -1 || msa_end == -1)
-    return eslFAIL; //those positions don't exist ...
-
-  for (i=msa_start; i <= msa_end; i++ ) {
+  for (i = 1; i <= msa->alen; i++) {
     for (j = 0; j < msa->nseq; j++) {
+      if (msa->mm[i-1] == 'm') {
 #ifdef eslAUGMENT_ALPHABET
-      if (msa->ax[j][i] != msa->abc->K && msa->ax[j][i] != msa->abc->Kp-1) // if not gap
-        msa->ax[j][i] = msa->abc->Kp-3; //that's the degenerate "any character" (N for DNA, X for protein)
+        if (msa->ax[j][i] != msa->abc->K && msa->ax[j][i] != msa->abc->Kp-1) // if not gap
+          msa->ax[j][i] = msa->abc->Kp-3; //that's the degenerate "any character" (N for DNA, X for protein)
 #else
-      if (msa->aseq[j][i] != '-' && msa->aseq[j][i] != '.') // if not gap
-        msa->aseq[j][i] = 'N';
+        if (msa->aseq[j][i] != '-' && msa->aseq[j][i] != '.') // if not gap
+          msa->aseq[j][i] = 'N';
 #endif
+      }
     }
   }
   return eslOK;
@@ -296,6 +271,9 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***opt_tr
   int      idx;                 /* counter over sequences              */
   int      apos;                /* counter for aligned columns         */
   char errbuf[eslERRBUFSIZE];
+
+  /* apply the model mask in the 'GC MM' row */
+  do_modelmask(msa);
 
   /* How many match states in the HMM? */
   for (M = 0, apos = 1; apos <= msa->alen; apos++) 
@@ -378,6 +356,16 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
       if (matassign[apos]) hmm->rf[k++] = msa->rf[apos-1]; /* watch off-by-one in msa's rf */
     hmm->rf[k] = '\0';
     hmm->flags |= p7H_RF;
+  }
+
+  /* Model mask annotation  */
+  if (msa->mm != NULL) {
+    ESL_ALLOC(hmm->mm, sizeof(char) * (hmm->M+2));
+    hmm->mm[0] = ' ';
+    for (apos = k = 1; apos <= msa->alen; apos++)
+      if (matassign[apos]) hmm->mm[k++] = msa->mm[apos-1];
+    hmm->mm[k] = '\0';
+    hmm->flags |= p7H_MMASK;
   }
 
   /* Consensus structure annotation */

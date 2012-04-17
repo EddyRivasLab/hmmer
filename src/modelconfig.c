@@ -146,9 +146,10 @@ p7_profile_ConfigCustom(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int 
   if (gm->acc)  free(gm->acc);    if ((status = esl_strdup(hmm->acc,    -1, &(gm->acc)))  != eslOK) return status;
   if (gm->desc) free(gm->desc);   if ((status = esl_strdup(hmm->desc,   -1, &(gm->desc))) != eslOK) return status;
 
-  if (hmm->flags & p7H_RF)   strcpy(gm->rf,        hmm->rf);
-  if (hmm->flags & p7H_CS)   strcpy(gm->cs,        hmm->cs);
-  if (hmm->flags & p7H_CONS) strcpy(gm->consensus, hmm->consensus);  /* must be present, flag test is just for pretty symmetry */
+  if (hmm->flags & p7H_RF)    strcpy(gm->rf,        hmm->rf);
+  if (hmm->flags & p7H_MMASK) strcpy(gm->mm,        hmm->mm);
+  if (hmm->flags & p7H_CONS)  strcpy(gm->consensus, hmm->consensus); /* must be present, actually, so the flag test is just for symmetry w/ other optional HMM fields */
+  if (hmm->flags & p7H_CS)    strcpy(gm->cs,        hmm->cs);
 
   for (z = 0; z < p7_NEVPARAM; z++) gm->evparam[z] = hmm->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) gm->cutoff[z]  = hmm->cutoff[z];
