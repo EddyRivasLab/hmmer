@@ -69,8 +69,8 @@ static inline void  posterior_decode_row(P7_FILTERMX *ox, int rowi, P7_GBANDS *b
 
 #ifdef p7_DEBUGGING
 static inline float backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_FILTERMX *ox);
-static        void  save_debug_row_pp(P7_FILTERMX *ox,             __m128 *dpc, int i);
-static        void  save_debug_row_fb(P7_FILTERMX *ox, P7_GMX *gx, __m128 *dpc, int i, float totscale);
+static        void  save_debug_row_pp(P7_FILTERMX *ox,               __m128 *dpc, int i);
+static        void  save_debug_row_fb(P7_FILTERMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float totscale);
 #endif
 
 /*****************************************************************
@@ -117,6 +117,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 
   /* Set the size of the problem in <ox> now, not later
    * Debugging dumps need this information, for example
+   * (Ditto for any debugging copy of the fwd mx)
    */
   ox->M  = om->M;	
   ox->L  = L;
@@ -124,6 +125,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 #ifdef p7_DEBUGGING
   ox->dump_flags |= p7_SHOW_LOG;                     /* also sets for Backward dumps, since <ox> shared */
   if (ox->do_dumping) p7_filtermx_DumpFBHeader(ox);
+  if (ox->fwd) { ox->fwd->M = om->M; ox->fwd->L = L; ox->fwd->type = p7R_FORWARD; }
 #endif
 
   /* Initialization of the zero row, including specials */
@@ -174,9 +176,6 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 
   ESL_DASSERT1( (ox->R == ox->Ra+ox->Rb+ox->Rc) );
   ESL_DASSERT1( ( (! isnan(xc[p7F_C])) && (! isinf(xc[p7F_C]))) );
-#ifdef p7_DEBUGGING
-  if (ox->fwd) { ox->fwd->M = om->M; ox->fwd->L = L; }
-#endif
 
   if (opt_sc) *opt_sc = totsc + logf(xc[p7F_C] * om->xf[p7O_C][p7O_MOVE]);
   return eslOK;
@@ -224,6 +223,11 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
   float   Tvalue;
   int     i, b, w, i2;
   
+#ifdef p7_DEBUGGING
+   if (ox->bck) { ox->bck->M = om->M; ox->bck->L = L; ox->bck->type = p7R_BACKWARD; }
+   if (ox->pp)  { ox->pp->M  = om->M; ox->pp->L  = L; ox->pp->type  = p7R_DECODING; }
+#endif
+
   /* Row L is a special case for Backwards; so in checkpointed Backward,
    * we have to special-case the last block, rows L-1 and L
    */
@@ -350,6 +354,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
     * production code, we can stop at row 1.
     */
    float xN;
+   ox->R--;
    fwd = (__m128 *) ox->dpf[ox->R0];
    bck = (__m128 *) ox->dpf[i%2];	       
    xN = backward_row_zero(dsq[1], om, ox); 
@@ -357,9 +362,6 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
    if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, 0, ox->bcksc); 
    posterior_decode_row(ox, 0, bnd, Tvalue);
    ox->bcksc += xN;
-
-   if (ox->bck) { ox->bck->M = om->M; ox->bck->L = L; }
-   if (ox->pp)  { ox->pp->M  = om->M; ox->pp->L  = L; }
 #endif
 
    bnd->L = L;
@@ -843,11 +845,14 @@ posterior_decode_row(P7_FILTERMX *ox, int rowi, P7_GBANDS *bnd, float overall_sc
   /* in debugging code, we store the pp's in the fwd row's space, and defer the pnonhomology 
    * threshold test until after we've calculated and saved the entire row 
    */
-  xf[p7F_N]               = (rowi == 0 ? 0.0f : xf[p7F_N]  * xb[p7F_N]  * scaleterm);
-  xf[p7F_J] = xf[p7F_JJ]  = xf[p7F_JJ] * xb[p7F_JJ] * scaleterm;
-  xf[p7F_C] = xf[p7F_CC]  = xf[p7F_CC] * xb[p7F_CC] * scaleterm;
-  xf[p7F_E] = xf[p7F_B] = 0.0f;
-  pnonhomology = xf[p7F_N] + xf[p7F_J] + xf[p7F_C];
+  xf[p7F_E]  = xf[p7F_E]  * xb[p7F_E]  * scaleterm;
+  xf[p7F_N]  = (rowi == 0 ? 1.0f : xf[p7F_N]  * xb[p7F_N]  * scaleterm);
+  xf[p7F_JJ] = xf[p7F_JJ] * xb[p7F_JJ] * scaleterm;
+  xf[p7F_J]  = xf[p7F_J]  * xb[p7F_J]  * scaleterm;
+  xf[p7F_B]  = xf[p7F_B]  * xb[p7F_B]  * scaleterm;
+  xf[p7F_CC] = xf[p7F_CC] * xb[p7F_CC] * scaleterm;
+  xf[p7F_C]  = xf[p7F_C]  * xb[p7F_C]  * scaleterm;
+  pnonhomology = xf[p7F_N] + xf[p7F_JJ] + xf[p7F_CC];
 #else
   /* in production code, we don't need to store, and we may immediately threshold on pnonhomology */
   pnonhomology = (xf[p7F_N] * xb[p7F_N] + xf[p7F_JJ] * xb[p7F_JJ] + xf[p7F_CC] * xb[p7F_CC]) * scaleterm;
@@ -991,26 +996,37 @@ save_debug_row_pp(P7_FILTERMX *ox, __m128 *dpc, int i)
   union { __m128 v; float x[p7_VNF]; } u;
   int      Q  = ox->Qf;
   float  *xc  = (float *) (dpc + Q*p7F_NSCELLS);
-  float **dp;
-  float  *xmx;
-  int     q,k,z;
+  int     q,k,z,s;
 
   if (! ox->pp) return;
-  dp  = ox->pp->dp;    	/* sets up {MDI}MX() macros in <pp> */
-  xmx = ox->pp->xmx;	/* sets up XMX() macro in <pp>      */
   
-  XMX(i,p7G_E) = xc[p7F_E];
-  XMX(i,p7G_N) = xc[p7F_N];
-  XMX(i,p7G_J) = xc[p7F_J];
-  XMX(i,p7G_B) = xc[p7F_B];
-  XMX(i,p7G_C) = xc[p7F_C];
+  P7R_XMX(ox->pp,i,p7R_E)  = xc[p7F_E];
+  P7R_XMX(ox->pp,i,p7R_N)  = xc[p7F_N];
+  P7R_XMX(ox->pp,i,p7R_J)  = xc[p7F_J];
+  P7R_XMX(ox->pp,i,p7R_B)  = xc[p7F_B];
+  P7R_XMX(ox->pp,i,p7R_L)  = xc[p7F_B];	/* all mass in local path */
+  P7R_XMX(ox->pp,i,p7R_G)  = 0.0;	/* ... none in glocal     */
+  P7R_XMX(ox->pp,i,p7R_C)  = xc[p7F_C];
+  P7R_XMX(ox->pp,i,p7R_JJ) = xc[p7F_JJ];
+  P7R_XMX(ox->pp,i,p7R_CC) = xc[p7F_CC];
   
-  MMX(i,0) = DMX(i,0) = IMX(i,0) = 0.0;
+  /* in a posterior decoding matrix (prob-space), all k=0 cells are 0.0 */
+  for (s = 0; s < p7R_NSCELLS; s++) P7R_MX(ox->pp,i,0,s) = 0.0f;
+
+  /* ... all mass is on local path for the filter, so all glocal cells are 0.0 */
+  for (k =1; k <= ox->M; k++)
+    {
+      P7R_MX(ox->pp,i,k,p7R_MG) = 0.0f;
+      P7R_MX(ox->pp,i,k,p7R_IG) = 0.0f;
+      P7R_MX(ox->pp,i,k,p7R_DG) = 0.0f;
+    }
+
+  /* now the transfer from filtermx decoding to local cells of refmx */
   for (q = 0; q < Q; q++)
     {
-      u.v = P7F_MQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) MMX(i,k) = u.x[z]; }
-      u.v = P7F_DQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) DMX(i,k) = u.x[z]; }
-      u.v = P7F_IQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) IMX(i,k) = u.x[z]; }
+      u.v = P7F_MQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(ox->pp,i,k,p7R_ML) = u.x[z]; }
+      u.v = P7F_DQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(ox->pp,i,k,p7R_DL) = u.x[z]; }
+      u.v = P7F_IQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(ox->pp,i,k,p7R_IL) = u.x[z]; }
     }
 }
 
@@ -1024,31 +1040,40 @@ save_debug_row_pp(P7_FILTERMX *ox, __m128 *dpc, int i)
  * space.
  */
 static void
-save_debug_row_fb(P7_FILTERMX *ox, P7_GMX *gx, __m128 *dpc, int i, float totscale)
+save_debug_row_fb(P7_FILTERMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float totscale)
 {
   union { __m128 v; float x[p7_VNF]; } u;
   int      Q  = ox->Qf;
   float  *xc  = (float *) (dpc + Q*p7F_NSCELLS);
-  float **dp;
-  float  *xmx;
   int     q,k,z;
 
   if (! gx) return;
-  dp  = gx->dp; 	/* sets up {MDI}MX() macros */
-  xmx = gx->xmx;	/* sets up XMX() macro      */
   
-  XMX(i,p7G_E) = logf(xc[p7F_E]) + totscale;
-  XMX(i,p7G_N) = logf(xc[p7F_N]) + totscale;
-  XMX(i,p7G_J) = logf(xc[p7F_J]) + totscale;
-  XMX(i,p7G_B) = logf(xc[p7F_B]) + totscale;
-  XMX(i,p7G_C) = logf(xc[p7F_C]) + totscale;
+  P7R_XMX(gx,i,p7R_E)  = logf(xc[p7F_E]) + totscale;
+  P7R_XMX(gx,i,p7R_N)  = logf(xc[p7F_N]) + totscale;
+  P7R_XMX(gx,i,p7R_J)  = logf(xc[p7F_J]) + totscale;
+  P7R_XMX(gx,i,p7R_B)  = logf(xc[p7F_B]) + totscale;
+  P7R_XMX(gx,i,p7R_L)  = P7R_XMX(gx,i,p7R_B);         /* filter is local-mode. all mass assigned to local path */
+  P7R_XMX(gx,i,p7R_G)  = -eslINFINITY;		      /* ... and no mass assigned to glocal path               */
+  P7R_XMX(gx,i,p7R_C)  = logf(xc[p7F_C]) + totscale;
+  P7R_XMX(gx,i,p7R_JJ) = -eslINFINITY;                /* JJ only saved in decoding, not fwd/bck */
+  P7R_XMX(gx,i,p7R_CC) = -eslINFINITY;                /* ... CC, ditto                          */
   
-  MMX(i,0) = DMX(i,0) = IMX(i,0) = -eslINFINITY;
+  /* in P7_REFMX, all k=0 cells are initialized to -eslINFINITY;
+   * set all glocal cells to -eslINFINITY too: */
+  for (k =1; k <= ox->M; k++)
+    {
+      P7R_MX(gx,i,k,p7R_MG) = -eslINFINITY;
+      P7R_MX(gx,i,k,p7R_IG) = -eslINFINITY;
+      P7R_MX(gx,i,k,p7R_DG) = -eslINFINITY;
+    }
+
+  /* now the transfer from filtermx (scaled prob-space) to local cells of refmx (log-space): */
   for (q = 0; q < Q; q++)
     {
-      u.v = P7F_MQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) MMX(i,k) = logf(u.x[z]) + totscale; }
-      u.v = P7F_DQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) DMX(i,k) = logf(u.x[z]) + totscale; }
-      u.v = P7F_IQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) IMX(i,k) = logf(u.x[z]) + totscale; }
+      u.v = P7F_MQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(gx,i,k,p7R_ML) = logf(u.x[z]) + totscale; }
+      u.v = P7F_DQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(gx,i,k,p7R_DL) = logf(u.x[z]) + totscale; }
+      u.v = P7F_IQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(gx,i,k,p7R_IL) = logf(u.x[z]) + totscale; }
     }
 }
 #endif
@@ -1195,9 +1220,9 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
   int          tL     = 0;
   ESL_SQ      *sq     = esl_sq_CreateDigital(abc);
   P7_FILTERMX *ox     = p7_filtermx_Create(M, L, ramlimit);
-  P7_GMX      *fwd    = p7_gmx_Create   (M, L);
-  P7_GMX      *bck    = p7_gmx_Create   (M, L);
-  P7_GMX      *pp     = p7_gmx_Create   (M, L);
+  P7_REFMX    *fwd    = p7_refmx_Create   (M, L);
+  P7_REFMX    *bck    = p7_refmx_Create   (M, L);
+  P7_REFMX    *pp     = p7_refmx_Create   (M, L);
   P7_GBANDS   *bnd    = p7_gbands_Create(M, L);
   float        tol2   = ( p7_logsum_IsSlowExact() ? 0.001  : 0.1);   /* absolute agreement of reference (log-space) and vector (prob-space) depends on whether we're using LUT-based logsum() */
   float fsc1, fsc2;
@@ -1212,21 +1237,26 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
   /* We set the debugging tools to record full pp, fwd, bck matrices
    * for comparison to reference implementation: 
    */
-  ox->pp  = p7_gmx_Create(M,L);	
-  ox->fwd = p7_gmx_Create(M,L);	
-  ox->bck = p7_gmx_Create(M,L);	
+  ox->pp  = p7_refmx_Create(M,L);	
+  ox->fwd = p7_refmx_Create(M,L);	
+  ox->bck = p7_refmx_Create(M,L);	
 #endif
 
   if ( p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om) != eslOK) esl_fatal(msg);
+  /* note the <gm> is config'ed local-only; both <om>,<gm> have length model set to <L> */
 
   while (N--)
     {
+      p7_profile_SetLength(gm, L);       /* because it may have been reset to tL by last emitted seq */
+      p7_oprofile_ReconfigLength(om, L); 
+
       /* A mix of generated (homologous) and random (nonhomologous) sequences */
       if (esl_rnd_Roll(r, 2)) 
 	{
 	  esl_rsq_xfIID(r, bg->f, abc->K, L, dsqmem);  
 	  dsq = dsqmem;  
 	  tL = L;     
+	  /* fixed-length random emission: length config on <gm>,<om> don't need to change  */
 	}
       else  
 	{
@@ -1236,19 +1266,22 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
 	  } while (sq->n > L * 3); /* keep sequence length from getting ridiculous; long seqs do have higher abs error per cell */
 	  dsq = sq->dsq; 
 	  tL = sq->n; 
+	  /* variable-length seq emission: length config on <gm>,<om> will change */
 	}
 	
-      if ( p7_gmx_GrowTo     (fwd, M, tL) != eslOK) esl_fatal(msg);
-      if ( p7_gmx_GrowTo     (bck, M, tL) != eslOK) esl_fatal(msg);
-      if ( p7_gmx_GrowTo     (pp,  M, tL) != eslOK) esl_fatal(msg);
-      if ( p7_filtermx_GrowTo(ox,  M, tL) != eslOK) esl_fatal(msg);
+      if ( p7_profile_SetLength(gm, tL)       != eslOK) esl_fatal(msg);
+      if ( p7_oprofile_ReconfigLength(om, tL) != eslOK) esl_fatal(msg); 
+      if ( p7_refmx_GrowTo   (fwd, M, tL)     != eslOK) esl_fatal(msg);
+      if ( p7_refmx_GrowTo   (bck, M, tL)     != eslOK) esl_fatal(msg);
+      if ( p7_refmx_GrowTo   (pp,  M, tL)     != eslOK) esl_fatal(msg);
+      if ( p7_filtermx_GrowTo(ox,  M, tL)     != eslOK) esl_fatal(msg);
 
       p7_ForwardFilter (dsq, tL, om, ox, &fsc1);
       p7_BackwardFilter(dsq, tL, om, ox,  bnd);
 
-      p7_GForward (dsq, tL, gm, fwd,  &fsc2);
-      p7_GBackward(dsq, tL, gm, bck,  &bsc2);
-      p7_GDecoding(         gm, fwd, bck, pp);
+      p7_ReferenceForward (dsq, tL, gm, fwd,  &fsc2);
+      p7_ReferenceBackward(dsq, tL, gm, bck,  &bsc2);
+      p7_ReferenceDecoding(         gm, fwd, bck, pp);
 
 #ifdef p7_DEBUGGING
       /* vector Forward and Backward scores should agree with high tolerance.
@@ -1266,16 +1299,21 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
 
 #ifdef p7_DEBUGGING
       /* Compare all DP cell values to reference implementation,
-       * in fwd, bck, and pp matrices.
+       * in fwd, bck, and pp matrices. Note the need for CompareLocal()
+       * for the Backward matrix comparison, because the zero B->G
+       * transition isn't evaluated until the *end* of glocal paths;
+       * thus Backward values along the glocal paths are finite for 
+       * the reference implementation, whereas in the ForwardFilter
+       * they're -inf by construction (ForwardFilter is local-only).
        */
-      if (p7_gmx_Compare(pp,  ox->pp,  ptol) != eslOK) esl_fatal(msg);
-      if (p7_gmx_Compare(fwd, ox->fwd, tol2) != eslOK) esl_fatal(msg);
-      if (p7_gmx_Compare(bck, ox->bck, tol2) != eslOK) esl_fatal(msg);
+      if (p7_refmx_Compare     (pp,  ox->pp,  ptol) != eslOK) esl_fatal(msg);
+      if (p7_refmx_Compare     (fwd, ox->fwd, tol2) != eslOK) esl_fatal(msg);
+      if (p7_refmx_CompareLocal(bck, ox->bck, tol2) != eslOK) esl_fatal(msg);
 #endif
       esl_sq_Reuse(sq);
-      p7_gmx_Reuse(fwd);
-      p7_gmx_Reuse(bck);
-      p7_gmx_Reuse(pp);
+      p7_refmx_Reuse(fwd);
+      p7_refmx_Reuse(bck);
+      p7_refmx_Reuse(pp);
       p7_filtermx_Reuse(ox);
       p7_gbands_Reuse(bnd);
     }
@@ -1284,9 +1322,9 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
   esl_sq_Destroy(sq);
   p7_gbands_Destroy(bnd);
   p7_filtermx_Destroy(ox);
-  p7_gmx_Destroy(fwd);
-  p7_gmx_Destroy(bck);
-  p7_gmx_Destroy(pp);
+  p7_refmx_Destroy(fwd);
+  p7_refmx_Destroy(bck);
+  p7_refmx_Destroy(pp);
   p7_hmm_Destroy(hmm);
   p7_profile_Destroy(gm);
   p7_oprofile_Destroy(om);
@@ -1413,7 +1451,7 @@ main(int argc, char **argv)
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
-  P7_GMX         *gx      = NULL;
+  P7_REFMX       *gx      = NULL;
   P7_FILTERMX    *ox      = NULL;
   P7_GBANDS      *bnd     = NULL;
   ESL_SQ         *sq      = NULL;
@@ -1424,6 +1462,9 @@ main(int argc, char **argv)
   float           gmem, cmem;
   double          P, gP;
   int             status;
+
+  p7_FLogsumInit();
+  impl_Init();
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
@@ -1440,7 +1481,7 @@ main(int argc, char **argv)
   /* create default null model, then create and optimize profile */
   bg = p7_bg_Create(abc);               
   gm = p7_profile_Create(hmm->M, abc); 
-  p7_profile_Config(gm, hmm, bg);
+  p7_profile_ConfigLocal(gm, hmm, bg, 500); /* local-mode, for comparison to fwdfilter which is local-only */
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
   /* p7_oprofile_Dump(stdout, om);  */
@@ -1449,17 +1490,17 @@ main(int argc, char **argv)
    * we resize as needed for each individual target seq 
    */
   ox  = p7_filtermx_Create(gm->M, 500, ESL_MBYTES(32));  
-  gx  = p7_gmx_Create     (gm->M, 500);
-  bnd = p7_gbands_Create(gm->M, 500);
+  gx  = p7_refmx_Create   (gm->M, 500);
+  bnd = p7_gbands_Create  (gm->M, 500);
 #ifdef p7_DEBUGGING
   /* When the p7_DEBUGGING flag is up, <ox> matrix has the ability to
    * record generic, complete <fwd>, <bck>, and <pp> matrices, for
    * comparison to reference implementation, even when checkpointing.
    */
   if (esl_opt_GetBoolean(go, "-D")) p7_filtermx_SetDumpMode(ox, stdout, TRUE);
-  if (esl_opt_GetBoolean(go, "-F")) ox->fwd = p7_gmx_Create(gm->M, 100);
-  if (esl_opt_GetBoolean(go, "-B")) ox->bck = p7_gmx_Create(gm->M, 100);
-  if (esl_opt_GetBoolean(go, "-P")) ox->pp  = p7_gmx_Create(gm->M, 100);
+  if (esl_opt_GetBoolean(go, "-F")) ox->fwd = p7_refmx_Create(gm->M, 100);
+  if (esl_opt_GetBoolean(go, "-B")) ox->bck = p7_refmx_Create(gm->M, 100);
+  if (esl_opt_GetBoolean(go, "-P")) ox->pp  = p7_refmx_Create(gm->M, 100);
 #endif
 
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
@@ -1469,7 +1510,7 @@ main(int argc, char **argv)
       p7_bg_SetLength(bg,            sq->n);
 
       p7_filtermx_GrowTo(ox,  om->M, sq->n); 
-      p7_gmx_GrowTo     (gx,  gm->M, sq->n); 
+      p7_refmx_GrowTo   (gx,  gm->M, sq->n); 
       p7_gbands_Reinit  (bnd, gm->M, sq->n); 
 
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
@@ -1477,14 +1518,14 @@ main(int argc, char **argv)
       p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fraw);
       p7_BackwardFilter(sq->dsq, sq->n, om, ox, bnd);
 
-      p7_GForward     (sq->dsq, sq->n, gm, gx, &gfraw);
-      p7_GBackward    (sq->dsq, sq->n, gm, gx, &gbraw);
+      p7_ReferenceForward (sq->dsq, sq->n, gm, gx, &gfraw);
+      p7_ReferenceBackward(sq->dsq, sq->n, gm, gx, &gbraw);
 
       bsc = 0.0;		/* Backward score only available in debugging mode */
 #ifdef p7_DEBUGGING
-      if (esl_opt_GetBoolean(go, "-F")) p7_gmx_Dump(stdout, ox->fwd, p7_DEFAULT);
-      if (esl_opt_GetBoolean(go, "-B")) p7_gmx_Dump(stdout, ox->bck, p7_DEFAULT);
-      if (esl_opt_GetBoolean(go, "-P")) p7_gmx_Dump(stdout, ox->pp, p7_DEFAULT);
+      if (esl_opt_GetBoolean(go, "-F")) p7_refmx_Dump(stdout, ox->fwd);
+      if (esl_opt_GetBoolean(go, "-B")) p7_refmx_Dump(stdout, ox->bck);
+      if (esl_opt_GetBoolean(go, "-P")) p7_refmx_Dump(stdout, ox->pp);
       bsc  =  (ox->bcksc-nullsc) / eslCONST_LOG2;
 #endif
 
@@ -1494,7 +1535,7 @@ main(int argc, char **argv)
       P  = esl_exp_surv(fsc,   om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
       gP = esl_exp_surv(gfsc,  gm->evparam[p7_FTAU],  gm->evparam[p7_FLAMBDA]);
 
-      gmem = (float) p7_gmx_Sizeof(gx) / 1000000.;
+      gmem = (float) p7_refmx_Sizeof(gx)    / 1000000.;
       cmem = (float) p7_filtermx_Sizeof(ox) / 1000000.;
 
       p7_gbands_Dump(stdout, bnd);	  
@@ -1521,7 +1562,7 @@ main(int argc, char **argv)
 	}
 
       esl_sq_Reuse(sq);
-      p7_gmx_Reuse(gx);
+      p7_refmx_Reuse(gx);
       p7_gbands_Reuse(bnd);
       p7_filtermx_Reuse(ox);
     }
@@ -1530,7 +1571,7 @@ main(int argc, char **argv)
   esl_sqfile_Close(sqfp);
   p7_gbands_Destroy(bnd);
   p7_filtermx_Destroy(ox);
-  p7_gmx_Destroy(gx);
+  p7_refmx_Destroy(gx);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);

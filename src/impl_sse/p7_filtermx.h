@@ -3,7 +3,7 @@
  * Backwards).
  * 
  * Contents:
- *    1. The P7_FILTERMX object
+ *    1. The P7_FILTERMX object and its access macros
  *    2. Function declarations
  *    3. Notes:
  *       [a] Layout of the matrix, in checkpointed rows
@@ -15,7 +15,13 @@
 #define P7_FILTERMX_INCLUDED
 #include "p7_config.h"
 #include "hmmer.h"
+#include "p7_refmx.h"
 #include "impl_sse.h"
+
+/*****************************************************************
+ * 1. P7_FILTERMX
+ *****************************************************************/
+
 
 #define P7F_NQF(M)  ( ESL_MAX(2, ((((M)-1) / p7_VNF) + 1)))
 #define P7F_NQW(M)  ( ESL_MAX(2, ((((M)-1) / p7_VNW) + 1)))
@@ -44,9 +50,6 @@ enum p7f_xcells_e {
 #define P7F_DQ(dp, q)     ((dp)[(q) * p7F_NSCELLS + p7F_D])
 #define P7F_IQ(dp, q)     ((dp)[(q) * p7F_NSCELLS + p7F_I])
 
-/*****************************************************************
- * 1. P7_FILTERMX
- *****************************************************************/
 
 typedef struct p7_filtermx_s {
   int M;	/* current actual query model dimension (consensus positions)         */
@@ -76,17 +79,18 @@ typedef struct p7_filtermx_s {
 
 #ifdef p7_DEBUGGING
   /* Info for dumping debugging info, conditionally compiled                        */
-  int      do_dumping;		/* TRUE if matrix is in dumping mode                */
-  FILE    *dfp;			/* open output stream for debug dumps               */
-  int      dump_maxpfx;		/* each line prefixed by tag of up to this # chars  */
-  int      dump_width;		/* cell values in diagnostic output are fprintf'ed: */
-  int      dump_precision;	/*   dfp, "%*.*f", dbg_width, dbg_precision, val    */
-  uint32_t dump_flags;		/* p7_DEFAULT | p7_HIDE_SPECIALS | p7_SHOW_LOG      */
-  P7_GMX  *fwd;			/* full Forward matrix, saved for unit test diffs   */
-  P7_GMX  *bck;			/* ... full Backward matrix, ditto                  */
-  P7_GMX  *pp;			/* ... full posterior probability matrix, ditto     */
-  float    bcksc;		/* Backwards score: which we check against Forward  */
-#endif
+  int       do_dumping;		/* TRUE if matrix is in dumping mode                */
+  FILE     *dfp;		/* open output stream for debug dumps               */
+  int       dump_maxpfx;	/* each line prefixed by tag of up to this # chars  */
+  int       dump_width;		/* cell values in diagnostic output are fprintf'ed: */
+  int       dump_precision;	/*   dfp, "%*.*f", dbg_width, dbg_precision, val    */
+  uint32_t  dump_flags;		/* p7_DEFAULT | p7_HIDE_SPECIALS | p7_SHOW_LOG      */
+
+  P7_REFMX *fwd;		/* full Forward matrix, saved for unit test diffs   */
+  P7_REFMX *bck;		/* ... full Backward matrix, ditto                  */
+  P7_REFMX *pp;			/* ... full posterior probability matrix, ditto     */
+  float     bcksc;		/* Backwards score: which we check against Forward  */
+#endif /*p7_DEBUGGING*/
 } P7_FILTERMX;
 
 
@@ -107,7 +111,7 @@ extern int          p7_filtermx_DumpFBHeader(P7_FILTERMX *ox);
 extern int          p7_filtermx_DumpFBRow(P7_FILTERMX *ox, int rowi, __m128 *dpc, char *pfx);
 extern int          p7_filtermx_DumpMFRow(P7_FILTERMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
 extern int          p7_filtermx_DumpVFRow(P7_FILTERMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
-#endif
+#endif /*p7_DEBUGGING*/
 
 /*****************************************************************
  * 3. Notes

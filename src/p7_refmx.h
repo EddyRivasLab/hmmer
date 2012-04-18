@@ -1,20 +1,30 @@
-/* P7_REFMX :
- *  dynamic programming matrix for dual-mode (local/glocal) alignment;
- *  full (quadratic memory, not banded, not checkpointed);
- *  "reference implementation", baseline for comparison to the
- *  production code.
- *           
- * This structure is not part of H3's main code path.  It is used as
- * an example and for testing. Production code uses two other
- * Forward/Backward implementations: a vectorized banding filter (see
- * impl_{xxx}/fwdfilter.c) and a banded local/glocal alignment (see
- * banded_fwdback.c).
+/* P7_REFMX is the reference version of a dynamic programming matrix
+ * for Forward, Backward, decoding, and alignment calculations.  The
+ * reference implementation is used for testing and debugging; a
+ * baseline for comparison to our production code.
  * 
+ * For DP matrices used by the production code, see P7_FILTERMX and
+ * P7_BANDMX.
+ * 
+ * The reference DP matrix is quadratic memory (not banded, not
+ * checkpointed), with values in standard floats (not vectors).
+ * 
+ * Contents:
+ *    1. The P7_REFMX object and its access macros.
+ *    2. Function declarations.
+ *    3. Notes on layout of the matrix
+ *    4. Copyright and license information.   
  */          
 #ifndef p7REFMX_INCLUDED
 #define p7REFMX_INCLUDED
-
+#include "p7_config.h"
 #include "hmmer.h"
+
+
+
+/*****************************************************************
+ * 1. The P7_REFMX object and its access macros
+ *****************************************************************/
 
 #define p7R_NSCELLS 6
 #define p7R_ML 0
@@ -46,6 +56,68 @@
 #define p7R_ALIGNMENT 4
 #define p7R_VITERBI   5
 
+typedef struct p7_refmx_s {
+  int      M;	     /* current DP matrix values valid for model of length M   */
+  int      L;	     /* current DP matrix values valid for seq of length L     */
+
+  float   *dp_mem;   /* matrix memory available. dp[i] rows point into this    */
+  int64_t  allocN;   /* # DP cells (floats) allocated. allocN >= allocR*allocW */
+
+  float  **dp;	     /* dp[i] rows of matrix. 0..i..L; L+1 <= validR <= allocR */
+  int      allocR;   /* # of allocated rows, dp[]                              */
+  int      allocW;   /* width of each dp[i] row, in floats.                    */
+  int      validR;   /* # of dp[] ptrs validly placed in dp_mem                */
+
+  int      type;     /* p7R_UNSET | p7R_FORWARD | p7R_BACKWARD | p7R_DECODING  */
+} P7_REFMX;
+
+
+/* Usually we access the matrix values by stepping pointers thru,
+ * exploiting detailed knowledge of their order. Sometimes, either for
+ * code clarity or robustness against layout changes, it's worth
+ * having access macros, though we can expect these to be relatively
+ * expensive to evaluate:
+ */
+#define P7R_XMX(rmx,i,s)  ( (rmx)->dp[(i)][ ( (rmx)->M +1) * p7R_NSCELLS + (s)] )
+#define P7R_MX(rmx,i,k,s) ( (rmx)->dp[(i)][ (k)            * p7R_NSCELLS + (s)] )
+
+
+
+/*****************************************************************
+ * 2. Function declarations
+ *****************************************************************/
+
+/* from p7_refmx.c */
+extern P7_REFMX *p7_refmx_Create(int M, int L);
+extern int       p7_refmx_GrowTo (P7_REFMX *rmx, int M, int L);
+extern size_t    p7_refmx_Sizeof (const P7_REFMX *rmx);
+extern int       p7_refmx_Reuse  (P7_REFMX *rmx);
+extern void      p7_refmx_Destroy(P7_REFMX *rmx);
+
+extern int   p7_refmx_Compare     (const P7_REFMX *rx1, const P7_REFMX *rx2, float tolerance);
+extern int   p7_refmx_CompareLocal(const P7_REFMX *rx1, const P7_REFMX *rx2, float tolerance);
+extern char *p7_refmx_DecodeSpecial(int type);
+extern char *p7_refmx_DecodeState(int type);
+extern int   p7_refmx_Dump(FILE *ofp, P7_REFMX *rmx);
+extern int   p7_refmx_DumpWindow(FILE *ofp, P7_REFMX *rmx, int istart, int iend, int kstart, int kend);
+extern int   p7_refmx_DumpCSV(FILE *fp, P7_REFMX *pp, int istart, int iend, int kstart, int kend);
+
+extern int   p7_refmx_Validate(P7_REFMX *rmx, char *errbuf);
+
+/* from reference_fwdback.c */
+extern int p7_ReferenceForward (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, float *opt_sc);
+extern int p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, float *opt_sc);
+extern int p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, const P7_REFMX *bck, P7_REFMX *pp);
+extern int p7_ReferenceAlign   (const P7_PROFILE *gm, float gamma, const P7_REFMX *pp,  P7_REFMX *rmx, P7_TRACE *tr, float *opt_gain);
+
+/* from reference_viterbi.c */
+extern int p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, P7_TRACE *opt_tr, float *opt_sc);
+
+
+
+/*****************************************************************
+ * 3. Notes on layout of the matrix
+ *****************************************************************/
 
 /* Layout of each row dp[i] of the P7_REFMX dynamic programming matrix:
  * dp[i]:   [ML MG IL IG DL DG] [ML MG IL IG DL DG] [ML MG IL IG DL DG]  ...  [ML MG IL IG DL DG]  [E  N  J  B  L  G  C JJ CC]
@@ -88,57 +160,11 @@
  *     N=NN for all i>=1, and NN=0 at i=0, so we don't need to store NN decoding.
  * 
  * Access:
- *  Row dp[r]:                     gxd->dp_mem+(r*allocW) = dpc
+ *  Row dp[r]:                     rmx->dp_mem+(r*allocW) = dpc
  *  Main state s at node k={0..M}: dpc[k*p7R_NSCELLS+s]   
  *  Special state s={ENJBLGC}:     dpc[(M+1)*p7R_NSCELLS+s]
  */
-typedef struct p7_refmx_s {
-  int      M;	     /* current DP matrix values valid for model of length M   */
-  int      L;	     /* current DP matrix values valid for seq of length L     */
 
-  float   *dp_mem;   /* matrix memory available. dp[i] rows point into this    */
-  int64_t  allocN;   /* # DP cells (floats) allocated. allocN >= allocR*allocW */
-
-  float  **dp;	     /* dp[i] rows of matrix. 0..i..L; L+1 <= validR <= allocR */
-  int      allocR;   /* # of allocated rows, dp[]                              */
-  int      allocW;   /* width of each dp[i] row, in floats.                    */
-  int      validR;   /* # of dp[] ptrs validly placed in dp_mem                */
-
-  int      type;     /* p7R_UNSET | p7R_FORWARD | p7R_BACKWARD | p7R_DECODING  */
-} P7_REFMX;
-
-
-/* Usually we access the matrix values by stepping pointers thru,
- * exploiting detailed knowledge of their order. Sometimes, either for
- * code clarity or robustness against layout changes, it's worth
- * having access macros, though we can expect these to be relatively
- * expensive to evaluate:
- */
-#define P7R_XMX(gxd,i,s)  ( (gxd)->dp[(i)][ ( ((gxd)->M) +1) * p7R_NSCELLS + (s)] )
-#define P7R_MX(gxd,i,k,s) ( (gxd)->dp[(i)][ (k)              * p7R_NSCELLS + (s)] )
-
-/* from p7_refmx.c */
-extern P7_REFMX *p7_refmx_Create(int M, int L);
-extern int       p7_refmx_GrowTo (P7_REFMX *gxd, int M, int L);
-extern int       p7_refmx_Reuse  (P7_REFMX *gxd);
-extern void      p7_refmx_Destroy(P7_REFMX *gxd);
-
-extern char *p7_refmx_DecodeSpecial(int type);
-extern char *p7_refmx_DecodeState(int type);
-extern int   p7_refmx_Dump(FILE *ofp, P7_REFMX *gxd);
-extern int   p7_refmx_DumpWindow(FILE *ofp, P7_REFMX *gxd, int istart, int iend, int kstart, int kend);
-extern int   p7_refmx_DumpCSV(FILE *fp, P7_REFMX *pp, int istart, int iend, int kstart, int kend);
-
-extern int   p7_refmx_Validate(P7_REFMX *rmx, char *errbuf);
-
-/* from reference_fwdback.c */
-extern int p7_ReferenceForward (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, float *opt_sc);
-extern int p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, float *opt_sc);
-extern int p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, const P7_REFMX *bck, P7_REFMX *pp);
-extern int p7_ReferenceAlign   (const P7_PROFILE *gm, float gamma, const P7_REFMX *pp,  P7_REFMX *rmx, P7_TRACE *tr, float *opt_gain);
-
-/* from reference_viterbi.c */
-extern int p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, P7_TRACE *opt_tr, float *opt_sc);
 
 #endif /*p7REFMX_INCLUDED*/
 /*****************************************************************

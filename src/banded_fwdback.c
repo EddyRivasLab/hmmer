@@ -1158,10 +1158,10 @@ utest_single_paths(ESL_GETOPTS *go)
   p7_BandedForward (sq->dsq, sq->n, gm, bmf, &fsc);
   p7_BandedBackward(sq->dsq, sq->n, gm, bmb, &bsc);
 
-  printf("n   = %" PRId64 "\n", sq->n);
-  printf("tsc = %.2f nats\n",   tsc);
-  printf("fsc = %.2f nats\n",   fsc);
-  printf("bsc = %.2f nats\n",   bsc);
+  //printf("n   = %" PRId64 "\n", sq->n);
+  //printf("tsc = %.2f nats\n",   tsc);
+  //printf("fsc = %.2f nats\n",   fsc);
+  //printf("bsc = %.2f nats\n",   bsc);
 
 
   if ( esl_FCompareAbs(fsc, tsc, 0.0001) != eslOK) esl_fatal(msg);

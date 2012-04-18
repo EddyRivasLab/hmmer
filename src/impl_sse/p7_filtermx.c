@@ -2,10 +2,10 @@
  * Shared by all the filter implementations (SSV, MSV, Vit, Fwd, Bck).
  * 
  * Contents:
- *    x. API for the P7_FILTERMX object
- *    x. Debugging, development routines.
- *    x. Internal routines.
- *    x. Copyright and license information.
+ *    1. API for the P7_FILTERMX object
+ *    2. Debugging, development routines.
+ *    3. Internal routines.
+ *    4. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -23,6 +23,7 @@ static void set_redlined    (P7_FILTERMX *ox, int L, double minR);
 
 static double minimum_rows     (int L);
 static double checkpointed_rows(int L, int R);
+
 
 /*****************************************************************
  * 1. API for the <P7_FILTERMX> object
@@ -171,9 +172,9 @@ p7_filtermx_GrowTo(P7_FILTERMX *ox, int M, int L)
    * condition coming below.
    */
 #ifdef p7_DEBUGGING
-  if (ox->fwd && (status = p7_gmx_GrowTo(ox->fwd, M, L)) != eslOK) goto ERROR;
-  if (ox->bck && (status = p7_gmx_GrowTo(ox->bck, M, L)) != eslOK) goto ERROR;
-  if (ox->pp  && (status = p7_gmx_GrowTo(ox->pp,  M, L)) != eslOK) goto ERROR;
+  if (ox->fwd && (status = p7_refmx_GrowTo(ox->fwd, M, L)) != eslOK) goto ERROR;
+  if (ox->bck && (status = p7_refmx_GrowTo(ox->bck, M, L)) != eslOK) goto ERROR;
+  if (ox->pp  && (status = p7_refmx_GrowTo(ox->pp,  M, L)) != eslOK) goto ERROR;
 #endif
 
   /* Calculate W, the minimum row width needed, in bytes */
@@ -241,13 +242,17 @@ p7_filtermx_GrowTo(P7_FILTERMX *ox, int M, int L)
  * Purpose:   Returns the size of the checkpointed vector DP matrix
  *            in bytes. 
  *            
- *            If code has been compiled in debugging mode, this size
- *            includes a negligible amount of extra space for
- *            debugging fields in the structure (about 5 ints and 4
- *            pointers - around 52 bytes). The returned size does not
- *            include the use of any full Forward, Backward, or
- *            decoding matrices in the debugging part of the
- *            structure.
+ *            If code has been compiled in debugging mode, the
+ *            returned size includes a negligible amount of extra
+ *            space for debugging fields in the structure (about 5
+ *            ints, 4 pointers, and a float - around 56 bytes). The
+ *            returned size does not include the use of any full
+ *            Forward, Backward, or decoding matrices in the debugging
+ *            part of the structure. This is because when we're in
+ *            debugging mode asking about memory usage, we're usually
+ *            interested in the estimated usage of the production
+ *            code, because we're optimizing some parameter choices
+ *            for example.
  */
 size_t
 p7_filtermx_Sizeof(const P7_FILTERMX *ox)
@@ -286,9 +291,9 @@ p7_filtermx_Reuse(P7_FILTERMX *ox)
   ox->Qf = 0;
 
 #ifdef p7_DEBUGGING
-  if (ox->fwd && (status = p7_gmx_Reuse(ox->fwd)) != eslOK) return status;
-  if (ox->bck && (status = p7_gmx_Reuse(ox->bck)) != eslOK) return status;
-  if (ox->pp  && (status = p7_gmx_Reuse(ox->pp))  != eslOK) return status;
+  if (ox->fwd && (status = p7_refmx_Reuse(ox->fwd)) != eslOK) return status;
+  if (ox->bck && (status = p7_refmx_Reuse(ox->bck)) != eslOK) return status;
+  if (ox->pp  && (status = p7_refmx_Reuse(ox->pp))  != eslOK) return status;
   ox->bcksc = 0.0f;
 #endif
 
@@ -309,9 +314,9 @@ p7_filtermx_Destroy(P7_FILTERMX *ox)
    if (ox->dp_mem) free(ox->dp_mem);
    if (ox->dpf)    free(ox->dpf);
 #ifdef p7_DEBUGGING
-   if (ox->fwd)    p7_gmx_Destroy(ox->fwd);
-   if (ox->bck)    p7_gmx_Destroy(ox->bck);
-   if (ox->pp)     p7_gmx_Destroy(ox->pp);
+   if (ox->fwd)    p7_refmx_Destroy(ox->fwd);
+   if (ox->bck)    p7_refmx_Destroy(ox->bck);
+   if (ox->pp)     p7_refmx_Destroy(ox->pp);
 #endif
    free(ox);
  }
@@ -319,10 +324,37 @@ p7_filtermx_Destroy(P7_FILTERMX *ox)
 /*--------------- end, P7_FILTERMX object -----------------------*/
 
 
+
 /*****************************************************************
  * 2. Debugging, development routines
  *****************************************************************/
 
+/* Function:  p7_filtermx_SetDumpMode()
+ * Synopsis:  Toggle dump mode flag in a P7_FILTERMX.
+ *
+ * Purpose:   Toggles whether DP matrix rows will be dumped for examination
+ *            during <p7_ForwardFilter()>, <p7_BackwardFilter()>.
+ *            Dumping has to be done row by row, on the fly during the
+ *            DP calculations, not afterwards, because these routines
+ *            are memory efficient (checkpointed) and they do not save
+ *            all their rows.
+ * 
+ *            To turn on dumping, <truefalse> is <TRUE>, and <dfp> is an
+ *            open <FILE> pointer for dump output (such as <stderr>).
+ *            
+ *            To turn off dumping, <truefalse> is <FALSE>, and <dfp>
+ *            should be <NULL>.
+ *            
+ *            For this to have effect, <p7_DEBUGGING> compile-time
+ *            flag must be on. If it is not, no dumping will occur,
+ *            and this call is a no-op.
+ *
+ * Args:      ox        - DP matrix object to set
+ *            dfp       - open FILE * for debugging output, or NULL
+ *            truefalse - TRUE to set dump mode, or FALSE to unset
+ *
+ * Returns:   <eslOK> on success.
+ */
 int
 p7_filtermx_SetDumpMode(P7_FILTERMX *ox, FILE *dfp, int truefalse)
 {
@@ -333,7 +365,12 @@ p7_filtermx_SetDumpMode(P7_FILTERMX *ox, FILE *dfp, int truefalse)
   return eslOK;
 }
 
+
 #ifdef p7_DEBUGGING
+
+/* Function:  p7_filtermx_DecodeX()
+ * Synopsis:  Convert a special X statecode to a string.
+ */
 char *
 p7_filtermx_DecodeX(enum p7f_xcells_e xcode)
 {
@@ -350,6 +387,12 @@ p7_filtermx_DecodeX(enum p7f_xcells_e xcode)
   }
 }
 
+/* Function:  p7_filtermx_DumpFBHeader()
+ * Synopsis:  Prints the header of the fwd/bck dumps.
+ *
+ * Purpose:   Print the header that accompanies 
+ *            <p7_filtermx_DumpFBRow()>.
+ */
 int
 p7_filtermx_DumpFBHeader(P7_FILTERMX *ox)
 {
@@ -372,6 +415,18 @@ p7_filtermx_DumpFBHeader(P7_FILTERMX *ox)
   return eslOK;
 }
 
+/* Function:  p7_filtermx_DumpFBRow()
+ * Synopsis:  Dump one row from fwd or bck version of the matrix.
+ *
+ * Purpose:   Dump current row <dpc> of forward or backward calculations from
+ *            DP matrix <ox> for diagnostics. The index <rowi> is used
+ *            as a row label, along with an additional free-text label
+ *            <pfx>.  (The checkpointed backward implementation
+ *            interleaves backward row calculations with recalculated
+ *            fwd rows, both of which it is dumping; they need to be
+ *            labeled something like "fwd" and "bck" to distinguish
+ *            them in the debugging dump.)
+ */
 int
 p7_filtermx_DumpFBRow(P7_FILTERMX *ox, int rowi, __m128 *dpc, char *pfx)
 {
@@ -591,6 +646,9 @@ ERROR:
 
 #endif /*p7_DEBUGGING*/
 /*---------------- end, debugging -------------------------------*/
+
+
+
 
 /*****************************************************************
  * 3. Internal routines

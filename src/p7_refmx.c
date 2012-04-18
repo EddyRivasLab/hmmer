@@ -6,7 +6,8 @@
  * Contents:
  *   1. The <P7_REFMX> object
  *   2. Debugging aids
- *   3. Copyright and license information.
+ *   3. Validation 
+ *   4. Copyright and license information.
  */
 
 #include "p7_config.h"
@@ -141,6 +142,20 @@ p7_refmx_GrowTo(P7_REFMX *rmx, int M, int L)
 }
 	
 
+/* Function:  p7_refmx_Sizeof()
+ * Synopsis:  Returns the allocated size of DP matrix, in bytes.
+ */
+extern size_t
+p7_refmx_Sizeof(const P7_REFMX *rmx)
+{
+  size_t n = 0;
+
+  n += sizeof(P7_REFMX);
+  n += rmx->allocN * sizeof(float);     /* dp_mem */
+  n += rmx->allocR * sizeof(float *);	/* dp[]   */
+  return n;
+}
+
 
 
 /* Function:  p7_refmx_Reuse()
@@ -186,6 +201,96 @@ p7_refmx_Destroy(P7_REFMX *rmx)
 /*****************************************************************
  * 2. Debugging aids
  *****************************************************************/
+
+/* Function:  p7_refmx_Compare()
+ * Synopsis:  Compare two DP matrices for equality (within given tolerance)
+ *
+ * Purpose:   Compare all the values in DP matrices <rx1>, <rx2> for
+ *            equality within absolute epsilon <tolerance>, using
+ *            <esl_FCompareAbs()> calls. Return <eslOK> if all cell
+ *            comparisons succeed; <eslFAIL> if not.
+ *            
+ *            Absolute difference comparison is preferred over
+ *            relative differences. Numerical error accumulation in DP
+ *            scales more with the number of terms than their
+ *            magnitude. DP cells with values close to zero (and hence
+ *            small absolute differences) may reasonably have large
+ *            relative differences.
+ */
+int
+p7_refmx_Compare(const P7_REFMX *rx1, const P7_REFMX *rx2, float tolerance)
+{
+  int i,k,s;
+  int killmenow = FALSE;
+#ifdef p7_DEBUGGING
+  killmenow = TRUE;	/* Setting <killmenow> during debugging helps find where a comparison fails */
+#endif /*p7_DEBUGGING*/
+  
+  if (rx1->M    != rx2->M)    { if (killmenow) abort(); return eslFAIL; }
+  if (rx1->L    != rx2->L)    { if (killmenow) abort(); return eslFAIL; }
+  if (rx1->type != rx2->type) { if (killmenow) abort(); return eslFAIL; }
+  
+  for (i = 0; i <= rx1->L; i++)
+    {
+      for (k = 0; k <= rx1->M; k++)   
+	for (s = 0; s < p7R_NSCELLS; s++)
+	  if ( esl_FCompareAbs(P7R_MX(rx1,i,k,s), P7R_MX(rx2,i,k,s), tolerance) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+      for (s = 0; s < p7R_NXCELLS; s++)
+	if ( esl_FCompareAbs(P7R_XMX(rx1,i,s), P7R_XMX(rx2,i,s), tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
+    }
+  return eslOK;	
+}
+
+/* Function:  p7_refmx_CompareLocal()
+ * Synopsis:  Compare two DP matrices (local paths only) for equality 
+ *
+ * Purpose:   A variant of <p7_refmx_Compare()> that compares only 
+ *            cells on local paths. <MG,IG,DG,G> states are excluded.
+ *            
+ *            This gets used in unit tests that compare Backwards
+ *            matrices computed by the ForwardFilter() with the
+ *            reference implementation. You can't expect these Bck
+ *            matrices to compare completely equal.  In the fwdfilter,
+ *            glocal paths are all -inf by construction (they're not
+ *            evaluated at all).  In the reference impl, in local
+ *            mode, backwards values are finite along glocal paths
+ *            (G/MG/IG/DG) because the zero transition that prohibits
+ *            the path is the B->G transition, which isn't evaluated
+ *            in the recursion until the *end* of glocal paths. 
+ */
+int
+p7_refmx_CompareLocal(const P7_REFMX *rx1, const P7_REFMX *rx2, float tolerance)
+{
+  int i,k;
+  int killmenow = FALSE;
+#ifdef p7_DEBUGGING
+  killmenow = TRUE;	/* Setting <killmenow> during debugging helps find where a comparison fails */
+#endif /*p7_DEBUGGING*/
+  
+  if (rx1->M    != rx2->M)    { if (killmenow) abort(); return eslFAIL; }
+  if (rx1->L    != rx2->L)    { if (killmenow) abort(); return eslFAIL; }
+  if (rx1->type != rx2->type) { if (killmenow) abort(); return eslFAIL; }
+  
+  for (i = 0; i <= rx1->L; i++)
+    {
+      for (k = 0; k <= rx1->M; k++)   
+	{
+	  if ( esl_FCompareAbs(P7R_MX(rx1,i,k,p7R_ML), P7R_MX(rx2,i,k,p7R_ML), tolerance) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	  if ( esl_FCompareAbs(P7R_MX(rx1,i,k,p7R_IL), P7R_MX(rx2,i,k,p7R_IL), tolerance) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	  if ( esl_FCompareAbs(P7R_MX(rx1,i,k,p7R_DL), P7R_MX(rx2,i,k,p7R_DL), tolerance) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	}
+      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_E),  P7R_XMX(rx2,i,p7R_E),  tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
+      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_N),  P7R_XMX(rx2,i,p7R_N),  tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
+      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_J),  P7R_XMX(rx2,i,p7R_J),  tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
+      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_B),  P7R_XMX(rx2,i,p7R_B),  tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
+      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_L),  P7R_XMX(rx2,i,p7R_L),  tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
+      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_C),  P7R_XMX(rx2,i,p7R_C),  tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
+      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_JJ), P7R_XMX(rx2,i,p7R_JJ), tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
+      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_CC), P7R_XMX(rx2,i,p7R_CC), tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
+    }
+  return eslOK;	
+}
+
 
 /* Function:  p7_refmx_DecodeSpecial()
  * Synopsis:  Convert special state code to string for debugging output.

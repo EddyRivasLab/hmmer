@@ -1387,7 +1387,6 @@ p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om)
 
 /* Function:  p7_oprofile_Sample()
  * Synopsis:  Sample a random profile.
- * Incept:    SRE, Wed Jul 30 13:11:52 2008 [Janelia]
  *
  * Purpose:   Sample a random profile of <M> nodes for alphabet <abc>,
  *            using <r> as the source of random numbers. Parameterize
@@ -1395,14 +1394,21 @@ p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om)
  *            <L>. Calculate its log-odds scores using background
  *            model <bg>.
  *            
+ *            Caller may optionally obtain the corresponding hmm by
+ *            passing a non-<NULL> <opt_hmm>, and/or the corresponding
+ *            profile by passing a non-<NULL> <opt_gm>. If the <gm> is
+ *            obtained, it is configured for local-only mode and for a
+ *            target length of <L>, so that its scores will match the
+ *            <om> (as closely as roundoff allows).
+ *            
  * Args:      r       - random number generator
  *            abc     - emission alphabet 
  *            bg      - background frequency model
  *            M       - size of sampled profile, in nodes
  *            L       - configured target seq mean length
  *            opt_hmm - optRETURN: sampled HMM
- *            opt_gm  - optRETURN: sampled normal profile
- *            opt_om  - RETURN: optimized profile
+ *            opt_gm  - optRETURN: sampled normal profile, (local,L) mode
+ *            opt_om  - RETURN: optimized profile, length config'ed to L
  *
  * Returns:   <eslOK> on success.
  *
