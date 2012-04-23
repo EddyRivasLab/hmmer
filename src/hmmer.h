@@ -54,7 +54,6 @@
 #include "esl_scorematrix.h"    /* ESL_SCOREMATRIX       */
 #include "esl_stopwatch.h"      /* ESL_STOPWATCH         */
 
-
 /* Search modes. */
 #define p7_NO_MODE   0
 #define p7_LOCAL     1		/* multihit local:  "fs" mode   */
@@ -494,6 +493,11 @@ enum p7t_statetype_e {
   p7T_T     = 15, 
 };
 #define p7T_NSTATETYPES 16	/* used when we collect statetype usage counts, for example */
+#define p7_trace_IsMain(s)   ( (s) >= p7T_ML && (s) <= p7T_DG )
+#define p7_trace_IsM(s)      ( (s) == p7T_ML || (s) == p7T_MG )
+#define p7_trace_IsI(s)      ( (s) == p7T_IL || (s) == p7T_IG )
+#define p7_trace_IsD(s)      ( (s) == p7T_DL || (s) == p7T_DG )
+
 
 typedef struct p7_trace_s {
   int    N;		/* length of traceback                       */  // N=0 means "no traceback": viterbi score = -inf and no possible path, for example.
@@ -512,6 +516,10 @@ typedef struct p7_trace_s {
   int  *hmmfrom, *hmmto;/* first/last M/D state on model (1..M)              */
   int   ndomalloc;	/* current allocated size of these stacks            */
 } P7_TRACE;
+
+
+
+
 
 
 
@@ -1243,6 +1251,8 @@ typedef struct p7_builder_s {
 /*****************************************************************
  * 17. Routines in HMMER's exposed API.
  *****************************************************************/
+#include "p7_refmx.h"
+#include "p7_bandmx.h"
 
 /* build.c */
 extern int p7_Handmodelmaker(ESL_MSA *msa,                P7_BUILDER *bld, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
@@ -1660,6 +1670,8 @@ extern char *p7_trace_DecodeStatetype(char st);
 extern int   p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *dsq, char *errbuf);
 extern int   p7_trace_Dump(FILE *fp, const P7_TRACE *tr);
 extern int   p7_trace_DumpAnnotated(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ *dsq);
+extern int   p7_trace_DumpSuper    (FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ *dsq,
+				    float gamma, const P7_REFMX *fpp, const P7_BANDMX *bpp);
 extern int   p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol);
 extern int   p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, float *ret_sc);
 extern float p7_trace_GetExpectedAccuracy(const P7_TRACE *tr);

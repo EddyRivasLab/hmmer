@@ -69,6 +69,7 @@ p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
   float  mlv, mgv;	      /* ML,MG cell values on current row   */
   float  dlv, dgv; 	      /* pushed-ahead DL,DG cell k+1 values */
   float  xE, xL, xG;
+  float  vsc;
   
 #ifdef p7_DEBUGGING
   if (L+1 > rmx->allocR)                           ESL_EXCEPTION(eslEINVAL, "matrix allocR too small; missing a p7_refmx_GrowTo() initialization call?");
@@ -176,11 +177,12 @@ p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
     }
   /* Done with all rows i. As we leave, dpc is still sitting on the specials for i=L ... including even the L=0 case */
   
-  if (opt_sc) *opt_sc = dpc[p7R_C] + gm->xsc[p7P_C][p7P_MOVE];
+  vsc =  dpc[p7R_C] + gm->xsc[p7P_C][p7P_MOVE];
+  if (opt_sc) *opt_sc = vsc;
   rmx->M    = M;
   rmx->L    = L;
   rmx->type = p7R_VITERBI;
-  if (opt_tr && *opt_sc != -eslINFINITY) return reference_viterbi_traceback(gm, rmx, opt_tr);  // if no paths are possible at all: leave tr->N=0, our convention for impossible trace
+  if (opt_tr && vsc != -eslINFINITY) return reference_viterbi_traceback(gm, rmx, opt_tr);  // if no paths are possible at all: leave tr->N=0, our convention for impossible trace
   else                                   return eslOK;
 }
 /*------------------ end, viterbi DP fill -----------------------*/

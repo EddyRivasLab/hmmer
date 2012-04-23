@@ -669,8 +669,8 @@ p7_BandedAlign(const P7_PROFILE *gm, float gamma, const P7_BANDMX *bmd, P7_BANDM
 	      xE = ESL_MAX(xE, ESL_MAX(mlc, dlc));
 	      
 	      /* DL/DG states delayed storage trick */
-	      *dpc++ = dlc + (*ppp++) + gammaterm;
-	      *dpc++ = dgc + (*ppp++) + gammaterm;
+	      *dpc++ = dlc = dlc + (*ppp++) + gammaterm;
+	      *dpc++ = dgc = dgc + (*ppp++) + gammaterm;
 	      dlc = ESL_MAX( P7_DELTAT(mlc, TSC(p7P_MD, k)), P7_DELTAT(dlc, TSC(p7P_DD, k))); 
 	      dgc = ESL_MAX( P7_DELTAT(mgc, TSC(p7P_MD, k)), P7_DELTAT(dgc, TSC(p7P_DD, k))); 
 	    }
@@ -1248,16 +1248,17 @@ static ESL_OPTIONS options[] = {
   { "-1",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "1 line per sequence, tabular summary output",       0 },
   { "-i",        eslARG_STRING, FALSE, NULL, NULL,   NULL,  NULL, NULL, "when dumping, restrict dump to rows <i1>..<i2>",    0 },
   { "-k",        eslARG_STRING, FALSE, NULL, NULL,   NULL,  NULL, NULL, "when dumping, restrict dump to columns <k1>..<k2>", 0 },
-  { "-A",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump OA alignment DP matrix for examination",       0 },
-  { "-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward DP matrix for examination",           0 },
-  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward DP matrix for examination",            0 },
   { "-G",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump DP bands for examination",                     0 },
+  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward DP matrix for examination",            0 },
+  { "-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward DP matrix for examination",           0 },
   { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump posterior Decoding matrix for examination",    0 },
+  { "-A",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump alignment DP matrix for examination",          0 },
   { "-T",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump alignment Traceback for examination",          0 },
 #ifdef p7_DEBUGGING
   { "--fF",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward filter matrix for examination",      0 },
   { "--fB",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward filter matrix for examination",     0 },
   { "--fD",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Decoding filter matrix for examination",     0 },
+  { "--fT",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump superannotated alignment Traceback",         0 },
 #endif
   { "--fs",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "config model for multihit local mode only",       0 },
   { "--sw",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "config model for unihit local mode only",         0 },
@@ -1343,19 +1344,20 @@ main(int argc, char **argv)
   p7_oprofile_Convert(gm, om);
 
   /* Allocate bands, matrices */
-  bnd = p7_gbands_Create(gm->M, 400); /* L=400 is a dummy; Reinit() will fix */
-  bmf = p7_bandmx_Create(NULL);	
-  bmb = p7_bandmx_Create(NULL);	
-  bmd = p7_bandmx_Create(NULL);	
-  bma = p7_bandmx_Create(NULL);	
-  ox  = p7_filtermx_Create(om->M, 400, ESL_MBYTES(32));
-  tr  = p7_trace_CreateWithPP();
+  bnd    = p7_gbands_Create(gm->M, 400); /* L=400 is a dummy; Reinit() will fix */
+  bmf    = p7_bandmx_Create(NULL);	
+  bmb    = p7_bandmx_Create(NULL);	
+  bmd    = p7_bandmx_Create(NULL);	
+  bma    = p7_bandmx_Create(NULL);	
+  ox     = p7_filtermx_Create(om->M, 400, ESL_MBYTES(32));
+  tr     = p7_trace_CreateWithPP();
 
 #ifdef p7_DEBUGGING
   /* Under debugging mode only, we can also dump internals of the ForwardFilter/BackwardFilter vector calculations */
-  if (esl_opt_GetBoolean(go, "--fF")) ox->fwd = p7_gmx_Create(gm->M, 100);
-  if (esl_opt_GetBoolean(go, "--fB")) ox->bck = p7_gmx_Create(gm->M, 100);
-  if (esl_opt_GetBoolean(go, "--fD")) ox->pp  = p7_gmx_Create(gm->M, 100);
+  if (esl_opt_GetBoolean(go, "--fF")) ox->fwd = p7_refmx_Create(gm->M, 100);
+  if (esl_opt_GetBoolean(go, "--fB")) ox->bck = p7_refmx_Create(gm->M, 100);
+  if (esl_opt_GetBoolean(go, "--fD") || 
+      esl_opt_GetBoolean(go, "--fT")) ox->pp  = p7_refmx_Create(gm->M, 100);
 #endif
 
   if (esl_opt_GetBoolean(go, "-1")) {
@@ -1375,21 +1377,18 @@ main(int argc, char **argv)
 
       /* Determine bands */
       p7_gbands_Reinit(bnd, gm->M, sq->n);
-      if (esl_opt_GetBoolean(go, "--full"))
-	p7_gbands_SetFull(bnd);
-      else
-	{
-	  p7_filtermx_GrowTo(ox, om->M, sq->n);
-	  p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fsc);
-	  p7_BackwardFilter(sq->dsq, sq->n, om, ox, bnd);
-	}
+      p7_filtermx_GrowTo(ox, om->M, sq->n);
+      p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fsc);
+      p7_BackwardFilter(sq->dsq, sq->n, om, ox, bnd);
+
+      /* --full overrides the bands; but we still need to run the fwdfilter, for refmx_Dumps and trace_DumpSuper below */
+      if (esl_opt_GetBoolean(go, "--full")) p7_gbands_SetFull(bnd);
 
 #ifdef p7_DEBUGGING
-      if (esl_opt_GetBoolean(go, "--fF")) p7_gmx_Dump(stdout, ox->fwd, p7_DEFAULT);
-      if (esl_opt_GetBoolean(go, "--fB")) p7_gmx_Dump(stdout, ox->bck, p7_DEFAULT);
-      if (esl_opt_GetBoolean(go, "--fD")) p7_gmx_Dump(stdout, ox->pp,  p7_DEFAULT);
+      if (esl_opt_GetBoolean(go, "--fF")) p7_refmx_Dump(stdout, ox->fwd);
+      if (esl_opt_GetBoolean(go, "--fB")) p7_refmx_Dump(stdout, ox->bck);
+      if (esl_opt_GetBoolean(go, "--fD")) p7_refmx_Dump(stdout, ox->pp);
 #endif
-
       if (esl_opt_GetBoolean(go, "-G")) p7_gbands_Dump(stdout, bnd);
 
       /* Resize banded DP matrix if necessary */
@@ -1404,11 +1403,14 @@ main(int argc, char **argv)
       p7_BandedDecoding(gm, fsc, bmf, bmb, bmd);
       p7_BandedAlign   (gm, /*gamma=*/1.0, bmd, bma, tr, &gain);
 
-      if (esl_opt_GetBoolean(go, "-F")) p7_bandmx_DumpWindow(stdout, bmf, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
-      if (esl_opt_GetBoolean(go, "-B")) p7_bandmx_DumpWindow(stdout, bmb, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
-      if (esl_opt_GetBoolean(go, "-D")) p7_bandmx_DumpWindow(stdout, bmd, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
-      if (esl_opt_GetBoolean(go, "-A")) p7_bandmx_DumpWindow(stdout, bma, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
-      if (esl_opt_GetBoolean(go, "-T")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
+      if (esl_opt_GetBoolean(go, "-F"))   p7_bandmx_DumpWindow(stdout, bmf, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
+      if (esl_opt_GetBoolean(go, "-B"))   p7_bandmx_DumpWindow(stdout, bmb, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
+      if (esl_opt_GetBoolean(go, "-D"))   p7_bandmx_DumpWindow(stdout, bmd, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
+      if (esl_opt_GetBoolean(go, "-A"))   p7_bandmx_DumpWindow(stdout, bma, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
+      if (esl_opt_GetBoolean(go, "-T"))   p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
+#ifdef p7_DEBUGGING
+      if (esl_opt_GetBoolean(go, "--fT")) p7_trace_DumpSuper    (stdout, tr, gm, sq->dsq, /*gamma=*/1.0f, ox->pp, bmd);
+#endif
 
       /* Those scores are partial log-odds likelihoods in nats.
        * Subtract off the rest of the null model, convert to bits.

@@ -692,7 +692,7 @@ static ESL_OPTIONS options[] = {
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   { "-L",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "configured mean seq length for profile",           0 },
-  { "-N",        eslARG_INT,     "10", NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-N",        eslARG_INT,     "10", NULL, NULL,  NULL,  NULL, NULL, "number of traces to emit",                         0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";

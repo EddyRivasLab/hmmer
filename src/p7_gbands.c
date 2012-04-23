@@ -76,8 +76,12 @@ int
 p7_gbands_SetFull(P7_GBANDS *bnd)
 {
   int i;
-  for (i = 1; i <= bnd->L; i++)
-    p7_gbands_Append(bnd, i, 1, bnd->M);
+  int M = bnd->M;
+  int L = bnd->L;
+
+  p7_gbands_Reuse(bnd);
+  p7_gbands_Reinit(bnd, M, L);
+  for (i = 1; i <= bnd->L; i++) p7_gbands_Append(bnd, i, 1, bnd->M);
   return eslOK;
 }
 
