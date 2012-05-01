@@ -237,7 +237,9 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  *            L       - length of dsq in residues
  *            om      - optimized profile
  *            ox      - DP matrix
- *            sc_threshv - a precomputed vector containing the score threshold required for a window to be considered "high-scoring"
+ *            msvdata    - compact representation of substitution scores, for backtracking diagonals
+ *            sc_thresh  - a precomputed threshold required for a window to be considered "high-scoring"
+ *            sc_threshv - a precomputed vector containing a vector of sc_thresh values
  *            starts  - RETURN: array of start positions for windows surrounding above-threshold areas
  *            ends    - RETURN: array of end positions for windows surrounding above-threshold areas
  *			  hit_cnt - RETURN: count of entries in the above two arrays
@@ -255,7 +257,8 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 static int
-p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, uint8_t sc_thresh, __m128i sc_threshv, P7_MSV_WINDOWLIST *windowlist)
+p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata,
+                     uint8_t sc_thresh, __m128i sc_threshv, P7_MSV_WINDOWLIST *windowlist)
 {
 
   register __m128i mpv;            /* previous row values                                       */
@@ -275,7 +278,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   __m128i ceilingv;                /* saturated simd value used to test for overflow           */
   __m128i tempv;                   /* work vector                                               */
   int cmp;
-  int status;
   int k;
   int n;
   int end;
@@ -290,9 +292,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   float ret_sc;
 
   union { __m128i v; uint8_t b[16]; } u;
-  uint8_t *scores = NULL;
-
-  ESL_ALLOC(scores, ((om->abc->Kp)*Q) * sizeof(uint8_t) );
 
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
@@ -345,14 +344,14 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	    rem_sc = -1;
 	    for (q = 0; q < Q; q++) {  /// Unpack and unstripe, so we can find the state that exceeded pthresh
           u.v = dp[q];
-          for (k = 0; k < 16; k++) scores[q+Q*k+1] = u.b[k]; // unstripe
-          dp[q] = _mm_set1_epi8(0); // while we're here ... this will cause values to get reset to xB in next dp iteration
-	    }
-	    for (k = 1; k <= om->M; k++) {
-          if (scores[k] >= sc_thresh && scores[k] > rem_sc) {
-            end = k;
-            rem_sc = scores[k];
+          for (k = 0; k < 16; k++) { // unstripe
+            //(q+Q*k+1) is the model position k at which the xE score is found
+            if (u.b[k] >= sc_thresh && u.b[k] > rem_sc && (q+Q*k+1) <= om->M) {
+              end = (q+Q*k+1);
+              rem_sc = u.b[k];
+            }
           }
+          dp[q] = _mm_set1_epi8(0); // while we're here ... this will cause values to get reset to xB in next dp iteration
 	    }
 
 	    //recover the diagonal that hit threshold
@@ -406,12 +405,8 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
   } /* end loop over sequence residues 1..L */
 
-  free(scores);
   return eslOK;
 
-ERROR:
-  if (scores != NULL) free(scores);
-  return eslEMEM;
 }
 /*------------------ end, p7_SSVFilter_longtarget() ------------------------*/
 
@@ -419,22 +414,17 @@ ERROR:
 
 /* Function:  p7_MSVFilter_longtarget()
  * Synopsis:  Finds windows with MSV scores above some threshold (vewy vewy fast, in limited precision)
- * Incept:    TJW, Mon Feb 22 16:27:25 2010 [Janelia] - based on p7_MSVFilter
  *
  * Purpose:   Calculates an approximation of the MSV score for regions of
- *            sequence <dsq> of length <L> residues, using optimized profile
- *            <om>, and a preallocated one-row DP matrix <ox>, and captures
- *            the positions at which such regions exceed the score required
- *            to be significant in the eyes of the calling function (usually
+ *            sequence <dsq>, using optimized profile <om>, and a pre-
+ *            allocated one-row DP matrix <ox>, and captures the positions
+ *            at which such regions exceed the score required to be
+ *            significant in the eyes of the calling function (usually
  *            p=0.02).  Note that this will typically simply call
  *            p7_SSVFilter_longtarget(), as the score threshold is nearly
  *            always lower than the score required for a pass through the
  *            J-state to yield a positive score.
  *
- *            Rather than simply capturing positions at which a score threshold
- *            is reached, this function (and SSVFilter_longtarget) establishes
- *            windows around those high-scoring positions, and merges overlapping
- *            windows.
  *
  *
  * Args:      dsq        - digital target sequence, 1..L
@@ -444,8 +434,7 @@ ERROR:
  *            msvdata    - compact representation of substitution scores, for backtracking diagonals
  *            bg         - the background model, required for translating a P-value threshold into a score threshold
  *            P          - p-value below which a region is captured as being above threshold
- *            windowlist - RETURN: array of hit windows (start and end of diagonal) for the above-threshold areas
- *            force_ssv  - if TRUE, use SSV, not MSV, regardless of score threshold
+ *            windowlist - RETURN: preallocated array of hit windows (start and end of diagonal) for the above-threshold areas
  *
  * Note:      We misuse the matrix <ox> here, using only a third of the
  *            first dp row, accessing it as <dp[0..Q-1]> rather than
@@ -506,9 +495,10 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
    *  1 bit for each doubling of the length model, so they offset.
    */
   float nullsc;
-  float invP = esl_gumbel_invsurv(P, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   __m128i sc_threshv;
   uint8_t sc_thresh;
+
+  float invP = esl_gumbel_invsurv(P, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
 
   p7_bg_SetLength(bg, om->max_length);
   p7_oprofile_ReconfigMSVLength(om, om->max_length);

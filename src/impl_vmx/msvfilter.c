@@ -399,6 +399,8 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
   } /* end loop over sequence residues 1..L */
 
+  free(scores);
+
   return eslOK;
 
 
@@ -437,7 +439,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
  *            bg         - the background model, required for translating a P-value threshold into a score threshold
  *            P          - p-value below which a region is captured as being above threshold
  *            windowlist - RETURN: array of hit windows (start and end of diagonal) for the above-threshold areas
- *            force_ssv  - if TRUE, use SSV, not MSV, regardless of score threshold
  *
  * Note:      We misuse the matrix <ox> here, using only a third of the
  *            first dp row, accessing it as <dp[0..Q-1]> rather than

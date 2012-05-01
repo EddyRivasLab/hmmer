@@ -111,9 +111,9 @@ p7_GMSV(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float nu, f
  *
  *
  * Purpose:   Calculates the MSV score for regions of sequence <dsq> of length <L>
- * 			  residues, and captures the positions at which such regions exceed the
- * 			  score required to be significant in the eyes of the calling function
- * 			  (usually p=0.02).  Note that this variant performs MSV computations,
+ *            residues, and captures the positions at which such regions exceed the
+ *            score required to be significant in the eyes of the calling function
+ *            (usually p=0.02).  Note that this variant performs MSV computations,
  *            while the optimized versions typically perform SSV (never passing
  *            through the J state). See comments in impl_sse/p7_MSVFilter_longtarget()
  *            for details
