@@ -67,6 +67,46 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 /*---------------- end, p7_ViterbiFilter() ----------------------*/
 
 
+
+/* Function:  p7_ViterbiFilter_longtarget()
+ * Synopsis:  Finds windows within potentially long sequence blocks with Viterbi
+ *            scores above threshold (vewy vewy fast, in limited precision)
+ *
+ * Purpose:   Calculates the Viterbi score for regions of sequence <dsq>,
+ *            and captures the positions at which such regions exceed the
+ *            score required to be significant in the eyes of the calling
+ *            function (usually p=0.001).
+ *
+ *            The resulting landmarks are converted to subsequence
+ *            windows by the calling function
+ *
+ * Args:      dsq     - digital target sequence, 1..L
+ *            L       - length of dsq in residues
+ *            om      - optimized profile
+ *            ox      - DP matrix
+ *            filtersc   - null or bias correction, required for translating a P-value threshold into a score threshold
+ *            P          - p-value below which a region is captured as being above threshold
+ *            windowlist - RETURN: array of hit windows (start and end of diagonal) for the above-threshold areas
+ *
+ * Returns:   <eslOK> on success;
+ *
+ * Throws:    <eslEINVAL> if <ox> allocation is too small
+ *
+ * Xref:      See p7_ViterbiFilter()
+ */
+int
+p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox,
+                            float filtersc, double P, P7_MSV_WINDOWLIST *windowlist)
+{
+  int status;
+  if ((status = p7_gmx_GrowTo(ox, om->M, L)) != eslOK) return status;
+  return p7_GViterbi_longtarget(dsq, L, om, ox, filtersc, P, windowlist);
+
+}
+/*---------------- end, p7_ViterbiFilter() ----------------------*/
+
+
+
 /*****************************************************************
  * 2. Benchmark driver.
  *****************************************************************/

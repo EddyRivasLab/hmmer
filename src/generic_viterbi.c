@@ -27,6 +27,7 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_gumbel.h"
 
 #include "hmmer.h"
 
@@ -159,6 +160,161 @@ p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
 
 /*-------------------- end, viterbi -----------------------------*/
 
+
+
+/* Function:  p7_GViterbi_longtarget()
+ * Synopsis:  The Viterbi algorithm.
+ * Incept:    SRE, Tue Jan 30 10:50:53 2007 [Einstein's, St. Louis]
+ *
+ * Purpose:   Given a digital sequence <dsq> of length <L>, a profile
+ *            <gm>, and DP matrix <gx> allocated for at least <L>
+ *            by <gm->M> cells; calculates the Viterbi score for
+ *            regions of <dsq>, and captures the positions at which
+ *            such regions exceed the score required to be
+ *            significant in the eyes of the calling function
+ *            (usually p=0.001).
+ *
+ * Args:      dsq    - sequence in digitized form, 1..L
+ *            L      - length of dsq
+ *            gm     - profile.
+ *            gx     - DP matrix with room for an MxL alignment
+ *            filtersc   - null or bias correction, required for translating a P-value threshold into a score threshold
+ *            P       - p-value below which a region is captured as being above threshold
+ *            windowlist - RETURN: array of hit windows (start and end of diagonal) for the above-threshold areas
+ *
+ * Return:   <eslOK> on success.
+ */
+int
+p7_GViterbi_longtarget(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx,
+                       float filtersc, double P, P7_MSV_WINDOWLIST *windowlist)
+{
+  float const *tsc  = gm->tsc;
+  float      **dp   = gx->dp;
+  float       *xmx  = gx->xmx;
+  int          M    = gm->M;
+  int          i,k;
+  float        esc  = p7_profile_IsLocal(gm) ? 0 : -eslINFINITY;
+
+  int16_t sc_thresh;
+  float invP;
+
+  /* Initialization of the zero row.  */
+  XMX(0,p7G_N) = 0;                                           /* S->N, p=1            */
+  XMX(0,p7G_B) = gm->xsc[p7P_N][p7P_MOVE];                    /* S->N->B, no N-tail   */
+  XMX(0,p7G_E) = XMX(0,p7G_C) = XMX(0,p7G_J) = -eslINFINITY;  /* need seq to get here */
+  for (k = 0; k <= gm->M; k++)
+    MMX(0,k) = IMX(0,k) = DMX(0,k) = -eslINFINITY;            /* need seq to get here */
+
+
+  /*
+   *  In p7_ViterbiFilter, converting from a scaled int Viterbi score
+   *  S (aka xE the score getting to state E) to a probability
+   *  goes like this:
+   *    S =  XMX(i,p7G_E)
+   *    vsc =  S + gm->xsc[p7P_E][p7P_MOVE] +  gm->xsc[p7P_C][p7P_MOVE];
+   *    P  = esl_gumbel_surv((vfsc - filtersc) / eslCONST_LOG2  ,  gm->evparam[p7_VMU],  gm->evparam[p7_VLAMBDA]);
+   *  and we're computing the threshold vsc, so invert it:
+   *    (vsc - filtersc) /  eslCONST_LOG2 = esl_gumbel_invsurv( P, gm->evparam[p7_VMU],  gm->evparam[p7_VLAMBDA])
+   *    vsc = filtersc + eslCONST_LOG2 * esl_gumbel_invsurv( P, gm->evparam[p7_VMU],  gm->evparam[p7_VLAMBDA])
+   *    S = vsc - gm->xsc[p7P_E][p7P_MOVE] -  gm->xsc[p7P_C][p7P_MOVE]
+   */
+    invP = esl_gumbel_invsurv(P, gm->evparam[p7_VMU],  gm->evparam[p7_VLAMBDA]);
+    sc_thresh =   (int) ceil (filtersc + (eslCONST_LOG2 * invP)
+                  - gm->xsc[p7P_E][p7P_MOVE] -  gm->xsc[p7P_C][p7P_MOVE] );
+
+
+  /* DP recursion */
+  for (i = 1; i <= L; i++)
+  {
+      float const *rsc = gm->rsc[dsq[i]];
+      float sc;
+
+      MMX(i,0) = IMX(i,0) = DMX(i,0) = -eslINFINITY;
+      XMX(i,p7G_E) = -eslINFINITY;
+
+      for (k = 1; k < gm->M; k++)
+      {
+          /* match state */
+        sc       = ESL_MAX(    MMX(i-1,k-1)   + TSC(p7P_MM,k-1),
+             IMX(i-1,k-1)   + TSC(p7P_IM,k-1));
+        sc       = ESL_MAX(sc, DMX(i-1,k-1)   + TSC(p7P_DM,k-1));
+        sc       = ESL_MAX(sc, XMX(i-1,p7G_B) + TSC(p7P_BM,k-1));
+        MMX(i,k) = sc + MSC(k);
+
+        /* E state update */
+        XMX(i,p7G_E) = ESL_MAX(XMX(i,p7G_E), MMX(i,k) + esc);
+        /* in Viterbi alignments, Dk->E can't win in local mode (and
+         * isn't possible in glocal mode), so don't bother
+         * looking. */
+
+        /* insert state */
+        sc = ESL_MAX(MMX(i-1,k) + TSC(p7P_MI,k),
+               IMX(i-1,k) + TSC(p7P_II,k));
+        IMX(i,k) = sc + ISC(k);
+
+        /* delete state */
+        DMX(i,k) =  ESL_MAX(MMX(i,k-1) + TSC(p7P_MD,k-1),
+                DMX(i,k-1) + TSC(p7P_DD,k-1));
+      }
+
+      /* Unrolled match state M. */
+      sc       = ESL_MAX(    MMX(i-1,M-1)   + TSC(p7P_MM,M-1),
+           IMX(i-1,M-1)   + TSC(p7P_IM,M-1));
+      sc       = ESL_MAX(sc, DMX(i-1,M-1 )  + TSC(p7P_DM,M-1));
+      sc       = ESL_MAX(sc, XMX(i-1,p7G_B) + TSC(p7P_BM,M-1));
+      MMX(i,M) = sc + MSC(M);
+
+      /* Unrolled delete state D_M
+       * (Unlike internal Dk->E transitions that can never appear in
+       * Viterbi alignments, D_M->E is possible in glocal mode.)
+       */
+      DMX(i,M) = ESL_MAX(MMX(i,M-1) + TSC(p7P_MD,M-1),
+       DMX(i,M-1) + TSC(p7P_DD,M-1));
+
+      /* E state update; transition from M_M scores 0 by def'n */
+      sc  =          ESL_MAX(XMX(i,p7G_E), MMX(i,M));
+      XMX(i,p7G_E) = ESL_MAX(sc,           DMX(i,M));
+
+
+      if (XMX(i,p7G_E) >= sc_thresh) {
+        //hit score threshold. Add a window to the list, then reset scores.
+
+        for (k = 1; k <= gm->M; k++) {
+          if (MMX(i,k) == XMX(i,p7G_E)) {
+            fm_newWindow(windowlist, 0, i, 0, k, 1, 0.0, fm_nocomplement );
+          }
+          MMX(i,0) = IMX(i,0) = DMX(i,0) = -eslINFINITY;
+        }
+      } else {
+
+        /* Now the special states. E must already be done, and B must follow N,J.
+         * remember, N, C and J emissions are zero score by definition.
+         */
+        /* J state */
+        sc           =             XMX(i-1,p7G_J) + gm->xsc[p7P_J][p7P_LOOP];   /* J->J */
+        XMX(i,p7G_J) = ESL_MAX(sc, XMX(i,  p7G_E) + gm->xsc[p7P_E][p7P_LOOP]);  /* E->J is E's "loop" */
+
+        /* C state */
+        sc           =             XMX(i-1,p7G_C) + gm->xsc[p7P_C][p7P_LOOP];
+        XMX(i,p7G_C) = ESL_MAX(sc, XMX(i,  p7G_E) + gm->xsc[p7P_E][p7P_MOVE]);
+
+        /* N state */
+        XMX(i,p7G_N) = XMX(i-1,p7G_N) + gm->xsc[p7P_N][p7P_LOOP];
+
+        /* B state */
+        sc           =             XMX(i,p7G_N) + gm->xsc[p7P_N][p7P_MOVE];   /* N->B is N's move */
+        XMX(i,p7G_B) = ESL_MAX(sc, XMX(i,p7G_J) + gm->xsc[p7P_J][p7P_MOVE]);  /* J->B is J's move */
+
+      }
+   }
+
+  /* T state (not stored) */
+  gx->M = gm->M;
+  gx->L = L;
+  return eslOK;
+}
+
+/*-------------------- end, p7_GViterbi_longtarget -----------------------------*/
 
 /*****************************************************************
  * 2. Benchmark driver.
