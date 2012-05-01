@@ -797,6 +797,7 @@ typedef struct msv_window_s {
   int32_t    length; // length of the diagonal/window
   int16_t    k;  //position of the model at which the diagonal ends
   int8_t     complementarity;
+  int        used_to_extend;
 } P7_MSV_WINDOW;
 
 typedef struct msv_window_list_s {
@@ -1182,6 +1183,8 @@ extern int p7_GViterbi     (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,    
 
 /* generic_vtrace.c */
 extern int p7_GTrace       (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr);
+extern int p7_GViterbi_longtarget(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx,
+                       float filtersc, double P, P7_MSV_WINDOWLIST *windowlist);
 
 
 /* heatmap.c (evolving now, intend to move this to Easel in the future) */
@@ -1384,6 +1387,7 @@ extern int  p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset);
 
 /* p7_msvdata.c */
 extern P7_MSVDATA *p7_hmm_MSVDataCreate(P7_OPROFILE *om, int do_opt_ext);
+extern P7_MSVDATA * p7_hmm_MSVDataClone(P7_MSVDATA *src, int K);
 extern int         p7_hmm_MSVDataComputeRest(P7_OPROFILE *om, P7_MSVDATA *data );
 extern void        p7_hmm_MSVDataDestroy( P7_MSVDATA *data );
 
@@ -1397,7 +1401,7 @@ extern int          p7_pipeline_Reuse  (P7_PIPELINE *pli);
 extern void         p7_pipeline_Destroy(P7_PIPELINE *pli);
 extern int          p7_pipeline_Merge  (P7_PIPELINE *p1, P7_PIPELINE *p2);
 
-extern int p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, P7_MSVDATA *msvdata, P7_MSV_WINDOWLIST *windowlist, int L);
+extern int p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_MSVDATA *msvdata, P7_MSV_WINDOWLIST *windowlist, int L, float pct_overlap);
 extern int p7_pli_TargetReportable  (P7_PIPELINE *pli, float score,     double lnP);
 extern int p7_pli_DomainReportable  (P7_PIPELINE *pli, float dom_score, double lnP);
 

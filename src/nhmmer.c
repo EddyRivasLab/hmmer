@@ -563,7 +563,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       msvdata = p7_hmm_MSVDataCreate(om, FALSE);
 
-
       for (i = 0; i < infocnt; ++i) {
           /* Create processing pipeline and hit list */
           info[i].th  = p7_tophits_Create();
@@ -581,11 +580,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
           info[i].fm_cfg = fm_cfg;
-          info[i].msvdata = msvdata;
+          info[i].msvdata = p7_hmm_MSVDataClone(msvdata, om->abc->Kp);
 #ifdef HMMER_THREADS
           if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
 #endif
       }
+
+
 
 #ifdef HMMER_THREADS
       if (dbformat == eslSQFILE_FMINDEX) {
@@ -601,6 +602,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       else
         sstatus = serial_loop(info, dbfp);
 #endif
+
+
       switch(sstatus) {
         case eslEFORMAT:
           esl_fatal("Parse failed (sequence file %s):\n%s\n",
@@ -635,6 +638,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           p7_pipeline_Destroy(info[i].pli);
           p7_tophits_Destroy(info[i].th);
           p7_oprofile_Destroy(info[i].om);
+          p7_hmm_MSVDataDestroy(info[i].msvdata);
       }
 
 
@@ -709,7 +713,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* Cleanup - prepare for successful exit
    */
-  for (i = 0; i < infocnt; ++i) 
+  for (i = 0; i < infocnt; ++i)
     p7_bg_Destroy(info[i].bg);
 
 #ifdef HMMER_THREADS
@@ -755,6 +759,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
   int      wstatus;
   int i;
   int prev_hit_cnt;
+
   ESL_SQ   *dbsq   =  esl_sq_CreateDigital(info->om->abc);
 #ifdef eslAUGMENT_ALPHABET
   ESL_SQ   *dbsq_revcmp;
@@ -763,10 +768,12 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 #endif /*eslAUGMENT_ALPHABET*/
 
 
+
   wstatus = esl_sqio_ReadWindow(dbfp, 0, NHMMER_MAX_RESIDUE_COUNT, dbsq);
 
 //  while (wstatus == eslEOD ) //skip empty sequences
 //    wstatus = esl_sqio_ReadWindow(dbfp, 0, NHMMER_MAX_RESIDUE_COUNT, dbsq);
+
 
   while (wstatus == eslOK ) {
 
@@ -884,7 +891,6 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
   int          eofCount = 0;
   ESL_SQ_BLOCK *block;
   void         *newBlock;
-  int i;
 
   esl_workqueue_Reset(queue);
   esl_threads_WaitForStart(obj);
