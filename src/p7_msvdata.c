@@ -207,6 +207,11 @@ p7_hmm_MSVDataClone(P7_MSVDATA *src, int Kp) {
 
   ESL_ALLOC(new, sizeof(P7_MSVDATA));
   new->M = src->M;
+  new->scores         = NULL;
+  new->opt_ext_fwd    = NULL;
+  new->opt_ext_rev    = NULL;
+  new->prefix_lengths = NULL;
+  new->suffix_lengths = NULL;
 
   if (src->scores != NULL) {
     ESL_ALLOC(new->scores, (src->M + 1) * Kp * sizeof(uint8_t));
