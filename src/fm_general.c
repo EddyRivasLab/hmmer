@@ -69,9 +69,9 @@ ERROR:
 int
 fm_initWindows (P7_MSV_WINDOWLIST *list) {
   int status;
-  list->size = 1000;
-  ESL_ALLOC(list->windows, list->size * sizeof(P7_MSV_WINDOW));
+  list->size = 10000;
   list->count = 0;
+  ESL_ALLOC(list->windows, list->size * sizeof(P7_MSV_WINDOW));
 
   return eslOK;
 

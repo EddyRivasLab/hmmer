@@ -801,7 +801,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
    * it isn't yet, if we're in a simple one-domain region). If it isn't,
    * do it now, by the expectation (posterior decoding) method.
    */
-  if (! null2_is_done) {
+  if (long_target || !null2_is_done) {
     p7_Null2_ByExpectation(om, ox2, null2);
     for (pos = i; pos <= j; pos++)
       ddef->n2sc[pos]  = logf(null2[sq->dsq[pos]]);
