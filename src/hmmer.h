@@ -780,7 +780,7 @@ typedef struct p7_tophits_s {
  */
 typedef struct p7_msvdata_s {
   int      M;
-  uint8_t    *scores;  //implicit M*K matrix, where M = # states, and K = # characters in alphabet
+  uint8_t    *scores;  //implicit (M+1)*K matrix, where M = # states, and K = # characters in alphabet
   uint8_t   **opt_ext_fwd;
   uint8_t   **opt_ext_rev;
   float      *prefix_lengths;
@@ -1490,6 +1490,7 @@ extern int p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPH
 extern int p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli);
 extern int p7_tophits_TabularTail(FILE *ofp, const char *progname, enum p7_pipemodes_e pipemode, 
 				  const char *qfile, const char *tfile, const ESL_GETOPTS *go);
+extern int p7_tophits_LongInserts(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int min_length);
 
 
 /* p7_trace.c */

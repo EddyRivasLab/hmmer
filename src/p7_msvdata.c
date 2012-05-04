@@ -159,7 +159,6 @@ p7_hmm_MSVDataCreate(P7_OPROFILE *om, int do_opt_ext )
   P7_MSVDATA *data = NULL;
   int    status;
 
-
   ESL_ALLOC(data, sizeof(P7_MSVDATA));
 
   data->scores         = NULL;
@@ -222,14 +221,14 @@ p7_hmm_MSVDataClone(P7_MSVDATA *src, int Kp) {
      ESL_ALLOC(new->opt_ext_fwd, (src->M + 1) * sizeof(uint8_t*));
      for (i=1; i<=src->M; i++) {
        ESL_ALLOC(new->opt_ext_fwd[i], 10 * sizeof(uint8_t));
-       memcpy(new->opt_ext_fwd[i], src->opt_ext_fwd[i], 10 * sizeof(uint8_t));
+       memcpy(new->opt_ext_fwd+i, src->opt_ext_fwd+i, 10 * sizeof(uint8_t));
      }
   }
   if (src->opt_ext_rev != NULL) {
      ESL_ALLOC(new->opt_ext_rev, (src->M + 1) * sizeof(uint8_t*));
      for (i=1; i<=src->M; i++) {
        ESL_ALLOC(new->opt_ext_rev[i], 10 * sizeof(uint8_t));
-       memcpy(new->opt_ext_rev[i], src->opt_ext_rev[i], 10 * sizeof(uint8_t));
+       memcpy(new->opt_ext_rev+i, src->opt_ext_rev+i, 10 * sizeof(uint8_t));
      }
   }
 

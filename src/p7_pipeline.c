@@ -301,8 +301,9 @@ p7_pipeline_Destroy(P7_PIPELINE *pli)
  * Purpose:   Accepts a <windowlist> of SSV diagonals, extends those
  *            to windows based on a combination of the max_length
  *            value from <om> and the prefix and suffix lengths stored
- *            in <msvdata>, then merges overlapping windows in place,
- *            ensuring that windows stay within the bounds of 1..<L>.
+ *            in <msvdata>, then merges (in place) windows that overlap
+ *            by more than <pct_overlap> percent, ensuring that windows
+ *            stay within the bounds of 1..<L>.
  *
  * Returns:   <eslOK>
  */

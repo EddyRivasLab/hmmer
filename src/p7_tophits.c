@@ -1780,6 +1780,87 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
 }
 
 
+/* Function:  p7_tophits_LongInserts()
+ * Synopsis:  Output list of long inserts for each query/hit pair
+ *
+ * Purpose:
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ *            <eslEWRITE> if a write to <ofp> fails; for example, if
+ *            the disk fills up.
+ */
+int
+p7_tophits_LongInserts(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int min_length)
+{
+  int         h,i,j,k;
+  int         insert_len;
+  int         status;
+  int qnamew = ESL_MAX(20, strlen(qname));
+  int tnamew = ESL_MAX(20, p7_tophits_GetMaxNameLength(th));
+  int qaccw  = ((qacc != NULL) ? ESL_MAX(10, strlen(qacc)) : 10);
+  int taccw  = ESL_MAX(10, p7_tophits_GetMaxAccessionLength(th));
+
+  P7_HIT *hit;
+
+  if (fprintf(ofp, "# Long inserts (at least length %d)\n# ------------\n#\n", min_length) < 0)
+    ESL_XEXCEPTION_SYS(eslEWRITE, "long insert output: write failed");
+
+  if (fprintf(ofp, "#%-*s %-*s %-*s %-*s %s %s\n",
+    tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession", "insert from", "insert to") < 0)
+    ESL_EXCEPTION_SYS(eslEWRITE, "long insert output: write failed");
+
+  if (fprintf(ofp, "#%*s %*s %*s %*s %s %s\n",
+    tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "----------", "----------") < 0)
+    ESL_EXCEPTION_SYS(eslEWRITE, "long insert output: write failed");
+
+
+  for (h = 0; h < th->N; h++) {
+    hit = th->hit[h];
+    if (hit->flags & p7_IS_REPORTED)
+    {
+      j = hit->dcl[0].ad->sqfrom;
+      k = hit->dcl[0].ad->hmmfrom;
+      insert_len = 0;
+      for (i=0; k<=hit->dcl[0].ad->hmmto && i < hit->dcl[0].ad->N; i++) {
+//        printf("%c",hit->dcl[0].ad->model[i]);
+
+        if (hit->dcl[0].ad->model[i] == '.') {
+          insert_len++;
+        } else {
+          if (insert_len >= min_length) {
+            int start = j;
+            start -= (insert_len-1) * (hit->dcl[0].ad->sqfrom < hit->dcl[0].ad->sqto ? 1 : -1 );
+            if (fprintf(ofp, "%-*s %-*s %-*s %-*s %7d %7d\n",
+                tnamew, hit->name,
+                taccw, hit->acc,
+                qnamew, qname,
+                qaccw, qacc,
+                start,
+                j
+                 ) < 0)
+              ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
+          }
+          k++;
+          insert_len = 0;
+        }
+
+        if (hit->dcl[0].ad->aseq[i] != '-') {
+          j +=   (hit->dcl[0].ad->sqfrom < hit->dcl[0].ad->sqto ? 1 : -1 );
+        }
+      }
+
+    }
+
+  }
+  return eslOK;
+
+ ERROR:
+  return status;
+}
+
+
 
 /* Function:  p7_tophits_TabularTail()
  * Synopsis:  Print a trailer on a tabular output file.
