@@ -296,7 +296,7 @@ find_simplerepeats(ESL_GETOPTS *go, FILE *ofp, P7_HMM *hmm)
   int min_repeat_cnt = 4;
   int min_rep_len = 25;
   int min_tot_len = 50;
-  float relent_thresh = 1.2;
+  float relent_thresh = 1.5;
   P7_MSV_WINDOWLIST *windowlist;
   ESL_ALLOC(windowlist, sizeof(P7_MSV_WINDOWLIST));
   fm_initWindows(windowlist);
