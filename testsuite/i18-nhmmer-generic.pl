@@ -90,7 +90,7 @@ if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 2\n";
 }
 
-$cmd = "$builddir/src/nhmmer --tformat fasta --single $tmppfx.hmm $database";
+$cmd = "$builddir/src/nhmmer --tformat fasta --toponly $tmppfx.hmm $database";
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = 

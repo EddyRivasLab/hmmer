@@ -119,8 +119,13 @@ static ESL_OPTIONS options[] = {
   { "-Z",           eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,           NULL,     "set database size (Megabases) to <x> for E-value calculations", 12 },
   { "--seed",       eslARG_INT,          "42", NULL, "n>=0",  NULL,  NULL,           NULL,     "set RNG seed to <n> (if 0: one-time arbitrary seed)",           12 },
   { "--w_beta",     eslARG_REAL,         NULL, NULL, NULL,    NULL,  NULL,           NULL,     "tail mass at which window length is determined",                12 },
-  { "--w_length",   eslARG_INT,          NULL, NULL, NULL,    NULL,  NULL,           NULL,     "window length ",                                                12 },
-  { "--single",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,           NULL,     "don't search reverse complement of database sequences ",        12 },
+  { "--w_length",   eslARG_INT,          NULL, NULL, NULL,    NULL,  NULL,           NULL,     "window length - essentially max expected hit length ",                                                12 },
+  { "--block_length", eslARG_INT,        NULL, NULL, "n>=50000", NULL, NULL,         NULL,     "length of blocks read from target database (threaded) ",        12 },
+  { "--toponly",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,   "--bottomonly",  "only search the top strand",                                    12 },
+  { "--bottomonly",  eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,      "--toponly",  "only search the bottom strand",                                    12 },
+
+
+
 /* Not used, but retained because esl option-handling code errors if it isn't kept here.  Placed in group 99 so it doesn't print to help*/
   { "--domZ",       eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "Not used",   99 },
   { "--domE",       eslARG_REAL,       "10.0", NULL, "x>0",   NULL,  NULL,  DOMREPOPTS,      "Not used",   99 },
@@ -304,7 +309,8 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--usenull3w")  && fprintf(ofp, "# windowed-null3 bias corrections: width=%d\n",       esl_opt_GetInteger(go, "--null3wlen")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 
-  if (esl_opt_IsUsed(go, "--single")     && fprintf(ofp, "# search reverse complement:       off\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--toponly")    && fprintf(ofp, "# search only top strand:          on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--bottomonly") && fprintf(ofp, "# search only bottom strand:       on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-Z")           && fprintf(ofp, "# database size is set to:         %.1f Mb\n",        esl_opt_GetReal(go, "-Z"))            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--seed"))  {
     if (esl_opt_GetInteger(go, "--seed") == 0 && fprintf(ofp, "# random number seed:              one-time arbitrary\n")                              < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -314,12 +320,15 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--tformat")    && fprintf(ofp, "# targ <seqfile> format asserted:  %s\n",             esl_opt_GetString(go, "--tformat"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--w_beta")     && fprintf(ofp, "# window length beta value:        %g\n",             esl_opt_GetReal(go, "--w_beta"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--w_length")   && fprintf(ofp, "# window length :                  %d\n",             esl_opt_GetInteger(go, "--w_length")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--block_length")&&fprintf(ofp, "# block length :                   %d\n",             esl_opt_GetInteger(go, "--block_length")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   #ifdef HMMER_THREADS
   if (esl_opt_IsUsed(go, "--cpu")        && fprintf(ofp, "# number of worker threads:        %d\n",             esl_opt_GetInteger(go, "--cpu"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 #endif
   if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   return eslOK;
 }
+
+
 
 int
 main(int argc, char **argv)
@@ -579,7 +588,20 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].om  = p7_oprofile_Clone(om);
           info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
           p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
-          info[i].pli->single_strand = esl_opt_IsUsed(go, "--single");
+
+          if (  esl_opt_IsUsed(go, "--toponly") )
+            info[i].pli->strand = p7_STRAND_TOPONLY;
+          else if (  esl_opt_IsUsed(go, "--bottomonly") )
+            info[i].pli->strand = p7_STRAND_BOTTOMONLY;
+          else
+            info[i].pli->strand = p7_STRAND_BOTH;
+
+
+          if (  esl_opt_IsUsed(go, "--block_length") )
+            info[i].pli->block_length = esl_opt_GetInteger(go, "--block_length");
+          else
+            info[i].pli->block_length = NHMMER_MAX_RESIDUE_COUNT;
+
 
           info[i].pli->show_app      = esl_opt_IsUsed(go, "--show_app");
           info[i].pli->app_hi        = esl_opt_GetReal (go, "--app_hi");
@@ -772,7 +794,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
   int      wstatus;
   int i;
   int prev_hit_cnt;
-
+  P7_DOMAIN *dcl;
   ESL_SQ   *dbsq   =  esl_sq_CreateDigital(info->om->abc);
 #ifdef eslAUGMENT_ALPHABET
   ESL_SQ   *dbsq_revcmp;
@@ -782,40 +804,41 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 
 
 
-  wstatus = esl_sqio_ReadWindow(dbfp, 0, NHMMER_MAX_RESIDUE_COUNT, dbsq);
+  wstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
 
-//  while (wstatus == eslEOD ) //skip empty sequences
-//    wstatus = esl_sqio_ReadWindow(dbfp, 0, NHMMER_MAX_RESIDUE_COUNT, dbsq);
 
 
   while (wstatus == eslOK ) {
 
       p7_pli_NewSeq(info->pli, dbsq);
-      info->pli->nres -= dbsq->C; // to account for overlapping region of windows
-      prev_hit_cnt = info->th->N;
 
-      p7_Pipeline_LongTarget(info->pli, info->om, info->msvdata, info->bg, dbsq, info->th, info->pli->nseqs);
+      if (info->pli->strand != p7_STRAND_BOTTOMONLY) {
 
-      p7_pipeline_Reuse(info->pli); // prepare for next search
+        info->pli->nres -= dbsq->C; // to account for overlapping region of windows
+        prev_hit_cnt = info->th->N;
 
+        p7_Pipeline_LongTarget(info->pli, info->om, info->msvdata, info->bg, dbsq, info->th, info->pli->nseqs);
 
-      P7_DOMAIN *dcl;
-      // modify hit positions to account for the position of the window in the full sequence
-      for (i=prev_hit_cnt; i < info->th->N ; i++) {
-          dcl = info->th->unsrt[i].dcl;
-          dcl->ienv += dbsq->start - 1;
-          dcl->jenv += dbsq->start - 1;
-          dcl->iali += dbsq->start - 1;
-          dcl->jali += dbsq->start - 1;
-          dcl->ihq  += dbsq->start - 1;
-          dcl->jhq  += dbsq->start - 1;
-          dcl->ad->sqfrom += dbsq->start - 1;
-          dcl->ad->sqto += dbsq->start - 1;
+        p7_pipeline_Reuse(info->pli); // prepare for next search
+
+        // modify hit positions to account for the position of the window in the full sequence
+        for (i=prev_hit_cnt; i < info->th->N ; i++) {
+            dcl = info->th->unsrt[i].dcl;
+            dcl->ienv += dbsq->start - 1;
+            dcl->jenv += dbsq->start - 1;
+            dcl->iali += dbsq->start - 1;
+            dcl->jali += dbsq->start - 1;
+            dcl->ihq  += dbsq->start - 1;
+            dcl->jhq  += dbsq->start - 1;
+            dcl->ad->sqfrom += dbsq->start - 1;
+            dcl->ad->sqto += dbsq->start - 1;
+        }
+      } else {
+        info->pli->nres -= dbsq->n;
       }
-
 #ifdef eslAUGMENT_ALPHABET
       //reverse complement
-      if (!info->pli->single_strand && dbsq->abc->complement != NULL )
+      if (info->pli->strand != p7_STRAND_TOPONLY && dbsq->abc->complement != NULL )
       {
           prev_hit_cnt = info->th->N;
           esl_sq_Copy(dbsq,dbsq_revcmp);
@@ -842,14 +865,11 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
       }
 #endif /*eslAUGMENT_ALPHABET*/
 
-      wstatus = esl_sqio_ReadWindow(dbfp, info->om->max_length, NHMMER_MAX_RESIDUE_COUNT, dbsq);
+      wstatus = esl_sqio_ReadWindow(dbfp, info->om->max_length, info->pli->block_length, dbsq);
       if (wstatus == eslEOD) { // no more left of this sequence ... move along to the next sequence.
           info->pli->nseqs++;
           esl_sq_Reuse(dbsq);
-          wstatus = esl_sqio_ReadWindow(dbfp, 0, NHMMER_MAX_RESIDUE_COUNT, dbsq);
-
-//          while (wstatus == eslEOD ) //skip empty sequences
-//            wstatus = esl_sqio_ReadWindow(dbfp, 0, NHMMER_MAX_RESIDUE_COUNT, dbsq);
+          wstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
 
       }
     }
@@ -917,7 +937,7 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
   while (sstatus == eslOK ) {
       block = (ESL_SQ_BLOCK *) newBlock;
 
-      sstatus = esl_sqio_ReadBlock(dbfp, block, NHMMER_MAX_RESIDUE_COUNT, TRUE);
+      sstatus = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, TRUE);
 
       block->first_seqidx = info->pli->nseqs;
       info->pli->nseqs += block->count  - (block->complete ? 0 : 1);// if there's an incomplete sequence read into the block wait to count it until it's complete.
@@ -970,7 +990,7 @@ pipeline_thread(void *arg)
   int workeridx;
   WORKER_INFO   *info;
   ESL_THREADS   *obj;
-
+  P7_DOMAIN *dcl;
   ESL_SQ_BLOCK  *block = NULL;
   void          *newBlock;
   
@@ -994,31 +1014,34 @@ pipeline_thread(void *arg)
       ESL_SQ *dbsq = block->list + i;
 
       p7_pli_NewSeq(info->pli, dbsq);
-      info->pli->nres -= dbsq->C; // to account for overlapping region of windows
 
-      prev_hit_cnt = info->th->N;
-      p7_Pipeline_LongTarget(info->pli, info->om, info->msvdata, info->bg, dbsq, info->th, block->first_seqidx + i);
-      p7_pipeline_Reuse(info->pli); // prepare for next search
+      if (info->pli->strand != p7_STRAND_BOTTOMONLY) {
+        info->pli->nres -= dbsq->C; // to account for overlapping region of windows
+
+        prev_hit_cnt = info->th->N;
+        p7_Pipeline_LongTarget(info->pli, info->om, info->msvdata, info->bg, dbsq, info->th, block->first_seqidx + i);
+        p7_pipeline_Reuse(info->pli); // prepare for next search
 
 
-      P7_DOMAIN *dcl;
-      // modify hit positions to account for the position of the window in the full sequence
-      for (j=prev_hit_cnt; j < info->th->N ; ++j) {
-          dcl = info->th->unsrt[j].dcl;
-          dcl->ienv += dbsq->start - 1;
-          dcl->jenv += dbsq->start - 1;
-          dcl->iali += dbsq->start - 1;
-          dcl->jali += dbsq->start - 1;
-          dcl->ihq  += dbsq->start - 1;
-          dcl->jhq  += dbsq->start - 1;
-          dcl->ad->sqfrom += dbsq->start - 1;
-          dcl->ad->sqto += dbsq->start - 1;
+        // modify hit positions to account for the position of the window in the full sequence
+        for (j=prev_hit_cnt; j < info->th->N ; ++j) {
+            dcl = info->th->unsrt[j].dcl;
+            dcl->ienv += dbsq->start - 1;
+            dcl->jenv += dbsq->start - 1;
+            dcl->iali += dbsq->start - 1;
+            dcl->jali += dbsq->start - 1;
+            dcl->ihq  += dbsq->start - 1;
+            dcl->jhq  += dbsq->start - 1;
+            dcl->ad->sqfrom += dbsq->start - 1;
+            dcl->ad->sqto += dbsq->start - 1;
+        }
+      } else {
+        info->pli->nres -= dbsq->n;
       }
-
 
 #ifdef eslAUGMENT_ALPHABET
       //reverse complement
-      if (!info->pli->single_strand && dbsq->abc->complement != NULL)
+      if (info->pli->strand != p7_STRAND_TOPONLY && dbsq->abc->complement != NULL)
       {
           prev_hit_cnt = info->th->N;
           esl_sq_ReverseComplement(dbsq);
