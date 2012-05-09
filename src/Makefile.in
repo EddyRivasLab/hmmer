@@ -60,7 +60,8 @@ PROGS = hmmalign\
 	hmmpgmd\
 	hmmc2\
 	makenhmmerdb\
-	exactmatch
+	exactmatch\
+	alimask
 
 
 PROGOBJS =\
