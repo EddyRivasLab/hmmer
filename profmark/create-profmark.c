@@ -24,6 +24,7 @@
 #include "esl_getopts.h"
 #include "esl_msa.h"
 #include "esl_msacluster.h"
+#include "esl_msashuffle.h"
 #include "esl_msafile.h"
 #include "esl_random.h"
 #include "esl_randomseq.h"
@@ -226,6 +227,7 @@ main(int argc, char **argv)
 	  synthesize_positives(go, &cfg, msa->name, teststack, &ntest);
 
 	  esl_msa_MinimGaps(trainmsa, NULL, NULL, FALSE);
+	  esl_msashuffle_PermuteSequenceOrder(cfg.r, trainmsa);
 	  eslx_msafile_Write(cfg.out_msafp, trainmsa, eslMSAFILE_STOCKHOLM);
 
 	  esl_dst_XAverageId(cfg.abc, trainmsa->ax, trainmsa->nseq, 10000, &avgid); /* 10000 is max_comparisons, before sampling kicks in */
