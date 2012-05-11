@@ -303,7 +303,7 @@ A driver script gets the 7 arguments as described above:
                           programs, this is nonetheless still a HMMER
 			  top-level src directory, where parser scripts
 			  and data may be found. (For example, BLAST
-			  output parsers.)
+			  output parsers: our demotic perl modules.)
 
             <resultdir> : name of the directory that temp files can
 	                  be placed in, unique to the instantiation
@@ -322,7 +322,13 @@ A driver script gets the 7 arguments as described above:
 
   <benchmark_prefix.fa> : the benchmark's positive and negative sequences;
                           this will be used as the target database for
-			  searches the driver runs.
+			  searches the driver runs. 
+
+                          As a special case (hack), iterative search
+			  benchmarks may look for related files, such
+			  as <benchmark_prefix.fa.iter>, a sequence
+			  database to iterate on first before running
+			  on <benchmark_prefix.fa>.
 
               <outfile> : a whitespace-delimited tabular output file, 
                           one line per target sequence, described below.
