@@ -22,6 +22,7 @@
 #include "esl_alphabet.h"
 #include "esl_distance.h"
 #include "esl_getopts.h"
+#include "esl_keyhash.h"
 #include "esl_msa.h"
 #include "esl_msacluster.h"
 #include "esl_msashuffle.h"
@@ -40,12 +41,14 @@ static char usage[]  = "[options] <basename> <msafile> <seqdb>\n";
 #define SHUF_OPTS "--mono,--di,--markov0,--markov1,--reverse"   /* toggle group, seq shuffling options          */
 
 static ESL_OPTIONS options[] = {
-  /* name       type        default env   range togs  reqs  incomp      help                                                   docgroup */
-  { "-h",       eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL, NULL,            "help; show brief info on version and usage",              1 },
-  { "-1",       eslARG_REAL, "0.25", NULL,"0<x<=1.0",NULL,NULL,NULL,         "require all test seqs to have < x id to training",        1 },
-  { "-2",       eslARG_REAL, "0.50", NULL,"0<x<=1.0",NULL,NULL,NULL,         "require all test seqs to have < x id to each other",      1 },
-  { "-F",       eslARG_REAL, "0.70", NULL,"0<x<=1.0",NULL,NULL,NULL,         "filter out seqs <x*average length",                       1 },
-  { "-N",       eslARG_INT,"200000", NULL, NULL, NULL, NULL, NULL,           "number of negative test seqs",                            1 },
+  /* name         type        default env   range togs  reqs  incomp      help                                                   docgroup */
+  { "-h",         eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL, NULL,            "help; show brief info on version and usage",              1 },
+  { "-1",         eslARG_REAL, "0.25", NULL,"0<x<=1.0",NULL,NULL,NULL,         "require all test seqs to have < x id to training",        1 },
+  { "-2",         eslARG_REAL, "0.50", NULL,"0<x<=1.0",NULL,NULL,NULL,         "require all test seqs to have < x id to each other",      1 },
+  { "-F",         eslARG_REAL, "0.70", NULL,"0<x<=1.0",NULL,NULL,NULL,         "filter out seqs <x*average length",                       1 },
+  { "-N",         eslARG_INT,"200000", NULL, NULL, NULL, NULL, NULL,           "number of negative test seqs",                            1 },
+  { "--maxtrain", eslARG_INT,   FALSE, NULL, NULL, NULL, NULL, NULL,           "maximum number of test domains taken per input MSA",      1 },
+  { "--maxtest",  eslARG_INT,   FALSE, NULL, NULL, NULL, NULL, NULL,           "maximum number of training domains taken per input MSA",  1 },
 
   /* Options controlling negative segment randomization method  */
   { "--mono",    eslARG_NONE,"default", NULL, NULL, SHUF_OPTS, NULL, NULL, "shuffle preserving monoresidue composition",                2 },
@@ -61,10 +64,10 @@ static ESL_OPTIONS options[] = {
   { "--rna",    eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL,"--amino,--dna",  "<msafile> contains RNA alignments",                       3 },
 
   /* Other options */
-  { "--single", eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,           "embed one, not two domains in each positive",             4 },
-  { "--minDPL", eslARG_INT,   "100", NULL, NULL, NULL, NULL, NULL,           "minimum segment length for DP shuffling",                 4 },
-  { "--seed",   eslARG_INT,     "0", NULL, NULL, NULL, NULL, NULL,           "specify random number generator seed",                    4 },
-
+  { "--single", eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,           "embed one, not two domains in each positive",                  4 },
+  { "--minDPL", eslARG_INT,   "100", NULL, NULL, NULL, NULL, NULL,           "minimum segment length for DP shuffling",                      4 },
+  { "--seed",   eslARG_INT,     "0", NULL, NULL, NULL, NULL, NULL,           "specify random number generator seed",                         4 },
+  { "--pid",    eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,           "create optional .pid file, %id's for all train/test domain pairs", 4 },
   { 0,0,0,0,0,0,0,0,0,0 },
 };
 
@@ -78,17 +81,20 @@ struct testseq_s {
 };
 
 struct cfg_s {
-  ESL_ALPHABET   *abc;          /* biological alphabet             */
-  ESL_RANDOMNESS *r;            /* random number generator         */
+  ESL_ALPHABET   *abc;          /* biological alphabet                                     */
+  ESL_RANDOMNESS *r;            /* random number generator                                 */
   double          fragfrac;	/* seqs less than x*avg length are removed from alignment  */
   double          idthresh1;	/* fractional identity threshold for train/test split      */
   double          idthresh2;	/* fractional identity threshold for selecting test seqs   */
+  int             max_ntrain;	/* maximum number of test domains per input alignment; 0=unlimited */
+  int             max_ntest;	/* maximum number of test domains per input alignment; 0=unlimited */
 
-  FILE           *out_msafp;	/* output: training MSAs  */
-  FILE           *out_seqfp;	/* output: test sequences */
-  FILE           *possummfp;    /* output: summary table of the positive test set */
-  FILE           *negsummfp;	/* output: summary table of the negative test set */
-  FILE           *tblfp;	/* output: summary table of the training set alignments */
+  FILE           *out_msafp;	/* output stream: training MSAs  */
+  FILE           *out_seqfp;	/* output stream: test sequences */
+  FILE           *possummfp;    /* output stream: summary table of the positive test set */
+  FILE           *negsummfp;	/* output stream: summary table of the negative test set */
+  FILE           *tblfp;	/* output stream: summary table of the training set alignments */
+  FILE           *pidfp;	/* optional out stream: table of pairwise %id for all train x test domain pairs */
 
   ESL_SQFILE     *dbfp;   	/* source database for negatives                           */
   int             db_nseq;	/* # of sequences in the db                                */
@@ -102,12 +108,15 @@ struct cfg_s {
 
 
 
-static int process_dbfile      (struct cfg_s *cfg, char *dbfile, int dbfmt);
-static int remove_fragments    (struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_filteredmsa, int *ret_nfrags);
-static int separate_sets       (struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack);
-static int synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STACK *teststack, int *ret_ntest);
-static int synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg);
-static int set_random_segment  (ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq, int L);
+static int  process_dbfile      (struct cfg_s *cfg, char *dbfile, int dbfmt);
+static int  remove_fragments    (struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_filteredmsa, int *ret_nfrags);
+static int  separate_sets       (struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack);
+static int  synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STACK *teststack, int *ret_ntest);
+static int  synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg);
+static int  set_random_segment  (ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq, int L);
+static void msa_select_topn(ESL_MSA **msaptr, int n);
+static void pstack_select_topn(ESL_STACK **stackptr, int n);
+static void write_pids(FILE *pidfp, ESL_MSA *origmsa, ESL_MSA *trainmsa, ESL_STACK *teststack);
 
 static void
 cmdline_failure(char *argv0, char *format, ...)
@@ -177,12 +186,14 @@ main(int argc, char **argv)
   /* Set up the configuration structure shared amongst functions here */
   if (esl_opt_IsDefault(go, "--seed"))   cfg.r = esl_randomness_CreateTimeseeded();
   else                                   cfg.r = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
-  cfg.abc       = NULL;		          /* until we open the MSA file, below */
-  cfg.fragfrac  = esl_opt_GetReal(go, "-F");
-  cfg.idthresh1 = esl_opt_GetReal(go, "-1");
-  cfg.idthresh2 = esl_opt_GetReal(go, "-2");
-  cfg.test_lens = NULL;
-  cfg.ntest     = 0;
+  cfg.abc        = NULL;		          /* until we open the MSA file, below */
+  cfg.fragfrac   = esl_opt_GetReal(go, "-F");
+  cfg.idthresh1  = esl_opt_GetReal(go, "-1");
+  cfg.idthresh2  = esl_opt_GetReal(go, "-2");
+  cfg.test_lens  = NULL;
+  cfg.ntest      = 0;
+  cfg.max_ntest  = (esl_opt_IsOn(go, "--maxtest")  ? esl_opt_GetInteger(go, "--maxtest")  : 0); 
+  cfg.max_ntrain = (esl_opt_IsOn(go, "--maxtrain") ? esl_opt_GetInteger(go, "--maxtrain") : 0); 
 
   /* Open the output files */ 
   if (snprintf(outfile, 256, "%s.msa", basename) >= 256)  esl_fatal("Failed to construct output MSA file name");
@@ -195,6 +206,10 @@ main(int argc, char **argv)
   if ((cfg.negsummfp = fopen(outfile, "w"))      == NULL) esl_fatal("Failed to open neg test set summary file %s\n", outfile);
   if (snprintf(outfile, 256, "%s.tbl", basename) >= 256)  esl_fatal("Failed to construct benchmark table file name");
   if ((cfg.tblfp     = fopen(outfile, "w"))      == NULL) esl_fatal("Failed to open benchmark table file %s\n", outfile);
+  if (esl_opt_GetBoolean(go, "--pid")) {
+    if (snprintf(outfile, 256, "%s.pid", basename) >= 256)  esl_fatal("Failed to construct %%id table file name");
+    if ((cfg.pidfp   = fopen(outfile, "w"))        == NULL) esl_fatal("Failed to open %%id table file %s\n", outfile);
+  }
 
   /* Open the MSA file, digital mode; determine alphabet */
   if      (esl_opt_GetBoolean(go, "--amino"))   cfg.abc = esl_alphabet_Create(eslAMINO);
@@ -216,18 +231,27 @@ main(int argc, char **argv)
     {
       if (status != eslOK) eslx_msafile_ReadFailure(afp, status);
       esl_msa_ConvertDegen2X(origmsa); 
+      esl_msa_Hash(origmsa);
 
       remove_fragments(&cfg, origmsa, &msa, &nfrags);
       separate_sets   (&cfg, msa, &trainmsa, &teststack);
-      ntestdom = esl_stack_ObjectCount(teststack);
 
-      if (ntestdom >= 2) 
+      if ( esl_stack_ObjectCount(teststack) >= 2) 
 	{
+	  /* randomize test domain order, and apply size limit if any */
 	  esl_stack_Shuffle(cfg.r, teststack);
+	  if (cfg.max_ntest) pstack_select_topn(&teststack, cfg.max_ntest);
+	  ntestdom =  esl_stack_ObjectCount(teststack);
+
+	  /* randomize training set alignment order, and apply size limit if any */
+	  esl_msashuffle_PermuteSequenceOrder(cfg.r, trainmsa);
+	  if (cfg.max_ntrain) msa_select_topn(&trainmsa, cfg.max_ntrain);
+	  esl_msa_MinimGaps(trainmsa, NULL, NULL, FALSE);
+	  
+	  if (esl_opt_GetBoolean(go, "--pid")) write_pids(cfg.pidfp, origmsa, trainmsa, teststack);
+
 	  synthesize_positives(go, &cfg, msa->name, teststack, &ntest);
 
-	  esl_msa_MinimGaps(trainmsa, NULL, NULL, FALSE);
-	  esl_msashuffle_PermuteSequenceOrder(cfg.r, trainmsa);
 	  eslx_msafile_Write(cfg.out_msafp, trainmsa, eslMSAFILE_STOCKHOLM);
 
 	  esl_dst_XAverageId(cfg.abc, trainmsa->ax, trainmsa->nseq, 10000, &avgid); /* 10000 is max_comparisons, before sampling kicks in */
@@ -248,6 +272,7 @@ main(int argc, char **argv)
   fclose(cfg.possummfp);
   fclose(cfg.negsummfp);
   fclose(cfg.tblfp);
+  if (cfg.pidfp) fclose(cfg.pidfp);
   esl_randomness_Destroy(cfg.r);
   esl_alphabet_Destroy(cfg.abc);
   eslx_msafile_Close(afp);
@@ -652,6 +677,77 @@ set_random_segment(ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq
   return eslOK;
 }
   
+
+static void
+msa_select_topn(ESL_MSA **msaptr, int n)
+{
+  ESL_MSA *new;
+  int     *useme;
+  int      i;
+
+  if (n >= (*msaptr)->nseq) return;
+
+  useme = malloc(sizeof(int) * (*msaptr)->nseq);
+  for (i = 0; i < n;               i++) useme[i] = TRUE;
+  for (     ; i < (*msaptr)->nseq; i++) useme[i] = FALSE;
+
+  if ( esl_msa_SequenceSubset(*msaptr, useme, &new) != eslOK) esl_fatal("esl_msa_SequenceSubset() failed");
+
+  free(useme);
+  esl_msa_Destroy(*msaptr);
+  *msaptr = new;
+  return;
+}
+
+/* select the top n test domains, to apply the --maxtest limit.
+ *    if n > size of stack, leave stack untouched and return.
+ *    stack order should first be shuffled.
+ */
+static void
+pstack_select_topn(ESL_STACK **stackptr, int n)
+{
+  ESL_STACK *new;
+  int        i;
+
+  if (n > (*stackptr)->n) return;
+  
+  new = esl_stack_PCreate();
+  for (i = n-1; i >= 0; i--)
+    esl_stack_PPush(new, (*stackptr)->pdata[i]);
+  esl_stack_Destroy(*stackptr);
+  *stackptr = new;
+  return;
+}
+  
+    
+
+static void
+write_pids(FILE *pidfp, ESL_MSA *origmsa, ESL_MSA *trainmsa, ESL_STACK *teststack)
+{
+  int     i,j;
+  double  pid;
+  int     iidx, jidx;
+
+  for (i = 0; i < trainmsa->nseq; i++)
+    {
+      if ( esl_keyhash_Lookup(origmsa->index, trainmsa->sqname[i], -1, &iidx) != eslOK)
+	esl_fatal("failed to find training seq %s in original MSA", trainmsa->sqname[i]);
+
+      for (j = 0; j < teststack->n; j++) /* traverse test seq stack without destroying/popping */
+	{
+	  ESL_SQ *sq = (ESL_SQ *) teststack->pdata[j];
+
+	  if ( esl_keyhash_Lookup(origmsa->index, sq->name, -1, &jidx) != eslOK)
+	    esl_fatal("failed to find test domain %s in original MSA", sq->name);
+
+	  esl_dst_XPairId(origmsa->abc, origmsa->ax[iidx], origmsa->ax[jidx], &pid, NULL, NULL);
+
+	  fprintf(pidfp, "%-20s %-24s %-24s %4.1f\n", origmsa->name, origmsa->sqname[iidx], origmsa->sqname[jidx], pid*100.0);
+	}
+    }
+}
+
+
 /*****************************************************************
  * @LICENSE@
  *
