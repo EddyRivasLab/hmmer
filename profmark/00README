@@ -324,17 +324,34 @@ A driver script gets the 7 arguments as described above:
                           this will be used as the target database for
 			  searches the driver runs. 
 
-                          As a special case (hack), iterative search
-			  benchmarks may look for related files, such
-			  as <benchmark_prefix.fa.iter>, a sequence
-			  database to iterate on first before running
-			  on <benchmark_prefix.fa>.
+                          As a special case (i.e. hack), iterative
+			  search benchmarks may look for related
+			  files, such as <benchmark_prefix.fa.iter>, a
+			  sequence database to iterate on first before
+			  running on <benchmark_prefix.fa>.
 
               <outfile> : a whitespace-delimited tabular output file, 
                           one line per target sequence, described below.
 
 Using <top_builddir> and <top_srcdir> allows us to easily construct
 regression tests of different HMMER versions and/or configurations.
+
+Why the BEGIN {} clause: you'll see a BEGIN {} clause wrapping cmdline
+argument parsing on many of the x- scripts. That's a trick that goes
+with "use lib ${top_srcdir}/easel/demotic", where we need the demotic
+library included, but we don't know where it is until we get
+${top_srcdir} from the cmdline, so we defer the 'use lib'.
+
+Error handling: why don't these scripts call die() on errors? That's
+deliberate. If a step fails, the script prints an error message and
+skips to the next query, without cleaning up any tmp files from the
+failed query.  Thus we continue collecting data from as much of the
+.tbl file of queries as possible, while saving tmp files that we'll
+need for debugging later. If you have the x- script fail w/ a fatal
+error, it will stop in the middle of a tbl file, which unnecessarily
+compromises the completeness of a benchmark (say, if one piddly query
+out of 10000 fails, there's no reason to bring down the whole
+benchmark).
 
 
 ================================================================

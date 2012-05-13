@@ -209,7 +209,7 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "--pid")) {
     if (snprintf(outfile, 256, "%s.pid", basename) >= 256)  esl_fatal("Failed to construct %%id table file name");
     if ((cfg.pidfp   = fopen(outfile, "w"))        == NULL) esl_fatal("Failed to open %%id table file %s\n", outfile);
-  }
+  } else cfg.pidfp   = NULL;
 
   /* Open the MSA file, digital mode; determine alphabet */
   if      (esl_opt_GetBoolean(go, "--amino"))   cfg.abc = esl_alphabet_Create(eslAMINO);
