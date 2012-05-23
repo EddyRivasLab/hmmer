@@ -47,7 +47,7 @@ p7_tophits_Create(void)
   h->nreported = 0;
   h->nincluded = 0;
   h->is_sorted_by_sortkey = TRUE; /* but only because there's 0 hits */
-  h->is_sorted_by_seqidx  = TRUE; /* but only because there's 0 hits */
+  h->is_sorted_by_seqidx  = FALSE;
   h->hit[0]    = h->unsrt;        /* if you're going to call it "sorted" when it contains just one hit, you need this */
   return h;
 
@@ -550,8 +550,8 @@ p7_tophits_Reuse(P7_TOPHITS *h)
     }
   }
   h->N         = 0;
-  h->is_sorted_by_seqidx = TRUE;
-  h->is_sorted_by_sortkey = TRUE;
+  h->is_sorted_by_seqidx = FALSE;
+  h->is_sorted_by_sortkey = TRUE;  /* because there are 0 hits */
   h->hit[0]    = h->unsrt;
   return eslOK;
 }
@@ -697,28 +697,25 @@ int
 p7_tophits_RemoveDuplicates(P7_TOPHITS *th)
 {
   int     i;    /* counter over hits */
+  int     j;    /* previous un-duplicated hit */
   int     s_i, s_j, e_i, e_j, dir_i, dir_j, len_i, len_j;
   int64_t sub_i, sub_j;
   double  p_i, p_j;
+  int remove;
 
   if (th->N<2) return eslOK;
 
-  //s_i and e_i are the start and end of a window, regardless of orientation
-  sub_i = th->hit[0]->subseq_start;
-  p_i = th->hit[0]->lnP;
-  s_i = th->hit[0]->dcl[0].iali;
-  e_i = th->hit[0]->dcl[0].jali;
-  dir_i = (s_i < e_i ? 1 : -1);
-  len_i = 1 + dir_i * (e_i - s_i) ;
-
+  j=0;
   for (i = 1; i < th->N; i++)
   {
-      sub_j = sub_i;
-      p_j   = p_i;
-      s_j   = s_i;
-      e_j   = e_i;
-      dir_j = dir_i;
-      len_j = len_i;
+
+      sub_j = th->hit[j]->subseq_start;
+      p_j = th->hit[j]->lnP;
+      s_j = th->hit[j]->dcl[0].iali;
+      e_j = th->hit[j]->dcl[0].jali;
+      dir_j = (s_j < e_j ? 1 : -1);
+      len_j = 1 + dir_j * (e_j - s_j) ;
+
 
       sub_i = th->hit[i]->subseq_start;
       p_i = th->hit[i]->lnP;
@@ -731,19 +728,37 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th)
          //  sub_i != sub_j && // not from the same subsequence ... if they are, then domaindef already split them up
            dir_i == dir_j && // only bother removing if the overlapping hits are on the same strand
            (
-               ( s_i >= s_j-2 && s_i <= s_j+2) ||  // at least one side is essentially flush (
-               ( e_i >= e_j-2 && e_i <= e_j+2)
+               ( s_i >= s_j-3 && s_i <= s_j+3) ||  // at least one side is essentially flush (
+               ( e_i >= e_j-3 && e_i <= e_j+3)
            )
       )
       {
-        //force one to go unreported
-        int offset = 0; // 1 := keep i,  0 := keep i-1
-        if (s_i==s_j && e_i==e_j) // if same length, choose the one with lower p-value (they should be roughly the same)
-          offset = p_i < p_j ? 1 : 0;
-        else // otherwise remove the shorter one (assume that one was cut short by the end of a segment
-          offset = len_i > len_j ? 1 : 0;
+        /* Force one to go unreported.  I prefer to keep the one with the
+         * better e-value.  This addresses two issues
+         * (1) longer hits sometimes encounter higher bias corrections,
+         *     leading to lower scores; seems better to focus on the
+         *     high-scoring heart of the alignment, if we have a
+         *     choice
+         * (2) it is possible that a lower-scoring longer hit (see #1)
+         *     that is close to threshold will pass the pipeline in
+         *     one condition and not the other (e.g. --toponly, or
+         *     single vs multi threaded), and if longer hits obscure
+         *     shorter higher-scoring ones, a shorter "hit" might be
+         *     lost by being obscured by a longer one that is subsequently
+         *     removed due to insufficient score.
+         * see late notes in ~wheelert/notebook/2012/0518-dfam-scripts/00NOTES
+        */
+        //remove = 0; // 1 := keep i,  0 := keep i-1
+        //if (s_i==s_j && e_i==e_j) // if same length, choose the one with lower p-value (they should be roughly the same)
+          remove = p_i < p_j ? j : i;
+        //else // otherwise remove the shorter one (assume that one was cut short by the end of a segment
+        //  remove = len_i > len_j ? j : i;
 
-        th->hit[i-offset]->flags |= p7_IS_DUPLICATE;
+        th->hit[remove]->flags |= p7_IS_DUPLICATE;
+
+        j = remove == j ? i : j;
+      } else {
+        j = i;
       }
   }
   return eslOK;
@@ -1641,35 +1656,37 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
   int         h,d;
   int         status;
 
+
   if (pli->long_targets) 
   {
       if (fprintf(ofp, "# Hit scores\n# ----------\n#\n") < 0)
         ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
-      if (fprintf(ofp, "# %-*s %6s %9s %5s  %s  %s %6s %*s %*s %*s %*s %*s %*s   %s\n",
-      tnamew-1, "name", " bits", "  E-value", " bias", "hmm-st", "hmm-en", "strand", posw, "ali-st", posw, "ali-en", posw, "env-st", posw, "env-en", posw, "hq-st", posw, "hq-en", "description of target") < 0)
+      if (fprintf(ofp, "# %-*s %6s %9s %5s  %s  %s %6s %*s %*s %*s %*s %*s %*s %*s   %s\n",
+      tnamew-1, "name", " bits", "  E-value", " bias", "hmm-st", "hmm-en", "strand", posw, "ali-st", posw, "ali-en", posw, "env-st", posw, "env-en", posw, "hq-st", posw, "hq-en", posw, "sq-len", "description of target") < 0)
         ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
-      if (fprintf(ofp, "# %*s %6s %9s %5s %s %s %6s %*s %*s %*s %*s %*s %*s   %s\n",
-      tnamew-1, "-------------------",  "------",  "---------", "-----", "-------", "-------", "------", posw, "-------", posw, "-------",  posw, "-------", posw, "-------", posw, "-------", posw, "-------", "---------------------") < 0)
+      if (fprintf(ofp, "# %*s %6s %9s %5s %s %s %6s %*s %*s %*s %*s %*s %*s %*s   %s\n",
+      tnamew-1, "-------------------",  "------",  "---------", "-----", "-------", "-------", "------", posw, "-------", posw, "-------",  posw, "-------", posw, "-------", posw, "-------", posw, "-------", posw, "-------", "---------------------") < 0)
         ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
 
       for (h = 0; h < th->N; h++) 
         if (th->hit[h]->flags & p7_IS_REPORTED)
         {
-            d    = th->hit[h]->best_domain;
-            if (fprintf(ofp, "%-*s  %6.1f %9.2g %5.1f %7d %7d %s %*d %*d %*d %*d %*d %*d   %s\n",
+            //d    = th->hit[h]->best_domain;
+            if (fprintf(ofp, "%-*s  %6.1f %9.2g %5.1f %7d %7d %s %*d %*d %*d %*d %*d %*d %*ld   %s\n",
             tnamew, th->hit[h]->name,
             th->hit[h]->score,
             exp(th->hit[h]->lnP),
-            th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
-            th->hit[h]->dcl[d].ad->hmmfrom,
-            th->hit[h]->dcl[d].ad->hmmto,
-            (th->hit[h]->dcl[d].iali < th->hit[h]->dcl[d].jali ? "   +  "  :  "   -  "),
-            posw, th->hit[h]->dcl[d].iali,
-            posw, th->hit[h]->dcl[d].jali,
-            posw, th->hit[h]->dcl[d].ienv,
-            posw, th->hit[h]->dcl[d].jenv,
-            posw, th->hit[h]->dcl[d].ihq,
-            posw, th->hit[h]->dcl[d].jhq,
+            th->hit[h]->dcl[0].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
+            th->hit[h]->dcl[0].ad->hmmfrom,
+            th->hit[h]->dcl[0].ad->hmmto,
+            (th->hit[h]->dcl[0].iali < th->hit[h]->dcl[0].jali ? "   +  "  :  "   -  "),
+            posw, th->hit[h]->dcl[0].iali,
+            posw, th->hit[h]->dcl[0].jali,
+            posw, th->hit[h]->dcl[0].ienv,
+            posw, th->hit[h]->dcl[0].jenv,
+            posw, th->hit[h]->dcl[0].ihq,
+            posw, th->hit[h]->dcl[0].jhq,
+            posw, th->hit[h]->dcl[0].ad->L,
             th->hit[h]->desc == NULL ?  "-" : th->hit[h]->desc) < 0)
               ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
         }

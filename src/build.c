@@ -190,7 +190,7 @@ p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_BUILDER *bld, P7_HMM **ret_hmm
    * trace counting) and sets up ret_hmm and opt_tr.
    */
   if ((status = matassign2hmm(msa, matassign, ret_hmm, opt_tr)) != eslOK) {
-    fprintf (stderr, "invalid hmm haircut start/end positions\n");
+    fprintf (stderr, "hmm construction error during trace counting\n");
     goto ERROR;
   }
 
@@ -297,6 +297,7 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***opt_tr
     if (tr[idx] == NULL) continue; /* skip rare examples of empty sequences */
     if ((status = p7_trace_Count(hmm, msa->ax[idx], msa->wgt[idx], tr[idx])) != eslOK) goto ERROR;
   }
+
   hmm->nseq     = msa->nseq;
   hmm->eff_nseq = msa->nseq;
 

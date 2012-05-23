@@ -345,7 +345,7 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_MSVDATA *msvdata, P7_MSV
 //    if (curr_window->n <= prev_window->n + prev_window->length ) {
       //merge windows
       if (  curr_window->n + curr_window->length >  prev_window->n + prev_window->length )
-        prev_window->length = curr_window->n + curr_window->length - prev_window->n;
+        prev_window->length = curr_window->n + curr_window->length - prev_window->n;  //+1, -1 factored out
 
     } else {
       new_hit_cnt++;
@@ -973,9 +973,9 @@ postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS 
   if ((status = esl_sq_SetDesc     (tmpseq, seq_desc))   != eslOK) goto ERROR;
   if ((status = esl_sq_GrowTo      (tmpseq, window_len)) != eslOK) goto ERROR;
   tmpseq->n = window_len;
-  memcpy((void*)(tmpseq->dsq), subseq, (window_len+1) * sizeof(uint8_t) ); // len+1 to account for the 0 position plus len others
-  tmpseq->dsq[window_len+1]= eslDSQ_SENTINEL;
 
+  if ((status = esl_abc_dsqcpy(subseq, window_len, tmpseq->dsq)) != eslOK) goto ERROR;
+  tmpseq->dsq[window_len+1]= eslDSQ_SENTINEL;
 
   /* Now a Backwards parser pass, and hand it to domain definition workflow
    * In this case "domains" will end up being translated as independent "hits" */
@@ -1017,6 +1017,8 @@ postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS 
       bitscore += 2 * log(2. / (om->max_length+2)) ;
       //the ESL_MAX test handles the extremely rare case that the env_len is actually larger than om->max_length
       bitscore +=  (ESL_MAX(om->max_length, env_len) - ali_len) * log((float)om->max_length / (float) (om->max_length+2));
+
+
 
       /*compute scores used to decide if we should keep this "domain" as a hit.
        *
@@ -1240,7 +1242,7 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   for (i=0; i<vit_windowlist->count; i++) {
 
       if (vit_windowlist->windows[i].length > max_window_len) {
-         fprintf(stderr, "shockingly long window (%d, %d)\n", vit_windowlist->windows[i].n, vit_windowlist->windows[i].length);
+         //fprintf(stderr, "shockingly long window (%d, %d)\n", vit_windowlist->windows[i].n, vit_windowlist->windows[i].length);
 
          //modify the current window to restrict length to 40K, then add
          //new windows with max length 40K, and MAXL overlap w/ preceding window
@@ -1266,7 +1268,8 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
     postViterbi_LongTarget(pli, om, bg, hitlist, seqidx,
         window_start+vit_windowlist->windows[i].n-1, vit_windowlist->windows[i].length, tmpseq,
         ddef_app, subseq + vit_windowlist->windows[i].n - 1,
-        seq_start, seq_name, seq_source, seq_acc, seq_desc, complementarity, &overlap);
+        seq_start, seq_name, seq_source, seq_acc, seq_desc, complementarity, &overlap
+    );
 
     if (overlap == -1 && i<vit_windowlist->count-1) {
       overlap = ESL_MAX(0,  vit_windowlist->windows[i].n + vit_windowlist->windows[i].length - vit_windowlist->windows[i+1].n );
@@ -1335,6 +1338,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
   P7_DOMAINDEF     *ddef_app = NULL ;
   P7_MSV_WINDOWLIST msv_windowlist;
   P7_MSV_WINDOWLIST vit_windowlist;
+
 
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
@@ -1431,7 +1435,10 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
       pli->pos_past_msv += window_len;
 
       status = postMSV_LongTarget(pli, om, bg, hitlist, msvdata, seqidx, msv_windowlist.windows[i].n, window_len, tmpseq, ddef_app,
-                        subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc, fm_nocomplement, &vit_windowlist);
+                        subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc, fm_nocomplement, &vit_windowlist
+      );
+
+
 
       if (status != eslOK) goto ERROR;
 
@@ -1545,7 +1552,8 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
     status = postMSV_LongTarget(pli, om, bg, hitlist, msvdata, seqidx, window.n, window.length, tmpseq, ddef_app,
                       subseq, 1, seqdata[window.id].name, seqdata[window.id].source,
                       seqdata[window.id].acc, seqdata[window.id].desc,
-                      window.null_sc, window.score, window.complementarity, NULL);
+                      window.null_sc, window.score, window.complementarity, NULL
+                      );
 
     if (status != eslOK) return status;
 

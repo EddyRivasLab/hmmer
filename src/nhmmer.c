@@ -32,7 +32,9 @@
 #include "esl_vectorops.h"
 #define NHMMER_MAX_RESIDUE_COUNT (1024 * 100)
 #else
-#define NHMMER_MAX_RESIDUE_COUNT MAX_RESIDUE_COUNT   /*from esl_sqio_(ascii|ncbi).c*/
+//#define NHMMER_MAX_RESIDUE_COUNT MAX_RESIDUE_COUNT   /*from esl_sqio_(ascii|ncbi).c*/
+//#define NHMMER_MAX_RESIDUE_COUNT (300000)  /* 1/4 Mb */
+#define NHMMER_MAX_RESIDUE_COUNT (1024 * 1024)
 #endif
 
 typedef struct {
@@ -46,6 +48,23 @@ typedef struct {
   FM_CFG           *fm_cfg;      /* global data for FM-index for fast MSV */
   P7_MSVDATA       *msvdata;     /* hmm-specific data for FM-index for fast MSV */
 } WORKER_INFO;
+
+typedef struct {
+  int    id;         /* internal sequence ID  */
+  int    length;     /* length of sequence */
+} ID_LENGTH;
+
+typedef struct {
+  ID_LENGTH  *id_lengths;
+  int        count;
+  int        size;
+} ID_LENGTH_LIST;
+
+
+static ID_LENGTH_LIST* init_id_length( int size );
+static void            destroy_id_length( ID_LENGTH_LIST *list );
+static int             add_id_length(ID_LENGTH_LIST *list, int id, int L);
+static int             assign_Lengths(P7_TOPHITS *th, ID_LENGTH_LIST *id_length_list);
 
 #define REPOPTS     "-E,-T,--cut_ga,--cut_nc,--cut_tc"
 #define DOMREPOPTS  "--domE,--domT,--cut_ga,--cut_nc,--cut_tc"
@@ -165,13 +184,13 @@ static char banner[] = "search a DNA model against a DNA database";
 
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
-static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp);
-static int  serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp);
+static int  serial_loop  (WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp);
+static int  serial_loop_FM(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp);
 
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
 
-static int  thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
+static int  thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
 static void pipeline_thread(void *arg);
 #endif /*HMMER_THREADS*/
 
@@ -395,6 +414,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              sstatus  = eslOK;
   int              i;
 
+  /* used to keep track of the lengths of the sequences that are processed */
+  ID_LENGTH_LIST  *id_length_list = NULL;
 
 
   /* these variables are only used if db type is FM-index*/
@@ -619,15 +640,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
       }
 
+      /* establish the id_lengths data structutre */
+      id_length_list = init_id_length(100);
 
 
 #ifdef HMMER_THREADS
       if (dbformat == eslSQFILE_FMINDEX) {
-        if (ncpus > 0)  sstatus = thread_loop(info, threadObj, queue, dbfp);
-        else            sstatus = serial_loop_FM(info, dbfp);
+        if (ncpus > 0)  sstatus = thread_loop(info, id_length_list, threadObj, queue, dbfp);
+        else            sstatus = serial_loop_FM(info, id_length_list, dbfp);
       } else {
-        if (ncpus > 0)  sstatus = thread_loop(info, threadObj, queue, dbfp);
-        else            sstatus = serial_loop(info, dbfp);
+        if (ncpus > 0)  sstatus = thread_loop(info, id_length_list, threadObj, queue, dbfp);
+        else            sstatus = serial_loop(info, id_length_list, dbfp);
       }
 #else
       if (dbformat == eslSQFILE_FMINDEX)
@@ -671,12 +694,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           p7_pipeline_Destroy(info[i].pli);
           p7_tophits_Destroy(info[i].th);
           p7_oprofile_Destroy(info[i].om);
-          p7_hmm_MSVDataDestroy(info[i].msvdata);
       }
+
 
 
       /* Print the results.  */
       p7_tophits_SortBySeqidx(info->th);
+      assign_Lengths(info->th, id_length_list);
       p7_tophits_RemoveDuplicates(info->th);
 
       p7_tophits_SortBySortkey(info->th);
@@ -721,6 +745,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           esl_msa_Destroy(msa);
       }
 
+      for (i = 0; i < infocnt; ++i)
+              p7_hmm_MSVDataDestroy(info[i].msvdata);
+
       p7_hmm_MSVDataDestroy(msvdata);
 
       p7_pipeline_Destroy(info->pli);
@@ -729,6 +756,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_oprofile_Destroy(om);
       p7_profile_Destroy(gm);
       p7_hmm_Destroy(hmm);
+      destroy_id_length(id_length_list);
 
       qhstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
   } /* end outer loop over query HMMs */
@@ -788,12 +816,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 //TODO: MPI code needs to be added here
 static int
-serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
+serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
 {
 
   int      wstatus;
   int i;
   int prev_hit_cnt;
+  int seq_id = 0;
   P7_DOMAIN *dcl;
   ESL_SQ   *dbsq   =  esl_sq_CreateDigital(info->om->abc);
 #ifdef eslAUGMENT_ALPHABET
@@ -803,12 +832,11 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 #endif /*eslAUGMENT_ALPHABET*/
 
 
-
   wstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
 
 
-
   while (wstatus == eslOK ) {
+      dbsq->idx = seq_id;
 
       p7_pli_NewSeq(info->pli, dbsq);
 
@@ -867,9 +895,13 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 
       wstatus = esl_sqio_ReadWindow(dbfp, info->om->max_length, info->pli->block_length, dbsq);
       if (wstatus == eslEOD) { // no more left of this sequence ... move along to the next sequence.
+          add_id_length(id_length_list, dbsq->idx, dbsq->L);
+
           info->pli->nseqs++;
           esl_sq_Reuse(dbsq);
           wstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
+
+          seq_id++;
 
       }
     }
@@ -881,7 +913,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 }
 
 static int
-serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp)
+serial_loop_FM(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
 {
 
   int      wstatus = eslOK;
@@ -916,14 +948,16 @@ serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp)
 
 #ifdef HMMER_THREADS
 static int
-thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
+thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
 {
 
+  int i;
   int          status  = eslOK;
   int          sstatus = eslOK;
   int          eofCount = 0;
   ESL_SQ_BLOCK *block;
   void         *newBlock;
+  int          seqid = -1;
 
   esl_workqueue_Reset(queue);
   esl_threads_WaitForStart(obj);
@@ -939,8 +973,19 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
 
       sstatus = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, TRUE);
 
+
       block->first_seqidx = info->pli->nseqs;
       info->pli->nseqs += block->count  - (block->complete ? 0 : 1);// if there's an incomplete sequence read into the block wait to count it until it's complete.
+
+
+      seqid = block->first_seqidx;
+      for (i=0; i<block->count; i++) {
+        block->list[i].idx = seqid;
+        add_id_length(id_length_list, seqid, block->list[i].L);
+        seqid++;
+      }
+
+
       if (sstatus == eslEOF) {
           if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
           ++eofCount;
@@ -1082,7 +1127,81 @@ pipeline_thread(void *arg)
   return;
 }
 #endif   /* HMMER_THREADS */
+
+
+
+/* helper functions for tracking id_lengths */
+
+static ID_LENGTH_LIST *
+init_id_length( int size )
+{
+  int status;
+  ID_LENGTH_LIST *list;
+
+  ESL_ALLOC (list, sizeof(ID_LENGTH_LIST));
+  list->count = 0;
+  list->size  = size;
+  list->id_lengths = NULL;
+
+  ESL_ALLOC (list->id_lengths, size * sizeof(ID_LENGTH));
+
+  return list;
+
+ERROR:
+  return NULL;
+}
+
+static void
+destroy_id_length( ID_LENGTH_LIST *list )
+{
+
+  if (list != NULL) {
+    if (list->id_lengths != NULL) free (list->id_lengths);
+    free (list);
+  }
+
+}
+
+
+static int
+add_id_length(ID_LENGTH_LIST *list, int id, int L)
+{
+   int status;
+
+   if (list->count > 0 && list->id_lengths[list->count-1].id == id) {
+     // the last time this gets updated, it'll have the sequence's actual length
+     list->id_lengths[list->count-1].length = L;
+   } else {
+
+     if (list->count == list->size) {
+       list->size *= 10;
+       ESL_REALLOC(list->id_lengths, list->size);
+     }
+     list->id_lengths[list->count].id     = id;
+     list->id_lengths[list->count].length = L;
+
+     list->count++;
+   }
+   return eslOK;
+
+ERROR:
+   return status;
+}
  
+static int
+assign_Lengths(P7_TOPHITS *th, ID_LENGTH_LIST *id_length_list) {
+
+  int i;
+  int j = 0;
+
+  for (i=0; i<th->N; i++) {
+    while (th->hit[i]->seqidx != id_length_list->id_lengths[j].id) { j++;   }
+    th->hit[i]->dcl[0].ad->L = id_length_list->id_lengths[j].length;
+  }
+
+  return eslOK;
+
+}
 
 /*****************************************************************
  * @LICENSE@
