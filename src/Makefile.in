@@ -44,11 +44,14 @@ MYINCDIRS = -I../${ESLDIR} \
 	    -I${srcdir}
 
 
-PROGS = hmmalign\
+PROGS = alimask\
+	exactmatch\
+	hmmalign\
 	hmmbuild\
 	hmmconvert\
 	hmmemit\
 	hmmfetch\
+	hmmlogo\
 	hmmpress\
 	hmmscan\
 	hmmsearch\
@@ -59,17 +62,17 @@ PROGS = hmmalign\
 	nhmmer\
 	hmmpgmd\
 	hmmc2\
-	makenhmmerdb\
-	exactmatch\
-	alimask
+	makenhmmerdb
 
 
 PROGOBJS =\
+	exactmatch.o\
 	hmmalign.o\
 	hmmbuild.o\
 	hmmconvert.o\
 	hmmemit.o\
 	hmmfetch.o\
+	hmmlogo.o\
 	hmmpress.o\
 	hmmscan.o\
 	hmmsearch.o\
@@ -81,7 +84,6 @@ PROGOBJS =\
 	hmmpgmd.o\
 	hmmc2.o\
 	makenhmmerdb.o\
-	exactmatch.o
 
 HDRS =  hmmer.h \
 	cachedb.h \
