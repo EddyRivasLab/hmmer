@@ -32,9 +32,7 @@
 #include "esl_vectorops.h"
 #define NHMMER_MAX_RESIDUE_COUNT (1024 * 100)
 #else
-//#define NHMMER_MAX_RESIDUE_COUNT MAX_RESIDUE_COUNT   /*from esl_sqio_(ascii|ncbi).c*/
-//#define NHMMER_MAX_RESIDUE_COUNT (300000)  /* 1/4 Mb */
-#define NHMMER_MAX_RESIDUE_COUNT (1024 * 1024)
+#define NHMMER_MAX_RESIDUE_COUNT (1024 * 256)  /* 1/4 Mb */
 #endif
 
 typedef struct {
