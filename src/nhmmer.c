@@ -27,7 +27,7 @@
 #include "hmmer.h"
 
 
-/* set the max residue count to 1 meg when reading a block */
+/* set the max residue count to 1/4 meg when reading a block */
 #ifdef P7_IMPL_DUMMY_INCLUDED
 #include "esl_vectorops.h"
 #define NHMMER_MAX_RESIDUE_COUNT (1024 * 100)
@@ -639,7 +639,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       }
 
       /* establish the id_lengths data structutre */
-      id_length_list = init_id_length(100);
+      id_length_list = init_id_length(1000);
 
 
 #ifdef HMMER_THREADS
@@ -1173,8 +1173,9 @@ add_id_length(ID_LENGTH_LIST *list, int id, int L)
 
      if (list->count == list->size) {
        list->size *= 10;
-       ESL_REALLOC(list->id_lengths, list->size);
+       ESL_REALLOC(list->id_lengths, list->size * sizeof(ID_LENGTH));
      }
+
      list->id_lengths[list->count].id     = id;
      list->id_lengths[list->count].length = L;
 

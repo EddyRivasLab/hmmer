@@ -49,7 +49,7 @@ hmmlogo_emissionHeightsDivRelent (P7_HMM *hmm, P7_BG *bg, float *rel_ents, float
     }
 
   }
-
+  return eslOK;
 }
 
 
@@ -86,7 +86,7 @@ hmmlogo_posScoreHeightsDivRelent (P7_HMM *hmm, P7_BG *bg, float *rel_ents, float
     }
 
   }
-
+  return eslOK;
 }
 
 /* assumes heights is allocated with hmm->M floats*/
@@ -112,7 +112,7 @@ hmmlogo_ScoreHeights (P7_HMM *hmm, P7_BG *bg, float **heights ) {
     }
 
   }
-
+  return eslOK;
 }
 
 
@@ -127,7 +127,7 @@ hmmlogo_IndelValues (P7_HMM *hmm, float *insert_P, float *insert_expL, float *de
     insert_expL[i] =  1 / (1 - hmm->t[i][p7H_II]) ;          //expected length of the insert, if it happens
     delete_P[i] = hmm->t[i-1][p7H_MD] + hmm->t[i-1][p7H_DD]; //probability of missing this state, either due to DD or MD from previous position
   }
-
+  return eslOK;
 }
 
 
