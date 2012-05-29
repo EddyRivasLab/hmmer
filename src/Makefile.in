@@ -110,6 +110,7 @@ OBJS =  build.o\
 	generic_vtrace.o\
 	h2_io.o\
 	heatmap.o\
+	hmmlogo.o\
 	hmmdmstr.o\
 	hmmdwrkr.o\
 	hmmdutils.o\
