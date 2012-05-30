@@ -123,9 +123,9 @@ hmmlogo_IndelValues (P7_HMM *hmm, float *insert_P, float *insert_expL, float *de
   int    i;
 
   for (i = 1; i <= hmm->M; i++) {
-    insert_P[i] = hmm->t[i][p7H_MI];                         //probability of inserting after this match
-    insert_expL[i] =  1 / (1 - hmm->t[i][p7H_II]) ;          //expected length of the insert, if it happens
-    delete_P[i] = hmm->t[i-1][p7H_MD] + hmm->t[i-1][p7H_DD]; //probability of missing this state, either due to DD or MD from previous position
+    if (insert_P != NULL)    insert_P[i] = hmm->t[i][p7H_MI];                         //probability of inserting after this match
+    if (insert_expL != NULL) insert_expL[i] =  1 / (1 - hmm->t[i][p7H_II]) ;          //expected length of the insert, if it happens
+    if (delete_P != NULL)    delete_P[i] = hmm->t[i-1][p7H_MD] + hmm->t[i-1][p7H_DD]; //probability of missing this state, either due to DD or MD from previous position
   }
   return eslOK;
 }
@@ -265,12 +265,24 @@ main(int argc, char **argv)
     ESL_ALLOC(del_P, (hmm->M+1) * sizeof(float));
 
     hmmlogo_IndelValues(hmm, ins_P, ins_expL, del_P);
+//    hmmlogo_IndelValues(hmm, ins_P, NULL, NULL);
 
     printf ("Indel values\n");
     for (i = 1; i <= hmm->M; i++)
       printf("%d: %6.3f %6.3f %6.3f\n", i, ins_P[i], ins_expL[i], del_P[i] );
+      //printf("%d: %6.3f\n", i, ins_P[i] );
+
+    free(ins_P);
+    free(ins_expL);
+    free(del_P);
 
   }
+
+
+  p7_hmmfile_Close(hfp);
+  esl_alphabet_Destroy(abc);
+  p7_bg_Destroy(bg);
+
 
   exit(0);
 
@@ -282,6 +294,14 @@ main(int argc, char **argv)
       if (heights[i] != NULL) free(heights[i]);
     free(heights);
   }
+  if (hfp != NULL) p7_hmmfile_Close(hfp);
+  if (abc != NULL) esl_alphabet_Destroy(abc);
+
+
+  if (ins_P != NULL)    free(ins_P);
+  if (ins_expL != NULL) free(ins_expL);
+  if (del_P != NULL)    free(del_P);
+
 
 }
 

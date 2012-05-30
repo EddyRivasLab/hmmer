@@ -1181,13 +1181,13 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 
       if (pli->long_targets) {
         /* The dna hit table is 119 char wide:
-    score  bias    Evalue hmmfrom  hmm to     alifrom    ali to      envfrom    env to       hqfrom     hq to     acc
-   ------ ----- --------- ------- -------    --------- ---------    --------- ---------    --------- ---------    ----
- !   82.7 104.4   4.9e-22     782     998 .. 241981174 241980968 .. 241981174 241980966 .. 241981174 241980968    0.78
+    score  bias    Evalue hmmfrom  hmm to     alifrom    ali to      envfrom    env to       hqfrom     hq to   sq len      acc
+   ------ ----- --------- ------- -------    --------- ---------    --------- ---------    --------- --------- ---------    ----
+ !   82.7 104.4   4.9e-22     782     998 .. 241981174 241980968 .. 241981174 241980966 .. 241981174 241980968 234234233   0.78
         */
-        if (fprintf(ofp, "   %6s %5s %9s %9s %9s %2s %9s %9s %2s %9s %9s %2s %9s %9s %2s %4s\n",  "score",  "bias",  "  Evalue", "hmmfrom",  "hmm to", "  ", " alifrom ",  " ali to ", "  ",  " envfrom ",  " env to ", "  ", " hqfrom ",  "  hq to  ", "  ",  "acc")  < 0)
+        if (fprintf(ofp, "   %6s %5s %9s %9s %9s %2s %9s %9s %2s %9s %9s %2s %9s %9s %9s %2s %4s\n",  "score",  "bias",  "  Evalue", "hmmfrom",  "hmm to", "  ", " alifrom ",  " ali to ", "  ",  " envfrom ",  " env to ", "  ", " hqfrom ",  "  hq to  ", "  sq len ", "  ",  "acc")  < 0)
           ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-        if (fprintf(ofp, "   %6s %5s %9s %9s %9s %2s %9s %9s %2s %9s %9s %2s %9s %9s %2s %4s\n",  "------", "-----", "---------", "-------", "-------", "  ", "---------", "---------", "  ", "---------", "---------", "  ", "---------", "---------", "  ", "----") < 0)
+        if (fprintf(ofp, "   %6s %5s %9s %9s %9s %2s %9s %9s %2s %9s %9s %2s %9s %9s %9s %2s %4s\n",  "------", "-----", "---------", "-------", "-------", "  ", "---------", "---------", "  ", "---------", "---------", "  ", "---------", "---------", "---------", "  ", "----") < 0)
           ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
       } else {
 
@@ -1212,7 +1212,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
             if (pli->long_targets)
             {
 
-               if (fprintf(ofp, " %c %6.1f %5.1f %9.2g %9d %9d %c%c %9ld %9ld %c%c %9d %9d %c%c %9d %9d    %4.2f\n",
+               if (fprintf(ofp, " %c %6.1f %5.1f %9.2g %9d %9d %c%c %9ld %9ld %c%c %9d %9d %c%c %9d %9d %9ld    %4.2f\n",
                     //nd,
                     th->hit[h]->dcl[d].is_included ? '!' : '?',
                     th->hit[h]->dcl[d].bitscore,
@@ -1232,6 +1232,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                     (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
                     th->hit[h]->dcl[d].ihq,
                     th->hit[h]->dcl[d].jhq,
+                    th->hit[h]->dcl[d].ad->L,
                     (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv))))) < 0)
                          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
 
