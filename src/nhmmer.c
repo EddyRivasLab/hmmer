@@ -804,7 +804,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (ofp != stdout) fclose(ofp);
   if (afp)           fclose(afp);
   if (tblfp)         fclose(tblfp);
-  //if (domtblfp)      fclose(domtblfp);
+
 
   return eslOK;
 

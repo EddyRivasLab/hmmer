@@ -15,9 +15,14 @@
  *****************************************************************/
 
 float
-hmmlogo_maxHeight (ESL_ALPHABET    *abc)
+hmmlogo_maxHeight (P7_BG *bg)
 {
-  return eslCONST_LOG2R * log(abc->K);  //bits
+  float min_p = 1;
+  int i;
+  for (i=0; i<bg->abc->K; i++)
+    min_p = ESL_MIN(min_p,bg->f[i]);
+
+  return eslCONST_LOG2R * log(1.0/min_p);  //bits
 }
 
 
@@ -33,13 +38,14 @@ hmmlogo_emissionHeightsDivRelent (P7_HMM *hmm, P7_BG *bg, float *rel_ents, float
   float logodds;
 
   for (i = 1; i <= M; i++) {
-
     // height of column, to be split among the residues
     rel_ents[i] = 0;
     for (j=0; j<K; j++) {
       p       = hmm->mat[i][j];
-      logodds = eslCONST_LOG2R * log(p / bg->f[j]);  //bits
-      rel_ents[i] += p==0? 0 : p * logodds ;
+      if ( p > 0 ) {
+        logodds = eslCONST_LOG2R * log(p / bg->f[j]);  //bits
+        rel_ents[i] +=  p * logodds ;
+      }
     }
 
     // height of residues
@@ -122,11 +128,20 @@ hmmlogo_IndelValues (P7_HMM *hmm, float *insert_P, float *insert_expL, float *de
 
   int    i;
 
-  for (i = 1; i <= hmm->M; i++) {
-    if (insert_P != NULL)    insert_P[i] = hmm->t[i][p7H_MI];                         //probability of inserting after this match
+  if (insert_P != NULL)    insert_P[1]    = hmm->t[1][p7H_MI];                   //probability of inserting after this match
+  if (insert_expL != NULL) insert_expL[1] =  1 / (1 - hmm->t[1][p7H_II]) ;       //expected length of the insert, if it happens
+  if (delete_P != NULL)    delete_P[1]    = 0.0;  //1st match state never deleted
+
+  for (i = 2; i < hmm->M; i++) {
+    if (insert_P != NULL)    insert_P[i]    = hmm->t[i][p7H_MI];                         //probability of inserting after this match
     if (insert_expL != NULL) insert_expL[i] =  1 / (1 - hmm->t[i][p7H_II]) ;          //expected length of the insert, if it happens
-    if (delete_P != NULL)    delete_P[i] = hmm->t[i-1][p7H_MD] + hmm->t[i-1][p7H_DD]; //probability of missing this state, either due to DD or MD from previous position
+    if (delete_P != NULL)    delete_P[i]    = ( (1.0-delete_P[i-1]) * hmm->t[i-1][p7H_MD] ) + ( delete_P[i-1] * hmm->t[i-1][p7H_DD]) ; //probability of missing this state, either due to DD or MD from previous position
   }
+
+  if (insert_P != NULL)    insert_P[hmm->M]    = 0.0;   //no inserts after final position
+  if (insert_expL != NULL) insert_expL[hmm->M] = 0.0;   //no inserts after final position
+  if (delete_P != NULL)    delete_P[hmm->M]    = ( (1.0-delete_P[hmm->M-1]) * hmm->t[hmm->M-1][p7H_MD] ) + ( delete_P[hmm->M-1] * hmm->t[hmm->M-1][p7H_DD]) ; //probability of missing this state, either due to DD or MD from previous position
+
   return eslOK;
 }
 
@@ -216,6 +231,7 @@ main(int argc, char **argv)
 
 
   status = p7_hmmfile_Read(hfp, &abc, &hmm);
+
   bg     = p7_bg_Create(abc);
 
   ESL_ALLOC(rel_ents, (hmm->M+1) * sizeof(float));
@@ -223,13 +239,12 @@ main(int argc, char **argv)
   for (i = 1; i <= hmm->M; i++)
     ESL_ALLOC(heights[i], abc->K * sizeof(float));
 
-
   /* residue heights */
   if (mode == HMMLOGO_HEIGHT_EMISSION) {
-    printf ("max expected height = %.2f\n", hmmlogo_maxHeight(abc) );
+    printf ("max expected height = %.2f\n", hmmlogo_maxHeight(bg) );
     hmmlogo_emissionHeightsDivRelent(hmm, bg, rel_ents, heights);
   } else if (mode == HMMLOGO_HEIGHT_POS_SCORE) {
-    printf ("max expected height = %.2f\n", hmmlogo_maxHeight(abc) );
+    printf ("max expected height = %.2f\n", hmmlogo_maxHeight(bg) );
     hmmlogo_posScoreHeightsDivRelent(hmm, bg, rel_ents, heights);
   } else if (mode == HMMLOGO_HEIGHT_BITS) {
     hmmlogo_ScoreHeights (hmm, bg, heights );
@@ -256,7 +271,6 @@ main(int argc, char **argv)
   }
 
 
-
   /* indel values */
   if (! esl_opt_IsOn(go, "--no_indel")) {
 
@@ -265,12 +279,10 @@ main(int argc, char **argv)
     ESL_ALLOC(del_P, (hmm->M+1) * sizeof(float));
 
     hmmlogo_IndelValues(hmm, ins_P, ins_expL, del_P);
-//    hmmlogo_IndelValues(hmm, ins_P, NULL, NULL);
 
     printf ("Indel values\n");
     for (i = 1; i <= hmm->M; i++)
       printf("%d: %6.3f %6.3f %6.3f\n", i, ins_P[i], ins_expL[i], del_P[i] );
-      //printf("%d: %6.3f\n", i, ins_P[i] );
 
     free(ins_P);
     free(ins_expL);

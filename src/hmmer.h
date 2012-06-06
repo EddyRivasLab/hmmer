@@ -1203,7 +1203,7 @@ extern void p7_syslog(int priority, const char *format, ...);
 extern void p7_closelog(void);
 
 /* hmmlogo.c */
-extern float hmmlogo_maxHeight (ESL_ALPHABET    *abc);
+extern float hmmlogo_maxHeight (P7_BG *bg);
 extern int hmmlogo_emissionHeightsDivRelent (P7_HMM *hmm, P7_BG *bg, float *rel_ents, float **heights );
 extern int hmmlogo_posScoreHeightsDivRelent (P7_HMM *hmm, P7_BG *bg, float *rel_ents, float **heights );
 extern int hmmlogo_ScoreHeights (P7_HMM *hmm, P7_BG *bg, float **heights );
