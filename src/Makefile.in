@@ -66,6 +66,7 @@ PROGS = alimask\
 
 
 PROGOBJS =\
+	alimask.o\
 	exactmatch.o\
 	hmmalign.o\
 	hmmbuild.o\
