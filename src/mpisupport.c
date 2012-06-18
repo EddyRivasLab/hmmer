@@ -1090,7 +1090,6 @@ int
 p7_hit_MPIPackSize(P7_HIT *hit, MPI_Comm comm, int *ret_n)
 {
   int   status;
-  int   len = 0;
   int   n = 0;
   int   sz;
 
@@ -1143,7 +1142,6 @@ int
 p7_hit_MPIPack(P7_HIT *hit, char *buf, int n, int *pos, MPI_Comm comm)
 {
   int             status;
-  int             len;
 
   if (MPI_Pack(&hit->sortkey,        1, MPI_DOUBLE,   buf, n, pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed"); 
   if (MPI_Pack(&hit->score,          1, MPI_FLOAT,    buf, n, pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed"); 
@@ -1194,7 +1192,6 @@ int
 p7_hit_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, P7_HIT *hit)
 {
   int  status;
-  int  len;
 
   if (MPI_Unpack(buf, n, pos, &hit->sortkey,     1, MPI_DOUBLE, comm) != 0) ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); 
   if (MPI_Unpack(buf, n, pos, &hit->score,       1, MPI_FLOAT,  comm) != 0) ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); 
