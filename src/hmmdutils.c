@@ -5,6 +5,8 @@
  */
 #include "p7_config.h"
 
+#ifdef HMMER_THREADS
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -201,3 +203,5 @@ free_QueueData(QUEUE_DATA *data)
   memset(data, 0, sizeof(*data));
   free(data);
 }
+
+#endif /*HMMER_THREADS*/

@@ -548,7 +548,7 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
   if (ncpus > 0)  thread_loop(threadObj, queue, cfg, go);
   else            serial_loop(info, cfg, go);
 #else
-  serial_loop(info, cfg);
+  serial_loop(info, cfg, go);
 #endif
 
   for (i = 0; i < infocnt; ++i)

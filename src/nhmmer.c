@@ -652,9 +652,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       }
 #else
       if (dbformat == eslSQFILE_FMINDEX)
-        sstatus = serial_loop_FM(info, dbfp);
+        sstatus = serial_loop_FM(info, id_length_list, dbfp);
       else
-        sstatus = serial_loop(info, dbfp);
+        sstatus = serial_loop(info, id_length_list, dbfp);
 #endif
 
 
