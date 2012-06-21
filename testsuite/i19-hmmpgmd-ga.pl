@@ -92,8 +92,13 @@ exit 0;
 sub tear_down 
 {
     if ($daemon_active) {
-        &create_kill_script("$tmppfx.in");
-        `cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1`;
+        my $ps = `lsof | grep $wport | head -n 1 | awk '{print \$2}'`;
+        chomp $ps;
+        `kill $ps`;
+
+        # the old way
+        #&create_kill_script("$tmppfx.in");
+        #`cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1`;
     }
     unlink <$tmppfx.hmm*>;
     unlink "$tmppfx.in";
