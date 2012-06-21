@@ -42,7 +42,7 @@ if (IO::Socket::INET->new(PeerHost => $host, PeerPort => $cport, Proto     => 't
 
 $daemon_active = 0;
 # start the hmmpgmd master and 1 worker with 1 core
-system("$builddir/src/hmmpgmd --master --wport $wport --cport $cport --hmmdb $tmppfx.hmm > /dev/null 2>&1 &"); 
+system("$builddir/src/hmmpgmd --master --wport $wport --cport $cport --hmmdb $tmppfx.hmm --pid $tmppfx.pid  > /dev/null 2>&1 &"); 
 if ($?) { die "FAIL: hmmpgmd master failed to start";  }
 $daemon_active = 1;
 sleep 2;  
@@ -85,6 +85,7 @@ if ($nhits != 1 && $resultline[0] ne $expected_line) { $daemon_active=1; tear_do
 
 unlink <$tmppfx.hmm*>;
 unlink "$tmppfx.in";
+unlink "$tmppfx.pid";
 print "ok\n";
 exit 0;
 
@@ -92,9 +93,10 @@ exit 0;
 sub tear_down 
 {
     if ($daemon_active) {
-        my $ps = `lsof | grep $wport | head -n 1 | awk '{print \$2}'`;
-        chomp $ps;
-        `kill $ps`;
+        open PID, "<$tmppfx.pid";
+        my $pid = <PID>;
+        close PID;
+        `kill $pid`;
 
         # the old way
         #&create_kill_script("$tmppfx.in");
