@@ -1,6 +1,8 @@
 /* hmmd: hmmc2 deamon client.
  */
 
+#include "p7_config.h"
+
 #ifdef HMMER_THREADS
 
 #include <stdio.h>
