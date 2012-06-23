@@ -29,6 +29,17 @@ $wport   = 51374;		# nondefault worker and client ports...
 @h3progs = ("hmmpgmd", "hmmc2", "hmmpress");
 foreach $h3prog  (@h3progs) { if (! -x "$builddir/src/$h3prog")             { die "FAIL: didn't find $h3prog executable in $builddir/src\n";              } }
 
+# Verify that threads are enabled in p7_config.h
+# by looking for "#define HMMER_THREADS"
+# if not found, threads are not enabled and this
+# test would fail, but we return ok status because
+# we don't want the full testsuite to fail.
+$have_threads = `cat $builddir/src/p7_config.h | grep "^#define HMMER_THREADS"`;
+if($have_threads eq "") { 
+    printf("HMMER_THREADS not defined in p7_config.h\n"); 
+    exit 0;
+}
+
 # Verify that the wport and cport are CLOSED - we don't want to
 # clobber existing hmmpgmd's (or other client-server programs on those
 # ports).
