@@ -140,7 +140,7 @@ p7_GMSV(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float nu, f
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, P7_MSV_WINDOWLIST *windowlist)
+p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
 
   /* A couple differences between this MSV and the standard one:
@@ -231,7 +231,7 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
 	    //TODO: this is wrong - it just pretends the hit was to the middle of the model, to get dummy to
 	    // quit crashing.  Results are definitely wrong.
 	    // Need to get diagonal backtracking implemented in dummy
-	    fm_newWindow(windowlist, 0, target_start, 0, gm->M/2, 1, XMX(i,p7G_C), fm_nocomplement );
+	    p7_hmmwindow_new(windowlist, 0, target_start, 0, gm->M/2, 1, XMX(i,p7G_C), fm_nocomplement );
 
 
 		  //start the search all over again

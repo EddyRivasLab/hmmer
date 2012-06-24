@@ -186,7 +186,7 @@ p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
  */
 int
 p7_GViterbi_longtarget(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx,
-                       float filtersc, double P, P7_MSV_WINDOWLIST *windowlist)
+                       float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
 {
   float const *tsc  = gm->tsc;
   float      **dp   = gx->dp;
@@ -281,7 +281,7 @@ p7_GViterbi_longtarget(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *
 
         for (k = 1; k <= gm->M; k++) {
           if (MMX(i,k) == XMX(i,p7G_E)) {
-            fm_newWindow(windowlist, 0, i, 0, k, 1, 0.0, fm_nocomplement );
+            p7_hmmwindow_new(windowlist, 0, i, 0, k, 1, 0.0, fm_nocomplement );
           }
           MMX(i,0) = IMX(i,0) = DMX(i,0) = -eslINFINITY;
         }

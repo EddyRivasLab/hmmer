@@ -96,7 +96,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
  */
 int
 p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox,
-                            float filtersc, double P, P7_MSV_WINDOWLIST *windowlist)
+                            float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
 {
   int status;
   if ((status = p7_gmx_GrowTo(ox, om->M, L)) != eslOK) return status;

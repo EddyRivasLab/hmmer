@@ -14,12 +14,13 @@
  *   10. P7_DOMAINDEF:   reusably managing workflow in annotating domains
  *   11. P7_TOPHITS:     ranking lists of top-scoring hits
  *   12. P7_MSVDATA:     data used in diagonal recovery and extension
- *   13. FM:             FM-index
- *   14. Inclusion of the architecture-specific optimized implementation.
- *   15. P7_PIPELINE:    H3's accelerated seq/profile comparison pipeline
- *   16. P7_BUILDER:     configuration options for new HMM construction.
- *   17. Declaration of functions in HMMER's exposed API.
- *   18. Copyright and license information.
+ *   13. P7_HMM_WINDOW:  data used to track lists of sequence windows
+ *   14. FM:             FM-index
+ *   15. Inclusion of the architecture-specific optimized implementation.
+ *   16. P7_PIPELINE:    H3's accelerated seq/profile comparison pipeline
+ *   17. P7_BUILDER:     configuration options for new HMM construction.
+ *   18. Declaration of functions in HMMER's exposed API.
+ *   19. Copyright and license information.
  *   
  * Also, see impl_{sse,vmx}/impl_{sse,vmx}.h for additional API
  * specific to the acceleration layer; in particular, the P7_OPROFILE
@@ -790,7 +791,12 @@ typedef struct p7_msvdata_s {
 } P7_MSVDATA;
 
 
-typedef struct msv_window_s {
+/*****************************************************************
+ * 13. P7_HMM_WINDOW: data used to track lists of sequence windows
+ *****************************************************************/
+
+
+typedef struct p7_hmm_window_s {
   float      score;
   float      null_sc;
   int32_t    id;    //sequence id of the database sequence hit
@@ -800,17 +806,17 @@ typedef struct msv_window_s {
   int16_t    k;  //position of the model at which the diagonal ends
   int8_t     complementarity;
   int        used_to_extend;
-} P7_MSV_WINDOW;
+} P7_HMM_WINDOW;
 
-typedef struct msv_window_list_s {
-  P7_MSV_WINDOW *windows;
+typedef struct p7_hmm_window_list_s {
+  P7_HMM_WINDOW *windows;
   int       count;
   int       size;
-} P7_MSV_WINDOWLIST;
+} P7_HMM_WINDOWLIST;
 
 
 /*****************************************************************
- * 13. FM:  FM-index implementation (architecture-specific code found in impl_**)
+ * 14. FM:  FM-index implementation (architecture-specific code found in impl_**)
  *****************************************************************/
 // fm.c
 
@@ -938,7 +944,7 @@ typedef struct fm_diaglist_s {
 
 
 /*****************************************************************
- * 14. The optimized implementation.
+ * 15. The optimized implementation.
  *****************************************************************/
 #if   defined (p7_IMPL_SSE)
 #include "impl_sse/impl_sse.h"
@@ -949,7 +955,7 @@ typedef struct fm_diaglist_s {
 #endif
 
 /*****************************************************************
- * 15. P7_PIPELINE: H3's accelerated seq/profile comparison pipeline
+ * 16. P7_PIPELINE: H3's accelerated seq/profile comparison pipeline
  *****************************************************************/
 
 enum p7_pipemodes_e { p7_SEARCH_SEQS = 0, p7_SCAN_MODELS = 1 };
@@ -1040,7 +1046,7 @@ typedef struct p7_pipeline_s {
 
 
 /*****************************************************************
- * 16. P7_BUILDER: pipeline for new HMM construction
+ * 17. P7_BUILDER: pipeline for new HMM construction
  *****************************************************************/
 
 #define p7_DEFAULT_WINDOW_BETA  1e-7
@@ -1081,6 +1087,7 @@ typedef struct p7_builder_s {
 
   /* Choice of prior                                                                               */
   P7_PRIOR            *prior;	         /* choice of prior when parameterizing from counts        */
+  int                  do_uniform_insert;  /* default is FALSE  */
 
   /* Optional: information used for parameterizing single sequence queries                         */
   ESL_SCOREMATRIX     *S;		 /* residue score matrix                                   */
@@ -1098,7 +1105,7 @@ typedef struct p7_builder_s {
 
 
 /*****************************************************************
- * 17. Routines in HMMER's exposed API.
+ * 18. Routines in HMMER's exposed API.
  *****************************************************************/
 
 /* build.c */
@@ -1145,8 +1152,6 @@ extern int fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_
 extern int fm_updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval);
 extern int fm_initSeeds (FM_DIAGLIST *list) ;
 extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
-extern int fm_initWindows (P7_MSV_WINDOWLIST *list);
-extern P7_MSV_WINDOW *fm_newWindow (P7_MSV_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity);
 extern int fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint8_t *B, ESL_SQ *sq );
 extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
 
@@ -1154,7 +1159,7 @@ extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
 /* fm_msv.c */
 extern int p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
          const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata,
-         P7_MSV_WINDOWLIST *windowlist);
+         P7_HMM_WINDOWLIST *windowlist);
 
 
 /* generic_decoding.c */
@@ -1168,7 +1173,7 @@ extern int p7_GHybrid      (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,    
 
 /* generic_msv.c */
 extern int p7_GMSV           (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float nu, float *ret_sc);
-extern int p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, P7_MSV_WINDOWLIST *windowlist);
+extern int p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float nu,  P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist);
 
 /* generic_null2.c */
 extern int p7_GNull2_ByExpectation(const P7_PROFILE *gm, P7_GMX *pp, float *null2);
@@ -1187,7 +1192,7 @@ extern int p7_GViterbi     (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,    
 /* generic_vtrace.c */
 extern int p7_GTrace       (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_TRACE *tr);
 extern int p7_GViterbi_longtarget(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx,
-                       float filtersc, double P, P7_MSV_WINDOWLIST *windowlist);
+                       float filtersc, double P, P7_HMM_WINDOWLIST *windowlist);
 
 
 /* heatmap.c (evolving now, intend to move this to Easel in the future) */
@@ -1247,7 +1252,7 @@ extern double p7_MeanMatchRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg);
 extern double p7_MeanForwardScore        (const P7_HMM *hmm, const P7_BG *bg);
 extern int    p7_MeanPositionRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg, double *ret_entropy);
 extern int    p7_hmm_CompositionKLDist(P7_HMM *hmm, P7_BG *bg, float *ret_KL, float **opt_avp);
-extern int    p7_hmm_GetSimpleRepeats(P7_HMM *hmm, int maxK, int min_rep, int min_length, float relent_thresh, P7_MSV_WINDOWLIST *ranges);
+extern int    p7_hmm_GetSimpleRepeats(P7_HMM *hmm, int maxK, int min_rep, int min_length, float relent_thresh, P7_HMM_WINDOWLIST *ranges);
 
 
 /* mpisupport.c */
@@ -1398,11 +1403,22 @@ extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **o
 extern int  p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key);
 extern int  p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset);
 
+
+/* p7_hmmwindow.c */
+int p7_hmmwindow_init (P7_HMM_WINDOWLIST *list);
+P7_HMM_WINDOW *p7_hmmwindow_new (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity);
+
+
+
 /* p7_msvdata.c */
-extern P7_MSVDATA *p7_hmm_MSVDataCreate(P7_OPROFILE *om, int do_opt_ext);
-extern P7_MSVDATA * p7_hmm_MSVDataClone(P7_MSVDATA *src, int K);
-extern int         p7_hmm_MSVDataComputeRest(P7_OPROFILE *om, P7_MSVDATA *data );
-extern void        p7_hmm_MSVDataDestroy( P7_MSVDATA *data );
+extern P7_MSVDATA    *p7_hmm_MSVDataCreate(P7_OPROFILE *om, int do_opt_ext);
+extern P7_MSVDATA    *p7_hmm_MSVDataClone(P7_MSVDATA *src, int K);
+extern int            p7_hmm_MSVDataComputeRest(P7_OPROFILE *om, P7_MSVDATA *data );
+extern void           p7_hmm_MSVDataDestroy( P7_MSVDATA *data );
+extern int            p7_hmm_initWindows (P7_HMM_WINDOWLIST *list);
+extern P7_HMM_WINDOW *p7_hmm_newWindow (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity);
+
+
 
 /* p7_null3.c */
 extern void p7_null3_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, P7_TRACE *tr, int start, int stop, P7_BG *bg, float *ret_sc);
@@ -1414,7 +1430,7 @@ extern int          p7_pipeline_Reuse  (P7_PIPELINE *pli);
 extern void         p7_pipeline_Destroy(P7_PIPELINE *pli);
 extern int          p7_pipeline_Merge  (P7_PIPELINE *p1, P7_PIPELINE *p2);
 
-extern int p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_MSVDATA *msvdata, P7_MSV_WINDOWLIST *windowlist, int L, float pct_overlap);
+extern int p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_MSVDATA *msvdata, P7_HMM_WINDOWLIST *windowlist, int L, float pct_overlap);
 extern int p7_pli_TargetReportable  (P7_PIPELINE *pli, float score,     double lnP);
 extern int p7_pli_DomainReportable  (P7_PIPELINE *pli, float dom_score, double lnP);
 

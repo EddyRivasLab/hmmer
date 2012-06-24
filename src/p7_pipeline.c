@@ -308,11 +308,11 @@ p7_pipeline_Destroy(P7_PIPELINE *pli)
  * Returns:   <eslOK>
  */
 int
-p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_MSVDATA *msvdata, P7_MSV_WINDOWLIST *windowlist, int L, float pct_overlap) {
+p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_MSVDATA *msvdata, P7_HMM_WINDOWLIST *windowlist, int L, float pct_overlap) {
 
   int i;
-  P7_MSV_WINDOW        *prev_window = NULL;
-  P7_MSV_WINDOW        *curr_window = NULL;
+  P7_HMM_WINDOW        *prev_window = NULL;
+  P7_HMM_WINDOW        *curr_window = NULL;
   int              window_start;
   int              window_end;
   int new_hit_cnt = 0;
@@ -1176,7 +1176,7 @@ static int
 postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, const P7_MSVDATA *msvdata,
     int64_t seqidx, int window_start, int window_len, ESL_SQ *tmpseq, P7_DOMAINDEF *ddef_app,
     ESL_DSQ *subseq, int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
-    float nullsc, float usc, int complementarity, P7_MSV_WINDOWLIST *vit_windowlist
+    float nullsc, float usc, int complementarity, P7_HMM_WINDOWLIST *vit_windowlist
 )
 {
   float            filtersc;           /* HMM null filter score                   */
@@ -1253,7 +1253,7 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
          do {
            new_n   +=  (smaller_window_len - om->max_length);
            new_len -=  (smaller_window_len - om->max_length);
-           fm_newWindow(vit_windowlist, 0, new_n, 0, 0, ESL_MIN(smaller_window_len,new_len), 0.0, fm_nocomplement );
+           p7_hmmwindow_new(vit_windowlist, 0, new_n, 0, 0, ESL_MIN(smaller_window_len,new_len), 0.0, fm_nocomplement );
          } while (new_len > smaller_window_len);
       }
   }
@@ -1336,8 +1336,8 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
   float            bias_filtersc;
 
   P7_DOMAINDEF     *ddef_app = NULL ;
-  P7_MSV_WINDOWLIST msv_windowlist;
-  P7_MSV_WINDOWLIST vit_windowlist;
+  P7_HMM_WINDOWLIST msv_windowlist;
+  P7_HMM_WINDOWLIST vit_windowlist;
 
 
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
@@ -1346,7 +1346,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
   msv_windowlist.windows = NULL;
   vit_windowlist.windows = NULL;
 
-  fm_initWindows(&msv_windowlist);
+  p7_hmmwindow_init(&msv_windowlist);
 
   ddef_app = p7_domaindef_Create(pli->r);  /* single allocation of a domaindef object that will be used
                                                          to compute mocc posterior probs for hit segments */
@@ -1412,7 +1412,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
   /*
    * pass each remaining window on to the remaining pipeline
    */
-    fm_initWindows(&vit_windowlist);
+    p7_hmmwindow_init(&vit_windowlist);
     tmpseq = esl_sq_CreateDigital(sq->abc);
     for (i=0; i<msv_windowlist.count; i++){
       int window_len = msv_windowlist.windows[i].length;
@@ -1507,8 +1507,8 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
   int status;
   ESL_SQ           *tmpseq;
   ESL_DSQ          *subseq;
-  P7_MSV_WINDOW     window;
-  P7_MSV_WINDOWLIST windowlist;
+  P7_HMM_WINDOW     window;
+  P7_HMM_WINDOWLIST windowlist;
   FM_SEQDATA       *seqdata;
   P7_DOMAINDEF     *ddef_app;
 
@@ -1519,7 +1519,7 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
 
   if (fmf->N == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
-  fm_initWindows(&windowlist);
+  p7_hmmwindow_init(&windowlist);
 
   seqdata = fm_cfg->meta->seq_data;
 

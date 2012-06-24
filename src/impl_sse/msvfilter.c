@@ -258,7 +258,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  */
 static int
 p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata,
-                     uint8_t sc_thresh, __m128i sc_threshv, P7_MSV_WINDOWLIST *windowlist)
+                     uint8_t sc_thresh, __m128i sc_threshv, P7_HMM_WINDOWLIST *windowlist)
 {
 
   register __m128i mpv;            /* previous row values                                       */
@@ -397,7 +397,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       ret_sc /= om->scale_b;
       ret_sc -= 3.0; // that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ
 
-      fm_newWindow(windowlist, 0, target_start, k, end, end-start+1 , ret_sc, fm_nocomplement );
+      p7_hmmwindow_new(windowlist, 0, target_start, k, end, end-start+1 , ret_sc, fm_nocomplement );
 
       i = target_end; // skip forward
 	  }
@@ -448,7 +448,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, P7_MSV_WINDOWLIST *windowlist)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
 #ifdef ALLOW_MSV
   register __m128i mpv;        /* previous row values                                       */

@@ -125,6 +125,7 @@ static ESL_OPTIONS options[] = {
   { "--seed",     eslARG_INT,   "42", NULL, "n>=0",     NULL,      NULL,    NULL, "set RNG seed to <n> (if 0: one-time arbitrary seed)",   8 },
   { "--w_beta",   eslARG_REAL,  NULL, NULL, NULL,       NULL,      NULL,    NULL, "tail mass at which window length is determined",        8 },
   { "--w_length", eslARG_INT,   NULL, NULL, NULL,       NULL,      NULL,    NULL, "window length ",                                        8 },
+  { "--uniforminsert", eslARG_NONE,   FALSE, NULL, NULL, NULL,     NULL,    NULL, "learn uniform insert parameters (not position-specific)", 8 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -506,6 +507,10 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
       info[i].bld = p7_builder_Create(go, cfg->abc);
 
       if (info[i].bld == NULL)  p7_Fail("p7_builder_Create failed");
+
+      //do this here instead of in p7_builder_Create(), because it's an hmmbuild-specific option
+      info[i].bld->do_uniform_insert = esl_opt_IsOn(go, "--uniforminsert");
+
 
       /* Default matrix is stored in the --mx option, so it's always IsOn().
        * Check --mxfile first; then go to the --mx option and the default.

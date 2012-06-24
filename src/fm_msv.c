@@ -589,7 +589,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const P7_MSVDATA *msvdata, FM_CF
 int
 p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
          const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata,
-         P7_MSV_WINDOWLIST *windowlist)
+         P7_HMM_WINDOWLIST *windowlist)
 {
   float P;
   float P_fm = 0.5;
@@ -684,7 +684,7 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
         //then convert to positions in the original sequence used to produce the db
         fm_getOriginalPosition (fmf, fm_cfg->meta, 0, diag->length, fm_forward, diag->n, &(tmp_id), &(tmp_n) );
         if (tmp_id == -1) continue; // crosses over a barrier between sequences in the digital data structure
-        fm_newWindow(windowlist, tmp_id, tmp_n, diag->n, diag->k, seeds.diags[i].length, score, diag->complementarity);
+        p7_hmmwindow_new(windowlist, tmp_id, tmp_n, diag->n, diag->k, seeds.diags[i].length, score, diag->complementarity);
 
       }
 
@@ -728,7 +728,7 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
           } else if ( prev_sc + score >= sc_thresh) { // here's an MSV window, finally above sc_thresh
             //create MSV
             //fm_newWindow(windowlist, fm_cfg->meta->seq_data[ tmp_id ].id, prev_nstart, seeds.diags+i);
-            fm_newWindow(windowlist, tmp_id, prev_nstart, prev_fmstart, diag->k, 0, score, diag->complementarity);
+            p7_hmmwindow_new(windowlist, tmp_id, prev_nstart, prev_fmstart, diag->k, 0, score, diag->complementarity);
             windowlist->windows[windowlist->count-1].length = tmp_n - prev_nstart + diag->length; // widen the window
             windowlist->windows[windowlist->count-1].score += prev_sc - j_thresh ;
 
@@ -744,7 +744,7 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
         if (score >= sc_thresh) { // this diagonal doesn't need any help from another. Make a window based on just this seed
           //create SSV
 //          fm_newWindow(windowlist, fm_cfg->meta->seq_data[ tmp_id ].id, tmp_n, seeds.diags+i);
-          fm_newWindow(windowlist, tmp_id, tmp_n, diag->n, diag->k, diag->length, score, diag->complementarity);
+          p7_hmmwindow_new(windowlist, tmp_id, tmp_n, diag->n, diag->k, diag->length, score, diag->complementarity);
         }
 
         //capture the n position of the diagonal and above-j_thresh contribution, whether it produced an SSV hit or not,
@@ -766,7 +766,7 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
   //update window size and corresponding score. Filter away windows now below threshold, compressing list
   j=0;
   for(i=0; i<windowlist->count; i++) {
-    P7_MSV_WINDOW *window  =  windowlist->windows + i;
+    P7_HMM_WINDOW *window  =  windowlist->windows + i;
 
     int   diag_len     = window->length;
 
@@ -802,8 +802,8 @@ p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
   if (windowlist->count > 0) {
     j=1;
     for(i=1; i<windowlist->count; i++) {
-      P7_MSV_WINDOW *prev_window  =  windowlist->windows + i-1;
-      P7_MSV_WINDOW *window  =  windowlist->windows + i;
+      P7_HMM_WINDOW *prev_window  =  windowlist->windows + i-1;
+      P7_HMM_WINDOW *window  =  windowlist->windows + i;
 
       if (window->id == prev_window->id &&
           window->complementarity == prev_window->complementarity &&

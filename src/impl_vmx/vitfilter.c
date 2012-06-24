@@ -292,7 +292,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
  */
 int
 p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox,
-                            float filtersc, double P, P7_MSV_WINDOWLIST *windowlist)
+                            float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
 {
   vector signed short mpv, dpv, ipv; /* previous row values                                       */
   vector signed short sv;      /* temp storage of 1 curr row value in progress              */
@@ -421,7 +421,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
           for (z = 0; z < 8; z++)  { // unstripe
             if ( tmp.i[z] == xE && (q+Q*z+1) <= om->M) {
               // (q+Q*z+1) is the model position k at which the xE score is found
-              fm_newWindow(windowlist, 0, i, 0, (q+Q*z+1), 1, 0.0, fm_nocomplement );
+              p7_hmmwindow_new(windowlist, 0, i, 0, (q+Q*z+1), 1, 0.0, fm_nocomplement );
             }
           }
           MMXo(q) = IMXo(q) = DMXo(q) = negInfv; //reset score to start search for next vit window.

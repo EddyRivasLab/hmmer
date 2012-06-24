@@ -279,8 +279,8 @@ emit_sequences(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM
 static int
 repeat_sorter(const void *vw1, const void *vw2)
 {
-  P7_MSV_WINDOW *w1 = (P7_MSV_WINDOW*) vw1;
-  P7_MSV_WINDOW *w2 = (P7_MSV_WINDOW*) vw2;
+  P7_HMM_WINDOW *w1 = (P7_HMM_WINDOW*) vw1;
+  P7_HMM_WINDOW *w2 = (P7_HMM_WINDOW*) vw2;
 
   if      (w1->n > w2->n) return  1;
   else if (w1->n < w2->n) return -1;
@@ -297,13 +297,13 @@ find_simplerepeats(ESL_GETOPTS *go, FILE *ofp, P7_HMM *hmm)
   int min_rep_len = 25;
   int min_tot_len = 50;
   float relent_thresh = 1.5;
-  P7_MSV_WINDOWLIST *windowlist;
-  ESL_ALLOC(windowlist, sizeof(P7_MSV_WINDOWLIST));
-  fm_initWindows(windowlist);
+  P7_HMM_WINDOWLIST *windowlist;
+  ESL_ALLOC(windowlist, sizeof(P7_HMM_WINDOWLIST));
+  p7_hmmwindow_init(windowlist);
 
   p7_hmm_GetSimpleRepeats(hmm, max_repeat_len, min_repeat_cnt, min_rep_len, relent_thresh, windowlist);
 
-  if (windowlist->count > 1)  qsort(windowlist->windows, windowlist->count, sizeof(P7_MSV_WINDOW), repeat_sorter);
+  if (windowlist->count > 1)  qsort(windowlist->windows, windowlist->count, sizeof(P7_HMM_WINDOW), repeat_sorter);
 
   //merge neighboring windows
   j = 0;

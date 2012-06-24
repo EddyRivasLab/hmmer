@@ -297,7 +297,7 @@ p7_hmm_CompositionKLDist(P7_HMM *hmm, P7_BG *bg, float *ret_KL, float **opt_avp)
  */
 
 int
-p7_hmm_GetSimpleRepeats(P7_HMM *hmm, int maxK, int min_rep, int min_length, float relent_thresh, P7_MSV_WINDOWLIST *ranges)
+p7_hmm_GetSimpleRepeats(P7_HMM *hmm, int maxK, int min_rep, int min_length, float relent_thresh, P7_HMM_WINDOWLIST *ranges)
 {
   int    K   = hmm->abc->K;
   int    i, j, k, n, x;
@@ -357,7 +357,7 @@ p7_hmm_GetSimpleRepeats(P7_HMM *hmm, int maxK, int min_rep, int min_length, floa
 
         if (relent/n > relent_thresh) {//avg relent
           //printf ("%d : %.2f  (%d-mer)\n", i, rel_ent, n);
-          fm_newWindow(ranges, 0, i, 0, 0, n*reps, relent/n, 0);
+          p7_hmmwindow_new(ranges, 0, i, 0, 0, n*reps, relent/n, 0);
         }
 
         //remove the first character of the preceding (n*min_rep), since it'll be replaced with a new one
