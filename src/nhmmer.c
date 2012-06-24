@@ -82,7 +82,7 @@ static ESL_OPTIONS options[] = {
   { "-A",           eslARG_OUTFILE,      NULL, NULL, NULL,    NULL,  NULL,  NULL,              "save multiple alignment of all hits to file <s>",              2 },
   { "--tblout",     eslARG_OUTFILE,      NULL, NULL, NULL,    NULL,  NULL,  NULL,              "save parseable table of hits to file <s>",                     2 },
   { "--dfamtblout", eslARG_OUTFILE,      NULL, NULL, NULL,    NULL,  NULL,  NULL,              "save table of hits to file, in Dfam format <s>",               2 },
-  { "--longinsertout", eslARG_OUTFILE,   NULL, NULL, NULL,    NULL,  NULL,  NULL,  "save table of long inserts to file <s>",                       2 },
+  { "--longinsertout", eslARG_OUTFILE,   NULL, NULL, NULL,    NULL,  NULL,  NULL,              "save table of long inserts to file <s>",                       2 },
   { "--insertlength", eslARG_INT,        "40", NULL, "n>=5",  NULL,  "--longinsertout",  NULL, "min length of insert printed to --longinsertout",              2 },
 
   { "--acc",        eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "prefer accessions over names in output",                       2 },
@@ -311,7 +311,7 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--show_app")        && fprintf(ofp, "# Show APP line\n")                                                                         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--app_hi")          && fprintf(ofp, "# APP 'H':                      <= %g\n",             esl_opt_GetReal(go, "--app_hi"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--app_med")         && fprintf(ofp, "# APP 'M', (hq start/end base): <= %g\n",             esl_opt_GetReal(go, "--app_med"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--app_lo")          && fprintf(ofp, "# APP 'H':                      <= %g\n",             esl_opt_GetReal(go, "--app_lo"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--app_lo")          && fprintf(ofp, "# APP 'L':                      <= %g\n",             esl_opt_GetReal(go, "--app_lo"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--fm_msv_length")   && fprintf(ofp, "# seed extension max length:       %d\n",             esl_opt_GetInteger(go, "--fm_msv_length"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--fm_max_depth")    && fprintf(ofp, "# seed length:                     %d\n",             esl_opt_GetInteger(go, "--fm_max_depth"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -570,7 +570,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       if      (window_length > 0)     hmm->max_length = window_length;
       else if (window_beta   > 0)     p7_Builder_MaxLength(hmm, window_beta);
-      else if (hmm->max_length == 0 ) p7_Builder_MaxLength(hmm, p7_DEFAULT_WINDOW_BETA);
+      else if (hmm->max_length == -1 ) p7_Builder_MaxLength(hmm, p7_DEFAULT_WINDOW_BETA);
 
       nquery++;
       esl_stopwatch_Start(w);

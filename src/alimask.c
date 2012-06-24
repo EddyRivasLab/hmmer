@@ -18,6 +18,7 @@
 #include "esl_msacluster.h"
 #include "esl_stopwatch.h"
 #include "esl_vectorops.h"
+#include "esl_regexp.h"
 
 #include "hmmer.h"
 
@@ -30,6 +31,7 @@ typedef struct {
 #define ALPHOPTS "--amino,--dna,--rna"                         /* Exclusive options for alphabet choice */
 #define CONOPTS "--fast,--hand"                                /* Exclusive options for model construction                    */
 #define WGTOPTS "--wgsc,--wblosum,--wpb,--wnone,--wgiven"      /* Exclusive options for relative weighting                    */
+#define RANGEOPTS "--modelrange,--alirange,--ali2model,--model2ali"      /* Exclusive options for relative weighting                    */
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
@@ -53,8 +55,10 @@ static ESL_OPTIONS options[] = {
   { "--wgiven",  eslARG_NONE,   NULL,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "use weights as given in MSA file",                     4 },
   { "--wid",     eslARG_REAL, "0.62",  NULL,"0<=x<=1",   NULL,"--wblosum",   NULL, "for --wblosum: set identity cutoff",                   4 },
 /* mask ranges */
-  { "--modelrange", eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL, "--alirange", "range(s) for mask(s) in model coordinates", 5 },
-  { "--alirange",   eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL, "--modelrange", "range(s) for mask(s) in alignment coordinates", 5 },
+  { "--modelrange", eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "range(s) for mask(s) in model coordinates", 5 },
+  { "--alirange",   eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "range(s) for mask(s) in alignment coordinates", 5 },
+  { "--model2ali",  eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "print model ranges corresponding to input alignment ranges", 5 },
+  { "--ali2model",  eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "print alignment ranges corresponding to input model ranges", 5 },
 /* Other options */
   { "--informat", eslARG_STRING, NULL, NULL, NULL,      NULL,      NULL,    NULL, "assert input alifile is in format <s> (no autodetect)", 8 },
   { "--seed",     eslARG_INT,   "42", NULL, "n>=0",     NULL,      NULL,    NULL, "set RNG seed to <n> (if 0: one-time arbitrary seed)",   8 },
@@ -87,7 +91,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_alif
       if (puts("\nBasic options:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
 
-      if (puts("\nMask range options (format:  --xxxrange 10-20,30-40 ) :") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+      if (puts("\nMask range options (format:  --xxx 10-20,30-40 ) :") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 5, 2, 80);
 
       if (puts("\nOptions for selecting alphabet rather than guessing it:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
@@ -104,9 +108,11 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_alif
       exit(0);
     }
 
-  if (esl_opt_ArgNumber(go)                  != 2)    { if (puts("Incorrect number of command line arguments.")          < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if (esl_opt_ArgNumber(go)                  > 2)    { if (puts("Incorrect number of command line arguments.")          < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
   if ((*ret_alifile     = esl_opt_GetArg(go, 1)) == NULL) { if (puts("Failed to get <msafile> argument on command line")     < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
-  if ((*ret_postalifile = esl_opt_GetArg(go, 2)) == NULL) { if (puts("Failed to get <postmsafile> argument on command line")     < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if (esl_opt_IsUsed(go, "--alirange") || esl_opt_IsUsed(go, "--modelrange") ) {
+    if ((*ret_postalifile = esl_opt_GetArg(go, 2)) == NULL) { if (puts("Failed to get <postmsafile> argument on command line")     < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  }
 
   if (strcmp(*ret_alifile, "-") == 0 && ! esl_opt_IsOn(go, "--informat"))
     { if (puts("Must specify --informat to read <alifile> from stdin ('-')") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
@@ -134,7 +140,10 @@ output_header(const ESL_GETOPTS *go, FILE *ofp, char *alifile, char *postmsafile
   p7_banner(ofp, go->argv[0], banner);
   
   if (fprintf(ofp, "# input alignment file:             %s\n", alifile) < 0)     ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (fprintf(ofp, "# output alignment file:            %s\n", postmsafile) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+
+  if (esl_opt_IsUsed(go, "--alirange") || esl_opt_IsUsed(go, "--modelrange") ) {
+    if (fprintf(ofp, "# output alignment file:            %s\n", postmsafile) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  }
 
   if (esl_opt_IsUsed(go, "-o")           && fprintf(ofp, "# output directed to file:          %s\n",        esl_opt_GetString(go, "-o"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--amino")      && fprintf(ofp, "# input alignment is asserted as:   protein\n")                                        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -158,6 +167,26 @@ output_header(const ESL_GETOPTS *go, FILE *ofp, char *alifile, char *postmsafile
   return eslOK;
 }
 
+/* lifted from esl-sfetch */
+static int
+parse_coord_string(const char *cstring, uint32_t *ret_start, uint32_t *ret_end)
+{
+  ESL_REGEXP *re = esl_regexp_Create();
+  char        tok1[32];
+  char        tok2[32];
+
+  if (esl_regexp_Match(re, "^(\\d+)\\D+(\\d*)$", cstring) != eslOK) esl_fatal("-c takes arg of subseq coords <from>..<to>; %s not recognized", cstring);
+  if (esl_regexp_SubmatchCopy(re, 1, tok1, 32)            != eslOK) esl_fatal("Failed to find <from> coord in %s", cstring);
+  if (esl_regexp_SubmatchCopy(re, 2, tok2, 32)            != eslOK) esl_fatal("Failed to find <to> coord in %s",   cstring);
+
+  *ret_start = atol(tok1);
+  *ret_end   = (tok2[0] == '\0') ? 0 : atol(tok2);
+
+  esl_regexp_Destroy(re);
+  return eslOK;
+}
+
+
 int
 main(int argc, char **argv)
 {
@@ -169,23 +198,23 @@ main(int argc, char **argv)
 
   int              status;
   ESL_MSA      *msa         = NULL;
-  FILE         *ofp;    /* output file (default is stdout) */
-  ESL_ALPHABET *abc;    /* digital alphabet */
+  FILE         *ofp         = NULL;    /* output file (default is stdout) */
+  ESL_ALPHABET *abc         = NULL;    /* digital alphabet */
 
   char         *alifile;  /* name of the alignment file we're building HMMs from  */
-  ESLX_MSAFILE *afp;            /* open alifile  */
+  ESLX_MSAFILE *afp         = NULL;            /* open alifile  */
   int           fmt;    /* format code for alifile */
 
   char         *postmsafile;  /* optional file to resave annotated, modified MSAs to  */
-  FILE         *postmsafp;  /* open <postmsafile>, or NULL */
+  FILE         *postmsafp = NULL;  /* open <postmsafile>, or NULL */
 
   int           mask_range_cnt = 0;
-  int           mask_starts[100]; // over-the-top allocation.
-  int           mask_ends[100];
+  uint32_t      mask_starts[100]; // over-the-top allocation.
+  uint32_t      mask_ends[100];
 
   char         *rangestr;
   char         *range;
-  char         *value;
+
 
   int     *map = NULL; /* map[i]=j,  means model position i comes from column j of the alignment; 1..alen */
 
@@ -221,20 +250,19 @@ main(int argc, char **argv)
     rangestr = esl_opt_GetString(go, "--alirange");
   } else if (esl_opt_IsUsed(go, "--modelrange")) {
     rangestr = esl_opt_GetString(go, "--modelrange");
+  } else if (esl_opt_IsUsed(go, "--model2ali")) {
+    rangestr = esl_opt_GetString(go, "--model2ali");
+  } else if (esl_opt_IsUsed(go, "--ali2model")) {
+    rangestr = esl_opt_GetString(go, "--ali2model");
   } else {
-    if (puts("Must specify mask range with either --modelrange or --alirange") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto ERROR;
+    if (puts("Must specify mask range with --modelrange, --alirange, --model2ali, or --ali2model\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto ERROR;
   }
 
 
   while ( (status = esl_strtok(&rangestr, ",", &range) ) == eslOK) {
-    if ( (status = esl_strtok(&range, "-", &value) ) != eslOK) {
-      if (puts("invalid range format") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto ERROR;
-    }
-    mask_starts[mask_range_cnt] = atoi(value);
-    mask_ends[mask_range_cnt] = atoi(range);
+    parse_coord_string(range, mask_starts + mask_range_cnt, mask_ends + mask_range_cnt );
     mask_range_cnt++;
   }
-
 
 
 
@@ -257,10 +285,10 @@ main(int argc, char **argv)
   status = eslx_msafile_Open(&abc, alifile, NULL, fmt, NULL, &afp);
   if (status != eslOK) eslx_msafile_OpenFailure(afp, status);
 
-
-  postmsafp = fopen(postmsafile, "w");
-  if (postmsafp == NULL) p7_Fail("Failed to MSA output file %s for writing", postmsafile);
-
+  if (esl_opt_IsUsed(go, "--alirange") || esl_opt_IsUsed(go, "--modelrange") ) {
+    postmsafp = fopen(postmsafile, "w");
+    if (postmsafp == NULL) p7_Fail("Failed to MSA output file %s for writing", postmsafile);
+  }
 
   if (esl_opt_IsUsed(go, "-o")) 
     {
@@ -278,17 +306,18 @@ main(int argc, char **argv)
   if ((status = eslx_msafile_Read(afp, &msa)) != eslOK)  eslx_msafile_ReadFailure(afp, status);
 
 
-  /* add/modify mmline for the mask */
-  if (msa->mm == NULL) {
-    // if it doesn't already exist, allocate it and set is to all '.'
-    ESL_ALLOC(msa->mm, msa->alen);
-    for (i=0; i<msa->alen; i++)
-      msa->mm[i] = '.';
+  if (esl_opt_IsUsed(go, "--alirange") || esl_opt_IsUsed(go, "--modelrange") ) {
+    /* add/modify mmline for the mask */
+    if (msa->mm == NULL) {
+      // if it doesn't already exist, allocate it and set is to all '.'
+      ESL_ALLOC(msa->mm, msa->alen);
+      for (i=0; i<msa->alen; i++)
+        msa->mm[i] = '.';
+    }
   }
 
-
   // convert model coordinates to alignment coordinates, if necessary
-  if (esl_opt_IsUsed(go, "--modelrange")) {
+  if (esl_opt_IsUsed(go, "--modelrange") || esl_opt_IsUsed(go, "--model2ali") || esl_opt_IsUsed(go, "--ali2model") ) {
     int      apos, idx;
     float    r;            /* weighted residue count              */
     float    totwgt;       /* weighted residue+gap count          */
@@ -325,28 +354,47 @@ main(int argc, char **argv)
           i++;
     }
 
-    //convert the mask coords based on map
-    for (i=0; i<mask_range_cnt; i++) {
-      mask_starts[i] = map[mask_starts[i]-1]; //-1 because mmline is offset by one relative to the 1-base alignment
-      mask_ends[i]   = map[mask_ends[i]-1];
+    if ( esl_opt_IsUsed(go, "--model2ali") ) {
+      //print mapping
+      printf ("model coordinates     alignment coordinates\n");
+      for (i=0; i<mask_range_cnt; i++)
+        printf ("%8d..%-8d -> %8d..%-8d\n", mask_starts[i], mask_ends[i], map[mask_starts[i]-1], map[mask_ends[i]-1]);
+    } else if ( esl_opt_IsUsed(go, "--ali2model") ) {
+      //print mapping  (requires scanning the inverted map
+      int alistart = 0;
+      int aliend = 0;
+      printf ("alignment coordinates     model coordinates\n");
+      for (i=0; i<mask_range_cnt; i++) {
+        //find j for ali positions
+        while (map[alistart] < mask_starts[i] )
+          alistart++;
+        aliend = alistart;
+        while (map[aliend] < mask_ends[i] )
+          aliend++;
+
+        printf ("   %8d..%-8d -> %8d..%-8d\n", map[alistart], map[aliend], alistart+1, aliend+1);
+      }
+    } else {
+      //convert the mask coords based on map
+      for (i=0; i<mask_range_cnt; i++) {
+          mask_starts[i] = map[mask_starts[i]-1]; //-1 because mmline is offset by one relative to the 1-base alignment
+          mask_ends[i]   = map[mask_ends[i]-1];
+      }
     }
-
-
   }
 
-  //overwrite '.' with 'm' everywhere the range says to do it
-  for (i=0; i<mask_range_cnt; i++)
-    for (j=mask_starts[i]; j<=mask_ends[i]; j++)
-      msa->mm[j-1] = 'm';
+  if (esl_opt_IsUsed(go, "--alirange") || esl_opt_IsUsed(go, "--modelrange") ) {
+    //overwrite '.' with 'm' everywhere the range says to do it
+    for (i=0; i<mask_range_cnt; i++)
+      for (j=mask_starts[i]; j<=mask_ends[i]; j++)
+        msa->mm[j-1] = 'm';
 
-
-
-  if ((status = eslx_msafile_Write(postmsafp, msa, eslMSAFILE_STOCKHOLM))  != eslOK) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-
+    if ((status = eslx_msafile_Write(postmsafp, msa, eslMSAFILE_STOCKHOLM))  != eslOK) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+  }
 
   esl_stopwatch_Stop(w);
 
-  if (esl_opt_IsOn(go, "-o")) { fclose(ofp); }
+  if (esl_opt_IsOn(go, "-o"))  fclose(ofp);
   if (postmsafp) fclose(postmsafp);
   if (afp)   eslx_msafile_Close(afp);
   if (abc)   esl_alphabet_Destroy(abc);

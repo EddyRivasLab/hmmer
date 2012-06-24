@@ -160,17 +160,13 @@ p7_prior_CreateAmino(void)
   return NULL;
 }
 
-/* Function:  p7_prior_CreateNucleicNew()
- * Incept:    TJW, Thu Nov 12 21:15:11 EST 2009 [Couch at home]
+/* Function:  p7_prior_CreateNucleic()
  *
  * Purpose:   Creates the default mixture Dirichlet prior for nucleotide
  *            sequences.
  *
  *            The transition priors (match, insert, delete) are all
- *            single Dirichlets, originally trained by Graeme
- *            Mitchison in the mid-1990's. Notes have been lost, but
- *            we believe they were trained on an early version of
- *            Pfam.
+ *            single Dirichlets, trained on a portion of the rmark dataset
  *
  *            The match emission prior is an eight-component mixture
  *            trained against a portion of the rmark dataset

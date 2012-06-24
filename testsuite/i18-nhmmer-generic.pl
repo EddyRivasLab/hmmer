@@ -16,7 +16,7 @@ BEGIN {
     $tmppfx    = shift;
 }
 
-$verbose = 1;
+$verbose = 0;
 
 # The test makes use of the following file:
 #
