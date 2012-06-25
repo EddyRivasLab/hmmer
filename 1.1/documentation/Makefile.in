@@ -1,0 +1,40 @@
+top_srcdir     = @top_srcdir@
+srcdir         = @srcdir@
+VPATH          = @srcdir@
+
+QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
+QUIET_SUBDIR1 = 
+ifndef V
+	QUIET_SUBDIR0 = +@subdir=
+	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
+		        ${MAKE} -C $$subdir
+endif
+
+
+.PHONY: pdf install uninstall clean distclean
+
+pdf:
+	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} pdf
+
+install: 
+	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} install
+
+uninstall:
+	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} uninstall
+
+clean:
+	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} clean
+	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} clean
+	-rm -f *~
+
+distclean:
+	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} distclean
+	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} distclean
+	-rm -f Makefile
+
+################################################################
+# @LICENSE@
+# 
+# SVN $URL$
+# SVN $Id$
+################################################################

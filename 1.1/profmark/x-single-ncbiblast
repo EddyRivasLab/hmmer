@@ -1,0 +1,57 @@
+#! /usr/bin/perl -w
+
+BEGIN {
+    $top_builddir  = shift;
+    $top_srcdir    = shift;
+    $wrkdir        = shift;
+    $tblfile       = shift;
+    $msafile       = shift;
+    $fafile        = shift;
+    $outfile       = shift;
+}
+use lib "${top_srcdir}/easel/demotic";
+use demotic_blast;
+
+$blastp      = "${top_builddir}/bin/blastall";
+$blastopts   = "-p blastp -a 1 -v 9999 -b 0";
+# -a 1    : 1 cpu
+# -v 9999 : long hit list, well into noise
+# -b 0    : suppress alignment output, benchmark doesn't use it
+
+if (! -d $top_builddir)                                 { die "didn't find BLAST build directory $top_builddir"; }
+if (! -d $top_srcdir)                                   { die "didn't find H3 source directory $top_srcdir"; }
+if (! -x $blastp)                                       { die "didn't find executable $blastp"; }
+if (! -e $wrkdir)                                       { die "$wrkdir doesn't exist"; }
+
+open(OUTFILE,">$outfile") || die "failed to open $outfile";
+open(TABLE, "$tblfile")   || die "failed to open $tblfile";
+MSA:
+while (<TABLE>)
+{
+    ($msaname) = split;
+
+    $cmd  = "esl-afetch -o $wrkdir/$msaname.sto $msafile $msaname";                           $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Fetch the query MSA from the benchmark; tmp .sto file here
+    $cmd  = "esl-seqstat --amino -a $wrkdir/$msaname.sto | grep "^=" | awk '{print \$2}'";    $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n", next MSA; }   # Extract list of indiv seq names. --amino for robustness, some msa's v. small
+    @qnames = split(/^/,$output); 
+    chop (@qnames);
+    $qname = $qnames[0];
+    $cmd = "esl-sfetch -o $wrkdir/$msaname.query $wrkdir/$msaname.sto $qname > /dev/null";              `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Pick a single seq (first one) to tmp file; tmp .query file here
+
+    $cmd = "$blastp -d $fafile -i $wrkdir/$msaname.query $blastopts |";              if (! open(BLASTP, "$cmd"))            { print "FAILED: $cmd\n"; next MSA; }
+
+    if (! demotic_blast::parse(\*BLASTP)) {  print "FAILED: demotic blastp parser on $msaname\n"; next MSA; }
+
+    for ($i = 0; $i < $demotic_blast::nhits; $i++)
+    {
+	$target   = $demotic_blast::hit_target[$i];
+	$pval     = $demotic_blast::hit_Eval[$i];
+	$bitscore = $demotic_blast::hit_bitscore[$i];
+	printf OUTFILE "%g %.1f %s %s\n", $pval, $bitscore, $target, $msaname;
+    }
+
+    close BLASTP;
+    unlink "$wrkdir/$msaname.sto";
+    unlink "$wrkdir/$msaname.query";
+}
+close TABLE;
+close OUTFILE;
