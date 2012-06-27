@@ -50,11 +50,15 @@ extern int        p7_bandmx_Reinit (P7_BANDMX *bmx, P7_GBANDS *bnd);
 extern int        p7_bandmx_Reuse  (P7_BANDMX *bmx);
 extern void       p7_bandmx_Destroy(P7_BANDMX *bmx);
 
-
 extern char *p7_bandmx_DecodeSpecial(int type);
 extern int   p7_bandmx_Dump      (FILE *ofp, P7_BANDMX *bmx);
 extern int   p7_bandmx_DumpWindow(FILE *ofp, P7_BANDMX *bmx, int istart, int iend, int kstart, int kend);
 
+/* from banded_fwdback.c */
+extern int p7_BandedForward (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bmf, float *opt_sc);
+extern int p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bmb, float *opt_sc);
+extern int p7_BandedDecoding(const P7_PROFILE *gm, const P7_BANDMX *bmf, P7_BANDMX *bmb, P7_BANDMX *bmd);
+extern int p7_BandedAlign   (const P7_PROFILE *gm, float gamma, const P7_BANDMX *bmd, P7_BANDMX *bma, P7_TRACE *tr, float *opt_gain);
 #endif /*P7_BANDMX_INCLUDED*/
 
 /*****************************************************************

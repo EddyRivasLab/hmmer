@@ -2,6 +2,8 @@
  */
 #include "p7_config.h"
 
+#ifdef HMMER_THREADS
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -893,6 +895,8 @@ setup_masterside_comm(ESL_GETOPTS *opts)
 
   return fd;    
 }
+
+#endif /*HMMER_THREADS*/
 
 /*****************************************************************
  * @LICENSE@

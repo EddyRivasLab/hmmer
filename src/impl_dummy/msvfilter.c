@@ -60,23 +60,11 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 
 /* Function:  p7_MSVFilter_longtarget()
  * Synopsis:  Finds windows with MSV scores above some threshold (slow, correct version)
- * Incept:    TJW, Thu Jun 17 14:32:08 EDT 2010 [Janelia]
- *
  *
  * Purpose:   Calculates the MSV score for regions of sequence <dsq> of length <L>
- * 			  residues, and captures the positions at which such regions exceed the
- * 			  score required to be significant in the eyes of the calling function
- * 			  (usually p=0.02).
- *
- *            <force_ssv> is a flag used by optimized versions
- *            (impl_sse, impl_vmx) to force SSV rather than MSV. Since
- *            there is no generic SSV, we can't enforce it here, but
- *            unfortunately we still need it so the function
- *            prototypes match up between generic and optimized
- *            versions. It doesn't have any impact as currently
- *            only Infernal functions set force_ssv to TRUE, and
- *            Infernal requires an optimized build (it won't work
- *            with generic). 
+ * 			      residues, and captures the positions at which such regions exceed the
+ * 			      score required to be significant in the eyes of the calling function
+ * 			      (usually p=0.02).
  *
  * Args:      dsq        - digital target sequence, 1..L
  *            L          - length of dsq in residues
@@ -86,7 +74,6 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  *            bg         - the background model, required for translating a P-value threshold into a score threshold
  *            P          - p-value below which a region is captured as being above threshold
  *            windowlist - RETURN: array of hit windows (start and end of diagonal) for the above-threshold areas
- *            force_ssv  - irrelevant (relevant only in impl_sse, impl_vmx versions)
  *
  * Note:      Not worried about speed here. Based on p7_GMSV
  *
@@ -95,7 +82,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, P7_MSV_WINDOWLIST *windowlist)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
 	  int status;
 	  if ((status = p7_gmx_GrowTo(ox, om->M, L)) != eslOK) return status;

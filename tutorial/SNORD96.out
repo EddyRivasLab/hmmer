@@ -3,8 +3,8 @@
 # Copyright (C) 2011 Howard Hughes Medical Institute.
 # Freely distributed under the GNU General Public License (GPLv3).
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# query HMM file:                  tutorial/SNORD96.hmm
-# target sequence database:        tutorial/dna_target.fa
+# query HMM file:                  ../tutorial/SNORD96.hmm
+# target sequence database:        ../tutorial/dna_target.fa
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 Query:       SNORD96  [M=96]
@@ -13,20 +13,20 @@ Description: Small nucleolar RNA SNORD96 family
 Scores for complete hits:
     E-value  score  bias  Sequence   start     end  Description
     ------- ------ -----  --------   -----   -----  -----------
-    4.2e-22   78.5   0.0  chr22    1846605 1846512  
-     0.0019   18.7   0.1  chr22     189909  189969  
+    3.8e-22   78.6   0.0  chr22    1846605 1846512  
+     0.0017   18.9   0.0  chr22     189908  189969  
   ------ inclusion threshold ------
-      0.039   14.5   0.0  chr22    1197742 1197673  
+      0.038   14.5   0.0  chr22    1197742 1197673  
 
 
 Annotation for each hit  (and alignments):
 >> chr22  
-    score  bias    Evalue hmmfrom  hmm to     alifrom    ali to      envfrom    env to       hqfrom    hq to       acc
-   ------ ----- --------- ------- -------    --------- ---------    --------- ---------    --------- ---------    ----
- !   78.5   0.0   4.2e-22         2        95 ..   1846605   1846512 ..   1846606   1846511 ..   1846605   1846512    0.97
+    score  bias    Evalue   hmmfrom    hmm to     alifrom    ali to      envfrom    env to       hqfrom    hq to       acc
+   ------ ----- ---------   -------   -------    --------- ---------    --------- ---------    --------- ---------    ----
+ !   78.6   0.0   3.8e-22         2        95 ..   1846605   1846512 ..   1846606   1846511 ..   1846605   1846512    0.97
 
   Alignment:
-  score: 78.5 bits
+  score: 78.6 bits
                   <<<<_____________________________________________________.._________________________________>> CS
   SNORD96       2 ggccggugaugaaauccgauauaaaaaaacaccaucuuucgggacugauuuggcgcc..ucugcggcaaugaugcuacuucugcaauucugagg 93     
                   ggccgguga gaaa+cc + au+aaaaa caccaucuuucggg+cugau +g+cgcc  uc gcggc+aug+ugc+a uucugcaauucugagg
@@ -40,22 +40,22 @@ Annotation for each hit  (and alignments):
                   87 PP
 
 >> chr22  
-    score  bias    Evalue hmmfrom  hmm to     alifrom    ali to      envfrom    env to       hqfrom    hq to       acc
-   ------ ----- --------- ------- -------    --------- ---------    --------- ---------    --------- ---------    ----
- !   18.7   0.1    0.0019         9        84 ..    189909    189969 ..    189903    189982 ..    189927    189964    0.67
+    score  bias    Evalue   hmmfrom    hmm to     alifrom    ali to      envfrom    env to       hqfrom    hq to       acc
+   ------ ----- ---------   -------   -------    --------- ---------    --------- ---------    --------- ---------    ----
+ !   18.9   0.0    0.0017         8        84 ..    189908    189969 ..    189902    189982 ..    189927    189964    0.67
 
   Alignment:
-  score: 18.7 bits
-                 ____________________________________________________________________________ CS
-  SNORD96      9 gaugaaauccgauauaaaaaaacaccaucuuucgggacugauuuggcgccucugcggcaaugaugcuacuucugca 84    
-                 gauga+ ucc  u    aa   +accaucuuucggg cuga uu+          +g + ug+ug+ua uu ug +
-    chr22 189909 GAUGAUUUCCCUU----AAUUUUACCAUCUUUCGGGUCUGAAUUA----------AGAUGUGUUGAUA-UUAUGGG 189969
-                 5555555544333....344459*****************98877..........4566677777777.5555443 PP
+  score: 18.9 bits
+                 _____________________________________________________________________________ CS
+  SNORD96      8 ugaugaaauccgauauaaaaaaacaccaucuuucgggacugauuuggcgccucugcggcaaugaugcuacuucugca 84    
+                 ugauga+ ucc  u    aa   +accaucuuucggg cuga uu+          +g + ug+ug+ua uu ug +
+    chr22 189908 UGAUGAUUUCCCUU----AAUUUUACCAUCUUUCGGGUCUGAAUUA----------AGAUGUGUUGAUA-UUAUGGG 189969
+                 55566655544333....344459*****************98877..........4566677777777.5555443 PP
 
 >> chr22  
-    score  bias    Evalue hmmfrom  hmm to     alifrom    ali to      envfrom    env to       hqfrom    hq to       acc
-   ------ ----- --------- ------- -------    --------- ---------    --------- ---------    --------- ---------    ----
- ?   14.5   0.0     0.039         6        71 ..   1197742   1197673 ..   1197746   1197646 ..   1197742   1197673    0.76
+    score  bias    Evalue   hmmfrom    hmm to     alifrom    ali to      envfrom    env to       hqfrom    hq to       acc
+   ------ ----- ---------   -------   -------    --------- ---------    --------- ---------    --------- ---------    ----
+ ?   14.5   0.0     0.038         6        71 ..   1197742   1197673 ..   1197746   1197645 ..   1197742   1197673    0.76
 
   Alignment:
   score: 14.5 bits
@@ -63,7 +63,7 @@ Annotation for each hit  (and alignments):
   SNORD96       6 ggugaugaaauccgauauaaaaaa..acaccaucuuucgggacuga.uuuggcgcc.ucugcggcaauga 71     
                   ggug +ga+au + ++a aaaaa   a a   ucu  cggg+cuga uu++gc++c u  g  gc+auga
     chr22 1197742 GGUGUGGAUAUUUUCAACAAAAAUaaAAAUGCUCUCCCGGGGCUGAaUUGAGCUUCgUGGGUUGCUAUGA 1197673
-                  589999***9998888887776540034455589999********7355556666667777778888875 PP
+                  689999***9998888887776540034455589999********7355556666667777778888875 PP
 
 
 
@@ -73,10 +73,10 @@ Query model(s):                    1  (96 nodes)
 Target sequences:                  1  (3718012 residues searched)
 Residues passing MSV filter:             99668  (0.0268); expected (0.02)
 Residues passing bias filter:            95863  (0.0258); expected (0.02)
-Residues passing Vit filter:              2686  (0.000722); expected (0.001)
-Residues passing Fwd filter:               634  (0.000171); expected (1e-05)
-Total number of hits:                        3  (6.05e-05)
-# CPU time: 0.11u 0.00s 00:00:00.11 Elapsed: 00:00:00.07
-# Mc/sec: 5098.99
+Residues passing Vit filter:              3043  (0.000818); expected (0.001)
+Residues passing Fwd filter:               612  (0.000165); expected (1e-05)
+Total number of hits:                        3  (6.08e-05)
+# CPU time: 0.11u 0.01s 00:00:00.12 Elapsed: 00:00:00.13
+# Mc/sec: 2745.61
 //
 [ok]

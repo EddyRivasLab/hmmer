@@ -1,6 +1,10 @@
 /* hmmd: hmmc2 deamon client.
  */
 
+#include "p7_config.h"
+
+#ifdef HMMER_THREADS
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -581,6 +585,8 @@ int main(int argc, char *argv[])
   close(sock);
   return 0;
 }
+
+#endif /*HMMER_THREADS*/
 
 /*****************************************************************
  * @LICENSE@

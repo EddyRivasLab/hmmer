@@ -29,6 +29,17 @@ $wport   = 51374;		# nondefault worker and client ports...
 @h3progs = ("hmmpgmd", "hmmc2", "hmmpress");
 foreach $h3prog  (@h3progs) { if (! -x "$builddir/src/$h3prog")             { die "FAIL: didn't find $h3prog executable in $builddir/src\n";              } }
 
+# Verify that threads are enabled in p7_config.h
+# by looking for "#define HMMER_THREADS"
+# if not found, threads are not enabled and this
+# test would fail, but we return ok status because
+# we don't want the full testsuite to fail.
+$have_threads = `cat $builddir/src/p7_config.h | grep "^#define HMMER_THREADS"`;
+if($have_threads eq "") { 
+    printf("HMMER_THREADS not defined in p7_config.h\n"); 
+    exit 0;
+}
+
 # Verify that the wport and cport are CLOSED - we don't want to
 # clobber existing hmmpgmd's (or other client-server programs on those
 # ports).
@@ -42,7 +53,7 @@ if (IO::Socket::INET->new(PeerHost => $host, PeerPort => $cport, Proto     => 't
 
 $daemon_active = 0;
 # start the hmmpgmd master and 1 worker with 1 core
-system("$builddir/src/hmmpgmd --master --wport $wport --cport $cport --hmmdb $tmppfx.hmm > /dev/null 2>&1 &"); 
+system("$builddir/src/hmmpgmd --master --wport $wport --cport $cport --hmmdb $tmppfx.hmm --pid $tmppfx.pid  > /dev/null 2>&1 &"); 
 if ($?) { die "FAIL: hmmpgmd master failed to start";  }
 $daemon_active = 1;
 sleep 2;  
@@ -85,6 +96,7 @@ if ($nhits != 1 && $resultline[0] ne $expected_line) { $daemon_active=1; tear_do
 
 unlink <$tmppfx.hmm*>;
 unlink "$tmppfx.in";
+unlink "$tmppfx.pid";
 print "ok\n";
 exit 0;
 
@@ -92,8 +104,14 @@ exit 0;
 sub tear_down 
 {
     if ($daemon_active) {
-        &create_kill_script("$tmppfx.in");
-        `cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1`;
+        open PID, "<$tmppfx.pid";
+        my $pid = <PID>;
+        close PID;
+        `kill $pid`;
+
+        # the old way
+        #&create_kill_script("$tmppfx.in");
+        #`cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1`;
     }
     unlink <$tmppfx.hmm*>;
     unlink "$tmppfx.in";

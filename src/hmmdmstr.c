@@ -6,6 +6,8 @@
  */
 #include "p7_config.h"
 
+#ifdef HMMER_THREADS
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -2067,6 +2069,8 @@ setup_workerside_comm(ESL_GETOPTS *opts, WORKERSIDE_ARGS *args)
 
   if ((n = pthread_create(&thread_id, NULL, worker_comm_thread, (void *)args)) != 0) LOG_FATAL_MSG("thread create", n);
 }
+
+#endif /*HMMER_THREADS*/
 
 /*****************************************************************
  * @LICENSE@

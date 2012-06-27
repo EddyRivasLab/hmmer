@@ -248,7 +248,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 static int
-p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, uint8_t sc_thresh, vector unsigned char sc_threshv, P7_MSV_WINDOWLIST *windowlist)
+p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, uint8_t sc_thresh, vector unsigned char sc_threshv, P7_HMM_WINDOWLIST *windowlist)
 {
 
   vector unsigned char mpv;        /* previous row values                                       */
@@ -390,7 +390,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       ret_sc /= om->scale_b;
       ret_sc -= 3.0; // that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ
 
-      fm_newWindow(windowlist, 0, target_start, k, end, end-start+1 , ret_sc, fm_nocomplement );
+      p7_hmmwindow_new(windowlist, 0, target_start, k, end, end-start+1 , ret_sc, fm_nocomplement );
 
       i = target_end; // skip forward
 
@@ -398,6 +398,8 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  }
 
   } /* end loop over sequence residues 1..L */
+
+  free(scores);
 
   return eslOK;
 
@@ -437,7 +439,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
  *            bg         - the background model, required for translating a P-value threshold into a score threshold
  *            P          - p-value below which a region is captured as being above threshold
  *            windowlist - RETURN: array of hit windows (start and end of diagonal) for the above-threshold areas
- *            force_ssv  - if TRUE, use SSV, not MSV, regardless of score threshold
  *
  * Note:      We misuse the matrix <ox> here, using only a third of the
  *            first dp row, accessing it as <dp[0..Q-1]> rather than
@@ -451,7 +452,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, P7_MSV_WINDOWLIST *windowlist)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
 #ifdef ALLOW_MSV
   vector unsigned char mpv;        /* previous row values                                       */

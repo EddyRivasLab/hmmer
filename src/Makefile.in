@@ -44,15 +44,17 @@ MYINCDIRS = -I../${ESLDIR} \
 	    -I${srcdir}
 
 
-PROGS = hmmalign\
+PROGS = alimask\
+	exactmatch\
+	hmmalign\
 	hmmbuild\
 	hmmconvert\
 	hmmemit\
 	hmmfetch\
+	hmmlogo\
 	hmmpress\
 	hmmscan\
 	hmmsearch\
-	hmmsim\
 	hmmstat\
 	jackhmmer\
 	phmmer\
@@ -60,19 +62,22 @@ PROGS = hmmalign\
 	hmmpgmd\
 	hmmc2\
 	makenhmmerdb\
-	exactmatch
-
+	exactmatch\
+	hmmsim\
+	sim-alignment
 
 PROGOBJS =\
+	alimask.o\
+	exactmatch.o\
 	hmmalign.o\
 	hmmbuild.o\
 	hmmconvert.o\
 	hmmemit.o\
 	hmmfetch.o\
+	hmmlogo.o\
 	hmmpress.o\
 	hmmscan.o\
 	hmmsearch.o\
-	hmmsim.o\
 	hmmstat.o\
 	jackhmmer.o\
 	phmmer.o\
@@ -80,7 +85,9 @@ PROGOBJS =\
 	hmmpgmd.o\
 	hmmc2.o\
 	makenhmmerdb.o\
-	exactmatch.o
+	exactmatch.o\
+	hmmsim.o\
+	sim-alignment.o
 
 HDRS =  hmmer.h \
 	cachedb.h \
@@ -88,7 +95,8 @@ HDRS =  hmmer.h \
 	p7_gmxb.h \
 	p7_gmxchk.h \
 	p7_hmmcache.h\
-	p7_refmx.h
+	p7_refmx.h\
+	p7_trace_metrics.h
 
 OBJS =  banded_fwdback.o\
 	build.o\
@@ -109,6 +117,7 @@ OBJS =  banded_fwdback.o\
 	generic_vtrace.o\
 	h2_io.o\
 	heatmap.o\
+	hmmlogo.o\
 	hmmdmstr.o\
 	hmmdwrkr.o\
 	hmmdutils.o\
@@ -133,6 +142,7 @@ OBJS =  banded_fwdback.o\
 	p7_hmm.o\
 	p7_hmmcache.o\
 	p7_hmmfile.o\
+	p7_hmmwindow.o\
 	p7_null3.o\
 	p7_pipeline.o\
 	p7_prior.o\
@@ -141,6 +151,7 @@ OBJS =  banded_fwdback.o\
 	p7_spensemble.o\
 	p7_tophits.o\
 	p7_trace.o\
+	p7_trace_metrics.o\
 	p7_msvdata.o\
 	fm_alphabet.o\
 	fm_general.o\

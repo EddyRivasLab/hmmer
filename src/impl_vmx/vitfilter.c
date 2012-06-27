@@ -31,6 +31,7 @@
 
 #include "easel.h"
 #include "esl_vmx.h"
+#include "esl_gumbel.h"
 
 #include "hmmer.h"
 #include "impl_vmx.h"
@@ -244,6 +245,249 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
       *ret_sc -= 3.0; /* the NN/CC/JJ=0,-3nat approximation: see J5/36. That's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ contrib */
     }
   else *ret_sc = -eslINFINITY;
+  return eslOK;
+}
+/*---------------- end, p7_ViterbiFilter() ----------------------*/
+
+
+
+
+/* Function:  p7_ViterbiFilter_longtarget()
+ * Synopsis:  Finds windows within potentially long sequence blocks with Viterbi
+ *            scores above threshold (vewy vewy fast, in limited precision)
+ *
+ * Purpose:   Calculates an approximation of the Viterbi score for regions
+ *            of sequence <dsq>, using optimized profile <om>, and a pre-
+ *            allocated one-row DP matrix <ox>, and captures the positions
+ *            at which such regions exceed the score required to be
+ *            significant in the eyes of the calling function (usually
+ *            p=0.001).
+ *
+ *            The resulting landmarks are converted to subsequence
+ *            windows by the calling function
+ *
+ *            The model must be in a local alignment mode; other modes
+ *            cannot provide the necessary guarantee of no underflow.
+ *
+ *            This is a striped SIMD Viterbi implementation using Intel
+ *            VMX integer intrinsics \citep{Farrar07}, in reduced
+ *            precision (signed words, 16 bits).
+ *
+ * Args:      dsq     - digital target sequence, 1..L
+ *            L       - length of dsq in residues
+ *            om      - optimized profile
+ *            ox      - DP matrix
+ *            filtersc   - null or bias correction, required for translating a P-value threshold into a score threshold
+ *            P          - p-value below which a region is captured as being above threshold
+ *            windowlist - RETURN: array of hit windows (start and end of diagonal) for the above-threshold areas
+ *
+ * Returns:   <eslOK> on success;
+ *
+ * Throws:    <eslEINVAL> if <ox> allocation is too small, or if
+ *            profile isn't in a local alignment mode. (Must be in local
+ *            alignment mode because that's what helps us guarantee
+ *            limited dynamic range.)
+ *
+ * Xref:      See p7_ViterbiFilter()
+ */
+int
+p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox,
+                            float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
+{
+  vector signed short mpv, dpv, ipv; /* previous row values                                       */
+  vector signed short sv;      /* temp storage of 1 curr row value in progress              */
+  vector signed short dcv;       /* delayed storage of D(i,q+1)                               */
+  vector signed short xEv;       /* E state: keeps max for Mk->E as we go                     */
+  vector signed short xBv;       /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  vector signed short Dmaxv;         /* keeps track of maximum D cell on row                      */
+  int16_t  xE, xB, xC, xJ, xN;       /* special states' scores                                    */
+  int16_t  Dmax;         /* maximum D cell score on row                               */
+  int i;           /* counter over sequence positions 1..L                      */
+  int q;           /* counter over vectors 0..nq-1                              */
+  int Q          =  p7O_NQW(om->M);                             /* segment length: # of vectors                              */
+  vector signed short *dp  =  ox->dpw[0];    /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  vector signed short *rsc;      /* will point at om->ru[x] for residue x[i]                  */
+  vector signed short *tsc;      /* will point into (and step thru) om->tu                    */
+
+  vector signed short negInfv;
+
+  int16_t sc_thresh;
+  float invP;
+
+  int z;
+  union { vector signed short v; int16_t i[8]; } tmp;
+  windowlist->count = 0;
+
+  /*
+   *  In p7_ViterbiFilter, converting from a scaled int Viterbi score
+   *  S (aka xE the score getting to state E) to a probability
+   *  goes like this:
+   *    vsc =  S + om->xw[p7O_E][p7O_MOVE] + om->xw[p7O_C][p7O_MOVE] - om->base_w
+   *    ret_sc /= om->scale_w;
+   *    vsc -= 3.0;
+   *    P  = esl_gumbel_surv((vfsc - filtersc) / eslCONST_LOG2  ,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
+   *  and we're computing the threshold vsc, so invert it:
+   *    (vsc - filtersc) /  eslCONST_LOG2 = esl_gumbel_invsurv( P, om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA])
+   *    vsc = filtersc + eslCONST_LOG2 * esl_gumbel_invsurv( P, om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA])
+   *    vsc += 3.0
+   *    vsc *= om->scale_w
+   *    S = vsc - (float)om->xw[p7O_E][p7O_MOVE] - (float)om->xw[p7O_C][p7O_MOVE] + (float)om->base_w
+   */
+  invP = esl_gumbel_invsurv(P, om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
+  sc_thresh =   (int) ceil ( ( (filtersc + (eslCONST_LOG2 * invP) + 3.0) * om->scale_w )
+                - (float)om->xw[p7O_E][p7O_MOVE] - (float)om->xw[p7O_C][p7O_MOVE] + (float)om->base_w );
+
+
+  /* Check that the DP matrix is ok for us. */
+  if (Q > ox->allocQ8)                                 ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
+  if (om->mode != p7_LOCAL && om->mode != p7_UNILOCAL) ESL_EXCEPTION(eslEINVAL, "Fast filter only works for local alignment");
+  ox->M   = om->M;
+
+  negInfv = esl_vmx_set_s16((signed short)-32768);
+
+  /* Initialization. In unsigned arithmetic, -infinity is -32768
+   */
+  for (q = 0; q < Q; q++)
+    MMXo(q) = IMXo(q) = DMXo(q) = negInfv;
+  xN   = om->base_w;
+  xB   = xN + om->xw[p7O_N][p7O_MOVE];
+  xJ   = -32768;
+  xC   = -32768;
+  xE   = -32768;
+
+#if p7_DEBUGGING
+  if (ox->debugging) p7_omx_DumpVFRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
+#endif
+
+  for (i = 1; i <= L; i++)
+    {
+      rsc   = om->rwv[dsq[i]];
+      tsc   = om->twv;
+      dcv   = negInfv;               /* "-infinity" */
+      xEv   = negInfv;
+      Dmaxv = negInfv;
+      xBv   = esl_vmx_set_s16(xB);
+
+      /* Right shifts by 1 value (2 bytes). 4,8,12,x becomes x,4,8,12.
+       * Because ia32 is littlendian, this means a left bit shift.
+       * Zeros shift on automatically; replace it with -32768.
+       */
+      mpv = MMXo(Q-1);  mpv = vec_sld(negInfv, mpv, 14);
+      dpv = DMXo(Q-1);  dpv = vec_sld(negInfv, dpv, 14);
+      ipv = IMXo(Q-1);  ipv = vec_sld(negInfv, ipv, 14);
+
+      for (q = 0; q < Q; q++)
+      {
+        /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
+        sv   =              vec_adds(xBv, *tsc);  tsc++;
+        sv   = vec_max (sv, vec_adds(mpv, *tsc)); tsc++;
+        sv   = vec_max (sv, vec_adds(ipv, *tsc)); tsc++;
+        sv   = vec_max (sv, vec_adds(dpv, *tsc)); tsc++;
+        sv   = vec_adds(sv, *rsc);                rsc++;
+        xEv  = vec_max(xEv, sv);
+
+        /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
+         * {MDI}MX(q) is then the current, not the prev row
+         */
+        mpv = MMXo(q);
+        dpv = DMXo(q);
+        ipv = IMXo(q);
+
+        /* Do the delayed stores of {MD}(i,q) now that memory is usable */
+        MMXo(q) = sv;
+        DMXo(q) = dcv;
+
+        /* Calculate the next D(i,q+1) partially: M->D only;
+               * delay storage, holding it in dcv
+         */
+        dcv   = vec_adds(sv, *tsc);  tsc++;
+        Dmaxv = vec_max(dcv, Dmaxv);
+
+        /* Calculate and store I(i,q) */
+        sv     =             vec_adds(mpv, *tsc);  tsc++;
+        IMXo(q)= vec_max(sv, vec_adds(ipv, *tsc)); tsc++;
+      }
+
+      /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
+      xE = esl_vmx_hmax_s16(xEv);
+
+      if (xE >= sc_thresh) {
+        //hit score threshold. Add a window to the list, then reset scores.
+
+        /* Unpack and unstripe, then find the position responsible for the hit */
+
+        for (q = 0; q < Q; q++) {
+          tmp.v = MMXo(q);
+          for (z = 0; z < 8; z++)  { // unstripe
+            if ( tmp.i[z] == xE && (q+Q*z+1) <= om->M) {
+              // (q+Q*z+1) is the model position k at which the xE score is found
+              p7_hmmwindow_new(windowlist, 0, i, 0, (q+Q*z+1), 1, 0.0, fm_nocomplement );
+            }
+          }
+          MMXo(q) = IMXo(q) = DMXo(q) = negInfv; //reset score to start search for next vit window.
+        }
+
+      } else {
+
+          xN = xN + om->xw[p7O_N][p7O_LOOP];
+          xC = ESL_MAX(xC + om->xw[p7O_C][p7O_LOOP], xE + om->xw[p7O_E][p7O_MOVE]);
+          xJ = ESL_MAX(xJ + om->xw[p7O_J][p7O_LOOP], xE + om->xw[p7O_E][p7O_LOOP]);
+          xB = ESL_MAX(xJ + om->xw[p7O_J][p7O_MOVE], xN + om->xw[p7O_N][p7O_MOVE]);
+          /* and now xB will carry over into next i, and xC carries over after i=L */
+
+          /* Finally the "lazy F" loop (sensu [Farrar07]). We can often
+           * prove that we don't need to evaluate any D->D paths at all.
+           *
+           * The observation is that if we can show that on the next row,
+           * B->M(i+1,k) paths always dominate M->D->...->D->M(i+1,k) paths
+           * for all k, then we don't need any D->D calculations.
+           *
+           * The test condition is:
+           *      max_k D(i,k) + max_k ( TDD(k-2) + TDM(k-1) - TBM(k) ) < xB(i)
+           * So:
+           *   max_k (TDD(k-2) + TDM(k-1) - TBM(k)) is precalc'ed in om->dd_bound;
+           *   max_k D(i,k) is why we tracked Dmaxv;
+           *   xB(i) was just calculated above.
+           */
+          Dmax = esl_vmx_hmax_s16(Dmaxv);
+          if (Dmax + om->ddbound_w > xB)
+          {
+            /* Now we're obligated to do at least one complete DD path to be sure. */
+            /* dcv has carried through from end of q loop above */
+            dcv = vec_sld(negInfv, dcv, 14);
+            tsc = om->twv + 7*Q;  /* set tsc to start of the DD's */
+            for (q = 0; q < Q; q++)
+              {
+                DMXo(q) = vec_max(dcv, DMXo(q));
+                dcv     = vec_adds(DMXo(q), *tsc); tsc++;
+              }
+
+            /* We may have to do up to three more passes; the check
+             * is for whether crossing a segment boundary can improve
+             * our score.
+             */
+            do {
+              dcv = vec_sld(negInfv, dcv, 14);
+              tsc = om->twv + 7*Q;  /* set tsc to start of the DD's */
+              for (q = 0; q < Q; q++)
+                {
+            if (! vec_any_gt(dcv, DMXo(q))) break;
+            DMXo(q) = vec_max(dcv, DMXo(q));
+            dcv     = vec_adds(DMXo(q), *tsc);   tsc++;
+                }
+            } while (q == Q);
+          }
+          else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
+            DMXo(0) = vec_sld(negInfv, dcv, 14);
+
+#if p7_DEBUGGING
+          if (ox->debugging) p7_omx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);
+#endif
+
+      }
+    } /* end loop over sequence residues 1..L */
+
+
   return eslOK;
 }
 /*---------------- end, p7_ViterbiFilter() ----------------------*/

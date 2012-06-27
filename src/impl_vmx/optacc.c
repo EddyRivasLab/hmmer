@@ -108,8 +108,8 @@ p7_OptimalAccuracy(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *r
 	{
 	  sv  =             vec_and(vec_cmpgt(*tp, zerov), xBv);  tp++;
 	  sv  = vec_max(sv, vec_and(vec_cmpgt(*tp, zerov), mpv)); tp++;
-	  sv  = vec_max(sv, vec_and(vec_cmpgt(*tp, zerov), dpv)); tp++;
 	  sv  = vec_max(sv, vec_and(vec_cmpgt(*tp, zerov), ipv)); tp++;
+	  sv  = vec_max(sv, vec_and(vec_cmpgt(*tp, zerov), dpv)); tp++;
 	  sv  = vec_add(sv, *ppp);                                ppp += 2;
 	  xEv = vec_max(xEv, sv);
 	  

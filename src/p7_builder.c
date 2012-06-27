@@ -91,6 +91,8 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
       seed = esl_opt_GetInteger(go, "--seed");
     }
 
+  bld->do_uniform_insert = FALSE; // default
+
   /* The default RE target is alphabet dependent. */
   if (go != NULL &&  esl_opt_IsOn (go, "--ere")) 
     bld->re_target = esl_opt_GetReal(go, "--ere");
@@ -356,6 +358,7 @@ p7_builder_Destroy(P7_BUILDER *bld)
 static int    validate_msa         (P7_BUILDER *bld, ESL_MSA *msa);
 static int    relative_weights     (P7_BUILDER *bld, ESL_MSA *msa);
 static int    build_model          (P7_BUILDER *bld, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr);
+static int    homogonize_inserts   (P7_HMM *hmm);
 static int    effective_seqnumber  (P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm, const P7_BG *bg);
 static int    parameterize         (P7_BUILDER *bld, P7_HMM *hmm);
 static int    annotate             (P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm);
@@ -413,6 +416,10 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
   if ((status =  relative_weights     (bld, msa))                       != eslOK) goto ERROR;
   if ((status =  esl_msa_MarkFragments(msa, bld->fragthresh))           != eslOK) goto ERROR;
   if ((status =  build_model          (bld, msa, &hmm, tr_ptr))         != eslOK) goto ERROR;
+
+  if (bld->do_uniform_insert)
+    if ((status =  homogonize_inserts (hmm))                            != eslOK) goto ERROR;
+
   if ((status =  effective_seqnumber  (bld, msa, hmm, bg))              != eslOK) goto ERROR;
   if ((status =  parameterize         (bld, hmm))                       != eslOK) goto ERROR;
   if ((status =  annotate             (bld, msa, hmm))                  != eslOK) goto ERROR;
@@ -817,6 +824,55 @@ build_model(P7_BUILDER *bld, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
 
  ERROR:
   return status;
+}
+
+/* homogonize_inserts()
+ *
+ * <hmm> comes in with weighted observed counts. It goes out with
+ * the observed counts for transitions p7H_II and p7H_MI distributed
+ * equally among all positions.
+ */
+static int
+homogonize_inserts(P7_HMM *hmm)
+{
+  int i;
+  float tii = 0.0;
+  float tmi = 0.0;
+  float dmi;
+  float tm_md;
+
+  /* Get total counts for M->I and I->I transitions
+   * Ignore position M, as its insert state isn't reached.
+   */
+  for (i=1; i<hmm->M; i++ ) {
+    tii += hmm->t[i][p7H_II];
+    tmi += hmm->t[i][p7H_MI];
+  }
+
+
+  //these is the avg counts per position
+  tii /= (hmm->M-1);
+  tmi /= (hmm->M-1);
+
+  //assign those avg counts per position
+  for (i=1; i<hmm->M; i++ ) {
+
+    hmm->t[i][p7H_II]  = tii;
+    hmm->t[i][p7H_IM]  = tmi; //(I->M == M->I by design).
+
+    dmi = tmi - hmm->t[i][p7H_MI];  //change
+    hmm->t[i][p7H_MI]  = tmi;
+
+    /* the change to M->I counts should be offset by
+     * changes to the M->M or M->D counts
+     */
+    tm_md = hmm->t[i][p7H_MM] + hmm->t[i][p7H_MD];
+    hmm->t[i][p7H_MM] -= (tm_md == 0 ? 0 : (dmi * hmm->t[i][p7H_MM]/tm_md)) ;
+    hmm->t[i][p7H_MD] -= (tm_md == 0 ? 0 : (dmi * hmm->t[i][p7H_MD]/tm_md)) ;
+
+  }
+
+  return eslOK;
 }
 
 

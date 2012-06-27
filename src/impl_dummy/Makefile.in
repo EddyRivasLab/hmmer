@@ -29,7 +29,8 @@ MYINCDIRS   = -I../../${ESLDIR} \
 	      -I. \
 	      -I.. \
 	      -I${srcdir} \
-	      -I${top_srcdir}/src
+	      -I${top_srcdir}/src \
+	      -I${srcdir}/..
 
 OBJS =  decoding.o\
 	fwdback.o\

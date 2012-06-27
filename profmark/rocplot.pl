@@ -1,6 +1,6 @@
 #! /usr/bin/perl
 
-$nsearches = 1567;
+$nsearches = 2809;
 
 require "getopts.pl";
 &Getopts('n:X:x:');

@@ -143,10 +143,8 @@ p7_hmm_MSVDataDestroy(P7_MSVDATA *data )
  *            values of P7_MSVDATA are required, p7_hmm_MSVDataComputeRest()
  *            must be called.
  *
- * Args:      gm         - P7_PROFILE containing scores used to produce MSVDATA contents
+ * Args:      om         - P7_PROFILE containing scores used to produce MSVDATA contents
  *            do_opt_ext - boolean, TRUE if optimal-extension scores are required (for FM-MSV)
- *            scale      - used to produce 8-bit extracted scores
- *            bias       - used to produce 8-bit extracted scores
  *
  * Returns:   a pointer to the new <P7_MSVDATA> object.
  *
@@ -157,7 +155,6 @@ p7_hmm_MSVDataCreate(P7_OPROFILE *om, int do_opt_ext )
 {
   P7_MSVDATA *data = NULL;
   int    status;
-
 
   ESL_ALLOC(data, sizeof(P7_MSVDATA));
 
@@ -177,6 +174,76 @@ ERROR:
 }
 
 
+/* Function:  p7_hmm_MSVDataClone()
+ * Synopsis:  Clone a <P7_MSVDATA> model object
+ *
+ * Purpose:   Allocate a <P7_MSVDATA> object used in both FM-MSV and
+ *            MSV_LongTarget diagonal recovery/extension, then
+ *            copy data into it from another populated instance
+ *
+ *            Once a hit passes the MSV filter, and the prefix/suffix
+ *            values of P7_MSVDATA are required, p7_hmm_MSVDataComputeRest()
+ *            must be called.
+ *
+ * Args:      src        - P7_MSVDATA upon which clone will be based
+ *            Kp          - alphabet size, including degeneracy codes, gaps
+ *
+ * Returns:   a pointer to the new <P7_MSVDATA> object.
+ *
+ * Throws:    <NULL> on allocation failure.
+ */
+P7_MSVDATA *
+p7_hmm_MSVDataClone(P7_MSVDATA *src, int Kp) {
+  P7_MSVDATA *new;
+  int status;
+  int i;
+
+  if (src == NULL)
+    return NULL;
+
+  ESL_ALLOC(new, sizeof(P7_MSVDATA));
+  new->M = src->M;
+  new->scores         = NULL;
+  new->opt_ext_fwd    = NULL;
+  new->opt_ext_rev    = NULL;
+  new->prefix_lengths = NULL;
+  new->suffix_lengths = NULL;
+
+  if (src->scores != NULL) {
+    ESL_ALLOC(new->scores, (src->M + 1) * Kp * sizeof(uint8_t));
+    memcpy(new->scores, src->scores, (src->M + 1) * Kp * sizeof(uint8_t)  );
+  }
+
+  if (src->opt_ext_fwd != NULL) {
+     ESL_ALLOC(new->opt_ext_fwd, (src->M + 1) * sizeof(uint8_t*));
+     for (i=1; i<=src->M; i++) {
+       ESL_ALLOC(new->opt_ext_fwd[i], 10 * sizeof(uint8_t));
+       memcpy(new->opt_ext_fwd+i, src->opt_ext_fwd+i, 10 * sizeof(uint8_t));
+     }
+  }
+  if (src->opt_ext_rev != NULL) {
+     ESL_ALLOC(new->opt_ext_rev, (src->M + 1) * sizeof(uint8_t*));
+     for (i=1; i<=src->M; i++) {
+       ESL_ALLOC(new->opt_ext_rev[i], 10 * sizeof(uint8_t));
+       memcpy(new->opt_ext_rev+i, src->opt_ext_rev+i, 10 * sizeof(uint8_t));
+     }
+  }
+
+
+  if (src->prefix_lengths != NULL) {
+     ESL_ALLOC(new->prefix_lengths, (src->M+1) * sizeof(float));
+     memcpy(new->prefix_lengths, src->prefix_lengths, (src->M+1) * sizeof(float));
+  }
+  if (src->suffix_lengths != NULL) {
+     ESL_ALLOC(new->suffix_lengths, (src->M+1) * sizeof(float));
+     memcpy(new->suffix_lengths, src->suffix_lengths, (src->M+1) * sizeof(float));
+  }
+
+  return new;
+
+ERROR:
+  return NULL;
+}
 
 /* Function:  p7_hmm_MSVDataComputeRest()
  * Synopsis:  Compute prefix_ and suffix_ lengths for a <P7_MSVDATA>
@@ -207,6 +274,7 @@ p7_hmm_MSVDataComputeRest(P7_OPROFILE *om, P7_MSVDATA *data )
   float *t_mis;
   float *t_iis;
 
+
   ESL_ALLOC(t_mis, sizeof(float) * (om->M+1));
   p7_oprofile_GetFwdTransitionArray(om, p7O_MI, t_mis );
 
@@ -220,10 +288,10 @@ p7_hmm_MSVDataComputeRest(P7_OPROFILE *om, P7_MSVDATA *data )
 
   sum = 0;
   for (i=1; i < om->M; i++) {
-
     data->prefix_lengths[i] = 2 + (int)(log(p7_DEFAULT_WINDOW_BETA / t_mis[i] )/log(t_iis[i]));
     sum += data->prefix_lengths[i];
   }
+  data->prefix_lengths[0] = data->prefix_lengths[om->M] = 0;
 
 
   for (i=1; i < om->M; i++)

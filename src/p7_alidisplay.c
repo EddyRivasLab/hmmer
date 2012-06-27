@@ -75,6 +75,12 @@ p7_alidisplay_pickHqBounds(P7_DOMAINDEF *ddef, P7_ALIDISPLAY *ad, const P7_TRACE
 {
   int z, i;    /* counter over positions in the alignment */
 
+  /*strange special case, should be gone with new (as of May 2012) domain definition machinery*/
+  if (z1==z2){
+    ad->hqto = ad->hqfrom = tr->i[z1];
+    return eslOK;
+  }
+
   /*scan left to right to find left boundary*/
   i = z1-2;
   for (z = z1 ; z < z2; z++) {

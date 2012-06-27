@@ -2,6 +2,8 @@
  */
 #include "p7_config.h"
 
+#ifdef HMMER_THREADS
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -215,7 +217,7 @@ main(int argc, char **argv)
  *    cat my.hmm | pbcopy   
  */
 
-
+#endif /*HMMER_THREADS*/
 
 /*****************************************************************
  * @LICENSE@

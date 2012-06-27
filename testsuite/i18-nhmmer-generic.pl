@@ -16,7 +16,7 @@ BEGIN {
     $tmppfx    = shift;
 }
 
-$verbose = 1;
+$verbose = 0;
 
 # The test makes use of the following file:
 #
@@ -73,41 +73,41 @@ if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = 
 q[
 Target sequences:                  1  \(9000000 residues searched\)
-Residues passing MSV filter:            181626  \(0.0202\); expected \(0.02\)
-Residues passing bias filter:           154025  \(0.0171\); expected \(0.02\)
-Residues passing Vit filter:              6764  \(0.000752\); expected \(0.001\)
-Residues passing Fwd filter:               174  \(1.93e-05\); expected \(1e-05\)
+Residues passing MSV filter:            181921  \(0.0202\); expected \(0.02\)
+Residues passing bias filter:           154172  \(0.0171\); expected \(0.02\)
+Residues passing Vit filter:              6160  \(0.000684\); expected \(0.001\)
+Residues passing Fwd filter:               165  \(1.83e-05\); expected \(1e-05\)
 Total number of hits:                        3  \(6.44e-06\)];
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 1\n";
 }
 
 $expect = 
-    q[0.023   17.6   1.2  random   4499980 4499999\s+
+    q[0.054   16.4   1.2  random   4499980 4499999\s+
       0.077   15.9   0.2  random   3299961 3299978\s+
-      0.094   15.7   0.6  random   1979941 1979960];
+       0.13   15.3   0.6  random   1979941 1979960];
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 2\n";
 }
 
-$cmd = "$builddir/src/nhmmer --tformat fasta --single $tmppfx.hmm $database";
+$cmd = "$builddir/src/nhmmer --tformat fasta --toponly $tmppfx.hmm $database";
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = 
 q[Target sequences:                  1  \(4500000 residues searched\)
 Residues passing MSV filter:             91726  \(0.0204\); expected \(0.02\)
 Residues passing bias filter:            78563  \(0.0175\); expected \(0.02\)
-Residues passing Vit filter:              3651  \(0.000811\); expected \(0.001\)
-Residues passing Fwd filter:               174  \(3.87e-05\); expected \(1e-05\)
+Residues passing Vit filter:              3303  \(0.000734\); expected \(0.001\)
+Residues passing Fwd filter:               165  \(3.67e-05\); expected \(1e-05\)
 Total number of hits:                        3  \(1.29e-05\)];
 
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 3\n";
 }
 $expect = 
-    q[0.011   17.6   1.2  random   4499980 4499999.+
+    q[0.027   16.4   1.2  random   4499980 4499999.+
       0.039   15.9   0.2  random   3299961 3299978\s+
-      0.047   15.7   0.6  random   1979941 1979960]; 
+      0.063   15.3   0.6  random   1979941 1979960]; 
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 4\n";
 }

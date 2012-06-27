@@ -15,7 +15,7 @@
 BEGIN {
     $top_builddir  = shift;
     $top_srcdir    = shift;
-    $wrkdir     = shift;
+    $wrkdir        = shift;
     $tblfile       = shift;
     $msafile       = shift;
     $fafile        = shift;
@@ -55,7 +55,7 @@ while (<TABLE>)
     foreach $qname (@qnames) 
     {
 	$output = `esl-sfetch -o $wrkdir/$msaname.query.fa $wrkdir/$msaname.sto $qname`;
-	if ($?) { print "FAILED: esl-sfetch-o $wrkdir/$msaname.query.fa $wrkdir/$msaname.sto $qname\n"; next MSA; }
+	if ($?) { print "FAILED: esl-sfetch -o $wrkdir/$msaname.query.fa $wrkdir/$msaname.sto $qname\n"; next MSA; }
 
 	`$phmmer --cpu 1 --tblout $wrkdir/$msaname.tmp $opts $wrkdir/$msaname.query.fa $fafile > /dev/null`;
 	if ($?) { print "FAILED: $phmmer --tblout $msaname.tmp $opts $wrkdir/$msaname.query.fa $fafile\n"; next MSA; }

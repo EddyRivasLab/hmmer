@@ -413,7 +413,6 @@ p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bm
  *            <bmd> (which caller has allocated).
  *
  * Args:      gm    - query profile
- *            totsc - Forward (or Backward) raw lod score
  *            bmf   - computed Forward matrix
  *            bmb   - computed Backward matrix
  *            bmd   - RESULT: decoding matrix, space provided by caller
@@ -424,7 +423,7 @@ p7_BandedBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_BANDMX *bm
  * Throws:    (no abnormal error conditions)
  */
 int 
-p7_BandedDecoding(const P7_PROFILE *gm, float totsc, const P7_BANDMX *bmf, P7_BANDMX *bmb, P7_BANDMX *bmd)
+p7_BandedDecoding(const P7_PROFILE *gm, const P7_BANDMX *bmf, P7_BANDMX *bmb, P7_BANDMX *bmd)
 {
   const int   *bnd_ip = bmf->bnd->imem;          /* ptr to current ia, ib segment band in bmx->bnd  */
   const int   *bnd_kp = bmf->bnd->kmem;		 /* ptr to current ka, kb row band in bmx->bnd      */
@@ -435,6 +434,7 @@ p7_BandedDecoding(const P7_PROFILE *gm, float totsc, const P7_BANDMX *bmf, P7_BA
   float       *xpb    = bmb->xmx;
   float       *xpd    = bmd->xmx;
   float        xN, xJ, xC;
+  float        totsc;
   float        norm;
   int          ia,ib;
   int          last_ib;
@@ -445,6 +445,10 @@ p7_BandedDecoding(const P7_PROFILE *gm, float totsc, const P7_BANDMX *bmf, P7_BA
   xJ = xC = -eslINFINITY; 
   last_ib = 0;
 
+  /* we need the Forward/Backward score for normalization. Reconstruct it from the Backward score. */
+  ia =    *bnd_ip;			                                     /* that's last_ia in Backwards            */
+  totsc = xpb[p7B_N] + ( (ia-1) ? (ia-1) * gm->xsc[p7P_N][p7P_LOOP] : 0.0f); /* ia-1 can be 0; guard against 0*inf=NaN */
+  
   for (g = 0; g < bmf->bnd->nseg; g++)
     {
       ia = *bnd_ip++;
@@ -928,7 +932,21 @@ traceback(const P7_PROFILE *gm, const P7_BANDMX *bmd, const P7_BANDMX *bma, P7_T
 	  }
 
 	  /* Now we can decrement dp/ppp, if we're supposed to. Do this before decrementing i */
-	  if ((i>ia+1 && decrement_dp) || (i>ia && do_NCJ_emit))
+	  /* i>ia+decrement_i test is tricky and deserves explanation.
+	   *   1. At the end of a segment (ia), we want the dp pointer to STAY on ia and not move.
+	   *      In the initialization of the next segment, dp will decrement to point to ib.
+	   *   2. If you have scur->snxt D->M on row i=ia+1, dp was pointing at row i (where the D
+	   *      is); the M will emit the i; the M is still on row i so decrement_i is FALSE;
+	   *      decrement_dp is TRUE and indeed we need to decrement dp, so it points to ia
+	   *      (where the M will trace to).
+	   *   3. If you have scur->snxt M->M on row i=ia+1, dp was already pointing at i-1=ia
+	   *      where it needs to remain; decrement_i is TRUE; we will decrement i to become ia;
+	   *      and decrement_dp is TRUE but now we must not move dp (because it's already resting
+	   *      on ia).
+	   * Thus: in case (2), with decrement_i FALSE, we want to decrement dp so long as i>ia;
+	   *       in case (3), with decrement_i TRUE,  we want to decrement dp so long as i>ia+1.      
+	   */
+	  if ( (i>ia+decrement_i && decrement_dp) || (i>ia && do_NCJ_emit)) /* i>ia test: leave dp on row ia as a boundary condition; don't move it until we start next segment. */
 	    {
 	      kb   = *bnd_kp--;
 	      ka   = *bnd_kp--;	
@@ -1400,12 +1418,13 @@ main(int argc, char **argv)
       /* Run banded Forward, Backward */
       p7_BandedForward (sq->dsq, sq->n, gm, bmf, &fsc);
       p7_BandedBackward(sq->dsq, sq->n, gm, bmb, &bsc);
-      p7_BandedDecoding(gm, fsc, bmf, bmb, bmd);
-      p7_BandedAlign   (gm, /*gamma=*/1.0, bmd, bma, tr, &gain);
+      p7_BandedDecoding(gm, bmf, bmb, bmd);
 
       if (esl_opt_GetBoolean(go, "-F"))   p7_bandmx_DumpWindow(stdout, bmf, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
       if (esl_opt_GetBoolean(go, "-B"))   p7_bandmx_DumpWindow(stdout, bmb, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
       if (esl_opt_GetBoolean(go, "-D"))   p7_bandmx_DumpWindow(stdout, bmd, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
+
+      p7_BandedAlign   (gm, /*gamma=*/1.0f, bmd, bma, tr, &gain);
       if (esl_opt_GetBoolean(go, "-A"))   p7_bandmx_DumpWindow(stdout, bma, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
       if (esl_opt_GetBoolean(go, "-T"))   p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 #ifdef p7_DEBUGGING
@@ -1443,6 +1462,8 @@ main(int argc, char **argv)
       p7_filtermx_Reuse(ox);
       p7_bandmx_Reuse(bmf);
       p7_bandmx_Reuse(bmb);
+      p7_bandmx_Reuse(bmd);
+      p7_bandmx_Reuse(bma);
       p7_gbands_Reuse(bnd);
       esl_sq_Reuse(sq);
     }
