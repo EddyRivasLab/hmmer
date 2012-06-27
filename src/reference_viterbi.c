@@ -572,7 +572,8 @@ main(int argc, char **argv)
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
-  float           vsc, nullsc;
+  float           vsc, nullsc, dvsc;
+  int             d;
   int             status;
 
   /* Read in one HMM */
@@ -623,10 +624,25 @@ main(int argc, char **argv)
        */
       p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
 
+      p7_trace_Index(tr);
+      for (d = 0; d < tr->ndom; d++)
+	{
+	  p7_trace_ScoreDomain(tr, sq->dsq, gm, d, &dvsc);
+
+	  printf("%-20s %-30s %10.2f %2d/%-2d %5d %5d %10.2f\n",
+		 gm->name, sq->name,
+		 (vsc - nullsc) / eslCONST_LOG2,
+		 d+1, tr->ndom,
+		 tr->sqfrom[d], tr->sqto[d],
+		 (dvsc - nullsc) / eslCONST_LOG2);
+	}
+
+#if 0
       printf("%-30s   %10.4f nats (raw)    %10.4f bits\n", 
 	     sq->name,
 	     vsc, 
 	     (vsc - nullsc) / eslCONST_LOG2);
+#endif
 
       p7_refmx_Reuse(vit);
       p7_trace_Reuse(tr);

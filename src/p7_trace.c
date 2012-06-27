@@ -970,6 +970,65 @@ p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, float *ret_sc)
 }
 
 
+/* Function:  p7_trace_ScoreDomain()
+ * Synopsis:  Return a per-domain trace score for a selected domain.
+ *
+ * Purpose:   For an indexed trace <tr> of sequence <dsq> aligned to
+ *            model <gm>, find domain number <which> (0..tr->ndom-1)
+ *            and calculate a "per-domain" score for this domain.
+ *            Return this lod score (in nats) in <*ret_sc>. The caller
+ *            still needs to subtract the null model score and convert
+ *            to bits.
+ *            
+ *            The per-domain score is the score that you'd get if this
+ *            were the only domain in the sequence. If there is only
+ *            one domain, it is equal to the overall trace score.
+ *            
+ *            The score respects the given configuration of <gm>
+ *            (whether it is in unihit or multihit mode); the
+ *            per-domain score is not necessarily w.r.t. unihit mode
+ *            configuration.
+ *
+ * Args:      tr     - trace
+ *            dsq    - sequence (digital, 1..tr->L)
+ *            gm     - profile
+ *            which  - which domain to score, 0..tr->ndom-1
+ *            ret_sc - RETURN: per-domain score in nats
+ *
+ * Returns:   <eslOK> on success, and <*ret_sc> is the per-domain score
+ *            in nats.
+ *
+ * Throws:    <eslEINVAL> if the trace isn't indexed, or if it has
+ *            no domain number <which>. Now <*ret_sc> is undefined.
+ */
+int
+p7_trace_ScoreDomain(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, int which, float *ret_sc)
+{
+  float sc = 0.0;
+  int   xi;
+  int   z;
+
+  if (! tr->ndom)        ESL_EXCEPTION(eslEINVAL, "p7_trace_ScoreDomain() requires an indexed trace structure");
+  if (which >= tr->ndom) ESL_EXCEPTION(eslEINVAL, "<which> exceeds number of domains");
+
+  /* S->N, N->N*(i-1), N->B ;  E->C, C->C*(L-j), C->T */
+  sc += (float)(tr->sqfrom[which]-1)     * gm->xsc[p7P_N][p7P_LOOP] + gm->xsc[p7P_N][p7P_MOVE];
+  sc += (float)(tr->L - tr->sqto[which]) * gm->xsc[p7P_C][p7P_LOOP] + gm->xsc[p7P_E][p7P_MOVE] + gm->xsc[p7P_E][p7P_MOVE];
+  
+  for (z = tr->tfrom[which]; z < tr->tto[which]; z++)
+    {
+      xi = dsq[tr->i[z]];
+
+      if      (tr->st[z] == p7T_ML || tr->st[z] == p7T_MG) sc += P7P_MSC(gm, tr->k[z], xi);
+      else if (tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) sc += P7P_ISC(gm, tr->k[z], xi);
+
+      sc += p7_profile_GetT(gm, tr->st[z], tr->k[z], tr->st[z+1], tr->k[z+1]);
+    }
+  *ret_sc = sc;
+  return eslOK;
+}
+
+
 /* Function:  p7_trace_GetExpectedAccuracy()
  * Synopsis:  Returns the sum of the posterior residue decoding probs.
  */
@@ -1087,7 +1146,7 @@ p7_trace_AppendWithPP(P7_TRACE *tr, char st, int k, int i, float pp)
  *           At least for now, this invalidates any domain index
  *           table, if it exists. The expectd order of invocation is
  *           to create the traceback backwards, <Reverse()> it, then
- *           <IndexDomains()> it.
+ *           <Index()> it.
  *           
  * Args:     tr - the traceback to reverse. tr->N must be set.
  *                
@@ -1172,7 +1231,7 @@ p7_trace_Index(P7_TRACE *tr)
 	{
 	  if ((status = p7_trace_GrowIndex(tr)) != eslOK) return status;
 	  
-	  tr->sqfrom[tr->ndom]  = z;
+	  tr->tfrom[tr->ndom]   = z;
 	  z += 2;		/* now we're either on M1/D1 for glocal, or MLk for local */
 	  tr->hmmfrom[tr->ndom] = tr->k[z];
 	  while (tr->st[z] == p7T_DG) z++;

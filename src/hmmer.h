@@ -1707,7 +1707,8 @@ extern int   p7_trace_DumpAnnotated(FILE *fp, const P7_TRACE *tr, const P7_PROFI
 extern int   p7_trace_DumpSuper    (FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ *dsq,
 				    float gamma, const P7_REFMX *fpp, const P7_BANDMX *bpp);
 extern int   p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol);
-extern int   p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, float *ret_sc);
+extern int   p7_trace_Score      (P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm,            float *ret_sc);
+extern int   p7_trace_ScoreDomain(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, int which, float *ret_sc);
 extern float p7_trace_GetExpectedAccuracy(const P7_TRACE *tr);
 
 extern int  p7_trace_Append(P7_TRACE *tr, char st, int k, int i);

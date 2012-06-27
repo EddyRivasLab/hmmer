@@ -45,7 +45,6 @@ MYINCDIRS = -I../${ESLDIR} \
 
 
 PROGS = alimask\
-	exactmatch\
 	hmmalign\
 	hmmbuild\
 	hmmconvert\
@@ -68,7 +67,6 @@ PROGS = alimask\
 
 PROGOBJS =\
 	alimask.o\
-	exactmatch.o\
 	hmmalign.o\
 	hmmbuild.o\
 	hmmconvert.o\
