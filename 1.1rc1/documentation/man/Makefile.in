@@ -1,0 +1,61 @@
+top_srcdir = @top_srcdir@
+srcdir     = @srcdir@
+VPATH      = @srcdir@ 
+SHELL      = /bin/sh
+
+# Installation targets
+#
+prefix      = @prefix@
+exec_prefix = @exec_prefix@
+datarootdir = @datarootdir@
+bindir      = @bindir@
+libdir      = @libdir@
+includedir  = @includedir@
+mandir      = @mandir@
+docdir      = @docdir@
+pdfdir      = @pdfdir@
+mandir      = @mandir@
+man1dir     = ${mandir}/man1
+man1ext     = .1
+
+INSTALL     = @INSTALL@
+
+MANS =  hmmer\
+	hmmalign\
+	hmmbuild\
+	hmmconvert\
+	hmmemit\
+	hmmfetch\
+	hmmpress\
+	hmmscan\
+	hmmsearch\
+	hmmsim\
+	hmmstat\
+	jackhmmer\
+	phmmer
+
+.PHONY:  install uninstall clean distclean
+
+install:
+	for file in ${MANS}; do \
+	   ${INSTALL} -m 0755 ${srcdir}/$$file.man ${DESTDIR}${man1dir}/$${file}${man1ext} ;\
+	done
+
+uninstall:
+	for file in ${MANS}; do \
+	   rm ${DESTDIR}${man1dir}/$${file}${man1ext} ;\
+	done
+
+clean:
+	-rm -f *~ 
+
+distclean:
+	-rm -f *~ 
+	-rm -f Makefile
+
+################################################################
+# @LICENSE@
+#
+# SVN $URL$
+# SVN $Id$
+################################################################
