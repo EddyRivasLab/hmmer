@@ -62,6 +62,8 @@ UTESTS = @MPI_UTESTS@\
 	stotrace_utest\
 	vitfilter_utest
 
+STATS  = fwdfilter_stats
+
 BENCHMARKS = @MPI_BENCHMARKS@\
 	decoding_benchmark\
 	fwdback_benchmark\
@@ -99,7 +101,7 @@ endif
 
 
 all:   libhmmer-impl.stamp
-dev:   ${UTESTS} ${BENCHMARKS} ${EXAMPLES}
+dev:   ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
 check: ${UTESTS}
 tests: ${UTESTS}
 
@@ -120,6 +122,21 @@ ${UTESTS}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
 	@BASENAME=`echo $@ | sed -e 's/_utest//'| sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
+	if test -e ${srcdir}/p7_$${BASENAME}.c; then \
+           DFILE=${srcdir}/p7_$${BASENAME}.c ;\
+        else \
+           DFILE=${srcdir}/$${BASENAME}.c ;\
+	fi;\
+	if test ${V} ;\
+	   then echo "${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
+	   else echo '    ' GEN $@ ;\
+	fi ;\
+	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
+
+${STATS}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
+	@BASENAME=`echo $@ | sed -e 's/_stats//' | sed -e 's/^p7_//'`;\
+	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
+	DFLAG=p7$${DFLAG}_STATS ;\
 	if test -e ${srcdir}/p7_$${BASENAME}.c; then \
            DFILE=${srcdir}/p7_$${BASENAME}.c ;\
         else \

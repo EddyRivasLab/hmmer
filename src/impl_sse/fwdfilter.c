@@ -1081,6 +1081,157 @@ save_debug_row_fb(P7_FILTERMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float totsc
 
 
 /*****************************************************************
+ * x. Stats driver: memory usage profiling 
+ *****************************************************************/
+
+#ifdef p7FWDFILTER_STATS
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_exponential.h"
+#include "esl_gumbel.h"
+#include "esl_getopts.h"
+#include "esl_sq.h"
+#include "esl_sqio.h"
+
+#include "hmmer.h"
+#include "impl_sse.h"
+#include "p7_filtermx.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile> <seqfile>";
+static char banner[] = "stats driver, ForwardFilter()";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  char           *seqfile = esl_opt_GetArg(go, 2);
+  ESL_ALPHABET   *abc     = NULL;
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_BG          *bg      = NULL;
+  P7_PROFILE     *gm      = NULL;
+  P7_OPROFILE    *om      = NULL;
+  P7_FILTERMX    *ox      = NULL;
+  P7_GBANDS      *bnd     = NULL;
+  ESL_SQ         *sq      = NULL;
+  ESL_SQFILE     *sqfp    = NULL;
+  int             format  = eslSQFILE_UNKNOWN;
+  float           fraw, nullsc, fsc, msvsc;
+  float           msvmem, vfmem, fbmem, bndmem, basemem;
+  double          P;
+  double          bandw;
+  int             status;
+
+  p7_FLogsumInit();
+  impl_Init();
+
+  /* Read in one HMM */
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+
+  /* Open sequence file for reading */
+  sq     = esl_sq_CreateDigital(abc);
+  status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
+  if      (status == eslENOTFOUND) p7_Fail("No such file.");
+  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+
+  /* create default null model, then create and optimize profile */
+  bg = p7_bg_Create(abc);               
+  gm = p7_profile_Create(hmm->M, abc); 
+  p7_profile_ConfigCustom(gm, hmm, bg, 500, 1.0, 0.5);
+  om = p7_oprofile_Create(gm->M, abc);
+  p7_oprofile_Convert(gm, om);
+
+  /* Initially allocate matrices for a default sequence size, 500; 
+   * we resize as needed for each individual target seq 
+   */
+  ox  = p7_filtermx_Create(gm->M, 500, ESL_MBYTES(32));  
+  bnd = p7_gbands_Create  (gm->M, 500);
+
+  printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s\n",
+	 "target seq", "query profile", "score", "P-value", "MSV (KB)", "VF (KB)", "FB (MB)", "bnd (MB)", "bandwidth", "base (MB)");
+  printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s\n",
+	 "----------------------------", "------------------------------",  "---------", "---------", "---------", "---------", "---------", "---------", "---------", "---------");
+
+  while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
+    {
+      p7_oprofile_ReconfigLength(om, sq->n);
+      p7_profile_SetLength      (gm, sq->n);
+      p7_bg_SetLength(bg,            sq->n);
+
+      p7_filtermx_GrowTo(ox,  om->M, sq->n); 
+      p7_gbands_Reinit  (bnd, gm->M, sq->n); 
+
+
+      p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
+
+      p7_MSVFilter(sq->dsq, sq->n, om, ox, &msvsc);
+      msvsc = (msvsc - nullsc) / eslCONST_LOG2;
+      P     =  esl_gumbel_surv(msvsc,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+
+      if (P <= 0.02) 
+	{
+          p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fraw);
+	  p7_BackwardFilter(sq->dsq, sq->n, om, ox, bnd);
+
+	  /* Calculate minimum memory requirements for each step */
+	  msvmem  = (double) ( p7O_NQB(om->M) * sizeof(__m128i))      / 1024.;   /* in KB */
+	  vfmem   = (double) ( p7O_NQW(om->M) * sizeof(__m128i)) * 3. / 1024.;  
+	  fbmem   = (double) ( 3. + ceil (sqrt(9. + 8. * (double) sq->n - 3.) / 2.)) * (double) (om->M * 3 * sizeof(float)) / 1024. / 1024.;
+	  bndmem  = (double) bnd->ncell * 6. * sizeof(float) / 1024. / 1024.;           /* 6, because you're dual-mode */
+	  basemem = (double) om->M * (double) sq->n * 6 * sizeof(float) / 1024. / 1024;	/* 6 = dual-mode */
+	  bandw   = (double) bnd->ncell / (double) sq->n;
+
+	  fsc  =  (fraw-nullsc) / eslCONST_LOG2;
+	  P    = esl_exp_surv(fsc,   om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
+
+	  printf("%-30s %-30s %9.2f %9.2g %9.3f %9.3f %9.3f %9.3f %9.3f %9.3f\n",
+		 sq->name,
+		 hmm->name,
+		 fsc, P,
+		 msvmem,
+		 vfmem,
+		 fbmem, 
+		 bndmem,
+		 bandw,
+		 basemem);
+	}
+	     
+      esl_sq_Reuse(sq);
+      p7_gbands_Reuse(bnd);
+      p7_filtermx_Reuse(ox);
+    }
+
+  esl_sq_Destroy(sq);
+  esl_sqfile_Close(sqfp);
+  p7_gbands_Destroy(bnd);
+  p7_filtermx_Destroy(ox);
+  p7_oprofile_Destroy(om);
+  p7_profile_Destroy(gm);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  p7_hmmfile_Close(hfp);
+  esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+
+
+#endif
+/*--------------- end, stats driver -----------------------------*/
+
+
+/*****************************************************************
  * 4. Benchmark
  *****************************************************************/
 /* Difference between gcc -g vs. icc -O3 is large! */
@@ -1459,7 +1610,7 @@ main(int argc, char **argv)
   int             format  = eslSQFILE_UNKNOWN;
   float           fraw, nullsc, fsc, bsc;
   float           gfraw, gbraw, gfsc, gbsc;
-  float           gmem, cmem;
+  float           gmem, cmem, bmem;
   double          P, gP;
   int             status;
 
@@ -1481,7 +1632,8 @@ main(int argc, char **argv)
   /* create default null model, then create and optimize profile */
   bg = p7_bg_Create(abc);               
   gm = p7_profile_Create(hmm->M, abc); 
-  p7_profile_ConfigLocal(gm, hmm, bg, 500); /* local-mode, for comparison to fwdfilter which is local-only */
+  //  p7_profile_ConfigLocal(gm, hmm, bg, 500); /* local-mode, for comparison to fwdfilter which is local-only */
+  p7_profile_ConfigUnilocal(gm, hmm, bg, 500); 
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
   /* p7_oprofile_Dump(stdout, om);  */
@@ -1535,30 +1687,32 @@ main(int argc, char **argv)
       P  = esl_exp_surv(fsc,   om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
       gP = esl_exp_surv(gfsc,  gm->evparam[p7_FTAU],  gm->evparam[p7_FLAMBDA]);
 
-      gmem = (float) p7_refmx_Sizeof(gx)    / 1000000.;
-      cmem = (float) p7_filtermx_Sizeof(ox) / 1000000.;
+      gmem = (float) p7_refmx_Sizeof(gx)    / 1024 / 1024;
+      cmem = (float) p7_filtermx_Sizeof(ox) / 1024 / 1024;
+      bmem = (float) bnd->ncell * 6. * sizeof(float) / 1024 / 1024; /* 6: banded impl is dual-mode */
 
-      p7_gbands_Dump(stdout, bnd);	  
+      // p7_gbands_Dump(stdout, bnd);	  
 
       if (esl_opt_GetBoolean(go, "-1")) 
-	printf("%-30s\t%-20s\t%9.2g\t%7.4f\t%7.4f\t%9.2g\t%6.1f\t%6.2fM\t%6.2fM\n", sq->name, hmm->name, P, fsc, bsc, gP, gfsc, gmem, cmem);
+	printf("%-30s\t%-20s\t%9.2g\t%7.4f\t%7.4f\t%9.2g\t%6.1f\t%6.2fM\t%6.2fM\t%6.2fM\n", sq->name, hmm->name, P, fsc, bsc, gP, gfsc, gmem, cmem, bmem);
       else
 	{
-	  
-	  printf("target sequence:      %s\n",        sq->name);
-	  printf("fwd filter raw score: %.4f nats\n", fraw);
+	  printf("query model:               %s\n",        hmm->name);
+	  printf("target sequence:           %s\n",        sq->name);
+	  printf("fwd filter raw score:      %.4f nats\n", fraw);
 #ifdef p7_DEBUGGING
-	  printf("bck filter raw score: %.4f nats\n", ox->bcksc);
+	  printf("bck filter raw score:      %.4f nats\n", ox->bcksc);
 #endif
-	  printf("null score:           %.2f nats\n", nullsc);
-	  printf("per-seq score:        %.2f bits\n", fsc);
-	  printf("P-value:              %g\n",        P);
-	  printf("GForward raw score:   %.2f nats\n", gfraw);
-	  printf("GBackward raw score:  %.2f nats\n", gbraw);
-	  printf("GForward seq score:   %.2f bits\n", gfsc);
-	  printf("GForward P-value:     %g\n",        gP);
-	  printf("RAM, f/b filter:      %6.2fM\n",    cmem);
-	  printf("RAM, generic:         %6.2fM\n",    gmem);
+	  printf("null score:                %.2f nats\n", nullsc);
+	  printf("per-seq score:             %.2f bits\n", fsc);
+	  printf("P-value:                   %g\n",        P);
+	  printf("Reference fwd raw score:   %.2f nats\n", gfraw);
+	  printf("Reference bck raw score:   %.2f nats\n", gbraw);
+	  printf("Reference Fwd bit score:   %.2f bits\n", gfsc);
+	  printf("Reference Forward P-val:   %g\n",        gP);
+	  printf("RAM, f/b filter:           %.2fM\n",    cmem);
+	  printf("RAM, generic:              %.2fM\n",    gmem);
+	  printf("RAM, banded:               %.2fM\n",    bmem);
 	}
 
       esl_sq_Reuse(sq);
