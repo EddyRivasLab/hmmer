@@ -33,9 +33,10 @@ p7_gbands_Create(int M, int L)
   bnd->nseg  = 0;
   bnd->nrow  = 0;
 
-  bnd->M     = M;
-  bnd->L     = L;
-  bnd->ncell = 0;
+  bnd->M      = M;
+  bnd->L      = L;
+  bnd->ncell  = 0;
+  bnd->ncell2 = 0;
 
   ESL_ALLOC(bnd->imem, sizeof(int) * init_segalloc * 2); /* *2: for ia, ib pairs */
   ESL_ALLOC(bnd->kmem, sizeof(int) * init_rowalloc * p7_GBANDS_NK);
@@ -209,11 +210,12 @@ p7_gbands_GrowRows(P7_GBANDS *bnd)
 int
 p7_gbands_Reuse(P7_GBANDS *bnd)
 {
-  bnd->nseg  = 0;
-  bnd->nrow  = 0;
-  bnd->L     = 0;
-  bnd->M     = 0;
-  bnd->ncell = 0;
+  bnd->nseg   = 0;
+  bnd->nrow   = 0;
+  bnd->L      = 0;
+  bnd->M      = 0;
+  bnd->ncell  = 0;
+  bnd->ncell2 = 0;		/* J10/29 experiment */
   return eslOK;
 }
 

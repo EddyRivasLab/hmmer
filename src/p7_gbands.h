@@ -20,10 +20,10 @@
 /* P7_GBANDS: specifies a banded dynamic programming matrix.
  */
 typedef struct {
-  int    *imem;	   /* ia,ib pairs for each segment.    imem[0..2*nseg-1]            */
-  int    *kmem;	   /* ka,kb pairs for each banded row. kmem[0..p7_GBANDS_NK*nrow-1] */
-  int     nseg;	   /* number of banded segments.                                    */
-  int     nrow;	   /* number of banded rows. \sum_{g=1}^{nseg} ( ib[g]-ia[g]+1 )    */
+  int    *imem;	   /* ia,ib pairs for each segment.    imem[0..2*nseg-1]              */
+  int    *kmem;	   /* ka,kb pairs for each banded row. kmem[0..p7_GBANDS_NK*nrow-1]   */
+  int     nseg;	   /* number of banded segments.                                      */
+  int     nrow;	   /* number of banded rows. \sum_{g=0}^{nseg-1} ( ib[g]-ia[g]+1 )    */
 
   /* Things for memory management:                                                            */
   int  segalloc;   /* imem[] alloc'ed for 2*segalloc segment ia,ib coords;   nseg <= segalloc */
@@ -33,6 +33,7 @@ typedef struct {
   int     L;	   /* target seq len (copy of; only needed for stats, arg checks)             */
   int     M;	   /* query model length (ditto)                                              */
   int64_t ncell;   /* # banded cells: \sum_{g} \sum_{i=ia[g]}^{ib[g]} { kb[i]-ka[i]+1 }       */
+  int64_t ncell2;  /* experiment; delete later J10/29 */
 } P7_GBANDS;
 
 #define p7_GBANDS_NK 2		/* for IK banding. Or 6, for IKS banding */

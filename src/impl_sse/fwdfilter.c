@@ -780,6 +780,18 @@ backward_row_rescale(float *xc, __m128 *dpc, int Q, float scalefactor)
   xc[p7F_SCALE] = scalefactor;
 }
 
+/* Only needed during development, for memory profiling; J10/29
+ */
+static inline int
+sse_countge(__m128 v, float thresh)
+{
+  union { __m128 v; float x[4]; } u;
+  int z;
+  int c = 0;
+  u.v   = v;
+  for (z = 0; z < 4; z++) if (u.x[z] >= thresh) c++;
+  return c;
+}
 
 /* posterior_decode_row()
  *
@@ -883,6 +895,8 @@ posterior_decode_row(P7_FILTERMX *ox, int rowi, P7_GBANDS *bnd, float overall_sc
       pv   = _mm_add_ps(pv, _mm_mul_ps(P7F_DQ(fwd, q), P7F_DQ(bck, q)));
       pv   = _mm_mul_ps(pv, cv);
       mask = _mm_cmpge_ps(pv, threshv);
+
+      bnd->ncell2 += sse_countge(pv, p7_BANDS_THRESH2); /* experimental; J10/29 */
 
 #ifdef p7_DEBUGGING
       P7F_MQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7F_MQ(fwd, q), P7F_MQ(bck, q)));
@@ -1125,7 +1139,7 @@ main(int argc, char **argv)
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
   float           fraw, nullsc, fsc, msvsc;
-  float           msvmem, vfmem, fbmem, bndmem, basemem;
+  float           msvmem, vfmem, fbmem, bndmem, bndmem2, basemem;
   double          P;
   double          bandw;
   int             status;
@@ -1158,10 +1172,10 @@ main(int argc, char **argv)
   ox  = p7_filtermx_Create(gm->M, 500, ESL_MBYTES(32));  
   bnd = p7_gbands_Create  (gm->M, 500);
 
-  printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s\n",
-	 "target seq", "query profile", "score", "P-value", "MSV (KB)", "VF (KB)", "FB (MB)", "bnd (MB)", "bandwidth", "base (MB)");
-  printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s\n",
-	 "----------------------------", "------------------------------",  "---------", "---------", "---------", "---------", "---------", "---------", "---------", "---------");
+  printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s %9s\n",
+	 "target seq", "query profile", "score", "P-value", "MSV (KB)", "VF (KB)", "FB (MB)", "bnd (MB)", "bnd2 (MB)", "bandwidth", "base (MB)");
+  printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s %9s\n",
+	 "----------------------------", "------------------------------",  "---------", "---------", "---------", "---------", "---------", "---------", "---------", "---------", "---------");
 
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
@@ -1187,15 +1201,16 @@ main(int argc, char **argv)
 	  /* Calculate minimum memory requirements for each step */
 	  msvmem  = (double) ( p7O_NQB(om->M) * sizeof(__m128i))      / 1024.;   /* in KB */
 	  vfmem   = (double) ( p7O_NQW(om->M) * sizeof(__m128i)) * 3. / 1024.;  
-	  fbmem   = (double) ( 3. + ceil (sqrt(9. + 8. * (double) sq->n - 3.) / 2.)) * (double) (om->M * 3 * sizeof(float)) / 1024. / 1024.;
+	  fbmem   = (double) ( 3. + ceil ( (sqrt(9. + 8. * (double) sq->n) - 3.) / 2.)) * (double) (om->M * 3 * sizeof(float)) / 1024. / 1024.;
 	  bndmem  = (double) bnd->ncell * 6. * sizeof(float) / 1024. / 1024.;           /* 6, because you're dual-mode */
+	  bndmem2 = (double) bnd->ncell2 * 6. * sizeof(float) / 1024. / 1024.;          
 	  basemem = (double) om->M * (double) sq->n * 6 * sizeof(float) / 1024. / 1024;	/* 6 = dual-mode */
-	  bandw   = (double) bnd->ncell / (double) sq->n;
+	  bandw   = (double) bnd->ncell  / (double) sq->n;
 
 	  fsc  =  (fraw-nullsc) / eslCONST_LOG2;
 	  P    = esl_exp_surv(fsc,   om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
 
-	  printf("%-30s %-30s %9.2f %9.2g %9.3f %9.3f %9.3f %9.3f %9.3f %9.3f\n",
+	  printf("%-30s %-30s %9.2f %9.2g %9.3f %9.3f %9.3f %9.3f %9.3f %9.3f %9.3f\n",
 		 sq->name,
 		 hmm->name,
 		 fsc, P,
@@ -1203,6 +1218,7 @@ main(int argc, char **argv)
 		 vfmem,
 		 fbmem, 
 		 bndmem,
+		 bndmem2,
 		 bandw,
 		 basemem);
 	}
