@@ -978,6 +978,10 @@ main(int argc, char **argv)
   float           sc;
   double          base_time, bench_time, Mcs;
 
+  /* Initialize log-sum calculator */
+  impl_Init();
+  p7_FLogsumInit();
+
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
 
