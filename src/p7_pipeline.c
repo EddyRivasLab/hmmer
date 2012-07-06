@@ -1279,8 +1279,8 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
 
       dom = pli->ddef->dcl + d;
       p7_pli_computeAliScores(dom, subseq, data, om->abc->Kp);
-      if (pli->aliscore_trim > -10000)
-        if ( (status = p7_pli_modifyAliBoundaries(dom, subseq, data, pli->aliscore_trim, om->abc->Kp)) != eslOK) esl_fatal("pipeline trimming failure");
+      if (pli->trim_bits > -10000)
+        if ( (status = p7_pli_modifyAliBoundaries(dom, subseq, data, pli->trim_bits, om->abc->Kp)) != eslOK) esl_fatal("pipeline trimming failure");
 
 
      /* note: the initial bitscore of a hit depends on the window_len of the

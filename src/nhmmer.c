@@ -115,11 +115,11 @@ static ESL_OPTIONS options[] = {
   { "--B2",         eslARG_INT,         "240", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Vit)",          7 },
   { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",          7 },
   /* Control of boundary picking based on aligned posterior probability */
-  { "--show_app",   eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,   "",             "Show aligned-posterior-probability (APP) line in tabular output",     9 },
-  { "--app_hi",     eslARG_REAL,       "0.95", NULL, NULL,    NULL,  NULL,   "",             "Set aligned-posterior-probability 'H' threshold",                     9 },
-  { "--app_med",    eslARG_REAL,       "0.85", NULL, NULL,    NULL,  NULL,   "",             "Set aligned-posterior-probability 'M' threshold (also hq_start/end)", 9 },
-  { "--app_lo",     eslARG_REAL,       "0.75", NULL, NULL,    NULL,  NULL,   "",             "Set aligned-posterior-probability 'L' threshold",                     9 },
-  { "--aliscore_trim", eslARG_REAL,  "-10000", NULL, NULL,    NULL,  NULL,   "",              "Trim off alignment ends with score less than this score",                     9 },
+  { "--show_app",   eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,   "",             "Show aligned-posterior-probability (APP) line (deprecated)",     9 },
+  { "--app_hi",     eslARG_REAL,       "0.95", NULL, NULL,    NULL,  NULL,   "",             "Set APP 'H' threshold (deprecated)",                             9 },
+  { "--app_med",    eslARG_REAL,       "0.85", NULL, NULL,    NULL,  NULL,   "",             "Set APP 'M' threshold (also hq_start/end) (deprecated)",         9 },
+  { "--app_lo",     eslARG_REAL,       "0.75", NULL, NULL,    NULL,  NULL,   "",             "Set APP 'L' threshold (deprecated)",                             9 },
+  { "--trim_bits", eslARG_REAL,      "-10000", NULL, NULL,    NULL,  NULL,   "",             "Trim off alignment ends with bit score less than this value",         9 },
 
   /* Control of FM pruning/extension */
   { "--fm_msv_length",   eslARG_INT,          "70", NULL, NULL,    NULL,  NULL, NULL,          "max length used when extending seed for MSV",                8 },
@@ -231,11 +231,11 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
       if (puts("\nOptions controlling acceleration heuristics:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 7, 2, 100);
 
-      if (puts("\nOptions controlling APP-based trimming thresholds:")       < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+      if (puts("\nOptions controlling trimming thresholds:")         < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 9, 2, 100);
 
-      if (puts("\nControl of FM pruning and extension:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 8, 2, 100);
+//      if (puts("\nControl of FM pruning and extension:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+//      esl_opt_DisplayHelp(stdout, go, 8, 2, 100);
 
       if (puts("\nOther expert options:")                                    < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 12, 2, 100);
@@ -315,7 +315,7 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--app_hi")          && fprintf(ofp, "# APP 'H':                      <= %g\n",             esl_opt_GetReal(go, "--app_hi"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--app_med")         && fprintf(ofp, "# APP 'M', (hq start/end base): <= %g\n",             esl_opt_GetReal(go, "--app_med"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--app_lo")          && fprintf(ofp, "# APP 'L':                      <= %g\n",             esl_opt_GetReal(go, "--app_lo"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--aliscore_trim")   && fprintf(ofp, "# trim ends with score          <= %g\n",             esl_opt_GetReal(go, "--aliscore_trim"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--trim_bits")       && fprintf(ofp, "# trim ends with bit score      <  %g\n",             esl_opt_GetReal(go, "--trim_bits"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 
   if (esl_opt_IsUsed(go, "--fm_msv_length")   && fprintf(ofp, "# seed extension max length:       %d\n",             esl_opt_GetInteger(go, "--fm_msv_length"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -636,7 +636,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           if (info[i].pli->app_med < info[i].pli->app_lo)  info[i].pli->app_med = info[i].pli->app_lo;
           if (info[i].pli->app_hi  < info[i].pli->app_med) info[i].pli->app_hi = info[i].pli->app_med;
 
-          info[i].pli->aliscore_trim = esl_opt_GetReal (go, "--aliscore_trim");
+          info[i].pli->trim_bits = esl_opt_GetReal (go, "--trim_bits");
 
 
           info[i].fm_cfg = fm_cfg;

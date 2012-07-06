@@ -1040,7 +1040,7 @@ typedef struct p7_pipeline_s {
   float  app_hi;  /* default 0.95 */
   float  app_med; /* default 0.85 */
   float  app_lo;  /* default 0.75 */
-  float  aliscore_trim;
+  float  trim_bits;
 
 
   P7_HMMFILE   *hfp;		/* COPY of open HMM database (if scan mode) */
