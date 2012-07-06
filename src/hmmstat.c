@@ -24,9 +24,9 @@ static ESL_OPTIONS options[] = {
   { "-h",        eslARG_NONE,    FALSE,  NULL, NULL,    NULL,  NULL,           NULL, "show brief help on version and usage",            0 },
 
   { "--eval2score",  eslARG_NONE, FALSE, NULL, NULL,    NULL,  NULL,           NULL,            "compute score required to get E-value (E) for database of (Z) sequences",     0 },
-  { "-Z",            eslARG_INT,    "1", NULL, "n>0",   NULL,  "--eval2score", NULL,            "database size, by default in # sequences , for --eval2score (default 1)",      0 },
-  { "--rescntZ",    eslARG_NONE,   FALSE, NULL, NULL,   NULL,  "--eval2score", NULL,            "for --eval2score, -Z is in # residues (DNA models only)",             0 },
-  { "-E",           eslARG_REAL,  "0.01", NULL, NULL,   NULL,  "--eval2score", NULL,            "E-value threshold, for --eval2score",                                               0 },
+  { "-Z",            eslARG_INT,    "1", NULL, "n>0",   NULL,  "--eval2score", NULL,            "database size, by default in # sequences , for --eval2score (default 1)",     0 },
+  { "--rescntZ",    eslARG_NONE,   FALSE, NULL, NULL,   NULL,  "--eval2score", NULL,            "for --eval2score, -Z is in thousands of residues (DNA models only)",          0 },
+  { "-E",           eslARG_REAL,  "0.01", NULL, NULL,   NULL,  "--eval2score", NULL,            "E-value threshold, for --eval2score",                                         0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -40,11 +40,11 @@ output_header(FILE *ofp, const ESL_GETOPTS *go)
   p7_banner(ofp, go->argv[0], banner);
 
   if (esl_opt_IsUsed(go, "--eval2score"))  {
-     if (  fprintf(ofp, "# show scores required to reach E-value:    %.2g\n",       esl_opt_GetReal(go, "-E"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+     if (  fprintf(ofp, "# show scores required to reach E-value:    %.2g\n",        esl_opt_GetReal(go, "-E"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
      if (esl_opt_IsUsed(go, "--rescntZ") ) {
-       if (  fprintf(ofp, "# assume database residue count:            %d\n",       esl_opt_GetInteger(go, "-Z")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+       if (  fprintf(ofp, "# assume database residue count:            %d Kb\n",     esl_opt_GetInteger(go, "-Z")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
      } else {
-       if (  fprintf(ofp, "# assume database sequence count:           %d\n",       esl_opt_GetInteger(go, "-Z")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+       if (  fprintf(ofp, "# assume database sequence count:           %d\n",        esl_opt_GetInteger(go, "-Z")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
      }
   }
 
@@ -186,7 +186,7 @@ main(int argc, char **argv)
         float nseq;
         float sc;
         if (esl_opt_IsUsed(go, "--rescntZ") )
-          nseq = (float)z_val / (float)(hmm->max_length);
+          nseq = (float)((long)z_val*1000) / (float)(hmm->max_length);
         else
           nseq = (float)z_val;
 
