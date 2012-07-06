@@ -301,14 +301,14 @@ p7_pipeline_Destroy(P7_PIPELINE *pli)
  * Purpose:   Accepts a <windowlist> of SSV diagonals, extends those
  *            to windows based on a combination of the max_length
  *            value from <om> and the prefix and suffix lengths stored
- *            in <msvdata>, then merges (in place) windows that overlap
+ *            in <data>, then merges (in place) windows that overlap
  *            by more than <pct_overlap> percent, ensuring that windows
  *            stay within the bounds of 1..<L>.
  *
  * Returns:   <eslOK>
  */
 int
-p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_MSVDATA *msvdata, P7_HMM_WINDOWLIST *windowlist, int L, float pct_overlap) {
+p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_WINDOWLIST *windowlist, int L, float pct_overlap) {
 
   int i;
   P7_HMM_WINDOW        *prev_window = NULL;
@@ -325,8 +325,8 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_MSVDATA *msvdata, P7_HMM
     curr_window = windowlist->windows+i;
 
     // the 0.1 multiplier provides for a small buffer in excess of the predefined prefix/suffix lengths - one proportional to max_length
-    window_start = ESL_MAX( 1,   curr_window->n - ( om->max_length * (0.1 + msvdata->prefix_lengths[curr_window->k - curr_window->length + 1]  )) ) ;
-    window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + (om->max_length * (0.1 + msvdata->suffix_lengths[curr_window->k] ) ) )   ;
+    window_start = ESL_MAX( 1,   curr_window->n - ( om->max_length * (0.1 + data->prefix_lengths[curr_window->k - curr_window->length + 1]  )) ) ;
+    window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + (om->max_length * (0.1 + data->suffix_lengths[curr_window->k] ) ) )   ;
 
     curr_window->n = window_start;
     curr_window->length = window_end - window_start + 1;
@@ -871,7 +871,283 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 
 
 
-/* Function:  postViterbi_LongTarget()
+/* Function:  p7_pli_computeAliScores()
+ * Synopsis:  Compute per-position scores for the alignment for a domain
+ *
+ * Purpose:   Compute per-position scores for the alignment for a domain
+ *
+ * Args:      dom             - domain with the alignment for which we wish to compute scores
+ *            seq             - sequence in which domain resides
+ *            data         - contains model's emission and transition values in unstriped form
+ *            K               - alphabet size
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ *
+ * Xref:      J4/25.
+ */
+static int
+p7_pli_computeAliScores(P7_DOMAIN *dom, ESL_DSQ *seq, const P7_SCOREDATA *data, int K)
+{
+  int status;
+  int i, j, k;
+  float sc;
+
+  //Compute score contribution of each position in the alignment to the overall Viterbi score
+  ESL_ALLOC( dom->scores_per_pos, sizeof(float) * dom->ad->N );
+  for (i=0; i<dom->ad->N; i++)  dom->scores_per_pos[i] = 0.0;
+
+  i = dom->iali - 1;        //sequence position
+  j = dom->ad->hmmfrom - 1; //model position
+  k = 0;
+  while ( k<dom->ad->N) {
+    if (dom->ad->model[k] != '.' && dom->ad->aseq[k] != '-') { //match
+      i++;  j++;
+      // Including the MM cost is a hack. The cost of getting to/from this match
+      // state does matter, but an IM or DM transition would improperly deflate
+      // the score of this column, so just give MM. That amount is offset out of
+      // the score shown for preceding indels
+      dom->scores_per_pos[k] = data->fwd_scores[K * j + seq[i]]
+                             +  (j==1 ? 0 : log(data->fwd_transitions[p7O_MM][j]) );
+      k++;
+    } else if (dom->ad->model[k] == '.' ) { // insert
+      //spin through the insert, accumulating cost;  only assign to final column in gap
+      dom->scores_per_pos[k] = -eslINFINITY;
+
+      sc = log(data->fwd_transitions[p7O_MI][j]);
+      i++; k++;
+      while (k<dom->ad->N && dom->ad->model[k] == '.') { //extend insert
+        dom->scores_per_pos[k] = -eslINFINITY;
+        sc += log(data->fwd_transitions[p7O_II][j]);
+        i++; k++;
+      }
+      sc += log(data->fwd_transitions[p7O_IM][j+1]) - log(data->fwd_transitions[p7O_MM][j+1]);
+      dom->scores_per_pos[k-1] = sc;
+
+    } else if (dom->ad->aseq[k] == '-' ) { // delete
+      dom->scores_per_pos[k] = -eslINFINITY;
+      sc = log(data->fwd_transitions[p7O_MD][j]);
+      j++; k++;
+      while (k<dom->ad->N && dom->ad->aseq[k] == '-')  { //extend delete
+        dom->scores_per_pos[k] = -eslINFINITY;
+        sc += log(data->fwd_transitions[p7O_DD][j]);
+        j++; k++;
+      }
+      sc += log(data->fwd_transitions[p7O_DM][j+1]) - log(data->fwd_transitions[p7O_MM][j+1]);
+      dom->scores_per_pos[k-1] = sc;
+    }
+  }
+
+  return eslOK;
+
+ERROR:
+  return eslEMEM;
+
+}
+
+
+/* Function:  p7_pli_modifyAliBoundaries()
+ * Synopsis:  Compute per-position scores for the alignment for a domain
+ *
+ * Purpose:   Compute per-position scores for the alignment for a domain
+ *
+ * Args:      dom             - domain with the alignment for which we wish to compute scores
+ *            seq             - sequence in which domain resides
+ *            data         - contains model's emission and transition values in unstriped form
+ *            thresh          - the threshold at which any lower-scoring end will be trimmed
+ *            K               - alphabet size
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ *
+ * Xref:      J4/25.
+ */
+static int
+p7_pli_modifyAliBoundaries(P7_DOMAIN *dom, ESL_DSQ *seq, const P7_SCOREDATA *data, float thresh, int K)
+{
+    //update alignment: trim  terminal sections with (a) all Ns or (b) negative score
+    int left_neg = -1;
+    float left_min = thresh;
+    float left_sum = 0.0;
+
+    int right_neg = dom->ad->N;
+    float right_min = thresh;
+    float right_sum = 0.0;
+
+    int ali_len;
+    int i = 0;
+
+
+    /*
+    //check if alignments can be trivially extended by adding a
+    //maximal extension of positive-scoring bases
+
+    //look left
+    int left_change=0;
+    while ( data->fwd_scores[K * (dom->ad->hmmfrom-left_change-1) + seq[(dom->iali-left_change-1)]] > 0 ) {
+      //dom->ad->hmmfrom--;
+      //dom->iali--;
+      left_change++;
+    }
+    //look right
+    int right_change=0;
+    while ( data->fwd_scores[K * (dom->ad->hmmto+right_change+1) + seq[(dom->jali+right_change+1)]] > 0 ) {
+      //dom->ad->hmmto++;
+      //dom->jali++;
+      right_change++;
+    }
+    printf ("push out: %d\n", left_change+right_change);
+    */
+
+    ali_len = dom->jali - dom->iali + 1;
+
+
+    //walk in on both ends of the alignment
+    while (i < ali_len) {
+      if (dom->scores_per_pos[i] != -eslINFINITY) {
+        left_sum += dom->scores_per_pos[i];
+        if (left_sum < left_min) {
+          left_min = left_sum;
+          left_neg = i;
+        }
+      }
+      i++;
+    }
+
+    i = dom->ad->N-1;
+    while (i >= 0) {
+      if (dom->scores_per_pos[i] != -eslINFINITY) {
+        right_sum += dom->scores_per_pos[i];
+        if (right_sum < right_min) {
+          right_min = right_sum;
+          right_neg = i;
+        }
+      }
+      i--;
+    }
+    // because gaps scores are stored in the right-most entry for the gap,
+    // this may leave us with a trailing gap.  Clean that up
+    if (dom->ad->model[right_neg] == '.' ||  dom->ad->aseq[right_neg] == '-') {
+      while (dom->ad->model[right_neg] == '.' ||  dom->ad->aseq[right_neg] == '-')
+        right_neg--;
+      right_neg++;
+    }
+
+
+    //if the negatives have overlapped, pin whichever is responsible for the lowest
+    // score, and recompute the other side.
+    if (left_neg > right_neg) {
+
+      if (right_min < left_min) {
+        //recompute left_min
+        left_neg = -1;
+        left_min = 0.0;
+        left_sum = 0.0;
+        i = 0;
+        while (i < right_neg - 1) {
+          if (dom->scores_per_pos[i] != -eslINFINITY) {
+            left_sum += dom->scores_per_pos[i];
+            if (left_sum < left_min) {
+              left_min = left_sum;
+              left_neg = i;
+            }
+          }
+          i++;
+        }
+      } else {
+        //recompute right min
+        right_neg = dom->ad->N;
+        right_min = 0.0;
+        right_sum = 0.0;
+        i = dom->ad->N-1;
+        while (i >= left_neg+1) {
+          if (dom->scores_per_pos[i] != -eslINFINITY) {
+            right_sum += dom->scores_per_pos[i];
+            if (right_sum < right_min) {
+              right_min = right_sum;
+              right_neg = i;
+            }
+          }
+          i--;
+        }
+        // because gaps scores are stored in the right-most entry for the gap,
+        // this may leave us with a trailing gap.  Clean that up
+        if (dom->ad->model[right_neg] == '.' ||  dom->ad->aseq[right_neg] == '-') {
+          while (dom->ad->model[right_neg] == '.' ||  dom->ad->aseq[right_neg] == '-')
+            right_neg--;
+          right_neg++;
+        }
+
+      }
+    }
+
+
+    if (left_neg>=0 || right_neg<= dom->ad->N - 1 ) {
+      printf ("changed: %s  (%.2f, %.2f)\n", dom->ad->aseq, left_min, right_min);
+    }
+
+    //modify positions
+    for (i=0; i<=left_neg; i++) {
+      if (dom->ad->aseq[i] != '-')  dom->iali++;
+      if (dom->ad->model[i] != '.') dom->ad->hmmfrom++;
+    }
+    for (i=dom->ad->N - 1; i>=right_neg; i--)  {
+      if (dom->ad->aseq[i] != '-')  dom->jali--;
+      if (dom->ad->model[i] != '.') dom->ad->hmmto--;
+    }
+    dom->ad->N = right_neg - left_neg - 1;
+
+
+    //overriding hqfrom and hqto, as I expect those to be removed in the next release
+    dom->ad->sqfrom = dom->ad->hqfrom = dom->iali;
+    dom->ad->sqto   = dom->ad->hqto   = dom->jali;
+
+    for (i=0; i<dom->ad->N; i++)
+      dom->scores_per_pos[i] = dom->scores_per_pos[i+left_neg+1];
+
+
+    //modify strings
+    if (dom->ad->model) {
+      dom->ad->model[right_neg] = '\0';
+      dom->ad->model = dom->ad->model + left_neg + 1;
+    }
+    if (dom->ad->mline) {
+      dom->ad->mline[right_neg] = '\0';
+      dom->ad->mline = dom->ad->mline + left_neg + 1;
+    }
+    if (dom->ad->aseq) {
+      dom->ad->aseq[right_neg] = '\0';
+      dom->ad->aseq = dom->ad->aseq + left_neg + 1;
+    }
+    if (dom->ad->rfline) {
+      dom->ad->rfline[right_neg] = '\0';
+      dom->ad->rfline = dom->ad->rfline + left_neg + 1;
+    }
+    if (dom->ad->mmline) {
+      dom->ad->mmline[right_neg] = '\0';
+      dom->ad->mmline = dom->ad->mmline + left_neg + 1;
+    }
+    if (dom->ad->csline) {
+      dom->ad->csline[right_neg] = '\0';
+      dom->ad->csline = dom->ad->csline + left_neg + 1;
+    }
+    if (dom->ad->ppline) {
+      dom->ad->ppline[right_neg] = '\0';
+      dom->ad->ppline = dom->ad->ppline + left_neg + 1;
+    }
+    if (dom->ad->appline) {
+      dom->ad->appline[right_neg] = '\0';
+      dom->ad->appline = dom->ad->appline + left_neg + 1;
+    }
+
+  return eslOK;
+
+}
+
+
+/* Function:  p7_pli_postViterbi_LongTarget()
  * Synopsis:  the part of the LongTarget P7 search Pipeline downstream
  *            of the Viterbi filter
  *
@@ -888,7 +1164,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
  *            om              - optimized profile (query)
  *            bg              - background model
  *            hitlist         - pointer to hit storage bin
- *            msvdata         - for computing windows based on maximum prefix/suffix extensions
+ *            data         - for computing windows based on maximum prefix/suffix extensions
  *            seqidx          - the id # of the sequence from which the current window was extracted
  *            window_start    - the starting position of the extracted window (offset from the first
  *                              position of the block of a possibly longer sequence)
@@ -917,15 +1193,15 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
  *
  * Throws:    <eslEMEM> on allocation failure.
  *
- * Xref:      J4/25.
  */
 static int
-postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist,
+p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, const P7_SCOREDATA *data,
     int64_t seqidx, int window_start, int window_len, ESL_SQ *tmpseq, P7_DOMAINDEF *ddef_app,
     ESL_DSQ *subseq, int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
     int complementarity, int *overlap
 )
 {
+  P7_DOMAIN        *dom     = NULL;     /* conveience variable, ptr to current domain */
   P7_HIT           *hit     = NULL;     /* ptr to the current hit output data      */
   float            fwdsc;   /* filter scores                           */
   float            nullsc;
@@ -935,7 +1211,6 @@ postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS 
   double           P;               /* P-value of a hit */
   int              d;
   int              status;
-
 
   int env_len;
   int ali_len;
@@ -1002,6 +1277,12 @@ postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS 
   for (d = 0; d < pli->ddef->ndom; d++)
   {
 
+      dom = pli->ddef->dcl + d;
+      p7_pli_computeAliScores(dom, subseq, data, om->abc->Kp);
+      if (pli->aliscore_trim > -10000)
+        if ( (status = p7_pli_modifyAliBoundaries(dom, subseq, data, pli->aliscore_trim, om->abc->Kp)) != eslOK) esl_fatal("pipeline trimming failure");
+
+
      /* note: the initial bitscore of a hit depends on the window_len of the
       * current window. Here, the score is modified (reduced) by treating
       * all passing windows as though they came from windows of length
@@ -1009,16 +1290,14 @@ postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS 
       * ~wheelert/notebook/2012/0130_bits_v_evalues/00NOTES (Feb 1)
       */
       //adjust the score of a hit to account for the full length model - the characters outside the envelope but in the window
-      env_len = pli->ddef->dcl[d].jenv - pli->ddef->dcl[d].ienv + 1;
-      ali_len = pli->ddef->dcl[d].jali - pli->ddef->dcl[d].iali + 1;
-      bitscore = pli->ddef->dcl[d].envsc ;
+      env_len = dom->jenv - dom->ienv + 1;
+      ali_len = dom->jali - dom->iali + 1;
+      bitscore = dom->envsc ;
       //For these modifications, see notes, ~/notebook/2010/0716_hmmer_score_v_eval_bug/, end of Thu Jul 22 13:36:49 EDT 2010
       bitscore -= 2 * log(2. / (window_len+2))          +   (env_len-ali_len)            * log((float)window_len / (window_len+2));
       bitscore += 2 * log(2. / (om->max_length+2)) ;
       //the ESL_MAX test handles the extremely rare case that the env_len is actually larger than om->max_length
       bitscore +=  (ESL_MAX(om->max_length, env_len) - ali_len) * log((float)om->max_length / (float) (om->max_length+2));
-
-
 
       /*compute scores used to decide if we should keep this "domain" as a hit.
        *
@@ -1026,7 +1305,7 @@ postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS 
        * saying that this null model is <omega> as likely as the standard null model.
        * <omega> is by default 1/(2^8), so this is by default an 8 bit penalty.
        */
-      dom_bias   = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + pli->ddef->dcl[d].domcorrection) : 0.0);
+      dom_bias   = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + dom->domcorrection) : 0.0);
       dom_score  = (bitscore - (nullsc + dom_bias))  / eslCONST_LOG2;
       dom_lnP   = esl_exp_logsurv(dom_score, om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
@@ -1123,7 +1402,7 @@ ERROR:
 }
 
 
-/* Function:  postMSV_LongTarget()
+/* Function:  p7_pli_postMSV_LongTarget()
  * Synopsis:  the part of the LongTarget P7 search Pipeline downstream
  *            of the MSV filter
  *
@@ -1141,7 +1420,7 @@ ERROR:
  *            om              - optimized profile (query)
  *            bg              - background model
  *            hitlist         - pointer to hit storage bin
- *            msvdata         - for computing windows based on maximum prefix/suffix extensions
+ *            data         - for computing windows based on maximum prefix/suffix extensions
  *            seqidx          - the id # of the sequence from which the current window was extracted
  *            window_start    - the starting position of the extracted window (offset from the first
  *                              position of the block of a possibly longer sequence)
@@ -1170,10 +1449,9 @@ ERROR:
  *
  * Throws:    <eslEMEM> on allocation failure.
  *
- * Xref:      J4/25.
  */
 static int
-postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, const P7_MSVDATA *msvdata,
+p7_pli_postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, const P7_SCOREDATA *data,
     int64_t seqidx, int window_start, int window_len, ESL_SQ *tmpseq, P7_DOMAINDEF *ddef_app,
     ESL_DSQ *subseq, int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
     float nullsc, float usc, int complementarity, P7_HMM_WINDOWLIST *vit_windowlist
@@ -1234,7 +1512,7 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
   //use window_len instead of loc_window_len, because length parameterization is done, just need to loop over subseq
   p7_ViterbiFilter_longtarget(subseq, window_len, om, pli->oxf, filtersc, pli->F2, vit_windowlist);
 
-  p7_pli_ExtendAndMergeWindows (om, msvdata, vit_windowlist, window_len, 0.5);
+  p7_pli_ExtendAndMergeWindows (om, data, vit_windowlist, window_len, 0.5);
 
 
   // if a window is still too long (>80Kb), need to split it up to
@@ -1265,7 +1543,7 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
     if (i>0)
       pli->pos_past_vit -= ESL_MAX(0,  vit_windowlist->windows[i-1].n + vit_windowlist->windows[i-1].length - vit_windowlist->windows[i].n );
 
-    postViterbi_LongTarget(pli, om, bg, hitlist, seqidx,
+    p7_pli_postViterbi_LongTarget(pli, om, bg, hitlist, data, seqidx,
         window_start+vit_windowlist->windows[i].n-1, vit_windowlist->windows[i].length, tmpseq,
         ddef_app, subseq + vit_windowlist->windows[i].n - 1,
         seq_start, seq_name, seq_source, seq_acc, seq_desc, complementarity, &overlap
@@ -1324,7 +1602,7 @@ postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hit
  * Xref:      J4/25.
  */
 int
-p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx)
+p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx)
 {
   int              i;
   int              status;
@@ -1364,12 +1642,11 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
    * that we would miss if we left length parameters set to the full target length */
   p7_oprofile_ReconfigMSVLength(om, om->max_length);
 
-
   /* First level filter: the SSV filter, with <om>.
    * This variant of SSV will scan a long sequence and find
    * short high-scoring regions.
    */
-  p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, msvdata, bg, pli->F1, &msv_windowlist);
+  p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, data, bg, pli->F1, &msv_windowlist);
 
   /* convert hits to windows, possibly filtering based on composition bias,
    * definitely merging neighboring windows, and
@@ -1381,11 +1658,11 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
     if (pli->hfp)
     {
       p7_oprofile_ReadRest(pli->hfp, om);
-      if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) goto ERROR; /* pli->errbuf has err msg set */
+      if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) goto ERROR;
     }
 
-    if (msvdata->prefix_lengths == NULL) { //otherwise, already filled in
-      p7_hmm_MSVDataComputeRest(om, msvdata);
+    if (data->prefix_lengths == NULL) { //otherwise, already filled in
+      p7_hmm_ScoreDataComputeRest(om, data);
     }
 
     /*
@@ -1406,7 +1683,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
       windowlist.count = j;
     }
 */
-    p7_pli_ExtendAndMergeWindows (om, msvdata, &msv_windowlist, sq->n, 0);
+    p7_pli_ExtendAndMergeWindows (om, data, &msv_windowlist, sq->n, 0);
 
 
   /*
@@ -1434,7 +1711,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P
 
       pli->pos_past_msv += window_len;
 
-      status = postMSV_LongTarget(pli, om, bg, hitlist, msvdata, seqidx, msv_windowlist.windows[i].n, window_len, tmpseq, ddef_app,
+      status = p7_pli_postMSV_LongTarget(pli, om, bg, hitlist, data, seqidx, msv_windowlist.windows[i].n, window_len, tmpseq, ddef_app,
                         subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc, fm_nocomplement, &vit_windowlist
       );
 
@@ -1500,7 +1777,7 @@ ERROR:
  */
 int
 p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
-    const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata)
+    const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_SCOREDATA *data)
 {
 
   int i;
@@ -1531,7 +1808,7 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
    * short high-scoring regions.
    * */
   p7_FM_MSV(om, (P7_GMX*)(pli->oxf), 2.0, bg, pli->F1,
-             fmf, fmb, fm_cfg, msvdata, &windowlist );
+             fmf, fmb, fm_cfg, data, &windowlist );
 
   for (i=0; i<windowlist.count; i++){
 
@@ -1549,7 +1826,7 @@ p7_Pipeline_FM( P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlis
     pli->pos_past_msv += window.length;
     p7_oprofile_ReconfigMSVLength(om, window.length);
 
-    status = postMSV_LongTarget(pli, om, bg, hitlist, msvdata, seqidx, window.n, window.length, tmpseq, ddef_app,
+    status = p7_pli_postMSV_LongTarget(pli, om, bg, hitlist, data, seqidx, window.n, window.length, tmpseq, ddef_app,
                       subseq, 1, seqdata[window.id].name, seqdata[window.id].source,
                       seqdata[window.id].acc, seqdata[window.id].desc,
                       window.null_sc, window.score, window.complementarity, NULL
