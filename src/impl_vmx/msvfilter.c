@@ -248,7 +248,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 static int
-p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, uint8_t sc_thresh, vector unsigned char sc_threshv, P7_HMM_WINDOWLIST *windowlist)
+p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_SCOREDATA *msvdata, uint8_t sc_thresh, vector unsigned char sc_threshv, P7_HMM_WINDOWLIST *windowlist)
 {
 
   vector unsigned char mpv;        /* previous row values                                       */
@@ -284,10 +284,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   float ret_sc;
 
   union { vector unsigned char v; uint8_t b[16]; } u;
-  uint8_t *scores = NULL;
-
-  ESL_ALLOC(scores, ((om->abc->Kp)*Q) * sizeof(uint8_t) );
-
 
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
@@ -336,22 +332,22 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       rem_sc = -1;
       for (q = 0; q < Q; q++) {  /// Unpack and unstripe, so we can find the state that exceeded pthresh
           u.v = dp[q];
-          for (k = 0; k < 16; k++) scores[q+Q*k+1] = u.b[k]; // unstripe
-          dp[q] = vec_splat_u8(0); // while we're here ... this will cause values to get reset to xB in next dp iteration
-
-      }
-      for (k = 1; k <= om->M; k++) {
-          if (scores[k] >= sc_thresh && scores[k] > rem_sc) {
-            end = k;
-            rem_sc = scores[k];
+          for (k = 0; k < 16; k++) { // unstripe
+            //(q+Q*k+1) is the model position k at which the xE score is found
+            if (u.b[k] >= sc_thresh && u.b[k] > rem_sc && (q+Q*k+1) <= om->M) {
+              end = (q+Q*k+1);
+              rem_sc = u.b[k];
+            }
           }
+          dp[q] = vec_splat_u8(0); // while we're here ... this will cause values to get reset to xB in next dp iteration
       }
+
       //recover the diagonal that hit threshold
       start = end;
       target_end = target_start = i;
       sc = rem_sc;
       while (rem_sc > om->base_b - om->tjb_b - om->tbm_b) {
-        rem_sc -= om->bias_b -  msvdata->scores[start*om->abc->Kp + dsq[target_start]];
+        rem_sc -= om->bias_b -  msvdata->msv_scores[start*om->abc->Kp + dsq[target_start]];
         --start;
         --target_start;
         //if ( start == 0 || target_start==0)    break;
@@ -368,7 +364,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       max_sc = sc;
       pos_since_max = 0;
       while (k<om->M && n<=L) {
-        sc += om->bias_b -  msvdata->scores[start*om->abc->Kp + dsq[n]];
+        sc += om->bias_b -  msvdata->msv_scores[start*om->abc->Kp + dsq[n]];
         if (sc >= max_sc) {
           max_sc = sc;
           max_end = n;
@@ -398,8 +394,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  }
 
   } /* end loop over sequence residues 1..L */
-
-  free(scores);
 
   return eslOK;
 
@@ -452,7 +446,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_SCOREDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
 #ifdef ALLOW_MSV
   vector unsigned char mpv;        /* previous row values                                       */

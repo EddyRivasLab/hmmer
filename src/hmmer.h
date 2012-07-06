@@ -13,7 +13,7 @@
  *    9. P7_ALIDISPLAY:  an alignment formatted for printing
  *   10. P7_DOMAINDEF:   reusably managing workflow in annotating domains
  *   11. P7_TOPHITS:     ranking lists of top-scoring hits
- *   12. P7_MSVDATA:     data used in diagonal recovery and extension
+ *   12. P7_SCOREDATA:     data used in diagonal recovery and extension
  *   13. P7_HMM_WINDOW:  data used to track lists of sequence windows
  *   14. FM:             FM-index
  *   15. Inclusion of the architecture-specific optimized implementation.
@@ -628,6 +628,7 @@ typedef struct p7_dom_s {
   double         lnP;	        /* log(P-value) of the bitscore                                               */
   int            is_reported;	/* TRUE if domain meets reporting thresholds                                  */
   int            is_included;	/* TRUE if domain meets inclusion thresholds                                  */
+  float         *scores_per_pos; /* score in BITS that each position in the alignment contributes to an overall viterbi score */
   P7_ALIDISPLAY *ad; 
 } P7_DOMAIN;
 
@@ -773,7 +774,7 @@ typedef struct p7_tophits_s {
 
 
 /*****************************************************************
- * 12. P7_MSVDATA: data used in diagonal recovery and extension
+ * 12. P7_SCOREDATA: data used in diagonal recovery and extension
  *****************************************************************/
 
 /* This contains a compact representation of 8-bit bias-shifted scores for use in
@@ -781,14 +782,16 @@ typedef struct p7_tophits_s {
  * along with MAXL-associated prefix- and suffix-lengths, and optimal extensions
  * for FM-MSV.
  */
-typedef struct p7_msvdata_s {
+typedef struct p7_scoredata_s {
   int      M;
-  uint8_t    *scores;  //implicit (M+1)*K matrix, where M = # states, and K = # characters in alphabet
+  uint8_t    *msv_scores;  //implicit (M+1)*K matrix, where M = # states, and K = # characters in alphabet
   uint8_t   **opt_ext_fwd;
   uint8_t   **opt_ext_rev;
   float      *prefix_lengths;
   float      *suffix_lengths;
-} P7_MSVDATA;
+  float      *fwd_scores;
+  float     **fwd_transitions;
+} P7_SCOREDATA;
 
 
 /*****************************************************************
@@ -1037,6 +1040,7 @@ typedef struct p7_pipeline_s {
   float  app_hi;  /* default 0.95 */
   float  app_med; /* default 0.85 */
   float  app_lo;  /* default 0.75 */
+  float  aliscore_trim;
 
 
   P7_HMMFILE   *hfp;		/* COPY of open HMM database (if scan mode) */
@@ -1158,7 +1162,7 @@ extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
 
 /* fm_msv.c */
 extern int p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
-         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata,
+         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_SCOREDATA *scoredata,
          P7_HMM_WINDOWLIST *windowlist);
 
 
@@ -1411,10 +1415,10 @@ P7_HMM_WINDOW *p7_hmmwindow_new (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t 
 
 
 /* p7_msvdata.c */
-extern P7_MSVDATA    *p7_hmm_MSVDataCreate(P7_OPROFILE *om, int do_opt_ext);
-extern P7_MSVDATA    *p7_hmm_MSVDataClone(P7_MSVDATA *src, int K);
-extern int            p7_hmm_MSVDataComputeRest(P7_OPROFILE *om, P7_MSVDATA *data );
-extern void           p7_hmm_MSVDataDestroy( P7_MSVDATA *data );
+extern P7_SCOREDATA   *p7_hmm_ScoreDataCreate(P7_OPROFILE *om, int do_opt_ext);
+extern P7_SCOREDATA   *p7_hmm_ScoreDataClone(P7_SCOREDATA *src, int K);
+extern int            p7_hmm_ScoreDataComputeRest(P7_OPROFILE *om, P7_SCOREDATA *data );
+extern void           p7_hmm_ScoreDataDestroy( P7_SCOREDATA *data );
 extern int            p7_hmm_initWindows (P7_HMM_WINDOWLIST *list);
 extern P7_HMM_WINDOW *p7_hmm_newWindow (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity);
 
@@ -1430,7 +1434,7 @@ extern int          p7_pipeline_Reuse  (P7_PIPELINE *pli);
 extern void         p7_pipeline_Destroy(P7_PIPELINE *pli);
 extern int          p7_pipeline_Merge  (P7_PIPELINE *p1, P7_PIPELINE *p2);
 
-extern int p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_MSVDATA *msvdata, P7_HMM_WINDOWLIST *windowlist, int L, float pct_overlap);
+extern int p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *msvdata, P7_HMM_WINDOWLIST *windowlist, int L, float pct_overlap);
 extern int p7_pli_TargetReportable  (P7_PIPELINE *pli, float score,     double lnP);
 extern int p7_pli_DomainReportable  (P7_PIPELINE *pli, float dom_score, double lnP);
 
@@ -1440,9 +1444,9 @@ extern int p7_pli_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7
 extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
 extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
 extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
-extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_MSVDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx);
+extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx);
 extern int p7_Pipeline_FM           (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
-                                     const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_MSVDATA *msvdata);
+                                     const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_SCOREDATA *msvdata);
 
 extern int p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w);
 
@@ -1520,7 +1524,7 @@ extern int p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS
 extern int p7_tophits_TabularTail(FILE *ofp, const char *progname, enum p7_pipemodes_e pipemode, 
 				  const char *qfile, const char *tfile, const ESL_GETOPTS *go);
 extern int p7_tophits_LongInserts(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int min_length);
-
+extern int p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th );
 
 /* p7_trace.c */
 extern P7_TRACE *p7_trace_Create(void);
