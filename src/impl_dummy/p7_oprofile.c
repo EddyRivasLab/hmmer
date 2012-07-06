@@ -263,13 +263,13 @@ p7_oprofile_ReconfigUnihit(P7_OPROFILE *om, int L)
 
 
 /* Function:  p7_oprofile_GetFwdTransitionArray()
- * Synopsis:  Retrieve full 32-bit float transition probabilities from an
- *            optimized profile into a flat array
+ * Synopsis:  Retrieve full 32-bit float transition probabilities from a
+ *            profile into a flat array
  *
  * Purpose:   Extract an array of <type> (e.g. p7O_II) transition probabilities
  *            from the underlying <om> profile. In SIMD implementations,
  *            these are striped and interleaved, making them difficult to
- *            directly access. Here, this is trivial
+ *            directly access. Here, this is trivial.
  *
  * Args:      <om>   - optimized profile, containing transition information
  *            <type> - transition type (e.g. p7O_II)
@@ -285,7 +285,7 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
   int i;
 
   for (i=0; i<om->M; i++) {
-    arr[i] = p7P_TSC(om, i, type);
+    arr[i] = exp(p7P_TSC(om, i, type));
   }
 
   return eslOK;
@@ -299,7 +299,7 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
  *            profile into an array
  *
  * Purpose:   Extract an implicitly 2D array of 8-bit int MSV residue
- *            emission scores from an optimized profile <om>. <arr> must
+ *            emission scores from a profile <om>. <arr> must
  *            be allocated by the calling function to be of size
  *            ( om->abc->Kp * ( om->M  + 1 )), and indexing into the array
  *            is done as  [om->abc->Kp * i +  c ] for character c at
@@ -310,7 +310,7 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
  *            is based on code from the function mf_conversion in impl_sse's
  *            p7_oprofile.c
  *
- * Args:      <om>   - optimized profile, containing transition information
+ * Args:      <om>   - optimized profile, containing emission information
  *            <arr>  - preallocated array into which scores will be placed
  *
  * Returns:   <eslOK> on success.
@@ -345,6 +345,40 @@ p7_oprofile_GetMSVEmissionArray(const P7_OPROFILE *om, uint8_t *arr )
 
   return eslOK;
 }
+
+/* Function:  p7_oprofile_GetFwdEmissionArray()
+ * Synopsis:  Retrieve Fwd (float) residue emission scores from a
+ *            profile into an array
+ *
+ * Purpose:   Extract an implicitly 2D array of 32-bit float Fwd residue
+ *            emission scores from a profile <om>. <arr> must
+ *            be allocated by the calling function to be of size
+ *            ( om->abc->Kp * ( om->M  + 1 )), and indexing into the array
+ *            is done as  [om->abc->Kp * i +  c ] for character c at
+ *            position i.
+ *
+ *
+ * Args:      <om>   - profile
+ *            <arr>  - preallocated array into which scores will be placed
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, float *arr )
+{
+  int i, j;
+
+  for (i = 1; i <= om->M; i++) {
+    for (j=0; j<om->abc->Kp; j++) {
+      arr[i*om->abc->Kp + j] = exp( om->rsc[j][(i) * p7P_NR     + p7P_MSC]));
+    }
+  }
+
+  return eslOK;
+}
+
 
 /*------------ end, conversions from P7_OPROFILE ------------------*/
 

@@ -733,7 +733,7 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 	}
     }
 
-  /* And finally the DD's, which are at the end of the optimized tsc vector; (j is already there) */
+  /* And finally the DD's, which are at the end of the optimized tfv vector; (j is already there) */
   for (k = 1, q = 0; q < nq; q++, k++)
     {
       for (z = 0; z < 4; z++) tmp.x[z] = (k+z*nq < M) ? p7P_TSC(gm, k+z*nq, p7P_DD) : -eslINFINITY;
@@ -987,7 +987,8 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
 
 
   for (i=0; i<nq; i++) {
-    tmp.v = om->tfv[ type  + 7 * i ];
+    // because DD transitions are held at the end of the tfv array
+    tmp.v = om->tfv[ (type==p7O_DD ?  nq*7+i :  type+7*i) ];
     for (j=0; j<4; j++)
       if ( i+1+ j*nq < om->M+1)
         arr[i+1+ j*nq]      = tmp.x[j];
@@ -1041,6 +1042,54 @@ p7_oprofile_GetMSVEmissionArray(const P7_OPROFILE *om, uint8_t *arr )
 
   return eslOK;
 }
+
+
+/* Function:  p7_oprofile_GetFwdEmissionArray()
+ * Synopsis:  Retrieve Fwd (float) residue emission scores from an optimized
+ *            profile into an array
+ *
+ * Purpose:   Extract an implicitly 2D array of 32-bit float Fwd residue
+ *            emission scores from an optimized profile <om>. <arr> must
+ *            be allocated by the calling function to be of size
+ *            ( om->abc->Kp * ( om->M  + 1 )), and indexing into the array
+ *            is done as  [om->abc->Kp * i +  c ] for character c at
+ *            position i.
+ *
+ *            In SIMD implementations, the residue scores are striped
+ *            and interleaved, making them somewhat difficult to
+ *            directly access.
+ *
+ * Args:      <om>   - optimized profile, containing transition information
+ *            <arr>  - preallocated array into which scores will be placed
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, float *arr )
+{
+  int x, q, z, k;
+  union { __m128 v; float f[4]; } tmp; /* used to align and read simd minivectors               */
+  int      M   = om->M;    /* length of the query                                          */
+  int      K   = om->abc->Kp;
+  int      nq  = p7O_NQF(M);     /* segment length; total # of striped vectors needed            */
+  int cell_cnt = (om->M + 1) * K;
+
+  for (x = 0; x < K; x++) {
+      for (q = 0, k = 1; q < nq; q++, k++) {
+        tmp.v = esl_sse_logf(om->rfv[x][q]);
+        for (z = 0; z < 4; z++)
+          if (  (K * (k+z*nq) + x) < cell_cnt)
+            arr[ K * (k+z*nq) + x ] = tmp.f[z];
+      }
+  }
+
+  return eslOK;
+}
+
+
+
 /*------------ end, conversions from P7_OPROFILE ------------------*/
 
 

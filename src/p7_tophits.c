@@ -1799,6 +1799,46 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
 }
 
 
+/* Function:  p7_tophits_AliScores()
+ * Synopsis:  Output per-position scores for each position of each query/hit pair
+ *
+ * Purpose:
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    none
+ */
+int
+p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th )
+{
+  P7_HIT *hit;
+  int h, i;
+  float *scores;
+
+  for (h = 0; h < th->N; h++) {
+    hit = th->hit[h];
+    if (hit->flags & p7_IS_REPORTED)
+    {
+      fprintf (ofp, "%s %s %d %d :", qname, hit->name, hit->dcl[0].iali, hit->dcl[0].jali);
+
+      scores = hit->dcl[0].scores_per_pos;
+      for (i=0; i<hit->dcl[0].ad->N; i++) {
+        if (scores[i] == -eslINFINITY)
+          fprintf (ofp, " >");
+        else
+          fprintf (ofp, " %.3f", scores[i]);
+
+      }
+      fprintf (ofp, "\n");
+    }
+
+  }
+  return eslOK;
+
+}
+
+
+
 /* Function:  p7_tophits_LongInserts()
  * Synopsis:  Output list of long inserts for each query/hit pair
  *
