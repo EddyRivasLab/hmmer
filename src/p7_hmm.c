@@ -967,8 +967,9 @@ p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HM
   p7_hmm_SetCtime(hmm);
   p7_hmm_SetConsensus(hmm, NULL);
 
-  /* SRE DEBUGGING */
+#ifdef p7_DEBUGGING
   p7_hmm_Validate(hmm, NULL, 0.0001);
+#endif
 
   *ret_hmm = hmm;
   return eslOK;
@@ -1158,39 +1159,55 @@ p7_hmm_SampleUniform(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,
 int
 p7_hmm_SampleSinglePathed(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
 {
-  P7_HMM *hmm = NULL;
   char   *logmsg   = "[random single-pathed HMM, all t/e probs 0 or 1, created by sampling]";
+  P7_HMM *hmm      = NULL;
+  int     nm       = 0;		/* make sure the HMM uses at least one M state */
   int     k;
   int     status;
   
   if ( (hmm = p7_hmm_Create(M, abc)) == NULL) { status = eslEMEM; goto ERROR; }
-  if ( (status = p7_hmm_Zero(hmm))  != eslOK) goto ERROR;
 
-  /* At node k=0 boundary:
-   *    t[0][MM,MI,MD] = B->{MID} distribution
-   *    t[0][IM,II] = a normal I transition distribution (I0 exists)
-   *    t[0][DM,DD] = 1.0,0.0 by convention (no D0 state)
-   *    mat[0][...] = {1.0,0.0...} by convention (no M_0 state)
-   *    ins[0][...] = a normal I emission distribution (I0 exists)
-   * At node k=M boundary: 
-   *    t[M][MM,MI,MD] = ME,MI, 0.0    
-   *    t[M][IM,II]    = IE,II
-   *    t[M][DM,DD]    = 1.0(DE), 0.0
-   *    mat[M],ins[M] as usual
-   * [xref hmmer.h::P7_HMM documentation]
-   */
-  for (k = 0; k <= M; k++)
+  while (nm == 0) 
     {
-      hmm->mat[k][(k==0 ? 0 : esl_rnd_Roll(r,abc->K))] = 1.0f;
-      hmm->ins[k][            esl_rnd_Roll(r,abc->K)]  = 1.0f;
-      
-      /* code below relies on partial transition order, vectors 
-       * starting at 0, 3, 5: MM MI MD {IM II} DM DD 
+      if ( (status = p7_hmm_Zero(hmm))  != eslOK) goto ERROR;
+
+      /* At node k=0 boundary:
+       *    t[0][MM,MI,MD] = B->{MID} distribution
+       *    t[0][IM,II] = a normal I transition distribution (I0 exists)
+       *    t[0][DM,DD] = 1.0,0.0 by convention (no D0 state)
+       *    mat[0][...] = {1.0,0.0...} by convention (no M_0 state)
+       *    ins[0][...] = a normal I emission distribution (I0 exists)
+       * At node k=M boundary: 
+       *    t[M][MM,MI,MD] = ME,MI, 0.0    
+       *    t[M][IM,II]    = IE,II
+       *    t[M][DM,DD]    = 1.0(DE), 0.0
+       *    mat[M],ins[M] as usual
+       * [xref hmmer.h::P7_HMM documentation]
        */
-      hmm->t[k][esl_rnd_Roll(r, (k==M ? 2 : 3))]          = 1.0f; /* at k==M, MD=0.0 */
-      hmm->t[k][p7H_IM]                                   = 1.0f; /* can't set II to 1.0; infinite loop */
-      hmm->t[k][p7H_DM + (k==M ? 0 : esl_rnd_Roll(r, 2))] = 1.0f; /* at k==M, DM=1.0, DD=0.0 */
+      for (k = 0; k <= M; k++)
+	{
+	  hmm->mat[k][(k==0 ? 0 : esl_rnd_Roll(r,abc->K))] = 1.0f;
+	  hmm->ins[k][            esl_rnd_Roll(r,abc->K)]  = 1.0f;
+      
+	  /* code below relies on partial transition order, vectors 
+	   * starting at 0, 3, 5: MM MI MD {IM II} DM DD 
+	   */
+	  hmm->t[k][esl_rnd_Roll(r, (k==M ? 2 : 3))]          = 1.0f; /* at k==M, MD=0.0 */
+	  hmm->t[k][p7H_IM]                                   = 1.0f; /* can't set II to 1.0; infinite loop */
+	  hmm->t[k][p7H_DM + (k==M ? 0 : esl_rnd_Roll(r, 2))] = 1.0f; /* at k==M, DM=1.0, DD=0.0 */
+	}
+
+      /* Make sure there's at least one M state in that path. 
+       * Otherwise the HMM can't generate anything; only 
+       * sequences of length zero are possible; and that just
+       * makes life miserable in test code that uses single-pathed
+       * HMMs. Just disallow that case.
+       */
+      if (hmm->t[0][p7H_MM]) nm++;
+      for (k = 1; k < M; k++)
+	if (hmm->t[k][p7H_DM]) nm++;
     }
+
 
   /* Add mandatory annotation */
   p7_hmm_SetName(hmm, "single-pathed-hmm");
@@ -1287,7 +1304,7 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
  * 
  *            Probability vectors are validated to sum up to
  *            within a fractional tolerance <tol> of 1.0.
- *
+ *            
  *            Probably only useful for debugging and development,
  *            not production code.
  *
@@ -1297,8 +1314,8 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
 int
 p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol)
 {
-  int status;
   int k;
+  int status;
 
   if (hmm            == NULL)       ESL_XFAIL(eslFAIL, errbuf, "HMM is a null pointer");
   if (hmm->M         <  1)          ESL_XFAIL(eslFAIL, errbuf, "HMM has M < 1");

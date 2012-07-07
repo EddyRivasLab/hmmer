@@ -1378,7 +1378,7 @@ main(int argc, char **argv)
 static void
 utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N, int64_t ramlimit)
 {
-  char        *msg    = "fbfilter scores unit test failed";
+  char         msg[]  = "fbfilter scores unit test failed";
   P7_HMM      *hmm    = NULL;
   P7_PROFILE  *gm     = NULL;
   P7_OPROFILE *om     = NULL;

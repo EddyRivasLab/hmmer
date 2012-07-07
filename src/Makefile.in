@@ -195,6 +195,7 @@ UTESTS =\
 	reference_fwdback_utest\
 	reference_viterbi_utest\
 	seqmodel_utest\
+	sparse_fwdback_utest\
 	p7_alidisplay_utest\
 	p7_bg_utest\
 	p7_gmx_utest\

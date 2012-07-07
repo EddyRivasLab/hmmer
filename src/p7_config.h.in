@@ -1,19 +1,15 @@
-/* @configure_input@
- * p7config.h.in -> p7config.h
- * 
+/* @configure_input@  
  * p7config.h is generated from p7config.h.in by the ./configure script.
  * DO NOT EDIT p7config.h; only edit p7config.h.in.
  *
- * Configuration of HMMER, including both system-dependent configuration
- * (done by ./configure) and hardcoded configuration that someone might
- * want to alter someday.
+ *
+ * Configuration of HMMER, including both system-dependent
+ * configuration (done by ./configure) and hardcoded configuration
+ * that someone might want to alter manually.
  *
  * Because this header may configure the behavior of system headers
  * (for example, LFS support), it must be included before any other
  * header file.
- * 
- * SRE, Mon Jan  1 16:07:28 2007 [Casa de Gatos] [Nirvana, Nevermind]
- * SVN $Id$
  */
 #ifndef P7_CONFIGH_INCLUDED
 #define P7_CONFIGH_INCLUDED
@@ -84,7 +80,28 @@
 
 
 /*****************************************************************
- * 4. The final section isn't meant to be human editable at all.
+ * 4. The following constants define our SIMD vector layout and memory
+ *    alignment.  Although SSE, Altivec/VMX are 128b/16B vectors, we
+ *    must anticipate different vector sizes.  For example, Intel AVX
+ *    is already roadmapped out to 1024b/128B vectors.  See note [1]
+ *    in src/impl_{sse/vmx}.h on memory alignment, SIMD vectors, and
+ *    malloc(). We need these constants and macros not only in the
+ *    vector implementation, but also in the P7_SPARSEMASK code that
+ *    interfaces with the vector f/b filter, which is why we need
+ *    these constants in the general config.h.
+ *****************************************************************/
+
+#define p7_VALIGN   16		/* Vector memory must be aligned on 16-byte boundaries   */
+#define p7_VNF      4		/* Number of floats per SIMD vector (Forward, Backward)  */
+#define p7_VNW      8		/* Number of shorts (words) per SIMD vector (Viterbi)    */
+#define p7_VNB      16		/* Number of bytes per SIMD vector (SSV, MSV)            */
+#define p7_VALIMASK (~0xf)      /* Ptrs are aligned using & p7_VALIMASK                  */
+
+
+
+
+/*****************************************************************
+ * 5. The final section isn't meant to be human editable at all.
  *    It is configured automatically by the ./configure script. 
  *****************************************************************/
 
@@ -129,4 +146,7 @@
 #endif /*P7_CONFIGH_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
  *****************************************************************/

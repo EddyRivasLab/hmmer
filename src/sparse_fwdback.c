@@ -1,3 +1,17 @@
+/* 
+ * 
+ * Contents:
+ *   1. Sparse Forward
+ *   2. Sparse Backward
+ *   3. Sparse Viterbi
+ *   4. Sparse Viterbi trace
+ *   5. Benchmark driver
+ *   6. Unit tests
+ *   7. Test driver
+ *   8. Example 
+ *   9. Notes
+ */
+
 #include "p7_config.h"
 
 #include "easel.h"
@@ -6,6 +20,9 @@
 #include "p7_sparsemx.h"
 
 
+/*****************************************************************
+ * 1. Sparse Forward
+ *****************************************************************/
 
 int
 p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx, float *opt_sc)
@@ -60,15 +77,15 @@ p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *s
       kc = sm->k[i];		/* ditto for current row i */
 
       dlc = dgc = xE = -eslINFINITY;
-      for (z = 0, y = 0; z < sm->n[i]; z++) /* Iterate over the one or more sparse cells (i,k) that we calculate on this row. */
+      for (z = sm->n[i]-1, y = sm->n[i-1]-1; z >= 0; z--) /* Iterate over the one or more sparse cells (i,k) that we calculate on this row. Remember, sparsemask is stored in reverse order! */
 	{
 	  k = kc[z]; /* next sparse cell to calculate: (i,k) */
 	  
 	  /* Try to find cell i-1,k-1; then compute M(i,k) from it */
-	  while (y < sm->n[i-1] && kp[y] < k-1) { y++; dpp+=p7S_NSCELLS; }
+	  while (y >= 0 && kp[y] < k-1) { y--; dpp+=p7S_NSCELLS; }
 	  mlc = xL  + TSC(p7P_LM, k-1);
 	  mgc = xG  + TSC(p7P_GM, k-1);
-	  if (y < sm->n[i-1] && kp[y] == k-1) {
+	  if (y >= 0 && kp[y] == k-1) {
 	    mlc = p7_FLogsum( p7_FLogsum( dpp[p7R_ML] + TSC(p7P_MM, k-1),
 					  dpp[p7R_IL] + TSC(p7P_IM, k-1)),
 			      p7_FLogsum( dpp[p7R_DL] + TSC(p7P_DM, k-1),
@@ -82,8 +99,8 @@ p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *s
 	  *dpc++ = mgc = MSC(k) + mgc;
 
 	  /* Try to find cell i-1,k; then compute I(i,k) from it */
-	  while (y < sm->n[i-1] && kp[y] < k) { y++; dpp+=p7S_NSCELLS; }
-	  if (y < sm->n[i-1] && kp[y] == k) {
+	  while (y >= 0 && kp[y] < k) { y--; dpp+=p7S_NSCELLS; }
+	  if (y >= 0 && kp[y] == k) {
 	    *dpc++ = ISC(k) + p7_FLogsum( dpp[p7R_ML] + TSC(p7P_MI,k),  dpp[p7R_IL] + TSC(p7P_II, k));
 	    *dpc++ = ISC(k) + p7_FLogsum( dpp[p7R_MG] + TSC(p7P_MI,k),  dpp[p7R_IG] + TSC(p7P_II, k));
 	  } else {
@@ -97,10 +114,10 @@ p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *s
 	  /* delayed store of Dk; advance calculation of next D_k+1 */
 	  *dpc++ = dlc;
 	  *dpc++ = dgc;
-	  if (z+1 < sm->n[i] && kc[z+1] == k+1) { /* is there a (i,k+1) cell to our right? */
+	  if (z >= 1 && kc[z-1] == k+1) { /* is there a (i,k+1) cell to our right? */
 	    dlc = p7_FLogsum( mlc + TSC(p7P_MD, k), dlc + TSC(p7P_DD, k));
 	    dgc = p7_FLogsum( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k));
-	  } else if (z+1 == sm->n[i]) {           /* last sparse cell on row? we need dgc to complete MGk->E path, below */
+	  } else if (z == 0) {             /* last sparse cell on row? we need dgc to complete MGk->E path, below */
 	    dlc = -eslINFINITY;
 	    dgc = p7_FLogsum( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k));
 	  } else {
@@ -122,13 +139,16 @@ p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *s
       dpp = last_dpc;
     }
 
+  sx->type = p7S_FORWARD;
   if (opt_sc != NULL) *opt_sc = xC + ( ng ? ng *  gm->xsc[p7P_C][p7P_LOOP] : 0.0f) + gm->xsc[p7P_C][p7P_MOVE];
   return eslOK;
 }
+/*--------------- end, sparse Forward  --------------------------*/
+
 
 
 /*****************************************************************
- * x. Benchmark driver
+ * 5. Benchmark driver
  *****************************************************************/
 
 #ifdef p7SPARSE_FWDBACK_BENCHMARK
@@ -190,7 +210,8 @@ main(int argc, char **argv)
   p7_profile_Config(gm, hmm, bg);
   p7_profile_SetLength(gm, L);
 
-  sm  = p7_sparsemask_CreateFull(gm->M, L);
+  sm  = p7_sparsemask_Create(gm->M, L, 0.0);
+  p7_sparsemask_AddAll(sm);
   sxf = p7_sparsemx_Create(sm);
 
   /* Baseline time. */
@@ -231,10 +252,278 @@ main(int argc, char **argv)
 
 
 
+/*****************************************************************
+ * 6. Unit tests
+ *****************************************************************/
+#ifdef p7SPARSE_FWDBACK_TESTDRIVE
+#include "esl_alphabet.h"
+#include "esl_random.h"
+#include "esl_randomseq.h"
+
+static void
+sparsemask_set_from_trace(ESL_RANDOMNESS *rng, P7_SPARSEMASK *sm, P7_TRACE *tr)
+{
+  char  msg[] = "sparse fwdback, sparse mask creation from trace failed";
+  float cellprob = 0.5;
+  float rowprob  = 0.2;
+  int   i,k,z;
+  int   status;
+  
+  z = tr->N-1;
+  for (i = sm->L; i >= 1; i--) /* sparsemask api requires building it backwards */
+    {
+      while (tr->i[z] != i) z--; /* find trace position that generated this residue. */
+    
+      if ( (status = p7_sparsemask_StartRow(sm, i)) != eslOK) esl_fatal(msg);
+
+      /* If this residue was emitted by the model, at least that cell
+       * must be present; thus the row must be present. 
+       * Tricky: in addition to the actual emitting cell i,k, we may
+       * also need to add one or more delete cells i,k-1... 
+       */
+      if (p7_trace_IsM(tr->st[z]) || p7_trace_IsI(tr->st[z])) 
+	{
+	  while (p7_trace_IsD(tr->st[z+1])) z++;
+	  
+	  for (k = sm->M; k > tr->k[z]; k--) 
+	    if (esl_random(rng) < cellprob)
+	      if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) esl_fatal(msg); 
+
+	  while (p7_trace_IsD(tr->st[z])) {
+	    k = tr->k[z]; 
+	    if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) esl_fatal(msg); 
+	    z--;
+	  }
+
+	  k = tr->k[z];
+	  if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) esl_fatal(msg); 
+	  
+	  for (k = k-1; k >= 1; k--)
+	    if (esl_random(rng) < cellprob)
+	      if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) esl_fatal(msg); 
+	}
+      else
+	{
+	  if (esl_random(rng) < rowprob)
+	    for (k = sm->M; k >= 1; k--)
+	      if (esl_random(rng) < cellprob)
+		if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) esl_fatal(msg); /* append to k[i] list, increment n[i] count, reallocating as needed; doesn't deal w/ segments (nrow,nseg,i[]) */
+	}
+
+      if ((status = p7_sparsemask_FinishRow(sm)) != eslOK) esl_fatal(msg);
+    }
+  if ( (status = p7_sparsemask_Finish(sm)) != eslOK) esl_fatal(msg);
+  return;
+}
+
+
+
+
+static void
+utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
+{
+  char           msg[]  = "sparse fwdback, reference comparison unit test failed";
+  P7_HMM        *hmm    = NULL;
+  P7_PROFILE    *gm     = p7_profile_Create(M, abc);
+  ESL_SQ        *sq     = esl_sq_CreateDigital(abc);       /* space for generated (homologous) target seqs              */
+  ESL_DSQ       *dsqmem = malloc(sizeof(ESL_DSQ) * (L+2)); /* space for randomly generated target sequences of length L */
+  ESL_DSQ       *dsq    = NULL;				 /* ptr into either dsqmem (nonhomologous targets) or sq->dsq (homologous targets) */
+  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L, 0.0);
+  P7_SPARSEMX   *sx     = p7_sparsemx_Create(sm);
+  P7_REFMX      *rmx    = p7_refmx_Create(M, L);
+  P7_REFMX      *sxcopy = p7_refmx_Create(M, L);
+  int            tL;
+  int            idx;
+  float          fsc1, fsc2;
+  float          tol   =  (p7_logsum_IsSlowExact() ? 1e-5 : 0.01);
+  
+  if ( p7_hmm_Sample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+  if ( p7_profile_Config(gm, hmm, bg)   != eslOK) esl_fatal(msg);
+
+  for (idx = 0; idx < N; idx++)
+    {
+      if ( p7_profile_SetLength(gm, L)  != eslOK) esl_fatal(msg);   /* config to generate mean length of L (length may have been reset to tL by last emitted seq) */
+
+      /* A 50:50 mix of generated (homologous) and random (nonhomologous) sequences */
+      if (esl_rnd_Roll(rng, 2)) 
+	{ /* fixed-length random emission */
+	  esl_rsq_xfIID(rng, bg->f, abc->K, L, dsqmem);  
+	  dsq = dsqmem;  
+	  tL = L;     
+	}
+      else  
+	{ /* variable-length seq emission: length config on <gm>,<om> will change to <tL> before DP */
+	  do {
+	    esl_sq_Reuse(sq);
+	    p7_ProfileEmit(rng, hmm, gm, bg, sq, NULL);
+	  } while (sq->n > L * 3); /* keep sequence length from getting ridiculous; long seqs do have higher abs error per cell */
+	  dsq = sq->dsq; 
+	  tL = sq->n; 
+	}
+
+      if ( p7_profile_SetLength(gm, tL)         != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_Reinit(sm, M, tL, 0.0) != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_AddAll(sm)             != eslOK) esl_fatal(msg);
+
+      if ( p7_refmx_GrowTo(rmx,    M, tL)  != eslOK) esl_fatal(msg);
+      if ( p7_refmx_GrowTo(sxcopy, M, tL)  != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reinit(sx, sm)      != eslOK) esl_fatal(msg);
+
+      p7_SparseForward   (dsq, tL, gm, sx,  &fsc1);
+      p7_ReferenceForward(dsq, tL, gm, rmx, &fsc2);
+
+      p7_sparsemx_Copy2Reference(sx, sxcopy);
+
+      //printf("%3d %.4f %.4f\n", idx, fsc1, fsc2);
+      //p7_sparsemx_Dump(stdout, sx);
+      //p7_refmx_Dump(stdout, sxcopy);
+      //p7_refmx_Dump(stdout, rmx);
+
+      if ( fabs(fsc1-fsc2)                    > tol)    esl_fatal(msg);
+      if ( p7_refmx_Validate(sxcopy, NULL)    != eslOK) esl_fatal(msg);
+      if ( p7_refmx_Compare(rmx, sxcopy, tol) != eslOK) esl_fatal(msg);
+      
+      esl_sq_Reuse(sq);
+      p7_refmx_Reuse(rmx);
+      p7_refmx_Reuse(sxcopy);
+      p7_sparsemask_Reuse(sm);
+      p7_sparsemx_Reuse(sx);
+    }
+
+  free(dsqmem);
+  p7_sparsemask_Destroy(sm);
+  p7_sparsemx_Destroy(sx);
+  p7_refmx_Destroy(rmx);
+  p7_refmx_Destroy(sxcopy);
+  esl_sq_Destroy(sq);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+}
+
+static void
+utest_singlepath(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int N)
+{
+  char           msg[] = "sparse fwdback singlepath unit test failed";
+  P7_HMM        *hmm   = NULL;
+  P7_PROFILE    *gm    = p7_profile_Create(M, abc);
+  ESL_SQ        *sq    = esl_sq_CreateDigital(abc);
+  P7_TRACE      *gtr   = p7_trace_Create();           /* generated trace */
+  P7_SPARSEMASK *sm    = NULL;
+  P7_SPARSEMX   *sx    = NULL;
+  float          tsc, fsc;
+  float          tol   = 1e-4;
+  int            idx;
+
+  for (idx = 0; idx <= N; idx++)
+    {
+      /* Create a profile that has only a single possible path (including
+       * emissions) thru it; requires configuring in uniglocal mode w/ L=0
+       */
+      if ( p7_hmm_SampleSinglePathed(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+      if ( p7_profile_ConfigUniglocal(gm, hmm, bg, 0)   != eslOK) esl_fatal(msg);
+
+      /* Sample that sequence and path; get its trace score */
+      if ( p7_ProfileEmit(rng, hmm, gm, bg, sq, gtr)    != eslOK) esl_fatal(msg);
+      if ( p7_trace_Score(gtr, sq->dsq, gm, &tsc)       != eslOK) esl_fatal(msg);
+  
+      //p7_trace_DumpAnnotated(stdout, gtr, gm, sq->dsq);
+
+      /* Build a randomized sparse mask around that trace */
+      if  (sm) { if (   p7_sparsemask_Reinit(sm, M, sq->n, 0.0)  != eslOK) esl_fatal(msg); }
+      else     { if ( (sm = p7_sparsemask_Create(M, sq->n, 0.0)) == NULL) esl_fatal(msg); }
+      sparsemask_set_from_trace(rng, sm, gtr);
+
+      if  (sx) { if (   p7_sparsemx_Reinit(sx, sm) != eslOK) esl_fatal(msg); }
+      else     { if ( (sx = p7_sparsemx_Create(sm)) == NULL) esl_fatal(msg); }
+
+      //p7_sparsemask_Dump(stdout, sm);
+
+      /* Run DP routines, collect scores that should all match trace score */
+      if ( p7_SparseForward(sq->dsq, sq->n, gm, sx, &fsc) != eslOK) esl_fatal(msg);
+  
+      //p7_sparsemx_Dump(stdout, sx);
+
+      /* Since only a single path is possible, trace score and Fwd score match */
+      if ( esl_FCompareAbs(tsc, fsc, tol) != eslOK) esl_fatal(msg);
+  
+      esl_sq_Reuse(sq);
+      p7_sparsemask_Reuse(sm);
+      p7_sparsemx_Reuse(sx);
+      p7_trace_Reuse(gtr);
+      p7_profile_Reuse(gm);
+      p7_hmm_Destroy(hmm);
+    }
+  
+  p7_sparsemx_Destroy(sx);
+  p7_sparsemask_Destroy(sm);
+  p7_trace_Destroy(gtr);
+  esl_sq_Destroy(sq);
+  p7_profile_Destroy(gm);
+}
+
+
+#endif /*p7SPARSE_FWDBACK_TESTDRIVE*/
+/*------------------- end, unit tests ---------------------------*/
 
 
 /*****************************************************************
- * x. Example
+ * 7. Test driver
+ *****************************************************************/
+#ifdef p7SPARSE_FWDBACK_TESTDRIVE
+
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+
+#include "hmmer.h"
+#include "p7_sparsemx.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-L",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
+  { "-M",        eslARG_INT,    "145", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
+  { "-N",        eslARG_INT,     "20", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "test driver for sparse DP of dual-mode profile";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
+  P7_BG          *bg   = p7_bg_Create(abc);
+  int             M    = esl_opt_GetInteger(go, "-M");
+  int             L    = esl_opt_GetInteger(go, "-L");
+  int             N    = esl_opt_GetInteger(go, "-N");
+
+  p7_FLogsumInit();
+  impl_Init();
+
+  utest_compare_reference(r, abc, bg, M, L, N);
+  utest_singlepath       (r, abc, bg, M,    N);
+
+  p7_bg_Destroy(bg);
+  esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
+  esl_randomness_Destroy(r);
+  return eslOK;
+}
+
+#endif /*p7SPARSE_FWDBACK_TESTDRIVE*/
+/*------------------- end, test driver --------------------------*/
+
+
+
+/*****************************************************************
+ * 8. Example
  *****************************************************************/
 #ifdef p7SPARSE_FWDBACK_EXAMPLE
 
@@ -309,7 +598,8 @@ main(int argc, char **argv)
   p7_profile_Config(gm, hmm, bg);
 
   /* Allocate bands, matrices */
-  sm  = p7_sparsemask_CreateFull(gm->M, sq->n);
+  sm  = p7_sparsemask_Create(gm->M, sq->n, 0.0);
+  p7_sparsemask_AddAll(sm);
   sxf = p7_sparsemx_Create(sm);
 
   /* Set the profile and null model's target length models */

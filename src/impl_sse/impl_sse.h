@@ -20,26 +20,6 @@
 #include "p7_filtermx.h"
 #include "p7_gbands.h"
 
-/* The following constants define our SIMD vector layout and memory
- * alignment.  Although SSE, Altivec/VMX are 128b/16B vectors, we must
- * anticipate different vector sizes.  For example, Intel AVX is
- * already roadmapped out to 1024b/128B vectors.  See note [1]
- * below on memory alignment, SIMD vectors, and malloc().
- */
-#define p7_VALIGN   16		/* Vector memory must be aligned on 16-byte boundaries   */
-#define p7_VNF      4		/* Number of floats per SIMD vector (Forward, Backward)  */
-#define p7_VNW      8		/* Number of shorts (words) per SIMD vector (Viterbi)    */
-#define p7_VNB      16		/* Number of bytes per SIMD vector (SSV, MSV)            */
-#define p7_VALIMASK (~0xf)      /* Ptrs are aligned using & p7_VALIMASK                  */
-
-
-/* In calculating Q, the number of vectors we need in a row, we have
- * to make sure there's at least 2, or a striped implementation fails.
- */
-#define p7O_NQB(M)   ( ESL_MAX(2, ((((M)-1) / 16) + 1)))   /* 16 uchars  */
-#define p7O_NQW(M)   ( ESL_MAX(2, ((((M)-1) / 8)  + 1)))   /*  8 words   */
-#define p7O_NQF(M)   ( ESL_MAX(2, ((((M)-1) / 4)  + 1)))   /*  4 floats  */
-
 #define p7O_EXTRA_SB 17    /* see ssvfilter.c for explanation */
 
 
