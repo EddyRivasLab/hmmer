@@ -707,7 +707,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Print the results.  */
       p7_tophits_SortBySeqidx(info->th);
       assign_Lengths(info->th, id_length_list);
-      p7_tophits_RemoveDuplicates(info->th);
+      p7_tophits_RemoveDuplicates(info->th, info->pli->use_bit_cutoffs);
+
 
       p7_tophits_SortBySortkey(info->th);
       p7_tophits_Threshold(info->th, info->pli);
@@ -717,7 +718,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       //tally up total number of hits and target coverage
       info->pli->n_output = info->pli->pos_output = 0;
       for (i = 0; i < info->th->N; i++) {
-          if (info->th->hit[i]->dcl[0].is_reported || info->th->hit[i]->dcl[0].is_included) {
+          if ( (info->th->hit[i]->flags & p7_IS_REPORTED) || info->th->hit[i]->flags & p7_IS_INCLUDED) {
               info->pli->n_output++;
               info->pli->pos_output += abs(info->th->hit[i]->dcl[0].jali - info->th->hit[i]->dcl[0].iali) + 1;
           }

@@ -1084,10 +1084,6 @@ p7_pli_modifyAliBoundaries(P7_DOMAIN *dom, ESL_DSQ *seq, const P7_SCOREDATA *dat
     }
 
 
-    if (left_neg>=0 || right_neg<= dom->ad->N - 1 ) {
-      printf ("changed: %s  (%.2f, %.2f)\n", dom->ad->aseq, left_min, right_min);
-    }
-
     //modify positions
     for (i=0; i<=left_neg; i++) {
       if (dom->ad->aseq[i] != '-')  dom->iali++;

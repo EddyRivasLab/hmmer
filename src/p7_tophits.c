@@ -694,7 +694,7 @@ p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N, int W)
  * Returns:   <eslOK> on success.
  */
 int
-p7_tophits_RemoveDuplicates(P7_TOPHITS *th)
+p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
 {
   int     i;    /* counter over hits */
   int     j;    /* previous un-duplicated hit */
@@ -749,12 +749,14 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th)
          * see late notes in ~wheelert/notebook/2012/0518-dfam-scripts/00NOTES
         */
         //remove = 0; // 1 := keep i,  0 := keep i-1
-        //if (s_i==s_j && e_i==e_j) // if same length, choose the one with lower p-value (they should be roughly the same)
-          remove = p_i < p_j ? j : i;
-        //else // otherwise remove the shorter one (assume that one was cut short by the end of a segment
-        //  remove = len_i > len_j ? j : i;
+        remove = p_i < p_j ? j : i;
 
         th->hit[remove]->flags |= p7_IS_DUPLICATE;
+        if (using_bit_cutoffs) {
+          //report/include flags were already included, need to remove them here
+          th->hit[remove]->flags &= ~p7_IS_REPORTED;
+          th->hit[remove]->flags &= ~p7_IS_INCLUDED;
+        }
 
         j = remove == j ? i : j;
       } else {
@@ -1653,6 +1655,7 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
   P7_TOPHITS *domHitlist = NULL;
   P7_HIT     *domhit     = NULL;
   int         tnamew     = ESL_MAX(20, p7_tophits_GetMaxNameLength(th));
+  int         qnamew     = ESL_MAX(20, strlen(qname));
   int         ndom       = 0;
   int         posw       = (pli->long_targets ? ESL_MAX(7, p7_tophits_GetMaxPositionLength(th)) : 0);
   int         h,d;
@@ -1661,37 +1664,38 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
 
   if (pli->long_targets) 
   {
-      if (fprintf(ofp, "# Hit scores\n# ----------\n#\n") < 0)
-        ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
-      if (fprintf(ofp, "# %-*s %6s %9s %5s  %s  %s %6s %*s %*s %*s %*s %*s %*s %*s   %s\n",
-      tnamew-1, "name", " bits", "  E-value", " bias", "hmm-st", "hmm-en", "strand", posw, "ali-st", posw, "ali-en", posw, "env-st", posw, "env-en", posw, "hq-st", posw, "hq-en", posw, "sq-len", "description of target") < 0)
-        ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
-      if (fprintf(ofp, "# %*s %6s %9s %5s %s %s %6s %*s %*s %*s %*s %*s %*s %*s   %s\n",
-      tnamew-1, "-------------------",  "------",  "---------", "-----", "-------", "-------", "------", posw, "-------", posw, "-------",  posw, "-------", posw, "-------", posw, "-------", posw, "-------", posw, "-------", "---------------------") < 0)
-        ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
+    if (fprintf(ofp, "# hit scores\n# ----------\n#\n") < 0)
+      ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
+    if (fprintf(ofp, "# %-*s %-*s %6s %9s %5s  %s  %s %6s %*s %*s %*s %*s %*s %*s %*s   %s\n",
+    tnamew-1, "target name", qnamew-1, "query name", " bits", "  e-value", " bias", "hmm-st", "hmm-en", "strand", posw, "ali-st", posw, "ali-en", posw, "env-st", posw, "env-en", posw, "hq-st", posw, "hq-en", posw, "sq-len", "description of target") < 0)
+      ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
+    if (fprintf(ofp, "# %*s %*s %6s %9s %5s %s %s %6s %*s %*s %*s %*s %*s %*s %*s   %s\n",
+    tnamew-1, "-------------------", qnamew-1, "-------------------",  "------",  "---------", "-----", "-------", "-------", "------", posw, "-------", posw, "-------",  posw, "-------", posw, "-------", posw, "-------", posw, "-------", posw, "-------", "---------------------") < 0)
+      ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
 
-      for (h = 0; h < th->N; h++) 
-        if (th->hit[h]->flags & p7_IS_REPORTED)
-        {
-            //d    = th->hit[h]->best_domain;
-            if (fprintf(ofp, "%-*s  %6.1f %9.2g %5.1f %7d %7d %s %*d %*d %*d %*d %*d %*d %*ld   %s\n",
-            tnamew, th->hit[h]->name,
-            th->hit[h]->score,
-            exp(th->hit[h]->lnP),
-            th->hit[h]->dcl[0].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
-            th->hit[h]->dcl[0].ad->hmmfrom,
-            th->hit[h]->dcl[0].ad->hmmto,
-            (th->hit[h]->dcl[0].iali < th->hit[h]->dcl[0].jali ? "   +  "  :  "   -  "),
-            posw, th->hit[h]->dcl[0].iali,
-            posw, th->hit[h]->dcl[0].jali,
-            posw, th->hit[h]->dcl[0].ienv,
-            posw, th->hit[h]->dcl[0].jenv,
-            posw, th->hit[h]->dcl[0].ihq,
-            posw, th->hit[h]->dcl[0].jhq,
-            posw, th->hit[h]->dcl[0].ad->L,
-            th->hit[h]->desc == NULL ?  "-" : th->hit[h]->desc) < 0)
-              ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
-        }
+    for (h = 0; h < th->N; h++)
+      if (th->hit[h]->flags & p7_IS_REPORTED)
+      {
+          //d    = th->hit[h]->best_domain;
+          if (fprintf(ofp, "%-*s  %-*s  %6.1f %9.2g %5.1f %7d %7d %s %*d %*d %*d %*d %*d %*d %*ld   %s\n",
+          tnamew, th->hit[h]->name,
+          qnamew, qname,
+          th->hit[h]->score,
+          exp(th->hit[h]->lnP),
+          th->hit[h]->dcl[0].dombias * eslCONST_LOG2R, /* convert nats to bits at last moment */
+          th->hit[h]->dcl[0].ad->hmmfrom,
+          th->hit[h]->dcl[0].ad->hmmto,
+          (th->hit[h]->dcl[0].iali < th->hit[h]->dcl[0].jali ? "   +  "  :  "   -  "),
+          posw, th->hit[h]->dcl[0].iali,
+          posw, th->hit[h]->dcl[0].jali,
+          posw, th->hit[h]->dcl[0].ienv,
+          posw, th->hit[h]->dcl[0].jenv,
+          posw, th->hit[h]->dcl[0].ihq,
+          posw, th->hit[h]->dcl[0].jhq,
+          posw, th->hit[h]->dcl[0].ad->L,
+          th->hit[h]->desc == NULL ?  "-" : th->hit[h]->desc) < 0)
+            ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
+      }
   }
   else 
   {
