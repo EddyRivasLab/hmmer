@@ -1013,7 +1013,7 @@ p7_trace_ScoreDomain(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, int which, floa
 
   /* S->N, N->N*(i-1), N->B ;  E->C, C->C*(L-j), C->T */
   sc += (float)(tr->sqfrom[which]-1)     * gm->xsc[p7P_N][p7P_LOOP] + gm->xsc[p7P_N][p7P_MOVE];
-  sc += (float)(tr->L - tr->sqto[which]) * gm->xsc[p7P_C][p7P_LOOP] + gm->xsc[p7P_E][p7P_MOVE] + gm->xsc[p7P_E][p7P_MOVE];
+  sc += (float)(tr->L - tr->sqto[which]) * gm->xsc[p7P_C][p7P_LOOP] + gm->xsc[p7P_C][p7P_MOVE] + gm->xsc[p7P_E][p7P_MOVE];
   
   for (z = tr->tfrom[which]; z < tr->tto[which]; z++)
     {
