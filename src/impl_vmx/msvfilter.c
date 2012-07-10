@@ -364,7 +364,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       max_sc = sc;
       pos_since_max = 0;
       while (k<om->M && n<=L) {
-        sc += om->bias_b -  msvdata->msv_scores[start*om->abc->Kp + dsq[n]];
+        sc += om->bias_b -  msvdata->msv_scores[k*om->abc->Kp + dsq[n]];
         if (sc >= max_sc) {
           max_sc = sc;
           max_end = n;
@@ -379,14 +379,13 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       }
 
       end  +=  (max_end - target_end);
-      k    +=  (max_end - target_end);
       target_end = max_end;
 
       ret_sc = ((float) (max_sc - om->tjb_b) - (float) om->base_b);
       ret_sc /= om->scale_b;
       ret_sc -= 3.0; // that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ
 
-      p7_hmmwindow_new(windowlist, 0, target_start, k, end, end-start+1 , ret_sc, fm_nocomplement );
+      p7_hmmwindow_new(windowlist, 0, target_start, -1, end, end-start+1 , ret_sc, fm_nocomplement );
 
       i = target_end; // skip forward
 
