@@ -59,6 +59,9 @@ TEXFILES =\
 pdf:    Userguide.pdf
 
 Userguide.pdf: symlinks.stamp titlepage.tex copyright.tex manpages.tex
+	@for prog in pdflatex bibtex; do \
+	  command -v $$prog >/dev/null 2>&1 || { echo >&2 "The $$prog program is required to build the Userguide, but it's not installed. Aborting."; exit 1; } \
+	done
 	@echo "     LATEX Userguide.pdf  (see latex.log for output)"
 	@pdflatex main   > latex.log 2>&1 
 	@bibtex main    >> latex.log 2>&1 
@@ -88,6 +91,7 @@ copyright.tex: ${srcdir}/copyright.tex.in
 # manpages: convert man pages to LaTeX chapter in User Guide.
 #    uses PolyglotMan 3.2 "rman", and rmanprocess.pl script in easel's devkit
 manpages.tex: ${MANPAGES}
+	@command -v ${RMAN} >/dev/null 2>&1 || { echo >&2 "The ${RMAN} program is required to build the Userguide, but it's not installed. Aborting."; exit 1; }
 	@echo "%% This chapter automatically generated. Do not edit." > manpages.tex
 	@echo "\section{Manual pages}" >> manpages.tex 
 	@for file in ${MANPAGES}; do\
