@@ -312,8 +312,6 @@ typedef struct p7_bg_s {
 
   float    omega;	/* the "prior" on null2/null3: set at initialization (one omega for both null types)  */
   int      use_null3;  /* use null3 in addition to null2 ?*/
-  int      use_null3w; /* use windowed-null3 in addition to null2 ?   (compatible with use_null3) */
-  int      null3_wlen; /* if use_null3w==TRUE, this is the width to be used by p7_null3_windowed_score()*/
 
   const ESL_ALPHABET *abc;	/* reference to alphabet in use: set at initialization             */
 } P7_BG;

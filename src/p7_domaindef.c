@@ -810,17 +810,13 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
     domcorrection   += ddef->n2sc[pos];         /* domcorrection is in units of NATS */
 
   if (long_target) {
-    /* for long_target case, merge in the results of two null3 correction
+    /* for long_target case, merge in the results of null3 correction
      * see ~/notebook/2012/0214_Dfam_false_positives/00NOTES 02/19 for details
      *
      * bias composition is based only on the aligned positions:
      */
     if (bg->use_null3) {
       p7_null3_score(om->abc, sq->dsq, NULL /*don't use trace*/, dom->iali, dom->jali, bg, &null3_corr);
-      domcorrection = p7_FLogsum (domcorrection, null3_corr);
-    }
-    if (bg->use_null3w) {
-      p7_null3_windowed_score(om->abc, sq->dsq, dom->iali, dom->jali, bg, &null3_corr);
       domcorrection = p7_FLogsum (domcorrection, null3_corr);
     }
   }
