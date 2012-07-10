@@ -573,6 +573,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       else if (hmm->max_length == -1 ) p7_Builder_MaxLength(hmm, p7_DEFAULT_WINDOW_BETA);
 
       nquery++;
+      resCnt = 0;
       esl_stopwatch_Start(w);
 
       /* seqfile may need to be rewound (multiquery mode) */
