@@ -63,7 +63,8 @@ PROGS = alimask\
 	makenhmmerdb\
 	exactmatch\
 	hmmsim\
-	sim-alignment
+	sim-alignment\
+	pipetest
 
 PROGOBJS =\
 	alimask.o\
@@ -85,20 +86,17 @@ PROGOBJS =\
 	makenhmmerdb.o\
 	exactmatch.o\
 	hmmsim.o\
-	sim-alignment.o
+	sim-alignment.o\
+	pipetest.o
 
 HDRS =  hmmer.h \
 	cachedb.h \
-	p7_gbands.h \
-	p7_gmxb.h \
-	p7_gmxchk.h \
 	p7_hmmcache.h\
 	p7_refmx.h\
 	p7_sparsemx.h \
 	p7_trace_metrics.h
 
-OBJS =  banded_fwdback.o\
-	build.o\
+OBJS =  build.o\
 	cachedb.o\
 	emit.o\
 	errors.o\
@@ -106,7 +104,6 @@ OBJS =  banded_fwdback.o\
 	eweight.o\
 	generic_decoding.o\
 	generic_fwdback.o\
-	generic_fwdback_banded.o\
 	generic_fwdback_chk.o\
 	generic_null2.o\
 	generic_msv.o\
@@ -131,11 +128,9 @@ OBJS =  banded_fwdback.o\
 	sparse_fwdback.o\
 	tracealign.o\
 	p7_alidisplay.o\
-	p7_bandmx.o\
 	p7_bg.o\
 	p7_builder.o\
 	p7_domaindef.o\
-	p7_gbands.o\
 	p7_gmx.o\
 	p7_gmxb.o\
 	p7_gmxchk.o\
@@ -164,7 +159,6 @@ STATS = \
 	evalues_stats
 
 BENCHMARKS = \
-	banded_fwdback_benchmark\
 	evalues_benchmark\
 	logsum_benchmark\
 	generic_decoding_benchmark\
@@ -181,11 +175,9 @@ BENCHMARKS = \
 	p7_hmmcache_benchmark
 
 UTESTS =\
-	banded_fwdback_utest\
 	build_utest\
 	emit_utest\
 	generic_fwdback_utest\
-	generic_fwdback_chk_utest\
 	generic_msv_utest\
 	generic_stotrace_utest\
 	generic_viterbi_utest\
@@ -199,7 +191,6 @@ UTESTS =\
 	p7_alidisplay_utest\
 	p7_bg_utest\
 	p7_gmx_utest\
-	p7_gmxchk_utest\
 	p7_hmm_utest\
 	p7_hmmfile_utest\
 	p7_profile_utest\

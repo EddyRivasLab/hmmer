@@ -15,9 +15,8 @@
 #include "esl_sqio.h"
 
 #include "hmmer.h"
-#include "p7_gbands.h"
-#include "p7_bandmx.h"
 #include "p7_refmx.h"
+#include "p7_sparsemx.h"
 #include "p7_trace_metrics.h"
 
 #include "impl_sse/impl_sse.h"
@@ -35,7 +34,7 @@ static ESL_OPTIONS options[] = {
   { "--apglocal",eslARG_REAL,   "0.5", NULL, NULL,  NULL,  NULL, NULL, "local/glocal prob param, alignment; 0.5=dual-mode; 0=local",    0 },
   { "--anj",     eslARG_REAL,   "1.0", NULL, NULL,  NULL,  NULL, NULL, "uni/multihit expected # param, alignment; 1=multi; 0=uni",      0 },
   { "--vit",     eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "test Viterbi alignment, not banded MEG alignment",              0 },
-  { "--full",    eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "unrestricted bands",                                            0 },
+  { "--full",    eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "unrestricted sparse DP",                                        0 },
   { "--dumpseqs",eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "dump the generated sequences",                                  0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -60,16 +59,13 @@ main(int argc, char **argv)
   P7_OPROFILE      *aom      = NULL;
   P7_BG            *bg       = NULL;
   ESL_SQ           *sq       = NULL;
-  P7_TRACE         *reftr    = p7_trace_CreateWithPP();
-  P7_TRACE         *testtr   = p7_trace_CreateWithPP();
+  P7_TRACE         *reftr    = p7_trace_Create();
+  P7_TRACE         *testtr   = p7_trace_Create();
   P7_TRACE_METRICS *tmetrics = p7_trace_metrics_Create();
   P7_REFMX         *rmx      = NULL;
-  P7_FILTERMX      *ox       = NULL;
-  P7_GBANDS        *bnd      = NULL;
-  P7_BANDMX        *bmf      = p7_bandmx_Create(NULL);
-  P7_BANDMX        *bmb      = p7_bandmx_Create(NULL);
-  P7_BANDMX        *bmd      = p7_bandmx_Create(NULL);
-  P7_BANDMX        *bma      = p7_bandmx_Create(NULL);
+  //  P7_FILTERMX      *ox       = NULL;
+  P7_SPARSEMASK    *sm       = NULL;
+  P7_SPARSEMX      *sxv      = NULL;
   int               idx;
   char              errbuf[eslERRBUFSIZE];
   int               status;
@@ -89,6 +85,11 @@ main(int argc, char **argv)
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", ahmmfile, errbuf);
   else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                ahmmfile, errbuf);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, ahmmfile, errbuf);  
+
+  /* initial allocations */
+  sm  = p7_sparsemask_Create(100, 100, 0.0);
+  sxv = p7_sparsemx_Create(sm);
+  rmx = p7_refmx_Create(100,100);
 
   while ( (status = p7_hmmfile_Read(ghfp, &abc, &ghmm)) == eslOK) /* <abc> gets set on first read  */
     {
@@ -114,7 +115,6 @@ main(int argc, char **argv)
       p7_profile_ConfigCustom(agm, ahmm, bg, 100,                            esl_opt_GetReal(go, "--anj"), esl_opt_GetReal(go, "--apglocal"));
       p7_oprofile_Convert(agm, aom);
 
-
       for (idx = 1; idx <= N; idx++)
 	{
 	  p7_ProfileEmit(rng, ghmm, ggm, bg, sq, reftr);
@@ -126,23 +126,26 @@ main(int argc, char **argv)
 
 	  p7_bg_SetLength(bg, sq->n);
 	  p7_profile_SetLength(agm, sq->n);
-	  if (esl_opt_GetBoolean(go, "--vit")) {
-	    p7_ReferenceViterbi(sq->dsq, sq->n, agm, rmx, testtr, /*opt_vsc=*/NULL);
-	  } else {
-	    p7_BandedForward (sq->dsq, sq->n, agm, bmf, /*opt_fsc=*/NULL);
-	    p7_BandedBackward(sq->dsq, sq->n, agm, bmb, /*opt_bsc=*/NULL);
-	    p7_BandedDecoding(agm, bmf, bmb, bmd);
-	    p7_BandedAlign(agm, /*gamma=*/1.0, bmd, bma, testtr, /*opt_gain=*/NULL);
-	  }
+	  p7_sparsemask_Reinit(sm, agm->M, sq->n, 0.0);
+	  p7_sparsemask_AddAll(sm);
+
+	  p7_refmx_GrowTo(rmx, agm->M, sq->n);
+	  p7_sparsemx_Reinit(sxv, sm);
+	  
+	  if (esl_opt_GetBoolean(go, "--vit")) 
+	    {
+	      p7_ReferenceViterbi(sq->dsq, sq->n, agm, rmx, testtr, /*opt_vsc=*/NULL);
+	    } 
+	  else 
+	    {
+	      p7_SparseViterbi(sq->dsq, sq->n, agm, sxv, /*opt_vsc=*/NULL, testtr);
+	    }
 
 	  p7_trace_metrics(reftr, testtr, tmetrics);
 
-	  p7_gbands_Reuse(bnd);
-	  p7_bandmx_Reuse(bmf);
-	  p7_bandmx_Reuse(bmb);
-	  p7_bandmx_Reuse(bmd);
-	  p7_bandmx_Reuse(bma);
-	  p7_filtermx_Reuse(ox);
+	  p7_sparsemask_Reuse(sm);
+	  p7_sparsemx_Reuse(sxv);
+	  //p7_filtermx_Reuse(ox);
 	  p7_refmx_Reuse(rmx);
 	  esl_sq_Reuse(sq);
 	  p7_trace_Reuse(reftr);
@@ -164,12 +167,9 @@ main(int argc, char **argv)
 
   p7_hmmfile_Close(ghfp);  
   p7_hmmfile_Close(ahfp);
-  p7_filtermx_Destroy(ox);
-  p7_gbands_Destroy(bnd);
-  p7_bandmx_Destroy(bmf);
-  p7_bandmx_Destroy(bmb);
-  p7_bandmx_Destroy(bmd);
-  p7_bandmx_Destroy(bma);
+  //  p7_filtermx_Destroy(ox);
+  p7_sparsemask_Destroy(sm);
+  p7_sparsemx_Destroy(sxv);
   p7_refmx_Destroy(rmx);
   p7_trace_metrics_Destroy(tmetrics);
   p7_trace_Destroy(testtr);

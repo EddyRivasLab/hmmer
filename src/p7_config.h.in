@@ -49,6 +49,12 @@
 #define p7_ETARGET_DNA    0.45 /* bits,  from the work of Travis Wheeler. */
 #define p7_ETARGET_OTHER  1.0  /* bits */ /* if you define your own alphabet, set this */
 
+/* Posterior probability thresholds for determining which i,k cells
+ * (from posterior decoding of vectorized local-only alignment in
+ * p7_ForwardFilter() and p7_BackwardFilter()) are included in 
+ * sparse DP reprocessing using the full local/glocal model.
+ */
+#define p7_SPARSEMASK_THRESH_DEFAULT 0.01 /* per-cell posterior prob inclusion threshold */
 
 #define p7_SEQDBENV          "BLASTDB"
 #define p7_HMMDBENV          "PFAMDB"

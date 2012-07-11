@@ -88,6 +88,7 @@ typedef struct {
 
 extern P7_SPARSEMASK *p7_sparsemask_Create(int M, int L, float pthresh);
 extern int            p7_sparsemask_Reinit (P7_SPARSEMASK *sm, int M, int L, float pthresh);
+extern size_t         p7_sparsemask_Sizeof (P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Reuse  (P7_SPARSEMASK *sm);
 extern void           p7_sparsemask_Destroy(P7_SPARSEMASK *sm);
 
@@ -108,6 +109,9 @@ extern char *p7_sparsemx_DecodeSpecial(int type);
 extern int   p7_sparsemx_Dump(FILE *ofp, P7_SPARSEMX *sx);
 extern int   p7_sparsemx_DumpWindow(FILE *ofp, P7_SPARSEMX *sx, int i1, int i2, int ka, int kb);
 extern int   p7_sparsemx_Copy2Reference(P7_SPARSEMX *sx, P7_REFMX *rx);
+
+extern int p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx, float *opt_sc);
+extern int p7_SparseViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx, float *opt_sc, P7_TRACE *opt_tr);
 
 #endif /*P7_SPARSEMX_INCLUDED*/
 

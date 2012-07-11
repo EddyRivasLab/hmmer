@@ -268,10 +268,11 @@ p7_SparseViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *s
     }
 
   sx->type = p7S_VITERBI;
-  if (opt_sc != NULL) *opt_sc = xC + ( ng ? ng *  gm->xsc[p7P_C][p7P_LOOP] : 0.0f) + gm->xsc[p7P_C][p7P_MOVE];
+  xC += ( ng ? ng *  gm->xsc[p7P_C][p7P_LOOP] : 0.0f) + gm->xsc[p7P_C][p7P_MOVE];
 
-  if (opt_tr && *opt_sc != -eslINFINITY) return sparse_viterbi_traceback(gm, sx, opt_tr);
-  else                                   return eslOK;
+  if (opt_sc) *opt_sc = xC;
+  if (opt_tr && xC != -eslINFINITY) return sparse_viterbi_traceback(gm, sx, opt_tr);
+  else                              return eslOK;
 }
 
 

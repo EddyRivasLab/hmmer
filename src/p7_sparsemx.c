@@ -123,7 +123,7 @@ p7_sparsemask_Create(int M, int L, float pthresh)
   return NULL;
 }
 
-/* Function:  p7_sparsemx_Reinit()
+/* Function:  p7_sparsemask_Reinit()
  * Synopsis:  Reinitialize an existing P7_SPARSEMASK for a new comparison.
  *
  * Purpose:   Same as a <_Create()>, but reusing an existing 
@@ -163,9 +163,9 @@ p7_sparsemask_Reinit(P7_SPARSEMASK *sm, int M, int L, float pthresh)
     sm->last_k[r]  = -1; 
   /* sn[] are initialized for each sparse row by _StartRow() */
 
-  sm->n_krealloc = 0;
-  sm->n_irealloc = 0;
-  sm->n_rrealloc = 0;
+  /* The realloc counters are NOT reset. They keep accumulating during
+   * the life of the object. 
+   */
 
   for (i = 1; i <= L; i++)	/* n[0] will always be 0, but reinit n[1..L] */
     sm->n[i] = 0;
@@ -174,6 +174,21 @@ p7_sparsemask_Reinit(P7_SPARSEMASK *sm, int M, int L, float pthresh)
  ERROR:
   return status;
 }
+
+/* Function:  p7_sparsemask_Sizeof()
+ * Synopsis:  Returns the allocated size of a <P7_SPARSEMASK>
+ */
+size_t
+p7_sparsemask_Sizeof(P7_SPARSEMASK *sm)
+{
+  size_t n = sizeof(P7_SPARSEMASK);
+  n += sm->ialloc * sizeof(int)   * 2; /* *2 = ia,ib pairs */
+  n += sm->ralloc * sizeof(int *);
+  n += sm->kalloc * sizeof(int);
+  return n;
+}
+
+
 
 /* Function:  p7_sparsemask_Reuse()
  * Synopsis:  Reuse a <P7_SPARSEMASK>.
@@ -562,6 +577,22 @@ p7_sparsemx_Reinit(P7_SPARSEMX *sx, P7_SPARSEMASK *sm)
 
  ERROR:
   return status;
+}
+
+
+/* Function:  p7_sparsemx_Sizeof()
+ * Synopsis:  Returns allocated size of a P7_SPARSEMX
+ *
+ * Purpose:   Returns allocated size of <sx>, in bytes.  Does not
+ *            include the size of its <P7_SPARSEMASK>.
+ */
+size_t
+p7_sparsemx_Sizeof(P7_SPARSEMX *sx)
+{
+  size_t n = sizeof(P7_SPARSEMX);
+  n += sizeof(float) * p7S_NSCELLS * sx->dalloc;
+  n += sizeof(float) * p7S_NXCELLS * sx->xalloc;
+  return n;
 }
 
 int

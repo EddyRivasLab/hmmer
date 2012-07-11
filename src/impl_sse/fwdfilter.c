@@ -10,11 +10,12 @@
  * in probability space using sparse rescaling [Eddy11].
  *
  * Called in two pieces. p7_ForwardFilter() returns the Forward score
- * in nats. Caller then chooses whether or not to proceed with Backward 
- * and posterior decoding. p7_BackwardFilter() then does Backward and 
- * posterior decoding, and based on the posterior decoding probabilities 
- * on each row i, it calculates a band ka..kb in which nonnegligible 
- * alignment mass appears to lie, returning these bands in a <P7_GBANDS> 
+ * in nats. Caller chooses whether or not to proceed with Backward and
+ * posterior decoding. If caller proceeds, p7_BackwardFilter() does
+ * Backward and posterior decoding. Based on the posterior decoding
+ * probabilities on each row i, it determines which cells are to be
+ * added to the sparse DP mask for subsequent local/glocal
+ * reprocessing.  The sparse DP mask is returned in a <P7_SPARSEMASK>
  * structure.
  *
  * ForwardFilter() and BackwardFilter() are a dependent pair, sharing
@@ -50,7 +51,7 @@
 #include "esl_sse.h"
 
 #include "hmmer.h"
-#include "p7_gbands.h"
+#include "p7_sparsemx.h"
 
 #include "impl_sse.h"
 #include "p7_filtermx.h"
@@ -65,7 +66,7 @@ static inline void  backward_row_main(ESL_DSQ xi, const P7_OPROFILE *om,       _
 static inline void  backward_row_L   (            const P7_OPROFILE *om,                    __m128 *dpc, int Q, float scalefactor);
 static inline void  backward_row_finish(          const P7_OPROFILE *om,                    __m128 *dpc, int Q, __m128 dcv);
 static inline void  backward_row_rescale(float *xc, __m128 *dpc, int Q, float scalefactor);
-static inline void  posterior_decode_row(P7_FILTERMX *ox, int rowi, P7_GBANDS *bnd, float overall_sc);
+static inline int   posterior_decode_row(P7_FILTERMX *ox, int rowi, P7_SPARSEMASK *sm, float overall_sc);
 
 #ifdef p7_DEBUGGING
 static inline float backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_FILTERMX *ox);
@@ -183,37 +184,36 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 
 
 /* Function:  p7_BackwardFilter()
- * Synopsis:  Checkpointed striped vector Backward calculation, producing bands.
+ * Synopsis:  Checkpointed striped vector Backward calculation, producing sparse mask.
  *
  * Purpose:   Given a target sequence <dsq> of length <L>, a query model
  *            <om>, and a DP matrix <ox> resulting from a successful
- *            call to <p7_ForwardFilter()>. Calculate the Backward and
+ *            call to <p7_ForwardFilter()>; calculate the Backward and
  *            posterior decoding algorithms. On each row <i=1..L>, use
- *            posterior decoding to determine a band <ka..kb> (or no
- *            band at all) in which significant posterior alignment
- *            probability falls. The bands are stored in the <bnd> structure,
- *            which the caller allocates (or reuses) and provides.
+ *            posterior decoding to determine which <i,k> cells pass a
+ *            significance threshold for inclusion in the sparse DP
+ *            mask. Store those sparse cells in <sm>, which the caller
+ *            allocates (or reuses) and provides.
  *            
- *            Currently the rule for determining 'significant'
- *            posterior alignment probability is hardcoded. If the
- *            probability of nonhomology (N/C/J emissions) is 
- *            0.9 (<p7_BANDS_THRESH1>) or more, the row is skipped
- *            altogether. If the sum of M+I emission in any k,i cell
- *            is 0.02 (<p7_BANDS_THRESH2>) or more, the cell is
- *            considered to have 'significant' posterior probability.
- *            The minimum and maximum significant k positions on 
- *            each row determine the band <ka..kb>.
+ *            Currently the threshold for determining 'significant'
+ *            posterior alignment probability is hardcoded in 
+ *            <p7_SPARSEMASK_THRESH_DEFAULT>, in <p7_config.h.in>. We take
+ *            advantage of the fact that if N/C/J emission postprobs
+ *            exceed <1.0 - p7_SPARSEMASK_THRESH_DEFAULT>, we don't even 
+ *            need to look at the vectorize row; no cell can exceed
+ *            threshold.
  *            
  * Args:      dsq    - digital target sequence, 1..L
  *            L      - length of dsq, residues
  *            om     - optimized profile (multihit local)
  *            ox     - checkpointed DP matrix, ForwardFilter already run  
- *            bnd    - allocated P7_GBANDS structure to hold posterior bands
+ *            sm    - allocated P7_SPARSEMASK structure to hold sparse DP mask
  *
- * Throws:    (no abnormal error conditions)
+ * Throws:    <eslEINVAL> if something's awry with a data structure's internals.
+ *            <eslEMEM> on allocation failure.
  */
 int
-p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, P7_GBANDS *bnd)
+p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, P7_SPARSEMASK *sm)
 {
   int Q = ox->Qf;
   __m128 *fwd;
@@ -222,8 +222,15 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
   float  *xf;
   float   Tvalue;
   int     i, b, w, i2;
+  int     status;
   
 #ifdef p7_DEBUGGING
+  /* Contract checks */
+  if (sm->L != L || sm->M != om->M || sm->ncells) ESL_EXCEPTION(eslEINVAL, "sparsemask wasn't (re)-initialized");
+#endif
+
+#ifdef p7_DEBUGGING
+  /* Debugging instrumentations. */
    if (ox->bck) { ox->bck->M = om->M; ox->bck->L = L; ox->bck->type = p7R_BACKWARD; }
    if (ox->pp)  { ox->pp->M  = om->M; ox->pp->L  = L; ox->pp->type  = p7R_DECODING; }
 #endif
@@ -243,7 +250,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
   if (ox->do_dumping) { p7_filtermx_DumpFBRow(ox, L, fwd, "f2 O"); if (ox->do_dumping) p7_filtermx_DumpFBRow(ox, L, bck, "bck");  }
   if (ox->bck)          save_debug_row_fb(ox, ox->bck, bck, L, ox->bcksc); 
 #endif
-  posterior_decode_row(ox, i, bnd, Tvalue);
+  if ( (status = posterior_decode_row(ox, i, sm, Tvalue)) != eslOK) return status;
   i--;
   dpp = bck;
 
@@ -270,7 +277,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
       if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
       /* And decode. */
-      posterior_decode_row(ox, i, bnd, Tvalue);
+      if ( (status = posterior_decode_row(ox, i, sm, Tvalue)) != eslOK) return status;
       dpp = bck;
       i--;			/* i is now L-2 if there's checkpointing; else it's L-1 */
     }
@@ -294,7 +301,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
       if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
       /* And decode checkpointed row i. */
-      posterior_decode_row(ox, i, bnd, Tvalue);
+      if ( (status = posterior_decode_row(ox, i, sm, Tvalue)) != eslOK) return status;
       
       /* The rest of the rows in the block weren't checkpointed.
        * Compute Forwards from last checkpoint ...
@@ -321,7 +328,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
 	  if (ox->do_dumping) { p7_filtermx_DumpFBRow(ox, i2, fwd, "f2 X"); p7_filtermx_DumpFBRow(ox, i2, bck, "bck"); }
 	  if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i2, ox->bcksc); 
 #endif
-	  posterior_decode_row(ox, i2, bnd, Tvalue);
+	  if ((status = posterior_decode_row(ox, i2, sm, Tvalue)) != eslOK) return status;
 	  dpp = bck;
 	}
       i -= w;
@@ -342,7 +349,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
        if (ox->do_dumping) { p7_filtermx_DumpFBRow(ox, i, fwd, "f2 O"); p7_filtermx_DumpFBRow(ox, i, bck, "bck"); }
        if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
-       posterior_decode_row(ox, i, bnd, Tvalue);
+       if ((status = posterior_decode_row(ox, i, sm, Tvalue)) != eslOK) return status;
        dpp = bck;
      }
 
@@ -360,13 +367,11 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
    xN = backward_row_zero(dsq[1], om, ox); 
    if (ox->do_dumping) { p7_filtermx_DumpFBRow(ox, 0, fwd, "f2 O"); p7_filtermx_DumpFBRow(ox, 0, bck, "bck"); }
    if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, 0, ox->bcksc); 
-   posterior_decode_row(ox, 0, bnd, Tvalue);
+   if ((status = posterior_decode_row(ox, 0, sm, Tvalue)) != eslOK) return status;
    ox->bcksc += xN;
 #endif
 
-   bnd->L = L;
-   bnd->M = om->M;
-   p7_gbands_Reverse(bnd);
+   p7_sparsemask_Finish(sm);
    return eslOK;
 }
 /*----------- end forward/backward API calls --------------------*/
@@ -796,7 +801,7 @@ sse_countge(__m128 v, float thresh)
 /* posterior_decode_row()
  *
  * In production code, we don't have to save results of posterior
- * decoding; we immediately use them to calculate bands on the row.
+ * decoding; we immediately use them to calculate sparse mask on the row.
  *
  * In debugging code, we save pp's, overwriting the forward row as we
  * go; when all pp's on the row have been calculated, if there's a
@@ -828,35 +833,62 @@ sse_countge(__m128 v, float thresh)
  * code overwrites the forward row, if the caller wants to 
  * dump, copy, or test anything on the forward row, it must do it
  * BEFORE calling posterior_decode_row().
+ * 
+ * Can throw <eslEINVAL> on bad code (something awry in data structure initialization)
+ *           <eslEMEM> on allocation failure in sparsemask
  */
-#define p7_BANDS_THRESH1  0.99
-#define p7_BANDS_THRESH2  0.01
-static inline void
-posterior_decode_row(P7_FILTERMX *ox, int rowi, P7_GBANDS *bnd, float overall_sc)
+static inline int
+posterior_decode_row(P7_FILTERMX *ox, int rowi, P7_SPARSEMASK *sm, float overall_sc)
 {
-  int             Q  = ox->Qf;
-  __m128        *fwd = (__m128 *) ox->dpf[ox->R0 + ox->R]; /* a calculated fwd row R has been popped off */
-  const  __m128 *bck = (__m128 *) ox->dpf[rowi%2];
-  float         *xf  = (float *) (fwd + Q*p7F_NSCELLS);
-  const  float  *xb  = (float *) (bck + Q*p7F_NSCELLS);
-  __m128 threshv     = _mm_set1_ps(p7_BANDS_THRESH2);
-  __m128 onev        = _mm_set1_ps(1.0);
-  __m128 kv          = _mm_set_ps((float) 3*Q, (float) 2*Q, (float) Q, 0.0f); /* iv is going to contain current i coord in each vector cell */
-  __m128 minkv       = _mm_set1_ps( (float) Q*4.0+1);
-  __m128 maxkv       = _mm_set1_ps( 0.0f);
-  float  scaleterm   = xf[p7F_SCALE] / overall_sc; /* see comments above, on how rescaling affects posterior decoding equations */
+  int             Q        = ox->Qf;
+  __m128        *fwd       = (__m128 *) ox->dpf[ox->R0 + ox->R]; /* a calculated fwd row R has been popped off */
+  const  __m128 *bck       = (__m128 *) ox->dpf[rowi%2];
+  float         *xf        = (float *) (fwd + Q*p7F_NSCELLS);
+  const  float  *xb        = (float *) (bck + Q*p7F_NSCELLS);
+  const __m128   threshv   = _mm_set1_ps(p7_SPARSEMASK_THRESH_DEFAULT); 
+  float          scaleterm = xf[p7F_SCALE] / overall_sc; /* see comments above, on how rescaling affects posterior decoding equations */
+  const __m128   cv        = _mm_set1_ps(scaleterm);
   float  pnonhomology;
   __m128 mask;
+  int    maskbits;		/* xxxx 4-bit mask for which cells 0..3 have passed threshold (if any) */
   __m128 pv;
-  __m128 cv;
-  int    q;
-  float  ktmp;
-  int    ka, kb;
-  
-#ifdef p7_DEBUGGING
-  /* in debugging code, we store the pp's in the fwd row's space, and defer the pnonhomology 
-   * threshold test until after we've calculated and saved the entire row 
+  int    q,r;
+  int    status;
+
+  /* test to see if *any* cells can meet threshold, before wasting
+   * time looking at them all.
+   * 
+   * Useful side effect: row 0 automatically fails this test (all pp
+   * in S->N->B), so posterior_decode_row() can be called on row 0 (in
+   * debugging code, we need to decode and store row zero specials),
+   * without triggering contract check failures in p7_sparsemask_* API
+   * functions that are checking for i=1..L.
+   * 
+   * This code block MAY NOT CHANGE the contents of fwd, bck vectors;
+   * in debugging, we will use them again to recalculate and store the
+   * decoding.
    */
+  pnonhomology = (xf[p7F_N] * xb[p7F_N] + xf[p7F_JJ] * xb[p7F_JJ] + xf[p7F_CC] * xb[p7F_CC]) * scaleterm;
+  if (pnonhomology <= 1.0f - p7_SPARSEMASK_THRESH_DEFAULT) 
+    {
+      if ((status = p7_sparsemask_StartRow(sm, rowi)) != eslOK) return status;
+      for (q = Q-1; q >= 0; q--)	/* reverse, because SPARSEMASK is entirely in reversed order */
+	{
+	  pv       =                _mm_mul_ps(P7F_MQ(fwd, q), P7F_MQ(bck, q));
+	  pv       = _mm_add_ps(pv, _mm_mul_ps(P7F_IQ(fwd, q), P7F_IQ(bck, q)));
+	  pv       = _mm_add_ps(pv, _mm_mul_ps(P7F_DQ(fwd, q), P7F_DQ(bck, q)));
+	  pv       = _mm_mul_ps(pv, cv);           /* pv is now the posterior probability of elements q,r=0..3 */
+	  mask     = _mm_cmpge_ps(pv, threshv);    /* mask now has all 0's in elems r that failed thresh; all 1's for r that passed */
+	  maskbits = _mm_movemask_ps(mask);	       /* maskbits is now something like 0100: 1's indicate which cell passed. */
+	  
+	  for (r = 0; r < p7_VNF; r++) 
+	    if ( maskbits & (1<<r)) 
+	      if ((status = p7_sparsemask_Add(sm, q, r)) != eslOK) return status;
+	}
+      if ((status = p7_sparsemask_FinishRow(sm)) != eslOK) return status;
+    }
+
+#ifdef p7_DEBUGGING
   xf[p7F_E]  = xf[p7F_E]  * xb[p7F_E]  * scaleterm;
   xf[p7F_N]  = (rowi == 0 ? 1.0f : xf[p7F_N]  * xb[p7F_N]  * scaleterm);
   xf[p7F_JJ] = xf[p7F_JJ] * xb[p7F_JJ] * scaleterm;
@@ -864,59 +896,17 @@ posterior_decode_row(P7_FILTERMX *ox, int rowi, P7_GBANDS *bnd, float overall_sc
   xf[p7F_B]  = xf[p7F_B]  * xb[p7F_B]  * scaleterm;
   xf[p7F_CC] = xf[p7F_CC] * xb[p7F_CC] * scaleterm;
   xf[p7F_C]  = xf[p7F_C]  * xb[p7F_C]  * scaleterm;
-  pnonhomology = xf[p7F_N] + xf[p7F_JJ] + xf[p7F_CC];
-#else
-  /* in production code, we don't need to store, and we may immediately threshold on pnonhomology */
-  pnonhomology = (xf[p7F_N] * xb[p7F_N] + xf[p7F_JJ] * xb[p7F_JJ] + xf[p7F_CC] * xb[p7F_CC]) * scaleterm;
-  if (pnonhomology >= p7_BANDS_THRESH1) return;
-#endif
-  
-  /* ka = min k that satisfies threshold posterior prob; kb = max k.
-   * Because of striping, identifying ka..kb is slightly nonobvious.
-   * What we do is collect min_k, max_k in each vector cell; these are
-   * the min/max in each segment (1..Q, Q+1..2Q, 2Q+1..3Q, 3Q+1..4Q).
-   * These are in <minkv>, <maxkv>. Finally we do a horizontal min/max
-   * on these vectors, and cast the result back to the integer coords
-   * we want.
-   * 
-   * kv vector contains the current i indices for each cell; we
-   * increment it by one (<onev>) each loop.
-   *
-   * All this coord computation is done as floats, because SSE2
-   * doesn't give us the integer _max/min we want. A float has exact
-   * range up to 2^24: 16.77M, more than enough for our design limit
-   * of L<=100K.
-   */
-  cv = _mm_set1_ps(scaleterm);
-  for (q = 0; q < Q; q++)
+
+  for (q = 0; q < Q; q++)	
     {
-      pv   =                _mm_mul_ps(P7F_MQ(fwd, q), P7F_MQ(bck, q));
-      pv   = _mm_add_ps(pv, _mm_mul_ps(P7F_IQ(fwd, q), P7F_IQ(bck, q)));
-      pv   = _mm_add_ps(pv, _mm_mul_ps(P7F_DQ(fwd, q), P7F_DQ(bck, q)));
-      pv   = _mm_mul_ps(pv, cv);
-      mask = _mm_cmpge_ps(pv, threshv);
-
-      bnd->ncell2 += sse_countge(pv, p7_BANDS_THRESH2); /* experimental; J10/29 */
-
-#ifdef p7_DEBUGGING
       P7F_MQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7F_MQ(fwd, q), P7F_MQ(bck, q)));
       P7F_DQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7F_DQ(fwd, q), P7F_DQ(bck, q)));
       P7F_IQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7F_IQ(fwd, q), P7F_IQ(bck, q)));
-#endif
-
-      kv    = _mm_add_ps(kv, onev);
-      minkv = _mm_min_ps( minkv, esl_sse_select_ps(minkv, kv, mask));
-      maxkv = _mm_max_ps( maxkv, esl_sse_select_ps(maxkv, kv, mask));
     }
-  esl_sse_hmax_ps(maxkv, &ktmp); kb = (int) ktmp;
-  esl_sse_hmin_ps(minkv, &ktmp); ka = (int) ktmp;
 
-#ifdef p7_DEBUGGING
   if (ox->pp)  save_debug_row_pp(ox, fwd, rowi);
-  if (pnonhomology >= p7_BANDS_THRESH1) return;
 #endif
-
-  if (kb) p7_gbands_Prepend(bnd, rowi, ka, kb);
+  return eslOK;
 }
 /*------------------ end, inlined recursions -------------------*/
 
@@ -1112,6 +1102,7 @@ save_debug_row_fb(P7_FILTERMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float totsc
 #include "hmmer.h"
 #include "impl_sse.h"
 #include "p7_filtermx.h"
+#include "p7_sparsemx.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
@@ -1134,14 +1125,13 @@ main(int argc, char **argv)
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
   P7_FILTERMX    *ox      = NULL;
-  P7_GBANDS      *bnd     = NULL;
+  P7_SPARSEMASK  *sm      = NULL;
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
   float           fraw, nullsc, fsc, msvsc;
-  float           msvmem, vfmem, fbmem, bndmem, bndmem2, basemem;
+  float           msvmem, vfmem, fbmem, sparsemem, sparsemem2, basemem;
   double          P;
-  double          bandw;
   int             status;
 
   p7_FLogsumInit();
@@ -1165,72 +1155,73 @@ main(int argc, char **argv)
   p7_profile_ConfigCustom(gm, hmm, bg, 500, 1.0, 0.5);
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
-
+  
   /* Initially allocate matrices for a default sequence size, 500; 
    * we resize as needed for each individual target seq 
    */
-  ox  = p7_filtermx_Create(gm->M, 500, ESL_MBYTES(32));  
-  bnd = p7_gbands_Create  (gm->M, 500);
+  ox  = p7_filtermx_Create  (gm->M, 500, ESL_MBYTES(32));  
+  sm  = p7_sparsemask_Create(gm->M, 500, p7_SPARSEMASK_THRESH_DEFAULT);
 
-  printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s %9s\n",
-	 "target seq", "query profile", "score", "P-value", "MSV (KB)", "VF (KB)", "FB (MB)", "bnd (MB)", "bnd2 (MB)", "bandwidth", "base (MB)");
-  printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s %9s\n",
-	 "----------------------------", "------------------------------",  "---------", "---------", "---------", "---------", "---------", "---------", "---------", "---------", "---------");
-
+  printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s\n",
+	 "target seq", "query profile", "score", "P-value", "MSV (KB)", "VF (KB)", "FB (MB)", "required", "actual", "base (MB)");
+  printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s\n",
+	 "----------------------------", "------------------------------",  "---------", "---------", "---------", "---------", "---------", "---------", "---------", "---------");
+  
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
       p7_oprofile_ReconfigLength(om, sq->n);
       p7_profile_SetLength      (gm, sq->n);
       p7_bg_SetLength(bg,            sq->n);
 
-      p7_filtermx_GrowTo(ox,  om->M, sq->n); 
-      p7_gbands_Reinit  (bnd, gm->M, sq->n); 
-
+      p7_filtermx_GrowTo  (ox, om->M, sq->n); 
+      p7_sparsemask_Reinit(sm, gm->M, sq->n, p7_SPARSEMASK_THRESH_DEFAULT); 
 
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
 
+      /* Filter insig hits, partially simulating the real pipeline */
       p7_MSVFilter(sq->dsq, sq->n, om, ox, &msvsc);
       msvsc = (msvsc - nullsc) / eslCONST_LOG2;
       P     =  esl_gumbel_surv(msvsc,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+      if (P > 0.02) goto NEXT_SEQ;
 
-      if (P <= 0.02) 
-	{
-          p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fraw);
-	  p7_BackwardFilter(sq->dsq, sq->n, om, ox, bnd);
+      p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fraw);
+      p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm);
 
-	  /* Calculate minimum memory requirements for each step */
-	  msvmem  = (double) ( p7O_NQB(om->M) * sizeof(__m128i))      / 1024.;   /* in KB */
-	  vfmem   = (double) ( p7O_NQW(om->M) * sizeof(__m128i)) * 3. / 1024.;  
-	  fbmem   = (double) ( 3. + ceil ( (sqrt(9. + 8. * (double) sq->n) - 3.) / 2.)) * (double) (om->M * 3 * sizeof(float)) / 1024. / 1024.;
-	  bndmem  = (double) bnd->ncell * 6. * sizeof(float) / 1024. / 1024.;           /* 6, because you're dual-mode */
-	  bndmem2 = (double) bnd->ncell2 * 6. * sizeof(float) / 1024. / 1024.;          
-	  basemem = (double) om->M * (double) sq->n * 6 * sizeof(float) / 1024. / 1024;	/* 6 = dual-mode */
-	  bandw   = (double) bnd->ncell  / (double) sq->n;
+      /* Calculate minimum memory requirements for each step */
+      msvmem     = (double) ( p7O_NQB(om->M) * sizeof(__m128i))      / 1024.;   /* in KB */
+      vfmem      = (double) ( p7O_NQW(om->M) * sizeof(__m128i)) * 3. / 1024.;  
+      fbmem      = (double) ( 3. + ceil ( (sqrt(9. + 8. * (double) sq->n) - 3.) / 2.)) * (double) (om->M * 3 * sizeof(float)) / 1024. / 1024.;
+      sparsemem  = (double) sm->ncells * 6. * sizeof(float) / 1024. / 1024.;             /* 6, because you're dual-mode */
+      sparsemem2 = (double) p7_sparsemask_Sizeof(sm) / 1024. / 1024.;
+      basemem    = (double) om->M * (double) sq->n * 6 * sizeof(float) / 1024. / 1024.;	
 
-	  fsc  =  (fraw-nullsc) / eslCONST_LOG2;
-	  P    = esl_exp_surv(fsc,   om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
+      fsc  =  (fraw-nullsc) / eslCONST_LOG2;
+      P    = esl_exp_surv(fsc,   om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
 
-	  printf("%-30s %-30s %9.2f %9.2g %9.3f %9.3f %9.3f %9.3f %9.3f %9.3f %9.3f\n",
-		 sq->name,
-		 hmm->name,
-		 fsc, P,
-		 msvmem,
-		 vfmem,
-		 fbmem, 
-		 bndmem,
-		 bndmem2,
-		 bandw,
-		 basemem);
-	}
+      printf("%-30s %-30s %9.2f %9.2g %9.3f %9.3f %9.3f %9.3f %9.3f %9.3f\n",
+	     sq->name,
+	     hmm->name,
+	     fsc, P,
+	     msvmem,
+	     vfmem,
+	     fbmem, 
+	     sparsemem,
+	     sparsemem2,
+	     basemem);
 	     
+    NEXT_SEQ:
       esl_sq_Reuse(sq);
-      p7_gbands_Reuse(bnd);
+      p7_sparsemask_Reuse(sm);
       p7_filtermx_Reuse(ox);
     }
 
+  printf("# SPARSEMASK: kmem reallocs: %d\n", sm->n_krealloc);
+  printf("#             seg reallocs:  %d\n", sm->n_irealloc);
+  printf("#             row reallocs:  %d\n", sm->n_rrealloc);
+
   esl_sq_Destroy(sq);
   esl_sqfile_Close(sqfp);
-  p7_gbands_Destroy(bnd);
+  p7_sparsemask_Destroy(sm);
   p7_filtermx_Destroy(ox);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
@@ -1265,6 +1256,7 @@ main(int argc, char **argv)
 #include "hmmer.h"
 #include "impl_sse.h"
 #include "p7_filtermx.h"
+#include "p7_sparsemx.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -1292,7 +1284,7 @@ main(int argc, char **argv)
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
   P7_FILTERMX    *ox      = NULL;
-  P7_GBANDS      *bnd     = NULL;
+  P7_SPARSEMASK  *sm      = NULL;
   int             L       = esl_opt_GetInteger(go, "-L");
   int             N       = esl_opt_GetInteger(go, "-N");
   ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
@@ -1300,6 +1292,7 @@ main(int argc, char **argv)
   float           sc;
   double          base_time, bench_time, Mcs;
 
+  p7_FLogsumInit();
   impl_Init();
 
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
@@ -1315,8 +1308,8 @@ main(int argc, char **argv)
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
 
-  ox  = p7_filtermx_Create(om->M, L, ESL_MBYTES(32));
-  bnd = p7_gbands_Create(om->M, L);
+  ox  = p7_filtermx_Create  (om->M, L, ESL_MBYTES(32));
+  sm  = p7_sparsemask_Create(om->M, L, p7_SPARSEMASK_THRESH_DEFAULT);
 
   /* Baseline time. */
   esl_stopwatch_Start(w);
@@ -1330,12 +1323,14 @@ main(int argc, char **argv)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
+      p7_sparsemask_Reinit(sm, om->M, L, p7_SPARSEMASK_THRESH_DEFAULT);
+
       p7_ForwardFilter(dsq, L, om, ox, &sc);
       if (! esl_opt_GetBoolean(go, "-F")) 
-	p7_BackwardFilter(dsq, L, om, ox, bnd);
+	p7_BackwardFilter(dsq, L, om, ox, sm);
 
       p7_filtermx_Reuse(ox);
-      p7_gbands_Reuse(bnd);
+      p7_sparsemask_Reuse(sm);
     }
   esl_stopwatch_Stop(w);
   bench_time = w->user - base_time;
@@ -1346,7 +1341,7 @@ main(int argc, char **argv)
 
   free(dsq);
   p7_filtermx_Destroy(ox);
-  p7_gbands_Destroy(bnd);
+  p7_sparsemask_Destroy(sm);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
@@ -1390,7 +1385,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
   P7_REFMX    *fwd    = p7_refmx_Create   (M, L);
   P7_REFMX    *bck    = p7_refmx_Create   (M, L);
   P7_REFMX    *pp     = p7_refmx_Create   (M, L);
-  P7_GBANDS   *bnd    = p7_gbands_Create(M, L);
+  P7_SPARSEMASK *sm   = p7_sparsemask_Create(M, L, p7_SPARSEMASK_THRESH_DEFAULT);
   float        tol2   = ( p7_logsum_IsSlowExact() ? 0.001  : 0.1);   /* absolute agreement of reference (log-space) and vector (prob-space) depends on whether we're using LUT-based logsum() */
   float fsc1, fsc2;
   float bsc2;
@@ -1442,9 +1437,10 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
       if ( p7_refmx_GrowTo   (bck, M, tL)     != eslOK) esl_fatal(msg);
       if ( p7_refmx_GrowTo   (pp,  M, tL)     != eslOK) esl_fatal(msg);
       if ( p7_filtermx_GrowTo(ox,  M, tL)     != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_Reinit(sm, M, tL, p7_SPARSEMASK_THRESH_DEFAULT) != eslOK) esl_fatal(msg);
 
       p7_ForwardFilter (dsq, tL, om, ox, &fsc1);
-      p7_BackwardFilter(dsq, tL, om, ox,  bnd);
+      p7_BackwardFilter(dsq, tL, om, ox,  sm);
 
       p7_ReferenceForward (dsq, tL, gm, fwd,  &fsc2);
       p7_ReferenceBackward(dsq, tL, gm, bck,  &bsc2);
@@ -1482,12 +1478,12 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
       p7_refmx_Reuse(bck);
       p7_refmx_Reuse(pp);
       p7_filtermx_Reuse(ox);
-      p7_gbands_Reuse(bnd);
+      p7_sparsemask_Reuse(sm);
     }
 
   free(dsqmem);
   esl_sq_Destroy(sq);
-  p7_gbands_Destroy(bnd);
+  p7_sparsemask_Destroy(sm);
   p7_filtermx_Destroy(ox);
   p7_refmx_Destroy(fwd);
   p7_refmx_Destroy(bck);
@@ -1590,6 +1586,7 @@ main(int argc, char **argv)
 #include "hmmer.h"
 #include "impl_sse.h"
 #include "p7_filtermx.h"
+#include "p7_sparsemx.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
@@ -1620,7 +1617,7 @@ main(int argc, char **argv)
   P7_OPROFILE    *om      = NULL;
   P7_REFMX       *gx      = NULL;
   P7_FILTERMX    *ox      = NULL;
-  P7_GBANDS      *bnd     = NULL;
+  P7_SPARSEMASK  *sm      = NULL;
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
@@ -1657,9 +1654,9 @@ main(int argc, char **argv)
   /* Initially allocate matrices for a default sequence size, 500; 
    * we resize as needed for each individual target seq 
    */
-  ox  = p7_filtermx_Create(gm->M, 500, ESL_MBYTES(32));  
-  gx  = p7_refmx_Create   (gm->M, 500);
-  bnd = p7_gbands_Create  (gm->M, 500);
+  ox  = p7_filtermx_Create  (gm->M, 500, ESL_MBYTES(32));  
+  gx  = p7_refmx_Create     (gm->M, 500);
+  sm  = p7_sparsemask_Create(gm->M, 500, p7_SPARSEMASK_THRESH_DEFAULT);
 #ifdef p7_DEBUGGING
   /* When the p7_DEBUGGING flag is up, <ox> matrix has the ability to
    * record generic, complete <fwd>, <bck>, and <pp> matrices, for
@@ -1677,14 +1674,14 @@ main(int argc, char **argv)
       p7_profile_SetLength      (gm, sq->n);
       p7_bg_SetLength(bg,            sq->n);
 
-      p7_filtermx_GrowTo(ox,  om->M, sq->n); 
-      p7_refmx_GrowTo   (gx,  gm->M, sq->n); 
-      p7_gbands_Reinit  (bnd, gm->M, sq->n); 
+      p7_filtermx_GrowTo  (ox, om->M, sq->n); 
+      p7_refmx_GrowTo     (gx, gm->M, sq->n); 
+      p7_sparsemask_Reinit(sm, gm->M, sq->n, p7_SPARSEMASK_THRESH_DEFAULT); 
 
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
     
       p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fraw);
-      p7_BackwardFilter(sq->dsq, sq->n, om, ox, bnd);
+      p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm);
 
       p7_ReferenceForward (sq->dsq, sq->n, gm, gx, &gfraw);
       p7_ReferenceBackward(sq->dsq, sq->n, gm, gx, &gbraw);
@@ -1705,9 +1702,7 @@ main(int argc, char **argv)
 
       gmem = (float) p7_refmx_Sizeof(gx)    / 1024 / 1024;
       cmem = (float) p7_filtermx_Sizeof(ox) / 1024 / 1024;
-      bmem = (float) bnd->ncell * 6. * sizeof(float) / 1024 / 1024; /* 6: banded impl is dual-mode */
-
-      // p7_gbands_Dump(stdout, bnd);	  
+      bmem = (float) sm->ncells * 6. * sizeof(float) / 1024 / 1024;
 
       if (esl_opt_GetBoolean(go, "-1")) 
 	printf("%-30s\t%-20s\t%9.2g\t%7.4f\t%7.4f\t%9.2g\t%6.1f\t%6.2fM\t%6.2fM\t%6.2fM\n", sq->name, hmm->name, P, fsc, bsc, gP, gfsc, gmem, cmem, bmem);
@@ -1728,18 +1723,18 @@ main(int argc, char **argv)
 	  printf("Reference Forward P-val:   %g\n",        gP);
 	  printf("RAM, f/b filter:           %.2fM\n",    cmem);
 	  printf("RAM, generic:              %.2fM\n",    gmem);
-	  printf("RAM, banded:               %.2fM\n",    bmem);
+	  printf("RAM, sparse:               %.2fM\n",    bmem);
 	}
 
       esl_sq_Reuse(sq);
       p7_refmx_Reuse(gx);
-      p7_gbands_Reuse(bnd);
+      p7_sparsemask_Reuse(sm);
       p7_filtermx_Reuse(ox);
     }
 
   esl_sq_Destroy(sq);
   esl_sqfile_Close(sqfp);
-  p7_gbands_Destroy(bnd);
+  p7_sparsemask_Destroy(sm);
   p7_filtermx_Destroy(ox);
   p7_refmx_Destroy(gx);
   p7_oprofile_Destroy(om);

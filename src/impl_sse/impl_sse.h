@@ -18,7 +18,7 @@
 
 #include "hmmer.h"
 #include "p7_filtermx.h"
-#include "p7_gbands.h"
+#include "p7_sparsemx.h"
 
 #define p7O_EXTRA_SB 17    /* see ssvfilter.c for explanation */
 
@@ -503,7 +503,7 @@ extern int p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
 
 /* fwdfilter.c */
 extern int p7_ForwardFilter (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *opt_sc);
-extern int p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, P7_GBANDS *bnd);
+extern int p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, P7_SPARSEMASK *bnd);
 
 /* io.c */
 extern int p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om);
