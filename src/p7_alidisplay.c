@@ -26,97 +26,6 @@
  * 1. The P7_ALIDISPLAY object
  *****************************************************************/
 
-/* Function:  p7_alidisplay_pickHqBounds()
- * Synopsis:  Compute conservative (high-quality) alignment boundaries
- *            based aligned posterior probabilities (APP).
- *
- * Purpose:   Each hit coming from the nhmmer pipeline brings with it
- *            an APP array (in ddef->mocc) that indicates the confidence
- *            nhmmer has that each position in the alignment is supposed
- *            to be aligned to *some* state of the model. There are
- *            typically only a few bases on either end that fall below
- *             a threshold of, say 80% or 90%, though in some cases, the
- *            length of such a low-quality terminal run can be pretty
- *            long.
- *
- *            This function a scans along from the left end to the right
- *            until a position i with mocc matching <thresh> is found, then:
- *            (a) if position i represents a positive-scoring match
- *                to the model, it scans back left until the first
- *                negative-scoring "mismatch" to the model at position j,
- *                and sets ihq (the hq start) to j+1;
- *            (b) if position i is a negative-scoring "mismatch", it
- *                scans to the right until the first positive-scoring
- *                match at position j, and sets ihq to j.
- *            The symmetric computation is done from the right end of APP
- *            to compute jhq.
- *
- *            The result of the function is then to update the ihq and jhq
- *            values for all hits in the <th> object.
- *
- *            This function assumes the hits are found in th->hit, i.e.
- *            that deduplication and sorting have already taken place
- *
- *            For details about offsets into mocc, see
- *            ~wheelert/notebook/2012/0203_app_hq_bounds/, (Feb 5)
- *
- * Args:      ddef     - object housing the mocc posterior probability array
- *            ad       - object holding the mline values used for the final edge
- *                       settlement and into which the hq-bounds will be stored
- *            tr       - trace, used in the position stepping
- *            z1       - envelope start
- *            z2       - envelope end
- *            thresh   - P-value threshold used in trimming
- *
- * Returns:   <eslOK> on success.
- */
-static int
-p7_alidisplay_pickHqBounds(P7_DOMAINDEF *ddef, P7_ALIDISPLAY *ad, const P7_TRACE *tr, int z1, int z2, float thresh)
-{
-  int z, i;    /* counter over positions in the alignment */
-
-  /*strange special case, should be gone with new (as of May 2012) domain definition machinery*/
-  if (z1==z2){
-    ad->hqto = ad->hqfrom = tr->i[z1];
-    return eslOK;
-  }
-
-  /*scan left to right to find left boundary*/
-  i = z1-2;
-  for (z = z1 ; z < z2; z++) {
-    if ( tr->st[z] != p7T_D ) {  //skip delete states in the trace
-      if (ddef->mocc[i++] >= thresh) break;
-    }
-  }
-  if (z==z2) { /* no confidence!, set values to 0 */
-    ad->hqto = ad->hqfrom = 0;
-    return eslOK;
-  }
-  //walk left or right to add good terminal positions or trim bad ones.
-  i=z-z1;
-  while (i>0 && ad->mline[i] != ' ')   i--; // positive score, so move out to the left
-  while (ad->mline[i] == ' ')          i++; // negative score, move back to right
-  ad->hqfrom = tr->i[z1+i];
-
-
-
-  /*scan right to left to find right boundary*/
-  i = ddef->L + 1 - (tr->N - z2 - 3);
-  for (z = z2 ; z > z1; z--) {
-    if ( tr->st[z] != p7T_D ) {  //skip delete states in the trace
-      if (ddef->mocc[i--] >= thresh) break;
-    }
-  }
-
-  //walk left or right to add good terminal positions or trim bad ones.
-  i=z-z1;
-  while (i<z2-z1 && ad->mline[i] != ' ')   i++; // positive score, so move out to the right
-  while (ad->mline[i] == ' ')              i--; // negative score, move back to left
-  ad->hqto = tr->i[z1+i];
-
-
-  return eslOK;
-}
 
 /* Function:  p7_alidisplay_Create()
  * Synopsis:  Create an alignment display, from trace and oprofile.
@@ -147,7 +56,7 @@ p7_alidisplay_pickHqBounds(P7_DOMAINDEF *ddef, P7_ALIDISPLAY *ad, const P7_TRACE
  *            in the data.
  */
 P7_ALIDISPLAY *
-p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq, P7_DOMAINDEF *ddef_app)
+p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq)
 {
   P7_ALIDISPLAY *ad       = NULL;
   char          *Alphabet = om->abc->sym;
@@ -192,7 +101,6 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   if (om->mm[0]  != 0)    n += z2-z1+2;  /* optional reference line              */
   if (om->cs[0]  != 0)    n += z2-z1+2;  /* optional structure line              */
   if (tr->pp     != NULL) n += z2-z1+2;  /* optional posterior prob line         */
-  if (ddef_app       != NULL) n += z2-z1+2;  /* optional posterior prob alignment line         */
   hmm_namelen = strlen(om->name);                           n += hmm_namelen + 1;
   hmm_acclen  = (om->acc  != NULL ? strlen(om->acc)  : 0);  n += hmm_acclen  + 1;
   hmm_desclen = (om->desc != NULL ? strlen(om->desc) : 0);  n += hmm_desclen + 1;
@@ -214,7 +122,6 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   ad->mline   = ad->mem + pos;  pos += z2-z1+2;
   ad->aseq    = ad->mem + pos;  pos += z2-z1+2;
   if (tr->pp != NULL)  { ad->ppline = ad->mem + pos;  pos += z2-z1+2;} else { ad->ppline = NULL; }
-  if (ddef_app != NULL)    { ad->appline = ad->mem + pos;  pos += z2-z1+2;} else { ad->appline = NULL; }
   ad->hmmname = ad->mem + pos;  pos += hmm_namelen +1;
   ad->hmmacc  = ad->mem + pos;  pos += hmm_acclen +1;
   ad->hmmdesc = ad->mem + pos;  pos += hmm_desclen +1;
@@ -263,15 +170,6 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   }
 
 
-  /* optional app line */
-  if (ddef_app != NULL && ddef_app->show_app) {
-    for (z = z1, s = z-2  ; z <= z2; z++)  ad->appline[z-z1] = ( (tr->st[z] == p7T_D) ? '.' : p7_alidisplay_EncodeAliPostProb(ddef_app->mocc[s++], ddef_app->app_hi, ddef_app->app_med, ddef_app->app_lo ));
-    ad->appline[z-z1] = '\0';
-  } else {
-    ad->appline = NULL;
-  }
-
-
   /* mandatory three alignment display lines: model, mline, aseq */
   for (z = z1; z <= z2; z++) 
     {
@@ -308,14 +206,6 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   ad->mline [z2-z1+1] = '\0';
   ad->aseq  [z2-z1+1] = '\0';
   ad->N = z2-z1+1;
-
-
-  if (ddef_app != NULL) {
-    /* pick APP-based hq bounds.  This is done after mline is created,
-     * as mline is used in the trimming process
-     */
-    p7_alidisplay_pickHqBounds(ddef_app, ad, tr, z1, z2, ddef_app->app_med);
-  }
 
   return ad;
 
@@ -760,7 +650,6 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
       else        { strncpy(buf, ad->aseq+pos, aliwidth); if (fprintf(fp, "  %*s %*s %s %*s\n",    namewidth, show_seqname, coordwidth, "-", buf, coordwidth, "-") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");  }
 
       if (ad->ppline != NULL)  { strncpy(buf, ad->ppline+pos, aliwidth);  if (fprintf(fp, "  %*s %s PP\n", namewidth+coordwidth+1, "", buf)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");  }
-      if (ad->appline != NULL) { strncpy(buf, ad->appline+pos, aliwidth); if (fprintf(fp, "  %*s %s APP\n", namewidth+coordwidth+1, "", buf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");  }
 
       k1 += nk;
       if   (ad->sqfrom < ad->sqto)  i1 += ni;

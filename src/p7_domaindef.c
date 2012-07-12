@@ -42,13 +42,14 @@
 #include "esl_random.h"
 #include "esl_sq.h"
 #include "esl_vectorops.h"
+#include "esl_sse.h"
 
 #include "hmmer.h"
 
 static int is_multidomain_region  (P7_DOMAINDEF *ddef, int i, int j);
 static int region_trace_ensemble  (P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *dsq, int ireg, int jreg, const P7_OMX *fwd, P7_OMX *wrk, int *ret_nc);
-static int rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPROFILE *om, const ESL_SQ *sq, P7_OMX *ox1, P7_OMX *ox2,
-				   int i, int j, int null2_is_done, P7_BG *bg, int long_target);
+static int rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq, P7_OMX *ox1, P7_OMX *ox2,
+				   int i, int j, int null2_is_done, P7_BG *bg, P7_HMM *hmm, int long_target, P7_BG *block_bg, float *bgf_tmp, float *scores_tmp);
 
 
 /*****************************************************************
@@ -341,7 +342,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
   p7_ReconfigUnihit(gm, 0);	  /* process each domain in unihit L=0 mode */
 
   for (d = 0; d < ddef->gtr->ndom; d++)
-    rescore_isolated_domain(ddef, gm, sq, gx1, gx2, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], FALSE, NULL, FALSE);
+    rescore_isolated_domain(ddef, gm, sq, gx1, gx2, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], FALSE, NULL, NULL, FALSE, NULL, NULL, NULL);
 
   /* Restore original model configuration, including length */
   if (p7_IsMulti(save_mode))  p7_ReconfigMultihit(gm, saveL); 
@@ -363,11 +364,8 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
  *            calculations) and obtain an optimal accuracy alignment,
  *            using <fwd> and <bck> matrices as workspace for the
  *            necessary full-matrix DP calculations. Caller provides a
- *            new or reused <ddef> object to hold these results, and
- *            optionally provides a new or reused <ddef_app> object to
- *            hold details required by nhmmer to produce the APP
- *            (posterior probability of being aligned) line in
- *            alignment printout. A <bg> is provided for (possible) use
+ *            new or reused <ddef> object to hold these results.
+ *             A <bg> is provided for (possible) use
  *            in null3 score correction (used in nhmmer), and a boolean
  *            <long_target> argument is provided to allow nhmmer-
  *            specific modifications to the behavior of this function
@@ -376,7 +374,6 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
  *            Upon return, <ddef> contains the definitions of all the
  *            domains: their bounds, their null-corrected Forward
  *            scores, and their optimal posterior accuracy alignments.
- *            If <ddef_app> is not null, it is now prepared for reuse.
  *            
  * Returns:   <eslOK> on success.           
  *            
@@ -387,7 +384,8 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
 int
 p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om, 
 				   P7_OMX *oxf, P7_OMX *oxb, P7_OMX *fwd, P7_OMX *bck, 
-				   P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, P7_BG *bg, int long_target)
+				   P7_DOMAINDEF *ddef, P7_BG *bg, P7_HMM *hmm,
+				   int long_target, P7_BG *block_bg, float *bgf_tmp, float *scores_tmp)
 {
   int i, j;
   int triggered;
@@ -469,7 +467,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
 
                   /*the !long_target argument will cause the function to recompute null2
                    * scores if this is part of a long_target (nhmmer) pipeline */
-                  if (rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i2, j2, TRUE, bg, long_target) == eslOK)
+                  if (rescore_isolated_domain(ddef, om, sq, fwd, bck, i2, j2, TRUE, bg, hmm, long_target, block_bg, bgf_tmp, scores_tmp) == eslOK)
                        last_j2 = j2;
             }
             p7_spensemble_Reuse(ddef->sp);
@@ -479,7 +477,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
         {
             /* The region looks simple, single domain; convert the region to an envelope. */
             ddef->nenvelopes++;
-            rescore_isolated_domain(ddef, ddef_app, om, sq, fwd, bck, i, j, FALSE, bg, long_target);
+            rescore_isolated_domain(ddef, om, sq, fwd, bck, i, j, FALSE, bg, hmm, long_target, block_bg, bgf_tmp, scores_tmp);
         }
         i     = -1;
         triggered = FALSE;
@@ -677,6 +675,64 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *
   return eslOK;
 }
 
+
+
+
+/* reparameterize_model()
+ *
+ * Establish new background priors based on a sequence window,
+ * and change match state emission log-odds scores accordingly.
+ *
+ * Given the frequency distribution of a block of sequence
+ * (<dsq>, of length <sq_len>), and a prior with which that
+ * distribution can be mixed (<block_bg>), modify the
+ * passed <bg> and <om> structures in place. This is called
+ * by rescore_isolated_domain(), which then calls it again
+ * once complete to return <bg> and <om> to original state.
+ * It is only used in the longtarget (nhmmer) case.
+ *
+ * In-place modification is done to avoid making copies, which
+ * would require overwhelming allocation calls. Doing this
+ * requires that (a) each thread has its own independent copy
+ * of <bg> and <om>, and (b) those are returned to their
+ * original state before being used outside the function
+ * using the modified structures.
+ *
+ * Two pre-allocated arrays <bgf_tmp> and <sc_tmp> must be
+ * passed, and are used to hold necessary internal data.
+ *
+ */
+static int
+reparameterize_model (P7_BG *bg, P7_HMM *hmm, P7_OPROFILE *om, const ESL_DSQ *dsq, int sq_len, P7_BG *block_bg, float *bgf_tmp, float *sc_tmp) {
+
+  int     K   = om->abc->K;
+
+  float   bg_smooth = 0.3; //fraction of f that comes from a prior determined by the sequence block
+
+  if (dsq != NULL) {
+    /* compute new bg->f, capturing original values into a preallocated array */
+    esl_vec_FCopy(bg->f, K, bgf_tmp);
+    esl_sq_GetFrequencies(dsq, sq_len, bg->abc, bg->f);
+
+
+    // optionally merge with a prior to reduce sharpness of correction
+    if (bg_smooth > 0) {
+      esl_vec_FScale(bg->f, K, 1-bg_smooth);
+      esl_vec_FAddScaled(bg->f, block_bg->f, bg_smooth, K);
+    }
+  } else {
+    /* revert bg->f to the passed in orig_bgf   */
+    esl_vec_FCopy(bgf_tmp, K, bg->f);
+  }
+
+
+  p7_oprofile_UpdateFwdEmissionScores(om, bg, hmm, sc_tmp);
+
+
+  return eslOK;
+}
+
+
 /* rescore_isolated_domain()
  * SRE, Fri Feb  8 09:18:33 2008 [Janelia]
  *
@@ -701,15 +757,11 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *
  * sufficient for the complete sequence lying around, and can just use
  * those.) The caller also provides a <P7_DOMAINDEF> object (ddef)
  * which is (efficiently, we trust) managing any necessary temporary
- * working space and heuristic thresholds. The caller also optionally
- * provides a second <P7_DOMAINDEF> object (ddef_app) which if
- * provided is used to hold details required by nhmmer to produce the
- * APP (posterior probability of being aligned) line in alignment
- * printout.
+ * working space and heuristic thresholds.
  *
  * If <long_target> is TRUE, null3 biased-composition score correction
- * is used, and <bg> is required. Otherwise null2 is used, and <bg>
- * may be NULL.
+ * may be used, in which case <bg> is required. Otherwise null2 is used,
+ * and <bg> may be NULL.
  * 
  * Returns <eslOK> if a domain was successfully identified, scored,
  * and aligned in the envelope; if so, the per-domain information is
@@ -721,7 +773,6 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *
  *         the OA trace of the domain. Before exit, we called
  *         <Reuse()> on it.
  *
- * <ddef_app>: if not null, it is now prepared for reuse.
  * 
  * <ox1> : happens to be holding OA score matrix for the domain
  *         upon return, but that's not part of the spec; officially
@@ -733,8 +784,9 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *
  *         spec just makes its contents "undefined".
  */
 static int
-rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPROFILE *om, const ESL_SQ *sq,
-			P7_OMX *ox1, P7_OMX *ox2, int i, int j, int null2_is_done, P7_BG *bg, int long_target)
+rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
+			P7_OMX *ox1, P7_OMX *ox2, int i, int j, int null2_is_done, P7_BG *bg, P7_HMM *hmm, int long_target,
+			P7_BG *block_bg, float *bgf_tmp, float *scores_tmp)
 {
   P7_DOMAIN     *dom           = NULL;
   int            Ld            = j-i+1;
@@ -746,14 +798,15 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
   int            status;
   float          null3_corr;
 
+
+  // I modify bg and om in-place to avoid having to clone (allocate) a massive
+  // number of times when there are many hits
+  if (long_target) // this modifies both bg and om.
+    reparameterize_model (bg, hmm, om, sq->dsq + i, j-i+1, block_bg, bgf_tmp, scores_tmp);
+
+
   p7_Forward (sq->dsq + i-1, Ld, om,      ox1, &envsc);
   p7_Backward(sq->dsq + i-1, Ld, om, ox1, ox2, NULL);
-
-  if (ddef_app != NULL) {
-	  //grab mocc values for computing confidence of alignment-inclusion boundaries
-	  if ((status = p7_domaindef_GrowTo(ddef_app, Ld))      != eslOK) return status;  /* ddef_app btot,etot,mocc now ready*/
-	  if ((status = p7_DomainDecoding(om, ox1, ox2, ddef_app)) != eslOK && status != eslERANGE) return status;  /* ddef_app->{btot,etot,mocc} now made.                    */
-  }
 
 
   status = p7_Decoding(om, ox1, ox2, ox2);      /* <ox2> is now overwritten with post probabilities     */
@@ -777,11 +830,9 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
   dom = &(ddef->dcl[ddef->ndom]);
 
   /* store the results in it */
-  dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq, ddef_app);
+  dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq);
   dom->iali          = dom->ad->sqfrom;
   dom->jali          = dom->ad->sqto;
-  dom->ihq           = dom->ad->hqfrom;
-  dom->jhq           = dom->ad->hqto;
   dom->ienv          = i;
   dom->jenv          = j;
   dom->envsc         = envsc;         /* in units of NATS */
@@ -825,8 +876,11 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, const P7_OPR
 
   ddef->ndom++;
 
+
+  if (long_target)  //revert bg and om back to original
+    reparameterize_model (bg, hmm, om, NULL, 0, NULL, bgf_tmp, scores_tmp);
+
   p7_trace_Reuse(ddef->tr);
-  if (ddef_app != NULL) p7_domaindef_Reuse(ddef_app);
   return eslOK;
 
  ERROR:
@@ -938,7 +992,8 @@ main(int argc, char **argv)
 
   p7_Forward (sq->dsq, sq->n, om,      fwd, &overall_sc); 
   p7_Backward(sq->dsq, sq->n, om, fwd, bck, &sc);       
-  p7_domaindef_ByPosteriorHeuristics(sq, om, oxf, oxb, fwd, bck, ddef, NULL, NULL, FALSE);
+  p7_domaindef_ByPosteriorHeuristics(sq, om, oxf, oxb, fwd, bck, ddef, NULL, NULL, FALSE, NULL, NULL, NULL);
+
 
   printf("Overall raw likelihood score: %.2f nats\n", overall_sc);
 

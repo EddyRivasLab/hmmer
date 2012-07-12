@@ -352,6 +352,7 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
   om2->allocM    = om1->allocM;
   om2->mode      = om1->mode;
   om2->nj        = om1->nj;
+  om2->max_length = om1->max_length;
 
   om2->clone     = om1->clone;
 
@@ -390,6 +391,58 @@ p7_oprofile_Clone(const P7_OPROFILE *om1)
   p7_oprofile_Destroy(om2);
   return NULL;
 }
+
+
+/* Function:  p7_oprofile_UpdateFwdEmissionScores()
+ * Synopsis:  Update om match emissions to account for new bg, using
+ *            preallocated sc_tmp[].
+ *            This is re-ordering of the loops used, for example in
+ *            fb_conversion, done with the aim of reducing the
+ *            required size of sc_tmp.
+ *
+ * Purpose:   Change scores based on updated background model
+ *
+ */
+int
+p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, P7_HMM *hmm, float *sc_tmp)
+{
+  int     M   = om->M;    /* length of the query                                          */
+  int     k, q, x, z;
+  int     nq  = p7O_NQF(M);     /* segment length; total # of striped vectors needed            */
+  int     K   = om->abc->K;
+  int     Kp  = om->abc->Kp;
+  union   { vector float v; float x[4]; } tmp;
+
+  for (k = 1, q = 0; q < nq; q++, k++) {
+
+    //First compute the core characters of the alphabet
+    //TODO: I could probably do this more simply, since scores will just change as a ratio of the current bg->f[i] and previous bg->f[i]...
+    for (x = 0; x < K; x++) {
+      for (z = 0; z < 4; z++) {
+         sc_tmp[z*Kp + x] =  (k+ z*nq <= M) ? log(hmm->mat[k+z*nq][x] / bg->f[x]) : -eslINFINITY;
+         tmp.x[z] = sc_tmp[z*Kp + x];
+      }
+      om->rfv[x][q] = esl_vmx_expf(tmp.v);
+    }
+
+    // Then compute corresponding scores for ambiguity codes.
+    // Calculation depends on having done the above.
+    for (z = 0; z < 4; z++)
+      esl_abc_FExpectScVec(hmm->abc, sc_tmp+(z*Kp), bg->f);
+
+    //finish off the interleaved values
+    for (x = K; x < Kp; x++) {
+      for (z = 0; z < 4; z++)
+         tmp.x[z] = sc_tmp[z*Kp + x];  // computed in FExpectScVec above
+      om->rfv[x][q] = esl_vmx_expf(tmp.v);
+    }
+  }
+
+  return eslOK;
+
+}
+
+
 
 /*----------------- end, P7_OPROFILE structure ------------------*/
 

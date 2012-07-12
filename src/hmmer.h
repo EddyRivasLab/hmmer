@@ -586,7 +586,6 @@ typedef struct p7_alidisplay_s {
   char *mline;                  /* "identities", conservation +'s, etc. */
   char *aseq;                   /* aligned target sequence              */
   char *ppline;			        /* posterior prob annotation; or NULL   */
-  char *appline;	  		    /* posterior prob of being aligned to the model (mocc) annotation; or NULL   */
   int   N;			            /* length of strings                    */
 
   char *hmmname;		/* name of HMM                          */
@@ -601,8 +600,6 @@ typedef struct p7_alidisplay_s {
   char *sqdesc;			/* description of targ seq; or [0]='\0' */
   long  sqfrom;			/* start position on sequence (1..L)    */
   long  sqto;		    /* end position on sequence   (1..L)    */
-  long  hqfrom;     /* start position on sequence (1..L) of trusted alignment (per APP)  */
-  long  hqto;       /* end position on sequence   (1..L) of trusted alignment (per APP)  */
   long  L;			/* length of sequence                   */
 
   int   memsize;                /* size of allocated block of memory    */
@@ -617,7 +614,6 @@ typedef struct p7_alidisplay_s {
 typedef struct p7_dom_s { 
   int            ienv, jenv;
   int            iali, jali;
-  int            ihq, jhq; /* Stores the conservative boundaries based on APP (aligned posterior probability) */
   float          envsc;  	/* Forward score in envelope ienv..jenv; NATS; without null2 correction       */
   float          domcorrection;	/* null2 score when calculating a per-domain score; NATS                      */
   float          dombias;	/* FLogsum(0, log(bg->omega) + domcorrection): null2 score contribution; NATS */
@@ -667,12 +663,6 @@ typedef struct p7_domaindef_s {
   float  rt2;		/* controls extent of regions. regions extended until mocc[i]-{b,e}occ[i] < dt2            */
   float  rt3;		/* controls when regions are flagged for split: if expected # of E preceding B is >= dt3   */
   
-  /* Heuristic thresholds for APP labeling (posterior probability of being aligned to a model, based on mocc */
-  int    show_app; /* default FALSE,  if TRUE, the APP of an nhmmer 'domain' should be printed */
-  float  app_hi;  /* default 0.95 */
-  float  app_med; /* default 0.85 */
-  float  app_lo;  /* default 0.75 */
-
   /* Heuristic thresholds that control the stochastic traceback/clustering process */
   int    nsamples;	/* collect ensemble of this many stochastic traces */
   float  min_overlap;	/* 0.8 means >= 80% overlap of (smaller/larger) segment to link, both in seq and hmm            */
@@ -1033,14 +1023,6 @@ typedef struct p7_pipeline_s {
   int           show_accessions;/* TRUE to output accessions not names      */
   int           show_alignments;/* TRUE to output alignments (default)      */
 
-  /* Preferences for APP labeling (posterior probability of being aligned to a model, based on mocc) in output */
-  int    show_app; /* default FALSE,  if TRUE, the APP */
-  float  app_hi;  /* default 0.95 */
-  float  app_med; /* default 0.85 */
-  float  app_lo;  /* default 0.75 */
-  float  trim_bits;
-
-
   P7_HMMFILE   *hfp;		/* COPY of open HMM database (if scan mode) */
   char          errbuf[eslERRBUFSIZE];
 } P7_PIPELINE;
@@ -1289,7 +1271,7 @@ extern int p7_tracealign_computeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, in
 extern int p7_tracealign_getMSAandStats(P7_HMM *hmm, ESL_SQ  **sq, int N, ESL_MSA **ret_msa, float **ret_pp, float **ret_relent, float **ret_scores );
 
 /* p7_alidisplay.c */
-extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq, P7_DOMAINDEF *app_ddef);
+extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
 extern P7_ALIDISPLAY *p7_alidisplay_Clone(const P7_ALIDISPLAY *ad);
 extern size_t         p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad);
 extern int            p7_alidisplay_Serialize(P7_ALIDISPLAY *ad);
@@ -1338,7 +1320,8 @@ extern void          p7_domaindef_Destroy(P7_DOMAINDEF *ddef);
 
 extern int p7_domaindef_ByViterbi            (P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, P7_DOMAINDEF *ddef);
 extern int p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om, P7_OMX *oxf, P7_OMX *oxb, P7_OMX *fwd, P7_OMX *bck,
-				   P7_DOMAINDEF *ddef, P7_DOMAINDEF *ddef_app, P7_BG *bg, int long_target);
+				                                  P7_DOMAINDEF *ddef, P7_BG *bg, P7_HMM *hmm,
+				                                  int long_target, P7_BG *block_bg, float *bgf_tmp, float *scores_tmp);
 
 
 /* p7_gmx.c */
@@ -1442,9 +1425,9 @@ extern int p7_pli_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7
 extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
 extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
 extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
-extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx);
-extern int p7_Pipeline_FM           (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
-                                     const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_SCOREDATA *msvdata);
+extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *msvdata, P7_HMM *hmm, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx);
+extern int p7_Pipeline_FM           (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *msvdata, P7_HMM *hmm, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
+                                     const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg);
 
 extern int p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w);
 

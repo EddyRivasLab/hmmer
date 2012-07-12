@@ -44,7 +44,8 @@ typedef struct {
   P7_TOPHITS       *th;          /* top hit results                         */
   P7_OPROFILE      *om;          /* optimized query profile                 */
   FM_CFG           *fm_cfg;      /* global data for FM-index for fast MSV */
-  P7_SCOREDATA     *scoredata;     /* hmm-specific data for FM-index for fast MSV */
+  P7_SCOREDATA     *scoredata;   /* hmm-specific data used by nhmmer */
+  P7_HMM           *hmm;
 } WORKER_INFO;
 
 typedef struct {
@@ -114,12 +115,6 @@ static ESL_OPTIONS options[] = {
   { "--B1",         eslARG_INT,         "110", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (MSV)",          7 },
   { "--B2",         eslARG_INT,         "240", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Vit)",          7 },
   { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",          7 },
-  /* Control of boundary picking based on aligned posterior probability */
-  { "--show_app",   eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,   "",             "Show aligned-posterior-probability (APP) line (deprecated)",     9 },
-  { "--app_hi",     eslARG_REAL,       "0.95", NULL, NULL,    NULL,  NULL,   "",             "Set APP 'H' threshold (deprecated)",                             9 },
-  { "--app_med",    eslARG_REAL,       "0.85", NULL, NULL,    NULL,  NULL,   "",             "Set APP 'M' threshold (also hq_start/end) (deprecated)",         9 },
-  { "--app_lo",     eslARG_REAL,       "0.75", NULL, NULL,    NULL,  NULL,   "",             "Set APP 'L' threshold (deprecated)",                             9 },
-  { "--trim_bits", eslARG_REAL,      "-10000", NULL, NULL,    NULL,  NULL,   "",             "Trim off alignment ends with bit score less than this value",         9 },
 
   /* Control of FM pruning/extension */
   { "--fm_msv_length",   eslARG_INT,          "70", NULL, NULL,    NULL,  NULL, NULL,          "max length used when extending seed for MSV",                8 },
@@ -308,12 +303,6 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--B1")         && fprintf(ofp, "# biased comp MSV window len:      %d\n",             esl_opt_GetInteger(go, "--B1"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--B2")         && fprintf(ofp, "# biased comp Viterbi window len:  %d\n",             esl_opt_GetInteger(go, "--B2"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--B3")         && fprintf(ofp, "# biased comp Forward window len:  %d\n",             esl_opt_GetInteger(go, "--B3"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-
-  if (esl_opt_IsUsed(go, "--show_app")        && fprintf(ofp, "# Show APP line\n")                                                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--app_hi")          && fprintf(ofp, "# APP 'H':                      <= %g\n",             esl_opt_GetReal(go, "--app_hi"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--app_med")         && fprintf(ofp, "# APP 'M', (hq start/end base): <= %g\n",             esl_opt_GetReal(go, "--app_med"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--app_lo")          && fprintf(ofp, "# APP 'L':                      <= %g\n",             esl_opt_GetReal(go, "--app_lo"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--trim_bits")       && fprintf(ofp, "# trim ends with bit score      <  %g\n",             esl_opt_GetReal(go, "--trim_bits"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 
   if (esl_opt_IsUsed(go, "--fm_msv_length")   && fprintf(ofp, "# seed extension max length:       %d\n",             esl_opt_GetInteger(go, "--fm_msv_length"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -606,7 +595,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 0; i < infocnt; ++i) {
           /* Create processing pipeline and hit list */
           info[i].th  = p7_tophits_Create();
-          info[i].om  = p7_oprofile_Clone(om);
+          //info[i].om  = p7_oprofile_Clone(om);
+          info[i].om = p7_oprofile_Copy(om);
+          info[i].hmm = p7_hmm_Clone(hmm);
           info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
           p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 
@@ -622,17 +613,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
             info[i].pli->block_length = esl_opt_GetInteger(go, "--block_length");
           else
             info[i].pli->block_length = NHMMER_MAX_RESIDUE_COUNT;
-
-
-          info[i].pli->show_app      = esl_opt_IsUsed(go, "--show_app");
-          info[i].pli->app_hi        = esl_opt_GetReal (go, "--app_hi");
-          info[i].pli->app_med       = esl_opt_GetReal (go, "--app_med");
-          info[i].pli->app_lo        = esl_opt_GetReal (go, "--app_lo");
-          if (info[i].pli->app_med < info[i].pli->app_lo)  info[i].pli->app_med = info[i].pli->app_lo;
-          if (info[i].pli->app_hi  < info[i].pli->app_med) info[i].pli->app_hi = info[i].pli->app_med;
-
-          info[i].pli->trim_bits = esl_opt_GetReal (go, "--trim_bits");
-
 
           info[i].fm_cfg = fm_cfg;
           info[i].scoredata = p7_hmm_ScoreDataClone(scoredata, om->abc->Kp);
@@ -748,14 +728,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           esl_msa_Destroy(msa);
       }
 
-      for (i = 0; i < infocnt; ++i)
-              p7_hmm_ScoreDataDestroy(info[i].scoredata);
+      for (i = 0; i < infocnt; ++i) {
+        p7_hmm_ScoreDataDestroy(info[i].scoredata);
+        //TODO: these cause errors, not sure why
+        //p7_oprofile_Destroy(info[i].om);
+        //p7_pipeline_Destroy(info[i].pli);
+        //p7_tophits_Destroy(info[i].th);
+      }
 
       p7_hmm_ScoreDataDestroy(scoredata);
-
       p7_pipeline_Destroy(info->pli);
       p7_tophits_Destroy(info->th);
-      p7_oprofile_Destroy(info->om);
       p7_oprofile_Destroy(om);
       p7_profile_Destroy(gm);
       p7_hmm_Destroy(hmm);
@@ -858,7 +841,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
         prev_hit_cnt = info->th->N;
 
-        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, info->pli->nseqs);
+        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->hmm, info->bg, dbsq, info->th, info->pli->nseqs);
 
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
@@ -869,8 +852,6 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
             dcl->jenv += dbsq->start - 1;
             dcl->iali += dbsq->start - 1;
             dcl->jali += dbsq->start - 1;
-            dcl->ihq  += dbsq->start - 1;
-            dcl->jhq  += dbsq->start - 1;
             dcl->ad->sqfrom += dbsq->start - 1;
             dcl->ad->sqto += dbsq->start - 1;
         }
@@ -884,7 +865,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
           prev_hit_cnt = info->th->N;
           esl_sq_Copy(dbsq,dbsq_revcmp);
           esl_sq_ReverseComplement(dbsq_revcmp);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq_revcmp, info->th, info->pli->nseqs);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->hmm, info->bg, dbsq_revcmp, info->th, info->pli->nseqs);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (i=prev_hit_cnt; i < info->th->N ; i++) {
@@ -894,8 +875,6 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
               dcl->jenv = dbsq_revcmp->start - dcl->jenv + 1;
               dcl->iali = dbsq_revcmp->start - dcl->iali + 1;
               dcl->jali = dbsq_revcmp->start - dcl->jali + 1;
-              dcl->ihq  = dbsq_revcmp->start - dcl->ihq + 1;
-              dcl->jhq  = dbsq_revcmp->start - dcl->jhq + 1;
               dcl->ad->sqfrom = dbsq_revcmp->start - dcl->ad->sqfrom + 1;
               dcl->ad->sqto = dbsq_revcmp->start - dcl->ad->sqto + 1;
 
@@ -947,8 +926,8 @@ serial_loop_FM(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *db
     fmb.SA = fmf.SA;
     fmb.T  = fmf.T;
 
-    wstatus = p7_Pipeline_FM(info->pli, info->om, info->bg, info->th, info->pli->nseqs,
-        &fmf, &fmb, info->fm_cfg, info->scoredata);
+    wstatus = p7_Pipeline_FM(info->pli, info->om, info->scoredata, info->hmm, info->bg,
+        info->th, info->pli->nseqs,  &fmf, &fmb, info->fm_cfg );
     if (wstatus != eslOK) return wstatus;
 
   }
@@ -1077,7 +1056,7 @@ pipeline_thread(void *arg)
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
 
         prev_hit_cnt = info->th->N;
-        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, block->first_seqidx + i);
+        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->hmm, info->bg, dbsq, info->th, block->first_seqidx + i);
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
 
@@ -1088,8 +1067,6 @@ pipeline_thread(void *arg)
             dcl->jenv += dbsq->start - 1;
             dcl->iali += dbsq->start - 1;
             dcl->jali += dbsq->start - 1;
-            dcl->ihq  += dbsq->start - 1;
-            dcl->jhq  += dbsq->start - 1;
             dcl->ad->sqfrom += dbsq->start - 1;
             dcl->ad->sqto += dbsq->start - 1;
         }
@@ -1103,7 +1080,7 @@ pipeline_thread(void *arg)
       {
           prev_hit_cnt = info->th->N;
           esl_sq_ReverseComplement(dbsq);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, block->first_seqidx + i);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->hmm, info->bg, dbsq, info->th, block->first_seqidx + i);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (j=prev_hit_cnt; j < info->th->N ; ++j) {
@@ -1113,8 +1090,6 @@ pipeline_thread(void *arg)
               dcl->jenv = dbsq->start - dcl->jenv + 1;
               dcl->iali = dbsq->start - dcl->iali + 1;
               dcl->jali = dbsq->start - dcl->jali + 1;
-              dcl->ihq  = dbsq->start - dcl->ihq + 1;
-              dcl->jhq  = dbsq->start - dcl->jhq + 1;
               dcl->ad->sqfrom = dbsq->start - dcl->ad->sqfrom + 1;
               dcl->ad->sqto = dbsq->start - dcl->ad->sqto + 1;
 
