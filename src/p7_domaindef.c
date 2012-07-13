@@ -714,7 +714,6 @@ reparameterize_model (P7_BG *bg, P7_HMM *hmm, P7_OPROFILE *om, const ESL_DSQ *ds
     esl_vec_FCopy(bg->f, K, bgf_tmp);
     esl_sq_GetFrequencies(dsq, sq_len, bg->abc, bg->f);
 
-
     // optionally merge with a prior to reduce sharpness of correction
     if (bg_smooth > 0) {
       esl_vec_FScale(bg->f, K, 1-bg_smooth);
@@ -759,9 +758,15 @@ reparameterize_model (P7_BG *bg, P7_HMM *hmm, P7_OPROFILE *om, const ESL_DSQ *ds
  * which is (efficiently, we trust) managing any necessary temporary
  * working space and heuristic thresholds.
  *
- * If <long_target> is TRUE, null3 biased-composition score correction
- * may be used, in which case <bg> is required. Otherwise null2 is used,
- * and <bg> may be NULL.
+ * If <long_target> is TRUE, p7_Null2_ByExpectation() is forced,
+ * even if null2 was already computed by sampling. Also, null3
+ * biased-composition score correction may be used, in which
+ * case <bg> is required. Otherwise null2 is used, and <bg> may be
+ * NULL. In this case, the calling function also optionally
+ * passes in two allocated arrays (bgf_tmp, scores_tmp) used for
+ * temporary storage in reparameterize_model(), and a previously
+ * computed array block_bg of residue frequencies for the long_target
+ * block from which this envelope came (these three can be NULL).
  * 
  * Returns <eslOK> if a domain was successfully identified, scored,
  * and aligned in the envelope; if so, the per-domain information is
@@ -801,7 +806,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
 
   // I modify bg and om in-place to avoid having to clone (allocate) a massive
   // number of times when there are many hits
-  if (long_target) // this modifies both bg and om.
+  if (long_target && scores_tmp!=NULL) // this modifies both bg and om.
     reparameterize_model (bg, hmm, om, sq->dsq + i, j-i+1, block_bg, bgf_tmp, scores_tmp);
 
 
@@ -877,7 +882,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
   ddef->ndom++;
 
 
-  if (long_target)  //revert bg and om back to original
+  if (long_target && scores_tmp!=NULL)  //revert bg and om back to original
     reparameterize_model (bg, hmm, om, NULL, 0, NULL, bgf_tmp, scores_tmp);
 
   p7_trace_Reuse(ddef->tr);

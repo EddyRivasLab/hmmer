@@ -416,7 +416,6 @@ p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, P7_HMM *hmm, flo
   for (k = 1, q = 0; q < nq; q++, k++) {
 
     //First compute the core characters of the alphabet
-    //TODO: I could probably do this more simply, since scores will just change as a ratio of the current bg->f[i] and previous bg->f[i]...
     for (x = 0; x < K; x++) {
       for (z = 0; z < 4; z++) {
          sc_tmp[z*Kp + x] =  (k+ z*nq <= M) ? log(hmm->mat[k+z*nq][x] / bg->f[x]) : -eslINFINITY;
@@ -426,7 +425,6 @@ p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, P7_HMM *hmm, flo
     }
 
     // Then compute corresponding scores for ambiguity codes.
-    // Calculation depends on having done the above.
     for (z = 0; z < 4; z++)
       esl_abc_FExpectScVec(hmm->abc, sc_tmp+(z*Kp), bg->f);
 

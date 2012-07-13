@@ -1618,11 +1618,12 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
 
   //ad hoc choice.  If there's a long block, I'll let it take ownership of the bg prior
   // but if it's too short, just stick with a uniform prior
-  if (sq->L > 5000)
-    esl_sq_GetFrequencies(sq->dsq+1, sq->n, bg->abc, block_bg->f);
-  else
-    esl_vec_FSet(block_bg->f, bg->abc->K, 0.25); // not enough sequence to build a trustworthy block background
-
+  if (block_bg != NULL) {
+    if (sq->L > 5000)
+      esl_sq_GetFrequencies(sq->dsq+1, sq->n, bg->abc, block_bg->f);
+    else
+      esl_vec_FSet(block_bg->f, bg->abc->K, 0.25); // not enough sequence to build a trustworthy block background
+  }
 
   msv_windowlist.windows = NULL;
   vit_windowlist.windows = NULL;
