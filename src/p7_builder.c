@@ -407,6 +407,7 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
 	   P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om,
 	   ESL_MSA **opt_postmsa)
 {
+  int i;
   uint32_t    checksum = 0;	/* checksum calculated for the input MSA. hmmalign --mapali verifies against this. */
   P7_HMM     *hmm      = NULL;
   P7_TRACE  **tr       = NULL;
@@ -423,7 +424,7 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
 
   //Ensures that the weighted-average I->I count <=  bld->max_insert_len
   if (bld->max_insert_len>0)
-    for (int i=1; i<hmm->M; i++ )   hmm->t[i][p7H_II] = ESL_MIN(hmm->t[i][p7H_II], bld->max_insert_len*hmm->t[i][p7H_MI]);
+    for (i=1; i<hmm->M; i++ )   hmm->t[i][p7H_II] = ESL_MIN(hmm->t[i][p7H_II], bld->max_insert_len*hmm->t[i][p7H_MI]);
 
   if ((status =  effective_seqnumber  (bld, msa, hmm, bg))              != eslOK) goto ERROR;
   if ((status =  parameterize         (bld, hmm))                       != eslOK) goto ERROR;
