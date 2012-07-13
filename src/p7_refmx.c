@@ -143,20 +143,34 @@ p7_refmx_GrowTo(P7_REFMX *rmx, int M, int L)
 	
 
 /* Function:  p7_refmx_Sizeof()
- * Synopsis:  Returns the allocated size of DP matrix, in bytes.
+ * Synopsis:  Returns current allocated size of reference DP matrix, in bytes.
  */
-extern size_t
+size_t
 p7_refmx_Sizeof(const P7_REFMX *rmx)
 {
-  size_t n = 0;
-
-  n += sizeof(P7_REFMX);
+  size_t n = sizeof(P7_REFMX);
   n += rmx->allocN * sizeof(float);     /* dp_mem */
   n += rmx->allocR * sizeof(float *);	/* dp[]   */
   return n;
 }
 
-
+/* Function:  p7_refmx_MinSizeof()
+ * Synopsis:  Returns minimum required size of reference DP matrix, in bytes.
+ * 
+ * Purpose:   Calculate and return the minimal required size of 
+ *            a reference DP matrix for a comparison of a 
+ *            profile of length <M> to a sequence of length <L>.
+ *            
+ *            This could overflow, on machines with 32b size_t. 
+ */
+size_t
+p7_refmx_MinSizeof(int M, int L)
+{
+  size_t n = sizeof(P7_REFMX);
+  n += sizeof(float)   * (size_t) (L+1) * (size_t) ( (M+1)*p7R_NSCELLS + p7R_NXCELLS); // dp_mem
+  n += sizeof(float *) * (size_t) (L+1);                                               // dp[]
+  return n;
+}
 
 /* Function:  p7_refmx_Reuse()
  * Synopsis:  Finish using a <P7_REFMX> without deallocation.
@@ -552,11 +566,8 @@ validate_backward(P7_REFMX *rmx, char *errbuf)
 
   /* Row i=0 */
   for (k = 1; k <= rmx->M; k++)
-    for (s = 0; s <= p7R_NSCELLS; s++)
+    for (s = 0; s < p7R_NSCELLS; s++)
       if ( (status = validate_mainstate(rmx, 0, k, s, -eslINFINITY, errbuf)) != eslOK) return status;
-  if ( ( status = validate_special(rmx, 0, p7R_E,     -eslINFINITY, errbuf)) != eslOK) return status;
-  if ( ( status = validate_special(rmx, 0, p7R_J,     -eslINFINITY, errbuf)) != eslOK) return status;
-  if ( ( status = validate_special(rmx, 0, p7R_C,     -eslINFINITY, errbuf)) != eslOK) return status;
 
   /* Rows 1..L */
   for (i = 1; i <= rmx->L; i++)

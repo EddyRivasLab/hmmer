@@ -98,11 +98,12 @@ typedef struct p7_filtermx_s {
  * 2. Function declarations
  *****************************************************************/
 
-extern P7_FILTERMX *p7_filtermx_Create (int M, int L, int64_t ramlimit);
-extern int          p7_filtermx_GrowTo (P7_FILTERMX *ox, int M, int L);
-extern size_t       p7_filtermx_Sizeof (const P7_FILTERMX *ox);
-extern int          p7_filtermx_Reuse  (P7_FILTERMX *ox);
-extern void         p7_filtermx_Destroy(P7_FILTERMX *ox);
+extern P7_FILTERMX *p7_filtermx_Create   (int M, int L, int64_t ramlimit);
+extern int          p7_filtermx_GrowTo   (P7_FILTERMX *ox, int M, int L);
+extern size_t       p7_filtermx_Sizeof   (const P7_FILTERMX *ox);
+extern size_t       p7_filtermx_MinSizeof(int M, int L);
+extern int          p7_filtermx_Reuse    (P7_FILTERMX *ox);
+extern void         p7_filtermx_Destroy  (P7_FILTERMX *ox);
 
 extern int          p7_filtermx_SetDumpMode(P7_FILTERMX *ox, FILE *dfp, int truefalse);
 #ifdef p7_DEBUGGING

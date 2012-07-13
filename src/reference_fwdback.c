@@ -428,20 +428,25 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
 
       /* xG,xL values are now ready for next row */
     } /* end of loop over rows i. */
-  /* now on row i=0. Only N,B,G,L states are reachable on this initial row. G,L values are already done. */
+
+  /* now on row i=0. Only N,B,G,L states are ultimately reachable on this initial
+   * row. We calculate C,J,E anyway, to match sparse implementation exactly,
+   * even though Decoding will see -inf for these cells in Fwd matrix, and decode
+   * them to impossible. G,L values are already done. 
+   */
   
   dpc = rmx->dp[0] + (M+1)*p7R_NSCELLS;	/* dpc is on start of row 0 specials  */
   dpn = rmx->dp[1] + (M+1)*p7R_NSCELLS; /* dpn is on start of row 1 specials  */
 
   dpc[p7R_CC] = -eslINFINITY;                                        
   dpc[p7R_JJ] = -eslINFINITY;                                        
-  dpc[p7R_C]  = -eslINFINITY;                                        
+  dpc[p7R_C]  = dpn[p7R_C] + gm->xsc[p7P_C][p7P_LOOP];
   dpc[p7R_G]  = xG;                                                  
   dpc[p7R_L]  = xL;                                                  
   dpc[p7R_B]  = p7_FLogsum( dpc[p7R_G] + gm->xsc[p7P_B][1],        dpc[p7R_L] + gm->xsc[p7P_B][0]);   
-  dpc[p7R_J]  = -eslINFINITY;                                      
+  dpc[p7R_J]  = p7_FLogsum( dpn[p7R_J] + gm->xsc[p7P_J][p7P_LOOP], dpc[p7R_B] + gm->xsc[p7P_J][p7P_MOVE]);  
   dpc[p7R_N]  = p7_FLogsum( dpn[p7R_N] + gm->xsc[p7P_N][p7P_LOOP], dpc[p7R_B] + gm->xsc[p7P_N][p7P_MOVE]); 
-  dpc[p7R_E]  = -eslINFINITY;                                      
+  dpc[p7R_E]  = p7_FLogsum( dpc[p7R_C] + gm->xsc[p7P_E][p7P_MOVE], dpc[p7R_J] + gm->xsc[p7P_E][p7P_LOOP]);
 
   /* for complete cleanliness: set all the main states on row 0 to -inf */
   dpc = rmx->dp[0] + p7R_NSCELLS;
@@ -950,8 +955,6 @@ static ESL_OPTIONS options[] = {
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                   0 },
   { "-N",        eslARG_INT,   "2000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                   0 },
-  { "-B",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "only benchmark Backward",                        0 },
-  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "only benchmark Forward",                         0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -969,14 +972,15 @@ main(int argc, char **argv)
   P7_HMM         *hmm     = NULL;
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
-  P7_REFMX        *fwd     = NULL;
-  P7_REFMX        *bck     = NULL;
+  P7_REFMX       *rx      = NULL;
+  P7_TRACE       *tr      = p7_trace_Create();
   int             L       = esl_opt_GetInteger(go, "-L");
   int             N       = esl_opt_GetInteger(go, "-N");
   ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
   int             i;
   float           sc;
-  double          base_time, bench_time, Mcs;
+  double          base_time, F_time, B_time, V_time;
+  double          F_speed, B_speed, V_speed;
 
   /* Initialize log-sum calculator */
   impl_Init();
@@ -992,8 +996,7 @@ main(int argc, char **argv)
   p7_profile_Config(gm, hmm, bg);
   p7_profile_SetLength(gm, L);
 
-  fwd = p7_refmx_Create(gm->M, L);
-  bck = p7_refmx_Create(gm->M, L);
+  rx = p7_refmx_Create(gm->M, L);
 
   /* Baseline time. */
   esl_stopwatch_Start(w);
@@ -1001,27 +1004,51 @@ main(int argc, char **argv)
   esl_stopwatch_Stop(w);
   base_time = w->user;
 
-  /* Benchmark time. */
+  /* Forward benchmark time. */
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-      if (! esl_opt_GetBoolean(go, "-B"))  p7_ReferenceForward (dsq, L, gm, fwd, &sc);
-      if (! esl_opt_GetBoolean(go, "-F"))  p7_ReferenceBackward(dsq, L, gm, bck, NULL);
-
-      p7_refmx_Reuse(fwd);
-      p7_refmx_Reuse(bck);
+      p7_ReferenceForward (dsq, L, gm, rx, &sc);
+      p7_refmx_Reuse(rx);
     }
   esl_stopwatch_Stop(w);
-  bench_time = w->user - base_time;
-  Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) bench_time;
-  esl_stopwatch_Display(stdout, w, "# CPU time: ");
-  printf("# M    = %d\n",   gm->M);
-  printf("# %.1f Mc/s\n", Mcs);
+  F_time  = w->user - base_time;
+  F_speed = (double) N * (double) L * (double) gm->M * 1e-6 / F_time;
+
+  /* Backward */
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++)
+    {
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
+      p7_ReferenceBackward (dsq, L, gm, rx, &sc);
+      p7_refmx_Reuse(rx);
+    }
+  esl_stopwatch_Stop(w);
+  B_time  = w->user - base_time;
+  B_speed = (double) N * (double) L * (double) gm->M * 1e-6 / B_time;
+
+  /* Viterbi */
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++)
+    {
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
+      p7_ReferenceViterbi (dsq, L, gm, rx, tr, &sc);
+      p7_refmx_Reuse(rx);
+      p7_trace_Reuse(tr);
+    }
+  esl_stopwatch_Stop(w);
+  V_time  = w->user - base_time;
+  V_speed = (double) N * (double) L * (double) gm->M * 1e-6 / V_time;
+
+  printf("# %s (M= %d)\n", gm->name, gm->M);
+  printf("# Reference Forward:  %8.1f Mc/s\n", F_speed);
+  printf("# Reference Backward: %8.1f Mc/s\n", B_speed);
+  printf("# Reference Viterbi:  %8.1f Mc/s\n", V_speed);
 
   free(dsq);
-  p7_refmx_Destroy(bck);
-  p7_refmx_Destroy(fwd);
+  p7_refmx_Destroy(rx);
+  p7_trace_Destroy(tr);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);

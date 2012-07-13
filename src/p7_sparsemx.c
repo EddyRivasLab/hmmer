@@ -7,11 +7,11 @@
  * then uses it to create or reinitialize a P7_SPARSEMX, before
  * running any sparse DP routines (see sparse_fwdback.c). 
  * 
- * For comparison see banded DP (p7_bandmx.[ch], banded_fwdback.c) and
- * the reference DP implementation (p7_refmx.[ch],
- * reference_fwdback.c). All these DP implementations work with a
- * dual-mode profile <P7_PROFILE>, either in the production code's
- * back end (downstream of our fast vector filters) or in testing.
+ * For comparison see the reference DP implementation (p7_refmx.[ch],
+ * reference_fwdback.c). Both the reference and the sparse DP
+ * implementations work with a dual-mode profile <P7_PROFILE>, either
+ * in the production code's back end (downstream of our fast vector
+ * filters) or in testing.
  * 
  * Contents:
  *   1. P7_SPARSEMASK; defines cells to be included in sparse DP matrix
@@ -28,6 +28,7 @@
 #include <string.h>
 
 #include "easel.h"
+#include "esl_vectorops.h"
 
 #include "hmmer.h"
 #include "p7_sparsemx.h"
@@ -40,31 +41,24 @@
  * Synopsis:  Creates a new P7_SPARSEMASK object.
  *
  * Purpose:   Create a new <P7_SPARSEMASK> for a comparison of a profile
- *            of length <M> to a sequence of length <L>, where we plan
- *            to include DP cells that have a posterior
- *            probability of at least <pthresh>. Return a ptr to the
+ *            of length <M> to a sequence of length <L>. Return a ptr to the
  *            new object.
- *            
- *            <pthresh> is used to define an upper bound on the
- *            maximum number of sparse DP cells per row, which helps
- *            us manage and minimize memory use. There cannot be more
- *            than $\frac{1}{p}$ supercells with posterior probability
- *            $\geq p$. 
- *            
- *            If sparse cells are to be defined by other means, pass
- *            <pthresh=0.0>, and this upper bound will then be set to
- *            <M>.
- *            
+ *
+ *            The allocation will generally be for (much) less than <ML> cells;
+ *            the API for creating the sparse mask will grow the structure
+ *            appropriately. The structure does require at least $O(M)$ cells
+ *            of temporary storage, in four "slots" used to sort input
+ *            from striped vector code.  
+ *
  * Args:      M       - model length
  *            L       - sequence length
- *            pthresh - posterior prob threshold to be used for adding sparse cells
  *
  * Returns:   a pointer to a new <P7_SPARSEMASK>
  *
  * Throws:    <NULL> on allocation failure.
  */
 P7_SPARSEMASK *
-p7_sparsemask_Create(int M, int L, float pthresh)
+p7_sparsemask_Create(int M, int L)
 {
   P7_SPARSEMASK *sm             = NULL;
   int            default_ialloc = 4;
@@ -75,9 +69,7 @@ p7_sparsemask_Create(int M, int L, float pthresh)
   ESL_ALLOC(sm, sizeof(P7_SPARSEMASK));
   sm->L      = L;
   sm->M      = M;
-  sm->Q      = p7O_NQF(M);
-  sm->W      = (pthresh ? (int) floor(1. / pthresh) : M);
-  sm->Ws     = ESL_MIN(sm->W, sm->Q); /* no slot needs to store more than Q, regardless of W */
+  sm->Q      = p7O_NQF(M);  // approx M/4, for striped vectors of four floats
 		
   sm->i      = NULL;
   sm->k      = NULL;
@@ -87,9 +79,9 @@ p7_sparsemask_Create(int M, int L, float pthresh)
   sm->nseg    = 0;
   sm->nrow    = 0;
   sm->ncells  = 0;
-  sm->last_i  = L+1;	/* sentinel that assures StartRow() is called in reverse L..1 order */
+  sm->last_i  = L+1;     	 // sentinel to assure StartRow() is called in reverse L..1 order 
   for (r = 0; r < p7_VNF; r++) 
-    sm->last_k[r]  = -1;    /* sentinels that make sure StartRow() is called before Add() */
+    sm->last_k[r]  = -1;        // sentinels to assure StartRow() is called before Add() 
   /* sn[] are initialized for each sparse row by _StartRow() */
 
   /* if Ws is really large, we might already know we need a
@@ -98,7 +90,7 @@ p7_sparsemask_Create(int M, int L, float pthresh)
    * reallocate for the slots, go ahead and figure this out now.
    */
   sm->kalloc = default_kalloc;
-  while (sm->kalloc < p7_VNF * sm->Ws) sm->kalloc *= 2;
+  while (sm->kalloc < p7_VNF*sm->Q) sm->kalloc *= 2;
 
   sm->ralloc   = L+1;		
   sm->ialloc   = default_ialloc;
@@ -107,15 +99,14 @@ p7_sparsemask_Create(int M, int L, float pthresh)
   sm->n_irealloc = 0;
   sm->n_rrealloc = 0;
 
-  ESL_ALLOC(sm->i,    sizeof(int)   * 2 * sm->ialloc); /* *2 = ia,ib pairs */
+  ESL_ALLOC(sm->i,    sizeof(int)   * 2 * sm->ialloc); // *2 because ia,ib pairs 
   ESL_ALLOC(sm->k,    sizeof(int *) * sm->ralloc);
   ESL_ALLOC(sm->n,    sizeof(int)   * sm->ralloc);
   ESL_ALLOC(sm->kmem, sizeof(int)   * sm->kalloc);
 
-  sm->k[0]   = NULL;		/* always. */
-  for (i = 0; i <= L; i++)	/* n[0] will always be 0; n[i=1..L] initialized to 0. */
+  sm->k[0]   = NULL;		// always. 
+  for (i = 0; i <= L; i++)	// n[0] will always be 0; n[i=1..L] initialized to 0, then count as cells are added 
     sm->n[i] = 0;
-
   return sm;
 
  ERROR:
@@ -134,7 +125,7 @@ p7_sparsemask_Create(int M, int L, float pthresh)
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_sparsemask_Reinit(P7_SPARSEMASK *sm, int M, int L, float pthresh)
+p7_sparsemask_Reinit(P7_SPARSEMASK *sm, int M, int L)
 {
   int i,r;
   int status;
@@ -142,8 +133,6 @@ p7_sparsemask_Reinit(P7_SPARSEMASK *sm, int M, int L, float pthresh)
   sm->L  = L;
   sm->M  = M;
   sm->Q  = p7O_NQF(M);
-  sm->W  = (pthresh ? (int) floor(1. / pthresh) : M);
-  sm->Ws = ESL_MIN(sm->W, sm->Q);
 		
   /* i[], kmem stay at their previous ialloc, kalloc
    * but do we need to reallocate rows for k[] and n[]? 
@@ -166,7 +155,6 @@ p7_sparsemask_Reinit(P7_SPARSEMASK *sm, int M, int L, float pthresh)
   /* The realloc counters are NOT reset. They keep accumulating during
    * the life of the object. 
    */
-
   for (i = 1; i <= L; i++)	/* n[0] will always be 0, but reinit n[1..L] */
     sm->n[i] = 0;
   return eslOK;
@@ -176,19 +164,32 @@ p7_sparsemask_Reinit(P7_SPARSEMASK *sm, int M, int L, float pthresh)
 }
 
 /* Function:  p7_sparsemask_Sizeof()
- * Synopsis:  Returns the allocated size of a <P7_SPARSEMASK>
+ * Synopsis:  Returns current allocated size of a <P7_SPARSEMASK>, in bytes.
  */
 size_t
-p7_sparsemask_Sizeof(P7_SPARSEMASK *sm)
+p7_sparsemask_Sizeof(const P7_SPARSEMASK *sm)
 {
   size_t n = sizeof(P7_SPARSEMASK);
-  n += sm->ialloc * sizeof(int)   * 2; /* *2 = ia,ib pairs */
-  n += sm->ralloc * sizeof(int *);
-  n += sm->kalloc * sizeof(int);
+  n += sm->ialloc * sizeof(int)   * 2; // <i>; *2 = ia,ib pairs 
+  n += sm->ralloc * sizeof(int *);     // <k>                   
+  n += sm->ralloc * sizeof(int);       // <n>                   
+  n += sm->kalloc * sizeof(int);       // <kmem>                
   return n;
 }
 
-
+/* Function:  p7_sparsemask_MinSizeof()
+ * Synopsis:  Returns minimum required size of a <P7_SPARSEMASK>, in bytes.
+ */
+size_t
+p7_sparsemask_MinSizeof(const P7_SPARSEMASK *sm)
+{
+  size_t n = sizeof(P7_SPARSEMASK);
+  n += sm->nseg   * sizeof(int) * 2;  // <i>
+  n += (sm->L+1)  * sizeof(int *);    // <k>
+  n += (sm->L+1)  * sizeof(int);      // <n>
+  n += sm->ncells * sizeof(int);      // <kmem>
+  return n;
+}
 
 /* Function:  p7_sparsemask_Reuse()
  * Synopsis:  Reuse a <P7_SPARSEMASK>.
@@ -260,10 +261,6 @@ p7_sparsemask_AddAll(P7_SPARSEMASK *sm)
   int  i,k;
   int  status;
 
-#ifdef p7_DEBUGGING
-  if (sm->W != sm->M) ESL_EXCEPTION(eslEINVAL, "<sm> wasn't set for full matrix (<pthresh=0.0>)");
-#endif
-
   for (i = sm->L; i >= 1; i--)
     {
       if (  (status = p7_sparsemask_StartRow(sm, i))                   != eslOK) return status;
@@ -293,8 +290,8 @@ p7_sparsemask_AddAll(P7_SPARSEMASK *sm)
  *            followed by their concatenation, is one way to rearrange
  *            efficiently. See note [3] in p7_sparsemx.h.
  *
- *            Remember, the whole <kmem> array is in reverse order, so
- *            slot n[3] is first, n[0] is last; see note [3] in
+ *            Remember, the whole <kmem> array is in reverse order during
+ *            collection, so slot n[3] is first, n[0] is last; see note [3] in
  *            p7_sparsemx.h.
  *
  * Returns:   <eslOK> on success.
@@ -321,7 +318,7 @@ p7_sparsemask_StartRow(P7_SPARSEMASK *sm, int i)
    * the slots, we know that doubling (even if ncells has filled
    * the current kalloc) is sufficient.
    */
-  if (sm->ncells + p7_VNF*sm->Ws > sm->kalloc)
+  if (sm->ncells + p7_VNF*sm->Q > sm->kalloc)
     {
       int64_t kalloc_req = sm->kalloc * 2;
       ESL_REALLOC(sm->kmem, sizeof(int) * kalloc_req);
@@ -331,7 +328,7 @@ p7_sparsemask_StartRow(P7_SPARSEMASK *sm, int i)
   
   for (r = 0; r < p7_VNF; r++)
     {
-      sm->s[p7_VNF-r-1] = sm->kmem + sm->ncells + r*sm->Ws;
+      sm->s[p7_VNF-r-1] = sm->kmem + sm->ncells + r*sm->Q;
       sm->sn[r]         = 0;
     }
   sm->last_i = i;
@@ -346,7 +343,7 @@ p7_sparsemask_StartRow(P7_SPARSEMASK *sm, int i)
 
 
 /* Function:  p7_sparsemask_Add()
- * Synopsis:  Add a vector cell q,v to k list on current row.
+ * Synopsis:  Add a vector cell q,r to k list on current row.
  *
  * Purpose:   For a row in progress (we've already called <_StartRow()>),
  *            add a striped vector cell <q,r>. We must call <q>'s
@@ -355,14 +352,17 @@ p7_sparsemask_StartRow(P7_SPARSEMASK *sm, int i)
  *            
  *            This is obviously designed for the production-code case,
  *            where we are constructing the <P7_SPARSEMASK> in the
- *            vectorized f/b filter's linear-memory backwards pass,
- *            and where we have to get the k indices back into order
- *            from their striped indexing. For testing and debugging
- *            code, where we want to store normal k indices (as opposed
- *            to q,r vector coordinates), the magic is to convert k
- *            to simulated vector coords: that's <q = (k-1)%sm->Q>,
- *            <r = (k-1)/sm->Q>. Better to do such contortions so our
- *            test code goes through the same API as production uses.
+ *            vectorized f/b filter's linear-memory backwards pass, we
+ *            have striped vector coords q,r, and where we have to get
+ *            the k indices back into order from their striped
+ *            indexing. For testing and debugging code, where we want
+ *            to store normal k indices (as opposed to q,r vector
+ *            coordinates), the magic is to convert k to simulated
+ *            vector coords: that's <q = (k-1)%sm->Q>, <r =
+ *            (k-1)/sm->Q>. Though that uglifies calls to this
+ *            function from our test code, it's better to do such
+ *            contortions so our test code goes through the same API
+ *            as production uses.
  *
  * Returns:   <eslOK> on success.
  *
@@ -394,7 +394,8 @@ p7_sparsemask_Add(P7_SPARSEMASK *sm, int q, int r)
  * Purpose:   This collapses (concatenates) the slots in <kmem[]>,
  *            increments <ncells>, and sets n[i] for the current
  *            row. No more cells can be added until <_StartRow()>
- *            initializes slots for a new row.
+ *            initializes slots for a new row. The kmem[] for
+ *            this row is now contiguous, albeit in reverse order.
  *
  * Returns:   <eslOK> on success.
  *
@@ -428,12 +429,12 @@ p7_sparsemask_FinishRow(P7_SPARSEMASK *sm)
  * Purpose:   We have finished collecting an entire <P7_SPARSEMASK> for
  *            a given profile/sequence comparison we want to do using
  *            sparse DP routines. <kmem>, <n[i]>, and <ncells> fields
- *            are valid.
+ *            are valid, though <kmem> is reversed.
  *            
- *            Here we set the rest: k[i] pointers into <kmem>, the
- *            <i[]> coord pairs ia,ib for each segment, the <nseg>
- *            counter for segments, and the <nrow> counter for the
- *            nonzero <n[i]>.
+ *            Here we reverse <kmem>, then set the rest: k[i] pointers
+ *            into <kmem>, the <i[]> coord pairs ia,ib for each
+ *            segment, the <nseg> counter for segments, and the <nrow>
+ *            counter for the nonzero <n[i]>.
  *
  * Returns:   <eslOK> on success.
  *
@@ -447,21 +448,24 @@ p7_sparsemask_Finish(P7_SPARSEMASK *sm)
   int *p;
   int status;
 
-  /* Set the k[] pointers. Remember <kmem> is in reverse order; see note [1] in p7_sparsemask.h */
-  p = sm->kmem;
-  for (i = sm->L; i >= 1; i--)
-    {
-      sm->k[i] = p;
-      p       += sm->n[i];
-    }
+  /* Reverse kmem. */
+  esl_vec_IReverse(sm->kmem, sm->kmem, sm->ncells);
 
-  /* Count <nseg> and <nrow> */
+  /* Set the k[] pointers; count <nseg> and <nrow> */
+  p = sm->kmem;
   sm->nseg = sm->nrow = 0;
   for (i = 1; i <= sm->L; i++)
-    if (sm->n[i]) {
-      sm->nrow++;
-      if (sm->n[i-1] == 0) sm->nseg++;
-    }
+    if (sm->n[i]) 
+      {
+	sm->nrow++;
+	sm->k[i] = p;
+	p       += sm->n[i];
+	if (sm->n[i-1] == 0) sm->nseg++;
+      } 
+    else 
+      {
+	sm->k[i] = NULL;
+      }
 
   /* Reallocate i[] if needed. */
   if (sm->nseg > sm->ialloc) 
@@ -508,20 +512,17 @@ p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm)
 
   for (i = 1; i <= sm->L; i++)
     {
-      z = sm->n[i]-1;
       fprintf(ofp, "%3d: ", i);
-      for (k = 1; k <= sm->M; k++)
+      for (z = 0, k = 1; k <= sm->M; k++)
 	{
-	  while (z >= 0 && sm->k[i][z] < k) z--;
-	  if (z >= 0 && sm->k[i][z] == k)   fprintf(ofp, "  X ");
-	  else                              fprintf(ofp, "  . ");
+	  while (z < sm->n[i] && sm->k[i][z] < k)  z++;
+	  if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "  X ");
+	  else                                     fprintf(ofp, "  . ");
 	}
       fprintf(ofp, "%3d\n", sm->n[i]);
     }
   return eslOK;
 }
-
-
 /*-------- end, P7_SPARSEMASK debugging tools -------------------*/
 
 
@@ -530,6 +531,19 @@ p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm)
  * 4. P7_SPARSEMX; sparse DP matrix, as specified by a given mask
  *****************************************************************/
 
+/* Function:  p7_sparsemx_Create()
+ * Synopsis:  Create a new sparse DP matrix.
+ *
+ * Purpose:   Create a new sparse DP matrix, defined by the sparse DP
+ *            mask <sm>.
+ *            
+ *            If <sm> is <NULL>, allocate for a reasonable-sized
+ *            matrix. Matrix won't be usable until caller calls
+ *            <p7_sparsemx_Reinit()>. This style works well in loops
+ *            over sequences, where you can create the object once
+ *            before any sequences are known, then
+ *            <_Reinit()/_Reuse()> it in the loop.
+ */
 P7_SPARSEMX *
 p7_sparsemx_Create(P7_SPARSEMASK *sm)
 {
@@ -581,19 +595,40 @@ p7_sparsemx_Reinit(P7_SPARSEMX *sx, P7_SPARSEMASK *sm)
 
 
 /* Function:  p7_sparsemx_Sizeof()
- * Synopsis:  Returns allocated size of a P7_SPARSEMX
+ * Synopsis:  Returns current allocated size of a P7_SPARSEMX, in bytes.
  *
  * Purpose:   Returns allocated size of <sx>, in bytes.  Does not
  *            include the size of its <P7_SPARSEMASK>.
  */
 size_t
-p7_sparsemx_Sizeof(P7_SPARSEMX *sx)
+p7_sparsemx_Sizeof(const P7_SPARSEMX *sx)
 {
   size_t n = sizeof(P7_SPARSEMX);
   n += sizeof(float) * p7S_NSCELLS * sx->dalloc;
   n += sizeof(float) * p7S_NXCELLS * sx->xalloc;
   return n;
 }
+
+/* Function:  p7_sparsemx_MinSizeof()
+ * Synopsis:  Returns minimal required allocation size of a P7_SPARSEMX, in bytes.
+ *
+ * Purpose:   Calculate and return the minimum required size, in 
+ *            bytes, of a sparse DP matrix, for a profile/sequence
+ *            comparison using the sparse mask in <sm>.
+ *            
+ *            Does not require having an actual DP matrix allocated.
+ *            We use this function when planning/profiling memory
+ *            allocation strategies.
+ */
+size_t
+p7_sparsemx_MinSizeof(const P7_SPARSEMASK *sm)
+{
+  size_t n = sizeof(P7_SPARSEMX);
+  n += sizeof(float) * p7S_NSCELLS * sm->ncells;             // dp[]
+  n += sizeof(float) * p7S_NXCELLS * (sm->nrow + sm->nseg);  // xmx[]; for each seg ia..ib, ia-1..ib has special cells
+  return n;
+}
+
 
 int
 p7_sparsemx_Reuse(P7_SPARSEMX *sx)
@@ -684,7 +719,7 @@ p7_sparsemx_DumpWindow(FILE *ofp, P7_SPARSEMX *sx, int i1, int i2, int k1, int k
 	if (i < sm->L && sm->n[i+1] > 0)                          /* if next row does, then we're about to start a segment; print specials on an ia-1 row   */
 	  {
 	    fprintf(ofp, "%3d -- ", i);
-	    for (k = k1; k <= k2;         k++) fprintf  (ofp, "%*s ", width, ".....");
+	    for (k = k1; k <= k2;         k++) fprintf(ofp, "%*s ", width, ".....");
 	    for (x = 0;  x < p7S_NXCELLS; x++) fprintf(ofp, "%*.*f ", width, precision, xc[x]);
 	    fputs("\n\n", ofp);
 	    xc += p7R_NXCELLS;	  
@@ -693,51 +728,51 @@ p7_sparsemx_DumpWindow(FILE *ofp, P7_SPARSEMX *sx, int i1, int i2, int k1, int k
       }
 
       fprintf(ofp, "%3d ML ", i);
-      for (z = sm->n[i]-1, k = k1; k <= k2; k++) { 
-	while (z >= 0 && sm->k[i][z] < k) z--; /* move back to next sparse cell */
-	if (z >= 0 && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + (sm->n[i]-z-1)*p7R_NSCELLS + p7R_ML));
-	else                            fprintf(ofp, "%*s ",   width, ".....");
+      for (z = 0, k = k1; k <= k2; k++) { 
+	while (z < sm->n[i] && sm->k[i][z] < k)  z++; 
+	if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*p7R_NSCELLS + p7R_ML));
+	else                                     fprintf(ofp, "%*s ",   width, ".....");
       }
       for (x = 0; x < p7S_NXCELLS; x++) fprintf(ofp, "%*.*f ", width, precision, xc[x]);
       fputc('\n', ofp);
 
       fprintf(ofp, "%3d IL ", i);
-      for (z = sm->n[i]-1, k = k1; k <= k2; k++) { 
-	while (z >= 0 && sm->k[i][z] < k) z--;
-	if (z >= 0 && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + (sm->n[i]-z-1)*p7R_NSCELLS + p7R_IL));
-	else                            fprintf(ofp, "%*s ",   width, ".....");
+      for (z = 0, k = k1; k <= k2; k++) { 
+	while (z < sm->n[i] && sm->k[i][z] < k)  z++;
+	if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*p7R_NSCELLS + p7R_IL));
+	else                                     fprintf(ofp, "%*s ",   width, ".....");
       }
       fputc('\n', ofp);
 
       fprintf(ofp, "%3d DL ", i);
-      for (z = sm->n[i]-1, k = k1; k <= k2; k++) { 
-	while (z >= 0 && sm->k[i][z] < k) z--; 
-	if (z >= 0 && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + (sm->n[i]-z-1)*p7R_NSCELLS + p7R_DL));
-	else                            fprintf(ofp, "%*s ",   width, ".....");
+      for (z = 0, k = k1; k <= k2; k++) { 
+	while (z < sm->n[i] && sm->k[i][z] < k)  z++; 
+	if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*p7R_NSCELLS + p7R_DL));
+	else                                     fprintf(ofp, "%*s ",   width, ".....");
       }
       fputc('\n', ofp);
 
       fprintf(ofp, "%3d MG ", i);
-      for (z = sm->n[i]-1, k = k1; k <= k2; k++) { 
-	while (z >= 0 && sm->k[i][z] < k) z--; 
-	if (z >= 0 && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + (sm->n[i]-z-1)*p7R_NSCELLS + p7R_MG));
-	else                            fprintf(ofp, "%*s ",   width, ".....");
+      for (z = 0, k = k1; k <= k2; k++) { 
+	while (z < sm->n[i] && sm->k[i][z] < k)  z++; 
+	if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*p7R_NSCELLS + p7R_MG));
+	else                                     fprintf(ofp, "%*s ",   width, ".....");
       }
       fputc('\n', ofp);
 
       fprintf(ofp, "%3d IG ", i);
-      for (z = sm->n[i]-1, k = k1; k <= k2; k++) { 
-	while (z >= 0 && sm->k[i][z] < k) z--; 
-	if (z >= 0 && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + (sm->n[i]-z-1)*p7R_NSCELLS + p7R_IG));
-	else                            fprintf(ofp, "%*s ",   width, ".....");
+      for (z = 0, k = k1; k <= k2; k++) { 
+	while (z < sm->n[i] && sm->k[i][z] < k)  z++; 
+	if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*p7R_NSCELLS + p7R_IG));
+	else                                     fprintf(ofp, "%*s ",   width, ".....");
       }
       fputc('\n', ofp);
 
       fprintf(ofp, "%3d DG ", i);
-      for (z = sm->n[i]-1, k = k1; k <= k2; k++) { 
-	while (z >=0 && sm->k[i][z] < k) z--; 
-	if (z >= 0 && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + (sm->n[i]-z-1)*p7R_NSCELLS + p7R_DG));
-	else                            fprintf(ofp, "%*s ",   width, ".....");
+      for (z = 0, k = k1; k <= k2; k++) { 
+	while (z < sm->n[i] && sm->k[i][z] < k)  z++; 
+	if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*p7R_NSCELLS + p7R_DG));
+	else                                     fprintf(ofp, "%*s ",   width, ".....");
       }
       fputs("\n\n", ofp);
 
@@ -794,7 +829,7 @@ p7_sparsemx_Copy2Reference(P7_SPARSEMX *sx, P7_REFMX *rx)
 
       for (i = ia; i <= ib; i++)
 	{
-	  for (z = sm->n[i]-1; z >= 0; z--)
+	  for (z = 0; z < sm->n[i]; z++)
 	    {
 	      k = sm->k[i][z];
 	      P7R_MX(rx, i, k, p7R_ML) = *dpc++;

@@ -87,7 +87,7 @@ main(int argc, char **argv)
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, ahmmfile, errbuf);  
 
   /* initial allocations */
-  sm  = p7_sparsemask_Create(100, 100, 0.0);
+  sm  = p7_sparsemask_Create(100, 100);
   sxv = p7_sparsemx_Create(sm);
   rmx = p7_refmx_Create(100,100);
 
@@ -126,7 +126,7 @@ main(int argc, char **argv)
 
 	  p7_bg_SetLength(bg, sq->n);
 	  p7_profile_SetLength(agm, sq->n);
-	  p7_sparsemask_Reinit(sm, agm->M, sq->n, 0.0);
+	  p7_sparsemask_Reinit(sm, agm->M, sq->n);
 	  p7_sparsemask_AddAll(sm);
 
 	  p7_refmx_GrowTo(rmx, agm->M, sq->n);
@@ -138,7 +138,7 @@ main(int argc, char **argv)
 	    } 
 	  else 
 	    {
-	      p7_SparseViterbi(sq->dsq, sq->n, agm, sxv, /*opt_vsc=*/NULL, testtr);
+	      p7_SparseViterbi(sq->dsq, sq->n, agm, sxv, testtr, /*opt_vsc=*/NULL);
 	    }
 
 	  p7_trace_metrics(reftr, testtr, tmetrics);

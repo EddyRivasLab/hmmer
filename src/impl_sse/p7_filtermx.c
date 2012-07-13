@@ -257,13 +257,37 @@ p7_filtermx_GrowTo(P7_FILTERMX *ox, int M, int L)
 size_t
 p7_filtermx_Sizeof(const P7_FILTERMX *ox)
 {
-  size_t n = 0;
-
-  n += sizeof(P7_FILTERMX);
+  size_t n = sizeof(P7_FILTERMX);
   n += ox->nalloc + (p7_VALIGN-1);	          /* +15 because of manual alignment */
   n += ox->allocR  * sizeof(float *);	  
   return n;
 }
+
+/* Function:  p7_filtermx_MinSizeof()
+ * Synopsis:  Returns minimum required size of a <P7_FILTERMX>, in bytes.
+ *
+ * Purpose:   Calculate and return the minimal required size, in bytes,
+ *            of a checkpointed f/b matrix, for a comparison of a profile
+ *            of length <M> to a sequence of length <L>.
+ *            
+ *            Does not require having an actual DP matrix allocated.
+ *            We use this function when planning/profiling memory
+ *            allocation strategies.
+ */
+size_t
+p7_filtermx_MinSizeof(int M, int L)
+{
+  size_t n    = sizeof(P7_FILTERMX);
+  int    Q    = P7F_NQF(M);                       // number of vectors needed
+  int    minR = 3 + (int) ceil(minimum_rows(L));  // 3 = Ra, 2 rows for backwards, 1 for fwd[0]
+  
+  n += p7_VALIGN-1;                                                  // dp_mem has to be hand-aligned for vectors
+  n += minR * (sizeof(float) * p7_VNF * Q * p7F_NSCELLS);            // dp_mem, main: QR supercells; each has p7F_NSCELLS=3 cells, MID; each cell is __m128 vector of four floats (p7_VNF=4 * float)
+  n += minR * (ESL_UPROUND(sizeof(float) * p7F_NXCELLS, p7_VALIGN)); // dp_mem, specials: maintaining vector memory alignment 
+  n += minR * sizeof(float *);                                       // dpf[] row ptrs
+  return n;
+}
+
 
 /* Function:  p7_filtermx_Reuse()
  * Synopsis:  Recycle a checkpointed vector DP matrix.

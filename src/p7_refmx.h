@@ -88,11 +88,12 @@ typedef struct p7_refmx_s {
  *****************************************************************/
 
 /* from p7_refmx.c */
-extern P7_REFMX *p7_refmx_Create(int M, int L);
-extern int       p7_refmx_GrowTo (P7_REFMX *rmx, int M, int L);
-extern size_t    p7_refmx_Sizeof (const P7_REFMX *rmx);
-extern int       p7_refmx_Reuse  (P7_REFMX *rmx);
-extern void      p7_refmx_Destroy(P7_REFMX *rmx);
+extern P7_REFMX *p7_refmx_Create   (int M, int L);
+extern int       p7_refmx_GrowTo   (P7_REFMX *rmx, int M, int L);
+extern size_t    p7_refmx_Sizeof   (const P7_REFMX *rmx);
+extern size_t    p7_refmx_MinSizeof(int M, int L);
+extern int       p7_refmx_Reuse    (P7_REFMX *rmx);
+extern void      p7_refmx_Destroy  (P7_REFMX *rmx);
 
 extern int   p7_refmx_Compare     (const P7_REFMX *rx1, const P7_REFMX *rx2, float tolerance);
 extern int   p7_refmx_CompareLocal(const P7_REFMX *rx1, const P7_REFMX *rx2, float tolerance);

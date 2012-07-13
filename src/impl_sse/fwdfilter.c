@@ -33,11 +33,12 @@
  *    1. ForwardFilter() and BackwardFilter() API.
  *    2. Internal functions: inlined recursions.
  *    3. Debugging tools.
- *    4. Benchmark driver.
- *    5. Unit tests.
- *    6. Test driver.
- *    7. Example.
- *    8. Notes
+ *    4. Stats driver (memory requirements)
+ *    5. Benchmark driver.
+ *    6. Unit tests.
+ *    7. Test driver.
+ *    8. Example.
+ *    9. Notes
  *       a. On debugging and testing methods.
  *       b. On running time, in theory and in practice.
  *       c. Copyright and license information.
@@ -49,6 +50,7 @@
 
 #include "easel.h"
 #include "esl_sse.h"
+#include "esl_vectorops.h"
 
 #include "hmmer.h"
 #include "p7_sparsemx.h"
@@ -1085,9 +1087,48 @@ save_debug_row_fb(P7_FILTERMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float totsc
 
 
 /*****************************************************************
- * x. Stats driver: memory usage profiling 
+ * 4. Stats driver: memory requirement profiling 
  *****************************************************************/
 
+/* In production pipeline, there are up to four sorts of DP matrices
+ * in play:
+ *    MSV   MSV filter
+ *    VF    Viterbi filter
+ *    CHK   checkpointed Forward/Backward
+ *    SP    sparse DP
+ * and the reference implementation has one, for our baseline:
+ *    REF   reference DP implementation of everything
+ * and, the sparse DP implementation also requires a sparse mask,
+ * which is of on the same memory usage order as the DP matrix:
+ *    SM    sparse DP mask
+ * We count it separately here because we will typically have one
+ * mask, for up to four (V/F/B/D) matrices in play.
+ *    
+ * MSV and VF are O(M).
+ * CHK is O(M \sqrt L)
+ * SP and SM are O(L) when a nonzero sparsity posterior threshold is used in the f/b filter.
+ * REF is O(ML). 
+ * 
+ * The goal of this driver is to characterize the minimal memory
+ * requirements for each, and in particular, for sparse DP.  MSV, VF,
+ * CHK, and REF minimal requirements are completely determined by
+ * dimensions M and L. The requirement of SP, though, is an empirical
+ * question of how many sparse cells get included by the f/b filter.
+ * This driver runs the f/b filter, using one query profile, against a
+ * target seq db, and for each profile/seq comparison, it prints a
+ * line summarizing all the minimal memory requirements.
+ * 
+ * Note that even though we're empirically characterizing the typical
+ * minimum requirement of SP, it nonetheless does have a proven O(L)
+ * memory complexity for a nonzero posterior prob threshold in f/b
+ * filter.
+ * 
+ * Note also that this is characterizing the "minimal" requirement,
+ * not the actual allocated size of the various matrices, which tend
+ * to grow depending on previous requirements. We're not testing our
+ * reallocation strategy here. We might use these statistics to help
+ * refine that strategy.
+ */
 #ifdef p7FWDFILTER_STATS
 #include "p7_config.h"
 
@@ -1130,7 +1171,7 @@ main(int argc, char **argv)
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
   float           fraw, nullsc, fsc, msvsc;
-  float           msvmem, vfmem, fbmem, sparsemem, sparsemem2, basemem;
+  float           msvmem, vfmem, fbmem, smmem, spmem, refmem;
   double          P;
   int             status;
 
@@ -1160,10 +1201,10 @@ main(int argc, char **argv)
    * we resize as needed for each individual target seq 
    */
   ox  = p7_filtermx_Create  (gm->M, 500, ESL_MBYTES(32));  
-  sm  = p7_sparsemask_Create(gm->M, 500, p7_SPARSEMASK_THRESH_DEFAULT);
+  sm  = p7_sparsemask_Create(gm->M, 500);
 
   printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s\n",
-	 "target seq", "query profile", "score", "P-value", "MSV (KB)", "VF (KB)", "FB (MB)", "required", "actual", "base (MB)");
+	 "target seq", "query profile", "score", "P-value", "MSV (KB)", "VF (KB)", "CHK (MB)", "SM (MB)", "SP (MB)", "REF (MB)");
   printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s\n",
 	 "----------------------------", "------------------------------",  "---------", "---------", "---------", "---------", "---------", "---------", "---------", "---------");
   
@@ -1174,7 +1215,7 @@ main(int argc, char **argv)
       p7_bg_SetLength(bg,            sq->n);
 
       p7_filtermx_GrowTo  (ox, om->M, sq->n); 
-      p7_sparsemask_Reinit(sm, gm->M, sq->n, p7_SPARSEMASK_THRESH_DEFAULT); 
+      p7_sparsemask_Reinit(sm, gm->M, sq->n);
 
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
 
@@ -1188,12 +1229,12 @@ main(int argc, char **argv)
       p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm);
 
       /* Calculate minimum memory requirements for each step */
-      msvmem     = (double) ( p7O_NQB(om->M) * sizeof(__m128i))      / 1024.;   /* in KB */
-      vfmem      = (double) ( p7O_NQW(om->M) * sizeof(__m128i)) * 3. / 1024.;  
-      fbmem      = (double) ( 3. + ceil ( (sqrt(9. + 8. * (double) sq->n) - 3.) / 2.)) * (double) (om->M * 3 * sizeof(float)) / 1024. / 1024.;
-      sparsemem  = (double) sm->ncells * 6. * sizeof(float) / 1024. / 1024.;             /* 6, because you're dual-mode */
-      sparsemem2 = (double) p7_sparsemask_Sizeof(sm) / 1024. / 1024.;
-      basemem    = (double) om->M * (double) sq->n * 6 * sizeof(float) / 1024. / 1024.;	
+      msvmem = (double) ( p7O_NQB(om->M) * sizeof(__m128i))      / 1024.;        // in KB. If we implement a structure specific to MSV/VF memory, add a MinSizeof()
+      vfmem  = (double) ( p7O_NQW(om->M) * sizeof(__m128i)) * 3. / 1024.;  
+      fbmem  = (double) p7_filtermx_MinSizeof(om->M, sq->n)      / 1024. / 1024.;
+      smmem  = (double) p7_sparsemask_MinSizeof(sm)              / 1024. / 1024.;
+      spmem  = (double) p7_sparsemx_MinSizeof(sm)                / 1024. / 1024.;
+      refmem = (double) p7_refmx_MinSizeof(om->M, sq->n)         / 1024. / 1024.;
 
       fsc  =  (fraw-nullsc) / eslCONST_LOG2;
       P    = esl_exp_surv(fsc,   om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
@@ -1205,9 +1246,9 @@ main(int argc, char **argv)
 	     msvmem,
 	     vfmem,
 	     fbmem, 
-	     sparsemem,
-	     sparsemem2,
-	     basemem);
+	     smmem,
+	     spmem,
+	     refmem);
 	     
     NEXT_SEQ:
       esl_sq_Reuse(sq);
@@ -1239,7 +1280,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 4. Benchmark
+ * 5. Benchmark
  *****************************************************************/
 /* Difference between gcc -g vs. icc -O3 is large! */
 
@@ -1309,7 +1350,7 @@ main(int argc, char **argv)
   p7_oprofile_Convert(gm, om);
 
   ox  = p7_filtermx_Create  (om->M, L, ESL_MBYTES(32));
-  sm  = p7_sparsemask_Create(om->M, L, p7_SPARSEMASK_THRESH_DEFAULT);
+  sm  = p7_sparsemask_Create(om->M, L);
 
   /* Baseline time. */
   esl_stopwatch_Start(w);
@@ -1323,11 +1364,14 @@ main(int argc, char **argv)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
-      p7_sparsemask_Reinit(sm, om->M, L, p7_SPARSEMASK_THRESH_DEFAULT);
+      p7_sparsemask_Reinit(sm, om->M, L);
 
       p7_ForwardFilter(dsq, L, om, ox, &sc);
       if (! esl_opt_GetBoolean(go, "-F")) 
-	p7_BackwardFilter(dsq, L, om, ox, sm);
+	{
+	  p7_BackwardFilter(dsq, L, om, ox, sm);
+	  esl_vec_IReverse(sm->kmem, sm->kmem, sm->ncells);
+	}
 
       p7_filtermx_Reuse(ox);
       p7_sparsemask_Reuse(sm);
@@ -1358,7 +1402,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 5. Unit tests
+ * 6. Unit tests
  *****************************************************************/
 #ifdef p7FWDFILTER_TESTDRIVE
 #include "esl_random.h"
@@ -1385,7 +1429,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
   P7_REFMX    *fwd    = p7_refmx_Create   (M, L);
   P7_REFMX    *bck    = p7_refmx_Create   (M, L);
   P7_REFMX    *pp     = p7_refmx_Create   (M, L);
-  P7_SPARSEMASK *sm   = p7_sparsemask_Create(M, L, p7_SPARSEMASK_THRESH_DEFAULT);
+  P7_SPARSEMASK *sm   = p7_sparsemask_Create(M, L);
   float        tol2   = ( p7_logsum_IsSlowExact() ? 0.001  : 0.1);   /* absolute agreement of reference (log-space) and vector (prob-space) depends on whether we're using LUT-based logsum() */
   float fsc1, fsc2;
   float bsc2;
@@ -1437,7 +1481,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
       if ( p7_refmx_GrowTo   (bck, M, tL)     != eslOK) esl_fatal(msg);
       if ( p7_refmx_GrowTo   (pp,  M, tL)     != eslOK) esl_fatal(msg);
       if ( p7_filtermx_GrowTo(ox,  M, tL)     != eslOK) esl_fatal(msg);
-      if ( p7_sparsemask_Reinit(sm, M, tL, p7_SPARSEMASK_THRESH_DEFAULT) != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_Reinit(sm,M, tL)     != eslOK) esl_fatal(msg);
 
       p7_ForwardFilter (dsq, tL, om, ox, &fsc1);
       p7_BackwardFilter(dsq, tL, om, ox,  sm);
@@ -1497,7 +1541,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
 
 
 /*****************************************************************
- * 6. Test driver
+ * 7. Test driver
  *****************************************************************/
 #ifdef p7FWDFILTER_TESTDRIVE
 
@@ -1570,7 +1614,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 7. Example
+ * 8. Example
  *****************************************************************/
 #ifdef p7FWDFILTER_EXAMPLE
 
@@ -1656,7 +1700,7 @@ main(int argc, char **argv)
    */
   ox  = p7_filtermx_Create  (gm->M, 500, ESL_MBYTES(32));  
   gx  = p7_refmx_Create     (gm->M, 500);
-  sm  = p7_sparsemask_Create(gm->M, 500, p7_SPARSEMASK_THRESH_DEFAULT);
+  sm  = p7_sparsemask_Create(gm->M, 500);
 #ifdef p7_DEBUGGING
   /* When the p7_DEBUGGING flag is up, <ox> matrix has the ability to
    * record generic, complete <fwd>, <bck>, and <pp> matrices, for
@@ -1676,7 +1720,7 @@ main(int argc, char **argv)
 
       p7_filtermx_GrowTo  (ox, om->M, sq->n); 
       p7_refmx_GrowTo     (gx, gm->M, sq->n); 
-      p7_sparsemask_Reinit(sm, gm->M, sq->n, p7_SPARSEMASK_THRESH_DEFAULT); 
+      p7_sparsemask_Reinit(sm, gm->M, sq->n);
 
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
     

@@ -629,8 +629,9 @@ typedef struct p7_gmx_s {
  *   float const *tsc = gm->tsc;
  *   float      **dp  = gx->dp;
  *   float       *xmx = gx->xmx;
- * and for each row i (target residue x_i in digital seq <dsq>):
+ * and for row i, i+1 (target residues x_i, x_i+1 in digital seq <dsq>):
  *   float const *rsc = gm->rsc[dsq[i]];
+ *   float const *rsn = gm->rsc[dsq[i+1]];
  */
 #define MMX(i,k) (dp[(i)][(k) * p7G_NSCELLS + p7G_M])
 #define IMX(i,k) (dp[(i)][(k) * p7G_NSCELLS + p7G_I])
@@ -640,6 +641,8 @@ typedef struct p7_gmx_s {
 #define TSC(s,k) (tsc[(k) * p7P_NTRANS + (s)])
 #define MSC(k)   (rsc[(k) * p7P_NR     + p7P_M])
 #define ISC(k)   (rsc[(k) * p7P_NR     + p7P_I])
+#define MSN(k)   (rsn[(k) * p7P_NR     + p7P_M])
+#define ISN(k)   (rsn[(k) * p7P_NR     + p7P_I])
 
 /* Flags that control P7_GMX debugging dumps */
 #define p7_HIDE_SPECIALS (1<<0)

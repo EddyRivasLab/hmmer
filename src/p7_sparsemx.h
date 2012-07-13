@@ -1,44 +1,66 @@
-
+/* Data structures used by sparse dynamic programming.
+ * 
+ * P7_SPARSEMASK defined the sparse cell mask: which i,k cells are to
+ * be included in a DP matrix.
+ * 
+ * P7_SPARSEMX is a sparse DP matrix, as constrained by a P7_SPARSEMASK.
+ * 
+ * Contents:
+ *    1. P7_SPARSEMASK structure declaration, indexing constants
+ *    2. P7_SPARSEMX structure declaration, indexing constants
+ *    3. Function declarations from p7_sparsemx.c, sparse_fwdback.c
+ *    4. Notes:
+ *        [1] On the layout of P7_SPARSEMASK: why kmem[] is in reverse order during construction
+ *        [2] On phases of construction of P7_SPARSEMASK: why k[], i[] aren't set until the end
+ *        [3] On sorting striped indices; why four "slots" are used, then contiguated.
+ *    5. Copyright and license information
+ */
 #ifndef P7_SPARSEMX_INCLUDED
 #define P7_SPARSEMX_INCLUDED
 
 #include "p7_refmx.h"
 
 
+/*****************************************************************
+ * 1. The P7_SPARSEMASK structure
+ *****************************************************************/
+
 typedef struct {
-  int      L;		/* sequence has 1..L residues */
-  int      M;		/* profile has 1..M positions */
-  int      Q;		/* number of striped vectors in fwdfilter; width of striped segments */
-  int      W;		/* maximum number of sparse cells per row; <=M; 1/p for posterior probability p per cell */
-  int      Ws;		/* maximum # of elements needed in each "slot" for temporary storage from striped vectors */
+  int      L;		// sequence has 1..L residues 
+  int      M;		// profile has 1..M positions 
+  int      Q;		// number of striped vectors in fwdfilter; width of each striped segment; width of "slots"
 
-  int     *i;    	/* ia,ib pairs for each segment. i[0..2*nseg-1] */
-  int    **k;		/* k[0,1..L] = ptrs into kmem, rows of sparse k indices; k[0]=NULL; k[i]=NULL if n[i]=0 */
-  int     *n;		/* number of cells included on each row; n[0]=0; n[i] <= M */
-  int     *kmem;	/* memory that k[] are pointing into, storing k indices of included cells */
+  int     *i;    	// ia,ib pairs for each segment. i[0..2*nseg-1] 
+  int    **k;		// k[0,1..L] = ptrs into kmem, rows of sparse k indices; k[0]=NULL; k[i]=NULL if n[i]=0 
+  int     *n;		// number of cells included on each row; n[0]=0; n[i] <= M 
+  int     *kmem;	// memory that k[] are pointing into, storing k indices of included cells, kmem[0..ncells-1]
 
-  int      nseg;	/* number of sparsified segments */
-  int      nrow;        /* number of included rows; \sum_{i=1}^{L} \delta(n[i]) */
-  int64_t  ncells;	/* number of included cells; \sum_{i=1}^{L} n[i]        */
+  int      nseg;	// number of sparsified segments 
+  int      nrow;        // number of included rows; \sum_{i=1}^{L} \delta(n[i]) 
+  int64_t  ncells;	// number of included cells; \sum_{i=1}^{L} n[i]        
 
-  int      ralloc;	/* k[] is allocated for ralloc rows; L+1 <= ralloc */
-  int64_t  kalloc;	/* kmem[] is allocated for kalloc cells; ncells <= kalloc */
-  int      ialloc;	/* i[] is allocated for up to 2*ialloc coords ia,ib; nseg <= ialloc */
+  int      ralloc;	// k[] is allocated for ralloc rows; L+1 <= ralloc 
+  int64_t  kalloc;	// kmem[] is allocated for kalloc cells; ncells <= kalloc 
+  int      ialloc;	// i[] is allocated for up to 2*ialloc coords ia,ib; nseg <= ialloc 
 
   /* "Slots" are used to convert striped vectors in f/b filter into correct M..1 cell index order in <kmem>; see note [3] */
-  int  *s[p7_VNF];	/* slot pointers s[0..Q-1] into <kmem>, for temporary storage of a striped vector row's sparse cells */
-  int   sn[p7_VNF];	/* number of sparse cells stored so far in each slot; sn[0..p7_VNF-1] */
+  int  *s[p7_VNF];	// slot pointers s[0..3] into <kmem>, for temporary storage of a striped vector row's sparse cells 
+  int   sn[p7_VNF];	// number of sparse cells stored so far in each slot; sn[0..3]
 
-  /* These are used for argument validation; the API is a little counterintuitive */
-  int   last_i;  	/* i of last StartRow(i) call; rows must be added in L..1 order; initialized to L+1 */
-  int   last_k[p7_VNF]; /* k of last cell added in slot r; cells must be added in M..1 order; initialized to M+1 or -1 */
+  /* These are used for argument validation; the construction API is a little counterintuitive because i,q run in reverse */
+  int   last_i;  	// i of last StartRow(i) call; rows must be added in L..1 order; initialized to L+1 
+  int   last_k[p7_VNF]; // k of last cell added in slot r; cells must be added in M..1 order; initialized to M+1 or -1 
 
   /* memory allocation profiling, statistics */
-  int   n_krealloc;	/* number of times we reallocated <kmem> in this instance of the structure */
-  int   n_irealloc;	/* ditto for <i>      */
-  int   n_rrealloc;	/* ditto for <k>, <n> */
+  int   n_krealloc;	// number of times we reallocated <kmem> in this instance of the structure 
+  int   n_irealloc;	// ditto for <i>      
+  int   n_rrealloc;	// ditto for <k>, <n> 
 } P7_SPARSEMASK;
 
+
+/*****************************************************************
+ * 2. The P7_SPARSEMX structure
+ *****************************************************************/
 
 #define p7S_NSCELLS 6
 #define p7S_ML 0
@@ -73,48 +95,65 @@ typedef struct {
 #define p7S_ALIGNMENT 4
 #define p7S_VITERBI   5
 
-
 typedef struct {
-  float  *dp;		/* main DP supercells. sm->ncells <= dalloc. each supercell contains p7S_NSCELLS values. */
-  float  *xmx;		/* special DP supercells. there are <sm->nrow>+<sm->nseg> of these, each w/ p7S_NXCELLS values. */
+  float  *dp;		// main DP supercells. sm->ncells <= dalloc. each supercell contains p7S_NSCELLS values. 
+  float  *xmx;		// special DP supercells. there are <sm->nrow>+<sm->nseg> of these, each w/ p7S_NXCELLS values. 
 
-  int64_t dalloc;	/* current <dp> allocation, denominated in supercells, (each p7S_NSCELLS wide) */
-  int     xalloc;	/* current <xmx> allocation, denominated in total rows (each p7S_NXCELLS wide; xalloc >= nrow+nseg) */
+  int64_t dalloc;	// current <dp> allocation, denominated in supercells, (each p7S_NSCELLS wide) 
+  int     xalloc;	// current <xmx> allocation, denominated in total rows (each p7S_NXCELLS wide; xalloc >= nrow+nseg) 
 
   P7_SPARSEMASK *sm;
 
-  int     type;		/* p7S_UNSET | p7R_VITERBI | p7R_FORWARD... etc */
+  int     type;		// p7S_UNSET | p7R_VITERBI | p7R_FORWARD... etc 
 } P7_SPARSEMX;
 
-extern P7_SPARSEMASK *p7_sparsemask_Create(int M, int L, float pthresh);
-extern int            p7_sparsemask_Reinit (P7_SPARSEMASK *sm, int M, int L, float pthresh);
-extern size_t         p7_sparsemask_Sizeof (P7_SPARSEMASK *sm);
-extern int            p7_sparsemask_Reuse  (P7_SPARSEMASK *sm);
-extern void           p7_sparsemask_Destroy(P7_SPARSEMASK *sm);
+/*****************************************************************
+ * 3. Function declarations from p7_sparsemx.c, sparse_fwdback.c
+ *****************************************************************/
 
+/* P7_SPARSEMASK object management {p7_sparsemx.c} */
+extern P7_SPARSEMASK *p7_sparsemask_Create   (int M, int L);
+extern int            p7_sparsemask_Reinit   (P7_SPARSEMASK *sm, int M, int L);
+extern size_t         p7_sparsemask_Sizeof   (const P7_SPARSEMASK *sm);
+extern size_t         p7_sparsemask_MinSizeof(const P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_Reuse    (P7_SPARSEMASK *sm);
+extern void           p7_sparsemask_Destroy  (P7_SPARSEMASK *sm);
+
+/* P7_SPARSEMASK construction API {p7_sparsemx.c} */
 extern int            p7_sparsemask_AddAll   (P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_StartRow (P7_SPARSEMASK *sm, int i);
 extern int            p7_sparsemask_Add      (P7_SPARSEMASK *sm, int q, int r);
 extern int            p7_sparsemask_FinishRow(P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Finish   (P7_SPARSEMASK *sm);
 
+/* P7_SPARSEMASK debugging tools {p7_sparsemx.c} */
 extern int            p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm);
 
-extern P7_SPARSEMX   *p7_sparsemx_Create(P7_SPARSEMASK *sm);
-extern int            p7_sparsemx_Reinit (P7_SPARSEMX *sx, P7_SPARSEMASK *sm);
-extern int            p7_sparsemx_Reuse  (P7_SPARSEMX *sx);
-extern void           p7_sparsemx_Destroy(P7_SPARSEMX *sx);
+/* P7_SPARSEMX object management {p7_sparsemx.c} */
+extern P7_SPARSEMX   *p7_sparsemx_Create   (P7_SPARSEMASK *sm);
+extern int            p7_sparsemx_Reinit   (P7_SPARSEMX *sx, P7_SPARSEMASK *sm);
+extern size_t         p7_sparsemx_Sizeof   (const P7_SPARSEMX *sx);
+extern size_t         p7_sparsemx_MinSizeof(const P7_SPARSEMASK *sm);
+extern int            p7_sparsemx_Reuse    (P7_SPARSEMX *sx);
+extern void           p7_sparsemx_Destroy  (P7_SPARSEMX *sx);
 
+/* P7_SPARSEMX debugging tools {p7_sparsemx.c} */
 extern char *p7_sparsemx_DecodeSpecial(int type);
 extern int   p7_sparsemx_Dump(FILE *ofp, P7_SPARSEMX *sx);
 extern int   p7_sparsemx_DumpWindow(FILE *ofp, P7_SPARSEMX *sx, int i1, int i2, int ka, int kb);
 extern int   p7_sparsemx_Copy2Reference(P7_SPARSEMX *sx, P7_REFMX *rx);
 
-extern int p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx, float *opt_sc);
-extern int p7_SparseViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx, float *opt_sc, P7_TRACE *opt_tr);
+/* Sparse DP routines {sparse_fwdback.c} */
+extern int p7_SparseViterbi (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx, P7_TRACE *opt_tr, float *opt_sc);
+extern int p7_SparseForward (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx,                   float *opt_sc);
+extern int p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx,                   float *opt_sc);
+extern int p7_SparseDecoding(const P7_PROFILE *gm, const P7_SPARSEMX *sxf, P7_SPARSEMX *sxb, P7_SPARSEMX *sxd);
 
 #endif /*P7_SPARSEMX_INCLUDED*/
 
+/*****************************************************************
+ * 4. Notes
+ *****************************************************************/
 
 /* [1] Notes on the layout of the P7_SPARSEMASK structure.
  * 
@@ -125,9 +164,19 @@ extern int p7_SparseViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_
  *     at least w.r.t. rows i. However, we don't know how many sparse
  *     cells there are, and may need to reallocate k index memory
  *     (<kmem>) during collection. This makes it problematic to store
- *     sparse cells in 1..L order.
+ *     sparse cells in 1..L order. But we want them so, and we want
+ *     them packed and contiguous. 
+ *    
+ *     So: during construction, indices are stored in reverse order;
+ *     when construction is done, we reverse the entire kmem[] array.
  *     
- *     In hope of optimizing contiguity, sparse cell indices are
+ *     Benchmarks disagree on whether this has an impact. In
+ *     fwdfilter_benchmark, running Caudal_act or Patched against
+ *     random sequences, wall time shows a ~5% hit; but gprof
+ *     profiling claims a negligible hit [SRE:J10/39]. Even if
+ *     it's as much as 5%, it's worth it in code clarity.
+
+ *     So, during construction, indices are
  *     stored in reverse order in <kmem>. For example, for a sparse
  *     matrix
  *          k= 1 2 3 4
@@ -135,35 +184,34 @@ extern int p7_SparseViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_
  *           2 . . o .
  *           3 . . o o
  *           4 . . . .
- *     the fields associated with sparse cells are:
+ *     kmem gets built up in reverse, but n[i] counters are in the correct direction:
  *        kmem[]:   4 3 3 3 2 1
  *        n[]:      0 3 1 2 0
- *        k[]:      NULL kmem+3 kmem+2 kmem NULL
- *        ncells:   6
+ *        ncells:   6     
+ *     Then in _Finish() we reverse kmem, and set k[] ptrs:
+ *        kmem[]:   1 2 3 3 3 4
+ *        n[]:      0 3 1 2 0
+ *        k[]:      NULL kmem kmem+3 kmem+4 NULL
  *     i.e.
- *        kmem:     [ 4  3 ] [ 3 ] [ 3 2 1 ]
+ *        kmem:     [ 1 2 3 ] [ 3 ] [ 3 4 ]
  *               x    ^        ^     ^       x
- *               k[4] k[3]     k[2]  k[1]    k[0]   
- *            n[4]=0  n[3]=2  n[2]=1 n[1]=3  n[0]=0
- *            
+ *               k[0] k[1]    k[2]   k[3]    k[4]   
+ *            n[0]=0  n[1]=3  n[2]=1 n[3]=2  n[4]=0
+
  *     To traverse sparse cells in forward order:
  *        for (i = 1; i <= L; i++)
- *          for (z = n[i]-1; z; z--)
+ *          for (z = 0; z < n[i]; z++)
  *            k = k[i][z];
  *     To traverse them in backwards order:
  *        for (i = L; i >= 1; i--)
- *           for (z = 0; z < n[i], z++)
+ *           for (z = n[i]-1; z >= 0, z--)
  *              k = k[i][z];
  *
- *     We're sort of hoping that the z--/z++ order of evaluation is
- *     enough of a system hint to prefetch memory in the correct
- *     traversal direction along kmem.
- *     
  * [2] Notes on how the P7_SPARSEMASK structure is allocated and built.
  * 
  *     Constraints in play:
  *       - minimize reallocation and maximize data contiguity
- *       - fb filter collects rows in reverse order i=L..1,k=M..1
+ *       - fb filter collects rows in reverse order i=L..1,k=M..1, then reverses the whole kmem[]
  *       - fb filter is vectorized and its k indices are striped, out of order
 
  *     Some fields are set at creation (or reinit) time; some during
@@ -175,14 +223,14 @@ extern int p7_SparseViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_
  *     n[] need to be allocated 0,1..L; on reinit, if L+1 > ralloc, we
  *     reallocate them. 
  *     
- *     At collect time, we set <n[]> as we append to <kmem> array in
+ *     During collect time, we set <n[]> as we append to <kmem> array in
  *     reverse order, counting <ncells>. If <kmem> must be
  *     reallocated, <kalloc> will change.
  *     
- *     At finish time, we set everything else. Row pointers <k[]> are
- *     set, using <n[]>. Segments are determined, reallocating <i[]>
- *     and resetting <ialloc> if needed, setting <i[]>, <nseg>, and
- *     <nrow>.
+ *     At finish time, we reverse kmem[], then set everything
+ *     else. Row pointers <k[]> are set, using <n[]>. Segments are
+ *     determined, reallocating <i[]> and resetting <ialloc> if
+ *     needed, setting <i[]>, <nseg>, and <nrow>.
  *     
  *     
  *     
@@ -226,7 +274,8 @@ extern int p7_SparseViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_
  *        
  *      and when we collapse it with FinishRow():               
  *        kmem = [ 0 ..  11 10 5 4 1 ]
- *      with ncells is incremented by 5.
+ *      with ncells is incremented by 5. Remember, kmem[] is collected in reverse
+ *      order during collection.
  */
 
 
