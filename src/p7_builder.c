@@ -92,6 +92,7 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
     }
 
   bld->do_uniform_insert = FALSE; // default
+  bld->max_insert_len = 0;
 
   /* The default RE target is alphabet dependent. */
   if (go != NULL &&  esl_opt_IsOn (go, "--ere")) 
@@ -419,6 +420,10 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
 
   if (bld->do_uniform_insert)
     if ((status =  homogonize_inserts (hmm))                            != eslOK) goto ERROR;
+
+  //Ensures that the weighted-average I->I count <=  bld->max_insert_len
+  if (bld->max_insert_len>0)
+    for (int i=1; i<hmm->M; i++ )   hmm->t[i][p7H_II] = ESL_MIN(hmm->t[i][p7H_II], bld->max_insert_len*hmm->t[i][p7H_MI]);
 
   if ((status =  effective_seqnumber  (bld, msa, hmm, bg))              != eslOK) goto ERROR;
   if ((status =  parameterize         (bld, hmm))                       != eslOK) goto ERROR;
