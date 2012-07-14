@@ -14,9 +14,9 @@ BEGIN {
     $builddir  = shift;
     $srcdir    = shift;
     $tmppfx    = shift;
+    $verbose   = shift;  # if arg not given, defaults to false (zero)
 }
 
-$verbose = 0;
 
 # The test makes use of the following file:
 #
