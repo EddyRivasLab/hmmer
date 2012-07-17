@@ -94,6 +94,7 @@ typedef struct {
 #define p7S_DECODING  3
 #define p7S_ALIGNMENT 4
 #define p7S_VITERBI   5
+#define p7S_MASSTRACE 6
 
 typedef struct {
   float  *dp;		// main DP supercells. sm->ncells <= dalloc. each supercell contains p7S_NSCELLS values. 
@@ -136,6 +137,9 @@ extern size_t         p7_sparsemx_Sizeof   (const P7_SPARSEMX *sx);
 extern size_t         p7_sparsemx_MinSizeof(const P7_SPARSEMASK *sm);
 extern int            p7_sparsemx_Reuse    (P7_SPARSEMX *sx);
 extern void           p7_sparsemx_Destroy  (P7_SPARSEMX *sx);
+
+/* Extracting information from a sparse DP matrix */
+extern int   p7_sparsemx_TracePostprobs(P7_SPARSEMX *sxd, P7_TRACE *tr);
 
 /* P7_SPARSEMX debugging tools {p7_sparsemx.c} */
 extern char *p7_sparsemx_DecodeSpecial(int type);

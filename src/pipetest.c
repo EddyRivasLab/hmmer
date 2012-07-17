@@ -10,6 +10,7 @@
 
 #include "hmmer.h"
 #include "p7_sparsemx.h"
+#include "sparse_masstrace.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -33,15 +34,19 @@ main(int argc, char **argv)
   P7_OPROFILE    *om      = NULL;
   P7_FILTERMX    *ox      = NULL;
   P7_SPARSEMASK  *sm      = NULL;
+  P7_SPARSEMX    *sxv     = NULL;
   P7_SPARSEMX    *sxf     = NULL;
   P7_SPARSEMX    *sxb     = NULL;
-  P7_SPARSEMX    *sxv     = NULL;
-  P7_TRACE       *tr      = p7_trace_Create();
+  P7_SPARSEMX    *sxd     = NULL;
+  P7_SPARSEMX    *sxm     = NULL;
+  P7_TRACE       *tr      = p7_trace_CreateWithPP();
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
   float           msvsc, vfsc, fsc, vsc, nullsc;
   float           P;
+  int             d;
+  int             iae,ibe, kae,kbe;
   int             status;
   
 
@@ -70,6 +75,8 @@ main(int argc, char **argv)
   sxv = p7_sparsemx_Create  (sm);
   sxf = p7_sparsemx_Create  (sm);
   sxb = p7_sparsemx_Create  (sm);
+  sxd = p7_sparsemx_Create  (sm);
+  sxm = p7_sparsemx_Create  (sm);
   
   /* Loop over sequences in db... */
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
@@ -109,20 +116,34 @@ main(int argc, char **argv)
       p7_sparsemx_Reinit(sxv, sm);
       p7_sparsemx_Reinit(sxf, sm);
       p7_sparsemx_Reinit(sxb, sm);
+      p7_sparsemx_Reinit(sxd, sm);
+
       p7_SparseViterbi (sq->dsq, sq->n, gm, sxv, tr, &vsc);
       p7_SparseForward (sq->dsq, sq->n, gm, sxf,     &fsc);
       p7_SparseBackward(sq->dsq, sq->n, gm, sxb,     NULL);
+      p7_SparseDecoding(gm, sxf, sxb, sxd);
+      p7_sparsemx_TracePostprobs(sxd, tr);
+      p7_trace_Index(tr);
+      
+      for (d = 0; d < tr->ndom; d++)
+	{
+	  p7_sparsemx_Reinit(sxm, sm);
 
-      /* output? */
+	  p7_sparse_masstrace_Up  (sq->dsq, sq->n, gm, sxf, sxm, tr, tr->anch[d], 0.1, &iae, &kae);
+	  p7_sparse_masstrace_Down(sq->dsq, sq->n, gm, sxb, sxm, tr, tr->anch[d], 0.1, &ibe, &kbe);
+	  
+	  p7_sparsemx_Reuse(sxm);
+	}
 
     NEXT_SEQ:
       esl_sq_Reuse(sq);
       p7_trace_Reuse(tr);
       p7_filtermx_Reuse(ox);    
       p7_sparsemask_Reuse(sm);  // most seqs don't use sparsemask: don't need to reuse because we never reinit'ed
-      p7_sparsemx_Reuse(sxb);
-      p7_sparsemx_Reuse(sxf);
       p7_sparsemx_Reuse(sxv);
+      p7_sparsemx_Reuse(sxf);
+      p7_sparsemx_Reuse(sxb);
+      p7_sparsemx_Reuse(sxd);
     }
 
   esl_sqfile_Close(sqfp);

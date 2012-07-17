@@ -90,11 +90,12 @@ trace_create_engine(int initial_nalloc, int initial_ndomalloc, int with_posterio
   tr->tfrom   = tr->tto   = NULL;
   tr->sqfrom  = tr->sqto  = NULL;
   tr->hmmfrom = tr->hmmto = NULL;
+  tr->anch                = NULL;
 
   /* The trace data itself */
-  ESL_ALLOC(tr->st, sizeof(char) * initial_nalloc);
-  ESL_ALLOC(tr->k,  sizeof(int)  * initial_nalloc);
-  ESL_ALLOC(tr->i,  sizeof(int)  * initial_nalloc);
+  ESL_ALLOC(tr->st,   sizeof(char) * initial_nalloc);
+  ESL_ALLOC(tr->k,    sizeof(int)  * initial_nalloc);
+  ESL_ALLOC(tr->i,    sizeof(int)  * initial_nalloc);
   if (with_posteriors)
     ESL_ALLOC(tr->pp, sizeof(float) * initial_nalloc);
   tr->N      = 0;
@@ -107,6 +108,7 @@ trace_create_engine(int initial_nalloc, int initial_ndomalloc, int with_posterio
   ESL_ALLOC(tr->sqto,    sizeof(int) * initial_ndomalloc);
   ESL_ALLOC(tr->hmmfrom, sizeof(int) * initial_ndomalloc);
   ESL_ALLOC(tr->hmmto,   sizeof(int) * initial_ndomalloc);
+  ESL_ALLOC(tr->anch,    sizeof(int) * initial_ndomalloc);
   tr->ndom      = 0;
   tr->ndomalloc = initial_ndomalloc;
   return tr;
@@ -187,17 +189,17 @@ p7_trace_Grow(P7_TRACE *tr)
 int
 p7_trace_GrowIndex(P7_TRACE *tr)
 {
-  void *p;
   int   status;
 
   if (tr->ndom < tr->ndomalloc) return eslOK;
 
-  ESL_RALLOC(tr->tfrom,   p, sizeof(int)*2*tr->ndomalloc);
-  ESL_RALLOC(tr->tto,     p, sizeof(int)*2*tr->ndomalloc);
-  ESL_RALLOC(tr->sqfrom,  p, sizeof(int)*2*tr->ndomalloc);
-  ESL_RALLOC(tr->sqto,    p, sizeof(int)*2*tr->ndomalloc);
-  ESL_RALLOC(tr->hmmfrom, p, sizeof(int)*2*tr->ndomalloc);
-  ESL_RALLOC(tr->hmmto,   p, sizeof(int)*2*tr->ndomalloc);
+  ESL_REALLOC(tr->tfrom,   sizeof(int)*2*tr->ndomalloc);
+  ESL_REALLOC(tr->tto,     sizeof(int)*2*tr->ndomalloc);
+  ESL_REALLOC(tr->sqfrom,  sizeof(int)*2*tr->ndomalloc);
+  ESL_REALLOC(tr->sqto,    sizeof(int)*2*tr->ndomalloc);
+  ESL_REALLOC(tr->hmmfrom, sizeof(int)*2*tr->ndomalloc);
+  ESL_REALLOC(tr->hmmto,   sizeof(int)*2*tr->ndomalloc);
+  ESL_REALLOC(tr->anch,    sizeof(int)*2*tr->ndomalloc);
   tr->ndomalloc *= 2;
   return eslOK;
 
@@ -251,17 +253,18 @@ p7_trace_GrowTo(P7_TRACE *tr, int N)
 int
 p7_trace_GrowIndexTo(P7_TRACE *tr, int ndom)
 {
-  void *p;
   int   status;
 
   if (ndom < tr->ndomalloc) return eslOK;
 
-  ESL_RALLOC(tr->tfrom,   p, sizeof(int)*ndom);
-  ESL_RALLOC(tr->tto,     p, sizeof(int)*ndom);
-  ESL_RALLOC(tr->sqfrom,  p, sizeof(int)*ndom);
-  ESL_RALLOC(tr->sqto,    p, sizeof(int)*ndom);
-  ESL_RALLOC(tr->hmmfrom, p, sizeof(int)*ndom);
-  ESL_RALLOC(tr->hmmto,   p, sizeof(int)*ndom);
+  ESL_REALLOC(tr->tfrom,   sizeof(int)*ndom);
+  ESL_REALLOC(tr->tto,     sizeof(int)*ndom);
+  ESL_REALLOC(tr->sqfrom,  sizeof(int)*ndom);
+  ESL_REALLOC(tr->sqto,    sizeof(int)*ndom);
+  ESL_REALLOC(tr->hmmfrom, sizeof(int)*ndom);
+  ESL_REALLOC(tr->hmmto,   sizeof(int)*ndom);
+  ESL_REALLOC(tr->hmmto,   sizeof(int)*ndom);
+  ESL_REALLOC(tr->anch,    sizeof(int)*ndom);
   tr->ndomalloc = ndom;
   return eslOK;
   
@@ -281,16 +284,17 @@ void
 p7_trace_Destroy(P7_TRACE *tr)
 {
   if (tr == NULL) return;
-  if (tr->st      != NULL) free(tr->st);
-  if (tr->k       != NULL) free(tr->k);
-  if (tr->i       != NULL) free(tr->i);
-  if (tr->pp      != NULL) free(tr->pp);
-  if (tr->tfrom   != NULL) free(tr->tfrom);
-  if (tr->tto     != NULL) free(tr->tto);
-  if (tr->sqfrom  != NULL) free(tr->sqfrom);
-  if (tr->sqto    != NULL) free(tr->sqto);
-  if (tr->hmmfrom != NULL) free(tr->hmmfrom);
-  if (tr->hmmto   != NULL) free(tr->hmmto);
+  if (tr->st)      free(tr->st);
+  if (tr->k)       free(tr->k);
+  if (tr->i)       free(tr->i);
+  if (tr->pp)      free(tr->pp);
+  if (tr->tfrom)   free(tr->tfrom);
+  if (tr->tto)     free(tr->tto);
+  if (tr->sqfrom)  free(tr->sqfrom);
+  if (tr->sqto)    free(tr->sqto);
+  if (tr->hmmfrom) free(tr->hmmfrom);
+  if (tr->hmmto)   free(tr->hmmto);
+  if (tr->anch)    free(tr->anch);
   free(tr);
   return;
 }
@@ -911,12 +915,13 @@ p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol)
 
       for (d = 0; d < tr1->ndom; d++)
 	{
-	  if (tr1->tfrom[d]   != tr2->tfrom[d])    ESL_EXCEPTION(eslFAIL, "traces' tfrom differs, domain %d",   d);
-	  if (tr1->tto[d]     != tr2->tto[d])      ESL_EXCEPTION(eslFAIL, "traces' tto differs, domain %d",     d);
-	  if (tr1->sqfrom[d]  != tr2->sqfrom[d])   ESL_EXCEPTION(eslFAIL, "traces' sqfrom differs, domain %d",  d);
-	  if (tr1->sqto[d]    != tr2->sqto[d])     ESL_EXCEPTION(eslFAIL, "traces' sqto differs, domain %d",    d);
-	  if (tr1->hmmfrom[d] != tr2->hmmfrom[d])  ESL_EXCEPTION(eslFAIL, "traces' hmmfrom differs, domain %d", d);
-	  if (tr1->hmmto[d]   != tr2->hmmto[d])    ESL_EXCEPTION(eslFAIL, "traces' hmmto differs, domain %d",   d);
+	  if (tr1->tfrom[d]   != tr2->tfrom[d])    ESL_EXCEPTION(eslFAIL, "traces' tfrom differs, domain %d",     d);
+	  if (tr1->tto[d]     != tr2->tto[d])      ESL_EXCEPTION(eslFAIL, "traces' tto differs, domain %d",       d);
+	  if (tr1->sqfrom[d]  != tr2->sqfrom[d])   ESL_EXCEPTION(eslFAIL, "traces' sqfrom differs, domain %d",    d);
+	  if (tr1->sqto[d]    != tr2->sqto[d])     ESL_EXCEPTION(eslFAIL, "traces' sqto differs, domain %d",      d);
+	  if (tr1->hmmfrom[d] != tr2->hmmfrom[d])  ESL_EXCEPTION(eslFAIL, "traces' hmmfrom differs, domain %d",   d);
+	  if (tr1->hmmto[d]   != tr2->hmmto[d])    ESL_EXCEPTION(eslFAIL, "traces' hmmto differs, domain %d",     d);
+	  if (tr1->anch[d]    != tr2->anch[d])     ESL_EXCEPTION(eslFAIL, "traces' anchors differ for domain %d", d);
 	}
     }
   return eslOK;
@@ -1217,8 +1222,10 @@ p7_trace_Reverse(P7_TRACE *tr)
 int
 p7_trace_Index(P7_TRACE *tr)
 {
-  int z,z2;
-  int status;
+  int   z,z2;
+  float best_pp;
+  int   anchor;
+  int   status;
 
   tr->ndom = 0;
   z        = 0;
@@ -1232,13 +1239,24 @@ p7_trace_Index(P7_TRACE *tr)
 	  if ((status = p7_trace_GrowIndex(tr)) != eslOK) return status;
 	  
 	  tr->tfrom[tr->ndom]   = z;
-	  z += 2;		/* now we're either on M1/D1 for glocal, or MLk for local */
+	  z += 2;		/* skip B,{GL}; now we're either on M1/D1 for glocal, or MLk for local */
+
 	  tr->hmmfrom[tr->ndom] = tr->k[z];
-	  while (tr->st[z] == p7T_DG) z++;
+	  if (tr->pp) { best_pp = tr->pp[z]; anchor = z; }
+
+	  while (tr->st[z] == p7T_DG) {
+	    if (tr->pp && tr->pp[z] > best_pp) { best_pp = tr->pp[z]; anchor = z; }
+	    z++;
+	  }
+
 	  tr->sqfrom[tr->ndom]  = tr->i[z];
+	  if (tr->pp && tr->pp[z] > best_pp) { best_pp = tr->pp[z]; anchor = z; }
 
 	  /* skip ahead to state before the E */
-	  while (tr->st[z+1] != p7T_E) z++;
+	  while (tr->st[z+1] != p7T_E) { 
+	    if (tr->pp && tr->pp[z] > best_pp) { best_pp = tr->pp[z]; anchor = z; }
+	    z++;
+	  }
 
 	  /* G... Mm/Dm -> E or L... Mk/Dk->E */
 	  tr->hmmto[tr->ndom] = tr->k[z];
@@ -1247,6 +1265,7 @@ p7_trace_Index(P7_TRACE *tr)
 	  tr->sqto[tr->ndom] = tr->i[z2];
 	  tr->tto[tr->ndom]   = ++z;
 	  /* z is now on E state */
+	  if (tr->pp) { tr->anch[tr->ndom] = anchor; }
 	  tr->ndom++;
 	}
       z++;

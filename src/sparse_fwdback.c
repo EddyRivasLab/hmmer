@@ -1303,7 +1303,6 @@ main(int argc, char **argv)
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
-#include "esl_regexp.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 

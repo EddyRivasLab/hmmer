@@ -126,6 +126,7 @@ OBJS =  build.o\
 	reference_viterbi.o\
 	seqmodel.o\
 	sparse_fwdback.o\
+	sparse_masstrace.o\
 	tracealign.o\
 	p7_alidisplay.o\
 	p7_bg.o\
@@ -217,6 +218,7 @@ EXAMPLES = \
 	reference_fwdback_example\
 	reference_viterbi_example\
 	sparse_fwdback_example\
+	sparse_masstrace_example\
 	p7_alidisplay_example\
 	p7_bg_example\
 	p7_bg_example2\

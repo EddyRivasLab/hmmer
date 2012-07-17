@@ -524,6 +524,7 @@ typedef struct p7_trace_s {
   int  *tfrom,   *tto;	/* locations of B/E states in trace (0..tr->N-1)     */
   int  *sqfrom,  *sqto;	/* first/last M-emitted residue on sequence (1..L)   */
   int  *hmmfrom, *hmmto;/* first/last M/D state on model (1..M)              */
+  int  *anch;		/* anchor position (1.N)                             */
   int   ndomalloc;	/* current allocated size of these stacks            */
 } P7_TRACE;
 
