@@ -411,7 +411,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              qhstatus  = eslOK;
   int              sstatus  = eslOK;
   int              i;
-
+  double           resCnt = 0;
   /* used to keep track of the lengths of the sequences that are processed */
   ID_LENGTH_LIST  *id_length_list = NULL;
 
@@ -674,7 +674,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
       //need to re-compute e-values before merging (when list will be sorted)
-      double resCnt = 0;
       if (esl_opt_IsUsed(go, "-Z"))
     	  resCnt = 1000000*esl_opt_GetReal(go, "-Z");
       else
