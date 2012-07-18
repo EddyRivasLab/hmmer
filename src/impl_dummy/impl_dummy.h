@@ -24,6 +24,7 @@
  *****************************************************************/
 typedef P7_PROFILE P7_OPROFILE;
 
+#define p7O_NTRANS    8    /* 7 core transitions + BMk entry                    */
 enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3, p7O_MD   = 4, p7O_MI   = 5,  p7O_II = 6,  p7O_DD = 7 };
 
 typedef struct {

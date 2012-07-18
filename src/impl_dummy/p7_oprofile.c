@@ -372,12 +372,45 @@ p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, float *arr )
 
   for (i = 1; i <= om->M; i++) {
     for (j=0; j<om->abc->Kp; j++) {
-      arr[i*om->abc->Kp + j] = exp( om->rsc[j][(i) * p7P_NR     + p7P_MSC]));
+      arr[i*om->abc->Kp + j] = exp( om->rsc[j][(i) * p7P_NR     + p7P_MSC]);
     }
   }
 
   return eslOK;
 }
+
+
+/* Function:  p7_oprofile_UpdateFwdEmissionScores()
+ * Synopsis:  Update om match emissions to account for new bg, using
+ *            preallocated sc_tmp[].
+ *
+ * Purpose:   Change scores based on updated background model
+ *
+ */
+int
+p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, P7_HMM *hmm, float *sc_tmp)
+{
+  int     M   = om->M;    /* length of the query                                          */
+  int     i, j;
+  int     K   = om->abc->K;
+  int     Kp  = om->abc->Kp;
+
+  for (i = 1; i <= om->M; i++) {
+
+    for (j=0; j<K; j++)
+      sc_tmp[j] = log(hmm->mat[i][j] / bg->f[j]);
+
+    esl_abc_FExpectScVec(hmm->abc, sc_tmp, bg->f);
+
+    for (j=0; j<Kp; j++)
+      om->rsc[j][(i) * p7P_NR  + p7P_MSC] =  sc_tmp[j];
+
+  }
+
+  return eslOK;
+
+}
+
 
 
 /*------------ end, conversions from P7_OPROFILE ------------------*/
