@@ -595,10 +595,15 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
   if (hmm->eff_nseq >= 0)      { if (           fprintf  (fp, "EFFN  %f\n", hmm->eff_nseq)     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
   if (hmm->flags & p7H_CHKSUM) { if (           fprintf  (fp, "CKSUM %u\n", hmm->checksum)     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); } /* unsigned 32-bit */
 
-  if ((hmm->flags & p7H_GA)  && fprintf(fp, "GA    %.2f %.2f\n", hmm->cutoff[p7_GA1], hmm->cutoff[p7_GA2]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
-  if ((hmm->flags & p7H_TC)  && fprintf(fp, "TC    %.2f %.2f\n", hmm->cutoff[p7_TC1], hmm->cutoff[p7_TC2]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
-  if ((hmm->flags & p7H_NC)  && fprintf(fp, "NC    %.2f %.2f\n", hmm->cutoff[p7_NC1], hmm->cutoff[p7_NC2]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
-
+  if (hmm->abc->type == eslRNA || hmm->abc->type == eslDNA ) {
+    if ((hmm->flags & p7H_GA)  && fprintf(fp, "GA    %.2f\n", hmm->cutoff[p7_GA1]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+    if ((hmm->flags & p7H_TC)  && fprintf(fp, "TC    %.2f\n", hmm->cutoff[p7_TC1]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+    if ((hmm->flags & p7H_NC)  && fprintf(fp, "NC    %.2f\n", hmm->cutoff[p7_NC1]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  } else {
+    if ((hmm->flags & p7H_GA)  && fprintf(fp, "GA    %.2f %.2f\n", hmm->cutoff[p7_GA1], hmm->cutoff[p7_GA2]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+    if ((hmm->flags & p7H_TC)  && fprintf(fp, "TC    %.2f %.2f\n", hmm->cutoff[p7_TC1], hmm->cutoff[p7_TC2]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+    if ((hmm->flags & p7H_NC)  && fprintf(fp, "NC    %.2f %.2f\n", hmm->cutoff[p7_NC1], hmm->cutoff[p7_NC2]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  }
   if (hmm->flags & p7H_STATS) {
     if (format == p7_HMMFILE_3a)  {        /* reverse compatibility */
       if (fprintf(fp, "STATS LOCAL     VLAMBDA %f\n", hmm->evparam[p7_MLAMBDA]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
