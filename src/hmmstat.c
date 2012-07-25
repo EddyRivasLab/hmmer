@@ -25,7 +25,7 @@ static ESL_OPTIONS options[] = {
 
   { "--eval2score",  eslARG_NONE, FALSE, NULL, NULL,    NULL,  NULL,           NULL,            "compute score required to get E-value (E) for database of (Z) sequences",     0 },
   { "-Z",            eslARG_INT,    "1", NULL, "n>0",   NULL,  "--eval2score", NULL,            "database size, by default in # sequences , for --eval2score (default 1)",     0 },
-  { "--rescntZ",    eslARG_NONE,   FALSE, NULL, NULL,   NULL,  "--eval2score", NULL,            "for --eval2score, -Z is in thousands of residues (DNA models only)",          0 },
+  { "--rescntZ",    eslARG_NONE,   FALSE, NULL, NULL,   NULL,  "--eval2score", NULL,            "for --eval2score, -Z is in millions of residues (DNA models only)",          0 },
   { "-E",           eslARG_REAL,  "0.01", NULL, NULL,   NULL,  "--eval2score", NULL,            "E-value threshold, for --eval2score",                                         0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -186,7 +186,7 @@ main(int argc, char **argv)
         float nseq;
         float sc;
         if (esl_opt_IsUsed(go, "--rescntZ") )
-          nseq = (float)((long)z_val*1000) / (float)(hmm->max_length);
+          nseq = (float)((long)z_val*1000000) / (float)(hmm->max_length);
         else
           nseq = (float)z_val;
 
