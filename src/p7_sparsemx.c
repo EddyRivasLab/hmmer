@@ -711,19 +711,70 @@ p7_sparsemx_TracePostprobs(P7_SPARSEMX *sxd, P7_TRACE *tr)
       
       /* and finally, in logic of neutron-star-like-density: */
       switch (tr->st[z]) {
-      case p7T_ML:  tr->pp[z] = ((v < sm->n[i] && sm->k[i][v] == k) ? *(dpc + p7S_NSCELLS * v + p7S_ML) : 0.0); break;
-      case p7T_MG:  tr->pp[z] = ((v < sm->n[i] && sm->k[i][v] == k) ? *(dpc + p7S_NSCELLS * v + p7S_MG) : 0.0); break;
-      case p7T_IL:  tr->pp[z] = ((v < sm->n[i] && sm->k[i][v] == k) ? *(dpc + p7S_NSCELLS * v + p7S_IL) : 0.0); break;
-      case p7T_IG:  tr->pp[z] = ((v < sm->n[i] && sm->k[i][v] == k) ? *(dpc + p7S_NSCELLS * v + p7S_IG) : 0.0); break;
+      case p7T_ML: case p7T_MG: tr->pp[z] = ((v < sm->n[i] && sm->k[i][v] == k) ? *(dpc + p7S_NSCELLS * v + p7S_ML) + *(dpc + p7S_NSCELLS * v + p7S_MG) : 0.0); break;
+      case p7T_IL: case p7T_IG: tr->pp[z] = ((v < sm->n[i] && sm->k[i][v] == k) ? *(dpc + p7S_NSCELLS * v + p7S_IL) + *(dpc + p7S_NSCELLS * v + p7S_IG) : 0.0); break;
       case p7T_N:   tr->pp[z] = ((i <= last_ib) ? xc[p7S_N]  : 0.0);  break;
       case p7T_J:   tr->pp[z] = ((i <= last_ib) ? xc[p7S_JJ] : 0.0);  break;
       case p7T_C:   tr->pp[z] = ((i <= last_ib) ? xc[p7S_CC] : 1.0);  break;
-      default:      ESL_EXCEPTION(eslEINCONCEIVABLE, "sorry, after all that, that's rather embarrassing.");
+      default:      ESL_EXCEPTION(eslEINCONCEIVABLE, "sorry. after all that, that's rather embarrassing.");
       }
     }
   return eslOK;
 }
 
+
+int
+p7_sparsemx_ExpectedDomains(P7_SPARSEMX *sxd, int iae, int ibe, float *ret_ndom_expected)
+{
+  const P7_SPARSEMASK *sm = sxd->sm;
+  float  expB = 0.;
+  float  expE = 0.;
+  int    i;
+  float *xc   = sxd->xmx;
+
+  for (i = 0; i <= ibe; i++)
+    {
+      if (! (sm->n[i] || (i < sm->L && sm->n[i+1]))) continue; // skip unstored special rows
+      if (i >= iae-1 && i < ibe) expB += xc[p7S_B];            // B(i-1) is pp of starting on i 
+      if (i >= iae)              expE += xc[p7S_E];
+      xc += p7S_NXCELLS;
+    }
+
+  /* Over the whole sequence, expB=expE, within roundoff error
+   * accumulation.  But on an envelope iae..ibe of a full-sequence
+   * Decoding matrix, expE is not necessarily equal to expB; one end
+   * may be better determined and entirely within the envelope, for
+   * example. So which do we use as the expected # of domains in the
+   * envelope? Since the main use of this function is to decide
+   * whether an envelope is simply a single domain or not -- whether
+   * we can directly take a per-domain score from the whole-seq
+   * Forward matrix -- we report the max(B,E), to be conservative
+   * about flagging when it looks like a second (or more) domain
+   * is impinging on this envelope.
+   */
+  *ret_ndom_expected = ESL_MAX(expE, expB);
+  return eslOK;
+}
+
+
+int
+p7_sparsemx_EnvelopeScore(P7_PROFILE *gm, P7_SPARSEMX *sxf, int iae, int ibe, float *ret_fwdsc)
+{
+  float Ci1, Ni1, Cj;
+  float Ld;
+  float tCC;
+  float delta;
+
+  /* Find first stored special row i>=iae-1; get C(i-1), N(i-1) from there; reset iae=i */
+  
+  /* Find last stored special row i <= ibe; get C(j) from there; reset ibe=i */
+  
+  Ld = ibe - iae + 1;
+
+  delta = 1. - 
+  
+
+}
 
 /*****************************************************************
  * 6. Debugging tools for P7_SPARSEMX

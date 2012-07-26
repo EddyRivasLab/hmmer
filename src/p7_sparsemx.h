@@ -140,6 +140,7 @@ extern void           p7_sparsemx_Destroy  (P7_SPARSEMX *sx);
 
 /* Extracting information from a sparse DP matrix */
 extern int   p7_sparsemx_TracePostprobs(P7_SPARSEMX *sxd, P7_TRACE *tr);
+extern int   p7_sparsemx_ExpectedDomains(P7_SPARSEMX *sxd, int iae, int ibe, float *ret_ndom_expected);
 
 /* P7_SPARSEMX debugging tools {p7_sparsemx.c} */
 extern char *p7_sparsemx_DecodeSpecial(int type);
