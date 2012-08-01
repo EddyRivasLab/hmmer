@@ -85,7 +85,7 @@ if ($output !~ /$expect/s) {
 $expect = 
     q[1.6   11.8   0.0  random   3299961 3299978\s+
         3.3   10.9   0.0  random   4499980 4499997\s+
-        8.1    9.7   0.0  random   1979941 1979960];
+        8.2    9.7   0.0  random   1979941 1979960];
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 2\n";
 }
