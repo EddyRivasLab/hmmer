@@ -192,6 +192,7 @@ p7_sparsemask_MinSizeof(const P7_SPARSEMASK *sm)
   return n;
 }
 
+
 /* Function:  p7_sparsemask_Reuse()
  * Synopsis:  Reuse a <P7_SPARSEMASK>.
  *
@@ -631,6 +632,53 @@ p7_sparsemx_MinSizeof(const P7_SPARSEMASK *sm)
 }
 
 
+/* Function:  p7_sparsemx_GetSpecial()
+ * Synopsis:  Look up and return cell value for a special state
+ *
+ * Purpose:   Returns the value for state <s> on row (sequence position) <i> 
+ *            in the sparse matrix <sx>. 
+ *            
+ *            The caller must know that specials for this row <i> is
+ *            stored; <i> must lie in <ia-1..ib> for a stored segment
+ *            <g>. If caller requests an invalid (unstored) <i> this
+ *            functions will fail immediately with an <esl_fatal()>
+ *            coding error.
+ *
+ *            The <P7_SPARSEMX> is designed for fast sweeps Forward or
+ *            Backward, not for random access of its values. Random
+ *            access of one value with a <p7_sparsemx_Get*()> requires
+ *            a partial sweep, and so is relatively expensive. If you
+ *            need to do many random accesses, it is probably better
+ *            to implement your own ordered sweep across the values you
+ *            need, rather than calling <p7_sparsemx_Get*()> many times.
+ *
+ * Args:      sx - sparse matrix (of any type except p7S_ENVSCORE)
+ *            i  - which row, 1..L, must be ia-1..ib in some stored segment
+ *            s  - which special state; example: p7S_C
+ *
+ * Returns:   the looked-up value.
+ */
+float
+p7_sparsemx_GetSpecial(const P7_SPARSEMX *sx, int i, int s)
+{
+  float *xc = sx->xmx;
+  int g, ia, ib;
+
+  for (g = 0; g < sx->sm->nseg; g++)
+    {
+      ia = sx->sm->i[2*g];
+      ib = sx->sm->i[2*g+1];
+      
+      if      (i > ib)    { xc += p7S_NXCELLS * (ib-ia+2); continue;     }
+      else if (i >= ia-1) { xc += p7S_NXCELLS * (i-ia+1);  return xc[s]; } // normal return
+      else    esl_fatal("i=%d was not stored - why are you asking for it?");
+    }
+  esl_fatal("i=%d was not stored - why are you asking for it?");
+  /*NOTREACHED*/
+  return -eslINFINITY;
+}
+
+
 int
 p7_sparsemx_Reuse(P7_SPARSEMX *sx)
 {
@@ -638,7 +686,6 @@ p7_sparsemx_Reuse(P7_SPARSEMX *sx)
   sx->type = p7S_UNSET;
   return eslOK;
 }
-
 
 void
 p7_sparsemx_Destroy(P7_SPARSEMX *sx)
@@ -757,24 +804,136 @@ p7_sparsemx_ExpectedDomains(P7_SPARSEMX *sxd, int iae, int ibe, float *ret_ndom_
 }
 
 
+/* Function:  p7_sparsemx_ApproxEnvScore()
+ * Synopsis:  Envelope score by fast Forward endpoint approximation method.
+ *
+ * Purpose:   Implements envelope scoring by the fast Forward endpoint
+ *            approximation method. Returns the envelope score of
+ *            envelope <iae..ibe> in the target sequence for which
+ *            we've calculated a Forward matrix <sxf>, comparing it to
+ *            profile <gm>. The "envelope score" is defined as the
+ *            Forward score for the entire sequence <1..L>, subject to
+ *            the condition that there is only a single domain that lies
+ *            somewhere within <iae..ibe> on the target sequence.
+ *
+ *            <*ret_envsc> is a raw Forward score in nats.  The caller
+ *            still needs to include the null model(s) contribution to
+ *            this score and convert it to bits, before calculating
+ *            P-values or reporting it in output.
+ *            
+ *            Caller has determined that the envelope <iae..ibe>
+ *            contains only a single domain (negligible probability
+ *            mass in any more than that); otherwise, this technique
+ *            does not work. 
+ *            
+ *            The model is assumed to have <tCC=tJJ=tNN> equal
+ *            transition scores, or this method does not work.
+ *            
+ *            For a single-domain envelope <iae..ibe>, with equal
+ *            CC,JJ,TT transition scores, the score <delta>
+ *            contributed by the <iae..ibe> region is
+ *            
+ *            $\delta = C_j 
+ *                      + \log \[ 1 - e^{C_{i-1} + L_e \tau_{CC} - C_j} \]
+ *                      - \log \[ e^{N_{i-1}} + e^{C_{i-1}} \]$
+ *            
+ *            where $L_e$ is the envelope length <ibe-iae+1>. We then
+ *            add the <S->N...> contribution for <iae-1> flanking
+ *            residues and <...C->T> contribution for <L-ibe> flanking
+ *            residues to convert <delta> to a raw Forward score for
+ *            the whole sequence, constrained to a single domain in
+ *            the envelope.
+ *
+ * Args:      gm        - profile used to create the Forward matrix
+ *            sxf       - Forward matrix calculated for gm x seq comparison
+ *            iae       - left endpoint of envelope, 1..L on target seq
+ *            ibe       - right endpoint of envelope, 1..L on target seq
+ *            ret_envsc - RETURN: raw envelope Forward score, in nats
+ *
+ * Returns:   <eslOK> on success, and <*ret_envsc> contains the raw 
+ *            envelope Forward score in nats.
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      SRE:J10/43-45.
+ */
 int
-p7_sparsemx_EnvelopeScore(P7_PROFILE *gm, P7_SPARSEMX *sxf, int iae, int ibe, float *ret_fwdsc)
+p7_sparsemx_ApproxEnvScore(P7_PROFILE *gm, P7_SPARSEMX *sxf, int iae, int ibe, float *ret_envsc)
 {
+  const float *xc = sxf->xmx;
   float Ci1, Ni1, Cj;
-  float Ld;
-  float tCC;
-  float delta;
+  float deltaC;
+  float Le;
+  int   g, ia, ib, last_ib;
+  float envsc;
 
+  /* Accessing the {CN}(iae-1) and C(ibe) entries is complicated because of sparse storage; forgive. */
   /* Find first stored special row i>=iae-1; get C(i-1), N(i-1) from there; reset iae=i */
+  for (g = 0; g < sxf->sm->nseg; g++)
+    {
+      ia = sxf->sm->i[g*2];
+      ib = sxf->sm->i[g*2+1];
+      
+      if      (iae < ia-1) {                             iae = ia;  Ci1 = xc[p7S_C]; Ni1 = xc[p7S_N]; break; }
+      else if (iae <= ib)  { xc += (iae-ia)*p7S_NXCELLS; ia  = iae; Ci1 = xc[p7S_C]; Ni1 = xc[p7S_N]; break; }
+      else    xc += (ib-ia+2) * p7S_NXCELLS;
+    }
+  /* now xc is on row ia-1, in segment g, which ends at ib. check if ib is in that segment. */
   
-  /* Find last stored special row i <= ibe; get C(j) from there; reset ibe=i */
-  
-  Ld = ibe - iae + 1;
+  /* Find last stored row j<=ibe, get C(j) from there; reset ibe=j */
+  if (ib < iae)  { *ret_envsc = -eslINFINITY; return eslOK; }
+  if (ibe <= ib) {
+    xc += (ibe - ia + 1) * p7S_NXCELLS;
+    Cj = xc[p7S_C];
+  } else {
+    xc     += (ib-ia+1) * p7S_NXCELLS; // now xc is on last supercell (ibe) in previous segment
+    last_ib = ib;
+    for (g = g+1; g < sxf->sm->nseg; g++)
+      {
+	ia = sxf->sm->i[g*2];
+	ib = sxf->sm->i[g*2+1];
+	
+	if      (ibe < ia-1) { ibe = last_ib;                 Cj = xc[p7S_C]; break; }
+	else if (ibe <= ib)  { xc += (ibe-ia+1)*p7S_NXCELLS;  Cj = xc[p7S_C]; break; }
+	else  {
+	  xc += (ib-ia+2)*p7S_NXCELLS;
+	  last_ib = ib;
+	}
+      }
+    if (g == sxf->sm->nseg) { ibe = last_ib; Cj = xc[p7S_C]; }
+  }
+  /* now iae,ibe may have been moved, to correspond to outermost stored rows in the envelope */
 
-  delta = 1. - 
-  
 
+  /* First part of envsc is Cj + log(1-exp(-deltaC)), and the log term needs
+   * special numerical handling; using lim x->0 1-e^-x = x for small deltaC,
+   * lim x->0 log (1-x) = -x for large deltaC
+   */
+  envsc  = Cj;			/* first term. */
+  Le     = ibe - iae + 1;
+  deltaC = Cj - Ci1 - Le * gm->xsc[p7P_C][p7P_LOOP];
+
+  if      (deltaC  < 0) ESL_EXCEPTION(eslEINCONCEIVABLE, "no, something's wrong, this intermediate term is >= 0 by construction");
+  if      (deltaC == 0)                  envsc = -eslINFINITY;
+  else if (deltaC < eslSMALLX1)          envsc += logf(deltaC);        // logf(deltaC) -> -eslINFINITY, for small deltaC ->0
+  else if (exp(-1.*deltaC) < eslSMALLX1) envsc -= expf(-1.*deltaC);    // expf(-deltaC) -> 0, for large deltaC -> inf
+  else                                   envsc += logf(1.-exp(-1.*deltaC));
+
+  /* third term is a standard log-sum-exp-2, may as well use our fast approx */
+  envsc -= p7_FLogsum(Ci1, Ni1);
+  
+  /* left flank: envsc already includes ...N->B->...; add S->N..N flank. S->N is 1.0.  */
+  envsc += gm->xsc[p7P_N][p7P_LOOP] * (iae-1);
+  
+  /* right flank: envsc includes E->C; add C..C->T flank */
+  envsc += gm->xsc[p7P_C][p7P_LOOP] * (sxf->sm->L - ibe);
+  envsc += gm->xsc[p7P_C][p7P_MOVE];
+
+  *ret_envsc = envsc;
+  return eslOK;
 }
+
+
 
 /*****************************************************************
  * 6. Debugging tools for P7_SPARSEMX

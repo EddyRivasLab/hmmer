@@ -8,6 +8,7 @@
 
 #include "hmmer.h"
 #include "p7_sparsemx.h"
+#include "sparse_envscore.h"
 
 int
 p7_sparse_masstrace_Up(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMX *fwd, P7_SPARSEMX *mass, P7_TRACE *tr, int z, float massthresh, int *ret_iae, int *ret_kae)
@@ -150,6 +151,8 @@ p7_sparse_masstrace_Up(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
 	  rhoc -= p7S_NSCELLS;
 	  dpc  -= p7S_NSCELLS;
 	}
+
+      printf("i=%d. rowmass = %.4f\n", i, rowmass);
 
       if (rowmass < massthresh)  iae_proven_done = TRUE; else iae = i;
       if (iae_proven_done && kae_proven_done) break;
@@ -372,6 +375,7 @@ main(int argc, char **argv)
   float           vsc, fsc;
   int             iae,ibe;
   int             kae,kbe;
+  float           envsc, envsc2;
   int             d;
   int             status;
 
@@ -431,11 +435,18 @@ main(int argc, char **argv)
 
       p7_sparse_masstrace_Up  (sq->dsq, sq->n, gm, sxf, sxm, tr, tr->anch[d], 0.1, &iae, &kae);
       p7_sparse_masstrace_Down(sq->dsq, sq->n, gm, sxb, sxm, tr, tr->anch[d], 0.1, &ibe, &kbe);
+      p7_sparsemx_Reuse(sxm);
       
-      printf("# domain %3d  iali: %d..%d [%daa]  ienv: %d..%d [%daa]  kali: %d..%d [%daa]  kenv: %d..%d [%daa]\n",
+      p7_sparsemx_ApproxEnvScore(gm, sxf, iae, ibe, &envsc);
+
+      p7_sparsemx_Reinit(sxm, sm);
+      p7_SparseEnvScore(sq->dsq, sq->n, gm, iae, ibe, kae, kbe, sxm, &envsc2);
+
+      printf("# domain %3d  iali: %d..%d [%daa]  ienv: %d..%d [%daa]  kali: %d..%d [%daa]  kenv: %d..%d [%daa]  envsc: %.2f  envsc2: %.2f\n",
 	     d,
 	     tr->sqfrom[d],  tr->sqto[d],  tr->sqto[d]-tr->sqfrom[d]+1, iae, ibe, ibe-iae+1,
-	     tr->hmmfrom[d], tr->hmmto[d], tr->hmmto[d]-tr->hmmfrom[d]+1, kae, kbe, kbe-kae+1);
+	     tr->hmmfrom[d], tr->hmmto[d], tr->hmmto[d]-tr->hmmfrom[d]+1, kae, kbe, kbe-kae+1,
+	     envsc, envsc2);
 
       p7_sparsemx_Reuse(sxm);
     }

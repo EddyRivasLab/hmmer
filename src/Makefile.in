@@ -125,6 +125,7 @@ OBJS =  build.o\
 	reference_fwdback.o\
 	reference_viterbi.o\
 	seqmodel.o\
+	sparse_envscore.o\
 	sparse_fwdback.o\
 	sparse_masstrace.o\
 	tracealign.o\

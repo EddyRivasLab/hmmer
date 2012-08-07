@@ -11,6 +11,7 @@
 #include "hmmer.h"
 #include "p7_sparsemx.h"
 #include "sparse_masstrace.h"
+#include "sparse_envscore.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -34,11 +35,10 @@ main(int argc, char **argv)
   P7_OPROFILE    *om      = NULL;
   P7_FILTERMX    *ox      = NULL;
   P7_SPARSEMASK  *sm      = NULL;
-  P7_SPARSEMX    *sxv     = NULL;
+  P7_SPARSEMX    *sx      = NULL;
   P7_SPARSEMX    *sxf     = NULL;
   P7_SPARSEMX    *sxb     = NULL;
   P7_SPARSEMX    *sxd     = NULL;
-  P7_SPARSEMX    *sxm     = NULL;
   P7_TRACE       *tr      = p7_trace_CreateWithPP();
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
@@ -47,6 +47,9 @@ main(int argc, char **argv)
   float           P;
   int             d;
   int             iae,ibe, kae,kbe;
+  float           ndom_exp;
+  float           Bprob, Eprob;
+  float           envsc_approx, envsc_exact;
   int             status;
   
 
@@ -72,11 +75,10 @@ main(int argc, char **argv)
   /* Allocate matrices and sparse mask for a default seq size, 500 */
   ox  = p7_filtermx_Create  (gm->M, 500, ESL_MBYTES(32));  
   sm  = p7_sparsemask_Create(gm->M, 500);
-  sxv = p7_sparsemx_Create  (sm);
+  sx  = p7_sparsemx_Create  (sm);
   sxf = p7_sparsemx_Create  (sm);
   sxb = p7_sparsemx_Create  (sm);
   sxd = p7_sparsemx_Create  (sm);
-  sxm = p7_sparsemx_Create  (sm);
   
   /* Loop over sequences in db... */
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
@@ -113,26 +115,42 @@ main(int argc, char **argv)
       p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm);
 
       /* Sparse postprocessors */
-      p7_sparsemx_Reinit(sxv, sm);
+      p7_sparsemx_Reinit(sx,  sm);
       p7_sparsemx_Reinit(sxf, sm);
       p7_sparsemx_Reinit(sxb, sm);
       p7_sparsemx_Reinit(sxd, sm);
 
-      p7_SparseViterbi (sq->dsq, sq->n, gm, sxv, tr, &vsc);
+      p7_SparseViterbi (sq->dsq, sq->n, gm, sx,  tr, &vsc);
       p7_SparseForward (sq->dsq, sq->n, gm, sxf,     &fsc);
       p7_SparseBackward(sq->dsq, sq->n, gm, sxb,     NULL);
       p7_SparseDecoding(gm, sxf, sxb, sxd);
       p7_sparsemx_TracePostprobs(sxd, tr);
       p7_trace_Index(tr);
+      p7_sparsemx_Reuse(sx);
       
       for (d = 0; d < tr->ndom; d++)
 	{
-	  p7_sparsemx_Reinit(sxm, sm);
-
-	  p7_sparse_masstrace_Up  (sq->dsq, sq->n, gm, sxf, sxm, tr, tr->anch[d], 0.1, &iae, &kae);
-	  p7_sparse_masstrace_Down(sq->dsq, sq->n, gm, sxb, sxm, tr, tr->anch[d], 0.1, &ibe, &kbe);
+	  p7_sparsemx_Reinit(sx, sm);
+	  p7_sparse_masstrace_Up  (sq->dsq, sq->n, gm, sxf, sx, tr, tr->anch[d], 0.1, &iae, &kae);
+	  p7_sparse_masstrace_Down(sq->dsq, sq->n, gm, sxb, sx, tr, tr->anch[d], 0.1, &ibe, &kbe);
+	  p7_sparsemx_Reuse(sx);
 	  
-	  p7_sparsemx_Reuse(sxm);
+	  p7_sparsemx_ExpectedDomains(sxd, iae, ibe, &ndom_exp);
+	  Bprob = p7_sparsemx_GetSpecial(sxd, iae-1, p7S_B);
+	  Eprob = p7_sparsemx_GetSpecial(sxd, ibe,   p7S_E);
+	  
+	  p7_sparsemx_ApproxEnvScore(gm, sxf, iae, ibe, &envsc_approx);
+
+	  p7_sparsemx_Reinit(sx, sm);
+	  p7_SparseEnvScore(sq->dsq, sq->n, gm, iae, ibe, kae, kbe, sx, &envsc_exact);
+	  p7_sparsemx_Reuse(sx);
+
+	  printf("%-20s %-20s %3d %5d %5d %5d %5d %5d %5d %5d %5d %5.2f %6.4f %6.4f %9.3f %9.3f\n",
+		  sq->name, gm->name, d,
+		  tr->sqfrom[d], tr->sqto[d], tr->hmmfrom[d], tr->hmmto[d],
+		  iae, ibe, kae, kbe,  
+		  ndom_exp, Bprob, Eprob,
+		  envsc_approx, envsc_exact);
 	}
 
     NEXT_SEQ:
@@ -140,7 +158,7 @@ main(int argc, char **argv)
       p7_trace_Reuse(tr);
       p7_filtermx_Reuse(ox);    
       p7_sparsemask_Reuse(sm);  // most seqs don't use sparsemask: don't need to reuse because we never reinit'ed
-      p7_sparsemx_Reuse(sxv);
+      p7_sparsemx_Reuse(sx);
       p7_sparsemx_Reuse(sxf);
       p7_sparsemx_Reuse(sxb);
       p7_sparsemx_Reuse(sxd);
@@ -150,9 +168,10 @@ main(int argc, char **argv)
   p7_hmmfile_Close(hfp);
   esl_sq_Destroy(sq);
   p7_trace_Destroy(tr);
-  p7_sparsemx_Destroy(sxv);
+  p7_sparsemx_Destroy(sx);
   p7_sparsemx_Destroy(sxf);
   p7_sparsemx_Destroy(sxb);
+  p7_sparsemx_Destroy(sxd);
   p7_sparsemask_Destroy(sm);
   p7_filtermx_Destroy(ox);
   p7_oprofile_Destroy(om);

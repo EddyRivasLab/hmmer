@@ -95,6 +95,7 @@ typedef struct {
 #define p7S_ALIGNMENT 4
 #define p7S_VITERBI   5
 #define p7S_MASSTRACE 6
+#define p7S_ENVSCORE  7
 
 typedef struct {
   float  *dp;		// main DP supercells. sm->ncells <= dalloc. each supercell contains p7S_NSCELLS values. 
@@ -134,13 +135,15 @@ extern int            p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm);
 extern P7_SPARSEMX   *p7_sparsemx_Create   (P7_SPARSEMASK *sm);
 extern int            p7_sparsemx_Reinit   (P7_SPARSEMX *sx, P7_SPARSEMASK *sm);
 extern size_t         p7_sparsemx_Sizeof   (const P7_SPARSEMX *sx);
-extern size_t         p7_sparsemx_MinSizeof(const P7_SPARSEMASK *sm);
+extern size_t         p7_sparsemx_MinSizeof(const P7_SPARSEMASK *sm); // not a typo: yes, it takes a SPARSEMASK, not a SPARSEMX
+extern float          p7_sparsemx_GetSpecial(const P7_SPARSEMX *sx, int i, int s);
 extern int            p7_sparsemx_Reuse    (P7_SPARSEMX *sx);
 extern void           p7_sparsemx_Destroy  (P7_SPARSEMX *sx);
 
 /* Extracting information from a sparse DP matrix */
 extern int   p7_sparsemx_TracePostprobs(P7_SPARSEMX *sxd, P7_TRACE *tr);
 extern int   p7_sparsemx_ExpectedDomains(P7_SPARSEMX *sxd, int iae, int ibe, float *ret_ndom_expected);
+extern int   p7_sparsemx_ApproxEnvScore(P7_PROFILE *gm, P7_SPARSEMX *sxf, int iae, int ibe, float *ret_envsc);
 
 /* P7_SPARSEMX debugging tools {p7_sparsemx.c} */
 extern char *p7_sparsemx_DecodeSpecial(int type);
