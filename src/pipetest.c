@@ -10,6 +10,7 @@
 
 #include "hmmer.h"
 #include "p7_sparsemx.h"
+#include "sparse_fwdback.h"
 #include "sparse_masstrace.h"
 #include "sparse_envscore.h"
 
@@ -145,12 +146,13 @@ main(int argc, char **argv)
 	  p7_SparseEnvScore(sq->dsq, sq->n, gm, iae, ibe, kae, kbe, sx, &envsc_exact);
 	  p7_sparsemx_Reuse(sx);
 
-	  printf("%-20s %-20s %3d %5d %5d %5d %5d %5d %5d %5d %5d %5.2f %6.4f %6.4f %9.3f %9.3f\n",
-		  sq->name, gm->name, d,
-		  tr->sqfrom[d], tr->sqto[d], tr->hmmfrom[d], tr->hmmto[d],
-		  iae, ibe, kae, kbe,  
-		  ndom_exp, Bprob, Eprob,
-		  envsc_approx, envsc_exact);
+	  printf("%-30s %-20s %3d %5d %5d %5d %5d %5d %5d %5d %5d %5.2f %6.4f %6.4f %9.3f %9.3f %9.3f\n",
+		 sq->name, gm->name, d+1,
+		 tr->sqfrom[d], tr->sqto[d], tr->hmmfrom[d], tr->hmmto[d],
+		 iae, ibe, kae, kbe,  
+		 ndom_exp, Bprob, Eprob,
+		 envsc_approx, envsc_exact, 
+		 envsc_approx-envsc_exact);
 	}
 
     NEXT_SEQ:

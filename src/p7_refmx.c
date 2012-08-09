@@ -704,7 +704,7 @@ validate_alignment(P7_REFMX *rmx, char *errbuf)
  *            DP matrix <rmx>. Returns <eslOK> if
  *            it passes. Returns <eslFAIL> if it fails,
  *            and sets <errbuf> to contain an explanation,
- *            if caller provided an <errbuf>
+ *            if caller provided an <errbuf>.
  *
  * Args:      rmx    - reference DP matrix to validate.
  *            errbuf - allocated space for err msg, or NULL

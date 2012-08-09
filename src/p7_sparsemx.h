@@ -8,7 +8,7 @@
  * Contents:
  *    1. P7_SPARSEMASK structure declaration, indexing constants
  *    2. P7_SPARSEMX structure declaration, indexing constants
- *    3. Function declarations from p7_sparsemx.c, sparse_fwdback.c
+ *    3. Function declarations from p7_sparsemx.c
  *    4. Notes:
  *        [1] On the layout of P7_SPARSEMASK: why kmem[] is in reverse order during construction
  *        [2] On phases of construction of P7_SPARSEMASK: why k[], i[] aren't set until the end
@@ -113,7 +113,7 @@ typedef struct {
  * 3. Function declarations from p7_sparsemx.c, sparse_fwdback.c
  *****************************************************************/
 
-/* P7_SPARSEMASK object management {p7_sparsemx.c} */
+/* P7_SPARSEMASK object management */
 extern P7_SPARSEMASK *p7_sparsemask_Create   (int M, int L);
 extern int            p7_sparsemask_Reinit   (P7_SPARSEMASK *sm, int M, int L);
 extern size_t         p7_sparsemask_Sizeof   (const P7_SPARSEMASK *sm);
@@ -121,17 +121,17 @@ extern size_t         p7_sparsemask_MinSizeof(const P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Reuse    (P7_SPARSEMASK *sm);
 extern void           p7_sparsemask_Destroy  (P7_SPARSEMASK *sm);
 
-/* P7_SPARSEMASK construction API {p7_sparsemx.c} */
+/* P7_SPARSEMASK construction API */
 extern int            p7_sparsemask_AddAll   (P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_StartRow (P7_SPARSEMASK *sm, int i);
 extern int            p7_sparsemask_Add      (P7_SPARSEMASK *sm, int q, int r);
 extern int            p7_sparsemask_FinishRow(P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Finish   (P7_SPARSEMASK *sm);
 
-/* P7_SPARSEMASK debugging tools {p7_sparsemx.c} */
+/* P7_SPARSEMASK debugging tools */
 extern int            p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm);
 
-/* P7_SPARSEMX object management {p7_sparsemx.c} */
+/* P7_SPARSEMX object management */
 extern P7_SPARSEMX   *p7_sparsemx_Create   (P7_SPARSEMASK *sm);
 extern int            p7_sparsemx_Reinit   (P7_SPARSEMX *sx, P7_SPARSEMASK *sm);
 extern size_t         p7_sparsemx_Sizeof   (const P7_SPARSEMX *sx);
@@ -145,18 +145,13 @@ extern int   p7_sparsemx_TracePostprobs(P7_SPARSEMX *sxd, P7_TRACE *tr);
 extern int   p7_sparsemx_ExpectedDomains(P7_SPARSEMX *sxd, int iae, int ibe, float *ret_ndom_expected);
 extern int   p7_sparsemx_ApproxEnvScore(P7_PROFILE *gm, P7_SPARSEMX *sxf, int iae, int ibe, float *ret_envsc);
 
-/* P7_SPARSEMX debugging tools {p7_sparsemx.c} */
+/* P7_SPARSEMX debugging tools */
 extern char *p7_sparsemx_DecodeSpecial(int type);
 extern int   p7_sparsemx_Dump(FILE *ofp, P7_SPARSEMX *sx);
 extern int   p7_sparsemx_DumpWindow(FILE *ofp, P7_SPARSEMX *sx, int i1, int i2, int ka, int kb);
-extern int   p7_sparsemx_Copy2Reference(P7_SPARSEMX *sx, P7_REFMX *rx);
-
-/* Sparse DP routines {sparse_fwdback.c} */
-extern int p7_SparseViterbi (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx, P7_TRACE *opt_tr, float *opt_sc);
-extern int p7_SparseForward (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx,                   float *opt_sc);
-extern int p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx,                   float *opt_sc);
-extern int p7_SparseDecoding(const P7_PROFILE *gm, const P7_SPARSEMX *sxf, P7_SPARSEMX *sxb, P7_SPARSEMX *sxd);
-
+extern int   p7_sparsemx_Copy2Reference  (P7_SPARSEMX *sx, P7_REFMX *rx);
+extern int   p7_sparsemx_CompareReference(P7_SPARSEMX *sx, P7_REFMX *rx, float tol);
+extern int   p7_sparsemx_Validate(P7_SPARSEMX *sx, char *errbuf);
 #endif /*P7_SPARSEMX_INCLUDED*/
 
 /*****************************************************************

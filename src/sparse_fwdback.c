@@ -26,28 +26,44 @@
  * 1. Sparse Forward
  *****************************************************************/
 
+/* Function:  p7_SparseForward()
+ * Synopsis:  Forward algorithm, by sparse DP.
+ *
+ * Purpose:   Compare profile <gm> to sequence <dsq> (of length <L>),
+ *            by the Forward algorithm, using sparse dynamic programming.
+ *            Fill in the sparse DP matrix <sx>, and the Forward score is
+ *            also optionally returned in <opt_sc>.
+ *
+ * Args:      dsq     -  target sequence 1..L
+ *            L       -  length of dsq
+ *            gm      -  profile
+ *            sx      -  Forward matrix to fill; allocated by caller
+ *            opt_sc  -  optRETURN: raw Forward score, in nats
+ *
+ * Returns:   <eslOK> on success. Matrix <sx> is filled. The raw Forward score
+ *            in nats is optionally in <*opt_sc>.
+ */
 int
 p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx, float *opt_sc)
 {
-  P7_SPARSEMASK *sm   = sx->sm;
-  float         *xpc  = sx->xmx;	 /* ptr that steps through current special cells   */
-  float         *dpc  = sx->dp;	         /* ptr to step thru current row i main DP cells */
-  float         *dpp;			 /* ptr to step thru previous row i-1 main DP cells */
-  float         *last_dpc;		 /* used to reinit dpp after each sparse row computation */
-  float const *tsc    = gm->tsc;	 /* sets up TSC() macro, access to profile's transitions */
+  P7_SPARSEMASK *sm   = sx->sm;	         /* just for clarity                                          */
+  float         *xpc  = sx->xmx;	 /* ptr that steps through current special cells              */
+  float         *dpc  = sx->dp;	         /* ptr to step thru current row i main DP cells              */
+  float         *dpp;			 /* ptr to step thru previous row i-1 main DP cells           */
+  float         *last_dpc;		 /* used to reinit dpp after each sparse row computation      */
+  float const *tsc    = gm->tsc;	 /* sets up TSC() macro, access to profile's transitions      */
   float const *rsc;			 /* will be set up for MSC(), ISC() macros for residue scores */
   int          ng;
   float        xE, xN, xJ, xB, xL, xG, xC;  /* tmp scores on special states. only stored when in row bands, and on ia-1 before a seg */
-  float        mlc, mgc;		 /* temporary score calculations M(i,k)         */
-  float        dlc, dgc;		 /* precalculated D(i,k+1) value on current row */
-  int         *kc = sm->k[0];		 /* <kc> points to the list of sparse cell indices k for current row i */
-  int         *kp;			 /* <kp> points to the previous row's sparse cell index list */
-  int          i,k;	      	         /* i,k row,col (seq position, profile position) cell coords */
-  int          y,z;			 /* indices in lists of k coords on prev, current row */
+  float        mlc, mgc;		 /* temporary score calculations M(i,k)                       */
+  float        dlc, dgc;		 /* precalculated D(i,k+1) value on current row               */
+  int         *kc = sm->k[0];		 /* <kc> points to list of sparse indices k for curr row i    */
+  int         *kp;			 /* <kp> points to the previous row's sparse cell index list  */
+  int          i,k;	      	         /* i,k row,col (seq position, profile position) cell coords  */
+  int          y,z;			 /* indices in lists of k coords on prev, current row         */
 
-
-#ifdef P7_DEBUGGING  
-  if (L != sx->L) ESL_EXCEPTION("L, sx->L disagree: sparse matrix wasn't allocated or reinitialized for this sequence");
+#ifdef p7_DEBUGGING  
+  if (L != sm->L) ESL_EXCEPTION(eslEINVAL, "L, sm->L disagree: sparse matrix wasn't allocated or reinitialized for this sequence");
 #endif
 
   xN = 0.0f;
@@ -75,7 +91,7 @@ p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *s
       rsc = gm->rsc[dsq[i]];	/* now MSC(k), ISC(k) residue score macros work */
       last_dpc = dpc;		/* remember where dpc started; dpp will be set here after we finish each row calculation */
 
-      kp = kc;                /* last row we did becomes prev row now; ready to step through k indices of previous row's sparse cells */
+      kp = kc;                  /* last row we did becomes prev row now; ready to step through k indices of previous row's sparse cells */
       kc = sm->k[i];		/* ditto for current row i */
 
       dlc = dgc = xE = -eslINFINITY;
@@ -119,15 +135,12 @@ p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *s
 	  if (z < sm->n[i]-1 && kc[z+1] == k+1) { /* is there a (i,k+1) cell to our right? */
 	    dlc = p7_FLogsum( mlc + TSC(p7P_MD, k), dlc + TSC(p7P_DD, k));
 	    dgc = p7_FLogsum( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k));
-	  } else if (z == sm->n[i]-1) {           /* last sparse cell on row? we need dgc to complete MGk->E path, below */
-	    dlc = -eslINFINITY;
-	    dgc = p7_FLogsum( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k));
-	  } else {
+	  } else {   /* if not, we MUST add {MD}l->Dk+1..E glocal exit path, even from internal sparse cells - not just last cell! */
 	    dlc = dgc = -eslINFINITY;
+	    xE  = p7_FLogsum( xE, TSC(p7P_DGE, k) + p7_FLogsum( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k)));
 	  }
 	}
-
-      *xpc++ = xE = p7_FLogsum( xE, dgc + TSC(p7P_DGE, k));   // glocal exit path(s) added on, from last k cell D(k)->E
+      *xpc++ = xE;  /* we already accumulated all Mk->E exits, both local and glocal */
       *xpc++ = xN = xN + gm->xsc[p7P_N][p7P_LOOP];
       *xpc++ = xJ = p7_FLogsum( xJ + gm->xsc[p7P_J][p7P_LOOP],  xE + gm->xsc[p7P_E][p7P_LOOP]);
       *xpc++ = xB = p7_FLogsum( xJ + gm->xsc[p7P_J][p7P_MOVE],  xN + gm->xsc[p7P_N][p7P_MOVE]);
@@ -296,6 +309,7 @@ p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *
 	  xp[p7S_J]  = xJ = p7_FLogsum( xJ,     	               xB + gm->xsc[p7P_J][p7P_MOVE]);
 	  xp[p7S_N]  = xN = p7_FLogsum( xN,		               xB + gm->xsc[p7P_N][p7P_MOVE]);
 	  xp[p7S_E]  = xE = p7_FLogsum( xJ + gm->xsc[p7P_E][p7P_LOOP], xC + gm->xsc[p7P_E][p7P_MOVE]);
+	  xp -= p7S_NXCELLS;
 
 	  xG = xL = -eslINFINITY; /* when we start the next segment at an ib, these will get stored */
 	}
@@ -335,7 +349,7 @@ p7_SparseDecoding(const P7_PROFILE *gm, const P7_SPARSEMX *sxf, P7_SPARSEMX *sxb
   for (i = 1; i <= sm->L; i++)
     {
       /* i=ia-1, initialization of a sparse segment; special storage */
-      if (sm->n[i-1] == 0) 
+      if (sm->n[i] && !sm->n[i-1])
 	{
 	  norm       = 0.0f;
 	  xd[p7S_E]  = 0.0f;                                
@@ -356,8 +370,6 @@ p7_SparseDecoding(const P7_PROFILE *gm, const P7_SPARSEMX *sxf, P7_SPARSEMX *sxb
 	  xd += p7S_NXCELLS;
 	}
 
-      if (sm->n[i] == 0) continue; /* otherwise, skip unstored rows */
-
       /* For each sparse cell z (k=k[i][z]) on row: */
       norm = 0.0;
       for (z = 0; z < sm->n[i]; z++)
@@ -375,25 +387,27 @@ p7_SparseDecoding(const P7_PROFILE *gm, const P7_SPARSEMX *sxf, P7_SPARSEMX *sxb
 	}
       
       /* specials on each stored row */
-      xd[p7S_E]  = expf(xf[p7S_E] + xb[p7S_E] - totsc);                                  
-      xd[p7S_N]  = expf(xf[p7S_N] + xb[p7S_N] - totsc);                            xN = xf[p7S_N]; norm += xd[p7S_N];
-      xd[p7S_J]  = expf(xf[p7S_J] + xb[p7S_J] - totsc);  
-      xd[p7S_B]  = expf(xf[p7S_B] + xb[p7S_B] - totsc);                                  
-      xd[p7S_L]  = expf(xf[p7S_L] + xb[p7S_L] - totsc);                                  
-      xd[p7S_G]  = expf(xf[p7S_G] + xb[p7S_G] - totsc);                                  
-      xd[p7S_C]  = expf(xf[p7S_C] + xb[p7S_C] - totsc);                                  
-      xd[p7S_JJ] = expf(  xJ      + xb[p7S_J] + gm->xsc[p7P_J][p7P_LOOP] - totsc); xJ = xf[p7S_J]; norm += xd[p7S_JJ];
-      xd[p7S_CC] = expf(  xC      + xb[p7S_C] + gm->xsc[p7P_C][p7P_LOOP] - totsc); xC = xf[p7S_C]; norm += xd[p7S_CC];
+      if (sm->n[i]) {
+	xd[p7S_E]  = expf(xf[p7S_E] + xb[p7S_E] - totsc);                                  
+	xd[p7S_N]  = expf(xf[p7S_N] + xb[p7S_N] - totsc);                            xN = xf[p7S_N]; norm += xd[p7S_N];
+	xd[p7S_J]  = expf(xf[p7S_J] + xb[p7S_J] - totsc);  
+	xd[p7S_B]  = expf(xf[p7S_B] + xb[p7S_B] - totsc);                                  
+	xd[p7S_L]  = expf(xf[p7S_L] + xb[p7S_L] - totsc);                                  
+	xd[p7S_G]  = expf(xf[p7S_G] + xb[p7S_G] - totsc);                                  
+	xd[p7S_C]  = expf(xf[p7S_C] + xb[p7S_C] - totsc);                                  
+	xd[p7S_JJ] = expf(  xJ      + xb[p7S_J] + gm->xsc[p7P_J][p7P_LOOP] - totsc); xJ = xf[p7S_J]; norm += xd[p7S_JJ];
+	xd[p7S_CC] = expf(  xC      + xb[p7S_C] + gm->xsc[p7P_C][p7P_LOOP] - totsc); xC = xf[p7S_C]; norm += xd[p7S_CC];
 
-      /* renormalize the row */
-      norm = 1.0f/norm;
-      dpd -= sm->n[i]*p7S_NSCELLS;  // back up to start of row again
-      for (x = 0; x < sm->n[i]*p7S_NSCELLS; x++) *dpd++ *= norm;  
-      for (x = 0; x < p7S_NXCELLS;          x++) xd[x]  *= norm;
+	/* renormalize the row (includes sparse main row!) */
+	norm = 1.0f/norm;
+	dpd -= sm->n[i]*p7S_NSCELLS;  // back up to start of row again
+	for (x = 0; x < sm->n[i]*p7S_NSCELLS; x++) *dpd++ *= norm;  
+	for (x = 0; x < p7S_NXCELLS;          x++) xd[x]  *= norm;
 	  
-      xd += p7S_NXCELLS;
-      xf += p7S_NXCELLS;
-      xb += p7S_NXCELLS;
+	xd += p7S_NXCELLS;
+	xf += p7S_NXCELLS;
+	xb += p7S_NXCELLS;
+      }
     }
   sxd->type = p7S_DECODING;
   return eslOK;
@@ -425,8 +439,8 @@ p7_SparseViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *s
   int            i,k;	      	         /* i,k row,col (seq position, profile position) cell coords */
   int            y,z;			 /* indices in lists of k coords on prev, current row */
 
-#ifdef P7_DEBUGGING  
-  if (L != sx->L) ESL_EXCEPTION("L, sx->L disagree: sparse matrix wasn't allocated or reinitialized for this sequence");
+#ifdef p7_DEBUGGING  
+  if (L != sm->L) ESL_EXCEPTION(eslEINVAL, "L, sx->L disagree: sparse matrix wasn't allocated or reinitialized for this sequence");
 #endif
 
   xN = 0.0f;
@@ -1062,7 +1076,6 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
   P7_REFMX      *rxf    = p7_refmx_Create(M, L);
   P7_REFMX      *rxb    = p7_refmx_Create(M, L);
   P7_REFMX      *rxd    = p7_refmx_Create(M, L);
-  P7_REFMX      *sxcopy = p7_refmx_Create(M, L);
   P7_TRACE      *rtr    = p7_trace_Create();
   P7_TRACE      *str    = p7_trace_Create();
   int            tL;
@@ -1107,7 +1120,6 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
       if ( p7_profile_SetLength(gm, tL)       != eslOK) esl_fatal(msg);
       if ( p7_oprofile_ReconfigLength(om, tL) != eslOK) esl_fatal(msg);
       if ( p7_refmx_GrowTo(rxv,    M, tL)     != eslOK) esl_fatal(msg);
-      if ( p7_refmx_GrowTo(sxcopy, M, tL)     != eslOK) esl_fatal(msg);
       if ( p7_filtermx_GrowTo(ox, om->M, tL)  != eslOK) esl_fatal(msg);
 
 
@@ -1126,18 +1138,10 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
 	}
       else
 	{
-	  ox->pp = sxcopy;
-
-
 	  if ( p7_ForwardFilter(dsq, tL, om, ox, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
 	  if ( p7_BackwardFilter(dsq, tL, om, ox, sm)          != eslOK) esl_fatal(msg);
 	  tol      = 1.0;
 	  did_full = FALSE;
-
-	  //p7_refmx_Dump(stdout, ox->pp);
-	  p7_refmx_Reuse(sxcopy);
-	  ox->pp = NULL;
-
 	}
       if ( p7_sparsemx_Reinit(sxv, sm)     != eslOK) esl_fatal(msg);
 
@@ -1153,50 +1157,42 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
       //printf("# REFERENCE viterbi trace\n");
       //p7_trace_DumpAnnotated(stdout, rtr, gm, dsq);
 
-      if ( fabs(vsc1-vsc2) > tol)                                   esl_fatal(msg); // Viterbi scores must agree.
-      if ( did_full && p7_trace_Compare(rtr, str, 0.0f)   != eslOK) esl_fatal(msg); // 0.0 is <pptol> arg, unused, because neither trace has PP annotation
-      if ( p7_sparsemx_Copy2Reference(sxv, sxcopy)        != eslOK) esl_fatal(msg); // NEED A SPARSEMX_VALIDATE
-      if ( did_full && p7_refmx_Validate(sxcopy, NULL)    != eslOK) esl_fatal(msg); // validates the sparse V matrix (after reformat to refmx)
-      if ( did_full && p7_refmx_Compare(rxv, sxcopy, tol) != eslOK) esl_fatal(msg); // V matrices must be identical, if sparse mask was set to all cells
-      if ( p7_refmx_Reuse(sxcopy)                         != eslOK) esl_fatal(msg);
-      
-      /* Forward reference comparison */
-      if ( p7_refmx_GrowTo   (rxf, M, tL)                != eslOK) esl_fatal(msg);
-      if ( p7_sparsemx_Reinit(sxf, sm)                   != eslOK) esl_fatal(msg);
-      
-      if ( p7_SparseForward   (dsq, tL, gm, sxf, &fsc1)  != eslOK) esl_fatal(msg);
-      if ( p7_ReferenceForward(dsq, tL, gm, rxf, &fsc2)  != eslOK) esl_fatal(msg);
+      if ( fabs(vsc1-vsc2) > tol)                                            esl_fatal(msg); // Viterbi scores must agree.
+      if ( did_full && p7_trace_Compare(rtr, str, 0.0f)            != eslOK) esl_fatal(msg); // 0.0 is <pptol> arg, unused, because neither trace has PP annotation
+      if ( p7_sparsemx_Validate(sxv, NULL)                         != eslOK) esl_fatal(msg); 
+      if ( did_full && p7_sparsemx_CompareReference(sxv, rxv, tol) != eslOK) esl_fatal(msg); // matrices only compare 'exactly' if sparse DP was full
 
-      if ( fabs(fsc1-fsc2) > tol)                                  esl_fatal(msg);  // Forward scores must agree
-      if ( p7_sparsemx_Copy2Reference(sxf, sxcopy)       != eslOK) esl_fatal(msg);
-      if ( p7_refmx_Validate(sxcopy, NULL)               != eslOK) esl_fatal(msg);  // sparse Forward DP matrix must validate
-      if ( did_full && p7_refmx_Compare(rxf, sxcopy, tol)!= eslOK) esl_fatal(msg);  // Forward DP matrices must agree, if sparse mask was set to all cells
-      if ( p7_refmx_Reuse(sxcopy)                        != eslOK) esl_fatal(msg);
+      /* Forward reference comparison */
+      if ( p7_refmx_GrowTo   (rxf, M, tL)                          != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reinit(sxf, sm)                             != eslOK) esl_fatal(msg);
+      
+      if ( p7_SparseForward   (dsq, tL, gm, sxf, &fsc1)            != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceForward(dsq, tL, gm, rxf, &fsc2)            != eslOK) esl_fatal(msg);
+
+      if ( fabs(fsc1-fsc2) > tol)                                            esl_fatal(msg);  
+      if ( p7_sparsemx_Validate(sxf, NULL)                         != eslOK) esl_fatal(msg);  
+      if ( did_full && p7_sparsemx_CompareReference(sxf, rxf, tol) != eslOK) esl_fatal(msg);  
 
       /* Backward reference comparison */
-      if ( p7_refmx_GrowTo   (rxb, M, tL)                != eslOK) esl_fatal(msg);
-      if ( p7_sparsemx_Reinit(sxb, sm)                   != eslOK) esl_fatal(msg);
+      if ( p7_refmx_GrowTo   (rxb, M, tL)                          != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reinit(sxb, sm)                             != eslOK) esl_fatal(msg);
 
-      if ( p7_SparseBackward   (dsq, tL, gm, sxb, &bsc1) != eslOK) esl_fatal(msg);
-      if ( p7_ReferenceBackward(dsq, tL, gm, rxb, &bsc2) != eslOK) esl_fatal(msg);
+      if ( p7_SparseBackward   (dsq, tL, gm, sxb, &bsc1)           != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceBackward(dsq, tL, gm, rxb, &bsc2)           != eslOK) esl_fatal(msg);
 
-      if ( fabs(bsc1-bsc2) > tol)                                  esl_fatal(msg);  // Backward scores must agree
-      if ( p7_sparsemx_Copy2Reference(sxb, sxcopy)       != eslOK) esl_fatal(msg);
-      if ( p7_refmx_Validate(sxcopy, NULL)               != eslOK) esl_fatal(msg);  // sparse Backward matrix must validate
-      if ( did_full && p7_refmx_Compare(rxb, sxcopy, tol)!= eslOK) esl_fatal(msg);  // Backward DP matrices must agree, if sparse mask was set to all cells
-      if ( p7_refmx_Reuse(sxcopy)                        != eslOK) esl_fatal(msg);
+      if ( fabs(bsc1-bsc2) > tol)                                            esl_fatal(msg);  
+      if ( p7_sparsemx_Validate(sxb, NULL)                         != eslOK) esl_fatal(msg);  
+      if ( did_full && p7_sparsemx_CompareReference(sxb, rxb, tol) != eslOK) esl_fatal(msg);  
 
       /* Decoding reference comparison */
-      if ( p7_refmx_GrowTo   (rxd, M, tL)                != eslOK) esl_fatal(msg);
-      if ( p7_sparsemx_Reinit(sxd, sm)                   != eslOK) esl_fatal(msg);
+      if ( p7_refmx_GrowTo   (rxd, M, tL)                          != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reinit(sxd, sm)                             != eslOK) esl_fatal(msg);
 
-      if ( p7_SparseDecoding   (gm, sxf, sxb, sxd)       != eslOK) esl_fatal(msg);
-      if ( p7_ReferenceDecoding(gm, rxf, rxb, rxd)       != eslOK) esl_fatal(msg);
+      if ( p7_SparseDecoding   (gm, sxf, sxb, sxd)                 != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceDecoding(gm, rxf, rxb, rxd)                 != eslOK) esl_fatal(msg);
 
-      if ( p7_sparsemx_Copy2Reference(sxd, sxcopy)       != eslOK) esl_fatal(msg);
-      if ( p7_refmx_Validate(sxcopy, NULL)               != eslOK) esl_fatal(msg);  // sparse Decoding matrix must validate
-      if ( did_full && p7_refmx_Compare(rxd, sxcopy, tol)!= eslOK) esl_fatal(msg);  // Decoding matrices must agree, if sparse mask was set to all cells
-      if ( p7_refmx_Reuse(sxcopy)                        != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Validate(sxf, NULL)                         != eslOK) esl_fatal(msg);  
+      if ( did_full && p7_sparsemx_CompareReference(sxd, rxd, tol) != eslOK) esl_fatal(msg);  
       
       if ( p7_trace_Reuse(str)     != eslOK) esl_fatal(msg);
       if ( p7_trace_Reuse(rtr)     != eslOK) esl_fatal(msg);
@@ -1210,7 +1206,6 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
       if ( p7_sparsemx_Reuse(sxd)  != eslOK) esl_fatal(msg);
       if ( p7_filtermx_Reuse(ox)   != eslOK) esl_fatal(msg);
       if ( esl_sq_Reuse(sq)        != eslOK) esl_fatal(msg);
-      if ( p7_refmx_Reuse(sxcopy)  != eslOK) esl_fatal(msg);
       if ( p7_sparsemask_Reuse(sm) != eslOK) esl_fatal(msg); 
     }
 
@@ -1224,7 +1219,6 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
   p7_refmx_Destroy(rxf);
   p7_refmx_Destroy(rxb);
   p7_refmx_Destroy(rxd);
-  p7_refmx_Destroy(sxcopy);
   p7_filtermx_Destroy(ox);
   esl_sq_Destroy(sq);
   p7_profile_Destroy(gm);
@@ -1391,11 +1385,13 @@ main(int argc, char **argv)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",              0 },
-  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward DP matrix for examination",            0 },
+  { "-a",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "include all cells in sparse mx",                    0 },
   { "-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward DP matrix for examination",           0 },
   { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump posterior decoding matrix for examination",    0 },
-  { "-V",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Viterbi DP matrix for examination",            0 },
+  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward DP matrix for examination",            0 },
+  { "-M",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump sparse mask for examination",                  0 },
   { "-T",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Viterbi trace for examination",                0 },
+  { "-V",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Viterbi DP matrix for examination",            0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -1415,6 +1411,8 @@ main(int argc, char **argv)
   ESL_SQ         *sq      = NULL;
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
+  P7_OPROFILE    *om      = NULL;
+  P7_FILTERMX    *ox      = NULL;
   P7_SPARSEMASK  *sm      = NULL;
   P7_SPARSEMX    *sxv     = NULL;
   P7_SPARSEMX    *sxf     = NULL;
@@ -1423,6 +1421,7 @@ main(int argc, char **argv)
   P7_TRACE       *tr      = p7_trace_Create();
   float           fsc, vsc, bsc;
   float           nullsc;
+  char            errbuf[eslERRBUFSIZE];
   int             status;
 
   /* Initialize log-sum calculator */
@@ -1451,19 +1450,30 @@ main(int argc, char **argv)
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
+  om = p7_oprofile_Create(hmm->M, abc);
   p7_profile_Config(gm, hmm, bg);
-
-  /* Allocate bands, matrices */
-  sm  = p7_sparsemask_Create(gm->M, sq->n);
-  p7_sparsemask_AddAll(sm);
-  sxv = p7_sparsemx_Create(sm);
-  sxf = p7_sparsemx_Create(sm);
-  sxb = p7_sparsemx_Create(sm);
-  sxd = p7_sparsemx_Create(sm);
+  p7_oprofile_Convert(gm, om);
 
   /* Set the profile and null model's target length models */
   p7_bg_SetLength           (bg, sq->n);
   p7_profile_SetLength      (gm, sq->n);
+  p7_oprofile_ReconfigLength(om, sq->n);
+
+  /* Use f/b filter to create sparse mask */
+  ox = p7_filtermx_Create(hmm->M, sq->n, ESL_MBYTES(32));
+  sm  = p7_sparsemask_Create(gm->M, sq->n);
+  if (esl_opt_GetBoolean(go, "-a"))  
+    p7_sparsemask_AddAll(sm);
+  else {
+    p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL);
+    p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm);
+  }
+  
+  /* Create sparse matrices */
+  sxv = p7_sparsemx_Create(sm);
+  sxf = p7_sparsemx_Create(sm);
+  sxb = p7_sparsemx_Create(sm);
+  sxd = p7_sparsemx_Create(sm);
 
   /* Sparse DP calculations */
   p7_SparseViterbi (sq->dsq, sq->n, gm, sxv, tr, &vsc);
@@ -1472,11 +1482,14 @@ main(int argc, char **argv)
   p7_SparseDecoding(gm, sxf, sxb, sxd);
   p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
 
- if (esl_opt_GetBoolean(go, "-T")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
- if (esl_opt_GetBoolean(go, "-V")) p7_sparsemx_Dump(stdout, sxv);
- if (esl_opt_GetBoolean(go, "-F")) p7_sparsemx_Dump(stdout, sxf);
- if (esl_opt_GetBoolean(go, "-B")) p7_sparsemx_Dump(stdout, sxb);
- if (esl_opt_GetBoolean(go, "-D")) p7_sparsemx_Dump(stdout, sxd);
+  if (esl_opt_GetBoolean(go, "-B")) p7_sparsemx_Dump(stdout, sxb);
+  if (esl_opt_GetBoolean(go, "-D")) p7_sparsemx_Dump(stdout, sxd);
+  if (esl_opt_GetBoolean(go, "-F")) p7_sparsemx_Dump(stdout, sxf);
+  if (esl_opt_GetBoolean(go, "-M")) p7_sparsemask_Dump(stdout, sm);
+  if (esl_opt_GetBoolean(go, "-T")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
+  if (esl_opt_GetBoolean(go, "-V")) p7_sparsemx_Dump(stdout, sxv);
+
+  if ( p7_sparsemx_Validate( sxd, errbuf)  != eslOK) esl_fatal("sxd validation failed: %s", errbuf);
 
   printf("target sequence:      %s\n",         sq->name);
   printf("vit raw score:        %.4f nats\n",  vsc);
@@ -1493,7 +1506,9 @@ main(int argc, char **argv)
   p7_sparsemx_Destroy(sxb);
   p7_sparsemx_Destroy(sxd);
   p7_sparsemask_Destroy(sm);
+  p7_filtermx_Destroy(ox);
   p7_profile_Destroy(gm);
+  p7_oprofile_Destroy(om);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);
   esl_alphabet_Destroy(abc);

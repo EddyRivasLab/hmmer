@@ -2,10 +2,10 @@
  * Data structures used by sparse dynamic programming.
  *
  * P7_SPARSEMASK and P7_SPARSEMX work together. P7_SPARSEMASK defines
- * which cells are included in the sparse DP matrix. P7_SPARSEMX is
- * the sparse DP matrix. The caller constructs a P7_SPARSEMASK first,
- * then uses it to create or reinitialize a P7_SPARSEMX, before
- * running any sparse DP routines (see sparse_fwdback.c). 
+ * which cells are included in the sparse DP matrix, and P7_SPARSEMX
+ * is the matrix. The caller constructs a P7_SPARSEMASK first, then
+ * uses it to create or reinitialize a P7_SPARSEMX, before running any
+ * sparse DP routines (see sparse_fwdback.c).
  * 
  * For comparison see the reference DP implementation (p7_refmx.[ch],
  * reference_fwdback.c). Both the reference and the sparse DP
@@ -20,7 +20,8 @@
  *   4. P7_SPARSEMX; sparse DP matrix, as specified by a given mask
  *   5. API for extracting information from a sparse DP matrix
  *   6. Debugging tools for P7_SPARSEMX
- *   7. Copyright and license information  
+ *   7. Validation of a P7_SPARSEMX
+ *   8. Copyright and license information  
  */
 
 #include "p7_config.h"
@@ -503,12 +504,18 @@ p7_sparsemask_Finish(P7_SPARSEMASK *sm)
  * 3. Debugging tools for P7_SPARSEMASK
  *****************************************************************/
 
+/* Function:  p7_sparsemask_Dump()
+ * Synopsis:  Dump contents of a P7_SPARSEMASK
+ *
+ * Purpose:   Dump the contents of the sparse mask <sm> to 
+ *            open stream <ofp> for debugging, diagnostics.
+ */
 int
 p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm)
 {
   int i,k,z;
 
-  fprintf(ofp, "# sparse mask: M=%d L=%d\n", sm->M, sm->L);
+  fprintf(ofp, "# sparse mask: M=%d L=%d Q=%d\n", sm->M, sm->L, sm->Q);
   fputs("     ", ofp);  for (k = 1; k <= sm->M; k++) fprintf(ofp, "%3d ", k);  fputs(" n \n", ofp);
   fputs("     ", ofp);  for (k = 1; k <= sm->M; k++) fputs("--- ", ofp);       fputs("---\n", ofp);
 
@@ -572,6 +579,25 @@ p7_sparsemx_Create(P7_SPARSEMASK *sm)
   return NULL;
 }
 
+
+/* Function:  p7_sparsemx_Reinit()
+ * Synopsis:  Reinitialize a sparse DP matrix.
+ *
+ * Purpose:   Reinitialize an existing sparse matrix <sx> to use the
+ *            sparse mask <sm>. Equivalent to a call to
+ *            <p7_sparsemx_Create()> except we reuse as much memory as
+ *            possible in the preexisting <sx>, to minimize
+ *            realloc/free calls.
+ *
+ *            Caller should have also called <p7_sparsemx_Reuse()> on
+ *            <sx>, but at least at present, this is not strictly
+ *            necessary.
+ *
+ * Returns:   <eslOK> on success, and <sx> is now ready for sparse DP
+ *            calculations defined by the mask <sm>.
+ *
+ * Throws:    <eslEMEM> on (re-)allocation failure.
+ */
 int
 p7_sparsemx_Reinit(P7_SPARSEMX *sx, P7_SPARSEMASK *sm)
 {
@@ -679,6 +705,17 @@ p7_sparsemx_GetSpecial(const P7_SPARSEMX *sx, int i, int s)
 }
 
 
+/* Function:  p7_sparsemx_Reuse()
+ * Synopsis:  Reuse (rather than free) a sparse DP matrix.
+ *
+ * Purpose:   Reuse the memory allocation in <sx>. This is an
+ *            alternative to free'ing the structure entirely 
+ *            (using <p7_sparsemx_Destroy()>.) The caller must
+ *            reinitialize the matrix with a new mask using
+ *            <p7_sparsemx_Reinit()> before using it again.
+ *
+ * Returns:   <eslOK> on success.
+ */
 int
 p7_sparsemx_Reuse(P7_SPARSEMX *sx)
 {
@@ -687,6 +724,9 @@ p7_sparsemx_Reuse(P7_SPARSEMX *sx)
   return eslOK;
 }
 
+/* Function:  p7_sparsemx_Destroy()
+ * Synopsis:  Free a sparse DP matrix.
+ */
 void
 p7_sparsemx_Destroy(P7_SPARSEMX *sx)
 {
@@ -940,6 +980,21 @@ p7_sparsemx_ApproxEnvScore(P7_PROFILE *gm, P7_SPARSEMX *sxf, int iae, int ibe, f
  *****************************************************************/ 
 
 char *
+p7_sparsemx_DecodeState(int type)
+{
+  switch (type) {
+  case p7S_ML: return "ML";
+  case p7S_MG: return "MG";
+  case p7S_IL: return "IL";
+  case p7S_IG: return "IG";
+  case p7S_DL: return "DL";
+  case p7S_DG: return "DG";
+  }
+  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such P7_REFMX main state code %d\n", type);
+  return NULL;
+}
+
+char *
 p7_sparsemx_DecodeSpecial(int type)
 {
   switch (type) {
@@ -1135,7 +1190,421 @@ p7_sparsemx_Copy2Reference(P7_SPARSEMX *sx, P7_REFMX *rx)
 
   return eslOK;
 }
+
+
+/* Function:  p7_sparsemx_CompareReference()
+ * Synopsis:  Test sparse DP matrix for tolerable equality to reference
+ *
+ * Purpose:   Compare all the values in sparse DP matrix <sx> to the
+ *            corresponding values in reference DP matrix <rx> for
+ *            equality within the absolute epsilon <tol>, using
+ *            <esl_FCompareAbs()> calls. Return <eslOK> if comparison
+ *            succeeds; return <eslFAIL> otherwise.
+ *            
+ *            The comparison tests two different traversal mechanisms
+ *            for sparse main cells.  Should be completely redundant,
+ *            unless we've corrupted the structure.  The routine is
+ *            intended for debugging, not speed.
+ *            
+ *            As also noted in <p7_refmx_Compare()>, absolute
+ *            difference comparison is preferred over relative
+ *            differences. Numerical error accumulation in DP scales
+ *            more with the number of terms than their magnitude. DP
+ *            cells with values close to zero (and hence small
+ *            absolute differences) may reasonably have large relative
+ *            differences.
+ *            
+ *            If <p7_DEBUGGING> compile-time flag is up, indicating
+ *            that we're working in development code (as opposed to
+ *            production code or a distro), we <abort()> immediately
+ *            on any element comparison failure, to facilitate 
+ *            finding errant elements during debugging.
+ *            
+ *            We assume that <p7S_NSCELLS> and <p7S_NXCELLS> main and
+ *            special elements are in the same order and number in
+ *            <p7R_NSCELLS> and <p7R_NXCELLS>.
+ *
+ * Args:      sx  - sparse DP matrix
+ *            rx  - reference DP matrix
+ *            tol - absolute floating point comparison tolerance
+ *                 
+ * Returns:   <eslOK> on success.
+ *            <eslFAIL> if comparison fails.
+ */
+int
+p7_sparsemx_CompareReference(P7_SPARSEMX *sx, P7_REFMX *rx, float tol)
+{
+  P7_SPARSEMASK *sm        = sx->sm;
+  int            killmenow = FALSE;
+  float         *dpc, *dpc2;
+  float         *xc,  *xc2;
+  int            g,i,s,z;
+  int            ia,ib;
+#ifdef p7_DEBUGGING
+  killmenow = TRUE;
+#endif
+  
+  if (sx->type != rx->type) { if (killmenow) abort(); return eslFAIL; }
+  if (sm->M    != rx->M)    { if (killmenow) abort(); return eslFAIL; }
+  if (sm->L    != rx->L)    { if (killmenow) abort(); return eslFAIL; }
+
+  /* First traversal way: sm->dp[] is just one big array */
+  dpc = sx->dp;
+  xc  = sx->xmx;
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n[i] && !sm->n[i-1])         /* ia-1 specials at a segment start */
+	{
+	  for (s = 0; s < p7S_NXCELLS; s++) {
+	    if (esl_FCompareAbs(*xc, P7R_XMX(rx,i,s), tol) == eslFAIL) { if (killmenow) { printf("DEBUG: %f\n", P7R_XMX(rx,i,s)); abort(); } return eslFAIL; }
+	    xc++;
+	  }
+	}
+
+      for (z = 0; z < sm->n[i]; z++)       /* sparse cells */
+	{
+	  for (s = 0; s < p7S_NSCELLS; s++) {
+	    if (esl_FCompareAbs(*dpc, P7R_MX(rx,i,sm->k[i][z],s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	    dpc++;
+	  }
+	}
+  
+      if (sm->n[i])       /* specials */
+	{
+	  for (s = 0; s < p7S_NXCELLS; s++) {
+	    if (esl_FCompareAbs(*xc, P7R_XMX(rx,i,s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	    xc++;
+	  }
+	}
+    }
+
+
+  /* Second way: "segments" */
+  dpc2 = sx->dp;
+  xc2  = sx->xmx;
+  for (g = 0; g < sm->nseg; g++)
+    {
+      ia = sm->i[g*2];
+      ib = sm->i[g*2+1];
+
+      for (s = 0; s < p7S_NXCELLS; s++) {       /* ia-1 specials at segment start */
+	if (esl_FCompareAbs(*xc2, P7R_XMX(rx,i,s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	xc2++;
+      }
+
+      for (i = ia; i <= ib; i++) 
+	{
+	  for (z = 0; z < sm->n[i]; z++)      	  /* sparse main cells */
+	    {
+	      for (s = 0; s < p7S_NSCELLS; s++) {
+		if (esl_FCompareAbs(*dpc2, P7R_MX(rx,i,sm->k[i][z],s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+		dpc2++;
+	      }
+	    }
+
+	  for (s = 0; s < p7S_NXCELLS; s++) {   	  /* specials */
+	    if (esl_FCompareAbs(*xc2, P7R_XMX(rx,i,s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	    xc2++;
+	  }
+	}
+    }
+  
+  /* Both ways must reach the same end */
+  if (dpc != dpc2)  { if (killmenow) abort(); return eslFAIL; }
+  if (xc  != xc2)   { if (killmenow) abort(); return eslFAIL; }
+  
+  return eslOK;
+}
 /*------------ end, P7_SPARSEMX debugging tools -----------------*/
+
+
+/*****************************************************************
+ * 7. Validation of a P7_SPARSEMX
+ *****************************************************************/
+/* also a debugging tool, but in its own section because it's
+ * fiddly and complicated
+ */
+
+static int
+validate_dimensions(P7_SPARSEMX *sx, char *errbuf)
+{
+  P7_SPARSEMASK *sm     = sx->sm;
+  int            g      = 0;
+  int            r      = 0;
+  int            ncells = 0;
+  int            i;
+
+  if ( sm->M <= 0)               ESL_FAIL(eslFAIL, errbuf, "nonpositive M");
+  if ( sm->L <= 0)               ESL_FAIL(eslFAIL, errbuf, "nonpositive L");
+  if ( sm->Q <  p7O_NQF(sm->M))  ESL_FAIL(eslFAIL, errbuf, "insufficient Q");
+
+  for (r=0, g=0, i = 1; i <= sm->L; i++) {
+    if (sm->n[i] && !sm->n[i-1]) g++; /* segment count */
+    if (sm->n[i])                r++; /* sparse row count */
+    ncells += sm->n[i];
+  }
+  if (g      != sm->nseg)       ESL_FAIL(eslFAIL, errbuf, "nseg is wrong");
+  if (r      != sm->nrow)       ESL_FAIL(eslFAIL, errbuf, "nrow is wrong");
+  if (ncells != sm->ncells)     ESL_FAIL(eslFAIL, errbuf, "ncells is wrong");
+
+  if (sm->L+1    > sm->ralloc)  ESL_FAIL(eslFAIL, errbuf, "k[] row allocation too small");
+  if (sm->ncells > sm->kalloc)  ESL_FAIL(eslFAIL, errbuf, "kmem[] cell allocation too small");
+  if (sm->nseg   > sm->ialloc)  ESL_FAIL(eslFAIL, errbuf, "i[] segment allocation too small");
+  return eslOK;
+}
+
+
+static int
+validate_no_nan(P7_SPARSEMX *sx, char *errbuf)
+{
+  P7_SPARSEMASK *sm  = sx->sm;
+  float         *dpc = sx->dp;
+  float         *xc  = sx->xmx;
+  int            i,k,z,s;
+
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n[i] && !sm->n[i-1])          /* ia-1 specials at a segment start */
+	{
+	  for (s = 0; s < p7S_NXCELLS; s++) {
+	    if (isnan(*xc)) ESL_FAIL(eslFAIL, errbuf, "nan at i=%d, %s", i, p7_sparsemx_DecodeSpecial(s));
+	    xc++;
+	  }
+	}
+      for (z = 0; z < sm->n[i]; z++)       /* sparse main cells */
+	{
+	  k = sm->k[i][z];
+	  for (s = 0; s < p7S_NSCELLS; s++) {
+	    if (isnan(*dpc)) ESL_FAIL(eslFAIL, errbuf, "nan at i=%d, k=%d, %s", i, k, p7_sparsemx_DecodeState(s));
+	    dpc++;
+	  }
+	}
+
+      if (sm->n[i])                       /* specials on sparse row */
+	{
+	  for (s = 0; s < p7S_NXCELLS; s++) {
+	    if (isnan(*xc)) ESL_FAIL(eslFAIL, errbuf, "nan at i=%d, %s", i, p7_sparsemx_DecodeSpecial(s));
+	    xc++;
+	  }
+	}
+    }
+  return eslOK;
+}
+
+static int
+validate_fwdvit(P7_SPARSEMX *sx, char *errbuf)
+{
+  P7_SPARSEMASK *sm  = sx->sm;
+  float         *dpc = sx->dp;
+  float         *xc  = sx->xmx;
+  int            i,z;
+
+  /* Check special cases prohibited in the first ia-1 presegment specials: */
+  if ( xc[p7S_J] !=  -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "first J not -inf");
+  if ( xc[p7S_C] !=  -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "first C not -inf");
+  
+  /* Sweep, checking for (the most easily spotchecked) prohibited values (must be -inf) */
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n[i] && !sm->n[i-1]) {       /* ia-1 specials at a segment start */
+	if ( xc[p7S_E]  != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "E seg start for ia=%d not -inf", i);
+	if ( xc[p7S_JJ] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "JJ seg start for ia=%d not -inf", i);
+	if ( xc[p7S_CC] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "CC seg start for ia=%d not -inf", i);
+	xc += p7S_NXCELLS;
+      }
+      for (z = 0; z < sm->n[i]; z++)       /* sparse main cells */
+	{
+	  /* if k-1 supercell doesn't exist, can't reach D's */
+	  if ((z == 0 || sm->k[i][z] != sm->k[i][z-1]+1) && dpc[p7S_DL] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "first DL on i=%d not -inf", i);
+	  if ((z == 0 || sm->k[i][z] != sm->k[i][z-1]+1) && dpc[p7S_DG] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "first DG on i=%d not -inf", i);
+	  if (   sm->k[i][z] == sm->M                    && dpc[p7S_IL] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "IL on i=%d,k=M not -inf", i);
+	  if (   sm->k[i][z] == sm->M                    && dpc[p7S_IG] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "IG on i=%d,k=M not -inf", i);
+	  dpc += p7S_NSCELLS;
+	  /* there are other conditions where I(i,k) values must be zero but this is more tedious to check */
+	}
+      if (sm->n[i]) {                     
+	if ( xc[p7S_JJ] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "JJ at i=%d not -inf", i);
+	if ( xc[p7S_CC] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "CC at i=%d not -inf", i);
+	xc += p7S_NXCELLS;
+      }
+    }
+  return eslOK;
+}
+
+static int
+validate_backward(P7_SPARSEMX *sx, char *errbuf)
+{
+  P7_SPARSEMASK *sm     = sx->sm;
+  float         *dpc    = sx->dp  + (sm->ncells-1)*p7S_NSCELLS;		// last supercell in dp  
+  float         *xc     = sx->xmx + (sm->nrow + sm->nseg - 1)*p7S_NXCELLS; // last supercell in xmx 
+  int            last_n = 0;
+  int            i,z;
+
+  /* Backward sweep; many of our prohibits are on ib segment-end rows */
+  /* first: some special cases on absolute final stored row ib */
+  if (xc[p7S_N] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "N on last row not 0");
+  if (xc[p7S_J] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "N on last row not 0");
+  /* sweep: */
+  for (i = sm->L; i >= 1; i++)
+    {
+      if (sm->n[i]) {                   /* specials on stored row i */
+	if (               xc[p7S_JJ] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "JJ on row i=%d not -inf", i);
+	if (               xc[p7S_CC] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "CC on row i=%d not -inf", i);
+	if (last_n == 0 && xc[p7S_B]  != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "B on end-seg row ib=%d not -inf", i);
+	if (last_n == 0 && xc[p7S_L]  != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "L on end-seg row ib=%d not -inf", i);
+	if (last_n == 0 && xc[p7S_G]  != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "G on end-seg row ib=%d not -inf", i);
+	xc -= p7S_NXCELLS;
+      }
+      for (z = sm->n[i]-1; z >= 0; z--) /* sparse main cells */
+	{
+	  if (sm->k[i][z] == sm->M && dpc[p7S_IL] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "IL on i=%d,k=M not -inf", i);
+	  if (sm->k[i][z] == sm->M && dpc[p7S_IL] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "IL on i=%d,k=M not -inf", i);
+	  if (     last_n == 0     && dpc[p7S_IL] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "IL on end-segment row ib=%d,k=%d not -inf", i, sm->k[i][z]);
+	  if (     last_n == 0     && dpc[p7S_IG] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "IG on end-segment row ib=%d,k=%d not -inf", i, sm->k[i][z]);
+	  dpc -= p7S_NSCELLS;
+	}
+      if (sm->n[i] && sm->n[i-1] == 0) xc -= p7S_NXCELLS; /* specials on ia-1 row before a start-segment */
+      last_n = sm->n[i];
+    }
+  return eslOK;
+}
+
+static int
+is_prob(float val, float tol)
+{
+  if (val < 0.0-tol || val > 1.0+tol) return FALSE; 
+  return TRUE;
+}
+
+static int
+validate_decoding(P7_SPARSEMX *sx, char *errbuf)
+{
+  P7_SPARSEMASK *sm  = sx->sm;
+  float         *dpc = sx->dp;
+  float         *xc  = sx->xmx;
+  int            i,z,s;
+  int            last_n;
+  float          tol = 1e-4;
+
+  /* Check special cases prohibited in the first ia-1 presegment specials: */
+  if ( esl_FCompareAbs(xc[p7S_N],  1.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first N not 1");
+  if ( esl_FCompareAbs(xc[p7S_J],  0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first J not 0");
+  if ( esl_FCompareAbs(xc[p7S_C],  0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first C not 0");
+  if ( esl_FCompareAbs(xc[p7S_JJ], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first JJ not 0");
+  if ( esl_FCompareAbs(xc[p7S_CC], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first CC not 0");
+
+  /* Sweep, checking for (the most easily spotchecked) prohibited values (must be 0.0's) */
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n[i] && !sm->n[i-1]) {       /* ia-1 specials at a segment start */
+	if ( esl_FCompareAbs(xc[p7S_E], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "E seg start for ia=%d not 0", i);
+	xc += p7S_NXCELLS;
+      }
+      for (z = 0; z < sm->n[i]; z++)       /* sparse main cells */
+	{
+	  /* if k-1 supercell doesn't exist, can't reach D's */
+	  if ((z == 0 || sm->k[i][z] != sm->k[i][z-1]+1) && esl_FCompareAbs(dpc[p7S_DL], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first DL on i=%d not 0", i);
+	  if ((z == 0 || sm->k[i][z] != sm->k[i][z-1]+1) && esl_FCompareAbs(dpc[p7S_DG], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first DG on i=%d not 0", i);
+	  if (   sm->k[i][z] == sm->M                    && esl_FCompareAbs(dpc[p7S_IL], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IL on i=%d,M not 0", i);
+	  if (   sm->k[i][z] == sm->M                    && esl_FCompareAbs(dpc[p7S_IG], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IG on i=%d,M not 0", i);
+	  dpc += p7S_NSCELLS;
+	  /* there are other conditions where I(i,k) values must be zero but this is more tedious to check */
+	}
+      if (sm->n[i]) xc += p7S_NXCELLS;
+    }
+
+  /* Backwards sweep, looking only at ib end rows. */
+  dpc    = sx->dp  + (sm->ncells-1)*p7S_NSCELLS;		 // last supercell in dp  
+  xc     = sx->xmx + (sm->nrow + sm->nseg - 1)*p7S_NXCELLS; // last supercell in xmx 
+  last_n = 0;
+  /* special cases on absolute final stored row ib: */
+  if (esl_FCompareAbs(xc[p7S_N], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "N on last row not 0");
+  if (esl_FCompareAbs(xc[p7S_J], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "J on last row not 0");
+  if (esl_FCompareAbs(xc[p7S_B], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "B on last row not 0");
+  if (esl_FCompareAbs(xc[p7S_L], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "L on last row not 0");
+  if (esl_FCompareAbs(xc[p7S_G], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "G on last row not 0");
+  /* sweep: */
+  for (i = sm->L; i >= 1; i--)
+    {
+      if (sm->n[i]) xc -= p7S_NXCELLS; /* specials on stored row i */
+
+      for (z = sm->n[i]-1; z >= 0; z--)
+	{ // last_n == 0 checks if we're on an end-segment row ib
+	  if (last_n == 0 && esl_FCompareAbs(dpc[p7S_IL], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IL on end-seg row ib=%d not 0", i);
+	  if (last_n == 0 && esl_FCompareAbs(dpc[p7S_IG], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IG on end-seg row ib=%d not 0", i);
+	  dpc -= p7S_NSCELLS;
+	}
+
+      if (sm->n[i] && sm->n[i-1] == 0) xc -= p7S_NXCELLS; /* specials on ia-1 row before a start-segment */
+      last_n = sm->n[i];
+    }
+
+  /* Sweep again; check all values are probabilities, 0<=x<=1, allowing a bit of numerical slop. */
+  dpc = sx->dp;
+  xc  = sx->xmx;
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n[i] && !sm->n[i-1]) {       /* ia-1 specials at a segment start */
+	for (s = 0; s < p7S_NXCELLS; xc++, s++) 
+	  if (! is_prob(*xc, tol)) ESL_FAIL(eslFAIL, errbuf, "bad decode prob for %s, seg start, ia=%d\n", p7_sparsemx_DecodeSpecial(s), i);
+      }
+      for (z = 0; z < sm->n[i]; z++)       /* sparse main cells */
+	for (s = 0; s < p7S_NSCELLS; dpc++, s++) 
+	  if (! is_prob(*dpc, tol)) ESL_FAIL(eslFAIL, errbuf, "bad decode prob at i=%d,k=%d,%s", i,sm->k[i][z], p7_sparsemx_DecodeState(s));
+      if (sm->n[i]) {                      /* specials on sparse row */
+	for (s = 0; s < p7S_NXCELLS; xc++, s++) 
+	  if (! is_prob(*xc, tol)) ESL_FAIL(eslFAIL, errbuf, "bad decode prob at i=%d,%s", i, p7_sparsemx_DecodeSpecial(s));
+      }
+    }
+  return eslOK;
+}
+
+/* Function:  p7_sparsemx_Validate()
+ * Synopsis:  Validate a sparse DP matrix.
+ *
+ * Purpose:   Validate the contents of sparse DP matrix <sx>.
+ *            Return <eslOK> if it passes. Return <eslFAIL> if
+ *            it fails, and set <errbuf> to contain an 
+ *            explanation, if caller provides a non-<NULL>
+ *            <errbuf>.
+ *            
+ *            Currently validation is only implemented for
+ *            Forward, Backward, Viterbi, and Decoding matrix
+ *            types; not for Masstrace or Envscore.
+ *
+ * Args:      sx      - sparse DP matrix to validate
+ *            errbuf  - char[eslERRBUFSIZE] space for error msg, or NULL.
+ *
+ * Returns:   <eslOK> on success.
+ *            <eslFAIL> on failure, with an error message in <errbuf>
+ *            if <errbuf> was provided.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_sparsemx_Validate(P7_SPARSEMX *sx, char *errbuf)
+{
+  int status;
+
+  if ( (status = validate_dimensions(sx, errbuf)) != eslOK) return status;
+  if ( (status = validate_no_nan    (sx, errbuf)) != eslOK) return status;
+
+  switch (sx->type) {
+  case p7S_UNSET:      ESL_FAIL(eslFAIL, errbuf, "validating an unset sparse DP matrix? probably not what you meant");
+  case p7S_FORWARD:    if ( (status = validate_fwdvit  (sx, errbuf)) != eslOK) return status; break;
+  case p7S_BACKWARD:   if ( (status = validate_backward(sx, errbuf)) != eslOK) return status; break;
+  case p7S_DECODING:   if ( (status = validate_decoding(sx, errbuf)) != eslOK) return status; break;
+  case p7S_ALIGNMENT:  ESL_FAIL(eslFAIL, errbuf, "unimplemented");
+  case p7S_VITERBI:    if ( (status = validate_fwdvit  (sx, errbuf)) != eslOK) return status; break;
+  case p7S_MASSTRACE:  ESL_FAIL(eslFAIL, errbuf, "unimplemented");
+  case p7S_ENVSCORE:   ESL_FAIL(eslFAIL, errbuf, "unimplemented");
+  default:             ESL_FAIL(eslFAIL, errbuf, "no such spare DP matrix type %d", sx->type);
+  }
+  return eslOK;
+}
+/*----------------- end, P7_SPARSEMX validation -----------------*/
+
+
 
 /*****************************************************************
  * @LICENSE@

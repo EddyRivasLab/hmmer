@@ -19,6 +19,8 @@
 #include "p7_sparsemx.h"
 #include "p7_trace_metrics.h"
 
+#include "sparse_fwdback.h"
+
 #include "impl_sse/impl_sse.h"
 #include "impl_sse/p7_filtermx.h"
 

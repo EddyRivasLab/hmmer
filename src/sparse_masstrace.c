@@ -152,8 +152,6 @@ p7_sparse_masstrace_Up(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
 	  dpc  -= p7S_NSCELLS;
 	}
 
-      printf("i=%d. rowmass = %.4f\n", i, rowmass);
-
       if (rowmass < massthresh)  iae_proven_done = TRUE; else iae = i;
       if (iae_proven_done && kae_proven_done) break;
     }

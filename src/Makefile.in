@@ -163,15 +163,6 @@ STATS = \
 BENCHMARKS = \
 	evalues_benchmark\
 	logsum_benchmark\
-	generic_decoding_benchmark\
-	generic_fwdback_benchmark\
-	generic_fwdback_banded_benchmark\
-	generic_fwdback_chk_benchmark\
-	generic_msv_benchmark\
-	generic_null2_benchmark\
-	generic_optacc_benchmark\
-	generic_stotrace_benchmark\
-	generic_viterbi_benchmark \
 	reference_fwdback_benchmark\
 	sparse_fwdback_benchmark\
 	p7_hmmcache_benchmark
@@ -179,10 +170,6 @@ BENCHMARKS = \
 UTESTS =\
 	build_utest\
 	emit_utest\
-	generic_fwdback_utest\
-	generic_msv_utest\
-	generic_stotrace_utest\
-	generic_viterbi_utest\
 	hmmer_utest\
 	logsum_utest\
 	modelconfig_utest\
@@ -204,17 +191,8 @@ ITESTS = \
 	itest_brute
 
 EXAMPLES = \
-	banded_fwdback_example\
 	build_example\
 	emit_example\
-	generic_fwdback_example\
-	generic_fwdback_chk_example\
-	generic_msv_example\
-	generic_decoding_example\
-	generic_optacc_example\
-	generic_stotrace_example\
-	generic_viterbi_example\
-	generic_vtrace_example\
 	logsum_example\
 	reference_fwdback_example\
 	reference_viterbi_example\
