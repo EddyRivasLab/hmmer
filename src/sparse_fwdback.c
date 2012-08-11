@@ -136,8 +136,8 @@ p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *s
 	    dlc = p7_FLogsum( mlc + TSC(p7P_MD, k), dlc + TSC(p7P_DD, k));
 	    dgc = p7_FLogsum( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k));
 	  } else {   /* if not, we MUST add {MD}l->Dk+1..E glocal exit path, even from internal sparse cells - not just last cell! */
+	    xE  = p7_FLogsum( xE, TSC(p7P_DGE, k) + p7_FLogsum( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k))); // this line comes first BEFORE you set dgc to -inf, fool
 	    dlc = dgc = -eslINFINITY;
-	    xE  = p7_FLogsum( xE, TSC(p7P_DGE, k) + p7_FLogsum( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k)));
 	  }
 	}
       *xpc++ = xE;  /* we already accumulated all Mk->E exits, both local and glocal */
@@ -1084,6 +1084,7 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
   int            did_full;			      /* 50:50 mix of sparse mask set full, vs. set by vector F/B filter */
   float          vsc1, vsc2, fsc1, fsc2, bsc1, bsc2;
   float          tol;
+  char           errbuf[eslERRBUFSIZE];
   
   /* Sample a profile.
    * Config as usual, multihit dual-mode local/glocal.  
@@ -1133,7 +1134,7 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
       if (!did_homolog || esl_rnd_Roll(rng, 2))
 	{
 	  if ( p7_sparsemask_AddAll(sm) != eslOK) esl_fatal(msg);
-	  tol      =  (p7_logsum_IsSlowExact() ? 1e-5 : 0.01);
+	  tol      =  (p7_logsum_IsSlowExact() ? 1e-5 : 0.02);
 	  did_full = TRUE;
 	}
       else
@@ -1169,6 +1170,9 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
       if ( p7_SparseForward   (dsq, tL, gm, sxf, &fsc1)            != eslOK) esl_fatal(msg);
       if ( p7_ReferenceForward(dsq, tL, gm, rxf, &fsc2)            != eslOK) esl_fatal(msg);
 
+      p7_refmx_Dump(stdout, rxf);
+      p7_sparsemx_Dump(stdout, sxf);
+
       if ( fabs(fsc1-fsc2) > tol)                                            esl_fatal(msg);  
       if ( p7_sparsemx_Validate(sxf, NULL)                         != eslOK) esl_fatal(msg);  
       if ( did_full && p7_sparsemx_CompareReference(sxf, rxf, tol) != eslOK) esl_fatal(msg);  
@@ -1181,7 +1185,7 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
       if ( p7_ReferenceBackward(dsq, tL, gm, rxb, &bsc2)           != eslOK) esl_fatal(msg);
 
       if ( fabs(bsc1-bsc2) > tol)                                            esl_fatal(msg);  
-      if ( p7_sparsemx_Validate(sxb, NULL)                         != eslOK) esl_fatal(msg);  
+      if ( p7_sparsemx_Validate(sxb, errbuf)                       != eslOK) esl_fatal(errbuf);  
       if ( did_full && p7_sparsemx_CompareReference(sxb, rxb, tol) != eslOK) esl_fatal(msg);  
 
       /* Decoding reference comparison */
@@ -1489,6 +1493,9 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "-T")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
   if (esl_opt_GetBoolean(go, "-V")) p7_sparsemx_Dump(stdout, sxv);
 
+  if ( p7_sparsemx_Validate( sxv, errbuf)  != eslOK) esl_fatal("sxv validation failed: %s", errbuf);
+  if ( p7_sparsemx_Validate( sxf, errbuf)  != eslOK) esl_fatal("sxf validation failed: %s", errbuf);
+  if ( p7_sparsemx_Validate( sxb, errbuf)  != eslOK) esl_fatal("sxb validation failed: %s", errbuf);
   if ( p7_sparsemx_Validate( sxd, errbuf)  != eslOK) esl_fatal("sxd validation failed: %s", errbuf);
 
   printf("target sequence:      %s\n",         sq->name);

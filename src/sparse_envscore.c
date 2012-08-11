@@ -161,10 +161,9 @@ p7_SparseEnvScore(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 	    dlc = p7_FLogsum( mlc + TSC(p7P_MD, k), dlc + TSC(p7P_DD, k));
 	    dgc = p7_FLogsum( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k));
 	  } else { 		/* if not, we must add the {MD}k->Dk+1..E glocal exit path! (even from internal sparse cells, not just the last sparse cell)  */
-	    dlc = dgc = -eslINFINITY; // D paths do not propagate thru unmarked cells
 	    xE  = p7_FLogsum( xE, TSC(p7P_DGE, k) + p7_FLogsum( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k)));
+	    dlc = dgc = -eslINFINITY; // D paths do not propagate thru unmarked cells
 	  } 
-	  
 	  dpc += p7S_NSCELLS;
 	} // end loop over sparse cells on current row
 

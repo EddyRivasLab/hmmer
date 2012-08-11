@@ -1255,25 +1255,22 @@ p7_sparsemx_CompareReference(P7_SPARSEMX *sx, P7_REFMX *rx, float tol)
     {
       if (sm->n[i] && !sm->n[i-1])         /* ia-1 specials at a segment start */
 	{
-	  for (s = 0; s < p7S_NXCELLS; s++) {
-	    if (esl_FCompareAbs(*xc, P7R_XMX(rx,i,s), tol) == eslFAIL) { if (killmenow) { printf("DEBUG: %f\n", P7R_XMX(rx,i,s)); abort(); } return eslFAIL; }
-	    xc++;
+	  for (s = 0; s < p7S_NXCELLS; xc++, s++) {
+	    if (esl_FCompareAbs(*xc, P7R_XMX(rx,i-1,s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
 	  }
 	}
 
       for (z = 0; z < sm->n[i]; z++)       /* sparse cells */
 	{
-	  for (s = 0; s < p7S_NSCELLS; s++) {
+	  for (s = 0; s < p7S_NSCELLS; dpc++, s++) {
 	    if (esl_FCompareAbs(*dpc, P7R_MX(rx,i,sm->k[i][z],s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
-	    dpc++;
 	  }
 	}
   
       if (sm->n[i])       /* specials */
 	{
-	  for (s = 0; s < p7S_NXCELLS; s++) {
-	    if (esl_FCompareAbs(*xc, P7R_XMX(rx,i,s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
-	    xc++;
+	  for (s = 0; s < p7S_NXCELLS; xc++, s++) {
+	    if (esl_FCompareAbs(*xc, P7R_XMX(rx,i,s), tol) == eslFAIL) { if (killmenow) { printf("DEBUG: %f\n", P7R_XMX(rx,i,s)); abort(); } return eslFAIL; }
 	  }
 	}
     }
@@ -1288,7 +1285,7 @@ p7_sparsemx_CompareReference(P7_SPARSEMX *sx, P7_REFMX *rx, float tol)
       ib = sm->i[g*2+1];
 
       for (s = 0; s < p7S_NXCELLS; s++) {       /* ia-1 specials at segment start */
-	if (esl_FCompareAbs(*xc2, P7R_XMX(rx,i,s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	if (esl_FCompareAbs(*xc2, P7R_XMX(rx,ia-1,s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
 	xc2++;
       }
 
@@ -1445,7 +1442,7 @@ validate_backward(P7_SPARSEMX *sx, char *errbuf)
   if (xc[p7S_N] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "N on last row not 0");
   if (xc[p7S_J] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "N on last row not 0");
   /* sweep: */
-  for (i = sm->L; i >= 1; i++)
+  for (i = sm->L; i >= 1; i--)
     {
       if (sm->n[i]) {                   /* specials on stored row i */
 	if (               xc[p7S_JJ] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "JJ on row i=%d not -inf", i);
