@@ -15,29 +15,31 @@
 
 #include "p7_config.h"
 
+#include <string.h>
+
 #include "easel.h"
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
 #include "p7_sparsemx.h"
-
+#include "sparse_fwdback.h"
 
 /*****************************************************************
  * 1. Sparse Forward
  *****************************************************************/
 
 /* Function:  p7_SparseForward()
- * Synopsis:  Forward algorithm, by sparse DP.
+ * Synopsis:  Forward algorithm, in sparse DP.
  *
- * Purpose:   Compare profile <gm> to sequence <dsq> (of length <L>),
+ * Purpose:   Compare profile <gm> to digital sequence <dsq> (of length <L>),
  *            by the Forward algorithm, using sparse dynamic programming.
  *            Fill in the sparse DP matrix <sx>, and the Forward score is
  *            also optionally returned in <opt_sc>.
  *
  * Args:      dsq     -  target sequence 1..L
- *            L       -  length of dsq
+ *            L       -  length of <dsq>
  *            gm      -  profile
- *            sx      -  Forward matrix to fill; allocated by caller
+ *            sx      -  Forward matrix to fill; allocated and initialized by caller
  *            opt_sc  -  optRETURN: raw Forward score, in nats
  *
  * Returns:   <eslOK> on success. Matrix <sx> is filled. The raw Forward score
@@ -167,6 +169,25 @@ p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *s
  * 2. Sparse Backward
  *****************************************************************/
 
+/* Function:  p7_SparseBackward()
+ * Synopsis:  Backward algorithm, in sparse DP.
+ *
+ * Purpose:   Compare profile <gm> to digital sequence <dsq> (of length
+ *            <L>) by the Backward algorithm, using sparse dynamic
+ *            programming, as constrained by the sparse mask that the
+ *            caller has initialized the matrix <sx> with. Fill in the
+ *            sparse DP Backward matrix <sx> and (optionally) return
+ *            the overall raw Backward score in <*opt_sc>.
+ *
+ * Args:      dsq     - digital target sequence 1..L
+ *            L       - length of <dsq>
+ *            gm      - profile
+ *            sx      - Backward matrix to fill; allocated and initialized by caller
+ *            opt_sc  - optRETURN: raw Backwards score, in nats
+ *                      
+ * Returns:   <eslOK> on success, and matrix <sx> is filled, and the
+ *            raw Backward score is in <*opt_sc>.
+ */
 int
 p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx, float *opt_sc)
 {
@@ -224,10 +245,9 @@ p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *
       rsn      = rsc;               // from previous row. invalid if there is no i+1 row (indeed, will be NULL for i=L) but doesn't matter; won't be accessed in that case
       rsc      = gm->rsc[dsq[i]];   // MSC(k),ISC(k) macros now work
 
-      dlc = -eslINFINITY;	                      // initialize delete path: DL(i,kb+1) out of band, so -inf 
-      dgc = xE + TSC(p7P_DGE, sm->k[i][sm->n[i]-1]);  // DG(i,kb)->Dkb+1..->E wing retracted exit path. TSC(DGE,M) = 0. 
-      xG  = xL = -eslINFINITY;
-      
+      dlc = -eslINFINITY; 
+      dgc = xE + TSC(p7P_DGE, sm->k[i][sm->n[i]-1]);
+      xG  = xL = -eslINFINITY;               // prepare to accumulate xG, xL logsums
       y = (i == sm->L ? -1 : sm->n[i+1]-1);  // if n[i+1] were allocated and set to a 0 sentinel, we could avoid this branch
       for (z = sm->n[i]-1; z >= 0; z--)
 	{
@@ -247,8 +267,11 @@ p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *
 	    ign = dpn[p7S_IG]; // + ISN(k), ditto
 	  } else { iln = ign = -eslINFINITY; }
 
-	  /* see if dln, dgn are valid from prev calculation on this row */
-	  if (z < sm->n[i]-1 && sm->k[i][z+1] != k+1) { dlc = dgc = -eslINFINITY; } // last_k more efficient?
+	  /* see if dlc, dgc are valid from prev calculation on this row. if not reinit. note glocal path, wing-retracted. */
+	  if (z < sm->n[i]-1 && sm->k[i][z+1] != k+1) { 
+	    dlc = -eslINFINITY; 
+	    dgc = xE + TSC(p7P_DGE, k);
+	  }
 	  
 	  /* M(i,k) calculations need to use dgc,dlc before we
 	   * change them, while they're still D(i,k+1). 
@@ -325,6 +348,45 @@ p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *
  * 3. Sparse Decoding
  *****************************************************************/
 
+/* Function:  p7_SparseDecoding()
+ * Synopsis:  Posterior decoding algorithm, in sparse DP.
+ *
+ * Purpose:   Given Forward matrix <sxf> and Backward matrix <sxb>, that
+ *            have been computed for a comparison of profile <gm> against
+ *            some sequence, fill in the posterior decoding matrix <sxd>.
+ *            
+ *            <sxb> and <sxd> can point to the same structure, in
+ *            which case posterior decoding overwrites the Backward
+ *            matrix; a trick that the caller might use to save
+ *            allocating a new matrix. (Can't do the same with
+ *            Forward, because of a detail involving CC/JJ transition
+ *            decoding.)
+ *            
+ *            {M/I}(i,k) is the prob that state {MI}k generated
+ *            residue <x_i>.  D(i,k) is the prob that a state path
+ *            used state Dk after already generating residue <x_i>
+ *            with another M state.  {BLG}(i) is the probability of
+ *            being in a {BLG} state just as we start a new domain at
+ *            <x_i+1>. E(i) is the probability of being in the end
+ *            state on row <i>, having ended the domain on this row.
+ *            These all arise from standard posterior decoding eqn's.
+ *            
+ *            Watch out for {NJC}, though, the states that emit on
+ *            transition; these are decoded in a slightly nonstandard
+ *            way. {NN/CC/JJ}(i) is the probability that we emitted
+ *            residue <i> on an {NN/CC/JJ} transition. {NCJ}(i) is the
+ *            probability that the state path uses {NCJ} on (i), which
+ *            is a sum of emitting <i> and an initial mute transition
+ *            {S->N,E->C,E->J}.
+ *
+ * Args:      gm   - profile
+ *            sxf  - Forward matrix, computed by caller
+ *            sxb  - Backward matrix, computed by caller
+ *            sxd  - space for result - the posterior decoding matrix
+ *            
+ * Returns:   <eslOK> on success, and <sxd> is filled by the posterior decoding
+ *            calculation.
+ */
 int
 p7_SparseDecoding(const P7_PROFILE *gm, const P7_SPARSEMX *sxf, P7_SPARSEMX *sxb, P7_SPARSEMX *sxd)
 {
@@ -420,6 +482,27 @@ p7_SparseDecoding(const P7_PROFILE *gm, const P7_SPARSEMX *sxf, P7_SPARSEMX *sxb
  *****************************************************************/
 static int sparse_viterbi_traceback(const P7_PROFILE *gm, const P7_SPARSEMX *sx, P7_TRACE *tr);
 
+/* Function:  p7_SparseViterbi()
+ * Synopsis:  Viterbi optimal path algorithm, in sparse DP.
+ *
+ * Purpose:   Compare profile <gm> to digital sequence <dsq> of length <L>,
+ *            by the Viterbi algorithm, using sparse dynamic programming,
+ *            as constrained by the sparse mask in sparse DP matrix <sx>.
+ *            Fill in the sparse Viterbi matrix <sx>; (optionally) trace
+ *            back the optimal path and return it in the trace structure <opt_tr>
+ *            if the caller provides one; and (optionally) return the 
+ *            Viterbi raw score in nats in <*opt_sc>.
+ *            
+ * Args:      dsq     - digital target sequence, 1..L
+ *            L       - length of <dsq>
+ *            gm      - profile
+ *            sx      - Viterbi matrix to fill; allocated and initialized by caller
+ *            opt_tr  - optRESULT: trace structure with optimal traceback; or NULL if caller doesn't want it
+ *            opt_sc  - optRETURN: raw Viterbi score in nats; or NULL if result unwanted
+ *
+ * Returns:   <eslOK> on success; <opt_tr>, if non-NULL, contains the optimal traceback;
+ *            and <*opt_sc> optionally contains the raw Viterbi score.
+ */
 int
 p7_SparseViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx,  P7_TRACE *opt_tr, float *opt_sc)
 {
@@ -511,15 +594,13 @@ p7_SparseViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *s
 	  if (z < sm->n[i]-1 && kc[z+1] == k+1) { /* is there a (i,k+1) cell to our right? */
 	    dlc = ESL_MAX( mlc + TSC(p7P_MD, k), dlc + TSC(p7P_DD, k));
 	    dgc = ESL_MAX( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k));
-	  } else if (z == sm->n[i]-1) {          /* last sparse cell on row? we need dgc to complete MGk->E path, below */
-	    dlc = -eslINFINITY;
-	    dgc = ESL_MAX( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k));
-	  } else {
+	  } else {  		/* if not, we MUST consider {MD}Gk->Dk+1..E glocal exit path, even from internal sparse cells - not just last cell! */
+	    xE  = ESL_MAX( xE,  TSC(p7P_DGE, k) + ESL_MAX( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k)));  // yes, the D path can contribute; we only use wing-retraction on sparse cells k where k+1 is unmarked; if k=M, for example, we must check D->E
 	    dlc = dgc = -eslINFINITY;
 	  }
 	}
 
-      *xpc++ = xE = ESL_MAX( xE, dgc + TSC(p7P_DGE, k));   // glocal exit path(s) added on, from last k cell D(k)->E; dgc includes Mk exit as Mk->Dk+1->E
+      *xpc++ = xE;  // we already max'ed over all Mk->E exits, both local and glocal
       *xpc++ = xN = xN + gm->xsc[p7P_N][p7P_LOOP];
       *xpc++ = xJ = ESL_MAX( xJ + gm->xsc[p7P_J][p7P_LOOP],  xE + gm->xsc[p7P_E][p7P_LOOP]);
       *xpc++ = xB = ESL_MAX( xJ + gm->xsc[p7P_J][p7P_MOVE],  xN + gm->xsc[p7P_N][p7P_MOVE]);
@@ -642,26 +723,36 @@ static inline int
 select_e(const P7_PROFILE *gm, const float *dpp, int *kp, int np, int *ret_z)
 {
   float max  = -eslINFINITY;
+  float pathsc;
   int   smax = -1;
   int   zmax = -1;
   int   z;
 
-  for (z = 0; z < np-1; z++)
-    {       /* don't need to check DL->E path; these can't occur in a Viterbi path */
-      if (dpp[p7S_ML] >= max) { max = dpp[p7S_ML]; smax = p7T_ML; zmax = z; }
-      dpp += p7S_NSCELLS;
-    }
-  /* last cell np-1 is out of loop because we don't want to bump dpp after it */
-  if (dpp[p7S_ML] >= max) { max = dpp[p7S_ML]; smax = p7T_ML; zmax = z; }
-  
   /* Glocal Mk,Dk->E: Mkb + t(MD,kb->kb+1) + t(Dkb+1->E) wing retraction 
    * remember DGE is stored off by one; TSC(gm,kb,DGE) is t(Dkb+1->E) wing retraction 
    * for this to work on boundary condition kb=M, requires TSC(gm,M,DGE) = TSC(gm,M,MD) = TSC(gm,M,DD) = 0.0 
    * for this to work on boundary condition kb=M-1, requires TSC(gm,M-1,DGE) = 0.0 
    * and those boundary conditions are enforced: see modelconfig.c 
+   * 
+   * Dk->E paths don't need to be checked in Viterbi;
+   *   in local, any Mk->Dk+1->...E path must be inferior to Mk->E
+   *   in glocal, an Mk->Dk+1->...E path can win, but all such paths are already checked by wing-retracted Mk->...E exits
    */
-  if ( dpp[p7S_MG] + P7P_TSC(gm, kp[z], p7P_MD) + P7P_TSC(gm, kp[z], p7P_DGE) >= max) { max = dpp[p7S_MG]; smax = p7T_MG; zmax = z; }
-  if ( dpp[p7S_DG] + P7P_TSC(gm, kp[z], p7P_DD) + P7P_TSC(gm, kp[z], p7P_DGE) >= max) { max = dpp[p7S_DG]; smax = p7T_DG; zmax = z; }
+  for (z = 0; z < np-1; z++)
+    {       /* don't need to check DL->E path; these can't occur in a Viterbi path */
+      if (dpp[p7S_ML] >= max) { max = dpp[p7S_ML]; smax = p7T_ML; zmax = z; }
+      
+      if (kp[z+1] != kp[z]+1) 
+	{ 	/* sparse cell k with no following cell k+1: then a glocal exit Mk->...->E across unmarked cells is possible */
+	  pathsc = dpp[p7S_MG] + P7P_TSC(gm, kp[z], p7P_MD) + P7P_TSC(gm, kp[z], p7P_DGE);
+	  if (pathsc > max) { max = pathsc; smax = p7T_MG; zmax = z; }
+	}
+      dpp += p7S_NSCELLS;
+    }
+  /* last cell np-1 is out of loop because we don't want to bump dpp after it */
+  if (dpp[p7S_ML] > max) { max = dpp[p7S_ML]; smax = p7T_ML; zmax = z; }
+  pathsc = dpp[p7S_MG] + P7P_TSC(gm, kp[z], p7P_MD) + P7P_TSC(gm, kp[z], p7P_DGE);  if (pathsc > max) { max = pathsc; smax = p7T_MG; zmax = z; }  
+  pathsc = dpp[p7S_DG] + P7P_TSC(gm, kp[z], p7P_DD) + P7P_TSC(gm, kp[z], p7P_DGE);  if (pathsc > max) { max = pathsc; smax = p7T_DG; zmax = z; }  
   *ret_z = zmax;
   return smax;
 }
@@ -793,8 +884,15 @@ sparse_viterbi_traceback(const P7_PROFILE *gm, const P7_SPARSEMX *sx, P7_TRACE *
 /*****************************************************************
  * 6. Benchmark driver
  *****************************************************************/
-
 #ifdef p7SPARSE_FWDBACK_BENCHMARK
+
+/* As of 13 Aug 2012, on cluster node:
+ * # Caudal_act (M= 143)
+ * # Sparse Forward:      13.8 Mc/s
+ * # Sparse Backward:     13.1 Mc/s
+ * # Sparse Decoding:     17.5 Mc/s
+ * # Sparse Viterbi:      64.3 Mc/s
+ */
 #include "p7_config.h"
 
 #include "easel.h"
@@ -969,6 +1067,134 @@ main(int argc, char **argv)
 #include "esl_random.h"
 #include "esl_randomseq.h"
 
+/*  The "randomseq" utest compares a randomly sampled profile to
+ *  random iid sequences by sparse DP (including fwd/bck filter step
+ *  to generate the sparse mask), and tests:
+ *     
+ *  1. Forward score is always >= Viterbi
+ *  2. Forward score = Backwards score
+ *  3. F,B,V matrices pass Validate()
+ *  
+ *  It also runs full reference DP, and tests:
+ *  
+ *  4. Reference F,B score >= sparse F,B score 
+ *     (but not necessarily very close, esp on iid seqs)
+ *  5. Reference V score >= sparse V score.
+ *  6. All values v in reference, sparse F,B,V matrices 
+ *     satisfy v_ref >= v_sparse
+ *     
+ *  These are relatively weak constraints, but one advantage of the
+ *  unit test is that it tests the entire sparse calculation sequence,
+ *  including fwd/bck filtering to generate the sparse mask, which can
+ *  then include the most tricky indexing situations (multisegment
+ *  sparse masks). Contrast to the "compare-reference" utest, which
+ *  guarantees strong constraints (exact match to the reference
+ *  implementation, within roundoff error) but only by using "full"
+ *  sparse masks with all cells marked; or to the "singlepath" utest,
+ *  which also guarantees strong constraints, but only by restricting
+ *  to a special singlepath profile with uniglocal,L=0, which cannot
+ *  generate a multisegment sparse path.
+ */
+static void
+utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
+{
+  char           msg[]  = "sparse fwdback 'randomseq' unit test failed";
+  P7_HMM        *hmm    = NULL;
+  P7_PROFILE    *gm     = p7_profile_Create(M, abc);
+  P7_OPROFILE   *om     = p7_oprofile_Create(M, abc);
+  ESL_DSQ       *dsq    = malloc(sizeof(ESL_DSQ) * (L+2));
+  P7_FILTERMX   *ox     = p7_filtermx_Create(M, L, ESL_MBYTES(32));
+  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L);
+  P7_SPARSEMX   *sxv    = p7_sparsemx_Create(sm);
+  P7_SPARSEMX   *sxf    = p7_sparsemx_Create(sm);
+  P7_SPARSEMX   *sxb    = p7_sparsemx_Create(sm);
+  P7_REFMX      *rxv    = p7_refmx_Create(M, L);
+  P7_REFMX      *rxf    = p7_refmx_Create(M, L);
+  P7_REFMX      *rxb    = p7_refmx_Create(M, L);
+  float          fsc_s, bsc_s, vsc_s; /* sparse DP scores for fwd, bck, vit    */
+  float          fsc_r, bsc_r, vsc_r; /* reference DP scores for fwd, bck, vit */
+  int            idx;
+  float          tol  = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+   
+  if ( p7_hmm_Sample(rng, M, abc, &hmm)  != eslOK) esl_fatal(msg);
+  if ( p7_profile_Config(gm, hmm, bg)    != eslOK) esl_fatal(msg);
+  if ( p7_oprofile_Convert(gm, om)       != eslOK) esl_fatal(msg);
+  if ( p7_profile_SetLength(gm, L)       != eslOK) esl_fatal(msg);
+  if ( p7_oprofile_ReconfigLength(om, L) != eslOK) esl_fatal(msg);
+
+  for (idx = 0; idx < N; idx++)
+    {
+      /* Sample a random iid sequence */
+      if (esl_rsq_xfIID(rng, bg->f, abc->K, L, dsq)      != eslOK) esl_fatal(msg);
+
+      /* Fwd/Bck local filter to calculate the sparse mask */
+      if ( p7_filtermx_GrowTo(ox, M, L)                    != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_Reinit(sm, M, L)                  != eslOK) esl_fatal(msg);
+      if ( p7_ForwardFilter (dsq, L, om, ox, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
+      if ( p7_BackwardFilter(dsq, L, om, ox, sm)           != eslOK) esl_fatal(msg);
+
+      /* Sparse DP calculations */
+      if ( p7_sparsemx_Reinit(sxv, sm)                        != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reinit(sxf, sm)                        != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reinit(sxb, sm)                        != eslOK) esl_fatal(msg);
+      if ( p7_SparseViterbi   (dsq, L, gm, sxv, NULL, &vsc_s) != eslOK) esl_fatal(msg);
+      if ( p7_SparseForward   (dsq, L, gm, sxf, &fsc_s)       != eslOK) esl_fatal(msg);
+      if ( p7_SparseBackward  (dsq, L, gm, sxb, &bsc_s)       != eslOK) esl_fatal(msg);
+  
+      /* Tests (1)-(3) */
+      if (fsc_s < vsc_s+tol)                         esl_fatal(msg); /* 1. Fwd score >= Vit score */
+      if (fabs(fsc_s - bsc_s) > tol)                 esl_fatal(msg); /* 2. Fwd score == Bck score */
+      if ( p7_sparsemx_Validate(sxv, NULL) != eslOK) esl_fatal(msg); /* 3. F,B,V matrices must Validate() */
+      if ( p7_sparsemx_Validate(sxf, NULL) != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Validate(sxb, NULL) != eslOK) esl_fatal(msg);
+      
+      /* Reference DP calculations */
+      if ( p7_refmx_GrowTo(rxv, M, L)                          != eslOK) esl_fatal(msg);
+      if ( p7_refmx_GrowTo(rxf, M, L)                          != eslOK) esl_fatal(msg);
+      if ( p7_refmx_GrowTo(rxb, M, L)                          != eslOK) esl_fatal(msg);
+      if (p7_ReferenceForward (dsq, L, gm, rxf,       &fsc_r)  != eslOK) esl_fatal(msg);
+      if (p7_ReferenceBackward(dsq, L, gm, rxb,       &bsc_r)  != eslOK) esl_fatal(msg);
+      if (p7_ReferenceViterbi (dsq, L, gm, rxv, NULL, &vsc_r)  != eslOK) esl_fatal(msg);
+
+      /* Tests (4)-(6) */
+      if (fsc_s > fsc_r+tol) esl_fatal(msg); /* 4. Reference F,B score >= sparse F,B score */
+      if (vsc_s > vsc_r+tol) esl_fatal(msg); /* 5. Reference V score >= sparse V score     */
+      if ( p7_sparsemx_CompareReferenceAsBound(sxv, rxv, tol) != eslOK) esl_fatal(msg); /* 6. All matrix values satisfy v_ref >= v_sparse */
+      if ( p7_sparsemx_CompareReferenceAsBound(sxf, rxf, tol) != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_CompareReferenceAsBound(sxb, rxb, tol) != eslOK) esl_fatal(msg);
+      
+      /* reuse DP matrices and mask */
+      if ( p7_refmx_Reuse(rxv)     != eslOK) esl_fatal(msg);
+      if ( p7_refmx_Reuse(rxf)     != eslOK) esl_fatal(msg);
+      if ( p7_refmx_Reuse(rxb)     != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reuse(sxv)  != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reuse(sxf)  != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reuse(sxb)  != eslOK) esl_fatal(msg);
+      if ( p7_filtermx_Reuse(ox)   != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_Reuse(sm) != eslOK) esl_fatal(msg); 
+    }
+
+  free(dsq);
+  p7_sparsemask_Destroy(sm);
+  p7_sparsemx_Destroy(sxv);  p7_sparsemx_Destroy(sxf);  p7_sparsemx_Destroy(sxb);
+  p7_refmx_Destroy(rxv);     p7_refmx_Destroy(rxf);     p7_refmx_Destroy(rxb);
+  p7_filtermx_Destroy(ox);
+  p7_profile_Destroy(gm);
+  p7_oprofile_Destroy(om);
+  p7_hmm_Destroy(hmm);
+}
+
+
+/* sparsemask_set_from_trace()
+ * 
+ * Add every supercell <i,k> in trace <tr> to the sparse mask <sm>.
+ * On rows <i> with at least one such cell, and on 20% of empty rows,
+ * also mark random sparse supercells with 50% probability each.
+ * 
+ * This creates a sparse mask in which the path defined by <tr> is
+ * marked and can be scored by sparse DP routines; plus additional
+ * random cells, to try to exercise possible failure modes.
+ */
 static void
 sparsemask_set_from_trace(ESL_RANDOMNESS *rng, P7_SPARSEMASK *sm, P7_TRACE *tr)
 {
@@ -1030,43 +1256,28 @@ sparsemask_set_from_trace(ESL_RANDOMNESS *rng, P7_SPARSEMASK *sm, P7_TRACE *tr)
 /* utest_compare_reference: 
  * 
  *  Tests that the sparse implementations of Viterbi, Forward,
- *  Backward, and posterior decoding give the same results as
- *  reference implementation.  
+ *  Backward, and Decoding give the same results as
+ *  reference implementation, when all cells are included
+ *  in the sparse mask.  
  *  
- *  Samples a random profile and compare it to a 50:50 mix of both
- *  homologous and nonhomologous sequences (generated from the
- *  profile, or iid). Either sets sparse mask to the
- *  full DP matrix, to facilitate exact comparison to reference
- *  implementation; or uses the vector F/B local filter to set it
- *  heuristically, to test sparse mask/matrix layout much more
- *  thoroughly, but with less tight agreement to full DP
- *  calculations; on negative sequences we always set the full
- *  DP matrix, and on homologs we do a 50:50 mix of setting
- *  full sparsemask vs. using vector F/B filter.
- *  Runs Viterbi, Forward, Backward, and Decoding, in
- *  both sparse and reference versions.
+ *  Samples a random profile and compare it to 'homologous'
+ *  sequences, generated from the profile, with the sparse
+ *  mask set to mark all cells, and tests:
  *  
- *     - Viterbi, Forward, and Backward scores must be identical
- *       within a tolerance (no more than 0.01 nats when
- *       sparse mask is set full; no more than 1.0 when using
- *       vector F/B local filter to set the mask).
- *     - when sparse mask is full: Viterbi traces must be identical
- *     - V,F,B,D DP matrix structures must validate;
- *     - V trace structure must validate;
- *     - when sparse mask is full, contents of V, F, and D DP
- *       matrices must be identical within tolerance. 
+ * 1. Reference and sparse scores must be identical (V,F,B), 
+ *    within a tolerance;
+ * 2. Reference and sparse viterbi traces must be identical;
+ * 3. All sparse V,F,B,D DP matrix structures must Validate();
+ * 4. Sparse Viterbi trace structure must Validate();
+ * 5. Reference and sparse matrices are identical within tolerance. 
  */
 static void
 utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
 {
-  char           msg[]  = "sparse fwdback, reference comparison unit test failed";
+  char           msg[]  = "sparse fwdback, compare-reference unit test failed";
   P7_HMM        *hmm    = NULL;
   P7_PROFILE    *gm     = p7_profile_Create(M, abc);
-  P7_OPROFILE   *om     = p7_oprofile_Create(M, abc);
   ESL_SQ        *sq     = esl_sq_CreateDigital(abc);       /* space for generated (homologous) target seqs              */
-  ESL_DSQ       *dsqmem = malloc(sizeof(ESL_DSQ) * (L+2)); /* space for randomly generated target sequences of length L */
-  ESL_DSQ       *dsq    = NULL;				   /* ptr into either dsqmem (nonhomologous targets) or sq->dsq (homologous targets) */
-  P7_FILTERMX   *ox     = p7_filtermx_Create(M, 500, ESL_MBYTES(32));
   P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L);
   P7_SPARSEMX   *sxv    = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxf    = p7_sparsemx_Create(sm);
@@ -1078,125 +1289,64 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
   P7_REFMX      *rxd    = p7_refmx_Create(M, L);
   P7_TRACE      *rtr    = p7_trace_Create();
   P7_TRACE      *str    = p7_trace_Create();
-  int            tL;
   int            idx;
-  int            did_homolog;	                      /* 50:50 mix of homologs (generated from profile) vs. nonhomologs (generated iid) */
-  int            did_full;			      /* 50:50 mix of sparse mask set full, vs. set by vector F/B filter */
-  float          vsc1, vsc2, fsc1, fsc2, bsc1, bsc2;
-  float          tol;
+  float          vsc_s, fsc_s, bsc_s;
+  float          vsc_r, fsc_r, bsc_r;
+  float          tol = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
   char           errbuf[eslERRBUFSIZE];
   
-  /* Sample a profile.
-   * Config as usual, multihit dual-mode local/glocal.  
-   * Vectorize it too.
-   */
+  /* Sample a profile. Config as usual, multihit dual-mode local/glocal. */
   if ( p7_hmm_Sample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
   if ( p7_profile_Config(gm, hmm, bg)   != eslOK) esl_fatal(msg);
-  if ( p7_oprofile_Convert(gm, om)      != eslOK) esl_fatal(msg);
 
   for (idx = 0; idx < N; idx++)
     {
-      if ( p7_profile_SetLength(gm, L)  != eslOK) esl_fatal(msg);   /* config to generate mean length of L (length may have been reset to tL by last emitted seq) */
+      /* Generate (sample) a sequence from the profile */
+      if ( p7_profile_SetLength(gm, L)  != eslOK) esl_fatal(msg);   /* config to generate mean length of L (length was probably reset by last emitted seq) */
+      do {
+	esl_sq_Reuse(sq);
+	p7_ProfileEmit(rng, hmm, gm, bg, sq, NULL);
+      } while (sq->n > L * 3); /* keep sequence length from getting ridiculous; long seqs do have higher abs error per cell */
+      if ( p7_profile_SetLength(gm, sq->n) != eslOK) esl_fatal(msg);
 
-      /* A 50:50 mix of generated (homologous) and random (nonhomologous) sequences */
-      if (esl_rnd_Roll(rng, 2)) 
-	{ /* fixed-length random emission */
-	  esl_rsq_xfIID(rng, bg->f, abc->K, L, dsqmem);  
-	  dsq = dsqmem;  
-	  tL = L;     
-	  did_homolog = FALSE;
-	}
-      else  
-	{ /* variable-length seq emission: length config on <gm>,<om> will change to <tL> before DP */
-	  do {
-	    esl_sq_Reuse(sq);
-	    p7_ProfileEmit(rng, hmm, gm, bg, sq, NULL);
-	  } while (sq->n > L * 3); /* keep sequence length from getting ridiculous; long seqs do have higher abs error per cell */
-	  dsq = sq->dsq; 
-	  tL = sq->n; 
-	  did_homolog = TRUE;
-	}
+      /* Mark all cells in sparse mask */
+      if ( p7_sparsemask_Reinit(sm, M, sq->n) != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_AddAll(sm)           != eslOK) esl_fatal(msg);
 
-      /* Config length models, resize DP matrices for L=tL target */
-      if ( p7_profile_SetLength(gm, tL)       != eslOK) esl_fatal(msg);
-      if ( p7_oprofile_ReconfigLength(om, tL) != eslOK) esl_fatal(msg);
-      if ( p7_refmx_GrowTo(rxv,    M, tL)     != eslOK) esl_fatal(msg);
-      if ( p7_filtermx_GrowTo(ox, om->M, tL)  != eslOK) esl_fatal(msg);
-
-
-      /* Sparse mask. 
-       * On negative seqs, always add all cells to mask.
-       * On homolog seqs, w/ 50:50 odds, either use F/B filter or add all cells to mask. 
-       * If all cells are in mask, we expect ref, sparse to agree within fp roundoff accum. 
-       * With F/B filter pruning the DP matrix heuristically, agreement is less tight.
-       */
-      if ( p7_sparsemask_Reinit(sm, M, tL) != eslOK) esl_fatal(msg);
-      if (!did_homolog || esl_rnd_Roll(rng, 2))
-	{
-	  if ( p7_sparsemask_AddAll(sm) != eslOK) esl_fatal(msg);
-	  tol      =  (p7_logsum_IsSlowExact() ? 1e-5 : 0.02);
-	  did_full = TRUE;
-	}
-      else
-	{
-	  if ( p7_ForwardFilter(dsq, tL, om, ox, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
-	  if ( p7_BackwardFilter(dsq, tL, om, ox, sm)          != eslOK) esl_fatal(msg);
-	  tol      = 1.0;
-	  did_full = FALSE;
-	}
+      /* Sparse DP calculations  */
       if ( p7_sparsemx_Reinit(sxv, sm)     != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reinit(sxf, sm)     != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reinit(sxb, sm)     != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reinit(sxd, sm)     != eslOK) esl_fatal(msg);
+      if ( p7_SparseViterbi (sq->dsq, sq->n, gm, sxv, str, &vsc_s) != eslOK) esl_fatal(msg);
+      if ( p7_SparseForward (sq->dsq, sq->n, gm, sxf,      &fsc_s) != eslOK) esl_fatal(msg);
+      if ( p7_SparseBackward(sq->dsq, sq->n, gm, sxb,      &bsc_s) != eslOK) esl_fatal(msg);
+      if ( p7_SparseDecoding(gm, sxf, sxb, sxd)                    != eslOK) esl_fatal(msg);
 
-      /* Viterbi reference comparison  */
-      if ( p7_SparseViterbi   (dsq, tL, gm, sxv, str, &vsc1) != eslOK) esl_fatal(msg);
-      if ( p7_ReferenceViterbi(dsq, tL, gm, rxv, rtr, &vsc2) != eslOK) esl_fatal(msg);
+      /* Reference DP calculations */
+      if ( p7_refmx_GrowTo(rxv, M, sq->n)        != eslOK) esl_fatal(msg);
+      if ( p7_refmx_GrowTo(rxf, M, sq->n)        != eslOK) esl_fatal(msg);
+      if ( p7_refmx_GrowTo(rxb, M, sq->n)        != eslOK) esl_fatal(msg);
+      if ( p7_refmx_GrowTo(rxd, M, sq->n)        != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceViterbi (sq->dsq, sq->n, gm, rxv, rtr, &vsc_r) != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceForward (sq->dsq, sq->n, gm, rxf,      &fsc_r) != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceBackward(sq->dsq, sq->n, gm, rxb,      &bsc_r) != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceDecoding(gm, rxf, rxb, rxd)                    != eslOK) esl_fatal(msg);
 
-      //printf("# SPARSE MASK:\n");              p7_sparsemask_Dump(stdout, sm);
-      //printf("# SPARSE viterbi matrix:\n");    p7_sparsemx_Dump(stdout, sxv);
-      //printf("# REFERENCE viterbi matrix:\n"); p7_refmx_Dump(stdout, rxv);
-      //printf("# SPARSE viterbi trace; %s  %s\n", did_homolog? "homolog":"negative", did_full? "full" : "F/Bfilter");
-      //p7_trace_DumpAnnotated(stdout, str, gm, dsq);
-      //printf("# REFERENCE viterbi trace\n");
-      //p7_trace_DumpAnnotated(stdout, rtr, gm, dsq);
-
-      if ( fabs(vsc1-vsc2) > tol)                                            esl_fatal(msg); // Viterbi scores must agree.
-      if ( did_full && p7_trace_Compare(rtr, str, 0.0f)            != eslOK) esl_fatal(msg); // 0.0 is <pptol> arg, unused, because neither trace has PP annotation
-      if ( p7_sparsemx_Validate(sxv, NULL)                         != eslOK) esl_fatal(msg); 
-      if ( did_full && p7_sparsemx_CompareReference(sxv, rxv, tol) != eslOK) esl_fatal(msg); // matrices only compare 'exactly' if sparse DP was full
-
-      /* Forward reference comparison */
-      if ( p7_refmx_GrowTo   (rxf, M, tL)                          != eslOK) esl_fatal(msg);
-      if ( p7_sparsemx_Reinit(sxf, sm)                             != eslOK) esl_fatal(msg);
-      
-      if ( p7_SparseForward   (dsq, tL, gm, sxf, &fsc1)            != eslOK) esl_fatal(msg);
-      if ( p7_ReferenceForward(dsq, tL, gm, rxf, &fsc2)            != eslOK) esl_fatal(msg);
-
-      p7_refmx_Dump(stdout, rxf);
-      p7_sparsemx_Dump(stdout, sxf);
-
-      if ( fabs(fsc1-fsc2) > tol)                                            esl_fatal(msg);  
-      if ( p7_sparsemx_Validate(sxf, NULL)                         != eslOK) esl_fatal(msg);  
-      if ( did_full && p7_sparsemx_CompareReference(sxf, rxf, tol) != eslOK) esl_fatal(msg);  
-
-      /* Backward reference comparison */
-      if ( p7_refmx_GrowTo   (rxb, M, tL)                          != eslOK) esl_fatal(msg);
-      if ( p7_sparsemx_Reinit(sxb, sm)                             != eslOK) esl_fatal(msg);
-
-      if ( p7_SparseBackward   (dsq, tL, gm, sxb, &bsc1)           != eslOK) esl_fatal(msg);
-      if ( p7_ReferenceBackward(dsq, tL, gm, rxb, &bsc2)           != eslOK) esl_fatal(msg);
-
-      if ( fabs(bsc1-bsc2) > tol)                                            esl_fatal(msg);  
-      if ( p7_sparsemx_Validate(sxb, errbuf)                       != eslOK) esl_fatal(errbuf);  
-      if ( did_full && p7_sparsemx_CompareReference(sxb, rxb, tol) != eslOK) esl_fatal(msg);  
-
-      /* Decoding reference comparison */
-      if ( p7_refmx_GrowTo   (rxd, M, tL)                          != eslOK) esl_fatal(msg);
-      if ( p7_sparsemx_Reinit(sxd, sm)                             != eslOK) esl_fatal(msg);
-
-      if ( p7_SparseDecoding   (gm, sxf, sxb, sxd)                 != eslOK) esl_fatal(msg);
-      if ( p7_ReferenceDecoding(gm, rxf, rxb, rxd)                 != eslOK) esl_fatal(msg);
-
-      if ( p7_sparsemx_Validate(sxf, NULL)                         != eslOK) esl_fatal(msg);  
-      if ( did_full && p7_sparsemx_CompareReference(sxd, rxd, tol) != eslOK) esl_fatal(msg);  
+      /* Tests */
+      if ( esl_FCompareAbs(vsc_s, vsc_r, tol)          != eslOK) esl_fatal(msg); /* (1): reference and sparse scores (V,F,B) identical within tolerance */
+      if ( esl_FCompareAbs(fsc_s, fsc_r, tol)          != eslOK) esl_fatal(msg);
+      if ( esl_FCompareAbs(bsc_s, bsc_r, tol)          != eslOK) esl_fatal(msg);
+      if ( p7_trace_Compare(rtr, str, 0.0f)            != eslOK) esl_fatal(msg); /* (2): reference, sparse Viterbi tracebacks identical */
+      if ( p7_sparsemx_Validate(sxv, NULL)             != eslOK) esl_fatal(msg); /* (3): All sparse DP matrices Validate() (V,F,B,D) */
+      if ( p7_sparsemx_Validate(sxf, NULL)             != eslOK) esl_fatal(msg); /*      (the <NULL> arg is an optional <errbuf>)    */
+      if ( p7_sparsemx_Validate(sxb, NULL)             != eslOK) esl_fatal(msg);       
+      if ( p7_sparsemx_Validate(sxd, errbuf)           != eslOK) esl_fatal(errbuf);
+      if ( p7_trace_Validate(str, abc, sq->dsq, NULL)  != eslOK) esl_fatal(msg); /* (4): Sparse DP Viterbi trace must Validate() */
+      if ( p7_sparsemx_CompareReference(sxv, rxv, tol) != eslOK) esl_fatal(msg); /* (5): Sparse and reference DP matrices all identical within tolerance */
+      if ( p7_sparsemx_CompareReference(sxf, rxf, tol) != eslOK) esl_fatal(msg); /* (5): Sparse and reference DP matrices all identical within tolerance */
+      if ( p7_sparsemx_CompareReference(sxb, rxb, tol) != eslOK) esl_fatal(msg); /* (5): Sparse and reference DP matrices all identical within tolerance */
+      if ( p7_sparsemx_CompareReference(sxd, rxd, tol) != eslOK) esl_fatal(msg); /* (5): Sparse and reference DP matrices all identical within tolerance */
       
       if ( p7_trace_Reuse(str)     != eslOK) esl_fatal(msg);
       if ( p7_trace_Reuse(rtr)     != eslOK) esl_fatal(msg);
@@ -1208,12 +1358,12 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
       if ( p7_sparsemx_Reuse(sxf)  != eslOK) esl_fatal(msg);
       if ( p7_sparsemx_Reuse(sxb)  != eslOK) esl_fatal(msg);
       if ( p7_sparsemx_Reuse(sxd)  != eslOK) esl_fatal(msg);
-      if ( p7_filtermx_Reuse(ox)   != eslOK) esl_fatal(msg);
       if ( esl_sq_Reuse(sq)        != eslOK) esl_fatal(msg);
       if ( p7_sparsemask_Reuse(sm) != eslOK) esl_fatal(msg); 
     }
 
-  free(dsqmem);
+  p7_trace_Destroy(rtr);
+  p7_trace_Destroy(str);
   p7_sparsemask_Destroy(sm);
   p7_sparsemx_Destroy(sxv);
   p7_sparsemx_Destroy(sxf);
@@ -1223,13 +1373,169 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
   p7_refmx_Destroy(rxf);
   p7_refmx_Destroy(rxb);
   p7_refmx_Destroy(rxd);
-  p7_filtermx_Destroy(ox);
   esl_sq_Destroy(sq);
   p7_profile_Destroy(gm);
-  p7_oprofile_Destroy(om);
   p7_hmm_Destroy(hmm);
 }
 
+
+
+/* The "reference-constrained" utest compares a randomly sampled
+ * profile against homologous sequences (i.e. sampled from the same
+ * profile) by sparse DP, using a sparse mask that includes all the
+ * cells in the reference Viterbi trace plus a sprinkling of
+ * additional random sparse supercells. Thus by construction, we know
+ * that the sparse Viterbi score must equal the reference, and the
+ * sparse Forward and Backward scores must be >= the reference Viterbi
+ * score. 
+ *
+ * This test is important because it bounds the sparse DP scores from
+ * *below*, which is nontrivial. If sparse DP missed a high scoring
+ * path, it could elude other unit tests like 'randomseq' where
+ * we only have the sparse DP score bounded from above by the 
+ * reference DP.
+ * 
+ * Tests:
+ * 1. Reference and sparse Viterbi scores are equal (within tolerance)
+ * 2. Reference and sparse Viterbi traces are identical 
+ * 3. Sparse F,B scores are >= reference Viterbi score, because we
+ *    know the reference V path is included in the sparse mask.
+ *
+ * Also, more general test criteria apply, shared with 'randomseq' for 
+ * example:
+ * 
+ * 4. Sparse F score == B
+ * 5. All values v in reference, sparse V,F,B matrices satisfy v_r >= v_s
+ * 6. Sparse V,F,B,D matrices Validate()
+ */
+static void
+utest_reference_constrained(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
+{
+  char           msg[]  = "sparse fwdback, reference-constrained unit test failed";
+  P7_HMM        *hmm    = NULL;
+  P7_PROFILE    *gm     = p7_profile_Create(M, abc);
+  ESL_SQ        *sq     = esl_sq_CreateDigital(abc);       /* space for generated (homologous) target seqs              */
+  P7_REFMX      *rxv    = p7_refmx_Create(M, L);
+  P7_REFMX      *rxf    = p7_refmx_Create(M, L);
+  P7_REFMX      *rxb    = p7_refmx_Create(M, L);
+  P7_TRACE      *rtr    = p7_trace_Create();
+  P7_TRACE      *str    = p7_trace_Create();
+  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L);
+  P7_SPARSEMX   *sxv    = p7_sparsemx_Create(sm);
+  P7_SPARSEMX   *sxf    = p7_sparsemx_Create(sm);
+  P7_SPARSEMX   *sxb    = p7_sparsemx_Create(sm);
+  P7_SPARSEMX   *sxd    = p7_sparsemx_Create(sm);
+  int            idx;
+  float          vsc_s, fsc_s, bsc_s;
+  float          vsc_r, fsc_r, bsc_r;
+  float          tol = ( p7_logsum_IsSlowExact() ? 0.001 : 0.01 ); /* numerical error on V scores is a little higher in this test */
+
+  /* Sample a profile. 
+   * Config as usual: multihit dual-mode local/glocal, so all paths in it are valid.
+   */
+  if ( p7_hmm_Sample(rng, M, abc, &hmm)  != eslOK) esl_fatal(msg);
+  if ( p7_profile_Config(gm, hmm, bg)    != eslOK) esl_fatal(msg);
+
+  for (idx = 0; idx < N; idx++)
+    {
+      /* Generate (sample) a sequence from the profile */
+      if ( p7_profile_SetLength(gm, L)  != eslOK) esl_fatal(msg);   /* config to generate mean length of L (length was probably reset by last emitted seq) */
+      do {
+	esl_sq_Reuse(sq);
+	p7_ProfileEmit(rng, hmm, gm, bg, sq, NULL);
+      } while (sq->n > L * 3); /* keep sequence length from getting ridiculous; long seqs do have higher abs error per cell */
+      if ( p7_profile_SetLength(gm, sq->n) != eslOK) esl_fatal(msg);
+
+      /* Reference DP calculations, including a reference Viterbi traceback */
+      if ( p7_refmx_GrowTo(rxv, M, sq->n)                              != eslOK) esl_fatal(msg);
+      if ( p7_refmx_GrowTo(rxf, M, sq->n)                              != eslOK) esl_fatal(msg);
+      if ( p7_refmx_GrowTo(rxb, M, sq->n)                              != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceForward (sq->dsq, sq->n, gm, rxf,       &fsc_r) != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceBackward(sq->dsq, sq->n, gm, rxb,       &bsc_r) != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceViterbi (sq->dsq, sq->n, gm, rxv, rtr,  &vsc_r) != eslOK) esl_fatal(msg);
+      
+      /* Use the reference Viterbi trace to create a sparse mask */
+      if ( p7_sparsemask_Reinit(sm, M, sq->n)  != eslOK) esl_fatal(msg);
+      sparsemask_set_from_trace(rng, sm, rtr);
+
+      /* Sparse DP calculations, in which we know the reference Viterbi trace will be scored */
+      if ( p7_sparsemx_Reinit(sxv, sm)     != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reinit(sxf, sm)     != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reinit(sxb, sm)     != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reinit(sxd, sm)     != eslOK) esl_fatal(msg);
+      if ( p7_SparseViterbi (sq->dsq, sq->n, gm, sxv, str, &vsc_s) != eslOK) esl_fatal(msg);
+      if ( p7_SparseForward (sq->dsq, sq->n, gm, sxf,      &fsc_s) != eslOK) esl_fatal(msg);
+      if ( p7_SparseBackward(sq->dsq, sq->n, gm, sxb,      &bsc_s) != eslOK) esl_fatal(msg);
+      if ( p7_SparseDecoding(gm, sxf, sxb, sxd)                    != eslOK) esl_fatal(msg);
+
+      //p7_trace_DumpAnnotated(stdout, str, gm, sq->dsq);
+      //p7_trace_DumpAnnotated(stdout, rtr, gm, sq->dsq);
+      //p7_sparsemx_Dump(stdout, sxv);
+      //p7_refmx_Dump(stdout, rxv);
+
+      /* Tests */
+      if ( esl_FCompare(vsc_s, vsc_r, tol)                    != eslOK) esl_fatal(msg); /* (1) sparse, reference V scores equal */
+      if ( p7_trace_Compare(str, rtr, 0.0f)                   != eslOK) esl_fatal(msg); /* (2) sparse, reference V traces identical (0.0f arg is <pptol>, unused) */
+      if ( ! (fsc_s - vsc_r + tol > 0.0f))                              esl_fatal(msg); /* (3) sparse F,B scores >= reference V score. */
+      if ( esl_FCompare(fsc_s, bsc_s, tol)                    != eslOK) esl_fatal(msg); /* (4) sparse F score = B score */
+      if ( p7_sparsemx_CompareReferenceAsBound(sxv, rxv, tol) != eslOK) esl_fatal(msg); /* (5) All V,F,B matrix values satisfy v_ref >= v_sparse */
+      if ( p7_sparsemx_CompareReferenceAsBound(sxf, rxf, tol) != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_CompareReferenceAsBound(sxb, rxb, tol) != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Validate(sxv, NULL)                    != eslOK) esl_fatal(msg); /* (6): All sparse DP matrices Validate() (V,F,B,D) */
+      if ( p7_sparsemx_Validate(sxf, NULL)                    != eslOK) esl_fatal(msg); /*      (the <NULL> arg is an optional <errbuf>)    */
+      if ( p7_sparsemx_Validate(sxb, NULL)                    != eslOK) esl_fatal(msg);       
+      if ( p7_sparsemx_Validate(sxd, NULL)                    != eslOK) esl_fatal(msg);
+
+      /* reuse DP matrices, mask, and trace */
+      if ( p7_sparsemask_Reuse(sm) != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reuse(sxv)  != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reuse(sxf)  != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reuse(sxb)  != eslOK) esl_fatal(msg);
+      if ( p7_sparsemx_Reuse(sxd)  != eslOK) esl_fatal(msg);
+      if ( p7_refmx_Reuse(rxv)     != eslOK) esl_fatal(msg);
+      if ( p7_refmx_Reuse(rxf)     != eslOK) esl_fatal(msg);
+      if ( p7_refmx_Reuse(rxb)     != eslOK) esl_fatal(msg);
+      if ( p7_trace_Reuse(rtr)     != eslOK) esl_fatal(msg);
+      if ( p7_trace_Reuse(str)     != eslOK) esl_fatal(msg);
+    }
+
+  p7_trace_Destroy(rtr);
+  p7_trace_Destroy(str);
+  p7_sparsemask_Destroy(sm);
+  p7_sparsemx_Destroy(sxv);
+  p7_sparsemx_Destroy(sxf);
+  p7_sparsemx_Destroy(sxb);
+  p7_sparsemx_Destroy(sxd);
+  p7_refmx_Destroy(rxv);
+  p7_refmx_Destroy(rxf);
+  p7_refmx_Destroy(rxb);
+  esl_sq_Destroy(sq);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+}
+
+
+/* The 'singlepath' utest samples a specially configured profile that
+ * only allows one possible statepath. Generate a sequence from that
+ * path, and set the sparse mask to include the path, plus marking a
+ * dusting of additional randomly chosen sparse cells; then use sparse
+ * DP routines to compare the profile to the seq. Test:
+ * 
+ * 1. Sparse V score = sparse F score = sparse B score
+ * 2. Sparse V score = trace score of the generated seq
+ * 3. Sparse Viterbi trace = generated trace
+ * 
+ * The key observation in this utest is that V=F=B scores, because we
+ * know there is only a single possible path.
+ * 
+ * In order to guarantee a single path, the sampled profile must be
+ * uniglocal L=0 (local mode would allow different local subseq
+ * entry/exit; multihit or L>0 would allow different alignments of the
+ * model to a target seq. Thus many paths are not exercised by the
+ * test. Most importantly, because the profile aligns globally to the
+ * sequence it generates, the sparse mask can't be multisegment; every
+ * row i has at least one sparse cell marked.
+ */
 static void
 utest_singlepath(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int N)
 {
@@ -1285,9 +1591,9 @@ utest_singlepath(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int N
       //p7_trace_DumpAnnotated(stdout, vtr, gm, sq->dsq);
 
       /* Since only a single path is possible, trace score and Fwd score match */
-      if ( esl_FCompareAbs(tsc, vsc, tol)   != eslOK) esl_fatal(msg);
-      if ( esl_FCompareAbs(tsc, fsc, tol)   != eslOK) esl_fatal(msg);
+      if ( esl_FCompareAbs(tsc, fsc, tol)   != eslOK) esl_fatal(msg); 
       if ( esl_FCompareAbs(tsc, bsc, tol)   != eslOK) esl_fatal(msg);
+      if ( esl_FCompareAbs(tsc, vsc, tol)   != eslOK) esl_fatal(msg);
       if ( p7_trace_Compare(gtr, vtr, 0.0f) != eslOK) esl_fatal(msg); // 0.0 is <pptol> arg, unused, because neither trace has PP annotation
   
       esl_sq_Reuse(sq);
@@ -1302,12 +1608,136 @@ utest_singlepath(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int N
   
   p7_sparsemx_Destroy(sxv);
   p7_sparsemx_Destroy(sxf);
+  p7_sparsemx_Destroy(sxb);
+  p7_sparsemx_Destroy(sxd);
   p7_sparsemask_Destroy(sm);
   p7_trace_Destroy(vtr);
   p7_trace_Destroy(gtr);
   esl_sq_Destroy(sq);
   p7_profile_Destroy(gm);
 }
+
+
+/* The 'internal-glocal-exit' utest tests for a peculiar quirk of
+ * sparse DP: that MGk->...->E glocal exits may cross unmarked Dk+1.Dm
+ * supercells, so any time we have an {DM}Gk sparse cell that does not
+ * have DGk+1 marked, DP routines must allow an internal
+ * wing-retracted {DM}Gk->E exit.
+ * 
+ * The utest creates a handcrafted simple example of comparing a 40aa
+ * model to a 38aa truncated target, where the final transition needs
+ * to cross an unmarked cell. It then tests the usual sort of stuff
+ * against the reference:
+ * 1. Viterbi score for sparse, reference are identical within tolerance
+ * 2. Sparse F score = B
+ * 3. Reference F score = B 
+ * 4. Viterbi traces for sparse, reference are identical
+ */
+static void
+utest_internal_glocal_exit(void)
+{
+  char          msg[]   = "sparse fwdback, internal-glocal-exit utest failed";
+  ESL_ALPHABET *abc     = esl_alphabet_Create(eslAMINO);
+  char          qseq[]  = "ACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWY";
+  char          tseq[]  = "ACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTV";
+  int           M       = strlen(qseq);
+  int           L       = strlen(tseq);
+  ESL_DSQ      *qsq     = NULL;
+  ESL_DSQ      *tsq     = NULL;
+  float         popen   = 0.1;
+  float         pextend = 0.4;
+  P7_BUILDER   *bld     = p7_builder_Create(NULL, abc);
+  P7_BG        *bg      = p7_bg_Create(abc);
+  P7_HMM       *hmm     = NULL;
+  P7_PROFILE   *gm      = p7_profile_Create(M, abc);
+  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M,L);
+  P7_SPARSEMX   *sxv    = NULL;
+  P7_SPARSEMX   *sxf    = NULL;
+  P7_SPARSEMX   *sxb    = NULL;
+  P7_SPARSEMX   *sxd    = NULL;
+  P7_REFMX      *rxv    = p7_refmx_Create(M, L);
+  P7_REFMX      *rxf    = p7_refmx_Create(M, L);
+  P7_REFMX      *rxb    = p7_refmx_Create(M, L);
+  P7_REFMX      *rxd    = p7_refmx_Create(M, L);
+  P7_TRACE      *rtr    = p7_trace_Create();
+  P7_TRACE      *str    = p7_trace_Create();
+  float          vsc_s, fsc_s, bsc_s, tsc_s;
+  float          vsc_r, fsc_r, bsc_r, tsc_r;
+  int            i;
+  float          tol = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+
+  /* Create the 40aa A-YA-Y test model */
+  if ( esl_abc_CreateDsq(abc, qseq, &qsq)                                                != eslOK) esl_fatal(msg);
+  if ( p7_builder_LoadScoreSystem(bld, "BLOSUM62", popen, pextend, bg)                   != eslOK) esl_fatal(msg); 
+  if ( p7_Seqmodel(abc, qsq, M, "aatest", bld->Q, bg->f, bld->popen, bld->pextend, &hmm) != eslOK) esl_fatal(msg);
+  if ( p7_hmm_SetComposition(hmm)                                                        != eslOK) esl_fatal(msg);
+  if ( p7_hmm_SetConsensus(hmm, NULL)                                                    != eslOK) esl_fatal(msg);
+  if ( p7_profile_Config(gm, hmm, bg)                                                    != eslOK) esl_fatal(msg);
+
+  /* Create the 38aa truncated test target seq */
+  if ( esl_abc_CreateDsq(abc, tseq, &tsq)                                                != eslOK) esl_fatal(msg);
+  
+  /* Create a sparse mask that includes the main diagonal and the last column. 
+   * This mask exercises the potential bug.
+   */
+  for (i = L; i >= 1; i--)  // remember, sparsemask construction is constrained by backwards pass of the backwards filter
+    {
+      /* Add cells k=M (last column), k=i (diagonal) to each row.
+       * API requires that they're added in backwards order (M, then i).
+       * API also requires that they're added not as <k> coord but as <q,r> slot coords (see sparsemask.c docs)
+       */
+      if ( p7_sparsemask_StartRow(sm, i)                   != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_Add(sm, (M-1)%sm->Q, (M-1)/sm->Q) != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_Add(sm, (i-1)%sm->Q, (i-1)/sm->Q) != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_FinishRow(sm)                     != eslOK) esl_fatal(msg);
+    }
+  if ( p7_sparsemask_Finish(sm)          != eslOK) esl_fatal(msg);
+  if ( (sxv    = p7_sparsemx_Create(sm)) == NULL)  esl_fatal(msg);
+  if ( (sxf    = p7_sparsemx_Create(sm)) == NULL)  esl_fatal(msg);
+  if ( (sxb    = p7_sparsemx_Create(sm)) == NULL)  esl_fatal(msg);
+  if ( (sxd    = p7_sparsemx_Create(sm)) == NULL)  esl_fatal(msg);
+  
+  /* Reference DP calculations */
+  if ( p7_ReferenceViterbi (tsq, L, gm, rxv, rtr, &vsc_r) != eslOK) esl_fatal(msg);
+  if ( p7_ReferenceForward (tsq, L, gm, rxf,      &fsc_r) != eslOK) esl_fatal(msg);
+  if ( p7_ReferenceBackward(tsq, L, gm, rxb,      &bsc_r) != eslOK) esl_fatal(msg);
+  if ( p7_ReferenceDecoding(gm, rxf, rxb, rxd)            != eslOK) esl_fatal(msg);
+
+  /* Sparse DP calculations */
+  if ( p7_SparseViterbi (tsq, L, gm, sxv, str, &vsc_s) != eslOK) esl_fatal(msg);
+  if ( p7_SparseForward (tsq, L, gm, sxf,      &fsc_s) != eslOK) esl_fatal(msg);
+  if ( p7_SparseBackward(tsq, L, gm, sxb,      &bsc_s) != eslOK) esl_fatal(msg);
+  if ( p7_SparseDecoding(gm, sxf, sxb, sxd)            != eslOK) esl_fatal(msg);
+
+  if ( p7_trace_Score(str, tsq, gm, &tsc_s) != eslOK) esl_fatal(msg);
+  if ( p7_trace_Score(rtr, tsq, gm, &tsc_r) != eslOK) esl_fatal(msg);
+
+  /* Tests */
+  if ( esl_FCompareAbs(vsc_s, vsc_r, tol) != eslOK) esl_fatal(msg); 
+  if ( esl_FCompareAbs(fsc_s, bsc_s, tol) != eslOK) esl_fatal(msg);
+  if ( esl_FCompareAbs(fsc_r, bsc_r, tol) != eslOK) esl_fatal(msg);
+  if ( p7_trace_Compare(str, rtr, 0.0f)   != eslOK) esl_fatal(msg); // 0.0 is <pptol> arg, unused, because neither trace has PP annotation
+
+  p7_trace_Destroy(rtr);
+  p7_trace_Destroy(str);
+  p7_sparsemask_Destroy(sm);
+  p7_sparsemx_Destroy(sxv);
+  p7_sparsemx_Destroy(sxf);
+  p7_sparsemx_Destroy(sxb);
+  p7_sparsemx_Destroy(sxd);
+  p7_refmx_Destroy(rxv);
+  p7_refmx_Destroy(rxf);
+  p7_refmx_Destroy(rxb);
+  p7_refmx_Destroy(rxd);
+  p7_builder_Destroy(bld);
+  p7_bg_Destroy(bg);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);  
+  free(qsq);
+  free(tsq);
+}
+  
 
 
 #endif /*p7SPARSE_FWDBACK_TESTDRIVE*/
@@ -1355,8 +1785,17 @@ main(int argc, char **argv)
   p7_FLogsumInit();
   impl_Init();
 
-  utest_compare_reference(r, abc, bg, M, L, N);
-  utest_singlepath       (r, abc, bg, M,    N);
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
+
+  utest_internal_glocal_exit();
+
+  utest_randomseq            (r, abc, bg, M, L, N);
+  utest_compare_reference    (r, abc, bg, M, L, N);
+  utest_reference_constrained(r, abc, bg, M, L, N);
+  utest_singlepath           (r, abc, bg, M,    N);
+
+  fprintf(stderr, "#  status = ok\n");
 
   p7_bg_Destroy(bg);
   esl_alphabet_Destroy(abc);

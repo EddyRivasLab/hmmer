@@ -56,7 +56,6 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
   int         seed;
   int         status;
 
-
   ESL_ALLOC(bld, sizeof(P7_BUILDER));
   bld->prior        = NULL;
   bld->r            = NULL;
@@ -338,11 +337,10 @@ p7_builder_Destroy(P7_BUILDER *bld)
 {
   if (bld == NULL) return;
 
-  if (bld->prior   != NULL) p7_prior_Destroy(bld->prior);
-  if (bld->r       != NULL) esl_randomness_Destroy(bld->r);
-  if (bld->Q       != NULL) esl_dmatrix_Destroy(bld->Q);
-  if (bld->S       != NULL) esl_scorematrix_Destroy(bld->S);
-
+  if (bld->prior) p7_prior_Destroy(bld->prior);
+  if (bld->r)     esl_randomness_Destroy(bld->r);
+  if (bld->Q)     esl_dmatrix_Destroy(bld->Q);
+  if (bld->S)     esl_scorematrix_Destroy(bld->S);
   free(bld);
   return;
 }

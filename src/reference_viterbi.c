@@ -73,7 +73,7 @@ p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
   
 #ifdef p7_DEBUGGING
   if (L+1 > rmx->allocR)                           ESL_EXCEPTION(eslEINVAL, "matrix allocR too small; missing a p7_refmx_GrowTo() initialization call?");
-  if ((M+1)*p7R_NSCELLS+p7R_NXCELLS < rmx->allocW) ESL_EXCEPTION(eslEINVAL, "matrix allocW too small; missing a p7_refmx_GrowTo() initialization call?");
+  if ((M+1)*p7R_NSCELLS+p7R_NXCELLS > rmx->allocW) ESL_EXCEPTION(eslEINVAL, "matrix allocW too small; missing a p7_refmx_GrowTo() initialization call?");
   if (gm->L != L && gm->L != 0)                    ESL_EXCEPTION(eslEINVAL, "length model in profile wasn't set to L (or 0)");
 #endif
 

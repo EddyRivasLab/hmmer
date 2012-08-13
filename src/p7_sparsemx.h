@@ -150,7 +150,8 @@ extern char *p7_sparsemx_DecodeSpecial(int type);
 extern int   p7_sparsemx_Dump(FILE *ofp, P7_SPARSEMX *sx);
 extern int   p7_sparsemx_DumpWindow(FILE *ofp, P7_SPARSEMX *sx, int i1, int i2, int ka, int kb);
 extern int   p7_sparsemx_Copy2Reference  (P7_SPARSEMX *sx, P7_REFMX *rx);
-extern int   p7_sparsemx_CompareReference(P7_SPARSEMX *sx, P7_REFMX *rx, float tol);
+extern int   p7_sparsemx_CompareReference       (const P7_SPARSEMX *sx, const P7_REFMX *rx, float tol);
+extern int   p7_sparsemx_CompareReferenceAsBound(const P7_SPARSEMX *sx, const P7_REFMX *rx, float tol);
 extern int   p7_sparsemx_Validate(P7_SPARSEMX *sx, char *errbuf);
 #endif /*P7_SPARSEMX_INCLUDED*/
 

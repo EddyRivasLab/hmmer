@@ -85,7 +85,7 @@ p7_ReferenceForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
   
 #ifdef p7_DEBUGGING
   if (L+1 > rmx->allocR)                           ESL_EXCEPTION(eslEINVAL, "matrix allocR too small; missing a p7_refmx_GrowTo() initialization call?");
-  if ((M+1)*p7R_NSCELLS+p7R_NXCELLS < rmx->allocW) ESL_EXCEPTION(eslEINVAL, "matrix allocW too small; missing a p7_refmx_GrowTo() initialization call?");
+  if ((M+1)*p7R_NSCELLS+p7R_NXCELLS > rmx->allocW) ESL_EXCEPTION(eslEINVAL, "matrix allocW too small; missing a p7_refmx_GrowTo() initialization call?");
   if (gm->L != L && gm->L != 0)                    ESL_EXCEPTION(eslEINVAL, "length model in profile wasn't set to L (or 0)");
 #endif
 
@@ -264,7 +264,7 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
 
 #ifdef p7_DEBUGGING
   if (L+1 > rmx->allocR)                           ESL_EXCEPTION(eslEINVAL, "matrix allocR too small; missing a p7_refmx_GrowTo() initialization call?");
-  if ((M+1)*p7R_NSCELLS+p7R_NXCELLS < rmx->allocW) ESL_EXCEPTION(eslEINVAL, "matrix allocW too small; missing a p7_refmx_GrowTo() initialization call?");
+  if ((M+1)*p7R_NSCELLS+p7R_NXCELLS > rmx->allocW) ESL_EXCEPTION(eslEINVAL, "matrix allocW too small; missing a p7_refmx_GrowTo() initialization call?");
   if (gm->L != L && gm->L != 0)                    ESL_EXCEPTION(eslEINVAL, "length model in profile wasn't set to L");
 #endif
 
@@ -513,7 +513,7 @@ p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, const P7_REFMX *
   if (fwd->M    != bck->M)       ESL_EXCEPTION(eslEINVAL, "<fwd>, <bck> matrices have different M");
   if (gm->M     != fwd->M)       ESL_EXCEPTION(eslEINVAL, "profile <gm> M doesn't match matrices");
   if (fwd->L+1 > pp->allocR)     ESL_EXCEPTION(eslEINVAL, "<pp> matrix allocR too small; missing p7_refmx_GrowTo() initialization call?");
-  if ((fwd->M+1)*p7R_NSCELLS+p7R_NXCELLS < pp->allocW) ESL_EXCEPTION(eslEINVAL, "<pp> matrix allocW too small; missing p7_refmx_GrowTo() initialization call?");
+  if ((fwd->M+1)*p7R_NSCELLS+p7R_NXCELLS > pp->allocW) ESL_EXCEPTION(eslEINVAL, "<pp> matrix allocW too small; missing p7_refmx_GrowTo() initialization call?");
 #endif
 
   /* On row 0, all main states are 0; initialize them so. set

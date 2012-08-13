@@ -1201,6 +1201,14 @@ p7_sparsemx_Copy2Reference(P7_SPARSEMX *sx, P7_REFMX *rx)
  *            <esl_FCompareAbs()> calls. Return <eslOK> if comparison
  *            succeeds; return <eslFAIL> otherwise.
  *            
+ *            In generaly, this is only going to succeed if <sx> was
+ *            calculated as a 'full' sparse matrix, with all cells
+ *            marked, as in <p7_sparsemask_AddAll()>. For truly sparse
+ *            calculations, you will more likely want to use
+ *            <p7_sparsemx_CompareReferenceAsBound()>, which treats
+ *            the reference calculation's matrix values as an upper
+ *            bound on the corresponding sparse cell values.
+ *            
  *            The comparison tests two different traversal mechanisms
  *            for sparse main cells.  Should be completely redundant,
  *            unless we've corrupted the structure.  The routine is
@@ -1232,12 +1240,12 @@ p7_sparsemx_Copy2Reference(P7_SPARSEMX *sx, P7_REFMX *rx)
  *            <eslFAIL> if comparison fails.
  */
 int
-p7_sparsemx_CompareReference(P7_SPARSEMX *sx, P7_REFMX *rx, float tol)
+p7_sparsemx_CompareReference(const P7_SPARSEMX *sx, const P7_REFMX *rx, float tol)
 {
-  P7_SPARSEMASK *sm        = sx->sm;
+  const P7_SPARSEMASK *sm  = sx->sm;
   int            killmenow = FALSE;
-  float         *dpc, *dpc2;
-  float         *xc,  *xc2;
+  const float   *dpc, *dpc2;
+  const float   *xc,  *xc2;
   int            g,i,s,z;
   int            ia,ib;
 #ifdef p7_DEBUGGING
@@ -1255,23 +1263,20 @@ p7_sparsemx_CompareReference(P7_SPARSEMX *sx, P7_REFMX *rx, float tol)
     {
       if (sm->n[i] && !sm->n[i-1])         /* ia-1 specials at a segment start */
 	{
-	  for (s = 0; s < p7S_NXCELLS; xc++, s++) {
+	  for (s = 0; s < p7S_NXCELLS; xc++, s++) 
 	    if (esl_FCompareAbs(*xc, P7R_XMX(rx,i-1,s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
-	  }
 	}
 
       for (z = 0; z < sm->n[i]; z++)       /* sparse cells */
 	{
-	  for (s = 0; s < p7S_NSCELLS; dpc++, s++) {
+	  for (s = 0; s < p7S_NSCELLS; dpc++, s++) 
 	    if (esl_FCompareAbs(*dpc, P7R_MX(rx,i,sm->k[i][z],s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
-	  }
 	}
   
       if (sm->n[i])       /* specials */
 	{
-	  for (s = 0; s < p7S_NXCELLS; xc++, s++) {
-	    if (esl_FCompareAbs(*xc, P7R_XMX(rx,i,s), tol) == eslFAIL) { if (killmenow) { printf("DEBUG: %f\n", P7R_XMX(rx,i,s)); abort(); } return eslFAIL; }
-	  }
+	  for (s = 0; s < p7S_NXCELLS; xc++, s++) 
+	    if (esl_FCompareAbs(*xc, P7R_XMX(rx,i,s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
 	}
     }
 
@@ -1284,25 +1289,18 @@ p7_sparsemx_CompareReference(P7_SPARSEMX *sx, P7_REFMX *rx, float tol)
       ia = sm->i[g*2];
       ib = sm->i[g*2+1];
 
-      for (s = 0; s < p7S_NXCELLS; s++) {       /* ia-1 specials at segment start */
+      for (s = 0; s < p7S_NXCELLS; xc2++, s++)        /* ia-1 specials at segment start */
 	if (esl_FCompareAbs(*xc2, P7R_XMX(rx,ia-1,s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
-	xc2++;
-      }
 
       for (i = ia; i <= ib; i++) 
 	{
 	  for (z = 0; z < sm->n[i]; z++)      	  /* sparse main cells */
 	    {
-	      for (s = 0; s < p7S_NSCELLS; s++) {
+	      for (s = 0; s < p7S_NSCELLS; dpc2++, s++) 
 		if (esl_FCompareAbs(*dpc2, P7R_MX(rx,i,sm->k[i][z],s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
-		dpc2++;
-	      }
 	    }
-
-	  for (s = 0; s < p7S_NXCELLS; s++) {   	  /* specials */
+	  for (s = 0; s < p7S_NXCELLS; xc2++, s++)  	  /* specials */
 	    if (esl_FCompareAbs(*xc2, P7R_XMX(rx,i,s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
-	    xc2++;
-	  }
 	}
     }
   
@@ -1310,6 +1308,62 @@ p7_sparsemx_CompareReference(P7_SPARSEMX *sx, P7_REFMX *rx, float tol)
   if (dpc != dpc2)  { if (killmenow) abort(); return eslFAIL; }
   if (xc  != xc2)   { if (killmenow) abort(); return eslFAIL; }
   
+  return eslOK;
+}
+
+
+/* Function:  p7_sparsemx_CompareReferenceAsBound()
+ * Synopsis:  Test sparse DP matrix cell values are upper-bounded by reference
+ *
+ * Purpose:   Check that all values in sparse matrix <sx> are bounded
+ *            (less than or equal to) the corresponding values in reference
+ *            matrix <rx>, allowing for a small amount <tol> of floating-point
+ *            roundoff error accumulation. That is, <v_s <= v_r+tol> for all
+ *            matrix cell values <v>. Return <eslOK> if comparison succeeds;
+ *            return <eslFAIL> otherwise.
+ *            
+ *            This is a variant of <p7_sparsemx_CompareReference()>;
+ *            see additional documentation there, with the exception
+ *            that this routine only uses one traversal mechanism in
+ *            the sparse matrix.
+ *
+ * Args:      sx  - sparse DP matrix
+ *            rx  - reference DP matrix
+ *            tol - absolute floating point comparison tolerance
+ *                 
+ * Returns:   <eslOK> on success.
+ *            <eslFAIL> if comparison fails.
+ */
+int
+p7_sparsemx_CompareReferenceAsBound(const P7_SPARSEMX *sx, const P7_REFMX *rx, float tol)
+{
+  const P7_SPARSEMASK *sm  = sx->sm;
+  int            killmenow = FALSE;
+  const float   *dpc       = sx->dp;
+  const float   *xc        = sx->xmx;
+  int            i,s,z;
+#ifdef p7_DEBUGGING
+  killmenow = TRUE;
+#endif
+
+  if (sx->type != rx->type) { if (killmenow) abort(); return eslFAIL; }
+  if (sm->M    != rx->M)    { if (killmenow) abort(); return eslFAIL; }
+  if (sm->L    != rx->L)    { if (killmenow) abort(); return eslFAIL; }
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n[i] && !sm->n[i-1]) {    /* ia-1 specials at a segment start */
+	for (s = 0; s < p7S_NXCELLS; xc++, s++) 
+	  if (*xc > P7R_XMX(rx,i-1,s)+tol)           { if (killmenow) abort(); return eslFAIL; }
+      }
+      for (z = 0; z < sm->n[i]; z++)    /* sparse cells */
+	for (s = 0; s < p7S_NSCELLS; dpc++, s++) 
+	  if (*dpc > P7R_MX(rx,i,sm->k[i][z],s)+tol) { if (killmenow) abort(); return eslFAIL; }
+  
+      if (sm->n[i]) {    /* specials */
+	for (s = 0; s < p7S_NXCELLS; xc++, s++) 
+	  if (*xc > P7R_XMX(rx,i,s)+tol)             { if (killmenow) abort(); return eslFAIL;  }
+      }
+    }
   return eslOK;
 }
 /*------------ end, P7_SPARSEMX debugging tools -----------------*/
@@ -1481,7 +1535,7 @@ validate_decoding(P7_SPARSEMX *sx, char *errbuf)
   float         *xc  = sx->xmx;
   int            i,z,s;
   int            last_n;
-  float          tol = 1e-4;
+  float          tol = 0.001;
 
   /* Check special cases prohibited in the first ia-1 presegment specials: */
   if ( esl_FCompareAbs(xc[p7S_N],  1.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first N not 1");
@@ -1543,14 +1597,14 @@ validate_decoding(P7_SPARSEMX *sx, char *errbuf)
     {
       if (sm->n[i] && !sm->n[i-1]) {       /* ia-1 specials at a segment start */
 	for (s = 0; s < p7S_NXCELLS; xc++, s++) 
-	  if (! is_prob(*xc, tol)) ESL_FAIL(eslFAIL, errbuf, "bad decode prob for %s, seg start, ia=%d\n", p7_sparsemx_DecodeSpecial(s), i);
+	  if (! is_prob(*xc, tol)) ESL_FAIL(eslFAIL, errbuf, "bad decode prob %f for %s, seg start, ia=%d\n", *xc, p7_sparsemx_DecodeSpecial(s), i); 
       }
       for (z = 0; z < sm->n[i]; z++)       /* sparse main cells */
 	for (s = 0; s < p7S_NSCELLS; dpc++, s++) 
-	  if (! is_prob(*dpc, tol)) ESL_FAIL(eslFAIL, errbuf, "bad decode prob at i=%d,k=%d,%s", i,sm->k[i][z], p7_sparsemx_DecodeState(s));
+	  if (! is_prob(*dpc, tol)) ESL_FAIL(eslFAIL, errbuf, "bad decode prob %f at i=%d,k=%d,%s", *xc, i,sm->k[i][z], p7_sparsemx_DecodeState(s));
       if (sm->n[i]) {                      /* specials on sparse row */
 	for (s = 0; s < p7S_NXCELLS; xc++, s++) 
-	  if (! is_prob(*xc, tol)) ESL_FAIL(eslFAIL, errbuf, "bad decode prob at i=%d,%s", i, p7_sparsemx_DecodeSpecial(s));
+	  if (! is_prob(*xc, tol)) { abort(); ESL_FAIL(eslFAIL, errbuf, "bad decode prob %f at i=%d,%s", *xc, i, p7_sparsemx_DecodeSpecial(s)); }
       }
     }
   return eslOK;
