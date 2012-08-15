@@ -75,8 +75,8 @@ p7_SparseEnvScore(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
   float         *dpc = sx->dp;
   float         *dpp;
   float         *last_dpc;
-  const float const *tsc = gm->tsc;
-  const float const *rsc;
+  const float * const tsc = gm->tsc;
+  const float * rsc;
   float          xE, xB, xL, xG, xN, xC;
   float          mlc, mgc;
   float          dlc, dgc;

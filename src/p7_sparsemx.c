@@ -622,6 +622,15 @@ p7_sparsemx_Reinit(P7_SPARSEMX *sx, P7_SPARSEMASK *sm)
 }
 
 
+int
+p7_sparsemx_Zero(P7_SPARSEMX *sx)
+{
+  esl_vec_FSet(sx->dp,   sx->sm->ncells*p7S_NSCELLS,             0.0f);
+  esl_vec_FSet(sx->xmx, (sx->sm->nrow+sx->sm->nseg)*p7S_NXCELLS, 0.0f);
+  return eslOK;
+}
+
+
 /* Function:  p7_sparsemx_Sizeof()
  * Synopsis:  Returns current allocated size of a P7_SPARSEMX, in bytes.
  *
@@ -808,6 +817,60 @@ p7_sparsemx_TracePostprobs(P7_SPARSEMX *sxd, P7_TRACE *tr)
     }
   return eslOK;
 }
+
+
+int
+p7_sparsemx_CountTrace(const P7_TRACE *tr, P7_SPARSEMX *sxd)
+{
+  static int sttype[p7T_NSTATETYPES] = { -1, p7S_ML, p7S_MG, p7S_IL, p7S_IG, p7S_DL, p7S_DG, -1, p7S_N, p7S_B, p7S_L, p7S_G, p7S_E, p7S_C, p7S_J, -1 }; /* sttype[] translates trace idx to DP matrix idx*/
+  const P7_SPARSEMASK *sm  = sxd->sm;
+  float               *dpc = sxd->dp;   /* ptr that steps thru stored main supercells i,k */
+  float               *xc  = sxd->xmx;	/* ptr that steps thru stored special rows, including ia-1 seg edges */
+  int   i   = 0;		/* row index (seq position) */
+  int   y   = 0;		/* index in sparse cell list on a row */
+  int   z;			/* index in trace positions */
+
+  if (sxd->type == p7S_UNSET) sxd->type = p7S_DECODING; /* first time */
+  
+  for (z = 1; z < tr->N-1; z++)	/* z=0 is S; z=N-1 is T; neither is represented in DP matrix, so avoid them */
+    {
+      if (tr->i[z])		/* we'll emit i, so we need to update our matrix ptrs */
+	{
+	  while (y < sm->n[i]) { y++; dpc += p7S_NSCELLS; }  /* skip remainder of prev sparse row */
+	  if (sm->n[i] || sm->n[i+1])  xc += p7S_NXCELLS;    /* increment specials. note, i+1 is safe here; i<L at this point, because tr->i[z] <= L and i < tr->i[z] */
+	  i = tr->i[z];
+	  y = 0;
+	}
+      
+      if (tr->k[z])		/* if it's a main state, {MID}{LG} */
+	{
+	  while (y < sm->n[i] && sm->k[i][y] <  tr->k[z]) { y++; dpc += p7S_NSCELLS; } /* try to find sparse cell for i,k. note, if row isn't stored at all (n[i]==0) nothing happens here, because y==n[i] */
+	  if    (y < sm->n[i] && sm->k[i][y] == tr->k[z]) dpc[sttype[(int) tr->st[z]]] += 1.0;  /* did we find it? then increment +1 */
+	  else if ( tr->st[z] != p7T_DG )       	  ESL_EXCEPTION(eslEINCONCEIVABLE, "failed to find i,k supercell, and this cannot be a DG wing retraction");
+	    /* Because of wing-retraction, it's possible to have DGk states in a trace that can't be stored in sparse cells,
+	     * because they were implied by a wing-retracted entry/exit.
+	     * for y == sm->n[i], then it must be a DG on a MGk->Dk+1...E wing-retracted exit. 
+	     * for k[i][z] > tr->k[z], then it must be a DG on a G->...Dk-1->Mk wing-retracted entry.
+	     * but if it's not a DG, fail.
+	     */
+	}
+      else 			/* if it's a special state, {ENJBLGC} */
+	{
+	  if (sm->n[i] || (i < sm->L && sm->n[i+1])) {
+	    xc[sttype[(int) tr->st[z]]] += 1.0;
+	    if (tr->st[z] == p7T_C && tr->i[z]) xc[p7S_CC] += 1.0;
+	    if (tr->st[z] == p7T_J && tr->i[z]) xc[p7S_JJ] += 1.0;
+	  } else {   /* else, make sure it's something that's allowed to be implicit */
+	    if ( ! (i == 0     && tr->st[z] == p7T_N) &&    /* S->N... on row 0 can be implicit */
+		 ! (tr->i[z]))                        	    /* NN/CC/JJ emissions are implied on unstored rows; if (tr->i[z]) is used to check for NN/CC/JJ  */
+	      ESL_EXCEPTION(eslEINCONCEIVABLE, "failed to find stored xmx[i] specials for this trace position");
+	  }
+	}
+    }
+  return eslOK;
+}
+
+
 
 
 int
@@ -1201,7 +1264,7 @@ p7_sparsemx_Copy2Reference(P7_SPARSEMX *sx, P7_REFMX *rx)
  *            <esl_FCompareAbs()> calls. Return <eslOK> if comparison
  *            succeeds; return <eslFAIL> otherwise.
  *            
- *            In generaly, this is only going to succeed if <sx> was
+ *            In general, this is only going to succeed if <sx> was
  *            calculated as a 'full' sparse matrix, with all cells
  *            marked, as in <p7_sparsemask_AddAll()>. For truly sparse
  *            calculations, you will more likely want to use
@@ -1366,6 +1429,44 @@ p7_sparsemx_CompareReferenceAsBound(const P7_SPARSEMX *sx, const P7_REFMX *rx, f
     }
   return eslOK;
 }
+
+int
+p7_sparsemx_CompareDecoding(const P7_SPARSEMX *sxe, const P7_SPARSEMX *sxa, float tol)
+{
+  const P7_SPARSEMASK *sm  = sxe->sm;
+  const float         *dpe = sxe->dp;
+  const float         *dpa = sxa->dp;
+  const float         *xce = sxe->xmx;
+  const float         *xca = sxa->xmx;
+  int   killmenow          = FALSE;             
+  int   i,s,z;
+  float diff;
+  float max = 0.0f;
+#ifdef p7_DEBUGGING
+  killmenow = TRUE;
+#endif
+
+
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n[i] && !sm->n[i-1]) {    /* ia-1 specials at a segment start */
+	for (s = 0; s < p7S_NXCELLS; xce++, xca++, s++) 
+	  { diff = fabs(*xce-*xca); if (diff > max) { max = diff; } }
+      }
+      for (z = 0; z < sm->n[i]; z++)    /* sparse cells */
+	for (s = 0; s < p7S_NSCELLS; dpe++, dpa++, s++)
+	  { diff = fabs(*dpe-*dpa); if (diff > max) { max = diff; } }
+
+      if (sm->n[i]) {		        /* specials */
+	for (s = 0; s < p7S_NSCELLS; xce++, xca++, s++)
+	  { diff = fabs(*xce-*xca); if (diff > max) { max = diff; } }
+      }
+    }
+  printf(" max diff = %f\n", max);
+  return eslOK;
+}
+
+
 /*------------ end, P7_SPARSEMX debugging tools -----------------*/
 
 
@@ -1549,19 +1650,24 @@ validate_decoding(P7_SPARSEMX *sx, char *errbuf)
     {
       if (sm->n[i] && !sm->n[i-1]) {       /* ia-1 specials at a segment start */
 	if ( esl_FCompareAbs(xc[p7S_E], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "E seg start for ia=%d not 0", i);
+	if ( xc[p7S_J]+tol < xc[p7S_JJ])                    ESL_FAIL(eslFAIL, errbuf, "JJ>J at seg start for ia=%d ", i);
+	if ( xc[p7S_C]+tol < xc[p7S_CC])                    ESL_FAIL(eslFAIL, errbuf, "CC>C at seg start for ia=%d ", i);
 	xc += p7S_NXCELLS;
       }
       for (z = 0; z < sm->n[i]; z++)       /* sparse main cells */
 	{
-	  /* if k-1 supercell doesn't exist, can't reach D's */
+	  /* if k-1 supercell doesn't exist, can't reach DL. But all DGk are reachable, because of wing-retracted entry/exit */
 	  if ((z == 0 || sm->k[i][z] != sm->k[i][z-1]+1) && esl_FCompareAbs(dpc[p7S_DL], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first DL on i=%d not 0", i);
-	  if ((z == 0 || sm->k[i][z] != sm->k[i][z-1]+1) && esl_FCompareAbs(dpc[p7S_DG], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first DG on i=%d not 0", i);
 	  if (   sm->k[i][z] == sm->M                    && esl_FCompareAbs(dpc[p7S_IL], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IL on i=%d,M not 0", i);
 	  if (   sm->k[i][z] == sm->M                    && esl_FCompareAbs(dpc[p7S_IG], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IG on i=%d,M not 0", i);
 	  dpc += p7S_NSCELLS;
 	  /* there are other conditions where I(i,k) values must be zero but this is more tedious to check */
 	}
-      if (sm->n[i]) xc += p7S_NXCELLS;
+      if (sm->n[i]) {
+	if ( xc[p7S_J]+tol < xc[p7S_JJ])                    ESL_FAIL(eslFAIL, errbuf, "JJ>J at i=%d ", i);
+	if ( xc[p7S_C]+tol < xc[p7S_CC])                    ESL_FAIL(eslFAIL, errbuf, "CC>C at i=%d ", i);
+	xc += p7S_NXCELLS;
+      }
     }
 
   /* Backwards sweep, looking only at ib end rows. */

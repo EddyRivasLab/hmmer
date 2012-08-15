@@ -94,7 +94,9 @@ HDRS =  hmmer.h \
 	p7_hmmcache.h\
 	p7_refmx.h\
 	p7_sparsemx.h \
-	p7_trace_metrics.h
+	p7_trace_metrics.h\
+	sparse_fwdback.h\
+	sparse_trace.h
 
 OBJS =  build.o\
 	cachedb.o\
@@ -128,6 +130,7 @@ OBJS =  build.o\
 	sparse_envscore.o\
 	sparse_fwdback.o\
 	sparse_masstrace.o\
+	sparse_trace.o\
 	tracealign.o\
 	p7_alidisplay.o\
 	p7_bg.o\
@@ -198,6 +201,7 @@ EXAMPLES = \
 	reference_viterbi_example\
 	sparse_fwdback_example\
 	sparse_masstrace_example\
+	sparse_trace_example\
 	p7_alidisplay_example\
 	p7_bg_example\
 	p7_bg_example2\

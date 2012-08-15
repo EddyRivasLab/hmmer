@@ -494,9 +494,10 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
 int
 p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, const P7_REFMX *bck, P7_REFMX *pp)
 {
-  const int L = fwd->L;
-  const int M = fwd->M;
-  float     xJ, xC;
+  const float *tsc = gm->tsc;	/* activates the TSC() convenience macro */
+  const int    L   = fwd->L;
+  const int    M   = fwd->M;
+  float     xJ, xC, xG, xE;
   float    *fwdp;
   float    *bckp;
   float    *ppp;
@@ -505,6 +506,8 @@ p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, const P7_REFMX *
   int       i;
   int       k;
   int       x;
+  float     delta;		/* additions to DGk's, resulting from unfolding wing-retracted entry/exit paths */
+
 
 #ifdef p7_DEBUGGING
   if (fwd->type != p7R_FORWARD)  ESL_EXCEPTION(eslEINVAL, "<fwd> argument isn't a Forward matrix");
@@ -535,45 +538,63 @@ p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, const P7_REFMX *
   ppp[p7R_JJ] = 0.0f;
   ppp[p7R_CC] = 0.0f;
   
-  /* xJ/xC hold the previous row i-1 values from forward matrix;
-   * needed for decoding emit-on-transition 
+  /* xJ/xC/xG hold the previous row i-1 values from forward matrix;
+   * needed for decoding emit-on-transition, and G->D1..Dk-1->Mk entry
    */
   xJ = fwdp[p7R_J];     /* i.e. -inf */
   xC = fwdp[p7R_C];	/* i.e. -inf */
+  xG = fwdp[p7R_G];
 
   /* main recursion */
   for (i = 1; i <= L; i++)
     {
       fwdp  = fwd->dp[i] + p7R_NSCELLS;
       bckp  = bck->dp[i] + p7R_NSCELLS;
+      xE    = *(bckp + (M+1)*p7R_NSCELLS + p7R_E); /* unfortunate. we really need to leap ahead to get E(i) value. */
       ppp   = pp->dp[i];
       for (x = 0; x < p7R_NSCELLS; x++) *ppp++ = 0.0;
       denom = 0.0;
 
-      for (k = 1; k <= M; k++)
+      /* [ ML MG IL IG DL . ] */
+      for (k = 1; k <= M; k++, ppp+= p7R_NSCELLS, fwdp+= p7R_NSCELLS, bckp += p7R_NSCELLS )
 	{
 	  ppp[p7R_ML] = expf(fwdp[p7R_ML] + bckp[p7R_ML] - sc); denom += ppp[p7R_ML]; 
 	  ppp[p7R_MG] = expf(fwdp[p7R_MG] + bckp[p7R_MG] - sc); denom += ppp[p7R_MG]; 
 	  ppp[p7R_IL] = expf(fwdp[p7R_IL] + bckp[p7R_IL] - sc); denom += ppp[p7R_IL]; // at k=M IL=0.0; made so because fwd/bck are -inf
 	  ppp[p7R_IG] = expf(fwdp[p7R_IG] + bckp[p7R_IG] - sc); denom += ppp[p7R_IG];
 	  ppp[p7R_DL] = expf(fwdp[p7R_DL] + bckp[p7R_DL] - sc);                  
-	  ppp[p7R_DG] = expf(fwdp[p7R_DG] + bckp[p7R_DG] - sc);                  
-
-	  ppp  += p7R_NSCELLS;
-	  fwdp += p7R_NSCELLS;
-	  bckp += p7R_NSCELLS;
+	  /* don't do DG yet. We need to deal with wing-retracted entry/exit paths.  */
 	}
+      /* now our pointers are miraculously on the specials */
+      xE = bckp[p7R_E]; /* note, we can now sneakily pick up the Backward E(i) value... which we need for MGk->Dk+1..Dm->E exits... */
 
+      /* Wing-retracted G->D1..Dk-1->MGk entry paths, right to left: */
+      for (delta=0.0, k = M; k >= 1; k--)
+	{
+	  ppp-= p7R_NSCELLS; fwdp-= p7R_NSCELLS; bckp-= p7R_NSCELLS;
+	  ppp[p7S_DG] = delta +  expf(fwdp[p7R_DG] + bckp[p7R_DG] - sc);     /* because we allow D to overwrite B, we may have just overwritten bckp[p7R_DG]. Do not access it again. */
+	  delta      += expf(xG + TSC(p7P_GM, k-1) + bckp[p7S_MG] - sc);
+	}
+      /* Wing-retracted MGk->Dk+1..Dm->E path prob, added to all Dk+1..Dm... sweep left to right: */
+      for (delta=0.0, k = 1; k <= M; k++, ppp+=p7R_NSCELLS, fwdp+=p7R_NSCELLS, bckp+=p7R_NSCELLS)
+	{
+	  ppp[p7R_DG] += delta;
+	  delta       += expf(fwdp[p7S_MG] + TSC(p7P_MD,k) + TSC(p7P_DGE,k) + xE - sc);
+	}
+      /* now our pointers, having run right->left then left->right again, are back on the specials */
+      
       /* [ E N J B L G C JJ CC ] */
-      ppp[p7R_E]  = expf(fwdp[p7R_E] + bckp[p7R_E] - sc);
+      /* JJ, CC must be done first; they access bckp[J,C], which ppp[J,C] calc will clobber */
+      ppp[p7R_JJ] = expf(xJ + gm->xsc[p7P_J][p7P_LOOP] + bckp[p7R_J] - sc); xJ = fwdp[p7R_J]; denom += ppp[p7R_JJ];
+      ppp[p7R_CC] = expf(xC + gm->xsc[p7P_C][p7P_LOOP] + bckp[p7R_C] - sc); xC = fwdp[p7R_C]; denom += ppp[p7R_CC];
+      ppp[p7R_E]  = expf(fwdp[p7R_E] + bckp[p7R_E] - sc);                   
       ppp[p7R_N]  = expf(fwdp[p7R_N] + bckp[p7R_N] - sc); denom += ppp[p7R_N]; /* only NN is possible for i>=1, so N=NN */
       ppp[p7R_J]  = expf(fwdp[p7R_J] + bckp[p7R_J] - sc);
       ppp[p7R_B]  = expf(fwdp[p7R_B] + bckp[p7R_B] - sc);
       ppp[p7R_L]  = expf(fwdp[p7R_L] + bckp[p7R_L] - sc);
-      ppp[p7R_G]  = expf(fwdp[p7R_G] + bckp[p7R_G] - sc);
+      ppp[p7R_G]  = expf(fwdp[p7R_G] + bckp[p7R_G] - sc);                  xG = fwdp[p7R_G];
       ppp[p7R_C]  = expf(fwdp[p7R_C] + bckp[p7R_C] - sc);
-      ppp[p7R_JJ] = expf(xJ + gm->xsc[p7P_J][p7P_LOOP] + bckp[p7R_J] - sc); xJ = fwdp[p7R_J]; denom += ppp[p7R_JJ];
-      ppp[p7R_CC] = expf(xC + gm->xsc[p7P_C][p7P_LOOP] + bckp[p7R_C] - sc); xC = fwdp[p7R_C]; denom += ppp[p7R_CC];
+
 
       /* renormalization, to squash out some error accumulation in f/b */
       denom = 1.0 / denom;	/* multiplication faster than division... */
