@@ -841,7 +841,7 @@ p7_sparsemx_CountTrace(const P7_TRACE *tr, P7_SPARSEMX *sxd)
 	  i = tr->i[z];
 	  y = 0;
 	}
-      
+
       if (tr->k[z])		/* if it's a main state, {MID}{LG} */
 	{
 	  while (y < sm->n[i] && sm->k[i][y] <  tr->k[z]) { y++; dpc += p7S_NSCELLS; } /* try to find sparse cell for i,k. note, if row isn't stored at all (n[i]==0) nothing happens here, because y==n[i] */
@@ -1430,6 +1430,28 @@ p7_sparsemx_CompareReferenceAsBound(const P7_SPARSEMX *sx, const P7_REFMX *rx, f
   return eslOK;
 }
 
+/* Function:  p7_sparsemx_CompareDecoding()
+ * Synopsis:  Compare exact, approximate posterior decoding matrices.
+ *
+ * Purpose:   Compare exact sparse decoding matrix <sxe> (calculated by 
+ *            <p7_SparseDecoding()> to an approximate one <sxa> 
+ *            (calculated by sampling lots of stochastic traces).
+ *            Make sure that no nonzero value in <sxe> differs by
+ *            more than absolute difference <tol> in <sxa>, and make
+ *            sure that an exact zero value in <sxe> is also zero
+ *            in <sxa>. Return <eslOK> if these tests succeed; <eslFAIL>
+ *            if they do not.
+ *            
+ *            This comparison is used in the main unit test of
+ *            posterior decoding. See
+ *            <sparse_fwdback.c::utest_approx_decoding()>.
+ *            
+ * Args:      sxe  - exact posterior decoding matrix, from p7_SparseDecoding
+ *            sxa  - approximate decoding mx, from stochastic trace ensemble
+ *            tol  - absolute difference to tolerate per cell value
+ *
+ * Returns:   <eslOK> if all comparisons pass. <eslFAIL> if not.
+ */
 int
 p7_sparsemx_CompareDecoding(const P7_SPARSEMX *sxe, const P7_SPARSEMX *sxa, float tol)
 {
@@ -1441,28 +1463,41 @@ p7_sparsemx_CompareDecoding(const P7_SPARSEMX *sxe, const P7_SPARSEMX *sxa, floa
   int   killmenow          = FALSE;             
   int   i,s,z;
   float diff;
-  float max = 0.0f;
+  float max = 0.;
 #ifdef p7_DEBUGGING
   killmenow = TRUE;
 #endif
-
 
   for (i = 1; i <= sm->L; i++)
     {
       if (sm->n[i] && !sm->n[i-1]) {    /* ia-1 specials at a segment start */
 	for (s = 0; s < p7S_NXCELLS; xce++, xca++, s++) 
-	  { diff = fabs(*xce-*xca); if (diff > max) { max = diff; } }
+	  {
+	    diff = *xce-*xca;
+	    max  = ESL_MAX(fabs(diff), max);
+	    printf(" diff %9.4f  i=%d %s\n", diff, i-1, p7_sparsemx_DecodeSpecial(s));
+	    //if ( (*xce == 0. && *xca != 0.) || fabs(*xce-*xca) > tol) { if (killmenow) abort(); return eslFAIL; } 
+	  }	    
       }
       for (z = 0; z < sm->n[i]; z++)    /* sparse cells */
 	for (s = 0; s < p7S_NSCELLS; dpe++, dpa++, s++)
-	  { diff = fabs(*dpe-*dpa); if (diff > max) { max = diff; } }
-
+	  {
+	    diff = *dpe-*dpa;
+	    max  = ESL_MAX(fabs(diff),max);
+	    printf(" diff %9.4f  i=%d k=%d %s  %9.4f %9.4f\n", diff, i, sm->k[i][z], p7_sparsemx_DecodeState(s), *dpe, *dpa);
+	    //if ( (*dpe == 0. && *dpa != 0.) || fabs(*dpe-*dpa) > tol) { if (killmenow) abort(); return eslFAIL; } 
+	  }
       if (sm->n[i]) {		        /* specials */
 	for (s = 0; s < p7S_NSCELLS; xce++, xca++, s++)
-	  { diff = fabs(*xce-*xca); if (diff > max) { max = diff; } }
+	  {
+	    diff = *xce-*xca;
+	    max  = ESL_MAX(fabs(diff),max);
+	    printf(" diff %9.4f  i=%d %s\n", diff, i, p7_sparsemx_DecodeSpecial(s));
+	    //if ( (*xce == 0. && *xca != 0.) || fabs(*xce-*xca) > tol) { if (killmenow) abort(); return eslFAIL; } 
+	  }
       }
     }
-  printf(" max diff = %f\n", max);
+  printf("max diff %f\n", max);
   return eslOK;
 }
 
@@ -1707,7 +1742,7 @@ validate_decoding(P7_SPARSEMX *sx, char *errbuf)
       }
       for (z = 0; z < sm->n[i]; z++)       /* sparse main cells */
 	for (s = 0; s < p7S_NSCELLS; dpc++, s++) 
-	  if (! is_prob(*dpc, tol)) ESL_FAIL(eslFAIL, errbuf, "bad decode prob %f at i=%d,k=%d,%s", *xc, i,sm->k[i][z], p7_sparsemx_DecodeState(s));
+	  if (! is_prob(*dpc, tol)) ESL_FAIL(eslFAIL, errbuf, "bad decode prob %f at i=%d,k=%d,%s", *dpc, i,sm->k[i][z], p7_sparsemx_DecodeState(s));
       if (sm->n[i]) {                      /* specials on sparse row */
 	for (s = 0; s < p7S_NXCELLS; xc++, s++) 
 	  if (! is_prob(*xc, tol)) { abort(); ESL_FAIL(eslFAIL, errbuf, "bad decode prob %f at i=%d,%s", *xc, i, p7_sparsemx_DecodeSpecial(s)); }

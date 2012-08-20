@@ -95,6 +95,9 @@ HDRS =  hmmer.h \
 	p7_refmx.h\
 	p7_sparsemx.h \
 	p7_trace_metrics.h\
+	reference_decoding.h\
+	reference_fwdback.h\
+	reference_trace.h\
 	sparse_fwdback.h\
 	sparse_trace.h
 
@@ -124,7 +127,9 @@ OBJS =  build.o\
 	modelconfig.o\
 	modelstats.o\
 	mpisupport.o\
+	reference_decoding.o\
 	reference_fwdback.o\
+	reference_trace.o\
 	reference_viterbi.o\
 	seqmodel.o\
 	sparse_envscore.o\
@@ -176,6 +181,7 @@ UTESTS =\
 	hmmer_utest\
 	logsum_utest\
 	modelconfig_utest\
+	reference_decoding_utest\
 	reference_fwdback_utest\
 	reference_viterbi_utest\
 	seqmodel_utest\
@@ -197,6 +203,7 @@ EXAMPLES = \
 	build_example\
 	emit_example\
 	logsum_example\
+	reference_decoding_example\
 	reference_fwdback_example\
 	reference_viterbi_example\
 	sparse_fwdback_example\

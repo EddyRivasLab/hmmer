@@ -90,6 +90,8 @@ typedef struct p7_refmx_s {
 /* from p7_refmx.c */
 extern P7_REFMX *p7_refmx_Create   (int M, int L);
 extern int       p7_refmx_GrowTo   (P7_REFMX *rmx, int M, int L);
+extern int       p7_refmx_Zero     (P7_REFMX *rmx, int M, int L);
+extern int       p7_refmx_Rescale  (P7_REFMX *rmx, float scale);
 extern size_t    p7_refmx_Sizeof   (const P7_REFMX *rmx);
 extern size_t    p7_refmx_MinSizeof(int M, int L);
 extern int       p7_refmx_Reuse    (P7_REFMX *rmx);
@@ -97,6 +99,8 @@ extern void      p7_refmx_Destroy  (P7_REFMX *rmx);
 
 extern int   p7_refmx_Compare     (const P7_REFMX *rx1, const P7_REFMX *rx2, float tolerance);
 extern int   p7_refmx_CompareLocal(const P7_REFMX *rx1, const P7_REFMX *rx2, float tolerance);
+extern int   p7_refmx_CompareDecoding(const P7_REFMX *ppe, const P7_REFMX *ppa, float tol);
+extern int   p7_refmx_CountTrace(const P7_TRACE *tr, P7_REFMX *rx);
 extern char *p7_refmx_DecodeSpecial(int type);
 extern char *p7_refmx_DecodeState(int type);
 extern int   p7_refmx_Dump(FILE *ofp, P7_REFMX *rmx);
@@ -104,12 +108,6 @@ extern int   p7_refmx_DumpWindow(FILE *ofp, P7_REFMX *rmx, int istart, int iend,
 extern int   p7_refmx_DumpCSV(FILE *fp, P7_REFMX *pp, int istart, int iend, int kstart, int kend);
 
 extern int   p7_refmx_Validate(P7_REFMX *rmx, char *errbuf);
-
-/* from reference_fwdback.c */
-extern int p7_ReferenceForward (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, float *opt_sc);
-extern int p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, float *opt_sc);
-extern int p7_ReferenceDecoding(const P7_PROFILE *gm, const P7_REFMX *fwd, const P7_REFMX *bck, P7_REFMX *pp);
-extern int p7_ReferenceAlign   (const P7_PROFILE *gm, float gamma, const P7_REFMX *pp,  P7_REFMX *rmx, P7_TRACE *tr, float *opt_gain);
 
 /* from reference_viterbi.c */
 extern int p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, P7_TRACE *opt_tr, float *opt_sc);

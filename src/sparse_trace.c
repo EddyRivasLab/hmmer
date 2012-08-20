@@ -18,8 +18,6 @@
 #include "hmmer.h"
 #include "p7_sparsemx.h"
 
-#define UNUSED(x) (void)(sizeof(x))
-
 /*****************************************************************
  * 1. Choice selection functions for Viterbi traces
  *****************************************************************/
@@ -27,7 +25,7 @@
 static inline int
 v_select_ml(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int k, const float *dpp, int *kp, int np, float *xp, int *ret_z)
 {
-  UNUSED(r);
+  ESL_UNUSED(r);
   int   y = 0;
   while (y < np && kp[y]  < k-1) { y++; dpp += p7S_NSCELLS; } 
   if    (y < np && kp[y] == k-1) 
@@ -47,7 +45,7 @@ v_select_ml(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int k, const float *dpp, in
 static inline int
 v_select_mg(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int k, const float *dpp, int *kp, int np, float *xp, int *ret_z)
 {
-  UNUSED(r);
+  ESL_UNUSED(r);
   int   y = 0;
   while (y < np && kp[y]  < k-1) { y++; dpp += p7S_NSCELLS; } 
   if    (y < np && kp[y] == k-1) 
@@ -67,7 +65,7 @@ v_select_mg(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int k, const float *dpp, in
 static inline int
 v_select_il(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int k, const float *dpp, int *kp, int np, int *ret_z)
 {
-  UNUSED(r);
+  ESL_UNUSED(r);
   float path[2];
   int   y = 0;
   while (kp[y] != k) { y++; dpp += p7S_NSCELLS; } /* a little brave; we know an appropriate sparse cell exists on prv row, else we couldn't reach I on cur */
@@ -79,7 +77,7 @@ v_select_il(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int k, const float *dpp, in
 static inline int
 v_select_ig(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int k, const float *dpp, int *kp, int np, int *ret_z)
 {
-  UNUSED(r);
+  ESL_UNUSED(r);
   float path[2];
   int y = 0;
   while (kp[y] != k) { y++; dpp += p7S_NSCELLS; } /* a little brave; we know an appropriate sparse cell exists on prv row, else we couldn't reach I on cur */
@@ -91,7 +89,7 @@ v_select_ig(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int k, const float *dpp, in
 static inline int
 v_select_dl(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int k, const float *dpp)
 {
-  UNUSED(r);
+  ESL_UNUSED(r);
   float path[2];
   path[0] = dpp[p7S_ML] + P7P_TSC(gm, k-1, p7P_MD); /* more bravery. fact that we're tracing back from DL means that sparse cell k-1 must exist in z+1 */
   path[1] = dpp[p7S_DL] + P7P_TSC(gm, k-1, p7P_DD);
@@ -100,7 +98,7 @@ v_select_dl(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int k, const float *dpp)
 static inline int
 v_select_dg(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int k, const float *dpp)
 {
-  UNUSED(r);
+  ESL_UNUSED(r);
   float path[2];
   path[0] = dpp[p7S_MG] + P7P_TSC(gm, k-1, p7P_MD); /* more bravery. fact that we're tracing back from DL means that sparse cell k-1 must exist in z+1 */
   path[1] = dpp[p7S_DG] + P7P_TSC(gm, k-1, p7P_DD);
@@ -109,7 +107,7 @@ v_select_dg(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int k, const float *dpp)
 static inline int
 v_select_j(ESL_RANDOMNESS *r, const P7_PROFILE *gm, const float *xc)
 {
-  UNUSED(r);
+  ESL_UNUSED(r);
   float path[2];
   path[0] = *(xc-p7S_NXCELLS+p7S_J) + gm->xsc[p7P_J][p7P_LOOP]; /* i.e. xp[p7S_J] on prv row i-1. */
   path[1] = xc[p7S_E]               + gm->xsc[p7P_E][p7P_LOOP];
@@ -118,7 +116,7 @@ v_select_j(ESL_RANDOMNESS *r, const P7_PROFILE *gm, const float *xc)
 static inline int
 v_select_c(ESL_RANDOMNESS *r, const P7_PROFILE *gm, const float *xc)
 {
-  UNUSED(r);
+  ESL_UNUSED(r);
   float path[2];
   path[0] = *(xc-p7S_NXCELLS+p7S_C) + gm->xsc[p7P_C][p7P_LOOP]; /* i.e. xp[p7S_C] on prv row i-1. */
   path[1] =   xc[p7S_E]             + gm->xsc[p7P_E][p7P_MOVE];
@@ -127,8 +125,8 @@ v_select_c(ESL_RANDOMNESS *r, const P7_PROFILE *gm, const float *xc)
 static inline int
 v_select_e(ESL_RANDOMNESS *r, float *wrk, const P7_PROFILE *gm, const float *dpp, int *kp, int np, int *ret_z)
 {
-  UNUSED(r);
-  UNUSED(wrk);
+  ESL_UNUSED(r);
+  ESL_UNUSED(wrk);
   float max  = -eslINFINITY;
   float pathsc;
   int   smax = -1;
@@ -166,7 +164,7 @@ v_select_e(ESL_RANDOMNESS *r, float *wrk, const P7_PROFILE *gm, const float *dpp
 static inline int
 v_select_b(ESL_RANDOMNESS *r, const P7_PROFILE *gm, const float *xc)
 {
-  UNUSED(r);
+  ESL_UNUSED(r);
   float path[2];
   path[0] = xc[p7S_J] + gm->xsc[p7P_J][p7P_MOVE];
   path[1] = xc[p7S_N] + gm->xsc[p7P_N][p7P_MOVE];
@@ -687,7 +685,7 @@ main(int argc, char **argv)
   /* Sparse DP calculations */
   p7_SparseForward (sq->dsq, sq->n, gm, sxf,  &fsc);
   p7_SparseBackward(sq->dsq, sq->n, gm, sxb,  NULL);
-  p7_SparseDecoding(gm, sxf, sxb, sxd);
+  p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxb, sxd);
 
   if (esl_opt_GetBoolean(go, "-M")) p7_sparsemask_Dump(stdout, sm);
   if (esl_opt_GetBoolean(go, "-F")) p7_sparsemx_Dump(stdout, sxf);

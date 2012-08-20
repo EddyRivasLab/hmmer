@@ -12,6 +12,9 @@
 
 #include "p7_config.h"
 
+#include "easel.h"
+#include "esl_vectorops.h"
+
 #include "hmmer.h"
 #include "p7_refmx.h"
 
@@ -141,6 +144,51 @@ p7_refmx_GrowTo(P7_REFMX *rmx, int M, int L)
   return status;
 }
 	
+/* Function:  p7_refmx_Zero()
+ * Synopsis:  Initialize a decoding matrix to all zeros.
+ *
+ * Purpose:   We're going to use <rmx> to count stochastic traces, to
+ *            create an approximate posterior decoding matrix.  (We do
+ *            this in unit testing of posterior decoding, for
+ *            example.) First we need to set the whole matrix to
+ *            zeros, before we start counting traces into it.  A newly
+ *            allocated <rmx> only knows its allocation size, not the
+ *            dimensions <M>,<L> of a DP comparison, so we need to
+ *            pass that information too, for the comparison we're
+ *            about to collect a stochastic trace ensemble from.
+ *            
+ *            Upon return, the <M> and <L> fields in the <rmx>
+ *            structure have been set, the <type> field has been set
+ *            to <p7R_DECODING>, and all DP cells are 0.0.
+ *            
+ * Args:      rmx  - posterior decoding matrix to zero
+ *            M    - profile length
+ *            L    - sequence length
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_refmx_Zero(P7_REFMX *rmx, int M, int L)
+{
+  int i;
+
+  rmx->type = p7R_DECODING; 
+  rmx->M    = M; 
+  rmx->L    = L; 
+  for (i = 0; i <= L; i++)
+    esl_vec_FSet(rmx->dp[i], (rmx->M+1)*p7R_NSCELLS + p7R_NXCELLS, 0.0f);
+  return eslOK;
+}
+
+int
+p7_refmx_Rescale(P7_REFMX *rmx, float scale)
+{
+  int i;
+  for (i = 0; i <= rmx->L; i++)
+    esl_vec_FScale(rmx->dp[i], (rmx->M+1)*p7R_NSCELLS + p7R_NXCELLS, scale);
+  return eslOK;
+
+}
 
 /* Function:  p7_refmx_Sizeof()
  * Synopsis:  Returns current allocated size of reference DP matrix, in bytes.
@@ -303,6 +351,84 @@ p7_refmx_CompareLocal(const P7_REFMX *rx1, const P7_REFMX *rx2, float tolerance)
       if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_CC), P7R_XMX(rx2,i,p7R_CC), tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
     }
   return eslOK;	
+}
+
+/* Function:  p7_refmx_CompareDecoding()
+ * Synopsis:  Compare exact, approximate posterior decoding matrices.
+ *
+ * Purpose:   Compare exact sparse decoding matrix <ppe> (calculated by 
+ *            <p7_ReferenceDecoding()> to an approximate one <ppa> 
+ *            (calculated by sampling lots of stochastic traces).
+ *            Make sure that no nonzero value in <ppe> differs by
+ *            more than absolute difference <tol> in <ppa>, and make
+ *            sure that an exact zero value in <ppe> is also zero
+ *            in <ppa>. Return <eslOK> if these tests succeed; <eslFAIL>
+ *            if they do not.
+ *            
+ *            This comparison is used in a unit test of
+ *            posterior decoding. See
+ *            <reference_fwdback.c::utest_approx_decoding()>.
+ *            
+ * Args:      ppe  - exact posterior decoding matrix, from p7_ReferenceDecoding
+ *            ppa  - approximate decoding mx, from stochastic trace ensemble
+ *            tol  - absolute difference to tolerate per cell value
+ *
+ * Returns:   <eslOK> if all comparisons pass. <eslFAIL> if not.
+ */
+int
+p7_refmx_CompareDecoding(const P7_REFMX *ppe, const P7_REFMX *ppa, float tol)
+{
+  float *dpe, *dpa;
+  int i,k,s;
+  int killmenow = FALSE;
+#ifdef p7_DEBUGGING
+  killmenow = TRUE;
+#endif
+
+  if (ppe->M    != ppa->M)       { if (killmenow) abort(); return eslFAIL; }
+  if (ppe->L    != ppa->L)       { if (killmenow) abort(); return eslFAIL; }
+  if (ppe->type != ppa->type)    { if (killmenow) abort(); return eslFAIL; }
+  if (ppe->type != p7R_DECODING) { if (killmenow) abort(); return eslFAIL; }
+
+  for (i = 0; i <= ppe->L; i++)	/* include i=0; DG0's have nonzero pp, as do N/B/L/G */
+    {
+      for (dpe = ppe->dp[i], dpa = ppa->dp[i], k = 0; k <= ppe->M; k++)
+	for (s = 0; s < p7R_NSCELLS; s++, dpe++, dpa++)
+	  if ( (*dpe == 0. && *dpa != 0.0) || esl_FCompareAbs(*dpe, *dpa, tol) != eslOK) 
+	    { if (killmenow) abort(); return eslFAIL; }
+      for (s = 0; s < p7R_NXCELLS; s++, dpe++, dpa++)
+	if ( (*dpe == 0. && *dpa != 0.0) || esl_FCompareAbs(*dpe, *dpa, tol) != eslOK) 
+	  { if (killmenow) abort(); return eslFAIL; }
+    }
+  return eslOK;
+}
+
+int
+p7_refmx_CountTrace(const P7_TRACE *tr, P7_REFMX *rx)
+{
+  static int sttype[p7T_NSTATETYPES] = { -1, p7R_ML, p7R_MG, p7R_IL, p7R_IG, p7R_DL, p7R_DG, -1, p7R_N, p7R_B, p7R_L, p7R_G, p7R_E, p7R_C, p7R_J, -1 }; /* sttype[] translates trace idx to DP matrix idx*/
+  int i = 0;
+  int z;
+
+#ifdef p7_DEBUGGING
+  if (rx->type != p7R_DECODING)  ESL_EXCEPTION(eslEINVAL, "need a decoding matrix");
+  if (rx->L    != tr->L)         ESL_EXCEPTION(eslEINVAL, "sequence lengths don't agree");
+  if (rx->M    != tr->M)         ESL_EXCEPTION(eslEINVAL, "profile lengths don't agree");
+#endif
+
+  for (z = 1; z < tr->N-1; z++)	/* z=0 is S; z=N-1 is T; neither is represented in DP matrix, so avoid */
+    {
+      if (tr->i[z]) i = tr->i[z];
+
+      if (tr->k[z]) 
+	P7R_MX (rx, i, tr->k[z], sttype[(int)tr->st[z]]) += 1.0;
+      else {
+	P7R_XMX(rx, i,           sttype[(int)tr->st[z]]) += 1.0;
+	if (tr->st[z] == p7T_C && tr->i[z]) P7R_XMX(rx, i, p7R_CC) += 1.0;
+	if (tr->st[z] == p7T_J && tr->i[z]) P7R_XMX(rx, i, p7R_JJ) += 1.0;
+      }	  
+    }
+  return eslOK;
 }
 
 
@@ -600,16 +726,23 @@ validate_backward(P7_REFMX *rmx, char *errbuf)
 static inline int
 validate_decoding(P7_REFMX *rmx, char *errbuf)
 {
-  int i,k,s;
+  int i,k;
   int status;
 
   /* All of k=0 column is 0.0 */
   if (( status = validate_column_zero(rmx, 0.0, errbuf)) != eslOK) return status;  
 
-  /* Row i=0: main states all 0.0  */
+  /* Row i=0: main states all 0.0 except DGk for k=1..M-1, which are reachable by unfolded wing-retracted entry */
   for (k = 1; k <= rmx->M; k++)
-    for (s = 0; s <= p7R_NSCELLS; s++)
-      if ( (status = validate_mainstate(rmx, 0, k, s, 0.0f, errbuf)) != eslOK) return status;
+    {
+      if ( (status = validate_mainstate(rmx, 0, k, p7R_ML, 0.0f, errbuf)) != eslOK) return status;
+      if ( (status = validate_mainstate(rmx, 0, k, p7R_MG, 0.0f, errbuf)) != eslOK) return status;
+      if ( (status = validate_mainstate(rmx, 0, k, p7R_IL, 0.0f, errbuf)) != eslOK) return status;
+      if ( (status = validate_mainstate(rmx, 0, k, p7R_IG, 0.0f, errbuf)) != eslOK) return status;
+      if ( (status = validate_mainstate(rmx, 0, k, p7R_DL, 0.0f, errbuf)) != eslOK) return status;
+    }
+  if ( (status = validate_mainstate(rmx, 0, rmx->M, p7R_DG, 0.0f, errbuf)) != eslOK) return status;
+  
   /*          and E,J,C are unreached */
   if ( ( status = validate_special(rmx, 0, p7R_E, 0.0f, errbuf)) != eslOK) return status;
   if ( ( status = validate_special(rmx, 0, p7R_J, 0.0f, errbuf)) != eslOK) return status;
@@ -618,11 +751,12 @@ validate_decoding(P7_REFMX *rmx, char *errbuf)
   /* Rows 1..L */
   for (i = 1; i <= rmx->L; i++)
     {
-      if ((status = validate_mainstate(rmx, i,      1, p7R_DL, 0.0f, errbuf)) != eslOK) return status;
-      if ((status = validate_mainstate(rmx, i,      1, p7R_DG, 0.0f, errbuf)) != eslOK) return status;
+      if ((status = validate_mainstate(rmx, i,      1, p7R_DL, 0.0f, errbuf)) != eslOK) return status; /* DL1 doesn't exist. DG1 does, in decoding! */
       if ((status = validate_mainstate(rmx, i, rmx->M, p7R_IL, 0.0f, errbuf)) != eslOK) return status;
       if ((status = validate_mainstate(rmx, i, rmx->M, p7R_IG, 0.0f, errbuf)) != eslOK) return status;
     }
+  /* on row L, DG1 cannot be reached */
+  if ( (status = validate_mainstate(rmx, rmx->L,    1, p7R_DG, 0.0f, errbuf)) != eslOK) return status;
 
   /* Rows i=1,L have some additional zeros */
   for (k = 1; k < rmx->M; k++) {
@@ -641,6 +775,7 @@ validate_decoding(P7_REFMX *rmx, char *errbuf)
   if ((status = validate_special  (rmx, rmx->L, p7R_L,  0.0f, errbuf)) != eslOK) return status;
   if ((status = validate_special  (rmx, rmx->L, p7R_G,  0.0f, errbuf)) != eslOK) return status;
   if ((status = validate_special  (rmx, rmx->L, p7R_JJ, 0.0f, errbuf)) != eslOK) return status;
+
   return eslOK;
 }
 

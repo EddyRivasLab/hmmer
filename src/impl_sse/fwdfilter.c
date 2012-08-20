@@ -1488,7 +1488,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
 
       p7_ReferenceForward (dsq, tL, gm, fwd,  &fsc2);
       p7_ReferenceBackward(dsq, tL, gm, bck,  &bsc2);
-      p7_ReferenceDecoding(         gm, fwd, bck, pp);
+      p7_ReferenceDecoding(dsq, tL, gm, fwd, bck, pp);
 
 #ifdef p7_DEBUGGING
       /* vector Forward and Backward scores should agree with high tolerance.

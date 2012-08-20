@@ -421,7 +421,7 @@ main(int argc, char **argv)
   p7_SparseViterbi (sq->dsq, sq->n, gm, sxv, tr, &vsc);
   p7_SparseForward (sq->dsq, sq->n, gm, sxf,     &fsc);
   p7_SparseBackward(sq->dsq, sq->n, gm, sxb,     NULL);
-  p7_SparseDecoding(gm, sxf, sxb, sxd);
+  p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxb, sxd);
   p7_sparsemx_TracePostprobs(sxd, tr);
   p7_trace_Index(tr);
 
