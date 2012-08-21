@@ -23,6 +23,7 @@
 
 #include "hmmer.h"
 #include "p7_refmx.h"
+#include "reference_viterbi.h"
 #include "reference_trace.h"
 
 /*****************************************************************

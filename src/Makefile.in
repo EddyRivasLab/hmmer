@@ -98,8 +98,13 @@ HDRS =  hmmer.h \
 	reference_decoding.h\
 	reference_fwdback.h\
 	reference_trace.h\
+	reference_viterbi.h\
+	sparse_decoding.h\
+	sparse_envscore.h\
 	sparse_fwdback.h\
-	sparse_trace.h
+	sparse_masstrace.h\
+	sparse_trace.h\
+	sparse_viterbi.h
 
 OBJS =  build.o\
 	cachedb.o\
@@ -132,10 +137,12 @@ OBJS =  build.o\
 	reference_trace.o\
 	reference_viterbi.o\
 	seqmodel.o\
+	sparse_decoding.o\
 	sparse_envscore.o\
 	sparse_fwdback.o\
 	sparse_masstrace.o\
 	sparse_trace.o\
+	sparse_viterbi.o\
 	tracealign.o\
 	p7_alidisplay.o\
 	p7_bg.o\
@@ -181,11 +188,12 @@ UTESTS =\
 	hmmer_utest\
 	logsum_utest\
 	modelconfig_utest\
-	reference_decoding_utest\
 	reference_fwdback_utest\
+	reference_decoding_utest\
 	reference_viterbi_utest\
-	seqmodel_utest\
 	sparse_fwdback_utest\
+	sparse_decoding_utest\
+	seqmodel_utest\
 	p7_alidisplay_utest\
 	p7_bg_utest\
 	p7_gmx_utest\

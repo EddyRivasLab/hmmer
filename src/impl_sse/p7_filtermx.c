@@ -80,6 +80,8 @@ p7_filtermx_Create(int M, int L, int64_t ramlimit)
   /* Validity of integer variable ranges may depend on design spec:                  */
   ESL_DASSERT1( (M <= 100000) );       /* design spec says, model length M <= 100000 */
   ESL_DASSERT1( (L <= 100000) );       /*           ... and,  seq length L <= 100000 */
+  ESL_DASSERT1( (L >  0) );
+  ESL_DASSERT1( (M >  0) );
 
   /* Level 1 allocation: the structure itself */
   ESL_ALLOC(ox, sizeof(P7_FILTERMX));
@@ -166,6 +168,12 @@ p7_filtermx_GrowTo(P7_FILTERMX *ox, int M, int L)
   int64_t W;			/* minimum row width needed, bytes */
   int     r;
   int     status;
+
+  /* Validity of integer variable ranges may depend on design spec:                  */
+  ESL_DASSERT1( (M <= 100000) );       /* design spec says, model length M <= 100000 */
+  ESL_DASSERT1( (L <= 100000) );       /*           ... and,  seq length L <= 100000 */
+  ESL_DASSERT1( (L >  0) );
+  ESL_DASSERT1( (M >  0) );
 
   /* If we're debugging and we have stored copies of any matrices,
    * grow them too.  Must do this first, because we have an early exit

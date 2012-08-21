@@ -532,6 +532,30 @@ p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm)
     }
   return eslOK;
 }
+
+int
+p7_sparsemask_Compare(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2)
+{
+  int i;
+  int killmenow = FALSE;
+#ifdef p7_DEBUGGING
+  killmenow = TRUE;
+#endif
+
+  if ( (sm1->L      != sm2->L)      ||
+       (sm1->M      != sm2->M)      ||
+       (sm1->nseg   != sm2->nseg)   ||
+       (sm1->nrow   != sm2->nrow)   ||
+       (sm1->ncells != sm2->ncells)) 
+    { if (killmenow) abort(); return eslFAIL; }
+
+  if ( esl_vec_ICompare(sm1->i, sm2->i, sm1->nseg*2) != eslOK)  { if (killmenow) abort(); return eslFAIL; }
+  if ( esl_vec_ICompare(sm1->n, sm2->n, sm1->L+1)    != eslOK)  { if (killmenow) abort(); return eslFAIL; }
+  for (i = 0; i <= sm1->L; i++)
+    if ( esl_vec_ICompare(sm1->k[i], sm2->k[i], sm1->n[i]) != eslOK) { if (killmenow) abort(); return eslFAIL; }
+  return eslOK;
+}
+
 /*-------- end, P7_SPARSEMASK debugging tools -------------------*/
 
 
@@ -1254,6 +1278,20 @@ p7_sparsemx_Copy2Reference(P7_SPARSEMX *sx, P7_REFMX *rx)
   return eslOK;
 }
 
+int
+p7_sparsemx_Compare(const P7_SPARSEMX *sx1, const P7_SPARSEMX *sx2, float tol)
+{
+  int killmenow = FALSE;
+#ifdef p7_DEBUGGING
+  killmenow = TRUE;
+#endif
+
+  if ( sx1->type != sx2->type)                            { if (killmenow) abort(); return eslFAIL; }
+  if ( p7_sparsemask_Compare(sx1->sm, sx2->sm) != eslOK)  { if (killmenow) abort(); return eslFAIL; }
+  if ( esl_vec_FCompare(sx1->dp,  sx2->dp,   p7S_NSCELLS*sx1->sm->ncells,               tol) != eslOK) { if (killmenow) abort(); return eslFAIL; }
+  if ( esl_vec_FCompare(sx1->xmx, sx2->xmx,  p7S_NXCELLS*(sx1->sm->nrow+sx1->sm->nseg), tol) != eslOK) { if (killmenow) abort(); return eslFAIL; }
+  return eslOK;
+}
 
 /* Function:  p7_sparsemx_CompareReference()
  * Synopsis:  Test sparse DP matrix for tolerable equality to reference
@@ -1475,8 +1513,8 @@ p7_sparsemx_CompareDecoding(const P7_SPARSEMX *sxe, const P7_SPARSEMX *sxa, floa
 	  {
 	    diff = *xce-*xca;
 	    max  = ESL_MAX(fabs(diff), max);
-	    printf(" diff %9.4f  i=%d %s\n", diff, i-1, p7_sparsemx_DecodeSpecial(s));
-	    //if ( (*xce == 0. && *xca != 0.) || fabs(*xce-*xca) > tol) { if (killmenow) abort(); return eslFAIL; } 
+	    //printf(" diff %9.4f  i=%d %s\n", diff, i-1, p7_sparsemx_DecodeSpecial(s));
+	    if ( (*xce == 0. && *xca != 0.) || fabs(*xce-*xca) > tol) { if (killmenow) abort(); return eslFAIL; } 
 	  }	    
       }
       for (z = 0; z < sm->n[i]; z++)    /* sparse cells */
@@ -1484,20 +1522,20 @@ p7_sparsemx_CompareDecoding(const P7_SPARSEMX *sxe, const P7_SPARSEMX *sxa, floa
 	  {
 	    diff = *dpe-*dpa;
 	    max  = ESL_MAX(fabs(diff),max);
-	    printf(" diff %9.4f  i=%d k=%d %s  %9.4f %9.4f\n", diff, i, sm->k[i][z], p7_sparsemx_DecodeState(s), *dpe, *dpa);
-	    //if ( (*dpe == 0. && *dpa != 0.) || fabs(*dpe-*dpa) > tol) { if (killmenow) abort(); return eslFAIL; } 
+	    //printf(" diff %9.4f  i=%d k=%d %s  %9.4f %9.4f\n", diff, i, sm->k[i][z], p7_sparsemx_DecodeState(s), *dpe, *dpa);
+	    if ( (*dpe == 0. && *dpa != 0.) || fabs(*dpe-*dpa) > tol) { if (killmenow) abort(); return eslFAIL; } 
 	  }
       if (sm->n[i]) {		        /* specials */
 	for (s = 0; s < p7S_NSCELLS; xce++, xca++, s++)
 	  {
 	    diff = *xce-*xca;
 	    max  = ESL_MAX(fabs(diff),max);
-	    printf(" diff %9.4f  i=%d %s\n", diff, i, p7_sparsemx_DecodeSpecial(s));
-	    //if ( (*xce == 0. && *xca != 0.) || fabs(*xce-*xca) > tol) { if (killmenow) abort(); return eslFAIL; } 
+	    //printf(" diff %9.4f  i=%d %s\n", diff, i, p7_sparsemx_DecodeSpecial(s));
+	    if ( (*xce == 0. && *xca != 0.) || fabs(*xce-*xca) > tol) { if (killmenow) abort(); return eslFAIL; } 
 	  }
       }
     }
-  printf("max diff %f\n", max);
+  //printf("max diff %f\n", max);
   return eslOK;
 }
 
@@ -1674,7 +1712,7 @@ validate_decoding(P7_SPARSEMX *sx, char *errbuf)
   float          tol = 0.001;
 
   /* Check special cases prohibited in the first ia-1 presegment specials: */
-  if ( esl_FCompareAbs(xc[p7S_N],  1.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first N not 1");
+  /* Note that the N on the first ia-1 row is *not* necessarily 1, because ia-1 is not necessarily row 0 */
   if ( esl_FCompareAbs(xc[p7S_J],  0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first J not 0");
   if ( esl_FCompareAbs(xc[p7S_C],  0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first C not 0");
   if ( esl_FCompareAbs(xc[p7S_JJ], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first JJ not 0");

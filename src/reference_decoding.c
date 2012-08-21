@@ -508,9 +508,6 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
 #include "esl_random.h"
 
 #include "hmmer.h"
-#include "p7_refmx.h"
-#include "reference_fwdback.h"
-#include "reference_decoding.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/

@@ -130,6 +130,7 @@ extern int            p7_sparsemask_Finish   (P7_SPARSEMASK *sm);
 
 /* P7_SPARSEMASK debugging tools */
 extern int            p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_Compare(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2);
 
 /* P7_SPARSEMX object management */
 extern P7_SPARSEMX   *p7_sparsemx_Create   (P7_SPARSEMASK *sm);
@@ -152,6 +153,7 @@ extern char *p7_sparsemx_DecodeSpecial(int type);
 extern int   p7_sparsemx_Dump(FILE *ofp, P7_SPARSEMX *sx);
 extern int   p7_sparsemx_DumpWindow(FILE *ofp, P7_SPARSEMX *sx, int i1, int i2, int ka, int kb);
 extern int   p7_sparsemx_Copy2Reference  (P7_SPARSEMX *sx, P7_REFMX *rx);
+extern int   p7_sparsemx_Compare(const P7_SPARSEMX *sx1, const P7_SPARSEMX *sx2, float tol);
 extern int   p7_sparsemx_CompareReference       (const P7_SPARSEMX *sx, const P7_REFMX *rx, float tol);
 extern int   p7_sparsemx_CompareReferenceAsBound(const P7_SPARSEMX *sx, const P7_REFMX *rx, float tol);
 extern int   p7_sparsemx_CompareDecoding        (const P7_SPARSEMX *sxe, const P7_SPARSEMX *sxa, float tol);

@@ -630,6 +630,9 @@ p7_ReferenceAlign(const P7_PROFILE *gm, float gamma, const P7_REFMX *pp, P7_REFM
 
 #include "hmmer.h"
 #include "p7_refmx.h"
+#include "reference_fwdback.h"
+#include "reference_viterbi.h"
+#include "reference_decoding.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -754,6 +757,7 @@ main(int argc, char **argv)
 #include "esl_random.h"
 #include "esl_randomseq.h"
 
+#include "reference_viterbi.h"
 
 /* The "randomseq" test compares randomly sampled profile to 
  * random sequences, and tests:
@@ -1415,6 +1419,19 @@ score_brute(struct p7_brute_utest_s *prm, P7_BG *bg, int do_viterbi, double sc[5
   double msc = prm->alpha / (double) bg->f[0];
   double isc = prm->beta  / (double) bg->f[0];
 
+  double onem_s  = ESL_MAX(0.0, 1.-s);      /* guard against roundoff errors making 1-(x) < 0  */
+  double onem_ae = ESL_MAX(0.0, 1.-(a+e)); 
+  double onem_bf = ESL_MAX(0.0, 1.-(b+f)); 
+  double onem_l  = ESL_MAX(0.0, 1.-l) ;
+  double onem_cg = ESL_MAX(0.0, 1.-(c+g)); 
+  double onem_m  = ESL_MAX(0.0, 1.-m); 
+  double onem_i  = ESL_MAX(0.0, 1.-i); 
+  double onem_j  = ESL_MAX(0.0, 1.-j); 
+  double onem_n  = ESL_MAX(0.0, 1.-n); 
+  double onem_p  = ESL_MAX(0.0, 1.-p); 
+  double onem_q  = ESL_MAX(0.0, 1.-q); 
+  double onem_r  = ESL_MAX(0.0, 1.-r); 
+
   double cp[32];	/* "core paths": odds of the 32 paths thru the core model                    */
   double cL[5];		/* summed/maxed paths for core model accounting for substring of length 0..4 */
   double jp[21];	/* "J paths": odds of the 21 paths that use 1 or more cp's and J state(s)    */
@@ -1425,44 +1442,45 @@ score_brute(struct p7_brute_utest_s *prm, P7_BG *bg, int do_viterbi, double sc[5
   /* 1. There are 32 possible paths thru the core model.
    *    9 with n=1 residues cp[0..8];  7 with n=2, cp[9..15];
    *    7 with n=3, cp[16..22]; and 9 with n=4, cp[23..31]
+   *    These are odds ratio calculations (because msc is an odds ratio); they can be > 1
    */
-  cp[0] = msc * (1.-s) * LM1;	                              // n=1  L M1 
-  cp[1] = msc * (1.-s) * LM2;                                 // n=1  L M2 
-  cp[2] = msc * (1.-s) * LM3;                                 // n=1  L M3 
-  cp[3] = msc * (1.-s) * LM1 * (1.-(b+f));                    // n=1  L M1 D2 
-  cp[4] = msc * (1.-s) * LM2 * (1.-(c+g));                    // n=1  L M2 D3
-  cp[5] = msc * (1.-s) * LM1 * (1.-(b+f)) * m;                // n=1  L M1 D2 D3
-  cp[6] = msc * s * (a+e) * (1-(b+f)) * m;                    // n=1  G M1 D2 D3
-  cp[7] = msc * s * (1.-(a+e)) * (1.-l) * (1.-(c+g));         // n=1  G D1 M2 D3
-  cp[8] = msc * s * (1.-(a+e)) * l * (1.-m);                  // n=1  G D1 D2 M3
+  cp[0] = msc * onem_s * LM1;	                              // n=1  L M1 
+  cp[1] = msc * onem_s * LM2;                                 // n=1  L M2 
+  cp[2] = msc * onem_s * LM3;                                 // n=1  L M3 
+  cp[3] = msc * onem_s * LM1 * onem_bf;                    // n=1  L M1 D2 
+  cp[4] = msc * onem_s * LM2 * onem_cg;                    // n=1  L M2 D3
+  cp[5] = msc * onem_s * LM1 * onem_bf * m;                // n=1  L M1 D2 D3
+  cp[6] = msc * s * (a+e) * onem_bf * m;                    // n=1  G M1 D2 D3
+  cp[7] = msc * s * onem_ae * onem_l * onem_cg;         // n=1  G D1 M2 D3
+  cp[8] = msc * s * onem_ae * l * onem_m;                  // n=1  G D1 D2 M3
 
-  cp[9]  = msc * msc * (1.-s) * LM1 * b;                      // n=2  L M1 M2
-  cp[10] = msc * msc * (1.-s) * LM2 * c;                      // n=2  L M2 M3
-  cp[11] = msc * msc * (1.-s) * LM1 * b * (1.-(c+g));         // n=2  L M1 M2 D3
-  cp[12] = msc * msc * (1.-s) * LM1 * (1.-(b+f)) * (1.-m);    // n=2  L M1 D2 M3
-  cp[13] = msc * msc * s * (a+e) * b * (1.-(c+g));            // n=2  G M1 M2 M3
-  cp[14] = msc * msc * s * (a+e) * (1.-(b+f)) * (1-m);        // n=2  G M1 D2 M3
-  cp[15] = msc * msc * s * (1.-(a+e)) * (1.-l) * c;           // n=2  G D1 M2 M3
+  cp[9]  = msc * msc * onem_s * LM1 * b;                      // n=2  L M1 M2
+  cp[10] = msc * msc * onem_s * LM2 * c;                      // n=2  L M2 M3
+  cp[11] = msc * msc * onem_s * LM1 * b * onem_cg;         // n=2  L M1 M2 D3
+  cp[12] = msc * msc * onem_s * LM1 * onem_bf * onem_m;    // n=2  L M1 D2 M3
+  cp[13] = msc * msc * s * (a+e) * b * onem_cg;            // n=2  G M1 M2 M3
+  cp[14] = msc * msc * s * (a+e) * onem_bf * onem_m;        // n=2  G M1 D2 M3
+  cp[15] = msc * msc * s * onem_ae * onem_l * c;           // n=2  G D1 M2 M3
   
-  cp[16] = msc * msc * msc * (1.-s) * LM1 * b * c;              // n=3  L M1 M2 M3
-  cp[17] = msc * isc * msc * (1.-s) * LM1 * f * i * (1.-(c+g)); // n=3  L M1 I1 M2 D3
-  cp[18] = msc * isc * msc * (1.-s) * LM1 * f * i;              // n=3  L M1 I1 M2
-  cp[19] = msc * isc * msc * (1.-s) * LM2 * g * j;              // n=3  L M2 I2 M3
+  cp[16] = msc * msc * msc * onem_s * LM1 * b * c;              // n=3  L M1 M2 M3
+  cp[17] = msc * isc * msc * onem_s * LM1 * f * i * onem_cg; // n=3  L M1 I1 M2 D3
+  cp[18] = msc * isc * msc * onem_s * LM1 * f * i;              // n=3  L M1 I1 M2
+  cp[19] = msc * isc * msc * onem_s * LM2 * g * j;              // n=3  L M2 I2 M3
   cp[20] = msc * msc * msc * s * (a+e) * b * c;                 // n=3  G M1 M2 M3
-  cp[21] = msc * isc * msc * s * (a+e) * f * i * (1.-(c+g));    // n=3  G M1 I1 M2 D3
-  cp[22] = msc * isc * msc * s * (1.-(a+e)) * (1.-l) * g * j;   // n=3  G D1 M2 I2 M3
+  cp[21] = msc * isc * msc * s * (a+e) * f * i * onem_cg;    // n=3  G M1 I1 M2 D3
+  cp[22] = msc * isc * msc * s * onem_ae * onem_l * g * j;   // n=3  G D1 M2 I2 M3
 
-  cp[23] = msc * isc * msc * msc * (1.-s) * LM1 * f * i * c;                     // n=4  L M1 I1 M2 M3
-  cp[24] = msc * isc * isc * msc * (1.-s) * LM1 * f * (1.-i) * i * (1.-(c+g));   // n=4  L M1 I1 I1 M2 D3
-  cp[25] = msc * msc * isc * msc * (1.-s) * LM1 * b * g * j;                     // n=4  L M1 M2 I2 M3
-  cp[26] = msc * isc * isc * msc * (1.-s) * LM1 * f * (1.-i) * i;                // n=4  L M1 I1 I1 M2
-  cp[27] = msc * isc * isc * msc * (1.-s) * LM2 * g * (1.-j) * j;                // n=4  L M2 I2 I2 M3
+  cp[23] = msc * isc * msc * msc * onem_s * LM1 * f * i * c;                     // n=4  L M1 I1 M2 M3
+  cp[24] = msc * isc * isc * msc * onem_s * LM1 * f * onem_i * i * onem_cg;   // n=4  L M1 I1 I1 M2 D3
+  cp[25] = msc * msc * isc * msc * onem_s * LM1 * b * g * j;                     // n=4  L M1 M2 I2 M3
+  cp[26] = msc * isc * isc * msc * onem_s * LM1 * f * onem_i * i;                // n=4  L M1 I1 I1 M2
+  cp[27] = msc * isc * isc * msc * onem_s * LM2 * g * onem_j * j;                // n=4  L M2 I2 I2 M3
   cp[28] = msc * isc * msc * msc * s * (a+e) * f * i * c;                        // n=4  G M1 I1 M2 M3
-  cp[29] = msc * isc * isc * msc * s * (a+e) * f * (1.-i) * i * (1.-(c+g));      // n=4  G M1 I1 I1 M2 D3
+  cp[29] = msc * isc * isc * msc * s * (a+e) * f * onem_i * i * onem_cg;      // n=4  G M1 I1 I1 M2 D3
   cp[30] = msc * msc * isc * msc * s * (a+e) * b * g * j;                        // n=4  G M1 M2 I2 M3
-  cp[31] = msc * isc * isc * msc * s * (1.-(a+e)) * (1.-l) * g * (1.-j) * j;     // n=4  G D1 M2 I2 I2 M3
+  cp[31] = msc * isc * isc * msc * s * onem_ae * onem_l * g * onem_j * j;     // n=4  G D1 M2 I2 I2 M3
 
-  /* 2. Now sum/max (Fwd/Vit) the probabilities of each length 1..4 */
+  /* 2. Now sum/max (Fwd/Vit) the odds ratios of each length 1..4 */
   cL[0] = 0.;
   cL[1] = (do_viterbi ? esl_vec_DMax(cp,    9) : esl_vec_DSum(cp,    9));
   cL[2] = (do_viterbi ? esl_vec_DMax(cp+9,  7) : esl_vec_DSum(cp+9,  7));
@@ -1475,27 +1493,27 @@ score_brute(struct p7_brute_utest_s *prm, P7_BG *bg, int do_viterbi, double sc[5
    *    core model: 21 such paths.
    */
   jp[0]  = cL[4];			                                          // [4]                    (n=4, 0 in J) 
-  jp[1]  = cL[3] * (1.-p) * r * cL[1];                                            // [3] J [1]              (n=4, 0 in J) 
-  jp[2]  = cL[2] * (1.-p) * r * cL[2];                                            // [2] J [2]              (n=4, 0 in J) 
-  jp[3]  = cL[2] * (1.-p) * r * cL[1] * (1.-p) * r * cL[1];                       // [2] J [1] J [1]        (n=4, 0 in J) 
-  jp[4]  = cL[1] * (1.-p) * r * cL[3];                                            // [1] J [3]              (n=4, 0 in J) 
-  jp[5]  = cL[1] * (1.-p) * r * cL[2] * (1.-p) * r * cL[1];                       // [1] J [2] J [1]        (n=4, 0 in J) 
-  jp[6]  = cL[1] * (1.-p) * r * cL[1] * (1.-p) * r * cL[2];                       // [1] J [1] J [2]        (n=4, 0 in J) 
-  jp[7]  = cL[1] * (1.-p) * r * cL[1] * (1.-p) * r * cL[1] * (1.-p) * r * cL[1];  // [1] J [1] J [1] J [1]  (n=4, 0 in J) 
-  jp[8]  = cL[2] * (1.-p) * (1.-r) * r * cL[1];                                   // [2] JJ [1]             (n=4, 1 in J) 
-  jp[9]  = cL[1] * (1.-p) * (1.-r) * r * cL[2];                                   // [1] JJ [2]             (n=4, 1 in J) 
-  jp[10] = cL[1] * (1.-p) * (1.-r) * r * cL[1] * (1.-p) * r * cL[1];              // [1] JJ [1] J [1]       (n=4, 1 in J) 
-  jp[11] = cL[1] * (1.-p) * r * cL[1] * (1.-p) * (1.-r) * r * cL[1];              // [1] J [1] JJ [1]       (n=4, 1 in J) 
-  jp[12] = cL[1] * (1.-p) * (1.-r) * (1.-r) * r * cL[1];                          // [1] JJJ [1]            (n=4, 2 in J) 
+  jp[1]  = cL[3] * onem_p * r * cL[1];                                            // [3] J [1]              (n=4, 0 in J) 
+  jp[2]  = cL[2] * onem_p * r * cL[2];                                            // [2] J [2]              (n=4, 0 in J) 
+  jp[3]  = cL[2] * onem_p * r * cL[1] * onem_p * r * cL[1];                       // [2] J [1] J [1]        (n=4, 0 in J) 
+  jp[4]  = cL[1] * onem_p * r * cL[3];                                            // [1] J [3]              (n=4, 0 in J) 
+  jp[5]  = cL[1] * onem_p * r * cL[2] * onem_p * r * cL[1];                       // [1] J [2] J [1]        (n=4, 0 in J) 
+  jp[6]  = cL[1] * onem_p * r * cL[1] * onem_p * r * cL[2];                       // [1] J [1] J [2]        (n=4, 0 in J) 
+  jp[7]  = cL[1] * onem_p * r * cL[1] * onem_p * r * cL[1] * onem_p * r * cL[1];  // [1] J [1] J [1] J [1]  (n=4, 0 in J) 
+  jp[8]  = cL[2] * onem_p * onem_r * r * cL[1];                                   // [2] JJ [1]             (n=4, 1 in J) 
+  jp[9]  = cL[1] * onem_p * onem_r * r * cL[2];                                   // [1] JJ [2]             (n=4, 1 in J) 
+  jp[10] = cL[1] * onem_p * onem_r * r * cL[1] * onem_p * r * cL[1];              // [1] JJ [1] J [1]       (n=4, 1 in J) 
+  jp[11] = cL[1] * onem_p * r * cL[1] * onem_p * onem_r * r * cL[1];              // [1] J [1] JJ [1]       (n=4, 1 in J) 
+  jp[12] = cL[1] * onem_p * onem_r * onem_r * r * cL[1];                          // [1] JJJ [1]            (n=4, 2 in J) 
 
   jp[13] = cL[3];		                                                  // [3]                    (n=3, 0 in J) 
-  jp[14] = cL[2] * (1.-p) * r * cL[1];                                            // [2] J [1]              (n=3, 0 in J) 
-  jp[15] = cL[1] * (1.-p) * r * cL[2];                                            // [1] J [2]              (n=3, 0 in J) 
-  jp[16] = cL[1] * (1.-p) * r * cL[1] * (1.-p) * r * cL[1];                       // [1] J [1] J [1]        (n=3, 0 in J) 
-  jp[17] = cL[1] * (1.-p) * (1.-r) * r * cL[1];                                   // [1] JJ [1]             (n=3, 1 in J) 
+  jp[14] = cL[2] * onem_p * r * cL[1];                                            // [2] J [1]              (n=3, 0 in J) 
+  jp[15] = cL[1] * onem_p * r * cL[2];                                            // [1] J [2]              (n=3, 0 in J) 
+  jp[16] = cL[1] * onem_p * r * cL[1] * onem_p * r * cL[1];                       // [1] J [1] J [1]        (n=3, 0 in J) 
+  jp[17] = cL[1] * onem_p * onem_r * r * cL[1];                                   // [1] JJ [1]             (n=3, 1 in J) 
 
   jp[18] = cL[2];                                                                 // [2]                    (n=2, 0 in J) 
-  jp[19] = cL[1] * (1.-p) * r * cL[1];                                            // [1] J [1]              (n=2, 0 in J) 
+  jp[19] = cL[1] * onem_p * r * cL[1];                                            // [1] J [1]              (n=2, 0 in J) 
   
   jp[20] = cL[1];		                                                  // [1]                    (n=1, 0 in J) 
 
@@ -1509,15 +1527,15 @@ score_brute(struct p7_brute_utest_s *prm, P7_BG *bg, int do_viterbi, double sc[5
   /* 5. Probabilities of 10 possible paths accounting for 0..3 residues in the flanks.
    */
   ap[0] = n * p * q;
-  ap[1] = (1.-n) * n * p * q;
-  ap[2] = n * p * (1.-q) * q;
-  ap[3] = (1.-n) * (1.-n) * n * p * q;
-  ap[4] = (1.-n) * n * p * (1.-q) * q;
-  ap[5] = n * p * (1.-q) * (1.-q) * q;
-  ap[6] = (1.-n) * (1.-n) * (1.-n) * n * p * q;
-  ap[7] = (1.-n) * (1.-n) * n * p * (1.-q) * q;
-  ap[8] = (1.-n) * n * p * (1.-q) * (1.-q) * q;
-  ap[9] = n * p * (1.-q) * (1.-q) * (1.-q) * q;
+  ap[1] = onem_n * n * p * q;
+  ap[2] = n * p * onem_q * q;
+  ap[3] = onem_n * onem_n * n * p * q;
+  ap[4] = onem_n * n * p * onem_q * q;
+  ap[5] = n * p * onem_q * onem_q * q;
+  ap[6] = onem_n * onem_n * onem_n * n * p * q;
+  ap[7] = onem_n * onem_n * n * p * onem_q * q;
+  ap[8] = onem_n * n * p * onem_q * onem_q * q;
+  ap[9] = n * p * onem_q * onem_q * onem_q * q;
 
   /* 6. Sum or max the total path probability for the flanks generating
    *     0..3 residues
