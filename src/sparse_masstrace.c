@@ -16,7 +16,7 @@ p7_sparse_masstrace_Up(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
   const P7_SPARSEMASK *sm = fwd->sm;
   int   st0 = tr->st[z];	/* anchor point's state (p7T_{MDI}) */
   int   k0  = tr->k[z];		/* anchor point's k position in profile (1..M) */
-  int   i0  = tr->i[z];		/* anchor point's i positon in sequence (1..L) */
+  int   i0  = tr->i[z];		/* anchor point's i position in sequence (1..L) */   // BUG: this can be 0, if st0 is a D; need to identify last emitted i in trace
   int   iae = i0;		/* RETURN: envelope start coord in sequence (1..i0) */
   int   kae = k0;		/* RETURN: envelope start coord in profile (1..k0) */
   float *rhoc;			/* ptr into current row i rho (trace mass) cells */
@@ -39,6 +39,7 @@ p7_sparse_masstrace_Up(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
   for (k = 0; k<= sm->M; k++) 
     kmass[k] = 0.;
 
+  /* dpc, rhoc initialized to point at last sparse supercell on row i0 */
   dpc  = fwd->dp  + p7S_NSCELLS*((sm->k[i0] + sm->n[i0] - 1) - sm->kmem);      // unwarranted pointer-arithmetic chumminess with sparsemask, sparsemx: assumes that dp[] and kmem[] are EXACTLY 1:1 with each other
   rhoc = mass->dp + p7S_NSCELLS*((sm->k[i0] + sm->n[i0] - 1) - sm->kmem);      // sm->k[i+1]-1 doesn't work because of i=L edge case (no k[L+1]) 
 
@@ -53,16 +54,15 @@ p7_sparse_masstrace_Up(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
    * if st0 is {MDI}G glocal, offset ptrs by +1 cell; now our ptrs are on MG 
    * because of relative indexing in dp (everything done by stepping exactly in supercell units),
    * this single offset suffices to keep dpc,dpn,rhoc,rhon on L vs. G in all the rest of the code here
-   * we access everything with L indices, but with the offset, these will exactly be the G cells
+   * we access everything with L indices, but with the offset, these will be exactly the G cells!
    * seriously, trust me.
    */
-  if (st0 == p7T_MG || st0 == p7T_IG || st0 == p7T_DG)
-    { dpc += 1; rhoc += 1; }
+  if (st0 == p7T_MG || st0 == p7T_IG || st0 == p7T_DG) { dpc += 1; rhoc += 1; }
   last_dpc  = dpc;
   last_rhoc = rhoc;
 
   /* special case the first row (i0): initialize on i0,k0, then pull delete path to the left.  */
-  /* first, skip to find k0, bravely assuming that k0 MUST be in the sparse list for i0 */
+  /* first, skip backwards to find k0, bravely assuming that k0 MUST be in the sparse list for i0 */
   for (v = sm->n[i0]-1; sm->k[i0][v] != k0; v--)
     { dpc  -= p7S_NSCELLS; rhoc -= p7S_NSCELLS;  }
 
@@ -80,28 +80,28 @@ p7_sparse_masstrace_Up(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
   dpc       -= p7S_NSCELLS;
   rhoc      -= p7S_NSCELLS;
   
-  /* now pull to the left. If we didn't start on a D, or
-   * if we don't have contiguous supercells on the row, this
-   * is all an expensive way of zeroing the row: but it's
-   * clearer this way than a lot of special case branching,
-   * especially since it's obvious where the same ->D case is
-   * in the main recursion later.
+  /* now pull to the left to finish the initialization of row i0.  If
+   * we didn't start on a D, or if we don't have contiguous supercells
+   * on the row, this amounts to an expensive way of zeroing the row:
+   * but it's clearer this way than a lot of special case branching,
+   * especially since it's obvious where the same ->D case is in the
+   * main recursion later.
    */ 
   for (v = v-1; v >= 0; v--) 
     {
       k = sm->k[i0][v];
-      if (sm->k[i0][v+1] == k+1) {
+      if (sm->k[i0][v+1] == k+1) { /* if v,v+1 sparse cells are contiguous k,k+1, we can propagate D path leftwards */
 	rhoc[p7S_ML] = rhoc[p7S_DL+p7S_NSCELLS] * exp( dpc[p7S_ML] + TSC(p7P_MD, k) - dpc[p7S_DL+p7S_NSCELLS]);
 	rhoc[p7S_IL] = 0.0f;
 	rhoc[p7S_DL] = rhoc[p7S_DL+p7S_NSCELLS] * exp( dpc[p7S_DL] + TSC(p7P_DD, k) - dpc[p7S_DL+p7S_NSCELLS]);
-      } else { rhoc[p7S_ML] = rhoc[p7S_IL] = rhoc[p7S_DL] = 0.0f; }
+      } else { rhoc[p7S_ML] = rhoc[p7S_IL] = rhoc[p7S_DL] = 0.0f; } /* else we can't, and no probability mass reaches these cells (nor any others on the row) */
 
       kmass[k] += rhoc[p7S_ML] + rhoc[p7S_DL];
       if (kmass[k] >= massthresh) kae = k; 
       dpc      -= p7S_NSCELLS;
       rhoc     -= p7S_NSCELLS;
     }
-
+  /* Now dpc, rhoc are on last supercell of row i0-1. */
   
   /* The main recursion.  */
   for (i = i0-1; i >= 1; i--)
@@ -146,7 +146,7 @@ p7_sparse_masstrace_Up(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
 	  kmass[k] += rhoc[p7S_ML] + rhoc[p7S_DL]; /* kmass[k] is a lower bound on how much probability mass is flowing leftwards thru this column  */
 	  if (k < kae && kmass[k] >= massthresh) kae = k; 
 	  if (kae == 1 || kmass[k] + rowmass < massthresh) kae_proven_done = TRUE; /* kmass[k] + rowmass is the upper bound on what can flow leftward thru k */
-	  rowmass  += rhoc[p7S_ML] + rhoc[p7S_IL]; /* how much total probability mass is flowing upwards through this row  */
+	  rowmass  += rhoc[p7S_ML] + rhoc[p7S_IL]; /* accumulate total probability mass that's still flowing upwards through this row  */
 
 	  rhoc -= p7S_NSCELLS;
 	  dpc  -= p7S_NSCELLS;
