@@ -10,6 +10,7 @@
 
 #include "hmmer.h"
 #include "p7_sparsemx.h"
+#include "p7_masstrace.h"
 #include "sparse_fwdback.h"
 #include "sparse_masstrace.h"
 #include "sparse_envscore.h"
@@ -41,6 +42,7 @@ main(int argc, char **argv)
   P7_SPARSEMX    *sxb     = NULL;
   P7_SPARSEMX    *sxd     = NULL;
   P7_TRACE       *tr      = p7_trace_CreateWithPP();
+  P7_MASSTRACE   *mt      = p7_masstrace_Create(100,100); /* M,L here are hints; it will be grown as needed */
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
@@ -131,9 +133,7 @@ main(int argc, char **argv)
       
       for (d = 0; d < tr->ndom; d++)
 	{
-	  p7_sparsemx_Reinit(sx, sm);
-	  p7_sparse_masstrace_Up  (sq->dsq, sq->n, gm, sxf, sx, tr, tr->anch[d], 0.1, &iae, &kae);
-	  p7_sparse_masstrace_Down(sq->dsq, sq->n, gm, sxb, sx, tr, tr->anch[d], 0.1, &ibe, &kbe);
+	  p7_SparseMasstrace(sq->dsq, sq->n, gm, sxf, sxb, tr, tr->anch[d], 0.1, sx, mt, &iae, &ibe, &kae, &kbe);
 	  p7_sparsemx_Reuse(sx);
 	  
 	  p7_sparsemx_ExpectedDomains(sxd, iae, ibe, &ndom_exp);

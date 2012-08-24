@@ -512,7 +512,7 @@ forward_row(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dpc, i
   xc[p7F_B]  = xc[p7F_N] * om->xf[p7O_N][p7O_MOVE] + xc[p7F_J] * om->xf[p7O_J][p7O_MOVE];
   xc[p7F_CC] =                                       xp[p7F_C] * om->xf[p7O_C][p7O_LOOP];
   xc[p7F_C]  = xc[p7F_CC]                          + xc[p7F_E] * om->xf[p7O_E][p7O_MOVE];
-  
+
   /* Sparse rescaling. xE above threshold? Then trigger a rescaling event.            */
   if (xc[p7F_E] > 1.0e4)	/* that's a little less than e^10, ~10% of our dynamic range */
     {

@@ -535,7 +535,7 @@ p7_sparse_trace_Viterbi(const P7_PROFILE *gm, const P7_SPARSEMX *sx, P7_TRACE *t
  *                      is smaller, it will be reallocated; if <*wrk_byp> is <NULL> it
  *                      will be allocated.
  *            gm      - profile
- *            sx      - filled sparse Viterbi DP matrix
+ *            sxf     - filled sparse Forward DP matrix
  *            tr      - trace structure to store the result in
  *
  * Returns:   <eslOK> on success.
@@ -548,16 +548,18 @@ p7_sparse_trace_Viterbi(const P7_PROFILE *gm, const P7_SPARSEMX *sx, P7_TRACE *t
  *            <eslEINVAL> on various coding, contract check failures. 
  */
 int
-p7_sparse_trace_Stochastic(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PROFILE *gm, const P7_SPARSEMX *sx, P7_TRACE *tr)
+p7_sparse_trace_Stochastic(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PROFILE *gm, const P7_SPARSEMX *sxf, P7_TRACE *tr)
 {
   float *wrk = NULL;
   int    status;
 
-  if      (esl_byp_IsInternal(wrk_byp)) { ESL_ALLOC  (wrk,      sx->sm->M * p7S_NSCELLS * sizeof(float));                 }
-  else if (esl_byp_IsReturned(wrk_byp)) { ESL_ALLOC  (*wrk_byp, sx->sm->M * p7S_NSCELLS * sizeof(float)); wrk = *wrk_byp; }
-  else if (esl_byp_IsProvided(wrk_byp)) { ESL_REALLOC(*wrk_byp, sx->sm->M * p7S_NSCELLS * sizeof(float)); wrk = *wrk_byp; }
+  ESL_DASSERT1( (sxf->type == p7S_FORWARD)  );
 
-  status = sparse_traceback_engine(rng, wrk, gm, sx, tr);
+  if      (esl_byp_IsInternal(wrk_byp)) { ESL_ALLOC  (wrk,      sxf->sm->M * p7S_NSCELLS * sizeof(float));                 }
+  else if (esl_byp_IsReturned(wrk_byp)) { ESL_ALLOC  (*wrk_byp, sxf->sm->M * p7S_NSCELLS * sizeof(float)); wrk = *wrk_byp; }
+  else if (esl_byp_IsProvided(wrk_byp)) { ESL_REALLOC(*wrk_byp, sxf->sm->M * p7S_NSCELLS * sizeof(float)); wrk = *wrk_byp; }
+
+  status = sparse_traceback_engine(rng, wrk, gm, sxf, tr);
 
   if  (esl_byp_IsInternal(wrk_byp)) { free(wrk); }
   return status;

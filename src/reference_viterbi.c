@@ -335,9 +335,13 @@ main(int argc, char **argv)
   p7_profile_Config   (gm, hmm, bg);   
   p7_profile_SetLength(gm, L);
 
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+
   utest_randomseq (rng,      gm, bg, N, L);
   utest_generation(rng, hmm, gm, bg, N, L);
 
+  fprintf(stderr, "#  status = ok\n");
   p7_profile_Destroy(gm);
   p7_hmm_Destroy(hmm);
   p7_bg_Destroy(bg);

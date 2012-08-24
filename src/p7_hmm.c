@@ -795,6 +795,7 @@ p7_hmm_Dump(FILE *fp, P7_HMM *hmm)
   return eslOK;
 }
 
+
 /* Function:  p7_hmm_Sample()
  * Synopsis:  Sample an HMM at random.
  *
@@ -818,29 +819,31 @@ int
 p7_hmm_Sample(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
 {
   P7_HMM *hmm    = NULL;
-  char   *logmsg = "[random HMM created by sampling]";
+  char   *logmsg = "[random HMM created by uniform sampling]";
   int     k;
   int     status;
 
-  hmm = p7_hmm_Create(M, abc);
-  if (hmm == NULL) { status = eslEMEM; goto ERROR; }
+  if ( (hmm = p7_hmm_Create(M, abc)) == NULL) { status = eslEMEM; goto ERROR; }
   
   for (k = 0; k <= M; k++)
     {
       if (k > 0) esl_dirichlet_FSampleUniform(r, abc->K, hmm->mat[k]);
-      esl_dirichlet_FSampleUniform(r, abc->K, hmm->ins[k]);
-      esl_dirichlet_FSampleUniform(r, 3,      hmm->t[k]);
-      esl_dirichlet_FSampleUniform(r, 2,      hmm->t[k]+3);
-      if (k > 0) esl_dirichlet_FSampleUniform(r, 2,      hmm->t[k]+5);
+      esl_dirichlet_FSampleUniform(r, abc->K,    hmm->ins[k]);
+      esl_dirichlet_FSampleUniform(r, p7H_NTMAT, P7H_TMAT(hmm, k));
+      do {  /* put a cap on tII, because tII~1.0 leads to infinite-length sequence samples */
+	esl_dirichlet_FSampleUniform(r, p7H_NTINS, P7H_TINS(hmm, k));
+      } while (hmm->t[k][p7H_II] > p7H_II_SAMPLE_MAX);
+      if (k > 0) esl_dirichlet_FSampleUniform(r, p7H_NTDEL, P7H_TDEL(hmm, k));
     }
   /* Node M is special: no transitions to D, transitions to M
    * are interpreted as transitions to E. Overwrite a little of
    * what we did in node M.
    */
-  esl_dirichlet_FSampleUniform(r, 2, hmm->t[M]);    /* TMM,TMI only */
-  hmm->t[M][p7H_MD] = 0.;	
+  hmm->t[M][p7H_MD] = 0.0;
+  esl_vec_FNorm(P7H_TMAT(hmm, M), p7H_NTMAT);
+  
+  esl_vec_FSet(P7H_TDEL(hmm, M), p7H_NTDEL, 0.0);
   hmm->t[M][p7H_DM] = 1.0;
-  hmm->t[M][p7H_DD] = 0.0;
   
   /* Add mandatory annotation, and some relevant optional annotation  */
   p7_hmm_SetName(hmm, "sampled-hmm");
@@ -852,10 +855,106 @@ p7_hmm_Sample(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hm
   return eslOK;
   
  ERROR:
-  if (hmm != NULL) p7_hmm_Destroy(hmm);
+  if (hmm) p7_hmm_Destroy(hmm);
   *ret_hmm = NULL;
   return status;
+}
 
+/* Function:  p7_hmm_SamplePrior()
+ * Synopsis:  Sample an HMM from a prior distribution.
+ *
+ * Purpose:   Creates a random HMM of length <M> nodes, for 
+ *            alphabet <abc>, using random number generator
+ *            <r>, by sampling from mixture Dirichlet priors
+ *            given in <pri>.
+ *            
+ *            In general this should give more 'realistic' profile
+ *            HMMs than <p7_hmm_Sample()> does.  In unit testing, we
+ *            tend to use <p7_hmm_Sample()> for tests that should be
+ *            able to deal with any profile, no matter how
+ *            pathological. A few tests need to see typical,
+ *            reasonable (high-posterior-probability) alignment paths,
+ *            and we use <p7_hmm_SamplePrior()> in these cases.
+ *            
+ * Args:      r       : random number generator
+ *            M       : length of profile HMM to sample
+ *            abc     : alphabet
+ *            pri     : mixture Dirichlet priors on emissions, transitions
+ *            ret_hmm : RETURN: newly sampled profile HMM.
+ *
+ * Returns:   <eslOK> on success, and <*ret_hmm> contains the new profile
+ *            HMM object. Caller is responsible for free'ing this 
+ *            with <p7_hmm_Destroy()>.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ */
+int
+p7_hmm_SamplePrior(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, const P7_PRIOR *pri, P7_HMM **ret_hmm)
+{
+  P7_HMM *hmm    = NULL;
+  char   *logmsg = "[random HMM created by sampling prior]";
+  double  ep[p7_MAXABET];	/* tmp storage for sampled emission parameters as doubles */
+  double  tp[p7H_NTMAX];	/* tmp storage, transitions */
+  int     q,k;
+  int     status;
+
+  ESL_DASSERT1 ( ( M>0) );
+  ESL_DASSERT1 ( ( pri->em->K == abc->K )   );
+  ESL_DASSERT1 ( ( pri->ei->K == abc->K )   );
+  ESL_DASSERT1 ( ( pri->tm->K == p7H_NTMAT) );
+  ESL_DASSERT1 ( ( pri->ti->K == p7H_NTINS) );
+  ESL_DASSERT1 ( ( pri->td->K == p7H_NTDEL) );
+  
+  if ( (hmm = p7_hmm_Create(M, abc)) == NULL) { status = eslEMEM; goto ERROR; }
+
+  for (k = 0; k <= M; k++)
+    {
+      if (k) {
+	q = esl_rnd_DChoose(r, pri->em->pq, pri->em->N); 
+	esl_dirichlet_DSample(r, pri->em->alpha[q], pri->em->K, ep); /* extra D2F step because Easel Dirichlet module is double-precision */
+	esl_vec_D2F(ep, abc->K, hmm->mat[k]);
+      }
+
+      q = esl_rnd_DChoose(r, pri->ei->pq, pri->ei->N); 
+      esl_dirichlet_DSample(r, pri->ei->alpha[q], pri->ei->K, ep);
+      esl_vec_D2F(ep, abc->K, hmm->ins[k]);
+
+      q = esl_rnd_DChoose(r, pri->tm->pq, pri->tm->N); 
+      esl_dirichlet_DSample(r, pri->tm->alpha[q], pri->tm->K, tp);
+      esl_vec_D2F(tp, p7H_NTMAT, P7H_TMAT(hmm,k));
+
+      do {
+	q = esl_rnd_DChoose(r, pri->ti->pq, pri->ti->N); 
+	esl_dirichlet_DSample(r, pri->ti->alpha[q], pri->ti->K, tp);
+	esl_vec_D2F(tp, p7H_NTINS, P7H_TINS(hmm,k));
+      } while (hmm->t[k][p7H_II] > p7H_II_SAMPLE_MAX); /* put a cap on tII, because tII~1 gives us infinite-length sequence samples */
+
+      if (k) {
+	q = esl_rnd_DChoose(r, pri->td->pq, pri->td->N); 
+	esl_dirichlet_DSample(r, pri->td->alpha[q], pri->td->K, tp);
+	esl_vec_D2F(tp, p7H_NTDEL, P7H_TDEL(hmm,k));
+      }
+    }
+
+  hmm->t[M][p7H_MD] = 0.0;
+  esl_vec_FNorm(P7H_TMAT(hmm, M), p7H_NTMAT);
+  
+  esl_vec_FSet(P7H_TDEL(hmm, M), p7H_NTDEL, 0.0);
+  hmm->t[M][p7H_DM] = 1.0;
+
+  /* Add mandatory annotation, and some relevant optional annotation  */
+  p7_hmm_SetName(hmm, "sampled-hmm");
+  p7_hmm_AppendComlog(hmm, 1, &logmsg);
+  p7_hmm_SetCtime(hmm);
+  p7_hmm_SetConsensus(hmm, NULL);
+
+  *ret_hmm = hmm;
+  return eslOK;
+
+ ERROR:
+  if (hmm) p7_hmm_Destroy(hmm);
+  *ret_hmm = NULL;
+  return status;
 }
 
 /* Function:  p7_hmm_SampleUngapped()

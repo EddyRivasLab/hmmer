@@ -1,22 +1,35 @@
 /* Mass trace algorithm, sparse DP version:
  * finding bounds of a domain envelope.
+ * 
+ * Contents:
+ *   1. Upwards recursion (iae/kae starts)
+ *   2. Downwards recursion (ibe/kbe ends)
+ *   3. API, wrapper for up/down recursions
+ *   4. Unit tests
+ *   5. Test driver
+ *   6. Example
+ *   7. Copyright, license information.
  */
 
 #include "p7_config.h"
 
 #include "easel.h"
+#include "esl_vectorops.h"
 
 #include "hmmer.h"
+#include "p7_masstrace.h"
 #include "p7_sparsemx.h"
-#include "sparse_envscore.h"
 
-int
-p7_sparse_masstrace_Up(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMX *fwd, P7_SPARSEMX *mass, P7_TRACE *tr, int z, float massthresh, int *ret_iae, int *ret_kae)
+/*****************************************************************
+ * 1. The upwards recursion.
+ *****************************************************************/
+
+static int
+masstrace_up(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMX *fwd,
+	     int i0, int k0, int st0, float massthresh, 
+	     P7_SPARSEMX *mass, P7_MASSTRACE *mt, int *ret_iae, int *ret_kae)
 {
   const P7_SPARSEMASK *sm = fwd->sm;
-  int   st0 = tr->st[z];	/* anchor point's state (p7T_{MDI}) */
-  int   k0  = tr->k[z];		/* anchor point's k position in profile (1..M) */
-  int   i0  = tr->i[z];		/* anchor point's i position in sequence (1..L) */   // BUG: this can be 0, if st0 is a D; need to identify last emitted i in trace
   int   iae = i0;		/* RETURN: envelope start coord in sequence (1..i0) */
   int   kae = k0;		/* RETURN: envelope start coord in profile (1..k0) */
   float *rhoc;			/* ptr into current row i rho (trace mass) cells */
@@ -29,21 +42,14 @@ p7_sparse_masstrace_Up(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
   const float *tsc = gm->tsc;   /* transition score vector. Enables TSC(k) notation macro. */
   int   i, k, v,w;
   float  rowmass;
-  float *kmass           = NULL;
   int    iae_proven_done = FALSE;
   int    kae_proven_done = FALSE;
-  int    status;
-
-  /* we should avoid this tmp alloc. find space for kmass in sparsemx. */
-  ESL_ALLOC(kmass, sizeof(float) * (sm->M+1));
-  for (k = 0; k<= sm->M; k++) 
-    kmass[k] = 0.;
 
   /* dpc, rhoc initialized to point at last sparse supercell on row i0 */
   dpc  = fwd->dp  + p7S_NSCELLS*((sm->k[i0] + sm->n[i0] - 1) - sm->kmem);      // unwarranted pointer-arithmetic chumminess with sparsemask, sparsemx: assumes that dp[] and kmem[] are EXACTLY 1:1 with each other
   rhoc = mass->dp + p7S_NSCELLS*((sm->k[i0] + sm->n[i0] - 1) - sm->kmem);      // sm->k[i+1]-1 doesn't work because of i=L edge case (no k[L+1]) 
 
-  /* ok, so, the following is insane.
+  /* ok, so, the following is not pretty.
    * note that local, glocal paths don't cross; 
    * if st0 is {MDI}L, only {MDI}L can be reached; analogous for {MDI}G.
    * so we only need to compute the L or G interleaved half of the sparse matrix, depending on st0
@@ -61,7 +67,17 @@ p7_sparse_masstrace_Up(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
   last_dpc  = dpc;
   last_rhoc = rhoc;
 
-  /* special case the first row (i0): initialize on i0,k0, then pull delete path to the left.  */
+  /* Another wrinkle: on glocal paths, we know kae=1 and kbe=M.
+   * The code below is going to neglect the prob mass that flows
+   * through wing-retracted DGks; so for glocal mass trace, it
+   * will calculate kmass[] distribution exclusive of the wing
+   * retractions. On a glocal path, we must be sure not to modify kae
+   * after this initialization.
+   */
+  if (p7_trace_IsGlocal(st0)) kae = 1;
+
+  /* Initialization of first row, i0:
+   */
   /* first, skip backwards to find k0, bravely assuming that k0 MUST be in the sparse list for i0 */
   for (v = sm->n[i0]-1; sm->k[i0][v] != k0; v--)
     { dpc  -= p7S_NSCELLS; rhoc -= p7S_NSCELLS;  }
@@ -76,9 +92,10 @@ p7_sparse_masstrace_Up(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
   case p7T_DL: case p7T_DG: rhoc[p7S_ML] = 0.; rhoc[p7S_IL] = 0.;  rhoc[p7S_DL] = 1.;  break;
   default:     ESL_EXCEPTION(eslEINCONCEIVABLE, "you know it is");
   }
-  kmass[k0]  = 1.0;
-  dpc       -= p7S_NSCELLS;
-  rhoc      -= p7S_NSCELLS;
+  mt->kmass[k0]  = 1.0;
+  if (mt->imass) mt->imass[i0] = 1.0;
+  dpc  -= p7S_NSCELLS;
+  rhoc -= p7S_NSCELLS;
   
   /* now pull to the left to finish the initialization of row i0.  If
    * we didn't start on a D, or if we don't have contiguous supercells
@@ -91,15 +108,15 @@ p7_sparse_masstrace_Up(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
     {
       k = sm->k[i0][v];
       if (sm->k[i0][v+1] == k+1) { /* if v,v+1 sparse cells are contiguous k,k+1, we can propagate D path leftwards */
-	rhoc[p7S_ML] = rhoc[p7S_DL+p7S_NSCELLS] * exp( dpc[p7S_ML] + TSC(p7P_MD, k) - dpc[p7S_DL+p7S_NSCELLS]);
+	rhoc[p7S_ML] = P7_MASSTRACE_INCREMENT(rhoc[p7S_DL+p7S_NSCELLS],  dpc[p7S_ML] + TSC(p7P_MD, k), dpc[p7S_DL+p7S_NSCELLS]);
 	rhoc[p7S_IL] = 0.0f;
-	rhoc[p7S_DL] = rhoc[p7S_DL+p7S_NSCELLS] * exp( dpc[p7S_DL] + TSC(p7P_DD, k) - dpc[p7S_DL+p7S_NSCELLS]);
+	rhoc[p7S_DL] = P7_MASSTRACE_INCREMENT(rhoc[p7S_DL+p7S_NSCELLS],  dpc[p7S_DL] + TSC(p7P_DD, k), dpc[p7S_DL+p7S_NSCELLS]);
       } else { rhoc[p7S_ML] = rhoc[p7S_IL] = rhoc[p7S_DL] = 0.0f; } /* else we can't, and no probability mass reaches these cells (nor any others on the row) */
 
-      kmass[k] += rhoc[p7S_ML] + rhoc[p7S_DL];
-      if (kmass[k] >= massthresh) kae = k; 
-      dpc      -= p7S_NSCELLS;
-      rhoc     -= p7S_NSCELLS;
+      mt->kmass[k] += rhoc[p7S_ML] + rhoc[p7S_DL];
+      if (k < kae && mt->kmass[k] >= massthresh) kae = k; /* k<kae test suffices to prevent changing kae on glocal path */
+      dpc  -= p7S_NSCELLS;
+      rhoc -= p7S_NSCELLS;
     }
   /* Now dpc, rhoc are on last supercell of row i0-1. */
   
@@ -125,56 +142,55 @@ p7_sparse_masstrace_Up(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
 	  /* Try to find the M(i+1,k+1) cell on row i+1. If it exists: apportion its mass to our current cells {MID}ik */
 	  while (w >= 0 && sm->k[i+1][w]  > k+1) { w--; dpn -= p7S_NSCELLS; rhon -= p7S_NSCELLS; }
 	  if    (w >= 0 && sm->k[i+1][w] == k+1 && k < k0) {  // note k<k0 test; for k=k0, Mk+1 was never initialized in rhon[]
-	    rhoc[p7S_ML]  = rhon[p7S_ML] * exp( dpc[p7S_ML] + TSC(p7P_MM, k) + MSN(k+1) - dpn[p7S_ML]);
-	    rhoc[p7S_IL]  = rhon[p7S_ML] * exp( dpc[p7S_IL] + TSC(p7P_IM, k) + MSN(k+1) - dpn[p7S_ML]);
-	    rhoc[p7S_DL]  = rhon[p7S_ML] * exp( dpc[p7S_DL] + TSC(p7P_DM, k) + MSN(k+1) - dpn[p7S_ML]);
+	    rhoc[p7S_ML]  = P7_MASSTRACE_INCREMENT(rhon[p7S_ML], dpc[p7S_ML] + TSC(p7P_MM, k) + MSN(k+1), dpn[p7S_ML]);
+	    rhoc[p7S_IL]  = P7_MASSTRACE_INCREMENT(rhon[p7S_ML], dpc[p7S_IL] + TSC(p7P_IM, k) + MSN(k+1), dpn[p7S_ML]);
+	    rhoc[p7S_DL]  = P7_MASSTRACE_INCREMENT(rhon[p7S_ML], dpc[p7S_DL] + TSC(p7P_DM, k) + MSN(k+1), dpn[p7S_ML]);
 	  } else { rhoc[p7S_ML] = rhoc[p7S_IL] = rhoc[p7S_DL] = 0.0f; }
 
 	  /* Try to find I(i+1,k) cell on row i+1; if exists, apportion its mass */
 	  while (w >= 0 && sm->k[i+1][w]  > k) { w--; dpn -= p7S_NSCELLS; rhon -= p7S_NSCELLS; }
 	  if    (w >= 0 && sm->k[i+1][w] == k) { 
-	    rhoc[p7S_ML] += rhon[p7S_IL] * exp( dpc[p7S_ML] + TSC(p7P_MI, k) - dpn[p7S_IL]); // insert scores ISN(k) assumed to be zero
-	    rhoc[p7S_IL] += rhon[p7S_IL] * exp( dpc[p7S_IL] + TSC(p7P_II, k) - dpn[p7S_IL]);
+	    rhoc[p7S_ML] += P7_MASSTRACE_INCREMENT(rhon[p7S_IL], dpc[p7S_ML] + TSC(p7P_MI, k), dpn[p7S_IL]); // insert scores ISN(k) assumed to be zero
+	    rhoc[p7S_IL] += P7_MASSTRACE_INCREMENT(rhon[p7S_IL], dpc[p7S_IL] + TSC(p7P_II, k), dpn[p7S_IL]);
 	  }
 
 	  /* If v+1 is k+1 ... then v,v+1 are contiguous supercells ... and D(i,k+1) exists, so apportion its mass. */
 	  if (v < sm->n[i]-1 && sm->k[i][v+1] == k+1 && k < k0) { // k<k0 test: don't look for Dk0+1
-	    rhoc[p7S_ML] += rhoc[p7S_DL+p7S_NSCELLS] * exp( dpc[p7S_ML] + TSC(p7P_MD, k) - dpc[p7S_DL+p7S_NSCELLS]);
-	    rhoc[p7S_DL] += rhoc[p7S_DL+p7S_NSCELLS] * exp( dpc[p7S_DL] + TSC(p7P_DD, k) - dpc[p7S_DL+p7S_NSCELLS]);
+	    rhoc[p7S_ML] += P7_MASSTRACE_INCREMENT(rhoc[p7S_DL+p7S_NSCELLS], dpc[p7S_ML] + TSC(p7P_MD, k), dpc[p7S_DL+p7S_NSCELLS]);
+	    rhoc[p7S_DL] += P7_MASSTRACE_INCREMENT(rhoc[p7S_DL+p7S_NSCELLS], dpc[p7S_DL] + TSC(p7P_DD, k), dpc[p7S_DL+p7S_NSCELLS]);
 	  }
 
-	  kmass[k] += rhoc[p7S_ML] + rhoc[p7S_DL]; /* kmass[k] is a lower bound on how much probability mass is flowing leftwards thru this column  */
-	  if (k < kae && kmass[k] >= massthresh) kae = k; 
-	  if (kae == 1 || kmass[k] + rowmass < massthresh) kae_proven_done = TRUE; /* kmass[k] + rowmass is the upper bound on what can flow leftward thru k */
+	  mt->kmass[k] += rhoc[p7S_ML] + rhoc[p7S_DL]; /* kmass[k] is a lower bound on how much probability mass is flowing leftwards thru this column  */
+	  if (k < kae && mt->kmass[k] >= massthresh) kae = k; /* k<kae condition suffices to prevent changing preset kae=1 on glocal path */
+	  if (kae == 1 || mt->kmass[k] + rowmass < massthresh) kae_proven_done = TRUE; /* kmass[k] + rowmass is the upper bound on what can flow leftward thru k */
 	  rowmass  += rhoc[p7S_ML] + rhoc[p7S_IL]; /* accumulate total probability mass that's still flowing upwards through this row  */
 
 	  rhoc -= p7S_NSCELLS;
 	  dpc  -= p7S_NSCELLS;
 	}
+      if (rowmass < massthresh)  iae_proven_done = TRUE; else iae = i;     /* we keep decrementing iae until we drop below our mass threshold */
 
-      if (rowmass < massthresh)  iae_proven_done = TRUE; else iae = i;
-      if (iae_proven_done && kae_proven_done) break;
+      if      (mt->imass)                          mt->imass[i] = rowmass; /* if we're storing <imass>, we do all rows. */
+      else if (iae_proven_done && kae_proven_done) break;                  /* if not, we stop recursing up in i when we've provably obtained iae,kae */
     }
-  
-  free(kmass);
-  mass->type = p7S_MASSTRACE;
+
   *ret_iae   = iae;
   *ret_kae   = kae;
   return eslOK;
-
- ERROR:
-  if (kmass) free(kmass);
-  return status;
 }
+/*--------------- end, upwards recursion ------------------------*/
 
 
-int
-p7_sparse_masstrace_Down(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMX *fwd, P7_SPARSEMX *mass, P7_TRACE *tr, int z, float massthresh, int *ret_ibe, int *ret_kbe)
+/*****************************************************************
+ * x. The downwards recursion.
+ *****************************************************************/
+
+static int
+masstrace_down(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMX *bck,
+	       int i0, int k0, int st0, float massthresh,
+	       P7_SPARSEMX *mass, P7_MASSTRACE *mt, int *ret_ibe, int *ret_kbe)
 {
-  const P7_SPARSEMASK *sm = fwd->sm; 
-  int          st0 = tr->st[z];	/* anchor point's state (p7T_{MDI}) */
-  int          k0  = tr->k[z];	/* anchor point's k position in profile (1..M) */
-  int          i0  = tr->i[z];	/* anchor point's i positon in sequence (1..L) */
+  const P7_SPARSEMASK *sm = bck->sm; 
   int          ibe = i0;	/* RETURN: envelope end coord in sequence (i0..L) */
   int          kbe = k0;	/* RETURN: envelope end coord in profile (10..M) */
   float       *rhoc;  		/* ptr that steps through sparse mass supercells on current row i */
@@ -186,34 +202,30 @@ p7_sparse_masstrace_Down(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const 
   const float *rsc;		/* residue score vector on current row. Enables MSC(k) notation macro */
   const float *tsc   = gm->tsc; /* transition score vector. Enables TSC(k) notation macro */
   float        rowmass;
-  float       *kmass = NULL;
   int ibe_proven_done = FALSE;
   int kbe_proven_done = FALSE;
   int v;			/* v index steps through list of sparse supercells k on current row i    */
   int w;			/* w index steps through list of sparse supercells k on previous row i-1 */
   int k;			/* index in profile positions 1..M */
   int i;			/* index in sequence positions 1..L */
-  int status;
 
-  /* we should avoid this tmp alloc. find space for kmass in sparsemx. */
-  ESL_ALLOC(kmass, sizeof(float) * (sm->M+1));
-  for (k = 0; k<= sm->M; k++) 
-    kmass[k] = 0.;
-
-  dpc  = fwd->dp  + p7S_NSCELLS*(sm->k[i0] - sm->kmem);  // unwarranted ptr-arithmetic chumminess with sparse matrix layout
+  /* dpc, rhoc set to first sparse supercell on row i0. */
+  dpc  = bck->dp  + p7S_NSCELLS*(sm->k[i0] - sm->kmem);  // unwarranted ptr-arithmetic chumminess with sparse matrix layout
   rhoc = mass->dp + p7S_NSCELLS*(sm->k[i0] - sm->kmem);
   
-  /* See comment in _Down() about the following magic: */
+  /* See comment in _up() about the following magic: */
   if (st0 == p7T_MG || st0 == p7T_IG || st0 == p7T_DG)
     { dpc += 1; rhoc += 1; }
-
-  last_dpc  = dpc;  // these two lines must be placed after the magic above, of course
+  last_dpc  = dpc;  /* these two lines must be placed after the magic above, of course */
   last_rhoc = rhoc;
+
+  /* See comment in _up(): for glocal paths we know kbe=M; we're going to neglect wing-retracted exits thru DG in code below */
+  if (p7_trace_IsGlocal(st0)) kbe = gm->M;
 
   /* Start initializing the first row, i0. 
    * Up() is responsible for k<k0. We are (Down() is) responsible for k>k0.
    * In both Up() and Down(), (s0,i0,k0) anchor itself is set to 1.0, and
-   * it doesn't hurt to redo that here (just in case Up() isn't called too).
+   * it doesn't hurt to redo that here.
    */
   /* first, skip to k0. We trust that it exists in sparse cell list: caller said so. */
   for (v = 0; sm->k[i0][v] != k0; v++) { dpc += p7S_NSCELLS; rhoc += p7S_NSCELLS; }
@@ -227,7 +239,8 @@ p7_sparse_masstrace_Down(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const 
   case p7T_DL: case p7T_DG: rhoc[p7S_ML] = 0.; rhoc[p7S_IL] = 0.;  rhoc[p7S_DL] = 1.;  break;
   default:     ESL_EXCEPTION(eslEINCONCEIVABLE, "you know it is");
   }
-  kmass[k0]  = 1.0;
+  mt->kmass[k0]  = 1.0;
+  if (mt->imass) mt->imass[i0] = 1.0;
   dpc       += p7S_NSCELLS;
   rhoc      += p7S_NSCELLS;
 
@@ -241,13 +254,13 @@ p7_sparse_masstrace_Down(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const 
       if (sm->k[i0][v-1] == k-1) 
 	{
 	  rhoc[p7S_DL] = 
-	    rhoc[p7S_ML-p7S_NSCELLS] * exp ( dpc[p7S_DL] + TSC(p7P_MD, k-1) - dpc[p7S_ML-p7S_NSCELLS]) +  // yes, those array indices are negative;
-	    rhoc[p7S_DL-p7S_NSCELLS] * exp ( dpc[p7S_DL] + TSC(p7P_DD, k-1) - dpc[p7S_DL-p7S_NSCELLS]);   // but that's valid C,  seriously.
+	    P7_MASSTRACE_INCREMENT(rhoc[p7S_ML-p7S_NSCELLS], dpc[p7S_DL] + TSC(p7P_MD, k-1), dpc[p7S_ML-p7S_NSCELLS]) + // yes, those array indices are negative;
+	    P7_MASSTRACE_INCREMENT(rhoc[p7S_DL-p7S_NSCELLS], dpc[p7S_DL] + TSC(p7P_DD, k-1), dpc[p7S_DL-p7S_NSCELLS]);  // but that's valid C,  seriously.
 	}
       else rhoc[p7S_DL] = 0.;
 
-      kmass[k] += rhoc[p7S_ML] + rhoc[p7S_DL];
-      if (kmass[k] >= massthresh) kbe = k; 
+      mt->kmass[k] += rhoc[p7S_ML] + rhoc[p7S_DL];
+      if (k > kbe && mt->kmass[k] >= massthresh) kbe = k; /* k>kbe test suffices to avoid changing preset kbe=M on glocal path */
       dpc  += p7S_NSCELLS;
       rhoc += p7S_NSCELLS;
     }
@@ -275,9 +288,9 @@ p7_sparse_masstrace_Down(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const 
 	  if    (w < sm->n[i-1] && sm->k[i-1][w] == k-1 && k > k0) // k > k0 test is there to prevent looking at k0-1 supercell
 	    {
 	      rhoc[p7S_ML] = 
-		rhop[p7S_ML] * exp( dpc[p7S_ML] + TSC(p7P_MM, k-1) + MSC(k) - dpp[p7S_ML]) +
-		rhop[p7S_IL] * exp( dpc[p7S_ML] + TSC(p7P_IM, k-1) + MSC(k) - dpp[p7S_IL]) +
-		rhop[p7S_DL] * exp( dpc[p7S_ML] + TSC(p7P_DM, k-1) + MSC(k) - dpp[p7S_DL]);
+		P7_MASSTRACE_INCREMENT(rhop[p7S_ML], dpc[p7S_ML] + TSC(p7P_MM, k-1) + MSC(k), dpp[p7S_ML]) +
+		P7_MASSTRACE_INCREMENT(rhop[p7S_IL], dpc[p7S_ML] + TSC(p7P_IM, k-1) + MSC(k), dpp[p7S_IL]) +
+		P7_MASSTRACE_INCREMENT(rhop[p7S_DL], dpc[p7S_ML] + TSC(p7P_DM, k-1) + MSC(k), dpp[p7S_DL]);
 	    }
 	  else rhoc[p7S_ML] = 0.;
 
@@ -286,8 +299,8 @@ p7_sparse_masstrace_Down(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const 
 	  if    (w < sm->n[i-1] && sm->k[i-1][w] == k && k < gm->M)  // k=M check because Im doesn't exist, and we need to avoid a -inf - -inf = nan
 	    {
 	      rhoc[p7S_IL] = 
-		rhop[p7S_ML] * exp( dpc[p7S_IL] + TSC(p7P_MI, k) - dpp[p7S_ML]) +   // here we're assuming ISC(k)=0
-		rhop[p7S_IL] * exp( dpc[p7S_IL] + TSC(p7P_II, k) - dpp[p7S_IL]);    // ditto
+		P7_MASSTRACE_INCREMENT(rhop[p7S_ML], dpc[p7S_IL] + TSC(p7P_MI, k), dpp[p7S_ML]) +   // here we're assuming ISC(k)=0
+		P7_MASSTRACE_INCREMENT(rhop[p7S_IL], dpc[p7S_IL] + TSC(p7P_II, k), dpp[p7S_IL]);    // ditto
 
 	    }
 	  else rhoc[p7S_IL] = 0.;
@@ -296,14 +309,14 @@ p7_sparse_masstrace_Down(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const 
 	  if (v > 0 && sm->k[i][v-1] == k-1 && k > k0) 
 	    {
 	      rhoc[p7S_DL] = 
-		rhoc[p7S_ML-p7S_NSCELLS] * exp ( dpc[p7S_DL] + TSC(p7P_MD, k-1) - dpc[p7S_ML-p7S_NSCELLS]) +  // yes, those array indices are negative;
-		rhoc[p7S_DL-p7S_NSCELLS] * exp ( dpc[p7S_DL] + TSC(p7P_DD, k-1) - dpc[p7S_DL-p7S_NSCELLS]);   // but that's valid C,  seriously.
+		P7_MASSTRACE_INCREMENT(rhoc[p7S_ML-p7S_NSCELLS], dpc[p7S_DL] + TSC(p7P_MD, k-1), dpc[p7S_ML-p7S_NSCELLS]) +  // yes, those array indices are negative;
+		P7_MASSTRACE_INCREMENT(rhoc[p7S_DL-p7S_NSCELLS], dpc[p7S_DL] + TSC(p7P_DD, k-1), dpc[p7S_DL-p7S_NSCELLS]);   // but that's valid C,  seriously.
 	    }
 	  else rhoc[p7S_DL] = 0.;
 
-	  kmass[k] += rhoc[p7S_ML] + rhoc[p7S_DL];       // lower bound on how much mass is flowing right, through column k (partial sum, rows i0..i). Don't count I.
-	  if (k > kbe && kmass[k] > massthresh) kbe = k; // update kbe envelope end bound: rightmost k that satisfies threshold
-	  if (kbe == gm->M || kmass[k] + rowmass < massthresh) kbe_proven_done = TRUE;  // *upper* bound on mass flowing right, by adding total mass that's still to the left of k 
+	  mt->kmass[k] += rhoc[p7S_ML] + rhoc[p7S_DL];       // lower bound on how much mass is flowing right, through column k (partial sum, rows i0..i). Don't count I.
+	  if (k > kbe && mt->kmass[k] > massthresh) kbe = k; // update kbe envelope end bound: rightmost k that satisfies threshold; k>kbe test avoids changing preset kbe=M on glocal
+	  if (kbe == gm->M || mt->kmass[k] + rowmass < massthresh) kbe_proven_done = TRUE;  // *upper* bound on mass flowing right, by adding total mass that's still to the left of k 
 	  rowmass  += rhoc[p7S_ML] + rhoc[p7S_IL]; // how much mass is still flowing down, through this row i. Don't count D.
 
 	  rhoc += p7S_NSCELLS;  // advance rhoc, dpc ptrs by one supercell;
@@ -311,23 +324,273 @@ p7_sparse_masstrace_Down(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const 
 	}
 
       if (rowmass < massthresh) ibe_proven_done = TRUE; else ibe = i;
-      if (ibe_proven_done && kbe_proven_done) break;
+
+      if      (mt->imass) mt->imass[i] = rowmass;
+      else if (ibe_proven_done && kbe_proven_done) break;
     } // end loop over i=i0..L
 
-  free(kmass);
-  mass->type = p7S_MASSTRACE;
   *ret_ibe   = ibe;
   *ret_kbe   = kbe;
   return eslOK;
-
- ERROR:
-  if (kmass) free(kmass);
-  return status;
 }
+/*--------------- end, downwards recursion ----------------------*/
 
 
 /*****************************************************************
- * x. Example
+ * x. API, wrapping the Up and Down recursions
+ *****************************************************************/
+
+int
+p7_SparseMasstrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMX *fwd, const P7_SPARSEMX *bck, const P7_TRACE *tr, int z, float massthresh, 
+		   P7_SPARSEMX *mass, P7_MASSTRACE *mt,
+		   int *ret_iae, int *ret_ibe, int *ret_kae, int *ret_kbe)
+{
+  int   st0 = tr->st[z];	/* anchor point's state (p7T_{MDI}) */
+  int   k0  = tr->k[z];		/* anchor point's k position in profile (1..M) */
+  int   i0;
+  int   status;
+
+  /* Find i0, the last emitted i (i.e. watch out for st0=D; D states have no tr->i[] */
+  while (z && ! tr->i[z]) z--;
+  i0 = tr->i[z];
+
+  /* We might be reusing <mass> dp matrix; make sure it's big enough.
+   * Set its type now, so it can be Dumped or otherwise analyzed, if we need to.
+   * No need to zero it out.
+   */
+  p7_sparsemx_Reinit(mass, fwd->sm);
+  mass->type = p7S_MASSTRACE;
+
+  /* We might be reusing <mt> workspace. Make sure it's big enough. Then zero it, which sets its L,M. */
+  p7_masstrace_GrowTo(mt, gm->M, L);
+  p7_masstrace_Zero  (mt, gm->M, L); 
+
+  /* Up() recursion finds <iae>,<kae>; fills upper left quadrant of <mass> and <mt> (i<=i0, k<=k0); 
+   * Down() recurstion finds <ibe>,<kbe>; fills lower right quadrant of <mass> and <mt> (i>=i0, k>=k0) 
+   */
+  if ( (status = masstrace_up  (dsq, L, gm, fwd, i0, k0, st0, massthresh, mass, mt, ret_iae, ret_kae)) != eslOK) return status;
+  if ( (status = masstrace_down(dsq, L, gm, bck, i0, k0, st0, massthresh, mass, mt, ret_ibe, ret_kbe)) != eslOK) return status;
+
+  /* Algorithm neglects glocal wing retraction kmass thru DGks; but on
+   * glocal paths we know kmass[k]=1. When the <mt> is being used for
+   * its distributions (i.e. when it's not Slim; when mt->imass is
+   * non-NULL), then clean up this detail, so unit tests, etc don't
+   * mess up on it. (Which explains the weird-looking test on
+   * mt->imass before setting kmass; this is not a typo.)
+   */
+  if (mt->imass && (st0 == p7T_MG || st0 == p7T_IG || st0 == p7T_DG))
+    { esl_vec_FSet(mt->kmass+1, mt->M, 1.0); }
+
+  mt->i0  = i0;
+  mt->k0  = k0;
+  mt->st0 = st0;
+  return eslOK;
+}
+/*----------------- end, API wrapper ----------------------------*/
+
+
+/*****************************************************************
+ * 4. Unit tests
+ *****************************************************************/
+#ifdef p7SPARSE_MASSTRACE_TESTDRIVE
+
+#include "sparse_viterbi.h"
+#include "sparse_fwdback.h"
+#include "sparse_trace.h"
+
+static void
+utest_approx_masstrace(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L)
+{
+  char           msg[]  = "sparse masstrace, approx-masstrace unit test failed";
+  P7_PRIOR      *pri    = NULL;
+  P7_HMM        *hmm    = NULL;
+  P7_PROFILE    *gm     = p7_profile_Create(M, abc);
+  ESL_SQ        *sq     = esl_sq_CreateDigital(abc);       /* space for generated (homologous) target seqs              */
+  P7_OPROFILE   *om     = p7_oprofile_Create(M, abc);
+  P7_FILTERMX   *ox     = NULL;
+  P7_TRACE      *vtr    = p7_trace_CreateWithPP(); /* domain anchor selection in trace_Index() requires a pp-annotated trace */
+  P7_TRACE      *str    = p7_trace_Create();
+  P7_SPARSEMASK *sm     = NULL;
+  P7_SPARSEMX   *sxv    = NULL;
+  P7_SPARSEMX   *sxf    = NULL;
+  P7_SPARSEMX   *sxb    = NULL;
+  P7_SPARSEMX   *sxd    = NULL;
+  float         *wrk    = NULL;	/* reusable scratch workspace needed by stochastic trace */
+  P7_MASSTRACE  *mte    = NULL;
+  P7_MASSTRACE  *mta    = NULL;
+  int            d;
+  int            ntr    = 10000;
+  int            i, ntrc;
+  float          tol    = 0.01;
+  int            i0,k0,st0;	/* anchor triplet */
+  int            iae,ibe,kae,kbe;
+  int            z;
+  float          fsc;
+  char           errbuf[eslERRBUFSIZE];
+
+  /* Sample a profile from prior. Config as usual, multihit dial-mode. 
+   * We sample from the prior, as opposed to uniform p7_hmm_Sample(), 
+   * in order to get a more realistic, info-rich profile. This utest
+   * needs high posterior prob anchors in its domain alignment paths,
+   * to be able to sample domain endpoints effectively.
+   */
+  if       (abc->type == eslAMINO) pri = p7_prior_CreateAmino();
+  else if  (abc->type == eslDNA)   pri = p7_prior_CreateNucleic();
+  else if  (abc->type == eslRNA)   pri = p7_prior_CreateNucleic();
+  else                             pri = p7_prior_CreateLaplace(abc);
+
+  if ( p7_hmm_SamplePrior(rng, M, abc, pri, &hmm)  != eslOK) esl_fatal(msg);
+  if ( p7_profile_Config(gm, hmm, bg)              != eslOK) esl_fatal(msg);
+  if ( p7_oprofile_Convert(gm, om)                 != eslOK) esl_fatal(msg);
+
+  /* Generate (sample) a sequence from the profile */
+  if ( p7_profile_SetLength(gm, L)                 != eslOK) esl_fatal(msg);
+  do {
+    esl_sq_Reuse(sq);
+    p7_ProfileEmit(rng, hmm, gm, bg, sq, NULL);
+  } while (sq->n > L * 3); /* keep sequence length from getting ridiculous; long seqs do have higher abs error per cell */
+  if ( p7_profile_SetLength(gm, sq->n)       != eslOK) esl_fatal(msg);
+  if ( p7_oprofile_ReconfigLength(om, sq->n) != eslOK) esl_fatal(msg);
+
+  /* Fwd/Bck local filter to calculate the sparse mask */
+  if (  (ox = p7_filtermx_Create(M, sq->n, ESL_MBYTES(32)))     == NULL) esl_fatal(msg);
+  if (  (sm = p7_sparsemask_Create(M, sq->n))                   == NULL) esl_fatal(msg);
+
+  if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
+  if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm)           != eslOK) esl_fatal(msg);
+
+   /* Sparse DP calculations, and exact posterior decoding */
+  if ( (sxv = p7_sparsemx_Create(sm))                          == NULL)  esl_fatal(msg);
+  if ( (sxf = p7_sparsemx_Create(sm))                          == NULL)  esl_fatal(msg);
+  if ( (sxb = p7_sparsemx_Create(sm))                          == NULL)  esl_fatal(msg);
+  if ( (sxd = p7_sparsemx_Create(sm))                          == NULL)  esl_fatal(msg);
+  if ( p7_SparseViterbi   (sq->dsq, sq->n, gm, sxv, vtr, NULL) != eslOK) esl_fatal(msg);
+  if ( p7_SparseForward   (sq->dsq, sq->n, gm, sxf,     &fsc)  != eslOK) esl_fatal(msg);
+  if ( p7_SparseBackward  (sq->dsq, sq->n, gm, sxb,      NULL) != eslOK) esl_fatal(msg);
+  if ( p7_SparseDecoding  (sq->dsq, sq->n, gm, sxf, sxb, sxd)  != eslOK) esl_fatal(msg);
+  p7_sparsemx_TracePostprobs(sxd, vtr); /* selecting domain anchors requires pp annotation of the trace */
+  p7_trace_Index(vtr);
+  p7_sparsemx_Reuse(sxv);	/* we'll reuse it for mass trace dp below, like we do in production pipeline */
+
+  /* Choose one domain at random (we know there's at least one) */
+  if (!vtr->ndom)   esl_fatal(msg);
+  d = esl_rnd_Roll(rng, vtr->ndom);
+  if (!vtr->anch[d]) esl_fatal(msg);
+
+  /* Determine the anchor triplet (CountTrace needs it, whereas SparseMasstrace works it out for itself */
+  for (i0=0, z = vtr->anch[d]; z && !i0; z--) i0 = vtr->i[z];
+  k0  = vtr->k[vtr->anch[d]];
+  st0 = vtr->st[vtr->anch[d]];
+
+  //p7_trace_DumpAnnotated(stdout, vtr, gm, sq->dsq);
+
+  /* Stochastic trace ensemble approximation to mass trace */
+  ntrc = 0;
+  if ( ( mta = p7_masstrace_Create(gm->M, sq->n))   == NULL)  esl_fatal(msg);
+  if (         p7_masstrace_Zero(mta, gm->M, sq->n) != eslOK) esl_fatal(msg);
+  for (i = 0; i < ntr; i++)
+    {
+      p7_sparse_trace_Stochastic(rng, &wrk, gm, sxf, str);
+      //p7_trace_DumpAnnotated(stdout, str, gm, sq->dsq);
+      p7_masstrace_CountTrace(str, i0, k0, st0, mta, &ntrc);
+      p7_trace_Reuse(str);
+    }
+  p7_masstrace_FinishCount(mta, ntrc);
+
+  /* Exact mass trace algorithm */
+  if ( ( mte = p7_masstrace_Create(gm->M, sq->n)) == NULL)  esl_fatal(msg);
+  if ( p7_SparseMasstrace(sq->dsq, sq->n, gm, sxf, sxb, vtr, vtr->anch[d], 0.1, sxv, mte, &iae, &ibe, &kae, &kbe) != eslOK) esl_fatal(msg);
+  
+  //printf("max = %f\n", p7_masstrace_GetMaxAbsDiff(mte, mta));
+  //p7_masstrace_Dump(stdout, mte);
+  //p7_masstrace_Dump(stdout, mta);
+
+  /* Tests */
+  if ( p7_masstrace_Validate(mte, errbuf)  != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+  if ( p7_masstrace_Validate(mta, errbuf)  != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+  if ( p7_masstrace_Compare(mte, mta, tol) != eslOK) esl_fatal(msg);
+
+  /* Clean up */
+  p7_masstrace_Destroy(mta);
+  p7_masstrace_Destroy(mte);
+  if (wrk) free(wrk);
+  p7_sparsemx_Destroy(sxd);
+  p7_sparsemx_Destroy(sxb);
+  p7_sparsemx_Destroy(sxf);
+  p7_sparsemx_Destroy(sxv);
+  p7_sparsemask_Destroy(sm);
+  p7_trace_Destroy(str);
+  p7_trace_Destroy(vtr);
+  p7_filtermx_Destroy(ox);
+  p7_oprofile_Destroy(om);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+  p7_prior_Destroy(pri);
+  esl_sq_Destroy(sq);
+}
+#endif /*p7SPARSE_MASSTRACE_TESTDRIVE*/
+/*------------------ end, unit tests ----------------------------*/
+
+
+
+/*****************************************************************
+ * 5. Test driver
+ *****************************************************************/
+#ifdef p7SPARSE_MASSTRACE_TESTDRIVE
+
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-L",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
+  { "-M",        eslARG_INT,    "145", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "test driver for sparse mass trace algorithms";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
+  P7_BG          *bg   = p7_bg_Create(abc);
+  int             M    = esl_opt_GetInteger(go, "-M");
+  int             L    = esl_opt_GetInteger(go, "-L");
+
+  p7_FLogsumInit();
+  impl_Init();
+
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
+
+  utest_approx_masstrace(r, abc, bg, M, L);
+
+  fprintf(stderr, "#  status = ok\n");
+
+  p7_bg_Destroy(bg);
+  esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
+  esl_randomness_Destroy(r);
+  return eslOK;
+}
+
+#endif /*p7SPARSE_MASSTRACE_TESTDRIVE*/
+/*------------------- end, test driver --------------------------*/
+
+
+/*****************************************************************
+ * 6. Example
  *****************************************************************/
 #ifdef p7SPARSE_MASSTRACE_EXAMPLE
 #include "p7_config.h"
@@ -337,9 +600,15 @@ p7_sparse_masstrace_Down(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const 
 #include "esl_getopts.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
+#include "esl_random.h"
 
 #include "hmmer.h"
 #include "p7_sparsemx.h"
+#include "p7_masstrace.h"
+#include "sparse_fwdback.h"
+#include "sparse_decoding.h"
+#include "sparse_trace.h"
+#include "sparse_masstrace.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
@@ -369,13 +638,20 @@ main(int argc, char **argv)
   P7_SPARSEMX    *sxb     = NULL;
   P7_SPARSEMX    *sxd     = NULL;
   P7_SPARSEMX    *sxm     = NULL;
+  P7_MASSTRACE   *mt      = p7_masstrace_Create(100,100); /* M,L hints. Will be grown. */
   P7_TRACE       *tr      = p7_trace_CreateWithPP();
   float           vsc, fsc;
   int             iae,ibe;
   int             kae,kbe;
-  float           envsc, envsc2;
-  int             d;
+  int             d,z;
   int             status;
+
+  ESL_RANDOMNESS *rng     = esl_randomness_Create(42);
+  float          *wrk     = NULL;
+  P7_TRACE       *str     = p7_trace_Create();
+  int             ntr     = 10000;
+  int             i, ntrx;
+  int             i0,k0,st0;
 
   impl_Init();
   p7_FLogsumInit();
@@ -425,31 +701,49 @@ main(int argc, char **argv)
   p7_sparsemx_TracePostprobs(sxd, tr);
   p7_trace_Index(tr);
 
+  //p7_sparsemx_Dump(stdout, sxf);
   //p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
   
   for (d = 0; d < tr->ndom; d++)
     {
-      p7_sparsemx_Reinit(sxm, sm);
+      /* Determine the anchor triplet (CountTrace needs it, whereas SparseMasstrace works it out for itself */
+      for (i0=0, z = tr->anch[d]; z && !i0; z--) i0 = tr->i[z];
+      k0  = tr->k[tr->anch[d]];
+      st0 = tr->st[tr->anch[d]];
 
-      p7_sparse_masstrace_Up  (sq->dsq, sq->n, gm, sxf, sxm, tr, tr->anch[d], 0.1, &iae, &kae);
-      p7_sparse_masstrace_Down(sq->dsq, sq->n, gm, sxb, sxm, tr, tr->anch[d], 0.1, &ibe, &kbe);
+      /* stochastic ensemble approximation */
+      ntrx = 0;
+      p7_masstrace_GrowTo(mt, gm->M, sq->n);
+      p7_masstrace_Zero(mt, gm->M, sq->n);
+      for (i = 0; i < ntr; i++)
+	{
+	  p7_sparse_trace_Stochastic(rng, &wrk, gm, sxf, str);
+	  p7_masstrace_CountTrace(str, i0, k0, st0, mt, &ntrx);
+	  p7_trace_Reuse(str);
+	}
+      p7_masstrace_FinishCount(mt, ntrx);
+      p7_masstrace_PlotImass(stdout, mt);
+      p7_masstrace_Reuse(mt);
+
+      /* Mass trace calculation */
+      p7_SparseMasstrace(sq->dsq, sq->n, gm, sxf, sxb, tr, tr->anch[d], 0.1, sxm, mt, &iae, &ibe, &kae, &kbe);
+
+      p7_masstrace_PlotImass(stdout, mt);
+      //p7_masstrace_PlotKmass(stdout, mt);
+
+      //      printf("# domain %3d  iali: %d..%d [%daa]  ienv: %d..%d [%daa]  kali: %d..%d [%daa]  kenv: %d..%d [%daa]\n",
+      //	     d,
+      //	     tr->sqfrom[d],  tr->sqto[d],  tr->sqto[d]-tr->sqfrom[d]+1, iae, ibe, ibe-iae+1,
+      //	     tr->hmmfrom[d], tr->hmmto[d], tr->hmmto[d]-tr->hmmfrom[d]+1, kae, kbe, kbe-kae+1);
       p7_sparsemx_Reuse(sxm);
-      
-      p7_sparsemx_ApproxEnvScore(gm, sxf, iae, ibe, &envsc);
-
-      p7_sparsemx_Reinit(sxm, sm);
-      p7_SparseEnvScore(sq->dsq, sq->n, gm, iae, ibe, kae, kbe, sxm, &envsc2);
-
-      printf("# domain %3d  iali: %d..%d [%daa]  ienv: %d..%d [%daa]  kali: %d..%d [%daa]  kenv: %d..%d [%daa]  envsc: %.2f  envsc2: %.2f\n",
-	     d,
-	     tr->sqfrom[d],  tr->sqto[d],  tr->sqto[d]-tr->sqfrom[d]+1, iae, ibe, ibe-iae+1,
-	     tr->hmmfrom[d], tr->hmmto[d], tr->hmmto[d]-tr->hmmfrom[d]+1, kae, kbe, kbe-kae+1,
-	     envsc, envsc2);
-
-      p7_sparsemx_Reuse(sxm);
+      p7_masstrace_Reuse(mt);
     }
   
   /* Cleanup */
+  p7_trace_Destroy(str);
+  esl_randomness_Destroy(rng);
+  free(wrk);
+
   esl_sq_Destroy(sq);
   p7_trace_Destroy(tr);
   p7_sparsemx_Destroy(sxv);
@@ -458,6 +752,7 @@ main(int argc, char **argv)
   p7_sparsemx_Destroy(sxd);
   p7_sparsemx_Destroy(sxm);
   p7_sparsemask_Destroy(sm);
+  p7_masstrace_Destroy(mt);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);

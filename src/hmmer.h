@@ -155,6 +155,9 @@ enum p7h_transitions_e {
 #define p7H_NTMAT 3
 #define p7H_NTDEL 2
 #define p7H_NTINS 2
+#define p7H_NTMAX 3	/* max size of a transition prob vector */
+
+#define p7H_II_SAMPLE_MAX 0.99	/* an artificial cap on sampled tII parameters, to avoid inf-length seqs */
 
 /* Some notes:
  *   0. The model might be either in counts or probability form.
@@ -507,7 +510,8 @@ enum p7t_statetype_e {
 #define p7_trace_IsM(s)      ( (s) == p7T_ML || (s) == p7T_MG )
 #define p7_trace_IsI(s)      ( (s) == p7T_IL || (s) == p7T_IG )
 #define p7_trace_IsD(s)      ( (s) == p7T_DL || (s) == p7T_DG )
-
+#define p7_trace_IsGlocal(s) ( (s) == p7T_G || (s) == p7T_MG || (s) == p7T_DG || (s) == p7T_IG)
+#define p7_trace_IsLocal(s)  ( (s) == p7T_L || (s) == p7T_ML || (s) == p7T_DL || (s) == p7T_IL)
 
 typedef struct p7_trace_s {
   int    N;		/* length of traceback                       */  // N=0 means "no traceback": viterbi score = -inf and no possible path, for example.
@@ -1543,10 +1547,11 @@ extern int     p7_hmm_Scale      (P7_HMM *hmm, double scale);
 extern int     p7_hmm_Renormalize(P7_HMM *hmm);
 /*      4. Debugging and development code. */
 extern int     p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
-extern int     p7_hmm_Sample           (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleUngapped   (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleEnumerable (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleEnumerable2(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
+extern int     p7_hmm_Sample           (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
+extern int     p7_hmm_SamplePrior      (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, const P7_PRIOR *pri, P7_HMM **ret_hmm);
+extern int     p7_hmm_SampleUngapped   (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
+extern int     p7_hmm_SampleEnumerable (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
+extern int     p7_hmm_SampleEnumerable2(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
 extern int     p7_hmm_SampleUniform    (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, 
 				     float tmi, float tii, float tmd, float tdd,  P7_HMM **ret_hmm);
 extern int     p7_hmm_SampleSinglePathed(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);

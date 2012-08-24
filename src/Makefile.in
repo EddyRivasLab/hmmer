@@ -92,6 +92,7 @@ PROGOBJS =\
 HDRS =  hmmer.h \
 	cachedb.h \
 	p7_hmmcache.h\
+	p7_masstrace.h\
 	p7_refmx.h\
 	p7_sparsemx.h \
 	p7_trace_metrics.h\
@@ -155,6 +156,7 @@ OBJS =  build.o\
 	p7_hmmcache.o\
 	p7_hmmfile.o\
 	p7_hmmwindow.o\
+	p7_masstrace.o\
 	p7_null3.o\
 	p7_pipeline.o\
 	p7_prior.o\
@@ -193,6 +195,7 @@ UTESTS =\
 	reference_viterbi_utest\
 	sparse_fwdback_utest\
 	sparse_decoding_utest\
+	sparse_masstrace_utest\
 	seqmodel_utest\
 	p7_alidisplay_utest\
 	p7_bg_utest\
