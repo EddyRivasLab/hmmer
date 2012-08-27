@@ -374,7 +374,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	    max_sc = sc;
 	    pos_since_max = 0;
 	    while (k<om->M && n<=L) {
-	      sc += om->bias_b -  msvdata->scores[start*om->abc->Kp + dsq[n]];
+	      sc += om->bias_b -  msvdata->scores[k*om->abc->Kp + dsq[n]];
 
 	      if (sc >= max_sc) {
 	        max_sc = sc;
