@@ -1676,7 +1676,7 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
           //d    = th->hit[h]->best_domain;
           if (fprintf(ofp, "%-*s  %-*s %-*s %6.1f %9.2g %5.1f %7d %7d %s %*d %*d %*d %*d %*ld   %s\n",
           tnamew, th->hit[h]->name,
-          taccw,  th->hit[h]->acc,
+          taccw,  qacc,
           qnamew, qname,
           th->hit[h]->score,
           exp(th->hit[h]->lnP),
