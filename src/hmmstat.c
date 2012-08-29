@@ -23,10 +23,12 @@ static ESL_OPTIONS options[] = {
   /* name           type       default   env  range    toggles    reqs       incomp  help   docgroup*/
   { "-h",        eslARG_NONE,    FALSE,  NULL, NULL,    NULL,  NULL,           NULL, "show brief help on version and usage",            0 },
 
-  { "--eval2score",  eslARG_NONE, FALSE, NULL, NULL,    NULL,  NULL,           NULL,            "compute score required to get E-value (E) for database of (Z) sequences",     0 },
-  { "-Z",            eslARG_INT,    "1", NULL, "n>0",   NULL,  "--eval2score", NULL,            "database size, by default in # sequences , for --eval2score (default 1)",     0 },
-  { "--rescntZ",    eslARG_NONE,   FALSE, NULL, NULL,   NULL,  "--eval2score", NULL,            "for --eval2score, -Z is in millions of residues (DNA models only)",          0 },
+  { "--eval2score",  eslARG_NONE, FALSE, NULL, NULL,    NULL,  "-E",        NULL,            "compute score required to get E-value (E) for database of (Z) sequences",     0 },
+  { "--score2eval",  eslARG_NONE, FALSE, NULL, NULL,    NULL,  "-S",        NULL,            "compute E-value corresponding to score (S) for database of (Z) sequences",     0 },
+  { "-Z",            eslARG_INT,    "1", NULL, "n>0",   NULL,  NULL,           NULL,            "database size, by default in # sequences , for --eval2score or --score2eval (default 1)",     0 },
+  { "--rescntZ",    eslARG_NONE,   FALSE, NULL, NULL,   NULL,  "-Z",           NULL,            "for --eval2score, -Z is in millions of residues (DNA models only)",          0 },
   { "-E",           eslARG_REAL,  "0.01", NULL, NULL,   NULL,  "--eval2score", NULL,            "E-value threshold, for --eval2score",                                         0 },
+  { "-S",           eslARG_REAL,  "0.01", NULL, NULL,   NULL,  "--score2eval", NULL,            "Score input for --score2eval",                                         0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -40,7 +42,13 @@ output_header(FILE *ofp, const ESL_GETOPTS *go)
   p7_banner(ofp, go->argv[0], banner);
 
   if (esl_opt_IsUsed(go, "--eval2score"))  {
-     if (  fprintf(ofp, "# show scores required to reach E-value:    %.2g\n",        esl_opt_GetReal(go, "-E"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+     if (  fprintf(ofp, "# show score required to reach E-value:    %.2g\n",        esl_opt_GetReal(go, "-E"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  }
+  if (esl_opt_IsUsed(go, "--score2eval"))  {
+     if (  fprintf(ofp, "# show E-value required to reach score:    %.2g\n",        esl_opt_GetReal(go, "-S"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  }
+
+  if (esl_opt_IsUsed(go, "--eval2score") || esl_opt_IsUsed(go, "--score2eval"))  {
      if (esl_opt_IsUsed(go, "--rescntZ") ) {
        if (  fprintf(ofp, "# assume database residue count:            %d Kb\n",     esl_opt_GetInteger(go, "-Z")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
      } else {
@@ -70,8 +78,10 @@ main(int argc, char **argv)
   char             errbuf[eslERRBUFSIZE];
 
   int              do_eval2score = 0;
+  int              do_score2eval = 0;
   int              z_val;
   float            e_val;
+  float            s_val;
 
   /* Process the command line options.
    */
@@ -118,6 +128,12 @@ main(int argc, char **argv)
     e_val         =  esl_opt_GetReal(go, "-E");
   }
 
+  if ( esl_opt_IsOn(go, "--score2eval") ) {
+      do_score2eval = TRUE;
+      z_val         =  esl_opt_GetInteger(go, "-Z");
+      s_val         =  esl_opt_GetReal(go, "-S");
+  }
+
   /* Initializations: open the HMM file
    */
   status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
@@ -131,9 +147,14 @@ main(int argc, char **argv)
   printf("# %-4s %-20s %-12s %8s %8s %6s %6s %6s %6s %6s", "idx",  "name",                 "accession",    "nseq",     "eff_nseq", "M",      "relent", "info",   "p relE", "compKL");
   if (do_eval2score)
     printf (" %6s %6.2g", "sc for", e_val);
+  if (do_score2eval)
+    printf (" %6s %6.2f", "E-val for", s_val);
+
   printf("\n");
   printf("# %-4s %-20s %-12s %8s %8s %6s %6s %6s %6s %6s", "----", "--------------------", "------------", "--------", "--------", "------", "------", "------", "------", "------");
   if (do_eval2score)
+    printf (" %13s", "-------------");
+  if (do_score2eval)
     printf (" %13s", "-------------");
   printf("\n");
 
@@ -147,7 +168,7 @@ main(int argc, char **argv)
       else if (status != eslOK)        esl_fatal("Unexpected error in reading HMMs from %s",   hmmfile);
       nhmm++;
 
-      if ( esl_opt_IsOn(go, "--eval2score") ) {
+      if ( esl_opt_IsOn(go, "--eval2score") || esl_opt_IsOn(go, "--score2eval") ) {
         if (esl_opt_IsUsed(go, "--rescntZ") ) {
           if ( hmm->abc->type != eslRNA   && hmm->abc->type != eslDNA) {
             puts("The flag --rescntZ can't be used with non-nucleotide models.");
@@ -156,7 +177,7 @@ main(int argc, char **argv)
             exit(1);
           }
         } else if ( hmm->abc->type != eslAMINO  && hmm->abc->type != eslRNA && hmm->abc->type != eslDNA) {
-          puts("The flag --eval2score can't be used with non-sequence models.");
+          puts("The flags --eval2score and --score2eval can't be used with non-sequence models.");
           esl_usage(stdout, argv[0], usage);
           printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
           exit(1);
@@ -189,13 +210,21 @@ main(int argc, char **argv)
           nseq = (float)((long)z_val*1000000) / (float)(hmm->max_length);
         else
           nseq = (float)z_val;
-
         sc = esl_exp_invsurv( e_val / nseq ,  hmm->evparam[p7_FTAU],  hmm->evparam[p7_FLAMBDA]);
-
-        printf("%8.1f", sc);
-
+        printf("%13.2f", sc);
       }
 
+
+      if ( esl_opt_IsOn(go, "--score2eval") ) {
+        float nseq;
+        float e;
+        if (esl_opt_IsUsed(go, "--rescntZ") )
+          nseq = (float)((long)z_val*1000000) / (float)(hmm->max_length);
+        else
+          nseq = (float)z_val;
+        e = nseq * esl_exp_surv( s_val ,  hmm->evparam[p7_FTAU],  hmm->evparam[p7_FLAMBDA]);
+        printf("%13.2g", e);
+      }
 
       printf("\n");
 
