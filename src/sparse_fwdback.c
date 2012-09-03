@@ -27,29 +27,38 @@
 /* Function:  p7_SparseForward()
  * Synopsis:  Forward algorithm, in sparse DP.
  *
- * Purpose:   Compare profile <gm> to digital sequence <dsq> (of length <L>),
- *            by the Forward algorithm, using sparse dynamic programming.
- *            Fill in the sparse DP matrix <sx>, and the Forward score is
- *            also optionally returned in <opt_sc>.
+ * Purpose:   Compare profile <gm> to digital sequence <dsq> (of length
+ *            <L>), by the Forward algorithm, using sparse dynamic
+ *            programming, restricted to the mask <sm>.  Fill in the
+ *            sparse DP matrix <sx>, and the Forward score is also
+ *            optionally returned in <opt_sc>.
+ *            
+ *            <sx> can be reused from previous calculations, even
+ *            smaller ones; see <p7_sparsemx_Reuse()>. If necessary,
+ *            it will be reallocated here, to be large enough for the
+ *            <gm->M> by <L> calculation restricted to masked cells
+ *            <sm>.
  *
  * Args:      dsq     -  target sequence 1..L
  *            L       -  length of <dsq>
  *            gm      -  profile
- *            sx      -  Forward matrix to fill; allocated and initialized by caller
+ *            sm      -  sparse mask
+ *            sx      -  Forward matrix to fill (may be reallocated here)
  *            opt_sc  -  optRETURN: raw Forward score, in nats
  *
- * Returns:   <eslOK> on success. Matrix <sx> is filled. The raw Forward score
- *            in nats is optionally in <*opt_sc>.
+ * Returns:   <eslOK> on success. Matrix <sx> may be reallocated, and is filled.
+ *            The raw Forward score in nats is optionally in <*opt_sc>.
+ *            
+ * Throws:    <eslEMEM> if we fail to reallocate a large enough <sx>.           
  */
 int
-p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx, float *opt_sc)
+p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_SPARSEMX *sx, float *opt_sc)
 {
-  P7_SPARSEMASK *sm   = sx->sm;	         /* just for clarity                                          */
-  float         *xpc  = sx->xmx;	 /* ptr that steps through current special cells              */
-  float         *dpc  = sx->dp;	         /* ptr to step thru current row i main DP cells              */
-  float         *dpp;			 /* ptr to step thru previous row i-1 main DP cells           */
-  float         *last_dpc;		 /* used to reinit dpp after each sparse row computation      */
   float const *tsc    = gm->tsc;	 /* sets up TSC() macro, access to profile's transitions      */
+  float       *xpc;	                 /* ptr that steps through current special cells              */
+  float       *dpc;	                 /* ptr to step thru current row i main DP cells              */
+  float       *dpp;			 /* ptr to step thru previous row i-1 main DP cells           */
+  float       *last_dpc;		 /* used to reinit dpp after each sparse row computation      */
   float const *rsc;			 /* will be set up for MSC(), ISC() macros for residue scores */
   int          ng;
   float        xE, xN, xJ, xB, xL, xG, xC;  /* tmp scores on special states. only stored when in row bands, and on ia-1 before a seg */
@@ -59,15 +68,24 @@ p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *s
   int         *kp;			 /* <kp> points to the previous row's sparse cell index list  */
   int          i,k;	      	         /* i,k row,col (seq position, profile position) cell coords  */
   int          y,z;			 /* indices in lists of k coords on prev, current row         */
+  int          status;
 
-#ifdef p7_DEBUGGING  
-  if (L != sm->L) ESL_EXCEPTION(eslEINVAL, "L, sm->L disagree: sparse matrix wasn't allocated or reinitialized for this sequence");
-#endif
+  /* Contract checks on arguments */
+  ESL_DASSERT1( (sm->L == L) );
+  ESL_DASSERT1( (sm->M == gm->M) );
 
-  xN = 0.0f;
-  xJ = -eslINFINITY;
-  xC = -eslINFINITY;
-  ng = 0;
+  /* Assure that <sx> is allocated large enough (we might be reusing it).
+   * Set its type now, so we can Dump/Validate/etc. during debugging this routine, if needed.
+   */
+  if ( (status = p7_sparsemx_Reinit(sx, sm)) != eslOK) return status;
+  sx->type = p7S_FORWARD;
+
+  xN  = 0.0f;
+  xJ  = -eslINFINITY;
+  xC  = -eslINFINITY;
+  ng  = 0;
+  xpc = sx->xmx;
+  dpc = sx->dp;
   for (i = 1; i <= L; i++)
     {
       if (! sm->n[i]) { ng++; continue; }   /* skip rows that have no included cells */
@@ -152,7 +170,6 @@ p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *s
       dpp = last_dpc;
     }
 
-  sx->type = p7S_FORWARD;
   if (opt_sc != NULL) *opt_sc = xC + ( ng ? ng *  gm->xsc[p7P_C][p7P_LOOP] : 0.0f) + gm->xsc[p7P_C][p7P_MOVE];
   return eslOK;
 }
@@ -170,24 +187,26 @@ p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *s
  *
  * Purpose:   Compare profile <gm> to digital sequence <dsq> (of length
  *            <L>) by the Backward algorithm, using sparse dynamic
- *            programming, as constrained by the sparse mask that the
- *            caller has initialized the matrix <sx> with. Fill in the
- *            sparse DP Backward matrix <sx> and (optionally) return
- *            the overall raw Backward score in <*opt_sc>.
+ *            programming, as constrained by the sparse mask <sm>.
+ *            Fill in the sparse DP Backward matrix <sx> and
+ *            (optionally) return the overall raw Backward score in
+ *            <*opt_sc>.
  *
  * Args:      dsq     - digital target sequence 1..L
  *            L       - length of <dsq>
  *            gm      - profile
- *            sx      - Backward matrix to fill; allocated and initialized by caller
+ *            sm      - sparse mask
+ *            sx      - Backward matrix to fill; may get reallocated here
  *            opt_sc  - optRETURN: raw Backwards score, in nats
  *                      
- * Returns:   <eslOK> on success, and matrix <sx> is filled, and the
- *            raw Backward score is in <*opt_sc>.
+ * Returns:   <eslOK> on success. Matrix <sx> is filled (and may be
+ *            reallocated), and the raw Backward score is in <*opt_sc>.
+ *            
+ * Throws:    <eslEMEM> if we fail to reallocated a large enough <sx>.           
  */
 int
-p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx, float *opt_sc)
+p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_SPARSEMX *sx, float *opt_sc)
 {
-  P7_SPARSEMASK  *sm  = sx->sm;
   const float    *tsc = gm->tsc; // ptr into model transition score vector; enables TSC(k,s) macro shorthand 
   const float    *rsc = NULL;	 // ptr into emission scores on current row i; enables MSC(k),ISC(k) macro shorthand 
   const float    *rsn;		 // ptr into emission scores on next row i+1; enables MSN(k),ISN(k) 
@@ -199,6 +218,17 @@ p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *
   float  xC,xG,xL,xB,xJ,xN,xE;	 // tmp vars for special cells on this row i
   float  dlc,dgc;		 // tmp vars for D vals on current row i  
   float  mln,mgn,iln,ign;	 // tmp vars for M+e, I+e on next row i+1 
+  int    status;
+
+  /* Contract checks on arguments */
+  ESL_DASSERT1( (sm->L == L) );
+  ESL_DASSERT1( (sm->M == gm->M) );
+
+  /* Assure that <sx> is allocated large enough (we might be reusing it).
+   * Set its type now, so we can Dump/Validate/etc. during debugging this routine, if needed.
+   */
+  if ( (status = p7_sparsemx_Reinit(sx, sm)) != eslOK) return status;
+  sx->type = p7S_BACKWARD;
 
   /* In Backwards, we traverse DP matrix backwards; init ptrs to last elements */
   xp  = sx->xmx + (sm->nrow + sm->nseg - 1)*p7S_NXCELLS; // last supercell in xmx 
@@ -334,7 +364,6 @@ p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *
 	}
     } // end loop over i
 
-  sx->type       = p7S_BACKWARD;
   if (opt_sc) *opt_sc = xN;	/* tS->N is 1.0, no cost. */
   return eslOK;
 }
@@ -365,6 +394,9 @@ p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *
 
 #include "hmmer.h"
 #include "p7_sparsemx.h"
+#include "sparse_viterbi.h"
+#include "sparse_fwdback.h"
+#include "sparse_decoding.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -390,10 +422,10 @@ main(int argc, char **argv)
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
   P7_SPARSEMASK  *sm      = NULL;
-  P7_SPARSEMX    *sxv     = NULL;
-  P7_SPARSEMX    *sxf     = NULL;
-  P7_SPARSEMX    *sxb     = NULL;
-  P7_SPARSEMX    *sxd     = NULL;
+  P7_SPARSEMX    *sxv     = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX    *sxf     = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX    *sxb     = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX    *sxd     = p7_sparsemx_Create(NULL);
   P7_TRACE       *tr      = p7_trace_Create();
   int             L       = esl_opt_GetInteger(go, "-L");
   int             N       = esl_opt_GetInteger(go, "-N");
@@ -419,10 +451,6 @@ main(int argc, char **argv)
 
   sm  = p7_sparsemask_Create(gm->M, L);
   p7_sparsemask_AddAll(sm);
-  sxv  = p7_sparsemx_Create(sm);
-  sxf  = p7_sparsemx_Create(sm);
-  sxb  = p7_sparsemx_Create(sm);
-  sxd  = p7_sparsemx_Create(sm);
 
   /* Baseline time. */
   esl_stopwatch_Start(w);
@@ -435,8 +463,7 @@ main(int argc, char **argv)
   for (i = 0; i < N; i++)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-      p7_sparsemx_Reinit(sxf, sm);
-      p7_SparseForward  (dsq, L, gm, sxf, &sc);
+      p7_SparseForward  (dsq, L, gm, sm, sxf, &sc);
       p7_sparsemx_Reuse (sxf);
     }
   esl_stopwatch_Stop(w);
@@ -448,8 +475,7 @@ main(int argc, char **argv)
   for (i = 0; i < N; i++)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-      p7_sparsemx_Reinit(sxb, sm);
-      p7_SparseBackward (dsq, L, gm, sxb, &sc);
+      p7_SparseBackward (dsq, L, gm, sm, sxb, &sc);
       p7_sparsemx_Reuse (sxb);
     }
   esl_stopwatch_Stop(w);
@@ -461,8 +487,7 @@ main(int argc, char **argv)
   for (i = 0; i < N; i++)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-      p7_sparsemx_Reinit(sxv, sm);
-      p7_SparseViterbi  (dsq, L, gm, sxv, tr, &sc);
+      p7_SparseViterbi  (dsq, L, gm, sm, sxv, tr, &sc);
       p7_sparsemx_Reuse (sxv);
       p7_trace_Reuse    (tr);
     }
@@ -475,12 +500,9 @@ main(int argc, char **argv)
   for (i = 0; i < N; i++)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-      p7_sparsemx_Reinit(sxf, sm);
-      p7_sparsemx_Reinit(sxb, sm);
-      p7_sparsemx_Reinit(sxd, sm);
 
-      p7_SparseForward  (dsq, L, gm, sxf, &sc);
-      p7_SparseBackward (dsq, L, gm, sxb, &sc);
+      p7_SparseForward  (dsq, L, gm, sm, sxf, &sc);
+      p7_SparseBackward (dsq, L, gm, sm, sxb, &sc);
       p7_SparseDecoding (dsq, L, gm, sxf, sxb, sxd);
 
       p7_sparsemx_Reuse (sxf);
@@ -604,12 +626,9 @@ utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L,
       if ( p7_BackwardFilter(dsq, L, om, ox, sm)           != eslOK) esl_fatal(msg);
 
       /* Sparse DP calculations */
-      if ( p7_sparsemx_Reinit(sxv, sm)                        != eslOK) esl_fatal(msg);
-      if ( p7_sparsemx_Reinit(sxf, sm)                        != eslOK) esl_fatal(msg);
-      if ( p7_sparsemx_Reinit(sxb, sm)                        != eslOK) esl_fatal(msg);
-      if ( p7_SparseViterbi   (dsq, L, gm, sxv, NULL, &vsc_s) != eslOK) esl_fatal(msg);
-      if ( p7_SparseForward   (dsq, L, gm, sxf, &fsc_s)       != eslOK) esl_fatal(msg);
-      if ( p7_SparseBackward  (dsq, L, gm, sxb, &bsc_s)       != eslOK) esl_fatal(msg);
+      if ( p7_SparseViterbi   (dsq, L, gm, sm, sxv, NULL, &vsc_s) != eslOK) esl_fatal(msg);
+      if ( p7_SparseForward   (dsq, L, gm, sm, sxf, &fsc_s)       != eslOK) esl_fatal(msg);
+      if ( p7_SparseBackward  (dsq, L, gm, sm, sxb, &bsc_s)       != eslOK) esl_fatal(msg);
   
       /* Tests (1)-(3) */
       if (fsc_s < vsc_s+tol)                         esl_fatal(msg); /* 1. Fwd score >= Vit score */
@@ -619,9 +638,6 @@ utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L,
       if ( p7_sparsemx_Validate(sxb, NULL) != eslOK) esl_fatal(msg);
       
       /* Reference DP calculations */
-      if ( p7_refmx_GrowTo(rxv, M, L)                          != eslOK) esl_fatal(msg);
-      if ( p7_refmx_GrowTo(rxf, M, L)                          != eslOK) esl_fatal(msg);
-      if ( p7_refmx_GrowTo(rxb, M, L)                          != eslOK) esl_fatal(msg);
       if (p7_ReferenceForward (dsq, L, gm, rxf,       &fsc_r)  != eslOK) esl_fatal(msg);
       if (p7_ReferenceBackward(dsq, L, gm, rxb,       &bsc_r)  != eslOK) esl_fatal(msg);
       if (p7_ReferenceViterbi (dsq, L, gm, rxv, NULL, &vsc_r)  != eslOK) esl_fatal(msg);
@@ -784,20 +800,12 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
       if ( p7_sparsemask_AddAll(sm)           != eslOK) esl_fatal(msg);
 
       /* Sparse DP calculations  */
-      if ( p7_sparsemx_Reinit(sxv, sm)     != eslOK) esl_fatal(msg);
-      if ( p7_sparsemx_Reinit(sxf, sm)     != eslOK) esl_fatal(msg);
-      if ( p7_sparsemx_Reinit(sxb, sm)     != eslOK) esl_fatal(msg);
-      if ( p7_sparsemx_Reinit(sxd, sm)     != eslOK) esl_fatal(msg);
-      if ( p7_SparseViterbi (sq->dsq, sq->n, gm, sxv, str, &vsc_s) != eslOK) esl_fatal(msg);
-      if ( p7_SparseForward (sq->dsq, sq->n, gm, sxf,      &fsc_s) != eslOK) esl_fatal(msg);
-      if ( p7_SparseBackward(sq->dsq, sq->n, gm, sxb,      &bsc_s) != eslOK) esl_fatal(msg);
-      if ( p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxb, sxd)    != eslOK) esl_fatal(msg);
+      if ( p7_SparseViterbi (sq->dsq, sq->n, gm, sm, sxv, str, &vsc_s) != eslOK) esl_fatal(msg);
+      if ( p7_SparseForward (sq->dsq, sq->n, gm, sm, sxf,      &fsc_s) != eslOK) esl_fatal(msg);
+      if ( p7_SparseBackward(sq->dsq, sq->n, gm, sm, sxb,      &bsc_s) != eslOK) esl_fatal(msg);
+      if ( p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxb, sxd)        != eslOK) esl_fatal(msg);
 
       /* Reference DP calculations */
-      if ( p7_refmx_GrowTo(rxv, M, sq->n)        != eslOK) esl_fatal(msg);
-      if ( p7_refmx_GrowTo(rxf, M, sq->n)        != eslOK) esl_fatal(msg);
-      if ( p7_refmx_GrowTo(rxb, M, sq->n)        != eslOK) esl_fatal(msg);
-      if ( p7_refmx_GrowTo(rxd, M, sq->n)        != eslOK) esl_fatal(msg);
       if ( p7_ReferenceViterbi (sq->dsq, sq->n, gm, rxv, rtr, &vsc_r) != eslOK) esl_fatal(msg);
       if ( p7_ReferenceForward (sq->dsq, sq->n, gm, rxf,      &fsc_r) != eslOK) esl_fatal(msg);
       if ( p7_ReferenceBackward(sq->dsq, sq->n, gm, rxb,      &bsc_r) != eslOK) esl_fatal(msg);
@@ -920,9 +928,6 @@ utest_reference_constrained(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, i
       if ( p7_profile_SetLength(gm, sq->n) != eslOK) esl_fatal(msg);
 
       /* Reference DP calculations, including a reference Viterbi traceback */
-      if ( p7_refmx_GrowTo(rxv, M, sq->n)                              != eslOK) esl_fatal(msg);
-      if ( p7_refmx_GrowTo(rxf, M, sq->n)                              != eslOK) esl_fatal(msg);
-      if ( p7_refmx_GrowTo(rxb, M, sq->n)                              != eslOK) esl_fatal(msg);
       if ( p7_ReferenceForward (sq->dsq, sq->n, gm, rxf,       &fsc_r) != eslOK) esl_fatal(msg);
       if ( p7_ReferenceBackward(sq->dsq, sq->n, gm, rxb,       &bsc_r) != eslOK) esl_fatal(msg);
       if ( p7_ReferenceViterbi (sq->dsq, sq->n, gm, rxv, rtr,  &vsc_r) != eslOK) esl_fatal(msg);
@@ -932,14 +937,10 @@ utest_reference_constrained(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, i
       sparsemask_set_from_trace(rng, sm, rtr);
 
       /* Sparse DP calculations, in which we know the reference Viterbi trace will be scored */
-      if ( p7_sparsemx_Reinit(sxv, sm)     != eslOK) esl_fatal(msg);
-      if ( p7_sparsemx_Reinit(sxf, sm)     != eslOK) esl_fatal(msg);
-      if ( p7_sparsemx_Reinit(sxb, sm)     != eslOK) esl_fatal(msg);
-      if ( p7_sparsemx_Reinit(sxd, sm)     != eslOK) esl_fatal(msg);
-      if ( p7_SparseViterbi (sq->dsq, sq->n, gm, sxv, str, &vsc_s) != eslOK) esl_fatal(msg);
-      if ( p7_SparseForward (sq->dsq, sq->n, gm, sxf,      &fsc_s) != eslOK) esl_fatal(msg);
-      if ( p7_SparseBackward(sq->dsq, sq->n, gm, sxb,      &bsc_s) != eslOK) esl_fatal(msg);
-      if ( p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxb, sxd)    != eslOK) esl_fatal(msg);
+      if ( p7_SparseViterbi (sq->dsq, sq->n, gm, sm, sxv, str, &vsc_s) != eslOK) esl_fatal(msg);
+      if ( p7_SparseForward (sq->dsq, sq->n, gm, sm, sxf,      &fsc_s) != eslOK) esl_fatal(msg);
+      if ( p7_SparseBackward(sq->dsq, sq->n, gm, sm, sxb,      &bsc_s) != eslOK) esl_fatal(msg);
+      if ( p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxb, sxd)        != eslOK) esl_fatal(msg);
 
       //p7_trace_DumpAnnotated(stdout, str, gm, sq->dsq);
       //p7_trace_DumpAnnotated(stdout, rtr, gm, sq->dsq);
@@ -1045,19 +1046,13 @@ utest_singlepath(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int N
       if ( p7_sparsemask_Reinit(sm, M, sq->n)  != eslOK) esl_fatal(msg); 
       sparsemask_set_from_trace(rng, sm, gtr);
 
-      /* Resize the matrices */
-      if ( p7_sparsemx_Reinit(sxv, sm) != eslOK) esl_fatal(msg); 
-      if ( p7_sparsemx_Reinit(sxf, sm) != eslOK) esl_fatal(msg); 
-      if ( p7_sparsemx_Reinit(sxb, sm) != eslOK) esl_fatal(msg); 
-      if ( p7_sparsemx_Reinit(sxd, sm) != eslOK) esl_fatal(msg); 
-
       //p7_sparsemask_Dump(stdout, sm);
 
       /* Run DP routines, collect scores that should all match trace score */
-      if ( p7_SparseViterbi  (sq->dsq, sq->n, gm, sxv, vtr, &vsc) != eslOK) esl_fatal(msg);
-      if ( p7_SparseForward  (sq->dsq, sq->n, gm, sxf,      &fsc) != eslOK) esl_fatal(msg);
-      if ( p7_SparseBackward (sq->dsq, sq->n, gm, sxb,      &bsc) != eslOK) esl_fatal(msg);
-      if ( p7_SparseDecoding (sq->dsq, sq->n, gm, sxf, sxb, sxd)  != eslOK) esl_fatal(msg);
+      if ( p7_SparseViterbi  (sq->dsq, sq->n, gm, sm, sxv, vtr, &vsc) != eslOK) esl_fatal(msg);
+      if ( p7_SparseForward  (sq->dsq, sq->n, gm, sm, sxf,      &fsc) != eslOK) esl_fatal(msg);
+      if ( p7_SparseBackward (sq->dsq, sq->n, gm, sm, sxb,      &bsc) != eslOK) esl_fatal(msg);
+      if ( p7_SparseDecoding (sq->dsq, sq->n, gm, sxf, sxb, sxd)      != eslOK) esl_fatal(msg);
   
       //p7_sparsemx_Dump(stdout, sxv);
       //p7_trace_DumpAnnotated(stdout, gtr, gm, sq->dsq);
@@ -1124,10 +1119,10 @@ utest_internal_glocal_exit(void)
   P7_HMM       *hmm     = NULL;
   P7_PROFILE   *gm      = p7_profile_Create(M, abc);
   P7_SPARSEMASK *sm     = p7_sparsemask_Create(M,L);
-  P7_SPARSEMX   *sxv    = NULL;
-  P7_SPARSEMX   *sxf    = NULL;
-  P7_SPARSEMX   *sxb    = NULL;
-  P7_SPARSEMX   *sxd    = NULL;
+  P7_SPARSEMX   *sxv    = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *sxf    = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *sxb    = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *sxd    = p7_sparsemx_Create(NULL);
   P7_REFMX      *rxv    = p7_refmx_Create(M, L);
   P7_REFMX      *rxf    = p7_refmx_Create(M, L);
   P7_REFMX      *rxb    = p7_refmx_Create(M, L);
@@ -1165,10 +1160,6 @@ utest_internal_glocal_exit(void)
       if ( p7_sparsemask_FinishRow(sm)                     != eslOK) esl_fatal(msg);
     }
   if ( p7_sparsemask_Finish(sm)          != eslOK) esl_fatal(msg);
-  if ( (sxv    = p7_sparsemx_Create(sm)) == NULL)  esl_fatal(msg);
-  if ( (sxf    = p7_sparsemx_Create(sm)) == NULL)  esl_fatal(msg);
-  if ( (sxb    = p7_sparsemx_Create(sm)) == NULL)  esl_fatal(msg);
-  if ( (sxd    = p7_sparsemx_Create(sm)) == NULL)  esl_fatal(msg);
   
   /* Reference DP calculations */
   if ( p7_ReferenceViterbi (tsq, L, gm, rxv, rtr, &vsc_r) != eslOK) esl_fatal(msg);
@@ -1177,10 +1168,10 @@ utest_internal_glocal_exit(void)
   if ( p7_ReferenceDecoding(tsq, L, gm, rxf, rxb, rxd)    != eslOK) esl_fatal(msg);
 
   /* Sparse DP calculations */
-  if ( p7_SparseViterbi (tsq, L, gm, sxv, str, &vsc_s) != eslOK) esl_fatal(msg);
-  if ( p7_SparseForward (tsq, L, gm, sxf,      &fsc_s) != eslOK) esl_fatal(msg);
-  if ( p7_SparseBackward(tsq, L, gm, sxb,      &bsc_s) != eslOK) esl_fatal(msg);
-  if ( p7_SparseDecoding(tsq, L, gm, sxf, sxb, sxd)    != eslOK) esl_fatal(msg);
+  if ( p7_SparseViterbi (tsq, L, gm, sm, sxv, str, &vsc_s) != eslOK) esl_fatal(msg);
+  if ( p7_SparseForward (tsq, L, gm, sm, sxf,      &fsc_s) != eslOK) esl_fatal(msg);
+  if ( p7_SparseBackward(tsq, L, gm, sm, sxb,      &bsc_s) != eslOK) esl_fatal(msg);
+  if ( p7_SparseDecoding(tsq, L, gm, sxf, sxb, sxd)        != eslOK) esl_fatal(msg);
 
   if ( p7_trace_Score(str, tsq, gm, &tsc_s) != eslOK) esl_fatal(msg);
   if ( p7_trace_Score(rtr, tsq, gm, &tsc_r) != eslOK) esl_fatal(msg);
@@ -1295,7 +1286,9 @@ main(int argc, char **argv)
 
 #include "hmmer.h"
 #include "p7_sparsemx.h"
+#include "sparse_viterbi.h"
 #include "sparse_fwdback.h"
+#include "sparse_decoding.h"
 #include "sparse_trace.h"
 
 static ESL_OPTIONS options[] = {
@@ -1333,10 +1326,10 @@ main(int argc, char **argv)
   P7_OPROFILE    *om      = NULL;
   P7_FILTERMX    *ox      = NULL;
   P7_SPARSEMASK  *sm      = NULL;
-  P7_SPARSEMX    *sxv     = NULL;
-  P7_SPARSEMX    *sxf     = NULL;
-  P7_SPARSEMX    *sxb     = NULL;
-  P7_SPARSEMX    *sxd     = NULL;
+  P7_SPARSEMX    *sxv     = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX    *sxf     = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX    *sxb     = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX    *sxd     = p7_sparsemx_Create(NULL);
   P7_TRACE       *tr      = p7_trace_Create();
   float           fsc, vsc, bsc;
   float           nullsc;
@@ -1388,16 +1381,10 @@ main(int argc, char **argv)
     p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm);
   }
   
-  /* Create sparse matrices */
-  sxv = p7_sparsemx_Create(sm);
-  sxf = p7_sparsemx_Create(sm);
-  sxb = p7_sparsemx_Create(sm);
-  sxd = p7_sparsemx_Create(sm);
-
   /* Sparse DP calculations */
-  p7_SparseViterbi (sq->dsq, sq->n, gm, sxv, tr, &vsc);
-  p7_SparseForward (sq->dsq, sq->n, gm, sxf,     &fsc);
-  p7_SparseBackward(sq->dsq, sq->n, gm, sxb,     &bsc);
+  p7_SparseViterbi (sq->dsq, sq->n, gm, sm, sxv, tr, &vsc);
+  p7_SparseForward (sq->dsq, sq->n, gm, sm, sxf,     &fsc);
+  p7_SparseBackward(sq->dsq, sq->n, gm, sm, sxb,     &bsc);
   p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxb, sxd);
   p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
 

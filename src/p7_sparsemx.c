@@ -533,6 +533,12 @@ p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm)
   return eslOK;
 }
 
+/* Function:  p7_sparsemask_Compare()
+ * Synopsis:  Compare two sparse masks for equality.
+ *
+ * Purpose:   Compare <sm1> and <sm2>; return <eslOK> if they
+ *            are equal, <eslFAIL> if they are not.
+ */
 int
 p7_sparsemask_Compare(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2)
 {
@@ -556,6 +562,58 @@ p7_sparsemask_Compare(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2)
   return eslOK;
 }
 
+
+/* Function:  p7_sparsemask_Validate()
+ * Synopsis:  Validate a P7_SPARSEMASK sparse DP mask.
+ *
+ * Purpose:   Validate the contents of sparse mask <sm>. 
+ *            Return <eslOK> if it passes. Return <eslFAIL>
+ *            if it fails, and set <errbuf> to contain an
+ *            explanation, if caller provides a non-<NULL>
+ *            <errbuf>.
+ *
+ * Args:      sm      - sparse DP mask to validate
+ *            errbuf  - [eslERRBUFSIZE] space for an error msg; or NULL      
+ *
+ * Returns:   <eslOK> on success; <errbuf>, if provided, is set
+ *            to an empty string "\0".
+ *            
+ *            <eslFAIL> on failure; <errbuf>, if provided, contains an
+ *            informative error message.
+ *            
+ * Note:      We don't check for all possible invalidity; the goal of a
+ *            Validate() is primarily to catch any future problems
+ *            similar to past problems that we've already run across
+ *            in debugging/testing.
+ */
+int
+p7_sparsemask_Validate(const P7_SPARSEMASK *sm, char *errbuf)
+{
+  int g, i, ia, ib, last_ib;
+
+  if (errbuf) errbuf[0] = '\0';
+
+  if ( sm->L < 1) ESL_FAIL(eslFAIL, errbuf, "L must be >=1");
+  if ( sm->M < 1) ESL_FAIL(eslFAIL, errbuf, "M must be >=1");
+
+  last_ib = 0;
+  for (g = 0; g < sm->nseg; g++)
+    {
+      ia = sm->i[g*2];
+      ib = sm->i[g*2+1];
+      if (last_ib > ia) ESL_FAIL(eslFAIL, errbuf, "last_ib > ia?");
+      if (ia > ib)      ESL_FAIL(eslFAIL, errbuf, "ia..ib not in order");
+      if (ib > sm->L)   ESL_FAIL(eslFAIL, errbuf, "ib > L");
+
+      for (i = last_ib+1; i < ia; i++)
+	if (sm->n[i] != 0) ESL_FAIL(eslFAIL, errbuf, "n[i] != 0 for i unmarked, not in sparse segment");
+      for (i = ia; i <= ib; i++)
+	if (sm->n[i] == 0) ESL_FAIL(eslFAIL, errbuf, "n[i] == 0 for i supposedly marked in sparse seg");
+
+      last_ib = ib;
+    }
+  return eslOK;
+}
 /*-------- end, P7_SPARSEMASK debugging tools -------------------*/
 
 
@@ -623,7 +681,7 @@ p7_sparsemx_Create(P7_SPARSEMASK *sm)
  * Throws:    <eslEMEM> on (re-)allocation failure.
  */
 int
-p7_sparsemx_Reinit(P7_SPARSEMX *sx, P7_SPARSEMASK *sm)
+p7_sparsemx_Reinit(P7_SPARSEMX *sx, const P7_SPARSEMASK *sm)
 {
   int64_t dalloc_req = sm->ncells;
   int     xalloc_req = sm->nrow + sm->nseg;
@@ -779,7 +837,7 @@ p7_sparsemx_Destroy(P7_SPARSEMX *sx)
  *****************************************************************/
 
 int
-p7_sparsemx_TracePostprobs(P7_SPARSEMX *sxd, P7_TRACE *tr)
+p7_sparsemx_TracePostprobs(const P7_SPARSEMX *sxd, P7_TRACE *tr)
 {
   const P7_SPARSEMASK *sm  = sxd->sm;
   const float         *dpc = sxd->dp;   /* ptr that steps through stored main supercells */
@@ -898,7 +956,7 @@ p7_sparsemx_CountTrace(const P7_TRACE *tr, P7_SPARSEMX *sxd)
 
 
 int
-p7_sparsemx_ExpectedDomains(P7_SPARSEMX *sxd, int iae, int ibe, float *ret_ndom_expected)
+p7_sparsemx_ExpectedDomains(const P7_SPARSEMX *sxd, int iae, int ibe, float *ret_ndom_expected)
 {
   const P7_SPARSEMASK *sm = sxd->sm;
   float  expB = 0.;
@@ -930,135 +988,6 @@ p7_sparsemx_ExpectedDomains(P7_SPARSEMX *sxd, int iae, int ibe, float *ret_ndom_
   return eslOK;
 }
 
-
-/* Function:  p7_sparsemx_ApproxEnvScore()
- * Synopsis:  Envelope score by fast Forward endpoint approximation method.
- *
- * Purpose:   Implements envelope scoring by the fast Forward endpoint
- *            approximation method. Returns the envelope score of
- *            envelope <iae..ibe> in the target sequence for which
- *            we've calculated a Forward matrix <sxf>, comparing it to
- *            profile <gm>. The "envelope score" is defined as the
- *            Forward score for the entire sequence <1..L>, subject to
- *            the condition that there is only a single domain that lies
- *            somewhere within <iae..ibe> on the target sequence.
- *
- *            <*ret_envsc> is a raw Forward score in nats.  The caller
- *            still needs to include the null model(s) contribution to
- *            this score and convert it to bits, before calculating
- *            P-values or reporting it in output.
- *            
- *            Caller has determined that the envelope <iae..ibe>
- *            contains only a single domain (negligible probability
- *            mass in any more than that); otherwise, this technique
- *            does not work. 
- *            
- *            The model is assumed to have <tCC=tJJ=tNN> equal
- *            transition scores, or this method does not work.
- *            
- *            For a single-domain envelope <iae..ibe>, with equal
- *            CC,JJ,TT transition scores, the score <delta>
- *            contributed by the <iae..ibe> region is
- *            
- *            $\delta = C_j 
- *                      + \log \[ 1 - e^{C_{i-1} + L_e \tau_{CC} - C_j} \]
- *                      - \log \[ e^{N_{i-1}} + e^{C_{i-1}} \]$
- *            
- *            where $L_e$ is the envelope length <ibe-iae+1>. We then
- *            add the <S->N...> contribution for <iae-1> flanking
- *            residues and <...C->T> contribution for <L-ibe> flanking
- *            residues to convert <delta> to a raw Forward score for
- *            the whole sequence, constrained to a single domain in
- *            the envelope.
- *
- * Args:      gm        - profile used to create the Forward matrix
- *            sxf       - Forward matrix calculated for gm x seq comparison
- *            iae       - left endpoint of envelope, 1..L on target seq
- *            ibe       - right endpoint of envelope, 1..L on target seq
- *            ret_envsc - RETURN: raw envelope Forward score, in nats
- *
- * Returns:   <eslOK> on success, and <*ret_envsc> contains the raw 
- *            envelope Forward score in nats.
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      SRE:J10/43-45.
- */
-int
-p7_sparsemx_ApproxEnvScore(P7_PROFILE *gm, P7_SPARSEMX *sxf, int iae, int ibe, float *ret_envsc)
-{
-  const float *xc = sxf->xmx;
-  float Ci1, Ni1, Cj;
-  float deltaC;
-  float Le;
-  int   g, ia, ib, last_ib;
-  float envsc;
-
-  /* Accessing the {CN}(iae-1) and C(ibe) entries is complicated because of sparse storage; forgive. */
-  /* Find first stored special row i>=iae-1; get C(i-1), N(i-1) from there; reset iae=i */
-  for (g = 0; g < sxf->sm->nseg; g++)
-    {
-      ia = sxf->sm->i[g*2];
-      ib = sxf->sm->i[g*2+1];
-      
-      if      (iae < ia-1) {                             iae = ia;  Ci1 = xc[p7S_C]; Ni1 = xc[p7S_N]; break; }
-      else if (iae <= ib)  { xc += (iae-ia)*p7S_NXCELLS; ia  = iae; Ci1 = xc[p7S_C]; Ni1 = xc[p7S_N]; break; }
-      else    xc += (ib-ia+2) * p7S_NXCELLS;
-    }
-  /* now xc is on row ia-1, in segment g, which ends at ib. check if ib is in that segment. */
-  
-  /* Find last stored row j<=ibe, get C(j) from there; reset ibe=j */
-  if (ib < iae)  { *ret_envsc = -eslINFINITY; return eslOK; }
-  if (ibe <= ib) {
-    xc += (ibe - ia + 1) * p7S_NXCELLS;
-    Cj = xc[p7S_C];
-  } else {
-    xc     += (ib-ia+1) * p7S_NXCELLS; // now xc is on last supercell (ibe) in previous segment
-    last_ib = ib;
-    for (g = g+1; g < sxf->sm->nseg; g++)
-      {
-	ia = sxf->sm->i[g*2];
-	ib = sxf->sm->i[g*2+1];
-	
-	if      (ibe < ia-1) { ibe = last_ib;                 Cj = xc[p7S_C]; break; }
-	else if (ibe <= ib)  { xc += (ibe-ia+1)*p7S_NXCELLS;  Cj = xc[p7S_C]; break; }
-	else  {
-	  xc += (ib-ia+2)*p7S_NXCELLS;
-	  last_ib = ib;
-	}
-      }
-    if (g == sxf->sm->nseg) { ibe = last_ib; Cj = xc[p7S_C]; }
-  }
-  /* now iae,ibe may have been moved, to correspond to outermost stored rows in the envelope */
-
-
-  /* First part of envsc is Cj + log(1-exp(-deltaC)), and the log term needs
-   * special numerical handling; using lim x->0 1-e^-x = x for small deltaC,
-   * lim x->0 log (1-x) = -x for large deltaC
-   */
-  envsc  = Cj;			/* first term. */
-  Le     = ibe - iae + 1;
-  deltaC = Cj - Ci1 - Le * gm->xsc[p7P_C][p7P_LOOP];
-
-  if      (deltaC  < 0) ESL_EXCEPTION(eslEINCONCEIVABLE, "no, something's wrong, this intermediate term is >= 0 by construction");
-  if      (deltaC == 0)                  envsc = -eslINFINITY;
-  else if (deltaC < eslSMALLX1)          envsc += logf(deltaC);        // logf(deltaC) -> -eslINFINITY, for small deltaC ->0
-  else if (exp(-1.*deltaC) < eslSMALLX1) envsc -= expf(-1.*deltaC);    // expf(-deltaC) -> 0, for large deltaC -> inf
-  else                                   envsc += logf(1.-exp(-1.*deltaC));
-
-  /* third term is a standard log-sum-exp-2, may as well use our fast approx */
-  envsc -= p7_FLogsum(Ci1, Ni1);
-  
-  /* left flank: envsc already includes ...N->B->...; add S->N..N flank. S->N is 1.0.  */
-  envsc += gm->xsc[p7P_N][p7P_LOOP] * (iae-1);
-  
-  /* right flank: envsc includes E->C; add C..C->T flank */
-  envsc += gm->xsc[p7P_C][p7P_LOOP] * (sxf->sm->L - ibe);
-  envsc += gm->xsc[p7P_C][p7P_MOVE];
-
-  *ret_envsc = envsc;
-  return eslOK;
-}
 
 
 
@@ -1107,16 +1036,16 @@ p7_sparsemx_Dump(FILE *ofp, P7_SPARSEMX *sx)
 }
 
 int
-p7_sparsemx_DumpWindow(FILE *ofp, P7_SPARSEMX *sx, int i1, int i2, int k1, int k2)
+p7_sparsemx_DumpWindow(FILE *ofp, const P7_SPARSEMX *sx, int i1, int i2, int k1, int k2)
 {
-  P7_SPARSEMASK *sm  = sx->sm;
+  const P7_SPARSEMASK *sm  = sx->sm;
   float         *dpc = sx->dp;
   float         *xc  = sx->xmx;
   int width          = 9;
   int precision      = 4;
   int i,k,x,z;
 
-   /* Header */
+  /* Header */
   fprintf(ofp, "       ");
   for (k = k1; k <= k2;         k++) fprintf(ofp, "%*d ", width, k);
   for (x = 0;  x < p7S_NXCELLS; x++) fprintf(ofp, "%*s ", width, p7_sparsemx_DecodeSpecial(x));
@@ -1207,9 +1136,9 @@ p7_sparsemx_DumpWindow(FILE *ofp, P7_SPARSEMX *sx, int i1, int i2, int k1, int k
 }
 
 int
-p7_sparsemx_Copy2Reference(P7_SPARSEMX *sx, P7_REFMX *rx)
+p7_sparsemx_Copy2Reference(const P7_SPARSEMX *sx, P7_REFMX *rx)
 {
-  P7_SPARSEMASK *sm = sx->sm;
+  const P7_SPARSEMASK *sm = sx->sm;
   int             M = sm->M;
   int             L = sm->L;
   int             W = (M+1)*p7R_NSCELLS + p7R_NXCELLS; /* total width of a reference DP row, in cells */
@@ -1551,9 +1480,9 @@ p7_sparsemx_CompareDecoding(const P7_SPARSEMX *sxe, const P7_SPARSEMX *sxa, floa
  */
 
 static int
-validate_dimensions(P7_SPARSEMX *sx, char *errbuf)
+validate_dimensions(const P7_SPARSEMX *sx, char *errbuf)
 {
-  P7_SPARSEMASK *sm     = sx->sm;
+  const P7_SPARSEMASK *sm  = sx->sm;
   int            g      = 0;
   int            r      = 0;
   int            ncells = 0;
@@ -1580,9 +1509,9 @@ validate_dimensions(P7_SPARSEMX *sx, char *errbuf)
 
 
 static int
-validate_no_nan(P7_SPARSEMX *sx, char *errbuf)
+validate_no_nan(const P7_SPARSEMX *sx, char *errbuf)
 {
-  P7_SPARSEMASK *sm  = sx->sm;
+  const P7_SPARSEMASK *sm  = sx->sm;
   float         *dpc = sx->dp;
   float         *xc  = sx->xmx;
   int            i,k,z,s;
@@ -1617,9 +1546,9 @@ validate_no_nan(P7_SPARSEMX *sx, char *errbuf)
 }
 
 static int
-validate_fwdvit(P7_SPARSEMX *sx, char *errbuf)
+validate_fwdvit(const P7_SPARSEMX *sx, char *errbuf)
 {
-  P7_SPARSEMASK *sm  = sx->sm;
+  const P7_SPARSEMASK *sm  = sx->sm;
   float         *dpc = sx->dp;
   float         *xc  = sx->xmx;
   int            i,z;
@@ -1657,9 +1586,9 @@ validate_fwdvit(P7_SPARSEMX *sx, char *errbuf)
 }
 
 static int
-validate_backward(P7_SPARSEMX *sx, char *errbuf)
+validate_backward(const P7_SPARSEMX *sx, char *errbuf)
 {
-  P7_SPARSEMASK *sm     = sx->sm;
+  const P7_SPARSEMASK *sm     = sx->sm;
   float         *dpc    = sx->dp  + (sm->ncells-1)*p7S_NSCELLS;		// last supercell in dp  
   float         *xc     = sx->xmx + (sm->nrow + sm->nseg - 1)*p7S_NXCELLS; // last supercell in xmx 
   int            last_n = 0;
@@ -1702,9 +1631,9 @@ is_prob(float val, float tol)
 }
 
 static int
-validate_decoding(P7_SPARSEMX *sx, char *errbuf)
+validate_decoding(const P7_SPARSEMX *sx, char *errbuf)
 {
-  P7_SPARSEMASK *sm  = sx->sm;
+  const P7_SPARSEMASK *sm  = sx->sm;
   float         *dpc = sx->dp;
   float         *xc  = sx->xmx;
   int            i,z,s;
@@ -1812,9 +1741,11 @@ validate_decoding(P7_SPARSEMX *sx, char *errbuf)
  * Throws:    (no abnormal error conditions)
  */
 int
-p7_sparsemx_Validate(P7_SPARSEMX *sx, char *errbuf)
+p7_sparsemx_Validate(const P7_SPARSEMX *sx, char *errbuf)
 {
   int status;
+
+  if (errbuf) errbuf[0] = '\0';
 
   if ( (status = validate_dimensions(sx, errbuf)) != eslOK) return status;
   if ( (status = validate_no_nan    (sx, errbuf)) != eslOK) return status;

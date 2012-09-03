@@ -31,7 +31,7 @@
  * Synopsis:  Reference implementation of posterior decoding.
  *
  * Purpose:   Given previously calculated Forward and Backward matrices
- *            <fwd> and <bck>, for a comparisong of query profile <gm>
+ *            <fwd> and <bck>, for a comparison of query profile <gm>
  *            to digital sequence <dsq> of length <L>, perform
  *            posterior decoding for states responsible for residue
  *            emissions.  (That is, $P(s \mid x_i)$ for each state <s>
@@ -42,18 +42,13 @@
  * Args:      dsq - digital sequence, 1..L
  *            L   - length of <dsq>
  *            gm  - query profile
- *            fwd - Forward matrix
- *            bck - Backward matrix
+ *            fwd - Forward matrix, provided by caller
+ *            bck - Backward matrix, provided by caller
  *            pp  - RESULT: posterior decoding matrix
  *
  * Returns:   <eslOK> on success.
  *
- * Throws:    When <p7_DEBUGGING> flag is on at compile-time (only), we
- *            do some extra checking of the inputs to catch some
- *            typical coding errors. Throws <eslEINVAL> if caller
- *            forgot to size the matrix <pp> appropriately, or if the
- *            profile <gm>'s length model wasn't set to <L>, or if
- *            the sizes of the <fwd> and <bck> matrices don't match.
+ * Throws:    <eslEMEM> if a reallocation fails.
  */
 int
 p7_ReferenceDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_REFMX *fwd, const P7_REFMX *bck, P7_REFMX *pp)
@@ -72,17 +67,18 @@ p7_ReferenceDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_R
   int       k;
   int       s;
   float     delta;		/* additions to DGk's, resulting from unfolding wing-retracted entry/exit paths */
+  int       status;
 
+  /* Contract checks / argument validation */
+  ESL_DASSERT1( (fwd->type == p7R_FORWARD) );
+  ESL_DASSERT1( (bck->type == p7R_BACKWARD) );
+  ESL_DASSERT1( (fwd->L == bck->L && fwd->M == bck->M && fwd->M == gm->M) );
 
-#ifdef p7_DEBUGGING
-  if (fwd->type != p7R_FORWARD)  ESL_EXCEPTION(eslEINVAL, "<fwd> argument isn't a Forward matrix");
-  if (bck->type != p7R_BACKWARD) ESL_EXCEPTION(eslEINVAL, "<bck> argument isn't a Backward matrix");
-  if (fwd->L    != bck->L)       ESL_EXCEPTION(eslEINVAL, "<fwd>, <bck> matrices have different L");
-  if (fwd->M    != bck->M)       ESL_EXCEPTION(eslEINVAL, "<fwd>, <bck> matrices have different M");
-  if (gm->M     != fwd->M)       ESL_EXCEPTION(eslEINVAL, "profile <gm> M doesn't match matrices");
-  if (fwd->L+1 > pp->allocR)     ESL_EXCEPTION(eslEINVAL, "<pp> matrix allocR too small; missing p7_refmx_GrowTo() initialization call?");
-  if ((fwd->M+1)*p7R_NSCELLS+p7R_NXCELLS > pp->allocW) ESL_EXCEPTION(eslEINVAL, "<pp> matrix allocW too small; missing p7_refmx_GrowTo() initialization call?");
-#endif
+  /* Reallocation, if needed */
+  if (bck != pp && ( status = p7_refmx_GrowTo(pp, gm->M, L)) != eslOK) return status;
+  pp->M    = M;
+  pp->L    = L;
+  pp->type = p7R_DECODING;
 
   /* On row 0, all main states are 0; initialize them so. set
    * N is 1.0 by definition.
@@ -183,9 +179,6 @@ p7_ReferenceDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_R
 #endif
     }
   
-  pp->M    = M;
-  pp->L    = L;
-  pp->type = p7R_DECODING;
   return eslOK;
 }
 /*-------------- end, posterior decoding ------------------------*/
@@ -294,12 +287,9 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
 	if (p7_ProfileEmit(rng, hmm, gm, bg, sq, /*tr=*/NULL) != eslOK) esl_fatal(msg);
       } while (sq->n > (gm->M+gm->L) * 3); 
 
-      /* Resize matrices, and set length models */
-      if ( p7_profile_SetLength(gm, sq->n)        != eslOK) esl_fatal(msg);
-      if ( p7_refmx_GrowTo(fwd, gm->M, sq->n)     != eslOK) esl_fatal(msg);
-      if ( p7_refmx_GrowTo(pp,  gm->M, sq->n)     != eslOK) esl_fatal(msg);
 
       /* F/B, then decode in place */
+      if ( p7_profile_SetLength(gm, sq->n)        != eslOK) esl_fatal(msg);
       if (p7_ReferenceForward (sq->dsq, sq->n, gm, fwd, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
       if (p7_ReferenceBackward(sq->dsq, sq->n, gm, pp, /*bsc=*/NULL)  != eslOK) esl_fatal(msg); /* <pp> is temporarily the Bck matrix */
       if (p7_ReferenceDecoding(sq->dsq, sq->n, gm, fwd, pp, pp)       != eslOK) esl_fatal(msg); 
@@ -363,12 +353,8 @@ utest_colsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
 	if (p7_ProfileEmit(rng, hmm, gm, bg, sq, /*tr=*/NULL) != eslOK) esl_fatal(msg);
       } while (sq->n > (gm->M+gm->L) * 3); 
 
-      /* Resize matrices, and set length models */
-      if ( p7_profile_SetLength(gm, sq->n)        != eslOK) esl_fatal(msg);
-      if ( p7_refmx_GrowTo(fwd, gm->M, sq->n)     != eslOK) esl_fatal(msg);
-      if ( p7_refmx_GrowTo(pp,  gm->M, sq->n)     != eslOK) esl_fatal(msg);
-
       /* F/B, then decode in place */
+      if ( p7_profile_SetLength(gm, sq->n) != eslOK) esl_fatal(msg);
       if (p7_ReferenceForward (sq->dsq, sq->n, gm, fwd, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
       if (p7_ReferenceBackward(sq->dsq, sq->n, gm, pp, /*bsc=*/NULL)  != eslOK) esl_fatal(msg); /* <pp> is temporarily the Bck matrix */
       if (p7_ReferenceDecoding(sq->dsq, sq->n, gm, fwd, pp, pp)       != eslOK) esl_fatal(msg); 

@@ -1477,9 +1477,6 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
 	
       if ( p7_profile_SetLength(gm, tL)       != eslOK) esl_fatal(msg);
       if ( p7_oprofile_ReconfigLength(om, tL) != eslOK) esl_fatal(msg); 
-      if ( p7_refmx_GrowTo   (fwd, M, tL)     != eslOK) esl_fatal(msg);
-      if ( p7_refmx_GrowTo   (bck, M, tL)     != eslOK) esl_fatal(msg);
-      if ( p7_refmx_GrowTo   (pp,  M, tL)     != eslOK) esl_fatal(msg);
       if ( p7_filtermx_GrowTo(ox,  M, tL)     != eslOK) esl_fatal(msg);
       if ( p7_sparsemask_Reinit(sm,M, tL)     != eslOK) esl_fatal(msg);
 
@@ -1719,7 +1716,6 @@ main(int argc, char **argv)
       p7_bg_SetLength(bg,            sq->n);
 
       p7_filtermx_GrowTo  (ox, om->M, sq->n); 
-      p7_refmx_GrowTo     (gx, gm->M, sq->n); 
       p7_sparsemask_Reinit(sm, gm->M, sq->n);
 
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);

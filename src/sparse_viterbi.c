@@ -22,16 +22,23 @@
  *
  * Purpose:   Compare profile <gm> to digital sequence <dsq> of length <L>,
  *            by the Viterbi algorithm, using sparse dynamic programming,
- *            as constrained by the sparse mask in sparse DP matrix <sx>.
+ *            as constrained by the sparse mask <sm>.
  *            Fill in the sparse Viterbi matrix <sx>; (optionally) trace
  *            back the optimal path and return it in the trace structure <opt_tr>
  *            if the caller provides one; and (optionally) return the 
  *            Viterbi raw score in nats in <*opt_sc>.
  *            
+ *            <sx> can be reused from previous calculations, even
+ *            smaller ones; see <p7_sparsemx_Reuse()>. If necessary,
+ *            it will be reallocated here, to be large enough for the
+ *            <gm->M> by <L> calculation restricted to masked cells
+ *            <sm>.
+ *            
  * Args:      dsq     - digital target sequence, 1..L
  *            L       - length of <dsq>
  *            gm      - profile
- *            sx      - Viterbi matrix to fill; allocated and initialized by caller
+ *            sm      - sparse mask
+ *            sx      - Viterbi matrix to fill; (may be reallocated here)
  *            opt_tr  - optRESULT: trace structure with optimal traceback; or NULL if caller doesn't want it
  *            opt_sc  - optRETURN: raw Viterbi score in nats; or NULL if result unwanted
  *
@@ -39,15 +46,14 @@
  *            and <*opt_sc> optionally contains the raw Viterbi score.
  */
 int
-p7_SparseViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *sx,  P7_TRACE *opt_tr, float *opt_sc)
+p7_SparseViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_SPARSEMX *sx,  P7_TRACE *opt_tr, float *opt_sc)
 {
-  P7_SPARSEMASK *sm   = sx->sm;
-  float         *xpc  = sx->xmx;	 /* ptr that steps through current special cells   */
-  float         *dpc  = sx->dp;	         /* ptr to step thru current row i main DP cells */
-  float         *dpp;			 /* ptr to step thru previous row i-1 main DP cells */
-  float         *last_dpc;		 /* used to reinit dpp after each sparse row computation */
   float const   *tsc    = gm->tsc;	 /* sets up TSC() macro, access to profile's transitions */
   float const   *rsc;			 /* will be set up for MSC(), ISC() macros for residue scores */
+  float         *xpc; 	                 /* ptr that steps through current special cells   */
+  float         *dpc;	                 /* ptr to step thru current row i main DP cells */
+  float         *dpp;			 /* ptr to step thru previous row i-1 main DP cells */
+  float         *last_dpc;		 /* used to reinit dpp after each sparse row computation */
   int            ng;
   float          xE, xN, xJ, xB, xL, xG, xC;  /* tmp scores on special states. only stored when in row bands, and on ia-1 before a seg */
   float          mlc, mgc;		 /* temporary score calculations M(i,k)         */
@@ -56,15 +62,24 @@ p7_SparseViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *s
   int           *kp;			 /* <kp> points to the previous row's sparse cell index list */
   int            i,k;	      	         /* i,k row,col (seq position, profile position) cell coords */
   int            y,z;			 /* indices in lists of k coords on prev, current row */
+  int            status;
 
-#ifdef p7_DEBUGGING  
-  if (L != sm->L) ESL_EXCEPTION(eslEINVAL, "L, sx->L disagree: sparse matrix wasn't allocated or reinitialized for this sequence");
-#endif
+  /* Contract checks on arguments */
+  ESL_DASSERT1( (sm->L == L) );
+  ESL_DASSERT1( (sm->M == gm->M) );
 
-  xN = 0.0f;
-  xJ = -eslINFINITY;
-  xC = -eslINFINITY;
-  ng = 0;
+  /* Assure that <sx> is allocated large enough (we might be reusing it).
+   * Set its type now, so we can Dump/Validate/etc. during debugging this routine, if needed.
+   */
+  if ( (status = p7_sparsemx_Reinit(sx, sm)) != eslOK) return status;
+  sx->type = p7S_VITERBI;
+
+  xN  = 0.0f;
+  xJ  = -eslINFINITY;
+  xC  = -eslINFINITY;
+  ng  = 0;
+  xpc = sx->xmx;
+  dpc = sx->dp;
   for (i = 1; i <= L; i++)
     {
       if (! sm->n[i]) { ng++; continue; }   /* skip rows that have no included cells */
@@ -149,7 +164,6 @@ p7_SparseViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_SPARSEMX *s
       dpp = last_dpc;
     }
 
-  sx->type = p7S_VITERBI;
   xC += ( ng ? ng *  gm->xsc[p7P_C][p7P_LOOP] : 0.0f) + gm->xsc[p7P_C][p7P_MOVE];
 
   if (opt_sc) *opt_sc = xC;

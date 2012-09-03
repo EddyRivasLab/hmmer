@@ -11,9 +11,12 @@
 #include "hmmer.h"
 #include "p7_sparsemx.h"
 #include "p7_masstrace.h"
+#include "sparse_viterbi.h"
 #include "sparse_fwdback.h"
+#include "sparse_decoding.h"
 #include "sparse_masstrace.h"
 #include "sparse_envscore.h"
+
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -118,14 +121,9 @@ main(int argc, char **argv)
       p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm);
 
       /* Sparse postprocessors */
-      p7_sparsemx_Reinit(sx,  sm);
-      p7_sparsemx_Reinit(sxf, sm);
-      p7_sparsemx_Reinit(sxb, sm);
-      p7_sparsemx_Reinit(sxd, sm);
-
-      p7_SparseViterbi (sq->dsq, sq->n, gm, sx,  tr, &vsc);
-      p7_SparseForward (sq->dsq, sq->n, gm, sxf,     &fsc);
-      p7_SparseBackward(sq->dsq, sq->n, gm, sxb,     NULL);
+      p7_SparseViterbi (sq->dsq, sq->n, gm, sm, sx,  tr, &vsc);
+      p7_SparseForward (sq->dsq, sq->n, gm, sm, sxf,     &fsc);
+      p7_SparseBackward(sq->dsq, sq->n, gm, sm, sxb,     NULL);
       p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxb, sxd);
       p7_sparsemx_TracePostprobs(sxd, tr);
       p7_trace_Index(tr);
@@ -140,10 +138,9 @@ main(int argc, char **argv)
 	  Bprob = p7_sparsemx_GetSpecial(sxd, iae-1, p7S_B);
 	  Eprob = p7_sparsemx_GetSpecial(sxd, ibe,   p7S_E);
 	  
-	  p7_sparsemx_ApproxEnvScore(gm, sxf, iae, ibe, &envsc_approx);
+	  p7_SparseEnvscoreApprox(gm, sxf, iae, ibe, &envsc_approx);
 
-	  p7_sparsemx_Reinit(sx, sm);
-	  p7_SparseEnvScore(sq->dsq, sq->n, gm, iae, ibe, kae, kbe, sx, &envsc_exact);
+	  p7_SparseEnvscore(sq->dsq, sq->n, gm, iae, ibe, kae, kbe, sm, sx, &envsc_exact);
 	  p7_sparsemx_Reuse(sx);
 
 	  printf("%-30s %-20s %3d %5d %5d %5d %5d %5d %5d %5d %5d %5.2f %6.4f %6.4f %9.3f %9.3f %9.3f\n",

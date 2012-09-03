@@ -34,29 +34,26 @@
  * Synopsis:  Reference implementation of the Viterbi algorithm.
  *
  * Purpose:   Given a target sequence <dsq> of length <L> residues, a
- *            query profile <gm>, and a DP matrix <rmx> that the
- *            caller has allocated for a <gm->M> by <L> comparison,
+ *            query profile <gm>, and a DP matrix <rmx>;
  *            do the Viterbi optimal alignment algorithm.
  *            Return the Viterbi score in nats in <*opt_sc>, if
  *            caller provides it. 
  *            Return the Viterbi optimal trace in <*opt_tr>, if
  *            caller provides an allocated trace structure.
  *            
+ *            <rmx> will be reallocated if needed, so it can be reused
+ *            from a previous calculation, even a smaller one.
+ *            
  * Args:      dsq     - digital target sequence 1..L
  *            L       - length of <dsq> in residues
  *            gm      - query profile
- *            rmx     - DP matrix, allocated gm->M by L
+ *            rmx     - DP matrix
  *            opt_tr  - optRETURN: trace structure for Viterbi alignment, or NULL
  *            opt_sc  - optRETURN: Viterbi raw score in nats, or NULL
  *
  * Returns:   <eslOK> on success. <rmx> contains the Viterbi matrix.
  * 
- * Throws:    When <p7_DEBUGGING> flag is on at compile-time (only), we
- *            do some extra checking of the inputs to catch some
- *            typical coding errors. Throws <eslEINVAL> if caller
- *            forgot to size the matrix <rmx> appropriately, or if the
- *            profile <gm>'s length model wasn't set to <L> (or 0,
- *            which some unit tests will do).
+ * Throws:    <eslEMEM> on reallocation failure.
  */
 int
 p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, P7_TRACE *opt_tr, float *opt_sc)
@@ -70,12 +67,17 @@ p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
   float  dlv, dgv; 	      /* pushed-ahead DL,DG cell k+1 values */
   float  xE, xL, xG;
   float  vsc;
-  
-#ifdef p7_DEBUGGING
-  if (L+1 > rmx->allocR)                           ESL_EXCEPTION(eslEINVAL, "matrix allocR too small; missing a p7_refmx_GrowTo() initialization call?");
-  if ((M+1)*p7R_NSCELLS+p7R_NXCELLS > rmx->allocW) ESL_EXCEPTION(eslEINVAL, "matrix allocW too small; missing a p7_refmx_GrowTo() initialization call?");
-  if (gm->L != L && gm->L != 0)                    ESL_EXCEPTION(eslEINVAL, "length model in profile wasn't set to L (or 0)");
-#endif
+  int    status;
+
+  /* contract checks / arg validation */
+  ESL_DASSERT1( ( gm->L == L || gm->L == 0) ); /* length model in profile is either L (usually) or 0 (some unit tests) */
+
+  /* reallocation, if needed */
+  if ( (status = p7_refmx_GrowTo(rmx, gm->M, L)) != eslOK) return status;
+  rmx->M    = M;
+  rmx->L    = L;
+  rmx->type = p7R_VITERBI;
+
 
   /* Initialization of the zero row. */
   dpc = rmx->dp[0];
@@ -179,9 +181,6 @@ p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
   
   vsc =  dpc[p7R_C] + gm->xsc[p7P_C][p7P_MOVE];
   if (opt_sc) *opt_sc = vsc;
-  rmx->M    = M;
-  rmx->L    = L;
-  rmx->type = p7R_VITERBI;
   if (opt_tr && vsc != -eslINFINITY) return p7_reference_trace_Viterbi(gm, rmx, opt_tr);  // if no paths are possible at all: leave tr->N=0, our convention for impossible trace
   else                               return eslOK;
 }
@@ -246,17 +245,13 @@ static void
 utest_generation(ESL_RANDOMNESS *rng, P7_HMM *hmm, P7_PROFILE *gm, P7_BG *bg, int nseq, int L)
 {
   char      msg[]   = "viterbi generation test failed";
-  ESL_SQ    *sq     = NULL;
-  P7_REFMX  *rmx    = NULL;
-  P7_TRACE  *tr     = NULL;
+  ESL_SQ    *sq     = esl_sq_CreateDigital(gm->abc);
+  P7_REFMX  *rmx    = p7_refmx_Create(gm->M, 400);
+  P7_TRACE  *tr     = p7_trace_Create();
   int        idx;
   float      sc1, sc2, sc3;
   char       errbuf[eslERRBUFSIZE];
 
-  if (( sq  = esl_sq_CreateDigital(gm->abc))   == NULL) esl_fatal(msg);
-  if (( tr  = p7_trace_Create())               == NULL) esl_fatal(msg);
-  if (( rmx = p7_refmx_Create(gm->M, 400))     == NULL) esl_fatal(msg);
-  
   for (idx = 0; idx < nseq; idx++)
     {
       p7_profile_SetLength(gm, L);
@@ -269,7 +264,6 @@ utest_generation(ESL_RANDOMNESS *rng, P7_HMM *hmm, P7_PROFILE *gm, P7_BG *bg, in
       p7_trace_Reuse(tr);
 
       p7_profile_SetLength(gm, sq->n);
-      if (p7_refmx_GrowTo(rmx, gm->M, sq->n)                     != eslOK) esl_fatal(msg);
       if (p7_ReferenceViterbi(sq->dsq, sq->n, gm, rmx, tr, &sc2) != eslOK) esl_fatal(msg);
       if (p7_trace_Validate(tr, gm->abc, sq->dsq, errbuf)        != eslOK) esl_fatal("%s:\n%s", msg, errbuf);
       if (p7_trace_Score(tr, sq->dsq, gm, &sc3)                  != eslOK) esl_fatal(msg);
@@ -395,9 +389,9 @@ main(int argc, char **argv)
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
   P7_BG          *bg      = NULL;
-  P7_PROFILE     *gm      = NULL;
-  P7_REFMX       *vit     = NULL;
-  P7_TRACE       *tr      = NULL;
+  P7_PROFILE     *gm      = NULL; 
+  P7_REFMX       *vit     = p7_refmx_Create(200, 400); /* will grow as needed */
+  P7_TRACE       *tr      = p7_trace_Create();
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
@@ -427,17 +421,10 @@ main(int argc, char **argv)
   else if (esl_opt_GetBoolean(go, "--s"))   p7_profile_ConfigUniglocal(gm, hmm, bg, 400);
   else                                      p7_profile_Config         (gm, hmm, bg);
 
-  /* Allocate matrices, trace */
-  vit = p7_refmx_Create(gm->M, 400);
-  tr  = p7_trace_Create();
-
   while ( (status = esl_sqio_Read(sqfp, sq)) != eslEOF)
     {
       if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
       else if (status != eslOK)      p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
-
-      /* Resize the DP matrix if necessary */
-      p7_refmx_GrowTo(vit, gm->M, sq->n);
 
       /* Set the profile and null model's target length models */
       p7_bg_SetLength     (bg, sq->n);

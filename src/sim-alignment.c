@@ -19,7 +19,9 @@
 #include "p7_sparsemx.h"
 #include "p7_trace_metrics.h"
 
+#include "reference_viterbi.h"
 #include "sparse_fwdback.h"
+#include "sparse_viterbi.h"
 
 #include "impl_sse/impl_sse.h"
 #include "impl_sse/p7_filtermx.h"
@@ -64,10 +66,10 @@ main(int argc, char **argv)
   P7_TRACE         *reftr    = p7_trace_Create();
   P7_TRACE         *testtr   = p7_trace_Create();
   P7_TRACE_METRICS *tmetrics = p7_trace_metrics_Create();
-  P7_REFMX         *rmx      = NULL;
+  P7_REFMX         *rmx      = p7_refmx_Create(100,100);
   //  P7_FILTERMX      *ox       = NULL;
-  P7_SPARSEMASK    *sm       = NULL;
-  P7_SPARSEMX      *sxv      = NULL;
+  P7_SPARSEMASK    *sm       = p7_sparsemask_Create(100, 100);
+  P7_SPARSEMX      *sxv      = p7_sparsemx_Create(NULL);
   int               idx;
   char              errbuf[eslERRBUFSIZE];
   int               status;
@@ -87,11 +89,6 @@ main(int argc, char **argv)
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", ahmmfile, errbuf);
   else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                ahmmfile, errbuf);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, ahmmfile, errbuf);  
-
-  /* initial allocations */
-  sm  = p7_sparsemask_Create(100, 100);
-  sxv = p7_sparsemx_Create(sm);
-  rmx = p7_refmx_Create(100,100);
 
   while ( (status = p7_hmmfile_Read(ghfp, &abc, &ghmm)) == eslOK) /* <abc> gets set on first read  */
     {
@@ -131,17 +128,8 @@ main(int argc, char **argv)
 	  p7_sparsemask_Reinit(sm, agm->M, sq->n);
 	  p7_sparsemask_AddAll(sm);
 
-	  p7_refmx_GrowTo(rmx, agm->M, sq->n);
-	  p7_sparsemx_Reinit(sxv, sm);
-	  
-	  if (esl_opt_GetBoolean(go, "--vit")) 
-	    {
-	      p7_ReferenceViterbi(sq->dsq, sq->n, agm, rmx, testtr, /*opt_vsc=*/NULL);
-	    } 
-	  else 
-	    {
-	      p7_SparseViterbi(sq->dsq, sq->n, agm, sxv, testtr, /*opt_vsc=*/NULL);
-	    }
+	  if (esl_opt_GetBoolean(go, "--vit"))  p7_ReferenceViterbi(sq->dsq, sq->n, agm,     rmx, testtr, /*opt_vsc=*/NULL);
+	  else                         	        p7_SparseViterbi   (sq->dsq, sq->n, agm, sm, sxv, testtr, /*opt_vsc=*/NULL);
 
 	  p7_trace_metrics(reftr, testtr, tmetrics);
 

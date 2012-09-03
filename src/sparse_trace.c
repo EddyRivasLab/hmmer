@@ -340,7 +340,7 @@ sto_select_b(ESL_RANDOMNESS *rng, const P7_PROFILE *gm, const float *xc)
 static int
 sparse_traceback_engine(ESL_RANDOMNESS *rng, float *wrk, const P7_PROFILE *gm, const P7_SPARSEMX *sx, P7_TRACE *tr)
 {
-  P7_SPARSEMASK *sm = sx->sm;
+  const P7_SPARSEMASK *sm = sx->sm;
   int            k  = 0;	/* current coord in profile consensus */
   int            i  = sm->L;	/* current coord in sequence (that snxt is on) */
   float         *dp;		/* points to main model DP cells for next valid row i */
@@ -586,6 +586,7 @@ p7_sparse_trace_Stochastic(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PROFIL
 #include "hmmer.h"
 #include "p7_sparsemx.h"
 #include "sparse_fwdback.h"
+#include "sparse_decoding.h"
 #include "sparse_trace.h"
 
 static ESL_OPTIONS options[] = {
@@ -621,9 +622,9 @@ main(int argc, char **argv)
   P7_OPROFILE    *om      = NULL;
   P7_FILTERMX    *ox      = NULL;
   P7_SPARSEMASK  *sm      = NULL;
-  P7_SPARSEMX    *sxf     = NULL;
-  P7_SPARSEMX    *sxb     = NULL;
-  P7_SPARSEMX    *sxd     = NULL;
+  P7_SPARSEMX    *sxf     = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX    *sxb     = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX    *sxd     = p7_sparsemx_Create(NULL);
   P7_SPARSEMX    *sxd2    = NULL;
   P7_TRACE       *tr      = p7_trace_Create();
   float          *wrk     = NULL;
@@ -677,22 +678,17 @@ main(int argc, char **argv)
     p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm);
   }
   
-  /* Create sparse matrices */
-  sxf  = p7_sparsemx_Create(sm);
-  sxb  = p7_sparsemx_Create(sm);
-  sxd  = p7_sparsemx_Create(sm);
-  sxd2 = p7_sparsemx_Create(sm);
-  p7_sparsemx_Zero(sxd2);
-
   /* Sparse DP calculations */
-  p7_SparseForward (sq->dsq, sq->n, gm, sxf,  &fsc);
-  p7_SparseBackward(sq->dsq, sq->n, gm, sxb,  NULL);
+  p7_SparseForward (sq->dsq, sq->n, gm, sm, sxf,  &fsc);
+  p7_SparseBackward(sq->dsq, sq->n, gm, sm, sxb,  NULL);
   p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxb, sxd);
 
   if (esl_opt_GetBoolean(go, "-M")) p7_sparsemask_Dump(stdout, sm);
   if (esl_opt_GetBoolean(go, "-F")) p7_sparsemx_Dump(stdout, sxf);
 
   /* Collect N stochastic traces, count them into <sxd> */
+  sxd2 = p7_sparsemx_Create(sm);
+  p7_sparsemx_Zero(sxd2);
   for (idx = 0; idx < N; idx++)
     {
       p7_sparse_trace_Stochastic(rng, &wrk, gm, sxf, tr);

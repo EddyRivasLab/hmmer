@@ -104,7 +104,7 @@ typedef struct {
   int64_t dalloc;	// current <dp> allocation, denominated in supercells, (each p7S_NSCELLS wide) 
   int     xalloc;	// current <xmx> allocation, denominated in total rows (each p7S_NXCELLS wide; xalloc >= nrow+nseg) 
 
-  P7_SPARSEMASK *sm;
+  const P7_SPARSEMASK *sm;
 
   int     type;		// p7S_UNSET | p7R_VITERBI | p7R_FORWARD... etc 
 } P7_SPARSEMX;
@@ -131,10 +131,11 @@ extern int            p7_sparsemask_Finish   (P7_SPARSEMASK *sm);
 /* P7_SPARSEMASK debugging tools */
 extern int            p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Compare(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2);
+extern int            p7_sparsemask_Validate(const P7_SPARSEMASK *sm, char *errbuf);
 
 /* P7_SPARSEMX object management */
 extern P7_SPARSEMX   *p7_sparsemx_Create   (P7_SPARSEMASK *sm);
-extern int            p7_sparsemx_Reinit   (P7_SPARSEMX *sx, P7_SPARSEMASK *sm);
+extern int            p7_sparsemx_Reinit   (P7_SPARSEMX *sx, const P7_SPARSEMASK *sm);
 extern int            p7_sparsemx_Zero     (P7_SPARSEMX *sx);
 extern size_t         p7_sparsemx_Sizeof   (const P7_SPARSEMX *sx);
 extern size_t         p7_sparsemx_MinSizeof(const P7_SPARSEMASK *sm); // not a typo: yes, it takes a SPARSEMASK, not a SPARSEMX
@@ -143,21 +144,21 @@ extern int            p7_sparsemx_Reuse    (P7_SPARSEMX *sx);
 extern void           p7_sparsemx_Destroy  (P7_SPARSEMX *sx);
 
 /* Extracting information from a sparse DP matrix */
-extern int   p7_sparsemx_TracePostprobs(P7_SPARSEMX *sxd, P7_TRACE *tr);
+extern int   p7_sparsemx_TracePostprobs(const P7_SPARSEMX *sxd, P7_TRACE *tr);
 extern int   p7_sparsemx_CountTrace(const P7_TRACE *tr, P7_SPARSEMX *sxd);
-extern int   p7_sparsemx_ExpectedDomains(P7_SPARSEMX *sxd, int iae, int ibe, float *ret_ndom_expected);
-extern int   p7_sparsemx_ApproxEnvScore(P7_PROFILE *gm, P7_SPARSEMX *sxf, int iae, int ibe, float *ret_envsc);
+extern int   p7_sparsemx_ExpectedDomains(const P7_SPARSEMX *sxd, int iae, int ibe, float *ret_ndom_expected);
 
 /* P7_SPARSEMX debugging tools */
+extern char *p7_sparsemx_DecodeState  (int type);
 extern char *p7_sparsemx_DecodeSpecial(int type);
 extern int   p7_sparsemx_Dump(FILE *ofp, P7_SPARSEMX *sx);
-extern int   p7_sparsemx_DumpWindow(FILE *ofp, P7_SPARSEMX *sx, int i1, int i2, int ka, int kb);
-extern int   p7_sparsemx_Copy2Reference  (P7_SPARSEMX *sx, P7_REFMX *rx);
+extern int   p7_sparsemx_DumpWindow(FILE *ofp, const P7_SPARSEMX *sx, int i1, int i2, int ka, int kb);
+extern int   p7_sparsemx_Copy2Reference  (const P7_SPARSEMX *sx, P7_REFMX *rx);
 extern int   p7_sparsemx_Compare(const P7_SPARSEMX *sx1, const P7_SPARSEMX *sx2, float tol);
 extern int   p7_sparsemx_CompareReference       (const P7_SPARSEMX *sx, const P7_REFMX *rx, float tol);
 extern int   p7_sparsemx_CompareReferenceAsBound(const P7_SPARSEMX *sx, const P7_REFMX *rx, float tol);
 extern int   p7_sparsemx_CompareDecoding        (const P7_SPARSEMX *sxe, const P7_SPARSEMX *sxa, float tol);
-extern int   p7_sparsemx_Validate(P7_SPARSEMX *sx, char *errbuf);
+extern int   p7_sparsemx_Validate(const P7_SPARSEMX *sx, char *errbuf);
 #endif /*P7_SPARSEMX_INCLUDED*/
 
 /*****************************************************************

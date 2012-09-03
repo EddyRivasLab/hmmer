@@ -38,8 +38,9 @@
  *
  * Purpose:   The Forward algorithm, comparing profile <gm> to target
  *            sequence <dsq> of length <L>. Caller provides an
- *            allocated <P7_REFMX> DP matrix <rmx>, sized for an
- *            <gm->M> by <L> problem. 
+ *            allocated <P7_REFMX> DP matrix <rmx>; this matrix will
+ *            be reallocated if needed, so it can be reused from a
+ *            previous calculation, including a smaller one.
  *            
  *            Caller also has initialized with a <p7_FLogsumInit()>
  *            call, because this function will use <p7_FLogsum()>.
@@ -51,17 +52,13 @@
  * Args:      dsq    : digital target sequence of length <L>
  *            L      : length of the target sequence
  *            gm     : query profile 
- *            rmx    : RESULT: DP matrix, caller allocated
+ *            rmx    : RESULT: DP matrix 
  *            opt_sc : optRETURN: raw Forward score in nats
  *
- * Returns:   <eslOK> on success.
- *
- * Throws:    When <p7_DEBUGGING> flag is on at compile-time (only), we do
- *            some extra checking of the inputs to catch some typical
- *            coding errors. Throws <eslEINVAL> if caller forgot to
- *            size the matrix <rmx> appropriately, or if the profile
- *            <gm>'s length model wasn't set to <L> (or 0, which some 
- *            unit tests need to do).
+ * Returns:   <eslOK> on success. <rmx> contains the Forward matrix;
+ *            its internals may have been reallocated.
+ *            
+ * Throws:    <eslEMEM> if reallocation is attempted and fails.           
  *
  * Notes:     This function makes assumptions about the order
  *            of the state indices in p7_refmx.h:
@@ -77,17 +74,21 @@ p7_ReferenceForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
   float *dpc, *dpp;
   const float *tsc;		/* ptr for stepping thru profile's transition parameters */
   const float *rsc;		/* ptr for stepping thru profile's emission parameters   */
-  int    M          = gm->M;
+  int    M = gm->M;
   int    i, k, s;
   float  mlv, mgv;	      /* ML,MG cell values on current row   */
   float  dlv, dgv; 	      /* pushed-ahead DL,DG cell k+1 values */
   float  xE, xL, xG;
+  int    status;		
   
-#ifdef p7_DEBUGGING
-  if (L+1 > rmx->allocR)                           ESL_EXCEPTION(eslEINVAL, "matrix allocR too small; missing a p7_refmx_GrowTo() initialization call?");
-  if ((M+1)*p7R_NSCELLS+p7R_NXCELLS > rmx->allocW) ESL_EXCEPTION(eslEINVAL, "matrix allocW too small; missing a p7_refmx_GrowTo() initialization call?");
-  if (gm->L != L && gm->L != 0)                    ESL_EXCEPTION(eslEINVAL, "length model in profile wasn't set to L (or 0)");
-#endif
+  /* contract checks / arg validation */
+  ESL_DASSERT1( ( gm->L == L || gm->L == 0) ); /* length model in profile is either L (usually) or 0 (some unit tests) */
+
+  /* reallocation, if needed */
+  if ( (status = p7_refmx_GrowTo(rmx, gm->M, L)) != eslOK) return status;
+  rmx->M    = M;
+  rmx->L    = L;
+  rmx->type = p7R_FORWARD;
 
   /* Initialization of the zero row. */
   dpc = rmx->dp[0];
@@ -189,9 +190,6 @@ p7_ReferenceForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
   /* Done with all rows i. As we leave, dpc is still sitting on the final special value for i=L ... including even the L=0 case */
   
   if (opt_sc) *opt_sc = dpc[p7R_C] + gm->xsc[p7P_C][p7P_MOVE]; /* C->T */
-  rmx->M    = M;
-  rmx->L    = L;
-  rmx->type = p7R_FORWARD;
   return eslOK;
 }
 /*-----------  end, Forwards implementation ---------------------*/
@@ -207,8 +205,9 @@ p7_ReferenceForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
  *
  * Purpose:   The Backward algorithm, comparing profile <gm> to target
  *            sequence <dsq> of length <L>. Caller provides an
- *            allocated <P7_REFMX> DP matrix <rmx>, sized for an
- *            <gm->M> by <L> problem. 
+ *            allocated <P7_REFMX> DP matrix <rmx>; this matrix will
+ *            be reallocated if needed, so it can be reused from
+ *            a previous calculation, including a smaller one.
  *            
  *            Caller also has initialized with a <p7_FLogsumInit()>
  *            call; this function will use <p7_FLogsum()>.
@@ -223,14 +222,10 @@ p7_ReferenceForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
  *            rmx    : allocated DP matrix
  *            opt_sc : optRETURN: raw Backward score in nats
  *
- * Returns:   <eslOK> on success.
- *
- * Throws:    When <p7_DEBUGGING> flag is on at compile-time (only), we
- *            do some extra checking of the inputs to catch some
- *            typical coding errors. Throws <eslEINVAL> if caller
- *            forgot to size the matrix <rmx> appropriately, or if the
- *            profile <gm>'s length model wasn't set to <L> (or 0, which
- *            some unit tests need to do).
+ * Returns:   <eslOK> on success. <rmx> contains the Forward matrix;
+ *            its internals may have been reallocated.
+ *            
+ * Throws:    <eslEMEM> if reallocation is attempted and fails.           
  *
  * Notes:     In <gm->rsc>, assumes p7P_NR = 2 and order [M I]
  *            In <gm->tsc>, does not make assumptions about p7P_NTRANS or order of values
@@ -261,12 +256,16 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
   int   i;			/* counter over sequence positions 1..L */
   int   k;			/* counter over model positions 1..M    */
   const int M  = gm->M;
+  int   status;
 
-#ifdef p7_DEBUGGING
-  if (L+1 > rmx->allocR)                           ESL_EXCEPTION(eslEINVAL, "matrix allocR too small; missing a p7_refmx_GrowTo() initialization call?");
-  if ((M+1)*p7R_NSCELLS+p7R_NXCELLS > rmx->allocW) ESL_EXCEPTION(eslEINVAL, "matrix allocW too small; missing a p7_refmx_GrowTo() initialization call?");
-  if (gm->L != L && gm->L != 0)                    ESL_EXCEPTION(eslEINVAL, "length model in profile wasn't set to L");
-#endif
+ /* contract checks / arg validation */
+  ESL_DASSERT1( ( gm->L == L || gm->L == 0) ); /* length model in profile is either L (usually) or 0 (some unit tests) */
+
+  /* reallocation, if needed */
+  if ( (status = p7_refmx_GrowTo(rmx, gm->M, L)) != eslOK) return status;
+  rmx->M    = M;
+  rmx->L    = L;
+  rmx->type = p7R_BACKWARD;
 
   /* Initialize row L. */
   /* Specials are in order ENJBLGC,JJ,CC: step backwards thru them */
@@ -453,9 +452,6 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
   for (i = 0; i < M*p7R_NSCELLS; i++)
     *dpc++ = -eslINFINITY;
 
-  rmx->M    = M;
-  rmx->L    = L;
-  rmx->type = p7R_BACKWARD;
   if (opt_sc) *opt_sc = dpc[p7R_N];
   return eslOK;
 }
@@ -475,7 +471,10 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
  *            profile <gm> to a target sequence, given the computed posterior 
  *            decoding matrix <pp> for that query/target comparison,
  *            using DP matrix <rmx> for storage during the alignment
- *            computation. Return the alignment traceback in
+ *            computation. <rmx> will be reallocated if needed, so it
+ *            can be reused from a previous computation, even a smaller one.
+ *
+ *            Return the alignment traceback in
  *            <tr>, storage provided and initialized by caller, and grown
  *            here as needed. Also optionally return the gain score,
  *            the total sum of pp - (1-(1+gamma)) for each state 
@@ -519,6 +518,17 @@ p7_ReferenceAlign(const P7_PROFILE *gm, float gamma, const P7_REFMX *pp, P7_REFM
   float        xE,xG,xL;
   int          i,k,s;
   float        gammaterm = -1.0f/(1.0f+gamma);
+  int          status;
+
+  /* Contract checks / argument validation */
+  ESL_DASSERT1( (pp->type == p7R_DECODING) );
+  ESL_DASSERT1( (pp->M    == gm->M) );
+
+  /* DP matrix reallocation, if needed */
+  if ( (status = p7_refmx_GrowTo(rmx, gm->M, L)) != eslOK) return status;
+  rmx->M    = M;
+  rmx->L    = L;
+  rmx->type = p7R_ALIGNMENT;
 
   /* Initialization of the zero row. 
    * Main states    [ ML MG IL IG DL DG] 0..M; then special states [E N J B L G C] 
@@ -605,8 +615,6 @@ p7_ReferenceAlign(const P7_PROFILE *gm, float gamma, const P7_REFMX *pp, P7_REFM
       dpc[p7R_CC]     = -eslINFINITY;
     }
 
-  rmx->L    = L;
-  rmx->M    = M;
   rmx->type = p7R_ALIGNMENT;
   if (opt_gain) *opt_gain = dpc[p7R_C] + 1.0f + gammaterm; /* C->T; T has pp=1.0f */
   return p7_reference_trace_MGE(gm, rmx, tr);
@@ -878,9 +886,6 @@ utest_generation(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
        * score it with fwd, bck, vit 
        */
       if (p7_profile_SetLength(gm, sq->n)                            != eslOK) esl_fatal(msg);
-      if (p7_refmx_GrowTo(fwd, gm->M, sq->n)                         != eslOK) esl_fatal(msg);
-      if (p7_refmx_GrowTo(bck, gm->M, sq->n)                         != eslOK) esl_fatal(msg);
-      if (p7_refmx_GrowTo(vit, gm->M, sq->n)                         != eslOK) esl_fatal(msg);
       if (p7_ReferenceForward (sq->dsq, sq->n, gm, fwd,       &fsc)  != eslOK) esl_fatal(msg);
       if (p7_ReferenceBackward(sq->dsq, sq->n, gm, bck,       &bsc)  != eslOK) esl_fatal(msg);
       if (p7_ReferenceViterbi (sq->dsq, sq->n, gm, vit, NULL, &vsc)  != eslOK) esl_fatal(msg);
@@ -1604,10 +1609,6 @@ utest_brute(ESL_RANDOMNESS *rng, int N)
 
       for (L = 1; L <= 4; L++)
 	{
-	  p7_refmx_GrowTo(vit, 3, L);
-	  p7_refmx_GrowTo(fwd, 3, L);
-	  p7_refmx_GrowTo(bck, 3, L);
-
 	  /* create digital sequence of length L, all A's */
 	  dsq[0] = dsq[L+1] = eslDSQ_SENTINEL;
 	  for (pos = 1; pos <= L; pos++) dsq[pos] = 0; /* 0='A' */
@@ -1766,11 +1767,11 @@ main(int argc, char **argv)
   P7_HMM         *hmm     = NULL;
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
-  P7_REFMX       *fwd     = NULL;
-  P7_REFMX       *bck     = NULL;
-  P7_REFMX       *pp      = NULL;
-  P7_REFMX       *mge     = NULL;
-  P7_TRACE       *tr      = NULL;
+  P7_REFMX       *fwd     = p7_refmx_Create(100, 100);
+  P7_REFMX       *bck     = p7_refmx_Create(100, 100);
+  P7_REFMX       *pp      = p7_refmx_Create(100, 100);
+  P7_REFMX       *mge     = p7_refmx_Create(100, 100);
+  P7_TRACE       *tr      = p7_trace_Create();
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   float          *wrk     = NULL;
@@ -1803,7 +1804,7 @@ main(int argc, char **argv)
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
  
-  /* Read in one sequence */
+  /* Open sequence file */
   sq     = esl_sq_CreateDigital(abc);
   status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
   if      (status == eslENOTFOUND) p7_Fail("No such file.");
@@ -1822,13 +1823,6 @@ main(int argc, char **argv)
   else if (esl_opt_GetBoolean(go, "--s"))   p7_profile_ConfigUniglocal(gm, hmm, bg, sq->n);
   else                                      p7_profile_Config         (gm, hmm, bg);
 
-  /* Allocate matrices */
-  fwd = p7_refmx_Create(gm->M, sq->n);
-  bck = p7_refmx_Create(gm->M, sq->n);
-  pp  = p7_refmx_Create(gm->M, sq->n);
-  mge = p7_refmx_Create(gm->M, sq->n);
-  tr  = p7_trace_Create();
-
   printf("%-30s   %-10s %-10s   %-10s %-10s\n", "# seq name",      "fwd (raw)",   "bck (raw) ",  "fwd (bits)",  "bck (bits)");
   printf("%-30s   %10s %10s   %10s %10s\n",     "#--------------", "----------",  "----------",  "----------",  "----------");
 
@@ -1836,13 +1830,6 @@ main(int argc, char **argv)
     {
       if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
       else if (status != eslOK)      p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
-
-      /* Resize the DP matrices if necessary */
-      p7_refmx_GrowTo(fwd, gm->M, sq->n);
-      p7_refmx_GrowTo(bck, gm->M, sq->n);
-      p7_refmx_GrowTo(pp,  gm->M, sq->n);
-      p7_refmx_GrowTo(mge, gm->M, sq->n);
-
 
       /* Set the profile and null model's target length models */
       p7_bg_SetLength     (bg, sq->n);

@@ -300,7 +300,7 @@ utest_consistency(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
   P7_PROFILE       *gm     = p7_profile_Create(M, abc);
   P7_TRACE         *reftr  = p7_trace_Create();
   P7_TRACE         *testtr = p7_trace_Create();
-  P7_REFMX         *vmx    = NULL;
+  P7_REFMX         *vmx    = p7_refmx_Create(100, 100); /* will grow as needed */
   P7_TRACE_METRICS *tm     = p7_trace_metrics_Create();
   int               refct[p7T_NSTATETYPES];
   int               testct[p7T_NSTATETYPES];
@@ -323,9 +323,6 @@ utest_consistency(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
       if ( p7_ProfileEmit(rng, hmm, gm, bg, sq, reftr) != eslOK) esl_fatal(msg);
 
       /* Viterbi alignment of that sequence back to the model gives us a test state path */
-      if   (vmx)  p7_refmx_GrowTo(vmx, M, sq->n);
-      else  vmx = p7_refmx_Create(M, sq->n);
-
       if ( p7_profile_SetLength(gm, sq->n)                            != eslOK) esl_fatal(msg);
       if ( p7_bg_SetLength(bg, sq->n)                                 != eslOK) esl_fatal(msg); 
       if ( p7_ReferenceViterbi(sq->dsq, sq->n, gm, vmx, testtr, NULL) != eslOK) esl_fatal(msg);

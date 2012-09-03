@@ -79,7 +79,7 @@ p7_profile_ConfigUnilocal(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, in
 int
 p7_profile_ConfigGlocal(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int L)
 {
-  return p7_profile_ConfigCustom(gm, hmm, bg, L, 1.0, 1.0); /* nj=1, pglocal=0: multihit glocal */
+  return p7_profile_ConfigCustom(gm, hmm, bg, L, 1.0, 1.0); /* nj=1, pglocal=1: multihit glocal */
 }
 
 int

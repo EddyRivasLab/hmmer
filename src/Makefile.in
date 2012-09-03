@@ -171,7 +171,7 @@ OBJS =  build.o\
 	fm_alphabet.o\
 	fm_general.o\
 	fm_msv.o\
-    hmmpgmd2msa.o
+	hmmpgmd2msa.o
 #	island.o\
 
 STATS = \
@@ -195,6 +195,7 @@ UTESTS =\
 	reference_viterbi_utest\
 	sparse_fwdback_utest\
 	sparse_decoding_utest\
+	sparse_envscore_utest\
 	sparse_masstrace_utest\
 	seqmodel_utest\
 	p7_alidisplay_utest\
@@ -217,6 +218,7 @@ EXAMPLES = \
 	reference_decoding_example\
 	reference_fwdback_example\
 	reference_viterbi_example\
+	sparse_envscore_example\
 	sparse_fwdback_example\
 	sparse_masstrace_example\
 	sparse_trace_example\

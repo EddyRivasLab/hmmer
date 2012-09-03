@@ -340,6 +340,92 @@ masstrace_down(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEM
  * x. API, wrapping the Up and Down recursions
  *****************************************************************/
 
+
+
+/* Function:  p7_SparseMasstrace()
+ * Synopsis:  Calculate envelope coords, given a domain's anchor point.
+ *
+ * Purpose:   Determine envelope coords for an individual domain by the "mass trace"
+ *            algorithm.
+ *
+ *            The caller has compared profile <gm> to digital sequence
+ *            <dsq> of length <L>, obtaining Forward matrix <fwd> and
+ *            Backward matrix <bck>, for a sparse mask that both of
+ *            those matrices have copies of (<fwd->sm == bck->sm>);
+ *            and we have obtained an optimal trace <tr> for that
+ *            comparison (probably a Viterbi trace), which we're doing
+ *            to use to define the individual domains we find in
+ *            <dsq>. 
+ *
+ *            Consider the individual domain defined by an anchor
+ *            defined by position <z> in trace <tr> (see below). For
+ *            each possible trace that contains the anchor, define
+ *            (ia,ib,ka,kb) as the bounds of the domain on the
+ *            sequence and the profile. For a glocal path, ka=1,kb=M (i.e.
+ *            wing-retracted paths through terminal DG's count).
+ *            
+ *            (We uniquely define a domain by its "anchor": a triplet
+ *            (i0,k0,st0={MDI}{LG}), such that any subpath
+ *            ...B->...->anchor->...E ... is considered to be the
+ *            "same" domain, when we're looking at alternative paths
+ *            of the same comparison in an ensemble.)
+ * 
+ *            Summed over the partial posterior trace ensemble of
+ *            traces containing this domain anchor, calculate
+ *            cumulative distributions away from the anchor:
+ *               P(ia <= i), the prob that the domain starts at least as far out as i, i<=i0
+ *               P(ib >= i), prob that domain ends at least as far out as i, i>=i0
+ *               and similarly P(ka <= k), P(kb >= k).
+ *               
+ *            For us to run this calculation, caller provides us with
+ *            a sparse DP matrix <mass>, and a <P7_MASSTRACE> object
+ *            <mt> which will store the necessary histograms. These objects
+ *            can be reused from a previous calculation, even a smaller one;
+ *            they will be reallocated if needed, and reinitialized here.
+ *               
+ *            Define envelope coords as:
+ *               iae = \min_{i \leq i0} P(ia \leq i) \geq massthresh
+ *               ibe = \max_{i \geq i0} P(ib \geq i) \geq massthresh
+ *               kae = \min_{k \leq k0} P(ka \leq k) \leq massthresh
+ *               kbe = \max_{k \geq k0} P(kb \geq k) \leq massthresh
+ *            
+ *            i.e. the widest start/end points that contain at least a
+ *            posterior probability of <massthresh>, (Put another way:
+ *            the probability that the domain starts at some i < iae
+ *            is less than <massthresh>.) These probabilities are
+ *            conditional on having the domain at all (e.g., the
+ *            envelope *given* that the domain is present; our sums
+ *            are over the partial ensemble of traces containing this
+ *            domain's anchor triplet).
+ *            
+ *            Return the envelope coords in <*ret_iae>, <*ret_ibe>,
+ *            <*ret_kae>, <*ret_kbe>.
+ *
+ * Args:      dsq     - digital sequence 1..L
+ *            L       - length of digital sequence
+ *            gm      - profile
+ *            fwd     - sparse Forward matrix that caller calculated for gm x dsq comparison
+ *            bck     - sparse Backward matrix caller calc'ed 
+ *            tr      - optimal path caller wants to use to define domain structure of <dsq>
+ *            z       - index in <tr>'s path of an anchor triplet (i0,k0,st0) = (<tr->i[z]>, <tr->k[z]>, <tr->st[z]>);
+ *                      the anchor defines an individual domain, for purposes of identifying the "same" domain in 
+ *                      different paths
+ *            mass    - sparse DP matrix for the mass trace calculation; can be reused, will be reallocated if needed.
+ *            mt      - cumulative histogram space needed for the calculation; can be reused, will be reallocated if needed.
+ *            ret_iae - RETURN: iae envelope coord
+ *            ret_ibe - RETURN: ibe envelope coord
+ *            ret_kae - RETURN: kae envelope coord
+ *            ret_kbe - RETURN: kbe envelope coord
+ *
+ * Returns:   <eslOK> on success. <mass> may have been reallocated, and
+ *            it now contains the $\rho$ values from the sparse mass
+ *            trace recursions, both up and down. <mt> may have been
+ *            reallocated, and it now contains the cumulative $P(ia
+ *            \leq i)$, etc. distributions away from the anchor.
+ *            The envelope coords are in <*ret_iae,*ret_ibe,*ret_kae,*ret_kbe>.
+ *
+ * Throws:    <eslEMEM> if a reallocation (of <mass> or <mt>) fails.
+ */
 int
 p7_SparseMasstrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMX *fwd, const P7_SPARSEMX *bck, const P7_TRACE *tr, int z, float massthresh, 
 		   P7_SPARSEMX *mass, P7_MASSTRACE *mt,
@@ -350,6 +436,15 @@ p7_SparseMasstrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPA
   int   i0;
   int   status;
 
+  /* contract check / arg validation */
+  ESL_DASSERT1 ( (fwd->type == p7S_FORWARD) );
+  ESL_DASSERT1 ( (bck->type == p7S_BACKWARD) );
+  ESL_DASSERT1 ( (fwd->sm == bck->sm) );
+  ESL_DASSERT1 ( (fwd->sm->L == L) );
+  ESL_DASSERT1 ( (fwd->sm->M == gm->M) );
+  ESL_DASSERT1 ( (tr->L == L) );
+  ESL_DASSERT1 ( (tr->M == gm->M) );
+
   /* Find i0, the last emitted i (i.e. watch out for st0=D; D states have no tr->i[] */
   while (z && ! tr->i[z]) z--;
   i0 = tr->i[z];
@@ -358,11 +453,11 @@ p7_SparseMasstrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPA
    * Set its type now, so it can be Dumped or otherwise analyzed, if we need to.
    * No need to zero it out.
    */
-  p7_sparsemx_Reinit(mass, fwd->sm);
+  if ( (status = p7_sparsemx_Reinit(mass, fwd->sm)) != eslOK) return status;
   mass->type = p7S_MASSTRACE;
 
   /* We might be reusing <mt> workspace. Make sure it's big enough. Then zero it, which sets its L,M. */
-  p7_masstrace_GrowTo(mt, gm->M, L);
+  if ( (status = p7_masstrace_GrowTo(mt, gm->M, L)) != eslOK) return status;
   p7_masstrace_Zero  (mt, gm->M, L); 
 
   /* Up() recursion finds <iae>,<kae>; fills upper left quadrant of <mass> and <mt> (i<=i0, k<=k0); 
@@ -396,6 +491,7 @@ p7_SparseMasstrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPA
 
 #include "sparse_viterbi.h"
 #include "sparse_fwdback.h"
+#include "sparse_decoding.h"
 #include "sparse_trace.h"
 
 static void
@@ -411,10 +507,10 @@ utest_approx_masstrace(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M,
   P7_TRACE      *vtr    = p7_trace_CreateWithPP(); /* domain anchor selection in trace_Index() requires a pp-annotated trace */
   P7_TRACE      *str    = p7_trace_Create();
   P7_SPARSEMASK *sm     = NULL;
-  P7_SPARSEMX   *sxv    = NULL;
-  P7_SPARSEMX   *sxf    = NULL;
-  P7_SPARSEMX   *sxb    = NULL;
-  P7_SPARSEMX   *sxd    = NULL;
+  P7_SPARSEMX   *sxv    = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *sxf    = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *sxb    = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *sxd    = p7_sparsemx_Create(NULL);
   float         *wrk    = NULL;	/* reusable scratch workspace needed by stochastic trace */
   P7_MASSTRACE  *mte    = NULL;
   P7_MASSTRACE  *mta    = NULL;
@@ -460,14 +556,10 @@ utest_approx_masstrace(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M,
   if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm)           != eslOK) esl_fatal(msg);
 
    /* Sparse DP calculations, and exact posterior decoding */
-  if ( (sxv = p7_sparsemx_Create(sm))                          == NULL)  esl_fatal(msg);
-  if ( (sxf = p7_sparsemx_Create(sm))                          == NULL)  esl_fatal(msg);
-  if ( (sxb = p7_sparsemx_Create(sm))                          == NULL)  esl_fatal(msg);
-  if ( (sxd = p7_sparsemx_Create(sm))                          == NULL)  esl_fatal(msg);
-  if ( p7_SparseViterbi   (sq->dsq, sq->n, gm, sxv, vtr, NULL) != eslOK) esl_fatal(msg);
-  if ( p7_SparseForward   (sq->dsq, sq->n, gm, sxf,     &fsc)  != eslOK) esl_fatal(msg);
-  if ( p7_SparseBackward  (sq->dsq, sq->n, gm, sxb,      NULL) != eslOK) esl_fatal(msg);
-  if ( p7_SparseDecoding  (sq->dsq, sq->n, gm, sxf, sxb, sxd)  != eslOK) esl_fatal(msg);
+  if ( p7_SparseViterbi   (sq->dsq, sq->n, gm, sm, sxv, vtr, NULL) != eslOK) esl_fatal(msg);
+  if ( p7_SparseForward   (sq->dsq, sq->n, gm, sm, sxf,     &fsc)  != eslOK) esl_fatal(msg);
+  if ( p7_SparseBackward  (sq->dsq, sq->n, gm, sm, sxb,      NULL) != eslOK) esl_fatal(msg);
+  if ( p7_SparseDecoding  (sq->dsq, sq->n, gm, sxf, sxb, sxd)      != eslOK) esl_fatal(msg);
   p7_sparsemx_TracePostprobs(sxd, vtr); /* selecting domain anchors requires pp annotation of the trace */
   p7_trace_Index(vtr);
   p7_sparsemx_Reuse(sxv);	/* we'll reuse it for mass trace dp below, like we do in production pipeline */
@@ -605,6 +697,7 @@ main(int argc, char **argv)
 #include "hmmer.h"
 #include "p7_sparsemx.h"
 #include "p7_masstrace.h"
+#include "sparse_viterbi.h"
 #include "sparse_fwdback.h"
 #include "sparse_decoding.h"
 #include "sparse_trace.h"
@@ -633,11 +726,11 @@ main(int argc, char **argv)
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
   P7_SPARSEMASK  *sm      = NULL;
-  P7_SPARSEMX    *sxv     = NULL;
-  P7_SPARSEMX    *sxf     = NULL;
-  P7_SPARSEMX    *sxb     = NULL;
-  P7_SPARSEMX    *sxd     = NULL;
-  P7_SPARSEMX    *sxm     = NULL;
+  P7_SPARSEMX    *sxv     = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX    *sxf     = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX    *sxb     = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX    *sxd     = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX    *sxm     = p7_sparsemx_Create(NULL);
   P7_MASSTRACE   *mt      = p7_masstrace_Create(100,100); /* M,L hints. Will be grown. */
   P7_TRACE       *tr      = p7_trace_CreateWithPP();
   float           vsc, fsc;
@@ -683,20 +776,15 @@ main(int argc, char **argv)
   /* Allocate bands, matrices */
   sm  = p7_sparsemask_Create(gm->M, sq->n);
   p7_sparsemask_AddAll(sm);
-  sxv = p7_sparsemx_Create(sm);
-  sxf = p7_sparsemx_Create(sm);
-  sxb = p7_sparsemx_Create(sm);
-  sxd = p7_sparsemx_Create(sm);
-  sxm = p7_sparsemx_Create(sm);
 
   /* Set the profile and null model's target length models */
   p7_bg_SetLength           (bg, sq->n);
   p7_profile_SetLength      (gm, sq->n);
 
   /* Sparse DP calculations */
-  p7_SparseViterbi (sq->dsq, sq->n, gm, sxv, tr, &vsc);
-  p7_SparseForward (sq->dsq, sq->n, gm, sxf,     &fsc);
-  p7_SparseBackward(sq->dsq, sq->n, gm, sxb,     NULL);
+  p7_SparseViterbi (sq->dsq, sq->n, gm, sm, sxv, tr, &vsc);
+  p7_SparseForward (sq->dsq, sq->n, gm, sm, sxf,     &fsc);
+  p7_SparseBackward(sq->dsq, sq->n, gm, sm, sxb,     NULL);
   p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxb, sxd);
   p7_sparsemx_TracePostprobs(sxd, tr);
   p7_trace_Index(tr);
