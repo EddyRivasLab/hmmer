@@ -261,6 +261,13 @@ p7_SparseEnvscore(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
  *            this score and convert it to bits, before calculating
  *            P-values or reporting it in output.
  *            
+ *            If the envelope contains negligible probability mass in
+ *            the core model, the calculation here is subject to
+ *            numerical error; the function returns <eslEINACCURATE>
+ *            in this case, but still sets <*ret_envsc> to what it
+ *            estimated. A caller that wants the right answer must check
+ *            for the <eslINACCURATE>/<eslOK> status return.
+ *            
  *            Caller has determined that the envelope <iae..ibe>
  *            contains only a single domain (negligible probability
  *            mass in any more than that); otherwise, this technique
@@ -294,8 +301,10 @@ p7_SparseEnvscore(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
  *
  * Returns:   <eslOK> on success, and <*ret_envsc> contains the raw 
  *            envelope Forward score in nats.
- *
- * Throws:    (no abnormal error conditions)
+ *            
+ *            <eslEINACCURATE> if the value in <*ret_envsc> may be inaccurate
+ *            because of numerical error. Caller may want to call the exact
+ *            envelope score calculation in this case.
  *
  * Xref:      SRE:J10/43-45.
  */
@@ -333,15 +342,15 @@ p7_SparseEnvscoreApprox(P7_PROFILE *gm, P7_SPARSEMX *sxf, int iae, int ibe, floa
     xc += (ibe - ia + 1) * p7S_NXCELLS;
     Cj = xc[p7S_C];
   } else {
-    xc     += (ib-ia+1) * p7S_NXCELLS; // now xc is on last supercell (ibe) in previous segment
-    last_ib = ib;
+    xc     += (ib-ia+1) * p7S_NXCELLS; // xc was on ia-1. Move it to (ib) in that previous segment
+    last_ib = ib;	 	       /* Now we're looking for ibe' = max_i i <= ibe such that xc[i] is stored  */
     for (g = g+1; g < sxf->sm->nseg; g++)
       {
 	ia = sxf->sm->i[g*2];
 	ib = sxf->sm->i[g*2+1];
 	
 	if      (ibe < ia-1) { ibe = last_ib;                 Cj = xc[p7S_C]; break; }
-	else if (ibe <= ib)  { xc += (ibe-ia+1)*p7S_NXCELLS;  Cj = xc[p7S_C]; break; }
+	else if (ibe <= ib)  { xc += (ibe-ia+2)*p7S_NXCELLS;  Cj = xc[p7S_C]; break; }
 	else  {
 	  xc += (ib-ia+2)*p7S_NXCELLS;
 	  last_ib = ib;
@@ -377,7 +386,13 @@ p7_SparseEnvscoreApprox(P7_PROFILE *gm, P7_SPARSEMX *sxf, int iae, int ibe, floa
   envsc += gm->xsc[p7P_C][p7P_MOVE];
 
   *ret_envsc = envsc;
-  return eslOK;
+
+  /* if Cj and Ci1 path term are very close, deltaC ~ 0, and the accuracy of
+   * our calculation is compromised by a catatrophic cancellation that I
+   * don't see how to wriggle out of. Warn that the calculation is inaccurate
+   * by setting eslEINACCURATE flag.
+   */
+  return (deltaC >= 0.1f ? eslOK : eslEINACCURATE);
 }
 /*-------------- end, approximate method ------------------------*/
 
@@ -704,7 +719,9 @@ utest_engine(int do_intersected_mask, char *msg, ESL_RANDOMNESS *rng, ESL_ALPHAB
   int            idx;
   int            d;
   char           errbuf[eslERRBUFSIZE];
-  float          tol = 0.001;
+  float          tol  = 0.001;
+  float          tol2 = 1.0;	/* relaxed tolerance for Approx() calculations that report they're inaccurate */
+  int            a1_status, a2_status;
 
   /* Sample a profile. Config as requested for the utest version. */
   if (p7_hmm_Sample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
@@ -755,7 +772,9 @@ utest_engine(int do_intersected_mask, char *msg, ESL_RANDOMNESS *rng, ESL_ALPHAB
 	  if (p7_SparseMasstrace(sq->dsq, sq->n, gm, sxf, sxb, vtr, vtr->anch[d], 0.1, sx, mt, &iae, &ibe, &kae, &kbe) != eslOK) esl_fatal(msg);
 	  p7_sparsemx_Reuse(sx);
 
-	  if (p7_SparseEnvscoreApprox(gm, sxf, iae, ibe, &a1_sc)                        != eslOK) esl_fatal(msg);
+	  a1_status = p7_SparseEnvscoreApprox(gm, sxf, iae, ibe, &a1_sc); /* EnvscoreApprox can return eslOK or eslEINACCURATE */
+	  if (a1_status != eslOK && a1_status != eslEINACCURATE) esl_fatal(msg);
+
 	  if (p7_SparseEnvscore(sq->dsq, sq->n, gm, iae, ibe, kae, kbe, sm, sx, &e1_sc) != eslOK) esl_fatal(msg);
 	  //printf("# Exact: for domain %d, iae..ibe=%d..%d, kae..kbe=%d..%d\n", d, iae, ibe, kae, kbe);
 	  //p7_sparse_envscore_Dump(stdout, sx, iae, ibe, kae, kbe);
@@ -780,24 +799,25 @@ utest_engine(int do_intersected_mask, char *msg, ESL_RANDOMNESS *rng, ESL_ALPHAB
 	  /* Now recalculate on the utest's envelope-restricted versions: */
 	  if (p7_SparseForward(dsq_restricted, sq->n, gm_restricted, sm_restricted, sx, &f2_sc) != eslOK) esl_fatal(msg);
 	  //p7_sparsemx_Dump(stdout, sx);
-	  if (p7_SparseEnvscoreApprox(gm_restricted, sx, iae, ibe, &a2_sc)                      != eslOK) esl_fatal(msg);
+	  a2_status = p7_SparseEnvscoreApprox(gm_restricted, sx, iae, ibe, &a2_sc);
+	  if (a2_status != eslOK && a2_status != eslEINACCURATE) esl_fatal(msg);
 	  p7_sparsemx_Reuse(sx);
 	  if (p7_SparseEnvscore(dsq_restricted, sq->n, gm_restricted, iae, ibe, kae, kbe, sm_restricted, sx, &e2_sc) != eslOK) esl_fatal(msg);
 	  //p7_sparse_envscore_Dump(stdout, sx, iae, ibe, kae, kbe);
 	  
 	  if (do_unihit) 
 	    {
-	      if (esl_FCompareAbs(e1_sc, f2_sc, tol) != eslOK) esl_fatal("%s\n e1 (%f) should equal f2 (%f)",             msg, e1_sc, f2_sc);
-	      if (esl_FCompareAbs(e1_sc, e2_sc, tol) != eslOK) esl_fatal("%s\n e1 (%f) should equal e2 (%f)",             msg, e1_sc, e2_sc);
-	      if (esl_FCompareAbs(e1_sc, a2_sc, tol) != eslOK) esl_fatal("%s\n e1 (%f) should equal a2 (%f)",             msg, e1_sc, a2_sc);
-	      if ( e1_sc > a1_sc + tol)                        esl_fatal("%s\n  (e1,f2,e2,a2) (%f) should be <= a1 (%f)", msg, e1_sc, a1_sc);
+	      if (esl_FCompareAbs(e1_sc, f2_sc, tol)                              != eslOK) esl_fatal("%s\n e1 (%f) should equal f2 (%f)",             msg, e1_sc, f2_sc);
+	      if (esl_FCompareAbs(e1_sc, e2_sc, tol)                              != eslOK) esl_fatal("%s\n e1 (%f) should equal e2 (%f)",             msg, e1_sc, e2_sc);
+	      if (esl_FCompareAbs(e1_sc, a2_sc, (a2_status == eslOK? tol : tol2)) != eslOK) esl_fatal("%s\n e1 (%f) should equal a2 (%f)",             msg, e1_sc, a2_sc);
+	      if ( e1_sc > a1_sc + (a1_status == eslOK? tol: tol2))                         esl_fatal("%s\n  (e1,f2,e2,a2) (%f) should be <= a1 (%f)", msg, e1_sc, a1_sc);
 	    }
 	  else           
 	    {
-	      if ( esl_FCompareAbs(e1_sc, e2_sc, tol) != eslOK) esl_fatal("%s\n  e1 (%f) should equal e2 (%f)\n",         msg, e1_sc, e2_sc);
-	      if ( esl_FCompareAbs(f2_sc, a2_sc, tol) != eslOK) esl_fatal("%s\n  f2 (%f) should equal a2 (%f)\n",         msg, f2_sc, a2_sc);
-	      if ( e2_sc > f2_sc + tol)                         esl_fatal("%s\n  (e1,e2) (%f) should be <= (f2,a2) (%f)", msg, e2_sc, f2_sc);
-	      if ( f2_sc > a1_sc + tol)                         esl_fatal("%s\n  (f2,a2) (%f) should be <= a1 (%f)",      msg, f2_sc, a1_sc);
+	      if ( esl_FCompareAbs(e1_sc, e2_sc, tol)                              != eslOK) esl_fatal("%s\n  e1 (%f) should equal e2 (%f)\n",         msg, e1_sc, e2_sc);
+	      if ( esl_FCompareAbs(f2_sc, a2_sc, (a2_status == eslOK? tol : tol2)) != eslOK) esl_fatal("%s\n  f2 (%f) should equal a2 (%f)\n",         msg, f2_sc, a2_sc);
+	      if ( e2_sc > f2_sc + tol)                                                      esl_fatal("%s\n  (e1,e2) (%f) should be <= (f2,a2) (%f)", msg, e2_sc, f2_sc);
+	      if ( f2_sc > a1_sc + (a1_status == eslOK? tol : tol2))                         esl_fatal("%s\n  (f2,a2) (%f) should be <= a1 (%f)",      msg, f2_sc, a1_sc);
 	    }
 
 	  if (do_intersected_mask) 
