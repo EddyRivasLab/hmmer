@@ -699,7 +699,10 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
   int     i;    /* counter over hits */
   int     j;    /* previous un-duplicated hit */
   int     s_i, s_j, e_i, e_j, dir_i, dir_j, len_i, len_j;
-  int64_t sub_i, sub_j;
+  int     intersect_alistart, intersect_aliend, intersect_alilen;
+  int     intersect_hmmstart, intersect_hmmend, intersect_hmmlen;
+  //int64_t sub_i, sub_j;
+  int     tmp;
   double  p_i, p_j;
   int remove;
 
@@ -709,27 +712,49 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
   for (i = 1; i < th->N; i++)
   {
 
-      sub_j = th->hit[j]->subseq_start;
+      //sub_j = th->hit[j]->subseq_start;
       p_j = th->hit[j]->lnP;
       s_j = th->hit[j]->dcl[0].iali;
       e_j = th->hit[j]->dcl[0].jali;
       dir_j = (s_j < e_j ? 1 : -1);
-      len_j = 1 + dir_j * (e_j - s_j) ;
+      if (dir_j == -1) {
+        tmp = s_j;
+        s_j = e_j;
+        e_j = tmp;
+      }
+      len_j = e_j - s_j + 1 ;
 
 
-      sub_i = th->hit[i]->subseq_start;
+      //sub_i = th->hit[i]->subseq_start;
       p_i = th->hit[i]->lnP;
       s_i = th->hit[i]->dcl[0].iali;
       e_i = th->hit[i]->dcl[0].jali;
       dir_i = (s_i < e_i ? 1 : -1);
-      len_i = 1 + dir_i * (e_i - s_i) ;
+      if (dir_i == -1) {
+        tmp = s_i;
+        s_i = e_i;
+        e_i = tmp;
+      }
+      len_i = e_i - s_i + 1 ;
+
+
+      // these will only matter if seqidx and strand are the same
+      intersect_alistart  = s_i>s_j ? s_i : s_j;
+      intersect_aliend    = e_i<e_j ? e_i : e_j;
+      intersect_alilen    = intersect_aliend - intersect_alistart + 1;
+
+      intersect_hmmstart = (th->hit[i]->dcl[0].ad->hmmfrom > th->hit[j]->dcl[0].ad->hmmfrom) ? th->hit[i]->dcl[0].ad->hmmfrom : th->hit[j]->dcl[0].ad->hmmfrom;
+      intersect_hmmend   = (th->hit[i]->dcl[0].ad->hmmto   < th->hit[j]->dcl[0].ad->hmmto)   ? th->hit[i]->dcl[0].ad->hmmto : th->hit[j]->dcl[0].ad->hmmto;
+      intersect_hmmlen = intersect_hmmend - intersect_hmmstart + 1;
 
       if ( th->hit[i]->seqidx ==  th->hit[i-1]->seqidx  && //same source sequence
-         //  sub_i != sub_j && // not from the same subsequence ... if they are, then domaindef already split them up
            dir_i == dir_j && // only bother removing if the overlapping hits are on the same strand
+           intersect_hmmlen > 0 && //only if they're both hitting similar parts of the model
            (
-               ( s_i >= s_j-3 && s_i <= s_j+3) ||  // at least one side is essentially flush (
-               ( e_i >= e_j-3 && e_i <= e_j+3)
+               ( s_i >= s_j-3 && s_i <= s_j+3) ||  // at least one side is essentially flush
+               ( e_i >= e_j-3 && e_i <= e_j+3) ||
+               ( intersect_alilen >= len_i * 0.95) || // or one of the hits covers >90% of the other
+               ( intersect_alilen >= len_j * 0.95)
            )
       )
       {
