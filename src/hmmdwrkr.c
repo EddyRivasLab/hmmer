@@ -661,7 +661,6 @@ scan_thread(void *arg)
   pli = p7_pipeline_Create(info->opts, 100, 100, FALSE, p7_SCAN_MODELS);
 
   p7_pli_NewSeq(pli, info->seq);
-  p7_bg_SetLength(bg, info->seq->n);
 
   /* loop until all sequences have been processed */
   count = 1;
@@ -693,6 +692,7 @@ scan_thread(void *arg)
     /* Main loop: */
     for (i = 0; i < count; ++i, ++om) {
       p7_pli_NewModel(pli, *om, bg);
+      p7_bg_SetLength(bg, info->seq->n);
       p7_oprofile_ReconfigLength(*om, info->seq->n);
 	      
       p7_Pipeline(pli, *om, bg, info->seq, th);
