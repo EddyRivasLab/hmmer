@@ -224,8 +224,8 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
       if (puts("\nOptions controlling acceleration heuristics:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 7, 2, 100);
 
-      if (puts("\nOptions controlling trimming thresholds:")         < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 9, 2, 100);
+//      if (puts("\nOptions controlling trimming thresholds:")         < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+//      esl_opt_DisplayHelp(stdout, go, 9, 2, 100);
 
 //      if (puts("\nControl of FM pruning and extension:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
 //      esl_opt_DisplayHelp(stdout, go, 8, 2, 100);
@@ -285,12 +285,8 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
 //if (esl_opt_IsUsed(go, "--mxfile")     && fprintf(ofp, "# subst score matrix (file):       %s\n",             esl_opt_GetString (go, "--mxfile"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-E")           && fprintf(ofp, "# sequence reporting threshold:    E-value <= %g\n",  esl_opt_GetReal   (go, "-E"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-T")           && fprintf(ofp, "# sequence reporting threshold:    score >= %g\n",    esl_opt_GetReal   (go, "-T"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--domE")       && fprintf(ofp, "# domain reporting threshold:      E-value <= %g\n",  esl_opt_GetReal   (go, "--domE"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--domT")       && fprintf(ofp, "# domain reporting threshold:      score >= %g\n",    esl_opt_GetReal   (go, "--domT"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--incE")       && fprintf(ofp, "# sequence inclusion threshold:    E-value <= %g\n",  esl_opt_GetReal   (go, "--incE"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--incT")       && fprintf(ofp, "# sequence inclusion threshold:    score >= %g\n",    esl_opt_GetReal   (go, "--incT"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--incdomE")    && fprintf(ofp, "# domain inclusion threshold:      E-value <= %g\n",  esl_opt_GetReal   (go, "--incdomE"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--incdomT")    && fprintf(ofp, "# domain inclusion threshold:      score >= %g\n",    esl_opt_GetReal   (go, "--incdomT"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--cut_ga")     && fprintf(ofp, "# model-specific thresholding:     GA cutoffs\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--cut_nc")     && fprintf(ofp, "# model-specific thresholding:     NC cutoffs\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--cut_tc")     && fprintf(ofp, "# model-specific thresholding:     TC cutoffs\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -312,10 +308,8 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--fm_sc_ratio")     && fprintf(ofp, "# min seed bit ratio:              %.2f\n",           esl_opt_GetReal(go, "--fm_sc_ratio"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--fm_max_scthresh") && fprintf(ofp, "# max bits in seed:                %.2f\n",           esl_opt_GetReal(go, "--fm_max_scthresh"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
-
   if (esl_opt_IsUsed(go, "--nonull2")    && fprintf(ofp, "# null2 bias corrections:          off\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--usenull3")   && fprintf(ofp, "# null3 bias corrections:          on\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-
 
   if (esl_opt_IsUsed(go, "--toponly")    && fprintf(ofp, "# search only top strand:          on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--bottomonly") && fprintf(ofp, "# search only bottom strand:       on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -382,10 +376,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   FILE            *aliscoresfp  = NULL;            /* output stream for alignment scores (--aliscoresout)    */
 
 
-
-  P7_HMMFILE      *hfp      = NULL;              /* open input HMM file                             */
-  P7_HMM          *hmm      = NULL;              /* one HMM query                                   */
-  P7_SCOREDATA      *scoredata  = NULL;
+  P7_HMMFILE      *hfp        = NULL;              /* open input HMM file                             */
+  P7_HMM          *hmm        = NULL;              /* one HMM query                                   */
+  P7_SCOREDATA    *scoredata  = NULL;
   /*either the two above or ones below will be used*/
   //int              qhformat  = eslSQFILE_UNKNOWN;  /* format of qfile                                  */
   //ESL_SQFILE      *qfp      = NULL;          /* open qfile                                       */
@@ -428,6 +421,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   char   errbuf[eslERRBUFSIZE];
   double window_beta = -1.0 ;
   int window_length  = -1;
+
   if (esl_opt_IsUsed(go, "--w_beta")) { if (  ( window_beta   = esl_opt_GetReal(go, "--w_beta") )  < 0 || window_beta > 1  ) esl_fatal("Invalid window-length beta value\n"); }
   if (esl_opt_IsUsed(go, "--w_length")) { if (( window_length = esl_opt_GetInteger(go, "--w_length")) < 4  ) esl_fatal("Invalid window length value\n"); }
 
@@ -595,7 +589,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 0; i < infocnt; ++i) {
           /* Create processing pipeline and hit list */
           info[i].th  = p7_tophits_Create();
-          //info[i].om  = p7_oprofile_Clone(om);
           info[i].om = p7_oprofile_Copy(om);
           info[i].hmm = p7_hmm_Clone(hmm);
           info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
@@ -841,7 +834,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
         prev_hit_cnt = info->th->N;
 
-        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->hmm, info->bg, dbsq, info->th, info->pli->nseqs);
+        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, info->pli->nseqs);
 
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
@@ -865,7 +858,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
           prev_hit_cnt = info->th->N;
           esl_sq_Copy(dbsq,dbsq_revcmp);
           esl_sq_ReverseComplement(dbsq_revcmp);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->hmm, info->bg, dbsq_revcmp, info->th, info->pli->nseqs);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq_revcmp, info->th, info->pli->nseqs);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (i=prev_hit_cnt; i < info->th->N ; i++) {
@@ -899,6 +892,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
     }
 
   if (dbsq) esl_sq_Destroy(dbsq);
+  if (dbsq_revcmp) esl_sq_Destroy(dbsq_revcmp);
 
   return wstatus;
 
@@ -926,7 +920,7 @@ serial_loop_FM(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *db
     fmb.SA = fmf.SA;
     fmb.T  = fmf.T;
 
-    wstatus = p7_Pipeline_FM(info->pli, info->om, info->scoredata, info->hmm, info->bg,
+    wstatus = p7_Pipeline_FM(info->pli, info->om, info->scoredata, info->bg,
         info->th, info->pli->nseqs,  &fmf, &fmb, info->fm_cfg );
     if (wstatus != eslOK) return wstatus;
 
@@ -1056,7 +1050,7 @@ pipeline_thread(void *arg)
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
 
         prev_hit_cnt = info->th->N;
-        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->hmm, info->bg, dbsq, info->th, block->first_seqidx + i);
+        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, block->first_seqidx + i);
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
 
@@ -1080,7 +1074,7 @@ pipeline_thread(void *arg)
       {
           prev_hit_cnt = info->th->N;
           esl_sq_ReverseComplement(dbsq);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->hmm, info->bg, dbsq, info->th, block->first_seqidx + i);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, block->first_seqidx + i);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (j=prev_hit_cnt; j < info->th->N ; ++j) {

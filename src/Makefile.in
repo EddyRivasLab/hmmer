@@ -60,6 +60,7 @@ PROGS = alimask\
 	jackhmmer\
 	phmmer\
 	nhmmer\
+	nhmmscan\
 	hmmpgmd\
 	hmmc2\
 	makenhmmerdb
@@ -82,6 +83,7 @@ PROGOBJS =\
 	jackhmmer.o\
 	phmmer.o\
 	nhmmer.o\
+	nhmmscan.o\
 	hmmpgmd.o\
 	hmmc2.o\
 	makenhmmerdb.o\

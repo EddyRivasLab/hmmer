@@ -318,7 +318,7 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
  * Throws:    (no abnormal error conditions)
  */
 int
-p7_oprofile_GetMSVEmissionArray(const P7_OPROFILE *om, uint8_t *arr )
+p7_oprofile_GetMSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr )
 {
   int     M   = om->M;    /* length of the query                                          */
   int i, j;
@@ -366,18 +366,53 @@ p7_oprofile_GetMSVEmissionArray(const P7_OPROFILE *om, uint8_t *arr )
  * Throws:    (no abnormal error conditions)
  */
 int
-p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, float *arr )
+p7_oprofile_GetFwdEmissionScoreArray(const P7_OPROFILE *om, float *arr )
 {
   int i, j;
 
   for (i = 1; i <= om->M; i++) {
     for (j=0; j<om->abc->Kp; j++) {
-      arr[i*om->abc->Kp + j] = exp( om->rsc[j][(i) * p7P_NR     + p7P_MSC]);
+      arr[i*om->abc->Kp + j] =  om->rsc[j][(i) * p7P_NR     + p7P_MSC];
     }
   }
 
   return eslOK;
 }
+
+/* Function:  p7_oprofile_GetFwdEmissionArray()
+ * Synopsis:  Retrieve Fwd (float) residue emission values from an optimized
+ *            profile into an array
+ *
+ * Purpose:   Extract an implicitly 2D array of 32-bit float Fwd residue
+ *            emission values from an optimized profile <om>, converting
+ *            back to emission values based on the background. <arr> must
+ *            be allocated by the calling function to be of size
+ *            ( om->abc->Kp * ( om->M  + 1 )), and indexing into the array
+ *            is done as  [om->abc->Kp * i +  c ] for character c at
+ *            position i.
+ *
+ * Args:      <om>   - optimized profile, containing transition information
+ *            <bg>   - background frequencies
+ *            <arr>  - preallocated array into which scores will be placed
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, P7_BG *bg, float *arr )
+{
+  int i, j;
+
+  for (i = 1; i <= om->M; i++) {
+    for (j=0; j<om->abc->Kp; j++) {
+      arr[i*om->abc->Kp + j] =  bg->f[x] * exp( om->rsc[j][(i) * p7P_NR     + p7P_MSC]);
+    }
+  }
+
+  return eslOK;
+}
+
 
 
 /* Function:  p7_oprofile_UpdateFwdEmissionScores()
@@ -410,7 +445,6 @@ p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, P7_HMM *hmm, flo
   return eslOK;
 
 }
-
 
 
 /*------------ end, conversions from P7_OPROFILE ------------------*/

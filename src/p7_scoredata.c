@@ -60,7 +60,7 @@ p7_scoredata_GetMSVScoreArrays(P7_OPROFILE *om, P7_SCOREDATA *data, int do_opt_e
   data->M = om->M;
 
   ESL_ALLOC(data->msv_scores, (om->M + 1) * K * sizeof(uint8_t));
-  p7_oprofile_GetMSVEmissionArray(om, data->msv_scores);
+  p7_oprofile_GetMSVEmissionScoreArray(om, data->msv_scores);
 
   if (do_opt_ext) {
     ESL_ALLOC(max_scores, (om->M + 1) * sizeof(float));
@@ -295,7 +295,7 @@ p7_hmm_ScoreDataComputeRest(P7_OPROFILE *om, P7_SCOREDATA *data )
   float *t_iis;
 
   ESL_ALLOC(data->fwd_scores, sizeof(float) *  om->abc->Kp * (om->M+1));
-  p7_oprofile_GetFwdEmissionArray(om, data->fwd_scores);
+  p7_oprofile_GetFwdEmissionScoreArray(om, data->fwd_scores);
 
   //2D array, holding all the transition scores/costs
   ESL_ALLOC(data->fwd_transitions, sizeof(float*) * p7O_NTRANS);

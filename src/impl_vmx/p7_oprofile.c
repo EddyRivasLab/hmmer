@@ -89,6 +89,7 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   om->rfv[0] = (vector float *)         (((unsigned long int) om->rfv_mem + 15) & (~0xf));
   om->tfv    = (vector float *)         (((unsigned long int) om->tfv_mem + 15) & (~0xf));
 
+
   /* set the rest of the row pointers for match emissions */
   for (x = 1; x < abc->Kp; x++) {
     om->rbv[x] = om->rbv[0] + (x * nqb);
@@ -404,7 +405,7 @@ p7_oprofile_Clone(const P7_OPROFILE *om1)
  *
  */
 int
-p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, P7_HMM *hmm, float *sc_tmp)
+p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr)
 {
   int     M   = om->M;    /* length of the query                                          */
   int     k, q, x, z;
@@ -418,20 +419,20 @@ p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, P7_HMM *hmm, flo
     //First compute the core characters of the alphabet
     for (x = 0; x < K; x++) {
       for (z = 0; z < 4; z++) {
-         sc_tmp[z*Kp + x] =  (k+ z*nq <= M) ? log(hmm->mat[k+z*nq][x] / bg->f[x]) : -eslINFINITY;
-         tmp.x[z] = sc_tmp[z*Kp + x];
+         sc_arr[z*Kp + x] =  (k+ z*nq <= M) ? log(fwd_emissions[Kp * (k+z*nq) + x]/bg->f[x]) : -eslINFINITY;
+         tmp.x[z] = sc_arr[z*Kp + x];
       }
-      om->rfv[x][q] = esl_vmx_expf(tmp.v);
+      om->rfv[x][q] =  esl_vmx_expf(tmp.v);
     }
 
     // Then compute corresponding scores for ambiguity codes.
     for (z = 0; z < 4; z++)
-      esl_abc_FExpectScVec(hmm->abc, sc_tmp+(z*Kp), bg->f);
+      esl_abc_FExpectScVec(om->abc, sc_arr+(z*Kp), bg->f);
 
     //finish off the interleaved values
     for (x = K; x < Kp; x++) {
       for (z = 0; z < 4; z++)
-         tmp.x[z] = sc_tmp[z*Kp + x];  // computed in FExpectScVec above
+        tmp.x[z] = sc_arr[z*Kp + x];  // computed in FExpectScVec call above
       om->rfv[x][q] = esl_vmx_expf(tmp.v);
     }
   }
@@ -1015,7 +1016,7 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
  * Throws:    (no abnormal error conditions)
  */
 int
-p7_oprofile_GetMSVEmissionArray(const P7_OPROFILE *om, uint8_t *arr )
+p7_oprofile_GetMSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr )
 {
   int x, q, z, k;
   union { vector unsigned char v; uint8_t i[16]; } tmp; /* used to align and read simd minivectors           */
@@ -1038,7 +1039,7 @@ p7_oprofile_GetMSVEmissionArray(const P7_OPROFILE *om, uint8_t *arr )
 }
 
 
-/* Function:  p7_oprofile_GetFwdEmissionArray()
+/* Function:  p7_oprofile_GetFwdEmissionScoreArray()
  * Synopsis:  Retrieve Fwd (float) residue emission scores from an optimized
  *            profile into an array
  *
@@ -1061,10 +1062,10 @@ p7_oprofile_GetMSVEmissionArray(const P7_OPROFILE *om, uint8_t *arr )
  * Throws:    (no abnormal error conditions)
  */
 int
-p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, float *arr )
+p7_oprofile_GetFwdEmissionScoreArray(const P7_OPROFILE *om, float *arr )
 {
   int x, q, z, k;
-  union { vector float v; uint8_t f[4]; } tmp; /* used to align and read simd minivectors           */
+  union { vector float v; float f[4]; } tmp; /* used to align and read simd minivectors           */
   int      M   = om->M;    /* length of the query                                          */
   int      K   = om->abc->Kp;
   int      nq  = p7O_NQF(M);     /* segment length; total # of striped vectors needed            */
@@ -1076,6 +1077,52 @@ p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, float *arr )
         for (z = 0; z < 4; z++)
           if (  (K * (k+z*nq) + x) < cell_cnt)
             arr[ K * (k+z*nq) + x ] = tmp.f[z];
+      }
+  }
+
+  return eslOK;
+}
+
+/* Function:  p7_oprofile_GetFwdEmissionArray()
+ * Synopsis:  Retrieve Fwd (float) residue emission values from an optimized
+ *            profile into an array
+ *
+ * Purpose:   Extract an implicitly 2D array of 32-bit float Fwd residue
+ *            emission values from an optimized profile <om>, converting
+ *            back to emission values based on the background. <arr> must
+ *            be allocated by the calling function to be of size
+ *            ( om->abc->Kp * ( om->M  + 1 )), and indexing into the array
+ *            is done as  [om->abc->Kp * i +  c ] for character c at
+ *            position i.
+ *
+ *            In SIMD implementations, the residue scores are striped
+ *            and interleaved, making them somewhat difficult to
+ *            directly access.
+ *
+ * Args:      <om>   - optimized profile, containing transition information
+ *            <bg>   - background frequencies
+ *            <arr>  - preallocated array into which scores will be placed
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, P7_BG *bg, float *arr )
+{
+  int x, q, z, k;
+  union { vector float v; float f[4]; } tmp; /* used to align and read simd minivectors           */
+  int      M   = om->M;    /* length of the query                                          */
+  int      K   = om->abc->Kp;
+  int      nq  = p7O_NQF(M);     /* segment length; total # of striped vectors needed            */
+  int cell_cnt = (om->M + 1) * K;
+
+  for (x = 0; x < K; x++) {
+      for (q = 0, k = 1; q < nq; q++, k++) {
+        tmp.v = om->rfv[x][q];
+        for (z = 0; z < 4; z++)
+          if (  (K * (k+z*nq) + x) < cell_cnt)
+            arr[ K * (k+z*nq) + x ] = tmp.f[z] * bg->f[x];
       }
   }
 
