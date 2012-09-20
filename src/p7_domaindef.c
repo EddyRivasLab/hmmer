@@ -1000,7 +1000,7 @@ main(int argc, char **argv)
 
   p7_Forward (sq->dsq, sq->n, om,      fwd, &overall_sc); 
   p7_Backward(sq->dsq, sq->n, om, fwd, bck, &sc);       
-  p7_domaindef_ByPosteriorHeuristics(sq, om, oxf, oxb, fwd, bck, ddef, NULL, NULL, FALSE, NULL, NULL, NULL);
+  p7_domaindef_ByPosteriorHeuristics(sq, om, oxf, oxb, fwd, bck, ddef, NULL, FALSE, NULL, NULL, NULL);
 
 
   printf("Overall raw likelihood score: %.2f nats\n", overall_sc);
@@ -1088,6 +1088,9 @@ main(int argc, char **argv)
   P7_TRACE       *tr      = NULL;
   P7_GMX         *fwd     = NULL;
   P7_GMX         *bck     = NULL;
+  P7_OMX         *gxf     = NULL; /* parsing matrix, passed to PosteriorHeuristics */
+  P7_OMX         *gxb     = NULL;
+
   P7_DOMAINDEF   *ddef    = NULL;
   int   N           = esl_opt_GetInteger(go, "-N");
   int   L0          = esl_opt_GetInteger(go, "-L");
@@ -1114,6 +1117,8 @@ main(int argc, char **argv)
   ddef = p7_domaindef_Create(r);
   fwd  = p7_gmx_Create(gm->M, L0);
   bck  = p7_gmx_Create(gm->M, L0);
+  gxf  = p7_gmx_Create(gm->M, L0);
+  gxb  = p7_gmx_Create(gm->M, L0);
   tr   = p7_trace_Create();
   p7_FLogsumInit();
 
@@ -1143,7 +1148,8 @@ main(int argc, char **argv)
 	  p7_GForward (sq->dsq, sq->n, gm, fwd, &overall_sc); 
 	  if (! do_baseline) {
 	    p7_GBackward(sq->dsq, sq->n, gm, bck, &sc);       
-	    p7_domaindef_ByPosteriorHeuristics(gm, sq, fwd, bck, ddef, NULL,  NULL, FALSE);
+	    p7_domaindef_ByPosteriorHeuristics(sq, gm, fwd, bck, gxf, gxb, ddef, NULL, FALSE, NULL, NULL, NULL);
+	    //Is this even being compiled by any tests? Looks like there's a fair amount of bit rot here
 	  }
 	}
 
