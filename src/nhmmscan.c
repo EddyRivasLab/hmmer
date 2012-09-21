@@ -21,7 +21,6 @@
 
 #include "hmmer.h"
 
-/* set the max residue count to 1/4 meg when reading a block */
 #ifdef P7_IMPL_DUMMY_INCLUDED
 #include "esl_vectorops.h"
 #define NHMMER_MAX_RESIDUE_COUNT (1024 * 100)
@@ -525,7 +524,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         p7_tophits_Destroy(info[i].th);
       }
 
-
       /* modify e-value to account for number of models */
       for (i = 0; i < info->th->N ; i++)
       {
@@ -536,7 +534,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
       /* it's possible to have duplicates based on how viterbi ranges can overlap */
-      p7_tophits_SortBySeqidx(info->th);
+      p7_tophits_SortByModelnameAndAlipos(info->th);
       p7_tophits_RemoveDuplicates(info->th, info->pli->use_bit_cutoffs);
 
       /* Print results */
@@ -553,11 +551,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       }
 
 
+
+
       p7_tophits_Targets(ofp, info->th, info->pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
       p7_tophits_Domains(ofp, info->th, info->pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
       if (tblfp)     p7_tophits_TabularTargets(tblfp,    qsq->name, qsq->acc, info->th, info->pli, (nquery == 1));
-      if (dfamtblfp) p7_tophits_TabularXfam(dfamtblfp,   qsq->name, qsq->acc, info->th, info->pli);
+      if (dfamtblfp) p7_tophits_TabularXfam(dfamtblfp,   qsq->name, NULL, info->th, info->pli);
       if (inserttblfp) p7_tophits_LongInserts(inserttblfp, qsq->name, qsq->acc, info->th, info->pli, esl_opt_GetInteger(go, "--insertlength") );
       if (aliscoresfp) p7_tophits_AliScores(aliscoresfp, qsq->name, info->th );
 

@@ -275,7 +275,7 @@ hit_sorter_by_sortkey(const void *vh1, const void *vh2)
 }
 
 static int
-hit_sorter_by_seqidx(const void *vh1, const void *vh2)
+hit_sorter_by_seqidx_aliposition(const void *vh1, const void *vh2)
 {
   P7_HIT *h1 = *((P7_HIT **) vh1);  /* don't ask. don't change. Don't Panic. */
   P7_HIT *h2 = *((P7_HIT **) vh2);
@@ -287,7 +287,29 @@ hit_sorter_by_seqidx(const void *vh1, const void *vh2)
   int dir2 = (h2->dcl[0].iali < h2->dcl[0].jali ? 1 : -1);
 
   if (dir1 != dir2) return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
-  else              return  (h1->dcl[0].iali > h2->dcl[0].iali ? 1 : -1 );
+
+  if ( h1->dcl[0].iali == h2->dcl[0].iali)    return  (h1->dcl[0].jali < h2->dcl[0].jali ? 1 : -1 );
+  else                                        return  (h1->dcl[0].iali > h2->dcl[0].iali ? 1 : -1 );
+}
+
+static int
+hit_sorter_by_modelname_aliposition(const void *vh1, const void *vh2)
+{
+  P7_HIT *h1 = *((P7_HIT **) vh1);  /* don't ask. don't change. Don't Panic. */
+  P7_HIT *h2 = *((P7_HIT **) vh2);
+
+  int res = esl_strcmp( h1->name, h2->name);
+
+  if  ( res != 0 ) return  res; /* first key, seq_idx (unique id for sequences), low to high */
+
+  // if on different strand, the positive strand goes first, else use position
+  int dir1 = (h1->dcl[0].iali < h1->dcl[0].jali ? 1 : -1);
+  int dir2 = (h2->dcl[0].iali < h2->dcl[0].jali ? 1 : -1);
+
+  if (dir1 != dir2) return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
+
+  if ( h1->dcl[0].iali == h2->dcl[0].iali)    return  (h1->dcl[0].jali < h2->dcl[0].jali ? 1 : -1 );
+  else                                        return  (h1->dcl[0].iali > h2->dcl[0].iali ? 1 : -1 );
 }
 
 
@@ -314,9 +336,9 @@ p7_tophits_SortBySortkey(P7_TOPHITS *h)
 }
 
 
-/* Function:  p7_tophits_SortBySeqidx()
+/* Function:  p7_tophits_SortBySeqidxAndAlipos()
  * Synopsis:  Sorts a hit list by sequence index and position in that
- *            sequence at which the hit's first domain begins
+ *            sequence at which the hit's first domain begins (used in nhmmer)
  *
  * Purpose:   Sorts a top hit list. After this call,
  *            <h->hit[i]> points to the i'th ranked
@@ -325,18 +347,40 @@ p7_tophits_SortBySortkey(P7_TOPHITS *h)
  * Returns:   <eslOK> on success.
  */
 int
-p7_tophits_SortBySeqidx(P7_TOPHITS *h)
+p7_tophits_SortBySeqidxAndAlipos(P7_TOPHITS *h)
 {
   int i;
 
   if (h->is_sorted_by_seqidx)  return eslOK;
   for (i = 0; i < h->N; i++) h->hit[i] = h->unsrt + i;
-  if (h->N > 1)  qsort(h->hit, h->N, sizeof(P7_HIT *), hit_sorter_by_seqidx);
+  if (h->N > 1)  qsort(h->hit, h->N, sizeof(P7_HIT *), hit_sorter_by_seqidx_aliposition);
   h->is_sorted_by_sortkey = FALSE;
   h->is_sorted_by_seqidx  = TRUE;
   return eslOK;
 }
 
+/* Function:  p7_tophits_SortByModelnameAndAlipos()
+ * Synopsis:  Sorts a hit list by model name and position in the query sequence
+ *            sequence at which the hit's first domain begins (used in nhmmscan)
+ *
+ * Purpose:   Sorts a top hit list. After this call,
+ *            <h->hit[i]> points to the i'th ranked
+ *            <P7_HIT> for all <h->N> hits.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_tophits_SortByModelnameAndAlipos(P7_TOPHITS *h)
+{
+  int i;
+
+  if (h->is_sorted_by_seqidx)  return eslOK;
+  for (i = 0; i < h->N; i++) h->hit[i] = h->unsrt + i;
+  if (h->N > 1)  qsort(h->hit, h->N, sizeof(P7_HIT *), hit_sorter_by_modelname_aliposition);
+  h->is_sorted_by_sortkey = FALSE;
+  h->is_sorted_by_seqidx  = TRUE;
+  return eslOK;
+}
 
 
 /* Function:  p7_tophits_Merge()
@@ -1689,7 +1733,7 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
     if (fprintf(ofp, "# hit scores\n# ----------\n#\n") < 0)
       ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
     if (fprintf(ofp, "# %-*s %-*s %-*s %6s %9s %5s  %s  %s %6s %*s %*s %*s %*s %*s   %s\n",
-    tnamew-1, "target name", taccw, "acc name", qnamew, "query name", "bits", "  e-value", " bias", "hmm-st", "hmm-en", "strand", posw, "ali-st", posw, "ali-en", posw, "env-st", posw, "env-en", posw, "sq-len", "description of target") < 0)
+    tnamew-1, "sequence name", taccw, "acc name", qnamew, "query name", "bits", "  e-value", " bias", "hmm-st", "hmm-en", "strand", posw, "ali-st", posw, "ali-en", posw, "env-st", posw, "env-en", posw, "sq-len", "description of target") < 0)
       ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
     if (fprintf(ofp, "# %-*s %-*s %-*s %6s %9s %5s %s %s %6s %*s %*s %*s %*s %*s   %s\n",
     tnamew-1, "-------------------", taccw, "-------------------", qnamew, "-------------------",  "------",  "---------", "-----", "-------", "-------", "------", posw, "-------", posw, "-------",  posw, "-------", posw, "-------", posw, "-------", "---------------------") < 0)
@@ -1701,7 +1745,7 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
           //d    = th->hit[h]->best_domain;
           if (fprintf(ofp, "%-*s  %-*s %-*s %6.1f %9.2g %5.1f %7d %7d %s %*d %*d %*d %*d %*ld   %s\n",
           tnamew, th->hit[h]->name,
-          taccw,  qacc,
+          taccw, ( pli->mode == p7_SCAN_MODELS ? th->hit[h]->acc : ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-") ),
           qnamew, qname,
           th->hit[h]->score,
           exp(th->hit[h]->lnP),

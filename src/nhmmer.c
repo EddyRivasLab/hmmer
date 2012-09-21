@@ -673,7 +673,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
       /* Print the results.  */
-      p7_tophits_SortBySeqidx(info->th);
+      p7_tophits_SortBySeqidxAndAlipos(info->th);
       assign_Lengths(info->th, id_length_list);
       p7_tophits_RemoveDuplicates(info->th, info->pli->use_bit_cutoffs);
 

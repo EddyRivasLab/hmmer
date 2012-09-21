@@ -1482,7 +1482,8 @@ extern int         p7_tophits_Add(P7_TOPHITS *h,
 				  int domidx, int ndom,
 				  P7_ALIDISPLAY *ali);
 extern int         p7_tophits_SortBySortkey(P7_TOPHITS *h);
-extern int         p7_tophits_SortBySeqidx(P7_TOPHITS *h);
+extern int         p7_tophits_SortBySeqidxAndAlipos(P7_TOPHITS *h);
+extern int         p7_tophits_SortByModelnameAndAlipos(P7_TOPHITS *h);
 
 extern int         p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2);
 extern int         p7_tophits_GetMaxPositionLength(P7_TOPHITS *h);
