@@ -791,7 +791,8 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
       intersect_hmmend   = (th->hit[i]->dcl[0].ad->hmmto   < th->hit[j]->dcl[0].ad->hmmto)   ? th->hit[i]->dcl[0].ad->hmmto : th->hit[j]->dcl[0].ad->hmmto;
       intersect_hmmlen = intersect_hmmend - intersect_hmmstart + 1;
 
-      if ( th->hit[i]->seqidx ==  th->hit[i-1]->seqidx  && //same source sequence
+      if ( esl_strcmp(th->hit[i]->name, th->hit[i-1]->name) == 0  && //same model
+          th->hit[i]->seqidx ==  th->hit[i-1]->seqidx  && //same source sequence
            dir_i == dir_j && // only bother removing if the overlapping hits are on the same strand
            intersect_hmmlen > 0 && //only if they're both hitting similar parts of the model
            (
@@ -1733,7 +1734,7 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
     if (fprintf(ofp, "# hit scores\n# ----------\n#\n") < 0)
       ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
     if (fprintf(ofp, "# %-*s %-*s %-*s %6s %9s %5s  %s  %s %6s %*s %*s %*s %*s %*s   %s\n",
-    tnamew-1, "sequence name", taccw, "acc name", qnamew, "query name", "bits", "  e-value", " bias", "hmm-st", "hmm-en", "strand", posw, "ali-st", posw, "ali-en", posw, "env-st", posw, "env-en", posw, "sq-len", "description of target") < 0)
+    tnamew-1, "target name", taccw, "acc name", qnamew, "query name", "bits", "  e-value", " bias", "hmm-st", "hmm-en", "strand", posw, "ali-st", posw, "ali-en", posw, "env-st", posw, "env-en", posw, "sq-len", "description of target") < 0)
       ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
     if (fprintf(ofp, "# %-*s %-*s %-*s %6s %9s %5s %s %s %6s %*s %*s %*s %*s %*s   %s\n",
     tnamew-1, "-------------------", taccw, "-------------------", qnamew, "-------------------",  "------",  "---------", "-----", "-------", "-------", "------", posw, "-------", posw, "-------",  posw, "-------", posw, "-------", posw, "-------", "---------------------") < 0)
@@ -1745,7 +1746,7 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
           //d    = th->hit[h]->best_domain;
           if (fprintf(ofp, "%-*s  %-*s %-*s %6.1f %9.2g %5.1f %7d %7d %s %*d %*d %*d %*d %*ld   %s\n",
           tnamew, th->hit[h]->name,
-          taccw, ( pli->mode == p7_SCAN_MODELS ? th->hit[h]->acc : ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-") ),
+          taccw, ( pli->mode == p7_SCAN_MODELS ? th->hit[h]->acc : qacc ),
           qnamew, qname,
           th->hit[h]->score,
           exp(th->hit[h]->lnP),

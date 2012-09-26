@@ -310,8 +310,12 @@ p7_emit_SimpleConsensus(const P7_HMM *hmm, ESL_SQ *sq)
 
   for (k = 1; k <= hmm->M; k++)
     {
-      x = esl_vec_FArgMax(hmm->mat[k], hmm->abc->K);
-      if ((status = esl_sq_XAddResidue(sq, x)) != eslOK) return status;
+      if (hmm->mm && hmm->mm[k] == 'm') { //masked position, spit out the degenerate code
+        if ((status = esl_sq_XAddResidue(sq, hmm->abc->Kp-3)) != eslOK) return status;
+      } else {
+        x = esl_vec_FArgMax(hmm->mat[k], hmm->abc->K);
+        if ((status = esl_sq_XAddResidue(sq, x)) != eslOK) return status;
+      }
     }
   if ((status = esl_sq_XAddResidue(sq, eslDSQ_SENTINEL)) != eslOK) return status;
   return eslOK;
@@ -352,7 +356,11 @@ p7_emit_FancyConsensus(const P7_HMM *hmm, float min_lower, float min_upper, ESL_
   if ((status = esl_sq_GrowTo(sq, hmm->M)) != eslOK) return status;
 
   for (k = 1; k <= hmm->M; k++)
-    {
+  {
+
+    if (hmm->mm && hmm->mm[k] == 'm') { //masked position, spit out the degenerate code
+      if ((status = esl_sq_CAddResidue(sq, tolower(esl_abc_CGetUnknown(hmm->abc))) ) != eslOK) return status;
+    } else {
       p = esl_vec_FMax(   hmm->mat[k], hmm->abc->K);
       x = esl_vec_FArgMax(hmm->mat[k], hmm->abc->K);
   
@@ -362,6 +370,7 @@ p7_emit_FancyConsensus(const P7_HMM *hmm, float min_lower, float min_upper, ESL_
 
       if ((status = esl_sq_CAddResidue(sq, c)) != eslOK) return status;
     }
+  }
   if ((status = esl_sq_CAddResidue(sq, '\0')) != eslOK) return status;
   return eslOK;
 }
