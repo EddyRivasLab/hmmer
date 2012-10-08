@@ -15,6 +15,7 @@
 #include "sparse_fwdback.h"
 #include "sparse_decoding.h"
 #include "sparse_masstrace.h"
+#include "sparse_null2.h"
 #include "sparse_envscore.h"
 
 
@@ -48,11 +49,15 @@ main(int argc, char **argv)
   P7_MASSTRACE   *mt      = p7_masstrace_Create(100,100); /* M,L here are hints; it will be grown as needed */
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
+  float          *wrk     = NULL;
+  float           null2[p7_MAXCODE];
   int             format  = eslSQFILE_UNKNOWN;
   float           msvsc, vfsc, fsc, vsc, nullsc;
   float           P;
   int             d;
   int             iae,ibe, kae,kbe;
+  int             i;
+  float           domcorrection;
   float           ndom_exp;
   float           Bprob, Eprob;
   float           envsc_approx, envsc_exact;
@@ -86,6 +91,8 @@ main(int argc, char **argv)
   sxb = p7_sparsemx_Create  (sm);
   sxd = p7_sparsemx_Create  (sm);
   
+  wrk = malloc(sizeof(float) * (gm->M+1));
+
   /* Loop over sequences in db... */
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
@@ -143,13 +150,20 @@ main(int argc, char **argv)
 	  p7_SparseEnvscore(sq->dsq, sq->n, gm, iae, ibe, kae, kbe, sm, sx, &envsc_exact);
 	  p7_sparsemx_Reuse(sx);
 
-	  printf("%-30s %-20s %3d %5d %5d %5d %5d %5d %5d %5d %5d %5.2f %6.4f %6.4f %9.3f %9.3f %9.3f\n",
+	  /* null2 */
+	  p7_sparse_Null2ByExpectation(gm, sxd, iae, ibe, kae, kbe, wrk, null2);
+	  domcorrection = -log(256.);
+	  for (i = iae; i <= ibe; i++) domcorrection += null2[ sq->dsq[i]];
+	  domcorrection = p7_FLogsum(0.0, domcorrection);
+
+	  printf("%-30s %-20s %3d %5d %5d %5d %5d %5d %5d %5d %5d %5.2f %6.4f %6.4f %6.4f %9.3f %9.3f %9.3f %.3f\n",
 		 sq->name, gm->name, d+1,
 		 tr->sqfrom[d], tr->sqto[d], tr->hmmfrom[d], tr->hmmto[d],
 		 iae, ibe, kae, kbe,  
-		 ndom_exp, Bprob, Eprob,
+		 ndom_exp, Bprob, tr->pp[tr->anch[d]], Eprob,
 		 envsc_approx, envsc_exact, 
-		 envsc_approx-envsc_exact);
+		 envsc_approx-envsc_exact,
+		 domcorrection);
 	}
 
     NEXT_SEQ:
@@ -163,6 +177,7 @@ main(int argc, char **argv)
       p7_sparsemx_Reuse(sxd);
     }
 
+  free(wrk);
   esl_sqfile_Close(sqfp);
   p7_hmmfile_Close(hfp);
   esl_sq_Destroy(sq);

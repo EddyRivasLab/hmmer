@@ -104,6 +104,7 @@ HDRS =  hmmer.h \
 	sparse_envscore.h\
 	sparse_fwdback.h\
 	sparse_masstrace.h\
+	sparse_null2.h\
 	sparse_trace.h\
 	sparse_viterbi.h
 
@@ -142,6 +143,7 @@ OBJS =  build.o\
 	sparse_envscore.o\
 	sparse_fwdback.o\
 	sparse_masstrace.o\
+	sparse_null2.o\
 	sparse_trace.o\
 	sparse_viterbi.o\
 	tracealign.o\
