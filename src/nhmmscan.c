@@ -21,12 +21,12 @@
 
 #include "hmmer.h"
 
-#ifdef P7_IMPL_DUMMY_INCLUDED
-#include "esl_vectorops.h"
-#define NHMMER_MAX_RESIDUE_COUNT (1024 * 100)
-#else
-#define NHMMER_MAX_RESIDUE_COUNT (10000000)  /* 10 million bases */
-#endif
+//#ifdef P7_IMPL_DUMMY_INCLUDED
+//#include "esl_vectorops.h"
+//#define NHMMER_MAX_RESIDUE_COUNT (1024 * 100)
+//#else
+//#define NHMMER_MAX_RESIDUE_COUNT (10000000)  /* 10 million bases */
+//#endif
 
 
 
@@ -450,7 +450,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   {
       if (sstatus == eslEMEM)                 p7_Fail("Memory allocation error reading sequence file\n", status);
       if (sstatus == eslEINCONCEIVABLE)       p7_Fail("Unexpected error %d reading sequence file\n", status);
-      if (qsq->L > NHMMER_MAX_RESIDUE_COUNT)  p7_Fail("Input sequence %s in file %s exceeds maximum length of %d bases.\n",  qsq->name, cfg->seqfile, NHMMER_MAX_RESIDUE_COUNT);
+     // if (qsq->L > NHMMER_MAX_RESIDUE_COUNT)  p7_Fail("Input sequence %s in file %s exceeds maximum length of %d bases.\n",  qsq->name, cfg->seqfile, NHMMER_MAX_RESIDUE_COUNT);
 
       nquery++;
       esl_stopwatch_Start(w);	                          
@@ -523,6 +523,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         p7_pipeline_Destroy(info[i].pli);
         p7_tophits_Destroy(info[i].th);
       }
+
 
       /* modify e-value to account for number of models */
       for (i = 0; i < info->th->N ; i++)
@@ -661,9 +662,9 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
       //reverse complement
       if (info->pli->strand != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL )
       {
+
         p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, sq_revcmp, info->th, 0);
         p7_pipeline_Reuse(info->pli); // prepare for next search
-
         seq_len = info->qsq->n;
         for (i = prev_hit_cnt; i < info->th->N ; i++)
         {
@@ -692,7 +693,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
         info->th->unsrt[i].lnP         += log((float)seq_len / (float)om->max_length);
         info->th->unsrt[i].dcl[0].lnP   = info->th->unsrt[i].lnP;
         info->th->unsrt[i].sortkey      = -1.0 * info->th->unsrt[i].lnP;
-        info->th->unsrt[i].dcl[0].ad->L =  info->qsq->n;
+        info->th->unsrt[i].dcl[0].ad->L =  om->M;
       }
 
       prev_hit_cnt = info->th->N;
@@ -852,7 +853,7 @@ pipeline_thread(void *arg)
           info->th->unsrt[j].lnP         += log((float)seq_len / (float)om->max_length);
           info->th->unsrt[j].dcl[0].lnP   = info->th->unsrt[j].lnP;
           info->th->unsrt[j].sortkey      = -1.0 * info->th->unsrt[j].lnP;
-          info->th->unsrt[j].dcl[0].ad->L =  info->qsq->n;
+          info->th->unsrt[j].dcl[0].ad->L = om->M;
         }
 
         prev_hit_cnt = info->th->N;
