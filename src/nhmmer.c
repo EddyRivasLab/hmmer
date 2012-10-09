@@ -134,8 +134,7 @@ static ESL_OPTIONS options[] = {
   { "--w_length",   eslARG_INT,          NULL, NULL, NULL,    NULL,  NULL,           NULL,     "window length - essentially max expected hit length ",                                                12 },
   { "--block_length", eslARG_INT,        NULL, NULL, "n>=50000", NULL, NULL,         NULL,     "length of blocks read from target database (threaded) ",        12 },
   { "--toponly",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,   "--bottomonly",  "only search the top strand",                                    12 },
-  { "--bottomonly",  eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,      "--toponly",  "only search the bottom strand",                                    12 },
-
+  { "--bottomonly",  eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,      "--toponly",  "only search the bottom strand",                                 12 },
 
 
 /* Not used, but retained because esl option-handling code errors if it isn't kept here.  Placed in group 99 so it doesn't print to help*/
@@ -648,13 +647,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           esl_fatal("Unexpected error %d reading sequence file %s", sstatus, dbfp->filename);
       }
 
-
       //need to re-compute e-values before merging (when list will be sorted)
-      if (esl_opt_IsUsed(go, "-Z"))
+      if (esl_opt_IsUsed(go, "-Z")) {
     	  resCnt = 1000000*esl_opt_GetReal(go, "-Z");
-      else
+
+    	  if ( info[0].pli->strand == p7_STRAND_BOTH)
+    	    resCnt *= 2;
+
+      } else {
     	  for (i = 0; i < infocnt; ++i)
     		  resCnt += info[i].pli->nres;
+      }
 
       for (i = 0; i < infocnt; ++i)
           p7_tophits_ComputeNhmmerEvalues(info[i].th, resCnt, info[i].om->max_length);
@@ -1183,7 +1186,6 @@ assign_Lengths(P7_TOPHITS *th, ID_LENGTH_LIST *id_length_list) {
   }
 
   return eslOK;
-
 }
 
 /*****************************************************************
