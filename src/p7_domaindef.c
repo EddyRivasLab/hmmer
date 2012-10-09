@@ -803,7 +803,8 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
   float          null2[p7_MAXCODE];
   int            status;
   float          null3_corr;
-
+  int            local_env_i;
+  int            local_env_j;
 
   // I modify bg and om in-place to avoid having to clone (allocate) a massive
   // number of times when there are many hits
@@ -815,15 +816,12 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
   p7_Forward (sq->dsq + i-1, Ld, om,      ox1, &envsc);
   p7_Backward(sq->dsq + i-1, Ld, om, ox1, ox2, NULL);
 
-
   status = p7_Decoding(om, ox1, ox2, ox2);      /* <ox2> is now overwritten with post probabilities     */
   if (status == eslERANGE) return eslFAIL;      /* rare: numeric overflow; domain is assumed to be repetitive garbage [J3/119-212] */
-
 
   /* Find an optimal accuracy alignment */
   p7_OptimalAccuracy(om, ox2, ox1, &oasc);      /* <ox1> is now overwritten with OA scores              */
   p7_OATrace        (om, ox2, ox1, ddef->tr);   /* <tr>'s seq coords are offset by i-1, rel to orig dsq */
-
 
   /* hack the trace's sq coords to be correct w.r.t. original dsq */
   for (z = 0; z < ddef->tr->N; z++)
@@ -832,12 +830,51 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
   /* get ptr to next empty domain structure in domaindef's results */
   if (ddef->ndom == ddef->nalloc) {
     ESL_REALLOC(ddef->dcl, sizeof(P7_DOMAIN) * (ddef->nalloc*2));
-    ddef->nalloc *= 2;    
+    ddef->nalloc *= 2;
   }
   dom = &(ddef->dcl[ddef->ndom]);
 
   /* store the results in it */
   dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq);
+
+
+  /* For long target DNA, it's common to see a huge envelope (>1Kb longer than alignment), usually
+   * involving simple repeat part of model that attracted similar segments of the repeatedly, to
+   * acquire a large total score. Now that we have alignment boundaries, re-run Fwd/Bkwd to trim away such a long envelope and estimate
+   * the true score of the hit region
+   */
+  if (long_target) {
+    local_env_i = ESL_MAX (i, ddef->dcl[ddef->ndom].ad->sqfrom-100+1);
+    local_env_j = ESL_MIN (j, ddef->dcl[ddef->ndom].ad->sqto+100-1);
+    if (local_env_i != i || local_env_j != j ) {
+      i = local_env_i;
+      j = local_env_j;
+      Ld = j - i + 1;
+
+      p7_Forward (sq->dsq + i-1, Ld, om,      ox1, &envsc);
+      p7_Backward(sq->dsq + i-1, Ld, om, ox1, ox2, NULL);
+
+      status = p7_Decoding(om, ox1, ox2, ox2);      /* <ox2> is now overwritten with post probabilities     */
+      if (status == eslERANGE) return eslFAIL;      /* rare: numeric overflow; domain is assumed to be repetitive garbage [J3/119-212] */
+
+      /* Find an optimal accuracy alignment */
+      p7_OptimalAccuracy(om, ox2, ox1, &oasc);      /* <ox1> is now overwritten with OA scores              */
+      p7_trace_Reuse(ddef->tr);
+      p7_OATrace        (om, ox2, ox1, ddef->tr);   /* <tr>'s seq coords are offset by i-1, rel to orig dsq */
+
+      /* re-hack the trace's sq coords to be correct w.r.t. original dsq */
+       for (z = 0; z < ddef->tr->N; z++)
+         if (ddef->tr->i[z] > 0) ddef->tr->i[z] += i-1;
+
+       /* store the results in it */
+       dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq);
+    }
+  }
+
+
+
+
+
   dom->iali          = dom->ad->sqfrom;
   dom->jali          = dom->ad->sqto;
   dom->ienv          = i;
