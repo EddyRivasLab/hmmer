@@ -649,6 +649,7 @@ AC_SYS_LARGEFILE
 if test -d release-notes; then
   AC_CONFIG_FILES(release-notes/LICENSE.sh)
 fi
+
 AC_CONFIG_FILES([documentation/Makefile])
 AC_CONFIG_FILES([documentation/man/Makefile])
 AC_CONFIG_FILES([documentation/userguide/Makefile])

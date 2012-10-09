@@ -468,6 +468,7 @@ extern void         p7_oprofile_Destroy(P7_OPROFILE *om);
 extern size_t       p7_oprofile_Sizeof(P7_OPROFILE *om);
 extern P7_OPROFILE *p7_oprofile_Copy(P7_OPROFILE *om);
 extern P7_OPROFILE *p7_oprofile_Clone(const P7_OPROFILE *om);
+extern int          p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr);
 
 extern int          p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om);
 extern int          p7_oprofile_ReconfigLength    (P7_OPROFILE *om, int L);
@@ -484,7 +485,9 @@ extern int          p7_profile_SameAsMF(const P7_OPROFILE *om, P7_PROFILE *gm);
 extern int          p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm);
 
 extern int          p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr );
-extern int          p7_oprofile_GetMSVEmissionArray(const P7_OPROFILE *om, uint8_t *arr );
+extern int          p7_oprofile_GetMSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr );
+extern int          p7_oprofile_GetFwdEmissionScoreArray(const P7_OPROFILE *om, float *arr );
+extern int          p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, P7_BG *bg, float *arr );
 
 /* decoding.c */
 extern int p7_Decoding      (const P7_OPROFILE *om, const P7_OMX *oxf,       P7_OMX *oxb, P7_OMX *pp);
@@ -509,7 +512,7 @@ extern void p7_oprofile_DestroyBlock(P7_OM_BLOCK *block);
 
 /* msvfilter.c */
 extern int p7_MSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
-extern int p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist);
+extern int p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_SCOREDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist);
 
 /* null2.c */
 extern int p7_Null2_ByExpectation(const P7_OPROFILE *om, const P7_OMX *pp, float *null2);

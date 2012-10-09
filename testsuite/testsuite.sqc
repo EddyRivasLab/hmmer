@@ -44,7 +44,7 @@
 1 exercise p7_profile         @src/p7_profile_utest@
 1 exercise p7_tophits         @src/p7_tophits_utest@
 1 exercise p7_trace           @src/p7_trace_utest@
-1 exercise p7_msvdata         @src/p7_msvdata_utest@
+1 exercise p7_scoredata         @src/p7_scoredata_utest@
 
 1 exercise decoding           @src/impl/decoding_utest@
 1 exercise fwdback            @src/impl/fwdback_utest@

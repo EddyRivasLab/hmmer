@@ -13,7 +13,8 @@
     { name => "intel-macosx-gcc-debug",      host => "."           },
     { name => "intel-macosx-gcc-dummy",      host => "."           },
     { name => "ppc-aix-xlc",                 host => "cf-ppc2"     },
-    { name => "ppc-macosx",                  host => "10.41.4.30"  },
+    { name => "intel-linux-gcc-ubuntu32",    host => "cf-ubuntu32" },
+#   { name => "ppc-macosx",                  host => "10.41.4.30"  },
     );
 
 $autoconf = "/opt/local/bin/autoconf";

@@ -58,6 +58,7 @@ PROGS = alimask\
 	jackhmmer\
 	phmmer\
 	nhmmer\
+	nhmmscan\
 	hmmpgmd\
 	hmmc2\
 	makenhmmerdb\
@@ -81,6 +82,7 @@ PROGOBJS =\
 	jackhmmer.o\
 	phmmer.o\
 	nhmmer.o\
+	nhmmscan.o\
 	hmmpgmd.o\
 	hmmc2.o\
 	makenhmmerdb.o\
@@ -169,7 +171,7 @@ OBJS =  build.o\
 	p7_tophits.o\
 	p7_trace.o\
 	p7_trace_metrics.o\
-	p7_msvdata.o\
+	p7_scoredata.o\
 	fm_alphabet.o\
 	fm_general.o\
 	fm_msv.o\
@@ -208,7 +210,7 @@ UTESTS =\
 	p7_profile_utest\
 	p7_tophits_utest\
 	p7_trace_utest\
-	p7_msvdata_utest
+	p7_scoredata_utest
 
 ITESTS = \
 	itest_brute

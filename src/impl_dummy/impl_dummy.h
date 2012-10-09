@@ -24,6 +24,7 @@
  *****************************************************************/
 typedef P7_PROFILE P7_OPROFILE;
 
+#define p7O_NTRANS    8    /* 7 core transitions + BMk entry                    */
 enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3, p7O_MD   = 4, p7O_MI   = 5,  p7O_II = 6,  p7O_DD = 7 };
 
 typedef struct {
@@ -115,7 +116,9 @@ extern int          p7_profile_SameAsMF(const P7_OPROFILE *om, P7_PROFILE *gm);
 extern int          p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm);
 
 extern int          p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr );
-extern int          p7_oprofile_GetMSVEmissionArray(const P7_OPROFILE *om, uint8_t *arr );
+extern int          p7_oprofile_GetMSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr );
+extern int          p7_oprofile_GetFwdEmissionScoreArray(const P7_OPROFILE *om, float *arr );
+extern int          p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, P7_BG *bg, float *arr );
 
 /* decoding.c */
 extern int p7_Decoding      (const P7_OPROFILE *om, const P7_OMX *oxf,       P7_OMX *oxb, P7_OMX *pp);
@@ -138,7 +141,7 @@ extern void p7_oprofile_DestroyBlock(P7_OM_BLOCK *block);
 
 /* msvfilter.c */
 extern int p7_MSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
-extern int p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist);
+extern int p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_SCOREDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist);
 
 /* null2.c */
 extern int p7_Null2_ByExpectation(const P7_OPROFILE *om, P7_OMX *pp, float *null2);

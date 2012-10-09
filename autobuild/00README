@@ -1,4 +1,4 @@
-Automated build system for HMMER3
+Automated build system for HMMER3 (i.e., our "nightlies")
 
 The automated build system consists of three levels of files.  A build
 can be done at any of the three levels. Each level increases the

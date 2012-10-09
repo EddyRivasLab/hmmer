@@ -44,7 +44,8 @@ typedef struct {
   P7_TOPHITS       *th;          /* top hit results                         */
   P7_OPROFILE      *om;          /* optimized query profile                 */
   FM_CFG           *fm_cfg;      /* global data for FM-index for fast MSV */
-  P7_MSVDATA       *msvdata;     /* hmm-specific data for FM-index for fast MSV */
+  P7_SCOREDATA     *scoredata;   /* hmm-specific data used by nhmmer */
+  P7_HMM           *hmm;
 } WORKER_INFO;
 
 typedef struct {
@@ -84,6 +85,7 @@ static ESL_OPTIONS options[] = {
   { "--dfamtblout", eslARG_OUTFILE,      NULL, NULL, NULL,    NULL,  NULL,  NULL,              "save table of hits to file, in Dfam format <s>",               2 },
   { "--longinsertout", eslARG_OUTFILE,   NULL, NULL, NULL,    NULL,  NULL,  NULL,              "save table of long inserts to file <s>",                       2 },
   { "--insertlength", eslARG_INT,        "40", NULL, "n>=5",  NULL,  "--longinsertout",  NULL, "min length of insert printed to --longinsertout",              2 },
+  { "--aliscoresout", eslARG_OUTFILE,   NULL, NULL, NULL,    NULL,  NULL,  NULL,               "save of scores for each position in each alignment to <s>",    2 },
 
   { "--acc",        eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "prefer accessions over names in output",                       2 },
   { "--noali",      eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't output alignments, so output is smaller",                2 },
@@ -113,11 +115,6 @@ static ESL_OPTIONS options[] = {
   { "--B1",         eslARG_INT,         "110", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (MSV)",          7 },
   { "--B2",         eslARG_INT,         "240", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Vit)",          7 },
   { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",          7 },
-  /* Control of boundary picking based on aligned posterior probability */
-  { "--show_app",   eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,   "",             "Show aligned-posterior-probability (APP) line in tabular output",     9 },
-  { "--app_hi",     eslARG_REAL,       "0.95", NULL, NULL,    NULL,  NULL,   "",             "Set aligned-posterior-probability 'H' threshold",                     9 },
-  { "--app_med",    eslARG_REAL,       "0.85", NULL, NULL,    NULL,  NULL,   "",             "Set aligned-posterior-probability 'M' threshold (also hq_start/end)", 9 },
-  { "--app_lo",     eslARG_REAL,       "0.75", NULL, NULL,    NULL,  NULL,   "",             "Set aligned-posterior-probability 'L' threshold",                     9 },
 
   /* Control of FM pruning/extension */
   { "--fm_msv_length",   eslARG_INT,          "70", NULL, NULL,    NULL,  NULL, NULL,          "max length used when extending seed for MSV",                8 },
@@ -131,16 +128,13 @@ static ESL_OPTIONS options[] = {
   { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,     "assert target <seqdb> is in format <s>: no autodetection",      12 },
   { "--nonull2",    eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,           NULL,     "turn off biased composition score corrections",                 12 },
   { "--usenull3",   eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,        "--nonull2", "also use null3 for biased composition score corrections",       12 },
-  { "--usenull3w",  eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,        "--nonull2", "also use windowed-null3 for bias score corrections",            12 },
-  { "--null3wlen",  eslARG_INT,          "20", NULL, "n>=10", NULL,  "--usenull3w",  NULL,     "width on either side of position to use for windowed-null3",    12 },
   { "-Z",           eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,           NULL,     "set database size (Megabases) to <x> for E-value calculations", 12 },
   { "--seed",       eslARG_INT,          "42", NULL, "n>=0",  NULL,  NULL,           NULL,     "set RNG seed to <n> (if 0: one-time arbitrary seed)",           12 },
   { "--w_beta",     eslARG_REAL,         NULL, NULL, NULL,    NULL,  NULL,           NULL,     "tail mass at which window length is determined",                12 },
   { "--w_length",   eslARG_INT,          NULL, NULL, NULL,    NULL,  NULL,           NULL,     "window length - essentially max expected hit length ",                                                12 },
   { "--block_length", eslARG_INT,        NULL, NULL, "n>=50000", NULL, NULL,         NULL,     "length of blocks read from target database (threaded) ",        12 },
   { "--toponly",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,   "--bottomonly",  "only search the top strand",                                    12 },
-  { "--bottomonly",  eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,      "--toponly",  "only search the bottom strand",                                    12 },
-
+  { "--bottomonly",  eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,      "--toponly",  "only search the bottom strand",                                 12 },
 
 
 /* Not used, but retained because esl option-handling code errors if it isn't kept here.  Placed in group 99 so it doesn't print to help*/
@@ -229,11 +223,11 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
       if (puts("\nOptions controlling acceleration heuristics:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 7, 2, 100);
 
-      if (puts("\nOptions controlling APP-based trimming thresholds:")       < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 9, 2, 100);
+//      if (puts("\nOptions controlling trimming thresholds:")         < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+//      esl_opt_DisplayHelp(stdout, go, 9, 2, 100);
 
-      if (puts("\nControl of FM pruning and extension:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 8, 2, 100);
+//      if (puts("\nControl of FM pruning and extension:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+//      esl_opt_DisplayHelp(stdout, go, 8, 2, 100);
 
       if (puts("\nOther expert options:")                                    < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 12, 2, 100);
@@ -278,6 +272,7 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--dfamtblout")    && fprintf(ofp, "# hits output in Dfam format:      %s\n",            esl_opt_GetString(go, "--dfamtblout")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--longinsertout") && fprintf(ofp, "# long inserts output:             %s\n",            esl_opt_GetString(go, "--longinsertout")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--insertlength")  && fprintf(ofp, "# long inserts minimum length:     %d\n",            esl_opt_GetInteger(go, "--insertlength")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--aliscoresout")  && fprintf(ofp, "# alignment scores output:         %s\n",            esl_opt_GetString(go, "--longinsertout")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--acc")        && fprintf(ofp, "# prefer accessions over names:    yes\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--noali")      && fprintf(ofp, "# show alignments in output:       no\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -289,12 +284,8 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
 //if (esl_opt_IsUsed(go, "--mxfile")     && fprintf(ofp, "# subst score matrix (file):       %s\n",             esl_opt_GetString (go, "--mxfile"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-E")           && fprintf(ofp, "# sequence reporting threshold:    E-value <= %g\n",  esl_opt_GetReal   (go, "-E"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-T")           && fprintf(ofp, "# sequence reporting threshold:    score >= %g\n",    esl_opt_GetReal   (go, "-T"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--domE")       && fprintf(ofp, "# domain reporting threshold:      E-value <= %g\n",  esl_opt_GetReal   (go, "--domE"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--domT")       && fprintf(ofp, "# domain reporting threshold:      score >= %g\n",    esl_opt_GetReal   (go, "--domT"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--incE")       && fprintf(ofp, "# sequence inclusion threshold:    E-value <= %g\n",  esl_opt_GetReal   (go, "--incE"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--incT")       && fprintf(ofp, "# sequence inclusion threshold:    score >= %g\n",    esl_opt_GetReal   (go, "--incT"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--incdomE")    && fprintf(ofp, "# domain inclusion threshold:      E-value <= %g\n",  esl_opt_GetReal   (go, "--incdomE"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--incdomT")    && fprintf(ofp, "# domain inclusion threshold:      score >= %g\n",    esl_opt_GetReal   (go, "--incdomT"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--cut_ga")     && fprintf(ofp, "# model-specific thresholding:     GA cutoffs\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--cut_nc")     && fprintf(ofp, "# model-specific thresholding:     NC cutoffs\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--cut_tc")     && fprintf(ofp, "# model-specific thresholding:     TC cutoffs\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -308,10 +299,6 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--B2")         && fprintf(ofp, "# biased comp Viterbi window len:  %d\n",             esl_opt_GetInteger(go, "--B2"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--B3")         && fprintf(ofp, "# biased comp Forward window len:  %d\n",             esl_opt_GetInteger(go, "--B3"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
-  if (esl_opt_IsUsed(go, "--show_app")        && fprintf(ofp, "# Show APP line\n")                                                                         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--app_hi")          && fprintf(ofp, "# APP 'H':                      <= %g\n",             esl_opt_GetReal(go, "--app_hi"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--app_med")         && fprintf(ofp, "# APP 'M', (hq start/end base): <= %g\n",             esl_opt_GetReal(go, "--app_med"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--app_lo")          && fprintf(ofp, "# APP 'L':                      <= %g\n",             esl_opt_GetReal(go, "--app_lo"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--fm_msv_length")   && fprintf(ofp, "# seed extension max length:       %d\n",             esl_opt_GetInteger(go, "--fm_msv_length"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--fm_max_depth")    && fprintf(ofp, "# seed length:                     %d\n",             esl_opt_GetInteger(go, "--fm_max_depth"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -320,11 +307,8 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--fm_sc_ratio")     && fprintf(ofp, "# min seed bit ratio:              %.2f\n",           esl_opt_GetReal(go, "--fm_sc_ratio"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--fm_max_scthresh") && fprintf(ofp, "# max bits in seed:                %.2f\n",           esl_opt_GetReal(go, "--fm_max_scthresh"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
-
   if (esl_opt_IsUsed(go, "--nonull2")    && fprintf(ofp, "# null2 bias corrections:          off\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--usenull3")   && fprintf(ofp, "# null3 bias corrections:          on\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--usenull3w")  && fprintf(ofp, "# windowed-null3 bias corrections: width=%d\n",       esl_opt_GetInteger(go, "--null3wlen")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-
 
   if (esl_opt_IsUsed(go, "--toponly")    && fprintf(ofp, "# search only top strand:          on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--bottomonly") && fprintf(ofp, "# search only bottom strand:       on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -388,11 +372,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   FILE            *tblfp        = NULL;            /* output stream for tabular  (--tblout)    */
   FILE            *dfamtblfp    = NULL;            /* output stream for tabular Dfam format (--dfamtblout)    */
   FILE            *inserttblfp  = NULL;            /* output stream for table of long inserts (--longinsertout)    */
+  FILE            *aliscoresfp  = NULL;            /* output stream for alignment scores (--aliscoresout)    */
 
 
-  P7_HMMFILE      *hfp      = NULL;              /* open input HMM file                             */
-  P7_HMM          *hmm      = NULL;              /* one HMM query                                   */
-  P7_MSVDATA      *msvdata  = NULL;
+  P7_HMMFILE      *hfp        = NULL;              /* open input HMM file                             */
+  P7_HMM          *hmm        = NULL;              /* one HMM query                                   */
+  P7_SCOREDATA    *scoredata  = NULL;
   /*either the two above or ones below will be used*/
   //int              qhformat  = eslSQFILE_UNKNOWN;  /* format of qfile                                  */
   //ESL_SQFILE      *qfp      = NULL;          /* open qfile                                       */
@@ -411,7 +396,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              qhstatus  = eslOK;
   int              sstatus  = eslOK;
   int              i;
-
+  double           resCnt = 0;
   /* used to keep track of the lengths of the sequences that are processed */
   ID_LENGTH_LIST  *id_length_list = NULL;
 
@@ -435,6 +420,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   char   errbuf[eslERRBUFSIZE];
   double window_beta = -1.0 ;
   int window_length  = -1;
+
   if (esl_opt_IsUsed(go, "--w_beta")) { if (  ( window_beta   = esl_opt_GetReal(go, "--w_beta") )  < 0 || window_beta > 1  ) esl_fatal("Invalid window-length beta value\n"); }
   if (esl_opt_IsUsed(go, "--w_length")) { if (( window_length = esl_opt_GetInteger(go, "--w_length")) < 4  ) esl_fatal("Invalid window length value\n"); }
 
@@ -494,7 +480,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (esl_opt_IsOn(go, "--tblout"))        { if ((tblfp    = fopen(esl_opt_GetString(go, "--tblout"),    "w")) == NULL)  esl_fatal("Failed to open tabular output file %s for writing\n", esl_opt_GetString(go, "--tblout")); }
   if (esl_opt_IsOn(go, "--dfamtblout"))    { if ((dfamtblfp    = fopen(esl_opt_GetString(go, "--dfamtblout"),"w"))    == NULL)  esl_fatal("Failed to open tabular dfam output file %s for writing\n", esl_opt_GetString(go, "--dfamtblout")); }
   if (esl_opt_IsOn(go, "--longinsertout")) { if ((inserttblfp  = fopen(esl_opt_GetString(go, "--longinsertout"),"w")) == NULL)  esl_fatal("Failed to open long-insert output file %s for writing\n", esl_opt_GetString(go, "--longinsertout")); }
-
+  if (esl_opt_IsOn(go, "--aliscoresout"))  { if ((aliscoresfp  = fopen(esl_opt_GetString(go, "--aliscoresout"),"w")) == NULL)  esl_fatal("Failed to open alignment scores output file %s for writing\n", esl_opt_GetString(go, "--aliscoresout")); }
 
 
 #ifdef HMMER_THREADS
@@ -540,9 +526,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].bg     = p7_bg_Create(abc);
 
           info[i].bg->use_null3  = esl_opt_IsUsed(go, "--usenull3");
-          info[i].bg->use_null3w = esl_opt_IsUsed(go, "--usenull3w");
-          info[i].bg->null3_wlen = esl_opt_GetInteger(go, "--null3wlen");
-
           info[i].fm_cfg = NULL;
 #ifdef HMMER_THREADS
           info[i].queue = queue;
@@ -573,6 +556,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       else if (hmm->max_length == -1 ) p7_Builder_MaxLength(hmm, p7_DEFAULT_WINDOW_BETA);
 
       nquery++;
+      resCnt = 0;
       esl_stopwatch_Start(w);
 
       /* seqfile may need to be rewound (multiquery mode) */
@@ -599,12 +583,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_profile_ConfigLocal(gm, hmm, info->bg, 100); /* 100 is a dummy length for now; and MSVFilter requires local mode */
       p7_oprofile_Convert(gm, om);                    /* <om> is now p7_LOCAL, multihit */
 
-      msvdata = p7_hmm_MSVDataCreate(om, FALSE);
+      scoredata = p7_hmm_ScoreDataCreate(om, FALSE);
 
       for (i = 0; i < infocnt; ++i) {
           /* Create processing pipeline and hit list */
           info[i].th  = p7_tophits_Create();
-          info[i].om  = p7_oprofile_Clone(om);
+          info[i].om = p7_oprofile_Copy(om);
+          info[i].hmm = p7_hmm_Clone(hmm);
           info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
           p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 
@@ -621,17 +606,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           else
             info[i].pli->block_length = NHMMER_MAX_RESIDUE_COUNT;
 
-
-          info[i].pli->show_app      = esl_opt_IsUsed(go, "--show_app");
-          info[i].pli->app_hi        = esl_opt_GetReal (go, "--app_hi");
-          info[i].pli->app_med       = esl_opt_GetReal (go, "--app_med");
-          info[i].pli->app_lo        = esl_opt_GetReal (go, "--app_lo");
-          if (info[i].pli->app_med < info[i].pli->app_lo)  info[i].pli->app_med = info[i].pli->app_lo;
-          if (info[i].pli->app_hi  < info[i].pli->app_med) info[i].pli->app_hi = info[i].pli->app_med;
-
-
           info[i].fm_cfg = fm_cfg;
-          info[i].msvdata = p7_hmm_MSVDataClone(msvdata, om->abc->Kp);
+          info[i].scoredata = p7_hmm_ScoreDataClone(scoredata, om->abc->Kp);
 
 #ifdef HMMER_THREADS
           if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
@@ -671,14 +647,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           esl_fatal("Unexpected error %d reading sequence file %s", sstatus, dbfp->filename);
       }
 
-
       //need to re-compute e-values before merging (when list will be sorted)
-      double resCnt = 0;
-      if (esl_opt_IsUsed(go, "-Z"))
+      if (esl_opt_IsUsed(go, "-Z")) {
     	  resCnt = 1000000*esl_opt_GetReal(go, "-Z");
-      else
+
+    	  if ( info[0].pli->strand == p7_STRAND_BOTH)
+    	    resCnt *= 2;
+
+      } else {
     	  for (i = 0; i < infocnt; ++i)
     		  resCnt += info[i].pli->nres;
+      }
 
       for (i = 0; i < infocnt; ++i)
           p7_tophits_ComputeNhmmerEvalues(info[i].th, resCnt, info[i].om->max_length);
@@ -697,9 +676,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
       /* Print the results.  */
-      p7_tophits_SortBySeqidx(info->th);
+      p7_tophits_SortBySeqidxAndAlipos(info->th);
       assign_Lengths(info->th, id_length_list);
-      p7_tophits_RemoveDuplicates(info->th);
+      p7_tophits_RemoveDuplicates(info->th, info->pli->use_bit_cutoffs);
+
 
       p7_tophits_SortBySortkey(info->th);
       p7_tophits_Threshold(info->th, info->pli);
@@ -709,7 +689,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       //tally up total number of hits and target coverage
       info->pli->n_output = info->pli->pos_output = 0;
       for (i = 0; i < info->th->N; i++) {
-          if (info->th->hit[i]->dcl[0].is_reported || info->th->hit[i]->dcl[0].is_included) {
+          if ( (info->th->hit[i]->flags & p7_IS_REPORTED) || info->th->hit[i]->flags & p7_IS_INCLUDED) {
               info->pli->n_output++;
               info->pli->pos_output += abs(info->th->hit[i]->dcl[0].jali - info->th->hit[i]->dcl[0].iali) + 1;
           }
@@ -722,6 +702,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (tblfp)     p7_tophits_TabularTargets(tblfp,    hmm->name, hmm->acc, info->th, info->pli, (nquery == 1));
       if (dfamtblfp) p7_tophits_TabularXfam(dfamtblfp,   hmm->name, hmm->acc, info->th, info->pli);
       if (inserttblfp) p7_tophits_LongInserts(inserttblfp, hmm->name, hmm->acc, info->th, info->pli, esl_opt_GetInteger(go, "--insertlength") );
+      if (aliscoresfp) p7_tophits_AliScores(aliscoresfp, hmm->name, info->th );
 
 
       esl_stopwatch_Stop(w);
@@ -743,14 +724,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           esl_msa_Destroy(msa);
       }
 
-      for (i = 0; i < infocnt; ++i)
-              p7_hmm_MSVDataDestroy(info[i].msvdata);
+      for (i = 0; i < infocnt; ++i) {
+        p7_hmm_ScoreDataDestroy(info[i].scoredata);
+        //TODO: these cause errors, not sure why
+        //p7_oprofile_Destroy(info[i].om);
+        //p7_pipeline_Destroy(info[i].pli);
+        //p7_tophits_Destroy(info[i].th);
+      }
 
-      p7_hmm_MSVDataDestroy(msvdata);
-
+      p7_hmm_ScoreDataDestroy(scoredata);
       p7_pipeline_Destroy(info->pli);
       p7_tophits_Destroy(info->th);
-      p7_oprofile_Destroy(info->om);
       p7_oprofile_Destroy(om);
       p7_profile_Destroy(gm);
       p7_hmm_Destroy(hmm);
@@ -804,12 +788,22 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (ofp != stdout) fclose(ofp);
   if (afp)           fclose(afp);
   if (tblfp)         fclose(tblfp);
-
+  if (dfamtblfp)     fclose(dfamtblfp);
+  if (inserttblfp)   fclose(inserttblfp);
+  if (aliscoresfp)   fclose(aliscoresfp);
 
   return eslOK;
 
  ERROR:
-  return eslFAIL;
+
+   if (ofp != stdout) fclose(ofp);
+   if (afp)           fclose(afp);
+   if (tblfp)         fclose(tblfp);
+   if (dfamtblfp)     fclose(dfamtblfp);
+   if (inserttblfp)   fclose(inserttblfp);
+   if (aliscoresfp)   fclose(aliscoresfp);
+
+   return eslFAIL;
 }
 
 //TODO: MPI code needs to be added here
@@ -843,7 +837,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
         prev_hit_cnt = info->th->N;
 
-        p7_Pipeline_LongTarget(info->pli, info->om, info->msvdata, info->bg, dbsq, info->th, info->pli->nseqs);
+        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, info->pli->nseqs);
 
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
@@ -854,8 +848,6 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
             dcl->jenv += dbsq->start - 1;
             dcl->iali += dbsq->start - 1;
             dcl->jali += dbsq->start - 1;
-            dcl->ihq  += dbsq->start - 1;
-            dcl->jhq  += dbsq->start - 1;
             dcl->ad->sqfrom += dbsq->start - 1;
             dcl->ad->sqto += dbsq->start - 1;
         }
@@ -869,7 +861,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
           prev_hit_cnt = info->th->N;
           esl_sq_Copy(dbsq,dbsq_revcmp);
           esl_sq_ReverseComplement(dbsq_revcmp);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->msvdata, info->bg, dbsq_revcmp, info->th, info->pli->nseqs);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq_revcmp, info->th, info->pli->nseqs);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (i=prev_hit_cnt; i < info->th->N ; i++) {
@@ -879,8 +871,6 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
               dcl->jenv = dbsq_revcmp->start - dcl->jenv + 1;
               dcl->iali = dbsq_revcmp->start - dcl->iali + 1;
               dcl->jali = dbsq_revcmp->start - dcl->jali + 1;
-              dcl->ihq  = dbsq_revcmp->start - dcl->ihq + 1;
-              dcl->jhq  = dbsq_revcmp->start - dcl->jhq + 1;
               dcl->ad->sqfrom = dbsq_revcmp->start - dcl->ad->sqfrom + 1;
               dcl->ad->sqto = dbsq_revcmp->start - dcl->ad->sqto + 1;
 
@@ -905,6 +895,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
     }
 
   if (dbsq) esl_sq_Destroy(dbsq);
+  if (dbsq_revcmp) esl_sq_Destroy(dbsq_revcmp);
 
   return wstatus;
 
@@ -932,8 +923,8 @@ serial_loop_FM(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *db
     fmb.SA = fmf.SA;
     fmb.T  = fmf.T;
 
-    wstatus = p7_Pipeline_FM(info->pli, info->om, info->bg, info->th, info->pli->nseqs,
-        &fmf, &fmb, info->fm_cfg, info->msvdata);
+    wstatus = p7_Pipeline_FM(info->pli, info->om, info->scoredata, info->bg,
+        info->th, info->pli->nseqs,  &fmf, &fmb, info->fm_cfg );
     if (wstatus != eslOK) return wstatus;
 
   }
@@ -1062,7 +1053,7 @@ pipeline_thread(void *arg)
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
 
         prev_hit_cnt = info->th->N;
-        p7_Pipeline_LongTarget(info->pli, info->om, info->msvdata, info->bg, dbsq, info->th, block->first_seqidx + i);
+        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, block->first_seqidx + i);
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
 
@@ -1073,8 +1064,6 @@ pipeline_thread(void *arg)
             dcl->jenv += dbsq->start - 1;
             dcl->iali += dbsq->start - 1;
             dcl->jali += dbsq->start - 1;
-            dcl->ihq  += dbsq->start - 1;
-            dcl->jhq  += dbsq->start - 1;
             dcl->ad->sqfrom += dbsq->start - 1;
             dcl->ad->sqto += dbsq->start - 1;
         }
@@ -1088,7 +1077,7 @@ pipeline_thread(void *arg)
       {
           prev_hit_cnt = info->th->N;
           esl_sq_ReverseComplement(dbsq);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->msvdata, info->bg, dbsq, info->th, block->first_seqidx + i);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, block->first_seqidx + i);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (j=prev_hit_cnt; j < info->th->N ; ++j) {
@@ -1098,8 +1087,6 @@ pipeline_thread(void *arg)
               dcl->jenv = dbsq->start - dcl->jenv + 1;
               dcl->iali = dbsq->start - dcl->iali + 1;
               dcl->jali = dbsq->start - dcl->jali + 1;
-              dcl->ihq  = dbsq->start - dcl->ihq + 1;
-              dcl->jhq  = dbsq->start - dcl->jhq + 1;
               dcl->ad->sqfrom = dbsq->start - dcl->ad->sqfrom + 1;
               dcl->ad->sqto = dbsq->start - dcl->ad->sqto + 1;
 
@@ -1199,7 +1186,6 @@ assign_Lengths(P7_TOPHITS *th, ID_LENGTH_LIST *id_length_list) {
   }
 
   return eslOK;
-
 }
 
 /*****************************************************************

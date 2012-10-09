@@ -244,7 +244,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 static int
-p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_MSVDATA *msvdata,
+p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_SCOREDATA *msvdata,
                      uint8_t sc_thresh, __m128i sc_threshv, P7_HMM_WINDOWLIST *windowlist)
 {
 
@@ -347,7 +347,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
 	    target_end = target_start = i;
 	    sc = rem_sc;
 	    while (rem_sc > om->base_b - om->tjb_b - om->tbm_b) {
-	      rem_sc -= om->bias_b -  msvdata->scores[start*om->abc->Kp + dsq[target_start]];
+	      rem_sc -= om->bias_b -  msvdata->msv_scores[start*om->abc->Kp + dsq[target_start]];
 	      --start;
 	      --target_start;
 	    }
@@ -362,7 +362,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
 	    max_sc = sc;
 	    pos_since_max = 0;
 	    while (k<om->M && n<=L) {
-	      sc += om->bias_b -  msvdata->scores[start*om->abc->Kp + dsq[n]];
+	      sc += om->bias_b -  msvdata->msv_scores[k*om->abc->Kp + dsq[n]];
 
 	      if (sc >= max_sc) {
 	        max_sc = sc;
@@ -436,7 +436,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_MSVDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
+p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_SCOREDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
 #ifdef ALLOW_MSV
   register __m128i mpv;        /* previous row values                                       */

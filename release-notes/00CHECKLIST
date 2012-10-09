@@ -308,6 +308,14 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
 
 
 * clean up files that don't belong in the distro
+
+  NOTE from EPN, Tue Jul 10 08:56:32 2012: 
+  Be careful here to either (a) not delete documentation/userguide and
+  easel/documentation or (b) fix a problem with 'make clean' and 'make
+  distclean' that will result in a distro if you do delete them. As of 
+  HMMER trunk rev 4159 and Easel trunk rev 780 you should be fine with
+  doing (a). See those svn logs for details.
+
    make distclean
    cp   release-notes/RELEASE-${HMMER_VERSION} RELEASE-NOTES
    rm -rf bugs

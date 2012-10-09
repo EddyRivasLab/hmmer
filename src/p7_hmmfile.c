@@ -595,10 +595,15 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
   if (hmm->eff_nseq >= 0)      { if (           fprintf  (fp, "EFFN  %f\n", hmm->eff_nseq)     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
   if (hmm->flags & p7H_CHKSUM) { if (           fprintf  (fp, "CKSUM %u\n", hmm->checksum)     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); } /* unsigned 32-bit */
 
-  if ((hmm->flags & p7H_GA)  && fprintf(fp, "GA    %.2f %.2f\n", hmm->cutoff[p7_GA1], hmm->cutoff[p7_GA2]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
-  if ((hmm->flags & p7H_TC)  && fprintf(fp, "TC    %.2f %.2f\n", hmm->cutoff[p7_TC1], hmm->cutoff[p7_TC2]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
-  if ((hmm->flags & p7H_NC)  && fprintf(fp, "NC    %.2f %.2f\n", hmm->cutoff[p7_NC1], hmm->cutoff[p7_NC2]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
-
+  if (hmm->abc->type == eslRNA || hmm->abc->type == eslDNA ) {
+    if ((hmm->flags & p7H_GA)  && fprintf(fp, "GA    %.2f\n", hmm->cutoff[p7_GA1]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+    if ((hmm->flags & p7H_TC)  && fprintf(fp, "TC    %.2f\n", hmm->cutoff[p7_TC1]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+    if ((hmm->flags & p7H_NC)  && fprintf(fp, "NC    %.2f\n", hmm->cutoff[p7_NC1]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  } else {
+    if ((hmm->flags & p7H_GA)  && fprintf(fp, "GA    %.2f %.2f\n", hmm->cutoff[p7_GA1], hmm->cutoff[p7_GA2]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+    if ((hmm->flags & p7H_TC)  && fprintf(fp, "TC    %.2f %.2f\n", hmm->cutoff[p7_TC1], hmm->cutoff[p7_TC2]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+    if ((hmm->flags & p7H_NC)  && fprintf(fp, "NC    %.2f %.2f\n", hmm->cutoff[p7_NC1], hmm->cutoff[p7_NC2]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+  }
   if (hmm->flags & p7H_STATS) {
     if (format == p7_HMMFILE_3a)  {        /* reverse compatibility */
       if (fprintf(fp, "STATS LOCAL     VLAMBDA %f\n", hmm->evparam[p7_MLAMBDA]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
@@ -1471,27 +1476,39 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       }
 
       else if (strcmp(tag, "GA") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on GA line");
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on GA line");
-  hmm->cutoff[p7_GA1] = atof(tok1);
-  hmm->cutoff[p7_GA2] = atof(tok2);
-  hmm->flags         |= p7H_GA;
+        if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on GA line");
+        hmm->cutoff[p7_GA1] = atof(tok1);
+        if ( (abc->type == eslDNA || abc->type == eslRNA) ) { //if DNA, there's no need for a 2nd value (domain GA)
+          hmm->cutoff[p7_GA2] = hmm->cutoff[p7_GA1];
+        } else {
+          if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on GA line");
+          hmm->cutoff[p7_GA2] = atof(tok2);
+        }
+        hmm->flags         |= p7H_GA;
       }
 
       else if (strcmp(tag, "TC") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on TC line");
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on TC line");
-    hmm->cutoff[p7_TC1] = atof(tok1);
-    hmm->cutoff[p7_TC2] = atof(tok2);
-    hmm->flags         |= p7H_TC;
+        if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on TC line");
+        hmm->cutoff[p7_TC1] = atof(tok1);
+        if ( (abc->type == eslDNA || abc->type == eslRNA) ) { //if DNA, there's no need for a 2nd value (domain GA)
+          hmm->cutoff[p7_TC2] = hmm->cutoff[p7_TC1];
+        } else {
+          if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on TC line");
+          hmm->cutoff[p7_TC2] = atof(tok2);
+        }
+        hmm->flags         |= p7H_TC;
       }
 
       else if (strcmp(tag, "NC") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on NC line");
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on NC line");
-    hmm->cutoff[p7_NC1] = atof(tok1);
-    hmm->cutoff[p7_NC2] = atof(tok2);
-    hmm->flags         |= p7H_NC;
+        if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on NC line");
+        hmm->cutoff[p7_NC1] = atof(tok1);
+        if ( (abc->type == eslDNA || abc->type == eslRNA) ) { //if DNA, there's no need for a 2nd value (domain GA)
+          hmm->cutoff[p7_NC2] = hmm->cutoff[p7_NC1];
+        } else {
+          if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok2, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on NC line");
+          hmm->cutoff[p7_NC2] = atof(tok2);
+        }
+        hmm->flags         |= p7H_NC;
       }
 
       else if (strcmp(tag, "HMM") == 0) 
