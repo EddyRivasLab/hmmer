@@ -440,12 +440,15 @@ p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emiss
   int     Kp  = om->abc->Kp;
   union   { __m128 v; float x[4]; } tmp; /* used to align and load simd minivectors               */
 
+
   for (k = 1, q = 0; q < nq; q++, k++) {
 
     //First compute the core characters of the alphabet
     for (x = 0; x < K; x++) {
       for (z = 0; z < 4; z++) {
-        sc_arr[z*Kp + x] =  (k+ z*nq <= M) ? log(fwd_emissions[Kp * (k+z*nq) + x]/bg->f[x]) : -eslINFINITY;
+        if (k+ z*nq <= M)  sc_arr[z*Kp + x] =  (om->mm && om->mm[(k+z*nq)]=='m') ? 0 : log(fwd_emissions[Kp * (k+z*nq) + x]/bg->f[x]);
+        else               sc_arr[z*Kp + x] =  -eslINFINITY;
+
         tmp.x[z] = sc_arr[z*Kp + x];
       }
       om->rfv[x][q] = esl_sse_expf(tmp.v);

@@ -1071,7 +1071,6 @@ typedef struct p7_builder_s {
 
   /* Choice of prior                                                                               */
   P7_PRIOR            *prior;	         /* choice of prior when parameterizing from counts        */
-  int                  do_uniform_insert;  /* default is FALSE  */
   int                  max_insert_len;
 
   /* Optional: information used for parameterizing single sequence queries                         */

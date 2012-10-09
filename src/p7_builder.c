@@ -91,7 +91,6 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
       seed = esl_opt_GetInteger(go, "--seed");
     }
 
-  bld->do_uniform_insert = FALSE; // default
   bld->max_insert_len = 0;
 
   /* The default RE target is alphabet dependent. */
@@ -359,7 +358,6 @@ p7_builder_Destroy(P7_BUILDER *bld)
 static int    validate_msa         (P7_BUILDER *bld, ESL_MSA *msa);
 static int    relative_weights     (P7_BUILDER *bld, ESL_MSA *msa);
 static int    build_model          (P7_BUILDER *bld, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr);
-static int    homogonize_inserts   (P7_HMM *hmm);
 static int    effective_seqnumber  (P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm, const P7_BG *bg);
 static int    parameterize         (P7_BUILDER *bld, P7_HMM *hmm);
 static int    annotate             (P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm);
@@ -407,7 +405,7 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
 	   P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om,
 	   ESL_MSA **opt_postmsa)
 {
-  int i;
+  int i,j;
   uint32_t    checksum = 0;	/* checksum calculated for the input MSA. hmmalign --mapali verifies against this. */
   P7_HMM     *hmm      = NULL;
   P7_TRACE  **tr       = NULL;
@@ -419,8 +417,6 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
   if ((status =  esl_msa_MarkFragments(msa, bld->fragthresh))           != eslOK) goto ERROR;
   if ((status =  build_model          (bld, msa, &hmm, tr_ptr))         != eslOK) goto ERROR;
 
-  if (bld->do_uniform_insert)
-    if ((status =  homogonize_inserts (hmm))                            != eslOK) goto ERROR;
 
   //Ensures that the weighted-average I->I count <=  bld->max_insert_len
   if (bld->max_insert_len>0)
@@ -431,6 +427,13 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
   if ((status =  annotate             (bld, msa, hmm))                  != eslOK) goto ERROR;
   if ((status =  calibrate            (bld, hmm, bg, opt_gm, opt_om))   != eslOK) goto ERROR;
   if ((status =  make_post_msa        (bld, msa, hmm, tr, opt_postmsa)) != eslOK) goto ERROR;
+
+  //force masked positions to background  (it'll be close already, so no relevant impact on weighting)
+  if (hmm->mm != NULL)
+    for (i=1; i<hmm->M; i++ )
+      if (hmm->mm[i] == 'm')
+        for (j=0; j<hmm->abc->K; j++)
+          hmm->mat[i][j] = bg->f[j];
 
   if ( bld->abc->type == eslDNA ||  bld->abc->type == eslRNA ) {
 	  if (bld->w_len > 0)           hmm->max_length = bld->w_len;
@@ -827,54 +830,6 @@ build_model(P7_BUILDER *bld, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
   return status;
 }
 
-/* homogonize_inserts()
- *
- * <hmm> comes in with weighted observed counts. It goes out with
- * the observed counts for transitions p7H_II and p7H_MI distributed
- * equally among all positions.
- */
-static int
-homogonize_inserts(P7_HMM *hmm)
-{
-  int i;
-  float tii = 0.0;
-  float tmi = 0.0;
-  float dmi;
-  float tm_md;
-
-  /* Get total counts for M->I and I->I transitions
-   * Ignore position M, as its insert state isn't reached.
-   */
-  for (i=1; i<hmm->M; i++ ) {
-    tii += hmm->t[i][p7H_II];
-    tmi += hmm->t[i][p7H_MI];
-  }
-
-
-  //these is the avg counts per position
-  tii /= (hmm->M-1);
-  tmi /= (hmm->M-1);
-
-  //assign those avg counts per position
-  for (i=1; i<hmm->M; i++ ) {
-
-    hmm->t[i][p7H_II]  = tii;
-    hmm->t[i][p7H_IM]  = tmi; //(I->M == M->I by design).
-
-    dmi = tmi - hmm->t[i][p7H_MI];  //change
-    hmm->t[i][p7H_MI]  = tmi;
-
-    /* the change to M->I counts should be offset by
-     * changes to the M->M or M->D counts
-     */
-    tm_md = hmm->t[i][p7H_MM] + hmm->t[i][p7H_MD];
-    hmm->t[i][p7H_MM] -= (tm_md == 0 ? 0 : (dmi * hmm->t[i][p7H_MM]/tm_md)) ;
-    hmm->t[i][p7H_MD] -= (tm_md == 0 ? 0 : (dmi * hmm->t[i][p7H_MD]/tm_md)) ;
-
-  }
-
-  return eslOK;
-}
 
 
 /* set_effective_seqnumber()

@@ -432,8 +432,13 @@ p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, P7_HMM *hmm, flo
 
   for (i = 1; i <= om->M; i++) {
 
-    for (j=0; j<K; j++)
-      sc_tmp[j] = log(hmm->mat[i][j] / bg->f[j]);
+    for (j=0; j<K; j++) {
+      if (om->mm && om->mm[i] == 'm')
+        sc_tmp[j] = 0;
+      else
+        sc_tmp[j] = log(hmm->mat[i][j] / bg->f[j]);
+    }
+
 
     esl_abc_FExpectScVec(hmm->abc, sc_tmp, bg->f);
 
