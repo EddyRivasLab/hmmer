@@ -833,10 +833,10 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
     ddef->nalloc *= 2;
   }
   dom = &(ddef->dcl[ddef->ndom]);
+  dom->scores_per_pos = NULL;
 
   /* store the results in it */
   dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq);
-
 
   /* For long target DNA, it's common to see a huge envelope (>1Kb longer than alignment), usually
    * involving simple repeat part of model that attracted similar segments of the repeatedly, to
@@ -866,13 +866,11 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
        for (z = 0; z < ddef->tr->N; z++)
          if (ddef->tr->i[z] > 0) ddef->tr->i[z] += i-1;
 
-       /* store the results in it */
+       /* store the results in it, destroying the alidisplay object */
+       p7_alidisplay_Destroy(dom->ad);
        dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq);
     }
   }
-
-
-
 
 
   dom->iali          = dom->ad->sqfrom;
