@@ -45,7 +45,6 @@ typedef struct {
   P7_OPROFILE      *om;          /* optimized query profile                 */
   FM_CFG           *fm_cfg;      /* global data for FM-index for fast MSV */
   P7_SCOREDATA     *scoredata;   /* hmm-specific data used by nhmmer */
-  P7_HMM           *hmm;
 } WORKER_INFO;
 
 typedef struct {
@@ -589,7 +588,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           /* Create processing pipeline and hit list */
           info[i].th  = p7_tophits_Create();
           info[i].om = p7_oprofile_Copy(om);
-          info[i].hmm = p7_hmm_Clone(hmm);
           info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
           p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 
@@ -680,10 +678,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       assign_Lengths(info->th, id_length_list);
       p7_tophits_RemoveDuplicates(info->th, info->pli->use_bit_cutoffs);
 
-
       p7_tophits_SortBySortkey(info->th);
       p7_tophits_Threshold(info->th, info->pli);
-
 
 
       //tally up total number of hits and target coverage
@@ -724,17 +720,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           esl_msa_Destroy(msa);
       }
 
-      for (i = 0; i < infocnt; ++i) {
+      for (i = 0; i < infocnt; ++i)
         p7_hmm_ScoreDataDestroy(info[i].scoredata);
-        //TODO: these cause errors, not sure why
-        //p7_oprofile_Destroy(info[i].om);
-        //p7_pipeline_Destroy(info[i].pli);
-        //p7_tophits_Destroy(info[i].th);
-      }
 
       p7_hmm_ScoreDataDestroy(scoredata);
       p7_pipeline_Destroy(info->pli);
       p7_tophits_Destroy(info->th);
+      p7_oprofile_Destroy(info->om);
       p7_oprofile_Destroy(om);
       p7_profile_Destroy(gm);
       p7_hmm_Destroy(hmm);

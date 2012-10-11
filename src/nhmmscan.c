@@ -858,7 +858,7 @@ pipeline_thread(void *arg)
 
         prev_hit_cnt = info->th->N;
         p7_hmm_ScoreDataDestroy(scoredata);
-
+        p7_oprofile_Destroy(om);
         block->list[i] = NULL;
       }
 
