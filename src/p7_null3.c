@@ -84,7 +84,7 @@ p7_null3_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, P7_TRACE *tr, int st
     /* skip the parts of the trace that precede the first match state */
     tr_pos = 2;
     i = start;
-    while (tr->st[tr_pos] != p7T_M) {
+    while (tr->st[tr_pos] != p7T_MG && tr->st[tr_pos] != p7T_ML) {
       if (tr->st[tr_pos] == p7T_N)
         i += dir;
       tr_pos++;
@@ -92,11 +92,11 @@ p7_null3_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, P7_TRACE *tr, int st
 
     /* tally frequencies from characters hitting match state*/
     while (tr->st[tr_pos] != p7T_E) {
-      if (tr->st[tr_pos] == p7T_M) {
+      if (tr->st[tr_pos] == p7T_MG || tr->st[tr_pos] == p7T_ML) {
         if(esl_abc_XIsGap(abc, dsq[i])) esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "in p7_null3_score(), res %d is a gap!%s\n", "");
         esl_abc_FCount(abc, freq, dsq[i], 1.);
       }
-      if (tr->st[tr_pos] != p7T_D )
+      if (tr->st[tr_pos] != p7T_DG && tr->st[tr_pos] != p7T_DL )
         i += dir;
       tr_pos++;
     }

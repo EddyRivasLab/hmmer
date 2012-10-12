@@ -208,30 +208,35 @@ p7_gmx_Destroy(P7_GMX *gx)
 /* Function:  p7_gmx_Compare()
  * Synopsis:  Compare two DP matrices for equality within given tolerance.
  *
- * Purpose:   Compare all the values in DP matrices <gx1> and <gx2> using
- *            <esl_FCompare()> and relative epsilon <tolerance>. If any
- *            value pairs differ by more than the acceptable <tolerance>
- *            return <eslFAIL>.  If all value pairs are identical within
- *            tolerance, return <eslOK>. 
+ * Purpose:   Compare all the values in DP matrices <gx1> and <gx2>
+ *            using absolute epsilon <tolerance>, using
+ *            <esl_FCompareAbs()>. Return <eslOK> if all cell comparisons
+ *            succeed; <eslFAIL> if any fail.
+ *            
+ *            Absolute difference comparison is preferred. Numerical
+ *            error accumulation in DP scales more with the number of
+ *            terms, rather than the magnitide of values. DP cells
+ *            with values very close to zero (and hence very small
+ *            absolute differences) can reasonably have large relative
+ *            differences.
  */
 int
 p7_gmx_Compare(P7_GMX *gx1, P7_GMX *gx2, float tolerance)
 {
-  int i,k,x;
-  if (gx1->M != gx2->M) return eslFAIL;
-  if (gx1->L != gx2->L) return eslFAIL;
+  int   i,k,x;
+  int   killmenow = TRUE;	/* Setting <killmenow> during debugging helps find where a comparison is failing */
+
+  if (gx1->M != gx2->M) { if (killmenow) abort(); return eslFAIL; }
+  if (gx1->L != gx2->L) { if (killmenow) abort(); return eslFAIL; }
   
   for (i = 0; i <= gx1->L; i++)
-  {
-      for (k = 1; k <= gx1->M; k++) /* k=0 is a boundary; doesn't need to be checked */
-      {
-		  if (esl_FCompare(gx1->dp[i][k * p7G_NSCELLS + p7G_M],  gx2->dp[i][k * p7G_NSCELLS + p7G_M], tolerance) != eslOK) return eslFAIL;
-		  if (esl_FCompare(gx1->dp[i][k * p7G_NSCELLS + p7G_I],  gx2->dp[i][k * p7G_NSCELLS + p7G_I], tolerance) != eslOK) return eslFAIL;
-		  if (esl_FCompare(gx1->dp[i][k * p7G_NSCELLS + p7G_D],  gx2->dp[i][k * p7G_NSCELLS + p7G_D], tolerance) != eslOK) return eslFAIL;
-      }
+    {
+      for (k = 1; k <= gx1->M; k++)       /* k=0 is a boundary; doesn't need to be checked */
+	for (x = 0; x < p7G_NSCELLS; x++) /* x={p7G_M, p7G_I, p7G_D} */
+	  if ( esl_FCompareAbs(gx1->dp[i][k * p7G_NSCELLS + x], gx2->dp[i][k * p7G_NSCELLS + x], tolerance) == eslFAIL) { if (killmenow) abort(); else return eslFAIL; }
       for (x = 0; x < p7G_NXCELLS; x++)
-	if (esl_FCompare(gx1->xmx[i * p7G_NXCELLS + x], gx2->xmx[i * p7G_NXCELLS + x], tolerance) != eslOK) return eslFAIL;
-  }
+	if ( esl_FCompareAbs(gx1->xmx[i * p7G_NXCELLS + x], gx2->xmx[i * p7G_NXCELLS + x], tolerance) == eslFAIL) { if (killmenow) abort(); else return eslFAIL; }
+    }
   return eslOK;	
 }
 
@@ -326,6 +331,65 @@ p7_gmx_DumpWindow(FILE *ofp, P7_GMX *gx, int istart, int iend, int kstart, int k
       fprintf(ofp, "\n\n");
   }
   return eslOK;
+}
+
+/* Function:  p7_gmx_SetPP()
+ * Synopsis:  Set posterior probs of an arbitrary trace.
+ *
+ * Purpose:   Set the posterior probability fields of an arbitrary
+ *            trace <tr>, by accessing posterior residue probabilities
+ *            in decoding matrix <pp>. 
+ *            
+ *            In general, <pp> was created by <p7_GDecoding()> 
+ *            or converted from the optimized matrix created by
+ *            <p7_Decoding()>.
+ *
+ *            Because we're using <P7_GMX>, a deprecated local-only
+ *            matrix, the trace may only contain local paths: 
+ *            no G, MG, DG, or IG states.
+ *            
+ *            This is classed as a debugging function, because in
+ *            general traces with posterior probabilities are created
+ *            directly during gamma centroid alignment tracebacks.
+ *            This function allows us to add PP annotation to any
+ *            trace, including suboptimal samples or Viterbi
+ *            aligments.
+ * 
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ *            <eslEINVAL> on internal corruptions.
+ */
+int
+p7_gmx_SetPP(P7_TRACE *tr, const P7_GMX *pp)
+{
+  float **dp  = pp->dp;		/* so {MDI}MX() macros work */
+  float  *xmx = pp->xmx;	/* so XMX() macro works     */
+  int z;
+  int status;
+
+  if (tr->pp == NULL) ESL_ALLOC(tr->pp, sizeof(float) * tr->nalloc);
+
+  for (z = 0; z < tr->N; z++)
+    {
+      if (tr->i[z] > 0)		/* an emitting state? */
+	{
+	  switch (tr->st[z]) {
+	  case p7T_ML:  tr->pp[z] = MMX(tr->i[z], tr->k[z]); break;
+	  case p7T_IL:  tr->pp[z] = IMX(tr->i[z], tr->k[z]); break;
+	  case p7T_N:   tr->pp[z] = XMX(tr->i[z], p7G_N);    break;
+	  case p7T_C:   tr->pp[z] = XMX(tr->i[z], p7G_C);    break;
+	  case p7T_J:   tr->pp[z] = XMX(tr->i[z], p7G_J);    break;
+	  default:      ESL_EXCEPTION(eslEINVAL, "no such emitting state");
+	  }
+	}
+      else
+	tr->pp[z] = 0.0;
+    }
+  return eslOK;
+       
+ ERROR:
+  return status;
 }
 
 
@@ -469,10 +533,10 @@ main(int argc, char **argv)
 
   p7_FLogsumInit();
 
-  if (p7_hmm_Sample(r, M, abc, &hmm)                != eslOK) esl_fatal(msg);
-  if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal(msg);
-  if (p7_bg_SetLength(bg, L)                        != eslOK) esl_fatal(msg);
-  if (p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL) != eslOK) esl_fatal(msg);
+  if (p7_hmm_Sample(r, M, abc, &hmm)            != eslOK) esl_fatal(msg);
+  if ((gm = p7_profile_Create(hmm->M, abc))     == NULL)  esl_fatal(msg);
+  if (p7_bg_SetLength(bg, L)                    != eslOK) esl_fatal(msg);
+  if (p7_profile_ConfigUnilocal(gm, hmm, bg, L) != eslOK) esl_fatal(msg);
 
   utest_GrowTo();
   utest_Compare(r, gm, bg, L, tol);

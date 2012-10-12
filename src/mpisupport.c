@@ -1542,7 +1542,7 @@ main(int argc, char **argv)
       while (p7_hmmfile_Read(hfp, &abc, &hmm)     == eslOK) 
 	{
 	  gm = p7_profile_Create(hmm->M, abc);	  
-	  p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
+	  p7_profile_ConfigLocal(gm, hmm, bg, 400);
 	  if (!esl_opt_GetBoolean(go, "-b"))
 	    p7_profile_MPISend(gm, 1, 0, MPI_COMM_WORLD, &buf, &nbuf); /* 1 = dest; 0 = tag */
 
@@ -1649,7 +1649,7 @@ utest_ProfileSendRecv(int my_rank, int nproc)
   p7_hmm_Sample(r, M, abc, &hmm); /* master and worker's sampled profiles are identical */
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, L);
   p7_bg_SetLength  (bg, L);
 
   if (my_rank == 0)

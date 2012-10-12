@@ -31,6 +31,7 @@
 #define DMX(i,k)      (dp[(i)][(k) * p7G_NSCELLS + p7G_D])
 #define XMX(i,s)      (xmx[(i) * p7G_NXCELLS + (s)])
 #define TSCDELTA(s,k) ( (tsc[(k) * p7P_NTRANS + (s)] == -eslINFINITY) ? FLT_MIN : 1.0)
+/* note: TSCDELTA is inefficient, deprecated; see P7_DELTAT for better alternative */
 
 /* The TSCDELTA is used to make impossible paths impossible in the
  * optimal accuracy decoding algorithm; see Kall et al (2005). What we
@@ -100,7 +101,7 @@ p7_GOptimalAccuracy(const P7_PROFILE *gm, const P7_GMX *pp, P7_GMX *gx, float *r
 	  MMX(i,k)     = ESL_MAX(ESL_MAX(TSCDELTA(p7P_MM, k-1) * (MMX(i-1,k-1)  + pp->dp[i][k*p7G_NSCELLS + p7G_M]),
 					 TSCDELTA(p7P_IM, k-1) * (IMX(i-1,k-1)  + pp->dp[i][k*p7G_NSCELLS + p7G_M])),
 				 ESL_MAX(TSCDELTA(p7P_DM, k-1) * (DMX(i-1,k-1)  + pp->dp[i][k*p7G_NSCELLS + p7G_M]),
-					 TSCDELTA(p7P_BM, k-1) * (XMX(i-1,p7G_B)+ pp->dp[i][k*p7G_NSCELLS + p7G_M])));
+					 TSCDELTA(p7P_LM, k-1) * (XMX(i-1,p7G_B)+ pp->dp[i][k*p7G_NSCELLS + p7G_M])));
 
 	  XMX(i,p7G_E) = ESL_MAX(XMX(i,p7G_E), 
 				 esc * MMX(i,k));
@@ -116,7 +117,7 @@ p7_GOptimalAccuracy(const P7_PROFILE *gm, const P7_GMX *pp, P7_GMX *gx, float *r
       MMX(i,M)     = ESL_MAX(ESL_MAX(TSCDELTA(p7P_MM, M-1) * (MMX(i-1,M-1)  + pp->dp[i][M*p7G_NSCELLS + p7G_M]),
 				     TSCDELTA(p7P_IM, M-1) * (IMX(i-1,M-1)  + pp->dp[i][M*p7G_NSCELLS + p7G_M])),
 			     ESL_MAX(TSCDELTA(p7P_DM, M-1) * (DMX(i-1,M-1)  + pp->dp[i][M*p7G_NSCELLS + p7G_M]),
-				     TSCDELTA(p7P_BM, M-1) * (XMX(i-1,p7G_B)+ pp->dp[i][M*p7G_NSCELLS + p7G_M])));
+				     TSCDELTA(p7P_LM, M-1) * (XMX(i-1,p7G_B)+ pp->dp[i][M*p7G_NSCELLS + p7G_M])));
 
       DMX(i,M)     = ESL_MAX(TSCDELTA(p7P_MD, M-1) * MMX(i,M-1),
 			     TSCDELTA(p7P_DD, M-1) * DMX(i,M-1));
@@ -215,14 +216,15 @@ p7_GOATrace(const P7_PROFILE *gm, const P7_GMX *pp, const P7_GMX *gx, P7_TRACE *
   while (sprv != p7T_S) 
     {
       switch (sprv) {
-      case p7T_M: scur = select_m(gm,     gx, i, k);  k--; i--; break;
-      case p7T_D: scur = select_d(gm,     gx, i, k);  k--;      break;
-      case p7T_I: scur = select_i(gm,     gx, i, k);       i--; break;
-      case p7T_N: scur = select_n(i);                           break;
-      case p7T_C: scur = select_c(gm, pp, gx, i);               break;
-      case p7T_J: scur = select_j(gm, pp, gx, i);               break;
-      case p7T_E: scur = select_e(gm,     gx, i, &k);           break;
-      case p7T_B: scur = select_b(gm,     gx, i);               break;
+      case p7T_ML: scur = select_m(gm,     gx, i, k);  k--; i--; break;
+      case p7T_DL: scur = select_d(gm,     gx, i, k);  k--;      break;
+      case p7T_IL: scur = select_i(gm,     gx, i, k);       i--; break;
+      case p7T_N:  scur = select_n(i);                           break;
+      case p7T_C:  scur = select_c(gm, pp, gx, i);               break;
+      case p7T_J:  scur = select_j(gm, pp, gx, i);               break;
+      case p7T_E:  scur = select_e(gm,     gx, i, &k);           break;
+      case p7T_L:  scur = p7T_B;                                 break;
+      case p7T_B:  scur = select_b(gm,     gx, i);               break;
       default: ESL_EXCEPTION(eslEINVAL, "bogus state in traceback");
       }
       if (scur == -1) ESL_EXCEPTION(eslEINVAL, "OA traceback choice failed");
@@ -246,12 +248,12 @@ get_postprob(const P7_GMX *pp, int scur, int sprv, int k, int i)
   float  *xmx = pp->xmx;
 
   switch (scur) {
-  case p7T_M: return MMX(i,k);
-  case p7T_I: return IMX(i,k);
-  case p7T_N: if (sprv == scur) return XMX(i,p7G_N);
-  case p7T_C: if (sprv == scur) return XMX(i,p7G_C); 
-  case p7T_J: if (sprv == scur) return XMX(i,p7G_J); 
-  default:    return 0.0;
+  case p7T_ML: return MMX(i,k);
+  case p7T_IL: return IMX(i,k);
+  case p7T_N:  if (sprv == scur) return XMX(i,p7G_N);
+  case p7T_C:  if (sprv == scur) return XMX(i,p7G_C); 
+  case p7T_J:  if (sprv == scur) return XMX(i,p7G_J); 
+  default:     return 0.0;
   }
 }
 
@@ -262,12 +264,12 @@ select_m(const P7_PROFILE *gm, const P7_GMX *gx, int i, int k)
   float       *xmx  = gx->xmx;	/* so XMX() macro works           */
   float const *tsc  = gm->tsc;	/* so TSCDELTA() macro works */
   float path[4];
-  int   state[4] = { p7T_M, p7T_I, p7T_D, p7T_B };
+  int   state[4] = { p7T_ML, p7T_IL, p7T_DL, p7T_L };
 
   path[0] = TSCDELTA(p7P_MM, k-1) * MMX(i-1,k-1);
   path[1] = TSCDELTA(p7P_IM, k-1) * IMX(i-1,k-1);
   path[2] = TSCDELTA(p7P_DM, k-1) * DMX(i-1,k-1);
-  path[3] = TSCDELTA(p7P_BM, k-1) * XMX(i-1,p7G_B);
+  path[3] = TSCDELTA(p7P_LM, k-1) * XMX(i-1,p7G_B);
   return state[esl_vec_FArgMax(path, 4)];
 }
 
@@ -280,7 +282,7 @@ select_d(const P7_PROFILE *gm, const P7_GMX *gx, int i, int k)
 
   path[0] = TSCDELTA(p7P_MD, k-1) * MMX(i, k-1);
   path[1] = TSCDELTA(p7P_DD, k-1) * DMX(i, k-1);
-  return ((path[0] >= path[1]) ? p7T_M : p7T_D);
+  return ((path[0] >= path[1]) ? p7T_ML : p7T_DL);
 }
 	
 static inline int
@@ -292,7 +294,7 @@ select_i(const P7_PROFILE *gm, const P7_GMX *gx, int i, int k)
 
   path[0] = TSCDELTA(p7P_MI, k) * MMX(i-1,k);
   path[1] = TSCDELTA(p7P_II, k) * IMX(i-1,k);
-  return ((path[0] >= path[1]) ? p7T_M : p7T_I);
+  return ((path[0] >= path[1]) ? p7T_ML : p7T_IL);
 }
 
 static inline int
@@ -336,16 +338,10 @@ select_e(const P7_PROFILE *gm, const P7_GMX *gx, int i, int *ret_k)
   int     kmax = -1;
   int     k;
 
-  if (! p7_profile_IsLocal(gm)) /* glocal/global is easier */
-    {
-      *ret_k = gm->M;
-      return ((MMX(i,gm->M) >= DMX(i,gm->M)) ? p7T_M : p7T_D);
-    }
-
   for (k = 1; k <= gm->M; k++)
     {
-      if (MMX(i,k) >= max) { max = MMX(i,k); smax = p7T_M; kmax = k; }
-      if (DMX(i,k) >  max) { max = DMX(i,k); smax = p7T_D; kmax = k; }
+      if (MMX(i,k) >= max) { max = MMX(i,k); smax = p7T_ML; kmax = k; }
+      if (DMX(i,k) >  max) { max = DMX(i,k); smax = p7T_DL; kmax = k; }
     }
   *ret_k = kmax;
   return smax;
@@ -434,8 +430,10 @@ main(int argc, char **argv)
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
+  p7_profile_ConfigUnilocal(gm, hmm, bg, L);
+
   gx1 = p7_gmx_Create(gm->M, L);
   gx2 = p7_gmx_Create(gm->M, L);
   tr  = p7_trace_CreateWithPP();
@@ -568,8 +566,9 @@ main(int argc, char **argv)
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, sq->n);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL); /* multihit local: H3 default */
+  p7_profile_ConfigLocal(gm, hmm, bg, sq->n); /* multihit local */
   
   /* Allocations */
   gx1 = p7_gmx_Create(gm->M, sq->n);
@@ -587,7 +586,7 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "-d")) p7_gmx_Dump(stdout, gx2, p7_DEFAULT);
   if (esl_opt_GetBoolean(go, "-m")) p7_gmx_Dump(stdout, gx1, p7_DEFAULT);
 
-  p7_trace_Dump(stdout, tr, gm, sq->dsq);
+  p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
   if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) p7_Die("trace fails validation:\n%s\n", errbuf);
 
   printf("fwd = %.4f nats\n", fsc);
@@ -598,8 +597,8 @@ main(int argc, char **argv)
 
   p7_GViterbi(sq->dsq, sq->n, gm, gx1, &vsc);
   p7_GTrace  (sq->dsq, sq->n, gm, gx1, tr);
-  p7_trace_SetPP(tr, gx2);
-  p7_trace_Dump(stdout, tr, gm, sq->dsq);
+  p7_gmx_SetPP(tr, gx2);
+  p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 
   printf("vit = %.4f nats\n", vsc);
   printf("acc = %.4f\n", p7_trace_GetExpectedAccuracy(tr));

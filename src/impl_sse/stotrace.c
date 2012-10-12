@@ -88,14 +88,15 @@ p7_StochasticTrace(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPRO
   while (s0 != p7T_S)
     {
       switch (s0) {
-      case p7T_M: s1 = select_m(rng, om, ox, i, k);  k--; i--; break;
-      case p7T_D: s1 = select_d(rng, om, ox, i, k);  k--;      break;
-      case p7T_I: s1 = select_i(rng, om, ox, i, k);       i--; break;
-      case p7T_N: s1 = select_n(i);                            break;
-      case p7T_C: s1 = select_c(rng, om, ox, i);               break;
-      case p7T_J: s1 = select_j(rng, om, ox, i);               break;
-      case p7T_E: s1 = select_e(rng, om, ox, i, &k);           break;
-      case p7T_B: s1 = select_b(rng, om, ox, i);               break;
+      case p7T_ML: s1 = select_m(rng, om, ox, i, k);  k--; i--; break;
+      case p7T_DL: s1 = select_d(rng, om, ox, i, k);  k--;      break;
+      case p7T_IL: s1 = select_i(rng, om, ox, i, k);       i--; break;
+      case p7T_N:  s1 = select_n(i);                            break;
+      case p7T_C:  s1 = select_c(rng, om, ox, i);               break;
+      case p7T_J:  s1 = select_j(rng, om, ox, i);               break;
+      case p7T_E:  s1 = select_e(rng, om, ox, i, &k);           break;
+      case p7T_L:  s1 = p7T_B;                                  break;
+      case p7T_B:  s1 = select_b(rng, om, ox, i);               break;
       default: ESL_EXCEPTION(eslEINVAL, "bogus state in traceback");
       }
       if (s1 == -1) ESL_EXCEPTION(eslEINVAL, "Stochastic traceback choice failed");
@@ -135,7 +136,7 @@ select_m(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   __m128  mpv, dpv, ipv;
   union { __m128 v; float p[4]; } u;
   float   path[4];
-  int     state[4] = { p7T_B, p7T_M, p7T_I, p7T_D };
+  int     state[4] = { p7T_L, p7T_ML, p7T_IL, p7T_DL };
   
   if (q > 0) {
     mpv = ox->dpf[i-1][(q-1)*3 + p7X_M];
@@ -167,7 +168,7 @@ select_d(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   __m128  tmdv, tddv;
   union { __m128 v; float p[4]; } u;
   float   path[2];
-  int     state[2] = { p7T_M, p7T_D };
+  int     state[2] = { p7T_ML, p7T_DL };
 
   if (q > 0) {
     mpv  = ox->dpf[i][(q-1)*3 + p7X_M];
@@ -199,7 +200,7 @@ select_i(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   __m128 *tp   = om->tfv + 7*q + p7O_MI;
   union { __m128 v; float p[4]; } u;
   float   path[2];
-  int     state[2] = { p7T_M, p7T_I };
+  int     state[2] = { p7T_ML, p7T_IL };
 
   u.v = _mm_mul_ps(mpv, *tp); tp++;  path[0] = u.p[r];
   u.v = _mm_mul_ps(ipv, *tp);        path[1] = u.p[r];
@@ -265,13 +266,13 @@ select_e(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
 	u.v = _mm_mul_ps(ox->dpf[i][q*3 + p7X_M], xEv);
 	for (r = 0; r < 4; r++) {
 	  sum += u.p[r];
-	  if (roll < sum) { *ret_k = r*Q + q + 1; return p7T_M;}
+	  if (roll < sum) { *ret_k = r*Q + q + 1; return p7T_ML;}
 	}
 
 	u.v = _mm_mul_ps(ox->dpf[i][q*3 + p7X_D], xEv);
 	for (r = 0; r < 4; r++) {
 	  sum += u.p[r];
-	  if (roll < sum) { *ret_k = r*Q + q + 1; return p7T_D;}
+	  if (roll < sum) { *ret_k = r*Q + q + 1; return p7T_DL;}
 	}
       }
     ESL_DASSERT1((sum > 0.99));
@@ -352,7 +353,7 @@ main(int argc, char **argv)
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
 
   bg = p7_bg_Create(abc);                p7_bg_SetLength(bg, L);
-  gm = p7_profile_Create(hmm->M, abc);   p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
+  gm = p7_profile_Create(hmm->M, abc);   p7_profile_ConfigUnilocal(gm, hmm, bg, L);
   om = p7_oprofile_Create(gm->M, abc);   p7_oprofile_Convert(gm, om);
 
   fwd = p7_omx_Create(gm->M, L, L);
@@ -439,8 +440,8 @@ utest_stotrace(ESL_GETOPTS *go, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_PROFI
 
       maxsc = ESL_MAX(sc, maxsc);
       if (sc > vsc + 0.001){	/* need a little tolerance of floating point math here  */
-	//p7_trace_Dump(stdout, vtr, gm, dsq);
-	//p7_trace_Dump(stdout, tr,  gm, dsq);
+	//p7_trace_DumpAnnotated(stdout, vtr, gm, dsq);
+	//p7_trace_DumpAnnotated(stdout, tr,  gm, dsq);
 	esl_fatal("sampled trace has score > optimal Viterbi path; not possible (%f > %f)", sc, vsc);
       }
       p7_trace_Reuse(tr);
@@ -497,13 +498,13 @@ main(int argc, char **argv)
   int             L      = 10;
   int             ntrace = 1000;
 
-  if ((abc = esl_alphabet_Create(eslAMINO))         == NULL)  esl_fatal("failed to create alphabet");
-  if (p7_hmm_Sample(r, M, abc, &hmm)                != eslOK) esl_fatal("failed to sample an HMM");
-  if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
-  if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal("failed to create profile");
-  if (p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL)    != eslOK) esl_fatal("failed to config profile");
-  if ((om = p7_oprofile_Create(gm->M, abc))         == NULL)  esl_fatal("failed to create optimized profile");
-  if (p7_oprofile_Convert(gm, om)                   != eslOK) esl_fatal("failed to convert profile");
+  if ((abc = esl_alphabet_Create(eslAMINO))     == NULL)  esl_fatal("failed to create alphabet");
+  if (p7_hmm_Sample(r, M, abc, &hmm)            != eslOK) esl_fatal("failed to sample an HMM");
+  if ((bg = p7_bg_Create(abc))                  == NULL)  esl_fatal("failed to create null model");
+  if ((gm = p7_profile_Create(hmm->M, abc))     == NULL)  esl_fatal("failed to create profile");
+  if (p7_profile_ConfigLocal(gm, hmm, bg, L)    != eslOK) esl_fatal("failed to config profile");
+  if ((om = p7_oprofile_Create(gm->M, abc))     == NULL)  esl_fatal("failed to create optimized profile");
+  if (p7_oprofile_Convert(gm, om)               != eslOK) esl_fatal("failed to convert profile");
 
   /* Test with randomly generated (iid) sequence */
   if ((dsq = malloc(sizeof(ESL_DSQ) *(L+2)))  == NULL)  esl_fatal("malloc failed");
@@ -603,7 +604,7 @@ main(int argc, char **argv)
 
   /* create default null model, then create and optimize profile */
   bg = p7_bg_Create(abc);                p7_bg_SetLength(bg, sq->n);
-  gm = p7_profile_Create(hmm->M, abc);   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  gm = p7_profile_Create(hmm->M, abc);   p7_profile_ConfigLocal(gm, hmm, bg, sq->n);
   om = p7_oprofile_Create(gm->M, abc);   p7_oprofile_Convert(gm, om);
 
   if (esl_opt_GetBoolean(go, "-p")) p7_oprofile_Dump(stdout, om);  
@@ -621,7 +622,7 @@ main(int argc, char **argv)
       p7_StochasticTrace(rng, sq->dsq, sq->n, om, fwd, tr);
       p7_trace_Score(tr, sq->dsq, gm, &tsc);
   
-      if (esl_opt_GetBoolean(go, "-t") == TRUE) p7_trace_Dump(stdout, tr, gm, sq->dsq);
+      if (esl_opt_GetBoolean(go, "-t") == TRUE) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
       if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK)  p7_Die("trace %d fails validation:\n%s\n", i, errbuf);
 
       printf("Sampled trace:  %.4f nats\n", tsc);

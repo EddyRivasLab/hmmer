@@ -289,7 +289,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   ox->xmx[p7X_SCALE] = 1.0;
   ox->totscale       = 0.0;
 
-#if p7_DEBUGGING
+#ifdef p7_DEBUGGING
   if (ox->debugging) p7_omx_DumpFBRow(ox, TRUE, 0, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=0, width=8, precision=5*/
 #endif
 
@@ -446,7 +446,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
       ox->xmx[i*p7X_NXCELLS+p7X_B] = xB;
       ox->xmx[i*p7X_NXCELLS+p7X_C] = xC;
 
-#if p7_DEBUGGING
+#ifdef p7_DEBUGGING
       if (ox->debugging) p7_omx_DumpFBRow(ox, TRUE, i, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=8, precision=5*/
 #endif
     } /* end loop over sequence residues 1..L */
@@ -558,7 +558,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   bck->xmx[L*p7X_NXCELLS+p7X_B] = xB;
   bck->xmx[L*p7X_NXCELLS+p7X_C] = xC;
 
-#if p7_DEBUGGING
+#ifdef p7_DEBUGGING
   if (bck->debugging) p7_omx_DumpFBRow(bck, TRUE, L, 9, 4, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=L, width=9, precision=4*/
 #endif
 
@@ -689,7 +689,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
       bck->xmx[i*p7X_NXCELLS+p7X_B] = xB;
       bck->xmx[i*p7X_NXCELLS+p7X_C] = xC;
 
-#if p7_DEBUGGING
+#ifdef p7_DEBUGGING
       if (bck->debugging) p7_omx_DumpFBRow(bck, TRUE, i, 9, 4, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=9, precision=4*/
 #endif
     } /* thus ends the loop over sequence positions i */
@@ -719,7 +719,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   bck->xmx[p7X_E]     = 0.0;
   bck->xmx[p7X_SCALE] = 1.0;
 
-#if p7_DEBUGGING
+#ifdef p7_DEBUGGING
   dpc = bck->dpf[0];
   for (q = 0; q < Q; q++) /* Not strictly necessary, but if someone's looking at DP matrices, this is nice to do: */
     MMO(dpc,q) = DMO(dpc,q) = IMO(dpc,q) = zerov;
@@ -803,6 +803,7 @@ main(int argc, char **argv)
   float           fsc2, bsc2;
   double          base_time, bench_time, Mcs;
 
+  impl_Init();
   p7_FLogsumInit();
 
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
@@ -810,13 +811,15 @@ main(int argc, char **argv)
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  p7_profile_Config(gm, hmm, bg);
+
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
 
-  if (esl_opt_GetBoolean(go, "-x") && p7_FLogsumError(-0.4, -0.5) > 0.0001)
+  if (esl_opt_GetBoolean(go, "-x") && ! p7_logsum_IsSlowExact())
     p7_Fail("-x here requires p7_Logsum() recompiled in slow exact mode");
 
   if (esl_opt_GetBoolean(go, "-P")) {
@@ -911,8 +914,7 @@ utest_fwdback(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int
   float generic_sc;
 
   p7_FLogsumInit();
-  if (p7_FLogsumError(-0.4, -0.5) > 0.0001) tolerance = 1.0;  /* weaker test against GForward()   */
-  else tolerance = 0.0001;   /* stronger test: FLogsum() is in slow exact mode. */
+  tolerance = ( p7_logsum_IsSlowExact() ? 0.0001 : 1.0);  /* comparison stringency can't be too high when table-driven logsum() approx is used in GForward() */
 
   p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om);
   while (N--)
@@ -1058,6 +1060,8 @@ static ESL_OPTIONS options[] = {
   { "--sw",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit local alignment",                           0 },
   { "--ls",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "multihit glocal alignment",                        0 },
   { "--s",       eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit glocal alignment",                          0 },
+  { "-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward matrix for examination (verbose)",   0 },
+  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward matrix for examination (verbose)",    0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -1104,10 +1108,10 @@ main(int argc, char **argv)
   gm = p7_profile_Create(hmm->M, abc); 
 
   /* Now reconfig the models however we were asked to */
-  if      (esl_opt_GetBoolean(go, "--fs"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
-  else if (esl_opt_GetBoolean(go, "--sw"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNILOCAL);
-  else if (esl_opt_GetBoolean(go, "--ls"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_GLOCAL);
-  else if (esl_opt_GetBoolean(go, "--s"))   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNIGLOCAL);
+  if      (esl_opt_GetBoolean(go, "--fs"))  p7_profile_ConfigLocal    (gm, hmm, bg, sq->n);
+  else if (esl_opt_GetBoolean(go, "--sw"))  p7_profile_ConfigUnilocal (gm, hmm, bg, sq->n);
+  else if (esl_opt_GetBoolean(go, "--ls"))  p7_profile_ConfigGlocal   (gm, hmm, bg, sq->n);
+  else if (esl_opt_GetBoolean(go, "--s"))   p7_profile_ConfigUniglocal(gm, hmm, bg, sq->n);
 
   /* now the optimized profile */
   om = p7_oprofile_Create(gm->M, abc);
@@ -1123,13 +1127,14 @@ main(int argc, char **argv)
   /* fwd = p7_omx_Create(gm->M, sq->n, sq->n); */
   /* bck = p7_omx_Create(gm->M, sq->n, sq->n); */
 
-  /* p7_omx_SetDumpMode(stdout, fwd, TRUE); */     /* makes the fast DP algorithms dump their matrices */
-  /* p7_omx_SetDumpMode(stdout, bck, TRUE); */  
+  /* makes the fast DP algorithms dump their matrices */
+  if (esl_opt_GetBoolean(go, "-F")) p7_omx_SetDumpMode(stdout, fwd, TRUE); 
+  if (esl_opt_GetBoolean(go, "-B")) p7_omx_SetDumpMode(stdout, bck, TRUE); 
 
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
       p7_oprofile_ReconfigLength(om, sq->n);
-      p7_ReconfigLength(gm,          sq->n);
+      p7_profile_SetLength(gm,       sq->n);
       p7_bg_SetLength(bg,            sq->n);
       p7_omx_GrowTo(fwd, om->M, 0,   sq->n); 
       p7_omx_GrowTo(bck, om->M, 0,   sq->n); 

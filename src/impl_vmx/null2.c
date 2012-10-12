@@ -172,7 +172,7 @@ p7_Null2_ByTrace(const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend
       Ld++;
       if (tr->k[z] > 0)	/* must be an M or I */
 	{ /* surely there's an easier way? but our workspace is striped, interleaved quads... */
-	  s = ( (tr->st[z] == p7T_M) ?  p7X_M : p7X_I);
+	  s = ( (tr->st[z] == p7T_ML) ?  p7X_M : p7X_I);
 	  q = p7X_NSCELLS * ( (tr->k[z] - 1) % Q) + p7X_M;
 	  r = (tr->k[z] - 1) / Q;
 	  u.v            = wrk->dpf[0][q];
@@ -302,7 +302,7 @@ main(int argc, char **argv)
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
 
   bg = p7_bg_Create(abc);                 p7_bg_SetLength(bg, L);
-  gm = p7_profile_Create(hmm->M, abc);    p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  gm = p7_profile_Create(hmm->M, abc);    p7_profile_ConfigLocal(gm, hmm, bg, L);
   om = p7_oprofile_Create(gm->M, abc);    p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
 

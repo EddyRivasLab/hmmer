@@ -165,7 +165,7 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
 int
 p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L)
 {
-  return p7_ReconfigLength(om, L);
+  return p7_profile_SetLength(om, L);
 }
 
 /* Function:  p7_oprofile_ReconfigMSVLength()
@@ -186,7 +186,7 @@ p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L)
 int
 p7_oprofile_ReconfigMSVLength(P7_OPROFILE *om, int L)
 {
-	return p7_ReconfigLength(om, L);
+  return p7_profile_SetLength(om, L);
 }
 
 
@@ -209,7 +209,7 @@ p7_oprofile_ReconfigMSVLength(P7_OPROFILE *om, int L)
 int
 p7_oprofile_ReconfigRestLength(P7_OPROFILE *om, int L)
 {
-	return p7_ReconfigLength(om, L);
+  return p7_profile_SetLength(om, L);
 }
 
 /* Function:  p7_oprofile_ReconfigMultihit()
@@ -496,10 +496,10 @@ p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, 
   if ((gm = p7_profile_Create (M, abc)) == NULL)  { status = eslEMEM; goto ERROR; }
   if ((om = p7_oprofile_Create(M, abc)) == NULL)  { status = eslEMEM; goto ERROR; }
 
-  if ((status = p7_hmm_Sample(r, M, abc, &hmm))             != eslOK) goto ERROR;
-  if ((status = p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL)) != eslOK) goto ERROR;
-  if ((status = p7_oprofile_Convert(gm, om))                != eslOK) goto ERROR;
-  if ((status = p7_oprofile_ReconfigLength(om, L))          != eslOK) goto ERROR;
+  if ((status = p7_hmm_Sample(r, M, abc, &hmm))         != eslOK) goto ERROR;
+  if ((status = p7_profile_ConfigLocal(gm, hmm, bg, L)) != eslOK) goto ERROR;
+  if ((status = p7_oprofile_Convert(gm, om))            != eslOK) goto ERROR;
+  if ((status = p7_oprofile_ReconfigLength(om, L))      != eslOK) goto ERROR;
 
   if (opt_hmm != NULL) *opt_hmm = hmm; else p7_hmm_Destroy(hmm);
   if (opt_gm  != NULL) *opt_gm  = gm;  else p7_profile_Destroy(gm);
@@ -566,8 +566,8 @@ p7_profile_SameAsMF(const P7_OPROFILE *om, P7_PROFILE *gm)
 
   /* Transitions */
   esl_vec_FSet(gm->tsc, p7P_NTRANS * gm->M, -eslINFINITY);
-  for (k = 1; k <  gm->M; k++) p7P_TSC(gm, k, p7P_MM) = 0.0f;
-  for (k = 0; k <  gm->M; k++) p7P_TSC(gm, k, p7P_BM) = tbm;
+  for (k = 1; k <  gm->M; k++) P7P_TSC(gm, k, p7P_MM) = 0.0f;
+  for (k = 0; k <  gm->M; k++) P7P_TSC(gm, k, p7P_LM) = tbm;
   
   return eslOK;
 }
@@ -664,7 +664,7 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, L);
   om = p7_oprofile_Create(gm->M, abc);
 
   esl_stopwatch_Start(w);
@@ -753,7 +753,7 @@ main(int argc, char **argv)
   bg  = p7_bg_Create(abc);
   gm  = p7_profile_Create(hmm->M, abc);   
   om1 = p7_oprofile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, 400);
   p7_oprofile_Convert(gm, om1);
   
   om2 = p7_oprofile_Copy(om1);

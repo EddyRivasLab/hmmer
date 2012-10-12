@@ -56,7 +56,6 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
   int         seed;
   int         status;
 
-
   ESL_ALLOC(bld, sizeof(P7_BUILDER));
   bld->prior        = NULL;
   bld->r            = NULL;
@@ -338,11 +337,10 @@ p7_builder_Destroy(P7_BUILDER *bld)
 {
   if (bld == NULL) return;
 
-  if (bld->prior   != NULL) p7_prior_Destroy(bld->prior);
-  if (bld->r       != NULL) esl_randomness_Destroy(bld->r);
-  if (bld->Q       != NULL) esl_dmatrix_Destroy(bld->Q);
-  if (bld->S       != NULL) esl_scorematrix_Destroy(bld->S);
-
+  if (bld->prior) p7_prior_Destroy(bld->prior);
+  if (bld->r)     esl_randomness_Destroy(bld->r);
+  if (bld->Q)     esl_dmatrix_Destroy(bld->Q);
+  if (bld->S)     esl_scorematrix_Destroy(bld->S);
   free(bld);
   return;
 }
@@ -496,14 +494,19 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
   if ((status = p7_hmm_SetConsensus(hmm, sq))                                                                   != eslOK) goto ERROR; 
   if ((status = calibrate(bld, hmm, bg, opt_gm, opt_om))                                                        != eslOK) goto ERROR;
 
-  /* build a faux trace: relative to core model (B->M_1..M_L->E) */
-  if (opt_tr != NULL) 
+  /* build a faux glocal trace */
+  if (opt_tr)
     {
       if ((tr = p7_trace_Create())                      == NULL)  goto ERROR;
+      if ((status = p7_trace_Append(tr, p7T_S, 0, 0))   != eslOK) goto ERROR; 
+      if ((status = p7_trace_Append(tr, p7T_N, 0, 0))   != eslOK) goto ERROR; 
       if ((status = p7_trace_Append(tr, p7T_B, 0, 0))   != eslOK) goto ERROR; 
+      if ((status = p7_trace_Append(tr, p7T_G, 0, 0))   != eslOK) goto ERROR; 
       for (k = 1; k <= sq->n; k++)
-        if ((status = p7_trace_Append(tr, p7T_M, k, k)) != eslOK) goto ERROR;
+	if ((status = p7_trace_Append(tr, p7T_MG, k, k))!= eslOK) goto ERROR;
       if ((status = p7_trace_Append(tr, p7T_E, 0, 0))   != eslOK) goto ERROR; 
+      if ((status = p7_trace_Append(tr, p7T_C, 0, 0))   != eslOK) goto ERROR; 
+      if ((status = p7_trace_Append(tr, p7T_T, 0, 0))   != eslOK) goto ERROR; 
       tr->M = sq->n;
       tr->L = sq->n;
     }

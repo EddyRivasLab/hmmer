@@ -84,61 +84,54 @@ p7_GStochasticTrace(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int L, const P7_PROFI
       case p7T_E:	
 	if (XMX(i, p7G_E) == -eslINFINITY) ESL_XEXCEPTION(eslFAIL, "impossible E reached at i=%d", i);
 	
-	if (p7_profile_IsLocal(gm)) { /* local models come from any M, D */
-	  sc[0] = sc[M+1] = -eslINFINITY;
-	  for (k = 1; k <= M; k++) sc[k]   = MMX(i,k);
-	  for (k = 2; k <= M; k++) sc[k+M] = DMX(i,k);
-	  esl_vec_FLogNorm(sc, 2*M+1); /* now sc is a prob vector */
-	  k = esl_rnd_FChoose(r, sc, 2*M+1);
-	  if (k <= M)    scur = p7T_M;
-	  else { k -= M; scur = p7T_D; }
-	} else { 		/* glocal models come from M_M or D_M  */
-	  k     = M;
-	  sc[0] = MMX(i,M);
-	  sc[1] = DMX(i,M);
-	  esl_vec_FLogNorm(sc, 2); /* now sc is a prob vector */
-	  scur = (esl_rnd_FChoose(r, sc, 2) == 0) ? p7T_M : p7T_D;
-	}
+	sc[0] = sc[M+1] = -eslINFINITY;
+	for (k = 1; k <= M; k++) sc[k]   = MMX(i,k);
+	for (k = 2; k <= M; k++) sc[k+M] = DMX(i,k);
+	esl_vec_FLogNorm(sc, 2*M+1); /* now sc is a prob vector */
+	k = esl_rnd_FChoose(r, sc, 2*M+1);
+	
+	if  (k <= M)   scur = p7T_ML;
+	else { k -= M; scur = p7T_DL; }
 	break;
 
       /* M connects from {MDI} i-1,k-1, or B */
-      case p7T_M:
+      case p7T_ML:
 	if (MMX(i,k) == -eslINFINITY) ESL_XEXCEPTION(eslFAIL, "impossible M reached at k=%d,i=%d", k,i);
 	
-	sc[0] = XMX(i-1,p7G_B) + TSC(p7P_BM, k-1);
+	sc[0] = XMX(i-1,p7G_B) + TSC(p7P_LM, k-1);
 	sc[1] = MMX(i-1,k-1)   + TSC(p7P_MM, k-1);
 	sc[2] = IMX(i-1,k-1)   + TSC(p7P_IM, k-1);
 	sc[3] = DMX(i-1,k-1)   + TSC(p7P_DM, k-1);
 	esl_vec_FLogNorm(sc, 4); 
 	switch (esl_rnd_FChoose(r, sc, 4)) {
-	case 0: scur = p7T_B;   break;
-	case 1: scur = p7T_M;   break;
-	case 2: scur = p7T_I;   break;
-	case 3: scur = p7T_D;   break;
+	case 0: scur = p7T_L;    break;
+	case 1: scur = p7T_ML;   break;
+	case 2: scur = p7T_IL;   break;
+	case 3: scur = p7T_DL;   break;
 	}
 	k--; 
 	i--;
 	break;
 
       /* D connects from M,D at i,k-1 */
-      case p7T_D:
+      case p7T_DL:
 	if (DMX(i, k) == -eslINFINITY) ESL_XEXCEPTION(eslFAIL, "impossible D reached at k=%d,i=%d", k,i);
 
 	sc[0] = MMX(i, k-1) + TSC(p7P_MD, k-1);
 	sc[1] = DMX(i, k-1) + TSC(p7P_DD, k-1);
 	esl_vec_FLogNorm(sc, 2); 
-	scur = (esl_rnd_FChoose(r, sc, 2) == 0) ? p7T_M : p7T_D;
+	scur = (esl_rnd_FChoose(r, sc, 2) == 0) ? p7T_ML : p7T_DL;
 	k--;
 	break;
 
       /* I connects from M,I at i-1,k */
-      case p7T_I:
+      case p7T_IL:
 	if (IMX(i,k) == -eslINFINITY) ESL_XEXCEPTION(eslFAIL, "impossible I reached at k=%d,i=%d", k,i);
 	
 	sc[0] = MMX(i-1,k) + TSC(p7P_MI, k);
 	sc[1] = IMX(i-1,k) + TSC(p7P_II, k);
 	esl_vec_FLogNorm(sc, 2); 
-	scur = (esl_rnd_FChoose(r, sc, 2) == 0) ? p7T_M : p7T_I;
+	scur = (esl_rnd_FChoose(r, sc, 2) == 0) ? p7T_ML : p7T_IL;
 	i--;
 	break;
 
@@ -167,6 +160,8 @@ p7_GStochasticTrace(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int L, const P7_PROFI
 	esl_vec_FLogNorm(sc, 2); 
 	scur = (esl_rnd_FChoose(r, sc, 2) == 0) ? p7T_J : p7T_E;
 	break;
+
+      case p7T_L: scur = p7T_B;	break;
 
       default: ESL_XEXCEPTION(eslFAIL, "bogus state in traceback");
       } /* end switch over statetype[tpos-1] */
@@ -253,8 +248,10 @@ main(int argc, char **argv)
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
+  p7_profile_ConfigUnilocal(gm, hmm, bg, L);
+
   fwd = p7_gmx_Create(gm->M, L);
   tr  = p7_trace_Create();
   esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
@@ -379,11 +376,11 @@ main(int argc, char **argv)
   int             L      = 10;
   int             ntrace = 1000;
 
-  if ((abc = esl_alphabet_Create(eslAMINO))         == NULL)  esl_fatal("failed to create alphabet");
-  if (p7_hmm_Sample(r, M, abc, &hmm)                != eslOK) esl_fatal("failed to sample an HMM");
-  if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
-  if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal("failed to create profile");
-  if (p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL)    != eslOK) esl_fatal("failed to config profile");
+  if ((abc = esl_alphabet_Create(eslAMINO))   == NULL)  esl_fatal("failed to create alphabet");
+  if (p7_hmm_Sample(r, M, abc, &hmm)          != eslOK) esl_fatal("failed to sample an HMM");
+  if ((bg = p7_bg_Create(abc))                == NULL)  esl_fatal("failed to create null model");
+  if ((gm = p7_profile_Create(hmm->M, abc))   == NULL)  esl_fatal("failed to create profile");
+  if (p7_profile_ConfigLocal(gm, hmm, bg, L)  != eslOK) esl_fatal("failed to config profile");
 
   /* Test with randomly generated (iid) sequence */
   if ((dsq = malloc(sizeof(ESL_DSQ) *(L+2)))  == NULL)  esl_fatal("malloc failed");
@@ -477,6 +474,7 @@ main(int argc, char **argv)
   else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
   else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+
   if  (esl_sqio_Read(sqfp, sq) != eslOK) p7_Fail("Failed to read sequence");
   esl_sqfile_Close(sqfp);
  
@@ -484,7 +482,7 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, sq->n);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, sq->n);
 
   fwd = p7_gmx_Create(gm->M, sq->n);
   tr  = p7_trace_Create();
@@ -498,7 +496,7 @@ main(int argc, char **argv)
       p7_GStochasticTrace(r, sq->dsq, sq->n, gm, fwd, tr);
       p7_trace_Score(tr, sq->dsq, gm, &tsc);
   
-      if (esl_opt_GetBoolean(go, "-t") == TRUE) p7_trace_Dump(stdout, tr, gm, sq->dsq);
+      if (esl_opt_GetBoolean(go, "-t") == TRUE) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
       if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) esl_fatal("trace failed validation: %s\n", errbuf);
 
       printf("Sampled trace:  %.4f nats\n", tsc);

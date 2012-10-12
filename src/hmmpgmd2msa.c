@@ -108,7 +108,7 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
     if ((qtr = p7_trace_Create())                      == NULL)  {status = eslFAIL;  goto ERROR; }
     if ((status = p7_trace_Append(qtr, p7T_B, 0, 0))   != eslOK) goto ERROR;
     for (i = 1; i <= qsq->n; i++)
-      if ((status = p7_trace_Append(qtr, p7T_M, i, i)) != eslOK) goto ERROR;
+      if ((status = p7_trace_Append(qtr, p7T_MG, i, i))!= eslOK) goto ERROR;
     if ((status = p7_trace_Append(qtr, p7T_E, 0, 0))   != eslOK) goto ERROR;
     qtr->M = qsq->n;
     qtr->L = qsq->n;

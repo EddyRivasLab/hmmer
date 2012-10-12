@@ -139,7 +139,7 @@ AC_MSG_NOTICE([Full HMMER source distribution - using full configuration])
 # Process the ./configure command line
 ################################################################
 
-# --enable-debugging      - set basic debugging (level 0)
+# --enable-debugging      - set basic debugging (level 1)
 # --enable-debugging=x    - set debugging level to <x> (1-3)
 #
 # At all levels, including 0, replaces CFLAGS w/ "-g -Wall" (so it assumes gcc).
@@ -152,13 +152,23 @@ AS_HELP_STRING([--enable-debugging=x],[also set diagnostics verbosity level to <
 enable_debugging=$enableval, enable_debugging=no)
 
 case $enable_debugging in
-   yes)  AC_DEFINE(eslDEBUGLEVEL, 0);;
+   yes)  AC_DEFINE(eslDEBUGLEVEL, 1);;
      1)  AC_DEFINE(eslDEBUGLEVEL, 1);;
      2)  AC_DEFINE(eslDEBUGLEVEL, 2);;
      3)  AC_DEFINE(eslDEBUGLEVEL, 3);;
     no)  AC_DEFINE(eslDEBUGLEVEL, 0);;
      *)  AC_MSG_ERROR([Unknown argument to --enable-debugging: $enable_debugging]);;
 esac
+
+# --enable-exact-logsum  - turn on p7_LOGSUM_SLOWEXACT flag (should only be used in debugging)
+# 
+AC_ARG_ENABLE(exact-logsum,
+  [AS_HELP_STRING( [--enable-exact-logsum],[use slow/exact lse2 log-sum-exp calculations])],
+  ok=$enableval, ok=no)
+if test "$ok" = "yes"; then
+  AC_MSG_NOTICE([Compiling with slow/exact lse2 log-sum-exp calculations.])
+  AC_DEFINE(p7_LOGSUM_SLOWEXACT)
+fi
 
 
 # --enable-gcov      - compile for code coverage testing

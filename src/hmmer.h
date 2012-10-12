@@ -55,14 +55,14 @@
 #include "esl_scorematrix.h"    /* ESL_SCOREMATRIX       */
 #include "esl_stopwatch.h"      /* ESL_STOPWATCH         */
 
-
-
 /* Search modes. */
 #define p7_NO_MODE   0
 #define p7_LOCAL     1		/* multihit local:  "fs" mode   */
 #define p7_GLOCAL    2		/* multihit glocal: "ls" mode   */
 #define p7_UNILOCAL  3		/* unihit local: "sw" mode      */
 #define p7_UNIGLOCAL 4		/* unihit glocal: "s" mode      */
+#define p7_MIXED     5          /* mixed mode, local+glocal     */
+#define p7_UNIMIXED  
 
 #define p7_IsLocal(mode)  (mode == p7_LOCAL || mode == p7_UNILOCAL)
 #define p7_IsMulti(mode)  (mode == p7_LOCAL || mode == p7_GLOCAL)
@@ -87,8 +87,18 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 /* Option flags when creating faux traces with p7_trace_FauxFromMSA() */
 #define p7_MSA_COORDS	       (1<<0) /* default: i = unaligned seq residue coords     */
 
+/* MEA traceback routines have to check consistency, all path transitions must be nonzero */
+#define P7_DELTAT(val, tsc) ( ((tsc) == -eslINFINITY) ? -eslINFINITY : (val))
+
 /* Which strand(s) should be searched */
 enum p7_strands_e {    p7_STRAND_TOPONLY  = 0, p7_STRAND_BOTTOMONLY = 1,  p7_STRAND_BOTH = 2};
+
+/* In calculating Q, the number of vectors we need in a row, we have
+ * to make sure there's at least 2, or a striped implementation fails.
+ */
+#define p7O_NQB(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNB) + 1)))   /* 16 uchars  */
+#define p7O_NQW(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNW) + 1)))   /*  8 words   */
+#define p7O_NQF(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNF) + 1)))   /*  4 floats  */
 
 /*****************************************************************
  * 1. P7_HMM: a core model.
@@ -145,6 +155,9 @@ enum p7h_transitions_e {
 #define p7H_NTMAT 3
 #define p7H_NTDEL 2
 #define p7H_NTINS 2
+#define p7H_NTMAX 3	/* max size of a transition prob vector */
+
+#define p7H_II_SAMPLE_MAX 0.99	/* an artificial cap on sampled tII parameters, to avoid inf-length seqs */
 
 /* Some notes:
  *   0. The model might be either in counts or probability form.
@@ -154,9 +167,13 @@ enum p7h_transitions_e {
  *      To simplify some normalization code, we adopt a convention that these are set
  *      to valid probability distributions: 1.0 for t[0][TDM] and mat[0][0],
  *      and 0 for the rest.
- *   2. t[M] is also special: TMD and TDD are 0 because there is no next delete state;
- *      TDM is therefore 1.0 by definition. TMM and TDM are interpreted as the
- *      M->E and D->E end transitions. t[M][TDM] must be 1.0, therefore.
+ *                      MM     MI    MD     IM    II     DM   DD
+ *              t[0]  B->M1  B->I0  B->D1 I0->M1 I0->I0  (1)  (0)
+ *   2. t[M] is also special: there is no next M/D, only E. So TMD and
+ *      TDD are 0; TMM, TIM, and TDM are interpreted as transitions to
+ *      E; and thus t[M][TDM] must be 1.0 and [TMD] must be 0:
+ *                      MM     MI    MD    IM    II    DM   DD
+ *              t[M]  Mm->E  Mm->Im   0  Im->E Im->Im   1    0
  */
 typedef struct p7_hmm_s {
   /*::cexcerpt::plan7_core::begin::*/
@@ -200,66 +217,175 @@ typedef struct p7_hmm_s {
  * 2. P7_PROFILE: a scoring profile, and its implicit model.
  *****************************************************************/
 
-/* Indices for special state types in the length model, gm->xsc[x][]
+/* Whereas the core HMM is a model of a single global alignment to a
+ * homologous domain, a profile is a model of local and glocal homologous
+ * alignments embedded in a longer sequence. The profile is constructed
+ * from the core HMM by adding nine additional states: 
+ *
+ *   S->N->B-->L ... -->E->C->T
+ *          \_>G ... _/ |
+ *         ^            |
+ *         |____ J _____|
+ *
+ * These nine states control the "algorithm-dependent" configuration
+ * of the profile and of our alignment/scoring algorithms (Viterbi or 
+ * Forward). There are three components to this configuration:
+ *     1. The length model:
+ *          N,C,J transitions control the expected length of
+ *          nonhomologous sequence segments. The length model is
+ *          typically reset for each new target sequence length L.
+ *     2. Multihit vs. unihit
+ *          The E transitions control whether the model is allowed
+ *          to loop around for multiple homology segments per
+ *          target sequence. Usually we're multihit.
+ *     3. Search mode: local vs. glocal paths
+ *          The B->L, B->G probabilities control whether the model
+ *          only allows local alignment, only allows glocal alignment,
+ *          or a mixture of the two. Usually we're "dual-mode"
+ *          with 50/50 probability of local vs. glocal.
+ *         
+ * For efficiency, two of the nine states (S,T) only appear in our
+ * formal state diagrams. They are not explicitly represented in the
+ * P7_PROFILE parameters that DP calculations use:
+ *     1. The S->N probability is always 1.0, so our DP codes 
+ *        initialize on the N state and don't store anything for S.
+ *     2. The C->T log probability is added on to any final 
+ *        lod score. We know the T state only has nonzero probability
+ *        at position i=L in the target, so DP algorithms don't
+ *        bother to store it in their matrix.
+ *        
+ * The profile is missing some states of the core HMM:
+ *     1. The D1 state is removed by "wing retraction".
+ *     2. The I0 and Im states aren't present.
+ * Transition costs from the I0/Im states are initialized to -inf.
+ * Transition costs from the D1 state are present in the P7_PROFILE
+ * data structure, but unused by DP algorithms; see the "wing 
+ * retraction" section below for an explanation.
+ *     
+ * Some alignment/scoring DP implementations may implicitly override the
+ * length model, multihit mode, or the search mode (so long as they
+ * document it). Examples:
+ *     1. For the length model, we sometimes make the approximation
+ *          that there are ~L NN/CC/JJ transitions (assuming the
+ *          target sequence length is large enough that the sum 
+ *          of homologous segment lengths is negligible). This
+ *          allows what the code calls the "3 nat" or "2 nat"
+ *          approximation: L \log \frac{L}{L+3} ~ 3.0 (multihit mode),
+ *          L \log \frac{L}{L+2} ~ 2.0 (unihit mode).
+ *     2. To override multihit/unihit mode: Multihit vs. unihit mode
+ *          also affects the length model parameters, so the
+ *          algorithm must not only replace tEC/tEJ parameters, but
+ *          must also use appropriate N,C,J parameters. The MSV
+ *          filter (impl_xxx/msvfilter.c) is an example where the
+ *          algorithm is always multihit, and where NN,CC,JJ 
+ *          parameters are handled implicitly w/ the 3-nat approximation.
+ *     3. To override search mode and use only one path (local or
+ *          glocal): The algorithm ignores the tBL/tBG log probability
+ *          and evaluates the path it wants as if it had B->L or B->G
+ *          set to 1.0.
+ *          
+ * The full (dual-mode, local/glocal) model is only implemented in
+ * P7_PROFILE, not in a vectorized P7_OPROFILE. Vector implementations
+ * are always and only in local alignment mode, because of numeric
+ * range limitations. Vector implementations are only used for fast
+ * filtering before a final banded calculation with the full model.
+ *          
+ * Wing retraction:        
+ *   For the local path, all algorithms must use the L->Mk "uniform"
+ *   entry distribution, and assume that all Mk->E and Dk->E are
+ *   1.0. The L->Mk entry distribution supercedes all paths involving
+ *   terminal deletion. This is the "implicit probabilitistic model"
+ *   of local alignment [Eddy08].  The D_1 and I_M states don't exist
+ *   on the local path, and algorithms must treat them as zero probability.
+ * 
+ *   For the glocal path, all algorithms must use a G->Mk "wing
+ *   retracted" entry distribution <p7P_GM>, and some algorithms may
+ *   optionally use a DGk+1->E wing retracted exit distribution
+ *   <p7P_DGE>. Wing retracted entry G->Mk is required, because this is
+ *   the way we remove a mute cycle (B->G->D1..Dm->E->J->B) from the
+ *   profile: by removing the D1 state and neglecting the probability
+ *   of the mute cycle in all DP calculations.
+ *      
+ *   Wing retracted entry, see modelconfig.c::set_glocal_entry()
+ *      tGM1 = log t(G->M1) 
+ *      tGMk = log t(G->D1) + \sum_j={1..k-2} log t(Dj->Dj+1) + log t(Dk-1->Mk)
+ *      stored off-by-one: tGMk is stored at TSC(k-1, p7P_GM) in profile structure.
+ *      
+ *   Wing retracted exit, see modelconfig.c::set_glocal_exit()
+ *      tDGkE = log t(Dk+1->...Dm->E)
+ *            = \sum_j={k+1..m-1} log t(Dj->Dj+1)    (recall that Dm->E = 1.0)
+ *      valid for k=0..M: 
+ *      boundary conditions:
+ *      TSC(M,DGE) = TSC(M-1,DGE) = 0    
+ *   
+ *   Wing retracted exits are used in banded DP calculations: see
+ *   banded_fwdback.c. A DP calculation may also use Mm->E and Dm->E
+ *   (both 1.0) explicitly, rather than using the DGE wing retracted
+ *   exit.  The reference implementation does this, for example (see
+ *   reference_fwdback.c or reference_viterbi.c).
+ *
+ *   Wing retraction is only used internally in DP implementations.
+ *   Any resulting tracebacks (alignments) still represent a
+ *   G->D1...Dk-1->Mk entry explicitly; you'll see this in traceback
+ *   code, where it adds k-1 delete states to a trace whenever it sees
+ *   a G->Mk entry.  Thus we may still need the D1->{DM}
+ *   parameterization, to call p7_trace_Score() for example; and so,
+ *   even though the D1 state is implicitly removed by all DP
+ *   implementations, on both the local and glocal paths, its
+ *   parameterization is still present in the P7_PROFILE.
  */
-enum p7p_xstates_e { 
-  p7P_E = 0,
-  p7P_N = 1,
-  p7P_J = 2,
-  p7P_C = 3
-};
-#define p7P_NXSTATES 4
 
-/* Indices for transitions from the length modeling scores gm->xsc[][x]
+
+/* Indices for six special state types x that have transition parameters
+ * in gm->xsc[x][y], where all of them have two choices y.
  */
-enum p7p_xtransitions_e {
-  p7P_LOOP = 0,
-  p7P_MOVE = 1
-};
-#define p7P_NXTRANS 2
+#define p7P_NXSTATES 6
+#define p7P_NXTRANS  2
+#define p7P_LOOP 0              /* gm->xsc[x][p7P_LOOP]    gm->xsc[x][p7P_MOVE] */        
+#define p7P_MOVE 1              /* -------------------     -------------------- */
+#define p7P_E  0            	/*     E->J                       E->C          */
+#define p7P_N  1		/*     N->N                       N->B          */
+#define p7P_J  2                /*     J->J                       J->B          */
+#define p7P_C  3		/*     C->C                       C->T          */
+#define p7P_B  4		/*     B->L                       B->G          */
+#define p7P_G  5		/*     G->M1                      G->D1         */
 
-/* Indices for transition scores gm->tsc[k][] */
-/* order is optimized for dynamic programming */
-enum p7p_tsc_e {
-  p7P_MM = 0, 
-  p7P_IM = 1, 
-  p7P_DM = 2, 
-  p7P_BM = 3, 
-  p7P_MD = 4, 
-  p7P_DD = 5, 
-  p7P_MI = 6, 
-  p7P_II = 7, 
-};
-#define p7P_NTRANS 8
-
-/* Indices for residue emission score vectors
+/* Indices x for main model transition scores gm->tsc[k][x] 
+ * Order is optimized for dynamic programming algorithms.
  */
-enum p7p_rsc_e {
-  p7P_MSC = 0, 
-  p7P_ISC = 1
-};
-#define p7P_NR 2
+#define p7P_NTRANS 10
+#define p7P_MM   0
+#define p7P_IM   1
+#define p7P_DM   2
+#define p7P_LM   3	/* local submodel entry L->Mk; stored off-by-one, tsc[k-1][LM] = L->Mk */
+#define p7P_GM   4	/* wing-retracted glocal submodel entry G->Mk;    tsc[k-1][GM] = G->Mk */
+#define p7P_MD   5  
+#define p7P_DD   6
+#define p7P_MI   7
+#define p7P_II   8
+#define p7P_DGE  9	/* wing-retracted glocal exit, DD component, tDGEk = Dk+1..Dm->E, 0.0 for k=M-1,M */
 
-/* Accessing transition, emission scores */
-/* _BM is specially stored off-by-one: [k-1][p7P_BM] is score for entering at Mk */
-#define p7P_TSC(gm, k, s) ((gm)->tsc[(k) * p7P_NTRANS + (s)])
-#define p7P_MSC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_MSC])
-#define p7P_ISC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_ISC])
-
+/* Indices for residue emission score vectors */
+#define p7P_NR   2
+#define p7P_M    0
+#define p7P_I    1
 
 typedef struct p7_profile_s {
-  float  *tsc;          /* transitions  [0.1..M-1][0..p7P_NTRANS-1], hand-indexed  */
-  float **rsc;          /* emissions [0..Kp-1][0.1..M][p7P_NR], hand-indexed       */
-  float   xsc[p7P_NXSTATES][p7P_NXTRANS]; /* special transitions [NECJ][LOOP,MOVE] */
+  /* Model parameters:                                                               */
+  int     M;		/* number of nodes in the model                              */
+  float  *tsc;          /* transitions  [0.1..M][0..p7P_NTRANS-1], hand-indexed      */
+  float **rsc;          /* emissions [0..Kp-1][0.1..M][p7P_NR], hand-indexed         */
+  float   xsc[p7P_NXSTATES][p7P_NXTRANS]; /* special transitions [ENJCBG][LOOP,MOVE] */
 
-  int     mode;        	/* configured algorithm mode (e.g. p7_LOCAL)               */ 
-  int     L;		/* current configured target seq length                    */
-  int     allocM;	/* max # of nodes allocated in this structure              */
-  int     M;		/* number of nodes in the model                            */
-  int     max_length;	/* calculated upper bound on emitted seq length            */
-  float   nj;		/* expected # of uses of J; precalculated from loop config */
+  /* Memory allocation:                                                              */
+  int     allocM;	/* max # of nodes allocated in this structure                */
 
-  /* Info, most of which is a copy from parent HMM:                                       */
+  /* Configuration: length model, multi vs unihit, local vs glocal:                  */
+  int     L;		/* current configured target seq length           (unset:-1) */
+  float   nj;           /* exp # of J's; 0.0=unihit 1.0=standard multihit (unset:-1) */
+  float   pglocal;	/* base B->G; 0.0=local; 0.5=dual; 1.0=glocal     (unset:-1) */
+
+  /* Annotation copied from parent HMM:                                                   */
   char  *name;			/* unique name of model                                   */
   char  *acc;			/* unique accession of model, or NULL                     */
   char  *desc;                  /* brief (1-line) description of model, or NULL           */
@@ -271,16 +397,23 @@ typedef struct p7_profile_s {
   float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-domain bit score cutoffs, or UNSET         */
   float  compo[p7_MAXABET];	/* per-model HMM filter composition, or UNSET             */
 
-  /* Disk offset information for hmmpfam's fast model retrieval                           */
+  /* Disk offset information supporting fast model retrieval:                             */
   off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET, or -1                                  */
-
   off_t  roff;                  /* record offset (start of record); -1 if none            */
   off_t  eoff;                  /* offset to last byte of record; -1 if unknown           */
 
+  /* Derived information:                                                                 */
+  int     max_length;	/* calc'ed upper bound on emitted seq length (nhmmer) (unset:-1)  */
+
+  /* Associated objects:                                                                  */
   const ESL_ALPHABET *abc;	/* copy of pointer to appropriate alphabet                */
 } P7_PROFILE;
 
-
+/* Convenience macros for accessing transition, emission scores */
+/* _LM,GM are specially stored off-by-one: [k-1][p7P_{LG}M] is score for *entering* at Mk */
+#define P7P_TSC(gm, k, s) ((gm)->tsc[(k) * p7P_NTRANS + (s)])
+#define P7P_MSC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_M])
+#define P7P_ISC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_I])
 
 /*****************************************************************
  * 3. P7_BG: a null (background) model.
@@ -322,59 +455,64 @@ typedef struct p7_bg_s {
 
 /* Traceback structure for alignment of a model to a sequence.
  *
- * A traceback only makes sense in a triplet (tr, gm, dsq), for a
- * given profile or HMM (with nodes 1..M) and a given digital sequence
- * (with positions 1..L).
- * 
- * A traceback may be relative to a profile (usually) or to a core
- * model (as a special case in model construction; see build.c). You
- * can tell the difference by looking at the first statetype,
- * tr->st[0]; if it's a p7T_S, it's for a profile, and if it's p7T_B,
- * it's for a core model.
- * 
- * A "profile" trace uniquely has S,N,C,T,J states and their
- * transitions; it also can have B->Mk and Mk->E internal entry/exit
- * transitions for local alignments. It may not contain X states.
+ * A traceback usually only makes sense in a triplet (tr, gm, dsq),
+ * for a given profile or HMM (with nodes 1..M) and a given digital
+ * sequence (with positions 1..L).
  *
- * A "core" trace may contain I0, IM, and D1 states and their
- * transitions. A "core" trace can also have B->X->{MDI}k and
- * {MDI}k->X->E transitions as a special hack in a build procedure, to
- * deal with the case of a local alignment fragment implied by an
- * input alignment, which is "impossible" for a core model.
- * X "states" only appear in core traces, and only at these
- * entry/exit places; some code depends on this.
- *   
- * A profile's N,C,J states emit on transition, not on state, so a
- * path of N emits 0 residues, NN emits 1 residue, NNN emits 2
- * residues, and so on. By convention, the trace always associates an
- * emission-on-transition with the trailing (destination) state, so
- * the first N, C, or J is stored in a trace as a nonemitter (i=0).
+ * A traceback is always relative to a profile model (not a core HMM):
+ * so minimally, S->N->B->{GL}->...->E->C->T.
+ * 
+ * It does not contain I0 or IM states.
+ * D1 state can only occur as a G->D1 glocal entry.
+ * 
+ * N,C,J states emit on transition, not on state, so a path of N emits
+ * 0 residues, NN emits 1 residue, NNN emits 2 residues, and so on. By
+ * convention, the trace always associates an emission-on-transition
+ * with the trailing (destination) state, so the first N, C, or J is
+ * stored in a trace as a nonemitter (i=0).
  *
  * A i coords in a traceback are usually 1..L with respect to an
  * unaligned digital target sequence, but in the special case of
  * traces faked from existing MSAs (as in hmmbuild), the coords may
- * be 1..alen relative to an MSA's columns.
+ * be 1..alen relative to an MSA's columns. 
+ * 
+ * tr->i[] and tr->pp[] values are only nonzero for an emitted residue
+ * x_i; so nonemitting states {DG,DL,S,B,L,G,E,T} always have i[]=0
+ * and pp[] = 0.0.
+ * 
+ * tr->k[] values are only nonzero for a main model state; so special
+ * states {SNBLGECJT} always have k[] = 0.
  */
 
 /* State types */
 enum p7t_statetype_e {
-  p7T_BOGUS =  0,
-  p7T_M     =  1,
-  p7T_D     =  2,
-  p7T_I     =  3,
-  p7T_S     =  4,
-  p7T_N     =  5,
-  p7T_B     =  6, 
-  p7T_E     =  7,
-  p7T_C     =  8, 
-  p7T_T     =  9, 
-  p7T_J     = 10,
-  p7T_X     = 11, 	/* missing data: used esp. for local entry/exits */
+  p7T_BOGUS =  0,	/* only needed once: in _EncodeStatetype() as an error code  */
+  p7T_ML    =  1,
+  p7T_MG    =  2,
+  p7T_IL    =  3,
+  p7T_IG    =  4,
+  p7T_DL    =  5,
+  p7T_DG    =  6,
+  p7T_S     =  7,
+  p7T_N     =  8,
+  p7T_B     =  9, 
+  p7T_L     = 10,
+  p7T_G     = 11,
+  p7T_E     = 12,
+  p7T_C     = 13, 
+  p7T_J     = 14,
+  p7T_T     = 15, 
 };
-#define p7T_NSTATETYPES 12
+#define p7T_NSTATETYPES 16	/* used when we collect statetype usage counts, for example */
+#define p7_trace_IsMain(s)   ( (s) >= p7T_ML && (s) <= p7T_DG )
+#define p7_trace_IsM(s)      ( (s) == p7T_ML || (s) == p7T_MG )
+#define p7_trace_IsI(s)      ( (s) == p7T_IL || (s) == p7T_IG )
+#define p7_trace_IsD(s)      ( (s) == p7T_DL || (s) == p7T_DG )
+#define p7_trace_IsGlocal(s) ( (s) == p7T_G || (s) == p7T_MG || (s) == p7T_DG || (s) == p7T_IG)
+#define p7_trace_IsLocal(s)  ( (s) == p7T_L || (s) == p7T_ML || (s) == p7T_DL || (s) == p7T_IL)
 
 typedef struct p7_trace_s {
-  int    N;		/* length of traceback                       */
+  int    N;		/* length of traceback                       */  // N=0 means "no traceback": viterbi score = -inf and no possible path, for example.
   int    nalloc;        /* allocated length of traceback             */
   char  *st;		/* state type code                   [0..N-1]*/
   int   *k;		/* node index; 1..M if M,D,I; else 0 [0..N-1]*/
@@ -387,10 +525,14 @@ typedef struct p7_trace_s {
   int   ndom;		/* number of domains in trace (= # of B or E states) */
   int  *tfrom,   *tto;	/* locations of B/E states in trace (0..tr->N-1)     */
   int  *sqfrom,  *sqto;	/* first/last M-emitted residue on sequence (1..L)   */
-  int  *hmmfrom, *hmmto;/* first/last M state on model (1..M)                */
+  int  *hmmfrom, *hmmto;/* first/last M/D state on model (1..M)              */
+  int  *anch;		/* anchor position (1.N)                             */
   int   ndomalloc;	/* current allocated size of these stacks            */
-
 } P7_TRACE;
+
+
+
+
 
 
 
@@ -490,8 +632,9 @@ typedef struct p7_gmx_s {
  *   float const *tsc = gm->tsc;
  *   float      **dp  = gx->dp;
  *   float       *xmx = gx->xmx;
- * and for each row i (target residue x_i in digital seq <dsq>):
+ * and for row i, i+1 (target residues x_i, x_i+1 in digital seq <dsq>):
  *   float const *rsc = gm->rsc[dsq[i]];
+ *   float const *rsn = gm->rsc[dsq[i+1]];
  */
 #define MMX(i,k) (dp[(i)][(k) * p7G_NSCELLS + p7G_M])
 #define IMX(i,k) (dp[(i)][(k) * p7G_NSCELLS + p7G_I])
@@ -499,8 +642,10 @@ typedef struct p7_gmx_s {
 #define XMX(i,s) (xmx[(i) * p7G_NXCELLS + (s)])
 
 #define TSC(s,k) (tsc[(k) * p7P_NTRANS + (s)])
-#define MSC(k)   (rsc[(k) * p7P_NR     + p7P_MSC])
-#define ISC(k)   (rsc[(k) * p7P_NR     + p7P_ISC])
+#define MSC(k)   (rsc[(k) * p7P_NR     + p7P_M])
+#define ISC(k)   (rsc[(k) * p7P_NR     + p7P_I])
+#define MSN(k)   (rsn[(k) * p7P_NR     + p7P_M])
+#define ISN(k)   (rsn[(k) * p7P_NR     + p7P_I])
 
 /* Flags that control P7_GMX debugging dumps */
 #define p7_HIDE_SPECIALS (1<<0)
@@ -574,9 +719,34 @@ typedef struct p7_spensemble_s {
  * 
  * Alignment of a sequence domain to an HMM, formatted for printing.
  * 
- * For an alignment of L residues and names C chars long, requires
- * 6L + 2C + 30 bytes; for typical case of L=100,C=10, that's
- * <0.7 Kb.
+ * A homology domain produces a chunk of P7_TRACE:
+ *     ... B -> {GL} -> {MD}k1 -> ... {MD}k2 -> E ...
+ * There may be more than one per trace. Number them d, d=0..ndom-1.
+ * For a given d, a trace's index tells us:
+ *    tfrom[d]   = position of B in the trace's arrays (0..tr->N-1)
+ *    tto[d]     = position of E (0..tr->N-1)
+ *    sqfrom[d]  = position of first seq residue accounted for (1..L)
+ *    sqto[d]    = position of last seq residue (1..L)
+ *    hmmfrom[d] = k1
+ *    hmmto[d]   = k2
+ *    
+ * A P7_ALIDISPLAY is an annotated text representation of such a chunk
+ * of trace. From tfrom[d]+2 to tto[d]-1 (skipping the B, {GL}, and
+ * {E}), we have a series of {MDI} states: each is converted to an
+ * aligned symbol pair. These strings are tto[d]-1 - (tfrom[d]+2) + 1 = 
+ * tto[d] - tfrom[d] - 2 symbols long. (That's ad->N.)
+ * 
+ * The alidisplay also records whether state tfrom[d]+1 was G or L
+ * by setting the is_glocal flag. We need this, for instance, to backconvert
+ * an alidisplay to a trace.
+ * 
+ * Memory in this structure may either be serialized or deserialized.
+ * If serialized, ad->mem is non-NULL, ad->memsize is >0, and all the ptrs
+ * point into that memory. If not, ad->mem is NULL, ad->memsize is 0,
+ * and all the ptrs have their own allocation as NUL-terminated strings.
+ *
+ * For an alignment of L residues and names C chars long, requires 6L
+ * + 2C + 31 bytes; for typical case of L=100,C=10, that's <0.7 Kb.
  */
 typedef struct p7_alidisplay_s {
   char *rfline;                 /* reference coord info; or NULL        */
@@ -585,15 +755,15 @@ typedef struct p7_alidisplay_s {
   char *model;                  /* aligned query consensus sequence     */
   char *mline;                  /* "identities", conservation +'s, etc. */
   char *aseq;                   /* aligned target sequence              */
-  char *ppline;			        /* posterior prob annotation; or NULL   */
-  int   N;			            /* length of strings                    */
-
+  char *ppline;		        /* posterior prob annotation; or NULL   */
+  int   N;                      /* length of strings                    */
   char *hmmname;		/* name of HMM                          */
   char *hmmacc;			/* accession of HMM; or [0]='\0'        */
   char *hmmdesc;		/* description of HMM; or [0]='\0'      */
   int   hmmfrom;		/* start position on HMM (1..M, or -1)  */
   int   hmmto;			/* end position on HMM (1..M, or -1)    */
   int   M;			/* length of model                      */
+  char  is_glocal;		/* TRUE if this is a glocal alignment   */
 
   char *sqname;			/* name of target sequence              */
   char *sqacc;			/* accession of target seq; or [0]='\0' */
@@ -1091,6 +1261,8 @@ typedef struct p7_builder_s {
 /*****************************************************************
  * 18. Routines in HMMER's exposed API.
  *****************************************************************/
+#include "p7_refmx.h"
+#include "p7_bandmx.h"
 
 /* build.c */
 extern int p7_Handmodelmaker(ESL_MSA *msa,                P7_BUILDER *bld, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
@@ -1218,16 +1390,18 @@ extern int          p7_AminoFrequencies(float *f);
 /* logsum.c */
 extern int   p7_FLogsumInit(void);
 extern float p7_FLogsum(float a, float b);
-extern float p7_FLogsumError(float a, float b);
-extern int   p7_ILogsumInit(void);
-extern int   p7_ILogsum(int s1, int s2);
+extern int   p7_logsum_IsSlowExact(void);
 
 
 /* modelconfig.c */
-extern int p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int mode);
-extern int p7_ReconfigLength  (P7_PROFILE *gm, int L);
-extern int p7_ReconfigMultihit(P7_PROFILE *gm, int L);
-extern int p7_ReconfigUnihit  (P7_PROFILE *gm, int L);
+extern int p7_profile_Config         (P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg);
+extern int p7_profile_ConfigLocal    (P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int L);
+extern int p7_profile_ConfigUnilocal (P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int L);
+extern int p7_profile_ConfigGlocal   (P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int L);
+extern int p7_profile_ConfigUniglocal(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int L);
+extern int p7_profile_ConfigCustom   (P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int L, float nj, float pglocal);
+extern int p7_profile_SetLength      (P7_PROFILE *gm, int L);
+
 
 /* modelstats.c */
 extern double p7_MeanMatchInfo           (const P7_HMM *hmm, const P7_BG *bg);
@@ -1333,6 +1507,7 @@ extern void    p7_gmx_Destroy(P7_GMX *gx);
 extern int     p7_gmx_Compare(P7_GMX *gx1, P7_GMX *gx2, float tolerance);
 extern int     p7_gmx_Dump(FILE *fp, P7_GMX *gx, int flags);
 extern int     p7_gmx_DumpWindow(FILE *fp, P7_GMX *gx, int istart, int iend, int kstart, int kend, int show_specials);
+extern int     p7_gmx_SetPP(P7_TRACE *tr, const P7_GMX *pp);
 
 
 /* p7_hmm.c */
@@ -1344,8 +1519,6 @@ extern void    p7_hmm_Destroy(P7_HMM *hmm);
 extern int     p7_hmm_CopyParameters(const P7_HMM *src, P7_HMM *dest);
 extern P7_HMM *p7_hmm_Clone(const P7_HMM *hmm);
 extern int     p7_hmm_Zero(P7_HMM *hmm);
-extern char    p7_hmm_EncodeStatetype(char *typestring);
-extern char   *p7_hmm_DecodeStatetype(char st);
 /*      2. Convenience routines for setting fields in an HMM. */
 extern int     p7_hmm_SetName       (P7_HMM *hmm, char *name);
 extern int     p7_hmm_SetAccession  (P7_HMM *hmm, char *acc);
@@ -1359,11 +1532,14 @@ extern int     p7_hmm_Scale      (P7_HMM *hmm, double scale);
 extern int     p7_hmm_Renormalize(P7_HMM *hmm);
 /*      4. Debugging and development code. */
 extern int     p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
-extern int     p7_hmm_Sample          (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleUngapped  (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleUniform   (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, 
+extern int     p7_hmm_Sample           (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
+extern int     p7_hmm_SamplePrior      (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, const P7_PRIOR *pri, P7_HMM **ret_hmm);
+extern int     p7_hmm_SampleUngapped   (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
+extern int     p7_hmm_SampleEnumerable (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
+extern int     p7_hmm_SampleEnumerable2(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
+extern int     p7_hmm_SampleUniform    (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, 
 				     float tmi, float tii, float tmd, float tdd,  P7_HMM **ret_hmm);
+extern int     p7_hmm_SampleSinglePathed(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
 extern int     p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol);
 extern int     p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol);
 /*      5. Other routines in the API */
@@ -1450,9 +1626,11 @@ extern size_t      p7_profile_Sizeof(P7_PROFILE *gm);
 extern void        p7_profile_Destroy(P7_PROFILE *gm);
 extern int         p7_profile_IsLocal(const P7_PROFILE *gm);
 extern int         p7_profile_IsMultihit(const P7_PROFILE *gm);
-extern int         p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, 
-				   char st2, int k2, float *ret_tsc);
+extern float       p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2);
+extern int         p7_profile_Dump(FILE *fp, P7_PROFILE *gm);
 extern int         p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol);
+extern char       *p7_profile_DecodeT(int tidx);
+extern int         p7_profile_GetMutePathLogProb(const P7_PROFILE *gm, double *ret_mute_lnp);
 extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol);
 
 /* p7_spensemble.c */
@@ -1524,11 +1702,15 @@ extern int  p7_trace_GetStateUseCounts(const P7_TRACE *tr, int *counts);
 extern int  p7_trace_GetDomainCoords  (const P7_TRACE *tr, int which, int *ret_i1, int *ret_i2,
 				       int *ret_k1, int *ret_k2);
 
+extern char *p7_trace_DecodeStatetype(char st);
 extern int   p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *dsq, char *errbuf);
-extern int   p7_trace_Dump(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ *dsq);
+extern int   p7_trace_Dump(FILE *fp, const P7_TRACE *tr);
+extern int   p7_trace_DumpAnnotated(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ *dsq);
+extern int   p7_trace_DumpSuper    (FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ *dsq,
+				    float gamma, const P7_REFMX *fpp, const P7_BANDMX *bpp);
 extern int   p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol);
-extern int   p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, float *ret_sc);
-extern int   p7_trace_SetPP(P7_TRACE *tr, const P7_GMX *pp);
+extern int   p7_trace_Score      (P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm,            float *ret_sc);
+extern int   p7_trace_ScoreDomain(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, int which, float *ret_sc);
 extern float p7_trace_GetExpectedAccuracy(const P7_TRACE *tr);
 
 extern int  p7_trace_Append(P7_TRACE *tr, char st, int k, int i);

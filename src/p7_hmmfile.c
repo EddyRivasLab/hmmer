@@ -2310,17 +2310,16 @@ main(int argc, char **argv)
       totM += hmm->M;
 
       if (esl_opt_GetBoolean(go, "-a") == TRUE) 
-  {
-    gm = p7_profile_Create(hmm->M, abc);
-    p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
-    om = p7_oprofile_Create(gm->M, abc);
-    p7_oprofile_Convert(gm, om);
-    p7_oprofile_ReconfigLength(om, 400);
+	{
+	  gm = p7_profile_Create(hmm->M, abc);
+	  p7_profile_ConfigLocal(gm, hmm, bg, 400);
+	  om = p7_oprofile_Create(gm->M, abc);
+	  p7_oprofile_Convert(gm, om);
+	  p7_oprofile_ReconfigLength(om, 400);
 
-    p7_profile_Destroy(gm);
-    p7_oprofile_Destroy(om);
-  }
-
+          p7_profile_Destroy(gm);
+          p7_oprofile_Destroy(om);
+        }
       p7_hmm_Destroy(hmm);
     }
   if      (status == eslEFORMAT)   p7_Fail("bad file format in HMM file %s",             hmmfile);

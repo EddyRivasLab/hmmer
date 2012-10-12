@@ -31,7 +31,7 @@
 
 #include "hmmer.h"
 #include "impl_sse.h"
-
+#include "p7_filtermx.h"
 
 /*****************************************************************
  * 1. Viterbi filter implementation.
@@ -39,7 +39,6 @@
 
 /* Function:  p7_ViterbiFilter()
  * Synopsis:  Calculates Viterbi score, vewy vewy fast, in limited precision.
- * Incept:    SRE, Tue Nov 27 09:15:24 2007 [Janelia]
  *
  * Purpose:   Calculates an approximation of the Viterbi score for sequence
  *            <dsq> of length <L> residues, using optimized profile <om>,
@@ -79,9 +78,10 @@
  *            J2/65 for initial benchmarking
  *            J2/66 for precision maximization
  *            J4/138-140 for reimplementation in 16-bit precision
+ *            J9/110-111 for reimplementation with P7_FILTERMX, memory share w/ checkpointed DP matrix
  */
 int
-p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
+p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)
 {
   register __m128i mpv, dpv, ipv;  /* previous row values                                       */
   register __m128i sv;		   /* temp storage of 1 curr row value in progress              */
@@ -93,16 +93,16 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   int16_t  Dmax;		   /* maximum D cell score on row                               */
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
-  int Q        = p7O_NQW(om->M);   /* segment length: # of vectors                              */
-  __m128i *dp  = ox->dpw[0];	   /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  int Q        = P7F_NQW(om->M);   /* segment length: # of vectors                              */
+  __m128i *dp  = (__m128i *) ox->dpf[0]; /* see note [c] in p7_filtermx.h on 1-row DP memory    */
   __m128i *rsc;			   /* will point at om->ru[x] for residue x[i]                  */
   __m128i *tsc;			   /* will point into (and step thru) om->tu                    */
-
   __m128i negInfv;
 
-  /* Check that the DP matrix is ok for us. */
-  if (Q > ox->allocQ8)                                 ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
+#ifdef p7_DEBUGGING   /* Check that the DP matrix is ok for us; see note [c], p7_filtermx.h */
+  if (Q * sizeof(__m128i) > ox->allocW * ox->allocR)   ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
   if (om->mode != p7_LOCAL && om->mode != p7_UNILOCAL) ESL_EXCEPTION(eslEINVAL, "Fast filter only works for local alignment");
+#endif
   ox->M   = om->M;
 
   /* -infinity is -32768 */
@@ -119,8 +119,8 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   xC   = -32768;
   xE   = -32768;
 
-#if p7_DEBUGGING
-  if (ox->debugging) p7_omx_DumpVFRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
+#ifdef p7_DEBUGGING
+  if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
 #endif
 
   for (i = 1; i <= L; i++)
@@ -231,8 +231,8 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	  DMXo(0) = _mm_or_si128(dcv, negInfv);
 	}
 	  
-#if p7_DEBUGGING
-      if (ox->debugging) p7_omx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);   
+#ifdef p7_DEBUGGING
+      if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);   
 #endif
     } /* end loop over sequence residues 1..L */
 
@@ -509,9 +509,9 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
    gcc -o vitfilter_benchmark -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7VITFILTER_BENCHMARK vitfilter.c -lhmmer -leasel -lm 
    icc -o vitfilter_benchmark -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7VITFILTER_BENCHMARK vitfilter.c -lhmmer -leasel -lm 
 
-   ./benchmark-vitfilter <hmmfile>          runs benchmark 
-   ./benchmark-vitfilter -N100 -c <hmmfile> compare scores to generic impl
-   ./benchmark-vitfilter -N100 -x <hmmfile> compare scores to exact emulation
+   ./vitfilter_benchmark <hmmfile>          runs benchmark 
+   ./vitfilter_benchmark -N100 -c <hmmfile> compare scores to generic impl
+   ./vitfilter_benchmark -N100 -x <hmmfile> compare scores to exact emulation
  */
 #include "p7_config.h"
 
@@ -524,6 +524,8 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 
 #include "hmmer.h"
 #include "impl_sse.h"
+#include "p7_refmx.h"
+#include "p7_filtermx.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -552,8 +554,8 @@ main(int argc, char **argv)
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
-  P7_OMX         *ox      = NULL;
-  P7_GMX         *gx      = NULL;
+  P7_FILTERMX    *ox      = NULL;
+  P7_REFMX       *gx      = NULL;
   int             L       = esl_opt_GetInteger(go, "-L");
   int             N       = esl_opt_GetInteger(go, "-N");
   ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
@@ -567,15 +569,15 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, L);
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
 
   if (esl_opt_GetBoolean(go, "-x")) p7_profile_SameAsVF(om, gm);
 
-  ox = p7_omx_Create(gm->M, 0, 0);
-  gx = p7_gmx_Create(gm->M, L);
+  ox = p7_filtermx_Create(om->M, 0, 0);
+  gx = p7_refmx_Create(gm->M, L);
 
   /* Get a baseline time: how long it takes just to generate the sequences */
   esl_stopwatch_Start(w);
@@ -593,13 +595,13 @@ main(int argc, char **argv)
 
       if (esl_opt_GetBoolean(go, "-c")) 
 	{
-	  p7_GViterbi(dsq, L, gm, gx, &sc2); 
+	  p7_ReferenceViterbi(dsq, L, gm, gx, NULL, &sc2); 
 	  printf("%.4f %.4f\n", sc1, sc2);  
 	}
 
       if (esl_opt_GetBoolean(go, "-x"))
 	{
-	  p7_GViterbi(dsq, L, gm, gx, &sc2); 
+	  p7_ReferenceViterbi(dsq, L, gm, gx, NULL, &sc2); 
 	  sc2 /= om->scale_w;
 	  if (om->mode == p7_UNILOCAL)   sc2 -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
 	  else if (om->mode == p7_LOCAL) sc2 -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
@@ -614,8 +616,8 @@ main(int argc, char **argv)
   printf("# %.1f Mc/s\n", Mcs);
 
   free(dsq);
-  p7_omx_Destroy(ox);
-  p7_gmx_Destroy(gx);
+  p7_filtermx_Destroy(ox);
+  p7_refmx_Destroy(gx);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
@@ -639,57 +641,64 @@ main(int argc, char **argv)
 #ifdef p7VITFILTER_TESTDRIVE
 #include "esl_random.h"
 #include "esl_randomseq.h"
+#include "p7_refmx.h"
 
-/* ViterbiFilter() unit test
+/* utest_comparison()
  * 
- * We can check that scores are identical (within machine error) to
- * scores of generic DP with scores rounded the same way.  Do this for
- * a random model of length <M>, for <N> test sequences of length <L>.
+ * Check against the reference Viterbi, after configuring  
+ * a profile such that its scores will match the roundoffs in 
+ * the ViterbiFilter -- p7_profile_SameAsVF().
  * 
+ * Sample a random model of length <M>, and score <N> random
+ * test sequences of length <L>.
+ *
  * We assume that we don't accidentally generate a high-scoring random
  * sequence that overflows ViterbiFilter()'s limited range.
  * 
  */
 static void
-utest_viterbi_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
+utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
 {
   P7_HMM      *hmm = NULL;
   P7_PROFILE  *gm  = NULL;
   P7_OPROFILE *om  = NULL;
   ESL_DSQ     *dsq = malloc(sizeof(ESL_DSQ) * (L+2));
-  P7_OMX      *ox  = p7_omx_Create(M, 0, 0);
-  P7_GMX      *gx  = p7_gmx_Create(M, L);
+  P7_FILTERMX *ox  = p7_filtermx_Create(M, 0, 0);
+  P7_REFMX    *gx  = p7_refmx_Create(M, L);
   float sc1, sc2;
 
   p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om);
   p7_profile_SameAsVF(om, gm);	/* round and scale the scores in <gm> the same as in <om> */
 
 #if 0
-  p7_oprofile_Dump(stdout, om);              // dumps the optimized profile
-  p7_omx_SetDumpMode(stdout, ox, TRUE);      // makes the fast DP algorithms dump their matrices
+  p7_oprofile_Dump(stdout, om);                   // dumps the optimized profile
+  p7_filtermx_SetDumpMode(ox, stdout, TRUE);      // makes the fast DP algorithms dump their matrices
 #endif
 
   while (N--)
     {
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
-      p7_ViterbiFilter(dsq, L, om, ox, &sc1);
-      p7_GViterbi     (dsq, L, gm, gx, &sc2);
+      p7_ViterbiFilter   (dsq, L, om, ox,       &sc1);
+      p7_ReferenceViterbi(dsq, L, gm, gx, NULL, &sc2);
 
 #if 0
-      p7_gmx_Dump(stdout, gx, p7_DEFAULT);   // dumps a generic DP matrix
+      p7_refmx_Dump(stdout, gx);   // dumps a generic DP matrix
 #endif
       
       sc2 /= om->scale_w;
       sc2 -= 3.0;
 
       if (fabs(sc1-sc2) > 0.001) esl_fatal("viterbi filter unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
+      
+      p7_refmx_Reuse(gx);
+      p7_filtermx_Reuse(ox);
     }
 
   free(dsq);
   p7_hmm_Destroy(hmm);
-  p7_omx_Destroy(ox);
-  p7_gmx_Destroy(gx);
+  p7_filtermx_Destroy(ox);
+  p7_refmx_Destroy(gx);
   p7_profile_Destroy(gm);
   p7_oprofile_Destroy(om);
 }
@@ -744,9 +753,9 @@ main(int argc, char **argv)
   if ((bg = p7_bg_Create(abc))            == NULL)  esl_fatal("failed to create null model");
 
   if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiFilter() tests, DNA\n");
-  utest_viterbi_filter(r, abc, bg, M, L, N);   
-  utest_viterbi_filter(r, abc, bg, 1, L, 10);  
-  utest_viterbi_filter(r, abc, bg, M, 1, 10);  
+  utest_comparison(r, abc, bg, M, L, N);   
+  utest_comparison(r, abc, bg, 1, L, 10);  
+  utest_comparison(r, abc, bg, M, 1, 10);  
 
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
@@ -756,9 +765,9 @@ main(int argc, char **argv)
   if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to create null model");
 
   if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiFilter() tests, protein\n");
-  utest_viterbi_filter(r, abc, bg, M, L, N); 
-  utest_viterbi_filter(r, abc, bg, 1, L, 10);
-  utest_viterbi_filter(r, abc, bg, M, 1, 10);
+  utest_comparison(r, abc, bg, M, L, N); 
+  utest_comparison(r, abc, bg, 1, L, 10);
+  utest_comparison(r, abc, bg, M, 1, 10);
 
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
@@ -816,14 +825,12 @@ main(int argc, char **argv)
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
-  P7_OMX         *ox      = NULL;
-  P7_GMX         *gx      = NULL;
+  P7_FILTERMX    *ox      = NULL;
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
   float           vfraw, nullsc, vfscore;
-  float           graw, gscore;
-  double          P, gP;
+  double          P;
   int             status;
 
   /* Read in one HMM */
@@ -842,40 +849,33 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, sq->n);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, sq->n);
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
 
-  /* allocate DP matrices, both a generic and an optimized one */
-  ox = p7_omx_Create(gm->M, 0, sq->n);
-  gx = p7_gmx_Create(gm->M, sq->n);
+  ox = p7_filtermx_Create(gm->M, 0, 0);
 
   /* Useful to place and compile in for debugging: 
-     p7_oprofile_Dump(stdout, om);         dumps the optimized profile
-     p7_omx_SetDumpMode(ox, TRUE);         makes the fast DP algorithms dump their matrices
-     p7_gmx_Dump(stdout, gx, p7_DEFAULT);  dumps a generic DP matrix
+     p7_oprofile_Dump(stdout, om);                      // dumps the optimized profile
+     p7_filtermx_SetDumpMode(ox, stdout, TRUE);         // makes the fast DP algorithms dump their matrices
+     p7_refmx_Dump(stdout, gx);                         // dumps a generic DP matrix
   */
 
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
       p7_oprofile_ReconfigLength(om, sq->n);
-      p7_ReconfigLength(gm,          sq->n);
+      p7_profile_SetLength      (gm, sq->n);
       p7_bg_SetLength(bg,            sq->n);
-      p7_omx_GrowTo(ox, om->M, 0,    sq->n); 
-      p7_gmx_GrowTo(gx, gm->M,       sq->n); 
+      p7_filtermx_GrowTo(ox, om->M, 0);
 
       p7_ViterbiFilter  (sq->dsq, sq->n, om, ox, &vfraw);
       p7_bg_NullOne (bg, sq->dsq, sq->n, &nullsc);
       vfscore = (vfraw - nullsc) / eslCONST_LOG2;
       P        = esl_gumbel_surv(vfscore,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
 
-      p7_GViterbi       (sq->dsq, sq->n, gm, gx, &graw); 
-      gscore   = (graw - nullsc) / eslCONST_LOG2;
-      gP       = esl_gumbel_surv(gscore,  gm->evparam[p7_VMU],  gm->evparam[p7_VLAMBDA]);
-
       if (esl_opt_GetBoolean(go, "-1"))
 	{
-	  printf("%-30s\t%-20s\t%9.2g\t%7.2f\t%9.2g\t%7.2f\n", sq->name, hmm->name, P, vfscore, gP, gscore);
+	  printf("%-30s\t%-20s\t%9.2g\t%7.2f\n", sq->name, hmm->name, P, vfscore);
 	}
       else if (esl_opt_GetBoolean(go, "-P"))
 	{ /* output suitable for direct use in profmark benchmark postprocessors: */
@@ -888,19 +888,16 @@ main(int argc, char **argv)
 	  printf("null score:           %.2f nats\n", nullsc);
 	  printf("per-seq score:        %.2f bits\n", vfscore);
 	  printf("P-value:              %g\n",        P);
-	  printf("GViterbi raw score:   %.2f nats\n", graw);
-	  printf("GViterbi seq score:   %.2f bits\n", gscore);
-	  printf("GViterbi P-value:     %g\n",        gP);
 	}
       
+      p7_filtermx_Reuse(ox);
       esl_sq_Reuse(sq);
     }
 
   /* cleanup */
   esl_sq_Destroy(sq);
   esl_sqfile_Close(sqfp);
-  p7_omx_Destroy(ox);
-  p7_gmx_Destroy(gx);
+  p7_filtermx_Destroy(ox);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);

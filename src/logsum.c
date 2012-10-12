@@ -1,7 +1,7 @@
 /* p7_FLogsum() function used in the Forward() algorithm.
  * 
  * Contents:
- *    1. Floating point log sum.
+ *    1. Floating point log-sum-exp-2arg: LSE2.
  *    2. Benchmark driver.
  *    3. Unit tests.
  *    4. Test driver.
@@ -60,9 +60,10 @@
 #define p7_LOGSUM_TBL   16000
 
 static float flogsum_lookup[p7_LOGSUM_TBL]; /* p7_LOGSUM_TBL=16000: (A-B) = 0..16 nats, steps of 0.001 */
+static int   logsum_initialized = FALSE;
 
 /*****************************************************************
- *# 1. floating point log sum
+ *# 1. floating point log-sum-exp-2arg: LSE2
  *****************************************************************/
 
 /* Function:  p7_FLogsumInit()
@@ -80,13 +81,13 @@ static float flogsum_lookup[p7_LOGSUM_TBL]; /* p7_LOGSUM_TBL=16000: (A-B) = 0..1
 int
 p7_FLogsumInit(void)
 {
-  static int firsttime = TRUE;
-  if (!firsttime) return eslOK;
-  firsttime = FALSE;
-
   int i;
+
+  if (logsum_initialized) return eslOK;
+
   for (i = 0; i < p7_LOGSUM_TBL; i++) 
     flogsum_lookup[i] = log(1. + exp((double) -i / p7_LOGSUM_SCALE));
+  logsum_initialized = TRUE;
   return eslOK;
 }
 
@@ -101,42 +102,69 @@ p7_FLogsumInit(void)
  *
  * Note:      This function is a critical optimization target, because
  *            it's in the inner loop of generic Forward() algorithms.
+ *            
+ *            Compiling with the <p7_LOGSUM_SLOWEXACT> flag bypasses
+ *            the table-driven approximation and uses the exact 
+ *            calculation instead; useful for debugging.
  */
 float
 p7_FLogsum(float a, float b)
 {
   const float max = ESL_MAX(a, b);
   const float min = ESL_MIN(a, b);
-
-  //return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + log(1.0 + exp(min-max));  /* SRE: While debugging SSE impl. Remember to remove! */
+#ifdef p7_DEBUGGING
+  if (! logsum_initialized) esl_fatal("p7_FLogsumInit() was not called");
+#endif
+#ifdef p7_LOGSUM_SLOWEXACT
+  return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + log(1.0 + exp(min-max));  
+#else
   return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + flogsum_lookup[(int)((max-min)*p7_LOGSUM_SCALE)];
+#endif
 } 
 
-/* Function:  p7_FLogsumError()
- * Synopsis:  Compute absolute error in probability from Logsum.
+/* Function:  p7_logsum_exact()
+ * Synopsis:  Exact calculation of $\log(e^a + e^b)$, without fast approximation.
  *
- * Purpose:   Compute the absolute error in probability space
- *            resulting from <p7_FLogsum()>'s table lookup 
- *            approximation: approximation result - exact result.
- *                                                  
- *            This is of course computable analytically for
- *            any <a,b> given <p7_LOGSUM_TBL>; but the function
- *            is useful for some routines that want to determine
- *            if <p7_FLogsum()> has been compiled in its
- *            exact slow mode for debugging purposes. Testing
- *            <p7_FLogsumError(-0.4, -0.5) > 0.0001>
- *            for example, suffices to detect that the function
- *            is compiled in its fast approximation mode given
- *            the defaults. 
+ * Purpose:   Calculates $\log(e^a + e^b)$ exactly, without the fast
+ *            table driven approximation. Rarely used - just for some
+ *            debugging and unit testing situations. To get
+ *            p7_FLogsum() itself to use the exact calculation,
+ *            compile with the <p7_LOGSUM_SLOWEXACT> flag.
  */
-float
-p7_FLogsumError(float a, float b)
+float 
+p7_logsum_exact(float a, float b)
 {
-  float approx = p7_FLogsum(a,b);
-  float exact  = log(exp(a) + exp(b));
-  return (exp(approx) - exp(exact));
+  const float max = ESL_MAX(a, b);
+  const float min = ESL_MIN(a, b);
+  return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + log(1.0 + exp(min-max));  
 }
 
+
+/* Function:  p7_logsum_IsSlowExact()
+ * Synopsis:  Return TRUE if compiled for slow but exact calculation.
+ *
+ * Purpose: When debugging, especially when comparing scores or DP
+ *            cell values from a prob-space implementation against a
+ *            log-space implementation, it can be useful to compile
+ *            the code with <p7_LOGSUM_SLOWEXACT>. This replaces the
+ *            table-driven approximation with the slow but exact max +
+ *            log(1.0 + exp(min-max)) calculation, to avoid score
+ *            differences arising from the logsum approximation.  When
+ *            unit tests compare scores, they need to know how
+ *            stringently to do the comparison: they can call this
+ *            function to decide whether to compare stringently.
+ *            
+ * Returns:   <TRUE> or <FALSE>.
+ */
+int
+p7_logsum_IsSlowExact(void)
+{
+#ifdef p7_LOGSUM_SLOWEXACT
+  return TRUE;
+#else
+  return FALSE;
+#endif
+}
 
 /*****************************************************************
  * 2. Benchmark driver.
@@ -272,7 +300,7 @@ utest_FLogsumError(ESL_GETOPTS *go, ESL_RANDOMNESS *r)
       a = (esl_random(r) - 0.5) * maxval * 2.; /* uniform draws on -maxval..maxval */
       b = (esl_random(r) - 0.5) * maxval * 2.; 
 
-      exact  = log(exp(a) + exp(b));
+      exact  = p7_logsum_exact(a,b);
       result = p7_FLogsum(a,b);
       err    = fabs(exact-result) / maxval;
 
@@ -371,16 +399,16 @@ main(int argc, char **argv)
 {
   float a = atof(argv[1]);
   float b = atof(argv[2]);
-  float result;
+  float r_approx, r_exact;
 
   p7_FLogsumInit();
-  result = p7_FLogsum(a, b);
-  printf("p7_FLogsum(%f,%f) = %f\n", a, b, result);
+  r_approx = p7_FLogsum(a, b);
+  printf("p7_FLogsum(%f,%f) = %f\n", a, b, r_approx);
 
-  result = log(exp(a) + exp(b));
-  printf("log(e^%f + e^%f) = %f\n", a, b, result);
+  r_exact = p7_logsum_exact(a,b);
+  printf("log(e^%f + e^%f) = %f\n", a, b, r_exact);
 
-  printf("Absolute error in probability: %f\n", p7_FLogsumError(a,b));
+  printf("Absolute error in probability: %f\n", r_approx - r_exact);
   return eslOK;
 }
 #endif /*p7LOGSUM_EXAMPLE*/
@@ -404,19 +432,24 @@ main(int argc, char **argv)
  *     implemementation only works for local; glocal or global may
  *     underflow long delete paths. Would be desirable to use a
  *     log-space implementation if we could make it fast. Problem is
- *     implementing the p7_FLogsum() lookup table in SIMD; lookup
- *     tables of this size in current SSE, Altivec appear to be
- *     infeasible. I considered the possibility of using a functional
- *     fit to f(x) = log(1+e^{-x}) for x >=0, for example with a
- *     Chebyshev polynomial, because a numerical f(x) would vectorize.
- *     Decided that this computation would necessarily be expensive on
- *     the order of log(x) or exp(x), so replacing log(1+exp(-x)) with
- *     f(x) doesn't look like compelling -- might as well compute
- *     log(1+exp(-x)) directly! The table-driven approach is about 20x
- *     faster (about 9 clocks, compared to about 200 for the direct
- *     log,exp calculation), and even if we could get an f(x)
+ *     implementing the lookup table in SIMD. Lookup tables of this
+ *     size in current SSE, Altivec appear to be infeasible.  For my
+ *     best implementation of a SIMD lse2, see [SRE:J8/71-74; SRE
+ *     notebook/Archive2011/0810-logsum and 0816-logsum-in-h3]. Those
+ *     notes give a SSSE3 implementation using a piecewise linear fit
+ *     (PWL) approximation, a 16-way LUT for the PWL coefficients, and
+ *     a reduced-precision custom 8-bit float representation (5
+ *     exponent and 3 mantissa bits). Despite its complexity, and its
+ *     loss of accuracy (from the PWL fit), this vector implementation
+ *     is hardly faster (if at all) than the serial LUT implementation
+ *     in FLogsum().
+ *     
+ *     One way to think about this: the table-driven approach seems to
+ *     require about 10 clocks, compared to about 200 for the direct
+ *     log,exp calculation. Even if we could get an lse2(x)
  *     calculation to be as efficient as log(x) -- say 100 clocks --
  *     the 4x SIMD vectorization does not compensate for the 10x hit
- *     in speed. [xref SRE:J8/71]
+ *     in speed. So it's unlikely that any vectorized functional
+ *     approximation is going to compete with the serial LUT approach.
  */
 

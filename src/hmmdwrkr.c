@@ -551,7 +551,7 @@ search_thread(void *arg)
   } else {
     gm = p7_profile_Create (info->hmm->M, info->abc);
     om = p7_oprofile_Create(info->hmm->M, info->abc);
-    p7_ProfileConfig(info->hmm, bg, gm, 100, p7_LOCAL);
+    p7_profile_ConfigLocal(gm, info->hmm, bg, 100);
     p7_oprofile_Convert(gm, om);
   }
 

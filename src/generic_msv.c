@@ -191,8 +191,8 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
    *  1 bit for each doubling of the length model, so they offset.
    */
   float invP = esl_gumbel_invsurv(P, gm->evparam[p7_MMU],  gm->evparam[p7_MLAMBDA]);
-  p7_bg_SetLength(bg, gm->max_length);
-  p7_ReconfigLength(gm, gm->max_length);
+  p7_bg_SetLength     (bg, gm->max_length);
+  p7_profile_SetLength(gm, gm->max_length);
   p7_bg_NullOne  (bg, dsq, gm->max_length, &nullsc);
 
   sc_thresh =   nullsc  + (invP * eslCONST_LOG2) - tmove - tloop_total;
@@ -315,8 +315,10 @@ main(int argc, char **argv)
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
+  p7_profile_ConfigUnilocal(gm, hmm, bg, L);
+
   gx = p7_gmx_Create(gm->M, L);
 
   /* Baseline time. */
@@ -383,8 +385,8 @@ utest_msv(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, P7_P
 
   /* Make g2's scores appropriate for simulating the MSV algorithm in Viterbi */
   esl_vec_FSet(g2->tsc, p7P_NTRANS * g2->M, -eslINFINITY);
-  for (k = 1; k <  g2->M; k++) p7P_TSC(g2, k, p7P_MM) = 0.0f;
-  for (k = 0; k <  g2->M; k++) p7P_TSC(g2, k, p7P_BM) = log(2.0f / ((float) g2->M * (float) (g2->M+1)));
+  for (k = 1; k <  g2->M; k++) P7P_TSC(g2, k, p7P_MM)  = 0.0f;
+  for (k = 0; k <  g2->M; k++) P7P_TSC(g2, k, p7P_LM) = log(2.0f / ((float) g2->M * (float) (g2->M+1)));
 
   for (idx = 0; idx < nseq; idx++)
     {
@@ -446,7 +448,7 @@ main(int argc, char **argv)
   if (p7_hmm_Sample(r, M, abc, &hmm)                != eslOK) esl_fatal("failed to sample an HMM");
   if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
   if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal("failed to create profile");
-  if (p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL)    != eslOK) esl_fatal("failed to config profile");
+  if (p7_profile_ConfigLocal(gm, hmm, bg, L)        != eslOK) esl_fatal("failed to config profile");
   if (p7_hmm_Validate    (hmm, errbuf, 0.0001)      != eslOK) esl_fatal("whoops, HMM is bad!: %s", errbuf);
   if (p7_profile_Validate(gm,  errbuf, 0.0001)      != eslOK) esl_fatal("whoops, profile is bad!: %s", errbuf);
 
@@ -528,15 +530,15 @@ main(int argc, char **argv)
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, sq->n);
 
   /* Allocate matrix */
   fwd = p7_gmx_Create(gm->M, sq->n);
 
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
-      p7_ReconfigLength(gm,  sq->n);
-      p7_bg_SetLength(bg,    sq->n);
+      p7_profile_SetLength(gm,   sq->n);
+      p7_bg_SetLength     (bg,   sq->n);
       p7_gmx_GrowTo(fwd, gm->M, sq->n); 
 
       /* Run MSV */

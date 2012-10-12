@@ -56,7 +56,7 @@ forward_row(const ESL_DSQ *dsq, const P7_PROFILE *gm, P7_GMXCHK *gxc, const floa
    	            + p7_FLogsum(p7_FLogsum( mvp + *(tsc+p7P_MM),    /* M(i-1,k-1) * t_M(k-1)->M(k)  */
 					     ivp + *(tsc+p7P_IM)),   /* I(i-1,k-1) * t_I(k-1)->M(k)  */
 				 p7_FLogsum( dvp + *(tsc+p7P_DM),    /* D(i-1,k-1) * t_D(k-1)->M(k)  */
-					     xB  + *(tsc+p7P_BM)));  /* B(i-1)     * t_B->M_k        */
+					     xB  + *(tsc+p7P_LM)));  /* B(i-1)     * t_B->M_k        */
       tsc += p7P_NTRANS;	/* advance to the t_X(k) transitions now */
 
       /* pick up values from prev row, (k)... at next loop iteration they're magically the k-1 values we need for M calc */
@@ -81,7 +81,7 @@ forward_row(const ESL_DSQ *dsq, const P7_PROFILE *gm, P7_GMXCHK *gxc, const floa
                 + p7_FLogsum(p7_FLogsum( mvp + *(tsc + p7P_MM),    /* M(i-1,M-1) * t_MM   */
 					 ivp + *(tsc + p7P_IM)),   /* I(i-1,M-1) * t_IM   */
 			     p7_FLogsum( dvp + *(tsc + p7P_DM),    /* D(i-1,M-1) * t_DM   */
-					 xB  + *(tsc + p7P_BM)));  /* B(i-1)     * t_BM_M */
+					 xB  + *(tsc + p7P_LM)));  /* B(i-1)     * t_BM_M */
   *dpc++ = -eslINFINITY;       /* I_M: no such state   */
   *dpc++ = dc;		       /* delayed store of D_M */
   dpp += 3;
@@ -111,7 +111,7 @@ forward_row(const ESL_DSQ *dsq, const P7_PROFILE *gm, P7_GMXCHK *gxc, const floa
  *            
  *            The caller has also already configured the length model
  *            in <gm> for the target sequence length <L>, for example
- *            by calling <p7_ReconfigLength()>.
+ *            by calling <p7_profile_SetLength()>.
  *            
  * Args:      dsq    : digital sequence target
  *            L      : length of <dsq> in residues
@@ -196,9 +196,9 @@ backward_row(const ESL_DSQ *dsq, const P7_PROFILE *gm, P7_GMXCHK *gxc, const flo
   
   XMR(dpc,p7GC_C) =  XMR(dpc,p7GC_CC) =  XMR(dpp,p7GC_C) + gm->xsc[p7P_C][p7P_LOOP];
 
-  XMR(dpc,p7GC_B) = MMR(dpp,1) + TSC(p7P_BM,0) + MSC(1); /* t_BM index = 0 because it's stored off by one */
+  XMR(dpc,p7GC_B) = MMR(dpp,1) + TSC(p7P_LM,0) + MSC(1); /* t_BM index = 0 because it's stored off by one */
   for (k = 2; k <= M; k++)
-    XMR(dpc,p7GC_B) = p7_FLogsum( XMR(dpc,p7GC_B), MMR(dpp,k) + TSC(p7P_BM,k-1) + MSC(k));
+    XMR(dpc,p7GC_B) = p7_FLogsum( XMR(dpc,p7GC_B), MMR(dpp,k) + TSC(p7P_LM,k-1) + MSC(k));
 
   XMR(dpc,p7GC_J)  = XMR(dpc,p7GC_JJ) = p7_FLogsum( XMR(dpp,p7GC_J) + gm->xsc[p7P_J][p7P_LOOP],  XMR(dpc,p7GC_B) + gm->xsc[p7P_J][p7P_MOVE]);
 
@@ -368,9 +368,9 @@ p7_GBackwardCheckpointed(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX
   /* now i=0. At i=0, only N,B states are reachable. */
   bck = gxc->dp[0];
   rsc = gm->rsc[dsq[1]];
-  XMR(bck,p7GC_B) = MMR(dpp,1) + TSC(p7P_BM,0) + MSC(1); /* t_BM index is 0 because it's stored off-by-one. */
+  XMR(bck,p7GC_B) = MMR(dpp,1) + TSC(p7P_LM,0) + MSC(1); /* t_BM index is 0 because it's stored off-by-one. */
   for (k = 2; k <= M; k++)
-    XMR(bck,p7GC_B) = p7_FLogsum(XMR(bck,p7GC_B), MMR(dpp,k) + TSC(p7P_BM,k-1) + MSC(k));
+    XMR(bck,p7GC_B) = p7_FLogsum(XMR(bck,p7GC_B), MMR(dpp,k) + TSC(p7P_LM,k-1) + MSC(k));
   XMR(bck,p7GC_J) = -eslINFINITY;
   XMR(bck,p7GC_C) = -eslINFINITY;
   XMR(bck,p7GC_N) = p7_FLogsum( XMR(dpp, p7GC_N) + gm->xsc[p7P_N][p7P_LOOP],
@@ -490,11 +490,13 @@ main(int argc, char **argv)
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
+  p7_profile_Config(gm, hmm, bg);
+  p7_profile_SetLength(gm, L);
 
   gxc = p7_gmxchk_Create(gm->M, L, ESL_MBYTES(32));
-  bnd = p7_gbands_Create();
+  bnd = p7_gbands_Create(gm->M, L);
 
   /* Baseline time. */
   esl_stopwatch_Start(w);
@@ -506,6 +508,8 @@ main(int argc, char **argv)
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
+      p7_gbands_Reinit(bnd, gm->M, L);
+
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
       p7_GForwardCheckpointed (dsq, L, gm, gxc, &sc);
       if (! esl_opt_GetBoolean(go, "-F"))
@@ -554,6 +558,7 @@ scoring_comparison(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, P7_GMXCHK *g
   float fsc1, fsc2;
   float bsc1, bsc2;
 
+  if ( p7_gbands_Reinit(bnd, gm->M, L)                  != eslOK) esl_fatal(msg);
   if ( p7_gmx_GrowTo(gx, gm->M, L)                      != eslOK) esl_fatal(msg);
   if ( p7_gmxchk_GrowTo(gxc, gm->M, L)                  != eslOK) esl_fatal(msg);
 
@@ -580,7 +585,7 @@ utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc,
   ESL_DSQ   *dsq   = malloc(sizeof(ESL_DSQ) * (L+2));
   P7_GMX    *gx    = p7_gmx_Create(gm->M, 100);
   P7_GMXCHK *gxc   = p7_gmxchk_Create(gm->M, 100, ESL_MBYTES(32));
-  P7_GBANDS *bnd   = p7_gbands_Create();
+  P7_GBANDS *bnd   = p7_gbands_Create(gm->M, L);
   int        idx;
 
   for (idx = 0; idx < nseq; idx++)
@@ -603,13 +608,12 @@ utest_emitseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc,
   ESL_SQ    *sq    = esl_sq_CreateDigital(abc);
   P7_GMX    *gx    = p7_gmx_Create(gm->M, 100);
   P7_GMXCHK *gxc   = p7_gmxchk_Create(gm->M, 100, ESL_MBYTES(32));
-  P7_GBANDS *bnd   = p7_gbands_Create();
+  P7_GBANDS *bnd   = p7_gbands_Create(gm->M, 100);
   int        idx;
 
   for (idx = 0; idx < nseq; idx++)
     {
       if ( p7_ProfileEmit(rng, hmm, gm, bg, sq, NULL) != eslOK) esl_fatal(msg);
-      
       scoring_comparison(sq->dsq, sq->n, gm, gx, gxc, bnd);
     }
 
@@ -668,7 +672,7 @@ main(int argc, char **argv)
   if (p7_hmm_Sample(rng, M, abc, &hmm)              != eslOK) esl_fatal("failed to sample an HMM");
   if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
   if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal("failed to create profile");
-  if (p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL)    != eslOK) esl_fatal("failed to config profile");
+  if (p7_profile_ConfigLocal(gm, hmm, bg, L)        != eslOK) esl_fatal("failed to config profile");
   if (p7_hmm_Validate    (hmm, errbuf, 0.0001)      != eslOK) esl_fatal("whoops, HMM is bad!: %s", errbuf);
   if (p7_profile_Validate(gm,  errbuf, 0.0001)      != eslOK) esl_fatal("whoops, profile is bad!: %s", errbuf);
 
@@ -756,13 +760,13 @@ main(int argc, char **argv)
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, 400);
 
   /* Allocate matrices */
   fwd = p7_gmx_Create(gm->M, 400);
   bck = p7_gmx_Create(gm->M, 400);
   gxc = p7_gmxchk_Create(gm->M, 400, ESL_MBYTES(32));
-  bnd = p7_gbands_Create();
+  bnd = p7_gbands_Create(gm->M, 400);
 
   while ( (status = esl_sqio_Read(sqfp, sq)) != eslEOF)
     {
@@ -773,12 +777,13 @@ main(int argc, char **argv)
       p7_gmx_GrowTo   (fwd, gm->M, sq->n);
       p7_gmx_GrowTo   (bck, gm->M, sq->n);
       p7_gmxchk_GrowTo(gxc, gm->M, sq->n);
+      p7_gbands_Reinit(bnd, gm->M, sq->n);
 
       //printf("Allocation: %ld\n", p7_gmxchk_Sizeof(fwdc));
 
       /* Set the profile and null model's target length models */
-      p7_bg_SetLength(bg,   sq->n);
-      p7_ReconfigLength(gm, sq->n);
+      p7_bg_SetLength    (bg,  sq->n);
+      p7_profile_SetLength(gm, sq->n);
 
       /* Run Forward in both modes */
       p7_GForward            (sq->dsq, sq->n, gm, fwd,  &fsc);

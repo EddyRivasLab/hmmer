@@ -74,7 +74,7 @@ main(int argc, char **argv)
       totM += hmm->M;
 
       gm = p7_profile_Create(hmm->M, abc);
-      p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
+      p7_profile_ConfigLocal(gm, hmm, bg, 400);
       om = p7_oprofile_Create(gm->M, abc);
       p7_oprofile_Convert(gm, om);
       

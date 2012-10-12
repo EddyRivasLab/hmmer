@@ -1,4 +1,4 @@
-/* P7_TRACE, the traceback structure.
+/* P7_TRACE: the traceback structure.
  *
  * Contents:
  *   1. The P7_TRACE structure
@@ -9,7 +9,8 @@
  *   6. Counting traces into new HMMs
  *   7. Unit tests
  *   8. Test driver
- *   9. Copyright and license information
+ *   9. Example
+ *  10. Copyright and license information
  * 
  * Stylistic note: elements in a trace path are usually indexed by z.
  */
@@ -18,13 +19,15 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdarg.h>
 
 #include "easel.h"
 #include "hmmer.h"
-
+#include "p7_bandmx.h"
+#include "p7_refmx.h"
 
 /*****************************************************************
- * 1. The P7_TRACE structure.
+ * 1. The P7_TRACE structure
  *****************************************************************/
 
 static P7_TRACE *trace_create_engine(int initial_nalloc, int initial_ndomalloc, int with_posteriors);
@@ -57,7 +60,6 @@ p7_trace_Create(void)
 
 /* Function:  p7_trace_CreateWithPP()
  * Synopsis:  Allocates a traceback that includes posterior probs.
- * Incept:    SRE, Tue Aug 19 13:08:12 2008 [Janelia]
  *
  * Purpose:   Allocates a traceback that includes <tr->pp[z]> fields
  *            for posterior probabilities of emitted residues; 
@@ -88,11 +90,12 @@ trace_create_engine(int initial_nalloc, int initial_ndomalloc, int with_posterio
   tr->tfrom   = tr->tto   = NULL;
   tr->sqfrom  = tr->sqto  = NULL;
   tr->hmmfrom = tr->hmmto = NULL;
+  tr->anch                = NULL;
 
   /* The trace data itself */
-  ESL_ALLOC(tr->st, sizeof(char) * initial_nalloc);
-  ESL_ALLOC(tr->k,  sizeof(int)  * initial_nalloc);
-  ESL_ALLOC(tr->i,  sizeof(int)  * initial_nalloc);
+  ESL_ALLOC(tr->st,   sizeof(char) * initial_nalloc);
+  ESL_ALLOC(tr->k,    sizeof(int)  * initial_nalloc);
+  ESL_ALLOC(tr->i,    sizeof(int)  * initial_nalloc);
   if (with_posteriors)
     ESL_ALLOC(tr->pp, sizeof(float) * initial_nalloc);
   tr->N      = 0;
@@ -105,6 +108,7 @@ trace_create_engine(int initial_nalloc, int initial_ndomalloc, int with_posterio
   ESL_ALLOC(tr->sqto,    sizeof(int) * initial_ndomalloc);
   ESL_ALLOC(tr->hmmfrom, sizeof(int) * initial_ndomalloc);
   ESL_ALLOC(tr->hmmto,   sizeof(int) * initial_ndomalloc);
+  ESL_ALLOC(tr->anch,    sizeof(int) * initial_ndomalloc);
   tr->ndom      = 0;
   tr->ndomalloc = initial_ndomalloc;
   return tr;
@@ -117,7 +121,6 @@ trace_create_engine(int initial_nalloc, int initial_ndomalloc, int with_posterio
 
 /* Function:  p7_trace_Reuse()
  * Synopsis:  Prepare a trace for reuse.
- * Incept:    SRE, Tue Jan  9 13:02:34 2007 [Janelia]
  *
  * Purpose:   Reinitializes an existing trace object, reusing its
  *            memory.
@@ -174,7 +177,6 @@ p7_trace_Grow(P7_TRACE *tr)
 
 /* Function:  p7_trace_GrowIndex()
  * Synopsis:  Grows the allocation of the trace's domain index.
- * Incept:    SRE, Fri Jan  4 10:40:02 2008 [Janelia]
  *
  * Purpose:   If <tr> can't fit another domain in its index,
  *            double the allocation of the index in <tr>.
@@ -187,17 +189,17 @@ p7_trace_Grow(P7_TRACE *tr)
 int
 p7_trace_GrowIndex(P7_TRACE *tr)
 {
-  void *p;
   int   status;
 
   if (tr->ndom < tr->ndomalloc) return eslOK;
 
-  ESL_RALLOC(tr->tfrom,   p, sizeof(int)*2*tr->ndomalloc);
-  ESL_RALLOC(tr->tto,     p, sizeof(int)*2*tr->ndomalloc);
-  ESL_RALLOC(tr->sqfrom,  p, sizeof(int)*2*tr->ndomalloc);
-  ESL_RALLOC(tr->sqto,    p, sizeof(int)*2*tr->ndomalloc);
-  ESL_RALLOC(tr->hmmfrom, p, sizeof(int)*2*tr->ndomalloc);
-  ESL_RALLOC(tr->hmmto,   p, sizeof(int)*2*tr->ndomalloc);
+  ESL_REALLOC(tr->tfrom,   sizeof(int)*2*tr->ndomalloc);
+  ESL_REALLOC(tr->tto,     sizeof(int)*2*tr->ndomalloc);
+  ESL_REALLOC(tr->sqfrom,  sizeof(int)*2*tr->ndomalloc);
+  ESL_REALLOC(tr->sqto,    sizeof(int)*2*tr->ndomalloc);
+  ESL_REALLOC(tr->hmmfrom, sizeof(int)*2*tr->ndomalloc);
+  ESL_REALLOC(tr->hmmto,   sizeof(int)*2*tr->ndomalloc);
+  ESL_REALLOC(tr->anch,    sizeof(int)*2*tr->ndomalloc);
   tr->ndomalloc *= 2;
   return eslOK;
 
@@ -239,7 +241,6 @@ p7_trace_GrowTo(P7_TRACE *tr, int N)
 
 /* Function:  p7_trace_GrowIndexTo()
  * Synopsis:  Reallocates domain index for a given minimum number.
- * Incept:    SRE, Fri Jan  4 10:47:43 2008 [Janelia]
  *
  * Purpose:   Reallocates the domain index in <tr> to index
  *            at least <ndom> domains.
@@ -252,17 +253,18 @@ p7_trace_GrowTo(P7_TRACE *tr, int N)
 int
 p7_trace_GrowIndexTo(P7_TRACE *tr, int ndom)
 {
-  void *p;
   int   status;
 
   if (ndom < tr->ndomalloc) return eslOK;
 
-  ESL_RALLOC(tr->tfrom,   p, sizeof(int)*ndom);
-  ESL_RALLOC(tr->tto,     p, sizeof(int)*ndom);
-  ESL_RALLOC(tr->sqfrom,  p, sizeof(int)*ndom);
-  ESL_RALLOC(tr->sqto,    p, sizeof(int)*ndom);
-  ESL_RALLOC(tr->hmmfrom, p, sizeof(int)*ndom);
-  ESL_RALLOC(tr->hmmto,   p, sizeof(int)*ndom);
+  ESL_REALLOC(tr->tfrom,   sizeof(int)*ndom);
+  ESL_REALLOC(tr->tto,     sizeof(int)*ndom);
+  ESL_REALLOC(tr->sqfrom,  sizeof(int)*ndom);
+  ESL_REALLOC(tr->sqto,    sizeof(int)*ndom);
+  ESL_REALLOC(tr->hmmfrom, sizeof(int)*ndom);
+  ESL_REALLOC(tr->hmmto,   sizeof(int)*ndom);
+  ESL_REALLOC(tr->hmmto,   sizeof(int)*ndom);
+  ESL_REALLOC(tr->anch,    sizeof(int)*ndom);
   tr->ndomalloc = ndom;
   return eslOK;
   
@@ -282,16 +284,17 @@ void
 p7_trace_Destroy(P7_TRACE *tr)
 {
   if (tr == NULL) return;
-  if (tr->st      != NULL) free(tr->st);
-  if (tr->k       != NULL) free(tr->k);
-  if (tr->i       != NULL) free(tr->i);
-  if (tr->pp      != NULL) free(tr->pp);
-  if (tr->tfrom   != NULL) free(tr->tfrom);
-  if (tr->tto     != NULL) free(tr->tto);
-  if (tr->sqfrom  != NULL) free(tr->sqfrom);
-  if (tr->sqto    != NULL) free(tr->sqto);
-  if (tr->hmmfrom != NULL) free(tr->hmmfrom);
-  if (tr->hmmto   != NULL) free(tr->hmmto);
+  if (tr->st)      free(tr->st);
+  if (tr->k)       free(tr->k);
+  if (tr->i)       free(tr->i);
+  if (tr->pp)      free(tr->pp);
+  if (tr->tfrom)   free(tr->tfrom);
+  if (tr->tto)     free(tr->tto);
+  if (tr->sqfrom)  free(tr->sqfrom);
+  if (tr->sqto)    free(tr->sqto);
+  if (tr->hmmfrom) free(tr->hmmfrom);
+  if (tr->hmmto)   free(tr->hmmto);
+  if (tr->anch)    free(tr->anch);
   free(tr);
   return;
 }
@@ -316,7 +319,6 @@ p7_trace_DestroyArray(P7_TRACE **tr, int N)
   free(tr);
   return;
 }
-
 /*---------------------- end, P7_TRACE --------------------------*/
 
 
@@ -327,7 +329,6 @@ p7_trace_DestroyArray(P7_TRACE **tr, int N)
  *****************************************************************/
 
 /* Function:  p7_trace_GetDomainCount()
- * Incept:    SRE, Tue Feb 27 13:11:43 2007 [Janelia]
  *
  * Purpose:   Determine the number of hits in the trace <tr> -- that is,
  *            the number of times the trace traverses the model from
@@ -360,13 +361,12 @@ p7_trace_GetDomainCount(const P7_TRACE *tr, int *ret_ndom)
 }
 
 /* Function:  p7_trace_GetStateUseCounts()
- * Incept:    SRE, Sun May 27 10:30:13 2007 [Janelia]
  *
  * Purpose:   Accumulate counts of each different state type in trace <tr>. 
  *
  *            <counts[]> is allocated for at least <p7T_NSTATETYPES>
  *            integers, indexed by statetype. Upon return,
- *            <counts[p7T_M]> contains the number of match states
+ *            <counts[p7T_MG]> contains the number of glocal match states
  *            in the trace, for example.
  */
 int
@@ -385,7 +385,6 @@ p7_trace_GetStateUseCounts(const P7_TRACE *tr, int *counts)
 }
 
 /* Function:  p7_trace_GetDomainCoords()
- * Incept:    SRE, Tue Feb 27 13:08:32 2007 [Janelia]
  *
  * Purpose:   Retrieve the bounds of domain alignment number <which> in
  *            traceback <tr>. <which> starts from 0. The total number
@@ -424,8 +423,8 @@ int
 p7_trace_GetDomainCoords(const P7_TRACE *tr, int which,
 			 int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2)
 {
-  int status;
   int z;
+  int status;
 
   if (which < 0) ESL_XEXCEPTION(eslEINVAL, "bad which < 0");
 
@@ -445,23 +444,24 @@ p7_trace_GetDomainCoords(const P7_TRACE *tr, int which,
   for (z = 0; which >= 0 && z < tr->N; z++)
     if (tr->st[z] == p7T_B) which--;
   if (z == tr->N) { status = eslEOD; goto ERROR; }
-  
-  /* skip to the first M state and record i1,k1: 
-   * in a profile trace, this must be the next state.
-   */
-  if (tr->st[z] != p7T_M) ESL_XEXCEPTION(eslECORRUPT, "not a profile trace?");
-  *ret_i1 = tr->i[z];
-  *ret_k1 = tr->k[z];
 
-  /* skip to the end E, then look back at the last M, record i2,k2.
+  /* Find start coord on model and seq.
+   * B->G->M1/D1 or B->L->Mk; z is currently on G/L.
    */
-  for (; z < tr->N; z++)
-    if (tr->st[z] == p7T_E) break;
-  if (z == tr->N)         ESL_EXCEPTION(eslECORRUPT, "invalid trace: no E for a B");
-  do { z--; } while (tr->st[z] == p7T_D); /* roll back over any D trailer */
-  if (tr->st[z] != p7T_M) ESL_EXCEPTION(eslECORRUPT, "invalid trace: no M");
-  *ret_i2 = tr->i[z];
+  z++;
+  *ret_k1 = tr->k[z];		   /* z is on {MD}1 for glocal, MLk local   */
+  while (tr->st[z] == p7T_DG) z++; 
+  *ret_i1 = tr->i[z];		   /* z is on MGk for glocal, MLk for local */
+
+  /* Skip ahead to the state before E. */
+  while (tr->st[z+1] != p7T_E) z++;
+
+  /* Find end coord on model, seq 
+   * glocal: we're on {MD}m; local: we're on {MD}k (Dk only happens on suboptimal path)
+   */
   *ret_k2 = tr->k[z];
+  while (tr->st[z] == p7T_DG || tr->st[z] == p7T_DL) z--;  
+  *ret_i2 = tr->i[z];
   return eslOK;
 
  ERROR:
@@ -480,8 +480,42 @@ p7_trace_GetDomainCoords(const P7_TRACE *tr, int which,
  * 3. Debugging tools.
  *****************************************************************/
 
+/* Function:  p7_trace_DecodeStatetype()
+ * Synopsis:  Convert an internal state type code to a string.
+ *
+ * Purpose:   Returns the state type in text, as a string.
+ *            For example, <p7_trace_DecodeStatetype(p7T_S)>
+ *            returns "S".
+ *            
+ * Throws:    an internal <eslEINVAL> exception if the code doesn't 
+ *            exist, and returns <NULL>.           
+ */
+char *
+p7_trace_DecodeStatetype(char st)
+{
+  switch (st) {
+  case p7T_ML: return "ML";
+  case p7T_MG: return "MG";
+  case p7T_IL: return "IL";
+  case p7T_IG: return "IG";
+  case p7T_DL: return "DL";
+  case p7T_DG: return "DG";
+  case p7T_S:  return "S";
+  case p7T_N:  return "N";
+  case p7T_B:  return "B";
+  case p7T_L:  return "L";
+  case p7T_G:  return "G";
+  case p7T_E:  return "E";
+  case p7T_C:  return "C";
+  case p7T_J:  return "J";
+  case p7T_T:  return "T";
+  default:     break;
+  }
+  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such statetype code %d", st);
+  return NULL;
+}
+
 /* Function:  p7_trace_Validate()
- * Incept:    SRE, Fri Jan  5 09:17:24 2007 [Janelia]
  *
  * Purpose:   Validate the internal data in a trace structure <tr>
  *            representing an alignment of an HMM to a 
@@ -495,12 +529,11 @@ p7_trace_GetDomainCoords(const P7_TRACE *tr, int which,
  *            HMM construction when we don't have an HMM yet; but 
  *            we always have a digital sequence.
  *
- *            Intended for debugging, development, and testing
- *            purposes.
+ *            Intended for debugging/development/testing only.
  *            
  * Args:      tr     - trace to validate
  *            abc    - alphabet corresponding to sequence <sq>
- *            sq     - digital sequence that <tr> is explaining
+ *            dsq    - digital sequence that <tr> is explaining
  *            errbuf - NULL, or an error message buffer allocated
  *                     for at least eslERRBUFSIZE chars.           
  *
@@ -512,286 +545,341 @@ p7_trace_GetDomainCoords(const P7_TRACE *tr, int which,
 int
 p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *dsq, char *errbuf)
 {
-  int  z;			/* position in trace    */
-  int  i;			/* position in sequence */
-  int  k;			/* position in model */
-  char prv;			/* type of the previous state */
-  int  is_core;			/* TRUE if trace is a core trace, not profile */
+                                           /* X  ML MG IL IG DL DG S  N  B  L  G  E  C  J  T */
+  static int is_kindexed[p7T_NSTATETYPES] = { 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 }; /* main states that have a k index */
+  static int is_kbumped [p7T_NSTATETYPES] = { 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 }; /* states that advance k index on transition */
+  static int is_memitter[p7T_NSTATETYPES] = { 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }; /* states that emit on state */
+  static int is_temitter[p7T_NSTATETYPES] = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0 }; /* states that emit on transition */
+  static int is_valid   [p7T_NSTATETYPES] = { 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0 }; /* valid in nonterminal positions 1..N-2 in trace */
 
-  /* minimum trace length is a core's B->Mk->E. If we don't have at least that,
-   * we're definitely in trouble
+  static int valid_transition[p7T_NSTATETYPES][p7T_NSTATETYPES] = {
+    /*         X  ML MG IL IG DL DG S  N  B  L  G  E  C  J  T */
+    /* X  */ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 
+    /* ML */ { 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0 }, 
+    /* MG */ { 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0 }, /* MG->E only if k==M */
+    /* IL */ { 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 
+    /* IG */ { 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 
+    /* DL */ { 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0 }, 
+    /* DG */ { 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0 }, /* DG->E only if k==M */
+    /* S  */ { 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 }, 
+    /* N  */ { 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0 }, 
+    /* B  */ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0 }, 
+    /* L  */ { 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 
+    /* G  */ { 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, /* G->{MD} only for k=1 */
+    /* E  */ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0 }, 
+    /* C  */ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1 }, 
+    /* J  */ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0 }, 
+    /* T  */ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, /* T is terminal, has no transitions */
+  };
+  int  z, i, k;			/* position in trace, sequence, model */
+
+  /* minimum trace length is 8, S->N->B->L->Mk->E->C->T. If we don't have at least that,
+   * we're definitely in trouble. Exception: N=0 can happen in the case of an "impossible"
+   * trace.
    */
-  if (tr->N < 3)          ESL_FAIL(eslFAIL, errbuf, "trace is too short");
+  if (tr == NULL)         return eslOK;
+  if (tr->N == 0)         return eslOK;
+  if (tr->N < 8)          ESL_FAIL(eslFAIL, errbuf, "trace is too short");
   if (tr->N > tr->nalloc) ESL_FAIL(eslFAIL, errbuf, "N of %d isn't sensible", tr->N);
 
-  /* Determine if this is a core trace or a profile trace, so we can
-   * construct validation tests appropriately.
-   */
-  if      (tr->st[0] == p7T_B) is_core = TRUE;
-  else if (tr->st[0] == p7T_S) is_core = FALSE;
-  else    ESL_FAIL(eslFAIL, errbuf, "first state neither S nor B");
-
-  /* Verify "sentinels", the final states of the trace
-   * (before we start looking backwards and forwards from each state in 
-   * our main validation loop)
-   */
-  if (is_core  && tr->st[tr->N-1] != p7T_E) ESL_FAIL(eslFAIL, errbuf, "last state not E");
-  if (!is_core && tr->st[tr->N-1] != p7T_T) ESL_FAIL(eslFAIL, errbuf, "last state not T");
-  if (tr->k[0]        != 0)                 ESL_FAIL(eslFAIL, errbuf, "first state shouldn't have k set");
-  if (tr->i[0]        != 0)                 ESL_FAIL(eslFAIL, errbuf, "first state shouldn't have i set");
-  if (tr->k[tr->N-1]  != 0)                 ESL_FAIL(eslFAIL, errbuf, "last state shouldn't have k set");
-  if (tr->i[tr->N-1]  != 0)                 ESL_FAIL(eslFAIL, errbuf, "last state shouldn't have i set");
-
-  if (tr->pp != NULL && tr->pp[0]       != 0.0) ESL_FAIL(eslFAIL, errbuf, "first state doesn't emit; but post prob isn't 0");
-  if (tr->pp != NULL && tr->pp[tr->N-1] != 0.0) ESL_FAIL(eslFAIL, errbuf, "last state doesn't emit; but post prob isn't 0");
+  /* Verify known terminal states */
+  if (tr->st[0]       != p7T_S) ESL_FAIL(eslFAIL, errbuf, "first state should be S");
+  if (tr->st[1]       != p7T_N) ESL_FAIL(eslFAIL, errbuf, "second state should be N");
+  if (tr->st[tr->N-2] != p7T_C) ESL_FAIL(eslFAIL, errbuf, "penultimate state should be C");
+  if (tr->st[tr->N-1] != p7T_T) ESL_FAIL(eslFAIL, errbuf, "last state should be T");
 
   /* Main validation loop. */
   k = 0; 
   i = 1;
   for (z = 1; z < tr->N-1; z++)
     {
-      for (; dsq[i] != eslDSQ_SENTINEL; i++) /* find next non-gap residue in dsq */
-	if (esl_abc_XIsResidue(abc, dsq[i]) || esl_abc_XIsNonresidue(abc, dsq[i])) break; /* '*' included as emitted "residue"  */
+      /* on special case of an aligned dsq[] that includes gaps: increment i to past them */
+      while (esl_abc_XIsGap(abc, dsq[i]) || esl_abc_XIsMissing(abc, dsq[i])) i++;
 
-      /* watch out for missing data states X: can only be one.
-       * prv state might have to skip over one (but not more) missing data states
-       */
-      prv = (tr->st[z-1] == p7T_X)? tr->st[z-2] : tr->st[z-1];
+      /* Validate state type st[] */
+      if (tr->st[z] < 0 || tr->st[z] >= p7T_NSTATETYPES) ESL_FAIL(eslFAIL, errbuf, "state type out of range, at %d", z);
+      if (! is_valid[(int) tr->st[z]])                   ESL_FAIL(eslFAIL, errbuf, "invalid state type at %d", z);
 
-      switch (tr->st[z]) {
-      case p7T_S:
-	ESL_FAIL(eslFAIL, errbuf, "S must be first state");
-	break;
-	
-      case p7T_X:
-	if (! is_core)       ESL_FAIL(eslFAIL, errbuf, "X state (missing data) only appears in core traces");
-	if (prv != p7T_B && tr->st[z+1] != p7T_E)	/* only B->X and X->E are possible */
-	  ESL_FAIL(eslFAIL, errbuf, "bad transition involving missing data (X state) not at start/end");
-	break;
+      /* Validate state transition z-1,z */
+      if (! valid_transition[(int) tr->st[z-1]][(int) tr->st[z]])             ESL_FAIL(eslFAIL, errbuf, "invalid transition, at %d", z);
+      if (tr->st[z-1] == p7T_MG && tr->st[z] == p7T_E && tr->k[z-1] != tr->M) ESL_FAIL(eslFAIL, errbuf, "MG->E glocal exit only if k==M");
+      if (tr->st[z-1] == p7T_DG && tr->st[z] == p7T_E && tr->k[z-1] != tr->M) ESL_FAIL(eslFAIL, errbuf, "DG->E glocal exit only if k==M");
+      if (tr->st[z-1] == p7T_G  && tr->k[z]  != 1)                            ESL_FAIL(eslFAIL, errbuf, "G->{MD}k glocal entry only k==1");
 
-      case p7T_N:
-	if (is_core)       ESL_FAIL(eslFAIL, errbuf, "core trace can't contain N");
-	if (tr->k[z] != 0) ESL_FAIL(eslFAIL, errbuf, "no N should have k set");
-	if (prv == p7T_S) { /* 1st N doesn't emit */
-	  if (tr->i[z] != 0)                      ESL_FAIL(eslFAIL, errbuf, "first N shouldn't have i set");
-	  if (tr->pp != NULL && tr->pp[z] != 0.0) ESL_FAIL(eslFAIL, errbuf, "first N can't have nonzero post prob");
-	} else if (prv == p7T_N) { /* subsequent N's do */
-	  if (tr->i[z] != i) ESL_FAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
-	  i++;
-	} else ESL_FAIL(eslFAIL, errbuf, "bad transition to N; expected {S,N}->N");
-	break;
+      /* Validate state index k */
+      if (is_kindexed[(int) tr->st[z]]) 
+	{
+	  if      (tr->st[z-1] == p7T_L)        k = tr->k[z]; /* on a L->Mk entry, trust k; else verify based on prev k */
+	  else if (is_kbumped[(int) tr->st[z]]) k++;	      /* M,D states increment previous k; I's don't */
 
-      case p7T_B:
-	if (tr->k[z] != 0)                      ESL_FAIL(eslFAIL, errbuf, "B shouldn't have k set");
-	if (tr->i[z] != 0)                      ESL_FAIL(eslFAIL, errbuf, "B shouldn't have i set");
-	if (tr->pp != NULL && tr->pp[z] != 0.0) ESL_FAIL(eslFAIL, errbuf, "B can't have nonzero post prob");
-	if (prv != p7T_N && prv != p7T_J) 
-	  ESL_FAIL(eslFAIL, errbuf, "bad transition to B; expected {N,J}->B");
-	break;
-
-      case p7T_M:
-	if (prv == p7T_B) k = tr->k[z]; else k++; /* on a B->Mk entry, trust k; else verify */
-
-	if (tr->k[z] != k) ESL_FAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
-	if (tr->i[z] != i) ESL_FAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
-	if (prv != p7T_B && prv != p7T_M && prv != p7T_D && prv != p7T_I)
-	  ESL_FAIL(eslFAIL, errbuf, "bad transition to M; expected {B,M,D,I}->M");
-	i++;
-	break;
-
-      case p7T_D:
-	k++;
-	if (tr->st[z-1] == p7T_X)  k = tr->k[z]; /* with fragments, a X->Ik case is possible */
-	if (tr->k[z] != k)                      ESL_FAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
-	if (tr->i[z] != 0)                      ESL_FAIL(eslFAIL, errbuf, "D shouldn't have i set");
-	if (tr->pp != NULL && tr->pp[z] != 0.0) ESL_FAIL(eslFAIL, errbuf, "D can't have nonzero post prob");
-	if (is_core) {
-	  if (prv != p7T_M && prv != p7T_D && prv != p7T_B)
-	    ESL_FAIL(eslFAIL, errbuf, "bad transition to D; expected {B,M,D}->D");
-	} else {
-	  if (prv != p7T_M && prv != p7T_D)
-	    ESL_FAIL(eslFAIL, errbuf, "bad transition to D; expected {M,D}->D");
+	  if (tr->k[z] < 1 || tr->k[z] > tr->M) ESL_FAIL(eslFAIL, errbuf, "invalid k[] at %d", z);
+	  if (tr->k[z] != k)                    ESL_FAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
 	}
-	break;
-	
-      case p7T_I:
-	if (tr->st[z-1] == p7T_X)  k = tr->k[z]; /* with fragments, a X->Ik case is possible */
-	if (tr->k[z] != k) ESL_FAIL(eslFAIL, errbuf, "expected k doesn't match trace's k");
-	if (tr->i[z] != i) ESL_FAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
-	if (is_core) {
-	  if (prv != p7T_B && prv != p7T_M && prv != p7T_I)
-	    ESL_FAIL(eslFAIL, errbuf, "bad transition to I; expected {B,M,I}->I");
-	} else {
-	  if (prv != p7T_M && prv != p7T_I)
-	    ESL_FAIL(eslFAIL, errbuf, "bad transition to I; expected {M,I}->I");
+      else
+	{
+	  k = 0;		/* reset expected k */
+	  if (tr->k[z] != 0)                  ESL_FAIL(eslFAIL, errbuf, "invalid k[z] at %d", z);
 	}
-	i++;
-	break;
 
-      case p7T_E:
-	if (tr->k[z] != 0) ESL_FAIL(eslFAIL, errbuf, "E shouldn't have k set");
-	if (tr->i[z] != 0) ESL_FAIL(eslFAIL, errbuf, "E shouldn't have i set");
-	if (tr->pp != NULL && tr->pp[z] != 0.0) ESL_FAIL(eslFAIL, errbuf, "E can't have nonzero post prob");
-	if (is_core) {
-	  if (prv != p7T_M && prv != p7T_D && prv != p7T_I)
-	    ESL_FAIL(eslFAIL, errbuf, "bad transition to E; expected {M,D,I}->E");
-	} else {
-	  if (prv != p7T_M && prv != p7T_D)
-	    ESL_FAIL(eslFAIL, errbuf, "bad transition to E; expected {M,D}->E");
+      /* Validate emission data, i[] and pp[] */
+      if (is_memitter[(int) tr->st[z]] || (is_temitter[(int) tr->st[z]] && tr->st[z-1] == tr->st[z]))
+	{
+	  if (tr->i[z] < 1 || tr->i[z] > tr->L)                 ESL_FAIL(eslFAIL, errbuf, "invalid i[] at %d", z);
+	  if (tr->pp && (tr->pp[z] < 0.0 || tr->pp[z] > 1.001)) ESL_FAIL(eslFAIL, errbuf, "invalid pp[] at %d", z);
+	  if (tr->i[z] != i)                                    ESL_FAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
+	  i++;
 	}
-	break;
-	
-      case p7T_J:
-	if (tr->k[z] != 0) ESL_FAIL(eslFAIL, errbuf, "no J should have k set");
-	if (prv == p7T_E) { /* 1st J doesn't emit */
-	  if (tr->i[z] != 0)                      ESL_FAIL(eslFAIL, errbuf, "first J shouldn't have i set");
-	  if (tr->pp != NULL && tr->pp[z] != 0.0) ESL_FAIL(eslFAIL, errbuf, "first J can't have nonzero post prob");
-	} else if (prv == p7T_J) { /* subsequent J's do */
-	  if (tr->i[z] != i) ESL_FAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
-	  i++;
-	} else ESL_FAIL(eslFAIL, errbuf, "bad transition to J; expected {E,J}->J");
-	break;
-
-      case p7T_C:
-	if (is_core)       ESL_FAIL(eslFAIL, errbuf, "core trace can't contain C");
-	if (tr->k[z] != 0) ESL_FAIL(eslFAIL, errbuf, "no C should have k set");
-	if (prv == p7T_E) { /* 1st C doesn't emit */
-	  if (tr->i[z] != 0)                      ESL_FAIL(eslFAIL, errbuf, "first C shouldn't have i set");
-	  if (tr->pp != NULL && tr->pp[z] != 0.0) ESL_FAIL(eslFAIL, errbuf, "first C can't have nonzero post prob");
-	} else if (prv == p7T_C) { /* subsequent C's do */
-	  if (tr->i[z] != i) ESL_FAIL(eslFAIL, errbuf, "expected i doesn't match trace's i");
-	  i++;
-	} else ESL_FAIL(eslFAIL, errbuf, "bad transition to C; expected {E,C}->C");
-	break;
-	
-      case p7T_T:
-	ESL_FAIL(eslFAIL, errbuf, "T must be last state");
-	break;	
-      }
+      else
+	{
+	  if (tr->i[z] != 0)               ESL_FAIL(eslFAIL, errbuf, "invalid i[] at %d", z);
+	  if (tr->pp && tr->pp[z] != 0.0f) ESL_FAIL(eslFAIL, errbuf, "invalid pp[] at %d", z);
+	}
     }
 
   /* Trace should have accounted for all residues in the dsq */
   for (; dsq[i] != eslDSQ_SENTINEL; i++) 
-    if (esl_abc_XIsResidue(abc, dsq[i])) 
-      ESL_FAIL(eslFAIL, errbuf, "trace didn't account for all residues in the sq");
+    if (! (esl_abc_XIsGap(abc, dsq[i]) || esl_abc_XIsMissing(abc, dsq[i])))
+      ESL_FAIL(eslFAIL, errbuf, "trace didn't account for all residues in dsq");
 
-  /* No k larger than M; no i-1 larger than L (i is sitting on dsq[n+1] sentinel right now) */
-  if (k   > tr->M) ESL_FAIL(eslFAIL, errbuf, "M=%d, but k went to %d\n", tr->M, k);
-  if (i-1 > tr->L) ESL_FAIL(eslFAIL, errbuf, "L=%d, but i went to %d\n", tr->L, i);
-
+  /* i should be sitting on dsq[L+1] sentinel right now */
+  if (i != tr->L+1) ESL_FAIL(eslFAIL, errbuf, "L=%d, but i went to %d\n", tr->L, i-1);
   return eslOK;
 }
 
 
 /* Function:  p7_trace_Dump()
- * Incept:    SRE, Fri Jan  5 09:26:04 2007 [Janelia]
+ * Synopsis:  Dump a trace's internals to a stream.
  *
- * Purpose:   Dumps internals of a traceback structure <tr> to <fp>.
- *            If <gm> is non-NULL, also prints transition/emission scores.
- *            If <dsq> is non-NULL, also prints residues (using alphabet
- *            in the <gm>).
+ * Purpose:   Dump the internals of trace <tr> to stream <fp>,
+ *            for debugging/examination.
+ *            
+ *            If <tr> is <NULL>, just print "[null trace]". We
+ *            tolerate dumping null traces because
+ *            <p7_trace_FauxFromMSA()> may normally return them.
+ *
+ *            See <p7_trace_DumpAnnotated()> for a more verbose
+ *            and useful version. This version is used when we
+ *            don't necessarily have a profile and/or sequence
+ *            to go with a trace.
+ */
+int 
+p7_trace_Dump(FILE *fp, const P7_TRACE *tr)
+{
+  int z;
+
+  if (tr == NULL) { fprintf(fp, "[null trace]\n");                     return eslOK; }
+  if (tr->N == 0) { fprintf(fp, "[no trace: all paths impossible]\n"); return eslOK; }
+
+  fprintf(fp, "z     st   k     i  \n");  
+  fprintf(fp, "----- -- ----- -----\n"); 
+
+  for (z = 0; z < tr->N; z++)
+    fprintf(fp, "%5d %2s %5d %5d\n", z, p7_trace_DecodeStatetype(tr->st[z]), tr->k[z], tr->i[z]);
+
+  fprintf(fp, "\n#          M = %d\n", tr->M);
+  fprintf(fp,   "#          L = %d\n", tr->L);
+  fprintf(fp,   "# allocation = %d\n", tr->nalloc);
+  return eslOK;
+}
+
+/* Function:  p7_trace_DumpAnnotated()
+ *
+ * Purpose:   Dumps internals of a traceback structure <tr> to <fp>,
+ *            annotating residues, scores, and posterior probabilities using
+ *            the profile <gm> and the sequence <dsq> that correspond
+ *            to this trace.
+ *            
+ *            If <tr> is <NULL>, just print "[null trace]". We
+ *            tolerate dumping null traces because
+ *            <p7_trace_FauxFromMSA()> may normally return them.
  *            
  * Args:      fp   - stream to dump to (often stdout)
- *            tr   - trace to dump
- *            gm   - NULL, or score profile corresponding to trace
- *            dsq  - NULL, or digitized seq corresponding to trace        
+ *            tr   - trace to dump (may be NULL)
+ *            gm   - score profile corresponding to trace
+ *            dsq  - digitized seq corresponding to trace        
  *
  * Returns:   <eslOK> on success.
- * 
- * Throws:    <eslEINVAL> if trace contains something corrupt or invalid;
- *            in this case, dump will be aborted, possibly after partial
- *            output.
  */
 int
-p7_trace_Dump(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ *dsq) /* replace void w/ P7_PROFILE */
+p7_trace_DumpAnnotated(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ *dsq)
 {
-  int z;		/* counter for trace position */
-  if (tr == NULL) { fprintf(fp, " [ trace is NULL ]\n"); return eslOK; }
+  float sc       = 0.0;
+  float accuracy = 0.0;
+  float esc, tsc;
+  int   z;
 
-  if (gm == NULL) 
-    {		/* Yes, this does get used: during model construction. */ 
-      fprintf(fp, "st   k      i   - traceback len %d\n", tr->N);
-      fprintf(fp, "--  ----   ----\n");
-      for (z = 0; z < tr->N; z++) {
-	fprintf(fp, "%1s  %4d %6d\n", 
-		p7_hmm_DecodeStatetype(tr->st[z]),
-		tr->k[z],
-		tr->i[z]);
-      } 
-    } 
-  else 
+  if (tr == NULL) { fprintf(fp, "[null trace]\n");                     return eslOK; }
+  if (tr->N == 0) { fprintf(fp, "[no trace: all paths impossible]\n"); return eslOK; }
+
+  fprintf(fp, "#  z   st   k     i   x_i  transit  emission postprob\n");
+  fprintf(fp, "#----- -- ----- ----- ---  -------- -------- --------\n");
+
+  for (z = 0; z < tr->N-1; z++)	/* not including T state at end: */
     {
-      int   status;
-      float accuracy = 0.0f;
-      float sc       = 0.0f;
-      float tsc;
-      int   xi;
+      tsc = p7_profile_GetT(gm, tr->st[z], tr->k[z], tr->st[z+1], tr->k[z+1]);
 
+      esc = 0.;
+      if (tr->i[z]) {
+	if      (tr->st[z] == p7T_ML || tr->st[z] == p7T_MG) esc = P7P_MSC(gm, tr->k[z], dsq[tr->i[z]]);
+	else if (tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) esc = P7P_ISC(gm, tr->k[z], dsq[tr->i[z]]);
+      }
 
-      fprintf(fp, "st   k     i      transit emission postprob - traceback len %d\n", tr->N);
-      fprintf(fp, "--  ---- ------  -------- -------- --------\n");
-      for (z = 0; z < tr->N; z++) 
-	{
-	  if (z < tr->N-1) 
-	    {
-	      status = p7_profile_GetT(gm, tr->st[z], tr->k[z], tr->st[z+1], tr->k[z+1], &tsc);
-	      if (status != eslOK) return status;
-	    }
-	  else tsc = 0.0f;
+      fprintf(fp, "%5d %2s %5d %5d  %c  %8.4f %8.4f %8.4f\n",
+	      z,
+	      p7_trace_DecodeStatetype(tr->st[z]),
+	      tr->k[z],
+	      tr->i[z],
+	      (tr->i[z] ? gm->abc->sym[dsq[tr->i[z]]] : '-'),
+	      tsc, 
+	      esc, 
+	      (tr->pp ? tr->pp[z] : 0.0f));
 
-	  fprintf(fp, "%1s  %4d %6d  %8.4f", p7_hmm_DecodeStatetype(tr->st[z]),  tr->k[z], tr->i[z], tsc);
-	  sc += tsc;
-	  
-	  if (dsq != NULL) {
-	    xi = dsq[tr->i[z]];
-
-	    if (tr->st[z] == p7T_M) {
-	      fprintf(fp, " %8.4f", p7P_MSC(gm, tr->k[z], xi));
-	      sc += p7P_MSC(gm, tr->k[z], xi);
-	      if (tr->pp != NULL) {
-		fprintf(fp, " %8.4f", tr->pp[z]);
-		accuracy += tr->pp[z];
-	      }
-	      fprintf(fp, " %c", gm->abc->sym[xi]);
-	    } 
-	    else if (tr->st[z] == p7T_I) {
-	      fprintf(fp, " %8.4f", p7P_ISC(gm, tr->k[z], xi));
-	      sc += p7P_ISC(gm, tr->k[z], xi);
-	      if (tr->pp != NULL) {
-		fprintf(fp, " %8.4f", tr->pp[z]);
-		accuracy += tr->pp[z];
-	      }
-	      fprintf(fp, " %c", (char) tolower((int) gm->abc->sym[xi]));
-	    }
-	    else if ((tr->st[z] == p7T_N && tr->st[z-1] == p7T_N) ||
-		     (tr->st[z] == p7T_C && tr->st[z-1] == p7T_C) ||
-		     (tr->st[z] == p7T_J && tr->st[z-1] == p7T_J))  {
-	      fprintf(fp, " %8d", 0);
-	      if (tr->pp != NULL) {
-		fprintf(fp, " %8.4f", tr->pp[z]);
-		accuracy += tr->pp[z];
-	      }
-	      fprintf(fp, " %c", (char) tolower((int) gm->abc->sym[xi]));
-	    }
-	  } 
-	  else fprintf(fp, " %8s %8s %c", "-", "-", '-');
-	  fputs("\n", fp);
-	}
-      fprintf(fp, "                -------- -------- --------\n");
-      fprintf(fp, "                  total: %8.4f %8.4f\n\n", sc, accuracy);
+      sc       += tsc + esc;
+      accuracy += (tr->pp ? tr->pp[z] : 0.0f);
     }
+  fprintf(fp, "%5d %2s\n", z, p7_trace_DecodeStatetype(tr->st[z])); /* T state */
+  fprintf(fp, "                                   -------- --------\n");
+  fprintf(fp, "                          total:   %8.4f %8.4f\n", sc, accuracy);
+
+  fprintf(fp, "\n#          M = %d\n", tr->M);
+  fprintf(fp,   "#          L = %d\n", tr->L);
+  fprintf(fp,   "# allocation = %d\n", tr->nalloc);
+  return eslOK;
+}
 
 
+int
+p7_trace_DumpSuper(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ *dsq,
+		   float gamma, const P7_REFMX *fpp, const P7_BANDMX *bpp)
+{
+  int   i       = 0;	                       /* current row/residue index */
+  int   g       = 0;                   	       /* current segment index in banded DP matrix */
+  int   z;				       /* index for trace (state path) */
+  int   *bnd_ip = bpp ? bpp->bnd->imem : NULL; /* ia..ib segment bands in the banded post prob DP mx    */
+  int   *bnd_kp = bpp ? bpp->bnd->kmem : NULL; /* ka..kb bands for each row i in banded pp DP mx        */
+  float *xc     = bpp ? bpp->xmx       : NULL; /* current special row in bpp; starts on ia-1            */
+  float *dpc    = bpp ? bpp->dp        : NULL; /* current main row in bpp; starts on ia                 */
+  int   ia      = bpp ? *bnd_ip++      : 0;    /* row coords of current banded segment */
+  int   ib      = bpp ? *bnd_ip++      : 0;    
+  int   ka      = bpp ? *bnd_kp++      : 0;    /* col coords of current band on row */
+  int   kb      = bpp ? *bnd_kp++      : 0;    
+  float esc, tsc;
+  float filterpp;
+  float nonhompp;
+  float pathpp;
+  float gain;
+  float tot_sc       = 0.0;
+  float tot_accuracy = 0.0;
+  float tot_gain     = 0.0;
+
+  if (tr == NULL) { fprintf(fp, "[null trace]\n");                     return eslOK; }
+  if (tr->N == 0) { fprintf(fp, "[no trace: all paths impossible]\n"); return eslOK; }
+
+  fprintf(fp, "#    z st     k     i xi transit  emission postprob filterpp nonhompp   bandpp     gain\n");
+  fprintf(fp, "#----- -- ----- ----- -- -------- -------- -------- -------- -------- -------- --------\n");
+
+  /* For each state z in state path: */
+  for (z = 0; z < tr->N; z++)	
+    {
+      /* Transition score <tsc>: look up in profile. Catch special case of T state at end w/ no transition. */
+      tsc = (z == tr->N-1) ? 0.0f : p7_profile_GetT(gm, tr->st[z], tr->k[z], tr->st[z+1], tr->k[z+1]);
+
+      /* Emission score <esc>: look up in profile */
+      esc = 0.;
+      if (tr->i[z]) {
+	if      (tr->st[z] == p7T_ML || tr->st[z] == p7T_MG) esc = P7P_MSC(gm, tr->k[z], dsq[tr->i[z]]);
+	else if (tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) esc = P7P_ISC(gm, tr->k[z], dsq[tr->i[z]]);
+	i++;
+      }
+
+      /* Posterior prob of dp cell in fwdfilter (local) */
+      filterpp = 0.0f;
+      if (fpp && p7_trace_IsMain(tr->st[z]))
+	filterpp = P7R_MX (fpp, i, tr->k[z], p7R_ML) +
+	           P7R_MX (fpp, i, tr->k[z], p7R_DL) +
+ 	           P7R_MX (fpp, i, tr->k[z], p7R_IL);
+
+      /* Posterior prob of nonhomology at this i */
+      nonhompp = fpp ? P7R_XMX (fpp, i, p7R_N) + P7R_XMX (fpp, i, p7R_JJ) + P7R_XMX (fpp, i, p7R_CC) : 0.0f;
+
+      /* Posterior prob of this state assignment in path, as used in gamma-centroid alignment */
+      /*  ... this assumes that xc and dpc are positioned on the current row i...  */
+      pathpp = gain = 0.0;
+      if (bpp) {
+	switch (tr->st[z]) {
+	case p7T_ML: pathpp = dpc[ (tr->k[z] - ka)*p7B_NSCELLS + p7B_ML]; break;
+	case p7T_MG: pathpp = dpc[ (tr->k[z] - ka)*p7B_NSCELLS + p7B_MG]; break;
+	case p7T_IL: pathpp = dpc[ (tr->k[z] - ka)*p7B_NSCELLS + p7B_IL]; break;
+	case p7T_IG: pathpp = dpc[ (tr->k[z] - ka)*p7B_NSCELLS + p7B_IG]; break; 
+	case p7T_DL: pathpp = dpc[ (tr->k[z] - ka)*p7B_NSCELLS + p7B_DL]; break;
+	case p7T_DG: pathpp = dpc[ (tr->k[z] - ka)*p7B_NSCELLS + p7B_DG]; break;
+	case p7T_S:  pathpp = 1.0f;                    break; /* assert(i==0) */
+	case p7T_N:  pathpp = i==0 ? 1.0f : xc[p7B_N]; break;
+	case p7T_B:  pathpp = xc[p7B_B]; break;
+	case p7T_L:  pathpp = xc[p7B_L]; break;
+	case p7T_G:  pathpp = xc[p7B_G]; break;
+	case p7T_E:  pathpp = xc[p7B_E]; break;
+	case p7T_C:  pathpp = xc[p7B_C]; break;
+	case p7T_J:  pathpp = xc[p7B_J]; break;
+	case p7T_T:  pathpp = 1.0f;      break; /* assert(i==L) */
+	}
+	gain = pathpp - 1.0f/(1.0f + gamma);
+      }
+
+      /*            z  st   k   i   xi  tsc    esc   pp   fpp  nonhom  bpp   gain  */
+      fprintf(fp, "%6d %2s %5d %5d  %c %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f\n",
+	      z,
+	      p7_trace_DecodeStatetype(tr->st[z]),
+	      tr->k[z],
+	      tr->i[z],
+	      (tr->i[z] ? gm->abc->sym[dsq[tr->i[z]]] : '-'),
+	      tsc, 
+	      esc, 
+	      (tr->pp ? tr->pp[z] : 0.0f),
+	      filterpp,
+	      nonhompp,
+	      pathpp, 
+	      gain);
+
+      tot_sc       += tsc + esc;
+      tot_accuracy += (tr->pp ? tr->pp[z] : 0.0f);
+      tot_gain     += gain;
+      
+      /* Traversal logic for banded pp matrix. Insanely finicky because of its
+       * implicit indexing.
+       * If next state in trace emits ... and if we're in a segment... we advance the rows...
+       * except if it's ib+1 off the end of the last segment, in which case we leave xc where it
+       * is (on last row ib); never move xc or dpc again, never deference dpc (only xc[NJC]),
+       * and don't attempt to load any new segments.
+       * Note: if z+1 is an N/C/J that will emit position ia-1, you DON'T advance (you're
+       * not in the band yet).
+       */
+      if (bpp && tr->i[z+1])		
+	{
+	  if (g < bpp->bnd->nseg-1 || (g == bpp->bnd->nseg-1 && i<ib)) /* avoid advancing on last segment's ib */
+	    {
+	      if (i >= ia-1 && i <= ib)   xc += p7B_NXCELLS;
+	      if (i >= ia   && i <= ib) { dpc += (kb-ka+1)*p7B_NSCELLS; ka  = *bnd_kp++; kb  = *bnd_kp++; }
+	      /* end of a segment? then load the next one's ia..ib coords */
+	      if (i == ib) { g++; ia = *bnd_ip++; ib = *bnd_ip++; }
+	    }
+	}
+    }
+  fprintf(fp, "#                                 -------- -------- -------- -------- -------- --------\n");
+  fprintf(fp, "#                        total:   %8.2f %8.2f %8s %8s %8s %8.2f\n", tot_sc, tot_accuracy, "", "", "", tot_gain);
+
+  fprintf(fp, "\n#          M = %d\n", tr->M);
+  fprintf(fp,   "#          L = %d\n", tr->L);
+  fprintf(fp,   "# allocation = %d\n", tr->nalloc);
   return eslOK;
 }
 
 
 /* Function:  p7_trace_Compare()
  * Synopsis:  Compare two traces for identity
- * Incept:    SRE, Wed Aug 20 09:05:24 2008 [Janelia]
  *
  * Purpose:   Compare two tracebacks; return <eslOK> if they
- *            are identical, <eslFAIL> if not.
+ *            are identical, throw <eslFAIL> if not.
  *            
  *            If posterior probability annotation is present in 
  *            both traces, they are compared using <esl_FCompare()>
@@ -805,45 +893,35 @@ p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol)
 {
   int z,d;
   
-  if (tr1->N != tr2->N) esl_fatal("FAIL");
-  if (tr1->M != tr2->M) esl_fatal("FAIL");
-  if (tr1->L != tr2->L) esl_fatal("FAIL");
+  if (tr1->N != tr2->N) ESL_EXCEPTION(eslFAIL, "traces' N differ");
+  if (tr1->M != tr2->M) ESL_EXCEPTION(eslFAIL, "traces' M differ");
+  if (tr1->L != tr2->L) ESL_EXCEPTION(eslFAIL, "traces' L differ");
   
   /* Main data in the trace */
   for (z = 0; z < tr1->N; z++)
     {
-      if (tr1->st[z] != tr2->st[z]) esl_fatal("FAIL");
-      if (tr1->k[z]  != tr2->k[z])  esl_fatal("FAIL");
-      if (tr1->i[z]  != tr2->i[z])  esl_fatal("FAIL");
-    }
-
-  /* Optional posterior probability annotation */
-  if (tr1->pp != NULL && tr2->pp != NULL)
-    {
-      for (z = 0; z < tr1->N; z++)
-	if (tr1->i[z] != 0) 	/* an emission: has a nonzero posterior prob*/
-	  {
-	    if (esl_FCompare(tr1->pp[z], tr2->pp[z], pptol) != eslOK) esl_fatal("FAIL");
-	  }
-	else
-	  {
-	    if (tr1->pp[z] != tr2->pp[z]) esl_fatal("FAIL"); /* both 0.0 */
-	  }
+      if (tr1->st[z] != tr2->st[z]) ESL_EXCEPTION(eslFAIL, "traces' state types differ at %d", z);
+      if (tr1->k[z]  != tr2->k[z])  ESL_EXCEPTION(eslFAIL, "traces' k indices differ at %d", z);
+      if (tr1->i[z]  != tr2->i[z])  ESL_EXCEPTION(eslFAIL, "traces' i indices differ at %d", z);
+      if (tr1->pp != NULL && tr2->pp != NULL)
+	if (esl_FCompare(tr1->pp[z], tr2->pp[z], pptol) != eslOK)  /* comparison of 0.0 for positions without pp will succeed */
+	  ESL_EXCEPTION(eslFAIL, "traces' posterior probs differ at %d", z);
     }
 
   /* Optional domain index */
   if (tr1->ndom > 0 && tr2->ndom > 0)
     {
-      if (tr1->ndom != tr2->ndom) esl_fatal("FAIL");
+      if (tr1->ndom != tr2->ndom) ESL_EXCEPTION(eslFAIL, "traces' domain table # differ");
 
       for (d = 0; d < tr1->ndom; d++)
 	{
-	  if (tr1->tfrom[d]   != tr2->tfrom[d])    esl_fatal("FAIL");
-	  if (tr1->tto[d]     != tr2->tto[d])      esl_fatal("FAIL");
-	  if (tr1->sqfrom[d]  != tr2->sqfrom[d])   esl_fatal("FAIL");
-	  if (tr1->sqto[d]    != tr2->sqto[d])     esl_fatal("FAIL");
-	  if (tr1->hmmfrom[d] != tr2->hmmfrom[d])  esl_fatal("FAIL");
-	  if (tr1->hmmto[d]   != tr2->hmmto[d])    esl_fatal("FAIL");
+	  if (tr1->tfrom[d]   != tr2->tfrom[d])    ESL_EXCEPTION(eslFAIL, "traces' tfrom differs, domain %d",     d);
+	  if (tr1->tto[d]     != tr2->tto[d])      ESL_EXCEPTION(eslFAIL, "traces' tto differs, domain %d",       d);
+	  if (tr1->sqfrom[d]  != tr2->sqfrom[d])   ESL_EXCEPTION(eslFAIL, "traces' sqfrom differs, domain %d",    d);
+	  if (tr1->sqto[d]    != tr2->sqto[d])     ESL_EXCEPTION(eslFAIL, "traces' sqto differs, domain %d",      d);
+	  if (tr1->hmmfrom[d] != tr2->hmmfrom[d])  ESL_EXCEPTION(eslFAIL, "traces' hmmfrom differs, domain %d",   d);
+	  if (tr1->hmmto[d]   != tr2->hmmto[d])    ESL_EXCEPTION(eslFAIL, "traces' hmmto differs, domain %d",     d);
+	  if (tr1->anch[d]    != tr2->anch[d])     ESL_EXCEPTION(eslFAIL, "traces' anchors differ for domain %d", d);
 	}
     }
   return eslOK;
@@ -853,11 +931,16 @@ p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol)
 
 
 /* Function:  p7_trace_Score()
- * Incept:    SRE, Tue Mar  6 14:40:34 2007 [Janelia]
  *
  * Purpose:   Score path <tr> for digital target sequence <dsq> 
  *            using profile <gm>. Return the lod score in
- *            <ret_sc>.
+ *            <*ret_sc>.
+ *            
+ *            If <tr> is empty (an 'impossible' trace, with <tr->N=0>),
+ *            then <*ret_sc = -eslINFINITY>. This can arise for example
+ *            when there is no possible path at all that can generate
+ *            a sequence, hence the sequence correctly scores <-eslINFINITY>;
+ *            by convention, traces in this situation have <tr->N=0>.
  *
  * Args:      tr     - traceback path to score
  *            dsq    - digitized sequence
@@ -874,89 +957,85 @@ int
 p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, float *ret_sc)
 {
   float  sc;		/* total lod score   */
-  float tsc;		/* a transition score */
   int    z;             /* position in tr */
   int    xi;		/* digitized symbol in dsq */
-  int  status;
 
-  sc = 0.0f;
+  sc = (tr->N ? 0.0f : -eslINFINITY);
   for (z = 0; z < tr->N-1; z++) {
     xi = dsq[tr->i[z]];
 
-    if      (tr->st[z] == p7T_M) sc += p7P_MSC(gm, tr->k[z], xi);
-    else if (tr->st[z] == p7T_I) sc += p7P_ISC(gm, tr->k[z], xi);
+    if      (tr->st[z] == p7T_ML || tr->st[z] == p7T_MG) sc += P7P_MSC(gm, tr->k[z], xi);
+    else if (tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) sc += P7P_ISC(gm, tr->k[z], xi);
 
-    if ((status = p7_profile_GetT(gm, tr->st[z], tr->k[z], 
-				  tr->st[z+1], tr->k[z+1], &tsc)) != eslOK) goto ERROR;
-    sc += tsc;
+    sc += p7_profile_GetT(gm, tr->st[z], tr->k[z], tr->st[z+1], tr->k[z+1]);
   }
 
   *ret_sc = sc;
   return eslOK;
-
- ERROR:
-  *ret_sc = -eslINFINITY;
-  return status;
 }
 
-/* Function:  p7_trace_SetPP()
- * Synopsis:  Set posterior probs of an arbitrary trace.
- * Incept:    SRE, Tue Aug 19 14:16:10 2008 [Janelia]
+
+/* Function:  p7_trace_ScoreDomain()
+ * Synopsis:  Return a per-domain trace score for a selected domain.
  *
- * Purpose:   Set the posterior probability fields of an arbitrary
- *            trace <tr>, by accessing posterior residue probabilities
- *            in decoding matrix <pp>.
+ * Purpose:   For an indexed trace <tr> of sequence <dsq> aligned to
+ *            model <gm>, find domain number <which> (0..tr->ndom-1)
+ *            and calculate a "per-domain" score for this domain.
+ *            Return this lod score (in nats) in <*ret_sc>. The caller
+ *            still needs to subtract the null model score and convert
+ *            to bits.
  *            
- *            In general, <pp> was created by <p7_GDecoding()> 
- *            or converted from the optimized matrix created by
- *            <p7_Decoding()>.
+ *            The per-domain score is the score that you'd get if this
+ *            were the only domain in the sequence. If there is only
+ *            one domain, it is equal to the overall trace score.
  *            
- *            This is classed as a debugging function for the moment,
- *            because in general traces with posterior probabilities are
- *            created directly using optimal accuracy DP routines.
- *            This function allows us to add PP annotation to any
- *            trace.
- * 
- * Returns:   <eslOK> on success.
+ *            The score respects the given configuration of <gm>
+ *            (whether it is in unihit or multihit mode); the
+ *            per-domain score is not necessarily w.r.t. unihit mode
+ *            configuration.
  *
- * Throws:    <eslEMEM> on allocation error.
- *            <eslEINVAL> on internal corruptions.
+ * Args:      tr     - trace
+ *            dsq    - sequence (digital, 1..tr->L)
+ *            gm     - profile
+ *            which  - which domain to score, 0..tr->ndom-1
+ *            ret_sc - RETURN: per-domain score in nats
+ *
+ * Returns:   <eslOK> on success, and <*ret_sc> is the per-domain score
+ *            in nats.
+ *
+ * Throws:    <eslEINVAL> if the trace isn't indexed, or if it has
+ *            no domain number <which>. Now <*ret_sc> is undefined.
  */
 int
-p7_trace_SetPP(P7_TRACE *tr, const P7_GMX *pp)
+p7_trace_ScoreDomain(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, int which, float *ret_sc)
 {
-  float **dp  = pp->dp;		/* so {MDI}MX() macros work */
-  float  *xmx = pp->xmx;	/* so XMX() macro works     */
-  int z;
-  int status;
+  float sc = 0.0;
+  int   xi;
+  int   z;
 
-  if (tr->pp == NULL) ESL_ALLOC(tr->pp, sizeof(float) * tr->nalloc);
+  if (! tr->ndom)        ESL_EXCEPTION(eslEINVAL, "p7_trace_ScoreDomain() requires an indexed trace structure");
+  if (which >= tr->ndom) ESL_EXCEPTION(eslEINVAL, "<which> exceeds number of domains");
 
-  for (z = 0; z < tr->N; z++)
+  /* S->N, N->N*(i-1), N->B ;  E->C, C->C*(L-j), C->T */
+  sc += (float)(tr->sqfrom[which]-1)     * gm->xsc[p7P_N][p7P_LOOP] + gm->xsc[p7P_N][p7P_MOVE];
+  sc += (float)(tr->L - tr->sqto[which]) * gm->xsc[p7P_C][p7P_LOOP] + gm->xsc[p7P_C][p7P_MOVE] + gm->xsc[p7P_E][p7P_MOVE];
+  
+  for (z = tr->tfrom[which]; z < tr->tto[which]; z++)
     {
-      if (tr->i[z] > 0)		/* an emitting state? */
-	{
-	  switch (tr->st[z]) {
-	  case p7T_M:  tr->pp[z] = MMX(tr->i[z], tr->k[z]); break;
-	  case p7T_I:  tr->pp[z] = IMX(tr->i[z], tr->k[z]); break;
-	  case p7T_N:  tr->pp[z] = XMX(tr->i[z], p7G_N);    break;
-	  case p7T_C:  tr->pp[z] = XMX(tr->i[z], p7G_C);    break;
-	  case p7T_J:  tr->pp[z] = XMX(tr->i[z], p7G_J);    break;
-	  default:     ESL_EXCEPTION(eslEINVAL, "no such emitting state");
-	  }
-	}
-      else
-	tr->pp[z] = 0.0;
+      xi = dsq[tr->i[z]];
+
+      if      (tr->st[z] == p7T_ML || tr->st[z] == p7T_MG) sc += P7P_MSC(gm, tr->k[z], xi);
+      else if (tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) sc += P7P_ISC(gm, tr->k[z], xi);
+
+      sc += p7_profile_GetT(gm, tr->st[z], tr->k[z], tr->st[z+1], tr->k[z+1]);
     }
+  *ret_sc = sc;
   return eslOK;
-       
- ERROR:
-  return status;
 }
+
 
 /* Function:  p7_trace_GetExpectedAccuracy()
  * Synopsis:  Returns the sum of the posterior residue decoding probs.
- * Incept:    SRE, Tue Aug 19 15:29:18 2008 [Janelia]
  */
 float
 p7_trace_GetExpectedAccuracy(const P7_TRACE *tr)
@@ -968,7 +1047,6 @@ p7_trace_GetExpectedAccuracy(const P7_TRACE *tr)
     accuracy += tr->pp[z];
   return accuracy;
 }
-
 /*------------------ end, debugging tools -----------------------*/
 
 
@@ -983,7 +1061,7 @@ p7_trace_GetExpectedAccuracy(const P7_TRACE *tr)
  *
  * Purpose:   Adds an element to a trace <tr> that is growing
  *            left-to-right. The element is defined by a state type
- *            <st> (such as <p7T_M>); a node index <k> (1..M for
+ *            <st> (such as <p7T_ML>); a node index <k> (1..M for
  *            M,D,I main states; else 0); and a dsq position <i> (1..L
  *            for emitters, else 0).
  *            
@@ -1014,24 +1092,31 @@ p7_trace_Append(P7_TRACE *tr, char st, int k, int i)
 
   switch (st) {
     /* Emit-on-transition states: */
-  case p7T_N: 
-  case p7T_C: 
-  case p7T_J: 
+  case p7T_N: case p7T_C: case p7T_J: 
     tr->i[tr->N] = ( (tr->st[tr->N-1] == st) ? i : 0);
     tr->k[tr->N] = 0;
     break;
+
     /* Nonemitting states, outside main model: */
-  case p7T_X:
-  case p7T_S:
-  case p7T_B:
-  case p7T_E:
-  case p7T_T: tr->i[tr->N] = 0; tr->k[tr->N] = 0; break;
+  case p7T_S: case p7T_B: case p7T_G: case p7T_L: case p7T_E: case p7T_T:
+    tr->i[tr->N] = 0; 
+    tr->k[tr->N] = 0; 
+    break;
+
     /* Nonemitting, but in main model (k valid) */
-  case p7T_D: tr->i[tr->N] = 0; tr->k[tr->N] = k; break;
+  case p7T_DL: case p7T_DG: 
+    tr->i[tr->N] = 0; 
+    tr->k[tr->N] = k; 
+    break;
+
     /* Emitting states, with valid k position in model: */
-  case p7T_M: 
-  case p7T_I: tr->i[tr->N] = i; tr->k[tr->N] = k; break;
-  default:    ESL_EXCEPTION(eslEINVAL, "no such state; can't append");
+  case p7T_ML: case p7T_MG: case p7T_IL: case p7T_IG:
+    tr->i[tr->N] = i;
+    tr->k[tr->N] = k; 
+    break;
+
+  default: 
+    ESL_EXCEPTION(eslEINVAL, "no such state; can't append");
   }
 
   tr->st[tr->N] = st;
@@ -1043,50 +1128,16 @@ p7_trace_Append(P7_TRACE *tr, char st, int k, int i)
  * Synopsis:  Add element to growing trace, with posterior probability.
  *
  * Purpose:   Same as <p7_trace_Append()>, but also records a posterior
- *            probability estimate for emitted residues. <pp> is assumed to be
- *            zero for nonemitting states even if a nonzero argument is
- *            mistakenly passed. 
+ *            probability estimate for emitted residues. For nonemitting
+ *            states, <pp> must be passed as zero.
  */
 int
 p7_trace_AppendWithPP(P7_TRACE *tr, char st, int k, int i, float pp)
 {
   int status;
 
-  if ((status = p7_trace_Grow(tr)) != eslOK) return status;
-
-  switch (st) {
-    /* Emit-on-transition states: */
-  case p7T_N: 
-  case p7T_C: 
-  case p7T_J:
-    if (tr->st[tr->N-1] == st) 
-      {
-	tr->i[tr->N]  = i; 
-	tr->pp[tr->N] = pp;
-      }
-    else
-      {
-	tr->i[tr->N]  = 0; 
-	tr->pp[tr->N] = 0.0;
-      }
-    tr->k[tr->N] = 0; 
-    break;
-    /* Nonemitting states, outside main model: */
-  case p7T_X:
-  case p7T_S:
-  case p7T_B:
-  case p7T_E:
-  case p7T_T: tr->i[tr->N] = 0; tr->pp[tr->N] = 0.0; tr->k[tr->N] = 0; break;
-    /* Nonemitting, but in main model (k valid) */
-  case p7T_D: tr->i[tr->N] = 0; tr->pp[tr->N] = 0.0; tr->k[tr->N] = k; break;
-    /* Emitting states, with valid k position in model: */
-  case p7T_M: 
-  case p7T_I: tr->i[tr->N] = i; tr->pp[tr->N] = pp;  tr->k[tr->N] = k; break;
-  default:    ESL_EXCEPTION(eslEINVAL, "no such state; can't append");
-  }
-
-  tr->st[tr->N] = st;
-  tr->N++;
+  if ((status = p7_trace_Append(tr, st, k, i)) != eslOK) return status;
+  tr->pp[tr->N-1] = pp;
   return eslOK;
 }
 
@@ -1100,7 +1151,7 @@ p7_trace_AppendWithPP(P7_TRACE *tr, char st, int k, int i, float pp)
  *           At least for now, this invalidates any domain index
  *           table, if it exists. The expectd order of invocation is
  *           to create the traceback backwards, <Reverse()> it, then
- *           <IndexDomains()> it.
+ *           <Index()> it.
  *           
  * Args:     tr - the traceback to reverse. tr->N must be set.
  *                
@@ -1154,14 +1205,13 @@ p7_trace_Reverse(P7_TRACE *tr)
 
 /* Function:  p7_trace_Index()
  * Synopsis:  Internally index the domains in a trace.
- * Incept:    SRE, Fri Jan  4 11:12:24 2008 [Janelia]
  *
- * Purpose:   Create an internal index of the domains in <tr>.
- *            This makes calls to <GetDomainCount()> and 
- *            <GetDomainCoords()> more efficient, and it is
- *            a necessary prerequisite for creating alignments
- *            of any individual domains in a multidomain trace with
- *            <p7_alidisplay_Create()>.
+ * Purpose:   Create an internal index of the domains in <tr>.  This
+ *            indexing makes individual calls to
+ *            <GetDomainCount()> and <GetDomainCoords()> more
+ *            efficient, and it is a necessary prerequisite for
+ *            creating alignments of any individual domains in a
+ *            multidomain trace with <p7_alidisplay_Create()>.
  *
  * Returns:   <eslOK> on success. 
  *
@@ -1172,37 +1222,55 @@ p7_trace_Reverse(P7_TRACE *tr)
 int
 p7_trace_Index(P7_TRACE *tr)
 {
-  int z;
-  int status;
+  int   z,z2;
+  float best_pp;
+  int   anchor;
+  int   status;
 
   tr->ndom = 0;
-  for (z = 0; z < tr->N; z++)
+  z        = 0;
+  while (tr->st[z] != p7T_T)
     {
-      switch (tr->st[z]) {
-      case p7T_B:
-	if ((status = p7_trace_GrowIndex(tr)) != eslOK) goto ERROR;
-	tr->tfrom[tr->ndom]   = z;
-	tr->sqfrom[tr->ndom]  = 0;
-	tr->hmmfrom[tr->ndom] = 0;
-	break;
+      /* Find start coord on model and seq.
+       * B->G->M1/D1 or B->L->Mk; z is currently on B.
+       */
+      if (tr->st[z] == p7T_B)
+	{
+	  if ((status = p7_trace_GrowIndex(tr)) != eslOK) return status;
+	  
+	  tr->tfrom[tr->ndom]   = z;
+	  z += 2;		/* skip B,{GL}; now we're either on M1/D1 for glocal, or MLk for local */
 
-      case p7T_M:
-	if (tr->sqfrom[tr->ndom]  == 0) tr->sqfrom[tr->ndom]  = tr->i[z];
-	if (tr->hmmfrom[tr->ndom] == 0) tr->hmmfrom[tr->ndom] = tr->k[z];
-	tr->sqto[tr->ndom]  = tr->i[z];
-	tr->hmmto[tr->ndom] = tr->k[z];
-	break;
+	  tr->hmmfrom[tr->ndom] = tr->k[z];
+	  if (tr->pp) { best_pp = tr->pp[z]; anchor = z; }
 
-      case p7T_E:
-	tr->tto[tr->ndom]   = z;
-	tr->ndom++;
-	break;
-      }
+	  while (tr->st[z] == p7T_DG) {
+	    if (tr->pp && tr->pp[z] > best_pp) { best_pp = tr->pp[z]; anchor = z; }
+	    z++;
+	  }
+
+	  tr->sqfrom[tr->ndom]  = tr->i[z];
+	  if (tr->pp && tr->pp[z] > best_pp) { best_pp = tr->pp[z]; anchor = z; }
+
+	  /* skip ahead to state before the E */
+	  while (tr->st[z+1] != p7T_E) { 
+	    if (tr->pp && tr->pp[z] > best_pp) { best_pp = tr->pp[z]; anchor = z; }
+	    z++;
+	  }
+
+	  /* G... Mm/Dm -> E or L... Mk/Dk->E */
+	  tr->hmmto[tr->ndom] = tr->k[z];
+	  z2 = z;
+	  while (tr->st[z2] == p7T_DG || tr->st[z2] == p7T_DL) z2--;
+	  tr->sqto[tr->ndom] = tr->i[z2];
+	  tr->tto[tr->ndom]   = ++z;
+	  /* z is now on E state */
+	  if (tr->pp) { tr->anch[tr->ndom] = anchor; }
+	  tr->ndom++;
+	}
+      z++;
     }
   return eslOK;
-  
- ERROR:
-  return status;
 }
 /*----------- end, creating traces by DP traceback ---------------*/
 
@@ -1213,28 +1281,28 @@ p7_trace_Index(P7_TRACE *tr)
 
 /* Function:  p7_trace_FauxFromMSA()
  * Synopsis:  Create array of faux tracebacks from an existing MSA.
- * Incept:    SRE, Thu May 21 08:07:25 2009 [Janelia]
  *
  * Purpose:   Given an existing <msa> and an array <matassign> that
  *            flags the alignment columns that are assigned to consensus
  *            match states (matassign[1..alen] = 1|0); create an array
  *            of faux traces <tr[0..msa->nseq-1]>. <optflags> controls 
  *            optional behavior; it can be <p7_DEFAULT> or <p7_MSA_COORDS>,
- *            as explained below.
+ *            as explained below. <matassign[]> must mark at least 
+ *            one consensus column.
  *            
- *            The traces are core traces: they start/end with B/E,
- *            they may use I_0,I_M, and D_1 states. Any flanking
+ *            This creates single-domain profile traces. Any flanking
  *            insertions (outside the first/last consensus column) are
- *            assigned to I_0 and I_M.
+ *            assigned to NN/CC transitions. No I0/Im states and no
+ *            J states occur.
  *            
- *            If the input alignment contains sequence fragments,
- *            caller should first convert leading/trailing gaps to
- *            missing data symbols. This hack causes entry/exit
- *            transitions to be encoded in the trace as B->X->{MDI}k
- *            and {MDI}k->X->E, rather than B->DDDD->Mk, Mk->DDDDD->E
- *            paths involving terminal deletions, and all functions
- *            that use traces, such as <p7_trace_Count()>, (should)
- *            ignore transitions involving <p7T_X> states.
+ *            Alignments are assumed to be glocal unless otherwise
+ *            indicated to be local. Currently the convention for
+ *            flagging a local alignment is that the leading/trailing
+ *            gaps are converted to missing data symbols; see
+ *            <esl_msa_MarkFragments()> for example. (But this is a
+ *            problematic convention; it would be better to directly
+ *            annotate the MSA somehow, instead of overloading the ~
+ *            character this way.)
  *            
  *            By default (<optflags = p7_DEFAULT>), the <i> coordinate
  *            in the faux tracebacks is <1..L>, relative to the
@@ -1245,18 +1313,59 @@ p7_trace_Index(P7_TRACE *tr)
  *            <optflags = p7_MSA_COORDS> makes the traces come out
  *            with <i=1..alen> coords for residues.
  *            
- *            Important: an MSA may imply DI and ID transitions that
- *            are illegal in a core model. If the only purpose of the
- *            traces is to go straight back into alignment
- *            construction through a <p7_tracealign_*> function, this
- *            is ok, because the <p7_tracealign_*> routines can handle
- *            DI and ID transitions (enabling reconstruction of almost
- *            exactly the same input alignment, modulo unaligned
- *            insertions). This is what happens for <hmmalign
- *            --mapali>, for example. However, if the caller wants to
- *            use the traces for anything else, these illegal DI and
- *            ID transitions have to be removed first, and the caller
- *            should use <p7_trace_Doctor()> to do it.
+ *            The reason these are called "faux" tracebacks is the
+ *            following, and it's very important. An input MSA did not
+ *            necessarily come from H3. It may imply transitions that
+ *            H3 disallows. Thus a returned trace may contain Ik->Dk+1
+ *            and Dk->Ik transitions. The input MSA may also imply a
+ *            local alignment with no consensus Mk entry; in this
+ *            case, a returned <tr[idx]> will be <NULL>.
+ *
+ *            We use faux tracebacks in two ways. One is in model
+ *            construction, where we will pass them to TraceCount(),
+ *            for parameterization. Trace counting must either ignore
+ *            I->D and D->I transitions and <NULL> traces, or "fix"
+ *            them first; see <TraceDoctor()>. Here the goal is to
+ *            only count model transitions we've observed; it seems
+ *            fair enough to simply ignore events we observe that H3
+ *            doesn't model. In effect, this amounts to H3 changing
+ *            the input alignment. One extreme example of this is that
+ *            in a local alignment path, any residues in "insert"
+ *            columns before or after the first consensus residue will
+ *            be assigned to N/C state emissions, regardless of their
+ *            position in the alignment (that is, the MSA could imply
+ *            Ik->Ik+1 transitions -- H3 in effect moves all such
+ *            residues out of the homology region.)
+ *            
+ *            The second way is in merging a given MSA to an
+ *            H3-constructed MSA, using <p7_tracealign_*()> functions;
+ *            for example, <hmmalign --mapali>. Here the goal is to
+ *            recover the exact input alignment, as much as possible.
+ *            The <p7_tracealign_*> routines are explicitly designed
+ *            to handle illegal D->I/I->D transitions, in order to
+ *            enable reconstruction of almost exactly the same input
+ *            alignment (the exception being unaligned
+ *            insertions). For best results, the caller should not
+ *            define any local fragments (because of the
+ *            aforementioned issue of possibly pushing residues into
+ *            N/C states); glocal alignment paths are more faithfully
+ *            reconstructed as the original alignment. 
+ *            
+ *            If the caller wants to make traces that guarantee
+ *            recovery of exactly the input alignment, it should
+ *            define all sequences as glocal, and all columns as
+ *            consensus (matassign[ai] = 1 for all ai=1..alen).
+ *
+ *            A related point: input protein alignments may include
+ *            '*' characters, which H3 considers to be a "nonresidue"
+ *            -- but if the user included them, the user is almost
+ *            certainly counting them as residues at least for its
+ *            unaligned residue coordinate system.  Therefore we
+ *            include '*' characters as emitted residues here, though
+ *            they are illegal residue characters for H3. Same issues
+ *            apply as above: caller must either doctor these
+ *            emissions, or assure that they will be tolerated or
+ *            ignored.
  *
  * Args:      msa       - digital alignment
  *            matassign - flag for each alignment column, whether
@@ -1269,73 +1378,125 @@ p7_trace_Index(P7_TRACE *tr)
  * Returns:   <eslOK> on success, and tr[0..nseq-1] now point to newly
  *            created traces; caller is responsible for freeing these.
  *
+ *            These traces are not necessarily "legal", and may not
+ *            pass trace validation. Caller must be prepared to deal
+ *            with some consequences of mapping an input MSA onto the
+ *            restricted H3 profile architecture.  A <tr[idx]> may be
+ *            <NULL> (local ali path had no consensus residues for seq
+ *            <idx>). A <tr[idx]> may contain D->I and I->D
+ *            transitions.  A <tr[idx]> may contain emissions of the
+ *            nonresidue '*'.
+ *
  * Throws:    <eslEMEM> on allocation error.
+ *
+ * Notes:     To facilitate future changes in the unsatisfying convention
+ *            of flagging local/glocal alignments, we isolate its
+ *            decipherment of local vs. glocal: the code that sets
+ *            <is_local> can be replaced by whatever the local
+ *            vs. glocal MSA annotation convention is.
+ *
+ *            Because the nonresidue character '*' is treated as a residue
+ *            here, you'll see confusing  <if (...XIsResidue || ...XIsNonresidue)> 
+ *            OR tests that might look like they would always succeed. Not so;
+ *            the other possibilities are gap symbols and missing data symbols.
  *
  * Xref:      J5/17: build.c::fake_tracebacks() becomes p7_trace_FauxFromMSA();
  *                   ability to handle MSA or raw coords added.
+ *            J9/42: upgraded to dual-mode local/glocal profile paths.
  */
 int
 p7_trace_FauxFromMSA(ESL_MSA *msa, int *matassign, int optflags, P7_TRACE **tr)
 {		      
   int  idx;			/* counter over seqs in MSA */
   int  k;                       /* position in HMM                 */
-  int  apos;                    /* position in alignment columns 1..alen */
-  int  rpos;			/* position in unaligned sequence residues 1..L */
-  int  showpos;			/* coord to actually record: apos or rpos */
+  int  ai;                      /* position in alignment columns 1..alen */
+  int  i;			/* position in unaligned sequence residues 1..L */
+  int  showpos;			/* coord to actually record: ai or i */
+  int  lpos_c, rpos_c;		/* leftmost, rightmost consensus column, 1..alen */
+  int  lpos, rpos;		/* leftmost, rightmost {MD}k assignment in this seq: glocal: lpos_c,rpos_c; local:  */
+  int  is_local;
   int  status = eslOK;
- 
+
   for (idx = 0; idx < msa->nseq; idx++) tr[idx] = NULL;
- 
+
+  /* Find leftmost and rightmost consensus columns */
+  for (lpos_c = 1;         lpos_c <= msa->alen; lpos_c++)  if (matassign[lpos_c]) break;
+  for (rpos_c = msa->alen; rpos_c >= 1;         rpos_c--)  if (matassign[rpos_c]) break;
+  /* if there were no consensus columns, lpos_c = alen+1 and rpos_c = 0 now; but we specified requirement of at least one consensus column in matassign[] */
+
   for (idx = 0; idx < msa->nseq; idx++)
     {
-      if ((tr[idx] = p7_trace_Create())                      == NULL) goto ERROR; 
-      if ((status  = p7_trace_Append(tr[idx], p7T_B, 0, 0)) != eslOK) goto ERROR;
-
-      for (k = 0, rpos = 1, apos = 1; apos <= msa->alen; apos++)
+      /* Decipher whatever the convention is that tells us whether this is a local (fragment) or glocal sequence alignment */
+      is_local = (esl_abc_XIsMissing(msa->abc, msa->ax[idx][1]) || esl_abc_XIsMissing(msa->abc, msa->ax[idx][msa->alen])) ? TRUE : FALSE;
+      
+      /* Find the first/last consensus column for model entry/exit on this seq. 
+       * For glocal, that's always simply the first/last consensus column.
+       * For local, it's the first/last col with a residue in it (enter/exit on Mk)
+       */
+      if (is_local)
 	{
-	  showpos = (optflags & p7_MSA_COORDS) ? apos : rpos;
-
-	  if (matassign[apos]) 
-	    {			/* match or delete */
-	      k++;
-	      if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos])) 
-		status = p7_trace_Append(tr[idx], p7T_M, k, showpos);
-	      else if (esl_abc_XIsGap    (msa->abc, msa->ax[idx][apos])) 
-		status = p7_trace_Append(tr[idx], p7T_D, k, 0);          
-	      else if (esl_abc_XIsNonresidue(msa->abc, msa->ax[idx][apos]))
-		status = p7_trace_Append(tr[idx], p7T_M, k, showpos); /* treat * as a residue! */
-	      else if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]))
-		{
-		  if (tr[idx]->st[tr[idx]->N-1] != p7T_X)
-		    status = p7_trace_Append(tr[idx], p7T_X, k, 0); /* allow only one X in a row */
-		}
-	      else ESL_XEXCEPTION(eslEINCONCEIVABLE, "can't happen");
-	    }
-	  else
-	    { 			/* insert or nothing */
-	      if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos]))
-		status = p7_trace_Append(tr[idx], p7T_I, k, showpos);
-	      else if (esl_abc_XIsNonresidue(msa->abc, msa->ax[idx][apos]))
-		status = p7_trace_Append(tr[idx], p7T_I, k, showpos); /* treat * as a residue! */
-	      else if (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos]))
-		{ 
-		  if (tr[idx]->st[tr[idx]->N-1] != p7T_X)
-		    status = p7_trace_Append(tr[idx], p7T_X, k, 0);
-		}
-	      else if (! esl_abc_XIsGap(msa->abc, msa->ax[idx][apos]))
-		ESL_XEXCEPTION(eslEINCONCEIVABLE, "can't happen");
-	    }
-
-	  if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos])) rpos++; 
-	  if (status != eslOK) goto ERROR;
+	  for (lpos = lpos_c; lpos <= rpos_c; lpos++) 
+	    if (matassign[lpos] && (esl_abc_XIsResidue(msa->abc, msa->ax[idx][lpos]) || esl_abc_XIsNonresidue(msa->abc, msa->ax[idx][lpos]))) break; /* "nonresidue" is the '*' character */
+	  for (rpos = rpos_c; rpos >= lpos_c; rpos--)
+	    if (matassign[rpos] && (esl_abc_XIsResidue(msa->abc, msa->ax[idx][rpos]) || esl_abc_XIsNonresidue(msa->abc, msa->ax[idx][rpos]))) break;
 	}
-      if ((status = p7_trace_Append(tr[idx], p7T_E, 0, 0)) != eslOK) goto ERROR;
-      /* k == M by construction; set tr->L = msa->alen since coords are w.r.t. ax */
+      else { lpos = lpos_c; rpos = rpos_c; }
+
+      /* It's possible in a local path that there were no residues in
+       * consensus columns, in which case now lpos > rpos (lpos = rpos_c+1,
+       * rpos = lpos_c-1) and logic below will fail. Moreover,
+       * without any Mk to enter on, we're headed for a B->L->E
+       * empty path that isn't legal. So, leave such a trace NULL.
+       */
+      if (lpos > rpos) continue;
+
+      if ((tr[idx] = p7_trace_Create())                      == NULL) goto ERROR; 
+      if ((status  = p7_trace_Append(tr[idx], p7T_S, 0, 0)) != eslOK) goto ERROR;
+      if ((status  = p7_trace_Append(tr[idx], p7T_N, 0, 0)) != eslOK) goto ERROR;
+
+      k = 0;
+      i = 1; 
+      for (ai = 1; ai <= msa->alen; ai++)
+	{
+	  showpos = (optflags & p7_MSA_COORDS) ? ai : i;
+	  if (matassign[ai]) k++;
+
+	  if (ai == lpos) {	/* left edge of homology: model entry */
+	    if ((status  = p7_trace_Append(tr[idx], p7T_B, 0, 0)) != eslOK) goto ERROR;
+	    if (is_local) { if ((status  = p7_trace_Append(tr[idx], p7T_L, 0, 0)) != eslOK) goto ERROR; }
+	    else          { if ((status  = p7_trace_Append(tr[idx], p7T_G, 0, 0)) != eslOK) goto ERROR; }
+	  }
+
+	  if  (esl_abc_XIsResidue(msa->abc, msa->ax[idx][ai]) || esl_abc_XIsNonresidue(msa->abc, msa->ax[idx][ai])) 
+	    {
+	      if      (ai < lpos)     { if ((status  = p7_trace_Append(tr[idx], p7T_N,  0, showpos)) != eslOK) goto ERROR; }
+	      else if (ai > rpos)     { if ((status  = p7_trace_Append(tr[idx], p7T_C,  0, showpos)) != eslOK) goto ERROR; }
+	      else if (is_local) {
+		if (matassign[ai])    { if ((status  = p7_trace_Append(tr[idx], p7T_ML, k, showpos)) != eslOK) goto ERROR; }
+		else                  { if ((status  = p7_trace_Append(tr[idx], p7T_IL, k, showpos)) != eslOK) goto ERROR; }
+	      } else {
+		if (matassign[ai])    { if ((status  = p7_trace_Append(tr[idx], p7T_MG, k, showpos)) != eslOK) goto ERROR; }
+		else                  { if ((status  = p7_trace_Append(tr[idx], p7T_IG, k, showpos)) != eslOK) goto ERROR; }
+	      }
+	      i++;
+	    }
+	  else if (matassign[ai]) /* delete, or nothing. gaps or ~ in nonconsensus columns. */
+	    {
+	      if      (is_local && ai > lpos && ai < rpos) { if ((status  = p7_trace_Append(tr[idx], p7T_DL, k, 0)) != eslOK) goto ERROR; }
+	      else if (! is_local)                         { if ((status  = p7_trace_Append(tr[idx], p7T_DG, k, 0)) != eslOK) goto ERROR; }
+	    }
+
+	  if (ai == rpos) { 	/* right edge of consensus homology region */
+	    if ((status = p7_trace_Append(tr[idx], p7T_E, 0, 0)) != eslOK) goto ERROR; 
+	    if ((status = p7_trace_Append(tr[idx], p7T_C, 0, 0)) != eslOK) goto ERROR;
+	  }
+	}
+      if ((status = p7_trace_Append(tr[idx], p7T_T, 0, 0)) != eslOK) goto ERROR;
+
       tr[idx]->M = k;
-      tr[idx]->L = msa->alen;
+      tr[idx]->L = (optflags & p7_MSA_COORDS) ? msa->alen : i-1;
     }
   return eslOK;
-
 
  ERROR:
   for (idx = 0; idx < msa->nseq; idx++) { p7_trace_Destroy(tr[idx]); tr[idx] = NULL; }
@@ -1345,19 +1506,22 @@ p7_trace_FauxFromMSA(ESL_MSA *msa, int *matassign, int optflags, P7_TRACE **tr)
 
 
 /* Function: p7_trace_Doctor()
- * Incept:   SRE, Thu May 21 08:45:46 2009 [Janelia]
+ * Synopsis: Hack a trace to assure it is valid. 
  * 
  * Purpose:  Plan 7 disallows D->I and I->D "chatter" transitions.
  *           However, these transitions will be implied by many
  *           alignments. trace_doctor() arbitrarily collapses I->D or
  *           D->I into a single M position in the trace.
+ *  
+ *           Once <tr> has been doctored, it will pass validation
+ *           by <p7_trace_Validate()>.
  *           
  *           trace_doctor does not examine any scores when it does
  *           this. In ambiguous situations (D->I->D) the symbol
  *           will be pulled arbitrarily to the left, regardless
  *           of whether that's the best column to put it in or not.
  *           
- * Args:     tr      - trace to doctor
+ * Args:     tr      - trace to doctor (may be NULL)
  *           opt_ndi - optRETURN: number of DI transitions doctored
  *           opt_nid - optRETURN: number of ID transitions doctored
  * 
@@ -1366,40 +1530,67 @@ p7_trace_FauxFromMSA(ESL_MSA *msa, int *matassign, int optflags, P7_TRACE **tr)
 int
 p7_trace_Doctor(P7_TRACE *tr, int *opt_ndi, int *opt_nid)
 {
-  int opos;			/* position in old trace                 */
-  int npos;			/* position in new trace (<= opos)       */
-  int ndi, nid;			/* number of DI, ID transitions doctored */
+  int opos;			/* position in old trace             */
+  int npos;			/* position in new trace (<= opos)   */
+  int ndi = 0;			/* number of DI transitions doctored */
+  int nid = 0;			/* number of ID transitions doctored */
 
   /* overwrite the trace from left to right */
-  ndi  = nid  = 0;
-  opos = npos = 0;
-  while (opos < tr->N) {
-      /* fix implied D->I transitions; D transforms to M, I pulled in */
-    if (tr->st[opos] == p7T_D && tr->st[opos+1] == p7T_I) {
-      tr->st[npos] = p7T_M;
-      tr->k[npos]  = tr->k[opos];     /* D transforms to M      */
-      tr->i[npos]  = tr->i[opos+1];   /* insert char moves back */
-      opos += 2;
-      npos += 1;
-      ndi++;
-    } /* fix implied I->D transitions; D transforms to M, I is pushed in */
-    else if (tr->st[opos]== p7T_I && tr->st[opos+1]== p7T_D) {
-      tr->st[npos] = p7T_M;
-      tr->k[npos]  = tr->k[opos+1];    /* D transforms to M    */
-      tr->i[npos]  = tr->i[opos];      /* insert char moves up */
-      opos += 2;
-      npos += 1;
-      nid++; 
-    } /* everything else is just copied */
-    else {
-      tr->st[npos] = tr->st[opos];
-      tr->k[npos]  = tr->k[opos];
-      tr->i[npos]  = tr->i[opos];
-      opos++;
-      npos++;
+  if (tr) 
+    {
+      opos = npos = 0;
+      while (opos < tr->N) {
+	/* fix implied D->I transitions; D transforms to M, I pulled in */
+	if (tr->st[opos] == p7T_DL && tr->st[opos+1] == p7T_IL) 
+	  {
+	    tr->st[npos] = p7T_ML;
+	    tr->k[npos]  = tr->k[opos];     /* D transforms to M      */
+	    tr->i[npos]  = tr->i[opos+1];   /* insert char moves back */
+	    opos += 2;
+	    npos += 1;
+	    ndi++;
+	  }
+	/* ditto for glocal */
+	else if (tr->st[opos] == p7T_DG && tr->st[opos+1] == p7T_IG) 
+	  {
+	    tr->st[npos] = p7T_MG;
+	    tr->k[npos]  = tr->k[opos];     /* D transforms to M      */
+	    tr->i[npos]  = tr->i[opos+1];   /* insert char moves back */
+	    opos += 2;
+	    npos += 1;
+	    ndi++;
+	  }
+	/* fix implied I->D transitions; D transforms to M, I is pushed in */
+	else if (tr->st[opos]== p7T_IL && tr->st[opos+1]== p7T_DL) 
+	  {
+	    tr->st[npos] = p7T_ML;
+	    tr->k[npos]  = tr->k[opos+1];    /* D transforms to M    */
+	    tr->i[npos]  = tr->i[opos];      /* insert char moves up */
+	    opos += 2;
+	    npos += 1;
+	    nid++; 
+	  } 
+	/* ditto for glocal */
+	else if (tr->st[opos]== p7T_IG && tr->st[opos+1]== p7T_DG) 
+	  {
+	    tr->st[npos] = p7T_MG;
+	    tr->k[npos]  = tr->k[opos+1];    /* D transforms to M    */
+	    tr->i[npos]  = tr->i[opos];      /* insert char moves up */
+	    opos += 2;
+	    npos += 1;
+	    nid++; 
+	  } 
+	/* everything else is just copied */
+	else {
+	  tr->st[npos] = tr->st[opos];
+	  tr->k[npos]  = tr->k[opos];
+	  tr->i[npos]  = tr->i[opos];
+	  opos++;
+	  npos++;
+	}
+      }
+      tr->N = npos;
     }
-  }
-  tr->N = npos;
 
   if (opt_ndi != NULL) *opt_ndi = ndi;
   if (opt_nid != NULL) *opt_nid = nid;
@@ -1417,26 +1608,18 @@ p7_trace_Doctor(P7_TRACE *tr, int *opt_ndi, int *opt_nid)
  * Purpose:  Count a traceback into a count-based core HMM structure.
  *           (Usually as part of a model parameter re-estimation.)
  *           
- *           The traceback may either be a core traceback (as in model
- *           construction) or a profile traceback (as in model
- *           reestimation).
- *           
- *           If it is a profile traceback, we have to be careful how
- *           we translate an internal entry path from a score profile
- *           back to the core model. Sometimes a B->M_k transition is
- *           an internal entry from local alignment, and sometimes it
- *           is a wing-folded B->D_1..DDM_k alignment to the core
- *           model.
- *           
- *           This is one of the purposes of the special p7T_X
- *           'missing data' state in tracebacks. Local alignment entry
- *           is indicated by a B->X->{MDI}_k 'missing data' path, and
- *           direct B->M_k or M_k->E transitions in a traceback are
- *           interpreted as wing retraction in a glocal model.
+ *           Tracebacks are relative to the profile model, not
+ *           the simpler core HMM. Therefore we have to do some
+ *           interpretation; for example, ignoring transitions that
+ *           aren't parameterized by observed counts, such as
+ *           L->Mk entries and Mk->E local exits.
  * 
- *           The <p7T_X> state is also used in core traces in model
- *           construction literally to mean missing data, in the
- *           treatment of sequence fragments.
+ *           Because tracebacks might (and often do) come from an
+ *           input alignment via <p7_trace_FauxFromMSA()>, we have to
+ *           tolerate some "illegal" special cases: I->D and D->I
+ *           transitions, "emissions" of the * nonresidue character,
+ *           and NULL traces (empty local alignments). We simply
+ *           ignore all these.
  *
  * Args:     hmm   - counts-based HMM to count <tr> into
  *           tr    - alignment of seq to HMM
@@ -1457,67 +1640,82 @@ p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
   int z;                        /* position in tr         */
   int i;			/* symbol position in seq */
   int st,st2;     		/* state type (cur, nxt)  */
-  int k,k2,ktmp;		/* node index (cur, nxt)  */
+  int k;	        	/* node index (cur, nxt)  */
   
+  if (tr == NULL) return eslOK;	/* tolerate empty local alignments from FauxFromMSA() */
+
+  /* Collect emission counts  */
   for (z = 0; z < tr->N-1; z++) 
     {
-      if (tr->st[z] == p7T_X) continue; /* skip missing data */
+      /* pull some info into tmp vars for notational clarity below. */
+      st  = tr->st[z]; 
+      k   = tr->k[z]; 
+      i   = tr->i[z];
+      
+      if (! i) continue;				     /* skip nonemitters */
+      if (esl_abc_XIsNonresidue(hmm->abc, dsq[i])) continue; /* ignore '*' symbols in undoctored traces */
 
-      /* pull some info into tmp vars for notational clarity later. */
+      if      (st == p7T_MG || st == p7T_ML) esl_abc_FCount(hmm->abc, hmm->mat[k], dsq[i], wt);
+      else if (st == p7T_IG || st == p7T_IL) esl_abc_FCount(hmm->abc, hmm->ins[k], dsq[i], wt);      
+    }
+
+  /* Collect transition counts */
+  for (z = 0; z < tr->N-1; z++) 
+    {
+      /* pull some info into tmp vars for notational clarity below. */
       st  = tr->st[z]; 
       st2 = tr->st[z+1];
       k   = tr->k[z]; 
-      k2  = tr->k[z+1];
-      i   = tr->i[z];
 
-      /* Emission counts. */
-      if      (st == p7T_M) esl_abc_FCount(hmm->abc, hmm->mat[k], dsq[i], wt);
-      else if (st == p7T_I) esl_abc_FCount(hmm->abc, hmm->ins[k], dsq[i], wt);
+      /* Ignore stuff that could be in a profile trace, esp. one from FauxFromMSA(), but isn't in a core HMM. */
+      if (st == p7T_S || st == p7T_N || st == p7T_B || st == p7T_L ||
+	  st == p7T_E || st == p7T_J || st == p7T_C)    continue; /* only count G,M,D,I glocal transitions */
+      if (st == p7T_DL && st2 == p7T_IL)                continue; /* no D->I transitions */
+      if (st == p7T_DG && st2 == p7T_IG)                continue; /* no D->I transitions */
+      if (st == p7T_IL && st2 == p7T_DL)                continue; /* no I->D transitions */
+      if (st == p7T_IG && st2 == p7T_DG)                continue; /* no I->D transitions */
 
-      /* Transition counts */
-      if (st2 == p7T_X) continue; /* ignore transition to missing data */
+      switch (st) {
 
-      if (st == p7T_B) {
-	if (st2 == p7T_M && k2 > 1)   /* wing-retracted B->DD->Mk path */
-	  {
-	    hmm->t[0][p7H_MD] += wt;                
-	    for (ktmp = 1; ktmp < k2-1; ktmp++) 
-	      hmm->t[ktmp][p7H_DD] += wt;
-	    hmm->t[ktmp][p7H_DM] += wt;
-	  }
-	else  {
-	  switch (st2) {
-	  case p7T_M: hmm->t[0][p7H_MM] += wt; break;
-	  case p7T_I: hmm->t[0][p7H_MI] += wt; break;
-	  case p7T_D: hmm->t[0][p7H_MD] += wt; break;
-	  default:     ESL_EXCEPTION(eslEINVAL, "bad transition in trace");
-	  }
-	}
-      }
-      else if (st == p7T_M) {
-     	switch (st2) {
-	case p7T_M: hmm->t[k][p7H_MM] += wt; break;
-	case p7T_I: hmm->t[k][p7H_MI] += wt; break;
-	case p7T_D: hmm->t[k][p7H_MD] += wt; break;
-	case p7T_E: hmm->t[k][p7H_MM] += wt; break; /* k==M. A local alignment would've been Mk->X->E. */
-	default:     ESL_EXCEPTION(eslEINVAL, "bad transition in trace");
-	}
-      }
-      else if (st == p7T_I) {
+      case p7T_G:
 	switch (st2) {
-	case p7T_M: hmm->t[k][p7H_IM] += wt; break;
-	case p7T_I: hmm->t[k][p7H_II] += wt; break;
-	case p7T_E: hmm->t[k][p7H_IM] += wt; break; /* k==M. */
-	default:     ESL_EXCEPTION(eslEINVAL, "bad transition in trace");
+	case p7T_MG: hmm->t[0][p7H_MM] += wt; break;
+	case p7T_DG: hmm->t[0][p7H_MD] += wt; break;
+	default: ESL_EXCEPTION(eslEINVAL, "bad transition in trace");
 	}
-      }
-      else if (st == p7T_D) {
+	break;
+
+      case p7T_MG: 
+      case p7T_ML:
 	switch (st2) {
-	case p7T_M: hmm->t[k][p7H_DM] += wt; break;
-	case p7T_D: hmm->t[k][p7H_DD] += wt; break;
-	case p7T_E: hmm->t[k][p7H_DM] += wt; break; /* k==M. A local alignment would've been Dk->X->E. */
+	case p7T_MG: case p7T_ML: hmm->t[k][p7H_MM] += wt; break;
+	case p7T_IG: case p7T_IL: hmm->t[k][p7H_MI] += wt; break;
+	case p7T_DG: case p7T_DL: hmm->t[k][p7H_MD] += wt; break;
+	case p7T_E: if (st == p7T_MG) hmm->t[k][p7H_MM] += wt; break; /* only glocal exits are counted */
 	default:     ESL_EXCEPTION(eslEINVAL, "bad transition in trace");
 	}
+	break;
+
+      case p7T_IG:
+      case p7T_IL:
+	switch (st2) {
+	case p7T_MG: case p7T_ML: hmm->t[k][p7H_IM] += wt; break;
+	case p7T_IG: case p7T_IL: hmm->t[k][p7H_II] += wt; break;
+	default:     ESL_EXCEPTION(eslEINVAL, "bad transition in trace");
+	}
+	break;
+
+      case p7T_DG:
+      case p7T_DL:
+	switch (st2) {
+	case p7T_MG: case p7T_ML: hmm->t[k][p7H_DM] += wt; break;
+	case p7T_DG: case p7T_DL: hmm->t[k][p7H_DD] += wt; break;
+	case p7T_E: if (st == p7T_DG) hmm->t[k][p7H_DM] += wt; break; /* only glocal exits are counted */
+	default:     ESL_EXCEPTION(eslEINVAL, "bad transition in trace");
+	}
+	break;
+
+      default: ESL_EXCEPTION(eslEINVAL, "bad state in trace");
       }
     } /* end loop over trace position */
   return eslOK;
@@ -1525,17 +1723,347 @@ p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
 /*--------------------- end, trace counting ---------------------*/
 
 
+
+
 /*****************************************************************
  * 7. Unit tests
  *****************************************************************/			 
 #ifdef p7TRACE_TESTDRIVE
 
+#include "esl_sq.h"
+#include "esl_msafile.h"
+
+#define P7_TRACE_SPOTCHECK(tr, zidx, stidx, kidx, iidx)	\
+  (((tr)->st[zidx] == (stidx) && (tr)->k[zidx] == (kidx) && (tr)->i[zidx] == (iidx)) ? 1 : 0)
+
+static void
+utest_create_msa(ESL_ALPHABET **ret_abc, ESL_MSA **ret_msa, int **ret_matassign, ESL_SQ ***ret_sq)
+{
+  char         *msg       = "p7_trace.c:: create_msa failed";
+  int          *matassign = NULL;
+  ESL_ALPHABET *abc       = esl_alphabet_Create(eslAMINO);
+  ESL_MSA      *msa       = esl_msa_CreateFromString("\
+# STOCKHOLM 1.0\n\
+#=GC RF ..x.xx.xx.x..\n\
+seq0    ..A.CD.EF.G..\n\
+seq1    ~~~~CD.EF.G~~\n\
+seq2    gg-.-DeE-.-gg\n\
+seq3    ..A.C-e-Fy-..\n\
+seq4    ~~Ac--e-F~~~~\n\
+seq5    ~g-w--eEFy~~~\n\
+seq6    ~g-w--e--y~~~\n\
+seq7    ..A.C*.EF.G..\n\
+//\n", eslMSAFILE_STOCKHOLM);
+  ESL_SQ      **sq        = NULL;
+  int           idx,apos;
+
+  if (msa == NULL)                                                esl_fatal(msg);
+  if (esl_msa_Digitize(abc, msa, /*errbuf=*/ NULL )     != eslOK) esl_fatal(msg);
+  if (( matassign = malloc(sizeof(int) * (msa->alen+2))) == NULL) esl_fatal("malloc");
+
+  matassign[0] = matassign[msa->alen+1] = 0;
+  for (apos = 1; apos <= msa->alen; apos++)
+    matassign[apos] = (esl_abc_CIsGap(msa->abc, msa->rf[apos-1])? FALSE : TRUE);
+
+  sq = malloc(sizeof(ESL_SQ *)   * msa->nseq);
+  for (idx = 0; idx < msa->nseq; idx++)
+    if (esl_sq_FetchFromMSA(msa, idx, &(sq[idx]))  != eslOK) esl_fatal(msg);
+
+  *ret_abc       = abc;
+  *ret_msa       = msa;
+  *ret_matassign = matassign;
+  *ret_sq        = sq;
+}
+
+static void
+utest_FauxFromMSA_seqcoords(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
+{
+  char      *msg       = "p7_trace.c:: FauxFromMSA, seqcoords unit test failed";
+  P7_TRACE **tr        = NULL;
+  int        optflags  = p7_DEFAULT;
+
+
+  if (( tr     = malloc(sizeof(P7_TRACE *) * msa->nseq))  == NULL)  esl_fatal("malloc");
+  if ( p7_trace_FauxFromMSA(msa, matassign, optflags, tr) != eslOK) esl_fatal(msg);
+  
+  /* Spotchecks of the trickiest bits of those traces. They'll also be Validate()'ed later. */
+  /* seq0 = a glocal alignment.  */
+  if (! P7_TRACE_SPOTCHECK(tr[0], 3, p7T_G,  0, 0))     esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[0], 9, p7T_MG, 6, 6))     esl_fatal(msg);
+  if (tr[0]->N != 13 || tr[0]->M != 6 || tr[0]->L != 6) esl_fatal(msg);
+
+  /* seq1 = a local alignment. */
+  if (! P7_TRACE_SPOTCHECK(tr[1], 3, p7T_L,  0, 0))     esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[1], 4, p7T_ML, 2, 1))     esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[1], 8, p7T_ML, 6, 5))     esl_fatal(msg);
+  if (tr[1]->N != 12 || tr[1]->M != 6 || tr[1]->L != 5) esl_fatal(msg);
+
+  /* seq2 = one reason ~ convention is bad: local ali with flush N,C can't be represented */
+  if (! P7_TRACE_SPOTCHECK(tr[2],  3, p7T_N,  0, 2))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[2],  5, p7T_G,  0, 0))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[2],  6, p7T_DG, 1, 0))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[2],  9, p7T_IG, 3, 4))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[2], 12, p7T_DG, 6, 0))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[2], 16, p7T_C,  0, 7))    esl_fatal(msg);
+  if (tr[2]->N != 18 || tr[2]->M != 6 || tr[2]->L != 7) esl_fatal(msg);
+
+  /* seq3 = input MSA implies D->I, I->D transitions, illegal in H3 */
+  if (! P7_TRACE_SPOTCHECK(tr[3],  6, p7T_DG, 3, 0))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[3],  7, p7T_IG, 3, 3))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[3],  8, p7T_DG, 4, 0))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[3], 10, p7T_IG, 5, 5))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[3], 11, p7T_DG, 6, 0))    esl_fatal(msg);
+  if (tr[3]->N != 15 || tr[3]->M != 6 || tr[3]->L != 5) esl_fatal(msg);
+
+  /* seq4 = ... D->I, I->D transitions in a local alignment path */
+  if (! P7_TRACE_SPOTCHECK(tr[4],  5, p7T_IL, 1, 2))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[4],  6, p7T_DL, 2, 0))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[4],  7, p7T_DL, 3, 0))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[4],  8, p7T_IL, 3, 3))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[4],  9, p7T_DL, 4, 0))    esl_fatal(msg);
+  if (tr[4]->N != 14 || tr[4]->M != 6 || tr[4]->L != 4) esl_fatal(msg);
+
+  /* seq5 = quirk of L->Mk, Mk->E local entry/exit: all nonconsensus
+   * res outside the entry/exit go to N/C regardless of their alignment 
+   */
+  if (! P7_TRACE_SPOTCHECK(tr[5],  4, p7T_N,  0, 3))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[5],  7, p7T_ML, 4, 4))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[5], 11, p7T_C,  0, 6))    esl_fatal(msg);
+  if (tr[5]->N != 13 || tr[5]->M != 6 || tr[5]->L != 6) esl_fatal(msg);
+
+  /* seq6 = pathological case, local ali can imply no consensus residues; results in NULL trace */
+  if (tr[6] != NULL) esl_fatal(msg);
+
+  /* seq7 = nonresidue '*' symbol is accepted in input ali as if it's a residue */
+  if (! P7_TRACE_SPOTCHECK(tr[7],  6, p7T_MG,  3, 3))   esl_fatal(msg);
+  if (tr[7]->N != 13 || tr[7]->M != 6 || tr[7]->L != 6) esl_fatal(msg);
+
+  *ret_tr = tr;
+}		      
+
+/* same test as above, but now in MSA coords 1..alen, not unaligned seq coords */
+static void
+utest_FauxFromMSA_msacoords(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
+{
+  char      *msg       = "p7_trace.c:: FauxFromMSA, MSA coords unit test failed";
+  P7_TRACE **tr        = NULL;
+  int        optflags  = p7_MSA_COORDS;
+
+  if (( tr     = malloc(sizeof(P7_TRACE *) * msa->nseq))  == NULL)  esl_fatal("malloc");
+  if ( p7_trace_FauxFromMSA(msa, matassign, optflags, tr) != eslOK) esl_fatal(msg);
+  
+  if (! P7_TRACE_SPOTCHECK(tr[0], 9, p7T_MG, 6, 11))     esl_fatal(msg);
+  if (tr[0]->N != 13 || tr[0]->M != 6 || tr[0]->L != 13) esl_fatal(msg);
+
+  if (! P7_TRACE_SPOTCHECK(tr[1], 4, p7T_ML, 2, 5))      esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[1], 8, p7T_ML, 6, 11))     esl_fatal(msg);
+  if (tr[1]->N != 12 || tr[1]->M != 6 || tr[1]->L != 13) esl_fatal(msg);
+
+  if (! P7_TRACE_SPOTCHECK(tr[2],  3, p7T_N,  0, 2))     esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[2],  9, p7T_IG, 3, 7))     esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[2], 16, p7T_C,  0, 13))    esl_fatal(msg);
+  if (tr[2]->N != 18 || tr[2]->M != 6 || tr[2]->L != 13) esl_fatal(msg);
+
+  if (! P7_TRACE_SPOTCHECK(tr[3],  7, p7T_IG, 3, 7))     esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[3], 10, p7T_IG, 5, 10))    esl_fatal(msg);
+  if (tr[3]->N != 15 || tr[3]->M != 6 || tr[3]->L != 13) esl_fatal(msg);
+
+  if (! P7_TRACE_SPOTCHECK(tr[4],  5, p7T_IL, 1, 4))     esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[4],  8, p7T_IL, 3, 7))     esl_fatal(msg);
+  if (tr[4]->N != 14 || tr[4]->M != 6 || tr[4]->L != 13) esl_fatal(msg);
+
+  if (! P7_TRACE_SPOTCHECK(tr[5],  4, p7T_N,  0, 7))     esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[5],  7, p7T_ML, 4, 8))     esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[5], 11, p7T_C,  0, 10))    esl_fatal(msg);
+  if (tr[5]->N != 13 || tr[5]->M != 6 || tr[5]->L != 13) esl_fatal(msg);
+
+  if (tr[6] != NULL) esl_fatal(msg);
+
+  if (! P7_TRACE_SPOTCHECK(tr[7],  6, p7T_MG,  3, 6))    esl_fatal(msg);
+  if (tr[7]->N != 13 || tr[7]->M != 6 || tr[7]->L != 13) esl_fatal(msg);
+
+  *ret_tr = tr;
+}		      
+
+
+static void
+utest_Doctor(ESL_SQ **sq, P7_TRACE **tr)
+{
+  char *msg          = "p7_trace.c:: Doctor unit test failed";
+  int   preresult[8] = { eslOK, eslOK, eslOK, eslFAIL, eslFAIL, eslOK, eslOK, eslOK };
+  int   ndi, nid;
+  int   idx;
+  /* traces 3,4 have DI,ID transitions and will fail validation until they're doctored */
+
+  for (idx = 0; idx < 8; idx++)
+    {
+      if (p7_trace_Validate(tr[idx], sq[idx]->abc, sq[idx]->dsq, /*errbuf=*/NULL) != preresult[idx]) esl_fatal(msg);
+      if (p7_trace_Doctor(tr[idx], &ndi, &nid) != eslOK) esl_fatal(msg);
+      if (preresult[idx] == eslOK   && (ndi != 0 || nid != 0)) esl_fatal(msg);
+      if (preresult[idx] == eslFAIL && (ndi == 0 || nid == 0)) esl_fatal(msg);
+      if (p7_trace_Validate(tr[idx], sq[idx]->abc, sq[idx]->dsq, /*errbuf=*/NULL) != eslOK) esl_fatal(msg);
+    }      
+
+  /* spotcheck the doctoring in 3 and 4 */
+  if (! P7_TRACE_SPOTCHECK(tr[3],  6, p7T_MG, 3, 3))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[3],  7, p7T_DG, 4, 0))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[3],  8, p7T_MG, 5, 4))    esl_fatal(msg);
+  if (tr[3]->N != 13 || tr[3]->M != 6 || tr[3]->L != 5) esl_fatal(msg);
+
+  if (! P7_TRACE_SPOTCHECK(tr[4],  5, p7T_ML, 2, 2))    esl_fatal(msg); /* a I->D pushed right, became ML */
+  if (! P7_TRACE_SPOTCHECK(tr[4],  6, p7T_ML, 3, 3))    esl_fatal(msg); /* a D->I pulled left, became ML  */
+  if (! P7_TRACE_SPOTCHECK(tr[4],  7, p7T_DL, 4, 0))    esl_fatal(msg); /* this D stayed */
+  if (tr[4]->N != 12 || tr[4]->M != 6 || tr[4]->L != 4) esl_fatal(msg);
+}
+
+
+static void
+utest_check_counts_are_zero(P7_HMM *hmm)
+{
+ char   *msg = "p7_trace.c:: zero count check failed";
+ int k,x,z;
+
+  /* now all emissions should be zero, including the mat[0] state */
+  for (k = 0; k <= hmm->M; k++)
+    {
+      for (x = 0; x < hmm->abc->K; x++)
+	{
+	  if (hmm->mat[k][x] != 0.0) esl_fatal(msg);
+	  if (hmm->ins[k][x] != 0.0) esl_fatal(msg);
+	}
+      for (z = 0; z < p7H_NTRANSITIONS; z++)
+	if (hmm->t[k][z] != 0.0) esl_fatal(msg);
+    }
+}
+
+static void 
+utest_check_counts_undoctored(P7_HMM *hmm)
+{
+  char   *msg = "p7_trace.c:: count check (undoctored version) failed";
+  int     k, sym;
+  ESL_DSQ x;
+  float   ct;
+
+  /* check nonzero match emissions; zero them as we go */
+  k = 1; sym = 'A'; ct = 4.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
+  k = 2; sym = 'C'; ct = 4.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
+  k = 3; sym = 'D'; ct = 3.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
+  k = 4; sym = 'E'; ct = 5.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
+  k = 5; sym = 'F'; ct = 6.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
+  k = 6; sym = 'G'; ct = 3.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
+
+  /* check nonzero insert emissions, zero as we go */
+  k = 1; sym = 'C'; ct = 1.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->ins[k][x] != ct) esl_fatal(msg); hmm->ins[k][x] = 0.0;
+  k = 3; sym = 'E'; ct = 3.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->ins[k][x] != ct) esl_fatal(msg); hmm->ins[k][x] = 0.0;
+  k = 5; sym = 'Y'; ct = 1.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->ins[k][x] != ct) esl_fatal(msg); hmm->ins[k][x] = 0.0;
+
+  /* check nonzero transitions, zero as we go */
+  if (hmm->t[0][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[0][p7H_MM] = 0.0;
+  if (hmm->t[0][p7H_MD] != 1.0) esl_fatal(msg); hmm->t[0][p7H_MD] = 0.0;
+  if (hmm->t[1][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[1][p7H_MM] = 0.0;
+  if (hmm->t[1][p7H_MI] != 1.0) esl_fatal(msg); hmm->t[1][p7H_MI] = 0.0;
+  if (hmm->t[1][p7H_DD] != 1.0) esl_fatal(msg); hmm->t[1][p7H_DD] = 0.0;
+  if (hmm->t[2][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[2][p7H_MM] = 0.0;
+  if (hmm->t[2][p7H_DD] != 1.0) esl_fatal(msg); hmm->t[2][p7H_DD] = 0.0;
+  if (hmm->t[2][p7H_MD] != 1.0) esl_fatal(msg); hmm->t[2][p7H_MD] = 0.0;
+  if (hmm->t[2][p7H_DM] != 1.0) esl_fatal(msg); hmm->t[2][p7H_DM] = 0.0;
+  if (hmm->t[3][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[3][p7H_MM] = 0.0;
+  if (hmm->t[3][p7H_IM] != 1.0) esl_fatal(msg); hmm->t[3][p7H_IM] = 0.0;
+  if (hmm->t[3][p7H_MI] != 1.0) esl_fatal(msg); hmm->t[3][p7H_MI] = 0.0;
+  if (hmm->t[4][p7H_MM] != 4.0) esl_fatal(msg); hmm->t[4][p7H_MM] = 0.0;
+  if (hmm->t[4][p7H_DM] != 2.0) esl_fatal(msg); hmm->t[4][p7H_DM] = 0.0;
+  if (hmm->t[4][p7H_MD] != 1.0) esl_fatal(msg); hmm->t[4][p7H_MD] = 0.0;
+  if (hmm->t[5][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[5][p7H_MM] = 0.0;
+  if (hmm->t[5][p7H_DD] != 1.0) esl_fatal(msg); hmm->t[5][p7H_DD] = 0.0;
+  if (hmm->t[5][p7H_MI] != 1.0) esl_fatal(msg); hmm->t[5][p7H_MI] = 0.0;
+  if (hmm->t[6][p7H_MM] != 2.0) esl_fatal(msg); hmm->t[6][p7H_MM] = 0.0;
+  if (hmm->t[6][p7H_DM] != 2.0) esl_fatal(msg); hmm->t[6][p7H_DM] = 0.0;
+
+  /* now all counts should be zeroed */
+  utest_check_counts_are_zero(hmm);
+}
+
+static void 
+utest_check_counts_doctored(P7_HMM *hmm)
+{
+  char   *msg = "p7_trace.c:: count check (doctered version) failed";
+  int     k, sym;
+  ESL_DSQ x;
+  float   ct;
+
+  /* check nonzero match emissions; zero them as we go */
+  k = 1; sym = 'A'; ct = 4.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
+  k = 2; sym = 'C'; ct = 5.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
+  k = 3; sym = 'D'; ct = 3.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
+  k = 3; sym = 'E'; ct = 2.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
+  k = 4; sym = 'E'; ct = 5.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
+  k = 5; sym = 'F'; ct = 6.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
+  k = 6; sym = 'G'; ct = 3.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
+  k = 6; sym = 'Y'; ct = 1.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
+
+  /* check nonzero insert emissions, zero as we go */
+  k = 3; sym = 'E'; ct = 1.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->ins[k][x] != ct) esl_fatal(msg); hmm->ins[k][x] = 0.0;
+
+  /* check nonzero transitions, zero as we go */
+  if (hmm->t[0][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[0][p7H_MM] = 0.0;
+  if (hmm->t[0][p7H_MD] != 1.0) esl_fatal(msg); hmm->t[0][p7H_MD] = 0.0;
+  if (hmm->t[1][p7H_MM] != 4.0) esl_fatal(msg); hmm->t[1][p7H_MM] = 0.0;
+  if (hmm->t[1][p7H_DD] != 1.0) esl_fatal(msg); hmm->t[1][p7H_DD] = 0.0;
+  if (hmm->t[2][p7H_MM] != 5.0) esl_fatal(msg); hmm->t[2][p7H_MM] = 0.0;
+  if (hmm->t[2][p7H_DM] != 1.0) esl_fatal(msg); hmm->t[2][p7H_DM] = 0.0;
+  if (hmm->t[3][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[3][p7H_MM] = 0.0;
+  if (hmm->t[3][p7H_MD] != 2.0) esl_fatal(msg); hmm->t[3][p7H_MD] = 0.0;
+  if (hmm->t[3][p7H_IM] != 1.0) esl_fatal(msg); hmm->t[3][p7H_IM] = 0.0;
+  if (hmm->t[3][p7H_MI] != 1.0) esl_fatal(msg); hmm->t[3][p7H_MI] = 0.0;
+  if (hmm->t[4][p7H_MM] != 4.0) esl_fatal(msg); hmm->t[4][p7H_MM] = 0.0;
+  if (hmm->t[4][p7H_DM] != 2.0) esl_fatal(msg); hmm->t[4][p7H_DM] = 0.0;
+  if (hmm->t[4][p7H_MD] != 1.0) esl_fatal(msg); hmm->t[4][p7H_MD] = 0.0;
+  if (hmm->t[5][p7H_MM] != 4.0) esl_fatal(msg); hmm->t[5][p7H_MM] = 0.0;
+  if (hmm->t[5][p7H_DD] != 1.0) esl_fatal(msg); hmm->t[5][p7H_DD] = 0.0;
+  if (hmm->t[6][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[6][p7H_MM] = 0.0;
+  if (hmm->t[6][p7H_DM] != 1.0) esl_fatal(msg); hmm->t[6][p7H_DM] = 0.0;
+
+  /* now all counts should be zeroed */
+  utest_check_counts_are_zero(hmm);
+}
+
+/* pass undoctored msa-coord traces into this; they're doctored here */
+static void
+utest_Count(ESL_MSA *msa, int *matassign, P7_TRACE **trm)
+{
+  char   *msg = "p7_trace.c:: Count unit test failed";
+  P7_HMM *hmm = NULL;
+  int     M;
+  int     apos,idx;
+  
+  for (M = 0, apos = 1; apos <= msa->alen; apos++) if (matassign[apos]) M++;
+  if ((hmm = p7_hmm_Create(M, msa->abc)) == NULL)  esl_fatal(msg);
+  if (p7_hmm_Zero(hmm)                   != eslOK) esl_fatal(msg);
+
+  /* First count and check the undoctored traces */
+  for (idx = 0; idx < msa->nseq; idx++) 
+    if (p7_trace_Count(hmm, msa->ax[idx], msa->wgt[idx], trm[idx]) != eslOK) esl_fatal(msg);
+  utest_check_counts_undoctored(hmm);
+
+  /* Then do it again with doctored traces. */
+  for (idx = 0; idx < msa->nseq; idx++) 
+    {
+      if (p7_trace_Doctor(trm[idx], NULL, NULL)                      != eslOK) esl_fatal(msg);
+      if (p7_trace_Validate(trm[idx], msa->abc, msa->ax[idx], NULL)  != eslOK) esl_fatal(msg);
+      if (p7_trace_Count(hmm, msa->ax[idx], msa->wgt[idx], trm[idx]) != eslOK) esl_fatal(msg);
+    }
+  utest_check_counts_doctored(hmm);
+
+  p7_hmm_Destroy(hmm);
+}
+
+#if 0
 /* convert an MSA to traces; then traces back to MSA; 
  * starting and ending MSA should be the same, provided
  * the msa doesn't have any ambiguously aligned insertions.
  */
 static void
-utest_faux(ESL_MSA *msa, int *matassign, int M)
+utest_faux_tracealign(ESL_MSA *msa, int *matassign, int M)
 {
   char      *msg  = "p7_trace.c:: FauxFromMSA unit test failed";
   ESL_MSA   *msa2 = NULL;
@@ -1564,74 +2092,172 @@ utest_faux(ESL_MSA *msa, int *matassign, int M)
   free(sq);
   return;
 }
+#endif
 
 #endif /*p7TRACE_TESTDRIVE*/
 /*--------------------- end, unit tests -------------------------*/
+
+
 
 /*****************************************************************
  * 8. Test driver
  *****************************************************************/			 
 #ifdef p7TRACE_TESTDRIVE
-/*
-  gcc -o p7_trace_utest -msse2 -std=gnu99 -g -O2 -I. -L. -I../easel -L../easel -Dp7TRACE_TESTDRIVE p7_trace.c -lhmmer -leasel -lm 
-  ./p7_trace_utest
-*/
+
+/* Unit testing:
+ * make:     make p7_trace_utest
+ * compile:  cc -o p7_trace_utest -g -Wall -Dp7TRACE_TESTDRIVE -I. -I../easel -L../easel p7_trace.c p7_hmm.c p7_profile.c hmmer.c -leasel
+ * run:      ./p7_trace_utest
+ * 
+ * To test under valgrind:
+ * run:      valgrind ./p7_trace_utest
+ * 
+ * To measure code coverage:
+ * make:     (make clean; ./configure --enable-gcov; make; cd src; make p7_trace_utest)
+ * compile:  gcc -o p7_trace_utest -fprofile-arcs -ftest-coverage -Dp7TRACE_TESTDRIVE -I. -I../easel -L../easel p7_trace.c p7_hmm.c p7_profile.c hmmer.c -leasel
+ * run:      ./p7_trace_utest
+ * measure:  gcov p7_trace.c
+ * examine:  emacs p7_trace.c.gcov
+ */
 #include "p7_config.h"
 
 #include "easel.h"
 #include "esl_getopts.h"
 #include "esl_msa.h"
 #include "esl_msafile.h"
-#include "esl_random.h"
 
 #include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
-
 static char usage[]  = "[-options]";
 static char banner[] = "test driver for P7_TRACE";
 
 int
 main(int argc, char **argv)
 {
-  char           *msg       = "p7_trace_utest failed";
   ESL_GETOPTS    *go        = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r         = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
-  ESL_ALPHABET   *abc       = esl_alphabet_Create(eslAMINO);
+  ESL_ALPHABET   *abc       = NULL;
   ESL_MSA        *msa       = NULL;
-  int             alen      = 6;
-  int             M         = 4;
-  int            *matassign = malloc(sizeof(int) * (alen+1)); /* 1..alen */
+  int            *matassign = NULL;
+  ESL_SQ        **sq        = NULL;
+  P7_TRACE      **trs       = NULL; /* traces in unaligned seq coords */
+  P7_TRACE      **trm       = NULL; /* traces in MSA coords */
+  int             idx;
 
-  /* Create a test MSA/matassign/M triplet */
-  /* missing data ~ doesn't work here yet; tracealign_* doesn't propagate p7T_X in any way  */
-  if ((msa = esl_msa_CreateFromString("# STOCKHOLM 1.0\n#=GC RF .xxxx.\nseq1    AAAAAA\nseq2    -AAA--\nseq3    AA--AA\n//\n", eslMSAFILE_STOCKHOLM)) == NULL) esl_fatal(msg);
-  if (esl_msa_Digitize(abc, msa,NULL) != eslOK) esl_fatal(msg);
+  utest_create_msa(&abc, &msa, &matassign, &sq);
+  utest_FauxFromMSA_seqcoords(msa, matassign, &trs);
+  utest_FauxFromMSA_msacoords(msa, matassign, &trm);
+  utest_Doctor(sq, trs);	    /* now trs's are doctored on return */
+  utest_Count(msa, matassign, trm); /* trm's are doctored here too      */
 
-  matassign[0] = 0;
-  matassign[1] = 0;
-  matassign[2] = 1;
-  matassign[3] = 1;
-  matassign[4] = 1;
-  matassign[5] = 1;
-  matassign[6] = 0;
-  
-  utest_faux(msa, matassign, M);
-
+  p7_trace_DestroyArray(trs, msa->nseq);
+  p7_trace_DestroyArray(trm, msa->nseq);
+  for (idx = 0; idx < msa->nseq; idx++) esl_sq_Destroy(sq[idx]);
+  free(sq);
   free(matassign);
   esl_msa_Destroy(msa);
   esl_alphabet_Destroy(abc);
-  esl_randomness_Destroy(r);
   esl_getopts_Destroy(go);
   return eslOK;
 }
 #endif /*p7TRACE_TESTDRIVE*/
 /*--------------------- end, test driver ------------------------*/
+
+
+/*****************************************************************
+ * 9. Example
+ *****************************************************************/
+#ifdef p7TRACE_EXAMPLE
+
+/* To compile: cc -o p7_trace_example -g -Wall -Dp7TRACE_EXAMPLE -I. -I../easel -L../easel p7_trace.c p7_profile.c hmmer.c -leasel
+ * To run:     ./p7_trace_example foo.sto
+ * The foo.sto alignment must have a RF annotation line marking consensus columns.
+ */
+
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_msa.h"
+#include "esl_msafile.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type         default   env  range   toggles   reqs   incomp   help                                    docgroup*/
+  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,   "show brief help on version and usage",        0 },
+  { "-d",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,   "doctor traces",                               0 },
+  { "-m",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,   "use msa coords, not unaligned seq coords",    0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <msafile> <seqfile>";
+static char banner[] = "example driver for P7_TRACE";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go        = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  char           *msafile   = esl_opt_GetArg(go, 1);
+  int             infmt     = eslMSAFILE_UNKNOWN;
+  ESL_ALPHABET   *abc       = NULL;
+  ESLX_MSAFILE   *afp       = NULL;
+  ESL_MSA        *msa       = NULL;
+  int            *matassign = NULL;
+  int             optflags  = (esl_opt_GetBoolean(go, "-m") ? p7_MSA_COORDS : p7_DEFAULT);
+  P7_TRACE      **trarr     = NULL;
+  int             apos,idx;
+  int             status;
+
+  if ( (status = eslx_msafile_Open(&abc, msafile, NULL, infmt, NULL, &afp)) != eslOK)
+    eslx_msafile_OpenFailure(afp, status);
+
+  if ( (status = eslx_msafile_Read(afp, &msa)) != eslOK) 
+    eslx_msafile_ReadFailure(afp, status);
+
+  if (! msa->rf)
+    esl_fatal("MSA must have #=GC RF consensus column annotation line for this example to work.");
+
+  if (( matassign = malloc(sizeof(int) *        (msa->alen+2))) == NULL) esl_fatal("malloc failed");
+  if (( trarr     = malloc(sizeof(P7_TRACE *) * msa->nseq))     == NULL) esl_fatal("malloc failed");
+
+  matassign[0] = matassign[msa->alen+1] = 0;
+  for (apos = 1; apos <= msa->alen; apos++)
+    matassign[apos] = (esl_abc_CIsGap(msa->abc, msa->rf[apos-1])? FALSE : TRUE);
+
+  if ( (status = p7_trace_FauxFromMSA(msa, matassign, optflags, trarr)) != eslOK)
+    esl_fatal("FauxFromMSA() failed");
+
+  if (esl_opt_GetBoolean(go, "-d")) {
+    for (idx = 0; idx < msa->nseq; idx++)
+      p7_trace_Doctor(trarr[idx], NULL, NULL);
+  }
+
+  for (idx = 0; idx < msa->nseq; idx++)
+    if (p7_trace_Validate(trarr[idx], abc, msa->ax[idx], NULL) == eslFAIL)
+      printf("warning: trace %d failed validation\n", idx);
+
+  for (idx = 0; idx < msa->nseq; idx++)
+    {
+      printf("\n### trace %d:\n", idx);
+      p7_trace_Dump(stdout, trarr[idx]);
+    }
+
+  for (idx = 0; idx < msa->nseq; idx++) p7_trace_Destroy(trarr[idx]);
+  free(trarr);
+  free(matassign);
+  esl_msa_Destroy(msa);
+  eslx_msafile_Close(afp);
+  esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7TRACE_EXAMPLE*/
+
 
 
 /************************************************************

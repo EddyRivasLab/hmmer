@@ -579,8 +579,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Convert to an optimized model */
       gm = p7_profile_Create (hmm->M, abc);
       om = p7_oprofile_Create(hmm->M, abc);
-      p7_ProfileConfig(hmm, info->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
-      p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
+      p7_profile_ConfigLocal(gm, hmm, info->bg, 100); /* 100 is a dummy length for now; and MSVFilter requires local mode */
+      p7_oprofile_Convert(gm, om);                    /* <om> is now p7_LOCAL, multihit */
 
       scoredata = p7_hmm_ScoreDataCreate(om, FALSE);
 

@@ -279,7 +279,7 @@ p7_gmxchk_Destroy(P7_GMXCHK *gxc)
 /*****************************************************************
  *= 2. Debugging and testing tools
  *****************************************************************/
-#if p7_DEBUGGING
+#ifdef p7_DEBUGGING
 
 /* Function:  p7_gmxchk_Dump()
  * Synopsis:  Dump a checkpointed DP matrix to a stream.
@@ -815,10 +815,10 @@ main(int argc, char **argv)
 
   p7_FLogsumInit();
 
-  if (p7_hmm_Sample(r, M, abc, &hmm)             != eslOK) esl_fatal(msg);
-  if ((gm = p7_profile_Create(hmm->M, abc))      == NULL)  esl_fatal(msg);
-  if (p7_bg_SetLength(bg, L)                     != eslOK) esl_fatal(msg);
-  if (p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL) != eslOK) esl_fatal(msg);
+  if (p7_hmm_Sample(r, M, abc, &hmm)         != eslOK) esl_fatal(msg);
+  if ((gm = p7_profile_Create(hmm->M, abc))  == NULL)  esl_fatal(msg);
+  if (p7_bg_SetLength(bg, L)                 != eslOK) esl_fatal(msg);
+  if (p7_profile_ConfigLocal(gm, hmm, bg, L) != eslOK) esl_fatal(msg);
 
   utest_GrowTo();
 

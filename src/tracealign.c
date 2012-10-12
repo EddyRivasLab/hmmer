@@ -5,9 +5,6 @@
  *   2. Internal functions used by the API
  *   3. Test driver
  *   4. Copyright and license.
- * 
- * SRE, Tue Oct 21 19:38:19 2008 [Casa de Gatos]
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -256,7 +253,7 @@ p7_tracealign_computeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
   gm = p7_profile_Create (hmm->M, hmm->abc);
   om = p7_oprofile_Create(hmm->M, hmm->abc);
 
-  p7_ProfileConfig(hmm, bg, gm, sq[offset]->n, p7_UNILOCAL);
+  p7_profile_ConfigUnilocal(gm, hmm, bg, sq[offset]->n);
   p7_oprofile_Convert(gm, om);
 
 
@@ -313,7 +310,7 @@ p7_tracealign_computeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
         if (gxb == NULL) gxb = p7_gmx_Create(hmm->M, sq[idx]->n);
         else             p7_gmx_GrowTo(gxb,  hmm->M, sq[idx]->n);
 
-        p7_ReconfigLength(gm, sq[idx]->n);
+        p7_profile_SetLength(gm, sq[idx]->n);
 
         p7_GForward (sq[idx]->dsq, sq[idx]->n, gm, gxf, &fwdsc);
         p7_GBackward(sq[idx]->dsq, sq[idx]->n, gm, gxb, NULL);
@@ -332,7 +329,7 @@ p7_tracealign_computeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
        */
       // skip the parts of the trace that precede the first match state
       tfrom = 2;
-      while (tr[idx]->st[tfrom] != p7T_M)   tfrom++;
+      while (tr[idx]->st[tfrom] != p7T_ML && tr[idx]->st[tfrom] != p7T_MG)  tfrom++;
 
       tto = tfrom + 1;
       //run until the model is exited
@@ -423,11 +420,11 @@ p7_tracealign_getMSAandStats(P7_HMM *hmm, ESL_SQ  **sq, int N, ESL_MSA **ret_msa
     j = tr[i]->tfrom[0] - 2;
     for (z = tr[i]->tfrom[0]; z <= tr[i]->tto[0]; z++) {
 
-      if (tr[i]->st[z] != p7T_D ) { //M or I
+      if (tr[i]->st[z] != p7T_DL && tr[i]->st[z] != p7T_DG ) { //M or I
 
         ret_pp[i][j] = tr[i]->pp[z];
 
-        if (tr[i]->st[z] == p7T_M ) {
+        if (tr[i]->st[z] == p7T_ML || tr[i]->st[z] == p7T_MG ) {
           k = tr[i]->k[z];
           for (x=0; x<hmm->abc->K; x++) {
             p       = hmm->mat[k][x];
@@ -526,21 +523,19 @@ map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount,
   if (optflags & p7_ALL_CONSENSUS_COLS) esl_vec_ISet(matuse+1, M, TRUE); 
   else                                  esl_vec_ISet(matuse+1, M, FALSE);
 
-  /* Collect inscount[], matuse[] in a fairly general way 
-   * (either profile or core traces work)
-   */
+  /* Collect inscount[], matuse[] in a fairly general way */
   for (idx = 0; idx < nseq; idx++)
     {
       esl_vec_ISet(insnum, M+1, 0);
       for (z = 1; z < tr[idx]->N; z++) 
 	{
       	  switch (tr[idx]->st[z]) {
-	  case p7T_I:                                insnum[tr[idx]->k[z]]++; break;
-	  case p7T_N: if (tr[idx]->st[z-1] == p7T_N) insnum[0]++;             break;
-	  case p7T_C: if (tr[idx]->st[z-1] == p7T_C) insnum[M]++;             break;
-	  case p7T_M: matuse[tr[idx]->k[z]] = TRUE;                           break;
+	  case p7T_IL: case p7T_IG: insnum[tr[idx]->k[z]]++;                    break;
+	  case p7T_N:               if (tr[idx]->st[z-1] == p7T_N) insnum[0]++; break;
+	  case p7T_C:               if (tr[idx]->st[z-1] == p7T_C) insnum[M]++; break;
+	  case p7T_ML: case p7T_MG: matuse[tr[idx]->k[z]] = TRUE;               break;
 	  case p7T_J: p7_Die("J state unsupported");
-	  default:                                                            break;
+	  default:                                                              break;
 	  }
 	}
       for (k = 0; k <= M; k++) 
@@ -606,6 +601,7 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
   int           idx;
   int           apos;
   int           z;
+  int           is_local;
   int           status;
 
   if ((msa = esl_msa_CreateDigital(abc, nseq, alen)) == NULL) { status = eslEMEM; goto ERROR;  }
@@ -616,22 +612,26 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
       for (apos = 1; apos <= alen; apos++) msa->ax[idx][apos] = esl_abc_XGetGap(abc);
       msa->ax[idx][alen+1] = eslDSQ_SENTINEL;
 
-      apos = 1;
+      is_local = FALSE;		/* until shown otherwise */
+      apos     = 1;
       for (z = 0; z < tr[idx]->N; z++)
 	{
 	  switch (tr[idx]->st[z]) {
-	  case p7T_M:
+	  case p7T_ML: 
+	  case p7T_MG:
 	    msa->ax[idx][matmap[tr[idx]->k[z]]] = get_dsq_z(sq, premsa, tr, idx, z);
 	    apos = matmap[tr[idx]->k[z]] + 1;
 	    break;
 
-	  case p7T_D:
+	  case p7T_DL:
+	  case p7T_DG:
 	    if (matuse[tr[idx]->k[z]]) /* bug h77: if all col is deletes, do nothing; do NOT overwrite a column */
 	      msa->ax[idx][matmap[tr[idx]->k[z]]] = esl_abc_XGetGap(abc); /* overwrites ~ in Dk column on X->Dk */
 	    apos = matmap[tr[idx]->k[z]] + 1;
 	    break;
 
-	  case p7T_I:
+	  case p7T_IL:
+	  case p7T_IG:
 	    if ( !(optflags & p7_TRIM) || (tr[idx]->k[z] != 0 && tr[idx]->k[z] != M)) {
 	      msa->ax[idx][apos] = get_dsq_z(sq, premsa, tr, idx, z);
 	      apos++;
@@ -646,36 +646,26 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
 	    }
 	    break;
 	    
-	  case p7T_E:
-	    apos = matmap[M]+1;	/* set position for C-terminal tail */
-	    break;
-	    
-	  case p7T_X: 
-	    /* Mark fragments (B->X and X->E containing core traces): 
-	     * convert flanks from gaps to ~ 
-	     */
-	    if (tr[idx]->st[z-1] == p7T_B)
-	      { /* B->X leader. This is a core trace and a fragment. Convert leading gaps to ~ */
-		/* to set apos for an initial Ik: peek at next state for B->X->Ik; superfluous for ->{DM}k: */
-		for (apos = 1; apos <= matmap[tr[idx]->k[z+1]]; apos++)
-		  msa->ax[idx][apos] = esl_abc_XGetMissing(abc);
-		/* tricky! apos is now exactly where it needs to be for X->Ik. all other cases except B->X->Ik set their own apos */
-	      }
-	    else if (tr[idx]->st[z+1] == p7T_E) 
-	      { /* X->E trailer. This is a core trace and a fragment. Convert trailing gaps to ~ */
-		/* don't need to set apos for trailer. There can't be any more residues in a core trace once we hit X->E */
-		for (; apos <= alen; apos++)
-		  msa->ax[idx][apos] = esl_abc_XGetMissing(abc);
-	      }
-	    else ESL_XEXCEPTION(eslECORRUPT, "make_digital_msa(): X state in unexpected position in trace"); 
-	      
-	    break;
+	  case p7T_E:  apos     = matmap[M]+1; break; /* set position for C-terminal tail */
+	  case p7T_L:  is_local = TRUE;        break;
+	  case p7T_J:  ESL_EXCEPTION(eslEINCONCEIVABLE, "can't tracealign a J");
+	  default:                             break; /* do nothing on other states */
+	  } /* end switch over state type at trace position z */
+	}   /* end loop over trace position z */
 
-	  default:
-	    break;
+      /* Impose the local fragment-marking convention. */
+      if (is_local)
+	{
+	  for (apos = 1; apos <= alen; apos++) {
+	    if (esl_abc_XIsGap(abc, msa->ax[idx][apos])) msa->ax[idx][apos] = esl_abc_XGetMissing(abc);
+	    else break;
+	  }
+	  for (apos = alen; apos >= 1; apos--) {
+	    if (esl_abc_XIsGap(abc, msa->ax[idx][apos])) msa->ax[idx][apos] = esl_abc_XGetMissing(abc);
+	    else break;
 	  }
 	}
-    }
+    }	    /* end loop over all traces[idx] */
 
   msa->nseq = nseq;
   msa->alen = alen;
@@ -709,6 +699,7 @@ make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const
   int           apos;
   int           z;
   int           k;
+  int           is_local;
   int           status;
 
   if ((msa = esl_msa_Create(nseq, alen)) == NULL) { status = eslEMEM; goto ERROR; }
@@ -719,22 +710,23 @@ make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const
       for (k    = 1; k    <= M;   k++)    if (matuse[k]) msa->aseq[idx][-1+matmap[k]] = '-';
       msa->aseq[idx][apos] = '\0';
 
-      apos = 0;
+      is_local = FALSE;
+      apos     = 0;
       for (z = 0; z < tr[idx]->N; z++)
 	{
 	  switch (tr[idx]->st[z]) {
-	  case p7T_M:
+	  case p7T_ML: case p7T_MG:
 	    msa->aseq[idx][-1+matmap[tr[idx]->k[z]]] = toupper(abc->sym[get_dsq_z(sq, premsa, tr, idx, z)]);
 	    apos = matmap[tr[idx]->k[z]]; /* i.e. one past the match column. remember, text mode is 0..alen-1 */
 	    break;
 
-	  case p7T_D:
+	  case p7T_DL: case p7T_DG:
 	    if (matuse[tr[idx]->k[z]]) /* bug #h77: if all column is deletes, do nothing; do NOT overwrite a column */
 	      msa->aseq[idx][-1+matmap[tr[idx]->k[z]]] = '-';  /* overwrites ~ in Dk column on X->Dk */
 	    apos = matmap[tr[idx]->k[z]];
 	    break;
 
-	  case p7T_I:
+	  case p7T_IL: case p7T_IG:
 	    if ( !(optflags & p7_TRIM) || (tr[idx]->k[z] != 0 && tr[idx]->k[z] != M)) {
 	      msa->aseq[idx][apos] = tolower(abc->sym[get_dsq_z(sq, premsa, tr, idx, z)]);
 	      apos++;
@@ -749,33 +741,25 @@ make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const
 	    }
 	    break;
 	    
-	  case p7T_E:
-	    apos = matmap[M];	/* set position for C-terminal tail */
-	    break;
-
-	  case p7T_X:
-	    /* Mark fragments (B->X and X->E containing core traces): 
-	     * convert flanks from gaps to ~ 
-	     */
-	    if (tr[idx]->st[z-1] == p7T_B)
-	      { /* B->X leader. This is a core trace and a fragment. Convert leading gaps to ~ */
-		for (apos = 0; apos < matmap[tr[idx]->k[z+1]]; apos++)
-		  msa->aseq[idx][apos] = '~';
-		/* tricky; apos exactly where it must be for X->Ik; see comments in make_digital_msa() */
-	      }
-	    else if (tr[idx]->st[z+1] == p7T_E) 
-	      { /* X->E trailer. This is a core trace and a fragment. Convert trailing gaps to ~ */
-		for (;  apos < alen; apos++)
-		  msa->aseq[idx][apos] = '~';
-	      }
-	    else ESL_XEXCEPTION(eslECORRUPT, "make_text_msa(): X state in unexpected position in trace"); 
-	 
-	    break;
-
-	  default:
-	    break;
+	  case p7T_E:  apos = matmap[M]; break;	/* set position for C-terminal tail */
+	  case p7T_L:  is_local = TRUE;  break;
+	  default:                       break;
 	  }
 	}
+
+      /* Impose the local fragment-marking convention. */
+      if (is_local)
+	{
+	  for (apos = 0; apos < alen; apos++) {
+	    if (msa->aseq[idx][apos] == '.' || msa->aseq[idx][apos] == '-') msa->aseq[idx][apos] = '~';
+	    else break;
+	  }
+	  for (apos = alen-1; apos > 0; apos--) {
+	    if (msa->aseq[idx][apos] == '.' || msa->aseq[idx][apos] == '-') msa->aseq[idx][apos] = '~';
+	    else break;
+	  }
+	}
+
     }
   msa->nseq = nseq;
   msa->alen = alen;
@@ -911,15 +895,18 @@ annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, const int *matmap, i
       for (z = 0; z < tr[idx]->N; z++)
 	{
 	  switch (tr[idx]->st[z]) {
-	  case p7T_M: 
+	  case p7T_ML: case p7T_MG:
 	    msa->pp[idx][matmap[tr[idx]->k[z]]-1] = p7_alidisplay_EncodePostProb(tr[idx]->pp[z]);  
 	    totp  [matmap[tr[idx]->k[z]]-1]+= tr[idx]->pp[z];
 	    matuse[matmap[tr[idx]->k[z]]-1]++;
-	  case p7T_D:
 	    apos = matmap[tr[idx]->k[z]]; 
 	    break;
 
-	  case p7T_I:
+	  case p7T_DL: case p7T_DG:
+	    apos = matmap[tr[idx]->k[z]]; 
+	    break;
+
+	  case p7T_IL: case p7T_IG:
 	    if ( !(optflags & p7_TRIM) || (tr[idx]->k[z] != 0 && tr[idx]->k[z] != M)) {
 	      msa->pp[idx][apos] = p7_alidisplay_EncodePostProb(tr[idx]->pp[z]);  
 	      apos++;
@@ -1303,6 +1290,9 @@ main(int argc, char **argv)
 
 /*****************************************************************
  * @LICENSE@
+ * 
+ * SRE, Tue Oct 21 19:38:19 2008 [Casa de Gatos]
+ * SVN $Id$
  *****************************************************************/
 
 

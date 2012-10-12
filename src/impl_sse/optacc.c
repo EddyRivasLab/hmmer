@@ -241,14 +241,15 @@ p7_OATrace(const P7_OPROFILE *om, const P7_OMX *pp, const P7_OMX *ox, P7_TRACE *
   while (s0 != p7T_S)
     {
       switch (s0) {
-      case p7T_M: s1 = select_m(om,     ox, i, k);  k--; i--; break;
-      case p7T_D: s1 = select_d(om,     ox, i, k);  k--;      break;
-      case p7T_I: s1 = select_i(om,     ox, i, k);       i--; break;
-      case p7T_N: s1 = select_n(i);                           break;
-      case p7T_C: s1 = select_c(om, pp, ox, i);               break;
-      case p7T_J: s1 = select_j(om, pp, ox, i);               break;
-      case p7T_E: s1 = select_e(om,     ox, i, &k);           break;
-      case p7T_B: s1 = select_b(om,     ox, i);               break;
+      case p7T_ML: s1 = select_m(om,     ox, i, k);  k--; i--; break;
+      case p7T_DL: s1 = select_d(om,     ox, i, k);  k--;      break;
+      case p7T_IL: s1 = select_i(om,     ox, i, k);       i--; break;
+      case p7T_N:  s1 = select_n(i);                           break;
+      case p7T_C:  s1 = select_c(om, pp, ox, i);               break;
+      case p7T_J:  s1 = select_j(om, pp, ox, i);               break;
+      case p7T_E:  s1 = select_e(om,     ox, i, &k);           break;
+      case p7T_L:  s1 = p7T_B;                                 break;
+      case p7T_B:  s1 = select_b(om,     ox, i);               break;
       default: ESL_EXCEPTION(eslEINVAL, "bogus state in traceback");
       }
       if (s1 == -1) ESL_EXCEPTION(eslEINVAL, "OA traceback choice failed");
@@ -273,16 +274,16 @@ get_postprob(const P7_OMX *pp, int scur, int sprv, int k, int i)
   union { __m128 v; float p[4]; } u;
 
   switch (scur) {
-  case p7T_M: u.v = MMO(pp->dpf[i], q); return u.p[r]; 
-  case p7T_I: u.v = IMO(pp->dpf[i], q); return u.p[r]; 
-  case p7T_N: if (sprv == scur) return pp->xmx[i*p7X_NXCELLS+p7X_N];
-  case p7T_C: if (sprv == scur) return pp->xmx[i*p7X_NXCELLS+p7X_C];
-  case p7T_J: if (sprv == scur) return pp->xmx[i*p7X_NXCELLS+p7X_J];
-  default:    return 0.0;
+  case p7T_ML: u.v = MMO(pp->dpf[i], q); return u.p[r]; 
+  case p7T_IL: u.v = IMO(pp->dpf[i], q); return u.p[r]; 
+  case p7T_N:  if (sprv == scur) return pp->xmx[i*p7X_NXCELLS+p7X_N];
+  case p7T_C:  if (sprv == scur) return pp->xmx[i*p7X_NXCELLS+p7X_C];
+  case p7T_J:  if (sprv == scur) return pp->xmx[i*p7X_NXCELLS+p7X_J];
+  default:     return 0.0;
   }
 }
 
-/* M(i,k) is reached from B(i-1), M(i-1,k-1), D(i-1,k-1), or I(i-1,k-1). */
+/* M(i,k) is reached from B(i-1) (i.e. L), M(i-1,k-1), D(i-1,k-1), or I(i-1,k-1). */
 static inline int
 select_m(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
 {
@@ -295,7 +296,7 @@ select_m(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
   __m128  mpv, dpv, ipv;
   union { __m128 v; float p[4]; } u, tv;
   float   path[4];
-  int     state[4] = { p7T_M, p7T_I, p7T_D, p7T_B };
+  int     state[4] = { p7T_ML, p7T_IL, p7T_DL, p7T_L };
   
   if (q > 0) {
     mpv = ox->dpf[i-1][(q-1)*3 + p7X_M];
@@ -341,7 +342,7 @@ select_d(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
 
   path[0] = ((tmdv.p[r] == 0.0) ? -eslINFINITY : mpv.p[r]);
   path[1] = ((tddv.p[r] == 0.0) ? -eslINFINITY : dpv.p[r]);
-  return  ((path[0] >= path[1]) ? p7T_M : p7T_D);
+  return  ((path[0] >= path[1]) ? p7T_ML : p7T_DL);
 }
 
 /* I(i,k) is reached from M(i-1, k) or I(i-1,k). */
@@ -357,7 +358,7 @@ select_i(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
 
   mpv.v = ox->dpf[i-1][q*3 + p7X_M]; tv.v = *tp;  path[0] = ((tv.p[r] == 0.0) ? -eslINFINITY : mpv.p[r]);  tp++;
   ipv.v = ox->dpf[i-1][q*3 + p7X_I]; tv.v = *tp;  path[1] = ((tv.p[r] == 0.0) ? -eslINFINITY : ipv.p[r]);  
-  return  ((path[0] >= path[1]) ? p7T_M : p7T_I);
+  return  ((path[0] >= path[1]) ? p7T_ML : p7T_IL);
 }
 
 /* N(i) must come from N(i-1) for i>0; else it comes from S */
@@ -403,8 +404,8 @@ select_e(const P7_OPROFILE *om, const P7_OMX *ox, int i, int *ret_k)
   /* precedence rules in case of ties here are a little tricky: M beats D: note the >= max!  */
   for (q = 0; q < Q; q++)
     {
-      u.v   = *dp; dp++;  for (r = 0; r < 4; r++) if (u.p[r] >= max) { max = u.p[r]; smax = p7T_M; kmax = r*Q + q + 1; }
-      u.v   = *dp; dp+=2; for (r = 0; r < 4; r++) if (u.p[r] > max)  { max = u.p[r]; smax = p7T_D; kmax = r*Q + q + 1; }
+      u.v   = *dp; dp++;  for (r = 0; r < 4; r++) if (u.p[r] >= max) { max = u.p[r]; smax = p7T_ML; kmax = r*Q + q + 1; }
+      u.v   = *dp; dp+=2; for (r = 0; r < 4; r++) if (u.p[r] > max)  { max = u.p[r]; smax = p7T_DL; kmax = r*Q + q + 1; }
     }
   *ret_k = kmax;
   return smax;
@@ -500,11 +501,11 @@ main(int argc, char **argv)
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
 
   bg = p7_bg_Create(abc);                 p7_bg_SetLength(bg, L);
-  gm = p7_profile_Create(hmm->M, abc);    p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  gm = p7_profile_Create(hmm->M, abc);    p7_profile_ConfigLocal(gm, hmm, bg, L);
   om = p7_oprofile_Create(gm->M, abc);    p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
 
-  if (esl_opt_GetBoolean(go, "-x") && p7_FLogsumError(-0.4, -0.5) > 0.0001)
+  if (esl_opt_GetBoolean(go, "-x") && ! p7_logsum_IsSlowExact())
     p7_Fail("-x here requires p7_Logsum() recompiled in slow exact mode");
 
   ox1 = p7_omx_Create(gm->M, L, L);
@@ -616,7 +617,7 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
   float        gtol;
 
   p7_FLogsumInit();
-  gtol = ( (p7_FLogsumError(-0.4, -0.5) > 0.0001) ?  0.1 : 0.001);
+  gtol = ( p7_logsum_IsSlowExact() ?  0.001 : 0.1);
 
   if (p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om)!= eslOK) esl_fatal(msg);
   while (N--)
@@ -658,20 +659,20 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
 #endif
       if (p7_GOATrace(gm, gx2, gx1, trg)                  != eslOK) esl_fatal(msg);
 
-      if (p7_trace_SetPP(tro, gx2)                        != eslOK) esl_fatal(msg);
+      if (p7_gmx_SetPP(tro, gx2)                          != eslOK) esl_fatal(msg);
 
       if (esl_opt_GetBoolean(go, "--traces"))
 	{
-	  p7_trace_Dump(stdout, tro, gm, sq->dsq);
-	  p7_trace_Dump(stdout, tr,  gm, sq->dsq);
-	  p7_trace_Dump(stdout, trg, gm, sq->dsq);
+	  p7_trace_DumpAnnotated(stdout, tro, gm, sq->dsq);
+	  p7_trace_DumpAnnotated(stdout, tr,  gm, sq->dsq);
+	  p7_trace_DumpAnnotated(stdout, trg, gm, sq->dsq);
 	}
 
       if (p7_trace_Validate(tr,  abc, sq->dsq, NULL)      != eslOK) esl_fatal(msg);
       if (p7_trace_Validate(trg, abc, sq->dsq, NULL)      != eslOK) esl_fatal(msg);
       if (p7_trace_Compare(tr, trg, pptol)                != eslOK) esl_fatal(msg);
 
-      accscore_o  = p7_trace_GetExpectedAccuracy(tro); /* according to gx2; see p7_trace_SetPP() call above */
+      accscore_o  = p7_trace_GetExpectedAccuracy(tro); /* according to gx2; see p7_gmx_SetPP() call above */
       accscore_g2 = p7_trace_GetExpectedAccuracy(trg);
 
 #if 0
@@ -896,7 +897,7 @@ main(int argc, char **argv)
  
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);                 p7_bg_SetLength(bg, sq->n);
-  gm = p7_profile_Create(hmm->M, abc);    p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL); /* multihit local: H3 default */
+  gm = p7_profile_Create(hmm->M, abc);    p7_profile_ConfigLocal(gm, hmm, bg, sq->n);
   om = p7_oprofile_Create(gm->M, abc);    p7_oprofile_Convert(gm, om);
 
   /* Allocations */
@@ -916,7 +917,7 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "-d")) { p7_omx_FDeconvert(ox2, gx);  p7_gmx_Dump(stdout, gx, p7_DEFAULT); }
   if (esl_opt_GetBoolean(go, "-m")) { p7_omx_FDeconvert(ox1, gx);  p7_gmx_Dump(stdout, gx, p7_DEFAULT); }
 
-  p7_trace_Dump(stdout, tr, gm, sq->dsq);
+  p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 
   if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) p7_Die("trace fails validation:\n%s\n", errbuf);
 

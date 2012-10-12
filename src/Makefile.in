@@ -45,7 +45,6 @@ MYINCDIRS = -I../${ESLDIR} \
 
 
 PROGS = alimask\
-	exactmatch\
 	hmmalign\
 	hmmbuild\
 	hmmconvert\
@@ -55,7 +54,6 @@ PROGS = alimask\
 	hmmpress\
 	hmmscan\
 	hmmsearch\
-	hmmsim\
 	hmmstat\
 	jackhmmer\
 	phmmer\
@@ -63,12 +61,14 @@ PROGS = alimask\
 	nhmmscan\
 	hmmpgmd\
 	hmmc2\
-	makenhmmerdb
-
+	makenhmmerdb\
+	exactmatch\
+	hmmsim\
+	sim-alignment\
+	pipetest
 
 PROGOBJS =\
 	alimask.o\
-	exactmatch.o\
 	hmmalign.o\
 	hmmbuild.o\
 	hmmconvert.o\
@@ -78,7 +78,6 @@ PROGOBJS =\
 	hmmpress.o\
 	hmmscan.o\
 	hmmsearch.o\
-	hmmsim.o\
 	hmmstat.o\
 	jackhmmer.o\
 	phmmer.o\
@@ -87,13 +86,29 @@ PROGOBJS =\
 	hmmpgmd.o\
 	hmmc2.o\
 	makenhmmerdb.o\
+	exactmatch.o\
+	hmmsim.o\
+	sim-alignment.o\
+	pipetest.o
 
 HDRS =  hmmer.h \
 	cachedb.h \
-	p7_gbands.h \
-	p7_gmxb.h \
-	p7_gmxchk.h \
-	p7_hmmcache.h
+	p7_hmmcache.h\
+	p7_masstrace.h\
+	p7_refmx.h\
+	p7_sparsemx.h \
+	p7_trace_metrics.h\
+	reference_decoding.h\
+	reference_fwdback.h\
+	reference_trace.h\
+	reference_viterbi.h\
+	sparse_decoding.h\
+	sparse_envscore.h\
+	sparse_fwdback.h\
+	sparse_masstrace.h\
+	sparse_null2.h\
+	sparse_trace.h\
+	sparse_viterbi.h
 
 OBJS =  build.o\
 	cachedb.o\
@@ -104,7 +119,6 @@ OBJS =  build.o\
 	generic_decoding.o\
 	generic_fwdback.o\
 	generic_fwdback_chk.o\
-	generic_fwdback_banded.o\
 	generic_null2.o\
 	generic_msv.o\
 	generic_optacc.o\
@@ -122,13 +136,23 @@ OBJS =  build.o\
 	modelconfig.o\
 	modelstats.o\
 	mpisupport.o\
+	reference_decoding.o\
+	reference_fwdback.o\
+	reference_trace.o\
+	reference_viterbi.o\
 	seqmodel.o\
+	sparse_decoding.o\
+	sparse_envscore.o\
+	sparse_fwdback.o\
+	sparse_masstrace.o\
+	sparse_null2.o\
+	sparse_trace.o\
+	sparse_viterbi.o\
 	tracealign.o\
 	p7_alidisplay.o\
 	p7_bg.o\
 	p7_builder.o\
 	p7_domaindef.o\
-	p7_gbands.o\
 	p7_gmx.o\
 	p7_gmxb.o\
 	p7_gmxchk.o\
@@ -136,18 +160,22 @@ OBJS =  build.o\
 	p7_hmmcache.o\
 	p7_hmmfile.o\
 	p7_hmmwindow.o\
+	p7_masstrace.o\
 	p7_null3.o\
 	p7_pipeline.o\
 	p7_prior.o\
 	p7_profile.o\
+	p7_refmx.o\
+	p7_sparsemx.o\
 	p7_spensemble.o\
 	p7_tophits.o\
 	p7_trace.o\
+	p7_trace_metrics.o\
 	p7_scoredata.o\
 	fm_alphabet.o\
 	fm_general.o\
 	fm_msv.o\
-    hmmpgmd2msa.o
+	hmmpgmd2msa.o
 #	island.o\
 
 STATS = \
@@ -156,31 +184,27 @@ STATS = \
 BENCHMARKS = \
 	evalues_benchmark\
 	logsum_benchmark\
-	generic_decoding_benchmark\
-	generic_fwdback_benchmark\
-	generic_fwdback_chk_benchmark\
-	generic_msv_benchmark\
-	generic_null2_benchmark\
-	generic_optacc_benchmark\
-	generic_stotrace_benchmark\
-	generic_viterbi_benchmark \
+	reference_fwdback_benchmark\
+	sparse_fwdback_benchmark\
 	p7_hmmcache_benchmark
 
 UTESTS =\
 	build_utest\
-	generic_fwdback_utest\
-	generic_fwdback_chk_utest\
-	generic_msv_utest\
-	generic_stotrace_utest\
-	generic_viterbi_utest\
+	emit_utest\
 	hmmer_utest\
 	logsum_utest\
 	modelconfig_utest\
+	reference_fwdback_utest\
+	reference_decoding_utest\
+	reference_viterbi_utest\
+	sparse_fwdback_utest\
+	sparse_decoding_utest\
+	sparse_envscore_utest\
+	sparse_masstrace_utest\
 	seqmodel_utest\
 	p7_alidisplay_utest\
 	p7_bg_utest\
 	p7_gmx_utest\
-	p7_gmxchk_utest\
 	p7_hmm_utest\
 	p7_hmmfile_utest\
 	p7_profile_utest\
@@ -194,22 +218,23 @@ ITESTS = \
 EXAMPLES = \
 	build_example\
 	emit_example\
-	generic_fwdback_example\
-	generic_fwdback_chk_example\
-	generic_msv_example\
-	generic_decoding_example\
-	generic_optacc_example\
-	generic_stotrace_example\
-	generic_viterbi_example\
-	generic_vtrace_example\
 	logsum_example\
+	reference_decoding_example\
+	reference_fwdback_example\
+	reference_viterbi_example\
+	sparse_envscore_example\
+	sparse_fwdback_example\
+	sparse_masstrace_example\
+	sparse_trace_example\
 	p7_alidisplay_example\
 	p7_bg_example\
 	p7_bg_example2\
 	p7_domaindef_example\
 	p7_hmmfile_example\
 	p7_pipeline_example\
-	p7_spensemble_example
+	p7_profile_example\
+	p7_spensemble_example\
+	p7_trace_example
 
 # beautification magic stolen from git
 QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c

@@ -2,16 +2,13 @@
  * Converting a core model to a fully configured Plan7 search profile.
  * 
  * Contents:
- *     1. Routines in the exposed API.
- *     2. Unit tests.
- *     3. Test driver.
- *     4. Statistics collection driver.
- *     5. Copyright and license
- * 
- * Revised May 2005: xref STL9/77-81.       (Uniform fragment distribution)
- * Again, Sept 2005: xref STL10/24-26.      (Inherent target length dependency)
- * Again, Jan 2007:  xref STL11/125,136-137 (HMMER3)
- * Again, Jul 2007:  xref J1/103            (floating point ops)
+ *   1. Profile configuration
+ *   2. Internal functions
+ *   3. Unit tests
+ *   4. Test driver
+ *   5. Statistics collection driver
+ *   6. References
+ *   7. Copyright and license information
  */
 #include "p7_config.h"
 
@@ -25,180 +22,229 @@
 
 #include "hmmer.h"
 
+static int set_local_entry (P7_PROFILE *gm, const P7_HMM *hmm);
+static int set_glocal_entry(P7_PROFILE *gm, const P7_HMM *hmm);
+static int set_glocal_exit (P7_PROFILE *gm, const P7_HMM *hmm);
+
 
 /*****************************************************************
- * 1. Routines in the exposed API.
+ * 1. Profile configuration 
  *****************************************************************/
  
-/* Function:  p7_ProfileConfig()
- * Synopsis:  Configure a search profile.
+/* Function:  p7_profile_Config()
+ * Synopsis:  Standard HMMER3 profile configuration.
  *
- * Purpose:   Given a model <hmm> with core probabilities, the null1
- *            model <bg>, a desired search <mode> (one of <p7_LOCAL>,
- *            <p7_GLOCAL>, <p7_UNILOCAL>, or <p7_UNIGLOCAL>), and an
- *            expected target sequence length <L>; configure the
- *            search model in <gm> with lod scores relative to the
- *            background frequencies in <bg>.
+ * Purpose:   Parameterize search profile <gm>, from core
+ *            probability model <hmm> and null model <bg>,
+ *            using the standard HMMER3 configuration.
+ *            
+ *            The caller assures that <gm> has been allocated for a
+ *            model of at least <hmm->M> nodes, and that the alphabet
+ *            <gm->abc> is the same as <hmm->abc>.
+ *
+ *            The standard configuration sets <L=0> (no length model
+ *            yet; caller will do <p7_profile_SetLength(gm, L)>),
+ *            <nj=1.0> (multihit), and <pglocal=0.5> (dual-mode
+ *            local/glocal).
+ *
+ * Returns:   <eslOK> on success; the profile <gm> now contains 
+ *            scores. Before it is used, it still needs a length
+ *            model; see <p7_profile_SetLength()>.
+ *            
+ * Throws:    <eslEMEM> on allocation error.           
+ */
+int
+p7_profile_Config(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg)
+{
+  return p7_profile_ConfigCustom(gm, hmm, bg, 0, 1.0, 0.5); 
+  /* that's L=0         : caller will call p7_profile_SetLength() before first use;
+   *        nj=1.0      : multihit;
+   *        pglocal=0.5 : dual-mode local/glocal.
+   */
+}
+
+
+int
+p7_profile_ConfigLocal(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int L)
+{
+  return p7_profile_ConfigCustom(gm, hmm, bg, L, 1.0, 0.0); /* nj=1, pglocal=0: multihit local */
+}
+
+int
+p7_profile_ConfigUnilocal(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int L)
+{
+  return p7_profile_ConfigCustom(gm, hmm, bg, L, 0.0, 0.0); /* nj=0, pglocal=0: unihit local */
+}
+
+int
+p7_profile_ConfigGlocal(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int L)
+{
+  return p7_profile_ConfigCustom(gm, hmm, bg, L, 1.0, 1.0); /* nj=1, pglocal=1: multihit glocal */
+}
+
+int
+p7_profile_ConfigUniglocal(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int L)
+{
+  return p7_profile_ConfigCustom(gm, hmm, bg, L, 0.0, 1.0); /* nj=0, pglocal=1: unihit glocal */
+}
+
+/* Function:  p7_profile_ConfigCustom()
+ * Synopsis:  Configure a search profile from a core HMM.
+ *
+ * Purpose:   Parameterize search model <gm>, given a model <hmm> with
+ *            core probabilities, the null1 model <bg>, and the free
+ *            parameters <L>, <nj>, <pglocal> that determine search
+ *            profile configuration (see below).
+ *            
+ *            The caller assures that <gm> has been allocated for a
+ *            model of at least <hmm->M> nodes, and that the alphabet
+ *            <gm->abc> is the same as <hmm->abc>.
+ *            
+ *            Parameter <L> controls the parameters of the target
+ *            sequence length model. The length model must be (re)set
+ *            for each new target sequence length. The function
+ *            <p7_profile_SetLength()> is the fastest way to
+ *            reconfigure the length model without reconfiguring the
+ *            entire profile. It is common to initially config with
+ *            <L=0>, knowing that <p7_profile_SetLength()> will also
+ *            be called appropriately before the profile is first
+ *            used.
+ *            
+ *            Parameter <nj> controls the unihit/multihit behavior of
+ *            the profile. <nj> is the expected number of J segments.
+ *            <nj=0> is unihit. <nj=1> is the standard multihit model,
+ *            with <t_{EJ} = 0.5>.
+ *            
+ *            Parameter <pglocal> controls the local/glocal mode of
+ *            the profile, by setting the <t_{BG}> transition
+ *            probability. <pglocal=0> makes a local alignment
+ *            profile.  <pglocal=1> makes a glocal alignment
+ *            profile. <pglocal=0.5> makes the (now-standard)
+ *            "dual-mode" profile.
  *            
  * Returns:   <eslOK> on success; the profile <gm> now contains 
- *            scores and is ready for searching target sequences.
+ *            scores and is ready for searching target sequence(s)
+ *            of length <L>.
  *            
  * Throws:    <eslEMEM> on allocation error.
  */
 int
-p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int mode)
+p7_profile_ConfigCustom(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int L, float nj, float pglocal)
 {
-  int   k, x, z;	/* counters over states, residues, annotation */
-  int   status;
-  float *occ = NULL;
   float *tp, *rp;
   float  sc[p7_MAXCODE];
-  float  Z;
- 
-  /* Contract checks */
-  if (gm->abc->type != hmm->abc->type) ESL_XEXCEPTION(eslEINVAL, "HMM and profile alphabet don't match");
-  if (hmm->M > gm->allocM)             ESL_XEXCEPTION(eslEINVAL, "profile too small to hold HMM");
-  if (! (hmm->flags & p7H_CONS))       ESL_XEXCEPTION(eslEINVAL, "HMM must have a consensus to transfer to the profile");
+  int    k, x, z;	/* counters over states, residues, annotation */
+  int    status;
 
-  /* Copy some pointer references and other info across from HMM  */
-  gm->M                = hmm->M;
-  gm->max_length       = hmm->max_length;
-  gm->mode             = mode;
-  gm->roff             = -1;
-  gm->eoff             = -1;
-  gm->offs[p7_MOFFSET] = -1;
-  gm->offs[p7_FOFFSET] = -1;
-  gm->offs[p7_POFFSET] = -1;
-  if (gm->name != NULL) free(gm->name);
-  if (gm->acc  != NULL) free(gm->acc);
-  if (gm->desc != NULL) free(gm->desc);
-  if ((status = esl_strdup(hmm->name,   -1, &(gm->name))) != eslOK) goto ERROR;
-  if ((status = esl_strdup(hmm->acc,    -1, &(gm->acc)))  != eslOK) goto ERROR;
-  if ((status = esl_strdup(hmm->desc,   -1, &(gm->desc))) != eslOK) goto ERROR;
+  /* Contract checks */
+  if (gm->abc->type != hmm->abc->type) ESL_EXCEPTION(eslEINVAL, "HMM and profile alphabet don't match");
+  if (hmm->M > gm->allocM)             ESL_EXCEPTION(eslEINVAL, "profile too small to hold HMM");
+  if (! (hmm->flags & p7H_CONS))       ESL_EXCEPTION(eslEINVAL, "HMM must have a consensus to transfer to the profile");
+
+  /* Copy annotation across from HMM  */
+  if (gm->name) free(gm->name);   if ((status = esl_strdup(hmm->name,   -1, &(gm->name))) != eslOK) return status;
+  if (gm->acc)  free(gm->acc);    if ((status = esl_strdup(hmm->acc,    -1, &(gm->acc)))  != eslOK) return status;
+  if (gm->desc) free(gm->desc);   if ((status = esl_strdup(hmm->desc,   -1, &(gm->desc))) != eslOK) return status;
+
   if (hmm->flags & p7H_RF)    strcpy(gm->rf,        hmm->rf);
   if (hmm->flags & p7H_MMASK) strcpy(gm->mm,        hmm->mm);
   if (hmm->flags & p7H_CONS)  strcpy(gm->consensus, hmm->consensus); /* must be present, actually, so the flag test is just for symmetry w/ other optional HMM fields */
   if (hmm->flags & p7H_CS)    strcpy(gm->cs,        hmm->cs);
+
   for (z = 0; z < p7_NEVPARAM; z++) gm->evparam[z] = hmm->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) gm->cutoff[z]  = hmm->cutoff[z];
   for (z = 0; z < p7_MAXABET;  z++) gm->compo[z]   = hmm->compo[z];
 
-  /* Entry scores. */
-  if (p7_profile_IsLocal(gm))
-    {
-      /* Local mode entry:  occ[k] /( \sum_i occ[i] * (M-i+1))
-       * (Reduces to uniform 2/(M(M+1)) for occupancies of 1.0)  */
-      Z = 0.;
-      ESL_ALLOC(occ, sizeof(float) * (hmm->M+1));
+  gm->offs[p7_MOFFSET] = -1;
+  gm->offs[p7_FOFFSET] = -1;
+  gm->offs[p7_POFFSET] = -1;
+  gm->roff             = -1;
+  gm->eoff             = -1;
 
-      if ((status = p7_hmm_CalculateOccupancy(hmm, occ, NULL)) != eslOK) goto ERROR;
-      for (k = 1; k <= hmm->M; k++) 
-	Z += occ[k] * (float) (hmm->M-k+1);
-      for (k = 1; k <= hmm->M; k++) 
-	p7P_TSC(gm, k-1, p7P_BM) = log(occ[k] / Z); /* note off-by-one: entry at Mk stored as [k-1][BM] */
+  gm->max_length       = hmm->max_length;
+  gm->M                = hmm->M;
 
-      free(occ);
-    }
-  else	/* glocal modes: left wing retraction; must be in log space for precision */
-    {
-      Z = log(hmm->t[0][p7H_MD]);
-      p7P_TSC(gm, 0, p7P_BM) = log(1.0 - hmm->t[0][p7H_MD]);
-      for (k = 1; k < hmm->M; k++) 
-	{
-	   p7P_TSC(gm, k, p7P_BM) = Z + log(hmm->t[k][p7H_DM]);
-	   Z += log(hmm->t[k][p7H_DD]);
-	}
-    }
+  gm->xsc[p7P_E][p7P_MOVE] = logf ( 1.0f / (1.0f + nj));       // E->C
+  gm->xsc[p7P_E][p7P_LOOP] = logf ( nj / (1.0f + nj));         // E->J
 
-  /* E state loop/move probabilities: nonzero for MOVE allows loops/multihits
-   * N,C,J transitions are set later by length config 
+  gm->xsc[p7P_B][0]        = logf(1.0 - pglocal);              // B->L
+  gm->xsc[p7P_B][1]        = logf(pglocal);                    // B->G
+
+  gm->xsc[p7P_G][0]        = logf(1.0 - hmm->t[0][p7H_MD]);    // not p7H_MM, because we're absorbing core model's I0 state and p7H_MI I
+  gm->xsc[p7P_G][1]        = logf(hmm->t[0][p7H_MD]);
+
+  /* Initialize tsc[k=M] boundary condition to -inf; 
+   * this deletes Im state;
+   * will overwrite as needed in set_ functions below
    */
-  if (p7_profile_IsMultihit(gm)) {
-    gm->xsc[p7P_E][p7P_MOVE] = -eslCONST_LOG2;   
-    gm->xsc[p7P_E][p7P_LOOP] = -eslCONST_LOG2;   
-    gm->nj                   = 1.0f;
-  } else {
-    gm->xsc[p7P_E][p7P_MOVE] = 0.0f;   
-    gm->xsc[p7P_E][p7P_LOOP] = -eslINFINITY;  
-    gm->nj                   = 0.0f;
-  }
+  esl_vec_FSet( gm->tsc + gm->M*p7P_NTRANS, p7P_NTRANS, -eslINFINITY);
 
-  /* Transition scores. */
+  /* Entry and exit distributions: L->MLk, G->MGk, MGk->E */
+  if (( status = set_local_entry (gm, hmm)) != eslOK) return status;   // L->MLk params: uniform fragment length parameterization 
+  if (( status = set_glocal_entry(gm, hmm)) != eslOK) return status;   // G->MGk params: left wing retraction : glocal entry
+  if (( status = set_glocal_exit (gm, hmm)) != eslOK) return status;   // MGk->E params: right wing retraction : glocal exit
+
+  /* Remaining transition scores (BLM, BGM, MGE entries/exits were
+   * just set, above). 
+   */
   for (k = 1; k < gm->M; k++) {
     tp = gm->tsc + k * p7P_NTRANS;
-    tp[p7P_MM] = log(hmm->t[k][p7H_MM]);
-    tp[p7P_MI] = log(hmm->t[k][p7H_MI]);
-    tp[p7P_MD] = log(hmm->t[k][p7H_MD]);
-    tp[p7P_IM] = log(hmm->t[k][p7H_IM]);
-    tp[p7P_II] = log(hmm->t[k][p7H_II]);
-    tp[p7P_DM] = log(hmm->t[k][p7H_DM]);
-    tp[p7P_DD] = log(hmm->t[k][p7H_DD]);
+    tp[p7P_MM] = logf(hmm->t[k][p7H_MM]);
+    tp[p7P_IM] = logf(hmm->t[k][p7H_IM]);
+    tp[p7P_DM] = logf(hmm->t[k][p7H_DM]);
+    tp[p7P_MD] = logf(hmm->t[k][p7H_MD]);
+    tp[p7P_DD] = logf(hmm->t[k][p7H_DD]);
+    tp[p7P_MI] = logf(hmm->t[k][p7H_MI]);
+    tp[p7P_II] = logf(hmm->t[k][p7H_II]);
   }
   
-  /* Match emission scores. */
+  /* All transition scores at k=M are special cases for DP boundary conditions! */
+  tp = gm->tsc + gm->M * (p7P_NTRANS);
+  tp[p7P_MD] = 0.0;		/* glocal Forward and Backwards rely on this    */
+  tp[p7P_DD] = 0.0;		/* ditto */
+
+  /* match emission scores. */
   sc[hmm->abc->K]     = -eslINFINITY; /* gap character */
   sc[hmm->abc->Kp-2]  = -eslINFINITY; /* nonresidue character */
   sc[hmm->abc->Kp-1]  = -eslINFINITY; /* missing data character */
   for (k = 1; k <= hmm->M; k++) {
     for (x = 0; x < hmm->abc->K; x++) 
-      sc[x] = log(hmm->mat[k][x] / bg->f[x]);
+      sc[x] = logf(hmm->mat[k][x] / bg->f[x]);
     esl_abc_FExpectScVec(hmm->abc, sc, bg->f); 
     for (x = 0; x < hmm->abc->Kp; x++) {
       rp = gm->rsc[x] + k * p7P_NR;
-      rp[p7P_MSC] = sc[x];
+      rp[p7P_M] = sc[x];
     }
   }
   
-  /* Insert emission scores */
-  /* SRE, Fri Dec 5 08:41:08 2008: We currently hardwire insert scores
-   * to 0, i.e. corresponding to the insertion emission probabilities
-   * being equal to the background probabilities. Benchmarking shows
-   * that setting inserts to informative emission distributions causes
-   * more problems than it's worth: polar biased composition hits
-   * driven by stretches of "insertion" occur, and are difficult to
-   * correct for.
-   */
+ /* Insert emission scores are currently hardwired to zero, an
+  * implicit assumption that insert emissions are equal to
+  * background. Benchmarking shows that setting inserts to informative
+  * emission distributions causes more problems than it's worth: polar
+  * biased composition hits driven by stretches of "insertion" occur,
+  * and are difficult to correct for. This may change someday, if we
+  * get a better null model for example.
+  */
   for (x = 0; x < gm->abc->Kp; x++)
     {
-      for (k = 1; k < hmm->M; k++) p7P_ISC(gm, k, x) = 0.0f;
-      p7P_ISC(gm, hmm->M, x) = -eslINFINITY;   /* init I_M to impossible.   */
+      for (k = 1; k < hmm->M; k++) P7P_ISC(gm, k, x) = 0.0f;
+      P7P_ISC(gm, hmm->M, x) = -eslINFINITY;   /* init I_M to impossible.   */
     }
-  for (k = 1; k <= hmm->M; k++) p7P_ISC(gm, k, gm->abc->K)    = -eslINFINITY; /* gap symbol */
-  for (k = 1; k <= hmm->M; k++) p7P_ISC(gm, k, gm->abc->Kp-2) = -eslINFINITY; /* nonresidue symbol */
-  for (k = 1; k <= hmm->M; k++) p7P_ISC(gm, k, gm->abc->Kp-1) = -eslINFINITY; /* missing data symbol */
+  for (k = 1; k <= hmm->M; k++) P7P_ISC(gm, k, gm->abc->K)    = -eslINFINITY; /* gap symbol */
+  for (k = 1; k <= hmm->M; k++) P7P_ISC(gm, k, gm->abc->Kp-2) = -eslINFINITY; /* nonresidue symbol */
+  for (k = 1; k <= hmm->M; k++) P7P_ISC(gm, k, gm->abc->Kp-1) = -eslINFINITY; /* missing data symbol */
 
-
-#if 0
-  /* original (informative) insert setting: relies on sc[K, Kp-1] initialization to -inf above */
-  for (k = 1; k < hmm->M; k++) {
-    for (x = 0; x < hmm->abc->K; x++) 
-      sc[x] = log(hmm->ins[k][x] / bg->f[x]); 
-    esl_abc_FExpectScVec(hmm->abc, sc, bg->f); 
-    for (x = 0; x < hmm->abc->Kp; x++) {
-      rp = gm->rsc[x] + k*p7P_NR;
-      rp[p7P_ISC] = sc[x];
-    }
-  }    
-  for (x = 0; x < hmm->abc->Kp; x++)
-    p7P_ISC(gm, hmm->M, x) = -eslINFINITY;   /* init I_M to impossible.   */
-#endif
-
-  /* Remaining specials, [NCJ][MOVE | LOOP] are set by ReconfigLength()
-   */
-  gm->L = 0;			/* force ReconfigLength to reconfig */
-  if ((status = p7_ReconfigLength(gm, L)) != eslOK) goto ERROR;
-  return eslOK;
-
- ERROR:
-  if (occ != NULL) free(occ);
-  return status;
+  /* Remaining specials, [NCJ][MOVE | LOOP] are set by length model */
+  gm->nj      = nj;
+  gm->pglocal = pglocal;
+  return p7_profile_SetLength(gm, L);
 }
 
 
-/* Function:  p7_ReconfigLength()
+/* Function:  p7_profile_SetLength()
  * Synopsis:  Set the target sequence length of a model.
  *
- * Purpose:   Given a model already configured for scoring, in some
+ * Purpose:   Given a model <gm> already configured for scoring, in some
  *            particular algorithm mode; reset the expected length
  *            distribution of the profile for a new mean of <L>.
  *
@@ -208,81 +254,135 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
  *            We want this routine to run as fast as possible, because
  *            the caller needs to dynamically reconfigure the model
  *            for the length of each target sequence in a database
- *            search. The profile has precalculated <gm->nj>, 
- *            the number of times the J state is expected to be used,
- *            based on the E state loop transition in the current
- *            configuration.
+ *            search.
  *
  * Returns:   <eslOK> on success; xsc[NCJ] scores are set here. These
  *            control the target length dependence of the model.
  */
 int
-p7_ReconfigLength(P7_PROFILE *gm, int L)
+p7_profile_SetLength(P7_PROFILE *gm, int L)
 {
   float ploop, pmove;
   
   /* Configure N,J,C transitions so they bear L/(2+nj) of the total
    * unannotated sequence length L. 
    */
-  pmove = (2.0f + gm->nj) / ((float) L + 2.0f + gm->nj); /* 2/(L+2) for sw; 3/(L+3) for fs */
+  pmove = (2.0f + gm->nj) / ((float) L + 2.0f + gm->nj); /* 2/(L+2) for unihit; 3/(L+3) for standard multihit */
   ploop = 1.0f - pmove;
-  gm->xsc[p7P_N][p7P_LOOP] =  gm->xsc[p7P_C][p7P_LOOP] = gm->xsc[p7P_J][p7P_LOOP] = log(ploop);
-  gm->xsc[p7P_N][p7P_MOVE] =  gm->xsc[p7P_C][p7P_MOVE] = gm->xsc[p7P_J][p7P_MOVE] = log(pmove);
+  gm->xsc[p7P_N][p7P_LOOP] =  gm->xsc[p7P_C][p7P_LOOP] = gm->xsc[p7P_J][p7P_LOOP] = logf(ploop);
+  gm->xsc[p7P_N][p7P_MOVE] =  gm->xsc[p7P_C][p7P_MOVE] = gm->xsc[p7P_J][p7P_MOVE] = logf(pmove);
   gm->L = L;
   return eslOK;
 }
+/*------------ end, initial profile config ----------------------*/
 
-/* Function:  p7_ReconfigMultihit()
- * Synopsis:  Quickly reconfig model into multihit mode for target length <L>.
- *
- * Purpose:   Given a profile <gm> that's already been configured once,
- *            quickly reconfigure it into a multihit mode for target 
- *            length <L>. 
- *            
- *            This gets called in domain definition, when we need to
- *            flip the model in and out of unihit <L=0> mode to
- *            process individual domains.
- *            
- * Note:      You can't just flip uni/multi mode alone, because that
- *            parameterization also affects target length
- *            modeling. You need to make sure uni vs. multi choice is
- *            made before the length model is set, and you need to
- *            make sure the length model is recalculated if you change
- *            the uni/multi mode. Hence, these functions call
- *            <p7_ReconfigLength()>.
- */
-int
-p7_ReconfigMultihit(P7_PROFILE *gm, int L)
-{
-  gm->xsc[p7P_E][p7P_MOVE] = -eslCONST_LOG2;   
-  gm->xsc[p7P_E][p7P_LOOP] = -eslCONST_LOG2;   
-  gm->nj                   = 1.0f;
-  return p7_ReconfigLength(gm, L);
-}
-
-/* Function:  p7_ReconfigUnihit()
- * Synopsis:  Quickly reconfig model into unihit mode for target length <L>.
- *
- * Purpose:   Given a profile <gm> that's already been configured once,
- *            quickly reconfigure it into a unihit mode for target 
- *            length <L>. 
- *            
- *            This gets called in domain definition, when we need to
- *            flip the model in and out of unihit <L=0> mode to
- *            process individual domains.
- */
-int
-p7_ReconfigUnihit(P7_PROFILE *gm, int L)
-{
-  gm->xsc[p7P_E][p7P_MOVE] = 0.0f;   
-  gm->xsc[p7P_E][p7P_LOOP] = -eslINFINITY;  
-  gm->nj                   = 0.0f;
-  return p7_ReconfigLength(gm, L);
-}
 
 
 /*****************************************************************
- * 2. Unit tests
+ * 2. Internal functions
+ *****************************************************************/
+
+/* set_local_entry()
+ * 
+ * Local mode entry prob t_BLMk is approx. 2/(M(M+1)), with a
+ * correction for match state occupancy probability [Eddy08]:
+ *    L->Mk = occ[k] /( \sum_i occ[i] * (M-i+1))
+ *    
+ * and we store these params off-by-one, with tLMk stored in TSC(gm,
+ * k-1, p7P_LM), for DP efficiency reasons.
+ * 
+ * We need space for an M+1 occ[k] array of match occupancy.  We save
+ * a malloc by using gm->rsc[0]'s space, which we know is >= M+1, and
+ * which we guarantee (by order of calls in config calls) has not been
+ * parameterized yet.
+ */
+static int
+set_local_entry(P7_PROFILE *gm, const P7_HMM *hmm)
+{
+  float *occ = gm->rsc[0];	/* a safe, malloc-saving hack; see note above  */
+  float  Z   = 0.;
+  int    k;
+  int    status;
+
+  if (( status  = p7_hmm_CalculateOccupancy(hmm, occ, NULL)) != eslOK) return status; /* NULL=iocc[k], I state expected uses, which we don't need here */
+  for (k = 1; k <= hmm->M; k++) 
+    Z += occ[k] * (float) (hmm->M-k+1);
+  for (k = 1; k <= hmm->M; k++) 
+    P7P_TSC(gm, k-1, p7P_LM) = logf(occ[k] / Z); /* note off-by-one: entry at Mk stored as [k-1][LM] */
+  /* leave tsc[M,LM] as -inf, as we'd already initialized it */
+  return eslOK;
+}
+
+/* set_glocal_entry()
+ * 
+ * glocal entry is "wing retracted" into a G->Mk entry distribution.
+ *
+ * Wing retraction removes the B->G->D1..Dm->E->J->B mute cycle, by
+ * removing the D1 state. In a profile, all entries start at an Mk
+ * state. As a result, a (usually negligible) amount of probability is
+ * unaccounted for (see p7_profile_GetMutePathLogProb(), if you need
+ * to know what that neglected mass is).
+ *
+ * Unretracted "base" transition parameters G->{M1,D1} are in
+ * xsc[p7G][0=M,1=D].
+ *
+ * We compute the wing-retracted entries G->{D1..Dk-1}->Mk as follows:
+ *      tGM1 = log t(G->M1) 
+ *      tGMk = log t(G->D1) + \sum_j={1..k-2} log t(Dj->Dj+1) + log t(Dk-1->Mk)
+ * and for technical/efficiency reasons, these params are stored
+ * off-by-one in the profile: tGMk is stored at TSC(k-1, p7P_GM).
+ */
+static int
+set_glocal_entry(P7_PROFILE *gm, const P7_HMM *hmm)
+{
+  float Z;   
+  int   k;
+
+  P7P_TSC(gm, 0, p7P_GM) = gm->xsc[p7P_G][0];  // i.e. G->M1, stored at TSC(0,GM)
+  Z                      = gm->xsc[p7P_G][1];  // i.e. G->D1
+  for (k = 1; k < hmm->M; k++) 
+    {
+      P7P_TSC(gm, k, p7P_GM) = Z + logf(hmm->t[k][p7H_DM]);
+      Z += logf(hmm->t[k][p7H_DD]);
+    }
+  /* leave tsc[M,GM] as -inf, as we'd already initialized it */
+  return eslOK;
+}
+
+/* set_glocal_exit()
+ * 
+ * Right wing retraction, DGE
+ *   TSC(k,DGE) = t(Dk+1->...Dm->E) 
+ *              = [\prod_j=k+1..m-1 t(Dj->Dj+1)] * Dm->E
+ *              = \prod_j=k+1..m-1 t(Dj->Dj+1)              | because Dm->E=1.0
+ *  valid for k=0..M
+ *  boundaries: TSC(M,DGE)   = 0
+ *              TSC(M-1,DGE) = 0
+ * note off by one. 
+ * to get the glocal exit path from an Mk: t(k,MD) + t(k,DGE)
+ * to get the glocal exit path from a Dk:  t(k,DD) + t(k,DGE)
+ */
+static int
+set_glocal_exit(P7_PROFILE *gm, const P7_HMM *hmm)
+{
+  float Z = 0.0;		/* accumulated Dk+1..Dm part of the path */
+  int   k;
+
+  P7P_TSC(gm, gm->M, p7P_DGE) = Z;
+  for (k = hmm->M-1; k >= 1; k--)
+    {
+      P7P_TSC(gm, k, p7P_DGE) = Z;
+      Z += logf(hmm->t[k][p7H_DD]);
+    }
+  return eslOK;
+}
+/*--------------- end, internal functions -----------------------*/
+
+
+
+
+/*****************************************************************
+ * 3. Unit tests
  *****************************************************************/
 #ifdef p7MODELCONFIG_TESTDRIVE
 
@@ -292,11 +392,11 @@ p7_ReconfigUnihit(P7_PROFILE *gm, int L)
 static void
 utest_Config(P7_HMM *hmm, P7_BG *bg)
 {
-  char       *msg = "modelconfig.c::p7_ProfileConfig() unit test failed";
+  char       *msg = "modelconfig.c::p7_profile_Config() unit test failed";
   P7_PROFILE *gm  = NULL;
 
   if ((gm = p7_profile_Create(hmm->M, hmm->abc))    == NULL)   esl_fatal(msg);
-  if (p7_ProfileConfig(hmm, bg, gm, 350, p7_LOCAL)  != eslOK)  esl_fatal(msg);
+  if (p7_profile_Config(gm, hmm, bg)                != eslOK)  esl_fatal(msg);
   if (p7_profile_Validate(gm, NULL, 0.0001)         != eslOK)  esl_fatal(msg);
 
   p7_profile_Destroy(gm);
@@ -326,7 +426,7 @@ utest_occupancy(P7_HMM *hmm)
 
 
 /*****************************************************************
- * 3. Test driver
+ * 4. Test driver
  *****************************************************************/
 #ifdef p7MODELCONFIG_TESTDRIVE
 
@@ -367,7 +467,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 4. Statistics collection driver.
+ * 5. Statistics collection driver.
  *****************************************************************/
 #ifdef p7MODELCONFIG_STATS
 /* gcc -g -Wall -Dp7MODELCONFIG_STATS -I. -I../easel -L. -L../easel -o statprog modelconfig.c -lhmmer -leasel -lm
@@ -520,7 +620,7 @@ main(int argc, char **argv)
     p7_H2_ProfileConfig(hmm, bg, gm, p7_UNILOCAL);
   } else {
     gm = p7_profile_Create(hmm->M, abc);
-    p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
+    p7_profile_ConfigUnilocal(gm, hmm, bg, L);
     if (p7_hmm_Validate    (hmm, NULL, 0.0001) != eslOK) esl_fatal("whoops, HMM is bad!");
     if (p7_profile_Validate(gm,  NULL, 0.0001) != eslOK) esl_fatal("whoops, profile is bad!");
   }
@@ -846,278 +946,25 @@ profile_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ 
   *ret_k2 = 0;
   return status;
 }
-
-
-
 #endif /*p7MODELCONFIG_STATS*/
 
-
-/* All the commentary below here is archaic and obsolete.
- * It is only a shadow of the current truth, and may mislead.
- * It is of archaeological interest only; needs to be whipped back
- * into shape in real documentation.
- */
-
-/*----------------------------------------------------------------------
- * Preamble.
- * 
- * There are four search modes:
- *                  single-hit              multi-hit
- *              --------------------  ------------------------
- *     local  |   sw (p7_UNILOCAL)          fs (p7_LOCAL)
- *    glocal  |    s (p7_UNIGLOCAL)         ls (p7_GLOCAL)
- *
- * Additionally, each search mode is configured for a particular
- * target length. Thus "LS/400" means a model configured for glocal,
- * multihit alignment of a target sequence of length 400.
- *
- *-----------------------------------------------------------------------
- * Exegesis. 
- * 
- * When you enter this module, you've got an HMM (P7_HMM) in "core"
- * probability form: t[], mat[], ins[] are all valid, normalized
- * probabilities. The routines here are used to create the "profile"
- * form (P7_PROFILE) of the model: tsc[], msc[], isc[], bsc[], esc[],
- * and xsc[] fields as integer log-odds scores.
- * 
- * Also in the process, xt[] are set to their algorithm-dependent
- * probabilities, though these probabilities are only for reference.
- * 
- * The configuration process breaks down into distinct conceptual steps:
- * 
- * 1. Algorithm configuration.
- *    An "algorithm mode" is chosen. This determines whether
- *    alignments will allow local entry/exit in the model, and sets
- *    the probabilities in xt[XTE], which determine
- *    multi-hit/single-hit behavior.  The "nj" value of the HMM is
- *    also set here (the expected # of times the J state will be used;
- *    0 for single-hit mode and 1 for the default parameterization of
- *    multihit modes).
- *    
- * 2. Wing retraction.
- *    In a profile, the D_1 and D_M states of the core model are
- *    removed. The probability of the paths B->D1...->Mk ("BMk") that
- *    enter D1 and use all D's before reaching M_k is treated instead
- *    as an additional dollop of B->Mk entry probability, and the
- *    probability of paths Mk->Dk+1...D_M->E ("MkE") is treated
- *    instead as an additional dollop of Mk->E exit probability.  The
- *    MkE path probability is subtracted from the Mk->Dk+1 transition.
- *    
- *    In local algorithm modes, these extra dollops are ignored, and
- *    the model is renormalized appropriately. That is, the algorithm
- *    overrides all B->DDDD->M and/or M->DDDD->E path probabilities
- *    with its own internal entry/exit probabilities.
- *    
- *    If the algorithm mode is "global" at either entry or exit, then
- *    the internal entries are set to BMk and internal exits are set
- *    to MkE, and the model is renormalized appropriately.  That is,
- *    the algorithm treats B->DDDD->M and/or M->DDDD->E path
- *    probabilities as internal entries/exits, instead of allowing
- *    dynamic programming algorithms to use the D_1 or D_M states.
- *    
- *    These two alternatives are represented differently in traces,
- *    where an X state is used to signal 'missing data' in a local
- *    alignment. Thus B->X->Mk indicates local entry, whereas B->Mk in
- *    a trace indicates a wing-retracted B->DDD->Mk entry with respect
- *    to the core HMM; similarly Mk->X->E indicates local exit, and
- *    Mk->E indicates a Mk->DDDD->E path in the core HMM.
- *    
- *    Wing retraction is a compulsive detail with two purposes. First,
- *    it removes a mute cycle from the model, B->D1 ...D_M->E, which
- *    cannot be correctly and efficiently dealt with by DP
- *    recursions. (A DP algorithm could just *ignore* that path
- *    though, and ignore the negligible amount of probability in it.)
- *    Second, wing retraction reconciles the algorithm-dependent
- *    entry/exit probabilities with the core model. For algorithms
- *    that impose local internal entry/exit, we don't want there to be
- *    any additional probability coming from "internal" B->DDD->M and
- *    M->DDD->E paths, so wing retraction takes it away.
- *  
- *  3. Local alignment D-path leveling.
- *    For fully local alignments, we want every fragment ij (starting
- *    at match i, ending from match j) to be equiprobable. There are
- *    M(M+1)/2 possible such fragments, so the probability of each
- *    one is 2/M(M+1). 
- *    
- *    Notionally, we imagine a "model" consisting of the M(M+1)/2
- *    possible fragments, with entry probability of 2/M(M+1) for each.
- *    
- *    Operationally, we achieve this by a trick inspired by a
- *    suggestion from Bill Bruno. Bill suggested that for a model with
- *    no delete states, if we set begin[k] = 1/(M-k+1) and end[k] =
- *    (M-k+1) / [M(M+1)/2], all fragments are equiprobable: the prob
- *    of any given fragment is
- *         b_i * e_j * \prod_{k=i}^{j-1} (1-e_k);
- *    that is, the fragment also includes (j-i) penalizing terms for
- *    *not* ending at i..j-1. Remarkably, this gives the result we
- *    want: this product is always 2/M(M+1), for any ij.
- *    
- *    However, D->D transitions throw a wrench into this trick,
- *    though. A local alignment that goes M_i->D...D->M_j, for
- *    example, only gets hit with one not-end penalty (for the
- *    M_i->D). This means that paths including deletions will be
- *    artifactually favored.
- *    
- *    A solution is to subtract log(1-e_k) from the deletion
- *    transition scores as well as the match transition scores.  Thus
- *    one log(1-e_k) penalty is always exacted upon transitioning from
- *    any node k->k+1. This is *not* part of the probabilistic model:
- *    it is a score accounting trick that forces the DP algorithms to
- *    associate a log(1-e_k) penalty for each node k->k+1 transition,
- *    which makes the DP calculations give the result desired for our
- *    *notional* probabilistic model with a single 2/M(M+1) transition
- *    for each possible fragment. (A similar accounting trick is the
- *    use of log-odds scoring, where we associate null model
- *    transitions and emissions with appropriate terms in the HMM, to
- *    assure that the final score of any path accounts for all the
- *    desired probability terms in an overall log-odds score). The
- *    overall score of any fragment can be rearranged such that there
- *    is one term consisting of a product of all these penalties * b_i
- *    * e_j = 2/M(M+1), and another term consisting of the actual
- *    model transition path score between i,j.
- *    
- * 4. Target length dependence. 
- *    Given a particular target sequence of length L, we want our HMM score
- *    to be as independent as possible of L. Otherwise, long sequences will
- *    give higher scores, even if they are nonhomologous. 
- *    
- *    The traditional solution to this is Karlin/Altschul statistics,
- *    which tells us that E(s=x) = KMNe^-{\lambda x}, so we expect to
- *    have to make a -1 bit score correction for every 2x increase in
- *    target sequence length (ignoring edge correction effects). K/A
- *    statistics have been proven for local Viterbi single-hit
- *    ungapped alignments. There is abundant literature showing they
- *    hold empirically for local Viterbi single-hit gapped
- *    alignments. In my hands the length dependence (though not the
- *    form of the distribution) holds for any single-hit alignment
- *    (local or glocal, Viterbi or forward) but it does not
- *    hold for multihit alignment modes.
- *    
- *    HMMER's solution is to build the length dependence right into
- *    the probabilistic model, so that we have a full probabilistic
- *    model of the target sequence. We match the expected lengths of
- *    the model M and the null model R by setting the p1, N, C, and J
- *    transitions appropriately. R has to emit the whole sequence, so
- *    it has a self-transition of L/(L+1). N, C, and J have to emit
- *    (L-(k+1)x) residues of the sequence, where x is the expected
- *    length of an alignment to the core model, and k is the expected
- *    number of times that we cycle through the J state. k=0 in sw
- *    mode, and k=1 in fs/ls mode w/ the standard [XTE][LOOP]
- *    probability of 0.5.
- *
- * 5. Conversion of probabilities to integer log-odds scores.
- *    This step incorporates the contribution of the null model,
- *    and converts floating-point probs to the scaled integer log-odds
- *    score values that are used by the DP alignment routines. 
- *
- * Step 1 is done by the main p7_ProfileConfig() function, which takes
- * a choice of algorithm mode as an argument.
- *
- * Step 2 is done by the *wing_retraction*() functions, which also
- *  go ahead and convert the affected transitions to log-odds scores;
- *  left wing retraction sets bsc[], right wing retraction sets
- *  esc[] and tsc[TM*].
- *  
- * Step 3 is carried out by one of two delete path accounting routines,
- *  which go ahead and set tsc[TD*].
- *  
- * Step 4 is carried out by the p7_ReconfigLength() routine.
- * 
- * Step 5 is carried out for all remaining scores by logoddsify_the_rest().   
- * 
- * Note that the profile never exists in a configured probability
- * form. The probability model for the search profile is implicit, not
- * explicit, because of the handling of local entry/exit transitions.
- * You can see this in more detail in emit.c:p7_ProfileEmit()
- * function, which samples sequences from the profile's probabilistic
- * model.
- *
- * So, overall, to find where the various scores and probs are set:
- *   bsc      :  wing retraction          (section 2)
- *   esc      :  wing retraction          (section 2)
- *   tsc[TM*] :  wing retraction          (section 2)
- *   tsc[TI*] :  logoddsify_the_rest()    (section 4)
- *   tsc[TD*] :  dpath leveling           (section 3)
- *   p1       :  target_ldependence()     (section 4)  
- *   xt[NCJ]  :  target_ldependence()     (section 4)  
- *   xsc (all):  logoddsify_the_rest()    (section 4)
- *   msc      :  logoddsify_the_rest()    (section 5)
- *   isc      :  logoddsify_the_rest()    (section 5)
- */
-
-
 /*****************************************************************
- * 2. The four config_*() functions for specific algorithm modes.
+ * 6. References.
  *****************************************************************/
 
-/*****************************************************************
- * Exegesis.
- *
- * The following functions are the Plan7 equivalent of choosing
- * different alignment styles (fully local, fully global,
- * global/local, multihit, etc.)
- * 
- * When you come into a configuration routine, the following
- * probabilities are valid in the model:
- *    1. t[1..M-1][0..6]: all the state transitions.
- *       (Node M is special: it has only a match and a delete state,
- *       no insert state, and M_M->E = 1.0 and D_M->E = 1.0 by def'n.)
- *    2. mat[1..M][]:  all the match emissions.
- *    3. ins[1..M-1][]: all the insert emissions. Note that there is
- *       no insert state in node M.
- *    4. tbd1: the B->D1 probability. The B->M1 probability is 1-tbd1.
- * These are the "data-dependent" probabilities in the model.
- * 
- * The configuration routine gets to set the "algorithm-dependent"
- * probabilities:
- *    1. xt[XTN][MOVE,LOOP] dist controls unaligned N-terminal seq.
- *       The higher xt[XTN][LOOP] is, the more unaligned seq we allow.
- *       Similarly, xt[XTC][MOVE,LOOP] dist controls unaligned C-terminal 
- *       seq, and xt[XTJ][MOVE,LOOP] dist controls length of unaligned sequence
- *       between multiple copies of a domain. Normally, if these are nonzero,
- *       they are all set to be equal to hmm->p1, the loop probability
- *       for the null hypothesis (see below).
- *    2. xt[XTE][MOVE,LOOP] distribution controls multihits. 
- *       Setting xt[XTE][LOOP] to 0.0 forces one hit per model.
- *    3. begin[1..M] controls entry probabilities. An algorithm 
- *       mode either imposes internal begin probabilities, or leaves begin[1] 
- *       as 1.0 and begin[k] = 0.0 for k>1.
- *    4. end[1..M] controls exit probabilities. An algorithm mode either
- *       imposes internal exit probabilities, or leaves end[M] = 1.0
- *       and end[k] = 0.0 for k<M.
- *    
- * The configuration routine then calls routines as appropriate to set
- * up all the model's scores, given these configured probabilities. When
- * the config routine returns, all scores are ready for alignment:
- * bsc, esc, tsc, msc, isc, and xsc.
- * 
- *****************************************************************
- *
- * SRE: REVISIT THE ISSUE BELOW. THE CONDITIONS ARE NO LONGER MET!
- *
- * There is (at least) one more issue worth noting.
- * If you want per-domain scores to sum up to per-sequence scores, which is
- * generally desirable if you don't want "bug" reports from vigilant users,
- * then one of the following two sets of conditions must be met:
+/* Major revisions include:
+ *   May 2005:  xref STL9/77-81         Uniform fragment distribution
+ *   Sep 2005:  xref STL10/24-26        Target length dependency
+ *   Jan 2007:  xref STL11/125,136-137  HMMER3
+ *   Jul 2007:  xref J1/103             floating point ops
+ *   Nov 2011:  xref J9/2               dual-mode local/glocal
  *   
- *   1) t(E->J) = 0    
- *      e.g. no multidomain hits
- *      
- *   2) t(N->N) = t(C->C) = t(J->J) = hmm->p1 
- *      e.g. unmatching sequence scores zero, and 
- *      N->B first-model score is equal to J->B another-model score.
- *      
- * These constraints are obeyed in the default Config() functions below,
- * but in the future (say, when HMM editing may be allowed) we'll have
- * to remember this. Non-equality of the summed domain scores and
- * the total sequence score is a really easy "red flag" for people to
- * notice and report as a bug, even if it may make probabilistic
- * sense not to meet either constraint for certain modeling problems.
- *****************************************************************
  */
-
 
 
 /*****************************************************************
  * @LICENSE@
+ * 
+ * SVN $URL$
+ * SVN $Id$
  *****************************************************************/

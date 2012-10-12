@@ -237,12 +237,12 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, L);
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
 
-  if (esl_opt_GetBoolean(go, "-x") && p7_FLogsumError(-0.4, -0.5) > 0.0001)
+  if (esl_opt_GetBoolean(go, "-x") && ! p7_logsum_IsSlowExact())
     p7_Fail("-x here requires p7_Logsum() recompiled in slow exact mode");
 
   if (esl_opt_GetBoolean(go, "-P")) {
@@ -335,8 +335,7 @@ utest_fwdback(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int
   float generic_sc;
 
   p7_FLogsumInit();
-  if (p7_FLogsumError(-0.4, -0.5) > 0.0001) tolerance = 1.0;  /* weaker test against GForward()   */
-  else tolerance = 0.001;   /* stronger test: FLogsum() is in slow exact mode. */
+  tolerance = ( p7_logsum_IsSlowExact() ? 0.001 : 1.0 );
 
   p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om);
   while (N--)
@@ -520,7 +519,7 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);               
   p7_bg_SetLength(bg, sq->n);
   gm = p7_profile_Create(hmm->M, abc); 
-  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNILOCAL);
+  p7_profile_ConfigUnilocal(gm, hmm, bg, sq->n);
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
 
@@ -541,7 +540,7 @@ main(int argc, char **argv)
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
       p7_oprofile_ReconfigLength(om, sq->n);
-      p7_ReconfigLength(gm,          sq->n);
+      p7_profile_SetLength      (gm, sq->n);
       p7_bg_SetLength(bg,            sq->n);
       p7_omx_GrowTo(fwd, om->M, 0,   sq->n); 
       p7_omx_GrowTo(bck, om->M, 0,   sq->n); 

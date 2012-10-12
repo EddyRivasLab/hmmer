@@ -94,7 +94,7 @@ p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
 	  sc       = ESL_MAX(    MMX(i-1,k-1)   + TSC(p7P_MM,k-1), 
 				 IMX(i-1,k-1)   + TSC(p7P_IM,k-1));
 	  sc       = ESL_MAX(sc, DMX(i-1,k-1)   + TSC(p7P_DM,k-1));
-	  sc       = ESL_MAX(sc, XMX(i-1,p7G_B) + TSC(p7P_BM,k-1));
+	  sc       = ESL_MAX(sc, XMX(i-1,p7G_B) + TSC(p7P_LM,k-1));
 	  MMX(i,k) = sc + MSC(k);
 
 	  /* E state update */
@@ -117,7 +117,7 @@ p7_GViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *gx, float *
       sc       = ESL_MAX(    MMX(i-1,M-1)   + TSC(p7P_MM,M-1),
 			     IMX(i-1,M-1)   + TSC(p7P_IM,M-1));
       sc       = ESL_MAX(sc, DMX(i-1,M-1 )  + TSC(p7P_DM,M-1));
-      sc       = ESL_MAX(sc, XMX(i-1,p7G_B) + TSC(p7P_BM,M-1));
+      sc       = ESL_MAX(sc, XMX(i-1,p7G_B) + TSC(p7P_LM,M-1));
       MMX(i,M) = sc + MSC(M);
       
       /* Unrolled delete state D_M 
@@ -238,7 +238,7 @@ p7_GViterbi_longtarget(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *
         sc       = ESL_MAX(    MMX(i-1,k-1)   + TSC(p7P_MM,k-1),
              IMX(i-1,k-1)   + TSC(p7P_IM,k-1));
         sc       = ESL_MAX(sc, DMX(i-1,k-1)   + TSC(p7P_DM,k-1));
-        sc       = ESL_MAX(sc, XMX(i-1,p7G_B) + TSC(p7P_BM,k-1));
+        sc       = ESL_MAX(sc, XMX(i-1,p7G_B) + TSC(p7P_LM,k-1));
         MMX(i,k) = sc + MSC(k);
 
         /* E state update */
@@ -261,7 +261,7 @@ p7_GViterbi_longtarget(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *
       sc       = ESL_MAX(    MMX(i-1,M-1)   + TSC(p7P_MM,M-1),
            IMX(i-1,M-1)   + TSC(p7P_IM,M-1));
       sc       = ESL_MAX(sc, DMX(i-1,M-1 )  + TSC(p7P_DM,M-1));
-      sc       = ESL_MAX(sc, XMX(i-1,p7G_B) + TSC(p7P_BM,M-1));
+      sc       = ESL_MAX(sc, XMX(i-1,p7G_B) + TSC(p7P_LM,M-1));
       MMX(i,M) = sc + MSC(M);
 
       /* Unrolled delete state D_M
@@ -379,8 +379,10 @@ main(int argc, char **argv)
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
+  p7_profile_ConfigUnilocal(gm, hmm, bg, L);
+
   gx = p7_gmx_Create(gm->M, L);
 
   /* Baseline time. */
@@ -462,7 +464,7 @@ utest_basic(ESL_GETOPTS *go)
   if (p7_hmm_SetConsensus(hmm, NULL)               != eslOK) esl_fatal("failed to make consensus");
   if ((bg = p7_bg_Create(abc))                     == NULL)  esl_fatal("failed to create DNA null model");
   if ((gm = p7_profile_Create(hmm->M, abc))        == NULL)  esl_fatal("failed to create GAATTC profile");
-  if (p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL)!= eslOK) esl_fatal("failed to config profile");
+  if (p7_profile_ConfigUnilocal(gm, hmm, bg, L)    != eslOK) esl_fatal("failed to config profile");
   if (p7_profile_Validate(gm, NULL, 0.0001)        != eslOK) esl_fatal("whoops, profile is bad!");
   if (esl_abc_CreateDsq(abc, targ, &dsq)           != eslOK) esl_fatal("failed to create GAATTC digital sequence");
   if ((gx = p7_gmx_Create(gm->M, L))               == NULL)  esl_fatal("failed to create DP matrix");
@@ -474,7 +476,7 @@ utest_basic(ESL_GETOPTS *go)
 
   p7_GTrace     (dsq, L, gm, gx, tr);
   p7_trace_Score(tr, dsq, gm, &vsc2);
-  if (esl_opt_GetBoolean(go, "-v")) p7_trace_Dump(stdout, tr, gm, dsq);
+  if (esl_opt_GetBoolean(go, "-v")) p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
   
   if (esl_FCompare(vsc, vsc2, 1e-5) != eslOK)  esl_fatal("trace score and Viterbi score don't agree.");
 
@@ -589,7 +591,7 @@ main(int argc, char **argv)
   if (p7_hmm_Sample(r, M, abc, &hmm)                != eslOK) esl_fatal("failed to sample an HMM");
   if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
   if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal("failed to create profile");
-  if (p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL)    != eslOK) esl_fatal("failed to config profile");
+  if (p7_profile_ConfigLocal(gm, hmm, bg, L)        != eslOK) esl_fatal("failed to config profile");
   if (p7_hmm_Validate    (hmm, errbuf, 0.0001)      != eslOK) esl_fatal("whoops, HMM is bad!: %s", errbuf);
   if (p7_profile_Validate(gm,  errbuf, 0.0001)      != eslOK) esl_fatal("whoops, profile is bad!: %s", errbuf);
 
@@ -670,6 +672,7 @@ main(int argc, char **argv)
   else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
   else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+
   if  (esl_sqio_Read(sqfp, sq) != eslOK) p7_Fail("Failed to read sequence");
   esl_sqfile_Close(sqfp);
  
@@ -677,7 +680,7 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, sq->n);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, sq->n);
   
   /* Allocate matrix and a trace */
   fwd = p7_gmx_Create(gm->M, sq->n);
@@ -688,7 +691,7 @@ main(int argc, char **argv)
   p7_GTrace   (sq->dsq, sq->n, gm, fwd, tr);
 
   /* Dump and validate the trace. */
-  p7_trace_Dump(stdout, tr, gm, sq->dsq);
+  p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
   if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) p7_Die("trace fails validation:\n%s\n", errbuf);
 
   /* Domain info in the trace. */

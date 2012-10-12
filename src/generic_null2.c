@@ -109,10 +109,10 @@ p7_GNull2_ByExpectation(const P7_PROFILE *gm, P7_GMX *pp, float *null2)
     { 
       for (k = 1; k < M; k++)
 	{
-	  null2[x] = p7_FLogsum(null2[x], MMX(0,k) + p7P_MSC(gm, k, x));
-	  null2[x] = p7_FLogsum(null2[x], IMX(0,k) + p7P_ISC(gm, k, x));
+	  null2[x] = p7_FLogsum(null2[x], MMX(0,k) + P7P_MSC(gm, k, x));
+	  null2[x] = p7_FLogsum(null2[x], IMX(0,k) + P7P_ISC(gm, k, x));
 	}
-      null2[x] = p7_FLogsum(null2[x], MMX(0,M) + p7P_MSC(gm, k, x));
+      null2[x] = p7_FLogsum(null2[x], MMX(0,M) + P7P_MSC(gm, k, x));
       null2[x] = p7_FLogsum(null2[x], xfactor);
     }
 
@@ -134,7 +134,6 @@ p7_GNull2_ByExpectation(const P7_PROFILE *gm, P7_GMX *pp, float *null2)
 
 /* Function:  p7_GNull2_ByTrace()
  * Synopsis:  Assign null2 scores to an envelope by the sampling method.
- * Incept:    SRE, Thu May  1 10:00:43 2008 [Janelia]
  *
  * Purpose:   Given a traceback <tr> for an alignment of model <gm> to
  *            some target sequence; calculate null2 odds ratios $\frac{f'{x}}{f{x}}$ 
@@ -180,8 +179,8 @@ p7_GNull2_ByTrace(const P7_PROFILE *gm, const P7_TRACE *tr, int zstart, int zend
   for (z = zstart; z <= zend; z++) 
     {
       switch (tr->st[z]) {
-      case p7T_M:  Ld++; MMX(0,tr->k[z]) += 1.0; break;
-      case p7T_I:  Ld++; IMX(0,tr->k[z]) += 1.0; break;
+      case p7T_ML: Ld++; MMX(0,tr->k[z]) += 1.0; break;
+      case p7T_IL: Ld++; IMX(0,tr->k[z]) += 1.0; break;
       case p7T_N:  if (tr->st[z-1] == p7T_N) { Ld++; XMX(0,p7G_N) += 1.0; } break;
       case p7T_C:  if (tr->st[z-1] == p7T_C) { Ld++; XMX(0,p7G_C) += 1.0; } break;
       case p7T_J:  if (tr->st[z-1] == p7T_J) { Ld++; XMX(0,p7G_J) += 1.0; } break;
@@ -200,10 +199,10 @@ p7_GNull2_ByTrace(const P7_PROFILE *gm, const P7_TRACE *tr, int zstart, int zend
     {
       for (k = 1; k < M; k++)
 	{
-	  null2[x] += MMX(0,k) * expf(p7P_MSC(gm, k, x));
-	  null2[x] += IMX(0,k) * expf(p7P_ISC(gm, k, x));
+	  null2[x] += MMX(0,k) * expf(P7P_MSC(gm, k, x));
+	  null2[x] += IMX(0,k) * expf(P7P_ISC(gm, k, x));
 	}
-      null2[x] += MMX(0,M) * expf(p7P_MSC(gm, M, x));
+      null2[x] += MMX(0,M) * expf(P7P_MSC(gm, M, x));
       null2[x] += xfactor;
     }
   /* now null2[x] = \frac{f_d(x)}{f_0(x)} odds ratios for all x in alphabet,
@@ -281,8 +280,12 @@ main(int argc, char **argv)
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
 
-  bg = p7_bg_Create(abc);                 p7_bg_SetLength(bg, L);
-  gm = p7_profile_Create(hmm->M, abc);    p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  bg = p7_bg_Create(abc);                
+  p7_bg_SetLength(bg, L);
+
+  gm = p7_profile_Create(hmm->M, abc);   
+  p7_profile_ConfigLocal(gm, hmm, bg, L);
+
   gx1 = p7_gmx_Create(gm->M, L);  
   gx2 = p7_gmx_Create(gm->M, L);
 
@@ -406,8 +409,9 @@ main(int argc, char **argv)
   /* Configure a profile from the sampled HMM */
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
+
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, L);
 
   /* Other initial allocations */
   dsq  = malloc(sizeof(ESL_DSQ) * (L+2));

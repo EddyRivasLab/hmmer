@@ -114,12 +114,12 @@ p7_MeanForwardScore(const P7_HMM *hmm, const P7_BG *bg)
   double          sum = 0.;
   int             i;
 
-  if (p7_ProfileConfig (hmm, bg, gm, L, p7_LOCAL)        != eslOK) p7_Die("failed to configure profile");
+  if (p7_profile_ConfigLocal(gm, hmm, bg, L)              != eslOK) p7_Die("failed to configure profile");
   for (i = 0; i < N; i++)
     {
-      if (p7_ReconfigLength(gm, L)                        != eslOK) p7_Die("failed to reconfig profile length");
+      if (p7_profile_SetLength(gm, L)                     != eslOK) p7_Die("failed to reconfig profile length");
       if (p7_ProfileEmit(r, hmm, gm, bg, sq, NULL)        != eslOK) p7_Die("failed to emit sequence");
-      if (p7_ReconfigLength(gm, sq->n)                    != eslOK) p7_Die("failed to reconfig profile length");
+      if (p7_profile_SetLength(gm, sq->n)                 != eslOK) p7_Die("failed to reconfig profile length");
       if (p7_gmx_GrowTo(gx, gm->M, sq->n)                 != eslOK) p7_Die("failed to grow the matrix");
       if (p7_GForward(sq->dsq, sq->n, gm, gx, &fsc)       != eslOK) p7_Die("failed to run Forward");
       if (p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc)      != eslOK) p7_Die("failed to run bg_NullOne()");

@@ -25,12 +25,16 @@
 
 1 exercise hmmer              @src/hmmer_utest@
 1 exercise build              @src/build_utest@
+1 exercise emit               @src/emit_utest@
 1 exercise generic_fwdback    @src/generic_fwdback_utest@
+1 exercise _fwdback_dual      @src/generic_fwdback_dual_utest@
 1 exercise generic_msv        @src/generic_msv_utest@
 1 exercise generic_stotrace   @src/generic_stotrace_utest@
 1 exercise generic_viterbi    @src/generic_viterbi_utest@
 1 exercise logsum             @src/logsum_utest@
 1 exercise modelconfig        @src/modelconfig_utest@
+1 exercise ref_fwdback        @src/reference_fwdback_utest@
+1 exercise ref_viterbi        @src/reference_viterbi_utest@
 1 exercise seqmodel           @src/seqmodel_utest@
 1 exercise p7_alidisplay      @src/p7_alidisplay_utest@
 1 exercise p7_bg              @src/p7_bg_utest@
@@ -52,7 +56,6 @@
 1 exercise vitfilter          @src/impl/vitfilter_utest@
 
 # Still to come, unit tests for
-#   emit.c
 #   errors.c
 #   evalues.c
 #   eweight.c

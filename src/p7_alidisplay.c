@@ -48,7 +48,6 @@
  *            which    - domain number, 0..tr->ndom-1
  *            om       - optimized profile (query)
  *            sq       - digital sequence (target)
- *            ddef_app - optional posterior prob alignment line; only nhmmer sends a not-NULL value
  *
  * Returns:   <eslOK> on success.
  *
@@ -61,36 +60,40 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   P7_ALIDISPLAY *ad       = NULL;
   char          *Alphabet = om->abc->sym;
   int            n, pos, z;
-  int            z1,z2;
+  int            z1,z2,za,zb;
   int            k,x,i,s;
   int            hmm_namelen, hmm_acclen, hmm_desclen;
   int            sq_namelen,  sq_acclen,  sq_desclen;
   int            status;
   
-  /* First figure out which piece of the trace (from first match to last match) 
-   * we're going to represent, and how big it is.
+  /* First figure out start/end coords in the trace.
+   *   B->{GL}-> D? ... M ... M ... D? ->E
+   *             ^      ^     ^     ^
+   *             z1     za    zb    z2
+   *   ^                                 ^          
+   *   tfrom[d]                          tto[d]           
    */
-  if (tr->ndom > 0) {		/* if we have an index, this is a little faster: */
-    for (z1 = tr->tfrom[which]; z1 < tr->N; z1++) if (tr->st[z1] == p7T_M) break;  /* find next M state      */
-    if (z1 == tr->N) return NULL;                                                  /* no M? corrupt trace    */
-    for (z2 = tr->tto[which];   z2 >= 0 ;   z2--) if (tr->st[z2] == p7T_M) break;  /* find prev M state      */
-    if (z2 == -1) return NULL;                                                     /* no M? corrupt trace    */
-  } else {			/* without an index, we can still do it fine:    */
-    for (z1 = 0; which >= 0 && z1 < tr->N; z1++) if (tr->st[z1] == p7T_B) which--; /* find the right B state */
-    if (z1 == tr->N) return NULL;                                                  /* no such domain <which> */
-    for (; z1 < tr->N; z1++) if (tr->st[z1] == p7T_M) break;                       /* find next M state      */
-    if (z1 == tr->N) return NULL;                                                  /* no M? corrupt trace    */
-    for (z2 = z1; z2 < tr->N; z2++) if (tr->st[z2] == p7T_E) break;                /* find the next E state  */
-    for (; z2 >= 0;    z2--) if (tr->st[z2] == p7T_M) break;                       /* find prev M state      */
-    if (z2 == -1) return NULL;                                                     /* no M? corrupt trace    */
+  if (tr->ndom) { /* if trace is indexed, this is a little faster: */
+    z1 = tr->tfrom[which];	
+    z2 = tr->tto[which];        
+  } else {			/* else, we have to find domain <which> ourselves, by scanning */
+    for (z1 = 0; which >= 0 && z1 < tr->N; z1++) if (tr->st[z1] == p7T_B) which--; /* now z1 should be on B state    */
+    if (z1 == tr->N) return NULL;                                                  /* ... if not, no domain <which>. */
+    for (z2 = z1+1; z2 < tr->N; z2++) if (tr->st[z2] == p7T_E) break;              /* now z2 should be on E state    */
+    if (z2 == tr->N) return NULL;                                                  /* ... if not, trace is corrupt   */
   }
+
+  z1 += 2;                                             /* skip B, {GL} in trace */
+  z2 -= 1;                                             /* back off E in trace  */      
+  za = z1; while (tr->st[za] == p7T_DG) za++;	       /* find first emitting state (glocal traces can start with G->D1... */
+  zb = z2; while (tr->st[zb] == p7T_DG || tr->st[zb] == p7T_DL) zb--; /* find last emitting state (both local,glocal can end with D->E */
 
   /* Now we know that z1..z2 in the trace will be represented in the
    * alidisplay; that's z2-z1+1 positions. We need a \0 trailer on all
-   * our display lines, so allocate z2-z1+2. We know each position is
+   * our display strings, so allocate z2-z1+2. We know each position is
    * M, D, or I, so there's a 1:1 correspondence of trace positions
    * with alignment display positions.  We also know the display
-   * starts and ends with M states.
+   * starts and ends with {MD} states.
    * 
    * So now let's allocate. The alidisplay is packed into a single
    * memory space, so this appears to be intricate, but it's just
@@ -101,6 +104,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   if (om->mm[0]  != 0)    n += z2-z1+2;  /* optional reference line              */
   if (om->cs[0]  != 0)    n += z2-z1+2;  /* optional structure line              */
   if (tr->pp     != NULL) n += z2-z1+2;  /* optional posterior prob line         */
+
   hmm_namelen = strlen(om->name);                           n += hmm_namelen + 1;
   hmm_acclen  = (om->acc  != NULL ? strlen(om->acc)  : 0);  n += hmm_acclen  + 1;
   hmm_desclen = (om->desc != NULL ? strlen(om->desc) : 0);  n += hmm_desclen + 1;
@@ -110,10 +114,11 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   
   ESL_ALLOC(ad, sizeof(P7_ALIDISPLAY));
   ad->mem = NULL;
-
-  pos = 0; 
   ad->memsize = sizeof(char) * n;
   ESL_ALLOC(ad->mem, ad->memsize);
+
+  /* Set all the string pointers into the single chunk of allocated memory, ad->mem  */
+  pos = 0; 
   if (om->rf[0]  != 0) { ad->rfline = ad->mem + pos; pos += z2-z1+2; } else { ad->rfline = NULL; }
   //if (om->mm[0]  != 0) { ad->mmline = ad->mem + pos; pos += z2-z1+2; } else { ad->mmline = NULL; }
   ad->mmline = NULL;
@@ -121,7 +126,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   ad->model   = ad->mem + pos;  pos += z2-z1+2;
   ad->mline   = ad->mem + pos;  pos += z2-z1+2;
   ad->aseq    = ad->mem + pos;  pos += z2-z1+2;
-  if (tr->pp != NULL)  { ad->ppline = ad->mem + pos;  pos += z2-z1+2;} else { ad->ppline = NULL; }
+  if (tr->pp)    { ad->ppline  = ad->mem + pos;  pos += z2-z1+2;} else { ad->ppline  = NULL; }
   ad->hmmname = ad->mem + pos;  pos += hmm_namelen +1;
   ad->hmmacc  = ad->mem + pos;  pos += hmm_acclen +1;
   ad->hmmdesc = ad->mem + pos;  pos += hmm_desclen +1;
@@ -129,9 +134,10 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   ad->sqacc   = ad->mem + pos;  pos += sq_acclen +1;
   ad->sqdesc  = ad->mem + pos;  pos += sq_desclen +1;
 
+  /* Copy annotation for hmm, seq */
   strcpy(ad->hmmname, om->name);
-  if (om->acc  != NULL) strcpy(ad->hmmacc,  om->acc);  else ad->hmmacc[0]  = 0;
-  if (om->desc != NULL) strcpy(ad->hmmdesc, om->desc); else ad->hmmdesc[0] = 0;
+  if (om->acc)  strcpy(ad->hmmacc,  om->acc);  else ad->hmmacc[0]  = 0;
+  if (om->desc) strcpy(ad->hmmdesc, om->desc); else ad->hmmdesc[0] = 0;
   strcpy(ad->sqname,  sq->name);
   strcpy(ad->sqacc,   sq->acc);
   strcpy(ad->sqdesc,  sq->desc);
@@ -140,34 +146,36 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   ad->hmmfrom = tr->k[z1];
   ad->hmmto   = tr->k[z2];
   ad->M       = om->M;
-  ad->sqfrom  = tr->i[z1];
-  ad->sqto    = tr->i[z2];
+  ad->sqfrom  = tr->i[za];	/* za = first emitting position */
+  ad->sqto    = tr->i[zb];	/* zb = last emitting position  */
   ad->L       = sq->n;
 
+  /* Set whether the domain is glocal or local */
+  ad->is_glocal = (tr->st[z1-1] == p7T_G ? TRUE : FALSE);
+
   /* optional rf line */
-  if (ad->rfline != NULL) {
-    for (z = z1; z <= z2; z++) ad->rfline[z-z1] = ((tr->st[z] == p7T_I) ? '.' : om->rf[tr->k[z]]);
+  if (ad->rfline) {
+    for (z = z1; z <= z2; z++) ad->rfline[z-z1] = ((tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) ? '.' : om->rf[tr->k[z]]);
     ad->rfline[z-z1] = '\0';
   }
 
   /* optional mm line */
   if (ad->mmline != NULL) {
-    for (z = z1; z <= z2; z++) ad->mmline[z-z1] = ((tr->st[z] == p7T_I) ? '.' : om->mm[tr->k[z]]);
+    for (z = z1; z <= z2; z++) ad->mmline[z-z1] = ((tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) ? '.' : om->mm[tr->k[z]]);
     ad->mmline[z-z1] = '\0';
   }
 
   /* optional cs line */
-  if (ad->csline != NULL) {
-    for (z = z1; z <= z2; z++) ad->csline[z-z1] = ((tr->st[z] == p7T_I) ? '.' : om->cs[tr->k[z]]);
+  if (ad->csline) {
+    for (z = z1; z <= z2; z++) ad->csline[z-z1] = ((tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) ? '.' : om->cs[tr->k[z]]);
     ad->csline[z-z1] = '\0';
   }
 
   /* optional pp line */
-  if (ad->ppline != NULL) {
-    for (z = z1; z <= z2; z++) ad->ppline[z-z1] = ( (tr->st[z] == p7T_D) ? '.' : p7_alidisplay_EncodePostProb(tr->pp[z]));
+  if (ad->ppline) {
+    for (z = z1; z <= z2; z++) ad->ppline[z-z1] = ( (tr->st[z] == p7T_DL || tr->st[z] == p7T_DG) ? '.' : p7_alidisplay_EncodePostProb(tr->pp[z]));
     ad->ppline[z-z1] = '\0';
   }
-
 
   /* mandatory three alignment display lines: model, mline, aseq */
   for (z = z1; z <= z2; z++) 
@@ -178,7 +186,8 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
       s = tr->st[z];
 
       switch (s) {
-      case p7T_M:
+      case p7T_ML:
+      case p7T_MG:
         ad->model[z-z1] = om->consensus[k];
         if      (x == esl_abc_DigitizeSymbol(om->abc, om->consensus[k])) ad->mline[z-z1] = ad->model[z-z1];
         else if (p7_oprofile_FGetEmission(om, k, x) > 1.0)               ad->mline[z-z1] = '+'; /* >1 not >0; om has odds ratios, not scores */
@@ -186,13 +195,15 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
         ad->aseq  [z-z1] = toupper(Alphabet[x]);
         break;
 	
-      case p7T_I:
+      case p7T_IL:
+      case p7T_IG:
         ad->model [z-z1] = '.';
         ad->mline [z-z1] = ' ';
         ad->aseq  [z-z1] = tolower(Alphabet[x]);
         break;
 	
-      case p7T_D:
+      case p7T_DL:
+      case p7T_DG:
         ad->model [z-z1] = om->consensus[k];
         ad->mline [z-z1] = ' ';
         ad->aseq  [z-z1] = '-';
@@ -236,12 +247,20 @@ p7_alidisplay_Clone(const P7_ALIDISPLAY *ad)
   ad2->hmmname = ad2->hmmacc = ad2->hmmdesc = NULL;
   ad2->sqname  = ad2->sqacc  = ad2->sqdesc  = NULL;
   ad2->mem     = NULL;
-  ad2->memsize = 0;
+  ad2->memsize = ad->memsize;
+
+  ad2->N         = ad->N;
+  ad2->hmmfrom   = ad->hmmfrom;
+  ad2->hmmto     = ad->hmmto;
+  ad2->M         = ad->M;
+  ad2->is_glocal = ad->is_glocal;
+  ad2->sqfrom    = ad->sqfrom;
+  ad2->sqto      = ad->sqto;
+  ad2->L         = ad->L;
 
   if (ad->memsize) 		/* serialized */
     {
       ESL_ALLOC(ad2->mem, sizeof(char) * ad->memsize);
-      ad2->memsize = ad->memsize;
       memcpy(ad2->mem, ad->mem, ad->memsize);
 
       ad2->rfline = (ad->rfline ? ad2->mem + (ad->rfline - ad->mem) : NULL );
@@ -256,16 +275,9 @@ p7_alidisplay_Clone(const P7_ALIDISPLAY *ad)
       ad2->hmmname = ad2->mem + (ad->hmmname - ad->mem);
       ad2->hmmacc  = ad2->mem + (ad->hmmacc  - ad->mem);
       ad2->hmmdesc = ad2->mem + (ad->hmmdesc - ad->mem);
-      ad2->hmmfrom = ad->hmmfrom;
-      ad2->hmmto   = ad->hmmto;
-      ad2->M       = ad->M;
-
-      ad2->sqname  = ad2->mem + (ad->sqname - ad->mem);
-      ad2->sqacc   = ad2->mem + (ad->sqacc  - ad->mem);
-      ad2->sqdesc  = ad2->mem + (ad->sqdesc - ad->mem);
-      ad2->sqfrom  = ad->sqfrom;
-      ad2->sqto    = ad->sqto;
-      ad2->L       = ad->L;
+      ad2->sqname  = ad2->mem + (ad->sqname  - ad->mem);
+      ad2->sqacc   = ad2->mem + (ad->sqacc   - ad->mem);
+      ad2->sqdesc  = ad2->mem + (ad->sqdesc  - ad->mem);
     }
   else				/* deserialized */
     {
@@ -281,18 +293,10 @@ p7_alidisplay_Clone(const P7_ALIDISPLAY *ad)
       if ( esl_strdup(ad->hmmname, -1, &(ad2->hmmname)) != eslOK) goto ERROR;
       if ( esl_strdup(ad->hmmacc,  -1, &(ad2->hmmacc))  != eslOK) goto ERROR;
       if ( esl_strdup(ad->hmmdesc, -1, &(ad2->hmmdesc)) != eslOK) goto ERROR;
-      ad2->hmmfrom = ad->hmmfrom;
-      ad2->hmmto   = ad->hmmto;
-      ad2->M       = ad->M;
-
       if ( esl_strdup(ad->sqname,  -1, &(ad2->sqname)) != eslOK) goto ERROR;
       if ( esl_strdup(ad->sqacc,   -1, &(ad2->sqacc))  != eslOK) goto ERROR;
       if ( esl_strdup(ad->sqdesc,  -1, &(ad2->sqdesc)) != eslOK) goto ERROR;
-      ad2->sqfrom  = ad->sqfrom;
-      ad2->sqto    = ad->sqto;
-      ad2->L       = ad->L;      
     }
-
   return ad2;
 
  ERROR:
@@ -319,18 +323,21 @@ p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad)
 {
   size_t n = sizeof(P7_ALIDISPLAY);
 
-  if (ad->rfline) n += ad->N+1; /* +1 for \0 */
-  if (ad->mmline) n += ad->N+1;
-  if (ad->csline) n += ad->N+1; 
-  if (ad->ppline) n += ad->N+1; 
-  n += 3 * (ad->N+1);	          /* model, mline, aseq */
-  n += 1 + strlen(ad->hmmname);	  
-  n += 1 + strlen(ad->hmmacc);	  /* optional acc, desc fields: when not present, just "" ("\0") */
-  n += 1 + strlen(ad->hmmdesc);
-  n += 1 + strlen(ad->sqname);
-  n += 1 + strlen(ad->sqacc);  
-  n += 1 + strlen(ad->sqdesc); 
- 
+  if (ad->memsize) {	  	  /* serialized    */
+    n += ad->memsize;
+  } else {			  /* deserialized: */
+    if (ad->rfline) n += ad->N+1; /* +1 for \0 */
+    if (ad->mmline) n += ad->N+1;
+    if (ad->csline) n += ad->N+1; 
+    if (ad->ppline) n += ad->N+1; 
+    n += 3 * (ad->N+1);	          /* model, mline, aseq */
+    n += 1 + strlen(ad->hmmname);	  
+    n += 1 + strlen(ad->hmmacc);	  /* optional acc, desc fields: when not present, just "" ("\0") */
+    n += 1 + strlen(ad->hmmdesc);
+    n += 1 + strlen(ad->sqname);
+    n += 1 + strlen(ad->sqacc);  
+    n += 1 + strlen(ad->sqdesc); 
+  }
   return n;
 }
 
@@ -695,28 +702,34 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
   if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_S, 0, 0) : p7_trace_AppendWithPP(tr, p7T_S, 0, 0, 0.0))) != eslOK) goto ERROR;
   if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_N, 0, 0) : p7_trace_AppendWithPP(tr, p7T_N, 0, 0, 0.0))) != eslOK) goto ERROR;
   if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_B, 0, 0) : p7_trace_AppendWithPP(tr, p7T_B, 0, 0, 0.0))) != eslOK) goto ERROR;
+  if (ad->is_glocal) { if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_G, 0, 0) : p7_trace_AppendWithPP(tr, p7T_G, 0, 0, 0.0))) != eslOK) goto ERROR; }
+  else               { if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_L, 0, 0) : p7_trace_AppendWithPP(tr, p7T_L, 0, 0, 0.0))) != eslOK) goto ERROR; }
   k = ad->hmmfrom;
   i = 1; 
   for (a = 0; a < ad->N; a++)
     {
-      if (esl_abc_CIsResidue(abc, ad->model[a]))   { cur_st = (esl_abc_CIsResidue(abc, ad->aseq[a])   ? p7T_M : p7T_D); } else cur_st = p7T_I;
-      if (esl_abc_CIsResidue(abc, ad->model[a+1])) { nxt_st = (esl_abc_CIsResidue(abc, ad->aseq[a+1]) ? p7T_M : p7T_D); } else nxt_st = p7T_I; /* ad->N pos is \0, nxt_st becomes p7T_I on last step, that's fine. */
-
+      if (ad->is_glocal)  {
+	if (esl_abc_CIsResidue(abc, ad->model[a]))   { cur_st = (esl_abc_CIsResidue(abc, ad->aseq[a])   ? p7T_MG : p7T_DG); } else cur_st = p7T_IG;
+	if (esl_abc_CIsResidue(abc, ad->model[a+1])) { nxt_st = (esl_abc_CIsResidue(abc, ad->aseq[a+1]) ? p7T_MG : p7T_DG); } else nxt_st = p7T_IG; /* ad->N pos is \0, nxt_st becomes p7T_IG on last step, that's fine. */
+      } else {
+	if (esl_abc_CIsResidue(abc, ad->model[a]))   { cur_st = (esl_abc_CIsResidue(abc, ad->aseq[a])   ? p7T_ML : p7T_DL); } else cur_st = p7T_IL;
+	if (esl_abc_CIsResidue(abc, ad->model[a+1])) { nxt_st = (esl_abc_CIsResidue(abc, ad->aseq[a+1]) ? p7T_ML : p7T_DL); } else nxt_st = p7T_IL; 
+      }
+      
       if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, cur_st, k, i) : p7_trace_AppendWithPP(tr, cur_st, k, i, p7_alidisplay_DecodePostProb(ad->ppline[a])))) != eslOK) goto ERROR;
 
       switch (cur_st) {
-      case p7T_M: sq->dsq[i] = esl_abc_DigitizeSymbol(abc, ad->aseq[a]); i++; break;
-      case p7T_I: sq->dsq[i] = esl_abc_DigitizeSymbol(abc, ad->aseq[a]); i++; break;
-      case p7T_D:                                                             break;
+      case p7T_ML: case p7T_MG: sq->dsq[i] = esl_abc_DigitizeSymbol(abc, ad->aseq[a]); i++; break;
+      case p7T_IL: case p7T_IG: sq->dsq[i] = esl_abc_DigitizeSymbol(abc, ad->aseq[a]); i++; break;
+      case p7T_DL: case p7T_DG:                                                             break;
       }
 
       switch (nxt_st) {
-      case p7T_M:  k++; break;
-      case p7T_I:       break;
-      case p7T_D:  k++; break;
-      case p7T_E:       break;
+      case p7T_ML: case p7T_MG:  k++; break;
+      case p7T_IL: case p7T_IG:       break;
+      case p7T_DL: case p7T_DG:  k++; break;
+      case p7T_E:                     break;
       }
-
     }
   if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_E, 0, 0) : p7_trace_AppendWithPP(tr, p7T_E, 0, 0, 0.0))) != eslOK) goto ERROR;
   if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_C, 0, 0) : p7_trace_AppendWithPP(tr, p7T_C, 0, 0, 0.0))) != eslOK) goto ERROR;
@@ -724,7 +737,7 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
   sq->dsq[i] = eslDSQ_SENTINEL;
 
   /* some sanity checks */
-  if (tr->N != ad->N + 6)  ESL_XEXCEPTION(eslECORRUPT, "backconverted trace ended up with unexpected size (%s/%s)",         ad->sqname, ad->hmmname);
+  if (tr->N != ad->N + 7)  ESL_XEXCEPTION(eslECORRUPT, "backconverted trace ended up with unexpected size (%s/%s)",         ad->sqname, ad->hmmname); /* SNB{GL}...ECT: +7 states */
   if (k     != ad->hmmto)  ESL_XEXCEPTION(eslECORRUPT, "backconverted trace didn't end at expected place on model (%s/%s)", ad->sqname, ad->hmmname);
   if (i     != subL+1)     ESL_XEXCEPTION(eslECORRUPT, "backconverted subseq didn't end at expected length (%s/%s)",        ad->sqname, ad->hmmname);
 
@@ -741,7 +754,7 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
   sq->L     = ad->L;
   
   tr->M     = ad->M;
-  tr->L     = ad->L;
+  tr->L     = subL;
 
   *ret_sq = sq;
   *ret_tr = tr;
@@ -777,6 +790,7 @@ p7_alidisplay_Dump(FILE *fp, const P7_ALIDISPLAY *ad)
 {
   fprintf(fp, "P7_ALIDISPLAY dump\n");
   fprintf(fp, "------------------\n");
+  fprintf(fp, "type    = %s\n", (ad->is_glocal ? "glocal" : "local"));
 
   fprintf(fp, "rfline  = %s\n", ad->rfline ? ad->rfline : "[none]");
   fprintf(fp, "mmline  = %s\n", ad->mmline ? ad->mmline : "[none]");
@@ -840,9 +854,10 @@ p7_alidisplay_Compare(const P7_ALIDISPLAY *ad1, const P7_ALIDISPLAY *ad2)
   if (esl_strcmp(ad1->hmmname, ad2->hmmname) != eslOK) return eslFAIL;
   if (esl_strcmp(ad1->hmmacc,  ad2->hmmacc)  != eslOK) return eslFAIL;
   if (esl_strcmp(ad1->hmmdesc, ad2->hmmdesc) != eslOK) return eslFAIL;
-  if (ad1->hmmfrom != ad2->hmmfrom)                    return eslFAIL;
-  if (ad1->hmmto   != ad2->hmmto)                      return eslFAIL;
-  if (ad1->M       != ad2->M)                          return eslFAIL;
+  if (ad1->hmmfrom   != ad2->hmmfrom)                  return eslFAIL;
+  if (ad1->hmmto     != ad2->hmmto)                    return eslFAIL;
+  if (ad1->M         != ad2->M)                        return eslFAIL;
+  if (ad1->is_glocal != ad2->is_glocal)                return eslFAIL;
 
   if (esl_strcmp(ad1->sqname,  ad2->sqname)  != eslOK) return eslFAIL;
   if (esl_strcmp(ad1->sqacc,   ad2->sqacc)   != eslOK) return eslFAIL;
@@ -918,7 +933,7 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, 0);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, 0, p7_UNIGLOCAL); /* that sets N,C,J to generate nothing */
+  p7_profile_ConfigUniglocal(gm, hmm, bg, 0); /* uniglocal w. L=0; sets N,C,J to generate nothing */
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
 
@@ -983,57 +998,58 @@ create_faux_alidisplay(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
   int            nM            = 0;
   int            nD            = 0;
   int            nI            = 0;
+  int            is_glocal     = esl_rnd_Roll(rng, 2);
   enum p7t_statetype_e last_st;
   int            pos;
   int            status;
 
+  /* The "guide string" is a plausible string of M,D,I, 
+   * obeying profile state architecture; from this, we 
+   * build the faux alidisplay.
+   * last_st only needs to be {MDI}; we use MG,DG,IG by convention, 
+   * G/L distinction doesn't matter here.
+   */
   ESL_ALLOC(guidestring, sizeof(char) * (N+1));
 
-  guidestring[0] = 'M'; nM++; last_st = p7T_M; /* local alignments must start with M */
+  /* glocal alignments may start with M or D 
+   * local alignments must start with M
+   */
+  if (!is_glocal || esl_rnd_Roll(rng, 2)) { guidestring[0] = 'M'; nM++; last_st = p7T_MG; }
+  else                                    { guidestring[0] = 'D'; nD++; last_st = p7T_DG; }
+
   for (pos = 1; pos < N-1; pos++)
     {
-      switch (last_st) 
-	{
-	case p7T_M:
-	  switch (esl_rnd_Roll(rng, 3)) 
-	    {
-	    case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_M; break;
-	    case 1: guidestring[pos] = 'D'; nD++; last_st = p7T_D; break;
-	    case 2: guidestring[pos] = 'I'; nI++; last_st = p7T_I; break;
-	    }
-	  break;
-
-	case p7T_I: 
-	  switch (esl_rnd_Roll(rng, 2))
-	    {
-	    case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_M; break;
-	    case 1: guidestring[pos] = 'I'; nI++; last_st = p7T_I; break;
-	    }
-	  break;
-
-	case p7T_D: 
-	  switch (esl_rnd_Roll(rng, 2)) 
-	    {
-	    case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_M; break;
-	    case 1: guidestring[pos] = 'D'; nD++; last_st = p7T_D; break;
-	    }
-	  break;
-	  
-	default:
-	  break;
+      switch (last_st) {
+      case p7T_MG:
+	switch (esl_rnd_Roll(rng, 3)) {
+	case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_MG; break;
+	case 1: guidestring[pos] = 'D'; nD++; last_st = p7T_DG; break;
+	case 2: guidestring[pos] = 'I'; nI++; last_st = p7T_IG; break;
 	}
+	break;
+
+      case p7T_IG: 
+	switch (esl_rnd_Roll(rng, 2)) {
+	case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_MG; break;
+	case 1: guidestring[pos] = 'I'; nI++; last_st = p7T_IG; break;
+	}
+	break;
+
+      case p7T_DG: 
+	switch (esl_rnd_Roll(rng, 2)) {
+	case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_MG; break;
+	case 1: guidestring[pos] = 'D'; nD++; last_st = p7T_DG; break;
+	}
+	break;
+
+      default: break;	/* yes, necessary, otherwise compilers will bitch about unhandled enumeration values. */
+      }
     }
-  /* local alignments can end on M or D. (optimal local alignments can only end on M) */
-  switch (last_st) {
-  case p7T_I:
-    guidestring[N-1] = 'M';  nM++;  break;
-  default:   
-    switch (esl_rnd_Roll(rng, 2)) {
-    case 0: guidestring[N-1] = 'M'; nM++; break;
-    case 1: guidestring[N-1] = 'D'; nD++; break;
-    }
-    break;
-  }
+
+  /* alignments can end on M or D. (optimal local alignments can only end on M) */
+  if (last_st == p7T_IG || esl_rnd_Roll(rng, 2)) { guidestring[N-1] = 'M';  nM++; }
+  else                                           { guidestring[N-1] = 'D';  nD++; }
+
   guidestring[N] = '\0';
 
   ESL_ALLOC(ad, sizeof(P7_ALIDISPLAY));
@@ -1042,6 +1058,7 @@ create_faux_alidisplay(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
   ad->sqname  = ad->sqacc  = ad->sqdesc  = NULL;
   ad->mem     = NULL;
   ad->memsize = 0;
+  ad->is_glocal = is_glocal;
 
   /* Optional lines are added w/ 50% chance */
   if (esl_rnd_Roll(rng, 2) == 0)  ESL_ALLOC(ad->rfline, sizeof(char) * (N+1));
@@ -1062,9 +1079,9 @@ create_faux_alidisplay(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
   if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("(sequence description)", -1, &(ad->sqdesc)); else esl_strdup("", -1, &(ad->sqdesc));
 
   /* model, seq coords must look valid. */
-  ad->hmmfrom = 100;
+  ad->hmmfrom = (is_glocal ? 1 : 100);
   ad->hmmto   = ad->hmmfrom + nM + nD - 1;
-  ad->M       = ad->hmmto + esl_rnd_Roll(rng, 2);
+  ad->M       = (is_glocal ? ad->hmmto : ad->hmmto + esl_rnd_Roll(rng, 2));
 
   ad->sqfrom  = 1000;
   ad->sqto    = ad->sqfrom + nM + nI - 1;
@@ -1183,12 +1200,12 @@ utest_Backconvert(int be_verbose, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int nt
 
   for (trial = 0; trial < ntrials; trial++)
     {
-      if ( create_faux_alidisplay(rng, N, &ad)                   != eslOK) esl_fatal(msg);
-      if ( p7_alidisplay_Serialize(ad)                           != eslOK) esl_fatal(msg);
-      if (be_verbose && p7_alidisplay_Dump(stdout, ad)           != eslOK) esl_fatal(msg);
-      if ( p7_alidisplay_Backconvert(ad, abc, &sq, &tr)          != eslOK) esl_fatal(msg);
-      if (be_verbose && p7_trace_Dump(stdout, tr, NULL, sq->dsq) != eslOK) esl_fatal(msg);
-      if ( p7_trace_Validate(tr, abc, sq->dsq, NULL)             != eslOK) esl_fatal(msg);
+      if ( create_faux_alidisplay(rng, N, &ad)             != eslOK) esl_fatal(msg);
+      if ( p7_alidisplay_Serialize(ad)                     != eslOK) esl_fatal(msg);
+      if (be_verbose && p7_alidisplay_Dump(stdout, ad)     != eslOK) esl_fatal(msg);
+      if ( p7_alidisplay_Backconvert(ad, abc, &sq, &tr)    != eslOK) esl_fatal(msg);
+      if (be_verbose && p7_trace_Dump(stdout, tr)          != eslOK) esl_fatal(msg);
+      if ( p7_trace_Validate(tr, abc, sq->dsq, NULL)       != eslOK) esl_fatal(msg);
 
       p7_alidisplay_Destroy(ad);
       esl_sq_Destroy(sq);
@@ -1309,7 +1326,7 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, 0);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, 0, p7_UNILOCAL); 
+  p7_profile_ConfigUnilocal(gm, hmm, bg, 0);
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
 
@@ -1327,7 +1344,7 @@ main(int argc, char **argv)
 
   if (p7_alidisplay_Backconvert(hitlist->hit[0]->dcl[0].ad, abc, &sq2, &tr2) != eslOK) p7_Fail("backconvert failed");
   
-  p7_trace_Dump(stdout, tr2, gm, sq2->dsq);
+  p7_trace_DumpAnnotated(stdout, tr2, gm, sq2->dsq);
 
   p7_tophits_Destroy(hitlist);
   p7_alidisplay_Destroy(ad);

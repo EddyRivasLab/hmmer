@@ -572,9 +572,6 @@ ERROR:
 }
 
 
-
-
-
 /* Function:  fm_configAlloc()
  * Synopsis:  Allocate a 16-byte-aligned <FM_CFG> model object, and it's FM_METADATA
  *

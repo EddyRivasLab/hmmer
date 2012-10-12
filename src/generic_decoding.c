@@ -288,8 +288,13 @@ main(int argc, char **argv)
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
 
-  bg = p7_bg_Create(abc);                 p7_bg_SetLength(bg, L);
-  gm = p7_profile_Create(hmm->M, abc);    p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  bg = p7_bg_Create(abc);                 
+  gm = p7_profile_Create(hmm->M, abc);  
+
+  p7_profile_Config(gm, hmm, bg);
+  p7_profile_SetLength(gm, L);
+  p7_bg_SetLength     (bg, L);
+
   fwd = p7_gmx_Create(gm->M, L);  
   bck = p7_gmx_Create(gm->M, L);
   pp  = p7_gmx_Create(gm->M, L);
@@ -374,6 +379,8 @@ static ESL_OPTIONS options[] = {
   { "--sw",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit local alignment",                           0 },
   { "--ls",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "multihit glocal alignment",                        0 },
   { "--s",       eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit glocal alignment",                          0 },
+  { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump decoding matrix for examination (verbose)",   0 },
+  { "--csv",  eslARG_OUTFILE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "write matrix to file <f> in csv, for heatmaps",    0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -414,19 +421,19 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
 
-  /* Now reconfig the model however we were asked to */
-  if      (esl_opt_GetBoolean(go, "--fs"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
-  else if (esl_opt_GetBoolean(go, "--sw"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNILOCAL);
-  else if (esl_opt_GetBoolean(go, "--ls"))  p7_ProfileConfig(hmm, bg, gm, sq->n, p7_GLOCAL);
-  else if (esl_opt_GetBoolean(go, "--s"))   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_UNIGLOCAL);
+  /* Config the model however we were asked to */
+  if      (esl_opt_GetBoolean(go, "--fs"))  p7_profile_ConfigLocal    (gm, hmm, bg, sq->n);
+  else if (esl_opt_GetBoolean(go, "--sw"))  p7_profile_ConfigUnilocal (gm, hmm, bg, sq->n);
+  else if (esl_opt_GetBoolean(go, "--ls"))  p7_profile_ConfigGlocal   (gm, hmm, bg, sq->n);
+  else if (esl_opt_GetBoolean(go, "--s"))   p7_profile_ConfigUniglocal(gm, hmm, bg, sq->n);
   
   /* Allocate matrices */
   fwd = p7_gmx_Create(gm->M, sq->n);
   bck = p7_gmx_Create(gm->M, sq->n);
 
   /* Set the profile and null model's target length models */
-  p7_bg_SetLength(bg,   sq->n);
-  p7_ReconfigLength(gm, sq->n);
+  p7_bg_SetLength     (bg, sq->n);
+  p7_profile_SetLength(gm, sq->n);
 
   /* Run Forward, Backward */
   p7_GForward (sq->dsq, sq->n, gm, fwd, &fsc);
@@ -435,8 +442,13 @@ main(int argc, char **argv)
   /* Decoding: <bck> becomes the posterior probability mx */
   p7_GDecoding(gm, fwd, bck, bck);
 
-  //p7_gmx_Dump(stdout, bck, p7_DEFAULT);
-  dump_matrix_csv(stdout, bck, 1, sq->n, 1, gm->M);
+  if (esl_opt_GetBoolean(go, "-D")) p7_gmx_Dump(stdout, bck, p7_DEFAULT);
+  if (esl_opt_IsOn(go, "--csv")) {
+    char *outfile = esl_opt_GetString(go, "--csv");
+    FILE *ofp     = fopen(outfile, "w");
+    dump_matrix_csv(ofp, bck, 1, sq->n, 1, gm->M);
+    fclose(ofp);
+  }
 
   /* Cleanup */
   esl_sq_Destroy(sq);

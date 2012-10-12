@@ -554,7 +554,7 @@ mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   for (x = 0; x < gm->abc->Kp; x++)
     for (q = 0, k = 1; q < nq; q++, k++)
       {
-	for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_byteify(om, p7P_MSC(gm, k+z*nq, x)) : 255);
+	for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_byteify(om, P7P_MSC(gm, k+z*nq, x)) : 255);
 	om->rbv[x][q]   = tmp.v;	
       }
 
@@ -609,7 +609,7 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   for (x = 0; x < gm->abc->Kp; x++)
     for (k = 1, q = 0; q < nq; q++, k++)
       {
-	for (z = 0; z < 8; z++) tmp.i[z] = ((k+ z*nq <= M) ? wordify(om, p7P_MSC(gm, k+z*nq, x)) : -32768);
+	for (z = 0; z < 8; z++) tmp.i[z] = ((k+ z*nq <= M) ? wordify(om, P7P_MSC(gm, k+z*nq, x)) : -32768);
 	om->rwv[x][q]   = tmp.v;
       }
 
@@ -619,7 +619,7 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
       for (t = p7O_BM; t <= p7O_II; t++) /* this loop of 7 transitions depends on the order in p7o_tsc_e */
 	{
 	  switch (t) {
-	  case p7O_BM: tg = p7P_BM;  kb = k-1; maxval =  0; break; /* gm has tBMk stored off by one! start from k=0 not 1   */
+	  case p7O_BM: tg = p7P_LM;  kb = k-1; maxval =  0; break; /* gm has tBMk stored off by one! start from k=0 not 1   */
 	  case p7O_MM: tg = p7P_MM;  kb = k-1; maxval =  0; break; /* MM, DM, IM vectors are rotated by -1, start from k=0  */
 	  case p7O_IM: tg = p7P_IM;  kb = k-1; maxval =  0; break;
 	  case p7O_DM: tg = p7P_DM;  kb = k-1; maxval =  0; break;
@@ -629,7 +629,7 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 	  }
 
 	  for (z = 0; z < 8; z++) {
-	    val      = ((kb+ z*nq < M) ? wordify(om, p7P_TSC(gm, kb+ z*nq, tg)) : -32768);
+	    val      = ((kb+ z*nq < M) ? wordify(om, P7P_TSC(gm, kb+ z*nq, tg)) : -32768);
 	    tmp.i[z] = (val <= maxval) ? val : maxval; /* do not allow an II transition cost of 0, or hell may occur. */
 	  }
 	  om->twv[j++] = tmp.v;
@@ -639,7 +639,7 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   /* Finally the DD's, which are at the end of the optimized tsc vector; (j is already sitting there) */
   for (k = 1, q = 0; q < nq; q++, k++)
     {
-      for (z = 0; z < 8; z++) tmp.i[z] = ((k+ z*nq < M) ? wordify(om, p7P_TSC(gm, k+ z*nq, p7P_DD)) : -32768);
+      for (z = 0; z < 8; z++) tmp.i[z] = ((k+ z*nq < M) ? wordify(om, P7P_TSC(gm, k+ z*nq, p7P_DD)) : -32768);
       om->twv[j++] = tmp.v;
     }
 
@@ -667,9 +667,9 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   om->ddbound_w = -32768;	
   for (k = 2; k < M-1; k++)
     {
-      ddtmp         = (int) wordify(om, p7P_TSC(gm, k,   p7P_DD));
-      ddtmp        += (int) wordify(om, p7P_TSC(gm, k+1, p7P_DM));
-      ddtmp        -= (int) wordify(om, p7P_TSC(gm, k+1, p7P_BM));
+      ddtmp         = (int) wordify(om, P7P_TSC(gm, k,   p7P_DD));
+      ddtmp        += (int) wordify(om, P7P_TSC(gm, k+1, p7P_DM));
+      ddtmp        -= (int) wordify(om, P7P_TSC(gm, k+1, p7P_LM));
       om->ddbound_w = ESL_MAX(om->ddbound_w, ddtmp);
     }
 
@@ -704,7 +704,7 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   for (x = 0; x < gm->abc->Kp; x++)
     for (k = 1, q = 0; q < nq; q++, k++)
       {
-	for (z = 0; z < 4; z++) tmp.x[z] = (k+ z*nq <= M) ? p7P_MSC(gm, k+z*nq, x) : -eslINFINITY;
+	for (z = 0; z < 4; z++) tmp.x[z] = (k+ z*nq <= M) ? P7P_MSC(gm, k+z*nq, x) : -eslINFINITY;
 	om->rfv[x][q] = esl_vmx_expf(tmp.v);
       }
 
@@ -714,7 +714,7 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
       for (t = p7O_BM; t <= p7O_II; t++) /* this loop of 7 transitions depends on the order in the definition of p7o_tsc_e */
 	{
 	  switch (t) {
-	  case p7O_BM: tg = p7P_BM;  kb = k-1; break; /* gm has tBMk stored off by one! start from k=0 not 1 */
+	  case p7O_BM: tg = p7P_LM;  kb = k-1; break; /* gm has tBMk stored off by one! start from k=0 not 1 */
 	  case p7O_MM: tg = p7P_MM;  kb = k-1; break; /* MM, DM, IM quads are rotated by -1, start from k=0  */
 	  case p7O_IM: tg = p7P_IM;  kb = k-1; break;
 	  case p7O_DM: tg = p7P_DM;  kb = k-1; break;
@@ -723,7 +723,7 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 	  case p7O_II: tg = p7P_II;  kb = k;   break;
 	  }
 
-	  for (z = 0; z < 4; z++) tmp.x[z] = (kb+z*nq < M) ? p7P_TSC(gm, kb+z*nq, tg) : -eslINFINITY;
+	  for (z = 0; z < 4; z++) tmp.x[z] = (kb+z*nq < M) ? P7P_TSC(gm, kb+z*nq, tg) : -eslINFINITY;
 	  om->tfv[j++] = esl_vmx_expf(tmp.v);
 	}
     }
@@ -731,7 +731,7 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   /* And finally the DD's, which are at the end of the optimized tsc vector; (j is already there) */
   for (k = 1, q = 0; q < nq; q++, k++)
     {
-      for (z = 0; z < 4; z++) tmp.x[z] = (k+z*nq < M) ? p7P_TSC(gm, k+z*nq, p7P_DD) : -eslINFINITY;
+      for (z = 0; z < 4; z++) tmp.x[z] = (k+z*nq < M) ? P7P_TSC(gm, k+z*nq, p7P_DD) : -eslINFINITY;
       om->tfv[j++] = esl_vmx_expf(tmp.v);
     }
 
@@ -775,6 +775,17 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
   if (gm->abc->type != om->abc->type)  ESL_EXCEPTION(eslEINVAL, "alphabets of the two profiles don't match");
   if (gm->M         >  om->allocM)     ESL_EXCEPTION(eslEINVAL, "oprofile is too small");
 
+  /* Set these first so they are available in the following calls */
+  /* om->mode may only be unilocal or local! FIXME */
+  if      (gm->nj == 0.0) om->mode = p7_UNILOCAL;
+  else if (gm->nj == 1.0) om->mode = p7_LOCAL;
+  else    ESL_EXCEPTION(eslEINVAL, "oprofile must be unilocal or local");
+
+  om->L    = gm->L;
+  om->M    = gm->M;
+  om->nj   = gm->nj;
+  om->max_length = gm->max_length;
+
   if ((status =  mf_conversion(gm, om)) != eslOK) return status;   /* MSVFilter()'s information     */
   if ((status =  vf_conversion(gm, om)) != eslOK) return status;   /* ViterbiFilter()'s information */
   if ((status =  fb_conversion(gm, om)) != eslOK) return status;   /* ForwardFilter()'s information */
@@ -792,12 +803,6 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
   for (z = 0; z < p7_NEVPARAM; z++) om->evparam[z] = gm->evparam[z];
   for (z = 0; z < p7_NCUTOFFS; z++) om->cutoff[z]  = gm->cutoff[z];
   for (z = 0; z < p7_MAXABET;  z++) om->compo[z]   = gm->compo[z];
-
-  om->mode = gm->mode;
-  om->L    = gm->L;
-  om->M    = gm->M;
-  om->max_length = gm->max_length;
-  om->nj   = gm->nj;
 
   return eslOK;
 
@@ -1515,10 +1520,10 @@ p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, 
   if ((gm = p7_profile_Create (M, abc)) == NULL)  { status = eslEMEM; goto ERROR; }
   if ((om = p7_oprofile_Create(M, abc)) == NULL)  { status = eslEMEM; goto ERROR; }
 
-  if ((status = p7_hmm_Sample(r, M, abc, &hmm))             != eslOK) goto ERROR;
-  if ((status = p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL)) != eslOK) goto ERROR;
-  if ((status = p7_oprofile_Convert(gm, om))                != eslOK) goto ERROR;
-  if ((status = p7_oprofile_ReconfigLength(om, L))          != eslOK) goto ERROR;
+  if ((status = p7_hmm_Sample(r, M, abc, &hmm))         != eslOK) goto ERROR;
+  if ((status = p7_profile_ConfigLocal(gm, hmm, bg, L)) != eslOK) goto ERROR;
+  if ((status = p7_oprofile_Convert(gm, om))            != eslOK) goto ERROR;
+  if ((status = p7_oprofile_ReconfigLength(om, L))      != eslOK) goto ERROR;
 
   if (opt_hmm != NULL) *opt_hmm = hmm; else p7_hmm_Destroy(hmm);
   if (opt_gm  != NULL) *opt_gm  = gm;  else p7_profile_Destroy(gm);
@@ -1664,8 +1669,8 @@ p7_profile_SameAsMF(const P7_OPROFILE *om, P7_PROFILE *gm)
 
   /* Transitions */
   esl_vec_FSet(gm->tsc, p7P_NTRANS * gm->M, -eslINFINITY);
-  for (k = 1; k <  gm->M; k++) p7P_TSC(gm, k, p7P_MM) = 0.0f;
-  for (k = 0; k <  gm->M; k++) p7P_TSC(gm, k, p7P_BM) = tbm;
+  for (k = 1; k <  gm->M; k++) P7P_TSC(gm, k, p7P_MM) = 0.0f;
+  for (k = 0; k <  gm->M; k++) P7P_TSC(gm, k, p7P_LM) = tbm;
 
   /* Emissions */
   for (x = 0; x < gm->abc->Kp; x++)
@@ -1809,7 +1814,7 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
   gm = p7_profile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, L);
   om = p7_oprofile_Create(gm->M, abc);
 
   esl_stopwatch_Start(w);
@@ -1898,7 +1903,7 @@ main(int argc, char **argv)
   bg  = p7_bg_Create(abc);
   gm  = p7_profile_Create(hmm->M, abc);
   om1 = p7_oprofile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, 400);
   p7_oprofile_Convert(gm, om1);
 
   p7_oprofile_Dump(stdout, om1);

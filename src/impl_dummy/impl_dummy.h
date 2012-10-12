@@ -38,7 +38,7 @@ typedef struct {
 static inline float 
 p7_oprofile_FGetEmission(const P7_OPROFILE *om, int k, int x)
 {
-  return expf(p7P_MSC(om, k, x));
+  return expf(P7P_MSC(om, k, x));
 }
 
 /*****************************************************************

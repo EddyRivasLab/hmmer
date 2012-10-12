@@ -97,8 +97,8 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
 
   if ((pli->fwd = p7_omx_Create(M_hint, L_hint, L_hint)) == NULL) goto ERROR;
   if ((pli->bck = p7_omx_Create(M_hint, L_hint, L_hint)) == NULL) goto ERROR;
-  if ((pli->oxf = p7_omx_Create(M_hint, 0,      L_hint)) == NULL) goto ERROR;
-  if ((pli->oxb = p7_omx_Create(M_hint, 0,      L_hint)) == NULL) goto ERROR;     
+  if ((pli->oxf = p7_filtermx_Create(M_hint, L_hint, ESL_MBYTES(32))) == NULL) goto ERROR;
+  if ((pli->oxb = p7_filtermx_Create(M_hint, L_hint, ESL_MBYTES(32))) == NULL) goto ERROR;     
 
   /* Normally, we reinitialize the RNG to the original seed every time we're
    * about to collect a stochastic trace ensemble. This eliminates run-to-run
@@ -259,8 +259,8 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
 int
 p7_pipeline_Reuse(P7_PIPELINE *pli)
 {
-  p7_omx_Reuse(pli->oxf);
-  p7_omx_Reuse(pli->oxb);
+  p7_filtermx_Reuse(pli->oxf);
+  p7_filtermx_Reuse(pli->oxb);
   p7_omx_Reuse(pli->fwd);
   p7_omx_Reuse(pli->bck);
   p7_domaindef_Reuse(pli->ddef);
@@ -279,8 +279,8 @@ p7_pipeline_Destroy(P7_PIPELINE *pli)
 {
   if (pli == NULL) return;
   
-  p7_omx_Destroy(pli->oxf);
-  p7_omx_Destroy(pli->oxb);
+  p7_filtermx_Destroy(pli->oxf);
+  p7_filtermx_Destroy(pli->oxb);
   p7_omx_Destroy(pli->fwd);
   p7_omx_Destroy(pli->bck);
   esl_randomness_Destroy(pli->r);
@@ -650,7 +650,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
   
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
-  p7_omx_GrowTo(pli->oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
+  p7_filtermx_GrowTo(pli->oxf, om->M, sq->n);  /* expand omx if needed */
 
   /* Base null model score (we could calculate this in NewSeq(), for a scan pipeline) */
   p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
@@ -1851,7 +1851,7 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
   om = p7_oprofile_Create(hmm->M, abc);
-  p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
+  p7_profile_ConfigLocal(gm, hmm, bg, 400);
   p7_oprofile_Convert(gm, om);     /* <om> is now p7_LOCAL, multihit */
   p7_pli_NewModel(pli, om, bg);
 

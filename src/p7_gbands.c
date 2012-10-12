@@ -5,8 +5,22 @@
 
 #include "p7_gbands.h"
 
+/* Function:  p7_gbands_Create()
+ * Synopsis:  Create a <P7_GBANDS> structure.
+ *
+ * Purpose:   Create an object defining the bands for a banded dynamic
+ *            programming matrix for a comparison of a query profile
+ *            of length <M> against a target sequence of length <L>.
+ *
+ * Args:      M  - query profile length
+ *            L  - target sequence length
+ *
+ * Returns:   ptr to the new object.
+ *
+ * Throws:    <NULL> on allocation failure.
+ */
 P7_GBANDS *
-p7_gbands_Create(void)
+p7_gbands_Create(int M, int L)
 {
   P7_GBANDS *bnd           = NULL;
   int        init_segalloc = 4;
@@ -14,14 +28,15 @@ p7_gbands_Create(void)
   int        status;
 
   ESL_ALLOC(bnd, sizeof(P7_GBANDS));
-  bnd->nseg  = 0;
-  bnd->nrow  = 0;
-  bnd->L     = 0;
-  bnd->M     = 0;
-  bnd->ncell = 0;
   bnd->imem  = NULL;
   bnd->kmem  = NULL;
+  bnd->nseg  = 0;
+  bnd->nrow  = 0;
 
+  bnd->M      = M;
+  bnd->L      = L;
+  bnd->ncell  = 0;
+  bnd->ncell2 = 0;
 
   ESL_ALLOC(bnd->imem, sizeof(int) * init_segalloc * 2); /* *2: for ia, ib pairs */
   ESL_ALLOC(bnd->kmem, sizeof(int) * init_rowalloc * p7_GBANDS_NK);
@@ -36,15 +51,41 @@ p7_gbands_Create(void)
 }
 
 int
-p7_gbands_Reuse(P7_GBANDS *bnd)
+p7_gbands_Reinit(P7_GBANDS *bnd, int M, int L)
 {
-  bnd->nseg  = 0;
-  bnd->nrow  = 0;
-  bnd->L     = 0;
-  bnd->M     = 0;
-  bnd->ncell = 0;
+  /* at least for now, GBANDS structure doesn't use M,L for allocation
+   * strategy, only for SetFull() and statistics and such
+   */
+  bnd->M = M;
+  bnd->L = L;
   return eslOK;
 }
+
+
+/* Function:  p7_gbands_SetFull()
+ * Synopsis:  Set bands to do the entire DP matrix.
+ *
+ * Purpose:   Set the bands in <bnd> to cover the entire
+ *            DP matrix. This is generally used for debugging
+ *            and testing comparisons to non-banded DP.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_gbands_SetFull(P7_GBANDS *bnd)
+{
+  int i;
+  int M = bnd->M;
+  int L = bnd->L;
+
+  p7_gbands_Reuse(bnd);
+  p7_gbands_Reinit(bnd, M, L);
+  for (i = 1; i <= bnd->L; i++) p7_gbands_Append(bnd, i, 1, bnd->M);
+  return eslOK;
+}
+
 
 /* Function:  
  * Synopsis:  
@@ -165,6 +206,19 @@ p7_gbands_GrowRows(P7_GBANDS *bnd)
  ERROR:
   return status;
 }
+
+int
+p7_gbands_Reuse(P7_GBANDS *bnd)
+{
+  bnd->nseg   = 0;
+  bnd->nrow   = 0;
+  bnd->L      = 0;
+  bnd->M      = 0;
+  bnd->ncell  = 0;
+  bnd->ncell2 = 0;		/* J10/29 experiment */
+  return eslOK;
+}
+
 
 void
 p7_gbands_Destroy(P7_GBANDS *bnd)
