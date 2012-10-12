@@ -23,12 +23,12 @@ static ESL_OPTIONS options[] = {
   /* name           type       default   env  range    toggles    reqs       incomp  help   docgroup*/
   { "-h",        eslARG_NONE,    FALSE,  NULL, NULL,    NULL,  NULL,           NULL, "show brief help on version and usage",            0 },
 
-  { "--eval2score",  eslARG_NONE, FALSE, NULL, NULL,    NULL,  "-E",        NULL,            "compute score required to get E-value (E) for database of (Z) sequences",     0 },
-  { "--score2eval",  eslARG_NONE, FALSE, NULL, NULL,    NULL,  "-S",        NULL,            "compute E-value corresponding to score (S) for database of (Z) sequences",     0 },
-  { "-Z",            eslARG_INT,    "1", NULL, "n>0",   NULL,  NULL,           NULL,            "database size, by default in # sequences , for --eval2score or --score2eval (default 1)",     0 },
-  { "--rescntZ",    eslARG_NONE,   FALSE, NULL, NULL,   NULL,  "-Z",           NULL,            "for --eval2score, -Z is in millions of residues (DNA models only)",          0 },
-  { "-E",           eslARG_REAL,  "0.01", NULL, NULL,   NULL,  "--eval2score", NULL,            "E-value threshold, for --eval2score",                                         0 },
-  { "-S",           eslARG_REAL,  "0.01", NULL, NULL,   NULL,  "--score2eval", NULL,            "Score input for --score2eval",                                         0 },
+  { "--eval2score",  eslARG_NONE, FALSE, NULL, NULL,    NULL,  "-E",        NULL,            "compute score for E-value (E) for database of (Z) sequences",     0 },
+  { "--score2eval",  eslARG_NONE, FALSE, NULL, NULL,    NULL,  "-S",        NULL,            "compute E-value for score (S) for database of (Z) sequences",     0 },
+  { "-Z",            eslARG_INT,    "1", NULL, "n>0",   NULL,  NULL,           NULL,         "database size for --eval2score or --score2eval (default 1)",     0 },
+  { "--rescntZ",    eslARG_NONE,   FALSE, NULL, NULL,   NULL,  "-Z",           NULL,         "for --eval2score, -Z is in millions of residues (DNA models only)",          0 },
+  { "-E",           eslARG_REAL,  "0.01", NULL, NULL,   NULL,  "--eval2score", NULL,         "E-value threshold, for --eval2score",                                         0 },
+  { "-S",           eslARG_REAL,  "0.01", NULL, NULL,   NULL,  "--score2eval", NULL,         "Score input for --score2eval",                                         0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -98,7 +98,7 @@ main(int argc, char **argv)
       p7_banner(stdout, argv[0], banner);
       esl_usage(stdout, argv[0], usage);
       puts("\nOptions:");
-      esl_opt_DisplayHelp(stdout, go, 0, 2, 90); /* 0=docgroup, 2 = indentation; 80=textwidth*/
+      esl_opt_DisplayHelp(stdout, go, 0, 2, 80); /* 0=docgroup, 2 = indentation; 80=textwidth*/
 
 
       exit(0);

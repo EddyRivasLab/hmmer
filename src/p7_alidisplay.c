@@ -506,29 +506,6 @@ integer_textwidth(long n)
   return w;
 }
 
-/* Function:  p7_alidisplay_EncodeAliPostProb()
- * Synopsis:  Convert the posterior probability of a position aligning
- *            toa core model state into a char code.
- *
- * Purpose:   Convert the posterior probability <p> to
- *            a character code used to visually assess the 
- *            confidence that a position should be included 
- *            at the boundary of an alignment.
- *
- *            Returns a character from the class [HML-],
- *            with 'H' if <p>   >= <hi>
- *                 'M' if <hi>  >  <p>   >= <med>
- *                 'L' if <med> >  <p>   >= <lo>
- *                 '-' if <p> < <lo>
- *
- * Returns:   the encoded character.
- */
-char
-p7_alidisplay_EncodeAliPostProb(float p, float hi, float med, float lo)
-{
-  //return (p >= 0.97) ? '*' : (p<0.7? '0' : (char) ((p-.67) * (100.0/3)) + '0');
-  return (p >= hi ) ? 'H' : (p>med ? 'M' : (p>lo ? 'L' : '-'));
-}
 
 /* Function:  p7_alidisplay_EncodePostProb()
  * Synopsis:  Convert a posterior probability to a char code.

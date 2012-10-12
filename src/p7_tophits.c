@@ -617,8 +617,12 @@ p7_tophits_Destroy(P7_TOPHITS *h)
       if (h->unsrt[i].acc  != NULL) free(h->unsrt[i].acc);
       if (h->unsrt[i].desc != NULL) free(h->unsrt[i].desc);
       if (h->unsrt[i].dcl  != NULL) {
+        if (h->unsrt[i].dcl->scores_per_pos != NULL) free (h->unsrt[i].dcl->scores_per_pos);
+
         for (j = 0; j < h->unsrt[i].ndom; j++)
-          if (h->unsrt[i].dcl[j].ad != NULL) p7_alidisplay_Destroy(h->unsrt[i].dcl[j].ad);
+          if (h->unsrt[i].dcl[j].ad != NULL)
+            p7_alidisplay_Destroy(h->unsrt[i].dcl[j].ad);
+
         free(h->unsrt[i].dcl);
       }
     }
@@ -1528,7 +1532,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
       if (pli->long_targets) 
       {
         if (fprintf(ofp, "#%-*s %-*s %-*s %-*s %s %s %*s %*s %*s %*s %*s %6s %9s %6s %5s  %s\n",
-          tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession", "hmmfrom", "hmm to", posw, "alifrom", posw, "ali to", posw, "envfrom", posw, "env to", posw, "sq len", "strand", "  E-value", " score", " bias", "description of target") < 0)
+          tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession", "hmmfrom", "hmm to", posw, "alifrom", posw, "ali to", posw, "envfrom", posw, "env to", posw, ( pli->mode == p7_SCAN_MODELS ? "modlen" : "sq len" ), "strand", "  E-value", " score", " bias", "description of target") < 0)
           ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-sequence hit list: write failed");
         if (fprintf(ofp, "#%*s %*s %*s %*s %s %s %*s %*s %*s %*s %*s %6s %9s %6s %5s %s\n",
           tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "-------", "-------", posw, "-------", posw, "-------",  posw, "-------", posw, "-------", posw, "-------", "------", "---------", "------", "-----", "---------------------") < 0)

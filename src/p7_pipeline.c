@@ -874,18 +874,19 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
 /* Function:  p7_pli_computeAliScores()
  * Synopsis:  Compute per-position scores for the alignment for a domain
  *
- * Purpose:   Compute per-position scores for the alignment for a domain
+ * Purpose:   Compute per-position (Viterbi) scores for the alignment for a domain,
+ *            for the purpose of optionally printing these scores out in association
+ *            with each alignment. Such scores can, for example, be used to detangle
+ *            overlapping alignments (from different models)
  *
  * Args:      dom             - domain with the alignment for which we wish to compute scores
  *            seq             - sequence in which domain resides
- *            data         - contains model's emission and transition values in unstriped form
+ *            data            - contains model's emission and transition values in unstriped form
  *            K               - alphabet size
  *
  * Returns:   <eslOK> on success.
  *
  * Throws:    <eslEMEM> on allocation failure.
- *
- * Xref:      J4/25.
  */
 static int
 p7_pli_computeAliScores(P7_DOMAIN *dom, ESL_DSQ *seq, const P7_SCOREDATA *data, int K)
@@ -943,198 +944,6 @@ p7_pli_computeAliScores(P7_DOMAIN *dom, ESL_DSQ *seq, const P7_SCOREDATA *data, 
 
 ERROR:
   return eslEMEM;
-
-}
-
-
-/* Function:  p7_pli_modifyAliBoundaries()
- * Synopsis:  Compute per-position scores for the alignment for a domain
- *
- * Purpose:   Compute per-position scores for the alignment for a domain
- *
- * Args:      dom             - domain with the alignment for which we wish to compute scores
- *            seq             - sequence in which domain resides
- *            data         - contains model's emission and transition values in unstriped form
- *            thresh          - the threshold at which any lower-scoring end will be trimmed
- *            K               - alphabet size
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    <eslEMEM> on allocation failure.
- *
- *   ( deprecated and unused, to be removed soon )
- */
-static int
-p7_pli_modifyAliBoundaries(P7_DOMAIN *dom, ESL_DSQ *seq, const P7_SCOREDATA *data, float thresh, int K)
-{
-    //update alignment: trim  terminal sections with (a) all Ns or (b) negative score
-    int left_neg = -1;
-    float left_min = thresh;
-    float left_sum = 0.0;
-
-    int right_neg = dom->ad->N;
-    float right_min = thresh;
-    float right_sum = 0.0;
-
-    int ali_len;
-    int i = 0;
-
-
-    /*
-    //check if alignments can be trivially extended by adding a
-    //maximal extension of positive-scoring bases
-
-    //look left
-    int left_change=0;
-    while ( data->fwd_scores[K * (dom->ad->hmmfrom-left_change-1) + seq[(dom->iali-left_change-1)]] > 0 ) {
-      //dom->ad->hmmfrom--;
-      //dom->iali--;
-      left_change++;
-    }
-    //look right
-    int right_change=0;
-    while ( data->fwd_scores[K * (dom->ad->hmmto+right_change+1) + seq[(dom->jali+right_change+1)]] > 0 ) {
-      //dom->ad->hmmto++;
-      //dom->jali++;
-      right_change++;
-    }
-    printf ("push out: %d\n", left_change+right_change);
-    */
-
-    ali_len = dom->jali - dom->iali + 1;
-
-
-    //walk in on both ends of the alignment
-    while (i < ali_len) {
-      if (dom->scores_per_pos[i] != -eslINFINITY) {
-        left_sum += dom->scores_per_pos[i];
-        if (left_sum < left_min) {
-          left_min = left_sum;
-          left_neg = i;
-        }
-      }
-      i++;
-    }
-
-    i = dom->ad->N-1;
-    while (i >= 0) {
-      if (dom->scores_per_pos[i] != -eslINFINITY) {
-        right_sum += dom->scores_per_pos[i];
-        if (right_sum < right_min) {
-          right_min = right_sum;
-          right_neg = i;
-        }
-      }
-      i--;
-    }
-    // because gaps scores are stored in the right-most entry for the gap,
-    // this may leave us with a trailing gap.  Clean that up
-    if (dom->ad->model[right_neg] == '.' ||  dom->ad->aseq[right_neg] == '-') {
-      while (dom->ad->model[right_neg] == '.' ||  dom->ad->aseq[right_neg] == '-')
-        right_neg--;
-      right_neg++;
-    }
-
-
-    //if the negatives have overlapped, pin whichever is responsible for the lowest
-    // score, and recompute the other side.
-    if (left_neg > right_neg) {
-
-      if (right_min < left_min) {
-        //recompute left_min
-        left_neg = -1;
-        left_min = 0.0;
-        left_sum = 0.0;
-        i = 0;
-        while (i < right_neg - 1) {
-          if (dom->scores_per_pos[i] != -eslINFINITY) {
-            left_sum += dom->scores_per_pos[i];
-            if (left_sum < left_min) {
-              left_min = left_sum;
-              left_neg = i;
-            }
-          }
-          i++;
-        }
-      } else {
-        //recompute right min
-        right_neg = dom->ad->N;
-        right_min = 0.0;
-        right_sum = 0.0;
-        i = dom->ad->N-1;
-        while (i >= left_neg+1) {
-          if (dom->scores_per_pos[i] != -eslINFINITY) {
-            right_sum += dom->scores_per_pos[i];
-            if (right_sum < right_min) {
-              right_min = right_sum;
-              right_neg = i;
-            }
-          }
-          i--;
-        }
-        // because gaps scores are stored in the right-most entry for the gap,
-        // this may leave us with a trailing gap.  Clean that up
-        if (dom->ad->model[right_neg] == '.' ||  dom->ad->aseq[right_neg] == '-') {
-          while (dom->ad->model[right_neg] == '.' ||  dom->ad->aseq[right_neg] == '-')
-            right_neg--;
-          right_neg++;
-        }
-
-      }
-    }
-
-
-    //modify positions
-    for (i=0; i<=left_neg; i++) {
-      if (dom->ad->aseq[i] != '-')  dom->iali++;
-      if (dom->ad->model[i] != '.') dom->ad->hmmfrom++;
-    }
-    for (i=dom->ad->N - 1; i>=right_neg; i--)  {
-      if (dom->ad->aseq[i] != '-')  dom->jali--;
-      if (dom->ad->model[i] != '.') dom->ad->hmmto--;
-    }
-    dom->ad->N = right_neg - left_neg - 1;
-
-
-    //overriding hqfrom and hqto, as I expect those to be removed in the next release
-    dom->ad->sqfrom = dom->iali;
-    dom->ad->sqto   = dom->jali;
-
-    for (i=0; i<dom->ad->N; i++)
-      dom->scores_per_pos[i] = dom->scores_per_pos[i+left_neg+1];
-
-
-    //modify strings
-    if (dom->ad->model) {
-      dom->ad->model[right_neg] = '\0';
-      dom->ad->model = dom->ad->model + left_neg + 1;
-    }
-    if (dom->ad->mline) {
-      dom->ad->mline[right_neg] = '\0';
-      dom->ad->mline = dom->ad->mline + left_neg + 1;
-    }
-    if (dom->ad->aseq) {
-      dom->ad->aseq[right_neg] = '\0';
-      dom->ad->aseq = dom->ad->aseq + left_neg + 1;
-    }
-    if (dom->ad->rfline) {
-      dom->ad->rfline[right_neg] = '\0';
-      dom->ad->rfline = dom->ad->rfline + left_neg + 1;
-    }
-    if (dom->ad->mmline) {
-      dom->ad->mmline[right_neg] = '\0';
-      dom->ad->mmline = dom->ad->mmline + left_neg + 1;
-    }
-    if (dom->ad->csline) {
-      dom->ad->csline[right_neg] = '\0';
-      dom->ad->csline = dom->ad->csline + left_neg + 1;
-    }
-    if (dom->ad->ppline) {
-      dom->ad->ppline[right_neg] = '\0';
-      dom->ad->ppline = dom->ad->ppline + left_neg + 1;
-    }
-
-  return eslOK;
 
 }
 
@@ -1273,8 +1082,6 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
   {
 
       dom = pli->ddef->dcl + d;
-      p7_pli_computeAliScores(dom, subseq, data, om->abc->Kp);
-
 
      /* note: the initial bitscore of a hit depends on the window_len of the
       * current window. Here, the score is modified (reduced) by treating
@@ -1309,7 +1116,13 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
       if (pli->mode == p7_SCAN_MODELS)  nres = ESL_MIN(window_len,om->max_length);
       else                              nres = pli->nres;
 
-      if ( p7_pli_TargetReportable(pli, dom_score, dom_lnP + log((float)nres / om->max_length) ) ) {
+      if ( !p7_pli_TargetReportable(pli, dom_score, dom_lnP + log((float)nres / om->max_length) ) ) {
+
+        p7_alidisplay_Destroy(dom->ad);
+
+      } else {
+
+        p7_pli_computeAliScores(dom, subseq, data, om->abc->Kp);
 
         p7_tophits_CreateNextHit(hitlist, &hit);
 
@@ -1648,8 +1461,10 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
     /* In scan mode, if it passes the MSV filter, read the rest of the profile */
     if (pli->hfp)
     {
-      p7_oprofile_ReadRest(pli->hfp, om);
-      if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) goto ERROR;
+      if (om->base_w == 0 &&  om->scale_w == 0) { // we haven't already read this hmm (if we're on the second strand, we would've)
+        p7_oprofile_ReadRest(pli->hfp, om);
+        if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) goto ERROR;
+      }
     }
 
     if (data->prefix_lengths == NULL) { //otherwise, already filled in
