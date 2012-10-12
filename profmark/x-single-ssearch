@@ -13,11 +13,10 @@ use lib "${top_srcdir}/easel/demotic";
 use demotic_fasta;
 
 $fasta      = "${top_builddir}/bin/ssearch36";
-$opts       = "-q -E 200 -d 0 -H";
+$opts       = "-q -E 200 -m 8";
 # -q     = quiet (batch) mode
 # -E 200 = report top hits deeper into noise, down to E=200 (default was 10)
-# -d 0   = suppresses alignment output; we only need the hit list
-# -H     = suppresses histogram output.
+# -m 8   = tabular output. E-value is field 11.
 
 if (! -d $top_builddir)                                 { die "didn't find FASTA/SSEARCH build directory $top_builddir"; }
 if (! -d $top_srcdir)                                   { die "didn't find H3 source directory $top_srcdir"; }
@@ -31,25 +30,30 @@ while (<TABLE>)
 {
     ($msaname) = split;
 
-    $cmd  = "esl-afetch -o $wrkdir/$msaname.sto $msafile $msaname";                           $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Fetch the query MSA from the benchmark; tmp .sto file here
-    $cmd  = "esl-seqstat --amino -a $wrkdir/$msaname.sto | grep "^=" | awk '{print \$2}'";    $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n", next MSA; }   # Extract list of indiv seq names. --amino for robustness, some msa's v. small
+    $cmd  = qq!esl-afetch -o $wrkdir/$msaname.sto $msafile $msaname!;                         $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Fetch the query MSA from the benchmark; tmp .sto file here
+    $cmd  = qq!esl-seqstat --amino -a $wrkdir/$msaname.sto | grep "^=" | awk '{print \$2}'!;  $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n", next MSA; }   # Extract list of indiv seq names. --amino for robustness, some msa's v. small
     @qnames = split(/^/,$output); 
     chop (@qnames);
     $qname = $qnames[0];
-    $cmd = "esl-sfetch -o $wrkdir/$msaname.query $wrkdir/$msaname.sto $qname > /dev/null";              `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Pick a single seq (first one) to tmp file; tmp .query file here
+    $cmd  = qq!esl-sfetch -o $wrkdir/$msaname.query $wrkdir/$msaname.sto $qname > /dev/null!;           `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Pick a single seq (first one) to tmp file; tmp .query file here
 
     # search it against the benchmark db
-    $cmd = "$fasta $opts $wrkdir/$msaname.query $fafile |";                           if (! open(FASTA, "$cmd"))            { print "FAILED: $cmd\n", next MSA; }
+    $cmd = qq!$fasta $opts $wrkdir/$msaname.query $fafile | sort -g -k11 |!;         if (! open(OUTPUT, "$cmd"))            { print "FAILED: $cmd\n", next MSA; }
 
-    if (! demotic_fasta::parse(\*FASTA)) { print "FAILED: demotic fasta parser on $msaname\n"; next MSA; }
-    for ($i = 0; $i < $demotic_fasta::nhits; $i++)
+    # sort and %saw are protecting us against multiple hits to same target in the tabular output.
+    %saw = ();
+    while (<OUTPUT>)
     {
-	$target   = $demotic_fasta::hit_target[$i];
-	$pval     = $demotic_fasta::hit_Eval[$i];
-	$bitscore = $demotic_fasta::hit_bitscore[$i];
-	printf OUTFILE "%g %.1f %s %s\n", $pval, $bitscore, $target, $msaname;
+	if (/^\#/) { next; }
+	@fields   = split(' ', $_);
+	$target   = $fields[1];
+	$pval     = $fields[10];
+	$bitscore = $fields[11];
+	if (! $saw{$target}) { 	printf OUTFILE "%g %.1f %s %s\n", $pval, $bitscore, $target, $msaname; }
+	$saw{$target} = 1;
     }
-    close FASTA;
+    close OUTPUT;
+
     unlink "$wrkdir/$msaname.query";
     unlink "$wrkdir/$msaname.sto";
 }

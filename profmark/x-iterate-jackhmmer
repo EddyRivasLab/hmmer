@@ -35,16 +35,17 @@ while (<TABLE>)
 {
     ($msaname) = split;
 
-    $cmd  = "esl-afetch -o $wrkdir/$msaname.sto $msafile $msaname";                                      $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Fetch the query MSA from the benchmark; tmp .sto file here
-    $cmd  = "esl-seqstat --amino -a $wrkdir/$msaname.sto | grep "^=" | awk '{print \$2}'";               $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n", next MSA; }   # Extract list of indiv seq names. --amino for robustness, some msa's v. small
+    # From each query alignment, extract the first sequence as our query.
+    $cmd  = qq!esl-afetch -o $wrkdir/$msaname.sto $msafile $msaname!;                                      $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Fetch the query MSA from the benchmark; tmp .sto file here
+    $cmd  = qq!esl-seqstat --amino -a $wrkdir/$msaname.sto | grep "^=" | awk '{print \$2}'!;               $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n", next MSA; }   # Extract list of indiv seq names. --amino for robustness, some msa's v. small
     @qnames = split(/^/,$output); 
     chop (@qnames);
     $qname = $qnames[0];
-    $cmd = "esl-sfetch -o $wrkdir/$msaname.query $wrkdir/$msaname.sto $qname > /dev/null";                         `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Pick a single seq (first one) to tmp file; tmp .query file here
+    $cmd = qq!esl-sfetch -o $wrkdir/$msaname.query $wrkdir/$msaname.sto $qname                  > /dev/null!;        `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Pick a single seq (first one) to tmp file; tmp .query file here
 
-    $cmd = "$jackhmmer $iteropts -A $wrkdir/$msaname.jck $wrkdir/$msaname.query $fafile.iter > /dev/null";         `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Iterate n times on the .iter intermediate database (NR, whatever); alignment to tmp .jck file
-    $cmd = "$hmmbuild --hand $wrkdir/$msaname.hmm $wrkdir/$msaname.jck > /dev/null`";                              `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Build a model from .jck, using the same architecture (--hand)
-    $cmd = "$hmmsearch $searchopts --tblout $wrkdir/$msaname.tmp $wrkdir/$msaname.hmm $fafile > /dev/null";        `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Search against benchmark .fa file; results to tmp .tmp tbl file
+    $cmd = qq!$jackhmmer $iteropts -A $wrkdir/$msaname.jck $wrkdir/$msaname.query $fafile.iter  > /dev/null!;        `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Iterate n times on the .iter intermediate database (NR, whatever); alignment to tmp .jck file
+    $cmd = qq!$hmmbuild --amino --hand $wrkdir/$msaname.hmm $wrkdir/$msaname.jck                > /dev/null!;        `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Build a model from .jck, using the same architecture (--hand)
+    $cmd = qq!$hmmsearch $searchopts --tblout $wrkdir/$msaname.tmp $wrkdir/$msaname.hmm $fafile > /dev/null!;        `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Search against benchmark .fa file; results to tmp .tmp tbl file
 
     if (! open(OUTPUT, "$wrkdir/$msaname.tmp")) { print "FAILED: to open $wrkdir/$msaname.tmp"; next MSA; }
     while (<OUTPUT>)

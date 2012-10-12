@@ -1,22 +1,23 @@
 #! /usr/bin/perl -w
 
-BEGIN {
-    $top_builddir  = shift;
-    $top_srcdir    = shift;
-    $wrkdir        = shift;
-    $tblfile       = shift;
-    $msafile       = shift;
-    $fafile        = shift;
-    $outfile       = shift;
-}
-use lib "${top_srcdir}/easel/demotic";
-use demotic_blast;
+$top_builddir  = shift;
+$top_srcdir    = shift;
+$wrkdir        = shift;
+$tblfile       = shift;
+$msafile       = shift;
+$fafile        = shift;
+$outfile       = shift;
 
-$blastp      = "${top_builddir}/bin/blastall";
-$blastopts   = "-p blastp -a 1 -v 9999 -b 0";
-# -a 1    : 1 cpu
-# -v 9999 : long hit list, well into noise
-# -b 0    : suppress alignment output, benchmark doesn't use it
+$blastp      = "${top_builddir}/bin/blastp";
+$blastopts   = "-evalue 100 -outfmt 6 -num_threads 1 -seg yes -max_target_seqs 9999";
+# explanation of options
+#   -evalue 100           : to go deeper into noise
+#   -outfmt 6             : tabular output, for directly & simply parsing results, obviating need for our demotic parsers
+#   -num_threads 1        : run a single thread/cpu  (benchmark sends independent jobs to our cluster nodes, uses all cpus that way already)
+#   -seg yes              : filters query seq with SEG
+#   -max_target_seqs 9999 : show a large hit list, deep into noise (benchmark calculates its own false positive threshold)
+#                            (with outfmt 6, num_descriptions and num_alignments options don't work)
+# also will add -query <query.fa> -db <database> 
 
 if (! -d $top_builddir)                                 { die "didn't find BLAST build directory $top_builddir"; }
 if (! -d $top_srcdir)                                   { die "didn't find H3 source directory $top_srcdir"; }
@@ -30,25 +31,26 @@ while (<TABLE>)
 {
     ($msaname) = split;
 
-    $cmd  = "esl-afetch -o $wrkdir/$msaname.sto $msafile $msaname";                           $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Fetch the query MSA from the benchmark; tmp .sto file here
-    $cmd  = "esl-seqstat --amino -a $wrkdir/$msaname.sto | grep "^=" | awk '{print \$2}'";    $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n", next MSA; }   # Extract list of indiv seq names. --amino for robustness, some msa's v. small
+    $cmd  = qq!esl-afetch -o $wrkdir/$msaname.sto $msafile $msaname!;                           $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Fetch the query MSA from the benchmark; tmp .sto file here
+    $cmd  = qq!esl-seqstat --amino -a $wrkdir/$msaname.sto | grep "^=" | awk '{print \$2}'!;    $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n", next MSA; }   # Extract list of indiv seq names. --amino for robustness, some msa's v. small
     @qnames = split(/^/,$output); 
     chop (@qnames);
     $qname = $qnames[0];
-    $cmd = "esl-sfetch -o $wrkdir/$msaname.query $wrkdir/$msaname.sto $qname > /dev/null";              `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Pick a single seq (first one) to tmp file; tmp .query file here
+    $cmd = qq!esl-sfetch -o $wrkdir/$msaname.query $wrkdir/$msaname.sto $qname > /dev/null!;              `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Pick a single seq (first one) to tmp file; tmp .query file here
 
-    $cmd = "$blastp -d $fafile -i $wrkdir/$msaname.query $blastopts |";              if (! open(BLASTP, "$cmd"))            { print "FAILED: $cmd\n"; next MSA; }
+    $cmd = qq!$blastp -db $fafile -query $wrkdir/$msaname.query $blastopts | sort -g -k11 |!;  if (! open(BLASTP, "$cmd"))    { print "FAILED: $cmd\n"; next MSA; }
 
-    if (! demotic_blast::parse(\*BLASTP)) {  print "FAILED: demotic blastp parser on $msaname\n"; next MSA; }
-
-    for ($i = 0; $i < $demotic_blast::nhits; $i++)
+    %saw = ();
+    while (<BLASTP>) 
     {
-	$target   = $demotic_blast::hit_target[$i];
-	$pval     = $demotic_blast::hit_Eval[$i];
-	$bitscore = $demotic_blast::hit_bitscore[$i];
-	printf OUTFILE "%g %.1f %s %s\n", $pval, $bitscore, $target, $msaname;
+	if (/^\#/) { next; }
+	@fields   = split(' ', $_);
+	$target   = $fields[1];
+	$pval     = $fields[10];
+	$bitscore = $fields[11];
+	if (! $saw{$target}) { 	printf OUTFILE "%g %.1f %s %s\n", $pval, $bitscore, $target, $msaname; }
+	$saw{$target} = 1;
     }
-
     close BLASTP;
     unlink "$wrkdir/$msaname.sto";
     unlink "$wrkdir/$msaname.query";

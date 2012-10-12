@@ -23,14 +23,14 @@ while (<TABLE>)
 {
     ($msaname) = split;
 
-    $cmd  = "esl-afetch -o $wrkdir/$msaname.sto $msafile $msaname";                                      $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Fetch the query MSA from the benchmark; tmp .sto file here
-    $cmd  = "esl-seqstat --amino -a $wrkdir/$msaname.sto | grep "^=" | awk '{print \$2}'";               $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n", next MSA; }   # Extract list of indiv seq names. --amino for robustness, some msa's v. small
+    $cmd  = qq!esl-afetch -o $wrkdir/$msaname.sto $msafile $msaname!;                                      $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Fetch the query MSA from the benchmark; tmp .sto file here
+    $cmd  = qq!esl-seqstat --amino -a $wrkdir/$msaname.sto | grep "^=" | awk '{print \$2}'!;               $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n", next MSA; }   # Extract list of indiv seq names. --amino for robustness, some msa's v. small
     @qnames = split(/^/,$output); 
     chop (@qnames);
     $qname = $qnames[0];
-    $cmd = "esl-sfetch -o $wrkdir/$msaname.query $wrkdir/$msaname.sto $qname > /dev/null";                         `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Pick a single seq (first one) to tmp file; tmp .query file here
+    $cmd = qq!esl-sfetch -o $wrkdir/$msaname.query $wrkdir/$msaname.sto $qname > /dev/null!;                         `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Pick a single seq (first one) to tmp file; tmp .query file here
 
-    $cmd = "$phmmer $searchopts --tblout $wrkdir/$msaname.tmp $wrkdir/$msaname.query $fafile > /dev/null";         `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # phmmer against benchmark db; tmp .tmp output file here
+    $cmd = qq!$phmmer $searchopts --tblout $wrkdir/$msaname.tmp $wrkdir/$msaname.query $fafile > /dev/null!;         `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # phmmer against benchmark db; tmp .tmp output file here
 
     if (! open(OUTPUT, "$wrkdir/$msaname.tmp")) { print "FAILED: to open $wrkdir/$msaname.tmp"; next MSA; }
     while (<OUTPUT>)
