@@ -36,7 +36,7 @@ ifndef V
 		        ${MAKE} -C $$subdir
 endif
 
-.PHONY: all dev distclean clean
+.PHONY: all dev distclean clean tags-append
 
 all:    ${PROGS}
 dev:    ${PROGS}
@@ -55,6 +55,12 @@ distclean: clean
 clean:
 	-rm -f *.o *~ ${PROGS} 
 	-rm -f *.gcno
+
+tags-append:
+	etags -o ${top_srcdir}/TAGS -a ${srcdir}/x-*
+	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.pl
+	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.c
+	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.in
 
 ################################################################
 # @LICENSE@

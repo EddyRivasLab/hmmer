@@ -1,3 +1,4 @@
+
 top_srcdir     = @top_srcdir@
 srcdir         = @srcdir@
 VPATH          = @srcdir@
@@ -11,13 +12,13 @@ ifndef V
 endif
 
 
-.PHONY: pdf install uninstall clean distclean
+.PHONY: pdf install uninstall clean distclean 
 
 pdf:
 	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} pdf
 
 install: 
-	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} install
+	${QUIET_SUBDIR0}man  ${QUIET_SUBDIR1} install
 
 uninstall:
 	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} uninstall

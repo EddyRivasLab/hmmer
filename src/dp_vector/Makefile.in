@@ -1,3 +1,33 @@
+MODULE = dp_vector
+
+OBJS =  p7_filtermx.o\
+        p7_checkptmx.o\
+	p7_oprofile.o\
+	p7_oprofile_mpi.o\
+	ssvfilter.o\
+	msvfilter.o\
+	vitfilter.o\
+	fwdfilter.o\
+	io.o
+
+HDRS =  p7_filtermx.h\
+        p7_checkptmx.h\
+	p7_oprofile.h\
+	p7_oprofile_mpi.h\
+	ssvfilter.h\
+	msvfilter.h\
+	vitfilter.h\
+	fwdfilter.h\
+	io.h
+
+UTESTS = 
+
+STATS  = 
+
+BENCHMARKS = 
+
+EXAMPLES =
+
 top_srcdir  = @top_srcdir@
 srcdir      = @srcdir@
 VPATH       = @srcdir@ 
@@ -26,64 +56,7 @@ ESLDIR         = @HMMER_ESLDIR@
 MYLIBDIRS      = -L../../${ESLDIR} -L.. 
 MYINCDIRS      = -I../../${ESLDIR} \
 		 -I${top_srcdir}/easel \
-		 -I. \
-		 -I.. \
-		 -I${srcdir} \
-		 -I${top_srcdir}/src \
-		 -I${srcdir}/.. 
-
-OBJS =  decoding.o\
-	fwdback.o\
-	io.o\
-	ssvfilter.o\
-	msvfilter.o\
-	vitfilter.o\
-	fwdfilter.o\
-	null2.o\
-	optacc.o\
-	stotrace.o\
-	p7_filtermx.o\
-	p7_omx.o\
-	p7_oprofile.o\
-	mpi.o\
-	fm.o
-
-HDRS =  impl_sse.h\
-	p7_filtermx.h
-
-UTESTS = @MPI_UTESTS@\
-	decoding_utest\
-	fwdback_utest\
-	fwdfilter_utest\
-	io_utest\
-	msvfilter_utest\
-	null2_utest\
-	optacc_utest\
-	stotrace_utest\
-	vitfilter_utest
-
-STATS  = fwdfilter_stats
-
-BENCHMARKS = @MPI_BENCHMARKS@\
-	decoding_benchmark\
-	fwdback_benchmark\
-	fwdfilter_benchmark\
-	msvfilter_benchmark\
-	null2_benchmark\
-	optacc_benchmark\
-	stotrace_benchmark\
-	vitfilter_benchmark
-
-EXAMPLES =\
-	msvfilter_example\
-	vitfilter_example\
-	fwdfilter_example\
-	fwdback_example\
-	io_example\
-	optacc_example\
-	p7_oprofile_example\
-	stotrace_example
-
+		 -I${top_srcdir}/src
 
 # beautification magic stolen from git 
 QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
@@ -97,28 +70,28 @@ ifndef V
 		        ${MAKE} -C $$subdir
 endif
 
-.PHONY: all dev check tests install uninstall distclean clean 
+.PHONY: all dev check tests install uninstall distclean clean tags-append
 
 
-all:   libhmmer-impl.stamp
+all:   libhmmer-${MODULE}.stamp
 dev:   ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
 check: ${UTESTS}
 tests: ${UTESTS}
 
-libhmmer-impl.stamp: ${OBJS}
+libhmmer-${MODULE}.stamp: ${OBJS}
 	${QUIET_AR}${AR} -r ../libhmmer.a $? > /dev/null 2>&1
 	@${RANLIB} ../libhmmer.a
-	@echo "impl_lib objects compiled:\c" > $@
+	@echo ${MODULE} "objects compiled:\c" > $@
 	@date >> $@
 
 .FORCE:
 
-${OBJS}:   ${HDRS} ../hmmer.h 
+${OBJS}:   ${HDRS}
 
 .c.o:  
 	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -o $@ -c $<
 
-${UTESTS}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
+${UTESTS}: libhmmer-${MODULE}.stamp ../libhmmer.a ${HDRS} 
 	@BASENAME=`echo $@ | sed -e 's/_utest//'| sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
@@ -133,7 +106,7 @@ ${UTESTS}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
 	fi ;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${STATS}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
+${STATS}: libhmmer-${MODULE}.stamp ../libhmmer.a ${HDRS} 
 	@BASENAME=`echo $@ | sed -e 's/_stats//' | sed -e 's/^p7_//'`;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_STATS ;\
@@ -148,7 +121,7 @@ ${STATS}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
 	fi ;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${BENCHMARKS}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
+${BENCHMARKS}: libhmmer-${MODULE}.stamp ../libhmmer.a ${HDRS} 
 	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'`;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_BENCHMARK ;\
@@ -163,7 +136,7 @@ ${BENCHMARKS}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
 	fi ;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${EXAMPLES}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
+${EXAMPLES}: libhmmer-${MODULE}.stamp ../libhmmer.a ${HDRS} 
 	@BASENAME=`echo $@ | sed -e 's/_example//'| sed -e 's/^p7_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_EXAMPLE ;\
@@ -193,15 +166,20 @@ distclean: clean
 	-rm -f Makefile 
 
 clean:
-	-rm -f libhmmer-impl.stamp
-	-rm -f ${UTESTS}
-	-rm -f ${BENCHMARKS}
-	-rm -f ${EXAMPLES}
+	-rm -f libhmmer-${MODULE}.stamp
+	-rm -f ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out cscope.out
 	-rm -f *.gcno
-	for prog in ${UTESTS} ${BENCHMARKS} ${EXAMPLES}; do\
+	for prog in ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do\
 	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi;\
 	done
+
+
+tags-append:
+	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.c
+	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.h
+	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.in
+#	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.pl
 
 ################################################################
 # @LICENSE@
