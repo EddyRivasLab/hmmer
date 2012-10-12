@@ -1,15 +1,18 @@
+/* P7_HMM: a core model.
+ */
 #ifndef P7_HMM_INCLUDED
 #define P7_HMM_INCLUDED
 
 #include "p7_config.h"
 
+#include <stdio.h>
+
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_random.h"
+#include "esl_sq.h"
 
-
-/*****************************************************************
- * 1. P7_HMM: a core model.
- *****************************************************************/
+#include "hmmer.h"
 
 /* Bit flags used in <hmm->flags>: optional annotation in an HMM
  * 
@@ -120,7 +123,6 @@ typedef struct p7_hmm_s {
 } P7_HMM;
 
 
-/* p7_hmm.c */
 /*      1. The P7_HMM object: allocation, initialization, destruction. */
 extern P7_HMM *p7_hmm_Create(int M, const ESL_ALPHABET *abc);
 extern P7_HMM *p7_hmm_CreateShell(void);
@@ -154,3 +156,14 @@ extern int     p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol);
 extern int     p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol);
 /*      5. Other routines in the API */
 extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *iocc);
+
+
+#endif /*P7_HMM_INCLUDED*/
+
+/*****************************************************************
+ * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
+ *****************************************************************/
+

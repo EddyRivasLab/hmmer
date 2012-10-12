@@ -1,3 +1,24 @@
+#ifndef P7_BUILDER_INCLUDED
+#define P7_BUILDER_INCLUDED
+
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_msa.h"
+#include "esl_random.h"
+#include "esl_dmatrix.h"
+#include "esl_scorematrix.h"
+
+#include "base/p7_bg.h"
+#include "base/p7_hmm.h"
+#include "base/p7_prior.h"
+#include "base/p7_profile.h"
+#include "base/p7_trace.h"
+
+#include "dp_vector/p7_oprofile.h"
+
 
 #define p7_DEFAULT_WINDOW_BETA  1e-7
 
@@ -60,3 +81,13 @@ extern void        p7_builder_Destroy(P7_BUILDER *bld);
 extern int p7_Builder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om, ESL_MSA **opt_postmsa);
 extern int p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq,   P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE  **opt_tr,    P7_PROFILE **opt_gm, P7_OPROFILE **opt_om); 
 extern int p7_Builder_MaxLength      (P7_HMM *hmm, double emit_thresh);
+
+#endif /*P7_BUILDER_INCLUDED*/
+
+/*****************************************************************
+ * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
+ *****************************************************************/
+

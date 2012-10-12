@@ -1,7 +1,5 @@
-
-/*****************************************************************
- * 3. P7_BG: a null (background) model.
- *****************************************************************/
+/* P7_BG: a null (background) model.
+ */
 
 /* This really contains three different things: 
  *     
@@ -21,6 +19,17 @@
  * Someday we might pull this apart into two or three separate
  * objects.
  */
+#ifndef P7_BG_INCLUDED
+#define P7_BG_INCLUDED
+
+#include "p7_config.h"
+
+#include <stdio.h>
+
+#include "easel.h"
+#include "esl_hmm.h"
+#include "esl_alphabet.h"
+
 typedef struct p7_bg_s {
   float   *f;		/* null1 background residue frequencies [0..K-1]: set at initialization    */
   float    p1;		/* null1's transition prob: p7_bg_SetLength() sets this from target seq L  */
@@ -47,3 +56,13 @@ extern int    p7_bg_Write(FILE *fp, P7_BG *bg);
 
 extern int    p7_bg_SetFilter  (P7_BG *bg, int M, const float *compo);
 extern int    p7_bg_FilterScore(P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc);
+
+
+#endif /*P7_BG_INCLUDED*/
+
+/************************************************************
+ * @LICENSE@
+ *
+ * SVN $Id: hmmer.h 4252 2012-10-12 22:59:55Z eddys $
+ * SVN $URL: https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk/src/hmmer.h $
+ ************************************************************/

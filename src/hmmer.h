@@ -1,5 +1,5 @@
-#ifndef P7_HMMERH_INCLUDED
-#define P7_HMMERH_INCLUDED
+#ifndef P7_HMMER_INCLUDED
+#define P7_HMMER_INCLUDED
 
 #include "p7_config.h"
 #include "esl_getopts.h"
@@ -79,7 +79,7 @@ extern void         p7_banner(FILE *fp, char *progname, char *banner);
 extern ESL_GETOPTS *p7_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char *banner, char *usage);
 extern int          p7_AminoFrequencies(float *f);
 
-#endif /*P7_HMMERH_INCLUDED*/
+#endif /*P7_HMMER_INCLUDED*/
 
 /************************************************************
  * @LICENSE@
