@@ -15,7 +15,6 @@
 
 #include "base/p7_domain.h"
 #include "base/p7_alidisplay.h"
-#include "p7_pipeline.h"
 
 #define p7_HITFLAGS_DEFAULT 0
 #define p7_IS_INCLUDED      (1<<0)
@@ -109,22 +108,6 @@ extern int         p7_tophits_GetMaxAccessionLength(P7_TOPHITS *h);
 extern int         p7_tophits_GetMaxShownLength(P7_TOPHITS *h);
 extern void        p7_tophits_Destroy(P7_TOPHITS *h);
 
-extern int p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N, int W);
-extern int p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs);
-extern int p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli);
-extern int p7_tophits_CompareRanking(P7_TOPHITS *th, ESL_KEYHASH *kh, int *opt_nnew);
-extern int p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw);
-extern int p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw);
-extern int p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, 
-				ESL_SQ **inc_sqarr, P7_TRACE **inc_trarr, int inc_n, int optflags,
-				ESL_MSA **ret_msa);
-extern int p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header);
-extern int p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header);
-extern int p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli);
-extern int p7_tophits_TabularTail(FILE *ofp, const char *progname, enum p7_pipemodes_e pipemode, 
-				  const char *qfile, const char *tfile, const ESL_GETOPTS *go);
-extern int p7_tophits_LongInserts(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int min_length);
-extern int p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th );
 
 #endif /*P7_TOPHITS_INCLUDED*/
 

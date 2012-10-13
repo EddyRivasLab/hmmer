@@ -6,7 +6,6 @@
  *   2. Unit tests.
  *   3. Test driver.
  *   4. Copyright and license.
- *
  */
 #include "p7_config.h"
 
@@ -21,7 +20,9 @@
 #include "esl_random.h"
 #include "esl_dirichlet.h"
 
-#include "hmmer.h"
+#include "base/p7_scoredata.h"
+#include "build/p7_builder.h"	/* only for p7_DEFAULT_WINDOW_BETA, which we should move */
+#include "dp_vector/p7_oprofile.h"
 
 
 /*********************************************************************

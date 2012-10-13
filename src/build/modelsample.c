@@ -10,7 +10,7 @@
 
 #include "base/p7_hmm.h"
 #include "base/p7_prior.h"
-#include "base/p7_hmm_sample.h"
+#include "build/modelsample.h"
 
 
 /* Function:  p7_hmm_Sample()

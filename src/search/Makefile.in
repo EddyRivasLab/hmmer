@@ -1,12 +1,10 @@
-MODULE = build
+MODULE = search
 
-OBJS =  build.c\
-	evalues.c\
-	eweight.c\
-	modelsample.c\
-	modelstats.c\
-	p7_builder.c\
-	seqmodel.c
+OBJS =  modelconfig.c\
+	null3.c\
+	p7_pipeline.c\
+	tophits_output.c\
+	tophits_output_tabular.c
 
 HDRS =  
 

@@ -9,8 +9,10 @@
  *
  */
 #include "p7_config.h"
-#include "hmmer.h"
 
+#include "easel.h"
+
+#include "base/p7_hmmwindow.h"
 
 /*********************************************************************
  *# 1. The P7_MSVDATA object: allocation, initialization, destruction.

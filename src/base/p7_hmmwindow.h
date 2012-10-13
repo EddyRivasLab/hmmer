@@ -2,6 +2,7 @@
 #define P7_HMMWINDOW_INCLUDED
 
 #include "p7_config.h"
+#include "easel.h"		/* Easel handles portable declartion of int32_t, etc. */
 
 typedef struct p7_hmm_window_s {
   float      score;

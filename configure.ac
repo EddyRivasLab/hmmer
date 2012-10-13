@@ -473,13 +473,16 @@ AC_CONFIG_FILES([
   documentation/userguide/Makefile
   src/Makefile
   src/base/Makefile
+  src/build/Makefile
   src/daemon/Makefile
   src/dp_reference/Makefile
   src/dp_sparse/Makefile
   src/dp_vector/Makefile
   src/experiments/Makefile
   src/fm/Makefile
+  src/misc/Makefile
   src/programs/Makefile
+  src/search/Makefile
   src/utilities/Makefile
   testsuite/Makefile
   benchmarks/Makefile

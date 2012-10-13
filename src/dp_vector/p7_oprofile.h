@@ -9,6 +9,15 @@
 #include <pmmintrin.h>   /* DENORMAL_MODE */
 #endif
 
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_random.h"
+
+#include "base/general.h"
+#include "base/p7_bg.h"
+#include "base/p7_hmm.h"
+#include "base/p7_profile.h"
+
 
 /* The OPROFILE is striped [Farrar07] and interleaved, as is the DP matrix.
  * For example, the layout of a profile for an M=14 model (xref J2/46):
@@ -140,7 +149,6 @@ p7_oprofile_FGetEmission(const P7_OPROFILE *om, int k, int x)
 }
 
 
-/* p7_oprofile.c */
 extern P7_OPROFILE *p7_oprofile_Create(int M, const ESL_ALPHABET *abc);
 extern int          p7_oprofile_IsLocal(const P7_OPROFILE *om);
 extern void         p7_oprofile_Destroy(P7_OPROFILE *om);

@@ -1,26 +1,18 @@
 SUBDIRS    = base\
 	     dp_vector
+	     # build\
              # daemon\
              # dp_reference\
              # dp_sparse\
              # experiments\
+             # misc\
              # programs\
+             # search\
              # utilities
 
 HDRS =  
 
-OBJS =  emit.o\
-	h2_io.o\
-	logsum.o\
-	modelconfig.o\
-	mpisupport.o\
-	p7_hmmwindow.o\
-	p7_null3.o\
-	p7_pipeline.o\
-	p7_scoredata.o\
-	p7_tophits.o\
-	p7_trace_metrics.o\
-	tracealign.o
+OBJS = 
 
 STATS = 
 

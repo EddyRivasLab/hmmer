@@ -1,17 +1,14 @@
 /* Mixture Dirichlet priors for profile HMMs.
- * 
- * 
- * SRE, Sat Mar 24 09:12:44 2007 [Janelia]
- * SVN $Id$
  */
 
 #include "p7_config.h"
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_dirichlet.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
+#include "base/p7_prior.h"
 
 
 /* Function:  p7_prior_CreateAmino()
@@ -399,4 +396,7 @@ p7_ParameterEstimation(P7_HMM *hmm, const P7_PRIOR *pri)
 
 /*****************************************************************
  * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
  *****************************************************************/

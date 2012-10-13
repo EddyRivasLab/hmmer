@@ -27,8 +27,9 @@
 #include <stdio.h>
 
 #include "easel.h"
-#include "esl_hmm.h"
 #include "esl_alphabet.h"
+#include "esl_hmm.h"
+
 
 typedef struct p7_bg_s {
   float   *f;		/* null1 background residue frequencies [0..K-1]: set at initialization    */

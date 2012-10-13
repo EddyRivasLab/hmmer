@@ -18,10 +18,12 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_fileparser.h"
 #include "esl_hmm.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
+#include "base/general.h"
+#include "base/p7_bg.h"
 
 
 /*****************************************************************

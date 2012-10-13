@@ -11,28 +11,24 @@
 #include "esl_stopwatch.h"
 
 #include "base/p7_bg.h"
+#include "base/p7_hmmfile.h"
+#include "base/p7_hmmwindow.h"
+#include "base/p7_scoredata.h"
+#include "base/p7_tophits.h"
 #include "dp_vector/p7_oprofile.h"
 #include "fm/fm.h"
-
-#include "p7_hmmfile.h"
-#include "p7_hmmwindow.h"
-#include "p7_scoredata.h"
-#include "p7_tophits.h"
 
 enum p7_pipemodes_e { p7_SEARCH_SEQS = 0, p7_SCAN_MODELS = 1 };
 enum p7_zsetby_e    { p7_ZSETBY_NTARGETS = 0, p7_ZSETBY_OPTION = 1, p7_ZSETBY_FILEINFO = 2 };
 
 typedef struct p7_pipeline_s {
   /* Dynamic programming matrices                                           */
+#if 0			/* SRE: WE WILL REWITE THIS SOON */
   P7_OMX     *oxf;		/* one-row Forward matrix, accel pipe       */
   P7_OMX     *oxb;		/* one-row Backward matrix, accel pipe      */
   P7_OMX     *fwd;		/* full Fwd matrix for domain envelopes     */
   P7_OMX     *bck;		/* full Bck matrix for domain envelopes     */
-
-  /* Domain postprocessing                                                  */
-  ESL_RANDOMNESS *r;		/* random number generator                  */
-  int             do_reseeding; /* TRUE: reseed for reproducible results    */
-  P7_DOMAINDEF   *ddef;		/* domain definition workflow               */
+#endif
 
   /* Reporting threshold settings                                           */
   int     by_E;		        /* TRUE to cut per-target report off by E   */

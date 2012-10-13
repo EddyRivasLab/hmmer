@@ -1,12 +1,11 @@
-MODULE = build
+MODULE = misc
 
-OBJS =  build.c\
-	evalues.c\
-	eweight.c\
-	modelsample.c\
-	modelstats.c\
-	p7_builder.c\
-	seqmodel.c
+OBJS =  emit.c\
+	h2_io.c\
+	logsum.c\
+	mpisupport.c\
+	p7_trace_metrics.c\
+	tracealign.c
 
 HDRS =  
 

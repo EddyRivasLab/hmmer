@@ -21,10 +21,11 @@
 #endif
 
 #include "easel.h"
+#include "esl_alphabet.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
-
+#include "base/p7_profile.h"
+#include "base/p7_trace.h"
 
 /*****************************************************************
  * 1. The P7_PROFILE object: allocation, initialization, destruction.

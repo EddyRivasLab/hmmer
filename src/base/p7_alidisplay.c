@@ -20,8 +20,10 @@
 
 #include "easel.h"
 
+#include "base/p7_alidisplay.h"
 #include "base/p7_trace.h"
 #include "dp_vector/p7_oprofile.h"
+
 
 /*****************************************************************
  * 1. The P7_ALIDISPLAY object
@@ -1366,5 +1368,8 @@ main(int argc, char **argv)
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SVN $Id$
+ * SVN $URL$
  *****************************************************************/
 

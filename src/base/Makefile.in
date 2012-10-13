@@ -5,9 +5,11 @@ OBJS =  general.o\
 	p7_bg.o\
 	p7_hmm.o\
 	p7_hmmfile.o\
-	p7_hmm_sample.o\
+	p7_hmmwindow.o\
 	p7_prior.o\
 	p7_profile.o\
+	p7_scoredata.o\
+	p7_tophits.o\
 	p7_trace.o
 
 HDRS =  

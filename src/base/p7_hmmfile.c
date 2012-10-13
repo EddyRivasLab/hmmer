@@ -24,10 +24,14 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
-#include "esl_ssi.h"     /* this gives us esl_byteswap */
+#include "esl_ssi.h"         /* this gives us esl_byteswap */
 #include "esl_vectorops.h"   /* gives us esl_vec_FCopy()   */
 
-#include "hmmer.h"
+#include "base/p7_bg.h"
+#include "base/p7_hmm.h"
+#include "base/p7_hmmfile.h"
+
+#include "build/evalues.h"
 
 /* Magic numbers identifying binary formats.
  * Do not change the old magics! Necessary for backwards compatibility.
