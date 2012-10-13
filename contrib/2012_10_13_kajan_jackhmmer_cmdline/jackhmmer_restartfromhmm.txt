@@ -1,0 +1,111 @@
+--- a/src/jackhmmer.c
++++ b/src/jackhmmer.c
+@@ -62,6 +62,7 @@
+   /* name           type         default   env  range   toggles     reqs   incomp                             help                                                  docgroup*/
+   { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  NULL,            "show brief help on version and usage",                         1 },
+   { "-N",           eslARG_INT,      "5", NULL, "n>0",     NULL,    NULL,  NULL,            "set maximum number of iterations to <n>",                      1 },
++  { "--hmmprime",   eslARG_INFILE,  NULL, NULL, NULL,      NULL,    NULL,  NULL,            "HMM checkpoint to prime search with",                          1 },
+ /* Control of output */
+   { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,            "direct output to file <f>, not stdout",                        2 },
+   { "-A",           eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,            "save multiple alignment of hits to file <s>",                  2 },
+@@ -256,6 +257,7 @@
+   fprintf(ofp, "# query sequence file:             %s\n", qfile);
+   fprintf(ofp, "# target sequence database:        %s\n", dbfile);
+   if (esl_opt_IsUsed(go, "-N"))          fprintf(ofp, "# maximum iterations set to:       %d\n",      esl_opt_GetInteger(go, "-N"));
++  if (esl_opt_IsUsed(go, "--hmmprime"))  fprintf(ofp, "# priming HMM checkpoint:          %s\n",      esl_opt_GetString(go, "--hmmprime"));
+   if (esl_opt_IsUsed(go, "-o"))          fprintf(ofp, "# output directed to file:         %s\n",      esl_opt_GetString(go, "-o"));
+   if (esl_opt_IsUsed(go, "-A"))          fprintf(ofp, "# MSA of hits saved to file:       %s\n",      esl_opt_GetString(go, "-A"));
+   if (esl_opt_IsUsed(go, "--tblout"))    fprintf(ofp, "# per-seq hits tabular output:     %s\n",      esl_opt_GetString(go, "--tblout"));
+@@ -401,6 +403,7 @@
+   int              qformat  = eslSQFILE_UNKNOWN;  /* format of qfile                                 */
+   int              dbformat = eslSQFILE_UNKNOWN;  /* format of dbfile                                */
+   ESL_SQFILE      *qfp      = NULL;		  /* open qfile                                      */
++  P7_HMMFILE      *hfp      = NULL;		  /* open input HMM file                             */
+   ESL_SQFILE      *dbfp     = NULL;               /* open dbfile                                     */
+   ESL_ALPHABET    *abc      = NULL;               /* sequence alphabet                               */
+   P7_BUILDER      *bld      = NULL;               /* HMM construction configuration                  */
+@@ -414,6 +417,7 @@
+   int              nnew_targets;
+   int              prv_msa_nseq;
+   int              status   = eslOK;
++  int              hstatus  = eslOK;
+   int              qstatus  = eslOK;
+   int              sstatus  = eslOK;
+ 
+@@ -480,6 +484,15 @@
+   else if (status != eslOK)        esl_fatal ("Unexpected error %d opening sequence file %s\n", status, cfg->qfile);
+   qsq = esl_sq_CreateDigital(abc);
+ 
++  // lkajan: open HMM file
++  char		*hmmfile = esl_opt_GetString(go, "--hmmprime"); // query HMM file
++  if( hmmfile )
++  {
++      status = p7_hmmfile_Open(hmmfile, NULL, &hfp);
++      if      (status == eslENOTFOUND) p7_Fail("Failed to open hmm file %s for reading.\n",                      hmmfile);
++      else if (status == eslEFORMAT)   p7_Fail("Unrecognized format, trying to open hmm file %s for reading.\n", hmmfile);
++      else if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n", status,          hmmfile);
++  }
+ #ifdef HMMER_THREADS
+   /* initialize thread data */
+   if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
+@@ -530,13 +543,22 @@
+   while ((qstatus = esl_sqio_Read(qfp, qsq)) == eslOK)
+     {
+       P7_HMM          *hmm     = NULL;	     /* HMM - only needed if checkpointed        */
++      P7_HMM          *phmm    = NULL;	     /* priming HMM - only needed if primed      */
+       P7_HMM         **ret_hmm = NULL;	     /* HMM - only needed if checkpointed        */
++      P7_PROFILE      *gm      = NULL;
+       P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
+       P7_TRACE        *qtr     = NULL;       /* faux trace for query sequence            */
+       ESL_MSA         *msa     = NULL;       /* multiple alignment of included hits      */
+       
+       if (esl_opt_IsOn(go, "--chkhmm")) ret_hmm = &hmm;
+ 
++      // lkajan: read in an HMM and prime search with it - here, so that the below 'continue' does not affect this
++      if(hfp)
++      {
++	  hstatus = p7_hmmfile_Read(hfp, &abc, &phmm);
++	  if (hstatus != eslOK){ p7_Fail("Failed to read from hmm file %s.\n", hmmfile); phmm = NULL; }
++      }
++
+       nquery++;
+       if (qsq->n == 0) continue; /* skip zero length queries as if they aren't even present. */
+ 
+@@ -560,6 +582,20 @@
+ 	    {
+ 	      p7_SingleBuilder(bld, qsq, info->bg, ret_hmm, &qtr, NULL, &om); /* bypass HMM - only need model */
+ 
++	      // lkajan: from hmmsearch.c:425
++	      if( phmm )
++	      {
++      		p7_hmm_Destroy(hmm);
++		p7_oprofile_Destroy(om);
++      		p7_profile_Destroy(gm);
++
++		hmm = p7_hmm_Clone(phmm);
++		gm = p7_profile_Create (hmm->M, abc);
++		om = p7_oprofile_Create(hmm->M, abc);
++      		p7_ProfileConfig(hmm, info->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
++      		p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
++	      }
++
+ 	      prv_msa_nseq = 1;
+ 	    }
+ 	  else 
+@@ -699,6 +735,8 @@
+ 
+       esl_msa_Destroy(msa);
+       p7_oprofile_Destroy(om);
++      p7_profile_Destroy(gm);
++      p7_hmm_Destroy(phmm);
+       p7_trace_Destroy(qtr);
+       esl_sq_Reuse(qsq);
+       esl_keyhash_Reuse(kh);
+@@ -732,6 +770,7 @@
+   esl_keyhash_Destroy(kh);
+   esl_sqfile_Close(qfp);
+   esl_sqfile_Close(dbfp);
++  p7_hmmfile_Close(hfp);
+   esl_sq_Destroy(qsq);  
+   esl_stopwatch_Destroy(w);
+   p7_builder_Destroy(bld);

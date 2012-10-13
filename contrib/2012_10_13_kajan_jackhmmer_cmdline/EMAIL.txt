@@ -1,0 +1,43 @@
+From: Laszlo Kajan <lkajan@rostlab.org>
+Date: October 12, 2012 7:13:41 PM EDT
+To: Debian Med Packaging Team <debian-med-packaging@lists.alioth.debian.org>, <eddys@janelia.hhmi.org>
+Cc: <hmmer@janelia.hhmi.org>
+Subject: Feature Suggestion with Patch
+
+Dear Sean!
+
+I am Laszlo Kajan from Burkhard Rost's lab, bioinformatician, Debian maintainer.
+
+I would like to use jackhmmer to search a smaller database to build up an HMM, and then search a bigger database with this model. The present
+version of jackhmmer (that I know of, 3.0-4 in Debian) does not support this fully, because:
+
+1: jackhmmer can not be started from a query /and/ a model, so I can not use the checkpoint model to restart it on the big database.
+
+2: hmmsearch can not be started from a model /and/ a query, so that it would produce an alignment including the query as jackhmmer does; it also
+can not do iterative search.
+
+3: jackhmmer saves the checkpoint HMM /before/ doing another iteration, therefore in order to get the checkpoint for 3 iterations I have to run
+actually 4. I would like to save those clock cycles.
+
+I have prepared patches that solve 1 and 3 and allow me to search the big database with a model built on the smaller one, using jackhmmer
+(patches attached, series: jackhmmer_chkhmmstop, jackhmmer_restartfromhmm, jackhmmer_stop_restart_test). The results obtained from the restarted
+search are identical to a non-restart, when performed on the same database, i.e. 3 iterations on a database give the same results as one
+iteration starting from a checkpoint HMM saved before the 3rd iteration. This make me hope that my patches - though I do not have much knowledge
+about the internals of hmmer3 - are on the right path.
+
+* Please comment on my patches and let me know if my approach is all right.
+
+* Please consider adding the features (1 and 3) to hmmer in your next release.
+
+ If you do approve my patches (or something with similar results), then I would like to include them in the Debian release of hmmer3. However
+this should only be a temporary solution, until your next release.
+
+Please treat my feature suggestion and patches as a sign of my great appreciation of hmmer3. Thank you for releasing hmmer3 under a free
+software license.
+
+Best regards,
+
+Laszlo Kajan
+Rost Lab
+Debian Maintainer
+   

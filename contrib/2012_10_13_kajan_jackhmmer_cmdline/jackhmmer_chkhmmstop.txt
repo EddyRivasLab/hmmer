@@ -1,0 +1,38 @@
+--- a/src/jackhmmer.c
++++ b/src/jackhmmer.c
+@@ -68,6 +68,7 @@
+   { "--tblout",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,            "save parseable table of per-sequence hits to file <s>",        2 },
+   { "--domtblout",  eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,            "save parseable table of per-domain hits to file <s>",          2 },
+   { "--chkhmm",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,            "save HMM checkpoints to files <s>-<iteration>.hmm",            2 },
++  { "--chkhmmskip", eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  NULL,            "skip search after saving HMM checkpoint for last iteration",   2 },
+   { "--chkali",     eslARG_OUTFILE, NULL, NULL, NULL,      NULL,    NULL,  NULL,            "save alignment checkpoints to files <s>-<iteration>.sto",      2 },
+   { "--acc",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  NULL,            "prefer accessions over names in output",                       2 },
+   { "--noali",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,    NULL,  NULL,            "don't output alignments, so output is smaller",                2 },
+@@ -260,6 +261,7 @@
+   if (esl_opt_IsUsed(go, "--tblout"))    fprintf(ofp, "# per-seq hits tabular output:     %s\n",      esl_opt_GetString(go, "--tblout"));
+   if (esl_opt_IsUsed(go, "--domtblout")) fprintf(ofp, "# per-dom hits tabular output:     %s\n",      esl_opt_GetString(go, "--domtblout"));
+   if (esl_opt_IsUsed(go, "--chkhmm"))    fprintf(ofp, "# HMM checkpoint files output:     %s-<i>.hmm\n", esl_opt_GetString(go, "--chkhmm"));
++  if (esl_opt_IsUsed(go, "--chkhmmskip"))fprintf(ofp, "# skipped search after saving HMM checkpoint for last iteration\n");
+   if (esl_opt_IsUsed(go, "--chkali"))    fprintf(ofp, "# MSA checkpoint files output:     %s-<i>.sto\n", esl_opt_GetString(go, "--chkali"));
+   if (esl_opt_IsUsed(go, "--acc"))       fprintf(ofp, "# prefer accessions over names:    yes\n");
+   if (esl_opt_IsUsed(go, "--noali"))     fprintf(ofp, "# show alignments in output:       no\n");
+@@ -599,6 +601,10 @@
+ #endif
+ 	    }
+ 
++		// lkajan: chkhmmskip
++		if( !( esl_opt_GetBoolean(go, "--chkhmmskip") == TRUE && esl_opt_IsOn(go, "--chkhmm") && iteration == maxiterations ) )
++		{
++
+ #ifdef HMMER_THREADS
+ 	  if (ncpus > 0) sstatus = thread_loop(threadObj, queue, dbfp);
+ 	  else           sstatus = serial_loop(info, dbfp);
+@@ -619,6 +625,8 @@
+ 			sstatus, dbfp->filename);
+ 	    }
+ 
++	    	} // lkajan: chkhmmskip
++
+ 	  /* merge the results of the search results */
+ 	  for (i = 1; i < infocnt; ++i)
+ 	    {
