@@ -9,23 +9,17 @@ SUBDIRS    = base\
 
 HDRS =  
 
-OBJS =  build.o\
-	emit.o\
-	evalues.o\
-	eweight.o\
+OBJS =  emit.o\
 	h2_io.o\
 	logsum.o\
 	modelconfig.o\
-	modelstats.o\
 	mpisupport.o\
-	p7_builder.o\
 	p7_hmmwindow.o\
 	p7_null3.o\
 	p7_pipeline.o\
 	p7_scoredata.o\
 	p7_tophits.o\
 	p7_trace_metrics.o\
-	seqmodel.o\
 	tracealign.o
 
 STATS = 
