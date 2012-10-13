@@ -1,16 +1,17 @@
 /* Miscellaneous summary statistics calculated for HMMs and profiles.
- * 
- * SRE, Fri May  4 11:43:20 2007 [Janelia]
- * SVN $Id$
  */
 
 #include "p7_config.h"
 
 #include "easel.h"
+#include "esl_random.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
+#include "base/p7_bg.h"
+#include "base/p7_hmm.h"
+#include "p7_hmmwindow.h"
 
+#include "modelstats.h"
 
 
 /* Function:  p7_MeanMatchInfo()
@@ -95,44 +96,6 @@ p7_MeanMatchRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg)
     KL += esl_vec_FRelEntropy(hmm->mat[k], bg->f, hmm->abc->K);
   KL /= (double) hmm->M;
   return KL;
-}
-
-
-
-double
-p7_MeanForwardScore(const P7_HMM *hmm, const P7_BG *bg)
-{
-  int             L   = 350;
-  int             N   = 100;
-  P7_PROFILE     *gm  = p7_profile_Create(hmm->M, hmm->abc);
-  P7_GMX         *gx  = p7_gmx_Create(gm->M, L);
-  ESL_SQ         *sq  = esl_sq_CreateDigital(hmm->abc);
-  ESL_RANDOMNESS *r   = esl_randomness_CreateFast(0);
-  float           fsc;
-  float           nullsc;
-  double          bitscore;
-  double          sum = 0.;
-  int             i;
-
-  if (p7_profile_ConfigLocal(gm, hmm, bg, L)              != eslOK) p7_Die("failed to configure profile");
-  for (i = 0; i < N; i++)
-    {
-      if (p7_profile_SetLength(gm, L)                     != eslOK) p7_Die("failed to reconfig profile length");
-      if (p7_ProfileEmit(r, hmm, gm, bg, sq, NULL)        != eslOK) p7_Die("failed to emit sequence");
-      if (p7_profile_SetLength(gm, sq->n)                 != eslOK) p7_Die("failed to reconfig profile length");
-      if (p7_gmx_GrowTo(gx, gm->M, sq->n)                 != eslOK) p7_Die("failed to grow the matrix");
-      if (p7_GForward(sq->dsq, sq->n, gm, gx, &fsc)       != eslOK) p7_Die("failed to run Forward");
-      if (p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc)      != eslOK) p7_Die("failed to run bg_NullOne()");
-      bitscore = (fsc - nullsc) / eslCONST_LOG2;
-
-      sum += bitscore;
-    }
-  
-  esl_randomness_Destroy(r);
-  esl_sq_Destroy(sq);
-  p7_gmx_Destroy(gx);
-  p7_profile_Destroy(gm);
-  return (sum / (double) N);
 }
 
 
@@ -388,4 +351,7 @@ p7_hmm_GetSimpleRepeats(P7_HMM *hmm, int maxK, int min_rep, int min_length, floa
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SVN $Id$
+ * SVN $URL$
  *****************************************************************/

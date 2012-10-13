@@ -20,7 +20,12 @@
 #include "easel.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
+#include "base/p7_bg.h"
+#include "base/p7_hmm.h"
+#include "base/p7_profile.h"
+
+#include "modelconfig.h"
+
 
 static int set_local_entry (P7_PROFILE *gm, const P7_HMM *hmm);
 static int set_glocal_entry(P7_PROFILE *gm, const P7_HMM *hmm);
@@ -965,6 +970,6 @@ profile_local_endpoints(ESL_RANDOMNESS *r, P7_HMM *core, P7_PROFILE *gm, ESL_SQ 
 /*****************************************************************
  * @LICENSE@
  * 
- * SVN $URL$
  * SVN $Id$
+ * SVN $URL$
  *****************************************************************/

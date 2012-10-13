@@ -14,8 +14,7 @@
 #include "esl_sq.h"
 
 #include "base/p7_domain.h"
-
-#include "p7_alidisplay.h"
+#include "base/p7_alidisplay.h"
 #include "p7_pipeline.h"
 
 #define p7_HITFLAGS_DEFAULT 0

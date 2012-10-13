@@ -13,10 +13,13 @@
  */
 #ifndef P7_FILTERMX_INCLUDED
 #define P7_FILTERMX_INCLUDED
+
 #include "p7_config.h"
-#include "hmmer.h"
-#include "p7_refmx.h"
-#include "impl_sse.h"
+
+#include <stdio.h>
+
+#include "dp_reference/p7_refmx.h"
+
 
 /*****************************************************************
  * 1. P7_FILTERMX

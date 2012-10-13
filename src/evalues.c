@@ -7,8 +7,6 @@
  *   4. Benchmark driver
  *   5. Copyright and license information
  * 
- * SRE, Mon Aug  6 13:00:06 2007
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -18,7 +16,20 @@
 #include "esl_randomseq.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
+#include "base/p7_bg.h"
+#include "base/p7_hmm.h"
+#include "base/p7_profile.h"
+
+#include "dp_vector/p7_oprofile.h"
+#include "dp_vector/p7_filtermx.h"
+#include "dp_vector/msvfilter.h"
+#include "dp_vector/vitfilter.h"
+#include "dp_vector/fwdfilter.h"
+
+#include "p7_builder.h"
+#include "evalues.h"
+#include "modelconfig.h"
+#include "modelstats.h"
 
 /*****************************************************************
  * 1. p7_Calibrate():  model calibration wrapper 
@@ -660,4 +671,7 @@ main(int argc, char **argv)
 
 /*****************************************************************
  * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
  *****************************************************************/

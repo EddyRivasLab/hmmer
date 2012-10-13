@@ -11,8 +11,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "hmmer.h"
 #include "easel.h"
+
+#include "base/p7_bg.h"
+#include "base/p7_hmm.h"
 
 static int h2_multiline(FILE *fp, const char *pfx, char *s);
 static int printprob(FILE *fp, int fieldwidth, float p, float null);

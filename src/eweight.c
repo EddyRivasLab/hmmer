@@ -4,8 +4,6 @@
  *    L. Steven Johnson, "Remote Protein Homology Detection Using Hidden Markov Models",
  *    Ph.D. thesis, Washington University School of Medicine, 2006.
  *    
- * SRE, Fri May  4 14:01:54 2007 [Janelia] [Tom Waits, Orphans]
- * SVN $Id$   
  */
 
 #include "p7_config.h"
@@ -13,7 +11,10 @@
 #include "easel.h"
 #include "esl_rootfinder.h"
 
-#include "hmmer.h"
+#include "base/p7_bg.h"
+#include "base/p7_hmm.h"
+#include "base/p7_prior.h"
+#include "modelstats.h"
 
 struct ew_param_s {
   const P7_HMM    *hmm;		/* ptr to the original count-based HMM, which remains unchanged */
@@ -96,6 +97,14 @@ p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_PRIOR *pri, double
   *ret_Neff = (double) hmm->nseq;
   return status;
 }
+
+
+/*****************************************************************
+ * @LICENSE@
+ *
+ * SVN $Id$   
+ * SVN $URL$
+ *****************************************************************/
 
 
 

@@ -17,7 +17,11 @@
 #include "esl_sq.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
+#include "base/p7_bg.h"
+#include "base/p7_hmm.h"
+#include "base/p7_profile.h"
+#include "base/p7_trace.h"
+
 
 static int sample_endpoints(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int *ret_kstart, int *ret_kend);
 
@@ -514,6 +518,7 @@ sample_endpoints(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int *ret_kstart, int *
 #include "esl_alphabet.h"
 #include "esl_random.h"
 #include "esl_sq.h"
+
 #include "hmmer.h"
 
 int

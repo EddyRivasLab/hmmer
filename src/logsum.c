@@ -44,9 +44,10 @@
  * Forward.
  */
 #include "p7_config.h"
-#include <math.h>
-#include "hmmer.h"
 
+#include <math.h>
+
+#include "easel.h"
 
 /* p7_LOGSUM_SCALE defines the precision of the calculation; the
  * default of 1000.0 means rounding differences to the nearest 0.001

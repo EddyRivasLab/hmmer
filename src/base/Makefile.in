@@ -1,8 +1,10 @@
 MODULE = base
 
 OBJS =  general.o\
+	p7_alidisplay.o\
 	p7_bg.o\
 	p7_hmm.o\
+	p7_hmmfile.o\
 	p7_hmm_sample.o\
 	p7_prior.o\
 	p7_profile.o\

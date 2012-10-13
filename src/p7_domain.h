@@ -3,7 +3,7 @@
 
 #include "p7_config.h"
 
-#include "p7_alidisplay.h"
+#include "base/p7_alidisplay.h"
 
 typedef struct p7_dom_s { 
   int            ienv, jenv;

@@ -7,6 +7,7 @@
 
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/p7_filtermx.h"
+#include "dp_sparse/p7_sparsemx.h"
 
 extern int p7_ForwardFilter (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *opt_sc);
 extern int p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, P7_SPARSEMASK *sm);
