@@ -2,12 +2,10 @@
  * 
  * Contents:
  *   1. Miscellaneous functions for H3
- *   2. Unit tests
- *   3. Test driver
- *   4. License and copyright 
- *
- * SRE, Fri Jan 12 13:19:38 2007 [Janelia] [Franz Ferdinand, eponymous]
- * SVN $Id$
+ *   2. Error handling (Die, Fail)
+ *   3. Unit tests
+ *   4. Test driver
+ *   5. License and copyright 
  */
 
 #include "p7_config.h"
@@ -16,8 +14,10 @@
 #include <float.h>
 
 #include "easel.h"
+
 #include "esl_getopts.h"
-#include "hmmer.h"
+
+#include "base/general.h"
 
 /*****************************************************************
  * 1. Miscellaneous functions for H3
@@ -186,9 +186,58 @@ p7_AminoFrequencies(float *f)
 }
 
 /*****************************************************************
- * 2. Unit tests
+ * 2. Error handling.
+ * 
+ * HMMER's fatal error messages distinguish between user errors
+ * ("failure", with p7_Fail()) and internal faults ("death", with
+ * p7_Die()). For now, though, there is no difference between the two
+ * functions. Someday we might have p7_Die() print a comforting
+ * apology, or provide some help on how to report bugs to us;
+ * p7_Fail() might provide some pointers on where to read more
+ * documentation.
  *****************************************************************/
-#ifdef p7HMMER_TESTDRIVE
+
+/* Function:  p7_Die()
+ * Synopsis:  Handle a fatal exception (something that's our fault)
+ * Incept:    SRE, Fri Jan 12 08:54:45 2007 [Janelia]
+ */
+void
+p7_Die(char *format, ...)
+{
+  va_list  argp;
+                                /* format the error mesg */
+  fprintf(stderr, "\nFATAL: ");
+  va_start(argp, format);
+  vfprintf(stderr, format, argp);
+  va_end(argp);
+  fprintf(stderr, "\n");
+  fflush(stderr);
+  exit(1);
+}
+
+/* Function:  p7_Fail()
+ * Synopsis:  Handle a user error (something that's the user's fault).
+ * Incept:    SRE, Fri Jan 12 08:54:45 2007 [Janelia]
+ */
+void
+p7_Fail(char *format, ...)
+{
+  va_list  argp;
+                                /* format the error mesg */
+  fprintf(stderr, "\nError: ");
+  va_start(argp, format);
+  vfprintf(stderr, format, argp);
+  va_end(argp);
+  fprintf(stderr, "\n");
+  fflush(stderr);
+  exit(1);
+}
+
+
+/*****************************************************************
+ * 3. Unit tests
+ *****************************************************************/
+#ifdef p7GENERAL_TESTDRIVE
 
 static void
 utest_alphabet_config(int alphatype)
@@ -201,14 +250,14 @@ utest_alphabet_config(int alphatype)
   if (abc->Kp > p7_MAXCODE)                           esl_fatal(msg);
   esl_alphabet_Destroy(abc);
 }
-#endif /*p7HMMER_TESTDRIVE*/
+#endif /*p7GENERAL_TESTDRIVE*/
 
   
 
 /*****************************************************************
- * 3. Test driver
+ * 4. Test driver
  *****************************************************************/
-#ifdef p7HMMER_TESTDRIVE
+#ifdef p7GENERAL_TESTDRIVE
 
 /* gcc -o hmmer_utest -g -Wall -I../easel -L../easel -I. -L. -Dp7HMMER_TESTDRIVE hmmer.c -lhmmer -leasel -lm
  * ./hmmer_utest
@@ -237,10 +286,13 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /*p7HMMER_TESTDRIVE*/
+#endif /*p7GENERAL_TESTDRIVE*/
 
 
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SVN $Id$
+ * SVN $URL$
  *****************************************************************/

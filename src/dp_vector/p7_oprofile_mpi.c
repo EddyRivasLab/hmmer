@@ -559,9 +559,9 @@ p7_oprofile_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc,
  * 2. Benchmark driver.
  *****************************************************************/
 
-#ifdef p7MPI_BENCHMARK
+#ifdef p7OPROFILE_MPI_BENCHMARK
 /* 
-  mpicc -g -Wall -L. -I. -L ../easel -I ../easel -D p7MPI_BENCHMARK -o benchmark-mpi mpi.c -lhmmer -leasel -lm
+  mpicc -g -Wall -L. -I. -L ../easel -I ../easel -D p7OPROFILE_MPI_BENCHMARK -o benchmark-mpi mpi.c -lhmmer -leasel -lm
   qsub -N benchmark-mpi -j y -R y -b y -cwd -V -pe lam-mpi-tight 2 'mpirun C ./benchmark-mpi  ~/notebook/1227-msp-statistics/Pfam.hmm > bench.out'
   qsub -N benchmark-mpi -j y -R y -b y -cwd -V -pe lam-mpi-tight 2 'mpirun C ./benchmark-mpi -b ~/notebook/1227-msp-statistics/Pfam.hmm > bench.out'
  */
@@ -666,7 +666,7 @@ main(int argc, char **argv)
 /*****************************************************************
  * 3. Unit tests
  *****************************************************************/
-#ifdef p7MPI_TESTDRIVE
+#ifdef p7OPROFILE_MPI_TESTDRIVE
 
 static void
 utest_oprofileSendRecv(int my_rank, int nproc)
@@ -723,16 +723,16 @@ utest_oprofileSendRecv(int my_rank, int nproc)
   esl_randomness_Destroy(r);
   return;
 }
-#endif /*p7MPI_TESTDRIVE*/
+#endif /*p7OPROFILE_MPI_TESTDRIVE*/
 /*---------------------- end, unit tests ------------------------*/
 
 
 /*****************************************************************
  * 4. Test driver.
  *****************************************************************/
-#ifdef p7MPI_TESTDRIVE
+#ifdef p7OPROFILE_MPI_TESTDRIVE
 
-/* mpicc -o mpi_utest -g -Wall -I../easel -L../easel -I. -L. -Dp7MPI_TESTDRIVE mpi.c -lhmmer -leasel -lm
+/* mpicc -o mpi_utest -g -Wall -I../easel -L../easel -I. -L. -Dp7OPROFILE_MPI_TESTDRIVE mpi.c -lhmmer -leasel -lm
  * In an MPI environment: (qlogin -pe lam-mpi-tight 2; setenv JOB_ID <jobid>; setenv TMPDIR /tmp/<jobid>....
  *    mpirun C ./mpi_utest
  */
@@ -767,7 +767,7 @@ main(int argc, char **argv)
   return 0;
 }
 
-#endif /*p7MPI_TESTDRIVE*/
+#endif /*p7OPROFILE_MPI_TESTDRIVE*/
 /*---------------------- end, test driver -----------------------*/
 
 
@@ -779,11 +779,14 @@ main(int argc, char **argv)
  */
 void p7_mpi_DoAbsolutelyNothing(void) { return; }
 
-#if defined p7MPI_TESTDRIVE || p7MPI_BENCHMARK || p7MPI_EXAMPLE
+#if defined p7OPROFILE_MPI_TESTDRIVE || p7OPROFILE_MPI_BENCHMARK || p7OPROFILE_MPI_EXAMPLE
 int main(void) { return 0; }
 #endif
 #endif /*HAVE_MPI*/
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SVN $Id$
+ * SVN $URL$
  *****************************************************************/

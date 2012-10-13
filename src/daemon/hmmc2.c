@@ -1,4 +1,4 @@
-/* hmmd: hmmc2 deamon client.
+/* hmmc2: example client that connects to an hmmpgmd daemon
  */
 
 #include "p7_config.h"

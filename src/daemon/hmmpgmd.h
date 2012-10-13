@@ -1,9 +1,16 @@
-/*
- * SVN $URL$
- * SVN $Id$
- */
 #ifndef P7_HMMPGMD_INCLUDED
 #define P7_HMMPGMD_INCLUDED
+
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_sq.h"
+
+#include "base/p7_hmm.h"
+
+#include "p7_pipeline.h"  
 
 
 typedef struct {
@@ -133,4 +140,7 @@ extern void master_process(ESL_GETOPTS *go);
 
 /************************************************************
  * @LICENSE@
+ *
+ * SVN $URL$
+ * SVN $Id$
  ************************************************************/

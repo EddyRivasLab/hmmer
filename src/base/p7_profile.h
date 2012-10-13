@@ -1,6 +1,5 @@
-/*****************************************************************
- * 2. P7_PROFILE: a scoring profile, and its implicit model.
- *****************************************************************/
+/* P7_PROFILE: a scoring profile, and its implicit model.
+ */
 
 /* Whereas the core HMM is a model of a single global alignment to a
  * homologous domain, a profile is a model of local and glocal homologous
@@ -119,6 +118,16 @@
  *   implementations, on both the local and glocal paths, its
  *   parameterization is still present in the P7_PROFILE.
  */
+#ifndef P7_PROFILE_INCLUDED
+#define P7_PROFILE_INCLUDED
+
+#include "p7_config.h"
+
+#include <stdio.h>
+
+#include "esl_alphabet.h"
+
+#include "base/general.h"
 
 
 /* Indices for six special state types x that have transition parameters
@@ -217,3 +226,12 @@ extern int         p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float
 extern char       *p7_profile_DecodeT(int tidx);
 extern int         p7_profile_GetMutePathLogProb(const P7_PROFILE *gm, double *ret_mute_lnp);
 extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol);
+
+#endif /*P7_PROFILE_INCLUDED*/
+
+/*****************************************************************
+ * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
+ *****************************************************************/

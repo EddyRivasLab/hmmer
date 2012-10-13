@@ -1,6 +1,11 @@
 #ifndef P7_CACHEDB_INCLUDED
 #define P7_CACHEDB_INCLUDED
 
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+
 typedef struct {
   char    *name;                   /* name; ("\0" if no name)               */
   ESL_DSQ *dsq;                    /* digitized sequence [1..n]             */
@@ -42,4 +47,7 @@ extern void   p7_seqcache_Close(P7_SEQCACHE *cache);
 
 /************************************************************
  * @LICENSE@
+ *
+ * SVN $Id$
+ * SVN $URL$
  ************************************************************/

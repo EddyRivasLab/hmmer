@@ -1,6 +1,23 @@
-/*****************************************************************
- * 5. P7_HMMFILE:  an HMM save file or database, open for reading.
- *****************************************************************/
+/* P7_HMMFILE:  an HMM save file or database, open for reading.
+ */
+#ifndef P7_HMMFILE_INCLUDED
+#define P7_HMMFILE_INCLUDED
+
+#include "p7_config.h"
+
+#include <stdio.h>
+
+#ifdef HMMER_THREADS
+#include <pthread.h>
+#endif
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_fileparser.h"
+#include "esl_ssi.h"
+
+#include "base/general.h"
+#include "base/p7_hmm.h"
 
 /* These tags need to be in temporal order, so we can do tests
  * like "if (format >= p7_HMMFILE_3b) ..."

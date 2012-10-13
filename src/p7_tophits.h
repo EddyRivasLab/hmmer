@@ -1,6 +1,22 @@
-/*****************************************************************
- * 11. P7_TOPHITS: ranking lists of top-scoring hits
- *****************************************************************/
+/* P7_TOPHITS: ranking lists of top-scoring hits
+ */
+#ifndef P7_TOPHITS_INCLUDED
+#define P7_TOPHITS_INCLUDED
+
+#include "p7_config.h"
+
+#include <stdio.h>
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_keyhash.h"
+#include "esl_msa.h"
+#include "esl_sq.h"
+
+#include "base/p7_domain.h"
+
+#include "p7_alidisplay.h"
+#include "p7_pipeline.h"
 
 #define p7_HITFLAGS_DEFAULT 0
 #define p7_IS_INCLUDED      (1<<0)
@@ -71,7 +87,6 @@ typedef struct p7_tophits_s {
 
 
 
-/* p7_tophits.c */
 extern P7_TOPHITS *p7_tophits_Create(void);
 extern int         p7_tophits_Grow(P7_TOPHITS *h);
 extern int         p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit);
@@ -111,3 +126,12 @@ extern int p7_tophits_TabularTail(FILE *ofp, const char *progname, enum p7_pipem
 				  const char *qfile, const char *tfile, const ESL_GETOPTS *go);
 extern int p7_tophits_LongInserts(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int min_length);
 extern int p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th );
+
+#endif /*P7_TOPHITS_INCLUDED*/
+
+/*****************************************************************
+ * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
+ *****************************************************************/

@@ -1,8 +1,3 @@
-
-
-
-
-
 /* Structure: P7_ALIDISPLAY
  * 
  * Alignment of a sequence domain to an HMM, formatted for printing.
@@ -36,6 +31,20 @@
  * For an alignment of L residues and names C chars long, requires 6L
  * + 2C + 31 bytes; for typical case of L=100,C=10, that's <0.7 Kb.
  */
+#ifndef P7_ALIDISPLAY_INCLUDED
+#define P7_ALIDISPLAY_INCLUDED
+
+#include "p7_config.h"
+
+#include <stdio.h>
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_sq.h"
+
+#include "base/p7_trace.h"
+#include "dp_vector/p7_oprofile.h"
+
 typedef struct p7_alidisplay_s {
   char *rfline;                 /* reference coord info; or NULL        */
   char *mmline;                 /* modelmask coord info; or NULL        */
@@ -78,3 +87,12 @@ extern int            p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_a
 extern int            p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_SQ **ret_sq, P7_TRACE **ret_tr);
 extern int            p7_alidisplay_Dump(FILE *fp, const P7_ALIDISPLAY *ad);
 extern int            p7_alidisplay_Compare(const P7_ALIDISPLAY *ad1, const P7_ALIDISPLAY *ad2);
+
+#endif /*P7_ALIDISPLAY_INCLUDED*/
+
+/*****************************************************************
+ * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
+ *****************************************************************/

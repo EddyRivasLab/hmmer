@@ -2,6 +2,14 @@
  * (alignment) accuracy metrics, calculated/accumulated by
  * p7_trace_metrics() function.
  */
+#ifndef P7_TRACE_METRICS_INCLUDED
+#define P7_TRACE_METRICS_INCLUDED
+
+#include "p7_config.h"
+
+#include <stdio.h>
+
+#include "base/p7_trace.h"
 
 typedef struct {
   int state_tp;
@@ -30,9 +38,11 @@ extern int               p7_trace_metrics(const P7_TRACE *reftr, const P7_TRACE 
 
 extern int               p7_trace_metrics_Dump(FILE *ofp, P7_TRACE_METRICS *tm);
 
+
+#endif /*P7_TRACE_METRICS_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 
- * SVN $URL$
  * SVN $Id$
+ * SVN $URL$
  *****************************************************************/

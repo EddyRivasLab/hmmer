@@ -1,3 +1,10 @@
+#ifndef P7_DOMAIN_INCLUDED
+#define P7_DOMAIN_INCLUDED
+
+#include "p7_config.h"
+
+#include "p7_alidisplay.h"
+
 typedef struct p7_dom_s { 
   int            ienv, jenv;
   int            iali, jali;
@@ -13,3 +20,12 @@ typedef struct p7_dom_s {
   P7_ALIDISPLAY *ad; 
 } P7_DOMAIN;
 
+
+#endif /*P7_DOMAIN_INCLUDED*/
+
+/*****************************************************************
+ * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
+ *****************************************************************/

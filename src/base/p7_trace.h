@@ -33,6 +33,13 @@
 #ifndef P7_TRACE_INCLUDED
 #define P7_TRACE_INCLUDED
 
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_msa.h"
+
+#include "base/p7_hmm.h"
+#include "base/p7_profile.h"
+
 /* State types */
 enum p7t_statetype_e {
   p7T_BOGUS =  0,	/* only needed once: in _EncodeStatetype() as an error code  */
@@ -99,11 +106,9 @@ extern int  p7_trace_GetDomainCoords  (const P7_TRACE *tr, int which, int *ret_i
 
 extern char *p7_trace_DecodeStatetype(char st);
 extern int   p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *dsq, char *errbuf);
-extern int   p7_trace_Dump(FILE *fp, const P7_TRACE *tr);
+extern int   p7_trace_Dump         (FILE *fp, const P7_TRACE *tr);
 extern int   p7_trace_DumpAnnotated(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ *dsq);
-extern int   p7_trace_DumpSuper    (FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ *dsq,
-				    float gamma, const P7_REFMX *fpp, const P7_BANDMX *bpp);
-extern int   p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol);
+extern int   p7_trace_Compare    (P7_TRACE *tr1, P7_TRACE *tr2, float pptol);
 extern int   p7_trace_Score      (P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm,            float *ret_sc);
 extern int   p7_trace_ScoreDomain(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, int which, float *ret_sc);
 extern float p7_trace_GetExpectedAccuracy(const P7_TRACE *tr);

@@ -18,8 +18,10 @@
 #ifndef P7_SPARSEMX_INCLUDED
 #define P7_SPARSEMX_INCLUDED
 
-#include "p7_refmx.h"
+#include "p7_config.h"
 
+#include "base/p7_trace.h"
+#include "dp_reference/p7_refmx.h"
 
 /*****************************************************************
  * 1. The P7_SPARSEMASK structure
@@ -159,7 +161,7 @@ extern int   p7_sparsemx_CompareReference       (const P7_SPARSEMX *sx, const P7
 extern int   p7_sparsemx_CompareReferenceAsBound(const P7_SPARSEMX *sx, const P7_REFMX *rx, float tol);
 extern int   p7_sparsemx_CompareDecoding        (const P7_SPARSEMX *sxe, const P7_SPARSEMX *sxa, float tol);
 extern int   p7_sparsemx_Validate(const P7_SPARSEMX *sx, char *errbuf);
-#endif /*P7_SPARSEMX_INCLUDED*/
+
 
 /*****************************************************************
  * 4. Notes
@@ -289,7 +291,7 @@ extern int   p7_sparsemx_Validate(const P7_SPARSEMX *sx, char *errbuf);
  */
 
 
- 
+#endif /*P7_SPARSEMX_INCLUDED*/ 
 /*****************************************************************
  * @LICENSE@
  * 

@@ -9,10 +9,9 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
-#include "esl_random.h"
 #include "esl_sq.h"
 
-#include "hmmer.h"
+#include "base/general.h"
 
 /* Bit flags used in <hmm->flags>: optional annotation in an HMM
  * 
@@ -144,14 +143,6 @@ extern int     p7_hmm_Scale      (P7_HMM *hmm, double scale);
 extern int     p7_hmm_Renormalize(P7_HMM *hmm);
 /*      4. Debugging and development code. */
 extern int     p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
-extern int     p7_hmm_Sample           (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
-extern int     p7_hmm_SamplePrior      (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, const P7_PRIOR *pri, P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleUngapped   (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleEnumerable (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleEnumerable2(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleUniform    (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, 
-				     float tmi, float tii, float tmd, float tdd,  P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleSinglePathed(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
 extern int     p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol);
 extern int     p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol);
 /*      5. Other routines in the API */

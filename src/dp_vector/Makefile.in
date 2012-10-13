@@ -1,24 +1,18 @@
 MODULE = dp_vector
 
-OBJS =  p7_filtermx.o\
-        p7_checkptmx.o\
+OBJS =  fm_sse.o\
+	fwdfilter.o\
+	io.o\
+	msvfilter.o\
+	p7_filtermx.o\
 	p7_oprofile.o\
 	p7_oprofile_mpi.o\
+	simdvec.o\
 	ssvfilter.o\
-	msvfilter.o\
-	vitfilter.o\
-	fwdfilter.o\
-	io.o
+	vitfilter.o
+#       p7_checkptmx.o\
 
-HDRS =  p7_filtermx.h\
-        p7_checkptmx.h\
-	p7_oprofile.h\
-	p7_oprofile_mpi.h\
-	ssvfilter.h\
-	msvfilter.h\
-	vitfilter.h\
-	fwdfilter.h\
-	io.h
+HDRS =  
 
 UTESTS = 
 
@@ -55,6 +49,7 @@ INSTALL     = @INSTALL@
 ESLDIR         = @HMMER_ESLDIR@
 MYLIBDIRS      = -L../../${ESLDIR} -L.. 
 MYINCDIRS      = -I../../${ESLDIR} \
+		 -I.. \
 		 -I${top_srcdir}/easel \
 		 -I${top_srcdir}/src
 
@@ -170,9 +165,9 @@ clean:
 	-rm -f ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out cscope.out
 	-rm -f *.gcno
-	for prog in ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do\
-	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi;\
-	done
+#	for prog in ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do\
+#	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi;\
+#	done
 
 
 tags-append:

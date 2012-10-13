@@ -1,8 +1,6 @@
 /* master side of the hmmpgmd daemon
  * 
  * MSF, Thu Aug 12, 2010 [Janelia]
- * SVN $Id$
- * SVN $URL$
  */
 #include "p7_config.h"
 
@@ -2074,5 +2072,8 @@ setup_workerside_comm(ESL_GETOPTS *opts, WORKERSIDE_ARGS *args)
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SVN $Id$
+ * SVN $URL$
  *****************************************************************/
 

@@ -31,12 +31,10 @@
 #include "esl_msa.h"
 #include "esl_msafile.h"
 
-#include "hmmer.h"
 #include "base/p7_hmm.h"
 #include "base/p7_trace.h"
 
 #include "p7_builder.h"
-
 
 static int do_modelmask( ESL_MSA *msa);
 static int matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***opt_tr);

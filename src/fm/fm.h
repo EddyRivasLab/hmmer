@@ -1,6 +1,10 @@
+#ifndef P7_FM_INCLUDED
+#define P7_FM_INCLUDED
+
+#include "p7_config.h"
+#include <stdio.h"
 
 #define FM_MAX_LINE 256
-
 
 /* Structure the 2D occ array into a single array.  "type" is either b or sb.
  * Note that one extra count value is required by RLE, one 4-byte int for
@@ -119,3 +123,13 @@ typedef struct fm_diaglist_s {
   int       count;
   int       size;
 } FM_DIAGLIST;
+
+#endif /*P7_FM_INCLUDED*/
+
+/*****************************************************************
+ * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
+ *****************************************************************/
+

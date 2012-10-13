@@ -1,28 +1,23 @@
-SUBDIRS    = dp_vector
-	     # base\
+SUBDIRS    = base\
+	     dp_vector
              # daemon\
              # dp_reference\
              # dp_sparse\
-             # dp_vector\
              # experiments\
              # programs\
              # utilities
 
-HDRS =  hmmer.h 
+HDRS =  
 
 OBJS =  build.o\
 	emit.o\
-	errors.o\
 	evalues.o\
 	eweight.o\
 	h2_io.o\
-	hmmer.o\
 	logsum.o\
 	modelconfig.o\
 	modelstats.o\
 	mpisupport.o\
-	seqmodel.o\
-	tracealign.o\
 	p7_alidisplay.o\
 	p7_builder.o\
 	p7_hmmfile.o\
@@ -31,8 +26,9 @@ OBJS =  build.o\
 	p7_pipeline.o\
 	p7_scoredata.o\
 	p7_tophits.o\
-	p7_trace.o\
-	p7_trace_metrics.o
+	p7_trace_metrics.o\
+	seqmodel.o\
+	tracealign.o
 
 STATS = 
 

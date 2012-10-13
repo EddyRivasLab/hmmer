@@ -52,11 +52,12 @@
 #include "esl_sse.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
-#include "p7_sparsemx.h"
+#include "dp_reference/p7_refmx.h"
+#include "dp_sparse/p7_sparsemx.h"
 
-#include "impl_sse.h"
-#include "p7_filtermx.h"
+#include "dp_vector/p7_oprofile.h"
+#include "dp_vector/p7_filtermx.h"
+#include "dp_vector/fwdfilter.h"
 
 
 /* vectorized DP recursions are tediously lengthy, so for some

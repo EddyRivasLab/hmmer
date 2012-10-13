@@ -22,9 +22,12 @@
 #include <stdarg.h>
 
 #include "easel.h"
-#include "hmmer.h"
-#include "p7_bandmx.h"
-#include "p7_refmx.h"
+#include "esl_alphabet.h"
+#include "esl_msa.h"
+
+#include "base/p7_hmm.h"
+#include "base/p7_profile.h"
+#include "base/p7_trace.h"
 
 /*****************************************************************
  * 1. The P7_TRACE structure
@@ -740,133 +743,6 @@ p7_trace_DumpAnnotated(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const
   fprintf(fp, "%5d %2s\n", z, p7_trace_DecodeStatetype(tr->st[z])); /* T state */
   fprintf(fp, "                                   -------- --------\n");
   fprintf(fp, "                          total:   %8.4f %8.4f\n", sc, accuracy);
-
-  fprintf(fp, "\n#          M = %d\n", tr->M);
-  fprintf(fp,   "#          L = %d\n", tr->L);
-  fprintf(fp,   "# allocation = %d\n", tr->nalloc);
-  return eslOK;
-}
-
-
-int
-p7_trace_DumpSuper(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ *dsq,
-		   float gamma, const P7_REFMX *fpp, const P7_BANDMX *bpp)
-{
-  int   i       = 0;	                       /* current row/residue index */
-  int   g       = 0;                   	       /* current segment index in banded DP matrix */
-  int   z;				       /* index for trace (state path) */
-  int   *bnd_ip = bpp ? bpp->bnd->imem : NULL; /* ia..ib segment bands in the banded post prob DP mx    */
-  int   *bnd_kp = bpp ? bpp->bnd->kmem : NULL; /* ka..kb bands for each row i in banded pp DP mx        */
-  float *xc     = bpp ? bpp->xmx       : NULL; /* current special row in bpp; starts on ia-1            */
-  float *dpc    = bpp ? bpp->dp        : NULL; /* current main row in bpp; starts on ia                 */
-  int   ia      = bpp ? *bnd_ip++      : 0;    /* row coords of current banded segment */
-  int   ib      = bpp ? *bnd_ip++      : 0;    
-  int   ka      = bpp ? *bnd_kp++      : 0;    /* col coords of current band on row */
-  int   kb      = bpp ? *bnd_kp++      : 0;    
-  float esc, tsc;
-  float filterpp;
-  float nonhompp;
-  float pathpp;
-  float gain;
-  float tot_sc       = 0.0;
-  float tot_accuracy = 0.0;
-  float tot_gain     = 0.0;
-
-  if (tr == NULL) { fprintf(fp, "[null trace]\n");                     return eslOK; }
-  if (tr->N == 0) { fprintf(fp, "[no trace: all paths impossible]\n"); return eslOK; }
-
-  fprintf(fp, "#    z st     k     i xi transit  emission postprob filterpp nonhompp   bandpp     gain\n");
-  fprintf(fp, "#----- -- ----- ----- -- -------- -------- -------- -------- -------- -------- --------\n");
-
-  /* For each state z in state path: */
-  for (z = 0; z < tr->N; z++)	
-    {
-      /* Transition score <tsc>: look up in profile. Catch special case of T state at end w/ no transition. */
-      tsc = (z == tr->N-1) ? 0.0f : p7_profile_GetT(gm, tr->st[z], tr->k[z], tr->st[z+1], tr->k[z+1]);
-
-      /* Emission score <esc>: look up in profile */
-      esc = 0.;
-      if (tr->i[z]) {
-	if      (tr->st[z] == p7T_ML || tr->st[z] == p7T_MG) esc = P7P_MSC(gm, tr->k[z], dsq[tr->i[z]]);
-	else if (tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) esc = P7P_ISC(gm, tr->k[z], dsq[tr->i[z]]);
-	i++;
-      }
-
-      /* Posterior prob of dp cell in fwdfilter (local) */
-      filterpp = 0.0f;
-      if (fpp && p7_trace_IsMain(tr->st[z]))
-	filterpp = P7R_MX (fpp, i, tr->k[z], p7R_ML) +
-	           P7R_MX (fpp, i, tr->k[z], p7R_DL) +
- 	           P7R_MX (fpp, i, tr->k[z], p7R_IL);
-
-      /* Posterior prob of nonhomology at this i */
-      nonhompp = fpp ? P7R_XMX (fpp, i, p7R_N) + P7R_XMX (fpp, i, p7R_JJ) + P7R_XMX (fpp, i, p7R_CC) : 0.0f;
-
-      /* Posterior prob of this state assignment in path, as used in gamma-centroid alignment */
-      /*  ... this assumes that xc and dpc are positioned on the current row i...  */
-      pathpp = gain = 0.0;
-      if (bpp) {
-	switch (tr->st[z]) {
-	case p7T_ML: pathpp = dpc[ (tr->k[z] - ka)*p7B_NSCELLS + p7B_ML]; break;
-	case p7T_MG: pathpp = dpc[ (tr->k[z] - ka)*p7B_NSCELLS + p7B_MG]; break;
-	case p7T_IL: pathpp = dpc[ (tr->k[z] - ka)*p7B_NSCELLS + p7B_IL]; break;
-	case p7T_IG: pathpp = dpc[ (tr->k[z] - ka)*p7B_NSCELLS + p7B_IG]; break; 
-	case p7T_DL: pathpp = dpc[ (tr->k[z] - ka)*p7B_NSCELLS + p7B_DL]; break;
-	case p7T_DG: pathpp = dpc[ (tr->k[z] - ka)*p7B_NSCELLS + p7B_DG]; break;
-	case p7T_S:  pathpp = 1.0f;                    break; /* assert(i==0) */
-	case p7T_N:  pathpp = i==0 ? 1.0f : xc[p7B_N]; break;
-	case p7T_B:  pathpp = xc[p7B_B]; break;
-	case p7T_L:  pathpp = xc[p7B_L]; break;
-	case p7T_G:  pathpp = xc[p7B_G]; break;
-	case p7T_E:  pathpp = xc[p7B_E]; break;
-	case p7T_C:  pathpp = xc[p7B_C]; break;
-	case p7T_J:  pathpp = xc[p7B_J]; break;
-	case p7T_T:  pathpp = 1.0f;      break; /* assert(i==L) */
-	}
-	gain = pathpp - 1.0f/(1.0f + gamma);
-      }
-
-      /*            z  st   k   i   xi  tsc    esc   pp   fpp  nonhom  bpp   gain  */
-      fprintf(fp, "%6d %2s %5d %5d  %c %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f\n",
-	      z,
-	      p7_trace_DecodeStatetype(tr->st[z]),
-	      tr->k[z],
-	      tr->i[z],
-	      (tr->i[z] ? gm->abc->sym[dsq[tr->i[z]]] : '-'),
-	      tsc, 
-	      esc, 
-	      (tr->pp ? tr->pp[z] : 0.0f),
-	      filterpp,
-	      nonhompp,
-	      pathpp, 
-	      gain);
-
-      tot_sc       += tsc + esc;
-      tot_accuracy += (tr->pp ? tr->pp[z] : 0.0f);
-      tot_gain     += gain;
-      
-      /* Traversal logic for banded pp matrix. Insanely finicky because of its
-       * implicit indexing.
-       * If next state in trace emits ... and if we're in a segment... we advance the rows...
-       * except if it's ib+1 off the end of the last segment, in which case we leave xc where it
-       * is (on last row ib); never move xc or dpc again, never deference dpc (only xc[NJC]),
-       * and don't attempt to load any new segments.
-       * Note: if z+1 is an N/C/J that will emit position ia-1, you DON'T advance (you're
-       * not in the band yet).
-       */
-      if (bpp && tr->i[z+1])		
-	{
-	  if (g < bpp->bnd->nseg-1 || (g == bpp->bnd->nseg-1 && i<ib)) /* avoid advancing on last segment's ib */
-	    {
-	      if (i >= ia-1 && i <= ib)   xc += p7B_NXCELLS;
-	      if (i >= ia   && i <= ib) { dpc += (kb-ka+1)*p7B_NSCELLS; ka  = *bnd_kp++; kb  = *bnd_kp++; }
-	      /* end of a segment? then load the next one's ia..ib coords */
-	      if (i == ib) { g++; ia = *bnd_ip++; ib = *bnd_ip++; }
-	    }
-	}
-    }
-  fprintf(fp, "#                                 -------- -------- -------- -------- -------- --------\n");
-  fprintf(fp, "#                        total:   %8.2f %8.2f %8s %8s %8s %8.2f\n", tot_sc, tot_accuracy, "", "", "", tot_gain);
 
   fprintf(fp, "\n#          M = %d\n", tr->M);
   fprintf(fp,   "#          L = %d\n", tr->L);

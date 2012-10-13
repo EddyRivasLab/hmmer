@@ -3,8 +3,12 @@
 #ifndef P7_HMMCACHE_INCLUDED
 #define P7_HMMCACHE_INCLUDED
 
+#include "p7_config.h"
+
+#include "easel.h"
 #include "esl_alphabet.h"
-#include "hmmer.h"
+
+#include "dp_vector/p7_oprofile.h"
 
 typedef struct {
   char               *name;        /* name of the hmm database              */

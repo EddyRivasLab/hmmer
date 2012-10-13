@@ -17,10 +17,12 @@
  */          
 #ifndef p7REFMX_INCLUDED
 #define p7REFMX_INCLUDED
+
 #include "p7_config.h"
-#include "hmmer.h"
 
+#include <stdio.h>
 
+#include "base/p7_trace.h"
 
 /*****************************************************************
  * 1. The P7_REFMX object and its access macros
@@ -161,6 +163,7 @@ extern int   p7_refmx_Validate(P7_REFMX *rmx, char *errbuf);
 
 
 #endif /*p7REFMX_INCLUDED*/
+
 /*****************************************************************
  * @LICENSE@
  * 

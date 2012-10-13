@@ -1,6 +1,13 @@
+#ifndef P7_PRIOR_INCLUDED
+#define P7_PRIOR_INCLUDED
 
+#include "p7_config.h"
+
+#include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_dirichlet.h"
+
+#include "base/p7_hmm.h"
 
 typedef struct p7_prior_s {
   ESL_MIXDCHLET *tm;		/*  match transitions */
@@ -16,3 +23,13 @@ extern P7_PRIOR  *p7_prior_CreateLaplace(const ESL_ALPHABET *abc);
 extern void       p7_prior_Destroy(P7_PRIOR *pri);
 
 extern int        p7_ParameterEstimation(P7_HMM *hmm, const P7_PRIOR *pri);
+
+#endif /*P7_PRIOR_INCLUDED*/
+
+/*****************************************************************
+ * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
+ *****************************************************************/
+

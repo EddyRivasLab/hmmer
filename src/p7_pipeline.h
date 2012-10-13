@@ -1,3 +1,24 @@
+#ifndef P7_PIPELINE_INCLUDED
+#define P7_PIPELINE_INCLUDED
+
+#include "p7_config.h"
+
+#include <stdio.h>
+
+#include "easel.h"
+#include "esl_getopts.h"
+#include "esl_sq.h"
+#include "esl_stopwatch.h"
+
+#include "base/p7_bg.h"
+#include "dp_vector/p7_oprofile.h"
+#include "fm/fm.h"
+
+#include "p7_hmmfile.h"
+#include "p7_hmmwindow.h"
+#include "p7_scoredata.h"
+#include "p7_tophits.h"
+
 enum p7_pipemodes_e { p7_SEARCH_SEQS = 0, p7_SCAN_MODELS = 1 };
 enum p7_zsetby_e    { p7_ZSETBY_NTARGETS = 0, p7_ZSETBY_OPTION = 1, p7_ZSETBY_FILEINFO = 2 };
 
@@ -99,3 +120,11 @@ extern int p7_Pipeline_FM           (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCORE
 
 extern int p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w);
 
+#endif /*P7_PIPELINE_INCLUDED*/
+
+/*****************************************************************
+ * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
+ *****************************************************************/
