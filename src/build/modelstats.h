@@ -5,7 +5,7 @@
 
 #include "base/p7_bg.h"
 #include "base/p7_hmm.h"
-#include "p7_hmmwindow.h"
+#include "base/p7_hmmwindow.h"
 
 extern double p7_MeanMatchInfo           (const P7_HMM *hmm, const P7_BG *bg);
 extern double p7_MeanMatchEntropy        (const P7_HMM *hmm);

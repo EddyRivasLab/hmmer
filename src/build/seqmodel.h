@@ -1,5 +1,5 @@
-#ifndef P7_TRACEALIGN_INCLUDED
-#define P7_TRACEALIGN_INCLUDED
+#ifndef P7_SEQMODEL_INCLUDED
+#define P7_SEQMODEL_INCLUDED
 
 #include "p7_config.h"
 

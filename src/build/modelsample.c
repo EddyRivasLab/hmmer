@@ -7,6 +7,7 @@
 #include "easel.h"
 #include "esl_dirichlet.h"
 #include "esl_random.h"
+#include "esl_vectorops.h"
 
 #include "base/p7_hmm.h"
 #include "base/p7_prior.h"

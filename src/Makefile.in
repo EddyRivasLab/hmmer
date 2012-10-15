@@ -1,7 +1,7 @@
 SUBDIRS    = base\
-	     dp_vector
-	     # build\
-             # daemon\
+	     build\
+             daemon
+	     # dp_vector
              # dp_reference\
              # dp_sparse\
              # experiments\

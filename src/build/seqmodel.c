@@ -11,9 +11,11 @@
 #include "p7_config.h"
 
 #include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_dmatrix.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
+#include "base/p7_hmm.h"
 
 /*****************************************************************
  * 1. Routines in the exposed API.

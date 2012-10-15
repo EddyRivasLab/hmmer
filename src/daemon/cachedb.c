@@ -20,10 +20,9 @@
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
 
-#include "hmmer.h"
-#include "cachedb.h"
-#include "hmmpgmd.h"
 
+#include "hmmpgmd.h"
+#include "daemon/cachedb.h"
 
 /* sort routines */
 static int

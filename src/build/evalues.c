@@ -26,10 +26,11 @@
 #include "dp_vector/vitfilter.h"
 #include "dp_vector/fwdfilter.h"
 
-#include "p7_builder.h"
-#include "evalues.h"
-#include "modelconfig.h"
-#include "modelstats.h"
+#include "search/modelconfig.h"
+
+#include "build/p7_builder.h"
+#include "build/modelstats.h"
+#include "build/evalues.h"
 
 /*****************************************************************
  * 1. p7_Calibrate():  model calibration wrapper 

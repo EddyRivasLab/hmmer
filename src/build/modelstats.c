@@ -9,9 +9,9 @@
 
 #include "base/p7_bg.h"
 #include "base/p7_hmm.h"
-#include "p7_hmmwindow.h"
+#include "base/p7_hmmwindow.h"
 
-#include "modelstats.h"
+#include "build/modelstats.h"
 
 
 /* Function:  p7_MeanMatchInfo()

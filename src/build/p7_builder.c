@@ -14,6 +14,7 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_dmatrix.h"
+#include "esl_fileparser.h"
 #include "esl_getopts.h"
 #include "esl_msa.h"
 #include "esl_msacluster.h"
@@ -21,7 +22,20 @@
 #include "esl_random.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
+#include "base/p7_bg.h"
+#include "base/p7_hmm.h"
+#include "base/p7_profile.h"
+#include "base/p7_trace.h"
+
+#include "build/p7_builder.h"
+#include "build/build.h"
+#include "build/evalues.h"
+#include "build/eweight.h"
+#include "build/seqmodel.h"
+
+#include "dp_vector/p7_oprofile.h"
+
+#include "misc/tracealign.h"
 
 /*****************************************************************
  * 1. P7_BUILDER: allocation, initialization, destruction

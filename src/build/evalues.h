@@ -12,7 +12,7 @@
 
 #include "dp_vector/p7_oprofile.h"
 
-#include "p7_builder.h"
+#include "build/p7_builder.h"
 
 extern int p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **byp_bg, P7_PROFILE **byp_gm, P7_OPROFILE **byp_om);
 extern int p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda);

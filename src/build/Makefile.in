@@ -1,12 +1,12 @@
 MODULE = build
 
-OBJS =  build.c\
-	evalues.c\
-	eweight.c\
-	modelsample.c\
-	modelstats.c\
-	p7_builder.c\
-	seqmodel.c
+OBJS =  build.o\
+	evalues.o\
+	eweight.o\
+	modelsample.o\
+	modelstats.o\
+	p7_builder.o\
+	seqmodel.o
 
 HDRS =  
 
