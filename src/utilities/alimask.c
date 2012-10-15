@@ -230,8 +230,7 @@ main(int argc, char **argv)
 
   int    keep_mm;
 
-  /* Set processor specific flags */
-  impl_Init();
+  p7_Init();
 
   alifile     = NULL;
   postmsafile = NULL;

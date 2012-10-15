@@ -12,11 +12,14 @@
 
 #include "p7_config.h"
 
+#include <stdio.h>
+
 #include "easel.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
-#include "p7_refmx.h"
+#include "base/p7_trace.h"
+
+#include "dp_reference/p7_refmx.h"
 
 
 /*****************************************************************

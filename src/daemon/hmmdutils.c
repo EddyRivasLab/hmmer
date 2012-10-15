@@ -1,11 +1,6 @@
 /* hmmpgmd: hmmer deamon searchs against a sequence database.
- * 
- * MSF, Thu Aug 12, 2010 [Janelia]
- * SVN $Id$
  */
 #include "p7_config.h"
-
-#ifdef HMMER_THREADS
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,13 +23,9 @@
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
-#include "esl_stopwatch.h"
-#include "esl_threads.h"
 
-#include "hmmer.h"
-#include "hmmpgmd.h"
-#include "cachedb.h"
+#include "daemon/cachedb.h"
+#include "daemon/hmmdutils.h"
 
 #define MAX_WORKERS  64
 #define MAX_BUFFER   4096
@@ -204,4 +195,10 @@ free_QueueData(QUEUE_DATA *data)
   free(data);
 }
 
-#endif /*HMMER_THREADS*/
+/*****************************************************************
+ * @LICENSE@
+ *
+ * 
+ * SVN $Id$
+ * SVN $URL$
+ *****************************************************************/

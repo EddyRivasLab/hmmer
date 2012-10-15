@@ -165,7 +165,6 @@ clean:
 #	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi;\
 #	done
 
-
 tags-append:
 	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.c
 	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.h

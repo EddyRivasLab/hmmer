@@ -633,9 +633,7 @@ main(int argc, char **argv)
   float           fsc;
   int             status;
 
-  /* Initialize log-sum calculator */
-  impl_Init();
-  p7_FLogsumInit();
+  p7_Init();
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);

@@ -2,8 +2,6 @@
  */
 #include "p7_config.h"
 
-#ifdef HMMER_THREADS
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,10 +27,14 @@
 #include "esl_stopwatch.h"
 #include "esl_threads.h"
 
-#include "hmmer.h"
-#include "hmmpgmd.h"
-#include "cachedb.h"
-#include "p7_hmmcache.h"
+#include "base/general.h"
+
+#include "build/p7_builder.h"
+#include "search/modelconfig.h"
+
+#include "daemon/hmmdutils.h"
+#include "daemon/cachedb.h"
+#include "daemon/p7_hmmcache.h"
 
 #define MAX_WORKERS  64
 #define MAX_BUFFER   4096
@@ -142,9 +144,7 @@ worker_process(ESL_GETOPTS *go)
   WORKER_ENV    env;
   int           status;
     
-  /* Initializations */
-  impl_Init();
-  p7_FLogsumInit();      /* we're going to use table-driven Logsum() approximations at times */
+  p7_Init();
 
   if (esl_opt_IsOn(go, "--cpu")) env.ncpus = esl_opt_GetInteger(go, "--cpu");
   else esl_threads_CPUCount(&env.ncpus);
@@ -895,8 +895,6 @@ setup_masterside_comm(ESL_GETOPTS *opts)
 
   return fd;    
 }
-
-#endif /*HMMER_THREADS*/
 
 /*****************************************************************
  * @LICENSE@

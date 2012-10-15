@@ -149,6 +149,8 @@ main(int argc, char **argv)
   ESL_STOPWATCH   *w       = esl_stopwatch_Create();
   struct cfg_s     cfg;
 
+  p7_Init();
+
   /* Process command line options.  */
   go = esl_getopts_Create(options);
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK || 
@@ -204,8 +206,6 @@ main(int argc, char **argv)
   /* Initialize configuration shared across all kinds of masters
    * and workers in this .c file.
    */
-  p7_FLogsumInit();
-
   cfg.hmmfile  = esl_opt_GetArg(go, 1);
   cfg.r        = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
   cfg.abc      = esl_alphabet_Create(eslAMINO);

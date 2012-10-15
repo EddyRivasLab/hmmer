@@ -660,8 +660,7 @@ main(int argc, char **argv)
   int             M    = esl_opt_GetInteger(go, "-M");
   int             L    = esl_opt_GetInteger(go, "-L");
 
-  p7_FLogsumInit();
-  impl_Init();
+  p7_Init();
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
@@ -746,8 +745,7 @@ main(int argc, char **argv)
   int             i, ntrx;
   int             i0,k0,st0;
 
-  impl_Init();
-  p7_FLogsumInit();
+  p7_Init();
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);

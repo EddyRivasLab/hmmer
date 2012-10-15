@@ -14,10 +14,14 @@
 #include "p7_config.h"
 
 #include "easel.h"
+#include "esl_random.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
-#include "p7_refmx.h"
+#include "base/p7_profile.h"
+#include "base/p7_trace.h"
+
+#include "dp_reference/p7_refmx.h"
+#include "dp_reference/reference_trace.h"
 
 
 

@@ -23,8 +23,7 @@
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
 
-#include "hmmer.h"
-#include "hmmpgmd.h"
+#include "daemon/hmmdutils.h"
 
 #define SERVER_PORT      51371
 #define MAX_READ_LEN     4096

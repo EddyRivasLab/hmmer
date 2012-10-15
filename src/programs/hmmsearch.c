@@ -258,8 +258,7 @@ main(int argc, char **argv)
   struct cfg_s     cfg;        
   int              status   = eslOK;
 
-  impl_Init();                  /* processor specific initialization */
-  p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
+  p7_Init();
 
   /* Initialize what we can in the config structure (without knowing the alphabet yet) 
    */
@@ -1228,7 +1227,7 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
   ESL_SQ_BLOCK *block;
   void         *newBlock;
 
-  impl_ThreadInit();
+  p7_Init();
 
   esl_workqueue_Reset(queue);
   esl_threads_WaitForStart(obj);

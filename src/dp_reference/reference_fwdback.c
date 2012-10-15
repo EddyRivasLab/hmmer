@@ -24,10 +24,14 @@
 #include "easel.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
-#include "p7_refmx.h"
-#include "reference_fwdback.h"
-#include "reference_trace.h"   // for MGE alignment. Move this, when we move MGE.
+#include "base/p7_profile.h"
+#include "base/p7_trace.h"
+
+#include "misc/logsum.h"
+
+#include "dp_reference/p7_refmx.h"
+#include "dp_reference/reference_fwdback.h"
+#include "dp_reference/reference_trace.h"
 
 /*****************************************************************
  * 1. Forward 
@@ -636,7 +640,7 @@ p7_ReferenceAlign(const P7_PROFILE *gm, float gamma, const P7_REFMX *pp, P7_REFM
 #include "esl_randomseq.h"
 #include "esl_stopwatch.h"
 
-#include "hmmer.h"
+#include "base/general.h"
 #include "p7_refmx.h"
 #include "reference_fwdback.h"
 #include "reference_viterbi.h"
@@ -675,9 +679,7 @@ main(int argc, char **argv)
   double          base_time, F_time, B_time, V_time;
   double          F_speed, B_speed, V_speed;
 
-  /* Initialize log-sum calculator */
-  impl_Init();
-  p7_FLogsumInit();
+  p7_Init();
 
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
@@ -1663,7 +1665,7 @@ utest_brute(ESL_RANDOMNESS *rng, int N)
 #include "esl_getopts.h"
 #include "esl_msa.h"
 
-#include "hmmer.h"
+#include "base/general.h"
 #include "p7_refmx.h"
 
 static ESL_OPTIONS options[] = {
@@ -1683,8 +1685,7 @@ main(int argc, char **argv)
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
 
-  p7_FLogsumInit();
-  impl_Init();
+  p7_Init();
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
@@ -1721,7 +1722,7 @@ main(int argc, char **argv)
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
-#include "hmmer.h"
+#include "base/general.h"
 #include "p7_refmx.h"
 #include "reference_decoding.h"
 #include "reference_fwdback.h"
@@ -1784,8 +1785,7 @@ main(int argc, char **argv)
   char            errbuf[eslERRBUFSIZE];
   int             status;
 
-  /* Initialize log-sum calculator */
-  p7_FLogsumInit();
+  p7_Init();
 
  /* Determine coords of dump windows, if any */
   istart = iend = 0;

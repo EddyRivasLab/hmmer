@@ -74,9 +74,7 @@ main(int argc, char **argv)
   char              errbuf[eslERRBUFSIZE];
   int               status;
   
-  /* Initialize log-sum calculator */
-  impl_Init();
-  p7_FLogsumInit();
+  p7_Init();
 
   /* open HMM file containing models parameterized for generation (sampling) of seqs */
   status = p7_hmmfile_OpenE(ghmmfile, NULL, &ghfp, errbuf);

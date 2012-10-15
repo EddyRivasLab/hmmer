@@ -4,16 +4,27 @@
  *    1. The <esl_msa_hmmpgmd2msa> function
  *    2. Test driver
  *    3. Copyright and license information
- *
  */
 
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <hmmer.h>
-#include <hmmpgmd.h>
-#include <esl_sqio.h>
+
+#include "easel.h"
+#include "esl_sq.h"
+#include "esl_sqio.h"
+#include "esl_msa.h"
+
+#include "base/p7_alidisplay.h"
+#include "base/p7_domain.h"
+#include "base/p7_hmm.h"
+#include "base/p7_trace.h"
+#include "base/p7_tophits.h"
+
+#include "daemon/hmmdutils.h"
+
+#include "search/tophits_output.h"
 
 
 /******************************************************************************

@@ -18,10 +18,49 @@
 #include "esl_getopts.h"
 
 #include "base/general.h"
+#include "misc/logsum.h"
+#include "dp_vector/simdvec.h"
 
 /*****************************************************************
  * 1. Miscellaneous functions for H3
  *****************************************************************/
+
+/* Function:  p7_Init()
+ * Synopsis:  Initialize a new HMMER thread or process.
+ *
+ * Purpose:   Initialize a new HMMER thread or executable process.
+ *            
+ *            - initialize the lookup table for our fast table-driven
+ *              approximation of log-sum-exp.
+ *
+ *            - set processor flags to turn off denormalized
+ *              floating point math; performance penalty is too
+ *              high.
+ *
+ * Args:      none.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_Init(void)
+{
+  /* We do a lot of log-sum-exp operations using a table-driven
+   * approximation; initialize the table.
+   */
+  p7_FLogsumInit();
+
+  /* Initialize any cpu flags we need to set for SIMD vector processing.
+   * On Intel/AMD platforms, for example, we turn off denormalized fp.
+   * This is implemented in dp_vector, so most of our code is independent
+   * of whether we're SSE vs. another vector flavor (VMX, AVX, whatever).
+   */
+  p7_simdvec_Init();
+
+  return eslOK;
+}
+
 
 /* Function:  p7_banner()
  * Synopsis:  print standard HMMER application output header

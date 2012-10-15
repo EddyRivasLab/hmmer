@@ -338,8 +338,7 @@ main(int argc, char **argv)
   ESL_STOPWATCH   *w  = esl_stopwatch_Create();
   struct cfg_s     cfg;
 
-  /* Set processor specific flags */
-  impl_Init();
+  p7_Init();
 
   cfg.alifile     = NULL;
   cfg.hmmfile     = NULL;

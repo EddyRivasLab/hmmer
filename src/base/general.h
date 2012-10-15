@@ -76,6 +76,7 @@ enum p7_strands_e {    p7_STRAND_TOPONLY  = 0, p7_STRAND_BOTTOMONLY = 1,  p7_STR
 #define p7_SHOW_LOG      (1<<1)
 
 
+extern int          p7_Init(void);
 extern void         p7_banner(FILE *fp, char *progname, char *banner);
 extern void         p7_Die (char *format, ...);
 extern void         p7_Fail(char *format, ...);

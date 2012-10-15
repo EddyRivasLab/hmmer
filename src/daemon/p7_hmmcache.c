@@ -13,8 +13,12 @@
 
 #include "easel.h"
 
-#include "hmmer.h"
-#include "p7_hmmcache.h"
+#include "base/p7_hmmfile.h"
+
+#include "dp_vector/p7_oprofile.h"
+#include "dp_vector/io.h"
+
+#include "daemon/p7_hmmcache.h"
 
 /*****************************************************************
  * 1. P7_HMMCACHE: a daemon's cached profile database

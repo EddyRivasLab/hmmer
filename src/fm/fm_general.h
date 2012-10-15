@@ -4,9 +4,10 @@
 #include "p7_config.h"
 
 #include "esl_getopts.h"
+#include "esl_sq.h"
 
 #include "fm/fm.h"
-#include "dp_vector/impl_sse.h"
+#include "dp_vector/fm_sse.h"
 
 extern uint32_t fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int pos);
 extern int fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,

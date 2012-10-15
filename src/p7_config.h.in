@@ -125,11 +125,20 @@
 #undef _LARGE_FILES
 #undef _LARGEFILE_SOURCE
 
-/* Choice of optimized implementation (one and only one must be set)
+/* System headers
  */
-#undef p7_IMPL_SSE
-#undef p7_IMPL_VMX
-#undef p7_IMPL_DUMMY
+#undef HAVE_STRINGS_H
+
+#undef HAVE_ENDIAN_H
+#undef HAVE_INTTYPES_H
+#undef HAVE_STDINT_H
+#undef HAVE_UNISTD_H
+#undef HAVE_SYS_TYPES_H
+#undef HAVE_SYS_SYSCTL_H
+
+#undef HAVE_XMMINTRIN_H		/* SSE  */
+#undef HAVE_EMMINTRIN_H		/* SSE2 */
+#undef HAVE_PMMINTRIN_H		/* SSE3 */
 
 /* Optional parallel implementations
  */

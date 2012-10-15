@@ -63,10 +63,7 @@ main(int argc, char **argv)
   float           envsc_approx, envsc_exact;
   int             status;
   
-
-  /* initialize HMMER (simplify this!) */
-  p7_FLogsumInit();
-  impl_Init();
+  p7_Init();
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);

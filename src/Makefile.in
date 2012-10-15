@@ -1,8 +1,8 @@
 SUBDIRS    = base\
 	     build\
-             daemon
+             daemon\
+             dp_reference
 	     # dp_vector
-             # dp_reference\
              # dp_sparse\
              # experiments\
              # misc\
@@ -231,7 +231,7 @@ clean:
 	done
 
 tags-append:
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.c
+#	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.c
 	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.h
 	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.in
 #	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.pl

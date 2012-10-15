@@ -1176,8 +1176,7 @@ main(int argc, char **argv)
   double          P;
   int             status;
 
-  p7_FLogsumInit();
-  impl_Init();
+  p7_Init();
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
@@ -1296,7 +1295,6 @@ main(int argc, char **argv)
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
 #include "p7_filtermx.h"
 #include "p7_sparsemx.h"
 
@@ -1334,8 +1332,7 @@ main(int argc, char **argv)
   float           sc;
   double          base_time, bench_time, Mcs;
 
-  p7_FLogsumInit();
-  impl_Init();
+  p7_Init();
 
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
@@ -1551,7 +1548,6 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
 #include "esl_random.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -1576,8 +1572,7 @@ main(int argc, char **argv)
   int             L    = esl_opt_GetInteger(go, "-L");
   int             N    = esl_opt_GetInteger(go, "-N");
 
-  p7_FLogsumInit();
-  impl_Init();
+  p7_Init();
 
   /* First round of tests for DNA alphabets.  */
   if ((abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal("failed to create alphabet");
@@ -1626,7 +1621,6 @@ main(int argc, char **argv)
 #include "esl_sqio.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
 #include "p7_filtermx.h"
 #include "p7_sparsemx.h"
 
@@ -1669,8 +1663,7 @@ main(int argc, char **argv)
   double          P, gP;
   int             status;
 
-  p7_FLogsumInit();
-  impl_Init();
+  p7_Init();
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);

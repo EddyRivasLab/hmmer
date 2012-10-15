@@ -233,7 +233,7 @@ main(int argc, char **argv)
   int             i;
   float          *A, *B, *C;
 
-  p7_FLogsumInit();
+  p7_LogsumInit();
 
   /* Create the problem: sample N values A,B on interval -1000,1000: about the range of H3 scores */
   A = malloc(sizeof(float) * N);

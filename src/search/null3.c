@@ -307,6 +307,8 @@ main(int argc, char **argv)
   int             M           = esl_opt_GetInteger(go, "-M");
   int             L           = esl_opt_GetInteger(go, "-L");
 
+  p7_Init();
+
   /* Sample a random HMM */
   p7_hmm_Sample(r, M, abc, &hmm);
 
@@ -320,7 +322,6 @@ main(int argc, char **argv)
   dsq  = malloc(sizeof(ESL_DSQ) * (L+2));
   fwd  = p7_gmx_Create(gm->M, L);
   bck  = p7_gmx_Create(gm->M, L);
-  p7_FLogsumInit();
 
   utest_correct_normalization(r, gm, bg, dsq, L, fwd, bck);
 

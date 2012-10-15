@@ -7,8 +7,9 @@ OBJS =  cachedb.o\
 	hmmpgmd2msa.o\
 	p7_hmmcache.o
 
-PROGS = hmmc2\
-	hmmpgmd
+PROGS = 
+#	hmmc2\
+#	hmmpgmd
 
 HDRS =  
 
@@ -84,7 +85,7 @@ ${OBJS}:   ${HDRS}
 .c.o:  
 	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -o $@ -c $<
 
-${PROGS}: @EXEC_DEPENDENCY@  ../libhmmer.a ${ESLDIR}/libeasel.a
+${PROGS}: @EXEC_DEPENDENCY@  ../libhmmer.a 
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
 
 ${UTESTS}: libhmmer-${MODULE}.stamp ../libhmmer.a ${HDRS} 

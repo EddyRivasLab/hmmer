@@ -1313,7 +1313,7 @@ main(int argc, char **argv)
   P7_PIPELINE    *pli     = NULL;
   P7_TOPHITS     *hitlist = NULL;
 
-  p7_FLogsumInit();
+  p7_Init();
 
   /* Read a single HMM from a file */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);

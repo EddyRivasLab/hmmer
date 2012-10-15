@@ -2,8 +2,6 @@
  */
 #include "p7_config.h"
 
-#ifdef HMMER_THREADS
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,8 +14,7 @@
 #include "easel.h"
 #include "esl_getopts.h"
 
-#include "hmmer.h"
-#include "hmmpgmd.h"
+#include "daemon/hmmdutils.h"
 
 #define CONF_FILE "/etc/hmmpgmd.conf"
 
@@ -217,7 +214,6 @@ main(int argc, char **argv)
  *    cat my.hmm | pbcopy   
  */
 
-#endif /*HMMER_THREADS*/
 
 /*****************************************************************
  * @LICENSE@

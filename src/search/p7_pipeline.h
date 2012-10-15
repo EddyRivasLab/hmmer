@@ -17,6 +17,7 @@
 #include "base/p7_tophits.h"
 #include "dp_vector/p7_oprofile.h"
 #include "fm/fm.h"
+#include "fm/fm_general.h"
 
 enum p7_pipemodes_e { p7_SEARCH_SEQS = 0, p7_SCAN_MODELS = 1 };
 enum p7_zsetby_e    { p7_ZSETBY_NTARGETS = 0, p7_ZSETBY_OPTION = 1, p7_ZSETBY_FILEINFO = 2 };

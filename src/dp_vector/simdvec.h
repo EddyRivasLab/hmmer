@@ -2,7 +2,6 @@
 #define P7_SIMDVEC_INCLUDED
 
 extern void p7_simdvec_Init(void);
-extern void p7_simdvec_InitThread(void);
 
 /* [1]. On memory alignment, SIMD vectors, and malloc(): 
  * 

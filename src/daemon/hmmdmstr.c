@@ -1,10 +1,6 @@
 /* master side of the hmmpgmd daemon
- * 
- * MSF, Thu Aug 12, 2010 [Janelia]
  */
 #include "p7_config.h"
-
-#ifdef HMMER_THREADS
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,16 +23,19 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
+#include "esl_scorematrix.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 #include "esl_stack.h"
 #include "esl_stopwatch.h"
 #include "esl_threads.h"
 
-#include "hmmer.h"
-#include "hmmpgmd.h"
-#include "cachedb.h"
-#include "p7_hmmcache.h"
+#include "base/general.h"
+#include "search/tophits_output.h"
+#include "daemon/hmmdutils.h"
+#include "daemon/cachedb.h"
+#include "daemon/p7_hmmcache.h"
+
 
 #define MAX_WORKERS  64
 #define MAX_BUFFER   4096
@@ -674,8 +673,7 @@ master_process(ESL_GETOPTS *go)
   char                errbuf[eslERRBUFSIZE]; 
   int                 status     = eslOK;
 
-  impl_Init();
-  p7_FLogsumInit();     /* we're going to use table-driven Logsum() approximations at times */
+  p7_Init();
 
   if (esl_opt_IsUsed(go, "--seqdb")) {
     char *name = esl_opt_GetString(go, "--seqdb");
@@ -2068,7 +2066,6 @@ setup_workerside_comm(ESL_GETOPTS *opts, WORKERSIDE_ARGS *args)
   if ((n = pthread_create(&thread_id, NULL, worker_comm_thread, (void *)args)) != 0) LOG_FATAL_MSG("thread create", n);
 }
 
-#endif /*HMMER_THREADS*/
 
 /*****************************************************************
  * @LICENSE@

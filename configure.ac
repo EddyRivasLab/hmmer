@@ -422,9 +422,28 @@ AS_IF([test "x$with_gsl" != xno],
         )])
 
 # Checks for headers
-#
-AC_CHECK_HEADERS([sys/types.h sys/sysctl.h unistd.h stdint.h inttypes.h endian.h])
+# Defines HAVE_SYS_TYPES_H, HAVE_STDINT_H, etc.
+AC_CHECK_HEADERS([ \
+  endian.h\
+  inttypes.h\
+  stdint.h\
+  unistd.h\
+  sys/types.h\
+  sys/sysctl.h
+])  
 
+# Vector-specific headers. 
+# Separated, because we may want to implement
+# other vector languages besides SSE
+# For SSE:
+#  xmmintrin.h = SSE
+#  emmintrin.h = SSE2
+#  pmmintrin.h = SSE3
+AC_CHECK_HEADERS([\
+  emmintrin.h\
+  pmmintrin.h\
+  xmmintrin.h
+])
 
 # Checks for types
 #

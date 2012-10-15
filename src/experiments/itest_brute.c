@@ -113,7 +113,7 @@ main(int argc, char **argv)
   int             i,j;
   float           vprecision, fprecision; /* expected bound on absolute accuracy for viterbi, forward */
 
-  p7_FLogsumInit();
+  p7_Init();
 
   for (do_local = 0; do_local <= 1; do_local++) /* run tests in both glocal and local mode   */
     for (j = 0; j <= N; j++)	                /* #0 = fixed params; #1..N = sampled params */

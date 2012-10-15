@@ -354,8 +354,7 @@ main(int argc, char **argv)
   struct cfg_s     cfg;                 /* configuration data                      */
   int              status  = eslOK;
 
-  /* Set processor specific flags */
-  impl_Init();
+  p7_Init();
 
   /* Initialize what we can in the config structure (without knowing the alphabet yet) 
    */
@@ -366,7 +365,6 @@ main(int argc, char **argv)
   cfg.my_rank    = 0;		           /* this gets reset below, if we init MPI */
 
   /* Initializations */
-  p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
   process_commandline(argc, argv, &go, &cfg.qfile, &cfg.dbfile);    
 
   /* Figure out who we are, and send control there: 
@@ -1662,8 +1660,7 @@ pipeline_thread(void *arg)
   ESL_SQ_BLOCK  *block = NULL;
   void          *newBlock;
 
-  impl_ThreadInit();
-
+  p7_Init();
 
   obj = (ESL_THREADS *) arg;
   esl_threads_Started(obj, &workeridx);

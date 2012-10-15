@@ -21,10 +21,13 @@
 #include "easel.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
-#include "p7_refmx.h"
-#include "reference_viterbi.h"
-#include "reference_trace.h"
+#include "base/p7_profile.h"
+#include "base/p7_trace.h"
+
+#include "dp_reference/p7_refmx.h"
+#include "dp_reference/reference_trace.h"
+#include "dp_reference/reference_viterbi.h"
+
 
 /*****************************************************************
  * 1. Viterbi DP fill.

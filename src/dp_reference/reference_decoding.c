@@ -19,9 +19,10 @@
 
 #include "easel.h"
 
-#include "hmmer.h"
-#include "p7_refmx.h"
-#include "reference_decoding.h"
+#include "base/p7_profile.h"
+
+#include "dp_reference/p7_refmx.h"
+#include "dp_reference/reference_decoding.h"
 
 /*****************************************************************
  * 1. Posterior decoding
@@ -120,9 +121,9 @@ p7_ReferenceDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_R
       /* Note we need the residue match emission score, *rsc */
       for (delta=0.0, k = M; k >= 1; k--, ppp2-= p7R_NSCELLS, ppp-= p7R_NSCELLS, fwdp-=p7R_NSCELLS, bckp -= p7R_NSCELLS, rsc -= p7P_NR)
 	{
-	  ppp2[p7S_DG] += delta;                                                  /* deltas are applied to all DGk on PREVIOUS row  */
-	  ppp[p7S_DG]   = expf(fwdp[p7R_DG] + bckp[p7R_DG] - sc);                 /* because we allow decoding to overwrite bck, we may have just overwritten bckp[p7R_DG]. Do not access it again. */
-	  delta        += expf(xG + TSC(p7P_GM, k-1) + *rsc + bckp[p7S_MG] - sc); /* the access of bckp[MG] forces this line before the ppp[MG] calculation below */
+	  ppp2[p7R_DG] += delta;                                                  /* deltas are applied to all DGk on PREVIOUS row  */
+	  ppp[p7R_DG]   = expf(fwdp[p7R_DG] + bckp[p7R_DG] - sc);                 /* because we allow decoding to overwrite bck, we may have just overwritten bckp[p7R_DG]. Do not access it again. */
+	  delta        += expf(xG + TSC(p7P_GM, k-1) + *rsc + bckp[p7R_MG] - sc); /* the access of bckp[MG] forces this line before the ppp[MG] calculation below */
 	}
 
       /* Those ptrs are now on supercell k=0. Initialize ppp[0] supercell, and move them all to supercell 1 */
@@ -493,7 +494,7 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
 #include "esl_getopts.h"
 #include "esl_random.h"
 
-#include "hmmer.h"
+#include "base/general.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -518,8 +519,7 @@ main(int argc, char **argv)
   int             L    = esl_opt_GetInteger(go, "-L");
   int             N    = esl_opt_GetInteger(go, "-N");
 
-  p7_FLogsumInit();
-  impl_Init();
+  p7_Init();
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
@@ -557,7 +557,7 @@ main(int argc, char **argv)
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
-#include "hmmer.h"
+#include "base/general.h"
 #include "p7_sparsemx.h"
 #include "reference_fwdback.h"
 #include "reference_decoding.h"
@@ -597,9 +597,7 @@ main(int argc, char **argv)
   float        *dpc;
   int             status;
 
-  /* Initialize log-sum calculator */
-  impl_Init();
-  p7_FLogsumInit();
+  p7_Init();
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);

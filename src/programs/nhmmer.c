@@ -337,8 +337,7 @@ main(int argc, char **argv)
   struct cfg_s     cfg;         
   int              status   = eslOK;
 
-  impl_Init();             /* processor specific initialization */
-  p7_FLogsumInit();        /* we're going to use table-driven Logsum() approximations at times */
+  p7_Init();
 
   /* Initialize what we can in the config structure (without knowing the alphabet yet)
    */
@@ -1020,7 +1019,7 @@ pipeline_thread(void *arg)
   ESL_SQ_BLOCK  *block = NULL;
   void          *newBlock;
   
-  impl_ThreadInit();
+  p7_Init();
 
   obj = (ESL_THREADS *) arg;
   esl_threads_Started(obj, &workeridx);

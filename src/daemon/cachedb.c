@@ -16,12 +16,11 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
+#include "esl_random.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
 
-
-#include "hmmpgmd.h"
 #include "daemon/cachedb.h"
 
 /* sort routines */

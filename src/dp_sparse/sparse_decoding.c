@@ -546,8 +546,7 @@ main(int argc, char **argv)
   int             L    = esl_opt_GetInteger(go, "-L");
   int             N    = esl_opt_GetInteger(go, "-N");
 
-  p7_FLogsumInit();
-  impl_Init();
+  p7_Init();
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));

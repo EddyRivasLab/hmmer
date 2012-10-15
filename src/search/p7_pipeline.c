@@ -1831,8 +1831,7 @@ main(int argc, char **argv)
   P7_TOPHITS   *hitlist = NULL;
   int           h,d,namew;
 
-  /* Don't forget this. Null2 corrections need FLogsum() */
-  p7_FLogsumInit();
+  p7_Init();
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
@@ -1968,8 +1967,7 @@ main(int argc, char **argv)
   P7_TOPHITS   *hitlist = p7_tophits_Create();
   int           h,d,namew;
 
-  /* Don't forget this. Null2 corrections need FLogsum() */
-  p7_FLogsumInit();
+  p7_Init();
 
   /* Open a sequence file, read one seq from it.
    * Convert to digital later, after 1st HMM is input and abc becomes known 
