@@ -18,6 +18,7 @@
 #include "base/p7_hmm.h"
 #include "base/p7_profile.h"
 
+#include "dp_vector/simdvec.h"
 
 /* The OPROFILE is striped [Farrar07] and interleaved, as is the DP matrix.
  * For example, the layout of a profile for an M=14 model (xref J2/46):
@@ -62,27 +63,27 @@ enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3, 
 
 typedef struct p7_oprofile_s {
   /* MSVFilter uses scaled, biased uchars: 16x unsigned byte vectors                 */
-  __m128i **rbv;         /* match scores [x][q]: rm, rm[0] are allocated      */
-  __m128i **sbv;         /* match scores for ssvfilter                        */
-  uint8_t   tbm_b;    /* constant B->Mk cost:    scaled log 2/M(M+1)       */
-  uint8_t   tec_b;    /* constant E->C  cost:    scaled log 0.5            */
-  uint8_t   tjb_b;    /* constant NCJ move cost: scaled log 3/(L+3)        */
-  float     scale_b;    /* typically 3 / log2: scores scale to 1/3 bits      */
-  uint8_t   base_b;            /* typically +190: offset of uchar scores            */
-  uint8_t   bias_b;    /* positive bias to emission scores, make them >=0   */
+  __m128i **rbv;                /* match scores [x][q]: rm, rm[0] are allocated      */
+  __m128i **sbv;                /* match scores for ssvfilter                        */
+  uint8_t   tbm_b;              /* constant B->Mk cost:    scaled log 2/M(M+1)       */
+  uint8_t   tec_b;              /* constant E->C  cost:    scaled log 0.5            */
+  uint8_t   tjb_b;              /* constant NCJ move cost: scaled log 3/(L+3)        */
+  float     scale_b;            /* typically 3 / log2: scores scale to 1/3 bits      */
+  uint8_t   base_b;             /* typically +190: offset of uchar scores            */
+  uint8_t   bias_b;             /* positive bias to emission scores, make them >=0   */
 
   /* ViterbiFilter uses scaled swords: 8x signed 16-bit integer vectors              */
-  __m128i **rwv;    /* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
-  __m128i  *twv;    /* transition score blocks          [8*Q8]           */
+  __m128i **rwv;                /* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
+  __m128i  *twv;                /* transition score blocks          [8*Q8]           */
   int16_t   xw[p7O_NXSTATES][p7O_NXTRANS]; /* NECJ state transition costs            */
   float     scale_w;            /* score units: typically 500 / log(2), 1/500 bits   */
   int16_t   base_w;             /* offset of sword scores: typically +12000          */
-  int16_t   ddbound_w;    /* threshold precalculated for lazy DD evaluation    */
-  float     ncj_roundoff;  /* missing precision on NN,CC,JJ after rounding      */
+  int16_t   ddbound_w;          /* threshold precalculated for lazy DD evaluation    */
+  float     ncj_roundoff;       /* missing precision on NN,CC,JJ after rounding      */
 
   /* Forward, Backward use IEEE754 single-precision floats: 4x vectors               */
-  __m128 **rfv;         /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
-  __m128  *tfv;          /* transition probability blocks    [8*Q4]           */
+  __m128 **rfv;                 /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
+  __m128  *tfv;                 /* transition probability blocks    [8*Q4]           */
   float    xf[p7O_NXSTATES][p7O_NXTRANS]; /* NECJ transition costs                   */
 
   /* Our actual vector mallocs, before we align the memory                           */
@@ -101,28 +102,28 @@ typedef struct p7_oprofile_s {
   off_t  eoff;                  /* offset to last byte of record; -1 if unknown      */
 
   /* Information, annotation copied from parent profile:                             */
-  char  *name;      /* unique name of model                              */
-  char  *acc;      /* unique accession of model, or NULL                */
+  char  *name;                  /* unique name of model                              */
+  char  *acc;                   /* unique accession of model, or NULL                */
   char  *desc;                  /* brief (1-line) description of model, or NULL      */
   char  *rf;                    /* reference line           1..M; *ref=0: unused     */
   char  *mm;                    /* modelmask line           1..M; *ref=0: unused     */
   char  *cs;                    /* consensus structure line 1..M, *cs=0: unused      */
-  char  *consensus;    /* consensus residues for ali display, 1..M          */
-  float  evparam[p7_NEVPARAM];   /* parameters for determining E-values, or UNSET     */
+  char  *consensus;             /* consensus residues for ali display, 1..M          */
+  float  evparam[p7_NEVPARAM];  /* parameters for determining E-values, or UNSET     */
   float  cutoff[p7_NCUTOFFS];   /* per-seq/per-dom bit cutoffs, or UNSET             */
-  float  compo[p7_MAXABET];  /* per-model HMM filter composition, or UNSET        */
-  const ESL_ALPHABET *abc;  /* copy of ptr to alphabet information               */
+  float  compo[p7_MAXABET];     /* per-model HMM filter composition, or UNSET        */
+  const ESL_ALPHABET *abc;      /* copy of ptr to alphabet information               */
 
   /* Information about current configuration, size, allocation                       */
-  int    L;      /* current configured target seq length              */
-  int    M;      /* model length                                      */
-  int    max_length;    /* upper bound on emitted sequence length            */
-  int    allocM;    /* maximum model length currently allocated for      */
-  int    allocQ4;    /* p7_NQF(allocM): alloc size for tf, rf             */
-  int    allocQ8;    /* p7_NQW(allocM): alloc size for tw, rw             */
-  int    allocQ16;    /* p7_NQB(allocM): alloc size for rb                 */
-  int    mode;      /* currently must be p7_LOCAL                        */
-  float  nj;      /* expected # of J's: 0 or 1, uni vs. multihit       */
+  int    L;                     /* current configured target seq length              */
+  int    M;                     /* model length                                      */
+  int    max_length;            /* upper bound on emitted sequence length            */
+  int    allocM;                /* maximum model length currently allocated for      */
+  int    allocQ4;               /* P7_NVF(allocM): alloc size for tf, rf             */
+  int    allocQ8;               /* P7_NVW(allocM): alloc size for tw, rw             */
+  int    allocQ16;              /* P7_NVB(allocM): alloc size for rb                 */
+  int    mode;                  /* currently must be p7_LOCAL                        */
+  float  nj;                    /* expected # of J's: 0 or 1, uni vs. multihit       */
 
   int    clone;                 /* this optimized profile structure is just a copy   */
                                 /* of another profile structre.  all pointers of     */
@@ -141,7 +142,7 @@ static inline float
 p7_oprofile_FGetEmission(const P7_OPROFILE *om, int k, int x)
 {
   union { __m128 v; float p[4]; } u;
-  int   Q = p7O_NQF(om->M);
+  int   Q = P7_NVF(om->M);
   int   q = ((k-1) % Q);
   int   r = (k-1)/Q;
   u.v = om->rfv[x][q];

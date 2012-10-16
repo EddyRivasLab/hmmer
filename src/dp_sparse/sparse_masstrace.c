@@ -505,7 +505,7 @@ utest_approx_masstrace(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M,
   P7_PROFILE    *gm     = p7_profile_Create(M, abc);
   ESL_SQ        *sq     = esl_sq_CreateDigital(abc);       /* space for generated (homologous) target seqs              */
   P7_OPROFILE   *om     = p7_oprofile_Create(M, abc);
-  P7_FILTERMX   *ox     = NULL;
+  P7_CHECKPTMX  *ox     = NULL;
   P7_TRACE      *vtr    = p7_trace_CreateWithPP(); /* domain anchor selection in trace_Index() requires a pp-annotated trace */
   P7_TRACE      *str    = p7_trace_Create();
   P7_SPARSEMASK *sm     = NULL;
@@ -551,7 +551,7 @@ utest_approx_masstrace(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M,
   if ( p7_oprofile_ReconfigLength(om, sq->n) != eslOK) esl_fatal(msg);
 
   /* Fwd/Bck local filter to calculate the sparse mask */
-  if (  (ox = p7_filtermx_Create(M, sq->n, ESL_MBYTES(32)))     == NULL) esl_fatal(msg);
+  if (  (ox = p7_checkptmx_Create(M, sq->n, ESL_MBYTES(32)))    == NULL) esl_fatal(msg);
   if (  (sm = p7_sparsemask_Create(M, sq->n))                   == NULL) esl_fatal(msg);
 
   if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
@@ -615,7 +615,7 @@ utest_approx_masstrace(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M,
   p7_sparsemask_Destroy(sm);
   p7_trace_Destroy(str);
   p7_trace_Destroy(vtr);
-  p7_filtermx_Destroy(ox);
+  p7_checkptmx_Destroy(ox);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_hmm_Destroy(hmm);

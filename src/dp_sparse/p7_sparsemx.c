@@ -35,6 +35,8 @@
 
 #include "base/p7_trace.h"
 
+#include "dp_vector/simdvec.h"	    /* #define's of SIMD vector sizes */
+
 #include "dp_reference/p7_refmx.h"
 #include "dp_sparse/p7_sparsemx.h"
 
@@ -76,7 +78,7 @@ p7_sparsemask_Create(int M, int L)
   ESL_ALLOC(sm, sizeof(P7_SPARSEMASK));
   sm->L      = L;
   sm->M      = M;
-  sm->Q      = p7O_NQF(M);  // approx M/4, for striped vectors of four floats
+  sm->Q      = P7_NVF(M);  // approx M/4, for striped vectors of four floats
 		
   sm->i      = NULL;
   sm->k      = NULL;
@@ -139,7 +141,7 @@ p7_sparsemask_Reinit(P7_SPARSEMASK *sm, int M, int L)
 
   sm->L  = L;
   sm->M  = M;
-  sm->Q  = p7O_NQF(M);
+  sm->Q  = P7_NVF(M);
 		
   /* i[], kmem stay at their previous ialloc, kalloc
    * but do we need to reallocate rows for k[] and n[]? 
@@ -1495,7 +1497,7 @@ validate_dimensions(const P7_SPARSEMX *sx, char *errbuf)
 
   if ( sm->M <= 0)               ESL_FAIL(eslFAIL, errbuf, "nonpositive M");
   if ( sm->L <= 0)               ESL_FAIL(eslFAIL, errbuf, "nonpositive L");
-  if ( sm->Q <  p7O_NQF(sm->M))  ESL_FAIL(eslFAIL, errbuf, "insufficient Q");
+  if ( sm->Q <  P7_NVF(sm->M))  ESL_FAIL(eslFAIL, errbuf, "insufficient Q");
 
   for (r=0, g=0, i = 1; i <= sm->L; i++) {
     if (sm->n[i] && !sm->n[i-1]) g++; /* segment count */

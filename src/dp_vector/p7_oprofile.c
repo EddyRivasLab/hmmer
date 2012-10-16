@@ -54,9 +54,9 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
 {
   int          status;
   P7_OPROFILE *om  = NULL;
-  int          nqb = p7O_NQB(allocM); /* # of uchar vectors needed for query */
-  int          nqw = p7O_NQW(allocM); /* # of sword vectors needed for query */
-  int          nqf = p7O_NQF(allocM); /* # of float vectors needed for query */
+  int          nqb = P7_NVB(allocM); /* # of uchar vectors needed for query */
+  int          nqw = P7_NVW(allocM); /* # of sword vectors needed for query */
+  int          nqf = P7_NVF(allocM); /* # of float vectors needed for query */
   int          nqs = nqb + p7O_EXTRA_SB;
   int          x;
 
@@ -264,9 +264,9 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
   int           x, y;
   int           status;
 
-  int           nqb  = p7O_NQB(om1->allocM); /* # of uchar vectors needed for query */
-  int           nqw  = p7O_NQW(om1->allocM); /* # of sword vectors needed for query */
-  int           nqf  = p7O_NQF(om1->allocM); /* # of float vectors needed for query */
+  int           nqb  = P7_NVB(om1->allocM); /* # of uchar vectors needed for query */
+  int           nqw  = P7_NVW(om1->allocM); /* # of sword vectors needed for query */
+  int           nqf  = P7_NVF(om1->allocM); /* # of float vectors needed for query */
   int           nqs  = nqb + p7O_EXTRA_SB;
 
   size_t        size = sizeof(char) * (om1->allocM+2);
@@ -438,7 +438,7 @@ p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emiss
 {
   int     M   = om->M;    /* length of the query                                          */
   int     k, q, x, z;
-  int     nq  = p7O_NQF(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVF(M);     /* segment length; total # of striped vectors needed            */
   int     K   = om->abc->K;
   int     Kp  = om->abc->Kp;
   union   { __m128 v; float x[4]; } tmp; /* used to align and load simd minivectors               */
@@ -553,7 +553,7 @@ static int
 sf_conversion(P7_OPROFILE *om)
 {
   int     M   = om->M;		/* length of the query                                          */
-  int     nq  = p7O_NQB(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVB(M);     /* segment length; total # of striped vectors needed            */
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
   __m128i tmp;
@@ -605,7 +605,7 @@ static int
 mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
   int     M   = gm->M;		/* length of the query                                          */
-  int     nq  = p7O_NQB(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVB(M);     /* segment length; total # of striped vectors needed            */
   float   max = 0.0;		/* maximum residue score: used for unsigned emission score bias */
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
@@ -656,7 +656,7 @@ static int
 vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
   int     M   = gm->M;		/* length of the query                                          */
-  int     nq  = p7O_NQW(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVW(M);     /* segment length; total # of striped vectors needed            */
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
   int     k;			/* the usual counter over model nodes 1..M                      */
@@ -759,7 +759,7 @@ static int
 fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
   int     M   = gm->M;		/* length of the query                                          */
-  int     nq  = p7O_NQF(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVF(M);     /* segment length; total # of striped vectors needed            */
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
   int     k;			/* the usual counter over model nodes 1..M                      */
@@ -1052,7 +1052,7 @@ p7_oprofile_ReconfigUnihit(P7_OPROFILE *om, int L)
 int
 p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
 {
-  int     nq  = p7O_NQF(om->M);     /* # of striped vectors needed            */
+  int     nq  = P7_NVF(om->M);     /* # of striped vectors needed            */
   int i, j;
   union { __m128 v; float x[4]; } tmp; /* used to align and read simd minivectors               */
 
@@ -1099,7 +1099,7 @@ p7_oprofile_GetMSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr )
   union { __m128i v; uint8_t i[16]; } tmp; /* used to align and read simd minivectors           */
   int      M   = om->M;    /* length of the query                                          */
   int      K   = om->abc->Kp;
-  int      nq  = p7O_NQB(M);     /* segment length; total # of striped vectors needed            */
+  int      nq  = P7_NVB(M);     /* segment length; total # of striped vectors needed            */
   int cell_cnt = (om->M + 1) * K;
 
   for (x = 0; x < K ; x++) {
@@ -1144,7 +1144,7 @@ p7_oprofile_GetFwdEmissionScoreArray(const P7_OPROFILE *om, float *arr )
   union { __m128 v; float f[4]; } tmp; /* used to align and read simd minivectors               */
   int      M   = om->M;    /* length of the query                                          */
   int      K   = om->abc->Kp;
-  int      nq  = p7O_NQF(M);     /* segment length; total # of striped vectors needed            */
+  int      nq  = P7_NVF(M);     /* segment length; total # of striped vectors needed            */
   int cell_cnt = (om->M + 1) * K;
 
   for (x = 0; x < K; x++) {
@@ -1191,7 +1191,7 @@ p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, P7_BG *bg, float *arr )
   int      M   = om->M;    /* length of the query                                          */
   int      Kp  = om->abc->Kp;
   int      K   = om->abc->K;
-  int      nq  = p7O_NQF(M);     /* segment length; total # of striped vectors needed            */
+  int      nq  = P7_NVF(M);     /* segment length; total # of striped vectors needed            */
   int cell_cnt = (om->M + 1) * Kp;
 
   for (x = 0; x < K; x++) {
@@ -1227,7 +1227,7 @@ static int
 oprofile_dump_mf(FILE *fp, const P7_OPROFILE *om)
 {
   int     M   = om->M;		/* length of the query                                          */
-  int     nq  = p7O_NQB(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVB(M);     /* segment length; total # of striped vectors needed            */
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
   int     k;			/* counter over nodes 1..M                                      */
@@ -1283,7 +1283,7 @@ static int
 oprofile_dump_vf(FILE *fp, const P7_OPROFILE *om)
 {
   int     M   = om->M;		/* length of the query                                          */
-  int     nq  = p7O_NQW(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVW(M);     /* segment length; total # of striped vectors needed            */
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
   int     k;			/* the usual counter over model nodes 1..M                      */
@@ -1408,7 +1408,7 @@ static int
 oprofile_dump_fb(FILE *fp, const P7_OPROFILE *om, int width, int precision)
 {
   int     M   = om->M;		/* length of the query                                          */
-  int     nq  = p7O_NQF(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVF(M);     /* segment length; total # of striped vectors needed            */
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
   int     k;			/* the usual counter over model nodes 1..M                      */
@@ -1637,9 +1637,9 @@ p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, 
 int
 p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg)
 {
-  int Q4  = p7O_NQF(om1->M);
-  int Q8  = p7O_NQW(om1->M);
-  int Q16 = p7O_NQB(om1->M);
+  int Q4  = P7_NVF(om1->M);
+  int Q8  = P7_NVW(om1->M);
+  int Q16 = P7_NVB(om1->M);
   int q, r, x, y;
   union { __m128i v; uint8_t c[16]; } a16, b16;
   union { __m128i v; int16_t w[8];  } a8,  b8;

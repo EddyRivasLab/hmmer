@@ -622,7 +622,7 @@ main(int argc, char **argv)
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
-  P7_FILTERMX    *ox      = NULL;
+  P7_CHECKPTMX   *ox      = NULL;
   P7_SPARSEMASK  *sm      = NULL;
   P7_SPARSEMX    *sxf     = p7_sparsemx_Create(NULL);
   P7_SPARSEMX    *sxb     = p7_sparsemx_Create(NULL);
@@ -669,7 +669,7 @@ main(int argc, char **argv)
   p7_oprofile_ReconfigLength(om, sq->n);
 
   /* Use f/b filter to create sparse mask */
-  ox = p7_filtermx_Create(hmm->M, sq->n, ESL_MBYTES(32));
+  ox = p7_checkptmx_Create(hmm->M, sq->n, ESL_MBYTES(32));
   sm  = p7_sparsemask_Create(gm->M, sq->n);
   if (esl_opt_GetBoolean(go, "-a"))  
     p7_sparsemask_AddAll(sm);
@@ -715,7 +715,7 @@ main(int argc, char **argv)
   p7_sparsemx_Destroy(sxf);
   p7_sparsemx_Destroy(sxd);
   p7_sparsemask_Destroy(sm);
-  p7_filtermx_Destroy(ox);
+  p7_checkptmx_Destroy(ox);
   p7_profile_Destroy(gm);
   p7_oprofile_Destroy(om);
   p7_bg_Destroy(bg);

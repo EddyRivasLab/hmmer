@@ -1,18 +1,18 @@
-/* P7_FILTERMX is the striped SIMD vector, checkpointed DP matrix used
- * by all filter DP implementations (SSV, MSV, Viterbi, Forwards,
- * Backwards).
+/* P7_CHECKPTMX is the striped SIMD vector, checkpointed DP matrix
+ * used by the vectorized local Forwards/Backwards calculation that
+ * builds our sparse mask, for subsequent postprocessing with the more
+ * complex glocal/local model.
  * 
  * Contents:
- *    1. The P7_FILTERMX object and its access macros
+ *    1. The P7_CHECKPTMX object and its access macros
  *    2. Function declarations
  *    3. Notes:
  *       [a] Layout of the matrix, in checkpointed rows
  *       [b] Layout of one row, in vectors and floats
- *       [c] Using P7_FILTERMX for single-row DP: MSV, Viterbi filters
  *    4. Copyright and license information.
  */
-#ifndef P7_FILTERMX_INCLUDED
-#define P7_FILTERMX_INCLUDED
+#ifndef P7_CHECKPTMX_INCLUDED
+#define P7_CHECKPTMX_INCLUDED
 
 #include "p7_config.h"
 
@@ -20,45 +20,35 @@
 
 #include "dp_reference/p7_refmx.h"
 
-
-/*****************************************************************
- * 1. P7_FILTERMX
- *****************************************************************/
-
-
-#define P7F_NQF(M)  ( ESL_MAX(2, ((((M)-1) / p7_VNF) + 1)))
-#define P7F_NQW(M)  ( ESL_MAX(2, ((((M)-1) / p7_VNW) + 1)))
-#define P7F_NQB(M)  ( ESL_MAX(2, ((((M)-1) / p7_VNB) + 1)))
-
-#define p7F_NSCELLS 3
+#define p7C_NSCELLS 3
 enum p7f_scells_e {
-  p7F_M     = 0,
-  p7F_D     = 1,
-  p7F_I     = 2,
+  p7C_M     = 0,
+  p7C_D     = 1,
+  p7C_I     = 2,
 };
 
-#define p7F_NXCELLS 8
+#define p7C_NXCELLS 8
 enum p7f_xcells_e {
-  p7F_E     = 0,
-  p7F_N     = 1,
-  p7F_JJ    = 2,
-  p7F_J     = 3,
-  p7F_B     = 4,
-  p7F_CC    = 5,
-  p7F_C     = 6,
-  p7F_SCALE = 7
+  p7C_E     = 0,
+  p7C_N     = 1,
+  p7C_JJ    = 2,
+  p7C_J     = 3,
+  p7C_B     = 4,
+  p7C_CC    = 5,
+  p7C_C     = 6,
+  p7C_SCALE = 7
 };
 
-#define P7F_MQ(dp, q)     ((dp)[(q) * p7F_NSCELLS + p7F_M])
-#define P7F_DQ(dp, q)     ((dp)[(q) * p7F_NSCELLS + p7F_D])
-#define P7F_IQ(dp, q)     ((dp)[(q) * p7F_NSCELLS + p7F_I])
+#define P7C_MQ(dp, q)     ((dp)[(q) * p7C_NSCELLS + p7C_M])
+#define P7C_DQ(dp, q)     ((dp)[(q) * p7C_NSCELLS + p7C_D])
+#define P7C_IQ(dp, q)     ((dp)[(q) * p7C_NSCELLS + p7C_I])
 
 
-typedef struct p7_filtermx_s {
+typedef struct p7_checkptmx_s {
   int M;	/* current actual query model dimension (consensus positions)         */
   int L;	/* current actual target seq dimension (residues)                     */
   int R;	/* current actual number of rows (<=Ra+Rb+Rc), excluding R0           */
-  int Qf;	/* current actual number of fb vectors = P7F_NQF(M)                   */
+  int Qf;	/* current actual number of fb vectors = P7C_NVF(M)                   */
 
   /* Checkpointed layout, mapping rows 1..R to residues 1..L:                         */
   int R0;	/* # of extra rows: one for fwd[0] boundary, two for bck[prv,cur]     */
@@ -94,7 +84,7 @@ typedef struct p7_filtermx_s {
   P7_REFMX *pp;			/* ... full posterior probability matrix, ditto     */
   float     bcksc;		/* Backwards score: which we check against Forward  */
 #endif /*p7_DEBUGGING*/
-} P7_FILTERMX;
+} P7_CHECKPTMX;
 
 
 /* ?MXo(q) access macros work for either uchar or float, so long as you
@@ -107,24 +97,20 @@ typedef struct p7_filtermx_s {
 
 
 
-/*****************************************************************
- * 2. Function declarations
- *****************************************************************/
+extern P7_CHECKPTMX *p7_checkptmx_Create   (int M, int L, int64_t ramlimit);
+extern int           p7_checkptmx_GrowTo   (P7_CHECKPTMX *ox, int M, int L);
+extern size_t        p7_checkptmx_Sizeof   (const P7_CHECKPTMX *ox);
+extern size_t        p7_checkptmx_MinSizeof(int M, int L);
+extern int           p7_checkptmx_Reuse    (P7_CHECKPTMX *ox);
+extern void          p7_checkptmx_Destroy  (P7_CHECKPTMX *ox);
 
-extern P7_FILTERMX *p7_filtermx_Create   (int M, int L, int64_t ramlimit);
-extern int          p7_filtermx_GrowTo   (P7_FILTERMX *ox, int M, int L);
-extern size_t       p7_filtermx_Sizeof   (const P7_FILTERMX *ox);
-extern size_t       p7_filtermx_MinSizeof(int M, int L);
-extern int          p7_filtermx_Reuse    (P7_FILTERMX *ox);
-extern void         p7_filtermx_Destroy  (P7_FILTERMX *ox);
-
-extern int          p7_filtermx_SetDumpMode(P7_FILTERMX *ox, FILE *dfp, int truefalse);
+extern int           p7_checkptmx_SetDumpMode(P7_CHECKPTMX *ox, FILE *dfp, int truefalse);
 #ifdef p7_DEBUGGING
-extern char *       p7_filtermx_DecodeX(enum p7f_xcells_e xcode);
-extern int          p7_filtermx_DumpFBHeader(P7_FILTERMX *ox);
-extern int          p7_filtermx_DumpFBRow(P7_FILTERMX *ox, int rowi, __m128 *dpc, char *pfx);
-extern int          p7_filtermx_DumpMFRow(P7_FILTERMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
-extern int          p7_filtermx_DumpVFRow(P7_FILTERMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
+extern char *        p7_checkptmx_DecodeX(enum p7f_xcells_e xcode);
+extern int           p7_checkptmx_DumpFBHeader(P7_CHECKPTMX *ox);
+extern int           p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, __m128 *dpc, char *pfx);
+extern int           p7_checkptmx_DumpMFRow(P7_CHECKPTMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
+extern int           p7_checkptmx_DumpVFRow(P7_CHECKPTMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
 #endif /*p7_DEBUGGING*/
 
 /*****************************************************************
@@ -133,7 +119,7 @@ extern int          p7_filtermx_DumpVFRow(P7_FILTERMX *ox, int rowi, int16_t xE,
 
 /* [a] Layout of the matrix, in checkpointed rows
  * 
- * One P7_FILTERMX data structure is used for both Forward and Backward
+ * One P7_CHECKPTMX data structure is used for both Forward and Backward
  * computations on a target sequence. The Forward calculation is
  * checkpointed. The Backward calculation is linear memory in two
  * rows. The end result is a Forward score and a posterior-decoded set
@@ -192,29 +178,29 @@ extern int          p7_filtermx_DumpVFRow(P7_FILTERMX *ox, int rowi, int16_t xE,
  *  [1 5 9 13][1 5 9 13][1 5 9 13] [2 6 10 14][2 6 10 14][2 6 10 14] [3 7 11 x][3 7 11 x][3 7 11 x] [4 8 12 x][4 8 12 x][4 8 12 x] [E N JJ J B CC C SCALE]
  *  |-- M ---||-- D ---||-- I ---| |--- M ---||--- D ---||--- I ---| |-- M ---||-- D ---||-- I ---| |-- M ---||-- D ---||-- I ---| 
  *  |---------- q=0 -------------| |------------ q=1 --------------| |---------- q=2 -------------| |---------- q=3 -------------|
- *  |----------------------------------- P7F_NQF(M) * p7F_NSCELLS ---------------------------------------------------------------| |---- p7F_NXCELLS ----|
+ *  |----------------------------------- P7C_NVF(M) * p7C_NSCELLS ---------------------------------------------------------------| |---- p7C_NXCELLS ----|
  *  
  *  Number of elements in a vector = p7_NVF      =  4  (assuming 16-byte wide SIMD vectors; 8, for 32-byte AVX vectors)
- *  Number of vectors on a row     = P7F_NQF(M)  =  max( 2, ((M-1) / p7_NVF) + 1)
- *  Number of main states          = p7F_NSCELLS =  3  (e.g. M,I,D)
- *  Number of special state vals   = p7F_NXCELLS =  8  (e.g. E, N, JJ, J, B, CC, C, SCALE)
- *  Total size of row              = sizeof(float) * (P7F_NQF(M) * P7F_NSCELLS * p7F_NVF + p7F_NXCELLS)
+ *  Number of vectors on a row     = P7C_NVF(M)  =  max( 2, ((M-1) / p7_NVF) + 1)
+ *  Number of main states          = p7C_NSCELLS =  3  (e.g. M,I,D)
+ *  Number of special state vals   = p7C_NXCELLS =  8  (e.g. E, N, JJ, J, B, CC, C, SCALE)
+ *  Total size of row              = sizeof(float) * (P7C_NVF(M) * P7C_NSCELLS * p7C_NVF + p7C_NXCELLS)
  *
  */
 
 
-/* [c] Using P7_FILTERMX for single-row DP: MSV and Viterbi filters.
+/* [c] Using P7_CHECKPTMX for single-row DP: MSV and Viterbi filters.
  * 
  * MSVFilter() and VitFilter() only use a single row of DP memory, and
  * no main memory for special states. They only need to make sure that
  * they have a vector-aligned chunk of memory big enough for
- * P7F_NQB(M) or 3*P7F_NQW(M) __m128i vectors, respectively. We know
+ * P7C_NVB(M) or 3*P7C_NVW(M) __m128i vectors, respectively. We know
  * dpf[0] is vector aligned and big enough: if it's big enough for a
  * Forward vector row, it must be big enough for MSV and Viterbi.
  * 
  * But we can do better than that, and avoid/defer many re-allocations
- * (p7_filtermx_GrowTo() calls), by using even more of the allocated
- * memory in the P7_FILTERMX. We know that the dpf[i] point
+ * (p7_checkptmx_GrowTo() calls), by using even more of the allocated
+ * memory in the P7_CHECKPTMX. We know that the dpf[i] point
  * sequentially into a single allocated memory chunk,
  * dp_mem. Therefore we can use at least <validR> rows: i.e. the total
  * row width available to a single-row calculation in bytes is
@@ -226,7 +212,7 @@ extern int          p7_filtermx_DumpVFRow(P7_FILTERMX *ox, int rowi, int16_t xE,
  */
 
 
-#endif /*P7_FILTERMX_INCLUDED*/
+#endif /*P7_CHECKPTMX_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

@@ -128,9 +128,9 @@ p7_oprofile_MPIPackSize(P7_OPROFILE *om, MPI_Comm comm, int *ret_n)
   int   cnt;
   int   sz;
 
-  int   Q4  = p7O_NQF(om->M);
-  int   Q8  = p7O_NQW(om->M);
-  int   Q16 = p7O_NQB(om->M);
+  int   Q4  = P7_NVF(om->M);
+  int   Q8  = P7_NVW(om->M);
+  int   Q16 = P7_NVB(om->M);
   int   vsz = sizeof(__m128i);
 
   /* MSV Filter information */
@@ -211,9 +211,9 @@ p7_oprofile_MPIPack(P7_OPROFILE *om, char *buf, int n, int *pos, MPI_Comm comm)
   int   len;
   int   x;
 
-  int   Q4    = p7O_NQF(om->M);
-  int   Q8    = p7O_NQW(om->M);
-  int   Q16   = p7O_NQB(om->M);
+  int   Q4    = P7_NVF(om->M);
+  int   Q8    = P7_NVW(om->M);
+  int   Q16   = P7_NVB(om->M);
   int   vsz   = sizeof(__m128i);
 
   /* model configuration */
@@ -356,9 +356,9 @@ p7_oprofile_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **
     if ((*abc)->type != atype)                             { status = eslEINCOMPAT; goto ERROR; }
   }
 
-  Q4  = p7O_NQF(M);
-  Q8  = p7O_NQW(M);
-  Q16 = p7O_NQB(M);
+  Q4  = P7_NVF(M);
+  Q8  = P7_NVW(M);
+  Q16 = P7_NVB(M);
 
   if ((om = p7_oprofile_Create(M, *abc)) == NULL) { status = eslEMEM; goto ERROR;    }
   om->M = M;

@@ -44,13 +44,6 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 /* Which strand(s) should be searched */
 enum p7_strands_e {    p7_STRAND_TOPONLY  = 0, p7_STRAND_BOTTOMONLY = 1,  p7_STRAND_BOTH = 2};
 
-/* In calculating Q, the number of vectors we need in a row, we have
- * to make sure there's at least 2, or a striped implementation fails.
- */
-#define p7O_NQB(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNB) + 1)))   /* 16 uchars  */
-#define p7O_NQW(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNW) + 1)))   /*  8 words   */
-#define p7O_NQF(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNF) + 1)))   /*  4 floats  */
-
 /* Macros below implement indexing idioms for generic DP routines.
  * They require the following setup, for profile <gm> and matrix <gx>:
  *   float const *tsc = gm->tsc;

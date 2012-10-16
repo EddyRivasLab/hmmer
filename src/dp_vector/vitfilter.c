@@ -80,6 +80,7 @@
  *            J2/66 for precision maximization
  *            J4/138-140 for reimplementation in 16-bit precision
  *            J9/110-111 for reimplementation with P7_FILTERMX, memory share w/ checkpointed DP matrix
+ *            J10/101 for separating P7_FILTERMX from P7_CHECKPTMX again: don't share these
  */
 int
 p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)
@@ -304,7 +305,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   int16_t  Dmax;       /* maximum D cell score on row                               */
   int i;         /* counter over sequence positions 1..L                      */
   int q;         /* counter over vectors 0..nq-1                              */
-  int Q        = p7O_NQW(om->M);   /* segment length: # of vectors                              */
+  int Q        = P7_NVW(om->M);   /* segment length: # of vectors                              */
   __m128i *dp  = ox->dpw[0];     /* using {MDI}MX(q) macro requires initialization of <dp>    */
   __m128i *rsc;        /* will point at om->ru[x] for residue x[i]                  */
   __m128i *tsc;        /* will point into (and step thru) om->tu                    */

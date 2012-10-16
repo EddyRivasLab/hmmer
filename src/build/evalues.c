@@ -21,7 +21,7 @@
 #include "base/p7_profile.h"
 
 #include "dp_vector/p7_oprofile.h"
-#include "dp_vector/p7_filtermx.h"
+#include "dp_vector/p7_checkptmx.h"
 #include "dp_vector/msvfilter.h"
 #include "dp_vector/vitfilter.h"
 #include "dp_vector/fwdfilter.h"
@@ -437,7 +437,7 @@ p7_ViterbiMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double
 int
 p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_tau)
 {
-  P7_FILTERMX  *ox      = p7_filtermx_Create(om->M, L, ESL_MBYTES(32)); 
+  P7_CHECKPTMX *ox      = p7_checkptmx_Create(om->M, L, ESL_MBYTES(32)); 
   ESL_DSQ      *dsq     = NULL;
   double       *xv      = NULL;
   float         fsc, nullsc;		                  
@@ -460,7 +460,7 @@ p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambd
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
       xv[i] = (fsc - nullsc) / eslCONST_LOG2;
 
-      p7_filtermx_Reuse(ox);
+      p7_checkptmx_Reuse(ox);
     }
   if ((status = esl_gumbel_FitComplete(xv, N, &gmu, &glam)) != eslOK) goto ERROR;
 
@@ -473,14 +473,14 @@ p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambd
   
   free(xv);
   free(dsq);
-  p7_filtermx_Destroy(ox);
+  p7_checkptmx_Destroy(ox);
   return eslOK;
 
  ERROR:
   *ret_tau = 0.;
   if (xv  != NULL) free(xv);
   if (dsq != NULL) free(dsq);
-  if (ox  != NULL) p7_filtermx_Destroy(ox);
+  if (ox  != NULL) p7_checkptmx_Destroy(ox);
   return status;
 }
 /*-------------- end, determining individual parameters ---------*/

@@ -45,6 +45,7 @@
 
 #include "base/p7_hmmfile.h"
 
+#include "dp_vector/simdvec.h"
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/io.h"
 
@@ -92,10 +93,10 @@ static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file, SSE: "h3ps
 int
 p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
 {
-  int Q4   = p7O_NQF(om->M);
-  int Q8   = p7O_NQW(om->M);
-  int Q16  = p7O_NQB(om->M);
-  int Q16x = p7O_NQB(om->M) + p7O_EXTRA_SB;
+  int Q4   = P7_NVF(om->M);
+  int Q8   = P7_NVW(om->M);
+  int Q16  = P7_NVB(om->M);
+  int Q16x = P7_NVB(om->M) + p7O_EXTRA_SB;
   int n    = strlen(om->name);
   int x;
 
@@ -262,8 +263,8 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
 
   if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
-  Q16  = p7O_NQB(M);
-  Q16x = p7O_NQB(M) + p7O_EXTRA_SB;
+  Q16  = P7_NVB(M);
+  Q16x = P7_NVB(M) + p7O_EXTRA_SB;
 
   /* Set or verify alphabet. */
   if (byp_abc == NULL || *byp_abc == NULL)	{	/* alphabet unknown: whether wanted or unwanted, make a new one */
@@ -383,8 +384,8 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
 
   if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
-  Q16  = p7O_NQB(M);
-  Q16x = p7O_NQB(M) + p7O_EXTRA_SB;
+  Q16  = P7_NVB(M);
+  Q16x = P7_NVB(M) + p7O_EXTRA_SB;
 
   /* Set or verify alphabet. */
   if (byp_abc == NULL || *byp_abc == NULL)	{	/* alphabet unknown: whether wanted or unwanted, make a new one */
@@ -553,8 +554,8 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
   if (! fread((char *) om->cs,           sizeof(char),     M+2,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read cs annotation");
   if (! fread((char *) om->consensus,    sizeof(char),     M+2,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read consensus annotation");
 
-  Q4  = p7O_NQF(om->M);
-  Q8  = p7O_NQW(om->M);
+  Q4  = P7_NVF(om->M);
+  Q8  = P7_NVW(om->M);
 
   if (! fread((char *) om->twv,             sizeof(__m128i),  8*Q8,        hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <tu>, vitfilter transitions");
   for (x = 0; x < om->abc->Kp; x++)

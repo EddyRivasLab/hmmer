@@ -254,7 +254,7 @@ utest_overwrite(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L)
   P7_HMM        *hmm   = NULL;
   P7_PROFILE    *gm    = p7_profile_Create(M, abc);
   P7_OPROFILE   *om    = p7_oprofile_Create(M, abc);
-  P7_FILTERMX   *ox    = NULL;
+  P7_CHECKPTMX  *ox    = NULL;
   P7_SPARSEMASK *sm    = NULL;
   P7_SPARSEMX   *fwd   = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *bck   = p7_sparsemx_Create(NULL);
@@ -281,7 +281,7 @@ utest_overwrite(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L)
   if ( p7_oprofile_ReconfigLength(om, sq->n)  != eslOK)  esl_fatal(msg);
 
   /* F/B filter to calculate the sparse mask */
-  if ( (ox = p7_filtermx_Create(gm->M, sq->n, ESL_MBYTES(32)))   == NULL)  esl_fatal(msg);
+  if ( (ox = p7_checkptmx_Create(gm->M, sq->n, ESL_MBYTES(32)))  == NULL)  esl_fatal(msg);
   if ( (sm = p7_sparsemask_Create(gm->M, sq->n))                 == NULL)  esl_fatal(msg);
   if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL)   != eslOK) esl_fatal(msg);
   if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm)             != eslOK) esl_fatal(msg);
@@ -301,7 +301,7 @@ utest_overwrite(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L)
   p7_hmm_Destroy(hmm);
   p7_profile_Destroy(gm);
   p7_oprofile_Destroy(om);
-  p7_filtermx_Destroy(ox);
+  p7_checkptmx_Destroy(ox);
   p7_sparsemask_Destroy(sm);
   p7_sparsemx_Destroy(pp);
   p7_sparsemx_Destroy(bck);
@@ -320,7 +320,7 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
   P7_HMM        *hmm   = NULL;
   P7_PROFILE    *gm    = p7_profile_Create(M, abc);
   P7_OPROFILE   *om    = p7_oprofile_Create(M, abc);
-  P7_FILTERMX   *ox    = p7_filtermx_Create(M, L, ESL_MBYTES(32));
+  P7_CHECKPTMX  *ox    = p7_checkptmx_Create(M, L, ESL_MBYTES(32));
   P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L);
   P7_SPARSEMX   *sxf   = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxb   = p7_sparsemx_Create(sm);
@@ -353,7 +353,7 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
       if ( p7_oprofile_ReconfigLength(om, sq->n)   != eslOK) esl_fatal(msg);
 
       /* F/B filter to calculate the sparse mask */
-      if ( p7_filtermx_GrowTo  (ox,  gm->M, sq->n)                 != eslOK) esl_fatal(msg);
+      if ( p7_checkptmx_GrowTo (ox,  gm->M, sq->n)                 != eslOK) esl_fatal(msg);
       if ( p7_sparsemask_Reinit(sm,  gm->M, sq->n)                 != eslOK) esl_fatal(msg);
       if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
       if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm)           != eslOK) esl_fatal(msg);
@@ -387,7 +387,7 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
 	  }
 	}
       
-      p7_filtermx_Reuse(ox);
+      p7_checkptmx_Reuse(ox);
       p7_sparsemask_Reuse(sm);
       p7_sparsemx_Reuse(sxf);
       p7_sparsemx_Reuse(sxb);
@@ -399,7 +399,7 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
   p7_hmm_Destroy(hmm);
   p7_profile_Destroy(gm);
   p7_oprofile_Destroy(om);
-  p7_filtermx_Destroy(ox);
+  p7_checkptmx_Destroy(ox);
   p7_sparsemask_Destroy(sm);
   p7_sparsemx_Destroy(sxd);
   p7_sparsemx_Destroy(sxb);
@@ -431,7 +431,7 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
   P7_PROFILE    *gm     = p7_profile_Create(M, abc);
   ESL_SQ        *sq     = esl_sq_CreateDigital(abc);       /* space for generated (homologous) target seqs              */
   P7_OPROFILE   *om     = p7_oprofile_Create(M, abc);
-  P7_FILTERMX   *ox     = NULL;
+  P7_CHECKPTMX  *ox     = NULL;
   P7_TRACE      *tr     = NULL;
   P7_SPARSEMASK *sm     = NULL;
   P7_SPARSEMX   *sxf    = p7_sparsemx_Create(NULL);
@@ -460,9 +460,9 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
   if ( p7_oprofile_ReconfigLength(om, sq->n) != eslOK) esl_fatal(msg);
 
   /* Fwd/Bck local filter to calculate the sparse mask */
-  if (  (ox = p7_filtermx_Create(M, sq->n, ESL_MBYTES(32)))     == NULL) esl_fatal(msg);
+  if (  (ox = p7_checkptmx_Create(M, sq->n, ESL_MBYTES(32)))    == NULL) esl_fatal(msg);
   if (  (sm = p7_sparsemask_Create(M, sq->n))                   == NULL) esl_fatal(msg);
-  if ( p7_filtermx_GrowTo(ox, M, sq->n)                        != eslOK) esl_fatal(msg);
+  if ( p7_checkptmx_GrowTo(ox, M, sq->n)                       != eslOK) esl_fatal(msg);
   if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
   if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm)           != eslOK) esl_fatal(msg);
 
@@ -502,7 +502,7 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
   p7_sparsemx_Destroy(sxf);
   p7_sparsemask_Destroy(sm);
   p7_trace_Destroy(tr);
-  p7_filtermx_Destroy(ox);
+  p7_checkptmx_Destroy(ox);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_hmm_Destroy(hmm);

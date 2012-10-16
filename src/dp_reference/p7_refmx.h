@@ -3,8 +3,9 @@
  * reference implementation is used for testing and debugging; a
  * baseline for comparison to our production code.
  * 
- * For DP matrices used by the production code, see P7_FILTERMX and
- * P7_BANDMX.
+ * For DP matrices used by the production code, see P7_FILTERMX
+ * and P7_CHECKPTMX in the dp_vector subdir (the vectorized 
+ * implementation).
  * 
  * The reference DP matrix is quadratic memory (not banded, not
  * checkpointed), with values in standard floats (not vectors).

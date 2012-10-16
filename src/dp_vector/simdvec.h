@@ -1,5 +1,35 @@
+/* Configuration constants and initialization of our SIMD vector environment.
+ * 
+ * This header file may be included by non-vector code: for example,
+ * P7_SPARSEMASK code that is called by the vectorized fwd-bck local
+ * decoder.
+ */
 #ifndef P7_SIMDVEC_INCLUDED
 #define P7_SIMDVEC_INCLUDED
+
+/* Define our SIMD vector sizes.
+ * SSE, Altivec/VMX are 128b/16B vectors, but we anticipate others.
+ * Intel AVX is already roadmapped out to 1024b/128B vectors. 
+ * See note [1] below on memory alignment, SIMD vectors, and
+ * malloc(). We need these constants and macros not only in the
+ * vector implementation, but also in the P7_SPARSEMASK code that
+ * interfaces with the vector f/b decoder.
+ */
+#define p7_VALIGN   16		/* Vector memory must be aligned on 16-byte boundaries   */
+#define p7_VNF      4		/* Number of floats per SIMD vector (Forward, Backward)  */
+#define p7_VNW      8		/* Number of shorts (words) per SIMD vector (Viterbi)    */
+#define p7_VNB      16		/* Number of bytes per SIMD vector (SSV, MSV)            */
+#define p7_VALIMASK (~0xf)      /* Ptrs are aligned using & p7_VALIMASK                  */
+
+/* In calculating Q, the number of vectors we need in a row, we have
+ * to make sure there's at least 2, or a striped implementation fails.
+ */
+#define P7_NVB(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNB) + 1)))   /* 16 uchars  */
+#define P7_NVW(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNW) + 1)))   /*  8 words   */
+#define P7_NVF(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNF) + 1)))   /*  4 floats  */
+
+
+
 
 extern void p7_simdvec_Init(void);
 

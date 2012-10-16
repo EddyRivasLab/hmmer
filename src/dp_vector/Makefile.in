@@ -4,7 +4,7 @@ OBJS =  fm_sse.o\
 	fwdfilter.o\
 	io.o\
 	msvfilter.o\
-	p7_filtermx.o\
+	p7_checkptmx.o\
 	p7_oprofile.o\
 	p7_oprofile_mpi.o\
 	simdvec.o\
