@@ -15,6 +15,7 @@
 #include "p7_config.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>		/* roundf() */
 
@@ -22,12 +23,19 @@
 #include <emmintrin.h>		/* SSE2 */
 
 #include "easel.h"
+#include "esl_alphabet.h"
 #include "esl_random.h"
 #include "esl_sse.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
-#include "impl_sse.h"
+#include "base/p7_bg.h"
+#include "base/p7_hmm.h"
+#include "base/p7_profile.h"
+
+#include "build/modelsample.h"
+#include "search/modelconfig.h"
+
+#include "dp_vector/p7_oprofile.h"
 
 /*****************************************************************
  * 1. The P7_OPROFILE structure: a score profile.
@@ -412,11 +420,6 @@ p7_oprofile_Clone(const P7_OPROFILE *om1)
   p7_oprofile_Destroy(om2);
   return NULL;
 }
-
-/*
-   *
-   *
-   */
 
 
 /* Function:  p7_oprofile_UpdateFwdEmissionScores()

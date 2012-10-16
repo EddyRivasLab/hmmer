@@ -6,9 +6,6 @@
  *    3. Unit tests.
  *    4. Test driver.
  *    5. Copyright and license information.
- *    
- * SRE, Thu Jun 14 09:59:20 2007 [Janelia] [Tom Waits, Orphans]
- * SVN $Id$
  */
 #include "p7_config.h"		
 
@@ -17,16 +14,18 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "mpi.h"
+#include <mpi.h>		/* MPI  */
 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
 
 #include "easel.h"
+#include "esl_alphabet.h"
 #include "esl_mpi.h"
 #include "esl_getopts.h"
 
-#include "hmmer.h"
+#include "dp_vector/p7_oprofile.h"
+
 
 /*****************************************************************
  * 1. Communicating P7_OPROFILE, an optimized model.

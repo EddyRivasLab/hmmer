@@ -97,6 +97,16 @@ typedef struct p7_filtermx_s {
 } P7_FILTERMX;
 
 
+/* ?MXo(q) access macros work for either uchar or float, so long as you
+ * init your "dp" to point to the appropriate array.
+ */
+#define MMXo(q)   (dp[(q) * p7X_NSCELLS + p7X_M])
+#define DMXo(q)   (dp[(q) * p7X_NSCELLS + p7X_D])
+#define IMXo(q)   (dp[(q) * p7X_NSCELLS + p7X_I])
+#define XMXo(i,s) (xmx[(i) * p7X_NXCELLS + s])
+
+
+
 /*****************************************************************
  * 2. Function declarations
  *****************************************************************/

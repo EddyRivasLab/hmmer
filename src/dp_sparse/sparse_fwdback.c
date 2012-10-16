@@ -16,9 +16,12 @@
 #include "easel.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
-#include "p7_sparsemx.h"
-#include "sparse_fwdback.h"
+#include "base/p7_profile.h"
+
+#include "misc/logsum.h"
+
+#include "dp_sparse/p7_sparsemx.h"
+#include "dp_sparse/sparse_fwdback.h"
 
 /*****************************************************************
  * 1. Sparse Forward

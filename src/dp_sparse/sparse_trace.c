@@ -15,8 +15,10 @@
 #include "esl_random.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
-#include "p7_sparsemx.h"
+#include "base/p7_profile.h"
+
+#include "dp_sparse/p7_sparsemx.h"
+#include "dp_sparse/sparse_trace.h"
 
 /*****************************************************************
  * 1. Choice selection functions for Viterbi traces

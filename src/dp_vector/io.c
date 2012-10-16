@@ -41,9 +41,13 @@
 #include <emmintrin.h>		/* SSE2 */
 
 #include "easel.h"
+#include "esl_alphabet.h"
 
-#include "hmmer.h"
-#include "impl_sse.h"
+#include "base/p7_hmmfile.h"
+
+#include "dp_vector/p7_oprofile.h"
+#include "dp_vector/io.h"
+
 
 static uint32_t  v3f_fmagic = 0xb3e6e6f3; /* 3/f binary MSV file, SSE:     "3ffs" = 0x 33 66 66 73  + 0x80808080 */
 static uint32_t  v3f_pmagic = 0xb3e6f0f3; /* 3/f binary profile file, SSE: "3fps" = 0x 33 66 70 73  + 0x80808080 */

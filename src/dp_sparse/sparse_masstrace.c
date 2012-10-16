@@ -16,9 +16,11 @@
 #include "easel.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
-#include "p7_masstrace.h"
-#include "p7_sparsemx.h"
+#include "base/p7_profile.h"
+#include "base/p7_masstrace.h"
+
+#include "dp_sparse/p7_sparsemx.h"
+#include "dp_sparse/sparse_masstrace.h"
 
 /*****************************************************************
  * 1. The upwards recursion.

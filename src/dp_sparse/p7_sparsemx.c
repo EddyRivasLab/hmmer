@@ -26,14 +26,19 @@
 
 #include "p7_config.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "easel.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
-#include "p7_sparsemx.h"
+#include "base/p7_trace.h"
+
+#include "dp_reference/p7_refmx.h"
+#include "dp_sparse/p7_sparsemx.h"
+
+
 
 /*****************************************************************
  * 1. P7_SPARSEMASK; defines cells to be included in sparse DP matrix

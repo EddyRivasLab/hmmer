@@ -1,9 +1,21 @@
-#include "hmmer.h"
-#include "impl_sse.h"
+#include "p7_config.h"
+
+#include <stdio.h>
+
+#include <xmmintrin.h>		/* SSE  */
+#include <emmintrin.h>		/* SSE2 */
+
+#include "easel.h"
+#include "esl_getopts.h"
+
+#include "fm/fm_general.h"
+
+#include "dp_vector/fm_sse.h"
 
 
 int
-fm_getbits_m128 (__m128i in, char *buf, int reverse) {
+fm_getbits_m128 (__m128i in, char *buf, int reverse) 
+{
   byte_m128 new;
   new.m128 = in;
   int i,j;
@@ -24,7 +36,8 @@ fm_getbits_m128 (__m128i in, char *buf, int reverse) {
 }
 
 int
-fm_print_m128 (__m128i in) {
+fm_print_m128 (__m128i in) 
+{
   char str[144];
   fm_getbits_m128(in, str, 0);
   fprintf (stderr, "%s\n", str);
@@ -33,7 +46,8 @@ fm_print_m128 (__m128i in) {
 
 
 int
-fm_print_m128_rev (__m128i in) {
+fm_print_m128_rev (__m128i in) 
+{
   char str[144];
   fm_getbits_m128(in, str, 1);
   fprintf (stderr, "%s\n", str);
@@ -45,7 +59,8 @@ fm_print_m128_rev (__m128i in) {
  * Purpose:   Initialize vector masks used in SSE FMindex implementation
  */
 int
-fm_initConfig( FM_CFG *cfg, ESL_GETOPTS *go ) {
+fm_initConfig( FM_CFG *cfg, ESL_GETOPTS *go ) 
+{
   int status;
   int i,j;
   int trim_chunk_count;

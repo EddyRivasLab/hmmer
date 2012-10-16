@@ -7,6 +7,7 @@
 #include "esl_random.h"
 
 #include "base/p7_hmm.h"
+#include "base/p7_prior.h"
 
 extern int     p7_hmm_Sample           (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
 extern int     p7_hmm_SamplePrior      (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, const P7_PRIOR *pri, P7_HMM **ret_hmm);

@@ -26,9 +26,13 @@
 #include "esl_sse.h"
 #include "esl_gumbel.h"
 
-#include "hmmer.h"
-#include "impl_sse.h"
-#include "p7_filtermx.h"
+#include "base/p7_hmmwindow.h"
+#include "fm/fm.h"
+
+#include "dp_vector/p7_oprofile.h"
+#include "dp_vector/p7_filtermx.h"
+#include "dp_vector/ssvfilter.h"
+#include "dp_vector/msvfilter.h"
 
 
 /*****************************************************************
@@ -385,7 +389,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
       ret_sc /= om->scale_b;
       ret_sc -= 3.0; // that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ
 
-      p7_hmmwindow_new(windowlist, 0, target_start, k, end, end-start+1 , ret_sc, fm_nocomplement );
+      p7_hmmwindow_new(windowlist, 0, target_start, k, end, end-start+1 , ret_sc, fm_nocomplement);
 
       i = target_end; // skip forward
 	  }

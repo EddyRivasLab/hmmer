@@ -1,10 +1,12 @@
 #include "p7_config.h"
 
+#include <stdio.h>
+
 #include "easel.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
-#include "p7_masstrace.h"
+#include "base/p7_trace.h"
+#include "base/p7_masstrace.h"
 
 static P7_MASSTRACE *
 masstrace_create_engine(int M_hint, int L_hint, int do_slim)

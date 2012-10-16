@@ -3,6 +3,9 @@
 
 #include "p7_config.h"
 
+#include <xmmintrin.h>		/* SSE  */
+#include <emmintrin.h>		/* SSE2 */
+
 #include "esl_getopts.h"
 
 #include "fm/fm.h"

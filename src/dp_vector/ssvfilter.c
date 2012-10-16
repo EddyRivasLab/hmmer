@@ -415,8 +415,8 @@
 #include "easel.h"
 #include "esl_sse.h"
 
-#include "hmmer.h"
-#include "impl_sse.h"
+#include "dp_vector/p7_oprofile.h"
+#include "dp_vector/ssvfilter.h"
 
 /* Note that some ifdefs below has to be changed if these values are
    changed. These values are chosen based on some simple speed

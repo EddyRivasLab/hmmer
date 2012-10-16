@@ -10,11 +10,11 @@
 #include "p7_config.h"
 
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "easel.h"
 
-#include "hmmer.h"
-#include "p7_filtermx.h"
+#include "dp_vector/p7_filtermx.h"
 
 static void set_row_layout  (P7_FILTERMX *ox, int allocL, int maxR); 
 static void set_full        (P7_FILTERMX *ox, int L);

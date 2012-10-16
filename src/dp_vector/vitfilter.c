@@ -29,9 +29,10 @@
 #include "esl_sse.h"
 #include "esl_gumbel.h"
 
-#include "hmmer.h"
-#include "impl_sse.h"
-#include "p7_filtermx.h"
+#include "base/p7_hmmwindow.h"
+
+#include "dp_vector/p7_oprofile.h"
+#include "dp_vector/p7_filtermx.h"
 
 /*****************************************************************
  * 1. Viterbi filter implementation.
@@ -290,7 +291,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
  * Xref:      See p7_ViterbiFilter()
  */
 int
-p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox,
+p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox,
                             float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
 {
   register __m128i mpv, dpv, ipv;  /* previous row values                                       */

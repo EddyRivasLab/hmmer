@@ -8,10 +8,11 @@
 
 #include "easel.h"
 
-#include "hmmer.h"
-#include "p7_sparsemx.h"
-#include "sparse_viterbi.h"
-#include "sparse_trace.h"
+#include "base/p7_profile.h"
+
+#include "dp_sparse/p7_sparsemx.h"
+#include "dp_sparse/sparse_trace.h"
+#include "dp_sparse/sparse_viterbi.h"
 
 /*****************************************************************
  * 1. Sparse Viterbi

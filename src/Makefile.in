@@ -1,14 +1,14 @@
-SUBDIRS    = base\
-	     build\
-             daemon\
-             dp_reference
-	     # dp_vector
-             # dp_sparse\
-             # experiments\
-             # misc\
-             # programs\
-             # search\
-             # utilities
+SUBDIRS = base\
+	  build\
+          daemon\
+          dp_reference\
+	  dp_sparse\
+	  dp_vector
+        # experiments\
+        # misc\
+        # programs\
+        # search\
+        # utilities
 
 HDRS =  
 
