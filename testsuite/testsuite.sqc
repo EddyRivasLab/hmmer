@@ -287,6 +287,32 @@
 1 exercise  nhmmer/-Z            @src/nhmmer@  -Z 45000000                !tutorial/SNORD96.hmm! %RNDDB%
 1 exercise  nhmmer/--seed        @src/nhmmer@  --seed 42                  !tutorial/SNORD96.hmm! %RNDDB%
 
+
+# nhmmscan    xxxxxxxxxxxxxxxxxxxx
+1 prep      rnddb                  @easel/miniapps/esl-shuffle@ -G --dna   -L 10000 -N 2 -o %RNDDB%
+1 prep      press                  @src/hmmpress@  -f                        !tutorial/SNORD96.hmm!
+1 exercise  nhmmscan               @src/nhmmscan@                             !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/-h            @src/nhmmscan@  -h
+1 exercise  nhmmscan/-o            @src/nhmmscan@  -o           %nhmmscan.out%  !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/--tblout      @src/nhmmscan@  --tblout     %nhmmscan.tbl%  !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/--dfamtblout  @src/nhmmscan@  --dfamtblout %nhmmscan.dtbl% !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/--acc         @src/nhmmscan@  --acc                      !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/--noali       @src/nhmmscan@  --noali                    !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/--notextw     @src/nhmmscan@  --notextw                  !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/--textw       @src/nhmmscan@  --textw 256                !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/-E            @src/nhmmscan@  -E 0.01                    !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/-T            @src/nhmmscan@  -T 20                      !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/--incE        @src/nhmmscan@  --incE 0.01                !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/--incT        @src/nhmmscan@  --incT 20                  !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/--max         @src/nhmmscan@  --max                      !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/--F1          @src/nhmmscan@  --F1 0.03                  !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/--F2          @src/nhmmscan@  --F2 0.002                 !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/--F3          @src/nhmmscan@  --F3 0.0002                !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/--nobias      @src/nhmmscan@  --nobias                   !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/--nonull2     @src/nhmmscan@  --nonull2                  !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/-Z            @src/nhmmscan@  -Z 45000000                !tutorial/SNORD96.hmm! %RNDDB%
+1 exercise  nhmmscan/--seed        @src/nhmmscan@  --seed 42                  !tutorial/SNORD96.hmm! %RNDDB%
+
 ################################################################
 # Integration tests
 ################################################################
