@@ -1435,6 +1435,9 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
   ESL_ALLOC(scores_arr, (om->abc->Kp)*4*sizeof(float));
   ESL_ALLOC(fwd_emissions_arr, sizeof(float) *  om->abc->Kp * (om->M+1));
 
+  p7_oprofile_GetFwdEmissionArray(om, bg, fwd_emissions_arr);
+
+
   msv_windowlist.windows = NULL;
   vit_windowlist.windows = NULL;
   p7_hmmwindow_init(&msv_windowlist);

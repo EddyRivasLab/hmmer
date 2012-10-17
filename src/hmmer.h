@@ -311,7 +311,6 @@ typedef struct p7_bg_s {
   ESL_HMM *fhmm;	/* bias filter: p7_bg_SetFilter() sets this, from model's mean composition */
 
   float    omega;	/* the "prior" on null2/null3: set at initialization (one omega for both null types)  */
-  int      use_null3;  /* use null3 in addition to null2 ?*/
 
   const ESL_ALPHABET *abc;	/* reference to alphabet in use: set at initialization             */
 } P7_BG;

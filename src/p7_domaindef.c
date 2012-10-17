@@ -802,14 +802,12 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
   int            pos;
   float          null2[p7_MAXCODE];
   int            status;
-  float          null3_corr;
-  int            local_env_i;
-  int            local_env_j;
+  int            max_env_extra = 20;
 
   // I modify bg and om in-place to avoid having to clone (allocate) a massive
   // number of times when there are many hits
   if (long_target && scores_arr!=NULL) { // this modifies both bg and om.
-    p7_oprofile_GetFwdEmissionArray(om, bg, fwd_emissions_arr);
+    //p7_oprofile_GetFwdEmissionArray(om, bg, fwd_emissions_arr);
     reparameterize_model (bg, om, sq->dsq + i, j-i+1, fwd_emissions_arr, bgf_arr, scores_arr);
   }
 
@@ -844,12 +842,18 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
    * the true score of the hit region
    */
   if (long_target) {
-    local_env_i = ESL_MAX (i, ddef->dcl[ddef->ndom].ad->sqfrom-100+1);
-    local_env_j = ESL_MIN (j, ddef->dcl[ddef->ndom].ad->sqto+100-1);
-    if (local_env_i != i || local_env_j != j ) {
-      i = local_env_i;
-      j = local_env_j;
+    if (     i < ddef->dcl[ddef->ndom].ad->sqfrom-max_env_extra   //trim the left side of the envelope
+        ||   j > ddef->dcl[ddef->ndom].ad->sqto+max_env_extra     //trim the right side of the envelope
+        ) {
+
+      //trim in the envelope, and do it again
+      i = ESL_MAX(i,ddef->dcl[ddef->ndom].ad->sqfrom-max_env_extra);
+      j = ESL_MIN(j,ddef->dcl[ddef->ndom].ad->sqto+max_env_extra);
       Ld = j - i + 1;
+
+      //revert bg and om back to original, then forward to new values
+      reparameterize_model (bg, om, NULL, 0, fwd_emissions_arr, bgf_arr, scores_arr);
+      reparameterize_model (bg, om, sq->dsq + i, Ld, fwd_emissions_arr, bgf_arr, scores_arr);
 
       p7_Forward (sq->dsq + i-1, Ld, om,      ox1, &envsc);
       p7_Backward(sq->dsq + i-1, Ld, om, ox1, ox2, NULL);
@@ -866,7 +870,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
        for (z = 0; z < ddef->tr->N; z++)
          if (ddef->tr->i[z] > 0) ddef->tr->i[z] += i-1;
 
-       /* store the results in it, destroying the alidisplay object */
+       /* store the results in it, first destroying the old alidisplay object */
        p7_alidisplay_Destroy(dom->ad);
        dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq);
     }
@@ -901,18 +905,6 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
   }
   for (pos = i; pos <= j; pos++)
     domcorrection   += ddef->n2sc[pos];         /* domcorrection is in units of NATS */
-
-  if (long_target) {
-    /* for long_target case, merge in the results of null3 correction
-     * see ~/notebook/2012/0214_Dfam_false_positives/00NOTES 02/19 for details
-     *
-     * bias composition is based only on the aligned positions:
-     */
-    if (bg->use_null3) {
-      p7_null3_score(om->abc, sq->dsq, NULL /*don't use trace*/, dom->iali, dom->jali, bg, &null3_corr);
-      domcorrection = p7_FLogsum (domcorrection, null3_corr);
-    }
-  }
 
   dom->domcorrection = domcorrection; /* in units of NATS */
 
