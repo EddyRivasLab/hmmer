@@ -30,6 +30,7 @@
 #include "esl_gumbel.h"
 
 #include "base/p7_hmmwindow.h"
+#include "fm/fm.h"
 
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/p7_filtermx.h"
@@ -49,6 +50,9 @@
  *            Score may overflow (and will, on high-scoring
  *            sequences), but will not underflow. 
  *            
+ *            <ox> will be resized if needed. It's fine if it was just
+ *            <_Reuse()'d> from a previous, smaller profile comparison.
+ *            
  *            The model must be in a local alignment mode; other modes
  *            cannot provide the necessary guarantee of no underflow.
  *            
@@ -66,11 +70,7 @@
  *            <eslERANGE> if the score overflows; in this case
  *            <*ret_sc> is <eslINFINITY>, and the sequence can 
  *            be treated as a high-scoring hit.
- *
- * Throws:    <eslEINVAL> if <ox> allocation is too small, or if
- *            profile isn't in a local alignment mode. (Must be in local
- *            alignment mode because that's what helps us guarantee 
- *            limited dynamic range.)
+ *            <ox> may be reallocated.
  *
  * Xref:      [Farrar07] for ideas behind striped SIMD DP.
  *            J2/46-47 for layout of HMMER's striped SIMD DP.
@@ -95,17 +95,22 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   int16_t  Dmax;		   /* maximum D cell score on row                               */
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
-  int Q        = P7F_NQW(om->M);   /* segment length: # of vectors                              */
-  __m128i *dp  = (__m128i *) ox->dpf[0]; /* see note [c] in p7_filtermx.h on 1-row DP memory    */
+  int Q        = P7_NVW(om->M);    /* segment length: # of vectors                              */
+  __m128i *dp  = ox->dp;           /* enables MMXf(), IMXf(), DMXf() access macros              */
   __m128i *rsc;			   /* will point at om->ru[x] for residue x[i]                  */
   __m128i *tsc;			   /* will point into (and step thru) om->tu                    */
   __m128i negInfv;
+  int     status;
 
-#ifdef p7_DEBUGGING   /* Check that the DP matrix is ok for us; see note [c], p7_filtermx.h */
-  if (Q * sizeof(__m128i) > ox->allocW * ox->allocR)   ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
-  if (om->mode != p7_LOCAL && om->mode != p7_UNILOCAL) ESL_EXCEPTION(eslEINVAL, "Fast filter only works for local alignment");
-#endif
-  ox->M   = om->M;
+  /* Contract checks / argument validation */
+  ESL_DASSERT1( (om->mode == p7_LOCAL || om->mode == p7_UNILOCAL) ); /* VF numerics only work for local alignment */
+
+  /* Resize the filter mx as needed */
+  if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of Vit filter matrix failed");
+
+  /* Matrix type and size must be set early, not late: debugging dump functions need this information. */
+  ox->M    = om->M;
+  ox->type = p7F_VITFILTER;
 
   /* -infinity is -32768 */
   negInfv = _mm_set1_epi16(-32768);
@@ -114,7 +119,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   /* Initialization. In unsigned arithmetic, -infinity is -32768
    */
   for (q = 0; q < Q; q++)
-    MMXo(q) = IMXo(q) = DMXo(q) = _mm_set1_epi16(-32768);
+    MMXf(q) = IMXf(q) = DMXf(q) = _mm_set1_epi16(-32768);
   xN   = om->base_w;
   xB   = xN + om->xw[p7O_N][p7O_MOVE];
   xJ   = -32768;
@@ -138,13 +143,13 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
        * Because ia32 is littlendian, this means a left bit shift.
        * Zeros shift on automatically; replace it with -32768.
        */
-      mpv = MMXo(Q-1);  mpv = _mm_slli_si128(mpv, 2);  mpv = _mm_or_si128(mpv, negInfv);
-      dpv = DMXo(Q-1);  dpv = _mm_slli_si128(dpv, 2);  dpv = _mm_or_si128(dpv, negInfv);
-      ipv = IMXo(Q-1);  ipv = _mm_slli_si128(ipv, 2);  ipv = _mm_or_si128(ipv, negInfv);
+      mpv = MMXf(Q-1);  mpv = _mm_slli_si128(mpv, 2);  mpv = _mm_or_si128(mpv, negInfv);
+      dpv = DMXf(Q-1);  dpv = _mm_slli_si128(dpv, 2);  dpv = _mm_or_si128(dpv, negInfv);
+      ipv = IMXf(Q-1);  ipv = _mm_slli_si128(ipv, 2);  ipv = _mm_or_si128(ipv, negInfv);
 
       for (q = 0; q < Q; q++)
       {
-        /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
+        /* Calculate new MMXf(i,q); don't store it yet, hold it in sv. */
         sv   =                    _mm_adds_epi16(xBv, *tsc);  tsc++;
         sv   = _mm_max_epi16 (sv, _mm_adds_epi16(mpv, *tsc)); tsc++;
         sv   = _mm_max_epi16 (sv, _mm_adds_epi16(ipv, *tsc)); tsc++;
@@ -155,13 +160,13 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
         /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
          * {MDI}MX(q) is then the current, not the prev row
          */
-        mpv = MMXo(q);
-        dpv = DMXo(q);
-        ipv = IMXo(q);
+        mpv = MMXf(q);
+        dpv = DMXf(q);
+        ipv = IMXf(q);
 
         /* Do the delayed stores of {MD}(i,q) now that memory is usable */
-        MMXo(q) = sv;
-        DMXo(q) = dcv;
+        MMXf(q) = sv;
+        DMXf(q) = dcv;
 
         /* Calculate the next D(i,q+1) partially: M->D only;
                * delay storage, holding it in dcv
@@ -171,7 +176,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 
         /* Calculate and store I(i,q) */
         sv     =                    _mm_adds_epi16(mpv, *tsc);  tsc++;
-        IMXo(q)= _mm_max_epi16 (sv, _mm_adds_epi16(ipv, *tsc)); tsc++;
+        IMXf(q)= _mm_max_epi16 (sv, _mm_adds_epi16(ipv, *tsc)); tsc++;
       }
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
@@ -207,8 +212,8 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 	  tsc = om->twv + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
-	      DMXo(q) = _mm_max_epi16(dcv, DMXo(q));	
-	      dcv     = _mm_adds_epi16(DMXo(q), *tsc); tsc++;
+	      DMXf(q) = _mm_max_epi16(dcv, DMXf(q));	
+	      dcv     = _mm_adds_epi16(DMXf(q), *tsc); tsc++;
 	    }
 
 	  /* We may have to do up to three more passes; the check
@@ -221,16 +226,16 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 	    tsc = om->twv + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
-		if (! esl_sse_any_gt_epi16(dcv, DMXo(q))) break;
-		DMXo(q) = _mm_max_epi16(dcv, DMXo(q));	
-		dcv     = _mm_adds_epi16(DMXo(q), *tsc);   tsc++;
+		if (! esl_sse_any_gt_epi16(dcv, DMXf(q))) break;
+		DMXf(q) = _mm_max_epi16(dcv, DMXf(q));	
+		dcv     = _mm_adds_epi16(DMXf(q), *tsc);   tsc++;
 	      }	    
 	  } while (q == Q);
 	}
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
 	{
 	  dcv = _mm_slli_si128(dcv, 2);
-	  DMXo(0) = _mm_or_si128(dcv, negInfv);
+	  DMXf(0) = _mm_or_si128(dcv, negInfv);
 	}
 	  
 #ifdef p7_DEBUGGING
@@ -295,29 +300,38 @@ int
 p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox,
                             float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
 {
-  register __m128i mpv, dpv, ipv;  /* previous row values                                       */
-  register __m128i sv;       /* temp storage of 1 curr row value in progress              */
-  register __m128i dcv;      /* delayed storage of D(i,q+1)                               */
-  register __m128i xEv;      /* E state: keeps max for Mk->E as we go                     */
-  register __m128i xBv;      /* B state: splatted vector of B[i-1] for B->Mk calculations */
-  register __m128i Dmaxv;          /* keeps track of maximum D cell on row                      */
-  int16_t  xE, xB, xC, xJ, xN;     /* special states' scores                                    */
-  int16_t  Dmax;       /* maximum D cell score on row                               */
-  int i;         /* counter over sequence positions 1..L                      */
-  int q;         /* counter over vectors 0..nq-1                              */
+  register __m128i mpv, dpv, ipv; /* previous row values                                       */
+  register __m128i sv;            /* temp storage of 1 curr row value in progress              */
+  register __m128i dcv;           /* delayed storage of D(i,q+1)                               */
+  register __m128i xEv;           /* E state: keeps max for Mk->E as we go                     */
+  register __m128i xBv;           /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register __m128i Dmaxv;         /* keeps track of maximum D cell on row                      */
+  int16_t  xE, xB, xC, xJ, xN;    /* special states' scores                                    */
+  int16_t  Dmax;                  /* maximum D cell score on row                               */
+  int i;                          /* counter over sequence positions 1..L                      */
+  int q;                          /* counter over vectors 0..nq-1                              */
   int Q        = P7_NVW(om->M);   /* segment length: # of vectors                              */
-  __m128i *dp  = ox->dpw[0];     /* using {MDI}MX(q) macro requires initialization of <dp>    */
-  __m128i *rsc;        /* will point at om->ru[x] for residue x[i]                  */
-  __m128i *tsc;        /* will point into (and step thru) om->tu                    */
-
+  __m128i *dp  = ox->dp;          /* using {MDI}MXf(q) macro requires initialization of <dp>   */
+  __m128i *rsc;                   /* will point at om->ru[x] for residue x[i]                  */
+  __m128i *tsc;                   /* will point into (and step thru) om->tu                    */
   __m128i negInfv;
-
   int16_t sc_thresh;
-  float invP;
-
+  float   invP;
   int z;
   union { __m128i v; int16_t i[8]; } tmp;
+  int status;
+
   windowlist->count = 0;
+
+  /* Contract checks / argument validation */
+  ESL_DASSERT1( (om->mode == p7_LOCAL || om->mode == p7_UNILOCAL) ); /* VF numerics only work for local alignment */
+
+  /* Resize the filter mx as needed */
+  if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of Vit filter matrix failed");
+
+  /* Matrix type and size must be set early, not late: debugging dump functions need this information. */
+  ox->M    = om->M;
+  ox->type = p7F_VITFILTER;
 
 /*
  *  In p7_ViterbiFilter, converting from a scaled int Viterbi score
@@ -338,11 +352,6 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   sc_thresh =   (int) ceil ( ( (filtersc + (eslCONST_LOG2 * invP) + 3.0) * om->scale_w )
                 - (float)om->xw[p7O_E][p7O_MOVE] - (float)om->xw[p7O_C][p7O_MOVE] + (float)om->base_w );
 
-  /* Check that the DP matrix is ok for us. */
-  if (Q > ox->allocQ8)                                 ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
-  if (om->mode != p7_LOCAL && om->mode != p7_UNILOCAL) ESL_EXCEPTION(eslEINVAL, "Fast filter only works for local alignment");
-  ox->M   = om->M;
-
   /* -infinity is -32768 */
   negInfv = _mm_set1_epi16(-32768);
   negInfv = _mm_srli_si128(negInfv, 14);  /* negInfv = 16-byte vector, 14 0 bytes + 2-byte value=-32768, for an OR operation. */
@@ -350,7 +359,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   /* Initialization. In unsigned arithmetic, -infinity is -32768
    */
   for (q = 0; q < Q; q++)
-    MMXo(q) = IMXo(q) = DMXo(q) = _mm_set1_epi16(-32768);
+    MMXf(q) = IMXf(q) = DMXf(q) = _mm_set1_epi16(-32768);
   xN   = om->base_w;
   xB   = xN + om->xw[p7O_N][p7O_MOVE];
   xJ   = -32768;
@@ -358,7 +367,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   xE   = -32768;
 
 #if p7_DEBUGGING
-  if (ox->debugging) p7_omx_DumpVFRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
+  if (ox->debugging) p7_filtermx_DumpVFRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
 #endif
 
 
@@ -375,13 +384,13 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
        * Because ia32 is littlendian, this means a left bit shift.
        * Zeros shift on automatically; replace it with -32768.
        */
-      mpv = MMXo(Q-1);  mpv = _mm_slli_si128(mpv, 2);  mpv = _mm_or_si128(mpv, negInfv);
-      dpv = DMXo(Q-1);  dpv = _mm_slli_si128(dpv, 2);  dpv = _mm_or_si128(dpv, negInfv);
-      ipv = IMXo(Q-1);  ipv = _mm_slli_si128(ipv, 2);  ipv = _mm_or_si128(ipv, negInfv);
+      mpv = MMXf(Q-1);  mpv = _mm_slli_si128(mpv, 2);  mpv = _mm_or_si128(mpv, negInfv);
+      dpv = DMXf(Q-1);  dpv = _mm_slli_si128(dpv, 2);  dpv = _mm_or_si128(dpv, negInfv);
+      ipv = IMXf(Q-1);  ipv = _mm_slli_si128(ipv, 2);  ipv = _mm_or_si128(ipv, negInfv);
 
       for (q = 0; q < Q; q++)
       {
-        /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
+        /* Calculate new MMXf(i,q); don't store it yet, hold it in sv. */
         sv   =                    _mm_adds_epi16(xBv, *tsc);  tsc++;
         sv   = _mm_max_epi16 (sv, _mm_adds_epi16(mpv, *tsc)); tsc++;
         sv   = _mm_max_epi16 (sv, _mm_adds_epi16(ipv, *tsc)); tsc++;
@@ -392,13 +401,13 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
         /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
          * {MDI}MX(q) is then the current, not the prev row
          */
-        mpv = MMXo(q);
-        dpv = DMXo(q);
-        ipv = IMXo(q);
+        mpv = MMXf(q);
+        dpv = DMXf(q);
+        ipv = IMXf(q);
 
         /* Do the delayed stores of {MD}(i,q) now that memory is usable */
-        MMXo(q) = sv;
-        DMXo(q) = dcv;
+        MMXf(q) = sv;
+        DMXf(q) = dcv;
 
         /* Calculate the next D(i,q+1) partially: M->D only;
                * delay storage, holding it in dcv
@@ -408,7 +417,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 
         /* Calculate and store I(i,q) */
         sv     =                    _mm_adds_epi16(mpv, *tsc);  tsc++;
-        IMXo(q)= _mm_max_epi16 (sv, _mm_adds_epi16(ipv, *tsc)); tsc++;
+        IMXf(q)= _mm_max_epi16 (sv, _mm_adds_epi16(ipv, *tsc)); tsc++;
       }
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
@@ -419,14 +428,14 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 
         /* Unpack and unstripe, then find the position responsible for the hit */
         for (q = 0; q < Q; q++) {
-          tmp.v = MMXo(q);
+          tmp.v = MMXf(q);
           for (z = 0; z < 8; z++)  { // unstripe
             if ( tmp.i[z] == xE && (q+Q*z+1) <= om->M) {
               // (q+Q*z+1) is the model position k at which the xE score is found
               p7_hmmwindow_new(windowlist, 0, i, 0, (q+Q*z+1), 1, 0.0, fm_nocomplement );
             }
           }
-          MMXo(q) = IMXo(q) = DMXo(q) = _mm_set1_epi16(-32768); //reset score to start search for next vit window.
+          MMXf(q) = IMXf(q) = DMXf(q) = _mm_set1_epi16(-32768); //reset score to start search for next vit window.
         }
 
       } else {
@@ -462,8 +471,8 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
           tsc = om->twv + 7*Q;  /* set tsc to start of the DD's */
           for (q = 0; q < Q; q++)
           {
-            DMXo(q) = _mm_max_epi16(dcv, DMXo(q));
-            dcv     = _mm_adds_epi16(DMXo(q), *tsc); tsc++;
+            DMXf(q) = _mm_max_epi16(dcv, DMXf(q));
+            dcv     = _mm_adds_epi16(DMXf(q), *tsc); tsc++;
           }
 
           /* We may have to do up to three more passes; the check
@@ -476,20 +485,20 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
             tsc = om->twv + 7*Q;  /* set tsc to start of the DD's */
             for (q = 0; q < Q; q++)
             {
-              if (! esl_sse_any_gt_epi16(dcv, DMXo(q))) break;
-              DMXo(q) = _mm_max_epi16(dcv, DMXo(q));
-              dcv     = _mm_adds_epi16(DMXo(q), *tsc);   tsc++;
+              if (! esl_sse_any_gt_epi16(dcv, DMXf(q))) break;
+              DMXf(q) = _mm_max_epi16(dcv, DMXf(q));
+              dcv     = _mm_adds_epi16(DMXf(q), *tsc);   tsc++;
             }
           } while (q == Q);
         }
         else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
         {
           dcv = _mm_slli_si128(dcv, 2);
-          DMXo(0) = _mm_or_si128(dcv, negInfv);
+          DMXf(0) = _mm_or_si128(dcv, negInfv);
         }
       }
 #if p7_DEBUGGING
-      if (ox->debugging) p7_omx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);
+      if (ox->debugging) p7_filtermx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);
 #endif
   } /* end loop over sequence residues 1..L */
 
@@ -578,7 +587,7 @@ main(int argc, char **argv)
 
   if (esl_opt_GetBoolean(go, "-x")) p7_profile_SameAsVF(om, gm);
 
-  ox = p7_filtermx_Create(om->M, 0, 0);
+  ox = p7_filtermx_Create(om->M);
   gx = p7_refmx_Create(gm->M, L);
 
   /* Get a baseline time: how long it takes just to generate the sequences */
@@ -665,7 +674,7 @@ utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
   P7_PROFILE  *gm  = NULL;
   P7_OPROFILE *om  = NULL;
   ESL_DSQ     *dsq = malloc(sizeof(ESL_DSQ) * (L+2));
-  P7_FILTERMX *ox  = p7_filtermx_Create(M, 0, 0);
+  P7_FILTERMX *ox  = p7_filtermx_Create(M);
   P7_REFMX    *gx  = p7_refmx_Create(M, L);
   float sc1, sc2;
 
@@ -855,7 +864,7 @@ main(int argc, char **argv)
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
 
-  ox = p7_filtermx_Create(gm->M, 0, 0);
+  ox = p7_filtermx_Create(gm->M);
 
   /* Useful to place and compile in for debugging: 
      p7_oprofile_Dump(stdout, om);                      // dumps the optimized profile
@@ -868,7 +877,6 @@ main(int argc, char **argv)
       p7_oprofile_ReconfigLength(om, sq->n);
       p7_profile_SetLength      (gm, sq->n);
       p7_bg_SetLength(bg,            sq->n);
-      p7_filtermx_GrowTo(ox, om->M, 0);
 
       p7_ViterbiFilter  (sq->dsq, sq->n, om, ox, &vfraw);
       p7_bg_NullOne (bg, sq->dsq, sq->n, &nullsc);

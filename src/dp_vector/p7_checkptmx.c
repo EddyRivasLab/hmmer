@@ -13,6 +13,7 @@
 
 #include "easel.h"
 
+#include "dp_vector/simdvec.h"
 #include "dp_vector/p7_checkptmx.h"
 
 static void set_row_layout  (P7_CHECKPTMX *ox, int allocL, int maxR); 
@@ -81,7 +82,7 @@ p7_checkptmx_Create(int M, int L, int64_t ramlimit)
 
   /* Set checkpointed row layout: allocR, R{abc}, L{abc} fields */
   ox->R0          = 3;	                                                   /* fwd[0]; bck[prv,cur] */
-  ox->allocW      = sizeof(float) * P7C_NVF(M) * p7C_NSCELLS * p7_VNF;	   /* accounts for main vector part of the row       */
+  ox->allocW      = sizeof(float) * P7_NVF(M) * p7C_NSCELLS * p7_VNF;	   /* accounts for main vector part of the row       */
   ox->allocW     += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN);  /* plus specials (must maintain memory alignment) */
   ox->ramlimit    = ramlimit;
   maxR            = (int) (ox->ramlimit / ox->allocW); 
@@ -177,7 +178,7 @@ p7_checkptmx_GrowTo(P7_CHECKPTMX *ox, int M, int L)
 #endif
 
   /* Calculate W, the minimum row width needed, in bytes */
-  W  = sizeof(float) * P7C_NVF(M) * p7C_NSCELLS * p7_VNF;    /* vector part of row (MDI)     */
+  W  = sizeof(float) * P7_NVF(M) * p7C_NSCELLS * p7_VNF;     /* vector part of row (MDI)     */
   W += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN);  /* float part of row (specials); must maintain p7_VALIGN-byte alignment */
 
   /* Are current allocations satisfactory ? */
@@ -277,7 +278,7 @@ size_t
 p7_checkptmx_MinSizeof(int M, int L)
 {
   size_t n    = sizeof(P7_CHECKPTMX);
-  int    Q    = P7C_NVF(M);                       // number of vectors needed
+  int    Q    = P7_NVF(M);                        // number of vectors needed
   int    minR = 3 + (int) ceil(minimum_rows(L));  // 3 = Ra, 2 rows for backwards, 1 for fwd[0]
   
   n += p7_VALIGN-1;                                                  // dp_mem has to be hand-aligned for vectors
@@ -395,7 +396,7 @@ p7_checkptmx_SetDumpMode(P7_CHECKPTMX *ox, FILE *dfp, int truefalse)
  * Synopsis:  Convert a special X statecode to a string.
  */
 char *
-p7_checkptmx_DecodeX(enum p7f_xcells_e xcode)
+p7_checkptmx_DecodeX(enum p7c_xcells_e xcode)
 {
   switch (xcode) {
   case p7C_E:     return "E"; 
@@ -507,165 +508,6 @@ p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, __m128 *dpc, char *pfx)
   if (v) free(v);
   return status;
 }
-
-
-/* Function:  p7_checkptmx_DumpMFRow()
- * Synopsis:  Dump one row from MSV version of a DP matrix.
- *
- * Purpose:   Dump current row of MSV calculations from DP matrix <ox>
- *            for diagnostics, and include the values of specials
- *            <xE>, etc. The index <rowi> for the current row is used
- *            as a row label. This routine has to be specialized for
- *            the layout of the MSVFilter() row, because it's all
- *            match scores dp[0..q..Q-1], rather than triplets of
- *            M,D,I.
- * 
- *            If <rowi> is 0, print a header first too.
- * 
- *            The output format is coordinated with <p7_refmx_Dump()> to
- *            facilitate comparison to a known answer.
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    <eslEMEM> on allocation failure. 
- */
-int
-p7_checkptmx_DumpMFRow(P7_CHECKPTMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
-{
-  __m128i *dp = (__m128i *) ox->dpf[0];	/* we may use up to allocW*validR bytes on our one MSV row */
-  int      Q  = P7C_NVB(ox->M);	        /* and we actually use Q * sizeof(__m128i)                 */
-  int      M  = ox->M;
-  uint8_t *v  = NULL;		/* array of unstriped scores  */
-  int      q,z,k;
-  union { __m128i v; uint8_t i[16]; } tmp;
-  int      status;
-
-  ESL_ALLOC(v, sizeof(unsigned char) * ((Q*16)+1));
-  v[0] = 0;
-
-  /* Header (if we're on the 0th row)  */
-  if (rowi == 0)
-    {
-      fprintf(ox->dfp, "       ");
-      for (k = 0; k <= M;  k++) fprintf(ox->dfp, "%3d ", k);
-      fprintf(ox->dfp, "%3s %3s %3s %3s %3s\n", "E", "N", "J", "B", "C");
-      fprintf(ox->dfp, "       ");
-      for (k = 0; k <= M+5;  k++) fprintf(ox->dfp, "%3s ", "---");
-      fprintf(ox->dfp, "\n");
-    }
-
-  /* Unpack and unstripe, then print M's. */
-  for (q = 0; q < Q; q++) {
-    tmp.v = dp[q];
-    for (z = 0; z < 16; z++) v[q+Q*z+1] = tmp.i[z];
-  }
-  fprintf(ox->dfp, "%4d M ", rowi);
-  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%3d ", v[k]);
-
-  /* The specials */
-  fprintf(ox->dfp, "%3d %3d %3d %3d %3d\n", xE, xN, xJ, xB, xC);
-
-  /* I's are all 0's; print just to facilitate comparison. */
-  fprintf(ox->dfp, "%4d I ", rowi);
-  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%3d ", 0);
-  fprintf(ox->dfp, "\n");
-
-  /* D's are all 0's too */
-  fprintf(ox->dfp, "%4d D ", rowi);
-  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%3d ", 0);
-  fprintf(ox->dfp, "\n\n");
-
-  free(v);
-  return eslOK;
-
-ERROR:
-  free(v);
-  return status;
-}
-
-
-
-/* Function:  p7_checkptmx_DumpVFRow()
- * Synopsis:  Dump current row of ViterbiFilter (int16) part of <ox> matrix.
- *
- * Purpose:   Dump current row of ViterbiFilter (int16) part of DP
- *            matrix <ox> for diagnostics, and include the values of
- *            specials <xE>, etc. The index <rowi> for the current row
- *            is used as a row label.
- *
- *            If <rowi> is 0, print a header first too.
- * 
- *            The output format is coordinated with <p7_refmx_Dump()> to
- *            facilitate comparison to a known answer.
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    <eslEMEM> on allocation failure.
- */
-int
-p7_checkptmx_DumpVFRow(P7_CHECKPTMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
-{
-  __m128i *dp = (__m128i *) ox->dpf[0]; /* we may use up to allocW*validR bytes on our one MSV row */
-  int      Q  = P7C_NVW(ox->M);		/* and we actually use Q * sizeof(__m128i)                 */
-  int      M  = ox->M;
-  int16_t *v  = NULL;		/* array of unstriped, uninterleaved scores  */
-  int      q,z,k;
-  union { __m128i v; int16_t i[8]; } tmp;
-  int      status;
-
-  ESL_ALLOC(v, sizeof(int16_t) * ((Q*8)+1));
-  v[0] = 0;
-
-  /* Header (if we're on the 0th row)
-   */
-  if (rowi == 0)
-    {
-      fprintf(ox->dfp, "       ");
-      for (k = 0; k <= M;  k++) fprintf(ox->dfp, "%6d ", k);
-      fprintf(ox->dfp, "%6s %6s %6s %6s %6s\n", "E", "N", "J", "B", "C");
-      fprintf(ox->dfp, "       ");
-      for (k = 0; k <= M+5;  k++) fprintf(ox->dfp, "%6s ", "------");
-      fprintf(ox->dfp, "\n");
-    }
-
-  /* Unpack and unstripe, then print M's. */
-  for (q = 0; q < Q; q++) {
-    tmp.v = P7C_MQ(dp, q);
-    for (z = 0; z < 8; z++) v[q+Q*z+1] = tmp.i[z];
-  }
-  fprintf(ox->dfp, "%4d M ", rowi);
-  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%6d ", v[k]);
-
-  /* The specials */
-  fprintf(ox->dfp, "%6d %6d %6d %6d %6d\n", xE, xN, xJ, xB, xC);
-
-  /* Unpack and unstripe, then print I's. */
-  for (q = 0; q < Q; q++) {
-    tmp.v = P7C_IQ(dp, q);
-    for (z = 0; z < 8; z++) v[q+Q*z+1] = tmp.i[z];
-  }
-  fprintf(ox->dfp, "%4d I ", rowi);
-  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%6d ", v[k]);
-  fprintf(ox->dfp, "\n");
-
-  /* Unpack, unstripe, then print D's. */
-  for (q = 0; q < Q; q++) {
-    tmp.v = P7C_DQ(dp, q);
-    for (z = 0; z < 8; z++) v[q+Q*z+1] = tmp.i[z];
-  }
-  fprintf(ox->dfp, "%4d D ", rowi);
-  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%6d ", v[k]);
-  fprintf(ox->dfp, "\n\n");
-
-  free(v);
-  return eslOK;
-
-ERROR:
-  free(v);
-  return status;
-
-}
-
 
 #endif /*p7_DEBUGGING*/
 /*---------------- end, debugging -------------------------------*/

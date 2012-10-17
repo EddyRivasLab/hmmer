@@ -44,11 +44,14 @@
  *
  * Purpose:   Calculates an approximation of the MSV score for sequence
  *            <dsq> of length <L> residues, using optimized profile <om>,
- *            and the pre-allocated DP matrix <ox>. Return the 
+ *            and the one-row DP matrix <ox>. Return the 
  *            estimated MSV score (in nats) in <ret_sc>.
  *            
  *            Score may overflow (and will, on high-scoring
  *            sequences), but will not underflow.
+ *            
+ *            <ox> will be resized if needed. It's fine if it was
+ *            just <_Reuse()'d> from a previous, smaller profile.
  *            
  *            The model may be in any mode, because only its match
  *            emission scores will be used. The MSV filter inherently
@@ -58,17 +61,13 @@
  * Args:      dsq     - digital target sequence, 1..L
  *            L       - length of dsq in residues          
  *            om      - optimized profile
- *            ox      - DP matrix
+ *            ox      - filter DP matrix (one row)
  *            ret_sc  - RETURN: MSV score (in nats)          
  *                      
- * Note:      We only need a single row of DP memory, sufficient for
- *            P7F_NQB(M) vectors, aligned on a vector boundary.  We
- *            know that ox->dpf[0] (a forward row) is more than
- *            enough. That's all we need from the <ox> matrix.
- *
  * Returns:   <eslOK> on success.
  *            <eslERANGE> if the score overflows the limited range; in
  *            this case, this is a high-scoring hit.
+ *            <ox> may have been resized.
  *
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
@@ -83,8 +82,8 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
   uint8_t  xJ;                     /* special states' scores                                    */
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
-  int Q        = P7F_NQB(om->M);   /* segment length: # of vectors                              */
-  __m128i *dp  = (__m128i *) ox->dpf[0]; /* we know a Forward row is big enough for an MSV row  */
+  int Q        = P7_NVB(om->M);    /* segment length: # of vectors                              */
+  __m128i *dp  = ox->dp;	   /* the dp row memory                                         */
   __m128i *rsc;			   /* will point at om->rbv[x] for residue x[i]                 */
   __m128i xJv;                     /* vector for states score                                   */
   __m128i tjbmv;                   /* vector for cost of moving {JN}->B->M                      */
@@ -100,15 +99,14 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
    */
   if (( status = p7_SSVFilter(dsq, L, om, ret_sc)) != eslENORESULT) return status;
 
-#ifdef p7_DEBUGGING
-  /* see note [c] in p7_filtermx.h for explanation of tricky use of memory in single-row DP */
-  if (Q * sizeof(__m128i) > ox->allocW * ox->validR) ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
-#endif
-  ox->M   = om->M;		/* This must be set early, not late: debugging dump functions will use it */
+  /* Resize the filter mx as needed */
+  if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of MSV filter matrix failed");
 
+  /* Matrix type and size must be set early, not late: debugging dump functions need this information. */
+  ox->M    = om->M;
+  ox->type = p7F_MSVFILTER;
 
-  /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
-   */
+  /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.  */
   biasv = _mm_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
   for (q = 0; q < Q; q++) dp[q] = _mm_setzero_si128();
   xJ   = 0;
@@ -260,8 +258,8 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
   uint8_t  xJ;                     /* special states' scores                                    */
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
-  int Q        = P7F_NQB(om->M);   /* segment length: # of vectors                              */
-  __m128i *dp  = (__m128i *) ox->dpf[0]; /* see p7_filtermx.h note [c] for how we use a DP row  */
+  int Q        = P7_NVB(om->M);    /* segment length: # of vectors                              */
+  __m128i *dp  = ox->dp;           /* one DP row of memory                                      */
   __m128i *rsc;			   /* will point at om->rbv[x] for residue x[i]                 */
   __m128i tecv;                    /* vector for E->C  cost                                     */
   __m128i tjbmv;                   /* vector for J->B move cost + B->M move costs               */
@@ -281,14 +279,15 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
   int sc;
   int pos_since_max;
   float ret_sc;
-
   union { __m128i v; uint8_t b[16]; } u;
+  int   status;
 
-#ifdef p7_DEBUGGING
-  /* see note [c] in p7_filtermx.h for explanation of tricky use of memory in single-row DP */
-  if (Q * sizeof(__m128i) > ox->allocW * ox->validR) ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
-#endif
-  ox->M   = om->M;		/* This must be set early, not late: debugging dump functions will use it */
+  /* Resize the filter mx as needed */
+  if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of SSV filter matrix failed");
+
+  /* Matrix type and size must be set early, not late: debugging dump functions need this information. */
+  ox->M    = om->M;
+  ox->type = p7F_SSVFILTER;
 
   /* Initialization. In offset unsigned  arithmetic, -infinity is 0, and 0 is om->base.
    */
@@ -443,29 +442,27 @@ int
 p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_SCOREDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
 #ifdef ALLOW_MSV
-  register __m128i mpv;        /* previous row values                                       */
+  register __m128i mpv;            /* previous row values                                       */
   register __m128i xEv;		   /* E state: keeps max for Mk->E as we go                     */
   register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
   register __m128i sv;		   /* temp storage of 1 curr row value in progress              */
   register __m128i biasv;	   /* emission bias in a vector                                 */
-  uint8_t  xJ;                 /* special states' scores                                    */
-  int i;			           /* counter over sequence positions 1..L                      */
+  uint8_t  xJ;                     /* special states' scores                                    */
+  int i;			   /* counter over sequence positions 1..L                      */
 //  int j;
-  int q;			           /* counter over vectors 0..nq-1                              */
-  int Q        = P7F_NQB(om->M);   /* segment length: # of vectors                              */
-  __m128i *dp  = (__m128i *) ox->dpf[0];   /* see note [c] in p7_filtermx.h on single-row DP memory usage */
-  __m128i *rsc;			        /* will point at om->rbv[x] for residue x[i]                 */
-
-  __m128i xEv_prev;            	 /* E state: keeps the max seen up to the current position i, for window overlap test.  Note that this will always just be xJv + tecv    */
+  int q;			   /* counter over vectors 0..nq-1                              */
+  int Q        = P7_NVB(om->M);    /* segment length: # of vectors                              */
+  __m128i *dp  = ox->dp;           /* DP row                                                    */
+  __m128i *rsc;		           /* will point at om->rbv[x] for residue x[i]                 */
+  __m128i xEv_prev;      	   /* E state: keeps the max seen up to the current position i, for window overlap test.  Note that this will always just be xJv + tecv    */
   __m128i xJv;                     /* vector for states score                                   */
   __m128i tecv;                    /* vector for E->C  cost                                     */
-  __m128i tjbmv;                    /* vector for [JN]->B->M move cost                                  */
+  __m128i tjbmv;                   /* vector for [JN]->B->M move cost                           */
   __m128i basev;                   /* offset for scores                                         */
-  __m128i jthreshv;                /* pushes value to saturation if it's above pthresh  */
-  __m128i ceilingv;                /* saturated simd value used to test for overflow           */
+  __m128i jthreshv;                /* pushes value to saturation if it's above pthresh          */
+  __m128i ceilingv;                /* saturated simd value used to test for overflow            */
   __m128i tempv;                   /* work vector                                               */
 #endif
-
 
   /*
    * Computing the score required to let P meet the F1 prob threshold
@@ -526,14 +523,14 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
 	  int first_peak = -1;
 	  int last_peak = -1;
 	  int hit_jthresh;
+	  __m128i *dp  = ox->dp; 
 
-
-
-#ifdef p7_DEBUGGING
-	  /* see note [c] in p7_filtermx.h for explanation of tricky use of memory in single-row DP */
-	  if (Q * sizeof(__m128i) > ox->allocW * ox->validR) ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
-#endif
-	  ox->M   = om->M;		/* This must be set early, not late: debugging dump functions will use it */
+	  /* Resize the filter mx as needed */
+	  if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of MSV filter matrix failed");
+	  
+	  /* Matrix type and size must be set early, not late: debugging dump functions need this information. */
+	  ox->M    = om->M;
+	  ox->type = p7F_MSVFILTER;
 
 	  /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
 	   */
@@ -779,7 +776,7 @@ main(int argc, char **argv)
 
   if (esl_opt_GetBoolean(go, "-x")) p7_profile_SameAsMF(om, gm);
 
-  ox = p7_filtermx_Create(gm->M, 0, 0); /* even with L=0 and ramlimit=0 at least 3 rows are always allocated */
+  ox = p7_filtermx_Create(gm->M);
   gx = p7_refmx_Create(gm->M, L);
 
   /* Get a baseline time: how long it takes just to generate the sequences */
@@ -863,15 +860,15 @@ utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
   P7_PROFILE  *gm  = NULL;
   P7_OPROFILE *om  = NULL;
   ESL_DSQ     *dsq = malloc(sizeof(ESL_DSQ) * (L+2));
-  P7_FILTERMX *ox  = p7_filtermx_Create(M, 0, 0);
+  P7_FILTERMX *ox  = p7_filtermx_Create(M);
   P7_REFMX    *gx  = p7_refmx_Create(M, L);
   float sc1, sc2;
 
   p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om);
   p7_profile_SameAsMF(om, gm);
 #if 0
-  p7_oprofile_Dump(stdout, om);                       /* dumps the optimized profile */
-  p7_filtermx_SetDumpMode(ox, stdout, ox, TRUE);      /* makes the fast DP algorithms dump their matrices */
+  p7_oprofile_Dump(stdout, om);                   /* dumps the optimized profile */
+  p7_filtermx_SetDumpMode(ox, stdout, TRUE);      /* makes the fast DP algorithms dump their matrices */
 #endif
 
   while (N--)
@@ -1050,7 +1047,7 @@ main(int argc, char **argv)
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
 
-  ox = p7_filtermx_Create(gm->M, 0, 0); /* one row version */
+  ox = p7_filtermx_Create(gm->M);
 
   /* Useful to place and compile in for debugging: 
      p7_oprofile_Dump(stdout, om);                  dumps the optimized profile
@@ -1063,7 +1060,7 @@ main(int argc, char **argv)
       p7_oprofile_ReconfigLength(om, sq->n);
       p7_bg_SetLength(bg,            sq->n);
 
-      p7_filtermx_GrowTo(ox, om->M, 0) ;
+      p7_filtermx_GrowTo(ox, om->M) ;
 
       p7_MSVFilter   (sq->dsq, sq->n, om, ox, &msvraw);  
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);

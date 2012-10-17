@@ -21,14 +21,14 @@
 #include "dp_reference/p7_refmx.h"
 
 #define p7C_NSCELLS 3
-enum p7f_scells_e {
+enum p7c_scells_e {
   p7C_M     = 0,
   p7C_D     = 1,
   p7C_I     = 2,
 };
 
 #define p7C_NXCELLS 8
-enum p7f_xcells_e {
+enum p7c_xcells_e {
   p7C_E     = 0,
   p7C_N     = 1,
   p7C_JJ    = 2,
@@ -48,7 +48,7 @@ typedef struct p7_checkptmx_s {
   int M;	/* current actual query model dimension (consensus positions)         */
   int L;	/* current actual target seq dimension (residues)                     */
   int R;	/* current actual number of rows (<=Ra+Rb+Rc), excluding R0           */
-  int Qf;	/* current actual number of fb vectors = P7C_NVF(M)                   */
+  int Qf;	/* current actual number of fb vectors = P7_NVF(M)                    */
 
   /* Checkpointed layout, mapping rows 1..R to residues 1..L:                         */
   int R0;	/* # of extra rows: one for fwd[0] boundary, two for bck[prv,cur]     */
@@ -87,16 +87,6 @@ typedef struct p7_checkptmx_s {
 } P7_CHECKPTMX;
 
 
-/* ?MXo(q) access macros work for either uchar or float, so long as you
- * init your "dp" to point to the appropriate array.
- */
-#define MMXo(q)   (dp[(q) * p7X_NSCELLS + p7X_M])
-#define DMXo(q)   (dp[(q) * p7X_NSCELLS + p7X_D])
-#define IMXo(q)   (dp[(q) * p7X_NSCELLS + p7X_I])
-#define XMXo(i,s) (xmx[(i) * p7X_NXCELLS + s])
-
-
-
 extern P7_CHECKPTMX *p7_checkptmx_Create   (int M, int L, int64_t ramlimit);
 extern int           p7_checkptmx_GrowTo   (P7_CHECKPTMX *ox, int M, int L);
 extern size_t        p7_checkptmx_Sizeof   (const P7_CHECKPTMX *ox);
@@ -106,11 +96,9 @@ extern void          p7_checkptmx_Destroy  (P7_CHECKPTMX *ox);
 
 extern int           p7_checkptmx_SetDumpMode(P7_CHECKPTMX *ox, FILE *dfp, int truefalse);
 #ifdef p7_DEBUGGING
-extern char *        p7_checkptmx_DecodeX(enum p7f_xcells_e xcode);
+extern char *        p7_checkptmx_DecodeX(enum p7c_xcells_e xcode);
 extern int           p7_checkptmx_DumpFBHeader(P7_CHECKPTMX *ox);
 extern int           p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, __m128 *dpc, char *pfx);
-extern int           p7_checkptmx_DumpMFRow(P7_CHECKPTMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
-extern int           p7_checkptmx_DumpVFRow(P7_CHECKPTMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
 #endif /*p7_DEBUGGING*/
 
 /*****************************************************************
@@ -178,39 +166,15 @@ extern int           p7_checkptmx_DumpVFRow(P7_CHECKPTMX *ox, int rowi, int16_t 
  *  [1 5 9 13][1 5 9 13][1 5 9 13] [2 6 10 14][2 6 10 14][2 6 10 14] [3 7 11 x][3 7 11 x][3 7 11 x] [4 8 12 x][4 8 12 x][4 8 12 x] [E N JJ J B CC C SCALE]
  *  |-- M ---||-- D ---||-- I ---| |--- M ---||--- D ---||--- I ---| |-- M ---||-- D ---||-- I ---| |-- M ---||-- D ---||-- I ---| 
  *  |---------- q=0 -------------| |------------ q=1 --------------| |---------- q=2 -------------| |---------- q=3 -------------|
- *  |----------------------------------- P7C_NVF(M) * p7C_NSCELLS ---------------------------------------------------------------| |---- p7C_NXCELLS ----|
+ *  |------------------------------------ P7_NVF(M) * p7C_NSCELLS ---------------------------------------------------------------| |---- p7C_NXCELLS ----|
  *  
- *  Number of elements in a vector = p7_NVF      =  4  (assuming 16-byte wide SIMD vectors; 8, for 32-byte AVX vectors)
- *  Number of vectors on a row     = P7C_NVF(M)  =  max( 2, ((M-1) / p7_NVF) + 1)
+ *  Number of elements in a vector = p7_VNF      =  4  (assuming 16-byte wide SIMD vectors; 8, for 32-byte AVX vectors)
+ *  Number of vectors on a row     = P7_NVF(M)   =  max( 2, ((M-1) / p7_VNF) + 1)
  *  Number of main states          = p7C_NSCELLS =  3  (e.g. M,I,D)
  *  Number of special state vals   = p7C_NXCELLS =  8  (e.g. E, N, JJ, J, B, CC, C, SCALE)
- *  Total size of row              = sizeof(float) * (P7C_NVF(M) * P7C_NSCELLS * p7C_NVF + p7C_NXCELLS)
+ *  Total size of row              = sizeof(float) * (P7_NVF(M) * P7C_NSCELLS * p7_VNF + p7C_NXCELLS)
  *
  */
-
-
-/* [c] Using P7_CHECKPTMX for single-row DP: MSV and Viterbi filters.
- * 
- * MSVFilter() and VitFilter() only use a single row of DP memory, and
- * no main memory for special states. They only need to make sure that
- * they have a vector-aligned chunk of memory big enough for
- * P7C_NVB(M) or 3*P7C_NVW(M) __m128i vectors, respectively. We know
- * dpf[0] is vector aligned and big enough: if it's big enough for a
- * Forward vector row, it must be big enough for MSV and Viterbi.
- * 
- * But we can do better than that, and avoid/defer many re-allocations
- * (p7_checkptmx_GrowTo() calls), by using even more of the allocated
- * memory in the P7_CHECKPTMX. We know that the dpf[i] point
- * sequentially into a single allocated memory chunk,
- * dp_mem. Therefore we can use at least <validR> rows: i.e. the total
- * row width available to a single-row calculation in bytes is
- * allocW*allocR, not just allocW. 
- * 
- * So you'll see tests comparing (Q * sizeof(__m128i) against
- * ox->allocW * ox->allocR in single-row DP implementations when
- * they're deciding if they have enough row memory.
- */
-
 
 #endif /*P7_CHECKPTMX_INCLUDED*/
 /*****************************************************************

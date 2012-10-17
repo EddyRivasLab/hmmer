@@ -1228,12 +1228,12 @@ main(int argc, char **argv)
       p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm);
 
       /* Calculate minimum memory requirements for each step */
-      msvmem = (double) ( P7_NVB(om->M) * sizeof(__m128i))      / 1024.;        // in KB. If we implement a structure specific to MSV/VF memory, add a MinSizeof()
-      vfmem  = (double) ( P7_NVW(om->M) * sizeof(__m128i)) * 3. / 1024.;  
-      fbmem  = (double) p7_checkptmx_MinSizeof(om->M, sq->n)     / 1024. / 1024.;
-      smmem  = (double) p7_sparsemask_MinSizeof(sm)              / 1024. / 1024.;
-      spmem  = (double) p7_sparsemx_MinSizeof(sm)                / 1024. / 1024.;
-      refmem = (double) p7_refmx_MinSizeof(om->M, sq->n)         / 1024. / 1024.;
+      msvmem = (double) ( P7_NVB(om->M) * sizeof(__m128i))    / 1024.;  
+      vfmem  = (double) p7_filtermx_MinSizeof(om->M)          / 1024.;
+      fbmem  = (double) p7_checkptmx_MinSizeof(om->M, sq->n)  / 1024. / 1024.;
+      smmem  = (double) p7_sparsemask_MinSizeof(sm)           / 1024. / 1024.;
+      spmem  = (double) p7_sparsemx_MinSizeof(sm)             / 1024. / 1024.;
+      refmem = (double) p7_refmx_MinSizeof(om->M, sq->n)      / 1024. / 1024.;
 
       fsc  =  (fraw-nullsc) / eslCONST_LOG2;
       P    = esl_exp_surv(fsc,   om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
