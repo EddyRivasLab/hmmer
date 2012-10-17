@@ -1,11 +1,11 @@
 MODULE = misc
 
-OBJS =  emit.c\
-	h2_io.c\
-	logsum.c\
-	mpisupport.c\
-	p7_trace_metrics.c\
-	tracealign.c
+OBJS =  emit.o\
+	h2_io.o\
+	logsum.o\
+	mpisupport.o\
+	p7_trace_metrics.o\
+	tracealign.o
 
 HDRS =  
 

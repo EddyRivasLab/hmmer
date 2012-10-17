@@ -1,32 +1,20 @@
-/* MSV algorithm; generic (non-SIMD) version.
- * 
- * Contents:
- *   1. MSV implementation.
- *   2. Benchmark driver.
- *   3. Unit tests.
- *   4. Test driver.
- *   5. Example.
- *   6. Copyright and license information.
- * 
- * SRE, Fri Aug 15 10:38:21 2008 [Janelia]
- * SVN $Id: generic_msv.c 3582 2011-06-26 20:09:21Z wheelert $
- */
-
 #include "p7_config.h"
+
+#include <string.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_gumbel.h"
+#include "esl_sq.h"
 
+#include "base/p7_scoredata.h"
 
-#include "hmmer.h"
-#include <string.h>
+#include "dp_vector/fm_sse.h"
+#include "dp_vector/p7_oprofile.h"
 
-/*****************************************************************
- * 1. MSV implementation.
- *****************************************************************/
-
-
+#include "fm/fm.h"
+#include "fm/fm_alphabet.h"
+#include "fm/fm_general.h"
 
 
 /* hit_sorter(): qsort's pawn, below */
@@ -343,7 +331,8 @@ FM_Recurse( int depth, int M, int fm_direction,
 }
 
 
-static int FM_getSeeds (const P7_OPROFILE *gm, P7_GMX *gx, float sc_threshFM,
+/* SRE: <gx> arg was P7_GMX. Unused. Changed to <void> for now; GMX is gone */
+static int FM_getSeeds (const P7_OPROFILE *gm, void *gx, float sc_threshFM,
                 FM_DIAGLIST *seeds,
                 const FM_DATA *fmf, const FM_DATA *fmb,
                 FM_CFG *fm_cfg, const P7_SCOREDATA *msvdata )
@@ -587,7 +576,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const P7_SCOREDATA *msvdata, FM_
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
+p7_FM_MSV( P7_OPROFILE *om, void *gx, float nu, P7_BG *bg, double F1,
          const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_SCOREDATA *msvdata,
          P7_HMM_WINDOWLIST *windowlist)
 {

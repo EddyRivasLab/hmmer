@@ -11,8 +11,11 @@
 
 #include "p7_config.h"
 
-#include "hmmer.h"
-#include "p7_trace_metrics.h"
+#include "easel.h"
+
+#include "base/p7_trace.h"
+
+#include "misc/p7_trace_metrics.h"
 
 /*****************************************************************
  * 1. The P7_TRACE_METRICS object

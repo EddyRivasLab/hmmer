@@ -13,12 +13,11 @@
 
 #include "base/p7_hmm.h"
 #include "base/p7_profile.h"
+#include "base/p7_tophits.h"
+
+#include "search/p7_pipeline.h"
 
 #include "dp_vector/p7_oprofile.h"
-
-#include "p7_pipeline.h"
-#include "p7_tophits.h"
-
 
 extern int p7_hmm_MPISend(P7_HMM *hmm, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc);
 extern int p7_hmm_MPIPackSize(P7_HMM *hmm, MPI_Comm comm, int *ret_n);

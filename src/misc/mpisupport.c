@@ -17,13 +17,21 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "mpi.h"
+#include <mpi.h>
 
 #include "easel.h"
+#include "esl_alphabet.h"
 #include "esl_mpi.h"
 #include "esl_getopts.h"
 
-#include "hmmer.h"
+#include "base/p7_bg.h"
+#include "base/p7_domain.h"
+#include "base/p7_hmm.h"
+#include "base/p7_profile.h"
+#include "base/p7_tophits.h"
+
+#include "search/p7_pipeline.h"
+
 
 static int p7_hit_MPISend(P7_HIT *hit, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc);
 static int p7_hit_MPIPackSize(P7_HIT *hit, MPI_Comm comm, int *ret_n);

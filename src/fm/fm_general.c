@@ -12,9 +12,13 @@
  *  # 7. Copyright and license.
  *
  */
-#include "hmmer.h"
+#include "p7_config.h"
 
+#include "easel.h"
+#include "esl_getopts.h"
 
+#include "fm/fm.h"
+#include "fm/fm_general.h"
 
 
 /* Function:  fm_initSeeds()

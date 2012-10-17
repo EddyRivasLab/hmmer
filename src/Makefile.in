@@ -3,9 +3,10 @@ SUBDIRS = base\
           daemon\
           dp_reference\
 	  dp_sparse\
-	  dp_vector
+	  dp_vector\
+	  fm\
+	  misc
         # experiments\
-        # misc\
         # programs\
         # search\
         # utilities

@@ -1,5 +1,11 @@
-#include "hmmer.h"
+#include "p7_config.h"
+
+#include <ctype.h>
+
+#include "easel.h"
 #include "esl_mem.h"
+
+#include "fm/fm_alphabet.h"
 
 /* Function:  fm_createAlphabet()
  *

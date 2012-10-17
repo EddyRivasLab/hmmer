@@ -9,9 +9,14 @@
 #include "p7_config.h"
 
 #include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_msa.h"
+#include "esl_sq.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
+#include "base/p7_alidisplay.h"
+#include "base/p7_hmm.h"
+#include "base/p7_trace.h"
 
 static int     map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount, int **ret_matuse, int **ret_matmap, int *ret_alen);
 static ESL_DSQ get_dsq_z(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int idx, int z);
@@ -217,6 +222,7 @@ p7_tracealign_MSA(const ESL_MSA *premsa, P7_TRACE **tr, int M, int optflags, ESL
 
 
 
+#if 0			    /* SRE: taking this out for now. It's dependent on OMX, GMX. Need to think on it */
 /* Function: p7_tracealign_computeTraces()
  *
  * Synopsis: Compute traces for a collection of sequences relative to
@@ -234,7 +240,6 @@ p7_tracealign_MSA(const ESL_MSA *premsa, P7_TRACE **tr, int M, int optflags, ESL
 int
 p7_tracealign_computeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRACE  **tr)
 {
-
   P7_OMX       *oxf     = NULL; /* optimized Forward matrix        */
   P7_OMX       *oxb     = NULL; /* optimized Backward matrix       */
   P7_GMX       *gxf     = NULL; /* generic Forward mx for failover */
@@ -384,7 +389,6 @@ p7_tracealign_computeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
 int
 p7_tracealign_getMSAandStats(P7_HMM *hmm, ESL_SQ  **sq, int N, ESL_MSA **ret_msa, float **ret_pp, float **ret_relent, float **ret_scores )
 {
-
   P7_TRACE    **tr      = NULL; /* array of tracebacks             */
   ESL_MSA      *msa     = NULL; /* resulting multiple alignment    */
   P7_BG        *bg      = NULL;
@@ -453,7 +457,7 @@ ERROR:
   }
   return status;
 }
-
+#endif /* SRE DELETED for now */
 
 /*--------------- end, exposed API ------------------------------*/
 
