@@ -482,8 +482,8 @@ AC_SYS_LARGEFILE
 # Done.
 # Config subdirs and files (except main Makefile, which we defer)
 #
-if test -d release-notes; then
-  AC_CONFIG_FILES(release-notes/LICENSE.sh)
+if test -d documentation/release-notes; then
+  AC_CONFIG_FILES(documentation/release-notes/LICENSE.sh)
 fi
 
 AC_CONFIG_FILES([
