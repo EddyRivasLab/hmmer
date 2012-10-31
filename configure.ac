@@ -73,8 +73,8 @@ HMMER_COPYRIGHT="Copyright (C) 2012 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
-HMMER_ESLDIR="easel"
-HMMER_SADIR="libdivsufsort"
+HMMER_ESLDIR="lib/easel"
+HMMER_SADIR="lib/libdivsufsort"
 
 EASEL_DATE="October 2012"
 EASEL_COPYRIGHT="Copyright (C) 2012 Howard Hughes Medical Institute."
@@ -507,17 +507,18 @@ AC_CONFIG_FILES([
   benchmarks/Makefile
   benchmarks/profmark/Makefile
   benchmarks/speed/Makefile
-  easel/miniapps/Makefile
-  easel/testsuite/Makefile
-  easel/documentation/Makefile
-  easel/Makefile
-  libdivsufsort/Makefile
+  lib/Makefile
+  lib/easel/miniapps/Makefile
+  lib/easel/testsuite/Makefile
+  lib/easel/documentation/Makefile
+  lib/easel/Makefile
+  lib/libdivsufsort/Makefile
 ])
   
 AC_CONFIG_HEADERS([
   src/p7_config.h
-  easel/esl_config.h
-  libdivsufsort/divsufsort.h
+  lib/easel/esl_config.h
+  lib/libdivsufsort/divsufsort.h
 ])
 
 ################################################################
