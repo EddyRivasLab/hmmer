@@ -465,7 +465,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  info[i].pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS); /* M_hint = 100, L_hint = 100 are just dummies for now */
 	  info[i].pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
 
-	  p7_pli_NewSeq(info[i].pli, qsq);
+	  p7_pipeline_NewSeq(info[i].pli, qsq);
 	  info[i].qsq = qsq;
 
 #ifdef HMMER_THREADS
@@ -491,7 +491,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 1; i < infocnt; ++i)
 	{
 	  p7_tophits_Merge(info[0].th, info[i].th);
-	  p7_pipeline_Merge(info[0].pli, info[i].pli);
+	  p7_pipeline_MergeStats(info[0].pli, info[i].pli);
 
 	  p7_pipeline_Destroy(info[i].pli);
 	  p7_tophits_Destroy(info[i].th);
@@ -508,7 +508,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (domtblfp) p7_tophits_TabularDomains(domtblfp, qsq->name, qsq->acc, info->th, info->pli, (nquery == 1));
 
       esl_stopwatch_Stop(w);
-      p7_pli_Statistics(ofp, info->pli, w);
+      p7_pipeline_WriteStats(ofp, info->pli, w);
       if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
       fflush(ofp);
 
@@ -834,7 +834,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS); /* M_hint = 100, L_hint = 100 are just dummies for now */
       pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
 
-      p7_pli_NewSeq(pli, qsq);
+      p7_pipeline_NewSeq(pli, qsq);
 
       /* Main loop: */
       while ((hstatus = next_block(hfp, list, &block)) == eslOK)
@@ -917,7 +917,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	    mpi_failure("Unexpected error %d receiving pipeline from %d", status, dest);
 
 	  p7_tophits_Merge(th, mpi_th);
-	  p7_pipeline_Merge(pli, mpi_pli);
+	  p7_pipeline_MergeStats(pli, mpi_pli);
 
 	  p7_pipeline_Destroy(mpi_pli);
 	  p7_tophits_Destroy(mpi_th);
@@ -933,7 +933,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (domtblfp) p7_tophits_TabularDomains(domtblfp, qsq->name, qsq->acc, th, pli, (nquery == 1));
 
       esl_stopwatch_Stop(w);
-      p7_pli_Statistics(ofp, pli, w);
+      p7_pipeline_WriteStats(ofp, pli, w);
       if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
       p7_hmmfile_Close(hfp);
@@ -1066,7 +1066,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS); /* M_hint = 100, L_hint = 100 are just dummies for now */
       pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
 
-      p7_pli_NewSeq(pli, qsq);
+      p7_pipeline_NewSeq(pli, qsq);
 
       /* receive a sequence block from the master */
       MPI_Recv(&block, 3, MPI_LONG_LONG_INT, 0, HMMER_BLOCK_TAG, MPI_COMM_WORLD, &mpistatus);
@@ -1082,7 +1082,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	    {
 	      length = om->eoff - block.offset + 1;
 
-	      p7_pli_NewModel(pli, om, bg);
+	      p7_pipeline_NewModel(pli, om, bg);
 	      p7_bg_SetLength(bg, qsq->n);
 	      p7_oprofile_ReconfigLength(om, qsq->n);
 	      
@@ -1169,7 +1169,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
   /* Main loop: */
   while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK)
     {
-      p7_pli_NewModel(info->pli, om, info->bg);
+      p7_pipeline_NewModel(info->pli, om, info->bg);
       p7_bg_SetLength(info->bg, info->qsq->n);
       p7_oprofile_ReconfigLength(om, info->qsq->n);
 
@@ -1263,7 +1263,7 @@ pipeline_thread(void *arg)
 	{
 	  P7_OPROFILE *om = block->list[i];
 
-	  p7_pli_NewModel(info->pli, om, info->bg);
+	  p7_pipeline_NewModel(info->pli, om, info->bg);
 	  p7_bg_SetLength(info->bg, info->qsq->n);
 	  p7_oprofile_ReconfigLength(om, info->qsq->n);
 

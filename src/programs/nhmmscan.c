@@ -479,7 +479,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         info[i].pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
 
 
-        p7_pli_NewSeq(info[i].pli, qsq);
+        p7_pipeline_NewSeq(info[i].pli, qsq);
         info[i].qsq = qsq;
 
         if (  esl_opt_IsUsed(go, "--toponly") )
@@ -517,7 +517,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 1; i < infocnt; ++i)
       {
         p7_tophits_Merge(info[0].th, info[i].th);
-        p7_pipeline_Merge(info[0].pli, info[i].pli);
+        p7_pipeline_MergeStats(info[0].pli, info[i].pli);
 
         p7_pipeline_Destroy(info[i].pli);
         p7_tophits_Destroy(info[i].th);
@@ -564,7 +564,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       esl_stopwatch_Stop(w);
       info->pli->nseqs = 1;
-      p7_pli_Statistics(ofp, info->pli, w);
+      p7_pipeline_WriteStats(ofp, info->pli, w);
       if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
       fflush(ofp);
 
@@ -651,7 +651,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
   {
       seq_len = 0;
 
-      p7_pli_NewModel(info->pli, om, info->bg);
+      p7_pipeline_NewModel(info->pli, om, info->bg);
       p7_bg_SetLength(info->bg, info->qsq->n);
       p7_oprofile_ReconfigLength(om, info->qsq->n);
 
@@ -811,7 +811,7 @@ pipeline_thread(void *arg)
         om = block->list[i];
         seq_len = 0;
 
-        p7_pli_NewModel(info->pli, om, info->bg);
+        p7_pipeline_NewModel(info->pli, om, info->bg);
         p7_bg_SetLength(info->bg, info->qsq->n);
         p7_oprofile_ReconfigLength(om, info->qsq->n);
 

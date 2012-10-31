@@ -7,6 +7,8 @@
 
 #include "base/p7_profile.h"
 #include "base/p7_trace.h"
+#include "base/p7_masstrace.h"
+
 #include "dp_sparse/p7_sparsemx.h"
 
 extern int

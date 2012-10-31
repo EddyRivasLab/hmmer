@@ -20,17 +20,21 @@
  *    It can be edited and configured manually before compilation.
  *****************************************************************/
 
-/* p7_RAMLIMIT controls the switch from fast full DP to slow
- * linear-memory divide and conquer. Default devotes 32 MB/thread.
+/* p7_RAMLIMIT controls the default size of the checkpointed
+ * decoding dynamic programming matrix in the H3 pipeline:
+ * the main memory-use-determining step, other than output itself.
+ * Default devotes 128 MB/thread to the checkpoint matrix.
+ * (It may redline above this temporarily, on particularly large 
+ * comparisons.)
  */
 #ifndef p7_RAMLIMIT
-#define p7_RAMLIMIT   32
+#define p7_RAMLIMIT   128
 #endif
 
 /* p7_ALILENGTH controls length of displayed alignment lines.
  */
 #ifndef p7_ALILENGTH
-#define p7_ALILENGTH       50
+#define p7_ALILENGTH   50
 #endif
 
 /*****************************************************************
@@ -56,8 +60,16 @@
  */
 #define p7_SPARSEMASK_THRESH_DEFAULT 0.01 /* per-cell posterior prob inclusion threshold */
 
+/* Posterior probability threshold controlling envelope endpoint determination */
+#define p7_MASSTRACE_THRESH_DEFAULT  0.1
+
 #define p7_SEQDBENV          "BLASTDB"
 #define p7_HMMDBENV          "PFAMDB"
+
+/* Controls block_size when reading seq data in nhmmer */
+#define p7_NHMMER_MAX_RESIDUE_COUNT (1024 * 256) /* 0.25 MB */
+
+
 
 /*****************************************************************
  * 3. The next section probably shouldn't be edited at all, unless

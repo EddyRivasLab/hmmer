@@ -4,6 +4,7 @@
 #include "p7_config.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -13,6 +14,9 @@
 
 #include "base/p7_tophits.h"
 #include "base/p7_trace.h"
+
+#include "misc/tracealign.h"
+
 #include "search/p7_pipeline.h"
 
 
@@ -63,8 +67,8 @@ workaround_bug_h74(P7_TOPHITS *th)
     {
         for (d1 = 0; d1 < th->hit[h]->ndom; d1++)
           for (d2 = d1+1; d2 < th->hit[h]->ndom; d2++)
-            if (th->hit[h]->dcl[d1].iali == th->hit[h]->dcl[d2].iali &&
-                th->hit[h]->dcl[d1].jali == th->hit[h]->dcl[d2].jali)
+            if (th->hit[h]->dcl[d1].ia == th->hit[h]->dcl[d2].ia &&
+                th->hit[h]->dcl[d1].ib == th->hit[h]->dcl[d2].ib)
             {
                 dremoved = (th->hit[h]->dcl[d1].bitscore >= th->hit[h]->dcl[d2].bitscore) ? d2 : d1;
                 if (th->hit[h]->dcl[dremoved].is_reported) { th->hit[h]->dcl[dremoved].is_reported = FALSE; th->hit[h]->nreported--; }
@@ -138,8 +142,8 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
 
       //sub_j = th->hit[j]->subseq_start;
       p_j = th->hit[j]->lnP;
-      s_j = th->hit[j]->dcl[0].iali;
-      e_j = th->hit[j]->dcl[0].jali;
+      s_j = th->hit[j]->dcl[0].ia;
+      e_j = th->hit[j]->dcl[0].ib;
       dir_j = (s_j < e_j ? 1 : -1);
       if (dir_j == -1) {
         tmp = s_j;
@@ -151,8 +155,8 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
 
       //sub_i = th->hit[i]->subseq_start;
       p_i = th->hit[i]->lnP;
-      s_i = th->hit[i]->dcl[0].iali;
-      e_i = th->hit[i]->dcl[0].jali;
+      s_i = th->hit[i]->dcl[0].ia;
+      e_i = th->hit[i]->dcl[0].ib;
       dir_i = (s_i < e_i ? 1 : -1);
       if (dir_i == -1) {
         tmp = s_i;
@@ -252,10 +256,10 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
     {
 
       if ( !(th->hit[h]->flags & p7_IS_DUPLICATE) &&
-          p7_pli_TargetReportable(pli, th->hit[h]->score, th->hit[h]->lnP))
+          p7_pipeline_TargetReportable(pli, th->hit[h]->score, th->hit[h]->lnP))
       {
           th->hit[h]->flags |= p7_IS_REPORTED;
-          if (p7_pli_TargetIncludable(pli, th->hit[h]->score, th->hit[h]->lnP))
+          if (p7_pipeline_TargetIncludable(pli, th->hit[h]->score, th->hit[h]->lnP))
               th->hit[h]->flags |= p7_IS_INCLUDED;
 
           if (pli->long_targets) { // no domains in dna search, so:
@@ -293,10 +297,10 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
       {
         for (d = 0; d < th->hit[h]->ndom; d++)
         {
-          if (p7_pli_DomainReportable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].lnP))
+          if (p7_pipeline_DomainReportable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].lnP))
             th->hit[h]->dcl[d].is_reported = TRUE;
           if ((th->hit[h]->flags & p7_IS_INCLUDED) &&
-              p7_pli_DomainIncludable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].lnP))
+              p7_pipeline_DomainIncludable(pli, th->hit[h]->dcl[d].bitscore, th->hit[h]->dcl[d].lnP))
             th->hit[h]->dcl[d].is_included = TRUE;
         }
       }
@@ -515,8 +519,8 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
           th->hit[h]->score,
           eslCONST_LOG2R * th->hit[h]->dcl[d].dombias, // an nhmmer hit is really a domain, so this is the hit's bias correction
           namew, showname,
-          posw, th->hit[h]->dcl[d].iali,
-          posw, th->hit[h]->dcl[d].jali) < 0)
+          posw, th->hit[h]->dcl[d].ia,
+          posw, th->hit[h]->dcl[d].ib) < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
         }
         else
@@ -678,12 +682,12 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                     th->hit[h]->dcl[d].ad->sqto,
                     (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
                     (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
-                    th->hit[h]->dcl[d].ienv,
-                    th->hit[h]->dcl[d].jenv,
-                    (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
-                    (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
+                    th->hit[h]->dcl[d].iae,
+                    th->hit[h]->dcl[d].ibe,
+                    (th->hit[h]->dcl[d].iae == 1) ? '[' : '.',
+                    (th->hit[h]->dcl[d].ibe == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
                     th->hit[h]->dcl[d].ad->L,
-                    (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv))))) < 0)
+                    (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].ibe - th->hit[h]->dcl[d].iae))))) < 0)
                          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
 
             }
@@ -704,11 +708,11 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                     th->hit[h]->dcl[d].ad->sqto,
                     (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
                     (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
-                    th->hit[h]->dcl[d].ienv,
-                    th->hit[h]->dcl[d].jenv,
-                    (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
-                    (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
-                    (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv))))) < 0)
+                    th->hit[h]->dcl[d].iae,
+                    th->hit[h]->dcl[d].ibe,
+                    (th->hit[h]->dcl[d].iae == 1) ? '[' : '.',
+                    (th->hit[h]->dcl[d].ibe == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
+                    (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].ibe - th->hit[h]->dcl[d].iae))))) < 0)
                         ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
             }
           }
@@ -894,8 +898,9 @@ p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th )
     hit = th->hit[h];
     if (hit->flags & p7_IS_REPORTED)
     {
-      fprintf (ofp, "%s %s %d %d :", qname, hit->name, hit->dcl[0].iali, hit->dcl[0].jali);
+      fprintf (ofp, "%s %s %d %d :", qname, hit->name, hit->dcl[0].ia, hit->dcl[0].ib);
 
+#ifdef SRE_REMOVED_FOR_TRAVIS
       scores = hit->dcl[0].scores_per_pos;
       for (i=0; i<hit->dcl[0].ad->N; i++) {
         if (scores[i] == -eslINFINITY)
@@ -905,6 +910,7 @@ p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th )
 
       }
       fprintf (ofp, "\n");
+#endif
     }
 
   }

@@ -397,7 +397,7 @@ p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
  *            sequence is set to a default (about 400). You need a
  *            subsequent call to <p7_bg_SetLength()> to set it to the
  *            target sequence length. In hmmscan, this requires a 
- *            call after every new model is read and <p7_pli_NewModel()> 
+ *            call after every new model is read and <p7_pipeline_NewModel()> 
  *            is called, because <NewModel()> is calling <p7_bg_SetFilter()>
  *            to copy the new model's composition <compo>. [Failure to
  *            do this properly was bug #h85, 14 Dec 2010.]

@@ -26,15 +26,6 @@
 
 #include "hmmer.h"
 
-
-/* set the max residue count to 1/4 meg when reading a block */
-#ifdef P7_IMPL_DUMMY_INCLUDED
-#include "esl_vectorops.h"
-#define NHMMER_MAX_RESIDUE_COUNT (1024 * 100)
-#else
-#define NHMMER_MAX_RESIDUE_COUNT (1024 * 256)  /* 1/4 Mb */
-#endif
-
 typedef struct {
 #ifdef HMMER_THREADS
   ESL_WORK_QUEUE   *queue;
@@ -588,7 +579,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].th  = p7_tophits_Create();
           info[i].om = p7_oprofile_Copy(om);
           info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
-          p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
+          p7_pipeline_NewModel(info[i].pli, info[i].om, info[i].bg);
 
           if (  esl_opt_IsUsed(go, "--toponly") )
             info[i].pli->strand = p7_STRAND_TOPONLY;
@@ -663,7 +654,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* merge the results of the search results */
       for (i = 1; i < infocnt; ++i) {
           p7_tophits_Merge(info[0].th, info[i].th);
-          p7_pipeline_Merge(info[0].pli, info[i].pli);
+          p7_pipeline_MergeStats(info[0].pli, info[i].pli);
 
           p7_pipeline_Destroy(info[i].pli);
           p7_tophits_Destroy(info[i].th);
@@ -701,7 +692,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
       esl_stopwatch_Stop(w);
-      p7_pli_Statistics(ofp, info->pli, w);
+      p7_pipeline_WriteStats(ofp, info->pli, w);
       if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
       /* Output the results in an MSA (-A option) */
@@ -821,7 +812,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
   while (wstatus == eslOK ) {
       dbsq->idx = seq_id;
 
-      p7_pli_NewSeq(info->pli, dbsq);
+      p7_pipeline_NewSeq(info->pli, dbsq);
 
       if (info->pli->strand != p7_STRAND_BOTTOMONLY) {
 
@@ -1038,7 +1029,7 @@ pipeline_thread(void *arg)
     {
       ESL_SQ *dbsq = block->list + i;
 
-      p7_pli_NewSeq(info->pli, dbsq);
+      p7_pipeline_NewSeq(info->pli, dbsq);
 
       if (info->pli->strand != p7_STRAND_BOTTOMONLY) {
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows

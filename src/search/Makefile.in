@@ -1,10 +1,10 @@
 MODULE = search
 
-OBJS =  modelconfig.c\
-	null3.c\
-	p7_pipeline.c\
-	tophits_output.c\
-	tophits_output_tabular.c
+OBJS =  modelconfig.o\
+	null3.o\
+	p7_pipeline.o\
+	tophits_output.o\
+	tophits_output_tabular.o
 
 HDRS =  
 

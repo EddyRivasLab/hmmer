@@ -142,16 +142,13 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
   hit->sum_lnP      = 0.0;
 
   hit->ndom         = 0;
-  hit->nexpected    = 0.0;
-  hit->nregions     = 0;
-  hit->nclustered   = 0;
   hit->noverlaps    = 0;
-  hit->nenvelopes   = 0;
+  hit->nexpected    = 0.0;
 
   hit->flags        = p7_HITFLAGS_DEFAULT;
   hit->nreported    = 0;
   hit->nincluded    = 0;
-  hit->best_domain  = -1;
+  hit->best_domain  = 0;
   hit->dcl          = NULL;
   hit->offset       = 0;
 
@@ -164,93 +161,6 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
 }
 
 
-
-/* Function:  p7_tophits_Add()
- * Synopsis:  Add a hit to the top hits list.
- *
- * Purpose:   Adds a hit to the top hits list <h>. 
- * 
- *            <name>, <acc>, and <desc> are copied, so caller may free
- *            them if it likes.
- *            
- *            Only the pointer <ali> is kept. Caller turns over memory
- *            management of <ali> to the top hits object; <ali> will
- *            be free'd when the top hits structure is free'd.
- *
- * Args:      h        - active top hit list
- *            name     - name of target  
- *            acc      - accession of target (may be NULL)
- *            desc     - description of target (may be NULL) 
- *            sortkey  - value to sort by: bigger is better
- *            score    - score of this hit
- *            lnP      - log P-value of this hit 
- *            mothersc - score of parent whole sequence 
- *            mother_lnP - log P-value of parent whole sequence
- *            sqfrom   - 1..L pos in target seq  of start
- *            sqto     - 1..L pos; sqfrom > sqto if rev comp
- *            sqlen    - length of sequence, L
- *            hmmfrom  - 0..M+1 pos in HMM of start
- *            hmmto    - 0..M+1 pos in HMM of end
- *            hmmlen   - length of HMM, M
- *            domidx   - number of this domain 
- *            ndom     - total # of domains in sequence
- *            ali      - optional printable alignment info
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    <eslEMEM> if reallocation failed.
- * 
- * Note:      Is this actually used anywhere? (SRE, 10 Dec 08) 
- *            I think it's not up to date.
- *            
- *            That's right. This function is obsolete.
- *            But it is used in benchmark and test code, so you can't
- *            delete it yet; benchmarks and test code should be
- *            revised (SRE, 26 Oct 09)
- */
-int
-p7_tophits_Add(P7_TOPHITS *h,
-         char *name, char *acc, char *desc,
-         double sortkey,
-         float score,    double lnP,
-         float mothersc, double mother_lnP,
-         int sqfrom, int sqto, int sqlen,
-         int hmmfrom, int hmmto, int hmmlen,
-         int domidx, int ndom,
-         P7_ALIDISPLAY *ali)
-{
-  int status;
-
-  if ((status = p7_tophits_Grow(h))                           != eslOK) return status;
-  if ((status = esl_strdup(name, -1, &(h->unsrt[h->N].name))) != eslOK) return status;
-  if ((status = esl_strdup(acc,  -1, &(h->unsrt[h->N].acc)))  != eslOK) return status;
-  if ((status = esl_strdup(desc, -1, &(h->unsrt[h->N].desc))) != eslOK) return status;
-  h->unsrt[h->N].sortkey    = sortkey;
-  h->unsrt[h->N].score      = score;
-  h->unsrt[h->N].pre_score  = 0.0;
-  h->unsrt[h->N].sum_score  = 0.0;
-  h->unsrt[h->N].lnP        = lnP;
-  h->unsrt[h->N].pre_lnP    = 0.0;
-  h->unsrt[h->N].sum_lnP    = 0.0;
-  h->unsrt[h->N].nexpected  = 0;
-  h->unsrt[h->N].nregions   = 0;
-  h->unsrt[h->N].nclustered = 0;
-  h->unsrt[h->N].noverlaps  = 0;
-  h->unsrt[h->N].nenvelopes = 0;
-  h->unsrt[h->N].ndom       = ndom;
-  h->unsrt[h->N].flags      = 0;
-  h->unsrt[h->N].nreported  = 0;
-  h->unsrt[h->N].nincluded  = 0;
-  h->unsrt[h->N].best_domain= 0;
-  h->unsrt[h->N].dcl        = NULL;
-  h->N++;
-
-  if (h->N >= 2) {
-    h->is_sorted_by_seqidx = FALSE;
-    h->is_sorted_by_sortkey = FALSE;
-  }
-  return eslOK;
-}
 
 /* hit_sorter(): qsort's pawn, below */
 static int
@@ -266,10 +176,10 @@ hit_sorter_by_sortkey(const void *vh1, const void *vh2)
     if ( (c = strcmp(h1->name, h2->name)) != 0) return c;
 
     /* if on different strand, the positive strand goes first, else use position */
-    int dir1 = (h1->dcl[0].iali < h1->dcl[0].jali ? 1 : -1);
-    int dir2 = (h2->dcl[0].iali < h2->dcl[0].jali ? 1 : -1);
+    int dir1 = (h1->dcl[0].ia < h1->dcl[0].ib ? 1 : -1);
+    int dir2 = (h2->dcl[0].ia < h2->dcl[0].ib ? 1 : -1);
     if (dir1 != dir2) return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
-    else              return (h1->dcl[0].iali > h2->dcl[0].iali ? 1 : -1 );
+    else              return (h1->dcl[0].ia > h2->dcl[0].ia ? 1 : -1 );
 
   }
 }
@@ -283,13 +193,13 @@ hit_sorter_by_seqidx_aliposition(const void *vh1, const void *vh2)
   if      (h1->seqidx > h2->seqidx) return  1; /* first key, seq_idx (unique id for sequences), low to high */
   else if (h1->seqidx < h2->seqidx) return -1;
   // if on different strand, the positive strand goes first, else use position
-  int dir1 = (h1->dcl[0].iali < h1->dcl[0].jali ? 1 : -1);
-  int dir2 = (h2->dcl[0].iali < h2->dcl[0].jali ? 1 : -1);
+  int dir1 = (h1->dcl[0].ia < h1->dcl[0].ib ? 1 : -1);
+  int dir2 = (h2->dcl[0].ia < h2->dcl[0].ib ? 1 : -1);
 
   if (dir1 != dir2) return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
 
-  if ( h1->dcl[0].iali == h2->dcl[0].iali)    return  (h1->dcl[0].jali < h2->dcl[0].jali ? 1 : -1 );
-  else                                        return  (h1->dcl[0].iali > h2->dcl[0].iali ? 1 : -1 );
+  if ( h1->dcl[0].ia == h2->dcl[0].ia)    return  (h1->dcl[0].ib < h2->dcl[0].ib ? 1 : -1 );
+  else                                        return  (h1->dcl[0].ia > h2->dcl[0].ia ? 1 : -1 );
 }
 
 static int
@@ -303,13 +213,13 @@ hit_sorter_by_modelname_aliposition(const void *vh1, const void *vh2)
   if  ( res != 0 ) return  res; /* first key, seq_idx (unique id for sequences), low to high */
 
   // if on different strand, the positive strand goes first, else use position
-  int dir1 = (h1->dcl[0].iali < h1->dcl[0].jali ? 1 : -1);
-  int dir2 = (h2->dcl[0].iali < h2->dcl[0].jali ? 1 : -1);
+  int dir1 = (h1->dcl[0].ia < h1->dcl[0].ib ? 1 : -1);
+  int dir2 = (h2->dcl[0].ia < h2->dcl[0].ib ? 1 : -1);
 
   if (dir1 != dir2) return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
 
-  if ( h1->dcl[0].iali == h2->dcl[0].iali)    return  (h1->dcl[0].jali < h2->dcl[0].jali ? 1 : -1 );
-  else                                        return  (h1->dcl[0].iali > h2->dcl[0].iali ? 1 : -1 );
+  if ( h1->dcl[0].ia == h2->dcl[0].ia)    return  (h1->dcl[0].ib < h2->dcl[0].ib ? 1 : -1 );
+  else                                        return  (h1->dcl[0].ia > h2->dcl[0].ia ? 1 : -1 );
 }
 
 
@@ -478,10 +388,10 @@ p7_tophits_GetMaxPositionLength(P7_TOPHITS *h)
   char buffer [11];
 
   for (max = 0, i = 0; i < h->N; i++) {
-    if (h->unsrt[i].dcl[0].iali > 0) {
-      n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].iali);
+    if (h->unsrt[i].dcl[0].ia > 0) {
+      n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].ia);
       max = ESL_MAX(n, max);
-      n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].jali);
+      n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].ib);
       max = ESL_MAX(n, max);
     }
   }
@@ -617,7 +527,7 @@ p7_tophits_Destroy(P7_TOPHITS *h)
       if (h->unsrt[i].acc  != NULL) free(h->unsrt[i].acc);
       if (h->unsrt[i].desc != NULL) free(h->unsrt[i].desc);
       if (h->unsrt[i].dcl  != NULL) {
-        if (h->unsrt[i].dcl->scores_per_pos != NULL) free (h->unsrt[i].dcl->scores_per_pos);
+        //if (h->unsrt[i].dcl->scores_per_pos != NULL) free (h->unsrt[i].dcl->scores_per_pos);
 
         for (j = 0; j < h->unsrt[i].ndom; j++)
           if (h->unsrt[i].dcl[j].ad != NULL)

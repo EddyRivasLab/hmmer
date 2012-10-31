@@ -4,6 +4,7 @@
 #include "p7_config.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "easel.h"
 
@@ -73,12 +74,12 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
                 qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
                 th->hit[h]->dcl[d].ad->hmmfrom,
                 th->hit[h]->dcl[d].ad->hmmto,
-                posw, th->hit[h]->dcl[d].iali,
-                posw, th->hit[h]->dcl[d].jali,
-                posw, th->hit[h]->dcl[d].ienv,
-                posw, th->hit[h]->dcl[d].jenv,
+                posw, th->hit[h]->dcl[d].ia,
+                posw, th->hit[h]->dcl[d].ib,
+                posw, th->hit[h]->dcl[d].iae,
+                posw, th->hit[h]->dcl[d].ibe,
                 posw, th->hit[h]->dcl[0].ad->L,
-                (th->hit[h]->dcl[d].iali < th->hit[h]->dcl[d].jali ? "   +  "  :  "   -  "),
+                (th->hit[h]->dcl[d].ia < th->hit[h]->dcl[d].ib ? "   +  "  :  "   -  "),
                 exp(th->hit[h]->lnP),
                 th->hit[h]->score,
                 th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
@@ -99,10 +100,10 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
                 th->hit[h]->dcl[d].bitscore,
                 th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
                 th->hit[h]->nexpected,
-                th->hit[h]->nregions,
-                th->hit[h]->nclustered,
+			    0,	/* SRE: FIXME (<nregions> removed now)   */
+			    0, 	/* SRE: FIXME (<nclustered> removed now) */
                 th->hit[h]->noverlaps,
-                th->hit[h]->nenvelopes,
+			    0,	/* SRE: FIXME (<nenvelopes> removed now) */
                 th->hit[h]->ndom,
                 th->hit[h]->nreported,
                 th->hit[h]->nincluded,
@@ -190,9 +191,9 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
                 th->hit[h]->dcl[d].ad->hmmto,
                 th->hit[h]->dcl[d].ad->sqfrom,
                 th->hit[h]->dcl[d].ad->sqto,
-                th->hit[h]->dcl[d].ienv,
-                th->hit[h]->dcl[d].jenv,
-                (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv)))),
+                th->hit[h]->dcl[d].iae,
+                th->hit[h]->dcl[d].ibe,
+                (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].ibe - th->hit[h]->dcl[d].iae)))),
                 (th->hit[h]->desc ?  th->hit[h]->desc : "-")) < 0)
                   ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-domain hit list: write failed");
           }
@@ -266,11 +267,11 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
           th->hit[h]->dcl[0].dombias * eslCONST_LOG2R, /* convert nats to bits at last moment */
           th->hit[h]->dcl[0].ad->hmmfrom,
           th->hit[h]->dcl[0].ad->hmmto,
-          (th->hit[h]->dcl[0].iali < th->hit[h]->dcl[0].jali ? "   +  "  :  "   -  "),
-          posw, th->hit[h]->dcl[0].iali,
-          posw, th->hit[h]->dcl[0].jali,
-          posw, th->hit[h]->dcl[0].ienv,
-          posw, th->hit[h]->dcl[0].jenv,
+          (th->hit[h]->dcl[0].ia < th->hit[h]->dcl[0].ib ? "   +  "  :  "   -  "),
+          posw, th->hit[h]->dcl[0].ia,
+          posw, th->hit[h]->dcl[0].ib,
+          posw, th->hit[h]->dcl[0].iae,
+          posw, th->hit[h]->dcl[0].ibe,
           posw, th->hit[h]->dcl[0].ad->L,
           th->hit[h]->desc == NULL ?  "-" : th->hit[h]->desc) < 0)
             ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
@@ -356,8 +357,8 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
               exp(domhit->dcl[0].lnP) * pli->Z, //i-Evalue
               domhit->ndom,
               domhit->dcl[0].dombias * eslCONST_LOG2R, // NATS to BITS at last moment
-              domhit->dcl[0].ienv,
-              domhit->dcl[0].jenv,
+              domhit->dcl[0].iae,
+              domhit->dcl[0].ibe,
               domhit->dcl[0].ad->sqfrom,
               domhit->dcl[0].ad->sqto,
               domhit->dcl[0].ad->hmmfrom,

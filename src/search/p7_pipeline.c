@@ -2,10 +2,14 @@
  *  
  * Contents:
  *   1. P7_PIPELINE: allocation, initialization, destruction
- *   2. Pipeline API
- *   3. Example 1: search mode (in a sequence db)
- *   4. Example 2: scan mode (in an HMM db)
- *   5. Copyright and license information
+ *   2. Setting pipeline for next target or model
+ *   3. Testing bitscore/E-value against reporting/inclusion thresholds
+ *   4. Statistics output from a completed pipeline.
+ *   5. The main pipeline call: p7_Pipeline().
+ *   6. The pipeline specialized for nhmmer/longtarget.
+ *   7. Example 1: search mode (in a sequence db)
+ *   8. Example 2: scan mode (in an HMM db)
+ *   9. Copyright and license information
  * 
  */
 #include "p7_config.h"
@@ -18,10 +22,36 @@
 #include "esl_exponential.h"
 #include "esl_getopts.h"
 #include "esl_gumbel.h"
+#include "esl_sq.h"
+#include "esl_stopwatch.h"
 #include "esl_vectorops.h"
 
+#include "base/p7_bg.h"
+#include "base/p7_domain.h"
+#include "base/p7_scoredata.h"
+#include "base/p7_tophits.h"
+#include "base/p7_hmmwindow.h"
 
-#include "hmmer.h"
+#include "dp_vector/p7_oprofile.h"
+#include "dp_vector/fm_sse.h"
+#include "dp_vector/io.h"
+#include "dp_vector/msvfilter.h"
+#include "dp_vector/vitfilter.h"
+#include "dp_vector/fwdfilter.h"
+
+#include "dp_sparse/sparse_viterbi.h"
+#include "dp_sparse/sparse_fwdback.h"
+#include "dp_sparse/sparse_decoding.h"
+#include "dp_sparse/sparse_masstrace.h"
+#include "dp_sparse/sparse_envscore.h"
+#include "dp_sparse/sparse_null2.h"
+
+#include "fm/fm.h"
+
+#include "misc/logsum.h"
+
+#include "search/p7_pipeline.h"
+
 
 /*****************************************************************
  * 1. The P7_PIPELINE object: allocation, initialization, destruction.
@@ -34,6 +64,8 @@
  *            containing certain standardized options (described
  *            below), some initial guesses at the model size <M_hint>
  *            and sequence length <L_hint> that will be processed,
+ *            an nhmmer flag <do_longtargets> (TRUE for nhmmer's
+ *            long target sequence scanning; FALSE otherwise);
  *            and a <mode> that can be either <p7_SCAN_MODELS> or
  *            <p7_SEARCH_SEQS> depending on whether we're searching one sequence
  *            against a model database (hmmscan mode) or one model
@@ -85,30 +117,40 @@
  * Throws:    <NULL> on allocation failure.
  */
 P7_PIPELINE *
-p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, enum p7_pipemodes_e mode)
+p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, enum p7_pipemodes_e mode)
 {
   P7_PIPELINE *pli  = NULL;
-  int          seed = (go ? esl_opt_GetInteger(go, "--seed") : 42);
   int          status;
 
+  /* Contract checks / arg validation */
+  ESL_DASSERT1( (M_hint >= 1 && M_hint <= 100000) ); /* H3 design limit: M,L <= 100Kres */
+  ESL_DASSERT1( (L_hint >= 1 && L_hint <= 100000) );
+
   ESL_ALLOC(pli, sizeof(P7_PIPELINE));
-
-  pli->long_targets = long_targets;
-
-  if ((pli->fwd = p7_omx_Create(M_hint, L_hint, L_hint)) == NULL) goto ERROR;
-  if ((pli->bck = p7_omx_Create(M_hint, L_hint, L_hint)) == NULL) goto ERROR;
-  if ((pli->oxf = p7_filtermx_Create(M_hint, L_hint, ESL_MBYTES(32))) == NULL) goto ERROR;
-  if ((pli->oxb = p7_filtermx_Create(M_hint, L_hint, ESL_MBYTES(32))) == NULL) goto ERROR;     
-
-  /* Normally, we reinitialize the RNG to the original seed every time we're
-   * about to collect a stochastic trace ensemble. This eliminates run-to-run
-   * variability. As a special case, if seed==0, we choose an arbitrary one-time 
-   * seed: time() sets the seed, and we turn off the reinitialization.
-   */
-  pli->r                  =  esl_randomness_CreateFast(seed);
-  pli->do_reseeding       = (seed == 0) ? FALSE : TRUE;
-  pli->ddef               = p7_domaindef_Create(pli->r);
-  pli->ddef->do_reseeding = pli->do_reseeding;
+  pli->fx   = NULL;
+  pli->cx   = NULL;
+  pli->sm   = NULL;
+  pli->sxf  = NULL;
+  pli->sxb  = NULL;
+  pli->sxd  = NULL;
+  pli->sxx  = NULL;
+  pli->tr   = NULL;
+  pli->mt   = NULL;
+  pli->n2sc = NULL;
+  pli->wrk  = NULL;
+  
+  if ( (pli->fx  = p7_filtermx_Create  (M_hint))                                  == NULL) goto ERROR;
+  if ( (pli->cx  = p7_checkptmx_Create (M_hint, L_hint, ESL_MBYTES(p7_RAMLIMIT))) == NULL) goto ERROR; /* p7_RAMLIMIT=256MB, in p7_config.h.in */
+  if ( (pli->sm  = p7_sparsemask_Create(M_hint, L_hint))                          == NULL) goto ERROR;
+  if ( (pli->sxf = p7_sparsemx_Create  (pli->sm))                                 == NULL) goto ERROR;
+  if ( (pli->sxb = p7_sparsemx_Create  (pli->sm))                                 == NULL) goto ERROR;
+  if ( (pli->sxd = p7_sparsemx_Create  (pli->sm))                                 == NULL) goto ERROR;
+  if ( (pli->sxx = p7_sparsemx_Create  (pli->sm))                                 == NULL) goto ERROR;
+  if ( (pli->tr  = p7_trace_CreateWithPP())                                       == NULL) goto ERROR;
+  if ( (pli->mt  = p7_masstrace_Create (M_hint, L_hint))                          == NULL) goto ERROR;
+  ESL_ALLOC(pli->n2sc, sizeof(float) * (L_hint+1));
+  ESL_ALLOC(pli->wrk,  sizeof(float) * (M_hint+1));
+  esl_vec_FSet(pli->n2sc, L_hint+1, 0.0f);
 
   /* Configure reporting thresholds */
   pli->by_E            = TRUE;
@@ -118,17 +160,8 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
   pli->domE            = (go ? esl_opt_GetReal(go, "--domE") : 10.0);
   pli->domT            = 0.0;
   pli->use_bit_cutoffs = FALSE;
-  if (go && esl_opt_IsOn(go, "-T")) 
-    {
-      pli->T    = esl_opt_GetReal(go, "-T");  
-      pli->by_E = FALSE;
-    }
-  if (go && esl_opt_IsOn(go, "--domT")) 
-    {
-      pli->domT     = esl_opt_GetReal(go, "--domT"); 
-      pli->dom_by_E = FALSE;
-    }
-
+  if (go && esl_opt_IsOn(go, "-T"))     { pli->T    = esl_opt_GetReal(go, "-T");     pli->by_E     = FALSE; }
+  if (go && esl_opt_IsOn(go, "--domT")) { pli->domT = esl_opt_GetReal(go, "--domT"); pli->dom_by_E = FALSE; }
 
   /* Configure inclusion thresholds */
   pli->inc_by_E           = TRUE;
@@ -137,17 +170,8 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
   pli->incdom_by_E        = TRUE;
   pli->incdomE            = (go ? esl_opt_GetReal(go, "--incdomE") : 0.01);
   pli->incdomT            = 0.0;
-  if (go && esl_opt_IsOn(go, "--incT")) 
-    {
-      pli->incT     = esl_opt_GetReal(go, "--incT"); 
-      pli->inc_by_E = FALSE;
-    } 
-  if (go && esl_opt_IsOn(go, "--incdomT")) 
-    {
-      pli->incdomT     = esl_opt_GetReal(go, "--incdomT"); 
-      pli->incdom_by_E = FALSE;
-    }
-
+  if (go && esl_opt_IsOn(go, "--incT"))    { pli->incT    = esl_opt_GetReal(go, "--incT");    pli->inc_by_E    = FALSE; }
+  if (go && esl_opt_IsOn(go, "--incdomT")) { pli->incdomT = esl_opt_GetReal(go, "--incdomT"); pli->incdom_by_E = FALSE; }
 
   /* Configure for one of the model-specific thresholding options */
   if (go && esl_opt_GetBoolean(go, "--cut_ga"))
@@ -175,7 +199,6 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
       pli->use_bit_cutoffs = p7H_TC;
     }
 
-
   /* Configure search space sizes for E value calculations  */
   pli->Z       = pli->domZ       = 0.0;
   pli->Z_setby = pli->domZ_setby = p7_ZSETBY_NTARGETS;
@@ -190,7 +213,6 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
       pli->domZ       = esl_opt_GetReal(go, "--domZ");
     }
 
-
   /* Configure acceleration pipeline thresholds */
   pli->do_max        = FALSE;
   pli->do_biasfilter = TRUE;
@@ -198,14 +220,13 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
   pli->F1     = (go ? ESL_MIN(1.0, esl_opt_GetReal(go, "--F1")) : 0.02);
   pli->F2     = (go ? ESL_MIN(1.0, esl_opt_GetReal(go, "--F2")) : 1e-3);
   pli->F3     = (go ? ESL_MIN(1.0, esl_opt_GetReal(go, "--F3")) : 1e-5);
-  if (long_targets) {
-	  pli->B1     = (go ? esl_opt_GetInteger(go, "--B1") : 100);
-	  pli->B2     = (go ? esl_opt_GetInteger(go, "--B2") : 240);
-	  pli->B3     = (go ? esl_opt_GetInteger(go, "--B3") : 1000);
+  if (do_longtargets) {
+    pli->B1     = (go ? esl_opt_GetInteger(go, "--B1") : 100);
+    pli->B2     = (go ? esl_opt_GetInteger(go, "--B2") : 240);
+    pli->B3     = (go ? esl_opt_GetInteger(go, "--B3") : 1000);
   } else {
-	  pli->B1 = pli->B2 = pli->B3 = -1;
+    pli->B1 = pli->B2 = pli->B3 = -1;
   }
-
 
   if (go && esl_opt_GetBoolean(go, "--max")) 
     {
@@ -213,12 +234,11 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
       pli->do_biasfilter = FALSE;
 
       pli->F2 = pli->F3 = 1.0;
-      pli->F1 = (pli->long_targets ? 0.3 : 1.0); // need to set some threshold for F1 even on long targets. Should this be tighter?
+      pli->F1 = (do_longtargets ? 0.3 : 1.0); // need to set some threshold for F1 even on long targets. Should this be tighter?
     }
   if (go && esl_opt_GetBoolean(go, "--nonull2")) pli->do_null2      = FALSE;
   if (go && esl_opt_GetBoolean(go, "--nobias"))  pli->do_biasfilter = FALSE;
   
-
   /* Accounting as we collect results */
   pli->nmodels         = 0;
   pli->nseqs           = 0;
@@ -228,14 +248,28 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
   pli->n_past_bias     = 0;
   pli->n_past_vit      = 0;
   pli->n_past_fwd      = 0;
+
+  /* Additional accounting in nhmmer */
+  pli->n_output        = 0;
   pli->pos_past_msv    = 0;
   pli->pos_past_bias   = 0;
   pli->pos_past_vit    = 0;
   pli->pos_past_fwd    = 0;
+  pli->pos_output      = 0;
+
+  /* State config, flags. */
   pli->mode            = mode;
   pli->show_accessions = (go && esl_opt_GetBoolean(go, "--acc")   ? TRUE  : FALSE);
   pli->show_alignments = (go && esl_opt_GetBoolean(go, "--noali") ? FALSE : TRUE);
   pli->hfp             = NULL;
+
+  /* Additional state config for nhmmer */
+  pli->long_targets = do_longtargets;               /* TRUE | FALSE */
+  pli->strand       = p7_STRAND_BOTH;               /* nhmmer's default */
+  pli->W            = -1;	                    /* p7_pipeline_NewModel() initializes this, from profile */
+  pli->block_length = p7_NHMMER_MAX_RESIDUE_COUNT;
+
+  /* Diagnostic info */
   pli->errbuf[0]       = '\0';
 
   return pli;
@@ -259,15 +293,21 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
 int
 p7_pipeline_Reuse(P7_PIPELINE *pli)
 {
-  p7_filtermx_Reuse(pli->oxf);
-  p7_filtermx_Reuse(pli->oxb);
-  p7_omx_Reuse(pli->fwd);
-  p7_omx_Reuse(pli->bck);
-  p7_domaindef_Reuse(pli->ddef);
+  p7_filtermx_Reuse  (pli->fx);
+  p7_checkptmx_Reuse (pli->cx);
+  p7_sparsemask_Reuse(pli->sm);
+  p7_sparsemx_Reuse  (pli->sxf);
+  p7_sparsemx_Reuse  (pli->sxb);
+  p7_sparsemx_Reuse  (pli->sxd);
+  p7_sparsemx_Reuse  (pli->sxx);
+  p7_trace_Reuse     (pli->tr);
+  p7_masstrace_Reuse (pli->mt);
+
+  /* The rest of the state of the pipeline stays constant
+   * as we move to the next target.
+   */
   return eslOK;
 }
-
-
 
 /* Function:  p7_pipeline_Destroy()
  * Synopsis:  Free a <P7_PIPELINE> object.
@@ -277,24 +317,707 @@ p7_pipeline_Reuse(P7_PIPELINE *pli)
 void
 p7_pipeline_Destroy(P7_PIPELINE *pli)
 {
-  if (pli == NULL) return;
-  
-  p7_filtermx_Destroy(pli->oxf);
-  p7_filtermx_Destroy(pli->oxb);
-  p7_omx_Destroy(pli->fwd);
-  p7_omx_Destroy(pli->bck);
-  esl_randomness_Destroy(pli->r);
-  p7_domaindef_Destroy(pli->ddef);
-  free(pli);
+  if (pli) {
+    p7_filtermx_Destroy  (pli->fx);
+    p7_checkptmx_Destroy (pli->cx);
+    p7_sparsemask_Destroy(pli->sm);
+    p7_sparsemx_Destroy  (pli->sxf);
+    p7_sparsemx_Destroy  (pli->sxb);
+    p7_sparsemx_Destroy  (pli->sxd);
+    p7_sparsemx_Destroy  (pli->sxx);
+    p7_trace_Destroy     (pli->tr);
+    p7_masstrace_Destroy (pli->mt);
+    free(pli);
+  }
 }
 /*---------------- end, P7_PIPELINE object ----------------------*/
 
 
 /*****************************************************************
- * 2. The pipeline API.
+ * 2. Setting pipeline for next target or model
  *****************************************************************/
 
-/* Function:  p7_pli_ExtendAndMergeWindows
+/* Function:  p7_pipeline_NewModel()
+ * Synopsis:  Prepare pipeline for a new model (target or query)
+ *
+ * Purpose:   Caller has a new model <om>. Prepare the pipeline <pli>
+ *            to receive this model as either a query or a target.
+ *
+ *            If the "experimental" bias filter HMM is in use, this
+ *            call resets it to use the new model's composition. This
+ *            overwrites the bias filter HMM's expected length! You
+ *            need to call <p7_bg_SetLength()> after a <NewModel()> call.
+ *            (Failure to do this is bug #h85, 14 Dec 10.)
+ *
+ *            The pipeline may alter the null model <bg> in a model-specific
+ *            way (if we're using a composition bias filter HMM in the
+ *            pipeline).
+ *
+ * Returns:   <eslOK> on success.
+ * 
+ *            <eslEINVAL> if pipeline expects to be able to use a
+ *            model's bit score thresholds, but this model does not
+ *            have the appropriate ones set.
+ *            
+ *            <eslEMEM> if an allocation fails.
+ */
+int
+p7_pipeline_NewModel(P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg)
+{
+  int status = eslOK;
+
+  pli->nmodels++;
+  pli->nnodes += om->M;
+  if (pli->Z_setby == p7_ZSETBY_NTARGETS && pli->mode == p7_SCAN_MODELS) pli->Z = pli->nmodels;
+
+  if (pli->do_biasfilter) p7_bg_SetFilter(bg, om->M, om->compo);
+
+  if (pli->mode == p7_SEARCH_SEQS) 
+    status = p7_pipeline_NewModelThresholds(pli, om);
+
+  pli->W = om->max_length;
+  return status;
+}
+
+/* Function:  p7_pipeline_NewModelThresholds()
+ * Synopsis:  Set reporting and inclusion bit score thresholds on a new model.
+ *
+ * Purpose:   Set the bit score thresholds on a new model, if we're 
+ *            using Pfam GA, TC, or NC cutoffs for reporting or
+ *            inclusion.
+ *            
+ *            In a "search" pipeline, this only needs to be done once
+ *            per query model, so <p7_pipeline_NewModelThresholds()> gets 
+ *            called by <p7_pipeline_NewModel()>.
+ *            
+ *            In a "scan" pipeline, this needs to be called for each
+ *            model, and it needs to be called after
+ *            <p7_oprofile_ReadRest()>, because that's when the bit
+ *            score thresholds get read.
+ *
+ * Returns:   <eslOK> on success. 
+ *            
+ *            <eslEINVAL> if pipeline expects to be able to use a
+ *            model's bit score thresholds, but this model does not
+ *            have the appropriate ones set.
+ *
+ * Xref:      Written to fix bug #h60.
+ */
+int
+p7_pipeline_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om)
+{
+
+  if (pli->use_bit_cutoffs)
+    {
+      if (pli->use_bit_cutoffs == p7H_GA)
+    {
+      if (om->cutoff[p7_GA1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "GA bit thresholds unavailable on model %s\n", om->name);
+      pli->T    = pli->incT    = om->cutoff[p7_GA1];
+      pli->domT = pli->incdomT = om->cutoff[p7_GA2];
+    }
+      else if  (pli->use_bit_cutoffs == p7H_TC)
+    {
+      if (om->cutoff[p7_TC1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "TC bit thresholds unavailable on model %s\n", om->name);
+      pli->T    = pli->incT    = om->cutoff[p7_TC1];
+      pli->domT = pli->incdomT = om->cutoff[p7_TC2];
+    }
+      else if (pli->use_bit_cutoffs == p7H_NC)
+    {
+      if (om->cutoff[p7_NC1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "NC bit thresholds unavailable on model %s\n", om->name);
+      pli->T    = pli->incT    = om->cutoff[p7_NC1];
+      pli->domT = pli->incdomT = om->cutoff[p7_NC2];
+    }
+    }
+
+  return eslOK;
+}
+
+
+/* Function:  p7_pipeline_NewSeq()
+ * Synopsis:  Prepare pipeline for a new sequence (target or query)
+ *
+ * Purpose:   Caller has a new sequence <sq>. Prepare the pipeline <pli>
+ *            to receive this model as either a query or a target.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_pipeline_NewSeq(P7_PIPELINE *pli, const ESL_SQ *sq)
+{
+  int status;
+
+  if (!pli->long_targets) pli->nseqs++; // if long_targets, sequence counting happens in the serial loop, which can track multiple windows for a single long sequence
+  pli->nres += sq->n;
+  if (pli->Z_setby == p7_ZSETBY_NTARGETS && pli->mode == p7_SEARCH_SEQS) pli->Z = pli->nseqs;
+  return eslOK;
+}
+/*-------- end, setting pipeline for next target ----------------*/
+
+
+
+/*****************************************************************
+ * 3. Testing bitscore/E-value against reporting/inclusion threshold
+ *****************************************************************/
+
+/* Function:  p7_pipeline_TargetReportable
+ * Synopsis:  Returns TRUE if target score meets reporting threshold.
+ *
+ * Purpose:   Returns <TRUE> if the bit score <score> and/or 
+ *            log P-value <lnP> meet per-target reporting thresholds 
+ *            for the processing pipeline.
+ */
+int
+p7_pipeline_TargetReportable(P7_PIPELINE *pli, float score, double lnP)
+{
+  if (pli->by_E )
+    {
+      if ( !pli->long_targets  && exp(lnP) * pli->Z <= pli->E) return TRUE;
+      if (  pli->long_targets  && exp(lnP) <= pli->E)          return TRUE; // database size is already built into the Pval if pli->targetlength == p7_TARGET_LONG
+    }
+  else if (! pli->by_E   && score >= pli->T) return TRUE;
+  return FALSE;
+}
+
+/* Function:  p7_pipeline_DomainReportable
+ * Synopsis:  Returns TRUE if domain score meets reporting threshold. 
+ *
+ * Purpose:   Returns <TRUE> if the bit score <score> and/or 
+ *            log P-value <lnP> meet per-domain reporting thresholds 
+ *            for the processing pipeline.
+ */
+int
+p7_pipeline_DomainReportable(P7_PIPELINE *pli, float dom_score, double lnP)
+{
+  if ( pli->dom_by_E )
+    {
+      if ( !pli->long_targets  &&  exp(lnP) * pli->domZ <= pli->domE) return TRUE;
+      if (  pli->long_targets  &&  exp(lnP) <= pli->domE) return TRUE;
+    }
+  else if (! pli->dom_by_E   && dom_score        >= pli->domT) return TRUE;
+  return FALSE;
+}
+
+/* Function:  p7_pipeline_TargetIncludable()
+ * Synopsis:  Returns TRUE if target score meets inclusion threshold.
+ */
+int
+p7_pipeline_TargetIncludable(P7_PIPELINE *pli, float score, double lnP)
+{
+  if (pli->inc_by_E )
+    {
+      if ( !pli->long_targets && exp(lnP) * pli->Z <= pli->incE) return TRUE;
+      if (  pli->long_targets && exp(lnP) <= pli->incE) return TRUE;
+    }
+  else if (! pli->inc_by_E   && score         >= pli->incT) return TRUE;
+  return FALSE;
+}
+
+/* Function:  p7_pipeline_DomainIncludable()
+ * Synopsis:  Returns TRUE if domain score meets inclusion threshold.
+ */
+int
+p7_pipeline_DomainIncludable(P7_PIPELINE *pli, float dom_score, double lnP)
+{
+  if      (  pli->incdom_by_E   && exp(lnP) * pli->domZ <= pli->incdomE) return TRUE;
+  else if (! pli->incdom_by_E   && dom_score        >= pli->incdomT) return TRUE;
+  else return FALSE;
+}
+/*-------- end, testing score/E-value against thresholds  -------*/
+
+
+/*****************************************************************
+ * 4. Statistics output from a completed pipeline
+ *****************************************************************/
+
+/* Function:  p7_pipeline_MergeStats()
+ * Synopsis:  Merge the pipeline statistics (among workers/threads)
+ *
+ * Purpose:   Merge the statistics of a subsidiary pipeline <p2> (from a worker thread
+ *            or MPI process, say) into a master <p1>, prior to output
+ *            of summary statistics.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_pipeline_MergeStats(P7_PIPELINE *p1, const P7_PIPELINE *p2)
+{
+  /* if we are searching a sequence database, we need to keep track of the
+   * number of sequences and residues processed.
+   */
+  if (p1->mode == p7_SEARCH_SEQS)
+    {
+      p1->nseqs   += p2->nseqs;
+      p1->nres    += p2->nres;
+    }
+  else
+    {
+      p1->nmodels += p2->nmodels;
+      p1->nnodes  += p2->nnodes;
+    }
+
+  p1->n_past_msv  += p2->n_past_msv;
+  p1->n_past_bias += p2->n_past_bias;
+  p1->n_past_vit  += p2->n_past_vit;
+  p1->n_past_fwd  += p2->n_past_fwd;
+  p1->n_output    += p2->n_output;
+
+  p1->pos_past_msv  += p2->pos_past_msv;
+  p1->pos_past_bias += p2->pos_past_bias;
+  p1->pos_past_vit  += p2->pos_past_vit;
+  p1->pos_past_fwd  += p2->pos_past_fwd;
+  p1->pos_output    += p2->pos_output;
+
+  if (p1->Z_setby == p7_ZSETBY_NTARGETS)
+    {
+      p1->Z += (p1->mode == p7_SCAN_MODELS) ? p2->nmodels : p2->nseqs;
+    }
+  else
+    {
+      p1->Z = p2->Z;
+    }
+
+  return eslOK;
+}
+
+/* Function:  p7_pipeline_WriteStats()
+ * Synopsis:  Final statistics output from a processing pipeline.
+ *
+ * Purpose:   Print a standardized report of the internal statistics of
+ *            a finished processing pipeline <pli> to stream <ofp>.
+ *            
+ *            If stopped, non-<NULL> stopwatch <w> is provided for a
+ *            stopwatch that was timing the pipeline, then the report
+ *            also includes timing information.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_pipeline_WriteStats(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
+{
+  double ntargets; 
+
+  fprintf(ofp, "Internal pipeline statistics summary:\n");
+  fprintf(ofp, "-------------------------------------\n");
+  if (pli->mode == p7_SEARCH_SEQS) {
+    fprintf(ofp,   "Query model(s):      %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
+    fprintf(ofp,   "Target sequences:    %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
+    ntargets = pli->nseqs;
+  } else {
+    fprintf(ofp, "Query sequence(s):           %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
+    fprintf(ofp, "Target model(s):             %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
+    ntargets = pli->nmodels;
+  }
+
+  if (pli->long_targets) {
+      fprintf(ofp, "Residues passing MSV filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
+      //fprintf(ofp, "Windows passing MSV filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
+          //pli->n_past_msv,
+          pli->pos_past_msv,
+          (double)pli->pos_past_msv / (pli->nres*pli->nmodels) ,
+          pli->F1);
+
+      fprintf(ofp, "Residues passing bias filter:  %15" PRId64 "  (%.3g); expected (%.3g)\n",
+      //fprintf(ofp, "Windows passing bias filter:  %15" PRId64 "  (%.4g); expected (%.4g)\n",
+          //pli->n_past_bias,
+          pli->pos_past_bias,
+          (double)pli->pos_past_bias / (pli->nres*pli->nmodels) ,
+          pli->F1);
+
+      fprintf(ofp, "Residues passing Vit filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
+      //fprintf(ofp, "Windows passing Vit filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
+          //pli->n_past_vit,
+          pli->pos_past_vit,
+          (double)pli->pos_past_vit / (pli->nres*pli->nmodels) ,
+          pli->F2);
+
+      fprintf(ofp, "Residues passing Fwd filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
+      //fprintf(ofp, "Windows passing Fwd filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
+          //pli->n_past_fwd,
+          pli->pos_past_fwd,
+          (double)pli->pos_past_fwd / (pli->nres*pli->nmodels) ,
+          pli->F3);
+
+      fprintf(ofp, "Total number of hits:          %15d  (%.3g)\n",
+          (int)pli->n_output,
+          (double)pli->pos_output / (pli->nres*pli->nmodels) );
+
+  } else { // typical case output
+
+      fprintf(ofp, "Passed MSV filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",
+          pli->n_past_msv,
+          (double) pli->n_past_msv / ntargets,
+          pli->F1 * ntargets,
+          pli->F1);
+
+      fprintf(ofp, "Passed bias filter:          %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",
+          pli->n_past_bias,
+          (double) pli->n_past_bias / ntargets,
+          pli->F1 * ntargets,
+          pli->F1);
+
+      fprintf(ofp, "Passed Vit filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",
+          pli->n_past_vit,
+          (double) pli->n_past_vit / ntargets,
+          pli->F2 * ntargets,
+          pli->F2);
+
+      fprintf(ofp, "Passed Fwd filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",
+          pli->n_past_fwd,
+          (double) pli->n_past_fwd / ntargets,
+          pli->F3 * ntargets,
+          pli->F3);
+
+      fprintf(ofp, "Initial search space (Z):    %15.0f  %s\n", pli->Z,    pli->Z_setby    == p7_ZSETBY_OPTION ? "[as set by --Z on cmdline]"    : "[actual number of targets]");
+      fprintf(ofp, "Domain search space  (domZ): %15.0f  %s\n", pli->domZ, pli->domZ_setby == p7_ZSETBY_OPTION ? "[as set by --domZ on cmdline]" : "[number of targets reported over threshold]");
+  }
+
+  if (w != NULL) {
+    esl_stopwatch_Display(ofp, w, "# CPU time: ");
+    fprintf(ofp, "# Mc/sec: %.2f\n", 
+        (double) pli->nres * (double) pli->nnodes / (w->elapsed * 1.0e6));
+  }
+
+  return eslOK;
+}
+/*--------------- end, pipeline statistics ----------------------*/
+
+
+
+/*****************************************************************
+ * 5. The main pipeline call: p7_Pipeline()
+ *****************************************************************/
+
+
+/* Function:  p7_Pipeline()
+ * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline.
+ *
+ * Purpose:   Run H3's accelerated pipeline to compare profile <om>
+ *            against sequence <sq>. If a significant hit is found,
+ *            information about it is added to the <hitlist>. The pipeline 
+ *            accumulates beancounting information about how many comparisons
+ *            flow through the pipeline while it's active.
+ *            
+ * Returns:   <eslOK> on success. If a significant hit is obtained,
+ *            its information is added to the growing <hitlist>. 
+ *            
+ *            <eslEINVAL> if (in a scan pipeline) we're supposed to
+ *            set GA/TC/NC bit score thresholds but the model doesn't
+ *            have any.
+ *            
+ *            <eslERANGE> on numerical overflow errors in the
+ *            optimized vector implementations; particularly in
+ *            posterior decoding. I don't believe this is possible for
+ *            multihit local models, but I'm set up to catch it
+ *            anyway. We may emit a warning to the user, but cleanly
+ *            skip the problematic sequence and continue.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ * 
+ * Future:    Right now it needs both <gm> and <om> because the filters
+ *            use <om> and sparse DP uses <gm>. Not a problem in hmmsearch,
+ *            which typically has both; more of a problem for hmmscan,
+ *            which reads <om>. In the future, we need to optimize a bit
+ *            more; perhaps we'll have P7_MODEL, holding annotation,
+ *            hmm, profile params, and striped vector params for MSV,
+ *            Vit, and Fwd/Back, with the ability to create vector params
+ *            from profile and vice versa, on demand.
+ */
+int
+p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist)
+{
+  P7_DOMAIN       *dcl     = NULL;     /* array of domain data structures <0..ndom-1> */
+  P7_HIT          *hit     = NULL;     /* ptr to the current hit output data          */
+  float            usc, vitsc, fwdsc;  /* DP scores                                   */
+  float            filtersc;           /* HMM null filter score                       */
+  float            nullsc;             /* null model score                            */
+  float            seqbias;  
+  float            seq_score;          /* the corrected per-seq bit score */
+  float            sum_score;           /* the corrected reconstruction score for the seq */
+  float            pre_score, pre2_score; /* uncorrected bit scores for seq */
+  double           P;                /* P-value of a hit */
+  double           lnP;              /* log P-value of a hit */
+  int              Ld;               /* # of residues in envelopes */
+  int              d,z,i;
+  float            null2[p7_MAXCODE];
+  int              noverlaps;
+  int              last_ibe;
+  int              best_d;
+  int              status;
+  
+  if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
+
+  /* Base null model score (we could calculate this in NewSeq(), for a scan pipeline) */
+  p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
+
+  /* First level filter: the SSV and MSV filters */
+  p7_MSVFilter(sq->dsq, sq->n, om, pli->fx, &usc);
+  seq_score = (usc - nullsc) / eslCONST_LOG2;
+  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  if (P > pli->F1) return eslOK;
+  pli->n_past_msv++;
+
+  /* biased composition HMM filtering */
+  if (pli->do_biasfilter)
+    {
+      p7_bg_FilterScore(bg, sq->dsq, sq->n, &filtersc);
+      seq_score = (usc - filtersc) / eslCONST_LOG2;
+      P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+      if (P > pli->F1) return eslOK;
+    }
+  else filtersc = nullsc;
+  pli->n_past_bias++;
+
+  /* In scan mode, if it passes the MSV filter, read the rest of the profile */
+  if (pli->mode == p7_SCAN_MODELS)
+    {
+      if (pli->hfp) p7_oprofile_ReadRest(pli->hfp, om);
+      p7_oprofile_ReconfigRestLength(om, sq->n);
+      if ((status = p7_pipeline_NewModelThresholds(pli, om)) != eslOK) return status; /* pli->errbuf has err msg set */
+    }
+
+  /* Second level filter: ViterbiFilter(), multihit with <om> */
+  if (P > pli->F2)
+    {
+      p7_ViterbiFilter(sq->dsq, sq->n, om, pli->fx, &vitsc);  
+      seq_score = (vitsc-filtersc) / eslCONST_LOG2;
+      P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
+      if (P > pli->F2) return eslOK;
+    }
+  pli->n_past_vit++;
+
+  /* Checkpointed Forward. Check score as a filter step before proceeding to backwards/decoding. */
+  p7_ForwardFilter(sq->dsq, sq->n, om, pli->cx, &fwdsc);
+  seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
+  P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
+  if (P > pli->F3) return eslOK;
+  pli->n_past_fwd++;
+
+  /* ok, it's for real; passes vectorized local scoring filters.
+   * Finish with Backwards and Decoding, defining a sparse mask in <sm>.
+   */
+  p7_BackwardFilter(sq->dsq, sq->n, om, pli->cx, pli->sm);
+
+  /* Now we can hand it over to sparse DP, with the full glocal/local model */
+  p7_SparseViterbi (sq->dsq, sq->n, gm, pli->sm,  pli->sxx, pli->tr, &vitsc);
+  p7_SparseForward (sq->dsq, sq->n, gm, pli->sm,  pli->sxf,          &fwdsc);
+  p7_SparseBackward(sq->dsq, sq->n, gm, pli->sm,  pli->sxb,          NULL);
+  p7_SparseDecoding(sq->dsq, sq->n, gm, pli->sxf, pli->sxb, pli->sxd);
+  p7_sparsemx_TracePostprobs(pli->sxd, pli->tr); /* annotate the trace. */
+  p7_trace_Index(pli->tr);		         /* index domains in the trace */
+  p7_sparsemx_Reuse(pli->sxx);	                 /* reuse the Viterbi matrix for mass tracing, coming up next */
+  
+  ESL_ALLOC(dcl, sizeof(P7_DOMAIN) * pli->tr->ndom);
+  ESL_REALLOC(pli->wrk,  sizeof(float) * (gm->M+1));
+  ESL_REALLOC(pli->n2sc, sizeof(float) * (sq->n+1));
+  esl_vec_FSet(pli->n2sc, sq->n+1, 0.0f);
+
+  noverlaps  = 0;
+  last_ibe   = -1;
+  best_d     = -1;
+  for (d = 0; d < pli->tr->ndom; d++)
+    {
+      /* Determine envelope coords by mass trace. */
+      p7_SparseMasstrace(sq->dsq, sq->n, gm, pli->sxf, pli->sxb, pli->tr, pli->tr->anch[d], p7_MASSTRACE_THRESH_DEFAULT, pli->sxx, pli->mt, 
+			 &(dcl[d].iae), &(dcl[d].ibe), &(dcl[d].kae), &(dcl[d].kbe));
+      p7_sparsemx_Reuse (pli->sxx);
+      p7_masstrace_Reuse(pli->mt);
+
+      /* Keep track of overlaps */
+      if (dcl[d].iae <= last_ibe) noverlaps++;
+      last_ibe = dcl[d].ibe;
+
+      /* Transfer alignment coords from trace. [Do we need to do this?] */
+      dcl[d].ia = pli->tr->sqfrom[d];  
+      dcl[d].ib = pli->tr->sqto[d];  
+      dcl[d].ka = pli->tr->hmmfrom[d];  
+      dcl[d].kb = pli->tr->hmmto[d];  
+
+      /* Determine envelope score. [We have an approximation available, but we determined it rarely holds */
+      p7_SparseEnvscore(sq->dsq, sq->n, gm, dcl[d].iae, dcl[d].ibe, dcl[d].kae, dcl[d].kbe, pli->sm, pli->sxx, &(dcl[d].envsc));
+      p7_sparsemx_Reuse(pli->sxx);
+
+      /* Determine null2 correction 
+       * Upon return, null2[x] = \log f'(x)/f(x).
+       * Then we record that in n2sc[iae..ibe]: seqbias correction mustn't overcount overlapped envelopes
+       */
+      if (pli->do_null2) 
+	{
+	  p7_sparse_Null2ByExpectation(gm, pli->sxd, dcl[d].iae, dcl[d].ibe, dcl[d].kae, dcl[d].kbe, pli->wrk, null2);
+	  dcl[d].domcorrection = 0.;
+	  for (i = dcl[d].iae; i <= dcl[d].ibe; i++)
+	    {
+	      dcl[d].domcorrection += null2[ sq->dsq[i] ];
+	      pli->n2sc[i]          = null2[ sq->dsq[i] ];
+	    }
+	  dcl[d].dombias = p7_FLogsum(0., log(bg->omega) + dcl[d].domcorrection);
+	}
+      else 
+	{
+	  dcl[d].domcorrection = 0.;
+	  dcl[d].dombias       = 0.;
+	}
+
+      /* alignment "accuracy score": expected number of correctly aligned positions */
+      dcl[d].oasc = 0.;
+      for (z = pli->tr->tfrom[d]; z <= pli->tr->tto[d]; z++)
+	if (pli->tr->i[z]) dcl[d].oasc += pli->tr->pp[z];
+
+      /* domain bit score = null2-corrected bit score of the sequence if this were the only envelope in it. */
+      dcl[d].bitscore = dcl[d].envsc - (nullsc + dcl[d].dombias) / eslCONST_LOG2;
+      dcl[d].lnP      = esl_exp_logsurv( dcl[d].bitscore, om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+
+      if (dcl[d].bitscore > dcl[best_d].bitscore) best_d = d;
+    }
+  
+  /* Calculate the null2-corrected per-seq score */
+  seqbias = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + esl_vec_FSum(pli->n2sc, sq->n+1)) : 0.0);
+  pre_score =  (fwdsc - nullsc) / eslCONST_LOG2;              /* BITS */
+  seq_score =  (fwdsc - (nullsc + seqbias)) / eslCONST_LOG2;  /* BITS */
+
+  
+  /* Calculate the "reconstruction score": estimated
+   * per-sequence score as sum of individual domains,
+   * discounting domains that don't contribute positive
+   * score after being null2-corrected.
+   */
+  if (pli->do_null2) 
+    {
+      float baseline = sq->n * gm->xsc[p7P_C][p7P_LOOP] + gm->xsc[p7P_C][p7P_MOVE];
+      sum_score = 0.0f;
+      seqbias   = 0.0f;
+      Ld        = 0;
+      for (d = 0; d < pli->tr->ndom; d++)
+	{
+	  if (dcl[d].envsc - dcl[d].dombias > baseline) 
+	    {
+	      sum_score += dcl[d].envsc - (sq->n - (dcl[d].ibe - dcl[d].iae + 1)) * gm->xsc[p7P_C][p7P_LOOP] - gm->xsc[p7P_C][p7P_MOVE];
+	      Ld        += dcl[d].ibe - dcl[d].iae + 1;
+	      seqbias   += dcl[d].domcorrection; /* NATS */
+	    }
+	}
+      seqbias    = p7_FLogsum(0.0, log(bg->omega) + seqbias);      /* NATS */
+      sum_score += (sq->n - Ld) * gm->xsc[p7P_C][p7P_LOOP] + gm->xsc[p7P_C][p7P_MOVE];
+      pre2_score = (sum_score - nullsc) / eslCONST_LOG2;           /* BITS */
+      sum_score  = (sum_score - (nullsc+seqbias)) / eslCONST_LOG2; /* BITS */
+    }
+  else 
+    {
+      pre2_score = pre_score;
+      sum_score  = seq_score;
+    }
+
+  /* Let sum_score override the seq_score when it's better, and it includes at least 1 domain */
+  if (Ld > 0 && sum_score > seq_score)
+    {
+      seq_score = sum_score;
+      pre_score = pre2_score;
+    }
+
+  /* Apply thresholding and determine whether to put this
+   * target into the hit list. E-value thresholding may
+   * only be a lower bound for now, so this list may be longer
+   * than eventually reported.
+   */
+  lnP =  esl_exp_logsurv (seq_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+  if (! p7_pipeline_TargetReportable(pli, seq_score, lnP))
+    {
+      free(dcl);		/* we could be more efficient about reusing this! */
+    }
+  else
+    {
+      p7_tophits_CreateNextHit(hitlist, &hit);
+      if (pli->mode == p7_SEARCH_SEQS) {
+        if (                       (status  = esl_strdup(sq->name, -1, &(hit->name)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+        if (sq->acc[0]  != '\0' && (status  = esl_strdup(sq->acc,  -1, &(hit->acc)))   != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+        if (sq->desc[0] != '\0' && (status  = esl_strdup(sq->desc, -1, &(hit->desc)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+      } else {
+        if ((status  = esl_strdup(om->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
+        if ((status  = esl_strdup(om->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
+        if ((status  = esl_strdup(om->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
+      } 
+      hit->window_length = 0;
+      hit->sortkey       = pli->inc_by_E ? -lnP : seq_score; /* per-seq output sorts on bit score if inclusion is by score  */
+      
+      hit->score      = seq_score;
+      hit->pre_score  = pre_score;
+      hit->sum_score  = sum_score;
+
+      hit->lnP        = lnP;
+      hit->pre_lnP    = esl_exp_logsurv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+      hit->sum_lnP    = esl_exp_logsurv (hit->sum_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+
+      p7_sparsemx_ExpectedDomains(pli->sxd, 1, sq->n, &(hit->nexpected));
+      hit->noverlaps  = noverlaps;
+      hit->ndom       = pli->tr->ndom;
+
+      hit->flags       = 0;
+      hit->nreported   = 0;
+      hit->nincluded   = 0;
+      hit->best_domain = best_d;
+
+      hit->seqidx       = -1;	/* nhmmer/longtarget only */
+      hit->subseq_start = -1;	/* nhmmer/longtarget only */
+      
+      hit->dcl        = dcl;
+      dcl             = NULL;
+
+      /* If we're using model-specific bit score thresholds (GA | TC |
+       * NC) and we're in an hmmscan pipeline (mode = p7_SCAN_MODELS),
+       * then we *must* apply those reporting or inclusion thresholds
+       * now, because this model is about to go away; we won't have
+       * its thresholds after all targets have been processed.
+       * 
+       * If we're using E-value thresholds and we don't know the
+       * search space size (Z_setby or domZ_setby =
+       * p7_ZSETBY_NTARGETS), we *cannot* apply those thresholds now,
+       * and we *must* wait until all targets have been processed
+       * (see p7_tophits_Threshold()).
+       * 
+       * For any other thresholding, it doesn't matter whether we do
+       * it here (model-specifically) or at the end (in
+       * p7_tophits_Threshold()). 
+       * 
+       * What we actually do, then, is to set the flags if we're using
+       * model-specific score thresholds (regardless of whether we're
+       * in a scan or a search pipeline); otherwise we leave it to 
+       * p7_tophits_Threshold(). p7_tophits_Threshold() is always
+       * responsible for *counting* the reported, included sequences.
+       * 
+       * [xref J5/92]
+       */
+      if (pli->use_bit_cutoffs)
+      {
+        if (p7_pipeline_TargetReportable(pli, hit->score, hit->lnP))
+        {
+          hit->flags |= p7_IS_REPORTED;
+          if (p7_pipeline_TargetIncludable(pli, hit->score, hit->lnP))
+            hit->flags |= p7_IS_INCLUDED;
+        }
+
+        for (d = 0; d < hit->ndom; d++)
+        {
+          if (p7_pipeline_DomainReportable(pli, hit->dcl[d].bitscore, hit->dcl[d].lnP))
+          {
+            hit->dcl[d].is_reported = TRUE;
+            if (p7_pipeline_DomainIncludable(pli, hit->dcl[d].bitscore, hit->dcl[d].lnP))
+              hit->dcl[d].is_included = TRUE;
+          }
+        }
+      }
+    }
+  return eslOK;
+
+ ERROR:
+  if (dcl) free(dcl);
+  return status;
+}
+
+
+/*****************************************************************
+ * 6. The pipeline, specialized for nhmmer/longtarget
+ *****************************************************************/
+#ifdef SRE_REMOVED_FOR_TRAVIS
+/* pipeline_ExtendAndMergeWindows()
  * Synopsis:  Turns a list of ssv diagonals into windows, and merges
  *            overlapping windows.
  *
@@ -307,18 +1030,17 @@ p7_pipeline_Destroy(P7_PIPELINE *pli)
  *
  * Returns:   <eslOK>
  */
-int
-p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_WINDOWLIST *windowlist, int L, float pct_overlap) {
-
+static int
+pipeline_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_WINDOWLIST *windowlist, int L, float pct_overlap) 
+{
   int i;
-  P7_HMM_WINDOW        *prev_window = NULL;
-  P7_HMM_WINDOW        *curr_window = NULL;
+  P7_HMM_WINDOW   *prev_window = NULL;
+  P7_HMM_WINDOW   *curr_window = NULL;
   int              window_start;
   int              window_end;
   int new_hit_cnt = 0;
 
-  if (windowlist->count == 0)
-    return eslOK;
+  if (windowlist->count == 0) return eslOK;
 
   /* extend windows */
   for (i=0; i<windowlist->count; i++) {
@@ -361,517 +1083,11 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_
   if ( windowlist->windows[windowlist->count-1].n + windowlist->windows[windowlist->count-1].length - 1  >  L)
     windowlist->windows[windowlist->count-1].length =  L - windowlist->windows[windowlist->count-1].n + 1;
 
-
-  return eslOK;
-}
-
-/* Function:  p7_pli_TargetReportable
- * Synopsis:  Returns TRUE if target score meets reporting threshold.
- *
- * Purpose:   Returns <TRUE> if the bit score <score> and/or 
- *            log P-value <lnP> meet per-target reporting thresholds 
- *            for the processing pipeline.
- */
-int
-p7_pli_TargetReportable(P7_PIPELINE *pli, float score, double lnP)
-{
-  if      (  pli->by_E )
-    {
-      if ( !pli->long_targets  && exp(lnP) * pli->Z <= pli->E) return TRUE;
-      if (  pli->long_targets  && exp(lnP) <= pli->E)          return TRUE; // database size is already built into the Pval if pli->targetlength == p7_TARGET_LONG
-    }
-  else if (! pli->by_E   && score         >= pli->T) return TRUE;
-
-  return FALSE;
-}
-
-/* Function:  p7_pli_DomainReportable
- * Synopsis:  Returns TRUE if domain score meets reporting threshold. 
- *
- * Purpose:   Returns <TRUE> if the bit score <score> and/or 
- *            log P-value <lnP> meet per-domain reporting thresholds 
- *            for the processing pipeline.
- */
-int
-p7_pli_DomainReportable(P7_PIPELINE *pli, float dom_score, double lnP)
-{
-  if      (  pli->dom_by_E )
-    {
-      if ( !pli->long_targets  &&  exp(lnP) * pli->domZ <= pli->domE) return TRUE;
-      if (  pli->long_targets  &&  exp(lnP) <= pli->domE) return TRUE;
-    }
-  else if (! pli->dom_by_E   && dom_score        >= pli->domT) return TRUE;
-  return FALSE;
-}
-
-/* Function:  p7_pli_TargetIncludable()
- * Synopsis:  Returns TRUE if target score meets inclusion threshold.
- */
-int
-p7_pli_TargetIncludable(P7_PIPELINE *pli, float score, double lnP)
-{
-  if      (  pli->inc_by_E )
-    {
-      if ( !pli->long_targets && exp(lnP) * pli->Z <= pli->incE) return TRUE;
-      if (  pli->long_targets && exp(lnP) <= pli->incE) return TRUE;
-    }
-
-  else if (! pli->inc_by_E   && score         >= pli->incT) return TRUE;
-
-  return FALSE;
-}
-
-/* Function:  p7_pli_DomainIncludable()
- * Synopsis:  Returns TRUE if domain score meets inclusion threshold.
- */
-int
-p7_pli_DomainIncludable(P7_PIPELINE *pli, float dom_score, double lnP)
-{
-  if      (  pli->incdom_by_E   && exp(lnP) * pli->domZ <= pli->incdomE) return TRUE;
-  else if (! pli->incdom_by_E   && dom_score        >= pli->incdomT) return TRUE;
-  else return FALSE;
-}
-
-
-
-
-/* Function:  p7_pli_NewModel()
- * Synopsis:  Prepare pipeline for a new model (target or query)
- *
- * Purpose:   Caller has a new model <om>. Prepare the pipeline <pli>
- *            to receive this model as either a query or a target.
- *
- *            If the "experimental" bias filter HMM is in use, this
- *            call resets it to use the new model's composition. This
- *            overwrites the bias filter HMM's expected length! You
- *            need to call <p7_bg_SetLength()> after a <NewModel()> call.
- *            (Failure to do this is bug #h85, 14 Dec 10.)
- *
- *            The pipeline may alter the null model <bg> in a model-specific
- *            way (if we're using a composition bias filter HMM in the
- *            pipeline).
- *
- * Returns:   <eslOK> on success.
- * 
- *            <eslEINVAL> if pipeline expects to be able to use a
- *            model's bit score thresholds, but this model does not
- *            have the appropriate ones set.
- */
-int
-p7_pli_NewModel(P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg)
-{
-  int status = eslOK;
-
-  pli->nmodels++;
-  pli->nnodes += om->M;
-  if (pli->Z_setby == p7_ZSETBY_NTARGETS && pli->mode == p7_SCAN_MODELS) pli->Z = pli->nmodels;
-
-  if (pli->do_biasfilter) p7_bg_SetFilter(bg, om->M, om->compo);
-
-  if (pli->mode == p7_SEARCH_SEQS) 
-    status = p7_pli_NewModelThresholds(pli, om);
-
-  pli->W = om->max_length;
-
-  return status;
-}
-
-/* Function:  p7_pli_NewModelThresholds()
- * Synopsis:  Set reporting and inclusion bit score thresholds on a new model.
- *
- * Purpose:   Set the bit score thresholds on a new model, if we're 
- *            using Pfam GA, TC, or NC cutoffs for reporting or
- *            inclusion.
- *            
- *            In a "search" pipeline, this only needs to be done once
- *            per query model, so <p7_pli_NewModelThresholds()> gets 
- *            called by <p7_pli_NewModel()>.
- *            
- *            In a "scan" pipeline, this needs to be called for each
- *            model, and it needs to be called after
- *            <p7_oprofile_ReadRest()>, because that's when the bit
- *            score thresholds get read.
- *
- * Returns:   <eslOK> on success. 
- *            
- *            <eslEINVAL> if pipeline expects to be able to use a
- *            model's bit score thresholds, but this model does not
- *            have the appropriate ones set.
- *
- * Xref:      Written to fix bug #h60.
- */
-int
-p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om)
-{
-
-  if (pli->use_bit_cutoffs)
-    {
-      if (pli->use_bit_cutoffs == p7H_GA)
-    {
-      if (om->cutoff[p7_GA1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "GA bit thresholds unavailable on model %s\n", om->name);
-      pli->T    = pli->incT    = om->cutoff[p7_GA1];
-      pli->domT = pli->incdomT = om->cutoff[p7_GA2];
-    }
-      else if  (pli->use_bit_cutoffs == p7H_TC)
-    {
-      if (om->cutoff[p7_TC1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "TC bit thresholds unavailable on model %s\n", om->name);
-      pli->T    = pli->incT    = om->cutoff[p7_TC1];
-      pli->domT = pli->incdomT = om->cutoff[p7_TC2];
-    }
-      else if (pli->use_bit_cutoffs == p7H_NC)
-    {
-      if (om->cutoff[p7_NC1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "NC bit thresholds unavailable on model %s\n", om->name);
-      pli->T    = pli->incT    = om->cutoff[p7_NC1];
-      pli->domT = pli->incdomT = om->cutoff[p7_NC2];
-    }
-    }
-
   return eslOK;
 }
 
 
-/* Function:  p7_pli_NewSeq()
- * Synopsis:  Prepare pipeline for a new sequence (target or query)
- *
- * Purpose:   Caller has a new sequence <sq>. Prepare the pipeline <pli>
- *            to receive this model as either a query or a target.
- *
- * Returns:   <eslOK> on success.
- */
-int
-p7_pli_NewSeq(P7_PIPELINE *pli, const ESL_SQ *sq)
-{
-  if (!pli->long_targets) pli->nseqs++; // if long_targets, sequence counting happens in the serial loop, which can track multiple windows for a single long sequence
-  pli->nres += sq->n;
-  if (pli->Z_setby == p7_ZSETBY_NTARGETS && pli->mode == p7_SEARCH_SEQS) pli->Z = pli->nseqs;
-  return eslOK;
-}
-
-/* Function:  p7_pipeline_Merge()
- * Synopsis:  Merge the pipeline statistics
- *
- * Purpose:   Caller has a new model <om>. Prepare the pipeline <pli>
- *            to receive this model as either a query or a target.
- *
- *            The pipeline may alter the null model <bg> in a model-specific
- *            way (if we're using a composition bias filter HMM in the
- *            pipeline).
- *
- * Returns:   <eslOK> on success.
- * 
- *            <eslEINVAL> if pipeline expects to be able to use a
- *            model's bit score thresholds, but this model does not
- *            have the appropriate ones set.
- */
-int
-p7_pipeline_Merge(P7_PIPELINE *p1, P7_PIPELINE *p2)
-{
-  /* if we are searching a sequence database, we need to keep track of the
-   * number of sequences and residues processed.
-   */
-  if (p1->mode == p7_SEARCH_SEQS)
-    {
-      p1->nseqs   += p2->nseqs;
-      p1->nres    += p2->nres;
-    }
-  else
-    {
-      p1->nmodels += p2->nmodels;
-      p1->nnodes  += p2->nnodes;
-    }
-
-  p1->n_past_msv  += p2->n_past_msv;
-  p1->n_past_bias += p2->n_past_bias;
-  p1->n_past_vit  += p2->n_past_vit;
-  p1->n_past_fwd  += p2->n_past_fwd;
-  p1->n_output    += p2->n_output;
-
-  p1->pos_past_msv  += p2->pos_past_msv;
-  p1->pos_past_bias += p2->pos_past_bias;
-  p1->pos_past_vit  += p2->pos_past_vit;
-  p1->pos_past_fwd  += p2->pos_past_fwd;
-  p1->pos_output    += p2->pos_output;
-
-  if (p1->Z_setby == p7_ZSETBY_NTARGETS)
-    {
-      p1->Z += (p1->mode == p7_SCAN_MODELS) ? p2->nmodels : p2->nseqs;
-    }
-  else
-    {
-      p1->Z = p2->Z;
-    }
-
-  return eslOK;
-}
-
-/* Function:  p7_Pipeline()
- * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline.
- *
- * Purpose:   Run H3's accelerated pipeline to compare profile <om>
- *            against sequence <sq>. If a significant hit is found,
- *            information about it is added to the <hitlist>. The pipeline 
- *            accumulates beancounting information about how many comparisons
- *            flow through the pipeline while it's active.
- *            
- * Returns:   <eslOK> on success. If a significant hit is obtained,
- *            its information is added to the growing <hitlist>. 
- *            
- *            <eslEINVAL> if (in a scan pipeline) we're supposed to
- *            set GA/TC/NC bit score thresholds but the model doesn't
- *            have any.
- *            
- *            <eslERANGE> on numerical overflow errors in the
- *            optimized vector implementations; particularly in
- *            posterior decoding. I don't believe this is possible for
- *            multihit local models, but I'm set up to catch it
- *            anyway. We may emit a warning to the user, but cleanly
- *            skip the problematic sequence and continue.
- *
- * Throws:    <eslEMEM> on allocation failure.
- *
- * Xref:      J4/25.
- */
-int
-p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist)
-{
-  P7_HIT          *hit     = NULL;     /* ptr to the current hit output data      */
-  float            usc, vfsc, fwdsc;   /* filter scores                           */
-  float            filtersc;           /* HMM null filter score                   */
-  float            nullsc;             /* null model score                        */
-  float            seqbias;  
-  float            seq_score;          /* the corrected per-seq bit score */
-  float            sum_score;           /* the corrected reconstruction score for the seq */
-  float            pre_score, pre2_score; /* uncorrected bit scores for seq */
-  double           P;                /* P-value of a hit */
-  double           lnP;              /* log P-value of a hit */
-  int              Ld;               /* # of residues in envelopes */
-  int              d;
-  int              status;
-  
-  if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
-
-  p7_filtermx_GrowTo(pli->oxf, om->M, sq->n);  /* expand omx if needed */
-
-  /* Base null model score (we could calculate this in NewSeq(), for a scan pipeline) */
-  p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
-
-  /* First level filter: the MSV filter, multihit with <om> */
-  p7_MSVFilter(sq->dsq, sq->n, om, pli->oxf, &usc);
-  seq_score = (usc - nullsc) / eslCONST_LOG2;
-  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-  if (P > pli->F1) return eslOK;
-  pli->n_past_msv++;
-
-  /* biased composition HMM filtering */
-  if (pli->do_biasfilter)
-    {
-      p7_bg_FilterScore(bg, sq->dsq, sq->n, &filtersc);
-      seq_score = (usc - filtersc) / eslCONST_LOG2;
-      P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-      if (P > pli->F1) return eslOK;
-    }
-  else filtersc = nullsc;
-  pli->n_past_bias++;
-
-  /* In scan mode, if it passes the MSV filter, read the rest of the profile */
-  if (pli->mode == p7_SCAN_MODELS)
-    {
-      if (pli->hfp) p7_oprofile_ReadRest(pli->hfp, om);
-      p7_oprofile_ReconfigRestLength(om, sq->n);
-      if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) return status; /* pli->errbuf has err msg set */
-    }
-
-  /* Second level filter: ViterbiFilter(), multihit with <om> */
-  if (P > pli->F2)
-    {
-      p7_ViterbiFilter(sq->dsq, sq->n, om, pli->oxf, &vfsc);  
-      seq_score = (vfsc-filtersc) / eslCONST_LOG2;
-      P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
-      if (P > pli->F2) return eslOK;
-    }
-  pli->n_past_vit++;
-
-
-  /* Parse it with Forward and obtain its real Forward score. */
-  p7_ForwardParser(sq->dsq, sq->n, om, pli->oxf, &fwdsc);
-  seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
-  P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
-  if (P > pli->F3) return eslOK;
-  pli->n_past_fwd++;
-
-  /* ok, it's for real. Now a Backwards parser pass, and hand it to domain definition workflow */
-  p7_omx_GrowTo(pli->oxb, om->M, 0, sq->n);
-  p7_BackwardParser(sq->dsq, sq->n, om, pli->oxf, pli->oxb, NULL);
-
-  status = p7_domaindef_ByPosteriorHeuristics(sq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef, bg, FALSE, NULL, NULL, NULL);
-  if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen */
-  if (pli->ddef->nregions   == 0) return eslOK; /* score passed threshold but there's no discrete domains here       */
-  if (pli->ddef->nenvelopes == 0) return eslOK; /* rarer: region was found, stochastic clustered, no envelopes found */
-
-
-  /* Calculate the null2-corrected per-seq score */
-  if (pli->do_null2)
-    {
-      seqbias = esl_vec_FSum(pli->ddef->n2sc, sq->n+1);
-      seqbias = p7_FLogsum(0.0, log(bg->omega) + seqbias);
-    }
-  else seqbias = 0.0;
-  pre_score =  (fwdsc - nullsc) / eslCONST_LOG2; 
-  seq_score =  (fwdsc - (nullsc + seqbias)) / eslCONST_LOG2;
-
-  
-  /* Calculate the "reconstruction score": estimated
-   * per-sequence score as sum of individual domains,
-   * discounting domains that aren't significant after they're
-   * null-corrected.
-   */
-  sum_score = 0.0f;
-  seqbias   = 0.0f;
-  Ld        = 0;
-  if (pli->do_null2) 
-    {
-      for (d = 0; d < pli->ddef->ndom; d++) 
-	{
-	  if (pli->ddef->dcl[d].envsc - pli->ddef->dcl[d].domcorrection > 0.0)
-	    {
-	      sum_score += pli->ddef->dcl[d].envsc;         /* NATS */
-	      Ld        += pli->ddef->dcl[d].jenv  - pli->ddef->dcl[d].ienv + 1;
-	      seqbias   += pli->ddef->dcl[d].domcorrection; /* NATS */
-	    }
-	}
-      seqbias = p7_FLogsum(0.0, log(bg->omega) + seqbias);  /* NATS */
-    }
-  else 
-    {
-      for (d = 0; d < pli->ddef->ndom; d++) 
-	{
-	  if (pli->ddef->dcl[d].envsc > 0.0)
-	    {
-	      sum_score += pli->ddef->dcl[d].envsc;      /* NATS */
-	      Ld        += pli->ddef->dcl[d].jenv  - pli->ddef->dcl[d].ienv + 1;
-	    }
-	}
-      seqbias = 0.0;
-    }    
-  sum_score += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); /* NATS */
-  pre2_score = (sum_score - nullsc) / eslCONST_LOG2;                /* BITS */
-  sum_score  = (sum_score - (nullsc + seqbias)) / eslCONST_LOG2;    /* BITS */
-
-  /* A special case: let sum_score override the seq_score when it's better, and it includes at least 1 domain */
-  if (Ld > 0 && sum_score > seq_score)
-    {
-      seq_score = sum_score;
-      pre_score = pre2_score;
-    }
-
-  /* Apply thresholding and determine whether to put this
-   * target into the hit list. E-value thresholding may
-   * only be a lower bound for now, so this list may be longer
-   * than eventually reported.
-   */
-  lnP =  esl_exp_logsurv (seq_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
-  if (p7_pli_TargetReportable(pli, seq_score, lnP))
-    {
-      p7_tophits_CreateNextHit(hitlist, &hit);
-      if (pli->mode == p7_SEARCH_SEQS) {
-        if (                       (status  = esl_strdup(sq->name, -1, &(hit->name)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
-        if (sq->acc[0]  != '\0' && (status  = esl_strdup(sq->acc,  -1, &(hit->acc)))   != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
-        if (sq->desc[0] != '\0' && (status  = esl_strdup(sq->desc, -1, &(hit->desc)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
-      } else {
-        if ((status  = esl_strdup(om->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
-        if ((status  = esl_strdup(om->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
-        if ((status  = esl_strdup(om->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
-      } 
-      hit->ndom       = pli->ddef->ndom;
-      hit->nexpected  = pli->ddef->nexpected;
-      hit->nregions   = pli->ddef->nregions;
-      hit->nclustered = pli->ddef->nclustered;
-      hit->noverlaps  = pli->ddef->noverlaps;
-      hit->nenvelopes = pli->ddef->nenvelopes;
-
-      hit->pre_score  = pre_score; /* BITS */
-      hit->pre_lnP    = esl_exp_logsurv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
-
-      hit->score      = seq_score; /* BITS */
-      hit->lnP        = lnP;
-      hit->sortkey    = pli->inc_by_E ? -lnP : seq_score; /* per-seq output sorts on bit score if inclusion is by score  */
-
-      hit->sum_score  = sum_score; /* BITS */
-      hit->sum_lnP    = esl_exp_logsurv (hit->sum_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
-
-      /* Transfer all domain coordinates (unthresholded for
-       * now) with their alignment displays to the hit list,
-       * associated with the sequence. Domain reporting will
-       * be thresholded after complete hit list is collected,
-       * because we probably need to know # of significant
-       * hits found to set domZ, and thence threshold and
-       * count reported domains.
-       */
-      hit->dcl         = pli->ddef->dcl;
-      pli->ddef->dcl   = NULL;
-      hit->best_domain = 0;
-      for (d = 0; d < hit->ndom; d++)
-      {
-        Ld = hit->dcl[d].jenv - hit->dcl[d].ienv + 1;
-        hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); /* NATS, for the moment... */
-        hit->dcl[d].dombias  = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + hit->dcl[d].domcorrection) : 0.0); /* NATS, and will stay so */
-        hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + hit->dcl[d].dombias)) / eslCONST_LOG2; /* now BITS, as it should be */
-        hit->dcl[d].lnP      = esl_exp_logsurv (hit->dcl[d].bitscore,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
-
-        if (hit->dcl[d].bitscore > hit->dcl[hit->best_domain].bitscore) hit->best_domain = d;
-      }
-
-      /* If we're using model-specific bit score thresholds (GA | TC |
-       * NC) and we're in an hmmscan pipeline (mode = p7_SCAN_MODELS),
-       * then we *must* apply those reporting or inclusion thresholds
-       * now, because this model is about to go away; we won't have
-       * its thresholds after all targets have been processed.
-       * 
-       * If we're using E-value thresholds and we don't know the
-       * search space size (Z_setby or domZ_setby =
-       * p7_ZSETBY_NTARGETS), we *cannot* apply those thresholds now,
-       * and we *must* wait until all targets have been processed
-       * (see p7_tophits_Threshold()).
-       * 
-       * For any other thresholding, it doesn't matter whether we do
-       * it here (model-specifically) or at the end (in
-       * p7_tophits_Threshold()). 
-       * 
-       * What we actually do, then, is to set the flags if we're using
-       * model-specific score thresholds (regardless of whether we're
-       * in a scan or a search pipeline); otherwise we leave it to 
-       * p7_tophits_Threshold(). p7_tophits_Threshold() is always
-       * responsible for *counting* the reported, included sequences.
-       * 
-       * [xref J5/92]
-       */
-      if (pli->use_bit_cutoffs)
-      {
-        if (p7_pli_TargetReportable(pli, hit->score, hit->lnP))
-        {
-          hit->flags |= p7_IS_REPORTED;
-          if (p7_pli_TargetIncludable(pli, hit->score, hit->lnP))
-            hit->flags |= p7_IS_INCLUDED;
-        }
-
-        for (d = 0; d < hit->ndom; d++)
-        {
-          if (p7_pli_DomainReportable(pli, hit->dcl[d].bitscore, hit->dcl[d].lnP))
-          {
-            hit->dcl[d].is_reported = TRUE;
-            if (p7_pli_DomainIncludable(pli, hit->dcl[d].bitscore, hit->dcl[d].lnP))
-              hit->dcl[d].is_included = TRUE;
-          }
-        }
-      }
-    }
-
-  return eslOK;
-}
-
-
-
-/* Function:  p7_pli_computeAliScores()
+/* Function:  p7_pipeline_computeAliScores()
  * Synopsis:  Compute per-position scores for the alignment for a domain
  *
  * Purpose:   Compute per-position (Viterbi) scores for the alignment for a domain,
@@ -889,7 +1105,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_T
  * Throws:    <eslEMEM> on allocation failure.
  */
 static int
-p7_pli_computeAliScores(P7_DOMAIN *dom, ESL_DSQ *seq, const P7_SCOREDATA *data, int K)
+pipeline_computeAliScores(P7_DOMAIN *dom, ESL_DSQ *seq, const P7_SCOREDATA *data, int K)
 {
   int status;
   int i, j, k;
@@ -948,7 +1164,7 @@ ERROR:
 }
 
 
-/* Function:  p7_pli_postViterbi_LongTarget()
+/* Function:  p7_pipeline_postViterbi_LongTarget()
  * Synopsis:  the part of the LongTarget P7 search Pipeline downstream
  *            of the Viterbi filter
  *
@@ -995,7 +1211,7 @@ ERROR:
  *
  */
 static int
-p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, const P7_SCOREDATA *data,
+pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, const P7_SCOREDATA *data,
     int64_t seqidx, int window_start, int window_len, ESL_SQ *tmpseq,
     ESL_DSQ *subseq, int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
     int complementarity, int *overlap, float *bgf_arr, float *scores_arr, float *fwd_emissions_arr
@@ -1116,13 +1332,13 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
       if (pli->mode == p7_SCAN_MODELS)  nres = ESL_MIN(window_len,om->max_length);
       else                              nres = pli->nres;
 
-      if ( !p7_pli_TargetReportable(pli, dom_score, dom_lnP + log((float)nres / om->max_length) ) ) {
+      if ( !p7_pipeline_TargetReportable(pli, dom_score, dom_lnP + log((float)nres / om->max_length) ) ) {
 
         p7_alidisplay_Destroy(dom->ad);
 
       } else {
 
-        p7_pli_computeAliScores(dom, subseq, data, om->abc->Kp);
+        p7_pipeline_computeAliScores(dom, subseq, data, om->abc->Kp);
 
         p7_tophits_CreateNextHit(hitlist, &hit);
 
@@ -1181,17 +1397,17 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
          */
         if (pli->use_bit_cutoffs)
         {
-          if (p7_pli_TargetReportable(pli, hit->score, hit->lnP))
+          if (p7_pipeline_TargetReportable(pli, hit->score, hit->lnP))
           {
             hit->flags |= p7_IS_REPORTED;
-            if (p7_pli_TargetIncludable(pli, hit->score, hit->lnP))
+            if (p7_pipeline_TargetIncludable(pli, hit->score, hit->lnP))
               hit->flags |= p7_IS_INCLUDED;
           }
 
-          if (p7_pli_DomainReportable(pli, hit->dcl[0].bitscore, hit->dcl[0].lnP))
+          if (p7_pipeline_DomainReportable(pli, hit->dcl[0].bitscore, hit->dcl[0].lnP))
           {
             hit->dcl[0].is_reported = TRUE;
-            if (p7_pli_DomainIncludable(pli, hit->dcl[0].bitscore, hit->dcl[0].lnP))
+            if (p7_pipeline_DomainIncludable(pli, hit->dcl[0].bitscore, hit->dcl[0].lnP))
               hit->dcl[0].is_included = TRUE;
           }
 
@@ -1210,7 +1426,7 @@ ERROR:
 }
 
 
-/* Function:  p7_pli_postMSV_LongTarget()
+/* Function:  p7_pipeline_postMSV_LongTarget()
  * Synopsis:  the part of the LongTarget P7 search Pipeline downstream
  *            of the MSV filter
  *
@@ -1258,7 +1474,7 @@ ERROR:
  *
  */
 static int
-p7_pli_postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, const P7_SCOREDATA *data,
+p7_pipeline_postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, const P7_SCOREDATA *data,
     int64_t seqidx, int window_start, int window_len, ESL_SQ *tmpseq,
     ESL_DSQ *subseq, int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
     float nullsc, float usc, int complementarity, P7_HMM_WINDOWLIST *vit_windowlist,
@@ -1320,7 +1536,7 @@ p7_pli_postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
   //use window_len instead of loc_window_len, because length parameterization is done, just need to loop over subseq
   p7_ViterbiFilter_longtarget(subseq, window_len, om, pli->oxf, filtersc, pli->F2, vit_windowlist);
 
-  p7_pli_ExtendAndMergeWindows (om, data, vit_windowlist, window_len, 0.5);
+  p7_pipeline_ExtendAndMergeWindows (om, data, vit_windowlist, window_len, 0.5);
 
 
   // if a window is still too long (>80Kb), need to split it up to
@@ -1351,7 +1567,7 @@ p7_pli_postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
     if (i>0)
       pli->pos_past_vit -= ESL_MAX(0,  vit_windowlist->windows[i-1].n + vit_windowlist->windows[i-1].length - vit_windowlist->windows[i].n );
 
-    p7_pli_postViterbi_LongTarget(pli, om, bg, hitlist, data, seqidx,
+    p7_pipeline_postViterbi_LongTarget(pli, om, bg, hitlist, data, seqidx,
         window_start+vit_windowlist->windows[i].n-1, vit_windowlist->windows[i].length, tmpseq,
         subseq + vit_windowlist->windows[i].n - 1,
         seq_start, seq_name, seq_source, seq_acc, seq_desc, complementarity, &overlap,
@@ -1375,9 +1591,6 @@ p7_pli_postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
   return eslOK;
 
 }
-
-
-
 
 /* Function:  p7_Pipeline_LongTarget()
  * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline, modified to use the scanning MSV/SSV filters.
@@ -1463,7 +1676,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
     {
       if (om->base_w == 0 &&  om->scale_w == 0) { // we haven't already read this hmm (if we're on the second strand, we would've)
         p7_oprofile_ReadRest(pli->hfp, om);
-        if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) goto ERROR;
+        if ((status = p7_pipeline_NewModelThresholds(pli, om)) != eslOK) goto ERROR;
       }
     }
 
@@ -1489,7 +1702,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
       windowlist.count = j;
     }
 */
-    p7_pli_ExtendAndMergeWindows (om, data, &msv_windowlist, sq->n, 0);
+    p7_pipeline_ExtendAndMergeWindows (om, data, &msv_windowlist, sq->n, 0);
 
 
   /*
@@ -1517,7 +1730,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
 
       pli->pos_past_msv += window_len;
 
-      status = p7_pli_postMSV_LongTarget(pli, om, bg, hitlist, data, seqidx, msv_windowlist.windows[i].n, window_len, tmpseq,
+      status = p7_pipeline_postMSV_LongTarget(pli, om, bg, hitlist, data, seqidx, msv_windowlist.windows[i].n, window_len, tmpseq,
                         subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc, fm_nocomplement, &vit_windowlist,
                         bgf_arr, scores_arr, fwd_emissions_arr
       );
@@ -1643,7 +1856,7 @@ p7_Pipeline_FM(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7_BG *bg,
     pli->pos_past_msv += window.length;
     p7_oprofile_ReconfigMSVLength(om, window.length);
 
-    status = p7_pli_postMSV_LongTarget(pli, om, bg, hitlist, data, seqidx, window.n, window.length, tmpseq,
+    status = p7_pipeline_postMSV_LongTarget(pli, om, bg, hitlist, data, seqidx, window.n, window.length, tmpseq,
                       subseq, 1, seqdata[window.id].name, seqdata[window.id].source,
                       seqdata[window.id].acc, seqdata[window.id].desc,
                       window.null_sc, window.score, window.complementarity,
@@ -1665,113 +1878,11 @@ ERROR:
   return eslEMEM;
 
 }
-
-
-/* Function:  p7_pli_Statistics()
- * Synopsis:  Final statistics output from a processing pipeline.
- *
- * Purpose:   Print a standardized report of the internal statistics of
- *            a finished processing pipeline <pli> to stream <ofp>.
- *            
- *            If stopped, non-<NULL> stopwatch <w> is provided for a
- *            stopwatch that was timing the pipeline, then the report
- *            includes timing information.
- *
- * Returns:   <eslOK> on success.
- */
-int
-p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
-{
-  double ntargets; 
-
-  fprintf(ofp, "Internal pipeline statistics summary:\n");
-  fprintf(ofp, "-------------------------------------\n");
-  if (pli->mode == p7_SEARCH_SEQS) {
-    fprintf(ofp,   "Query model(s):      %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
-    fprintf(ofp,   "Target sequences:    %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
-    ntargets = pli->nseqs;
-  } else {
-    fprintf(ofp, "Query sequence(s):           %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
-    fprintf(ofp, "Target model(s):             %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
-    ntargets = pli->nmodels;
-  }
-
-  if (pli->long_targets) {
-      fprintf(ofp, "Residues passing MSV filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
-      //fprintf(ofp, "Windows passing MSV filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          //pli->n_past_msv,
-          pli->pos_past_msv,
-          (double)pli->pos_past_msv / (pli->nres*pli->nmodels) ,
-          pli->F1);
-
-      fprintf(ofp, "Residues passing bias filter:  %15" PRId64 "  (%.3g); expected (%.3g)\n",
-      //fprintf(ofp, "Windows passing bias filter:  %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          //pli->n_past_bias,
-          pli->pos_past_bias,
-          (double)pli->pos_past_bias / (pli->nres*pli->nmodels) ,
-          pli->F1);
-
-      fprintf(ofp, "Residues passing Vit filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
-      //fprintf(ofp, "Windows passing Vit filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          //pli->n_past_vit,
-          pli->pos_past_vit,
-          (double)pli->pos_past_vit / (pli->nres*pli->nmodels) ,
-          pli->F2);
-
-      fprintf(ofp, "Residues passing Fwd filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
-      //fprintf(ofp, "Windows passing Fwd filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          //pli->n_past_fwd,
-          pli->pos_past_fwd,
-          (double)pli->pos_past_fwd / (pli->nres*pli->nmodels) ,
-          pli->F3);
-
-      fprintf(ofp, "Total number of hits:          %15d  (%.3g)\n",
-          (int)pli->n_output,
-          (double)pli->pos_output / (pli->nres*pli->nmodels) );
-
-  } else { // typical case output
-
-      fprintf(ofp, "Passed MSV filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",
-          pli->n_past_msv,
-          (double) pli->n_past_msv / ntargets,
-          pli->F1 * ntargets,
-          pli->F1);
-
-      fprintf(ofp, "Passed bias filter:          %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",
-          pli->n_past_bias,
-          (double) pli->n_past_bias / ntargets,
-          pli->F1 * ntargets,
-          pli->F1);
-
-      fprintf(ofp, "Passed Vit filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",
-          pli->n_past_vit,
-          (double) pli->n_past_vit / ntargets,
-          pli->F2 * ntargets,
-          pli->F2);
-
-      fprintf(ofp, "Passed Fwd filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",
-          pli->n_past_fwd,
-          (double) pli->n_past_fwd / ntargets,
-          pli->F3 * ntargets,
-          pli->F3);
-
-      fprintf(ofp, "Initial search space (Z):    %15.0f  %s\n", pli->Z,    pli->Z_setby    == p7_ZSETBY_OPTION ? "[as set by --Z on cmdline]"    : "[actual number of targets]");
-      fprintf(ofp, "Domain search space  (domZ): %15.0f  %s\n", pli->domZ, pli->domZ_setby == p7_ZSETBY_OPTION ? "[as set by --domZ on cmdline]" : "[number of targets reported over threshold]");
-  }
-
-  if (w != NULL) {
-    esl_stopwatch_Display(ofp, w, "# CPU time: ");
-    fprintf(ofp, "# Mc/sec: %.2f\n", 
-        (double) pli->nres * (double) pli->nnodes / (w->elapsed * 1.0e6));
-  }
-
-  return eslOK;
-}
-/*------------------- end, pipeline API -------------------------*/
-
+#endif /*SRE_REMOVED_FOR_TRAVIS*/
+/*------------- end, nhmmer/longtarget pipelines ----------------*/
 
 /*****************************************************************
- * 3. Example 1: "search mode" in a sequence db
+ * 7. Example 1: "search mode" in a sequence db
  *****************************************************************/
 
 #ifdef p7PIPELINE_EXAMPLE
@@ -1852,12 +1963,12 @@ main(int argc, char **argv)
   om = p7_oprofile_Create(hmm->M, abc);
   p7_profile_ConfigLocal(gm, hmm, bg, 400);
   p7_oprofile_Convert(gm, om);     /* <om> is now p7_LOCAL, multihit */
-  p7_pli_NewModel(pli, om, bg);
+  p7_pipeline_NewModel(pli, om, bg);
 
   /* Run each target sequence through the pipeline */
   while (esl_sqio_Read(sqfp, sq) == eslOK)
     { 
-      p7_pli_NewSeq(pli, sq);
+      p7_pipeline_NewSeq(pli, sq);
       p7_bg_SetLength(bg, sq->n);
       p7_oprofile_ReconfigLength(om, sq->n);
   
@@ -1910,7 +2021,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 4. Example 2: "scan mode" in an HMM db
+ * 8. Example 2: "scan mode" in an HMM db
  *****************************************************************/
 #ifdef p7PIPELINE_EXAMPLE2
 /* gcc -o pipeline_example2 -g -Wall -I../easel -L../easel -I. -L. -Dp7PIPELINE_EXAMPLE2 p7_pipeline.c -lhmmer -leasel -lm
@@ -1982,7 +2093,7 @@ main(int argc, char **argv)
 
   /* Create a pipeline for the query sequence in scan mode */
   pli      = p7_pipeline_Create(go, 100, sq->n, FALSE, p7_SCAN_MODELS);
-  p7_pli_NewSeq(pli, sq);
+  p7_pipeline_NewSeq(pli, sq);
    
   /* Some additional config of the pipeline specific to scan mode */
   pli->hfp = hfp;
@@ -1997,7 +2108,7 @@ main(int argc, char **argv)
       bg = p7_bg_Create(abc);
       if (esl_sq_Digitize(abc, sq) != eslOK) p7_Die("alphabet mismatch");
     }
-      p7_pli_NewModel(pli, om, bg);
+      p7_pipeline_NewModel(pli, om, bg);
       p7_bg_SetLength(bg, sq->n); /* SetLength() call MUST follow NewModel() call, because NewModel() resets the filter HMM, including its default expected length; see bug #h85 */
       p7_oprofile_ReconfigLength(om, sq->n);
 

@@ -48,12 +48,9 @@ typedef struct p7_hit_s {
   double pre_lnP;		/* log(P-value) of the pre_score           */
   double sum_lnP;		/* log(P-value) of the sum_score           */
 
-  float  nexpected;     /* posterior expected number of domains in the sequence (from posterior arrays) */
-  int    nregions;	/* number of regions evaluated */
-  int    nclustered;	/* number of regions evaluated by clustering ensemble of tracebacks */
-  int    noverlaps;	/* number of envelopes defined in ensemble clustering that overlap w/ prev envelope */
-  int    nenvelopes;	/* number of envelopes handed over for domain definition, null2, alignment, and scoring. */
-  int    ndom;		/* total # of domains identified in this seq   */
+  int    ndom;		/* total # of domains identified in this seq              */
+  int    noverlaps;	/* # of domain envelopes that overlap with a previous one */
+  float  nexpected;	/* expected # of domains, by posterior decoding           */
 
   uint32_t flags;      	/* p7_IS_REPORTED | p7_IS_INCLUDED | p7_IS_NEW | p7_IS_DROPPED */
   int      nreported;	/* # of domains satisfying reporting thresholding  */

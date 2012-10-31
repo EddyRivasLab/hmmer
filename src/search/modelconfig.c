@@ -24,7 +24,7 @@
 #include "base/p7_hmm.h"
 #include "base/p7_profile.h"
 
-#include "modelconfig.h"
+#include "search/modelconfig.h"
 
 
 static int set_local_entry (P7_PROFILE *gm, const P7_HMM *hmm);

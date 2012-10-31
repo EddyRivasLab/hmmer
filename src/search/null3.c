@@ -16,15 +16,15 @@
  * and described in its user guide, specifically based on
  * ScoreCorrectionNull3CompUnknown()
  *
- * SVN $Id: null3.c 3474 2011-02-17 13:25:32Z wheelert $
  */
 #include "p7_config.h"
 
 #include "easel.h"
+#include "esl_alphabet.h"
 #include "esl_vectorops.h"
 
-#include "hmmer.h"
-
+#include "base/p7_bg.h"
+#include "base/p7_trace.h"
 
 /*****************************************************************
  * 1. Null3 estimation algorithms.
@@ -353,5 +353,8 @@ main(int argc, char **argv)
 
 /*****************************************************************
  * @LICENSE@
+ *
+ * SVN $Id: null3.c 3474 2011-02-17 13:25:32Z wheelert $
+ * SVN $URL$
  *****************************************************************/
 

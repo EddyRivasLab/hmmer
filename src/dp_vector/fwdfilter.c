@@ -91,6 +91,9 @@ static        void  save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dp
  *            matrix, and <*opt_sc> optionally contains the raw Forward
  *            score in nats.
  *            
+ *            <cx> will be reallocated, if needed, for the MxL problem;
+ *            caller does not need to call <p7_checkptmx_GrowTo()> itself.
+ *  
  * Args:      dsq    - digital target sequence, 1..L
  *            L      - length of dsq, residues
  *            om     - optimized profile (multihit local)
@@ -118,6 +121,9 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX 
   int     i;			/* counter over residues/rows 1..L                    */
   int     b;			/* counter down through checkpointed blocks, Rb+Rc..1 */
   int     w;			/* counter down through rows in a checkpointed block  */
+
+  /* Make sure <ox> is allocated big enough */
+  p7_checkptmx_GrowTo(ox, om->M, L);
 
   /* Set the size of the problem in <ox> now, not later
    * Debugging dumps need this information, for example
@@ -196,7 +202,9 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX 
  *            posterior decoding to determine which <i,k> cells pass a
  *            significance threshold for inclusion in the sparse DP
  *            mask. Store those sparse cells in <sm>, which the caller
- *            allocates (or reuses) and provides.
+ *            allocates (or reuses) and provides. <sm> will be resized
+ *            here as needed; caller does not need to call 
+ *            <p7_sparsemask_Reinit()> on it.
  *            
  *            Currently the threshold for determining 'significant'
  *            posterior alignment probability is hardcoded in 
@@ -231,6 +239,8 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
   /* Contract checks */
   if (sm->L != L || sm->M != om->M || sm->ncells) ESL_EXCEPTION(eslEINVAL, "sparsemask wasn't (re)-initialized");
 #endif
+
+  p7_sparsemask_Reinit(sm, om->M, L);
 
 #ifdef p7_DEBUGGING
   /* Debugging instrumentations. */

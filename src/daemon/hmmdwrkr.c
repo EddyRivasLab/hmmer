@@ -284,7 +284,7 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
   /* merge the results of the search results */
   for (i = 1; i < env->ncpus; ++i) {
     p7_tophits_Merge(info[0].th, info[i].th);
-    p7_pipeline_Merge(info[0].pli, info[i].pli);
+    p7_pipeline_MergeStats(info[0].pli, info[i].pli);
     p7_pipeline_Destroy(info[i].pli);
     p7_tophits_Destroy(info[i].th);
   }
@@ -558,7 +558,7 @@ search_thread(void *arg)
   /* Create processing pipeline and hit list */
   th  = p7_tophits_Create(); 
   pli = p7_pipeline_Create(info->opts, om->M, 100, FALSE, p7_SEARCH_SEQS);
-  p7_pli_NewModel(pli, om, bg);
+  p7_pipeline_NewModel(pli, om, bg);
 
   if (pli->Z_setby == p7_ZSETBY_NTARGETS) pli->Z = info->db_Z;
 
@@ -599,7 +599,7 @@ search_thread(void *arg)
       dbsq.idx   = (*sq)->idx;
       if((*sq)->desc != NULL) dbsq.desc  = (*sq)->desc;
 
-      //p7_pli_NewSeq(pli, &dbsq);
+      //p7_pipeline_NewSeq(pli, &dbsq);
       p7_bg_SetLength(bg, dbsq.n);
       p7_oprofile_ReconfigLength(om, dbsq.n);
 
@@ -660,7 +660,7 @@ scan_thread(void *arg)
   th  = p7_tophits_Create(); 
   pli = p7_pipeline_Create(info->opts, 100, 100, FALSE, p7_SCAN_MODELS);
 
-  p7_pli_NewSeq(pli, info->seq);
+  p7_pipeline_NewSeq(pli, info->seq);
 
   /* loop until all sequences have been processed */
   count = 1;
@@ -691,7 +691,7 @@ scan_thread(void *arg)
 
     /* Main loop: */
     for (i = 0; i < count; ++i, ++om) {
-      p7_pli_NewModel(pli, *om, bg);
+      p7_pipeline_NewModel(pli, *om, bg);
       p7_bg_SetLength(bg, info->seq->n);
       p7_oprofile_ReconfigLength(*om, info->seq->n);
 	      

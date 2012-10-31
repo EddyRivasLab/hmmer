@@ -1,3 +1,8 @@
+/* P7_PIPELINE is the standardized pipeline for one profile/sequence
+ * comparison, from the fast filters down through domain postprocessing,
+ * alignment, and scoring.
+ */
+
 #ifndef P7_PIPELINE_INCLUDED
 #define P7_PIPELINE_INCLUDED
 
@@ -13,9 +18,16 @@
 #include "base/p7_bg.h"
 #include "base/p7_hmmfile.h"
 #include "base/p7_hmmwindow.h"
+#include "base/p7_masstrace.h"
 #include "base/p7_scoredata.h"
 #include "base/p7_tophits.h"
+
+#include "dp_sparse/p7_sparsemx.h"
+
 #include "dp_vector/p7_oprofile.h"
+#include "dp_vector/p7_checkptmx.h"
+#include "dp_vector/p7_filtermx.h"
+
 #include "fm/fm.h"
 #include "fm/fm_general.h"
 
@@ -24,12 +36,17 @@ enum p7_zsetby_e    { p7_ZSETBY_NTARGETS = 0, p7_ZSETBY_OPTION = 1, p7_ZSETBY_FI
 
 typedef struct p7_pipeline_s {
   /* Dynamic programming matrices                                           */
-#if 0			/* SRE: WE WILL REWITE THIS SOON */
-  P7_OMX     *oxf;		/* one-row Forward matrix, accel pipe       */
-  P7_OMX     *oxb;		/* one-row Backward matrix, accel pipe      */
-  P7_OMX     *fwd;		/* full Fwd matrix for domain envelopes     */
-  P7_OMX     *bck;		/* full Bck matrix for domain envelopes     */
-#endif
+  P7_FILTERMX   *fx;	        /* one-row vector DP: MSV, Vit filter       */
+  P7_CHECKPTMX  *cx;		/* checkpointed vector Fwd/Bck decoding     */
+  P7_SPARSEMASK *sm;		/* sparse mask created by F/B decoding      */
+  P7_SPARSEMX   *sxf;		/* sparse Forward (glocal/local)            */
+  P7_SPARSEMX   *sxb;		/* sparse Backward                          */
+  P7_SPARSEMX   *sxd;		/* sparse Decoding                          */
+  P7_SPARSEMX   *sxx;		/* sparse Viterbi, plus other uses          */
+  P7_TRACE      *tr;		/* Viterbi trace of seq/profile comparison  */
+  P7_MASSTRACE  *mt;		/* envelope endpoint determination          */
+  float         *n2sc;		/* null2 scores per position, 1..L          */
+  float         *wrk;		/* null2 calculation needs M+1 wrkspace     */
 
   /* Reporting threshold settings                                           */
   int     by_E;		        /* TRUE to cut per-target report off by E   */
@@ -59,9 +76,9 @@ typedef struct p7_pipeline_s {
   double  F1;		        /* MSV filter threshold                     */
   double  F2;		        /* Viterbi filter threshold                 */
   double  F3;		        /* uncorrected Forward filter threshold     */
-  int     B1;               /* window length for biased-composition modifier - MSV*/
-  int     B2;               /* window length for biased-composition modifier - Viterbi*/
-  int     B3;               /* window length for biased-composition modifier - Forward*/
+  int     B1;                   /* window len, biased-comp modifier - MSV   */
+  int     B2;                   /* window len, biased-comp modifier - Vit   */
+  int     B3;                   /* window len, biased-comp modifier - Fwd   */
   int     do_biasfilter;	/* TRUE to use biased comp HMM filter       */
   int     do_null2;		/* TRUE to use null2 score corrections      */
 
@@ -74,48 +91,55 @@ typedef struct p7_pipeline_s {
   uint64_t      n_past_bias;	/* # comparisons that pass bias filter      */
   uint64_t      n_past_vit;	/* # comparisons that pass ViterbiFilter()  */
   uint64_t      n_past_fwd;	/* # comparisons that pass ForwardFilter()  */
-  uint64_t      n_output;	    /* # alignments that make it to the final output (used for nhmmer) */
-  uint64_t      pos_past_msv;	/* # positions that pass MSVFilter()  (used for nhmmer) */
-  uint64_t      pos_past_bias;	/* # positions that pass bias filter  (used for nhmmer) */
-  uint64_t      pos_past_vit;	/* # positions that pass ViterbiFilter()  (used for nhmmer) */
-  uint64_t      pos_past_fwd;	/* # positions that pass ForwardFilter()  (used for nhmmer) */
-  uint64_t      pos_output;	    /* # positions that make it to the final output (used for nhmmer) */
 
+  /* Additional accounting in nhmmer */
+  uint64_t      n_output;	/* # alis that make it to final output      */
+  uint64_t      pos_past_msv;	/* # positions that pass MSVFilter()        */
+  uint64_t      pos_past_bias;	/* # positions that pass bias filter        */
+  uint64_t      pos_past_vit;	/* # positions that pass ViterbiFilter()    */
+  uint64_t      pos_past_fwd;	/* # positions that pass ForwardFilter()    */
+  uint64_t      pos_output;	/* # positions that make it to final output */
+
+  /* State config, flags */
   enum p7_pipemodes_e mode;    	/* p7_SCAN_MODELS | p7_SEARCH_SEQS          */
-  int           long_targets;   /* TRUE if the target sequences are expected to be very long (e.g. dna chromosome search in nhmmer) */
-  int           strand;         /* TRUE if the search should ignore the revcomp (used for nhmmer only) */
-  int 		    	W;              /* window length for nhmmer scan - essentially maximum length of model that we expect to find*/
-  int           block_length;   /* length of overlapping blocks read in the multi-threaded variant (default MAX_RESIDUE_COUNT) */
-
   int           show_accessions;/* TRUE to output accessions not names      */
   int           show_alignments;/* TRUE to output alignments (default)      */
+  P7_HMMFILE   *hfp;		/* COPY of open HMM db (if hmmscan mode)    */
 
-  P7_HMMFILE   *hfp;		/* COPY of open HMM database (if scan mode) */
+  /* Additional state config for nhmmer */
+  int           long_targets;   /* TRUE if targ seqs expected to be v. long                     */
+  enum p7_strands_e strand;     /* p7_STRAND_TOPONLY | p7_STRAND_BOTTOMONLY | p7_STRAND_BOTH    */
+  int 		W;              /* window len for nhmmer; ~max len expected                     */
+  int           block_length;   /* overlapping block len, threaded; p7_NHMMER_MAX_RESIDUE_COUNT */
+
+  /* Diagostic info */
   char          errbuf[eslERRBUFSIZE];
 } P7_PIPELINE;
 
 
 
-extern P7_PIPELINE *p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, enum p7_pipemodes_e mode);
+extern P7_PIPELINE *p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, enum p7_pipemodes_e mode);
 extern int          p7_pipeline_Reuse  (P7_PIPELINE *pli);
 extern void         p7_pipeline_Destroy(P7_PIPELINE *pli);
-extern int          p7_pipeline_Merge  (P7_PIPELINE *p1, P7_PIPELINE *p2);
 
-extern int p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *msvdata, P7_HMM_WINDOWLIST *windowlist, int L, float pct_overlap);
-extern int p7_pli_TargetReportable  (P7_PIPELINE *pli, float score,     double lnP);
-extern int p7_pli_DomainReportable  (P7_PIPELINE *pli, float dom_score, double lnP);
+extern int p7_pipeline_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg);
+extern int p7_pipeline_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
+extern int p7_pipeline_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
 
-extern int p7_pli_TargetIncludable  (P7_PIPELINE *pli, float score,     double lnP);
-extern int p7_pli_DomainIncludable  (P7_PIPELINE *pli, float dom_score, double lnP);
-extern int p7_pli_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg);
-extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
-extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
-extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
+extern int p7_pipeline_TargetReportable  (P7_PIPELINE *pli, float score,     double lnP);
+extern int p7_pipeline_DomainReportable  (P7_PIPELINE *pli, float dom_score, double lnP);
+extern int p7_pipeline_TargetIncludable  (P7_PIPELINE *pli, float score,     double lnP);
+extern int p7_pipeline_DomainIncludable  (P7_PIPELINE *pli, float dom_score, double lnP);
+
+extern int p7_pipeline_MergeStats(P7_PIPELINE *p1, const P7_PIPELINE *p2);
+extern int p7_pipeline_WriteStats(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w);
+
+extern int p7_Pipeline              (P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
+#ifdef SRE_REMOVED_FOR_TRAVIS
 extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx);
 extern int p7_Pipeline_FM           (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *msvdata, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
                                      const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg);
-
-extern int p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w);
+#endif
 
 #endif /*P7_PIPELINE_INCLUDED*/
 
