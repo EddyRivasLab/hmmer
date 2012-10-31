@@ -507,7 +507,6 @@ AC_CONFIG_FILES([
   benchmarks/Makefile
   benchmarks/profmark/Makefile
   benchmarks/speed/Makefile
-  lib/Makefile
   lib/easel/miniapps/Makefile
   lib/easel/testsuite/Makefile
   lib/easel/documentation/Makefile
