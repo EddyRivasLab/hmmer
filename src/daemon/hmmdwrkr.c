@@ -546,7 +546,7 @@ search_thread(void *arg)
       pthread_exit(NULL);
       return;
     }
-    p7_SingleBuilder(bld, info->seq, bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
+    p7_SingleBuilder(bld, info->seq, bg, NULL, NULL, &gm, &om); /* bypass HMM - only need models */
     p7_builder_Destroy(bld);
   } else {
     gm = p7_profile_Create (info->hmm->M, info->abc);
@@ -601,9 +601,10 @@ search_thread(void *arg)
 
       //p7_pipeline_NewSeq(pli, &dbsq);
       p7_bg_SetLength(bg, dbsq.n);
+      p7_profile_SetLength(gm, dbsq.n);
       p7_oprofile_ReconfigLength(om, dbsq.n);
 
-      p7_Pipeline(pli, om, bg, &dbsq, th);
+      p7_Pipeline(pli, gm, om, bg, &dbsq, th);
 
       p7_pipeline_Reuse(pli);
     }
@@ -616,8 +617,7 @@ search_thread(void *arg)
   /* clean up */
   p7_bg_Destroy(bg);
   p7_oprofile_Destroy(om);
-
-  if (gm != NULL)  p7_profile_Destroy(gm);
+  p7_profile_Destroy(gm);
 
   esl_stopwatch_Stop(w);
   info->elapsed = w->elapsed;
@@ -695,7 +695,7 @@ scan_thread(void *arg)
       p7_bg_SetLength(bg, info->seq->n);
       p7_oprofile_ReconfigLength(*om, info->seq->n);
 	      
-      p7_Pipeline(pli, *om, bg, info->seq, th);
+      p7_Pipeline(pli, /*gm=*/NULL, *om, bg, info->seq, th);
       p7_pipeline_Reuse(pli);
     }
   }

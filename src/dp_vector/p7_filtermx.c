@@ -47,7 +47,6 @@ P7_FILTERMX *
 p7_filtermx_Create(int allocM)
 {
   P7_FILTERMX *fx = NULL;
-  int          nv = P7_NVW(allocM);
   int          status;
 
   /* Contract checks / argument validation */
@@ -60,7 +59,7 @@ p7_filtermx_Create(int allocM)
   fx->allocM    = 0;
   fx->type      = p7F_NONE;
 #ifdef p7_DEBUGGING
-  fx->debugging = FALSE;
+  fx->do_dumping= FALSE;
   fx->dfp       = NULL;
 #endif 
   
@@ -174,7 +173,7 @@ p7_filtermx_Reuse(P7_FILTERMX *fx)
   fx->M         = 0;
   fx->type      = p7F_NONE;
 #ifdef p7_DEBUGGING
-  fx->debugging = FALSE;
+  fx->do_dumping= FALSE;
   fx->dfp       = NULL;
 #endif
   return eslOK;
@@ -231,8 +230,8 @@ int
 p7_filtermx_SetDumpMode(P7_FILTERMX *fx, FILE *dfp, int truefalse)
 {
 #ifdef p7_DEBUGGING
-  fx->debugging = truefalse;
-  fx->dfp       = dfp;
+  fx->do_dumping = truefalse;
+  fx->dfp        = dfp;
 #endif
   return eslOK;
 }
@@ -285,7 +284,7 @@ p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, u
       fprintf(fx->dfp, "%3s %3s %3s %3s %3s\n", "E", "N", "J", "B", "C");
       fprintf(fx->dfp, "       ");
       for (k = 0; k <= fx->M+5;  k++) fprintf(fx->dfp, "%3s ", "---");
-      fprintf(ox->dfp, "\n");
+      fprintf(fx->dfp, "\n");
     }
 
   /* Unpack and unstripe, then print M's. */
@@ -293,11 +292,11 @@ p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, u
     tmp.v = fx->dp[q];
     for (z = 0; z < 16; z++) v[q+Q*z+1] = tmp.i[z]; 
   }
-  fprintf(ox->dfp, "%4d M ", rowi);
-  for (k = 0; k <= fx->M; k++) fprintf(ox->dfp, "%3d ", v[k]);
+  fprintf(fx->dfp, "%4d M ", rowi);
+  for (k = 0; k <= fx->M; k++) fprintf(fx->dfp, "%3d ", v[k]);
 
   /* The specials */
-  fprintf(ox->dfp, "%3d %3d %3d %3d %3d\n", xE, xN, xJ, xB, xC);
+  fprintf(fx->dfp, "%3d %3d %3d %3d %3d\n", xE, xN, xJ, xB, xC);
 
   /* I's are all 0's; print just to facilitate comparison to refmx. */
   fprintf(fx->dfp, "%4d I ", rowi);
@@ -340,7 +339,7 @@ int
 p7_filtermx_DumpVFRow(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
 {
   __m128i *dp = fx->dp;		/* enable MMXf(q), DMXf(q), IMXf(q) macros */
-  int      Q  = P7_NVW(ox->M);	/* number of vectors in the VF row */
+  int      Q  = P7_NVW(fx->M);	/* number of vectors in the VF row */
   int16_t *v  = NULL;		/* array of unstriped, uninterleaved scores  */
   int      q,z,k;
   union { __m128i v; int16_t i[8]; } tmp;

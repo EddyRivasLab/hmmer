@@ -1029,7 +1029,7 @@ p7_oprofile_ReconfigUnihit(P7_OPROFILE *om, int L)
 /*------------ end, conversions to P7_OPROFILE ------------------*/
 
 /*******************************************************************
-*   3. Conversion from optimized P7_OPROFILE to compact score arrays
+ * 3. Conversion from optimized P7_OPROFILE to compact score arrays
  *******************************************************************/
 
 /* Function:  p7_oprofile_GetFwdTransitionArray()
@@ -1209,10 +1209,63 @@ p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, P7_BG *bg, float *arr )
 
   return eslOK;
 }
-
-
 /*------------ end, conversions from P7_OPROFILE ------------------*/
 
+
+#if 0
+/*****************************************************************
+ * x. Deconversion of OPROFILE to PROFILE
+ *****************************************************************/
+
+/* Function:  
+ * Synopsis:  
+ *
+ * Purpose:   
+ *
+ * Args:      
+ *
+ * Returns:   
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      
+ */
+int
+p7_oprofile_Deconvert(const P7_OPROFILE *om, P7_PROFILE *gm)
+{
+  int Q = P7_NVF(om->M);
+  union { __m128 v; float x[4]; } tmp; 
+  int x;		        /* 0..Kp-1 in residue symbols */
+  int q;			/* 0..Q-1 in array of striped vectors */
+  int z;			/* 0..3 in vector components (simd vectors are p7_VNF=4 components wide) */
+  int k;			/* (0)1..M in model position  */
+
+  ESL_DASSERT1( (gm->allocM >= om->M) );
+  ESL_DASSERT1( (gm->abc->type == om->abc->type) );
+  
+  /* Unstripe the emission odds ratios, and take their log to make them log-odds scores.
+   * Remember:  k = zQ + q + 1
+   *            q = (k-1)%Q
+   *            z = (k-1)/Q
+   * - Insert odds ratios are assumed 1.0 in the optimized profile: zero score
+   * - We assume scores for k=0 are already -inf (by Create(), Reinit())
+   * - esl_sse_logf() will correctly convert 0 odds ratios to -eslINFINITY lod score.
+   */
+  for (x = 0; x < om->abc->Kp; x++)
+    for (q = 0; q < Q; q++)
+      {
+	tmp.v = esl_sse_logf(om->rfv[x][q]);
+	for (z = 0; z < p7_VNF; z++)
+	  {
+	    k = z*Q + q + 1;
+	    P7P_MSC(gm, k, x) = tmp.x[z];
+	    P7P_ISC(gm, k, x) = 0.0f;
+	  }
+      }	
+  
+  /* SRE IN PROGRESS... */
+}
+#endif /*0*/
 
 /*****************************************************************
  * 4. Debugging and development utilities.

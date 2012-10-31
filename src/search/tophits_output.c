@@ -891,8 +891,11 @@ int
 p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th )
 {
   P7_HIT *hit;
-  int h, i;
+  int h;
+#ifdef SRE_REMOVED_FOR TRAVIS
+  int i;
   float *scores;
+#endif
 
   for (h = 0; h < th->N; h++) {
     hit = th->hit[h];

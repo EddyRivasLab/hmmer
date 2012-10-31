@@ -85,7 +85,7 @@ all:
 	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} all
 	${QUIET_SUBDIR0}${SADIR}      ${QUIET_SUBDIR1} all
 	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} all
-	${QUIET_SUBDIR0}benchmarks    ${QUIET_SUBDIR1} all
+#	${QUIET_SUBDIR0}benchmarks    ${QUIET_SUBDIR1} all
 
 # dev: compile all executables, including drivers.
 #
@@ -181,9 +181,9 @@ tags-append:
 	etags -o ${top_srcdir}/TAGS -a ${srcdir}/documentation/userguide/*.in
 	etags -o ${top_srcdir}/TAGS -a ${srcdir}/documentation/userguide/*.tex
 
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/libdivsufsort/README
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/libdivsufsort/*.in
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/libdivsufsort/*.c
+	etags -o ${top_srcdir}/TAGS -a ${srcdir}/${SADIR}/README
+	etags -o ${top_srcdir}/TAGS -a ${srcdir}/${SADIR}/*.in
+	etags -o ${top_srcdir}/TAGS -a ${srcdir}/${SADIR}/*.c
 
 	etags -o ${top_srcdir}/TAGS -a ${srcdir}/testsuite/*.in
 	etags -o ${top_srcdir}/TAGS -a ${srcdir}/testsuite/*.pl
@@ -193,7 +193,7 @@ tags-append:
 
 	${QUIET_SUBDIR0}src        ${QUIET_SUBDIR1} tags-append
 	${QUIET_SUBDIR0}benchmarks ${QUIET_SUBDIR1} tags-append
-	${QUIET_SUBDIR0}easel      ${QUIET_SUBDIR1} tags-append
+	${QUIET_SUBDIR0}${ESLDIR}  ${QUIET_SUBDIR1} tags-append
 
 ################################################################
 # @LICENSE@

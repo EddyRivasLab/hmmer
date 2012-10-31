@@ -28,6 +28,7 @@
 
 #include "base/p7_bg.h"
 #include "base/p7_domain.h"
+#include "base/p7_profile.h"	/* used by the hmmscan workaround */
 #include "base/p7_scoredata.h"
 #include "base/p7_tophits.h"
 #include "base/p7_hmmwindow.h"
@@ -50,8 +51,12 @@
 
 #include "misc/logsum.h"
 
+#include "search/modelconfig.h"	/* used by the hmmscan workaround */
 #include "search/p7_pipeline.h"
 
+
+/* SRE: FIXME 3.1 in progress */
+static int workaround_get_profile(P7_PIPELINE *pli, const P7_OPROFILE *om, const P7_BG *bg, P7_PROFILE **ret_gm);
 
 /*****************************************************************
  * 1. The P7_PIPELINE object: allocation, initialization, destruction.
@@ -444,8 +449,6 @@ p7_pipeline_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om)
 int
 p7_pipeline_NewSeq(P7_PIPELINE *pli, const ESL_SQ *sq)
 {
-  int status;
-
   if (!pli->long_targets) pli->nseqs++; // if long_targets, sequence counting happens in the serial loop, which can track multiple windows for a single long sequence
   pli->nres += sq->n;
   if (pli->Z_setby == p7_ZSETBY_NTARGETS && pli->mode == p7_SEARCH_SEQS) pli->Z = pli->nseqs;
@@ -797,6 +800,13 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
    */
   p7_BackwardFilter(sq->dsq, sq->n, om, pli->cx, pli->sm);
 
+  /* FIXME 3.1
+   * hmmscan needs <gm>; read from the hmm file (.h3m) on disk
+   * expect that this is slow and inefficient; come back and refactor later.
+   */
+  if (pli->mode == p7_SCAN_MODELS)
+    workaround_get_profile(pli, om, bg, &gm);
+
   /* Now we can hand it over to sparse DP, with the full glocal/local model */
   p7_SparseViterbi (sq->dsq, sq->n, gm, pli->sm,  pli->sxx, pli->tr, &vitsc);
   p7_SparseForward (sq->dsq, sq->n, gm, pli->sm,  pli->sxf,          &fwdsc);
@@ -1005,12 +1015,71 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
         }
       }
     }
+  if (pli->mode == p7_SCAN_MODELS) p7_profile_Destroy(gm);
   return eslOK;
 
  ERROR:
   if (dcl) free(dcl);
   return status;
 }
+
+
+/* Temporary workaround for a problem in the hmmscan version of the pipeline.
+ * hmmscan reads vectorized profile in two pieces from .h3f, .h3p files.
+ * In H3.0 we only needed vectorized profile in the pipeline.
+ * In H3.1 we need both <om> and <gm>.
+ * hmmscan doesn't have <gm>.
+ * Options include:
+ *   1. Convert <om> to <gm>.
+ *      - We'd have to recalculate the BGMk and DGkE entry/exit wing retractions
+ *        from the profile; normally modelconfig does this from the HMM.
+ *      - This might be slow.
+ *   2. Store the profile on disk too.
+ *      - I like this option, but I'd rather do it together with some
+ *        other reengineering. We have a lot of redundancy in HMM, PROFILE,
+ *        and OPROFILE, particularly in annotation. Should consider
+ *        having a P7_MODEL container around P7_MODELINFO (annotation),
+ *        P7_HMM, P7_PROFILE, vector MSV, vector VF, vector FB subparts, with ways to
+ *        convert amongst HMM, PROFILE, MSV, VF, and FB sections, or read
+ *        them from disk. Support delayed read of annotation including
+ *        name/desc, allow HMMs (and target seqs?) to be numbered for
+ *        efficiency. Measure memory footprints and timing of read, MPI 
+ *        transmit, conversion.
+ *   3. As it happens, we do have the HMM on disk, in the .h3m file.
+ *      We can read it, and convert it to a profile.
+ *      This might be slow - especially since we need to alloc/dealloc
+ *      the HMM and profile in the pipeline, rather than reusing them.
+ *      
+ * (3) is the fastest option to implement,
+ * and right now the pressure is to get 3.1 compiling and running asap;
+ * we can optimize/polish later from a baseline implementation.
+ */
+static int
+workaround_get_profile(P7_PIPELINE *pli, const P7_OPROFILE *om, const P7_BG *bg, P7_PROFILE **ret_gm)
+{
+  
+  P7_HMM     *hmm = NULL;
+  P7_PROFILE *gm  = NULL;
+  int         status;
+
+  if ( (status = p7_hmmfile_Position(pli->hfp, om->offs[p7_MOFFSET])) != eslOK) goto ERROR; /* {eslESYS | eslEINVAL} */
+  if ( (status = p7_hmmfile_Read(pli->hfp, (ESL_ALPHABET **) &(om->abc), &hmm)) != eslOK) goto ERROR; /* eslEOF | eslEINCOMPAT; {eslEMEM | eslESYS} */
+  /* the ESL_ALPHABET ** cast was to get rid of a const; safe, but ugly */
+
+  if ( (    gm = p7_profile_Create(hmm->M, om->abc))                  == NULL)  { status = eslEMEM; goto ERROR; }
+  if ( (status = p7_profile_Config(gm, hmm, bg))                      != eslOK) goto ERROR;
+  if ( (status = p7_profile_SetLength(gm, om->L))                     != eslOK) goto ERROR;
+  *ret_gm = gm;
+
+  p7_hmm_Destroy(hmm);
+  return eslOK;
+  
+ ERROR:
+  if (hmm) p7_hmm_Destroy(hmm);
+  if (gm)  p7_profile_Destroy(gm);
+  return status;
+}
+
 
 
 /*****************************************************************

@@ -20,7 +20,7 @@ typedef struct p7_filtermx_s {  /* MSV needs P7_NVB(M); VF needs 3*P7_NVW(M) __m
   enum p7f_mxtype_e type;	/* p7F_NONE | p7F_SSVFILTER | p7F_MSVFILTER | p7F_VITFILTER */
 
 #ifdef p7_DEBUGGING
-  int      debugging;		/* TRUE if we're dumping each row for diagnostics */
+  int      do_dumping;		/* TRUE if we're dumping each row for diagnostics */
   FILE    *dfp;			/* where we're dumping it (or NULL, if debugging=FALSE) */
 #endif
 } P7_FILTERMX;

@@ -2305,8 +2305,8 @@ main(int argc, char **argv)
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) == eslOK)
     {
       if (nmodel == 0) {   /* first time initialization, now that alphabet known */
-  bg = p7_bg_Create(abc);
-  p7_bg_SetLength(bg, 400);
+	bg = p7_bg_Create(abc);
+	p7_bg_SetLength(bg, 400);
       }
 
       if (esl_opt_GetBoolean(go, "-v")) printf("%s\n", hmm->name);

@@ -23,9 +23,15 @@
 /* The OPROFILE is striped [Farrar07] and interleaved, as is the DP matrix.
  * For example, the layout of a profile for an M=14 model (xref J2/46):
  * 
- * rsc[x] : striped blocks of M emissions, starting with q=0
+ * rfv[x] : striped blocks of M emissions, starting with q=0
  *                1     11     1      1  
- *             1593   2604   371x   482x 
+ *             1593   2604   371x   482* 
+ *
+ *          to get k given q,z:  k = zQ+q+1
+ *          to get q,z given k:  q = (k-1)%Q;  z = (k-1)/Q
+ *
+ *          unused values (marked * above) are 0.0 odds ratio (-inf score)
+ *          for x = gap, none, missing: all odds ratios are 0.0
  * 
  * tsc:  grouped in order of accession in DP for 7 transition scores;
  *       starting at q=0 for all but the three transitions to M, which

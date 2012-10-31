@@ -4,12 +4,13 @@ SUBDIRS = base\
           dp_reference\
 	  dp_sparse\
 	  dp_vector\
-	  experiments\
 	  fm\
 	  misc\
-	  programs\
-          search\
-	  utilities
+          search
+# experiments
+# programs
+# utilities
+
 
 HDRS =  
 

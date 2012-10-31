@@ -25,6 +25,7 @@
 
 #include "base/p7_bg.h"
 #include "base/p7_trace.h"
+#include "misc/logsum.h"
 
 /*****************************************************************
  * 1. Null3 estimation algorithms.
