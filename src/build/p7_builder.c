@@ -981,7 +981,7 @@ static int
 make_post_msa(P7_BUILDER *bld, const ESL_MSA *premsa, const P7_HMM *hmm, P7_TRACE **tr, ESL_MSA **opt_postmsa)
 {
   ESL_MSA  *postmsa  = NULL;
-  int       optflags = p7_DEFAULT;
+  int       optflags = p7_ALL_CONSENSUS_COLS;
   int       status;
 
   if (opt_postmsa == NULL) return eslOK;
