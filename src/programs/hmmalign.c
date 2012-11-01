@@ -1,5 +1,4 @@
 /* hmmalign:  align sequences to a profile HMM
- * 
  */
 #include "p7_config.h"
 
@@ -198,7 +197,7 @@ main(int argc, char **argv)
   for (idx = mapseq; idx < totseq; idx++)
     tr[idx] = p7_trace_CreateWithPP();
 
-  p7_tracealign_computeTraces(hmm, sq, mapseq, totseq - mapseq, tr);
+  p7_tracealign_ComputeTraces(hmm, sq, mapseq, totseq - mapseq, tr);
 
   p7_tracealign_Seqs(sq, tr, totseq, hmm->M, msaopts, hmm, &msa);
 

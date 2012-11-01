@@ -21,7 +21,7 @@
 #include "esl_stopwatch.h"
 
 #ifdef HAVE_MPI
-#include "mpi.h"
+#include <mpi.h>
 #include "esl_mpi.h"
 #endif /*HAVE_MPI*/
 
@@ -40,7 +40,8 @@ typedef struct {
   P7_BG            *bg;	         /* null model                              */
   P7_PIPELINE      *pli;         /* work pipeline                           */
   P7_TOPHITS       *th;          /* top hit results                         */
-  P7_OPROFILE      *om;          /* optimized query profile                 */
+  P7_PROFILE       *gm;		 /* profile                                 */
+  P7_OPROFILE      *om;          /* optimized query profile, partially cloned */  // note; p7_oprofile_Clone() doesn't behave like p7_profile_Clone(); revisit
 } WORKER_INFO;
 
 #define REPOPTS     "-E,-T,--cut_ga,--cut_nc,--cut_tc"
@@ -442,13 +443,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Convert to an optimized model */
       gm = p7_profile_Create (hmm->M, abc);
       om = p7_oprofile_Create(hmm->M, abc);
-      p7_profile_ConfigLocal(gm, hmm, info->bg, 100); /* 100 is a dummy length for now; and MSVFilter requires local mode */
-      p7_oprofile_Convert(gm, om);                    /* <om> is now p7_LOCAL, multihit */
+      p7_profile_Config(gm, hmm, info->bg); 
+      p7_oprofile_Convert(gm, om);          
 
       for (i = 0; i < infocnt; ++i)
 	{
 	  /* Create processing pipeline and hit list */
 	  info[i].th  = p7_tophits_Create(); 
+	  info[i].gm  = p7_profile_Clone(gm);
 	  info[i].om  = p7_oprofile_Clone(om);
 	  info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
 	  p7_pipeline_NewModel(info[i].pli, info[i].om, info[i].bg);
@@ -485,6 +487,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	  p7_pipeline_Destroy(info[i].pli);
 	  p7_tophits_Destroy(info[i].th);
+	  p7_profile_Destroy(info[i].gm);
 	  p7_oprofile_Destroy(info[i].om);
 	}
 
@@ -520,6 +523,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       p7_pipeline_Destroy(info->pli);
       p7_tophits_Destroy(info->th);
+      p7_profile_Destroy(info->gm);
       p7_oprofile_Destroy(info->om);
       p7_oprofile_Destroy(om);
       p7_profile_Destroy(gm);
@@ -850,7 +854,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Convert to an optimized model */
       gm = p7_profile_Create (hmm->M, abc);
       om = p7_oprofile_Create(hmm->M, abc);
-      p7_profile_ConfigLocal(gm, hmm, bg, 100);
+      p7_profile_Config(gm, hmm, bg)
       p7_oprofile_Convert(gm, om);
 
       /* Create processing pipeline and hit list */
@@ -1100,7 +1104,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Convert to an optimized model */
       gm = p7_profile_Create (hmm->M, abc);
       om = p7_oprofile_Create(hmm->M, abc);
-      p7_profile_ConfigLocal(gm, hmm, bg, 100);
+      p7_profile_Config(gm, hmm, bg);
       p7_oprofile_Convert(gm, om);
 
       th  = p7_tophits_Create(); 
@@ -1122,10 +1126,11 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      length = dbsq->eoff - block.offset + 1;
 
 	      p7_pipeline_NewSeq(pli, dbsq);
-	      p7_bg_SetLength(bg, dbsq->n);
+	      p7_bg_SetLength           (bg, dbsq->n);
+	      p7_profile_SetLength      (gm, dbsq->n);
 	      p7_oprofile_ReconfigLength(om, dbsq->n);
       
-	      p7_Pipeline(pli, om, bg, dbsq, th);
+	      p7_Pipeline(pli, gm, om, bg, dbsq, th);
 
 	      esl_sq_Reuse(dbsq);
 	      p7_pipeline_Reuse(pli);
@@ -1204,9 +1209,10 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
     {
       p7_pipeline_NewSeq(info->pli, dbsq);
       p7_bg_SetLength(info->bg, dbsq->n);
+      p7_profile_SetLength(info->gm, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
       
-      p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
+      p7_Pipeline(info->pli, info->gm, info->om, info->bg, dbsq, info->th);
 	  
       esl_sq_Reuse(dbsq);
       p7_pipeline_Reuse(info->pli);
@@ -1297,9 +1303,10 @@ pipeline_thread(void *arg)
 
 	  p7_pipeline_NewSeq(info->pli, dbsq);
 	  p7_bg_SetLength(info->bg, dbsq->n);
+	  p7_profile_SetLength(info->gm, dbsq->n);
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
 	  
-	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
+	  p7_Pipeline(info->pli, info->gm, info->om, info->bg, dbsq, info->th);
 	  
 	  esl_sq_Reuse(dbsq);
 	  p7_pipeline_Reuse(info->pli);

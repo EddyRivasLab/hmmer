@@ -19,7 +19,7 @@
 #include "esl_stopwatch.h"
 
 #ifdef HAVE_MPI
-#include "mpi.h"
+#include <mpi.h>
 #include "esl_mpi.h"
 #endif /*HAVE_MPI*/
 
@@ -1173,7 +1173,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
       p7_bg_SetLength(info->bg, info->qsq->n);
       p7_oprofile_ReconfigLength(om, info->qsq->n);
 
-      p7_Pipeline(info->pli, om, info->bg, info->qsq, info->th);
+      p7_Pipeline(info->pli, /*gm=*/NULL, om, info->bg, info->qsq, info->th);
 
       p7_oprofile_Destroy(om);
       p7_pipeline_Reuse(info->pli);
@@ -1267,7 +1267,7 @@ pipeline_thread(void *arg)
 	  p7_bg_SetLength(info->bg, info->qsq->n);
 	  p7_oprofile_ReconfigLength(om, info->qsq->n);
 
-	  p7_Pipeline(info->pli, om, info->bg, info->qsq, info->th);
+	  p7_Pipeline(info->pli, /*gm=*/NULL, om, info->bg, info->qsq, info->th);
 
 	  p7_oprofile_Destroy(om);
 	  p7_pipeline_Reuse(info->pli);

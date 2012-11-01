@@ -398,7 +398,7 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
  *            The cloned copy will point to the same memory as the original.
  * Incept:    SRE, Sun Nov 25 12:03:19 2007 [Casa de Gatos]
  *
- * Purpose:   Quick copy of an optimized profile used in mutiple threads.
+ * Purpose:   Quick copy of an optimized profile used in multiple threads.
  *
  * Throws:    <NULL> on allocation error.
  */

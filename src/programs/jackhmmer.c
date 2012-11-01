@@ -19,7 +19,7 @@
 #include "esl_stopwatch.h"
 
 #ifdef HAVE_MPI
-#include "mpi.h"
+#include <mpi.h>
 #include "esl_mpi.h"
 #endif /*HAVE_MPI*/
 
@@ -38,6 +38,7 @@ typedef struct {
   P7_BG            *bg;
   P7_PIPELINE      *pli;
   P7_TOPHITS       *th;
+  P7_PROFILE       *gm;
   P7_OPROFILE      *om;
 } WORKER_INFO;
 
@@ -556,6 +557,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     {
       P7_HMM          *hmm     = NULL;	     /* HMM - only needed if checkpointed        */
       P7_HMM         **ret_hmm = NULL;	     /* HMM - only needed if checkpointed        */
+      P7_PROFILE      *gm      = NULL;       /* query profile                            */
       P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
       P7_TRACE        *qtr     = NULL;       /* faux trace for query sequence            */
       ESL_MSA         *msa     = NULL;       /* multiple alignment of included hits      */
@@ -574,21 +576,23 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	{       /* We enter each iteration with an optimized profile. */
 	  esl_stopwatch_Start(w);
 
-	  if (om        != NULL) p7_oprofile_Destroy(om);
-	  if (info->pli != NULL) p7_pipeline_Destroy(info->pli);
-	  if (info->th  != NULL) p7_tophits_Destroy(info->th);
-	  if (info->om  != NULL) p7_oprofile_Destroy(info->om);
+	  if (gm)        p7_oprofile_Destroy(om);
+	  if (om)        p7_oprofile_Destroy(om);
+	  if (info->pli) p7_pipeline_Destroy(info->pli);
+	  if (info->th)  p7_tophits_Destroy(info->th);
+	  if (info->gm)  p7_profile_Destroy(info->gm);
+	  if (info->om)  p7_oprofile_Destroy(info->om);
 
  	  /* Create the search model: from query alone (round 1) or from MSA (round 2+) */
 	  if (msa == NULL)	/* round 1 */
 	    {
-	      p7_SingleBuilder(bld, qsq, info[0].bg, ret_hmm, &qtr, NULL, &om); /* bypass HMM - only need model */
+	      p7_SingleBuilder(bld, qsq, info[0].bg, ret_hmm, &qtr, &gm, &om); 
 	      prv_msa_nseq = 1;
 	    }
 	  else
 	    {
 	      /* Throw away old model. Build new one. */
-	      status = p7_Builder(bld, msa, info[0].bg, ret_hmm, NULL, NULL, &om, NULL);
+	      status = p7_Builder(bld, msa, info[0].bg, ret_hmm, NULL, &gm, &om, NULL);
 	      if      (status == eslENORESULT) p7_Fail("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status == eslEFORMAT)   p7_Fail("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status != eslOK)        p7_Fail("Unexpected error constructing new model at iteration %d:",     iteration);
@@ -615,6 +619,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  for (i = 0; i < infocnt; ++i)
 	    {
 	      info[i].th  = p7_tophits_Create();
+	      info[i].gm  = p7_profile_Clone(gm);
 	      info[i].om  = p7_oprofile_Clone(om);
 	      info[i].pli = p7_pipeline_Create(go, om->M, 400, FALSE, p7_SEARCH_SEQS); /* 400 is a dummy length for now */
 	      p7_pipeline_NewModel(info[i].pli, info[i].om, info[i].bg);
@@ -652,6 +657,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	      p7_pipeline_Destroy(info[i].pli);
 	      p7_tophits_Destroy(info[i].th);
+	      p7_profile_Destroy(info[i].gm);
 	      p7_oprofile_Destroy(info[i].om);
 	    }
 
@@ -710,14 +716,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       p7_pipeline_Destroy(info->pli);
       p7_tophits_Destroy(info->th);
+      p7_profile_Destroy(info->gm);
       p7_oprofile_Destroy(info->om);
 
       info->pli = NULL;
       info->th  = NULL;
+      info->gm  = NULL;
       info->om  = NULL;
 
       esl_msa_Destroy(msa);
       p7_oprofile_Destroy(om);
+      p7_profile_Destroy(gm);
       p7_trace_Destroy(qtr);
       esl_sq_Reuse(qsq);
       esl_keyhash_Reuse(kh);
@@ -1417,6 +1426,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
     {
       P7_PIPELINE     *pli     = NULL;	     /* accelerated HMM/seq comparison pipeline  */
       P7_TOPHITS      *th      = NULL;       /* top-scoring sequence hits                */
+      P7_PROFILE      *gm      = NULL;	     /* query profile                            */
       P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
       P7_TRACE        *qtr     = NULL;       /* faux trace for query sequence            */
       
@@ -1588,9 +1598,10 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
     {
       p7_pipeline_NewSeq(info->pli, dbsq);
       p7_bg_SetLength(info->bg, dbsq->n);
+      p7_profile_SetLength(info->gm, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
       
-      p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
+      p7_Pipeline(info->pli, info->gm, info->om, info->bg, dbsq, info->th);
 
       esl_sq_Reuse(dbsq);
       p7_pipeline_Reuse(info->pli);
@@ -1681,9 +1692,10 @@ pipeline_thread(void *arg)
 
 	  p7_pipeline_NewSeq(info->pli, dbsq);
 	  p7_bg_SetLength(info->bg, dbsq->n);
+	  p7_profile_SetLength(info->gm, dbsq->n);
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
 
-	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
+	  p7_Pipeline(info->pli, info->gm, info->om, info->bg, dbsq, info->th);
 
 	  esl_sq_Reuse(dbsq);
 	  p7_pipeline_Reuse(info->pli);

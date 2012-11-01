@@ -16,7 +16,17 @@
 
 #include "base/p7_alidisplay.h"
 #include "base/p7_hmm.h"
+#include "base/p7_profile.h"
 #include "base/p7_trace.h"
+
+#include "search/modelconfig.h"
+
+#include "dp_vector/p7_oprofile.h"
+#include "dp_vector/p7_checkptmx.h"
+#include "dp_vector/fwdfilter.h"
+
+#include "dp_sparse/p7_sparsemx.h"
+#include "dp_sparse/sparse_viterbi.h"
 
 static int     map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount, int **ret_matuse, int **ret_matmap, int *ret_alen);
 static ESL_DSQ get_dsq_z(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int idx, int z);
@@ -222,152 +232,68 @@ p7_tracealign_MSA(const ESL_MSA *premsa, P7_TRACE **tr, int M, int optflags, ESL
 
 
 
-#if 0			    /* SRE: taking this out for now. It's dependent on OMX, GMX. Need to think on it */
-/* Function: p7_tracealign_computeTraces()
+/* Function: p7_tracealign_ComputeTraces()
+ * Synopsis: Compute traces for an array of sequences.
  *
- * Synopsis: Compute traces for a collection of sequences relative to
- *           a given HMM
+ * Purpose:  Given an <hmm> and a set of sequences <sq> (along with an
+ *           <offset> into the first sequence for which a trace is
+ *           desired), calculate the state path (trace) for each of
+ *           <N> sequences. The calling function provides a allocated
+ *           array of P7_TRACE's (<tr>) into which the results are
+ *           placed.
  *
- * Purpose:  Given an <hmm> and a set of sequences <sq> (along with
- *           an <offset> into the first sequence for which a trace is
- *           desired), calculate the optimal accuracy alignment trace
- *           for each of <N> sequences. The calling function provides
- *           a allocated array of P7_TRACEs (<tr>) into which the
- *           results are placed.
- *
- * Return:   eslOK if no errors
+ * Returns:  <eslOK> on success.
  */
 int
-p7_tracealign_computeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRACE  **tr)
+p7_tracealign_ComputeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRACE  **tr)
 {
-  P7_OMX       *oxf     = NULL; /* optimized Forward matrix        */
-  P7_OMX       *oxb     = NULL; /* optimized Backward matrix       */
-  P7_GMX       *gxf     = NULL; /* generic Forward mx for failover */
-  P7_GMX       *gxb     = NULL; /* generic Backward mx for failover*/
-  P7_PROFILE   *gm      = NULL;
-  P7_OPROFILE  *om      = NULL;
-  P7_BG        *bg      = NULL;
-  int tfrom, tto;
-
+  P7_PROFILE    *gm  = NULL;
+  P7_OPROFILE   *om  = NULL;
+  P7_CHECKPTMX  *cx  = NULL;
+  P7_SPARSEMASK *sm  = NULL;
+  P7_SPARSEMX   *sxv = NULL;
+  P7_BG         *bg  = NULL;
   int           idx;
-  float         fwdsc;    /* Forward score                   */
-  float         oasc;   /* optimal accuracy score          */
-  int status;
+  float         fwdsc;  /* Forward raw score, nats         */
+  float         vsc;	/* Viterbi raw score, nats         */
 
   bg = p7_bg_Create(hmm->abc);
   gm = p7_profile_Create (hmm->M, hmm->abc);
   om = p7_oprofile_Create(hmm->M, hmm->abc);
 
-  p7_profile_ConfigUnilocal(gm, hmm, bg, sq[offset]->n);
+  p7_profile_ConfigCustom(gm, hmm, bg, sq[offset]->n, 0.0, 0.5); /* *unihit* glocal/local */
   p7_oprofile_Convert(gm, om);
 
+  cx  = p7_checkptmx_Create (hmm->M, sq[offset]->n, ESL_MBYTES(p7_RAMLIMIT));
+  sm  = p7_sparsemask_Create(hmm->M, sq[offset]->n);
+  sxv = p7_sparsemx_Create  (sm);
 
-  oxf = p7_omx_Create(hmm->M, sq[offset]->n, sq[offset]->n);
-  oxb = p7_omx_Create(hmm->M, sq[offset]->n, sq[offset]->n);
-
-  /* Collect an OA trace for each sequence that needs to be aligned
-   */
   for (idx = offset; idx < offset+ N; idx++)
-  {
-      p7_omx_GrowTo(oxf, hmm->M, sq[idx]->n, sq[idx]->n);
-      p7_omx_GrowTo(oxb, hmm->M, sq[idx]->n, sq[idx]->n);
-
+    {
       p7_oprofile_ReconfigLength(om, sq[idx]->n);
+      p7_profile_SetLength      (gm, sq[idx]->n);
 
-      p7_Forward (sq[idx]->dsq, sq[idx]->n, om,      oxf, &fwdsc);
-      p7_Backward(sq[idx]->dsq, sq[idx]->n, om, oxf, oxb, NULL);
+      p7_ForwardFilter (sq[idx]->dsq, sq[idx]->n, om, cx, &fwdsc);
+      p7_BackwardFilter(sq[idx]->dsq, sq[idx]->n, om, cx, sm);
+      p7_SparseViterbi (sq[idx]->dsq, sq[idx]->n, gm, sm, sxv, tr[idx], &vsc);
+      p7_trace_Index(tr[idx]);
 
-      status = p7_Decoding(om, oxf, oxb, oxb);      /* <oxb> is now overwritten with post probabilities     */
+      p7_checkptmx_Reuse(cx);
+      p7_sparsemask_Reuse(sm);
+      p7_sparsemx_Reuse(sxv);
+    }
 
-      if (status == eslOK)
-      {
-        p7_OptimalAccuracy(om, oxb, oxf, &oasc);      /* <oxf> is now overwritten with OA scores              */
-        p7_OATrace        (om, oxb, oxf, tr[idx]);    /* tr[idx] is now an OA traceback for seq #idx          */
-      }
-      else if (status == eslERANGE)
-      {
-        /* Work around the numeric overflow problem in Decoding()
-         * xref J3/119-121 for commentary;
-         * also the note in impl_sse/decoding.c::p7_Decoding().
-         *
-         * In short: p7_Decoding() can overflow in cases where the
-         * model is in unilocal mode (expects to see a single
-         * "domain") but the target contains more than one domain.
-         * In searches, I believe this only happens on repetitive
-         * garbage, because the domain postprocessor is very good
-         * about identifying single domains before doing posterior
-         * decoding. But in hmmalign, we're in unilocal mode
-         * to begin with, and the user can definitely give us a
-         * multidomain protein.
-         *
-         * We need to make this far more robust; but that's probably
-         * an issue to deal with when we really spend some time
-         * looking hard at hmmalign performance. For now (Nov 2009;
-         * in beta tests leading up to 3.0 release) I'm more
-         * concerned with stabilizing the search programs.
-         *
-         * The workaround is to detect the overflow and fail over to
-         * slow generic routines.
-         */
-        if (gxf == NULL) gxf = p7_gmx_Create(hmm->M, sq[idx]->n);
-        else             p7_gmx_GrowTo(gxf,  hmm->M, sq[idx]->n);
-
-        if (gxb == NULL) gxb = p7_gmx_Create(hmm->M, sq[idx]->n);
-        else             p7_gmx_GrowTo(gxb,  hmm->M, sq[idx]->n);
-
-        p7_profile_SetLength(gm, sq[idx]->n);
-
-        p7_GForward (sq[idx]->dsq, sq[idx]->n, gm, gxf, &fwdsc);
-        p7_GBackward(sq[idx]->dsq, sq[idx]->n, gm, gxb, NULL);
-        p7_GDecoding(gm, gxf, gxb, gxb);
-        p7_GOptimalAccuracy(gm, gxb, gxf, &oasc);
-        p7_GOATrace        (gm, gxb, gxf, tr[idx]);
-        p7_gmx_Reuse(gxf);
-        p7_gmx_Reuse(gxb);
-      }
-
-
-      /* the above steps aren't storing the tfrom/tto values in the trace,
-       * which are required for downstream processing in this case, so
-       * hack them here. Note - this treats the whole thing as one domain,
-       * even if there are really multiple domains.
-       */
-      // skip the parts of the trace that precede the first match state
-      tfrom = 2;
-      while (tr[idx]->st[tfrom] != p7T_ML && tr[idx]->st[tfrom] != p7T_MG)  tfrom++;
-
-      tto = tfrom + 1;
-      //run until the model is exited
-      while (tr[idx]->st[tto] != p7T_E)     tto++;
-
-      tr[idx]->tfrom[0]  = tfrom;
-      tr[idx]->tto[0]    = tto - 1;
-
-
-      p7_omx_Reuse(oxf);
-      p7_omx_Reuse(oxb);
-  }
-
-#if 0
-  for (idx = 0; idx < nseq; idx++)
-    p7_trace_Dump(stdout, tr[idx], gm, sq[idx]->dsq);
-#endif
-
-
-
-  p7_omx_Destroy(oxf);
-  p7_omx_Destroy(oxb);
-  p7_gmx_Destroy(gxf);
-  p7_gmx_Destroy(gxb);
   p7_bg_Destroy(bg);
-  p7_profile_Destroy(gm);
+  p7_sparsemx_Destroy(sxv);
+  p7_sparsemask_Destroy(sm);
+  p7_checkptmx_Destroy(cx);
   p7_oprofile_Destroy(om);
-
-
+  p7_profile_Destroy(gm);
   return eslOK;
 }
 
 
+#if 0			    /* SRE: taking this out for now. It's dependent on OMX, GMX. Need to think on it */
 /* Function: p7_tracealign_getTracesAndStats()
  *
  * Synopsis: Compute traces and stats for a collection of sequences
@@ -410,7 +336,7 @@ p7_tracealign_getMSAandStats(P7_HMM *hmm, ESL_SQ  **sq, int N, ESL_MSA **ret_msa
     tr[i] = p7_trace_CreateWithPP();
 
 
-  p7_tracealign_computeTraces(hmm, sq, 0, N, tr);
+  p7_tracealign_ComputeTraces(hmm, sq, 0, N, tr);
   p7_tracealign_Seqs(sq, tr, N, hmm->M, msaopts, hmm, &msa);
   *ret_msa = msa;
 

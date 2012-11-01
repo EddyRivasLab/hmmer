@@ -18,7 +18,7 @@
 #include "esl_stopwatch.h"
 
 #ifdef HAVE_MPI
-#include "mpi.h"
+#include <mpi.h>
 #include "esl_mpi.h"
 #endif /*HAVE_MPI*/
 
@@ -37,6 +37,7 @@ typedef struct {
   P7_BG            *bg;
   P7_PIPELINE      *pli;
   P7_TOPHITS       *th;
+  P7_PROFILE       *gm;
   P7_OPROFILE      *om;
 } WORKER_INFO;
 
@@ -474,6 +475,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     {
       info[i].pli   = NULL;
       info[i].th    = NULL;
+      info[i].gm    = NULL;
       info[i].om    = NULL;
       info[i].bg    = p7_bg_Clone(bg);
 #ifdef HMMER_THREADS
@@ -501,7 +503,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* Outer loop over sequence queries */
   while ((qstatus = esl_sqio_Read(qfp, qsq)) == eslOK)
     {
-      P7_OPROFILE     *om       = NULL;           /* optimized query profile                  */
+      P7_PROFILE  *gm = NULL;
+      P7_OPROFILE *om = NULL;
 
       nquery++;
       if (qsq->n == 0) continue; /* skip zero length seqs as if they aren't even present */
@@ -521,12 +524,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
       /* Build the model */
-      p7_SingleBuilder(bld, qsq, info[0].bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
+      p7_SingleBuilder(bld, qsq, info[0].bg, NULL, NULL, &gm, &om); /* bypass HMM - only need model */
 
       for (i = 0; i < infocnt; ++i)
 	{
 	  /* Create processing pipeline and hit list */
 	  info[i].th  = p7_tophits_Create(); 
+	  info[i].gm  = p7_profile_Clone(gm);
 	  info[i].om  = p7_oprofile_Clone(om);
 	  info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
 	  p7_pipeline_NewModel(info[i].pli, info[i].om, info[i].bg);
@@ -565,6 +569,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	  p7_pipeline_Destroy(info[i].pli);
 	  p7_tophits_Destroy(info[i].th);
+	  p7_profile_Destroy(info[i].gm);
 	  p7_oprofile_Destroy(info[i].om);
 	}
 
@@ -601,7 +606,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_tophits_Destroy(info->th);
       p7_pipeline_Destroy(info->pli);
       p7_oprofile_Destroy(info->om);
+      p7_profile_Destroy(info->gm);
       p7_oprofile_Destroy(om);
+      p7_profile_Destroy(gm);
       esl_sq_Reuse(qsq);
     } /* end outer loop over query sequences */
   if      (qstatus == eslEFORMAT) p7_Fail("Parse failed (sequence file %s):\n%s\n",
@@ -1316,10 +1323,11 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
   while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
     {
       p7_pipeline_NewSeq(info->pli, dbsq);
-      p7_bg_SetLength(info->bg, dbsq->n);
+      p7_bg_SetLength           (info->bg, dbsq->n);
+      p7_profile_SetLength      (info->gm, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
       
-      p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
+      p7_Pipeline(info->pli, info->gm, info->om, info->bg, dbsq, info->th);
 	  
       esl_sq_Reuse(dbsq);
       p7_pipeline_Reuse(info->pli);
@@ -1409,9 +1417,10 @@ pipeline_thread(void *arg)
 
 	  p7_pipeline_NewSeq(info->pli, dbsq);
 	  p7_bg_SetLength(info->bg, dbsq->n);
+	  p7_profile_SetLength(info->gm, dbsq->n);
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
 	  
-	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
+	  p7_Pipeline(info->pli, info->gm, info->om, info->bg, dbsq, info->th);
 	  
 	  esl_sq_Reuse(dbsq);
 	  p7_pipeline_Reuse(info->pli);

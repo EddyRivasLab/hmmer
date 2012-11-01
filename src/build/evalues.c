@@ -105,8 +105,9 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
    * calibration routines MSVMu(), etc. contain their own length setting calls.
    */
   if ((esl_byp_IsInternal(byp_gm) && ! esl_byp_IsProvided(byp_om)) || esl_byp_IsReturned(byp_gm)) {
-    if  ( (gm     = p7_profile_Create(hmm->M, hmm->abc))         == NULL)  ESL_XFAIL(eslEMEM, errbuf, "failed to allocate profile");
-    if  ( (status = p7_profile_ConfigLocal(gm, hmm, bg, EvL))   != eslOK)  ESL_XFAIL(status,  errbuf, "failed to configure profile");
+    if  ( (gm     = p7_profile_Create(hmm->M, hmm->abc))   == NULL)  ESL_XFAIL(eslEMEM, errbuf, "failed to allocate profile");
+    if  ( (status = p7_profile_Config(gm, hmm, bg))       != eslOK)  ESL_XFAIL(status,  errbuf, "failed to configure profile");
+    if  ( (status = p7_profile_SetLength(gm, EvL))        != eslOK)  ESL_XFAIL(status,  errbuf, "failed to config profile length");
   }
 
   if (om == NULL) {

@@ -112,9 +112,9 @@ int
 p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc)
 {
   int           Q     = P7_NVF(om->M);                   /* segment length; # of MDI vectors on each row      */
-  __m128       *dpp   = (__m128 *) ox->dpf[ox->R0-1];    /* dpp=prev row. start on dpf[2]; rows 0,1=Backwards */
+  __m128       *dpp   = NULL;                            /* dpp=prev row. start on dpf[2]; rows 0,1=Backwards */
   __m128       *dpc   = NULL;		                 /* dpc points at current row         */
-  float        *xc    = (float *) (dpp + Q*p7C_NSCELLS); /* specials E,N,JJ,J,B,CC,C,SCALE    */
+  float        *xc    = NULL;                            /* specials E,N,JJ,J,B,CC,C,SCALE    */
   float         totsc = 0.0f;	                         /* accumulates Forward score in nats */
   const __m128  zerov = _mm_setzero_ps();		 
   int     q;			/* counter over vectors 0..Q-1                        */
@@ -122,8 +122,12 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX 
   int     b;			/* counter down through checkpointed blocks, Rb+Rc..1 */
   int     w;			/* counter down through rows in a checkpointed block  */
 
-  /* Make sure <ox> is allocated big enough */
+  /* Make sure <ox> is allocated big enough.
+   * DO NOT set any ptrs into the matrix until after this potential reallocation!
+   */
   p7_checkptmx_GrowTo(ox, om->M, L);
+  dpp =  (__m128 *) ox->dpf[ox->R0-1];    /* dpp=prev row. start on dpf[2]; rows 0,1=Backwards */
+  xc  =  (float *) (dpp + Q*p7C_NSCELLS); /* specials E,N,JJ,J,B,CC,C,SCALE    */
 
   /* Set the size of the problem in <ox> now, not later
    * Debugging dumps need this information, for example
@@ -235,12 +239,12 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
   int     i, b, w, i2;
   int     status;
   
+  p7_sparsemask_Reinit(sm, om->M, L);
+
 #ifdef p7_DEBUGGING
   /* Contract checks */
   if (sm->L != L || sm->M != om->M || sm->ncells) ESL_EXCEPTION(eslEINVAL, "sparsemask wasn't (re)-initialized");
 #endif
-
-  p7_sparsemask_Reinit(sm, om->M, L);
 
 #ifdef p7_DEBUGGING
   /* Debugging instrumentations. */

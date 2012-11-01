@@ -1,5 +1,13 @@
-PROGS  = hmmbuild
-
+PROGS  = hmmalign\
+	 hmmbuild\
+	 hmmemit\
+	 hmmpress\
+	 hmmscan\
+	 hmmsearch\
+	 jackhmmer\
+	 phmmer
+#	 nhmmer
+#	 nhmmscan
 
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@
@@ -54,8 +62,6 @@ check:
 tests: 
 
 .FORCE:
-
-${OBJS}:   ${HDRS}
 
 .c.o:  
 	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -o $@ -c $<

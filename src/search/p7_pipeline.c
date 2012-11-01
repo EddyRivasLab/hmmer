@@ -40,6 +40,7 @@
 #include "dp_vector/vitfilter.h"
 #include "dp_vector/fwdfilter.h"
 
+#include "dp_sparse/p7_sparsemx.h"
 #include "dp_sparse/sparse_viterbi.h"
 #include "dp_sparse/sparse_fwdback.h"
 #include "dp_sparse/sparse_decoding.h"
@@ -332,6 +333,9 @@ p7_pipeline_Destroy(P7_PIPELINE *pli)
     p7_sparsemx_Destroy  (pli->sxx);
     p7_trace_Destroy     (pli->tr);
     p7_masstrace_Destroy (pli->mt);
+
+    if (pli->n2sc) free(pli->n2sc);
+    if (pli->wrk)  free(pli->wrk);
     free(pli);
   }
 }
@@ -823,7 +827,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
 
   noverlaps  = 0;
   last_ibe   = -1;
-  best_d     = -1;
+  best_d     = 0;
   for (d = 0; d < pli->tr->ndom; d++)
     {
       /* Determine envelope coords by mass trace. */
@@ -877,6 +881,9 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
       dcl[d].lnP      = esl_exp_logsurv( dcl[d].bitscore, om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
       if (dcl[d].bitscore > dcl[best_d].bitscore) best_d = d;
+
+      /* Viterbi alignment of the domain */
+      dcl[d].ad = p7_alidisplay_Create(pli->tr, d, om, sq);
     }
   
   /* Calculate the null2-corrected per-seq score */
