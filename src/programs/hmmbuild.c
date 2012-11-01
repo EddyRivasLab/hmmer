@@ -7,7 +7,7 @@
 #include <string.h>
 
 #ifdef HAVE_MPI
-#include "mpi.h"
+#include <mpi.h>
 #endif
 
 #include "easel.h"

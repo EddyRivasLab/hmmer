@@ -6,11 +6,10 @@ SUBDIRS = base\
 	  dp_vector\
 	  fm\
 	  misc\
-          search
+          search\
+	  programs
 # experiments
-# programs
 # utilities
-
 
 HDRS =  
 
