@@ -121,11 +121,10 @@ p7_banner(FILE *fp, char *progname, char *banner)
 
 /* Function:  p7_CreateDefaultApp()
  * Synopsis:  Initialize a small/simple/standard HMMER application
- * Incept:    SRE, Thu Oct 28 15:03:21 2010 [Janelia]
  *
  * Purpose:   Identical to <esl_getopts_CreateDefaultApp()>, but 
  *            specialized for HMMER. See documentation in 
- *            <easel/esl_getopts.c>.
+ *            <easel/esl_getopts.c>. 
  *
  * Args:      options - array of <ESL_OPTIONS> structures for getopts
  *            nargs   - number of cmd line arguments expected (excl. of cmdname)
@@ -157,6 +156,8 @@ p7_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char
 {
   ESL_GETOPTS *go = NULL;
 
+  p7_Init();
+
   go = esl_getopts_Create(options);
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK ||
       esl_opt_VerifyConfig(go)               != eslOK) 
@@ -186,7 +187,6 @@ p7_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char
 
 
 /* Function:  p7_AminoFrequencies()
- * Incept:    SRE, Fri Jan 12 13:46:41 2007 [Janelia]
  *
  * Purpose:   Fills a vector <f> with amino acid background frequencies,
  *            in [A..Y] alphabetic order, same order that Easel digital
@@ -226,7 +226,8 @@ p7_AminoFrequencies(float *f)
 
 /*****************************************************************
  * 2. Error handling.
- * 
+ *****************************************************************/
+/* 
  * HMMER's fatal error messages distinguish between user errors
  * ("failure", with p7_Fail()) and internal faults ("death", with
  * p7_Die()). For now, though, there is no difference between the two
@@ -234,11 +235,10 @@ p7_AminoFrequencies(float *f)
  * apology, or provide some help on how to report bugs to us;
  * p7_Fail() might provide some pointers on where to read more
  * documentation.
- *****************************************************************/
+ */
 
 /* Function:  p7_Die()
  * Synopsis:  Handle a fatal exception (something that's our fault)
- * Incept:    SRE, Fri Jan 12 08:54:45 2007 [Janelia]
  */
 void
 p7_Die(char *format, ...)
@@ -256,7 +256,6 @@ p7_Die(char *format, ...)
 
 /* Function:  p7_Fail()
  * Synopsis:  Handle a user error (something that's the user's fault).
- * Incept:    SRE, Fri Jan 12 08:54:45 2007 [Janelia]
  */
 void
 p7_Fail(char *format, ...)
@@ -278,17 +277,6 @@ p7_Fail(char *format, ...)
  *****************************************************************/
 #ifdef p7GENERAL_TESTDRIVE
 
-static void
-utest_alphabet_config(int alphatype)
-{
-  char         *msg = "HMMER alphabet config unit test failed";
-  ESL_ALPHABET *abc = NULL;
-
-  if ((abc = esl_alphabet_Create(alphatype)) == NULL) esl_fatal(msg);
-  if (abc->K  > p7_MAXABET)                           esl_fatal(msg);
-  if (abc->Kp > p7_MAXCODE)                           esl_fatal(msg);
-  esl_alphabet_Destroy(abc);
-}
 #endif /*p7GENERAL_TESTDRIVE*/
 
   
@@ -298,8 +286,8 @@ utest_alphabet_config(int alphatype)
  *****************************************************************/
 #ifdef p7GENERAL_TESTDRIVE
 
-/* gcc -o hmmer_utest -g -Wall -I../easel -L../easel -I. -L. -Dp7HMMER_TESTDRIVE hmmer.c -lhmmer -leasel -lm
- * ./hmmer_utest
+/* gcc -o general_utest -g -Wall -I../../lib/easel -L../../lib/easel -I.. -L.. -Dp7GENERAL_TESTDRIVE general.c -lhmmer -leasel -lm
+ * ./general_utest
  */
 #include "esl_getopts.h"
 

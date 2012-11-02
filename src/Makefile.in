@@ -28,10 +28,11 @@ EXAMPLES =
 
 
 # VPATH and shell configuration
-top_srcdir = @top_srcdir@
-srcdir     = @srcdir@
-VPATH      = @srcdir@ 
-SHELL      = /bin/sh
+top_srcdir   = @top_srcdir@
+top_builddir = @top_builddir@
+srcdir       = @srcdir@
+VPATH        = @srcdir@ 
+SHELL        = /bin/sh
 
 # Installation targets
 #
@@ -64,9 +65,9 @@ INSTALL   = @INSTALL@
 ESLDIR    = @HMMER_ESLDIR@
 SADIR     = @HMMER_SADIR@
 
-MYLIBDIRS = -L../${ESLDIR} -L../${SADIR} -L.
-MYINCDIRS = -I../${ESLDIR} \
-            -I../${SADIR} \
+MYLIBDIRS = -L${top_builddir}/${ESLDIR} -L${top_builddir}/${SADIR} -L.
+MYINCDIRS = -I${top_builddir}/${ESLDIR} \
+            -I${top_builddir}/${SADIR} \
 	    -I. \
             -I${top_srcdir}/${ESLDIR} \
 	    -I${top_srcdir}/${SADIR} \
@@ -87,131 +88,66 @@ endif
 
 .PHONY: all dev tests check install uninstall distclean clean TAGS tags-append
 
-all:    ${OBJS} .FORCE
+all: libhmmer.a 
 	+@for subdir in ${SUBDIRS}; do \
 	   echo '    ' SUBDIR $$subdir; \
 	   ${MAKE} -C $$subdir all; \
 	done
 
-dev:   ${PROGS} ${UTESTS} ${ITESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES} .FORCE
-	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} dev
+dev: libhmmer.a
+	+@for subdir in ${SUBDIRS}; do \
+	   echo '    ' SUBDIR $$subdir; \
+	   ${MAKE} -C $$subdir dev; \
+	done
 
-tests: ${PROGS} ${UTESTS} ${ITESTS} .FORCE
-	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} tests
+tests: libhmmer.a
+	+@for subdir in ${SUBDIRS}; do \
+	   echo '    ' SUBDIR $$subdir; \
+	   ${MAKE} -C $$subdir tests; \
+	done
 
-check: ${PROGS} ${UTESTS} ${ITESTS} .FORCE
-	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} check
+check: libhmmer.a
+	+@for subdir in ${SUBDIRS}; do \
+	   echo '    ' SUBDIR $$subdir; \
+	   ${MAKE} -C $$subdir check; \
+	done
 
-libhmmer.a: libhmmer-src.stamp .FORCE
-	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} libhmmer-impl.stamp
-
-libhmmer-src.stamp: ${OBJS}
-	${QUIET_AR}${AR} -r libhmmer.a $? > /dev/null 2>&1 
-	@${RANLIB} libhmmer.a
-	@echo "src_lib objects compiled:\c" > $@
-	@date >> $@
-
+# We need to do one pass thru the subdirs to build libhmmer.a before
+# we start trying to build any executables. That's why we make
+# libhmmer.a a target, and force building the libhmmer-{subdir}.stamp
+# target in each subdir.
 .FORCE:
-
-${OBJS}:     ${HDRS} p7_config.h  
-${PROGOBJS}: ${HDRS} p7_config.h
-
-${PROGS}: @EXEC_DEPENDENCY@  libhmmer.a ../${ESLDIR}/libeasel.a  
-	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
-
-.c.o:
-	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${CPPFLAGS} ${MYINCDIRS} -o $@ -c $<
-
-${ITESTS}: @EXEC_DEPENDENCY@ libhmmer.a ${HDRS} p7_config.h
-	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
-
-${UTESTS}: libhmmer.a  ${HDRS} p7_config.h
-	@BASENAME=`echo $@ | sed -e 's/_utest//' | sed -e 's/^p7_//'` ;\
-	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
-	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
-	if test -e ${srcdir}/p7_$${BASENAME}.c; then \
-           DFILE=${srcdir}/p7_$${BASENAME}.c ;\
-        else \
-           DFILE=${srcdir}/$${BASENAME}.c ;\
-	fi;\
-	if test ${V} ;\
-	   then echo "{CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
-	   else echo '    ' GEN $@ ;\
-        fi ;\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
-
-${BENCHMARKS}: libhmmer.a  ${HDRS} p7_config.h
-	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'` ;\
-	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
-	DFLAG=p7$${DFLAG}_BENCHMARK ;\
-	if test -e ${srcdir}/p7_$${BASENAME}.c; then \
-           DFILE=${srcdir}/p7_$${BASENAME}.c ;\
-        else \
-           DFILE=${srcdir}/$${BASENAME}.c ;\
-	fi;\
-	if test ${V} ;\
-	   then echo "{CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
-	   else echo '    ' GEN $@ ;\
-        fi ;\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
-
-${STATS}: libhmmer.a ${HDRS} p7_config.h
-	@BASENAME=`echo $@ | sed -e 's/_stats//' | sed -e 's/^p7_//'` ;\
-	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
-	DFLAG=p7$${DFLAG}_STATS ;\
-	if test -e ${srcdir}/p7_$${BASENAME}.c; then \
-           DFILE=${srcdir}/p7_$${BASENAME}.c ;\
-        else \
-           DFILE=${srcdir}/$${BASENAME}.c ;\
-	fi;\
-	if test ${V} ;\
-	   then echo "{CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
-	   else echo '    ' GEN $@ ;\
-        fi ;\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
-
-${EXAMPLES}: libhmmer.a ${HDRS} p7_config.h
-	@BASENAME=`echo $@ | sed -e 's/_example[0-9]*//' | sed -e 's/^p7_//'` ;\
-	DFLAG=p7`echo $@ | sed -e 's/^p7_//' | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
-	if test -e ${srcdir}/p7_$${BASENAME}.c; then \
-           DFILE=${srcdir}/p7_$${BASENAME}.c ;\
-        else \
-           DFILE=${srcdir}/$${BASENAME}.c ;\
-	fi;\
-	if test ${V} ;\
-	   then echo "{CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
-	   else echo '    ' GEN $@ ;\
-        fi ;\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
-
-install:
-	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} install
-	for file in ${PROGS}; do \
-	   ${INSTALL} -m 0755 $$file ${DESTDIR}${bindir}/ ;\
+libhmmer.a: .FORCE
+	+@for subdir in ${SUBDIRS}; do \
+	   echo '    ' SUBDIR $$subdir; \
+	   ${MAKE} -C $$subdir libhmmer-$$subdir.stamp; \
 	done
-	${INSTALL} -m 0755 libhmmer.a ${DESTDIR}${libdir}/
-	for file in ${HDRS}; do \
-	   ${INSTALL} -m 0644 ${srcdir}/$$file ${DESTDIR}${includedir}/ ;\
+
+
+install: libhmmer.a
+	+@for subdir in ${SUBDIRS}; do \
+	   echo '    ' SUBDIR $$subdir; \
+	   ${MAKE} -C $$subdir install \
 	done
-	${INSTALL} -m 0644 p7_config.h ${DESTDIR}${includedir}/ ;\
+	${INSTALL} -m 0755 libhmmer.a  ${DESTDIR}${libdir}/
+	${INSTALL} -m 0644 p7_config.h ${DESTDIR}${includedir}/ 
+	${INSTALL} -m 0644 hmmer.h     ${DESTDIR}${includedir}/ 
 
 uninstall:
-	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} uninstall
-	for file in ${PROGS}; do \
-	   rm -f ${DESTDIR}${bindir}/$$file ;\
-	done
-	-rm -f ${DESTDIR}${libdir}/libhmmer.a
-	for file in ${HDRS}; do \
-	   rm -f ${DESTDIR}${includedir}/$$file ;\
+	+@for subdir in ${SUBDIRS}; do \
+	   echo '    ' SUBDIR $$subdir; \
+	   ${MAKE} -C $$subdir uninstall \
 	done
 	-rm -f ${DESTDIR}${includedir}/p7_config.h
+	-rm -f ${DESTDIR}${includedir}/hmmer.h
+	-rm -f ${DESTDIR}${libdir}/libhmmer.a
 
 distclean: clean
 	+@for subdir in ${SUBDIRS}; do \
 	   echo '    ' SUBDIR $$subdir; \
 	   ${MAKE} -C $$subdir distclean; \
 	done
-	-rm -f Makefile p7_config.h
+	-rm -f Makefile Makefile-subdirs.mk p7_config.h
 
 clean:
 	+@for subdir in ${SUBDIRS}; do \
@@ -219,27 +155,14 @@ clean:
 	   ${MAKE} -C $$subdir clean; \
 	done
 	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out
-	-rm -f libhmmer.a libhmmer-src.stamp
-	-rm -f ${UTESTS}
-	-rm -f ${ITESTS}
-	-rm -f ${STATS}
-	-rm -f ${BENCHMARKS}
-	-rm -f ${EXAMPLES}
-	-rm -f *.gcno
-	-rm -f cscope.out
-	for prog in ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do \
-	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi ;\
-	done
+	-rm -f libhmmer.a 
 
 tags-append:
-#	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.c
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.h
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.in
-#	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.pl
 	+@for subdir in ${SUBDIRS}; do \
 	   echo '    ' SUBDIR $$subdir; \
 	   ${MAKE} -C $$subdir tags-append; \
 	done
+	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.h ${srcdir}/*.in
 
 
 ################################################################

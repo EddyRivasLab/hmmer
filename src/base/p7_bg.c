@@ -509,7 +509,6 @@ p7_bg_FilterScore(P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",      0 },
-  { "-L",        eslARG_INT,    "400", NULL, "n>0",     NULL,      NULL,    NULL, "length of random target seqs",              0 },
   { "-N",        eslARG_INT,    "100", NULL, "n>0",     NULL,      NULL,    NULL, "number of random target seqs",              0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -526,7 +525,6 @@ main(int argc, char **argv)
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
   P7_BG          *bg      = NULL;
-  int             L       = esl_opt_GetInteger(go, "-L");
   int             N       = esl_opt_GetInteger(go, "-N");
   int             i;
  
@@ -539,7 +537,7 @@ main(int argc, char **argv)
 
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
-    p7_bg_SetFilterByHMM(bg, hmm);
+    p7_bg_SetFilter(bg, hmm->M, hmm->compo);
   esl_stopwatch_Stop(w);
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
 
@@ -559,6 +557,18 @@ main(int argc, char **argv)
 #ifdef p7BG_TESTDRIVE
 #include "esl_dirichlet.h"
 #include "esl_random.h"
+
+static void
+utest_alphabet_config(int alphatype)
+{
+  char          msg[] = "alphabet config unit test failed";
+  ESL_ALPHABET *abc   = NULL;
+
+  if ((abc = esl_alphabet_Create(alphatype)) == NULL) esl_fatal(msg);
+  if (abc->K  > p7_MAXABET)                           esl_fatal(msg);
+  if (abc->Kp > p7_MAXCODE)                           esl_fatal(msg);
+  esl_alphabet_Destroy(abc);
+}
 
 static void
 utest_ReadWrite(ESL_RANDOMNESS *rng)
@@ -613,7 +623,6 @@ static ESL_OPTIONS options[] = {
    /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
   {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                            0},
   {"-s",  eslARG_INT,       "0", NULL, NULL, NULL, NULL, NULL, "set random number seed to <n>",                  0},
-  {"-v",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show verbose commentary/output",                 0},
   { 0,0,0,0,0,0,0,0,0,0},
 };
 static char usage[]  = "[-options]";
@@ -622,13 +631,21 @@ static char banner[] = "test driver for p7_bg";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go          = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_GETOPTS    *go          = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   ESL_RANDOMNESS *rng         = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
-  int             be_verbose  = esl_opt_GetBoolean(go, "-v");
 
-  if (be_verbose) printf("p7_bg unit test: rng seed %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
   utest_ReadWrite(rng);
+
+  utest_alphabet_config(eslAMINO);
+  utest_alphabet_config(eslDNA);
+  utest_alphabet_config(eslRNA);
+  utest_alphabet_config(eslCOINS);
+  utest_alphabet_config(eslDICE);
+
+  fprintf(stderr, "#  status = ok\n");
 
   esl_randomness_Destroy(rng);
   esl_getopts_Destroy(go);
@@ -642,8 +659,8 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7BG_EXAMPLE
 /*
-   gcc -O2 -Wall -msse2 -std=gnu99 -o p7_bg_example -I. -L. -I../easel -L../easel -Dp7BG_EXAMPLE p7_bg.c -lhmmer -leasel -lm
    ./p7_bg_example <hmmfile> <seqfile>
+   ./p7_bg_example ../../tutorial/fn3.hmm  ../../tutorial/fn3.sto
  */ 
 #include "p7_config.h"
 
@@ -728,6 +745,10 @@ main(int argc, char **argv)
 #endif /*p7BG_EXAMPLE*/
 
 #ifdef p7BG_EXAMPLE2
+/* 
+   ./p7_bg_example 
+ */
+
 #include <stdio.h>
 #include "easel.h"
 #include "esl_alphabet.h"

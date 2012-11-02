@@ -10,6 +10,8 @@ OBJS =  build.o\
 
 HDRS =  
 
+PROGS =
+
 UTESTS = 
 
 STATS  = 
@@ -18,158 +20,15 @@ BENCHMARKS =
 
 EXAMPLES =
 
-top_srcdir  = @top_srcdir@
-srcdir      = @srcdir@
-VPATH       = @srcdir@ 
-SHELL       = /bin/sh
-
-prefix      = @prefix@
-exec_prefix = @exec_prefix@
-datarootdir = @datarootdir@
-bindir      = @bindir@
-libdir      = @libdir@
-includedir  = @includedir@
-
-CC          = @CC@
-CFLAGS      = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
-SIMDFLAGS   = @SIMD_CFLAGS@
-CPPFLAGS    = @CPPFLAGS@
-LDFLAGS     = @LDFLAGS@
-DEFS        = @DEFS@
-LIBS        = -lhmmer -leasel @LIBS@ -lm
-
-AR          = @AR@ 
-RANLIB      = @RANLIB@
-INSTALL     = @INSTALL@
-
-ESLDIR         = @HMMER_ESLDIR@
-MYLIBDIRS      = -L../../${ESLDIR} -L.. 
-MYINCDIRS      = -I../../${ESLDIR} \
-		 -I../ \
-		 -I${top_srcdir}/easel \
-		 -I${top_srcdir}/src
-
-# beautification magic stolen from git 
-QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
-QUIET_SUBDIR1 = 
-ifndef V
-	QUIET_CC      = @echo '    ' CC $@;
-	QUIET_GEN     = @echo '    ' GEN $@;
-	QUIET_AR      = @echo '    ' AR $@;
-	QUIET_SUBDIR0 = +@subdir=
-	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
-		        ${MAKE} -C $$subdir
-endif
-
-.PHONY: all dev check tests install uninstall distclean clean tags-append
 
 
-all:   libhmmer-${MODULE}.stamp
-dev:   ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
-check: ${UTESTS}
-tests: ${UTESTS}
+top_srcdir   = @top_srcdir@
+top_builddir = @top_builddir@
+srcdir       = @srcdir@
+VPATH        = @srcdir@ 
+SHELL        = /bin/sh
 
-libhmmer-${MODULE}.stamp: ${OBJS}
-	${QUIET_AR}${AR} -r ../libhmmer.a $? > /dev/null 2>&1
-	@${RANLIB} ../libhmmer.a
-	@echo ${MODULE} "objects compiled:\c" > $@
-	@date >> $@
-
-.FORCE:
-
-${OBJS}:   ${HDRS}
-
-.c.o:  
-	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -o $@ -c $<
-
-${UTESTS}: libhmmer-${MODULE}.stamp ../libhmmer.a ${HDRS} 
-	@BASENAME=`echo $@ | sed -e 's/_utest//'| sed -e 's/^p7_//'` ;\
-	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
-	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
-	if test -e ${srcdir}/p7_$${BASENAME}.c; then \
-           DFILE=${srcdir}/p7_$${BASENAME}.c ;\
-        else \
-           DFILE=${srcdir}/$${BASENAME}.c ;\
-	fi;\
-	if test ${V} ;\
-	   then echo "${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
-	   else echo '    ' GEN $@ ;\
-	fi ;\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
-
-${STATS}: libhmmer-${MODULE}.stamp ../libhmmer.a ${HDRS} 
-	@BASENAME=`echo $@ | sed -e 's/_stats//' | sed -e 's/^p7_//'`;\
-	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
-	DFLAG=p7$${DFLAG}_STATS ;\
-	if test -e ${srcdir}/p7_$${BASENAME}.c; then \
-           DFILE=${srcdir}/p7_$${BASENAME}.c ;\
-        else \
-           DFILE=${srcdir}/$${BASENAME}.c ;\
-	fi;\
-	if test ${V} ;\
-	   then echo "${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
-	   else echo '    ' GEN $@ ;\
-	fi ;\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
-
-${BENCHMARKS}: libhmmer-${MODULE}.stamp ../libhmmer.a ${HDRS} 
-	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'`;\
-	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
-	DFLAG=p7$${DFLAG}_BENCHMARK ;\
-	if test -e ${srcdir}/p7_$${BASENAME}.c; then \
-           DFILE=${srcdir}/p7_$${BASENAME}.c ;\
-        else \
-           DFILE=${srcdir}/$${BASENAME}.c ;\
-	fi;\
-	if test ${V} ;\
-	   then echo "${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
-	   else echo '    ' GEN $@ ;\
-	fi ;\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
-
-${EXAMPLES}: libhmmer-${MODULE}.stamp ../libhmmer.a ${HDRS} 
-	@BASENAME=`echo $@ | sed -e 's/_example//'| sed -e 's/^p7_//'` ;\
-	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
-	DFLAG=p7$${DFLAG}_EXAMPLE ;\
-	if test -e ${srcdir}/p7_$${BASENAME}.c; then \
-           DFILE=${srcdir}/p7_$${BASENAME}.c ;\
-        else \
-           DFILE=${srcdir}/$${BASENAME}.c ;\
-	fi;\
-	if test ${V} ;\
-	   then echo "${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
-	   else echo '    ' GEN $@ ;\
-	fi ;\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
-
-
-install:
-	for file in ${HDRS}; do \
-	   ${INSTALL} -m 0644 ${srcdir}/$$file ${DESTDIR}${includedir}/ ;\
-	done
-
-uninstall:
-	for file in ${HDRS}; do \
-	   rm -f ${DESTDIR}${includedir}/$$file ;\
-	done
-
-distclean: clean
-	-rm -f Makefile 
-
-clean:
-	-rm -f libhmmer-${MODULE}.stamp
-	-rm -f ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
-	-rm -f *.o *~ Makefile.bak core TAGS gmon.out cscope.out
-	-rm -f *.gcno
-#	for prog in ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do\
-#	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi;\
-#	done
-
-tags-append:
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.c
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.h
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.in
-#	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.pl
+include ../Makefile-subdirs.mk
 
 ################################################################
 # @LICENSE@

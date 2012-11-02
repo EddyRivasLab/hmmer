@@ -491,6 +491,7 @@ AC_CONFIG_FILES([
   documentation/man/Makefile
   documentation/userguide/Makefile
   src/Makefile
+  src/Makefile-subdirs.mk
   src/base/Makefile
   src/build/Makefile
   src/daemon/Makefile

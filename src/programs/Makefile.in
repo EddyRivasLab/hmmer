@@ -1,3 +1,5 @@
+MODULE = programs
+
 PROGS  = hmmalign\
 	 hmmbuild\
 	 hmmemit\
@@ -9,92 +11,27 @@ PROGS  = hmmalign\
 #	 nhmmer
 #	 nhmmscan
 
+OBJS =
+
+HDRS = 
+
+UTESTS = 
+
+STATS  = 
+
+BENCHMARKS = 
+
+EXAMPLES =
+
+
+
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@
 srcdir       = @srcdir@
 VPATH        = @srcdir@ 
 SHELL        = /bin/sh
 
-prefix      = @prefix@
-exec_prefix = @exec_prefix@
-datarootdir = @datarootdir@
-bindir      = @bindir@
-libdir      = @libdir@
-includedir  = @includedir@
-
-CC          = @CC@
-CFLAGS      = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
-SIMDFLAGS   = @SIMD_CFLAGS@
-CPPFLAGS    = @CPPFLAGS@
-LDFLAGS     = @LDFLAGS@
-DEFS        = @DEFS@
-LIBS        = -lhmmer -leasel @LIBS@ -lm
-
-AR          = @AR@ 
-RANLIB      = @RANLIB@
-INSTALL     = @INSTALL@
-
-ESLDIR         = @HMMER_ESLDIR@
-MYLIBDIRS      = -L${top_builddir}/${ESLDIR} -L${top_builddir}/src
-MYINCDIRS      = -I${top_builddir}/${ESLDIR} \
-		 -I${top_builddir}/src \
-		 -I${top_srcdir}/${ESLDIR} \
-		 -I${top_srcdir}/src
-
-# beautification magic stolen from git 
-QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
-QUIET_SUBDIR1 = 
-ifndef V
-	QUIET_CC      = @echo '    ' CC $@;
-	QUIET_GEN     = @echo '    ' GEN $@;
-	QUIET_AR      = @echo '    ' AR $@;
-	QUIET_SUBDIR0 = +@subdir=
-	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
-		        ${MAKE} -C $$subdir
-endif
-
-.PHONY: all dev check tests install uninstall distclean clean tags-append
-
-
-all:   ${PROGS}
-dev:   ${PROGS}
-check: 
-tests: 
-
-.FORCE:
-
-.c.o:  
-	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -o $@ -c $<
-
-${PROGS}: @EXEC_DEPENDENCY@ ${top_builddir}/src/libhmmer.a ${top_builddir}/${ESLDIR}/libeasel.a
-	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
-
-install:
-	for file in ${PROGS}; do \
-	   ${INSTALL} -m 0755 $$file ${DESTDIR}${bindir}/ ;\
-	done
-
-uninstall:
-	for file in ${PROGS}; do \
-	   rm -f ${DESTDIR}${bindir}/$$file ;\
-	done
-
-distclean: clean
-	-rm -f Makefile 
-
-clean:
-	-rm -f ${PROGS}
-	-rm -f *.o *~ Makefile.bak core TAGS gmon.out cscope.out
-	-rm -f *.gcno
-	for prog in ${PROGS}; do \
-	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi ;\
-	done
-
-
-tags-append:
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.c
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.in
-
+include ../Makefile-subdirs.mk
 
 ################################################################
 # @LICENSE@
