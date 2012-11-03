@@ -342,6 +342,8 @@ p7_hmm_ScoreDataComputeRest(P7_OPROFILE *om, P7_SCOREDATA *data )
  *****************************************************************/
 #ifdef p7SCOREDATA_TESTDRIVE
 
+#include "build/modelsample.h"
+
 static void
 utest_createScoreData(ESL_GETOPTS *go, ESL_RANDOMNESS *r )
 {
@@ -404,24 +406,26 @@ static ESL_OPTIONS options[] = {
   { 0,0,0,0,0,0,0,0,0,0},
 };
 static char usage[]  = "[-options]";
-static char banner[] = "test driver for p7_bg";
+static char banner[] = "test driver for p7_scoredata.c";
 
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go          = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng         = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
-  int             be_verbose  = esl_opt_GetBoolean(go, "-v");
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *rng  = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
 
-  if (be_verbose) printf("p7_scoredata unit test: rng seed %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
   utest_createScoreData(go, rng);
+
+  fprintf(stderr, "#  status = ok\n");
 
   esl_randomness_Destroy(rng);
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /* p7BG_TESTDRIVE */
+#endif /* p7SCOREDATA_TESTDRIVE */
 
 /************************************************************
  * @LICENSE@

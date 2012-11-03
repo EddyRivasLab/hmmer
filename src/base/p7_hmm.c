@@ -989,7 +989,8 @@ p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *iocc)
  *****************************************************************/
 #ifdef p7HMM_TESTDRIVE
 #include "esl_random.h"
-#include "base/p7_hmm_sample.h"
+#include "build/modelsample.h"
+#include "misc/emit.h"
 
 /* The occupancy unit test is based on the principle that
  * the stationary match occupancy probability in a random HMM 
@@ -1081,12 +1082,13 @@ utest_composition(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
  *****************************************************************/
 
 #ifdef p7HMM_TESTDRIVE
-
 #include "p7_config.h"
 
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_random.h"
+
+#include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -1105,8 +1107,13 @@ main(int argc, char **argv)
   ESL_RANDOMNESS *r    = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
 
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
+
   utest_occupancy  (go, r, abc);
   utest_composition(go, r, abc);
+
+  fprintf(stderr, "#  status = ok\n");
 
   esl_alphabet_Destroy(abc);
   esl_randomness_Destroy(r);

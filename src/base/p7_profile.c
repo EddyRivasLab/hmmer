@@ -727,6 +727,10 @@ p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol)
 #include "esl_alphabet.h"
 #include "esl_random.h"
 
+#include "base/p7_bg.h"
+#include "build/modelsample.h"
+#include "search/modelconfig.h"
+
 static void
 utest_Compare(void)
 {
@@ -769,11 +773,9 @@ utest_Compare(void)
  * 5. Test driver
  *****************************************************************/
 #ifdef p7PROFILE_TESTDRIVE
-
-/* gcc -o profile_utest -g -Wall -I../easel -L../easel -I. -L. -Dp7PROFILE_TESTDRIVE p7_profile.c -lhmmer -leasel -lm
- * ./profile_utest
- */
 #include "esl_getopts.h"
+
+#include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -788,7 +790,11 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS *go = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
 
+  fprintf(stderr, "## %s\n", argv[0]);
+
   utest_Compare();
+
+  fprintf(stderr, "#  status = ok\n");
 
   esl_getopts_Destroy(go);
   return 0;

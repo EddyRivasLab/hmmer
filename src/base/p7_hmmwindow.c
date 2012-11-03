@@ -1,12 +1,5 @@
-/* The Plan7 MSVDATA data structure, which holds a compact representation
- * of substitution scores and maximal extensions, used by nhmmer.
- *
- * Contents:
- *   1. The P7_MSVDATA object: allocation, initialization, destruction.
- *   2. Unit tests.
- *   3. Test driver.
- *   4. Copyright and license.
- *
+/* P7_HMM_WINDOWLIST holds a compact representation of substitution
+ * scores and maximal extensions, used by nhmmer.
  */
 #include "p7_config.h"
 
@@ -14,12 +7,8 @@
 
 #include "base/p7_hmmwindow.h"
 
-/*********************************************************************
- *# 1. The P7_MSVDATA object: allocation, initialization, destruction.
- *********************************************************************/
 
-
-/* Function:  p7_hmm_initWindows()
+/* Function:  p7_hmmwindow_init()
  *
  * Synopsis:  initialize the object used to store a list of windows around seeds
  *
@@ -39,7 +28,7 @@ ERROR:
 
 }
 
-/* Function:  p7_hmm_newWindow()
+/* Function:  p7_hmmwindow_new()
  *
  * Synopsis:  return a pointer to the next window element on the list,
  *            increasing the size of the list, if necessary.
@@ -77,20 +66,6 @@ p7_hmmwindow_new (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t f
 ERROR:
   return NULL;
 }
-
-
-
-
-/*****************************************************************
- * 2. Unit tests
- *****************************************************************/
-
-
-
-/*****************************************************************
- * 3. Test driver
- *****************************************************************/
-
 
 
 /************************************************************

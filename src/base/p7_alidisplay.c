@@ -1248,15 +1248,20 @@ static char banner[] = "test driver for p7_alidisplay.c";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go         = esl_getopts_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_GETOPTS    *go         = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   ESL_RANDOMNESS *rng        = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc        = esl_alphabet_Create(eslAMINO);
   int             N          = esl_opt_GetInteger(go, "-N");
   int             L          = esl_opt_GetInteger(go, "-L");
   int             be_verbose = esl_opt_GetBoolean(go, "-v");
 
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+
   utest_Serialize  (            rng,      N, L);
   utest_Backconvert(be_verbose, rng, abc, N, L);
+
+  fprintf(stderr, "#  status = ok\n");
 
   esl_alphabet_Destroy(abc);
   esl_randomness_Destroy(rng);
@@ -1270,9 +1275,6 @@ main(int argc, char **argv)
 /*****************************************************************
  * 7. Example.
  *****************************************************************/
-/* 
-   gcc -o p7_alidisplay_example -std=gnu99 -g -Wall -I. -L. -I../easel -L../easel -Dp7ALIDISPLAY_EXAMPLE p7_alidisplay.c -lhmmer -leasel -lm 
-*/
 #ifdef p7ALIDISPLAY_EXAMPLE
 #include "p7_config.h"
 
@@ -1338,10 +1340,11 @@ main(int argc, char **argv)
   hitlist = p7_tophits_Create();
 
   /* Run the pipeline */
-  p7_pli_NewSeq(pli, sq);
+  p7_pipeline_NewSeq(pli, sq);
   p7_bg_SetLength(bg, sq->n);
+  p7_profile_SetLength(gm, sq->n);
   p7_oprofile_ReconfigLength(om, sq->n);
-  p7_Pipeline(pli, om, bg, sq, hitlist);
+  p7_Pipeline(pli, gm, om, bg, sq, hitlist);
 
   if (hitlist->N == 0) { p7_Fail("target sequence doesn't hit"); }
 

@@ -559,7 +559,6 @@ p7_tophits_Destroy(P7_TOPHITS *h)
  *****************************************************************/
 #ifdef p7TOPHITS_BENCHMARK
 /* 
-  gcc -o benchmark-tophits -std=gnu99 -g -O2 -I. -L. -I../easel -L../easel -Dp7TOPHITS_BENCHMARK p7_tophits.c -lhmmer -leasel -lm 
   ./benchmark-tophits
 
   As of 28 Dec 07, shows 0.20u for 10 lists of 10,000 hits each (at least ~100x normal expectation),
@@ -596,6 +595,7 @@ main(int argc, char **argv)
   int             N        = esl_opt_GetInteger(go, "-N");
   int             M        = esl_opt_GetInteger(go, "-M");
   P7_TOPHITS    **h        = NULL;
+  P7_HIT         *hit      = NULL;
   double         *sortkeys = NULL;
   char            name[]   = "not_unique_name";
   char            acc[]    = "not_unique_acc";
@@ -615,12 +615,27 @@ main(int argc, char **argv)
   {
       h[j] = p7_tophits_Create();
       for (i = 0; i < N; i++)
-        p7_tophits_Add(h[j], name, acc, desc, sortkeys[j*N + i],
-            (float) sortkeys[j*N+i], sortkeys[j*N+i],
-            (float) sortkeys[j*N+i], sortkeys[j*N+i],
-            i, i, N,
-            i, i, N,
-            i, N, NULL);
+	{
+	  p7_tophits_CreateNextHit(h[j], &hit);
+	  esl_strdup(name, -1, &(hit->name));
+	  esl_strdup(acc,  -1, &(hit->acc));
+	  esl_strdup(desc, -1, &(hit->desc));
+	  hit->sortkey    = sortkeys[j*N + i];
+	  hit->score      = (float) sortkeys[j*N+i]; 
+	  hit->pre_score  = 0.0;
+	  hit->sum_score  = 0.0;
+	  hit->lnP        = sortkeys[j*N+i];
+	  hit->pre_lnP    = 0.0;
+	  hit->sum_lnP    = 0.0;
+	  hit->ndom       = N;
+	  hit->noverlaps  = 0;
+	  hit->nexpected  = 0;
+	  hit->flags      = 0;
+	  hit->nreported  = 0;
+	  hit->nincluded  = 0;
+	  hit->best_domain = 0;
+	  hit->dcl         = NULL;
+	}
       p7_tophits_SortBySortkey(h[j]);
   }
   /* then merge them into one big list in h[0] */
@@ -650,10 +665,6 @@ main(int argc, char **argv)
  *****************************************************************/
 
 #ifdef p7TOPHITS_TESTDRIVE
-/*
-  gcc -o tophits_utest -std=gnu99 -g -O2 -I. -L. -I../easel -L../easel -Dp7TOPHITS_TESTDRIVE p7_tophits.c -lhmmer -leasel -lm 
-  ./tophits_test
-*/
 #include "p7_config.h"
 
 #include "easel.h"
@@ -674,6 +685,26 @@ static ESL_OPTIONS options[] = {
 static char usage[]  = "[-options]";
 static char banner[] = "test driver for P7_TOPHITS";
 
+/* this is an obsolete derivative of old p7_tophits_Add(), which the
+ * test driver happens to use; we should refactor.
+ * The unit test only needs name and sort key;
+ * we add the acc and desc too; and everything else is
+ * at a default unused value.
+ */
+static int
+tophits_Add(P7_TOPHITS *h, char *name, char *acc, char *desc, double sortkey)
+{
+  P7_HIT *hit = NULL;
+
+  p7_tophits_CreateNextHit(h, &hit);
+  esl_strdup(name, -1, &(hit->name));
+  esl_strdup(acc,  -1, &(hit->acc));
+  esl_strdup(desc, -1, &(hit->desc));
+  hit->sortkey    = sortkey;
+  return eslOK;
+}
+
+
 int
 main(int argc, char **argv)
 {
@@ -689,6 +720,9 @@ main(int argc, char **argv)
   double          key;
   int             i;
 
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
+
   h1 = p7_tophits_Create();
   h2 = p7_tophits_Create();
   h3 = p7_tophits_Create();
@@ -696,14 +730,14 @@ main(int argc, char **argv)
   for (i = 0; i < N; i++) 
   {
       key = esl_random(r);
-      p7_tophits_Add(h1, name, acc, desc, key, (float) key, key, (float) key, key, i, i, N, i, i, N, 1, 1, NULL);
+      tophits_Add(h1, name, acc, desc, key);
       key = 10.0 * esl_random(r);
-      p7_tophits_Add(h2, name, acc, desc, key, (float) key, key, (float) key, key, i, i, N, i, i, N, 2, 2, NULL);
+      tophits_Add(h2, name, acc, desc, key);
       key = 0.1 * esl_random(r);
-      p7_tophits_Add(h3, name, acc, desc, key, (float) key, key, (float) key, key, i, i, N, i, i, N, 3, 3, NULL);
+      tophits_Add(h3, name, acc, desc, key);
   }
-  p7_tophits_Add(h1, "last",  NULL, NULL, -1.0, (float) key, key, (float) key, key, i, i, N, i, i, N, 1, 1, NULL);
-  p7_tophits_Add(h1, "first", NULL, NULL, 20.0, (float) key, key, (float) key, key, i, i, N, i, i, N, 1, 1, NULL);
+  tophits_Add(h1, "last",  NULL, NULL, -1.0);
+  tophits_Add(h1, "first", NULL, NULL, 20.0);
 
   p7_tophits_SortBySortkey(h1);
   if (strcmp(h1->hit[0]->name,   "first") != 0) esl_fatal("sort failed (top is %s = %f)", h1->hit[0]->name,   h1->hit[0]->sortkey);
@@ -724,6 +758,8 @@ main(int argc, char **argv)
   p7_tophits_Destroy(h3);
   esl_randomness_Destroy(r);
   esl_getopts_Destroy(go);
+
+  fprintf(stderr, "#  status = ok\n");
   return eslOK;
 }
 #endif /*p7TOPHITS_TESTDRIVE*/

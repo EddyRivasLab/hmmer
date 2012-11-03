@@ -1,11 +1,9 @@
-/* General routines used throughout HMMER.
+/* A few general routines used throughout HMMER.
  * 
  * Contents:
  *   1. Miscellaneous functions for H3
  *   2. Error handling (Die, Fail)
- *   3. Unit tests
- *   4. Test driver
- *   5. License and copyright 
+ *   3. License and copyright 
  */
 
 #include "p7_config.h"
@@ -270,50 +268,6 @@ p7_Fail(char *format, ...)
   fflush(stderr);
   exit(1);
 }
-
-
-/*****************************************************************
- * 3. Unit tests
- *****************************************************************/
-#ifdef p7GENERAL_TESTDRIVE
-
-#endif /*p7GENERAL_TESTDRIVE*/
-
-  
-
-/*****************************************************************
- * 4. Test driver
- *****************************************************************/
-#ifdef p7GENERAL_TESTDRIVE
-
-/* gcc -o general_utest -g -Wall -I../../lib/easel -L../../lib/easel -I.. -L.. -Dp7GENERAL_TESTDRIVE general.c -lhmmer -leasel -lm
- * ./general_utest
- */
-#include "esl_getopts.h"
-
-static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL, NULL, NULL, NULL, "show brief help on version and usage",              0 },
-  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-};
-static char usage[]  = "[-options]";
-static char banner[] = "test driver for hmmer.c";
-
-int
-main(int argc, char **argv)
-{
-  ESL_GETOPTS *go = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-
-  utest_alphabet_config(eslAMINO);
-  utest_alphabet_config(eslDNA);
-  utest_alphabet_config(eslRNA);
-  utest_alphabet_config(eslCOINS);
-  utest_alphabet_config(eslDICE);
-
-  esl_getopts_Destroy(go);
-  return 0;
-}
-#endif /*p7GENERAL_TESTDRIVE*/
 
 
 

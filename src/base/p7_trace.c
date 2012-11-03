@@ -1979,22 +1979,6 @@ utest_faux_tracealign(ESL_MSA *msa, int *matassign, int M)
  * 8. Test driver
  *****************************************************************/			 
 #ifdef p7TRACE_TESTDRIVE
-
-/* Unit testing:
- * make:     make p7_trace_utest
- * compile:  cc -o p7_trace_utest -g -Wall -Dp7TRACE_TESTDRIVE -I. -I../easel -L../easel p7_trace.c p7_hmm.c p7_profile.c hmmer.c -leasel
- * run:      ./p7_trace_utest
- * 
- * To test under valgrind:
- * run:      valgrind ./p7_trace_utest
- * 
- * To measure code coverage:
- * make:     (make clean; ./configure --enable-gcov; make; cd src; make p7_trace_utest)
- * compile:  gcc -o p7_trace_utest -fprofile-arcs -ftest-coverage -Dp7TRACE_TESTDRIVE -I. -I../easel -L../easel p7_trace.c p7_hmm.c p7_profile.c hmmer.c -leasel
- * run:      ./p7_trace_utest
- * measure:  gcov p7_trace.c
- * examine:  emacs p7_trace.c.gcov
- */
 #include "p7_config.h"
 
 #include "easel.h"
@@ -2024,6 +2008,8 @@ main(int argc, char **argv)
   P7_TRACE      **trm       = NULL; /* traces in MSA coords */
   int             idx;
 
+  fprintf(stderr, "## %s\n", argv[0]);
+
   utest_create_msa(&abc, &msa, &matassign, &sq);
   utest_FauxFromMSA_seqcoords(msa, matassign, &trs);
   utest_FauxFromMSA_msacoords(msa, matassign, &trm);
@@ -2038,6 +2024,8 @@ main(int argc, char **argv)
   esl_msa_Destroy(msa);
   esl_alphabet_Destroy(abc);
   esl_getopts_Destroy(go);
+
+  fprintf(stderr, "#  status = ok\n");
   return eslOK;
 }
 #endif /*p7TRACE_TESTDRIVE*/
@@ -2049,11 +2037,9 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7TRACE_EXAMPLE
 
-/* To compile: cc -o p7_trace_example -g -Wall -Dp7TRACE_EXAMPLE -I. -I../easel -L../easel p7_trace.c p7_profile.c hmmer.c -leasel
- * To run:     ./p7_trace_example foo.sto
+/* To run:     ./p7_trace_example foo.sto
  * The foo.sto alignment must have a RF annotation line marking consensus columns.
  */
-
 #include "p7_config.h"
 
 #include "easel.h"

@@ -1231,7 +1231,7 @@ p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key)
 /* Function:  p7_hmmfile_Position()
  * Synopsis:  Reposition file to start of named HMM.
  *
- * Purpose:   Reposition <hfp> so tha start of the requested HMM.
+ * Purpose:   Reposition <hfp> to the start of the requested HMM.
  *
  * Returns:   <eslOK> on success.
  * 
@@ -2253,10 +2253,6 @@ h2ascii2prob(char *s, float null)
  * 6. Benchmark driver.
  *****************************************************************/
 #ifdef p7HMMFILE_BENCHMARK
-/*
-  icc  -O3 -static -o p7_hmmfile_benchmark -I. -L. -I../easel -L../easel -Dp7HMMFILE_BENCHMARK p7_hmmfile.c -lhmmer -leasel -lm 
-  ./p7_hmmfile_benchmark Pfam.hmm
- */
 #include "p7_config.h"
 
 #include <stdlib.h>
@@ -2459,20 +2455,30 @@ utest_io_3a(char *tmpfile, P7_HMM *hmm)
  *****************************************************************/
 
 #ifdef p7HMMFILE_TESTDRIVE
-/* gcc -g -Wall -Dp7HMMFILE_TESTDRIVE -I. -I../easel -L. -L../easel -o p7_hmmfile_test p7_hmmfile.c -lhmmer -leasel -lm
- */
 #include "p7_config.h"
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_getopts.h"
 #include "esl_random.h"
 
 #include "hmmer.h"
 
+static ESL_OPTIONS options[] = {
+   /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
+  {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                            0},
+  {"-s",  eslARG_INT,       "0", NULL, NULL, NULL, NULL, NULL, "set random number seed to <n>",                  0},
+  { 0,0,0,0,0,0,0,0,0,0},
+};
+static char usage[]  = "[-options]";
+static char banner[] = "test driver for p7_hmmfile.c";
+
+
 int
 main(int argc, char **argv)
 {
-  ESL_RANDOMNESS *r    = NULL;
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET *aa_abc = NULL,
                *nt_abc = NULL;
   P7_HMM       *hmm    = NULL;
@@ -2480,9 +2486,11 @@ main(int argc, char **argv)
   char tmpfile[32]     = "tmp-hmmerXXXXXX";
   int           M      = 20;
   
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
+
   if ((aa_abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("failed to create amino alphabet");
   if ((nt_abc = esl_alphabet_Create(eslDNA))   == NULL)  esl_fatal("failed to create DNA alphabet");
-  if ((r      = esl_randomness_CreateFast(0))  == NULL)  esl_fatal("failed to create randomness");
   if ((esl_tmpfile_named(tmpfile, &fp))        != eslOK) esl_fatal("failed to create tmp file");
   fclose(fp);
 
@@ -2502,6 +2510,8 @@ main(int argc, char **argv)
   esl_alphabet_Destroy(nt_abc);
   esl_randomness_Destroy(r);
   remove(tmpfile);
+
+  fprintf(stderr, "#  status = ok\n");
   exit(0);
 }
 #endif /*p7HMMFILE_TESTDRIVE*/
@@ -2526,8 +2536,6 @@ main(int argc, char **argv)
  */
 
 #ifdef p7HMMFILE_EXAMPLE
-/* gcc -g -Wall -Dp7HMMFILE_EXAMPLE -I. -I../easel -L. -L../easel -o p7_hmmfile_example p7_hmmfile.c -lhmmer -leasel -lm
- */
 #include "p7_config.h"
 
 #include "easel.h"
@@ -2545,6 +2553,8 @@ main(int argc, char **argv)
   char          errbuf[eslERRBUFSIZE];
   int           status;
   
+  p7_Init();
+
   /* An example of reading a single HMM from a file, and checking that it is the only one. */
   status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);

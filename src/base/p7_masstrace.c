@@ -1,3 +1,12 @@
+/* The "mass trace" algorithm determines the bounds of the probability
+ * envelope around each domain. The algorithm needs some auxiliary
+ * data storage, which is implemented in the P7_MASSTRACE object.
+ * 
+ * Contents:
+ *    1. P7_MASSTRACE object
+ *    2. Debugging tools
+ */
+
 #include "p7_config.h"
 
 #include <stdio.h>
@@ -7,6 +16,10 @@
 
 #include "base/p7_trace.h"
 #include "base/p7_masstrace.h"
+
+/*****************************************************************
+ * 1. P7_MASSTRACE object
+ *****************************************************************/
 
 static P7_MASSTRACE *
 masstrace_create_engine(int M_hint, int L_hint, int do_slim)
@@ -127,7 +140,9 @@ p7_masstrace_Destroy(P7_MASSTRACE *mt)
 }
 
 
-/* debugging tools */
+/*****************************************************************
+ * 2. Debugging tools 
+ *****************************************************************/
 
 /* Function:  p7_masstrace_CountTrace()
  * Synopsis:  Count domain endpoints into endpoint distributions.

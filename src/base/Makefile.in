@@ -17,15 +17,27 @@ HDRS =
 
 PROGS =
 
-UTESTS = p7_bg_utest
+UTESTS =     p7_alidisplay_utest \
+	     p7_bg_utest \
+	     p7_hmm_utest \
+	     p7_hmmfile_utest \
+	     p7_profile_utest \
+	     p7_scoredata_utest \
+	     p7_tophits_utest \
+	     p7_trace_utest
 
 STATS  = 
 
-BENCHMARKS = p7_bg_benchmark
+BENCHMARKS = p7_bg_benchmark \
+	     p7_hmmfile_benchmark \
+	     p7_tophits_benchmark
 
-EXAMPLES = p7_bg_example \
-	   p7_bg_example2 
-
+EXAMPLES =   p7_alidisplay_example \
+	     p7_bg_example \
+	     p7_bg_example2 \
+	     p7_hmmfile_example \
+	     p7_profile_example \
+	     p7_trace_example
 
 
 top_srcdir   = @top_srcdir@
