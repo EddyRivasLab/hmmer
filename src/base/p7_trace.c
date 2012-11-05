@@ -556,18 +556,18 @@ p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *ds
   static int is_valid   [p7T_NSTATETYPES] = { 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0 }; /* valid in nonterminal positions 1..N-2 in trace */
 
   static int valid_transition[p7T_NSTATETYPES][p7T_NSTATETYPES] = {
-    /*         X  ML MG IL IG DL DG S  N  B  L  G  E  C  J  T */
-    /* X  */ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 
+    /*         -  ML MG IL IG DL DG S  N  B  L  G  E  C  J  T */
+    /* -  */ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 
     /* ML */ { 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0 }, 
     /* MG */ { 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0 }, /* MG->E only if k==M */
-    /* IL */ { 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 
+    /* IL */ { 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0 }, /* IL->E only on construction, special case where MSA implies it */
     /* IG */ { 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 
     /* DL */ { 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0 }, 
     /* DG */ { 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0 }, /* DG->E only if k==M */
     /* S  */ { 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 }, 
     /* N  */ { 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0 }, 
     /* B  */ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0 }, 
-    /* L  */ { 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 
+    /* L  */ { 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, /* L->{DI}L only on construction, special case where MSA implies it */
     /* G  */ { 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, /* G->{MD} only for k=1 */
     /* E  */ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0 }, 
     /* C  */ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1 }, 
@@ -1291,6 +1291,7 @@ p7_trace_FauxFromMSA(ESL_MSA *msa, int *matassign, int optflags, P7_TRACE **tr)
   int  lpos_c, rpos_c;		/* leftmost, rightmost consensus column, 1..alen */
   int  lpos, rpos;		/* leftmost, rightmost {MD}k assignment in this seq: glocal: lpos_c,rpos_c; local:  */
   int  is_local;
+  int  is_legal;
   int  status = eslOK;
 
   for (idx = 0; idx < msa->nseq; idx++) tr[idx] = NULL;
@@ -1302,19 +1303,21 @@ p7_trace_FauxFromMSA(ESL_MSA *msa, int *matassign, int optflags, P7_TRACE **tr)
 
   for (idx = 0; idx < msa->nseq; idx++)
     {
+      is_legal = FALSE;		/* until proven otherwise */
+
       /* Decipher whatever the convention is that tells us whether this is a local (fragment) or glocal sequence alignment */
       is_local = (esl_abc_XIsMissing(msa->abc, msa->ax[idx][1]) || esl_abc_XIsMissing(msa->abc, msa->ax[idx][msa->alen])) ? TRUE : FALSE;
       
-      /* Find the first/last consensus column for model entry/exit on this seq. 
+      /* Find the first/last column for model entry/exit on this seq. 
        * For glocal, that's always simply the first/last consensus column.
-       * For local, it's the first/last col with a residue in it (enter/exit on Mk)
+       * For local, it's the first/last col with a residue in it (enter/exit on Mk; in construction, Ik is also possible as special case)
        */
       if (is_local)
 	{
 	  for (lpos = lpos_c; lpos <= rpos_c; lpos++) 
-	    if (matassign[lpos] && (esl_abc_XIsResidue(msa->abc, msa->ax[idx][lpos]) || esl_abc_XIsNonresidue(msa->abc, msa->ax[idx][lpos]))) break; /* "nonresidue" is the '*' character */
+	    if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][lpos]) || esl_abc_XIsNonresidue(msa->abc, msa->ax[idx][lpos])) break; /* "nonresidue" is the '*' character */
 	  for (rpos = rpos_c; rpos >= lpos_c; rpos--)
-	    if (matassign[rpos] && (esl_abc_XIsResidue(msa->abc, msa->ax[idx][rpos]) || esl_abc_XIsNonresidue(msa->abc, msa->ax[idx][rpos]))) break;
+	    if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][rpos]) || esl_abc_XIsNonresidue(msa->abc, msa->ax[idx][rpos])) break;
 	}
       else { lpos = lpos_c; rpos = rpos_c; }
 
@@ -1348,10 +1351,10 @@ p7_trace_FauxFromMSA(ESL_MSA *msa, int *matassign, int optflags, P7_TRACE **tr)
 	      if      (ai < lpos)     { if ((status  = p7_trace_Append(tr[idx], p7T_N,  0, showpos)) != eslOK) goto ERROR; }
 	      else if (ai > rpos)     { if ((status  = p7_trace_Append(tr[idx], p7T_C,  0, showpos)) != eslOK) goto ERROR; }
 	      else if (is_local) {
-		if (matassign[ai])    { if ((status  = p7_trace_Append(tr[idx], p7T_ML, k, showpos)) != eslOK) goto ERROR; }
+		if (matassign[ai])    { if ((status  = p7_trace_Append(tr[idx], p7T_ML, k, showpos)) != eslOK) goto ERROR; is_legal = TRUE; }
 		else                  { if ((status  = p7_trace_Append(tr[idx], p7T_IL, k, showpos)) != eslOK) goto ERROR; }
 	      } else {
-		if (matassign[ai])    { if ((status  = p7_trace_Append(tr[idx], p7T_MG, k, showpos)) != eslOK) goto ERROR; }
+		if (matassign[ai])    { if ((status  = p7_trace_Append(tr[idx], p7T_MG, k, showpos)) != eslOK) goto ERROR; is_legal = TRUE; }
 		else                  { if ((status  = p7_trace_Append(tr[idx], p7T_IG, k, showpos)) != eslOK) goto ERROR; }
 	      }
 	      i++;
@@ -1371,6 +1374,14 @@ p7_trace_FauxFromMSA(ESL_MSA *msa, int *matassign, int optflags, P7_TRACE **tr)
 
       tr[idx]->M = k;
       tr[idx]->L = (optflags & p7_MSA_COORDS) ? msa->alen : i-1;
+
+      /* special case: an input MSA can imply a trace with *no* consensus residues. This is illegal in H3;
+       * results in a NULL trace 
+       */
+      if (! is_legal) {
+	p7_trace_Destroy(tr[idx]);
+	tr[idx] = NULL; 
+      }
     }
   return eslOK;
 
@@ -1577,6 +1588,7 @@ p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
 	switch (st2) {
 	case p7T_MG: case p7T_ML: hmm->t[k][p7H_IM] += wt; break;
 	case p7T_IG: case p7T_IL: hmm->t[k][p7H_II] += wt; break;
+	case p7T_E:                                        break; /* IL->E can arise in model construction as special case */
 	default:     ESL_EXCEPTION(eslEINVAL, "bad transition in trace");
 	}
 	break;
@@ -1699,13 +1711,17 @@ utest_FauxFromMSA_seqcoords(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
   if (! P7_TRACE_SPOTCHECK(tr[4],  9, p7T_DL, 4, 0))    esl_fatal(msg);
   if (tr[4]->N != 14 || tr[4]->M != 6 || tr[4]->L != 4) esl_fatal(msg);
 
-  /* seq5 = quirk of L->Mk, Mk->E local entry/exit: all nonconsensus
-   * res outside the entry/exit go to N/C regardless of their alignment 
+  /* seq5 = quirk of L->Mk, Mk->E local entry/exit: nonconsensus IL
+   * res outside the entry/exit preserve knowledge of what consensus
+   * column they follow, rather than getting lumped into NN/CC
    */
-  if (! P7_TRACE_SPOTCHECK(tr[5],  4, p7T_N,  0, 3))    esl_fatal(msg);
-  if (! P7_TRACE_SPOTCHECK(tr[5],  7, p7T_ML, 4, 4))    esl_fatal(msg);
-  if (! P7_TRACE_SPOTCHECK(tr[5], 11, p7T_C,  0, 6))    esl_fatal(msg);
-  if (tr[5]->N != 13 || tr[5]->M != 6 || tr[5]->L != 6) esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[5],  2, p7T_N,  0, 1))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[5],  4, p7T_L,  0, 0))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[5],  5, p7T_IL, 1, 2))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[5],  8, p7T_IL, 3, 3))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[5], 11, p7T_IL, 5, 6))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[5], 13, p7T_C,  0, 0))    esl_fatal(msg);
+  if (tr[5]->N != 15 || tr[5]->M != 6 || tr[5]->L != 6) esl_fatal(msg);
 
   /* seq6 = pathological case, local ali can imply no consensus residues; results in NULL trace */
   if (tr[6] != NULL) esl_fatal(msg);
@@ -1748,10 +1764,12 @@ utest_FauxFromMSA_msacoords(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
   if (! P7_TRACE_SPOTCHECK(tr[4],  8, p7T_IL, 3, 7))     esl_fatal(msg);
   if (tr[4]->N != 14 || tr[4]->M != 6 || tr[4]->L != 13) esl_fatal(msg);
 
-  if (! P7_TRACE_SPOTCHECK(tr[5],  4, p7T_N,  0, 7))     esl_fatal(msg);
-  if (! P7_TRACE_SPOTCHECK(tr[5],  7, p7T_ML, 4, 8))     esl_fatal(msg);
-  if (! P7_TRACE_SPOTCHECK(tr[5], 11, p7T_C,  0, 10))    esl_fatal(msg);
-  if (tr[5]->N != 13 || tr[5]->M != 6 || tr[5]->L != 13) esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[5],  2, p7T_N,  0, 2))     esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[5],  5, p7T_IL, 1, 4))     esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[5],  8, p7T_IL, 3, 7))     esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[5], 11, p7T_IL, 5, 10))    esl_fatal(msg);
+  if (! P7_TRACE_SPOTCHECK(tr[5], 13, p7T_C,  0, 0))     esl_fatal(msg);
+  if (tr[5]->N != 15 || tr[5]->M != 6 || tr[5]->L != 13) esl_fatal(msg);
 
   if (tr[6] != NULL) esl_fatal(msg);
 
@@ -1766,10 +1784,10 @@ static void
 utest_Doctor(ESL_SQ **sq, P7_TRACE **tr)
 {
   char *msg          = "p7_trace.c:: Doctor unit test failed";
-  int   preresult[8] = { eslOK, eslOK, eslOK, eslFAIL, eslFAIL, eslOK, eslOK, eslOK };
+  int   preresult[8] = { eslOK, eslOK, eslOK, eslFAIL, eslFAIL, eslFAIL, eslOK, eslOK };
   int   ndi, nid;
   int   idx;
-  /* traces 3,4 have DI,ID transitions and will fail validation until they're doctored */
+  /* traces 3,4,5 have DI,ID transitions and will fail validation until they're doctored */
 
   for (idx = 0; idx < 8; idx++)
     {
@@ -1830,8 +1848,9 @@ utest_check_counts_undoctored(P7_HMM *hmm)
 
   /* check nonzero insert emissions, zero as we go */
   k = 1; sym = 'C'; ct = 1.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->ins[k][x] != ct) esl_fatal(msg); hmm->ins[k][x] = 0.0;
-  k = 3; sym = 'E'; ct = 3.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->ins[k][x] != ct) esl_fatal(msg); hmm->ins[k][x] = 0.0;
-  k = 5; sym = 'Y'; ct = 1.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->ins[k][x] != ct) esl_fatal(msg); hmm->ins[k][x] = 0.0;
+  k = 1; sym = 'W'; ct = 1.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->ins[k][x] != ct) esl_fatal(msg); hmm->ins[k][x] = 0.0;
+  k = 3; sym = 'E'; ct = 4.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->ins[k][x] != ct) esl_fatal(msg); hmm->ins[k][x] = 0.0;
+  k = 5; sym = 'Y'; ct = 2.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->ins[k][x] != ct) esl_fatal(msg); hmm->ins[k][x] = 0.0;
 
   /* check nonzero transitions, zero as we go */
   if (hmm->t[0][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[0][p7H_MM] = 0.0;
@@ -1840,18 +1859,18 @@ utest_check_counts_undoctored(P7_HMM *hmm)
   if (hmm->t[1][p7H_MI] != 1.0) esl_fatal(msg); hmm->t[1][p7H_MI] = 0.0;
   if (hmm->t[1][p7H_DD] != 1.0) esl_fatal(msg); hmm->t[1][p7H_DD] = 0.0;
   if (hmm->t[2][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[2][p7H_MM] = 0.0;
-  if (hmm->t[2][p7H_DD] != 1.0) esl_fatal(msg); hmm->t[2][p7H_DD] = 0.0;
   if (hmm->t[2][p7H_MD] != 1.0) esl_fatal(msg); hmm->t[2][p7H_MD] = 0.0;
   if (hmm->t[2][p7H_DM] != 1.0) esl_fatal(msg); hmm->t[2][p7H_DM] = 0.0;
+  if (hmm->t[2][p7H_DD] != 2.0) esl_fatal(msg); hmm->t[2][p7H_DD] = 0.0;
   if (hmm->t[3][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[3][p7H_MM] = 0.0;
-  if (hmm->t[3][p7H_IM] != 1.0) esl_fatal(msg); hmm->t[3][p7H_IM] = 0.0;
   if (hmm->t[3][p7H_MI] != 1.0) esl_fatal(msg); hmm->t[3][p7H_MI] = 0.0;
+  if (hmm->t[3][p7H_IM] != 2.0) esl_fatal(msg); hmm->t[3][p7H_IM] = 0.0;
   if (hmm->t[4][p7H_MM] != 4.0) esl_fatal(msg); hmm->t[4][p7H_MM] = 0.0;
-  if (hmm->t[4][p7H_DM] != 2.0) esl_fatal(msg); hmm->t[4][p7H_DM] = 0.0;
   if (hmm->t[4][p7H_MD] != 1.0) esl_fatal(msg); hmm->t[4][p7H_MD] = 0.0;
+  if (hmm->t[4][p7H_DM] != 2.0) esl_fatal(msg); hmm->t[4][p7H_DM] = 0.0;
   if (hmm->t[5][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[5][p7H_MM] = 0.0;
+  if (hmm->t[5][p7H_MI] != 2.0) esl_fatal(msg); hmm->t[5][p7H_MI] = 0.0;
   if (hmm->t[5][p7H_DD] != 1.0) esl_fatal(msg); hmm->t[5][p7H_DD] = 0.0;
-  if (hmm->t[5][p7H_MI] != 1.0) esl_fatal(msg); hmm->t[5][p7H_MI] = 0.0;
   if (hmm->t[6][p7H_MM] != 2.0) esl_fatal(msg); hmm->t[6][p7H_MM] = 0.0;
   if (hmm->t[6][p7H_DM] != 2.0) esl_fatal(msg); hmm->t[6][p7H_DM] = 0.0;
 
@@ -1862,7 +1881,7 @@ utest_check_counts_undoctored(P7_HMM *hmm)
 static void 
 utest_check_counts_doctored(P7_HMM *hmm)
 {
-  char   *msg = "p7_trace.c:: count check (doctered version) failed";
+  char   *msg = "p7_trace.c:: count check (doctored version) failed";
   int     k, sym;
   ESL_DSQ x;
   float   ct;
@@ -1870,8 +1889,9 @@ utest_check_counts_doctored(P7_HMM *hmm)
   /* check nonzero match emissions; zero them as we go */
   k = 1; sym = 'A'; ct = 4.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
   k = 2; sym = 'C'; ct = 5.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
+  k = 2; sym = 'W'; ct = 1.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
   k = 3; sym = 'D'; ct = 3.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
-  k = 3; sym = 'E'; ct = 2.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
+  k = 3; sym = 'E'; ct = 3.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
   k = 4; sym = 'E'; ct = 5.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
   k = 5; sym = 'F'; ct = 6.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
   k = 6; sym = 'G'; ct = 3.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->mat[k][x] != ct) esl_fatal(msg); hmm->mat[k][x] = 0.0;
@@ -1879,22 +1899,24 @@ utest_check_counts_doctored(P7_HMM *hmm)
 
   /* check nonzero insert emissions, zero as we go */
   k = 3; sym = 'E'; ct = 1.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->ins[k][x] != ct) esl_fatal(msg); hmm->ins[k][x] = 0.0;
+  k = 5; sym = 'Y'; ct = 1.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->ins[k][x] != ct) esl_fatal(msg); hmm->ins[k][x] = 0.0;
 
   /* check nonzero transitions, zero as we go */
   if (hmm->t[0][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[0][p7H_MM] = 0.0;
   if (hmm->t[0][p7H_MD] != 1.0) esl_fatal(msg); hmm->t[0][p7H_MD] = 0.0;
   if (hmm->t[1][p7H_MM] != 4.0) esl_fatal(msg); hmm->t[1][p7H_MM] = 0.0;
   if (hmm->t[1][p7H_DD] != 1.0) esl_fatal(msg); hmm->t[1][p7H_DD] = 0.0;
-  if (hmm->t[2][p7H_MM] != 5.0) esl_fatal(msg); hmm->t[2][p7H_MM] = 0.0;
+  if (hmm->t[2][p7H_MM] != 6.0) esl_fatal(msg); hmm->t[2][p7H_MM] = 0.0;
   if (hmm->t[2][p7H_DM] != 1.0) esl_fatal(msg); hmm->t[2][p7H_DM] = 0.0;
-  if (hmm->t[3][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[3][p7H_MM] = 0.0;
+  if (hmm->t[3][p7H_MM] != 4.0) esl_fatal(msg); hmm->t[3][p7H_MM] = 0.0;
+  if (hmm->t[3][p7H_MI] != 1.0) esl_fatal(msg); hmm->t[3][p7H_MI] = 0.0;
   if (hmm->t[3][p7H_MD] != 2.0) esl_fatal(msg); hmm->t[3][p7H_MD] = 0.0;
   if (hmm->t[3][p7H_IM] != 1.0) esl_fatal(msg); hmm->t[3][p7H_IM] = 0.0;
-  if (hmm->t[3][p7H_MI] != 1.0) esl_fatal(msg); hmm->t[3][p7H_MI] = 0.0;
   if (hmm->t[4][p7H_MM] != 4.0) esl_fatal(msg); hmm->t[4][p7H_MM] = 0.0;
-  if (hmm->t[4][p7H_DM] != 2.0) esl_fatal(msg); hmm->t[4][p7H_DM] = 0.0;
   if (hmm->t[4][p7H_MD] != 1.0) esl_fatal(msg); hmm->t[4][p7H_MD] = 0.0;
+  if (hmm->t[4][p7H_DM] != 2.0) esl_fatal(msg); hmm->t[4][p7H_DM] = 0.0;
   if (hmm->t[5][p7H_MM] != 4.0) esl_fatal(msg); hmm->t[5][p7H_MM] = 0.0;
+  if (hmm->t[5][p7H_MI] != 1.0) esl_fatal(msg); hmm->t[5][p7H_MI] = 0.0;
   if (hmm->t[5][p7H_DD] != 1.0) esl_fatal(msg); hmm->t[5][p7H_DD] = 0.0;
   if (hmm->t[6][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[6][p7H_MM] = 0.0;
   if (hmm->t[6][p7H_DM] != 1.0) esl_fatal(msg); hmm->t[6][p7H_DM] = 0.0;

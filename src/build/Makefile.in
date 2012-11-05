@@ -12,13 +12,14 @@ HDRS =
 
 PROGS =
 
-UTESTS = 
+UTESTS = build_utest \
+	 seqmodel_utest 
 
-STATS  = 
+STATS  = evalues_stats
 
-BENCHMARKS = 
+BENCHMARKS = evalues_benchmark
 
-EXAMPLES =
+EXAMPLES = build_example
 
 
 

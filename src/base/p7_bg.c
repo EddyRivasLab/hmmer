@@ -609,7 +609,7 @@ utest_ReadWrite(ESL_RANDOMNESS *rng)
  *****************************************************************/
 
 #ifdef p7BG_TESTDRIVE
-#include "esl_config.h"
+#include "p7_config.h"
 
 #include <stdio.h>
 
@@ -631,8 +631,8 @@ static char banner[] = "test driver for p7_bg.c";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go  = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_GETOPTS    *go          = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *rng         = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));

@@ -544,7 +544,7 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
 
       is_local = FALSE;		/* until shown otherwise */
       apos     = 1;
-      for (z = 0; z < tr[idx]->N; z++)
+      for (z = 1; z < tr[idx]->N; z++) /* start at z=1 so that we can peek back at z-1 in code below */
 	{
 	  switch (tr[idx]->st[z]) {
 	  case p7T_ML: 
@@ -561,6 +561,9 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
 	    break;
 
 	  case p7T_IL:
+	    if (tr[idx]->st[z-1] == p7T_L) /* very special case: L->IL is legal in construction, can be implied by input MSA */
+	      apos =  matmap[tr[idx]->k[z]] + 1; /* matmap of the consensus col *before* this IL */
+	    /*fallthru*/
 	  case p7T_IG:
 	    if ( !(optflags & p7_TRIM) || (tr[idx]->k[z] != 0 && tr[idx]->k[z] != M)) {
 	      msa->ax[idx][apos] = get_dsq_z(sq, premsa, tr, idx, z);
@@ -645,18 +648,24 @@ make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const
       for (z = 0; z < tr[idx]->N; z++)
 	{
 	  switch (tr[idx]->st[z]) {
-	  case p7T_ML: case p7T_MG:
+	  case p7T_ML: 
+	  case p7T_MG:
 	    msa->aseq[idx][-1+matmap[tr[idx]->k[z]]] = toupper(abc->sym[get_dsq_z(sq, premsa, tr, idx, z)]);
 	    apos = matmap[tr[idx]->k[z]]; /* i.e. one past the match column. remember, text mode is 0..alen-1 */
 	    break;
 
-	  case p7T_DL: case p7T_DG:
+	  case p7T_DL:
+	  case p7T_DG:
 	    if (matuse[tr[idx]->k[z]]) /* bug #h77: if all column is deletes, do nothing; do NOT overwrite a column */
 	      msa->aseq[idx][-1+matmap[tr[idx]->k[z]]] = '-';  /* overwrites ~ in Dk column on X->Dk */
 	    apos = matmap[tr[idx]->k[z]];
 	    break;
 
-	  case p7T_IL: case p7T_IG:
+	  case p7T_IL: 
+	    if (tr[idx]->st[z-1] == p7T_L)   /* very special case: L->IL is legal in construction, can be implied by input MSA */
+	      apos =  matmap[tr[idx]->k[z]]; /* matmap of the consensus col *before* this IL */
+	    /*fallthru*/
+	  case p7T_IG:
 	    if ( !(optflags & p7_TRIM) || (tr[idx]->k[z] != 0 && tr[idx]->k[z] != M)) {
 	      msa->aseq[idx][apos] = tolower(abc->sym[get_dsq_z(sq, premsa, tr, idx, z)]);
 	      apos++;

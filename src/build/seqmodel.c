@@ -232,10 +232,15 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * x. Unit tests.
+ * 3. Unit tests.
  *****************************************************************/
 #ifdef p7SEQMODEL_TESTDRIVE
+
 #include <string.h>
+
+#include "base/p7_bg.h"
+#include "build/p7_builder.h"
+
 
 static void 
 utest_normalization(ESL_GETOPTS *go)
@@ -270,12 +275,13 @@ utest_normalization(ESL_GETOPTS *go)
 /*---------------- end, unit tests ------------------------------*/
 
 /*****************************************************************
- * x. Test driver
+ * 4. Test driver
  *****************************************************************/
 #ifdef p7SEQMODEL_TESTDRIVE
-
 #include "p7_config.h"
+
 #include "easel.h"
+
 #include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
@@ -291,9 +297,13 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
 
+  fprintf(stderr, "## %s\n", argv[0]);
+
   utest_normalization(go);
 
   esl_getopts_Destroy(go);
+
+  fprintf(stderr, "#  status = ok\n");
   exit(0); /* success */
 }
 

@@ -289,8 +289,10 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***opt_tr
   for (idx = 0; idx < msa->nseq; idx++)
     {
       if ((status = p7_trace_Doctor(tr[idx], NULL, NULL))                       != eslOK) goto ERROR;
+#ifdef p7_DEBUGGING
       if ((status = p7_trace_Validate(tr[idx], msa->abc, msa->ax[idx], errbuf)) != eslOK) 
 	ESL_XEXCEPTION(eslFAIL, "validation failed: %s", errbuf);
+#endif
     }
 
   /* Build count model from tracebacks */
@@ -410,6 +412,8 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
  *****************************************************************/
 #ifdef p7BUILD_TESTDRIVE
 
+#include "misc/tracealign.c"
+
 /* utest_basic()
  * An MSA to ex{e,o}rcise past demons.
  *   1. seq2 gives an I->end transition.
@@ -495,7 +499,7 @@ utest_fragments(void)
   fprintf(ofp, "#=GC RF xxxxx.xxxxxxxxxxxx.xxx\n");
   fprintf(ofp, "seq1    ~~~~~~GHIKLMNPQRST~~~~\n");
   fprintf(ofp, "seq2    ~~~~~aGHIKLMNPQRSTa~~~\n");
-  fprintf(ofp, "seq3    ~~~~~~-HIKLMNPQRS-~~~~\n");
+  fprintf(ofp, "seq3    ~~~~~~~HIKLMNPQRS~~~~~\n");
   fprintf(ofp, "seq4    ACDEF.GHIKLMNPQRST.VWY\n");
   fprintf(ofp, "seq5    ACDEF.GHIKLMNPQRST.VWY\n");
   fprintf(ofp, "//\n");
@@ -507,7 +511,7 @@ utest_fragments(void)
   if ((dmsa = esl_msa_Clone(msa))                                           == NULL)  esl_fatal(failmsg);
   if (esl_msa_Digitize(abc, dmsa, NULL)                                     != eslOK) esl_fatal(failmsg);
 
-  if (p7_Handmodelmaker(dmsa, NULL, &hmm, &trarr)                                 != eslOK) esl_fatal(failmsg);
+  if (p7_Handmodelmaker(dmsa, NULL, &hmm, &trarr)                           != eslOK) esl_fatal(failmsg);
   for (i = 0; i < dmsa->nseq; i++)
     if (p7_trace_Validate(trarr[i], abc, dmsa->ax[i], NULL)                 != eslOK) esl_fatal(failmsg);
 
@@ -542,23 +546,35 @@ utest_fragments(void)
  *****************************************************************/
 
 #ifdef p7BUILD_TESTDRIVE
-/* gcc -g -Wall -Dp7BUILD_TESTDRIVE -I. -I../easel -L. -L../easel -o build_utest build.c -lhmmer -leasel -lm
- */
+#include "p7_config.h"
+
 #include "easel.h"
 
-#include "p7_config.h"
 #include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+   /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
+  {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                            0},
+  { 0,0,0,0,0,0,0,0,0,0},
+};
+static char usage[]  = "[-options]";
+static char banner[] = "test driver for build.c";
 
 int
 main(int argc, char **argv)
 {  
+  ESL_GETOPTS *go = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+
+  fprintf(stderr, "## %s\n", argv[0]);
+
   utest_basic();
   utest_fragments();
 
+  fprintf(stderr, "#  status = ok\n");
+
+  esl_getopts_Destroy(go);
   return eslOK;
 }
-
-
 #endif /*p7BUILD_TESTDRIVE*/
 /*-------------------- end of test driver ---------------------*/
 
@@ -568,10 +584,13 @@ main(int argc, char **argv)
  * 5. Example.
  ******************************************************************************/ 
 #ifdef p7BUILD_EXAMPLE
+#include "p7_config.h"
 
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
+
+#include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -583,7 +602,6 @@ static ESL_OPTIONS options[] = {
 };
 static char usage[]  = "[-options] <msafile>";
 static char banner[] = "example for the build module";
-
 
 int
 main(int argc, char **argv)
@@ -672,7 +690,6 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-
 #endif /*p7BUILD_EXAMPLE*/
 
 
