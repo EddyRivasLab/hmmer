@@ -198,6 +198,11 @@ p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
 #include "esl_random.h"
 #include "esl_randomseq.h"
 
+#include "base/p7_bg.h"
+#include "search/modelconfig.h"
+#include "misc/emit.h"
+
+
 /* "randomseq" test:
  * Does Viterbi on query <gm> against random sequences. 
  * Tests:
@@ -364,7 +369,6 @@ main(int argc, char **argv)
 #include "esl_sqio.h"
 
 #include "hmmer.h"
-#include "p7_refmx.h"
 
 #define STYLES     "--fs,--sw,--ls,--s"	               /* Exclusive choice for alignment mode     */
 

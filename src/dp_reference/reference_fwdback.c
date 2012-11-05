@@ -640,11 +640,7 @@ p7_ReferenceAlign(const P7_PROFILE *gm, float gamma, const P7_REFMX *pp, P7_REFM
 #include "esl_randomseq.h"
 #include "esl_stopwatch.h"
 
-#include "base/general.h"
-#include "p7_refmx.h"
-#include "reference_fwdback.h"
-#include "reference_viterbi.h"
-#include "reference_decoding.h"
+#include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -763,11 +759,19 @@ main(int argc, char **argv)
  * 5. Unit tests
  *****************************************************************/
 #ifdef p7REFERENCE_FWDBACK_TESTDRIVE
+#include "esl_dirichlet.h"
 #include "esl_getopts.h"
 #include "esl_random.h"
 #include "esl_randomseq.h"
 
-#include "reference_viterbi.h"
+#include "base/p7_bg.h"
+
+#include "build/modelsample.h"
+#include "search/modelconfig.h"
+
+#include "misc/emit.h"
+
+#include "dp_reference/reference_viterbi.h"
 
 /* The "randomseq" test compares randomly sampled profile to 
  * random sequences, and tests:
@@ -1665,8 +1669,7 @@ utest_brute(ESL_RANDOMNESS *rng, int N)
 #include "esl_getopts.h"
 #include "esl_msa.h"
 
-#include "base/general.h"
-#include "p7_refmx.h"
+#include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -1722,12 +1725,7 @@ main(int argc, char **argv)
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
-#include "base/general.h"
-#include "p7_refmx.h"
-#include "reference_decoding.h"
-#include "reference_fwdback.h"
-#include "reference_trace.h"
-
+#include "hmmer.h"
 
 #define STYLES     "--fs,--sw,--ls,--s"	               /* Exclusive choice for alignment mode     */
 

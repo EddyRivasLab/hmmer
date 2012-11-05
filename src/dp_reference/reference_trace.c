@@ -553,16 +553,11 @@ p7_reference_trace_Stochastic(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PRO
   return status;
 }
 
-
 int 
 p7_reference_trace_MGE(const P7_PROFILE *gm, const P7_REFMX *rmx, P7_TRACE *tr)
 {
   return (reference_trace_engine(NULL, NULL, gm, rmx, tr));
 }
-
-
-
-
 /*----------------- end, API wrappers ---------------------------*/
 
 /*****************************************************************

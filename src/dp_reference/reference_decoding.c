@@ -192,8 +192,16 @@ p7_ReferenceDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_R
 #include "esl_alphabet.h"
 #include "esl_random.h"
 
-#include "reference_fwdback.h"
-#include "reference_trace.h"
+#include "base/p7_bg.h"
+
+#include "build/modelsample.h"
+#include "search/modelconfig.h"
+
+#include "misc/emit.h"
+#include "misc/logsum.h"
+
+#include "dp_reference/reference_fwdback.h"
+#include "dp_reference/reference_trace.h"
 
 /* The "overwrite" utest verifies an important wrinkle in the API:
  * we're allowed to overwrite the input Backwards matrix with the new
@@ -494,7 +502,7 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
 #include "esl_getopts.h"
 #include "esl_random.h"
 
-#include "base/general.h"
+#include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -518,8 +526,6 @@ main(int argc, char **argv)
   int             M    = esl_opt_GetInteger(go, "-M");
   int             L    = esl_opt_GetInteger(go, "-L");
   int             N    = esl_opt_GetInteger(go, "-N");
-
-  p7_Init();
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
@@ -557,10 +563,7 @@ main(int argc, char **argv)
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
-#include "base/general.h"
-#include "p7_sparsemx.h"
-#include "reference_fwdback.h"
-#include "reference_decoding.h"
+#include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/

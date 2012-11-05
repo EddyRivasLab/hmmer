@@ -10,14 +10,17 @@ HDRS =
 
 PROGS =
 
-UTESTS = 
+UTESTS = reference_decoding_utest \
+         reference_fwdback_utest  \
+         reference_viterbi_utest 
 
 STATS  = 
 
-BENCHMARKS = 
+BENCHMARKS = reference_fwdback_benchmark
 
-EXAMPLES =
-
+EXAMPLES = reference_decoding_example \
+           reference_fwdback_example  \
+           reference_viterbi_example
 
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@
