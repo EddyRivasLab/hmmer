@@ -7,7 +7,8 @@
  *   2. Choice selection functions for stochastic traces of a Forward matrix
  *   3. Traceback engine, shared by Viterbi and stochastic
  *   4. Exposed API, wrappers around the engine
- *   5. Copyright and license information.
+ *   5. Example
+ *   6. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -571,7 +572,7 @@ p7_sparse_trace_Stochastic(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PROFIL
 }
 
 /*****************************************************************
- * x. Example
+ * 5. Example
  *****************************************************************/
 #ifdef p7SPARSE_TRACE_EXAMPLE
 
@@ -586,10 +587,6 @@ p7_sparse_trace_Stochastic(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PROFIL
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
-#include "p7_sparsemx.h"
-#include "sparse_fwdback.h"
-#include "sparse_decoding.h"
-#include "sparse_trace.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
@@ -634,8 +631,6 @@ main(int argc, char **argv)
   int             idx;
   float           fsc;
   int             status;
-
-  p7_Init();
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);

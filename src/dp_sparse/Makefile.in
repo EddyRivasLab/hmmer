@@ -13,14 +13,19 @@ HDRS =
 
 PROGS =
 
-UTESTS = 
+UTESTS = sparse_decoding_utest \
+         sparse_envscore_utest \
+         sparse_fwdback_utest  \
+         sparse_masstrace_utest
 
 STATS  = 
 
-BENCHMARKS = 
+BENCHMARKS = sparse_fwdback_benchmark
 
-EXAMPLES =
-
+EXAMPLES = sparse_envscore_example \
+           sparse_fwdback_example \
+           sparse_masstrace_example \
+           sparse_trace_example 
 
 
 top_srcdir   = @top_srcdir@

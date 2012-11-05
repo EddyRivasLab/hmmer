@@ -675,8 +675,6 @@ main(int argc, char **argv)
   double          base_time, F_time, B_time, V_time;
   double          F_speed, B_speed, V_speed;
 
-  p7_Init();
-
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
 
@@ -1688,8 +1686,6 @@ main(int argc, char **argv)
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
 
-  p7_Init();
-
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
 
@@ -1782,8 +1778,6 @@ main(int argc, char **argv)
   int             istart, iend, kstart, kend;
   char            errbuf[eslERRBUFSIZE];
   int             status;
-
-  p7_Init();
 
  /* Determine coords of dump windows, if any */
   istart = iend = 0;

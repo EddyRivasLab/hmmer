@@ -235,8 +235,18 @@ p7_SparseDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPAR
 #include "esl_random.h"
 #include "esl_vectorops.h"
 
-#include "sparse_fwdback.h"
-#include "sparse_trace.h"
+#include "base/p7_bg.h"
+
+#include "build/modelsample.h"
+#include "search/modelconfig.h"
+#include "misc/emit.h"
+
+#include "dp_vector/p7_oprofile.h"
+#include "dp_vector/p7_checkptmx.h"
+#include "dp_vector/fwdfilter.h"
+
+#include "dp_sparse/sparse_fwdback.h"
+#include "dp_sparse/sparse_trace.h"
 
 /* The "overwrite" utest verifies an important wrinkle in the API:
  * we're allowed to overwrite the input Backwards matrix with the new
@@ -548,8 +558,6 @@ main(int argc, char **argv)
   int             M    = esl_opt_GetInteger(go, "-M");
   int             L    = esl_opt_GetInteger(go, "-L");
   int             N    = esl_opt_GetInteger(go, "-N");
-
-  p7_Init();
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));

@@ -529,12 +529,22 @@ p7_sparse_envscore_IntersectedMask(P7_SPARSEMASK *osm, int iae, int ibe, int kae
 #ifdef p7SPARSE_ENVSCORE_TESTDRIVE
 #include "esl_vectorops.h"
 
-#include "p7_masstrace.h"
-#include "sparse_viterbi.h"
-#include "sparse_fwdback.h"
-#include "sparse_decoding.h"
-#include "sparse_trace.h"
-#include "sparse_masstrace.h"
+#include "base/p7_bg.h"
+#include "base/p7_masstrace.h"
+
+#include "build/modelsample.h"
+#include "search/modelconfig.h"
+#include "misc/emit.h"
+
+#include "dp_vector/p7_oprofile.h"
+#include "dp_vector/p7_checkptmx.h"
+#include "dp_vector/fwdfilter.h"
+
+#include "dp_sparse/sparse_viterbi.h"
+#include "dp_sparse/sparse_fwdback.h"
+#include "dp_sparse/sparse_decoding.h"
+#include "dp_sparse/sparse_trace.h"
+#include "dp_sparse/sparse_masstrace.h"
 
 
 /* The unit tests use two different alternative techniques to
@@ -914,8 +924,6 @@ main(int argc, char **argv)
   int             L    = esl_opt_GetInteger(go, "-L");
   int             N    = esl_opt_GetInteger(go, "-N");
 
-  p7_Init();
-
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
 
@@ -955,14 +963,6 @@ main(int argc, char **argv)
 #include "esl_sqio.h"
 
 #include "hmmer.h"
-#include "p7_sparsemx.h"
-#include "p7_masstrace.h"
-#include "sparse_viterbi.h"
-#include "sparse_fwdback.h"
-#include "sparse_decoding.h"
-#include "sparse_trace.h"
-#include "sparse_masstrace.h"
-#include "sparse_envscore.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
@@ -1003,8 +1003,6 @@ main(int argc, char **argv)
   float           e1_sc, a1_sc, f2_sc, e2_sc, a2_sc;
   int             d;
   int             status;
-
-  p7_Init();
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);

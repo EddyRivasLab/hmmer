@@ -184,7 +184,7 @@ masstrace_up(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMX 
 
 
 /*****************************************************************
- * x. The downwards recursion.
+ * 2. The downwards recursion.
  *****************************************************************/
 
 static int
@@ -339,7 +339,7 @@ masstrace_down(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEM
 
 
 /*****************************************************************
- * x. API, wrapping the Up and Down recursions
+ * 3. API, wrapping the Up and Down recursions
  *****************************************************************/
 
 
@@ -491,10 +491,21 @@ p7_SparseMasstrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPA
  *****************************************************************/
 #ifdef p7SPARSE_MASSTRACE_TESTDRIVE
 
-#include "sparse_viterbi.h"
-#include "sparse_fwdback.h"
-#include "sparse_decoding.h"
-#include "sparse_trace.h"
+#include "base/p7_bg.h"
+#include "base/p7_prior.h"
+
+#include "build/modelsample.h"
+#include "search/modelconfig.h"
+#include "misc/emit.h"
+
+#include "dp_vector/p7_oprofile.h"
+#include "dp_vector/p7_checkptmx.h"
+#include "dp_vector/fwdfilter.h"
+
+#include "dp_sparse/sparse_viterbi.h"
+#include "dp_sparse/sparse_fwdback.h"
+#include "dp_sparse/sparse_decoding.h"
+#include "dp_sparse/sparse_trace.h"
 
 static void
 utest_approx_masstrace(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L)
@@ -662,8 +673,6 @@ main(int argc, char **argv)
   int             M    = esl_opt_GetInteger(go, "-M");
   int             L    = esl_opt_GetInteger(go, "-L");
 
-  p7_Init();
-
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
 
@@ -696,13 +705,6 @@ main(int argc, char **argv)
 #include "esl_random.h"
 
 #include "hmmer.h"
-#include "p7_sparsemx.h"
-#include "p7_masstrace.h"
-#include "sparse_viterbi.h"
-#include "sparse_fwdback.h"
-#include "sparse_decoding.h"
-#include "sparse_trace.h"
-#include "sparse_masstrace.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
@@ -746,8 +748,6 @@ main(int argc, char **argv)
   int             ntr     = 10000;
   int             i, ntrx;
   int             i0,k0,st0;
-
-  p7_Init();
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);

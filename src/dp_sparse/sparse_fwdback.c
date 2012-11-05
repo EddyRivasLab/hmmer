@@ -396,10 +396,6 @@ p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPAR
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
-#include "p7_sparsemx.h"
-#include "sparse_viterbi.h"
-#include "sparse_fwdback.h"
-#include "sparse_decoding.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -437,8 +433,6 @@ main(int argc, char **argv)
   float           sc;
   double          base_time, F_time, B_time, V_time, D_time;
   double          F_speed, B_speed, V_speed, D_speed;
-
-  p7_Init();
 
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
@@ -551,14 +545,26 @@ main(int argc, char **argv)
 #include "esl_random.h"
 #include "esl_randomseq.h"
 
-#include "sparse_viterbi.h"
-#include "sparse_trace.h"
-#include "sparse_decoding.h"
+#include "base/p7_bg.h"
 
-#include "reference_fwdback.h"
-#include "reference_viterbi.h"
-#include "reference_trace.h"
-#include "reference_decoding.h"
+#include "build/modelsample.h"
+#include "build/p7_builder.h"
+#include "build/seqmodel.h"
+#include "search/modelconfig.h"
+#include "misc/emit.h"
+
+#include "dp_vector/p7_oprofile.h"
+#include "dp_vector/p7_checkptmx.h"
+#include "dp_vector/fwdfilter.h"
+
+#include "dp_sparse/sparse_viterbi.h"
+#include "dp_sparse/sparse_trace.h"
+#include "dp_sparse/sparse_decoding.h"
+
+#include "dp_reference/reference_fwdback.h"
+#include "dp_reference/reference_viterbi.h"
+#include "dp_reference/reference_trace.h"
+#include "dp_reference/reference_decoding.h"
 
 /*  The "randomseq" utest compares a randomly sampled profile to
  *  random iid sequences by sparse DP (including fwd/bck filter step
@@ -1220,7 +1226,6 @@ utest_internal_glocal_exit(void)
 #include "esl_random.h"
 
 #include "hmmer.h"
-#include "p7_sparsemx.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -1244,8 +1249,6 @@ main(int argc, char **argv)
   int             M    = esl_opt_GetInteger(go, "-M");
   int             L    = esl_opt_GetInteger(go, "-L");
   int             N    = esl_opt_GetInteger(go, "-N");
-
-  p7_Init();
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
@@ -1285,11 +1288,6 @@ main(int argc, char **argv)
 #include "esl_sqio.h"
 
 #include "hmmer.h"
-#include "p7_sparsemx.h"
-#include "sparse_viterbi.h"
-#include "sparse_fwdback.h"
-#include "sparse_decoding.h"
-#include "sparse_trace.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
@@ -1335,8 +1333,6 @@ main(int argc, char **argv)
   float           nullsc;
   char            errbuf[eslERRBUFSIZE];
   int             status;
-
-  p7_Init();
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
