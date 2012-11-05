@@ -37,6 +37,8 @@ static int     annotate_mm(ESL_MSA *msa, P7_HMM *hmm, const int *matuse, const i
 static int     annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, const int *matmap, int M, int optflags);
 static int     rejustify_insertions_digital  (                         ESL_MSA *msa, const int *inserts, const int *matmap, const int *matuse, int M);
 static int     rejustify_insertions_text     (const ESL_ALPHABET *abc, ESL_MSA *msa, const int *inserts, const int *matmap, const int *matuse, int M);
+static int     mark_fragments_digital(ESL_MSA *msa, P7_TRACE **tr);
+static int     mark_fragments_text   (ESL_MSA *msa, P7_TRACE **tr);
 
 
 /*****************************************************************
@@ -124,13 +126,15 @@ p7_tracealign_Seqs(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, P7
   if (optflags & p7_DIGITIZE) { if ((status = make_digital_msa(sq, NULL, tr, nseq, matuse, matmap, M, alen, optflags, &msa)) != eslOK) goto ERROR; }
   else                        { if ((status = make_text_msa   (sq, NULL, tr, nseq, matuse, matmap, M, alen, optflags, &msa)) != eslOK) goto ERROR; }
 
-  if ((status = annotate_rf(msa, M, matuse, matmap))                               != eslOK) goto ERROR;
-  if (hmm)
-    if ((status = annotate_mm(msa, hmm,    matuse, matmap))                          != eslOK) goto ERROR;
+  if ((status = annotate_rf(msa, M, matuse, matmap))                          != eslOK) goto ERROR;
+  if (hmm && (status = annotate_mm(msa, hmm,    matuse, matmap))              != eslOK) goto ERROR;
   if ((status = annotate_posterior_probability(msa, tr, matmap, M, optflags)) != eslOK) goto ERROR;
 
   if (optflags & p7_DIGITIZE) rejustify_insertions_digital(     msa, inscount, matmap, matuse, M);
   else                        rejustify_insertions_text   (abc, msa, inscount, matmap, matuse, M);
+
+  if (optflags & p7_DIGITIZE) mark_fragments_digital(msa, tr);
+  else                        mark_fragments_text   (msa, tr);
 
   for (idx = 0; idx < nseq; idx++)
     {
@@ -198,6 +202,8 @@ p7_tracealign_MSA(const ESL_MSA *premsa, P7_TRACE **tr, int M, int optflags, ESL
   if (optflags & p7_DIGITIZE) rejustify_insertions_digital(     msa, inscount, matmap, matuse, M);
   else                        rejustify_insertions_text   (abc, msa, inscount, matmap, matuse, M);
 
+  if (optflags & p7_DIGITIZE) mark_fragments_digital(msa, tr);
+  else                        mark_fragments_text   (msa, tr);
 
   /* Transfer information from old MSA to new */
   esl_msa_SetName     (msa, premsa->name, -1);
@@ -585,24 +591,11 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
 	  default:                             break; /* do nothing on other states */
 	  } /* end switch over state type at trace position z */
 	}   /* end loop over trace position z */
-
-      /* Impose the local fragment-marking convention. */
-      if (is_local)
-	{
-	  for (apos = 1; apos <= alen; apos++) {
-	    if (esl_abc_XIsGap(abc, msa->ax[idx][apos])) msa->ax[idx][apos] = esl_abc_XGetMissing(abc);
-	    else break;
-	  }
-	  for (apos = alen; apos >= 1; apos--) {
-	    if (esl_abc_XIsGap(abc, msa->ax[idx][apos])) msa->ax[idx][apos] = esl_abc_XGetMissing(abc);
-	    else break;
-	  }
-	}
     }	    /* end loop over all traces[idx] */
 
   msa->nseq = nseq;
   msa->alen = alen;
-  *ret_msa = msa;
+  *ret_msa  = msa;
   return eslOK;
 
  ERROR:
@@ -685,20 +678,6 @@ make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const
 	  default:                       break;
 	  }
 	}
-
-      /* Impose the local fragment-marking convention. */
-      if (is_local)
-	{
-	  for (apos = 0; apos < alen; apos++) {
-	    if (msa->aseq[idx][apos] == '.' || msa->aseq[idx][apos] == '-') msa->aseq[idx][apos] = '~';
-	    else break;
-	  }
-	  for (apos = alen-1; apos > 0; apos--) {
-	    if (msa->aseq[idx][apos] == '.' || msa->aseq[idx][apos] == '-') msa->aseq[idx][apos] = '~';
-	    else break;
-	  }
-	}
-
     }
   msa->nseq = nseq;
   msa->alen = alen;
@@ -891,8 +870,6 @@ annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, const int *matmap, i
 
 
 /* Function:  rejustify_insertions_digital()
- * Synopsis:  
- * Incept:    SRE, Thu Oct 23 13:06:12 2008 [Janelia]
  *
  * Purpose:   
  *
@@ -1003,6 +980,70 @@ rejustify_insertions_text(const ESL_ALPHABET *abc, ESL_MSA *msa, const int *inse
     }
   return eslOK;
 }
+
+static int
+mark_fragments_digital(ESL_MSA *msa, P7_TRACE **tr)
+{
+  int idx;
+  int is_local;
+  int z;
+  int apos;
+
+  for (idx = 0; idx < msa->nseq; idx++)
+    {
+      /* We can assume that these traces have only one begin state, so either L/G: local or glocal. */
+      is_local = FALSE;
+      for (z = 0; z < tr[idx]->N; z++)
+	if      (tr[idx]->st[z] == p7T_L) { is_local = TRUE; break; }
+	else if (tr[idx]->st[z] == p7T_G) {                  break; }
+
+      if (is_local)
+	{
+	  for (apos = 1; apos <= msa->alen; apos++) {
+	    if (esl_abc_XIsGap(msa->abc, msa->ax[idx][apos])) msa->ax[idx][apos] = esl_abc_XGetMissing(msa->abc);
+	    else break;
+	  }
+	  for (apos = msa->alen; apos >= 1; apos--) {
+	    if (esl_abc_XIsGap(msa->abc, msa->ax[idx][apos])) msa->ax[idx][apos] = esl_abc_XGetMissing(msa->abc);
+	    else break;
+	  }
+	}
+    }
+  return eslOK;
+}
+
+static int 
+mark_fragments_text(ESL_MSA *msa, P7_TRACE **tr)
+{
+  int idx;
+  int is_local;
+  int z;
+  int apos;
+
+  for (idx = 0; idx < msa->nseq; idx++)
+    {
+      /* We can assume that these traces have only one begin state, so either L/G: local or glocal. */
+      is_local = FALSE;
+      for (z = 0; z < tr[idx]->N; z++)
+	if      (tr[idx]->st[z] == p7T_L) { is_local = TRUE; break; }
+	else if (tr[idx]->st[z] == p7T_G) {                  break; }
+
+      if (is_local)
+	{
+	  for (apos = 0; apos < msa->alen; apos++) {
+	    if (msa->aseq[idx][apos] == '.' || msa->aseq[idx][apos] == '-') msa->aseq[idx][apos] = '~';
+	    else break;
+	  }
+	  for (apos = msa->alen-1; apos > 0; apos--) {
+	    if (msa->aseq[idx][apos] == '.' || msa->aseq[idx][apos] == '-') msa->aseq[idx][apos] = '~';
+	    else break;
+	  }
+	}
+    }
+  return eslOK;
+}
+
+
 /*---------------- end, internal functions ----------------------*/
 
 
