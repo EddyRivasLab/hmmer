@@ -1,10 +1,14 @@
-#include "divsufsort.h"
-#include "hmmer.h"
+#include "p7_config.h"
+
 #include "easel.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 #include "esl_mem.h"
+
 #include <string.h>
+
+#include "hmmer.h"
+#include "divsufsort.h"
 
 //#define PRINTBWT 1
 //#define PRINTOCC 1
@@ -15,7 +19,6 @@
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
   { "-h",           eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,       "show brief help on version and usage",                      1 },
-
   { "--informat",   eslARG_STRING,     FALSE, NULL, NULL, NULL, NULL,      NULL,        "specify that input file is in format <s>",                  2 },
   { "--alph",       eslARG_STRING,     "dna", NULL, NULL,    NULL,  NULL,  NULL,        "alphabet [dna,dna_full,amino]",                             2 },
   { "--bin_length", eslARG_INT,        "256", NULL, NULL,    NULL,  NULL,  NULL,        "bin length (power of 2;  32<=b<=4096)",                     2 },
@@ -25,7 +28,6 @@ static ESL_OPTIONS options[] = {
 
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
-
 static char usage[]  = "[options] <seqfile> <fmfile>";
 static char banner[] = "build a HMMER binary-formatted database from an input sequence file";
 
@@ -343,8 +345,8 @@ ERROR:
  *            could easily be replaced.
  */
 int
-main(int argc, char *argv[]) {
-
+main(int argc, char **argv) 
+{
   char tmp_filename[16] = "fmtmpXXXXXX";
   FILE *fptmp          = NULL;
   FILE *fp             = NULL;

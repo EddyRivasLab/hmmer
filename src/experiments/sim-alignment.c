@@ -15,17 +15,6 @@
 #include "esl_sqio.h"
 
 #include "hmmer.h"
-#include "p7_refmx.h"
-#include "p7_sparsemx.h"
-#include "p7_trace_metrics.h"
-
-#include "reference_viterbi.h"
-#include "sparse_fwdback.h"
-#include "sparse_viterbi.h"
-
-#include "impl_sse/impl_sse.h"
-#include "impl_sse/p7_filtermx.h"
-
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/

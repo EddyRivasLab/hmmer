@@ -1,20 +1,19 @@
-#include "hmmer.h"
+#include "p7_config.h"
+
 #include <sys/times.h>
+#include <string.h>
 
 #include "easel.h"
-#include <string.h>
+
+#include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
   { "-h",           eslARG_NONE,      FALSE, NULL, NULL,    NULL,  NULL,  NULL,    "show brief help on version and usage",                      1 },
-
   { "--out",      eslARG_STRING,     "none", NULL, NULL,    NULL,  NULL,  NULL,    "save list of hits to file <s>  ('-' writes to stdout)",     2 },
   { "--count_only", eslARG_NONE,      FALSE, NULL, NULL,    NULL,  NULL,  NULL,    "compute just counts, not locations",                        2 },
-
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
-
-
 static char usage[]  = "[options] <qfile> <fmfile>";
 static char banner[] = "Find all instances of each <qfile> sequence in the database represented by <fmfile>";
 
@@ -188,8 +187,8 @@ hit_sorter(const void *a, const void *b)
  *            are 0-based (so first character is position 0).
  */
 int
-main(int argc,  char *argv[]) {
-
+main(int argc,  char *argv[]) 
+{
   void* tmp; // used for RALLOC calls
   clock_t t1, t2;
   struct tms ts1, ts2;

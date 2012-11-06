@@ -4,11 +4,14 @@ LIBOBJS =
 
 LIBHDRS =  
 
-OBJS = 
+OBJS = heatmap.o
 
-HDRS =  
+HDRS =  heatmap.h
 
-PROGS =
+PROGS = exactmatch \
+        hmmsim \
+        makenhmmerdb \
+        sim-alignment
 
 UTESTS = 
 

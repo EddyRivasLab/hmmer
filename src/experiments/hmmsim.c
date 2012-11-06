@@ -11,7 +11,7 @@
 #include <math.h>
 
 #ifdef HAVE_MPI
-#include "mpi.h"
+#include <mpi.h>
 #endif 
 
 #include "easel.h"
@@ -30,7 +30,6 @@
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
-#include "p7_refmx.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default   env  range  toggles                   reqs    incomp  help                                  docgroup*/
