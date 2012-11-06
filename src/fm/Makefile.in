@@ -10,7 +10,8 @@ OBJS =
 
 HDRS =
 
-PROGS =
+PROGS = exactmatch \
+	makenhmmerdb
 
 UTESTS = 
 

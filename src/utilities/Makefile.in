@@ -1,14 +1,18 @@
 MODULE = utilities
 
-LIBOBJS = 
+PROGS =  alimask    \
+	 hmmconvert \
+	 hmmfetch   \
+	 hmmlogo    \
+	 hmmstat 
 
-OBJS =
+LIBOBJS = 
 
 LIBHDRS = 
 
-HDRS =
+OBJS =
 
-PROGS =
+HDRS =
 
 UTESTS = 
 

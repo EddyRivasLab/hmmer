@@ -41,10 +41,9 @@ static ESL_OPTIONS options[] = {
 #ifdef HAVE_MPI
   { "--mpi",     eslARG_NONE,   FALSE,  NULL, NULL,  NULL,                     NULL,   NULL, "run as an MPI parallel program",            1 },
 #endif
-  { "--fwd",     eslARG_NONE,"default", NULL, NULL, "--fwd,--vit,--msv,--hyb", NULL,   NULL, "calculate Forward scores",                  2 },
-  { "--vit",     eslARG_NONE,   FALSE,  NULL, NULL, "--fwd,--vit,--msv,--hyb", NULL,   NULL, "calculate Viterbi scores",                  2 },
-  { "--msv",     eslARG_NONE,   FALSE,  NULL, NULL, "--fwd,--vit,--msv,--hyb", NULL,   NULL, "calculate MSV/SSV scores",                  2 },
-  { "--hyb",     eslARG_NONE,   FALSE,  NULL, NULL, "--fwd,--vit,--msv,--hyb", NULL,   NULL, "calculate Hybrid scores",                   2 },
+  { "--fwd",     eslARG_NONE,"default", NULL, NULL, "--fwd,--vit,--msv",       NULL,   NULL, "calculate Forward scores",                  2 },
+  { "--vit",     eslARG_NONE,   FALSE,  NULL, NULL, "--fwd,--vit,--msv",       NULL,   NULL, "calculate Viterbi scores",                  2 },
+  { "--msv",     eslARG_NONE,   FALSE,  NULL, NULL, "--fwd,--vit,--msv",       NULL,   NULL, "calculate MSV/SSV scores",                  2 },
 
   { "--dual",    eslARG_NONE,"default", NULL, NULL, "--dual,--local,--glocal", NULL,   NULL, "config model in dual local/glocal mode",    3 },
   { "--local",   eslARG_NONE,    FALSE, NULL, NULL, "--dual,--local,--glocal", NULL,   NULL, "config model in local alignment mode",      3 },
@@ -83,7 +82,6 @@ static ESL_OPTIONS options[] = {
   { "--bgflat",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set uniform background frequencies",                10 },  
   { "--bgcomp",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "set bg frequencies to model's average composition", 10 },
   { "--x-no-lengthmodel", eslARG_NONE, FALSE,NULL,NULL, NULL,  NULL, NULL, "turn the H3 length model off",                      10 },
-  { "--nu",      eslARG_REAL,   "2.0", NULL, NULL,     NULL,"--msv","--fast", "set nu parameter (# expected HSPs) for GMSV",    10 },  
   { "--pthresh", eslARG_REAL,   "0.02",NULL, NULL,     NULL,"--ffile", NULL, "set P-value threshold for --ffile",               10 },  
   { "--xmax",    eslARG_REAL,   FALSE, NULL, NULL,      NULL, "--pfile", NULL, "plot fitted survival plots out to here on x-axis", 10 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -200,7 +198,6 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "--vector") && ! esl_opt_GetBoolean(go, "--local")) p7_Fail("SIMD vector implementations only work for local alignment.");    /* -16/48 */
   if (esl_opt_GetBoolean(go, "--msv")    && ! esl_opt_GetBoolean(go, "--local")) p7_Fail("MSV scoring is local by definition: use --local.");              /*  -4/48 */
   if (esl_opt_GetBoolean(go, "--vit")    && ! esl_opt_GetBoolean(go, "--local")) p7_Fail("no p7_GViterbiDual for new dual-mode profile implemented yet");  /*  -4/48 */
-  if (esl_opt_GetBoolean(go, "--hyb")    && ! esl_opt_GetBoolean(go, "--local")) p7_Fail("hybrid scores only implemented for local-only: use --local");    /*  -4/48 */
 
   /* Initialize configuration shared across all kinds of masters
    * and workers in this .c file.
@@ -235,10 +232,8 @@ main(int argc, char **argv)
    */
   while (cfg.do_stall); 
 
-
   /* Start timing. */
   esl_stopwatch_Start(w);
-
 
   /* Main body:
    * Handed off to serial version or MPI masters and workers as appropriate.
@@ -669,13 +664,12 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   int             L   = esl_opt_GetInteger(go, "-L");
   P7_PROFILE     *gm  = NULL;
   P7_OPROFILE    *om  = NULL;
-  P7_GMX         *gx  = NULL;
   P7_REFMX       *rmx = NULL;
-  P7_OMX         *ox  = NULL;
+  P7_CHECKPTMX   *cx  = NULL;
+  P7_FILTERMX    *fx  = NULL;
   P7_TRACE       *tr  = NULL;
   ESL_DSQ        *dsq = NULL;
   int             i;
-  float           nu  = esl_opt_GetReal   (go, "--nu");
   int             scounts[p7T_NSTATETYPES]; /* state usage counts from a trace */
   float           sc;
   float           nullsc;
@@ -713,13 +707,8 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   if (esl_opt_GetBoolean(go, "--x-no-lengthmodel")) elide_length_model(gm, cfg->bg);
 
   /* Allocate DP matrix for <gm>.
-   * For DP calculations with the profile, we need a GMXD for Forward,
-   * but a legacy GMX for Viterbi or MSV, at least until we update
-   * Viterbi and MSV to be able to handle the new P7_PROFILE's
-   * dual-mode parameters.
    */
-  if (esl_opt_GetBoolean(go, "--fwd"))  rmx = p7_refmx_Create(gm->M, L);
-  else                                  gx  = p7_gmx_Create (gm->M, L);
+  rmx = p7_refmx_Create(gm->M, L);
 
   /* Create and configure the vectorized profile, if needed;
    * and allocate its DP matrix
@@ -728,7 +717,8 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
     {
       om = p7_oprofile_Create(gm->M, cfg->abc);
       p7_oprofile_Convert(gm, om);
-      ox = p7_omx_Create(gm->M, 0, L);
+      cx = p7_checkptmx_Create(gm->M, L, ESL_MBYTES(32));
+      fx = p7_filtermx_Create(gm->M);
     }
   
   /* Remaining allocation */
@@ -748,9 +738,9 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
        */
       if (esl_opt_GetBoolean(go, "--vector")) 
 	{
-	  if      (esl_opt_GetBoolean(go, "--vit")) p7_ViterbiFilter(dsq, L, om, ox, &sc);
-	  else if (esl_opt_GetBoolean(go, "--fwd")) p7_ForwardParser(dsq, L, om, ox, &sc);
-	  else if (esl_opt_GetBoolean(go, "--msv")) p7_MSVFilter    (dsq, L, om, ox, &sc);
+	  if      (esl_opt_GetBoolean(go, "--vit")) p7_ViterbiFilter(dsq, L, om, fx, &sc);
+	  else if (esl_opt_GetBoolean(go, "--fwd")) p7_ForwardFilter(dsq, L, om, cx, &sc);
+	  else if (esl_opt_GetBoolean(go, "--msv")) p7_MSVFilter    (dsq, L, om, fx, &sc);
 	} 
 
       /* If we tried a vector calculation above but it overflowed,
@@ -759,16 +749,14 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
        */
       if (sc == eslINFINITY)
 	{
-	  if      (esl_opt_GetBoolean(go, "--fwd"))  p7_ReferenceForward(dsq, L, gm, rmx,      &sc); /* any mode: dual,local,glocal; gm's config takes care of this */
-	  else if (esl_opt_GetBoolean(go, "--vit"))  p7_GViterbi    (dsq, L, gm, gx,       &sc); /* local-only mode. cmdline opts processing has already assured that --local set */
-	  else if (esl_opt_GetBoolean(go, "--msv"))  p7_GMSV        (dsq, L, gm, gx, nu,   &sc);
-	  else if (esl_opt_GetBoolean(go, "--hyb"))  p7_GHybrid     (dsq, L, gm, gx, NULL, &sc);
+	  if      (esl_opt_GetBoolean(go, "--fwd"))  p7_ReferenceForward(dsq, L, gm, rmx,     &sc); /* any mode: dual,local,glocal; gm's config takes care of this */
+	  else if (esl_opt_GetBoolean(go, "--vit"))  p7_ReferenceViterbi(dsq, L, gm, rmx, tr, &sc); /* local-only mode. cmdline opts processing has already assured that --local set */
+	  else if (esl_opt_GetBoolean(go, "--msv"))  p7_Die("We used to be able to do a generic MSV algorithm - but no longer");
 	}
 
       /* Optional: get Viterbi alignment length too. */
-      if (esl_opt_GetBoolean(go, "-a"))  /* -a only works with Viterbi; getopts has checked this already */
+      if (esl_opt_GetBoolean(go, "-a"))  /* -a only works with Viterbi; getopts has checked this already; <tr> must be valid */
 	{
-	  p7_GTrace(dsq, L, gm, gx, tr);
 	  p7_trace_GetStateUseCounts(tr, scounts);
 
 	  /* there's various ways we could counts "alignment length". 
@@ -783,15 +771,19 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
 
       p7_bg_NullOne(cfg->bg, dsq, L, &nullsc);
       scores[i] = (sc - nullsc) / eslCONST_LOG2;
+
+      p7_checkptmx_Reuse(cx);
+      p7_filtermx_Reuse(fx);
+      p7_refmx_Reuse(rmx);
     }
   status      = eslOK;
   /* deliberate flowthru */
  ERROR:
   if (dsq != NULL) free(dsq);
-  p7_omx_Destroy(ox);
+  p7_checkptmx_Destroy(cx);
+  p7_filtermx_Destroy(fx);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
-  p7_gmx_Destroy(gx);
   p7_refmx_Destroy(rmx);
   p7_trace_Destroy(tr);
   if (status == eslEMEM) sprintf(errbuf, "allocation failure");
@@ -818,7 +810,6 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
   if       (esl_opt_GetBoolean(go, "--vit")) { pmu = hmm->evparam[p7_VMU];  plambda = hmm->evparam[p7_VLAMBDA]; }
   else if  (esl_opt_GetBoolean(go, "--msv")) { pmu = hmm->evparam[p7_MMU];  plambda = hmm->evparam[p7_MLAMBDA]; }
   else if  (esl_opt_GetBoolean(go, "--fwd")) { pmu = hmm->evparam[p7_FTAU]; plambda = hmm->evparam[p7_FLAMBDA]; }
-  else if  (esl_opt_GetBoolean(go, "--hyb")) { pmu = hmm->evparam[p7_VMU];  plambda = hmm->evparam[p7_VLAMBDA]; } /* we don't have hybrid stats */
 
   /* Optional output of scores/alignment lengths: */
   if (cfg->xfp)                      fwrite(scores, sizeof(double), cfg->N, cfg->xfp);
@@ -833,7 +824,7 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
   for (i = 0; i < cfg->N; i++) esl_histogram_Add(h, scores[i]);
 
   /* For viterbi, MSV, and hybrid, fit data to a Gumbel, either with known lambda or estimated lambda. */
-  if (esl_opt_GetBoolean(go, "--vit") || esl_opt_GetBoolean(go, "--hyb") || esl_opt_GetBoolean(go, "--msv"))
+  if (esl_opt_GetBoolean(go, "--vit")  || esl_opt_GetBoolean(go, "--msv"))
     {
       esl_histogram_GetRank(h, 10, &x10);
       tailp  = 1.0;

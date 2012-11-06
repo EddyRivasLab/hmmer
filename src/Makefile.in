@@ -7,9 +7,9 @@ SUBDIRS = base\
 	  fm\
 	  misc\
           search\
-	  programs
-# experiments
-# utilities
+	  programs \
+          utilities \
+	  experiments
 
 HDRS =  
 

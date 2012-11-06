@@ -1,7 +1,4 @@
 /* Fetch an HMM from an HMM database (such as Pfam)
- * 
- * SRE, Mon Jun 18 09:30:06 2007 [Janelia]
- * SVN $Id$
  */
 #include "esl_config.h"
 
@@ -74,6 +71,8 @@ main(int argc, char **argv)
   FILE         *ofp     = NULL;	/* output stream for HMMs          */
   int           status;		/* easel/hmmer return code         */
   char          errbuf[eslERRBUFSIZE];
+
+  p7_Init();
 
   /***********************************************
    * Parse command line

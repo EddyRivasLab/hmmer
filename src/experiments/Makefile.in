@@ -1,16 +1,10 @@
 MODULE = experiments
 
-LIBOBJS = 
-
-LIBHDRS =  
-
 OBJS = heatmap.o
 
 HDRS =  heatmap.h
 
-PROGS = exactmatch \
-        hmmsim \
-        makenhmmerdb \
+PROGS = hmmsim \
         sim-alignment
 
 UTESTS = 
@@ -20,6 +14,10 @@ STATS  =
 BENCHMARKS = 
 
 EXAMPLES =
+
+LIBOBJS = 
+
+LIBHDRS =  
 
 LIBTMP = 
 

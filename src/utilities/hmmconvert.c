@@ -1,7 +1,4 @@
 /* hmmconvert: converting profile HMM files to HMMER3 HMM format.
- * 
- * SRE, Thu Oct 16 08:57:43 2008 [janelia] [Enigma MCMXC a.D.]
- * SVN $Id$
  */
 #include "p7_config.h"
 

@@ -6,9 +6,16 @@
  *   3. Copyright and license information
  *
  */
+#include "p7_config.h"
 
 #include "hmmer.h"
-//#include "esl_alphabet.h"
+
+extern float hmmlogo_maxHeight (P7_BG *bg);
+extern int   hmmlogo_emissionHeightsDivRelent (P7_HMM *hmm, P7_BG *bg, float *rel_ents, float **heights );
+extern int   hmmlogo_posScoreHeightsDivRelent (P7_HMM *hmm, P7_BG *bg, float *rel_ents, float **heights );
+extern int   hmmlogo_ScoreHeights (P7_HMM *hmm, P7_BG *bg, float **heights );
+extern int   hmmlogo_IndelValues (P7_HMM *hmm, float *insert_P, float *insert_expL, float *delete_P );
+
 
 /*****************************************************************
  * 1. logo value functions
@@ -171,7 +178,6 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
-
 static char usage[]  = "<hmmfile> [options]";
 static char banner[] = "given an hmm, produce data required to build an hmm logo";
 
@@ -194,10 +200,9 @@ main(int argc, char **argv)
   float *ins_P     = NULL;
   float *ins_expL  = NULL;
   float *del_P     = NULL;
-
-
   int mode = HMMLOGO_HEIGHT_EMISSION;  //default
 
+  p7_Init();
 
   go = esl_getopts_Create(options);
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) esl_fatal(argv[0], "Failed to parse command line: %s\n", go->errbuf);
