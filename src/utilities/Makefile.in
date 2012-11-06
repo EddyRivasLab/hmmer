@@ -1,8 +1,12 @@
 MODULE = utilities
 
-OBJS = 
+LIBOBJS = 
 
-HDRS = 
+OBJS =
+
+LIBHDRS = 
+
+HDRS =
 
 PROGS =
 
@@ -14,7 +18,7 @@ BENCHMARKS =
 
 EXAMPLES =
 
-
+LIBTMP =
 
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@

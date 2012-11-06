@@ -1,10 +1,4 @@
 /* Sequence and profile caches, used by the hmmpgmd daemon.
- * 
- * Contents:
- *   2. P7_CACHEDB_SEQS: a daemon's cached sequence database
- *   x. Benchmark driver
- *   x. Unit tests
- *   x. License and copyright information.
  */
 #include "p7_config.h"
 
@@ -301,23 +295,10 @@ p7_seqcache_Close(P7_SEQCACHE *cache)
 
 
 /*****************************************************************
- * x. Unit test
+ * x. Example drivers
  *****************************************************************/
 
-#ifdef CACHEDB_UTEST1
-/*
- *   gcc -O3 -malign-double -msse2 -o evalues-benchmark -I. -L. -I../easel -L../easel -Dp7EVALUES_BENCHMARK evalues.c -lhmmer -leasel -lm
- *   gcc -g -O -pg  -o evalues-benchmark -I. -L. -I../easel -L../easel -Dp7EVALUES_BENCHMARK evalues.c -lhmmer -leasel -lm
- *   gcc -g -Wall -msse2 -o evalues-benchmark -I. -L. -I../easel -L../easel -Dp7EVALUES_BENCHMARK evalues.c -lhmmer -leasel -lm
- *
- *   ./evalues-benchmark <hmmfile>
- *
- *  -malign-double is needed for gcc if the rest of HMMER was compiled w/ -malign-double 
- *  (i.e., our default gcc optimization)
- *
- *  27 Dec 08 on wanderoo: 24 msec per RRM_1 calibration; 37 msec for Caudal_act
- *  profiling shows 75% in Forward; 12% esl_random(); <3% in MSVFilter.
- */
+#ifdef p7CACHEDB_EXAMPLE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -332,9 +313,8 @@ p7_seqcache_Close(P7_SEQCACHE *cache)
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
-#include "cachedb.h"
-#include "hmmpgmd.h"
 
+#include "daemon/cachedb.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -358,7 +338,6 @@ int
 main(int argc, char **argv)
 {
   FILE           *ofp     = stdout;
-
   int             i;
   int             cnt;
   int             inx;
@@ -368,20 +347,15 @@ main(int argc, char **argv)
   int             db_key;
   int             db_K[32];
   int             db_cnt[32];
-
   uint64_t        res_cnt;
-
   char           *seqfile;
   char            buffer[10];
-
   ESL_GETOPTS    *go      = NULL;
   ESL_ALPHABET   *abc     = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   ESL_SQ         *sq      = NULL;
-
   SEQ_INFO       *info;
   SEQ_INFO      **hash;
-
   time_t          timep;
 
   if ((go = esl_getopts_Create(options)) == NULL) { 
@@ -542,13 +516,13 @@ main(int argc, char **argv)
   if (ofp != stdout) fclose(ofp);
 
   if (esl_opt_IsOn(go, "-o")) { 
-    P7_CACHEDB_SEQS *cache = NULL;
+    P7_SEQCACHE *cache = NULL;
     printf("Reading cache %s\n", esl_opt_GetString(go, "-o"));
-    if ((status = cache_SeqDb(esl_opt_GetString(go, "-o"), &cache)) != eslOK) {
+    if ((status = p7_seqcache_Open(esl_opt_GetString(go, "-o"), &cache, NULL)) != eslOK) {
       printf("ERROR %d\n", status);
       return 0;
     }
-    cache_SeqDestroy(cache);
+    p7_seqcache_Close(cache);
   }
 
   esl_getopts_Destroy(go);
@@ -559,23 +533,10 @@ main(int argc, char **argv)
   return status;
 }
 
-#endif /*CACHEDB_UTEST1*/
+#endif /*p7CACHEDB_EXAMPLE*/
 
 
-#ifdef CACHEDB_UTEST2
-/*
- *   gcc -O3 -malign-double -msse2 -o evalues-benchmark -I. -L. -I../easel -L../easel -Dp7EVALUES_BENCHMARK evalues.c -lhmmer -leasel -lm
- *   gcc -g -O -pg  -o evalues-benchmark -I. -L. -I../easel -L../easel -Dp7EVALUES_BENCHMARK evalues.c -lhmmer -leasel -lm
- *   gcc -g -Wall -msse2 -o evalues-benchmark -I. -L. -I../easel -L../easel -Dp7EVALUES_BENCHMARK evalues.c -lhmmer -leasel -lm
- *
- *   ./evalues-benchmark <hmmfile>
- *
- *  -malign-double is needed for gcc if the rest of HMMER was compiled w/ -malign-double 
- *  (i.e., our default gcc optimization)
- *
- *  27 Dec 08 on wanderoo: 24 msec per RRM_1 calibration; 37 msec for Caudal_act
- *  profiling shows 75% in Forward; 12% esl_random(); <3% in MSVFilter.
- */
+#ifdef p7CACHEDB_EXAMPLE2
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -590,9 +551,8 @@ main(int argc, char **argv)
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
-#include "cachedb.h"
-#include "hmmpgmd.h"
 
+#include "cachedb.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -612,11 +572,9 @@ typedef struct seq_info_s {
 int 
 main(int argc, char **argv)
 {
-  int             status;
-
-  ESL_GETOPTS    *go      = NULL;
-  P7_CACHEDB_SEQS      *cache   = NULL;
-
+  ESL_GETOPTS  *go      = NULL;
+  P7_SEQCACHE  *cache   = NULL;
+  int           status;
 
   if ((go = esl_getopts_Create(options)) == NULL) { 
     printf("Failed to create options\n");
@@ -640,18 +598,18 @@ main(int argc, char **argv)
   }
 
   printf("Reading cache %s\n", esl_opt_GetArg(go, 1));
-  if ((status = cache_SeqDb(esl_opt_GetArg(go, 1), &cache)) != eslOK) {
+  if ((status = p7_seqcache_Open(esl_opt_GetArg(go, 1), &cache, NULL)) != eslOK) {
     printf("ERROR %d\n", status);
     return 0;
   }
-  cache_SeqDestroy(cache);
+  p7_seqcache_Close(cache);
 
   esl_getopts_Destroy(go);
 
   return 0;
 }
 
-#endif /*CACHEDB_UTEST2*/
+#endif /*p7CACHEDB_EXAMPLE2*/
 
 
 

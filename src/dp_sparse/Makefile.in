@@ -1,13 +1,17 @@
 MODULE = dp_sparse
 
-OBJS =  p7_sparsemx.o\
-	sparse_decoding.o\
-	sparse_envscore.o\
-	sparse_fwdback.o\
-	sparse_masstrace.o\
-	sparse_null2.o\
-	sparse_trace.o\
-	sparse_viterbi.o
+LIBOBJS =  p7_sparsemx.o\
+	   sparse_decoding.o\
+	   sparse_envscore.o\
+	   sparse_fwdback.o\
+	   sparse_masstrace.o\
+	   sparse_null2.o\
+	   sparse_trace.o\
+	   sparse_viterbi.o
+
+LIBHDRS =
+
+OBJS =
 
 HDRS =  
 
@@ -27,6 +31,8 @@ EXAMPLES = sparse_envscore_example \
            sparse_masstrace_example \
            sparse_trace_example 
 
+
+LIBTMP = 
 
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@

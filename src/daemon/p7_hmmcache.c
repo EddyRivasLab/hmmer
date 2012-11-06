@@ -1,10 +1,9 @@
 /* A cached profile database. Used by the hmmpgmd daemon.
  * 
  * Contents:
- *   x. P7_HMMCACHE : a daemon's cached profile database.
- *   x. Benchmark driver.
- *   x. Unit tests.
- *   x. License and copyright information
+ *   1. P7_HMMCACHE : a daemon's cached profile database.
+ *   2. Benchmark driver.
+ *   3. License and copyright information
  */
 #include "p7_config.h"
 
@@ -182,7 +181,7 @@ p7_hmmcache_Close(P7_HMMCACHE *cache)
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
-#include "p7_hmmcache.h"
+#include "daemon/p7_hmmcache.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                  docgroup*/

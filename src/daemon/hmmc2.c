@@ -23,7 +23,7 @@
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
 
-#include "daemon/hmmdutils.h"
+#include "hmmer.h"
 
 #define SERVER_PORT      51371
 #define MAX_READ_LEN     4096
@@ -158,40 +158,35 @@ usage(char *pgm)
   exit(1);
 }
 
-int main(int argc, char *argv[])
+int 
+main(int argc, char *argv[])
 {
   int              i, j;
   int              n;
   int              eod;
   int              size;
-
   char            *seq;
   char            *opts;
   int              seqlen;
-
   int              ali;
   int              scores;
-
   char             buffer[MAX_READ_LEN];
-
   int              status  = eslOK;
   char            *data    = NULL;
   char            *ptr     = NULL;
-
   ESL_GETOPTS     *go      = NULL;
   ESL_STOPWATCH   *w       = NULL;
   P7_PIPELINE     *pli     = NULL;
   P7_TOPHITS      *th      = NULL;
   P7_DOMAIN       *dcl     = NULL;
-
   HMMD_SEARCH_STATS   *stats;
   HMMD_SEARCH_STATUS   sstatus;
-
   int                  sock;
   char                 serv_ip[64];
   unsigned short       serv_port;
-
   struct sockaddr_in   serv_addr;
+
+  p7_Init();
 
   /* set up defaults */
   strcpy(serv_ip, "127.0.0.1");

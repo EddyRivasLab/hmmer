@@ -11,9 +11,13 @@ PROGS  = hmmalign\
 #	 nhmmer
 #	 nhmmscan
 
+LIBOBJS =
+
+LIBHDRS = 
+
 OBJS =
 
-HDRS = 
+HDRS =
 
 UTESTS = 
 
@@ -23,7 +27,7 @@ BENCHMARKS =
 
 EXAMPLES =
 
-
+LIBTMP = 
 
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@

@@ -1,12 +1,16 @@
 MODULE = search
 
-OBJS =  modelconfig.o\
-	null3.o\
-	p7_pipeline.o\
-	tophits_output.o\
-	tophits_output_tabular.o
+LIBOBJS =  modelconfig.o\
+	   null3.o\
+	   p7_pipeline.o\
+	   tophits_output.o\
+	   tophits_output_tabular.o
 
-HDRS =  
+LIBHDRS =  
+
+OBJS =
+
+HDRS =
 
 PROGS =
 
@@ -18,6 +22,7 @@ BENCHMARKS =
 
 EXAMPLES =
 
+LIBTMP = 
 
 
 top_srcdir   = @top_srcdir@

@@ -1,13 +1,17 @@
 MODULE = misc
 
-OBJS =  emit.o\
-	h2_io.o\
-	logsum.o\
-	mpisupport.o\
-	p7_trace_metrics.o\
-	tracealign.o
+LIBOBJS =  emit.o\
+	   h2_io.o\
+	   logsum.o\
+	   mpisupport.o\
+	   p7_trace_metrics.o\
+	   tracealign.o
 
-HDRS =  
+LIBHDRS =  
+
+OBJS =
+
+HDRS =
 
 PROGS =
 
@@ -19,6 +23,7 @@ BENCHMARKS =
 
 EXAMPLES =
 
+LIBTMP =
 
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@

@@ -16,7 +16,7 @@ SIMDFLAGS    = @SIMD_CFLAGS@
 CPPFLAGS     = @CPPFLAGS@
 LDFLAGS      = @LDFLAGS@
 DEFS         = @DEFS@
-LIBS         = -lhmmer -leasel -ldivsufsort @LIBS@ -lm
+LIBS         = ${LIBTMP} -lhmmer -leasel -ldivsufsort @LIBS@ -lm
 
 AR           = @AR@ 
 RANLIB       = @RANLIB@
@@ -31,6 +31,7 @@ ESLDIR       = @HMMER_ESLDIR@
 SADIR        = @HMMER_SADIR@
 MYLIBDIRS    = -L${top_builddir}/${ESLDIR}\
                -L${top_builddir}/${SADIR}\
+               ${LIBTMPDIR} \
                -L${top_builddir}/src
 MYINCDIRS    = -I${top_builddir}/${ESLDIR} \
                -I${top_builddir}/${SADIR} \
@@ -38,7 +39,7 @@ MYINCDIRS    = -I${top_builddir}/${ESLDIR} \
 	       -I${top_srcdir}/${ESLDIR} \
 	       -I${top_srcdir}/${SADIR} \
 	       -I${top_srcdir}/src
-MYLIBDEPS    = ${top_builddir}/src/libhmmer.a ${top_builddir}/${ESLDIR}/libeasel.a ${top_builddir}/${SADIR}/libdivsufsort.a
+MYLIBDEPS    = ${LIBTMPDEP} ${top_builddir}/src/libhmmer.a ${top_builddir}/${ESLDIR}/libeasel.a ${top_builddir}/${SADIR}/libdivsufsort.a
 
 
 # beautification magic stolen from git 
@@ -57,29 +58,45 @@ endif
 .PHONY: all dev check tests install uninstall distclean clean tags-append
 .FORCE:
 
-all:   libhmmer-${MODULE}.stamp ${PROGS}
-dev:   libhmmer-${MODULE}.stamp ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
-check: libhmmer-${MODULE}.stamp ${PROGS} ${UTESTS}
-tests: libhmmer-${MODULE}.stamp ${PROGS} ${UTESTS}
+all:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS}
+dev:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
+check: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${UTESTS}
+tests: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${UTESTS}
 
-libhmmer-${MODULE}.stamp: ${OBJS}
-	@if [ ! -z "${OBJS}" ]; then \
+# In some subdirs, ${LIBOBJS} is empty. We can't give an empty arg string to 'ar'.
+# Hence the ! -z shell test on ${LIBOBJS} below.
+libhmmer-${MODULE}.stamp: ${LIBOBJS}
+	@if [ ! -z "${LIBOBJS}" ]; then \
 	   echo '    ' AR $@ ;\
 	   ${AR} -r ${top_builddir}/src/libhmmer.a $? > /dev/null 2>&1 ;\
 	   ${RANLIB} ${top_builddir}/src/libhmmer.a ;\
-	   echo ${MODULE} "objects compiled:\c" > $@ ;\
+	   echo ${MODULE} "objects compiled for libhmmer:\c" > $@ ;\
 	   date >> $@ ;\
+	else \
+	   echo ${MODULE} "has no libhmmer objects\c" > $@ ;\
 	fi
-# In some subdirs, ${OBJS} is empty. We can't give an empty arg string to 'ar'.
-# Hence the ! -z shell test on ${OBJS}, above.
 
 
-${OBJS}:   ${HDRS}
+# The way we build unit tests, benchmarks, etc., our compile lines end
+# up with 'cc -o foo_utest foo.c ${OBJS}' and ${OBJS} includes foo.o;
+# compiler may barf on duplicate symbols in foo.c, foo.o. So, let the
+# linker deal with the issue; linker should only seek for symbols
+# that haven't already been defined. 
+# When ${OBJS} is non-empty, the including Makefile also sets:
+#    ${LIBTMP}    = -l./lib${MODULE}.a     prepended to ${LIBS}
+#    ${LIBTMPDIR} = -L.                    added to ${MYLIBDIRS}
+#    ${LIBTMPDEP} = lib${MODULE}.a         prepended to ${MYLIBDEPS}
+lib${MODULE}.a: ${OBJS}
+	${QUIET_AR}${AR} -r lib${MODULE}.a $? > /dev/null 2>&1 
+	@${RANLIB} lib${MODULE}.a 
+
+${LIBOBJS}:  ${HDRS}
+${OBJS}:     ${HDRS}
 
 .c.o:  
 	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -o $@ -c $<
 
-${PROGS}: @EXEC_DEPENDENCY@ ${MYLIBDEPS}
+${PROGS}: @EXEC_DEPENDENCY@  libhmmer-${MODULE}.stamp ${MYLIBDEPS}
 	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
 
 ${UTESTS}: libhmmer-${MODULE}.stamp ${MYLIBDEPS}
@@ -112,7 +129,7 @@ ${STATS}: libhmmer-${MODULE}.stamp ${MYLIBDEPS}
 	fi ;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${BENCHMARKS}: libhmmer-${MODULE}.stamp ${MYLIBDEPS}
+${BENCHMARKS}: libhmmer-${MODULE}.stamp  ${MYLIBDEPS}
 	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'`;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_BENCHMARK ;\
@@ -162,9 +179,8 @@ distclean: clean
 	-rm -f Makefile 
 
 clean:
-	-rm -f libhmmer-${MODULE}.stamp ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
-	-rm -f *.o *~ Makefile.bak core TAGS gmon.out cscope.out
-	-rm -f *.gcno
+	-rm -f libhmmer-${MODULE}.stamp lib${MODULE}.a ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
+	-rm -f *.o *~ Makefile.bak core TAGS gmon.out cscope.out *.gcno
 	for prog in ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do \
 	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi ;\
 	done

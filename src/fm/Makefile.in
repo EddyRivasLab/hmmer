@@ -1,10 +1,14 @@
 MODULE = fm
 
-OBJS =  fm_alphabet.o\
-	fm_general.o\
-	fm_msv.o
+LIBOBJS =  fm_alphabet.o\
+	   fm_general.o\
+	   fm_msv.o
 
-HDRS =  
+LIBHDRS =  
+
+OBJS =
+
+HDRS =
 
 PROGS =
 
@@ -16,6 +20,7 @@ BENCHMARKS =
 
 EXAMPLES =
 
+LIBTMP =
 
 
 top_srcdir   = @top_srcdir@

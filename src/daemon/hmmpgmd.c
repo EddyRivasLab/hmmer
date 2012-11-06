@@ -14,7 +14,7 @@
 #include "easel.h"
 #include "esl_getopts.h"
 
-#include "daemon/hmmdutils.h"
+#include "hmmer.h"
 
 #define CONF_FILE "/etc/hmmpgmd.conf"
 
@@ -153,6 +153,8 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS  *go = NULL;      /* command line processing */
+
+  p7_Init();
 
   process_commandline(argc, argv, &go);
 

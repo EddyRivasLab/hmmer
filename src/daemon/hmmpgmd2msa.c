@@ -286,7 +286,8 @@ ERROR:
  * the distribution. So it should be replaced with a tighter test.
  */
 int
-main(int argc, char **argv) {
+main(int argc, char **argv) 
+{
   ESL_MSA           *msa   = NULL;
   ESL_SQ            *qsq   = NULL;
   ESL_SQFILE        *qfp   = NULL;              /* open qfile                                      */
@@ -304,8 +305,6 @@ main(int argc, char **argv) {
   char *hmm_file = "esl_align.hmm";
   char *fa_file  = "esl_align.fa";
   char *dat_file = "esl_align.big.bin";
-
-
 
   if (argc > 1 ) {
     ESL_ALLOC(hmm_file, sizeof(char) * (strlen(argv[1])+1) );

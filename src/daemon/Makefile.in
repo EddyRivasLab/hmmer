@@ -1,5 +1,9 @@
 MODULE = daemon
 
+LIBOBJS =
+
+LIBHDRS =
+
 OBJS =  cachedb.o\
 	hmmdmstr.o\
 	hmmdutils.o\
@@ -9,18 +13,21 @@ OBJS =  cachedb.o\
 
 HDRS =  
 
-PROGS = 
-#	hmmc2\
-#	hmmpgmd
-
+PROGS = hmmc2\
+	hmmpgmd
 
 UTESTS = 
 
 STATS  = 
 
-BENCHMARKS = 
+BENCHMARKS = p7_hmmcache_benchmark
 
-EXAMPLES =
+EXAMPLES = cachedb_example \
+           cachedb_example2
+
+LIBTMP    = -l${MODULE}
+LIBTMPDIR = -L.
+LIBTMPDEP = lib${MODULE}.a
 
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@

@@ -30,8 +30,8 @@
 #include "esl_stopwatch.h"
 #include "esl_threads.h"
 
-#include "base/general.h"
-#include "search/tophits_output.h"
+#include "hmmer.h"
+
 #include "daemon/hmmdutils.h"
 #include "daemon/cachedb.h"
 #include "daemon/p7_hmmcache.h"

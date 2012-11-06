@@ -1,5 +1,3 @@
-/* hmmpgmd: hmmer deamon searchs against a sequence database.
- */
 #include "p7_config.h"
 
 #include <stdio.h>
