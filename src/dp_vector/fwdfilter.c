@@ -1155,9 +1155,7 @@ save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float tots
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
-#include "dp_sparse/p7_sparsemx.h"
-#include "dp_vector/p7_checkptmx.h"
-#include "dp_vector/fwdfilter.h"
+#include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
@@ -1179,6 +1177,7 @@ main(int argc, char **argv)
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
+  P7_FILTERMX    *fx      = NULL;
   P7_CHECKPTMX   *ox      = NULL;
   P7_SPARSEMASK  *sm      = NULL;
   ESL_SQ         *sq      = NULL;
@@ -1188,8 +1187,6 @@ main(int argc, char **argv)
   float           msvmem, vfmem, fbmem, smmem, spmem, refmem;
   double          P;
   int             status;
-
-  p7_Init();
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
@@ -1213,7 +1210,8 @@ main(int argc, char **argv)
   /* Initially allocate matrices for a default sequence size, 500; 
    * we resize as needed for each individual target seq 
    */
-  ox  = p7_checkptmx_Create  (gm->M, 500, ESL_MBYTES(32));  
+  fx  = p7_filtermx_Create  (gm->M);
+  ox  = p7_checkptmx_Create (gm->M, 500, ESL_MBYTES(32));  
   sm  = p7_sparsemask_Create(gm->M, 500);
 
   printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s\n",
@@ -1233,7 +1231,7 @@ main(int argc, char **argv)
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
 
       /* Filter insig hits, partially simulating the real pipeline */
-      p7_MSVFilter(sq->dsq, sq->n, om, ox, &msvsc);
+      p7_MSVFilter(sq->dsq, sq->n, om, fx, &msvsc);
       msvsc = (msvsc - nullsc) / eslCONST_LOG2;
       P     =  esl_gumbel_surv(msvsc,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
       if (P > 0.02) goto NEXT_SEQ;
@@ -1267,6 +1265,7 @@ main(int argc, char **argv)
       esl_sq_Reuse(sq);
       p7_sparsemask_Reuse(sm);
       p7_checkptmx_Reuse(ox);
+      p7_filtermx_Reuse(fx);
     }
 
   printf("# SPARSEMASK: kmem reallocs: %d\n", sm->n_krealloc);
@@ -1277,6 +1276,7 @@ main(int argc, char **argv)
   esl_sqfile_Close(sqfp);
   p7_sparsemask_Destroy(sm);
   p7_checkptmx_Destroy(ox);
+  p7_filtermx_Destroy(fx);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
@@ -1307,8 +1307,7 @@ main(int argc, char **argv)
 #include "esl_randomseq.h"
 #include "esl_stopwatch.h"
 
-#include "dp_sparse/p7_sparsemx.h"
-#include "dp_vector/p7_checkptmx.h"
+#include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -1343,8 +1342,6 @@ main(int argc, char **argv)
   int             i;
   float           sc;
   double          base_time, bench_time, Mcs;
-
-  p7_Init();
 
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
@@ -1417,8 +1414,14 @@ main(int argc, char **argv)
 #ifdef p7FWDFILTER_TESTDRIVE
 #include "esl_random.h"
 #include "esl_randomseq.h"
-
 #include "esl_sqio.h"
+
+#include "search/modelconfig.h"
+#include "misc/logsum.h"
+#include "misc/emit.h"
+
+#include "dp_reference/reference_fwdback.h"
+#include "dp_reference/reference_decoding.h"
 
 /* Compare scores of Forward, Backward to those from the reference
  * implementation.
@@ -1584,7 +1587,8 @@ main(int argc, char **argv)
   int             L    = esl_opt_GetInteger(go, "-L");
   int             N    = esl_opt_GetInteger(go, "-N");
 
-  p7_Init();
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
 
   /* First round of tests for DNA alphabets.  */
   if ((abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal("failed to create alphabet");
@@ -1609,9 +1613,10 @@ main(int argc, char **argv)
 
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
-
   esl_getopts_Destroy(go);
   esl_randomness_Destroy(r);
+
+  fprintf(stderr, "#  status = ok\n");
   return eslOK;
 }
 #endif /*p7FWDFILTER_TESTDRIVE*/
@@ -1632,8 +1637,7 @@ main(int argc, char **argv)
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
-#include "dp_sparse/p7_sparsemx.h"
-#include "dp_vector/p7_checkptmx.h"
+#include "hmmer.h"
 
 
 static ESL_OPTIONS options[] = {
@@ -1674,8 +1678,6 @@ main(int argc, char **argv)
   float           gmem, cmem, bmem;
   double          P, gP;
   int             status;
-
-  p7_Init();
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);

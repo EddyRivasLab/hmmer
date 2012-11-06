@@ -709,9 +709,6 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
  */
 #ifdef p7MSVFILTER_BENCHMARK
 /* 
-   gcc -o msvfilter_benchmark -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7MSVFILTER_BENCHMARK msvfilter.c -lhmmer -leasel -lm 
-   icc -o msvfilter_benchmark -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7MSVFILTER_BENCHMARK msvfilter.c -lhmmer -leasel -lm 
-
    ./msvfilter_benchmark <hmmfile>            runs benchmark 
    ./msvfilter_benchmark -N100 -x <hmmfile>   compare scores to exact emulation
  */
@@ -725,9 +722,6 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
-#include "p7_refmx.h"
-#include "p7_filtermx.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -836,7 +830,8 @@ main(int argc, char **argv)
 #include "esl_random.h"
 #include "esl_randomseq.h"
 
-#include "p7_refmx.h"
+#include "dp_reference/p7_refmx.h"
+#include "dp_reference/reference_viterbi.h"
 
 /* utest_comparison()
  * 
@@ -905,10 +900,6 @@ utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
  * 4. Test driver
  *****************************************************************/
 #ifdef p7MSVFILTER_TESTDRIVE
-/* 
-   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o msvfilter_utest -Dp7MSVFILTER_TESTDRIVE msvfilter.c -lhmmer -leasel -lm
-   ./msvfilter_utest
- */
 #include "p7_config.h"
 
 #include "easel.h"
@@ -916,7 +907,6 @@ utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
 #include "esl_getopts.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -942,6 +932,9 @@ main(int argc, char **argv)
   int             L    = esl_opt_GetInteger(go, "-L");
   int             N    = esl_opt_GetInteger(go, "-N");
 
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
+
   /* First round of tests for DNA alphabets.  */
   if ((abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))            == NULL)  esl_fatal("failed to create null model");
@@ -966,6 +959,8 @@ main(int argc, char **argv)
   p7_bg_Destroy(bg);
   esl_getopts_Destroy(go);
   esl_randomness_Destroy(r);
+
+  fprintf(stderr, "#  status = ok\n");
   return eslOK;
 }
 #endif /*p7MSVFILTER_TESTDRIVE*/
@@ -980,7 +975,6 @@ main(int argc, char **argv)
 /* A minimal example.
    Also useful for debugging on small HMMs and sequences.
 
-   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o msvfilter_example -Dp7MSVFILTER_EXAMPLE msvfilter.c -lhmmer -leasel -lm
    ./msvfilter_example <hmmfile> <seqfile>
  */ 
 #include "p7_config.h"
@@ -993,9 +987,6 @@ main(int argc, char **argv)
 #include "esl_sqio.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
-#include "p7_filtermx.h"
-#include "p7_refmx.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/

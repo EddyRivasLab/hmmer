@@ -7,10 +7,8 @@
  *   3. Conversion from optimized P7_OPROFILE to compact score arrays
  *   4. Debugging and development utilities.
  *   5. Benchmark driver.
- *   6. Unit tests.
- *   7. Test driver.
- *   8. Example.
- *   9. Copyright and license information.
+ *   6. Example.
+ *   7. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -1887,10 +1885,7 @@ p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm)
 
 #ifdef p7OPROFILE_BENCHMARK
 /* Timing profile conversion.
-   gcc -o benchmark-oprofile -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7OPROFILE_BENCHMARK\
-      p7_oprofile.c -lhmmer -leasel -lm 
-   icc -o benchmark-oprofile -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7OPROFILE_BENCHMARK p7_oprofile.c -lhmmer -leasel -lm 
-   ./benchmark-sse <hmmfile>         runs benchmark
+   ./benchmark-sse <hmmfile>      
  */
 #include "p7_config.h"
 
@@ -1901,7 +1896,6 @@ p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm)
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -1960,46 +1954,36 @@ main(int argc, char **argv)
 
 
 
-
-  
 /*****************************************************************
- * 6. Unit tests
- *****************************************************************/
-#ifdef p7OPROFILE_TESTDRIVE
-
-
-#endif /*p7OPROFILE_TESTDRIVE*/
-/*------------------- end, unit tests ---------------------------*/
-
-
-
-
-/*****************************************************************
- * 7. Test driver
- *****************************************************************/
-#ifdef p7OPROFILE_TESTDRIVE
-
-
-#endif /*p7OPROFILE_TESTDRIVE*/
-/*------------------- end, test driver --------------------------*/
-
-
-/*****************************************************************
- * 8. Example
+ * 6. Example
  *****************************************************************/
 #ifdef p7OPROFILE_EXAMPLE
-/* gcc -std=gnu99 -g -Wall -Dp7OPROFILE_EXAMPLE -I.. -I../../easel -L.. -L../../easel -o p7_oprofile_example p7_oprofile.c -lhmmer -leasel -lm
+/* 
  * ./p7_oprofile_example <hmmfile>
  */
 #include "p7_config.h"
+
 #include <stdlib.h>
+
 #include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+
 #include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+   /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
+  {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                            0},
+  { 0,0,0,0,0,0,0,0,0,0},
+};
+static char usage[]  = "[-options]";
+static char banner[] = "example main() for p7_oprofile.c";
 
 int
 main(int argc, char **argv)
 {
-  char         *hmmfile = argv[1];
+  ESL_GETOPTS  *go      = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  char         *hmmfile = esl_opt_GetArg(go, 1);
   ESL_ALPHABET *abc     = NULL;
   P7_HMMFILE   *hfp     = NULL;
   P7_HMM       *hmm     = NULL;
@@ -2040,6 +2024,7 @@ main(int argc, char **argv)
   p7_hmm_Destroy(hmm);
   p7_hmmfile_Close(hfp);
   esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
   return eslOK;
 }
 #endif /*p7OPROFILE_EXAMPLE*/

@@ -714,10 +714,8 @@ p7_oprofile_Position(P7_HMMFILE *hfp, off_t offset)
  *****************************************************************/
 #ifdef p7IO_BENCHMARK
 /*
-  gcc  -g -Wall    -o benchmark-io -I.. -L.. -I../../easel -L../../easel -Dp7IO_BENCHMARK io.c -lhmmer -leasel -lm 
-  icc  -O3 -static -o benchmark-io -I.. -L.. -I../../easel -L../../easel -Dp7IO_BENCHMARK io.c -lhmmer -leasel -lm 
-
-  ./benchmark-io Pfam.msv
+  ./benchmark-io Pfam.hmm
+  [.hmm file must be hmmpress'ed first]
  */
 #include "p7_config.h"
 
@@ -744,34 +742,38 @@ main(int argc, char **argv)
   ESL_GETOPTS   *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   ESL_STOPWATCH *w       = esl_stopwatch_Create();
   ESL_ALPHABET  *abc     = NULL;
-  char          *msvfile = esl_opt_GetArg(go, 1);
-  FILE          *msvfp   = NULL;
+  char          *hmmfile = esl_opt_GetArg(go, 1);
+  P7_HMMFILE    *hfp     = NULL;
   P7_OPROFILE   *om      = NULL;
   int            nmodel  = 0;
   uint64_t       totM    = 0;
   int            status;
+  char           errbuf[eslERRBUFSIZE];
 
   esl_stopwatch_Start(w);
 
-  if ((msvfp = fopen(msvfile, "r")) == NULL) p7_Fail("Failed to open MSV file %s for reading.\n", msvfile);
+  status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
 
-  while ((status = p7_oprofile_ReadMSV(msvfp, &abc, NULL, &om)) == eslOK)
+  while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK)
     {
       nmodel++;
       totM += om->M;
 
       p7_oprofile_Destroy(om);
     }
-  if      (status == eslEFORMAT)   p7_Fail("bad file format in profile file %s",           msvfile);
-  else if (status == eslEINCOMPAT) p7_Fail("profile file %s contains different alphabets", msvfile);
-  else if (status != eslEOF)       p7_Fail("Unexpected error in reading profiles from %s", msvfile);
+  if      (status == eslEFORMAT)   p7_Fail("bad file format in profile file %s",           hmmfile);
+  else if (status == eslEINCOMPAT) p7_Fail("profile file %s contains different alphabets", hmmfile);
+  else if (status != eslEOF)       p7_Fail("Unexpected error in reading profiles from %s", hmmfile);
 
   esl_stopwatch_Stop(w);
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
   printf("# number of models: %d\n", nmodel);
   printf("# total M:          %" PRId64 "\n", totM);
   
-  fclose(msvfp);
+  p7_hmmfile_Close(hfp);
   esl_alphabet_Destroy(abc);
   esl_stopwatch_Destroy(w);
   esl_getopts_Destroy(go);
@@ -874,10 +876,6 @@ utest_ReadWrite(P7_HMM *hmm, P7_OPROFILE *om)
  * 6. Test driver
  *****************************************************************/
 #ifdef p7IO_TESTDRIVE
-/* 
-   gcc -g -Wall -msse2 -std=gnu99 -o io_utest -I.. -L.. -I../../easel -L../../easel -Dp7IO_TESTDRIVE io.c -lhmmer -leasel -lm
-   ./io_utest
- */
 #include "p7_config.h"
 
 #include "easel.h"
@@ -885,7 +883,6 @@ utest_ReadWrite(P7_HMM *hmm, P7_OPROFILE *om)
 #include "esl_getopts.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -910,6 +907,9 @@ main(int argc, char **argv)
   int             M    = esl_opt_GetInteger(go, "-M");
   int             L    = esl_opt_GetInteger(go, "-L");
   
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
+
   /* Sample a random HMM and optimized profile, in amino acid alphabet.  */
   if ((abc = esl_alphabet_Create(eslAMINO))                    == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))                                 == NULL)  esl_fatal("failed to create null model");
@@ -924,6 +924,8 @@ main(int argc, char **argv)
   esl_alphabet_Destroy(abc);
   esl_randomness_Destroy(r);
   esl_getopts_Destroy(go);
+
+  fprintf(stderr, "#  status = ok\n");
   return eslOK;
 }
 

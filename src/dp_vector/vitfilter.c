@@ -514,12 +514,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
  * 2. Benchmark driver.
  *****************************************************************/
 #ifdef p7VITFILTER_BENCHMARK
-/* -c, -x are used for debugging, testing; see msvfilter.c for explanation */
-
-/* 
-   gcc -o vitfilter_benchmark -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7VITFILTER_BENCHMARK vitfilter.c -lhmmer -leasel -lm 
-   icc -o vitfilter_benchmark -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7VITFILTER_BENCHMARK vitfilter.c -lhmmer -leasel -lm 
-
+/* -c, -x are used for debugging, testing; see msvfilter.c for explanation 
    ./vitfilter_benchmark <hmmfile>          runs benchmark 
    ./vitfilter_benchmark -N100 -c <hmmfile> compare scores to generic impl
    ./vitfilter_benchmark -N100 -x <hmmfile> compare scores to exact emulation
@@ -534,9 +529,6 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
-#include "p7_refmx.h"
-#include "p7_filtermx.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -550,7 +542,6 @@ static ESL_OPTIONS options[] = {
 };
 static char usage[]  = "[-options] <hmmfile>";
 static char banner[] = "benchmark driver for Viterbi filter";
-
 
 int 
 main(int argc, char **argv)
@@ -652,7 +643,9 @@ main(int argc, char **argv)
 #ifdef p7VITFILTER_TESTDRIVE
 #include "esl_random.h"
 #include "esl_randomseq.h"
-#include "p7_refmx.h"
+
+#include "dp_reference/p7_refmx.h"
+#include "dp_reference/reference_viterbi.h"
 
 /* utest_comparison()
  * 
@@ -720,10 +713,6 @@ utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
  * 4. Test driver
  *****************************************************************/
 #ifdef p7VITFILTER_TESTDRIVE
-/* 
-   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o vitfilter_utest -Dp7VITFILTER_TESTDRIVE vitfilter.c -lhmmer -leasel -lm
-   ./vitfilter_utest
- */
 #include "p7_config.h"
 
 #include "easel.h"
@@ -733,7 +722,6 @@ utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
 #include "esl_randomseq.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -758,6 +746,9 @@ main(int argc, char **argv)
   int             M    = esl_opt_GetInteger(go, "-M");
   int             L    = esl_opt_GetInteger(go, "-L");
   int             N    = esl_opt_GetInteger(go, "-N");
+
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
 
   /* First round of tests for DNA alphabets.  */
   if ((abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal("failed to create alphabet");
@@ -785,6 +776,8 @@ main(int argc, char **argv)
 
   esl_getopts_Destroy(go);
   esl_randomness_Destroy(r);
+
+  fprintf(stderr, "#  status = ok\n");
   return eslOK;
 }
 #endif /*VITFILTER_TESTDRIVE*/
@@ -798,8 +791,6 @@ main(int argc, char **argv)
 #ifdef p7VITFILTER_EXAMPLE
 /* A minimal example.
    Also useful for debugging on small HMMs and sequences.
-
-   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o vitfilter_example -Dp7VITFILTER_EXAMPLE vitfilter.c -lhmmer -leasel -lm
    ./vitfilter_example <hmmfile> <seqfile>
  */ 
 #include "p7_config.h"
@@ -812,7 +803,6 @@ main(int argc, char **argv)
 #include "esl_sqio.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/

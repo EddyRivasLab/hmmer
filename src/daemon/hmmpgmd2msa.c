@@ -280,8 +280,7 @@ ERROR:
  * 2. Test driver
  *****************************************************************/
 
-#define hmmpgmd2msa_TESTDRIVE
-#ifdef hmmpgmd2msa_TESTDRIVE
+#ifdef p7HMMPGMD2MSA_TESTDRIVE
 
 /* Test driver. As written, requires files that won't be released with
  * the distribution. So it should be replaced with a tighter test.
@@ -358,7 +357,7 @@ ERROR:
   exit(1);
 
 }
-#endif
+#endif /*p7HMMPGMD2MSA_TESTDRIVE*/
 
 /************************************************************
  * @LICENSE@

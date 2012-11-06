@@ -16,13 +16,26 @@ HDRS =
 
 PROGS = 
 
-UTESTS = 
+UTESTS = fwdfilter_utest \
+         io_utest \
+         msvfilter_utest \
+         vitfilter_utest
 
-STATS  = 
+STATS  = fwdfilter_stats
 
-BENCHMARKS = 
+BENCHMARKS = fwdfilter_benchmark \
+             io_benchmark \
+             msvfilter_benchmark  \
+             p7_oprofile_benchmark \
+             vitfilter_benchmark
 
-EXAMPLES =
+EXAMPLES = fwdfilter_example \
+           io_example \
+           msvfilter_example \
+           p7_oprofile_example \
+           vitfilter_example
+
+# TODO: MPI-specific stuff in p7_oprofile_mpi.c
 
 
 top_srcdir   = @top_srcdir@
