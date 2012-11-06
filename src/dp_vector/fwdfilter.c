@@ -981,11 +981,19 @@ backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
       xBv = _mm_add_ps(xBv, _mm_mul_ps(*dp, *tp)); dp+= p7C_NSCELLS; tp += 7;
     }
 
-  xc[p7C_C] = xc[p7C_CC] = 0.0f;
+  /* Only B,N,E will decode to nonzero posterior probability; C,J,E
+   * can't be reached.  However, Backwards recursion gives C,J,E
+   * nonzero values, because it's the Forward term that makes them
+   * impossible. Though it's tempting to set these values to 0.0 (since
+   * we know they're impossible), just do the calculation anyway;
+   * by convention, all our DP algorithms (sparse, reference, and here)
+   * do this, and we have unit tests comparing the values.
+   */
+  xc[p7C_C] = xc[p7C_CC] = xp[p7C_C] * om->xf[p7O_C][p7O_LOOP];
   esl_sse_hsum_ps(xBv, &(xc[p7C_B]));
-  xc[p7C_J] = xc[p7C_JJ] = 0.0f;
+  xc[p7C_J] = xc[p7C_JJ] = xc[p7C_B] * om->xf[p7O_J][p7O_MOVE] + xp[p7C_J] * om->xf[p7O_J][p7O_LOOP];
   xc[p7C_N]              = xc[p7C_B] * om->xf[p7O_N][p7O_MOVE] + xp[p7C_N] * om->xf[p7O_N][p7O_LOOP];
-  xc[p7C_E]              = 0.0f;
+  xc[p7C_E]              = xc[p7C_C] * om->xf[p7O_E][p7O_MOVE] + xc[p7C_J] * om->xf[p7O_E][p7O_LOOP];
   
   /* not needed in production code: */
   for (q = 0; q < Q; q++)
