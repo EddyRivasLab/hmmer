@@ -3,7 +3,7 @@
  * Contents:
  *   1. API for aligning sequence or MSA traces
  *   2. Internal functions used by the API
- *   3. Test driver
+ *   3. Example
  *   4. Copyright and license.
  */
 #include "p7_config.h"
@@ -299,7 +299,6 @@ p7_tracealign_ComputeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
 }
 
 
-#if 0			    /* SRE: taking this out for now. It's dependent on OMX, GMX. Need to think on it */
 /* Function: p7_tracealign_getTracesAndStats()
  *
  * Synopsis: Compute traces and stats for a collection of sequences
@@ -389,8 +388,6 @@ ERROR:
   }
   return status;
 }
-#endif /* SRE DELETED for now */
-
 /*--------------- end, exposed API ------------------------------*/
 
 
@@ -1048,13 +1045,12 @@ mark_fragments_text(ESL_MSA *msa, P7_TRACE **tr)
 
 
 /*****************************************************************
- * 3. Test driver
+ * 3. Example
  *****************************************************************/
 
-#ifdef p7TRACEALIGN_TRACESTATS_TESTDRIVE
+#ifdef p7TRACEALIGN_EXAMPLE
 /*
-  gcc -o p7_tracealign_tracestats_test -msse2 -std=gnu99 -g -O2 -I. -L. -I../easel -L../easel -Dp7TRACEALIGN_TRACESTATS_TESTDRIVE tracealign.c -lhmmer -leasel -lm
-  ./p7_tracealign_tracestats_test ../tutorial/SNORD96.hmm ../tutorial/SNORD96.sto
+  ./p7_tracealign_example ../tutorial/SNORD96.hmm ../tutorial/SNORD96.sto
 */
 
 #include "p7_config.h"
@@ -1086,15 +1082,12 @@ static ESL_OPTIONS options[] = {
   { "--outformat", eslARG_STRING, "Stockholm", NULL, NULL,   NULL,    NULL,  NULL, "output alignment in format <s>",                                    2 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
-
-
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
-static char banner[] = "test driver for P7TRACE_SEQALIGNSTATS";
+static char banner[] = "example driver for tracealign.c";
 
 int
 main(int argc, char **argv)
 {
-
   ESL_GETOPTS  *go      = NULL;
   char         *hmmfile = NULL; /* HMM file name                   */
   char         *seqfile = NULL; /* sequence file name              */
@@ -1121,6 +1114,7 @@ main(int argc, char **argv)
   float **relent;
   float **scores;
 
+  p7_Init();
 
   /* Parse the command line
    */
@@ -1264,15 +1258,15 @@ main(int argc, char **argv)
   return status;
 }
 
-#endif /*p7TRACE_SEQALIGNSTATS_TESTDRIVE*/
+#endif /*p7TRACEALIGN_EXAMPLE*/
 /*--------------------- end, test driver ------------------------*/
 
 
 /*****************************************************************
  * @LICENSE@
  * 
- * SRE, Tue Oct 21 19:38:19 2008 [Casa de Gatos]
  * SVN $Id$
+ * SVN $URL$
  *****************************************************************/
 
 

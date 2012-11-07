@@ -4,19 +4,17 @@
 # bug #h73 in bad interaction of checksum calculation and marking
 # fragments.
 #
-# Usage:   ./i11-hmmalign-mapali.pl <builddir> <srcdir> <tmpfile prefix>
-# Example: ./i11-hmmalign-mapali.pl ..         ..       tmpfoo
-#
-# SRE, Mon Dec 21 14:38:17 2009 [Janelia]
-# SVN $Id$
+# Usage:   ./i011-hmmalign-mapali.pl <builddir> <srcdir> <tmpfile prefix>
+# Example: ./i011-hmmalign-mapali.pl ..         ..       tmpfoo
+
 
 $builddir   = shift;
 $srcdir     = shift;
 $tmppfx     = shift;
 
 # Verify that we have all the executables we need for the test.
-if (! -x "$builddir/src/hmmbuild")   { die "FAIL: didn't find hmmbuild binary in $builddir/src\n";  }
-if (! -x "$builddir/src/hmmalign")   { die "FAIL: didn't find hmmalign binary in $builddir/src\n";  }
+if (! -x "$builddir/src/programs/hmmbuild")   { die "FAIL: didn't find hmmbuild binary in $builddir/src/programs\n";  }
+if (! -x "$builddir/src/programs/hmmalign")   { die "FAIL: didn't find hmmalign binary in $builddir/src/programs\n";  }
 
 
 # Create our test files.
@@ -49,7 +47,7 @@ EOF
 close ALI1;
 close SEQ2;
 
-$output = `$builddir/src/hmmbuild -O $tmppfx.sto2 $tmppfx.hmm $tmppfx.sto 2>&1`;
+$output = `$builddir/src/programs/hmmbuild -O $tmppfx.sto2 $tmppfx.hmm $tmppfx.sto 2>&1`;
 if ($? != 0) { die "FAIL: hmmbuild failed\n"; }
 
 ($resave) = ($output =~ /processed alignment resaved to:\s+(\S+)/);
@@ -65,7 +63,7 @@ if ($aseq6 ne "~~~~~GHIKLM~~~~~~~~~") { die "FAIL: fragment wasn't marked in -O 
 if ($aseq7 ne "ACDEFAHIKLMNPQRSTVWY") { die "FAIL: D->I transition wasn't trace doctored properly?\n"; }
 if ($aseq8 ne "ACDEFGHIKAMNPQRSTVWY") { die "FAIL: I->D transition wasn't trace doctored properly?\n"; }
 
-$output = `$builddir/src/hmmalign --mapali $tmppfx.sto $tmppfx.hmm $tmppfx.fa 2>&1`;
+$output = `$builddir/src/programs/hmmalign --mapali $tmppfx.sto $tmppfx.hmm $tmppfx.fa 2>&1`;
 if ($? != 0) { die "FAIL: hmmalign --mapali failed\n"; }
 
 ($testseq) = ($output =~ /\ntest\s+(\S+)/);

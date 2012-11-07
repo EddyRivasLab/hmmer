@@ -7,11 +7,8 @@
 # Implemented as a regression test against specific scores (in domtbl
 # output) of a small manually checked example.
 #
-# Usage:    ./i8-nonresidues.pl <builddir> <srcdir> <tmpfile prefix>
-# Example:  ./i8-nonresidues.pl ..         ..        tmpfoo
-#
-# SRE, Thu Oct 29 08:38:09 2009
-# SVN $Id$
+# Usage:    ./i008-nonresidues.pl <builddir> <srcdir> <tmpfile prefix>
+# Example:  ./i008-nonresidues.pl ..         ..        tmpfoo
 
 BEGIN {
     $builddir = shift;
@@ -22,7 +19,7 @@ BEGIN {
 use lib "$srcdir/testsuite";
 use h3;
 
-$hmmsearch = "$builddir/src/hmmsearch";
+$hmmsearch = "$builddir/src/programs/hmmsearch";
 $hmm20aa   = "$srcdir/testsuite/20aa.hmm";
 
 # Two test sequences, to be aligned to 20aa.hmm

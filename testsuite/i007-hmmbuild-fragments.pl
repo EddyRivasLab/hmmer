@@ -3,11 +3,9 @@
 # Test the ability of hmmbuild to deal with crappy alignments
 # of lots of sequence fragments.
 #
-# Usage:    ./i7-hmmbuild-fragments.pl <hmmbuild binary> <tmpfile prefix>
-# Example:  ./i7-hmmbuild-fragments.pl ../src/hmmbuild   foo
-# 
-# SRE, Tue Jun 16 13:37:05 2009
-# SVN $Id$
+# Usage:    ./i007-hmmbuild-fragments.pl <hmmbuild binary> <tmpfile prefix>
+# Example:  ./i007-hmmbuild-fragments.pl ../src/hmmbuild   foo
+
 
 $hmmbuild = shift;
 $tmppfx   = shift;

@@ -3,13 +3,9 @@
 # Test that programs accept and reject argument of '-' (for reading
 # data from stdin, rather than from files) as they're supposed to.
 #
-# Usage:   ./i17-stdin.pl <builddir> <srcdir> <tmpfile prefix>
-# Example: ./i17-stdin.pl ..         ..       tmpfoo
+# Usage:   ./i017-stdin.pl <builddir> <srcdir> <tmpfile prefix>
+# Example: ./i017-stdin.pl ..         ..       tmpfoo
 #
-# SRE, Wed Oct 27 13:05:10 2010 [Janelia]
-# SVN $URL$
-# SVN $Id$
-
 BEGIN {
     $builddir  = shift;
     $srcdir    = shift;
@@ -46,12 +42,15 @@ $model2   = "Caudal_act";
 $nmodel1  = "3box";
 $nmodel2  = "PSE";
 
-@h3progs =  ("hmmalign", "hmmbuild", "hmmconvert", "hmmemit", "hmmfetch", "hmmpress", "hmmscan", "hmmsearch", "hmmstat", "jackhmmer", "nhmmer", "phmmer");
+@h3progs =  ("programs/hmmalign", "programs/hmmbuild",  "utilities/hmmconvert", 
+	     "programs/hmmemit",  "utilities/hmmfetch", "programs/hmmpress",
+	     "programs/hmmscan",  "programs/hmmsearch", "utilities/hmmstat", 
+	     "programs/jackhmmer", "programs/nhmmer",   "programs/phmmer");
 @eslprogs = ("esl-shuffle");
 
 # Verify that we have all the executables and datafiles we need for the test.
-foreach $h3prog  (@h3progs) { if (! -x "$builddir/src/$h3prog")             { die "FAIL: didn't find $h3prog executable in $builddir/src\n";              } }
-foreach $eslprog (@eslrogs) { if (! -x "$builddir/easel/miniapps/$eslprog") { die "FAIL: didn't find $eslprog executable in $builddir/easel/miniapps\n";  } }
+foreach $h3prog  (@h3progs) { if (! -x "$builddir/src/$h3prog")                 { die "FAIL: didn't find $h3prog executable in $builddir/src/\n";             } }
+foreach $eslprog (@eslrogs) { if (! -x "$builddir/lib/easel/miniapps/$eslprog") { die "FAIL: didn't find $eslprog executable in $builddir/easel/miniapps\n";  } }
 
 if (! -r "$srcdir/testsuite/$model1.hmm")  { die "FAIL: can't read profile $model1.hmm in $srcdir/testsuite\n"; }
 if (! -r "$srcdir/testsuite/$model2.hmm")  { die "FAIL: can't read profile $model2.hmm in $srcdir/testsuite\n"; }
@@ -66,23 +65,23 @@ if (! -r "$srcdir/testsuite/$nmodel2.sto") { die "FAIL: can't read msa $nmodel2.
 
 `cat $srcdir/testsuite/$model1.hmm  $srcdir/testsuite/$model2.hmm  > $tmppfx.hmm`;  if ($?) { die "FAIL: cat\n"; }
 `cat $srcdir/testsuite/$nmodel1.hmm $srcdir/testsuite/$nmodel2.hmm > $tmppfx.nhmm`; if ($?) { die "FAIL: cat\n"; }
-`$builddir/src/hmmpress $tmppfx.hmm`;                                               if ($?) { die "FAIL: hmmpress\n"; }
+`$builddir/src/programs/hmmpress $tmppfx.hmm`;                                               if ($?) { die "FAIL: hmmpress\n"; }
 
 `cat $srcdir/testsuite/$model1.sto $srcdir/testsuite/$model2.sto > $tmppfx.sto`;    if ($?) { die "FAIL: cat\n"; }
 
-`$builddir/src/hmmemit -c $srcdir/testsuite/$model1.hmm > $tmppfx.fa1`;             if ($?) { die "FAIL: hmmemit -c\n"; }
+`$builddir/src/programs/hmmemit -c $srcdir/testsuite/$model1.hmm > $tmppfx.fa1`;             if ($?) { die "FAIL: hmmemit -c\n"; }
 `cat $tmppfx.fa1 > $tmppfx.fa2`;                                                    if ($?) { die "FAIL: cat\n"; } 
-`$builddir/src/hmmemit -c $srcdir/testsuite/$model2.hmm >> $tmppfx.fa2`;            if ($?) { die "FAIL: hmmemit -c\n"; } 
+`$builddir/src/programs/hmmemit -c $srcdir/testsuite/$model2.hmm >> $tmppfx.fa2`;            if ($?) { die "FAIL: hmmemit -c\n"; } 
 
-`$builddir/src/hmmemit -N10 $srcdir/testsuite/$model1.hmm > $tmppfx.fa10`;          if ($?) { die "FAIL: hmmemit\n"; }
+`$builddir/src/programs/hmmemit -N10 $srcdir/testsuite/$model1.hmm > $tmppfx.fa10`;          if ($?) { die "FAIL: hmmemit\n"; }
 
-`$builddir/src/hmmemit -p -N10 $srcdir/testsuite/$model1.hmm > $tmppfx.db`;         if ($?) { die "FAIL: hmmemit\n"; }
-`$builddir/src/hmmemit -p -N10 $srcdir/testsuite/$model2.hmm >> $tmppfx.db`;        if ($?) { die "FAIL: hmmemit\n"; }
-`$builddir/easel/miniapps/esl-shuffle -G -N100 -L 400 --amino >> $tmppfx.db`;       if ($?) { die "FAIL: esl-shuffle\n"; }
+`$builddir/src/programs/hmmemit -p -N10 $srcdir/testsuite/$model1.hmm > $tmppfx.db`;         if ($?) { die "FAIL: hmmemit\n"; }
+`$builddir/src/programs/hmmemit -p -N10 $srcdir/testsuite/$model2.hmm >> $tmppfx.db`;        if ($?) { die "FAIL: hmmemit\n"; }
+`$builddir/lib/easel/miniapps/esl-shuffle -G -N100 -L 400 --amino >> $tmppfx.db`;       if ($?) { die "FAIL: esl-shuffle\n"; }
 
-`$builddir/src/hmmemit -p -N2 -L2000 --glocal $srcdir/testsuite/$nmodel1.hmm >  $tmppfx.ndb`; if ($?) { die "FAIL: hmmemit\n"; }
-`$builddir/src/hmmemit -p -N2 -L2000 --glocal $srcdir/testsuite/$nmodel2.hmm >> $tmppfx.ndb`; if ($?) { die "FAIL: hmmemit\n"; }
-`$builddir/easel/miniapps/esl-shuffle -G -N6 -L 2000 --dna                   >> $tmppfx.ndb`; if ($?) { die "FAIL: esl-shuffle\n"; }
+`$builddir/src/programs/hmmemit -p -N2 -L2000 --glocal $srcdir/testsuite/$nmodel1.hmm >  $tmppfx.ndb`; if ($?) { die "FAIL: hmmemit\n"; }
+`$builddir/src/programs/hmmemit -p -N2 -L2000 --glocal $srcdir/testsuite/$nmodel2.hmm >> $tmppfx.ndb`; if ($?) { die "FAIL: hmmemit\n"; }
+`$builddir/lib/easel/miniapps/esl-shuffle -G -N6 -L 2000 --dna                   >> $tmppfx.ndb`; if ($?) { die "FAIL: esl-shuffle\n"; }
 
 `echo $model1    > $tmppfx.key`;                                                    if ($?) { die "FAIL: cat\n"; }
 `echo $model2   >> $tmppfx.key`;                                                    if ($?) { die "FAIL: cat\n"; }
@@ -93,7 +92,7 @@ if (! -r "$srcdir/testsuite/$nmodel2.sto") { die "FAIL: can't read msa $nmodel2.
 #   reject - - case
 ################################################################
 
-$tag  = "hmmalign";    $prog = "$builddir/src/$tag";      
+$tag  = "hmmalign";    $prog = "$builddir/src/programs/$tag";      
 $tag1 = "<hmmfile>";   $arg1 = "$srcdir/testsuite/$model1.hmm"; 
 $tag2 = "<seqfile>";   $arg2 = "$tmppfx.fa10"; 
 if ($verbose) { print "$tag...\n"; }
@@ -116,7 +115,7 @@ if ($output !~ /^\nERROR: Either <hmmfile> or <seqfile>/) { die "FAIL: $tag didn
 #    reject - for <hmmfile>: can't send it to stdout.
 ################################################################
 
-$tag  = "hmmbuild";       $prog = "$builddir/src/$tag";      
+$tag  = "hmmbuild";       $prog = "$builddir/src/programs/$tag";      
 $tag1 = "<msafile>";      $arg1 = "$tmppfx.sto";    
 if ($verbose) { print "$tag...\n"; }
 
@@ -131,7 +130,7 @@ if (!$?) { die "FAIL: $tag should reject - for <hmmfile_out>\n"; }
 # hmmconvert
 ################################################################
 
-$tag  = "hmmconvert";     $prog = "$builddir/src/$tag";    
+$tag  = "hmmconvert";     $prog = "$builddir/src/utilities/$tag";    
 $tag1 = "<hmmfile>";      $arg1 = "$tmppfx.hmm";    
 if ($verbose) { print "$tag...\n"; }
 
@@ -146,7 +145,7 @@ if ($?) { die "FAIL: $tag results differ if $tag1 comes through stdin\n"; }
 #    need to pass fixed RNG seed to be able to diff outputs
 ################################################################
 
-$tag  = "hmmemit";      $prog = "$builddir/src/$tag";   
+$tag  = "hmmemit";      $prog = "$builddir/src/programs/$tag";   
 $tag1 = "<hmmfile>";    $arg1 = "$tmppfx.hmm";             
 if ($verbose) { print "$tag...\n"; }
 
@@ -167,7 +166,7 @@ if ($?) { die "FAIL: $tag results differ if $tag1 comes through stdin\n"; }
 #      same fetch order either way.
 ################################################################
 
-$tag  = "hmmfetch";    $prog = "$builddir/src/$tag";   
+$tag  = "hmmfetch";    $prog = "$builddir/src/utilities/$tag";   
 $tag1 = "<hmmfile>";   $arg1 = "$tmppfx.hmm";              
 $tag2 = "<keyfile>";   $arg2 = "$tmppfx.key";              
 if ($verbose) { print "$tag...\n"; }
@@ -195,7 +194,7 @@ if ($output !~ /^Can't use - with --index/) { die "FAIL: $tag didn't give expect
 #    rejects - argument.
 ################################################################
 
-$tag  = "hmmpress";         $prog = "$builddir/src/$tag";   
+$tag  = "hmmpress";         $prog = "$builddir/src/programs/$tag";   
 $tag1 = "<hmmfile>";        $arg1 = "$tmppfx.hmm";      
 if ($verbose) { print "$tag...\n"; }
 
@@ -207,7 +206,7 @@ if ($output !~ /^\nError: Can't use - for <hmmfile>/) { die "FAIL: $tag didn't g
 #     rejects - for <hmmfile>, because it must be hmmpress'ed. 
 #################################################################
 
-$tag  = "hmmscan";         $prog = "$builddir/src/$tag";   
+$tag  = "hmmscan";         $prog = "$builddir/src/programs/$tag";   
 $tag1 = "<hmmdb>";         $arg1 = "$tmppfx.hmm";      
 $tag2 = "<seqfile>";       $arg2 = "$tmppfx.fa2";      
 if ($verbose) { print "$tag...\n"; }
@@ -231,7 +230,7 @@ if ($output !~ /^hmmscan cannot read/) { die "FAIL: hmmscan didn't give expected
 # note that the grep -v "^#" removes lines that would make diffs fail,
 # like query name and cpu time.
 
-$tag  = "hmmsearch";         $prog = "$builddir/src/$tag";   
+$tag  = "hmmsearch";         $prog = "$builddir/src/programs/$tag";   
 $tag1 = "<hmmfile>";         $arg1 = "$srcdir/testsuite/$model1.hmm";   $arg1b = "$tmppfx.hmm";   
 $tag2 = "<seqdb>";           $arg2 = "$tmppfx.db";      
 if ($verbose) { print "$tag...\n"; }
@@ -253,7 +252,7 @@ $output = `cat $arg2 | $prog $arg1b - 2>&1`;     if (! $?) { die "FAIL: $prog sh
 # hmmstat
 ################################################################
 
-$tag  = "hmmstat";        $prog = "$builddir/src/$tag";    
+$tag  = "hmmstat";        $prog = "$builddir/src/utilities/$tag";    
 $tag1 = "<hmmfile>";      $arg1 = "$tmppfx.hmm";    
 if ($verbose) { print "$tag...\n"; }
 
@@ -268,7 +267,7 @@ if ($verbose) { print "$tag...\n"; }
 #    <seqdb> can't be -, always needs to be rewindable
 ################################################################
 
-$tag  = "jackhmmer";         $prog = "$builddir/src/$tag --enone -N2";   
+$tag  = "jackhmmer";         $prog = "$builddir/src/programs/$tag --enone -N2";   
 $tag1 = "<seqfile>";         $arg1 = "$tmppfx.fa1";      
 $tag2 = "<seqdb>";           $arg2 = "$tmppfx.db";      
 if ($verbose) { print "$tag...\n"; }
@@ -288,7 +287,7 @@ if ($output !~ /^jackhmmer cannot read <seqdb> from/) { die "FAIL: $prog didn't 
 #      reject <seqdb> as - on multiquery
 #################################################################
 
-$tag  = "nhmmer";            $prog = "$builddir/src/$tag";   
+$tag  = "nhmmer";            $prog = "$builddir/src/programs/$tag";   
 $tag1 = "<hmmfile>";         $arg1 = "$srcdir/testsuite/$nmodel1.hmm";   $arg1b = "$tmppfx.nhmm";   
 $tag2 = "<seqdb>";           $arg2 = "$tmppfx.ndb";      
 if ($verbose) { print "$tag...\n"; }
@@ -310,7 +309,7 @@ $output = `cat $arg2 | $prog $arg1b - 2>&1`;     if (! $?) { die "FAIL: $prog sh
 # first: single query.
 ################################################################
 
-$tag  = "phmmer";            $prog = "$builddir/src/$tag";   
+$tag  = "phmmer";            $prog = "$builddir/src/programs/$tag";   
 $tag1 = "<seqfile>";         $arg1 = "$tmppfx.fa1";         $arg1b = "$tmppfx.fa2";
 $tag2 = "<seqdb>";           $arg2 = "$tmppfx.db";      
 if ($verbose) { print "$tag...\n"; }

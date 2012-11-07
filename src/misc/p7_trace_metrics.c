@@ -169,7 +169,7 @@ p7_trace_metrics(const P7_TRACE *reftr, const P7_TRACE *testtr, P7_TRACE_METRICS
 	    zt++;
 	  }
       } else { /* if reference is mute: either find a corresponding mute state in test, or halt and wait on T or next emitter */		
-	while (testtr->i[zt] == 0 && testtr->st[zt] != reftr->st[zr] && zt < testtr->N-1)
+	while (testtr->i[zt] == 0 && ! (testtr->st[zt] == reftr->st[zr] && testtr->k[zt] == reftr->k[zr]) && zt < testtr->N-1)
 	  {  /* again, anything extra we see in the test trace is a false positive */
 	    if (testtr->st[zt] == p7T_B || testtr->st[zt] == p7T_E) tm->edge_fp++;
 	    tm->state_fp++;
@@ -192,10 +192,10 @@ p7_trace_metrics(const P7_TRACE *reftr, const P7_TRACE *testtr, P7_TRACE_METRICS
        */
       /* All-states comparison */
       if (reftr->st[zr] == testtr->st[zt] && reftr->i[zr]  == testtr->i[zt]  && reftr->k[zr]  == testtr->k[zt]) 
-	tm->state_tp++;
+	  tm->state_tp++;
       else {
 	tm->state_fn++;
-	if (reftr->i[zr]) tm->state_fp++; /* checking i[z] makes sure we only count each i once */
+	if (reftr->i[zr])  tm->state_fp++; /* checking i[z] makes sure we only count each i once */
       }
 
       /* Alignment comparison */
@@ -243,7 +243,7 @@ p7_trace_metrics(const P7_TRACE *reftr, const P7_TRACE *testtr, P7_TRACE_METRICS
 
 
 /*****************************************************************
- * x. Debugging/development tools
+ * 2. Debugging/development tools
  *****************************************************************/
 
 int
@@ -281,7 +281,13 @@ p7_trace_metrics_Dump(FILE *ofp, P7_TRACE_METRICS *tm)
 #include "esl_random.h"
 #include "esl_sq.h"
 
-#include "p7_refmx.h"
+#include "base/p7_bg.h"
+#include "build/modelsample.h"
+#include "search/modelconfig.h"
+#include "misc/emit.h"
+
+#include "dp_reference/p7_refmx.h"
+#include "dp_reference/reference_viterbi.h"
 
 /* The "consistency" test samples <N> random profiles; from each it
  * emits a sequence in multihit glocal/local <L> mode, and keeps the
@@ -333,6 +339,10 @@ utest_consistency(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
       /* calculate the metrics... */
       if ( p7_trace_metrics(reftr, testtr, tm) != eslOK) esl_fatal(msg);
 
+      //p7_trace_DumpAnnotated(stdout, reftr, gm, sq->dsq);
+      //p7_trace_DumpAnnotated(stdout, testtr, gm, sq->dsq);
+      //p7_trace_metrics_Dump(stdout, tm);
+
       /* independently, tote up state use counts, used for consistency checks */
       if ( p7_trace_GetStateUseCounts(reftr, refct)   != eslOK) esl_fatal(msg);
       if ( p7_trace_GetStateUseCounts(testtr, testct) != eslOK) esl_fatal(msg);
@@ -370,21 +380,6 @@ utest_consistency(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
   esl_alphabet_Destroy(abc);
 }
 
-/* The "singlepath" test creates a special profile with only one
- * possible parse (including its emitted residues). (We use singlepath
- * profiles in other unit tests; reference_fwdback's
- * utest_singlepath(), for example.) This is an HMM with 1.0/0.0
- * transitions and emissions, and a uniglocal L=0 profile made from
- * it. By construction, then, we must get completely identical trace
- * paths when we emit from it or align to it.
- */
-static void
-utest_singlepath(ESL_RANDOMNESS *rng, int alphatype, int M)
-{
-  
-
-
-}
 #endif /*p7TRACE_METRICS_TESTDRIVE*/
 /*--------------------- end, unit tests -------------------------*/
 
@@ -404,7 +399,6 @@ utest_singlepath(ESL_RANDOMNESS *rng, int alphatype, int M)
 #include "esl_msa.h"
 
 #include "hmmer.h"
-#include "p7_refmx.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -425,16 +419,16 @@ main(int argc, char **argv)
   int             L         = 20;
   int             N         = 10;
 
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
+
   utest_consistency(r, alphatype, M, L, N);
-  utest_singlepath (r, alphatype, M);
 
   esl_randomness_Destroy(r);
   esl_getopts_Destroy(go);
+  fprintf(stderr, "#  status = ok\n");
   return 0;
 }
-
-
-
 #endif /*p7TRACE_METRICS_TESTDRIVE*/
 /*--------------------- end, test driver ------------------------*/
 
@@ -467,29 +461,26 @@ static char banner[] = "example of calculating accuracy metrics for comparison o
 
 /* Test: emit two traces from the same profile. 
  *       compare them.
- * 
- * cc -I . -I ../easel -L. -L../easel p7_trace_benchmark.c -lhmmer -leasel -lm
  */
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng     = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
-  char           *hmmfile = esl_opt_GetArg(go, 1);
-  int             L       = esl_opt_GetInteger(go, "-L");
-  ESL_ALPHABET   *abc     = NULL;
-  P7_HMMFILE     *hfp     = NULL;
-  P7_HMM         *hmm     = NULL;
-  P7_BG          *bg      = NULL;
-  P7_PROFILE     *gm      = NULL;
-  P7_TRACE       *reftr   = p7_trace_Create();
-  P7_REFMX       *vmx     = NULL;
-  P7_TRACE       *testtr  = p7_trace_Create();
-  ESL_SQ         *sq      = NULL;
-  char            errbuf[eslERRBUFSIZE];
-  int             i;
-  int             status;
-
+  ESL_GETOPTS      *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_RANDOMNESS   *rng     = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  char             *hmmfile = esl_opt_GetArg(go, 1);
+  int               L       = esl_opt_GetInteger(go, "-L");
+  ESL_ALPHABET     *abc     = NULL;
+  P7_HMMFILE       *hfp     = NULL;
+  P7_HMM           *hmm     = NULL;
+  P7_BG            *bg      = NULL;
+  P7_PROFILE       *gm      = NULL;
+  P7_TRACE         *reftr   = p7_trace_Create();
+  P7_REFMX         *vmx     = NULL;
+  P7_TRACE         *testtr  = p7_trace_Create();
+  ESL_SQ           *sq      = NULL;
+  P7_TRACE_METRICS *tm      = p7_trace_metrics_Create();
+  char              errbuf[eslERRBUFSIZE];
+  int               status;
 
   status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
@@ -524,8 +515,11 @@ main(int argc, char **argv)
   p7_trace_DumpAnnotated(stdout, testtr, gm, sq->dsq);
 
   /* Calculate trace accuracy metrics. */
-  p7_trace_metrics(reftr, testtr, gm, sq->dsq);
+  p7_trace_metrics(reftr, testtr, tm);
 
+  p7_trace_metrics_Dump(stdout, tm);
+
+  p7_trace_metrics_Destroy(tm);
   p7_refmx_Destroy(vmx);
   p7_trace_Destroy(reftr);
   p7_trace_Destroy(testtr);

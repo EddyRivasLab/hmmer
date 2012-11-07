@@ -2,20 +2,19 @@
 
 # Test that HMM naming in hmmbuild works as advertised.
 # Written to test for #h50.
-# SRE, Tue Apr 28 14:00:51 2009
 #
-# Usage:    ./i5-hmmbuild-naming.pl  <builddir> <srcdir> <tmpfile prefix>
-# Example:  ./i5-hmmbuild-naming.pl  ..          ..      tmpfoo
+# Usage:    ./i005-hmmbuild-naming.pl  <builddir> <srcdir> <tmpfile prefix>
+# Example:  ./i005-hmmbuild-naming.pl  ..          ..      tmpfoo
 
 $builddir     = shift;
 $srcdir       = shift;
 $tmppfx       = shift;
 
 
-if (! -x "$builddir/src/hmmbuild")        { print "FAIL: didn't find hmmbuild binary $builddir/src/hmmbuild\n"; exit 1; }  
-if (! -r "$srcdir/testsuite/20aa.sto")    { print "FAIL: didn't find $srcdir/testsuite/20aa.sto\n";             exit 1; }
-if (! -r "$srcdir/tutorial/fn3.sto")      { print "FAIL: didn't find $srcdir/tutorial/globins4.sto\n";          exit 1; }
-if (! -r "$srcdir/tutorial/globins4.sto") { print "FAIL: didn't find $srcdir/tutorial/globins4.sto\n";          exit 1; }
+if (! -x "$builddir/src/programs/hmmbuild") { print "FAIL: didn't find hmmbuild binary $builddir/src/hmmbuild\n"; exit 1; }  
+if (! -r "$srcdir/testsuite/20aa.sto")      { print "FAIL: didn't find $srcdir/testsuite/20aa.sto\n";             exit 1; }
+if (! -r "$srcdir/tutorial/fn3.sto")        { print "FAIL: didn't find $srcdir/tutorial/globins4.sto\n";          exit 1; }
+if (! -r "$srcdir/tutorial/globins4.sto")   { print "FAIL: didn't find $srcdir/tutorial/globins4.sto\n";          exit 1; }
 
 system("$builddir/src/hmmbuild $tmppfx.hmm $srcdir/testsuite/20aa.sto > /dev/null");    
 if ($? != 0)                          { print "FAIL: hmmbuild failed unexpectedly\n";         exit 1; }

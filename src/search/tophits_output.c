@@ -1,4 +1,3 @@
-
 /* Standard (human-readable) output of pipeline results
  */
 #include "p7_config.h"

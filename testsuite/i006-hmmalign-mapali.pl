@@ -2,11 +2,8 @@
 
 # Test the hmmalign --mapali option.
 # 
-# Usage:    ./i6-hmmalign-mapali.pl  <hmmalign binary>     <esl-reformat binary>        <testsuitedir> <tmpfile prefix>
-# Example:  ./i6-hmmalign-mapali.pl  ../src/hmmalign    ../easel/miniapps/esl-reformat     .               foo
-#
-# SRE, Mon May 25 09:52:48 2009
-
+# Usage:    ./i006-hmmalign-mapali.pl  <hmmalign binary>     <esl-reformat binary>        <testsuitedir> <tmpfile prefix>
+# Example:  ./i006-hmmalign-mapali.pl  ../src/hmmalign    ../easel/miniapps/esl-reformat     .               foo
 
 $hmmalign     = shift;
 $eslreformat  = shift;

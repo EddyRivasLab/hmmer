@@ -2,12 +2,9 @@
 
 # Bug #h80: hmmconvert can't read H2 Nucleic files
 #
-# Usage:   ./i15-hmmconvert.pl <builddir> <srcdir> <tmpfile prefix>
-# Example: ./i15-hmmconvert.pl ..         ..       tmpfoo
+# Usage:   ./i015-hmmconvert.pl <builddir> <srcdir> <tmpfile prefix>
+# Example: ./i015-hmmconvert.pl ..         ..       tmpfoo
 #
-# SRE, Tue May 18 13:32:40 2010 [Janelia]
-# SVN $Id$
-
 BEGIN {
     $builddir  = shift;
     $srcdir    = shift;
@@ -15,16 +12,16 @@ BEGIN {
 }
 
 # Verify that we have all the executables we need for the test.
-if (! -x "$builddir/src/hmmconvert") { die "FAIL: didn't find hmmconvert binary in $builddir/src\n";  }
+if (! -x "$builddir/src/utilities/hmmconvert") { die "FAIL: didn't find hmmconvert binary in $builddir/src/utilities\n";  }
 
 # Create our test files (data embedded in script as functions: see end of file
 &h2_nt_file("$tmppfx.nt.hmm");
 &h2_aa_file("$tmppfx.aa.hmm");
 
-@output = `$builddir/src/hmmconvert $tmppfx.nt.hmm 2>&1`;
+@output = `$builddir/src/utilities/hmmconvert $tmppfx.nt.hmm 2>&1`;
 if ($? != 0) { die "FAIL: hmmconvert of H2 nucleic model failed\n"; }
 
-@output = `$builddir/src/hmmconvert $tmppfx.aa.hmm 2>&1`;
+@output = `$builddir/src/utilities/hmmconvert $tmppfx.aa.hmm 2>&1`;
 if ($? != 0) { die "FAIL: hmmconvert of H2 protein model failed\n"; }
 
 

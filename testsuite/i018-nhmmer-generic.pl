@@ -3,13 +3,9 @@
 # Test of hmmbuild/nhmmer as used to build a DNA model, then query a  
 # a database of long (1MB).
 #
-# Usage:   ./i18-nhmmer-generic.pl <builddir> <srcdir> <tmpfile prefix>
-# Example: ./i18-nhmmer-generic.pl ..         ..       tmpfoo
+# Usage:   ./i018-nhmmer-generic.pl <builddir> <srcdir> <tmpfile prefix>
+# Example: ./i018-nhmmer-generic.pl ..         ..       tmpfoo
 #
-# TJW, Fri Nov 12 11:07:31 EST 2010 [Janelia]
-# SVN $URL$
-# SVN $Id$
-
 BEGIN {
     $builddir  = shift;
     $srcdir    = shift;
@@ -35,13 +31,13 @@ $alignment   = "3box.sto";
 @eslprogs =  ("esl-shuffle");
 
 # Verify that we have all the executables and datafiles we need for the test.
-foreach $h3prog  (@h3progs)  { if (! -x "$builddir/src/$h3prog")              { die "FAIL: didn't find $h3prog executable in $builddir/src\n";              } }
-foreach $eslprog (@eslprogs) { if (! -x "$builddir/easel/miniapps/$eslprog")  { die "FAIL: didn't find $eslprog executable in $builddir/easel/miniapps\n";  } }
+foreach $h3prog  (@h3progs)  { if (! -x "$builddir/src/programs/$h3prog")         { die "FAIL: didn't find $h3prog executable in $builddir/src/programs\n";              } }
+foreach $eslprog (@eslprogs) { if (! -x "$builddir/lib/easel/miniapps/$eslprog")  { die "FAIL: didn't find $eslprog executable in $builddir/lib/easel/miniapps\n";  } }
 
 if (! -r "$srcdir/testsuite/$alignment")  { die "FAIL: can't read msa $alignment in $srcdir/testsuite\n"; }
 
 # Create the test hmm
-$cmd = "$builddir/src/hmmbuild $tmppfx.hmm $srcdir/testsuite/$alignment";
+$cmd = "$builddir/src/programs/hmmbuild $tmppfx.hmm $srcdir/testsuite/$alignment";
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: hmmbuild failed unexpectedly\n"; } 
 if ($output !~ /1     3box                    22    22    20    75    22.00  1.415/) {
@@ -55,9 +51,9 @@ if ($output !~ /MAXL  75/) {
 
 # Create a roughly 4.5MB database against which to search
 $database   = "$tmppfx.fa";
-do_cmd ( "$builddir/easel/miniapps/esl-shuffle --seed 1 --dna -G -N 1 -L 4500000 -o $tmppfx.A" );
-do_cmd ( "$builddir/src/hmmemit -N 2 --seed 4 $tmppfx.hmm >  $tmppfx.B " );
-do_cmd ( "$builddir/src/hmmemit -N 1 --seed 3 $tmppfx.hmm >> $tmppfx.B" ); 
+do_cmd ( "$builddir/lib/easel/miniapps/esl-shuffle --seed 1 --dna -G -N 1 -L 4500000 -o $tmppfx.A" );
+do_cmd ( "$builddir/src/programs/hmmemit -N 2 --seed 4 $tmppfx.hmm >  $tmppfx.B " );
+do_cmd ( "$builddir/src/programs/hmmemit -N 1 --seed 3 $tmppfx.hmm >> $tmppfx.B" ); 
 do_cmd ( "head -n 33000 $tmppfx.A > $database" );
 do_cmd ( "head -n 2 $tmppfx.B | tail -n 1 >> $database" );
 do_cmd ( "tail -n +33001 $tmppfx.A | head -n 22000 >> $database");
@@ -66,7 +62,7 @@ do_cmd ( "tail -n 20000 $tmppfx.A >> $database" );
 do_cmd ( "tail -n 1 $tmppfx.B >> $database" );
 
 # perform nhmmer search
-$cmd = "$builddir/src/nhmmer --tformat fasta $tmppfx.hmm $database";
+$cmd = "$builddir/src/programs/nhmmer --tformat fasta $tmppfx.hmm $database";
 $output = do_cmd($cmd);
 
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
@@ -89,7 +85,7 @@ if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 2\n";
 }
 
-$cmd = "$builddir/src/nhmmer --tformat fasta --toponly $tmppfx.hmm $database";
+$cmd = "$builddir/src/programs/nhmmer --tformat fasta --toponly $tmppfx.hmm $database";
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = 

@@ -1,6 +1,6 @@
 #! /bin/sh
 
-# Usage: ./i1-hmmbuild.sh <hmmbuild binary> <MSA file> <tmpfile prefix for filenames>
+# Usage: ./i001-hmmbuild.sh <hmmbuild binary> <MSA file> <tmpfile prefix for filenames>
 #
 # Verifies that hmmbuild builds HMMs reproducibly (no stochastic run-to-run variation by default).
 #

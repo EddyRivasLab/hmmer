@@ -15,15 +15,22 @@ HDRS =
 
 PROGS =
 
-UTESTS = 
+UTESTS =  emit_utest \
+	  logsum_utest \
+	  p7_trace_metrics_utest
 
-STATS  = 
+STATS  =  emit_stats
 
-BENCHMARKS = 
+BENCHMARKS =  logsum_benchmark
 
-EXAMPLES =
+EXAMPLES = emit_example \
+	   logsum_example \
+	   p7_trace_metrics_example \
+	   tracealign_example
 
 LIBTMP =
+
+# TODO: mpisupport.c
 
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@

@@ -1962,8 +1962,7 @@ ERROR:
  *****************************************************************/
 
 #ifdef p7PIPELINE_EXAMPLE
-/* gcc -o pipeline_example -g -Wall -I../easel -L../easel -I. -L. -Dp7PIPELINE_EXAMPLE p7_pipeline.c -lhmmer -leasel -lm
- * ./pipeline_example <hmmfile> <sqfile>
+/* ./pipeline_example <hmmfile> <sqfile>
  */
 
 #include "p7_config.h"
@@ -2018,8 +2017,6 @@ main(int argc, char **argv)
   P7_TOPHITS   *hitlist = NULL;
   int           h,d,namew;
 
-  p7_Init();
-
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
@@ -2037,8 +2034,8 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
   om = p7_oprofile_Create(hmm->M, abc);
-  p7_profile_ConfigLocal(gm, hmm, bg, 400);
-  p7_oprofile_Convert(gm, om);     /* <om> is now p7_LOCAL, multihit */
+  p7_profile_Config(gm, hmm, bg);
+  p7_oprofile_Convert(gm, om);   
   p7_pipeline_NewModel(pli, om, bg);
 
   /* Run each target sequence through the pipeline */
@@ -2046,9 +2043,10 @@ main(int argc, char **argv)
     { 
       p7_pipeline_NewSeq(pli, sq);
       p7_bg_SetLength(bg, sq->n);
+      p7_profile_SetLength(gm, sq->n);
       p7_oprofile_ReconfigLength(om, sq->n);
   
-      p7_Pipeline(pli, om, bg, sq, hitlist);
+      p7_Pipeline(pli, gm, om, bg, sq, hitlist);
 
       esl_sq_Reuse(sq);
       p7_pipeline_Reuse(pli);
@@ -2100,10 +2098,8 @@ main(int argc, char **argv)
  * 8. Example 2: "scan mode" in an HMM db
  *****************************************************************/
 #ifdef p7PIPELINE_EXAMPLE2
-/* gcc -o pipeline_example2 -g -Wall -I../easel -L../easel -I. -L. -Dp7PIPELINE_EXAMPLE2 p7_pipeline.c -lhmmer -leasel -lm
- * ./pipeline_example2 <hmmdb> <sqfile>
+/* ./pipeline_example2 <hmmdb> <sqfile>
  */
-
 #include "p7_config.h"
 
 #include "easel.h"
@@ -2153,8 +2149,6 @@ main(int argc, char **argv)
   P7_PIPELINE  *pli     = NULL;
   P7_TOPHITS   *hitlist = p7_tophits_Create();
   int           h,d,namew;
-
-  p7_Init();
 
   /* Open a sequence file, read one seq from it.
    * Convert to digital later, after 1st HMM is input and abc becomes known 

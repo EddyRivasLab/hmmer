@@ -2,13 +2,9 @@
 
 # Tests hmmemit -c and hmmemit -C consensus-generating options.
 #
-# Usage:   ./i14-hmmemit-consensus.pl <builddir> <srcdir> <tmpfile prefix>
-# Example: ./i14-hmmemit-consensus.pl ..         ..       tmpfoo
+# Usage:   ./i014-hmmemit-consensus.pl <builddir> <srcdir> <tmpfile prefix>
+# Example: ./i014-hmmemit-consensus.pl ..         ..       tmpfoo
 #
-# SRE, Fri May 14 11:34:28 2010 [Janelia]
-# SVN $Id$
-
-
 BEGIN {
     $builddir  = shift;
     $srcdir    = shift;
@@ -16,8 +12,8 @@ BEGIN {
 }
 
 # Verify that we have all the executables we need for the test.
-if (! -x "$builddir/src/hmmbuild")  { die "FAIL: didn't find hmmbuild binary in $builddir/src\n";  }
-if (! -x "$builddir/src/hmmemit")   { die "FAIL: didn't find hmmemit binary in $builddir/src\n";  }
+if (! -x "$builddir/src/programs/hmmbuild")  { die "FAIL: didn't find hmmbuild binary in $builddir/src/programs\n";  }
+if (! -x "$builddir/src/programs/hmmemit")   { die "FAIL: didn't find hmmemit binary in $builddir/src/programs\n";  }
 
 # Create a carefully constructed test alignment
 #
@@ -65,10 +61,10 @@ close ALI1;
 
 for ($i = 0; $i < $#symfrac_choices; $i++)
 {
-    @output = `$builddir/src/hmmbuild --wnone --pnone --symfrac $symfrac_choices[$i] $tmppfx.hmm $tmppfx.sto 2>&1`;
+    @output = `$builddir/src/programs/hmmbuild --wnone --pnone --symfrac $symfrac_choices[$i] $tmppfx.hmm $tmppfx.sto 2>&1`;
     if ($? != 0) { die "FAIL: hmmbuild failed\n"; }
 
-    @output = `$builddir/src/hmmemit  -C --minl $minl_choices[$i] --minu $minu_choices[$i] $tmppfx.hmm 2>&1`;
+    @output = `$builddir/src/programs/hmmemit  -C --minl $minl_choices[$i] --minu $minu_choices[$i] $tmppfx.hmm 2>&1`;
     if ($? != 0) { die "FAIL: hmmemit failed\n"; }
 
     if ($output[1] ne $answers[$i]) { die "FAIL: hmmemit, expected $answers[$i]; saw $output[1]\n"; }

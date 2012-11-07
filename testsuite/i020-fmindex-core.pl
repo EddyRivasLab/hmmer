@@ -5,9 +5,6 @@
 # Usage:   ./i20-fmindex-core.pl <builddir> <srcdir> <tmpfile prefix>
 # Example: ./i20-fmindex-core.pl ..         ..       tmpfoo
 #
-# SVN $URL$
-# SVN $Id$
-
 BEGIN {
     $builddir  = shift;
     $srcdir    = shift;
@@ -21,15 +18,12 @@ $verbose = 1;
 # $tmppfx.fm            <fm>    The hmmer-style FM-index set produced by makenhmmerdb
 # $tmppfx.test          <text>  9 length-12 sequences, used to search the FM-index sting of the two sequences from $tmppfx.B inserted into the sequence of $tmppfx.A  
 
-
-@h3progs =  ( "makenhmmerdb", "exactmatch");
-
-# Verify that we have all the executables and datafiles we need for the test.
-foreach $h3prog  (@h3progs)  { if (! -x "$builddir/src/$h3prog")              { die "FAIL: didn't find $h3prog executable in $builddir/src\n";              } }
+if (! -x "$builddir/src/fm/makenhmmerdb")  { die "FAIL: didn't find makenhmmerdb executable in $builddir/src/fm\n";              } }
+if (! -x "$builddir/src/fm/exactmatch")    { die "FAIL: didn't find exactmatch executable in $builddir/src/fm\n";              } }
 
 &create_db_file("$tmppfx.fa");
 
-$cmd = "$builddir/src/makenhmmerdb $tmppfx.fa $tmppfx.fm 2>&1";
+$cmd = "$builddir/src/fm/makenhmmerdb $tmppfx.fa $tmppfx.fm 2>&1";
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: makenhmmerdb failed unexpectedly\n"; } 
 if ($output !~ /# alphabet     :                           dna/ ||
@@ -42,7 +36,7 @@ if ($output !~ /# alphabet     :                           dna/ ||
 &create_search_file("$tmppfx.test");
 
 # Search for hits
-$cmd = "$builddir/src/exactmatch --out=- $tmppfx.test $tmppfx.fm "; #2>&1";
+$cmd = "$builddir/src/fm/exactmatch --out=- $tmppfx.test $tmppfx.fm "; #2>&1";
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: exactmatch failed unexpectedly\n"; }
 $expect = &get_expected();              

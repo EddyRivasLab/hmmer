@@ -506,8 +506,6 @@ sample_endpoints(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int *ret_kstart, int *
  *****************************************************************/
 
 /* A small driver providing a testbed for sequence-emission related development testing.
- * 
- * gcc -g -Wall -o stats -L. -I. -L../easel -I../easel -Dp7EMIT_STATS emit.c -lhmmer -leasel -lm
  */
 #ifdef p7EMIT_STATS
 #include "p7_config.h"
@@ -540,6 +538,8 @@ main(int argc, char **argv)
   float            nullsc;
   double           bitscore;
 
+  p7_Init();
+
   r  = esl_randomness_CreateFast(0);
   tr = p7_trace_Create();
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("failed to open %s", hmmfile);
@@ -563,7 +563,8 @@ main(int argc, char **argv)
       bitscore = (sc - nullsc)/ eslCONST_LOG2;
 
       printf("%d  %8.4f\n",
-	     counts[p7T_M] + (counts[p7T_I] + counts[p7T_D])/2,
+	     counts[p7T_MG] + counts[p7T_ML] + 
+	     (counts[p7T_IG] + counts[p7T_IL] + counts[p7T_DG] + counts[p7T_DL])/2,
 	     bitscore);
     }
 
@@ -668,6 +669,9 @@ main(int argc, char **argv)
   P7_HMM         *hmm          = NULL;
   P7_PROFILE     *gm           = p7_profile_Create(M, abc);
   
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+
   p7_hmm_Sample(rng, M, abc, &hmm);
   p7_profile_Config   (gm, hmm, bg);   
   p7_profile_SetLength(gm, L);
@@ -675,12 +679,15 @@ main(int argc, char **argv)
   utest_core_emit   (rng, hmm,         N);
   utest_profile_emit(rng, hmm, gm, bg, N);
 
+  fprintf(stderr, "#  status = ok\n");
+
   p7_profile_Destroy(gm);
   p7_hmm_Destroy(hmm);
   p7_bg_Destroy(bg);
   esl_alphabet_Destroy(abc);
   esl_randomness_Destroy(rng);
   esl_getopts_Destroy(go);
+  return 0;
 }
 #endif /*p7EMIT_TESTDRIVE*/
 /*------------------ end, test driver ---------------------------*/

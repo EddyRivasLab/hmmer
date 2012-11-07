@@ -645,10 +645,10 @@ main(int argc, char **argv)
   utest_alphabet_config(eslCOINS);
   utest_alphabet_config(eslDICE);
 
-  fprintf(stderr, "#  status = ok\n");
-
   esl_randomness_Destroy(rng);
   esl_getopts_Destroy(go);
+
+  fprintf(stderr, "#  status = ok\n");
   return 0;
 }
 #endif /* p7BG_TESTDRIVE */

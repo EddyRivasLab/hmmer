@@ -1,6 +1,5 @@
 /* Tabular (parsable) output of pipeline results.
  */
-
 #include "p7_config.h"
 
 #include <stdio.h>

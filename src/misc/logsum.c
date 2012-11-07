@@ -171,8 +171,7 @@ p7_logsum_IsSlowExact(void)
  * 2. Benchmark driver.
  *****************************************************************/
 #ifdef p7LOGSUM_BENCHMARK
-/* gcc -o logsum_benchmark -g -O2 -I. -L. -I../easel -L../easel -Dp7LOGSUM_BENCHMARK logsum.c -leasel -lm
- * ./logsum_benchmark
+/* ./logsum_benchmark
  */
 
 /* A table-driven FLogsum() is about 20x faster than a direct
@@ -232,8 +231,6 @@ main(int argc, char **argv)
   int             N       = esl_opt_GetInteger(go, "-N");
   int             i;
   float          *A, *B, *C;
-
-  p7_LogsumInit();
 
   /* Create the problem: sample N values A,B on interval -1000,1000: about the range of H3 scores */
   A = malloc(sizeof(float) * N);
@@ -338,10 +335,6 @@ utest_FLogsumSpecials(void)
  * 4. Test driver.
  *****************************************************************/
 #ifdef p7LOGSUM_TESTDRIVE
-/*
-  gcc -o logsum_utest -msse2 -g -Wall -I. -L. -I../easel -L../easel -Dp7LOGSUM_TESTDRIVE logsum.c -leasel -lm
-  ./logsum_utest
- */
 #include "p7_config.h"
 
 #include <stdio.h>
@@ -371,13 +364,16 @@ main(int argc, char **argv)
   ESL_GETOPTS    *go     = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   ESL_RANDOMNESS *r      = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
 
-  p7_FLogsumInit();
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
 
   utest_FLogsumError(go, r);
   utest_FLogsumSpecials();
 
   esl_randomness_Destroy(r);
   esl_getopts_Destroy(go);
+
+  fprintf(stderr, "#  status = ok\n");
   return eslOK;
 }
 #endif /*p7LOGSUM_TESTDRIVE*/
@@ -388,8 +384,7 @@ main(int argc, char **argv)
  * 5. Example.
  *****************************************************************/
 #ifdef p7LOGSUM_EXAMPLE
-/* gcc -o example -g -O2 -I. -L. -I../easel -L../easel -Dp7LOGSUM_EXAMPLE logsum.c -leasel -lm
- * ./example -0.5 -0.5
+/* ./example -0.5 -0.5
  */
 #include "p7_config.h"
 #include "easel.h"

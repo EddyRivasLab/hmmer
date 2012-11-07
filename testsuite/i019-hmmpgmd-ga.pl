@@ -4,10 +4,6 @@
 # in this case, the --cut_ga threshold, using an example that
 # Rob Finn found as a bug in Jan 2011.
 # 
-# SRE, Sat Jan  8 09:29:18 2011 [Casa de Gatos] xref J7/50
-# SVN $URL$
-# SVN $Id$
-
 use IO::Socket;
 
 $SIG{INT} = \&catch_sigint;
@@ -26,8 +22,11 @@ $wport   = 51374;		# nondefault worker and client ports...
 # Then we index that w/ hmmpress.
 
 # Verify that we have all the executables and datafiles we need for the test.
-@h3progs = ("hmmpgmd", "hmmc2", "hmmpress");
-foreach $h3prog  (@h3progs) { if (! -x "$builddir/src/$h3prog")             { die "FAIL: didn't find $h3prog executable in $builddir/src\n";              } }
+if (! -x "$builddir/src/programs/hmmpress")  { die "FAIL: didn't find hmmpress executable in $builddir/src/programs\n"; } }
+if (! -x "$builddir/src/daemon/hmmpgmd")     { die "FAIL: didn't find hmmpgmd executable in $builddir/src/daemon\n";    } }
+if (! -x "$builddir/src/daemon/hmmc2")       { die "FAIL: didn't find hmmc2 executable in $builddir/src/daemon\n";      } }
+
+
 
 # Verify that threads are enabled in p7_config.h
 # by looking for "#define HMMER_THREADS"
@@ -49,20 +48,20 @@ if (IO::Socket::INET->new(PeerHost => $host, PeerPort => $cport, Proto     => 't
 # create the files needed for the test
 &create_test_hmmdb("$tmppfx.hmm");
 &create_test_script("$tmppfx.in");
-`$builddir/src/hmmpress -f $tmppfx.hmm`;  if ($?) { die "FAIL: hmmpress"; }
+`$builddir/src/programs/hmmpress -f $tmppfx.hmm`;  if ($?) { die "FAIL: hmmpress"; }
 
 $daemon_active = 0;
 # start the hmmpgmd master and 1 worker with 1 core
-system("$builddir/src/hmmpgmd --master --wport $wport --cport $cport --hmmdb $tmppfx.hmm --pid $tmppfx.pid  > /dev/null 2>&1 &"); 
+system("$builddir/src/daemon/hmmpgmd --master --wport $wport --cport $cport --hmmdb $tmppfx.hmm --pid $tmppfx.pid  > /dev/null 2>&1 &"); 
 if ($?) { die "FAIL: hmmpgmd master failed to start";  }
 $daemon_active = 1;
 sleep 2;  
-system("$builddir/src/hmmpgmd --worker 127.0.0.1 --wport $wport --cpu 1   > /dev/null 2>&1 &"); 
+system("$builddir/src/daemon/hmmpgmd --worker 127.0.0.1 --wport $wport --cpu 1   > /dev/null 2>&1 &"); 
 if ($?) { die "FAIL: hmmpgmd worker failed to start";  }
 sleep 2;
 
 # Run the test script
-@output = `cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1`;
+@output = `cat $tmppfx.in | $builddir/src/daemon/hmmc2 -i $host -p $cport -S 2>&1`;
 # Currently, hmmc2 returns nonzero exit code even upon clean !shutdown command... don't check $?
 $daemon_active = 0;
 
@@ -111,7 +110,7 @@ sub tear_down
 
         # the old way
         #&create_kill_script("$tmppfx.in");
-        #`cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1`;
+        #`cat $tmppfx.in | $builddir/src/daemon/hmmc2 -i $host -p $cport -S 2>&1`;
     }
     unlink <$tmppfx.hmm*>;
     unlink "$tmppfx.in";

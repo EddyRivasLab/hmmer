@@ -14,13 +14,14 @@ HDRS =
 
 PROGS =
 
-UTESTS = 
+UTESTS =  modelconfig_utest 
 
-STATS  = 
+STATS  =  
 
-BENCHMARKS = 
+BENCHMARKS =
 
-EXAMPLES =
+EXAMPLES = p7_pipeline_example \
+	   p7_pipeline_example2
 
 LIBTMP = 
 
