@@ -67,7 +67,7 @@ $output = `$builddir/src/programs/hmmalign --mapali $tmppfx.sto $tmppfx.hmm $tmp
 if ($? != 0) { die "FAIL: hmmalign --mapali failed\n"; }
 
 ($testseq) = ($output =~ /\ntest\s+(\S+)/);
-if ($testseq ne "-CDEFG.HIK.LMNPQRSTVW-") { die "FAIL: test seq in unexpected alignment\n"; }
+if ($testseq ne "~CDEFG.HIK.LMNPQRSTVW~") { die "FAIL: test seq in unexpected alignment\n"; }
 
 print "ok\n";
 unlink "$tmppfx.sto";

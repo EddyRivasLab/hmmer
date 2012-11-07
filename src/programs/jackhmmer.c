@@ -576,7 +576,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	{       /* We enter each iteration with an optimized profile. */
 	  esl_stopwatch_Start(w);
 
-	  if (gm)        p7_oprofile_Destroy(om);
+	  if (gm)        p7_profile_Destroy(gm);
 	  if (om)        p7_oprofile_Destroy(om);
 	  if (info->pli) p7_pipeline_Destroy(info->pli);
 	  if (info->th)  p7_tophits_Destroy(info->th);

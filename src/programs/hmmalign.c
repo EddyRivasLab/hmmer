@@ -99,6 +99,8 @@ main(int argc, char **argv)
   int           status;		/* easel/hmmer return code         */
   char          errbuf[eslERRBUFSIZE];
 
+  p7_Init();
+
   /* Parse the command line
    */
   go = esl_getopts_Create(options);

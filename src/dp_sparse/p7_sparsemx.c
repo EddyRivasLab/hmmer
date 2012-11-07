@@ -1719,7 +1719,7 @@ validate_decoding(const P7_SPARSEMX *sx, char *errbuf)
 	  if (! is_prob(*dpc, tol)) ESL_FAIL(eslFAIL, errbuf, "bad decode prob %f at i=%d,k=%d,%s", *dpc, i,sm->k[i][z], p7_sparsemx_DecodeState(s));
       if (sm->n[i]) {                      /* specials on sparse row */
 	for (s = 0; s < p7S_NXCELLS; xc++, s++) 
-	  if (! is_prob(*xc, tol)) { abort(); ESL_FAIL(eslFAIL, errbuf, "bad decode prob %f at i=%d,%s", *xc, i, p7_sparsemx_DecodeSpecial(s)); }
+	  if (! is_prob(*xc, tol))  ESL_FAIL(eslFAIL, errbuf, "bad decode prob %f at i=%d,%s", *xc, i, p7_sparsemx_DecodeSpecial(s)); 
       }
     }
   return eslOK;

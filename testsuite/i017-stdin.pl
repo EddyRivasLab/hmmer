@@ -6,6 +6,7 @@
 # Usage:   ./i017-stdin.pl <builddir> <srcdir> <tmpfile prefix>
 # Example: ./i017-stdin.pl ..         ..       tmpfoo
 #
+# TODO: nhmmer has been temporarily removed from this test
 BEGIN {
     $builddir  = shift;
     $srcdir    = shift;
@@ -45,7 +46,8 @@ $nmodel2  = "PSE";
 @h3progs =  ("programs/hmmalign", "programs/hmmbuild",  "utilities/hmmconvert", 
 	     "programs/hmmemit",  "utilities/hmmfetch", "programs/hmmpress",
 	     "programs/hmmscan",  "programs/hmmsearch", "utilities/hmmstat", 
-	     "programs/jackhmmer", "programs/nhmmer",   "programs/phmmer");
+	     "programs/jackhmmer", "programs/phmmer");
+# TODO: nhmmer was removed from above
 @eslprogs = ("esl-shuffle");
 
 # Verify that we have all the executables and datafiles we need for the test.
@@ -285,24 +287,25 @@ if ($output !~ /^jackhmmer cannot read <seqdb> from/) { die "FAIL: $prog didn't 
 #    (like hmmsearch, but with DNA models)
 #      reject - - case 
 #      reject <seqdb> as - on multiquery
+# TODO: these tests removed temporarily; 3.1 in progress
 #################################################################
 
-$tag  = "nhmmer";            $prog = "$builddir/src/programs/$tag";   
-$tag1 = "<hmmfile>";         $arg1 = "$srcdir/testsuite/$nmodel1.hmm";   $arg1b = "$tmppfx.nhmm";   
-$tag2 = "<seqdb>";           $arg2 = "$tmppfx.ndb";      
-if ($verbose) { print "$tag...\n"; }
+# $tag  = "nhmmer";            $prog = "$builddir/src/programs/$tag";   
+# $tag1 = "<hmmfile>";         $arg1 = "$srcdir/testsuite/$nmodel1.hmm";   $arg1b = "$tmppfx.nhmm";   
+# $tag2 = "<seqdb>";           $arg2 = "$tmppfx.ndb";      
+# if ($verbose) { print "$tag...\n"; }
 
-`$prog $arg1 $arg2          | grep -v "^#" > $tmppfx.out1`;  if ($?) { die "FAIL: $tag $tag1 $tag2\n"; }
-`cat $arg1 | $prog - $arg2  | grep -v "^#" > $tmppfx.out2`;  if ($?) { die "FAIL: $tag - $tag2\n"; }
-`cat $arg2 | $prog $arg1 -  | grep -v "^#" > $tmppfx.out3`;  if ($?) { die "FAIL: $tag $tag1 -\n"; }
+# `$prog $arg1 $arg2          | grep -v "^#" > $tmppfx.out1`;  if ($?) { die "FAIL: $tag $tag1 $tag2\n"; }
+# `cat $arg1 | $prog - $arg2  | grep -v "^#" > $tmppfx.out2`;  if ($?) { die "FAIL: $tag - $tag2\n"; }
+# `cat $arg2 | $prog $arg1 -  | grep -v "^#" > $tmppfx.out3`;  if ($?) { die "FAIL: $tag $tag1 -\n"; }
 
-`diff -b $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag1 comes through stdin\n"; }
-`diff -b $tmppfx.out1 $tmppfx.out3 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag2 comes through stdin\n"; }
+# `diff -b $tmppfx.out1 $tmppfx.out2 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag1 comes through stdin\n"; }
+# `diff -b $tmppfx.out1 $tmppfx.out3 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag2 comes through stdin\n"; }
 
-$output = `cat $arg1 $arg2 | $prog - - 2>&1`;    if (! $?) { die "FAIL: $prog should have failed on double - -\n"; }
-if ($output !~ /^Either <hmmfile> or <seqdb>/) { die "FAIL: $prog didn't give expected error message for the - - case.\n"; }
+# $output = `cat $arg1 $arg2 | $prog - - 2>&1`;    if (! $?) { die "FAIL: $prog should have failed on double - -\n"; }
+# if ($output !~ /^Either <hmmfile> or <seqdb>/) { die "FAIL: $prog didn't give expected error message for the - - case.\n"; }
 
-$output = `cat $arg2 | $prog $arg1b - 2>&1`;     if (! $?) { die "FAIL: $prog should fail on multiquery $tag1, stdin $tag2.\n"; }
+# $output = `cat $arg2 | $prog $arg1b - 2>&1`;     if (! $?) { die "FAIL: $prog should fail on multiquery $tag1, stdin $tag2.\n"; }
 
 ################################################################
 # phmmer: just like testing hmmsearch, but with query sequences instead of profiles

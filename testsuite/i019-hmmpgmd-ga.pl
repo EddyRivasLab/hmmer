@@ -22,9 +22,9 @@ $wport   = 51374;		# nondefault worker and client ports...
 # Then we index that w/ hmmpress.
 
 # Verify that we have all the executables and datafiles we need for the test.
-if (! -x "$builddir/src/programs/hmmpress")  { die "FAIL: didn't find hmmpress executable in $builddir/src/programs\n"; } }
-if (! -x "$builddir/src/daemon/hmmpgmd")     { die "FAIL: didn't find hmmpgmd executable in $builddir/src/daemon\n";    } }
-if (! -x "$builddir/src/daemon/hmmc2")       { die "FAIL: didn't find hmmc2 executable in $builddir/src/daemon\n";      } }
+if (! -x "$builddir/src/programs/hmmpress")  { die "FAIL: didn't find hmmpress executable in $builddir/src/programs\n"; } 
+if (! -x "$builddir/src/daemon/hmmpgmd")     { die "FAIL: didn't find hmmpgmd executable in $builddir/src/daemon\n";    } 
+if (! -x "$builddir/src/daemon/hmmc2")       { die "FAIL: didn't find hmmc2 executable in $builddir/src/daemon\n";      } 
 
 
 

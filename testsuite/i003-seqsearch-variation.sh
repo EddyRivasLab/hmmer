@@ -1,6 +1,11 @@
 #! /bin/sh
 #
 # Verify that phmmer/jackhmmer runs are reproducible (no stochastic variation)
+# 
+# Although H3.1 replaced stochastic traceback clustering with the mass
+# trace algorithm, phmmer and jackhmmer can still show stochastic
+# variation, because they calibrate their models with stochastic
+# simulations. 
 #
 if test ! $# -eq 4; then 
   echo "Usage: $0 <phmmer/jackhmmer binary> <query seqfile> <target seqfile> <tmpfile prefix>"
@@ -24,19 +29,6 @@ diff $tmppfx.out1 $tmppfx.out2 > /dev/null
 if test $? -ne 0 
 then 
    echo "FAIL: results differ"
-   exit 1
-fi
-
-# Running with different seeds shows stochastically different results
-$prog --seed 1 $qfile $tfile > $tmppfx.out;   if test $? -ne 0; then echo "FAIL: crash"; exit 1; fi
-cat $tmppfx.out | grep -v "^#" > $tmppfx.out1
-$prog --seed 2 $qfile $tfile > $tmppfx.out;   if test $? -ne 0; then echo "FAIL: crash"; exit 1; fi
-cat $tmppfx.out | grep -v "^#" > $tmppfx.out2
-
-diff $tmppfx.out1 $tmppfx.out2 > /dev/null
-if test $? -eq 0 
-then 
-   echo "FAIL: results are the same despite different rng seeds"
    exit 1
 fi
 

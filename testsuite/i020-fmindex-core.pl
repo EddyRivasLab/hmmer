@@ -2,8 +2,8 @@
 
 # Test of makenhmmerdb and the core fm-index search functionality, using extactmatch  
 # 
-# Usage:   ./i20-fmindex-core.pl <builddir> <srcdir> <tmpfile prefix>
-# Example: ./i20-fmindex-core.pl ..         ..       tmpfoo
+# Usage:   ./i020-fmindex-core.pl <builddir> <srcdir> <tmpfile prefix>
+# Example: ./i020-fmindex-core.pl ..         ..       tmpfoo
 #
 BEGIN {
     $builddir  = shift;
@@ -11,15 +11,15 @@ BEGIN {
     $tmppfx    = shift;
 }
 
-$verbose = 1;
+$verbose = 0;
 
 # The test creates the following files:
 # $tmppfx.fa            <seqdb> 3 sequences in fasta format
 # $tmppfx.fm            <fm>    The hmmer-style FM-index set produced by makenhmmerdb
 # $tmppfx.test          <text>  9 length-12 sequences, used to search the FM-index sting of the two sequences from $tmppfx.B inserted into the sequence of $tmppfx.A  
 
-if (! -x "$builddir/src/fm/makenhmmerdb")  { die "FAIL: didn't find makenhmmerdb executable in $builddir/src/fm\n";              } }
-if (! -x "$builddir/src/fm/exactmatch")    { die "FAIL: didn't find exactmatch executable in $builddir/src/fm\n";              } }
+if (! -x "$builddir/src/fm/makenhmmerdb")  { die "FAIL: didn't find makenhmmerdb executable in $builddir/src/fm\n";  } 
+if (! -x "$builddir/src/fm/exactmatch")    { die "FAIL: didn't find exactmatch executable in $builddir/src/fm\n";    } 
 
 &create_db_file("$tmppfx.fa");
 

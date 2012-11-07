@@ -96,7 +96,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
   int Q        = P7_NVW(om->M);    /* segment length: # of vectors                              */
-  __m128i *dp  = ox->dp;           /* enables MMXf(), IMXf(), DMXf() access macros              */
+  __m128i *dp;
   __m128i *rsc;			   /* will point at om->ru[x] for residue x[i]                  */
   __m128i *tsc;			   /* will point into (and step thru) om->tu                    */
   __m128i negInfv;
@@ -107,6 +107,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 
   /* Resize the filter mx as needed */
   if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of Vit filter matrix failed");
+  dp = ox->dp;           /* enables MMXf(), IMXf(), DMXf() access macros. Must be set AFTER the GrowTo, because ox->dp may get moved */
 
   /* Matrix type and size must be set early, not late: debugging dump functions need this information. */
   ox->M    = om->M;

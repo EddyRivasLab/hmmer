@@ -107,7 +107,7 @@ p7_filtermx_GrowTo(P7_FILTERMX *fx, int allocM)
   if (allocM <= fx->allocM) return eslOK;
 
   /* if not, grow it */
-  ESL_REALLOC(fx->dp_mem, (sizeof(__m128i) * p7F_NSCELLS * P7_NVW(allocM)) + (p7_VALIGN-1));
+  ESL_REALLOC(fx->dp_mem, (sizeof(__m128i) * (p7F_NSCELLS * P7_NVW(allocM))) + (p7_VALIGN-1));
   fx->allocM = allocM;
   fx->dp     = (__m128i *) ( (unsigned long int) ( (char *) fx->dp_mem + (p7_VALIGN-1)) & p7_VALIMASK);
 

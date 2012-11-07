@@ -27,6 +27,8 @@
 
 #include "dp_sparse/p7_sparsemx.h"
 #include "dp_sparse/sparse_viterbi.h"
+#include "dp_sparse/sparse_fwdback.h"
+#include "dp_sparse/sparse_decoding.h"
 
 static int     map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount, int **ret_matuse, int **ret_matmap, int *ret_alen);
 static ESL_DSQ get_dsq_z(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int idx, int z);
@@ -257,7 +259,8 @@ p7_tracealign_ComputeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
   P7_OPROFILE   *om  = NULL;
   P7_CHECKPTMX  *cx  = NULL;
   P7_SPARSEMASK *sm  = NULL;
-  P7_SPARSEMX   *sxv = NULL;
+  P7_SPARSEMX   *sx1 = NULL;
+  P7_SPARSEMX   *sx2 = NULL;
   P7_BG         *bg  = NULL;
   int           idx;
   float         fwdsc;  /* Forward raw score, nats         */
@@ -272,7 +275,8 @@ p7_tracealign_ComputeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
 
   cx  = p7_checkptmx_Create (hmm->M, sq[offset]->n, ESL_MBYTES(p7_RAMLIMIT));
   sm  = p7_sparsemask_Create(hmm->M, sq[offset]->n);
-  sxv = p7_sparsemx_Create  (sm);
+  sx1 = p7_sparsemx_Create  (sm);
+  sx2 = p7_sparsemx_Create  (sm);
 
   for (idx = offset; idx < offset+ N; idx++)
     {
@@ -281,16 +285,24 @@ p7_tracealign_ComputeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
 
       p7_ForwardFilter (sq[idx]->dsq, sq[idx]->n, om, cx, &fwdsc);
       p7_BackwardFilter(sq[idx]->dsq, sq[idx]->n, om, cx, sm);
-      p7_SparseViterbi (sq[idx]->dsq, sq[idx]->n, gm, sm, sxv, tr[idx], &vsc);
+      p7_SparseViterbi (sq[idx]->dsq, sq[idx]->n, gm, sm, sx1, tr[idx], &vsc);
+      if (tr[idx]->pp) {
+	p7_SparseForward (sq[idx]->dsq, sq[idx]->n, gm, sm, sx1, &fwdsc);
+	p7_SparseBackward(sq[idx]->dsq, sq[idx]->n, gm, sm, sx2, &fwdsc);
+	p7_SparseDecoding(sq[idx]->dsq, sq[idx]->n, gm, sx1, sx2, sx2); /* decode sx2 in place */
+	p7_sparsemx_TracePostprobs(sx2, tr[idx]);
+      }
       p7_trace_Index(tr[idx]);
 
       p7_checkptmx_Reuse(cx);
       p7_sparsemask_Reuse(sm);
-      p7_sparsemx_Reuse(sxv);
+      p7_sparsemx_Reuse(sx1);
+      p7_sparsemx_Reuse(sx2);
     }
 
   p7_bg_Destroy(bg);
-  p7_sparsemx_Destroy(sxv);
+  p7_sparsemx_Destroy(sx1);
+  p7_sparsemx_Destroy(sx2);
   p7_sparsemask_Destroy(sm);
   p7_checkptmx_Destroy(cx);
   p7_oprofile_Destroy(om);

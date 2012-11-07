@@ -606,8 +606,8 @@ p7_pipeline_WriteStats(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
   fprintf(ofp, "Internal pipeline statistics summary:\n");
   fprintf(ofp, "-------------------------------------\n");
   if (pli->mode == p7_SEARCH_SEQS) {
-    fprintf(ofp,   "Query model(s):      %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
-    fprintf(ofp,   "Target sequences:    %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
+    fprintf(ofp, "Query model(s):              %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
+    fprintf(ofp, "Target sequences:            %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
     ntargets = pli->nseqs;
   } else {
     fprintf(ofp, "Query sequence(s):           %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
@@ -820,6 +820,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
   p7_trace_Index(pli->tr);		         /* index domains in the trace */
   p7_sparsemx_Reuse(pli->sxx);	                 /* reuse the Viterbi matrix for mass tracing, coming up next */
   
+
   ESL_ALLOC(dcl, sizeof(P7_DOMAIN) * pli->tr->ndom);
   ESL_REALLOC(pli->wrk,  sizeof(float) * (gm->M+1));
   ESL_REALLOC(pli->n2sc, sizeof(float) * (sq->n+1));
@@ -877,7 +878,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
 	if (pli->tr->i[z]) dcl[d].oasc += pli->tr->pp[z];
 
       /* domain bit score = null2-corrected bit score of the sequence if this were the only envelope in it. */
-      dcl[d].bitscore = dcl[d].envsc - (nullsc + dcl[d].dombias) / eslCONST_LOG2;
+      dcl[d].bitscore = (dcl[d].envsc - (nullsc + dcl[d].dombias)) / eslCONST_LOG2;
       dcl[d].lnP      = esl_exp_logsurv( dcl[d].bitscore, om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
       if (dcl[d].bitscore > dcl[best_d].bitscore) best_d = d;

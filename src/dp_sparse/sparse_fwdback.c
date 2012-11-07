@@ -138,8 +138,8 @@ p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARS
 	  /* Try to find cell i-1,k; then compute I(i,k) from it */
 	  while (y < sm->n[i-1] && kp[y] < k)  { y++; dpp+=p7S_NSCELLS; }
 	  if    (y < sm->n[i-1] && kp[y] == k) {
-	    *dpc++ = ISC(k) + p7_FLogsum( dpp[p7R_ML] + TSC(p7P_MI,k),  dpp[p7R_IL] + TSC(p7P_II, k));
-	    *dpc++ = ISC(k) + p7_FLogsum( dpp[p7R_MG] + TSC(p7P_MI,k),  dpp[p7R_IG] + TSC(p7P_II, k));
+	    *dpc++ = p7_FLogsum( dpp[p7R_ML] + TSC(p7P_MI,k),  dpp[p7R_IL] + TSC(p7P_II, k)); // +ISC(k) if we weren't enforcing it to zero
+	    *dpc++ = p7_FLogsum( dpp[p7R_MG] + TSC(p7P_MI,k),  dpp[p7R_IG] + TSC(p7P_II, k)); // ditto
 	  } else {
 	    *dpc++ = -eslINFINITY;
 	    *dpc++ = -eslINFINITY;
