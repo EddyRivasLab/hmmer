@@ -4,6 +4,18 @@
 # in this case, the --cut_ga threshold, using an example that
 # Rob Finn found as a bug in Jan 2011.
 # 
+# Usage:   ./i019-hmmpgmd-ga.pl <builddir> <srcdir> <tmpfile prefix>
+# Example: ./i019-hmmpgmd-ga.pl ..         ..       tmpfoo
+#
+# To reproduce this test manually, for debugging:
+#    - copy contents of &create_test_hmmdb to bug.hmm
+#    - copy contents of &create_test_script to bug.in
+#  ../programs/hmmpress bug.hmm
+#    - then, in three different terminals or emacs gdb sessions:
+#  ./hmmpgmd --master           --wport 51374 --cport 51373 --hmmdb bug.hmm --pid bug.pid 
+#  ./hmmpgmd --worker 127.0.0.1 --wport 51374 --cpu 1
+#  cat bug.in | ./hmmc2 -i 127.0.0.1 -p 51373 -S 
+# 
 use IO::Socket;
 
 $SIG{INT} = \&catch_sigint;
@@ -80,15 +92,16 @@ foreach $line (@output)
     }
 }
 
+
 # if cut_ga isn't being processed properly, we get three hits:
-#   1.3e-43  134.8   1.6      4e-28   82.1   0.1    3.3  3  3  
-#     1e-05   13.9   0.8    0.00016    7.0   0.4    2.9  1  1        
-#   1.7e-05   12.3   0.1    0.00012    6.4   0.0    2.2  2  2        
+#    3.3e-44  136.7   4.3    1.8e-29   89.5   0.1    3.0  3  3         
+#    0.00016    9.1   0.0     0.0036    4.6   0.0    2.0  1  2         
+#    0.00016   10.1   0.0      0.018    3.5   0.0    2.2  1  1         
 #
 # if we're ok, we get 1 hit:
-#   1.3e-43  134.8   1.6      4e-28   82.1   0.1    3.3  3  3  
+#   3.3e-44  136.7   4.3    1.8e-29   89.5   0.1    3.0  2  3
 
-$expected_line = "    1.3e-43  134.8   1.6      4e-28   82.1   0.1    3.3  3  3";
+$expected_line = "    3.3e-44  136.7   4.3    1.8e-29   89.5   0.1    3.0  3  3";
 
 if ($nhits == 3) { die "FAIL: ga thresholds not applied?"; }
 if ($nhits != 1 && $resultline[0] ne $expected_line) { $daemon_active=1; tear_down(); die "FAIL: didn't get expected result line\nresult: $resultline[0]\nexpect: $expected_line"; }

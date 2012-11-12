@@ -107,10 +107,10 @@ static ESL_OPTIONS options[] = {
   { "--EfN",        eslARG_INT,         "200", NULL,"n>0",      NULL,  NULL,  NULL,              "number of sequences for Forward exp tail tau fit",            11 },   
   { "--Eft",        eslARG_REAL,       "0.04", NULL,"0<x<1",    NULL,  NULL,  NULL,              "tail mass for Forward exponential tail tau fit",              11 },   
 /* other options */
-  { "--nonull2",    eslARG_NONE,        NULL,  NULL, NULL,      NULL,  NULL,  NULL,              "turn off biased composition score corrections",               12 },
+  { "--nonull2",    eslARG_NONE,        NULL,  NULL, NULL,      NULL,  NULL,  NULL,             "turn off biased composition score corrections",               12 },
   { "-Z",           eslARG_REAL,       FALSE, NULL, "x>0",     NULL,  NULL,  NULL,              "set # of comparisons done, for E-value calculation",          12 },
   { "--domZ",       eslARG_REAL,       FALSE, NULL, "x>0",     NULL,  NULL,  NULL,              "set # of significant seqs, for domain E-value calculation",   12 },
-  { "--seed",       eslARG_INT,         "42",  NULL, "n>=0",    NULL,  NULL,  NULL,              "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
+  { "--seed",       eslARG_INT,         "42",  NULL, "n>=0",    NULL,  NULL,  NULL,             "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
   { "--qformat",    eslARG_STRING,      NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert query <seqfile> is in format <s>: no autodetection",   12 },
   { "--tformat",    eslARG_STRING,      NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert target <seqdb> is in format <s>>: no autodetection",   12 },
   { "--daemon",     eslARG_NONE,        NULL, NULL, NULL,      NULL,  NULL,  DAEMONOPTS,        "run program as a daemon",                                     12 },

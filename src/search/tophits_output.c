@@ -891,7 +891,7 @@ p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th )
 {
   P7_HIT *hit;
   int h;
-#ifdef SRE_REMOVED_FOR TRAVIS
+#ifdef SRE_REMOVED_FOR_TRAVIS
   int i;
   float *scores;
 #endif

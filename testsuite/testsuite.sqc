@@ -5,9 +5,12 @@
 # Usage:  
 #     sqc <level> testsuite.sqc <top_builddir> <top_srcdir>
 #
-# Example:  
+# Example (in testsuite dir, in single build/src tree)
+#     sqc 1 testsuite.sqc .. ..
+#
+# Example (in a build dir) 
 #     cd build-debug
-#     sqc 1 ../testsuite/valgrind.sqc . ..
+#     sqc 1 ../testsuite/testsuite.sqc . ..
 #
 # level 1 = the standard test suite 
 # level 2 = (currently nothing)
@@ -344,6 +347,7 @@
 ################################################################
 # valgrind tests  (optional. 'make SQCLEVEL=3 check')
 ################################################################
+# Many of these have been throttled down, to keep computational times down.
 
 # ........ ....................
 3 valgrind p7_alidisplay        @src/base/p7_alidisplay_utest@
@@ -356,14 +360,14 @@
 3 valgrind p7_trace             @src/base/p7_trace_utest@
 3 valgrind build                @src/build/build_utest@
 3 valgrind seqmodel             @src/build/seqmodel_utest@
-3 valgrind reference_decoding   @src/dp_reference/reference_decoding_utest@
-3 valgrind reference_fwdback    @src/dp_reference/reference_fwdback_utest@
+3 valgrind reference_decoding   @src/dp_reference/reference_decoding_utest@ -L6 -M6
+3 valgrind reference_fwdback    @src/dp_reference/reference_fwdback_utest@  -M6 -L6 -N6 -m6
 3 valgrind reference_viterbi    @src/dp_reference/reference_viterbi_utest@
-3 valgrind sparse_decoding	@src/dp_sparse/sparse_decoding_utest@
-3 valgrind sparse_envscore	@src/dp_sparse/sparse_decoding_utest@
-3 valgrind sparse_fwdback	@src/dp_sparse/sparse_fwdback_utest@
-3 valgrind sparse_masstrace	@src/dp_sparse/sparse_masstrace_utest@
-3 valgrind fwdfilter            @src/dp_vector/fwdfilter_utest@
+3 valgrind sparse_decoding	@src/dp_sparse/sparse_decoding_utest@ -L6 -M6 -N6 -n50000
+3 valgrind sparse_envscore	@src/dp_sparse/sparse_envscore_utest@
+3 valgrind sparse_fwdback	@src/dp_sparse/sparse_fwdback_utest@ -L6 -M6 -N6
+3 valgrind sparse_masstrace	@src/dp_sparse/sparse_masstrace_utest@ -L6 -M6
+3 valgrind fwdfilter            @src/dp_vector/fwdfilter_utest@ -L6 -M6 -N6
 3 valgrind vector_io            @src/dp_vector/io_utest@
 3 valgrind msvfilter            @src/dp_vector/msvfilter_utest@
 3 valgrind vitfilter            @src/dp_vector/vitfilter_utest@
@@ -373,7 +377,7 @@
 3 valgrind modelconfig		@src/search/modelconfig_utest@
 
 3 valgrind hmmbuild             @src/programs/hmmbuild@   %GLOBIN.HMM% !tutorial/globins4.sto!
-3 valgrind hmmalign             @src/programshmmalign@   %GLOBIN.HMM% !tutorial/globins45.fa!
+3 valgrind hmmalign             @src/programs/hmmalign@   %GLOBIN.HMM% !tutorial/globins45.fa!
 3 valgrind hmmemit              @src/programs/hmmemit@    -N10 %GLOBIN.HMM% 
 3 valgrind hmmpress             @src/programs/hmmpress@   -f %MINIFAM.HMM%
 3 valgrind hmmscan              @src/programs/hmmscan@    %MINIFAM.HMM% !tutorial/HBB_HUMAN!

@@ -66,7 +66,7 @@ typedef struct p7_alidisplay_s {
   char *sqacc;			/* accession of target seq; or [0]='\0' */
   char *sqdesc;			/* description of targ seq; or [0]='\0' */
   long  sqfrom;			/* start position on sequence (1..L)    */
-  long  sqto;		    /* end position on sequence   (1..L)    */
+  long  sqto;		        /* end position on sequence   (1..L)    */
   long  L;			/* length of sequence                   */
 
   int   memsize;                /* size of allocated block of memory    */

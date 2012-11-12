@@ -19,6 +19,8 @@
 
 #include "daemon/p7_hmmcache.h"
 
+#include "search/modelconfig.h"
+
 /*****************************************************************
  * 1. P7_HMMCACHE: a daemon's cached profile database
  *****************************************************************/ 
@@ -55,44 +57,74 @@ int
 p7_hmmcache_Open(char *hmmfile, P7_HMMCACHE **ret_cache, char *errbuf)
 {
   P7_HMMCACHE *cache    = NULL;
-  P7_HMMFILE  *hfp      = NULL;        /* open HMM database file    */
-  P7_OPROFILE *om       = NULL;        /* target profile            */
+  P7_HMMFILE  *hfp      = NULL;     
+  P7_HMM      *hmm      = NULL;
+  P7_BG       *bg       = NULL;
+  P7_PROFILE  *gm       = NULL;
+  P7_OPROFILE *om       = NULL;     
   int          status;
   
+  if (errbuf) errbuf[0] = '\0';
+
   ESL_ALLOC(cache, sizeof(P7_HMMCACHE));
   cache->name      = NULL;
   cache->abc       = NULL;
-  cache->list      = NULL;
+  cache->omlist    = NULL;
+  cache->gmlist    = NULL;
   cache->lalloc    = 4096;	/* allocation chunk size for <list> of ptrs  */
   cache->n         = 0;
 
   if ( ( status = esl_strdup(hmmfile, -1, &cache->name) != eslOK)) goto ERROR; 
-  ESL_ALLOC(cache->list, sizeof(P7_OPROFILE *) * cache->lalloc);
+  ESL_ALLOC(cache->omlist, sizeof(P7_OPROFILE *) * cache->lalloc);
+  ESL_ALLOC(cache->gmlist, sizeof(P7_PROFILE *)  * cache->lalloc);
 
-  if ( (status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf)) != eslOK) goto ERROR;  // eslENOTFOUND | eslEFORMAT 
+  if ( (status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf)) != eslOK) goto ERROR;  // eslENOTFOUND | eslEFORMAT; <errbuf> 
 
-  while ((status = p7_oprofile_ReadMSV(hfp, &(cache->abc), &om)) == eslOK) /* eslEFORMAT | eslEINCOMPAT */
+  while ((status = p7_hmmfile_Read(hfp, &(cache->abc), &hmm)) != eslEOF)  // eslEFORMAT | eslEINCOMPAT; <errbuf>
     {
-      if (( status = p7_oprofile_ReadRest(hfp, om)) != eslOK) break; /* eslEFORMAT */
+      if (status != eslOK) ESL_XFAIL(status, errbuf, "%s", hfp->errbuf); 
+
+      if (!bg && (bg = p7_bg_Create(cache->abc)) == NULL)  { status = eslEMEM; goto ERROR; }
+
+      if ( (    gm = p7_profile_Create(hmm->M, cache->abc)) == NULL)  { status = eslEMEM; goto ERROR; }
+      if ( (status = p7_profile_Config(gm, hmm, bg)) != eslOK) goto ERROR;
+ 
+      if ( (status = p7_oprofile_ReadMSV (hfp, &(cache->abc), &om)) != eslOK || /* eslEFORMAT: hfp->errbuf | eslEINCOMPAT | eslEOF */
+	   (status = p7_oprofile_ReadRest(hfp, om))                 != eslOK)   /* eslEFORMAT: hfp->errbuf */
+	{
+	  if (status == eslEOF) ESL_XFAIL(eslEFORMAT, errbuf, "Premature EOF in vectorized profile files");
+	  else                  goto ERROR;
+	}
+
+      ESL_DASSERT1(( strcmp(gm->name, om->name) == 0 ));
 
       if (cache->n >= cache->lalloc) {
-	ESL_REALLOC(cache->list, sizeof(char *) * cache->lalloc * 2);
+	ESL_REALLOC(cache->gmlist, sizeof(P7_PROFILE  *) * cache->lalloc * 2);
+	ESL_REALLOC(cache->omlist, sizeof(P7_OPROFILE *) * cache->lalloc * 2);
 	cache->lalloc *= 2;
       }
-      
-      cache->list[cache->n++] = om;
+
+      cache->omlist[cache->n] = om;
+      cache->gmlist[cache->n] = gm;
+      cache->n++;
+
       om = NULL;
+      gm = NULL;
+      p7_hmm_Destroy(hmm);
     }
-  if (status != eslEOF)  { strncpy(errbuf, hfp->errbuf, eslERRBUFSIZE); goto ERROR; }
 
   //printf("\nfinal:: %d  memory %" PRId64 "\n", inx, total_mem);
   p7_hmmfile_Close(hfp);
+  p7_bg_Destroy(bg);
   *ret_cache = cache;
   return eslOK;
 
  ERROR:
   if (cache) p7_hmmcache_Close(cache);
   if (om)    p7_oprofile_Destroy(om);
+  if (gm)    p7_profile_Destroy(gm);
+  if (hmm)   p7_hmm_Destroy(hmm);
+  if (bg)    p7_bg_Destroy(bg);
   if (hfp)   p7_hmmfile_Close(hfp);
   return status;
 }
@@ -100,6 +132,15 @@ p7_hmmcache_Open(char *hmmfile, P7_HMMCACHE **ret_cache, char *errbuf)
 
 /* Function:  p7_hmmcache_Sizeof()
  * Synopsis:  Returns total size of a profile cache, in bytes.
+ * 
+ * Purpose:   Calculate and return the size of a profile cache,
+ *            in bytes. 
+ *            
+ *            The cache contains both standard and vectorized
+ *            profiles. Very roughly, for a total number of consensus
+ *            positions M, we consume M*560 bytes; 276 in a standard
+ *            profile, and 284 in a vectorized one. This is a lot, and
+ *            a target of future optimization.
  */
 size_t
 p7_hmmcache_Sizeof(P7_HMMCACHE *cache)
@@ -109,11 +150,14 @@ p7_hmmcache_Sizeof(P7_HMMCACHE *cache)
 
   n += sizeof(char) * (strlen(cache->name) + 1);
   n += esl_alphabet_Sizeof(cache->abc);
-  n += sizeof(P7_OPROFILE *) * cache->lalloc;     /* cache->list */
+  n += sizeof(P7_OPROFILE *) * cache->lalloc;     /* cache->omlist */
+  n += sizeof(P7_PROFILE *)  * cache->lalloc;     /* cache->gmlist */
 
-  for (i = 0; i < cache->n; i++)
-    n += p7_oprofile_Sizeof(cache->list[i]);
-
+  for (i = 0; i < cache->n; i++) 
+    {
+      n += p7_oprofile_Sizeof(cache->omlist[i]);
+      n += p7_profile_Sizeof (cache->gmlist[i]);
+    }
   return n;
 }
   
@@ -135,13 +179,18 @@ int
 p7_hmmcache_SetNumericNames(P7_HMMCACHE *cache)
 {
   int          namelen = 9;	/* 9 digit numeric code: 000000001, 000000002... */
+  P7_PROFILE  *gm;
   P7_OPROFILE *om;
   int          i;
   int          status;
 
   for (i = 0; i < cache->n; i++)
     {
-      om = cache->list[i];
+      gm = cache->gmlist[i];
+      if (gm->name) free(gm->name);
+      if (( status = esl_sprintf(&(gm->name), "%0*d", namelen, i+1)) != eslOK) return status;
+
+      om = cache->omlist[i];
       if (om->name) free(om->name);
       if (( status = esl_sprintf(&(om->name), "%0*d", namelen, i+1)) != eslOK) return status;
     }
@@ -157,16 +206,19 @@ p7_hmmcache_Close(P7_HMMCACHE *cache)
 {
   int i;
 
-  if (! cache) return;
-  if (cache->name) free(cache->name);
-  if (cache->abc)  esl_alphabet_Destroy(cache->abc);
-  if (cache->list) 
+  if (cache)
     {
+      if (cache->name) free(cache->name);
+      if (cache->abc)  esl_alphabet_Destroy(cache->abc);
       for (i = 0; i < cache->n; i++)
-	p7_oprofile_Destroy(cache->list[i]);
-      free(cache->list);
+	{
+	  if (cache->gmlist) p7_profile_Destroy (cache->gmlist[i]);
+	  if (cache->omlist) p7_oprofile_Destroy(cache->omlist[i]);
+	}
+      if (cache->gmlist) free(cache->gmlist);
+      if (cache->omlist) free(cache->omlist);
+      free(cache);
     }
-  free(cache);
 }
 
 /*****************************************************************
@@ -215,6 +267,7 @@ main(int argc, char **argv)
 
   esl_stopwatch_Stop(w);
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  printf("models     = %d\n",          hcache->n);
   printf("tot memory = %" PRIu64 "\n", (uint64_t) tot_mem);
   
   p7_hmmcache_Close(hcache);

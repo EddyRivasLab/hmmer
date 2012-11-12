@@ -434,7 +434,7 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
  * 
  */
 static void
-utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L)
+utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int ntr)
 {
   char           msg[]  = "sparse fwdback, approx-decoding unit test failed";
   P7_HMM        *hmm    = NULL;
@@ -450,7 +450,6 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
   P7_SPARSEMX   *sxs    = NULL;
   float         *wrk    = NULL;	/* reusable scratch workspace needed by stochastic trace */
   int            idx;
-  int            ntr    = 100000;
   float          tol    = 0.02;	         /* with utest's defaults, max diff will be ~0.004 or so; exact v. approx logsum seems to make no difference   */
 
   /* Sample a profile. 
@@ -547,6 +546,7 @@ static ESL_OPTIONS options[] = {
   { "-L",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
   { "-M",        eslARG_INT,    "145", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
   { "-N",        eslARG_INT,     "20", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
+  { "-n",        eslARG_INT, "100000", NULL, NULL,  NULL,  NULL, NULL, "number of stochastic traces in approx_decoding", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -562,13 +562,14 @@ main(int argc, char **argv)
   int             M    = esl_opt_GetInteger(go, "-M");
   int             L    = esl_opt_GetInteger(go, "-L");
   int             N    = esl_opt_GetInteger(go, "-N");
+  int             ntr  = esl_opt_GetInteger(go, "-n");
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
 
   utest_overwrite      (r, abc, bg, M, L);
   utest_rowsum         (r, abc, bg, M, L, N);
-  utest_approx_decoding(r, abc, bg, M, L);
+  utest_approx_decoding(r, abc, bg, M, L, ntr);
 
   fprintf(stderr, "#  status = ok\n");
 

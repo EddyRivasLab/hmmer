@@ -807,8 +807,9 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
   /* FIXME 3.1
    * hmmscan needs <gm>; read from the hmm file (.h3m) on disk
    * expect that this is slow and inefficient; come back and refactor later.
+   * (in hmmpgmd, hfp is NULL; all our profiles are already in a cache)
    */
-  if (pli->mode == p7_SCAN_MODELS)
+  if (pli->mode == p7_SCAN_MODELS && pli->hfp)
     workaround_get_profile(pli, om, bg, &gm);
 
   /* Now we can hand it over to sparse DP, with the full glocal/local model */
@@ -1023,7 +1024,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
         }
       }
     }
-  if (pli->mode == p7_SCAN_MODELS) p7_profile_Destroy(gm);
+  if (pli->mode == p7_SCAN_MODELS && pli->hfp) p7_profile_Destroy(gm); /* DON'T free it if we're in hmmpgmd, with all models cached */
   return eslOK;
 
  ERROR:

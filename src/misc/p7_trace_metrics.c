@@ -369,11 +369,14 @@ utest_consistency(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
       p7_trace_Reuse(reftr);
       p7_trace_Reuse(testtr);
       esl_sq_Reuse(sq);
+
+      p7_hmm_Destroy(hmm); 
     }  
 
+  p7_trace_metrics_Destroy(tm);
   p7_trace_Destroy(reftr);
   p7_trace_Destroy(testtr);
-  p7_hmm_Destroy(hmm);
+  p7_refmx_Destroy(vmx);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   esl_sq_Destroy(sq);

@@ -772,8 +772,8 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
       p7_bg_NullOne(cfg->bg, dsq, L, &nullsc);
       scores[i] = (sc - nullsc) / eslCONST_LOG2;
 
-      p7_checkptmx_Reuse(cx);
-      p7_filtermx_Reuse(fx);
+      if (cx) p7_checkptmx_Reuse(cx);
+      if (fx) p7_filtermx_Reuse(fx);
       p7_refmx_Reuse(rmx);
     }
   status      = eslOK;

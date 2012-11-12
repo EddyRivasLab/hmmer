@@ -262,6 +262,10 @@ p7_profile_Reuse(P7_PROFILE *gm)
  *            necessary size of a serialized structure. When we
  *            instead use Sizeof() to report memory consumption, a
  *            rough number is adequate.
+ *            
+ *            Very roughly, 276*M bytes; 50KB per typical M=200 model;
+ *            30MB for a design limit M=100K model. Dominated by
+ *            transition/emission parameters.
  */
 size_t
 p7_profile_Sizeof(P7_PROFILE *gm)
@@ -296,17 +300,17 @@ p7_profile_Sizeof(P7_PROFILE *gm)
 void
 p7_profile_Destroy(P7_PROFILE *gm)
 {
-  if (gm != NULL) {
-    if (gm->rsc   != NULL && gm->rsc[0] != NULL) free(gm->rsc[0]);
-    if (gm->tsc       != NULL) free(gm->tsc);
-    if (gm->rsc       != NULL) free(gm->rsc);
-    if (gm->name      != NULL) free(gm->name);
-    if (gm->acc       != NULL) free(gm->acc);
-    if (gm->desc      != NULL) free(gm->desc);
-    if (gm->rf        != NULL) free(gm->rf);
-    if (gm->mm        != NULL) free(gm->mm);
-    if (gm->cs        != NULL) free(gm->cs);
-    if (gm->consensus != NULL) free(gm->consensus);
+  if (gm) {
+    if (gm->rsc && gm->rsc[0]) free(gm->rsc[0]);
+    if (gm->tsc)       free(gm->tsc);
+    if (gm->rsc)       free(gm->rsc);
+    if (gm->name)      free(gm->name);
+    if (gm->acc)       free(gm->acc);
+    if (gm->desc)      free(gm->desc);
+    if (gm->rf)        free(gm->rf);
+    if (gm->mm)        free(gm->mm);
+    if (gm->cs)        free(gm->cs);
+    if (gm->consensus) free(gm->consensus);
     free(gm);
   }
   return;

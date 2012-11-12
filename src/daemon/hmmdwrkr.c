@@ -46,7 +46,8 @@ typedef struct {
   int               sq_cnt;      /* number of sequences              */
   int               db_Z;        /* true number of sequences         */
 
-  P7_OPROFILE     **om_list;     /* list of profiles to process      */
+  P7_OPROFILE     **om_list;     /* array of vector profiles         */
+  P7_PROFILE      **gm_list;	 /* array of standard profiles       */
   int               om_cnt;      /* number of profiles               */
 
   pthread_mutex_t  *inx_mutex;   /* protect data                     */
@@ -241,12 +242,14 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
       info[i].sq_cnt    = query->cnt;
       info[i].db_Z      = env->seq_db->db[query->dbx].K;
       info[i].om_list   = NULL;
+      info[i].gm_list   = NULL;
       info[i].om_cnt    = 0;
     } else {
       info[i].sq_list   = NULL;
       info[i].sq_cnt    = 0;
       info[i].db_Z      = 0;
-      info[i].om_list   = &env->hmm_db->list[query->inx];
+      info[i].om_list   = &env->hmm_db->omlist[query->inx];
+      info[i].gm_list   = &env->hmm_db->gmlist[query->inx];
       info[i].om_cnt    = query->cnt;
     }
 
@@ -659,7 +662,7 @@ scan_thread(void *arg)
   /* Create processing pipeline and hit list */
   th  = p7_tophits_Create(); 
   pli = p7_pipeline_Create(info->opts, 100, 100, FALSE, p7_SCAN_MODELS);
-
+  
   p7_pipeline_NewSeq(pli, info->seq);
 
   /* loop until all sequences have been processed */
@@ -667,6 +670,7 @@ scan_thread(void *arg)
   while (count > 0) {
     int           inx;
     int          blksz;
+    P7_PROFILE  **gm;
     P7_OPROFILE **om;
 
     /* grab the next block of sequences */
@@ -685,17 +689,19 @@ scan_thread(void *arg)
     *info->inx += blksz;
     if (pthread_mutex_unlock(info->inx_mutex) != 0) p7_Fail("mutex unlock failed");
 
+    gm    = info->gm_list + inx;
     om    = info->om_list + inx;
     count = info->om_cnt - inx;
     if (count > blksz) count = blksz;
 
     /* Main loop: */
-    for (i = 0; i < count; ++i, ++om) {
+    for (i = 0; i < count; ++i, ++om, ++gm) {
       p7_pipeline_NewModel(pli, *om, bg);
       p7_bg_SetLength(bg, info->seq->n);
+      p7_profile_SetLength      (*gm, info->seq->n);
       p7_oprofile_ReconfigLength(*om, info->seq->n);
 	      
-      p7_Pipeline(pli, /*gm=*/NULL, *om, bg, info->seq, th);
+      p7_Pipeline(pli, *gm, *om, bg, info->seq, th);
       p7_pipeline_Reuse(pli);
     }
   }
@@ -757,7 +763,9 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
 
   status.msg_size += n;
   offset = status.msg_size;
+
   if ((hit = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+  memset(hit, 0, n);		/* avoid valgrind bitching about unintialized bytes; remove if we serialize data properly */
 
   /* get the data in the right format before we send it */
   for (i = 0; i < stats.nhits; ++i) {
@@ -813,6 +821,7 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
 
     n = sizeof(P7_DOMAIN) * h2->ndom;
     if (writen(fd, dcl, n) != n) LOG_FATAL_MSG("write", errno);
+    /* valgrind will report write(buf) points to uninitialized bytes: the padding in P7_DOMAIN. We need to serialize properly. */
     base = (char *)NULL + n;
 
     for (j = 0; j < h2->ndom; ++j) {
@@ -841,6 +850,9 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
 
       n = sizeof(P7_ALIDISPLAY);
       if (writen(fd, dcl->ad, n) != n) LOG_FATAL_MSG("write", errno);
+      /* valgrind will report write(buf) points to uninitialized bytes: the padding in P7_ALIDISPLAY. We need to serialize
+       * these data properly. 
+       */
 
       n = dcl->ad->memsize;
       if (writen(fd, dcl->ad->mem, n) != n) LOG_FATAL_MSG("write", errno);

@@ -1029,9 +1029,13 @@ utest_duality(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
  * p7_hmm_SampleEnumerable2(). p7_hmm_SampleEnumerable() sets all
  * transitions to insert to 0, so it enumerates a smaller seq space of
  * L=0..M (no inserts are possible at all.)
+ * 
+ * The default test uses M = 8. You can change this, but you need to keep it 
+ * small, or the test will take a long time. There's a combinatorial
+ * explosion of paths.
  */
 static void
-utest_enumeration(ESL_RANDOMNESS *rng)
+utest_enumeration(ESL_RANDOMNESS *rng, int M)
 {
   char          msg[] = "enumeration unit test failed";
   ESL_ALPHABET *abc   = esl_alphabet_Create(eslCOINS); // using the eslCOINS alphabet helps keep the enumeration's size down.
@@ -1040,7 +1044,7 @@ utest_enumeration(ESL_RANDOMNESS *rng)
   ESL_DSQ      *dsq   = NULL;
   P7_PROFILE   *gm    = NULL;
   P7_REFMX     *rmx   = NULL;
-  int           M     = 8;      // you can change this, but you need to keep it small, or the test will take a long time.
+
   int           maxL  = 2*M-1;	
   int           i, L;
   float         fsc;
@@ -1599,7 +1603,7 @@ utest_brute(ESL_RANDOMNESS *rng, int N)
   int    idx;
   int    L;			/* sequence lengths 1..4 */
   int    pos;
-  float         vprecision = 1e-5;
+  float         vprecision = 1e-4;
   float         fprecision = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
 
   for (idx = 0; idx < N; idx++)
@@ -1647,6 +1651,8 @@ utest_brute(ESL_RANDOMNESS *rng, int N)
 
   p7_trace_Destroy(vtr);
   p7_refmx_Destroy(fwd);
+  p7_refmx_Destroy(vit);
+  p7_refmx_Destroy(bck);
   p7_bg_Destroy(bg);
   esl_alphabet_Destroy(abc);
 }
@@ -1675,6 +1681,11 @@ static ESL_OPTIONS options[] = {
   { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose",                                     0 },
   { "--vv",      eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be very verbose",                                0 },
+  { "-L",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
+  { "-M",        eslARG_INT,     "50", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
+  { "-m",        eslARG_INT,      "8", NULL, NULL,  NULL,  NULL, NULL, "size of random model in enumeration test",       0 },
+  { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
+
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -1685,17 +1696,21 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  int             M    = esl_opt_GetInteger(go, "-M");
+  int             L    = esl_opt_GetInteger(go, "-L");
+  int             N    = esl_opt_GetInteger(go, "-N");
+  int         enumM    = esl_opt_GetInteger(go, "-m");
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
 
-  utest_brute      (r, 100);
+  utest_brute      (r, N);
 
-  utest_randomseq  (r, eslAMINO, 50, 100, 100);
-  utest_generation (r, eslAMINO, 50, 100, 100);
-  utest_duality    (r, eslAMINO, 50, 100, 100);
-  utest_enumeration(r);	                   // this test hardcodes eslCOINS, a small M, and a fixed enumeration of target sequences.
-  utest_singlepath (r, eslAMINO, 50);
+  utest_randomseq  (r, eslAMINO, M, L, N);
+  utest_generation (r, eslAMINO, M, L, N);
+  utest_duality    (r, eslAMINO, M, L, N);
+  utest_enumeration(r, enumM);	       // test hardcodes eslCOINS and a fixed enumeration of target sequences. enumM should be <= 8; test is expensive
+  utest_singlepath (r, eslAMINO, M);
 
   fprintf(stderr, "#  status = ok\n");
   esl_randomness_Destroy(r);

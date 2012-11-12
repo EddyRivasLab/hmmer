@@ -474,6 +474,7 @@ main(int argc, char **argv)
   p7_bg_Destroy(bg);
   esl_alphabet_Destroy(abc);
   esl_randomness_Destroy(rng);
+  esl_getopts_Destroy(go);
 
   fprintf(stderr, "#  status = ok\n");
   return eslOK;

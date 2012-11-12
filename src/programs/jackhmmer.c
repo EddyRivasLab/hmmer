@@ -528,6 +528,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     {
       info[i].pli   = NULL;
       info[i].th    = NULL;
+      info[i].gm    = NULL;
       info[i].om    = NULL;
       info[i].bg    = p7_bg_Clone(bg);
 #ifdef HMMER_THREADS

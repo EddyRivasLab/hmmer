@@ -208,6 +208,10 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
  *
  * Purpose:   Returns the allocated size of a <P7_OPROFILE>,
  *            in bytes.
+ *            
+ *            Very roughly, M*284 bytes, for a model of length M; 60KB
+ *            for a typical model; 30MB for a design limit M=100K
+ *            model.
  */
 size_t
 p7_oprofile_Sizeof(P7_OPROFILE *om)

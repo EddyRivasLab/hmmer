@@ -83,7 +83,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
   int Q        = P7_NVB(om->M);    /* segment length: # of vectors                              */
-  __m128i *dp  = ox->dp;	   /* the dp row memory                                         */
+  __m128i *dp;   	           /* the dp row memory                                         */
   __m128i *rsc;			   /* will point at om->rbv[x] for residue x[i]                 */
   __m128i xJv;                     /* vector for states score                                   */
   __m128i tjbmv;                   /* vector for cost of moving {JN}->B->M                      */
@@ -101,6 +101,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
 
   /* Resize the filter mx as needed */
   if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of MSV filter matrix failed");
+  dp = ox->dp;			/* This MUST be set AFTER the GrowTo() call. */
 
   /* Matrix type and size must be set early, not late: debugging dump functions need this information. */
   ox->M    = om->M;

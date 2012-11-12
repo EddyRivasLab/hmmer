@@ -6,13 +6,13 @@
 # Example:   hmmer_autobuilds.pl  ~/nightlies/hmmer/trunk > /tmp/hmmer_autobuilds.log
 
 @buildconfigs = (
-    { name => "intel-linux-icc-intel64-mpi", host => "login-eddy"  },
-    { name => "intel-linux-icc-ia32-mpi",    host => "login-eddy"  },
+#   { name => "intel-linux-icc-intel64-mpi", host => "login-eddy"  },
+#   { name => "intel-linux-icc-ia32-mpi",    host => "login-eddy"  },
     { name => "intel-linux-gcc",             host => "login-eddy"  },
     { name => "intel-macosx-gcc",            host => "."           },
     { name => "intel-macosx-gcc-debug",      host => "."           },
-    { name => "intel-macosx-gcc-dummy",      host => "."           },
-    { name => "ppc-aix-xlc",                 host => "cf-ppc2"     },
+#   { name => "intel-macosx-gcc-dummy",      host => "."           },
+#   { name => "ppc-aix-xlc",                 host => "cf-ppc2"     },
     { name => "intel-linux-gcc-ubuntu32",    host => "cf-ubuntu32" },
 #   { name => "ppc-macosx",                  host => "10.41.4.30"  },
     );
@@ -26,9 +26,9 @@ if (! -d $srcdir) { die "FAIL: source working directory $srcdir not found"; }
 # First we update in the source working directory.
 #
 chdir $srcdir ||    die "FAIL: couldn't cd to $srcdir"; 
-system("svn update > autobuilds.log 2>&1");             if ($?) { die "FAIL: svn update"; }
-system("$autoconf  > autobuilds.log 2>&1 ");            if ($?) { die "FAIL: H3 $autoconf"; }
-system("(cd easel; $autoconf) > autobuilds.log 2>&1");  if ($?) { die "FAIL: esl $autoconf"; }
+system("svn update > autobuilds.log 2>&1");                 if ($?) { die "FAIL: svn update"; }
+system("$autoconf  > autobuilds.log 2>&1 ");                if ($?) { die "FAIL: H3 $autoconf"; }
+system("(cd lib/easel; $autoconf) > autobuilds.log 2>&1");  if ($?) { die "FAIL: esl $autoconf"; }
 
 # Then we try to build on everything
 #

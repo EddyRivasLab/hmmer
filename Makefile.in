@@ -93,7 +93,7 @@ dev:
 	${QUIET_SUBDIR0}${ESLDIR}  ${QUIET_SUBDIR1} dev
 	${QUIET_SUBDIR0}${SADIR}   ${QUIET_SUBDIR1} all
 	${QUIET_SUBDIR0}src        ${QUIET_SUBDIR1} dev
-	${QUIET_SUBDIR0}benchmarks ${QUIET_SUBDIR1} dev
+#	${QUIET_SUBDIR0}benchmarks ${QUIET_SUBDIR1} dev
 
 # tests: compile all test drivers for 'make check'
 #

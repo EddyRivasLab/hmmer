@@ -67,18 +67,18 @@ if (! -r "$srcdir/testsuite/$nmodel2.sto") { die "FAIL: can't read msa $nmodel2.
 
 `cat $srcdir/testsuite/$model1.hmm  $srcdir/testsuite/$model2.hmm  > $tmppfx.hmm`;  if ($?) { die "FAIL: cat\n"; }
 `cat $srcdir/testsuite/$nmodel1.hmm $srcdir/testsuite/$nmodel2.hmm > $tmppfx.nhmm`; if ($?) { die "FAIL: cat\n"; }
-`$builddir/src/programs/hmmpress $tmppfx.hmm`;                                               if ($?) { die "FAIL: hmmpress\n"; }
+`$builddir/src/programs/hmmpress $tmppfx.hmm`;                                      if ($?) { die "FAIL: hmmpress\n"; }
 
 `cat $srcdir/testsuite/$model1.sto $srcdir/testsuite/$model2.sto > $tmppfx.sto`;    if ($?) { die "FAIL: cat\n"; }
 
-`$builddir/src/programs/hmmemit -c $srcdir/testsuite/$model1.hmm > $tmppfx.fa1`;             if ($?) { die "FAIL: hmmemit -c\n"; }
+`$builddir/src/programs/hmmemit -c $srcdir/testsuite/$model1.hmm > $tmppfx.fa1`;    if ($?) { die "FAIL: hmmemit -c\n"; }
 `cat $tmppfx.fa1 > $tmppfx.fa2`;                                                    if ($?) { die "FAIL: cat\n"; } 
-`$builddir/src/programs/hmmemit -c $srcdir/testsuite/$model2.hmm >> $tmppfx.fa2`;            if ($?) { die "FAIL: hmmemit -c\n"; } 
+`$builddir/src/programs/hmmemit -c $srcdir/testsuite/$model2.hmm >> $tmppfx.fa2`;   if ($?) { die "FAIL: hmmemit -c\n"; } 
 
-`$builddir/src/programs/hmmemit -N10 $srcdir/testsuite/$model1.hmm > $tmppfx.fa10`;          if ($?) { die "FAIL: hmmemit\n"; }
+`$builddir/src/programs/hmmemit -N10 $srcdir/testsuite/$model1.hmm > $tmppfx.fa10`;     if ($?) { die "FAIL: hmmemit\n"; }
 
-`$builddir/src/programs/hmmemit -p -N10 $srcdir/testsuite/$model1.hmm > $tmppfx.db`;         if ($?) { die "FAIL: hmmemit\n"; }
-`$builddir/src/programs/hmmemit -p -N10 $srcdir/testsuite/$model2.hmm >> $tmppfx.db`;        if ($?) { die "FAIL: hmmemit\n"; }
+`$builddir/src/programs/hmmemit -p -N10 $srcdir/testsuite/$model1.hmm > $tmppfx.db`;    if ($?) { die "FAIL: hmmemit\n"; }
+`$builddir/src/programs/hmmemit -p -N10 $srcdir/testsuite/$model2.hmm >> $tmppfx.db`;   if ($?) { die "FAIL: hmmemit\n"; }
 `$builddir/lib/easel/miniapps/esl-shuffle -G -N100 -L 400 --amino >> $tmppfx.db`;       if ($?) { die "FAIL: esl-shuffle\n"; }
 
 `$builddir/src/programs/hmmemit -p -N2 -L2000 --glocal $srcdir/testsuite/$nmodel1.hmm >  $tmppfx.ndb`; if ($?) { die "FAIL: hmmemit\n"; }
