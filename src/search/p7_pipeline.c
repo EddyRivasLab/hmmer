@@ -886,6 +886,12 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
 
       /* Viterbi alignment of the domain */
       dcl[d].ad = p7_alidisplay_Create(pli->tr, d, om, sq);
+
+      /* We're initializing a P7_DOMAIN structure in dcl[d] by hand, without a Create().
+       * We're responsible for initializing all elements of this structure.
+       */
+      dcl[d].is_reported = FALSE; /* will get set later by p7_tophits_Threshold() */
+      dcl[d].is_included = FALSE; /* ditto */
     }
   
   /* Calculate the null2-corrected per-seq score */

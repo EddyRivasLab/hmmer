@@ -6,24 +6,26 @@
 
 \item[\textbf{accession}] A unique database identifier (key)
   associated with a query or target, in addition to its name. HMMER
-  generally assumes that both names and accessions are unique in any
-  given search. Many high-throughput annotation pipelines prefer to
-  track accessions rather than names because accessions are more
-  likely to be unique and stable over a long period of time, such as
-  over revisions of the same database. The HMMER search programs have
-  a \ccode{--acc} option that lets you request that accessions be
-  reported instead of names in output (when accessions are
-  available). Note that FASTA format for sequence files does not have
-  any standard way of recording accessions, so only names and
-  descriptions are available from FASTA files; to use accessions, you
-  must format your FASTA file to have accessions as names.
+  generally assumes that \emph{both} names and accessions are unique
+  in any given search, and it defaults to reporting names as its
+  primary identifiers. However, many high-throughput annotation
+  pipelines prefer to track accessions rather than names, because
+  accessions are more likely to be unique and stable over a long
+  period of time, such as over revisions of the same database. The
+  HMMER search programs have a \ccode{--acc} option that lets you
+  request that accessions be reported instead of names in output (when
+  accessions are available). Note that FASTA format for sequence files
+  does not have any standard way of recording accessions, so only
+  names and descriptions are available from FASTA files; to use
+  accessions, you would have tot format your FASTA file to have
+  accessions as names.
 
 \item[\textbf{alignment ensemble}] The set of all possible alignments
   for a target/query comparison, some more likely than others.
   Traditional sequence alignment methods typically find only one
-  best-scoring alignment. HMM-based methods can do computations over
-  the entire alignment ensemble. Several calculations in HMMER involve
-  summations over the alignment ensemble, including the bit score,
+  best-scoring alignment. Profile HMM-based methods can perform
+  computations over the entire alignment ensemble. HMMER performs
+  summations over the alignment ensemble to calculate bit scores,
   domain envelopes, the null2 model for biased-composition correction,
   and aligned residue posterior probabilities.
 
@@ -210,7 +212,17 @@ and domain postprocessing.
 
 \item[\textbf{score}]
 
-\item[\textbf{SIMD}]
+\item[\textbf{SIMD}] ``Single Instruction/Multiple Data'': a
+  buzzphrase in parallel computing, naming one widely used
+  parallelization strategy (as opposed to a more complex MIMD multiple
+  instruction/multiple data strategy for example). Modern processors
+  have specialized SIMD ``vector instructions'' that allow a program
+  to compute several (typically around 4 to 32) simultaneous
+  operations on a vector of data elements.  On Intel/AMD compatible
+  processors these are called SSE (Streaming SIMD Extensions) or, more
+  recently, AVX (Advanced Vector Extensions).  HMMER's
+  profile/sequence comparison algorithms use SSE vector instructions
+  to achieve high speed.
 
 \item[\textbf{statistical significance}]
 

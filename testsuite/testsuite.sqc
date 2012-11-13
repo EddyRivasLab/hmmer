@@ -1,6 +1,6 @@
 # HMMER's test suite, in sqc command format
 #
-# See the ../easel/devkit/sqc script for documentation of sqc.
+# See the ../lib/easel/devkit/sqc script for documentation of sqc.
 #
 # Usage:  
 #     sqc <level> testsuite.sqc <top_builddir> <top_srcdir>
@@ -11,6 +11,9 @@
 # Example (in a build dir) 
 #     cd build-debug
 #     sqc 1 ../testsuite/testsuite.sqc . ..
+#
+# Another example (when in testsuite/ dir)
+#      ../lib/easel/devkit/sqc 1 ./testsuite.sqc .. ..
 #
 # level 1 = the standard test suite 
 # level 2 = (currently nothing)

@@ -433,10 +433,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              status   = eslOK;
   int              qstatus  = eslOK;
   int              sstatus  = eslOK;
-
   int              i;
   int              ncpus    = 0;
-
   int              infocnt  = 0;
   WORKER_INFO     *info     = NULL;
 #ifdef HMMER_THREADS
