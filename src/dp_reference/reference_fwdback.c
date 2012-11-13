@@ -814,9 +814,9 @@ utest_randomseq(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
       if (p7_ReferenceViterbi (dsq, L, gm, vit, NULL, &vsc)  != eslOK) esl_fatal(msg);
 
       /* matrices pass Validate() */
-      if (p7_refmx_Validate(fwd, errbuf)                     != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
-      if (p7_refmx_Validate(bck, errbuf)                     != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
-      if (p7_refmx_Validate(vit, errbuf)                     != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+      if (p7_refmx_Validate(fwd, errbuf) != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+      if (p7_refmx_Validate(bck, errbuf) != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+      if (p7_refmx_Validate(vit, errbuf) != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
 
       //printf("fsc = %.4f  bsc = %.4f  difference = %g\n", fsc, bsc, fabs(fsc-bsc));
 
@@ -948,7 +948,7 @@ utest_duality(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
   P7_PROFILE   *gmd    = NULL;
   P7_PROFILE   *gml    = NULL;
   P7_PROFILE   *gmg    = NULL;
-  P7_REFMX      *rmx    = NULL;
+  P7_REFMX     *rmx    = NULL;
   float         dual_sc, local_sc, glocal_sc, combined_sc;
   int           idx;
 
@@ -1044,7 +1044,6 @@ utest_enumeration(ESL_RANDOMNESS *rng, int M)
   ESL_DSQ      *dsq   = NULL;
   P7_PROFILE   *gm    = NULL;
   P7_REFMX     *rmx   = NULL;
-
   int           maxL  = 2*M-1;	
   int           i, L;
   float         fsc;
@@ -1675,17 +1674,25 @@ utest_brute(ESL_RANDOMNESS *rng, int N)
 
 #include "hmmer.h"
 
+/* This unit test can fail normally. It compares scores for equality,
+ * within an acceptable tolerance. There is no tolerance that we can
+ * absoluteluy guarantee, because routines that use FLogsum()
+ * accumulate numeric error, and this error has an approximately
+ * normal distribution, so it's possible for stochastic outliers to
+ * occur. Default RNG seed is set to a constant to prevent this from
+ * happening in production 'make check's.
+ */
+
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose",                                     0 },
   { "--vv",      eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be very verbose",                                0 },
   { "-L",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
   { "-M",        eslARG_INT,     "50", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
   { "-m",        eslARG_INT,      "8", NULL, NULL,  NULL,  NULL, NULL, "size of random model in enumeration test",       0 },
   { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
-
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";

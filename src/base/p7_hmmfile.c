@@ -2509,6 +2509,7 @@ main(int argc, char **argv)
   esl_alphabet_Destroy(aa_abc);
   esl_alphabet_Destroy(nt_abc);
   esl_randomness_Destroy(r);
+  esl_getopts_Destroy(go);
   remove(tmpfile);
 
   fprintf(stderr, "#  status = ok\n");

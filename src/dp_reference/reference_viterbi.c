@@ -218,6 +218,7 @@ utest_randomseq(ESL_RANDOMNESS *rng, P7_PROFILE *gm, P7_BG *bg, int nseq, int L)
   P7_TRACE  *tr     = NULL;
   int        idx;
   float      sc1, sc2;
+  float      tol    = 1e-4;
   char       errbuf[eslERRBUFSIZE];
 
   if (( dsq = malloc(sizeof(ESL_DSQ) * (L+2))) == NULL) esl_fatal(msg);
@@ -230,7 +231,7 @@ utest_randomseq(ESL_RANDOMNESS *rng, P7_PROFILE *gm, P7_BG *bg, int nseq, int L)
       if (p7_ReferenceViterbi(dsq, L, gm, rmx, tr, &sc1) != eslOK) esl_fatal(msg);
       if (p7_trace_Validate(tr, gm->abc, dsq, errbuf)    != eslOK) esl_fatal("%s:\n%s", msg, errbuf);
       if (p7_trace_Score(tr, dsq, gm, &sc2)              != eslOK) esl_fatal(msg);
-      if (esl_FCompareAbs(sc1, sc2, 1e-6)                != eslOK) esl_fatal(msg);
+      if (esl_FCompareAbs(sc1, sc2, tol)                 != eslOK) esl_fatal(msg);
       if (! isfinite(sc1))                                         esl_fatal(msg);
       if (! isfinite(sc2))                                         esl_fatal(msg);
 
@@ -258,6 +259,7 @@ utest_generation(ESL_RANDOMNESS *rng, P7_HMM *hmm, P7_PROFILE *gm, P7_BG *bg, in
   P7_TRACE  *tr     = p7_trace_Create();
   int        idx;
   float      sc1, sc2, sc3;
+  float      tol    = 1e-4;
   char       errbuf[eslERRBUFSIZE];
 
   for (idx = 0; idx < nseq; idx++)
@@ -276,11 +278,11 @@ utest_generation(ESL_RANDOMNESS *rng, P7_HMM *hmm, P7_PROFILE *gm, P7_BG *bg, in
       if (p7_trace_Validate(tr, gm->abc, sq->dsq, errbuf)        != eslOK) esl_fatal("%s:\n%s", msg, errbuf);
       if (p7_trace_Score(tr, sq->dsq, gm, &sc3)                  != eslOK) esl_fatal(msg);
 
-      if (! isfinite(sc1))                            esl_fatal(msg);
-      if (! isfinite(sc2))                            esl_fatal(msg);
-      if (! isfinite(sc3))                            esl_fatal(msg);
-      if (sc1 > sc2)                                  esl_fatal(msg); /* score of generated trace should be <= Viterbi score */
-      if (esl_FCompareAbs(sc2, sc3, 0.0001) != eslOK) esl_fatal(msg);
+      if (! isfinite(sc1))                         esl_fatal(msg);
+      if (! isfinite(sc2))                         esl_fatal(msg);
+      if (! isfinite(sc3))                         esl_fatal(msg);
+      if (sc1 > sc2)                               esl_fatal(msg); /* score of generated trace should be <= Viterbi score */
+      if (esl_FCompareAbs(sc2, sc3, tol) != eslOK) esl_fatal(msg);
 
       esl_sq_Reuse(sq);
       p7_trace_Reuse(tr);

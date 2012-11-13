@@ -530,7 +530,7 @@ utest_approx_masstrace(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M,
   int            d;
   int            ntr    = 10000;
   int            i, ntrc;
-  float          tol    = 0.01;
+  float          tol    = 0.02;
   int            i0,k0,st0;	/* anchor triplet */
   int            iae,ibe,kae,kbe;
   int            z;

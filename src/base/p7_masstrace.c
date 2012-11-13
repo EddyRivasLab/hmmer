@@ -387,7 +387,7 @@ p7_masstrace_GetMaxAbsDiff(const P7_MASSTRACE *mte, const P7_MASSTRACE *mta)
 int
 p7_masstrace_Validate(const P7_MASSTRACE *mt, char *errbuf)
 {
-  float tol = 1e-4;
+  float tol = 1e-3;
   int i,k;
 
   if (mt->L  <= 0)                           ESL_FAIL(eslFAIL, errbuf, "L=0");

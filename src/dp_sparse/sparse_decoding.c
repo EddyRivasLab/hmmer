@@ -86,7 +86,7 @@ p7_SparseDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPAR
   const float   *rsc;		      /* residue scores on current row i; enables MSC(k) macro shorthand */
   float          totsc  = xf[p7S_N] + xb[p7S_N];  // remember, the first ia-1 is not necessarily row 0, so xb[N] alone does not suffice.
   float          norm;                // except for numerical roundoff error accumulation, so we also explicitly renormalize each row.
-  float          xN,xC,xJ,xG;         // Forward values remembered from prev row i-1.
+  float          xC,xJ,xG;            // Forward values remembered from prev row i-1.
   int            i,k,y,z;
   float          delta;		     /* additions to DGk's, resulting from unfolding the wing-retracted entry/exit paths */
   const float   *tsc    = gm->tsc;   /* activates the TSC() macro */
@@ -109,7 +109,6 @@ p7_SparseDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPAR
   if (sxd != sxb && (status = p7_sparsemx_Reinit(sxd, sm)) != eslOK) return status;
   sxd->type = p7S_DECODING;
 
-  xN = 0.0f;
   xJ = xC = -eslINFINITY;
   dpd = sxd->dp;
   xd  = sxd->xmx;
@@ -122,7 +121,7 @@ p7_SparseDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPAR
 	{
 	  norm       = 0.0f;
 	  xd[p7S_E]  = 0.0f;                                
-	  xd[p7S_N]  = expf(xf[p7S_N] + xb[p7S_N] - totsc);  xN = xf[p7S_N]; norm += xd[p7S_N];
+	  xd[p7S_N]  = expf(xf[p7S_N] + xb[p7S_N] - totsc);                  norm += xd[p7S_N];
 	  xd[p7S_J]  = expf(xf[p7S_J] + xb[p7S_J] - totsc);  
 	  xd[p7S_B]  = expf(xf[p7S_B] + xb[p7S_B] - totsc);
 	  xd[p7S_L]  = expf(xf[p7S_L] + xb[p7S_L] - totsc);
@@ -186,7 +185,7 @@ p7_SparseDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPAR
 	xd[p7S_JJ] = expf(  xJ      + xb[p7S_J] + gm->xsc[p7P_J][p7P_LOOP] - totsc); xJ = xf[p7S_J]; norm += xd[p7S_JJ];  // JJ,CC calculations must come before J,C; they depend on xb[J,C], which we may overwrite when we calc J,C
 	xd[p7S_CC] = expf(  xC      + xb[p7S_C] + gm->xsc[p7P_C][p7P_LOOP] - totsc); xC = xf[p7S_C]; norm += xd[p7S_CC];
 	xd[p7S_E]  = expf(xf[p7S_E] + xb[p7S_E] - totsc);                                  
-	xd[p7S_N]  = expf(xf[p7S_N] + xb[p7S_N] - totsc);                            xN = xf[p7S_N]; norm += xd[p7S_N];
+	xd[p7S_N]  = expf(xf[p7S_N] + xb[p7S_N] - totsc);                                            norm += xd[p7S_N];
 	xd[p7S_J]  = expf(xf[p7S_J] + xb[p7S_J] - totsc);  
 	xd[p7S_B]  = expf(xf[p7S_B] + xb[p7S_B] - totsc);                                  
 	xd[p7S_L]  = expf(xf[p7S_L] + xb[p7S_L] - totsc);                                  
