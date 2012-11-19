@@ -18,10 +18,12 @@ pdf:
 	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} pdf
 
 install: 
-	${QUIET_SUBDIR0}man  ${QUIET_SUBDIR1} install
+	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} install
+#	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} install
 
 uninstall:
 	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} uninstall
+#	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} uninstall
 
 clean:
 	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} clean

@@ -52,6 +52,7 @@ ifndef V
 	QUIET_SUBDIR0 = +@subdir=
 	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
 		        ${MAKE} -C $$subdir
+	QUIET         = @
 endif
 
 
@@ -66,7 +67,7 @@ tests: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${UTESTS}
 # In some subdirs, ${LIBOBJS} is empty. We can't give an empty arg string to 'ar'.
 # Hence the ! -z shell test on ${LIBOBJS} below.
 libhmmer-${MODULE}.stamp: ${LIBOBJS}
-	@if [ ! -z "${LIBOBJS}" ]; then \
+	${QUIET}+if [ ! -z "${LIBOBJS}" ]; then \
 	   echo '    ' AR $@ ;\
 	   ${AR} -r ${top_builddir}/src/libhmmer.a $? > /dev/null 2>&1 ;\
 	   ${RANLIB} ${top_builddir}/src/libhmmer.a ;\
@@ -160,20 +161,20 @@ ${EXAMPLES}: libhmmer-${MODULE}.stamp ${MYLIBDEPS}
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 install:
-	for file in ${PROGS}; do \
-	   ${INSTALL} -m 0755 $$file ${DESTDIR}${bindir}/ ;\
-	done
-	for file in ${HDRS}; do \
-	   ${INSTALL} -m 0644 ${srcdir}/$$file ${DESTDIR}${includedir}/ ;\
-	done
+	${QUIET}if [ ! -z "${PROGS}" ]; then \
+	   for file in ${PROGS}; do \
+	      echo '    ' INSTALL $$file ;\
+	      ${INSTALL} -m 0755 $$file ${DESTDIR}${bindir}/ ;\
+	   done ;\
+	fi
 
 uninstall:
-	for file in ${PROGS}; do \
-	   rm -f ${DESTDIR}${bindir}/$$file ;\
-	done
-	for file in ${HDRS}; do \
-	   rm -f ${DESTDIR}${includedir}/$$file ;\
-	done
+	${QUIET}if [ ! -z "${PROGS}" ]; then \
+	   for file in ${PROGS}; do \
+	      echo '    ' UNINSTALL $$file ;\
+	      rm -f ${DESTDIR}${bindir}/$$file ;\
+	   done ;\
+	fi
 
 distclean: clean
 	-rm -f Makefile 
@@ -181,7 +182,7 @@ distclean: clean
 clean:
 	-rm -f libhmmer-${MODULE}.stamp lib${MODULE}.a ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out cscope.out *.gcno
-	for prog in ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do \
+	${QUIET}for prog in ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do \
 	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi ;\
 	done
 

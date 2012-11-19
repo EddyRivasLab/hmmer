@@ -148,7 +148,7 @@
 
 \item[\textbf{Forward score}]
 
-\item[\textbf{global alignment}]
+\item[\textbf{global alignment}] n
 
 \item[\textbf{glocal alignment}]
 
@@ -210,7 +210,7 @@ and domain postprocessing.
 
 \item[\textbf{reporting threshold}]
 
-\item[\textbf{score}]
+\item[\textbf{score}] 
 
 \item[\textbf{SIMD}] ``Single Instruction/Multiple Data'': a
   buzzphrase in parallel computing, naming one widely used
@@ -224,19 +224,41 @@ and domain postprocessing.
   profile/sequence comparison algorithms use SSE vector instructions
   to achieve high speed.
 
-\item[\textbf{statistical significance}]
+\item[\textbf{statistical significance}] 
 
 \item[\textbf{stochastic traceback}]
 
 \item[\textbf{target}]
 
-\item[\textbf{Viterbi algorithm}]
+\item[\textbf{Viterbi algorithm}] The Viterbi algorithm finds the
+  optimal (maximum probability) alignment of an HMM to a sequence. It
+  is the probabilistic equivalent of standard dynamic programming
+  sequence alignment algorithms that find an optimum (highest score)
+  alignment.
 
-\item[\textbf{Viterbi alignment}] (Also, \emph{Viterbi algorithm}.)
+\item[\textbf{Viterbi alignment}] Colloquially, the Viterbi alignment
+  is the optimal (maximum probability) alignment found by a Viterbi
+  algorithm.
 
-\item[\textbf{Viterbi filter}]
+\item[\textbf{Viterbi filter}] One of three main steps in HMMER's
+  acceleration pipeline. The Viterbi filter is a fast
+  (vector-parallel, reduced-precision, local-only) Viterbi alignment
+  algorithm. It comes after the SSV/MSV filter, and before the Forward
+  filter. Sequences with Viterbi filter scores that pass a P-value
+  threshold are passed on to more powerful and computationally
+  intensive steps, ultimately to the Forward/Backward algorithm and
+  posterior decoding with a more complex global/local alignment
+  model.
+  
+\item[\textbf{Viterbi score}] Score of the best alignment; a log odds
+  ratio, the ratio of the probability of the optimal sequence
+  alignment given the profile HMM to the probability of the sequence
+  given the null model of random nonhomologous sequence. HMMER reports
+  it in units of \emph{bits} (base two logarithms). A positive score
+  means statistical support for thinking the target sequence is a
+  homolog of the sequence family represented by the profile HMM. The
+  more positive, the more support. 
 
-\item[\textbf{Viterbi score}]
 
 
 

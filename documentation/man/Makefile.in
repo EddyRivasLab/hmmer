@@ -34,15 +34,21 @@ MANS =  hmmer\
 	jackhmmer\
 	phmmer
 
+ifndef V
+	QUIET         = @
+endif
+
 .PHONY:  install uninstall clean distclean
 
 install:
-	for file in ${MANS}; do \
+	${QUIET}for file in ${MANS}; do \
+	   echo '    ' INSTALL $$file ;\
 	   ${INSTALL} -m 0755 ${srcdir}/$$file.man ${DESTDIR}${man1dir}/$${file}${man1ext} ;\
 	done
 
 uninstall:
-	for file in ${MANS}; do \
+	${QUIET}for file in ${MANS}; do \
+	   echo '    ' UNINSTALL $$file ;\
 	   rm ${DESTDIR}${man1dir}/$${file}${man1ext} ;\
 	done
 

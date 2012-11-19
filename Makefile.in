@@ -122,8 +122,6 @@ pdf:
 #          may be set on a make command line when building contrib RPMs).
 install: 
 	${INSTALL} -d ${DESTDIR}${bindir}
-	${INSTALL} -d ${DESTDIR}${libdir}
-	${INSTALL} -d ${DESTDIR}${includedir}
 	${INSTALL} -d ${DESTDIR}${man1dir}
 	${INSTALL} -d ${DESTDIR}${pdfdir}
 	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} install

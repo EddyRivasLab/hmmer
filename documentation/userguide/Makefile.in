@@ -54,6 +54,11 @@ TEXFILES =\
 	tabular.tex\
 	tutorial.tex
 
+ifndef V
+	QUIET_INSTALL = @echo '    ' INSTALL $@;
+	QUIET         = @
+endif
+
 .PHONY: pdf install uninstall clean distclean TAGS
 
 pdf:    Userguide.pdf
@@ -99,10 +104,12 @@ manpages.tex: ${MANPAGES}
 	done
 
 install:
-	${INSTALL} -m 0644 Userguide.pdf ${DESTDIR}${pdfdir}
+	echo '    ' INSTALL Userguide.pdf 
+	${QUIET}${INSTALL} -m 0644 Userguide.pdf ${DESTDIR}${pdfdir}
 
 uninstall:
-	-rm -f  ${DESTDIR}${pdfdir}/Userguide.pdf 
+	echo '    ' UNINSTALL Userguide.pdf 
+	${QUIET}-rm -f  ${DESTDIR}${pdfdir}/Userguide.pdf 
 
 clean:
 	-rm -f latex.log
