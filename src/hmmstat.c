@@ -23,12 +23,13 @@ static ESL_OPTIONS options[] = {
   /* name           type       default   env  range    toggles    reqs       incomp  help   docgroup*/
   { "-h",        eslARG_NONE,    FALSE,  NULL, NULL,    NULL,  NULL,           NULL, "show brief help on version and usage",            0 },
 
-  { "--eval2score",  eslARG_NONE, FALSE, NULL, NULL,    NULL,  "-E",        NULL,            "compute score for E-value (E) for database of (Z) sequences",     0 },
-  { "--score2eval",  eslARG_NONE, FALSE, NULL, NULL,    NULL,  "-S",        NULL,            "compute E-value for score (S) for database of (Z) sequences",     0 },
-  { "-Z",            eslARG_INT,    "1", NULL, "n>0",   NULL,  NULL,           NULL,         "database size for --eval2score or --score2eval (default 1)",     0 },
-  { "--rescntZ",    eslARG_NONE,   FALSE, NULL, NULL,   NULL,  "-Z",           NULL,         "for --eval2score, -Z is in millions of residues (DNA models only)",          0 },
-  { "-E",           eslARG_REAL,  "0.01", NULL, NULL,   NULL,  "--eval2score", NULL,         "E-value threshold, for --eval2score",                                         0 },
-  { "-S",           eslARG_REAL,  "0.01", NULL, NULL,   NULL,  "--score2eval", NULL,         "Score input for --score2eval",                                         0 },
+  { "--eval2score",  eslARG_NONE, FALSE, NULL, NULL,    NULL,  "-E",        NULL,            "compute score for E-value (E) for database of (Z) sequences",        0 },
+  { "--score2eval",  eslARG_NONE, FALSE, NULL, NULL,    NULL,  "-S",        NULL,            "compute E-value for score (S) for database of (Z) sequences",        0 },
+  { "-Z",            eslARG_INT,    "1", NULL, "n>0",   NULL,  NULL,   "--baseZ1,--baseZ",   "database size (in seqs) for --eval2score or --score2eval",           0 },
+  { "--baseZ",      eslARG_INT,     "0", NULL, NULL,   NULL,  NULL,      "--baseZ1,-Z",      "database size (M bases) (DNA only, if search on both strands)",      0 },
+  { "--baseZ1",     eslARG_INT,     "0", NULL, NULL,   NULL,  NULL,       "--baseZ,-Z",      "database size (M bases) (DNA only, if search on single strand)",     0 },
+  { "-E",           eslARG_REAL,  "0.01", NULL, NULL,   NULL,  "--eval2score", NULL,         "E-value threshold, for --eval2score",                                0 },
+  { "-S",           eslARG_REAL,  "0.01", NULL, NULL,   NULL,  "--score2eval", NULL,         "Score input for --score2eval",                                       0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -42,17 +43,19 @@ output_header(FILE *ofp, const ESL_GETOPTS *go)
   p7_banner(ofp, go->argv[0], banner);
 
   if (esl_opt_IsUsed(go, "--eval2score"))  {
-     if (  fprintf(ofp, "# show score required to reach E-value:    %.2g\n",        esl_opt_GetReal(go, "-E"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+     if (  fprintf(ofp, "# show score required to reach E-value:      %.2g\n",        esl_opt_GetReal(go, "-E"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   }
   if (esl_opt_IsUsed(go, "--score2eval"))  {
-     if (  fprintf(ofp, "# show E-value required to reach score:    %.2g\n",        esl_opt_GetReal(go, "-S"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+     if (  fprintf(ofp,   "# show E-value corresponding to score:     %.2g\n",        esl_opt_GetReal(go, "-S"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   }
 
   if (esl_opt_IsUsed(go, "--eval2score") || esl_opt_IsUsed(go, "--score2eval"))  {
-     if (esl_opt_IsUsed(go, "--rescntZ") ) {
-       if (  fprintf(ofp, "# assume database residue count:            %d Kb\n",     esl_opt_GetInteger(go, "-Z")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+     if (esl_opt_IsUsed(go, "--baseZ") ) {
+       if (  fprintf(ofp, "# using base count (search both strands):  %d Mb\n",     esl_opt_GetInteger(go, "--baseZ")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+     } else if (esl_opt_IsUsed(go, "--baseZ1") ) {
+       if (  fprintf(ofp, "# using base count (search single strand): %d Mb\n",     esl_opt_GetInteger(go, "--baseZ1")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
      } else {
-       if (  fprintf(ofp, "# assume database sequence count:           %d\n",        esl_opt_GetInteger(go, "-Z")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+       if (  fprintf(ofp, "# using database sequence count:           %d\n",        esl_opt_GetInteger(go, "-Z")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
      }
   }
 
@@ -79,9 +82,11 @@ main(int argc, char **argv)
 
   int              do_eval2score = 0;
   int              do_score2eval = 0;
-  int              z_val;
+  long             z_val;
   float            e_val;
   float            s_val;
+
+  float nseq;
 
   /* Process the command line options.
    */
@@ -124,14 +129,23 @@ main(int argc, char **argv)
 
   if ( esl_opt_IsOn(go, "--eval2score") ) {
     do_eval2score = TRUE;
-    z_val         =  esl_opt_GetInteger(go, "-Z");
     e_val         =  esl_opt_GetReal(go, "-E");
+  } else if ( esl_opt_IsOn(go, "--score2eval") ) {
+    do_score2eval = TRUE;
+    s_val         =  esl_opt_GetReal(go, "-S");
+  } else if (  esl_opt_IsUsed(go, "--baseZ") || esl_opt_IsUsed(go, "--baseZ1") || esl_opt_IsUsed(go, "--Z") ) {
+    puts("The flags --Z, --baseZ, and --baseZ1 are for use with --eval2score and --score2eval.");
+    esl_usage(stdout, argv[0], usage);
+    printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
+    exit(1);
   }
 
-  if ( esl_opt_IsOn(go, "--score2eval") ) {
-      do_score2eval = TRUE;
-      z_val         =  esl_opt_GetInteger(go, "-Z");
-      s_val         =  esl_opt_GetReal(go, "-S");
+  if (esl_opt_IsUsed(go, "--baseZ") ) {
+    z_val    = 1000000 * 2 * (long)(esl_opt_GetInteger(go, "--baseZ"));
+  } else if (esl_opt_IsUsed(go, "--baseZ1") ) {
+    z_val    = 1000000 * (long)(esl_opt_GetInteger(go, "--baseZ1"));
+  } else {
+    z_val    =  esl_opt_GetInteger(go, "-Z");
   }
 
   /* Initializations: open the HMM file
@@ -169,9 +183,9 @@ main(int argc, char **argv)
       nhmm++;
 
       if ( esl_opt_IsOn(go, "--eval2score") || esl_opt_IsOn(go, "--score2eval") ) {
-        if (esl_opt_IsUsed(go, "--rescntZ") ) {
+        if (esl_opt_IsUsed(go, "--baseZ") || esl_opt_IsUsed(go, "--baseZ1" ) ) {
           if ( hmm->abc->type != eslRNA   && hmm->abc->type != eslDNA) {
-            puts("The flag --rescntZ can't be used with non-nucleotide models.");
+            puts("The flags --baseZ and --baseZ1 can't be used with non-nucleotide models.");
             esl_usage(stdout, argv[0], usage);
             printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
             exit(1);
@@ -184,6 +198,13 @@ main(int argc, char **argv)
         }
       }
 
+      if (esl_opt_IsUsed(go, "--baseZ") ) {
+        nseq = (float)z_val / (float)(hmm->max_length);
+      } else if (esl_opt_IsUsed(go, "--baseZ1") ) {
+        nseq = (float)z_val / (float)(hmm->max_length);
+      } else {
+        nseq = z_val;
+      }
 
       if (bg == NULL) bg = p7_bg_Create(abc);
 
@@ -204,24 +225,11 @@ main(int argc, char **argv)
 
 
       if ( esl_opt_IsOn(go, "--eval2score") ) {
-        float nseq;
         float sc;
-        if (esl_opt_IsUsed(go, "--rescntZ") )
-          nseq = (float)((long)z_val*1000000) / (float)(hmm->max_length);
-        else
-          nseq = (float)z_val;
         sc = esl_exp_invsurv( e_val / nseq ,  hmm->evparam[p7_FTAU],  hmm->evparam[p7_FLAMBDA]);
         printf("%13.2f", sc);
-      }
-
-
-      if ( esl_opt_IsOn(go, "--score2eval") ) {
-        float nseq;
+      } else  if ( esl_opt_IsOn(go, "--score2eval") ) {
         float e;
-        if (esl_opt_IsUsed(go, "--rescntZ") )
-          nseq = (float)((long)z_val*1000000) / (float)(hmm->max_length);
-        else
-          nseq = (float)z_val;
         e = nseq * esl_exp_surv( s_val ,  hmm->evparam[p7_FTAU],  hmm->evparam[p7_FLAMBDA]);
         printf("%13.2g", e);
       }
