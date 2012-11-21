@@ -14,6 +14,7 @@
 #   { name => "intel-macosx-gcc-dummy",      host => "."           },
 #   { name => "ppc-aix-xlc",                 host => "cf-ppc2"     },
     { name => "intel-linux-gcc-ubuntu32",    host => "cf-ubuntu32" },
+    { name => "intel-freebsd-gcc",           host => "cf-freebsd"  },
 #   { name => "ppc-macosx",                  host => "10.41.4.30"  },
     );
 

@@ -15,6 +15,10 @@
 #include <syslog.h>
 #include <time.h>
 
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>	    /* On FreeBSD, you need netinet/in.h for struct sockaddr_in */
+#endif
+
 #ifndef HMMER_THREADS
 #error "Program requires pthreads be enabled."
 #endif /*HMMER_THREADS*/

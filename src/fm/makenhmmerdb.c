@@ -454,9 +454,9 @@ main(int argc, char **argv)
 
   output_header(stdout, go, fname_in, fname_out);
 
-  meta->SA_shift = log2(meta->freq_SA);
-  meta->cnt_shift_b = log2(meta->freq_cnt_b);
-  meta->cnt_shift_sb = log2(meta->freq_cnt_sb);
+  meta->SA_shift = log(meta->freq_SA) * eslCONST_LOG2R; /* i.e. log2() */
+  meta->cnt_shift_b = log(meta->freq_cnt_b) * eslCONST_LOG2R;
+  meta->cnt_shift_sb = log(meta->freq_cnt_sb) * eslCONST_LOG2R;
 
 
   //getInverseAlphabet

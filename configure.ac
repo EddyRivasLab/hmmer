@@ -332,10 +332,14 @@ fi
 # This sets @PIC_FLAGS@ output variable for Easel.
 ESL_PIC_FLAGS
 
-# Figure out our @SIMD_CFLAGS@, if they're not already set
+# Figure out our @SIMD_CFLAGS@, if they're not already set.
+# If we're using gcc, we need -msse2.
+# We'd also like to have SSE3, so try to add -msse3.
 if test "x$SIMD_CFLAGS" = x; then
    case $ax_cv_c_compiler_vendor in
-   gnu)   AX_CHECK_COMPILER_FLAGS(-msse2,[SIMD_CFLAGS="-msse2"],[AC_MSG_ERROR([-msse2 produces compiler failure?])] );;
+   gnu)   AX_CHECK_COMPILER_FLAGS([-msse2],        [ SIMD_CFLAGS="-msse2" ])
+          AX_CHECK_COMPILER_FLAGS([-msse2 -msse3], [ SIMD_CFLAGS="-msse2 -msse3" ])
+	  ;;
    intel) ;;
    *)     ;;
    esac
@@ -429,7 +433,8 @@ AC_CHECK_HEADERS([ \
   stdint.h\
   unistd.h\
   sys/types.h\
-  sys/sysctl.h
+  sys/sysctl.h\
+  netinet/in.h
 ])  
 
 # Vector-specific headers. 
