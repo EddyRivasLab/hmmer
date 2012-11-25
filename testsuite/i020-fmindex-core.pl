@@ -46,7 +46,7 @@ if ($output !~ /$expect/s) {
 }
 
 print "ok\n";
-unlink "$tmppfx.fm";
+unlink "$tmppfx.fa";
 unlink "$tmppfx.fm";
 unlink "$tmppfx.test";
 
