@@ -125,6 +125,10 @@
  */
 #undef p7_DEBUGGING
 
+/* System headers
+*/
+#undef HAVE_NETINET_IN_H	/* On FreeBSD, you need netinet/in.h for struct sockaddr_in */
+
 #endif /*P7_CONFIGH_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
