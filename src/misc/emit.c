@@ -238,6 +238,12 @@ ERROR:
  *            instead of a plain <ESL_DSQ *> or <char *> string, to
  *            take advantage of the object's support for dynamic
  *            reallocation of seq length.
+ *            
+ *            The minimum sequence length that can be sampled is 1,
+ *            because at least one match state must be used. Although
+ *            a profile has an all-delete glocal path, this (usually
+ *            negligible) probability is rejected; profiles act as if
+ *            they use wing-retracted glocal entry/exit transitions.
  *
  * Args:      r    - source of randomness
  *            hmm  - core probabilities of the profile
@@ -252,11 +258,12 @@ int
 p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE *gm, const P7_BG *bg, ESL_SQ *sq, P7_TRACE *tr)
 {
   char      prv, st;		/* prev, current state type */
-  int       k = 0;	        /* position in model nodes 1..M */
-  int       i = 0;		/* position in sequence 1..L */
+  int       k;	                /* position in model nodes 1..M */
+  int       i;		        /* position in sequence 1..L */
   int       x;			/* sampled residue */
-  int       kend = hmm->M;      /* predestined end node */
+  int       kend;               /* predestined end node */
   int       showi;
+  int       done = FALSE;	/* flag for whether we've generated a rare L=0 case that needs to be rejected */
   int       status;
   float     xt[p7P_NXSTATES][p7P_NXTRANS];
 
@@ -265,88 +272,104 @@ p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE *gm, const
     for (x = 0; x < p7P_NXTRANS; x++)
       xt[i][x] = exp(gm->xsc[i][x]);
 
-  if (sq) esl_sq_Reuse(sq);    
-
-  if (tr) {
-    if ((status = p7_trace_Reuse(tr))               != eslOK) goto ERROR;
-    if ((status = p7_trace_Append(tr, p7T_S, k, i)) != eslOK) goto ERROR;
-    if ((status = p7_trace_Append(tr, p7T_N, k, i)) != eslOK) goto ERROR;
-  }
-  st    = p7T_N;
-  i     = 0;
-  while (st != p7T_T)
+  /* Wrap the entire sampling routine with rejection of the L=0 case:
+   * since we use G->{MD}1 and {MD}m->E rather than the wing-retracted
+   * glocal entry/exits, it's possible (though typically rare) that we
+   * could go through an all-delete path, a tidbit of probability mass
+   * the profile is supposed to exclude. Visiting any M state 
+   * is sufficient to cancel the rejection, setting the <done> flag.
+   */
+  while (! done)
     {
-      /* Sample a state transition. After this section, prv and st (prev->current state) are set;
-       * k also gets set if we make a B->Mk entry transition.
-       */
-      prv = st;
-      switch (st) {
-	
-      case p7T_L:
-	if ((status = sample_endpoints(r, gm, &k, &kend)) != eslOK) goto ERROR; /* implicit probabilistic model over local fragment endpoints */
-	st = p7T_ML;	/* L->Mk entry */
-	break;
-				   
-      case p7T_ML: 
-      case p7T_MG:
-	if (k == kend) st = p7T_E; /* check our preordained local Mk->E fate or glocal Mm->E */
-	else {
-	  switch (esl_rnd_FChoose(r, P7H_TMAT(hmm, k), p7H_NTMAT)) {
-	  case 0:  st = (st == p7T_ML ? p7T_ML : p7T_MG); break;
-	  case 1:  st = (st == p7T_ML ? p7T_IL : p7T_IG); break;
-	  case 2:  st = (st == p7T_ML ? p7T_DL : p7T_DG); break;
-	  default: ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible.");  	    
-	  }
-	}
-	break;
+      st   = p7T_N;
+      k    = 0;
+      i    = 0;
+      kend = hmm->M;
+      
+      if (sq) esl_sq_Reuse(sq);    
 
-      case p7T_DL:
-	if (k == kend) st = p7T_E; /* preordained Dk->E local end fate */
-	else           st = (esl_rnd_FChoose(r, P7H_TDEL(hmm, k), p7H_NTDEL) == 0) ? p7T_ML : p7T_DL; 
-	break;
-
-      case p7T_DG:
-	if (k == kend) st = p7T_E; 
-	else           st = (esl_rnd_FChoose(r, P7H_TDEL(hmm, k), p7H_NTDEL) == 0) ? p7T_MG : p7T_DG; 
-	break;
-
-      case p7T_IL: st = (esl_rnd_FChoose(r, P7H_TINS(hmm, k), p7H_NTINS)    == 0)        ? p7T_ML : p7T_IL;                 break;
-      case p7T_IG: st = (esl_rnd_FChoose(r, P7H_TINS(hmm, k), p7H_NTINS)    == 0)        ? p7T_MG : p7T_IG;                 break;
-      case p7T_B:  st = (esl_rnd_FChoose(r, xt[p7P_B],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_G  : p7T_L;                  break;
-      case p7T_G:  st = (esl_rnd_FChoose(r, xt[p7P_G],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_DG : p7T_MG; kend = hmm->M;  break;
-      case p7T_N:  st = (esl_rnd_FChoose(r, xt[p7P_N],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_B  : p7T_N;                  break;
-      case p7T_E:  st = (esl_rnd_FChoose(r, xt[p7P_E],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_C  : p7T_J;                  break;
-      case p7T_C:  st = (esl_rnd_FChoose(r, xt[p7P_C],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_T  : p7T_C;                  break;
-      case p7T_J:  st = (esl_rnd_FChoose(r, xt[p7P_J],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_B  : p7T_J;                  break;
-      default:     ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible state reached during emission");
-      }
-     
-      /* Based on the transition we just sampled, update k. */
-      if      (st == p7T_E)                  k = 0;
-      else if (st == p7T_ML && prv != p7T_L) k++;    /* be careful about L->Mk, where we already set k */
-      else if (st == p7T_MG)                 k++;
-      else if (st == p7T_DG || st == p7T_DL) k++;
-
-      /* Based on the transition we just sampled, generate a residue. */
-      if      (st == p7T_ML || st == p7T_MG)                           x = esl_rnd_FChoose(r, hmm->mat[k], hmm->abc->K);
-      else if (st == p7T_IL || st == p7T_IG)                           x = esl_rnd_FChoose(r, hmm->ins[k], hmm->abc->K);
-      else if ((st == p7T_N || st == p7T_C || st == p7T_J) && prv==st) x = esl_rnd_FChoose(r, bg->f,       hmm->abc->K);
-      else    x = eslDSQ_SENTINEL;
-
-      if (x != eslDSQ_SENTINEL) i++;
-
-      /* Add residue (if any) to sequence */
-      if (sq != NULL && x != eslDSQ_SENTINEL && (status = esl_sq_XAddResidue(sq, x)) != eslOK) goto ERROR;
-
-      /* Add state to trace. */
       if (tr) {
-	showi = (x != eslDSQ_SENTINEL) ? i : 0;
-	if ((status = p7_trace_Append(tr, st, k, showi)) != eslOK) goto ERROR;
-      } 
+	if ((status = p7_trace_Reuse(tr))               != eslOK) goto ERROR;
+	if ((status = p7_trace_Append(tr, p7T_S, k, i)) != eslOK) goto ERROR;
+	if ((status = p7_trace_Append(tr, p7T_N, k, i)) != eslOK) goto ERROR;
+      }
+
+      while (st != p7T_T)
+	{
+	  /* Sample a state transition. After this section, prv and st (prev->current state) are set;
+	   * k also gets set if we make a B->Mk entry transition.
+	   */
+	  prv = st;
+	  switch (st) {
+	
+	  case p7T_L:
+	    if ((status = sample_endpoints(r, gm, &k, &kend)) != eslOK) goto ERROR; /* implicit probabilistic model over local fragment endpoints */
+	    st = p7T_ML;	/* L->Mk entry */
+	    break;
+				   
+	  case p7T_ML: 
+	  case p7T_MG:
+	    if (k == kend) st = p7T_E; /* check our preordained local Mk->E fate or glocal Mm->E */
+	    else {
+	      switch (esl_rnd_FChoose(r, P7H_TMAT(hmm, k), p7H_NTMAT)) {
+	      case 0:  st = (st == p7T_ML ? p7T_ML : p7T_MG); break;
+	      case 1:  st = (st == p7T_ML ? p7T_IL : p7T_IG); break;
+	      case 2:  st = (st == p7T_ML ? p7T_DL : p7T_DG); break;
+	      default: ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible.");  	    
+	      }
+	    }
+	    done = TRUE;
+	    break;
+
+	  case p7T_DL:
+	    if (k == kend) st = p7T_E; /* preordained Dk->E local end fate */
+	    else           st = (esl_rnd_FChoose(r, P7H_TDEL(hmm, k), p7H_NTDEL) == 0) ? p7T_ML : p7T_DL; 
+	    break;
+
+	  case p7T_DG:
+	    if (k == kend) st = p7T_E; 
+	    else           st = (esl_rnd_FChoose(r, P7H_TDEL(hmm, k), p7H_NTDEL) == 0) ? p7T_MG : p7T_DG; 
+	    break;
+
+	  case p7T_IL: st = (esl_rnd_FChoose(r, P7H_TINS(hmm, k), p7H_NTINS)    == 0)        ? p7T_ML : p7T_IL;                 break;
+	  case p7T_IG: st = (esl_rnd_FChoose(r, P7H_TINS(hmm, k), p7H_NTINS)    == 0)        ? p7T_MG : p7T_IG;                 break;
+	  case p7T_B:  st = (esl_rnd_FChoose(r, xt[p7P_B],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_G  : p7T_L;                  break;
+	  case p7T_G:  st = (esl_rnd_FChoose(r, xt[p7P_G],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_DG : p7T_MG; kend = hmm->M;  break;
+	  case p7T_N:  st = (esl_rnd_FChoose(r, xt[p7P_N],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_B  : p7T_N;                  break;
+	  case p7T_E:  st = (esl_rnd_FChoose(r, xt[p7P_E],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_C  : p7T_J;                  break;
+	  case p7T_C:  st = (esl_rnd_FChoose(r, xt[p7P_C],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_T  : p7T_C;                  break;
+	  case p7T_J:  st = (esl_rnd_FChoose(r, xt[p7P_J],        p7P_NXTRANS)  == p7P_MOVE) ? p7T_B  : p7T_J;                  break;
+	  default:     ESL_XEXCEPTION(eslEINCONCEIVABLE, "impossible state reached during emission");
+	  }
+     
+	  /* Based on the transition we just sampled, update k. */
+	  if      (st == p7T_E)                  k = 0;
+	  else if (st == p7T_ML && prv != p7T_L) k++;    /* be careful about L->Mk, where we already set k */
+	  else if (st == p7T_MG)                 k++;
+	  else if (st == p7T_DG || st == p7T_DL) k++;
+
+	  /* Based on the transition we just sampled, generate a residue. */
+	  if      (st == p7T_ML || st == p7T_MG)                           x = esl_rnd_FChoose(r, hmm->mat[k], hmm->abc->K);
+	  else if (st == p7T_IL || st == p7T_IG)                           x = esl_rnd_FChoose(r, hmm->ins[k], hmm->abc->K);
+	  else if ((st == p7T_N || st == p7T_C || st == p7T_J) && prv==st) x = esl_rnd_FChoose(r, bg->f,       hmm->abc->K);
+	  else    x = eslDSQ_SENTINEL;
+
+	  if (x != eslDSQ_SENTINEL) i++;
+
+	  /* Add residue (if any) to sequence */
+	  if (sq != NULL && x != eslDSQ_SENTINEL && (status = esl_sq_XAddResidue(sq, x)) != eslOK) goto ERROR;
+
+	  /* Add state to trace. */
+	  if (tr) {
+	    showi = (x != eslDSQ_SENTINEL) ? i : 0;
+	    if ((status = p7_trace_Append(tr, st, k, showi)) != eslOK) goto ERROR;
+	  } 
+	}
+      /* Terminate the trace and sequence (both are optional, remember) */
+      if (tr) {  tr->M = hmm->M; tr->L = i; }
+      if (sq && (status = esl_sq_XAddResidue(sq, eslDSQ_SENTINEL)) != eslOK) goto ERROR;
     }
-  /* Terminate the trace and sequence (both are optional, remember) */
-  if (tr) {  tr->M = hmm->M; tr->L = i; }
-  if (sq && (status = esl_sq_XAddResidue(sq, eslDSQ_SENTINEL)) != eslOK) goto ERROR;
+
   return eslOK;
 
  ERROR:
