@@ -357,7 +357,8 @@
 1 exercise  stdin_pipes           !testsuite/i17-stdin.pl!              @@ !! %OUTFILES%
 1 exercise  nhmmer_generic        !testsuite/i18-nhmmer-generic.pl!     @@ !! %OUTFILES%
 1 exercise  hmmpgmd_ga            !testsuite/i19-hmmpgmd-ga.pl!         @@ !! %OUTFILES% 
-1 exercise  fmindex-core          !testsuite/i20-fmindex-core.pl!       @@ !! %OUTFILES%
+#comment out fmindex test until it's been returned to life
+#1 exercise  fmindex-core          !testsuite/i20-fmindex-core.pl!       @@ !! %OUTFILES%
 
 1 exercise  brute-itest           @src/itest_brute@  
 1 exercise  hmmpress-itest        !src/hmmpress.itest.pl! @src/hmmpress@ %MINIFAM.HMM% %TMPPFX%

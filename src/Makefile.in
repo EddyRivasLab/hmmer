@@ -45,7 +45,6 @@ MYINCDIRS = -I../${ESLDIR} \
 
 
 PROGS = alimask\
-	exactmatch\
 	hmmalign\
 	hmmbuild\
 	hmmconvert\
@@ -62,8 +61,7 @@ PROGS = alimask\
 	nhmmer\
 	nhmmscan\
 	hmmpgmd\
-	hmmc2\
-	makenhmmerdb
+	hmmc2
 
 
 PROGOBJS =\

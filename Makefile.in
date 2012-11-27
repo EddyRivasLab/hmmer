@@ -91,9 +91,7 @@ PROGS = hmmalign\
 	jackhmmer\
 	phmmer\
 	nhmmer\
-	hmmpgmd\
-	makenhmmerdb\
-	exactmatch
+	hmmpgmd
 
 .PHONY: all dev check pdf install uninstall clean distclean TAGS
 
