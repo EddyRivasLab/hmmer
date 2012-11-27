@@ -4,7 +4,6 @@ SUBDIRS = base\
           dp_reference\
 	  dp_sparse\
 	  dp_vector\
-	  fm\
 	  misc\
           search\
 	  programs \

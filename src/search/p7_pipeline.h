@@ -28,11 +28,10 @@
 #include "dp_vector/p7_checkptmx.h"
 #include "dp_vector/p7_filtermx.h"
 
-#include "fm/fm.h"
-#include "fm/fm_general.h"
 
 enum p7_pipemodes_e { p7_SEARCH_SEQS = 0, p7_SCAN_MODELS = 1 };
 enum p7_zsetby_e    { p7_ZSETBY_NTARGETS = 0, p7_ZSETBY_OPTION = 1, p7_ZSETBY_FILEINFO = 2 };
+enum p7_complementarity_e { p7_NOCOMPLEMENT    = 0, p7_COMPLEMENT   = 1 };
 
 typedef struct p7_pipeline_s {
   /* Dynamic programming matrices                                           */
@@ -137,8 +136,6 @@ extern int p7_pipeline_WriteStats(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
 extern int p7_Pipeline              (P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
 #ifdef SRE_REMOVED_FOR_TRAVIS
 extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx);
-extern int p7_Pipeline_FM           (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *msvdata, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
-                                     const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg);
 #endif
 
 #endif /*P7_PIPELINE_INCLUDED*/

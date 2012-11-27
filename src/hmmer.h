@@ -55,7 +55,6 @@
 #include "dp_vector/msvfilter.h"	   /* "multiple seqment ungapped Viterbi" filter                                  */
 #include "dp_vector/vitfilter.h"	   /* Viterbi filter                                                              */
 #include "dp_vector/fwdfilter.h"	   /* Checkpointed Forward/Backward/posterior decoding filter                     */
-#include "dp_vector/fm_sse.h"	           /* vectorized FM index code {nhmmer}                                           */
 #include "dp_vector/io.h"		   /* Reading/writing P7_OPROFILEs to files                                       */
 #include "dp_vector/p7_oprofile_mpi.h"     /* MPI support functions for communicating P7_OPROFILE                         */
 
@@ -84,11 +83,6 @@
 #include "daemon/hmmdmstr.h"		      /* master process on the daemon's head node                 */
 #include "daemon/hmmpgmd2msa.h"		      /* utility for efficient MSA creation (Rob Finn)            */
 
-/* 'fm' subdir : experimental code in progress, for FM-index acceleration of nhmmer */
-#include "fm/fm_alphabet.h"
-#include "fm/fm.h"
-#include "fm/fm_general.h"
-#include "fm/fm_msv.h"
 
 
 /*****************************************************************

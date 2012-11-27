@@ -1,7 +1,7 @@
 MODULE = dp_vector
 
-LIBOBJS =  fm_sse.o\
-	   fwdfilter.o\
+LIBOBJS =  \
+       fwdfilter.o\
            io.o\
 	   msvfilter.o\
 	   p7_checkptmx.o\

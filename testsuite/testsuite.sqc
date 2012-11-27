@@ -114,7 +114,7 @@
 # TODO: nhmmer test commented out for now: 3.1 in progress: nhmmer not yet built
 #1 exercise  nhmmer_generic        !testsuite/i018-nhmmer-generic.pl!      @@ !! %OUTFILES%
 1 exercise  hmmpgmd_ga            !testsuite/i019-hmmpgmd-ga.pl!          @@ !! %OUTFILES% 
-1 exercise  fmindex-core          !testsuite/i020-fmindex-core.pl!        @@ !! %OUTFILES%
+#1 exercise  fmindex-core          !testsuite/i020-fmindex-core.pl!        @@ !! %OUTFILES%
 
 
 ################################################################

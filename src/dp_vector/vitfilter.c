@@ -30,7 +30,7 @@
 #include "esl_gumbel.h"
 
 #include "base/p7_hmmwindow.h"
-#include "fm/fm.h"
+#include "search/p7_pipeline.h"
 
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/p7_filtermx.h"
@@ -433,7 +433,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
           for (z = 0; z < 8; z++)  { // unstripe
             if ( tmp.i[z] == xE && (q+Q*z+1) <= om->M) {
               // (q+Q*z+1) is the model position k at which the xE score is found
-              p7_hmmwindow_new(windowlist, 0, i, 0, (q+Q*z+1), 1, 0.0, fm_nocomplement );
+              p7_hmmwindow_new(windowlist, 0, i, 0, (q+Q*z+1), 1, 0.0, p7_NOCOMPLEMENT );
             }
           }
           MMXf(q) = IMXf(q) = DMXf(q) = _mm_set1_epi16(-32768); //reset score to start search for next vit window.

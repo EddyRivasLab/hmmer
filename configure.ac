@@ -504,7 +504,6 @@ AC_CONFIG_FILES([
   src/dp_sparse/Makefile
   src/dp_vector/Makefile
   src/experiments/Makefile
-  src/fm/Makefile
   src/misc/Makefile
   src/programs/Makefile
   src/search/Makefile
