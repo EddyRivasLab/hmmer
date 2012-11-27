@@ -15,12 +15,11 @@
  *   11. P7_TOPHITS:     ranking lists of top-scoring hits
  *   12. P7_SCOREDATA:     data used in diagonal recovery and extension
  *   13. P7_HMM_WINDOW:  data used to track lists of sequence windows
- *   14. FM:             FM-index
- *   15. Inclusion of the architecture-specific optimized implementation.
- *   16. P7_PIPELINE:    H3's accelerated seq/profile comparison pipeline
- *   17. P7_BUILDER:     configuration options for new HMM construction.
- *   18. Declaration of functions in HMMER's exposed API.
- *   19. Copyright and license information.
+ *   14. Inclusion of the architecture-specific optimized implementation.
+ *   15. P7_PIPELINE:    H3's accelerated seq/profile comparison pipeline
+ *   16. P7_BUILDER:     configuration options for new HMM construction.
+ *   17. Declaration of functions in HMMER's exposed API.
+ *   18. Copyright and license information.
  *   
  * Also, see impl_{sse,vmx}/impl_{sse,vmx}.h for additional API
  * specific to the acceleration layer; in particular, the P7_OPROFILE
@@ -805,136 +804,9 @@ typedef struct p7_hmm_window_list_s {
 } P7_HMM_WINDOWLIST;
 
 
-/*****************************************************************
- * 14. FM:  FM-index implementation (architecture-specific code found in impl_**)
- *****************************************************************/
-// fm.c
-
-#define FM_MAX_LINE 256
-
-
-/* Structure the 2D occ array into a single array.  "type" is either b or sb.
- * Note that one extra count value is required by RLE, one 4-byte int for
- * each superblock count vector, and one 2-byte short for each block count
- * vector. This is small overhead, even for a small alphabet like dna.
- */
-#define FM_OCC_CNT( type, i, c)  ( occCnts_##type[(meta->alph_size)*(i) + (c)])
-
-enum fm_alphabettypes_e {
-  fm_DNA        = 0,  //acgt,  2 bit
-  fm_DNA_full   = 1,  //includes ambiguity codes, 4 bit
-  fm_RNA        = 2,  //acgu,  2 bit
-  fm_RNA_full   = 3,  //includes ambiguity codes, 4 bit
-  fm_AMINO      = 4,  // 5 bit
-};
-
-enum fm_direction_e {
-  fm_forward    = 0,
-  fm_backward   = 1,
-};
-
-enum fm_complementarity_e {
-  fm_nocomplement    = 0,
-  fm_complement   = 1,
-};
-
-typedef struct fm_interval_s {
-  int   lower;
-  int   upper;
-} FM_INTERVAL;
-
-typedef struct fm_hit_s {
-  uint32_t  start;
-  uint32_t  block;
-  int       direction;
-  int       length;
-  int       sortkey;
-} FM_HIT;
-
-
-typedef struct fm_seqdata_s {
-  uint32_t id;
-  uint32_t start;
-  uint32_t length;
-  uint32_t offset;
-  uint16_t name_length;
-  uint16_t source_length;
-  uint16_t acc_length;
-  uint16_t desc_length;
-  char     *name;
-  char     *source;
-  char     *acc;
-  char     *desc;
-} FM_SEQDATA;
-
-
-typedef struct fm_metadata_s {
-  uint8_t  fwd_only;
-  uint8_t  alph_type;
-  uint8_t  alph_size;
-  uint8_t  charBits;
-  uint32_t freq_SA; //frequency with which SA is sampled
-  uint32_t freq_cnt_sb; //frequency with which full cumulative counts are captured
-  uint32_t freq_cnt_b; //frequency with which intermittent counts are captured
-  uint8_t  SA_shift;
-  uint8_t  cnt_shift_sb;
-  uint8_t  cnt_shift_b;
-  uint16_t block_count;
-  uint32_t seq_count;
-  uint64_t char_count; //total count of characters including those in and out of the alphabet
-  char     *alph;
-  char     *inv_alph;
-  FILE       *fp;
-  FM_SEQDATA *seq_data;
-} FM_METADATA;
-
-
-
-typedef struct fm_data_s {
-  uint32_t N; //length of text
-  uint32_t term_loc; // location in the BWT at which the '$' char is found (replaced in the sequence with 'a')
-  uint32_t seq_offset;
-  uint32_t overlap; // number of bases at the beginning that overlap the FM-index for the preceding block
-  uint16_t seq_cnt;
-  uint8_t  *T;  //text corresponding to the BWT
-  uint8_t  *BWT_mem;
-  uint8_t  *BWT;
-  uint32_t *SA; // sampled suffix array
-  int32_t  *C; //the first position of each letter of the alphabet if all of T is sorted.  (signed, as I use that to keep tract of presence/absence)
-  uint32_t *occCnts_sb;
-  uint16_t *occCnts_b;
-} FM_DATA;
-
-typedef struct fm_dp_pair_s {
-  uint16_t    pos;  // position of the diagonal in the model.
-  float       score;
-  float       max_score;
-  uint8_t     max_score_len; // how long was the diagonal when the maximum observed score was seen?
-  uint8_t     consec_pos;
-  uint8_t     max_consec_pos;
-  uint8_t     model_direction;
-  uint8_t     complementarity;
-} FM_DP_PAIR;
-
-
-typedef struct fm_diag_s {
-  uint32_t    n;  //position of the database sequence at which the diagonal starts
-  double       sortkey;
-  uint16_t    k;  //position of the model at which the diagonal starts
-  uint16_t    length;
-  uint8_t     complementarity;
-} FM_DIAG;
-
-typedef struct fm_diaglist_s {
-  FM_DIAG   *diags;
-  int       count;
-  int       size;
-} FM_DIAGLIST;
-
-
 
 /*****************************************************************
- * 15. The optimized implementation.
+ * 14. The optimized implementation.
  *****************************************************************/
 #if   defined (p7_IMPL_SSE)
 #include "impl_sse/impl_sse.h"
@@ -945,11 +817,12 @@ typedef struct fm_diaglist_s {
 #endif
 
 /*****************************************************************
- * 16. P7_PIPELINE: H3's accelerated seq/profile comparison pipeline
+ * 15. P7_PIPELINE: H3's accelerated seq/profile comparison pipeline
  *****************************************************************/
 
 enum p7_pipemodes_e { p7_SEARCH_SEQS = 0, p7_SCAN_MODELS = 1 };
 enum p7_zsetby_e    { p7_ZSETBY_NTARGETS = 0, p7_ZSETBY_OPTION = 1, p7_ZSETBY_FILEINFO = 2 };
+enum p7_complementarity_e { p7_NOCOMPLEMENT    = 0, p7_COMPLEMENT   = 1 };
 
 typedef struct p7_pipeline_s {
   /* Dynamic programming matrices                                           */
@@ -1029,7 +902,7 @@ typedef struct p7_pipeline_s {
 
 
 /*****************************************************************
- * 17. P7_BUILDER: pipeline for new HMM construction
+ * 16. P7_BUILDER: pipeline for new HMM construction
  *****************************************************************/
 
 #define p7_DEFAULT_WINDOW_BETA  1e-7
@@ -1088,7 +961,7 @@ typedef struct p7_builder_s {
 
 
 /*****************************************************************
- * 18. Routines in HMMER's exposed API.
+ * 17. Routines in HMMER's exposed API.
  *****************************************************************/
 
 /* build.c */
@@ -1114,35 +987,6 @@ extern int p7_Tau       (ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, i
 
 /* eweight.c */
 extern int p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_PRIOR *pri, double infotarget, double *ret_Neff);
-
-/* fm_alphabet.c */
-extern int fm_createAlphabet (FM_METADATA *meta, uint8_t *alph_bits);
-extern int fm_reverseString (char* str, int N);
-extern int fm_getComplement (char c, uint8_t alph_type);
-
-/* fm_general.c */
-extern uint32_t fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int pos);
-extern int fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,
-                                    uint32_t *segment_id, uint32_t *seg_pos);
-extern int fm_readFMmeta( FM_METADATA *meta);
-extern int fm_readFM( FM_DATA *fm, FM_METADATA *meta, int getAll );
-extern void fm_freeFM ( FM_DATA *fm, int isMainFM);
-extern uint8_t fm_getChar(uint8_t alph_type, int j, const uint8_t *B );
-extern int fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
-extern int fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
-extern int fm_configAlloc(void **mem, FM_CFG **cfg);
-extern int fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_f, FM_INTERVAL *interval_bk);
-extern int fm_updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval);
-extern int fm_initSeeds (FM_DIAGLIST *list) ;
-extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
-extern int fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint8_t *B, ESL_SQ *sq );
-extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
-
-
-/* fm_msv.c */
-extern int p7_FM_MSV( P7_OPROFILE *om, P7_GMX *gx, float nu, P7_BG *bg, double F1,
-         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_SCOREDATA *scoredata,
-         P7_HMM_WINDOWLIST *windowlist);
 
 
 /* generic_decoding.c */
@@ -1425,8 +1269,6 @@ extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
 extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
 extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
 extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx);
-extern int p7_Pipeline_FM           (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *msvdata, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
-                                     const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg);
 
 extern int p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w);
 

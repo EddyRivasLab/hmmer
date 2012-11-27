@@ -133,8 +133,8 @@ main(int argc, char **argv)
   } else if ( esl_opt_IsOn(go, "--score2eval") ) {
     do_score2eval = TRUE;
     s_val         =  esl_opt_GetReal(go, "-S");
-  } else if (  esl_opt_IsUsed(go, "--baseZ") || esl_opt_IsUsed(go, "--baseZ1") || esl_opt_IsUsed(go, "--Z") ) {
-    puts("The flags --Z, --baseZ, and --baseZ1 are for use with --eval2score and --score2eval.");
+  } else if (  esl_opt_IsUsed(go, "--baseZ") || esl_opt_IsUsed(go, "--baseZ1") || esl_opt_IsUsed(go, "-Z") ) {
+    puts("The flags -Z, --baseZ, and --baseZ1 are for use with --eval2score and --score2eval.");
     esl_usage(stdout, argv[0], usage);
     printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
     exit(1);

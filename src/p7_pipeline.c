@@ -1136,7 +1136,7 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
         ESL_ALLOC(hit->dcl, sizeof(P7_DOMAIN) );
         hit->dcl[0] = pli->ddef->dcl[d];
 
-        if (complementarity == fm_nocomplement) {
+        if (complementarity == p7_NOCOMPLEMENT) {
           hit->dcl[0].ienv += window_start - 1; // represents the real position within the sequence handed to the pipeline
           hit->dcl[0].jenv += window_start - 1;
           hit->dcl[0].iali += window_start - 1;
@@ -1339,7 +1339,7 @@ p7_pli_postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
          do {
            new_n   +=  (smaller_window_len - om->max_length);
            new_len -=  (smaller_window_len - om->max_length);
-           p7_hmmwindow_new(vit_windowlist, 0, new_n, 0, 0, ESL_MIN(smaller_window_len,new_len), 0.0, fm_nocomplement );
+           p7_hmmwindow_new(vit_windowlist, 0, new_n, 0, 0, ESL_MIN(smaller_window_len,new_len), 0.0, p7_NOCOMPLEMENT );
          } while (new_len > smaller_window_len);
       }
   }
@@ -1521,7 +1521,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
       pli->pos_past_msv += window_len;
 
       status = p7_pli_postMSV_LongTarget(pli, om, bg, hitlist, data, seqidx, msv_windowlist.windows[i].n, window_len, tmpseq,
-                        subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc, fm_nocomplement, &vit_windowlist,
+                        subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc, p7_NOCOMPLEMENT, &vit_windowlist,
                         bgf_arr, scores_arr, fwd_emissions_arr
       );
 
@@ -1557,117 +1557,6 @@ ERROR:
 
 }
 
-
-
-
-
-/* Function:  p7_Pipeline_FM()
- * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline, using FM-index.
- *
- * Purpose:   Using FM-index, find high-scoring MSV windows, then
- *            pass these windows on to later pipeline stages. This
- *            pipeline compares profile <om> against the FM-index
- *            to find seeds, then extends those seeds to MSV-passing
- *            diagonals by comparing agasint the sequence associated
- *            with that window. If a significant hit is found,
- *            information about it is added to the <hitlist>. The
- *            pipeline accumulates beancounting information about how
- *            many comparisons flow through the pipeline while it's active.
- *
- * Returns:   <eslOK> on success. If a significant hit is obtained,
- *            its information is added to the growing <hitlist>.
- *
- *            <eslEINVAL> if (in a scan pipeline) we're supposed to
- *            set GA/TC/NC bit score thresholds but the model doesn't
- *            have any.
- *
- *            <eslERANGE> on numerical overflow errors in the
- *            optimized vector implementations; particularly in
- *            posterior decoding. I don't believe this is possible for
- *            multihit local models, but I'm set up to catch it
- *            anyway. We may emit a warning to the user, but cleanly
- *            skip the problematic sequence and continue.
- *
- * Throws:    <eslEMEM> on allocation failure.
- *
- * Xref:      J4/25.
- */
-int
-p7_Pipeline_FM(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7_BG *bg,
-    P7_TOPHITS *hitlist, int64_t seqidx, const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg)
-{
-
-  int i;
-  int status;
-  ESL_SQ           *tmpseq;
-  ESL_DSQ          *subseq;
-  P7_HMM_WINDOW     window;
-  P7_HMM_WINDOWLIST windowlist;
-  FM_SEQDATA       *seqdata;
-  float            *bgf_arr  = NULL;
-  float            *scores_arr = NULL;
-  float            *fwd_emissions_arr = NULL;
-
-  ESL_ALLOC(bgf_arr,   (om->abc->K)*sizeof(float));
-  ESL_ALLOC(scores_arr, (om->abc->Kp)*4*sizeof(float));
-  ESL_ALLOC(fwd_emissions_arr, sizeof(float) *  om->abc->Kp * (om->M+1));
-
-  tmpseq = esl_sq_CreateDigital(om->abc);
-
-  if (fmf->N == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
-
-  p7_hmmwindow_init(&windowlist);
-
-  seqdata = fm_cfg->meta->seq_data;
-
-  p7_omx_GrowTo(pli->oxf, om->M, 0, 0);    /* expand the one-row omx if needed */
-
-
-  /* First level filter: the MSV filter, multihit with <om>.
-   * This variant of MSV will scan a long sequence and find
-   * short high-scoring regions.
-   * */
-  p7_FM_MSV(om, (P7_GMX*)(pli->oxf), 2.0, bg, pli->F1,
-             fmf, fmb, fm_cfg, data, &windowlist );
-
-  for (i=0; i<windowlist.count; i++){
-
-    window =  windowlist.windows[i] ;
-
-    fm_convertRange2DSQ( fm_cfg->meta, window.id, window.fm_n, window.length, fmf->T, tmpseq );
-
-
-    if (window.complementarity == fm_complement)
-      esl_sq_ReverseComplement(tmpseq);
-
-    subseq = tmpseq->dsq;  // so subseq is just a pointer to tmpseq's dsq
-
-    pli->n_past_msv++;
-    pli->pos_past_msv += window.length;
-    p7_oprofile_ReconfigMSVLength(om, window.length);
-
-    status = p7_pli_postMSV_LongTarget(pli, om, bg, hitlist, data, seqidx, window.n, window.length, tmpseq,
-                      subseq, 1, seqdata[window.id].name, seqdata[window.id].source,
-                      seqdata[window.id].acc, seqdata[window.id].desc,
-                      window.null_sc, window.score, window.complementarity,
-                      NULL, bgf_arr, scores_arr, fwd_emissions_arr
-                      );
-
-    if (status != eslOK) return status;
-
-    pli->ddef->ndom = 0; // reset for next use
-
-  }
-
-  esl_sq_Destroy(tmpseq);
-  free(windowlist.windows);
-
-  return eslOK;
-
-ERROR:
-  return eslEMEM;
-
-}
 
 
 /* Function:  p7_pli_Statistics()

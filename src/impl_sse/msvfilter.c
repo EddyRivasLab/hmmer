@@ -397,7 +397,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       ret_sc /= om->scale_b;
       ret_sc -= 3.0; // that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ
 
-      p7_hmmwindow_new(windowlist, 0, target_start, k, end, end-start+1 , ret_sc, fm_nocomplement );
+      p7_hmmwindow_new(windowlist, 0, target_start, k, end, end-start+1 , ret_sc, p7_NOCOMPLEMENT );
 
       i = target_end; // skip forward
 	  }
@@ -450,30 +450,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 int
 p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_SCOREDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
-#ifdef ALLOW_MSV
-  register __m128i mpv;        /* previous row values                                       */
-  register __m128i xEv;		   /* E state: keeps max for Mk->E as we go                     */
-  register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
-  register __m128i sv;		   /* temp storage of 1 curr row value in progress              */
-  register __m128i biasv;	   /* emission bias in a vector                                 */
-  uint8_t  xJ;                 /* special states' scores                                    */
-  int i;			           /* counter over sequence positions 1..L                      */
-//  int j;
-  int q;			           /* counter over vectors 0..nq-1                              */
-  int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
-  __m128i *dp  = ox->dpb[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
-  __m128i *rsc;			        /* will point at om->rbv[x] for residue x[i]                 */
-
-  __m128i xEv_prev;            	 /* E state: keeps the max seen up to the current position i, for window overlap test.  Note that this will always just be xJv + tecv    */
-  __m128i xJv;                     /* vector for states score                                   */
-  __m128i tecv;                    /* vector for E->C  cost                                     */
-  __m128i tjbmv;                    /* vector for [JN]->B->M move cost                                  */
-  __m128i basev;                   /* offset for scores                                         */
-  __m128i jthreshv;                /* pushes value to saturation if it's above pthresh  */
-  __m128i ceilingv;                /* saturated simd value used to test for overflow           */
-  __m128i tempv;                   /* work vector                                               */
-#endif
-
 
   /*
    * Computing the score required to let P meet the F1 prob threshold
@@ -507,187 +483,7 @@ p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   sc_thresh = (int) ceil( ( ( nullsc  + (invP * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b );
   sc_threshv = _mm_set1_epi8((int8_t) 255 - sc_thresh);
 
-#ifdef ALLOW_MSV
-  //see ~wheelert/notebook/2012/0326-nhmmer-msv-ssv/00NOTES  - notes on 'Mar 31'
-  uint8_t jthresh = om->base_b + om->tec_b + 1;
-  jthreshv = _mm_set1_epi8((int8_t) 255 - (int)jthresh);
-
-
-  if (force_ssv || (sc_thresh < jthresh)) {
-#endif
-
-    p7_SSVFilter_longtarget(dsq, L, om, ox, msvdata, (uint8_t)sc_thresh, sc_threshv, windowlist);
-
-#ifdef ALLOW_MSV
-  } else {
-
-	  /*e.g. if base=190, tec=3, tjb=22 then a score of 217 would be required for a
-	   * second ssv-hit to improve the score of an earlier one. Usually,
-	   * sc_thresh < base. So only bother with msv if sc thresh is uncommonly
-	   *  high. This will require mu of something in the neighborhood of -6.4 bits
-	   *  (see TJW notes Mon Jun  7 10:19:34 EDT 2010 for details)
-	   */
-	  int hit_pthresh;
-	  int e_unchanged;
-
-	  //used to track neighboring MSV peaks
-	  int first_peak = -1;
-	  int last_peak = -1;
-	  int hit_jthresh;
-
-
-	  /* Check that the DP matrix is ok for us. */
-	  if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
-	  ox->M   = om->M;
-
-	  /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
-	   */
-	  biasv = _mm_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
-	  for (q = 0; q < Q; q++) dp[q] = _mm_setzero_si128();
-	  xJ   = 0;
-
-
-	  /* saturate simd register for overflow test */
-	  ceilingv = _mm_cmpeq_epi8(biasv, biasv);
-
-	  basev = _mm_set1_epi8((int8_t) om->base_b);
-
-	  tecv = _mm_set1_epi8((int8_t) om->tec_b);
-	  tjbmv = _mm_set1_epi8((int8_t) om->tjb_b + (int8_t) om->tbm_b);
-
-	  xJv = _mm_subs_epu8(biasv, biasv);
-	  xBv = _mm_subs_epu8(basev, tjbmv);
-
-	  xEv_prev = _mm_setzero_si128();
-
-
-	#if p7_DEBUGGING
-	  if (ox->debugging)
-		{
-		  uint8_t xB;
-		  xB = _mm_extract_epi16(xBv, 0);
-		  xJ = _mm_extract_epi16(xJv, 0);
-		  p7_omx_DumpMFRow(ox, 0, 0, 0, xJ, xB, xJ);
-		}
-	#endif
-
-
-	  for (i = 1; i <= L; i++)
-	  {
-
-		  rsc = om->rbv[dsq[i]];
-		  xEv = _mm_setzero_si128();
-
-		  /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12.
-		   * Because ia32 is littlendian, this means a left bit shift.
-		   * Zeros shift on automatically, which is our -infinity.
-		   */
-		  mpv = _mm_slli_si128(dp[Q-1], 1);
-		  for (q = 0; q < Q; q++)
-		  {
-			  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
-			  sv   = _mm_max_epu8(mpv, xBv);
-			  sv   = _mm_adds_epu8(sv, biasv);
-			  sv   = _mm_subs_epu8(sv, *rsc);   rsc++;
-			  xEv  = _mm_max_epu8(xEv, sv);
-
-			  mpv   = dp[q];   	  /* Load {MDI}(i-1,q) into mpv */
-			  dp[q] = sv;       	  /* Do delayed store of M(i,q) now that memory is usable */
-		  }
-
-		  if (last_peak == -1) { // haven't seen an above-jthresh peak recently, check if we've hit jthresh now
-			  tempv = _mm_adds_epu8(xEv, jthreshv);
-			  tempv = _mm_cmpeq_epi8(tempv, ceilingv);
-			  hit_jthresh = _mm_movemask_epi8(tempv);
-		  } else {
-			  hit_jthresh = 0xffff; // already passed some above-jthresh peak in the recent past
-		  }
-
-
-		  /* Now the "special" states, which start from Mk->E (->C, ->J->B)
-		   * Use shuffles instead of shifts so when the last max has completed,
-		   * the last four elements of the simd register will contain the
-		   * max value.  Then the last shuffle will broadcast the max value
-		   * to all simd elements.
-		   *
-		   * This is placed here so it can be run while movemask above is blocking
-		   */
-		  tempv = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(2, 3, 0, 1));
-		  xEv = _mm_max_epu8(xEv, tempv);
-		  tempv = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(0, 1, 2, 3));
-		  xEv = _mm_max_epu8(xEv, tempv);
-		  tempv = _mm_shufflelo_epi16(xEv, _MM_SHUFFLE(2, 3, 0, 1));
-		  xEv = _mm_max_epu8(xEv, tempv);
-		  tempv = _mm_srli_si128(xEv, 1);
-		  xEv = _mm_max_epu8(xEv, tempv);
-		  xEv = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(0, 0, 0, 0));
-
-
-		  if (hit_jthresh != 0x0000) {
-			  //test if xE has increased this iteration.  If we go a long way without increasing, then we'll give up on the current window
-			  tempv = _mm_max_epu8(xEv, xEv_prev);
-			  tempv = _mm_cmpeq_epi8(tempv, xEv_prev); //if these are equal, then xEv didn't go up
-			  e_unchanged = _mm_movemask_epi8(tempv);
-
-
-			  if (e_unchanged == 0x0000) { // there was an increase. Establish peaks
-				  xEv_prev = xEv;
-				  if (first_peak == -1)
-					  first_peak = i;
-				  last_peak = i;
-
-				  //check if we've hit pthresh.  If so, reset values and add this region to the list of hits
-				  tempv = _mm_adds_epu8(xEv, sc_threshv);
-				  tempv = _mm_cmpeq_epi8(tempv, ceilingv);
-				  hit_pthresh = _mm_movemask_epi8(tempv);
-				  if (hit_pthresh != 0)
-				  {
-
-			      int start = first_peak - om->max_length + 1;
-			      int length = i-first_peak+1 + 2 * om->max_length;
-			      fm_newWindow(windowlist, 0, start, -1, -1, length , -1, fm_nocomplement );
-
-					  // got one peak.  Start scanning for the next one, as though starting from scratch
-					  first_peak = last_peak = -1;
-
-					  //reset xE, xJ, and xB
-					  xJv = _mm_setzero_si128();  //_mm_subs_epu8(biasv, biasv);
-					  xBv = _mm_subs_epu8(basev, tjbmv);
-					  for (q = 0; q < Q; q++)
-							dp[q] = _mm_set1_epi8(0); // this will cause values to get reset to xB in next iteration
-
-				  }
-			  } else if (i > last_peak + om->max_length) {
-				  //been a long time since the last above-jthresh peak was seen;
-				  // give up looking for a J-state-induced extension that will drive the score above sc_thresh
-
-				  first_peak = last_peak = -1;
-
-				  //Reset values as if the previous peak hadn't existed, retaining the growth of the current peak
-				  //See end of TW notes feb 25, 2010
-				  tempv = _mm_subs_epu8(xEv_prev, basev);
-				  tempv = _mm_subs_epu8(tempv, tecv);
-				  for (q = 0; q < Q; q++)
-					  dp[q] = _mm_subs_epu8(dp[q], tempv);
-
-				  //reset xE, xJ, and xB
-				  xEv_prev = xEv = xJv = _mm_setzero_si128();
-				  xBv = _mm_subs_epu8(basev, tjbmv);
-
-			  } //else ... nothing to do, just extend another step
-
-		  }
-
-
-		  xEv = _mm_subs_epu8(xEv, tecv);
-		  xJv = _mm_max_epu8(xJv,xEv);
-
-		  xBv = _mm_max_epu8(basev, xJv);
-		  xBv = _mm_subs_epu8(xBv, tjbmv);
-
-	  } /* end loop over sequence residues 1..L */
-  }
-#endif
+  p7_SSVFilter_longtarget(dsq, L, om, ox, msvdata, (uint8_t)sc_thresh, sc_threshv, windowlist);
 
   return eslOK;
 

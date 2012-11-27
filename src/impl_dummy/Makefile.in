@@ -42,8 +42,7 @@ OBJS =  decoding.o\
 	vitfilter.o\
 	p7_omx.o\
 	p7_oprofile.o\
-	mpi.o\
-	fm.o
+	mpi.o
 
 HDRS =  impl_dummy.h
 

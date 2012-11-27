@@ -47,36 +47,9 @@ p7_oprofile_FGetEmission(const P7_OPROFILE *om, int k, int x)
 
 typedef P7_GMX P7_OMX;
 
-/*****************************************************************
- * 3. FM-index
- *****************************************************************/
-
-/* Effectively global variables, to be initialized once in fm_initConfig(),
- * then passed around among threads to avoid recomputing them
- */
-typedef struct {
-  /*suffix-array mask and offset values*/
-  int maskSA;
-  int shiftSA;
-
-  /*counter, to compute FM-index speed*/
-  int occCallCnt;
-
-  /*bounding cutoffs*/
-  int max_depth;
-  int neg_len_limit;
-  int consec_pos_req;
-  float score_ratio_req;
-  int msv_length;
-  float max_scthreshFM;
-
-  /*pointer to FM-index metadata*/
-  FM_METADATA *meta;
-
-} FM_CFG;
 
 /*****************************************************************
- * 4. Declarations of the external API.
+ * 3. Declarations of the external API.
  *****************************************************************/
 
 /* p7_omx.c */
@@ -165,14 +138,8 @@ extern int p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROF
 extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 
 
-/*fm.c */
-extern int fm_initConfig      (FM_CFG *cfg, ESL_GETOPTS *go );
-extern int fm_destroyConfig   (FM_CFG *cfg );
-extern int fm_getOccCount     (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c);
-extern int fm_getOccCountLT   (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
-
 /*****************************************************************
- * 5. Implementation specific initialization
+ * 4. Implementation specific initialization
  *****************************************************************/
 static inline void
 impl_Init(void)
