@@ -11,10 +11,11 @@ ifndef V
 endif
 
 
-.PHONY: all dev clean distclean tags-append
+.PHONY: all clean distclean tags-append
 
 all:
-dev:
+	${QUIET_SUBDIR0}profmark  ${QUIET_SUBDIR1} all
+	${QUIET_SUBDIR0}speed     ${QUIET_SUBDIR1} all
 
 clean:
 	${QUIET_SUBDIR0}profmark  ${QUIET_SUBDIR1} clean

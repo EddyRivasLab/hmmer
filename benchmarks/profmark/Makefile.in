@@ -1,30 +1,46 @@
-top_srcdir = @top_srcdir@
-srcdir     = @srcdir@
-VPATH      = @srcdir@ 
+PROGS        = create-profmark\
+	       rocplot
 
-CC       = @CC@
-CFLAGS   = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
-SIMDFLAGS= @SIMD_CFLAGS@
-CPPFLAGS = @CPPFLAGS@
-LDFLAGS  = @LDFLAGS@
-DEFS     = @DEFS@
-LIBS     = -lhmmer -leasel @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
-MPILIBS  = @MPILIBS@
-IMPLDIR  = impl_@IMPL_CHOICE@
+SHELL        = /bin/sh
+top_srcdir   = @top_srcdir@
+top_builddir = @top_srcdir@
+srcdir       = @srcdir@
+VPATH        = @srcdir@ 
 
-ESLDIR    = @HMMER_ESLDIR@
+prefix       = @prefix@
+exec_prefix  = @exec_prefix@
+datarootdir  = @datarootdir@
+bindir       = @bindir@
+libdir       = @libdir@
+includedir   = @includedir@
 
-ESLINC   = -I../${ESLDIR} -I${top_srcdir}/easel
-SRCINC   = -I../src   -I${top_srcdir}/src
+CC           = @CC@
+CFLAGS       = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
+SIMDFLAGS    = @SIMD_CFLAGS@
+CPPFLAGS     = @CPPFLAGS@
+LDFLAGS      = @LDFLAGS@
+DEFS         = @DEFS@
+LIBS         = -lhmmer -leasel -ldivsufsort @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
+MPILIBS      = @MPILIBS@
 
-PROGS    = create-profmark\
-	   rocplot
+AR           = @AR@ 
+RANLIB       = @RANLIB@
+INSTALL      = @INSTALL@
 
-PROGOBJS  =\
-	create-profmark.o\
-	rocplot.o
+ESLDIR       = @HMMER_ESLDIR@
+SADIR        = @HMMER_SADIR@
 
-# beautification magic stolen from git 
+MYLIBDIRS    = -L${top_builddir}/${ESLDIR} -L${top_builddir}/${SADIR} -L${top_builddir}/src
+MYINCDIRS    = -I${top_builddir}/${ESLDIR} \
+               -I${top_builddir}/${SADIR} \
+	       -I${top_builddir}/src \
+               -I${top_srcdir}/${ESLDIR} \
+	       -I${top_srcdir}/${SADIR} \
+	       -I${top_srcdir}/src 
+MYLIBDEPS    = ${top_builddir}/src/libhmmer.a \
+               ${top_builddir}/${ESLDIR}/libeasel.a \
+               ${top_builddir}/${SADIR}/libdivsufsort.a
+
 QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
 QUIET_SUBDIR1 = 
 ifndef V
@@ -36,18 +52,15 @@ ifndef V
 		        ${MAKE} -C $$subdir
 endif
 
-.PHONY: all dev distclean clean tags-append
+.PHONY: all distclean clean tags-append
 
 all:    ${PROGS}
-dev:    ${PROGS}
-
-${PROGS}: @EXEC_DEPENDENCY@  ../${ESLDIR}/libeasel.a ../src/libhmmer.a 
-	${QUIET_GEN}${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} -L../${ESLDIR} -L../src -o $@ $@.o ${LIBS}
-
-${PROGOBJS}: ../src/hmmer.h ../src/p7_config.h
 
 .c.o: 
-	${QUIET_CC}${CC} ${ESLINC} ${SRCINC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} -o $@ -c $<		
+	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -o $@ -c $<		
+
+${PROGS}: @EXEC_DEPENDENCY@  ${MYLIBDEPS}
+	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
 
 distclean: clean
 	-rm -f Makefile

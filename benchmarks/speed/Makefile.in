@@ -2,7 +2,9 @@ top_srcdir = @top_srcdir@
 srcdir     = @srcdir@
 VPATH      = @srcdir@ 
 
-.PHONY: all dev distclean clean tags-append
+.PHONY: all distclean clean tags-append
+
+all:
 
 distclean: clean
 	-rm -f Makefile
