@@ -108,6 +108,24 @@
 #undef p7_IMPL_VMX
 #undef p7_IMPL_DUMMY
 
+/* System headers
+ */
+#undef HAVE_STRINGS_H
+
+#undef HAVE_ENDIAN_H
+#undef HAVE_INTTYPES_H
+#undef HAVE_STDINT_H
+#undef HAVE_UNISTD_H
+#undef HAVE_SYS_TYPES_H
+#undef HAVE_NETINET_IN_H	/* On FreeBSD, you need netinet/in.h for struct sockaddr_in */
+
+#undef HAVE_SYS_PARAM_H		/* On OpenBSD, sys/sysctl.h needs sys/param.h */
+#undef HAVE_SYS_SYSCTL_H
+
+#undef HAVE_XMMINTRIN_H		/* SSE  */
+#undef HAVE_EMMINTRIN_H		/* SSE2 */
+#undef HAVE_PMMINTRIN_H		/* SSE3 */
+
 /* Optional parallel implementations
  */
 #undef HAVE_SSE2
@@ -124,10 +142,6 @@
 /* Debugging hooks
  */
 #undef p7_DEBUGGING
-
-/* System headers
-*/
-#undef HAVE_NETINET_IN_H	/* On FreeBSD, you need netinet/in.h for struct sockaddr_in */
 
 #endif /*P7_CONFIGH_INCLUDED*/
 /*****************************************************************
