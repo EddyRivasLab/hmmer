@@ -17,14 +17,13 @@
 #include <pthread.h>
 #include <setjmp.h>
 #include <sys/socket.h>
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>	    /* On FreeBSD, you need netinet/in.h for struct sockaddr_in            */
+#endif			    /* On OpenBSD, netinet/in.h is required for (must precede) arpa/inet.h */
 #include <arpa/inet.h>
 #include <syslog.h>
 #include <assert.h>
 #include <time.h>
-
-#ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>	    /* On FreeBSD, you need netinet/in.h for struct sockaddr_in */
-#endif
 
 #ifndef HMMER_THREADS
 #error "Program requires pthreads be enabled."
