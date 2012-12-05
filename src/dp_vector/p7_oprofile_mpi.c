@@ -25,15 +25,15 @@
 #include "esl_getopts.h"
 
 #include "dp_vector/p7_oprofile.h"
+#include "dp_vector/p7_oprofile_mpi.h"
 
 
 /*****************************************************************
  * 1. Communicating P7_OPROFILE, an optimized model.
  *****************************************************************/
 
-/* Function:  p7_oprofile_MPISend()
+/* Function:  p7_oprofile_mpi_Send()
  * Synopsis:  Send an OPROFILE as an MPI work unit.
- * Incept:    MSF, Wed Oct 21, 2009 [Janelia]
  *
  * Purpose:   Sends an OPROFILE <om> as a work unit to MPI process
  *            <dest> (where <dest> ranges from 0..<nproc-1>), tagged
@@ -68,7 +68,7 @@
  *            similar.
  */
 int
-p7_oprofile_MPISend(P7_OPROFILE *om, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc)
+p7_oprofile_mpi_Send(P7_OPROFILE *om, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc)
 {
   int   status;
   int   code;
@@ -77,7 +77,7 @@ p7_oprofile_MPISend(P7_OPROFILE *om, int dest, int tag, MPI_Comm comm, char **bu
   /* Figure out size */
   if (MPI_Pack_size(1, MPI_INT, comm, &n) != 0) ESL_XEXCEPTION(eslESYS, "mpi pack size failed");
   if (om != NULL) {
-    if ((status = p7_oprofile_MPIPackSize(om, comm, &sz)) != eslOK) return status;
+    if ((status = p7_oprofile_mpi_PackSize(om, comm, &sz)) != eslOK) return status;
     n += sz;
   }
 
@@ -93,7 +93,7 @@ p7_oprofile_MPISend(P7_OPROFILE *om, int dest, int tag, MPI_Comm comm, char **bu
   code = (om == NULL) ? eslEOD : eslOK;
   if (MPI_Pack(&code, 1, MPI_INT, *buf, n, &pos, comm) != 0) ESL_EXCEPTION(eslESYS, "mpi pack failed");
   if (om != NULL) {
-    if ((status = p7_oprofile_MPIPack(om, *buf, n, &pos, comm)) != eslOK) return status;
+    if ((status = p7_oprofile_mpi_Pack(om, *buf, n, &pos, comm)) != eslOK) return status;
   }
 
   /* Send the packed OPROFILE to the destination. */
@@ -104,12 +104,11 @@ p7_oprofile_MPISend(P7_OPROFILE *om, int dest, int tag, MPI_Comm comm, char **bu
   return status;
 }
 
-/* Function:  p7_oprofile_MPIPackSize()
+/* Function:  p7_oprofile_mpi_PackSize()
  * Synopsis:  Calculates size needed to pack an OPROFILE.
- * Incept:    MSF, Wed Oct 21, 2009 [Janelia]
  *
  * Purpose:   Calculate an upper bound on the number of bytes
- *            that <p7_oprofile_MPIPack()> will need to pack an 
+ *            that <p7_oprofile_mpi_Pack()> will need to pack an 
  *            OPROFILE <om> in a packed MPI message for MPI 
  *            communicator <comm>; return that number of bytes
  *            in <*ret_n>.
@@ -119,7 +118,7 @@ p7_oprofile_MPISend(P7_OPROFILE *om, int dest, int tag, MPI_Comm comm, char **bu
  * Throws:    <eslESYS> if an MPI call fails, and <*ret_n> is 0.
  */
 int
-p7_oprofile_MPIPackSize(P7_OPROFILE *om, MPI_Comm comm, int *ret_n)
+p7_oprofile_mpi_PackSize(P7_OPROFILE *om, MPI_Comm comm, int *ret_n)
 {
   int   status;
   int   n = 0;
@@ -178,9 +177,8 @@ p7_oprofile_MPIPackSize(P7_OPROFILE *om, MPI_Comm comm, int *ret_n)
 
 }
 
-/* Function:  p7_oprofile_MPIPack()
+/* Function:  p7_oprofile_mpi_Pack()
  * Synopsis:  Packs an OPROFILE into MPI buffer.
- * Incept:    MSF, Wed Oct 21, 2009 [Janelia]
  *
  * Purpose:   Packs OPROFILE <om> into an MPI packed message buffer <buf>
  *            of length <n> bytes, starting at byte position <*position>,
@@ -189,7 +187,7 @@ p7_oprofile_MPIPackSize(P7_OPROFILE *om, MPI_Comm comm, int *ret_n)
  *            The caller must know that <buf>'s allocation of <n>
  *            bytes is large enough to append the packed OPROFILE at
  *            position <*pos>. This typically requires a call to
- *            <p7_oprofile_MPIPackSize()> first, and reallocation if
+ *            <p7_oprofile_mpi_PackSize()> first, and reallocation if
  *            needed.
  *            
  * Returns:   <eslOK> on success; <buf> now contains the
@@ -204,7 +202,7 @@ p7_oprofile_MPIPackSize(P7_OPROFILE *om, MPI_Comm comm, int *ret_n)
  *            be considered to be corrupted.
  */
 int
-p7_oprofile_MPIPack(P7_OPROFILE *om, char *buf, int n, int *pos, MPI_Comm comm)
+p7_oprofile_mpi_Pack(P7_OPROFILE *om, char *buf, int n, int *pos, MPI_Comm comm)
 {
   int   K     = om->abc->Kp;
   int   atype = om->abc->type;
@@ -295,9 +293,8 @@ p7_oprofile_MPIPack(P7_OPROFILE *om, char *buf, int n, int *pos, MPI_Comm comm)
 }
 
 
-/* Function:  p7_oprofile_MPIUnpack()
+/* Function:  p7_oprofile_mpi_Unpack()
  * Synopsis:  Unpacks an OPROFILE from an MPI buffer.
- * Incept:    MSF, Wed Oct 21, 2009 [Janelia]
  *
  * Purpose:   Unpack a newly allocated OPROFILE from MPI packed buffer
  *            <buf>, starting from position <*pos>, where the total length
@@ -334,7 +331,7 @@ p7_oprofile_MPIPack(P7_OPROFILE *om, char *buf, int n, int *pos, MPI_Comm comm)
  *            and <*pos> is undefined and should be considered to be corrupted.
  */
 int
-p7_oprofile_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **abc, P7_OPROFILE **ret_om)
+p7_oprofile_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **abc, P7_OPROFILE **ret_om)
 {
   int   status;
   int   M, K, atype;
@@ -460,9 +457,8 @@ p7_oprofile_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **
 }
 
 
-/* Function:  p7_oprofile_MPIRecv()
+/* Function:  p7_oprofile_mpi_Recv()
  * Synopsis:  Receives an OPROFILE as a work unit from an MPI sender.
- * Incept:    MSF, Wed Oct 21, 2009 [Janelia]
  *
  * Purpose:   Receive a work unit that consists of a single OPROFILE
  *            sent by MPI <source> (<0..nproc-1>, or
@@ -516,7 +512,7 @@ p7_oprofile_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **
  *            <NULL>.           
  */
 int
-p7_oprofile_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL_ALPHABET **abc, P7_OPROFILE **ret_om)
+p7_oprofile_mpi_Recv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL_ALPHABET **abc, P7_OPROFILE **ret_om)
 {
   int         status;
   int         code;
@@ -544,7 +540,7 @@ p7_oprofile_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc,
   if (MPI_Unpack(*buf, n, &pos, &code, 1, MPI_INT, comm) != 0) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
   if (code == eslEOD)  { *ret_om = NULL;  return eslEOD; }
 
-  return p7_oprofile_MPIUnpack(*buf, *nalloc, &pos, comm, abc, ret_om);
+  return p7_oprofile_mpi_Unpack(*buf, *nalloc, &pos, comm, abc, ret_om);
 
  ERROR:
   if (om != NULL) p7_oprofile_Destroy(om);
@@ -624,12 +620,12 @@ main(int argc, char **argv)
 	     p7_oprofile_ReadRest(hfp, om)       == eslOK)
 	{
 	  if (!esl_opt_GetBoolean(go, "-b"))
-	    p7_oprofile_MPISend(om, 1, 0, MPI_COMM_WORLD, &buf, &nbuf); /* 1 = dest; 0 = tag */
+	    p7_oprofile_mpi_Send(om, 1, 0, MPI_COMM_WORLD, &buf, &nbuf); /* 1 = dest; 0 = tag */
 
 	  p7_hmm_Destroy(hmm);
 	  p7_oprofile_Destroy(om);
 	}
-      p7_oprofile_MPISend(NULL, 1, 0, MPI_COMM_WORLD, &buf, &nbuf); /* send the "no more HMMs" sign */
+      p7_oprofile_mpi_Send(NULL, 1, 0, MPI_COMM_WORLD, &buf, &nbuf); /* send the "no more HMMs" sign */
       MPI_Reduce(&subtotalM, &allM, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
 
       printf("total: %d\n", allM);
@@ -642,7 +638,7 @@ main(int argc, char **argv)
     {
       P7_OPROFILE     *om_recd = NULL;      
 
-      while (p7_oprofile_MPIRecv(0, 0, MPI_COMM_WORLD, &buf, &nbuf, &abc, &om_recd) == eslOK) 
+      while (p7_oprofile_mpi_Recv(0, 0, MPI_COMM_WORLD, &buf, &nbuf, &abc, &om_recd) == eslOK) 
 	{
 	  subtotalM += om_recd->M;
 	  p7_oprofile_Destroy(om_recd);  
@@ -697,7 +693,7 @@ utest_oprofileSendRecv(int my_rank, int nproc)
       for (i = 1; i < nproc; i++)
 	{
 	  ESL_DPRINTF1(("Master: receiving test profile\n"));
-	  p7_oprofile_MPIRecv(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &wbuf, &wn, &abc, &om2);
+	  p7_oprofile_mpi_Recv(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &wbuf, &wn, &abc, &om2);
 	  ESL_DPRINTF1(("Master: test profile received\n"));
 
 	  if (p7_oprofile_Compare(om, om2, 0.001, errbuf) != eslOK) 
@@ -709,7 +705,7 @@ utest_oprofileSendRecv(int my_rank, int nproc)
   else 
     {
       ESL_DPRINTF1(("Worker %d: sending test profile\n", my_rank));
-      p7_oprofile_MPISend(om, 0, 0, MPI_COMM_WORLD, &wbuf, &wn);
+      p7_oprofile_mpi_Send(om, 0, 0, MPI_COMM_WORLD, &wbuf, &wn);
       ESL_DPRINTF1(("Worker %d: test profile sent\n", my_rank));
     }
 

@@ -1,6 +1,115 @@
 /* P7_PROFILE: a scoring profile, and its implicit model.
  */
 
+#ifndef P7_PROFILE_INCLUDED
+#define P7_PROFILE_INCLUDED
+
+#include "p7_config.h"
+
+#include <stdio.h>
+
+#include "esl_alphabet.h"
+
+#include "base/general.h"
+
+/* Indices for six special state types x that have transition parameters
+ * in gm->xsc[x][y], where all of them have two choices y.
+ */
+#define p7P_NXSTATES 6
+#define p7P_NXTRANS  2
+#define p7P_LOOP 0              /* gm->xsc[x][p7P_LOOP]    gm->xsc[x][p7P_MOVE] */        
+#define p7P_MOVE 1              /* -------------------     -------------------- */
+#define p7P_E  0            	/*     E->J                       E->C          */
+#define p7P_N  1		/*     N->N                       N->B          */
+#define p7P_J  2                /*     J->J                       J->B          */
+#define p7P_C  3		/*     C->C                       C->T          */
+#define p7P_B  4		/*     B->L                       B->G          */
+#define p7P_G  5		/*     G->M1                      G->D1         */
+
+/* Indices x for main model transition scores gm->tsc[k][x] 
+ * Order is optimized for dynamic programming algorithms.
+ */
+#define p7P_NTRANS 10
+#define p7P_MM   0
+#define p7P_IM   1
+#define p7P_DM   2
+#define p7P_LM   3	/* local submodel entry L->Mk; stored off-by-one, tsc[k-1][LM] = L->Mk */
+#define p7P_GM   4	/* wing-retracted glocal submodel entry G->Mk;    tsc[k-1][GM] = G->Mk */
+#define p7P_MD   5  
+#define p7P_DD   6
+#define p7P_MI   7
+#define p7P_II   8
+#define p7P_DGE  9	/* wing-retracted glocal exit, DD component, tDGEk = Dk+1..Dm->E, 0.0 for k=M-1,M */
+
+/* Indices for residue emission score vectors */
+#define p7P_NR   2
+#define p7P_M    0
+#define p7P_I    1
+
+typedef struct p7_profile_s {
+  /* Model parameters:                                                               */
+  int     M;		/* number of nodes in the model                              */
+  float  *tsc;          /* transitions  [0.1..M][0..p7P_NTRANS-1], hand-indexed      */
+  float **rsc;          /* emissions [0..Kp-1][0.1..M][p7P_NR], hand-indexed         */
+  float   xsc[p7P_NXSTATES][p7P_NXTRANS]; /* special transitions [ENJCBG][LOOP,MOVE] */
+
+  /* Memory allocation:                                                              */
+  int     allocM;	/* max # of nodes allocated in this structure                */
+
+  /* Configuration: length model, multi vs unihit, local vs glocal:                  */
+  int     L;		/* current configured target seq length           (unset:-1) */
+  float   nj;           /* exp # of J's; 0.0=unihit 1.0=standard multihit (unset:-1) */
+  float   pglocal;	/* base B->G; 0.0=local; 0.5=dual; 1.0=glocal     (unset:-1) */
+
+  /* Annotation copied from parent HMM:                                                   */
+  char  *name;			/* unique name of model                                   */
+  char  *acc;			/* unique accession of model, or NULL                     */
+  char  *desc;                  /* brief (1-line) description of model, or NULL           */
+  char  *rf;                    /* reference line from alignment 1..M; *rf=0 means unused */
+  char  *mm;                    /* modelmask line           1..M; *ref=0: unused          */
+  char  *cs;                    /* consensus structure line 1..M, *cs=0 means unused      */
+  char  *consensus;		/* consensus residues to display in alignments, 1..M      */
+  float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values, or UNSET          */
+  float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-domain bit score cutoffs, or UNSET         */
+  float  compo[p7_MAXABET];	/* per-model HMM filter composition, or UNSET             */
+
+  /* Disk offset information supporting fast model retrieval:                             */
+  off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET, or -1                                  */
+  off_t  roff;                  /* record offset (start of record); -1 if none            */
+  off_t  eoff;                  /* offset to last byte of record; -1 if unknown           */
+
+  /* Derived information:                                                                 */
+  int     max_length;	/* calc'ed upper bound on emitted seq length (nhmmer) (unset:-1)  */
+
+  /* Associated objects:                                                                  */
+  const ESL_ALPHABET *abc;	/* copy of pointer to appropriate alphabet                */
+} P7_PROFILE;
+
+/* Convenience macros for accessing transition, emission scores */
+/* _LM,GM are specially stored off-by-one: [k-1][p7P_{LG}M] is score for *entering* at Mk */
+#define P7P_TSC(gm, k, s) ((gm)->tsc[(k) * p7P_NTRANS + (s)])
+#define P7P_MSC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_M])
+#define P7P_ISC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_I])
+
+
+
+extern P7_PROFILE *p7_profile_Create(int M, const ESL_ALPHABET *abc);
+extern P7_PROFILE *p7_profile_Clone(const P7_PROFILE *gm);
+extern int         p7_profile_Copy(const P7_PROFILE *src, P7_PROFILE *dst);
+extern int         p7_profile_SetNullEmissions(P7_PROFILE *gm);
+extern int         p7_profile_Reuse(P7_PROFILE *gm);
+extern size_t      p7_profile_Sizeof(P7_PROFILE *gm);
+extern void        p7_profile_Destroy(P7_PROFILE *gm);
+extern int         p7_profile_IsLocal(const P7_PROFILE *gm);
+extern int         p7_profile_IsMultihit(const P7_PROFILE *gm);
+extern float       p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2);
+extern int         p7_profile_Dump(FILE *fp, P7_PROFILE *gm);
+extern int         p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol);
+extern char       *p7_profile_DecodeT(int tidx);
+extern int         p7_profile_GetMutePathLogProb(const P7_PROFILE *gm, double *ret_mute_lnp);
+extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol);
+
+#endif /*P7_PROFILE_INCLUDED*/
 /* Whereas the core HMM is a model of a single global alignment to a
  * homologous domain, a profile is a model of local and glocal homologous
  * alignments embedded in a longer sequence. The profile is constructed
@@ -118,116 +227,8 @@
  *   implementations, on both the local and glocal paths, its
  *   parameterization is still present in the P7_PROFILE.
  */
-#ifndef P7_PROFILE_INCLUDED
-#define P7_PROFILE_INCLUDED
-
-#include "p7_config.h"
-
-#include <stdio.h>
-
-#include "esl_alphabet.h"
-
-#include "base/general.h"
 
 
-/* Indices for six special state types x that have transition parameters
- * in gm->xsc[x][y], where all of them have two choices y.
- */
-#define p7P_NXSTATES 6
-#define p7P_NXTRANS  2
-#define p7P_LOOP 0              /* gm->xsc[x][p7P_LOOP]    gm->xsc[x][p7P_MOVE] */        
-#define p7P_MOVE 1              /* -------------------     -------------------- */
-#define p7P_E  0            	/*     E->J                       E->C          */
-#define p7P_N  1		/*     N->N                       N->B          */
-#define p7P_J  2                /*     J->J                       J->B          */
-#define p7P_C  3		/*     C->C                       C->T          */
-#define p7P_B  4		/*     B->L                       B->G          */
-#define p7P_G  5		/*     G->M1                      G->D1         */
-
-/* Indices x for main model transition scores gm->tsc[k][x] 
- * Order is optimized for dynamic programming algorithms.
- */
-#define p7P_NTRANS 10
-#define p7P_MM   0
-#define p7P_IM   1
-#define p7P_DM   2
-#define p7P_LM   3	/* local submodel entry L->Mk; stored off-by-one, tsc[k-1][LM] = L->Mk */
-#define p7P_GM   4	/* wing-retracted glocal submodel entry G->Mk;    tsc[k-1][GM] = G->Mk */
-#define p7P_MD   5  
-#define p7P_DD   6
-#define p7P_MI   7
-#define p7P_II   8
-#define p7P_DGE  9	/* wing-retracted glocal exit, DD component, tDGEk = Dk+1..Dm->E, 0.0 for k=M-1,M */
-
-/* Indices for residue emission score vectors */
-#define p7P_NR   2
-#define p7P_M    0
-#define p7P_I    1
-
-typedef struct p7_profile_s {
-  /* Model parameters:                                                               */
-  int     M;		/* number of nodes in the model                              */
-  float  *tsc;          /* transitions  [0.1..M][0..p7P_NTRANS-1], hand-indexed      */
-  float **rsc;          /* emissions [0..Kp-1][0.1..M][p7P_NR], hand-indexed         */
-  float   xsc[p7P_NXSTATES][p7P_NXTRANS]; /* special transitions [ENJCBG][LOOP,MOVE] */
-
-  /* Memory allocation:                                                              */
-  int     allocM;	/* max # of nodes allocated in this structure                */
-
-  /* Configuration: length model, multi vs unihit, local vs glocal:                  */
-  int     L;		/* current configured target seq length           (unset:-1) */
-  float   nj;           /* exp # of J's; 0.0=unihit 1.0=standard multihit (unset:-1) */
-  float   pglocal;	/* base B->G; 0.0=local; 0.5=dual; 1.0=glocal     (unset:-1) */
-
-  /* Annotation copied from parent HMM:                                                   */
-  char  *name;			/* unique name of model                                   */
-  char  *acc;			/* unique accession of model, or NULL                     */
-  char  *desc;                  /* brief (1-line) description of model, or NULL           */
-  char  *rf;                    /* reference line from alignment 1..M; *rf=0 means unused */
-  char  *mm;                    /* modelmask line           1..M; *ref=0: unused     */
-  char  *cs;                    /* consensus structure line      1..M, *cs=0 means unused */
-  char  *consensus;		/* consensus residues to display in alignments, 1..M      */
-  float  evparam[p7_NEVPARAM]; 	/* parameters for determining E-values, or UNSET          */
-  float  cutoff[p7_NCUTOFFS]; 	/* per-seq/per-domain bit score cutoffs, or UNSET         */
-  float  compo[p7_MAXABET];	/* per-model HMM filter composition, or UNSET             */
-
-  /* Disk offset information supporting fast model retrieval:                             */
-  off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET, or -1                                  */
-  off_t  roff;                  /* record offset (start of record); -1 if none            */
-  off_t  eoff;                  /* offset to last byte of record; -1 if unknown           */
-
-  /* Derived information:                                                                 */
-  int     max_length;	/* calc'ed upper bound on emitted seq length (nhmmer) (unset:-1)  */
-
-  /* Associated objects:                                                                  */
-  const ESL_ALPHABET *abc;	/* copy of pointer to appropriate alphabet                */
-} P7_PROFILE;
-
-/* Convenience macros for accessing transition, emission scores */
-/* _LM,GM are specially stored off-by-one: [k-1][p7P_{LG}M] is score for *entering* at Mk */
-#define P7P_TSC(gm, k, s) ((gm)->tsc[(k) * p7P_NTRANS + (s)])
-#define P7P_MSC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_M])
-#define P7P_ISC(gm, k, x) ((gm)->rsc[x][(k) * p7P_NR + p7P_I])
-
-
-
-extern P7_PROFILE *p7_profile_Create(int M, const ESL_ALPHABET *abc);
-extern P7_PROFILE *p7_profile_Clone(const P7_PROFILE *gm);
-extern int         p7_profile_Copy(const P7_PROFILE *src, P7_PROFILE *dst);
-extern int         p7_profile_SetNullEmissions(P7_PROFILE *gm);
-extern int         p7_profile_Reuse(P7_PROFILE *gm);
-extern size_t      p7_profile_Sizeof(P7_PROFILE *gm);
-extern void        p7_profile_Destroy(P7_PROFILE *gm);
-extern int         p7_profile_IsLocal(const P7_PROFILE *gm);
-extern int         p7_profile_IsMultihit(const P7_PROFILE *gm);
-extern float       p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, char st2, int k2);
-extern int         p7_profile_Dump(FILE *fp, P7_PROFILE *gm);
-extern int         p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol);
-extern char       *p7_profile_DecodeT(int tidx);
-extern int         p7_profile_GetMutePathLogProb(const P7_PROFILE *gm, double *ret_mute_lnp);
-extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol);
-
-#endif /*P7_PROFILE_INCLUDED*/
 
 /*****************************************************************
  * @LICENSE@

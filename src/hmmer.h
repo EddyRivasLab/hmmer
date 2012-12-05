@@ -22,22 +22,22 @@
 #include "base/p7_hmmwindow.h"	     /* P7_HMM_WINDOW, P7_HMM_WINDOWLIST : {nhmmer}                                              */
 #include "base/p7_scoredata.h"	     /* P7_SCOREDATA  : {nhmmer}                                                                 */
 
-/* 'misc' subdir: various other support functions                                            */
-#include "misc/emit.h"		     /* emitting (sampling) sequences from HMM or profile    */
-#include "misc/mpisupport.h"	     /* MPI (Message Passing Interface) support              */
-#include "misc/h2_io.h"		     /* Legacy support for HMMER2 model file formats         */
-#include "misc/p7_trace_metrics.h"   /* Benchmarking utilities for alignment accuracy        */
-#include "misc/logsum.h"	     /* Fast lookup-table-driven log-sum-exp-2 function      */
-#include "misc/tracealign.h"	     /* Conversion of trace structures to multiple alignment */
+/* 'misc' subdir: various other support functions                                                                         */
+#include "misc/emit.h"		           /* emitting (sampling) sequences from HMM or profile                           */
+#include "misc/mpisupport.h"	           /* MPI (Message Passing Interface) support                                     */
+#include "misc/h2_io.h"		           /* Legacy support for HMMER2 model file formats                                */
+#include "misc/p7_trace_metrics.h"         /* Benchmarking utilities for alignment accuracy                               */
+#include "misc/logsum.h"	           /* Fast lookup-table-driven log-sum-exp-2 function                             */
+#include "misc/tracealign.h"	           /* Conversion of trace structures to multiple alignment                        */
 
 /* 'build' subdir: building and calibrating a new model */
-#include "build/build.h"	     /* Constructing a model from a multiple seq alignment               */
-#include "build/seqmodel.h"	     /* Constructing a model from a single query seq                     */
-#include "build/evalues.h"	     /* Model calibration, setting parameters for E-value determination  */
-#include "build/eweight.h"	     /* Entropy-weighting: ad hoc absolute sequence weights              */
-#include "build/modelsample.h"	     /* Sampling models randomly; used extensively in unit testing       */
-#include "build/modelstats.h"	     /* Various summary statistics for a model                           */
-#include "build/p7_builder.h"	     /* P7_BUILDER: an aggregrated pipeline for building new models      */
+#include "build/build.h"	           /* Constructing a model from a multiple seq alignment                          */
+#include "build/seqmodel.h"	           /* Constructing a model from a single query seq                                */
+#include "build/evalues.h"	           /* Model calibration, setting parameters for E-value determination             */
+#include "build/eweight.h"	           /* Entropy-weighting: ad hoc absolute sequence weights                         */
+#include "build/modelsample.h"	           /* Sampling models randomly; used extensively in unit testing                  */
+#include "build/modelstats.h"	           /* Various summary statistics for a model                                      */
+#include "build/p7_builder.h"	           /* P7_BUILDER: an aggregrated pipeline for building new models                 */
 
 /* 'search' subdir: compare a model against a sequence, to calculate score and alignment(s)                               */
 #include "search/modelconfig.h"	           /* Building a search profile (P7_PROFILE) from a basic model (P7_HMM)          */

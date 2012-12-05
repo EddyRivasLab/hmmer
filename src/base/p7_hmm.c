@@ -1086,6 +1086,7 @@ utest_composition(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_getopts.h"
 #include "esl_random.h"
 
 #include "hmmer.h"
