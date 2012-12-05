@@ -9,6 +9,9 @@
 #include <pthread.h>
 #include <setjmp.h>
 #include <sys/socket.h>
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>	    /* On OpenBSD, netinet/in.h is required for (must precede) arpa/inet.h */
+#endif			    
 #include <arpa/inet.h>
 #include <syslog.h>
 #include <assert.h>

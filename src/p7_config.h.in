@@ -146,8 +146,10 @@
 #undef HAVE_STDINT_H
 #undef HAVE_UNISTD_H
 #undef HAVE_SYS_TYPES_H
-#undef HAVE_SYS_SYSCTL_H
 #undef HAVE_NETINET_IN_H	/* On FreeBSD, you need netinet/in.h for struct sockaddr_in */
+
+#undef HAVE_SYS_PARAM_H		/* On OpenBSD, sys/sysctl.h needs sys/param.h */
+#undef HAVE_SYS_SYSCTL_H
 
 #undef HAVE_XMMINTRIN_H		/* SSE  */
 #undef HAVE_EMMINTRIN_H		/* SSE2 */

@@ -433,9 +433,19 @@ AC_CHECK_HEADERS([ \
   stdint.h\
   unistd.h\
   sys/types.h\
-  sys/sysctl.h\
   netinet/in.h
 ])  
+
+# Check for sysctl.h separately.  On OpenBSD, it requires
+# <sys/param.h> and autoconf needs special logic to deal w. this as
+# follows.
+AC_CHECK_HEADERS([sys/param.h])
+AC_CHECK_HEADERS([sys/sysctl.h], [], [], 
+[[#ifdef HAVE_SYS_PARAM_H
+#include <sys/param.h>
+#endif
+]])
+
 
 # Vector-specific headers. 
 # Separated, because we may want to implement
