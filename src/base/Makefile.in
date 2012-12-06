@@ -4,6 +4,7 @@ LIBOBJS =  general.o\
 	   p7_alidisplay.o\
 	   p7_bg.o\
 	   p7_hmm.o\
+	   p7_hmm_mpi.o\
 	   p7_hmmfile.o\
 	   p7_hmmwindow.o\
 	   p7_masstrace.o\
@@ -24,6 +25,7 @@ PROGS =
 UTESTS =     p7_alidisplay_utest \
 	     p7_bg_utest \
 	     p7_hmm_utest \
+	     p7_hmm_mpi_utest \
 	     p7_hmmfile_utest \
 	     p7_profile_utest \
 	     p7_scoredata_utest \

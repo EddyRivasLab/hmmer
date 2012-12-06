@@ -11,6 +11,10 @@
 #include <math.h>
 #include <float.h>
 
+#ifdef HAVE_MPI
+#include <mpi.h>
+#endif
+
 #include "easel.h"
 
 #include "esl_getopts.h"
@@ -242,6 +246,9 @@ void
 p7_Die(char *format, ...)
 {
   va_list  argp;
+#ifdef HAVE_MPI
+  int      mpiflag;
+#endif
                                 /* format the error mesg */
   fprintf(stderr, "\nFATAL: ");
   va_start(argp, format);
@@ -249,6 +256,10 @@ p7_Die(char *format, ...)
   va_end(argp);
   fprintf(stderr, "\n");
   fflush(stderr);
+#ifdef HAVE_MPI
+  MPI_Initialized(&mpiflag);
+  if (mpiflag) MPI_Abort(MPI_COMM_WORLD, 1);
+#endif
   exit(1);
 }
 

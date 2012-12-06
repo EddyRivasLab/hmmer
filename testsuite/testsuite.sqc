@@ -25,6 +25,11 @@
 #   %FOO%  = tmp files, created, managed, cleaned up by sqc itself
 #
 
+################################################################
+# MPI tests
+################################################################
+2 mpi      p7_hmm_mpi           mpirun -n 2 @src/base/p7_hmm_mpi_utest@
+
 
 ################################################################
 # Unit test drivers for each .c file
@@ -393,6 +398,9 @@
 3 valgrind hmmstat              @src/utilities/hmmstat@    %MINIFAM.HMM% 
 
 3 valgrind hmmsim               @src/experiments/hmmsim@     %GLOBIN.HMM% 
+
+
+
 
 
 #################################################################

@@ -3,9 +3,9 @@ MODULE = misc
 LIBOBJS =  emit.o\
 	   h2_io.o\
 	   logsum.o\
-	   mpisupport.o\
 	   p7_trace_metrics.o\
 	   tracealign.o
+#	   mpisupport.o\
 
 LIBHDRS =  
 

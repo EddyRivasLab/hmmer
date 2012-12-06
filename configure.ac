@@ -290,12 +290,9 @@ AC_ARG_WITH([gsl],
 #
 AC_PROG_CC
 AC_PROG_INSTALL
-# MPI :  set @CC@ to mpicc, sets @MPILIBS@, defines HAVE_MPI. 
+# MPI :  set @CC@ to mpicc, set @MPILIBS@ if needed (usually not; mpicc deals w/ it), defines HAVE_MPI. 
 if test "$enable_mpi" = "yes"; then
-   ACX_MPI([AC_DEFINE(HAVE_MPI)
-            AC_SUBST([MPI_UTESTS], ["mpi_utest"])
-            AC_SUBST([MPI_BENCHMARKS], ["mpi_benchmark"])],
-           AC_MSG_ERROR([MPI library not found for --enable-mpi]))
+   ACX_MPI([], AC_MSG_ERROR([MPI library not found for --enable-mpi]))
    CC=$MPICC
 fi
 AC_PROG_CPP
@@ -552,8 +549,8 @@ echo "
 HMMER configuration:
      compiler:             ${CC} ${CFLAGS} ${SIMD_CFLAGS} ${PTHREAD_CFLAGS} ${PIC_FLAGS}
      host:                 $host
-     linker:               ${LDFLAGS}
-     libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
+     linker options:       ${LDFLAGS}
+     libraries:            ${LIBGSL} ${MPILIBS} ${PTHREAD_LIBS} ${LIBS}
 "
 
 

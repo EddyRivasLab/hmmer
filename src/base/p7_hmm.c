@@ -120,6 +120,14 @@ p7_hmm_CreateShell(void)
  * Purpose:   Given an allocated shell <hmm>, and a now-known number
  *            of nodes <M> and alphabet <abc>, allocate
  *            the remainder of it for that many nodes.
+ *            
+ *            This often gets used when we're reading/receiving an
+ *            HMM.  Unlike the basic <Create()> call, <CreateBody()>
+ *            also allocates optional annotation fields, according to
+ *            the <hmm->flags> in the shell. Caller receives, reads,
+ *            or sets <hmm->flags> to indicate which optional
+ *            annotation is going to be present, then calls
+ *            <p7_hmm_CreateBody()>.
  *
  * Returns:   <eslOK> on success.
  *

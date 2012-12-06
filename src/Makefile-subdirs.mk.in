@@ -16,7 +16,7 @@ SIMDFLAGS    = @SIMD_CFLAGS@
 CPPFLAGS     = @CPPFLAGS@
 LDFLAGS      = @LDFLAGS@
 DEFS         = @DEFS@
-LIBS         = ${LIBTMP} -lhmmer -leasel -ldivsufsort @LIBS@ -lm
+LIBS         = ${LIBTMP} -lhmmer -leasel -ldivsufsort @MPILIBS@ @LIBS@ -lm
 
 AR           = @AR@ 
 RANLIB       = @RANLIB@
@@ -98,7 +98,7 @@ ${OBJS}:     ${HDRS}
 	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -o $@ -c $<
 
 ${PROGS}: @EXEC_DEPENDENCY@  libhmmer-${MODULE}.stamp ${MYLIBDEPS}
-	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
+	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${LIBS}
 
 ${UTESTS}: libhmmer-${MODULE}.stamp ${MYLIBDEPS}
 	@BASENAME=`echo $@ | sed -e 's/_utest//'| sed -e 's/^p7_//'` ;\
