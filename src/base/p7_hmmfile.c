@@ -100,7 +100,7 @@ static int open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_a
  *            As another special case, if <filename> ends in a <.gz>
  *            suffix, the file is assumed to be compressed by GNU
  *            <gzip>, and it is opened for reading from a pipe with
- *            <gunzip -dc>. This feature is only available on
+ *            <gzip -dc>. This feature is only available on
  *            POSIX-compliant systems that have a <popen()> call, and
  *            <HAVE_POPEN> is defined by the configure script at
  *            compile time. 
@@ -191,7 +191,7 @@ p7_hmmfile_OpenNoDB(char *filename, char *env, P7_HMMFILE **ret_hfp)
  *            As another special case, if <filename> ends in a <.gz>
  *            suffix, the file is assumed to be compressed by GNU
  *            <gzip>, and it is opened for reading from a pipe with
- *            <gunzip -dc>. This feature is only available on
+ *            <gzip -dc>. This feature is only available on
  *            POSIX-compliant systems that have a <popen()> call, and
  *            <HAVE_POPEN> is defined by the configure script at
  *            compile time. 
@@ -321,9 +321,9 @@ open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only, 
       if ((status = esl_strdup("[STDIN]", -1, &(hfp->fname))) != eslOK)   ESL_XFAIL(status, errbuf, "esl_strdup failed; shouldn't happen");
     }
 #ifdef HAVE_POPEN
-  else if (n > 3 && strcmp(filename+n-3, ".gz") == 0) /* a <*.gz> filename means read via gunzip pipe */
+  else if (n > 3 && strcmp(filename+n-3, ".gz") == 0) /* a <*.gz> filename means read via gzip pipe */
   {
-    if (! esl_FileExists(filename))                                    ESL_XFAIL(eslENOTFOUND, errbuf, ".gz file %s not found or not readable", filename);
+    if (! esl_FileExists(filename))                                     ESL_XFAIL(eslENOTFOUND, errbuf, ".gz file %s not found or not readable", filename);
     if ((status = esl_sprintf(&cmd, "gzip -dc %s", filename)) != eslOK) ESL_XFAIL(status,       errbuf, "when setting up .gz pipe: esl_sprintf() failed");
     if ((hfp->f = popen(cmd, "r")) == NULL)                             ESL_XFAIL(eslENOTFOUND, errbuf, "gzip -dc %s failed; gzip not installed or not in PATH?", filename);
     if ((status = esl_strdup(filename, n, &(hfp->fname))) != eslOK)     ESL_XFAIL(status,       errbuf, "esl_strdup() failed, shouldn't happen");

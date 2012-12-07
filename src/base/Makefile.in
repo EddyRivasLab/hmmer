@@ -10,6 +10,7 @@ LIBOBJS =  general.o\
 	   p7_masstrace.o\
 	   p7_prior.o\
 	   p7_profile.o\
+	   p7_profile_mpi.o\
 	   p7_scoredata.o\
 	   p7_tophits.o\
 	   p7_trace.o
@@ -28,6 +29,7 @@ UTESTS =     p7_alidisplay_utest \
 	     p7_hmm_mpi_utest \
 	     p7_hmmfile_utest \
 	     p7_profile_utest \
+	     p7_profile_mpi_utest \
 	     p7_scoredata_utest \
 	     p7_tophits_utest \
 	     p7_trace_utest

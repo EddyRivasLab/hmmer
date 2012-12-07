@@ -28,7 +28,8 @@
 ################################################################
 # MPI tests
 ################################################################
-2 mpi      p7_hmm_mpi           mpirun -n 2 @src/base/p7_hmm_mpi_utest@
+1 mpi      p7_hmm_mpi           mpirun -n 2 @src/base/p7_hmm_mpi_utest@
+1 mpi      p7_profile_mpi       mpirun -n 2 @src/base/p7_profile_mpi_utest@
 
 
 ################################################################

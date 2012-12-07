@@ -10,7 +10,9 @@
 /* 'base' subdir: contains code for many of HMMER3's data structures                                                             */
 #include "base/general.h"	     /* widely used definitions, error handling, initialization                                  */
 #include "base/p7_hmm.h"	     /* P7_HMM        : basic model, probability parameters or counts                            */
+#include "base/p7_hmm_mpi.h"	     /*               :    ... add-on: MPI communication                                         */
 #include "base/p7_profile.h"	     /* P7_PROFILE    : search model, glocal/local, with additional states for nonhomologous seq */
+#include "base/p7_profile_mpi.h"     /*               :    ... add-on: MPI communication                                         */
 #include "base/p7_hmmfile.h"	     /* P7_HMMFILE    : reading models from files                                                */
 #include "base/p7_trace.h"	     /* P7_TRACE      : alignment of a model to a sequence: an HMM state path                    */
 #include "base/p7_bg.h"		     /* P7_BG         : null model, of an entirely nonhomologous target seq                      */

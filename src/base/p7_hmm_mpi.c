@@ -218,36 +218,44 @@ p7_hmm_mpi_Pack(P7_HMM *hmm, char *buf, int n, int *pos, MPI_Comm comm)
 
 
 /* Function:  p7_hmm_mpi_Unpack()
- * Synopsis:  Unpacks an HMM from an MPI buffer.
+ * Synopsis:  Unpacks one HMM from an MPI buffer.
  *
- * Purpose:   Unpack a newly allocated HMM from MPI packed buffer
+ * Purpose:   Unpack one HMM from MPI packed buffer
  *            <buf>, starting from position <*pos>, where the total length
- *            of the buffer in bytes is <n>. 
+ *            of the buffer in bytes is <n>. The new HMM is allocated here.
  *            
  *            Caller may or may not already know what alphabet the HMM
  *            is expected to be in.  A reference to the current
- *            alphabet is passed in <abc>. If the alphabet is unknown,
- *            pass <*abc = NULL>, and when the HMM is received, an
+ *            alphabet is passed in <byp_abc>. If the alphabet is unknown,
+ *            pass <*byp_abc = NULL>, and when the HMM is received, an
  *            appropriate new alphabet object is allocated and passed
- *            back to the caller via <*abc>.  If the alphabet is
- *            already known, <*abc> is that alphabet, and the new
+ *            back to the caller via <*byp_abc>.  If the alphabet is
+ *            already known, <*byp_abc> is that alphabet, and the new
  *            HMM's alphabet type is verified to agree with it. This
  *            mechanism allows an application to let the first HMM
  *            determine the alphabet type for the application, while
  *            still keeping the alphabet under the application's scope
  *            of control.
  *
+ * Args:      buf      - MPI packed buffer to unpack
+ *            n        - total length of <buf> in bytes
+ *            pos      - current parsing/unpacking position in <buf>
+ *            comm     - MPI communicator
+ *            byp_abc  - BYPASS: <*byp_abc> == ESL_ALPHABET *> if known;
+ *                               <*byp_abc> == NULL> if alphabet unknown;
+ *            ret_hmm  - RETURN: ptr to newly allocated, unpacked profile
+ *
  * Returns:   <eslOK> on success. <*pos> is updated to the position of
  *            the next element in <buf> to unpack (if any). <*ret_hmm>
  *            contains a newly allocated HMM, which the caller is
- *            responsible for free'ing.  If <*abc> was passed as
+ *            responsible for free'ing.  If <*byp_abc> was passed as
  *            <NULL>, it now points to an <ESL_ALPHABET> object that
  *            was allocated here; caller is responsible for free'ing
  *            this.
  *            
  *            Returns <eslEINCOMPAT> if the HMM is in a different
- *            alphabet than <*abc> said to expect. In this case,
- *            <*abc> is unchanged, <*buf> and <*nalloc> may have been
+ *            alphabet than <*byp_abc> said to expect. In this case,
+ *            <*byp_abc> is unchanged, <*buf> and <*nalloc> may have been
  *            changed, and <*ret_hmm> is <NULL>.
  *            
  * Throws:    <eslESYS> on an MPI call failure. <eslEMEM> on allocation failure.
@@ -255,14 +263,15 @@ p7_hmm_mpi_Pack(P7_HMM *hmm, char *buf, int n, int *pos, MPI_Comm comm)
  *            and <*pos> is undefined and should be considered to be corrupted.
  */
 int
-p7_hmm_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **abc, P7_HMM **ret_hmm)
+p7_hmm_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **byp_abc, P7_HMM **ret_hmm)
 {
+  P7_HMM       *hmm = NULL;
+  ESL_ALPHABET *abc = NULL;
+  int     M, K, atype;
   int     status;
-  P7_HMM *hmm = NULL;
-  int     M, K, atype, abc_set;
 
   /* Use the CreateShell/CreateBody interface, because that interface allocates our optional fields, using <flags> */
-  if (( hmm = p7_hmm_CreateShell() ) == NULL) goto ERROR;
+  if (( hmm = p7_hmm_CreateShell() ) == NULL) { status = eslEMEM; goto ERROR; }
 
   /* First, unpack info that we need for HMM body allocation */
   if (MPI_Unpack(buf, n, pos, &M,             1, MPI_INT, comm) != 0) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
@@ -270,17 +279,16 @@ p7_hmm_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **abc,
   if (MPI_Unpack(buf, n, pos, &atype,         1, MPI_INT, comm) != 0) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
 
   /* Set or verify the alphabet */
-  abc_set = FALSE;
-  if (*abc == NULL)	{	/* still unknown: set it, pass control of it back to caller */
-    if ((*abc = esl_alphabet_Create(atype)) == NULL)       { status = eslEMEM;      goto ERROR; }
-    abc_set = TRUE;
+  if (*byp_abc == NULL) {	/* alphabet unknown. create new one */
+    if ( (abc = esl_alphabet_Create(atype)) == NULL)  { status = eslEMEM; goto ERROR; }
   } else {			/* already known: check it */
-    if ((*abc)->type != atype)                             { status = eslEINCOMPAT; goto ERROR; }
+    abc = *byp_abc;
+    if (abc->type != atype){ status = eslEINCOMPAT; goto ERROR; }
   }
-  K = (*abc)->K; /* For convenience below. */
+  K = abc->K; /* For convenience below. */
 
   /* Allocate the HMM body */
-  if ((status = p7_hmm_CreateBody(hmm, M, *abc)) != eslOK) goto ERROR;
+  if ((status = p7_hmm_CreateBody(hmm, M, abc)) != eslOK) goto ERROR;
 
   /* Unpack the rest of the HMM */
   if (MPI_Unpack( buf, n, pos, hmm->t[0],   p7H_NTRANSITIONS*(M+1), MPI_FLOAT, comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
@@ -311,12 +319,14 @@ p7_hmm_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **abc,
   if (MPI_Unpack( buf, n, pos,   hmm->compo,      p7_MAXABET, MPI_FLOAT,     comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); 
   if (MPI_Unpack( buf, n, pos, &(hmm->offset),             1, MPI_LONG_LONG, comm)  != 0)     ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); 
 
+  *byp_abc = abc; 	/* works even if caller provided *byp_abc, because then abc==*byp_abc already */
   *ret_hmm = hmm;
   return eslOK;
 
  ERROR:
-  if (hmm)               p7_hmm_Destroy(hmm);
-  if (abc_set && *abc) { esl_alphabet_Destroy(*abc); *abc = NULL; }
+  if (hmm) p7_hmm_Destroy(hmm);
+  if (abc && *byp_abc == NULL) esl_alphabet_Destroy(abc);
+  *ret_hmm = NULL;
   return status;
 }
 
@@ -348,16 +358,27 @@ p7_hmm_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **abc,
  *            
  *            Caller may or may not already know what alphabet the HMM
  *            is expected to be in.  A reference to the current
- *            alphabet is passed in <abc>. If the alphabet is unknown,
- *            pass <*abc = NULL>, and when the HMM is received, an
+ *            alphabet is passed in <byp_abc>. If the alphabet is unknown,
+ *            pass <*byp_abc = NULL>, and when the HMM is received, an
  *            appropriate new alphabet object is allocated and passed
  *            back to the caller via <*abc>.  If the alphabet is
- *            already known, <*ret_abc> is that alphabet, and the new
+ *            already known, <*byp_abc> is that alphabet, and the new
  *            HMM's alphabet type is verified to agree with it. This
  *            mechanism allows an application to let the first HMM
  *            determine the alphabet type for the application, while
  *            still keeping the alphabet under the application's scope
  *            of control.
+ *
+ * Args:      source  - index of MPI sender, 0..nproc-1 (0=master), or MPI_ANY_SOURCE
+ *            tag     - MPI message tag;  MPI_ANY_TAG, or a specific message tag (0..32767 will work on any MPI)
+ *            comm    - MPI communicator; MPI_COMM_WORLD, or a specific MPI communicator
+ *            buf     - working buffer (for receiving packed message);
+ *                      if <*buf> == NULL, a <*buf> is allocated and returned;
+ *                      if <*buf> != NULL, it is used (and may be reallocated)
+ *            nalloc  - allocation size of <*buf> in bytes; pass 0 if <*buf==NULL>.           
+ *            byp_abc - BYPASS: <*byp_abc> == ESL_ALPHABET *> if known;
+ *                              <*byp_abc> == NULL> if alphabet unknown.
+ *            ret_hmm  - RETURN: newly allocated/received profile
  *
  * Returns:   <eslOK> on success. <*ret_hmm> contains the received HMM;
  *            it is allocated here, and the caller is responsible for
@@ -380,17 +401,17 @@ p7_hmm_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **abc,
  *            <NULL>.           
  */
 int
-p7_hmm_mpi_Recv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL_ALPHABET **abc, P7_HMM **ret_hmm)
+p7_hmm_mpi_Recv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL_ALPHABET **byp_abc, P7_HMM **ret_hmm)
 {
-  int         status;
+  int         pos = 0;
   int         code;
   int         n;
-  int         pos;
   MPI_Status  mpistatus;
+  int         status;
 
   /* Probe first, because we need to know if our buffer is big enough. */
-  MPI_Probe(source, tag, comm, &mpistatus);
-  MPI_Get_count(&mpistatus, MPI_PACKED, &n);
+  if ( MPI_Probe(source, tag, comm, &mpistatus)  != 0) ESL_EXCEPTION(eslESYS, "mpi probe failed");
+  if ( MPI_Get_count(&mpistatus, MPI_PACKED, &n) != 0) ESL_EXCEPTION(eslESYS, "mpi get count failed");
 
   /* Make sure the buffer is allocated appropriately */
   if (*buf == NULL || n > *nalloc) 
@@ -400,18 +421,18 @@ p7_hmm_mpi_Recv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL
     }
 
   /* Receive the entire packed work unit */
-  MPI_Recv(*buf, n, MPI_PACKED, source, tag, comm, &mpistatus);
+  if (MPI_Recv(*buf, n, MPI_PACKED, source, tag, comm, &mpistatus) != 0) ESL_EXCEPTION(eslESYS, "mpi recv failed");
 
   /* Unpack the status code prefix */
-  pos = 0;
   if (MPI_Unpack(*buf, n, &pos, &code, 1, MPI_INT, comm) != 0) ESL_EXCEPTION(eslESYS, "mpi unpack failed");
 
   if      (code == 0) { status = eslEOD; *ret_hmm = NULL; }
-  else if (code == 1)   status = p7_hmm_mpi_Unpack(*buf, *nalloc, &pos, comm, abc, ret_hmm);
+  else if (code == 1)   status = p7_hmm_mpi_Unpack(*buf, *nalloc, &pos, comm, byp_abc, ret_hmm);
   else                  ESL_EXCEPTION(eslESYS, "bad mpi buffer transmission code");
   return status;
 
  ERROR: /* from ESL_REALLOC only */
+  *ret_hmm = NULL;
   return status;
 }
 /*----------------- end, P7_HMM communication -------------------*/
@@ -427,7 +448,7 @@ p7_hmm_mpi_Recv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL
 #include "build/modelsample.h"
 
 static void
-utest_SendRecv(ESL_GETOPTS *go, ESL_RANDOMNESS *rng, int my_rank, int nproc)
+utest_SendRecv(ESL_RANDOMNESS *rng, int my_rank, int nproc)
 {
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
   P7_HMM         *hmm  = NULL;
@@ -477,8 +498,7 @@ utest_SendRecv(ESL_GETOPTS *go, ESL_RANDOMNESS *rng, int my_rank, int nproc)
 
       /* worker's RNG is a private copy; destroy it. Master keeps its RNG, which the caller is responsible for. */
       esl_randomness_Destroy(rng);
-      rng = NULL;
-    }
+     }
 
   p7_hmm_Destroy(hmm);
   esl_alphabet_Destroy(abc);
@@ -531,7 +551,7 @@ main(int argc, char **argv)
     fprintf(stderr, "#  MPI nproc = %d\n", nproc);
   }
 
-  utest_SendRecv(go, rng, my_rank, nproc);
+  utest_SendRecv(rng, my_rank, nproc);
   
   if (my_rank == 0) {
     fprintf(stderr, "#  status = ok\n");

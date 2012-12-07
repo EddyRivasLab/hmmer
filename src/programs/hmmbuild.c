@@ -737,7 +737,7 @@ mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 	      if (xstatus == eslOK) /* worker reported success. Get the HMM. */
 		{
 		  ESL_DPRINTF1(("MPI master sees that the result buffer contains an HMM\n"));
-		  if (p7_hmm_MPIUnpack(buf, bn, &pos, MPI_COMM_WORLD, &(cfg->abc), &hmm) != eslOK) {  MPI_Finalize(); p7_Fail("HMM unpack failed"); }
+		  if (p7_hmm_mpi_Unpack(buf, bn, &pos, MPI_COMM_WORLD, &(cfg->abc), &hmm) != eslOK) {  MPI_Finalize(); p7_Fail("HMM unpack failed"); }
 		  ESL_DPRINTF1(("MPI master has unpacked the HMM\n"));
 
 		  if (cfg->postmsafile != NULL) {
@@ -896,7 +896,7 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Calculate upper bound on size of sending status, HMM, and optional postmsa; make sure wbuf can hold it. */
       n = 0;
       if (MPI_Pack_size(1,    MPI_INT, MPI_COMM_WORLD, &sz) != 0)     goto ERROR;   n += sz;
-      if (p7_hmm_MPIPackSize( hmm,     MPI_COMM_WORLD, &sz) != eslOK) goto ERROR;   n += sz;
+      if (p7_hmm_mpi_PackSize(hmm,     MPI_COMM_WORLD, &sz) != eslOK) goto ERROR;   n += sz;
       if (esl_msa_MPIPackSize(postmsa, MPI_COMM_WORLD, &sz) != eslOK) goto ERROR;   n += sz;
       if (n > wn) { ESL_RALLOC(wbuf, tmp, sizeof(char) * n); wn = n; }
       ESL_DPRINTF2(("worker %d: has calculated that HMM will pack into %d bytes\n", cfg->my_rank, n));
@@ -904,7 +904,7 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Send status, HMM, and optional postmsa back to the master */
       pos = 0;
       if (MPI_Pack       (&status, 1, MPI_INT, wbuf, wn, &pos, MPI_COMM_WORLD) != 0)     goto ERROR;
-      if (p7_hmm_MPIPack (hmm,                 wbuf, wn, &pos, MPI_COMM_WORLD) != eslOK) goto ERROR;
+      if (p7_hmm_mpi_Pack(hmm,                 wbuf, wn, &pos, MPI_COMM_WORLD) != eslOK) goto ERROR;
       if (esl_msa_MPIPack(postmsa,             wbuf, wn, &pos, MPI_COMM_WORLD) != eslOK) goto ERROR;
       MPI_Send(wbuf, pos, MPI_PACKED, 0, 0, MPI_COMM_WORLD);
       ESL_DPRINTF2(("worker %d: has sent HMM to master in message of %d bytes\n", cfg->my_rank, pos));
