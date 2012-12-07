@@ -76,7 +76,7 @@ open(SCRIPT,"$srcdir/autobuild/$script") || die "FAIL: couldn't open build scrip
 while (<SCRIPT>)
 {  chop; 
    if    (/^\s*$/   || /^\s*\#/)       { next; }
-   elsif (/^MAKE=(\S+)/)               { $MAKE = $1; }
+   elsif (/^MAKE=\s*(\S+)/)            { $MAKE = $1; }
    elsif (/^\s*\. / || /^\s*export /)  { push @envlist, $_; }
    else                                { push @cmdlist, $_; } 
 }
