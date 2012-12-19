@@ -461,7 +461,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 0; i < infocnt; ++i)
 	{
 	  /* Create processing pipeline and hit list */
-	  info[i].th  = p7_tophits_Create(); 
+	  info[i].th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
 	  info[i].pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS); /* M_hint = 100, L_hint = 100 are just dummies for now */
 	  info[i].pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
 
@@ -491,7 +491,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 1; i < infocnt; ++i)
 	{
 	  p7_tophits_Merge(info[0].th, info[i].th);
-	  p7_pipeline_MergeStats(info[0].pli, info[i].pli);
+	  p7_pipeline_stats_Merge(info[0].pli, &(info[i].pli->stats));
 
 	  p7_pipeline_Destroy(info[i].pli);
 	  p7_tophits_Destroy(info[i].th);
@@ -830,7 +830,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (qsq->desc[0] != 0 && fprintf(ofp, "Description: %s\n", qsq->desc)    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
       /* Create processing pipeline and hit list */
-      th  = p7_tophits_Create(); 
+      th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
       pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS); /* M_hint = 100, L_hint = 100 are just dummies for now */
       pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
 
@@ -903,23 +903,22 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* merge the results of the search results */
       for (dest = 1; dest < cfg->nproc; ++dest)
 	{
-	  P7_PIPELINE     *mpi_pli   = NULL;
-	  P7_TOPHITS      *mpi_th    = NULL;
+	  P7_PIPELINE_STATS mpi_pli_stats;
+	  P7_TOPHITS       *mpi_th    = NULL;
 
 	  /* send an empty block to signal the worker they are done */
 	  MPI_Send(&block, 3, MPI_LONG_LONG_INT, dest, HMMER_BLOCK_TAG, MPI_COMM_WORLD);
 
 	  /* wait for the results */
-	  if ((status = p7_tophits_MPIRecv(dest, HMMER_TOPHITS_TAG, MPI_COMM_WORLD, &mpi_buf, &mpi_size, &mpi_th)) != eslOK)
+	  if ((status = p7_tophits_mpi_Recv(dest, HMMER_TOPHITS_TAG, MPI_COMM_WORLD, &mpi_buf, &mpi_size, &mpi_th)) != eslOK)
 	    mpi_failure("Unexpected error %d receiving tophits from %d", status, dest);
 
-	  if ((status = p7_pipeline_MPIRecv(dest, HMMER_PIPELINE_TAG, MPI_COMM_WORLD, &mpi_buf, &mpi_size, go, &mpi_pli)) != eslOK)
-	    mpi_failure("Unexpected error %d receiving pipeline from %d", status, dest);
+	  if ((status = p7_pipeline_stats_mpi_Recv(dest, HMMER_PIPELINE_TAG, MPI_COMM_WORLD, &mpi_buf, &mpi_size, &mpi_pli_stats)) != eslOK)
+	    mpi_failure("Unexpected error %d receiving pipeline stats from %d", status, dest);
 
 	  p7_tophits_Merge(th, mpi_th);
-	  p7_pipeline_MergeStats(pli, mpi_pli);
+	  p7_pipeline_stats_Merge(pli, &mpi_pli_stats);
 
-	  p7_pipeline_Destroy(mpi_pli);
 	  p7_tophits_Destroy(mpi_th);
 	}
 
@@ -1062,7 +1061,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (status != eslOK) mpi_failure("Unexpected error %d in opening hmm file %s.\n", status, cfg->hmmfile);  
   
       /* Create processing pipeline and hit list */
-      th  = p7_tophits_Create(); 
+      th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
       pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS); /* M_hint = 100, L_hint = 100 are just dummies for now */
       pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
 
@@ -1086,7 +1085,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      p7_bg_SetLength(bg, qsq->n);
 	      p7_oprofile_ReconfigLength(om, qsq->n);
 	      
-	      p7_Pipeline(pli, om, bg, qsq, th);
+	      p7_Pipeline(pli, /*gm=*/NULL, om, bg, qsq, th);  /* gm=NULL: if needed, the pipeline will read the dual-mode profile from disk */
 	      
 	      p7_oprofile_Destroy(om);
 	      p7_pipeline_Reuse(pli);
@@ -1129,8 +1128,8 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_stopwatch_Stop(w);
 
       /* Send the top hits back to the master. */
-      p7_tophits_MPISend(th, 0, HMMER_TOPHITS_TAG, MPI_COMM_WORLD,  &mpi_buf, &mpi_size);
-      p7_pipeline_MPISend(pli, 0, HMMER_PIPELINE_TAG, MPI_COMM_WORLD,  &mpi_buf, &mpi_size);
+      p7_tophits_mpi_Send(th, 0, HMMER_TOPHITS_TAG, MPI_COMM_WORLD,  &mpi_buf, &mpi_size);
+      p7_pipeline_stats_mpi_Send(&(pli->stats), 0, HMMER_PIPELINE_TAG, MPI_COMM_WORLD,  &mpi_buf, &mpi_size);
 
       p7_hmmfile_Close(hfp);
       p7_pipeline_Destroy(pli);

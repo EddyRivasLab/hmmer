@@ -515,7 +515,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       for (i = 0; i < infocnt; ++i) {
           /* Create processing pipeline and hit list */
-          info[i].th  = p7_tophits_Create();
+          info[i].th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC);
           info[i].om = p7_oprofile_Copy(om);
           info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
           p7_pipeline_NewModel(info[i].pli, info[i].om, info[i].bg);
@@ -575,7 +575,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       } else {
     	  for (i = 0; i < infocnt; ++i)
-    		  resCnt += info[i].pli->nres;
+    		  resCnt += info[i].pli->stats.nres;
       }
 
       for (i = 0; i < infocnt; ++i)
@@ -585,7 +585,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* merge the results of the search results */
       for (i = 1; i < infocnt; ++i) {
           p7_tophits_Merge(info[0].th, info[i].th);
-          p7_pipeline_MergeStats(info[0].pli, info[i].pli);
+          p7_pipeline_stats_Merge(info[0].pli, &(info[i].pli.stats));
 
           p7_pipeline_Destroy(info[i].pli);
           p7_tophits_Destroy(info[i].th);
@@ -604,11 +604,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
       //tally up total number of hits and target coverage
-      info->pli->n_output = info->pli->pos_output = 0;
+      info->pli->stats.n_output = info->pli->stats.pos_output = 0;
       for (i = 0; i < info->th->N; i++) {
           if ( (info->th->hit[i]->flags & p7_IS_REPORTED) || info->th->hit[i]->flags & p7_IS_INCLUDED) {
-              info->pli->n_output++;
-              info->pli->pos_output += abs(info->th->hit[i]->dcl[0].jali - info->th->hit[i]->dcl[0].iali) + 1;
+              info->pli->stats.n_output++;
+              info->pli->stats.pos_output += abs(info->th->hit[i]->dcl[0].jali - info->th->hit[i]->dcl[0].iali) + 1;
           }
       }
 
@@ -741,10 +741,10 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
 
       if (info->pli->strand != p7_STRAND_BOTTOMONLY) {
 
-        info->pli->nres -= dbsq->C; // to account for overlapping region of windows
+        info->pli->stats.nres -= dbsq->C; // to account for overlapping region of windows
         prev_hit_cnt = info->th->N;
 
-        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, info->pli->nseqs);
+        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, info->pli->stats.nseqs);
 
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
@@ -759,7 +759,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
             dcl->ad->sqto += dbsq->start - 1;
         }
       } else {
-        info->pli->nres -= dbsq->n;
+        info->pli->stats.nres -= dbsq->n;
       }
 #ifdef eslAUGMENT_ALPHABET
       //reverse complement
@@ -768,7 +768,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
           prev_hit_cnt = info->th->N;
           esl_sq_Copy(dbsq,dbsq_revcmp);
           esl_sq_ReverseComplement(dbsq_revcmp);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq_revcmp, info->th, info->pli->nseqs);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq_revcmp, info->th, info->pli->stats.nseqs);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (i=prev_hit_cnt; i < info->th->N ; i++) {
@@ -783,7 +783,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
 
           }
 
-          info->pli->nres += dbsq_revcmp->W;
+          info->pli->stats.nres += dbsq_revcmp->W;
 
       }
 #endif /*eslAUGMENT_ALPHABET*/
@@ -792,7 +792,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
       if (wstatus == eslEOD) { // no more left of this sequence ... move along to the next sequence.
           add_id_length(id_length_list, dbsq->idx, dbsq->L);
 
-          info->pli->nseqs++;
+          info->pli->stats.nseqs++;
           esl_sq_Reuse(dbsq);
           wstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
 
@@ -837,8 +837,8 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
       sstatus = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, TRUE);
 
 
-      block->first_seqidx = info->pli->nseqs;
-      info->pli->nseqs += block->count  - (block->complete ? 0 : 1);// if there's an incomplete sequence read into the block wait to count it until it's complete.
+      block->first_seqidx = info->pli->stats.nseqs;
+      info->pli->stats.nseqs += block->count  - (block->complete ? 0 : 1);// if there's an incomplete sequence read into the block wait to count it until it's complete.
 
 
       seqid = block->first_seqidx;
@@ -924,7 +924,7 @@ pipeline_thread(void *arg)
       p7_pipeline_NewSeq(info->pli, dbsq);
 
       if (info->pli->strand != p7_STRAND_BOTTOMONLY) {
-        info->pli->nres -= dbsq->C; // to account for overlapping region of windows
+        info->pli->stats.nres -= dbsq->C; // to account for overlapping region of windows
 
         prev_hit_cnt = info->th->N;
         p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, block->first_seqidx + i);
@@ -942,7 +942,7 @@ pipeline_thread(void *arg)
             dcl->ad->sqto += dbsq->start - 1;
         }
       } else {
-        info->pli->nres -= dbsq->n;
+        info->pli->stats.nres -= dbsq->n;
       }
 
 #ifdef eslAUGMENT_ALPHABET
@@ -966,7 +966,7 @@ pipeline_thread(void *arg)
 
           }
 
-          info->pli->nres += dbsq->W;
+          info->pli->stats.nres += dbsq->W;
       }
 
 #endif /*eslAUGMENT_ALPHABET*/

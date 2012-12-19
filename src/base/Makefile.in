@@ -2,7 +2,10 @@ MODULE = base
 
 LIBOBJS =  general.o\
 	   p7_alidisplay.o\
+	   p7_alidisplay_mpi.o\
 	   p7_bg.o\
+	   p7_domain.o\
+	   p7_domain_mpi.o\
 	   p7_hmm.o\
 	   p7_hmm_mpi.o\
 	   p7_hmmfile.o\
@@ -13,6 +16,7 @@ LIBOBJS =  general.o\
 	   p7_profile_mpi.o\
 	   p7_scoredata.o\
 	   p7_tophits.o\
+	   p7_tophits_mpi.o\
 	   p7_trace.o
 
 LIBHDRS =  
@@ -33,6 +37,7 @@ UTESTS =     p7_alidisplay_utest \
 	     p7_scoredata_utest \
 	     p7_tophits_utest \
 	     p7_trace_utest
+#	     p7_tophits_mpi_utest \
 
 STATS  = 
 

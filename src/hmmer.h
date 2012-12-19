@@ -8,7 +8,7 @@
 #include "p7_config.h"
 
 /* 'base' subdir: contains code for many of HMMER3's data structures                                                             */
-#include "base/general.h"	     /* widely used definitions, error handling, initialization                                  */
+#include "base/general.h"	     /* Widely used definitions, error handling, initialization                                  */
 #include "base/p7_hmm.h"	     /* P7_HMM        : basic model, probability parameters or counts                            */
 #include "base/p7_hmm_mpi.h"	     /*               :    ... add-on: MPI communication                                         */
 #include "base/p7_profile.h"	     /* P7_PROFILE    : search model, glocal/local, with additional states for nonhomologous seq */
@@ -19,8 +19,10 @@
 #include "base/p7_prior.h"	     /* P7_PRIOR      : Dirichlet mixture prior on model parameters                              */
 #include "base/p7_masstrace.h"	     /* P7_MASSTRACE  : used in calculating envelope bounds for a domain                         */
 #include "base/p7_domain.h"	     /* P7_DOMAIN     : information about a match to a model in a target seq                     */
+#include "base/p7_domain_mpi.h"      /*               :    ... add-on: MPI communication                                         */
 #include "base/p7_alidisplay.h"	     /* P7_ALIDISPLAY : an alignment formatted for output                                        */
 #include "base/p7_tophits.h"	     /* P7_HIT, P7_TOPHITS : accumulated information about hits (scores, alis) during search     */
+#include "base/p7_tophits_mpi.h"     /*               :    ... add-on: MPI communication                                         */
 #include "base/p7_hmmwindow.h"	     /* P7_HMM_WINDOW, P7_HMM_WINDOWLIST : {nhmmer}                                              */
 #include "base/p7_scoredata.h"	     /* P7_SCOREDATA  : {nhmmer}                                                                 */
 
@@ -47,10 +49,12 @@
 #include "search/tophits_output_tabular.h" /* Formatted output of search results, tabular                                 */
 #include "search/null3.h"		   /* {nhmmer}: 'null3' model for correcting biased composition                   */
 #include "search/p7_pipeline.h"	           /* P7_PIPELINE: an aggregated pipeline for comparing one model against one seq */
+#include "search/p7_pipeline_mpi.h"        /*    ... add-on: MPI communication                                            */
 
 /* 'dp_vector' subdir: SIMD-vector-parallel accelerated dynamic programming filters; H3's speed heuristics                */
 #include "dp_vector/simdvec.h"	           /* general definitions and utilities for SIMD vector code                      */
 #include "dp_vector/p7_oprofile.h"	   /* P7_OPROFILE  : striped/vectorized profile                                   */
+#include "dp_vector/p7_oprofile_mpi.h"     /*              :  ... add-on: MPI communication                               */
 #include "dp_vector/p7_filtermx.h"	   /* P7_FILTERMX  : a one-row O(M) memory DP matrix for SSV, MSV, VF             */
 #include "dp_vector/p7_checkptmx.h"	   /* P7_CHECKPTMX : checkpointed O(M sqrt(L)) memory DP for F/B/Decode           */
 #include "dp_vector/ssvfilter.h"           /* "single segment ungapped Viterbi" filter, from Bjarne Knudsen               */
@@ -58,7 +62,6 @@
 #include "dp_vector/vitfilter.h"	   /* Viterbi filter                                                              */
 #include "dp_vector/fwdfilter.h"	   /* Checkpointed Forward/Backward/posterior decoding filter                     */
 #include "dp_vector/io.h"		   /* Reading/writing P7_OPROFILEs to files                                       */
-#include "dp_vector/p7_oprofile_mpi.h"     /* MPI support functions for communicating P7_OPROFILE                         */
 
 /* 'dp_sparse' subdir: glocal/local alignment in sparse dynamic programming */
 #include "dp_sparse/p7_sparsemx.h"         /* P7_SPARSEMASK, P7_SPARSEMX : sparse mask and sparse DP matrix  */

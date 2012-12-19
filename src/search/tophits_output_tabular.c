@@ -66,7 +66,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
         d    = th->hit[h]->best_domain;
         if (pli->long_targets) 
         {
-            if (fprintf(ofp, "%-*s %-*s %-*s %-*s %7d %7d %*d %*d %*d %*d %*ld %6s %9.2g %6.1f %5.1f  %s\n",
+            if (fprintf(ofp, "%-*s %-*s %-*s %-*s %7d %7d %*d %*d %*d %*d %*" PRId64 " %6s %9.2g %6.1f %5.1f  %s\n",
                 tnamew, th->hit[h]->name,
                 taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
                 qnamew, qname,
@@ -170,7 +170,7 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
               if (pli->mode == p7_SEARCH_SEQS) { qlen = th->hit[h]->dcl[d].ad->M; tlen = th->hit[h]->dcl[d].ad->L;  }
               else                             { qlen = th->hit[h]->dcl[d].ad->L; tlen = th->hit[h]->dcl[d].ad->M;  }
 
-              if (fprintf(ofp, "%-*s %-*s %5d %-*s %-*s %5d %9.2g %6.1f %5.1f %3d %3d %9.2g %9.2g %6.1f %5.1f %5d %5d %5ld %5ld %5d %5d %4.2f %s\n",
+              if (fprintf(ofp, "%-*s %-*s %5d %-*s %-*s %5d %9.2g %6.1f %5.1f %3d %3d %9.2g %9.2g %6.1f %5.1f %5d %5d %5" PRId64 " %5" PRId64 " %5d %5d %4.2f %s\n",
                 tnamew, th->hit[h]->name,
                 taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
                 tlen,
@@ -257,7 +257,7 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
       if (th->hit[h]->flags & p7_IS_REPORTED)
       {
           //d    = th->hit[h]->best_domain;
-          if (fprintf(ofp, "%-*s  %-*s %-*s %6.1f %9.2g %5.1f %7d %7d %s %*d %*d %*d %*d %*ld   %s\n",
+          if (fprintf(ofp, "%-*s  %-*s %-*s %6.1f %9.2g %5.1f %7d %7d %s %*d %*d %*d %*d %*" PRId64 "   %s\n",
           tnamew, th->hit[h]->name,
           taccw, ( pli->mode == p7_SCAN_MODELS ? th->hit[h]->acc : qacc ),
           qnamew, qname,
@@ -311,7 +311,7 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
       /* Need to sort the domains.  One way to do this is to re-use the hit sorting machinery,
        * so we create one "hit" for each domain, then hand it off to the sorter
        */
-      if ((domHitlist  = p7_tophits_Create()) == NULL) return eslEMEM;
+      if ((domHitlist  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC)) == NULL) return eslEMEM;
       for (h = 0; h < th->N; h++)
       {
         if (th->hit[h]->flags & p7_IS_REPORTED)
@@ -350,7 +350,7 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
       {
         domhit = domHitlist->hit[h];
 
-        if (fprintf(ofp, "%-*s  %6.1f %9.2g %5d %5.1f %6d %6d %6ld %6ld %6d %6d     %s\n",
+        if (fprintf(ofp, "%-*s  %6.1f %9.2g %5d %5.1f %6d %6d %6" PRId64 " %6" PRId64 " %6d %6d     %s\n",
               tnamew, domHitlist->hit[h]->name,
               domhit->dcl[0].bitscore,
               exp(domhit->dcl[0].lnP) * pli->Z, //i-Evalue

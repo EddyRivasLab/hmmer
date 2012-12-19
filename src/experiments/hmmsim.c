@@ -435,7 +435,6 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              nproc_working = 0;
   int              wi;
   int              pos;
-  double           mu, lambda;
   char             errbuf[eslERRBUFSIZE];
   int              status;
   MPI_Status       mpistatus;
@@ -488,9 +487,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 		  if (MPI_Unpack(wbuf, wn, &pos, xv,     cfg->N, MPI_DOUBLE, MPI_COMM_WORLD) != 0)   p7_Fail("score vector unpack failed");
 		  if (esl_opt_GetBoolean(go, "-a") &&
 		      MPI_Unpack(wbuf, wn, &pos, av,     cfg->N, MPI_INT,    MPI_COMM_WORLD) != 0)   p7_Fail("alilen vector unpack failed");
-		  if (MPI_Unpack(wbuf, wn, &pos, &mu,         1, MPI_DOUBLE, MPI_COMM_WORLD) != 0)   p7_Fail("mu param unpack failed");
-		  if (MPI_Unpack(wbuf, wn, &pos, &lambda,     1, MPI_DOUBLE, MPI_COMM_WORLD) != 0)   p7_Fail("lambda param unpack failed");
-		  if ((status = output_result(go, cfg, errbuf, hmmlist[wi], xv, av, mu, lambda))  != eslOK) xstatus = status;
+		  if ((status = output_result(go, cfg, errbuf, hmmlist[wi], xv, av))  != eslOK) xstatus = status;
 		}
 	      else	/* worker reported a user error. Get the errbuf. */
 		{
@@ -507,7 +504,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* If we have work, assign it to a free worker; else, terminate the free worker. */
       if (have_work) 
 	{
-	  p7_hmm_MPISend(hmm, wi, 0, MPI_COMM_WORLD, &wbuf, &wn);
+	  p7_hmm_mpi_Send(hmm, wi, 0, MPI_COMM_WORLD, &wbuf, &wn);
 	  hmmlist[wi] = hmm;
 	  wi++;
 	  nproc_working++;
@@ -516,7 +513,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* Tell all the workers (1..nproc-1) to shut down by sending them a NULL workunit. */
   for (wi = 1; wi < cfg->nproc; wi++)
-    if (p7_hmm_MPISend(NULL, wi, 0, MPI_COMM_WORLD, &wbuf, &wn) != eslOK) p7_Fail("MPI HMM send failed");	
+    if (p7_hmm_mpi_Send(NULL, wi, 0, MPI_COMM_WORLD, &wbuf, &wn) != eslOK) p7_Fail("MPI HMM send failed");	
 
 
   free(hmmlist);
@@ -559,7 +556,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
     ESL_ALLOC(av, cfg->N * sizeof(int));
 
   /* Main worker loop */
-  while (p7_hmm_MPIRecv(0, 0, MPI_COMM_WORLD, &wbuf, &wn, &(cfg->abc), &hmm) == eslOK) 
+  while (p7_hmm_mpi_Recv(0, 0, MPI_COMM_WORLD, &wbuf, &wn, &(cfg->abc), &hmm) == eslOK) 
     {
       if (esl_opt_GetBoolean(go, "--recal")) {
 	if (( status = recalibrate_model(go, cfg, errbuf, hmm))     != eslOK) goto CLEANERROR;
@@ -572,9 +569,6 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (esl_opt_GetBoolean(go, "-a"))
 	MPI_Pack(av,    cfg->N, MPI_INT,    wbuf, wn, &pos, MPI_COMM_WORLD);
       MPI_Send(wbuf, pos, MPI_PACKED, 0, 0, MPI_COMM_WORLD);
-      MPI_Pack(&mu,     1,      MPI_DOUBLE, wbuf, wn, &pos, MPI_COMM_WORLD);
-      MPI_Pack(&lambda, 1,      MPI_DOUBLE, wbuf, wn, &pos, MPI_COMM_WORLD);
-
       p7_hmm_Destroy(hmm);
     }
 

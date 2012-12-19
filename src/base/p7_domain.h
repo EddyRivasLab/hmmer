@@ -23,6 +23,13 @@ typedef struct p7_dom_s {
 } P7_DOMAIN;
 
 
+/* 1. P7_DOMAIN object (arrays of) */
+extern P7_DOMAIN *p7_domain_Create(int ndom);
+extern void       p7_domain_Destroy(P7_DOMAIN *dcl, int ndom);
+
+/* 2. Debugging, development tools */
+extern int        p7_domain_TestSample(ESL_RANDOMNESS *rng, int alen, P7_DOMAIN *dcl);
+
 #endif /*P7_DOMAIN_INCLUDED*/
 
 /*****************************************************************

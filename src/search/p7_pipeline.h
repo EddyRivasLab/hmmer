@@ -33,6 +33,36 @@ enum p7_pipemodes_e { p7_SEARCH_SEQS = 0, p7_SCAN_MODELS = 1 };
 enum p7_zsetby_e    { p7_ZSETBY_NTARGETS = 0, p7_ZSETBY_OPTION = 1, p7_ZSETBY_FILEINFO = 2 };
 enum p7_complementarity_e { p7_NOCOMPLEMENT    = 0, p7_COMPLEMENT   = 1 };
 
+/* We break out a separate chunk of structure, P7_PIPELINE_STATS, to
+ * contain accounting count accumulators; in threaded/mpi
+ * implementations, workers need to send these data back to be folded
+ * into the master, but the rest of each worker's pipeline does not
+ * need to be communicated. See p7_pipeline_stats_Merge(), and MPI
+ * comm routines for P7_PIPELINE_STATS in p7_pipeline_mpi.c.
+ */
+typedef struct p7_pipeline_stats_s {
+  uint64_t      nmodels;        /* # of HMMs searched                       */
+  uint64_t      nseqs;	        /* # of sequences searched                  */
+  uint64_t      nres;	        /* # of residues searched                   */
+  uint64_t      nnodes;	        /* # of model nodes searched                */
+  uint64_t      n_past_msv;	/* # comparisons that pass MSVFilter()      */
+  uint64_t      n_past_bias;	/* # comparisons that pass bias filter      */
+  uint64_t      n_past_vit;	/* # comparisons that pass ViterbiFilter()  */
+  uint64_t      n_past_fwd;	/* # comparisons that pass ForwardFilter()  */
+
+  /* Additional accounting in nhmmer */
+  uint64_t      n_output;	/* # alis that make it to final output      */
+  uint64_t      pos_past_msv;	/* # positions that pass MSVFilter()        */
+  uint64_t      pos_past_bias;	/* # positions that pass bias filter        */
+  uint64_t      pos_past_vit;	/* # positions that pass ViterbiFilter()    */
+  uint64_t      pos_past_fwd;	/* # positions that pass ForwardFilter()    */
+  uint64_t      pos_output;	/* # positions that make it to final output */
+} P7_PIPELINE_STATS;
+
+
+
+/* P7_PIPELINE
+ */
 typedef struct p7_pipeline_s {
   /* Dynamic programming matrices                                           */
   P7_FILTERMX   *fx;	        /* one-row vector DP: MSV, Vit filter       */
@@ -81,24 +111,6 @@ typedef struct p7_pipeline_s {
   int     do_biasfilter;	/* TRUE to use biased comp HMM filter       */
   int     do_null2;		/* TRUE to use null2 score corrections      */
 
-  /* Accounting. (reduceable in threaded/MPI parallel version)              */
-  uint64_t      nmodels;        /* # of HMMs searched                       */
-  uint64_t      nseqs;	        /* # of sequences searched                  */
-  uint64_t      nres;	        /* # of residues searched                   */
-  uint64_t      nnodes;	        /* # of model nodes searched                */
-  uint64_t      n_past_msv;	/* # comparisons that pass MSVFilter()      */
-  uint64_t      n_past_bias;	/* # comparisons that pass bias filter      */
-  uint64_t      n_past_vit;	/* # comparisons that pass ViterbiFilter()  */
-  uint64_t      n_past_fwd;	/* # comparisons that pass ForwardFilter()  */
-
-  /* Additional accounting in nhmmer */
-  uint64_t      n_output;	/* # alis that make it to final output      */
-  uint64_t      pos_past_msv;	/* # positions that pass MSVFilter()        */
-  uint64_t      pos_past_bias;	/* # positions that pass bias filter        */
-  uint64_t      pos_past_vit;	/* # positions that pass ViterbiFilter()    */
-  uint64_t      pos_past_fwd;	/* # positions that pass ForwardFilter()    */
-  uint64_t      pos_output;	/* # positions that make it to final output */
-
   /* State config, flags */
   enum p7_pipemodes_e mode;    	/* p7_SCAN_MODELS | p7_SEARCH_SEQS          */
   int           show_accessions;/* TRUE to output accessions not names      */
@@ -110,6 +122,9 @@ typedef struct p7_pipeline_s {
   enum p7_strands_e strand;     /* p7_STRAND_TOPONLY | p7_STRAND_BOTTOMONLY | p7_STRAND_BOTH    */
   int 		W;              /* window len for nhmmer; ~max len expected                     */
   int           block_length;   /* overlapping block len, threaded; p7_NHMMER_MAX_RESIDUE_COUNT */
+
+  /* Accounting. (reduceable in threaded/MPI parallel version)              */
+  P7_PIPELINE_STATS stats;	/* # of things searched, things past filters*/
 
   /* Diagostic info */
   char          errbuf[eslERRBUFSIZE];
@@ -130,7 +145,8 @@ extern int p7_pipeline_DomainReportable  (P7_PIPELINE *pli, float dom_score, dou
 extern int p7_pipeline_TargetIncludable  (P7_PIPELINE *pli, float score,     double lnP);
 extern int p7_pipeline_DomainIncludable  (P7_PIPELINE *pli, float dom_score, double lnP);
 
-extern int p7_pipeline_MergeStats(P7_PIPELINE *p1, const P7_PIPELINE *p2);
+extern int p7_pipeline_stats_Init (P7_PIPELINE_STATS *stats);
+extern int p7_pipeline_stats_Merge(P7_PIPELINE *p1, const P7_PIPELINE_STATS *stats);
 extern int p7_pipeline_WriteStats(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w);
 
 extern int p7_Pipeline              (P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);

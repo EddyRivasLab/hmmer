@@ -243,23 +243,8 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, 
   if (go && esl_opt_GetBoolean(go, "--nonull2")) pli->do_null2      = FALSE;
   if (go && esl_opt_GetBoolean(go, "--nobias"))  pli->do_biasfilter = FALSE;
   
-  /* Accounting as we collect results */
-  pli->nmodels         = 0;
-  pli->nseqs           = 0;
-  pli->nres            = 0;
-  pli->nnodes          = 0;
-  pli->n_past_msv      = 0;
-  pli->n_past_bias     = 0;
-  pli->n_past_vit      = 0;
-  pli->n_past_fwd      = 0;
-
-  /* Additional accounting in nhmmer */
-  pli->n_output        = 0;
-  pli->pos_past_msv    = 0;
-  pli->pos_past_bias   = 0;
-  pli->pos_past_vit    = 0;
-  pli->pos_past_fwd    = 0;
-  pli->pos_output      = 0;
+  /* Zero the accounting counters */
+  p7_pipeline_stats_Init(&(pli->stats));
 
   /* State config, flags. */
   pli->mode            = mode;
@@ -290,6 +275,9 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, 
  * Purpose:   Reuse <pli> for next target sequence (search mode)
  *            or model (scan mode). 
  *            
+ *            Accounting statistics are not altered by this call;
+ *            we accumulate statistics across many targets.
+ *            
  *            May eventually need to distinguish from reusing pipeline
  *            for next query, but we're not really focused on multiquery
  *            use of hmmscan/hmmsearch/phmmer for the moment.
@@ -308,7 +296,7 @@ p7_pipeline_Reuse(P7_PIPELINE *pli)
   p7_masstrace_Reuse (pli->mt);
 
   /* The rest of the state of the pipeline stays constant
-   * as we move to the next target.
+   * as we move to the next target, including acct'ing stats.
    */
   return eslOK;
 }
@@ -373,9 +361,9 @@ p7_pipeline_NewModel(P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg)
 {
   int status = eslOK;
 
-  pli->nmodels++;
-  pli->nnodes += om->M;
-  if (pli->Z_setby == p7_ZSETBY_NTARGETS && pli->mode == p7_SCAN_MODELS) pli->Z = pli->nmodels;
+  pli->stats.nmodels++;
+  pli->stats.nnodes += om->M;
+  if (pli->Z_setby == p7_ZSETBY_NTARGETS && pli->mode == p7_SCAN_MODELS) pli->Z = pli->stats.nmodels;
 
   if (pli->do_biasfilter) p7_bg_SetFilter(bg, om->M, om->compo);
 
@@ -451,9 +439,9 @@ p7_pipeline_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om)
 int
 p7_pipeline_NewSeq(P7_PIPELINE *pli, const ESL_SQ *sq)
 {
-  if (!pli->long_targets) pli->nseqs++; // if long_targets, sequence counting happens in the serial loop, which can track multiple windows for a single long sequence
-  pli->nres += sq->n;
-  if (pli->Z_setby == p7_ZSETBY_NTARGETS && pli->mode == p7_SEARCH_SEQS) pli->Z = pli->nseqs;
+  if (!pli->long_targets) pli->stats.nseqs++; // if long_targets, sequence counting happens in the serial loop, which can track multiple windows for a single long sequence
+  pli->stats.nres += sq->n;
+  if (pli->Z_setby == p7_ZSETBY_NTARGETS && pli->mode == p7_SEARCH_SEQS) pli->Z = pli->stats.nseqs;
   return eslOK;
 }
 /*-------- end, setting pipeline for next target ----------------*/
@@ -534,53 +522,73 @@ p7_pipeline_DomainIncludable(P7_PIPELINE *pli, float dom_score, double lnP)
  * 4. Statistics output from a completed pipeline
  *****************************************************************/
 
-/* Function:  p7_pipeline_MergeStats()
+/* Function:  p7_pipeline_stats_Init()
+ * Synopsis:  Zero the accounting count accumulators.
+ */
+int
+p7_pipeline_stats_Init(P7_PIPELINE_STATS *stats)
+{
+  stats->nmodels       = 0;
+  stats->nseqs         = 0;
+  stats->nres          = 0;
+  stats->nnodes        = 0;
+
+  stats->n_past_msv    = 0;
+  stats->n_past_bias   = 0;
+  stats->n_past_vit    = 0;
+  stats->n_past_fwd    = 0;
+
+  stats->n_output      = 0;
+  stats->pos_past_msv  = 0;
+  stats->pos_past_bias = 0;
+  stats->pos_past_vit  = 0;
+  stats->pos_past_fwd  = 0;
+  stats->pos_output    = 0;
+  return eslOK;
+}
+
+/* Function:  p7_pipeline_stats_Merge()
  * Synopsis:  Merge the pipeline statistics (among workers/threads)
  *
- * Purpose:   Merge the statistics of a subsidiary pipeline <p2> (from a worker thread
- *            or MPI process, say) into a master <p1>, prior to output
+ * Purpose:   Merge the statistics of a subsidiary pipeline <stats> (from a worker thread
+ *            or MPI process, say) into a master pipeline <p1>, prior to output
  *            of summary statistics.
  *
  * Returns:   <eslOK> on success.
  */
 int
-p7_pipeline_MergeStats(P7_PIPELINE *p1, const P7_PIPELINE *p2)
+p7_pipeline_stats_Merge(P7_PIPELINE *p1, const P7_PIPELINE_STATS *stats)
 {
   /* if we are searching a sequence database, we need to keep track of the
    * number of sequences and residues processed.
    */
   if (p1->mode == p7_SEARCH_SEQS)
     {
-      p1->nseqs   += p2->nseqs;
-      p1->nres    += p2->nres;
+      p1->stats.nseqs   += stats->nseqs;
+      p1->stats.nres    += stats->nres;
     }
   else
     {
-      p1->nmodels += p2->nmodels;
-      p1->nnodes  += p2->nnodes;
+      p1->stats.nmodels += stats->nmodels;
+      p1->stats.nnodes  += stats->nnodes;
     }
 
-  p1->n_past_msv  += p2->n_past_msv;
-  p1->n_past_bias += p2->n_past_bias;
-  p1->n_past_vit  += p2->n_past_vit;
-  p1->n_past_fwd  += p2->n_past_fwd;
-  p1->n_output    += p2->n_output;
+  p1->stats.n_past_msv  += stats->n_past_msv;
+  p1->stats.n_past_bias += stats->n_past_bias;
+  p1->stats.n_past_vit  += stats->n_past_vit;
+  p1->stats.n_past_fwd  += stats->n_past_fwd;
+  p1->stats.n_output    += stats->n_output;
 
-  p1->pos_past_msv  += p2->pos_past_msv;
-  p1->pos_past_bias += p2->pos_past_bias;
-  p1->pos_past_vit  += p2->pos_past_vit;
-  p1->pos_past_fwd  += p2->pos_past_fwd;
-  p1->pos_output    += p2->pos_output;
+  p1->stats.pos_past_msv  += stats->pos_past_msv;
+  p1->stats.pos_past_bias += stats->pos_past_bias;
+  p1->stats.pos_past_vit  += stats->pos_past_vit;
+  p1->stats.pos_past_fwd  += stats->pos_past_fwd;
+  p1->stats.pos_output    += stats->pos_output;
 
   if (p1->Z_setby == p7_ZSETBY_NTARGETS)
     {
-      p1->Z += (p1->mode == p7_SCAN_MODELS) ? p2->nmodels : p2->nseqs;
+      p1->Z += (p1->mode == p7_SCAN_MODELS) ? stats->nmodels : stats->nseqs;
     }
-  else
-    {
-      p1->Z = p2->Z;
-    }
-
   return eslOK;
 }
 
@@ -604,71 +612,71 @@ p7_pipeline_WriteStats(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
   fprintf(ofp, "Internal pipeline statistics summary:\n");
   fprintf(ofp, "-------------------------------------\n");
   if (pli->mode == p7_SEARCH_SEQS) {
-    fprintf(ofp, "Query model(s):              %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
-    fprintf(ofp, "Target sequences:            %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
-    ntargets = pli->nseqs;
+    fprintf(ofp, "Query model(s):              %15" PRId64 "  (%" PRId64 " nodes)\n",              pli->stats.nmodels, pli->stats.nnodes);
+    fprintf(ofp, "Target sequences:            %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->stats.nseqs,   pli->stats.nres);
+    ntargets = pli->stats.nseqs;
   } else {
-    fprintf(ofp, "Query sequence(s):           %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
-    fprintf(ofp, "Target model(s):             %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
-    ntargets = pli->nmodels;
+    fprintf(ofp, "Query sequence(s):           %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->stats.nseqs,   pli->stats.nres);
+    fprintf(ofp, "Target model(s):             %15" PRId64 "  (%" PRId64 " nodes)\n",              pli->stats.nmodels, pli->stats.nnodes);
+    ntargets = pli->stats.nmodels;
   }
 
   if (pli->long_targets) {
       fprintf(ofp, "Residues passing MSV filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
       //fprintf(ofp, "Windows passing MSV filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          //pli->n_past_msv,
-          pli->pos_past_msv,
-          (double)pli->pos_past_msv / (pli->nres*pli->nmodels) ,
+          //pli->stats.n_past_msv,
+          pli->stats.pos_past_msv,
+          (double)pli->stats.pos_past_msv / (pli->stats.nres*pli->stats.nmodels) ,
           pli->F1);
 
       fprintf(ofp, "Residues passing bias filter:  %15" PRId64 "  (%.3g); expected (%.3g)\n",
       //fprintf(ofp, "Windows passing bias filter:  %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          //pli->n_past_bias,
-          pli->pos_past_bias,
-          (double)pli->pos_past_bias / (pli->nres*pli->nmodels) ,
+          //pli->stats.n_past_bias,
+          pli->stats.pos_past_bias,
+          (double)pli->stats.pos_past_bias / (pli->stats.nres*pli->stats.nmodels) ,
           pli->F1);
 
       fprintf(ofp, "Residues passing Vit filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
       //fprintf(ofp, "Windows passing Vit filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          //pli->n_past_vit,
-          pli->pos_past_vit,
-          (double)pli->pos_past_vit / (pli->nres*pli->nmodels) ,
+          //pli->stats.n_past_vit,
+          pli->stats.pos_past_vit,
+          (double)pli->stats.pos_past_vit / (pli->stats.nres*pli->stats.nmodels) ,
           pli->F2);
 
       fprintf(ofp, "Residues passing Fwd filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
       //fprintf(ofp, "Windows passing Fwd filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          //pli->n_past_fwd,
-          pli->pos_past_fwd,
-          (double)pli->pos_past_fwd / (pli->nres*pli->nmodels) ,
+          //pli->stats.n_past_fwd,
+          pli->stats.pos_past_fwd,
+          (double)pli->stats.pos_past_fwd / (pli->stats.nres*pli->stats.nmodels) ,
           pli->F3);
 
       fprintf(ofp, "Total number of hits:          %15d  (%.3g)\n",
-          (int)pli->n_output,
-          (double)pli->pos_output / (pli->nres*pli->nmodels) );
+          (int)pli->stats.n_output,
+          (double)pli->stats.pos_output / (pli->stats.nres*pli->stats.nmodels) );
 
   } else { // typical case output
 
       fprintf(ofp, "Passed MSV filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",
-          pli->n_past_msv,
-          (double) pli->n_past_msv / ntargets,
+          pli->stats.n_past_msv,
+          (double) pli->stats.n_past_msv / ntargets,
           pli->F1 * ntargets,
           pli->F1);
 
       fprintf(ofp, "Passed bias filter:          %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",
-          pli->n_past_bias,
-          (double) pli->n_past_bias / ntargets,
+          pli->stats.n_past_bias,
+          (double) pli->stats.n_past_bias / ntargets,
           pli->F1 * ntargets,
           pli->F1);
 
       fprintf(ofp, "Passed Vit filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",
-          pli->n_past_vit,
-          (double) pli->n_past_vit / ntargets,
+          pli->stats.n_past_vit,
+          (double) pli->stats.n_past_vit / ntargets,
           pli->F2 * ntargets,
           pli->F2);
 
       fprintf(ofp, "Passed Fwd filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",
-          pli->n_past_fwd,
-          (double) pli->n_past_fwd / ntargets,
+          pli->stats.n_past_fwd,
+          (double) pli->stats.n_past_fwd / ntargets,
           pli->F3 * ntargets,
           pli->F3);
 
@@ -679,7 +687,7 @@ p7_pipeline_WriteStats(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
   if (w != NULL) {
     esl_stopwatch_Display(ofp, w, "# CPU time: ");
     fprintf(ofp, "# Mc/sec: %.2f\n", 
-        (double) pli->nres * (double) pli->nnodes / (w->elapsed * 1.0e6));
+        (double) pli->stats.nres * (double) pli->stats.nnodes / (w->elapsed * 1.0e6));
   }
 
   return eslOK;
@@ -759,7 +767,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
   seq_score = (usc - nullsc) / eslCONST_LOG2;
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   if (P > pli->F1) return eslOK;
-  pli->n_past_msv++;
+  pli->stats.n_past_msv++;
 
   /* biased composition HMM filtering */
   if (pli->do_biasfilter)
@@ -770,7 +778,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
       if (P > pli->F1) return eslOK;
     }
   else filtersc = nullsc;
-  pli->n_past_bias++;
+  pli->stats.n_past_bias++;
 
   /* In scan mode, if it passes the MSV filter, read the rest of the profile */
   if (pli->mode == p7_SCAN_MODELS)
@@ -788,14 +796,14 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
       P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
       if (P > pli->F2) return eslOK;
     }
-  pli->n_past_vit++;
+  pli->stats.n_past_vit++;
 
   /* Checkpointed Forward. Check score as a filter step before proceeding to backwards/decoding. */
   p7_ForwardFilter(sq->dsq, sq->n, om, pli->cx, &fwdsc);
   seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
   if (P > pli->F3) return eslOK;
-  pli->n_past_fwd++;
+  pli->stats.n_past_fwd++;
 
   /* ok, it's for real; passes vectorized local scoring filters.
    * Finish with Backwards and Decoding, defining a sparse mask in <sm>.
@@ -1335,7 +1343,7 @@ pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
   if (P > pli->F3 ) return eslOK;
 
-  pli->pos_past_fwd += window_len - *overlap;
+  pli->stats.pos_past_fwd += window_len - *overlap;
 
   *overlap = -1; // overload variable to tell calling function that this window passed fwd
 
@@ -1412,7 +1420,7 @@ pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7
       // - otherwise, use just the nres from the current pipeline, while the final filters
       //   will add up nres from all threads, over all windows, which will increase stringency
       if (pli->mode == p7_SCAN_MODELS)  nres = ESL_MIN(window_len,om->max_length);
-      else                              nres = pli->nres;
+      else                              nres = pli->stats.nres;
 
       if ( !p7_pipeline_TargetReportable(pli, dom_score, dom_lnP + log((float)nres / om->max_length) ) ) {
 
@@ -1593,7 +1601,7 @@ p7_pipeline_postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_
   } else {
     bias_filtersc = 0; // mullsc will be added in later
   }
-  pli->pos_past_bias += window_len;
+  pli->stats.pos_past_bias += window_len;
 
   //establish a possibly shorter target window parameterization
   loc_window_len = ESL_MIN(window_len,om->max_length);
@@ -1644,10 +1652,10 @@ p7_pipeline_postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_
 
   overlap = 0;
   for (i=0; i<vit_windowlist->count; i++) {
-    pli->pos_past_vit += vit_windowlist->windows[i].length;
+    pli->stats.pos_past_vit += vit_windowlist->windows[i].length;
     //remove overlap with preceding window
     if (i>0)
-      pli->pos_past_vit -= ESL_MAX(0,  vit_windowlist->windows[i-1].n + vit_windowlist->windows[i-1].length - vit_windowlist->windows[i].n );
+      pli->stats.pos_past_vit -= ESL_MAX(0,  vit_windowlist->windows[i-1].n + vit_windowlist->windows[i-1].length - vit_windowlist->windows[i].n );
 
     p7_pipeline_postViterbi_LongTarget(pli, om, bg, hitlist, data, seqidx,
         window_start+vit_windowlist->windows[i].n-1, vit_windowlist->windows[i].length, tmpseq,
@@ -1810,7 +1818,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
       P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
       if (P > pli->F1 ) continue;
 
-      pli->pos_past_msv += window_len;
+      pli->stats.pos_past_msv += window_len;
 
       status = p7_pipeline_postMSV_LongTarget(pli, om, bg, hitlist, data, seqidx, msv_windowlist.windows[i].n, window_len, tmpseq,
                         subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc, p7_NOCOMPLEMENT, &vit_windowlist,
@@ -1925,7 +1933,7 @@ main(int argc, char **argv)
 
   /* Create a pipeline and a top hits list */
   pli     = p7_pipeline_Create(go, hmm->M, 400, FALSE, p7_SEARCH_SEQS);
-  hitlist = p7_tophits_Create();
+  hitlist = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC);
 
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);
@@ -2044,7 +2052,7 @@ main(int argc, char **argv)
   ESL_SQFILE   *sqfp    = NULL;
   ESL_SQ       *sq      = NULL;
   P7_PIPELINE  *pli     = NULL;
-  P7_TOPHITS   *hitlist = p7_tophits_Create();
+  P7_TOPHITS   *hitlist = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC);
   int           h,d,namew;
 
   /* Open a sequence file, read one seq from it.

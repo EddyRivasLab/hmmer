@@ -468,19 +468,19 @@ main(int argc, char *argv[])
         w->user          = stats->user;
         w->sys           = stats->sys;
 
-        pli->nmodels     = stats->nmodels;
-        pli->nseqs       = stats->nseqs;
-        pli->n_past_msv  = stats->n_past_msv;
-        pli->n_past_bias = stats->n_past_bias;
-        pli->n_past_vit  = stats->n_past_vit;
-        pli->n_past_fwd  = stats->n_past_fwd;
+        pli->stats.nmodels     = stats->nmodels;
+        pli->stats.nseqs       = stats->nseqs;
+        pli->stats.n_past_msv  = stats->n_past_msv;
+        pli->stats.n_past_bias = stats->n_past_bias;
+        pli->stats.n_past_vit  = stats->n_past_vit;
+        pli->stats.n_past_fwd  = stats->n_past_fwd;
 
         pli->Z           = stats->Z;
         pli->domZ        = stats->domZ;
         pli->Z_setby     = stats->Z_setby;
         pli->domZ_setby  = stats->domZ_setby;
 
-        th = p7_tophits_Create(); 
+        th = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
 
         free(th->unsrt);
         free(th->hit);

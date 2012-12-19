@@ -529,7 +529,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 0; i < infocnt; ++i)
 	{
 	  /* Create processing pipeline and hit list */
-	  info[i].th  = p7_tophits_Create(); 
+	  info[i].th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
 	  info[i].gm  = p7_profile_Clone(gm);
 	  info[i].om  = p7_oprofile_Clone(om);
 	  info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
@@ -565,7 +565,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 1; i < infocnt; ++i)
 	{
 	  p7_tophits_Merge(info[0].th, info[i].th);
-	  p7_pipeline_MergeStats(info[0].pli, info[i].pli);
+	  p7_pipeline_stats_Merge(info[0].pli, &(info[i].pli->stats));
 
 	  p7_pipeline_Destroy(info[i].pli);
 	  p7_tophits_Destroy(info[i].th);
@@ -958,7 +958,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_SingleBuilder(bld, qsq, bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
 
       /* Create processing pipeline and hit list */
-      th  = p7_tophits_Create(); 
+      th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
       pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
       p7_pipeline_NewModel(pli, om, bg);
 
@@ -1026,23 +1026,22 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* merge the results of the search results */
       for (dest = 1; dest < cfg->nproc; ++dest)
 	{
-	  P7_PIPELINE     *mpi_pli   = NULL;
-	  P7_TOPHITS      *mpi_th    = NULL;
+	  P7_PIPELINE_STATS mpi_pli_stats;
+	  P7_TOPHITS       *mpi_th = NULL;
 
 	  /* send an empty block to signal the worker they are done */
 	  MPI_Send(&block, 3, MPI_LONG_LONG_INT, dest, HMMER_BLOCK_TAG, MPI_COMM_WORLD);
 
 	  /* wait for the results */
-	  if ((status = p7_tophits_MPIRecv(dest, HMMER_TOPHITS_TAG, MPI_COMM_WORLD, &mpi_buf, &mpi_size, &mpi_th)) != eslOK)
+	  if ((status = p7_tophits_mpi_Recv(dest, HMMER_TOPHITS_TAG, MPI_COMM_WORLD, &mpi_buf, &mpi_size, &mpi_th)) != eslOK)
 	    mpi_failure("Unexpected error %d receiving tophits from %d", status, dest);
 
-	  if ((status = p7_pipeline_MPIRecv(dest, HMMER_PIPELINE_TAG, MPI_COMM_WORLD, &mpi_buf, &mpi_size, go, &mpi_pli)) != eslOK)
-	    mpi_failure("Unexpected error %d receiving pipeline from %d", status, dest);
+	  if ((status = p7_pipeline_stats_mpi_Recv(dest, HMMER_PIPELINE_TAG, MPI_COMM_WORLD, &mpi_buf, &mpi_size, &mpi_pli_stats)) != eslOK)
+	    mpi_failure("Unexpected error %d receiving pipeline stats from %d", status, dest);
 
 	  p7_tophits_Merge(th, mpi_th);
-	  p7_pipeline_MergeStats(pli, mpi_pli);
+	  p7_pipeline_stats_Merge(pli, &mpi_pli_stats);
 
-	  p7_pipeline_Destroy(mpi_pli);
 	  p7_tophits_Destroy(mpi_th);
 	}
 
@@ -1221,7 +1220,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       P7_PIPELINE     *pli      = NULL;		  /* processing pipeline                      */
       P7_TOPHITS      *th       = NULL;        	  /* top-scoring sequence hits                */
       P7_OPROFILE     *om       = NULL;           /* optimized query profile                  */
-
+      P7_PROFILE      *gm       = NULL;      
       SEQ_BLOCK        block;
 
       status = 0;
@@ -1232,10 +1231,10 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_stopwatch_Start(w);
 
       /* Build the model */
-      p7_SingleBuilder(bld, qsq, bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
+      p7_SingleBuilder(bld, qsq, bg, NULL, NULL, &gm, &om); 
 
       /* Create processing pipeline and hit list */
-      th  = p7_tophits_Create(); 
+      th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
       pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
       p7_pipeline_NewModel(pli, om, bg);
 
@@ -1255,9 +1254,10 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	      p7_pipeline_NewSeq(pli, dbsq);
 	      p7_bg_SetLength(bg, dbsq->n);
+	      p7_profile_SetLength(gm, dbsq->n);
 	      p7_oprofile_ReconfigLength(om, dbsq->n);
       
-	      p7_Pipeline(pli, om, bg, dbsq, th);
+	      p7_Pipeline(pli, gm, om, bg, dbsq, th);
 
 	      esl_sq_Reuse(dbsq);
 	      p7_pipeline_Reuse(pli);
@@ -1280,8 +1280,8 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_stopwatch_Stop(w);
 
       /* Send the top hits back to the master. */
-      p7_tophits_MPISend(th, 0, HMMER_TOPHITS_TAG, MPI_COMM_WORLD,  &mpi_buf, &mpi_size);
-      p7_pipeline_MPISend(pli, 0, HMMER_PIPELINE_TAG, MPI_COMM_WORLD,  &mpi_buf, &mpi_size);
+      p7_tophits_mpi_Send(th, 0, HMMER_TOPHITS_TAG, MPI_COMM_WORLD,  &mpi_buf, &mpi_size);
+      p7_pipeline_stats_mpi_Send(&(pli->stats), 0, HMMER_PIPELINE_TAG, MPI_COMM_WORLD,  &mpi_buf, &mpi_size);
 
       p7_tophits_Destroy(th);
       p7_pipeline_Destroy(pli);

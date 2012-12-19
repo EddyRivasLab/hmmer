@@ -40,6 +40,7 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_mpi.h"		/* includes MPI_INT64_T, etc. on systems w/ MPI versions < 2.2 */
 #include "esl_sq.h"
 
 #include "base/p7_trace.h"
@@ -60,31 +61,38 @@ typedef struct p7_alidisplay_s {
   int   hmmfrom;		/* start position on HMM (1..M, or -1)  */
   int   hmmto;			/* end position on HMM (1..M, or -1)    */
   int   M;			/* length of model                      */
-  char  is_glocal;		/* TRUE if this is a glocal alignment   */
+  uint8_t is_glocal;		/* TRUE if this is a glocal alignment   */
 
   char *sqname;			/* name of target sequence              */
   char *sqacc;			/* accession of target seq; or [0]='\0' */
   char *sqdesc;			/* description of targ seq; or [0]='\0' */
-  long  sqfrom;			/* start position on sequence (1..L)    */
-  long  sqto;		        /* end position on sequence   (1..L)    */
-  long  L;			/* length of sequence                   */
+  int64_t sqfrom;		/* start position on sequence (1..L)    */
+  int64_t sqto;		        /* end position on sequence   (1..L)    */
+  int64_t L;			/* length of sequence                   */
 
   int   memsize;                /* size of allocated block of memory    */
   char *mem;			/* memory used for the char data above  */
 } P7_ALIDISPLAY;
 
 
+/* 1. The P7_ALIDISPLAY object */
 extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
 extern P7_ALIDISPLAY *p7_alidisplay_Clone(const P7_ALIDISPLAY *ad);
 extern size_t         p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad);
 extern int            p7_alidisplay_Serialize(P7_ALIDISPLAY *ad);
 extern int            p7_alidisplay_Deserialize(P7_ALIDISPLAY *ad);
 extern void           p7_alidisplay_Destroy(P7_ALIDISPLAY *ad);
+
+
+/* 2. More P7_ALIDISPLAY API */
 extern char           p7_alidisplay_EncodePostProb(float p);
 extern float          p7_alidisplay_DecodePostProb(char pc);
 extern char           p7_alidisplay_EncodeAliPostProb(float p, float hi, float med, float lo);
 extern int            p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, int show_accessions);
 extern int            p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_SQ **ret_sq, P7_TRACE **ret_tr);
+
+/* 3. Debugging and development tools */
+extern int            p7_alidisplay_TestSample(ESL_RANDOMNESS *rng, int alen, P7_ALIDISPLAY **ret_ad);
 extern int            p7_alidisplay_Dump(FILE *fp, const P7_ALIDISPLAY *ad);
 extern int            p7_alidisplay_Compare(const P7_ALIDISPLAY *ad1, const P7_ALIDISPLAY *ad2);
 

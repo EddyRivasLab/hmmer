@@ -474,7 +474,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 0; i < infocnt; ++i)
       {
         /* Create processing pipeline and hit list */
-        info[i].th  = p7_tophits_Create();
+        info[i].th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC);
         info[i].pli = p7_pipeline_Create(go, 100, 100, TRUE, p7_SCAN_MODELS); /* M_hint = 100, L_hint = 100 are just dummies for now */
         info[i].pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
 
@@ -517,7 +517,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 1; i < infocnt; ++i)
       {
         p7_tophits_Merge(info[0].th, info[i].th);
-        p7_pipeline_MergeStats(info[0].pli, info[i].pli);
+        p7_pipeline_stats_Merge(info[0].pli, &(info[i].pli.stats));
 
         p7_pipeline_Destroy(info[i].pli);
         p7_tophits_Destroy(info[i].th);
@@ -527,7 +527,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* modify e-value to account for number of models */
       for (i = 0; i < info->th->N ; i++)
       {
-        info->th->unsrt[i].lnP         += log((float)info->pli->nmodels);
+        info->th->unsrt[i].lnP         += log((float)info->pli->stats.nmodels);
         info->th->unsrt[i].dcl[0].lnP   = info->th->unsrt[i].lnP;
         info->th->unsrt[i].sortkey      = -1.0 * info->th->unsrt[i].lnP;
       }
@@ -542,11 +542,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_tophits_Threshold(info->th, info->pli);
 
       //tally up total number of hits and target coverage
-      info->pli->n_output = info->pli->pos_output = 0;
+      info->pli->stats.n_output = info->pli->stats.pos_output = 0;
       for (i = 0; i < info->th->N; i++) {
           if ( (info->th->hit[i]->flags & p7_IS_REPORTED) || info->th->hit[i]->flags & p7_IS_INCLUDED) {
-              info->pli->n_output++;
-              info->pli->pos_output += abs(info->th->hit[i]->dcl[0].jali - info->th->hit[i]->dcl[0].iali) + 1;
+              info->pli->stats.n_output++;
+              info->pli->stats.pos_output += abs(info->th->hit[i]->dcl[0].jali - info->th->hit[i]->dcl[0].iali) + 1;
           }
       }
 
@@ -563,7 +563,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
       esl_stopwatch_Stop(w);
-      info->pli->nseqs = 1;
+      info->pli->stats.nseqs = 1;
       p7_pipeline_WriteStats(ofp, info->pli, w);
       if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
       fflush(ofp);
@@ -641,7 +641,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
     esl_sq_Copy(info->qsq,sq_revcmp);
     esl_sq_ReverseComplement(sq_revcmp);
 
-    info->pli->nres += info->qsq->n;
+    info->pli->stats.nres += info->qsq->n;
   }
 #endif /*eslAUGMENT_ALPHABET*/
 
@@ -796,7 +796,7 @@ pipeline_thread(void *arg)
     sq_revcmp =  esl_sq_CreateDigital(info->qsq->abc);
     esl_sq_Copy(info->qsq,sq_revcmp);
     esl_sq_ReverseComplement(sq_revcmp);
-    info->pli->nres += info->qsq->n;
+    info->pli->stats.nres += info->qsq->n;
   }
 #endif /*eslAUGMENT_ALPHABET*/
 

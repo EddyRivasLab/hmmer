@@ -667,7 +667,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
             if (pli->long_targets)
             {
 
-               if (fprintf(ofp, " %c %6.1f %5.1f %9.2g %9d %9d %c%c %9ld %9ld %c%c %9d %9d %c%c %9ld    %4.2f\n",
+               if (fprintf(ofp, " %c %6.1f %5.1f %9.2g %9d %9d %c%c %9" PRId64 " %9" PRId64 " %c%c %9d %9d %c%c %9" PRId64 "    %4.2f\n",
                     //nd,
                     th->hit[h]->dcl[d].is_included ? '!' : '?',
                     th->hit[h]->dcl[d].bitscore,
@@ -692,7 +692,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
             }
             else
             {
-              if (fprintf(ofp, " %3d %c %6.1f %5.1f %9.2g %9.2g %7d %7d %c%c %7ld %7ld %c%c %7d %7d %c%c %4.2f\n",
+              if (fprintf(ofp, " %3d %c %6.1f %5.1f %9.2g %9.2g %7d %7d %c%c %7" PRId64 " %7" PRId64 " %c%c %7d %7d %c%c %4.2f\n",
                     nd,
                     th->hit[h]->dcl[d].is_included ? '!' : '?',
                     th->hit[h]->dcl[d].bitscore,

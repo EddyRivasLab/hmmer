@@ -1,7 +1,6 @@
 /* Optional support for MPI parallelization.
  * 
  * Contents:
- *    3. Communicating P7_PIPELINE, pipeline stats.
  *    4. Communicating P7_TOPHITS, list of high scoring alignments.
  *    5. Benchmark driver.
  *    6. Unit tests.
@@ -28,9 +27,6 @@
 #include "base/p7_profile.h"
 #include "base/p7_tophits.h"
 
-#include "search/p7_pipeline.h"
-
-
 static int p7_hit_MPISend(P7_HIT *hit, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc);
 static int p7_hit_MPIPackSize(P7_HIT *hit, MPI_Comm comm, int *ret_n);
 static int p7_hit_MPIPack(P7_HIT *hit, char *buf, int n, int *pos, MPI_Comm comm);
@@ -44,177 +40,6 @@ static int p7_dcl_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, P7_DOMAIN
 static int p7_dcl_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, P7_DOMAIN *dcl);
 
 
-
-
-/*****************************************************************
- * 3. Communicating P7_PIPELINE
- *****************************************************************/
-
-/* Function:  p7_pipeline_MPISend()
- * Synopsis:  Send pipeline data as an MPI message.
- *
- * Purpose:   Sends pipeline statistics <pli> to MPI process <dest>
- *            (where <dest> ranges from 0..<nproc-1>), with MPI tag
- *            <tag> for MPI communicator <comm>.
- *            
- *            In order to minimize alloc/free cycles in this routine,
- *            caller passes a pointer to a working buffer <*buf> of
- *            size <*nalloc> characters. If necessary (i.e. if <pli> is
- *            too big to fit), <*buf> will be reallocated and <*nalloc>
- *            increased to the new size. As a special case, if <*buf>
- *            is <NULL> and <*nalloc> is 0, the buffer will be
- *            allocated appropriately, but the caller is still
- *            responsible for free'ing it.
- *            
- *            If <pli> is NULL, the pipeline statistics are initialized
- *            to zeros.
- *            
- * Returns:   <eslOK> on success.
- */
-int
-p7_pipeline_MPISend(P7_PIPELINE *pli, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc)
-{
-  int   status;
-  int   sz, n, pos;
-
-  P7_PIPELINE bogus;
-
-  /* This will look wasteful, but the MPI spec doesn't guarantee that 
-   * MPI_Pack_size(x, ...) + MPI_Pack_size(x, ... ) == MPI_Pack_size(2x, ...).
-   * Indeed there are some hints in the spec that that's *not* true.
-   * So we assume we must match our Pack_size calls exactly to our Pack calls.
-   */
-  n = 0;
-  if (MPI_Pack_size(1, MPI_LONG_INT,      comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");  n += sz;
-  if (MPI_Pack_size(1, MPI_LONG_INT,      comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");  n += sz;
-  if (MPI_Pack_size(1, MPI_LONG_LONG_INT, comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");  n += sz;
-  if (MPI_Pack_size(1, MPI_LONG_LONG_INT, comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");  n += sz;
-  if (MPI_Pack_size(1, MPI_LONG_LONG_INT, comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");  n += sz;
-  if (MPI_Pack_size(1, MPI_LONG_LONG_INT, comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");  n += sz;
-  if (MPI_Pack_size(1, MPI_LONG_LONG_INT, comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");  n += sz;
-  if (MPI_Pack_size(1, MPI_LONG_LONG_INT, comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");  n += sz;
-  if (MPI_Pack_size(1, MPI_LONG_LONG_INT, comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");  n += sz;
-  if (MPI_Pack_size(1, MPI_LONG_LONG_INT, comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");  n += sz;
-  if (MPI_Pack_size(1, MPI_DOUBLE,        comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");  n += sz;
-  
-  /* Make sure the buffer is allocated appropriately */
-  if (*buf == NULL || n > *nalloc) {
-    void *tmp;
-    ESL_RALLOC(*buf, tmp, sizeof(char) * n);
-    *nalloc = n; 
-  }
-
-  /* if no pipeline was defined, return zeros for the stats */
-  if (pli == NULL) 
-    {
-      bogus.mode        = p7_SEARCH_SEQS;     /* that's 0. (some compilers complain if you set 0 directly. */
-      bogus.Z_setby     = p7_ZSETBY_NTARGETS; /* ditto. */
-      bogus.nmodels     = 0;
-      bogus.nseqs       = 0;
-      bogus.nres        = 0;
-      bogus.nnodes      = 0;
-      bogus.n_past_msv  = 0;
-      bogus.n_past_bias = 0;
-      bogus.n_past_vit  = 0;
-      bogus.n_past_fwd  = 0;
-      bogus.Z           = 0.0;
-      pli = &bogus;
-   } 
-
-  /* Pack the pipeline into the buffer */
-  pos = 0;
-  if (MPI_Pack(&pli->mode,        1, MPI_LONG_INT,      *buf, n, &pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed"); 
-  if (MPI_Pack(&pli->Z_setby,     1, MPI_LONG_INT,      *buf, n, &pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed"); 
-  if (MPI_Pack(&pli->nmodels,     1, MPI_LONG_LONG_INT, *buf, n, &pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed"); 
-  if (MPI_Pack(&pli->nseqs,       1, MPI_LONG_LONG_INT, *buf, n, &pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed"); 
-  if (MPI_Pack(&pli->nres,        1, MPI_LONG_LONG_INT, *buf, n, &pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed"); 
-  if (MPI_Pack(&pli->nnodes,      1, MPI_LONG_LONG_INT, *buf, n, &pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed"); 
-  if (MPI_Pack(&pli->n_past_msv,  1, MPI_LONG_LONG_INT, *buf, n, &pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed"); 
-  if (MPI_Pack(&pli->n_past_bias, 1, MPI_LONG_LONG_INT, *buf, n, &pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed"); 
-  if (MPI_Pack(&pli->n_past_vit,  1, MPI_LONG_LONG_INT, *buf, n, &pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed"); 
-  if (MPI_Pack(&pli->n_past_fwd,  1, MPI_LONG_LONG_INT, *buf, n, &pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed"); 
-  if (MPI_Pack(&pli->Z,           1, MPI_DOUBLE,        *buf, n, &pos, comm) != 0) ESL_XEXCEPTION(eslESYS, "pack failed"); 
-
-  /* Send the packed pipeline to destination  */
-  MPI_Send(*buf, n, MPI_PACKED, dest, tag, comm);
-  return eslOK;
-  
- ERROR:
-  return status;
-}
-
-
-/* Function:  p7_pipeline_MPIRecv()
- * Synopsis:  Receive pipeline data as an MPI message.
- *
- * Purpose:   Receive a pipeline from <source> (where <source> is usually
- *            process 0, the master) with tag <tag> from communicator <comm>,
- *            and return it in <*ret_pli>. 
- *            
- *            To minimize alloc/free cycles in this routine, caller
- *            passes a pointer to a buffer <*buf> of size <*nalloc>
- *            characters. These are passed by reference because if
- *            necessary, <buf> will be reallocated and <nalloc>
- *            increased to the new size. As a special case, if <buf>
- *            is <NULL> and <nalloc> is 0, the buffer will be
- *            allocated appropriately, but the caller is still
- *            responsible for free'ing it.
- *
- * Returns:   <eslOK> on success. <*ret_pli> contains the new pipeline;
- *            it is allocated here, and the caller is responsible for
- *            free'ing it.  <*buf> may have been reallocated to a
- *            larger size, and <*nalloc> may have been increased.
- *            
- */
-int
-p7_pipeline_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL_GETOPTS *go, P7_PIPELINE **ret_pli)
-{
-  int          status;
-  P7_PIPELINE *pli    = NULL;
-  int          n;
-  int          pos;
-  MPI_Status   mpistatus;
-
-  /* Probe first, because we need to know if our buffer is big enough.
-   */
-  MPI_Probe(source, tag, comm, &mpistatus);
-  MPI_Get_count(&mpistatus, MPI_PACKED, &n);
-
-  /* Make sure the buffer is allocated appropriately */
-  if (*buf == NULL || n > *nalloc) {
-    void *tmp;
-    ESL_RALLOC(*buf, tmp, sizeof(char) * n); 
-    *nalloc = n; 
-  }
-
-  /* Receive the packed pipeline */
-  MPI_Recv(*buf, n, MPI_PACKED, source, tag, comm, &mpistatus);
-
-  /* Unpack it - watching out for the EOD signal of M = -1. */
-  pos = 0;
-  if ((pli = p7_pipeline_Create(go, 0, 0, FALSE, p7_SEARCH_SEQS)) == NULL) { status = eslEMEM; goto ERROR; } /* mode will be immediately overwritten */
-  if (MPI_Unpack(*buf, n, &pos, &(pli->mode),        1, MPI_LONG_INT,      comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed"); 
-  if (MPI_Unpack(*buf, n, &pos, &(pli->Z_setby),     1, MPI_LONG_INT,      comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed"); 
-  if (MPI_Unpack(*buf, n, &pos, &(pli->nmodels),     1, MPI_LONG_LONG_INT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed"); 
-  if (MPI_Unpack(*buf, n, &pos, &(pli->nseqs),       1, MPI_LONG_LONG_INT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed"); 
-  if (MPI_Unpack(*buf, n, &pos, &(pli->nres),        1, MPI_LONG_LONG_INT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed"); 
-  if (MPI_Unpack(*buf, n, &pos, &(pli->nnodes),      1, MPI_LONG_LONG_INT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed"); 
-  if (MPI_Unpack(*buf, n, &pos, &(pli->n_past_msv),  1, MPI_LONG_LONG_INT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed"); 
-  if (MPI_Unpack(*buf, n, &pos, &(pli->n_past_bias), 1, MPI_LONG_LONG_INT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed"); 
-  if (MPI_Unpack(*buf, n, &pos, &(pli->n_past_vit),  1, MPI_LONG_LONG_INT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed"); 
-  if (MPI_Unpack(*buf, n, &pos, &(pli->n_past_fwd),  1, MPI_LONG_LONG_INT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed"); 
-  if (MPI_Unpack(*buf, n, &pos, &(pli->Z),           1, MPI_DOUBLE,        comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed"); 
-
-  *ret_pli = pli;
-  return eslOK;
-
- ERROR:
-  if (pli != NULL) p7_pipeline_Destroy(pli);
-  *ret_pli = NULL;
-  return status;
-}
-
-/*--------------- end, P7_PIPELINE communication -----------------*/
 
 
 /*****************************************************************
@@ -366,7 +191,7 @@ p7_tophits_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, 
 
   /* Unpack it - watching out for the EOD signal of M = -1. */
   pos = 0;
-  if ((th = p7_tophits_Create()) == NULL) { status = eslEMEM; goto ERROR; }
+  if ((th = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC)) == NULL) { status = eslEMEM; goto ERROR; }
   if (MPI_Unpack(*buf, n, &pos, &nhits,         1, MPI_LONG_LONG_INT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
   if (MPI_Unpack(*buf, n, &pos, &th->nreported, 1, MPI_LONG_LONG_INT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
   if (MPI_Unpack(*buf, n, &pos, &th->nincluded, 1, MPI_LONG_LONG_INT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");

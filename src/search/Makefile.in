@@ -3,6 +3,7 @@ MODULE = search
 LIBOBJS =  modelconfig.o\
 	   null3.o\
 	   p7_pipeline.o\
+	   p7_pipeline_mpi.o\
 	   tophits_output.o\
 	   tophits_output_tabular.o
 
@@ -14,7 +15,8 @@ HDRS =
 
 PROGS =
 
-UTESTS =  modelconfig_utest 
+UTESTS =  modelconfig_utest \
+	  p7_pipeline_mpi_utest
 
 STATS  =  
 

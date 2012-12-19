@@ -2,9 +2,11 @@
  * 
  * Contents:
  *    1. The P7_TOPHITS object.
- *    2. Benchmark driver.
- *    3. Test driver.
- *    4. Copyright and license information.
+ *    2. The P7_HIT object array in P7_TOPHITS.
+ *    3. Debugging and development tools.
+ *    4. Benchmark driver.
+ *    5. Test driver.
+ *    6. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -14,6 +16,8 @@
 #include <limits.h>
 
 #include "easel.h"
+#include "esl_random.h"
+#include "esl_randomseq.h"
 
 #include "base/p7_tophits.h"
 
@@ -24,25 +28,29 @@
 /* Function:  p7_tophits_Create()
  * Synopsis:  Allocate a hit list.
  *
- * Purpose:   Allocates a new <P7_TOPHITS> hit list and return a pointer
- *            to it.
+ * Purpose:   Allocates a new <P7_TOPHITS> hit list, for an initial
+ *            allocation of <int_hit_alloc> hits (this will be grown
+ *            later as needed). Return a pointer to it.
+ *            
+ * Args:      init_hit_alloc  - initial allocation size, # of hits.
+ *                              Often p7_TOPHITS_DEFAULT_INIT_ALLOC.
  *
  * Throws:    <NULL> on allocation failure.
  */
 P7_TOPHITS *
-p7_tophits_Create(void)
+p7_tophits_Create(int init_hit_alloc)
 {
   P7_TOPHITS *h = NULL;
-  int         default_nalloc = 256;
   int         status;
 
   ESL_ALLOC(h, sizeof(P7_TOPHITS));
   h->hit    = NULL;
   h->unsrt  = NULL;
 
-  ESL_ALLOC(h->hit,   sizeof(P7_HIT *) * default_nalloc);
-  ESL_ALLOC(h->unsrt, sizeof(P7_HIT)   * default_nalloc);
-  h->Nalloc    = default_nalloc;
+  if (( h->unsrt = p7_hit_Create(init_hit_alloc) ) == NULL) goto ERROR;
+  ESL_ALLOC(h->hit, sizeof(P7_HIT *) * init_hit_alloc);
+
+  h->Nalloc    = init_hit_alloc;
   h->N         = 0;
   h->nreported = 0;
   h->nincluded = 0;
@@ -79,8 +87,8 @@ p7_tophits_Grow(P7_TOPHITS *h)
 
   if (h->N < h->Nalloc) return eslOK; /* we have enough room for another hit */
 
+  if (( status = p7_hit_Grow( &(h->unsrt), h->Nalloc, Nalloc)) != eslOK) goto ERROR;
   ESL_RALLOC(h->hit,   p, sizeof(P7_HIT *) * Nalloc);
-  ESL_RALLOC(h->unsrt, p, sizeof(P7_HIT)   * Nalloc);
 
   /* If we grow a sorted list, we have to translate the pointers
    * in h->hit, because h->unsrt might have just moved in memory. 
@@ -310,7 +318,6 @@ p7_tophits_SortByModelnameAndAlipos(P7_TOPHITS *h)
 int
 p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
 {
-  void    *p;
   P7_HIT **new_hit = NULL;
   P7_HIT  *ori1    = h1->unsrt;    /* original base of h1's data */
   P7_HIT  *new2;
@@ -325,7 +332,7 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
   /* Attempt our allocations, so we fail early if we fail. 
    * Reallocating h1->unsrt screws up h1->hit, so fix it.
    */
-  ESL_RALLOC(h1->unsrt, p, sizeof(P7_HIT) * Nalloc);
+  if (( status = p7_hit_Grow( &(h1->unsrt), h1->Nalloc, Nalloc)) != eslOK) goto ERROR;
   ESL_ALLOC (new_hit, sizeof(P7_HIT *)    * Nalloc);
   for (i = 0; i < h1->N; i++)
     h1->hit[i] = h1->unsrt + (h1->hit[i] - ori1);
@@ -484,29 +491,25 @@ p7_tophits_GetMaxShownLength(P7_TOPHITS *h)
  *            <Create>'ing a new one.
  */
 int
-p7_tophits_Reuse(P7_TOPHITS *h)
+p7_tophits_Reuse(P7_TOPHITS *th)
 {
-  int i, j;
+  int i;
 
-  if (h == NULL) return eslOK;
-  if (h->unsrt != NULL) 
-  {
-    for (i = 0; i < h->N; i++)
+  if (th == NULL) return eslOK;
+  if (th->unsrt)
     {
-      if (h->unsrt[i].name != NULL) free(h->unsrt[i].name);
-      if (h->unsrt[i].acc  != NULL) free(h->unsrt[i].acc);
-      if (h->unsrt[i].desc != NULL) free(h->unsrt[i].desc);
-      if (h->unsrt[i].dcl  != NULL) {
-        for (j = 0; j < h->unsrt[i].ndom; j++)
-          if (h->unsrt[i].dcl[j].ad != NULL) p7_alidisplay_Destroy(h->unsrt[i].dcl[j].ad);
-        free(h->unsrt[i].dcl);
-      }
+      for (i = 0; i < th->N; i++)
+	{
+	  if (th->unsrt[i].name) { free(th->unsrt[i].name); th->unsrt[i].name = NULL; }
+	  if (th->unsrt[i].acc)  { free(th->unsrt[i].acc);  th->unsrt[i].acc  = NULL; }
+	  if (th->unsrt[i].desc) { free(th->unsrt[i].desc); th->unsrt[i].desc = NULL; }
+	  if (th->unsrt[i].dcl)  { p7_domain_Destroy(th->unsrt[i].dcl, th->unsrt[i].ndom); th->unsrt[i].dcl = NULL; th->unsrt[i].ndom = 0; }
+	}
     }
-  }
-  h->N         = 0;
-  h->is_sorted_by_seqidx = FALSE;
-  h->is_sorted_by_sortkey = TRUE;  /* because there are 0 hits */
-  h->hit[0]    = h->unsrt;
+  th->N         = 0;
+  th->is_sorted_by_seqidx = FALSE;
+  th->is_sorted_by_sortkey = TRUE;  /* because there are 0 hits */
+  th->hit[0]    = th->unsrt;
   return eslOK;
 }
 
@@ -514,48 +517,236 @@ p7_tophits_Reuse(P7_TOPHITS *h)
  * Synopsis:  Frees a hit list.
  */
 void
-p7_tophits_Destroy(P7_TOPHITS *h)
+p7_tophits_Destroy(P7_TOPHITS *th)
 {
-  int i,j;
-  if (h == NULL) return;
-  if (h->hit   != NULL) free(h->hit);
-  if (h->unsrt != NULL) 
-  {
-    for (i = 0; i < h->N; i++)
-    {
-      if (h->unsrt[i].name != NULL) free(h->unsrt[i].name);
-      if (h->unsrt[i].acc  != NULL) free(h->unsrt[i].acc);
-      if (h->unsrt[i].desc != NULL) free(h->unsrt[i].desc);
-      if (h->unsrt[i].dcl  != NULL) {
-        //if (h->unsrt[i].dcl->scores_per_pos != NULL) free (h->unsrt[i].dcl->scores_per_pos);
-
-        for (j = 0; j < h->unsrt[i].ndom; j++)
-          if (h->unsrt[i].dcl[j].ad != NULL)
-            p7_alidisplay_Destroy(h->unsrt[i].dcl[j].ad);
-
-        free(h->unsrt[i].dcl);
-      }
-    }
-    free(h->unsrt);
+  if (th) {
+    if (th->hit)   free(th->hit);
+    if (th->unsrt) p7_hit_Destroy(th->unsrt, th->N); /* destroy any allocated contents of the array of h->N hit objects we initialized/used */
+    free(th);
   }
-  free(h);
-  return;
 }
 /*---------------- end, P7_TOPHITS object -----------------------*/
 
 
+/*****************************************************************
+ * 2. The P7_HIT object array in P7_TOPHITS
+ *****************************************************************/
+
+/* Function:  p7_hit_Create()
+ * Synopsis:  Create a new array of P7_HITs
+ *
+ * Purpose:   Create a new array of <nhit_alloc> <P7_HIT> objects.
+ *            Return a ptr to this new array.
+ *
+ *            Initialize all the memory ptrs in these structures, so
+ *            it is safe to call <p7_hit_Destroy(ptr, nhit_alloc)>
+ *            on the returned ptr. 
+ */
+P7_HIT *
+p7_hit_Create(int nhit_alloc)
+{
+  P7_HIT *hit = NULL;
+  int     h;
+  int     status;
+
+  ESL_ALLOC(hit, sizeof(P7_HIT) * nhit_alloc);
+  for (h = 0; h < nhit_alloc; h++)
+    {
+      hit[h].name = NULL;
+      hit[h].acc  = NULL;
+      hit[h].desc = NULL;
+      hit[h].dcl  = NULL;
+      hit[h].ndom = 0;
+    }
+  return hit;
+
+ ERROR:
+  return NULL;
+}
+  
+
+/* Function:  p7_hit_Grow()
+ * Synopsis:  Change the allocation of a P7_HIT array.
+ *
+ * Purpose:   Given a ptr <*hitp> to a <P7_HIT> array,
+ *            the old allocation size <oldalloc>, and
+ *            a new allocation size <newalloc>;
+ *            reallocate the array <*hitp>.
+ *
+ * Returns:   <eslOK> on success; <*hitp> may have moved.
+ *
+ * Throws:    <eslEMEM> on reallocation failure. <*hitp> is
+ *            unchanged, as is the array's contents.
+ */
+int
+p7_hit_Grow(P7_HIT **hitp, int oldalloc, int newalloc)
+{
+  int h;
+  int status;
+
+  ESL_REALLOC( (*hitp), sizeof(P7_HIT) * newalloc);
+  for (h = oldalloc; h < newalloc; h++)
+    {
+      (*hitp)[h].name = NULL;
+      (*hitp)[h].acc  = NULL;
+      (*hitp)[h].desc = NULL;
+      (*hitp)[h].dcl  = NULL;
+      (*hitp)[h].ndom = 0;
+    }
+  return eslOK;
+
+ ERROR:
+  return status;
+}
+
+
+/* Function:  p7_hit_Destroy()
+ * Synopsis:  Free a P7_HIT array.
+ *
+ * Purpose:   Free array <hits> of <nhits> <P7_HIT> strucutures.
+ */
+void
+p7_hit_Destroy(P7_HIT *hits, int nhits)
+{
+  int i;
+  if (hits) {
+    for (i = 0; i < nhits; i++)
+      {
+	if (hits[i].name) free(hits[i].name);
+	if (hits[i].acc)  free(hits[i].acc);
+	if (hits[i].desc) free(hits[i].desc);      
+	if (hits[i].dcl)  p7_domain_Destroy(hits[i].dcl, hits[i].ndom);
+      }
+    free(hits);
+  }
+}
+/*------------------ end, P7_HIT --------------------------------*/
 
 
 
+/*****************************************************************
+ * 3. Debugging and development tools.
+ *****************************************************************/
 
+/* Function:  p7_tophits_TestSample()
+ * Synopsis:  Sample a random, bogus, mostly-syntactically-valid P7_TOPHITS
+ *
+ * Purpose:   Sample a random but syntactically valid <P7_TOPHITS>
+ *            structure, using random number generator <rng>.  Return
+ *            it thru <*ret_th>. It was allocated here; caller becomes
+ *            responsible for freeing it with <p7_tophits_Destroy()>.
+ *            
+ *            <th->hit[]> 'sorted' array of ptrs is put in a
+ *            randomized order. The <th->sortkey> value and
+ *            <th->is_sorted*> flags are set randomly, and have
+ *            nothing to do with the order of <th->hit[]>.  (Main use
+ *            here is for testing faithful communication of the
+ *            object, including its sorted ptrs.) 
+ *
+ * Returns:   <eslOK> on success, and <*ret_th> points to the sampled
+ *            <P7_TOPHITS> object.
+ *
+ * Throws:    (no abnormal error conditions)
+ * 
+ * Notes:     If/when we write a Validate() routine, note that Easel code spec
+ *            requires that TestSample() generates an object that
+ *            passes whatever Validate() looks for.
+ *
+ */
+int
+p7_tophits_TestSample(ESL_RANDOMNESS *rng, P7_TOPHITS **ret_th)
+{
+  P7_TOPHITS *th    = NULL;
+  int         nhits = 1000;
+  int         h,n;
+  int         status;
 
+  if (( th = p7_tophits_Create(nhits)) == NULL) { status = eslEMEM; goto ERROR; }
+  th->nreported = 1+esl_rnd_Roll(rng, nhits);
+  th->nincluded = 1+esl_rnd_Roll(rng, nhits);
+  th->is_sorted_by_sortkey = esl_rnd_Roll(rng, 2);
+  if (! th->is_sorted_by_sortkey) th->is_sorted_by_seqidx = esl_rnd_Roll(rng, 2);
+  
+  for (h = 0; h < nhits; h++)
+    {
+      if ( (status = p7_hit_TestSample(rng, &(th->unsrt[h]))) != eslOK) goto ERROR;
+      th->N++;  /* keep th->N precisely up to date; p7_tophits_Destroy() must work w/ unfinished <th> on error  */
+    }
 
+  /* Put the hit[] "sorted" array in a random order w/ a Fisher-Yates shuffle */
+  for (h = 0; h < th->N; h++)
+    th->hit[h] = &(th->unsrt[h]);
+  for (n = th->N; n > 1; n--) {	
+    h = esl_rnd_Roll(rng, n);
+    ESL_SWAP( th->hit[h], th->hit[n-1], P7_HIT *);
+  }
+  return eslOK;
+
+ ERROR:
+  if (th) p7_tophits_Destroy(th);
+  *ret_th = NULL;
+  return status;
+}
+
+/* Function:  p7_hit_TestSample()
+ * Synopsis:  Sample a random, bogus, mostly syntactic P7_HIT.
+ *
+ * Purpose:   Sample a random but syntactically valid <P7_HIT>
+ *            array, using random number generator <rng>, and 
+ *            store it in <hit>, space provided by the caller
+ *            (usually, one <P7_HIT> in an array that the caller
+ *            has).
+ */
+int
+p7_hit_TestSample(ESL_RANDOMNESS *rng, P7_HIT *hit)
+{
+  int d;
+  int status;
+
+  if ((status = esl_rsq_Sample(rng, eslRSQ_SAMPLE_GRAPH, 1+esl_rnd_Roll(rng, 30),  &(hit->name))) != eslOK) goto ERROR;
+  if (esl_rnd_Roll(rng, 2)) { if ((status = esl_rsq_Sample(rng, eslRSQ_SAMPLE_ALNUM, 1+esl_rnd_Roll(rng, 10),  &(hit->acc)))  != eslOK) goto ERROR; }
+  if (esl_rnd_Roll(rng, 2)) { if ((status = esl_rsq_Sample(rng, eslRSQ_SAMPLE_PRINT, 1+esl_rnd_Roll(rng, 120), &(hit->desc))) != eslOK) goto ERROR; }
+
+  hit->window_length = 1 + esl_rnd_Roll(rng, 100000);
+  hit->sortkey       = -1000. + 2000. * esl_random(rng);
+  hit->score         = -1000. + 2000. * esl_random(rng);
+  hit->pre_score     = -1000. + 2000. * esl_random(rng);
+  hit->sum_score     = -1000. + 2000. * esl_random(rng);
+  hit->lnP           = -1000. + 2000. * esl_random(rng);
+  hit->pre_lnP       = -1000. + 2000. * esl_random(rng);
+  hit->sum_lnP       = -1000. + 2000. * esl_random(rng);
+  hit->ndom          = 1 + esl_rnd_Roll(rng, 10);
+  hit->noverlaps     = 1 + esl_rnd_Roll(rng, 10);
+  hit->nexpected     = 1 + esl_rnd_Roll(rng, 10);
+  hit->flags         = p7_HITFLAGS_DEFAULT;
+  if (esl_rnd_Roll(rng, 2)) hit->flags |= p7_IS_INCLUDED;
+  if (esl_rnd_Roll(rng, 2)) hit->flags |= p7_IS_REPORTED;
+  if (esl_rnd_Roll(rng, 2)) hit->flags |= p7_IS_NEW;
+  if (esl_rnd_Roll(rng, 2)) hit->flags |= p7_IS_DROPPED;
+  if (esl_rnd_Roll(rng, 2)) hit->flags |= p7_IS_DUPLICATE;
+  hit->nreported     = 1 + esl_rnd_Roll(rng, hit->ndom);  
+  hit->nincluded     = 1 + esl_rnd_Roll(rng, hit->ndom);
+  hit->best_domain   =     esl_rnd_Roll(rng, hit->ndom);
+  hit->seqidx        = 1 + esl_rnd_Roll(rng, 1000000);
+  hit->subseq_start  = 1 + esl_rnd_Roll(rng, 1000000);
+  hit->offset        = 1 + esl_rnd_Roll(rng, 1000000);
+
+  if (( hit->dcl = p7_domain_Create(hit->ndom) ) == NULL) { status = eslEMEM; goto ERROR; }
+  for (d = 0; d < hit->ndom; d++)
+    if (( status = p7_domain_TestSample(rng, 1 + esl_rnd_Roll(rng, 100), &(hit->dcl[d]))) != eslOK) goto ERROR;
+  return eslOK;
+
+ ERROR:
+  /* should free inside hit; caller has the shell of it though */
+  return status;
+}
+/*-------------- end, debug/devel tools ------------------------*/
 
 
 
 
 /*****************************************************************
- * 2. Benchmark driver
+ * 4. Benchmark driver
  *****************************************************************/
 #ifdef p7TOPHITS_BENCHMARK
 /* 
@@ -613,7 +804,7 @@ main(int argc, char **argv)
   /* generate M "random" lists and sort them */
   for (j = 0; j < M; j++)
   {
-      h[j] = p7_tophits_Create();
+      h[j] = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC);
       for (i = 0; i < N; i++)
 	{
 	  p7_tophits_CreateNextHit(h[j], &hit);
@@ -661,7 +852,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 3. Test driver
+ * 5. Test driver
  *****************************************************************/
 
 #ifdef p7TOPHITS_TESTDRIVE
@@ -723,9 +914,9 @@ main(int argc, char **argv)
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
 
-  h1 = p7_tophits_Create();
-  h2 = p7_tophits_Create();
-  h3 = p7_tophits_Create();
+  h1 = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC);
+  h2 = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC);
+  h3 = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC);
   
   for (i = 0; i < N; i++) 
   {

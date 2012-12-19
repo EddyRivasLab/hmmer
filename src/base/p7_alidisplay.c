@@ -9,7 +9,7 @@
  *   5. Unit tests.
  *   6. Test driver.
  *   7. Example.
- *   8. Copyright and license.
+ *   8. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -19,6 +19,8 @@
 #include <ctype.h>
 
 #include "easel.h"
+#include "esl_random.h"
+#include "esl_randomseq.h"
 
 #include "base/p7_alidisplay.h"
 #include "base/p7_trace.h"
@@ -777,6 +779,93 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
  * 3. Debugging/dev code
  *****************************************************************/
 
+/* Function:  p7_alidisplay_TestSample()
+ * Synopsis:  Sample a bogus but mostly syntactically correct P7_ALIDISPLAY.
+ *
+ * Purpose:   Sample a random <P7_ALIDISPLAY> of length <alen> that's
+ *            mostly syntactically correct, for testing things like
+ *            data communication, using random number generator
+ *            <rng>. Return the newly allocated object thru <*ret_ad>.
+ *            
+ *            The idea is to exercise optional fields'
+ *            presence/absence (for example), but not to obsess about
+ *            internal semantic consistency. For example, we want be
+ *            able to test MPI send/receives; we don't care that the
+ *            alignment annotation lines aren't consistent with each
+ *            other in representing a plausible alignment, and we
+ *            don't care that the model and sequence names,
+ *            accessions, and descriptions are consistent with those
+ *            in the <P7_HIT> object that might contain this
+ *            alidisplay. 
+ *            
+ *            A <_TestSample()> can be used with other debugging code,
+ *            routines such as <_Dump()>, <_Validate()>, and
+ *            especially <_Compare()>.
+ *            
+ *            If internal semantic consistency is needed, it's better
+ *            to sample a model and generate a trace, then create the
+ *            alidisplay from that trace.
+ *            
+ * Args:      
+ *
+ * Returns:   
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      
+ */
+int
+p7_alidisplay_TestSample(ESL_RANDOMNESS *rng, int alen, P7_ALIDISPLAY **ret_ad)
+{
+  P7_ALIDISPLAY *ad = NULL;
+  int status;
+
+  ESL_ALLOC(ad, sizeof(P7_ALIDISPLAY));
+  ad->rfline  = ad->mmline = ad->csline = ad->model = NULL;
+  ad->mline   = ad->aseq   = ad->ppline             = NULL;
+  ad->hmmname = ad->hmmacc = ad->hmmdesc            = NULL;
+  ad->sqname  = ad->sqacc  = ad->sqdesc             = NULL;
+  ad->mem     = NULL;
+  ad->memsize = 0;
+
+  ad->N = alen;
+  if (esl_rnd_Roll(rng, 2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_GRAPH, ad->N, &(ad->rfline)); 
+  if (esl_rnd_Roll(rng, 2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_GRAPH, ad->N, &(ad->mmline)); 
+  if (esl_rnd_Roll(rng, 2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_GRAPH, ad->N, &(ad->csline)); 
+  esl_rsq_Sample(rng, eslRSQ_SAMPLE_GRAPH, ad->N, &(ad->model)); 
+  esl_rsq_Sample(rng, eslRSQ_SAMPLE_GRAPH, ad->N, &(ad->mline)); 
+  esl_rsq_Sample(rng, eslRSQ_SAMPLE_GRAPH, ad->N, &(ad->aseq)); 
+  if (esl_rnd_Roll(rng, 2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_DIGIT, ad->N, &(ad->ppline)); 
+  
+  esl_rsq_Sample(rng, eslRSQ_SAMPLE_GRAPH, 1+esl_rnd_Roll(rng, 30), &(ad->hmmname));
+  if (esl_rnd_Roll(rng,2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_ALNUM, 1+esl_rnd_Roll(rng,10),  &(ad->hmmacc));
+  if (esl_rnd_Roll(rng,2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_PRINT, 1+esl_rnd_Roll(rng,120), &(ad->hmmdesc));
+
+  esl_rsq_Sample(rng, eslRSQ_SAMPLE_GRAPH, 1+esl_rnd_Roll(rng, 30), &(ad->sqname));
+  if (esl_rnd_Roll(rng,2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_ALNUM, 1+esl_rnd_Roll(rng,10),  &(ad->sqacc));
+  if (esl_rnd_Roll(rng,2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_PRINT, 1+esl_rnd_Roll(rng,120), &(ad->sqdesc));
+
+  ad->is_glocal = esl_rnd_Roll(rng, 2);
+  ad->M         = 1+esl_rnd_Roll(rng, 100000);
+  ad->hmmfrom   = (ad->is_glocal ? 1 : 1+esl_rnd_Roll(rng, ad->M));
+  ad->hmmto     = (ad->is_glocal ? 1 : 1+esl_rnd_Roll(rng, ad->M));
+  if (ad->hmmfrom > ad->hmmto) ESL_SWAP(ad->hmmfrom, ad->hmmto, int);
+
+  ad->L       = 1+esl_rnd_Roll(rng, 100000);
+  ad->sqfrom  = 1+esl_rnd_Roll(rng, ad->L);
+  ad->sqto    = 1+esl_rnd_Roll(rng, ad->L);
+  if (ad->sqfrom > ad->sqto) ESL_SWAP(ad->sqfrom, ad->sqto, int64_t);
+
+  if (esl_rnd_Roll(rng, 2)) p7_alidisplay_Serialize(ad);
+  *ret_ad = ad;
+  return eslOK;
+
+ ERROR:
+  if (ad) p7_alidisplay_Destroy(ad);
+  return status;
+}
+
+
 /* Function:  p7_alidisplay_Dump()
  * Synopsis:  Print contents of P7_ALIDISPLAY for inspection.
  *
@@ -815,9 +904,9 @@ p7_alidisplay_Dump(FILE *fp, const P7_ALIDISPLAY *ad)
   fprintf(fp, "sqname  = %s\n",  ad->sqname);
   fprintf(fp, "sqacc   = %s\n",  ad->sqacc[0]  == '\0' ? "[none]" : ad->sqacc);
   fprintf(fp, "sqdesc  = %s\n",  ad->sqdesc[0] == '\0' ? "[none]" : ad->sqdesc);
-  fprintf(fp, "sqfrom  = %ld\n", ad->sqfrom);
-  fprintf(fp, "sqto    = %ld\n", ad->sqto);
-  fprintf(fp, "L       = %ld\n", ad->L);
+  fprintf(fp, "sqfrom  = %" PRId64 "\n", ad->sqfrom);
+  fprintf(fp, "sqto    = %" PRId64 "\n", ad->sqto);
+  fprintf(fp, "L       = %" PRId64 "\n", ad->L);
   fprintf(fp, "\n");
 
   fprintf(fp, "size    = %d bytes\n",  (int) p7_alidisplay_Sizeof(ad));
@@ -1337,7 +1426,7 @@ main(int argc, char **argv)
 
   /* Create a pipeline and a top hits list */
   pli     = p7_pipeline_Create(NULL/*=default*/, hmm->M, 400, FALSE, p7_SEARCH_SEQS);
-  hitlist = p7_tophits_Create();
+  hitlist = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC);
 
   /* Run the pipeline */
   p7_pipeline_NewSeq(pli, sq);

@@ -5,7 +5,6 @@ LIBOBJS =  emit.o\
 	   logsum.o\
 	   p7_trace_metrics.o\
 	   tracealign.o
-#	   mpisupport.o\
 
 LIBHDRS =  
 
@@ -29,8 +28,6 @@ EXAMPLES = emit_example \
 	   tracealign_example
 
 LIBTMP =
-
-# TODO: mpisupport.c
 
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@

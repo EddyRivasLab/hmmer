@@ -77,33 +77,36 @@ typedef struct p7_tophits_s {
   uint64_t nreported;	/* number of hits that are reportable       */
   uint64_t nincluded;	/* number of hits that are includable       */
   int      is_sorted_by_sortkey; /* TRUE when hits sorted by sortkey and th->hit valid for all N hits */
-  int      is_sorted_by_seqidx; /* TRUE when hits sorted by seq_idx, position, and th->hit valid for all N hits */
+  int      is_sorted_by_seqidx;  /* TRUE when hits sorted by seq_idx, position, and th->hit valid for all N hits */
 } P7_TOPHITS;
 
+#define p7_TOPHITS_DEFAULT_INIT_ALLOC 100
 
 
-extern P7_TOPHITS *p7_tophits_Create(void);
-extern int         p7_tophits_Grow(P7_TOPHITS *h);
-extern int         p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit);
-extern int         p7_tophits_Add(P7_TOPHITS *h,
-				  char *name, char *acc, char *desc, 
-				  double sortkey, 
-				  float score,    double lnP, 
-				  float mothersc, double mother_lnP,
-				  int sqfrom, int sqto, int sqlen,
-				  int hmmfrom, int hmmto, int hmmlen, 
-				  int domidx, int ndom,
-				  P7_ALIDISPLAY *ali);
-extern int         p7_tophits_SortBySortkey(P7_TOPHITS *h);
-extern int         p7_tophits_SortBySeqidxAndAlipos(P7_TOPHITS *h);
-extern int         p7_tophits_SortByModelnameAndAlipos(P7_TOPHITS *h);
+/* 1. The P7_TOPHITS object */
+extern P7_TOPHITS *p7_tophits_Create(int init_hit_alloc);
+extern int         p7_tophits_Grow(P7_TOPHITS *th);
+extern int         p7_tophits_CreateNextHit(P7_TOPHITS *th, P7_HIT **ret_hit);
+extern int         p7_tophits_SortBySortkey(P7_TOPHITS *th);
+extern int         p7_tophits_SortBySeqidxAndAlipos(P7_TOPHITS *th);
+extern int         p7_tophits_SortByModelnameAndAlipos(P7_TOPHITS *th);
+extern int         p7_tophits_Merge(P7_TOPHITS *th1, P7_TOPHITS *th2);
+extern int         p7_tophits_GetMaxPositionLength(P7_TOPHITS *th);
+extern int         p7_tophits_GetMaxNameLength(P7_TOPHITS *th);
+extern int         p7_tophits_GetMaxAccessionLength(P7_TOPHITS *th);
+extern int         p7_tophits_GetMaxShownLength(P7_TOPHITS *th);
+extern int         p7_tophits_Reuse(P7_TOPHITS *th);
+extern void        p7_tophits_Destroy(P7_TOPHITS *th);
 
-extern int         p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2);
-extern int         p7_tophits_GetMaxPositionLength(P7_TOPHITS *h);
-extern int         p7_tophits_GetMaxNameLength(P7_TOPHITS *h);
-extern int         p7_tophits_GetMaxAccessionLength(P7_TOPHITS *h);
-extern int         p7_tophits_GetMaxShownLength(P7_TOPHITS *h);
-extern void        p7_tophits_Destroy(P7_TOPHITS *h);
+/* 2. The P7_HIT object array in P7_TOPHITS */
+extern P7_HIT *p7_hit_Create(int nhit_alloc);
+extern int     p7_hit_Grow(P7_HIT **hitp, int oldalloc, int newalloc);
+extern void    p7_hit_Destroy(P7_HIT *hits, int nhits);
+
+/* 3. Debugging and development tools */
+extern int p7_tophits_TestSample(ESL_RANDOMNESS *rng, P7_TOPHITS **ret_th);
+extern int p7_hit_TestSample(ESL_RANDOMNESS *rng, P7_HIT *hit);
+
 
 
 #endif /*P7_TOPHITS_INCLUDED*/

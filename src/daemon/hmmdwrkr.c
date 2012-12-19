@@ -107,7 +107,8 @@ print_timings(int i, double elapsed, P7_PIPELINE *pli)
   sprintf(buf1, "%02d:%02d.%02d", m,s,hs);
 
   fprintf (stdout, "%2d %9" PRId64 " %9" PRId64 " %7" PRId64 " %7" PRId64 " %6" PRId64 " %5" PRId64 " %s\n",
-           i, pli->nseqs, pli->nres, pli->n_past_msv, pli->n_past_bias, pli->n_past_vit, pli->n_past_fwd, buf1);
+           i, pli->stats.nseqs, pli->stats.nres, 
+	   pli->stats.n_past_msv, pli->stats.n_past_bias, pli->stats.n_past_vit, pli->stats.n_past_fwd, buf1);
 }
 
 static int
@@ -290,7 +291,7 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
   /* merge the results of the search results */
   for (i = 1; i < env->ncpus; ++i) {
     p7_tophits_Merge(info[0].th, info[i].th);
-    p7_pipeline_MergeStats(info[0].pli, info[i].pli);
+    p7_pipeline_stats_Merge(info[0].pli, &(info[i].pli->stats));
     p7_pipeline_Destroy(info[i].pli);
     p7_tophits_Destroy(info[i].th);
   }
@@ -562,7 +563,7 @@ search_thread(void *arg)
   }
 
   /* Create processing pipeline and hit list */
-  th  = p7_tophits_Create(); 
+  th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
   pli = p7_pipeline_Create(info->opts, om->M, 100, FALSE, p7_SEARCH_SEQS);
   p7_pipeline_NewModel(pli, om, bg);
 
@@ -663,7 +664,7 @@ scan_thread(void *arg)
   bg = p7_bg_Create(info->abc);
 
   /* Create processing pipeline and hit list */
-  th  = p7_tophits_Create(); 
+  th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
   pli = p7_pipeline_Create(info->opts, 100, 100, FALSE, p7_SCAN_MODELS);
   
   p7_pipeline_NewSeq(pli, info->seq);
@@ -746,12 +747,12 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
   stats.user        = w->user;
   stats.sys         = w->sys;
 
-  stats.nmodels     = info->pli->nmodels;
-  stats.nseqs       = info->pli->nseqs;
-  stats.n_past_msv  = info->pli->n_past_msv;
-  stats.n_past_bias = info->pli->n_past_bias;
-  stats.n_past_vit  = info->pli->n_past_vit;
-  stats.n_past_fwd  = info->pli->n_past_fwd;
+  stats.nmodels     = info->pli->stats.nmodels;
+  stats.nseqs       = info->pli->stats.nseqs;
+  stats.n_past_msv  = info->pli->stats.n_past_msv;
+  stats.n_past_bias = info->pli->stats.n_past_bias;
+  stats.n_past_vit  = info->pli->stats.n_past_vit;
+  stats.n_past_fwd  = info->pli->stats.n_past_fwd;
 
   stats.Z           = info->pli->Z;
   stats.domZ        = info->pli->domZ;
