@@ -28,7 +28,6 @@
 
 /* 'misc' subdir: various other support functions                                                                         */
 #include "misc/emit.h"		           /* emitting (sampling) sequences from HMM or profile                           */
-#include "misc/mpisupport.h"	           /* MPI (Message Passing Interface) support                                     */
 #include "misc/h2_io.h"		           /* Legacy support for HMMER2 model file formats                                */
 #include "misc/p7_trace_metrics.h"         /* Benchmarking utilities for alignment accuracy                               */
 #include "misc/logsum.h"	           /* Fast lookup-table-driven log-sum-exp-2 function                             */
