@@ -33,6 +33,7 @@ typedef struct {
   P7_BG            *bg;             /* null model                              */
   P7_PIPELINE      *pli;         /* work pipeline                           */
   P7_TOPHITS       *th;          /* top hit results                         */
+  P7_PROFILE       *gm;          /* profile                                 */
   P7_OPROFILE      *om;          /* optimized query profile                 */
   P7_SCOREDATA     *scoredata;   /* hmm-specific data used by nhmmer */
 } WORKER_INFO;
@@ -108,7 +109,6 @@ static ESL_OPTIONS options[] = {
 /* Other options */
   { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,     "assert target <seqdb> is in format <s>: no autodetection",      12 },
   { "--nonull2",    eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,           NULL,     "turn off biased composition score corrections",                 12 },
-  { "--usenull3",   eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,        "--nonull2", "also use null3 for biased composition score corrections",       12 },
   { "-Z",           eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,           NULL,     "set database size (Megabases) to <x> for E-value calculations", 12 },
   { "--seed",       eslARG_INT,          "42", NULL, "n>=0",  NULL,  NULL,           NULL,     "set RNG seed to <n> (if 0: one-time arbitrary seed)",           12 },
   { "--w_beta",     eslARG_REAL,         NULL, NULL, NULL,    NULL,  NULL,           NULL,     "tail mass at which window length is determined",                12 },
@@ -277,7 +277,6 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--B3")         && fprintf(ofp, "# biased comp Forward window len:  %d\n",             esl_opt_GetInteger(go, "--B3"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--nonull2")    && fprintf(ofp, "# null2 bias corrections:          off\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--usenull3")   && fprintf(ofp, "# null3 bias corrections:          on\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--toponly")    && fprintf(ofp, "# search only top strand:          on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--bottomonly") && fprintf(ofp, "# search only bottom strand:       on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -460,7 +459,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].om     = NULL;
           info[i].bg     = p7_bg_Create(abc);
 
-          info[i].bg->use_null3  = esl_opt_IsUsed(go, "--usenull3");
 #ifdef HMMER_THREADS
           info[i].queue = queue;
 #endif
@@ -516,7 +514,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 0; i < infocnt; ++i) {
           /* Create processing pipeline and hit list */
           info[i].th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC);
-          info[i].om = p7_oprofile_Copy(om);
+          info[i].gm  = p7_profile_Clone(gm);
+          info[i].om  = p7_oprofile_Copy(om);
           info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
           p7_pipeline_NewModel(info[i].pli, info[i].om, info[i].bg);
 
@@ -531,7 +530,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           if (  esl_opt_IsUsed(go, "--block_length") )
             info[i].pli->block_length = esl_opt_GetInteger(go, "--block_length");
           else
-            info[i].pli->block_length = NHMMER_MAX_RESIDUE_COUNT;
+            info[i].pli->block_length = p7_NHMMER_MAX_RESIDUE_COUNT;
 
           info[i].scoredata = p7_hmm_ScoreDataClone(scoredata, om->abc->Kp);
 
@@ -585,7 +584,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* merge the results of the search results */
       for (i = 1; i < infocnt; ++i) {
           p7_tophits_Merge(info[0].th, info[i].th);
-          p7_pipeline_stats_Merge(info[0].pli, &(info[i].pli.stats));
+          p7_pipeline_stats_Merge(info[0].pli, &(info[i].pli->stats));
 
           p7_pipeline_Destroy(info[i].pli);
           p7_tophits_Destroy(info[i].th);
@@ -608,7 +607,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 0; i < info->th->N; i++) {
           if ( (info->th->hit[i]->flags & p7_IS_REPORTED) || info->th->hit[i]->flags & p7_IS_INCLUDED) {
               info->pli->stats.n_output++;
-              info->pli->stats.pos_output += abs(info->th->hit[i]->dcl[0].jali - info->th->hit[i]->dcl[0].iali) + 1;
+              info->pli->stats.pos_output += abs(info->th->hit[i]->dcl[0].ib - info->th->hit[i]->dcl[0].ia) + 1;
           }
       }
 
@@ -744,17 +743,18 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
         info->pli->stats.nres -= dbsq->C; // to account for overlapping region of windows
         prev_hit_cnt = info->th->N;
 
-        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, info->pli->stats.nseqs);
+
+        p7_Pipeline_LongTarget(info->pli, info->gm, info->om, info->scoredata, info->bg, dbsq, info->th, info->pli->stats.nseqs);
 
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
         // modify hit positions to account for the position of the window in the full sequence
         for (i=prev_hit_cnt; i < info->th->N ; i++) {
             dcl = info->th->unsrt[i].dcl;
-            dcl->ienv += dbsq->start - 1;
-            dcl->jenv += dbsq->start - 1;
-            dcl->iali += dbsq->start - 1;
-            dcl->jali += dbsq->start - 1;
+            dcl->iae += dbsq->start - 1;
+            dcl->ibe += dbsq->start - 1;
+            dcl->ia += dbsq->start - 1;
+            dcl->ib += dbsq->start - 1;
             dcl->ad->sqfrom += dbsq->start - 1;
             dcl->ad->sqto += dbsq->start - 1;
         }
@@ -768,16 +768,16 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
           prev_hit_cnt = info->th->N;
           esl_sq_Copy(dbsq,dbsq_revcmp);
           esl_sq_ReverseComplement(dbsq_revcmp);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq_revcmp, info->th, info->pli->stats.nseqs);
+          p7_Pipeline_LongTarget(info->pli, info->gm, info->om, info->scoredata, info->bg, dbsq_revcmp, info->th, info->pli->stats.nseqs);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (i=prev_hit_cnt; i < info->th->N ; i++) {
               dcl = info->th->unsrt[i].dcl;
               // modify hit positions to account for the position of the window in the full sequence
-              dcl->ienv = dbsq_revcmp->start - dcl->ienv + 1;
-              dcl->jenv = dbsq_revcmp->start - dcl->jenv + 1;
-              dcl->iali = dbsq_revcmp->start - dcl->iali + 1;
-              dcl->jali = dbsq_revcmp->start - dcl->jali + 1;
+              dcl->iae = dbsq_revcmp->start - dcl->iae + 1;
+              dcl->ibe = dbsq_revcmp->start - dcl->ibe + 1;
+              dcl->ia = dbsq_revcmp->start - dcl->ia + 1;
+              dcl->ib = dbsq_revcmp->start - dcl->ib + 1;
               dcl->ad->sqfrom = dbsq_revcmp->start - dcl->ad->sqfrom + 1;
               dcl->ad->sqto = dbsq_revcmp->start - dcl->ad->sqto + 1;
 
@@ -927,17 +927,17 @@ pipeline_thread(void *arg)
         info->pli->stats.nres -= dbsq->C; // to account for overlapping region of windows
 
         prev_hit_cnt = info->th->N;
-        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, block->first_seqidx + i);
+        p7_Pipeline_LongTarget(info->pli, info->gm, info->om, info->scoredata, info->bg, dbsq, info->th, block->first_seqidx + i);
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
 
         // modify hit positions to account for the position of the window in the full sequence
         for (j=prev_hit_cnt; j < info->th->N ; ++j) {
             dcl = info->th->unsrt[j].dcl;
-            dcl->ienv += dbsq->start - 1;
-            dcl->jenv += dbsq->start - 1;
-            dcl->iali += dbsq->start - 1;
-            dcl->jali += dbsq->start - 1;
+            dcl->iae += dbsq->start - 1;
+            dcl->ibe += dbsq->start - 1;
+            dcl->ia += dbsq->start - 1;
+            dcl->ib += dbsq->start - 1;
             dcl->ad->sqfrom += dbsq->start - 1;
             dcl->ad->sqto += dbsq->start - 1;
         }
@@ -951,16 +951,16 @@ pipeline_thread(void *arg)
       {
           prev_hit_cnt = info->th->N;
           esl_sq_ReverseComplement(dbsq);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, block->first_seqidx + i);
+          p7_Pipeline_LongTarget(info->pli, info->gm, info->om, info->scoredata, info->bg, dbsq, info->th, block->first_seqidx + i);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (j=prev_hit_cnt; j < info->th->N ; ++j) {
               dcl = info->th->unsrt[j].dcl;
               // modify hit positions to account for the position of the window in the full sequence
-              dcl->ienv = dbsq->start - dcl->ienv + 1;
-              dcl->jenv = dbsq->start - dcl->jenv + 1;
-              dcl->iali = dbsq->start - dcl->iali + 1;
-              dcl->jali = dbsq->start - dcl->jali + 1;
+              dcl->iae = dbsq->start - dcl->iae + 1;
+              dcl->ibe = dbsq->start - dcl->ibe + 1;
+              dcl->ia = dbsq->start - dcl->ia + 1;
+              dcl->ib = dbsq->start - dcl->ib + 1;
               dcl->ad->sqfrom = dbsq->start - dcl->ad->sqfrom + 1;
               dcl->ad->sqto = dbsq->start - dcl->ad->sqto + 1;
 

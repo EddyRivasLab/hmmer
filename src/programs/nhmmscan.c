@@ -95,7 +95,6 @@ static ESL_OPTIONS options[] = {
   /* Other options */
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,             "assert input <seqfile> is in format <s>: no autodetection",     12 },
   { "--nonull2",    eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  NULL,             "turn off biased composition score corrections",                12 },
-  { "--usenull3",   eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  "--nonull2",      "also use null3 for biased composition score corrections",       12 },
   { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,             "set # of comparisons done, for E-value calculation",           12 },
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,             "set RNG seed to <n> (if 0: one-time arbitrary seed)",          12 },
   { "--w_beta",     eslARG_REAL,    NULL, NULL, NULL,    NULL,  NULL,           NULL,    "tail mass at which window length is determined",                12 },
@@ -256,7 +255,6 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
 
 
   if (esl_opt_IsUsed(go, "--nonull2")   && fprintf(ofp, "# null2 bias corrections:          off\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--usenull3")   && fprintf(ofp, "# null3 bias corrections:          on\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--toponly")    && fprintf(ofp, "# search only top strand:          on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--bottomonly") && fprintf(ofp, "# search only bottom strand:       on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -427,7 +425,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   for (i = 0; i < infocnt; ++i)
     {
       info[i].bg    = p7_bg_Create(abc);
-      info[i].bg->use_null3  = esl_opt_IsUsed(go, "--usenull3");
 #ifdef HMMER_THREADS
       info[i].queue = queue;
 #endif

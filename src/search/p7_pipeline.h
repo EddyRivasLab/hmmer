@@ -150,9 +150,7 @@ extern int p7_pipeline_stats_Merge(P7_PIPELINE *p1, const P7_PIPELINE_STATS *sta
 extern int p7_pipeline_WriteStats(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w);
 
 extern int p7_Pipeline              (P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
-#ifdef SRE_REMOVED_FOR_TRAVIS
-extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx);
-#endif
+extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCOREDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx);
 
 #endif /*P7_PIPELINE_INCLUDED*/
 

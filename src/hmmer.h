@@ -46,7 +46,6 @@
 #include "search/modelconfig.h"	           /* Building a search profile (P7_PROFILE) from a basic model (P7_HMM)          */
 #include "search/tophits_output.h"	   /* Formatted output of search results, "human-readable" verbose                */
 #include "search/tophits_output_tabular.h" /* Formatted output of search results, tabular                                 */
-#include "search/null3.h"		   /* {nhmmer}: 'null3' model for correcting biased composition                   */
 #include "search/p7_pipeline.h"	           /* P7_PIPELINE: an aggregated pipeline for comparing one model against one seq */
 #include "search/p7_pipeline_mpi.h"        /*    ... add-on: MPI communication                                            */
 

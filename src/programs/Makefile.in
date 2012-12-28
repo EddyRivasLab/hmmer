@@ -7,8 +7,8 @@ PROGS  = hmmalign\
 	 hmmscan\
 	 hmmsearch\
 	 jackhmmer\
-	 phmmer
-#	 nhmmer
+	 phmmer\
+	 nhmmer
 #	 nhmmscan
 
 LIBOBJS =

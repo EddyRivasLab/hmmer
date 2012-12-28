@@ -891,10 +891,10 @@ p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th )
 {
   P7_HIT *hit;
   int h;
-#ifdef SRE_REMOVED_FOR_TRAVIS
+
   int i;
   float *scores;
-#endif
+
 
   for (h = 0; h < th->N; h++) {
     hit = th->hit[h];
@@ -902,7 +902,7 @@ p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th )
     {
       fprintf (ofp, "%s %s %d %d :", qname, hit->name, hit->dcl[0].ia, hit->dcl[0].ib);
 
-#ifdef SRE_REMOVED_FOR_TRAVIS
+
       scores = hit->dcl[0].scores_per_pos;
       for (i=0; i<hit->dcl[0].ad->N; i++) {
         if (scores[i] == -eslINFINITY)
@@ -912,7 +912,7 @@ p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th )
 
       }
       fprintf (ofp, "\n");
-#endif
+
     }
 
   }
