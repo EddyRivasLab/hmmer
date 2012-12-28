@@ -1,7 +1,6 @@
 MODULE = search
 
 LIBOBJS =  modelconfig.o\
-	   null3.o\
 	   p7_pipeline.o\
 	   p7_pipeline_mpi.o\
 	   tophits_output.o\
