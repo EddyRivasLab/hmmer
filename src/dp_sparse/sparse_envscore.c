@@ -56,7 +56,7 @@
  *            positions <kae..kbe> on the profile.
  *            
  *            Caller provides a sparse matrix <sx> for the
- *            calculation, initializaed the same way as a full sparse
+ *            calculation, initialized the same way as a full sparse
  *            Forward calculation. We currently abuse this space for
  *            efficiency of the envelope calculation. Upon return, the
  *            contents of <sx> are undefined, except that it still

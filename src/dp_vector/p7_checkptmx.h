@@ -71,7 +71,7 @@ typedef struct p7_checkptmx_s {
   /* Forward/Backward matrix rows */
   char   **dpf;		/* row ptrs, dpf[0.R0-1,R0..R0+R-1]; aligned on (p7_VALIGN)-byte boundary  */
   int      allocR;	/* allocated size of dpf[]. R+R0 <= R0+Ra+Rb+rc <= validR <= allocR        */
-  int      validR;	/* # of dpf[] rows poiting to valid dp_mem; may be < allocR after GrowTo() */
+  int      validR;	/* # of dpf[] rows pointing to valid dp_mem; may be < allocR after GrowTo() */
 
 #ifdef p7_DEBUGGING
   /* Info for dumping debugging info, conditionally compiled                        */

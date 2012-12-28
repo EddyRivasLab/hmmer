@@ -91,7 +91,7 @@ static        void  save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dp
  *            matrix, and <*opt_sc> optionally contains the raw Forward
  *            score in nats.
  *            
- *            <cx> will be reallocated, if needed, for the MxL problem;
+ *            <ox> will be reallocated, if needed, for the MxL problem;
  *            caller does not need to call <p7_checkptmx_GrowTo()> itself.
  *  
  * Args:      dsq    - digital target sequence, 1..L
@@ -157,6 +157,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX 
   for (i = 1; i <= ox->La; i++)
     {
       dpc = (__m128 *) ox->dpf[ox->R0+ox->R]; ox->R++;    /* idiomatic for "get next save/checkpoint row" */
+
       totsc += forward_row(dsq[i], om, dpp, dpc, Q);
       dpp = dpc;	    	                          /* current row becomes prev row */
 #ifdef p7_DEBUGGING
