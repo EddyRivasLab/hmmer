@@ -270,10 +270,11 @@ utest_generation(ESL_RANDOMNESS *rng, P7_HMM *hmm, P7_PROFILE *gm, P7_BG *bg, in
 	if (p7_ProfileEmit(rng, hmm, gm, bg, sq, tr)             != eslOK) esl_fatal(msg);
       } while (sq->n > (gm->M+gm->L) * 3); /* keep sampled sequence length down to something arbitrarily reasonable */
       if (p7_trace_Validate(tr, gm->abc, sq->dsq, errbuf)        != eslOK) esl_fatal("%s:\n%s", msg, errbuf);
+
+      p7_profile_SetLength(gm, sq->n); /* must set length before calculating generated trace score, to guarantee sc3 >= sc1! */
       if (p7_trace_Score   (tr, sq->dsq, gm, &sc1)               != eslOK) esl_fatal(msg);
       p7_trace_Reuse(tr);
 
-      p7_profile_SetLength(gm, sq->n);
       if (p7_ReferenceViterbi(sq->dsq, sq->n, gm, rmx, tr, &sc2) != eslOK) esl_fatal(msg);
       if (p7_trace_Validate(tr, gm->abc, sq->dsq, errbuf)        != eslOK) esl_fatal("%s:\n%s", msg, errbuf);
       if (p7_trace_Score(tr, sq->dsq, gm, &sc3)                  != eslOK) esl_fatal(msg);
