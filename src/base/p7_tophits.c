@@ -740,6 +740,74 @@ p7_hit_TestSample(ESL_RANDOMNESS *rng, P7_HIT *hit)
   /* should free inside hit; caller has the shell of it though */
   return status;
 }
+
+int
+p7_hit_Validate(const P7_HIT *hit, char *errbuf)
+{
+  int d;
+  int status;
+
+  if (hit->name == NULL) ESL_FAIL(eslFAIL, errbuf, "name cannot be NULL");
+  if (isnan(hit->sortkey) ||
+      isnan(hit->score) ||
+      isnan(hit->pre_score) ||
+      isnan(hit->sum_score) ||
+      isnan(hit->lnP) ||
+      isnan(hit->pre_lnP) ||
+      isnan(hit->sum_lnP) ||
+      isnan(hit->nexpected)) ESL_FAIL(eslFAIL, errbuf, "NaN found");
+  
+  if ( (hit->flags & (! ( p7_IS_REPORTED | p7_IS_INCLUDED | p7_IS_NEW | p7_IS_DROPPED | p7_IS_DUPLICATE))) != 0)
+    ESL_FAIL(eslFAIL, errbuf, "unrecognized flag is up");
+  
+  if (hit->ndom < 0)  ESL_FAIL(eslFAIL, errbuf, "negative ndom");
+  if (hit->noverlaps   < 0 || hit->noverlaps   >  hit->ndom) ESL_FAIL(eslFAIL, errbuf, "bad noverlaps");
+  if (hit->nreported   < 0 || hit->nreported   >  hit->ndom) ESL_FAIL(eslFAIL, errbuf, "bad nreported");
+  if (hit->nincluded   < 0 || hit->nincluded   >  hit->ndom) ESL_FAIL(eslFAIL, errbuf, "bad nincluded");
+  if (hit->best_domain < 0 || hit->best_domain >= hit->ndom) ESL_FAIL(eslFAIL, errbuf, "bad best_domain");
+
+  for (d = 0; d < hit->ndom; d++)
+    if (( status = p7_domain_Validate(&(hit->dcl[d]), errbuf)) != eslOK) return status;
+  
+  return eslOK;
+}
+
+int
+p7_hit_Compare(const P7_HIT *h1, const P7_HIT *h2, float tol)
+{
+  int d;
+  int status;
+
+  if (    strcmp(h1->name, h2->name) != 0) return eslFAIL;
+  if (esl_strcmp(h1->acc,  h2->acc)  != 0) return eslFAIL;
+  if (esl_strcmp(h1->desc, h2->desc) != 0) return eslFAIL;
+
+  if ( h1->window_length != h2->window_length) return eslFAIL;
+  if ( h1->ndom          != h2->ndom)          return eslFAIL;
+  if ( h1->noverlaps     != h2->noverlaps)     return eslFAIL;
+  if ( h1->flags         != h2->flags)         return eslFAIL;
+  if ( h1->nreported     != h2->nreported)     return eslFAIL;
+  if ( h1->nincluded     != h2->nincluded)     return eslFAIL;
+  if ( h1->best_domain   != h2->best_domain)   return eslFAIL;
+  if ( h1->seqidx        != h2->seqidx)        return eslFAIL;
+  if ( h1->subseq_start  != h2->subseq_start)  return eslFAIL;
+  if ( h1->offset        != h2->offset)        return eslFAIL;
+  
+  if ( esl_DCompare( h1->sortkey,   h2->sortkey,   tol ) != eslOK) return eslFAIL;
+  if ( esl_FCompare( h1->score,     h2->score,     tol ) != eslOK) return eslFAIL;
+  if ( esl_FCompare( h1->pre_score, h2->pre_score, tol ) != eslOK) return eslFAIL;
+  if ( esl_FCompare( h1->sum_score, h2->sum_score, tol ) != eslOK) return eslFAIL;
+  if ( esl_DCompare( h1->lnP,       h2->lnP,       tol ) != eslOK) return eslFAIL;
+  if ( esl_DCompare( h1->pre_lnP,   h2->pre_lnP,   tol ) != eslOK) return eslFAIL;
+  if ( esl_DCompare( h1->sum_lnP,   h2->sum_lnP,   tol ) != eslOK) return eslFAIL;
+  if ( esl_DCompare( h1->nexpected, h2->nexpected, tol ) != eslOK) return eslFAIL;
+
+  for (d = 0; d < h1->ndom; d++)
+    if (( status = p7_domain_Compare(&(h1->dcl[d]), &(h2->dcl[2]), tol)) != eslOK) return status;
+  return eslOK;
+}
+
+
 /*-------------- end, debug/devel tools ------------------------*/
 
 

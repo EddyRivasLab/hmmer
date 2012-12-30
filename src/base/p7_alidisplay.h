@@ -28,8 +28,13 @@
  * point into that memory. If not, ad->mem is NULL, ad->memsize is 0,
  * and all the ptrs have their own allocation as NUL-terminated strings.
  *
- * For an alignment of L residues and names C chars long, requires 6L
- * + 2C + 31 bytes; for typical case of L=100,C=10, that's <0.7 Kb.
+ * For an alignment of L residues, names/accessions C chars long, descriptions
+ * D characters long; requires 7L + 4C + 2D + 45 bytes; 
+ * for typical case of L=100,C=10,D=60: 905B.
+ * So design w/ expectation of ~1kb per structure.
+ * 
+ * Note that we could reduce that quite a bit, w/ a little more work;
+ * there's a lot of redundancy in this information.
  */
 #ifndef P7_ALIDISPLAY_INCLUDED
 #define P7_ALIDISPLAY_INCLUDED
@@ -94,6 +99,7 @@ extern int            p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const E
 /* 3. Debugging and development tools */
 extern int            p7_alidisplay_TestSample(ESL_RANDOMNESS *rng, int alen, P7_ALIDISPLAY **ret_ad);
 extern int            p7_alidisplay_Dump(FILE *fp, const P7_ALIDISPLAY *ad);
+extern int            p7_alidisplay_Validate(const P7_ALIDISPLAY *ad, char *errbuf);
 extern int            p7_alidisplay_Compare(const P7_ALIDISPLAY *ad1, const P7_ALIDISPLAY *ad2);
 
 #endif /*P7_ALIDISPLAY_INCLUDED*/

@@ -914,6 +914,36 @@ p7_alidisplay_Dump(FILE *fp, const P7_ALIDISPLAY *ad)
   return eslOK;
 }
 
+int
+p7_alidisplay_Validate(const P7_ALIDISPLAY *ad, char *errbuf)
+{
+  if (ad->N <= 0) ESL_FAIL(eslFAIL, errbuf, "bad N");
+  if (ad->M <= 0) ESL_FAIL(eslFAIL, errbuf, "bad M");
+  if (ad->L <= 0) ESL_FAIL(eslFAIL, errbuf, "bad L");
+
+  if (ad->rfline        && strlen(ad->rfline) != ad->N) ESL_FAIL(eslFAIL, errbuf, "bad rfline");
+  if (ad->mmline        && strlen(ad->mmline) != ad->N) ESL_FAIL(eslFAIL, errbuf, "bad mmline");
+  if (ad->csline        && strlen(ad->csline) != ad->N) ESL_FAIL(eslFAIL, errbuf, "bad csline");
+  if (ad->model == NULL || strlen(ad->model)  != ad->N) ESL_FAIL(eslFAIL, errbuf, "bad model line");
+  if (ad->mline == NULL || strlen(ad->mline)  != ad->N) ESL_FAIL(eslFAIL, errbuf, "bad mline");
+  if (ad->aseq  == NULL || strlen(ad->aseq)   != ad->N) ESL_FAIL(eslFAIL, errbuf, "bad aseq");
+  if (ad->ppline        && strlen(ad->ppline) != ad->N) ESL_FAIL(eslFAIL, errbuf, "bad ppline");
+
+  if (ad->hmmname  == NULL || ad->hmmname[0] == '\0') ESL_FAIL(eslFAIL, errbuf, "hmmname cannot be NULL or empty");
+  if (ad->hmmacc   == NULL)                           ESL_FAIL(eslFAIL, errbuf, "optional hmmacc cannot be NULL; if empty, it's an empty string");
+  if (ad->hmmdesc  == NULL)                           ESL_FAIL(eslFAIL, errbuf, "optional hmmdesc cannot be NULL; if empty, it's an empty string");
+
+  if (ad->hmmfrom < 1 || ad->hmmfrom > ad->M || ad->hmmfrom > ad->hmmto) ESL_FAIL(eslFAIL, errbuf, "bad hmmfrom, coro says");
+
+  if (ad->sqname  == NULL || ad->sqname[0] == '\0') ESL_FAIL(eslFAIL, errbuf, "sqname cannot be NULL or empty");
+  if (ad->sqacc   == NULL)                          ESL_FAIL(eslFAIL, errbuf, "optional sqacc cannot be NULL; if empty, it's an empty string");
+  if (ad->sqdesc  == NULL)                          ESL_FAIL(eslFAIL, errbuf, "optional sqdesc cannot be NULL; if empty, it's an empty string");
+
+  if (ad->sqfrom  < 1 || ad->sqto > ad->L) ESL_FAIL(eslFAIL, errbuf, "bad sqto");
+
+  return eslOK;
+}
+
 /* Function:  p7_alidisplay_Compare()
  * Synopsis:  Compare two <P7_ALIDISPLAY> objects for equality
  *

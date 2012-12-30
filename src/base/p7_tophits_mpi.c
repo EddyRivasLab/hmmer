@@ -643,7 +643,56 @@ p7_hit_mpi_Recv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, P7_
  *****************************************************************/
 #ifdef p7TOPHITS_MPI_TESTDRIVE
 
+#include "esl_random.h"
 
+static void
+utest_SendRecv(ESL_RANDOMNESS *rng, int my_rank, int nproc)
+{
+  char            msg[]   = "utest_SendRecv() failed";
+  P7_TOPHITS     *th_sent = NULL;
+  P7_TOPHITS     *th_recv = NULL;
+  char           *wbuf    = NULL;
+  int             wn      = 0;
+  int             i;
+  uint32_t        rngseed;
+  MPI_Status      mpistatus;
+  char            errmsg[eslERRBUFSIZE];
+
+  if (my_rank == 0) 
+    {
+      rngseed = esl_randomness_GetSeed(rng);
+      for (i = 1; i < nproc; i++)
+	if (MPI_Send( &rngseed, 1, MPI_UNSIGNED, i, 0, MPI_COMM_WORLD) != MPI_SUCCESS) esl_fatal(msg);
+
+      /* master samples exactly the same object that the worker(s) send */
+      if (p7_tophits_TestSample(rng, &th_sent) != eslOK) esl_fatal(msg);
+
+      for (i = 1; i < nproc; i++)
+	{
+	  if (p7_tophits_mpi_Recv(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &wbuf, &wn, &th_recv) != eslOK) esl_fatal(msg);
+
+	  if (p7_tophits_Validate(th_recd, errmsg, 0.001) != eslOK) esl_fatal("%s:\n   %s", msg, errmsg);
+	  if (p7_tophits_Compare(th_sent, th_recv, 0.001) != eslOK) esl_fatal(msg);
+
+	  p7_tophits_Destroy(th_recv);
+	}
+    }
+  else 
+    {
+      if (MPI_Recv(&rngseed, 1, MPI_UNSIGNED, 0, 0, MPI_COMM_WORLD, &mpistatus) != MPI_SUCCESS) esl_fatal(msg);
+      rng = esl_randomness_CreateFast(rngseed);
+
+      if (p7_tophits_Sample(rng, &th_sent) != eslOK) esl_fatal(msg);
+
+      if (p7_tophits_mpi_Send(th_sent, 0, 0, MPI_COMM_WORLD, &wbuf, &wn) != eslOK) esl_fatal(msg);
+
+      esl_randomness_Destroy(rng);
+     }
+
+  p7_tophits_Destroy(th_sent);
+  free(wbuf);
+  return;
+}
 #endif /*p7TOPHITS_MPI_TESTDRIVE*/
 
 /*****************************************************************
@@ -651,9 +700,58 @@ p7_hit_mpi_Recv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, P7_
  *****************************************************************/
 #ifdef p7TOPHITS_MPI_TESTDRIVE
 
+#include "p7_config.h"
 
+#include "easel.h"
+#include "esl_getopts.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                        docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",            0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                   0 },
+  { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "arrest after start: for debugging MPI under gdb", 0 },  
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "unit test driver for p7_tophits_mpi.c core model MPI communication routines";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go       = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *rng      = NULL;
+  int             stalling = esl_opt_GetBoolean(go, "--stall");
+  int             my_rank;
+  int             nproc;
+
+  MPI_Init(&argc, &argv);
+  MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+  if (my_rank == 0) {
+    rng = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+    fprintf(stderr, "## %s\n", argv[0]);
+    fprintf(stderr, "#  rng seed  = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+    fprintf(stderr, "#  MPI nproc = %d\n", nproc);
+  }
+#ifdef HAVE_GETPID
+  fprintf(stderr, "#    %6d = %d\n", my_rank, getpid()); 
+#endif
+  while (stalling);	
+
+  utest_SendRecv(rng, my_rank, nproc);
+  
+  if (my_rank == 0) {
+    fprintf(stderr, "#  status = ok\n");
+    esl_randomness_Destroy(rng);
+  }
+
+  MPI_Finalize();
+  esl_getopts_Destroy(go);
+  exit(0);
+}
 #endif /*p7TOPHITS_MPI_TESTDRIVE*/
-
 
 #else /*! HAVE_MPI*/
 /* If we don't have MPI compiled in, provide some nothingness to:

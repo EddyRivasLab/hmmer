@@ -106,7 +106,8 @@ extern void    p7_hit_Destroy(P7_HIT *hits, int nhits);
 /* 3. Debugging and development tools */
 extern int p7_tophits_TestSample(ESL_RANDOMNESS *rng, P7_TOPHITS **ret_th);
 extern int p7_hit_TestSample(ESL_RANDOMNESS *rng, P7_HIT *hit);
-
+extern int p7_hit_Validate(const P7_HIT *hit, char *errbuf);
+extern int p7_hit_Compare(const P7_HIT *h1, const P7_HIT *h2, float tol);
 
 
 #endif /*P7_TOPHITS_INCLUDED*/

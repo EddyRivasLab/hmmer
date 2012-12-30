@@ -81,6 +81,50 @@ p7_domain_TestSample(ESL_RANDOMNESS *rng, int alen, P7_DOMAIN *dcl)
   return eslOK;
 }
 
+int
+p7_domain_Validate(const P7_DOMAIN *dcl, char *errbuf)
+{
+  if (dcl->iae < 1 || dcl->ibe < 1) ESL_FAIL(eslFAIL, errbuf, "bad iae/ibe");
+  if (dcl->kae < 1 || dcl->kbe < 1) ESL_FAIL(eslFAIL, errbuf, "bad kae/kbe");
+  if (dcl->ia  < 1 || dcl->ib  < 1) ESL_FAIL(eslFAIL, errbuf, "bad ia/ib");
+  if (dcl->ka  < 1 || dcl->kb  < 1) ESL_FAIL(eslFAIL, errbuf, "bad ka/kb");
+
+  if ( isnan(dcl->envsc) ||
+       isnan(dcl->domcorrection) ||
+       isnan(dcl->dombias) ||
+       isnan(dcl->oasc) ||
+       isnan(dcl->bitscore) ||
+       isnan(dcl->lnP)) ESL_FAIL(eslFAIL, errbuf, "NaN");
+
+  if (dcl->is_reported != 0 && dcl->is_reported != 1) ESL_FAIL(eslFAIL, errbuf, "is_reported: 0|1");
+  if (dcl->is_included != 0 && dcl->is_included != 1) ESL_FAIL(eslFAIL, errbuf, "is_included: 0|1");
+
+  if (dcl->ad == NULL) ESL_FAIL(eslFAIL, errbuf, "bad (NULL) ad");
+
+  return p7_alidisplay_Validate(dcl->ad, errbuf);
+}
+
+int
+p7_domain_Compare(const P7_DOMAIN *dcl1, const P7_DOMAIN *dcl2, float tol)
+{
+  if ( dcl1->iae != dcl2->iae ||  dcl1->ibe != dcl2->ibe ) return eslFAIL;
+  if ( dcl1->kae != dcl2->kae ||  dcl1->kbe != dcl2->kbe ) return eslFAIL;
+  if ( dcl1->ia  != dcl2->ia  ||  dcl1->ib  != dcl2->ib  ) return eslFAIL;
+  if ( dcl1->ka  != dcl2->ka  ||  dcl1->kb  != dcl2->kb  ) return eslFAIL;
+
+  if (esl_FCompare(dcl1->envsc,         dcl2->envsc,         tol) != eslOK) return eslFAIL;
+  if (esl_FCompare(dcl1->domcorrection, dcl2->domcorrection, tol) != eslOK) return eslFAIL;
+  if (esl_FCompare(dcl1->dombias,       dcl2->dombias,       tol) != eslOK) return eslFAIL;
+  if (esl_FCompare(dcl1->oasc,          dcl2->oasc,          tol) != eslOK) return eslFAIL;
+  if (esl_FCompare(dcl1->bitscore,      dcl2->bitscore,      tol) != eslOK) return eslFAIL;
+  if (esl_DCompare(dcl1->lnP,           dcl2->lnP,           tol) != eslOK) return eslFAIL;
+
+  if (dcl1->is_reported != dcl2->is_reported) return eslFAIL;
+  if (dcl1->is_included != dcl2->is_included) return eslFAIL;
+
+  return p7_alidisplay_Compare(dcl1->ad, dcl2->ad);
+}
+
 
 /*****************************************************************
  * @LICENSE@
