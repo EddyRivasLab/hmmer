@@ -57,7 +57,19 @@
 /* SRE: FIXME 3.1 in progress */
 static int workaround_get_profile(P7_PIPELINE *pli, const P7_OPROFILE *om, const P7_BG *bg, P7_PROFILE **ret_gm);
 
+typedef struct {
+  P7_BG            *bg;
+  P7_PROFILE       *gm;
+  P7_TRACE         *trc;
+  P7_SPARSEMASK    *sm;
+  P7_SPARSEMX      *sxf;
+  P7_SPARSEMX      *sxb;
+  P7_SPARSEMX      *sxd;
+  P7_SPARSEMX      *sxx;
+  P7_MASSTRACE     *mt;
+  float            *scores;
 
+} P7_PIPELINE_TMP_OBJS;
 
 /*****************************************************************
  * 1. The P7_PIPELINE object: allocation, initiazation, destruction.
@@ -1148,7 +1160,6 @@ p7_pipeline_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7
     window_end   = ESL_MIN(prev_window->n+prev_window->length-1, curr_window->n+curr_window->length-1);
 
     if (  (float)(window_end-window_start+1)/ESL_MIN(prev_window->length, curr_window->length) > pct_overlap ) {
-//    if (curr_window->n <= prev_window->n + prev_window->length ) {
       //merge windows
       if (  curr_window->n + curr_window->length >  prev_window->n + prev_window->length )
         prev_window->length = curr_window->n + curr_window->length - prev_window->n;  //+1, -1 factored out
@@ -1248,6 +1259,93 @@ ERROR:
 }
 
 
+/* parameterize_bg_and_gm()
+ *
+ * Establish new background priors based on a sequence window,
+ * and, for a model that will be used narrowly within the post-fwd
+ * portion of the pipeline, set match state emission log-odds
+ * scores accordingly.
+ *
+ * Given the frequency distribution of a block of sequence
+ * (<dsq>, of length <sq_len>), and a prior with which that
+ * distribution can be mixed (<block_bg>), modify the
+ * passed <bg> and <om> structures in place. This is called
+ * by rescore_isolated_domain(), which then calls it again
+ * once complete to return <bg> and <om> to original state.
+ * It is only used in the longtarget (nhmmer) case.
+ *
+ * In-place modification is done to avoid making copies, which
+ * would require overwhelming allocation calls. Doing this
+ * requires that (a) each thread has its own independent copy
+ * of <bg> and <om>, and (b) those are returned to their
+ * original state before being used outside the function
+ * using the modified structures.
+ *
+ * Two pre-allocated arrays <bgf_tmp> and <sc_tmp> must be
+ * passed, and are used to hold necessary internal data.
+ *
+ */
+static int
+parameterize_bg_and_gm (P7_BG *bg, P7_BG *bg_tmp, P7_PROFILE *gm_src, P7_PROFILE *gm_dest, const ESL_DSQ *dsq, int sq_len, float *sc_tmp) {
+  int     i, j;
+  int     K   = gm_src->abc->K;
+  int     Kp  = gm_src->abc->Kp;
+
+  /* Fraction of new bg frequencies that comes from a prior determined by the sequence block.
+   * This is 25% for long sequences, more for shorter sequences (e.g. 50% for sequences of length 50)
+   */
+  float   bg_smooth = 25.0 / (ESL_MIN(100,sq_len));
+
+
+
+  if (dsq == NULL) {
+     return eslFAIL;
+  }
+
+
+  /* Compute new background frequencies as a weighted avg of the
+   * default bg and the observed frequencies dsq. Store in bg_tmp.
+   */
+  esl_sq_GetFrequencies(dsq, sq_len, bg->abc, bg_tmp->f);
+  esl_vec_FScale(bg_tmp->f, K, (1.0-bg_smooth));
+  esl_vec_FAddScaled(bg_tmp->f, bg->f, bg_smooth, K);
+
+
+  /* Compute new forward emission scores, based on default scores and
+   * the new bg.
+   *
+   * The value at a given cell i,j in the rsc (fwd_score) matrix is
+   *    sc[i][j]    = log(hmm->mat[i][j] / bg->f[j]);
+   * We'd like to compute a new score, sc_tmp:
+   *    sctmp[i][j] = log(hmm->mat[i][j] / bg_tmp->f[j]);
+   *
+   * Since log(hmm->mat[i][j] / bg->f[j])    == log(hmm->mat[i][j]) - log(bg->f[j])
+   * and   log(hmm->mat[i][j] / bgtmp->f[j]) == log(hmm->mat[i][j]) - log(bgtmp->f[j])
+   * we can set sctmp[i][j] = sc[i][j] + log(bg->f[j]) - log(bgtmp->f[j])
+   *                        = sc[i][j] + log(bg->f[j]/bgtmp->f[j])
+   */
+  for (i = 1; i <=gm_src->M; i++) {
+
+    for (j=0; j<K; j++) {
+      if (gm_src->mm && gm_src->mm[i] == 'm')
+        sc_tmp[j] = 0;
+      else
+        sc_tmp[j] = gm_src->rsc[j][(i) * p7P_NR  + p7P_M] + log(bg->f[j]/bg_tmp->f[j]);
+    }
+
+    esl_abc_FExpectScVec(gm_src->abc, sc_tmp, bg->f);
+
+    for (j=0; j<Kp; j++)
+      gm_dest->rsc[j][(i) * p7P_NR  + p7P_M] =  sc_tmp[j];
+
+  }
+
+
+
+  return eslOK;
+}
+
+
 /* Function:  p7_pipeline_postViterbi_LongTarget()
  * Synopsis:  the part of the LongTarget P7 search Pipeline downstream
  *            of the Viterbi filter
@@ -1295,12 +1393,11 @@ ERROR:
  *
  *
  */
-
 static int
 p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist,
     const P7_SCOREDATA *data, int64_t seqidx, int window_start, int window_len, ESL_SQ *tmpseq, ESL_DSQ *subseq,
     int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
-    int complementarity, int *overlap, float *bgf_arr, float *scores_arr, float *fwd_emissions_arr
+    int complementarity, int *overlap, P7_PIPELINE_TMP_OBJS *pli_tmp
 )
 {
   P7_DOMAIN        *dcl     = NULL;     /* array of domain data structures <0..ndom-1> */
@@ -1317,19 +1414,22 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
 
 //  int              Ld;               /* # of residues in envelopes */
   int              z,i;
-  float            null2[p7_MAXCODE];
   int              noverlaps;
   int              last_ibe;
   int              best_d;
+  int              ii, zz;
+  int              env_offset;
+
 
   int env_len;
   int ali_len;
   float bitscore;
   float dom_score;
   double dom_lnP;
+  ESL_DSQ *subseq_tmp;
 
-
-  int F3_L = ESL_MIN( window_len,  pli->B3);
+  int max_env_extra = 20;
+  int F3_L          = ESL_MIN( window_len,  pli->B3);
 
   p7_oprofile_ReconfigRestLength(om, window_len);
   p7_profile_SetLength(gm, window_len);
@@ -1371,6 +1471,7 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
 
 
    /* Now we can hand it over to sparse DP, with the full glocal/local model */
+   p7_trace_Reuse   (pli->tr);
    p7_SparseViterbi (subseq, window_len, gm, pli->sm,  pli->sxx, pli->tr, &fwdsc); // don't care what the function returns, so used fwdsc just to make it happy
    p7_SparseForward (subseq, window_len, gm, pli->sm,  pli->sxf,          &fwdsc);
    p7_SparseBackward(subseq, window_len, gm, pli->sm,  pli->sxb,          NULL);
@@ -1416,45 +1517,87 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
      p7_sparsemx_Reuse (pli->sxx);
      p7_masstrace_Reuse(pli->mt);
 
-     /* Keep track of overlaps */
-     if (dcl[d].iae <= last_ibe) noverlaps++;
-     last_ibe = dcl[d].ibe;
+     //if the envelope is very long, trim it
+     dcl[d].iae = ESL_MAX(dcl[d].iae,  pli->tr->sqfrom[d] - max_env_extra );
+     dcl[d].ibe = ESL_MIN(dcl[d].ibe,  pli->tr->sqto[d] + max_env_extra );
 
-     /* Transfer alignment coords from trace. [Do we need to do this?] */
+     /*
      dcl[d].ia = pli->tr->sqfrom[d];
      dcl[d].ib = pli->tr->sqto[d];
      dcl[d].ka = pli->tr->hmmfrom[d];
      dcl[d].kb = pli->tr->hmmto[d];
-
-     /* Determine envelope score. [We have an approximation available, but we determined it rarely holds */
      p7_SparseEnvscore(subseq, window_len, gm, dcl[d].iae, dcl[d].ibe, dcl[d].kae, dcl[d].kbe, pli->sm, pli->sxx, &(dcl[d].envsc));
      p7_sparsemx_Reuse(pli->sxx);
+     */
 
 
-     /* Determine null2 correction
-      * Upon return, null2[x] = \log f'(x)/f(x).
-      * Then we record that in n2sc[iae..ibe]: seqbias correction mustn't overcount overlapped envelopes
+     /* I have an envelope based on the default null model; now update that
+      * null model based on the contents of the current envelope (effectively
+      * a partial null3 correction), then re-run everything required to get the
+      * corrected score/trace/alignment for the domain
       */
-     if (pli->do_null2)
-       {
-         p7_sparse_Null2ByExpectation(gm, pli->sxd, dcl[d].iae, dcl[d].ibe, dcl[d].kae, dcl[d].kbe, pli->wrk, null2);
-         dcl[d].domcorrection = 0.;
-         for (i = dcl[d].iae; i <= dcl[d].ibe; i++)
-         {
-             dcl[d].domcorrection += null2[ subseq[i] ];
-             pli->n2sc[i]          = null2[ subseq[i] ];
+     subseq_tmp = subseq + dcl[d].iae - 1;
+     env_len    = dcl[d].ibe-dcl[d].iae+1;
+     env_offset = dcl[d].iae;
+     parameterize_bg_and_gm (bg, pli_tmp->bg, gm, pli_tmp->gm, subseq_tmp , env_len, pli_tmp->scores);
+     //pli_tmp->bg = bg;
+     //pli_tmp->gm = p7_profile_Clone(gm);
+
+
+     /* copy over the part of the sparse mask related to the current envelope*/
+     p7_sparsemask_Reinit(pli_tmp->sm, gm->M, env_len);
+     for (i=env_len; i >= 1; i--)
+     {
+       ii = i + env_offset - 1;
+       if (pli->sm->n[ii] > 0) {
+         if (  (status = p7_sparsemask_StartRow(pli_tmp->sm, i))                != eslOK) return status;
+         for (z = pli->sm->n[ii]-1; z >= 0; z--) {
+           zz = pli->sm->k[ii][z]-1;
+           if ((status = p7_sparsemask_Add(pli_tmp->sm, zz%pli->sm->Q, zz/pli->sm->Q))   != eslOK) return status;
          }
-         /* Apply an ad hoc log(omega) fudge factor penalty; interpreted as a prior,
-          * saying that this null model is <omega> as likely as the standard null model.
-          * <omega> is by default 1/(2^8), so this is by default an 8 bit penalty.
-          */
-         dcl[d].dombias = p7_FLogsum(0., log(bg->omega) + dcl[d].domcorrection);
+         if (  (status = p7_sparsemask_FinishRow(pli_tmp->sm))                      != eslOK) return status;
        }
-     else
-       {
-         dcl[d].domcorrection = 0.;
-         dcl[d].dombias       = 0.;
-       }
+     }
+     p7_sparsemask_Finish(pli_tmp->sm);
+
+
+
+     p7_SparseViterbi (subseq_tmp, env_len, pli_tmp->gm, pli_tmp->sm,  pli_tmp->sxx, pli_tmp->trc, &fwdsc); // don't care what the function returns, so used fwdsc just to make it happy
+     p7_SparseForward (subseq_tmp, env_len, pli_tmp->gm, pli_tmp->sm,  pli_tmp->sxf,               &fwdsc);
+     p7_SparseBackward(subseq_tmp, env_len, pli_tmp->gm, pli_tmp->sm,  pli_tmp->sxb,               NULL);
+     p7_SparseDecoding(subseq_tmp, env_len, pli_tmp->gm, pli_tmp->sxf, pli_tmp->sxb, pli_tmp->sxd);
+     p7_sparsemx_TracePostprobs(pli_tmp->sxd, pli_tmp->trc);
+     p7_trace_Index(pli_tmp->trc);
+     p7_sparsemx_Reuse(pli_tmp->sxx);
+     p7_SparseMasstrace(subseq_tmp, env_len, pli_tmp->gm, pli_tmp->sxf, pli_tmp->sxb, pli_tmp->trc, pli_tmp->trc->anch[0], p7_MASSTRACE_THRESH_DEFAULT, pli_tmp->sxx, pli_tmp->mt,
+                             &(dcl[d].iae), &(dcl[d].ibe), &(dcl[d].kae), &(dcl[d].kbe));
+     p7_sparsemx_Reuse (pli_tmp->sxx);
+     p7_masstrace_Reuse(pli_tmp->mt);
+
+
+
+     /* Transfer alignment coords from trace. [Do we need to do this?] */
+     dcl[d].ia = pli_tmp->trc->sqfrom[0] + env_offset - 1;
+     dcl[d].ib = pli_tmp->trc->sqto[0]   + env_offset - 1;
+     dcl[d].ka = pli_tmp->trc->hmmfrom[0];
+     dcl[d].kb = pli_tmp->trc->hmmto[0];
+     p7_SparseEnvscore(subseq_tmp, env_len, pli_tmp->gm, dcl[d].iae, dcl[d].ibe, dcl[d].kae, dcl[d].kbe, pli_tmp->sm, pli_tmp->sxx, &(dcl[d].envsc));
+     p7_sparsemx_Reuse(pli_tmp->sxx);
+     p7_trace_Reuse   (pli_tmp->trc);
+
+     /* this is an assessment of the null correction */
+     p7_SparseEnvscore(subseq_tmp, env_len,          gm, dcl[d].iae, dcl[d].ibe, dcl[d].kae, dcl[d].kbe, pli_tmp->sm, pli_tmp->sxx, &(dcl[d].domcorrection));
+     //dcl[d].dombias = (dcl[d].domcorrection < dcl[d].envsc ? 0.0 : dcl[d].domcorrection - dcl[d].envsc);
+     //p7_sparsemx_Reuse(pli->sxx);
+     dcl[d].dombias = 0.0;
+
+     dcl[d].iae +=  env_offset - 1;
+     dcl[d].ibe +=  env_offset - 1;
+
+     /* Keep track of overlaps */
+     if (dcl[d].iae <= last_ibe) noverlaps++;
+     last_ibe   = dcl[d].ibe;
+
 
      /* alignment "accuracy score": expected number of correctly aligned positions */
      dcl[d].oasc = 0.;
@@ -1490,16 +1633,14 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
      dom_score  = (bitscore - (nullsc + dcl[d].dombias))  / eslCONST_LOG2;
      dom_lnP   = esl_exp_logsurv(dom_score, om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
-      //note: this test is conservative:
-      // - if in scan mode, assume query sequence is at most the length of a single instance,
-      // - otherwise, use just the nres from the current pipeline, while the final filters
-      //   will add up nres from all threads, over all windows, which will increase stringency
-      if (pli->mode == p7_SCAN_MODELS)  nres = ESL_MIN(window_len,om->max_length);
-      else                              nres = pli->stats.nres;
+     //note: this test is conservative:
+     // - if in scan mode, assume query sequence is at most the length of a single instance,
+     // - otherwise, use just the nres from the current pipeline, while the final filters
+     //   will add up nres from all threads, over all windows, which will increase stringency
+     if (pli->mode == p7_SCAN_MODELS)  nres = ESL_MIN(window_len,om->max_length);
+     else                              nres = pli->stats.nres;
 
-      if ( p7_pipeline_TargetReportable(pli, dom_score, dom_lnP + log((float)nres / om->max_length) ) ) {
-
-
+     if ( p7_pipeline_TargetReportable(pli, dom_score, dom_lnP + log((float)nres / om->max_length) ) ) {
 
         /*now that almost everything has been filtered away, set up seq object required for the p7_alidisplay_Create() call */
         if ((status = esl_sq_SetName     (tmpseq, seq_name))   != eslOK) goto ERROR;
@@ -1513,7 +1654,7 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
 //        tmpseq->dsq[window_len+1]= eslDSQ_SENTINEL;
 
         /* Viterbi alignment of the domain */
-        dcl[d].ad = p7_alidisplay_Create(pli->tr, d, om, tmpseq);
+        dcl[d].ad = p7_alidisplay_Create(pli->tr, d, om, tmpseq); // it's ok to use the om instead of the gm here; it doesn't depend on updated fwd scores
 
         p7_pipeline_computeAliScores(dcl+d, subseq, data, om->abc->Kp);
 
@@ -1593,6 +1734,7 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
         }
 
       }
+
   }
 
 
@@ -1658,7 +1800,7 @@ p7_pipeline_postMSV_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om
     int64_t seqidx, int window_start, int window_len, ESL_SQ *tmpseq,
     ESL_DSQ *subseq, int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
     float nullsc, float usc, int complementarity, P7_HMM_WINDOWLIST *vit_windowlist,
-    float *bgf_arr, float *scores_arr, float *fwd_emissions_arr
+    P7_PIPELINE_TMP_OBJS *pli_tmp
 )
 {
   float            filtersc;           /* HMM null filter score                   */
@@ -1747,7 +1889,7 @@ p7_pipeline_postMSV_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om
         window_start+vit_windowlist->windows[i].n-1, vit_windowlist->windows[i].length, tmpseq,
         subseq + vit_windowlist->windows[i].n - 1,
         seq_start, seq_name, seq_source, seq_acc, seq_desc, complementarity, &overlap,
-        bgf_arr, scores_arr, fwd_emissions_arr
+        pli_tmp
     );
 
     if (overlap == -1 && i<vit_windowlist->count-1) {
@@ -1809,24 +1951,30 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
   ESL_SQ           *tmpseq   = NULL;
   float            bias_filtersc;
 
-  float            *bgf_arr  = NULL;
-  float            *scores_arr = NULL;
-  float            *fwd_emissions_arr = NULL;
-
   P7_HMM_WINDOWLIST msv_windowlist;
   P7_HMM_WINDOWLIST vit_windowlist;
 
+  P7_PIPELINE_TMP_OBJS *pli_tmp = NULL;
+
+
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
-  ESL_ALLOC(bgf_arr,   (om->abc->K)*sizeof(float));
-  ESL_ALLOC(scores_arr, (om->abc->Kp)*4*sizeof(float));
-  ESL_ALLOC(fwd_emissions_arr, sizeof(float) *  om->abc->Kp * (om->M+1));
+  ESL_ALLOC(pli_tmp, sizeof(P7_PIPELINE_TMP_OBJS));
+  pli_tmp->bg = p7_bg_Clone(bg);
+  pli_tmp->gm = p7_profile_Clone(gm);
+  pli_tmp->sm = p7_sparsemask_Create(gm->M, 100);
+  ESL_ALLOC(pli_tmp->scores, sizeof(float) * om->abc->Kp);
+  if ( (pli_tmp->trc = p7_trace_CreateWithPP())            == NULL) goto ERROR;
+  if ( (pli_tmp->sxf = p7_sparsemx_Create (pli_tmp->sm))   == NULL) goto ERROR;
+  if ( (pli_tmp->sxb = p7_sparsemx_Create (pli_tmp->sm))   == NULL) goto ERROR;
+  if ( (pli_tmp->sxd = p7_sparsemx_Create (pli_tmp->sm))   == NULL) goto ERROR;
+  if ( (pli_tmp->sxx = p7_sparsemx_Create (pli_tmp->sm))   == NULL) goto ERROR;
+  if ( (pli_tmp->mt  = p7_masstrace_Create (gm->M, 100))   == NULL) goto ERROR;
 
   msv_windowlist.windows = NULL;
   vit_windowlist.windows = NULL;
   p7_hmmwindow_init(&msv_windowlist);
 
-  //TW p7_omx_GrowTo(pli->oxf, om->M, 0, om->max_length);    /* expand the one-row omx if needed */
 
   /* Set false target length. This is a conservative estimate of the length of window that'll
    * soon be passed on to later phases of the pipeline;  used to recover some bits of the score
@@ -1887,7 +2035,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
 
       status = p7_pipeline_postMSV_LongTarget(pli, gm, om, bg, hitlist, data, seqidx, msv_windowlist.windows[i].n, window_len, tmpseq,
                         subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc, p7_NOCOMPLEMENT, &vit_windowlist,
-                        bgf_arr, scores_arr, fwd_emissions_arr
+                        pli_tmp
       );
 
 
@@ -1903,21 +2051,43 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
 
   if (msv_windowlist.windows != NULL) free (msv_windowlist.windows);
 
-
-  if (bgf_arr != NULL)           free (bgf_arr);
-  if (scores_arr != NULL)        free (scores_arr);
-  if (fwd_emissions_arr != NULL) free (fwd_emissions_arr);
+  if (pli_tmp != NULL) {
+    if (pli_tmp->bg != NULL)     p7_bg_Destroy(pli_tmp->bg);
+    if (pli_tmp->gm != NULL)     p7_profile_Destroy(pli_tmp->gm);
+    if (pli_tmp->sxf != NULL)    p7_sparsemx_Destroy(pli_tmp->sxf);
+    if (pli_tmp->sxb != NULL)    p7_sparsemx_Destroy(pli_tmp->sxb);
+    if (pli_tmp->sxd != NULL)    p7_sparsemx_Destroy(pli_tmp->sxd);
+    if (pli_tmp->sxx != NULL)    p7_sparsemx_Destroy(pli_tmp->sxx);
+    if (pli_tmp->sm != NULL)     p7_sparsemask_Destroy(pli_tmp->sm);
+    if (pli_tmp->trc != NULL)    p7_trace_Destroy(pli_tmp->trc);
+    if (pli_tmp->mt != NULL)     p7_masstrace_Destroy(pli_tmp->mt);
+    if (pli_tmp->scores != NULL) free(pli_tmp->scores);
+    free(pli_tmp);
+  }
 
   return eslOK;
+
+
+
+
 
 ERROR:
   if (tmpseq != NULL) esl_sq_Destroy(tmpseq);
   if (msv_windowlist.windows != NULL) free (msv_windowlist.windows);
   if (vit_windowlist.windows != NULL) free (vit_windowlist.windows);
-
-  if (bgf_arr != NULL)           free (bgf_arr);
-  if (scores_arr != NULL)        free (scores_arr);
-  if (fwd_emissions_arr != NULL) free (fwd_emissions_arr);
+  if (pli_tmp != NULL) {
+    if (pli_tmp->bg != NULL)     p7_bg_Destroy(pli_tmp->bg);
+    if (pli_tmp->gm != NULL)     p7_profile_Destroy(pli_tmp->gm);
+    if (pli_tmp->sxf != NULL)    p7_sparsemx_Destroy(pli_tmp->sxf);
+    if (pli_tmp->sxb != NULL)    p7_sparsemx_Destroy(pli_tmp->sxb);
+    if (pli_tmp->sxd != NULL)    p7_sparsemx_Destroy(pli_tmp->sxd);
+    if (pli_tmp->sxx != NULL)    p7_sparsemx_Destroy(pli_tmp->sxx);
+    if (pli_tmp->sm != NULL)     p7_sparsemask_Destroy(pli_tmp->sm);
+    if (pli_tmp->trc != NULL)    p7_trace_Destroy(pli_tmp->trc);
+    if (pli_tmp->mt != NULL)     p7_masstrace_Destroy(pli_tmp->mt);
+    if (pli_tmp->scores != NULL) free(pli_tmp->scores);
+    free(pli_tmp);
+  }
 
   return status;
 

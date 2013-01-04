@@ -1,0 +1,79 @@
+# nhmmer :: search a DNA model against a DNA database
+# HMMER 3.1dev (October 2012); http://hmmer.org/
+# Copyright (C) 2012 Howard Hughes Medical Institute.
+# Freely distributed under the GNU General Public License (GPLv3).
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# query HMM file:                  Arthur1a.hmm
+# target sequence database:        dna_target.fa
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Query:       Arthur1A  [M=177]
+Accession:   DF0000070.2
+Description: Non-autonomous, hAT-like DNA transposon
+Scores for complete hits:
+    E-value  score  bias  Sequence                       start    end  Description
+    ------- ------ -----  --------                       -----  -----  -----------
+    1.4e-25   87.2   0.0  humanchr1/239220001-239550000 323259 323433  
+    1.1e-06   26.0   0.0  humanchr1/239220001-239550000   6410   6324  
+
+
+Annotation for each hit  (and alignments):
+>> humanchr1/239220001-239550000  
+    score  bias    Evalue   hmmfrom    hmm to     alifrom    ali to      envfrom    env to    sq len      acc
+   ------ ----- ---------   -------   -------    --------- ---------    --------- --------- ---------    ----
+ !   87.2   0.0   1.4e-25         1       177 []    323259    323433 ..    323259    323433 ..    330000    0.91
+
+  Alignment:
+  score: 87.2 bits
+                                       xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.xxxxxxxxxx RF
+                       Arthur1A      1 cAgaggtagatttaccatgaagctaatgaagcttaagcttcagggcccctcacttgcatgggc.cccttccaag 73    
+                                       cAg  g   att ac+a  aag  aa  aa ct aa cttcag gcc+ctca+ttg atg    ccctt  aag
+  humanchr1/239220001-239550000 323259 CAGGAGATAATTAACTAGAAAGTGAACAAA-CTCAAACTTCAGAGCCTCTCATTTGTATGAATgCCCTTGTAAG 323331
+                                       ************999998888887776553.****************************87743889******* PP
+
+                                       xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx RF
+                       Arthur1A     74 gccctgtacctaattttgtatttgtaattttgtattctttttcttaaagagggccccccaaattgtataagctt 147   
+                                       g c+tg  ccta ttt  tattt+taa t tgt  t+tt ttct aaaga+++cc cc aaattgtataagct 
+  humanchr1/239220001-239550000 323332 GTCTTGGGCCTATTTTAATATTTATAAATGTGTTATTTTCTTCT-AAAGAAAACCACC-AAATTGTATAAGCTA 323403
+                                       *****************************999988877777776.6777777655544.*************** PP
+
+                                       xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx RF
+                       Arthur1A    148 caggccccacaaaacctggatctgcccctg 177   
+                                       cag  +c  caaaac   g tc++ cc tg
+  humanchr1/239220001-239550000 323404 CAGAATCTGCAAAACTGAGGTCCATCCATG 323433
+                                       ****************************** PP
+
+>> humanchr1/239220001-239550000  
+    score  bias    Evalue   hmmfrom    hmm to     alifrom    ali to      envfrom    env to    sq len      acc
+   ------ ----- ---------   -------   -------    --------- ---------    --------- --------- ---------    ----
+ !   26.0   0.0   1.1e-06         6        90 ..      6410      6324 ..      6414      6316 ..    330000    0.82
+
+  Alignment:
+  score: 26.0 bits
+                                     xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx..xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx RF
+                       Arthur1A    6 gtagatttaccatgaagctaatgaagcttaagcttca..gggcccctcacttgcatgggccccttccaaggccctgta 81  
+                                     g+agatttacca  aag  aatga g  taa  t ca  g gccc+tcacttgcatggg c     caag c++t  a
+  humanchr1/239220001-239550000 6410 GCAGATTTACCACAAAGGAAATGACGTGTAAAATGCAgaGAGCCCTTCACTTGCATGGGGCTTCGTCAAGCCTTTAGA 6333
+                                     799********************************98325689******************99999************ PP
+
+                                     xxxxxxxxx RF
+                       Arthur1A   82 cctaatttt 90  
+                                     cc aatttt
+  humanchr1/239220001-239550000 6332 CCAAATTTT 6324
+                                     **9999987 PP
+
+
+
+Internal pipeline statistics summary:
+-------------------------------------
+Query model(s):                            1  (177 nodes)
+Target sequences:                          1  (660000 residues searched)
+Residues passing MSV filter:            187701  (0.284); expected (0.02)
+Residues passing bias filter:           157805  (0.239); expected (0.02)
+Residues passing Vit filter:              8938  (0.0135); expected (0.001)
+Residues passing Fwd filter:              4730  (0.00717); expected (1e-05)
+Total number of hits:                        2  (0.000397)
+# CPU time: 0.12u 0.00s 00:00:00.12 Elapsed: 00:00:00.13
+# Mc/sec: 898.62
+//
+[ok]

@@ -424,61 +424,6 @@ p7_oprofile_Clone(const P7_OPROFILE *om1)
 }
 
 
-/* Function:  p7_oprofile_UpdateFwdEmissionScores()
- * Synopsis:  Update om match emissions to account for new bg, using
- *            preallocated sc_tmp[].
- *            This is re-ordering of the loops used, for example in
- *            fb_conversion, done with the aim of reducing the
- *            required size of sc_arr. Depends on precomputed values
- *            in fwd_emissions array.
- *
- * Purpose:   Change scores based on updated background model
- *
- */
-int
-p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr)
-{
-  int     M   = om->M;    /* length of the query                                          */
-  int     k, q, x, z;
-  int     nq  = P7_NVF(M);     /* segment length; total # of striped vectors needed            */
-  int     K   = om->abc->K;
-  int     Kp  = om->abc->Kp;
-  union   { __m128 v; float x[4]; } tmp; /* used to align and load simd minivectors               */
-
-
-  for (k = 1, q = 0; q < nq; q++, k++) {
-
-    //First compute the core characters of the alphabet
-    for (x = 0; x < K; x++) {
-      for (z = 0; z < 4; z++) {
-        if (k+ z*nq <= M)  sc_arr[z*Kp + x] =  (om->mm && om->mm[(k+z*nq)]=='m') ? 0 : log(fwd_emissions[Kp * (k+z*nq) + x]/bg->f[x]);
-        else               sc_arr[z*Kp + x] =  -eslINFINITY;
-
-        tmp.x[z] = sc_arr[z*Kp + x];
-      }
-      om->rfv[x][q] = esl_sse_expf(tmp.v);
-    }
-
-
-    // Then compute corresponding scores for ambiguity codes.
-    for (z = 0; z < 4; z++)
-      esl_abc_FExpectScVec(om->abc, sc_arr+(z*Kp), bg->f);
-
-    //finish off the interleaved values
-    for (x = K; x < Kp; x++) {
-      for (z = 0; z < 4; z++)
-         tmp.x[z] = sc_arr[z*Kp + x];  // computed in FExpectScVec call above
-      om->rfv[x][q] = esl_sse_expf(tmp.v);
-    }
-  }
-
-  return eslOK;
-
-}
-
-
-
-
 
 
 /*----------------- end, P7_OPROFILE structure ------------------*/
