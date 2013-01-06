@@ -2,11 +2,14 @@
 # known issue with icc's use of SSE-optimized str*() functions.
 # xref J7/84
 #
-. /usr/local/intel-2012/bin/compilervars.sh intel64
-. /usr/local/intel-2012/impi/4.0.3.008/bin64/mpivars.sh 
+# Setting the SQC_MPI env variable runs MPI-specific unit tests.
+#
+. /usr/local/intel-2013/bin/compilervars.sh intel64
+. /usr/local/intel-2013/impi/4.1.0.024/bin64/mpivars.sh intel64
 export INTEL_LICENSE_FILE="28518@flexlm.int.janelia.org"
+export SQC_MPI=1
 
-../configure CC=icc LDFLAGS=-static-intel --enable-mpi
+../configure CC=icc --enable-mpi
 make V=1
 make V=1 dev                              
 make V=1 check 

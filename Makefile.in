@@ -2,10 +2,8 @@
 # 
 # On most systems, to build H3 you should only need:
 #     % ./configure; make
-#
 # Optionally, you can run a test suite:
 #     % make check
-#
 # And optionally, you can install everything more permanently:
 #     % make install
 #

@@ -2,10 +2,6 @@ Brief installation instructions
 HMMER @HMMER_VERSION@; @HMMER_DATE@
 -------------------------------------------------------------
 
-These are quick installation instructions. For complete documentation,
-including customization and troubleshooting, please see the
-Installation chapter in the HMMER User's Guide (Userguide.pdf).
-
 Starting from a source distribution, hmmer-@HMMER_VERSION@.tar.gz:
  uncompress:                uncompress hmmer-@HMMER_VERSION@.tar.gz  
  unpack:                    tar xf hmmer-@HMMER_VERSION@.tar
@@ -15,13 +11,14 @@ Starting from a source distribution, hmmer-@HMMER_VERSION@.tar.gz:
  automated tests:           make check
  automated install:         make install
 
-HMMER is developed primarily on Linux and Mac OS/X systems. It is
-tested on a variety of UNIX and UNIX-like operating systems. It is
-written in ANSI C99 conforming to POSIX standards. It is meant to be
-portable to any POSIX-compliant system with an ANSI C99 compiler,
-including all UNIX and Macintosh systems. It should also build on
-Windows systems with optional POSIX compatibility software installed,
-such as Cygwin.
+For complete documentation, including customization and
+troubleshooting, see the Installation chapter in the HMMER User's
+Guide (Userguide.pdf).
+
+HMMER is written in C (ANSI C99) for Intel/AMD-compatible processors
+on POSIX-compliant systems (including UNIX, Linux, Mac OS/X, and
+Windows with optional POSIX-compatibility software installed such as
+Cygwin).
 
 -------------------------------------------------------------
 Starting from a Subversion (SVN) working copy:

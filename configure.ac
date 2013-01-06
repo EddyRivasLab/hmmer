@@ -1,43 +1,56 @@
 # Process this file with autoconf to produce the HMMER configure script.
 #
-# This is synchronized with Easel's configure script, so that HMMER
-# configures Easel in addition to itself. This saves having to do a
-# separate ./configure in Easel. That means that everything that
-# appears in Easel's configure script must also appear here.
+# This is synchronized with Easel's configure script. HMMER's
+# configure script configures Easel in addition to itself. This saves
+# having to do a separate ./configure in Easel, but also means that
+# everything that appears in Easel's configure script must also appear
+# here.
 #
-# reminders to save re-reading autoconf manual for the n'th time:
+# Some reminders to save re-reading autoconf manual for the n'th time:
 #    output variables:
 #      -  are defined here as normal shell variables, e.g. FOO="my string"
 #      -  are made into output variables by calling AC_SUBST(FOO)
 #      -  any occurrence of @FOO@ in an output file is then substituted
-#         I think this only happens in files we assign w/ AC_CONFIG_FILES;
-#         that's the Makefile.in's.
+#         This only happens in files we assign w/ AC_CONFIG_FILES;
+#         such as our Makefile.in's, for example.
 #
 #   C preprocessor symbols:
 #      -  are defined here by calling AC_DEFINE(FOO) or AC_DEFINE(FOO, [42])
 #      -  then #undef FOO in easel.h.in becomes #define FOO, #define FOO 42
-#         I think this only happens in header files that we assign
-#         w/ AC_CONFIG_HEADERS -- which means, easel.h.in
+#         This only happens in header files that we assign
+#         w/ AC_CONFIG_HEADERS, such as p7_config.h.in
 #
-# GNU recommends the following order:
-#   1. autoconf requirements
-#   2. AC_INIT
-#   3. info on the package
-#   4. checks for programs
-#   5. checks for libraries
-#   6. checks for header files
-#   7. checks for types
-#   8. checks for structures
-#   9. checks for compiler characteristics
-#  10. checks for library functions
-#  11. checks for system services
-#  12. AC_CONFIG_FILES
-#  13. AC_OUTPUT
+# Contents:   
+#    1. autoconf requirements
+#    2. AC_INIT
+#    3. Info on the package
+#    4. Process ./configure commandline options
+#    5. Checks for programs, including ${CC}, ${CFLAGS}
+#    6. Checks for libraries, such as GSL
+#    7. Checks for headers, including SSE headers
+#    8. Checks for types.
+#    9. Checks for functions.
+#   10. Checks for system services
+#   11. AC_CONFIG_FILES
+#   12. AC_OUTPUT
+#   13. Copyright and license information
+#
+# (the order of sections above is meant to obey GNU's suggested
+#  section order; see autoconf manual, 3.1.3 "standard configure.ac
+#  layout")
 
 
-# Autoconf 2.61 has a bug in AC_FUNC_FSEEKO; don't use it.
+################################################################
+# 1. autoconf requirements
+################################################################
+# AUTOCONF 2.61 has a bug in AC_FUNC_FSEEKO; don't use it.
 AC_PREREQ(2.63)
-AC_INIT(HMMER, 3.1dev, eddys@janelia.hhmi.org, hmmer)
+
+################################################################
+# 2. AC_INIT
+################################################################
+
+AC_INIT(HMMER, 4.0dev, eddys@janelia.hhmi.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -47,6 +60,7 @@ fi
 
 ################################################################
 # 3. Info on the package
+################################################################
 #
 # The four AC_INIT args set these output variables and preprocessor symbols:
 #     PACKAGE_NAME      <package>     e.g. "HMMER"
@@ -68,16 +82,16 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="October 2012"
-HMMER_COPYRIGHT="Copyright (C) 2012 Howard Hughes Medical Institute."
+HMMER_DATE="January 2013"
+HMMER_COPYRIGHT="Copyright (C) 2013 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="lib/easel"
 HMMER_SADIR="lib/libdivsufsort"
 
-EASEL_DATE="October 2012"
-EASEL_COPYRIGHT="Copyright (C) 2012 Howard Hughes Medical Institute."
+EASEL_DATE="January 2013"
+EASEL_COPYRIGHT="Copyright (C) 2013 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the Janelia Farm Software License."
 EASEL_VERSION="h$PACKAGE_VERSION"
 EASEL_URL="http://bioeasel.org/"
@@ -97,7 +111,7 @@ AC_SUBST(EASEL_LICENSE)
 AC_SUBST(EASEL_VERSION)
 AC_SUBST(EASEL_URL)
 
-# Preprocessor symbols (replace #undefs in p7config.h)
+# Preprocessor symbols (replace #undefs in p7_config.h)
 AC_DEFINE_UNQUOTED(HMMER_DATE,      "$HMMER_DATE")
 AC_DEFINE_UNQUOTED(HMMER_COPYRIGHT, "$HMMER_COPYRIGHT")
 AC_DEFINE_UNQUOTED(HMMER_LICENSE,   "$HMMER_LICENSE")
@@ -136,7 +150,7 @@ AC_MSG_NOTICE([Full HMMER source distribution - using full configuration])
 
 
 ################################################################
-# Process the ./configure command line
+# 4. Process the ./configure command line
 ################################################################
 
 # --enable-debugging      - set basic debugging (level 1)
@@ -286,8 +300,8 @@ AC_ARG_WITH([gsl],
 
 
 ################################################################
-# Checks for programs, including choice of compiler ${CC} and ${CFLAGS}.
-#
+# 5. Checks for programs, including choice of compiler ${CC} and ${CFLAGS}.
+#################################################################
 AC_PROG_CC
 AC_PROG_INSTALL
 # MPI :  set @CC@ to mpicc, set @MPILIBS@ if needed (usually not; mpicc deals w/ it), defines HAVE_MPI. 
@@ -406,8 +420,9 @@ fi
 
 
 
-# 5. Checks for libraries
-#
+################################################################
+# 6. Checks for libraries
+#################################################################
 LIBGSL=
 AS_IF([test "x$with_gsl" != xno],
       [AC_CHECK_LIB([gsl], [gsl_expm1], 
@@ -422,7 +437,9 @@ AS_IF([test "x$with_gsl" != xno],
            [-lgslcblas]
         )])
 
-# Checks for headers
+################################################################
+# 7. Checks for headers
+################################################################
 # Defines HAVE_SYS_TYPES_H, HAVE_STDINT_H, etc.
 AC_CHECK_HEADERS([ \
   endian.h\
@@ -457,8 +474,9 @@ AC_CHECK_HEADERS([\
   xmmintrin.h
 ])
 
-# Checks for types
-#
+################################################################
+# 8. Checks for types
+################################################################
 AC_C_BIGENDIAN
 AC_TYPE_UINT8_T
 AC_TYPE_UINT16_T
@@ -466,8 +484,9 @@ AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 AC_TYPE_OFF_T
 
-# Checks for functions, defining HAVE_FOO when foo is found
-#
+################################################################
+# 9. Checks for functions, defining HAVE_FOO when foo is found
+#################################################################
 AC_CHECK_FUNCS(mkstemp)
 AC_CHECK_FUNCS(popen)
 AC_CHECK_FUNCS(strcasecmp)
@@ -485,15 +504,15 @@ AC_CHECK_FUNCS(htons, , AC_CHECK_LIB(socket, htons))
 AC_CHECK_FUNCS(htonl, , AC_CHECK_LIB(socket, htonl))
 AC_FUNC_FSEEKO
 
-#
-# 11. System services
-#
+#################################################################
+# 10. System services
+#################################################################
 AC_SYS_LARGEFILE
 
 
-# Done.
-# Config subdirs and files (except main Makefile, which we defer)
-#
+################################################################
+# 11. Config subdirs and files (except main Makefile, which we defer)
+#################################################################
 if test -d documentation/release-notes; then
   AC_CONFIG_FILES(documentation/release-notes/LICENSE.sh)
 fi
@@ -534,7 +553,7 @@ AC_CONFIG_HEADERS([
 ])
 
 ################################################################
-# 13. AC_OUTPUT
+# 12. AC_OUTPUT
 ################################################################
 # remember that sneaky if statement that wraps the source
 # configuration? well, it ends here.
