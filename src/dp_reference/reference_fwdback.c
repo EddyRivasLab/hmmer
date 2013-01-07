@@ -1215,6 +1215,19 @@ struct p7_brute_utest_s {
   double r;             /* J->B   exp(gm->xsc[p7P_J][p7P_MOVE]) */  
   double s;		/* B->G   exp(gm->xsc[p7P_B][1]         */
 
+  /* When 1-(a+e) = 0 exactly, we can run into numerical trouble if we
+   * only store nonzero a,e separately, because a+e may not be exactly
+   * one. So, store these explicitly, even thought they're not free
+   * parameters. Only necessary for these three distributions, which
+   * have three probability parameters. The rest are 2-parameter 
+   * distributions (even the emissions are effectively so), and for
+   * those, 1. and 0. can be stored exactly with no numerical error.
+   * [xref SRE:J11/5]
+   */
+  double onem_ae;	/* 1-(a+e) = hmm->t[0][MD] */
+  double onem_bf;	/* 1-(b+f) = hmm->t[1][MD] */
+  double onem_cg;	/* 1-(c+g) = hmm->t[2][MD] */
+
   double alpha;  	/* hmm->mat[k][x=A] emission for all match states */
   double beta;  	/* hmm->ins[k][x=A] emission for all insert states */
 
@@ -1263,6 +1276,10 @@ set_bruteparams(struct p7_brute_utest_s *prm)
   prm->l = 0.57;      /* hmm->t[1][p7H_DD] */
   prm->m = 0.59;      /* hmm->t[2][p7H_DD] */
 
+  prm->onem_ae = 0.15;
+  prm->onem_bf = 0.1;
+  prm->onem_cg = 0.02;
+
 #if 0
   /* Setting n,p,q,r to 1.0 makes the core model account
    * for the entire target seq: <= 19 paths are possible,
@@ -1304,10 +1321,10 @@ sample_bruteparams(ESL_RANDOMNESS *r, struct p7_brute_utest_s *prm)
   double tmp[3];
 
   /* make sure we can get M->M w/ nonzero prob, but pepper zeros elsewhere */
-  do { sample_zeropeppered_probvector(r, tmp, 3);  prm->a = tmp[0]; prm->e = tmp[1]; } while (prm->a == 0.0);
-  do { sample_zeropeppered_probvector(r, tmp, 3);  prm->b = tmp[0]; prm->f = tmp[1]; } while (prm->b == 0.0);
-  do { sample_zeropeppered_probvector(r, tmp, 3);  prm->c = tmp[0]; prm->g = tmp[1]; } while (prm->c == 0.0);
-  do { sample_zeropeppered_probvector(r, tmp, 2);  prm->d = tmp[0]; }                  while (prm->d == 0.0);
+  do { sample_zeropeppered_probvector(r, tmp, 3);  prm->a = tmp[0]; prm->e = tmp[1]; prm->onem_ae = tmp[2]; } while (prm->a == 0.0);
+  do { sample_zeropeppered_probvector(r, tmp, 3);  prm->b = tmp[0]; prm->f = tmp[1]; prm->onem_bf = tmp[2]; } while (prm->b == 0.0);
+  do { sample_zeropeppered_probvector(r, tmp, 3);  prm->c = tmp[0]; prm->g = tmp[1]; prm->onem_cg = tmp[2]; } while (prm->c == 0.0);
+  do { sample_zeropeppered_probvector(r, tmp, 2);  prm->d = tmp[0]; }  while (prm->d == 0.0);
 
   /* pepper any D, I transition. [3][II] cannot be 1.0 (k param)*/
   sample_zeropeppered_probvector(r, tmp, 2);  prm->h = tmp[0];
@@ -1347,21 +1364,21 @@ create_brute_models(struct p7_brute_utest_s *prm, ESL_ALPHABET *abc, P7_BG *bg, 
 
   hmm->t[0][p7H_MM] = prm->a;
   hmm->t[0][p7H_MI] = prm->e;
-  hmm->t[0][p7H_MD] = ESL_MAX(0.0f, (1.0 - (prm->a+prm->e))); /* fp roundoff error can give 1-(a+e)<0, though we "know" a+e<=1 */
+  hmm->t[0][p7H_MD] = prm->onem_ae;
   hmm->t[0][p7H_IM] = prm->h;
   hmm->t[0][p7H_II] = ESL_MAX(0.0f, (1.0 - prm->h));
   hmm->t[0][p7H_DM] = 1.0;	/* D0 doesn't exist; 1.0 is a convention */
   hmm->t[0][p7H_DD] = 0.0;	/* D0 doesn't exist; 0.0 is a convention */
   hmm->t[1][p7H_MM] = prm->b;
   hmm->t[1][p7H_MI] = prm->f;
-  hmm->t[1][p7H_MD] = ESL_MAX(0.0f, (1.0 - (prm->b+prm->f)));
+  hmm->t[1][p7H_MD] = prm->onem_bf;
   hmm->t[1][p7H_IM] = prm->i;
   hmm->t[1][p7H_II] = ESL_MAX(0.0f, (1.0 - prm->i));
   hmm->t[1][p7H_DM] = ESL_MAX(0.0f, (1.0 - prm->l));
   hmm->t[1][p7H_DD] = prm->l;
   hmm->t[2][p7H_MM] = prm->c;
   hmm->t[2][p7H_MI] = prm->g;
-  hmm->t[2][p7H_MD] = ESL_MAX(0.0f, (1.0 - (prm->c+prm->g)));
+  hmm->t[2][p7H_MD] = prm->onem_cg;
   hmm->t[2][p7H_IM] = prm->j;
   hmm->t[2][p7H_II] = ESL_MAX(0.0f, (1.0 - prm->j));
   hmm->t[2][p7H_DM] = ESL_MAX(0.0f, (1.0 - prm->m));
@@ -1432,10 +1449,10 @@ score_brute(struct p7_brute_utest_s *prm, P7_BG *bg, int do_viterbi, double sc[5
   double isc = prm->beta  / (double) bg->f[0];
 
   double onem_s  = ESL_MAX(0.0, 1.-s);      /* guard against roundoff errors making 1-(x) < 0  */
-  double onem_ae = ESL_MAX(0.0, 1.-(a+e)); 
-  double onem_bf = ESL_MAX(0.0, 1.-(b+f)); 
+  double onem_ae = prm->onem_ae;
+  double onem_bf = prm->onem_bf;
   double onem_l  = ESL_MAX(0.0, 1.-l) ;
-  double onem_cg = ESL_MAX(0.0, 1.-(c+g)); 
+  double onem_cg = prm->onem_cg;
   double onem_m  = ESL_MAX(0.0, 1.-m); 
   double onem_i  = ESL_MAX(0.0, 1.-i); 
   double onem_j  = ESL_MAX(0.0, 1.-j); 
@@ -1613,6 +1630,7 @@ utest_brute(ESL_RANDOMNESS *rng, int N)
       create_brute_models(&prm, abc, bg, &hmm, &gm);
       score_brute(&prm, bg, FALSE, brute_fwd);
       score_brute(&prm, bg, TRUE,  brute_vit);
+      //if (idx==67) p7_profile_Dump(stdout, gm);
 
       for (L = 1; L <= 4; L++)
 	{
@@ -1632,8 +1650,7 @@ utest_brute(ESL_RANDOMNESS *rng, int N)
 	   * now, for L=1 target seq, no path is possible, all scores -inf.
            * in this case, convention for traces is that they have N=0 (empty).
 	   */
-	  //if (idx==0) p7_trace_DumpAnnotated(stdout, vtr, gm, dsq);
-
+	  //if (idx==67) p7_trace_DumpAnnotated(stdout, vtr, gm, dsq);
 	  if (esl_FCompareAbs(vsc[L], brute_vit[L], vprecision) != eslOK) esl_fatal(msg);
 	  if (esl_FCompareAbs(fsc[L], brute_fwd[L], fprecision) != eslOK) esl_fatal(msg);
 	  if (esl_FCompareAbs(bsc[L], brute_fwd[L], fprecision) != eslOK) esl_fatal(msg);
