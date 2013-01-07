@@ -1033,6 +1033,11 @@ utest_duality(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
  * The default test uses M = 8. You can change this, but you need to keep it 
  * small, or the test will take a long time. There's a combinatorial
  * explosion of paths.
+ *
+ * This test will fail normally, with randomly chosen rng seeds,
+ * at about a 1% rate with its currently set thresholds. This is
+ * one reason why the production test driver uses a fixed rng seed,
+ * which we know succeeds.
  */
 static void
 utest_enumeration(ESL_RANDOMNESS *rng, int M)
@@ -1366,37 +1371,37 @@ create_brute_models(struct p7_brute_utest_s *prm, ESL_ALPHABET *abc, P7_BG *bg, 
   hmm->t[0][p7H_MI] = prm->e;
   hmm->t[0][p7H_MD] = prm->onem_ae;
   hmm->t[0][p7H_IM] = prm->h;
-  hmm->t[0][p7H_II] = ESL_MAX(0.0f, (1.0 - prm->h));
+  hmm->t[0][p7H_II] = 1.0 - prm->h;
   hmm->t[0][p7H_DM] = 1.0;	/* D0 doesn't exist; 1.0 is a convention */
   hmm->t[0][p7H_DD] = 0.0;	/* D0 doesn't exist; 0.0 is a convention */
   hmm->t[1][p7H_MM] = prm->b;
   hmm->t[1][p7H_MI] = prm->f;
   hmm->t[1][p7H_MD] = prm->onem_bf;
   hmm->t[1][p7H_IM] = prm->i;
-  hmm->t[1][p7H_II] = ESL_MAX(0.0f, (1.0 - prm->i));
-  hmm->t[1][p7H_DM] = ESL_MAX(0.0f, (1.0 - prm->l));
+  hmm->t[1][p7H_II] = 1.0 - prm->i;
+  hmm->t[1][p7H_DM] = 1.0 - prm->l;
   hmm->t[1][p7H_DD] = prm->l;
   hmm->t[2][p7H_MM] = prm->c;
   hmm->t[2][p7H_MI] = prm->g;
   hmm->t[2][p7H_MD] = prm->onem_cg;
   hmm->t[2][p7H_IM] = prm->j;
-  hmm->t[2][p7H_II] = ESL_MAX(0.0f, (1.0 - prm->j));
-  hmm->t[2][p7H_DM] = ESL_MAX(0.0f, (1.0 - prm->m));
+  hmm->t[2][p7H_II] = 1.0 - prm->j;
+  hmm->t[2][p7H_DM] = 1.0 - prm->m;
   hmm->t[2][p7H_DD] = prm->m;
   hmm->t[3][p7H_MM] = prm->d;	               /* M3->E */
-  hmm->t[3][p7H_MI] = ESL_MAX(0.0f, (1.0 - prm->d));
+  hmm->t[3][p7H_MI] = 1.0 - prm->d;
   hmm->t[3][p7H_MD] = 0.0;	               /* no D_M+1 state to move to */
   hmm->t[3][p7H_IM] = prm->k;
-  hmm->t[3][p7H_II] = ESL_MAX(0.0f, (1.0 - prm->k));
+  hmm->t[3][p7H_II] = 1.0 - prm->k;
   hmm->t[3][p7H_DM] = 1.0;	               /* forced transition to E */
   hmm->t[3][p7H_DD] = 0.0;
 
   for (k = 1; k <= M; k++) {
-    esl_vec_FSet(hmm->mat[k], abc->K, ESL_MAX(0.0f, (1.0-prm->alpha)/(float)(abc->K-1)));
+    esl_vec_FSet(hmm->mat[k], abc->K, (1.0-prm->alpha)/(float)(abc->K-1));
     hmm->mat[k][0] = prm->alpha;
   }
   for (k = 0; k <= M; k++) {
-    esl_vec_FSet(hmm->ins[k], abc->K, ESL_MAX(0.0f, (1.0-prm->beta)/(float)(abc->K-1)));
+    esl_vec_FSet(hmm->ins[k], abc->K, (1.0-prm->beta)/(float)(abc->K-1));
     hmm->ins[k][0] = prm->beta;
   }
   
@@ -1412,17 +1417,17 @@ create_brute_models(struct p7_brute_utest_s *prm, ESL_ALPHABET *abc, P7_BG *bg, 
   p7_profile_Config(gm, hmm, bg);
   /* Replace profile's configured length and multihit modeling. */
   gm->xsc[p7P_N][p7P_MOVE] = log(prm->n);
-  gm->xsc[p7P_N][p7P_LOOP] = log(ESL_MAX(0.0f, (1. - prm->n)));
+  gm->xsc[p7P_N][p7P_LOOP] = log(1. - prm->n);
   gm->xsc[p7P_E][p7P_MOVE] = log(prm->p);
-  gm->xsc[p7P_E][p7P_LOOP] = log(ESL_MAX(0.0f, (1. - prm->p)));
+  gm->xsc[p7P_E][p7P_LOOP] = log(1. - prm->p);
   gm->xsc[p7P_C][p7P_MOVE] = log(prm->q);
-  gm->xsc[p7P_C][p7P_LOOP] = log(ESL_MAX(0.0f, (1. - prm->q)));
+  gm->xsc[p7P_C][p7P_LOOP] = log(1. - prm->q);
   gm->xsc[p7P_J][p7P_MOVE] = log(prm->r);
-  gm->xsc[p7P_J][p7P_LOOP] = log(ESL_MAX(0.0f, (1. - prm->r)));
-  gm->xsc[p7P_B][0]        = log(ESL_MAX(0.0f, (1. - prm->s))); 
+  gm->xsc[p7P_J][p7P_LOOP] = log(1. - prm->r);
+  gm->xsc[p7P_B][0]        = log(1. - prm->s); 
   gm->xsc[p7P_B][1]        = log(prm->s); 
   gm->xsc[p7P_G][0]        = log(prm->a + prm->e);
-  gm->xsc[p7P_G][1]        = log(ESL_MAX(0.0f, (1. - (prm->a+prm->e))));
+  gm->xsc[p7P_G][1]        = log(prm->onem_ae);
 
   *ret_hmm = hmm;
   *ret_gm  = gm;
@@ -1447,19 +1452,9 @@ score_brute(struct p7_brute_utest_s *prm, P7_BG *bg, int do_viterbi, double sc[5
   double LM1 = prm->LMk[1];  double LM2 = prm->LMk[2];  double LM3 = prm->LMk[3];
   double msc = prm->alpha / (double) bg->f[0];
   double isc = prm->beta  / (double) bg->f[0];
-
-  double onem_s  = ESL_MAX(0.0, 1.-s);      /* guard against roundoff errors making 1-(x) < 0  */
   double onem_ae = prm->onem_ae;
   double onem_bf = prm->onem_bf;
-  double onem_l  = ESL_MAX(0.0, 1.-l) ;
   double onem_cg = prm->onem_cg;
-  double onem_m  = ESL_MAX(0.0, 1.-m); 
-  double onem_i  = ESL_MAX(0.0, 1.-i); 
-  double onem_j  = ESL_MAX(0.0, 1.-j); 
-  double onem_n  = ESL_MAX(0.0, 1.-n); 
-  double onem_p  = ESL_MAX(0.0, 1.-p); 
-  double onem_q  = ESL_MAX(0.0, 1.-q); 
-  double onem_r  = ESL_MAX(0.0, 1.-r); 
 
   double cp[32];	/* "core paths": odds of the 32 paths thru the core model                    */
   double cL[5];		/* summed/maxed paths for core model accounting for substring of length 0..4 */
@@ -1473,41 +1468,41 @@ score_brute(struct p7_brute_utest_s *prm, P7_BG *bg, int do_viterbi, double sc[5
    *    7 with n=3, cp[16..22]; and 9 with n=4, cp[23..31]
    *    These are odds ratio calculations (because msc is an odds ratio); they can be > 1
    */
-  cp[0] = msc * onem_s * LM1;	                              // n=1  L M1 
-  cp[1] = msc * onem_s * LM2;                                 // n=1  L M2 
-  cp[2] = msc * onem_s * LM3;                                 // n=1  L M3 
-  cp[3] = msc * onem_s * LM1 * onem_bf;                    // n=1  L M1 D2 
-  cp[4] = msc * onem_s * LM2 * onem_cg;                    // n=1  L M2 D3
-  cp[5] = msc * onem_s * LM1 * onem_bf * m;                // n=1  L M1 D2 D3
-  cp[6] = msc * s * (a+e) * onem_bf * m;                    // n=1  G M1 D2 D3
-  cp[7] = msc * s * onem_ae * onem_l * onem_cg;         // n=1  G D1 M2 D3
-  cp[8] = msc * s * onem_ae * l * onem_m;                  // n=1  G D1 D2 M3
+  cp[0] = msc * (1.-s) * LM1;	                        // n=1  L M1 
+  cp[1] = msc * (1.-s) * LM2;                           // n=1  L M2 
+  cp[2] = msc * (1.-s) * LM3;                           // n=1  L M3 
+  cp[3] = msc * (1.-s) * LM1 * onem_bf;                 // n=1  L M1 D2 
+  cp[4] = msc * (1.-s) * LM2 * onem_cg;                 // n=1  L M2 D3
+  cp[5] = msc * (1.-s) * LM1 * onem_bf * m;             // n=1  L M1 D2 D3
+  cp[6] = msc * s * (a+e) * onem_bf * m;                // n=1  G M1 D2 D3
+  cp[7] = msc * s * onem_ae * (1.-l) * onem_cg;         // n=1  G D1 M2 D3
+  cp[8] = msc * s * onem_ae * l * (1.-m);               // n=1  G D1 D2 M3
 
-  cp[9]  = msc * msc * onem_s * LM1 * b;                      // n=2  L M1 M2
-  cp[10] = msc * msc * onem_s * LM2 * c;                      // n=2  L M2 M3
-  cp[11] = msc * msc * onem_s * LM1 * b * onem_cg;         // n=2  L M1 M2 D3
-  cp[12] = msc * msc * onem_s * LM1 * onem_bf * onem_m;    // n=2  L M1 D2 M3
-  cp[13] = msc * msc * s * (a+e) * b * onem_cg;            // n=2  G M1 M2 M3
-  cp[14] = msc * msc * s * (a+e) * onem_bf * onem_m;        // n=2  G M1 D2 M3
-  cp[15] = msc * msc * s * onem_ae * onem_l * c;           // n=2  G D1 M2 M3
+  cp[9]  = msc * msc * (1.-s) * LM1 * b;                 // n=2  L M1 M2
+  cp[10] = msc * msc * (1.-s) * LM2 * c;                 // n=2  L M2 M3
+  cp[11] = msc * msc * (1.-s) * LM1 * b * onem_cg;       // n=2  L M1 M2 D3
+  cp[12] = msc * msc * (1.-s) * LM1 * onem_bf * (1.-m);  // n=2  L M1 D2 M3
+  cp[13] = msc * msc * s * (a+e) * b * onem_cg;          // n=2  G M1 M2 M3
+  cp[14] = msc * msc * s * (a+e) * onem_bf * (1.-m);     // n=2  G M1 D2 M3
+  cp[15] = msc * msc * s * onem_ae * (1.-l) * c;        // n=2  G D1 M2 M3
   
-  cp[16] = msc * msc * msc * onem_s * LM1 * b * c;              // n=3  L M1 M2 M3
-  cp[17] = msc * isc * msc * onem_s * LM1 * f * i * onem_cg; // n=3  L M1 I1 M2 D3
-  cp[18] = msc * isc * msc * onem_s * LM1 * f * i;              // n=3  L M1 I1 M2
-  cp[19] = msc * isc * msc * onem_s * LM2 * g * j;              // n=3  L M2 I2 M3
-  cp[20] = msc * msc * msc * s * (a+e) * b * c;                 // n=3  G M1 M2 M3
+  cp[16] = msc * msc * msc * (1.-s) * LM1 * b * c;           // n=3  L M1 M2 M3
+  cp[17] = msc * isc * msc * (1.-s) * LM1 * f * i * onem_cg; // n=3  L M1 I1 M2 D3
+  cp[18] = msc * isc * msc * (1.-s) * LM1 * f * i;           // n=3  L M1 I1 M2
+  cp[19] = msc * isc * msc * (1.-s) * LM2 * g * j;           // n=3  L M2 I2 M3
+  cp[20] = msc * msc * msc * s * (a+e) * b * c;              // n=3  G M1 M2 M3
   cp[21] = msc * isc * msc * s * (a+e) * f * i * onem_cg;    // n=3  G M1 I1 M2 D3
-  cp[22] = msc * isc * msc * s * onem_ae * onem_l * g * j;   // n=3  G D1 M2 I2 M3
+  cp[22] = msc * isc * msc * s * onem_ae * (1.-l) * g * j;   // n=3  G D1 M2 I2 M3
 
-  cp[23] = msc * isc * msc * msc * onem_s * LM1 * f * i * c;                     // n=4  L M1 I1 M2 M3
-  cp[24] = msc * isc * isc * msc * onem_s * LM1 * f * onem_i * i * onem_cg;   // n=4  L M1 I1 I1 M2 D3
-  cp[25] = msc * msc * isc * msc * onem_s * LM1 * b * g * j;                     // n=4  L M1 M2 I2 M3
-  cp[26] = msc * isc * isc * msc * onem_s * LM1 * f * onem_i * i;                // n=4  L M1 I1 I1 M2
-  cp[27] = msc * isc * isc * msc * onem_s * LM2 * g * onem_j * j;                // n=4  L M2 I2 I2 M3
-  cp[28] = msc * isc * msc * msc * s * (a+e) * f * i * c;                        // n=4  G M1 I1 M2 M3
-  cp[29] = msc * isc * isc * msc * s * (a+e) * f * onem_i * i * onem_cg;      // n=4  G M1 I1 I1 M2 D3
-  cp[30] = msc * msc * isc * msc * s * (a+e) * b * g * j;                        // n=4  G M1 M2 I2 M3
-  cp[31] = msc * isc * isc * msc * s * onem_ae * onem_l * g * onem_j * j;     // n=4  G D1 M2 I2 I2 M3
+  cp[23] = msc * isc * msc * msc * (1.-s) * LM1 * f * i * c;                 // n=4  L M1 I1 M2 M3
+  cp[24] = msc * isc * isc * msc * (1.-s) * LM1 * f * (1.-i) * i * onem_cg;  // n=4  L M1 I1 I1 M2 D3
+  cp[25] = msc * msc * isc * msc * (1.-s) * LM1 * b * g * j;                 // n=4  L M1 M2 I2 M3
+  cp[26] = msc * isc * isc * msc * (1.-s) * LM1 * f * (1.-i) * i;            // n=4  L M1 I1 I1 M2
+  cp[27] = msc * isc * isc * msc * (1.-s) * LM2 * g * (1.-j) * j;            // n=4  L M2 I2 I2 M3
+  cp[28] = msc * isc * msc * msc * s * (a+e) * f * i * c;                    // n=4  G M1 I1 M2 M3
+  cp[29] = msc * isc * isc * msc * s * (a+e) * f * (1.-i) * i * onem_cg;     // n=4  G M1 I1 I1 M2 D3
+  cp[30] = msc * msc * isc * msc * s * (a+e) * b * g * j;                    // n=4  G M1 M2 I2 M3
+  cp[31] = msc * isc * isc * msc * s * onem_ae * (1.-l) * g * (1.-j) * j;    // n=4  G D1 M2 I2 I2 M3
 
   /* 2. Now sum/max (Fwd/Vit) the odds ratios of each length 1..4 */
   cL[0] = 0.;
@@ -1522,27 +1517,27 @@ score_brute(struct p7_brute_utest_s *prm, P7_BG *bg, int do_viterbi, double sc[5
    *    core model: 21 such paths.
    */
   jp[0]  = cL[4];			                                          // [4]                    (n=4, 0 in J) 
-  jp[1]  = cL[3] * onem_p * r * cL[1];                                            // [3] J [1]              (n=4, 0 in J) 
-  jp[2]  = cL[2] * onem_p * r * cL[2];                                            // [2] J [2]              (n=4, 0 in J) 
-  jp[3]  = cL[2] * onem_p * r * cL[1] * onem_p * r * cL[1];                       // [2] J [1] J [1]        (n=4, 0 in J) 
-  jp[4]  = cL[1] * onem_p * r * cL[3];                                            // [1] J [3]              (n=4, 0 in J) 
-  jp[5]  = cL[1] * onem_p * r * cL[2] * onem_p * r * cL[1];                       // [1] J [2] J [1]        (n=4, 0 in J) 
-  jp[6]  = cL[1] * onem_p * r * cL[1] * onem_p * r * cL[2];                       // [1] J [1] J [2]        (n=4, 0 in J) 
-  jp[7]  = cL[1] * onem_p * r * cL[1] * onem_p * r * cL[1] * onem_p * r * cL[1];  // [1] J [1] J [1] J [1]  (n=4, 0 in J) 
-  jp[8]  = cL[2] * onem_p * onem_r * r * cL[1];                                   // [2] JJ [1]             (n=4, 1 in J) 
-  jp[9]  = cL[1] * onem_p * onem_r * r * cL[2];                                   // [1] JJ [2]             (n=4, 1 in J) 
-  jp[10] = cL[1] * onem_p * onem_r * r * cL[1] * onem_p * r * cL[1];              // [1] JJ [1] J [1]       (n=4, 1 in J) 
-  jp[11] = cL[1] * onem_p * r * cL[1] * onem_p * onem_r * r * cL[1];              // [1] J [1] JJ [1]       (n=4, 1 in J) 
-  jp[12] = cL[1] * onem_p * onem_r * onem_r * r * cL[1];                          // [1] JJJ [1]            (n=4, 2 in J) 
+  jp[1]  = cL[3] * (1.-p) * r * cL[1];                                            // [3] J [1]              (n=4, 0 in J) 
+  jp[2]  = cL[2] * (1.-p) * r * cL[2];                                            // [2] J [2]              (n=4, 0 in J) 
+  jp[3]  = cL[2] * (1.-p) * r * cL[1] * (1.-p) * r * cL[1];                       // [2] J [1] J [1]        (n=4, 0 in J) 
+  jp[4]  = cL[1] * (1.-p) * r * cL[3];                                            // [1] J [3]              (n=4, 0 in J) 
+  jp[5]  = cL[1] * (1.-p) * r * cL[2] * (1.-p) * r * cL[1];                       // [1] J [2] J [1]        (n=4, 0 in J) 
+  jp[6]  = cL[1] * (1.-p) * r * cL[1] * (1.-p) * r * cL[2];                       // [1] J [1] J [2]        (n=4, 0 in J) 
+  jp[7]  = cL[1] * (1.-p) * r * cL[1] * (1.-p) * r * cL[1] * (1.-p) * r * cL[1];  // [1] J [1] J [1] J [1]  (n=4, 0 in J) 
+  jp[8]  = cL[2] * (1.-p) * (1.-r) * r * cL[1];                                   // [2] JJ [1]             (n=4, 1 in J) 
+  jp[9]  = cL[1] * (1.-p) * (1.-r) * r * cL[2];                                   // [1] JJ [2]             (n=4, 1 in J) 
+  jp[10] = cL[1] * (1.-p) * (1.-r) * r * cL[1] * (1.-p) * r * cL[1];              // [1] JJ [1] J [1]       (n=4, 1 in J) 
+  jp[11] = cL[1] * (1.-p) * r * cL[1] * (1.-p) * (1.-r) * r * cL[1];              // [1] J [1] JJ [1]       (n=4, 1 in J) 
+  jp[12] = cL[1] * (1.-p) * (1.-r) * (1.-r) * r * cL[1];                          // [1] JJJ [1]            (n=4, 2 in J) 
 
   jp[13] = cL[3];		                                                  // [3]                    (n=3, 0 in J) 
-  jp[14] = cL[2] * onem_p * r * cL[1];                                            // [2] J [1]              (n=3, 0 in J) 
-  jp[15] = cL[1] * onem_p * r * cL[2];                                            // [1] J [2]              (n=3, 0 in J) 
-  jp[16] = cL[1] * onem_p * r * cL[1] * onem_p * r * cL[1];                       // [1] J [1] J [1]        (n=3, 0 in J) 
-  jp[17] = cL[1] * onem_p * onem_r * r * cL[1];                                   // [1] JJ [1]             (n=3, 1 in J) 
+  jp[14] = cL[2] * (1.-p) * r * cL[1];                                            // [2] J [1]              (n=3, 0 in J) 
+  jp[15] = cL[1] * (1.-p) * r * cL[2];                                            // [1] J [2]              (n=3, 0 in J) 
+  jp[16] = cL[1] * (1.-p) * r * cL[1] * (1.-p) * r * cL[1];                       // [1] J [1] J [1]        (n=3, 0 in J) 
+  jp[17] = cL[1] * (1.-p) * (1.-r) * r * cL[1];                                   // [1] JJ [1]             (n=3, 1 in J) 
 
   jp[18] = cL[2];                                                                 // [2]                    (n=2, 0 in J) 
-  jp[19] = cL[1] * onem_p * r * cL[1];                                            // [1] J [1]              (n=2, 0 in J) 
+  jp[19] = cL[1] * (1.-p) * r * cL[1];                                            // [1] J [1]              (n=2, 0 in J) 
   
   jp[20] = cL[1];		                                                  // [1]                    (n=1, 0 in J) 
 
@@ -1556,15 +1551,15 @@ score_brute(struct p7_brute_utest_s *prm, P7_BG *bg, int do_viterbi, double sc[5
   /* 5. Probabilities of 10 possible paths accounting for 0..3 residues in the flanks.
    */
   ap[0] = n * p * q;
-  ap[1] = onem_n * n * p * q;
-  ap[2] = n * p * onem_q * q;
-  ap[3] = onem_n * onem_n * n * p * q;
-  ap[4] = onem_n * n * p * onem_q * q;
-  ap[5] = n * p * onem_q * onem_q * q;
-  ap[6] = onem_n * onem_n * onem_n * n * p * q;
-  ap[7] = onem_n * onem_n * n * p * onem_q * q;
-  ap[8] = onem_n * n * p * onem_q * onem_q * q;
-  ap[9] = n * p * onem_q * onem_q * onem_q * q;
+  ap[1] = (1.-n) * n * p * q;
+  ap[2] = n * p * (1.-q) * q;
+  ap[3] = (1.-n) * (1.-n) * n * p * q;
+  ap[4] = (1.-n) * n * p * (1.-q) * q;
+  ap[5] = n * p * (1.-q) * (1.-q) * q;
+  ap[6] = (1.-n) * (1.-n) * (1.-n) * n * p * q;
+  ap[7] = (1.-n) * (1.-n) * n * p * (1.-q) * q;
+  ap[8] = (1.-n) * n * p * (1.-q) * (1.-q) * q;
+  ap[9] = n * p * (1.-q) * (1.-q) * (1.-q) * q;
 
   /* 6. Sum or max the total path probability for the flanks generating
    *     0..3 residues
@@ -1611,14 +1606,14 @@ utest_brute(ESL_RANDOMNESS *rng, int N)
   P7_REFMX     *bck = p7_refmx_Create(3, 4); /* M=3, L=4. */
   P7_TRACE     *vtr = p7_trace_Create();
   ESL_DSQ       dsq[6];			     /* digital sequence of up to 4 residues */
-  double brute_fwd[5];
-  double brute_vit[5];
-  float  fsc[5];
-  float  bsc[5];
-  float  vsc[5];
-  int    idx;
-  int    L;			/* sequence lengths 1..4 */
-  int    pos;
+  double        brute_fwd[5];
+  double        brute_vit[5];
+  float         fsc[5];
+  float         bsc[5];
+  float         vsc[5];
+  int           idx;
+  int           L;			/* sequence lengths 1..4 */
+  int           pos;
   float         vprecision = 1e-4;
   float         fprecision = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
 
@@ -1642,13 +1637,20 @@ utest_brute(ESL_RANDOMNESS *rng, int N)
 	  p7_ReferenceForward (dsq, L, gm, fwd,      &(fsc[L])); 
 	  p7_ReferenceBackward(dsq, L, gm, bck,      &(bsc[L]));  
 
-	  /* It's possible, though very unusual, for the scores to be -inf.
-	   * An example I ran across:
+	  /* It's possible for the scores to be -inf.
+	   * One example I ran across:
 	   *  suppose B->L=0  (so only glocal paths are possible)
 	   *  and     G->D1=0 (so you have to start by emitting on match state 1)
 	   *  and     DG2->DG3=0 (so G->MG1->DG2->DG3 path has zero prob)
 	   * now, for L=1 target seq, no path is possible, all scores -inf.
            * in this case, convention for traces is that they have N=0 (empty).
+           * 
+           * A similar but even simpler example, run across later, which occurs
+           * in the standard test w/ rng seed 42, at idx==67:
+           *  suppose B->L=0
+           *  and     G->D1=0
+           *  and     DG1->DG2=0,DG2->DG3=0;
+           * now both L=1 and L=2 target seqs are impossible and -inf.
 	   */
 	  //if (idx==67) p7_trace_DumpAnnotated(stdout, vtr, gm, dsq);
 	  if (esl_FCompareAbs(vsc[L], brute_vit[L], vprecision) != eslOK) esl_fatal(msg);
