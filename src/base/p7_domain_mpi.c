@@ -2,15 +2,16 @@
  * 
  * Currently, one or more P7_DOMAINs are packed/unpacked as
  * part of one P7_HIT; we do not need a send/recv, only
- * pack/unpack. So, see p7_tophits_mpi for the send/recv;
- * also for unit testing.
+ * pack/unpack. So, see p7_tophits_mpi for the send/recv.
  * 
  * Depends on p7_alidisplay_mpi, because it packs the alidisplay,
  * in addition to the domain coord info.
  * 
  * Contents:
  *    1. Pack/unpack of P7_DOMAIN, one domain hit and its alignment
- *    2. Copyright and license information.
+ *    2. Unit tests
+ *    3. Test driver
+ *    4. Copyright and license information.
  */
 #include "p7_config.h"
 #ifdef HAVE_MPI
@@ -58,6 +59,7 @@ p7_domain_mpi_PackSize(const P7_DOMAIN *dcl, int ndom, MPI_Comm comm, int *ret_n
       if ( MPI_Pack_size( 1, MPI_DOUBLE, comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed"); n += sz;    /* lnP */
 
       if ( (status = p7_alidisplay_mpi_PackSize(dcl[d].ad, comm, &sz)) != eslOK) return status;                 n += sz;
+      // fixme: TJW is using scores_per_pos; SRE is not dealing with it
     }
   *ret_n = n;
   return eslOK;
@@ -117,6 +119,7 @@ p7_domain_mpi_Pack(const P7_DOMAIN *dcl, int ndom, char *buf, int n, int *pos, M
       if (MPI_Pack((void *) &(dcl[d].is_included),   1, MPI_INT,    buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
 
       if (( status = p7_alidisplay_mpi_Pack(dcl[d].ad,      buf, n, pos, comm))!= eslOK)       return status;
+      // fixme: TJW is using scores_per_pos; SRE is not dealing with it
     }
   if (*pos > n) ESL_EXCEPTION(eslEMEM, "buffer overflow");
   return eslOK;
@@ -170,6 +173,8 @@ p7_domain_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, P7_DOMAIN **ret_
       if ( MPI_Unpack( buf, n, pos, &(dcl[d].is_reported),   1, MPI_INT,    comm) != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
       if ( MPI_Unpack( buf, n, pos, &(dcl[d].is_included),   1, MPI_INT,    comm) != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
 
+      dcl[d].scores_per_pos = NULL;       // fixme: TJW is using scores_per_pos; SRE is not dealing with it
+
       if (( status = p7_alidisplay_mpi_Unpack( buf, n, pos, comm, &(dcl[d].ad)))  != eslOK) goto ERROR;
     }
   *ret_dcl = dcl;
@@ -184,6 +189,124 @@ p7_domain_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, P7_DOMAIN **ret_
   *ret_dcl = NULL;
   return status;
 }
+
+/*****************************************************************
+ * 2. Unit tests.
+ *****************************************************************/
+#ifdef p7DOMAIN_MPI_TESTDRIVE
+
+#include "esl_random.h"
+
+/* The pack/unpack test does no interprocess communication, so it can
+ * run with any number of mpi processes, even just 1
+ */
+static void
+utest_PackUnpack(ESL_RANDOMNESS *rng)
+{
+  char msg[]       = "utest_PackUnpack() failed";
+  P7_DOMAIN *dcl1  = NULL;
+  P7_DOMAIN *dcl2  = NULL;
+  int        ndom  = 10;
+  int        alen  = 100;
+  int        d;
+  int        n1;
+  char      *buf   = NULL;
+  int        pos   = 0;
+  char       errbuf[eslERRBUFSIZE];
+  int        status;
+
+  if ( (dcl1 = p7_domain_Create(ndom)) == NULL) esl_fatal(msg);
+  for (d = 0; d < ndom; d++)
+    if (p7_domain_TestSample(rng, alen, &(dcl1[d])) != eslOK) esl_fatal(msg);
+  
+  if (p7_domain_mpi_PackSize(dcl1, ndom, MPI_COMM_WORLD, &n1) != eslOK) esl_fatal(msg);
+  ESL_ALLOC(buf, sizeof(char) * n1);
+  
+  pos = 0;
+  if (p7_domain_mpi_Pack(dcl1, ndom, buf, n1, &pos, MPI_COMM_WORLD) != eslOK) esl_fatal(msg);
+  if (n1 != pos) esl_fatal(msg);
+
+  pos = 0;
+  if (p7_domain_mpi_Unpack(buf, n1, &pos, MPI_COMM_WORLD, &dcl2, ndom) != eslOK) esl_fatal(msg);
+  if (n1 != pos) esl_fatal(msg);
+
+  for (d = 0; d < ndom; d++)
+    {
+      if (p7_domain_Validate(&(dcl1[d]), errbuf) != eslOK) esl_fatal("%s:\n%s", msg, errbuf);
+      if (p7_domain_Validate(&(dcl2[d]), errbuf) != eslOK) esl_fatal("%s:\n%s", msg, errbuf);
+      if (p7_domain_Compare( &(dcl1[d]), &(dcl2[d]), 1e-6) != eslOK) esl_fatal(msg);
+    }
+  p7_domain_Destroy(dcl1, ndom);
+  p7_domain_Destroy(dcl2, ndom);
+  free(buf);
+  return;
+
+ ERROR:
+  esl_fatal(msg);
+}
+#endif /*p7DOMAIN_MPI_TESTDRIVE*/
+/*--------------- end, unit tests -------------------------------*/
+
+/*****************************************************************
+ * 3. Test driver
+ *****************************************************************/
+#ifdef p7DOMAIN_MPI_TESTDRIVE
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_getopts.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                        docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",            0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                   0 },
+  { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "arrest after start: for debugging MPI under gdb", 0 },  
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "unit test driver for p7_domain_mpi.c domain coord MPI communication routines";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go       = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *rng      = NULL;
+  int             stalling = esl_opt_GetBoolean(go, "--stall");
+  int             my_rank;
+  int             nproc;
+
+  MPI_Init(&argc, &argv);
+  MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+  if (my_rank == 0) {
+    rng = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+    fprintf(stderr, "## %s\n", argv[0]);
+    fprintf(stderr, "#  rng seed  = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+    fprintf(stderr, "#  MPI nproc = %d\n", nproc);
+  }
+#ifdef HAVE_GETPID
+  fprintf(stderr, "#    %6d = %d\n", my_rank, getpid()); 
+#endif
+  while (stalling);	
+
+  if (my_rank == 0) 
+    utest_PackUnpack(rng);
+  
+  if (my_rank == 0) {
+    fprintf(stderr, "#  status = ok\n");
+    esl_randomness_Destroy(rng);
+  }
+
+  MPI_Finalize();
+  esl_getopts_Destroy(go);
+  exit(0); /* success */
+}
+#endif /*p7DOMAIN_MPI_TESTDRIVE*/
+/*---------------- end, test driver -----------------------------*/
+
+
 
 #else /*! HAVE_MPI*/
 /* If we don't have MPI compiled in, provide some nothingness to:

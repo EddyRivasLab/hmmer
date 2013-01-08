@@ -28,9 +28,17 @@
 ################################################################
 # MPI tests
 ################################################################
+# Some MPI tests exercise interprocess communication; these have -n 2
+# Some don't; these have -n 1
+#
+1 mpi      p7_alidisplay_mpi    mpirun -n 1 @src/base/p7_alidisplay_mpi_utest@
+1 mpi      p7_domain_mpi        mpirun -n 1 @src/base/p7_domain_mpi_utest@
 1 mpi      p7_hmm_mpi           mpirun -n 2 @src/base/p7_hmm_mpi_utest@
 1 mpi      p7_profile_mpi       mpirun -n 2 @src/base/p7_profile_mpi_utest@
-1 mpi      p7_pipeline_mpi      mpirun -n 2 @src/base/p7_pipeline_mpi_utest@
+1 mpi      p7_tophits_mpi       mpirun -n 2 @src/base/p7_tophits_mpi_utest@
+1 mpi      p7_oprofile_mpi      mpirun -n 2 @src/dp_vector/p7_oprofile_mpi_utest@
+1 mpi      p7_pipeline_mpi      mpirun -n 2 @src/search/p7_pipeline_mpi_utest@
+
 
 ################################################################
 # Unit test drivers for each .c file

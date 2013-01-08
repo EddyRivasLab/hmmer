@@ -88,25 +88,25 @@ endif
 .PHONY: all dev tests check install uninstall distclean clean TAGS tags-append
 
 all: libhmmer.a 
-	${QUIET}+for subdir in ${SUBDIRS}; do \
+	${QUIET}+set -e; for subdir in ${SUBDIRS}; do \
 	   echo '    ' SUBDIR $$subdir; \
 	   ${MAKE} -C $$subdir all; \
 	done
 
 dev: libhmmer.a
-	${QUIET}+for subdir in ${SUBDIRS}; do \
+	${QUIET}+set -e; for subdir in ${SUBDIRS}; do \
 	   echo '    ' SUBDIR $$subdir; \
 	   ${MAKE} -C $$subdir dev; \
 	done
 
 tests: libhmmer.a
-	${QUIET}+for subdir in ${SUBDIRS}; do \
+	${QUIET}+set -e; for subdir in ${SUBDIRS}; do \
 	   echo '    ' SUBDIR $$subdir; \
 	   ${MAKE} -C $$subdir tests; \
 	done
 
 check: libhmmer.a
-	${QUIET}+for subdir in ${SUBDIRS}; do \
+	${QUIET}+set -e; for subdir in ${SUBDIRS}; do \
 	   echo '    ' SUBDIR $$subdir; \
 	   ${MAKE} -C $$subdir check; \
 	done
@@ -117,33 +117,33 @@ check: libhmmer.a
 # target in each subdir.
 .FORCE:
 libhmmer.a: .FORCE
-	${QUIET}+for subdir in ${SUBDIRS}; do \
+	${QUIET}+set -e; for subdir in ${SUBDIRS}; do \
 	   echo '    ' SUBDIR $$subdir; \
 	   ${MAKE} -C $$subdir libhmmer-$$subdir.stamp; \
 	done
 
 
 install: libhmmer.a
-	${QUIET}+for subdir in ${SUBDIRS}; do \
+	${QUIET}+set -e; for subdir in ${SUBDIRS}; do \
 	   echo '    ' SUBDIR $$subdir; \
 	   ${MAKE} -C $$subdir install ;\
 	done
 
 uninstall:
-	${QUIET}+for subdir in ${SUBDIRS}; do \
+	${QUIET}+set -e; for subdir in ${SUBDIRS}; do \
 	   echo '    ' SUBDIR $$subdir ;\
 	   ${MAKE} -C $$subdir uninstall ;\
 	done
 
 distclean: clean
-	${QUIET}+for subdir in ${SUBDIRS}; do \
+	${QUIET}+set -e; for subdir in ${SUBDIRS}; do \
 	   echo '    ' SUBDIR $$subdir; \
 	   ${MAKE} -C $$subdir distclean; \
 	done
 	-rm -f Makefile Makefile-subdirs.mk p7_config.h
 
 clean:
-	${QUIET}+for subdir in ${SUBDIRS}; do \
+	${QUIET}+set -e; for subdir in ${SUBDIRS}; do \
 	   echo '    ' SUBDIR $$subdir; \
 	   ${MAKE} -C $$subdir clean; \
 	done
@@ -151,7 +151,7 @@ clean:
 	-rm -f libhmmer.a 
 
 tags-append:
-	${QUIET}+for subdir in ${SUBDIRS}; do \
+	${QUIET}+set -e; for subdir in ${SUBDIRS}; do \
 	   echo '    ' SUBDIR $$subdir; \
 	   ${MAKE} -C $$subdir tags-append; \
 	done

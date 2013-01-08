@@ -75,8 +75,10 @@ p7_domain_TestSample(ESL_RANDOMNESS *rng, int alen, P7_DOMAIN *dcl)
   dcl->lnP           = -1000. + 2000.*esl_random(rng);
   dcl->is_reported   = esl_rnd_Roll(rng, 2);
   dcl->is_included   = esl_rnd_Roll(rng, 2);
+  dcl->scores_per_pos = NULL; //fixme. TJW is using this; SRE is not testing it.
 
   if ((status = p7_alidisplay_TestSample(rng, alen, &(dcl->ad))) != eslOK) return status;
+  if ((status = p7_alidisplay_Serialize (dcl->ad))               != eslOK) return status;
 
   return eslOK;
 }

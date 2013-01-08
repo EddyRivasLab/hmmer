@@ -838,12 +838,12 @@ p7_alidisplay_TestSample(ESL_RANDOMNESS *rng, int alen, P7_ALIDISPLAY **ret_ad)
   if (esl_rnd_Roll(rng, 2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_DIGIT, ad->N, &(ad->ppline)); 
   
   esl_rsq_Sample(rng, eslRSQ_SAMPLE_GRAPH, 1+esl_rnd_Roll(rng, 30), &(ad->hmmname));
-  if (esl_rnd_Roll(rng,2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_ALNUM, 1+esl_rnd_Roll(rng,10),  &(ad->hmmacc));
-  if (esl_rnd_Roll(rng,2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_PRINT, 1+esl_rnd_Roll(rng,120), &(ad->hmmdesc));
+  if (esl_rnd_Roll(rng,2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_ALNUM, 1+esl_rnd_Roll(rng,10),  &(ad->hmmacc));  else esl_strdup("", 0, &(ad->hmmacc));
+  if (esl_rnd_Roll(rng,2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_PRINT, 1+esl_rnd_Roll(rng,120), &(ad->hmmdesc)); else esl_strdup("", 0, &(ad->hmmdesc));
 
   esl_rsq_Sample(rng, eslRSQ_SAMPLE_GRAPH, 1+esl_rnd_Roll(rng, 30), &(ad->sqname));
-  if (esl_rnd_Roll(rng,2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_ALNUM, 1+esl_rnd_Roll(rng,10),  &(ad->sqacc));
-  if (esl_rnd_Roll(rng,2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_PRINT, 1+esl_rnd_Roll(rng,120), &(ad->sqdesc));
+  if (esl_rnd_Roll(rng,2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_ALNUM, 1+esl_rnd_Roll(rng,10),  &(ad->sqacc));   else esl_strdup("", 0, &(ad->sqacc));
+  if (esl_rnd_Roll(rng,2)) esl_rsq_Sample(rng, eslRSQ_SAMPLE_PRINT, 1+esl_rnd_Roll(rng,120), &(ad->sqdesc));  else esl_strdup("", 0, &(ad->sqdesc));
 
   ad->is_glocal = esl_rnd_Roll(rng, 2);
   ad->M         = 1+esl_rnd_Roll(rng, 100000);

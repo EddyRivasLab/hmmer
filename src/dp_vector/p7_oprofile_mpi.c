@@ -69,7 +69,7 @@ p7_oprofile_mpi_Send(const P7_OPROFILE *om, int dest, int tag, MPI_Comm comm, ch
   int   status;
 
   /* Figure out size */
-  if (MPI_Pack_size(1, MPI_INT, comm, &n)                != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi pack size failed"); n += sz;
+  if (MPI_Pack_size(1, MPI_INT, comm, &sz)               != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi pack size failed"); n += sz;
   if ((status = p7_oprofile_mpi_PackSize(om, comm, &sz)) != eslOK)       return status;                                   n += sz;
 
   /* Make sure the buffer is allocated appropriately */
@@ -584,6 +584,9 @@ main(int argc, char **argv)
  * 3. Unit tests
  *****************************************************************/
 #ifdef p7OPROFILE_MPI_TESTDRIVE
+
+#include "build/modelsample.h"
+#include "search/modelconfig.h"
 
 static void
 utest_oprofileSendRecv(int my_rank, int nproc)

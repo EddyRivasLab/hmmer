@@ -3,12 +3,13 @@
  * Currently, we only support packing/unpacking of P7_ALIDISPLAY; we
  * do not send/recv it.  P7_ALIDISPLAY is packed into a buffer as part
  * of a P7_DOMAIN, which is part of a P7_HIT; see p7_tophits_mpi.c,
- * p7_domain_mpi.c. Thus, unit tests are over in p7_tophits_mpi.c,
- * where we test send/recv of P7_HIT.
+ * p7_domain_mpi.c. 
  * 
  * Contents:
  *    1. Pack/unpack of P7_ALIDISPLAY, alignment display information.
- *    2. Copyright and license information.
+ *    2. Unit tests.
+ *    3. Test driver.
+ *    4. Copyright and license information.
  */
 #include "p7_config.h"
 #ifdef HAVE_MPI
@@ -103,13 +104,13 @@ p7_alidisplay_mpi_Pack(const P7_ALIDISPLAY *ad, char *buf, int n, int *pos, MPI_
       if (MPI_Pack((void *) &(ad->L),           1, MPI_INT64_T,   buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed"); 
       if (MPI_Pack((void *) ad->mem,  ad->memsize, MPI_CHAR,      buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed"); 
       
-      offset = (ad->rfline  ? ad->rfline  - ad->mem : 0);  if (MPI_Pack(&offset, 1, MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
-      offset = (ad->mmline  ? ad->mmline  - ad->mem : 0);  if (MPI_Pack(&offset, 1, MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
-      offset = (ad->csline  ? ad->csline  - ad->mem : 0);  if (MPI_Pack(&offset, 1, MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
+      offset = (ad->rfline  ? ad->rfline  - ad->mem : -1); if (MPI_Pack(&offset, 1, MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
+      offset = (ad->mmline  ? ad->mmline  - ad->mem : -1); if (MPI_Pack(&offset, 1, MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
+      offset = (ad->csline  ? ad->csline  - ad->mem : -1); if (MPI_Pack(&offset, 1, MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
       offset =                ad->model   - ad->mem;       if (MPI_Pack(&offset, 1, MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
       offset =                ad->mline   - ad->mem;       if (MPI_Pack(&offset, 1, MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
       offset =                ad->aseq    - ad->mem;       if (MPI_Pack(&offset, 1, MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
-      offset = (ad->ppline  ? ad->ppline  - ad->mem : 0);  if (MPI_Pack(&offset, 1, MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
+      offset = (ad->ppline  ? ad->ppline  - ad->mem : -1); if (MPI_Pack(&offset, 1, MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
       offset =                ad->hmmname - ad->mem;       if (MPI_Pack(&offset, 1, MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
       offset =                ad->hmmacc  - ad->mem;       if (MPI_Pack(&offset, 1, MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
       offset =                ad->hmmdesc - ad->mem;       if (MPI_Pack(&offset, 1, MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
@@ -162,19 +163,19 @@ p7_alidisplay_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, P7_ALIDISPLA
   ESL_ALLOC(ad->mem, sizeof(char) * ad->memsize);
   if ( MPI_Unpack( buf, n, pos,  ad->mem,  ad->memsize, MPI_CHAR,   comm) != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
   
-  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->rfline  = (offset ? ad->mem + offset : NULL);
-  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->mmline  = (offset ? ad->mem + offset : NULL);
-  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->csline  = (offset ? ad->mem + offset : NULL);
-  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->model   =           ad->mem + offset;
-  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->mline   =           ad->mem + offset;
-  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->aseq    =           ad->mem + offset;
-  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->ppline  = (offset ? ad->mem + offset : NULL);
-  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->hmmname =           ad->mem + offset;
-  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->hmmacc  =           ad->mem + offset;
-  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->hmmdesc =           ad->mem + offset;
-  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->sqname  =           ad->mem + offset;
-  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->sqacc   =           ad->mem + offset;
-  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->sqdesc  =           ad->mem + offset;
+  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->rfline  = (offset >= 0 ? ad->mem + offset : NULL);
+  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->mmline  = (offset >= 0 ? ad->mem + offset : NULL);
+  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->csline  = (offset >= 0 ? ad->mem + offset : NULL);
+  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->model   =                ad->mem + offset;
+  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->mline   =                ad->mem + offset;
+  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->aseq    =                ad->mem + offset;
+  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->ppline  = (offset >= 0 ? ad->mem + offset : NULL);
+  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->hmmname =                ad->mem + offset;
+  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->hmmacc  =                ad->mem + offset;
+  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->hmmdesc =                ad->mem + offset;
+  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->sqname  =                ad->mem + offset;
+  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->sqacc   =                ad->mem + offset;
+  if ( MPI_Unpack(buf, n, pos, &(offset), 1, MPI_INT, comm) != MPI_SUCCESS)  ESL_XEXCEPTION(eslESYS, "mpi unpack failed");  ad->sqdesc  =                ad->mem + offset;
 
   *ret_ad = ad;
   return eslOK;
@@ -184,6 +185,119 @@ p7_alidisplay_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, P7_ALIDISPLA
   *ret_ad = NULL;
   return status;
 }
+
+/*****************************************************************
+ * 2. Unit tests.
+ *****************************************************************/
+#ifdef p7ALIDISPLAY_MPI_TESTDRIVE
+
+#include "esl_random.h"
+
+/* The pack/unpack test does no interprocess communication, so it can
+ * run with any number of mpi processes, even just 1
+ */
+static void
+utest_PackUnpack(ESL_RANDOMNESS *rng, int alen)
+{
+  char msg[] = "utest_PackUnpack() failed";
+  P7_ALIDISPLAY *ad1 = NULL;
+  P7_ALIDISPLAY *ad2 = NULL;
+  int            n1;
+  char          *buf;
+  int            pos = 0;
+  char           errbuf[eslERRBUFSIZE];
+  int            status;
+
+  if (p7_alidisplay_TestSample(rng, alen, &ad1) != eslOK) esl_fatal(msg);
+  if (p7_alidisplay_Serialize(ad1)              != eslOK) esl_fatal(msg);
+
+  if (p7_alidisplay_mpi_PackSize(ad1, MPI_COMM_WORLD, &n1) != eslOK) esl_fatal(msg);
+  ESL_ALLOC(buf, sizeof(char) * n1);
+
+  pos = 0;
+  if (p7_alidisplay_mpi_Pack(ad1, buf, n1, &pos, MPI_COMM_WORLD) != eslOK) esl_fatal(msg);
+  if (n1 != pos) esl_fatal(msg);
+
+  pos = 0;
+  if (p7_alidisplay_mpi_Unpack(buf, n1, &pos, MPI_COMM_WORLD, &ad2) != eslOK) esl_fatal(msg);
+  if (n1 != pos) esl_fatal(msg);
+
+  if (p7_alidisplay_Validate(ad1, errbuf) != eslOK) esl_fatal("%s:\n%s", errbuf, msg);
+  if (p7_alidisplay_Validate(ad2, errbuf) != eslOK) esl_fatal("%s:\n%s", errbuf, msg);
+  if (p7_alidisplay_Compare(ad1, ad2)     != eslOK) esl_fatal(msg);
+
+  p7_alidisplay_Destroy(ad1);
+  p7_alidisplay_Destroy(ad2);
+  free(buf);
+  return;
+
+ ERROR:
+  esl_fatal(msg);
+}
+#endif /*p7ALIDISPLAY_MPI_TESTDRIVE*/
+/*--------------- end, unit tests -------------------------------*/
+
+/*****************************************************************
+ * 3. Test driver
+ *****************************************************************/
+#ifdef p7ALIDISPLAY_MPI_TESTDRIVE
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_getopts.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                        docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",            0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                   0 },
+  { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "arrest after start: for debugging MPI under gdb", 0 },  
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "unit test driver for p7_alidisplay_mpi.c alignment display MPI communication routines";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go       = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *rng      = NULL;
+  int             stalling = esl_opt_GetBoolean(go, "--stall");
+  int             my_rank;
+  int             nproc;
+
+  MPI_Init(&argc, &argv);
+  MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+  if (my_rank == 0) {
+    rng = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+    fprintf(stderr, "## %s\n", argv[0]);
+    fprintf(stderr, "#  rng seed  = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+    fprintf(stderr, "#  MPI nproc = %d\n", nproc);
+  }
+#ifdef HAVE_GETPID
+  fprintf(stderr, "#    %6d = %d\n", my_rank, getpid()); 
+#endif
+  while (stalling);	
+
+  if (my_rank == 0) 
+    utest_PackUnpack(rng, 100);
+  
+  if (my_rank == 0) {
+    fprintf(stderr, "#  status = ok\n");
+    esl_randomness_Destroy(rng);
+  }
+
+  MPI_Finalize();
+  esl_getopts_Destroy(go);
+  exit(0); /* success */
+}
+#endif /*p7ALIDISPLAY_MPI_TESTDRIVE*/
+/*---------------- end, test driver -----------------------------*/
+
+
+
 
 
 #else /*! HAVE_MPI*/

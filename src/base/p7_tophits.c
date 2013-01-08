@@ -50,13 +50,13 @@ p7_tophits_Create(int init_hit_alloc)
   if (( h->unsrt = p7_hit_Create(init_hit_alloc) ) == NULL) goto ERROR;
   ESL_ALLOC(h->hit, sizeof(P7_HIT *) * init_hit_alloc);
 
-  h->Nalloc    = init_hit_alloc;
-  h->N         = 0;
-  h->nreported = 0;
-  h->nincluded = 0;
-  h->is_sorted_by_sortkey = TRUE; /* but only because there's 0 hits */
+  h->Nalloc               = init_hit_alloc;
+  h->N                    = 0;
+  h->nreported            = 0;
+  h->nincluded            = 0;
+  h->is_sorted_by_sortkey = TRUE;     /* but only because there's 0 hits */
   h->is_sorted_by_seqidx  = FALSE;
-  h->hit[0]    = h->unsrt;        /* if you're going to call it "sorted" when it contains just one hit, you need this */
+  h->hit[0]               = h->unsrt; /* if you're going to call it "sorted" when it contains just one hit, you need this */
   return h;
 
  ERROR:
@@ -79,11 +79,11 @@ p7_tophits_Create(int init_hit_alloc)
 int
 p7_tophits_Grow(P7_TOPHITS *h)
 {
-  void   *p;
-  P7_HIT *ori    = h->unsrt;
-  int     Nalloc = h->Nalloc * 2;    /* grow by doubling */
-  int     i;
-  int     status;
+  void     *p;
+  P7_HIT   *ori    = h->unsrt;
+  int       Nalloc = h->Nalloc * 2;    /* grow by doubling */
+  int       i;
+  int       status;
 
   if (h->N < h->Nalloc) return eslOK; /* we have enough room for another hit */
 
@@ -94,10 +94,10 @@ p7_tophits_Grow(P7_TOPHITS *h)
    * in h->hit, because h->unsrt might have just moved in memory. 
    */
   if (h->is_sorted_by_seqidx || h->is_sorted_by_sortkey)
-  {
+    {
       for (i = 0; i < h->N; i++)
         h->hit[i] = h->unsrt + (h->hit[i] - ori);
-  }
+    }
 
   h->Nalloc = Nalloc;
   return eslOK;
@@ -241,15 +241,15 @@ hit_sorter_by_modelname_aliposition(const void *vh1, const void *vh2)
  * Returns:   <eslOK> on success.
  */
 int
-p7_tophits_SortBySortkey(P7_TOPHITS *h)
+p7_tophits_SortBySortkey(P7_TOPHITS *th)
 {
-  int i;
+  int h;
 
-  if (h->is_sorted_by_sortkey)  return eslOK;
-  for (i = 0; i < h->N; i++) h->hit[i] = h->unsrt + i;
-  if (h->N > 1)  qsort(h->hit, h->N, sizeof(P7_HIT *), hit_sorter_by_sortkey);
-  h->is_sorted_by_seqidx  = FALSE;
-  h->is_sorted_by_sortkey = TRUE;
+  if (th->is_sorted_by_sortkey)  return eslOK;
+  for (h = 0; h < th->N; h++) th->hit[h] = th->unsrt + h;
+  if (th->N > 1)  qsort(th->hit, th->N, sizeof(P7_HIT *), hit_sorter_by_sortkey);
+  th->is_sorted_by_seqidx  = FALSE;
+  th->is_sorted_by_sortkey = TRUE;
   return eslOK;
 }
 
@@ -265,15 +265,15 @@ p7_tophits_SortBySortkey(P7_TOPHITS *h)
  * Returns:   <eslOK> on success.
  */
 int
-p7_tophits_SortBySeqidxAndAlipos(P7_TOPHITS *h)
+p7_tophits_SortBySeqidxAndAlipos(P7_TOPHITS *th)
 {
-  int i;
+  int h;
 
-  if (h->is_sorted_by_seqidx)  return eslOK;
-  for (i = 0; i < h->N; i++) h->hit[i] = h->unsrt + i;
-  if (h->N > 1)  qsort(h->hit, h->N, sizeof(P7_HIT *), hit_sorter_by_seqidx_aliposition);
-  h->is_sorted_by_sortkey = FALSE;
-  h->is_sorted_by_seqidx  = TRUE;
+  if (th->is_sorted_by_seqidx)  return eslOK;
+  for (h = 0; h < th->N; h++) th->hit[h] = th->unsrt + h;
+  if (th->N > 1)  qsort(th->hit, th->N, sizeof(P7_HIT *), hit_sorter_by_seqidx_aliposition);
+  th->is_sorted_by_sortkey = FALSE;
+  th->is_sorted_by_seqidx  = TRUE;
   return eslOK;
 }
 
@@ -288,15 +288,15 @@ p7_tophits_SortBySeqidxAndAlipos(P7_TOPHITS *h)
  * Returns:   <eslOK> on success.
  */
 int
-p7_tophits_SortByModelnameAndAlipos(P7_TOPHITS *h)
+p7_tophits_SortByModelnameAndAlipos(P7_TOPHITS *th)
 {
-  int i;
+  int h;
 
-  if (h->is_sorted_by_seqidx)  return eslOK;
-  for (i = 0; i < h->N; i++) h->hit[i] = h->unsrt + i;
-  if (h->N > 1)  qsort(h->hit, h->N, sizeof(P7_HIT *), hit_sorter_by_modelname_aliposition);
-  h->is_sorted_by_sortkey = FALSE;
-  h->is_sorted_by_seqidx  = TRUE;
+  if (th->is_sorted_by_seqidx)  return eslOK;
+  for (h = 0; h < th->N; h++) th->hit[h] = th->unsrt + h;
+  if (th->N > 1)  qsort(th->hit, th->N, sizeof(P7_HIT *), hit_sorter_by_modelname_aliposition);
+  th->is_sorted_by_sortkey = FALSE;
+  th->is_sorted_by_seqidx  = TRUE;
   return eslOK;
 }
 
@@ -648,16 +648,14 @@ p7_hit_Destroy(P7_HIT *hits, int nhits)
  *
  * Throws:    (no abnormal error conditions)
  * 
- * Notes:     If/when we write a Validate() routine, note that Easel code spec
- *            requires that TestSample() generates an object that
- *            passes whatever Validate() looks for.
- *
+ * Notes:     Easel code spec requires that TestSample() generates an
+ *            object that passes whatever Validate() looks for.
  */
 int
 p7_tophits_TestSample(ESL_RANDOMNESS *rng, P7_TOPHITS **ret_th)
 {
   P7_TOPHITS *th    = NULL;
-  int         nhits = 1000;
+  int         nhits = 1049;	/* prime. don't make it divisible by any chunk size. */
   int         h,n;
   int         status;
 
@@ -680,6 +678,8 @@ p7_tophits_TestSample(ESL_RANDOMNESS *rng, P7_TOPHITS **ret_th)
     h = esl_rnd_Roll(rng, n);
     ESL_SWAP( th->hit[h], th->hit[n-1], P7_HIT *);
   }
+
+  *ret_th = th;
   return eslOK;
 
  ERROR:
@@ -687,6 +687,61 @@ p7_tophits_TestSample(ESL_RANDOMNESS *rng, P7_TOPHITS **ret_th)
   *ret_th = NULL;
   return status;
 }
+
+
+int
+p7_tophits_Validate(const P7_TOPHITS *th, char *errbuf)
+{
+  int i;
+  int idx;
+  int status;
+
+  if (th->is_sorted_by_sortkey || th->is_sorted_by_seqidx)
+    {
+      for (i = 0; i < th->N; i++)
+	{
+	  idx = th->hit[i] - th->unsrt; /* i.e., by ptr arithmetic: #i in sorted list is #idx in unsorted list */
+	  if (idx < 0 || idx >= th->N) ESL_FAIL(eslFAIL, errbuf, "sorted hit number %d points to bad address", i);
+	  /* TestSample() currently doesn't sort its sampled hit array, so we don't test for proper sortedness */
+	}
+    }
+  if (th->nreported < 0 || th->nreported > th->N) ESL_FAIL(eslFAIL, errbuf, "bad nreported field");
+  if (th->nincluded < 0 || th->nincluded > th->N) ESL_FAIL(eslFAIL, errbuf, "bad nreported field");
+  if (th->is_sorted_by_sortkey && th->is_sorted_by_seqidx) ESL_FAIL(eslFAIL, errbuf, "both sort type flags are up");
+  for (i = 0; i < th->N; i++)
+    if (( status = p7_hit_Validate( &(th->unsrt[i]), errbuf)) != eslOK) return status;
+
+  return eslOK;
+}
+
+int
+p7_tophits_Compare(const P7_TOPHITS *th1, const P7_TOPHITS *th2, float tol)
+{
+  int i;
+  int idx1, idx2;
+  int status;
+
+  if (th1->N                    != th2->N)                    return eslFAIL;
+  if (th1->nreported            != th2->nreported)            return eslFAIL;
+  if (th1->nincluded            != th2->nincluded)            return eslFAIL;
+  if (th1->is_sorted_by_sortkey != th2->is_sorted_by_sortkey) return eslFAIL;
+  if (th1->is_sorted_by_seqidx  != th2->is_sorted_by_seqidx)  return eslFAIL;
+  
+  for (i = 0; i < th1->N; i++)
+    if (( status = p7_hit_Compare( &(th1->unsrt[i]), &(th2->unsrt[i]), tol)) != eslOK) return status;
+
+  if (th1->is_sorted_by_sortkey || th1->is_sorted_by_seqidx)
+    {
+      for (i = 0; i < th1->N; i++)
+	{
+	  idx1 = th1->hit[i] - th1->unsrt; /* i.e., by ptr arithmetic: #i in sorted list is #idx in unsorted list */
+	  idx2 = th2->hit[i] - th2->unsrt; /* i.e., by ptr arithmetic: #i in sorted list is #idx in unsorted list */
+	  if (idx1 != idx2) return eslFAIL;
+	}
+    }
+  return eslOK;
+}
+
 
 /* Function:  p7_hit_TestSample()
  * Synopsis:  Sample a random, bogus, mostly syntactic P7_HIT.
@@ -716,8 +771,8 @@ p7_hit_TestSample(ESL_RANDOMNESS *rng, P7_HIT *hit)
   hit->pre_lnP       = -1000. + 2000. * esl_random(rng);
   hit->sum_lnP       = -1000. + 2000. * esl_random(rng);
   hit->ndom          = 1 + esl_rnd_Roll(rng, 10);
-  hit->noverlaps     = 1 + esl_rnd_Roll(rng, 10);
-  hit->nexpected     = 1 + esl_rnd_Roll(rng, 10);
+  hit->noverlaps     = esl_rnd_Roll(rng, hit->ndom);
+  hit->nexpected     = esl_random(rng)*10;
   hit->flags         = p7_HITFLAGS_DEFAULT;
   if (esl_rnd_Roll(rng, 2)) hit->flags |= p7_IS_INCLUDED;
   if (esl_rnd_Roll(rng, 2)) hit->flags |= p7_IS_REPORTED;
@@ -803,7 +858,7 @@ p7_hit_Compare(const P7_HIT *h1, const P7_HIT *h2, float tol)
   if ( esl_DCompare( h1->nexpected, h2->nexpected, tol ) != eslOK) return eslFAIL;
 
   for (d = 0; d < h1->ndom; d++)
-    if (( status = p7_domain_Compare(&(h1->dcl[d]), &(h2->dcl[2]), tol)) != eslOK) return status;
+    if (( status = p7_domain_Compare(&(h1->dcl[d]), &(h2->dcl[d]), tol)) != eslOK) return status;
   return eslOK;
 }
 

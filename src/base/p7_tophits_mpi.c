@@ -93,6 +93,11 @@ p7_tophits_mpi_Send(const P7_TOPHITS *th, int dest, int tag, MPI_Comm comm, char
  *            that <p7_tophits_mpi_Pack()> will need to pack 
  *            <th> in a packed MPI message for MPI communicator
  *            <comm>. Return that number of bytes in <*ret_n>.
+ * 
+ *            This only includes the size of the P7_TOPHITS
+ *            shell, not the hits list itself. That size must
+ *            be separately calculated, and the list separately
+ *            packed, because we may want to send it in chunks.
  *            
  *            <th> may be <NULL>, in which case <*ret_n> is 
  *            returned as 0.
@@ -108,8 +113,8 @@ p7_tophits_mpi_PackSize(const P7_TOPHITS *th, MPI_Comm comm, int *ret_n)
   int sz;
   if (th)
     {
-      if (MPI_Pack_size(1, MPI_UINT64_T, comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  n += 3*sz; /* N, nreported, nincluded */
-      if (MPI_Pack_size(1, MPI_INT,      comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  n += 2*sz; /* is_sorted_by_sortkey; is_sorted_by_seqidx */
+      if (MPI_Pack_size(1, MPI_INT, comm, &sz)      != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  n += 5*sz;     /* N, nreported, nincluded, is_sorted_by_sortkey, is_sorted_by_seqidx  */
+      if (th->is_sorted_by_sortkey || th->is_sorted_by_seqidx)                                                   n += th->N*sz; /* if sorted: hit[] offsets in unsrt[] array  */
     }
   *ret_n = n;
   return eslOK;
@@ -144,13 +149,25 @@ p7_tophits_mpi_PackSize(const P7_TOPHITS *th, MPI_Comm comm, int *ret_n)
 int
 p7_tophits_mpi_Pack(const P7_TOPHITS *th, char *buf, int n, int *pos, MPI_Comm comm)
 {
+  int h;
+  int idx;
+
   if (th)
     {
-      if (MPI_Pack((void *) &(th->N),                    1,  MPI_UINT64_T, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
-      if (MPI_Pack((void *) &(th->nreported),            1,  MPI_UINT64_T, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
-      if (MPI_Pack((void *) &(th->nincluded),            1,  MPI_UINT64_T, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
-      if (MPI_Pack((void *) &(th->is_sorted_by_sortkey), 1,  MPI_INT,      buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
-      if (MPI_Pack((void *) &(th->is_sorted_by_seqidx),  1,  MPI_INT,      buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
+      if (MPI_Pack((void *) &(th->N),                    1,  MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
+      if (MPI_Pack((void *) &(th->nreported),            1,  MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
+      if (MPI_Pack((void *) &(th->nincluded),            1,  MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
+      if (MPI_Pack((void *) &(th->is_sorted_by_sortkey), 1,  MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
+      if (MPI_Pack((void *) &(th->is_sorted_by_seqidx),  1,  MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
+
+      if (th->is_sorted_by_sortkey || th->is_sorted_by_seqidx)
+	{
+	  for (h = 0; h < th->N; h++)
+	    {
+	      idx = th->hit[h] - th->unsrt; /* ptr arithmetic to get sorted offset in unsrt[] array, as a portable integer */
+	      if (MPI_Pack((void *) &idx, 1, MPI_INT, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");
+	    }
+	}
     }
   if (*pos > n) ESL_EXCEPTION(eslEMEM, "buffer overflow");
   return eslOK;
@@ -188,6 +205,14 @@ p7_tophits_mpi_Pack(const P7_TOPHITS *th, char *buf, int n, int *pos, MPI_Comm c
  *            the caller is responsible for receiving these
  *            separately, and for setting <(*ret_th)->N>.
  *            
+ *            Although the hits' data have yet to be filled in, the
+ *            sorted <th->hit[]> array is set up with its ptrs
+ *            correctedly pointing to shell elements of the
+ *            <th->unsrt[]> array, if the received <P7_TOPHITS> was
+ *            sorted. So this means, when you unpack the hit array in
+ *            <th->unsrt[]>, don't do anything to change its memory
+ *            location or you'll invalidate the <th->hit[]> ptrs.
+ *            
  * Throws:    <eslESYS> on an MPI call failure. <eslEMEM> on allocation failure.
  *            In either case, <*ret_th> is <NULL>, <*ret_nhits> is 0, and the state of <buf>
  *            and <*pos> is undefined and should be considered to be corrupted.
@@ -196,21 +221,33 @@ int
 p7_tophits_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, P7_TOPHITS **ret_th, int *ret_nhits)
 {
   P7_TOPHITS *th = NULL;
+  int         nhits;
+  int         h, idx;
   int         status;
 
   /* First, unpack the # of hits; we need it to allocate. */
-  if (MPI_Unpack(buf, n, pos, ret_nhits, 1, MPI_INT, comm) != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
+  if (MPI_Unpack(buf, n, pos, &nhits, 1, MPI_INT, comm) != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
   /* but don't set th->N yet; the hits will be coming separately, later. */
 
-  /* Allocate */
-  if (( th = p7_tophits_Create(*ret_nhits) ) == NULL) { status = eslEMEM; goto ERROR; }
+  /* Allocate, including the shells of the unsrt[] array of hits */
+  if (( th = p7_tophits_Create(nhits) ) == NULL) { status = eslEMEM; goto ERROR; }
 
-  /* Unpack. Remember, this is just the shell. The hits are sent separately. */
-  if (MPI_Unpack(buf, n, pos, &(th->nreported),            1, MPI_UINT64_T, comm) != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
-  if (MPI_Unpack(buf, n, pos, &(th->nincluded),            1, MPI_UINT64_T, comm) != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
-  if (MPI_Unpack(buf, n, pos, &(th->is_sorted_by_sortkey), 1, MPI_INT, comm)      != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
-  if (MPI_Unpack(buf, n, pos, &(th->is_sorted_by_seqidx),  1, MPI_INT, comm)      != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
+  /* Unpack. Remember, this is just the shell. The hits are sent and filled in separately. */
+  if (MPI_Unpack(buf, n, pos, &(th->nreported),            1, MPI_INT, comm) != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
+  if (MPI_Unpack(buf, n, pos, &(th->nincluded),            1, MPI_INT, comm) != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
+  if (MPI_Unpack(buf, n, pos, &(th->is_sorted_by_sortkey), 1, MPI_INT, comm) != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
+  if (MPI_Unpack(buf, n, pos, &(th->is_sorted_by_seqidx),  1, MPI_INT, comm) != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
   
+  if (th->is_sorted_by_sortkey || th->is_sorted_by_seqidx)
+    {
+      for (h = 0; h < nhits; h++)
+	{
+	  if (MPI_Unpack(buf, n, pos, &idx, 1, MPI_INT, comm) != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
+	  th->hit[h] = th->unsrt + idx;
+	}
+    }
+
+  *ret_nhits = nhits;
   *ret_th    = th;
   return eslOK;
 
@@ -394,7 +431,7 @@ p7_hit_mpi_PackSize(const P7_HIT *hit, int nhit, MPI_Comm comm, int *ret_n)
 
   if (MPI_Pack_size(1, MPI_INT,      comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed"); n += sz*6; /* window_length,ndom,noverlaps,nreported,nexpected,best_domain */
   if (MPI_Pack_size(1, MPI_DOUBLE,   comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed"); n += sz*4; /* sortkey,lnP,pre_lnP,sum_lnP */
-  if (MPI_Pack_size(1, MPI_FLOAT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed"); n += sz;   /* nexpected */
+  if (MPI_Pack_size(1, MPI_FLOAT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed"); n += sz*4; /* nexpected,score,pre_score,sum_score */
   if (MPI_Pack_size(1, MPI_UINT32_T, comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed"); n += sz;   /* flags */
   if (MPI_Pack_size(1, MPI_INT64_T,  comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed"); n += sz*3; /* seqidx, subseq, and offset (offset is esl_pos_t, transmitted as int64_t) */
   n *= nhit;
@@ -449,9 +486,9 @@ p7_hit_mpi_Pack(const P7_HIT *hit, int nhit, char *buf, int n, int *pos, MPI_Com
     {
       offset = (int64_t) hit[h].offset; /* pedantic carefulness about transmitting esl_pos_t type: it may not be an int64_t, but we transmit it as one */
 
-      if ((status = esl_mpi_PackOpt(hit->name,        -1,      MPI_CHAR,  buf, n, pos, comm)) != eslOK) return status;
-      if ((status = esl_mpi_PackOpt(hit->acc,         -1,      MPI_CHAR,  buf, n, pos, comm)) != eslOK) return status; 
-      if ((status = esl_mpi_PackOpt(hit->desc,        -1,      MPI_CHAR,  buf, n, pos, comm)) != eslOK) return status; 
+      if ((status = esl_mpi_PackOpt(hit[h].name,    -1, MPI_CHAR,     buf, n, pos, comm)) != eslOK) return status;
+      if ((status = esl_mpi_PackOpt(hit[h].acc,     -1, MPI_CHAR,     buf, n, pos, comm)) != eslOK) return status; 
+      if ((status = esl_mpi_PackOpt(hit[h].desc,    -1, MPI_CHAR,     buf, n, pos, comm)) != eslOK) return status; 
       
       if (MPI_Pack((void *) &(hit[h].window_length), 1, MPI_INT,      buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");      
       if (MPI_Pack((void *) &(hit[h].sortkey),       1, MPI_DOUBLE,   buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");      
@@ -470,7 +507,7 @@ p7_hit_mpi_Pack(const P7_HIT *hit, int nhit, char *buf, int n, int *pos, MPI_Com
       if (MPI_Pack((void *) &(hit[h].best_domain),   1, MPI_INT,      buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");      
       if (MPI_Pack((void *) &(hit[h].seqidx),        1, MPI_INT64_T,  buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");      
       if (MPI_Pack((void *) &(hit[h].subseq_start),  1, MPI_INT64_T,  buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed");      
-      if (MPI_Pack(&offset,                 1, MPI_INT64_T,  buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed"); /* assumes that esl_pos_t == int64_t */
+      if (MPI_Pack(         &offset,                 1, MPI_INT64_T,  buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed"); 
 
       if ((status = p7_domain_mpi_Pack(hit[h].dcl, hit[h].ndom, buf, n, pos, comm)) != eslOK)   return status;
     }
@@ -524,9 +561,9 @@ p7_hit_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, P7_HIT *hit, int nh
 
   for (h = 0; h < nhit; h++)
     {
-      if ((status = esl_mpi_UnpackOpt(buf, n, pos,   (void**)&(hit->name),        NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
-      if ((status = esl_mpi_UnpackOpt(buf, n, pos,   (void**)&(hit->acc),         NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
-      if ((status = esl_mpi_UnpackOpt(buf, n, pos,   (void**)&(hit->desc),        NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
+      if ((status = esl_mpi_UnpackOpt(buf, n, pos, (void**)&(hit[h].name), NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
+      if ((status = esl_mpi_UnpackOpt(buf, n, pos, (void**)&(hit[h].acc),  NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
+      if ((status = esl_mpi_UnpackOpt(buf, n, pos, (void**)&(hit[h].desc), NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
 
       if (MPI_Unpack(buf, n, pos, &(hit[h].window_length), 1, MPI_INT,      comm) != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
       if (MPI_Unpack(buf, n, pos, &(hit[h].sortkey),       1, MPI_DOUBLE,   comm) != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed"); 
@@ -548,8 +585,8 @@ p7_hit_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, P7_HIT *hit, int nh
       if (MPI_Unpack(buf, n, pos, &offset,                 1, MPI_INT64_T,  comm) != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
       hit[h].offset = (esl_pos_t) offset;
 
-      if (( status = p7_domain_mpi_Unpack(buf, n, pos, comm, &(hit[h].dcl), hit[d].ndom)) != eslOK) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
-      /* that call just allocated the hit[d].dcl array of domain coord info, and the domain alidisplays */
+      if (( status = p7_domain_mpi_Unpack(buf, n, pos, comm, &(hit[h].dcl), hit[h].ndom)) != eslOK) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
+      /* that call just allocated the hit[h].dcl array of domain coord info, and the domain alidisplays */
     }
   return eslOK;
 
@@ -563,7 +600,7 @@ p7_hit_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, P7_HIT *hit, int nh
 	{
 	  for (d = 0; d < hit[h].ndom; d++)
 	    p7_alidisplay_Destroy(hit[h].dcl[d].ad);
-	  free(hit[d].dcl);
+	  free(hit[h].dcl);
 	}
     }
   return status;
@@ -645,6 +682,100 @@ p7_hit_mpi_Recv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, P7_
 
 #include "esl_random.h"
 
+/* The pack/unpack test does no interprocess communication, so it can
+ * run with any number of mpi processes, even just 1
+ */
+static void
+utest_hit_PackUnpack(ESL_RANDOMNESS *rng)
+{
+  char    msg[] = "utest_hit_PackUnpack() failed";
+  P7_HIT *h1    = NULL;
+  P7_HIT *h2    = NULL;
+  int     nhit  = 100;
+  int     h;
+  int     n;
+  int     pos;
+  char   *buf   = NULL;
+  char    errbuf[eslERRBUFSIZE];
+  int     status;
+
+  if (( h1 = p7_hit_Create(nhit)) == NULL) esl_fatal(msg);
+  for (h = 0; h < nhit; h++)
+    if (p7_hit_TestSample(rng, &(h1[h])) != eslOK) esl_fatal(msg);
+
+  if (p7_hit_mpi_PackSize(h1, nhit, MPI_COMM_WORLD, &n) != eslOK) esl_fatal(msg);
+  ESL_ALLOC(buf, sizeof(char) * n);
+
+  pos = 0;
+  if (p7_hit_mpi_Pack(h1, nhit, buf, n, &pos, MPI_COMM_WORLD) != eslOK) esl_fatal(msg);
+  if (n != pos) esl_fatal(msg);
+
+  pos = 0;
+  if (( h2 = p7_hit_Create(nhit)) == NULL) esl_fatal(msg);
+  if (p7_hit_mpi_Unpack(buf, n, &pos, MPI_COMM_WORLD, h2, nhit) != eslOK) esl_fatal(msg);
+  if (n != pos) esl_fatal(msg);
+
+  for (h = 0; h < nhit; h++)
+    {
+      if (p7_hit_Validate( &(h1[h]), errbuf)         != eslOK) esl_fatal("%s:\n%s", msg, errbuf);
+      if (p7_hit_Validate( &(h2[h]), errbuf)         != eslOK) esl_fatal("%s:\n%s", msg, errbuf);
+      if (p7_hit_Compare(  &(h1[h]), &(h2[h]), 1e-6) != eslOK) esl_fatal(msg);
+    }
+  p7_hit_Destroy(h1, nhit);
+  p7_hit_Destroy(h2, nhit);
+  free(buf);
+  return;
+
+ ERROR:
+  esl_fatal(msg);
+}
+
+
+static void
+utest_tophits_PackUnpack(ESL_RANDOMNESS *rng)
+{
+  char        msg[] = "utest_tophits_PackUnpack() failed";
+  P7_TOPHITS *th1   = NULL;
+  P7_TOPHITS *th2   = NULL;
+  int         n1,n2;
+  char       *buf   = NULL;
+  int         pos;
+  int         nhits;
+  char        errbuf[eslERRBUFSIZE];
+  int         status;
+
+  if (p7_tophits_TestSample(rng, &th1) != eslOK) esl_fatal(msg);
+  
+  if (p7_tophits_mpi_PackSize(th1,                MPI_COMM_WORLD, &n1) != eslOK) esl_fatal(msg);
+  if (p7_hit_mpi_PackSize    (th1->unsrt, th1->N, MPI_COMM_WORLD, &n2) != eslOK) esl_fatal(msg);
+  ESL_ALLOC(buf, sizeof(char) * (n1+n2));
+
+  pos = 0;
+  if (p7_tophits_mpi_Pack(th1,                buf, n1+n2, &pos, MPI_COMM_WORLD) != eslOK) esl_fatal(msg);
+  if (p7_hit_mpi_Pack    (th1->unsrt, th1->N, buf, n1+n2, &pos, MPI_COMM_WORLD) != eslOK) esl_fatal(msg);
+  if ((n1+n2) != pos) esl_fatal(msg);
+
+  pos = 0;
+  if (p7_tophits_mpi_Unpack(buf, (n1+n2), &pos, MPI_COMM_WORLD, &th2,      &nhits) != eslOK) esl_fatal(msg);
+  if (p7_hit_mpi_Unpack    (buf, (n1+n2), &pos, MPI_COMM_WORLD, th2->unsrt, nhits) != eslOK) esl_fatal(msg);
+  th2->N = nhits;		/* this has to be done by the caller */
+  if ((n1+n2) != pos) esl_fatal(msg);
+
+  if (p7_tophits_Validate(th1, errbuf)   != eslOK) esl_fatal("%s:\n%s", msg, errbuf);
+  if (p7_tophits_Validate(th2, errbuf)   != eslOK) esl_fatal("%s:\n%s", msg, errbuf);
+  if (p7_tophits_Compare(th1, th2, 1e-6) != eslOK) esl_fatal(msg);
+
+  p7_tophits_Destroy(th1);
+  p7_tophits_Destroy(th2);
+  free(buf);
+  return;
+
+ ERROR: 
+  esl_fatal(msg);
+}
+  
+
+
 static void
 utest_SendRecv(ESL_RANDOMNESS *rng, int my_rank, int nproc)
 {
@@ -671,7 +802,7 @@ utest_SendRecv(ESL_RANDOMNESS *rng, int my_rank, int nproc)
 	{
 	  if (p7_tophits_mpi_Recv(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &wbuf, &wn, &th_recv) != eslOK) esl_fatal(msg);
 
-	  if (p7_tophits_Validate(th_recd, errmsg, 0.001) != eslOK) esl_fatal("%s:\n   %s", msg, errmsg);
+	  if (p7_tophits_Validate(th_recv, errmsg)        != eslOK) esl_fatal("%s:\n   %s", msg, errmsg);
 	  if (p7_tophits_Compare(th_sent, th_recv, 0.001) != eslOK) esl_fatal(msg);
 
 	  p7_tophits_Destroy(th_recv);
@@ -682,8 +813,7 @@ utest_SendRecv(ESL_RANDOMNESS *rng, int my_rank, int nproc)
       if (MPI_Recv(&rngseed, 1, MPI_UNSIGNED, 0, 0, MPI_COMM_WORLD, &mpistatus) != MPI_SUCCESS) esl_fatal(msg);
       rng = esl_randomness_CreateFast(rngseed);
 
-      if (p7_tophits_Sample(rng, &th_sent) != eslOK) esl_fatal(msg);
-
+      if (p7_tophits_TestSample(rng, &th_sent) != eslOK) esl_fatal(msg);
       if (p7_tophits_mpi_Send(th_sent, 0, 0, MPI_COMM_WORLD, &wbuf, &wn) != eslOK) esl_fatal(msg);
 
       esl_randomness_Destroy(rng);
@@ -740,7 +870,18 @@ main(int argc, char **argv)
 #endif
   while (stalling);	
 
+  /* This test MUST precede anything else that accesses the RNG,
+   * because it depends on synchronizing the RNG with another 
+   * MPI process, by sending its initialization seed.
+   */
   utest_SendRecv(rng, my_rank, nproc);
+
+  if (my_rank == 0)  {
+    utest_hit_PackUnpack(rng);
+    utest_tophits_PackUnpack(rng);
+  }
+
+
   
   if (my_rank == 0) {
     fprintf(stderr, "#  status = ok\n");

@@ -28,7 +28,9 @@ HDRS =
 PROGS =
 
 UTESTS =     p7_alidisplay_utest \
+	     p7_alidisplay_mpi_utest \
 	     p7_bg_utest \
+	     p7_domain_mpi_utest \
 	     p7_hmm_utest \
 	     p7_hmm_mpi_utest \
 	     p7_hmmfile_utest \
@@ -36,8 +38,8 @@ UTESTS =     p7_alidisplay_utest \
 	     p7_profile_mpi_utest \
 	     p7_scoredata_utest \
 	     p7_tophits_utest \
+	     p7_tophits_mpi_utest \
 	     p7_trace_utest
-#	     p7_tophits_mpi_utest \
 
 STATS  = 
 

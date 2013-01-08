@@ -1,7 +1,7 @@
 MODULE = dp_vector
 
 LIBOBJS =  \
-       fwdfilter.o\
+           fwdfilter.o\
            io.o\
 	   msvfilter.o\
 	   p7_checkptmx.o\
@@ -23,6 +23,7 @@ PROGS =
 UTESTS = fwdfilter_utest \
          io_utest \
          msvfilter_utest \
+	 p7_oprofile_mpi_utest \
          vitfilter_utest
 
 STATS  = fwdfilter_stats
@@ -40,9 +41,6 @@ EXAMPLES = fwdfilter_example \
            vitfilter_example
 
 LIBTMP =
-
-# TODO: MPI-specific stuff in p7_oprofile_mpi.c
-
 
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@
