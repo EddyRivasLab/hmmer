@@ -163,9 +163,12 @@ p7_profile_Copy(const P7_PROFILE *src, P7_PROFILE *dst)
   dst->nj          = src->nj;
   dst->pglocal     = src->pglocal;
 
-  if (dst->name) { free(dst->name);   if ((status = esl_strdup(src->name,      -1, &(dst->name)))      != eslOK) return status; }
-  if (dst->acc)  { free(dst->acc);    if ((status = esl_strdup(src->acc,       -1, &(dst->acc)))       != eslOK) return status; }
-  if (dst->desc) { free(dst->desc);   if ((status = esl_strdup(src->desc,      -1, &(dst->desc)))      != eslOK) return status; }
+  if (dst->name) free(dst->name);   
+  if (dst->acc)  free(dst->acc);    
+  if (dst->desc) free(dst->desc);   
+  if ((status = esl_strdup(src->name, -1, &(dst->name)))      != eslOK) return status; 
+  if ((status = esl_strdup(src->acc,  -1, &(dst->acc)))       != eslOK) return status; 
+  if ((status = esl_strdup(src->desc, -1, &(dst->desc)))      != eslOK) return status; 
 
   strcpy(dst->rf,        src->rf);         /* RF is optional: if it's not set, *rf=0, and strcpy still works fine */
   strcpy(dst->mm,        src->mm);         /* MM is also optional annotation */
