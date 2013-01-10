@@ -56,6 +56,8 @@ AC_MSG_NOTICE([Configuring HMMER for your system.])
 # remember if the user is overriding CFLAGS
 if test x"$CFLAGS" = x; then 
   sre_cflags_env_set=no
+else
+  sre_cflags_env_set=yes
 fi
 
 ################################################################
@@ -319,24 +321,19 @@ AC_PROG_RANLIB
 AC_PATH_PROG([AR], [ar], [:], [$PATH:/usr/ccs/bin:/usr/xpg4/bin])
 CHECK_GNU_MAKE
 
-# Select our optimization level in CFLAGS.
+# If the base $CFLAGS isn't already set, select what it should be.
+# We've used AX_CC_MAXOPT in the past (from FFTW), but it's
+# superaggressive and problematic in many respects. Finally gave up on
+# it. -O3 is enough.
 if test "$enable_debugging" != "no"; then
    AC_DEFINE(p7_DEBUGGING,  1)
    if test "$GCC" = "yes" && test "$sre_cflags_env_set" = "no"; then
       CFLAGS="-g -Wall"
    fi
 else
-   sre_save_ac_test_cflags="$ac_test_CFLAGS"
    if test "$sre_cflags_env_set" = "no"; then
-     ac_test_CFLAGS=""
+      CFLAGS="-O3"	
    fi
-   AX_CC_MAXOPT
-   ac_test_CFLAGS="$sre_save_ac_test_cflags"
-   # That was a workaround. AX_CC_MAXOPT apparently thinks that
-   # $ac_test_CFLAGS only gets set if ${CFLAGS} was set by the
-   # user (in the environment), but that's not so; it gets set
-   # by AC_PROG_CC. Instead of rewriting AX_CC_MAXOPT, we fool
-   # it.
 fi
 
 # Figure out how to generate PIC code for shared libraries
