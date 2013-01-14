@@ -284,7 +284,7 @@ p7_tracealign_ComputeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
       p7_profile_SetLength      (gm, sq[idx]->n);
 
       p7_ForwardFilter (sq[idx]->dsq, sq[idx]->n, om, cx, &fwdsc);
-      p7_BackwardFilter(sq[idx]->dsq, sq[idx]->n, om, cx, sm);
+      p7_BackwardFilter(sq[idx]->dsq, sq[idx]->n, om, cx, sm, p7_SPARSEMASK_THRESH_DEFAULT);
       p7_SparseViterbi (sq[idx]->dsq, sq[idx]->n, gm, sm, sx1, tr[idx], &vsc);
       if (tr[idx]->pp) {
 	p7_SparseForward (sq[idx]->dsq, sq[idx]->n, gm, sm, sx1, &fwdsc);

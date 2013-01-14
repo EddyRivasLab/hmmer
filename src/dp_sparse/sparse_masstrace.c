@@ -355,7 +355,7 @@ masstrace_down(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEM
  *            Backward matrix <bck>, for a sparse mask that both of
  *            those matrices have copies of (<fwd->sm == bck->sm>);
  *            and we have obtained an optimal trace <tr> for that
- *            comparison (probably a Viterbi trace), which we're doing
+ *            comparison (probably a Viterbi trace), which we're going
  *            to use to define the individual domains we find in
  *            <dsq>. 
  *
@@ -566,7 +566,7 @@ utest_approx_masstrace(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M,
   if (  (sm = p7_sparsemask_Create(M, sq->n))                   == NULL) esl_fatal(msg);
 
   if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
-  if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm)           != eslOK) esl_fatal(msg);
+  if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSEMASK_THRESH_DEFAULT)           != eslOK) esl_fatal(msg);
 
    /* Sparse DP calculations, and exact posterior decoding */
   if ( p7_SparseViterbi   (sq->dsq, sq->n, gm, sm, sxv, vtr, NULL) != eslOK) esl_fatal(msg);

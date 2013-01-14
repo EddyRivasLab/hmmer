@@ -766,7 +766,7 @@ utest_engine(int do_intersected_mask, char *msg, ESL_RANDOMNESS *rng, ESL_ALPHAB
       if ( p7_checkptmx_GrowTo(ox, M, sq->n)                       != eslOK) esl_fatal(msg);
       if ( p7_sparsemask_Reinit(sm, M, sq->n)                      != eslOK) esl_fatal(msg);
       if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
-      if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm)           != eslOK) esl_fatal(msg);
+      if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSEMASK_THRESH_DEFAULT)           != eslOK) esl_fatal(msg);
       
       if ( p7_sparsemask_Validate(sm, errbuf)                      != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
 
@@ -1039,7 +1039,7 @@ main(int argc, char **argv)
   ox = p7_checkptmx_Create(hmm->M, sq->n, ESL_MBYTES(32));
   sm = p7_sparsemask_Create(gm->M, sq->n);
   p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL);
-  p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm);
+  p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSEMASK_THRESH_DEFAULT);
   
   /* Sparse DP calculations */
   p7_SparseViterbi (sq->dsq, sq->n, gm, sm, sx, vtr, &vsc);

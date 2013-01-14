@@ -69,7 +69,7 @@ static inline void  backward_row_main(ESL_DSQ xi, const P7_OPROFILE *om,       _
 static inline void  backward_row_L   (            const P7_OPROFILE *om,                    __m128 *dpc, int Q, float scalefactor);
 static inline void  backward_row_finish(          const P7_OPROFILE *om,                    __m128 *dpc, int Q, __m128 dcv);
 static inline void  backward_row_rescale(float *xc, __m128 *dpc, int Q, float scalefactor);
-static inline int   posterior_decode_row(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float overall_sc);
+static inline int   posterior_decode_row(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm_thresh, float overall_sc);
 
 #ifdef p7_DEBUGGING
 static inline float backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
@@ -211,25 +211,20 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX 
  *            here as needed; caller does not need to call 
  *            <p7_sparsemask_Reinit()> on it.
  *            
- *            Currently the threshold for determining 'significant'
- *            posterior alignment probability is hardcoded in 
- *            <p7_SPARSEMASK_THRESH_DEFAULT>, in <p7_config.h.in>. We take
- *            advantage of the fact that if N/C/J emission postprobs
- *            exceed <1.0 - p7_SPARSEMASK_THRESH_DEFAULT>, we don't even 
- *            need to look at the vectorize row; no cell can exceed
- *            threshold.
  *            
- * Args:      dsq    - digital target sequence, 1..L
- *            L      - length of dsq, residues
- *            om     - optimized profile (multihit local)
- *            ox     - checkpointed DP matrix, ForwardFilter already run  
- *            sm    - allocated P7_SPARSEMASK structure to hold sparse DP mask
+ * Args:      dsq       - digital target sequence, 1..L
+ *            L         - length of dsq, residues
+ *            om        - optimized profile (multihit local)
+ *            ox        - checkpointed DP matrix, ForwardFilter already run
+ *            sm        - allocated P7_SPARSEMASK structure to hold sparse DP mask
+ *            sm_thresh - Threshold for determining 'significant' posterior
+ *                        alignment probability, passed in to posterior_decode_row()
  *
  * Throws:    <eslEINVAL> if something's awry with a data structure's internals.
  *            <eslEMEM> on allocation failure.
  */
 int
-p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm)
+p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh)
 {
   int Q = ox->Qf;
   __m128 *fwd;
@@ -268,7 +263,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
   if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, L, fwd, "f2 O"); if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, L, bck, "bck");  }
   if (ox->bck)          save_debug_row_fb(ox, ox->bck, bck, L, ox->bcksc); 
 #endif
-  if ( (status = posterior_decode_row(ox, i, sm, Tvalue)) != eslOK) return status;
+  if ( (status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
   i--;
   dpp = bck;
 
@@ -295,7 +290,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
       if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
       /* And decode. */
-      if ( (status = posterior_decode_row(ox, i, sm, Tvalue)) != eslOK) return status;
+      if ( (status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
       dpp = bck;
       i--;			/* i is now L-2 if there's checkpointing; else it's L-1 */
     }
@@ -319,7 +314,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
       if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
       /* And decode checkpointed row i. */
-      if ( (status = posterior_decode_row(ox, i, sm, Tvalue)) != eslOK) return status;
+      if ( (status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
       
       /* The rest of the rows in the block weren't checkpointed.
        * Compute Forwards from last checkpoint ...
@@ -346,7 +341,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
 	  if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i2, fwd, "f2 X"); p7_checkptmx_DumpFBRow(ox, i2, bck, "bck"); }
 	  if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i2, ox->bcksc); 
 #endif
-	  if ((status = posterior_decode_row(ox, i2, sm, Tvalue)) != eslOK) return status;
+	  if ((status = posterior_decode_row(ox, i2, sm, sm_thresh, Tvalue)) != eslOK) return status;
 	  dpp = bck;
 	}
       i -= w;
@@ -367,7 +362,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
        if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i, fwd, "f2 O"); p7_checkptmx_DumpFBRow(ox, i, bck, "bck"); }
        if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
-       if ((status = posterior_decode_row(ox, i, sm, Tvalue)) != eslOK) return status;
+       if ((status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
        dpp = bck;
      }
 
@@ -385,7 +380,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
    xN = backward_row_zero(dsq[1], om, ox); 
    if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, 0, fwd, "f2 O"); p7_checkptmx_DumpFBRow(ox, 0, bck, "bck"); }
    if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, 0, ox->bcksc); 
-   if ((status = posterior_decode_row(ox, 0, sm, Tvalue)) != eslOK) return status;
+   if ((status = posterior_decode_row(ox, 0, sm, sm_thresh, Tvalue)) != eslOK) return status;
    ox->bcksc += xN;
 #endif
 
@@ -816,6 +811,8 @@ sse_countge(__m128 v, float thresh)
   return c;
 }
 
+
+
 /* posterior_decode_row()
  *
  * In production code, we don't have to save results of posterior
@@ -852,18 +849,25 @@ sse_countge(__m128 v, float thresh)
  * dump, copy, or test anything on the forward row, it must do it
  * BEFORE calling posterior_decode_row().
  * 
+ * The threshold for determining 'significant' posterior alignment
+ * probability is passed as <sm_thresh> (typically
+ * <p7_SPARSEMASK_THRESH_DEFAULT>, in <p7_config.h.in>). We take
+ * advantage of the fact that if N/C/J emission postprobs exceed
+ * <1.0 - sm_thresh>, we don't even need to look at the vectorized
+ * row; no cell can exceed threshold.
+ *
  * Can throw <eslEINVAL> on bad code (something awry in data structure initialization)
  *           <eslEMEM> on allocation failure in sparsemask
  */
 static inline int
-posterior_decode_row(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float overall_sc)
+posterior_decode_row(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm_thresh, float overall_sc)
 {
   int             Q        = ox->Qf;
   __m128        *fwd       = (__m128 *) ox->dpf[ox->R0 + ox->R]; /* a calculated fwd row R has been popped off */
   const  __m128 *bck       = (__m128 *) ox->dpf[rowi%2];
   float         *xf        = (float *) (fwd + Q*p7C_NSCELLS);
   const  float  *xb        = (float *) (bck + Q*p7C_NSCELLS);
-  const __m128   threshv   = _mm_set1_ps(p7_SPARSEMASK_THRESH_DEFAULT); 
+  const __m128   threshv   = _mm_set1_ps(sm_thresh);
   float          scaleterm = xf[p7C_SCALE] / overall_sc; /* see comments above, on how rescaling affects posterior decoding equations */
   const __m128   cv        = _mm_set1_ps(scaleterm);
   float  pnonhomology;
@@ -887,7 +891,7 @@ posterior_decode_row(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float overal
    * decoding.
    */
   pnonhomology = (xf[p7C_N] * xb[p7C_N] + xf[p7C_JJ] * xb[p7C_JJ] + xf[p7C_CC] * xb[p7C_CC]) * scaleterm;
-  if (pnonhomology <= 1.0f - p7_SPARSEMASK_THRESH_DEFAULT) 
+  if (pnonhomology <= 1.0f - sm_thresh)
     {
       if ((status = p7_sparsemask_StartRow(sm, rowi)) != eslOK) return status;
       for (q = Q-1; q >= 0; q--)	/* reverse, because SPARSEMASK is entirely in reversed order */
@@ -1246,7 +1250,7 @@ main(int argc, char **argv)
       if (P > 0.02) goto NEXT_SEQ;
 
       p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fraw);
-      p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm);
+      p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSEMASK_THRESH_DEFAULT);
 
       /* Calculate minimum memory requirements for each step */
       msvmem = (double) ( P7_NVB(om->M) * sizeof(__m128i))    / 1024.;  
@@ -1385,7 +1389,7 @@ main(int argc, char **argv)
       p7_ForwardFilter(dsq, L, om, ox, &sc);
       if (! esl_opt_GetBoolean(go, "-F")) 
 	{
-	  p7_BackwardFilter(dsq, L, om, ox, sm);
+	  p7_BackwardFilter(dsq, L, om, ox, sm, p7_SPARSEMASK_THRESH_DEFAULT);
 	  esl_vec_IReverse(sm->kmem, sm->kmem, sm->ncells);
 	}
 
@@ -1503,7 +1507,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
       if ( p7_sparsemask_Reinit(sm,M, tL)     != eslOK) esl_fatal(msg);
 
       p7_ForwardFilter (dsq, tL, om, ox, &fsc1);
-      p7_BackwardFilter(dsq, tL, om, ox,  sm);
+      p7_BackwardFilter(dsq, tL, om, ox,  sm, p7_SPARSEMASK_THRESH_DEFAULT);
 
       p7_ReferenceForward (dsq, tL, gm, fwd,  &fsc2);
       p7_ReferenceBackward(dsq, tL, gm, bck,  &bsc2);
@@ -1738,7 +1742,7 @@ main(int argc, char **argv)
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
     
       p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fraw);
-      p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm);
+      p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSEMASK_THRESH_DEFAULT);
 
       p7_ReferenceForward (sq->dsq, sq->n, gm, gx, &gfraw);
       p7_ReferenceBackward(sq->dsq, sq->n, gm, gx, &gbraw);

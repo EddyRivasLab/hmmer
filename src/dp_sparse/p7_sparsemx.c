@@ -871,7 +871,7 @@ p7_sparsemx_TracePostprobs(const P7_SPARSEMX *sxd, P7_TRACE *tr)
       if (! tr->i[z]) { tr->pp[z] = 0.0; continue; }  // only storing pp's for emissions. Only M,I, or NN/CC/JJ have i=1..L.
 
       k = tr->k[z];         // will be 0 for s={NJC}; 1..M for s={MID}
-      while (i < tr->i[z])  // this happens to also accomodate the case that a trace somehow starts with i>1
+      while (i < tr->i[z])  // this happens to also accommodate the case that a trace somehow starts with i>1
 	{                   // i is < L here, so n[i+1] is ok below
 	  dpc += p7S_NSCELLS * sm->n[i]; 
 	  if (sm->n[i] || sm->n[i+1]) xc += p7S_NXCELLS; // special rows also store ia-1, hence the move on sm->n[i+1] too
@@ -880,11 +880,11 @@ p7_sparsemx_TracePostprobs(const P7_SPARSEMX *sxd, P7_TRACE *tr)
       /*  ok, now: 
        *   dpc is either on first supercell of row i (if i is stored, n[i]>0); 
        *       or it's waiting on next stored row;
-       *       or it's just off area (and can't be deferenced) if there are no more stored rows.
+       *       or it's just off area (and can't be dereferenced) if there are no more stored rows.
        *       (If it's off area, we'll get v=0 == n[i] in logic below, and avoid dereference.)
        *   xc  is on special rows of row i (if i specials stored, including ia-1 start-segment edge cases);
        *       or it's waiting on the next stored special row;
-       *       or it's just off area and i>last_ib test will avoid deferencing it.
+       *       or it's just off area and i>last_ib test will avoid dereferencing it.
        *   
        *   in unstored intersegment regions ib+1..ia-2, the postprob of the downstream {CJ}(ia-1)
        *   is propagated up. The logic below exploits the fact that xc is waiting on the next

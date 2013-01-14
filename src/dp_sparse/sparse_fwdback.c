@@ -630,7 +630,7 @@ utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L,
       if ( p7_checkptmx_GrowTo(ox, M, L)                   != eslOK) esl_fatal(msg);
       if ( p7_sparsemask_Reinit(sm, M, L)                  != eslOK) esl_fatal(msg);
       if ( p7_ForwardFilter (dsq, L, om, ox, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
-      if ( p7_BackwardFilter(dsq, L, om, ox, sm)           != eslOK) esl_fatal(msg);
+      if ( p7_BackwardFilter(dsq, L, om, ox, sm, p7_SPARSEMASK_THRESH_DEFAULT)           != eslOK) esl_fatal(msg);
 
       /* Sparse DP calculations */
       if ( p7_SparseViterbi   (dsq, L, gm, sm, sxv, NULL, &vsc_s) != eslOK) esl_fatal(msg);
@@ -1372,7 +1372,7 @@ main(int argc, char **argv)
     p7_sparsemask_AddAll(sm);
   else {
     p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL);
-    p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm);
+    p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSEMASK_THRESH_DEFAULT);
   }
   
   /* Sparse DP calculations */

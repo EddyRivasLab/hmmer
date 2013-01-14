@@ -51,7 +51,7 @@ if ($output !~ /MAXL  75/) {
 
 # Create a roughly 4.5MB database against which to search
 $database   = "$tmppfx.fa";
-do_cmd ( "$builddir/lib/easel/miniapps/esl-shuffle --seed 1 --dna -G -N 1 -L 4500000 -o $tmppfx.A" );
+do_cmd ( "$builddir/lib/easel/miniapps/esl-shuffle --seed 33 --dna -G -N 1 -L 4500000 -o $tmppfx.A" );
 do_cmd ( "$builddir/src/programs/hmmemit -N 2 --seed 4 $tmppfx.hmm >  $tmppfx.B " );
 do_cmd ( "$builddir/src/programs/hmmemit -N 1 --seed 3 $tmppfx.hmm >> $tmppfx.B" ); 
 do_cmd ( "head -n 33000 $tmppfx.A > $database" );
@@ -67,20 +67,25 @@ $output = do_cmd($cmd);
 
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = 
-q[
-Target sequences:                  1  \(9000000 residues searched\)
-Residues passing MSV filter:            180964  \(0.0201\); expected \(0.02\)
-Residues passing bias filter:           153828  \(0.0171\); expected \(0.02\)
-Residues passing Vit filter:              6124  \(0.00068\); expected \(0.001\)
-Residues passing Fwd filter:               155  \(1.72e-05\); expected \(1e-05\)
-Total number of hits:                        2  \(4e-06\)];
+q[Target sequences:                          1  \(9000000 residues searched\)
+Residues passing MSV filter:            174223  \(0.0194\); expected \(0.02\)
+Residues passing bias filter:           145398  \(0.0162\); expected \(0.02\)
+Residues passing Vit filter:              6173  \(0.000686\); expected \(0.001\)
+Residues passing Fwd filter:               276  \(3.07e-05\); expected \(1e-05\)
+Total number of hits:                        5  \(1.06e-05\)];
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 1\n";
 }
 
 $expect = 
-      q[1.8   11.7   0.0  random   3299961 3299978\s+
-        4.3   10.5   0.0  random   4499980 4499997];
+  q[8.2e-05   25.1   0.0  random   4499980 4500000\s*
+    0.00011   24.8   0.0  random   3299961 3299979\s*
+    0.00012   24.6   0.0  random   1518622 1518604\s*
+    0.00018   24.1   0.0  random   1979941 1979960\s*
+  ------ inclusion threshold ------\s*
+      0.013   18.3   0.0  random   4019481 4019466];          
+        
+        
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 2\n";
 }
@@ -89,21 +94,21 @@ $cmd = "$builddir/src/programs/nhmmer --tformat fasta --toponly $tmppfx.hmm $dat
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = 
-q[Target sequences:                  1  \(4500000 residues searched\)
-Residues passing MSV filter:             91159  \(0.0203\); expected \(0.02\)
-Residues passing bias filter:            78403  \(0.0174\); expected \(0.02\)
-Residues passing Vit filter:              3386  \(0.000752\); expected \(0.001\)
+q[Target sequences:                          1  \(4500000 residues searched\)
+Residues passing MSV filter:             84348  \(0.0187\); expected \(0.02\)
+Residues passing bias filter:            70876  \(0.0158\); expected \(0.02\)
+Residues passing Vit filter:              3091  \(0.000687\); expected \(0.001\)
 Residues passing Fwd filter:               155  \(3.44e-05\); expected \(1e-05\)
-Total number of hits:                        3  \(1.24e-05\)];
+Total number of hits:                        3  \(1.33e-05\)];
 
 
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 3\n";
 }
 $expect = 
-     q[0.91   11.7   0.0  random   3299961 3299978\s+
-        2.1   10.5   0.0  random   4499980 4499997\s+
-        5.3    9.3   0.0  random   1979941 1979960]; 
+  q[4.1e-05   25.1   0.0  random   4499980 4500000\s*
+    5.5e-05   24.8   0.0  random   3299961 3299979\s*
+    9.1e-05   24.1   0.0  random   1979941 1979960]; 
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 4\n";
 }

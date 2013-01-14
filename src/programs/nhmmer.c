@@ -456,6 +456,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 0; i < infocnt; ++i)    {
           info[i].pli    = NULL;
           info[i].th     = NULL;
+          info[i].gm     = NULL;
           info[i].om     = NULL;
           info[i].bg     = p7_bg_Create(abc);
 
@@ -515,7 +516,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           /* Create processing pipeline and hit list */
           info[i].th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC);
           info[i].gm  = p7_profile_Clone(gm);
-          info[i].om  = p7_oprofile_Copy(om);
+          info[i].om  = p7_oprofile_Clone(om);
           info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
           p7_pipeline_NewModel(info[i].pli, info[i].om, info[i].bg);
 
@@ -589,6 +590,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           p7_pipeline_Destroy(info[i].pli);
           p7_tophits_Destroy(info[i].th);
           p7_oprofile_Destroy(info[i].om);
+          p7_profile_Destroy(info[i].gm);
       }
 
 

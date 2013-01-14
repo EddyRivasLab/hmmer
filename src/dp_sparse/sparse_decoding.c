@@ -293,7 +293,7 @@ utest_overwrite(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L)
   if ( (ox = p7_checkptmx_Create(gm->M, sq->n, ESL_MBYTES(32)))  == NULL)  esl_fatal(msg);
   if ( (sm = p7_sparsemask_Create(gm->M, sq->n))                 == NULL)  esl_fatal(msg);
   if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL)   != eslOK) esl_fatal(msg);
-  if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm)             != eslOK) esl_fatal(msg);
+  if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSEMASK_THRESH_DEFAULT)             != eslOK) esl_fatal(msg);
 
   /* F/B, then decode both ways */
   if (p7_SparseForward (sq->dsq, sq->n, gm, sm, fwd, /*fsc=*/NULL)  != eslOK) esl_fatal(msg);
@@ -365,7 +365,7 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
       if ( p7_checkptmx_GrowTo (ox,  gm->M, sq->n)                 != eslOK) esl_fatal(msg);
       if ( p7_sparsemask_Reinit(sm,  gm->M, sq->n)                 != eslOK) esl_fatal(msg);
       if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
-      if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm)           != eslOK) esl_fatal(msg);
+      if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSEMASK_THRESH_DEFAULT)           != eslOK) esl_fatal(msg);
 
       /* F/B, then decode in place */
       if (p7_SparseForward (sq->dsq, sq->n, gm, sm, sxf, &fsc)     != eslOK) esl_fatal(msg);
@@ -472,7 +472,7 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
   if (  (sm = p7_sparsemask_Create(M, sq->n))                   == NULL) esl_fatal(msg);
   if ( p7_checkptmx_GrowTo(ox, M, sq->n)                       != eslOK) esl_fatal(msg);
   if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
-  if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm)           != eslOK) esl_fatal(msg);
+  if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSEMASK_THRESH_DEFAULT)           != eslOK) esl_fatal(msg);
 
   /* Sparse DP calculations, and exact posterior decoding */
   if ( p7_SparseForward   (sq->dsq, sq->n, gm, sm, sxf, NULL) != eslOK) esl_fatal(msg);
