@@ -650,6 +650,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_tophits_Destroy(info->th);
       p7_oprofile_Destroy(info->om);
       p7_oprofile_Destroy(om);
+      p7_profile_Destroy(info->gm);
       p7_profile_Destroy(gm);
       p7_hmm_Destroy(hmm);
       destroy_id_length(id_length_list);

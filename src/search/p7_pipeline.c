@@ -28,7 +28,7 @@
 
 #include "base/p7_bg.h"
 #include "base/p7_domain.h"
-#include "base/p7_profile.h"	/* used by the hmmscan workaround */
+#include "base/p7_profile.h"   /* used by the hmmscan workaround */
 #include "base/p7_scoredata.h"
 #include "base/p7_tophits.h"
 #include "base/p7_hmmwindow.h"
@@ -50,7 +50,7 @@
 
 #include "misc/logsum.h"
 
-#include "search/modelconfig.h"	/* used by the hmmscan workaround */
+#include "search/modelconfig.h" /* used by the hmmscan workaround */
 #include "search/p7_pipeline.h"
 
 
@@ -270,7 +270,7 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, 
   /* Additional state config for nhmmer */
   pli->long_targets = do_longtargets;               /* TRUE | FALSE */
   pli->strand       = p7_STRAND_BOTH;               /* nhmmer's default */
-  pli->W            = -1;	                    /* p7_pipeline_NewModel() initiazes this, from profile */
+  pli->W            = -1;                     /* p7_pipeline_NewModel() initiazes this, from profile */
   pli->block_length = p7_NHMMER_MAX_RESIDUE_COUNT;
 
   /* Diagnostic info */
@@ -831,11 +831,12 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
   p7_SparseBackward(sq->dsq, sq->n, gm, pli->sm,  pli->sxb,          NULL);
   p7_SparseDecoding(sq->dsq, sq->n, gm, pli->sxf, pli->sxb, pli->sxd);
   p7_sparsemx_TracePostprobs(pli->sxd, pli->tr); /* annotate the trace. */
-  p7_trace_Index(pli->tr);		         /* index domains in the trace */
-  p7_sparsemx_Reuse(pli->sxx);	                 /* reuse the Viterbi matrix for mass tracing, coming up next */
+  p7_trace_Index(pli->tr);             /* index domains in the trace */
+  p7_sparsemx_Reuse(pli->sxx);                   /* reuse the Viterbi matrix for mass tracing, coming up next */
   
 
-  ESL_ALLOC(dcl, sizeof(P7_DOMAIN) * pli->tr->ndom);
+  dcl = p7_domain_Create(pli->tr->ndom);
+  //ESL_ALLOC(dcl, sizeof(P7_DOMAIN) * pli->tr->ndom);
   ESL_REALLOC(pli->wrk,  sizeof(float) * (gm->M+1));
   ESL_REALLOC(pli->n2sc, sizeof(float) * (sq->n+1));
   esl_vec_FSet(pli->n2sc, sq->n+1, 0.0f);
@@ -848,7 +849,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
 
       /* Determine envelope coords by mass trace. */
       p7_SparseMasstrace(sq->dsq, sq->n, gm, pli->sxf, pli->sxb, pli->tr, pli->tr->anch[d], p7_MASSTRACE_THRESH_DEFAULT, pli->sxx, pli->mt, 
-			 &(dcl[d].iae), &(dcl[d].ibe), &(dcl[d].kae), &(dcl[d].kbe));
+                         &(dcl[d].iae), &(dcl[d].ibe), &(dcl[d].kae), &(dcl[d].kbe));
       p7_sparsemx_Reuse (pli->sxx);
       p7_masstrace_Reuse(pli->mt);
 
@@ -871,26 +872,26 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
        * Then we record that in n2sc[iae..ibe]: seqbias correction mustn't overcount overlapped envelopes
        */
       if (pli->do_null2) 
-	{
-	  p7_sparse_Null2ByExpectation(gm, pli->sxd, dcl[d].iae, dcl[d].ibe, dcl[d].kae, dcl[d].kbe, pli->wrk, null2);
-	  dcl[d].domcorrection = 0.;
-	  for (i = dcl[d].iae; i <= dcl[d].ibe; i++)
-	    {
-	      dcl[d].domcorrection += null2[ sq->dsq[i] ];
-	      pli->n2sc[i]          = null2[ sq->dsq[i] ];
-	    }
-	  dcl[d].dombias = p7_FLogsum(0., log(bg->omega) + dcl[d].domcorrection);
-	}
+      {
+        p7_sparse_Null2ByExpectation(gm, pli->sxd, dcl[d].iae, dcl[d].ibe, dcl[d].kae, dcl[d].kbe, pli->wrk, null2);
+        dcl[d].domcorrection = 0.;
+        for (i = dcl[d].iae; i <= dcl[d].ibe; i++)
+          {
+            dcl[d].domcorrection += null2[ sq->dsq[i] ];
+            pli->n2sc[i]          = null2[ sq->dsq[i] ];
+          }
+        dcl[d].dombias = p7_FLogsum(0., log(bg->omega) + dcl[d].domcorrection);
+      }
       else 
-	{
-	  dcl[d].domcorrection = 0.;
-	  dcl[d].dombias       = 0.;
-	}
+      {
+        dcl[d].domcorrection = 0.;
+        dcl[d].dombias       = 0.;
+      }
 
       /* alignment "accuracy score": expected number of correctly aligned positions */
       dcl[d].oasc = 0.;
       for (z = pli->tr->tfrom[d]; z <= pli->tr->tto[d]; z++)
-	if (pli->tr->i[z]) dcl[d].oasc += pli->tr->pp[z];
+        if (pli->tr->i[z]) dcl[d].oasc += pli->tr->pp[z];
 
       /* domain bit score = null2-corrected bit score of the sequence if this were the only envelope in it. */
       dcl[d].bitscore = (dcl[d].envsc - (nullsc + dcl[d].dombias)) / eslCONST_LOG2;
@@ -926,14 +927,14 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
       seqbias   = 0.0f;
       Ld        = 0;
       for (d = 0; d < pli->tr->ndom; d++)
-	{
-	  if (dcl[d].envsc - dcl[d].dombias > baseline) 
-	    {
-	      sum_score += dcl[d].envsc - (sq->n - (dcl[d].ibe - dcl[d].iae + 1)) * gm->xsc[p7P_C][p7P_LOOP] - gm->xsc[p7P_C][p7P_MOVE];
-	      Ld        += dcl[d].ibe - dcl[d].iae + 1;
-	      seqbias   += dcl[d].domcorrection; /* NATS */
-	    }
-	}
+      {
+        if (dcl[d].envsc - dcl[d].dombias > baseline)
+          {
+            sum_score += dcl[d].envsc - (sq->n - (dcl[d].ibe - dcl[d].iae + 1)) * gm->xsc[p7P_C][p7P_LOOP] - gm->xsc[p7P_C][p7P_MOVE];
+            Ld        += dcl[d].ibe - dcl[d].iae + 1;
+            seqbias   += dcl[d].domcorrection; /* NATS */
+          }
+      }
       seqbias    = p7_FLogsum(0.0, log(bg->omega) + seqbias);      /* NATS */
       sum_score += (sq->n - Ld) * gm->xsc[p7P_C][p7P_LOOP] + gm->xsc[p7P_C][p7P_MOVE];
       pre2_score = (sum_score - nullsc) / eslCONST_LOG2;           /* BITS */
@@ -960,7 +961,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
   lnP =  esl_exp_logsurv (seq_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
   if (! p7_pipeline_TargetReportable(pli, seq_score, lnP))
     {
-      free(dcl);		/* we could be more efficient about reusing this! */
+      p7_domain_Destroy(dcl, pli->tr->ndom);
     }
   else
     {
@@ -994,8 +995,8 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
       hit->nincluded   = 0;
       hit->best_domain = best_d;
 
-      hit->seqidx       = -1;	/* nhmmer/longtarget only */
-      hit->subseq_start = -1;	/* nhmmer/longtarget only */
+      hit->seqidx       = -1; /* nhmmer/longtarget only */
+      hit->subseq_start = -1; /* nhmmer/longtarget only */
       
       hit->dcl        = dcl;
       dcl             = NULL;
@@ -1317,12 +1318,13 @@ parameterize_gm (P7_BG *bg, P7_BG *bg_tmp, P7_PROFILE *gm_src, P7_PROFILE *gm_de
   for (i = 1; i <=gm_src->M; i++) {
 
     for (j=0; j<K; j++) {
-      if (gm_src->mm && gm_src->mm[i] == 'm')
+      if (gm_src->mm[0] != 0 && gm_src->mm[i] == 'm')
         sc_tmp[j] = 0;
       else
         sc_tmp[j] = gm_src->rsc[j][(i) * p7P_NR  + p7P_M] + log(bg->f[j]/bg_tmp->f[j]);
     }
 
+    sc_tmp[K] = sc_tmp[Kp-2] = sc_tmp[Kp-1] = 0;
     esl_abc_FExpectScVec(gm_src->abc, sc_tmp, bg->f);
 
     for (j=0; j<Kp; j++)
@@ -1393,16 +1395,15 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
 )
 {
   P7_DOMAIN        *dcl     = NULL;     /* array of domain data structures <0..ndom-1>, from the first trace */
-  P7_DOMAIN        *dcl2    = NULL;     /* array of domain data structures <0..ndom-1>, a concatenated list of "domains" from the reparameterized trace(s)  */
+  P7_DOMAIN        *dcl_tmp    = NULL;  /* After reparameterization, and re-tracing, store a working domain here, then either point the hit->dcl to it, or free it  */
   P7_HIT           *hit     = NULL;     /* ptr to the current hit output data      */
-  int              dcl2_allocd = 0;
   float            fwdsc;   /* filter scores                           */
   float            nullsc;
   float            filtersc;           /* HMM null filter score                   */
   float            bias_filtersc;           /* HMM null filter score                   */
   float            seq_score;          /* the corrected per-seq bit score */
   double           P;               /* P-value of a hit */
-  int              d, dd, d2;
+  int              d, dd;
   int              status;
   int              nres;
 
@@ -1475,8 +1476,6 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
 
 
    ESL_ALLOC(dcl, sizeof(P7_DOMAIN) * pli->tr->ndom);
-   dcl2_allocd = pli->tr->ndom * 2;
-   ESL_ALLOC(dcl2, sizeof(P7_DOMAIN) * dcl2_allocd); // assumes the # of reparameterized domains will be at most 2X the number of default-parameter domains; will need to realloc if wrong
    ESL_REALLOC(pli->wrk,  sizeof(float) * (gm->M+1));
    ESL_REALLOC(pli->n2sc, sizeof(float) * (window_len+1));
    esl_vec_FSet(pli->n2sc, window_len+1, 0.0f);
@@ -1545,7 +1544,6 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
 
 
    pli->tr->ndom = dd+1;
-   d2 = 0; // this will now be used to keep track of the index into dcl2 (where newly found domains will be placed)
 
 
    for (d = 0; d < pli->tr->ndom; d++)
@@ -1587,7 +1585,6 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
      }
      p7_sparsemask_Finish(pli_tmp->sm);
 
-
      p7_SparseViterbi (subseq_tmp, env_len, pli_tmp->gm, pli_tmp->sm,  pli_tmp->sxx, pli_tmp->trc, &fwdsc); // don't care what the function returns, so used fwdsc just to make it happy
      p7_SparseForward (subseq_tmp, env_len, pli_tmp->gm, pli_tmp->sm,  pli_tmp->sxf,               &fwdsc);
      p7_SparseBackward(subseq_tmp, env_len, pli_tmp->gm, pli_tmp->sm,  pli_tmp->sxb,               NULL);
@@ -1600,51 +1597,47 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
        p7_oprofile_Convert(pli_tmp->gm, pli_tmp->om);
 
      for (dd = 0; dd < pli_tmp->trc->ndom; dd++) {
-
-       if (d2 == dcl2_allocd) {
-         dcl2_allocd *= 2;
-         ESL_REALLOC(dcl2, sizeof(P7_DOMAIN) * dcl2_allocd);
-       }
+       dcl_tmp = p7_domain_Create(1);
 
        p7_SparseMasstrace(subseq_tmp, env_len, pli_tmp->gm, pli_tmp->sxf, pli_tmp->sxb, pli_tmp->trc, pli_tmp->trc->anch[dd], p7_MASSTRACE_THRESH_DEFAULT, pli_tmp->sxx, pli_tmp->mt,
-                             &(dcl2[d2].iae), &(dcl2[d2].ibe), &(dcl2[d2].kae), &(dcl2[d2].kbe));
+                             &(dcl_tmp->iae), &(dcl_tmp->ibe), &(dcl_tmp->kae), &(dcl_tmp->kbe));
        p7_sparsemx_Reuse (pli_tmp->sxx);
        p7_masstrace_Reuse(pli_tmp->mt);
 
 
        /* Transfer alignment coords from trace. [Do we need to do this?] */
-       dcl2[d2].ia = pli_tmp->trc->sqfrom[dd] + env_offset - 1;
-       dcl2[d2].ib = pli_tmp->trc->sqto[dd]   + env_offset - 1;
-       dcl2[d2].ka = pli_tmp->trc->hmmfrom[dd];
-       dcl2[d2].kb = pli_tmp->trc->hmmto[dd];
-       p7_SparseEnvscore(subseq_tmp, env_len, pli_tmp->gm, dcl2[d2].iae, dcl2[d2].ibe, dcl2[d2].kae, dcl2[d2].kbe, pli_tmp->sm, pli_tmp->sxx, &(dcl2[d2].envsc));
+       dcl_tmp->ia = pli_tmp->trc->sqfrom[dd] + env_offset - 1;
+       dcl_tmp->ib = pli_tmp->trc->sqto[dd]   + env_offset - 1;
+       dcl_tmp->ka = pli_tmp->trc->hmmfrom[dd];
+       dcl_tmp->kb = pli_tmp->trc->hmmto[dd];
+       p7_SparseEnvscore(subseq_tmp, env_len, pli_tmp->gm, dcl_tmp->iae, dcl_tmp->ibe, dcl_tmp->kae, dcl_tmp->kbe, pli_tmp->sm, pli_tmp->sxx, &(dcl_tmp->envsc));
        p7_sparsemx_Reuse(pli_tmp->sxx);
 
        /* this is an assessment of the null correction */
-       p7_SparseEnvscore(subseq_tmp, env_len,          gm, dcl2[d2].iae, dcl2[d2].ibe, dcl2[d2].kae, dcl2[d2].kbe, pli_tmp->sm, pli_tmp->sxx, &(dcl2[d2].domcorrection));
-       //dcl2[d2].dombias = (dcl[d].domcorrection < dcl[d].envsc ? 0.0 : dcl[d].domcorrection - dcl[d].envsc);
-       dcl2[d2].dombias = 0.0;
+       p7_SparseEnvscore(subseq_tmp, env_len,          gm, dcl_tmp->iae, dcl_tmp->ibe, dcl_tmp->kae, dcl_tmp->kbe, pli_tmp->sm, pli_tmp->sxx, &(dcl_tmp->domcorrection));
+
+       dcl_tmp->dombias = 0.0;
        p7_sparsemx_Reuse(pli_tmp->sxx);
 
 
-       dcl2[d2].iae +=  env_offset - 1;
-       dcl2[d2].ibe +=  env_offset - 1;
+       dcl_tmp->iae +=  env_offset - 1;
+       dcl_tmp->ibe +=  env_offset - 1;
 
        /* Keep track of overlaps */
-       if (dcl2[d2].iae <= last_ibe) noverlaps++;
-       last_ibe   = dcl2[d2].ibe;
+       if (dcl_tmp->iae <= last_ibe) noverlaps++;
+       last_ibe   = dcl_tmp->ibe;
 
 
        /* alignment "accuracy score": expected number of correctly aligned positions */
-       dcl2[d2].oasc = 0.;
+       dcl_tmp->oasc = 0.;
        for (z = pli_tmp->trc->tfrom[dd]; z <= pli_tmp->trc->tto[dd]; z++)
-         if (pli_tmp->trc->i[z]) dcl2[d2].oasc += pli_tmp->trc->pp[z];
+         if (pli_tmp->trc->i[z]) dcl_tmp->oasc += pli_tmp->trc->pp[z];
 
        /* We're initiazing a P7_DOMAIN structure in dcl[d] by hand, without a Create().
         * We're responsible for initiazing all elements of this structure.
         */
-       dcl2[d2].is_reported = FALSE; /* will get set later by p7_tophits_Threshold() */
-       dcl2[d2].is_included = FALSE; /* ditto */
+       dcl_tmp->is_reported = FALSE; /* will get set later by p7_tophits_Threshold() */
+       dcl_tmp->is_included = FALSE; /* ditto */
 
 
 
@@ -1655,9 +1648,9 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
        * ~wheelert/archive/notebook/2012/0130_bits_v_evalues/00NOTES (Feb 1)
        */
        //adjust the score of a hit to account for the full length model - the characters outside the envelope but in the window
-       env_len2 = dcl2[d2].ibe - dcl2[d2].iae + 1;
-       ali_len  = dcl2[d2].ib - dcl2[d2].ia + 1;
-       bitscore = dcl2[d2].envsc ;
+       env_len2 = dcl_tmp->ibe - dcl_tmp->iae + 1;
+       ali_len  = dcl_tmp->ib - dcl_tmp->ia + 1;
+       bitscore = dcl_tmp->envsc ;
        //For these modifications, see notes, ~/notebook/2010/0716_hmmer_score_v_eval_bug/, end of Thu Jul 22 13:36:49 EDT 2010
        bitscore -= 2 * log(2. / (env_len+2))          +   (env_len2-ali_len)            * log((float)env_len / (env_len+2));
        bitscore += 2 * log(2. / (om->max_length+2)) ;
@@ -1676,7 +1669,9 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
        if (pli->mode == p7_SCAN_MODELS)  nres = ESL_MIN(env_len2,om->max_length);
        else                              nres = pli->stats.nres;
 
-       if ( p7_pipeline_TargetReportable(pli, dom_score, dom_lnP + log((float)nres / om->max_length) ) ) {
+       if (!( p7_pipeline_TargetReportable(pli, dom_score, dom_lnP + log((float)nres / om->max_length) ) ) ){
+         p7_domain_Destroy(dcl_tmp,1);
+       } else {
 
           /*now that almost everything has been filtered away, set up seq object required
            * for the p7_alidisplay_Create() call, if it wasn't already done for an earlier domain
@@ -1688,19 +1683,19 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
             if ((status = esl_sq_SetDesc     (tmpseq, seq_desc))   != eslOK) goto ERROR;
           }
           /* Viterbi alignment of the domain */
-          dcl2[d2].ad = p7_alidisplay_Create(pli_tmp->trc, dd, pli_tmp->om, tmpseq); // it's ok to use the om instead of the gm here; it doesn't depend on updated fwd scores
+          dcl_tmp->ad = p7_alidisplay_Create(pli_tmp->trc, dd, pli_tmp->om, tmpseq); // it's ok to use the om instead of the gm here; it doesn't depend on updated fwd scores
+
 
           pli_tmp->trc->sqfrom[dd] += env_offset - 1;
           pli_tmp->trc->sqto[dd]   += env_offset - 1;
-          dcl2[d2].ad->sqfrom      += env_offset - 1;
-          dcl2[d2].ad->sqto        += env_offset - 1;
+          dcl_tmp->ad->sqfrom      += env_offset - 1;
+          dcl_tmp->ad->sqto        += env_offset - 1;
 
           //I think this is broken: the "scores" array should be with the reparameterized values
-          p7_pipeline_computeAliScores(dcl2+d2, subseq, data, om->abc->Kp); // using subseq, because dcl[d] contains offsets into that sequence
+          p7_pipeline_computeAliScores(dcl_tmp, subseq, data, om->abc->Kp); // using subseq, because dcl[d] contains offsets into that sequence
 
           p7_tophits_CreateNextHit(hitlist, &hit);
-          ESL_ALLOC(hit->dcl, sizeof(P7_DOMAIN) );
-          hit->dcl[0] = dcl2[d2];
+          hit->dcl = dcl_tmp;
 
           hit->ndom        = 1;
           hit->best_domain = 0;
@@ -1731,7 +1726,7 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
           hit->pre_lnP   = esl_exp_logsurv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
 
-          hit->dcl[0].dombias  = dcl2[d2].dombias;
+          //hit->dcl[0].dombias  = dcl_tmp->dombias;
           hit->sum_score  = hit->score  = hit->dcl[0].bitscore = dom_score;
           hit->sum_lnP    = hit->lnP    = hit->dcl[0].lnP  = dom_lnP;
           hit->sortkey       = pli->inc_by_E ? -dom_lnP : dom_score; /* per-seq output sorts on bit score if inclusion is by score  */
@@ -1774,7 +1769,6 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
 
 
        }
-       d2++;
      }
      tmpseq->dsq    = NULL;
      esl_sq_Reuse(tmpseq);
@@ -2061,6 +2055,8 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
    */
     p7_hmmwindow_init(&vit_windowlist);
     tmpseq = esl_sq_CreateDigital(sq->abc);
+    free (tmpseq->dsq);  //this ESL_SQ object is just a container that'll point to a series of other DSQs, so free the one we just created inside the larger SQ object
+
     for (i=0; i<msv_windowlist.count; i++){
       int window_len = msv_windowlist.windows[i].length;
 
@@ -2101,6 +2097,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
   if (pli_tmp != NULL) {
     if (pli_tmp->bg != NULL)     p7_bg_Destroy(pli_tmp->bg);
     if (pli_tmp->gm != NULL)     p7_profile_Destroy(pli_tmp->gm);
+    if (pli_tmp->om != NULL)     p7_oprofile_Destroy(pli_tmp->om);
     if (pli_tmp->sxf != NULL)    p7_sparsemx_Destroy(pli_tmp->sxf);
     if (pli_tmp->sxb != NULL)    p7_sparsemx_Destroy(pli_tmp->sxb);
     if (pli_tmp->sxd != NULL)    p7_sparsemx_Destroy(pli_tmp->sxd);
@@ -2125,6 +2122,7 @@ ERROR:
   if (pli_tmp != NULL) {
     if (pli_tmp->bg != NULL)     p7_bg_Destroy(pli_tmp->bg);
     if (pli_tmp->gm != NULL)     p7_profile_Destroy(pli_tmp->gm);
+    if (pli_tmp->om != NULL)     p7_oprofile_Destroy(pli_tmp->om);
     if (pli_tmp->sxf != NULL)    p7_sparsemx_Destroy(pli_tmp->sxf);
     if (pli_tmp->sxb != NULL)    p7_sparsemx_Destroy(pli_tmp->sxb);
     if (pli_tmp->sxd != NULL)    p7_sparsemx_Destroy(pli_tmp->sxd);
@@ -2248,17 +2246,17 @@ main(int argc, char **argv)
       d    = hitlist->hit[h]->best_domain;
 
       printf("%10.2g %7.1f %6.1f  %7.1f %6.1f %10.2g  %6.1f %5d  %-*s %s\n",
-	     exp(hitlist->hit[h]->lnP) * (double) pli->Z,
-	     hitlist->hit[h]->score,
-	     hitlist->hit[h]->pre_score - hitlist->hit[h]->score, /* bias correction */
-	     hitlist->hit[h]->dcl[d].bitscore,
-	     eslCONST_LOG2R * p7_FLogsum(0.0, log(bg->omega) + hitlist->hit[h]->dcl[d].domcorrection), /* print in units of bits */
-	     exp(hitlist->hit[h]->dcl[d].lnP) * (double) pli->Z,
-	     hitlist->hit[h]->nexpected,
-	     hitlist->hit[h]->nreported,
-	     namew,
-	     hitlist->hit[h]->name,
-	     hitlist->hit[h]->desc);
+             exp(hitlist->hit[h]->lnP) * (double) pli->Z,
+             hitlist->hit[h]->score,
+             hitlist->hit[h]->pre_score - hitlist->hit[h]->score, /* bias correction */
+             hitlist->hit[h]->dcl[d].bitscore,
+             eslCONST_LOG2R * p7_FLogsum(0.0, log(bg->omega) + hitlist->hit[h]->dcl[d].domcorrection), /* print in units of bits */
+             exp(hitlist->hit[h]->dcl[d].lnP) * (double) pli->Z,
+             hitlist->hit[h]->nexpected,
+             hitlist->hit[h]->nreported,
+             namew,
+             hitlist->hit[h]->name,
+             hitlist->hit[h]->desc);
     }
 
   /* Done. */
@@ -2384,17 +2382,17 @@ main(int argc, char **argv)
       d    = hitlist->hit[h]->best_domain;
 
       printf("%10.2g %7.1f %6.1f  %7.1f %6.1f %10.2g  %6.1f %5d  %-*s %s\n",
-	     exp(hitlist->hit[h]->lnP) * (double) pli->Z,
-	     hitlist->hit[h]->score,
-	     hitlist->hit[h]->pre_score - hitlist->hit[h]->score, /* bias correction */
-	     hitlist->hit[h]->dcl[d].bitscore,
-	     eslCONST_LOG2R * p7_FLogsum(0.0, log(bg->omega) + hitlist->hit[h]->dcl[d].domcorrection), /* print in units of BITS */
-	     exp(hitlist->hit[h]->dcl[d].lnP) * (double) pli->Z,
-	     hitlist->hit[h]->nexpected,
-	     hitlist->hit[h]->nreported,
-	     namew,
-	     hitlist->hit[h]->name,
-	     hitlist->hit[h]->desc);
+             exp(hitlist->hit[h]->lnP) * (double) pli->Z,
+             hitlist->hit[h]->score,
+             hitlist->hit[h]->pre_score - hitlist->hit[h]->score, /* bias correction */
+             hitlist->hit[h]->dcl[d].bitscore,
+             eslCONST_LOG2R * p7_FLogsum(0.0, log(bg->omega) + hitlist->hit[h]->dcl[d].domcorrection), /* print in units of BITS */
+             exp(hitlist->hit[h]->dcl[d].lnP) * (double) pli->Z,
+             hitlist->hit[h]->nexpected,
+             hitlist->hit[h]->nreported,
+             namew,
+             hitlist->hit[h]->name,
+             hitlist->hit[h]->desc);
     }
 
   /* Done. */

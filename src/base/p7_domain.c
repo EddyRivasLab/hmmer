@@ -32,7 +32,10 @@ p7_domain_Create(int ndom)
   int        status;
 
   ESL_ALLOC(dcl, sizeof(P7_DOMAIN) * ndom);
-  for (d = 0; d < ndom; d++) dcl[d].ad = NULL;
+  for (d = 0; d < ndom; d++) {
+    dcl[d].ad = NULL;
+    dcl[d].scores_per_pos = NULL;
+  }
   return dcl;
 
  ERROR:
@@ -44,8 +47,10 @@ p7_domain_Destroy(P7_DOMAIN *dcl, int ndom)
 {
   int d;
   if (dcl) {
-    for (d = 0; d < ndom; d++)
+    for (d = 0; d < ndom; d++) {
       if (dcl[d].ad) p7_alidisplay_Destroy(dcl[d].ad);
+      if (dcl[d].scores_per_pos) free(dcl[d].scores_per_pos);
+    }
     free(dcl);
   }
 }
