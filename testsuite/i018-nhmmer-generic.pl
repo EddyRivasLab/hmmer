@@ -74,7 +74,7 @@ Residues passing Vit filter:              6173  \(0.000686\); expected \(0.001\)
 Residues passing Fwd filter:               276  \(3.07e-05\); expected \(1e-05\)
 Total number of hits:                        5  \(1.06e-05\)];
 if ($output !~ /$expect/s) {
-    die "FAIL: nhmmer failed search test 1\n";
+    die "FAIL: nhmmer failed search test 1\nExpect:\n$expect\nObserved:\n$output\n";
 }
 
 $expect = 
@@ -87,7 +87,7 @@ $expect =
         
         
 if ($output !~ /$expect/s) {
-    die "FAIL: nhmmer failed search test 2\n";
+    die "FAIL: nhmmer failed search test 2\nExpect:\n$expect\nObserved:\n$output\n";
 }
 
 $cmd = "$builddir/src/programs/nhmmer --tformat fasta --toponly $tmppfx.hmm $database";
@@ -103,22 +103,24 @@ Total number of hits:                        3  \(1.33e-05\)];
 
 
 if ($output !~ /$expect/s) {
-    die "FAIL: nhmmer failed search test 3\n";
+    die "FAIL: nhmmer failed search test 3\nExpect:\n$expect\nObserved:\n$output\n";
 }
 $expect = 
   q[4.1e-05   25.1   0.0  random   4499980 4500000\s*
     5.5e-05   24.8   0.0  random   3299961 3299979\s*
     9.1e-05   24.1   0.0  random   1979941 1979960]; 
 if ($output !~ /$expect/s) {
-    die "FAIL: nhmmer failed search test 4\n";
+    die "FAIL: nhmmer failed search test 4\nExpect:\n$expect\nObserved:\n$output\n";
 }
 
 print "ok.\n";
-unlink "$tmppfx.hmm";
-unlink "$tmppfx.A";
-unlink "$tmppfx.B";
-unlink "$tmppfx.fa";
 
+if (!$verbose) {
+  unlink "$tmppfx.hmm";
+  unlink "$tmppfx.A";
+  unlink "$tmppfx.B";
+  unlink "$tmppfx.fa";
+}
 exit 0;
 
 
