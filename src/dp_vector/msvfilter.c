@@ -256,7 +256,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
   register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
   register __m128i sv;		   /* temp storage of 1 curr row value in progress              */
   register __m128i biasv;	   /* emission bias in a vector                                 */
-  uint8_t  xJ;                     /* special states' scores                                    */
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
   int Q        = P7_NVB(om->M);    /* segment length: # of vectors                              */
@@ -295,14 +294,12 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
   biasv = _mm_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
   ceilingv = _mm_cmpeq_epi8(biasv, biasv);
   for (q = 0; q < Q; q++) dp[q] = _mm_setzero_si128();
-  xJ   = 0;
 
   basev = _mm_set1_epi8((int8_t) om->base_b);
   tecv = _mm_set1_epi8((int8_t) om->tec_b);
   tjbmv = _mm_set1_epi8((int8_t) om->tjb_b + (int8_t) om->tbm_b);
 
   xBv = _mm_subs_epu8(basev, tjbmv);
-
   for (i = 1; i <= L; i++) {
     rsc = om->rbv[dsq[i]];
     xEv = _mm_setzero_si128();
@@ -442,8 +439,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
 int
 p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_SCOREDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
-
-
   /*
    * Computing the score required to let P meet the F1 prob threshold
    * In original code, converting from a scaled int MSV
