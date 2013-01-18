@@ -2081,8 +2081,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
                         pli_tmp
       );
 
-
-
       if (status != eslOK) goto ERROR;
 
     }
