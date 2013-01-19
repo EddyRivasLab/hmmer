@@ -122,6 +122,12 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX 
   int     b;			/* counter down through checkpointed blocks, Rb+Rc..1 */
   int     w;			/* counter down through rows in a checkpointed block  */
 
+  /* Contract checks */
+  ESL_DASSERT1(( om->mode == p7_LOCAL )); /* Production code assumes multilocal mode w/ length model <L> */
+  ESL_DASSERT1(( om->L    == L ));	  /*  ... and it's easy to forget to set <om> that way           */
+  ESL_DASSERT1(( om->nj   == 1.0f ));	  /*  ... hence the check                                        */
+                                          /*  ... which you can disable, if you're playing w/ config     */
+
   /* Make sure <ox> is allocated big enough.
    * DO NOT set any ptrs into the matrix until after this potential reallocation!
    */
@@ -234,13 +240,14 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
   float   Tvalue;
   int     i, b, w, i2;
   int     status;
-  
+
   p7_sparsemask_Reinit(sm, om->M, L);
 
-#ifdef p7_DEBUGGING
   /* Contract checks */
-  if (sm->L != L || sm->M != om->M || sm->ncells) ESL_EXCEPTION(eslEINVAL, "sparsemask wasn't (re)-initialized");
-#endif
+  ESL_DASSERT1(( om->mode == p7_LOCAL )); /* Production code assumes multilocal mode w/ length model <L> */
+  ESL_DASSERT1(( om->L    == L ));	  /*  ... and it's easy to forget to set <om> that way           */
+  ESL_DASSERT1(( om->nj   == 1.0f ));	  /*  ... hence the check                                        */
+                                          /*  ... which you can disable, if you're playing w/ config     */
 
 #ifdef p7_DEBUGGING
   /* Debugging instrumentations. */
@@ -1216,7 +1223,7 @@ main(int argc, char **argv)
   /* create default null model, then create and optimize profile */
   bg = p7_bg_Create(abc);               
   gm = p7_profile_Create(hmm->M, abc); 
-  p7_profile_ConfigCustom(gm, hmm, bg, 500, 1.0, 0.5);
+  p7_profile_Config(gm, hmm, bg);
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
   
@@ -1662,6 +1669,7 @@ static ESL_OPTIONS options[] = {
   { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump recorded forward matrix",                     0 },
   { "-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump recorded backward matrix",                    0 },
   { "-P",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump recorded posterior prob matrix",              0 },
+  { "--diplot",  eslARG_OUTFILE, NULL, NULL, NULL,   NULL,  NULL, NULL, "save domain inference plot to <f>",                0 },
 #endif
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -1691,6 +1699,11 @@ main(int argc, char **argv)
   float           gmem, cmem, bmem;
   double          P, gP;
   int             status;
+#ifdef p7_DEBUGGING
+  int             store_pp   = FALSE;
+  char           *diplotfile = esl_opt_GetString(go, "--diplot");
+  FILE           *difp       = NULL;
+#endif
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
@@ -1704,11 +1717,15 @@ main(int argc, char **argv)
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
   else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
 
+#ifdef p7_DEBUGGING
+  if (diplotfile && (difp = fopen(diplotfile, "w")) == NULL) p7_Fail("couldn't open %s for writing", diplotfile);
+  if (difp || esl_opt_GetBoolean(go, "-P")) store_pp = TRUE;
+#endif
+
   /* create default null model, then create and optimize profile */
   bg = p7_bg_Create(abc);               
   gm = p7_profile_Create(hmm->M, abc); 
-  //  p7_profile_ConfigLocal(gm, hmm, bg, 500); /* local-mode, for comparison to fwdfilter which is local-only */
-  p7_profile_ConfigUnilocal(gm, hmm, bg, 500); 
+  p7_profile_Config(gm, hmm, bg);
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
   /* p7_oprofile_Dump(stdout, om);  */
@@ -1727,7 +1744,7 @@ main(int argc, char **argv)
   if (esl_opt_GetBoolean(go, "-D")) p7_checkptmx_SetDumpMode(ox, stdout, TRUE);
   if (esl_opt_GetBoolean(go, "-F")) ox->fwd = p7_refmx_Create(gm->M, 100);
   if (esl_opt_GetBoolean(go, "-B")) ox->bck = p7_refmx_Create(gm->M, 100);
-  if (esl_opt_GetBoolean(go, "-P")) ox->pp  = p7_refmx_Create(gm->M, 100);
+  if (store_pp)                     ox->pp  = p7_refmx_Create(gm->M, 100);
 #endif
 
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
@@ -1752,6 +1769,7 @@ main(int argc, char **argv)
       if (esl_opt_GetBoolean(go, "-F")) p7_refmx_Dump(stdout, ox->fwd);
       if (esl_opt_GetBoolean(go, "-B")) p7_refmx_Dump(stdout, ox->bck);
       if (esl_opt_GetBoolean(go, "-P")) p7_refmx_Dump(stdout, ox->pp);
+      if (difp)                         p7_refmx_PlotDomainInference(difp, ox->pp, 1, sq->n, NULL);
       bsc  =  (ox->bcksc-nullsc) / eslCONST_LOG2;
 #endif
 
@@ -1793,6 +1811,7 @@ main(int argc, char **argv)
       p7_checkptmx_Reuse(ox);
     }
 
+  if (difp) fclose(difp);
   esl_sq_Destroy(sq);
   esl_sqfile_Close(sqfp);
   p7_sparsemask_Destroy(sm);

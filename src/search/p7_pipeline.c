@@ -749,18 +749,18 @@ p7_pipeline_WriteStats(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
 int
 p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist)
 {
-  P7_DOMAIN       *dcl     = NULL;     /* array of domain data structures <0..ndom-1> */
-  P7_HIT          *hit     = NULL;     /* ptr to the current hit output data          */
-  float            usc, vitsc, fwdsc;  /* DP scores                                   */
-  float            filtersc;           /* HMM null filter score                       */
-  float            nullsc;             /* null model score                            */
+  P7_DOMAIN       *dcl     = NULL;        /* array of domain data structures <0..ndom-1> */
+  P7_HIT          *hit     = NULL;        /* ptr to the current hit output data          */
+  float            usc, vitsc, fwdsc;     /* DP scores                                   */
+  float            filtersc;              /* HMM null filter score                       */
+  float            nullsc;                /* null model score                            */
   float            seqbias;  
-  float            seq_score;          /* the corrected per-seq bit score */
-  float            sum_score;           /* the corrected reconstruction score for the seq */
-  float            pre_score, pre2_score; /* uncorrected bit scores for seq */
-  double           P;                /* P-value of a hit */
-  double           lnP;              /* log P-value of a hit */
-  int              Ld;               /* # of residues in envelopes */
+  float            seq_score;             /* the corrected per-seq bit score             */
+  float            sum_score;             /* the corrected reconstruction score          */
+  float            pre_score, pre2_score; /* uncorrected bit scores for seq              */
+  double           P;                     /* P-value of a hit                            */
+  double           lnP;                   /* log P-value of a hit                        */
+  int              Ld;                    /* # of residues in envelopes                  */
   int              d,z,i;
   float            null2[p7_MAXCODE];
   int              noverlaps;
@@ -850,7 +850,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
   best_d     = 0;
   for (d = 0; d < pli->tr->ndom; d++)
     {
-
       /* Determine envelope coords by mass trace. */
       p7_SparseMasstrace(sq->dsq, sq->n, gm, pli->sxf, pli->sxb, pli->tr, pli->tr->anch[d], p7_MASSTRACE_THRESH_DEFAULT, pli->sxx, pli->mt, 
                          &(dcl[d].iae), &(dcl[d].ibe), &(dcl[d].kae), &(dcl[d].kbe));
@@ -867,7 +866,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
       dcl[d].ka = pli->tr->hmmfrom[d];  
       dcl[d].kb = pli->tr->hmmto[d];  
 
-      /* Determine envelope score. [We have an approximation available, but we determined it rarely holds */
+      /* Determine envelope score. [We have an approximation available, but we determined it rarely holds.] */
       p7_SparseEnvscore(sq->dsq, sq->n, gm, dcl[d].iae, dcl[d].ibe, dcl[d].kae, dcl[d].kbe, pli->sm, pli->sxx, &(dcl[d].envsc));
       p7_sparsemx_Reuse(pli->sxx);
 
@@ -906,7 +905,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
       /* Viterbi alignment of the domain */
       dcl[d].ad = p7_alidisplay_Create(pli->tr, d, om, sq);
 
-      /* We're initiazing a P7_DOMAIN structure in dcl[d] by hand, without a Create().
+      /* We're initializing a P7_DOMAIN structure in dcl[d] by hand, without a Create().
        * We're responsible for initiazing all elements of this structure.
        */
       dcl[d].is_reported = FALSE; /* will get set later by p7_tophits_Threshold() */
@@ -950,12 +949,18 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
       sum_score  = seq_score;
     }
 
+  /* SRE TESTING: always use the reconstruction score. The fwd score is not adequately corrected */
+  seq_score = sum_score;
+  pre_score = pre2_score;
+
+#if 0
   /* Let sum_score override the seq_score when it's better, and it includes at least 1 domain */
   if (Ld > 0 && sum_score > seq_score)
     {
       seq_score = sum_score;
       pre_score = pre2_score;
     }
+#endif
 
   /* Apply thresholding and determine whether to put this
    * target into the hit list. E-value thresholding may

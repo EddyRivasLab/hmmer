@@ -621,6 +621,7 @@ p7_sparsemask_Validate(const P7_SPARSEMASK *sm, char *errbuf)
     }
   return eslOK;
 }
+
 /*-------- end, P7_SPARSEMASK debugging tools -------------------*/
 
 
@@ -1475,7 +1476,118 @@ p7_sparsemx_CompareDecoding(const P7_SPARSEMX *sxe, const P7_SPARSEMX *sxa, floa
   return eslOK;
 }
 
+/* Function:  p7_sparsemx_PlotDomainInference()
+ * Synopsis:  Plot graph of domain inference data, in xmgrace XY format
+ *
+ * Purpose:   Given posterior decoding matrix <sxd>, plot a 2D graph of
+ *            various quantities that could be useful for inferring 
+ *            sequence coordinates of a domain location. Output is
+ *            in XMGRACE xy format, and is sent to open writable
+ *            stream <ofp>.
+ *            
+ *            Restrict the plot to sequence coords <ia..ib>, which can
+ *            range from <1..sxd->L>. To get the full sequence, pass
+ *            <ia=1>, <ib=sxd->L>.
+ *            
+ *            At least four datasets are plotted. Set 0 is
+ *            P(homology): the posterior probability that this residue
+ *            is 'in' the model (as opposed to being emitted by N,C,
+ *            or J states).  Set 1 is P(B), the posterior probability
+ *            of the BEGIN state. Set 2 is P(E), the posterior
+ *            probability of the END state. Set 3 plots the maximum
+ *            posterior probability of any emitting model state (M or
+ *            I, glocal or local).
+ *            
+ *            Optionally, caller may also provide an indexed trace
+ *            <tr>, showing where domains have been defined (as
+ *            horizontal lines above the plot); each domain is an
+ *            xmgrace dataset (so, sets 4..4+ndom-1 are these
+ *            horizontal lines).
+ *
+ * Xref:      p7_refmx_PlotDomainInference() is the same thing,
+ *            for P7_REFMX, with sets in the same order.
+ */
+int
+p7_sparsemx_PlotDomainInference(FILE *ofp, const P7_SPARSEMX *sxd, int ia, int ib, const P7_TRACE *tr)
+{
+  const P7_SPARSEMASK *sm = sxd->sm;
+  const float  tr_height  = 1.2;
+  const float *xc;
+  const float *dpc;
+  float  val;
+  int    i,z,d;
 
+
+  /* Set #0: P(homology), via 1 - (NN+CC+JJ) */
+  xc = sxd->xmx;
+  for (i = 0; i <= ib; i++)
+    {
+      if ( sm->n[i] || (i < sm->L && sm->n[i+1]) ) /* either i is a stored row in segment, or an ia-1 special row before segment start */
+	{
+	  val = 1.0 - (xc[p7S_N] + xc[p7S_JJ] + xc[p7S_CC]); /* this might get calculated for i=0, and be wrong, because N(0) is not what we want. but we won't use <val> on i=0; see below */
+	  xc += p7S_NXCELLS;
+	}
+      else val = 0.0;
+
+      if (i >= ia) fprintf(ofp, "%-6d %.5f\n", i, val);
+    }
+  fprintf(ofp, "&\n");
+  
+  /* Set #1: P(B), begin */
+  xc = sxd->xmx;
+  for (i = 0; i <= ib; i++)
+    {
+      if ( sm->n[i] || (i < sm->L && sm->n[i+1]) ) /* either i is a stored row in segment, or an ia-1 special row before segment start */
+	{
+	  val = xc[p7S_B];
+	  xc += p7S_NXCELLS;
+	}
+      else val = 0.0;
+      if (i >= ia) fprintf(ofp, "%-6d %.5f\n", i, val);
+    }
+  fprintf(ofp, "&\n");
+  
+  /* Set #2: P(E), end */
+  xc = sxd->xmx;
+  for (i = 0; i <= ib; i++)
+    {
+      if ( sm->n[i] || (i < sm->L && sm->n[i+1]) ) /* either i is a stored row in segment, or an ia-1 special row before segment start */
+	{
+	  val = xc[p7S_E];
+	  xc += p7S_NXCELLS;
+	}
+      else val = 0.0;
+      if (i >= ia) fprintf(ofp, "%-6d %.5f\n", i, val);
+    }
+  fprintf(ofp, "&\n");
+
+  /* Set #3: max P(i,k,s) for s=M,I emitting states (both G and L) */
+  for (dpc = sxd->dp, i = 1; i < ia; i++) 
+    dpc += sm->n[i] * p7S_NSCELLS;
+  for (; i <= ib; i++)
+    {
+      for (val = 0., z = 0; z < sm->n[i]; z++)
+	{
+	  val = ESL_MAX(val, 
+			ESL_MAX( ESL_MAX(dpc[p7S_ML], dpc[p7S_MG]),
+				 ESL_MAX(dpc[p7S_IL], dpc[p7S_IG])));
+	  dpc += p7S_NSCELLS;
+	}
+      fprintf(ofp, "%-6d %.5f\n", i, val);
+    }
+  fprintf(ofp, "&\n");
+
+  if (tr && tr->ndom)  /* Remaining sets are horiz lines, representing individual domains appearing in the optional <tr> */
+    {
+      for (d = 0; d < tr->ndom; d++)
+	{
+	  fprintf(ofp, "%-6d %.5f\n", tr->sqfrom[d], tr_height);
+	  fprintf(ofp, "%-6d %.5f\n", tr->sqto[d],   tr_height);
+	  fprintf(ofp, "&\n");
+	}
+    }
+  return eslOK;
+}
 /*------------ end, P7_SPARSEMX debugging tools -----------------*/
 
 
@@ -1495,8 +1607,8 @@ validate_dimensions(const P7_SPARSEMX *sx, char *errbuf)
   int            ncells = 0;
   int            i;
 
-  if ( sm->M <= 0)               ESL_FAIL(eslFAIL, errbuf, "nonpositive M");
-  if ( sm->L <= 0)               ESL_FAIL(eslFAIL, errbuf, "nonpositive L");
+  if ( sm->M <= 0)              ESL_FAIL(eslFAIL, errbuf, "nonpositive M");
+  if ( sm->L <= 0)              ESL_FAIL(eslFAIL, errbuf, "nonpositive L");
   if ( sm->Q <  P7_NVF(sm->M))  ESL_FAIL(eslFAIL, errbuf, "insufficient Q");
 
   for (r=0, g=0, i = 1; i <= sm->L; i++) {

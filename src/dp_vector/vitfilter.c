@@ -102,8 +102,13 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   __m128i negInfv;
   int     status;
 
-  /* Contract checks / argument validation */
-  ESL_DASSERT1( (om->mode == p7_LOCAL || om->mode == p7_UNILOCAL) ); /* VF numerics only work for local alignment */
+  /* Contract checks */
+  ESL_DASSERT1(( om->mode == p7_LOCAL )); /* Production code assumes multilocal mode w/ length model <L> */
+  ESL_DASSERT1(( om->L    == L ));	  /*  ... and it's easy to forget to set <om> that way           */
+  ESL_DASSERT1(( om->nj   == 1.0f ));	  /*  ... hence the check                                        */
+                                          /*  ... which you can disable, if you're playing w/ config     */
+  /* note however that ViterbiFilter numerics are only guaranteed for local alignment, not glocal        */
+
 
   /* Resize the filter mx as needed */
   if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of Vit filter matrix failed");

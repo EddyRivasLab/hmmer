@@ -94,6 +94,13 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
   int     cmp;
   int     status;
 
+  /* Contract checks */
+  ESL_DASSERT1(( om->mode == p7_LOCAL )); /* Production code assumes multilocal mode w/ length model <L> */
+  ESL_DASSERT1(( om->L    == L ));	  /*  ... and it's easy to forget to set <om> that way           */
+  ESL_DASSERT1(( om->nj   == 1.0f ));	  /*  ... hence the check                                        */
+                                          /*  ... which you can disable, if you're playing w/ config     */
+  /* note however that it makes no sense to run MSV w/ a model in glocal mode                            */
+
   /* Try highly optimized Knudsen SSV filter first. 
    * Note that SSV doesn't use any main memory (from <ox>) at all! 
    */

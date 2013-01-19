@@ -270,8 +270,13 @@ p7_tracealign_ComputeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
   gm = p7_profile_Create (hmm->M, hmm->abc);
   om = p7_oprofile_Create(hmm->M, hmm->abc);
 
-  p7_profile_ConfigCustom(gm, hmm, bg, sq[offset]->n, 0.0, 0.5); /* *unihit* glocal/local */
-  p7_oprofile_Convert(gm, om);
+  /* May need to play with config choice 
+   * We want the <om> in local multihit mode for sparsification step
+   * But we want the <gm> in unihit dual local/glocal mode for alignment
+   */
+  p7_profile_Config(gm, hmm, bg);                    /* *multihit* glocal/local...   */
+  p7_oprofile_Convert(gm, om);	                     /*    ... *multihit* local      */
+  p7_profile_ConfigCustom(gm, hmm, bg, 0, 0.0, 0.5); /*    ... *unihit* glocal/local */
 
   cx  = p7_checkptmx_Create (hmm->M, sq[offset]->n, ESL_MBYTES(p7_RAMLIMIT));
   sm  = p7_sparsemask_Create(hmm->M, sq[offset]->n);
@@ -283,8 +288,11 @@ p7_tracealign_ComputeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
       p7_oprofile_ReconfigLength(om, sq[idx]->n);
       p7_profile_SetLength      (gm, sq[idx]->n);
 
+      /* Sparse mask is constructed by local multihit alignment to <om> in the filters */
       p7_ForwardFilter (sq[idx]->dsq, sq[idx]->n, om, cx, &fwdsc);
       p7_BackwardFilter(sq[idx]->dsq, sq[idx]->n, om, cx, sm, p7_SPARSEMASK_THRESH_DEFAULT);
+
+      /* Alignment itself is constructed by unihit dual-mode local/glocal to <gm> */
       p7_SparseViterbi (sq[idx]->dsq, sq[idx]->n, gm, sm, sx1, tr[idx], &vsc);
       if (tr[idx]->pp) {
 	p7_SparseForward (sq[idx]->dsq, sq[idx]->n, gm, sm, sx1, &fwdsc);

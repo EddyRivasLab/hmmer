@@ -161,6 +161,7 @@ extern int   p7_sparsemx_CompareReference       (const P7_SPARSEMX *sx, const P7
 extern int   p7_sparsemx_CompareReferenceAsBound(const P7_SPARSEMX *sx, const P7_REFMX *rx, float tol);
 extern int   p7_sparsemx_CompareDecoding        (const P7_SPARSEMX *sxe, const P7_SPARSEMX *sxa, float tol);
 extern int   p7_sparsemx_Validate(const P7_SPARSEMX *sx, char *errbuf);
+extern int   p7_sparsemx_PlotDomainInference(FILE *ofp, const P7_SPARSEMX *sxd, int ia, int ib, const P7_TRACE *tr);
 
 
 /*****************************************************************

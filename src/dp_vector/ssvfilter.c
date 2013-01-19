@@ -13,7 +13,7 @@
  * 1. Introduction
  *****************************************************************/
  
-/* Here is a description of the major ides going into this
+/* Here is a description of the major ideas going into this
  * implementation of the SSV filter.
  *
  *

@@ -6,7 +6,7 @@
 # syntax is tied to pmark_master.pl.
 #
 # Usage:      x-hmmsearch <top_builddir>                     <top_srcdir>        <resultdir> <tblfile> <msafile> <fafile> <outfile>
-# Example:  ./x-hmmsearch ~/releases/hmmer-3.0/build-icc-mpi ~/releases/hmmer-3.0 testdir    test.tbl  pmark.msa test.fa  test.out
+# Example:  ./x-hmmsearch ~/releases/hmmer-4.0/build-icc-mpi ~/releases/hmmer-4.0 testdir    test.tbl  pmark.msa test.fa  test.out
 #
 # SRE, Tue Apr 20 10:32:49 2010 [Janelia]
 # SVN $Id$
@@ -21,8 +21,13 @@ BEGIN {
     $outfile       = shift;
 }
 
-$hmmbuild    = "$top_builddir/src/hmmbuild";
-$hmmsearch   = "$top_builddir/src/hmmsearch";
+if (-d "$top_builddir/src/programs") {                     # H4 directory structure
+    $hmmbuild    = "$top_builddir/src/programs/hmmbuild";
+    $hmmsearch   = "$top_builddir/src/programs/hmmsearch";
+} else {
+    $hmmbuild    = "$top_builddir/src/hmmbuild";           # H3 directory structure
+    $hmmsearch   = "$top_builddir/src/hmmsearch";
+}
 $buildopts   = "";
 $searchopts  = "-E 200 --cpu 1";
 

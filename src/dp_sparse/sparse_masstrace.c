@@ -433,7 +433,7 @@ p7_SparseMasstrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPA
 		   P7_SPARSEMX *mass, P7_MASSTRACE *mt,
 		   int *ret_iae, int *ret_ibe, int *ret_kae, int *ret_kbe)
 {
-  int   st0 = tr->st[z];	/* anchor point's state (p7T_{MDI}) */
+  int   st0 = tr->st[z];	/* anchor point's state (p7T_{MDI}{LG}) */
   int   k0  = tr->k[z];		/* anchor point's k position in profile (1..M) */
   int   i0;
   int   status;

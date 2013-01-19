@@ -1301,6 +1301,7 @@ static ESL_OPTIONS options[] = {
   { "-S",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump a stochastic trace for examination",           0 },
   { "-T",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Viterbi trace for examination",                0 },
   { "-V",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Viterbi DP matrix for examination",            0 },
+  { "--diplot",  eslARG_OUTFILE,FALSE, NULL, NULL,   NULL,  NULL, NULL, "save domain inference plot to <f>",                 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -1328,7 +1329,8 @@ main(int argc, char **argv)
   P7_SPARSEMX    *sxf     = p7_sparsemx_Create(NULL);
   P7_SPARSEMX    *sxb     = p7_sparsemx_Create(NULL);
   P7_SPARSEMX    *sxd     = p7_sparsemx_Create(NULL);
-  P7_TRACE       *tr      = p7_trace_Create();
+  P7_TRACE       *tr      = p7_trace_CreateWithPP();
+  char           *difile  = NULL;
   float           fsc, vsc, bsc;
   float           nullsc;
   char            errbuf[eslERRBUFSIZE];
@@ -1382,12 +1384,23 @@ main(int argc, char **argv)
   p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxb, sxd);
   p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
 
+  p7_sparsemx_TracePostprobs(sxd, tr);
+  p7_trace_Index(tr);
+  
   if (esl_opt_GetBoolean(go, "-B")) p7_sparsemx_Dump(stdout, sxb);
   if (esl_opt_GetBoolean(go, "-D")) p7_sparsemx_Dump(stdout, sxd);
   if (esl_opt_GetBoolean(go, "-F")) p7_sparsemx_Dump(stdout, sxf);
   if (esl_opt_GetBoolean(go, "-M")) p7_sparsemask_Dump(stdout, sm);
   if (esl_opt_GetBoolean(go, "-T")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
   if (esl_opt_GetBoolean(go, "-V")) p7_sparsemx_Dump(stdout, sxv);
+
+  if (( difile = esl_opt_GetString(go, "--diplot")) != NULL)
+    {
+      FILE *difp;
+      if ((difp = fopen(difile, "w")) == NULL) esl_fatal("failed to open file %s\n", difile);
+      p7_sparsemx_PlotDomainInference(difp, sxd, 1, sq->n, tr);
+      fclose(difp);
+    }
 
   if (esl_opt_GetBoolean(go, "-S")) {
     p7_trace_Reuse(tr);

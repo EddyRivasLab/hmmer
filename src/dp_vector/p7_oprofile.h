@@ -61,7 +61,7 @@
  */
 
 #define p7O_NXSTATES  4    /* special states stored: ENJC                       */
-#define p7O_NXTRANS   2         /* special states all have 2 transitions: move, loop */
+#define p7O_NXTRANS   2    /* special states all have 2 transitions: move, loop */
 #define p7O_NTRANS    8    /* 7 core transitions + BMk entry                    */
 enum p7o_xstates_e      { p7O_E    = 0, p7O_N    = 1,  p7O_J  = 2,  p7O_C  = 3 };
 enum p7o_xtransitions_e { p7O_MOVE = 0, p7O_LOOP = 1 };
@@ -81,7 +81,7 @@ typedef struct p7_oprofile_s {
   /* ViterbiFilter uses scaled swords: 8x signed 16-bit integer vectors              */
   __m128i **rwv;                /* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
   __m128i  *twv;                /* transition score blocks          [8*Q8]           */
-  int16_t   xw[p7O_NXSTATES][p7O_NXTRANS]; /* NECJ state transition costs            */
+  int16_t   xw[p7O_NXSTATES][p7O_NXTRANS]; /* ENJC state transition costs            */
   float     scale_w;            /* score units: typically 500 / log(2), 1/500 bits   */
   int16_t   base_w;             /* offset of sword scores: typically +12000          */
   int16_t   ddbound_w;          /* threshold precalculated for lazy DD evaluation    */
@@ -90,7 +90,7 @@ typedef struct p7_oprofile_s {
   /* Forward, Backward use IEEE754 single-precision floats: 4x vectors               */
   __m128 **rfv;                 /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
   __m128  *tfv;                 /* transition probability blocks    [8*Q4]           */
-  float    xf[p7O_NXSTATES][p7O_NXTRANS]; /* NECJ transition costs                   */
+  float    xf[p7O_NXSTATES][p7O_NXTRANS]; /* ENJC transition costs                   */
 
   /* Our actual vector mallocs, before we align the memory                           */
   __m128i  *rbv_mem;

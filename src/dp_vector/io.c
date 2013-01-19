@@ -306,6 +306,10 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   /* keep track of the ending offset of the MSV model */
   om->eoff = ftello(hfp->ffp) - 1;;
 
+  /* MSV models are always multilocal. ReadRest() might override this later; that's ok. */
+  om->mode = p7_LOCAL;
+  om->nj   = 1.0f;
+
   if (byp_abc != NULL) *byp_abc = abc;  /* pass alphabet (whether new or not) back to caller, if caller wanted it */
   *ret_om = om;
   return eslOK;
@@ -417,6 +421,10 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
   /* keep track of the ending offset of the MSV model */
   p7_oprofile_Position(hfp, roff);
   om->eoff = ftello(hfp->ffp) - 1;
+
+  /* MSV models are always multilocal. ReadRest() might override this later; that's ok. */
+  om->mode = p7_LOCAL;
+  om->nj   = 1.0f;
 
   if (byp_abc != NULL) *byp_abc = abc;  /* pass alphabet (whether new or not) back to caller, if caller wanted it */
   *ret_om = om;

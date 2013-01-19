@@ -582,6 +582,83 @@ p7_refmx_DumpCSV(FILE *fp, P7_REFMX *pp, int istart, int iend, int kstart, int k
     }
   return eslOK;
 }
+
+/* Function:  p7_refmx_PlotDomainInference()
+ * Synopsis:  Plot graph of domain inference data, in XMGRACE xy format
+ *
+ * Purpose:   Given posterior decoding matrix <rxd>, plot a 2D graph of
+ *            various quantities that could be useful for inferring 
+ *            sequence coordinates of a domain location. Output is
+ *            in XMGRACE xy format, and is sent to open writable
+ *            stream <ofp>.
+ *            
+ *            Restrict the plot to sequence coords <ia..ib>, which can
+ *            range from <1..rxd->L>. To get the full sequence, pass
+ *            <ia=1>, <ib=rxd->L>.
+ *            
+ *            At least four datasets are plotted. Set 0 is
+ *            P(homology): the posterior probability that this residue
+ *            is 'in' the model (as opposed to being emitted by N,C,
+ *            or J states).  Set 1 is P(B), the posterior probability
+ *            of the BEGIN state. Set 2 is P(E), the posterior
+ *            probability of the END state. Set 3 plots the maximum
+ *            posterior probability of any emitting model state (M or
+ *            I, glocal or local).
+ *            
+ *            Optionally, caller may also provide an indexed trace
+ *            <tr>, showing where domains have been defined (as
+ *            horizontal lines above the plot); each domain is an
+ *            xmgrace dataset (so, sets 4..4+ndom-1 are these
+ *            horizontal lines).
+ */
+int
+p7_refmx_PlotDomainInference(FILE *ofp, const P7_REFMX *rxd, int ia, int ib, const P7_TRACE *tr)
+{
+  float *dpc;
+  int    i,k,d;
+  float  pmax;
+  float  tr_height = 1.2;
+
+  for (i = ia; i <= ib; i++)    /* Set #0 is P(homology) */
+    fprintf(ofp, "%-6d %.5f\n", i, 1.0 - ( P7R_XMX(rxd, i, p7R_N) + P7R_XMX(rxd, i, p7R_JJ) + P7R_XMX(rxd, i, p7R_CC)));
+  fprintf(ofp, "&\n");
+  
+  for (i = ia; i <= ib; i++)      /* Set #1 is P(B), the begin state */
+    fprintf(ofp, "%-6d %.5f\n", i, P7R_XMX(rxd, i, p7R_B));
+  fprintf(ofp, "&\n");
+
+  for (i = ia; i <= ib; i++)      /* Set #2 is P(E), the end state */
+    fprintf(ofp, "%-6d %.5f\n", i, P7R_XMX(rxd, i, p7R_E));
+  fprintf(ofp, "&\n");
+
+  for (i = ia; i <= ib; i++)	  /* Set #3 is max P(i,k,s) for s=M,I states (G and L) */
+    {
+      dpc = rxd->dp[i] + p7R_NSCELLS; /* initialize at k=1 by skipping k=0 cells */
+      for (pmax = 0., k = 1; k <= rxd->M; k++)
+	{
+	  pmax = ESL_MAX(pmax,
+			 ESL_MAX( ESL_MAX( dpc[p7R_ML], dpc[p7R_MG] ),
+				  ESL_MAX( dpc[p7R_IL], dpc[p7R_IG] )));
+	  dpc += p7R_NSCELLS;
+	}
+      fprintf(ofp, "%-6d %.5f\n", i, pmax);
+    }
+  fprintf(ofp, "&\n");
+
+  if (tr && tr->ndom)  /* Remaining sets are horiz lines, representing individual domains appearing in the optional <tr> */
+    {
+      for (d = 0; d < tr->ndom; d++)
+	{
+	  fprintf(ofp, "%-6d %.5f\n", tr->sqfrom[d], tr_height);
+	  fprintf(ofp, "%-6d %.5f\n", tr->sqto[d],   tr_height);
+	  fprintf(ofp, "&\n");
+	}
+    }
+  return eslOK;
+}
+
+
+
 /*------------- end, (most) debugging tools ---------------------*/
 
 
