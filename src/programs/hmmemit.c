@@ -19,7 +19,7 @@
 
 #include "hmmer.h"
 
-#define EMITOPTS "-a,-c,-C,-p,--simplerepeats"
+#define EMITOPTS "-a,-c,-C,-p"
 #define MODEOPTS "--local,--unilocal,--glocal,--uniglocal"
 
 static ESL_OPTIONS options[] = {
@@ -32,7 +32,6 @@ static ESL_OPTIONS options[] = {
   { "-c",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, EMITOPTS, "emit simple majority-rule consensus sequence",           2 },
   { "-C",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, EMITOPTS, "emit fancier consensus sequence (req's --minl, --minu)", 2 },
   { "-p",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, EMITOPTS, "sample sequences from profile, not core model",          2 },
-  { "--simplerepeats",eslARG_NONE,FALSE, NULL, NULL,      NULL,      NULL, EMITOPTS, "find locations with simple repeat signal",               2 },
 /* options controlling emission from profiles with -p  */
   { "-L",          eslARG_INT,    "400", NULL, NULL,      NULL,      "-p",    NULL, "set expected length from profile to <n>",               3 },
   { "--local",     eslARG_NONE,"default",NULL, NULL,    MODEOPTS,    "-p",    NULL, "configure profile in multihit local mode",              3 }, 
@@ -57,7 +56,6 @@ static void emit_consensus(ESL_GETOPTS *go, FILE *ofp, int outfmt,              
 static void emit_fancycons(ESL_GETOPTS *go, FILE *ofp, int outfmt,                    P7_HMM *hmm);
 static void emit_alignment(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM *hmm);
 static void emit_sequences(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM *hmm);
-static void find_simplerepeats(ESL_GETOPTS *go, FILE *ofp, P7_HMM *hmm);
 
 
 int
@@ -107,7 +105,6 @@ main(int argc, char **argv)
       if      (esl_opt_GetBoolean(go, "-c"))  emit_consensus(go, ofp, outfmt,    hmm);
       else if (esl_opt_GetBoolean(go, "-C"))  emit_fancycons(go, ofp, outfmt,    hmm);
       else if (esl_opt_GetBoolean(go, "-a"))  emit_alignment(go, ofp, outfmt, r, hmm);
-      else if (esl_opt_IsOn(go, "--simplerepeats")) find_simplerepeats(go, ofp, hmm);
       else                                    emit_sequences(go, ofp, outfmt, r, hmm);
 
 
@@ -285,50 +282,7 @@ repeat_sorter(const void *vw1, const void *vw2)
   else                    return  0;
 }
 
-static void
-find_simplerepeats(ESL_GETOPTS *go, FILE *ofp, P7_HMM *hmm)
-{
-  int i, j;
-  int status;
-  int max_repeat_len = 5;
-  int min_repeat_cnt = 4;
-  int min_rep_len = 25;
-  int min_tot_len = 50;
-  float relent_thresh = 1.5;
-  P7_HMM_WINDOWLIST *windowlist;
-  ESL_ALLOC(windowlist, sizeof(P7_HMM_WINDOWLIST));
-  p7_hmmwindow_init(windowlist);
 
-  p7_hmm_GetSimpleRepeats(hmm, max_repeat_len, min_repeat_cnt, min_rep_len, relent_thresh, windowlist);
-
-  if (windowlist->count > 1)  qsort(windowlist->windows, windowlist->count, sizeof(P7_HMM_WINDOW), repeat_sorter);
-
-  //merge neighboring windows
-  j = 0;
-  for (i=1; i<windowlist->count; i++) {
-    if (windowlist->windows[i].n < windowlist->windows[j].n + windowlist->windows[j].length + max_repeat_len ) {
-      windowlist->windows[j].length = (windowlist->windows[i].n+windowlist->windows[i].length)-windowlist->windows[j].n;
-    } else {
-      j++;
-      windowlist->windows[j].n      = windowlist->windows[i].n;
-      windowlist->windows[j].length = windowlist->windows[i].length;
-    }
-  }
-  windowlist->count = j+1;
-
-  //print repeat ranges, if sufficiently long
-  fprintf(ofp, "Position ranges for simple repeats\n");
-  for (i=0; i<windowlist->count; i++) {
-    if (windowlist->windows[i].length >= min_tot_len) {
-      fprintf(ofp, "%d .. %d\n",windowlist->windows[i].n - min_rep_len, windowlist->windows[i].n - min_rep_len + windowlist->windows[i].length - 1 );
-    }
-  }
-
-
-ERROR:
-  if (windowlist != NULL) free(windowlist);
-
-}
 
 
 
