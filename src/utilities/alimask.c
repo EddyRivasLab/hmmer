@@ -1,4 +1,7 @@
-/* Add mask line to a multiple sequence alignment
+/* Add mask line to a multiple sequence alignment, based on
+ * either the position range in the alignment or the position
+ * range in the model that would be produced using the alignment
+ * and the same set of flags in hmmbuild
  */
 #include "p7_config.h"
 

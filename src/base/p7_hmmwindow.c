@@ -30,12 +30,12 @@ ERROR:
 
 /* Function:  p7_hmmwindow_new()
  *
- * Synopsis:  return a pointer to the next window element on the list,
- *            increasing the size of the list, if necessary.
+ * Synopsis:  Return a pointer to the next window element on the list
  *
- * Purpose:   accepts <id>, <pos>, <fm_pos>, <k>, <length>, <score>,
+ * Purpose:   Accepts <id>, <pos>, <fm_pos>, <k>, <length>, <score>,
  *            and <complementarity>, assigns those to the next window
- *            element, then returns it.
+ *            element, then returns it, increasing the size of the
+ *            list, if necessary.
  *
  * Returns:   NULL in event of allocation failure, otherwise pointer to
  *            the next seed diagonal

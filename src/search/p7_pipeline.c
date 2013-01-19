@@ -1315,7 +1315,7 @@ parameterize_gm (P7_BG *bg, P7_BG *bg_tmp, P7_PROFILE *gm_src, P7_PROFILE *gm_de
    * default bg and the observed frequencies dsq. Store in bg_tmp.
    */
   esl_vec_FSet (bg_tmp->f, gm_src->abc->K, 0);
-  esl_sq_TallyCounts(sq, bg_tmp->f);
+  esl_sq_CountResidues(sq, bg_tmp->f);
   esl_vec_FNorm(bg_tmp->f, gm_src->abc->K);
 
   esl_vec_FScale(bg_tmp->f, K, (1.0-bg_smooth));

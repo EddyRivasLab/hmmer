@@ -22,7 +22,6 @@ extern int p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int t
 extern int p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, 
 				ESL_SQ **inc_sqarr, P7_TRACE **inc_trarr, int inc_n, int optflags,
 				ESL_MSA **ret_msa);
-extern int p7_tophits_LongInserts(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int min_length);
 extern int p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th );
 
 
