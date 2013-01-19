@@ -57,7 +57,11 @@
 /* SRE: FIXME 3.1 in progress */
 static int workaround_get_profile(P7_PIPELINE *pli, const P7_OPROFILE *om, const P7_BG *bg, P7_PROFILE **ret_gm);
 
+/* Struct used to pass a collection of useful temporary objects around
+ * within the LongTarget functions
+ *  */
 typedef struct {
+  ESL_SQ           *tmpseq; // - a new or reused digital sequence object used for p7_alidisplay_Create() call
   P7_BG            *bg;
   P7_PROFILE       *gm;
   P7_OPROFILE      *om;
@@ -70,7 +74,7 @@ typedef struct {
   P7_MASSTRACE     *mt;
   float            *scores;
 
-} P7_PIPELINE_TMP_OBJS;
+} P7_PIPELINE_LONGTARGET_OBJS;
 
 /*****************************************************************
  * 1. The P7_PIPELINE object: allocation, initiazation, destruction.
@@ -1261,24 +1265,36 @@ ERROR:
 }
 
 
-/* parameterize_gm()
+/* Function:  parameterize_gm()
+ * Synopsis:  Compute new parameters for model, based on residue frequency of the passed sequence
  *
- * Compute new (temporary) background priors based on a sequence
- * window, and, for a model that will be used narrowly within
- * the post-fwd portion of the longtarget pipeline, set match
- * state emission log-odds scores accordingly.
+ * Purpose:    Compute new (temporary) background priors based on a sequence
+ *             window, and, for a model that will be used narrowly within
+ *             the post-fwd portion of the longtarget pipeline, set match
+ *             state emission log-odds scores accordingly.
  *
- * Given the frequency distribution of a block of sequence
- * (<dsq>, of length <sq_len>), and a prior with which that
- * distribution can be mixed (<bg>), compute a new background
- * in the pre-allocated <bg_tmp> (used as a temporary holding
- * place). Use this to compute values for a pre-allocated
- * P&_PROFILE <gm_dest> based on a simple calculation involving
- * <gm>, <bg>, and <bg_tmp>.
+ *             Given the frequency distribution of a block of sequence
+ *             (<dsq>, of length <sq_len>), and a prior with which that
+ *             distribution can be mixed (<bg>), compute a new background
+ *             in the pre-allocated <bg_tmp> (used as a temporary holding
+ *             place). Use this to compute values for a pre-allocated
+ *             P7_PROFILE <gm_dest> based on a simple calculation involving
+ *             <gm>, <bg>, and <bg_tmp>.
  *
+ * Args:      bg              - default background model
+ *            bg_tmp          - pre-allocated background model, used just as a temporary storage
+ *                              for the new null that will be used in computing gm_dest
+ *            gm_src          - default profile (query)
+ *            gm_dest         - profile in which window-specific parameters will be stored
+ *            sq              - sequence upon which residue frequency, and thus new gm params, are based
+ *            L               -
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslFAIL> for empty sequence
  */
 static int
-parameterize_gm (P7_BG *bg, P7_BG *bg_tmp, P7_PROFILE *gm_src, P7_PROFILE *gm_dest, const ESL_SQ *sq, int L, float *sc_tmp) {
+parameterize_gm (P7_BG *bg, P7_BG *bg_tmp, P7_PROFILE *gm_src, P7_PROFILE *gm_dest, const ESL_SQ *sq, float *sc_tmp) {
   int     i, j;
   int     K   = gm_src->abc->K;
   int     Kp  = gm_src->abc->Kp;
@@ -1286,10 +1302,9 @@ parameterize_gm (P7_BG *bg, P7_BG *bg_tmp, P7_PROFILE *gm_src, P7_PROFILE *gm_de
   /* Fraction of new bg frequencies that comes from a prior determined by the sequence block.
    * This is 25% for long sequences, more for shorter sequences (e.g. 50% for sequences of length 50)
    */
-  float   bg_smooth = 25.0 / (ESL_MIN(100,L));
+  float   bg_smooth = 25.0 / (ESL_MIN(100,sq->n));
 
   if (sq == NULL) return eslFAIL;
-
 
   /* Compute new background frequencies as a weighted avg of the
    * default bg and the observed frequencies dsq. Store in bg_tmp.
@@ -1334,7 +1349,7 @@ parameterize_gm (P7_BG *bg, P7_BG *bg_tmp, P7_PROFILE *gm_src, P7_PROFILE *gm_de
 
 
   /* Set transitions */
-  p7_profile_SetLength(gm_dest, L);
+  p7_profile_SetLength(gm_dest, sq->n);
 
   return eslOK;
 }
@@ -1345,33 +1360,34 @@ parameterize_gm (P7_BG *bg, P7_BG *bg_tmp, P7_PROFILE *gm_src, P7_PROFILE *gm_de
  *            of the Viterbi filter
  *
  * Purpose:   This is called by postMSV_LongTarget(), and runs the
- *            post-Viterbi part of H3's accelerated pipeline to
+ *            post-Viterbi part of HMMER's accelerated pipeline to
  *            compare profile <om> against sequence <sq>. If a
  *            significant hit is found, information about it is
  *            added to the <hitlist>.
- *            The pipeline accumulates beancounting information
- *            about how many comparisons (and residues) flow through
+ *            The pipeline accumulates bean counting information
+ *            about how many comparisons and residues flow through
  *            the pipeline while it's active.
  *
  * Args:      pli             - the main pipeline object
+ *            gm              - profile (query)
  *            om              - optimized profile (query)
  *            bg              - background model
  *            hitlist         - pointer to hit storage bin
- *            data         - for computing windows based on maximum prefix/suffix extensions
+ *            data            - for computing windows based on maximum prefix/suffix extensions
  *            seqidx          - the id # of the sequence from which the current window was extracted
  *            window_start    - the starting position of the extracted window (offset from the first
  *                              position of the block of a possibly longer sequence)
  *            window_len      - the length of the extracted window
- *            tmpseq          - a new or reused digital sequence object used for p7_alidisplay_Create() call
  *            subseq          - digital sequence of the extracted window
  *            seq_start       - first position of the sequence block passed in to the calling pipeline function
  *            seq_name        - name of the sequence the window comes from
  *            seq_source      - source of the sequence the window comes from
  *            seq_acc         - acc of the sequence the window comes from
  *            seq_desc        - desc of the sequence the window comes from
- *            nullsc          - score of the passed window vs the bg model
- *            usc             - msv score of the passed window
  *            complementarity - boolean; is the passed window sourced from a complementary sequence block
+ *            overlap         - number of residues in this sequence window that overlap a preceding window.
+ *            pli_tmp         - a collection of objects used in the long target pipeline that should be
+ *                              (and are) only allocated once per pipeline to minimize alloc overhead.
  *
  * Returns:   <eslOK> on success. If a significant hit is obtained,
  *            its information is added to the growing <hitlist>.
@@ -1384,14 +1400,12 @@ parameterize_gm (P7_BG *bg, P7_BG *bg_tmp, P7_PROFILE *gm_src, P7_PROFILE *gm_de
  *            skip the problematic sequence and continue.
  *
  * Throws:    <eslEMEM> on allocation failure.
- *
- *
  */
 static int
 p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist,
-    const P7_SCOREDATA *data, int64_t seqidx, int window_start, int window_len, ESL_SQ *tmpseq, ESL_DSQ *subseq,
+    const P7_SCOREDATA *data, int64_t seqidx, int window_start, int window_len, ESL_DSQ *subseq,
     int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
-    int complementarity, int *overlap, P7_PIPELINE_TMP_OBJS *pli_tmp
+    int complementarity, int *overlap, P7_PIPELINE_LONGTARGET_OBJS *pli_tmp
 )
 {
   P7_DOMAIN        *dcl     = NULL;     /* array of domain data structures <0..ndom-1>, from the first trace */
@@ -1407,7 +1421,6 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
   int              status;
   int              nres;
 
-//  int              Ld;               /* # of residues in envelopes */
   int              z,i;
   int              noverlaps;
   int              last_ibe;
@@ -1562,12 +1575,12 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
       * to have these three fields filled in for the parameterize_gm() call.
       * Will fill in the rest if necessary
       */
-     tmpseq->n = env_len;
-     tmpseq->seq = NULL;
-     tmpseq->dsq = subseq_tmp; //using this instead of copying, I need to remember to set ->dsq to NULL before destroying tmpseq
+     pli_tmp->tmpseq->n = env_len;
+     pli_tmp->tmpseq->seq = NULL;
+     pli_tmp->tmpseq->dsq = subseq_tmp; //using this instead of copying, I need to remember to set ->dsq to NULL before destroying tmpseq
 
-     parameterize_gm (bg, pli_tmp->bg, gm, pli_tmp->gm, tmpseq, env_len, pli_tmp->scores);
-     //pli_tmp->gm = p7_profile_Clone(gm); // this keeps the default bg-based scoring
+     parameterize_gm (bg, pli_tmp->bg, gm, pli_tmp->gm, pli_tmp->tmpseq, pli_tmp->scores);
+     //pli_tmp->gm = p7_profile_Clone(gm); // this keeps the default bg-based scoring.  Used for testing
 
      /* copy over the part of the sparse mask related to the current envelope*/
      p7_sparsemask_Reinit(pli_tmp->sm, gm->M, env_len);
@@ -1596,6 +1609,7 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
      if (pli_tmp->trc->ndom > 0)
        p7_oprofile_Convert(pli_tmp->gm, pli_tmp->om);
 
+     //for each reparameterized domain...
      for (dd = 0; dd < pli_tmp->trc->ndom; dd++) {
        dcl_tmp = p7_domain_Create(1);
 
@@ -1616,7 +1630,7 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
        /* this is an assessment of the null correction */
        p7_SparseEnvscore(subseq_tmp, env_len,          gm, dcl_tmp->iae, dcl_tmp->ibe, dcl_tmp->kae, dcl_tmp->kbe, pli_tmp->sm, pli_tmp->sxx, &(dcl_tmp->domcorrection));
 
-       dcl_tmp->dombias = 0.0;
+       dcl_tmp->dombias = 0.0; // TODO:  right now I set it to 0, should it be (dcl_tmp->envsc - dcl_tmp->domcorrection)
        p7_sparsemx_Reuse(pli_tmp->sxx);
 
 
@@ -1676,14 +1690,14 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
           /*now that almost everything has been filtered away, set up seq object required
            * for the p7_alidisplay_Create() call, if it wasn't already done for an earlier domain
            * on the same sequence */
-          if (tmpseq->name[0] !=  '\0') {
-            if ((status = esl_sq_SetName     (tmpseq, seq_name))   != eslOK) goto ERROR;
-            if ((status = esl_sq_SetSource   (tmpseq, seq_source)) != eslOK) goto ERROR;
-            if ((status = esl_sq_SetAccession(tmpseq, seq_acc))    != eslOK) goto ERROR;
-            if ((status = esl_sq_SetDesc     (tmpseq, seq_desc))   != eslOK) goto ERROR;
+          if (pli_tmp->tmpseq->name[0] !=  '\0') {
+            if ((status = esl_sq_SetName     (pli_tmp->tmpseq, seq_name))   != eslOK) goto ERROR;
+            if ((status = esl_sq_SetSource   (pli_tmp->tmpseq, seq_source)) != eslOK) goto ERROR;
+            if ((status = esl_sq_SetAccession(pli_tmp->tmpseq, seq_acc))    != eslOK) goto ERROR;
+            if ((status = esl_sq_SetDesc     (pli_tmp->tmpseq, seq_desc))   != eslOK) goto ERROR;
           }
           /* Viterbi alignment of the domain */
-          dcl_tmp->ad = p7_alidisplay_Create(pli_tmp->trc, dd, pli_tmp->om, tmpseq); // it's ok to use the om instead of the gm here; it doesn't depend on updated fwd scores
+          dcl_tmp->ad = p7_alidisplay_Create(pli_tmp->trc, dd, pli_tmp->om, pli_tmp->tmpseq); // it's ok to use the om instead of the gm here; it doesn't depend on updated fwd scores
 
 
           pli_tmp->trc->sqfrom[dd] += env_offset - 1;
@@ -1691,7 +1705,7 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
           dcl_tmp->ad->sqfrom      += env_offset - 1;
           dcl_tmp->ad->sqto        += env_offset - 1;
 
-          //I think this is broken: the "scores" array should be with the reparameterized values
+          //TODO: the "scores" array should be with the reparameterized values. These are with the base scores
           p7_pipeline_computeAliScores(dcl_tmp, subseq, data, om->abc->Kp); // using subseq, because dcl[d] contains offsets into that sequence
 
           p7_tophits_CreateNextHit(hitlist, &hit);
@@ -1726,7 +1740,6 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
           hit->pre_lnP   = esl_exp_logsurv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
 
-          //hit->dcl[0].dombias  = dcl_tmp->dombias;
           hit->sum_score  = hit->score  = hit->dcl[0].bitscore = dom_score;
           hit->sum_lnP    = hit->lnP    = hit->dcl[0].lnP  = dom_lnP;
           hit->sortkey       = pli->inc_by_E ? -dom_lnP : dom_score; /* per-seq output sorts on bit score if inclusion is by score  */
@@ -1770,8 +1783,8 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
 
        }
      }
-     tmpseq->dsq    = NULL;
-     esl_sq_Reuse(tmpseq);
+     pli_tmp->tmpseq->dsq    = NULL;
+     esl_sq_Reuse(pli_tmp->tmpseq);
 
      p7_trace_Reuse   (pli_tmp->trc);
   }
@@ -1787,19 +1800,19 @@ ERROR:
 }
 
 
-/* Function:  p7_pipeline_postMSV_LongTarget()
- * Synopsis:  the part of the LongTarget P7 search Pipeline downstream
- *            of the MSV filter
+/* Function:  p7_pipeline_postSSV_LongTarget()
+ * Synopsis:  The part of the LongTarget P7 search Pipeline downstream
+ *            of the scanning SSV filter
  *
- * Purpose:   This is called by either the standard (SIMD-MSV) long-target
+ * Purpose:   This is called by either the standard (SIMD-SSV) long-target
  *            pipeline (p7_Pipeline_LongTarget) or the FM-index long-target
- *            pipeline (p7_Pipeline_FM), and runs the post-MSV part of H3's
- *            accelerated pipeline to compare profile <om> against
- *            sequence <sq>. If a significant hit is found,
- *            information about it is added to the <hitlist>.
- *            The pipeline accumulates beancounting information
- *            about how many comparisons (and residues) flow through
- *            the pipeline while it's active.
+ *            pipeline (p7_Pipeline_FM), and runs the post-MSV part of nhmmer's
+ *            accelerated pipeline to compare profile <om> against sequence
+ *            <sq>. If a significant hit is found (within the function
+ *            p7_pipeline_postViterbi_LongTarget(), called in this function),
+ *            information about it is added to the <hitlist>. The pipeline
+ *            accumulates bean-counting information about how many comparisons
+ *            and residues flow through the pipeline while it's active.
  *
  * Args:      pli             - the main pipeline object
  *            gm              - profile (query)
@@ -1811,7 +1824,6 @@ ERROR:
  *            window_start    - the starting position of the extracted window (offset from the first
  *                              position of the block of a possibly longer sequence)
  *            window_len      - the length of the extracted window
- *            tmpseq          - a new or reused digital sequence object used for "domain" definition
  *            subseq          - digital sequence of the extracted window
  *            seq_start       - first position of the sequence block passed in to the calling pipeline function
  *            seq_name        - name of the sequence the window comes from
@@ -1821,6 +1833,9 @@ ERROR:
  *            nullsc          - score of the passed window vs the bg model
  *            usc             - msv score of the passed window
  *            complementarity - boolean; is the passed window sourced from a complementary sequence block
+ *            vit_windowlist  - initialized window list, in which viterbi-passing hits are captured
+ *            pli_tmp         - a collection of objects used in the long target pipeline that should be
+ *                              (and are) only allocated once per pipeline to minimize alloc overhead.
  *
  * Returns:   <eslOK> on success. If a significant hit is obtained,
  *            its information is added to the growing <hitlist>.
@@ -1836,11 +1851,9 @@ ERROR:
  *
  */
 static int
-p7_pipeline_postMSV_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, const P7_SCOREDATA *data,
-    int64_t seqidx, int window_start, int window_len, ESL_SQ *tmpseq,
-    ESL_DSQ *subseq, int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
-    float nullsc, float usc, int complementarity, P7_HMM_WINDOWLIST *vit_windowlist,
-    P7_PIPELINE_TMP_OBJS *pli_tmp
+p7_pipeline_postSSV_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, const P7_SCOREDATA *data,
+    int64_t seqidx, int window_start, int window_len, ESL_DSQ *subseq, int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
+    float nullsc, float usc, int complementarity, P7_HMM_WINDOWLIST *vit_windowlist, P7_PIPELINE_LONGTARGET_OBJS *pli_tmp
 )
 {
   float            filtersc;           /* HMM null filter score                   */
@@ -1926,7 +1939,7 @@ p7_pipeline_postMSV_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om
       pli->stats.pos_past_vit -= ESL_MAX(0,  vit_windowlist->windows[i-1].n + vit_windowlist->windows[i-1].length - vit_windowlist->windows[i].n );
 
     p7_pipeline_postViterbi_LongTarget(pli, gm, om, bg, hitlist, data, seqidx,
-        window_start+vit_windowlist->windows[i].n-1, vit_windowlist->windows[i].length, tmpseq,
+        window_start+vit_windowlist->windows[i].n-1, vit_windowlist->windows[i].length,
         subseq + vit_windowlist->windows[i].n - 1,
         seq_start, seq_name, seq_source, seq_acc, seq_desc, complementarity, &overlap,
         pli_tmp
@@ -1949,17 +1962,18 @@ p7_pipeline_postMSV_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om
 }
 
 /* Function:  p7_Pipeline_LongTarget()
- * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline, modified to use the scanning MSV/SSV filters.
+ * Synopsis:  Accelerated seq/profile comparison pipeline, using scanning SSV filters for long target sequences.
  *
  * Purpose:   Run H3's accelerated pipeline to compare profile <om>
  *            against sequence <sq>. If a significant hit is found,
- *            information about it is added to the <hitlist>.
- *            This is a variant of p7_Pipeline that runs the
- *            versions of the MSV/SSV filters that scan a long
- *            sequence and find high-scoring regions (windows), then pass 
- *            those to the remainder of the pipeline. The pipeline
- *            accumulates beancounting information about how many comparisons
- *            flow through the pipeline while it's active.
+ *            information about it is added to the <hitlist>. This is
+ *            a variant of p7_Pipeline that runs the scanning SSV
+ *            filter (p7_SSVFilter_longtarget) that scans a long
+ *            sequence and finds high-scoring regions (windows), then
+ *            pass those to the remainder of the pipeline. The pipeline
+ *            accumulates bean counting information about how many
+ *            comparisons and residues flow through the pipeline while it's
+ *            active.
  *
  * Returns:   <eslOK> on success. If a significant hit is obtained,
  *            its information is added to the growing <hitlist>.
@@ -1975,12 +1989,22 @@ p7_pipeline_postMSV_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om
  *            anyway. We may emit a warning to the user, but cleanly
  *            skip the problematic sequence and continue.
  *
+ * Args:      pli             - the main pipeline object
+ *            gm              - profile (query)
+ *            om              - optimized profile (query)
+ *            data            - for computing diagonals, and picking window edges based
+ *                              on maximum prefix/suffix extensions
+ *            bg              - background model
+ *            subseq          - digital sequence of the window
+ *            hitlist         - pointer to hit storage bin (already allocated)
+ *            seqidx          - the id # of the sequence from which the current window was extracted
+ *
  * Throws:    <eslEMEM> on allocation failure.
  *
- * Xref:      J4/25.
  */
 int
-p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCOREDATA *data, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx)
+p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCOREDATA *data, P7_BG *bg,
+                       const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx)
 {
   int              i;
   int              status;
@@ -1988,18 +2012,17 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
   float            usc;      /* msv score  */
   float            P;
   ESL_DSQ          *subseq;
-  ESL_SQ           *tmpseq   = NULL;
   float            bias_filtersc;
 
   P7_HMM_WINDOWLIST msv_windowlist;
   P7_HMM_WINDOWLIST vit_windowlist;
 
-  P7_PIPELINE_TMP_OBJS *pli_tmp = NULL;
+  P7_PIPELINE_LONGTARGET_OBJS *pli_tmp = NULL;
 
 
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
-  ESL_ALLOC(pli_tmp, sizeof(P7_PIPELINE_TMP_OBJS));
+  ESL_ALLOC(pli_tmp, sizeof(P7_PIPELINE_LONGTARGET_OBJS));
   pli_tmp->bg = p7_bg_Clone(bg);
   pli_tmp->gm = p7_profile_Clone(gm);
   pli_tmp->om = p7_oprofile_Create(gm->M, gm->abc);
@@ -2026,11 +2049,9 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
    * This variant of SSV will scan a long sequence and find
    * short high-scoring regions.
    */
-  p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->fx, data, bg, pli->F1, &msv_windowlist);
+  p7_SSVFilter_longtarget(sq->dsq, sq->n, om, pli->fx, data, bg, pli->F1, &msv_windowlist);
 
-  /* convert hits to windows, possibly filtering based on composition bias,
-   * definitely merging neighboring windows, and
-   * TODO: splitting overly-large windows
+  /* convert hits to windows, merging neighboring windows (splitting overly-large windows)
    */
   if ( msv_windowlist.count > 0 ) {
 
@@ -2050,12 +2071,12 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
     p7_pipeline_ExtendAndMergeWindows (om, data, &msv_windowlist, sq->n, 0);
 
 
-  /*
-   * pass each remaining window on to the remaining pipeline
-   */
+    /*
+     * pass each remaining window on to the remaining pipeline
+     */
     p7_hmmwindow_init(&vit_windowlist);
-    tmpseq = esl_sq_CreateDigital(sq->abc);
-    free (tmpseq->dsq);  //this ESL_SQ object is just a container that'll point to a series of other DSQs, so free the one we just created inside the larger SQ object
+    pli_tmp->tmpseq = esl_sq_CreateDigital(sq->abc);
+    free (pli_tmp->tmpseq->dsq);  //this ESL_SQ object is just a container that'll point to a series of other DSQs, so free the one we just created inside the larger SQ object
 
     for (i=0; i<msv_windowlist.count; i++){
       int window_len = msv_windowlist.windows[i].length;
@@ -2076,7 +2097,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
 
       pli->stats.pos_past_msv += window_len;
 
-      status = p7_pipeline_postMSV_LongTarget(pli, gm, om, bg, hitlist, data, seqidx, msv_windowlist.windows[i].n, window_len, tmpseq,
+      status = p7_pipeline_postSSV_LongTarget(pli, gm, om, bg, hitlist, data, seqidx, msv_windowlist.windows[i].n, window_len,
                         subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc, p7_NOCOMPLEMENT, &vit_windowlist,
                         pli_tmp
       );
@@ -2085,8 +2106,8 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
 
     }
 
-    tmpseq->dsq = NULL;  //It's just a pointer to another sequence's dsq entry, which has already been freed.
-    esl_sq_Destroy(tmpseq);
+    pli_tmp->tmpseq->dsq = NULL;  //It's just a pointer to another sequence's dsq entry, which has already been freed.
+    esl_sq_Destroy(pli_tmp->tmpseq);
     free (vit_windowlist.windows);
   }
 
@@ -2114,10 +2135,10 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
 
 
 ERROR:
-  if (tmpseq != NULL) esl_sq_Destroy(tmpseq);
   if (msv_windowlist.windows != NULL) free (msv_windowlist.windows);
   if (vit_windowlist.windows != NULL) free (vit_windowlist.windows);
   if (pli_tmp != NULL) {
+    if (pli_tmp->tmpseq != NULL) esl_sq_Destroy(pli_tmp->tmpseq);
     if (pli_tmp->bg != NULL)     p7_bg_Destroy(pli_tmp->bg);
     if (pli_tmp->gm != NULL)     p7_profile_Destroy(pli_tmp->gm);
     if (pli_tmp->om != NULL)     p7_oprofile_Destroy(pli_tmp->om);
