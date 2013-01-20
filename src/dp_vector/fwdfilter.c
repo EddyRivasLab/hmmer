@@ -1811,7 +1811,9 @@ main(int argc, char **argv)
       p7_checkptmx_Reuse(ox);
     }
 
+#ifdef p7_DEBUGGING
   if (difp) fclose(difp);
+#endif
   esl_sq_Destroy(sq);
   esl_sqfile_Close(sqfp);
   p7_sparsemask_Destroy(sm);
