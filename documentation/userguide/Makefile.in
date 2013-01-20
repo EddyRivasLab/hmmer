@@ -24,8 +24,8 @@ HMMER_COPYRIGHT = "@HMMER_COPYRIGHT@"
 
 INSTALL       = @INSTALL@
 RMAN          = rman
-SEDITION      = ${top_srcdir}/easel/devkit/sedition
-RMANPROCESS   = ${top_srcdir}/easel/devkit/rmanprocess.pl
+SEDITION      = ${top_srcdir}/lib/easel/devkit/sedition
+RMANPROCESS   = ${top_srcdir}/lib/easel/devkit/rmanprocess.pl
 
 MANPAGES = \
 	${top_srcdir}/documentation/man/hmmalign.man\

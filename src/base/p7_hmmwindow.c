@@ -1,5 +1,8 @@
-/* P7_HMM_WINDOWLIST holds a compact representation of substitution
- * scores and maximal extensions, used by nhmmer.
+/* P7_HMM_WINDOWLIST holds a list of sequence windows (P7_HMM_WINDOWs).
+ * In nhmmer (specifically, the LongTarget pipeline functions), a
+ * set of these windows are identified within the full length target
+ * sequence in one stage, and these windows are passed on to a
+ * later stage of the pipeline.
  */
 #include "p7_config.h"
 
@@ -10,7 +13,7 @@
 
 /* Function:  p7_hmmwindow_init()
  *
- * Synopsis:  initialize the object used to store a list of windows around seeds
+ * Synopsis:  initialize the object used to store a list of sequence windows
  *
  * Returns:   eslEMEM in event of allocation failure, otherwise eslOK
  */
