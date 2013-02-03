@@ -49,7 +49,7 @@
 static int is_multidomain_region  (P7_DOMAINDEF *ddef, int i, int j);
 static int region_trace_ensemble  (P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *dsq, int ireg, int jreg, const P7_OMX *fwd, P7_OMX *wrk, int *ret_nc);
 static int rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq, P7_OMX *ox1, P7_OMX *ox2,
-				   int i, int j, int null2_is_done, P7_BG *bg, int long_target, float *bgf_arr, float *scores_arr, float *fwd_emissions_arr);
+				   int i, int j, int null2_is_done, P7_BG *bg, int long_target, P7_BG *bg_tmp, float *scores_arr, float *fwd_emissions_arr);
 
 
 /*****************************************************************
@@ -385,7 +385,7 @@ int
 p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om, 
 				   P7_OMX *oxf, P7_OMX *oxb, P7_OMX *fwd, P7_OMX *bck, 
 				   P7_DOMAINDEF *ddef, P7_BG *bg, int long_target,
-				   float *bgf_arr, float *scores_arr, float *fwd_emissions_arr
+				   P7_BG *bg_tmp, float *scores_arr, float *fwd_emissions_arr
 )
 {
   int i, j;
@@ -470,7 +470,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
 
                   /*the !long_target argument will cause the function to recompute null2
                    * scores if this is part of a long_target (nhmmer) pipeline */
-                  if (rescore_isolated_domain(ddef, om, sq, fwd, bck, i2, j2, TRUE, bg, long_target, bgf_arr, scores_arr, fwd_emissions_arr) == eslOK)
+                  if (rescore_isolated_domain(ddef, om, sq, fwd, bck, i2, j2, TRUE, bg, long_target, bg_tmp, scores_arr, fwd_emissions_arr) == eslOK)
                        last_j2 = j2;
             }
             p7_spensemble_Reuse(ddef->sp);
@@ -480,7 +480,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
         {
             /* The region looks simple, single domain; convert the region to an envelope. */
             ddef->nenvelopes++;
-            rescore_isolated_domain(ddef, om, sq, fwd, bck, i, j, FALSE, bg, long_target, bgf_arr, scores_arr, fwd_emissions_arr);
+            rescore_isolated_domain(ddef, om, sq, fwd, bck, i, j, FALSE, bg, long_target, bg_tmp, scores_arr, fwd_emissions_arr);
         }
         i     = -1;
         triggered = FALSE;
@@ -706,16 +706,21 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *
  *
  */
 static int
-reparameterize_model (P7_BG *bg, P7_OPROFILE *om, const ESL_DSQ *dsq, int sq_len, float *fwd_emissions, float *bgf_arr, float *sc_arr) {
-
+reparameterize_model (P7_BG *bg, P7_OPROFILE *om, const ESL_SQ *sq, int start, int L, float *fwd_emissions, float *bgf_arr, float *sc_arr) {
   int     K   = om->abc->K;
   float   bg_smooth = 0.25; //fraction of f that comes from a prior determined by the sequence block
   int i;
   float tmp;
+  int status;
 
-  if (dsq != NULL) {
+  if (sq != NULL) {
     /* compute new bg->f, capturing original values into a preallocated array */
-    esl_sq_GetFrequencies(dsq, sq_len, bg->abc, bgf_arr);
+
+    esl_vec_FSet (bgf_arr, om->abc->K, 0);
+    status = esl_sq_CountResidues(sq, start, L, bgf_arr);
+    if (status != eslOK) p7_Fail("Invalid sequence range in reparameterize_model()\n");
+    esl_vec_FNorm(bgf_arr, om->abc->K);
+
     for (i=0; i<K; i++) {
        tmp = bg->f[i];
        bg->f[i] = (bg_smooth*bg->f[i]) + ( (1.0-bg_smooth) * bgf_arr[i])  ;
@@ -792,7 +797,7 @@ reparameterize_model (P7_BG *bg, P7_OPROFILE *om, const ESL_DSQ *dsq, int sq_len
 static int
 rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
 			P7_OMX *ox1, P7_OMX *ox2, int i, int j, int null2_is_done, P7_BG *bg, int long_target,
-			float *bgf_arr, float *scores_arr, float *fwd_emissions_arr)
+			P7_BG *bg_tmp, float *scores_arr, float *fwd_emissions_arr)
 {
   P7_DOMAIN     *dom           = NULL;
   int            Ld            = j-i+1;
@@ -808,11 +813,12 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
   // number of times when there are many hits
   if (long_target && scores_arr!=NULL) { // this modifies both bg and om.
     //p7_oprofile_GetFwdEmissionArray(om, bg, fwd_emissions_arr);
-    reparameterize_model (bg, om, sq->dsq + i, j-i+1, fwd_emissions_arr, bgf_arr, scores_arr);
+    reparameterize_model (bg, om, sq, i, j-i+1, fwd_emissions_arr, bg_tmp->f, scores_arr);
   }
 
   p7_Forward (sq->dsq + i-1, Ld, om,      ox1, &envsc);
   p7_Backward(sq->dsq + i-1, Ld, om, ox1, ox2, NULL);
+
 
   status = p7_Decoding(om, ox1, ox2, ox2);      /* <ox2> is now overwritten with post probabilities     */
   if (status == eslERANGE) return eslFAIL;      /* rare: numeric overflow; domain is assumed to be repetitive garbage [J3/119-212] */
@@ -852,8 +858,8 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
       Ld = j - i + 1;
 
       //revert bg and om back to original, then forward to new values
-      reparameterize_model (bg, om, NULL, 0, fwd_emissions_arr, bgf_arr, scores_arr);
-      reparameterize_model (bg, om, sq->dsq + i, Ld, fwd_emissions_arr, bgf_arr, scores_arr);
+      reparameterize_model (bg, om, NULL, 0, 0, fwd_emissions_arr, bg_tmp->f, scores_arr);
+      reparameterize_model (bg, om, sq, i, Ld, fwd_emissions_arr, bg_tmp->f, scores_arr);
 
       p7_Forward (sq->dsq + i-1, Ld, om,      ox1, &envsc);
       p7_Backward(sq->dsq + i-1, Ld, om, ox1, ox2, NULL);
@@ -912,7 +918,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
 
 
   if (long_target && scores_arr!=NULL)  //revert bg and om back to original
-    reparameterize_model (bg, om, NULL, 0, fwd_emissions_arr, bgf_arr, scores_arr);
+    reparameterize_model (bg, om, NULL, 0, 0, fwd_emissions_arr, bg_tmp->f, scores_arr);
 
 
   p7_trace_Reuse(ddef->tr);
