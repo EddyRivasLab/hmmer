@@ -6,7 +6,7 @@
  *   3. Testing bitscore/E-value against reporting/inclusion thresholds
  *   4. Statistics output from a completed pipeline.
  *   5. The main pipeline call: p7_Pipeline().
- *   6. The pipeline speciazed for nhmmer/longtarget.
+ *   6. The pipeline specialized for nhmmer/longtarget.
  *   7. Example 1: search mode (in a sequence db)
  *   8. Example 2: scan mode (in an HMM db)
  *   9. Copyright and license information
@@ -866,7 +866,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
       dcl[d].ka = pli->tr->hmmfrom[d];  
       dcl[d].kb = pli->tr->hmmto[d];  
 
-      /* Determine envelope score. [We have an approximation available, but we determined it rarely holds.] */
+      /* Determine envelope score. [We have a fast approximation available, but empirical experiments determined that it rarely holds well.] */
       p7_SparseEnvscore(sq->dsq, sq->n, gm, dcl[d].iae, dcl[d].ibe, dcl[d].kae, dcl[d].kbe, pli->sm, pli->sxx, &(dcl[d].envsc));
       p7_sparsemx_Reuse(pli->sxx);
 

@@ -5,7 +5,8 @@
  *   2. Experiment driver: generating HMMs for hmmsim tests
  *   3. Unit tests.
  *   4. Test driver.
- *   5. Copyright and license.
+ *   5. Example.
+ *   6. Copyright and license.
  */
 
 #include "p7_config.h"
@@ -40,6 +41,13 @@
  *            probabilities assigned to gap-open ($t_{MI}$ and
  *            $t_{MD}$) and gap-extend ($t_{II}$ and $t_{DD}$)
  *            transitions.
+ *            
+ *            The <p7H_SINGLE> flag is set on the <hmm>. Model
+ *            configuration (<p7_profile_Config(), friends> detects
+ *            this flag. <B->Mk> entry transitions include a match
+ *            state occupancy term for profile HMMs, but for single
+ *            queries, that <occ[]> term is assumed 1.0 for all
+ *            positions. See commentary in modelconfig.c.
  *            
  * Args:      
  *
@@ -93,6 +101,7 @@ p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
   p7_hmm_SetCtime(hmm);
   hmm->checksum = 0;
 
+  hmm->flags |= p7H_SINGLE;
   *ret_hmm = hmm;
   return eslOK;
   
@@ -310,6 +319,102 @@ main(int argc, char **argv)
 #endif /*p7SEQMODEL_TESTDRIVE*/
 /*---------------- end, test driver -----------------------------*/
 
+/*****************************************************************
+ * 5. Example
+ *****************************************************************/
+#ifdef p7SEQMODEL_EXAMPLE
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_dmatrix.h"
+#include "esl_getopts.h"
+#include "esl_sq.h"
+#include "esl_sqio.h"
+#include "esl_scorematrix.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <query FASTA file> <target FASTA file>";
+static char banner[] = "probabilistic Smith/Waterman";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_ALPHABET   *abc     = esl_alphabet_Create(eslAMINO);
+  char           *qfile   = esl_opt_GetArg(go, 1);
+  char           *tfile   = esl_opt_GetArg(go, 2);
+  ESL_SQFILE     *qfp     = NULL;
+  ESL_SQFILE     *tfp     = NULL;
+  ESL_SQ         *qsq     = esl_sq_CreateDigital(abc);
+  ESL_SQ         *tsq     = esl_sq_CreateDigital(abc);
+  ESL_SCOREMATRIX *S      = esl_scorematrix_Create(abc);
+  ESL_DMATRIX     *Q      = NULL;
+  P7_BG           *bg     = p7_bg_Create(abc);
+  P7_HMM          *hmm    = NULL;
+  P7_PROFILE      *gm     = NULL;
+  P7_REFMX        *vit    = p7_refmx_Create(200, 400); /* will grow as needed */
+  double          *fa     = malloc(sizeof(double) * abc->K);
+  double          popen   = 0.02;
+  double          pextend = 0.4;
+  double          lambda;
+  float           vsc;
+  float           nullsc;
+  int             status;
+
+  esl_composition_BL62(fa);
+  esl_vec_D2F(fa, abc->K, bg->f);
+  esl_scorematrix_Set("BLOSUM62", S);
+  esl_scorematrix_ProbifyGivenBG(S, fa, fa, &lambda, &Q); 
+  esl_scorematrix_JointToConditionalOnQuery(abc, Q);
+
+  if (esl_sqfile_OpenDigital(abc, qfile, eslSQFILE_UNKNOWN, NULL, &qfp) != eslOK) esl_fatal("failed to open %s", qfile);
+  if (esl_sqio_Read(qfp, qsq) != eslOK) esl_fatal("failed to read query seq");
+
+  p7_Seqmodel(abc, qsq->dsq, qsq->n, qsq->name, Q, bg->f, popen, pextend, &hmm);  
+  p7_hmm_SetComposition(hmm);
+  p7_hmm_SetConsensus(hmm, qsq); 
+  
+  gm = p7_profile_Create(hmm->M, abc);
+  p7_profile_ConfigUnilocal(gm, hmm, bg, 400);
+  
+  if (esl_sqfile_OpenDigital(abc, tfile, eslSQFILE_UNKNOWN, NULL, &tfp) != eslOK) esl_fatal("failed to open %s", tfile);
+  while ((status = esl_sqio_Read(tfp, tsq)) == eslOK)
+    {
+      p7_bg_SetLength     (bg, tsq->n);
+      p7_profile_SetLength(gm, tsq->n);
+      
+      p7_ReferenceViterbi(tsq->dsq, tsq->n, gm, vit, NULL, &vsc);    
+      p7_bg_NullOne(bg, tsq->dsq, tsq->n, &nullsc);
+
+      printf("%.4f %-25s %-25s\n", (vsc - nullsc) / eslCONST_LOG2, tsq->name, gm->name);
+   
+      esl_sq_Reuse(tsq);
+      p7_refmx_Reuse(vit);
+    }
+  
+  p7_refmx_Destroy(vit);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+  p7_bg_Destroy(bg);
+  esl_dmatrix_Destroy(Q);
+  esl_scorematrix_Destroy(S);
+  free(fa);
+  esl_sq_Destroy(qsq);
+  esl_sq_Destroy(tsq);
+  esl_sqfile_Close(qfp);
+  esl_sqfile_Close(tfp);
+  esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7SEQMODEL_EXAMPLE*/
 
 
 

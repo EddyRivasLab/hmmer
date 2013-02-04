@@ -17,7 +17,7 @@
 #include "base/p7_trace.h"	     /* P7_TRACE      : alignment of a model to a sequence: an HMM state path                    */
 #include "base/p7_bg.h"		     /* P7_BG         : null model, of an entirely nonhomologous target seq                      */
 #include "base/p7_prior.h"	     /* P7_PRIOR      : Dirichlet mixture prior on model parameters                              */
-#include "base/p7_masstrace.h"	     /* P7_MASSTRACE  : used in calculating envelope bounds for a domain                         */
+#include "base/p7_masstrace.h"	     /* P7_MASSTRACE  : workspace used in calculating envelope bounds for a domain               */
 #include "base/p7_domain.h"	     /* P7_DOMAIN     : information about a match to a model in a target seq                     */
 #include "base/p7_domain_mpi.h"      /*               :    ... add-on: MPI communication                                         */
 #include "base/p7_alidisplay.h"	     /* P7_ALIDISPLAY : an alignment formatted for output                                        */

@@ -299,6 +299,10 @@ p7_profile_SetLength(P7_PROFILE *gm, int L)
  * a malloc by using gm->rsc[0]'s space, which we know is >= M+1, and
  * which we guarantee (by order of calls in config calls) has not been
  * parameterized yet.
+ * 
+ * If the <hmm>'s <p7H_SINGLE> flag is up, <occ[1..M]> is 1.0:
+ * i.e. the match state occupancy term is only applied to profiles,
+ * not to single-seq queries. 
  */
 static int
 set_local_entry(P7_PROFILE *gm, const P7_HMM *hmm)
@@ -308,12 +312,20 @@ set_local_entry(P7_PROFILE *gm, const P7_HMM *hmm)
   int    k;
   int    status;
 
-  if (( status  = p7_hmm_CalculateOccupancy(hmm, occ, NULL)) != eslOK) return status; /* NULL=iocc[k], I state expected uses, which we don't need here */
-  for (k = 1; k <= hmm->M; k++) 
-    Z += occ[k] * (float) (hmm->M-k+1);
-  for (k = 1; k <= hmm->M; k++) 
-    P7P_TSC(gm, k-1, p7P_LM) = logf(occ[k] / Z); /* note off-by-one: entry at Mk stored as [k-1][LM] */
-  /* leave tsc[M,LM] as -inf, as we'd already initialized it */
+  if (hmm->flags & p7H_SINGLE)
+    {
+      for (k = 0; k < hmm->M; k++) 
+	P7P_TSC(gm, k, p7P_LM) = logf( 2. / ((float) hmm->M * (float) (hmm->M+1))); 
+    }
+  else 
+    {
+      if (( status  = p7_hmm_CalculateOccupancy(hmm, occ, NULL)) != eslOK) return status; /* NULL=iocc[k], I state expected uses, which we don't need here */
+      for (k = 1; k <= hmm->M; k++) 
+	Z += occ[k] * (float) (hmm->M-k+1);
+      for (k = 1; k <= hmm->M; k++) 
+	P7P_TSC(gm, k-1, p7P_LM) = logf(occ[k] / Z); /* note off-by-one: entry at Mk stored as [k-1][LM] */
+      /* leave tsc[M,LM] as -inf, as we'd already initialized it */
+    }
   return eslOK;
 }
 

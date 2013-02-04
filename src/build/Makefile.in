@@ -23,7 +23,8 @@ STATS  = evalues_stats
 
 BENCHMARKS = evalues_benchmark
 
-EXAMPLES = build_example
+EXAMPLES = build_example\
+	   seqmodel_example
 
 LIBTMP = 
 

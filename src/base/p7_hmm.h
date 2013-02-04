@@ -44,6 +44,7 @@
 #define p7H_CHKSUM  (1<<15)   /* model has an alignment checksum                  */
 #define p7H_CONS    (1<<16)   /* consensus residue line available                 */
 #define p7H_MMASK   (1<<17)   /* #MM annotation available                        !*/
+#define p7H_SINGLE  (1<<18)   /* model was from single query w/ Seqmodel()        */
 
 /* Indices of Plan7 main model state transitions, hmm->t[k][] */
 enum p7h_transitions_e {
