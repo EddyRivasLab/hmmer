@@ -1299,10 +1299,12 @@ ERROR:
  * Throws:    <eslFAIL> for empty sequence
  */
 static int
-parameterize_gm (P7_BG *bg, P7_BG *bg_tmp, P7_PROFILE *gm_src, P7_PROFILE *gm_dest, const ESL_SQ *sq, float *sc_tmp) {
+parameterize_gm (P7_BG *bg, P7_BG *bg_tmp, P7_PROFILE *gm_src, P7_PROFILE *gm_dest, const ESL_SQ *sq, int start, int L, float *sc_tmp) {
+
   int     i, j;
   int     K   = gm_src->abc->K;
   int     Kp  = gm_src->abc->Kp;
+  int     status;
 
   /* Fraction of new bg frequencies that comes from a prior determined by the sequence block.
    * This is 25% for long sequences, more for shorter sequences (e.g. 50% for sequences of length 50)
@@ -1315,7 +1317,8 @@ parameterize_gm (P7_BG *bg, P7_BG *bg_tmp, P7_PROFILE *gm_src, P7_PROFILE *gm_de
    * default bg and the observed frequencies dsq. Store in bg_tmp.
    */
   esl_vec_FSet (bg_tmp->f, gm_src->abc->K, 0);
-  esl_sq_CountResidues(sq, bg_tmp->f);
+  status = esl_sq_CountResidues(sq, start, L, bg_tmp->f);
+  if (status != eslOK) p7_Fail("Invalid sequence range in reparameterize_model()\n");
   esl_vec_FNorm(bg_tmp->f, gm_src->abc->K);
 
   esl_vec_FScale(bg_tmp->f, K, (1.0-bg_smooth));
@@ -1584,7 +1587,7 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
      pli_tmp->tmpseq->seq = NULL;
      pli_tmp->tmpseq->dsq = subseq_tmp; //using this instead of copying, I need to remember to set ->dsq to NULL before destroying tmpseq
 
-     parameterize_gm (bg, pli_tmp->bg, gm, pli_tmp->gm, pli_tmp->tmpseq, pli_tmp->scores);
+     parameterize_gm (bg, pli_tmp->bg, gm, pli_tmp->gm, pli_tmp->tmpseq, 1, env_len, pli_tmp->scores);
      //pli_tmp->gm = p7_profile_Clone(gm); // this keeps the default bg-based scoring.  Used for testing
 
      /* copy over the part of the sparse mask related to the current envelope*/
