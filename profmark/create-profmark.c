@@ -33,7 +33,7 @@
 #include "esl_sqio.h"
 #include "esl_stack.h"
 #include "esl_vectorops.h"
-
+#include "esl_composition.h"
 
 static char banner[] = "construct a benchmark profile training/test set";
 static char usage[]  = "[options] <basename> <msafile> <seqdb>\n";

@@ -55,7 +55,7 @@ if ($output !~ /MAXL  75/) {
 
 # Create a roughly 4.5MB database against which to search
 $database   = "$tmppfx.fa";
-do_cmd ( "$builddir/easel/miniapps/esl-shuffle --seed 1 --dna -G -N 1 -L 4500000 -o $tmppfx.A" );
+do_cmd ( "$builddir/easel/miniapps/esl-shuffle --seed 33 --dna -G -N 1 -L 4500000 -o $tmppfx.A" );
 do_cmd ( "$builddir/src/hmmemit -N 2 --seed 4 $tmppfx.hmm >  $tmppfx.B " );
 do_cmd ( "$builddir/src/hmmemit -N 1 --seed 3 $tmppfx.hmm >> $tmppfx.B" ); 
 do_cmd ( "head -n 33000 $tmppfx.A > $database" );
@@ -72,11 +72,11 @@ $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = 
 q[
-Target sequences:                  1  \(9000000 residues searched\)
-Residues passing MSV filter:            180964  \(0.0201\); expected \(0.02\)
-Residues passing bias filter:           153828  \(0.0171\); expected \(0.02\)
-Residues passing Vit filter:              6124  \(0.00068\); expected \(0.001\)
-Residues passing Fwd filter:               155  \(1.72e-05\); expected \(1e-05\)
+Target sequences:                            1  \(9000000 residues searched\)
+Residues passing MSV filter:            174223  \(0.0194\); expected \(0.02\)
+Residues passing bias filter:           145398  \(0.0162\); expected \(0.02\)
+Residues passing Vit filter:              6173  \(0.000686\); expected \(0.001\)
+Residues passing Fwd filter:               276  \(3.07e-05\); expected \(1e-05\)
 Total number of hits:                        2  \(4e-06\)];
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 1\n";
@@ -93,10 +93,11 @@ $cmd = "$builddir/src/nhmmer --tformat fasta --toponly $tmppfx.hmm $database";
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = 
-q[Target sequences:                  1  \(4500000 residues searched\)
-Residues passing MSV filter:             91159  \(0.0203\); expected \(0.02\)
-Residues passing bias filter:            78403  \(0.0174\); expected \(0.02\)
-Residues passing Vit filter:              3386  \(0.000752\); expected \(0.001\)
+q[
+Target sequences:                            1  \(4500000 residues searched\)
+Residues passing MSV filter:             84348  \(0.0187\); expected \(0.02\)
+Residues passing bias filter:            70876  \(0.0158\); expected \(0.02\)
+Residues passing Vit filter:              3091  \(0.000687\); expected \(0.001\)
 Residues passing Fwd filter:               155  \(3.44e-05\); expected \(1e-05\)
 Total number of hits:                        3  \(1.24e-05\)];
 
