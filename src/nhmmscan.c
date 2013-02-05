@@ -61,8 +61,6 @@ static ESL_OPTIONS options[] = {
   { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "direct output to file <f>, not stdout",                         2 },
   { "--tblout",     eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save parseable table of per-sequence hits to file <s>",         2 },
   { "--dfamtblout", eslARG_OUTFILE,      NULL, NULL, NULL,    NULL,  NULL,  NULL,              "save table of hits to file, in Dfam format <s>",               2 },
-  { "--longinsertout", eslARG_OUTFILE,   NULL, NULL, NULL,    NULL,  NULL,  NULL,              "save table of long inserts to file <s>",                       2 },
-  { "--insertlength", eslARG_INT,        "40", NULL, "n>=5",  NULL,  "--longinsertout",  NULL, "min length of insert printed to --longinsertout",              2 },
   { "--aliscoresout", eslARG_OUTFILE,   NULL, NULL, NULL,    NULL,  NULL,  NULL,               "save of scores for each position in each alignment to <s>",    2 },
   { "--acc",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "prefer accessions over names in output",                        2 },
   { "--noali",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't output alignments, so output is smaller",                 2 },
@@ -226,9 +224,7 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "-o")          && fprintf(ofp, "# output directed to file:         %s\n",            esl_opt_GetString(go, "-o"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--tblout")    && fprintf(ofp, "# per-seq hits tabular output:     %s\n",            esl_opt_GetString(go, "--tblout"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--dfamtblout")    && fprintf(ofp, "# hits output in Dfam format:      %s\n",            esl_opt_GetString(go, "--dfamtblout")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--longinsertout") && fprintf(ofp, "# long inserts output:             %s\n",            esl_opt_GetString(go, "--longinsertout")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--insertlength")  && fprintf(ofp, "# long inserts minimum length:     %d\n",            esl_opt_GetInteger(go, "--insertlength")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--aliscoresout")  && fprintf(ofp, "# alignment scores output:         %s\n",            esl_opt_GetString(go, "--longinsertout")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--aliscoresout")  && fprintf(ofp, "# alignment scores output:         %s\n",            esl_opt_GetString(go, "--aliscoresout")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--acc")       && fprintf(ofp, "# prefer accessions over names:    yes\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--noali")     && fprintf(ofp, "# show alignments in output:       no\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -315,7 +311,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   FILE            *ofp      = stdout;	         /* output file for results (default stdout)        */
   FILE            *tblfp    = NULL;		 /* output stream for tabular per-seq (--tblout)    */
   FILE            *dfamtblfp    = NULL;            /* output stream for tabular Dfam format (--dfamtblout)    */
-  FILE            *inserttblfp  = NULL;            /* output stream for table of long inserts (--longinsertout)    */
   FILE            *aliscoresfp  = NULL;            /* output stream for alignment scores (--aliscoresout)    */
 
 //  P7_HMM          *hmm        = NULL;              /* one HMM query                                   */
@@ -403,7 +398,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"),          "w")) == NULL)  esl_fatal("Failed to open output file %s for writing\n",                 esl_opt_GetString(go, "-o")); }
   if (esl_opt_IsOn(go, "--tblout"))    { if ((tblfp    = fopen(esl_opt_GetString(go, "--tblout"),    "w")) == NULL)  esl_fatal("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblfp")); }
   if (esl_opt_IsOn(go, "--dfamtblout"))    { if ((dfamtblfp    = fopen(esl_opt_GetString(go, "--dfamtblout"),"w"))    == NULL)  esl_fatal("Failed to open tabular dfam output file %s for writing\n", esl_opt_GetString(go, "--dfamtblout")); }
-  if (esl_opt_IsOn(go, "--longinsertout")) { if ((inserttblfp  = fopen(esl_opt_GetString(go, "--longinsertout"),"w")) == NULL)  esl_fatal("Failed to open long-insert output file %s for writing\n", esl_opt_GetString(go, "--longinsertout")); }
   if (esl_opt_IsOn(go, "--aliscoresout"))  { if ((aliscoresfp  = fopen(esl_opt_GetString(go, "--aliscoresout"),"w")) == NULL)  esl_fatal("Failed to open alignment scores output file %s for writing\n", esl_opt_GetString(go, "--aliscoresout")); }
  
   output_header(ofp, go, cfg->hmmfile, cfg->seqfile);
@@ -556,7 +550,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       if (tblfp)     p7_tophits_TabularTargets(tblfp,    qsq->name, qsq->acc, info->th, info->pli, (nquery == 1));
       if (dfamtblfp) p7_tophits_TabularXfam(dfamtblfp,   qsq->name, NULL, info->th, info->pli);
-      if (inserttblfp) p7_tophits_LongInserts(inserttblfp, qsq->name, qsq->acc, info->th, info->pli, esl_opt_GetInteger(go, "--insertlength") );
       if (aliscoresfp) p7_tophits_AliScores(aliscoresfp, qsq->name, info->th );
 
 
@@ -610,13 +603,18 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (ofp != stdout) fclose(ofp);
   if (tblfp)         fclose(tblfp);
   if (dfamtblfp)     fclose(dfamtblfp);
-  if (inserttblfp)   fclose(inserttblfp);
   if (aliscoresfp)   fclose(aliscoresfp);
 
   return eslOK;
 
  ERROR:
-  return status;
+
+ if (ofp != stdout) fclose(ofp);
+ if (tblfp)         fclose(tblfp);
+ if (dfamtblfp)     fclose(dfamtblfp);
+ if (aliscoresfp)   fclose(aliscoresfp);
+
+ return status;
 }
 
 
