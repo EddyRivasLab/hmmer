@@ -406,7 +406,7 @@ p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, P7_BG *bg, float *arr )
 
   for (i = 1; i <= om->M; i++) {
     for (j=0; j<om->abc->Kp; j++) {
-      arr[i*om->abc->Kp + j] =  bg->f[x] * exp( om->rsc[j][(i) * p7P_NR     + p7P_MSC]);
+      arr[i*om->abc->Kp + j] =  bg->f[j] * exp( om->rsc[j][(i) * p7P_NR     + p7P_MSC]);
     }
   }
 
@@ -423,7 +423,7 @@ p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, P7_BG *bg, float *arr )
  *
  */
 int
-p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, P7_HMM *hmm, float *sc_tmp)
+p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_tmp)
 {
   int     M   = om->M;    /* length of the query                                          */
   int     i, j;
@@ -436,11 +436,11 @@ p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, P7_HMM *hmm, flo
       if (om->mm && om->mm[i] == 'm')
         sc_tmp[j] = 0;
       else
-        sc_tmp[j] = log(hmm->mat[i][j] / bg->f[j]);
+        sc_tmp[j] = log(fwd_emissions[i*om->abc->Kp + j] / bg->f[j]);
     }
 
 
-    esl_abc_FExpectScVec(hmm->abc, sc_tmp, bg->f);
+    esl_abc_FExpectScVec(bg->abc, sc_tmp, bg->f);
 
     for (j=0; j<Kp; j++)
       om->rsc[j][(i) * p7P_NR  + p7P_MSC] =  sc_tmp[j];

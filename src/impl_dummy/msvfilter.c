@@ -58,13 +58,15 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 /*------------------ end, p7_MSVFilter() ------------------------*/
 
 
-/* Function:  p7_MSVFilter_longtarget()
+/* Function:  p7_SSVFilter_longtarget()
  * Synopsis:  Finds windows with MSV scores above some threshold (slow, correct version)
  *
  * Purpose:   Calculates the MSV score for regions of sequence <dsq> of length <L>
  * 			      residues, and captures the positions at which such regions exceed the
  * 			      score required to be significant in the eyes of the calling function
- * 			      (usually p=0.02).
+ * 			      (usually p=0.02).  Note - this is out of touch with the vectorized
+ *            SSVFilter code. As dummy functions are deprecated, there's no
+ *            need to update it.
  *
  * Args:      dsq        - digital target sequence, 1..L
  *            L          - length of dsq in residues
@@ -82,7 +84,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_MSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_SCOREDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
+p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_SCOREDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
 	  int status;
 	  if ((status = p7_gmx_GrowTo(ox, om->M, L)) != eslOK) return status;

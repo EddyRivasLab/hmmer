@@ -1461,7 +1461,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
    * This variant of SSV will scan a long sequence and find
    * short high-scoring regions.
    */
-  p7_MSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, data, bg, pli->F1, &msv_windowlist);
+  p7_SSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, data, bg, pli->F1, &msv_windowlist);
 
   /* convert hits to windows, possibly filtering based on composition bias,
    * definitely merging neighboring windows, and
@@ -1469,7 +1469,9 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
    */
   if ( msv_windowlist.count > 0 ) {
 
-    /* In scan mode, if it passes the MSV filter, read the rest of the profile */
+    /* In scan mode, if it passes the MSV filter, read the rest of the profile
+     * Not necessary for dummy mode, and the ->base_w variable checks cause compilation failure*/
+#ifndef P7_IMPL_DUMMY_INCLUDED
     if (pli->hfp)
     {
       if (om->base_w == 0 &&  om->scale_w == 0) { // we haven't already read this hmm (if we're on the second strand, we would've)
@@ -1477,6 +1479,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
         if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) goto ERROR;
       }
     }
+#endif
 
     p7_oprofile_GetFwdEmissionArray(om, bg, pli_tmp->fwd_emissions_arr);
 
