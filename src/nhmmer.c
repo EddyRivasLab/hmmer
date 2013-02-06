@@ -818,6 +818,8 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
   void         *newBlock;
   int          seqid = -1;
 
+  ESL_SQ      *tmpsq = esl_sq_CreateDigital(info->om->abc);
+
   esl_workqueue_Reset(queue);
   esl_threads_WaitForStart(obj);
 
@@ -832,11 +834,8 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
 
       sstatus = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, TRUE);
 
-
       block->first_seqidx = info->pli->nseqs;
       info->pli->nseqs += block->count  - (block->complete ? 0 : 1);// if there's an incomplete sequence read into the block wait to count it until it's complete.
-
-
       seqid = block->first_seqidx;
       for (i=0; i<block->count; i++) {
         block->list[i].idx = seqid;
@@ -844,10 +843,20 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
         seqid++;
       }
 
-
       if (sstatus == eslEOF) {
           if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
           ++eofCount;
+      }
+
+
+      if (!block->complete) {
+          // The final sequence on the block was an incomplete window of the active sequence,
+          // so our next read will need a copy of it to correctly deal with overlapping
+          // regions. We capture a copy of the sequence here before sending it off to the
+          // pipeline to avoid odd race conditions that can occur otherwise.
+          // Copying the entire sequence isn't really necessary, and is a bit heavy-
+          // handed. Could accelerate if this proves to have any notable impact on speed.
+          esl_sq_Copy(block->list + (block->count - 1) , tmpsq);
       }
 
       if (sstatus == eslOK) {
@@ -857,9 +866,9 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
           //newBlock needs all this information so the next ReadBlock call will know what to do
           ((ESL_SQ_BLOCK *)newBlock)->complete = block->complete;
           if (!block->complete) {
-              // the final sequence on the block was an incomplete window of the active sequence,
-              // so prep the next block to read in the next window
-              esl_sq_Copy(block->list + (block->count - 1) , ((ESL_SQ_BLOCK *)newBlock)->list);
+              // Push the captured copy of the previously-read sequence into the new block,
+              // in preparation for ReadWindow  (double copy ... slower than necessary)
+              esl_sq_Copy(tmpsq, ((ESL_SQ_BLOCK *)newBlock)->list);
 
               if (  ((ESL_SQ_BLOCK *)newBlock)->list->n < info->om->max_length ) {
                 //no reason to search the final partial sequence on the block, as the next block will search this whole chunk
@@ -873,6 +882,7 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
       }
   }
 
+
   status = esl_workqueue_ReaderUpdate(queue, block, NULL);
   if (status != eslOK) esl_fatal("Work queue reader failed");
 
@@ -881,6 +891,8 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
       esl_threads_WaitForFinish(obj);
       esl_workqueue_Complete(queue);  
     }
+
+  esl_sq_Destroy(tmpsq);
 
   return sstatus;
 }
