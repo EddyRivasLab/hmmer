@@ -17,9 +17,9 @@
  *********************************************************************/
 
 
-/* Function:  p7_hmm_initWindows()
+/* Function:  p7_hmmwindow_init()
  *
- * Synopsis:  initialize the object used to store a list of windows around seeds
+ * Synopsis:  initialize the object used to store a list of sequence windows
  *
  * Returns:   eslEMEM in event of allocation failure, otherwise eslOK
  */
@@ -37,18 +37,19 @@ ERROR:
 
 }
 
-/* Function:  p7_hmm_newWindow()
+/* Function:  p7_hmmwindow_new()
  *
- * Synopsis:  return a pointer to the next window element on the list,
- *            increasing the size of the list, if necessary.
+ * Synopsis:  Return a pointer to the next window element on the list
  *
- * Purpose:   accepts <id>, <pos>, <fm_pos>, <k>, <length>, <score>,
+ * Purpose:   Accepts <id>, <pos>, <fm_pos>, <k>, <length>, <score>,
  *            and <complementarity>, assigns those to the next window
- *            element, then returns it.
+ *            element, then returns it, increasing the size of the
+ *            list, if necessary.
  *
  * Returns:   NULL in event of allocation failure, otherwise pointer to
  *            the next seed diagonal
  */
+
 P7_HMM_WINDOW *
 p7_hmmwindow_new (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity) {
   int status;

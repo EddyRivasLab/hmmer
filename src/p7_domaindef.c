@@ -681,40 +681,54 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *
 
 
 
-/* reparameterize_model()
+/* Function:  reparameterize_model()
  *
- * Establish new background priors based on a sequence window,
- * and change match state emission log-odds scores accordingly.
+ * Synopsis:  Establish new background priors based on a sequence window,
+ *            and change match state emission log-odds scores accordingly.
  *
- * Given the frequency distribution of a block of sequence
- * (<dsq>, of length <sq_len>), and a prior with which that
- * distribution can be mixed (<block_bg>), modify the
- * passed <bg> and <om> structures in place. This is called
- * by rescore_isolated_domain(), which then calls it again
- * once complete to return <bg> and <om> to original state.
- * It is only used in the longtarget (nhmmer) case.
+ * Purpose:    Compute new background priors based on a sequence window,
+ *             and set match search model's match state emission log-odds
+ *             scores accordingly. Used narrowly within the post-fwd
+ *             portion of the longtarget pipeline
  *
- * In-place modification is done to avoid making copies, which
- * would require overwhelming allocation calls. Doing this
- * requires that (a) each thread has its own independent copy
- * of <bg> and <om>, and (b) those are returned to their
- * original state before being used outside the function
- * using the modified structures.
+ *             If sq != NULL: Given a sequence <sq> and <start> and length
+ *             <L>, compute the residue frequency, and modify <bg> in place
+ *             to store a mixture of that frequency with the default (passed
+ *             in <bg>). Then update the match emission scores in place in
+ *             <om> to account for new <bg> values. Prior bg values are
+ *             stored for return in <bgf_arr>. This is called by
+ *             rescore_isolated_domain(), which is required to call it again
+ *             once complete to return <bg> and <om> to original state.
  *
- * Two pre-allocated arrays <bgf_tmp> and <sc_tmp> must be
- * passed, and are used to hold necessary internal data.
+ *
+ *             If sq == NULL: return <bg> and <om> to original state.
+ *
+ *             Only used in the longtarget (nhmmer) case. In-place
+ *             modification is done to avoid making copies. Doing this
+ *             requires that (a) each thread has its own independent copy
+ *             of <bg> and <om>, and (b) those are returned to their
+ *             original state before being used outside the function
+ *             using the modified structures.
+ *
+ *             The pre-allocated array <sc_tmp> must be passed, for use
+ *             in p7_oprofile_UpdateFwdEmissionScores().
  *
  */
 static int
 reparameterize_model (P7_BG *bg, P7_OPROFILE *om, const ESL_SQ *sq, int start, int L, float *fwd_emissions, float *bgf_arr, float *sc_arr) {
   int     K   = om->abc->K;
-  float   bg_smooth = 0.25; //fraction of f that comes from a prior determined by the sequence block
   int i;
   float tmp;
   int status;
 
+  /* Fraction of new bg frequencies that comes from a prior determined by the sequence block.
+   * This is 25% for long sequences, more for shorter sequences (e.g. 50% for sequences of length 50)
+   */
+  float   bg_smooth = 1.; // will be modified immediately below, if it's used
+
   if (sq != NULL) {
     /* compute new bg->f, capturing original values into a preallocated array */
+    bg_smooth = 25.0 / (ESL_MIN(100,ESL_MAX(50,sq->n)));
 
     esl_vec_FSet (bgf_arr, om->abc->K, 0);
     status = esl_sq_CountResidues(sq, start, L, bgf_arr);

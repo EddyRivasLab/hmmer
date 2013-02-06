@@ -1876,7 +1876,8 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
 /* Function:  p7_tophits_AliScores()
  * Synopsis:  Output per-position scores for each position of each query/hit pair
  *
- * Purpose:
+ * Purpose:   This depends on per-alignment-position scores having been
+ *            previously computed, as in p7_pipeline_computeAliScores()
  *
  * Returns:   <eslOK> on success.
  *

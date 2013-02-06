@@ -28,19 +28,25 @@
  *# 1. The P7_SCOREDATA object: allocation, initialization, destruction.
  *********************************************************************/
 
-/* Function:  p7_hmm_GetScoreArrays()
+/* Function:  scoredata_GetMSVScoreArrays()
  * Synopsis:  Get compact representation of substitution scores and maximal extensions
  *
  * Purpose:   Extract 8-bit (MSV-style) substitution scores from optimized
- *            matrix, and for each position in the model capture the maximum
+ *            matrix. These scores will be used in both standard MSV diagonal
+ *            recovery and FM-MSV diagonal scoring.
+ *
+ *            Optionally, for each position in the model, capture the maximum
  *            possible score that can be added to a diagonal's score (in both
- *            directions) by extending lengths 1..10.
+ *            directions) by extending lengths 1..10. These extension scores
+ *            are used in FM-MSV's pruning step.
  *
- *            The scores will be used in both standard MSV diagonal recovery
- *            and FM-MSV diagonal scoring. The extension scores are used in
- *            FM-MSV's pruning step.
+ *            Once a hit passes the SSV filter, and the prefix/suffix
+ *            values of P7_SCOREDATA are required (to establish windows
+ *            around SSV diagonals), p7_hmm_ScoreDataComputeRest()
+ *            must be called.
  *
- * Args:      gm         - P7_PROFILE containing scores used to produce SCOREDATA contents
+ *
+ * Args:      om         - P7_OPROFILE containing scores used to produce SCOREDATA contents
  *            data       - where scores and will be stored
  *            do_opt_ext - boolean, TRUE if optimal-extension scores are required (for FM-MSV)
  *            scale      - used to produce 8-bit extracted scores
@@ -50,7 +56,7 @@
  *            return eslEMEM on allocation failure, eslOK otherwise.
  */
 static int
-p7_scoredata_GetMSVScoreArrays(P7_OPROFILE *om, P7_SCOREDATA *data, int do_opt_ext ) {
+scoredata_GetMSVScoreArrays(P7_OPROFILE *om, P7_SCOREDATA *data, int do_opt_ext ) {
   int i, j, status;
 
   //gather values from gm->rsc into a succinct 2D array
@@ -173,7 +179,7 @@ p7_hmm_ScoreDataCreate(P7_OPROFILE *om, int do_opt_ext )
   data->fwd_scores      = NULL;
   data->fwd_transitions = NULL;
 
-  p7_scoredata_GetMSVScoreArrays(om, data, do_opt_ext);
+  scoredata_GetMSVScoreArrays(om, data, do_opt_ext);
 
   return data;
 
@@ -195,7 +201,7 @@ ERROR:
  *            must be called.
  *
  * Args:      src        - P7_SCOREDATA upon which clone will be based
- *            Kp          - alphabet size, including degeneracy codes, gaps
+ *            Kp         - alphabet size, including degeneracy codes, gaps
  *
  * Returns:   a pointer to the new <P7_SCOREDATA> object.
  *
@@ -267,11 +273,15 @@ ERROR:
 }
 
 /* Function:  p7_hmm_ScoreDataComputeRest()
- * Synopsis:  Capture emission and transition scores, and compute
- *            prefix_ and suffix_ lengths for a <P7_SCOREDATA>
- *            model object that was created by p7_hmmScoreDataCreate.
+ * Synopsis:  Using position-specific insert rates, compute MAXL-based prefix and suffix lengths
  *
- * Purpose:   This approach of computing the prefix/suffix length, used
+ * Purpose:   Using position-specific insert rates, compute MAXL-based prefix
+ *            and suffix lengths for each position in the model, used when
+ *            establishing windows around SSV diagonals. This fleshes out
+ *            the <P7_SCOREDATA> model object that was created by
+ *            p7_hmmScoreDataCreate().
+ *
+ *            This approach of computing the prefix/suffix length, used
  *            in establishing windows around a seed diagonal, is fast
  *            because it uses a simple closed-form computation of the
  *            length L_i for each position i at which all but

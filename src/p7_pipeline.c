@@ -354,7 +354,6 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_
     window_end   = ESL_MIN(prev_window->n+prev_window->length-1, curr_window->n+curr_window->length-1);
 
     if (  (float)(window_end-window_start+1)/ESL_MIN(prev_window->length, curr_window->length) > pct_overlap ) {
-//    if (curr_window->n <= prev_window->n + prev_window->length ) {
       //merge windows
       if (  curr_window->n + curr_window->length >  prev_window->n + prev_window->length )
         prev_window->length = curr_window->n + curr_window->length - prev_window->n;  //+1, -1 factored out
@@ -965,7 +964,7 @@ ERROR:
  *            of the Viterbi filter
  *
  * Purpose:   This is called by postMSV_LongTarget(), and runs the
- *            post-Viterbi part of H3's accelerated pipeline to
+ *            post-Viterbi part of HMMER's accelerated pipeline to
  *            compare profile <om> against sequence <sq>. If a
  *            significant hit is found, information about it is
  *            added to the <hitlist>.
@@ -977,22 +976,22 @@ ERROR:
  *            om              - optimized profile (query)
  *            bg              - background model
  *            hitlist         - pointer to hit storage bin
- *            data         - for computing windows based on maximum prefix/suffix extensions
+ *            data            - for computing windows based on maximum prefix/suffix extensions
  *            seqidx          - the id # of the sequence from which the current window was extracted
  *            window_start    - the starting position of the extracted window (offset from the first
  *                              position of the block of a possibly longer sequence)
  *            window_len      - the length of the extracted window
- *            tmpseq          - a new or reused digital sequence object used for "domain" definition
  *            subseq          - digital sequence of the extracted window
  *            seq_start       - first position of the sequence block passed in to the calling pipeline function
  *            seq_name        - name of the sequence the window comes from
  *            seq_source      - source of the sequence the window comes from
  *            seq_acc         - acc of the sequence the window comes from
  *            seq_desc        - desc of the sequence the window comes from
- *            nullsc          - score of the passed window vs the bg model
- *            usc             - msv score of the passed window
  *            complementarity - boolean; is the passed window sourced from a complementary sequence block
- *
+ *            overlap         - number of residues in this sequence window that overlap a preceding window.
+ *            pli_tmp         - a collection of objects used in the long target pipeline that should be
+ *                              (and are) only allocated once per pipeline to minimize alloc overhead.
+
  * Returns:   <eslOK> on success. If a significant hit is obtained,
  *            its information is added to the growing <hitlist>.
  *
@@ -1060,8 +1059,6 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
   if ((status = esl_sq_SetDesc     (pli_tmp->tmpseq, seq_desc))   != eslOK) goto ERROR;
   pli_tmp->tmpseq->n = window_len;
   pli_tmp->tmpseq->dsq = subseq;
-  //if ((status = esl_abc_dsqcpy(subseq, window_len, tmpseq->dsq)) != eslOK) goto ERROR;
-  //pli_tmp->tmpseq->dsq[window_len+1]= eslDSQ_SENTINEL;
 
   /* Now a Backwards parser pass, and hand it to domain definition workflow
    * In this case "domains" will end up being translated as independent "hits" */
@@ -1226,26 +1223,25 @@ ERROR:
  * Synopsis:  the part of the LongTarget P7 search Pipeline downstream
  *            of the MSV filter
  *
- * Purpose:   This is called by either the standard (SIMD-MSV) long-target
+ * Purpose:   This is called by either the standard (SIMD-SSV) long-target
  *            pipeline (p7_Pipeline_LongTarget) or the FM-index long-target
  *            pipeline (p7_Pipeline_FM), and runs the post-MSV part of H3's
- *            accelerated pipeline to compare profile <om> against
- *            sequence <sq>. If a significant hit is found,
- *            information about it is added to the <hitlist>.
- *            The pipeline accumulates beancounting information
- *            about how many comparisons (and residues) flow through
- *            the pipeline while it's active.
+ *            accelerated pipeline to compare profile <om> against sequence
+ *            <sq>. If a significant hit is found (within the function
+ *            p7_pipeline_postViterbi_LongTarget(), called in this function),
+ *            information about it is added to the <hitlist>. The pipeline
+ *            accumulates beancounting information about how many comparisons
+ *            and residues flow through the pipeline while it's active.
  *
  * Args:      pli             - the main pipeline object
  *            om              - optimized profile (query)
  *            bg              - background model
  *            hitlist         - pointer to hit storage bin
- *            data         - for computing windows based on maximum prefix/suffix extensions
+ *            data            - for computing windows based on maximum prefix/suffix extensions
  *            seqidx          - the id # of the sequence from which the current window was extracted
  *            window_start    - the starting position of the extracted window (offset from the first
  *                              position of the block of a possibly longer sequence)
  *            window_len      - the length of the extracted window
- *            tmpseq          - a new or reused digital sequence object used for "domain" definition
  *            subseq          - digital sequence of the extracted window
  *            seq_start       - first position of the sequence block passed in to the calling pipeline function
  *            seq_name        - name of the sequence the window comes from
@@ -1255,7 +1251,10 @@ ERROR:
  *            nullsc          - score of the passed window vs the bg model
  *            usc             - msv score of the passed window
  *            complementarity - boolean; is the passed window sourced from a complementary sequence block
- *
+ *            vit_windowlist  - initialized window list, in which viterbi-passing hits are captured
+ *            pli_tmp         - a collection of objects used in the long target pipeline that should be
+ *                              (and are) only allocated once per pipeline to minimize alloc overhead.
+
  * Returns:   <eslOK> on success. If a significant hit is obtained,
  *            its information is added to the growing <hitlist>.
  *
@@ -1390,17 +1389,18 @@ p7_pli_postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
 
 
 /* Function:  p7_Pipeline_LongTarget()
- * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline, modified to use the scanning MSV/SSV filters.
+ * Synopsis:  Accelerated seq/profile comparison pipeline, using scanning SSV filters for long target sequences.
  *
- * Purpose:   Run H3's accelerated pipeline to compare profile <om>
+ * Purpose:   Run HMMER's accelerated pipeline to compare profile <om>
  *            against sequence <sq>. If a significant hit is found,
- *            information about it is added to the <hitlist>.
- *            This is a variant of p7_Pipeline that runs the
- *            versions of the MSV/SSV filters that scan a long
- *            sequence and find high-scoring regions (windows), then pass 
- *            those to the remainder of the pipeline. The pipeline
- *            accumulates beancounting information about how many comparisons
- *            flow through the pipeline while it's active.
+ *            information about it is added to the <hitlist>.This is
+ *            a variant of p7_Pipeline that runs the scanning SSV
+ *            filter (p7_SSVFilter_longtarget) that scans a long
+ *            sequence and finds high-scoring regions (windows), then
+ *            pass those to the remainder of the pipeline. The pipeline
+ *            accumulates bean counting information about how many
+ *            comparisons and residues flow through the pipeline while it's
+ *            active.
  *
  * Returns:   <eslOK> on success. If a significant hit is obtained,
  *            its information is added to the growing <hitlist>.
@@ -1416,6 +1416,15 @@ p7_pli_postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
  *            anyway. We may emit a warning to the user, but cleanly
  *            skip the problematic sequence and continue.
  *
+ * Args:      pli             - the main pipeline object
+ *            om              - optimized profile (query)
+ *            data            - for computing diagonals, and picking window edges based
+ *                              on maximum prefix/suffix extensions
+ *            bg              - background model
+ *            subseq          - digital sequence of the window
+ *            hitlist         - pointer to hit storage bin (already allocated)
+ *            seqidx          - the id # of the sequence from which the current window was extracted
+ *
  * Throws:    <eslEMEM> on allocation failure.
  *
  * Xref:      J4/25.
@@ -1429,7 +1438,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
   float            usc;      /* msv score  */
   float            P;
   ESL_DSQ          *subseq;
-//  ESL_SQ           *tmpseq   = NULL;
   float            bias_filtersc;
 
   P7_HMM_WINDOWLIST msv_windowlist;
