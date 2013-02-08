@@ -1,0 +1,116 @@
+# nhmmer :: search a DNA model against a DNA database
+# HMMER 3.1dev (February 2013); http://hmmer.org/
+# Copyright (C) 2011 Howard Hughes Medical Institute.
+# Freely distributed under the GNU General Public License (GPLv3).
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# query HMM file:                  ../tutorial/MADE1.hmm
+# target sequence database:        ../tutorial/dna_target.fa
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Query:       MADE1  [M=80]
+Accession:   DF0000629.2
+Description: MADE1 (MAriner Derived Element 1), a TcMar-Mariner DNA transposon
+Scores for complete hits:
+    E-value  score  bias  Sequence                       start    end  Description
+    ------- ------ -----  --------                       -----  -----  -----------
+    9.1e-11   39.6   0.0  humanchr1/239220001-239550000 302390 302466  
+    6.1e-08   30.5   0.0  humanchr1/239220001-239550000 174456 174498  
+    1.1e-07   29.8   0.0  humanchr1/239220001-239550000 302466 302390  
+    6.2e-06   24.1   0.0  humanchr1/239220001-239550000 174493 174456  
+  ------ inclusion threshold ------
+        1.5    6.9   0.0  humanchr1/239220001-239550000 304074 304104  
+
+
+Annotation for each hit  (and alignments):
+>> humanchr1/239220001-239550000  
+    score  bias    Evalue   hmmfrom    hmm to     alifrom    ali to      envfrom    env to    sq len      acc
+   ------ ----- ---------   -------   -------    --------- ---------    --------- --------- ---------    ----
+ !   39.6   0.0   9.1e-11         4        80 .]    302390    302466 ..    302387    302466 ..    330000    0.87
+
+  Alignment:
+  score: 39.6 bits
+                                       xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx....xxxxxxxxxxxxxxxxxxxxxxxx RF
+                          MADE1      4 ggttggtgcaaaagtaattgcggtttttgccattacttttaatggc....aaaaaccgcaattacttttgcacc 73    
+                                       ggt ggtgcaaaa  aattg ggtttttgccatt cttttaat gc    a aaa  g a  t ctttt cacc
+  humanchr1/239220001-239550000 302390 GGTCGGTGCAAAATCAATTGTGGTTTTTGCCATTGCTTTTAATTGCttttA-AAA--GTA-ATGCTTTTACACC 302459
+                                       899******************************************955533.443..334.4689********* PP
+
+                                       xxxxxxx RF
+                          MADE1     74 aacctaa 80    
+                                       aa ctaa
+  humanchr1/239220001-239550000 302460 AATCTAA 302466
+                                       ***9986 PP
+
+>> humanchr1/239220001-239550000  
+    score  bias    Evalue   hmmfrom    hmm to     alifrom    ali to      envfrom    env to    sq len      acc
+   ------ ----- ---------   -------   -------    --------- ---------    --------- --------- ---------    ----
+ !   30.5   0.0   6.1e-08         1        43 [.    174456    174498 ..    174456    174518 ..    330000    0.92
+
+  Alignment:
+  score: 30.5 bits
+                                       xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx RF
+                          MADE1      1 ttaggttggtgcaaaagtaattgcggtttttgccattactttt 43    
+                                       ttaggtt gtgcaaaagtaattg ggtttttg cattactttt
+  humanchr1/239220001-239550000 174456 TTAGGTTAGTGCAAAAGTAATTGTGGTTTTTGTCATTACTTTT 174498
+                                       589************************************9975 PP
+
+>> humanchr1/239220001-239550000  
+    score  bias    Evalue   hmmfrom    hmm to     alifrom    ali to      envfrom    env to    sq len      acc
+   ------ ----- ---------   -------   -------    --------- ---------    --------- --------- ---------    ----
+ !   29.8   0.0   1.1e-07         1        77 [.    302466    302390 ..    302466    302387 ..    330000    0.73
+
+  Alignment:
+  score: 29.8 bits
+                                       xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx................xxxxxxxxxxxxxxx RF
+                          MADE1      1 ttaggttggtgcaaaagtaattgcggtttttgccattactttt................aatggcaaaaaccgc 58    
+                                       ttag ttggtg aaaag                 attactttt                aatggcaaaaacc c
+  humanchr1/239220001-239550000 302466 TTAGATTGGTGTAAAAGC----------------ATTACTTTTaaaagcaattaaaagcAATGGCAAAAACCAC 302409
+                                       689999999999999985................566666665222222222222222278************* PP
+
+                                       xxxxxxxxxxxxxxxxxxx RF
+                          MADE1     59 aattacttttgcaccaacc 77    
+                                       aatt  ttttgcacc acc
+  humanchr1/239220001-239550000 302408 AATTGATTTTGCACCGACC 302390
+                                       ***************9998 PP
+
+>> humanchr1/239220001-239550000  
+    score  bias    Evalue   hmmfrom    hmm to     alifrom    ali to      envfrom    env to    sq len      acc
+   ------ ----- ---------   -------   -------    --------- ---------    --------- --------- ---------    ----
+ !   24.1   0.0   6.2e-06        43        80 .]    174493    174456 ..    174513    174456 ..    330000    0.93
+
+  Alignment:
+  score: 24.1 bits
+                                       xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx RF
+                          MADE1     43 taatggcaaaaaccgcaattacttttgcaccaacctaa 80    
+                                       taatg caaaaacc caattacttttgcac aacctaa
+  humanchr1/239220001-239550000 174493 TAATGACAAAAACCACAATTACTTTTGCACTAACCTAA 174456
+                                       689********************************985 PP
+
+>> humanchr1/239220001-239550000  
+    score  bias    Evalue   hmmfrom    hmm to     alifrom    ali to      envfrom    env to    sq len      acc
+   ------ ----- ---------   -------   -------    --------- ---------    --------- --------- ---------    ----
+ ?    6.9   0.0       1.5        42        72 ..    304074    304104 ..    304053    304109 ..    330000    0.87
+
+  Alignment:
+  score: 6.9 bits
+                                       xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx RF
+                          MADE1     42 ttaatggcaaaaaccgcaattacttttgcac 72    
+                                       t a tgg aaaaa   ca tta ttttgca 
+  humanchr1/239220001-239550000 304074 TAAGTGGGAAAAAATACACTTATTTTTGCAT 304104
+                                       55779************************85 PP
+
+
+
+Internal pipeline statistics summary:
+-------------------------------------
+Query model(s):                              1  (80 nodes)
+Target sequences:                            1  (660000 residues searched)
+Residues passing MSV filter:             67373  (0.102); expected (0.02)
+Residues passing bias filter:            39985  (0.0606); expected (0.02)
+Residues passing Vit filter:              1292  (0.00196); expected (0.001)
+Residues passing Fwd filter:              1110  (0.00168); expected (1e-05)
+Total number of hits:                        5  (0.000403)
+# CPU time: 0.04u 0.00s 00:00:00.04 Elapsed: 00:00:00.03
+# Mc/sec: 1760.00
+//
+[ok]
