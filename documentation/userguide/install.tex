@@ -138,10 +138,10 @@ is awry with the threaded parallel implementation.
 
 \subsection{MPI parallelization for clusters is optional}
 
-The four search programs and hmmbuild now also support MPI (Message
-Passing Interface) parallelization on clusters.  To use MPI, you first
-need to have an MPI library installed, such as OpenMPI
-(\url{www.open-mpi.org}). We use Intel MPI at Janelia.
+MPI (Message Passing Interface) parallelization on clusters is now
+supported in hmmbuild and all search programs except nhmmer and 
+nhmmscan. To use MPI, you first need to have an MPI library installed, 
+such as OpenMPI (\url{www.open-mpi.org}). We use Intel MPI at Janelia.
 
 MPI support is not enabled by default, and it is not compiled into the
 precompiled binaries that we supply with HMMER. To enable MPI support

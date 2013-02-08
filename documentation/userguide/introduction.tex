@@ -2,7 +2,7 @@
 \setcounter{footnote}{0}
 
 HMMER is used to search sequence databases for homologs of protein
-sequences, and to make protein sequence alignments. HMMER can be used
+or DNA sequences, and to make sequence alignments. HMMER can be used
 to search sequence databases with single query sequences but it
 becomes particularly powerful when the query is an multiple sequence
 alignment of a sequence family. HMMER makes a \emph{profile} of the
@@ -17,8 +17,11 @@ significantly more accurate and more able to detect remote homologs,
 because of the strength of its underlying probability models. In the
 past, this strength came at a significant computational cost, with
 profile HMM implementations running about 100x slower than comparable
-BLAST searches. With HMMER3, HMMER is now essentially as fast as
-BLAST.
+BLAST searches for protein search, and about 1000x slower than BLAST
+searches for DNA search. With HMMER3.1, HMMER is now essentially as 
+fast as BLAST for protein search, and roughly 5-10x slower than BLAST 
+in DNA search\footnote{NCBI blastn with \texttt{--wordsize 7}; 
+default wordsize of 4 is $\sim$10x faster, but much less sensitive.}.
 
 
 \subsection{How to avoid reading this manual}
@@ -128,19 +131,19 @@ instance, because an HMM cannot describe base pairs.
 
 \subsection{Applications of profile HMMs}
 
-HMMER can be used to replace BLASTP and PSI-BLAST for searching
+HMMER can be used to replace BLASTP and PSI-BLAST for searching protein
 databases with single query sequences. With HMMER3, we now include two
 programs for searching databases with single query sequences:
 \prog{phmmer} and \prog{jackhmmer}, where \prog{jackhmmer} is an
 iterative search akin to PSI-BLAST.
 
-Another application of HMMER is when you are working on a protein
+Another application of HMMER is when you are working on a 
 sequence family, and you have carefully constructed a multiple
-sequence alignment. Your family, like most protein families, has a
-number of strongly (but not absolutely) conserved key residues,
-separated by characteristic spacing. You wonder if there are more
-members of your family in the sequence databases, but the family is so
-evolutionarily diverse, a BLAST search with any individual sequence
+sequence alignment. Your family, like most protein (or DNA) families, has 
+a number of strongly (but not absolutely) conserved key amino acids
+(or nucleotides), separated by characteristic spacing. You wonder if there 
+are more members of your family in the sequence databases, but the family is 
+so evolutionarily diverse, a BLAST search with any individual sequence
 doesn't even find the rest of the sequences you already know
 about. You're sure there are some distantly related sequences in the
 noise. You spend many pleasant evenings scanning weak BLAST alignments
@@ -166,16 +169,18 @@ or fibronectin type III domain?
 Another application is the automated construction and maintenance
 of large multiple alignment databases.  It is useful to organize
 sequences into evolutionarily related families. But there are
-thousands of protein sequence families, some of which comprise tens of
+thousands of 
+%protein 
+sequence families, some of which comprise tens of
 thousands of sequences -- and the primary sequence databases continue
 to double every year or two. This is a hopeless task for manual
 curation; but on the other hand, manual curation is still necessary
 for high-quality, biologically relevant multiple alignments. Databases
-like Pfam \citep{Finn10} are constructed by distinguishing between a
-stable curated ``seed'' alignment of a small number of representative
-sequences, and ``full'' alignments of all detectable homologs; HMMER
-is used to make a model of the seed, search the database for homologs,
-and automatically produce the full alignment by aligning every
+like Pfam \citep{Finn10} and Dfam \citep{Wheeler13} are constructed by
+distinguishing between a stable curated ``seed'' alignment of a small number
+of representative sequences, and ``full'' alignments of all detectable
+homologs; HMMER is used to make a model of the seed, search the database for
+homologs, and can automatically produce the full alignment by aligning every
 sequence to the seed consensus.
 
 You may find other applications as well. Using hidden Markov models to
@@ -231,9 +236,10 @@ combination} distinguish it from previous tools:
   posterior alignment ensemble.
   
 \item[\textbf{Speed.}] A major limitation of previous profile HMM
-  implementations (including HMMER2) was their slow
-  performance. HMMER3 implements a new heuristic acceleration
-  algorithm. For most queries, it's about as fast as BLAST.
+  implementations (including HMMER2) was their slow performance. HMMER3
+  implements a new heuristic acceleration algorithm. For most protein 
+  queries, it's about as fast as BLAST, while for DNA queries it's 
+  typically less than 10x slower than sensitive settings for BLAST. 
 \end{description}
 
 Individually, none of these points is new. As far as alignment
@@ -288,19 +294,6 @@ number of significantly improved approaches to classically important
 problems in sequence analysis. Some of the more important ``holes''
 for us are:
 
-\paragraph{DNA sequence comparison.} HMMER3's search pipeline is somewhat
-specialized to protein/protein comparison. Specifically, the pipeline
-works by filtering individual sequences, winnowing down to a subset of
-the sequences in a database that need close attention from the full
-heavy artillery of Bayesian inference. This strategy doesn't work for
-long DNA sequences; it doesn't filter the human genome much to say
-``there's a hit on chromosome 1''. The algorithms need to be adapted
-to identify high-scoring regions of a target sequence, rather than
-filtering by whole sequence scores. (You can chop a DNA sequence into
-overlapping windows and HMMER3 would work fine on such a chopped-up
-database, but that's a disgusting kludge and I don't want to know
-about it.)
-
 \paragraph{Translated comparisons.} We'd of course love to have the HMM
 equivalents of BLASTX, TBLASTN, and TBLASTX. They'll come.
 
@@ -337,16 +330,15 @@ sequences with poor P-values.
 
 \paragraph{More speed.} Even on x86 platforms, HMMER3's acceleration
 algorithms are still on a nicely sloping bit of their asymptotic
-optimization curve. I still think we can accelerate the code by
-another two-fold or so. Additionally, for a small number of HMMs
-($<1$\% of Pfam models), the acceleration core is performing
-relatively poorly, for reasons we pretty much understand (having to do
-with biased composition; most of these pesky models are hydrophobic
-membrane proteins), but which are nontrivial to work around. This'll
-produce an annoying behavior that you may notice: if you look
-systematically, sometimes you'll see a model that runs at something
-more like HMMER2 speed, 100x or so slower than an average query. This,
-needless to say, Will Be Fixed.
+optimization curve. I still think we can accelerate the code by another 
+two-fold or so, perhaps more for DNA search. Additionally, for a small number
+of HMMs ($<1$\% of Pfam models), the acceleration core is performing relatively
+poorly, for reasons we pretty much understand (having to do with biased
+composition; most of these pesky models are hydrophobic membrane proteins), but
+which are nontrivial to work around. This'll produce an annoying behavior that
+you may notice: if you look systematically, sometimes you'll see a model that
+runs at something more like HMMER2 speed, 100x or so slower than an average
+query. This, needless to say, Will Be Fixed.
 
 \paragraph{More processor support.} One of the attractive features of the
 HMMER3 ``MSV'' acceleration algorithm is that it is a very tight and

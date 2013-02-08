@@ -14,16 +14,22 @@ options.
 \begin{tabular}{ll}
 \multicolumn{2}{c}{\textbf{Single sequence queries: new to HMMER3}} \\ 
  & \\ 
-\textbf{phmmer}    & Search a sequence against a sequence database. (BLASTP-like) \\
-\textbf{jackhmmer} & Iteratively search a sequence against a sequence database. (PSIBLAST-like) \\
- & \\ 
+\textbf{phmmer}    & Search a protein sequence against a protein sequence database. (BLASTP-like) \\ 
+\textbf{jackhmmer} & Iteratively search a protein sequence against a protein sequence database. (PSIBLAST-like) \\ 
+\textbf{nhmmer}    & Search a DNA sequence against a DNA sequence database. (BLASTN-like) \\ 
+& \\
 \multicolumn{2}{c}{\textbf{Replacements for HMMER2's functionality}}  \\
  & \\ 
-\textbf{hmmbuild}  & Build a profile HMM from an input multiple alignment.\\
-\textbf{hmmsearch} & Search a profile HMM against a sequence database.\\
-\textbf{hmmscan}   & Search a sequence against a profile HMM database.\\
-\textbf{hmmalign}  & Make a multiple alignment of many sequences to a common profile HMM.\\
- & \\ 
+\textbf{hmmbuild}  & Build a profile HMM from an input multiple alignment (DNA or protein).\\  
+\textbf{hmmsearch} & Search a protein profile HMM against a protein sequence database.\\ 
+\textbf{hmmscan}   & Search a protein sequence against a protein profile HMM database.\\ 
+\textbf{hmmalign}  & Make a multiple alignment of many sequences to a common profile HMM (DNA or protein).\\ 
+& \\ 
+\multicolumn{2}{c}{\textbf{Replacements for HMMER1's DNA search functionality}} \\ 
+& \\ 
+\textbf{nhmmer}    & Search a DNA profile HMM against a DNA sequence database.\\
+\textbf{nhmmscan}  & Search a DNA sequence against a DNA profile HMM database.\\
+& \\
 \multicolumn{2}{c}{\textbf{Other utilities}}\\ 
  & \\ 
 \textbf{hmmconvert} & Convert profile formats to/from HMMER3 format.\\ 
@@ -40,14 +46,17 @@ pipelines, for instance using profile databases like Pfam or
 SMART. 
 
 The \prog{phmmer} and \prog{jackhmmer} programs are new to
-HMMER3. They search a single sequence against a sequence database,
-akin to BLASTP and PSIBLAST, respectively. (Internally, they just
+HMMER3. They search a single protein sequence against a protein sequence
+database, akin to BLASTP and PSIBLAST, respectively. (Internally, they just
 produce a profile HMM from the query sequence, then run HMM searches.)
 
-In the Tutorial section, I'll show examples of running each of these
+The \prog{nhmmer} program is new to HMMER3.1. It can search against
+a DNA database with a query of a prebuilt HMM (built using \prog{hmmbuild}),
+a multiple sequence alignment, or a single sequence. 
+
+In the Tutorial section, we'll show examples of running each of these
 programs, using examples in the \ccode{tutorial/} subdirectory of the
 distribution.
-
 
 \subsection{Files used in the tutorial}
 
@@ -95,6 +104,18 @@ are:
 \item[\emprog{HBB\_HUMAN}] A FASTA file containing the sequence of
   human $\beta-$hemoglobin, used as an example query for \prog{phmmer}
   and \prog{jackhmmer}.
+%
+\item[\emprog{Arthur1a.sto}] An example alignment of 792 instances of the
+Arthur1a transposable element family. This is the Dfam 1.1 \prog{Arthur1a} seed
+alignment. We'll use it for an example of using \prog{nhmmer} to search a DNA
+database.
+%
+\item[\emprog{Arthur1a.hmm}] A profile HMM created from \prog{Arthur1a.sto} by
+  \prog{hmmbuild}.
+%
+\item[\emprog{dna\_target.fa}] A FASTA file containing 330000 bases extracted
+from human chromosome 1, in which two Arthur1a instances are found. This is used
+as the example database for \prog{nhmmer} and \prog{nhmmscan}.
 \end{sreitems}
 
 
@@ -252,7 +273,7 @@ file containing 45 globin sequences.
 \prog{hmmsearch} accepts any FASTA file as input. It also accepts
 EMBL/UniProt text format. It will automatically determine what format
 your file is in; you don't have to say. An example of searching a
-sequene database with our \prog{globins4.hmm} model would look like:
+sequence database with our \prog{globins4.hmm} model would look like:
 
 \user{hmmsearch globins4.hmm uniprot\_sprot.fasta > globins4.out}
 
@@ -801,6 +822,155 @@ clock time) (running with \ccode{--cpu 2} on two cores). That's in the
 same ballpark as BLAST. On
 the same machine, also running dual-core, NCBI BLAST with one of these
 globin sequences took 2.3 seconds, and WU-BLAST took 4.8 seconds.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\subsection{Searching a DNA sequence database}
+
+\subsubsection{Step 1: Optionally build a profile HMM with hmmbuild}
+
+This step is nearly idential to Step 1 for protein profile HMM. For the DNA
+example, type:
+
+\user{hmmbuild Arthur1a.hmm tutorial/Arthur1a.sto}
+
+and you'll see some output that looks like:
+
+\begin{sreoutput}
+# hmmbuild :: profile HMM construction from multiple sequence alignments
+# HMMER 3.1dev (February 2013); http://hmmer.org/
+# Copyright (C) 2011 Howard Hughes Medical Institute.
+# Freely distributed under the GNU General Public License (GPLv3).
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# input alignment file:             tutorial/Arthur1a.sto
+# output HMM file:                  Arthur1a.hmm
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# idx name                  nseq  alen  mlen     W eff_nseq re/pos description
+#---- -------------------- ----- ----- ----- ----- -------- ------ -----------
+1     Arthur1A               792  1378   177   370     8.04  0.450 Non-autonomous, hAT-like DNA transposon
+
+# CPU time: 0.15u 0.00s 00:00:00.15 Elapsed: 00:00:00.17
+\end{sreoutput}
+
+Notice the new output column with the header ``W'', which is only present when
+the input sequence alignment is made up of DNA. This represents an upper bound
+on the length at which nhmmer expects to find an instances of the 
+family\footnote{Technically, based on position-specific insert rates, only
+$1e-7$ of all sequences generated from the profile HMM will have length 
+greater than W.}. 
+It is always larger than mlen, though the ratio of mlen to W depends on the
+observed insert rate in the seed alignment. This length is used deep in the
+acceleration pipeline, and is not expected to impact results, but larger values
+of W do correspond to longer run time.
+
+
+
+\subsubsection{Step 2: search the DNA sequence database with nhhmmer}
+
+Presumably you have a sequence database to search. Here I'll use
+\prog{tutorial/dna\_target.fa}, which is a FASTA format
+file containing one 330Kb long DNA sequence extracted from human chromosome 1.
+
+The program \prog{nhmmer} accepts a FASTA file containing DNA sequence(s) as
+input for the target database. For the query, it accepts either an HMM file as
+produced above by hmmbuild, or a file containing either one DNA sequence or an
+alignment of multiple DNA sequences. Sequence files are read in the same way as
+with \prog{hmmbuild}; see the build section for format constraints. Using an
+input alignment will result in a slower search than using an HMM, as nhmmer will
+first build an HMM based on the input alignment. An example of searching a
+sequence database with our \prog{Arthur1a.hmm} model would look like:
+
+\user{nhmmer Arthur1a.hmm dna\_target.fa > Arthur1a.out}
+
+The output file \prog{Arthur1a.out} should look like the example provided in
+\prog{tutorial/Arthur1a.out}.
+
+This output is largely similar to that of hmmsearch. The key differences are
+that (1) each hit is not to a full sequence in the target database, but a
+local alignment of the HMM to a subsequence of a full target database sequence,
+and (2) there are no domains.
+
+The first section is the \emph{header} that tells you what program you ran, on
+what, and with what options, as above.
+
+The second section is the \emph{top hits} list. It is a list
+of ranked top hits (sorted by E-value, most significant hit first),
+formatted in a BLAST-like style:
+
+\begin{sreoutput}
+    E-value  score  bias  Sequence                       start    end  Description
+    ------- ------ -----  --------                       -----  -----  -----------
+    3.6e-18   63.2   0.0  humanchr1/239220001-239550000 323264 323432
+    2.6e-07   28.1   0.0  humanchr1/239220001-239550000   6411   6323
+  ------ inclusion threshold ------
+        2.5    5.5   0.0  humanchr1/239220001-239550000 207565 207621
+        4.8    4.6   0.0  humanchr1/239220001-239550000  83727  83671
+ \end{sreoutput}
+
+The most important number here is the first one, the \emph{hit E-value}. As
+with \prog{hmmsearch}, this is the statistical significance of the match to
+this subsequence: the number of hits we'd expect to score this highly in a
+database of this size if the database contained only nonhomologous random
+sequence. The lower the E-value, the more significant the hit.
+
+The E-value is based on the \emph{sequence bit score}, which is the second
+number. This is the log-odds score for the hit. As mentioned above, the bit
+score doesn't depend on the size of the sequence database, only on the profile
+HMM and the target sequence.
+
+The next number, the \emph{bias}, gives an indication of the extent to which
+the target database subsequence displays composition bias, as
+described for \prog{hmmsearch}\footnote{The method of computing this value is
+both unpublished and different from the method used in hmmsearch. We will write
+it up when there's a chance.}.
+
+The Sequence and Description column shows the name and optional description of
+the target sequence, as extracted from the target database alignment file.
+
+The ``start'' and ``end'' columns give the range in the target sequence at which
+the hit is found. Note that ``end'' can be smaller than ``start'', indicating a
+hit found on the reverse complement of the target database sequence.
+
+
+
+
+
+
+
+HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 \subsection{Searching a profile HMM database with a query sequence}
 
