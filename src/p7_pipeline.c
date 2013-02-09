@@ -1603,7 +1603,7 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
   }
 
   if (pli->long_targets) {
-      fprintf(ofp, "Residues passing MSV filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
+      fprintf(ofp, "Residues passing SSV filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
       //fprintf(ofp, "Windows passing MSV filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
           //pli->n_past_msv,
           pli->pos_past_msv,

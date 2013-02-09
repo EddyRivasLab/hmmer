@@ -105,16 +105,16 @@ are:
   human $\beta-$hemoglobin, used as an example query for \prog{phmmer}
   and \prog{jackhmmer}.
 %
-\item[\emprog{Arthur1a.sto}] An example alignment of 792 instances of the
-Arthur1a transposable element family. This is the Dfam 1.1 \prog{Arthur1a} seed
+\item[\emprog{MADE1.sto}] An example alignment of 1997 instances of the
+MADE1 transposable element family. This is the Dfam 1.1 \prog{MADE1} seed
 alignment. We'll use it for an example of using \prog{nhmmer} to search a DNA
 database.
 %
-\item[\emprog{Arthur1a.hmm}] A profile HMM created from \prog{Arthur1a.sto} by
+\item[\emprog{MADE1.hmm}] A profile HMM created from \prog{MADE1.sto} by
   \prog{hmmbuild}.
 %
 \item[\emprog{dna\_target.fa}] A FASTA file containing 330000 bases extracted
-from human chromosome 1, in which two Arthur1a instances are found. This is used
+from human chromosome 1, in which four MADE1 instances are found. This is used
 as the example database for \prog{nhmmer} and \prog{nhmmscan}.
 \end{sreitems}
 
@@ -851,31 +851,32 @@ globin sequences took 2.3 seconds, and WU-BLAST took 4.8 seconds.
 This step is nearly idential to Step 1 for protein profile HMM. For the DNA
 example, type:
 
-\user{hmmbuild Arthur1a.hmm tutorial/Arthur1a.sto}
+\user{hmmbuild MADE1.hmm tutorial/MADE1.sto}
 
 and you'll see some output that looks like:
 
+% tutorial regression: MADE1.out
 \begin{sreoutput}
 # hmmbuild :: profile HMM construction from multiple sequence alignments
 # HMMER 3.1dev (February 2013); http://hmmer.org/
 # Copyright (C) 2011 Howard Hughes Medical Institute.
 # Freely distributed under the GNU General Public License (GPLv3).
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# input alignment file:             tutorial/Arthur1a.sto
-# output HMM file:                  Arthur1a.hmm
+# input alignment file:             tutorial/MADE1.sto
+# output HMM file:                  MADE1.hmm
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 # idx name                  nseq  alen  mlen     W eff_nseq re/pos description
 #---- -------------------- ----- ----- ----- ----- -------- ------ -----------
-1     Arthur1A               792  1378   177   370     8.04  0.450 Non-autonomous, hAT-like DNA transposon
+1     MADE1                 1997  1112    80   426     3.91  0.708 MADE1 (MAriner Derived Element 1), a TcMar-Mariner DNA transposon
 
-# CPU time: 0.15u 0.00s 00:00:00.15 Elapsed: 00:00:00.17
+# CPU time: 0.15u 0.01s 00:00:00.16 Elapsed: 00:00:00.20
 \end{sreoutput}
 
 Notice the new output column with the header ``W'', which is only present when
 the input sequence alignment is made up of DNA. This represents an upper bound
 on the length at which nhmmer expects to find an instances of the 
-family\footnote{Technically, based on position-specific insert rates, only
+family\footnote{W is based on position-specific insert rates: only
 $1e-7$ of all sequences generated from the profile HMM will have length 
 greater than W.}. 
 It is always larger than mlen, though the ratio of mlen to W depends on the
@@ -898,12 +899,12 @@ alignment of multiple DNA sequences. Sequence files are read in the same way as
 with \prog{hmmbuild}; see the build section for format constraints. Using an
 input alignment will result in a slower search than using an HMM, as nhmmer will
 first build an HMM based on the input alignment. An example of searching a
-sequence database with our \prog{Arthur1a.hmm} model would look like:
+sequence database with our \prog{MADE1.hmm} model would look like:
 
-\user{nhmmer Arthur1a.hmm dna\_target.fa > Arthur1a.out}
+\user{nhmmer MADE1.hmm dna\_target.fa > MADE1.out}
 
-The output file \prog{Arthur1a.out} should look like the example provided in
-\prog{tutorial/Arthur1a.out}.
+The output file \prog{MADE1.out} should look like the example provided in
+\prog{tutorial/MADE1.out}.
 
 This output is largely similar to that of hmmsearch. The key differences are
 that (1) each hit is not to a full sequence in the target database, but a
@@ -915,16 +916,18 @@ what, and with what options, as above.
 
 The second section is the \emph{top hits} list. It is a list
 of ranked top hits (sorted by E-value, most significant hit first),
-formatted in a BLAST-like style:
+formatted much like the \prog{hmmsearch} output \emph{top hits} list:
 
+% tutorial regression: MADE1.out
 \begin{sreoutput}
     E-value  score  bias  Sequence                       start    end  Description
     ------- ------ -----  --------                       -----  -----  -----------
-    3.6e-18   63.2   0.0  humanchr1/239220001-239550000 323264 323432
-    2.6e-07   28.1   0.0  humanchr1/239220001-239550000   6411   6323
+    9.1e-11   39.6   0.0  humanchr1/239220001-239550000 302390 302466
+    6.1e-08   30.5   0.0  humanchr1/239220001-239550000 174456 174498
+    1.1e-07   29.8   0.0  humanchr1/239220001-239550000 302466 302390
+    6.2e-06   24.1   0.0  humanchr1/239220001-239550000 174493 174456
   ------ inclusion threshold ------
-        2.5    5.5   0.0  humanchr1/239220001-239550000 207565 207621
-        4.8    4.6   0.0  humanchr1/239220001-239550000  83727  83671
+        1.5    6.9   0.0  humanchr1/239220001-239550000 304074 304104
  \end{sreoutput}
 
 The most important number here is the first one, the \emph{hit E-value}. As
@@ -934,9 +937,9 @@ database of this size if the database contained only nonhomologous random
 sequence. The lower the E-value, the more significant the hit.
 
 The E-value is based on the \emph{sequence bit score}, which is the second
-number. This is the log-odds score for the hit. As mentioned above, the bit
-score doesn't depend on the size of the sequence database, only on the profile
-HMM and the target sequence.
+number. This is the log-odds score for the hit. The bit score doesn't depend on
+the size of the sequence database, only on the profile HMM and the target
+sequence.
 
 The next number, the \emph{bias}, gives an indication of the extent to which
 the target database subsequence displays composition bias, as
@@ -944,29 +947,170 @@ described for \prog{hmmsearch}\footnote{The method of computing this value is
 both unpublished and different from the method used in hmmsearch. We will write
 it up when there's a chance.}.
 
-The Sequence and Description column shows the name and optional description of
+The Sequence and Description columns show the name and optional description of
 the target sequence, as extracted from the target database alignment file.
 
-The ``start'' and ``end'' columns give the range in the target sequence at which
-the hit is found. Note that ``end'' can be smaller than ``start'', indicating a
-hit found on the reverse complement of the target database sequence.
+The ``start'' and ``end'' columns give, for each hit, the range in the target
+sequence at which the hit is found. Note that ``end'' can be smaller than
+``start'', indicating a hit found on the reverse complement of the target
+database sequence.
+
+Note that one of the five reported hits falls below the inclusion threshold.
+
+Then comes the third output section, which starts with
+
+\begin{sreoutput}
+Annotation for each hit  (and alignments):
+\end{sreoutput}
+
+Now for each hit in the top hits list, there will be a one-line table
+providing detailed information about the hit, followed by the alignment
+inferred for the hit. The first entry from the \prog{MADE1} example
+above looks like: 
+
+% tutorial regression: MADE1.out
+\begin{sreoutput}
+>> humanchr1/239220001-239550000
+    score  bias    Evalue   hmmfrom    hmm to     alifrom    ali to      envfrom    env to    sq len      acc
+   ------ ----- ---------   -------   -------    --------- ---------    --------- --------- ---------    ----
+ !   39.6   0.0   9.1e-11         4        80 .]    302390    302466 ..    302387    302466 ..    330000    0.87 
+\end{sreoutput}
+
+The \ccode{!} or \ccode{?} symbol indicates whether this hit does
+or does not satisfy the inclusion threshold, as described in the
+\prog{hmmsearch} section. 
+
+The bit score, bias value, and Evalue are as described above.
+
+The next four columns give the endpoints of the reported local
+alignment with respect to both the query model (``hmm from'' and ``hmm
+to'') and the target sequence (``ali from'' and ``ali to''). These are as
+described in the section for \prog{hmmsearch} results, including the symbology
+used to recognize flush vs internal end points in hits. 
+
+The next two columns (``env from'' and ``env to'') also behave as
+described earlier for \prog{hmmsearch}, defining the \emph{envelope} of the
+hit's location on the target sequence.  
+
+The ``sq len'' column indicates the full length of the target sequence, enabling
+simple recognition of the proximity of a hit to the end of the target.
+
+The last column (``acc") is the average posterior probability of the aligned
+target sequence residues; effectively, the expected accuracy per
+residue of the alignment.
 
 
+Under each one-line hit table, an ``optimal posterior accuracy'' alignment
+\citep{Holmes98} is computed within that hit's envelope, and
+displayed. For example, the top hit from above is shown as:
+
+% tutorial regressions: fn3.out
+\begin{sreoutput}
+  Alignment:
+  score: 39.6 bits
+                                       xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx....xxxxxxxxxxxxxxxxxxxxxxxx RF
+                          MADE1      4 ggttggtgcaaaagtaattgcggtttttgccattacttttaatggc....aaaaaccgcaattacttttgcacc 73
+                                       ggt ggtgcaaaa  aattg ggtttttgccatt cttttaat gc    a aaa  g a  t ctttt cacc
+  humanchr1/239220001-239550000 302390 GGTCGGTGCAAAATCAATTGTGGTTTTTGCCATTGCTTTTAATTGCttttA-AAA--GTA-ATGCTTTTACACC 302459
+                                       899******************************************955533.443..334.4689********* PP
+
+                                       xxxxxxx RF
+                          MADE1     74 aacctaa 80
+                                       aa ctaa
+  humanchr1/239220001-239550000 302460 AATCTAA 302466
+                                       ***9986 PP                                       
+\end{sreoutput}
+
+Details of the alignment format are the same as for \prog{hmmsearch}.
 
 
+Finally, at the bottom of the file, you'll see some summary
+statistics.  For example, at the bottom of the MADE1 search output,
+you'll find something like:
 
 
+\begin{sreoutput}
+Internal pipeline statistics summary:
+-------------------------------------
+Query model(s):                              1  (80 nodes)
+Target sequences:                            1  (660000 residues searched)
+Residues passing MSV filter:             67373  (0.102); expected (0.02)
+Residues passing bias filter:            39985  (0.0606); expected (0.02)
+Residues passing Vit filter:              1292  (0.00196); expected (0.001)
+Residues passing Fwd filter:              1110  (0.00168); expected (1e-05)
+Total number of hits:                        5  (0.000403)
+# CPU time: 0.04u 0.00s 00:00:00.04 Elapsed: 00:00:00.03
+# Mc/sec: 1760.00
+//
+\end{sreoutput}
 
-HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE  HERE
+This gives you some idea of what's going on in nhmmer's acceleration
+pipeline. You've got one query HMM, and 660,000 residues were 
+%                                       ^^^^^^^
+searched (there are 330,000 bases in the single sequence found in the file;
+%                   ^^^^^^^
+the search includes the reverse complement, doubling the search space). The
+sequences in the database go through a gauntlet of three scoring algorithms 
+called SSV, Viterbi, and Forward, in order of increasing sensitivity and
+increasing computational requirement.
+
+SSV (the ``Single ungapped Segment Viterbi'' algorithm) as used in nhmmer is
+closely related to the MSV algorithm used in \prog{hmmsearch}, in that it
+depends on ungapped alignment segments. The difference lies in
+how those alignments are used. In \prog{hmmsearch}, one or more
+high-scoring ungapped segments contribute to a score that, if sufficiently
+high, casues the entire sequence to be passed on to the next scoring stage
+(Viterbi). This strategy doesn't work for long DNA sequences; it doesn't filter
+the human genome much to say ``there's a hit on chromosome 1''. In
+\prog{nhmmer}, each sequence in the database is scanned for high-scoring
+ungapped alignment segments, and a window around each such segment is extracted
+(merging overlapping windows), and passed on to the next stage. By default,
+nhmmer is configured to allow sequence segments with a P-value of $\leq 0.02$
+through the SSV score filter (thus, if the database contained no homologs and
+P-values were accurately calculated, the highest scoring 2\% of the sequence
+will pass the filter). Here, 67373 bases,
+%                            ^^^^^^                 
+or about 10\% of the database, got through the SSV filter.
+%        ^^^^
 
 
+A quick check is then done to see if the target window is
+``obviously'' so biased in its composition that it's unlikely to be a
+true homolog. This is called the ``bias filter''. If you don't like it
+(it can occasionally be overaggressive) you can shut it off with the
+\prog{--nobias} option. Here, 39985 bases, roughly 6\% of the database 
+%                             ^^^^^                ^^^
+pass through the bias filter.
 
+The Viterbi filter then calculates a gapped optimal alignment score for each
+window that survived the earlier stages. This score is a closer approximation
+than the SSV score of the final score that the window will achieve if it
+survives the filter, but the Viterbi filter is about four-fold slower than SSV.
+By default, nhmmer lets windows with a P-value of $\leq 0.001$ through this
+stage. Here, 1292 bases, about 0.2\% of the database gets through.
+%            ^^^^              ^^^^^
 
+Then the full Forward score is calculated, which sums over all
+possible alignments of the profile to the window. The default
+allows windows with a P-value of $\leq 10^{-5}$\% through; 1110 bases
+%                                                          ^^^^
+passed.
 
+All sequences that make it through the three filters are then
+subjected to a full probabilistic analysis using the HMM
+Forward/Backward algorithms, to identify hit envelopes, then determine
+posterior probabilities for each aligned residue, followed by optimal
+accuracy alignment. The results of this step are what you finally see on
+the output. The final number of hits and fractional coverage of the 
+database is shown next. This is typically smaller than the fraction of the
+database passing the Forward filter, as hit identification typically trims
+windows down to a smaller envelope.
 
-
-
-
+Finally, nhmmer reports the speed of the search in units of Mc/sec
+(million dynamic programming cells per second), the CPU time, and the
+elapsed time. This search took about 0.04 seconds of elapsed (wall
+%                                    ^^^^
+clock time). 
 
 
 
