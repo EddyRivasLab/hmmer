@@ -264,54 +264,54 @@
 
 # nhmmer    xxxxxxxxxxxxxxxxxxxx
 1 prep      rnddb                @easel/miniapps/esl-shuffle@ -G --dna   -L 10000 -N 2 -o %RNDDB%
-1 exercise  nhmmer               @src/nhmmer@                             !tutorial/Arthur1a.hmm! %RNDDB%
+1 exercise  nhmmer               @src/nhmmer@                             !tutorial/MADE1.hmm! %RNDDB%
 1 exercise  nhmmer/-h            @src/nhmmer@  -h
-1 exercise  nhmmer/-o            @src/nhmmer@  -o           %nhmmer.out%  !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/-A            @src/nhmmer@  -A           %nhmmer.sto%  !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/--tblout      @src/nhmmer@  --tblout     %nhmmer.tbl%  !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/--dfamtblout  @src/nhmmer@  --dfamtblout %nhmmer.dtbl% !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/--acc         @src/nhmmer@  --acc                      !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/--noali       @src/nhmmer@  --noali                    !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/--notextw     @src/nhmmer@  --notextw                  !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/--textw       @src/nhmmer@  --textw 256                !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/-E            @src/nhmmer@  -E 0.01                    !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/-T            @src/nhmmer@  -T 20                      !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/--incE        @src/nhmmer@  --incE 0.01                !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/--incT        @src/nhmmer@  --incT 20                  !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/--max         @src/nhmmer@  --max                      !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/--F1          @src/nhmmer@  --F1 0.03                  !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/--F2          @src/nhmmer@  --F2 0.002                 !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/--F3          @src/nhmmer@  --F3 0.0002                !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/--nobias      @src/nhmmer@  --nobias                   !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/--nonull2     @src/nhmmer@  --nonull2                  !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/-Z            @src/nhmmer@  -Z 45000000                !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmer/--seed        @src/nhmmer@  --seed 42                  !tutorial/Arthur1a.hmm! %RNDDB%
+1 exercise  nhmmer/-o            @src/nhmmer@  -o           %nhmmer.out%  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/-A            @src/nhmmer@  -A           %nhmmer.sto%  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/--tblout      @src/nhmmer@  --tblout     %nhmmer.tbl%  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/--dfamtblout  @src/nhmmer@  --dfamtblout %nhmmer.dtbl% !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/--acc         @src/nhmmer@  --acc                      !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/--noali       @src/nhmmer@  --noali                    !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/--notextw     @src/nhmmer@  --notextw                  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/--textw       @src/nhmmer@  --textw 256                !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/-E            @src/nhmmer@  -E 0.01                    !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/-T            @src/nhmmer@  -T 20                      !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/--incE        @src/nhmmer@  --incE 0.01                !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/--incT        @src/nhmmer@  --incT 20                  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/--max         @src/nhmmer@  --max                      !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/--F1          @src/nhmmer@  --F1 0.03                  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/--F2          @src/nhmmer@  --F2 0.002                 !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/--F3          @src/nhmmer@  --F3 0.0002                !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/--nobias      @src/nhmmer@  --nobias                   !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/--nonull2     @src/nhmmer@  --nonull2                  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/-Z            @src/nhmmer@  -Z 45000000                !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmer/--seed        @src/nhmmer@  --seed 42                  !tutorial/MADE1.hmm! %RNDDB%
 
 
 # nhmmscan    xxxxxxxxxxxxxxxxxxxx
 1 prep      rnddb                  @easel/miniapps/esl-shuffle@ -G --dna   -L 10000 -N 2 -o %RNDDB%
-1 prep      press                  @src/hmmpress@  -f                        !tutorial/Arthur1a.hmm!
-1 exercise  nhmmscan               @src/nhmmscan@                             !tutorial/Arthur1a.hmm! %RNDDB%
+1 prep      press                  @src/hmmpress@  -f                        !tutorial/MADE1.hmm!
+1 exercise  nhmmscan               @src/nhmmscan@                             !tutorial/MADE1.hmm! %RNDDB%
 1 exercise  nhmmscan/-h            @src/nhmmscan@  -h
-1 exercise  nhmmscan/-o            @src/nhmmscan@  -o           %nhmmscan.out%  !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/--tblout      @src/nhmmscan@  --tblout     %nhmmscan.tbl%  !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/--dfamtblout  @src/nhmmscan@  --dfamtblout %nhmmscan.dtbl% !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/--acc         @src/nhmmscan@  --acc                      !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/--noali       @src/nhmmscan@  --noali                    !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/--notextw     @src/nhmmscan@  --notextw                  !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/--textw       @src/nhmmscan@  --textw 256                !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/-E            @src/nhmmscan@  -E 0.01                    !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/-T            @src/nhmmscan@  -T 20                      !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/--incE        @src/nhmmscan@  --incE 0.01                !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/--incT        @src/nhmmscan@  --incT 20                  !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/--max         @src/nhmmscan@  --max                      !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/--F1          @src/nhmmscan@  --F1 0.03                  !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/--F2          @src/nhmmscan@  --F2 0.002                 !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/--F3          @src/nhmmscan@  --F3 0.0002                !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/--nobias      @src/nhmmscan@  --nobias                   !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/--nonull2     @src/nhmmscan@  --nonull2                  !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/-Z            @src/nhmmscan@  -Z 45000000                !tutorial/Arthur1a.hmm! %RNDDB%
-1 exercise  nhmmscan/--seed        @src/nhmmscan@  --seed 42                  !tutorial/Arthur1a.hmm! %RNDDB%
+1 exercise  nhmmscan/-o            @src/nhmmscan@  -o           %nhmmscan.out%  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--tblout      @src/nhmmscan@  --tblout     %nhmmscan.tbl%  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--dfamtblout  @src/nhmmscan@  --dfamtblout %nhmmscan.dtbl% !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--acc         @src/nhmmscan@  --acc                      !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--noali       @src/nhmmscan@  --noali                    !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--notextw     @src/nhmmscan@  --notextw                  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--textw       @src/nhmmscan@  --textw 256                !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/-E            @src/nhmmscan@  -E 0.01                    !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/-T            @src/nhmmscan@  -T 20                      !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--incE        @src/nhmmscan@  --incE 0.01                !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--incT        @src/nhmmscan@  --incT 20                  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--max         @src/nhmmscan@  --max                      !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--F1          @src/nhmmscan@  --F1 0.03                  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--F2          @src/nhmmscan@  --F2 0.002                 !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--F3          @src/nhmmscan@  --F3 0.0002                !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--nobias      @src/nhmmscan@  --nobias                   !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--nonull2     @src/nhmmscan@  --nonull2                  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/-Z            @src/nhmmscan@  -Z 45000000                !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--seed        @src/nhmmscan@  --seed 42                  !tutorial/MADE1.hmm! %RNDDB%
 
 ################################################################
 # Integration tests

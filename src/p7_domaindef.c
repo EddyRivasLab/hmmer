@@ -777,16 +777,14 @@ reparameterize_model (P7_BG *bg, P7_OPROFILE *om, const ESL_SQ *sq, int start, i
  * which is (efficiently, we trust) managing any necessary temporary
  * working space and heuristic thresholds.
  *
- * If <long_target> is TRUE, p7_Null2_ByExpectation() is forced,
- * even if null2 was already computed by sampling. Also, null3
- * biased-composition score correction may be used, in which
- * case <bg> is required. Otherwise null2 is used, and <bg> may be
- * NULL. In this case, the calling function also optionally
+ * If <long_target> is TRUE, the calling function  optionally
  * passes in three allocated arrays (bgf_arr, scores_arr,
  * fwd_emissions_arr) used for temporary storage in
  * reparameterize_model(), and a previously computed array block_bg
  * of residue frequencies for the long_target block from which this
- * envelope came (these three can be NULL).
+ * envelope came (if scores_arr is NULL, reparameterization is not
+ * done, and the domcorrection, used to determine null2, is not
+ * computed).
  * 
  * Returns <eslOK> if a domain was successfully identified, scored,
  * and aligned in the envelope; if so, the per-domain information is
@@ -826,7 +824,6 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
   // I modify bg and om in-place to avoid having to clone (allocate) a massive
   // number of times when there are many hits
   if (long_target && scores_arr!=NULL) { // this modifies both bg and om.
-    //p7_oprofile_GetFwdEmissionArray(om, bg, fwd_emissions_arr);
     reparameterize_model (bg, om, sq, i, j-i+1, fwd_emissions_arr, bg_tmp->f, scores_arr);
   }
 
@@ -861,6 +858,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
    * acquire a large total score. Now that we have alignment boundaries, re-run Fwd/Bkwd to trim away such a long envelope and estimate
    * the true score of the hit region
    */
+
   if (long_target) {
     if (     i < ddef->dcl[ddef->ndom].ad->sqfrom-max_env_extra   //trim the left side of the envelope
         ||   j > ddef->dcl[ddef->ndom].ad->sqto+max_env_extra     //trim the right side of the envelope
@@ -871,9 +869,11 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
       j = ESL_MIN(j,ddef->dcl[ddef->ndom].ad->sqto+max_env_extra);
       Ld = j - i + 1;
 
-      //revert bg and om back to original, then forward to new values
-      reparameterize_model (bg, om, NULL, 0, 0, fwd_emissions_arr, bg_tmp->f, scores_arr);
-      reparameterize_model (bg, om, sq, i, Ld, fwd_emissions_arr, bg_tmp->f, scores_arr);
+      if (scores_arr!=NULL) {
+        //revert bg and om back to original, then forward to new values
+        reparameterize_model (bg, om, NULL, 0, 0, fwd_emissions_arr, bg_tmp->f, scores_arr);
+        reparameterize_model (bg, om, sq, i, Ld, fwd_emissions_arr, bg_tmp->f, scores_arr);
+      }
 
       p7_Forward (sq->dsq + i-1, Ld, om,      ox1, &envsc);
       p7_Backward(sq->dsq + i-1, Ld, om, ox1, ox2, NULL);
@@ -894,6 +894,38 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
        p7_alidisplay_Destroy(dom->ad);
        dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq);
     }
+
+    /* Estimate bias correction, by computing what the score would've been without
+     * reparameterization
+     */
+    domcorrection = envsc;
+    if (scores_arr!=NULL) { //revert bg and om back to original,
+                            //and while I'm at it, capture what the default parameterized score would have been, for "null2"
+      reparameterize_model (bg, om, NULL, 0, 0, fwd_emissions_arr, bg_tmp->f, scores_arr);
+      p7_Forward (sq->dsq + i-1, Ld, om,      ox1, &domcorrection);
+    }
+
+    dom->domcorrection = domcorrection - envsc;
+
+  }  else {
+
+    /* Compute bias correction (for non-longtarget case)
+     *
+     * Is null2 set already for this i..j? (It is, if we're in a domain that
+     * was defined by stochastic traceback clustering in a multidomain region;
+     * it isn't yet, if we're in a simple one-domain region). If it isn't,
+     * do it now, by the expectation (posterior decoding) method.
+     */
+      if (!null2_is_done) {
+        p7_Null2_ByExpectation(om, ox2, null2);
+        for (pos = i; pos <= j; pos++)
+          ddef->n2sc[pos]  = logf(null2[sq->dsq[pos]]);
+      }
+      for (pos = i; pos <= j; pos++)
+        domcorrection   += ddef->n2sc[pos];         /* domcorrection is in units of NATS */
+
+      dom->domcorrection = domcorrection; /* in units of NATS */
+
   }
 
 
@@ -902,37 +934,15 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
   dom->ienv          = i;
   dom->jenv          = j;
   dom->envsc         = envsc;         /* in units of NATS */
-  dom->oasc          = oasc;	      /* in units of expected # of correctly aligned residues */
-  dom->dombias       = 0.0;	/* gets set later, using bg->omega and dombias */
-  dom->bitscore      = 0.0;	/* gets set later by caller, using envsc, null score, and dombias */
-  dom->lnP           = 0.0;	/* gets set later by caller, using bitscore */
-  dom->is_reported   = FALSE;	/* gets set later by caller */
-  dom->is_included   = FALSE;	/* gets set later by caller */
+  dom->oasc          = oasc;        /* in units of expected # of correctly aligned residues */
+  dom->dombias       = 0.0; /* gets set later, using bg->omega and dombias */
+  dom->bitscore      = 0.0; /* gets set later by caller, using envsc, null score, and dombias */
+  dom->lnP           = 0.0; /* gets set later by caller, using bitscore */
+  dom->is_reported   = FALSE; /* gets set later by caller */
+  dom->is_included   = FALSE; /* gets set later by caller */
 
-
-
-  /* Compute bias correction
-   *
-   * Is null2 set already for this i..j? (It is, if we're in a domain that
-   * was defined by stochastic traceback clustering in a multidomain region;
-   * it isn't yet, if we're in a simple one-domain region). If it isn't,
-   * do it now, by the expectation (posterior decoding) method.
-   */
-  if (long_target || !null2_is_done) {
-    p7_Null2_ByExpectation(om, ox2, null2);
-    for (pos = i; pos <= j; pos++)
-      ddef->n2sc[pos]  = logf(null2[sq->dsq[pos]]);
-  }
-  for (pos = i; pos <= j; pos++)
-    domcorrection   += ddef->n2sc[pos];         /* domcorrection is in units of NATS */
-
-  dom->domcorrection = domcorrection; /* in units of NATS */
 
   ddef->ndom++;
-
-
-  if (long_target && scores_arr!=NULL)  //revert bg and om back to original
-    reparameterize_model (bg, om, NULL, 0, 0, fwd_emissions_arr, bg_tmp->f, scores_arr);
 
 
   p7_trace_Reuse(ddef->tr);

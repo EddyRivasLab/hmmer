@@ -1065,8 +1065,9 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
   p7_omx_GrowTo(pli->oxb, om->M, 0, window_len);
   p7_BackwardParser(pli_tmp->tmpseq->dsq, window_len, om, pli->oxf, pli->oxb, NULL);
 
+  //if we're asked to not do null correction, pass a NULL instead of a temp scores variable - domaindef knows what to do
   status = p7_domaindef_ByPosteriorHeuristics(pli_tmp->tmpseq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef, bg, TRUE,
-                                                 pli_tmp->bg, pli_tmp->scores, pli_tmp->fwd_emissions_arr);
+                                              pli_tmp->bg, (pli->do_null2?pli_tmp->scores:NULL), pli_tmp->fwd_emissions_arr);
 
 
   if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen */
@@ -1114,8 +1115,9 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
        * saying that this null model is <omega> as likely as the standard null model.
        * <omega> is by default 1/(2^8), so this is by default an 8 bit penalty.
        */
-      dom_bias   = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + dom->domcorrection) : 0.0);
-      dom_score  = (bitscore - (nullsc + dom_bias))  / eslCONST_LOG2;
+      //dom_bias   = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + dom->domcorrection) : 0.0);
+      dom_bias   = dom->domcorrection;
+      dom_score  = (bitscore - (nullsc))  / eslCONST_LOG2;
       dom_lnP   = esl_exp_logsurv(dom_score, om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
       //note: this test is conservative:

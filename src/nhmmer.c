@@ -243,7 +243,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
 }
 
 static int
-output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
+output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile, int ncpus)
 {
   p7_banner(ofp, go->argv[0], banner);
   
@@ -294,8 +294,9 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--w_beta")     && fprintf(ofp, "# window length beta value:        %g\n",             esl_opt_GetReal(go, "--w_beta"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--w_length")   && fprintf(ofp, "# window length :                  %d\n",             esl_opt_GetInteger(go, "--w_length")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--block_length")&&fprintf(ofp, "# block length :                   %d\n",             esl_opt_GetInteger(go, "--block_length")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  #ifdef HMMER_THREADS
-  if (esl_opt_IsUsed(go, "--cpu")        && fprintf(ofp, "# number of worker threads:        %d\n",             esl_opt_GetInteger(go, "--cpu"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+#ifdef HMMER_THREADS
+  //if (esl_opt_IsUsed(go, "--cpu")        && fprintf(ofp, "# number of worker threads:        %d\n",             esl_opt_GetInteger(go, "--cpu"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (fprintf(ofp, "# number of worker threads:        %d\n",             ncpus)      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 #endif
   if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   return eslOK;
@@ -451,7 +452,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   if (qhstatus == eslOK) {
       /* One-time initializations after alphabet <abc> becomes known */
-      output_header(ofp, go, cfg->hmmfile, cfg->dbfile);
+      output_header(ofp, go, cfg->hmmfile, cfg->dbfile, ncpus);
 
       dbfp->abc = abc;
 
