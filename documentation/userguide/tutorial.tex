@@ -922,12 +922,12 @@ formatted much like the \prog{hmmsearch} output \emph{top hits} list:
 \begin{sreoutput}
     E-value  score  bias  Sequence                       start    end  Description
     ------- ------ -----  --------                       -----  -----  -----------
-    9.1e-11   39.6   0.0  humanchr1/239220001-239550000 302390 302466
-    6.1e-08   30.5   0.0  humanchr1/239220001-239550000 174456 174498
-    1.1e-07   29.8   0.0  humanchr1/239220001-239550000 302466 302390
-    6.2e-06   24.1   0.0  humanchr1/239220001-239550000 174493 174456
+    8.4e-11   39.0   7.4  humanchr1/239220001-239550000 302390 302466
+    7.8e-08   29.5   6.0  humanchr1/239220001-239550000 302466 302390
+    8.4e-08   29.4   8.3  humanchr1/239220001-239550000 174456 174498
+    5.6e-06   23.6   7.0  humanchr1/239220001-239550000 174493 174456
   ------ inclusion threshold ------
-        1.5    6.9   0.0  humanchr1/239220001-239550000 304074 304104
+        1.7    6.0   6.7  humanchr1/239220001-239550000 304074 304104
  \end{sreoutput}
 
 The most important number here is the first one, the \emph{hit E-value}. As
@@ -973,7 +973,7 @@ above looks like:
 >> humanchr1/239220001-239550000
     score  bias    Evalue   hmmfrom    hmm to     alifrom    ali to      envfrom    env to    sq len      acc
    ------ ----- ---------   -------   -------    --------- ---------    --------- --------- ---------    ----
- !   39.6   0.0   9.1e-11         4        80 .]    302390    302466 ..    302387    302466 ..    330000    0.87 
+ !   39.0   7.4   8.4e-11         4        80 .]    302390    302466 ..    302387    302466 ..    330000    0.87
 \end{sreoutput}
 
 The \ccode{!} or \ccode{?} symbol indicates whether this hit does
@@ -1007,7 +1007,7 @@ displayed. For example, the top hit from above is shown as:
 % tutorial regressions: fn3.out
 \begin{sreoutput}
   Alignment:
-  score: 39.6 bits
+  score: 39.0 bits
                                        xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx....xxxxxxxxxxxxxxxxxxxxxxxx RF
                           MADE1      4 ggttggtgcaaaagtaattgcggtttttgccattacttttaatggc....aaaaaccgcaattacttttgcacc 73
                                        ggt ggtgcaaaa  aattg ggtttttgccatt cttttaat gc    a aaa  g a  t ctttt cacc
@@ -1018,7 +1018,7 @@ displayed. For example, the top hit from above is shown as:
                           MADE1     74 aacctaa 80
                                        aa ctaa
   humanchr1/239220001-239550000 302460 AATCTAA 302466
-                                       ***9986 PP                                       
+                                       **99986 PP                                       
 \end{sreoutput}
 
 Details of the alignment format are the same as for \prog{hmmsearch}.
@@ -1034,13 +1034,13 @@ Internal pipeline statistics summary:
 -------------------------------------
 Query model(s):                              1  (80 nodes)
 Target sequences:                            1  (660000 residues searched)
-Residues passing MSV filter:             67373  (0.102); expected (0.02)
-Residues passing bias filter:            39985  (0.0606); expected (0.02)
-Residues passing Vit filter:              1292  (0.00196); expected (0.001)
-Residues passing Fwd filter:              1110  (0.00168); expected (1e-05)
+Residues passing SSV filter:             61658  (0.0934); expected (0.02)
+Residues passing bias filter:            45802  (0.0694); expected (0.02)
+Residues passing Vit filter:              2443  (0.0037); expected (0.001)
+Residues passing Fwd filter:              2217  (0.00336); expected (1e-05)
 Total number of hits:                        5  (0.000403)
-# CPU time: 0.04u 0.00s 00:00:00.04 Elapsed: 00:00:00.03
-# Mc/sec: 1760.00
+# CPU time: 0.20u 0.00s 00:00:00.20 Elapsed: 00:00:00.18
+# Mc/sec: 293.33
 //
 \end{sreoutput}
 
@@ -1068,9 +1068,9 @@ ungapped alignment segments, and a window around each such segment is extracted
 nhmmer is configured to allow sequence segments with a P-value of $\leq 0.02$
 through the SSV score filter (thus, if the database contained no homologs and
 P-values were accurately calculated, the highest scoring 2\% of the sequence
-will pass the filter). Here, 67373 bases,
+will pass the filter). Here, 61658 bases,
 %                            ^^^^^^                 
-or about 10\% of the database, got through the SSV filter.
+or about 9\% of the database, got through the SSV filter.
 %        ^^^^
 
 
@@ -1078,7 +1078,7 @@ A quick check is then done to see if the target window is
 ``obviously'' so biased in its composition that it's unlikely to be a
 true homolog. This is called the ``bias filter''. If you don't like it
 (it can occasionally be overaggressive) you can shut it off with the
-\prog{--nobias} option. Here, 39985 bases, roughly 6\% of the database 
+\prog{--nobias} option. Here, 45802 bases, roughly 7\% of the database 
 %                             ^^^^^                ^^^
 pass through the bias filter.
 
@@ -1087,12 +1087,12 @@ window that survived the earlier stages. This score is a closer approximation
 than the SSV score of the final score that the window will achieve if it
 survives the filter, but the Viterbi filter is about four-fold slower than SSV.
 By default, nhmmer lets windows with a P-value of $\leq 0.001$ through this
-stage. Here, 1292 bases, about 0.2\% of the database gets through.
+stage. Here, 2443 bases, about 0.4\% of the database gets through.
 %            ^^^^              ^^^^^
 
 Then the full Forward score is calculated, which sums over all
 possible alignments of the profile to the window. The default
-allows windows with a P-value of $\leq 10^{-5}$\% through; 1110 bases
+allows windows with a P-value of $\leq 10^{-5}$\% through; 2217 bases
 %                                                          ^^^^
 passed.
 
@@ -1108,8 +1108,8 @@ windows down to a smaller envelope.
 
 Finally, nhmmer reports the speed of the search in units of Mc/sec
 (million dynamic programming cells per second), the CPU time, and the
-elapsed time. This search took about 0.04 seconds of elapsed (wall
-%                                    ^^^^
+elapsed time. This search took about 0.2 seconds of elapsed (wall
+%                                    ^^^
 clock time). 
 
 

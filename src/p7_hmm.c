@@ -1130,11 +1130,11 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
     }
 
   if (strcmp(h1->name,   h2->name)   != 0) return eslFAIL;
-  if (strcmp(h1->comlog, h2->comlog) != 0) return eslFAIL;
+  if (esl_strcmp(h1->comlog, h2->comlog) != 0) return eslFAIL;
   if (strcmp(h1->ctime,  h2->ctime)  != 0) return eslFAIL;
 
-  if (h1->nseq     != h2->nseq)            return eslFAIL;
-  if (h1->eff_nseq != h2->eff_nseq)        return eslFAIL;
+  if (h1->nseq     != h2->nseq)                                      return eslFAIL;
+  if (esl_FCompare(h1->eff_nseq, h2->eff_nseq, tol) != eslOK)        return eslFAIL;
   if (h1->checksum != h2->checksum)        return eslFAIL;
 
   if (esl_strcmp(h1->acc,  h2->acc)  != 0) return eslFAIL;

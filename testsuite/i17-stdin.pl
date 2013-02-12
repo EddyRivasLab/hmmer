@@ -301,7 +301,7 @@ if ($verbose) { print "$tag...\n"; }
 `diff -b $tmppfx.out1 $tmppfx.out3 2>&1 > /dev/null`;  if ($?) { die "FAIL: $prog results differ if $tag2 comes through stdin\n"; }
 
 $output = `cat $arg1 $arg2 | $prog - - 2>&1`;    if (! $?) { die "FAIL: $prog should have failed on double - -\n"; }
-if ($output !~ /^Either <hmmfile> or <seqdb>/) { die "FAIL: $prog didn't give expected error message for the - - case.\n"; }
+if ($output !~ /^Either <query hmmfile|alignfile> or <seqdb>/) { die "FAIL: $prog didn't give expected error message for the - - case.\n"; }
 
 $output = `cat $arg2 | $prog $arg1b - 2>&1`;     if (! $?) { die "FAIL: $prog should fail on multiquery $tag1, stdin $tag2.\n"; }
 

@@ -1221,9 +1221,9 @@ ERROR:
 }
 
 
-/* Function:  p7_pli_postMSV_LongTarget()
+/* Function:  p7_pli_postSSV_LongTarget()
  * Synopsis:  the part of the LongTarget P7 search Pipeline downstream
- *            of the MSV filter
+ *            of the SSV filter
  *
  * Purpose:   This is called by either the standard (SIMD-SSV) long-target
  *            pipeline (p7_Pipeline_LongTarget) or the FM-index long-target
@@ -1271,7 +1271,7 @@ ERROR:
  *
  */
 static int
-p7_pli_postMSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, const P7_SCOREDATA *data,
+p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, const P7_SCOREDATA *data,
     int64_t seqidx, int window_start, int window_len, ESL_DSQ *subseq,
     int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
     float nullsc, float usc, int complementarity, P7_HMM_WINDOWLIST *vit_windowlist,
@@ -1447,6 +1447,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
 
   P7_PIPELINE_LONGTARGET_OBJS *pli_tmp;
 
+
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
   ESL_ALLOC(pli_tmp, sizeof(P7_PIPELINE_LONGTARGET_OBJS));
@@ -1455,10 +1456,10 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
   ESL_ALLOC(pli_tmp->scores, sizeof(float) * om->abc->Kp * 4);
   ESL_ALLOC(pli_tmp->fwd_emissions_arr, sizeof(float) *  om->abc->Kp * (om->M+1));
 
+
   msv_windowlist.windows = NULL;
   vit_windowlist.windows = NULL;
   p7_hmmwindow_init(&msv_windowlist);
-
 
   p7_omx_GrowTo(pli->oxf, om->M, 0, om->max_length);    /* expand the one-row omx if needed */
 
@@ -1471,7 +1472,9 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
    * This variant of SSV will scan a long sequence and find
    * short high-scoring regions.
    */
+
   p7_SSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, data, bg, pli->F1, &msv_windowlist);
+
 
   /* convert hits to windows, possibly filtering based on composition bias,
    * definitely merging neighboring windows, and
@@ -1499,7 +1502,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
 
     p7_pli_ExtendAndMergeWindows (om, data, &msv_windowlist, sq->n, 0);
 
-
   /*
    * pass each remaining window on to the remaining pipeline
    */
@@ -1509,12 +1511,12 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
     free (pli_tmp->tmpseq->dsq);  //this ESL_SQ object is just a container that'll point to a series of other DSQs, so free the one we just created inside the larger SQ object
 
     for (i=0; i<msv_windowlist.count; i++){
+
       int window_len = msv_windowlist.windows[i].length;
 
       subseq = sq->dsq + msv_windowlist.windows[i].n - 1;
       p7_bg_SetLength(bg, window_len);
       p7_bg_NullOne  (bg, subseq, window_len, &nullsc);
-
 
       p7_bg_FilterScore(bg, subseq, window_len, &bias_filtersc);
 
@@ -1528,12 +1530,10 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
 
       pli->pos_past_msv += window_len;
 
-      status = p7_pli_postMSV_LongTarget(pli, om, bg, hitlist, data, seqidx, msv_windowlist.windows[i].n, window_len,
+      status = p7_pli_postSSV_LongTarget(pli, om, bg, hitlist, data, seqidx, msv_windowlist.windows[i].n, window_len,
                         subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc, p7_NOCOMPLEMENT, &vit_windowlist,
                         pli_tmp
       );
-
-
 
       if (status != eslOK) goto ERROR;
 
@@ -1543,6 +1543,8 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7
     esl_sq_Destroy(pli_tmp->tmpseq);
     free (vit_windowlist.windows);
   }
+
+
 
   if (msv_windowlist.windows != NULL) free (msv_windowlist.windows);
 
