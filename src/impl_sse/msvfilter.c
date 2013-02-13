@@ -291,7 +291,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   float ret_sc;
 
   union { __m128i v; uint8_t b[16]; } u;
-  int   status;
 
 
   /*
