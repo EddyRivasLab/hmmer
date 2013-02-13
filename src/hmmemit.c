@@ -56,7 +56,6 @@ static void emit_consensus(ESL_GETOPTS *go, FILE *ofp, int outfmt,              
 static void emit_fancycons(ESL_GETOPTS *go, FILE *ofp, int outfmt,                    P7_HMM *hmm);
 static void emit_alignment(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM *hmm);
 static void emit_sequences(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM *hmm);
-static void find_simplerepeats(ESL_GETOPTS *go, FILE *ofp, P7_HMM *hmm);
 
 
 int
@@ -271,19 +270,6 @@ emit_sequences(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM
   return;
 }
 
-
-
-/* repeat_sorter(): qsort's pawn, below */
-static int
-repeat_sorter(const void *vw1, const void *vw2)
-{
-  P7_HMM_WINDOW *w1 = (P7_HMM_WINDOW*) vw1;
-  P7_HMM_WINDOW *w2 = (P7_HMM_WINDOW*) vw2;
-
-  if      (w1->n > w2->n) return  1;
-  else if (w1->n < w2->n) return -1;
-  else                    return  0;
-}
 
 
 /*****************************************************************
