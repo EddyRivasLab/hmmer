@@ -114,12 +114,6 @@ static ESL_OPTIONS options[] = {
   { "--B2",         eslARG_INT,         "240", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Vit)",          7 },
   { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",          7 },
 
-  /* Restrict search to subset of database*/
-  { "--firsttarget", eslARG_INT,        "0",   NULL, NULL,    NULL,  NULL,           NULL,   "Search starts at the <i>th sequence in target",                          8 },
-  { "--n_targetseqs",eslARG_INT,        "-1",  NULL, NULL,    NULL,  NULL,           NULL,   "Search includes up to <j> target sequences (starting at --firsttarget)", 8 },
-  { "--ssifile",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,   "Above range values require ssi file. Override default to <s>",           8 },
-
-
 /* Other options */
   { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,     "assert target <seqdb> is in format <s>: no autodetection",      12 },
   { "--qformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,     "assert query <seqfile> is in format <s>",                       12 },
@@ -131,6 +125,15 @@ static ESL_OPTIONS options[] = {
   { "--block_length", eslARG_INT,        NULL, NULL, "n>=50000", NULL, NULL,         NULL,     "length of blocks read from target database (threaded) ",        12 },
   { "--toponly",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,   "--bottomonly",  "only search the top strand",                                    12 },
   { "--bottomonly",  eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,      "--toponly",  "only search the bottom strand",                                 12 },
+
+
+  /* Restrict search to subset of database - hidden because these flags are
+   *   (a) currently for internal use
+   *   (b) probably going to change
+   */
+  { "--restrictdb_stkey", eslARG_STRING, "0",  NULL, NULL,    NULL,  NULL,           NULL,   "Search starts at the sequence with name <s>",                    99 },
+  { "--restrictdb_n",eslARG_INT,        "-1",  NULL, NULL,    NULL,  NULL,           NULL,   "Search <j> target sequences (starting at --restrictdb_stkey)",      99 },
+  { "--ssifile",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,   "restrictdb_x values require ssi file. Override default to <s>",     99 },
 
 
 /* Not used, but retained because esl option-handling code errors if it isn't kept here.  Placed in group 99 so it doesn't print to help*/
@@ -164,8 +167,8 @@ struct cfg_s {
   int              nproc;             /* how many MPI processes, total                   */
   int              my_rank;           /* who am I, in 0..nproc-1                         */
 
-  int              firstseq;
-  int              n_targetseq;
+  char             *firstseq_key;     /* name of the first sequence in the restricted db range */
+  int              n_targetseq;       /* number of sequences in the restricted range */
 };
 
 static char usage[]  = "[options] <query hmmfile|alignfile> <target seqfile>";
@@ -221,8 +224,8 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_quer
       if (puts("\nOptions controlling acceleration heuristics:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 7, 2, 100);
 
-      if (puts("\nOptions for restricting search to a range of target database sequences:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 8, 2, 100);
+//      if (puts("\nOptions for restricting search to a range of target database sequences:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+//      esl_opt_DisplayHelp(stdout, go, 8, 2, 100);
 
 //      if (puts("\nOptions controlling trimming thresholds:")         < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
 //      esl_opt_DisplayHelp(stdout, go, 9, 2, 100);
@@ -296,10 +299,9 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *queryfile, char *seqfile, 
   if (esl_opt_IsUsed(go, "--B2")         && fprintf(ofp, "# biased comp Viterbi window len:  %d\n",             esl_opt_GetInteger(go, "--B2"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--B3")         && fprintf(ofp, "# biased comp Forward window len:  %d\n",             esl_opt_GetInteger(go, "--B3"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
-
-  if (esl_opt_IsUsed(go, "--firsttarget")  && fprintf(ofp, "# First target sequence used:      %d\n",            esl_opt_GetInteger(go, "--firsttarget"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--n_targetseqs") && fprintf(ofp, "# Requested # target sequences:    %d\n",            esl_opt_GetInteger(go, "--n_targetseqs")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--ssifile")      && fprintf(ofp, "# Override ssi file to:            %s\n",            esl_opt_GetString(go, "--ssifile"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--restrictdb_stkey") && fprintf(ofp, "# Restrict db to start at seq key: %s\n",            esl_opt_GetString(go, "--restrictdb_stkey"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--restrictdb_n")     && fprintf(ofp, "# Restrict db to # target seqs:    %d\n",            esl_opt_GetInteger(go, "--restrictdb_n")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--ssifile")          && fprintf(ofp, "# Override ssi file to:            %s\n",            esl_opt_GetString(go, "--ssifile"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 
   if (esl_opt_IsUsed(go, "--nonull2")    && fprintf(ofp, "# null2 bias corrections:          off\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -345,8 +347,8 @@ main(int argc, char **argv)
   cfg.nproc      = 0;                   /* this gets reset below, if we init MPI */
   cfg.my_rank    = 0;                   /* this gets reset below, if we init MPI */
 
-  cfg.firstseq    = 0;
-  cfg.n_targetseq = -1;
+  cfg.firstseq_key = NULL;
+  cfg.n_targetseq  = -1;
 
   process_commandline(argc, argv, &go, &cfg.queryfile, &cfg.dbfile);
 
@@ -357,22 +359,20 @@ main(int argc, char **argv)
 
 
 #ifndef eslAUGMENT_SSI
-  if (esl_opt_IsUsed(go, "--firsttarget") || esl_opt_IsUsed(go, "--lasttarget")  || esl_opt_IsUsed(go, "--ssifile")  )
+  if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")  || esl_opt_IsUsed(go, "--ssifile")  )
     p7_Fail("Unable to use range-control options unless an SSI index file is available. See 'esl_sfetch --index'\n");
 #else
-  //if it's an ascii format, move to a given byte offset
-  if (esl_opt_IsUsed(go, "--firsttarget") )
-    cfg.firstseq = esl_opt_GetInteger(go, "--firsttarget");
-  if (cfg.firstseq < 0 )
-    p7_Fail("--firsttarget must be >= 0\n");
+  if (esl_opt_IsUsed(go, "--restrictdb_stkey") )
+    if ((cfg.firstseq_key = esl_opt_GetString(go, "--restrictdb_stkey")) == NULL)  p7_Fail("Failure capturing --restrictdb_stkey\n");
 
+  if (esl_opt_IsUsed(go, "--restrictdb_n") )
+    cfg.n_targetseq = esl_opt_GetInteger(go, "--restrictdb_n");
 
-  if (esl_opt_IsUsed(go, "--n_targetseqs") )
-    cfg.n_targetseq = esl_opt_GetInteger(go, "--n_targetseqs");
   if ( cfg.n_targetseq != -1 && cfg.n_targetseq < 1 )
-    p7_Fail("--n_targetseqs must be >= 1\n");
+    p7_Fail("--restrictdb_n must be >= 1\n");
 
 #endif
+
 
   status = serial_master(go, &cfg);
 
@@ -426,8 +426,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* used to keep track of the lengths of the sequences that are processed */
   ID_LENGTH_LIST  *id_length_list = NULL;
 
-  int              n_targetseq = cfg->n_targetseq;
-
   int              ncpus    = 0;
 
   int              infocnt  = 0;
@@ -474,22 +472,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status != eslOK)        p7_Fail("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
 
 
-  if (esl_opt_IsUsed(go, "--firsttarget") || esl_opt_IsUsed(go, "--n_targetseqs")) {
-
+  if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")) {
     if (esl_opt_IsUsed(go, "--ssifile"))
       esl_sqfile_OpenSSI(dbfp, esl_opt_GetString(go, "--ssifile"));
     else
       esl_sqfile_OpenSSI(dbfp, NULL);
 
-    if ( cfg->firstseq > 0 )
-      status = esl_sqfile_PositionByNumber(dbfp, cfg->firstseq);
-
+    if ( cfg->firstseq_key != NULL )
+      status = esl_sqfile_PositionByKey(dbfp, cfg->firstseq_key);
     if (status != eslOK)
-      p7_Fail("Unexpected error trying to set firstarget\n");
+      p7_Fail("Failure setting restrictdb_stkey to %d\n", cfg->firstseq_key);
   }
-//  sqfp->ssi->nprimary;
-
-
 
 
   if (dbfp->format > 100) // breaking the law!  That range is reserved for msa, for aligned formats
@@ -705,10 +698,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
 #ifdef HMMER_THREADS
-        if (ncpus > 0)  sstatus = thread_loop(info, id_length_list, threadObj, queue, dbfp, n_targetseq);
-        else            sstatus = serial_loop(info, id_length_list, dbfp, n_targetseq);
+        if (ncpus > 0)  sstatus = thread_loop(info, id_length_list, threadObj, queue, dbfp, cfg->n_targetseq);
+        else            sstatus = serial_loop(info, id_length_list, dbfp, cfg->n_targetseq);
 #else
-        sstatus = serial_loop(info, id_length_list, dbfp, n_targetseq);
+        sstatus = serial_loop(info, id_length_list, dbfp, cfg->n_targetseq);
 #endif
 
 
@@ -994,7 +987,7 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
   int          seqid = -1;
 
   ESL_SQ      *tmpsq = esl_sq_CreateDigital(info->om->abc);
-  int          abort = FALSE; // in the case n_targetseqs != -1, a block may get stopped mid-stream. Store that here
+  int          abort = FALSE; // in the case n_targetseqs != -1, a block may get abbreviated
 
 
   esl_workqueue_Reset(queue);
