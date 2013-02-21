@@ -589,7 +589,7 @@ Scores for complete sequences (score includes all domains):
     2.7e-50  175.3   0.4      3e-50  175.1   0.4    1.0  1  sp|P01957|HBA_PROHA    Hemoglobin subunit alpha OS=Procavia c
     2.7e-50  175.3   0.0      3e-50  175.1   0.0    1.0  1  sp|Q9GLX4|HBG1_CALMO   Hemoglobin subunit gamma-1 OS=Calliceb
     2.8e-50  175.2   0.1    3.1e-50  175.1   0.1    1.0  1  sp|P02128|HBE_CHICK    Hemoglobin subunit epsilon OS=Gallus g
-    3.1e-50  175.1   0.1    3.4e-50  174.9   0.1    1.0  1  sp|P01949|HBA_ERIEU    Hemoglobin subunit alpha OS=Erinaceus 
+    3.1e-50  175.1   0.1    3.5e-50  174.9   0.1    1.0  1  sp|P01949|HBA_ERIEU    Hemoglobin subunit alpha OS=Erinaceus 
     3.8e-50  174.8   1.4    4.2e-50  174.7   1.4    1.0  1  sp|P01979|HBA_ORNAN    Hemoglobin subunit alpha OS=Ornithorhy
     3.9e-50  174.8   0.1    4.3e-50  174.6   0.1    1.0  1  sp|P18977|HBA_PROLO    Hemoglobin subunit alpha OS=Procyon lo
     3.9e-50  174.8   0.6    4.3e-50  174.6   0.6    1.0  1  sp|P01973|HBA_LAMGL    Hemoglobin subunit alpha OS=Lama glama
@@ -1300,10 +1300,10 @@ Domain annotation for each sequence (and alignments):
 >> sp|P02178|MYG_MEGNO  Myoglobin OS=Megaptera novaeangliae GN=MB PE=1 SV=2
    #    score  bias  c-Evalue  i-Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
  ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
-   1 !  215.3   3.7   2.5e-65   1.2e-62       2     149 .]       2     148 ..       1     148 [. 0.99
+   1 !  215.3   3.7   2.6e-65   1.2e-62       2     149 .]       2     148 ..       1     148 [. 0.99
 
   Alignments for each domain:
-  == domain 1  score: 215.3 bits;  conditional E-value: 2.5e-65
+  == domain 1  score: 215.3 bits;  conditional E-value: 2.6e-65
              globins4   2 vLseaektkvkavWakveadveesGadiLvrlfkstPatqefFekFkdLstedelkksadvkkHgkkvldAlsdalakldekleaklkdL 91 
                           vLs+ae++ v+++Wakveadv+++G+diL+rlfk +P+t+e+F+kFk+L+te+e+k+s+d+kkHg++vl+Al+ +l+k ++++ea+lk+L
   sp|P02178|MYG_MEGNO   2 VLSDAEWQLVLNIWAKVEADVAGHGQDILIRLFKGHPETLEKFDKFKHLKTEAEMKASEDLKKHGNTVLTALGGILKK-KGHHEAELKPL 90 
@@ -10888,7 +10888,7 @@ Domain annotation for each sequence (and alignments):
 >> sp|P01949|HBA_ERIEU  Hemoglobin subunit alpha OS=Erinaceus europaeus GN=HBA PE=1 SV=1
    #    score  bias  c-Evalue  i-Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
  ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
-   1 !  174.9   0.1   7.1e-53   3.4e-50       2     149 .]       1     141 []       1     141 [] 0.99
+   1 !  174.9   0.1   7.1e-53   3.5e-50       2     149 .]       1     141 []       1     141 [] 0.99
 
   Alignments for each domain:
   == domain 1  score: 174.9 bits;  conditional E-value: 7.1e-53
@@ -19841,7 +19841,7 @@ Passed Vit filter:                      2321  (0.0043048); expected 539.2 (0.001
 Passed Fwd filter:                      1109  (0.00205688); expected 5.4 (1e-05)
 Initial search space (Z):             539165  [actual number of targets]
 Domain search space  (domZ):            1108  [number of targets reported over threshold]
-# CPU time: 5.67u 0.34s 00:00:06.01 Elapsed: 00:00:04.74
-# Mc/sec: 6018.37
+# CPU time: 6.50u 0.11s 00:00:06.61 Elapsed: 00:00:02.59
+# Mc/sec: 11014.32
 //
 [ok]

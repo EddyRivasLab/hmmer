@@ -324,8 +324,9 @@ output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
     if (esl_opt_GetInteger(go, "--seed") == 0  && fprintf(cfg->ofp,"# random number seed:               one-time arbitrary\n")                        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
     else if                              (  fprintf(cfg->ofp,"# random number seed set to:        %d\n",         esl_opt_GetInteger(go, "--seed"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   }
-  if (esl_opt_IsUsed(go, "--w_beta")     && fprintf(cfg->ofp, "# window length beta value:         %g bits\n",   esl_opt_GetReal(go, "--w_beta"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--w_beta")     && fprintf(cfg->ofp, "# window length tail mass:          %g bits\n",   esl_opt_GetReal(go, "--w_beta"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--w_length")   && fprintf(cfg->ofp, "# window length :                   %d\n",        esl_opt_GetInteger(go, "--w_length"))< 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+
 
   if (fprintf(cfg->ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   return eslOK;
@@ -1192,28 +1193,45 @@ output_result(const struct cfg_s *cfg, char *errbuf, int msaidx, ESL_MSA *msa, P
    * so we can keep the data and labels properly sync'ed.
    */
   if (msa == NULL)
-    {
+  {
+    if (cfg->abc->type == eslAMINO) {
+      if (fprintf(cfg->ofp, "#%4s %-20s %5s %5s %5s %8s %6s %s\n", " idx", "name",                 "nseq",  "alen",  "mlen",  "eff_nseq",  "re/pos",  "description")     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "output_result: write failed");
+      if (fprintf(cfg->ofp, "#%4s %-20s %5s %5s %5s %8s %6s %s\n", "----", "--------------------", "-----", "-----", "-----", "--------",  "------",  "-----------") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "output_result: write failed");
+    } else {
       if (fprintf(cfg->ofp, "#%4s %-20s %5s %5s %5s %5s %8s %6s %s\n", " idx", "name",                 "nseq",  "alen",  "mlen",  "W", "eff_nseq",  "re/pos",  "description")     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "output_result: write failed");
       if (fprintf(cfg->ofp, "#%4s %-20s %5s %5s %5s %5s %8s %6s %s\n", "----", "--------------------", "-----", "-----", "-----", "-----", "--------",  "------",  "-----------") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "output_result: write failed");
-      return eslOK;
     }
-
+    return eslOK;
+  }
 //  if ((status = p7_hmm_Validate(hmm, errbuf, 0.0001))       != eslOK) return status;
   if ((status = p7_hmmfile_WriteASCII(cfg->hmmfp, -1, hmm)) != eslOK) ESL_FAIL(status, errbuf, "HMM save failed");
   
 	             /* #   name nseq alen M max_length eff_nseq re/pos description */
-  if (fprintf(cfg->ofp, "%-5d %-20s %5d %5" PRId64 " %5d %5d %8.2f %6.3f %s\n",
-	      msaidx,
-	      (msa->name != NULL) ? msa->name : "",
-	      msa->nseq,
-	      msa->alen,
-	      hmm->M,
-	      hmm->max_length,
-	      hmm->eff_nseq,
-	      entropy,
-	      (msa->desc != NULL) ? msa->desc : "") < 0)
-    ESL_EXCEPTION_SYS(eslEWRITE, "output_result: write failed");
-  
+  if (cfg->abc->type == eslAMINO) {
+    if (fprintf(cfg->ofp, "%-5d %-20s %5d %5" PRId64 " %5d %8.2f %6.3f %s\n",
+          msaidx,
+          (msa->name != NULL) ? msa->name : "",
+          msa->nseq,
+          msa->alen,
+          hmm->M,
+          hmm->eff_nseq,
+          entropy,
+          (msa->desc != NULL) ? msa->desc : "") < 0)
+      ESL_EXCEPTION_SYS(eslEWRITE, "output_result: write failed");
+  } else {
+    if (fprintf(cfg->ofp, "%-5d %-20s %5d %5" PRId64 " %5d %5d %8.2f %6.3f %s\n",
+          msaidx,
+          (msa->name != NULL) ? msa->name : "",
+          msa->nseq,
+          msa->alen,
+          hmm->M,
+          hmm->max_length,
+          hmm->eff_nseq,
+          entropy,
+          (msa->desc != NULL) ? msa->desc : "") < 0)
+      ESL_EXCEPTION_SYS(eslEWRITE, "output_result: write failed");
+  }
+
   if (cfg->postmsafp != NULL && postmsa != NULL) {
     eslx_msafile_Write(cfg->postmsafp, postmsa, eslMSAFILE_STOCKHOLM);
   }
