@@ -57,10 +57,10 @@ HMMER2, for comparative studies.
 Output in a HMMER3 ASCII text format other then the most current one.
 Valid choices for 
 .I <s>
-are 3/b or 3/a.
-The current format is 3/b, and this is the default. There is a
-slightly different format 3/a that was used in some alpha test code.
-
+are 3/a through 3/f.
+The current format is 3/f, and this is the default. The format 3/b 
+was used in the official HMMER3 release, and the others were used in
+the various testing versions.
 
 
 .SH SEE ALSO 

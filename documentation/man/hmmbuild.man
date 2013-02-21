@@ -279,8 +279,9 @@ Set the minimum relative entropy/position target to
 .I <x>.
 Requires
 .B --eent. 
-Default depends on the sequence alphabet; for protein
-sequences, it is 0.59 bits/position.
+Default depends on the sequence alphabet. For protein
+sequences, it is 0.59 bits/position; for nucleotide 
+sequences, it is 0.45 bits/position.
 
 .TP
 .BI --esigma " <x>"
@@ -307,10 +308,12 @@ Default mixture Dirichlet prior parameters for protein models and for
 nucleic acid (RNA and DNA) models are built in. The following options
 allow you to override the default priors.
 
+.TP
 .B --pnone
 Don't use any priors. Probability parameters will simply be the
 observed frequencies, after relative sequence weighting. 
 
+.TP
 .B --plaplace
 Use a Laplace +1 prior in place of the default mixture Dirichlet
 prior.
@@ -362,13 +365,22 @@ the location parameter tau for Forward evalues. Default is 0.04.
 .SH OTHER OPTIONS
 
 .TP
-.B --mpi
-Run as a parallel MPI program. Each alignment is assigned to a MPI
-worker node for construction. (Therefore, the maximum parallelization 
-cannot exceed the number of alignments in the input
-.I msafile.)
-This is useful when building large profile libraries. This option is
-only available if optional MPI capability was enabled at compile-time.
+.BI --cpu " <n>"
+Set the number of parallel worker threads to 
+.I <n>.
+By default, HMMER sets this to the number of CPU cores it detects in
+your machine - that is, it tries to maximize the use of your available
+processor cores. Setting 
+.I <n>
+higher than the number of available cores is of little if any value,
+but you may want to set it to something less. You can also control
+this number by setting an environment variable, 
+.I HMMER_NCPU.
+
+This option is only available if HMMER was compiled with POSIX threads
+support. This is the default, but it may have been turned off for your
+site or machine for some reason.
+
 
 .TP 
 .BI --informat " <s>"
@@ -376,9 +388,11 @@ Declare that the input
 .I msafile
 is in format 
 .I <s>.
-Currently the accepted multiple alignment sequence file formats only
-include Stockholm and SELEX. Default is to autodetect the format of
+Currently the accepted multiple alignment sequence file formats 
+include Stockholm, Aligned FASTA, Clustal, NCBI PSI-BLAST, PHYLIP, 
+Selex, and UCSC SAM A2M. Default is to autodetect the format of
 the file.
+
 
 .TP 
 .BI --seed " <n>"
@@ -396,6 +410,44 @@ stochastic simulations will vary from run to run of the same command.
 The default seed is 42.
 
 
+.TP 
+.BI --w_beta " <x>"
+Window length tail mass.
+The upper bound,
+.I W,
+on the length at which nhmmer expects to find an instance of the 
+model is set such that the fraction of all sequences generated
+by the model with length 
+.I >= W
+is less than  
+.I <x>. 
+The default is 1e-7. 
+
+
+
+.TP 
+.BI --w_length " <n>"
+Override the model instance length upper bound,
+.I W,
+which is otherwise controlled by
+.B --w_beta. 
+It should be larger than the model length. The value of 
+.I W
+is used deep in the acceleration pipeline, and modest changes
+are not expected to impact results (though larger values of 
+.I W
+do lead to longer run time). 
+
+
+.TP
+.B --mpi
+Run as a parallel MPI program. Each alignment is assigned to a MPI
+worker node for construction. (Therefore, the maximum parallelization 
+cannot exceed the number of alignments in the input
+.I msafile.)
+This is useful when building large profile libraries. This option is
+only available if optional MPI capability was enabled at compile-time.
+
 
 .TP 
 .B --stall
@@ -403,6 +455,13 @@ For debugging MPI parallelization: arrest program execution
 immediately after start, and wait for a debugger to attach to the
 running process and release the arrest.
 
+
+.TP 
+.BI --maxinsertlen " <n>"
+Restrict insert length parameterization such that the expected
+insert length at each position of the model is no more than
+.I <n>. 
+ 
 
 
 

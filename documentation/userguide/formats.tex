@@ -10,17 +10,18 @@ save file. An abridged version is shown here, where (\ldots) mark
 deletions made for clarity and space:
 
 \begin{tinysreoutput}
-HMMER3/e [3.0 | March 2010]
+HMMER3/f [3.1 | February 2013]
 NAME  fn3
 ACC   PF00041.13
 DESC  Fibronectin type III domain
 LENG  86
 ALPH  amino
 RF    no
+MM    no
 CONS  yes
 CS    yes
 MAP   yes
-DATE  Thu Jun 16 11:48:22 2011
+DATE  Fri Feb 15 06:04:13 2013
 NSEQ  106
 EFFN  11.415833
 CKSUM 3564431818
@@ -35,30 +36,32 @@ HMM          A        C        D        E        F        G        H        I   
   COMPO   2.70330  4.91262  3.03272  2.64079  3.60307  2.84344  3.74204  3.07942 (...) 3.21526
           2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354 (...) 3.61503
           0.00338  6.08833  6.81068  0.61958  0.77255  0.00000        *
-      1   3.16986  5.21447  4.52134  3.29953  4.34285  4.18764  4.30886  3.35801 (...) 3.93889      1 p - -
+      1   3.16986  5.21447  4.52134  3.29953  4.34285  4.18764  4.30886  3.35801 (...) 3.93889      1 p - - -
           2.68629  4.42236  2.77530  2.73088  3.46365  2.40512  3.72505  3.29365 (...) 3.61514
           0.09796  2.38361  6.81068  0.10064  2.34607  0.48576  0.95510
-      2   2.70230  5.97353  2.24744  2.62947  5.31433  2.60356  4.43584  4.79731 (...) 4.25623      3 s - -
+      2   2.70230  5.97353  2.24744  2.62947  5.31433  2.60356  4.43584  4.79731 (...) 4.25623      3 s - - -
           2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354 (...) 3.61503
           0.00338  6.08833  6.81068  0.61958  0.77255  0.48576  0.95510
 (...)
-     85   2.48488  5.72055  3.87501  1.97538  3.04853  3.48010  4.51877  3.51898 (...) 3.43366    120 e - B
+     85   2.48488  5.72055  3.87501  1.97538  3.04853  3.48010  4.51877  3.51898 (...) 3.43366    120 e - - B
+     
           2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354 (...) 3.61503
           0.00338  6.08833  6.81068  0.61958  0.77255  0.48576  0.95510
-     86   3.03720  5.94099  3.75455  2.96917  5.26587  2.91682  3.66571  4.11840 (...) 4.99111    121 s - E
+     86   3.03720  5.94099  3.75455  2.96917  5.26587  2.91682  3.66571  4.11840 (...) 4.99111    121 s - - E
+     
           2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354 (...) 3.61503
           0.00227  6.08723        *  0.61958  0.77255  0.00000        *
 //
 \end{tinysreoutput}
 
 An HMM file consists of one or more HMMs.  Each HMM starts with a
-format version identifier (here, \prog{HMMER3/e}) and ends with
+format version identifier (here, \prog{HMMER3/f}) and ends with
 \prog{//} on a line by itself.  The format version identifier allows
 backward compatibility as the HMMER software evolves: it tells the
 parser this file is from HMMER3's save file format version
-e.\footnote{HMMER 3.0 used 3/b format. HMMER 3.1 uses 3/e format.
+f.\footnote{HMMER 3.0 used 3/b format. HMMER 3.1 uses 3/f format.
   Some alpha test versions of 3.0 used 3/a format. Internal
-  development versions of 3.1 used 3/c and 3/d formats.}  The closing
+  development versions of 3.1 used 3/c, 3/d, and 3/e formats.}  The closing
 \prog{//} allows multiple HMMs to be concatenated.
 
 The format is divided into two regions. The first region contains
@@ -86,14 +89,14 @@ indicated.
 
 \begin{sreitems}{\emprog{STATS <s1> <s2> <f>}}
 
-\item [\emprog{HMMER3/b}] Unique identifier for the save file format
-  version; the \prog{/b} means that this is HMMER3 HMM file format
-  version b. When HMMER3 changes its save file format, the revision
+\item [\emprog{HMMER3/f}] Unique identifier for the save file format
+  version; the \prog{/f} means that this is HMMER3 HMM file format
+  version f. When HMMER3 changes its save file format, the revision
   code advances. This way, parsers may easily remain backwards
-  compatible. The remainder of the line after the \prog{HMMER3/b} tag
+  compatible. The remainder of the line after the \prog{HMMER3/f} tag
   is free text that is ignored by the parser. HMMER currently writes
   its version number and release date in brackets here,
-  e.g. \prog{[3.0b2 | June 2009]} in this
+  e.g. \prog{[3.1b1 | February 2013]} in this
   example. \textbf{Mandatory.}
 
 \item [\emprog{NAME <s>}] Model name; \prog{<s>} is a single word
@@ -116,6 +119,11 @@ in a Stockholm alignment file. \textbf{Optional.}
 integer, is the number of match states in the model.
 \textbf{Mandatory.}
 
+\item [\emprog{MAXL <d>}] Max instance length; \prog{<d>}, a positive
+nonzero integer, is the upper bound on the length at which and instance
+of the model is expected to be found. Used only by nhmmer and nhmmscan.
+\textbf{Optional.}
+
 \item [\emprog{ALPH <s>}] Symbol alphabet type. For biosequence
 analysis models, \prog{<s>} is \prog{amino}, \prog{DNA}, or \prog{RNA}
 (case insensitive). There are also other accepted alphabets for
@@ -136,6 +144,17 @@ ignored.  Reference column annotation is picked up from a Stockholm
 alignment file's \verb+#=GC RF+ line. It is propagated to alignment
 outputs, and also may optionally be used to define consensus match
 columns in profile HMM construction. \textbf{Optional}; assumed to be
+no if not present.
+
+\item [\emprog{MM <s>}] Model masked flag; \prog{<s>} is
+either \prog{no} or \prog{yes} (case insensitive). If \prog{yes}, the
+model mask annotation character field for each match state in the main
+model (see below) is valid; if \prog{no}, these characters are
+ignored. Indicates that the profile model was created such that
+emission probabilities at masked positions are set to match the 
+background frequency, rather than being set based on observed frequencies 
+in the alignment. Position-specific insertion and deletion rates are not 
+altered, even in masked regions. \textbf{Optional}; assumed to be
 no if not present.
 
 \item [\emprog{CONS <s>}] Consensus residue annotation flag;
@@ -288,6 +307,11 @@ The next field is the \prog{RF} annotation for this node.  If
 \prog{RF} was \prog{yes} in the header, then this is a single
 character, representing the reference annotation for this match state;
 otherwise, this field is `-'.
+
+The next field is the \prog{MM} mask value for this node.  If
+\prog{MM} was \prog{yes} in the header, then this is a single 'm'
+character, indicating that the position was identified as a masked 
+position during model construction; otherwise, this field is `.'.
 
 The next field is the \prog{CS} annotation for this node.  If
 \prog{CS} was \prog{yes}, then this is a single character,
@@ -511,6 +535,12 @@ are as follows:
         column. The intent is to allow labeling the columns with some
         sort of mark.
         
+\item [\emprog{MM}]
+        Model mask line. An 'm' indicates that the column lies within a 
+        masked range, so that \prog{hmmbuild} should produce emissions matching
+        the background for a match state corresponding to that alignment column.
+        Otherwise, a '.' is used.
+                
 \item [\emprog{SS\_cons}]
         Secondary structure consensus. For protein alignments,
         DSSP codes or gaps are accepted as markup: [HGIEBTSCX.-\_], where

@@ -16,13 +16,13 @@ the header will say:
 
 \begin{sreoutput}
 # hmmscan :: search sequence(s) against a profile database
-# HMMER 3.0 (March 2010); http://hmmer.org/
-# Copyright (C) 2010 Howard Hughes Medical Institute.
+# HMMER 3.1 (February 2013); http://hmmer.org/
+# Copyright (C) 2011 Howard Hughes Medical Institute.
 # Freely distributed under the GNU General Public License (GPLv3).
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 \end{sreoutput}
 
-So (from the second line there) this is from HMMER 3.0.
+So (from the second line there) this is from HMMER 3.1.
 
 There is not yet any appropriate citable published paper that
 describes the HMMER3 software suite.
@@ -121,7 +121,8 @@ incantations that generate subsets of queries or targets on the
 fly. For example:
 
 \user{esl-sfetch --index uniprot\_sprot.fasta}
-\user{cat mytargets.list | esl-sfetch -f uniprot\_sprot.fasta - | hmmsearch globins4.hmm -}
+
+\user{cat mytargs.list | esl-sfetch -f uniprot\_sprot.fasta - | hmmsearch globins4.hmm -}
 
 This takes a list of sequence names/accessions in
 \prog{mytargets.list}, fetches them one by one from UniProt (note that
@@ -136,6 +137,7 @@ database queries).
 Ditto for piping subsets of profiles. Supposing you have a copy of Pfam in Pfam-A.hmm:
 
 \user{hmmfetch --index Pfam-A.hmm}
+
 \user{cat myqueries.list | hmmfetch -f Pfam.hmm - | hmmsearch - uniprot\_sprot.fasta}
 
 This takes a list of query profile names/accessions in
@@ -166,6 +168,7 @@ containing multiple profile queries against a streamed target
 database:
 
 \user{cat myqueries.list | hmmfetch -f Pfam.hmm > many.hmms}
+
 \user{cat mytargets.list | esl-sfetch -f uniprot\_sprot.fasta - | hmmsearch many.hmms -}
 
 This will fail. Unfortunately the above business about how it will
@@ -185,6 +188,7 @@ multiple queries against multiple targets, you always want to be
 reading the \emph{queries} from a stdin pipe, not the targets:
 
 \user{cat mytargets.list | esl-sfetch -f uniprot\_sprot.fasta > mytarget.seqs}
+
 \user{cat myqueries.list | hmmfetch -f Pfam.hmm - |  hmmsearch - mytarget.seqs}
 
 So in this multiple queries/multiple targets case of using stdin

@@ -43,7 +43,7 @@ have a copy of Easel separately installed:
 \user{cd easel; make install} 
 
 That's it.  You can keep reading if you want to know more about
-customizing a HMMER3 installation, or you can skip ahead to the next
+customizing a HMMER installation, or you can skip ahead to the next
 chapter, the tutorial.
 
 \subsection{System requirements}
@@ -59,7 +59,7 @@ Microsoft Windows.\footnote{There are add-on products available for
   Cygwin environment on Windows.}  We have tested most extensively on
 Linux and on MacOS/X, because these are the machines we develop on. 
 
-\paragraph{Processor:} HMMER3 depends on vector parallelization methods
+\paragraph{Processor:} HMMER depends on vector parallelization methods
 that are supported on most modern processors. H3 requires either an
 x86-compatible (IA32, IA64, or Intel64) processor that supports the
 SSE2 vector instruction set, or a PowerPC processor that supports the
@@ -114,7 +114,7 @@ GNU make and GNU grep.
 
 \subsection{Multithreaded parallelization for multicores is the default}
 
-The four search programs and \prog{hmmbuild} support multicore
+The six search programs and \prog{hmmbuild} support multicore
 parallelization using POSIX threads. By default, the configure script
 will identify whether your platform supports POSIX threads (almost all
 platforms do), and will automatically compile in multithreading
@@ -129,7 +129,7 @@ your machine. You can control the number of cores each HMMER process
 will use for computation with the \ccode{--cpu <x>} command line
 option or the \ccode{HMMER\_NCPU} environment variable. Even with a
 single processing thread (\ccode{--cpu 1}), HMMER will devote a second
-execution thread to database input, resulting in significant speedup
+execution thread to database input, resulting in possible speedup
 over serial execution.
 
 If you specify \ccode{--cpu 0}, the program will run in serial-only

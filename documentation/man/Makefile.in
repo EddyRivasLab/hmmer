@@ -32,7 +32,10 @@ MANS =  hmmer\
 	hmmsim\
 	hmmstat\
 	jackhmmer\
-	phmmer
+	phmmer\
+	nhmmer\
+	nhmmscan\
+	alimask
 
 .PHONY:  install uninstall clean distclean
 

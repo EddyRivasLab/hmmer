@@ -78,7 +78,8 @@ endif
 
 # Programs installed by HMMER (stable, documented)
 #
-PROGS = hmmalign\
+PROGS = alimask\
+	hmmalign\
 	hmmbuild\
 	hmmconvert\
 	hmmemit\
@@ -91,6 +92,7 @@ PROGS = hmmalign\
 	jackhmmer\
 	phmmer\
 	nhmmer\
+	nhmmscan\
 	hmmpgmd
 
 .PHONY: all dev check pdf install uninstall clean distclean TAGS

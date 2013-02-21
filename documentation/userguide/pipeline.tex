@@ -1,14 +1,18 @@
 
-\section{The HMMER3 profile/sequence comparison pipeline}
+\section{The HMMER profile/sequence comparison pipeline}
 \label{section:pipeline}
 \setcounter{footnote}{0}
 
 In this section, we briefly outline the processing pipeline for a
 single profile/sequence comparison.\footnote{Code gurus and
   masochists: you can follow along in \ccode{src/p7\_pipeline.c}.} This
-should help give you a sense of what HMMER3 is doing under the hood,
+should help give you a sense of what HMMER is doing under the hood,
 what sort of mistakes it may make (rarely, of course!), and what the
-various results in the output actually mean.
+various results in the output actually mean. We'll first describe the 
+pipeline in the context of protein search (\prog{phmmer}, \prog{hmmsearch},
+\prog{hmmscan}, \prog{jackhmmer}), then wrap back around to discuss the
+modified pipeline used in \prog{nhmmer} and \prog{nhmmscan}.
+
 
 In briefest outline, the comparison pipeline takes the following
 steps:
@@ -69,7 +73,8 @@ steps:
 
 \end{description}
 
-In more detail, each step is described in subsections that follow:
+In more detail, each step is described in subsections that follow. Even more
+detail may be found in \citep{Eddy11}.
 
 \subsection{Null model.}
 
@@ -107,8 +112,12 @@ Viterbi''. This is HMMER's main speed heuristic.
 The MSV score is comparable to BLAST's sum score (optimal sum of
 ungapped alignment segments).  Roughly speaking, MSV is comparable to
 skipping the heuristic word hit and hit extension steps of the BLAST
-acceleration algorithm. HMMER uses vector parallelization methods to
-accelerate optimal ungapped alignment.
+acceleration algorithm. 
+
+The MSV filter is very, very fast. In addition to avoiding indel 
+calculations in the dynamic programming table, it uses reduced precision
+scores scaled to 8-bit integers, enabling acceleration via 16-way       
+parallel SIMD vector instructions. 
 
 The MSV score is a true log-odds likelihood ratio, so it obeys
 conjectures about the expected score distribution \citep{Eddy08} that
@@ -120,7 +129,7 @@ filter, meaning that about $2\%$ of nonhomologous sequences are
 expected to pass. You can use the \ccode{--F1 <x>} option to change
 this threshold. For example, \ccode{--F1 <0.05>} would pass 5\% of the
 comparisons, making a search more sensitive but slower. Setting the
-threshold to $>1.0$ (\ccode{--F1 99} for example) assures that all
+threshold to $\ge 1.0$ (\ccode{--F1 99} for example) assures that all
 comparisons will pass. Shutting off the MSV filter may be worthwhile
 if you want to make sure you don't miss comparisons that have a lot of
 scattered insertions and deletions. Alternatively, the \ccode{--max}
@@ -154,7 +163,7 @@ composition, but these methods are computationally expensive and
 applied late in the pipeline (described below).
 
 In a few cases, profiles and/or target sequences are sufficiently
-biased that too many comparisons pass the MSV filter, causing HMMER3
+biased that too many comparisons pass the MSV filter, causing HMMER
 speed performance to be severely degraded. Although the final scores
 and E-values at the end of the pipeline will be calculated taking into
 account a ``null2'' model of biased composition and simple repetition,
@@ -162,7 +171,7 @@ the null2 model is dependent on a full alignment ensemble calculation
 via the Forward/Backward algorithm, making it computationally complex,
 so it won't get calculated until the very end. The treatment of biased
 composition comparisons is probably the most serious problem remaining
-in HMMER3. Solving it well will require more research. As a stopgap
+in HMMER. Solving it well will require more research. As a stopgap
 solution to rescuing most of the speed degradation while not
 sacrificing too much sensitivity, an \emph{ad hoc} biased composition
 filtering step is applied to remove highly biased comparisons.
@@ -420,7 +429,7 @@ $L$ is the length of the envelope subsequence. Usually in
 enough that this is not a problem. For example, a typical Pfam domain
 model is about 200 residues long, matching to individual target
 envelopes of about 200 residues each; this requires about 1.4 MB of
-memory in MEA alignment. However, in the new \prog{phmmer} and
+memory in MEA alignment. However, in \prog{phmmer} and
 \prog{jackhmmer} programs, it's often going to be the case that you're
 aligning an entire query sequence to an entire target sequence in a
 single unresolved ``domain'' alignment. If this is titin (about 40,000
@@ -430,8 +439,7 @@ sequences of up to a few thousand residues. If you see a ``fatal
 exception'' error complaining about failure of a large memory
 allocation, you're almost certainly seeing a prohibitive memory
 requirement at this stage.\footnote{We know how to fix this, with
-  memory-efficient algorithms. It's just a matter of finding the time
-  to do it.}
+  memory-efficient algorithms, and are working one it.}
 
 In a tabular output (\ccode{--tblout}) file, the number of domains in
 envelopes (before any significance thresholding) is in the column
@@ -441,15 +449,86 @@ envelopes.
 \paragraph{Biased composition score correction (``null2'')}
 An \emph{ad hoc} biased composition score correction is calculated for
 each envelope, using the posterior decoding. A corrected bit score and
-P-value for each envelope is calculated. These per-domain scores and
-P-values will eventually be subjected to per-domain thresholds to
-define significant domains that will appear in output.
+P-value for each envelope is calculated. These null2-corrected scores
+are subjected to the reporting and inclusion thresholds, at both the full
+sequence level and per-domain.
 
-Once the position-specific ``null2'' score is available, specifying a
-biased composition correction that applies to every residue, the total
-corrected bit score for the target sequence is recalculated, by
-summing up envelope scores for each significant domain.
+%Once the position-specific ``null2'' score is available, specifying a
+%biased composition correction that applies to every residue, the total
+%corrected bit score for the target sequence is recalculated, by
+%summing up envelope scores for each significant domain.
 
 
 
+\subsection{Modifications to the pipeline as used for DNA search.}
+
+\subsubsection{SSV, not MSV.}
+
+In the MSV filter, one or more high-scoring ungapped segments contribute to a
+score that, if sufficiently high, casues the entire sequence to be passed on to
+the next stage (the bias filter). This strategy won't work for long
+DNA sequences; it doesn't filter the human genome much to say ``there's a hit on
+chromosome 1, now process the whole thing''. In the scanning-SSV (``Single
+ungapped Segment Viterbi'') algorithm used in \prog{nhmmer} and
+\prog{nhmmscan}, each sequence in the database is scanned for high-scoring
+ungapped alignment segments, and a window around each such segment is extracted
+(merging overlapping windows), and passed on to the remaining filter cascade,
+where it is (mostly) treated as described above. As with the MSV filter, the
+default P-value threshold is $0.02$, and can be controlled with the
+\ccode{--F1} flag.
+
+The \ccode{--max} flag also controls the amount of the sequence database that
+passes the SSV filter, but instead of the threshold being set to $1.0$, as
+described for the protein pipeline, it is set to $0.4$.
+%, which allows passage to anything with a sniff of a chance of passing the
+% final threshold
+
+%Without doing this, the
+%segment-surrounding windows all overlap to the point that merging them causes
+%full-length chromosomes to possibly trickle down to the later
+%envelope-definition machinery, causing to out-of-memory errors. As a special
+%hack in case of very long merged windows, a maximum window length of 80Kb is
+%enforced by splitting long windows (keeping overlapping blocks, and tracking
+%shared hits as necessary to avoid duplicates).
+
+
+\subsubsection{There are no domains, but there are envelopes.}
+
+In HMMER's protein-search programs, multiple matches of the model to a target
+sequence are treated as domains contained within a single hit for that
+sequence. In the DNA-search programs, each match of the model to a subsequence
+is treated as an independent hit - there's no notion of a domain. This is
+largely a difference in reporting; both pipelines rely on essentially the same 
+envelope detection code; envelopes lead to domains in protein search, and
+hits in DNA search.
+
+
+\subsubsection{Biased composition.}
+
+DNA sequence is littered with regions containing tandem simple repeats or other 
+low complexity sequence. Without accounting for such composition bias, we see
+many cases in which one part of a hit is obviously legitimate, and serves as the
+anchor for a neighboring alignment segment that is clearly low-complexity
+garbage, one form of a problem known as homologous overextension
+\citep{Gonzalez10}. The null2 method used in protein search delays score
+modification until after the alignment is complete, but we know that
+this kind of overextension can be (mostly) avoided if the model's log odds
+scores account for the composition bias of the target region while constructing
+the alignment. The DNA search pipeline therefore does just this: it modifies
+the scoring scheme for each target envelope as a function of that envelope's
+sequence composition, then builds the alignment according to that scheme.
+
+
+%\subsubsection{More about envelopes.}
+
+%DNA sequence is littered with regions containing tandem simple repeats or other 
+%low complexity sequence. When an HMM contains a regions with similar bias, the
+%envelope-definition machinery can produce absurdly long envelopes
+%around plausible alignments\footnote{we've seen envelopes extending more than
+%1000 bases beyond the end of an alignment of length 300}. This happens because
+%the region-identification method is confused: there are many overlapping weak
+%hits, with no discrete alignment good enough to call a hit. 
+
+%By trimming these very long envelopes such that they are no more than 20 bases
+%beyond the edges of the aligned range, \ldots 
 

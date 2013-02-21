@@ -28,6 +28,7 @@ SEDITION      = ${top_srcdir}/easel/devkit/sedition
 RMANPROCESS   = ${top_srcdir}/easel/devkit/rmanprocess.pl
 
 MANPAGES = \
+	${top_srcdir}/documentation/man/alimask.man\
 	${top_srcdir}/documentation/man/hmmalign.man\
 	${top_srcdir}/documentation/man/hmmbuild.man\
 	${top_srcdir}/documentation/man/hmmconvert.man\
@@ -39,6 +40,8 @@ MANPAGES = \
 	${top_srcdir}/documentation/man/hmmsim.man\
 	${top_srcdir}/documentation/man/hmmstat.man\
 	${top_srcdir}/documentation/man/jackhmmer.man\
+	${top_srcdir}/documentation/man/nhmmer.man\
+	${top_srcdir}/documentation/man/nhmmscan.man\
 	${top_srcdir}/documentation/man/phmmer.man
 
 TEXFILES =\

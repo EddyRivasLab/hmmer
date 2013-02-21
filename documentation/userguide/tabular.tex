@@ -8,10 +8,14 @@ The \ccode{--tblout} output option produces the \emph{target hits
   table}.  The target hits table consists of one line for each
 different query/target comparison that met the reporting thresholds,
 ranked by decreasing statistical significance (increasing E-value).
-Each line consists of \textbf{18 space-delimited fields} followed by a
-free text target sequence description, as follows:\footnote{The
-  \ccode{tblout} format is deliberately space-delimited (rather than
-  tab-delimited) and justified into aligned columns, so these files
+
+
+\paragraph{tblout fields for protein search programs}
+
+In the protein search programs, each line consists of \textbf{18
+space-delimited fields} followed by a free text target sequence description, as
+follows:\footnote{The \ccode{tblout} format is deliberately space-delimited
+(rather than tab-delimited) and justified into aligned columns, so these files
   are suitable both for automated parsing and for human
   examination. Tab-delimited data files are difficult for humans to
   examine and spot check. For this reason, we think tab-delimited
@@ -121,7 +125,67 @@ free text target sequence description, as follows:\footnote{The
   The remainder of the line is the target's description line, as free text.
 \end{description}
 
-This table is columnated neatly for human readability, but do not
+
+
+\paragraph{tblout fields for DNA search programs}
+
+In the DNA search programs, there is less concentration on domains, and more
+focus on presenting the hit ranges. Each line consists of \textbf{15
+space-delimited fields} followed by a free text target sequence description, as follows:
+    
+\begin{description}
+\item[\emprog{(1) target name:}]
+  The name of the target sequence or profile. 
+
+\item[\emprog{(2) accession:}]
+  The accession of the target sequence or profile, or '-' if none.
+
+\item[\emprog{(3) query name:}] 
+  The name of the query sequence or profile.
+
+\item[\emprog{(4) accession:}]
+  The accession of the query sequence or profile, or '-' if none.
+
+\item[\emprog{(5) hmmfrom:}]
+  The position in the hmm at which the hit starts.
+
+\item[\emprog{(6) hmm to:}]
+  The position in the hmm at which the hit ends.
+
+\item[\emprog{(7) alifrom:}]
+  The position in the target sequence at which the hit starts.
+
+\item[\emprog{(8) ali to:}]
+  The position in the target sequence at which the hit ends.
+
+\item[\emprog{(9) envfrom:}]
+  The position in the target sequence at which the surrounding envelope starts.
+
+\item[\emprog{(10) env to:}]
+  The position in the target sequence at which the surrounding envelope ends.
+
+\item[\emprog{(11) sq len:}]
+  The length of the target sequence..
+
+\item[\emprog{(12) strand:}]
+  The strand on which the hit was found (``-" when alifrom>ali to). 
+  
+\item[\emprog{(13) E-value:}] The expectation value
+  (statistical significance) of the target, as above.
+
+\item[\emprog{(14) score (full sequence):}] 
+  The score (in bits) for this hit. It includes the biased-composition 
+  correction. 
+
+\item[\emprog{(15) Bias (full sequence):}] The biased-composition
+  correction, as above
+
+\item[\emprog{(16) description of target:}] 
+  The remainder of the line is the target's description line, as free text.
+\end{description}
+
+
+These tables are columnated neatly for human readability, but do not
 write parsers that rely on this columnation; rely on space-delimited
 fields. The pretty columnation assumes fixed maximum widths for each
 field. If a field exceeds its allotted width, it will still be fully
@@ -145,16 +209,16 @@ E-value calculations is different (number of target sequences for
   \prog{phmmer} where the query is a sequence and the targets are also
   sequences?
 
-If the ``domain number estimation'' section of the table (exp, reg,
+If the ``domain number estimation'' section of the protein table (exp, reg,
 clu, ov, env, dom, rep, inc) makes no sense to you, it may help to
-read the previous section of the manual, which describes the HMMER3
+read the previous section of the manual, which describes the HMMER
 processing pipeline, including the steps that probabilistically define
 domain locations in a sequence.
 
-\subsection{The domain hits table}
+\subsection{The domain hits table (protein search only)}
 
-The \ccode{--domtblout} option produces the \emph{domain hits
-  table}. There is one line for each domain. There may be more than
+In protein search programs, the \ccode{--domtblout} option produces the
+\emph{domain hits table}. There is one line for each domain. There may be more than
 one domain per sequence. The domain table has \textbf{22
   whitespace-delimited fields} followed by a free text target sequence
 description, as follows:
