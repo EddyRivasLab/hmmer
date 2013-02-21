@@ -1,4 +1,4 @@
-HMMER3/f [3.1dev | April 2012]
+HMMER3/f [3.1 | February 2013]
 NAME  MADE1
 ACC   DF0000629.2
 DESC  MADE1 (MAriner Derived Element 1), a TcMar-Mariner DNA transposon
@@ -10,7 +10,7 @@ MM    no
 CONS  yes
 CS    no
 MAP   yes
-DATE  Mon Feb 11 16:33:57 2013
+DATE  Tue Feb 19 20:33:41 2013
 NSEQ  1997
 EFFN  3.911818
 CKSUM 3015610723

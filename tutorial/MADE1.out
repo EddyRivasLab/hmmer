@@ -1,10 +1,11 @@
 # nhmmer :: search a DNA model or alignment against a DNA database
-# HMMER 3.1dev (April 2012); http://hmmer.org/
+# HMMER 3.1 (February 2013); http://hmmer.org/
 # Copyright (C) 2011 Howard Hughes Medical Institute.
 # Freely distributed under the GNU General Public License (GPLv3).
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# query HMM file:                  ../tutorial/MADE1.hmm
-# target sequence database:        ../tutorial/dna_target.fa
+# query HMM file:                  MADE1.hmm
+# target sequence database:        dna_target.fa
+# hits tabular output:             MADE1.tblout
 # number of worker threads:        2
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -111,7 +112,7 @@ Residues passing bias filter:            45802  (0.0694); expected (0.02)
 Residues passing Vit filter:              2443  (0.0037); expected (0.001)
 Residues passing Fwd filter:              2217  (0.00336); expected (1e-05)
 Total number of hits:                        5  (0.000403)
-# CPU time: 0.20u 0.00s 00:00:00.20 Elapsed: 00:00:00.15
-# Mc/sec: 352.00
+# CPU time: 0.05u 0.01s 00:00:00.06 Elapsed: 00:00:00.33
+# Mc/sec: 160.00
 //
 [ok]
