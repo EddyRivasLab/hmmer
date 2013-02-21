@@ -137,10 +137,11 @@
 1 prep      rnddb                @easel/miniapps/esl-shuffle@ -G --amino -L 100 -N 2 -o %RNDDB% 
 1 exercise  search               @src/hmmsearch@                            !tutorial/globins4.hmm! %RNDDB%
 1 exercise  search/-h            @src/hmmsearch@  -h
-1 exercise  search/-o            @src/hmmsearch@  -o          %HMMSEARCH.out%  !tutorial/globins4.hmm! %RNDDB%
-1 exercise  search/-A            @src/hmmsearch@  -A          %HMMSEARCH.sto%  !tutorial/globins4.hmm! %RNDDB%
-1 exercise  search/--tblout      @src/hmmsearch@  --tblout    %HMMSEARCH.tbl%  !tutorial/globins4.hmm! %RNDDB%
-1 exercise  search/--domtblout   @src/hmmsearch@  --domtblout %HMMSEARCH.dtbl% !tutorial/globins4.hmm! %RNDDB%
+1 exercise  search/-o            @src/hmmsearch@  -o           %HMMSEARCH.out%  !tutorial/globins4.hmm! %RNDDB%
+1 exercise  search/-A            @src/hmmsearch@  -A           %HMMSEARCH.sto%  !tutorial/globins4.hmm! %RNDDB%
+1 exercise  search/--tblout      @src/hmmsearch@  --tblout     %HMMSEARCH.tbl%  !tutorial/globins4.hmm! %RNDDB%
+1 exercise  search/--domtblout   @src/hmmsearch@  --domtblout  %HMMSEARCH.dtbl% !tutorial/globins4.hmm! %RNDDB%
+1 exercise  search/--pfamtblout  @src/hmmsearch@  --pfamtblout %HMMSEARCH.dtbl% !tutorial/globins4.hmm! %RNDDB%
 1 exercise  search/--acc         @src/hmmsearch@  --acc                     !tutorial/globins4.hmm! %RNDDB%
 1 exercise  search/--noali       @src/hmmsearch@  --noali                   !tutorial/globins4.hmm! %RNDDB%
 1 exercise  search/--notextw     @src/hmmsearch@  --notextw                 !tutorial/globins4.hmm! %RNDDB%
@@ -222,10 +223,11 @@
 # phmmer    xxxxxxxxxxxxxxxxxxxx
 1 exercise  phmmer               @src/phmmer@                            --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  phmmer/-h            @src/phmmer@  -h
-1 exercise  phmmer/-o            @src/phmmer@  -o          %PHMMER.out%  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/-A            @src/phmmer@  -A          %PHMMER.sto%  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--tblout      @src/phmmer@  --tblout    %PHMMER.tbl%  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--domtblout   @src/phmmer@  --domtblout %PHMMER.dtbl% --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/-o            @src/phmmer@  -o           %PHMMER.out%  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/-A            @src/phmmer@  -A           %PHMMER.sto%  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--tblout      @src/phmmer@  --tblout     %PHMMER.tbl%  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--domtblout   @src/phmmer@  --domtblout  %PHMMER.dtbl% --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--pfamtblout  @src/phmmer@  --pfamtblout %PHMMER.dtbl% --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  phmmer/--acc         @src/phmmer@  --acc                     --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  phmmer/--noali       @src/phmmer@  --noali                   --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  phmmer/--notextw     @src/phmmer@  --notextw                 --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
