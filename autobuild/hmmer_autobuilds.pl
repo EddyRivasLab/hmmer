@@ -17,7 +17,7 @@
     );
 
 $autoconf = "/opt/local/bin/autoconf";                          # on the build master: wol
-$qsub     = ". /sge/8.0.1p4/default/common/settings.sh; qsub";  # on the SGE master:   login-eddy
+$qsub     = ". /sge/current/default/common/settings.sh; qsub";  # on the SGE master:   login-eddy
 
 if ($#ARGV+1 != 1) { die "FAIL: incorrect number of command line arguments"; }
 $srcdir = shift;
