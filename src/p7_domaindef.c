@@ -198,10 +198,10 @@ p7_domaindef_Reuse(P7_DOMAINDEF *ddef)
   else
     {
       for (d = 0; d < ddef->ndom; d++) {
-	p7_alidisplay_Destroy(ddef->dcl[d].ad);
-	ddef->dcl[d].ad = NULL;
+	p7_alidisplay_Destroy(ddef->dcl[d].ad); ddef->dcl[d].ad             = NULL;
+	free(ddef->dcl[d].scores_per_pos);      ddef->dcl[d].scores_per_pos = NULL;
       }
-
+      
     }
   ddef->ndom = 0;
   ddef->L    = 0;
@@ -294,8 +294,10 @@ p7_domaindef_Destroy(P7_DOMAINDEF *ddef)
   if (ddef->n2sc != NULL) free(ddef->n2sc);
 
   if (ddef->dcl  != NULL) {
-    for (d = 0; d < ddef->ndom; d++)
+    for (d = 0; d < ddef->ndom; d++) {
+      if (ddef->dcl[d].scores_per_pos) free(ddef->dcl[d].scores_per_pos);
       p7_alidisplay_Destroy(ddef->dcl[d].ad);
+    }
     free(ddef->dcl);
   }
 
@@ -848,17 +850,14 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
     ddef->nalloc *= 2;
   }
   dom = &(ddef->dcl[ddef->ndom]);
+  dom->ad             = p7_alidisplay_Create(ddef->tr, 0, om, sq);
   dom->scores_per_pos = NULL;
-
-  /* store the results in it */
-  dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq);
 
   /* For long target DNA, it's common to see a huge envelope (>1Kb longer than alignment), usually
    * involving simple repeat part of model that attracted similar segments of the repeatedly, to
    * acquire a large total score. Now that we have alignment boundaries, re-run Fwd/Bkwd to trim away such a long envelope and estimate
    * the true score of the hit region
    */
-
   if (long_target) {
     if (     i < ddef->dcl[ddef->ndom].ad->sqfrom-max_env_extra   //trim the left side of the envelope
         ||   j > ddef->dcl[ddef->ndom].ad->sqto+max_env_extra     //trim the right side of the envelope
