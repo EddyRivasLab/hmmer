@@ -549,21 +549,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (qfp != NULL) {
     if (esl_opt_IsOn(go, "--hmmout")) {
       hmmfile = esl_opt_GetString(go, "--hmmout");
-    } else {
-
-      if ((status = esl_strdup(cfg->queryfile, -1, &hmmfile))           != eslOK) return status;
-      if ((status = esl_strcat(&hmmfile, -1, ".hmm", 4))                != eslOK) return status;
-
-
-
-      //check to be sure it doesn't already exist
-      if ( (hmmoutfp = fopen(hmmfile, "r")) != NULL )    {
-        fclose(hmmoutfp);
-        esl_fatal("Trying to write HMM to default filename, %s, but that file already exists\n", hmmfile);
-      }
+      if ((hmmoutfp        = fopen(hmmfile,"w")) == NULL)        esl_fatal("Failed to open hmm output file %s for writing\n", hmmfile);
     }
-
-    if ((hmmoutfp        = fopen(hmmfile,"w")) == NULL)        esl_fatal("Failed to open hmm output file %s for writing\n", hmmfile);
   }
 
 #ifdef HMMER_THREADS
@@ -636,8 +623,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
         //Turn sequence alignment into an HMM
         if ((qhstatus = p7_Builder(builder, msa, info->bg, &hmm, NULL, NULL, NULL, NULL)) != eslOK) p7_Fail("build failed: %s", builder->errbuf);
-        if ((status = p7_hmmfile_WriteASCII(hmmoutfp, -1, hmm)) != eslOK) ESL_FAIL(status, errbuf, "HMM save failed");
-
+        if (hmmoutfp != NULL) {
+          if ((status = p7_hmmfile_WriteASCII(hmmoutfp, -1, hmm)) != eslOK) ESL_FAIL(status, errbuf, "HMM save failed");
+          fclose(hmmoutfp);
+        }
       }
 
 
