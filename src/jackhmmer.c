@@ -485,9 +485,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (esl_opt_IsOn(go, "-A")          &&  (afp      = fopen(esl_opt_GetString(go, "-A"),          "w")) == NULL)  
     p7_Fail("Failed to open alignment output file %s for writing\n",       esl_opt_GetString(go, "-A"));
   if (esl_opt_IsOn(go, "--tblout")    && (tblfp    = fopen(esl_opt_GetString(go, "--tblout"),    "w")) == NULL)  
-    p7_Fail("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblfp"));
+    p7_Fail("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblout"));
   if (esl_opt_IsOn(go, "--domtblout") && (domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)  
-    p7_Fail("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblfp"));
+    p7_Fail("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblout"));
 
   /* Open the target sequence database for sequential access. */
   status =  esl_sqfile_OpenDigital(abc, cfg->dbfile, dbformat, p7_SEQDBENV, &dbfp);
