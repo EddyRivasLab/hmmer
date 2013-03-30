@@ -1035,11 +1035,15 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
 
   p7_bg_SetLength(bg, window_len);
   p7_bg_NullOne  (bg, subseq, window_len, &nullsc);
-  p7_bg_FilterScore(bg, subseq, window_len, &bias_filtersc);
-  bias_filtersc -= nullsc;  //remove nullsc, so bias scaling can be done, then add it back on later
+  if (pli->do_biasfilter)
+  {
+    p7_bg_FilterScore(bg, subseq, window_len, &bias_filtersc);
+    bias_filtersc -= nullsc;  //remove nullsc, so bias scaling can be done, then add it back on later
+  } else {
+    bias_filtersc = 0;
+  }
 
   p7_oprofile_ReconfigRestLength(om, window_len);
-
 
   /* Parse with Forward and obtain its real Forward score. */
   p7_ForwardParser(subseq, window_len, om, pli->oxf, &fwdsc);
@@ -1093,30 +1097,34 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
 
       dom = pli->ddef->dcl + d;
 
-     /* note: the initial bitscore of a hit depends on the window_len of the
-      * current window. Here, the score is modified (reduced) by treating
-      * all passing windows as though they came from windows of length
-      * om->max_length. For details, see
-      * ~wheelert/notebook/2012/0130_bits_v_evalues/00NOTES (Feb 1)
-      */
       //adjust the score of a hit to account for the full length model - the characters outside the envelope but in the window
       env_len = dom->jenv - dom->ienv + 1;
       ali_len = dom->jali - dom->iali + 1;
       bitscore = dom->envsc ;
-      //For these modifications, see notes, ~/notebook/2010/0716_hmmer_score_v_eval_bug/, end of Thu Jul 22 13:36:49 EDT 2010
-      bitscore -= 2 * log(2. / (window_len+2))          +   (env_len-ali_len)            * log((float)window_len / (window_len+2));
+
+     /* note: this bitscore was computed under a model with length of
+      * env_len (jenv-ienv+1). Here, the score is modified (reduced) by
+      * treating the hit as though it came from a window of length
+      * om->max_length. To do this:
+      */
+
+      // (1) the entrance/exit costs are shifted from env_len to max_length:
+      bitscore -= 2 * log(2. / (env_len+2)) ;
       bitscore += 2 * log(2. / (om->max_length+2)) ;
-      //the ESL_MAX test handles the extremely rare case that the env_len is actually larger than om->max_length
+
+      // (2) the extension cost for going from ali bounds to env bounds is removed,
+      // and replaced with the cost of going from ali bounds to max length (or env
+      // bounds in the extremely rare case that the env_len is actually larger than om->max_length).
+      bitscore -=  (env_len-ali_len)                            * log((float)env_len / (env_len+2));
       bitscore +=  (ESL_MAX(om->max_length, env_len) - ali_len) * log((float)om->max_length / (float) (om->max_length+2));
 
-      /*compute scores used to decide if we should keep this "domain" as a hit.
-       *
-       * Apply an ad hoc log(omega) fudge factor penalty; interpreted as a prior,
-       * saying that this null model is <omega> as likely as the standard null model.
-       * <omega> is by default 1/(2^8), so this is by default an 8 bit penalty.
+      /* Compute scores used to decide if we should keep this "domain" as a hit.
+       * Note that the bias correction was captured in dom->domcorrection during
+       * the p7_domaindef_ByPosteriorHeuristics() call.
        */
-      //dom_bias   = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + dom->domcorrection) : 0.0);
       dom_bias   = dom->domcorrection;
+      p7_bg_SetLength(bg, ESL_MAX(om->max_length, env_len));
+      p7_bg_NullOne  (bg, subseq, ESL_MAX(om->max_length, env_len), &nullsc);
       dom_score  = (bitscore - (nullsc))  / eslCONST_LOG2;
       dom_lnP   = esl_exp_logsurv(dom_score, om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
@@ -1183,7 +1191,6 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
           if ((status  = esl_strdup(om->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
           if ((status  = esl_strdup(om->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
         }
-
 
 
         /* If using model-specific thresholds, filter now.  See notes in front

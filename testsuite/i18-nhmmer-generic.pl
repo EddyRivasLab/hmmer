@@ -83,11 +83,11 @@ if ($output !~ /$expect/s) {
 }
 
 $expect =   q[
-          1   12.5   5.2  random   4499980 4499998\s+
-        1.5   12.0   4.1  random   3299961 3299978\s+
-        2.6   11.2   4.4  random   1979941 1979960\s+
-        9.4    9.5   5.4  random   1518622 1518605\s+
-        9.6    9.5   4.4  random   4019481 4019466]; 
+       0.44   13.6   5.2  random   4499980 4499998\s+
+        1.6   11.9   4.2  random   3299961 3299978\s+
+        1.7   11.8   4.4  random   1979941 1979960\s+
+        7.2    9.8   5.4  random   1518622 1518605\s+
+        9.3    9.5   4.4  random   4019481 4019466]; 
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 2\n";
 }
@@ -110,9 +110,9 @@ if ($output !~ /$expect/s) {
 }
 $expect = 
      q[
-       0.51   12.5   5.2  random   4499980 4499998\s+
-       0.75   12.0   4.1  random   3299961 3299978\s+
-        1.3   11.2   4.4  random   1979941 1979960]; 
+       0.22   13.6   5.2  random   4499980 4499998\s+
+       0.78   11.9   4.2  random   3299961 3299978\s+
+       0.85   11.8   4.4  random   1979941 1979960]; 
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 4\n";
 }

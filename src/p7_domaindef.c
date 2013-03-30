@@ -822,12 +822,22 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
   float          null2[p7_MAXCODE];
   int            status;
   int            max_env_extra = 20;
+  int            orig_L;
 
-  // I modify bg and om in-place to avoid having to clone (allocate) a massive
-  // number of times when there are many hits
-  if (long_target && scores_arr!=NULL) { // this modifies both bg and om.
+
+  if (long_target) {
+    //temporarily change model length to env_len. The nhmmer pipeline will tack
+    //on the appropriate cost to account for the longer actual window
+    orig_L = om->L;
+    p7_oprofile_ReconfigRestLength(om, j-i+1);
+  }
+
+  if (long_target && scores_arr!=NULL) {
+    // Modify bg and om in-place to avoid having to clone (allocate) a massive
+    // number of times when there are many hits
     reparameterize_model (bg, om, sq, i, j-i+1, fwd_emissions_arr, bg_tmp->f, scores_arr);
   }
+
 
   p7_Forward (sq->dsq + i-1, Ld, om,      ox1, &envsc);
   p7_Backward(sq->dsq + i-1, Ld, om, ox1, ox2, NULL);
@@ -868,6 +878,10 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
       j = ESL_MIN(j,ddef->dcl[ddef->ndom].ad->sqto+max_env_extra);
       Ld = j - i + 1;
 
+      //temporarily change model length to env_len. The nhmmer pipeline will tack
+      //on the appropriate cost to account for the longer actual window
+      p7_oprofile_ReconfigRestLength(om, j-i+1);
+
       if (scores_arr!=NULL) {
         //revert bg and om back to original, then forward to new values
         reparameterize_model (bg, om, NULL, 0, 0, fwd_emissions_arr, bg_tmp->f, scores_arr);
@@ -903,6 +917,8 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
       reparameterize_model (bg, om, NULL, 0, 0, fwd_emissions_arr, bg_tmp->f, scores_arr);
       p7_Forward (sq->dsq + i-1, Ld, om,      ox1, &domcorrection);
     }
+
+    p7_oprofile_ReconfigRestLength(om, orig_L);
 
     dom->domcorrection = domcorrection - envsc;
 
