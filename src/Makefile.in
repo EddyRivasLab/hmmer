@@ -181,7 +181,8 @@ UTESTS =\
 	p7_profile_utest\
 	p7_tophits_utest\
 	p7_trace_utest\
-	p7_scoredata_utest
+	p7_scoredata_utest\
+  hmmpgmd2msa_utest
 
 ITESTS = \
 	itest_brute
