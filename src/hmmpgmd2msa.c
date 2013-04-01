@@ -317,14 +317,14 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
   th.hit   = NULL;
 
   //storage for coverage, %id and %similar accumulations
-  ESL_ALLOC( cover,   sizeof(float) * hmm->M * 3);
-  similar = cover+hmm->M+1;
-  id = similar+hmm->M+1;
+  ESL_ALLOC( *statsOut,   sizeof(float) * hmm->M * 3);
+  similar = (*statsOut)+hmm->M;
+  id = similar+hmm->M;
   //ESL_ALLOC( id,      sizeof(int) * hmm->M);
   //ESL_ALLOC( similar, sizeof(int) * hmm->M);
   for(k = 0; k < hmm->M; k++)
   {
-    cover[k] = 0;
+    (*statsOut)[k] = 0;
     id[k] = 0;
     similar[k] = 0;
   }
@@ -423,7 +423,7 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
         //check if model covers residue
         if(isupper(ad2->aseq[readPos]) || ad2->aseq[readPos] == '-')
         {
-          cover[writePos]++;
+          (*statsOut)[writePos]++;
         
           //check mline for id
           if(isalpha(ad2->mline[readPos]))
@@ -444,9 +444,7 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
   }
 
   for(i = 0; i < hmm->M * 3; i++)
-    cover[i] = cover[i]/stats->nhits;
-  
-  *statsOut = cover;
+    (*statsOut)[i] = (*statsOut)[i]/stats->nhits;
 
   /* free memory */
   if (qtr != NULL) free(qtr);
@@ -463,9 +461,7 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
 
 ERROR:
   /* free memory */
-  if(cover != NULL) free(cover);
-  if(id != NULL) free(id);
-  if(similar != NULL) free(similar);
+  if(*statsOut != NULL) free(*statsOut);
   
   if (qtr != NULL) free(qtr);
 
