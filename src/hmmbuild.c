@@ -45,7 +45,7 @@ typedef struct {
   ESL_MSA    *msa;
   P7_HMM     *hmm;
   double      entropy;
-  int         force_single; /* FALSE by default,  TRUE if esl_opt_IsUsed(go, "--single") ;  only matters for single sequences */
+  int         force_single; /* FALSE by default,  TRUE if esl_opt_IsUsed(go, "--singlemx") ;  only matters for single sequences */
 } WORK_ITEM;
 
 typedef struct _pending_s {
@@ -98,11 +98,11 @@ static ESL_OPTIONS options[] = {
   { "--pnone",   eslARG_NONE,  FALSE,  NULL, NULL,       NULL,  NULL,"--plaplace", "don't use any prior; parameters are frequencies",      9 },
   { "--plaplace",eslARG_NONE,  FALSE,  NULL, NULL,       NULL,  NULL,   "--pnone", "use a Laplace +1 prior",                               9 },
 /* Single sequence methods */
-  { "--single",  eslARG_NONE,   FALSE, NULL,   NULL,   NULL,  NULL,            "",   "use substitution score matrix for single-sequence protein inputs",     10 },
-  { "--popen",    eslARG_REAL,   "0.02", NULL,"0<=x<0.5",NULL, NULL,           "",   "gap open probability (with --single)",                         10 },
-  { "--pextend",  eslARG_REAL,    "0.4", NULL, "0<=x<1", NULL, NULL,           "",   "gap extend probability (with --single)",                       10 },
-  { "--mx",     eslARG_STRING, "BLOSUM62", NULL, NULL,   NULL, NULL,   "--mxfile",   "substitution score matrix (built-in matrices, with --single)", 10 },
-  { "--mxfile", eslARG_INFILE,     NULL, NULL,   NULL,   NULL, NULL,       "--mx",   "read substitution score matrix from file <f> (with --single)", 10 },
+  { "--singlemx", eslARG_NONE,   FALSE, NULL,   NULL,   NULL,  NULL,           "",   "use substitution score matrix for single-sequence inputs",     10 },
+  { "--popen",    eslARG_REAL,   "0.02", NULL,"0<=x<0.5",NULL, NULL,           "",   "gap open probability (with --singlemx)",                         10 },
+  { "--pextend",  eslARG_REAL,    "0.4", NULL, "0<=x<1", NULL, NULL,           "",   "gap extend probability (with --singlemx)",                       10 },
+  { "--mx",     eslARG_STRING, "BLOSUM62", NULL, NULL,   NULL, NULL,   "--mxfile",   "substitution score matrix (built-in matrices, with --singlemx)", 10 },
+  { "--mxfile", eslARG_INFILE,     NULL, NULL,   NULL,   NULL, NULL,       "--mx",   "read substitution score matrix from file <f> (with --singlemx)", 10 },
 
   /* Control of E-value calibration */
   { "--EmL",     eslARG_INT,    "200", NULL,"n>0",       NULL,    NULL,      NULL, "length of sequences for MSV Gumbel mu fit",            6 },   
@@ -307,6 +307,7 @@ output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
   if (esl_opt_IsUsed(go, "--EfL")        && fprintf(cfg->ofp, "# seq length for Fwd exp tau fit:   %d\n",        esl_opt_GetInteger(go, "--EfL"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--EfN")        && fprintf(cfg->ofp, "# seq number for Fwd exp tau fit:   %d\n",        esl_opt_GetInteger(go, "--EfN"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--Eft")        && fprintf(cfg->ofp, "# tail mass for Fwd exp tau fit:    %f\n",        esl_opt_GetReal(go, "--Eft"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--singlemx")   && fprintf(cfg->ofp, "# use score matrix for 1-seq MSAs:  on\n")                                              < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--popen")      && fprintf(cfg->ofp, "# gap open probability:             %f\n",         esl_opt_GetReal   (go, "--popen"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--pextend")    && fprintf(cfg->ofp, "# gap extend probability:           %f\n",         esl_opt_GetReal   (go, "--pextend")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--mx")         && fprintf(cfg->ofp, "# subst score matrix (built-in):    %s\n",         esl_opt_GetString (go, "--mx"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -518,10 +519,24 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Default matrix is stored in the --mx option, so it's always IsOn().
        * Check --mxfile first; then go to the --mx option and the default.
        */
-      if ( cfg->abc->type == eslAMINO && esl_opt_IsUsed(go, "--single")) {
-        if (esl_opt_IsOn(go, "--mxfile")) status = p7_builder_SetScoreSystem (info[i].bld, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"), info[i].bg);
-        else                              status = p7_builder_LoadScoreSystem(info[i].bld, esl_opt_GetString(go, "--mx"),           esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"), info[i].bg);
+      if ( esl_opt_IsUsed(go, "--singlemx") ) {
+        char  *mx      = esl_opt_GetString(go, "--mx");
+        double popen   = esl_opt_GetReal(go, "--popen");
+        double pextend = esl_opt_GetReal(go, "--pextend");
+
+        if ( cfg->abc->type == eslDNA || cfg->abc->type == eslRNA ) {
+          //If user hasn't overridden defaults, assign the nucleotide defaults
+          if ( !esl_opt_IsUsed(go, "--mx") )
+            mx      = "DNA1";
+          if ( !esl_opt_IsUsed(go, "--popen") )
+            popen   = 0.03125;
+          if ( !esl_opt_IsUsed(go, "--pextend") )
+            pextend = 0.75;
+        }
+        if (esl_opt_IsOn(go, "--mxfile")) status = p7_builder_SetScoreSystem (info[i].bld, esl_opt_GetString(go, "--mxfile"), NULL, popen, pextend, info[i].bg);
+        else                              status = p7_builder_LoadScoreSystem(info[i].bld, mx,                                      popen, pextend, info[i].bg);
         if (status != eslOK) p7_Fail("Failed to set single query seq score system:\n%s\n", info[i].bld->errbuf);
+
       }
 
       /* special arguments for hmmbuild */
@@ -880,16 +895,16 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Build the HMM */
       ESL_DPRINTF2(("worker %d: has received MSA %s (%d columns, %d seqs)\n", cfg->my_rank, msa->name, msa->alen, msa->nseq));
 
-      if ( msa->nseq > 1 || cfg->abc->type != eslAMINO || !esl_opt_IsUsed(go, "--single")) {
-        if ((status = p7_Builder(bld, msa, bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) { strcpy(errmsg, bld->errbuf); goto ERROR; }
-      } else {
-        //for protein, single sequence, use blosum matrix:
+      if ( msa->nseq == 1 && esl_opt_IsUsed(go, "--singlemx")) {
+        //for, single sequence, use blosum matrix:
         sq = esl_sq_CreateDigital(cfg->abc);
         if ((status = esl_sq_FetchFromMSA(msa, 0, &sq)) != eslOK) { strcpy(errmsg, bld->errbuf); goto ERROR; }
         if ((status = p7_SingleBuilder(bld, sq, bg, &hmm, NULL, NULL, NULL)) != eslOK) { strcpy(errmsg, bld->errbuf); goto ERROR; }
         esl_sq_Destroy(sq);
         sq = NULL;
         hmm->eff_nseq = 1;
+      } else {
+        if ((status = p7_Builder(bld, msa, bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) { strcpy(errmsg, bld->errbuf); goto ERROR; }
       }
 
 
@@ -959,16 +974,14 @@ serial_loop(WORKER_INFO *info, struct cfg_s *cfg, const ESL_GETOPTS *go)
 
 
       /*         bg   new-HMM trarr gm   om  */
-      if ( msa->nseq > 1 || cfg->abc->type != eslAMINO || !esl_opt_IsUsed(go, "--single")) {
-        if ((status = p7_Builder(info->bld, msa, info->bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
-      } else {
-        //for protein, single sequence, use blosum matrix:
-        sq = esl_sq_CreateDigital(cfg->abc);
+      if ( msa->nseq == 1 && esl_opt_IsUsed(go, "--singlemx")) {
         if ((status = esl_sq_FetchFromMSA(msa, 0, &sq)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
         if ((status = p7_SingleBuilder(info->bld, sq, info->bg, &hmm, NULL, NULL, NULL)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
         esl_sq_Destroy(sq);
         sq = NULL;
         hmm->eff_nseq = 1;
+      } else {
+        if ((status = p7_Builder(info->bld, msa, info->bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
       }
       entropy = p7_MeanMatchRelativeEntropy(hmm, info->bg);
       if ((status = output_result(cfg, errmsg, cfg->nali, msa, hmm, postmsa, entropy))         != eslOK) p7_Fail(errmsg);
@@ -1017,7 +1030,7 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, struct cfg_s *cfg, const ES
       eslx_msafile_ReadFailure(cfg->afp, sstatus);
 	  
     if (sstatus == eslOK) {
-      item->force_single = esl_opt_IsUsed(go, "--single");
+      item->force_single = esl_opt_IsUsed(go, "--singlemx");
       status = esl_workqueue_ReaderUpdate(queue, item, &newItem);
       if (status != eslOK) esl_fatal("Work queue reader failed");
 
@@ -1146,12 +1159,7 @@ pipeline_thread(void *arg)
   while (item->msa != NULL)
     {
 
-      if ( item->msa->nseq > 1 || info->bg->abc->type != eslAMINO || !item->force_single) {
-        status = p7_Builder(info->bld, item->msa, info->bg, &item->hmm, NULL, NULL, NULL, &item->postmsa);
-        if (status != eslOK) p7_Fail("build failed: %s", info->bld->errbuf);
-      } else {
-        //for protein, single sequence, use blosum matrix:
-        sq = esl_sq_CreateDigital(info->bg->abc);
+      if ( item->msa->nseq == 1 && item->force_single) {
         status = esl_sq_FetchFromMSA(item->msa, 0, &sq);
         if (status != eslOK) p7_Fail("build failed: %s", info->bld->errbuf);
 
@@ -1161,6 +1169,9 @@ pipeline_thread(void *arg)
         esl_sq_Destroy(sq);
         sq = NULL;
         item->hmm->eff_nseq = 1;
+      } else {
+        status = p7_Builder(info->bld, item->msa, info->bg, &item->hmm, NULL, NULL, NULL, &item->postmsa);
+        if (status != eslOK) p7_Fail("build failed: %s", info->bld->errbuf);
       }
 
       item->entropy   = p7_MeanMatchRelativeEntropy(item->hmm, info->bg);
