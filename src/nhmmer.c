@@ -180,12 +180,12 @@ static char banner[] = "search a DNA model or alignment against a DNA database";
 
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
-static int  serial_loop  (WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp, int n_targetseqs);
+static int  serial_loop  (WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs);
 
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
 
-static int  thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, int n_targetseqs);
+static int  thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs);
 static void pipeline_thread(void *arg);
 #endif /*HMMER_THREADS*/
 
@@ -484,11 +484,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_sqfile_OpenSSI(dbfp, esl_opt_GetString(go, "--ssifile"));
     else
       esl_sqfile_OpenSSI(dbfp, NULL);
-
-    if ( cfg->firstseq_key != NULL )
-      status = esl_sqfile_PositionByKey(dbfp, cfg->firstseq_key);
-    if (status != eslOK)
-      p7_Fail("Failure setting restrictdb_stkey to %d\n", cfg->firstseq_key);
   }
 
 
@@ -756,10 +751,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
 #ifdef HMMER_THREADS
-        if (ncpus > 0)  sstatus = thread_loop(info, id_length_list, threadObj, queue, dbfp, cfg->n_targetseq);
-        else            sstatus = serial_loop(info, id_length_list, dbfp, cfg->n_targetseq);
+        if (ncpus > 0)  sstatus = thread_loop(info, id_length_list, threadObj, queue, dbfp, cfg->firstseq_key, cfg->n_targetseq);
+        else            sstatus = serial_loop(info, id_length_list, dbfp, cfg->firstseq_key, cfg->n_targetseq);
 #else
-        sstatus = serial_loop(info, id_length_list, dbfp, cfg->n_targetseq);
+        sstatus = serial_loop(info, id_length_list, dbfp, cfg->firstseq_key, cfg->n_targetseq);
 #endif
 
 
@@ -957,11 +952,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 //TODO: MPI code needs to be added here
 static int
-serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp, int n_targetseqs)
+serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs)
 {
 
-
-  int      wstatus;
+  int      wstatus = eslOK;
   int i;
   int prev_hit_cnt;
   int seq_id = 0;
@@ -972,6 +966,11 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
   if (dbsq->abc->complement != NULL)
     dbsq_revcmp =  esl_sq_CreateDigital(info->om->abc);
 #endif /*eslAUGMENT_ALPHABET*/
+
+  if ( firstseq_key != NULL )
+    wstatus = esl_sqfile_PositionByKey(dbfp, firstseq_key);
+  if (wstatus != eslOK)
+    p7_Fail("Failure setting restrictdb_stkey to %d\n", firstseq_key);
 
   wstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
 
@@ -1050,10 +1049,9 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
 
 }
 
-
 #ifdef HMMER_THREADS
 static int
-thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, int n_targetseqs)
+thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs)
 {
 
   int i;
@@ -1070,6 +1068,11 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
 
   esl_workqueue_Reset(queue);
   esl_threads_WaitForStart(obj);
+
+  if ( firstseq_key != NULL )
+    status = esl_sqfile_PositionByKey(dbfp, firstseq_key);
+  if (status != eslOK)
+    p7_Fail("Failure setting restrictdb_stkey to %d\n", firstseq_key);
 
   status = esl_workqueue_ReaderUpdate(queue, NULL, &newBlock);
   if (status != eslOK) esl_fatal("Work queue reader failed");
