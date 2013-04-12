@@ -91,6 +91,8 @@ typedef struct {
   int              idle_cnt;
   struct worker_s *idling;
 
+  RANGE_LIST       *range_list;  /* (optional) list of ranges searched within the seqdb */
+
   int              completed;
 } WORKERSIDE_ARGS;
 
@@ -295,8 +297,10 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
   int n;
   int cnt;
   int inx;
-  int rem;
+  int ready_workers;    /* counter variable used to track the number of workers currently available to receive work; short for "remaining", I imagine */
   int tries;
+  int i;
+
 
   memset(&results, 0, sizeof(SEARCH_RESULTS)); /* avoid valgrind bitching about uninit bytes; remove, if we ever serialize structs properly */
 
@@ -304,7 +308,6 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
   esl_stopwatch_Start(w);
 
   /* figure out the size of the database we are searching */
-  inx = 0;
   if (query->cmd_type == HMMD_CMD_SEARCH) {
     cnt = args->seq_db->db[query->dbx].count;
   } else {
@@ -312,8 +315,20 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
   }
 
   init_results(&results);
-  tries = 0;
 
+  //if range(s) are given, count how many of the seqdb's sequences are within supplied range(s)
+  if (args->range_list) { // can only happen in HMMD_CMD_SEARCH case
+    int range_cnt = 0; // this will now count how many of the seqs in the db are within the range
+    for (i=0; i<cnt; i++) {
+      if ( hmmpgmd_IsWithinRanges(args->seq_db->list[i].idx, args->range_list ) )
+        range_cnt++;
+    }
+    cnt = range_cnt;
+  }
+
+
+  inx = 0;
+  tries = 0;
   do {
     /* process any changes to the available workers */
     if ((n = pthread_mutex_lock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
@@ -323,10 +338,11 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
 
     /* if there are no workers, report an error */
     if (args->ready > 0) {
-      rem = args->ready;
+      ready_workers = args->ready;
 
       /* update the workers search information */
       worker = args->head;
+
       while (worker != NULL) {
         worker->cmd        = query->cmd;
         worker->completed  = 0;
@@ -334,12 +350,26 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
 
         /* assign each worker a portion of the database */
         worker->srch_inx = inx;
-        worker->srch_cnt = cnt / rem;
+        if (args->range_list) {
+          // if ranges are given, need to split the db list based on which elements in the list are within the given range(s)
+          int goal = cnt / ready_workers; //how many within-range sequences do I want to ask this worker to handle
+          int curr = 0;                   //how many within-range sequences have I seen since the start of this full-db range
+          worker->srch_cnt = 0;
+          while (curr < goal) {
+            if ( hmmpgmd_IsWithinRanges (args->seq_db->list[inx].idx, args->range_list ) )
+                curr++;
+            worker->srch_cnt++;
+            inx++;
+          }
+          cnt -= curr;
+        } else {
+          // default - split evenly among workers
+          worker->srch_cnt = cnt / ready_workers;
+          inx += worker->srch_cnt;
+          cnt -= worker->srch_cnt;
+        }
 
-        inx += worker->srch_cnt;
-        cnt -= worker->srch_cnt;
-        --rem;
-
+        --ready_workers;
         worker            = worker->next;
       }
 
@@ -348,7 +378,7 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
       /* notify all the worker threads of the new query */
       if ((n = pthread_cond_broadcast(&args->start_cond)) != 0) LOG_FATAL_MSG("cond broadcast", n);
     }
-    
+
     if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
 
     if (args->ready > 0) {
@@ -373,6 +403,7 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
     ++tries;
 
   } while (args->ready > 0 && results.errors == 1 && tries < 2);
+
 
   esl_stopwatch_Stop(w);
 
@@ -662,6 +693,7 @@ process_shutdown(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
   if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
 }
 
+
 void
 master_process(ESL_GETOPTS *go)
 {
@@ -683,6 +715,7 @@ master_process(ESL_GETOPTS *go)
     char *name = esl_opt_GetString(go, "--seqdb");
     if ((status = p7_seqcache_Open(name, &seq_db, errbuf)) != eslOK) 
       p7_Fail("Failed to cache %s (%d)", name, status);
+
   }
 
   if (esl_opt_IsUsed(go, "--hmmdb")) {
@@ -738,6 +771,13 @@ master_process(ESL_GETOPTS *go)
     printf("Processing command %d from %s\n", query->cmd_type, query->ip_addr);
     fflush(stdout);
 
+    worker_comm.range_list = NULL;
+    if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
+      ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
+      hmmpgmd_GetRanges(worker_comm.range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
+    }
+
+
     switch(query->cmd_type) {
     case HMMD_CMD_SEARCH:      process_search(&worker_comm, query); break;
     case HMMD_CMD_SCAN:        process_search(&worker_comm, query); break;
@@ -767,7 +807,19 @@ master_process(ESL_GETOPTS *go)
   pthread_cond_destroy(&worker_comm.start_cond);
   pthread_cond_destroy(&worker_comm.complete_cond);
 
+
+  if (worker_comm.range_list) {
+    if (worker_comm.range_list->starts)  free(worker_comm.range_list->starts);
+    if (worker_comm.range_list->ends)    free(worker_comm.range_list->ends);
+    free (worker_comm.range_list);
+  }
+
   return;
+
+
+ERROR:
+  p7_Fail("Memory allocation error. Code: %d\n",    status);
+
 }
 
 static int

@@ -31,6 +31,7 @@
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
 #include "esl_threads.h"
+#include "esl_regexp.h"
 
 #include "hmmer.h"
 #include "hmmpgmd.h"
@@ -90,8 +91,9 @@ static ESL_OPTIONS searchOpts[] = {
   { "--nonull2",    eslARG_NONE,       NULL, NULL, NULL,      NULL,  NULL, NULL,        "turn off biased composition score corrections",               12 },
   { "-Z",           eslARG_REAL,      FALSE, NULL, "x>0",     NULL,  NULL, NULL,        "set # of comparisons done, for E-value calculation",          12 },
   { "--domZ",       eslARG_REAL,      FALSE, NULL, "x>0",     NULL,  NULL, NULL,        "set # of significant seqs, for domain E-value calculation",   12 },
-  { "--seqdb",      eslARG_INT,        NULL, NULL, "n>0",     NULL,  NULL, "--hmmdb",   "protein database to search",                                  12 },
-  { "--hmmdb",      eslARG_INT,        NULL, NULL, "n>0",     NULL,  NULL, "--seqdb",   "hmm database to search",                                      12 },
+  { "--hmmdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--seqdb",       "hmm database to search",                                      12 },
+  { "--seqdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--hmmdb",       "protein database to search",                                  12 },
+  { "--seqdb_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, "--seqdb", NULL,         "range(s) of sequences within --seqdb that will be searched",  12 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -202,6 +204,74 @@ free_QueueData(QUEUE_DATA *data)
   if (data->cmd != NULL) free(data->cmd);
   memset(data, 0, sizeof(*data));
   free(data);
+}
+
+/* Function:  hmmpgmd_IsWithinRanges()
+ * Synopsis:  Test if the given id falls within one of a collection of ranges
+ *
+ * Purpose:   Given an index <sq_idx> and a number <N> of ranges stored in two
+ *            parallel arrays of start (<range_starts>) and end (<range_ends>)
+ *            positions, return TRUE if sq_idx falls in one of the ranges.
+ *            Otherwise return FALSE;
+ *
+ * Returns:   <TRUE> if within range(s), otherwise <FALSE>
+ */
+int
+hmmpgmd_IsWithinRanges (int64_t sq_idx, RANGE_LIST *list )  {
+  int i;
+  for (i=0; i<list->N; i++) {
+    if (sq_idx >= list->starts[i] && sq_idx <= list->ends[i] )
+      return TRUE;
+  }
+  return FALSE;
+}
+
+
+/* Function:  hmmpgmd_GetRanges()
+ * Synopsis:  Parse command flag into range(s)
+ *
+ * Purpose:   Given a command flag string <rangestr> of the form
+ *            <start1>..<end1>,<start2>..<end2>...
+ *            parse the string into a RANGE_LIST <list>
+ *
+ * Returns:   <eslOK> on success <TRUE>, <eslEMEM> on memory allocation failure,
+ *            otherwise <eslESYNTAX> or <eslFAIL> on parsing errors.
+ */
+int
+hmmpgmd_GetRanges (RANGE_LIST *list, char *rangestr)  {
+  char *range;
+  char *rangestr_cpy;
+  char *rangestr_cpy_ptr;
+  int status;
+
+  list->N      = 0;
+  list->starts = NULL;
+  list->ends   = NULL;
+
+  //first pass to figure out how much to allocate
+  esl_strdup(rangestr, -1, &rangestr_cpy); // do this because esl_strtok modifies the string, and we shouldn't change the opts value
+  rangestr_cpy_ptr = rangestr_cpy;         // do this because esl_strtok advances the pointer on the target string, but we need to free it
+  while ( (status = esl_strtok(&rangestr_cpy, ",", &range) ) == eslOK)  list->N++;
+  ESL_ALLOC(list->starts, list->N * sizeof(int));
+  ESL_ALLOC(list->ends,   list->N * sizeof(int));
+  free(rangestr_cpy_ptr);
+
+  //2nd pass to get the values
+  list->N = 0;
+  esl_strdup(rangestr, -1, &rangestr_cpy);
+  rangestr_cpy_ptr = rangestr_cpy;
+  while ( (status = esl_strtok(&rangestr_cpy, ",", &range) ) == eslOK) {
+    status = esl_regexp_ParseCoordString(range, list->starts + list->N, list->ends + list->N);
+    if (status == eslESYNTAX) esl_fatal("--seqdb_ranges takes coords <from>..<to>; %s not recognized", range);
+    if (status == eslFAIL)    esl_fatal("Failed to find <from> or <to> coord in %s", range);
+    list->N++;
+  }
+  free(rangestr_cpy_ptr);
+
+  return eslOK;
+
+ERROR:
+  return eslEMEM;
 }
 
 #endif /*HMMER_THREADS*/

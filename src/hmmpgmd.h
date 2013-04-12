@@ -100,7 +100,7 @@ size_t writen(int fd, const void *vptr, size_t n);
 size_t readn(int fd, void *vptr, size_t n);
 
 typedef struct queue_data_s {
-  uint32_t       cmd_type;    /* type of command to preform     */
+  uint32_t       cmd_type;    /* type of command to perform     */
   uint32_t       query_type;  /* type of the query              */
   P7_HMM        *hmm;         /* query HMM                      */
   ESL_SQ        *seq;         /* query sequence                 */
@@ -117,7 +117,16 @@ typedef struct queue_data_s {
 
 } QUEUE_DATA;
 
+
+typedef struct {
+  int       N;       /* number of ranges */
+  uint32_t *starts;  /* 0..N-1  start positions */
+  uint32_t *ends;    /* 0..N-1  start positions */
+} RANGE_LIST;
+
 extern void free_QueueData(QUEUE_DATA *data);
+extern int  hmmpgmd_IsWithinRanges (int64_t sq_idx, RANGE_LIST *list );
+extern int  hmmpgmd_GetRanges (RANGE_LIST *list, char *rangestr);
 
 extern int  process_searchopts(int fd, char *cmdstr, ESL_GETOPTS **ret_opts);
 

@@ -178,25 +178,6 @@ output_header(const ESL_GETOPTS *go, FILE *ofp, char *alifile, char *postmsafile
   return eslOK;
 }
 
-/* lifted from esl-sfetch */
-static int
-parse_coord_string(const char *cstring, uint32_t *ret_start, uint32_t *ret_end)
-{
-  ESL_REGEXP *re = esl_regexp_Create();
-  char        tok1[32];
-  char        tok2[32];
-
-  if (esl_regexp_Match(re, "^(\\d+)\\D+(\\d*)$", cstring) != eslOK) esl_fatal("-c takes arg of subseq coords <from>..<to>; %s not recognized", cstring);
-  if (esl_regexp_SubmatchCopy(re, 1, tok1, 32)            != eslOK) esl_fatal("Failed to find <from> coord in %s", cstring);
-  if (esl_regexp_SubmatchCopy(re, 2, tok2, 32)            != eslOK) esl_fatal("Failed to find <to> coord in %s",   cstring);
-
-  *ret_start = atol(tok1);
-  *ret_end   = (tok2[0] == '\0') ? 0 : atol(tok2);
-
-  esl_regexp_Destroy(re);
-  return eslOK;
-}
-
 
 int
 main(int argc, char **argv)
@@ -278,7 +259,10 @@ main(int argc, char **argv)
   }
 
   while ( (status = esl_strtok(&rangestr, ",", &range) ) == eslOK) {
-    parse_coord_string(range, mask_starts + mask_range_cnt, mask_ends + mask_range_cnt );
+    status = esl_regexp_ParseCoordString(range, mask_starts + mask_range_cnt, mask_ends + mask_range_cnt );
+    if (status == eslESYNTAX) esl_fatal("range flags take coords <from>..<to>; %s not recognized", range);
+    if (status == eslFAIL)    esl_fatal("Failed to find <from> or <to> coord in %s", range);
+
     mask_range_cnt++;
   }
 

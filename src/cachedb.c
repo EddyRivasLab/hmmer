@@ -79,7 +79,7 @@ p7_seqcache_Open(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
 
   /* This is a bit of a hack.  The first line contains database information.
    *
-   * #<res_count> <seq_count> <db_count> <db_entries> ... <id>
+   * #<res_count> <seq_count> <db_count> <db_sequences_1> <db_sequences_before_removing_duplicates_1> <db_sequences_2> <db_sequences_before_removing_duplicates_2>  ... <date_stamp>
    *
    * The rest of the file is a fasta format.  The fasta header is just
    * sequence number followed by a binary number indicating which
