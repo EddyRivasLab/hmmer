@@ -1,3 +1,20 @@
+ID              h95
+TITLE           hmmbuild fails with "Top is not empty" on bad Stockholm MSA
+AFFECTS         3.0
+FIXED_IN        -
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     Amir Szitenberg (U. Hull)
+OPENED_DATE     SRE, Thu Apr 11 15:48:56 2013
+CLOSED_DATE     SRE, Thu Apr 11 15:48:57 2013
+DESCRIPTION     
+  hmmbuild fails on a misformatted Stockholm MSA input with a cryptic
+  message, "Top is not empty." Problem is in error handling (lack thereof)
+  of MSA parser. This is already automagically fixed by 4.0's new eslx_msafile
+  Stockholm parser. Trunk 4.0 correctly reports: "Alignment input parse error://
+  invalid sequence character(s) on line//while reading Stockholm file
+  TEs_BETA_CELE_example.sto//at or near line 850."
+//
 ID              h94
 TITLE           phmmer assigns incorrect scores to degenerate residues
 AFFECTS         3.0

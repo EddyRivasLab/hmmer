@@ -26,8 +26,8 @@ typedef struct {
  * path.  When no paths are possible, the F/B score on a DP cell is
  * -inf, and all paths into that cell were -inf; the mass trace
  * recursion then has rho = 0, pathsc = -inf, and totsc = -inf, which
- * gives us a term of 0 * exp(-inf-inf), which would give us NaN. We
- * have to guard against this; that's what the macro does.
+ * gives us a term of 0 * exp( (-inf)-(-inf)), and that inf-inf 
+ * gives us an NaN. We have to guard against this; that's what the macro does.
  */
 #define P7_MASSTRACE_INCREMENT(rho, pathsc, totsc) ( ((rho) == 0. || (totsc) == -eslINFINITY) ? 0. : (rho) * expf( (pathsc) - (totsc) ))
 

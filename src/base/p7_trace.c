@@ -1088,6 +1088,11 @@ p7_trace_Reverse(P7_TRACE *tr)
  *            efficient, and it is a necessary prerequisite for
  *            creating alignments of any individual domains in a
  *            multidomain trace with <p7_alidisplay_Create()>.
+ *            
+ *            It's possible for alignment routines to result in empty
+ *            tracebacks, where there is no possible path at all
+ *            (Viterbi score -inf); empty tracebacks have <tr->N=0>. 
+ *            In this case, <p7_trace_Index()> sets <tr->ndom> to 0.
  *
  * Returns:   <eslOK> on success. 
  *
@@ -1105,7 +1110,7 @@ p7_trace_Index(P7_TRACE *tr)
 
   tr->ndom = 0;
   z        = 0;
-  while (tr->st[z] != p7T_T)
+  while (z < tr->N && tr->st[z] != p7T_T)
     {
       /* Find start coord on model and seq.
        * B->G->M1/D1 or B->L->Mk; z is currently on B.
