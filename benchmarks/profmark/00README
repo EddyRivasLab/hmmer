@@ -341,7 +341,7 @@ regression tests of different HMMER versions and/or configurations.
 
 Why the BEGIN {} clause: you'll see a BEGIN {} clause wrapping cmdline
 argument parsing on many of the x- scripts. That's a trick that goes
-with "use lib ${top_srcdir}/easel/demotic", where we need the demotic
+with "use lib ${top_srcdir}/lib/easel/demotic", where we need the demotic
 library included, but we don't know where it is until we get
 ${top_srcdir} from the cmdline, so we defer the 'use lib'.
 

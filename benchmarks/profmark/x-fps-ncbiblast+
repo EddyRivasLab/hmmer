@@ -21,7 +21,7 @@ BEGIN {
     $fafile        = shift;
     $outfile       = shift;
 }
-use lib "${top_srcdir}/easel/demotic";
+use lib "${top_srcdir}/lib/easel/demotic";
 use demotic_blast;
 
 $blastp      = "${top_builddir}/bin/blastp";
