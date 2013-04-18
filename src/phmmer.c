@@ -559,10 +559,19 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       /* seqfile may need to be rewound (multiquery mode) */
       if (nquery > 1)
-	{
-	  if (! esl_sqfile_IsRewindable(dbfp)) p7_Fail("Target sequence file %s isn't rewindable; can't search it with multiple queries", cfg->dbfile);
-	  esl_sqfile_Position(dbfp, 0);
-	}
+      {
+        if (! esl_sqfile_IsRewindable(dbfp)) p7_Fail("Target sequence file %s isn't rewindable; can't search it with multiple queries", cfg->dbfile);
+
+        if ( cfg->firstseq_key == NULL )
+          esl_sqfile_Position(dbfp, 0); //only re-set current position to 0 if we're not planning to set it in a moment
+      }
+
+      if ( cfg->firstseq_key != NULL ) { //it's tempting to want to do this once and capture the offset position for future passes, but ncbi files make this non-trivial, so this keeps it general
+        sstatus = esl_sqfile_PositionByKey(dbfp, cfg->firstseq_key);
+        if (sstatus != eslOK)
+          p7_Fail("Failure setting restrictdb_stkey to %d\n", cfg->firstseq_key);
+      }
+
 
       if (fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
       if (qsq->acc[0]  != '\0' && fprintf(ofp, "Accession:   %s\n", qsq->acc)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -573,17 +582,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_SingleBuilder(bld, qsq, info[0].bg, NULL, NULL, NULL, &om); /* bypass HMM - only need model */
 
       for (i = 0; i < infocnt; ++i)
-	{
-	  /* Create processing pipeline and hit list */
-	  info[i].th  = p7_tophits_Create(); 
-	  info[i].om  = p7_oprofile_Clone(om);
-	  info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
-	  p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
+      {
+        /* Create processing pipeline and hit list */
+        info[i].th  = p7_tophits_Create();
+        info[i].om  = p7_oprofile_Clone(om);
+        info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
+        p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 
 #ifdef HMMER_THREADS
-	  if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
+        if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
 #endif
-	}
+      }
 
 #ifdef HMMER_THREADS
       if (ncpus > 0) sstatus = thread_loop(threadObj, queue, dbfp, cfg->firstseq_key, cfg->n_targetseq);
@@ -592,30 +601,30 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       sstatus = serial_loop(info, dbfp, cfg->firstseq_key, cfg->n_targetseq);
 #endif
       switch(sstatus)
-	{
-	case eslEFORMAT: 
-	  p7_Fail("Parse failed (sequence file %s):\n%s\n",
-		    dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
-	  break;
-	case eslEOF:
-	  /* do nothing */
-	  break;
-	default:
-	  p7_Fail("Unexpected error %d reading sequence file %s",
-		    sstatus, dbfp->filename);
-	}
+      {
+      case eslEFORMAT:
+        p7_Fail("Parse failed (sequence file %s):\n%s\n",
+            dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
+        break;
+      case eslEOF:
+        /* do nothing */
+        break;
+      default:
+        p7_Fail("Unexpected error %d reading sequence file %s",
+            sstatus, dbfp->filename);
+      }
 
 
       /* merge the results of the search results */
       for (i = 1; i < infocnt; ++i)
-	{
-	  p7_tophits_Merge(info[0].th, info[i].th);
-	  p7_pipeline_Merge(info[0].pli, info[i].pli);
+      {
+        p7_tophits_Merge(info[0].th, info[i].th);
+        p7_pipeline_Merge(info[0].pli, info[i].pli);
 
-	  p7_pipeline_Destroy(info[i].pli);
-	  p7_tophits_Destroy(info[i].th);
-	  p7_oprofile_Destroy(info[i].om);
-	}
+        p7_pipeline_Destroy(info[i].pli);
+        p7_tophits_Destroy(info[i].th);
+        p7_oprofile_Destroy(info[i].om);
+      }
 
       /* Print the results.  */
       p7_tophits_SortBySortkey(info->th);
@@ -1372,11 +1381,6 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, char *firstseq_key, int n_targe
 
   dbsq = esl_sq_CreateDigital(info->om->abc);
 
-  if ( firstseq_key != NULL )
-    sstatus = esl_sqfile_PositionByKey(dbfp, firstseq_key);
-  if (sstatus != eslOK)
-    p7_Fail("Failure setting restrictdb_stkey to %d\n", firstseq_key);
-
   /* Main loop: */
   while ((n_targetseqs==-1 || seq_cnt<n_targetseqs) && (sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
     {
@@ -1408,16 +1412,9 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, char *fir
   int  eofCount = 0;
   ESL_SQ_BLOCK *block;
   void         *newBlock;
-  int          seq_cnt    = 0;
-  int          abort      = FALSE; // in the case n_targetseqs != -1, a block may get abbreviated
 
   esl_workqueue_Reset(queue);
   esl_threads_WaitForStart(obj);
-
-  if ( firstseq_key != NULL )
-    sstatus = esl_sqfile_PositionByKey(dbfp, firstseq_key);
-  if (sstatus != eslOK)
-    p7_Fail("Failure setting restrictdb_stkey to %d\n", firstseq_key);
 
   status = esl_workqueue_ReaderUpdate(queue, NULL, &newBlock);
   if (status != eslOK) p7_Fail("Work queue reader failed");
@@ -1427,30 +1424,26 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, char *fir
     {
       block = (ESL_SQ_BLOCK *) newBlock;
 
-      if (abort) {
+      if (n_targetseqs == 0)
+      {
         block->count = 0;
         sstatus = eslEOF;
       } else {
-        sstatus = esl_sqio_ReadBlock(dbfp, block, -1, FALSE);
-      }
-
-      seq_cnt += block->count;
-      if (n_targetseqs!=-1 && seq_cnt>n_targetseqs) {
-        abort = TRUE;
-        block->count -= (seq_cnt-n_targetseqs);
+        sstatus = esl_sqio_ReadBlock(dbfp, block, -1, n_targetseqs, FALSE);
+        n_targetseqs -= block->count;
       }
 
       if (sstatus == eslEOF)
-	{
-	  if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
-	  ++eofCount;
-	}
+      {
+        if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
+        ++eofCount;
+      }
 	  
       if (sstatus == eslOK)
-	{
-	  status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
-	  if (status != eslOK) p7_Fail("Work queue reader failed");
-	}
+      {
+        status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
+        if (status != eslOK) p7_Fail("Work queue reader failed");
+      }
     }
 
   status = esl_workqueue_ReaderUpdate(queue, block, NULL);

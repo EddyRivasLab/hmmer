@@ -702,7 +702,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (nquery > 1) {
           if (! esl_sqfile_IsRewindable(dbfp))
             esl_fatal("Target sequence file %s isn't rewindable; can't search it with multiple queries", cfg->dbfile);
-          esl_sqfile_Position(dbfp, 0);
+
+          if (! esl_opt_IsUsed(go, "--restrictdb_stkey") )
+            esl_sqfile_Position(dbfp, 0); //only re-set current position to 0 if we're not planning to set it in a moment
+      }
+
+      if ( cfg->firstseq_key != NULL ) { //it's tempting to want to do this once and capture the offset position for future passes, but ncbi files make this non-trivial, so this keeps it general
+        sstatus = esl_sqfile_PositionByKey(dbfp, cfg->firstseq_key);
+        if (sstatus != eslOK)
+          p7_Fail("Failure setting restrictdb_stkey to %d\n", cfg->firstseq_key);
       }
 
       if (fprintf(ofp, "Query:       %s  [M=%d]\n", hmm->name, hmm->M) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -747,7 +755,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       /* establish the id_lengths data structutre */
       id_length_list = init_id_length(1000);
-
 
 
 #ifdef HMMER_THREADS
@@ -967,11 +974,6 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
     dbsq_revcmp =  esl_sq_CreateDigital(info->om->abc);
 #endif /*eslAUGMENT_ALPHABET*/
 
-  if ( firstseq_key != NULL )
-    wstatus = esl_sqfile_PositionByKey(dbfp, firstseq_key);
-  if (wstatus != eslOK)
-    p7_Fail("Failure setting restrictdb_stkey to %d\n", firstseq_key);
-
   wstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
 
   while (wstatus == eslOK && (n_targetseqs==-1 || seq_id < n_targetseqs) ) {
@@ -1054,7 +1056,7 @@ static int
 thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs)
 {
 
-  int i;
+  int          i;
   int          status  = eslOK;
   int          sstatus = eslOK;
   int          eofCount = 0;
@@ -1069,15 +1071,9 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
   esl_workqueue_Reset(queue);
   esl_threads_WaitForStart(obj);
 
-  if ( firstseq_key != NULL )
-    status = esl_sqfile_PositionByKey(dbfp, firstseq_key);
-  if (status != eslOK)
-    p7_Fail("Failure setting restrictdb_stkey to %d\n", firstseq_key);
-
   status = esl_workqueue_ReaderUpdate(queue, NULL, &newBlock);
   if (status != eslOK) esl_fatal("Work queue reader failed");
   ((ESL_SQ_BLOCK *)newBlock)->complete = TRUE;
-
 
   /* Main loop: */
   while (sstatus == eslOK  ) {
@@ -1087,7 +1083,7 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
         block->count = 0;
         sstatus = eslEOF;
       } else {
-        sstatus = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, TRUE);
+        sstatus = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, n_targetseqs, TRUE);
       }
 
       block->first_seqidx = info->pli->nseqs;
