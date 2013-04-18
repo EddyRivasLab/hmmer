@@ -72,18 +72,16 @@ Residues passing MSV filter:            174223  \(0.0194\); expected \(0.02\)
 Residues passing bias filter:           145398  \(0.0162\); expected \(0.02\)
 Residues passing Vit filter:              6173  \(0.000686\); expected \(0.001\)
 Residues passing Fwd filter:               276  \(3.07e-05\); expected \(1e-05\)
-Total number of hits:                        5  \(1.06e-05\)];
+Total number of hits:                        4  \(8.78e-06\)];
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 1\nExpect:\n$expect\nObserved:\n$output\n";
 }
 
 $expect = 
-  q[8.2e-05   25.1   0.0  random   4499980 4500000\s*
-    0.00011   24.8   0.0  random   3299961 3299979\s*
-    0.00012   24.6   0.0  random   1518622 1518604\s*
-    0.00018   24.1   0.0  random   1979941 1979960\s*
-  ------ inclusion threshold ------\s*
-      0.013   18.3   0.0  random   4019481 4019466];          
+  q[  0.031   17.2   0.0  random   3299961 3299979\s*
+      0.046   16.6   0.0  random   1979941 1979960\s*
+      0.066   16.1   0.0  random   4499980 4500000\s*
+       0.23   14.5   0.0  random   1518622 1518604\s*];          
         
         
 if ($output !~ /$expect/s) {
@@ -106,9 +104,9 @@ if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 3\nExpect:\n$expect\nObserved:\n$output\n";
 }
 $expect = 
-  q[4.1e-05   25.1   0.0  random   4499980 4500000\s*
-    5.5e-05   24.8   0.0  random   3299961 3299979\s*
-    9.1e-05   24.1   0.0  random   1979941 1979960]; 
+  q[  0.015   17.2   0.0  random   3299961 3299979\s*
+      0.023   16.6   0.0  random   1979941 1979960\s*
+      0.033   16.1   0.0  random   4499980 4500000]; 
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 4\nExpect:\n$expect\nObserved:\n$output\n";
 }

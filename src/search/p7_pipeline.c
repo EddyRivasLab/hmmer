@@ -1278,8 +1278,8 @@ ERROR:
  *             the post-fwd portion of the longtarget pipeline, set match
  *             state emission log-odds scores accordingly.
  *
- *             Given the frequency distribution of a block of sequence
- *             (<dsq>, of length <sq_len>), and a prior with which that
+ *             Given a sequence <sq> and <start> and length <L>, compute
+ *             the residue frequency. With this and a prior with which that
  *             distribution can be mixed (<bg>), compute a new background
  *             in the pre-allocated <bg_tmp> (used as a temporary holding
  *             place). Use this to compute values for a pre-allocated
@@ -1309,7 +1309,7 @@ parameterize_gm (P7_BG *bg, P7_BG *bg_tmp, P7_PROFILE *gm_src, P7_PROFILE *gm_de
   /* Fraction of new bg frequencies that comes from a prior determined by the sequence block.
    * This is 25% for long sequences, more for shorter sequences (e.g. 50% for sequences of length 50)
    */
-  float   bg_smooth = 25.0 / (ESL_MIN(100,sq->n));
+  float   bg_smooth = 25.0 / (ESL_MIN(100,ESL_MAX(50,sq->n)));
 
   if (sq == NULL) return eslFAIL;
 
@@ -1827,7 +1827,7 @@ ERROR:
  *            om              - optimized profile (query)
  *            bg              - background model
  *            hitlist         - pointer to hit storage bin
- *            data         - for computing windows based on maximum prefix/suffix extensions
+ *            data            - for computing windows based on maximum prefix/suffix extensions
  *            seqidx          - the id # of the sequence from which the current window was extracted
  *            window_start    - the starting position of the extracted window (offset from the first
  *                              position of the block of a possibly longer sequence)
@@ -1972,7 +1972,7 @@ p7_pipeline_postSSV_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om
 /* Function:  p7_Pipeline_LongTarget()
  * Synopsis:  Accelerated seq/profile comparison pipeline, using scanning SSV filters for long target sequences.
  *
- * Purpose:   Run H3's accelerated pipeline to compare profile <om>
+ * Purpose:   Run HMMER's accelerated pipeline to compare profile <om>
  *            against sequence <sq>. If a significant hit is found,
  *            information about it is added to the <hitlist>. This is
  *            a variant of p7_Pipeline that runs the scanning SSV

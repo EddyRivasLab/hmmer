@@ -952,7 +952,8 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       if (tblfp)    p7_tophits_TabularTargets(tblfp,    hmm->name, hmm->acc, th, pli, (nquery == 1));
       if (domtblfp) p7_tophits_TabularDomains(domtblfp, hmm->name, hmm->acc, th, pli, (nquery == 1));
-  
+      if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, hmm->name, hmm->acc, th, pli);
+
       esl_stopwatch_Stop(w);
       p7_pipeline_WriteStats(ofp, pli, w);
       if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -1244,7 +1245,7 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
   while (sstatus == eslOK)
     {
       block = (ESL_SQ_BLOCK *) newBlock;
-      sstatus = esl_sqio_ReadBlock(dbfp, block, -1, FALSE);
+      sstatus = esl_sqio_ReadBlock(dbfp, block, -1, -1, FALSE);
       if (sstatus == eslEOF)
 	{
 	  if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;

@@ -276,7 +276,6 @@ ERROR:
 /* Function:  p7_hmm_ScoreDataComputeRest()
  * Synopsis:  Using position-specific insert rates, compute MAXL-based prefix and suffix lengths
  *
- *
  * Purpose:   Using position-specific insert rates, compute MAXL-based prefix
  *            and suffix lengths for each position in the model, used when
  *            establishing windows around SSV diagonals. This fleshes out

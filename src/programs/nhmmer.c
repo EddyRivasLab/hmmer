@@ -830,7 +830,7 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
   while (sstatus == eslOK ) {
       block = (ESL_SQ_BLOCK *) newBlock;
 
-      sstatus = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, TRUE);
+      sstatus = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, -1, TRUE);
 
       block->first_seqidx = info->pli->stats.nseqs;
       info->pli->stats.nseqs += block->count  - (block->complete ? 0 : 1);// if there's an incomplete sequence read into the block wait to count it until it's complete.
