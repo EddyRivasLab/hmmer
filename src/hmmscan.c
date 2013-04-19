@@ -942,7 +942,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       if (tblfp)     p7_tophits_TabularTargets(tblfp,    qsq->name, qsq->acc, th, pli, (nquery == 1));
       if (domtblfp)  p7_tophits_TabularDomains(domtblfp, qsq->name, qsq->acc, th, pli, (nquery == 1));
-      if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp,   qsq->name, qsq->acc, info->th, info->pli);
+      if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp,   qsq->name, qsq->acc, th, pli);
 
       esl_stopwatch_Stop(w);
       p7_pli_Statistics(ofp, pli, w);
