@@ -155,11 +155,11 @@ struct cfg_s {
 };
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
-static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs);
+static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs);
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
 
-static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs);
+static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, int n_targetseqs);
 static void pipeline_thread(void *arg);
 #endif /*HMMER_THREADS*/
 
@@ -332,6 +332,23 @@ main(int argc, char **argv)
   p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
   process_commandline(argc, argv, &go, &cfg.qfile, &cfg.dbfile);    
 
+
+  /* is the range restricted? */
+#ifndef eslAUGMENT_SSI
+  if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")  || esl_opt_IsUsed(go, "--ssifile")  )
+    p7_Fail("Unable to use range-control options unless an SSI index file is available. See 'esl_sfetch --index'\n");
+#else
+  if (esl_opt_IsUsed(go, "--restrictdb_stkey") )
+    if ((cfg.firstseq_key = esl_opt_GetString(go, "--restrictdb_stkey")) == NULL)  p7_Fail("Failure capturing --restrictdb_stkey\n");
+
+  if (esl_opt_IsUsed(go, "--restrictdb_n") )
+    cfg.n_targetseq = esl_opt_GetInteger(go, "--restrictdb_n");
+
+  if ( cfg.n_targetseq != -1 && cfg.n_targetseq < 1 )
+    p7_Fail("--restrictdb_n must be >= 1\n");
+#endif
+
+
   /* Figure out who we are, and send control there: 
    * we might be an MPI master, an MPI worker, or a serial program.
    */
@@ -357,22 +374,6 @@ main(int argc, char **argv)
   else
 #endif /*HAVE_MPI*/
     {
-
-#ifndef eslAUGMENT_SSI
-  if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")  || esl_opt_IsUsed(go, "--ssifile")  )
-    p7_Fail("Unable to use range-control options unless an SSI index file is available. See 'esl_sfetch --index'\n");
-#else
-  if (esl_opt_IsUsed(go, "--restrictdb_stkey") )
-    if ((cfg.firstseq_key = esl_opt_GetString(go, "--restrictdb_stkey")) == NULL)  p7_Fail("Failure capturing --restrictdb_stkey\n");
-
-  if (esl_opt_IsUsed(go, "--restrictdb_n") )
-    cfg.n_targetseq = esl_opt_GetInteger(go, "--restrictdb_n");
-
-  if ( cfg.n_targetseq != -1 && cfg.n_targetseq < 1 )
-    p7_Fail("--restrictdb_n must be >= 1\n");
-
-#endif
-
       status = serial_master(go, &cfg);
     }
 
@@ -485,6 +486,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
   else if (status != eslOK)        p7_Fail("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
 
+
   if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")) {
     if (esl_opt_IsUsed(go, "--ssifile"))
       esl_sqfile_OpenSSI(dbfp, esl_opt_GetString(go, "--ssifile"));
@@ -595,10 +597,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       }
 
 #ifdef HMMER_THREADS
-      if (ncpus > 0) sstatus = thread_loop(threadObj, queue, dbfp, cfg->firstseq_key, cfg->n_targetseq);
-      else           sstatus = serial_loop(info, dbfp, cfg->firstseq_key, cfg->n_targetseq);
+      if (ncpus > 0) sstatus = thread_loop(threadObj, queue, dbfp, cfg->n_targetseq);
+      else           sstatus = serial_loop(info, dbfp, cfg->n_targetseq);
 #else
-      sstatus = serial_loop(info, dbfp, cfg->firstseq_key, cfg->n_targetseq);
+      sstatus = serial_loop(info, dbfp, cfg->n_targetseq);
 #endif
       switch(sstatus)
       {
@@ -789,41 +791,42 @@ typedef struct {
  * MPI workers.  If multiple hmm's are in the query file, the
  * blocks are reused without parsing the database a second time.
  */
-int next_block(ESL_SQFILE *sqfp, ESL_SQ *sq, BLOCK_LIST *list, SEQ_BLOCK *block)
+int next_block(ESL_SQFILE *sqfp, ESL_SQ *sq, BLOCK_LIST *list, SEQ_BLOCK *block, int n_targetseqs)
 {
   int      status   = eslOK;
 
   /* if the list has been calculated, use it instead of parsing the database */
   if (list->complete)
-    {
+  {
       if (list->current == list->last)
-	{
-	  block->offset = 0;
-	  block->length = 0;
-	  block->count  = 0;
+      {
+        block->offset = 0;
+        block->length = 0;
+        block->count  = 0;
 
-	  status = eslEOF;
-	}
+        status = eslEOF;
+      }
       else
-	{
-	  int inx = list->current++;
+      {
+        int inx = list->current++;
 
-	  block->offset = list->blocks[inx].offset;
-	  block->length = list->blocks[inx].length;
-	  block->count  = list->blocks[inx].count;
+        block->offset = list->blocks[inx].offset;
+        block->length = list->blocks[inx].length;
+        block->count  = list->blocks[inx].count;
 
-	  status = eslOK;
-	}
+        status = eslOK;
+      }
 
       return status;
-    }
+  }
 
   block->offset = 0;
   block->length = 0;
   block->count = 0;
 
   esl_sq_Reuse(sq);
-  while (block->length < MAX_BLOCK_SIZE && (status = esl_sqio_ReadInfo(sqfp, sq)) == eslOK)
+  if (n_targetseqs == 0) status = eslEOF; //this is to handle the end-case of a restrictdb scenario, where no more targets are required, and we want to mark the list as complete
+  while (block->length < MAX_BLOCK_SIZE && (n_targetseqs < 0 || block->count < n_targetseqs) && (status = esl_sqio_ReadInfo(sqfp, sq)) == eslOK)
     {
       if (block->count == 0) block->offset = sq->roff;
       block->length = sq->eoff - block->offset + 1;
@@ -831,7 +834,9 @@ int next_block(ESL_SQFILE *sqfp, ESL_SQ *sq, BLOCK_LIST *list, SEQ_BLOCK *block)
       esl_sq_Reuse(sq);
     }
 
-  if (status == eslEOF && block->count > 0) status = eslOK;
+  if (block->count > 0)
+    if (status == eslEOF || block->count == n_targetseqs)
+      status = eslOK;
   if (status == eslEOF) list->complete = 1;
 
   /* add the block to the list of known blocks */
@@ -914,6 +919,8 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              size;
   MPI_Status       mpistatus;
 
+  int              n_targets;
+
   /* Initializations */
   abc     = esl_alphabet_Create(eslAMINO);
   w       = esl_stopwatch_Create();
@@ -974,6 +981,15 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status != eslOK)        mpi_failure("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
   dbsq = esl_sq_CreateDigital(abc);
 
+  if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")) {
+      if (esl_opt_IsUsed(go, "--ssifile"))
+        esl_sqfile_OpenSSI(dbfp, esl_opt_GetString(go, "--ssifile"));
+      else
+        esl_sqfile_OpenSSI(dbfp, NULL);
+  }
+
+
+
   /* Open the query sequence file  */
   status = esl_sqfile_OpenDigital(abc, cfg->qfile, qformat, NULL, &qfp);
   if      (status == eslENOTFOUND) mpi_failure("Failed to open sequence file %s for reading\n",      cfg->qfile);
@@ -989,8 +1005,16 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   list->last     = 0;
   list->blocks   = NULL;
 
+
   /* Show header output */
   output_header(ofp, go, cfg->qfile, cfg->dbfile);
+
+  if ( cfg->firstseq_key != NULL ) { //it's tempting to want to do this once and capture the offset position for future passes, but ncbi files make this non-trivial, so this keeps it general
+    sstatus = esl_sqfile_PositionByKey(dbfp, cfg->firstseq_key);
+    if (sstatus != eslOK)
+      p7_Fail("Failure setting restrictdb_stkey to %d\n", cfg->firstseq_key);
+  }
+
 
   /* Outer loop over sequence queries */
   while ((qstatus = esl_sqio_Read(qfp, qsq)) == eslOK)
@@ -1003,6 +1027,8 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (qsq->n == 0) continue; /* skip zero length seqs as if they aren't even present */
 
       esl_stopwatch_Start(w);
+
+      n_targets = cfg->n_targetseq;
 
       /* seqfile may need to be rewound (multiquery mode) */
       if (nquery > 1) list->current = 0;
@@ -1020,39 +1046,44 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_pli_NewModel(pli, om, bg);
 
       /* Main loop: */
-      while ((sstatus = next_block(dbfp, dbsq, list, &block)) == eslOK)
-	{
-	  if (MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &mpistatus) != 0) 
-	    mpi_failure("MPI error %d receiving message from %d\n", mpistatus.MPI_SOURCE);
+      while (n_targets >= 0 && (sstatus = next_block(dbfp, dbsq, list, &block, n_targets)) == eslOK)
+      {
+        n_targets -= block.count;
 
-	  MPI_Get_count(&mpistatus, MPI_PACKED, &size);
-	  if (mpi_buf == NULL || size > mpi_size) {
-	    void *tmp;
-	    ESL_RALLOC(mpi_buf, tmp, sizeof(char) * size);
-	    mpi_size = size; 
-	  }
+        if (MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &mpistatus) != 0)
+          mpi_failure("MPI error %d receiving message from %d\n", mpistatus.MPI_SOURCE);
 
-	  dest = mpistatus.MPI_SOURCE;
-	  MPI_Recv(mpi_buf, size, MPI_PACKED, dest, mpistatus.MPI_TAG, MPI_COMM_WORLD, &mpistatus);
+        MPI_Get_count(&mpistatus, MPI_PACKED, &size);
+        if (mpi_buf == NULL || size > mpi_size) {
+          void *tmp;
+          ESL_RALLOC(mpi_buf, tmp, sizeof(char) * size);
+          mpi_size = size;
+        }
 
-	  if (mpistatus.MPI_TAG == HMMER_ERROR_TAG)
-	    mpi_failure("MPI client %d raised error:\n%s\n", dest, mpi_buf);
-	  if (mpistatus.MPI_TAG != HMMER_READY_TAG)
-	    mpi_failure("Unexpected tag %d from %d\n", mpistatus.MPI_TAG, dest);
-      
-	  MPI_Send(&block, 3, MPI_LONG_LONG_INT, dest, HMMER_BLOCK_TAG, MPI_COMM_WORLD);
-	}
+        dest = mpistatus.MPI_SOURCE;
+        MPI_Recv(mpi_buf, size, MPI_PACKED, dest, mpistatus.MPI_TAG, MPI_COMM_WORLD, &mpistatus);
+
+        if (mpistatus.MPI_TAG == HMMER_ERROR_TAG)
+          mpi_failure("MPI client %d raised error:\n%s\n", dest, mpi_buf);
+        if (mpistatus.MPI_TAG != HMMER_READY_TAG)
+          mpi_failure("Unexpected tag %d from %d\n", mpistatus.MPI_TAG, dest);
+
+        MPI_Send(&block, 3, MPI_LONG_LONG_INT, dest, HMMER_BLOCK_TAG, MPI_COMM_WORLD);
+      }
+      if (n_targets==0)
+        sstatus = eslEOF;
+
       switch(sstatus)
-	{
-	case eslEFORMAT: 
-	  mpi_failure("Parse failed (sequence file %s):\n%s\n", 
-		      dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
-	  break;
-	case eslEOF:
-	  break;
-	default:
-	  mpi_failure("Unexpected error %d reading sequence file %s", sstatus, dbfp->filename);
-	}
+      {
+      case eslEFORMAT:
+        mpi_failure("Parse failed (sequence file %s):\n%s\n",
+              dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
+        break;
+      case eslEOF:
+        break;
+      default:
+        mpi_failure("Unexpected error %d reading sequence file %s", sstatus, dbfp->filename);
+      }
 
       block.offset = 0;
       block.length = 0;
@@ -1111,7 +1142,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   
       if (tblfp)     p7_tophits_TabularTargets(tblfp,    qsq->name, qsq->acc, th, pli, (nquery == 1));
       if (domtblfp)  p7_tophits_TabularDomains(domtblfp, qsq->name, qsq->acc, th, pli, (nquery == 1));
-      if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp,  qsq->name, qsq->acc, info->th, info->pli);
+      if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp,  qsq->name, qsq->acc, th, pli);
 
       esl_stopwatch_Stop(w);
       p7_pli_Statistics(ofp, pli, w);
@@ -1373,7 +1404,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
 static int
-serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs)
+serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
 {
   int      sstatus   = eslOK;
   ESL_SQ   *dbsq     = NULL;   /* one target sequence (digital)  */
@@ -1405,7 +1436,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, char *firstseq_key, int n_targe
 
 #ifdef HMMER_THREADS
 static int
-thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs)
+thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, int n_targetseqs)
 {
   int  status  = eslOK;
   int  sstatus = eslOK;
