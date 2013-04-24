@@ -1,12 +1,72 @@
+ID              h97
+TITLE           Error printing very small E-values
+AFFECTS         3.0
+FIXED_IN        3.1b1
+STATUS          CLOSED
+XREF            svn r3802, r3806
+REPORTED_BY     Travis Wheeler
+OPENED_DATE     TJW, 18 Nov 2011
+CLOSED_DATE     TJW,  9 Jan 2012
+DESCRIPTION     
+  After setting "flush-to-zero" with
+     _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON); 
+  the expectation is that all denormalized floating point values to 
+  will flush to zero, such that exp(v) should evaluate to 0 for any v 
+  less than about -708. However, on OS X systems, this command seems 
+  to only impact SIMD calculations, not scalar calcs. This exposed an
+  apparent bug in printf, in which printing exp(v) for v less than 
+  about -735 produced broken text. For example, on an OS X system, 
+  when v == -735, the line
+    printf ("%.0f:  %9.2g\n", v, exp(v));
+  should print     
+    6.2e-320
+  but after setting the FTZ flag with the FLUSH_ZERO command, it 
+  printed
+       e-321
+       
+  To flush scalar values to zero, thus avoiding the printf bug, we use
+         _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON).
+//
+ID              h96
+TITLE           Bias filter inactive in phmmer
+AFFECTS         3.0
+FIXED_IN        3.1b1
+STATUS          CLOSED
+XREF            svn r3589
+REPORTED_BY     Rob Finn
+OPENED_DATE     TJW, 28 Jun 2011
+CLOSED_DATE     TJW, 28 Jun 2011
+DESCRIPTION     
+  In phmmer, the bias filter failed to act on sequences passing the MSV
+  filter. This was because phmmer never internally set the compo values,
+  upon which the bias filter depends.   
+//
+ID              h95
+TITLE           Worker threads on OS X experienced denormal slow-down
+AFFECTS         3.0
+FIXED_IN        3.1b1
+STATUS          CLOSED
+XREF            svn r3311
+REPORTED_BY     Travis Wheeler
+OPENED_DATE     TJW, 26 May 2010
+CLOSED_DATE     TJW, 17 Jun 2010
+DESCRIPTION 
+  Worker threads on OS X lost the flush-to-zero flag required to avoid 
+  denormal slow-down (values get really close to zero, but not quite, 
+  and the processor goes off and spends crazy time working out the 
+  essentially-zero value, as in a long delete path). The fix is to call 
+  the following within each thread:  
+     _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+//
 ID              h94
 TITLE           phmmer assigns incorrect scores to degenerate residues
 AFFECTS         3.0
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            SRE:J9/87; svn r3878
 REPORTED_BY     Elena Rivas
-OPENED_DATE     25 Feb 2012
-CLOSED_DATE     25 Feb 2012
+OPENED_DATE     SRE, 25 Feb 2012
+CLOSED_DATE     SRE, 25 Feb 2012
 DESCRIPTION     
   When converting joint probs p_ab to conditionals p(b|a),
   p7_builder_{Load,Set}ScoreSystem() were only converting K canonical
@@ -16,7 +76,7 @@ DESCRIPTION
 ID              h93
 TITLE           Running out of disk space corrupts outputs
 AFFECTS         HMMER 3.0 and earlier
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            SRE:J8/118-119
 REPORTED_BY     Maarten Hekkelman <m.hekkelman@cmbi.ru.nl>
@@ -35,7 +95,7 @@ DESCRIPTION
 ID              h92
 TITLE           jackhmmer fails: backconverted subseq didn't end at expected length
 AFFECTS         3.0
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            SRE J8/117
 REPORTED_BY     Mustafa Adel <mustafa.adel@aucegypt.edu>
@@ -60,7 +120,7 @@ DESCRIPTION
 ID              h91
 TITLE           hmmscan floating point exception, is actually database corruption
 AFFECTS         3.0
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            SRE:J8/65
 REPORTED_BY     Haruna Cofer <haruna@sgi.com>
@@ -80,7 +140,7 @@ DESCRIPTION
 ID              h90
 TITLE           phmmer's displayed consensus differs from query sequence
 AFFECTS         3.0
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            SRE:J8/26
 REPORTED_BY     Rob Finn
@@ -106,7 +166,7 @@ DESCRIPTION
 ID              h89
 TITLE           HMMER_NCPU env var sets --cpu, creates incompatibility with -n, --mpi
 AFFECTS         3.0
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            SRE:J7/104;SRE:J8/25
 REPORTED_BY     Joel Hedlund <joel@nsc.liu.se> 9 Mar 2011; Torsten Seemann <torsten.seemann@monash.edu> 31 Mar 2011
@@ -143,7 +203,7 @@ DESCRIPTION
 ID              h88
 TITLE           Many classic score matrices are invalid for phmmer/jackhmmer
 AFFECTS         3.0
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            SRE:J7/126; SRE:J7/130-131; SRE:J7/132; SRE:J8/23
 REPORTED_BY     Eanna O'Keefe (Eanna O Keefe <eannaokeefe@yahoo.co.uk>), 24 Mar 2011
@@ -183,7 +243,7 @@ DESCRIPTION
 ID              h87
 TITLE           Fragment definition (--fragthresh) incorrectly documented.
 AFFECTS         3.0
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            SRE:J8/1; SRE:J8/24
 REPORTED_BY     Travis Wheeler
@@ -210,7 +270,7 @@ DESCRIPTION
 ID              h86
 TITLE           man pages have stray @KEYWORDS@ and aren't installed by "make install"
 AFFECTS         3.0
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            J7/114
 REPORTED_BY     Joel Hedlund <joel@nsc.liu.se> (National Supercomputer Centre, Linkoping University, Sweden) 21 Mar 2011
@@ -226,7 +286,7 @@ DESCRIPTION
 ID              h85
 TITLE           hmmscan and hmmsearch give different results for same model
 AFFECTS         3.0
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            J7/36; 1210-bug-h85
 REPORTED_BY    	Sarah Hunter <hunter@ebi.ac.uk>, 10 Dec 2010
@@ -254,7 +314,7 @@ DESCRIPTION
 ID              h84
 TITLE           hmmbuild: "composition fails pvector validation"
 AFFECTS         3.0
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            J7/7
 REPORTED_BY     Andy Yates <ayates@ebi.ac.uk>
@@ -291,7 +351,7 @@ DESCRIPTION
 ID              h83
 TITLE           commandline E-value threshold options only work down to ~1e-30
 AFFECTS         3.0
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            J6/120 
 REPORTED_BY     Marcelo Carlos Sousa <Marcelo.Sousa@Colorado.EDU>
@@ -309,7 +369,7 @@ DESCRIPTION
 ID              h82
 TITLE           hmmbuild corrupts resave alignment on all-insert seq
 AFFECTS         3.0
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            J6/73
 REPORTED_BY     Kevin Horan <khoran@cs.ucr.edu>
@@ -326,7 +386,7 @@ DESCRIPTION
 ID              h81
 TITLE           dombias output was in nats, not bits
 AFFECTS         3.0 and earlier
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            J6/53
 REPORTED_BY     Elena Rivas
@@ -338,7 +398,7 @@ DESCRIPTION
 ID              h80
 TITLE           hmmconvert can't read H2 "Nucleic" save files
 AFFECTS         3.0 and earlier.
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            J6/61
 REPORTED_BY     Martin Hartmann <martinha@interchange.ubc.ca>
@@ -356,7 +416,7 @@ DESCRIPTION
 ID              h79
 TITLE           Memory corruption in resized generic P7_GMX
 AFFECTS         3.0 and earlier.
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            J6/61
 REPORTED_BY     Elena Rivas
@@ -841,7 +901,7 @@ DESCRIPTION
 ID              h57
 TITLE           jackhmmer fails: "backconverted subseq didn't end at expected length"
 AFFECTS         3.0b2
-FIXED_IN        -
+FIXED_IN        3.1b1
 STATUS          CLOSED
 XREF            J5/52
 REPORTED_BY     Michael Seidl <m.f.seidl@uu.nl>, 22 June 2009
