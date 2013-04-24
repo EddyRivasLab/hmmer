@@ -1,4 +1,4 @@
-ID              h97
+ID              h98
 TITLE           Error printing very small E-values
 AFFECTS         3.0
 FIXED_IN        3.1b1
@@ -27,7 +27,7 @@ DESCRIPTION
   To flush scalar values to zero, thus avoiding the printf bug, we use
          _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON).
 //
-ID              h96
+ID              h97
 TITLE           Bias filter inactive in phmmer
 AFFECTS         3.0
 FIXED_IN        3.1b1
@@ -41,7 +41,7 @@ DESCRIPTION
   filter. This was because phmmer never internally set the compo values,
   upon which the bias filter depends.   
 //
-ID              h95
+ID              h96
 TITLE           Worker threads on OS X experienced denormal slow-down
 AFFECTS         3.0
 FIXED_IN        3.1b1
@@ -57,6 +57,23 @@ DESCRIPTION
   essentially-zero value, as in a long delete path). The fix is to call 
   the following within each thread:  
      _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+//
+ID              h95
+TITLE           hmmbuild fails with "Top is not empty" on bad Stockholm MSA
+AFFECTS         3.0
+FIXED_IN        -
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     Amir Szitenberg (U. Hull)
+OPENED_DATE     SRE, Thu Apr 11 15:48:56 2013
+CLOSED_DATE     SRE, Thu Apr 11 15:48:57 2013
+DESCRIPTION
+  hmmbuild fails on a misformatted Stockholm MSA input with a cryptic
+  message, "Top is not empty." Problem is in error handling (lack thereof)
+  of MSA parser. This is already automagically fixed by 4.0's new eslx_msafile
+  Stockholm parser. Trunk 4.0 correctly reports: "Alignment input parse error://
+  invalid sequence character(s) on line//while reading Stockholm file
+  TEs_BETA_CELE_example.sto//at or near line 850."
 //
 ID              h94
 TITLE           phmmer assigns incorrect scores to degenerate residues

@@ -222,12 +222,12 @@ Bugfixes:
 
 -:- #h94 phmmer assigned incorrect scores to degenerate residues.
 
--:- #h95 Worker threads on OS X experienced denormal slow-down. Resolved
+-:- #h96 Worker threads on OS X experienced denormal slow-down. Resolved
          with call to   _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
 
--:- #h96 Bias filter was inactive in phmmer.
+-:- #h97 Bias filter was inactive in phmmer.
 
--:- #h97 Error printing very small E-values. If E was less than about 
+-:- #h98 Error printing very small E-values. If E was less than about 
          1e-708, it should have flushed to zero, but instead survived 
          to experience denormal calculation, then highlighted a printf 
          bug.
