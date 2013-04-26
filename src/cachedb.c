@@ -250,10 +250,10 @@ p7_seqcache_Open(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
   }
 
   for (i = 0; i < cache->db_cnt; ++i) {
-    printf("final (%d):: %d %d\n", i, cache->db[i].count, db_inx[i]);
+    printf("sequence database (%d):: %d %d\n", i, cache->db[i].count, db_inx[i]);
   }
 
-  printf("\nTotal memory %" PRId64 "\n", total_mem);
+  printf("\nLoaded sequence db file %s; total memory %" PRId64 "\n", seqfile, total_mem);
 
   esl_sqfile_Close(sqfp);
   esl_sq_Destroy(sq);

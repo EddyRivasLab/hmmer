@@ -542,7 +542,7 @@ process_load(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
 
     if ( (status = p7_hmmcache_SetNumericNames(hmm_db)) != eslOK) goto ERROR;
 
-    client_msg(query->sock, eslOK, "Loaded profile db %s;  models: %d  memory: %" PRId64 "\n", 
+    client_msg(query->sock, eslOK, "Loaded profile db %s;  models: %d  memory: %" PRId64 "\n",
 	       name, hmm_db->n, p7_hmmcache_Sizeof(hmm_db));
   }
 
@@ -732,6 +732,8 @@ master_process(ESL_GETOPTS *go)
     printf("Loaded profile db %s;  models: %d  memory: %" PRId64 "\n", 
 	   name, hmm_db->n, (uint64_t) p7_hmmcache_Sizeof(hmm_db));
   }
+
+  printf("Data loaded into memory. Master is ready.\n");
 
   /* initialize the search stack, set it up for interthread communication  */
   cmdstack = esl_stack_PCreate();
