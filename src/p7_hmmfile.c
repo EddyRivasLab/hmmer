@@ -978,7 +978,7 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
     coffset += offset;
 
     if (format >= p7_HMMFILE_3f) {
-      if ((offset = sprintf(ret_hmm + coffset, " %c",  (hmm->flags & p7H_MMASK) ? hmm->mm[k]        : '.')) < 0) return eslEWRITE;
+      if ((offset = sprintf(ret_hmm + coffset, " %c",  (hmm->flags & p7H_MMASK) ? hmm->mm[k]        : '-')) < 0) return eslEWRITE;
       coffset += offset;
     }
 

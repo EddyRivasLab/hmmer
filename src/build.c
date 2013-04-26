@@ -364,7 +364,7 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
     ESL_ALLOC(hmm->mm, sizeof(char) * (hmm->M+2));
     hmm->mm[0] = ' ';
     for (apos = k = 1; apos <= msa->alen; apos++)
-      if (matassign[apos]) hmm->mm[k++] = msa->mm[apos-1];
+      if (matassign[apos]) hmm->mm[k++] = ( msa->mm[apos-1] == '.' ? '-' : msa->mm[apos-1]) ;
     hmm->mm[k] = '\0';
     hmm->flags |= p7H_MMASK;
   }
