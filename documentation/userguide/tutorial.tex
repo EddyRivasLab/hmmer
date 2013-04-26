@@ -19,18 +19,19 @@ options.
 \textbf{hmmalign}  & Make a multiple alignment of many sequences to a common profile HMM.\\ 
 & \\
 
-\multicolumn{2}{c}{\textbf{Search protein models against protein database}} \\ 
+\multicolumn{2}{c}{\textbf{Search protein queries against protein database}} \\ 
 & \\ 
 \textbf{phmmer}    & Search a single protein sequence against a protein sequence database. (BLASTP-like) \\
 \textbf{jackhmmer} & Iteratively search a protein sequence against a protein sequence database. (PSIBLAST-like) \\ 
 \textbf{hmmsearch} & Search a protein profile HMM against a protein sequence database.\\ 
-\textbf{hmmscan}   & Search a protein sequence against a protein profile HMM database.\\ 
+\textbf{hmmscan}   & Search a protein sequence against a protein profile HMM database.\\
+\textbf{hmmpgmd}   & Search daemon used for hmmer.org website.\\ 
 & \\ 
 
-\multicolumn{2}{c}{\textbf{Search DNA models against DNA database}} \\ 
+\multicolumn{2}{c}{\textbf{Search DNA queries against DNA database}} \\ 
 & \\ 
-\textbf{nhmmer}    & Search a DNA sequence or profile HMM against a DNA sequence database. (BLASTN-like)\\
-\textbf{nhmmscan}  & Search a DNA sequence against a DNA profile HMM database.\\
+\textbf{nhmmer}    & Search a DNA sequence, alignment, or profile HMM against a DNA sequence database. (BLASTN-like)\\ 
+\textbf{nhmmscan}  & Search a DNA sequence against a DNA profile HMM database.\\ 
 & \\
 
 \multicolumn{2}{c}{\textbf{Other utilities}}\\ 
@@ -58,6 +59,13 @@ The pair \prog{nhmmer/nhmmscan} are new to HMMER3.1. The program \prog{nhmmer}
 can search against a DNA sequence database with a query of a prebuilt HMM (built
 using \prog{hmmbuild}), a multiple sequence alignment, or a single sequence. The
 program \prog{nhmmscan} can search an HMM database with a DNA sequence query.
+
+The program \prog{hmmpgmd} is also new to HMMER3.1.  It is the daemon that 
+we use internally for the hmmer.org web server, and essentially
+stands in front of the protein search tools \prog{phmmer}, \prog{hmmsearch},
+and \prog{hmmscan}. As a daemon, it starts up, loads the target database into
+memory, then performs searches against that database as requested by client 
+programs.
 
 In the Tutorial section, we'll show examples of running each of these
 programs, using examples in the \ccode{tutorial/} subdirectory of the
@@ -1166,7 +1174,7 @@ plentiful insertions.
 
 
 
-\subsubsection{Step 2: search the DNA sequence database with nhhmmer}
+\subsubsection{Step 2: search the DNA sequence database with nhmmer}
 
 We'll use \prog{tutorial/dna\_target.fa} as the target sequence database. It is
 a FASTA format file containing one 330Kb long DNA sequence extracted from human

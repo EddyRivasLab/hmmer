@@ -34,6 +34,7 @@ MANPAGES = \
 	${top_srcdir}/documentation/man/hmmconvert.man\
 	${top_srcdir}/documentation/man/hmmemit.man\
 	${top_srcdir}/documentation/man/hmmfetch.man\
+	${top_srcdir}/documentation/man/hmmpgmd.man\
 	${top_srcdir}/documentation/man/hmmpress.man\
 	${top_srcdir}/documentation/man/hmmscan.man\
 	${top_srcdir}/documentation/man/hmmsearch.man\
