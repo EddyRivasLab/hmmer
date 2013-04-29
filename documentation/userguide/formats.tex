@@ -87,7 +87,7 @@ The header section is parsed line by line in a tag/value format. Each
 line type is either \textbf{mandatory} or \textbf{optional} as
 indicated. 
 
-\begin{sreitems}{\emprog{STATS <s1> <s2> <f>}}
+\begin{sreitems}{\emprog{header}}
 
 \item [\emprog{HMMER3/f}] Unique identifier for the save file format
   version; the \prog{/f} means that this is HMMER3 HMM file format
@@ -689,8 +689,100 @@ column.
 
 
 
+\subsection{hmmpgmd sequence database format}
+
+The hmmpgmd sequence database format closely resembles the 
+FASTA format, with slight modification to support use within HMMER's
+\prog{hmmpgmd} daemon. 
 
 
+The \prog{hmmpgmd} program enables search of one or more sequence 
+databases (e.g. NR, SwissProt, UniProt) within a single instance,
+having loaded a single sequence file into memory. Because the set of 
+sequences found within the various databases may overlap, the hmmpgmd 
+format allows each sequence to be stored once, and includes a small piece of
+metadata that indicates, for each sequence, the list of source databases in
+which the sequence is found. When a search is performed in \prog{hmmpgmd}, a
+single target database is specified, and search is restricted to sequences
+belonging to that database.
+
+Furthermore, because a single sequence might be found multiple times
+within a single sequence database, \prog{hmmpgmd} is designed to compute
+E-values not just on the total number of non-redundant sequences
+within a database, but on the total number of sequences in the original
+(possibly redundant) database, provided those redundant counts are
+given in the hmmpgmd-formatted file.
+
+The \prog{hmmpgmd} file begins with a single line containing various counts
+describing the contents of the file, of the form
+
+\emprog{\#res\_cnt seq\_cnt db\_cnt cnt\_1 fullcnt\_1 cnt\_2 fullcnt\_2 $\ldots$ date\_stamp}
+
+\subsubsection{Fields in header line}
+
+\begin{sreitems}{\emprog{header}}
+
+\item [\emprog{res\_cnt}] Number of residues in the sequence file.
+
+\item [\emprog{seq\_cnt}] Number of sequences in the sequence file. 
+
+\item [\emprog{db\_cnt}] Number of databases in the sequence file. 
+
+\item [\emprog{cnt\_i}] Of the sequnces in the file, the number that belong to
+database \prog{i}. Note that if the file contains only a single
+database, this will match \prog{seq\_cnt}.
+ 
+\item [\emprog{fullcnt\_i}] For database \prog{i}, the number of sequences
+that should be used in computing E-values. If redundant 
+sequences were collapsed out of the original database, this may be 
+larger than \prog{cnt\_i}.  
+
+\end{sreitems}
+
+
+\subsubsection{FASTA-like sequence format}
+
+In the main body of the sequence file, database sequences are stored
+sequentially, with each entry consisting of a one-line FASTA-like
+header followed by one or more lines containing the amino acid sequence, 
+like
+
+\begin{cchunk}
+>1 100
+ACDEFGHIKLMNPQTVWY
+>2 010
+ACDKLMNPQTVWYEFGHI
+>3 111
+EFMNRGHIKLMNPQT
+\end{cchunk}
+
+Note that the per-entry header line is made up of two parts. The first part 
+is a numeric, incrementing sequence identifier (the i'th entry has the
+identifier \prog{i}). The second part is a bit string indicating database
+membership. In this example, sequence 1 is found in database 1, sequence 2 is
+found in database 2, and sequence 3 found in databases 1, 2, and 3. The number 
+of bits in each bit string should match \prog{db\_cnt}.
+
+Because \prog{hmmpgmd} accepts only numeric sequence identifiers, it is
+necessary to keep track of the mapping between each numeric sequence identifier
+and the corresponding meta data (e.g. name, accession, description) external to
+the hmmpgmd-format file, and post-process \prog{hmmpgmd} seach results to 
+apply those fields to the target sequence information.
+Depending on the size of the map list, this might be easily acheived with a
+simple perl array, or might require a more heavy-duty mapping backend such as
+mongodb (\url{http://www.mongodb.org}).
+  
+
+\subsubsection{Creating a file in hmmpgmd format}
+
+The HMMER-Easel tool \prog{esl-reformat} is able to convert a file in unaligned
+fasta format into an hmmpgmd format file, such as
+
+\user{esl-reformat --id\_map mydb.hmmpgmd.map hmmpgmd mydb.fasta > mydb.hmmpgmd}.
+
+The optional \prog{--id\_map} flag captures sequence name and description
+information into a simple tabular file, to be used for mapping those values 
+back to \prog{hmmpgmd} query hits.
 
 
 

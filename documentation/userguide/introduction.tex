@@ -292,17 +292,24 @@ specifically designed for DNA/DNA comparison: \prog{nhmmer} and
 \prog{nhmmscan}. The most notable improvement over using HMMER3's tools is
 the ability to search long (e.g. chromosome length) target sequences.
 
-\paragraph{More sequence input formats} HMMER now handles a wide variety of
+\paragraph{More sequence input formats.} HMMER now handles a wide variety of
 input sequence file formats, both aligned (Stockholm, Aligned FASTA, Clustal,
 NCBI PSI-BLAST, PHYLIP, Selex, UCSC SAM A2M) and unaligned (FASTA, EMBL,
 Genbank), usually with autodetection.
 
+\paragraph{MSV stage of HMMER acceleration pipeline now even faster.}
+ Bjarne Knudsen, Chief Scientific Officer of CLC bio in Denmark, 
+ contributed an important optimization of the MSV filter (the
+ first stage in the accelerated "filter pipeline") that increases 
+ overall HMMER3 speed by about two-fold. This speed improvement
+ has no impact on sensitivity.
+    
 
 \subsection{What's still missing in HMMER3.1}
 
 Even though this is a stable public release that we consider suitable
 for large-scale production work (genome annotation, Pfam analysis,
-whatever), at the same time, HMMER3 remains a work in progress. We
+whatever), at the same time, HMMER remains a work in progress. We
 think the codebase is a suitable foundation for development of a
 number of significantly improved approaches to classically important
 problems in sequence analysis. Some of the more important ``holes''

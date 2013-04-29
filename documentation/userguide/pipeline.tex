@@ -470,12 +470,12 @@ the next stage (the bias filter). This strategy won't work for long
 DNA sequences; it doesn't filter the human genome much to say ``there's a hit on
 chromosome 1, now process the whole thing''. In the scanning-SSV (``Single
 ungapped Segment Viterbi'') algorithm used in \prog{nhmmer} and
-\prog{nhmmscan}, each sequence in the database is scanned for high-scoring
-ungapped alignment segments, and a window around each such segment is extracted
-(merging overlapping windows), and passed on to the remaining filter cascade,
-where it is (mostly) treated as described above. As with the MSV filter, the
-default P-value threshold is $0.02$, and can be controlled with the
-\ccode{--F1} flag.
+\prog{nhmmscan}, each comparison between a query and target is
+scanned for high-scoring ungapped alignment segments, and a window around each 
+such segment is extracted, merging overlapping windows. Each window is then
+passed on to the remaining filter cascade, where it is (for the most part)
+treated as described above. As with the MSV filter, the default P-value 
+threshold is $0.02$, and can be controlled with the \ccode{--F1} flag.
 
 The \ccode{--max} flag also controls the amount of the sequence database that
 passes the SSV filter, but instead of the threshold being set to $1.0$, as

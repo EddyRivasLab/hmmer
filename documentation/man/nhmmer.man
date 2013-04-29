@@ -18,16 +18,16 @@ nhmmer - search DNA/RNA queries against a DNA/RNA sequence database
 is used to search one or more nucleotide queries against a 
 nucleotide sequence database.
 For each query in 
-.I <queryfile>,
+.IR <queryfile> ,
 use that query to search the target database of sequences in
-.I <seqdb>,
+.IR <seqdb> ,
 and output a ranked list of the hits with the most significant
 matches to the query. A query may be either a profile model 
 built using 
-.B hmmbuild, 
+.BR hmmbuild , 
 a sequence alignment, or a single sequence. Sequence based
 queries can be in a number of formats (see
-.B --qformat), 
+.BR --qformat ), 
 and can typically be autodetected. Note that only 
 .I Stockholm
 format supports the use of multiple sequence-based queries.
@@ -56,9 +56,7 @@ streaming target database to search it with another profile.
 If the query is sequence-based, and not from <stdin>,
 a new file containing the HMM(s) built from the input(s) in 
 .I <queryfile>
-is produced, with the default filename being 
-.I <queryfile>.hmm. 
-This default may be overridden using the 
+may optionally be produced, with the filename set using the 
 .B --hmmout
 flag.
 
@@ -98,7 +96,7 @@ instead of the default stdout.
 Save a multiple alignment of all significant hits (those satisfying
 .I inclusion thresholds)
 to the file 
-.I <f>.
+.IR <f> .
 
 .TP 
 .BI --tblout " <f>"
@@ -122,9 +120,9 @@ different models.
 
 .TP 
 .BI --hmmout " <f>" 
-If <queryfile> is sequence-based, override the default 
-output HMM filename with 
-.I <f>. 
+If <queryfile> is sequence-based, the internally-computed HMM(s)
+are written to
+.IR <f> . 
 
 
 .TP 
@@ -158,14 +156,14 @@ Reporting thresholds control which hits are reported in output files
 (the main output,
 .I --tblout,
 and 
-.I --dfamtblout).
+.IR --dfamtblout ).
 Hits are ranked by statistical significance (E-value). 
 
 
 .TP
 .BI -E " <x>"
 Report target sequences with an E-value of <=
-.I <x>. 
+.IR <x> . 
 The default is 10.0, meaning that on average, about 10 false positives
 will be reported per query, so you can see the top of the noise
 and decide for yourself if it's really noise.
@@ -174,7 +172,7 @@ and decide for yourself if it's really noise.
 .BI -T " <x>"
 Instead of thresholding output on E-value, instead
 report target sequences with a bit score of >=
-.I <x>.
+.IR <x> .
 
 
 
@@ -284,7 +282,7 @@ flag increases sensitivity somewhat, at a large cost in speed.
 
 .TP
 .BI --F1 " <x>"
-Set the P-value threshold for the MSV filter step.  The default is
+Set the P-value threshold for the SSV filter step.  The default is
 0.02, meaning that roughly 2% of the highest scoring nonhomologous
 targets are expected to pass the filter.
 
@@ -310,24 +308,23 @@ computationally intensive Forward/Backward algorithms shoulder an
 abnormally heavy load.
 
 
-
 .SH OTHER OPTIONS
 
 .TP
 .BI --tformat " <s>"
 Assert that the target sequence database file is in format 
-.I <s>. 
+.IR <s> . 
 Accepted formats include 
-.I fasta, 
-.I embl, 
-.I genbank,
-.I ddbj, 
-.I uniprot,
-.I stockholm, 
-.I pfam, 
-.I a2m, 
+.IR fasta , 
+.IR embl , 
+.IR genbank ,
+.IR ddbj , 
+.IR uniprot ,
+.IR stockholm , 
+.IR pfam , 
+.IR a2m , 
 and 
-.I afa.
+.IR afa .
 The default is to autodetect the format of the file.
 
 
@@ -336,7 +333,7 @@ The default is to autodetect the format of the file.
 Declare that the input
 .I queryfile
 is in format 
-.I <s>.
+.IR <s> .
 This is used when the query is sequence-based, rather than made
 up of profile model(s).
 Currently the accepted multiple alignment sequence file formats 
@@ -372,7 +369,7 @@ reproducible) results. A choice of 0 uses a randomly chosen seed.
 .BI --w_beta " <x>"
 Window length tail mass.
 The upper bound,
-.I W,
+.IR W ,
 on the length at which nhmmer expects to find an instance of the 
 model is set such that the fraction of all sequences generated
 by the model with length 
@@ -383,7 +380,7 @@ The default is 1e-7.
 This flag may be used to override the value of 
 .I W
 established for the model by 
-.B hmmbuild,
+.BR hmmbuild ,
 or when the query is sequence-based.
 
 
@@ -393,7 +390,7 @@ or when the query is sequence-based.
 Override the model instance length upper bound,
 .I W,
 which is otherwise controlled by
-.B --w_beta. 
+.BR --w_beta . 
 It should be larger than the model length. The value of 
 .I W
 is used deep in the acceleration pipeline, and modest changes
@@ -423,7 +420,7 @@ default both the query sequence and its reverse-complement are searched.
 .TP
 .BI --cpu " <n>"
 Set the number of parallel worker threads to 
-.I <n>.
+.IR <n> .
 By default, HMMER sets this to the number of CPU cores it detects in
 your machine - that is, it tries to maximize the use of your available
 processor cores. Setting 
@@ -431,7 +428,7 @@ processor cores. Setting
 higher than the number of available cores is of little if any value,
 but you may want to set it to something less. You can also control
 this number by setting an environment variable, 
-.I HMMER_NCPU.
+.IR HMMER_NCPU .
 
 This option is only available if HMMER was compiled with POSIX threads
 support. This is the default, but it may have been turned off at
@@ -444,13 +441,13 @@ For debugging the MPI master/worker version: pause after start, to
 enable the developer to attach debuggers to the running master and
 worker(s) processes. Send SIGCONT signal to release the pause.
 (Under gdb: 
-.I (gdb) signal SIGCONT)
+.IR "(gdb) signal SIGCONT" )
 (Only available if optional MPI support was enabled at compile-time.)
 
 .TP
 .BI --mpi
 Run in MPI master/worker mode, using
-.I mpirun.
+.IR mpirun .
 (Only available if optional MPI support was enabled at compile-time.)
 
 

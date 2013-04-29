@@ -24,9 +24,17 @@ ________________________________________________________________
     DNA sequences against a database of DNA HMMs (analagous to hmmscan 
     for proteins). 
     
+-:- MSV stage of HMMER acceleration pipeline now even faster.
+
+    Bjarne Knudsen, Chief Scientific Officer of CLC bio in Denmark, 
+    contributed an important optimization of the MSV filter (the
+    first stage in the accelerated "filter pipeline") that increases 
+    overall HMMER3 speed by about two-fold. This speed improvement
+    has no impact on sensitivity.
+    
 -:- The daemon underlying the hmmer.org web server.
 
-    We couldn’t quite get enough speed out of standard cluster 
+    We couldn't quite get enough speed out of standard cluster 
     parallelization approaches like MPI, so we implemented our own 
     hand-rolled IP socket communication protocol in a daemon called
     hmmpgmd. 
@@ -61,18 +69,6 @@ ________________________________________________________________
     employed. Previous HMMER3 flatfiles are read fine in a reverse 
     compatible mode. However, any binary press'ed HMM databases must be 
     repress'ed with "hmmpress".
-
--:- One of the stages of the accelerated "filter pipeline" for the
-    protein search programs has been modified.  reimplemented. The ViterbiFilter step is
-    now implemented in 16-bit precision in 8-fold parallel vectors (it
-    was previously in 8-bit precision in 16-fold parallel vectors).
-    Testing/analysis of numerical roundoff error determined that the
-    8-bit implementation had unacceptable error on a subset of Pfam
-    models. You should observe little if any difference in speed as a
-    result of this change. There may be small differences in sequences
-    that do or don't pass through the filter, but for sequences that pass
-    the filter, there should be no changes in their called domain
-    structure, alignment, scores, or E-values.
 
 
 Other changes include:

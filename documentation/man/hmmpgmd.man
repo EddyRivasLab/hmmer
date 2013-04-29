@@ -12,46 +12,48 @@ hmmpgmd - daemon for searching a protein query against a protein database
 .SH DESCRIPTION
 
 .PP
+The
 .B hmmpgmd 
-is the daemon that we use internally for the hmmer.org web server, 
+program is the daemon that we use internally for the hmmer.org web server, 
 and essentially stands in front of the protein search programs
-.B phmmer, 
-.B hmmsearch,
+.BR phmmer , 
+.BR hmmsearch ,
 and 
-.B hmmscan. 
+.BR hmmscan . 
 
 To use
-.B hmmpgmd, 
+.BR hmmpgmd , 
 first an instance must be started up as a 
 .I master 
 server, and provided with at least one of a 
-.I <seqdb>
+.I "sequence database"
 (using the 
 .B --seqdb
 flag)
-and an 
-.I <hmmdb>
+and/or an 
+.I "HMM database"
 (using the
 .B --hmmdb
-flag). The input database(s) will be loaded into memory by the 
-master. The master has finished loading the database(s) when it 
+flag). 
+A sequence database must be in the hmmpgmd format, which may be
+produced using 
+.BR esl-reformat .
+An HMM database is of the form produced by 
+.BR hmmbuild .
+The input database(s) will be loaded into memory by the 
+master. When the master has finished loading the database(s), it 
 prints the line:
-.br
-.RS 6
-Data loaded into memory. Master is ready.
-.RE
+"Data loaded into memory. Master is ready."
 
-.LP
+
+.PP
 Only after master is ready, one or more instances of hmmpgmd may
 be started as workers. These workers may be (and typically are) on
 different machines from the master, but must have access to the 
 same database file(s) provided to the master, with the same path. As 
 with the master, each worker loads the database(s) into memory, and 
-indicates completion by printing:
-.br
-.RS 6
-Data loaded into memory. Worker is ready.
-.RE
+indicates completion by printing: "Data loaded into memory. Worker is ready."
+
 
 .PP
 The master server and workers are expected to remain running.
@@ -62,65 +64,61 @@ client. Two example client programs are included in the HMMER3.1 src
 directory - the C program
 .B hmmc2
 and the perl script
-.B hmmpgmd_client_example.pl.
+.BR hmmpgmd_client_example.pl .
 These are intended as examples only, and should be extended as 
 necessary to meet your needs. 
 
-Queries are submitted to the master from the client as a character
-string. They may be the sort of query that would normally be handled
+.PP
+A query is submitted to the master from the client as a character
+string. Queries may be the sort that would normally be handled
 by 
 .B phmmer
 (protein sequence vs protein database),
 .B hmmsearch
-(protein hmm query vs protein database), or
+(protein HMM query vs protein database), or
 .B hmmscan
-(protein query vs protein hmm database).
+(protein query vs protein HMM database).
  
 
-The general form of a client query is:
-.RS 6
-@[options]
-.br
-(fasta sequence) or (hmm text)
-.br
-//
-.RE
+The general form of a client query is to start with a single line
+of the form 
+.IR "@[options]" , 
+followed by multiple lines of text representing either the query HMM 
+or fasta-formatted sequence. The final line of each query is the separator 
+.IR "//" .
+
 
 .PP
 For example, to perform a 
 .B phmmer
-type search, the client submits the following text in order to query
-the given sequence against the subset of the sequence database
-files that belong to sequence database #2.
-.br
-.RS 6
-@--seqdb 2
-.br
->seq
-.br
-MGPSENDPNLFVALYDFVASGDNTLSITKGEKLRVLGYNHNGEWCEAQTKNGQGWVP
-.br
-//
-.RE
+type search of a sequence against a sequence database 
+file, the first line is of the form 
+.IR "@--seqdb 1" ,
+then the fasta-formatted query sequence starting with the header line
+.IR >sequence-name ,
+followed by one or more lines of sequence, and finally the closing
+.IR "//" .
 
 .PP
 To perform an
 .B hmmsearch 
-type search, the protein sequence will be replaced by the full
-text content of a HMMER-format HMM file. 
+type search, the query sequence is replaced by the full
+text of a HMMER-format query HMM. 
 
 .PP
 To perform an
 .B hmmscan 
-type search, the search will match that of the 
+type search, the text matches that of the 
 .B phmmer
-type search, except that the first line will change to 
-.br
-.RS 6
-@--hmmdb 1
-.RE
-.br
-(currently, only a single hmm database can be supported).
+type search, except that the first line changes to 
+.I "@--hmmdb 1".
+
+.PP
+In the hmmpgmd-formatted sequence database file, each sequence
+can be associated with one or more sub-databases. The 
+.I --seqdb
+flag indicates which of these sub-databases will be queried. 
+The HMM database format does not support sub-databases.
 
 .PP
 The result of each query is an undocumented data structure in 
