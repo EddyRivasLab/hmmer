@@ -105,13 +105,11 @@ static ESL_OPTIONS options[] = {
   { "--cut_tc",     eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  THRESHOPTS,      "use profile's TC trusted cutoffs to set all thresholding",     6 },
   /* Control of acceleration pipeline */
   { "--max",        eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL, "--F1,--F2,--F3", "Turn all heuristic filters off (less speed, more power)",      7 },
-  { "--F1",         eslARG_REAL,       "0.02", NULL, NULL,    NULL,  NULL, "--max",          "Stage 1 (MSV) threshold: promote hits w/ P <= F1",             7 },
+  { "--F1",         eslARG_REAL,       "0.02", NULL, NULL,    NULL,  NULL, "--max",          "Stage 1 (SSV) threshold: promote hits w/ P <= F1",             7 },
   { "--F2",         eslARG_REAL,       "1e-3", NULL, NULL,    NULL,  NULL, "--max",          "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             7 },
   { "--F3",         eslARG_REAL,       "1e-5", NULL, NULL,    NULL,  NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
   { "--nobias",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL, "--max",          "turn off composition bias filter",                             7 },
-  { "--B1",         eslARG_INT,         "110", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (MSV)",          7 },
-  { "--B2",         eslARG_INT,         "240", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Vit)",          7 },
-  { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",          7 },
+
   /* Selecting the alphabet rather than autoguessing it */
   { "--dna",        eslARG_NONE,        FALSE, NULL, NULL,   "--rna", NULL,   NULL,          "input alignment is DNA sequence data",                         8 },
   { "--rna",        eslARG_NONE,        FALSE, NULL, NULL,   "--dna",  NULL,  NULL,          "input alignment is RNA sequence data",                         8 },
@@ -134,8 +132,18 @@ static ESL_OPTIONS options[] = {
    *   (b) probably going to change
    */
   { "--restrictdb_stkey", eslARG_STRING, "0",  NULL, NULL,    NULL,  NULL,           NULL,   "Search starts at the sequence with name <s>",                    99 },
-  { "--restrictdb_n",eslARG_INT,        "-1",  NULL, NULL,    NULL,  NULL,           NULL,   "Search <j> target sequences (starting at --restrictdb_stkey)",      99 },
-  { "--ssifile",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,   "restrictdb_x values require ssi file. Override default to <s>",     99 },
+  { "--restrictdb_n",eslARG_INT,        "-1",  NULL, NULL,    NULL,  NULL,           NULL,   "Search <j> target sequences (starting at --restrictdb_stkey)",   99 },
+  { "--ssifile",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,   "restrictdb_x values require ssi file. Override default to <s>",  99 },
+
+
+  /* stage-specific window length used for bias composition estimate,
+   * hidden because they are confusing/expert options. May drag them out
+   * into the daylight eventually
+   */
+  { "--B1",         eslARG_INT,         "110", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (SSV)",          99 },
+  { "--B2",         eslARG_INT,         "240", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Vit)",          99 },
+  { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",         9 },
+
 
 
 /* Not used, but retained because esl option-handling code errors if it isn't kept here.  Placed in group 99 so it doesn't print to help*/
