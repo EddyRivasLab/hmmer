@@ -27,21 +27,23 @@ use Getopt::Long;
 #Process the options;
 #------------------------------------------------------------------------------
 
-my ( $map, $file, $nocleanup, $peerAddr, $peerPort, $proto, $verbose, $help );
+my ( $map, $file, $nocleanup, $peerAddr, $peerPort, $proto, $verbose, $help, $timeout );
 
+$timeout = 30;
 GetOptions(
   "map=s"      => \$map,
   "file=s"     => \$file,
   "PeerAddr=s" => \$peerAddr,
   "PeerPort=s" => \$peerPort,
   "Proto=s"    => \$proto,
+  "timeout=i"  => \$timeout,
   "verbose"    => \$verbose,
   "nocleanup"  => \$nocleanup,
   "h|help"     => \$help
 ) or die "Failed to parse options, run -h :[$@]\n";
 
 if ( !defined($map) ) {
-  warn("No accessions will be reported, just accessions.\n");
+  warn("No accessions will be reported, just hmmpgmd index.\n");
 }
 elsif ( !-s $map ) {
   warn
@@ -125,7 +127,7 @@ sub main {
 
     #Wrap this whole call in a sig alarm.
     local $SIG{ALRM} = sub { croak "Failed to get response from hmmpgmd" };
-    alarm 30;
+    alarm $timeout;
     eval {
       #open the file where we store the binary data.
       open( my $outFH, '>', "/tmp/hmmer.$$.$c.out" )
@@ -604,7 +606,7 @@ usage: hmmpgmd_client_example.pl -file seq.fa
   verbose   : Prints debug statements/progress reports.
   nocleanup : When this flag is set, leaves the hmmpgmd binary output files in
             : /tmp. The files has the format hmmer.#PID.#sequence.out.
- 
+  timeout   : Change the default timeout, 30 secs. Time in seconds.
    
   #The follow options control which hmmpgmd is connected to. The are used
   #by IO::Socket::INET, see CPAN for more information.
