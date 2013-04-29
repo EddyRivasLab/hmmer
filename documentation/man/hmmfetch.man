@@ -11,13 +11,13 @@ hmmfetch - retrieve profile HMM(s) from a file
 .I <key>
  (retrieves HMM named <key>)
 
-.B hmmfetch -f
+.B "hmmfetch -f"
 .I [options]
 .I <hmmfile>
 .I <keyfile>
  (retrieves all HMMs listed in <keyfile>)
 
-.B hmmfetch --index
+.B "hmmfetch --index"
 .I [options]
 .I <hmmfile>
  (indexes <hmmfile> for fetching)
@@ -34,16 +34,16 @@ Quickly retrieves one or more profile HMMs from an
 For maximum speed, the 
 .I <hmmfile>
 should be indexed first, using
-.B hmmfetch --index.
+.BR "hmmfetch --index" .
 The index is a binary file named
-.I <hmmfile>.ssi.
+.IR <hmmfile>.ssi .
 However, this is optional, and retrieval will still
 work from unindexed files, albeit much more slowly.
 
 .PP
 The default mode is to retrieve a single profile by name or
 accession, called the
-.I <key>.
+.IR <key> .
 For example:
 
 .nf
@@ -61,27 +61,27 @@ The first whitespace-delimited field on each non-blank non-comment
 line of the
 .I <keyfile> 
 is used as a 
-.I <key>,
+.IR <key> ,
 and any remaining data on the line is ignored. This allows
 a variety of whitespace delimited datafiles to be used
 as 
-.I <keyfile>s.
+.IR <keyfile>s .
 
 .PP
 When using
 .I -f 
 and a
-.I <keyfile>,
+.IR <keyfile> ,
 if 
 .B hmmfile 
 has been indexed, the keys are retrieved in the order
 they occur in the 
-.I keyfile,
+.IR keyfile ,
 but if 
 .B hmmfile 
 isn't indexed, keys are retrieved in the order they occur
 in the 
-.B hmmfile. 
+.BR hmmfile . 
 This is a side effect of an implementation that allows
 multiple keys to be retrieved even if the
 .B <hmmfile> 
@@ -136,7 +136,7 @@ options.
 The second commandline argument is a 
 .I <keyfile>
 instead of a single 
-.I <key>.
+.IR <key> .
 The first field on each line of the
 .I <keyfile> 
 is used as a retrieval 
@@ -163,7 +163,7 @@ being created.
 .TP
 .B --index
 Instead of retrieving one or more profiles from
-.I <hmmfile>,
+.IR <hmmfile> ,
 index the
 .I <hmmfile>
 for future retrievals.

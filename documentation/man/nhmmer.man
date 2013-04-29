@@ -94,7 +94,7 @@ instead of the default stdout.
 .TP
 .BI -A " <f>"
 Save a multiple alignment of all significant hits (those satisfying
-.I inclusion thresholds)
+.IR "inclusion thresholds" )
 to the file 
 .IR <f> .
 
@@ -154,7 +154,7 @@ characters per line. The default is 120.
 
 Reporting thresholds control which hits are reported in output files
 (the main output,
-.I --tblout,
+.IR --tblout ,
 and 
 .IR --dfamtblout ).
 Hits are ranked by statistical significance (E-value). 
@@ -272,7 +272,7 @@ postprocessing.
 Turn off (nearly) all filters, including the bias filter, and run full
 Forward/Backward postprocessing on most of the target sequence. 
 In contrast to 
-.B hmmscan,
+.BR hmmscan ,
 the 
 .I --max
 flag in 
@@ -358,7 +358,7 @@ rather than the actual number of targets seen.
 .TP
 .BI --seed " <n>"
 Set the random number seed to 
-.I <n>.
+.IR <n> .
 Some steps in postprocessing require Monte Carlo simulation.  The
 default is to use a fixed seed (42), so that results are exactly
 reproducible. Any other positive integer will give different (but also
@@ -373,9 +373,9 @@ The upper bound,
 on the length at which nhmmer expects to find an instance of the 
 model is set such that the fraction of all sequences generated
 by the model with length 
-.I >= W
+.I ">= W"
 is less than  
-.I <x>. 
+.IR <x> . 
 The default is 1e-7. 
 This flag may be used to override the value of 
 .I W
@@ -388,7 +388,7 @@ or when the query is sequence-based.
 .TP 
 .BI --w_length " <n>"
 Override the model instance length upper bound,
-.I W,
+.IR W ,
 which is otherwise controlled by
 .BR --w_beta . 
 It should be larger than the model length. The value of 
@@ -400,7 +400,7 @@ do lead to longer run time).
 This flag may be used to override the value of 
 .I W
 established for the model by 
-.B hmmbuild,
+.BR hmmbuild ,
 or when the query is sequence-based.
 
 

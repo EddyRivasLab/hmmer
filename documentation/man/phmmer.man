@@ -17,9 +17,9 @@ phmmer - search protein sequence(s) against a protein sequence database
 .B phmmer
 is used to search one or more query protein sequences against a protein sequence database.
 For each query sequence in 
-.I <seqfile>,
+.IR <seqfile> ,
 use that sequence to search the target database of sequences in
-.I <seqdb>,
+.IR <seqdb> ,
 and output ranked lists of the sequences with the most significant
 matches to the query.
 
@@ -124,7 +124,7 @@ position-independent gap open and gap extend probabilities.
 .TP
 .BI --popen " <x>"
 Set the gap open probability for a single sequence query model to 
-.I <x>.
+.IR <x> .
 The default is 0.02. 
 .I <x> 
 must be >= 0 and < 0.5.
@@ -132,7 +132,7 @@ must be >= 0 and < 0.5.
 .TP
 .BI --pextend " <x>"
 Set the gap extend probability for a single sequence query model to 
-.I <x>.
+.IR <x> .
 The default is 0.4. 
 .I <x> 
 must be >= 0 and < 1.0.
@@ -141,11 +141,12 @@ must be >= 0 and < 1.0.
 .BI --mx " <s>"
 Obtain residue alignment probabilities from the built-in
 substitution matrix named
-.I <s>. 
+.IR <s> . 
 Several standard matrices are built-in, and do not need to be
 read from files. 
 The matrix name
-.I <s> can be
+.I <s> 
+can be
 PAM30, PAM70, PAM120, PAM240, BLOSUM45, BLOSUM50, BLOSUM62, BLOSUM80,
 or BLOSUM90.
 Only one of the
@@ -158,7 +159,7 @@ options may be used.
 .BI --mxfile " <mxfile>"
 Obtain residue alignment probabilities from the substitution matrix
 in file
-.I <mxfile>.
+.IR <mxfile> .
 The default score matrix is BLOSUM62 (this matrix is internal to
 HMMER and does not have to be available as a file). 
 The format of a substitution matrix
@@ -176,9 +177,9 @@ options may be used.
 
 Reporting thresholds control which hits are reported in output files
 (the main output,
-.I --tblout,
+.IR --tblout ,
 and 
-.I --domtblout).
+.IR --domtblout ).
 Sequence hits and domain hits are ranked by statistical significance
 (E-value) and output is generated in two sections called per-target
 and per-domain output. In per-target output, by default, all
@@ -193,7 +194,7 @@ E-value reporting thresholds, or to use bit score thresholds instead.
 .TP
 .BI -E " <x>"
 In the per-target output, report target sequences with an E-value of <=
-.I <x>. 
+.IR <x> . 
 The default is 10.0, meaning that on average, about 10 false positives
 will be reported per query, so you can see the top of the noise
 and decide for yourself if it's really noise.
@@ -202,14 +203,14 @@ and decide for yourself if it's really noise.
 .BI -T " <x>"
 Instead of thresholding per-profile output on E-value, instead
 report target sequences with a bit score of >=
-.I <x>.
+.IR <x> .
 
 .TP
 .BI --domE " <x>"
 In the per-domain output, for target sequences that have already satisfied
 the per-profile reporting threshold, report individual domains
 with a conditional E-value of <=
-.I <x>. 
+.IR <x> . 
 The default is 10.0. 
 A conditional E-value means the expected number of additional false
 positive domains in the smaller search space of those comparisons that
@@ -220,7 +221,7 @@ have at least one homologous domain already).
 .BI --domT " <x>"
 Instead of thresholding per-domain output on E-value, instead
 report domains with a bit score of >=
-.I <x>.
+.IR <x> .
 
 .SH OPTIONS CONTROLLING INCLUSION THRESHOLDS
 
@@ -381,21 +382,21 @@ Turn off the null2 score corrections for biased composition.
 .TP
 .BI -Z " <x>"
 Assert that the total number of targets in your searches is
-.I <x>,
+.IR <x> ,
 for the purposes of per-sequence E-value calculations,
 rather than the actual number of targets seen. 
 
 .TP
 .BI --domZ " <x>"
 Assert that the total number of targets in your searches is
-.I <x>,
+.IR <x> ,
 for the purposes of per-domain conditional E-value calculations,
 rather than the number of targets that passed the reporting thresholds.
 
 .TP 
 .BI --seed " <n>"
 Seed the random number generator with
-.I <n>,
+.IR <n> ,
 an integer >= 0. 
 If 
 .I <n> 
@@ -412,18 +413,18 @@ The default seed is 42.
 Declare that the input
 .I <seqfile>
 is in format 
-.I <s>.
+.IR <s> .
 Accepted formats include 
-.I fasta, 
-.I embl, 
-.I genbank,
-.I ddbj, 
-.I uniprot,
-.I stockholm, 
-.I pfam, 
-.I a2m, 
+.IR fasta , 
+.IR embl , 
+.IR genbank ,
+.IR ddbj , 
+.IR uniprot ,
+.IR stockholm , 
+.IR pfam , 
+.IR a2m , 
 and 
-.I afa.
+.IR afa .
 The default is to autodetect the format of the file.
 
 .TP 
@@ -431,24 +432,24 @@ The default is to autodetect the format of the file.
 Declare that the input
 .I <seqdb>
 is in format 
-.I <s>.
+.IR <s> .
 Accepted formats include 
-.I fasta, 
-.I embl, 
-.I genbank,
-.I ddbj, 
-.I uniprot,
-.I stockholm, 
-.I pfam, 
-.I a2m, 
+.IR fasta , 
+.IR embl , 
+.IR genbank ,
+.IR ddbj , 
+.IR uniprot ,
+.IR stockholm , 
+.IR pfam , 
+.IR a2m , 
 and 
-.I afa.
+.IR afa .
 The default is to autodetect the format of the file.
 
 .TP
 .BI --cpu " <n>"
 Set the number of parallel worker threads to 
-.I <n>.
+.IR <n> .
 By default, HMMER sets this to the number of CPU cores it detects in
 your machine - that is, it tries to maximize the use of your available
 processor cores. Setting 
@@ -456,7 +457,7 @@ processor cores. Setting
 higher than the number of available cores is of little if any value,
 but you may want to set it to something less. You can also control
 this number by setting an environment variable, 
-.I HMMER_NCPU.
+.IR HMMER_NCPU .
 
 This option is only available if HMMER was compiled with POSIX threads
 support. This is the default, but it may have been turned off at
@@ -468,13 +469,13 @@ For debugging the MPI master/worker version: pause after start, to
 enable the developer to attach debuggers to the running master and
 worker(s) processes. Send SIGCONT signal to release the pause.
 (Under gdb: 
-.I (gdb) signal SIGCONT)
+.IR "(gdb) signal SIGCONT" )
 (Only available if optional MPI support was enabled at compile-time.)
 
 .TP
 .BI --mpi
 Run in MPI master/worker mode, using
-.I mpirun.
+.IR mpirun .
 (Only available if optional MPI support was enabled at compile-time.)
 
 

@@ -16,7 +16,7 @@ The
 .B hmmemit
 program 
 samples (emits) sequences from the profile HMM(s) in
-.I hmmfile,
+.IR hmmfile ,
 and writes them to output.
 Sampling sequences may be useful for a variety of purposes, including
 creating synthetic true positives for benchmarks or tests.
@@ -68,9 +68,9 @@ options.
 .TP
 .BI -o " <f>"
 Direct the output sequences to file
-.I <f>,
+.IR <f> ,
 rather than to
-.I stdout.
+.IR stdout .
 
 .TP
 .BI -N " <n>"
@@ -174,7 +174,7 @@ Configure the profile for unihit glocal alignment.
 .SH OPTIONS CONTROLLING FANCY CONSENSUS EMISSION
 
 These options require that you have set the
-.B -C option.
+.BR "-C option" .
 
 .TP
 .BI --minl " <x>"
@@ -197,7 +197,7 @@ threshold for showing strongly conserved residues as upper case.
 .TP
 .BI --seed " <n>"
 Seed the random number generator with
-.I <n>,
+.IR <n> ,
 an integer >= 0. 
 If 
 .I <n> 

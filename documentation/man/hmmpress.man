@@ -17,7 +17,7 @@ Starting from a profile database
 .I <hmmfile>
 in standard HMMER3 format,
 construct binary compressed datafiles for 
-.B hmmscan.
+.BR hmmscan .
 The 
 .I hmmpress
 step is required for
@@ -26,11 +26,11 @@ to work.
 
 .PP
 Four files are created:
-.I <hmmfile>.h3m,
-.I <hmmfile>.h3i,
-.I <hmmfile>.h3f,
+.IR <hmmfile>.h3m ,
+.IR <hmmfile>.h3i ,
+.IR <hmmfile>.h3f ,
 and
-.I <hmmfile>.h3p.
+.IR <hmmfile>.h3p .
 The 
 .I <hmmfile>.h3m
 file contains the profile HMMs and their annotation in a binary

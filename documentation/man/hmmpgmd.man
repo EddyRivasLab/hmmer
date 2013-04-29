@@ -111,7 +111,7 @@ To perform an
 type search, the text matches that of the 
 .B phmmer
 type search, except that the first line changes to 
-.I "@--hmmdb 1".
+.IR "@--hmmdb 1" .
 
 .PP
 In the hmmpgmd-formatted sequence database file, each sequence
@@ -147,7 +147,7 @@ Run as the master server.
 .BI --worker " <s>"
 Run as a worker, connecting to the master server that is running on IP
 address
-.I <s>.
+.IR <s> .
 
 .TP 
 .BI --daemon

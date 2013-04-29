@@ -16,7 +16,7 @@ For each multiple sequence alignment in
 .I <msafile>
 build a profile HMM 
 and save it to a new file
-.I <hmmfile_out>.
+.IR <hmmfile_out> .
 
 
 .PP
@@ -29,7 +29,7 @@ To use '-', you must also specify the
 alignment file format with
 .BI --informat " <s>",
 as in
-.B --informat stockholm
+.B "--informat stockholm"
 (because of a current limitation in our implementation,
 MSA file formats cannot be autodetected in a nonrewindable
 input stream.)
@@ -37,7 +37,7 @@ input stream.)
 .PP
 .I <hmmfile_out>
 may not be '-' 
-.I (stdout),
+.IR (stdout) ,
 because sending the HMM file to 
 .I stdout
 would conflict with the other text
@@ -58,12 +58,12 @@ options.
 .TP
 .BI -n " <s>"
 Name the new profile 
-.I <s>.
+.IR <s> .
 The default is to use the name of the alignment (if one is present in 
 the 
-.I msafile,
+.IR msafile ,
 or, failing that, the name of the
-.I hmmfile.
+.IR hmmfile .
 If 
 .I msafile
 contains more than one alignment, 
@@ -77,9 +77,9 @@ annotated in the
 .TP
 .BI -o " <f>"
 Direct the summary output to file
-.I <f>,
+.IR <f> ,
 rather than to
-.I stdout.
+.IR stdout .
 
 .TP
 .BI -O " <f>"
@@ -99,7 +99,7 @@ transitions between insert and delete states.
 
 The alphabet type (amino, DNA, or RNA) is autodetected by default, by
 looking at the composition of the
-.I msafile.
+.IR msafile .
 Autodetection is normally quite reliable, but occasionally alphabet
 type may be ambiguous and autodetection can fail (for instance, on
 tiny toy alignments of just a few residues). To avoid this, or to
@@ -208,7 +208,7 @@ Use the same clustering scheme that was used to weight data in
 calculating BLOSUM subsitution matrices [Henikoff and Henikoff,
 Proc. Natl. Acad. Sci 89:10915, 1992]. Sequences are single-linkage
 clustered at an identity threshold (default 0.62; see
-.I --wid)
+.IR --wid )
 and within each cluster of c sequences, each sequence gets relative
 weight 1/c.
 
@@ -220,7 +220,7 @@ No relative weights. All sequences are assigned uniform weight.
 .BI --wid " <x>"
 Sets the identity threshold used by single-linkage clustering when 
 using 
-.I --wblosum. 
+.IR --wblosum . 
 Invalid with any other weighting scheme. Default is 0.62.
 
 
@@ -230,7 +230,7 @@ Invalid with any other weighting scheme. Default is 0.62.
 
 After relative weights are determined, they are normalized to sum to a
 total effective sequence number, 
-.I eff_nseq. 
+.IR eff_nseq . 
 This number may be the actual number of sequences in the alignment,
 but it is almost always smaller than that.
 The default entropy weighting method 
@@ -242,20 +242,20 @@ relative entropy is controlled by a two-parameter function, where the
 two parameters are settable with
 .I --ere
 and 
-.I --esigma.
+.IR --esigma .
 
 .TP
 .B --eent
 Adjust effective sequence number to achieve a specific relative entropy
 per position (see
-.I --ere).
+.IR --ere ).
 This is the default.
 
 .TP
 .B --eclust
 Set effective sequence number to the number of single-linkage clusters
 at a specific identity threshold (see 
-.I --eid).
+.IR --eid ).
 This option is not recommended; it's for experiments evaluating
 how much better
 .B --eent
@@ -271,14 +271,14 @@ may be useful for short models.
 .TP
 .BI --eset " <x>"
 Explicitly set the effective sequence number for all models to 
-.I <x>.
+.IR <x> .
 
 .TP
 .BI --ere " <x>"
 Set the minimum relative entropy/position target to 
-.I <x>.
+.IR <x> .
 Requires
-.B --eent. 
+.BR --eent . 
 Default depends on the sequence alphabet. For protein
 sequences, it is 0.59 bits/position; for nucleotide 
 sequences, it is 0.45 bits/position.
@@ -367,7 +367,7 @@ the location parameter tau for Forward evalues. Default is 0.04.
 .TP
 .BI --cpu " <n>"
 Set the number of parallel worker threads to 
-.I <n>.
+.IR <n> .
 By default, HMMER sets this to the number of CPU cores it detects in
 your machine - that is, it tries to maximize the use of your available
 processor cores. Setting 
@@ -375,7 +375,7 @@ processor cores. Setting
 higher than the number of available cores is of little if any value,
 but you may want to set it to something less. You can also control
 this number by setting an environment variable, 
-.I HMMER_NCPU.
+.IR HMMER_NCPU .
 
 This option is only available if HMMER was compiled with POSIX threads
 support. This is the default, but it may have been turned off for your
@@ -387,7 +387,7 @@ site or machine for some reason.
 Declare that the input
 .I msafile
 is in format 
-.I <s>.
+.IR <s> .
 Currently the accepted multiple alignment sequence file formats 
 include Stockholm, Aligned FASTA, Clustal, NCBI PSI-BLAST, PHYLIP, 
 Selex, and UCSC SAM A2M. Default is to autodetect the format of
@@ -397,7 +397,7 @@ the file.
 .TP 
 .BI --seed " <n>"
 Seed the random number generator with
-.I <n>,
+.IR <n> ,
 an integer >= 0. 
 If 
 .I <n> 
@@ -414,13 +414,13 @@ The default seed is 42.
 .BI --w_beta " <x>"
 Window length tail mass.
 The upper bound,
-.I W,
+.IR W ,
 on the length at which nhmmer expects to find an instance of the 
 model is set such that the fraction of all sequences generated
 by the model with length 
-.I >= W
+.I ">= W"
 is less than  
-.I <x>. 
+.IR <x> . 
 The default is 1e-7. 
 
 
@@ -428,9 +428,9 @@ The default is 1e-7.
 .TP 
 .BI --w_length " <n>"
 Override the model instance length upper bound,
-.I W,
+.IR W ,
 which is otherwise controlled by
-.B --w_beta. 
+.BR --w_beta . 
 It should be larger than the model length. The value of 
 .I W
 is used deep in the acceleration pipeline, and modest changes
@@ -444,7 +444,7 @@ do lead to longer run time).
 Run as a parallel MPI program. Each alignment is assigned to a MPI
 worker node for construction. (Therefore, the maximum parallelization 
 cannot exceed the number of alignments in the input
-.I msafile.)
+.IR msafile .)
 This is useful when building large profile libraries. This option is
 only available if optional MPI capability was enabled at compile-time.
 
@@ -460,7 +460,7 @@ running process and release the arrest.
 .BI --maxinsertlen " <n>"
 Restrict insert length parameterization such that the expected
 insert length at each position of the model is no more than
-.I <n>. 
+.IR <n> . 
  
 
 

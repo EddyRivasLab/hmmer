@@ -15,7 +15,7 @@ hmmsim - collect score distributions on random sequences
 The 
 .B hmmsim 
 program generates random sequences, scores them with the model(s) in 
-.I <hmmfile>,
+.IR <hmmfile> ,
 and outputs various sorts of histograms, plots, and fitted
 distributions for the resulting scores.
 
@@ -137,7 +137,7 @@ options.
 Collect expected Viterbi alignment length statistics from each
 simulated sequence. This only works with Viterbi scores (the default;
 see
-.I --vit). 
+.IR --vit ). 
 Two additional fields are printed in the output table for
 each model: the mean length of Viterbi alignments, and the standard
 deviation.
@@ -149,24 +149,24 @@ deviation.
 .TP
 .BI -L " <n>"
 Set the length of the randomly sampled (nonhomologous) sequences to 
-.I <n>.
+.IR <n> .
 The default is 100.
 
 
 .TP
 .BI -N " <n>"
 Set the number of randomly sampled sequences to 
-.I <n>.
+.IR <n> .
 The default is 1000.
 
 .TP
 .B --mpi
 Run in MPI parallel mode, under 
-.B mpirun. 
+.BR mpirun . 
 It is parallelized at the level of sending one profile at a time to an
 MPI worker process, so parallelization only helps if you have more
 than one profile in the 
-.I <hmmfile>,
+.IR <hmmfile> ,
 and you want to have at least as many profiles as MPI worker
 processes.
 (Only available if optional MPI support was enabled at compile-time.)
@@ -187,7 +187,7 @@ When collecting Viterbi alignment statistics (the
 .I -a 
 option), for each sampled sequence, output two fields per
 line to a file
-.I <f>:
+.IR <f> :
 the length of the optimal alignment, and the Viterbi bit score.
 Requires that the 
 .I -a
@@ -196,7 +196,7 @@ option is also used.
 .TP
 .BI --efile " <f>"
 Output a rank vs. E-value plot in XMGRACE xy format to file
-.I <f>.
+.IR <f> .
 The x-axis is the rank of this sequence, from highest score to lowest;
 the y-axis is the E-value calculated for this sequence. E-values are
 calculated using H3's default procedures (i.e. the pmu, plambda
@@ -207,7 +207,7 @@ and E-value if E-values are accurately estimated.
 .TP
 .BI --ffile " <f>"
 Output a "filter power" file to 
-.I <f>:
+.IR <f> :
 for each model, a line with three fields:
 model name, number of sequences passing the P-value threshold,
 and fraction of sequences passing the P-value threshold. See
@@ -232,7 +232,7 @@ in XMGRACE xy format. There are three plots:
 .BI --xfile " <f>"
 Output the bit scores as a binary array of double-precision floats (8
 bytes per score) to file
-.I <f>.
+.IR <f> .
 Programs like Easel's 
 .B esl-histplot
 can read such binary files. This is useful when generating extremely
@@ -333,7 +333,7 @@ Set the upper bound on the tail mass distribution. (The default is
 Set the number of tail masses to sample, starting from
 .I --tmin
 and ending at 
-.I --tmax.
+.IR --tmax .
 (The default is 1, for the default 0.02 single tail mass.)
 
 .TP
@@ -394,13 +394,13 @@ For debugging the MPI master/worker version: pause after start, to
 enable the developer to attach debuggers to the running master and
 worker(s) processes. Send SIGCONT signal to release the pause.
 (Under gdb: 
-.I (gdb) signal SIGCONT)
+.IR "(gdb) signal SIGCONT" )
 (Only available if optional MPI support was enabled at compile-time.)
 
 .TP
 .BI --seed " <n>"
 Set the random number seed to 
-.I <n>.
+.IR <n> .
 The default is 0, which makes the random number generator use
 an arbitrary seed, so that different runs of 
 .B hmmsim 
@@ -454,7 +454,7 @@ and it will not work with
 .BI --pthresh " <x>"
 Set the filter P-value threshold to use in generating filter power
 files with
-.I --ffile.
+.IR --ffile .
 The default is 0.02 (which would be appropriate for testing MSV
 scores, since this is the default MSV filter threshold in H3's
 acceleration pipeline.) Other appropriate choices (matching defaults

@@ -64,11 +64,11 @@ determines which alignment positions would be identified by
 as match states, a process that requires that all
 .B hmmbuild 
 flags impacting that decision be supplied to 
-.B alimask.
+.BR alimask .
 It is for this reason that many of the 
 .B hmmbuild 
 flags are also used by
-.B alimask.  
+.BR alimask .  
 
 
 
@@ -82,17 +82,17 @@ options.
 .TP
 .BI -o " <f>"
 Direct the summary output to file
-.I <f>,
+.IR <f> ,
 rather than to
-.I stdout.
+.IR stdout .
 
 
 .SH OPTIONS FOR SPECIFYING MASK RANGE
 
 A single mask range is given as a dash-separated pair, like
-.I --modelrange 10-20
+.I "--modelrange 10-20"
 and multiple ranges may be submitted as a comma-separated list,
-.I --modelrange 10-20,30-42.
+.IR "--modelrange 10-20,30-42" .
 
 
 .TP
@@ -125,7 +125,7 @@ range(s).
 
 The alphabet type (amino, DNA, or RNA) is autodetected by default, by
 looking at the composition of the
-.I msafile.
+.IR msafile .
 Autodetection is normally quite reliable, but occasionally alphabet
 type may be ambiguous and autodetection can fail (for instance, on
 tiny toy alignments of just a few residues). To avoid this, or to
@@ -234,7 +234,7 @@ Use the same clustering scheme that was used to weight data in
 calculating BLOSUM subsitution matrices [Henikoff and Henikoff,
 Proc. Natl. Acad. Sci 89:10915, 1992]. Sequences are single-linkage
 clustered at an identity threshold (default 0.62; see
-.I --wid)
+.IR --wid )
 and within each cluster of c sequences, each sequence gets relative
 weight 1/c.
 
@@ -246,7 +246,7 @@ No relative weights. All sequences are assigned uniform weight.
 .BI --wid " <x>"
 Sets the identity threshold used by single-linkage clustering when 
 using 
-.I --wblosum. 
+.IR --wblosum . 
 Invalid with any other weighting scheme. Default is 0.62.
 
 
@@ -260,7 +260,7 @@ Invalid with any other weighting scheme. Default is 0.62.
 Declare that the input
 .I msafile
 is in format 
-.I <s>.
+.IR <s> .
 Currently the accepted multiple alignment sequence file formats 
 include Stockholm, Aligned FASTA, Clustal, NCBI PSI-BLAST, PHYLIP, 
 Selex, and UCSC SAM A2M. Default is to autodetect the format of
@@ -270,7 +270,7 @@ the file.
 .TP 
 .BI --seed " <n>"
 Seed the random number generator with
-.I <n>,
+.IR <n> ,
 an integer >= 0. 
 If 
 .I <n> 

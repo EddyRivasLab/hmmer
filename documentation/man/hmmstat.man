@@ -16,7 +16,7 @@ The
 .B hmmstat
 utility prints out a tabular file of summary statistics for each
 profile in
-.I <hmmfile>.
+.IR <hmmfile> .
 
 
 .PP 
@@ -68,7 +68,7 @@ Probably not useful. Information content is a slightly
 different calculation than relative entropy. 
 
 .TP
-.B p relE
+.B "p relE"
 Mean positional relative entropy, in bits.
 This is a fancier version of the per-match-state relative entropy,
 taking into account the transition (insertion/deletion) probabilities;

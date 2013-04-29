@@ -16,14 +16,14 @@ jackhmmer - iteratively search sequence(s) against a protein database
 iteratively searches each query sequence in 
 .I <seqfile>
 against the target sequence(s) in
-.I <seqdb>.
+.IR <seqdb> .
 The first iteration is identical to a 
 .B phmmer
 search.
 For the next iteration,
 a multiple alignment of the query together with all target sequences
 satisfying 
-.I inclusion thresholds
+.I "inclusion thresholds"
 is assembled, a profile is constructed from this alignment
 (identical to using
 .B hmmbuild
@@ -71,7 +71,7 @@ options.
 .TP
 .BI -N " <n>"
 Set the maximum number of iterations to 
-.I <n>.
+.IR <n> .
 The default is 5. If N=1, the result is equivalent to a
 .B phmmer
 search.
@@ -89,7 +89,7 @@ including checkpoint files for each iteration.
 .TP 
 .BI -o " <f>"
 Direct the human-readable output to a file
-.I <f>.
+.IR <f> .
 
 .TP
 .BI -A " <f>"
@@ -116,7 +116,7 @@ in a readily parseable, columnar, whitespace-delimited format.
 .BI --chkhmm " <prefix>"
 At the start of each iteration, checkpoint the query HMM, saving it
 to a file named
-.I <prefix>-<n>.hmm
+.I "<prefix>-<n>.hmm"
 where
 .I <n>
 is the iteration number (from 1..N).
@@ -128,7 +128,7 @@ domains satisfying inclusion thresholds (e.g. what will become the
 query HMM for the next iteration), 
 saving it
 to a file named
-.I <checkpoint file prefix>-<n>.sto
+.I "<checkpoint file prefix>-<n>.sto"
 in Stockholm format,
 where
 .I <n>
@@ -174,7 +174,7 @@ parameters to be changed.
 .TP
 .BI --popen " <x>"
 Set the gap open probability for a single sequence query model to 
-.I <x>.
+.IR <x> .
 The default is 0.02. 
 .I <x> 
 must be >= 0 and < 0.5.
@@ -182,7 +182,7 @@ must be >= 0 and < 0.5.
 .TP
 .BI --pextend " <x>"
 Set the gap extend probability for a single sequence query model to 
-.I <x>.
+.IR <x> .
 The default is 0.4. 
 .I <x> 
 must be >= 0 and < 1.0.
@@ -191,11 +191,12 @@ must be >= 0 and < 1.0.
 .BI --mx " <s>"
 Obtain residue alignment probabilities from the built-in
 substitution matrix named
-.I <s>. 
+.IR <s> . 
 Several standard matrices are built-in, and do not need to be
 read from files. 
 The matrix name
-.I <s> can be
+.I <s> 
+can be
 PAM30, PAM70, PAM120, PAM240, BLOSUM45, BLOSUM50, BLOSUM62, BLOSUM80,
 or BLOSUM90.
 Only one of the
@@ -208,7 +209,7 @@ options may be used.
 .BI --mxfile " <mxfile>"
 Obtain residue alignment probabilities from the substitution matrix
 in file
-.I <mxfile>.
+.IR <mxfile> .
 The default score matrix is BLOSUM62 (this matrix is internal to
 HMMER and does not have to be available as a file). 
 The format of a substitution matrix
@@ -221,9 +222,9 @@ analysis software.
 
 Reporting thresholds control which hits are reported in output files
 (the main output,
-.I --tblout,
+.IR --tblout ,
 and 
-.I --domtblout).
+.IR --domtblout ).
 In each iteration, sequence hits and domain hits are ranked by
 statistical significance (E-value) and output is generated in two
 sections called per-target and per-domain output. In per-target
@@ -248,7 +249,7 @@ Use a bit score threshold for per-sequence output instead of an
 E-value threshold (any setting of
 .B -E
 is ignored). Report sequences with a bit score of >=
-.I <x>.
+.IR <x> .
 By default this option is unset.
 
 .TP 
@@ -258,7 +259,8 @@ Declare the total size of the database to be
 sequences, for purposes of E-value calculation.
 Normally E-values are calculated relative to the size of the database
 you actually searched (e.g. the number of sequences in 
-.I target_seqdb). In some cases (for instance, if you've split your
+.IR target_seqdb ).
+In some cases (for instance, if you've split your
 target sequence database into multiple files for parallelization of
 your search), you may know better what the actual size of your search
 space is.
@@ -316,7 +318,7 @@ Include sequences with E-values <=
 .I <x>
 in subsequent iteration or final
 alignment output by 
-.I -A.
+.IR -A .
 The default is 0.001.
 
 .TP
@@ -325,7 +327,7 @@ Use a bit score threshold for per-sequence inclusion instead of an
 E-value threshold (any setting of
 .B --incE
 is ignored). Include sequences with a bit score of >=
-.I <x>.
+.IR <x> .
 By default this option is unset.
 
 .TP
@@ -333,7 +335,7 @@ By default this option is unset.
 Include domains with conditional E-values <=
 .I <x>
 in subsequent iteration or final alignment output by
-.I -A,
+.IR -A ,
 in addition to the top-scoring
 domain per significant sequence hit. 
 The default is 0.001.
@@ -344,7 +346,7 @@ Use a bit score threshold for per-domain inclusion instead of an
 E-value threshold (any setting of
 .B --incT
 is ignored). Include domains with a bit score of >=
-.I <x>.
+.IR <x> .
 By default this option is unset.
 
 
@@ -430,9 +432,9 @@ of residues as opposed to gaps. (See below for the
 .B --symfrac
 option.) Although this is the default 
 profile construction option elsewhere (in
-.B hmmbuild,
+.BR hmmbuild ,
 in particular), it may have undesirable effects in 
-.B jackhmmer,
+.BR jackhmmer ,
 because a profile could iteratively walk in sequence space away from
 your original query, leaving few or no consensus columns corresponding
 to its residues.
@@ -513,7 +515,7 @@ Use the same clustering scheme that was used to weight data in
 calculating BLOSUM subsitution matrices [Henikoff and Henikoff,
 Proc. Natl. Acad. Sci 89:10915, 1992]. Sequences are single-linkage
 clustered at an identity threshold (default 0.62; see
-.I --wid)
+.IR --wid )
 and within each cluster of c sequences, each sequence gets relative
 weight 1/c.
 
@@ -525,7 +527,7 @@ No relative weights. All sequences are assigned uniform weight.
 .BI --wid " <x>"
 Sets the identity threshold used by single-linkage clustering when 
 using 
-.I --wblosum. 
+.IR --wblosum . 
 Invalid with any other weighting scheme. Default is 0.62.
 
 
@@ -536,7 +538,7 @@ Invalid with any other weighting scheme. Default is 0.62.
 
 After relative weights are determined, they are normalized to sum to a
 total effective sequence number, 
-.I eff_nseq. 
+.IR eff_nseq . 
 This number may be the actual number of sequences in the alignment,
 but it is almost always smaller than that.
 The default entropy weighting method 
@@ -548,20 +550,20 @@ relative entropy is controlled by a two-parameter function, where the
 two parameters are settable with
 .I --ere
 and 
-.I --esigma.
+.IR --esigma .
 
 .TP
 .B --eent
 Adjust effective sequence number to achieve a specific relative entropy
 per position (see
-.I --ere).
+.IR --ere ).
 This is the default.
 
 .TP
 .B --eclust
 Set effective sequence number to the number of single-linkage clusters
 at a specific identity threshold (see 
-.I --eid).
+.IR --eid ).
 This option is not recommended; it's for experiments evaluating
 how much better
 .B --eent
@@ -577,14 +579,14 @@ may be useful for short models.
 .TP
 .BI --eset " <x>"
 Explicitly set the effective sequence number for all models to 
-.I <x>.
+.IR <x> .
 
 .TP
 .BI --ere " <x>"
 Set the minimum relative entropy/position target to 
-.I <x>.
+.IR <x> .
 Requires
-.B --eent. 
+.BR --eent . 
 Default depends on the sequence alphabet; for protein
 sequences, it is 0.59 bits/position.
 
@@ -675,21 +677,21 @@ Turn off the null2 score corrections for biased composition.
 .TP
 .BI -Z " <x>"
 Assert that the total number of targets in your searches is
-.I <x>,
+.IR <x> ,
 for the purposes of per-sequence E-value calculations,
 rather than the actual number of targets seen. 
 
 .TP
 .BI --domZ " <x>"
 Assert that the total number of targets in your searches is
-.I <x>,
+.IR <x> ,
 for the purposes of per-domain conditional E-value calculations,
 rather than the number of targets that passed the reporting thresholds.
 
 .TP 
 .BI --seed " <n>"
 Seed the random number generator with
-.I <n>,
+.IR <n> ,
 an integer >= 0. 
 If 
 .I <n> 
@@ -707,7 +709,7 @@ The default seed is 42.
 Declare that the input
 .I query_seqfile
 is in format 
-.I <s>.
+.IR <s> .
 Accepted sequence file formats include FASTA, EMBL, GenBank, DDBJ,
 UniProt, Stockholm, and SELEX. Default is to autodetect the format of
 the file.
@@ -717,7 +719,7 @@ the file.
 Declare that the input
 .I target_seqdb
 is in format 
-.I <s>.
+.IR <s> .
 Accepted sequence file formats include FASTA, EMBL, GenBank, DDBJ,
 UniProt, Stockholm, and SELEX. Default is to autodetect the format of
 the file.
@@ -725,7 +727,7 @@ the file.
 .TP
 .BI --cpu " <n>"
 Set the number of parallel worker threads to 
-.I <n>.
+.IR <n> .
 By default, HMMER sets this to the number of CPU cores it detects in
 your machine - that is, it tries to maximize the use of your available
 processor cores. Setting 
@@ -733,7 +735,7 @@ processor cores. Setting
 higher than the number of available cores is of little if any value,
 but you may want to set it to something less. You can also control
 this number by setting an environment variable, 
-.I HMMER_NCPU.
+.IR HMMER_NCPU .
 
 This option is only available if HMMER was compiled with POSIX threads
 support. This is the default, but it may have been turned off at
@@ -745,13 +747,13 @@ For debugging the MPI master/worker version: pause after start, to
 enable the developer to attach debuggers to the running master and
 worker(s) processes. Send SIGCONT signal to release the pause.
 (Under gdb: 
-.I (gdb) signal SIGCONT)
+.IR "(gdb) signal SIGCONT" )
 (Only available if optional MPI support was enabled at compile-time.)
 
 .TP
 .BI --mpi
 Run in MPI master/worker mode, using
-.I mpirun.
+.IR mpirun .
 (Only available if optional MPI support was enabled at compile-time.)
 
 
