@@ -117,8 +117,8 @@ sub main {
     $seq =~ s/>$//mx;
     $seq =~ s/^([^>])/>$1/x;
     my ($query_name) = $seq =~ /^>([^\s]*)/mx;
-    $seq .= "\n//";    #add on the file delimiter required by hmmer
-                       #This is it really
+    $seq .= "\n//";    #add on the file delimiter required by hmmer;  That's all there is ...
+                       
     $verbose && print STDERR "sending |$optStr\n$seq| to the socket\n";
 
     #Print the query to the socket
@@ -594,11 +594,11 @@ sub help {
 
   print <<'EOF';
 
-Summary: Search sequences in a file with the HMMER hmmpgmd master/worker process. 
-
-usage: hmmpgmd_client_example.pl -file seq.fa 
+Summary: Sample hmmpgmd client
+ 
+Usage: hmmpgmd_client_example.pl [options] -file seq.fa 
   
-  file      : The name of the fasta file.  The file is not being validated, give it
+  file      : The name of the fasta file.  The file is not being validated; give it
             : rubbish and bad things will happen.
   map       : The map file produced by esl-reformat when using hmmpgmd format option. 
             : If this is not provided, then it will just report the index numbers.
@@ -608,7 +608,7 @@ usage: hmmpgmd_client_example.pl -file seq.fa
             : /tmp. The files has the format hmmer.#PID.#sequence.out.
   timeout   : Change the default timeout, 30 secs. Time in seconds.
    
-  #The follow options control which hmmpgmd is connected to. The are used
+  #The following options control which hmmpgmd master is linked by the client. They are used
   #by IO::Socket::INET, see CPAN for more information.
   
   PeerAddr  : The IP address of the machine where the master is running, default 127.0.0.1
@@ -620,19 +620,27 @@ usage: hmmpgmd_client_example.pl -file seq.fa
   
   perldoc hmmpgmd_client_example.pl
   
-  for more information on the doe.
+  for more information.
   
-  Other notes
-  -----------
-  To generate the map file, run the following command:
+Details: This example script shows how to search sequences in a FASTA file against an
+hmmpgmd format database file, using HMMER's hmmpgmd. Steps include:  
+
+(1) Generate an hmmpgmd format file, including map file, from a FASTA format
+    file, for example using the HMMER/Easel tool esl-reformat:
   
-  prompt% esl-reformat hmmpgmd my.fasta 
+  prompt% esl-reformat --id_map my.hmmpgmd.map hmmpgmd my.fasta > my.hmmpgmd 
   
-  To start the hmmpgmd master/worker, run the following commands:
+(2) Start the hmmpgmd master/worker, run the following commands:
   
   prompt% hmmpgmd --master --seqdb my.hmmpgmd
   prompt% hmmpgmd --worker 127.0.0.1 --cpu 4
 
+(3) Run this client to connect to the master
+
+(4) Submit one query to hmmpgmd for each sequence in the query file, retrieve results 
+    from the master, then unpack the custom (and undocumented) binary. Examples of 
+    unpacking the binary are seen in the unpackXXX() functions.
+    
 EOF
 
   exit 0;
