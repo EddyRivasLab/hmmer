@@ -165,7 +165,7 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
 
   float 	   tloop_total = tloop * gm->max_length;
 
-  int target_end;
+  //int target_end;
   int target_start;
 
 
@@ -226,7 +226,7 @@ p7_GMSV_longtarget(const ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *gx, float 
 	  if (XMX(i,p7G_C) > sc_thresh)
 	  {
 	    target_start =  ESL_MAX(1, i - gm->max_length + 1);
-	    target_end   =  ESL_MIN(L, i + gm->max_length - 1);
+	    //target_end   =  ESL_MIN(L, i + gm->max_length - 1);
 
 	    //TODO: this is wrong - it just pretends the hit was to the middle of the model, to get dummy to
 	    // quit crashing.  Results are definitely wrong.
