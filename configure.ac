@@ -642,7 +642,9 @@ fi
 
 AC_CONFIG_FILES([documentation/Makefile])
 AC_CONFIG_FILES([documentation/man/Makefile])
-AC_CONFIG_FILES([documentation/userguide/Makefile])
+if test -d "documentation/userguide"; then 
+  AC_CONFIG_FILES([documentation/userguide/Makefile])
+fi  
 AC_CONFIG_FILES([src/Makefile])
 AC_CONFIG_FILES([testsuite/Makefile])
 AC_CONFIG_FILES([profmark/Makefile])
@@ -652,7 +654,9 @@ AC_CONFIG_HEADERS([easel/esl_config.h])
 AC_CONFIG_HEADERS([libdivsufsort/divsufsort.h])
 AC_CONFIG_FILES([easel/miniapps/Makefile])
 AC_CONFIG_FILES([easel/testsuite/Makefile])
-AC_CONFIG_FILES([easel/documentation/Makefile])
+if test -d "easel/documentation"; then
+  AC_CONFIG_FILES([easel/documentation/Makefile])
+fi    
 AC_CONFIG_FILES([easel/Makefile])
 AC_CONFIG_FILES([libdivsufsort/Makefile])
 
