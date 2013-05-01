@@ -69,7 +69,7 @@ fi
 ################################################################
 
 HMMER_DATE="February 2013"
-HMMER_COPYRIGHT="Copyright (C) 2011 Howard Hughes Medical Institute."
+HMMER_COPYRIGHT="Copyright (C) 2013 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
@@ -77,7 +77,7 @@ HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
 EASEL_DATE="February 2013"
-EASEL_COPYRIGHT="Copyright (C) 2010 Howard Hughes Medical Institute."
+EASEL_COPYRIGHT="Copyright (C) 2013 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the Janelia Farm Software License."
 EASEL_VERSION="h$PACKAGE_VERSION"
 EASEL_URL="http://bioeasel.org/"
