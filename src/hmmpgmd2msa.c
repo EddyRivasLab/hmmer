@@ -376,7 +376,8 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
       p += sizeof(P7_DOMAIN);
     }
     /* then grab the P7_ALIDISPLAYs for the hit */
-    for (j=0; j < th.hit[i]->ndom; j++) {
+    for (j=0; j < th.hit[i]->ndom; j++) 
+    {
       ad = (P7_ALIDISPLAY*)p;
       ESL_ALLOC(th.hit[i]->dcl[j].ad, sizeof(P7_ALIDISPLAY));
       ad2 = th.hit[i]->dcl[j].ad;
@@ -413,12 +414,13 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
       memcpy(ad2->mem, p, ad->memsize);
       
       p += ad2->memsize;
+      
       p7_alidisplay_Deserialize(ad2);
       
       readPos = 0;
       writePos = ad2->hmmfrom; //skip part of the hmm which isn't covered
      
-      while(readPos < ad2->hmmto)
+      while(readPos < ad2->N+1)
       {
         //check if model covers residue
         if(isupper(ad2->aseq[readPos]) || ad2->aseq[readPos] == '-')
@@ -437,15 +439,30 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
             similar[writePos]++;
           }
           writePos++;
-        }
+        }       
         readPos++;
       } 
     }
   }
 
   for(i = 0; i < hmm->M * 3; i++)
+  {
     (*statsOut)[i] = (*statsOut)[i]/stats->nhits;
-
+  }
+  for(i = 0; i < hmm->M; i++)
+  {
+    if((*statsOut)[i])
+    {
+      (*statsOut)[i+hmm->M  ] = (*statsOut)[i+hmm->M  ]/(*statsOut)[i];    
+      (*statsOut)[i+hmm->M*2] = (*statsOut)[i+hmm->M*2]/(*statsOut)[i];
+    }
+    else
+    {
+      (*statsOut)[i+hmm->M  ] = 0;
+      (*statsOut)[i+hmm->M*2] = 0;
+    }  
+  }
+  
   /* free memory */
   if (qtr != NULL) free(qtr);
   for (i = 0; i < th.N; i++) {
