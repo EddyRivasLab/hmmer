@@ -1022,6 +1022,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       P7_PIPELINE     *pli      = NULL;		  /* processing pipeline                      */
       P7_TOPHITS      *th       = NULL;        	  /* top-scoring sequence hits                */
       P7_OPROFILE     *om       = NULL;           /* optimized query profile                  */
+      int              seq_cnt  = 0;
 
       nquery++;
       if (qsq->n == 0) continue; /* skip zero length seqs as if they aren't even present */
@@ -1046,9 +1047,9 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_pli_NewModel(pli, om, bg);
 
       /* Main loop: */
-      while (n_targets >= 0 && (sstatus = next_block(dbfp, dbsq, list, &block, n_targets)) == eslOK)
+      while ((n_targets==-1 || seq_cnt<=n_targets) && (sstatus = next_block(dbfp, dbsq, list, &block, n_targets-seq_cnt)) == eslOK )
       {
-        n_targets -= block.count;
+        seq_cnt += block.count;
 
         if (MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &mpistatus) != 0)
           mpi_failure("MPI error %d receiving message from %d\n", mpistatus.MPI_SOURCE);
@@ -1070,7 +1071,8 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
         MPI_Send(&block, 3, MPI_LONG_LONG_INT, dest, HMMER_BLOCK_TAG, MPI_COMM_WORLD);
       }
-      if (n_targets==0)
+
+      if (n_targets!=-1 && seq_cnt==n_targets)
         sstatus = eslEOF;
 
       switch(sstatus)
