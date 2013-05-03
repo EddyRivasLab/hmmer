@@ -725,7 +725,7 @@ mpi_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 	{
 	  rstatus = eslx_msafile_Read(cfg->afp, &msa);
 	  if      (rstatus == eslOK)  {  cfg->nali++;                            ESL_DPRINTF1(("MPI master read MSA %s\n", msa->name == NULL? "" : msa->name));  } 
-	  else if (rstatus == eslEOF) {  have_work  = FALSE;                     ESL_DPRINTF1(("MPI master has run out of MSAs (having read %d)\n", cfg->nali)); }
+	  else if (rstatus == eslEOF) {  have_work  = FALSE;  rstatus = eslOK;   ESL_DPRINTF1(("MPI master has run out of MSAs (having read %d)\n", cfg->nali)); }
 	  else                        {  have_work  = FALSE;  xstatus = rstatus; ESL_DPRINTF1(("MPI master msa read has failed... start to shut down\n")); }
 	}
 
