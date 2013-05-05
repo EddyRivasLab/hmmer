@@ -162,7 +162,7 @@ p7_oprofile_MPIPackSize(P7_OPROFILE *om, MPI_Comm comm, int *ret_n)
   if (om->mm        != NULL) len += strlen(om->mm)        + 1;
   if (om->cs        != NULL) len += strlen(om->cs)        + 1;
   if (om->consensus != NULL) len += strlen(om->consensus) + 1;
-  if (MPI_Pack_size(6,           MPI_INT, comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");   n += sz;
+  if (MPI_Pack_size(7,           MPI_INT, comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");   n += sz;
   if (MPI_Pack_size(len,        MPI_CHAR, comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");   n += sz;
   cnt = p7_NEVPARAM + p7_NCUTOFFS + p7_MAXABET;
   if (MPI_Pack_size(cnt,       MPI_FLOAT, comm, &sz) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");   n += sz;
