@@ -375,6 +375,9 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
       th.hit[i]->dcl[j].is_included = 1;
       p += sizeof(P7_DOMAIN);
     }
+    
+    readPos = 0;
+    
     /* then grab the P7_ALIDISPLAYs for the hit */
     for (j=0; j < th.hit[i]->ndom; j++) 
     {
@@ -417,7 +420,6 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
       
       p7_alidisplay_Deserialize(ad2);
       
-      readPos = 0;
       writePos = ad2->hmmfrom; //skip part of the hmm which isn't covered
      
       while(readPos < ad2->N+1)
@@ -575,17 +577,17 @@ main(int argc, char **argv) {
 
   for(x = 0; x < hmm->M; x++)
   {
-    printf("%d", (int)(10*statsOut[x]));
+    printf("%d", ((int)(10*statsOut[x])>=10)?9:(int)(10*statsOut[x]));
   }
   printf("\n");
   for(x = hmm->M; x < hmm->M*2; x++)
   {
-    printf("%d", ((int)(10*statsOut[x])==10)?9:(int)(10*statsOut[x]));
+    printf("%d", ((int)(10*statsOut[x])>=10)?9:(int)(10*statsOut[x]));
   }
   printf("\n");
   for(x = hmm->M*2; x < hmm->M*3; x++)
   {
-    printf("%d", ((int)(10*statsOut[x])==10)?9:(int)(10*statsOut[x]));
+    printf("%d", ((int)(10*statsOut[x])>=10)?9:(int)(10*statsOut[x]));
   }
   printf("\n");
 
