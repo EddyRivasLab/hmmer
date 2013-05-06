@@ -445,23 +445,23 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
     }
   }
 
-  for(i = 0; i < hmm->M * 3; i++)
+  for(i = 0; i < hmm->M*3; i++)
   {
-    (*statsOut)[i] = (*statsOut)[i]/stats->nhits;
+    (*statsOut)[i] = (*statsOut)[i]/(stats->nhits);
   }
-  for(i = 0; i < hmm->M; i++)
+
+  for(i = hmm->M; i < hmm->M*3; i++)
   {
-    if((*statsOut)[i])
-    {
-      (*statsOut)[i+hmm->M  ] = (*statsOut)[i+hmm->M  ]/(*statsOut)[i];    
-      (*statsOut)[i+hmm->M*2] = (*statsOut)[i+hmm->M*2]/(*statsOut)[i];
+    if((*statsOut)[i%hmm->M])
+    {  
+      (*statsOut)[i] = (*statsOut)[i]/(*statsOut)[i%hmm->M];
     }
     else
     {
-      (*statsOut)[i+hmm->M  ] = 0;
-      (*statsOut)[i+hmm->M*2] = 0;
-    }  
+      (*statsOut)[i] = 0.0;
+    }
   }
+
   
   /* free memory */
   if (qtr != NULL) free(qtr);
@@ -537,12 +537,12 @@ main(int argc, char **argv) {
     strcpy(hmm_file, argv[1]);
   }
   if (argc > 2 ) {
-    ESL_ALLOC(fa_file, sizeof(char) * (strlen(argv[2])+1) );
-    strcpy(fa_file, argv[2]);
+    ESL_ALLOC(dat_file, sizeof(char) * (strlen(argv[2])+1) );
+    strcpy(dat_file, argv[2]);
   }
   if (argc > 3 ) {
-    ESL_ALLOC(dat_file, sizeof(char) * (strlen(argv[3])+1) );
-    strcpy(dat_file, argv[3]);
+    ESL_ALLOC(fa_file, sizeof(char) * (strlen(argv[3])+1) );
+    strcpy(fa_file, argv[3]);
   }
 
   printf("hmmpgmd2msa:\nhmm: %s\nfa:  %s\ndat: %s\n", hmm_file, fa_file, dat_file);
@@ -553,9 +553,9 @@ main(int argc, char **argv) {
   if ( (status = p7_hmmfile_Read(hfp, &abc, &hmm)) != 0 ) goto ERROR;
 
   /* read the query sequence */
-  if ( (status = esl_sqfile_OpenDigital(abc, fa_file, eslSQFILE_UNKNOWN, NULL, &qfp)) != 0) goto ERROR;
-  qsq = esl_sq_CreateDigital(abc);
-  if ( (status = esl_sqio_Read(qfp, qsq)) != eslOK)  goto ERROR;
+  //if ( (status = esl_sqfile_OpenDigital(abc, fa_file, eslSQFILE_UNKNOWN, NULL, &qfp)) != 0) goto ERROR;
+  //qsq = esl_sq_CreateDigital(abc);
+  //if ( (status = esl_sqio_Read(qfp, qsq)) != eslOK)  goto ERROR;
 
   //printf("sequence length %d\n", qsq->n);
 
@@ -570,28 +570,28 @@ main(int argc, char **argv) {
   fread(data, size, 1, fp);
 
   status = hmmpgmd2stats(data, hmm, &statsOut);
-  status = hmmpgmd2msa(data, hmm, qsq, NULL,0, NULL, 0, &msa);
+  //status = hmmpgmd2msa(data, hmm, qsq, NULL,0, NULL, 0, &msa);
 
 
   for(x = 0; x < hmm->M; x++)
   {
-    printf("%1d", (int)(10*statsOut[x]));
+    printf("%d", (int)(10*statsOut[x]));
   }
   printf("\n");
   for(x = hmm->M; x < hmm->M*2; x++)
   {
-    printf("%1d", (int)(10*statsOut[x]));
+    printf("%d", ((int)(10*statsOut[x])==10)?9:(int)(10*statsOut[x]));
   }
   printf("\n");
   for(x = hmm->M*2; x < hmm->M*3; x++)
   {
-    printf("%1d", (int)(10*statsOut[x]));
+    printf("%d", ((int)(10*statsOut[x])==10)?9:(int)(10*statsOut[x]));
   }
   printf("\n");
 
   if (status != eslOK) goto ERROR;
 
-  eslx_msafile_Write(stdout, msa, eslMSAFILE_STOCKHOLM);
+  //eslx_msafile_Write(stdout, msa, eslMSAFILE_STOCKHOLM);
 
   exit(0);
 
