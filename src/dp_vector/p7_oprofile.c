@@ -394,6 +394,10 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
   return NULL;
 }
 
+/* TODO: this "Clone" is not what we usually mean by a _Clone routine.
+ *       it's sharing allocated memory with another structure: maybe
+ *       it's a "shadow", a "golem", or something...
+*/
 /* Function:  p7_oprofile_Clone()
  * Synopsis:  Allocate a cloned copy of the optimized profile structure.  All
  *            allocated memory from the original profile is not reallocated.
@@ -413,6 +417,7 @@ p7_oprofile_Clone(const P7_OPROFILE *om1)
 
   ESL_ALLOC(om2, sizeof(P7_OPROFILE));
   memcpy(om2, om1, sizeof(P7_OPROFILE));
+  /* note that that copied *pointers*, not their *contents*, which are separately allocated. */
 
   om2->clone  = 1;
 
@@ -787,22 +792,26 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
  *            multihit configuration, in our production code.  The
  *            <om> comes out in local multihit config, with the same
  *            length model.
+ *            
+ *            <om> cannot be a "clone" (created by
+ *            <p7_oprofile_Clone()>); it must be a real allocation for
+ *            the <P7_OPROFILE>.
  *
  * Args:      gm - profile to optimize
  *            om - allocated optimized profile for holding the result.
  *
  * Returns:   <eslOK> on success.
  *
- * Throws:    <eslEINVAL> if <gm>, <om> aren't compatible. 
- *            <eslEMEM> on allocation failure.
+ * Throws:    <eslEMEM> on allocation failure.
  */
 int
 p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
   int status, z;
 
-  if (gm->abc->type != om->abc->type)  ESL_EXCEPTION(eslEINVAL, "alphabets of the two profiles don't match");  
-  if (gm->M         >  om->allocM)     ESL_EXCEPTION(eslEINVAL, "oprofile is too small");  
+  ESL_DASSERT1(( ! om->clone ));
+  ESL_DASSERT1(( gm->abc->type == om->abc->type));
+  ESL_DASSERT1(( gm->M         <= om->allocM));
 
   if      (gm->nj == 0.0) om->mode = p7_UNILOCAL;
   else if (gm->nj == 1.0) om->mode = p7_LOCAL;
