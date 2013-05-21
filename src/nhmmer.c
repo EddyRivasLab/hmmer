@@ -220,7 +220,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_quer
       esl_opt_DisplayHelp(stdout, go, 2, 2, 100);
 
       if (puts("\nOptions controlling scoring system:")                      < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 3, 2, 80);
+      esl_opt_DisplayHelp(stdout, go, 3, 2, 100);
 
       if (puts("\nOptions controlling reporting thresholds:")                < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 4, 2, 100);

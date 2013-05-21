@@ -159,6 +159,12 @@ main(int argc, char **argv)
 
   process_commandline(argc, argv, &go);
 
+  /* if stdout is redirected at the commandline, it causes printf's to be buffered,
+   * which means status logging isn't printed. This line strongly requests unbuffering,
+   * which should be ok, given the low stdout load of hmmpgmd
+   */
+  setbuf(stdout,NULL);
+
   /* if we write to a broken socket, ignore the signal and handle the error. */
   our_signal(SIGPIPE, SIG_IGN);
 

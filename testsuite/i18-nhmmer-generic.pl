@@ -75,9 +75,9 @@ q[
 Target sequences:                            1  \(9000000 residues searched\)
 Residues passing SSV filter:            174223  \(0.0194\); expected \(0.02\)
 Residues passing bias filter:           145398  \(0.0162\); expected \(0.02\)
-Residues passing Vit filter:              6173  \(0.000686\); expected \(0.001\)
-Residues passing Fwd filter:               276  \(3.07e-05\); expected \(1e-05\)
-Total number of hits:                        5  \(1.01e-05\)];
+Residues passing Vit filter:             18077  \(0.00201\); expected \(0.003\)
+Residues passing Fwd filter:               479  \(5.32e-05\); expected \(3e-05\)
+Total number of hits:                        5  \(9.78e-06\)];
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 1\n";
 }
@@ -86,7 +86,7 @@ $expect =   q[
        0.44   13.6   5.2  random   4499980 4499998\s+
         1.6   11.9   4.2  random   3299961 3299978\s+
         1.7   11.8   4.4  random   1979941 1979960\s+
-        7.2    9.8   5.4  random   1518622 1518605\s+
+        8.2    9.7   2.3  random   2354832 2354818\s+
         9.3    9.5   4.4  random   4019481 4019466]; 
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 2\n";
@@ -100,8 +100,8 @@ q[
 Target sequences:                            1  \(4500000 residues searched\)
 Residues passing SSV filter:             84348  \(0.0187\); expected \(0.02\)
 Residues passing bias filter:            70876  \(0.0158\); expected \(0.02\)
-Residues passing Vit filter:              3091  \(0.000687\); expected \(0.001\)
-Residues passing Fwd filter:               155  \(3.44e-05\); expected \(1e-05\)
+Residues passing Vit filter:              8820  \(0.00196\); expected \(0.003\)
+Residues passing Fwd filter:               228  \(5.07e-05\); expected \(3e-05\)
 Total number of hits:                        3  \(1.27e-05\)];
 
 
@@ -113,6 +113,7 @@ $expect =
        0.22   13.6   5.2  random   4499980 4499998\s+
        0.78   11.9   4.2  random   3299961 3299978\s+
        0.85   11.8   4.4  random   1979941 1979960]; 
+
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 4\n";
 }
