@@ -291,7 +291,11 @@ p7_builder_SetScoreSystem(P7_BUILDER *bld, const char *mxfile, const char *env, 
   if ((bld->S  = esl_scorematrix_Create(bld->abc)) == NULL) { status = eslEMEM; goto ERROR; }
   if (mxfile == NULL) 
     {
-      if ((status = esl_scorematrix_Set("BLOSUM62", bld->S)) != eslOK) goto ERROR;
+      if (bld->abc == eslAMINO) {
+        if ((status = esl_scorematrix_Set("BLOSUM62", bld->S)) != eslOK) goto ERROR;
+      } else {
+        if ((status = esl_scorematrix_Set("DNA1", bld->S)) != eslOK) goto ERROR;
+      }
     } 
   else 
     {
