@@ -510,7 +510,14 @@ process_InitCmd(HMMD_COMMAND *cmd, WORKER_ENV  *env)
 
   }
 
+  /* if stdout is redirected at the commandline, it causes printf's to be buffered,
+   * which means status logging isn't printed. This line strongly requests unbuffering,
+   * which should be ok, given the low stdout load of hmmpgmd
+   */
+  setvbuf (stdout, NULL, _IONBF, BUFSIZ);
   printf("Data loaded into memory. Worker is ready.\n");
+  setvbuf (stdout, NULL, _IOFBF, BUFSIZ);
+
 
   /* write back to the master that we are on line */
   n = MSG_SIZE(cmd);

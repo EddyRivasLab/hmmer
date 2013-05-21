@@ -733,7 +733,13 @@ master_process(ESL_GETOPTS *go)
 	   name, hmm_db->n, (uint64_t) p7_hmmcache_Sizeof(hmm_db));
   }
 
+  /* if stdout is redirected at the commandline, it causes printf's to be buffered,
+   * which means status logging isn't printed. This line strongly requests unbuffering,
+   * which should be ok, given the low stdout load of hmmpgmd
+   */
+  setvbuf (stdout, NULL, _IONBF, BUFSIZ);
   printf("Data loaded into memory. Master is ready.\n");
+  setvbuf (stdout, NULL, _IOFBF, BUFSIZ);
 
   /* initialize the search stack, set it up for interthread communication  */
   cmdstack = esl_stack_PCreate();
