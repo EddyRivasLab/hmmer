@@ -13,6 +13,7 @@ ________________________________________________________________
 
 3.1b1 includes the following large changes:
 
+
 -:- DNA-DNA homology search with nhmmer and nhmmscan. 
 
     The tool new tool nhmmer is used to search one or more queries 
@@ -23,9 +24,17 @@ ________________________________________________________________
     DNA sequences against a database of DNA HMMs (analagous to hmmscan 
     for proteins). 
     
+-:- MSV stage of HMMER acceleration pipeline now even faster.
+
+    Bjarne Knudsen, Chief Scientific Officer of CLC bio in Denmark, 
+    contributed an important optimization of the MSV filter (the
+    first stage in the accelerated "filter pipeline") that increases 
+    overall HMMER3 speed by about two-fold. This speed improvement
+    has no impact on sensitivity.
+    
 -:- The daemon underlying the hmmer.org web server.
 
-    We couldn’t quite get enough speed out of standard cluster 
+    We couldn't quite get enough speed out of standard cluster 
     parallelization approaches like MPI, so we implemented our own 
     hand-rolled IP socket communication protocol in a daemon called
     hmmpgmd. 
@@ -71,13 +80,13 @@ Other changes include:
     is available for nhmmer and nhmmscan, --dfamtblout.
 
 -:- Using new default parameterization for DNA, including a new mixture 
-    Dirichlet and changing the default relative entropy value from 0.59 
-    to 0.45 bits. 
+    Dirichlet and changing the default relative entropy value (which can 
+    be set using --ere) from 0.59 to 0.45 bits. 
 
 -:- Hit lists should now sort properly even for very high scores. 
 
 -:- The program hmmstat includes new flags to convert between bit score
-    and E-value for a given model (depending on provided database size).
+    and E-value for a given model (depending on input database size).
 
 -:- The program hmmbuild includes a new flag, --maxinsertlen <n>, that
     causes weighted-average I->I transition counts to be limited to n. 
@@ -127,8 +136,7 @@ Other changes include:
 
 -:- For hmmbuild and jackhmmer, changed --laplace to --plaplace.
 
--:- Improved the text output of 'make' to be easier on the eyes
-
+-:- Improved the text output of make to be easier on the eyes.
 
 
 Bugfixes:
@@ -174,9 +182,12 @@ Bugfixes:
 -:- #h88 Many classic score matrices are invalid for phmmer/jackhmmer.
          The previously-used Yu/Altschul procedure would frequently
          fail, an effect of roundoff of the integer values used to
-         store common score matrices. Matrices are now calculated 
-         using esl_scorematrix_ProbifyGivenBG() instead of the 
-         Yu/Altschul method.
+         store common score matrices. Matrices are now calculated using 
+         esl_scorematrix_ProbifyGivenBG() instead of the Yu/Altschul 
+         method. This change results in slightly diminished performance 
+         on internal benchmarks for phmmer using the default BLOSUM62 
+         scoring matrix (converted to conditional probabilities), but is
+         reliable and mathematically correct. 
          
 -:- #h89 The environment variable HMMER_NCPU would create incompatibility
          with -n, --mpi
@@ -218,3 +229,6 @@ Bugfixes:
          1e-708, it should have flushed to zero, but instead survived 
          to experience denormal calculation, then highlighted a printf 
          bug.
+
+-:- #h99 The --laplace flag was inactive in hmmbuild.
+         
