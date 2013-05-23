@@ -1,3 +1,17 @@
+ID              h99
+TITLE           In hmmbuild, --laplace flag was ignored.
+AFFECTS         3.0
+FIXED_IN        3.1b1
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     Travis Wheeler
+OPENED_DATE     Thu May 23 13:35:00 EDT 2013
+CLOSED_DATE     Thu May 23 13:35:01 EDT 2013
+DESCRIPTION     
+  This flag has been modified in 3.1b1 to be --plaplace, and 
+  somewhere along the way, magically started impacting hmmbuild,
+  as it should have all along.
+//
 ID              h98
 TITLE           Error printing very small E-values
 AFFECTS         3.0

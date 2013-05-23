@@ -136,8 +136,7 @@ Other changes include:
 
 -:- For hmmbuild and jackhmmer, changed --laplace to --plaplace.
 
--:- Improved the text output of make to be easier on the eyes
-
+-:- Improved the text output of make to be easier on the eyes.
 
 
 Bugfixes:
@@ -183,9 +182,12 @@ Bugfixes:
 -:- #h88 Many classic score matrices are invalid for phmmer/jackhmmer.
          The previously-used Yu/Altschul procedure would frequently
          fail, an effect of roundoff of the integer values used to
-         store common score matrices. Matrices are now calculated 
-         using esl_scorematrix_ProbifyGivenBG() instead of the 
-         Yu/Altschul method.
+         store common score matrices. Matrices are now calculated using 
+         esl_scorematrix_ProbifyGivenBG() instead of the Yu/Altschul 
+         method. This change results in slightly diminished performance 
+         on internal benchmarks for phmmer using the default BLOSUM62 
+         scoring matrix (converted to conditional probabilities), but is
+         reliable and mathematically correct. 
          
 -:- #h89 The environment variable HMMER_NCPU would create incompatibility
          with -n, --mpi
@@ -227,3 +229,6 @@ Bugfixes:
          1e-708, it should have flushed to zero, but instead survived 
          to experience denormal calculation, then highlighted a printf 
          bug.
+
+-:- #h99 The --laplace flag was inactive in hmmbuild.
+         
