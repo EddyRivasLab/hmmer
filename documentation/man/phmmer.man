@@ -463,7 +463,7 @@ This option is only available if HMMER was compiled with POSIX threads
 support. This is the default, but it may have been turned off at
 compile-time for your site or machine for some reason.
 
-
+.TP
 .BI --stall
 For debugging the MPI master/worker version: pause after start, to
 enable the developer to attach debuggers to the running master and
