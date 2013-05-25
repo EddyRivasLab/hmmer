@@ -1,7 +1,7 @@
 .TH "nhmmscan" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-nhmmscan - search nuceotide sequence(s) against a nuceotide profile database
+nhmmscan - search nucleotide sequence(s) against a nucleotide profile database
 
 
 .SH SYNOPSIS
@@ -16,8 +16,8 @@ nhmmscan - search nuceotide sequence(s) against a nuceotide profile database
 
 .PP
 .B nhmmscan 
-is used to search nuceotide sequences against collections 
-of nuceotide profiles. For each sequence in 
+is used to search nucleotide sequences against collections 
+of nucleotide profiles. For each sequence in 
 .IR <seqfile> ,
 use that query sequence to search the target database of
 profiles in

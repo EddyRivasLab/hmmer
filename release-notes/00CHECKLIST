@@ -1,5 +1,6 @@
 Checklist for a HMMER release
 SRE, Thu Feb  4 10:56:25 2010
+updated by TJW, Tue May 21 14:56:12 EDT 2013
 --------------------------------------------------------
 When editing this 00CHECKLIST, edit it in the trunk, not in a release
 branch; it isn't included in releases anyway.
@@ -45,7 +46,8 @@ development of the next main release.
    Compile should be entirely clean when compiled -Wall.
    'make check' should be clean.
    'make dev' should be clean.
-   '(cd documentation/alphaguide; make)' should work
+   'make pdf' should work 
+
 
    When trunk is clean, 
    svn commit
@@ -137,8 +139,8 @@ wrong, it's easy enough to come back and make a new tarball.
                         bugs, and divider indicating release.
    Paper notebook since last release
    svn log since last release:
-   svn log -r2837:HEAD https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk
-   svn log  -r350:HEAD https://svn.janelia.org/eddylab/eddys/easel/trunk
+   svn log -r3247:HEAD https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.1
+   svn log  -r577:HEAD https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.1
 
    When done, svn add the new RELEASE-xxx file.
 
@@ -270,6 +272,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    ./configure
    . release-notes/LICENSE.sh
 
+  3.1b1   exported 4452/866
   3.0:    exported 3243/575
   3.0rc2: exported 3224/554
   3.0rc1: exported 3160/510
@@ -317,11 +320,13 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
   doing (a). See those svn logs for details.
 
    make distclean
-   cp   release-notes/RELEASE-${HMMER_VERSION} RELEASE-NOTES
+   cp   release-notes/RELEASE-${HMMER_VERSION} RELEASE-NOTES-TMP
+   rm -rf release-notes
+   mv RELEASE-NOTES-TMP RELEASE-NOTES
    rm -rf bugs
    rm -rf contrib
    rm -rf documentation/userguide
-   rm -rf release-notes
+   rm -rf autobuild
    rm -rf test-speed
    rm -rf autom4te.cache
 
@@ -342,6 +347,7 @@ Delete TO-DO sections and clean up for public consumption.
    tar cvf hmmer-${HMMER_VERSION}.tar hmmer-${HMMER_VERSION}
    gzip hmmer-${HMMER_VERSION}.tar
 
+   3.1b1    5.5 Mb
    3.0:     4.0 Mb (source only)
    3.0rc2:  3.9 Mb (source only)
    3.0rc1: 21.0 Mb
@@ -378,8 +384,8 @@ On login-eddy (our compile host):
 = Testing
 ================================================================
 
-See latest e-notebook for tests.
-[TODO: Organize/systematize this better.]
+See latest e-notebook (~wheelert/notebook/2013/05-04-hmmer-3.1b1-release-try2/)
+for tests.  [TODO: Organize/systematize this better.]
 
 They include:
   Anecdotes:  more-or-less manual runs of some large example jobs;
