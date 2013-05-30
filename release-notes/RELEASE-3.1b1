@@ -5,7 +5,7 @@ TJW, Mon Apr 22 10:26:43 2013
 ________________________________________________________________
 
 # Previous release: 3.0; 28 March 2010
-# This is a temporrary issue-tracking document
+# This is a temporary issue-tracking document
 # Before release, print for posterity; delete xref's; 
 #    move this note and TO-DO to next notes
 # After release, this becomes the release notes document
@@ -16,12 +16,12 @@ ________________________________________________________________
 
 -:- DNA-DNA homology search with nhmmer and nhmmscan. 
 
-    The tool new tool nhmmer is used to search one or more queries 
+    The new tool nhmmer is used to search one or more queries 
     (where a query can be an alignment, a sequence, or an HMM built by 
     hmmbuild) against a database of (potentially long) DNA sequences.
     This is essentially the DNA analog of a merger of hmmsearch and 
     phmmer. The new tool nhmmscan is used to search one or more query 
-    DNA sequences against a database of DNA HMMs (analagous to hmmscan 
+    DNA sequences against a database of DNA HMMs (analogous to hmmscan 
     for proteins). 
     
 -:- MSV stage of HMMER acceleration pipeline now even faster.
