@@ -1,0 +1,88 @@
+#! /usr/bin/perl
+
+# We assume that an NCBI BLAST install tree is in $top_builddir
+# $top_srcdir is unused: pass "." or $top_builddir
+#
+# Example:
+#   mkdir foo-test
+#   ./x-psiblast /usr/local/blast-2.2.22 . foo-test test.list 1 Pfam-A.seed uniprot/trembl-shuf-1M test.out
+#
+
+use Benchmark qw(:hireswallclock) ;
+
+$top_builddir = shift;
+$top_srcdir   = shift;
+$resultdir    = shift;
+$tblfile      = shift;
+$nthreads     = shift;
+$querydb      = shift;
+$targetdb     = shift;
+$outfile      = shift;
+
+$blastpgp   = "$top_builddir/bin/blastpgp";
+$blastopts  = "-a $nthreads -v 9999 -b0";
+
+if (! -d $top_builddir)                                 { die "didn't find BLAST directory $top_builddir"; }
+if (! -x $blastpgp)                                     { die "didn't find blastpgp executable $blastpgp"; }
+if ($top_srcdir ne "." && $top_srcdir ne $top_builddir) { die "$top_srcdir is unused. pass ."; }
+if (! -e $resultdir)                                    { die "$resultdir doesn't exist"; }
+
+open(OUTFILE,">$outfile") || die "failed to open output $outfile";
+open(TABLE, "$tblfile")   || die "failed to open work unit list $tblfile";
+
+$n = 0;
+MSA:
+while (<TABLE>) 
+{
+    if (/(\S+)/) 
+    {
+	$n++;
+	$msaname = $1;
+
+	# Fetch the query MSA from the benchmark  (.sto file)
+	$output = `esl-afetch -o $resultdir/$msaname.sto $querydb $msaname`;
+	if ($?) { print "FAILED: esl-afetch on $msaname\n"; next MSA; }
+
+	# Reformat to psiblast format (.pbl file)
+	$output = `esl-reformat -o $resultdir/$msaname.pbl psiblast $resultdir/$msaname.sto`;
+	if ($?) { print "FAILED: esl-reformat on $msaname\n"; next MSA; }
+
+	# Select median length single sequence as the "query" (.query.fa file)
+	$output = `esl-seqstat -a $resultdir/$msaname.sto | grep "^=" | sort -n -k2 | awk '{print \$2}'`;
+	if ($?) { print "FAILED: esl-seqstat on $msaname\n"; next MSA; }
+	@qnames = split(/^/,$output);
+	chop (@qnames);
+	$qname = $qnames[ int(($#qnames+1) / 2)];
+	$output = `esl-sfetch -o $resultdir/$msaname.query.fa $resultdir/$msaname.sto $qname`;
+	if ($?) { print "FAILED: esl-sfetch on $msaname\n"; next MSA; }
+
+	# Warmup. (An untimed run, to encourage filesystem to cache the target database.)
+	if ($n == 1) {
+	    $output = `$blastpgp $blastopts -d $targetdb -i $resultdir/$msaname.query.fa -B $resultdir/$msaname.pbl 2>&1`;
+	}
+
+	# Run psi-blast against the benchmark
+	$t0 = Benchmark->new;
+	$output = `$blastpgp $blastopts -d $targetdb -i $resultdir/$msaname.query.fa -B $resultdir/$msaname.pbl 2>&1`;
+	if ($?) { print "FAILED: $blastpgp on $msaname\n"; next MSA; }
+	$t1 = Benchmark->new;
+
+	if    ($output =~ /\nLength of query:\s*(\S+)/)                  {$M = $1; $M =~ s/,//g; }
+	elsif ($output =~ /\nQuery=.+\n\s*\((\d+) letters\)/)            {$M = $1; $M =~ s/,//g; }
+	if    ($output =~ /\nLength of database:\s*(\S+)/)               {$L = $1; $L =~ s/,//g; }
+	elsif ($output =~ /\n\s*Number of letters in database:\s*(\S+)/) {$L = $1; $L =~ s/,//g; }
+
+	# Get the wall clock time.
+	$td = timediff($t1, $t0);
+	$walltime = $td->real;
+
+	$mcs = $L / 1000000 / $walltime * $M;
+	printf OUTFILE "%-15s %5d %10.1f %12.2f\n", $msaname, $M, $mcs, $walltime;
+	
+#	unlink "$resultdir/$msaname.sto";
+#	unlink "$resultdir/$msaname.pbl";
+#	unlink "$resultdir/$msaname.query.fa";
+    }
+}
+close TABLE;
+close OUTFILE;
