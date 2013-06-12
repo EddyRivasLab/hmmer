@@ -14,6 +14,7 @@
 #include <setjmp.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <netinet/in.h> //typically included by the arpa/inet.h file, but not on openbsd
 #include <syslog.h>
 #include <time.h>
 
