@@ -14,8 +14,10 @@
 #include <ctype.h>
 
 #include <sys/socket.h>
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>     /* On FreeBSD, you need netinet/in.h for struct sockaddr_in            */
+#endif                      /* On OpenBSD, netinet/in.h is required for (must precede) arpa/inet.h */
 #include <arpa/inet.h>
-#include <netinet/in.h> //typically included by the arpa/inet.h file, but not on openbsd
 
 #include "easel.h"
 #include "esl_alphabet.h"
