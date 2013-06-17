@@ -264,7 +264,7 @@ ERROR:
 }
 
 /******************************************************************************
- *# 1. The <hmmpgmd2stats> function
+ *# 2. The <hmmpgmd2stats> function
  *****************************************************************************/
 
 
@@ -467,33 +467,47 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
   
   /* free memory */
   if (qtr != NULL) free(qtr);
+  qtr = NULL;
+  
   for (i = 0; i < th.N; i++) {
     for (j=0; j < th.hit[i]->ndom; j++)
-      p7_alidisplay_Destroy(th.hit[i]->dcl[j].ad);
-
+      if(th.hit[i]->dcl[j].ad)
+      {
+        p7_alidisplay_Destroy(th.hit[i]->dcl[j].ad);
+        th.hit[i]->dcl[j].ad = NULL;
+      }
+      
     if (th.hit[i]->dcl != NULL) free (th.hit[i]->dcl);
+    th.hit[i]->dcl = NULL;
   }
   if (th.unsrt != NULL) free (th.unsrt);
+  th.unsrt = NULL;
   if (th.hit != NULL) free (th.hit);
+  th.hit = NULL;
 
   return eslOK;
 
 ERROR:
   /* free memory */
-  if(*statsOut != NULL) free(*statsOut);
-  
   if (qtr != NULL) free(qtr);
-
+  qtr = NULL;
+  
   for (i = 0; i < th.N; i++) {
     for (j=0; j < th.hit[i]->ndom; j++)
-      p7_alidisplay_Destroy(th.hit[i]->dcl[j].ad);
-
+      if(th.hit[i]->dcl[j].ad)
+      {
+        p7_alidisplay_Destroy(th.hit[i]->dcl[j].ad);
+        th.hit[i]->dcl[j].ad = NULL;
+      }
+      
     if (th.hit[i]->dcl != NULL) free (th.hit[i]->dcl);
+    th.hit[i]->dcl = NULL;
   }
   if (th.unsrt != NULL) free (th.unsrt);
+  th.unsrt = NULL;
   if (th.hit != NULL) free (th.hit);
-
-  *statsOut = NULL;
+  th.hit = NULL;
+  
 
   return status;
 }
@@ -502,7 +516,7 @@ ERROR:
 
 
 /*****************************************************************
- * 2. Test driver
+ * 3. Test driver
  *****************************************************************/
 
 //#define hmmpgmd2msa_TESTDRIVE
