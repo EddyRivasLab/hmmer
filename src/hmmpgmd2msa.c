@@ -420,9 +420,9 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
       
       p7_alidisplay_Deserialize(ad2);
       
-      writePos = ad2->hmmfrom; //skip part of the hmm which isn't covered
+      writePos = ad2->hmmfrom-1; //skip part of the hmm which isn't covered
      
-      while(readPos < ad2->N+1)
+      while(readPos < ad2->N)
       {
         //check if model covers residue
         if(isupper(ad2->aseq[readPos]) || ad2->aseq[readPos] == '-')
