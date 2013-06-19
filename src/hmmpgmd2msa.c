@@ -307,8 +307,9 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
   P7_TOPHITS         th;
   P7_ALIDISPLAY     *ad, *ad2;
 
-  float *id, *similar; //store statistics results
-  int readPos, writePos;     //for converting alignment contents into model indexing
+  float *cover, *id, *similar; //store statistics result per hit
+  int readPos, writePos, domainPos;     //for converting alignment contents into model indexing
+  int debugCount = 0;
 
   char              *p     = (char*)data;        /*pointer used to walk along data, must be char* to allow pointer arithmetic */
 
@@ -316,17 +317,22 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
   th.unsrt = NULL;
   th.hit   = NULL;
 
-  //storage for coverage, %id and %similar accumulations
+  //storage for output
   ESL_ALLOC( *statsOut,   sizeof(float) * hmm->M * 3);
-  similar = (*statsOut)+hmm->M;
-  id = similar+hmm->M;
-  //ESL_ALLOC( id,      sizeof(int) * hmm->M);
-  //ESL_ALLOC( similar, sizeof(int) * hmm->M);
+
+  //storage for accumulation per hit
+  ESL_ALLOC( cover,   sizeof(int) * hmm->M);
+  ESL_ALLOC( id,      sizeof(int) * hmm->M);
+  ESL_ALLOC( similar, sizeof(int) * hmm->M);
   for(k = 0; k < hmm->M; k++)
   {
-    (*statsOut)[k] = 0;
+    cover[k] = 0;
     id[k] = 0;
     similar[k] = 0;
+    
+    (*statsOut)[k         ] = 0;
+    (*statsOut)[k+hmm->M  ] = 0;
+    (*statsOut)[k+hmm->M*2] = 0;
   }
 
   /* get search stats + hit info */
@@ -367,7 +373,8 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
   th.is_sorted_by_sortkey = 0;
   th.is_sorted_by_seqidx  = 0;
 
-  for (i = 0; i < th.N; i++) {
+  for (i = 0; i < th.N; i++) 
+  {
     ESL_ALLOC( th.hit[i]->dcl, sizeof(P7_DOMAIN) *  th.hit[i]->ndom);
    /* first grab all the P7_DOMAINs for the hit */
     for (j=0; j < th.hit[i]->ndom; j++) 
@@ -375,8 +382,6 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
       th.hit[i]->dcl[j].is_included = 1;
       p += sizeof(P7_DOMAIN);
     }
-    
-    readPos = 0;
     
     /* then grab the P7_ALIDISPLAYs for the hit */
     for (j=0; j < th.hit[i]->ndom; j++) 
@@ -408,8 +413,8 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
       ad2->sqdesc  = ad->sqdesc;
       ad2->sqfrom  = ad->sqfrom;
       ad2->sqto    = ad->sqto;
-      ad2->L       = ad->L;
-       
+      ad2->L       = ad->L;    
+      
       p += sizeof(P7_ALIDISPLAY);
 
       ESL_ALLOC(ad2->mem, ad2->memsize);
@@ -420,14 +425,14 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
       
       p7_alidisplay_Deserialize(ad2);
       
-      writePos = ad2->hmmfrom-1; //skip part of the hmm which isn't covered
-     
+      writePos = ad2->hmmfrom-1;  
+      readPos = 0;
       while(readPos < ad2->N)
       {
         //check if model covers residue
         if(isupper(ad2->aseq[readPos]) || ad2->aseq[readPos] == '-')
-        {
-          (*statsOut)[writePos]++;
+        {          
+          cover[writePos]++;
         
           //check mline for id
           if(isalpha(ad2->mline[readPos]))
@@ -443,7 +448,20 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
           writePos++;
         }       
         readPos++;
-      } 
+      }
+    }
+  
+    //increment output, adjusting for overlaps
+    for(k = 0; k < hmm->M; k++)
+    {
+      if(cover  [k]) (*statsOut)[k         ]+=1.0;
+         cover  [k] = 0;
+      
+      if(id     [k]) (*statsOut)[k+hmm->M  ]+=1.0;
+         id     [k] = 0;
+      
+      if(similar[k]) (*statsOut)[k+hmm->M*2]+=1.0;
+         similar[k] = 0;
     }
   }
 
@@ -522,6 +540,8 @@ ERROR:
 //#define hmmpgmd2msa_TESTDRIVE
 #ifdef hmmpgmd2msa_TESTDRIVE
 
+//gcc -o alistat_test -msse2 -std=gnu99 -g -O2 -I. -L. -I../easel -L../easel -D hmmpgmd2msa_TESTDRIVE hmmpgmd2msa.c -lhmmer -leasel -lm
+
 /* Test driver. As written, requires files that won't be released with
  * the distribution. So it should be replaced with a tighter test.
  */
@@ -588,6 +608,13 @@ main(int argc, char **argv) {
   status = hmmpgmd2stats(data, hmm, &statsOut);
   //status = hmmpgmd2msa(data, hmm, qsq, NULL,0, NULL, 0, &msa);
 
+  for(x = 0; x < hmm->M*3; x++)
+  {
+    if(statsOut[x] > 1)
+    {
+      printf("problem x: %d %f\n", x, statsOut[x]);
+    }
+  }
 
   for(x = 0; x < hmm->M; x++)
   {
