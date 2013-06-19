@@ -178,9 +178,14 @@ distclean:
 	-rm -rf autom4te.cache
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
 	-rm -f cscope.po.out cscope.out cscope.in.out cscope.files
-	-rm -f release-notes/LICENSE.sh
 	-rm -f src/impl
 	-rm Makefile
+#Use 'ifneq' instead of 'test -e' because the '+@' in QUIET_SUBDIR0 can't
+#be passed to the shell. Note that ifneq breaks if indented.
+ifneq (,$(wildcard ./release-notes/LICENSE.sh))
+	-rm -f release-notes/LICENSE.sh
+endif
+
 
 TAGS:
 	-rm -f ${top_srcdir}/TAGS

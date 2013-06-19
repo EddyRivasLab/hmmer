@@ -23,13 +23,20 @@ uninstall:
 	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} uninstall
 
 clean:
-	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} clean
+#Use 'ifneq' instead of 'test -e' because the '+@' in QUIET_SUBDIR0 can't
+#be passed to the shell. Note that ifneq breaks if indented.
+ifneq (,$(wildcard userguide/.))
 	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} clean
+endif
+	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} clean;
 	-rm -f *~
 
 distclean:
-	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} distclean
+#See above for explanation of 'ifneq' usage
+ifneq (,$(wildcard userguide/.))
 	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} distclean
+endif
+	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} distclean
 	-rm -f Makefile
 
 ################################################################
