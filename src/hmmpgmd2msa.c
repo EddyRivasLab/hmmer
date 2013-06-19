@@ -454,14 +454,15 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
     //increment output, adjusting for overlaps
     for(k = 0; k < hmm->M; k++)
     {
-      if(cover  [k]) (*statsOut)[k         ]+=1.0;
-         cover  [k] = 0;
+      if(cover[k]) (*statsOut)[k]+=1.0;
       
-      if(id     [k]) (*statsOut)[k+hmm->M  ]+=1.0;
-         id     [k] = 0;
+      if(id[k]) (*statsOut)[k+hmm->M]+=(id[k]/cover[k]);
+      id[k] = 0;
       
-      if(similar[k]) (*statsOut)[k+hmm->M*2]+=1.0;
-         similar[k] = 0;
+      if(similar[k]) (*statsOut)[k+hmm->M*2]+=(similar[k]/cover[k]);
+      similar[k] = 0;
+      
+      cover[k] = 0;
     }
   }
 
