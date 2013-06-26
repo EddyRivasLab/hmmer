@@ -1,0 +1,12 @@
+# Cannot use valgrind memcheck on code compiled with icc;
+# known issue with icc's use of SSE-optimized str*() functions.
+# xref J7/84
+#
+. /usr/local/intel-2012/bin/compilervars.sh intel64
+. /usr/local/intel-2012/impi/4.0.3.008/bin64/mpivars.sh 
+export INTEL_LICENSE_FILE="28518@flexlm.int.janelia.org"
+
+../configure CC=icc LDFLAGS=-static-intel --enable-mpi
+make V=1
+make V=1 dev                              
+make V=1 check 

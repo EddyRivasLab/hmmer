@@ -1,0 +1,42 @@
+Brief installation instructions 
+HMMER @HMMER_VERSION@; @HMMER_DATE@
+-------------------------------------------------------------
+
+These are quick installation instructions. For complete documentation,
+including customization and troubleshooting, please see the
+Installation chapter in the HMMER User's Guide (Userguide.pdf).
+
+Starting from a source distribution, hmmer-@HMMER_VERSION@.tar.gz:
+ uncompress:                uncompress hmmer-@HMMER_VERSION@.tar.gz  
+ unpack:                    tar xf hmmer-@HMMER_VERSION@.tar
+ move into new directory:   cd hmmer-@HMMER_VERSION@
+ configure:                 ./configure
+ build:                     make
+ automated tests:           make check
+ automated install:         make install
+
+HMMER is developed primarily on Linux and Mac OS/X systems. It is
+tested on a variety of UNIX and UNIX-like operating systems. It is
+written in ANSI C99 conforming to POSIX standards. It is meant to be
+portable to any POSIX-compliant system with an ANSI C99 compiler,
+including all UNIX and Macintosh systems. It should also build on
+Windows systems with optional POSIX compatibility software installed,
+such as Cygwin.
+
+-------------------------------------------------------------
+Starting from a Subversion (SVN) working copy:
+
+If you have checked HMMER out from its Subversion repository, there's
+some additional stuff you need to do one-time-only in your new working
+directory:
+
+   ln -s easel/aclocal.m4 aclocal.m4
+   autoconf
+   (cd easel; autoconf)
+
+-------------------------------------------------------------
+The HMMER development team
+HHMI Janelia Farm Research Campus
+http://hmmer.org/
+
+
