@@ -11,8 +11,6 @@
 #include "divsufsort.h"
 #include "fm/fm.h"
 
-//#define PRINTBWT 1
-//#define PRINTOCC 1
 
 #define FM_BLOCK_COUNT 100000 //max number of SQ objects in a block
 #define FM_BLOCK_OVERLAP 100000 //100 Kbases of overlap, at most, between adjascent FM-index blocks
@@ -182,6 +180,7 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
   if ( status < 0 )
     esl_fatal("buildAndWriteFMIndex: Error building BWT.\n");
 
+
   // Construct the BWT, SA landmarks, and FM-index
   for (c=0; c<meta->alph_size; c++) {
     cnts_sb[c] = 0;
@@ -237,18 +236,6 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
   }
 
 
-
-/*
-printf("BWT (termloc: %d): \n", term_loc);
-for(j=0; j < N; ++j) {
-  printf("%d\n", BWT[j]);
-}
-
-printf("SA:\n");
-for(j=0; j < N; ++j) {
-  printf("%d\n", SA[j]);
-}
-*/
   //wrap up the counting;
   for (c=0; c<meta->alph_size; c++) {
     FM_OCC_CNT(b, num_freq_cnts_b-1, c ) = cnts_b[c];
@@ -527,7 +514,7 @@ main(int argc, char **argv)
         block->complete = TRUE;
     }
 
-    status = esl_sqio_ReadBlock(sqfp, block, -1, block_size, alphatype != eslAMINO);
+    status = esl_sqio_ReadBlock(sqfp, block, block_size, -1, alphatype != eslAMINO);
     if (status == eslEOF) continue;
     if (status != eslOK)  ESL_XEXCEPTION(status, "failure reading sequence block");
 
@@ -626,13 +613,13 @@ main(int argc, char **argv)
 
     seq_cnt = numseqs-seq_offset;
     //build and write FM-index for T
-
+    fm_reverseString ((char*)T, block_length-1); //need to reverse T so the index can be used to find forward hits (through backwards search)
     buildAndWriteFMIndex(meta, seq_offset, seq_cnt, (uint32_t)block->list[0].C, T, BWT, SA, SAsamp,
         occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);
 
 
     if ( ! meta->fwd_only ) {
-      //build and write FM-index for reversed T
+      //build and write FM-index for de-reversed T  (used to find reverse hits using forward traversal of the BWT
       fm_reverseString ((char*)T, block_length-1);
       buildAndWriteFMIndex(meta, seq_offset, seq_cnt, 0, T, BWT, SA, NULL,
           occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);

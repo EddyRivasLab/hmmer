@@ -181,10 +181,9 @@ hit_sorter(const void *a, const void *b)
 
 /* Function:  main()
  * Synopsis:  Run set of queries against an FM
- * Incept:    TJW, Fri Dec 24 21:30:51 MST 2010 [Tucson]
  * Purpose:   Read in a FM and a file of query sequences.
  *            For each query, find matching FM interval, then collect positions in
- *            the original text T for the corresponding occurences. These positions
+ *            the original text T for the corresponding occurrences. These positions
  *            are 0-based (so first character is position 0).
  */
 int
@@ -207,12 +206,12 @@ main(int argc,  char *argv[])
   int i;
   int count_only    = 0;
 
-  FM_DATA *fmsf;
-  FM_DATA *fmsb;
   FM_INTERVAL interval;
-  FILE* fp_fm = NULL;
-  FILE* fp = NULL;
-  FILE* out = NULL;
+  FM_DATA *fmsf = NULL;
+  FM_DATA *fmsb = NULL;
+  FILE* fp_fm   = NULL;
+  FILE* fp      = NULL;
+  FILE* out     = NULL;
   char *outname = NULL;
 
   ESL_GETOPTS     *go  = NULL;    /* command line processing                 */
@@ -254,7 +253,7 @@ main(int argc,  char *argv[])
   fm_readFMmeta( meta);
 
   //read in FM-index blocks
-  ESL_ALLOC(fmsf, cfg->meta->block_count * sizeof(FM_DATA) );
+  ESL_ALLOC(fmsf, meta->block_count * sizeof(FM_DATA) );
   if (!meta->fwd_only)
     ESL_ALLOC(fmsb, meta->block_count * sizeof(FM_DATA) );
 
@@ -269,7 +268,7 @@ main(int argc,  char *argv[])
   }
   fclose(fp_fm);
 
-  output_header(cfg->meta, stdout, go, fname_fm, fname_queries);
+  output_header(meta, stdout, go, fname_fm, fname_queries);
 
 
   /* initialize a few global variables, then call initGlobals
@@ -292,7 +291,6 @@ main(int argc,  char *argv[])
   hits_size = 200;
   ESL_ALLOC(hits, hits_size * sizeof(FM_HIT));
 
-
   while(fgets(line, FM_MAX_LINE, fp) ) {
     int qlen=0;
     while (line[qlen] != '\0' && line[qlen] != '\n')  qlen++;
@@ -302,7 +300,7 @@ main(int argc,  char *argv[])
 
     for (i=0; i<meta->block_count; i++) {
 
-      fm_getSARangeForward(fmsb+i, cfg, line, meta->inv_alph, &interval);// yes, use the backward fm to produce a forward search on the forward fm
+      fm_getSARangeReverse(fmsf+i, cfg, line, meta->inv_alph, &interval);
       if (interval.lower>0 && interval.lower <= interval.upper) {
         int new_hit_num =  interval.upper - interval.lower + 1;
         hit_num += new_hit_num;
@@ -311,17 +309,15 @@ main(int argc,  char *argv[])
             hits_size = 2*hit_num;
             ESL_RALLOC(hits, tmp, hits_size * sizeof(FM_HIT));
           }
-          //even though I used fmsb above, use fmsf here, since we'll now do a backward trace
-          //in the FM-index to find the next sampled SA position
-          getFMHits(fmsf+i, cfg, &interval, i, hit_num-new_hit_num, qlen, hits, fm_forward);
+          getFMHits(fmsf+i, cfg, &interval, i, hit_num-new_hit_num, qlen, hits, fm_backward);
         }
+
       }
 
 
       /* find reverse hits, using backward search on the forward FM*/
-
       if (!meta->fwd_only) {
-        fm_getSARangeReverse(fmsf+i, cfg, line, meta->inv_alph, &interval);
+        fm_getSARangeForward(fmsb+i, cfg, line, meta->inv_alph, &interval);// yes, use the backward fm to produce the equivalent of a forward search on the forward fm
         if (interval.lower>0 && interval.lower <= interval.upper) {
           int new_hit_num =  interval.upper - interval.lower + 1;
           hit_num += new_hit_num;
@@ -330,13 +326,15 @@ main(int argc,  char *argv[])
               hits_size = 2*hit_num;
               ESL_RALLOC(hits, tmp, hits_size * sizeof(FM_HIT));
             }
-            getFMHits(fmsf+i, cfg, &interval, i, hit_num-new_hit_num, qlen, hits, fm_backward);
+            //even though I used fmsb above, use fmsf here, since we'll now do a backward trace
+            //in the FM-index to find the next sampled SA position
+            getFMHits(fmsf+i, cfg, &interval, i, hit_num-new_hit_num, qlen, hits, fm_forward);
           }
         }
+
       }
 
     }
-
 
 
     if (hit_num > 0) {
@@ -359,7 +357,6 @@ main(int argc,  char *argv[])
         if (hit_num2 > 0)
           hit_cnt++;
 
-
         //now sort according the the sequence_id corresponding to that seq_offset
         qsort(hits, hit_num, sizeof(FM_HIT), hit_sorter);
 
@@ -371,6 +368,7 @@ main(int argc,  char *argv[])
           i++;
         }
 
+
         if (i < hit_num) {
           if (out != NULL) {
             fprintf (out, "%s\n",line);
@@ -379,6 +377,7 @@ main(int argc,  char *argv[])
           }
           hit_indiv_cnt++;
           i++; // skip the first one, since I'll be comparing each to the previous
+
           for (  ; i< hit_num; i++) {
             if ( //meta->seq_data[ hits[i].block ].id != meta->seq_data[ hits[i-1].block ].id ||
                  hits[i].sortkey   != hits[i-1].sortkey ||  //sortkey is seq_data[].id
@@ -403,9 +402,9 @@ main(int argc,  char *argv[])
   }
 
   for (i=0; i<meta->block_count; i++) {
-    fm_freeFM( fmsb+i, 1 );
+    fm_freeFM( fmsf+i, 1 );
     if (!meta->fwd_only)
-      fm_freeFM( fmsf+i, 0 );
+      fm_freeFM( fmsb+i, 0 );
   }
 
   for (i=0; i<meta->seq_count; i++)

@@ -236,7 +236,7 @@ check: ${PROGS} ${UTESTS} ${ITESTS} .FORCE
 
 libhmmer.a: libhmmer-src.stamp .FORCE
 	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} libhmmer-impl.stamp
-	${QUIET_SUBDIR0}fm ${QUIET_SUBDIR1} libhmmer-fm.stamp
+	${QUIET_SUBDIR0}fm ${QUIET_SUBDIR1} all
 
 libhmmer-src.stamp: ${OBJS}
 	${QUIET_AR}${AR} -r libhmmer.a $? > /dev/null 2>&1 
@@ -341,10 +341,12 @@ uninstall:
 
 distclean: clean
 	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} distclean
+	${QUIET_SUBDIR0}fm ${QUIET_SUBDIR1} distclean
 	-rm -f Makefile p7_config.h
 
 clean:
 	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} clean
+	${QUIET_SUBDIR0}fm ${QUIET_SUBDIR1} clean
 	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out
 	-rm -f libhmmer.a libhmmer-src.stamp
 	-rm -f ${UTESTS}

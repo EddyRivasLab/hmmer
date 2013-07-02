@@ -308,8 +308,7 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
   P7_ALIDISPLAY     *ad, *ad2;
 
   float *cover, *id, *similar; //store statistics result per hit
-  int readPos, writePos, domainPos;     //for converting alignment contents into model indexing
-  int debugCount = 0;
+  int readPos, writePos;     //for converting alignment contents into model indexing
 
   char              *p     = (char*)data;        /*pointer used to walk along data, must be char* to allow pointer arithmetic */
 

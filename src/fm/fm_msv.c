@@ -584,15 +584,7 @@ p7_FM_SSV( P7_OPROFILE *om, void *gx, float nu, P7_BG *bg, double F1,
   float      tbmk  = logf(     2.0f / ((float) om->M * (float) (om->M+1)));
   float      tec   = logf(1.0f / nu);
   uint32_t tmp_id, tmp_n;
-  uint32_t prev_n = 0;
-  uint32_t prev_id = 0;
-  uint32_t prev_nstart = 0;
-  uint32_t prev_fmstart = 0;
-  int prev_k;
-  float prev_sc = 0.0;
   float score = 0.0;
-  int left_edge;
-  int prev_right_edge;
   FM_DIAG   *diag;
 
   ESL_SQ   *tmp_sq;

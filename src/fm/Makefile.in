@@ -58,14 +58,12 @@ endif
 
 # targets
 all: libhmmer-fm.stamp ${PROGS} .FORCE
- 
 
 libhmmer-fm.stamp: ${OBJS}
 	${QUIET_AR}${AR} -r libhmmerfm.a $? > /dev/null 2>&1 
 	@${RANLIB} libhmmerfm.a
-	@chmod 644 libhmmerfm.a
-
-
+	@echo "fm_lib objects compiled:\c" > $@
+	@date >> $@
 
 .FORCE:
 
@@ -81,10 +79,10 @@ ${PROGS}: ${OBJS} ${PROGOBJS}
 
 
 clean:
-	$(RM) $(TARGET) $(OBJS) $(PROGS) $(PROGOBJS) libhmmerfm.a
+	$(RM) $(TARGET) $(OBJS) $(PROGS) $(PROGOBJS) libhmmerfm.a libhmmer-fm.stamp
 
 distclean:
-	$(RM) $(TARGET) $(OBJS) $(PROGS) $(PROGOBJS) libhmmerfm.a $(MAKEFILE)
+	$(RM) $(TARGET) $(OBJS) $(PROGS) $(PROGOBJS) libhmmerfm.a libhmmer-fm.stamp $(MAKEFILE)
 	
 
 ################################################################
