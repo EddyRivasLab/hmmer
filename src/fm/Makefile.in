@@ -1,0 +1,98 @@
+MODULE = fm
+
+top_srcdir   = @top_srcdir@
+top_builddir = @top_builddir@
+srcdir       = @srcdir@
+VPATH        = @srcdir@ 
+SHELL        = /bin/sh
+
+prefix      = @prefix@
+exec_prefix = @exec_prefix@
+datarootdir = @datarootdir@
+bindir      = @bindir@
+libdir      = @libdir@
+includedir  = @includedir@
+
+CC          = @CC@
+CFLAGS      = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
+SIMDFLAGS   = @SIMD_CFLAGS@
+CPPFLAGS    = @CPPFLAGS@
+LDFLAGS     = @LDFLAGS@
+DEFS        = @DEFS@
+LIBS        = @LIBS@ -lm -leasel -lhmmerfm
+
+AR          = @AR@ 
+RANLIB      = @RANLIB@
+INSTALL     = @INSTALL@
+
+
+MYLIBDIRS      = -L. -L.. -L${top_srcdir}/src -I${srcdir} 
+MYINCDIRS      = -I. \
+		 -I.. \
+		 -I${srcdir} \
+		 -I${top_srcdir}/src
+
+PROGS = hmmerfm-exactmatch
+
+PROGOBJS = hmmerfm-exactmatch.o
+
+OBJS =  fm_alphabet.o\
+	   fm_general.o\
+	   fm_msv.o\
+	   fm_sse.o
+
+HDRS =  fm.h
+
+# beautification magic stolen from git 
+QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
+QUIET_SUBDIR1 = 
+ifndef V
+	QUIET_CC      = @echo '    ' CC $@;
+	QUIET_GEN     = @echo '    ' GEN $@;
+	QUIET_AR      = @echo '    ' AR $@;
+	QUIET_SUBDIR0 = +@subdir=
+	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
+		        ${MAKE} -C $$subdir
+endif
+
+
+# targets
+all: libhmmer-fm.stamp ${PROGS} .FORCE
+ 
+
+libhmmer-fm.stamp: ${OBJS}
+	${QUIET_AR}${AR} -r libhmmerfm.a $? > /dev/null 2>&1 
+	@${RANLIB} libhmmerfm.a
+	@chmod 644 libhmmerfm.a
+
+
+
+.FORCE:
+
+${OBJS}:     ${HDRS}  
+${PROGOBJS}: ${HDRS}
+
+
+${PROGS}: ${OBJS} ${PROGOBJS}
+	${QUIET_GEN}${CC} ${CFLAGS} ${CPPFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${LIBS}
+
+.c.o: 
+	${QUIET_CC}${CC} ${CFLAGS} ${CPPFLAGS} ${MYINCDIRS} -o $@ -c $<
+
+
+clean:
+	$(RM) $(TARGET) $(OBJS) $(PROGS) $(PROGOBJS) libhmmerfm.a
+
+distclean:
+	$(RM) $(TARGET) $(OBJS) $(PROGS) $(PROGOBJS) libhmmerfm.a $(MAKEFILE)
+	
+
+################################################################
+# @LICENSE@
+#
+# SVN $URL$
+# SVN $Id$
+################################################################
+
+
+

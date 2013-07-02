@@ -678,7 +678,7 @@ if test -d "easel/documentation"; then
 fi    
 AC_CONFIG_FILES([easel/Makefile])
 AC_CONFIG_FILES([libdivsufsort/Makefile])
-
+AC_CONFIG_FILES([src/fm/Makefile])
 
 # the following incantation establishes a symlink of
 # src/impl_{whatever} to src/impl in the *build* directory.

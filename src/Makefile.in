@@ -25,7 +25,7 @@ SIMDFLAGS = @SIMD_CFLAGS@
 CPPFLAGS  = @CPPFLAGS@
 LDFLAGS   = @LDFLAGS@
 DEFS      = @DEFS@
-LIBS      = -lhmmer -leasel -ldivsufsort @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
+LIBS      = -lhmmer -leasel -ldivsufsort -lhmmerfm @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
 MPILIBS   = @MPILIBS@
 
 AR        = @AR@ 
@@ -36,10 +36,11 @@ IMPLDIR   = impl_@IMPL_CHOICE@
 ESLDIR    = @HMMER_ESLDIR@
 SADIR     = @HMMER_SADIR@
 
-MYLIBDIRS = -L../${ESLDIR} -L./${IMPLDIR} -L../${SADIR} -L.
+MYLIBDIRS = -L../${ESLDIR} -L./${IMPLDIR} -L../${SADIR} -L./fm -L.
 MYINCDIRS = -I../${ESLDIR} \
 	    -I../${SADIR} \
 	    -I${top_srcdir}/easel \
+	    -I./fm \
 	    -I. \
 	    -I${srcdir}
 
@@ -61,7 +62,8 @@ PROGS = alimask\
 	nhmmer\
 	nhmmscan\
 	hmmpgmd\
-	hmmc2
+	hmmc2\
+	makehmmerdb
 
 
 PROGOBJS =\
@@ -84,7 +86,7 @@ PROGOBJS =\
 	nhmmscan.o\
 	hmmpgmd.o\
 	hmmc2.o\
-	makenhmmerdb.o\
+	makehmmerdb.o\
 
 HDRS =  hmmer.h \
 	cachedb.h \
@@ -234,6 +236,7 @@ check: ${PROGS} ${UTESTS} ${ITESTS} .FORCE
 
 libhmmer.a: libhmmer-src.stamp .FORCE
 	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} libhmmer-impl.stamp
+	${QUIET_SUBDIR0}fm ${QUIET_SUBDIR1} libhmmer-fm.stamp
 
 libhmmer-src.stamp: ${OBJS}
 	${QUIET_AR}${AR} -r libhmmer.a $? > /dev/null 2>&1 
@@ -246,7 +249,7 @@ libhmmer-src.stamp: ${OBJS}
 ${OBJS}:     ${HDRS} p7_config.h  
 ${PROGOBJS}: ${HDRS} p7_config.h
 
-${PROGS}: @EXEC_DEPENDENCY@  libhmmer.a ../${ESLDIR}/libeasel.a  
+${PROGS}: @EXEC_DEPENDENCY@  libhmmer.a ../${ESLDIR}/libeasel.a  ./fm/libhmmerfm.a
 	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
 
 .c.o:
