@@ -201,22 +201,22 @@ fm_getOccCount (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c) {
   FM_METADATA *meta = cfg->meta;
 
   int cnt;
-  const int b_pos          = (pos+1) >> meta->cnt_shift_b; //floor(pos/b_size)   : the b count element preceding pos
+  const int b_pos          = (pos+1) / meta->freq_cnt_b ; //floor(pos/b_size)   : the b count element preceding pos
   const uint16_t * occCnts_b  = fm->occCnts_b;
   const uint32_t * occCnts_sb = fm->occCnts_sb;
-  const int sb_pos         = (pos+1) >> meta->cnt_shift_sb; //floor(pos/sb_size) : the sb count element preceding pos
+  const int sb_pos         = (pos+1) / meta->freq_cnt_sb; //floor(pos/sb_size) : the sb count element preceding pos
 
 
   const int cnt_mod_mask_b = meta->freq_cnt_b - 1; //used to compute the mod function
   const int b_rel_pos      = (pos+1) & cnt_mod_mask_b; // pos % b_size      : how close is pos to the boundary corresponding to b_pos
-  const int up_b           = b_rel_pos>>(meta->cnt_shift_b - 1); //1 if pos is expected to be closer to the boundary of b_pos+1, 0 otherwise
-  const int landmark       = ((b_pos+up_b)<<(meta->cnt_shift_b)) - 1 ;
+  const int up_b           = 2*b_rel_pos/meta->freq_cnt_b; //1 if pos is expected to be closer to the boundary of b_pos+1, 0 otherwise
+  const int landmark       = ((b_pos+up_b)*meta->freq_cnt_b) - 1 ;
   // get the cnt stored at the nearest checkpoint
   cnt =  FM_OCC_CNT(sb, sb_pos, c );
 
   if (up_b)
     cnt += FM_OCC_CNT(b, b_pos + 1, c ) ;
-  else if ( b_pos !=  sb_pos * (1<<(meta->cnt_shift_sb - meta->cnt_shift_b)) )
+  else if ( b_pos !=  sb_pos * (meta->freq_cnt_sb / meta->freq_cnt_b) )
     cnt += FM_OCC_CNT(b, b_pos, c )  ;// b_pos has cumulative counts since the prior sb_pos - if sb_pos references the same count as b_pos, it'll doublecount
 
 
@@ -353,16 +353,16 @@ fm_getOccCountLT (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *
 
   int i,j;
 
-  const int b_pos          = (pos+1) >> meta->cnt_shift_b; //floor(pos/b_size)   : the b count element preceding pos
+  const int b_pos          = (pos+1) / meta->freq_cnt_b; //floor(pos/b_size)   : the b count element preceding pos
   const uint16_t * occCnts_b  = fm->occCnts_b;
   const uint32_t * occCnts_sb = fm->occCnts_sb;
-  const int sb_pos         = (pos+1) >> meta->cnt_shift_sb; //floor(pos/sb_size) : the sb count element preceding pos
+  const int sb_pos         = (pos+1) / meta->freq_cnt_sb; //floor(pos/sb_size) : the sb count element preceding pos
 
 
   const int cnt_mod_mask_b = meta->freq_cnt_b - 1; //used to compute the mod function
   const int b_rel_pos      = (pos+1) & cnt_mod_mask_b; // pos % b_size      : how close is pos to the boundary corresponding to b_pos
-  const int up_b           = b_rel_pos>>(meta->cnt_shift_b - 1); //1 if pos is expected to be closer to the boundary of b_pos+1, 0 otherwise
-  const int landmark       = ((b_pos+up_b)<<(meta->cnt_shift_b)) - 1 ;
+  const int up_b           = 2*b_rel_pos/meta->freq_cnt_b; //1 if pos is expected to be closer to the boundary of b_pos+1, 0 otherwise
+  const int landmark       = ((b_pos+up_b)*(meta->freq_cnt_b)) - 1 ;
 
   // get the cnt stored at the nearest checkpoint
   *cnteq = FM_OCC_CNT(sb, sb_pos, c );
@@ -373,7 +373,7 @@ fm_getOccCountLT (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *
     *cnteq += FM_OCC_CNT(b, b_pos + 1, c ) ;
     for (i=0; i<c; i++)
       *cntlt += FM_OCC_CNT(b, b_pos + 1, i ) ;
-  } else if ( b_pos !=  sb_pos * (1<<(meta->cnt_shift_sb - meta->cnt_shift_b)) ) {
+  } else if ( b_pos !=  sb_pos * (meta->freq_cnt_sb / meta->freq_cnt_b))  {
     *cnteq += FM_OCC_CNT(b, b_pos, c )  ;// b_pos has cumulative counts since the prior sb_pos - if sb_pos references the same count as b_pos, it'll doublecount
     for (i=0; i<c; i++)
       *cntlt += FM_OCC_CNT(b, b_pos, i ) ;

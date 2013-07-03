@@ -192,45 +192,40 @@ fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
 
 /* Function:  getChar()
  * Synopsis:  Find the character c residing at a given position in the BWT.
- * Purpose:   The returned char is used by getFMHits(), to seed a call to
- *            bwt_getOccCount().
+ * Purpose:   This method must account for possible string compression, either
+ *            4 characters in one byte for a 4-letter DNA/RNA alphabet, 2 chars
+ *            per byte for a 15-letter alphabet of DNA/RNA with ambiguity codes,
+ *            or one char per byte for amino acids.
  */
-//#ifndef FMDEBUG
-//inline
-//#endif
 uint8_t
 fm_getChar(uint8_t alph_type, int j, const uint8_t *B )
 {
   uint8_t c = -1;
 
-  if (alph_type == fm_DNA) {
+  if (alph_type == fm_DNA || alph_type == fm_RNA) {
     /*
-     *  B[j>>2] is the byte of B in which j is found (j/4)
+     *  B[j/4] is the byte of B in which j is found
      *
      *  Let j' be the final two bits of j (j&0x2)
      *  The char bits are the two starting at position 2*j'.
-     *  Without branching, grab them by shifting B[j>>2] right 6-2*j' bits,
+     *  Without branching, grab them by shifting B[j/4] right 6-2*j' bits,
      *  then masking to keep the final two bits
      */
-    c = (B[j>>2] >> ( 0x6 - ((j&0x3)<<1) ) & 0x3);
-  } else if (alph_type == fm_DNA_full) {
-    c = (B[j>>1] >> (((j&0x1)^0x1)<<2) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
-  } else {
-    esl_fatal("Invalid alphabet type\n");
+    c = (B[j/4] >> ( 0x6 - ((j&0x3)*2) ) & 0x3);
+  } else if (alph_type == fm_DNA_full || alph_type == fm_RNA_full) {
+    c = (B[j/2] >> (((j&0x1)^0x1)/4) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
+  } else { // amino
+    c = B[j];
   }
 
   return c;
 }
 
 
-/* Function:  getChar()
- * Synopsis:  Find the character c residing at a given position in the BWT.
- * Purpose:   The returned char is used by getFMHits(), to seed a call to
- *            bwt_getOccCount().
+/* Function:  fm_convertRange2DSQ()
+ * Synopsis:  Convert the BWT range into a DSQ.
+ * Purpose:   Must account for the possible compression of the BWT
  */
-//#ifndef FMDEBUG
-//inline
-//#endif
 int
 fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint8_t *B, ESL_SQ *sq )
 {
@@ -246,22 +241,25 @@ fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint
      *
      *  Let j' be the final two bits of j (j&0x2)
      *  The char bits are the two starting at position 2*j'.
-     *  Without branching, grab them by shifting B[j>>2] right 6-2*j' bits,
+     *  Without branching, grab them by shifting B[j/4] right 6-2*j' bits,
      *  then masking to keep the final two bits
      */
     for (i = first; i<= first+length-1; i++)
-      sq->dsq[i-first+1] = (B[i>>2] >> ( 0x6 - ((i&0x3)<<1) ) & 0x3);
+      sq->dsq[i-first+1] = (B[i/4] >> ( 0x6 - ((i&0x3)*2) ) & 0x3);
 
     sq->dsq[length+1] = eslDSQ_SENTINEL;
 
   } else if (meta->alph_type == fm_DNA_full || meta->alph_type == fm_RNA_full ) {
     for (i = first; i<= first+length-1; i++) {
-      c = (B[i>>1] >> (((i&0x1)^0x1)<<2) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
-      sq->dsq[i-first+1] = c + (c < 4 ? 0 : 1);
+      c = (B[i/2] >> (((i&0x1)^0x1)*4) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
+      sq->dsq[i-first+1] = c + (c < 4 ? 0 : 1); //increment by one for ambiguity codes
     }
     sq->dsq[length+1] = eslDSQ_SENTINEL;
-  } else {
-    esl_fatal("Invalid alphabet type\n");
+  } else { // amino
+    for (i = first; i<= first+length-1; i++)
+      sq->dsq[i-first+1] = B[i] + (B[i] < 20 ? 0 : 1); //increment by one for ambiguity codes
+
+    sq->dsq[length+1] = eslDSQ_SENTINEL;
   }
 
   return eslOK;
@@ -269,16 +267,11 @@ fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint
 
 
 
-/* Function:  computeSequenceOffset()
+/* Function:  fm_computeSequenceOffset()
  * Synopsis:  Search in the meta->seq_data array for the sequence id corresponding to the
  *            requested position. The matching entry is the one with the largest index i
  *            such that seq_data[i].offset < pos
- *
- *
- * Input: file pointer to binary file
- * Output: return filled meta struct
  */
-//inline
 uint32_t
 fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int pos)
 {
@@ -286,14 +279,6 @@ fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int 
   uint32_t lo = fms[block].seq_offset;
   uint32_t hi  = lo + fms[block].seq_cnt - 1;
   uint32_t mid;
-
-  /*  //linear scan
-  for (mid=lo+1; i<=hi; i++) {
-    if (meta->seq_data[i].offset > pos) // the position of interest belongs to the previous sequence
-      break;
-  }
-  return i-1;
-    */
 
   //binary search, first handling edge cases
   if (lo==hi)                           return lo;
@@ -310,8 +295,9 @@ fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int 
 }
 
 
-/* Function:  FM_getOriginalPosition()
- * Synopsis:  find
+/* Function:  fm_getOriginalPosition()
+ * Synopsis:  Find the id of the sequence in the original input corresponding
+ *            to a given hit, and the position of that hit in the original
  * Purpose:   Given:
  *            fms       - an array of FM-indexes
  *            meta      - the fm metadata
@@ -322,7 +308,7 @@ fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int 
  *
  *            Returns
  *            *segment_id - index of the sequence segment captured in the FM-index
- *            *seg_pos    - position in the original sequence, as compressed in the FM binary data structure
+ *            *seg_pos    - position in the original sequence, as compressed in the FM binary data structure (zero based)
  */
 int
 fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,
@@ -356,7 +342,6 @@ int
 fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go ) {
 
   cfg->maskSA       =  cfg->meta->freq_SA - 1;
-  cfg->shiftSA      =  cfg->meta->SA_shift;
 
   cfg->msv_length      = (go ? esl_opt_GetInteger(go, "--fm_msv_length") : -1);
   cfg->max_depth       = (go ? esl_opt_GetInteger(go, "--fm_max_depth") :  -1);
@@ -365,19 +350,6 @@ fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go ) {
   cfg->score_ratio_req = (go ? esl_opt_GetReal(go, "--fm_sc_ratio") : -1.0);
   cfg->max_scthreshFM  = (go ? esl_opt_GetReal(go, "--fm_max_scthresh") : -1.0);
 
-
-/*
-
-  //bounding cutoffs
-  cfg->max_scthreshFM  = 10.5;
-
-  cfg->max_depth       = 18;
-  cfg->neg_len_limit   = 4;
-  cfg->consec_pos_req  = 4;
-  cfg->score_ratio_req = 0.40;
-  cfg->msv_length      = 50;
-
-*/
   return eslOK;
 }
 
@@ -518,9 +490,6 @@ fm_readFMmeta( FM_METADATA *meta)
       fread(&(meta->freq_SA),      sizeof(meta->freq_SA),      1, meta->fp) != 1 ||
       fread(&(meta->freq_cnt_sb),  sizeof(meta->freq_cnt_sb),  1, meta->fp) != 1 ||
       fread(&(meta->freq_cnt_b),   sizeof(meta->freq_cnt_b),   1, meta->fp) != 1 ||
-      fread(&(meta->SA_shift),     sizeof(meta->SA_shift),     1, meta->fp) != 1 ||
-      fread(&(meta->cnt_shift_sb), sizeof(meta->cnt_shift_sb), 1, meta->fp) != 1 ||
-      fread(&(meta->cnt_shift_b),  sizeof(meta->cnt_shift_b),  1, meta->fp) != 1 ||
       fread(&(meta->block_count),  sizeof(meta->block_count),  1, meta->fp) != 1 ||
       fread(&(meta->seq_count),    sizeof(meta->seq_count),    1, meta->fp) != 1 ||
       fread(&(meta->char_count),   sizeof(meta->char_count),   1, meta->fp) != 1

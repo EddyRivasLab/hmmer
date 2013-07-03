@@ -150,7 +150,7 @@ getFMHits( FM_DATA *fm, FM_CFG *cfg, FM_INTERVAL *interval, int block_id, int hi
     hits_ptr[hit_offset + i - interval->lower].direction = fm_direction;
     hits_ptr[hit_offset + i - interval->lower].length    = hit_length;
 
-    hits_ptr[hit_offset + i - interval->lower].start     = len + (j==fm->term_loc ? 0 : fm->SA[ j >> cfg->shiftSA ]) ; // len is how many backward steps we had to take to find a sampled SA position
+    hits_ptr[hit_offset + i - interval->lower].start     = len + (j==fm->term_loc ? 0 : fm->SA[ j >> cfg->maskSA ]) ; // len is how many backward steps we had to take to find a sampled SA position
     if (fm_direction == fm_backward)
       hits_ptr[hit_offset + i - interval->lower].start  +=  hit_length - 1 ;
 
@@ -275,7 +275,6 @@ main(int argc,  char *argv[])
    * to do architecture-specific initialization
    */
   cfg->maskSA       =  meta->freq_SA - 1;
-  cfg->shiftSA      =  meta->SA_shift;
   fm_initConfig(cfg, NULL);
 
 

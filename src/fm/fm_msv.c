@@ -113,7 +113,7 @@ FM_backtrackSeed(const FM_DATA *fmf, FM_CFG *fm_cfg, int i, FM_DIAG *seed) {
     len++;
   }
 
-  return len + (j==fmf->term_loc ? 0 : fmf->SA[ j >> fm_cfg->shiftSA ]) ; // len is how many backward steps we had to take to find a sampled SA position
+  return len + (j==fmf->term_loc ? 0 : fmf->SA[ j / fm_cfg->maskSA ]) ; // len is how many backward steps we had to take to find a sampled SA position
 
 }
 

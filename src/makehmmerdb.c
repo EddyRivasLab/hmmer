@@ -214,7 +214,7 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
     //sample the SA
     if (SAsamp != NULL) {
       if ( !(j % meta->freq_SA) )
-        SAsamp[ j>>meta->SA_shift ] = ( SA[j] == N - 1 ? -1 : SA[j] ) ; // handle the wrap-around '$'
+        SAsamp[ j/meta->freq_SA ] = ( SA[j] == N - 1 ? -1 : SA[j] ) ; // handle the wrap-around '$'
     }
 
     cnts_sb[BWT[j]]++;
@@ -224,11 +224,11 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
     if ( !(  joffset % meta->freq_cnt_b) ) {  // (j+1)%freq_cnt_b==0  , i.e. every freq_cnt_bth position, noting that it's a zero-based count
 
       for (c=0; c<meta->alph_size; c++)
-        FM_OCC_CNT(b, (joffset>>meta->cnt_shift_b), c ) = cnts_b[c];
+        FM_OCC_CNT(b, (joffset/meta->freq_cnt_b), c ) = cnts_b[c];
 
       if ( !(joffset % meta->freq_cnt_sb) ) {  // j%freq_cnt_sb==0
         for (c=0; c<meta->alph_size; c++) {
-          FM_OCC_CNT(sb, (joffset>>meta->cnt_shift_sb), c ) = cnts_sb[c];
+          FM_OCC_CNT(sb, (joffset/meta->freq_cnt_sb), c ) = cnts_sb[c];
           cnts_b[c] = 0;
         }
       }
@@ -442,10 +442,6 @@ main(int argc, char **argv)
 
   output_header(stdout, go, fname_in, fname_out);
 
-  meta->SA_shift     = (int) round(log(meta->freq_SA)     * eslCONST_LOG2R); /* i.e. log2() */
-  meta->cnt_shift_b  = (int) round(log(meta->freq_cnt_b)  * eslCONST_LOG2R);
-  meta->cnt_shift_sb = (int) round(log(meta->freq_cnt_sb) * eslCONST_LOG2R);
-
   //getInverseAlphabet
   fm_createAlphabet(meta, &(meta->charBits));
   chars_per_byte = 8/meta->charBits;
@@ -648,9 +644,6 @@ main(int argc, char **argv)
       fwrite(&(meta->freq_SA),      sizeof(meta->freq_SA),      1, fp) != 1 ||
       fwrite(&(meta->freq_cnt_sb),  sizeof(meta->freq_cnt_sb),  1, fp) != 1 ||
       fwrite(&(meta->freq_cnt_b),   sizeof(meta->freq_cnt_b),   1, fp) != 1 ||
-      fwrite(&(meta->SA_shift),     sizeof(meta->SA_shift),     1, fp) != 1 ||
-      fwrite(&(meta->cnt_shift_sb), sizeof(meta->cnt_shift_sb), 1, fp) != 1 ||
-      fwrite(&(meta->cnt_shift_b),  sizeof(meta->cnt_shift_b),  1, fp) != 1 ||
       fwrite(&(meta->block_count),  sizeof(meta->block_count),  1, fp) != 1 ||
       fwrite(&(meta->seq_count),    sizeof(meta->seq_count),    1, fp) != 1 ||
       fwrite(&total_char_count,     sizeof(total_char_count),   1, fp) != 1

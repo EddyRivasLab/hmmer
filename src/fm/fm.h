@@ -76,9 +76,6 @@ typedef struct fm_metadata_s {
   uint32_t freq_SA; //frequency with which SA is sampled
   uint32_t freq_cnt_sb; //frequency with which full cumulative counts are captured
   uint32_t freq_cnt_b; //frequency with which intermittent counts are captured
-  uint8_t  SA_shift;
-  uint8_t  cnt_shift_sb;
-  uint8_t  cnt_shift_b;
   uint16_t block_count;
   uint32_t seq_count;
   uint64_t char_count; //total count of characters including those in and out of the alphabet
@@ -160,7 +157,6 @@ typedef struct {
 
   /*suffix-array mask and offset values*/
   int maskSA;
-  int shiftSA;
 
   /*counter, to compute FM-index speed*/
   int occCallCnt;
@@ -223,12 +219,11 @@ typedef union {
 #define FM_MATCH_2BIT(in_v, c_v, a_v, b_v, out_v) do {\
     a_v = _mm_xor_si128(in_v, c_v);\
     \
-    b_v = _mm_and_si128(a_v, cfg->fm_m01);\
-    a_v  = _mm_srli_epi16(a_v, 1);\
-    a_v  = _mm_and_si128(a_v, cfg->fm_m01);\
+    b_v  = _mm_srli_epi16(a_v, 1);\
     a_v  = _mm_or_si128(a_v, b_v);\
+    b_v  = _mm_and_si128(a_v, cfg->fm_m01);\
     \
-    out_v  = _mm_subs_epi8(cfg->fm_m01,a_v);\
+    out_v  = _mm_subs_epi8(cfg->fm_m01,b_v);\
   } while (0)
 
 
