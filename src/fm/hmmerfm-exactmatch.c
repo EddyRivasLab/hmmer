@@ -231,7 +231,7 @@ main(int argc,  char *argv[])
       out = stdout;
       outname = "stdout";
     } else {
-      out = fopen(optarg,"w");
+      out = fopen(outname,"w");
     }
   }
 
@@ -348,6 +348,7 @@ main(int argc,  char *argv[])
         for (i = 0; i< hit_num; i++) {
 
           fm_getOriginalPosition (fmsf, meta, hits[i].block, hits[i].length, hits[i].direction, hits[i].start,  &(hits[i].block), &(hits[i].start) );
+          hits[i].start++;  //make number 1-based
           hits[i].sortkey = hits[i].block == -1 ? -1 : meta->seq_data[ hits[i].block ].id;
 
           if (hits[i].sortkey != -1)

@@ -613,7 +613,6 @@ main(int argc, char **argv)
 
     seq_cnt = numseqs-seq_offset;
     //build and write FM-index for T
-    fm_reverseString ((char*)T, block_length-1); //need to reverse T so the index can be used to find forward hits (through backwards search)
     buildAndWriteFMIndex(meta, seq_offset, seq_cnt, (uint32_t)block->list[0].C, T, BWT, SA, SAsamp,
         occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);
 
