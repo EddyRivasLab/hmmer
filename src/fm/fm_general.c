@@ -116,6 +116,9 @@ fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
   interval->lower  = interval_bk.lower = abs(fm->C[c]);
   interval->upper  = interval_bk.upper = abs(fm->C[c+1])-1;
 
+  //  fprintf (stderr, "%d : %12d..%12d\n", c, interval->lower, interval->upper );
+
+
   while (interval_bk.lower>0 && interval_bk.lower <= interval_bk.upper) {
     c = query[++i];
     if (c == '\0')  // end of query - the current range defines the hits
@@ -123,6 +126,7 @@ fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
 
     c = inv_alph[c];
     fm_updateIntervalForward( fm, cfg, c, &interval_bk, interval);
+    //    fprintf (stderr, "%d : %12d..%12d\n", c, interval->lower, interval->upper );
     cfg->occCallCnt+=2;
   }
 
@@ -213,13 +217,14 @@ fm_getChar(uint8_t alph_type, int j, const uint8_t *B )
      */
     c = (B[j/4] >> ( 0x6 - ((j&0x3)*2) ) & 0x3);
   } else if (alph_type == fm_DNA_full || alph_type == fm_RNA_full) {
-    c = (B[j/2] >> (((j&0x1)^0x1)/4) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
+    c = (B[j/2] >> (((j&0x1)^0x1)*4) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
   } else { // amino
     c = B[j];
   }
 
   return c;
 }
+
 
 
 /* Function:  fm_convertRange2DSQ()
@@ -340,8 +345,6 @@ fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int le
 
 int
 fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go ) {
-
-  cfg->maskSA       =  cfg->meta->freq_SA - 1;
 
   cfg->msv_length      = (go ? esl_opt_GetInteger(go, "--fm_msv_length") : -1);
   cfg->max_depth       = (go ? esl_opt_GetInteger(go, "--fm_max_depth") :  -1);

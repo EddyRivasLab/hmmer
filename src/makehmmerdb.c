@@ -180,7 +180,6 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
   if ( status < 0 )
     esl_fatal("buildAndWriteFMIndex: Error building BWT.\n");
 
-
   // Construct the BWT, SA landmarks, and FM-index
   for (c=0; c<meta->alph_size; c++) {
     cnts_sb[c] = 0;
@@ -195,9 +194,7 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
   }
   T[N-1]=0;
 
-
   BWT[0] =  SA[0]==0 ? 0 /* '$' */ : T[ SA[0]-1] ;
-
 
   cnts_sb[BWT[0]]++;
   cnts_b[BWT[0]]++;
@@ -210,6 +207,8 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
     } else {
         BWT[j] =  T[ SA[j]-1] ;
     }
+
+
 
     //sample the SA
     if (SAsamp != NULL) {
@@ -245,42 +244,45 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
 
 
   // Convert BWT and T to packed versions if appropriate.
-  if (meta->alph_type == fm_DNA) {
+  if (meta->alph_type == fm_DNA || meta->alph_type == fm_RNA) {
      //4 chars per byte.  Counting will be done based on quadruples 0..3; 4..7; 8..11; etc.
       for(i=0; i < N-3; i+=4) {
-        BWT[i>>2]           = BWT[i]<<6 | BWT[i+1]<<4 | BWT[i+2]<<2 | BWT[i+3];
+        BWT[i/4]           = BWT[i]<<6 | BWT[i+1]<<4 | BWT[i+2]<<2 | BWT[i+3];
         if (SAsamp != NULL)
-          Tcompressed[i>>2] =  T[i]<<6 |   T[i+1]<<4 |   T[i+2]<<2 | T[i+3];
+          Tcompressed[i/4] =  T[i]<<6 |   T[i+1]<<4 |   T[i+2]<<2 | T[i+3];
       }
       if (i <= N-1) {
-        BWT[i>>2]           =  BWT[i]<<6;
+        BWT[i/4]           =  BWT[i]<<6;
         if (SAsamp != NULL)
-          Tcompressed[i>>2] =   T[i]<<6;
+          Tcompressed[i/4] =   T[i]<<6;
       }
       if (i+1 <= N-1) {
-        BWT[i>>2]           =  BWT[i+1]<<4;
+        BWT[i/4]           |=  BWT[i+1]<<4;
         if (SAsamp != NULL)
-          Tcompressed[i>>2] =   T[i+1]<<4;
+          Tcompressed[i/4] |=   T[i+1]<<4;
       }
       if (i+2 <= N-1)  {
-        BWT[i>>2]           =  BWT[i+2]<<2;
+        BWT[i/4]           |=  BWT[i+2]<<2;
         if (SAsamp != NULL)
-          Tcompressed[i>>2] =   T[i+2]<<2;
+          Tcompressed[i/4] |=   T[i+2]<<2;
       }
 
-  } else if (meta->alph_type == fm_DNA_full) {
+  } else if (meta->alph_type == fm_DNA_full || meta->alph_type == fm_RNA_full) {
     //2 chars per byte.  Counting will be done based on quadruples 0..3; 4..7; 8..11; etc.
+
+
       for(i=0; i < N-1; i+=2) {
-        BWT[i>>1]           = BWT[i]<<4 | BWT[i+1];
+        BWT[i/2]           = BWT[i]<<4 | BWT[i+1];
         if (SAsamp != NULL)
-          Tcompressed[i>>1] =   T[i]<<4 |   T[i+1];
+          Tcompressed[i/2] =   T[i]<<4 |   T[i+1];
       }
       if (i==N-1) {
-        BWT[i>>1]           =  BWT[i]<<4 ;
+        BWT[i/2]           =  BWT[i]<<4 ;
         if (SAsamp != NULL)
-          Tcompressed[i>>1] =    T[i]<<4 ;
+          Tcompressed[i/2] =    T[i]<<4 ;
       }
   }
+
 
   for(j=0; j < N-1; ++j) {
       T[j]++;  //move values back up, in case the reverse FM needs to be built
@@ -298,7 +300,6 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
     esl_fatal( "buildAndWriteFMIndex: Error writing overlap in FM index.\n");
   if(fwrite(&seq_cnt, sizeof(seq_cnt), 1, fp) !=  1)
     esl_fatal( "buildAndWriteFMIndex: Error writing seq_cnt in FM index.\n");
-
 
   // don't write Tcompressed or SAsamp if SAsamp == NULL
   if(SAsamp != NULL && fwrite(Tcompressed, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
@@ -419,6 +420,7 @@ main(int argc, char **argv)
   } else if (esl_strcmp(meta->alph, "amino")==0) {
     meta->alph_type = fm_AMINO;
     alphatype = eslAMINO;
+    meta->fwd_only = 1;
   } else {
     esl_fatal("Unknown alphabet type. Try 'dna', 'dna_full', or 'amino'\n%s", "");
   }
@@ -609,6 +611,7 @@ main(int argc, char **argv)
 
     seq_cnt = numseqs-seq_offset;
     //build and write FM-index for T
+    fm_reverseString ((char*)T, block_length-1);
     buildAndWriteFMIndex(meta, seq_offset, seq_cnt, (uint32_t)block->list[0].C, T, BWT, SA, SAsamp,
         occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);
 

@@ -106,14 +106,14 @@ FM_backtrackSeed(const FM_DATA *fmf, FM_CFG *fm_cfg, int i, FM_DIAG *seed) {
   int len = 0;
   int c;
 
-  while ( j != fmf->term_loc && (j & fm_cfg->maskSA)) { //go until we hit a position in the full SA that was sampled during FM index construction
+  while ( j != fmf->term_loc && (j % fm_cfg->meta->freq_SA)) { //go until we hit a position in the full SA that was sampled during FM index construction
     c = fm_getChar( fm_cfg->meta->alph_type, j, fmf->BWT);
     j = fm_getOccCount (fmf, fm_cfg, j-1, c);
     j += abs(fmf->C[c]);
     len++;
   }
 
-  return len + (j==fmf->term_loc ? 0 : fmf->SA[ j / fm_cfg->maskSA ]) ; // len is how many backward steps we had to take to find a sampled SA position
+  return len + (j==fmf->term_loc ? 0 : fmf->SA[ j / fm_cfg->meta->freq_SA ]) ; // len is how many backward steps we had to take to find a sampled SA position
 
 }
 

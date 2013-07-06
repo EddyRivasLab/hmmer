@@ -20,8 +20,8 @@
 #include "esl_gumbel.h"
 #include "esl_vectorops.h"
 
-
 #include "hmmer.h"
+#include "fm/fm.h"
 
 /* Struct used to pass a collection of useful temporary objects around
  * within the LongTarget functions
@@ -1583,6 +1583,141 @@ ERROR:
 }
 
 
+/* Function:  p7_PipelineFM_LongTarget()
+ * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline, using FM-index.
+ *
+ * Purpose:   Using FM-index, find high-scoring SSV windows, then
+ *            pass these windows on to later pipeline stages. This
+ *            pipeline compares profile <om> against the FM-index
+ *            to find seeds, then extends those seeds to SSV-passing
+ *            diagonals. If a significant hit is found, the hit is added
+ *            to the <hitlist>. The pipeline accumulates beancounting
+ *            information about how many comparisons flow through the
+ *            pipeline while it's active.
+ *
+ * Returns:   <eslOK> on success. If a significant hit is obtained,
+ *            its information is added to the growing <hitlist>.
+ *
+ *            <eslERANGE> on numerical overflow errors in the
+ *            optimized vector implementations; particularly in
+ *            posterior decoding. I don't believe this is possible for
+ *            multihit local models, but I'm set up to catch it
+ *            anyway. We may emit a warning to the user, but cleanly
+ *            skip the problematic sequence and continue.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+int
+p7_PipelineFM_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7_BG *bg,
+    P7_TOPHITS *hitlist, int64_t seqidx, const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg)
+{
+
+  int i;
+  int status;
+  ESL_DSQ          *subseq;
+  FM_SEQDATA       *seqdata;
+
+  P7_HMM_WINDOW     window;
+  P7_HMM_WINDOWLIST msv_windowlist;
+  P7_HMM_WINDOWLIST vit_windowlist;
+
+  P7_PIPELINE_LONGTARGET_OBJS *pli_tmp;
+
+  if (fmf->N == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
+
+  seqdata = fm_cfg->meta->seq_data;
+
+  ESL_ALLOC(pli_tmp, sizeof(P7_PIPELINE_LONGTARGET_OBJS));
+  pli_tmp->bg = p7_bg_Clone(bg);
+  pli_tmp->om = p7_oprofile_Create(om->M, om->abc);
+  ESL_ALLOC(pli_tmp->scores, sizeof(float) * om->abc->Kp * 4);
+  ESL_ALLOC(pli_tmp->fwd_emissions_arr, sizeof(float) *  om->abc->Kp * (om->M+1));
+
+
+  msv_windowlist.windows = NULL;
+  vit_windowlist.windows = NULL;
+  p7_hmmwindow_init(&msv_windowlist);
+
+
+  p7_omx_GrowTo(pli->oxf, om->M, 0, 0);    /* expand the one-row omx if needed */
+
+  /* Set false target length. This is a conservative estimate of the length of window that'll
+   * soon be passed on to later phases of the pipeline;  used to recover some bits of the score
+   * that we would miss if we left length parameters set to the full target length */
+  p7_oprofile_ReconfigMSVLength(om, om->max_length);
+
+
+  /* First level filter: the MSV filter, multihit with <om>.
+   * This variant of MSV will scan a long sequence and find
+   * short high-scoring regions.
+   * */
+  p7_FM_SSV(om, (P7_GMX*)(pli->oxf), 2.0, bg, pli->F1,
+             fmf, fmb, fm_cfg, data, &msv_windowlist );
+
+
+  /* convert hits to windows, possibly filtering based on composition bias,
+   * definitely merging neighboring windows, and
+   * TODO: splitting overly-large windows
+   */
+  if ( msv_windowlist.count > 0 ) {
+
+    p7_oprofile_GetFwdEmissionArray(om, bg, pli_tmp->fwd_emissions_arr);
+
+    if (data->prefix_lengths == NULL) { //otherwise, already filled in
+      p7_hmm_ScoreDataComputeRest(om, data);
+    }
+
+    p7_pli_ExtendAndMergeWindows (om, data, &msv_windowlist, fmf->N, 0);
+
+    /*
+     * pass each remaining window on to the remaining pipeline
+     */
+    p7_hmmwindow_init(&vit_windowlist);
+    pli_tmp->tmpseq = esl_sq_CreateDigital(om->abc);
+    free (pli_tmp->tmpseq->dsq);  //this ESL_SQ object is just a container that'll point to a series of other DSQs, so free the one we just created inside the larger SQ object
+
+    for (i=0; i<msv_windowlist.count; i++){
+
+      window =  msv_windowlist.windows[i] ;
+
+      fm_convertRange2DSQ( fm_cfg->meta, window.id, window.fm_n, window.length, fmf->T, pli_tmp->tmpseq );
+
+      if (window.complementarity == fm_complement)
+        esl_sq_ReverseComplement(pli_tmp->tmpseq);
+
+      subseq = pli_tmp->tmpseq->dsq;  // so subseq is just a pointer to tmpseq's dsq
+
+      pli->n_past_msv++;
+      pli->pos_past_msv += window.length;
+      p7_oprofile_ReconfigMSVLength(om, window.length);
+
+      status = p7_pli_postSSV_LongTarget(pli, om, bg, hitlist, data, seqidx, window.n, window.length,
+                        subseq, 1, seqdata[window.id].name, seqdata[window.id].source,
+                        seqdata[window.id].acc, seqdata[window.id].desc,
+                        window.null_sc, window.score, window.complementarity,
+                        &vit_windowlist, pli_tmp
+                        );
+
+
+      if (status != eslOK) return status;
+
+      pli->ddef->ndom = 0; // reset for next use
+
+    }
+    pli_tmp->tmpseq->dsq = NULL;  //it's a pointer to a dsq object belonging to another sequence
+    esl_sq_Destroy(pli_tmp->tmpseq);
+    free (vit_windowlist.windows);
+
+  }
+
+  if (msv_windowlist.windows != NULL) free(msv_windowlist.windows);
+
+  return eslOK;
+
+ERROR:
+  return eslEMEM;
+
+}
 
 /* Function:  p7_pli_Statistics()
  * Synopsis:  Final statistics output from a processing pipeline.

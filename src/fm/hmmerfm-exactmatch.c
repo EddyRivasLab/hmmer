@@ -93,12 +93,22 @@ static int
 output_header(FM_METADATA *meta, FILE *ofp, const ESL_GETOPTS *go, char *fmfile, char *qfile)
 {
   char *alph;
+  char *appname = NULL;
+  int   status;
 
   if      (meta->alph_type == fm_DNA)       alph = "dna";
   else if (meta->alph_type == fm_DNA_full)  alph = "dna_full";
   else if (meta->alph_type == fm_AMINO)     alph = "amino";
 
-  esl_banner(ofp, go->argv[0], banner);
+  if ((status = esl_FileTail(go->argv[0], FALSE, &appname)) != eslOK) return status;
+
+
+
+  if (fprintf(ofp, "# %s :: %s\n", appname, banner)                                               < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+  if (fprintf(ofp, "# %s\n", EASEL_COPYRIGHT)                                                     < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+  if (fprintf(ofp, "# %s\n", EASEL_LICENSE)                                                       < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+  if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+
 
   if (fprintf(ofp, "# input binary-formatted HMMER database:   %s\n", fmfile) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (fprintf(ofp, "# input file of query sequences:           %s\n", qfile)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -114,7 +124,15 @@ output_header(FM_METADATA *meta, FILE *ofp, const ESL_GETOPTS *go, char *fmfile,
   if (fprintf(ofp, "# bin_length   :                           %d\n", meta->freq_cnt_b)             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (fprintf(ofp, "# suffix array sample rate:                %d\n", meta->freq_SA)                < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  return eslOK;
+
+
+  if (appname) free(appname);
+    return eslOK;
+
+ERROR:
+if (appname) free(appname);
+return status;
+
 }
 
 
@@ -126,19 +144,17 @@ output_header(FM_METADATA *meta, FILE *ofp, const ESL_GETOPTS *go, char *fmfile,
  *            to String Pattern Matching). Most of the meat is in the method of counting
  *            characters - bwt_getOccCount, which depends on compilation choices.
  */
-//#ifndef FMDEBUG
-//inline
-//#endif
 int
 getFMHits( FM_DATA *fm, FM_CFG *cfg, FM_INTERVAL *interval, int block_id, int hit_offset, int hit_length, FM_HIT *hits_ptr, int fm_direction) {
 
   int i, j, len = 0;
+  int dist_from_end;
 
   for (i = interval->lower;  i<= interval->upper; i++) {
     j = i;
     len = 0;
 
-    while ( j != fm->term_loc && (j & cfg->maskSA)) { //go until we hit a position in the full SA that was sampled during FM index construction
+    while ( j != fm->term_loc && (j % cfg->meta->freq_SA)) { //go until we hit a position in the full SA that was sampled during FM index construction
       uint8_t c = fm_getChar( cfg->meta->alph_type, j, fm->BWT);
       j = fm_getOccCount (fm, cfg, j-1, c);
       j += abs(fm->C[c]);
@@ -150,9 +166,17 @@ getFMHits( FM_DATA *fm, FM_CFG *cfg, FM_INTERVAL *interval, int block_id, int hi
     hits_ptr[hit_offset + i - interval->lower].direction = fm_direction;
     hits_ptr[hit_offset + i - interval->lower].length    = hit_length;
 
-    hits_ptr[hit_offset + i - interval->lower].start     = len + (j==fm->term_loc ? 0 : fm->SA[ j >> cfg->maskSA ]) ; // len is how many backward steps we had to take to find a sampled SA position
-    if (fm_direction == fm_backward)
-      hits_ptr[hit_offset + i - interval->lower].start  +=  hit_length - 1 ;
+    dist_from_end = len + (j==fm->term_loc ? 0 : fm->SA[ j / cfg->meta->freq_SA ]) ; // len is how many backward steps we had to take to find a sampled SA position
+
+    if (fm_direction == fm_forward)
+      dist_from_end += hit_length;
+    else
+      dist_from_end += 1;
+
+    //the SA is on the reversed string.  What would be the position in the unreversed string?
+    hits_ptr[hit_offset + i - interval->lower].start = fm->N - dist_from_end;
+
+    //printf ("SA: %d\n", hits_ptr[hit_offset + i - interval->lower].start);
 
   }
 
@@ -249,8 +273,8 @@ main(int argc,  char *argv[])
   meta->fp = fp_fm;
 
 
-
   fm_readFMmeta( meta);
+
 
   //read in FM-index blocks
   ESL_ALLOC(fmsf, meta->block_count * sizeof(FM_DATA) );
@@ -274,12 +298,9 @@ main(int argc,  char *argv[])
   /* initialize a few global variables, then call initGlobals
    * to do architecture-specific initialization
    */
-  cfg->maskSA       =  meta->freq_SA - 1;
   fm_initConfig(cfg, NULL);
 
-
   fm_createAlphabet(meta, NULL); // don't override charBits
-
 
   fp = fopen(fname_queries,"r");
   if (fp == NULL)
@@ -308,7 +329,7 @@ main(int argc,  char *argv[])
             hits_size = 2*hit_num;
             ESL_RALLOC(hits, tmp, hits_size * sizeof(FM_HIT));
           }
-          getFMHits(fmsf+i, cfg, &interval, i, hit_num-new_hit_num, qlen, hits, fm_backward);
+          getFMHits(fmsf+i, cfg, &interval, i, hit_num-new_hit_num, qlen, hits, fm_forward);
         }
 
       }
@@ -327,7 +348,7 @@ main(int argc,  char *argv[])
             }
             //even though I used fmsb above, use fmsf here, since we'll now do a backward trace
             //in the FM-index to find the next sampled SA position
-            getFMHits(fmsf+i, cfg, &interval, i, hit_num-new_hit_num, qlen, hits, fm_forward);
+            getFMHits(fmsf+i, cfg, &interval, i, hit_num-new_hit_num, qlen, hits, fm_backward);
           }
         }
 
@@ -347,8 +368,9 @@ main(int argc,  char *argv[])
         for (i = 0; i< hit_num; i++) {
 
           fm_getOriginalPosition (fmsf, meta, hits[i].block, hits[i].length, hits[i].direction, hits[i].start,  &(hits[i].block), &(hits[i].start) );
-          hits[i].start++;  //make number 1-based
-          hits[i].sortkey = hits[i].block == -1 ? -1 : meta->seq_data[ hits[i].block ].id;
+          hits[i].sortkey = (hits[i].block == -1 ? -1 : meta->seq_data[ hits[i].block ].id);
+
+          //printf("block %d , start %d\n", hits[i].block, hits[i].start);
 
           if (hits[i].sortkey != -1)
             hit_num2++; // legitimate hit

@@ -155,8 +155,6 @@ typedef struct {
 
   /* no non-__m128i- elements above this line */
 
-  /*suffix-array mask and offset values*/
-  int maskSA;
 
   /*counter, to compute FM-index speed*/
   int occCallCnt;
