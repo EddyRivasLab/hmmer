@@ -19,7 +19,7 @@ static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
   { "-h",           eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,       "show brief help on version and usage",                      1 },
   { "--informat",   eslARG_STRING,     FALSE, NULL, NULL, NULL, NULL,      NULL,        "specify that input file is in format <s>",                  2 },
-  { "--alph",       eslARG_STRING,     "dna", NULL, NULL,    NULL,  NULL,  NULL,        "alphabet [dna,dna_full,amino]",                             2 },
+  { "--alph",       eslARG_STRING,     NULL, NULL, NULL,    NULL,  NULL,  NULL,         "alphabet [dna,dna_full,rna,rna_full,amino]",                             2 },
   { "--bin_length", eslARG_INT,        "256", NULL, NULL,    NULL,  NULL,  NULL,        "bin length (power of 2;  32<=b<=4096)",                     2 },
   { "--sa_freq",    eslARG_INT,        "8",   NULL, NULL,    NULL,  NULL,  NULL,        "suffix array sample rate (power of 2)",                     2 },
   { "--block_size", eslARG_INT,        "50",  NULL, NULL,    NULL,  NULL,  NULL,        "input sequence broken into chunks this size (Mbases)",      2 },
@@ -364,6 +364,7 @@ main(int argc, char **argv)
 
   int             infmt     = eslSQFILE_UNKNOWN;
   int             alphatype = eslUNKNOWN;
+  int             alphaguess =eslUNKNOWN;
   ESL_ALPHABET   *abc       = NULL;
   ESL_SQ         *sq        = NULL;
   ESL_SQFILE     *sqfp      = NULL;
@@ -407,25 +408,6 @@ main(int argc, char **argv)
 
   process_commandline(argc, argv, &go, &fname_in, &fname_out);
 
-  meta->fwd_only =  (esl_opt_IsOn(go, "--fwd_only")) ? 1 : 0;
-
-  if (esl_opt_IsOn(go, "--alph")) { meta->alph    = esl_opt_GetString(go, "--alph") ; }
-
-  if ( esl_strcmp(meta->alph, "dna")==0) {
-    meta->alph_type = fm_DNA;
-    alphatype = eslDNA;
-  } else if (esl_strcmp(meta->alph, "dna_full")==0) {
-    meta->alph_type = fm_DNA_full;
-    alphatype = eslDNA;
-  } else if (esl_strcmp(meta->alph, "amino")==0) {
-    meta->alph_type = fm_AMINO;
-    alphatype = eslAMINO;
-    meta->fwd_only = 1;
-  } else {
-    esl_fatal("Unknown alphabet type. Try 'dna', 'dna_full', or 'amino'\n%s", "");
-  }
-  meta->alph = NULL;
-
   if (esl_opt_IsOn(go, "--bin_length")) meta->freq_cnt_b = esl_opt_GetInteger(go, "--bin_length");
   if ( meta->freq_cnt_b < 32 || meta->freq_cnt_b >4096 ||  (meta->freq_cnt_b & (meta->freq_cnt_b - 1))  ) // test power of 2
     esl_fatal("bin_length must be a power of 2, at least 128, and at most 4096\n");
@@ -444,16 +426,6 @@ main(int argc, char **argv)
 
   output_header(stdout, go, fname_in, fname_out);
 
-  //getInverseAlphabet
-  fm_createAlphabet(meta, &(meta->charBits));
-  chars_per_byte = 8/meta->charBits;
-
-    //shift inv_alph up one, to make space for '$' at 0
-  for (i=0; i<256; i++)
-    if ( meta->inv_alph[i] >= 0)
-      meta->inv_alph[i]++;
-
-
   if (esl_opt_GetString(go, "--informat") != NULL) {
     infmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--informat"));
     if (infmt == eslSQFILE_UNKNOWN) esl_fatal("%s is not a valid input sequence file format for --informat");
@@ -463,6 +435,65 @@ main(int argc, char **argv)
   if      (status == eslENOTFOUND) esl_fatal("No such file %s", fname_in);
   else if (status == eslEFORMAT)   esl_fatal("Format of seqfile %s unrecognized.", fname_in);
   else if (status != eslOK)        esl_fatal("Open failed, code %d.", status);
+
+  meta->fwd_only = 0;
+
+  if (esl_opt_IsUsed(go, "--alph")) {
+    meta->alph    = esl_opt_GetString(go, "--alph") ;
+    if ( esl_strcmp(meta->alph, "dna")==0) {
+      meta->alph_type = fm_DNA;
+      alphatype = eslDNA;
+    } else if (esl_strcmp(meta->alph, "dna_full")==0) {
+      meta->alph_type = fm_DNA_full;
+      alphatype = eslDNA;
+    } else if (esl_strcmp(meta->alph, "rna")==0) {
+        meta->alph_type = fm_RNA;
+        alphatype = eslRNA;
+    } else if (esl_strcmp(meta->alph, "rna_full")==0) {
+        meta->alph_type = fm_RNA_full;
+        alphatype = eslRNA;
+    } else if (esl_strcmp(meta->alph, "amino")==0) {
+      meta->alph_type = fm_AMINO;
+      alphatype = eslAMINO;
+      meta->fwd_only = 1;
+    } else {
+      esl_fatal("Unknown alphabet type. Try 'dna', 'dna_full', or 'amino'\n%s", "");
+    }
+  } else {
+    esl_sqfile_GuessAlphabet(sqfp, &alphaguess);
+
+    if (alphaguess == eslDNA) {
+      meta->alph_type = fm_DNA;
+      alphatype = eslDNA;
+    } else if (alphaguess == eslRNA) {
+      meta->alph_type = fm_RNA;
+      alphatype = eslRNA;
+    } else if (alphaguess == eslAMINO) {
+      meta->alph_type = fm_AMINO;
+      alphatype = eslAMINO;
+      meta->fwd_only = 1;
+    } else {
+      esl_fatal("Unknown alphabet type. Try 'dna', 'dna_full', or 'amino'\n%s", "");
+    }
+  }
+
+
+  if (esl_opt_IsOn(go, "--fwd_only") )
+    meta->fwd_only = 1;
+
+  meta->alph = NULL;
+
+
+
+  //getInverseAlphabet
+  fm_createAlphabet(meta, &(meta->charBits));
+  chars_per_byte = 8/meta->charBits;
+
+    //shift inv_alph up one, to make space for '$' at 0
+  for (i=0; i<256; i++)
+    if ( meta->inv_alph[i] >= 0)
+      meta->inv_alph[i]++;
+
 
   abc     = esl_alphabet_Create(alphatype);
   sq      = esl_sq_CreateDigital(abc);

@@ -209,8 +209,15 @@ fm_getOccCount (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c) {
 
   const int cnt_mod_mask_b = meta->freq_cnt_b - 1; //used to compute the mod function
   const int b_rel_pos      = (pos+1) & cnt_mod_mask_b; // pos % b_size      : how close is pos to the boundary corresponding to b_pos
-  const int up_b           = 2*b_rel_pos/meta->freq_cnt_b; //1 if pos is expected to be closer to the boundary of b_pos+1, 0 otherwise
-  const int landmark       = ((b_pos+up_b)*meta->freq_cnt_b) - 1 ;
+  int up_b           = 2*b_rel_pos/meta->freq_cnt_b; //1 if pos is expected to be closer to the boundary of b_pos+1, 0 otherwise
+  int landmark       = ((b_pos+up_b)*meta->freq_cnt_b) - 1 ;
+
+  if (landmark >= fm->N) { // special case: for a count in the final block, just count from the bottom
+    up_b      = 0;
+    landmark  = (b_pos*(meta->freq_cnt_b)) - 1 ;
+  }
+
+
   // get the cnt stored at the nearest checkpoint
   cnt =  FM_OCC_CNT(sb, sb_pos, c );
 
@@ -301,6 +308,7 @@ fm_getOccCount (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c) {
         }
       }
     } else { //amino
+
       if (!up_b) { // count forward, adding
         for (i=1+landmark ; i+15<(pos+1);  i+=16) { // keep running until i begins a run that shouldn't all be counted
           BWT_v    = *(__m128i*)(BWT+i);
@@ -318,17 +326,14 @@ fm_getOccCount (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c) {
 
         for (i=landmark-15 ; i>pos;  i-=16) {
           BWT_v = *(__m128i*)(BWT+i);
-          fm_print_m128(BWT_v);
-          fm_print_m128(c_v);
           BWT_v    = _mm_cmpeq_epi8(BWT_v, c_v);  // each byte is all 1s if matching, all zeros otherwise
           counts_v = _mm_subs_epi8(counts_v, BWT_v); // adds 1 for each matching byte  (subtracting negative 1)
         }
-
         int remaining_cnt = 16 - (pos + 1 - i);
         if (remaining_cnt > 0) {
           BWT_v = *(__m128i*)(BWT+i);
           BWT_v    = _mm_cmpeq_epi8(BWT_v, c_v);
-          BWT_v     = _mm_and_si128(tmp_v, *(cfg->fm_reverse_masks_v + remaining_cnt));// mask characters we don't want to count
+          BWT_v     = _mm_and_si128(BWT_v, *(cfg->fm_reverse_masks_v + remaining_cnt));// mask characters we don't want to count
           //tmp2_v    = _mm_and_si128(tmp2_v, *(cfg->fm_reverse_masks_v + (remaining_cnt+1)/2));
           counts_v = _mm_subs_epi8(counts_v, BWT_v);
         }
@@ -383,17 +388,19 @@ fm_getOccCountLT (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *
   FM_METADATA *meta = cfg->meta;
 
   int i,j;
-
   const int b_pos          = (pos+1) / meta->freq_cnt_b; //floor(pos/b_size)   : the b count element preceding pos
   const uint16_t * occCnts_b  = fm->occCnts_b;
   const uint32_t * occCnts_sb = fm->occCnts_sb;
   const int sb_pos         = (pos+1) / meta->freq_cnt_sb; //floor(pos/sb_size) : the sb count element preceding pos
 
+  const int b_rel_pos      = (pos+1) % meta->freq_cnt_b; //  how close is pos to the boundary corresponding to b_pos
+  int up_b                 = 2*b_rel_pos/meta->freq_cnt_b; //1 if pos is expected to be closer to the boundary of b_pos+1, 0 otherwise
+  int landmark             = ((b_pos+up_b)*(meta->freq_cnt_b)) - 1 ;
 
-  const int cnt_mod_mask_b = meta->freq_cnt_b - 1; //used to compute the mod function
-  const int b_rel_pos      = (pos+1) & cnt_mod_mask_b; // pos % b_size      : how close is pos to the boundary corresponding to b_pos
-  const int up_b           = 2*b_rel_pos/meta->freq_cnt_b; //1 if pos is expected to be closer to the boundary of b_pos+1, 0 otherwise
-  const int landmark       = ((b_pos+up_b)*(meta->freq_cnt_b)) - 1 ;
+  if (landmark >= fm->N) { // special case: for a count in the final block, just count from the bottom
+    up_b      = 0;
+    landmark  = (b_pos*(meta->freq_cnt_b)) - 1 ;
+  }
 
   // get the cnt stored at the nearest checkpoint
   *cnteq = FM_OCC_CNT(sb, sb_pos, c );

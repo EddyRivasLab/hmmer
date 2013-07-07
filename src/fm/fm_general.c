@@ -168,7 +168,7 @@ fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
   interval->lower  = abs(fm->C[(int)c]);
   interval->upper  = abs(fm->C[(int)c+1])-1;
 
-//  fprintf (stderr, "%d : %12d..%12d\n", c, interval->lower, interval->upper );
+  //fprintf (stderr, "1: %d : %12d..%12d\n", c, interval->lower, interval->upper );
 
   while (interval->lower>0 && interval->lower <= interval->upper) {
     c = query[++i];
@@ -179,7 +179,7 @@ fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
 
     fm_updateIntervalReverse(fm, cfg, c, interval);
 
-//    fprintf (stderr, "%d : %12d..%12d\n", c, interval->lower, interval->upper );
+    //fprintf (stderr, "2: %d : %12d..%12d\n", c, interval->lower, interval->upper );
 
     cfg->occCallCnt+=2;
   }
