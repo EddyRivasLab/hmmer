@@ -287,7 +287,7 @@ extern int          p7_profile_SameAsMF(const P7_OPROFILE *om, P7_PROFILE *gm);
 extern int          p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm);
 
 extern int          p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr );
-extern int          p7_oprofile_GetMSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr );
+extern int          p7_oprofile_GetSSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr );
 extern int          p7_oprofile_GetFwdEmissionScoreArray(const P7_OPROFILE *om, float *arr );
 extern int          p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, P7_BG *bg, float *arr );
 

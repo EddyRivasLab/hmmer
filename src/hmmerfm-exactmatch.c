@@ -6,7 +6,6 @@
 #include "easel.h"
 
 #include "hmmer.h"
-#include "fm.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/

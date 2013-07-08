@@ -256,7 +256,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_SCOREDATA *msvdata,
+p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_SCOREDATA *ssvdata,
                         P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
 
@@ -386,11 +386,11 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	    }
 
 	    //recover the diagonal that hit threshold
-	    start = end;
-	    target_end = target_start = i;
+	    start = end;                    // model position
+	    target_end = target_start = i;  // target position
 	    sc = rem_sc;
 	    while (rem_sc > om->base_b - om->tjb_b - om->tbm_b) {
-	      rem_sc -= om->bias_b -  msvdata->msv_scores[start*om->abc->Kp + dsq[target_start]];
+	      rem_sc -= om->bias_b -  ssvdata->ssv_scores[start*om->abc->Kp + dsq[target_start]];
 	      --start;
 	      --target_start;
 	    }
@@ -405,7 +405,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	    max_sc = sc;
 	    pos_since_max = 0;
 	    while (k<om->M && n<=L) {
-	      sc += om->bias_b -  msvdata->msv_scores[k*om->abc->Kp + dsq[n]];
+	      sc += om->bias_b -  ssvdata->ssv_scores[k*om->abc->Kp + dsq[n]];
 
 	      if (sc >= max_sc) {
 	        max_sc = sc;
@@ -421,14 +421,22 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	    }
 
 	    end  +=  (max_end - target_end);
-	    k    +=  (max_end - target_end);
+      //k    +=  (max_end - target_end);
       target_end = max_end;
 
       ret_sc = ((float) (max_sc - om->tjb_b) - (float) om->base_b);
       ret_sc /= om->scale_b;
       ret_sc -= 3.0; // that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ
 
-      p7_hmmwindow_new(windowlist, 0, target_start, k, end, end-start+1 , ret_sc, p7_NOCOMPLEMENT );
+      p7_hmmwindow_new(  windowlist,
+                         0,                  // sequence_id; used in the FM-based filter, but not here
+                         target_start,       // position in the target at which the diagonal starts
+                         0,                  // position in the target fm_index at which diagonal starts;  not used here, just in FM-based filter (was k, but that was a red herring)
+                         end,                // position in the model at which the diagonal ends
+                         end-start+1 ,       // length of diagonal
+                         ret_sc,             // score of diagonal
+                         p7_NOCOMPLEMENT     // always p7_NOCOMPLEMENT here;  varies in FM-based filter
+                       );
 
       i = target_end; // skip forward
 	  }

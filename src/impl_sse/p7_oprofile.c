@@ -1062,11 +1062,11 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
 
 }
 
-/* Function:  p7_oprofile_GetMSVEmissionScoreArray()
+/* Function:  p7_oprofile_GetSSVEmissionScoreArray()
  * Synopsis:  Retrieve MSV residue emission scores from an optimized
  *            profile into an array
  *
- * Purpose:   Extract an implicitly 2D array of 8-bit int MSV residue
+ * Purpose:   Extract an implicitly 2D array of 8-bit int SSV residue
  *            emission scores from an optimized profile <om>. <arr> must
  *            be allocated by the calling function to be of size
  *            ( om->abc->Kp * ( om->M  + 1 )), and indexing into the array
@@ -1086,7 +1086,7 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
  * Throws:    (no abnormal error conditions)
  */
 int
-p7_oprofile_GetMSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr )
+p7_oprofile_GetSSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr )
 {
   int x, q, z, k;
   union { __m128i v; uint8_t i[16]; } tmp; /* used to align and read simd minivectors           */

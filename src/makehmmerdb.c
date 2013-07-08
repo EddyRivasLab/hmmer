@@ -9,7 +9,6 @@
 
 #include "hmmer.h"
 #include "divsufsort.h"
-#include "fm/fm.h"
 
 
 #define FM_BLOCK_COUNT 100000 //max number of SQ objects in a block

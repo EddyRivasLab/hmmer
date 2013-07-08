@@ -1018,7 +1018,7 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
  * Throws:    (no abnormal error conditions)
  */
 int
-p7_oprofile_GetMSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr )
+p7_oprofile_GetSSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr )
 {
   int x, q, z, k;
   union { vector unsigned char v; uint8_t i[16]; } tmp; /* used to align and read simd minivectors           */

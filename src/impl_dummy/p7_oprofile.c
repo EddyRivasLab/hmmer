@@ -318,7 +318,7 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
  * Throws:    (no abnormal error conditions)
  */
 int
-p7_oprofile_GetMSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr )
+p7_oprofile_GetSSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr )
 {
   int     M   = om->M;    /* length of the query                                          */
   int i, j;

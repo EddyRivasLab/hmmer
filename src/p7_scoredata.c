@@ -28,7 +28,7 @@
  *# 1. The P7_SCOREDATA object: allocation, initialization, destruction.
  *********************************************************************/
 
-/* Function:  scoredata_GetMSVScoreArrays()
+/* Function:  scoredata_GetSSVScoreArrays()
  * Synopsis:  Get compact representation of substitution scores and maximal extensions
  *
  * Purpose:   Extract 8-bit (MSV-style) substitution scores from optimized
@@ -56,7 +56,7 @@
  *            return eslEMEM on allocation failure, eslOK otherwise.
  */
 static int
-scoredata_GetMSVScoreArrays(P7_OPROFILE *om, P7_SCOREDATA *data, int do_opt_ext ) {
+scoredata_GetSSVScoreArrays(P7_OPROFILE *om, P7_SCOREDATA *data, int do_opt_ext ) {
   int i, j, status;
 
   //gather values from gm->rsc into a succinct 2D array
@@ -65,15 +65,15 @@ scoredata_GetMSVScoreArrays(P7_OPROFILE *om, P7_SCOREDATA *data, int do_opt_ext 
   int K = om->abc->Kp;
   data->M = om->M;
 
-  ESL_ALLOC(data->msv_scores, (om->M + 1) * K * sizeof(uint8_t));
-  p7_oprofile_GetMSVEmissionScoreArray(om, data->msv_scores);
+  ESL_ALLOC(data->ssv_scores, (om->M + 1) * K * sizeof(uint8_t));
+  p7_oprofile_GetSSVEmissionScoreArray(om, data->ssv_scores);
 
   if (do_opt_ext) {
     ESL_ALLOC(max_scores, (om->M + 1) * sizeof(float));
     for (i = 1; i <= om->M; i++) {
       max_scores[i] = 0;
       for (j=0; j<K; j++)
-        if (data->msv_scores[i*K + j] > max_scores[i]) max_scores[i] = data->msv_scores[i*K + j];
+        if (data->ssv_scores[i*K + j] > max_scores[i]) max_scores[i] = data->ssv_scores[i*K + j];
     }
 
 
@@ -119,7 +119,7 @@ p7_hmm_ScoreDataDestroy(P7_SCOREDATA *data )
   int i;
   if (data != NULL) {
 
-    if (data->msv_scores != NULL)     free( data->msv_scores);
+    if (data->ssv_scores != NULL)     free( data->ssv_scores);
     if (data->prefix_lengths != NULL) free( data->prefix_lengths);
     if (data->suffix_lengths != NULL) free( data->suffix_lengths);
     if (data->fwd_scores != NULL)     free( data->fwd_scores);
@@ -171,7 +171,7 @@ p7_hmm_ScoreDataCreate(P7_OPROFILE *om, int do_opt_ext )
 
   ESL_ALLOC(data, sizeof(P7_SCOREDATA));
 
-  data->msv_scores      = NULL;
+  data->ssv_scores      = NULL;
   data->opt_ext_fwd     = NULL;
   data->opt_ext_rev     = NULL;
   data->prefix_lengths  = NULL;
@@ -179,7 +179,7 @@ p7_hmm_ScoreDataCreate(P7_OPROFILE *om, int do_opt_ext )
   data->fwd_scores      = NULL;
   data->fwd_transitions = NULL;
 
-  scoredata_GetMSVScoreArrays(om, data, do_opt_ext);
+  scoredata_GetSSVScoreArrays(om, data, do_opt_ext);
 
   return data;
 
@@ -218,7 +218,7 @@ p7_hmm_ScoreDataClone(P7_SCOREDATA *src, int Kp) {
 
   ESL_ALLOC(new, sizeof(P7_SCOREDATA));
   new->M = src->M;
-  new->msv_scores         = NULL;
+  new->ssv_scores         = NULL;
   new->opt_ext_fwd    = NULL;
   new->opt_ext_rev    = NULL;
   new->prefix_lengths = NULL;
@@ -226,9 +226,9 @@ p7_hmm_ScoreDataClone(P7_SCOREDATA *src, int Kp) {
   new->fwd_scores      = NULL;
   new->fwd_transitions = NULL;
 
-  if (src->msv_scores != NULL) {
-    ESL_ALLOC(new->msv_scores, (src->M + 1) * Kp * sizeof(uint8_t));
-    memcpy(new->msv_scores, src->msv_scores, (src->M + 1) * Kp * sizeof(uint8_t)  );
+  if (src->ssv_scores != NULL) {
+    ESL_ALLOC(new->ssv_scores, (src->M + 1) * Kp * sizeof(uint8_t));
+    memcpy(new->ssv_scores, src->ssv_scores, (src->M + 1) * Kp * sizeof(uint8_t)  );
   }
   if (src->prefix_lengths != NULL) {
      ESL_ALLOC(new->prefix_lengths, (src->M+1) * sizeof(float));

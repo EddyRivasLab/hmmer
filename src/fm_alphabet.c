@@ -4,8 +4,7 @@
 
 #include "easel.h"
 #include "esl_mem.h"
-
-#include "fm.h"
+#include "hmmer.h"
 
 
 /* Function:  fm_createAlphabet()

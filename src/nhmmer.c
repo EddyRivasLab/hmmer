@@ -25,10 +25,7 @@
 #endif /*HMMER_THREADS*/
 
 #include "hmmer.h"
-#include "fm/fm.h"
 
-/* extern placed here because placement in either hmmer.h or fm/fm.h leads to circular reference errors in make */
-extern int p7_PipelineFM_LongTarget (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx, const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg);
 
 /* set the max residue count to 1/4 meg when reading a block */
 #ifdef P7_IMPL_DUMMY_INCLUDED
@@ -119,7 +116,7 @@ static ESL_OPTIONS options[] = {
   { "--rna",        eslARG_NONE,        FALSE, NULL, NULL,   "--dna",  NULL,  NULL,          "input alignment is RNA sequence data",                         8 },
 
   /* Control of FM pruning/extension */
-  { "--fm_msv_length",   eslARG_INT,          "70", NULL, NULL,    NULL,  NULL, NULL,          "max length used when extending seed for MSV",                9 },
+  { "--fm_ssv_length",   eslARG_INT,          "70", NULL, NULL,    NULL,  NULL, NULL,          "max length used when extending seed for MSV",                9 },
   { "--fm_max_depth",    eslARG_INT,          "16", NULL, NULL,    NULL,  NULL, NULL,          "seed length at which bit threshold must be met",             9 },
   { "--fm_max_neg_len",  eslARG_INT,           "4", NULL, NULL,    NULL,  NULL, NULL,          "maximum number consecutive negative scores in seed",         9 },
   { "--fm_req_pos",      eslARG_INT,           "5", NULL, NULL,    NULL,  NULL, NULL,          "minimum number consecutive positive scores in seed" ,        9 },
@@ -1070,7 +1067,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
         prev_hit_cnt = info->th->N;
 
-        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, info->pli->nseqs);
+        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, info->pli->nseqs, dbsq, NULL, NULL, NULL);
 
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
@@ -1094,7 +1091,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
           prev_hit_cnt = info->th->N;
           esl_sq_Copy(dbsq,dbsq_revcmp);
           esl_sq_ReverseComplement(dbsq_revcmp);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq_revcmp, info->th, info->pli->nseqs);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, info->pli->nseqs, dbsq_revcmp, NULL, NULL, NULL);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (i=prev_hit_cnt; i < info->th->N ; i++) {
@@ -1158,8 +1155,8 @@ serial_loop_FM(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *db
     fmb.SA = fmf.SA;
     fmb.T  = fmf.T;
 
-    wstatus = p7_PipelineFM_LongTarget(info->pli, info->om, info->scoredata, info->bg,
-        info->th, info->pli->nseqs,  &fmf, &fmb, info->fm_cfg );
+    wstatus = p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg,
+        info->th, info->pli->nseqs, NULL,  &fmf, &fmb, info->fm_cfg );
     if (wstatus != eslOK) return wstatus;
 
   }
@@ -1314,7 +1311,7 @@ pipeline_thread(void *arg)
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
 
         prev_hit_cnt = info->th->N;
-        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, block->first_seqidx + i);
+        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, block->first_seqidx + i, dbsq, NULL, NULL, NULL);
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
 
@@ -1338,7 +1335,7 @@ pipeline_thread(void *arg)
       {
           prev_hit_cnt = info->th->N;
           esl_sq_ReverseComplement(dbsq);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, dbsq, info->th, block->first_seqidx + i);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, block->first_seqidx + i, dbsq, NULL, NULL, NULL);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (j=prev_hit_cnt; j < info->th->N ; ++j) {

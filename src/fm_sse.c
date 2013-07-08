@@ -7,9 +7,7 @@
 
 #include "easel.h"
 #include "esl_getopts.h"
-
-#include "fm/fm.h"
-
+#include "hmmer.h"
 
 int
 fm_getbits_m128 (__m128i in, char *buf, int reverse) 

@@ -16,9 +16,7 @@
 
 #include "easel.h"
 #include "esl_getopts.h"
-
-#include "fm.h"
-
+#include "hmmer.h"
 
 /* Function:  fm_initSeeds()
  *
@@ -346,7 +344,7 @@ fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int le
 int
 fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go ) {
 
-  cfg->msv_length      = (go ? esl_opt_GetInteger(go, "--fm_msv_length") : -1);
+  cfg->ssv_length      = (go ? esl_opt_GetInteger(go, "--fm_ssv_length") : -1);
   cfg->max_depth       = (go ? esl_opt_GetInteger(go, "--fm_max_depth") :  -1);
   cfg->neg_len_limit   = (go ? esl_opt_GetInteger(go, "--fm_max_neg_len") : -1);
   cfg->consec_pos_req  = (go ? esl_opt_GetInteger(go, "--fm_req_pos") : -1);
