@@ -1449,7 +1449,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
   float            bias_filtersc;
 
   ESL_DSQ          *subseq;
-  //FM_SEQDATA       *seqdata;
+  FM_SEQDATA       *seqdata;
 
 
   P7_HMM_WINDOWLIST msv_windowlist;
@@ -1459,11 +1459,11 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
   P7_PIPELINE_LONGTARGET_OBJS *pli_tmp;
 
 
-  if ((sq && (sq->n == 0)) /*|| (fmf && (fmf->N == 0))*/) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
-/*
+  if ((sq && (sq->n == 0)) || (fmf && (fmf->N == 0))) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
+
   if (fm_cfg)
     seqdata = fm_cfg->meta->seq_data;
-*/
+
   ESL_ALLOC(pli_tmp, sizeof(P7_PIPELINE_LONGTARGET_OBJS));
   pli_tmp->bg = p7_bg_Clone(bg);
   pli_tmp->om = p7_oprofile_Create(om->M, om->abc);
@@ -1486,9 +1486,9 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
    * This variant of SSV will scan a long sequence and find
    * short high-scoring regions.
    */
-//  if (fmf) // using an FM-index
-//    p7_FM_SSV(om, (P7_GMX*)(pli->oxf), 2.0, bg, pli->F1, fmf, fmb, fm_cfg, data, &msv_windowlist );
-//  else // compare directly to sequence
+  if (fmf) // using an FM-index
+    p7_FM_SSV(om, (P7_GMX*)(pli->oxf), 2.0, bg, pli->F1, fmf, fmb, fm_cfg, data, &msv_windowlist );
+  else // compare directly to sequence
     p7_SSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, data, bg, pli->F1, &msv_windowlist);
 
 
@@ -1501,7 +1501,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
     /* In scan mode, if it passes the MSV filter, read the rest of the profile
      * Not necessary for dummy mode, where the ->base_w variable checks cause compilation failure*/
 #ifndef P7_IMPL_DUMMY_INCLUDED
-    if (/*!fmf &&*/ pli->hfp)
+    if (!fmf && pli->hfp)
     {
       if (om->base_w == 0 &&  om->scale_w == 0) { // we haven't already read this hmm (if we're on the second strand, we would've)
         p7_oprofile_ReadRest(pli->hfp, om);
@@ -1516,28 +1516,37 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
       p7_hmm_ScoreDataComputeRest(om, data);
     }
 
-    p7_pli_ExtendAndMergeWindows (om, data, &msv_windowlist, (/*fmf ? fmf->N :*/ sq->n), 0);
+    for (i=0; i<msv_windowlist.count; i++){
+      window =  msv_windowlist.windows[i] ;
+
+      printf ("id  = %d\n", window.id);
+      printf ("n   = %d\n", window.n);
+      printf ("k   = %d\n", window.k);
+      printf ("len = %d\n", window.length);
+      printf ("\n");
+    }
+
+    p7_pli_ExtendAndMergeWindows (om, data, &msv_windowlist, (fmf ? fmf->N : sq->n), 0);
 
   /*
    * pass each remaining window on to the remaining pipeline
    */
     p7_hmmwindow_init(&vit_windowlist);
-    //tmpseq = esl_sq_CreateDigital(sq->abc);
     pli_tmp->tmpseq = esl_sq_CreateDigital(om->abc);
     free (pli_tmp->tmpseq->dsq);  //this ESL_SQ object is just a container that'll point to a series of other DSQs, so free the one we just created inside the larger SQ object
 
     for (i=0; i<msv_windowlist.count; i++){
       window =  msv_windowlist.windows[i] ;
-/*
+
+
       if (fmf) {
         fm_convertRange2DSQ( fm_cfg->meta, window.id, window.fm_n, window.length, fmf->T, pli_tmp->tmpseq );
         if (window.complementarity == fm_complement)
           esl_sq_ReverseComplement(pli_tmp->tmpseq);
         subseq = pli_tmp->tmpseq->dsq;
       } else {
-      */
         subseq = sq->dsq + msv_windowlist.windows[i].n - 1;
-     // }
+      }
 
       p7_bg_SetLength(bg, window.length);
       p7_bg_NullOne  (bg, subseq, window.length, &nullsc);

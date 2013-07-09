@@ -158,10 +158,10 @@ FM_getPassingDiags(const FM_DATA *fmf, FM_CFG *fm_cfg,
 
 
 static int
-FM_Recurse( int depth, int M, int fm_direction,
+FM_Recurse( int depth, int M, int Kp, int fm_direction,
             const FM_DATA *fmf, const FM_DATA *fmb,
             FM_CFG *fm_cfg, const P7_SCOREDATA *ssvdata,
-            int first, int last, float sc_threshFM,
+            int first, int last, uint8_t sc_threshFM,
             FM_DP_PAIR *dp_pairs,
             FM_INTERVAL *interval_1, FM_INTERVAL *interval_2,
             FM_DIAGLIST *seeds,
@@ -191,11 +191,13 @@ FM_Recurse( int depth, int M, int fm_direction,
           k = dp_pairs[i].pos - 1;
 
         if (dp_pairs[i].complementarity == fm_complement) {
-          next_score = ssvdata->ssv_scores[k*fm_cfg->meta->alph_size + fm_getComplement(c,fm_cfg->meta->alph_type) ];
+          next_score = ssvdata->ssv_scores[k*Kp + fm_getComplement(c,fm_cfg->meta->alph_type) ];
         } else
-          next_score = ssvdata->ssv_scores[k*fm_cfg->meta->alph_size + c];
+          next_score = ssvdata->ssv_scores[k*Kp + c];
 
         sc = dp_pairs[i].score + next_score;
+
+        //fprintf(stderr, "%-18s : (%d >=? %d)\n", seq, sc, sc_threshFM);
 
 
         if ( sc >= sc_threshFM ) { // this is a seed I want to extend
@@ -203,7 +205,7 @@ FM_Recurse( int depth, int M, int fm_direction,
           interval_1_new.lower = interval_1->lower;
           interval_1_new.upper = interval_1->upper;
 
-          //fprintf(stderr, "%-18s : (%.2f)\n", seq, sc);
+//          printf(stderr, "%-18s : (%.d)\n", seq, sc);
 
           if (fm_direction == fm_forward) {
             //searching for forward matches on the FM-index
@@ -288,7 +290,7 @@ FM_Recurse( int depth, int M, int fm_direction,
         if (  interval_1_new.lower < 0 || interval_1_new.lower > interval_1_new.upper )  //that string doesn't exist in fwd index
             continue;
 
-        FM_Recurse(depth+1, M, fm_direction,
+        FM_Recurse(depth+1, M, Kp, fm_direction,
                   fmf, fmb, fm_cfg, ssvdata,
                   last+1, dppos, sc_threshFM, dp_pairs,
                   &interval_1_new, &interval_2_new,
@@ -305,7 +307,7 @@ FM_Recurse( int depth, int M, int fm_direction,
         if (  interval_1_new.lower < 0 || interval_1_new.lower > interval_1_new.upper )  //that string doesn't exist in reverse index
             continue;
 
-        FM_Recurse(depth+1, M, fm_direction,
+        FM_Recurse(depth+1, M, Kp, fm_direction,
                   fmf, fmb, fm_cfg, ssvdata,
                   last+1, dppos, sc_threshFM, dp_pairs,
                   &interval_1_new, NULL,
@@ -367,7 +369,7 @@ static int FM_getSeeds (const P7_OPROFILE *gm, void *gx, float sc_threshFM,
     {
 
 
-      sc = ssvdata->ssv_scores[k*fm_cfg->meta->alph_size + i];
+      sc = ssvdata->ssv_scores[k*gm->abc->Kp + i];
       if (sc>0) { // we'll extend any positive-scoring diagonal
         if (k < gm->M-2) { // don't bother starting a forward diagonal so close to the end of the model
           //Forward pass on the FM-index
@@ -395,7 +397,7 @@ static int FM_getSeeds (const P7_OPROFILE *gm, void *gx, float sc_threshFM,
       }
 
 
-      sc = ssvdata->ssv_scores[k*fm_cfg->meta->alph_size + fm_getComplement(i, fm_cfg->meta->alph_type)];
+      sc = ssvdata->ssv_scores[k*gm->abc->Kp + fm_getComplement(i, fm_cfg->meta->alph_type)];
       if (sc>0) { // we'll extend any positive-scoring diagonal
 
         //forward on the FM, reverse on the model
@@ -429,7 +431,7 @@ static int FM_getSeeds (const P7_OPROFILE *gm, void *gx, float sc_threshFM,
 
     }
 
-    FM_Recurse ( 2, gm->M, fm_forward,
+    FM_Recurse ( 2, gm->M, gm->abc->Kp, fm_forward,
                 fmf, fmb, fm_cfg, ssvdata,
                  0, fwd_cnt-1, sc_threshFM, dp_pairs_fwd,
                  &interval_f1, &interval_f2,
@@ -438,7 +440,7 @@ static int FM_getSeeds (const P7_OPROFILE *gm, void *gx, float sc_threshFM,
             );
 
 
-    FM_Recurse ( 2, gm->M, fm_backward,
+    FM_Recurse ( 2, gm->M, gm->abc->Kp, fm_backward,
                 fmf, fmb, fm_cfg, ssvdata,
                  0, rev_cnt-1, sc_threshFM, dp_pairs_rev,
                  &interval_bk, NULL,
@@ -567,21 +569,21 @@ p7_FM_SSV( P7_OPROFILE *om, void *gx, float nu, P7_BG *bg, double F1,
          const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_SCOREDATA *ssvdata,
          P7_HMM_WINDOWLIST *windowlist)
 {
-  float P;
+//  float P;
   float P_fm = 0.5;
-  float sc_thresh, sc_threshFM, j_thresh;
+  uint8_t sc_thresh, sc_threshFM;
   float invP, invP_FM;
   float nullsc;
 
-  int i, j;
-  float window_tmove;
-  float window_tloop;
+  int i; //, j;
+//  float window_tmove;
+//  float window_tloop;
 
-  float      tloop = logf((float) om->max_length / (float) (om->max_length+3));
-  float      tloop_total = tloop * om->max_length;
-  float      tmove = logf(     3.0f / (float) (om->max_length+3));
-  float      tbmk  = logf(     2.0f / ((float) om->M * (float) (om->M+1)));
-  float      tec   = logf(1.0f / nu);
+//  float      tloop = logf((float) om->max_length / (float) (om->max_length+3));
+//  float      tloop_total = tloop * om->max_length;
+//  float      tmove = logf(     3.0f / (float) (om->max_length+3));
+//  float      tbmk  = logf(     2.0f / ((float) om->M * (float) (om->M+1)));
+//  float      tec   = logf(1.0f / nu);
   uint32_t tmp_id, tmp_n;
   float score = 0.0;
   FM_DIAG   *diag;
@@ -620,12 +622,12 @@ p7_FM_SSV( P7_OPROFILE *om, void *gx, float nu, P7_BG *bg, double F1,
    *  1 bit for each doubling of the length model, so they offset.
    */
   invP = esl_gumbel_invsurv(F1, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-  sc_thresh =   (invP * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec);
-  j_thresh  =   0 - tmove - tbmk - tec; //the score required to make it worth appending a diagonal to another diagonal
+  //sc_thresh =   (invP * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec);
+  sc_thresh =   (int) ceil( ( ( nullsc  + (invP   * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b );
 
   invP_FM = esl_gumbel_invsurv(P_fm, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-  sc_threshFM = ESL_MIN(fm_cfg->max_scthreshFM,  (invP_FM * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec) ) ;
-
+  //sc_threshFM = ESL_MIN(fm_cfg->max_scthreshFM,  (invP_FM * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec) ) ;
+  sc_threshFM = (int) ceil( ( ( nullsc  + (invP_FM * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b );
 
   //get diagonals that score above sc_threshFM
   FM_getSeeds(om, gx, sc_threshFM, &seeds, fmf, fmb, fm_cfg, ssvdata);
@@ -651,7 +653,7 @@ p7_FM_SSV( P7_OPROFILE *om, void *gx, float nu, P7_BG *bg, double F1,
 
   }
 
-
+/*
   //update window size and corresponding score. Filter away windows now below threshold, compressing list
   j=0;
   for(i=0; i<windowlist->count; i++) {
@@ -708,7 +710,7 @@ p7_FM_SSV( P7_OPROFILE *om, void *gx, float nu, P7_BG *bg, double F1,
     }
     windowlist->count = j;
   }
-
+*/
   return eslEOF;
 
 //ERROR:

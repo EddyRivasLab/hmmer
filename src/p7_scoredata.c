@@ -73,7 +73,8 @@ scoredata_GetSSVScoreArrays(P7_OPROFILE *om, P7_SCOREDATA *data, int do_opt_ext 
     for (i = 1; i <= om->M; i++) {
       max_scores[i] = 0;
       for (j=0; j<K; j++)
-        if (data->ssv_scores[i*K + j] > max_scores[i]) max_scores[i] = data->ssv_scores[i*K + j];
+        if (esl_abc_XIsResidue(om->abc,j))
+          if (data->ssv_scores[i*K + j] > max_scores[i]) max_scores[i] = data->ssv_scores[i*K + j];
     }
 
 
@@ -248,21 +249,21 @@ p7_hmm_ScoreDataClone(P7_SCOREDATA *src, int Kp) {
      ESL_ALLOC(new->opt_ext_fwd, (src->M + 1) * sizeof(uint8_t*));
      for (i=1; i<=src->M; i++) {
        ESL_ALLOC(new->opt_ext_fwd[i], 10 * sizeof(uint8_t));
-       memcpy(new->opt_ext_fwd+i, src->opt_ext_fwd+i, 10 * sizeof(uint8_t));
+       memcpy(new->opt_ext_fwd[i], src->opt_ext_fwd[i], 10 * sizeof(uint8_t));
      }
   }
   if (src->opt_ext_rev != NULL) {
      ESL_ALLOC(new->opt_ext_rev, (src->M + 1) * sizeof(uint8_t*));
      for (i=1; i<=src->M; i++) {
        ESL_ALLOC(new->opt_ext_rev[i], 10 * sizeof(uint8_t));
-       memcpy(new->opt_ext_rev+i, src->opt_ext_rev+i, 10 * sizeof(uint8_t));
+       memcpy(new->opt_ext_rev[i], src->opt_ext_rev[i], 10 * sizeof(uint8_t));
      }
   }
   if (src->fwd_transitions != NULL) {
      ESL_ALLOC(new->fwd_transitions, p7O_NTRANS * sizeof(float*));
      for (i=0; i<p7O_NTRANS; i++) {
        ESL_ALLOC(new->fwd_transitions[i], (src->M+1)* sizeof(float));
-       memcpy(new->fwd_transitions+i, src->fwd_transitions+i, (src->M+1) * sizeof(uint8_t));
+       memcpy(new->fwd_transitions[i], src->fwd_transitions[i], (src->M+1) * sizeof(float));
      }
   }
 

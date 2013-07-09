@@ -114,9 +114,7 @@ fm_reverseString (char* str, int N)
 int
 fm_getComplement (char c, uint8_t alph_type)
 {
-    if ( alph_type ==  fm_DNA) {
-        return 3-c;
-    } else if ( alph_type ==  fm_RNA) {
+    if ( alph_type ==  fm_DNA ||  alph_type ==  fm_RNA) {
         return 3-c;
     } else if ( alph_type ==  fm_DNA_full) {
         esl_fatal("complement for DNA_full not yet implemented\n");

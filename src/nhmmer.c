@@ -505,11 +505,24 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     fm_meta = fm_cfg->meta;
 
     if((fm_meta->fp = fopen(cfg->dbfile, "rb")) == NULL)
-      esl_fatal("Cannot open file `%s': ", cfg->dbfile);
+      p7_Fail("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
 
-    fm_readFMmeta(fm_meta);
-    fm_initConfig(fm_cfg, go);
-    fm_createAlphabet(fm_meta, NULL); // don't override charBits
+    if ( (status = fm_readFMmeta(fm_meta)) != eslOK)
+      p7_Fail("Failed to read FM meta data from target sequence database %s\n",      cfg->dbfile);
+
+    if ( (status = fm_initConfig(fm_cfg, go)) != eslOK)
+      p7_Fail("Failed to initialize FM configuration for target sequence database %s\n",      cfg->dbfile);
+
+    if ( (status = fm_createAlphabet(fm_meta, NULL)) != eslOK)
+      p7_Fail("Failed to create FM alphabet for target sequence database %s\n",      cfg->dbfile);
+
+    if (      fm_meta->alph_type == fm_DNA || fm_meta->alph_type == fm_DNA_full)
+      abc  = esl_alphabet_Create(eslDNA);
+    else if ( fm_meta->alph_type == fm_RNA || fm_meta->alph_type == fm_RNA_full)
+      abc  = esl_alphabet_Create(eslRNA);
+    else
+      abc  = esl_alphabet_Create(eslAMINO);
+
     fgetpos( fm_meta->fp, &fm_basepos);
 
   } else {
@@ -519,24 +532,24 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     else if (status == eslEFORMAT)   p7_Fail("Target sequence database file %s is empty or misformatted\n",   cfg->dbfile);
     else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
     else if (status != eslOK)        p7_Fail("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
-  }
 
-  if (dbformat != eslSQFILE_FMINDEX) {
     if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")) {
       if (esl_opt_IsUsed(go, "--ssifile"))
         esl_sqfile_OpenSSI(dbfp, esl_opt_GetString(go, "--ssifile"));
       else
         esl_sqfile_OpenSSI(dbfp, NULL);
     }
+    if (dbfp->format > 100) // breaking the law!  That range is reserved for msa, for aligned formats
+      p7_Fail("%s contains a multiple sequence alignment; expect unaligned sequences, like FASTA\n",   cfg->dbfile);
+
+    if ( esl_opt_IsOn(go, "--dna") )
+      abc     = esl_alphabet_Create(eslDNA);
+    else if ( esl_opt_IsOn(go, "--rna") )
+      abc     = esl_alphabet_Create(eslRNA);
+
   }
 
-  if (dbfp->format > 100) // breaking the law!  That range is reserved for msa, for aligned formats
-    p7_Fail("%s contains a multiple sequence alignment; expect unaligned sequences, like FASTA\n",   cfg->dbfile);
 
-  if ( esl_opt_IsOn(go, "--dna") )
-    abc     = esl_alphabet_Create(eslDNA);
-  else if ( esl_opt_IsOn(go, "--rna") )
-    abc     = esl_alphabet_Create(eslRNA);
 
 
   /* We're about to see if this is an HMM file. If we already know it isn't, based on --qformat, just skip the test*/
@@ -643,14 +656,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   if (! (abc->type == eslRNA || abc->type == eslDNA))
     p7_Fail("Invalid alphabet type in hmm for nhmmer. Expect DNA or RNA\n");
-
-  if (dbformat == eslSQFILE_FMINDEX) {
-    if ( ! (fm_meta->alph_type == fm_DNA ||
-            fm_meta->alph_type == fm_DNA_full  ||
-            fm_meta->alph_type == fm_RNA ||
-            fm_meta->alph_type == fm_RNA_full  ) )
-      p7_Fail("Alphabet type of hmm and database disagree.\n");
-  }
 
   if (qhstatus == eslOK) {
       /* One-time initializations after alphabet <abc> becomes known */
@@ -782,27 +787,31 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_ProfileConfig(hmm, info->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
       p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
 
-      scoredata = p7_hmm_ScoreDataCreate(om, FALSE);
+      scoredata = p7_hmm_ScoreDataCreate(om, (dbformat==eslSQFILE_FMINDEX));
+      if (dbformat == eslSQFILE_FMINDEX)
+        p7_hmm_ScoreDataComputeRest(om, scoredata);
 
       for (i = 0; i < infocnt; ++i) {
           /* Create processing pipeline and hit list */
           info[i].th  = p7_tophits_Create();
           info[i].om = p7_oprofile_Copy(om);
           info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
+          info[i].fm_cfg = fm_cfg;
           p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 
-          if (  esl_opt_IsUsed(go, "--toponly") )
-            info[i].pli->strand = p7_STRAND_TOPONLY;
-          else if (  esl_opt_IsUsed(go, "--bottomonly") )
-            info[i].pli->strand = p7_STRAND_BOTTOMONLY;
-          else
-            info[i].pli->strand = p7_STRAND_BOTH;
+          if (dbformat != eslSQFILE_FMINDEX) {
+            if (  esl_opt_IsUsed(go, "--toponly") )
+              info[i].pli->strand = p7_STRAND_TOPONLY;
+            else if (  esl_opt_IsUsed(go, "--bottomonly") )
+              info[i].pli->strand = p7_STRAND_BOTTOMONLY;
+            else
+              info[i].pli->strand = p7_STRAND_BOTH;
 
-
-          if (  esl_opt_IsUsed(go, "--block_length") )
-            info[i].pli->block_length = esl_opt_GetInteger(go, "--block_length");
-          else
-            info[i].pli->block_length = NHMMER_MAX_RESIDUE_COUNT;
+            if (  esl_opt_IsUsed(go, "--block_length") )
+              info[i].pli->block_length = esl_opt_GetInteger(go, "--block_length");
+            else
+              info[i].pli->block_length = NHMMER_MAX_RESIDUE_COUNT;
+          }
 
           info[i].scoredata = p7_hmm_ScoreDataClone(scoredata, om->abc->Kp);
 
