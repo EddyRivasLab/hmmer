@@ -267,22 +267,25 @@ p7_tracealign_computeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
    */
   for (idx = offset; idx < offset+ N; idx++)
   {
-      p7_omx_GrowTo(oxf, hmm->M, sq[idx]->n, sq[idx]->n);
-      p7_omx_GrowTo(oxb, hmm->M, sq[idx]->n, sq[idx]->n);
+    /* special case: a sequence of length 0. HMMER model can't generate 0 length seq. Set tr->N == 0 as a flag. (bug #h100 fix) */
+    if (sq[idx]->n == 0) { tr[idx]->N = 0; continue; }
 
-      p7_oprofile_ReconfigLength(om, sq[idx]->n);
+    p7_omx_GrowTo(oxf, hmm->M, sq[idx]->n, sq[idx]->n);
+    p7_omx_GrowTo(oxb, hmm->M, sq[idx]->n, sq[idx]->n);
 
-      p7_Forward (sq[idx]->dsq, sq[idx]->n, om,      oxf, &fwdsc);
-      p7_Backward(sq[idx]->dsq, sq[idx]->n, om, oxf, oxb, NULL);
+    p7_oprofile_ReconfigLength(om, sq[idx]->n);
 
-      status = p7_Decoding(om, oxf, oxb, oxb);      /* <oxb> is now overwritten with post probabilities     */
+    p7_Forward (sq[idx]->dsq, sq[idx]->n, om,      oxf, &fwdsc);
+    p7_Backward(sq[idx]->dsq, sq[idx]->n, om, oxf, oxb, NULL);
 
-      if (status == eslOK)
+    status = p7_Decoding(om, oxf, oxb, oxb);      /* <oxb> is now overwritten with post probabilities     */
+
+    if (status == eslOK)
       {
         p7_OptimalAccuracy(om, oxb, oxf, &oasc);      /* <oxf> is now overwritten with OA scores              */
         p7_OATrace        (om, oxb, oxf, tr[idx]);    /* tr[idx] is now an OA traceback for seq #idx          */
       }
-      else if (status == eslERANGE)
+    else if (status == eslERANGE)
       {
         /* Work around the numeric overflow problem in Decoding()
          * xref J3/119-121 for commentary;
@@ -325,25 +328,25 @@ p7_tracealign_computeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
       }
 
 
-      /* the above steps aren't storing the tfrom/tto values in the trace,
-       * which are required for downstream processing in this case, so
-       * hack them here. Note - this treats the whole thing as one domain,
-       * even if there are really multiple domains.
-       */
-      // skip the parts of the trace that precede the first match state
-      tfrom = 2;
-      while (tr[idx]->st[tfrom] != p7T_M)   tfrom++;
+    /* the above steps aren't storing the tfrom/tto values in the trace,
+     * which are required for downstream processing in this case, so
+     * hack them here. Note - this treats the whole thing as one domain,
+     * even if there are really multiple domains.
+     */
+    // skip the parts of the trace that precede the first match state
+    tfrom = 2;
+    while (tr[idx]->st[tfrom] != p7T_M)   tfrom++;
 
-      tto = tfrom + 1;
-      //run until the model is exited
-      while (tr[idx]->st[tto] != p7T_E)     tto++;
+    tto = tfrom + 1;
+    //run until the model is exited
+    while (tr[idx]->st[tto] != p7T_E)     tto++;
 
-      tr[idx]->tfrom[0]  = tfrom;
-      tr[idx]->tto[0]    = tto - 1;
+    tr[idx]->tfrom[0]  = tfrom;
+    tr[idx]->tto[0]    = tto - 1;
 
 
-      p7_omx_Reuse(oxf);
-      p7_omx_Reuse(oxb);
+    p7_omx_Reuse(oxf);
+    p7_omx_Reuse(oxb);
   }
 
 #if 0
