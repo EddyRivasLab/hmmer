@@ -285,6 +285,9 @@ p7_tracealign_ComputeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
 
   for (idx = offset; idx < offset+ N; idx++)
     {
+      /* special case: a sequence of length 0. HMMER model can't generate 0 length seq. Set tr->N == 0 as a flag. (bug #h100 fix) */
+      if (sq[idx]->n == 0) { tr[idx]->N = 0; continue; }
+
       p7_oprofile_ReconfigLength(om, sq[idx]->n);
       p7_profile_SetLength      (gm, sq[idx]->n);
 

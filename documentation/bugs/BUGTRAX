@@ -1,3 +1,18 @@
+ID              h100
+TITLE           hmmalign segfaults on zero length input sequences.
+AFFECTS         3.1b1
+FIXED_IN        {both 3.1 branch and H4 trunk}
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     "Kapucija, Stefanie" <stefanie.kapucija.626@my.csun.edu>
+OPENED_DATE     SRE, Sat Jul 13 09:46:16 2013
+CLOSED_DATE     SRE, Sat Jul 13 09:54:35 2013
+DESCRIPTION     
+  hmmalign segfaults on a zero length input sequence. Catch this case
+  in tracealign.c::p7_tracealign_computeTraces(), and set tr[idx]->N =
+  0, without doing F/B/OA alignment. This is sufficient, because the
+  traces-to-msa routines handle N=0 case robustly.
+//
 ID              h99
 TITLE           In hmmbuild, --laplace flag was ignored.
 AFFECTS         3.0
