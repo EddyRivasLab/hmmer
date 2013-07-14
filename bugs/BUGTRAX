@@ -1,3 +1,23 @@
+ID              h101
+TITLE           hmmsearch segfaults if a DNA HMM is searched against a protein db
+AFFECTS         3.1b1
+FIXED_IN        -
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     Stephanie Pearl <spearl@plantbio.uga.edu>
+OPENED_DATE     SRE, Sun Jul 14 13:44:30 2013
+CLOSED_DATE     
+DESCRIPTION     
+  hmmsearch segfaults when searching a DNA HMM against a protein db. Segfault only
+  occurs in Linux, not Mac OS/X; probably corrupted silently on Mac.
+
+  Problem is that <dbfp> is not getting set into digital mode, either
+  in serial_master or in mpi_worker in hmmsearch.c. In serial/threaded
+  mode, code was erroneously reaching into dbfp to set dbfp->abc, but
+  needs to call esl_sqfile_SetDigital(), which not only sets
+  dbfp->abc, but also more, including (crucially) setting the legal
+  <inmap>. In MPI mode, wasn't even doing that.
+//
 ID              h100
 TITLE           hmmalign segfaults on zero length input sequences.
 AFFECTS         3.1b1

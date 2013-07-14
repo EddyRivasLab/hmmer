@@ -445,7 +445,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     {
       /* One-time initializations after alphabet <abc> becomes known */
       output_header(ofp, go, cfg->hmmfile, cfg->dbfile);
-      dbfp->abc = abc; //ReadBlock requires knowledge of the alphabet to decide how best to read blocks
+      esl_sqfile_SetDigital(dbfp, abc); //ReadBlock requires knowledge of the alphabet to decide how best to read blocks
 
       for (i = 0; i < infocnt; ++i)
 	{
@@ -1170,6 +1170,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* One-time initializations after alphabet <abc> becomes known */
       dbsq = esl_sq_CreateDigital(abc);
       bg = p7_bg_Create(abc);
+      esl_sqfile_SetDigital(dbfp, abc);
     }
   
   /* Outer loop: over each query HMM in <hmmfile>. */
