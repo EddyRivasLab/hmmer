@@ -69,10 +69,9 @@ ERROR:
 
 /* Function:  fm_updateIntervalForward()
  *
- * Synopsis:  return a pointer to the next window element on the list,
- *            increasing the size of the list, if necessary.
+ * Synopsis:  Implement Algorithm 4 (i371) of Simpson (Bioinformatics 2010)
  *
- * Purpose:   Implement Algorithm 4 (i371) of Simpson (Bioinformatics 2010)
+ * Purpose:
  *
  * Returns:   eslOK
  */
@@ -230,10 +229,15 @@ fm_getChar(uint8_t alph_type, int j, const uint8_t *B )
  * Purpose:   Must account for the possible compression of the BWT
  */
 int
-fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint8_t *B, ESL_SQ *sq )
+fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, int first, int length, int complementarity, ESL_SQ *sq )
 {
   int i;
   uint8_t c;
+
+  if (complementarity == fm_complement)
+    first = fm->N-(first+length-1)+1;
+
+  first--; // the values are 0-based in the compressed T array.
 
   esl_sq_GrowTo(sq, length);
   sq->n = length;
@@ -247,23 +251,25 @@ fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint
      *  Without branching, grab them by shifting B[j/4] right 6-2*j' bits,
      *  then masking to keep the final two bits
      */
-    for (i = first; i<= first+length-1; i++)
-      sq->dsq[i-first+1] = (B[i/4] >> ( 0x6 - ((i&0x3)*2) ) & 0x3);
-
+    for (i = first; i<= first+length-1; i++) {
+      sq->dsq[i-first+1] = (fm->T[i/4] >> ( 0x6 - ((i&0x3)*2) ) & 0x3);
+    }
     sq->dsq[length+1] = eslDSQ_SENTINEL;
-
   } else if (meta->alph_type == fm_DNA_full || meta->alph_type == fm_RNA_full ) {
     for (i = first; i<= first+length-1; i++) {
-      c = (B[i/2] >> (((i&0x1)^0x1)*4) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
+      c = (fm->T[i/2] >> (((i&0x1)^0x1)*4) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
       sq->dsq[i-first+1] = c + (c < 4 ? 0 : 1); //increment by one for ambiguity codes
     }
     sq->dsq[length+1] = eslDSQ_SENTINEL;
   } else { // amino
     for (i = first; i<= first+length-1; i++)
-      sq->dsq[i-first+1] = B[i] + (B[i] < 20 ? 0 : 1); //increment by one for ambiguity codes
+      sq->dsq[i-first+1] = fm->T[i] + (fm->T[i] < 20 ? 0 : 1); //increment by one for ambiguity codes
 
     sq->dsq[length+1] = eslDSQ_SENTINEL;
   }
+
+  if (complementarity == fm_complement)
+    esl_sq_ReverseComplement(sq);
 
   return eslOK;
 }
@@ -276,7 +282,7 @@ fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint
  *            such that seq_data[i].offset < pos
  */
 uint32_t
-fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int pos)
+fm_computeSequenceOffset (const FM_DATA *fms, const FM_METADATA *meta, int block, int pos)
 {
 
   uint32_t lo = fms[block].seq_offset;
@@ -312,9 +318,10 @@ fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int 
  *            Returns
  *            *segment_id - index of the sequence segment captured in the FM-index
  *            *seg_pos    - position in the original sequence, as compressed in the FM binary data structure (zero based)
+ *            int         - eslERANGE if the range in question crosses the boundary between two target sequences. Otherwise eslOK.
  */
 int
-fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,
+fm_getOriginalPosition (const FM_DATA *fms, const FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,
                   uint32_t *segment_id, uint32_t *seg_pos
 ) {
   *segment_id = fm_computeSequenceOffset( fms, meta, fm_id, fm_pos);
@@ -323,13 +330,13 @@ fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int le
   //verify that the hit doesn't extend beyond the bounds of the target sequence
   if (direction == fm_forward) {
     if (*seg_pos + length > meta->seq_data[ *segment_id ].start + meta->seq_data[ *segment_id ].length ) {
-      *segment_id  = *seg_pos  = -1;  // goes into the next sequence, so it should be ignored
-      return eslOK;
+      //*segment_id  = *seg_pos  = -1;  // goes into the next sequence, so it should be ignored
+      return eslERANGE;
     }
   } else { //backward
     if ((int)*seg_pos - length + 1 < 0 ) {
-      *segment_id  = *seg_pos  = -1; // goes into the previous sequence, so it should be ignored
-      return eslOK;
+      //*segment_id  = *seg_pos  = -1; // goes into the previous sequence, so it should be ignored
+      return eslERANGE;
     }
   }
 
@@ -354,11 +361,11 @@ fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go ) {
   return eslOK;
 }
 
-/* Function:  freeFM()
+/* Function:  fm_FM_free()
  * Synopsis:  release the memory required to store an individual FM-index
  */
 void
-fm_freeFM ( FM_DATA *fm, int isMainFM)
+fm_FM_destroy ( FM_DATA *fm, int isMainFM)
 {
 
   if (fm->BWT_mem)      free (fm->BWT_mem);
@@ -377,7 +384,7 @@ fm_freeFM ( FM_DATA *fm, int isMainFM)
  *            then read it in.
  */
 int
-fm_readFM( FM_DATA *fm, FM_METADATA *meta, int getAll )
+fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
 {
   //shortcut variables
   int *C               = NULL;
@@ -419,7 +426,7 @@ fm_readFM( FM_DATA *fm, FM_METADATA *meta, int getAll )
   ESL_ALLOC (fm->BWT_mem, compressed_bytes + 31 ); // +31 for manual 16-byte alignment  ( typically only need +15, but this allows offset in memory, plus offset in case of <16 bytes of characters at the end)
      fm->BWT =   (uint8_t *) (((unsigned long int)fm->BWT_mem + 15) & (~0xf));   // align vector memory on 16-byte boundaries
   if (getAll) ESL_ALLOC (fm->SA, num_SA_samples * sizeof(uint32_t));
-  ESL_ALLOC (fm->C, 1+meta->alph_size * sizeof(uint32_t));
+  ESL_ALLOC (fm->C, (1+meta->alph_size) * sizeof(uint32_t));
   ESL_ALLOC (fm->occCnts_b,  num_freq_cnts_b *  (meta->alph_size ) * sizeof(uint16_t)); // every freq_cnt positions, store an array of ints
   ESL_ALLOC (fm->occCnts_sb,  num_freq_cnts_sb *  (meta->alph_size ) * sizeof(uint32_t)); // every freq_cnt positions, store an array of ints
 
@@ -466,7 +473,7 @@ fm_readFM( FM_DATA *fm, FM_METADATA *meta, int getAll )
   return eslOK;
 
 ERROR:
-  fm_freeFM(fm, getAll);
+  fm_FM_destroy(fm, getAll);
   esl_fatal("Error allocating memory in %s\n", "readFM");
   return eslFAIL;
 }
@@ -546,37 +553,74 @@ ERROR:
 
 
 /* Function:  fm_configAlloc()
- * Synopsis:  Allocate a 16-byte-aligned <FM_CFG> model object, and it's FM_METADATA
- *
+ * Synopsis:  Allocate a <FM_CFG> model object, and its FM_METADATA
  */
 int
-fm_configAlloc(void **mem, FM_CFG **cfg)
+fm_configAlloc(FM_CFG **cfg)
 {
   int status;
 
-  if (mem == NULL || cfg == NULL)
+  if ( cfg == NULL)
     esl_fatal("null pointer when allocating FM configuration\n");
 
-  *mem = NULL;
   *cfg = NULL;
 
-  ESL_ALLOC(*mem, sizeof(FM_CFG)+ 15 );
-    *cfg =   (FM_CFG *) (((unsigned long int)(*mem) + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
+  ESL_ALLOC(*cfg, sizeof(FM_CFG) );
 
   ESL_ALLOC((*cfg)->meta, sizeof(FM_METADATA));
 
   return eslOK;
 
 ERROR:
-  if (*cfg != NULL)
-   if ((*cfg)->meta != NULL) free ((*cfg)->meta);
-
-  if (*mem != NULL)
-    free (*mem);
-
+  if (*cfg != NULL) {
+    if ((*cfg)->meta != NULL) free ((*cfg)->meta);
+    free (*cfg);
+  }
   return eslEMEM;
 }
 
+
+
+/* Function:  fm_configDestroy()
+ * Synopsis:  Destroy various memory items used for the FMindex implementation
+ *
+ * Purpose:   Destroy the masks used by the FM index, the metadata for
+ *            the FM index, and the config itself.
+ */
+int
+fm_configDestroy(FM_CFG *cfg ) {
+  if (cfg) {
+    if (cfg->fm_chars_mem)         free(cfg->fm_chars_mem);
+    if (cfg->fm_masks_mem)         free(cfg->fm_masks_mem);
+    if (cfg->fm_reverse_masks_mem) free(cfg->fm_reverse_masks_mem);
+    fm_metaDestroy(cfg->meta);
+    free(cfg);
+  }
+  return eslOK;
+}
+
+/* Function:  fm_metaDestroy()
+ * Synopsis:  Destroy various metadata for the FMindex implementation
+ */
+int
+fm_metaDestroy(FM_METADATA *meta ) {
+  int i;
+  if (meta) {
+    for (i=0; i<meta->seq_count; i++) {
+      if(meta->seq_data[i].name)   free(meta->seq_data[i].name);
+      if(meta->seq_data[i].acc)    free(meta->seq_data[i].acc);
+      if(meta->seq_data[i].source) free(meta->seq_data[i].source);
+      if(meta->seq_data[i].desc)   free(meta->seq_data[i].desc);
+
+    }
+    free(meta->seq_data);
+
+    fm_alphabetDestroy(meta);
+    free (meta);
+  }
+
+  return eslOK;
+}
 
 /************************************************************
  * @LICENSE@

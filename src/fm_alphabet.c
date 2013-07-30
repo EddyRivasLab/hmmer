@@ -7,7 +7,7 @@
 #include "hmmer.h"
 
 
-/* Function:  fm_createAlphabet()
+/* Function:  fm_alphabetCreate()
  *
  * Synopsis:   Produce an alphabet for FMindex.
  *
@@ -18,14 +18,15 @@
  *            from a bit-packing perspective
  *
  * Args:      meta      - metadata object already initialized with the alphabet type.
- *                        meta's alphabet (and corresponding size) are set here
+ *                        This will hold the alphabet (and corresponding reverse alphabet)
+ *                        created here.
  *            alph_bits - pointer to an int that this function sets equal to the
  *                        number of bits required to store the alphabet (log of alph size)
  *
  * Returns:   <eslOK> on success.
  */
 int
-fm_createAlphabet (FM_METADATA *meta, uint8_t *alph_bits) {
+fm_alphabetCreate (FM_METADATA *meta, uint8_t *alph_bits) {
 
 
 	int i = 0;
@@ -50,7 +51,7 @@ fm_createAlphabet (FM_METADATA *meta, uint8_t *alph_bits) {
       esl_fatal("Unknown alphabet type\n%s", "");
 	}
 
-	ESL_ALLOC(meta->alph, meta->alph_size*sizeof(char));
+	ESL_ALLOC(meta->alph, (1+meta->alph_size)*sizeof(char));
 	ESL_ALLOC(meta->inv_alph, 256*sizeof(char));
 
 	if ( meta->alph_type ==  fm_DNA)
@@ -76,6 +77,24 @@ fm_createAlphabet (FM_METADATA *meta, uint8_t *alph_bits) {
 ERROR:
     esl_fatal("error allocating space for alphabet\n");
     return eslFAIL;
+}
+
+/* Function:  fm_alphabetDestroy()
+ *
+ * Synopsis:  Free the alphabet for an FMindex metadata object
+ *
+ * Purpose:   Free both the alphabet and corresponding inverse alphabet
+ *            (inv_alph) held within <meta>.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+fm_alphabetDestroy (FM_METADATA *meta) {
+  if (meta != NULL){
+    if (meta->alph != NULL)     free (meta->alph);
+    if (meta->inv_alph != NULL) free (meta->inv_alph);
+  }
+  return eslOK;
 }
 
 

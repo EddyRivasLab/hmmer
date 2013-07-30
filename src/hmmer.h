@@ -763,20 +763,30 @@ typedef struct p7_tophits_s {
  * 12. P7_SCOREDATA: data used in diagonal recovery and extension
  *****************************************************************/
 
+enum p7_scoredatatype_e {
+  p7_sd_std  = 0,
+  p7_sd_fm   = 1,
+};
+
+
 /* This contains a compact representation of 8-bit bias-shifted scores for use in
  * diagonal recovery (standard [MS]SV) and extension (standard and FM-[MS]SV),
  * along with MAXL-associated prefix- and suffix-lengths, and optimal extensions
  * for FM-MSV.
  */
 typedef struct p7_scoredata_s {
-  int      M;
-  uint8_t    *ssv_scores;  //implicit (M+1)*K matrix, where M = # states, and K = # characters in alphabet
-  uint8_t   **opt_ext_fwd;
-  uint8_t   **opt_ext_rev;
+  int         type;
+  int         M;
+  union {//implicit (M+1)*K matrix, where M = # states, and K = # characters in alphabet
+    uint8_t  *ssv_scores;    // this 2D array is used in the default nhmmer pipeline
+    float    *ssv_scores_f;  // this 2D array is used in the FM-index based pipeline
+  };
   float      *prefix_lengths;
   float      *suffix_lengths;
   float      *fwd_scores;
   float     **fwd_transitions;
+  float     **opt_ext_fwd; // Used only for FM-index based pipeline
+  float     **opt_ext_rev; // Used only for FM-index based pipeline
 } P7_SCOREDATA;
 
 
@@ -926,11 +936,15 @@ typedef struct fm_dp_pair_s {
 
 typedef struct fm_diag_s {
   uint32_t    n;  //position of the database sequence at which the diagonal starts
-  double       sortkey;
+  union {
+    double    sortkey;
+    double    score;
+  };
   uint16_t    k;  //position of the model at which the diagonal starts
   uint16_t    length;
   uint8_t     complementarity;
 } FM_DIAG;
+
 
 typedef struct fm_diaglist_s {
   FM_DIAG   *diags;
@@ -1555,7 +1569,7 @@ P7_HMM_WINDOW *p7_hmmwindow_new (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t 
 
 
 /* p7_msvdata.c */
-extern P7_SCOREDATA   *p7_hmm_ScoreDataCreate(P7_OPROFILE *om, int do_opt_ext);
+extern P7_SCOREDATA   *p7_hmm_ScoreDataCreate(P7_OPROFILE *om, P7_PROFILE *gm );
 extern P7_SCOREDATA   *p7_hmm_ScoreDataClone(P7_SCOREDATA *src, int K);
 extern int            p7_hmm_ScoreDataComputeRest(P7_OPROFILE *om, P7_SCOREDATA *data );
 extern void           p7_hmm_ScoreDataDestroy( P7_SCOREDATA *data );
@@ -1709,38 +1723,40 @@ extern int p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
 		       P7_HMM **ret_hmm);
 
 /* fm_alphabet.c */
-extern int fm_createAlphabet (FM_METADATA *meta, uint8_t *alph_bits);
+extern int fm_alphabetCreate (FM_METADATA *meta, uint8_t *alph_bits);
+extern int fm_alphabetDestroy (FM_METADATA *meta);
 extern int fm_reverseString (char *str, int N);
 extern int fm_getComplement (char c, uint8_t alph_type);
 
 
 /* fm_general.c */
-extern uint32_t fm_computeSequenceOffset (const FM_DATA *fms, FM_METADATA *meta, int block, int pos);
-extern int fm_getOriginalPosition (const FM_DATA *fms, FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,
+extern uint32_t fm_computeSequenceOffset (const FM_DATA *fms, const FM_METADATA *meta, int block, int pos);
+extern int fm_getOriginalPosition (const FM_DATA *fms, const FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,
                                     uint32_t *segment_id, uint32_t *seg_pos);
 extern int fm_readFMmeta( FM_METADATA *meta);
-extern int fm_readFM( FM_DATA *fm, FM_METADATA *meta, int getAll );
-extern void fm_freeFM ( FM_DATA *fm, int isMainFM);
+extern int fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll );
+extern void fm_FM_destroy ( FM_DATA *fm, int isMainFM);
 extern uint8_t fm_getChar(uint8_t alph_type, int j, const uint8_t *B );
 extern int fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
 extern int fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alph, FM_INTERVAL *interval);
-extern int fm_configAlloc(void **mem, FM_CFG **cfg);
+extern int fm_configAlloc(FM_CFG **cfg);
+extern int fm_configDestroy(FM_CFG *cfg);
+extern int fm_metaDestroy(FM_METADATA *meta );
 extern int fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_f, FM_INTERVAL *interval_bk);
 extern int fm_updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval);
 extern int fm_initSeeds (FM_DIAGLIST *list) ;
 extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
-extern int fm_convertRange2DSQ(FM_METADATA *meta, int id, int first, int length, const uint8_t *B, ESL_SQ *sq );
+extern int fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, int first, int length, int complementarity, ESL_SQ *sq );
 extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
 
 /* fm_ssv.c */
-extern int p7_FM_SSV( P7_OPROFILE *om, void *gx, float nu, P7_BG *bg, double F1,
+extern int p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
                       const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_SCOREDATA *ssvdata,
                       P7_HMM_WINDOWLIST *windowlist);
 
 
 /* fm_sse.c */
-extern int fm_initConfig      (FM_CFG *cfg, ESL_GETOPTS *go);
-extern int fm_destroyConfig   (FM_CFG *cfg );
+extern int fm_configInit      (FM_CFG *cfg, ESL_GETOPTS *go);
 extern int fm_getOccCount     (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c);
 extern int fm_getOccCountLT   (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
 

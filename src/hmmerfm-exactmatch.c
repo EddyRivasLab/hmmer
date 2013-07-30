@@ -238,7 +238,6 @@ main(int argc,  char *argv[])
   char *outname = NULL;
 
   ESL_GETOPTS     *go  = NULL;    /* command line processing                 */
-  void *cfg_mem; //used to ensure cfg is 16-byte aligned, which matters since, for sse/vmx implementations, elements within cfg need to be aligned thusly
   FM_CFG *cfg;
   FM_METADATA *meta;
 
@@ -266,7 +265,7 @@ main(int argc,  char *argv[])
     esl_fatal("Cannot open file `%s': ", fname_fm);
 
 
-  fm_configAlloc(&cfg_mem, &cfg);
+  fm_configAlloc(&cfg);
   cfg->occCallCnt = 0;
   meta = cfg->meta;
   meta->fp = fp_fm;
@@ -281,10 +280,10 @@ main(int argc,  char *argv[])
     ESL_ALLOC(fmsb, meta->block_count * sizeof(FM_DATA) );
 
   for (i=0; i<meta->block_count; i++) {
-    fm_readFM( fmsf+i,meta, 1 );
+    fm_FM_read( fmsf+i,meta, TRUE );
 
     if (!meta->fwd_only) {
-      fm_readFM(fmsb+i, meta, 0 );
+      fm_FM_read(fmsb+i, meta, FALSE );
       fmsb[i].SA = fmsf[i].SA;
       fmsb[i].T = fmsf[i].T;
     }
@@ -297,9 +296,9 @@ main(int argc,  char *argv[])
   /* initialize a few global variables, then call initGlobals
    * to do architecture-specific initialization
    */
-  fm_initConfig(cfg, NULL);
+  fm_configInit(cfg, NULL);
 
-  fm_createAlphabet(meta, NULL); // don't override charBits
+  fm_alphabetCreate(meta, NULL); // don't override charBits
 
   fp = fopen(fname_queries,"r");
   if (fp == NULL)
@@ -366,8 +365,8 @@ main(int argc,  char *argv[])
         //for each hit, identify the sequence id and position within that sequence
         for (i = 0; i< hit_num; i++) {
 
-          fm_getOriginalPosition (fmsf, meta, hits[i].block, hits[i].length, hits[i].direction, hits[i].start,  &(hits[i].block), &(hits[i].start) );
-          hits[i].sortkey = (hits[i].block == -1 ? -1 : meta->seq_data[ hits[i].block ].id);
+          status = fm_getOriginalPosition (fmsf, meta, hits[i].block, hits[i].length, hits[i].direction, hits[i].start,  &(hits[i].block), &(hits[i].start) );
+          hits[i].sortkey = (status==eslERANGE ? -1 : meta->seq_data[ hits[i].block ].id);
 
           //printf("block %d , start %d\n", hits[i].block, hits[i].start);
 
@@ -423,9 +422,9 @@ main(int argc,  char *argv[])
   }
 
   for (i=0; i<meta->block_count; i++) {
-    fm_freeFM( fmsf+i, 1 );
+    fm_FM_destroy( fmsf+i, 1 );
     if (!meta->fwd_only)
-      fm_freeFM( fmsb+i, 0 );
+      fm_FM_destroy( fmsb+i, 0 );
   }
 
   for (i=0; i<meta->seq_count; i++)
@@ -437,9 +436,7 @@ main(int argc,  char *argv[])
   free (line);
   fclose(fp);
 
-  fm_destroyConfig(cfg);
-  free (cfg->meta);
-  free(cfg_mem); //16-byte aligned memory in which cfg is found
+  fm_configDestroy(cfg);
 
 
   // compute and print the elapsed time in millisec

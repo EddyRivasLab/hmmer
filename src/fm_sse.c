@@ -55,7 +55,7 @@ fm_print_m128_rev (__m128i in)
  * Purpose:   Initialize vector masks used in SSE FMindex implementation
  */
 int
-fm_initConfig( FM_CFG *cfg, ESL_GETOPTS *go ) 
+fm_configInit( FM_CFG *cfg, ESL_GETOPTS *go )
 {
   int status;
   int i,j;
@@ -159,20 +159,6 @@ ERROR:
 }
 
 
-
-/* Function:  fm_destroyConfig()
- * Purpose:   Destroy vector masks used in SSE FMindex implementation
- */
-int
-fm_destroyConfig(FM_CFG *cfg ) {
-  if (cfg) {
-    if (cfg->fm_chars_mem)         free(cfg->fm_chars_mem);
-    if (cfg->fm_masks_mem)         free(cfg->fm_masks_mem);
-    if (cfg->fm_reverse_masks_mem) free(cfg->fm_reverse_masks_mem);
-    //free(cfg);
-  }
-  return eslOK;
-}
 
 /* Function:  fm_getOccCount()
  * Synopsis:  Compute number of occurrences of c in BWT[1..pos]

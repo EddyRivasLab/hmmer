@@ -986,6 +986,7 @@ ERROR:
  *            seq_source      - source of the sequence the window comes from
  *            seq_acc         - acc of the sequence the window comes from
  *            seq_desc        - desc of the sequence the window comes from
+ *            seq_len         - length of the sequence the window comes from (Available from FM; otherwise 0 and to be ignored)
  *            complementarity - boolean; is the passed window sourced from a complementary sequence block
  *            overlap         - number of residues in this sequence window that overlap a preceding window.
  *            pli_tmp         - a collection of objects used in the long target pipeline that should be
@@ -1007,7 +1008,7 @@ ERROR:
 static int
 p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, const P7_SCOREDATA *data,
     int64_t seqidx, int window_start, int window_len, ESL_DSQ *subseq,
-    int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
+    int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc, int seq_len,
     int complementarity, int *overlap, P7_PIPELINE_LONGTARGET_OBJS *pli_tmp
 )
 {
@@ -1060,6 +1061,7 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
   if ((status = esl_sq_SetSource   (pli_tmp->tmpseq, seq_source)) != eslOK) goto ERROR;
   if ((status = esl_sq_SetAccession(pli_tmp->tmpseq, seq_acc))    != eslOK) goto ERROR;
   if ((status = esl_sq_SetDesc     (pli_tmp->tmpseq, seq_desc))   != eslOK) goto ERROR;
+  pli_tmp->tmpseq->L = seq_len;
   pli_tmp->tmpseq->n = window_len;
   pli_tmp->tmpseq->dsq = subseq;
 
@@ -1256,13 +1258,14 @@ ERROR:
  *            seq_source      - source of the sequence the window comes from
  *            seq_acc         - acc of the sequence the window comes from
  *            seq_desc        - desc of the sequence the window comes from
+ *            seq_len         - length of the sequence the window comes from (only FM will have it; otherwise, 0 and ignored)
  *            nullsc          - score of the passed window vs the bg model
  *            usc             - msv score of the passed window
  *            complementarity - boolean; is the passed window sourced from a complementary sequence block
  *            vit_windowlist  - initialized window list, in which viterbi-passing hits are captured
  *            pli_tmp         - a collection of objects used in the long target pipeline that should be
  *                              (and are) only allocated once per pipeline to minimize alloc overhead.
-
+ *
  * Returns:   <eslOK> on success. If a significant hit is obtained,
  *            its information is added to the growing <hitlist>.
  *
@@ -1279,7 +1282,7 @@ ERROR:
 static int
 p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, const P7_SCOREDATA *data,
     int64_t seqidx, int window_start, int window_len, ESL_DSQ *subseq,
-    int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc,
+    int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc, int seq_len,
     float nullsc, float usc, int complementarity, P7_HMM_WINDOWLIST *vit_windowlist,
     P7_PIPELINE_LONGTARGET_OBJS *pli_tmp
 )
@@ -1371,7 +1374,7 @@ p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
     p7_pli_postViterbi_LongTarget(pli, om, bg, hitlist, data, seqidx,
         window_start+vit_windowlist->windows[i].n-1, vit_windowlist->windows[i].length,
         subseq + vit_windowlist->windows[i].n - 1,
-        seq_start, seq_name, seq_source, seq_acc, seq_desc, complementarity, &overlap,
+        seq_start, seq_name, seq_source, seq_acc, seq_desc, seq_len, complementarity, &overlap,
         pli_tmp
     );
 
@@ -1455,7 +1458,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
   P7_HMM_WINDOWLIST msv_windowlist;
   P7_HMM_WINDOWLIST vit_windowlist;
   P7_HMM_WINDOW     window;
-
+  FM_SEQDATA        seq_data;
   P7_PIPELINE_LONGTARGET_OBJS *pli_tmp;
 
 
@@ -1487,7 +1490,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
    * short high-scoring regions.
    */
   if (fmf) // using an FM-index
-    p7_FM_SSV(om, (P7_GMX*)(pli->oxf), 2.0, bg, pli->F1, fmf, fmb, fm_cfg, data, &msv_windowlist );
+    p7_SSVFM_longlarget(om /*, (P7_GMX*)(pli->oxf)*/, 2.0, bg, pli->F1, fmf, fmb, fm_cfg, data, &msv_windowlist );
   else // compare directly to sequence
     p7_SSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, data, bg, pli->F1, &msv_windowlist);
 
@@ -1512,67 +1515,65 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
 
     p7_oprofile_GetFwdEmissionArray(om, bg, pli_tmp->fwd_emissions_arr);
 
-    if (data->prefix_lengths == NULL) { //otherwise, already filled in
+    if (data->prefix_lengths == NULL)  //otherwise, already filled in
       p7_hmm_ScoreDataComputeRest(om, data);
-    }
 
-    for (i=0; i<msv_windowlist.count; i++){
-      window =  msv_windowlist.windows[i] ;
 
-      printf ("id  = %d\n", window.id);
-      printf ("n   = %d\n", window.n);
-      printf ("k   = %d\n", window.k);
-      printf ("len = %d\n", window.length);
-      printf ("\n");
-    }
-
-    p7_pli_ExtendAndMergeWindows (om, data, &msv_windowlist, (fmf ? fmf->N : sq->n), 0);
+    p7_pli_ExtendAndMergeWindows (om, data, &msv_windowlist, (fmf ? fmf->N-1 : sq->n), 0);
 
   /*
    * pass each remaining window on to the remaining pipeline
    */
     p7_hmmwindow_init(&vit_windowlist);
     pli_tmp->tmpseq = esl_sq_CreateDigital(om->abc);
-    free (pli_tmp->tmpseq->dsq);  //this ESL_SQ object is just a container that'll point to a series of other DSQs, so free the one we just created inside the larger SQ object
+    if (!fmf )
+      free (pli_tmp->tmpseq->dsq);  //this ESL_SQ object is just a container that'll point to a series of other DSQs, so free the one we just created inside the larger SQ object
 
     for (i=0; i<msv_windowlist.count; i++){
       window =  msv_windowlist.windows[i] ;
 
-
       if (fmf) {
-        fm_convertRange2DSQ( fm_cfg->meta, window.id, window.fm_n, window.length, fmf->T, pli_tmp->tmpseq );
-        if (window.complementarity == fm_complement)
-          esl_sq_ReverseComplement(pli_tmp->tmpseq);
+        fm_convertRange2DSQ( fmf, fm_cfg->meta, window.fm_n, window.length, window.complementarity, pli_tmp->tmpseq );
         subseq = pli_tmp->tmpseq->dsq;
       } else {
-        subseq = sq->dsq + msv_windowlist.windows[i].n - 1;
+        subseq = sq->dsq + window.n - 1;
       }
 
       p7_bg_SetLength(bg, window.length);
       p7_bg_NullOne  (bg, subseq, window.length, &nullsc);
 
       p7_bg_FilterScore(bg, subseq, window.length, &bias_filtersc);
-
       // Compute standard MSV to ensure that bias doesn't overcome SSV score when MSV
       // would have survived it
       p7_oprofile_ReconfigMSVLength(om, window.length);
       p7_MSVFilter(subseq, window.length, om, pli->oxf, &usc);
-
       P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
       if (P > pli->F1 ) continue;
 
       pli->pos_past_msv += window.length;
 
-      status = p7_pli_postSSV_LongTarget(pli, om, bg, hitlist, data, seqidx, msv_windowlist.windows[i].n, window.length,
-                        subseq, sq->start, sq->name, sq->source, sq->acc, sq->desc, nullsc, usc, p7_NOCOMPLEMENT, &vit_windowlist,
-                        pli_tmp
-      );
+      if (fmf)
+        seq_data = fm_cfg->meta->seq_data[window.id];
+
+      status = p7_pli_postSSV_LongTarget(pli, om, bg, hitlist, data, seqidx, window.n, window.length, subseq,
+            (fmf != NULL ? seq_data.start  : sq->start),
+            (fmf != NULL ? seq_data.name   : sq->name),
+            (fmf != NULL ? seq_data.source : sq->source),
+            (fmf != NULL ? seq_data.acc    : sq->acc),
+            (fmf != NULL ? seq_data.desc   : sq->desc),
+            (fmf != NULL ? seq_data.length : -1),
+            nullsc, usc, p7_NOCOMPLEMENT, &vit_windowlist, pli_tmp
+        );
+
 
       if (status != eslOK) goto ERROR;
 
     }
 
+    if (fmf )  free (pli_tmp->tmpseq->dsq);
+
     pli_tmp->tmpseq->dsq = NULL;  //it's a pointer to a dsq object belonging to another sequence
+
     esl_sq_Destroy(pli_tmp->tmpseq);
     free (vit_windowlist.windows);
   }

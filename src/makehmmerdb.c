@@ -171,8 +171,12 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
 
 
   uint8_t *Tcompressed;
-  if (SAsamp != NULL)
+  if (SAsamp != NULL) {
     ESL_ALLOC (Tcompressed, compressed_bytes * sizeof(uint8_t));
+
+    // Reverse the text T, so the BWT will be on reversed T.  Only used for the 1st pass
+    fm_reverseString ((char*)T, N-1);
+  }
 
   // Construct the Suffix Array on text T
   status = divsufsort(T, SA, N);
@@ -208,7 +212,6 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
     }
 
 
-
     //sample the SA
     if (SAsamp != NULL) {
       if ( !(j % meta->freq_SA) )
@@ -233,7 +236,6 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
     }
   }
 
-
   //wrap up the counting;
   for (c=0; c<meta->alph_size; c++) {
     FM_OCC_CNT(b, num_freq_cnts_b-1, c ) = cnts_b[c];
@@ -245,41 +247,51 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
   // Convert BWT and T to packed versions if appropriate.
   if (meta->alph_type == fm_DNA || meta->alph_type == fm_RNA) {
      //4 chars per byte.  Counting will be done based on quadruples 0..3; 4..7; 8..11; etc.
-      for(i=0; i < N-3; i+=4) {
+      for(i=0; i < N-3; i+=4)
         BWT[i/4]           = BWT[i]<<6 | BWT[i+1]<<4 | BWT[i+2]<<2 | BWT[i+3];
-        if (SAsamp != NULL)
-          Tcompressed[i/4] =  T[i]<<6 |   T[i+1]<<4 |   T[i+2]<<2 | T[i+3];
-      }
-      if (i <= N-1) {
+      if (i <= N-1)
         BWT[i/4]           =  BWT[i]<<6;
-        if (SAsamp != NULL)
-          Tcompressed[i/4] =   T[i]<<6;
-      }
-      if (i+1 <= N-1) {
+      if (i+1 <= N-1)
         BWT[i/4]           |=  BWT[i+1]<<4;
-        if (SAsamp != NULL)
-          Tcompressed[i/4] |=   T[i+1]<<4;
-      }
-      if (i+2 <= N-1)  {
+      if (i+2 <= N-1)
         BWT[i/4]           |=  BWT[i+2]<<2;
-        if (SAsamp != NULL)
-          Tcompressed[i/4] |=   T[i+2]<<2;
-      }
 
   } else if (meta->alph_type == fm_DNA_full || meta->alph_type == fm_RNA_full) {
     //2 chars per byte.  Counting will be done based on quadruples 0..3; 4..7; 8..11; etc.
-
-
-      for(i=0; i < N-1; i+=2) {
+      for(i=0; i < N-1; i+=2)
         BWT[i/2]           = BWT[i]<<4 | BWT[i+1];
-        if (SAsamp != NULL)
-          Tcompressed[i/2] =   T[i]<<4 |   T[i+1];
-      }
-      if (i==N-1) {
+      if (i==N-1)
         BWT[i/2]           =  BWT[i]<<4 ;
-        if (SAsamp != NULL)
-          Tcompressed[i/2] =    T[i]<<4 ;
-      }
+  }
+
+
+
+  //If this is the 1st (reversed text) BWT, de-reverse it, then compress it
+  if (SAsamp != NULL) {
+    fm_reverseString ((char*)T, N-1);
+    // Convert BWT and T to packed versions if appropriate.
+    if (meta->alph_type == fm_DNA || meta->alph_type == fm_RNA) {
+       //4 chars per byte.  Counting will be done based on quadruples 0..3; 4..7; 8..11; etc.
+      for(i=0; i < N-3; i+=4)
+        Tcompressed[i/4] =  T[i]<<6 |   T[i+1]<<4 |   T[i+2]<<2 | T[i+3];
+
+      if (i <= N-1)
+        Tcompressed[i/4] =   T[i]<<6;
+      if (i+1 <= N-1)
+        Tcompressed[i/4] |=   T[i+1]<<4;
+      if (i+2 <= N-1)
+        Tcompressed[i/4] |=   T[i+2]<<2;
+
+    } else if (meta->alph_type == fm_DNA_full || meta->alph_type == fm_RNA_full) {
+      //2 chars per byte.  Counting will be done based on quadruples 0..3; 4..7; 8..11; etc.
+      for(i=0; i < N-1; i+=2)
+        Tcompressed[i/2] =   T[i]<<4 |   T[i+1];
+      if (i==N-1)
+        Tcompressed[i/2] =    T[i]<<4 ;
+    } else {
+      for(i=0; i < N-1; i++)
+        Tcompressed[i] =    T[i];
+    }
   }
 
 
@@ -287,6 +299,7 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
       T[j]++;  //move values back up, in case the reverse FM needs to be built
   }
   T[N-1] = 0;
+
 
   // Write the FM-index meta data
   if(fwrite(&N, sizeof(N), 1, fp) !=  1)
@@ -485,7 +498,7 @@ main(int argc, char **argv)
 
 
   //getInverseAlphabet
-  fm_createAlphabet(meta, &(meta->charBits));
+  fm_alphabetCreate(meta, &(meta->charBits));
   chars_per_byte = 8/meta->charBits;
 
     //shift inv_alph up one, to make space for '$' at 0
@@ -640,15 +653,13 @@ main(int argc, char **argv)
     block_length++;
 
     seq_cnt = numseqs-seq_offset;
-    //build and write FM-index for T
-    fm_reverseString ((char*)T, block_length-1);
+    //build and write FM-index for T.  This will be a BWT on the reverse of the sequence, required for reverse-traversal of the BWT
     buildAndWriteFMIndex(meta, seq_offset, seq_cnt, (uint32_t)block->list[0].C, T, BWT, SA, SAsamp,
         occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);
 
 
     if ( ! meta->fwd_only ) {
-      //build and write FM-index for de-reversed T  (used to find reverse hits using forward traversal of the BWT
-      fm_reverseString ((char*)T, block_length-1);
+      //build and write FM-index for un-reversed T  (used to find reverse hits using forward traversal of the BWT
       buildAndWriteFMIndex(meta, seq_offset, seq_cnt, 0, T, BWT, SA, NULL,
           occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);
     }
@@ -787,13 +798,7 @@ main(int argc, char **argv)
   free(occCnts_sb);
   free(cnts_sb);
 
-  for (i=0; i<numseqs; i++)
-    free(meta->seq_data[i].name);
-  free(meta->seq_data);
-  free(meta->inv_alph);
-  free(meta->alph);
-  free(meta);
-
+  fm_metaDestroy(meta);
 
   esl_getopts_Destroy(go);
 

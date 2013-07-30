@@ -198,7 +198,7 @@ static char banner[] = "search a DNA model or alignment against a DNA database";
 
 static int  serial_master  (ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop    (WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs);
-static int  serial_loop_FM (WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp);
+static int  serial_loop_FM (WORKER_INFO *info, ESL_SQFILE *dbfp);
 
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
@@ -457,7 +457,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   ID_LENGTH_LIST  *id_length_list = NULL;
 
   /* these variables are only used if db type is FM-index*/
-  void        *fm_cfg_mem      = NULL; //used to ensure cfg is 16-byte aligned, which matters since, for sse/vmx implementations, elements within cfg need to be aligned thusly
   FM_CFG      *fm_cfg       = NULL;
   FM_METADATA *fm_meta      = NULL;
   fpos_t       fm_basepos;
@@ -501,7 +500,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     //For now, this is a separate path from the typical esl_sqfile_Open() function call
     //TODO: create esl_sqio_fmindex.c, analogous to esl_sqio_ascii.c,
 
-    fm_configAlloc(&fm_cfg_mem, &fm_cfg);
+    fm_configAlloc(&fm_cfg);
     fm_meta = fm_cfg->meta;
 
     if((fm_meta->fp = fopen(cfg->dbfile, "rb")) == NULL)
@@ -510,10 +509,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if ( (status = fm_readFMmeta(fm_meta)) != eslOK)
       p7_Fail("Failed to read FM meta data from target sequence database %s\n",      cfg->dbfile);
 
-    if ( (status = fm_initConfig(fm_cfg, go)) != eslOK)
+    if ( (status = fm_configInit(fm_cfg, go)) != eslOK)
       p7_Fail("Failed to initialize FM configuration for target sequence database %s\n",      cfg->dbfile);
 
-    if ( (status = fm_createAlphabet(fm_meta, NULL)) != eslOK)
+    if ( (status = fm_alphabetCreate(fm_meta, NULL)) != eslOK)
       p7_Fail("Failed to create FM alphabet for target sequence database %s\n",      cfg->dbfile);
 
     if (      fm_meta->alph_type == fm_DNA || fm_meta->alph_type == fm_DNA_full)
@@ -787,9 +786,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_ProfileConfig(hmm, info->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
       p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
 
-      scoredata = p7_hmm_ScoreDataCreate(om, (dbformat==eslSQFILE_FMINDEX));
-      if (dbformat == eslSQFILE_FMINDEX)
-        p7_hmm_ScoreDataComputeRest(om, scoredata);
+
+
+      if (dbformat == eslSQFILE_FMINDEX) {
+        scoredata = p7_hmm_ScoreDataCreate(om, gm);
+        //p7_hmm_ScoreDataComputeRest(om, scoredata);
+      } else {
+        scoredata = p7_hmm_ScoreDataCreate(om, NULL);
+      }
 
       for (i = 0; i < infocnt; ++i) {
           /* Create processing pipeline and hit list */
@@ -828,7 +832,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (dbformat == eslSQFILE_FMINDEX) {
         //if (ncpus > 0)  sstatus = thread_loop(info, id_length_list, threadObj, queue, dbfp);
         //else
-                        sstatus = serial_loop_FM (info, id_length_list, dbfp);
+                        sstatus = serial_loop_FM (info, dbfp);
       } else {
         if (ncpus > 0)  sstatus = thread_loop    (info, id_length_list, threadObj, queue, dbfp, cfg->firstseq_key, cfg->n_targetseq);
         else            sstatus = serial_loop    (info, id_length_list, dbfp, cfg->firstseq_key, cfg->n_targetseq);
@@ -836,7 +840,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 #else
       if (dbformat == eslSQFILE_FMINDEX)
-        sstatus = serial_loop_FM (info, id_length_list, dbfp);
+        sstatus = serial_loop_FM (info, dbfp);
       else
         sstatus = serial_loop    (info, id_length_list, dbfp, cfg->firstseq_key, cfg->n_targetseq);
 #endif
@@ -882,10 +886,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       }
 
 
-
       /* Print the results.  */
       p7_tophits_SortBySeqidxAndAlipos(info->th);
-      assign_Lengths(info->th, id_length_list);
+      if (fm_meta == NULL)
+        assign_Lengths(info->th, id_length_list);
       p7_tophits_RemoveDuplicates(info->th, info->pli->use_bit_cutoffs);
 
       p7_tophits_SortBySortkey(info->th);
@@ -1008,10 +1012,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   esl_stopwatch_Destroy(w);
 
   if (dbformat == eslSQFILE_FMINDEX) {
-    fm_destroyConfig(fm_cfg);
-    free (fm_cfg->meta);
-    free(fm_cfg_mem); //16-byte aligned memory in which cfg is found
+    fm_configDestroy(fm_cfg);
   }
+
 
 
   if (ofp != stdout) fclose(ofp);
@@ -1037,9 +1040,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    if (aliscoresfp)   fclose(aliscoresfp);
 
    if (dbformat == eslSQFILE_FMINDEX) {
-     fm_destroyConfig(fm_cfg);
-     free (fm_cfg->meta);
-     free(fm_cfg_mem); //16-byte aligned memory in which cfg is found
+     fm_configDestroy(fm_cfg);
    }
 
    if (hmmfile != NULL) free (hmmfile);
@@ -1143,7 +1144,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
 
 
 static int
-serial_loop_FM(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
+serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp)
 {
 
   int      wstatus = eslOK;
@@ -1156,17 +1157,21 @@ serial_loop_FM(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *db
 
   for ( i=0; i<info->fm_cfg->meta->block_count; i++ ) {
 
-    wstatus = fm_readFM( &fmf, meta, 1 );
+    wstatus = fm_FM_read( &fmf, meta, TRUE );
     if (wstatus != eslOK) return wstatus;
-    wstatus = fm_readFM( &fmb, meta, 0 );
+    wstatus = fm_FM_read( &fmb, meta, FALSE );
     if (wstatus != eslOK) return wstatus;
 
     fmb.SA = fmf.SA;
     fmb.T  = fmf.T;
 
+
     wstatus = p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg,
         info->th, info->pli->nseqs, NULL,  &fmf, &fmb, info->fm_cfg );
     if (wstatus != eslOK) return wstatus;
+
+    fm_FM_destroy(&fmf, 1);
+    fm_FM_destroy(&fmb, 0);
 
   }
 
@@ -1446,7 +1451,6 @@ assign_Lengths(P7_TOPHITS *th, ID_LENGTH_LIST *id_length_list) {
 
   int i;
   int j = 0;
-
   for (i=0; i<th->N; i++) {
     while (th->hit[i]->seqidx != id_length_list->id_lengths[j].id) { j++;   }
     th->hit[i]->dcl[0].ad->L = id_length_list->id_lengths[j].length;

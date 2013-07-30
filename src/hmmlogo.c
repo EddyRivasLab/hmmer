@@ -87,8 +87,8 @@ hmmlogo_posScoreHeightsDivRelent (P7_HMM *hmm, P7_BG *bg, float *rel_ents, float
     //height of residues
     for (j=0; j<K; j++) {
       p       = hmm->mat[i][j];
-      logodds = log(p / bg->f[j]);  //bits
-      heights[i][j] = logodds<=0 ? 0.0 : (rel_ents[i] * eslCONST_LOG2R * logodds / pos_scoresum) ;
+      logodds = eslCONST_LOG2R * log(p / bg->f[j]);  //bits
+      heights[i][j] = logodds<=0 ? 0.0 : (rel_ents[i] * logodds / pos_scoresum) ;
     }
 
   }
@@ -116,7 +116,6 @@ hmmlogo_ScoreHeights (P7_HMM *hmm, P7_BG *bg, float **heights ) {
       logodds = eslCONST_LOG2R * log(p / bg->f[j]);  //bits
       heights[i][j] = logodds;
     }
-
   }
   return eslOK;
 }
