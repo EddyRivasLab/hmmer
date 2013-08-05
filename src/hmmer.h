@@ -770,9 +770,9 @@ enum p7_scoredatatype_e {
 
 
 /* This contains a compact representation of 8-bit bias-shifted scores for use in
- * diagonal recovery (standard [MS]SV) and extension (standard and FM-[MS]SV),
+ * diagonal recovery (standard SSV) and extension (standard and FM-SSV),
  * along with MAXL-associated prefix- and suffix-lengths, and optimal extensions
- * for FM-MSV.
+ * for FM-SSV.
  */
 typedef struct p7_scoredata_s {
   int         type;
@@ -1598,10 +1598,10 @@ extern int p7_pli_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7
 extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
 extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
 extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
-//extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *msvdata, P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,  const ESL_SQ *sq);
 extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
                                      P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
-                                     const ESL_SQ *sq, const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg);
+                                     const ESL_SQ *sq, int complementarity,
+                                     const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg);
 
 
 
@@ -1742,8 +1742,8 @@ extern int fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, ch
 extern int fm_configAlloc(FM_CFG **cfg);
 extern int fm_configDestroy(FM_CFG *cfg);
 extern int fm_metaDestroy(FM_METADATA *meta );
-extern int fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_f, FM_INTERVAL *interval_bk);
-extern int fm_updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval);
+extern int fm_updateIntervalForward( const FM_DATA *fm, const FM_CFG *cfg, char c, FM_INTERVAL *interval_f, FM_INTERVAL *interval_bk);
+extern int fm_updateIntervalReverse( const FM_DATA *fm, const FM_CFG *cfg, char c, FM_INTERVAL *interval);
 extern int fm_initSeeds (FM_DIAGLIST *list) ;
 extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
 extern int fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, int first, int length, int complementarity, ESL_SQ *sq );
@@ -1757,8 +1757,8 @@ extern int p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
 
 /* fm_sse.c */
 extern int fm_configInit      (FM_CFG *cfg, ESL_GETOPTS *go);
-extern int fm_getOccCount     (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c);
-extern int fm_getOccCountLT   (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
+extern int fm_getOccCount     (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c);
+extern int fm_getOccCountLT   (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
 
 
 

@@ -1077,7 +1077,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
         prev_hit_cnt = info->th->N;
 
-        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, info->pli->nseqs, dbsq, NULL, NULL, NULL);
+        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, info->pli->nseqs, dbsq, p7_NOCOMPLEMENT, NULL, NULL, NULL);
 
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
@@ -1101,7 +1101,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
           prev_hit_cnt = info->th->N;
           esl_sq_Copy(dbsq,dbsq_revcmp);
           esl_sq_ReverseComplement(dbsq_revcmp);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, info->pli->nseqs, dbsq_revcmp, NULL, NULL, NULL);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, info->pli->nseqs, dbsq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (i=prev_hit_cnt; i < info->th->N ; i++) {
@@ -1167,7 +1167,7 @@ serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp)
 
 
     wstatus = p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg,
-        info->th, info->pli->nseqs, NULL,  &fmf, &fmb, info->fm_cfg );
+        info->th, info->pli->nseqs, NULL, -1,  &fmf, &fmb, info->fm_cfg );
     if (wstatus != eslOK) return wstatus;
 
     fm_FM_destroy(&fmf, 1);
@@ -1325,7 +1325,7 @@ pipeline_thread(void *arg)
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
 
         prev_hit_cnt = info->th->N;
-        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, block->first_seqidx + i, dbsq, NULL, NULL, NULL);
+        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, block->first_seqidx + i, dbsq, p7_NOCOMPLEMENT, NULL, NULL, NULL);
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
 
@@ -1349,19 +1349,26 @@ pipeline_thread(void *arg)
       {
           prev_hit_cnt = info->th->N;
           esl_sq_ReverseComplement(dbsq);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, block->first_seqidx + i, dbsq, NULL, NULL, NULL);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, block->first_seqidx + i, dbsq, p7_COMPLEMENT, NULL, NULL, NULL);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           for (j=prev_hit_cnt; j < info->th->N ; ++j) {
               dcl = info->th->unsrt[j].dcl;
               // modify hit positions to account for the position of the window in the full sequence
+              /*
               dcl->ienv = dbsq->start - dcl->ienv + 1;
               dcl->jenv = dbsq->start - dcl->jenv + 1;
               dcl->iali = dbsq->start - dcl->iali + 1;
               dcl->jali = dbsq->start - dcl->jali + 1;
               dcl->ad->sqfrom = dbsq->start - dcl->ad->sqfrom + 1;
               dcl->ad->sqto = dbsq->start - dcl->ad->sqto + 1;
-
+               */
+              dcl->ienv += dbsq->start - 1;
+              dcl->jenv += dbsq->start - 1;
+              dcl->iali += dbsq->start - 1;
+              dcl->jali += dbsq->start - 1;
+              dcl->ad->sqfrom += dbsq->start - 1;
+              dcl->ad->sqto += dbsq->start - 1;
           }
 
           info->pli->nres += dbsq->W;

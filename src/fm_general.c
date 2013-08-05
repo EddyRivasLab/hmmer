@@ -76,7 +76,7 @@ ERROR:
  * Returns:   eslOK
  */
 int
-fm_updateIntervalForward( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval_bk, FM_INTERVAL *interval_f) {
+fm_updateIntervalForward( const FM_DATA *fm, const FM_CFG *cfg, char c, FM_INTERVAL *interval_bk, FM_INTERVAL *interval_f) {
   uint32_t occLT_l, occLT_u, occ_l, occ_u;
 
   fm_getOccCountLT (fm, cfg, interval_bk->lower - 1, c, &occ_l, &occLT_l);
@@ -132,7 +132,7 @@ fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
 
 
 int
-fm_updateIntervalReverse( const FM_DATA *fm, FM_CFG *cfg, char c, FM_INTERVAL *interval) {
+fm_updateIntervalReverse( const FM_DATA *fm, const FM_CFG *cfg, char c, FM_INTERVAL *interval) {
   int count1, count2;
   //TODO: counting in these calls will often overlap
     // - might get acceleration by merging to a single redundancy-avoiding call
@@ -235,7 +235,7 @@ fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, int first, int l
   uint8_t c;
 
   if (complementarity == fm_complement)
-    first = fm->N-(first+length-1)+1;
+    first = fm->N-(first+length-1);
 
   first--; // the values are 0-based in the compressed T array.
 

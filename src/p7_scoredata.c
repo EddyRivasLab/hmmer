@@ -108,9 +108,9 @@ scoredata_GetSSVScoreArrays(P7_OPROFILE *om, P7_PROFILE *gm, P7_SCOREDATA *data 
       }
 
     }
+    free(max_scores);
   }
 
-  free(max_scores);
   return eslOK;
 
 ERROR:

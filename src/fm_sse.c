@@ -179,7 +179,7 @@ ERROR:
  *            and certainly better space-utilization.
  */
 int
-fm_getOccCount (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c) {
+fm_getOccCount (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c) {
 
   int i;
   FM_METADATA *meta = cfg->meta;
@@ -362,7 +362,7 @@ fm_getOccCount (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c) {
  *
  */
 int
-fm_getOccCountLT (const FM_DATA *fm, FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt) {
+fm_getOccCountLT (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt) {
 
   if (c == 0 && pos >= fm->term_loc)// < 'A'?  cntlt depends on relationship of pos and the position where the '$' was replaced by 'A'
     *cntlt = 1;

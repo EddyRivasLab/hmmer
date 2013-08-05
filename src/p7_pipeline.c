@@ -352,7 +352,8 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_
     window_start = ESL_MAX(prev_window->n, curr_window->n);
     window_end   = ESL_MIN(prev_window->n+prev_window->length-1, curr_window->n+curr_window->length-1);
 
-    if (  (float)(window_end-window_start+1)/ESL_MIN(prev_window->length, curr_window->length) > pct_overlap ) {
+    if (  prev_window->complementarity == curr_window->complementarity &&
+          (float)(window_end-window_start+1)/ESL_MIN(prev_window->length, curr_window->length) > pct_overlap ) {
       //merge windows
       if (  curr_window->n + curr_window->length >  prev_window->n + prev_window->length )
         prev_window->length = curr_window->n + curr_window->length - prev_window->n;  //+1, -1 factored out
@@ -1400,18 +1401,23 @@ p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
 
 
 /* Function:  p7_Pipeline_LongTarget()
- * Synopsis:  Accelerated seq/profile comparison pipeline, using scanning SSV filters for long target sequences.
+ * Synopsis:  Accelerated seq/profile comparison pipeline for long target sequences.
  *
  * Purpose:   Run HMMER's accelerated pipeline to compare profile <om>
  *            against sequence <sq>. If a significant hit is found,
- *            information about it is added to the <hitlist>.This is
- *            a variant of p7_Pipeline that runs the scanning SSV
- *            filter (p7_SSVFilter_longtarget) that scans a long
- *            sequence and finds high-scoring regions (windows), then
- *            pass those to the remainder of the pipeline. The pipeline
- *            accumulates bean counting information about how many
- *            comparisons and residues flow through the pipeline while it's
- *            active.
+ *            information about it is added to the <hitlist>. This is
+ *            a variant of p7_Pipeline that runs one of two
+ *            alternative SSV filters
+ *              (1) the scanning SSV filter (p7_SSVFilter_longtarget) that scans
+ *              a long sequence and finds high-scoring regions (windows), or
+ *              (2) the FM-index-based SSV filter that finds modest-scoring
+ *              diagonals using the FM-index, and extends them to maximum-
+ *              scoring diagonals subjected to the SSV filter thresholds
+ *
+ *            Windows passing the appropriate SSV filter are then passed
+ *            to the remainder of the pipeline. The pipeline accumulates
+ *            bean counting information about how many comparisons and
+ *            residues flow through the pipeline while it's active.
  *
  * Returns:   <eslOK> on success. If a significant hit is obtained,
  *            its information is added to the growing <hitlist>.
@@ -1422,8 +1428,8 @@ p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
  *
  *            <eslERANGE> on numerical overflow errors in the
  *            optimized vector implementations; particularly in
- *            posterior decoding. I don't believe this is possible for
- *            multihit local models, but I'm set up to catch it
+ *            posterior decoding. We don't believe this is possible for
+ *            multihit local models, but we're set up to catch it
  *            anyway. We may emit a warning to the user, but cleanly
  *            skip the problematic sequence and continue.
  *
@@ -1432,16 +1438,25 @@ p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
  *            data            - for computing diagonals, and picking window edges based
  *                              on maximum prefix/suffix extensions
  *            bg              - background model
- *            subseq          - digital sequence of the window
  *            hitlist         - pointer to hit storage bin (already allocated)
+ *
+ *            :: the next three values are assigned if a standard sequence database is being used. If FM database is used, they are ignored
  *            seqidx          - the id # of the sequence from which the current window was extracted
+ *            sq              - digital sequence of the window
+ *            complementarity - is <sq> from the top strand (p7_NOCOMPLEMENT), or bottom strand (P7_COMPLEMENT)
+ *
+ *            :: the next three are assigned if an FM database is being used. If standard sequence is used, they are set to NULL.
+ *            fmf             - the FM_DATA for forward-strand search
+ *            fmb             - the FM_DATA for reverse-strand (complement) search
+ *            fm_cfg          - general FM configuration
  *
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
 p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
-                        P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
-                        const ESL_SQ *sq, const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg
+                        P7_BG *bg, P7_TOPHITS *hitlist,
+                        int64_t seqidx, const ESL_SQ *sq, int complementarity,
+                        const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg
                         )
 {
   int              i;
@@ -1555,14 +1570,20 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
       if (fmf)
         seq_data = fm_cfg->meta->seq_data[window.id];
 
-      status = p7_pli_postSSV_LongTarget(pli, om, bg, hitlist, data, seqidx, window.n, window.length, subseq,
+      status = p7_pli_postSSV_LongTarget(pli, om, bg, hitlist, data,
+            (fmf != NULL ? seq_data.id  : seqidx),
+            window.n, window.length, subseq,
             (fmf != NULL ? seq_data.start  : sq->start),
             (fmf != NULL ? seq_data.name   : sq->name),
             (fmf != NULL ? seq_data.source : sq->source),
             (fmf != NULL ? seq_data.acc    : sq->acc),
             (fmf != NULL ? seq_data.desc   : sq->desc),
             (fmf != NULL ? seq_data.length : -1),
-            nullsc, usc, p7_NOCOMPLEMENT, &vit_windowlist, pli_tmp
+            nullsc,
+            usc,
+            (fmf != NULL ? window.complementarity : complementarity),
+            &vit_windowlist,
+            pli_tmp
         );
 
 
