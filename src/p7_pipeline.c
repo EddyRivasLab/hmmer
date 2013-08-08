@@ -319,13 +319,14 @@ p7_pipeline_Destroy(P7_PIPELINE *pli)
  * Returns:   <eslOK>
  */
 int
-p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_WINDOWLIST *windowlist, int L, float pct_overlap) {
+p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_WINDOWLIST *windowlist, float pct_overlap) {
 
   int i;
   P7_HMM_WINDOW        *prev_window = NULL;
   P7_HMM_WINDOW        *curr_window = NULL;
   int              window_start;
   int              window_end;
+  int              window_len;
   int new_hit_cnt = 0;
 
   if (windowlist->count == 0)
@@ -336,11 +337,11 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_
     curr_window = windowlist->windows+i;
 
     // the 0.1 multiplier provides for a small buffer in excess of the predefined prefix/suffix lengths - one proportional to max_length
-    window_start = ESL_MAX( 1,   curr_window->n - ( om->max_length * (0.1 + data->prefix_lengths[curr_window->k - curr_window->length + 1]  )) ) ;
-    window_end   = ESL_MIN( L ,  curr_window->n + curr_window->length + (om->max_length * (0.1 + data->suffix_lengths[curr_window->k] ) ) )   ;
-
-    curr_window->n = window_start;
+    window_start = ESL_MAX( 1                      ,  curr_window->n -                       (om->max_length * (0.1 + data->prefix_lengths[curr_window->k - curr_window->length + 1]  )) ) ;
+    window_end   = ESL_MIN( curr_window->target_len,  curr_window->n + curr_window->length + (om->max_length * (0.1 + data->suffix_lengths[curr_window->k] ) ) )   ;
     curr_window->length = window_end - window_start + 1;
+    curr_window->fm_n -= (curr_window->n - window_start);
+    curr_window->n = window_start;
   }
 
 
@@ -351,9 +352,10 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_
 
     window_start = ESL_MAX(prev_window->n, curr_window->n);
     window_end   = ESL_MIN(prev_window->n+prev_window->length-1, curr_window->n+curr_window->length-1);
+    window_len   = window_end - window_start + 1;
 
     if (  prev_window->complementarity == curr_window->complementarity &&
-          (float)(window_end-window_start+1)/ESL_MIN(prev_window->length, curr_window->length) > pct_overlap ) {
+          (float)(window_len)/ESL_MIN(prev_window->length, curr_window->length) > pct_overlap ) {
       //merge windows
       if (  curr_window->n + curr_window->length >  prev_window->n + prev_window->length )
         prev_window->length = curr_window->n + curr_window->length - prev_window->n;  //+1, -1 factored out
@@ -364,14 +366,6 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_
     }
   }
   windowlist->count = new_hit_cnt+1;
-
-  /* ensure that window start and end are within target sequence bounds */
-  if ( windowlist->windows[0].n  <  1)
-    windowlist->windows[0].n =  1;
-
-  if ( windowlist->windows[windowlist->count-1].n + windowlist->windows[windowlist->count-1].length - 1  >  L)
-    windowlist->windows[windowlist->count-1].length =  L - windowlist->windows[windowlist->count-1].n + 1;
-
 
   return eslOK;
 }
@@ -1158,20 +1152,19 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
         hit->dcl[0] = pli->ddef->dcl[d];
 
         if (complementarity == p7_NOCOMPLEMENT) {
-          hit->dcl[0].ienv += window_start - 1; // represents the real position within the sequence handed to the pipeline
-          hit->dcl[0].jenv += window_start - 1;
-          hit->dcl[0].iali += window_start - 1;
-          hit->dcl[0].jali += window_start - 1;
+          hit->dcl[0].ienv       += window_start - 1; // represents the real position within the sequence handed to the pipeline
+          hit->dcl[0].jenv       += window_start - 1;
+          hit->dcl[0].iali       += window_start - 1;
+          hit->dcl[0].jali       += window_start - 1;
           hit->dcl[0].ad->sqfrom += window_start - 1;
-          hit->dcl[0].ad->sqto += window_start - 1;
+          hit->dcl[0].ad->sqto   += window_start - 1;
         } else {
-
-          hit->dcl[0].ienv = window_start + window_len - 1 - hit->dcl[0].ienv + 1; // represents the real position within the sequence handed to the pipeline
-          hit->dcl[0].jenv = window_start + window_len - 1 - hit->dcl[0].jenv + 1;
-          hit->dcl[0].iali = window_start + window_len - 1 - hit->dcl[0].iali + 1;
-          hit->dcl[0].jali = window_start + window_len - 1 - hit->dcl[0].jali + 1;
-          hit->dcl[0].ad->sqfrom = window_start + window_len - 1 - hit->dcl[0].ad->sqfrom + 1;
-          hit->dcl[0].ad->sqto   = window_start + window_len - 1 - hit->dcl[0].ad->sqto + 1;
+          hit->dcl[0].ienv       = window_len - (window_start + hit->dcl[0].ienv - 1) + 1; // represents the real position within the sequence handed to the pipeline
+          hit->dcl[0].jenv       = window_len - (window_start + hit->dcl[0].jenv - 1) + 1;
+          hit->dcl[0].iali       = window_len - (window_start + hit->dcl[0].iali - 1) + 1;
+          hit->dcl[0].jali       = window_len - (window_start + hit->dcl[0].jali - 1) + 1;
+          hit->dcl[0].ad->sqfrom = window_len - (window_start + hit->dcl[0].ad->sqfrom - 1) + 1;
+          hit->dcl[0].ad->sqto   = window_len - (window_start + hit->dcl[0].ad->sqto - 1) + 1;
         }
 
 
@@ -1342,7 +1335,7 @@ p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
   //use window_len instead of loc_window_len, because length parameterization is done, just need to loop over subseq
   p7_ViterbiFilter_longtarget(subseq, window_len, om, pli->oxf, filtersc, pli->F2, vit_windowlist);
 
-  p7_pli_ExtendAndMergeWindows (om, data, vit_windowlist, window_len, 0.5);
+  p7_pli_ExtendAndMergeWindows (om, data, vit_windowlist, 0.5);
 
 
   // if a window is still too long (>80Kb), need to split it up to
@@ -1359,7 +1352,7 @@ p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
          do {
            new_n   +=  (smaller_window_len - om->max_length);
            new_len -=  (smaller_window_len - om->max_length);
-           p7_hmmwindow_new(vit_windowlist, 0, new_n, 0, 0, ESL_MIN(smaller_window_len,new_len), 0.0, p7_NOCOMPLEMENT );
+           p7_hmmwindow_new(vit_windowlist, 0, new_n, 0, 0, ESL_MIN(smaller_window_len,new_len), 0.0, p7_NOCOMPLEMENT, new_len );
          } while (new_len > smaller_window_len);
       }
   }
@@ -1515,7 +1508,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
   /* convert hits to windows, merging neighboring windows, and
    */
   if ( msv_windowlist.count > 0 ) {
-
     /* In scan mode, if it passes the MSV filter, read the rest of the profile
      * Not necessary for dummy mode, where the ->base_w variable checks cause compilation failure*/
 #ifndef P7_IMPL_DUMMY_INCLUDED
@@ -1534,11 +1526,9 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
       p7_hmm_ScoreDataComputeRest(om, data);
 
 
-    p7_pli_ExtendAndMergeWindows (om, data, &msv_windowlist, (fmf ? fmf->N-1 : sq->n), 0);
+    p7_pli_ExtendAndMergeWindows (om, data, &msv_windowlist, 0);
 
-  /*
-   * pass each remaining window on to the remaining pipeline
-   */
+  /* Pass each remaining window on to the remaining pipeline */
     p7_hmmwindow_init(&vit_windowlist);
     pli_tmp->tmpseq = esl_sq_CreateDigital(om->abc);
     if (!fmf )
@@ -1570,7 +1560,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
       if (fmf)
         seq_data = fm_cfg->meta->seq_data[window.id];
 
-      status = p7_pli_postSSV_LongTarget(pli, om, bg, hitlist, data,
+        status = p7_pli_postSSV_LongTarget(pli, om, bg, hitlist, data,
             (fmf != NULL ? seq_data.id  : seqidx),
             window.n, window.length, subseq,
             (fmf != NULL ? seq_data.start  : sq->start),
@@ -1586,12 +1576,11 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
             pli_tmp
         );
 
-
-      if (status != eslOK) goto ERROR;
+        if (status != eslOK) goto ERROR;
 
     }
 
-    if (fmf )  free (pli_tmp->tmpseq->dsq);
+    if (fmf)  free (pli_tmp->tmpseq->dsq);
 
     pli_tmp->tmpseq->dsq = NULL;  //it's a pointer to a dsq object belonging to another sequence
 

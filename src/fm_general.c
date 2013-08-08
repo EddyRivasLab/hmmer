@@ -226,7 +226,13 @@ fm_getChar(uint8_t alph_type, int j, const uint8_t *B )
 
 /* Function:  fm_convertRange2DSQ()
  * Synopsis:  Convert the BWT range into a DSQ.
- * Purpose:   Must account for the possible compression of the BWT
+ *
+ * Purpose:   Must account for the possible compression of the BWT.
+ *            The input value of <first> is the 0-based position at which
+ *            the requested range starts on either FM->T or revcomp(FM->T),
+ *            depending on <complementarity>. Since only FM->T is stored,
+ *            the necessary work is done to correct positions in the case
+ *            that the positions are relative to the revcomp.
  */
 int
 fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, int first, int length, int complementarity, ESL_SQ *sq )
@@ -234,11 +240,11 @@ fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, int first, int l
   int i;
   uint8_t c;
 
-  if (complementarity == fm_complement)
-    first = fm->N-(first+length-1);
 
-  first--; // the values are 0-based in the compressed T array.
+  if (complementarity == p7_COMPLEMENT)
+    first = fm->N-(first+length)-1;
 
+  //All the "+1" dsq offsets below are because the dsq characters are 1-based.
   esl_sq_GrowTo(sq, length);
   sq->n = length;
 
@@ -268,7 +274,7 @@ fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, int first, int l
     sq->dsq[length+1] = eslDSQ_SENTINEL;
   }
 
-  if (complementarity == fm_complement)
+  if (complementarity == p7_COMPLEMENT)
     esl_sq_ReverseComplement(sq);
 
   return eslOK;
@@ -321,27 +327,29 @@ fm_computeSequenceOffset (const FM_DATA *fms, const FM_METADATA *meta, int block
  *            int         - eslERANGE if the range in question crosses the boundary between two target sequences. Otherwise eslOK.
  */
 int
-fm_getOriginalPosition (const FM_DATA *fms, const FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,
-                  uint32_t *segment_id, uint32_t *seg_pos
+fm_getOriginalPosition (const FM_DATA *fms, const FM_METADATA *meta, int fm_id, int length, int complementarity,
+                        uint32_t fm_pos, uint32_t *segment_id, uint32_t *seg_pos
 ) {
+
+  int status = eslOK;
+
+  if (complementarity == p7_COMPLEMENT)  // need location in forward context:
+    fm_pos = fms->N - fm_pos - 2;
+
+
   *segment_id = fm_computeSequenceOffset( fms, meta, fm_id, fm_pos);
-  *seg_pos    =  ( fm_pos - meta->seq_data[ *segment_id ].offset) + meta->seq_data[ *segment_id ].start - 1;
+  *seg_pos    =  ( fm_pos - meta->seq_data[ *segment_id ].offset) + meta->seq_data[ *segment_id ].start;
+
 
   //verify that the hit doesn't extend beyond the bounds of the target sequence
-  if (direction == fm_forward) {
-    if (*seg_pos + length > meta->seq_data[ *segment_id ].start + meta->seq_data[ *segment_id ].length ) {
-      //*segment_id  = *seg_pos  = -1;  // goes into the next sequence, so it should be ignored
-      return eslERANGE;
-    }
-  } else { //backward
-    if ((int)*seg_pos - length + 1 < 0 ) {
-      //*segment_id  = *seg_pos  = -1; // goes into the previous sequence, so it should be ignored
-      return eslERANGE;
-    }
-  }
+  // this works even if the true position is in revcomp space (the length check will still recognize an overextension)
+  if (*seg_pos + length > meta->seq_data[ *segment_id ].start + meta->seq_data[ *segment_id ].length )
+      status = eslERANGE;
 
+  if (complementarity == p7_COMPLEMENT) // now reverse orientation
+    *seg_pos    =  meta->seq_data[ *segment_id ].length - *seg_pos + 1;
 
-  return eslOK;
+  return status;
 }
 
 /*********************************************************************

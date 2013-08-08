@@ -61,7 +61,7 @@ FM_mergeSeeds(FM_DIAGLIST *seeds, int N, int ssv_length) {
 
   next = diags[0];
 
-  curr_is_complement = (next.complementarity == fm_complement);
+  curr_is_complement = (next.complementarity == p7_COMPLEMENT);
   curr_n             = next.n;
   curr_k             = next.k;
   curr_len           = next.length;
@@ -72,7 +72,7 @@ FM_mergeSeeds(FM_DIAGLIST *seeds, int N, int ssv_length) {
   for( i=1; i<seeds->count; i++) {
 
     next = diags[i];
-    next_is_complement = (next.complementarity == fm_complement);
+    next_is_complement = (next.complementarity == p7_COMPLEMENT);
 
     if (  next_is_complement == curr_is_complement              //same direction
           && ( next.n - next.k) == curr_diagval                 //overlapping diagonals will share the same value of (n - k)
@@ -190,10 +190,10 @@ FM_getPassingDiags(const FM_DATA *fmf, const FM_CFG *fm_cfg,
     seed->k      = k;
     seed->length = depth;
 
-    if (complementarity == fm_nocomplement )
-      seed->n    =  fmf->N - FM_backtrackSeed(fmf, fm_cfg, i) - depth;
+    if (complementarity == p7_NOCOMPLEMENT )
+      seed->n    =  fmf->N - FM_backtrackSeed(fmf, fm_cfg, i) - depth - 1;
     else
-      seed->n    =  FM_backtrackSeed(fmf, fm_cfg, i) + 1;
+      seed->n    =  FM_backtrackSeed(fmf, fm_cfg, i) ;
 
     seed->complementarity = complementarity;
 
@@ -206,7 +206,7 @@ FM_getPassingDiags(const FM_DATA *fmf, const FM_CFG *fm_cfg,
       seed->k -= (depth - 1) ;
 
 
-    seed->sortkey =  (int)( complementarity == fm_complement ? fmf->N + 1 : 0)   // makes complement seeds cover a different score range than non-complements
+    seed->sortkey =  (int)( complementarity == p7_COMPLEMENT ? fmf->N + 1 : 0)   // makes complement seeds cover a different score range than non-complements
                     +  ((int)(seed->n) - (int)(seed->k) )                        // unique diagonal within the complement/non-complement score range
                     + ((double)(seed->k)/(double)(M+1))  ;                       // fractional part, used to sort seeds sharing a diagonal
 
@@ -279,7 +279,7 @@ FM_Recurse( int depth, int Kp, int fm_direction,
         else  //fm_backward
           k = dp_pairs[i].pos - 1;
 
-        if (dp_pairs[i].complementarity == fm_complement) {
+        if (dp_pairs[i].complementarity == p7_COMPLEMENT) {
           next_score = ssvdata->ssv_scores_f[k*Kp + fm_getComplement(c,fm_cfg->meta->alph_type) ];
         } else
           next_score = ssvdata->ssv_scores_f[k*Kp + c];
@@ -501,7 +501,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
           dp_pairs_fwd[fwd_cnt].max_score_len =   1;
           dp_pairs_fwd[fwd_cnt].consec_pos =      1;
           dp_pairs_fwd[fwd_cnt].max_consec_pos =  1;
-          dp_pairs_fwd[fwd_cnt].complementarity = fm_nocomplement;
+          dp_pairs_fwd[fwd_cnt].complementarity = p7_NOCOMPLEMENT;
           dp_pairs_fwd[fwd_cnt].model_direction = fm_forward;
           fwd_cnt++;
         }
@@ -516,7 +516,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
           dp_pairs_rev[rev_cnt].max_score_len =   1;
           dp_pairs_rev[rev_cnt].consec_pos =      1;
           dp_pairs_rev[rev_cnt].max_consec_pos =  1;
-          dp_pairs_rev[rev_cnt].complementarity = fm_nocomplement;
+          dp_pairs_rev[rev_cnt].complementarity = p7_NOCOMPLEMENT;
           dp_pairs_rev[rev_cnt].model_direction = fm_backward;
           rev_cnt++;
         }
@@ -536,7 +536,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
           dp_pairs_fwd[fwd_cnt].max_score_len =   1;
           dp_pairs_fwd[fwd_cnt].consec_pos =      1;
           dp_pairs_fwd[fwd_cnt].max_consec_pos =  1;
-          dp_pairs_fwd[fwd_cnt].complementarity = fm_complement;
+          dp_pairs_fwd[fwd_cnt].complementarity = p7_COMPLEMENT;
           dp_pairs_fwd[fwd_cnt].model_direction = fm_backward;
           fwd_cnt++;
         }
@@ -551,7 +551,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
           dp_pairs_rev[rev_cnt].max_score_len =   1;
           dp_pairs_rev[rev_cnt].consec_pos =      1;
           dp_pairs_rev[rev_cnt].max_consec_pos =  1;
-          dp_pairs_rev[rev_cnt].complementarity = fm_complement;
+          dp_pairs_rev[rev_cnt].complementarity = p7_COMPLEMENT;
           dp_pairs_rev[rev_cnt].model_direction = fm_forward;
           rev_cnt++;
         }
@@ -616,48 +616,45 @@ ERROR:
 static int
 FM_window_from_diag (FM_DIAG *diag, const FM_DATA *fm, const FM_METADATA *meta, P7_HMM_WINDOWLIST *windowlist) {
 
+  // if diag->complementarity == p7_NOCOMPLEMENT, these positions are in context of FM->T
+  // otherwise, they're in context of revcomp(FM->T).
+
   int status;
   int again = TRUE;
-  /*  Some of the seeds we just created may span more than one sequence in the target.
-   *  Check for this, and resolve it, by trimming such an offending seed, and tacking
-   *  the remainder on as a new seed
+
+
+  /*  It's possible for a seed we just created to span more than one sequence in the target.
+   *  Check for this, and resolve it, by trimming an over-extended segment, and tacking
+   *  it on as a new seed (to be dealt with on the next pass)
    */
   while (again) {
     uint32_t seg_id, seg_pos;
     again = FALSE;
 
-    if (diag->complementarity == fm_nocomplement) {
-      status = fm_getOriginalPosition (fm, meta, 0, diag->length, fm_forward, diag->n, &seg_id, &seg_pos);
-      if (status == eslERANGE) {
-        int target_end = meta->seq_data[seg_id].offset + meta->seq_data[seg_id].length - 1;
-        int diag_end   = seg_pos + diag->length;
-        int overext    = diag_end - target_end;
+    status = fm_getOriginalPosition (fm, meta, 0, diag->length, diag->complementarity, diag->n, &seg_id, &seg_pos);
+    if (status == eslERANGE) {
+      int target_end, diag_end, overext;
 
-        p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+diag->length-overext-1, diag->length-overext, diag->score, diag->complementarity);
-
-        diag->n      +=  diag->length - overext;
-        diag->k      +=  diag->length - overext;
-        diag->length = overext;
-        again        = TRUE;
+      printf("I know this is broken.  Fix it.\n");
+      if (diag->complementarity == p7_NOCOMPLEMENT) {
+        target_end = meta->seq_data[seg_id].offset + meta->seq_data[seg_id].length - 1;
+        diag_end   = seg_pos + diag->length;
+        overext    = diag_end - target_end;
+      } else {
+        diag_end   = seg_pos - diag->length;
+        overext    = meta->seq_data[seg_id].offset - diag_end;
       }
-    } else {
-      status = fm_getOriginalPosition (fm, meta, 0, diag->length, fm_backward, fm->N - diag->n + 1, &seg_id, &seg_pos);
-      if (status == eslERANGE) {
-        int target_end = meta->seq_data[seg_id].offset - meta->seq_data[seg_id].length + 1;
-        int diag_end   = seg_pos - diag->length;
-        int overext    = target_end - diag_end;
 
-        p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+diag->length-overext-1, diag->length-overext, diag->score, diag->complementarity);
+      p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+diag->length-overext-1, diag->length-overext, diag->score, diag->complementarity, meta->seq_data[seg_id].length);
+      diag->n      +=  diag->length - overext;
+      diag->k      +=  diag->length - overext;
+      diag->length = overext;
+      again        = TRUE;
 
-        diag->n      +=  diag->length - overext;
-        diag->k      +=  diag->length - overext;
-        diag->length = overext;
-        again        = TRUE;
-      }
     }
 
     if (!again)
-        p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+diag->length-1, diag->length, diag->score, diag->complementarity);
+      p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+diag->length-1, diag->length, diag->score, diag->complementarity, meta->seq_data[seg_id].length);
 
   }
 
@@ -692,33 +689,33 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const P7_SCOREDATA *ssvdata, FM_
 
   int k,n;
   int model_start, model_end, target_start, target_end;
-  int hit_start, hit_end, max_hit_start, max_hit_end;
+  int hit_start, max_hit_start, max_hit_end;
   float sc;
-  float max_sc = 0;
+  float max_sc = 0.0;
   int c;
 
   //this determines the start and end of the window that we think it's possible we'll extend to the window to (which determines the sequence we'll extract)
-  model_start      = ESL_MIN( diag->k, ESL_MAX(1, diag->k + diag->length - cfg->ssv_length  )) ; //-1 and +1 cancel
-  model_end        = ESL_MIN( ssvdata->M, diag->k + cfg->ssv_length - 1 );
+  model_start      = ESL_MAX ( 1,         diag->k + ESL_MIN(0, diag->length - cfg->ssv_length)) ;
+  model_end        = ESL_MIN( ssvdata->M, diag->k + ESL_MAX(cfg->ssv_length, diag->length) - 1 );
   target_start     = diag->n - (diag->k - model_start);
   target_end       = diag->n + (model_end - diag->k);
-  if (target_start < 1) {
-    model_start += 1-target_start;
-    target_start = 1;
+  if (target_start < 0) {
+    model_start -= target_start;
+    target_start = 0;
   }
-  if (target_end > fm->N-1) {
-    model_end -= target_end - (fm->N-1);
-    target_end = fm->N-1;
+  if (target_end > fm->N-2) {
+    model_end -= target_end - (fm->N-2);
+    target_end = fm->N-2;
   }
-
-
-  k = model_start;
-  n = 1;
-  sc = 0;
 
   fm_convertRange2DSQ(fm, cfg->meta, target_start, target_end-target_start+1, diag->complementarity, tmp_sq );
 
+
   //This finds the highest-scoring sub-diag in the just-determined potential diagonal range.
+  k = model_start;
+  n = 1;
+  sc = 0.0;
+
   hit_start = n;
   for (  ; k <= model_end; k++, n++) {
       c = tmp_sq->dsq[n];
@@ -728,13 +725,10 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const P7_SCOREDATA *ssvdata, FM_
       if (sc < 0) {
         sc = 0;
         hit_start = n+1;
-      }
-      hit_end = n;
-
-      if (sc > max_sc) {
+      } else if (sc > max_sc) {
           max_sc = sc;
           max_hit_start = hit_start;
-          max_hit_end   = hit_end;
+          max_hit_end   = n;
       }
   }
 

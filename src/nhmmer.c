@@ -1107,12 +1107,12 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
           for (i=prev_hit_cnt; i < info->th->N ; i++) {
               dcl = info->th->unsrt[i].dcl;
               // modify hit positions to account for the position of the window in the full sequence
-              dcl->ienv = dbsq_revcmp->start - dcl->ienv + 1;
-              dcl->jenv = dbsq_revcmp->start - dcl->jenv + 1;
-              dcl->iali = dbsq_revcmp->start - dcl->iali + 1;
-              dcl->jali = dbsq_revcmp->start - dcl->jali + 1;
-              dcl->ad->sqfrom = dbsq_revcmp->start - dcl->ad->sqfrom + 1;
-              dcl->ad->sqto = dbsq_revcmp->start - dcl->ad->sqto + 1;
+              dcl->ienv += dbsq_revcmp->end - 1;
+              dcl->jenv += dbsq_revcmp->end - 1;
+              dcl->iali += dbsq_revcmp->end - 1;
+              dcl->jali += dbsq_revcmp->end - 1;
+              dcl->ad->sqfrom += dbsq_revcmp->end - 1;
+              dcl->ad->sqto += dbsq_revcmp->end - 1;
 
           }
 
@@ -1363,12 +1363,12 @@ pipeline_thread(void *arg)
               dcl->ad->sqfrom = dbsq->start - dcl->ad->sqfrom + 1;
               dcl->ad->sqto = dbsq->start - dcl->ad->sqto + 1;
                */
-              dcl->ienv += dbsq->start - 1;
-              dcl->jenv += dbsq->start - 1;
-              dcl->iali += dbsq->start - 1;
-              dcl->jali += dbsq->start - 1;
-              dcl->ad->sqfrom += dbsq->start - 1;
-              dcl->ad->sqto += dbsq->start - 1;
+              dcl->ienv += dbsq->end - 1;
+              dcl->jenv += dbsq->end - 1;
+              dcl->iali += dbsq->end - 1;
+              dcl->jali += dbsq->end - 1;
+              dcl->ad->sqfrom += dbsq->end - 1;
+              dcl->ad->sqto += dbsq->end - 1;
           }
 
           info->pli->nres += dbsq->W;

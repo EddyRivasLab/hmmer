@@ -803,8 +803,9 @@ typedef struct p7_hmm_window_s {
   int32_t    fm_n;  //position in the concatenated fm-index sequence at which the diagonal starts
   int32_t    length; // length of the diagonal/window
   int16_t    k;  //position of the model at which the diagonal ends
+  int32_t    target_len;  //length of the target sequence
   int8_t     complementarity;
-  int        used_to_extend;
+  int8_t     used_to_extend;
 } P7_HMM_WINDOW;
 
 typedef struct p7_hmm_window_list_s {
@@ -853,10 +854,6 @@ enum fm_direction_e {
   fm_backward   = 1,
 };
 
-enum fm_complementarity_e {
-  fm_nocomplement    = 0,
-  fm_complement   = 1,
-};
 
 typedef struct fm_interval_s {
   int   lower;
@@ -1564,7 +1561,7 @@ extern int  p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset);
 
 /* p7_hmmwindow.c */
 int p7_hmmwindow_init (P7_HMM_WINDOWLIST *list);
-P7_HMM_WINDOW *p7_hmmwindow_new (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity);
+P7_HMM_WINDOW *p7_hmmwindow_new (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity, uint32_t target_len);
 
 
 
@@ -1588,7 +1585,7 @@ extern int          p7_pipeline_Reuse  (P7_PIPELINE *pli);
 extern void         p7_pipeline_Destroy(P7_PIPELINE *pli);
 extern int          p7_pipeline_Merge  (P7_PIPELINE *p1, P7_PIPELINE *p2);
 
-extern int p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *msvdata, P7_HMM_WINDOWLIST *windowlist, int L, float pct_overlap);
+extern int p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *msvdata, P7_HMM_WINDOWLIST *windowlist, float pct_overlap);
 extern int p7_pli_TargetReportable  (P7_PIPELINE *pli, float score,     double lnP);
 extern int p7_pli_DomainReportable  (P7_PIPELINE *pli, float dom_score, double lnP);
 

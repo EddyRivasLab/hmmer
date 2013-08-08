@@ -435,7 +435,8 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
                          end,                // position in the model at which the diagonal ends
                          end-start+1 ,       // length of diagonal
                          ret_sc,             // score of diagonal
-                         p7_NOCOMPLEMENT     // always p7_NOCOMPLEMENT here;  varies in FM-based filter
+                         p7_NOCOMPLEMENT,    // always p7_NOCOMPLEMENT here;  varies in FM-based filter
+                         L
                        );
 
       i = target_end; // skip forward

@@ -623,7 +623,6 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
   P7_OPROFILE   *om        = NULL;
   P7_SCOREDATA  *scoredata = NULL;   /* hmm-specific data used by nhmmer */
   ESL_ALPHABET  *abc = NULL;
-  P7_DOMAIN *dcl;
 
 #ifdef eslAUGMENT_ALPHABET
   ESL_SQ        *sq_revcmp = NULL;
@@ -652,22 +651,9 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
       //reverse complement
       if (info->pli->strand != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL )
       {
-
         p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, sq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL);
         p7_pipeline_Reuse(info->pli); // prepare for next search
         seq_len = info->qsq->n;
-        for (i = prev_hit_cnt; i < info->th->N ; i++)
-        {
-          dcl = info->th->unsrt[i].dcl;
-          // modify hit positions to account for the position of the window in the full sequence
-          dcl->ienv = seq_len - dcl->ienv + 1;
-          dcl->jenv = seq_len - dcl->jenv + 1;
-          dcl->iali = seq_len - dcl->iali + 1;
-          dcl->jali = seq_len - dcl->jali + 1;
-          dcl->ad->sqfrom = seq_len - dcl->ad->sqfrom + 1;
-          dcl->ad->sqto = seq_len - dcl->ad->sqto + 1;
-        }
-
       }
 #endif
 
@@ -763,7 +749,6 @@ pipeline_thread(void *arg)
   P7_OPROFILE   *om        = NULL;
   P7_SCOREDATA  *scoredata = NULL;   /* hmm-specific data used by nhmmer */
 
-  P7_DOMAIN *dcl;
   int seq_len = 0;
   int prev_hit_cnt = 0;
 
@@ -816,20 +801,7 @@ pipeline_thread(void *arg)
         {
           p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, sq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL);
           p7_pipeline_Reuse(info->pli); // prepare for next search
-
           seq_len = info->qsq->n;
-          for (j = prev_hit_cnt; j < info->th->N ; j++)
-          {
-            dcl = info->th->unsrt[j].dcl;
-            // modify hit positions to account for the position of the window in the full sequence
-            dcl->ienv = seq_len - dcl->ienv + 1;
-            dcl->jenv = seq_len - dcl->jenv + 1;
-            dcl->iali = seq_len - dcl->iali + 1;
-            dcl->jali = seq_len - dcl->jali + 1;
-            dcl->ad->sqfrom = seq_len - dcl->ad->sqfrom + 1;
-            dcl->ad->sqto = seq_len - dcl->ad->sqto + 1;
-          }
-
         }
 #endif
         if (info->pli->strand != p7_STRAND_BOTTOMONLY) {
