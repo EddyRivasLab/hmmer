@@ -633,29 +633,18 @@ FM_window_from_diag (FM_DIAG *diag, const FM_DATA *fm, const FM_METADATA *meta, 
 
     status = fm_getOriginalPosition (fm, meta, 0, diag->length, diag->complementarity, diag->n, &seg_id, &seg_pos);
     if (status == eslERANGE) {
-      int target_end, diag_end, overext;
+      int overext = (seg_pos + diag->length - 1) - (meta->seq_data[seg_id].length);
+      int use_length = diag->length - overext;
 
-      printf("I know this is broken.  Fix it.\n");
-      if (diag->complementarity == p7_NOCOMPLEMENT) {
-        target_end = meta->seq_data[seg_id].offset + meta->seq_data[seg_id].length - 1;
-        diag_end   = seg_pos + diag->length;
-        overext    = diag_end - target_end;
-      } else {
-        diag_end   = seg_pos - diag->length;
-        overext    = meta->seq_data[seg_id].offset - diag_end;
-      }
+      p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+use_length-1, use_length, diag->score, diag->complementarity, meta->seq_data[seg_id].length);
+      diag->n      +=  use_length;
+      diag->k      +=  use_length;
+      diag->length  =  overext;
 
-      p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+diag->length-overext-1, diag->length-overext, diag->score, diag->complementarity, meta->seq_data[seg_id].length);
-      diag->n      +=  diag->length - overext;
-      diag->k      +=  diag->length - overext;
-      diag->length = overext;
       again        = TRUE;
-
-    }
-
-    if (!again)
+    } else {
       p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+diag->length-1, diag->length, diag->score, diag->complementarity, meta->seq_data[seg_id].length);
-
+    }
   }
 
   return eslOK;

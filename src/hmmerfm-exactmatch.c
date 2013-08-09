@@ -427,10 +427,6 @@ main(int argc,  char *argv[])
       fm_FM_destroy( fmsb+i, 0 );
   }
 
-  for (i=0; i<meta->seq_count; i++)
-    free (meta->seq_data[i].name);
-
-  free (meta->seq_data);
 
   free (hits);
   free (line);

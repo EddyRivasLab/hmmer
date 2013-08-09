@@ -1054,10 +1054,8 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
 {
 
   int      wstatus = eslOK;
-  int i;
   int prev_hit_cnt;
   int seq_id = 0;
-  P7_DOMAIN *dcl;
   ESL_SQ   *dbsq   =  esl_sq_CreateDigital(info->om->abc);
 #ifdef eslAUGMENT_ALPHABET
   ESL_SQ   *dbsq_revcmp;
@@ -1081,16 +1079,6 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
 
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
-        // modify hit positions to account for the position of the window in the full sequence
-        for (i=prev_hit_cnt; i < info->th->N ; i++) {
-            dcl = info->th->unsrt[i].dcl;
-            dcl->ienv += dbsq->start - 1;
-            dcl->jenv += dbsq->start - 1;
-            dcl->iali += dbsq->start - 1;
-            dcl->jali += dbsq->start - 1;
-            dcl->ad->sqfrom += dbsq->start - 1;
-            dcl->ad->sqto += dbsq->start - 1;
-        }
       } else {
         info->pli->nres -= dbsq->n;
       }
@@ -1103,18 +1091,6 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
           esl_sq_ReverseComplement(dbsq_revcmp);
           p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, info->pli->nseqs, dbsq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL);
           p7_pipeline_Reuse(info->pli); // prepare for next search
-
-          for (i=prev_hit_cnt; i < info->th->N ; i++) {
-              dcl = info->th->unsrt[i].dcl;
-              // modify hit positions to account for the position of the window in the full sequence
-              dcl->ienv += dbsq_revcmp->end - 1;
-              dcl->jenv += dbsq_revcmp->end - 1;
-              dcl->iali += dbsq_revcmp->end - 1;
-              dcl->jali += dbsq_revcmp->end - 1;
-              dcl->ad->sqfrom += dbsq_revcmp->end - 1;
-              dcl->ad->sqto += dbsq_revcmp->end - 1;
-
-          }
 
           info->pli->nres += dbsq_revcmp->W;
 
@@ -1169,6 +1145,8 @@ serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp)
     wstatus = p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg,
         info->th, info->pli->nseqs, NULL, -1,  &fmf, &fmb, info->fm_cfg );
     if (wstatus != eslOK) return wstatus;
+
+    info->pli->nseqs += fmf.seq_cnt;
 
     fm_FM_destroy(&fmf, 1);
     fm_FM_destroy(&fmb, 0);
@@ -1328,17 +1306,6 @@ pipeline_thread(void *arg)
         p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, block->first_seqidx + i, dbsq, p7_NOCOMPLEMENT, NULL, NULL, NULL);
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
-
-        // modify hit positions to account for the position of the window in the full sequence
-        for (j=prev_hit_cnt; j < info->th->N ; ++j) {
-            dcl = info->th->unsrt[j].dcl;
-            dcl->ienv += dbsq->start - 1;
-            dcl->jenv += dbsq->start - 1;
-            dcl->iali += dbsq->start - 1;
-            dcl->jali += dbsq->start - 1;
-            dcl->ad->sqfrom += dbsq->start - 1;
-            dcl->ad->sqto += dbsq->start - 1;
-        }
       } else {
         info->pli->nres -= dbsq->n;
       }
@@ -1362,13 +1329,15 @@ pipeline_thread(void *arg)
               dcl->jali = dbsq->start - dcl->jali + 1;
               dcl->ad->sqfrom = dbsq->start - dcl->ad->sqfrom + 1;
               dcl->ad->sqto = dbsq->start - dcl->ad->sqto + 1;
-               */
+              */
+              /*
               dcl->ienv += dbsq->end - 1;
               dcl->jenv += dbsq->end - 1;
               dcl->iali += dbsq->end - 1;
               dcl->jali += dbsq->end - 1;
               dcl->ad->sqfrom += dbsq->end - 1;
               dcl->ad->sqto += dbsq->end - 1;
+              */
           }
 
           info->pli->nres += dbsq->W;

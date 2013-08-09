@@ -331,7 +331,6 @@ fm_getOriginalPosition (const FM_DATA *fms, const FM_METADATA *meta, int fm_id, 
                         uint32_t fm_pos, uint32_t *segment_id, uint32_t *seg_pos
 ) {
 
-  int status = eslOK;
 
   if (complementarity == p7_COMPLEMENT)  // need location in forward context:
     fm_pos = fms->N - fm_pos - 2;
@@ -340,16 +339,16 @@ fm_getOriginalPosition (const FM_DATA *fms, const FM_METADATA *meta, int fm_id, 
   *segment_id = fm_computeSequenceOffset( fms, meta, fm_id, fm_pos);
   *seg_pos    =  ( fm_pos - meta->seq_data[ *segment_id ].offset) + meta->seq_data[ *segment_id ].start;
 
+  if (complementarity == p7_COMPLEMENT) // now reverse orientation
+    *seg_pos    =  meta->seq_data[ *segment_id ].length - *seg_pos + 1;
+
 
   //verify that the hit doesn't extend beyond the bounds of the target sequence
   // this works even if the true position is in revcomp space (the length check will still recognize an overextension)
   if (*seg_pos + length > meta->seq_data[ *segment_id ].start + meta->seq_data[ *segment_id ].length )
-      status = eslERANGE;
+      return eslERANGE;
 
-  if (complementarity == p7_COMPLEMENT) // now reverse orientation
-    *seg_pos    =  meta->seq_data[ *segment_id ].length - *seg_pos + 1;
-
-  return status;
+  return eslOK;
 }
 
 /*********************************************************************

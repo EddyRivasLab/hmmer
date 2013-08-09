@@ -355,11 +355,12 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_
     window_len   = window_end - window_start + 1;
 
     if (  prev_window->complementarity == curr_window->complementarity &&
-          (float)(window_len)/ESL_MIN(prev_window->length, curr_window->length) > pct_overlap ) {
+          prev_window->id == curr_window->id &&
+          (float)(window_len)/ESL_MIN(prev_window->length, curr_window->length) > pct_overlap  &&
+          curr_window->n + curr_window->length >  prev_window->n + prev_window->length  )
+    {
       //merge windows
-      if (  curr_window->n + curr_window->length >  prev_window->n + prev_window->length )
-        prev_window->length = curr_window->n + curr_window->length - prev_window->n;  //+1, -1 factored out
-
+      prev_window->length = curr_window->n + curr_window->length - prev_window->n;  //+1, -1 factored out
     } else {
       new_hit_cnt++;
       windowlist->windows[new_hit_cnt] = windowlist->windows[i];
@@ -1151,23 +1152,24 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
         ESL_ALLOC(hit->dcl, sizeof(P7_DOMAIN) );
         hit->dcl[0] = pli->ddef->dcl[d];
 
+        hit->dcl[0].ad->L = seq_len;
+
+        // compute the real positions within the sequence handed to the pipeline
         if (complementarity == p7_NOCOMPLEMENT) {
-          hit->dcl[0].ienv       += window_start - 1; // represents the real position within the sequence handed to the pipeline
-          hit->dcl[0].jenv       += window_start - 1;
-          hit->dcl[0].iali       += window_start - 1;
-          hit->dcl[0].jali       += window_start - 1;
-          hit->dcl[0].ad->sqfrom += window_start - 1;
-          hit->dcl[0].ad->sqto   += window_start - 1;
+          hit->dcl[0].ienv       += seq_start + window_start - 2;
+          hit->dcl[0].jenv       += seq_start + window_start - 2;
+          hit->dcl[0].iali       += seq_start + window_start - 2;
+          hit->dcl[0].jali       += seq_start + window_start - 2;
+          hit->dcl[0].ad->sqfrom += seq_start + window_start - 2;
+          hit->dcl[0].ad->sqto   += seq_start + window_start - 2;
         } else {
-          hit->dcl[0].ienv       = window_len - (window_start + hit->dcl[0].ienv - 1) + 1; // represents the real position within the sequence handed to the pipeline
-          hit->dcl[0].jenv       = window_len - (window_start + hit->dcl[0].jenv - 1) + 1;
-          hit->dcl[0].iali       = window_len - (window_start + hit->dcl[0].iali - 1) + 1;
-          hit->dcl[0].jali       = window_len - (window_start + hit->dcl[0].jali - 1) + 1;
-          hit->dcl[0].ad->sqfrom = window_len - (window_start + hit->dcl[0].ad->sqfrom - 1) + 1;
-          hit->dcl[0].ad->sqto   = window_len - (window_start + hit->dcl[0].ad->sqto - 1) + 1;
+          hit->dcl[0].ienv       = seq_start - (window_start + hit->dcl[0].ienv) + 2;
+          hit->dcl[0].jenv       = seq_start - (window_start + hit->dcl[0].jenv) + 2;
+          hit->dcl[0].iali       = seq_start - (window_start + hit->dcl[0].iali) + 2;
+          hit->dcl[0].jali       = seq_start - (window_start + hit->dcl[0].jali) + 2;
+          hit->dcl[0].ad->sqfrom = seq_start - (window_start + hit->dcl[0].ad->sqfrom) + 2;
+          hit->dcl[0].ad->sqto   = seq_start - (window_start + hit->dcl[0].ad->sqto) + 2;
         }
-
-
         hit->pre_score = bitscore  / eslCONST_LOG2;
         hit->pre_lnP   = esl_exp_logsurv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
@@ -1461,12 +1463,13 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
 
   ESL_DSQ          *subseq;
   FM_SEQDATA       *seqdata;
-
+  uint32_t         seq_start;
 
   P7_HMM_WINDOWLIST msv_windowlist;
   P7_HMM_WINDOWLIST vit_windowlist;
   P7_HMM_WINDOW     window;
   FM_SEQDATA        seq_data;
+
   P7_PIPELINE_LONGTARGET_OBJS *pli_tmp;
 
 
@@ -1557,13 +1560,17 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
 
       pli->pos_past_msv += window.length;
 
-      if (fmf)
+      if (fmf) {
         seq_data = fm_cfg->meta->seq_data[window.id];
+        seq_start =  seq_data.start;
+        if (window.complementarity == p7_COMPLEMENT)
+          seq_start += seq_data.length - 1;
+      }
 
-        status = p7_pli_postSSV_LongTarget(pli, om, bg, hitlist, data,
+      status = p7_pli_postSSV_LongTarget(pli, om, bg, hitlist, data,
             (fmf != NULL ? seq_data.id  : seqidx),
             window.n, window.length, subseq,
-            (fmf != NULL ? seq_data.start  : sq->start),
+            (fmf != NULL ? seq_start       : sq->start),
             (fmf != NULL ? seq_data.name   : sq->name),
             (fmf != NULL ? seq_data.source : sq->source),
             (fmf != NULL ? seq_data.acc    : sq->acc),
