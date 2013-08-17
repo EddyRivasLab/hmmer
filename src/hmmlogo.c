@@ -8,7 +8,6 @@
  */
 
 #include "hmmer.h"
-//#include "esl_alphabet.h"
 
 /*****************************************************************
  * 1. logo value functions

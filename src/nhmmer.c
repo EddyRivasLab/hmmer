@@ -500,6 +500,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     //For now, this is a separate path from the typical esl_sqfile_Open() function call
     //TODO: create esl_sqio_fmindex.c, analogous to esl_sqio_ascii.c,
 
+    if (esl_opt_IsOn(go, "--max")) {
+      p7_Fail("--max flag is incompatible with the FMINDEX target type\n");
+    }
+
     fm_configAlloc(&fm_cfg);
     fm_meta = fm_cfg->meta;
 
