@@ -807,6 +807,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].fm_cfg = fm_cfg;
           p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 
+          info[i].pli->do_alignment_score_calc = esl_opt_IsOn(go, "--aliscoresout") ;
+
           if (dbformat != eslSQFILE_FMINDEX) {
             if (  esl_opt_IsUsed(go, "--toponly") )
               info[i].pli->strand = p7_STRAND_TOPONLY;
@@ -1232,6 +1234,7 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
 
 
       if (sstatus == eslOK) {
+
           status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
           if (status != eslOK) esl_fatal("Work queue reader failed");
 
@@ -1292,8 +1295,10 @@ pipeline_thread(void *arg)
   status = esl_workqueue_WorkerUpdate(info->queue, NULL, &newBlock);
   if (status != eslOK) esl_fatal("Work queue worker failed");
 
+
   /* loop until all blocks have been processed */
   block = (ESL_SQ_BLOCK *) newBlock;
+
   while (block->count > 0)
   {
       /* Main loop: */
@@ -1323,27 +1328,6 @@ pipeline_thread(void *arg)
           p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, block->first_seqidx + i, dbsq, p7_COMPLEMENT, NULL, NULL, NULL);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
-          for (j=prev_hit_cnt; j < info->th->N ; ++j) {
-              dcl = info->th->unsrt[j].dcl;
-              // modify hit positions to account for the position of the window in the full sequence
-              /*
-              dcl->ienv = dbsq->start - dcl->ienv + 1;
-              dcl->jenv = dbsq->start - dcl->jenv + 1;
-              dcl->iali = dbsq->start - dcl->iali + 1;
-              dcl->jali = dbsq->start - dcl->jali + 1;
-              dcl->ad->sqfrom = dbsq->start - dcl->ad->sqfrom + 1;
-              dcl->ad->sqto = dbsq->start - dcl->ad->sqto + 1;
-              */
-              /*
-              dcl->ienv += dbsq->end - 1;
-              dcl->jenv += dbsq->end - 1;
-              dcl->iali += dbsq->end - 1;
-              dcl->jali += dbsq->end - 1;
-              dcl->ad->sqfrom += dbsq->end - 1;
-              dcl->ad->sqto += dbsq->end - 1;
-              */
-          }
-
           info->pli->nres += dbsq->W;
       }
 
@@ -1355,6 +1339,7 @@ pipeline_thread(void *arg)
       if (status != eslOK) esl_fatal("Work queue worker failed");
 
       block = (ESL_SQ_BLOCK *) newBlock;
+
   }
 
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);

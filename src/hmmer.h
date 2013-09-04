@@ -1162,7 +1162,9 @@ typedef struct p7_pipeline_s {
   /* Domain postprocessing                                                  */
   ESL_RANDOMNESS *r;		/* random number generator                  */
   int             do_reseeding; /* TRUE: reseed for reproducible results    */
+  int             do_alignment_score_calc;
   P7_DOMAINDEF   *ddef;		/* domain definition workflow               */
+
 
   /* Reporting threshold settings                                           */
   int     by_E;		        /* TRUE to cut per-target report off by E   */
