@@ -1,3 +1,20 @@
+ID              h102
+TITLE           Marginal hits late in target might be filtered in an nhmmer search
+AFFECTS         3.1b1
+FIXED_IN        -
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     Jim Notwell <jimnotwell@gmail.com>
+OPENED_DATE     TJW, Tue Sep 03 23:407:30 2013
+CLOSED_DATE     
+DESCRIPTION  
+  In a late stage of the nhmmer acceleration pipeline, sequence windows passing
+  the Forward filter were subjected to a significance test and filtered if 
+  the estimated E-value was above threshold. This test proved not to be 
+  conservative, with the result that some marginal hits were filtered when
+  they shouldn't have been. The test was removed, with no noticable impact
+  on speed.
+//
 ID              h101
 TITLE           hmmsearch segfaults if a DNA HMM is searched against a protein db
 AFFECTS         3.1b1 and earlier
