@@ -331,13 +331,15 @@ fm_getOriginalPosition (const FM_DATA *fms, const FM_METADATA *meta, int fm_id, 
                         uint32_t fm_pos, uint32_t *segment_id, uint32_t *seg_pos
 ) {
 
+  // if complementarity == p7_NOCOMPLEMENT, the end positions are in context of FM->T
+  // otherwise, they're in context of revcomp(FM->T).
 
   if (complementarity == p7_COMPLEMENT)  // need location in forward context:
     fm_pos = fms->N - fm_pos - 2;
 
 
   *segment_id = fm_computeSequenceOffset( fms, meta, fm_id, fm_pos);
-  *seg_pos    =  ( fm_pos - meta->seq_data[ *segment_id ].offset) + meta->seq_data[ *segment_id ].start;
+  *seg_pos    =  ( fm_pos - meta->seq_data[ *segment_id ].offset) + 1;
 
   if (complementarity == p7_COMPLEMENT) // now reverse orientation
     *seg_pos    =  meta->seq_data[ *segment_id ].length - *seg_pos + 1;

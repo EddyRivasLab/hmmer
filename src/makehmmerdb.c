@@ -621,6 +621,8 @@ main(int argc, char **argv)
               meta->seq_data[numseqs].id   = block->first_seqidx + i ;
               meta->seq_data[numseqs].start = block->list[i].start + j;
               meta->seq_data[numseqs].offset =  meta->seq_data[numseqs-1].length + ( numseqs == 0 ? 0 : meta->seq_data[numseqs-1].offset);
+
+
               if (block->list[i].name == NULL) meta->seq_data[numseqs].name[0] = '\0';
                   else  strcpy(meta->seq_data[numseqs].name, block->list[i].name );
               if (block->list[i].acc == NULL) meta->seq_data[numseqs].acc[0] = '\0';

@@ -870,10 +870,10 @@ typedef struct fm_hit_s {
 
 
 typedef struct fm_seqdata_s {
-  uint32_t id;
-  uint32_t start;
-  uint32_t length;
-  uint32_t offset;
+  uint32_t id;      //which sequence in the target database did this block come from (can be multiple blocks per sequence, e.g. if a sequence has Ns)
+  uint32_t start;   //the position in sequence {id} in the target database at which this sequence-block starts
+  uint32_t length;  //length of this sequence block
+  uint32_t offset;  //the position in the FM at which this sequence-block starts
   uint16_t name_length;
   uint16_t source_length;
   uint16_t acc_length;

@@ -272,6 +272,7 @@ FM_Recurse( int depth, int Kp, int fm_direction,
     seq[depth-1] = fm_cfg->meta->alph[c];
     seq[depth] = '\0';
 
+
     for (i=first; i<=last; i++) { // for each surviving diagonal from the previous round
 
         if (dp_pairs[i].model_direction == fm_forward)
@@ -286,8 +287,6 @@ FM_Recurse( int depth, int Kp, int fm_direction,
 
         sc = dp_pairs[i].score + next_score;
 
-  //      printf( "%-18s : (%.2f >=? %.2f)\n", seq, sc, sc_threshFM);
-
         if ( sc >= sc_threshFM ) { // this is a seed I want to extend
 
           interval_1_new.lower = interval_1->lower;
@@ -296,8 +295,6 @@ FM_Recurse( int depth, int Kp, int fm_direction,
           if (fm_direction == fm_forward) {
             if ( interval_1_new.lower >= 0 && interval_1_new.lower <= interval_1_new.upper  )  //no use extending a non-existent string
             fm_updateIntervalReverse( fmf, fm_cfg, c, &interval_1_new);
-
-//            printf( "%-18s : (%d - %d) (%.2f)   (pass F)\n", seq, interval_1_new.lower, interval_1_new.upper, sc);
 
             if ( interval_1_new.lower >= 0 && interval_1_new.lower <= interval_1_new.upper  )  //no use passing a non-existent string
               FM_getPassingDiags(fmf, fm_cfg, k, ssvdata->M, sc, depth, fm_forward,
@@ -313,9 +310,6 @@ FM_Recurse( int depth, int Kp, int fm_direction,
             if ( interval_1_new.lower >= 0 && interval_1_new.lower <= interval_1_new.upper  )  //no use extending a non-existent string
               fm_updateIntervalForward( fmb, fm_cfg, c, &interval_1_new, &interval_2_new);
 
-            //printf( "%-18s : (%d - %d) (%.2f)   (pass R) (%d, %d)\n", seq, interval_1_new.lower, interval_1_new.upper, sc, interval_2_new.lower, interval_2_new.upper);
-
-
             if ( interval_2_new.lower >= 0 && interval_2_new.lower <= interval_2_new.upper  )  //no use passing a non-existent string
               FM_getPassingDiags(fmf, fm_cfg, k, ssvdata->M, sc, depth, fm_backward,
                                  dp_pairs[i].model_direction, dp_pairs[i].complementarity,
@@ -326,10 +320,10 @@ FM_Recurse( int depth, int Kp, int fm_direction,
         } else if (  sc <= 0                                                                                        //some other path in the string enumeration tree will do the job
             || depth == fm_cfg->max_depth                                                                            //can't extend anymore, 'cause we've reached the pruning length
             || (depth == dp_pairs[i].max_score_len + fm_cfg->neg_len_limit)                                        //too many consecutive positions with a negative total score contribution (sort of like Xdrop)
-            || ((float)sc/(float)depth < fm_cfg->score_ratio_req)                                                                //score density is too low
+            || ((float)sc/(float)depth < fm_cfg->score_ratio_req)                                                  //score density is too low
             || (dp_pairs[i].max_consec_pos < fm_cfg->consec_pos_req  &&                                            //a seed is expected to have at least one run of positive-scoring matches at least length consec_pos_req;  if it hasn't,  (see Tue Nov 23 09:39:54 EST 2010)
-                   ( (depth >= fm_cfg->max_depth/2 &&  sc/depth < sc_threshFM/fm_cfg->max_depth)                              // if we're close to the end of the sequence, abort -- if that end does have sufficiently long all-positive run, I'll find it on the reverse sweep
-                   || depth == fm_cfg->max_depth-fm_cfg->consec_pos_req+1 )                                                   // if we're at least half way across the sequence, and score density is too low, abort -- if the density on the other side is high enough, I'll find it on the reverse sweep
+                   ( (depth >= 10 &&  (float)sc/(float)depth < sc_threshFM/(float)(fm_cfg->max_depth))                  // if we're at least half way across the sequence, and score density is too low, abort -- if the density on the other side is high enough, I'll find it on the reverse sweep
+                   || depth == fm_cfg->max_depth-fm_cfg->consec_pos_req+1 )                                             // if we're close to the end of the sequence, abort -- if that end does have sufficiently long all-positive run, I'll find it on the reverse sweep
                )
             || (dp_pairs[i].model_direction == fm_forward  &&
                    ( (k == ssvdata->M)                                                                                                          //can't extend anymore, 'cause we're at the end of the model, going forward
@@ -642,6 +636,7 @@ FM_window_from_diag (FM_DIAG *diag, const FM_DATA *fm, const FM_METADATA *meta, 
       diag->length  =  overext;
 
       again        = TRUE;
+      printf ("AGAIN\n");
     } else {
       p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+diag->length-1, diag->length, diag->score, diag->complementarity, meta->seq_data[seg_id].length);
     }
@@ -830,8 +825,10 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
 
   for(i=0; i<seeds.count; i++) {
     diag = seeds.diags+i;
-    if (diag->score >= sc_thresh)
+    if (diag->score >= sc_thresh) {
       FM_window_from_diag(diag, fmf, fm_cfg->meta, windowlist );
+      //printf ("wl.n = %ld  (%ld)\n", (long)(windowlist->windows[windowlist->count-1].n), (long)(windowlist->count));
+    }
   }
 
 

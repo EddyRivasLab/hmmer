@@ -93,20 +93,21 @@ scoredata_GetSSVScoreArrays(P7_OPROFILE *om, P7_PROFILE *gm, P7_SCOREDATA *data 
     for (i=1; i<om->M; i++) {
       ESL_ALLOC(data->opt_ext_fwd[i], 10 * sizeof(float));
       ESL_ALLOC(data->opt_ext_rev[i], 10 * sizeof(float));
+    }
+    for (i=1; i<om->M; i++) {
       sc_fwd = 0;
       sc_rev = 0;
       for (j=0; j<10 && i+j+1<=om->M; j++) {
         sc_fwd += max_scores[i+j+1];
         data->opt_ext_fwd[i][j] = sc_fwd;
 
-        sc_rev += max_scores[om->M-i-j];
-        data->opt_ext_rev[i][j] = sc_rev;
+        sc_rev += max_scores[om->M-i-j-1];
+        data->opt_ext_rev[om->M-i][j] = sc_rev;
       }
       for ( ; j<10; j++) { //fill in empty values
-        data->opt_ext_fwd[i][j] = data->opt_ext_fwd[i][j-1];
-        data->opt_ext_rev[i][j] = data->opt_ext_rev[i][j-1];
+        data->opt_ext_fwd[i][j]       = data->opt_ext_fwd[i][j-1];
+        data->opt_ext_rev[om->M-i][j] = data->opt_ext_rev[om->M-i][j-1];
       }
-
     }
     free(max_scores);
   }

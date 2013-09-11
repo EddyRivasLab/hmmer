@@ -105,21 +105,21 @@ static ESL_OPTIONS options[] = {
   { "--cut_nc",     eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  THRESHOPTS,      "use profile's NC noise cutoffs to set all thresholding",       6 },
   { "--cut_tc",     eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  THRESHOPTS,      "use profile's TC trusted cutoffs to set all thresholding",     6 },
   /* Control of acceleration pipeline */
-  { "--max",        eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL, "--F1,--F2,--F3", "Turn all heuristic filters off (less speed, more power)",      7 },
-  { "--F1",         eslARG_REAL,       "0.02", NULL, NULL,    NULL,  NULL, "--max",          "Stage 1 (SSV) threshold: promote hits w/ P <= F1",             7 },
-  { "--F2",         eslARG_REAL,       "3e-3", NULL, NULL,    NULL,  NULL, "--max",          "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             7 },
-  { "--F3",         eslARG_REAL,       "3e-5", NULL, NULL,    NULL,  NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
-  { "--nobias",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL, "--max",          "turn off composition bias filter",                             7 },
+  { "--max",        eslARG_NONE,        FALSE,      NULL, NULL,    NULL,  NULL, "--F1,--F2,--F3", "Turn all heuristic filters off (less speed, more power)",      7 },
+  { "--F1",         eslARG_REAL, /*set below*/NULL, NULL, NULL,    NULL,  NULL, "--max",          "Stage 1 (SSV) threshold: promote hits w/ P <= F1",             7 },
+  { "--F2",         eslARG_REAL,       "3e-3",      NULL, NULL,    NULL,  NULL, "--max",          "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             7 },
+  { "--F3",         eslARG_REAL,       "3e-5",      NULL, NULL,    NULL,  NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
+  { "--nobias",     eslARG_NONE,         NULL,      NULL, NULL,    NULL,  NULL, "--max",          "turn off composition bias filter",                             7 },
 
   /* Selecting the alphabet rather than autoguessing it */
   { "--dna",        eslARG_NONE,        FALSE, NULL, NULL,   "--rna", NULL,   NULL,          "input alignment is DNA sequence data",                         8 },
   { "--rna",        eslARG_NONE,        FALSE, NULL, NULL,   "--dna",  NULL,  NULL,          "input alignment is RNA sequence data",                         8 },
 
   /* Control of FM pruning/extension */
-  { "--fm_ssv_length",   eslARG_INT,          "70", NULL, NULL,    NULL,  NULL, NULL,          "max length used when extending seed for MSV",                9 },
+  { "--fm_ssv_length",   eslARG_INT,         "100", NULL, NULL,    NULL,  NULL, NULL,          "max length used when extending seed for MSV",                9 },
   { "--fm_max_depth",    eslARG_INT,          "16", NULL, NULL,    NULL,  NULL, NULL,          "seed length at which bit threshold must be met",             9 },
   { "--fm_max_neg_len",  eslARG_INT,           "4", NULL, NULL,    NULL,  NULL, NULL,          "maximum number consecutive negative scores in seed",         9 },
-  { "--fm_req_pos",      eslARG_INT,           "5", NULL, NULL,    NULL,  NULL, NULL,          "minimum number consecutive positive scores in seed" ,        9 },
+  { "--fm_req_pos",      eslARG_INT,           "4", NULL, NULL,    NULL,  NULL, NULL,          "minimum number consecutive positive scores in seed" ,        9 },
   { "--fm_sc_ratio",     eslARG_REAL,       "0.45", NULL, NULL,    NULL,  NULL, NULL,          "seed must maintain this bit ratio from one of two ends",     9 },
   { "--fm_max_scthresh", eslARG_REAL,       "10.5", NULL, NULL,    NULL,  NULL, NULL,          "max total bits required in seed of length fm_max_depth",     9 },
 
@@ -519,13 +519,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if ( (status = fm_alphabetCreate(fm_meta, NULL)) != eslOK)
       p7_Fail("Failed to create FM alphabet for target sequence database %s\n",      cfg->dbfile);
 
-    if (      fm_meta->alph_type == fm_DNA || fm_meta->alph_type == fm_DNA_full)
-      abc  = esl_alphabet_Create(eslDNA);
-    else if ( fm_meta->alph_type == fm_RNA || fm_meta->alph_type == fm_RNA_full)
-      abc  = esl_alphabet_Create(eslRNA);
-    else
-      abc  = esl_alphabet_Create(eslAMINO);
-
     fgetpos( fm_meta->fp, &fm_basepos);
 
   } else {
@@ -560,7 +553,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     status = eslENORESULT; // so it'll fail into the section that opens an alignment
   else
     status = p7_hmmfile_OpenE(cfg->queryfile, NULL, &hfp, errbuf);
-
 
   if      (status == eslENOTFOUND) {
     // File just doesn't exist
@@ -605,6 +597,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     }
 
     qsq  = esl_sq_CreateDigital(abc); // only need this in the case of a single sequence ... but that could come from an MSA
+
+
+    if ( (abc->type == eslDNA || abc->type == eslRNA) && !(fm_meta->alph_type == fm_DNA || fm_meta->alph_type == fm_DNA_full) )
+      p7_Fail("incompatible alphabets - the HMM is a nucleotide alphabet, but the database isn't");
+    if ( (abc->type == eslAMINO ) && !(fm_meta->alph_type == fm_AMINO ) )
+      p7_Fail("incompatible alphabets - the HMM is an amino alphabet, but the database isn't");
+
 
     builder = p7_builder_Create(NULL, abc);
     if (builder == NULL)  p7_Fail("p7_builder_Create failed");
@@ -804,6 +803,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].th  = p7_tophits_Create();
           info[i].om = p7_oprofile_Copy(om);
           info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
+
+          //set method specific --F1, if it wasn't set at command line
+          if (!esl_opt_IsOn(go, "--F1") )
+            if (dbformat == eslSQFILE_FMINDEX) info[i].pli->F1 = 0.03;
+            else                               info[i].pli->F1 = 0.02;
+
+
           info[i].fm_cfg = fm_cfg;
           p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 
@@ -836,9 +842,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 #ifdef HMMER_THREADS
       if (dbformat == eslSQFILE_FMINDEX) {
+
+        for(i=0; i<fm_cfg->meta->seq_count; i++)
+          add_id_length(id_length_list, fm_cfg->meta->seq_data[i].id, fm_cfg->meta->seq_data[i].start + fm_cfg->meta->seq_data[i].length - 1);
+
         //if (ncpus > 0)  sstatus = thread_loop(info, id_length_list, threadObj, queue, dbfp);
         //else
                         sstatus = serial_loop_FM (info, dbfp);
+
+
       } else {
         if (ncpus > 0)  sstatus = thread_loop    (info, id_length_list, threadObj, queue, dbfp, cfg->firstseq_key, cfg->n_targetseq);
         else            sstatus = serial_loop    (info, id_length_list, dbfp, cfg->firstseq_key, cfg->n_targetseq);
@@ -894,7 +906,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       /* Print the results.  */
       p7_tophits_SortBySeqidxAndAlipos(info->th);
-      if (fm_meta == NULL)
+      //if (fm_meta == NULL)
         assign_Lengths(info->th, id_length_list);
       p7_tophits_RemoveDuplicates(info->th, info->pli->use_bit_cutoffs);
 
@@ -1149,15 +1161,16 @@ serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp)
 
 
     wstatus = p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg,
-        info->th, info->pli->nseqs, NULL, -1,  &fmf, &fmb, info->fm_cfg );
+        info->th, -1, NULL, -1,  &fmf, &fmb, info->fm_cfg );
     if (wstatus != eslOK) return wstatus;
 
-    info->pli->nseqs += fmf.seq_cnt;
 
     fm_FM_destroy(&fmf, 1);
     fm_FM_destroy(&fmb, 0);
 
   }
+
+  info->pli->nseqs = meta->seq_data[meta->seq_count-1].id + 1;
 
   info->pli->nres = 2 * meta->char_count;
 
@@ -1276,12 +1289,11 @@ static void
 pipeline_thread(void *arg)
 {
   int prev_hit_cnt;
-  int i, j;
+  int i;
   int status;
   int workeridx;
   WORKER_INFO   *info;
   ESL_THREADS   *obj;
-  P7_DOMAIN *dcl;
   ESL_SQ_BLOCK  *block = NULL;
   void          *newBlock;
   

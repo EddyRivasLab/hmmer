@@ -38,12 +38,14 @@ fm_alphabetCreate (FM_METADATA *meta, uint8_t *alph_bits) {
 	} else if ( meta->alph_type ==  fm_DNA_full) {
       meta->alph_size = 15;
       if (alph_bits) *alph_bits = 4;
-	} else if ( meta->alph_type ==  fm_RNA) {
+/*
+ 	} else if ( meta->alph_type ==  fm_RNA) {
       meta->alph_size = 4;
       if (alph_bits) *alph_bits = 2;
 	} else if ( meta->alph_type ==  fm_RNA_full) {
 	    meta->alph_size = 15;
       if (alph_bits) *alph_bits = 4;
+*/
 	} else if ( meta->alph_type ==  fm_AMINO) {
 	    meta->alph_size = 26;
       if (alph_bits) *alph_bits = 5;
@@ -58,10 +60,12 @@ fm_alphabetCreate (FM_METADATA *meta, uint8_t *alph_bits) {
 		esl_memstrcpy("ACGT", meta->alph_size, meta->alph);
 	else if ( meta->alph_type ==  fm_DNA_full)
 		esl_memstrcpy("ACGTRYMKSWHBVDN", meta->alph_size, meta->alph);
+/*
 	else if ( meta->alph_type ==  fm_RNA)
     esl_memstrcpy("ACGU", meta->alph_size, meta->alph);
 	else if ( meta->alph_type ==  fm_RNA_full)
     esl_memstrcpy("ACGURYMKSWHBVDN", meta->alph_size, meta->alph);
+*/
 	else if ( meta->alph_type ==  fm_AMINO)
 		esl_memstrcpy("ACDEFGHIKLMNPQRSTVWYBJZOUX", meta->alph_size, meta->alph);
 
@@ -69,8 +73,15 @@ fm_alphabetCreate (FM_METADATA *meta, uint8_t *alph_bits) {
 	for (i=0; i<256; i++)
 	  meta->inv_alph[i] = -1;
 
-	for (i=0; i<meta->alph_size; i++)
+	for (i=0; i<meta->alph_size; i++) {
 	  meta->inv_alph[tolower(meta->alph[i])] = meta->inv_alph[toupper(meta->alph[i])] = i;
+
+	  //special case for RNA, equate U to T:
+	  if (   (meta->alph_type ==  fm_DNA || meta->alph_type ==  fm_DNA_full) && toupper(meta->alph[i]) == 'T')
+	    meta->inv_alph['u'] = meta->inv_alph['U'] = i;
+	}
+
+
 
 	return eslOK;
 

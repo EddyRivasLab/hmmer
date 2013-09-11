@@ -40,6 +40,7 @@ hmmlogo_RelativeEntropy_all (P7_HMM *hmm, P7_BG *bg, float *rel_ents, float **pr
     rel_ents[i] = 0;
     for (j=0; j<K; j++) {
       probs[i][j] = hmm->mat[i][j];
+
       if ( probs[i][j] > 0 ) {
         logodds = eslCONST_LOG2R * log(probs[i][j] / bg->f[j]);  //bits
         rel_ents[i] +=  probs[i][j] * logodds ;
@@ -48,7 +49,7 @@ hmmlogo_RelativeEntropy_all (P7_HMM *hmm, P7_BG *bg, float *rel_ents, float **pr
 
     // height of residues
     for (j=0; j<K; j++) {
-      heights[i][j] = probs[i][j] * rel_ents[i];
+      heights[i][j] = rel_ents[i] * probs[i][j];
     }
 
   }
@@ -65,25 +66,32 @@ hmmlogo_RelativeEntropy_above_bg (P7_HMM *hmm, P7_BG *bg, float *rel_ents, float
   int    i, j;
 
   float logodds;
-  float pos_scoresum;
+  float abovebg_prob_sum;
 
   for (i = 1; i <= M; i++) {
 
     // height of column, to be split among the residues; also sum of of positive scores
     rel_ents[i] = 0;
-    pos_scoresum = 0.0;
+    abovebg_prob_sum = 0.0;
     for (j=0; j<K; j++) {
       probs[i][j] = hmm->mat[i][j];
-      logodds = eslCONST_LOG2R * log(probs[i][j] / bg->f[j]);  //bits
-      rel_ents[i] += probs[i][j]==0? 0 : probs[i][j] * logodds ;
-      if (logodds > 0)
-        pos_scoresum += logodds;
+
+      if ( probs[i][j] > 0 ) {
+        logodds = eslCONST_LOG2R * log(probs[i][j] / bg->f[j]);  //bits
+        rel_ents[i] += probs[i][j] * logodds ;
+
+        if (logodds > 0)
+          abovebg_prob_sum += probs[i][j];
+      }
     }
 
     //height of residues
     for (j=0; j<K; j++) {
-      logodds = eslCONST_LOG2R * log(probs[i][j] / bg->f[j]);  //bits
-      heights[i][j] = logodds<=0 ? 0.0 : (rel_ents[i] * logodds / pos_scoresum) ;
+      heights[i][j] = 0.0;
+      if ( probs[i][j] > 0 ) {
+        logodds = eslCONST_LOG2R * log(probs[i][j] / bg->f[j]);  //bits
+        heights[i][j] = logodds<=0 ? 0.0 : (rel_ents[i] * probs[i][j] / abovebg_prob_sum) ;
+      }
     }
 
   }
@@ -148,7 +156,7 @@ hmmlogo_IndelValues (P7_HMM *hmm, float *insert_P, float *insert_expL, float *de
  * 2. hmmlogo application
  *****************************************************************/
 
-#define HMMLOGO_OPTS "--height_emission,--height_positive_score,--height_bits"
+#define HMMLOGO_OPTS "--height_relent_all,--height_relent_abovebg,--height_score"
 #define HMMLOGO_RELENT_ALL        1
 #define HMMLOGO_RELENT_ABOVEBG    2
 #define HMMLOGO_SCORE             3
@@ -244,7 +252,7 @@ main(int argc, char **argv)
     hmmlogo_RelativeEntropy_all(hmm, bg, rel_ents, probs, heights);
   } else if (mode == HMMLOGO_RELENT_ABOVEBG) {
     printf ("max expected height = %.2f\n", hmmlogo_maxHeight(bg) );
-    hmmlogo_RelativeEntropy_all(hmm, bg, rel_ents, probs, heights);
+    hmmlogo_RelativeEntropy_above_bg(hmm, bg, rel_ents, probs, heights);
   } else if (mode == HMMLOGO_SCORE) {
     hmmlogo_ScoreHeights(hmm, bg, heights );
   }
