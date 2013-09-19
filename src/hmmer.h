@@ -844,8 +844,6 @@ typedef struct p7_hmm_window_list_s {
 enum fm_alphabettypes_e {
   fm_DNA        = 0,  //acgt,  2 bit
   fm_DNA_full   = 1,  //includes ambiguity codes, 4 bit
-  fm_RNA        = 2,  //acgu,  2 bit
-  fm_RNA_full   = 3,  //includes ambiguity codes, 4 bit
   fm_AMINO      = 4,  // 5 bit
 };
 
@@ -873,6 +871,7 @@ typedef struct fm_seqdata_s {
   uint32_t id;      //which sequence in the target database did this block come from (can be multiple blocks per sequence, e.g. if a sequence has Ns)
   uint32_t start;   //the position in sequence {id} in the target database at which this sequence-block starts
   uint32_t length;  //length of this sequence block
+  uint32_t full_seq_length;  //length of the full sequence from which this block is drawn
   uint32_t offset;  //the position in the FM at which this sequence-block starts
   uint16_t name_length;
   uint16_t source_length;
@@ -898,6 +897,7 @@ typedef struct fm_metadata_s {
   uint64_t char_count; //total count of characters including those in and out of the alphabet
   char     *alph;
   char     *inv_alph;
+  int      *compl_alph;
   FILE       *fp;
   FM_SEQDATA *seq_data;
 } FM_METADATA;
@@ -923,7 +923,7 @@ typedef struct fm_dp_pair_s {
   uint16_t    pos;  // position of the diagonal in the model.
   float       score;
   float       max_score;
-  uint8_t     max_score_len; // how long was the diagonal when the maximum observed score was seen?
+  uint8_t     score_peak_len; // how long was the diagonal when the most recent peak (within fm_drop_lim of the max score) was seen?
   uint8_t     consec_pos;
   uint8_t     max_consec_pos;
   uint8_t     model_direction;
@@ -982,9 +982,10 @@ typedef struct {
 
   /*bounding cutoffs*/
   int max_depth;
-  int neg_len_limit;
-  int consec_pos_req; //6
-  float score_ratio_req; //.49
+  float drop_lim;  // 0.2 ; in seed, max drop in a run of length [fm_drop_max_len]
+  int drop_max_len; // 4 ; maximum run length with score under (max - [fm_drop_lim])
+  int consec_pos_req; //5
+  float score_ratio_req; //.45
   int ssv_length;
   float max_scthreshFM;
 

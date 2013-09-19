@@ -357,10 +357,14 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_
     if (  prev_window->complementarity == curr_window->complementarity &&
           prev_window->id == curr_window->id &&
           (float)(window_len)/ESL_MIN(prev_window->length, curr_window->length) > pct_overlap  &&
-          curr_window->n + curr_window->length >  prev_window->n + prev_window->length  )
+          curr_window->n + curr_window->length >=  prev_window->n + prev_window->length  )
     {
       //merge windows
-      prev_window->length = curr_window->n + curr_window->length - prev_window->n;  //+1, -1 factored out
+      window_start        = ESL_MIN(prev_window->n, curr_window->n);
+      window_end          = ESL_MAX(prev_window->n+prev_window->length-1, curr_window->n+curr_window->length-1);
+      prev_window->fm_n  -= (prev_window->n - window_start);
+      prev_window->n      = window_start;
+      prev_window->length = window_end - window_start + 1;
     } else {
       new_hit_cnt++;
       windowlist->windows[new_hit_cnt] = windowlist->windows[i];
@@ -1018,7 +1022,7 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
   double           P;               /* P-value of a hit */
   int              d;
   int              status;
-  int              nres;
+//  int              nres;
   ESL_DSQ          *dsq_holder;
 
   int env_len;
@@ -1493,6 +1497,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
     p7_SSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, data, bg, pli->F1, &msv_windowlist);
 
 
+
   /* convert hits to windows, merging neighboring windows, and
    */
   if ( msv_windowlist.count > 0 ) {
@@ -1514,6 +1519,12 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
       p7_hmm_ScoreDataComputeRest(om, data);
 
     p7_pli_ExtendAndMergeWindows (om, data, &msv_windowlist, 0);
+
+    //  printf("cnt= %d\n",msv_windowlist.count);
+
+    //  for (i=0; i<msv_windowlist.count; i++)
+    //    printf("n=%d, k=%d, l=%d, c=%d\n", msv_windowlist.windows[i].n, msv_windowlist.windows[i].k, msv_windowlist.windows[i].length, msv_windowlist.windows[i].complementarity);
+
 
   /* Pass each remaining window on to the remaining pipeline */
     p7_hmmwindow_init(&vit_windowlist);

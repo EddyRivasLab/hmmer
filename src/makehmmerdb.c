@@ -245,7 +245,7 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
 
 
   // Convert BWT and T to packed versions if appropriate.
-  if (meta->alph_type == fm_DNA || meta->alph_type == fm_RNA) {
+  if (meta->alph_type == fm_DNA) {
      //4 chars per byte.  Counting will be done based on quadruples 0..3; 4..7; 8..11; etc.
       for(i=0; i < N-3; i+=4)
         BWT[i/4]           = BWT[i]<<6 | BWT[i+1]<<4 | BWT[i+2]<<2 | BWT[i+3];
@@ -256,7 +256,7 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
       if (i+2 <= N-1)
         BWT[i/4]           |=  BWT[i+2]<<2;
 
-  } else if (meta->alph_type == fm_DNA_full || meta->alph_type == fm_RNA_full) {
+  } else if (meta->alph_type == fm_DNA_full ) {
     //2 chars per byte.  Counting will be done based on quadruples 0..3; 4..7; 8..11; etc.
       for(i=0; i < N-1; i+=2)
         BWT[i/2]           = BWT[i]<<4 | BWT[i+1];
@@ -270,7 +270,7 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
   if (SAsamp != NULL) {
     fm_reverseString ((char*)T, N-1);
     // Convert BWT and T to packed versions if appropriate.
-    if (meta->alph_type == fm_DNA || meta->alph_type == fm_RNA) {
+    if (meta->alph_type == fm_DNA ) {
        //4 chars per byte.  Counting will be done based on quadruples 0..3; 4..7; 8..11; etc.
       for(i=0; i < N-3; i+=4)
         Tcompressed[i/4] =  T[i]<<6 |   T[i+1]<<4 |   T[i+2]<<2 | T[i+3];
@@ -282,7 +282,7 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
       if (i+2 <= N-1)
         Tcompressed[i/4] |=   T[i+2]<<2;
 
-    } else if (meta->alph_type == fm_DNA_full || meta->alph_type == fm_RNA_full) {
+    } else if (meta->alph_type == fm_DNA_full) {
       //2 chars per byte.  Counting will be done based on quadruples 0..3; 4..7; 8..11; etc.
       for(i=0; i < N-1; i+=2)
         Tcompressed[i/2] =   T[i]<<4 |   T[i+1];
@@ -366,7 +366,7 @@ main(int argc, char **argv)
   clock_t t1, t2;
   struct tms ts1, ts2;
 
-  long i,j, c;
+  long i,j,k, c;
   int status = eslOK;
 
   int chars_per_byte;
@@ -402,6 +402,7 @@ main(int argc, char **argv)
   uint32_t seq_offset = 0;
   uint32_t overlap = 0;
   uint16_t seq_cnt;
+
 
   int compressed_bytes;
   int term_loc;
@@ -452,18 +453,12 @@ main(int argc, char **argv)
 
   if (esl_opt_IsUsed(go, "--alph")) {
     meta->alph    = esl_opt_GetString(go, "--alph") ;
-    if ( esl_strcmp(meta->alph, "dna")==0) {
+    if ( esl_strcmp(meta->alph, "dna")==0  ||  esl_strcmp(meta->alph, "rna")==0) {
       meta->alph_type = fm_DNA;
       alphatype = eslDNA;
-    } else if (esl_strcmp(meta->alph, "dna_full")==0) {
+    } else if (esl_strcmp(meta->alph, "dna_full")==0  || esl_strcmp(meta->alph, "rna_full")==0) {
       meta->alph_type = fm_DNA_full;
       alphatype = eslDNA;
-    } else if (esl_strcmp(meta->alph, "rna")==0) {
-        meta->alph_type = fm_RNA;
-        alphatype = eslRNA;
-    } else if (esl_strcmp(meta->alph, "rna_full")==0) {
-        meta->alph_type = fm_RNA_full;
-        alphatype = eslRNA;
     } else if (esl_strcmp(meta->alph, "amino")==0) {
       meta->alph_type = fm_AMINO;
       alphatype = eslAMINO;
@@ -474,12 +469,9 @@ main(int argc, char **argv)
   } else {
     esl_sqfile_GuessAlphabet(sqfp, &alphaguess);
 
-    if (alphaguess == eslDNA) {
+    if (alphaguess == eslDNA || alphaguess == eslRNA) {
       meta->alph_type = fm_DNA;
       alphatype = eslDNA;
-    } else if (alphaguess == eslRNA) {
-      meta->alph_type = fm_RNA;
-      alphatype = eslRNA;
     } else if (alphaguess == eslAMINO) {
       meta->alph_type = fm_AMINO;
       alphatype = eslAMINO;
@@ -636,6 +628,7 @@ main(int argc, char **argv)
               meta->seq_data[numseqs].start++;
             }
 
+            if (j>block->list[i].C) total_char_count++;
             continue;
           }
         } else if (meta->inv_alph[c] == -1) {
@@ -651,6 +644,26 @@ main(int argc, char **argv)
       }
       numseqs++;
     }
+
+    //spread the full sequence length of each sequence among its various segments
+    i=0;
+
+    while (i<numseqs) {
+      uint64_t len = 0;
+      len = meta->seq_data[i].length;
+      j=i+1;
+      while (j<numseqs && meta->seq_data[i].id == meta->seq_data[j].id) {
+        len += meta->seq_data[j].start +  meta->seq_data[j].length - meta->seq_data[i].start - meta->seq_data[i].length  ; // offsetting '-1's
+        j++;
+      }
+
+      for (k=i; k<j; k++)
+        meta->seq_data[k].full_seq_length = len;
+
+      i=j;
+    }
+
+
     T[block_length] = 0; // last character 0 is effectively '$' for suffix array
     block_length++;
 
@@ -701,6 +714,7 @@ main(int argc, char **argv)
     if( fwrite(&(meta->seq_data[i].id),           sizeof(meta->seq_data[i].id),          1, fp) != 1 ||
         fwrite(&(meta->seq_data[i].start),        sizeof(meta->seq_data[i].start),       1, fp) != 1 ||
         fwrite(&(meta->seq_data[i].length),       sizeof(meta->seq_data[i].length),      1, fp) != 1 ||
+        fwrite(&(meta->seq_data[i].full_seq_length),  sizeof(meta->seq_data[i].full_seq_length), 1, fp) != 1 ||
         fwrite(&(meta->seq_data[i].offset),       sizeof(meta->seq_data[i].offset),      1, fp) != 1 ||
         fwrite(&(meta->seq_data[i].name_length),  sizeof(meta->seq_data[i].name_length), 1, fp) != 1 ||
         fwrite(&(meta->seq_data[i].acc_length),   sizeof(meta->seq_data[i].acc_length), 1, fp) != 1 ||

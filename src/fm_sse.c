@@ -225,7 +225,7 @@ fm_getOccCount (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c) {
                          // Since I count from left or right, whichever is closer, this means
                          // we can support an occ_b interval of up to 4096 with guarantee of
                          // correctness.
-    if (meta->alph_type == fm_DNA || meta->alph_type == fm_RNA) {
+    if (meta->alph_type == fm_DNA ) {
 
       if (!up_b) { // count forward, adding
         for (i=1+floor(landmark/4.0) ; i+15<( (pos+1)/4);  i+=16) { // keep running until i begins a run that shouldn't all be counted
@@ -258,7 +258,7 @@ fm_getOccCount (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c) {
         }
       }
 
-    } else if ( meta->alph_type == fm_DNA_full || meta->alph_type == fm_RNA_full) {
+    } else if ( meta->alph_type == fm_DNA_full ) {
 
       if (!up_b) { // count forward, adding
         for (i=1+floor(landmark/2.0) ; i+15<( (pos+1)/2);  i+=16) { // keep running until i begins a run that shouldn't all be counted
@@ -418,7 +418,7 @@ fm_getOccCountLT (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c, uint
                          // Since I count from left or right, whichever is closer, this means
                          // we can support an occ_b interval of up to 4096 with guarantee of
                          // correctness.
-    if (meta->alph_type == fm_DNA || meta->alph_type == fm_RNA) {
+    if (meta->alph_type == fm_DNA ) {
 
       /* TODO: For 4-bit characters, it's easy to develop an alternative SSE function that will count
        *       instances <c in the same time as counting matches. I haven't yet identified a similar
@@ -490,7 +490,7 @@ fm_getOccCountLT (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c, uint
         }
       }
 
-    } else if ( meta->alph_type == fm_DNA_full || meta->alph_type == fm_RNA_full) {
+    } else if ( meta->alph_type == fm_DNA_full) {
       c_v = *(cfg->fm_chars_v + c);
 
       if (!up_b) { // count forward, adding

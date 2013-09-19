@@ -273,6 +273,9 @@ FM_Recurse( int depth, int Kp, int fm_direction,
     seq[depth] = '\0';
 
 
+//    if ( esl_strcmp("TCTTCAAGGTTCCAC", seq)==0)
+//      printf("%s\n", seq);
+
     for (i=first; i<=last; i++) { // for each surviving diagonal from the previous round
 
         if (dp_pairs[i].model_direction == fm_forward)
@@ -281,11 +284,13 @@ FM_Recurse( int depth, int Kp, int fm_direction,
           k = dp_pairs[i].pos - 1;
 
         if (dp_pairs[i].complementarity == p7_COMPLEMENT) {
-          next_score = ssvdata->ssv_scores_f[k*Kp + fm_getComplement(c,fm_cfg->meta->alph_type) ];
+          next_score = ssvdata->ssv_scores_f[k*Kp + fm_cfg->meta->compl_alph[c]];
         } else
           next_score = ssvdata->ssv_scores_f[k*Kp + c];
 
         sc = dp_pairs[i].score + next_score;
+
+
 
         if ( sc >= sc_threshFM ) { // this is a seed I want to extend
 
@@ -319,22 +324,24 @@ FM_Recurse( int depth, int Kp, int fm_direction,
 
         } else if (  sc <= 0                                                                                        //some other path in the string enumeration tree will do the job
             || depth == fm_cfg->max_depth                                                                            //can't extend anymore, 'cause we've reached the pruning length
-            || (depth == dp_pairs[i].max_score_len + fm_cfg->neg_len_limit)                                        //too many consecutive positions with a negative total score contribution (sort of like Xdrop)
-            || ((float)sc/(float)depth < fm_cfg->score_ratio_req)                                                  //score density is too low
+            || (depth == dp_pairs[i].score_peak_len + fm_cfg->drop_max_len)                                        //too many consecutive positions with a negative total score contribution (sort of like Xdrop)
+            || (depth >4 && (float)sc/(float)depth < fm_cfg->score_ratio_req)                                      //score density is too low (don't bother checking in the first couple slots
             || (dp_pairs[i].max_consec_pos < fm_cfg->consec_pos_req  &&                                            //a seed is expected to have at least one run of positive-scoring matches at least length consec_pos_req;  if it hasn't,  (see Tue Nov 23 09:39:54 EST 2010)
                    ( (depth >= 10 &&  (float)sc/(float)depth < sc_threshFM/(float)(fm_cfg->max_depth))                  // if we're at least half way across the sequence, and score density is too low, abort -- if the density on the other side is high enough, I'll find it on the reverse sweep
                    || depth == fm_cfg->max_depth-fm_cfg->consec_pos_req+1 )                                             // if we're close to the end of the sequence, abort -- if that end does have sufficiently long all-positive run, I'll find it on the reverse sweep
                )
             || (dp_pairs[i].model_direction == fm_forward  &&
                    ( (k == ssvdata->M)                                                                                                          //can't extend anymore, 'cause we're at the end of the model, going forward
-                  || (depth > (fm_cfg->max_depth - 10) &&  sc + ssvdata->opt_ext_fwd[k][fm_cfg->max_depth-depth-1] < sc_threshFM)   //can't hit threshold, even with best possible forward extension up to length ssv_req
+                  || ( (depth > (fm_cfg->max_depth - 10)) &&  sc + ssvdata->opt_ext_fwd[k][fm_cfg->max_depth-depth-1] < sc_threshFM)   //can't hit threshold, even with best possible forward extension up to length ssv_req
                   ))
             || (dp_pairs[i].model_direction == fm_backward &&
                    ( (k == 1)                                                                                                          //can't extend anymore, 'cause we're at the beginning of the model, going backwards
-                  || (depth > (fm_cfg->max_depth - 10) &&  sc + ssvdata->opt_ext_rev[k][fm_cfg->max_depth-depth-1] < sc_threshFM )  //can't hit threshold, even with best possible extension up to length ssv_req
+                  || ( (depth > (fm_cfg->max_depth - 10)) &&  sc + ssvdata->opt_ext_rev[k][fm_cfg->max_depth-depth-1] < sc_threshFM )  //can't hit threshold, even with best possible extension up to length ssv_req
                   ))
          )
         {
+
+
 
           //do nothing - it's been pruned
 
@@ -349,10 +356,13 @@ FM_Recurse( int depth, int Kp, int fm_direction,
 
             if (sc > dp_pairs[i].max_score) {
               dp_pairs[dppos].max_score = sc;
-              dp_pairs[dppos].max_score_len = depth;
+              dp_pairs[dppos].score_peak_len = depth;
             } else {
               dp_pairs[dppos].max_score = dp_pairs[i].max_score;
-              dp_pairs[dppos].max_score_len = dp_pairs[i].max_score_len;
+              if (sc >= dp_pairs[i].max_score - fm_cfg->drop_lim)
+                dp_pairs[dppos].score_peak_len = depth; // close enough to call it a new peak
+              else
+                dp_pairs[dppos].score_peak_len = dp_pairs[i].score_peak_len;
             }
 
             dp_pairs[dppos].consec_pos =  (next_score > 0 ? dp_pairs[i].consec_pos + 1 : 0);
@@ -492,7 +502,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
           dp_pairs_fwd[fwd_cnt].pos =             k;
           dp_pairs_fwd[fwd_cnt].score =           sc;
           dp_pairs_fwd[fwd_cnt].max_score =       sc;
-          dp_pairs_fwd[fwd_cnt].max_score_len =   1;
+          dp_pairs_fwd[fwd_cnt].score_peak_len =   1;
           dp_pairs_fwd[fwd_cnt].consec_pos =      1;
           dp_pairs_fwd[fwd_cnt].max_consec_pos =  1;
           dp_pairs_fwd[fwd_cnt].complementarity = p7_NOCOMPLEMENT;
@@ -507,7 +517,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
           dp_pairs_rev[rev_cnt].pos =             k;
           dp_pairs_rev[rev_cnt].score =           sc;
           dp_pairs_rev[rev_cnt].max_score =       sc;
-          dp_pairs_rev[rev_cnt].max_score_len =   1;
+          dp_pairs_rev[rev_cnt].score_peak_len =   1;
           dp_pairs_rev[rev_cnt].consec_pos =      1;
           dp_pairs_rev[rev_cnt].max_consec_pos =  1;
           dp_pairs_rev[rev_cnt].complementarity = p7_NOCOMPLEMENT;
@@ -519,7 +529,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
 
 
       // Now do the reverse complement
-      sc = ssvdata->ssv_scores_f[k*Kp + fm_getComplement(i, fm_cfg->meta->alph_type)];
+      sc = ssvdata->ssv_scores_f[k*Kp + fm_cfg->meta->compl_alph[i]];
       if (sc>0) { // we'll extend any positive-scoring diagonal
         /* rev on model, fwd on FM (really, reverse on FM, but the FM is on a reversed string, so its fwd*/
 
@@ -527,7 +537,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
           dp_pairs_fwd[fwd_cnt].pos =             k;
           dp_pairs_fwd[fwd_cnt].score =           sc;
           dp_pairs_fwd[fwd_cnt].max_score =       sc;
-          dp_pairs_fwd[fwd_cnt].max_score_len =   1;
+          dp_pairs_fwd[fwd_cnt].score_peak_len =   1;
           dp_pairs_fwd[fwd_cnt].consec_pos =      1;
           dp_pairs_fwd[fwd_cnt].max_consec_pos =  1;
           dp_pairs_fwd[fwd_cnt].complementarity = p7_COMPLEMENT;
@@ -542,7 +552,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
           dp_pairs_rev[rev_cnt].pos =             k;
           dp_pairs_rev[rev_cnt].score =           sc;
           dp_pairs_rev[rev_cnt].max_score =       sc;
-          dp_pairs_rev[rev_cnt].max_score_len =   1;
+          dp_pairs_rev[rev_cnt].score_peak_len =   1;
           dp_pairs_rev[rev_cnt].consec_pos =      1;
           dp_pairs_rev[rev_cnt].max_consec_pos =  1;
           dp_pairs_rev[rev_cnt].complementarity = p7_COMPLEMENT;
@@ -627,7 +637,7 @@ FM_window_from_diag (FM_DIAG *diag, const FM_DATA *fm, const FM_METADATA *meta, 
 
     status = fm_getOriginalPosition (fm, meta, 0, diag->length, diag->complementarity, diag->n, &seg_id, &seg_pos);
     if (status == eslERANGE) {
-      int overext = (seg_pos + diag->length - 1) - (meta->seq_data[seg_id].length);
+      int overext = (seg_pos + diag->length - 1) - (meta->seq_data[seg_id].full_seq_length);
       int use_length = diag->length - overext;
 
       p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+use_length-1, use_length, diag->score, diag->complementarity, meta->seq_data[seg_id].length);
@@ -636,9 +646,8 @@ FM_window_from_diag (FM_DIAG *diag, const FM_DATA *fm, const FM_METADATA *meta, 
       diag->length  =  overext;
 
       again        = TRUE;
-      printf ("AGAIN\n");
     } else {
-      p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+diag->length-1, diag->length, diag->score, diag->complementarity, meta->seq_data[seg_id].length);
+      p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+diag->length-1, diag->length, diag->score, diag->complementarity, meta->seq_data[seg_id].full_seq_length);
     }
   }
 
@@ -683,6 +692,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const P7_SCOREDATA *ssvdata, FM_
   model_end        = ESL_MIN( ssvdata->M, diag->k + ESL_MAX(cfg->ssv_length, diag->length) - 1 );
   target_start     = diag->n - (diag->k - model_start);
   target_end       = diag->n + (model_end - diag->k);
+
   if (target_start < 0) {
     model_start -= target_start;
     target_start = 0;
@@ -827,7 +837,6 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
     diag = seeds.diags+i;
     if (diag->score >= sc_thresh) {
       FM_window_from_diag(diag, fmf, fm_cfg->meta, windowlist );
-      //printf ("wl.n = %ld  (%ld)\n", (long)(windowlist->windows[windowlist->count-1].n), (long)(windowlist->count));
     }
   }
 

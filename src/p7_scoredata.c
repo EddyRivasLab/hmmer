@@ -75,7 +75,6 @@ scoredata_GetSSVScoreArrays(P7_OPROFILE *om, P7_PROFILE *gm, P7_SCOREDATA *data 
     ESL_ALLOC(data->ssv_scores_f, (om->M + 1) * K * sizeof(float));
     ESL_ALLOC(max_scores, (om->M + 1) * sizeof(float));
 
-
     for (i = 1; i <= om->M; i++) {
       max_scores[i] = 0;
       for (j=0; j<K; j++) {
@@ -101,8 +100,9 @@ scoredata_GetSSVScoreArrays(P7_OPROFILE *om, P7_PROFILE *gm, P7_SCOREDATA *data 
         sc_fwd += max_scores[i+j+1];
         data->opt_ext_fwd[i][j] = sc_fwd;
 
-        sc_rev += max_scores[om->M-i-j-1];
+        sc_rev += max_scores[om->M-i-j];
         data->opt_ext_rev[om->M-i][j] = sc_rev;
+
       }
       for ( ; j<10; j++) { //fill in empty values
         data->opt_ext_fwd[i][j]       = data->opt_ext_fwd[i][j-1];
@@ -111,7 +111,6 @@ scoredata_GetSSVScoreArrays(P7_OPROFILE *om, P7_PROFILE *gm, P7_SCOREDATA *data 
     }
     free(max_scores);
   }
-
   return eslOK;
 
 ERROR:

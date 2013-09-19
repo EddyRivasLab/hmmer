@@ -203,7 +203,7 @@ fm_getChar(uint8_t alph_type, int j, const uint8_t *B )
 {
   uint8_t c = -1;
 
-  if (alph_type == fm_DNA || alph_type == fm_RNA) {
+  if (alph_type == fm_DNA /* || alph_type == fm_RNA */) {
     /*
      *  B[j/4] is the byte of B in which j is found
      *
@@ -213,7 +213,7 @@ fm_getChar(uint8_t alph_type, int j, const uint8_t *B )
      *  then masking to keep the final two bits
      */
     c = (B[j/4] >> ( 0x6 - ((j&0x3)*2) ) & 0x3);
-  } else if (alph_type == fm_DNA_full || alph_type == fm_RNA_full) {
+  } else if (alph_type == fm_DNA_full /* || alph_type == fm_RNA_full */) {
     c = (B[j/2] >> (((j&0x1)^0x1)*4) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
   } else { // amino
     c = B[j];
@@ -248,7 +248,7 @@ fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, int first, int l
   esl_sq_GrowTo(sq, length);
   sq->n = length;
 
-  if (meta->alph_type == fm_DNA || meta->alph_type == fm_RNA) {
+  if (meta->alph_type == fm_DNA ) {
     /*
      *  B[j>>2] is the byte of B in which j is found (j/4)
      *
@@ -256,12 +256,26 @@ fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, int first, int l
      *  The char bits are the two starting at position 2*j'.
      *  Without branching, grab them by shifting B[j/4] right 6-2*j' bits,
      *  then masking to keep the final two bits
+     *
+     *  Need to account for the fact that in the DNA alphabet without ambiguity codes,
+     *  makehmmerdb skips ambiguity codes. Need to stick an N back in place
      */
-    for (i = first; i<= first+length-1; i++) {
-      sq->dsq[i-first+1] = (fm->T[i/4] >> ( 0x6 - ((i&0x3)*2) ) & 0x3);
+    int ambig_added = 0;
+    int segment_id = fm_computeSequenceOffset( fm, meta, 0, first);
+    for (i = first; i+ambig_added <= first+length-1; i++) {
+      if ( (segment_id < meta->seq_count - 1 )  &&
+           (i==(meta->seq_data[segment_id].start + meta->seq_data[segment_id].length -1) )
+         ) {
+        segment_id++;
+        while (i+ambig_added+1 < meta->seq_data[segment_id].start) {
+          sq->dsq[i+ambig_added-first+1] = sq->abc->Kp-3; //'N'
+          ambig_added++;
+        }
+      }
+      sq->dsq[i+ambig_added-first+1] = (fm->T[i/4] >> ( 0x6 - ((i&0x3)*2) ) & 0x3);
     }
     sq->dsq[length+1] = eslDSQ_SENTINEL;
-  } else if (meta->alph_type == fm_DNA_full || meta->alph_type == fm_RNA_full ) {
+  } else if (meta->alph_type == fm_DNA_full) {
     for (i = first; i<= first+length-1; i++) {
       c = (fm->T[i/2] >> (((i&0x1)^0x1)*4) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
       sq->dsq[i-first+1] = c + (c < 4 ? 0 : 1); //increment by one for ambiguity codes
@@ -347,7 +361,7 @@ fm_getOriginalPosition (const FM_DATA *fms, const FM_METADATA *meta, int fm_id, 
 
   //verify that the hit doesn't extend beyond the bounds of the target sequence
   // this works even if the true position is in revcomp space (the length check will still recognize an overextension)
-  if (*seg_pos + length > meta->seq_data[ *segment_id ].start + meta->seq_data[ *segment_id ].length )
+  if (*seg_pos + length > /* meta->seq_data[ *segment_id ].start + */ meta->seq_data[ *segment_id ].full_seq_length )
       return eslERANGE;
 
   return eslOK;
@@ -362,7 +376,8 @@ fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go ) {
 
   cfg->ssv_length      = (go ? esl_opt_GetInteger(go, "--fm_ssv_length") : -1);
   cfg->max_depth       = (go ? esl_opt_GetInteger(go, "--fm_max_depth") :  -1);
-  cfg->neg_len_limit   = (go ? esl_opt_GetInteger(go, "--fm_max_neg_len") : -1);
+  cfg->drop_lim        = (go ? esl_opt_GetReal(go, "--fm_drop_lim") : -1.0);
+  cfg->drop_max_len    = (go ? esl_opt_GetInteger(go, "--fm_drop_max_len") : -1);
   cfg->consec_pos_req  = (go ? esl_opt_GetInteger(go, "--fm_req_pos") : -1);
   cfg->score_ratio_req = (go ? esl_opt_GetReal(go, "--fm_sc_ratio") : -1.0);
   cfg->max_scthreshFM  = (go ? esl_opt_GetReal(go, "--fm_max_scthresh") : -1.0);
@@ -523,6 +538,7 @@ fm_readFMmeta( FM_METADATA *meta)
     if( fread(&(meta->seq_data[i].id),           sizeof(meta->seq_data[i].id),           1, meta->fp) != 1 ||
         fread(&(meta->seq_data[i].start),        sizeof(meta->seq_data[i].start),        1, meta->fp) != 1 ||
         fread(&(meta->seq_data[i].length),       sizeof(meta->seq_data[i].length),       1, meta->fp) != 1 ||
+        fread(&(meta->seq_data[i].full_seq_length), sizeof(meta->seq_data[i].full_seq_length), 1, meta->fp) != 1 ||
         fread(&(meta->seq_data[i].offset),       sizeof(meta->seq_data[i].offset),       1, meta->fp) != 1 ||
         fread(&(meta->seq_data[i].name_length),  sizeof(meta->seq_data[i].name_length),  1, meta->fp) != 1 ||
         fread(&(meta->seq_data[i].acc_length),   sizeof(meta->seq_data[i].acc_length),   1, meta->fp) != 1 ||
@@ -614,7 +630,7 @@ fm_configDestroy(FM_CFG *cfg ) {
 int
 fm_metaDestroy(FM_METADATA *meta ) {
   int i;
-  if (meta) {
+  if (meta != NULL) {
     for (i=0; i<meta->seq_count; i++) {
       if(meta->seq_data[i].name)   free(meta->seq_data[i].name);
       if(meta->seq_data[i].acc)    free(meta->seq_data[i].acc);

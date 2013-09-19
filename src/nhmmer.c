@@ -48,6 +48,13 @@ typedef struct {
 } WORKER_INFO;
 
 typedef struct {
+  FM_DATA  *fmf;
+  FM_DATA  *fmb;
+  int      active;  //TRUE is worker is supposed to work on the contents, FALSE otherwise
+} FM_THREAD_INFO;
+
+
+typedef struct {
   int    id;         /* internal sequence ID  */
   int    length;     /* length of sequence */
 } ID_LENGTH;
@@ -116,10 +123,11 @@ static ESL_OPTIONS options[] = {
   { "--rna",        eslARG_NONE,        FALSE, NULL, NULL,   "--dna",  NULL,  NULL,          "input alignment is RNA sequence data",                         8 },
 
   /* Control of FM pruning/extension */
-  { "--fm_ssv_length",   eslARG_INT,         "100", NULL, NULL,    NULL,  NULL, NULL,          "max length used when extending seed for MSV",                9 },
+  { "--fm_ssv_length",   eslARG_INT,         "70", NULL, NULL,    NULL,  NULL, NULL,          "max length used when extending seed for MSV",                 9 },
   { "--fm_max_depth",    eslARG_INT,          "16", NULL, NULL,    NULL,  NULL, NULL,          "seed length at which bit threshold must be met",             9 },
-  { "--fm_max_neg_len",  eslARG_INT,           "4", NULL, NULL,    NULL,  NULL, NULL,          "maximum number consecutive negative scores in seed",         9 },
-  { "--fm_req_pos",      eslARG_INT,           "4", NULL, NULL,    NULL,  NULL, NULL,          "minimum number consecutive positive scores in seed" ,        9 },
+  { "--fm_drop_lim",     eslARG_REAL,         "0.2", NULL, NULL,   NULL,  NULL, NULL,          "in seed, max drop in a run of length [fm_drop_max_len]",     9 },
+  { "--fm_drop_max_len",  eslARG_INT,          "4", NULL, NULL,    NULL,  NULL, NULL,          "maximum run length with score under (max - [fm_drop_lim])",  9 },
+  { "--fm_req_pos",      eslARG_INT,           "5", NULL, NULL,    NULL,  NULL, NULL,          "minimum number consecutive positive scores in seed" ,        9 },
   { "--fm_sc_ratio",     eslARG_REAL,       "0.45", NULL, NULL,    NULL,  NULL, NULL,          "seed must maintain this bit ratio from one of two ends",     9 },
   { "--fm_max_scthresh", eslARG_REAL,       "10.5", NULL, NULL,    NULL,  NULL, NULL,          "max total bits required in seed of length fm_max_depth",     9 },
 
@@ -205,6 +213,10 @@ static int  serial_loop_FM (WORKER_INFO *info, ESL_SQFILE *dbfp);
 
 static int  thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs);
 static void pipeline_thread(void *arg);
+static int  thread_loop_FM(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
+static void pipeline_thread_FM(void *arg);
+
+
 #endif /*HMMER_THREADS*/
 
 
@@ -250,8 +262,8 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_quer
 //      if (puts("\nOptions for restricting search to a range of target database sequences:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
 //      esl_opt_DisplayHelp(stdout, go, 8, 2, 100);
 
-//      if (puts("\nOptions controlling trimming thresholds:")         < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-//      esl_opt_DisplayHelp(stdout, go, 9, 2, 100);
+      if (puts("\nOptions controlling FM-index pruning and extension:")         < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+      esl_opt_DisplayHelp(stdout, go, 9, 2, 100);
 
       if (puts("\nOther expert options:")                                    < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 12, 2, 100);
@@ -469,6 +481,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   WORKER_INFO     *info     = NULL;
 #ifdef HMMER_THREADS
   ESL_SQ_BLOCK    *block    = NULL;
+  FM_THREAD_INFO  *fminfo   = NULL;
   ESL_THREADS     *threadObj= NULL;
   ESL_WORK_QUEUE  *queue    = NULL;
 #endif
@@ -497,6 +510,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 
   if (dbformat == eslSQFILE_FMINDEX) {
+
     //For now, this is a separate path from the typical esl_sqfile_Open() function call
     //TODO: create esl_sqio_fmindex.c, analogous to esl_sqio_ascii.c,
 
@@ -648,7 +662,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
   if (ncpus > 0) {
-      threadObj = esl_threads_Create(&pipeline_thread);
+      if (dbformat == eslSQFILE_FMINDEX)  threadObj = esl_threads_Create(&pipeline_thread_FM);
+      else                                threadObj = esl_threads_Create(&pipeline_thread);
+
       queue = esl_workqueue_Create(ncpus * 2);
   }
 #endif
@@ -681,11 +697,24 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 #ifdef HMMER_THREADS
       for (i = 0; i < ncpus * 2; ++i) {
+        if (dbformat == eslSQFILE_FMINDEX) {
+          ESL_ALLOC(fminfo, sizeof(FM_THREAD_INFO));
+          if (fminfo == NULL)           esl_fatal("Failed to allocate FM thread info");
+
+          ESL_ALLOC(fminfo->fmf, sizeof(FM_DATA));
+          ESL_ALLOC(fminfo->fmb, sizeof(FM_DATA));
+          if (fminfo->fmf == NULL || fminfo->fmb == NULL)           esl_fatal("Failed to allocate FM thread info");
+
+          status = esl_workqueue_Init(queue, fminfo);
+          if (status != eslOK)          esl_fatal("Failed to add FM info to work queue");
+
+        } else {
           block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, abc);
           if (block == NULL)           esl_fatal("Failed to allocate sequence block");
 
           status = esl_workqueue_Init(queue, block);
           if (status != eslOK)          esl_fatal("Failed to add block to work queue");
+        }
       }
 #endif
   }
@@ -805,10 +834,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
 
           //set method specific --F1, if it wasn't set at command line
-          if (!esl_opt_IsOn(go, "--F1") )
+          if (!esl_opt_IsOn(go, "--F1") ) {
             if (dbformat == eslSQFILE_FMINDEX) info[i].pli->F1 = 0.03;
             else                               info[i].pli->F1 = 0.02;
-
+          }
 
           info[i].fm_cfg = fm_cfg;
           p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
@@ -832,7 +861,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].scoredata = p7_hmm_ScoreDataClone(scoredata, om->abc->Kp);
 
 #ifdef HMMER_THREADS
-          if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
+          if (ncpus > 0)
+            esl_threads_AddThread(threadObj, &info[i]);
 #endif
       }
 
@@ -846,9 +876,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         for(i=0; i<fm_cfg->meta->seq_count; i++)
           add_id_length(id_length_list, fm_cfg->meta->seq_data[i].id, fm_cfg->meta->seq_data[i].start + fm_cfg->meta->seq_data[i].length - 1);
 
-        //if (ncpus > 0)  sstatus = thread_loop(info, id_length_list, threadObj, queue, dbfp);
-        //else
-                        sstatus = serial_loop_FM (info, dbfp);
+        if (ncpus > 0)  sstatus = thread_loop_FM (info, threadObj, queue, dbfp);
+        else            sstatus = serial_loop_FM (info, dbfp);
 
 
       } else {
@@ -1006,8 +1035,18 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #ifdef HMMER_THREADS
   if (ncpus > 0) {
       esl_workqueue_Reset(queue);
-      while (esl_workqueue_Remove(queue, (void **) &block) == eslOK) {
+      if (dbformat == eslSQFILE_FMINDEX) {
+        while (esl_workqueue_Remove(queue, (void **) &fminfo) == eslOK) {
+          if (fminfo) {
+            if (fminfo->fmf) free(fminfo->fmf);
+            if (fminfo->fmb) free(fminfo->fmb);
+            free(fminfo);
+          }
+        }
+      } else {
+        while (esl_workqueue_Remove(queue, (void **) &block) == eslOK) {
           esl_sq_DestroyBlock(block);
+        }
       }
       esl_workqueue_Destroy(queue);
       esl_threads_Destroy(threadObj);
@@ -1030,7 +1069,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   esl_stopwatch_Destroy(w);
 
   if (dbformat == eslSQFILE_FMINDEX) {
-    fm_configDestroy(fm_cfg);
+    fm_configDestroy(fm_cfg); // will cascade to destroy meta and alphabet, too
   }
 
 
@@ -1360,6 +1399,118 @@ pipeline_thread(void *arg)
   esl_threads_Finished(obj, workeridx);
   return;
 }
+
+
+
+static int
+thread_loop_FM(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
+{
+
+  int      status  = eslOK;
+  int i;
+
+  FM_METADATA *meta = info->fm_cfg->meta;
+  FM_THREAD_INFO *fminfo    = NULL;
+  void           *newFMinfo = NULL;
+
+  esl_workqueue_Reset(queue);
+  esl_threads_WaitForStart(obj);
+
+  status = esl_workqueue_ReaderUpdate(queue, NULL, &newFMinfo);
+  if (status != eslOK) esl_fatal("Work queue reader failed");
+
+  /* Main loop: */
+  for ( i=0; i<info->fm_cfg->meta->block_count; i++ ) {
+
+    fminfo = (FM_THREAD_INFO *) newFMinfo;
+
+    status = fm_FM_read( fminfo->fmf, meta, TRUE );
+    if (status != eslOK) return status;
+    status = fm_FM_read( fminfo->fmb, meta, FALSE );
+    if (status != eslOK) return status;
+
+    fminfo->fmb->SA = fminfo->fmf->SA;
+    fminfo->fmb->T  = fminfo->fmf->T;
+    fminfo->active  = TRUE;
+
+    status = esl_workqueue_ReaderUpdate(queue, fminfo, &newFMinfo);
+    if (status != eslOK) esl_fatal("Work queue reader failed");
+
+  }
+
+  for (i=0; i<esl_threads_GetWorkerCount(obj)-1; i++) {
+    fminfo = (FM_THREAD_INFO *) newFMinfo;
+    fminfo->active = FALSE;
+    esl_workqueue_ReaderUpdate(queue, fminfo, &newFMinfo);
+  }
+  fminfo = (FM_THREAD_INFO *) newFMinfo;
+  fminfo->active = FALSE;
+  esl_workqueue_ReaderUpdate(queue, fminfo, NULL);
+
+  esl_threads_WaitForFinish(obj);
+  esl_workqueue_Complete(queue);
+
+  return status;
+}
+
+
+static void
+pipeline_thread_FM(void *arg)
+{
+  int status;
+  int workeridx;
+  WORKER_INFO    *info;
+  ESL_THREADS    *obj;
+  FM_METADATA    *meta =      NULL;
+  FM_THREAD_INFO *fminfo    = NULL;
+  void           *newFMinfo = NULL;
+
+
+  impl_ThreadInit();
+
+  obj = (ESL_THREADS *) arg;
+  esl_threads_Started(obj, &workeridx);
+
+  info = (WORKER_INFO *) esl_threads_GetData(obj, workeridx);
+  meta = info->fm_cfg->meta;
+
+
+  status = esl_workqueue_WorkerUpdate(info->queue, NULL, &newFMinfo);
+  if (status != eslOK) esl_fatal("Work queue worker failed");
+
+  /* loop until all blocks have been processed */
+  fminfo = (FM_THREAD_INFO *) newFMinfo;
+
+
+  while (fminfo->active)
+  {
+
+      status = p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg,
+          info->th, -1, NULL, -1,  fminfo->fmf, fminfo->fmb, info->fm_cfg );
+      if (status != eslOK) esl_fatal ("Work queue worker failed");
+
+      fm_FM_destroy(fminfo->fmf, 1);
+      fm_FM_destroy(fminfo->fmb, 0);
+
+      info->pli->nseqs = meta->seq_data[meta->seq_count-1].id + 1;
+
+      info->pli->nres = 2 * meta->char_count;
+
+      status = esl_workqueue_WorkerUpdate(info->queue, fminfo, &newFMinfo);
+      if (status != eslOK) esl_fatal("Work queue worker failed");
+      fminfo = (FM_THREAD_INFO *) newFMinfo;
+
+  }
+
+  status = esl_workqueue_WorkerUpdate(info->queue, fminfo, NULL);
+  if (status != eslOK) esl_fatal("Work queue worker failed");
+
+  esl_threads_Finished(obj, workeridx);
+  return;
+}
+
+
+
 #endif   /* HMMER_THREADS */
 
 

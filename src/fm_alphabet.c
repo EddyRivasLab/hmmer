@@ -28,7 +28,6 @@
 int
 fm_alphabetCreate (FM_METADATA *meta, uint8_t *alph_bits) {
 
-
 	int i = 0;
 	int status;
 
@@ -38,14 +37,6 @@ fm_alphabetCreate (FM_METADATA *meta, uint8_t *alph_bits) {
 	} else if ( meta->alph_type ==  fm_DNA_full) {
       meta->alph_size = 15;
       if (alph_bits) *alph_bits = 4;
-/*
- 	} else if ( meta->alph_type ==  fm_RNA) {
-      meta->alph_size = 4;
-      if (alph_bits) *alph_bits = 2;
-	} else if ( meta->alph_type ==  fm_RNA_full) {
-	    meta->alph_size = 15;
-      if (alph_bits) *alph_bits = 4;
-*/
 	} else if ( meta->alph_type ==  fm_AMINO) {
 	    meta->alph_size = 26;
       if (alph_bits) *alph_bits = 5;
@@ -56,19 +47,35 @@ fm_alphabetCreate (FM_METADATA *meta, uint8_t *alph_bits) {
 	ESL_ALLOC(meta->alph, (1+meta->alph_size)*sizeof(char));
 	ESL_ALLOC(meta->inv_alph, 256*sizeof(char));
 
-	if ( meta->alph_type ==  fm_DNA)
-		esl_memstrcpy("ACGT", meta->alph_size, meta->alph);
-	else if ( meta->alph_type ==  fm_DNA_full)
-		esl_memstrcpy("ACGTRYMKSWHBVDN", meta->alph_size, meta->alph);
-/*
-	else if ( meta->alph_type ==  fm_RNA)
-    esl_memstrcpy("ACGU", meta->alph_size, meta->alph);
-	else if ( meta->alph_type ==  fm_RNA_full)
-    esl_memstrcpy("ACGURYMKSWHBVDN", meta->alph_size, meta->alph);
-*/
-	else if ( meta->alph_type ==  fm_AMINO)
-		esl_memstrcpy("ACDEFGHIKLMNPQRSTVWYBJZOUX", meta->alph_size, meta->alph);
+	if ( meta->alph_type ==  fm_DNA || meta->alph_type ==  fm_DNA_full)
+	  ESL_ALLOC(meta->compl_alph, (1+meta->alph_size)*sizeof(int));
 
+
+
+	if ( meta->alph_type ==  fm_DNA) {
+		esl_memstrcpy("ACGT", 4, meta->alph);
+		for (i=0; i<4; i++)
+		  meta->compl_alph[i] = 3-i;
+	} else if ( meta->alph_type ==  fm_DNA_full) {
+		esl_memstrcpy("ACGTRYMKSWHBVDN", 15, meta->alph);
+	  meta->compl_alph[0] = 3;    /* A->T */
+		meta->compl_alph[1] = 2;    /* C->G */
+	  meta->compl_alph[2] = 1;    /* G->C */
+	  meta->compl_alph[3] = 0;    /* T->A */
+	  meta->compl_alph[4] = 5;    /* R->Y */
+	  meta->compl_alph[5] = 4;    /* Y->R */
+	  meta->compl_alph[6] = 7;    /* M->K */
+	  meta->compl_alph[7] = 6;    /* K->M */
+	  meta->compl_alph[8] = 8;    /* S  S */
+	  meta->compl_alph[9] = 9;    /* W  W */
+	  meta->compl_alph[10]= 13;   /* H->D */
+	  meta->compl_alph[11]= 12;   /* B->V */
+	  meta->compl_alph[12]= 11;   /* V->B */
+	  meta->compl_alph[13]= 10;   /* D->H */
+	  meta->compl_alph[14]= 14;   /* N  N */
+	} else if ( meta->alph_type ==  fm_AMINO) {
+		esl_memstrcpy("ACDEFGHIKLMNPQRSTVWYBJZOUX", meta->alph_size, meta->alph);
+	}
 
 	for (i=0; i<256; i++)
 	  meta->inv_alph[i] = -1;
@@ -102,8 +109,9 @@ ERROR:
 int
 fm_alphabetDestroy (FM_METADATA *meta) {
   if (meta != NULL){
-    if (meta->alph != NULL)     free (meta->alph);
-    if (meta->inv_alph != NULL) free (meta->inv_alph);
+    if (meta->alph != NULL)       free (meta->alph);
+    if (meta->inv_alph != NULL)   free (meta->inv_alph);
+    if (meta->compl_alph != NULL) free (meta->compl_alph);
   }
   return eslOK;
 }
@@ -144,12 +152,10 @@ fm_reverseString (char* str, int N)
 int
 fm_getComplement (char c, uint8_t alph_type)
 {
-    if ( alph_type ==  fm_DNA ||  alph_type ==  fm_RNA) {
+    if ( alph_type ==  fm_DNA ) {
         return 3-c;
     } else if ( alph_type ==  fm_DNA_full) {
         esl_fatal("complement for DNA_full not yet implemented\n");
-    } else if ( alph_type ==  fm_RNA_full) {
-        esl_fatal("complement for RNA_full not yet implemented\n");
     } else if ( alph_type ==  fm_AMINO) {
         esl_fatal("complement for amino acids is undefined\n");
     } else {
