@@ -93,7 +93,6 @@ hmmlogo_RelativeEntropy_above_bg (P7_HMM *hmm, P7_BG *bg, float *rel_ents, float
         heights[i][j] = logodds<=0 ? 0.0 : (rel_ents[i] * probs[i][j] / abovebg_prob_sum) ;
       }
     }
-
   }
   return eslOK;
 }
@@ -126,23 +125,25 @@ hmmlogo_ScoreHeights (P7_HMM *hmm, P7_BG *bg, float **heights ) {
 
 /* assumes heights is allocated with hmm->M floats*/
 int
-hmmlogo_IndelValues (P7_HMM *hmm, float *insert_P, float *insert_expL, float *delete_P ) {
+hmmlogo_IndelValues (P7_HMM *hmm, float *insert_P, float *insert_expL, float *occupancy ) {
 
   int    i;
 
   if (insert_P != NULL)    insert_P[1]    = hmm->t[1][p7H_MI];                   //probability of inserting after this match
   if (insert_expL != NULL) insert_expL[1] =  1 / (1 - hmm->t[1][p7H_II]) ;       //expected length of the insert, if it happens
-  if (delete_P != NULL)    delete_P[1]    = 0.0;  //1st match state never deleted
+//  if (delete_P != NULL)    delete_P[1]    = 0.0;  //1st match state never deleted
 
   for (i = 2; i < hmm->M; i++) {
     if (insert_P != NULL)    insert_P[i]    = hmm->t[i][p7H_MI];                         //probability of inserting after this match
     if (insert_expL != NULL) insert_expL[i] =  1 / (1 - hmm->t[i][p7H_II]) ;          //expected length of the insert, if it happens
-    if (delete_P != NULL)    delete_P[i]    = ( (1.0-delete_P[i-1]) * hmm->t[i-1][p7H_MD] ) + ( delete_P[i-1] * hmm->t[i-1][p7H_DD]) ; //probability of missing this state, either due to DD or MD from previous position
+//    if (delete_P != NULL)    delete_P[i]    = ( (1.0-delete_P[i-1]) * hmm->t[i-1][p7H_MD] ) + ( delete_P[i-1] * hmm->t[i-1][p7H_DD]) ; //probability of missing this state, either due to DD or MD from previous position
   }
 
   if (insert_P != NULL)    insert_P[hmm->M]    = 0.0;   //no inserts after final position
   if (insert_expL != NULL) insert_expL[hmm->M] = 0.0;   //no inserts after final position
-  if (delete_P != NULL)    delete_P[hmm->M]    = ( (1.0-delete_P[hmm->M-1]) * hmm->t[hmm->M-1][p7H_MD] ) + ( delete_P[hmm->M-1] * hmm->t[hmm->M-1][p7H_DD]) ; //probability of missing this state, either due to DD or MD from previous position
+//  if (delete_P != NULL)    delete_P[hmm->M]    = ( (1.0-delete_P[hmm->M-1]) * hmm->t[hmm->M-1][p7H_MD] ) + ( delete_P[hmm->M-1] * hmm->t[hmm->M-1][p7H_DD]) ; //probability of missing this state, either due to DD or MD from previous position
+
+  p7_hmm_CalculateOccupancy(hmm, occupancy, NULL);
 
   return eslOK;
 }
@@ -197,7 +198,7 @@ main(int argc, char **argv)
   float **probs    = NULL;
   float *ins_P     = NULL;
   float *ins_expL  = NULL;
-  float *del_P     = NULL;
+  float *occupancy = NULL;
 
 
   int mode = HMMLOGO_RELENT_ALL;  //default
@@ -223,8 +224,10 @@ main(int argc, char **argv)
     mode = HMMLOGO_RELENT_ALL;
   else if (esl_opt_IsOn(go, "--height_relent_abovebg"))
     mode = HMMLOGO_RELENT_ABOVEBG;
-  else if (esl_opt_IsOn(go, "--height_bits"))
+  else if (esl_opt_IsOn(go, "--height_score"))
     mode = HMMLOGO_SCORE;
+  else
+    mode = HMMLOGO_RELENT_ALL;  //default
 
   /* Open the query profile HMM file */
   status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
@@ -283,17 +286,17 @@ main(int argc, char **argv)
 
     ESL_ALLOC(ins_P, (hmm->M+1) * sizeof(float));
     ESL_ALLOC(ins_expL, (hmm->M+1) * sizeof(float));
-    ESL_ALLOC(del_P, (hmm->M+1) * sizeof(float));
+    ESL_ALLOC(occupancy, (hmm->M+1) * sizeof(float));
 
-    hmmlogo_IndelValues(hmm, ins_P, ins_expL, del_P);
+    hmmlogo_IndelValues(hmm, ins_P, ins_expL, occupancy);
 
     printf ("Indel values\n");
     for (i = 1; i <= hmm->M; i++)
-      printf("%d: %6.3f %6.3f %6.3f\n", i, ins_P[i], ins_expL[i], del_P[i] );
+      printf("%d: %6.3f %6.3f %6.3f\n", i, ins_P[i], ins_expL[i], occupancy[i] );
 
     free(ins_P);
     free(ins_expL);
-    free(del_P);
+    free(occupancy);
 
   }
 
@@ -317,9 +320,9 @@ main(int argc, char **argv)
   if (abc != NULL) esl_alphabet_Destroy(abc);
 
 
-  if (ins_P != NULL)    free(ins_P);
-  if (ins_expL != NULL) free(ins_expL);
-  if (del_P != NULL)    free(del_P);
+  if (ins_P != NULL)     free(ins_P);
+  if (ins_expL != NULL)  free(ins_expL);
+  if (occupancy != NULL) free(occupancy);
 
 
 }
