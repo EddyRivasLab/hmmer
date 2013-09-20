@@ -73,10 +73,10 @@ if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = 
 q[
 Target sequences:                            1  \(9000000 residues searched\)
-Residues passing SSV filter:            174385  \(0.0194\); expected \(0.02\)
-Residues passing bias filter:           145560  \(0.0162\); expected \(0.02\)
-Residues passing Vit filter:             18158  \(0.00202\); expected \(0.003\)
-Residues passing Fwd filter:               479  \(5.32e-05\); expected \(3e-05\)
+Residues passing SSV filter:            174402  \(0.0194\); expected \(0.02\)
+Residues passing bias filter:           145577  \(0.0162\); expected \(0.02\)
+Residues passing Vit filter:             18171  \(0.00202\); expected \(0.003\)
+Residues passing Fwd filter:               415  \(4.61e-05\); expected \(3e-05\)
 Total number of hits:                        5  \(9.78e-06\)];
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 1\n";
@@ -98,9 +98,9 @@ if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = 
 q[
 Target sequences:                            1  \(4500000 residues searched\)
-Residues passing SSV filter:             84510  \(0.0188\); expected \(0.02\)
-Residues passing bias filter:            71038  \(0.0158\); expected \(0.02\)
-Residues passing Vit filter:              8901  \(0.00198\); expected \(0.003\)
+Residues passing SSV filter:             84516  \(0.0188\); expected \(0.02\)
+Residues passing bias filter:            71044  \(0.0158\); expected \(0.02\)
+Residues passing Vit filter:              8904  \(0.00198\); expected \(0.003\)
 Residues passing Fwd filter:               228  \(5.07e-05\); expected \(3e-05\)
 Total number of hits:                        3  \(1.27e-05\)];
 

@@ -1069,6 +1069,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   esl_stopwatch_Destroy(w);
 
   if (dbformat == eslSQFILE_FMINDEX) {
+    fclose(fm_meta->fp);
     fm_configDestroy(fm_cfg); // will cascade to destroy meta and alphabet, too
   }
 
