@@ -143,7 +143,7 @@ hmmlogo_IndelValues (P7_HMM *hmm, float *insert_P, float *insert_expL, float *oc
   if (insert_expL != NULL) insert_expL[hmm->M] = 0.0;   //no inserts after final position
 //  if (delete_P != NULL)    delete_P[hmm->M]    = ( (1.0-delete_P[hmm->M-1]) * hmm->t[hmm->M-1][p7H_MD] ) + ( delete_P[hmm->M-1] * hmm->t[hmm->M-1][p7H_DD]) ; //probability of missing this state, either due to DD or MD from previous position
 
-  p7_hmm_CalculateOccupancy(hmm, occupancy, NULL);
+  if (occupancy != NULL)  p7_hmm_CalculateOccupancy(hmm, occupancy, NULL);
 
   return eslOK;
 }
