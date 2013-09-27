@@ -803,7 +803,8 @@ typedef struct p7_hmm_window_s {
   int32_t    fm_n;  //position in the concatenated fm-index sequence at which the diagonal starts
   int32_t    length; // length of the diagonal/window
   int16_t    k;  //position of the model at which the diagonal ends
-  int32_t    target_len;  //length of the target sequence
+  int32_t    target_len;  //full length of target sequence
+  int32_t    target_seg_len;  //in FM, target sequence may be broken into segments; this is the length of the segment in which the seed was formed
   int8_t     complementarity;
   int8_t     used_to_extend;
 } P7_HMM_WINDOW;
@@ -859,7 +860,7 @@ typedef struct fm_interval_s {
 } FM_INTERVAL;
 
 typedef struct fm_hit_s {
-  uint32_t  start;
+  uint64_t  start;
   uint32_t  block;
   int       direction;
   int       length;
@@ -1565,7 +1566,7 @@ extern int  p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset);
 
 /* p7_hmmwindow.c */
 int p7_hmmwindow_init (P7_HMM_WINDOWLIST *list);
-P7_HMM_WINDOW *p7_hmmwindow_new (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity, uint32_t target_len);
+P7_HMM_WINDOW *p7_hmmwindow_new (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity, uint32_t target_len, uint32_t target_seg_len);
 
 
 
@@ -1732,8 +1733,8 @@ extern int fm_getComplement (char c, uint8_t alph_type);
 
 /* fm_general.c */
 extern uint32_t fm_computeSequenceOffset (const FM_DATA *fms, const FM_METADATA *meta, int block, int pos);
-extern int fm_getOriginalPosition (const FM_DATA *fms, const FM_METADATA *meta, int fm_id, int length, int direction, uint32_t fm_pos,
-                                    uint32_t *segment_id, uint32_t *seg_pos);
+extern int fm_getOriginalPosition (const FM_DATA *fms, const FM_METADATA *meta, int fm_id, int length, int direction, uint64_t fm_pos,
+                                    uint32_t *segment_id, uint64_t *seg_pos);
 extern int fm_readFMmeta( FM_METADATA *meta);
 extern int fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll );
 extern void fm_FM_destroy ( FM_DATA *fm, int isMainFM);

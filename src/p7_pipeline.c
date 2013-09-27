@@ -324,24 +324,46 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_
   int i;
   P7_HMM_WINDOW        *prev_window = NULL;
   P7_HMM_WINDOW        *curr_window = NULL;
-  int              window_start;
-  int              window_end;
-  int              window_len;
-  int new_hit_cnt = 0;
+  int32_t              window_start;
+  int32_t              window_end;
+  int32_t              window_len;
+  int32_t              tmp;
+  int                  new_hit_cnt = 0;
 
   if (windowlist->count == 0)
     return eslOK;
 
   /* extend windows */
   for (i=0; i<windowlist->count; i++) {
+
     curr_window = windowlist->windows+i;
 
-    // the 0.1 multiplier provides for a small buffer in excess of the predefined prefix/suffix lengths - one proportional to max_length
-    window_start = ESL_MAX( 1                      ,  curr_window->n -                       (om->max_length * (0.1 + data->prefix_lengths[curr_window->k - curr_window->length + 1]  )) ) ;
-    window_end   = ESL_MIN( curr_window->target_len,  curr_window->n + curr_window->length + (om->max_length * (0.1 + data->suffix_lengths[curr_window->k] ) ) )   ;
+
+    if ( curr_window->complementarity == p7_COMPLEMENT) {
+      //flip for complement (then flip back), so the min and max bounds allow for appropriate overlap into neighboring segments in a multi-segment FM sequence
+      curr_window->n = curr_window->target_seg_len - curr_window->n +  1;
+
+      window_start   = ESL_MAX( 1                      ,  curr_window->n -                       (om->max_length * (0.1 + data->suffix_lengths[curr_window->k] ) ) ) ;
+      window_end     = ESL_MIN( curr_window->target_len,  curr_window->n + curr_window->length + (om->max_length * (0.1 + data->prefix_lengths[curr_window->k - curr_window->length + 1]  )) )   ;
+
+      tmp            = window_end;
+      window_end     = curr_window->target_seg_len - window_start +  1;
+      window_start   = curr_window->target_seg_len - tmp +  1;
+
+      curr_window->n = curr_window->target_seg_len - curr_window->n +  1;
+
+    } else {
+
+      // the 0.1 multiplier provides for a small buffer in excess of the predefined prefix/suffix lengths - one proportional to max_length
+      window_start = ESL_MAX( 1                      ,  curr_window->n -                       (om->max_length * (0.1 + data->prefix_lengths[curr_window->k - curr_window->length + 1]  )) ) ;
+      window_end   = ESL_MIN( curr_window->target_len,  curr_window->n + curr_window->length + (om->max_length * (0.1 + data->suffix_lengths[curr_window->k] ) ) )   ;
+    }
+
     curr_window->length = window_end - window_start + 1;
     curr_window->fm_n -= (curr_window->n - window_start);
+
     curr_window->n = window_start;
+
   }
 
 
@@ -1348,7 +1370,7 @@ p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
          do {
            new_n   +=  (smaller_window_len - om->max_length);
            new_len -=  (smaller_window_len - om->max_length);
-           p7_hmmwindow_new(vit_windowlist, 0, new_n, 0, 0, ESL_MIN(smaller_window_len,new_len), 0.0, p7_NOCOMPLEMENT, new_len );
+           p7_hmmwindow_new(vit_windowlist, 0, new_n, 0, 0, ESL_MIN(smaller_window_len,new_len), 0.0, p7_NOCOMPLEMENT, new_len, new_len );
          } while (new_len > smaller_window_len);
       }
   }
@@ -1453,12 +1475,12 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
   float            bias_filtersc;
 
   ESL_DSQ          *subseq;
-  FM_SEQDATA       *seqdata;
   uint32_t         seq_start;
+
 
   P7_HMM_WINDOWLIST msv_windowlist;
   P7_HMM_WINDOWLIST vit_windowlist;
-  P7_HMM_WINDOW     window;
+  P7_HMM_WINDOW    *window;
   FM_SEQDATA        seq_data;
 
   P7_PIPELINE_LONGTARGET_OBJS *pli_tmp;
@@ -1466,8 +1488,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
 
   if ((sq && (sq->n == 0)) || (fmf && (fmf->N == 0))) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
-  if (fm_cfg)
-    seqdata = fm_cfg->meta->seq_data;
 
   ESL_ALLOC(pli_tmp, sizeof(P7_PIPELINE_LONGTARGET_OBJS));
   pli_tmp->bg = p7_bg_Clone(bg);
@@ -1520,10 +1540,59 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
 
     p7_pli_ExtendAndMergeWindows (om, data, &msv_windowlist, 0);
 
-    //  printf("cnt= %d\n",msv_windowlist.count);
 
-    //  for (i=0; i<msv_windowlist.count; i++)
-    //    printf("n=%d, k=%d, l=%d, c=%d\n", msv_windowlist.windows[i].n, msv_windowlist.windows[i].k, msv_windowlist.windows[i].length, msv_windowlist.windows[i].complementarity);
+    /*  If using FM, it's possible for a seed we just created to span more than one segment
+     *  in the target. Check for this, and resolve it, by trimming an over-extended
+     *  segment, and tacking it on as a new window (to be dealt with in a later pass)
+     */
+    if (fmf) {
+      for (i=0; i<msv_windowlist.count; i++) {
+        int again = TRUE;
+        window = msv_windowlist.windows + i;
+
+
+        while (again) {
+          uint32_t seg_id;
+          uint64_t seg_pos;
+          again = FALSE;
+
+          status = fm_getOriginalPosition (fmf, fm_cfg->meta, 0, window->length, window->complementarity, window->fm_n, &seg_id, &seg_pos);
+
+          if (status == eslERANGE) {
+            int overext;
+            int incr;
+            int use_length;
+            int is_compl = (window->complementarity == p7_COMPLEMENT);
+
+            if (is_compl)  overext = (seg_pos + window->length) - (fm_cfg->meta->seq_data[ seg_id ].start + fm_cfg->meta->seq_data[ seg_id ].length - 1) ;
+            else           overext = (seg_pos + window->length) - (fm_cfg->meta->seq_data[ seg_id ].full_seq_length  -  fm_cfg->meta->seq_data[ seg_id ].start + 1) ;
+
+            use_length = window->length - overext + 1;
+
+            if (is_compl) incr  =  use_length + fm_cfg->meta->seq_data[ seg_id ].offset - (fm_cfg->meta->seq_data[ seg_id - 1 ].offset + fm_cfg->meta->seq_data[ seg_id - 1 ].length - 1) ;
+            else          incr  =  use_length + fm_cfg->meta->seq_data[ seg_id + 1 ].offset - (fm_cfg->meta->seq_data[ seg_id ].offset + fm_cfg->meta->seq_data[ seg_id ].length - 1) ;
+
+            if (use_length >= 8 && window->length-incr >= 8) { // if both halves are kinda long, split the first half off as a new window
+              p7_hmmwindow_new(&msv_windowlist, seg_id + (is_compl?-1:1), window->n, window->fm_n, window->k+use_length-1, use_length, window->score, window->complementarity, fm_cfg->meta->seq_data[seg_id].full_seq_length, fm_cfg->meta->seq_data[seg_id].length);
+              window = msv_windowlist.windows + i; // it may have moved due a a realloc
+              window->n      +=  incr;
+              window->fm_n   +=  incr;
+              window->k      +=  use_length;
+              window->length  =  overext;
+              again         = TRUE;
+            } else if (window->length-incr >= 8) { //if just the right half is long enough, shift numbers over
+              window->n      +=  incr;
+              window->fm_n   +=  incr;
+              window->k      +=  use_length;
+              window->length  =  overext;
+            } else { //just limit the length of the left half
+              window->length  =  use_length;
+            }
+
+          }
+        }
+      }
+    }
 
 
   /* Pass each remaining window on to the remaining pipeline */
@@ -1532,40 +1601,41 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
     if (!fmf )
       free (pli_tmp->tmpseq->dsq);  //this ESL_SQ object is just a container that'll point to a series of other DSQs, so free the one we just created inside the larger SQ object
 
+
     for (i=0; i<msv_windowlist.count; i++){
-      window =  msv_windowlist.windows[i] ;
+      window =  msv_windowlist.windows + i ;
 
       if (fmf) {
-        fm_convertRange2DSQ( fmf, fm_cfg->meta, window.fm_n, window.length, window.complementarity, pli_tmp->tmpseq );
+        fm_convertRange2DSQ( fmf, fm_cfg->meta, window->fm_n, window->length, window->complementarity, pli_tmp->tmpseq );
         subseq = pli_tmp->tmpseq->dsq;
       } else {
-        subseq = sq->dsq + window.n - 1;
+        subseq = sq->dsq + window->n - 1;
       }
 
-      p7_bg_SetLength(bg, window.length);
-      p7_bg_NullOne  (bg, subseq, window.length, &nullsc);
+      p7_bg_SetLength(bg, window->length);
+      p7_bg_NullOne  (bg, subseq, window->length, &nullsc);
 
-      p7_bg_FilterScore(bg, subseq, window.length, &bias_filtersc);
+      p7_bg_FilterScore(bg, subseq, window->length, &bias_filtersc);
       // Compute standard MSV to ensure that bias doesn't overcome SSV score when MSV
       // would have survived it
-      p7_oprofile_ReconfigMSVLength(om, window.length);
-      p7_MSVFilter(subseq, window.length, om, pli->oxf, &usc);
+      p7_oprofile_ReconfigMSVLength(om, window->length);
+      p7_MSVFilter(subseq, window->length, om, pli->oxf, &usc);
       P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
       if (P > pli->F1 ) continue;
 
-      pli->pos_past_msv += window.length;
+      pli->pos_past_msv += window->length;
 
       if (fmf) {
-        seq_data = fm_cfg->meta->seq_data[window.id];
+        seq_data = fm_cfg->meta->seq_data[window->id];
         seq_start =  seq_data.start;
-        if (window.complementarity == p7_COMPLEMENT)
+        if (window->complementarity == p7_COMPLEMENT)
           seq_start += seq_data.length - 1;
       }
 
 
       status = p7_pli_postSSV_LongTarget(pli, om, bg, hitlist, data,
             (fmf != NULL ? seq_data.id     : seqidx),
-            window.n, window.length, subseq,
+            window->n, window->length, subseq,
             (fmf != NULL ? seq_start       : sq->start),
             (fmf != NULL ? seq_data.name   : sq->name),
             (fmf != NULL ? seq_data.source : sq->source),
@@ -1574,7 +1644,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
             (fmf != NULL ? seq_data.length : -1),
             nullsc,
             usc,
-            (fmf != NULL ? window.complementarity : complementarity),
+            (fmf != NULL ? window->complementarity : complementarity),
             &vit_windowlist,
             pli_tmp
         );

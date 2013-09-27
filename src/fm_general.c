@@ -240,7 +240,6 @@ fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, int first, int l
   int i;
   uint8_t c;
 
-
   if (complementarity == p7_COMPLEMENT)
     first = fm->N-(first+length)-1;
 
@@ -342,14 +341,13 @@ fm_computeSequenceOffset (const FM_DATA *fms, const FM_METADATA *meta, int block
  */
 int
 fm_getOriginalPosition (const FM_DATA *fms, const FM_METADATA *meta, int fm_id, int length, int complementarity,
-                        uint32_t fm_pos, uint32_t *segment_id, uint32_t *seg_pos
+                        uint64_t fm_pos, uint32_t *segment_id, uint64_t *seg_pos
 ) {
 
   // if complementarity == p7_NOCOMPLEMENT, the end positions are in context of FM->T
   // otherwise, they're in context of revcomp(FM->T).
-
   if (complementarity == p7_COMPLEMENT)  // need location in forward context:
-    fm_pos = fms->N - fm_pos - 2;
+    fm_pos = fms->N - fm_pos - 1;
 
 
   *segment_id = fm_computeSequenceOffset( fms, meta, fm_id, fm_pos);
@@ -360,9 +358,13 @@ fm_getOriginalPosition (const FM_DATA *fms, const FM_METADATA *meta, int fm_id, 
 
 
   //verify that the hit doesn't extend beyond the bounds of the target sequence
-  // this works even if the true position is in revcomp space (the length check will still recognize an overextension)
-  if (*seg_pos + length > /* meta->seq_data[ *segment_id ].start + */ meta->seq_data[ *segment_id ].full_seq_length )
+  if (complementarity == p7_COMPLEMENT) {
+    if (*seg_pos + length  > meta->seq_data[ *segment_id ].start + meta->seq_data[ *segment_id ].length )
       return eslERANGE;
+  } else {
+    if (*seg_pos + length - 1 >  meta->seq_data[ *segment_id ].full_seq_length  -  meta->seq_data[ *segment_id ].start + 1)
+      return eslERANGE;
+  }
 
   return eslOK;
 }

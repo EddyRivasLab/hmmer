@@ -393,7 +393,7 @@ main(int argc,  char *argv[])
           if (out != NULL) {
             fprintf (out, "%s\n",line);
             //fprintf (out, "\t%10s (%8d %s)\n",meta->seq_data[ hits[i].block ].name, hits[i].start, (hits[i].direction==fm_forward?"+":"-"));
-            fprintf (out, "    %8d %s %10s\n", hits[i].start, (hits[i].direction==fm_forward?"f":"b"), meta->seq_data[ hits[i].block ].name);
+            fprintf (out, "    %8ld %s %10s\n", (long)(hits[i].start), (hits[i].direction==fm_forward?"f":"b"), meta->seq_data[ hits[i].block ].name);
           }
           hit_indiv_cnt++;
           i++; // skip the first one, since I'll be comparing each to the previous
@@ -406,7 +406,7 @@ main(int argc,  char *argv[])
             {
               if (out != NULL)
                 //fprintf (out, "\t%10s (%8d %s)\n",meta->seq_data[ hits[i].block ].name, hits[i].start, (hits[i].direction==fm_forward?"+":"-"));
-                fprintf (out, "    %8d %s %10s\n", hits[i].start, (hits[i].direction==fm_forward?"f":"b"), meta->seq_data[ hits[i].block ].name);
+                fprintf (out, "    %8ld %s %10s\n", (long)(hits[i].start), (hits[i].direction==fm_forward?"f":"b"), meta->seq_data[ hits[i].block ].name);
               hit_indiv_cnt++;
             }
           }

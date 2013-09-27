@@ -649,8 +649,7 @@ main(int argc, char **argv)
     i=0;
 
     while (i<numseqs) {
-      uint64_t len = 0;
-      len = meta->seq_data[i].length;
+      uint64_t len = meta->seq_data[i].length;
       j=i+1;
       while (j<numseqs && meta->seq_data[i].id == meta->seq_data[j].id) {
         len += meta->seq_data[j].start +  meta->seq_data[j].length - meta->seq_data[i].start - meta->seq_data[i].length  ; // offsetting '-1's

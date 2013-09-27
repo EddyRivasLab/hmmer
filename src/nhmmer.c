@@ -704,6 +704,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           ESL_ALLOC(fminfo->fmf, sizeof(FM_DATA));
           ESL_ALLOC(fminfo->fmb, sizeof(FM_DATA));
           if (fminfo->fmf == NULL || fminfo->fmb == NULL)           esl_fatal("Failed to allocate FM thread info");
+          fminfo->active = FALSE;
 
           status = esl_workqueue_Init(queue, fminfo);
           if (status != eslOK)          esl_fatal("Failed to add FM info to work queue");
@@ -914,9 +915,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     	    resCnt *= 2;
 
       } else {
-    	  for (i = 0; i < infocnt; ++i)
-    		  resCnt += info[i].pli->nres;
+        if (dbformat == eslSQFILE_FMINDEX) {
+          resCnt = 2 * fm_meta->char_count;
+
+        } else {
+          for (i = 0; i < infocnt; ++i)
+            resCnt += info[i].pli->nres;
+        }
       }
+
 
       for (i = 0; i < infocnt; ++i)
           p7_tophits_ComputeNhmmerEvalues(info[i].th, resCnt, info[i].om->max_length);
@@ -930,6 +937,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           p7_pipeline_Destroy(info[i].pli);
           p7_tophits_Destroy(info[i].th);
           p7_oprofile_Destroy(info[i].om);
+      }
+
+      if (dbformat == eslSQFILE_FMINDEX) {
+        info[0].pli->nseqs = fm_meta->seq_data[fm_meta->seq_count-1].id + 1;
+        info[0].pli->nres  = resCnt;
       }
 
 
@@ -1210,9 +1222,9 @@ serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp)
 
   }
 
-  info->pli->nseqs = meta->seq_data[meta->seq_count-1].id + 1;
+//  info->pli->nseqs = meta->seq_data[meta->seq_count-1].id + 1;
 
-  info->pli->nres = 2 * meta->char_count;
+//  info->pli->nres = 2 * meta->char_count;
 
   return wstatus;
 
@@ -1419,11 +1431,10 @@ thread_loop_FM(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_S
 
   status = esl_workqueue_ReaderUpdate(queue, NULL, &newFMinfo);
   if (status != eslOK) esl_fatal("Work queue reader failed");
+  fminfo = (FM_THREAD_INFO *) newFMinfo;
 
   /* Main loop: */
   for ( i=0; i<info->fm_cfg->meta->block_count; i++ ) {
-
-    fminfo = (FM_THREAD_INFO *) newFMinfo;
 
     status = fm_FM_read( fminfo->fmf, meta, TRUE );
     if (status != eslOK) return status;
@@ -1436,17 +1447,24 @@ thread_loop_FM(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_S
 
     status = esl_workqueue_ReaderUpdate(queue, fminfo, &newFMinfo);
     if (status != eslOK) esl_fatal("Work queue reader failed");
+    fminfo = (FM_THREAD_INFO *) newFMinfo;
 
   }
 
+  /* this part is here to feed the worker threads with new fminfo objects to swap from
+   *  the queue while they are confirming completion of earlier fminfo objects (by
+   *  returning them). They are labelled inactive, so the worker doesn't bother
+   *  computing on them.
+   */
   for (i=0; i<esl_threads_GetWorkerCount(obj)-1; i++) {
-    fminfo = (FM_THREAD_INFO *) newFMinfo;
     fminfo->active = FALSE;
     esl_workqueue_ReaderUpdate(queue, fminfo, &newFMinfo);
+    if (status != eslOK) esl_fatal("Work queue reader failed");
+    fminfo = (FM_THREAD_INFO *) newFMinfo;
   }
-  fminfo = (FM_THREAD_INFO *) newFMinfo;
   fminfo->active = FALSE;
   esl_workqueue_ReaderUpdate(queue, fminfo, NULL);
+  if (status != eslOK) esl_fatal("Work queue reader failed");
 
   esl_threads_WaitForFinish(obj);
   esl_workqueue_Complete(queue);
@@ -1475,17 +1493,14 @@ pipeline_thread_FM(void *arg)
   info = (WORKER_INFO *) esl_threads_GetData(obj, workeridx);
   meta = info->fm_cfg->meta;
 
-
   status = esl_workqueue_WorkerUpdate(info->queue, NULL, &newFMinfo);
   if (status != eslOK) esl_fatal("Work queue worker failed");
 
   /* loop until all blocks have been processed */
   fminfo = (FM_THREAD_INFO *) newFMinfo;
 
-
   while (fminfo->active)
   {
-
       status = p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg,
           info->th, -1, NULL, -1,  fminfo->fmf, fminfo->fmb, info->fm_cfg );
       if (status != eslOK) esl_fatal ("Work queue worker failed");
@@ -1493,9 +1508,8 @@ pipeline_thread_FM(void *arg)
       fm_FM_destroy(fminfo->fmf, 1);
       fm_FM_destroy(fminfo->fmb, 0);
 
-      info->pli->nseqs = meta->seq_data[meta->seq_count-1].id + 1;
-
-      info->pli->nres = 2 * meta->char_count;
+//      info->pli->nseqs = meta->seq_data[meta->seq_count-1].id + 1;
+//      info->pli->nres = 2 *  fminfo->fmf->N; // this is approximately right, but misses cases of ambiguity codes being lost to compression. Is fixed in the calling function anyway.
 
       status = esl_workqueue_WorkerUpdate(info->queue, fminfo, &newFMinfo);
       if (status != eslOK) esl_fatal("Work queue worker failed");
