@@ -630,55 +630,7 @@ FM_window_from_diag (FM_DIAG *diag, const FM_DATA *fm, const FM_METADATA *meta, 
   status = fm_getOriginalPosition (fm, meta, 0, diag->length, diag->complementarity, diag->n, &seg_id, &seg_pos);
   p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+diag->length-1, diag->length, diag->score, diag->complementarity, meta->seq_data[seg_id].full_seq_length, meta->seq_data[seg_id].length);
 
-//  int again = TRUE;
-
-
-  /*  It's possible for a seed we just created to span more than one sequence in the target.
-   *  Check for this, and resolve it, by trimming an over-extended segment, and tacking
-   *  it on as a new seed (to be dealt with on the next pass)
-   */
-  /*
-  while (again) {
-    uint32_t seg_id;
-    uint64_t seg_pos;
-    again = FALSE;
-
-    status = fm_getOriginalPosition (fm, meta, 0, diag->length, diag->complementarity, diag->n, &seg_id, &seg_pos);
-
-    if (status == eslERANGE) {
-      int overext;
-      int incr;
-      int use_length;
-      int is_compl = (diag->complementarity == p7_COMPLEMENT);
-
-      if (is_compl)  overext = (seg_pos + diag->length) - (meta->seq_data[ seg_id ].start + meta->seq_data[ seg_id ].length - 1) ;
-      else           overext = (seg_pos + diag->length) - (meta->seq_data[ seg_id ].full_seq_length  -  meta->seq_data[ seg_id ].start + 1) ;
-
-      use_length = diag->length - overext + 1;
-
-      if (is_compl)  incr =  use_length + meta->seq_data[ seg_id ].offset - (meta->seq_data[ seg_id - 1 ].offset + meta->seq_data[ seg_id - 1 ].length - 1) ;
-      else           incr =  use_length + meta->seq_data[ seg_id + 1 ].offset - (meta->seq_data[ seg_id ].offset + meta->seq_data[ seg_id ].length - 1) ;
-
-      if (use_length >= 8 && diag->length-incr >= 8) { // if both halves are kinda long, split the first half off as a new window
-        p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+use_length-1, use_length, diag->score, diag->complementarity, meta->seq_data[seg_id].full_seq_length, meta->seq_data[seg_id].length);
-        diag->n      +=  incr;
-        diag->k      +=  use_length;
-        diag->length  =  overext;
-        again         = TRUE;
-      } else if (diag->length-incr >= 8) { //if just the right half is long enough, shift numbers over
-        diag->n      +=  incr;
-        diag->k      +=  use_length;
-        diag->length  =  overext;
-      } else { //just limit the length of the left half
-        diag->length  =  use_length;
-      }
-
-    } else {
-
-      p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+diag->length-1, diag->length, diag->score, diag->complementarity, meta->seq_data[seg_id].full_seq_length, meta->seq_data[seg_id].length);
-    }
-  }
-  */
+  printf ("%d, %d, %ld\n", diag->n, seg_id, (long)seg_pos);
 
   return eslOK;
 
