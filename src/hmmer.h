@@ -804,7 +804,7 @@ typedef struct p7_hmm_window_s {
   int32_t    length; // length of the diagonal/window
   int16_t    k;  //position of the model at which the diagonal ends
   int32_t    target_len;  //full length of target sequence
-  int32_t    target_seg_len;  //in FM, target sequence may be broken into segments; this is the length of the segment in which the seed was formed
+  int32_t    target_seg_end;  //in FM, target sequence may be broken into segments; this is position of the end of this segment
   int8_t     complementarity;
   int8_t     used_to_extend;
 } P7_HMM_WINDOW;

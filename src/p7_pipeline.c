@@ -340,16 +340,16 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_
 
     if ( curr_window->complementarity == p7_COMPLEMENT) {
       //flip for complement (then flip back), so the min and max bounds allow for appropriate overlap into neighboring segments in a multi-segment FM sequence
-      curr_window->n = curr_window->target_seg_len - curr_window->n +  1;
+      curr_window->n = curr_window->target_seg_end - curr_window->n +  1;
 
       window_start   = ESL_MAX( 1                      ,  curr_window->n - curr_window->length - (om->max_length * (0.1 + data->suffix_lengths[curr_window->k] ) ) ) ;
       window_end     = ESL_MIN( curr_window->target_len,  curr_window->n                       + (om->max_length * (0.1 + data->prefix_lengths[curr_window->k - curr_window->length + 1]  )) )   ;
 
       tmp            = window_end;
-      window_end     = curr_window->target_seg_len - window_start +  1;
-      window_start   = curr_window->target_seg_len - tmp +  1;
+      window_end     = curr_window->target_seg_end - window_start +  1;
+      window_start   = curr_window->target_seg_end - tmp +  1;
 
-      curr_window->n = curr_window->target_seg_len - curr_window->n +  1;
+      curr_window->n = curr_window->target_seg_end - curr_window->n +  1;
 
     } else {
 
@@ -1520,6 +1520,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
   /* convert hits to windows, merging neighboring windows, and
    */
   if ( msv_windowlist.count > 0 ) {
+
     /* In scan mode, if it passes the MSV filter, read the rest of the profile
      * Not necessary for dummy mode, where the ->base_w variable checks cause compilation failure*/
 #ifndef P7_IMPL_DUMMY_INCLUDED
@@ -1571,7 +1572,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
             else          incr  =  use_length + fm_cfg->meta->seq_data[ seg_id + 1 ].offset - (fm_cfg->meta->seq_data[ seg_id ].offset + fm_cfg->meta->seq_data[ seg_id ].length - 1) ;
 
             if (use_length >= 8 && window->length-incr >= 8) { // if both halves are kinda long, split the first half off as a new window
-              p7_hmmwindow_new(&msv_windowlist, seg_id + (is_compl?-1:1), window->n, window->fm_n, window->k+use_length-1, use_length, window->score, window->complementarity, fm_cfg->meta->seq_data[seg_id].full_seq_length, fm_cfg->meta->seq_data[seg_id].length);
+              p7_hmmwindow_new(&msv_windowlist, seg_id + (is_compl?-1:1), window->n, window->fm_n, window->k+use_length-1, use_length, window->score, window->complementarity, fm_cfg->meta->seq_data[seg_id].full_seq_length, fm_cfg->meta->seq_data[seg_id].length + fm_cfg->meta->seq_data[seg_id].start - 1);
               window = msv_windowlist.windows + i; // it may have moved due a a realloc
               window->n      +=  incr;
               window->fm_n   +=  incr;
