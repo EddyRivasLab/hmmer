@@ -630,8 +630,6 @@ FM_window_from_diag (FM_DIAG *diag, const FM_DATA *fm, const FM_METADATA *meta, 
   status = fm_getOriginalPosition (fm, meta, 0, diag->length, diag->complementarity, diag->n, &seg_id, &seg_pos);
   p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+diag->length-1, diag->length, diag->score, diag->complementarity, meta->seq_data[seg_id].full_seq_length, meta->seq_data[seg_id].length);
 
-  printf ("%d, %d, %ld\n", diag->n, seg_id, (long)seg_pos);
-
   return eslOK;
 
 }

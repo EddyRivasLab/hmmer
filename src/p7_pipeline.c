@@ -338,13 +338,12 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_
 
     curr_window = windowlist->windows+i;
 
-
     if ( curr_window->complementarity == p7_COMPLEMENT) {
       //flip for complement (then flip back), so the min and max bounds allow for appropriate overlap into neighboring segments in a multi-segment FM sequence
       curr_window->n = curr_window->target_seg_len - curr_window->n +  1;
 
-      window_start   = ESL_MAX( 1                      ,  curr_window->n -                       (om->max_length * (0.1 + data->suffix_lengths[curr_window->k] ) ) ) ;
-      window_end     = ESL_MIN( curr_window->target_len,  curr_window->n + curr_window->length + (om->max_length * (0.1 + data->prefix_lengths[curr_window->k - curr_window->length + 1]  )) )   ;
+      window_start   = ESL_MAX( 1                      ,  curr_window->n - curr_window->length - (om->max_length * (0.1 + data->suffix_lengths[curr_window->k] ) ) ) ;
+      window_end     = ESL_MIN( curr_window->target_len,  curr_window->n                       + (om->max_length * (0.1 + data->prefix_lengths[curr_window->k - curr_window->length + 1]  )) )   ;
 
       tmp            = window_end;
       window_end     = curr_window->target_seg_len - window_start +  1;
@@ -1550,7 +1549,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
         int again = TRUE;
         window = msv_windowlist.windows + i;
 
-
         while (again) {
           uint32_t seg_id;
           uint64_t seg_pos;
@@ -1612,6 +1610,8 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
         subseq = sq->dsq + window->n - 1;
       }
 
+
+
       p7_bg_SetLength(bg, window->length);
       p7_bg_NullOne  (bg, subseq, window->length, &nullsc);
 
@@ -1629,9 +1629,8 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
         seq_data = fm_cfg->meta->seq_data[window->id];
         seq_start =  seq_data.start;
         if (window->complementarity == p7_COMPLEMENT)
-          seq_start += seq_data.length - 1;
+          seq_start += seq_data.length - 2;
       }
-
 
       status = p7_pli_postSSV_LongTarget(pli, om, bg, hitlist, data,
             (fmf != NULL ? seq_data.id     : seqidx),
