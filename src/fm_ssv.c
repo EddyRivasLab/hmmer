@@ -55,10 +55,6 @@ FM_mergeSeeds(FM_DIAGLIST *seeds, int N, int ssv_length) {
   //sort, first by direction, then N (position on database sequence), then K (model position)
   qsort(diags, seeds->count, sizeof(FM_DIAG), FM_hit_sorter);
 
-//  for (i=0; i<seeds->count; i++)
-//    printf("n: %d, k: %d, s: %3f , c: %d)\n", diags[i].n, diags[i].k, diags[i].sortkey, diags[i].complementarity);
-
-
   next = diags[0];
 
   curr_is_complement = (next.complementarity == p7_COMPLEMENT);
@@ -67,7 +63,6 @@ FM_mergeSeeds(FM_DIAGLIST *seeds, int N, int ssv_length) {
   curr_len           = next.length;
   curr_end           = curr_n + curr_len - 1;
   curr_diagval       = next.n - next.k;
-
 
   for( i=1; i<seeds->count; i++) {
 
@@ -123,7 +118,7 @@ FM_mergeSeeds(FM_DIAGLIST *seeds, int N, int ssv_length) {
   * Synopsis:  Find position(s) in the FM index for a diagonal that meets score threshold
   *
   * Details:   Follows the BWT/FM-index until finding an entry of the implicit
-  *            suffix array that in found in the sampled SA.
+  *            suffix array that is found in the sampled SA.
 
   *
   * Args:      fmf             - FM index for finding matches to the input sequence
@@ -268,13 +263,9 @@ FM_Recurse( int depth, int Kp, int fm_direction,
 
   for (c=0; c< fm_cfg->meta->alph_size; c++) {//acgt
     int dppos = last;
-
     seq[depth-1] = fm_cfg->meta->alph[c];
     seq[depth] = '\0';
 
-
-//    if ( esl_strcmp("TCTTCAAGGTTCCAC", seq)==0)
-//      printf("%s\n", seq);
 
     for (i=first; i<=last; i++) { // for each surviving diagonal from the previous round
 
@@ -301,11 +292,11 @@ FM_Recurse( int depth, int Kp, int fm_direction,
             if ( interval_1_new.lower >= 0 && interval_1_new.lower <= interval_1_new.upper  )  //no use extending a non-existent string
             fm_updateIntervalReverse( fmf, fm_cfg, c, &interval_1_new);
 
-            if ( interval_1_new.lower >= 0 && interval_1_new.lower <= interval_1_new.upper  )  //no use passing a non-existent string
+            if ( interval_1_new.lower >= 0 && interval_1_new.lower <= interval_1_new.upper  ) {  //no use passing a non-existent string
               FM_getPassingDiags(fmf, fm_cfg, k, ssvdata->M, sc, depth, fm_forward,
                                  dp_pairs[i].model_direction, dp_pairs[i].complementarity,
                                  &interval_1_new, seeds);
-
+            }
           } else {
             //searching for forward matches on the FM-index
             interval_2_new.lower = interval_2->lower;
@@ -315,11 +306,11 @@ FM_Recurse( int depth, int Kp, int fm_direction,
             if ( interval_1_new.lower >= 0 && interval_1_new.lower <= interval_1_new.upper  )  //no use extending a non-existent string
               fm_updateIntervalForward( fmb, fm_cfg, c, &interval_1_new, &interval_2_new);
 
-            if ( interval_2_new.lower >= 0 && interval_2_new.lower <= interval_2_new.upper  )  //no use passing a non-existent string
+            if ( interval_2_new.lower >= 0 && interval_2_new.lower <= interval_2_new.upper  ) { //no use passing a non-existent string
               FM_getPassingDiags(fmf, fm_cfg, k, ssvdata->M, sc, depth, fm_backward,
                                  dp_pairs[i].model_direction, dp_pairs[i].complementarity,
                                  &interval_2_new, seeds);
-
+            }
           }
 
         } else if (  sc <= 0                                                                                        //some other path in the string enumeration tree will do the job
@@ -400,6 +391,7 @@ FM_Recurse( int depth, int Kp, int fm_direction,
 
         if ( interval_1_new.lower >= 0 && interval_1_new.lower <= interval_1_new.upper  )  //no use extending a non-existent string
           fm_updateIntervalForward( fmb, fm_cfg, c, &interval_1_new, &interval_2_new);
+
 
         if (  interval_1_new.lower < 0 || interval_1_new.lower > interval_1_new.upper ) { //that string doesn't exist in reverse index
           continue;
@@ -484,8 +476,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
     seq[0] = fm_cfg->meta->alph[i];
     seq[1] = '\0';
 
-
-//    printf("%-18s : %d , %d\n", seq, interval_f1.lower, interval_f1.upper);
 
     // Fill in a DP column for the character c, (compressed so that only positive-scoring entries are kept)
     // There will be 4 DP columns for each character, (1) fwd-std, (2) fwd-complement, (3) rev-std, (4) rev-complement
@@ -580,7 +570,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
             );
 
   }
-
 
   //merge duplicates
   FM_mergeSeeds(seeds, fmf->N, fm_cfg->ssv_length);
@@ -801,6 +790,7 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
 
   invP_FM = esl_gumbel_invsurv(P_fm, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   sc_threshFM = ESL_MIN(fm_cfg->max_scthreshFM,  (invP_FM * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec) ) ;
+
 
   //get diagonals that score above sc_threshFM
   status = FM_getSeeds(fmf, fmb, fm_cfg, ssvdata, om->abc->Kp, sc_threshFM, &seeds );

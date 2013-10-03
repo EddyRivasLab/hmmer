@@ -164,9 +164,9 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
   int compressed_bytes =   ((chars_per_byte-1+N)/chars_per_byte);
   int term_loc;
 
-  int num_freq_cnts_b  = 1+ceil((float)N/meta->freq_cnt_b);
-  int num_freq_cnts_sb = 1+ceil((float)N/meta->freq_cnt_sb);
-  int num_SA_samples   = 1+floor((float)N/meta->freq_SA);
+  int num_freq_cnts_b  = 1+ceil((double)N/(meta->freq_cnt_b));
+  int num_freq_cnts_sb = 1+ceil((double)N/meta->freq_cnt_sb);
+  int num_SA_samples   = 1+floor((double)N/meta->freq_SA);
 
 
   uint8_t *Tcompressed = NULL;
@@ -207,7 +207,7 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
       term_loc = j;
       BWT[j] =  0; //store 'a' in place of '$'
     } else {
-        BWT[j] =  T[ SA[j]-1] ;
+      BWT[j] =  T[ SA[j]-1] ;
     }
 
 
@@ -515,11 +515,11 @@ main(int argc, char **argv)
   ESL_ALLOC (T, max_block_size * sizeof(uint8_t));
   ESL_ALLOC (BWT, max_block_size * sizeof(uint8_t));
   ESL_ALLOC (SA, max_block_size * sizeof(int));
-  ESL_ALLOC (SAsamp,     (1+floor((float)max_block_size/meta->freq_SA) ) * sizeof(uint32_t));
+  ESL_ALLOC (SAsamp,     (1+floor((double)max_block_size/meta->freq_SA) ) * sizeof(uint32_t));
 
-  ESL_ALLOC (occCnts_sb, (1+ceil((float)max_block_size/meta->freq_cnt_sb)) *  meta->alph_size * sizeof(uint32_t)); // every freq_cnt_sb positions, store an array of ints
+  ESL_ALLOC (occCnts_sb, (1+ceil((double)max_block_size/meta->freq_cnt_sb)) *  meta->alph_size * sizeof(uint32_t)); // every freq_cnt_sb positions, store an array of ints
   ESL_ALLOC (cnts_sb,    meta->alph_size * sizeof(uint32_t));
-  ESL_ALLOC (occCnts_b,  ( 1+ceil((float)max_block_size/meta->freq_cnt_b)) *  meta->alph_size * sizeof(uint16_t)); // every freq_cnt_b positions, store an array of 8-byte ints
+  ESL_ALLOC (occCnts_b,  ( 1+ceil((double)max_block_size/meta->freq_cnt_b)) *  meta->alph_size * sizeof(uint16_t)); // every freq_cnt_b positions, store an array of 8-byte ints
   ESL_ALLOC (cnts_b,     meta->alph_size * sizeof(uint16_t));
 
   if((T == NULL)  || (BWT == NULL)  || (SA==NULL) || (SAsamp==NULL) || (BWT==NULL) || (cnts_b==NULL) || (occCnts_b==NULL) || (cnts_sb==NULL) || (occCnts_sb==NULL) ) {
@@ -760,9 +760,9 @@ main(int argc, char **argv)
 
 
     compressed_bytes =   ((chars_per_byte-1+block_length)/chars_per_byte);
-    num_freq_cnts_b  = 1+ceil((float)block_length/meta->freq_cnt_b);
-    num_freq_cnts_sb = 1+ceil((float)block_length/meta->freq_cnt_sb);
-    num_SA_samples   = 1+floor((float)block_length/meta->freq_SA);
+    num_freq_cnts_b  = 1+ceil((double)block_length/meta->freq_cnt_b);
+    num_freq_cnts_sb = 1+ceil((double)block_length/meta->freq_cnt_sb);
+    num_SA_samples   = 1+floor((double)block_length/meta->freq_SA);
 
 
     //j==0 test cause T and SA to be written only for forward sequence

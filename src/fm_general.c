@@ -443,9 +443,9 @@ fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
 
 
   compressed_bytes =   ((chars_per_byte-1+fm->N)/chars_per_byte);
-  num_freq_cnts_b  = 1+ceil((float)fm->N/meta->freq_cnt_b);
-  num_freq_cnts_sb = 1+ceil((float)fm->N/meta->freq_cnt_sb);
-  num_SA_samples   = 1+floor((float)fm->N/meta->freq_SA);
+  num_freq_cnts_b  = 1+ceil((double)fm->N/meta->freq_cnt_b);
+  num_freq_cnts_sb = 1+ceil((double)fm->N/meta->freq_cnt_sb);
+  num_SA_samples   = 1+floor((double)fm->N/meta->freq_SA);
 
   // allocate space, then read the data
   if (getAll) ESL_ALLOC (fm->T, compressed_bytes );

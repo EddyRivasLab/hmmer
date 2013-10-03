@@ -364,22 +364,18 @@ fm_getOccCount (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c) {
 int
 fm_getOccCountLT (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt) {
 
-  if (c == 0 && pos >= fm->term_loc)// < 'A'?  cntlt depends on relationship of pos and the position where the '$' was replaced by 'A'
-    *cntlt = 1;
-  else
-    *cntlt = 0;
-
   FM_METADATA *meta = cfg->meta;
 
   int i,j;
-  const int b_pos          = (pos+1) / meta->freq_cnt_b; //floor(pos/b_size)   : the b count element preceding pos
   const uint16_t * occCnts_b  = fm->occCnts_b;
   const uint32_t * occCnts_sb = fm->occCnts_sb;
+  const int b_pos          = (pos+1) / meta->freq_cnt_b; //floor(pos/b_size)   : the b count element preceding pos
   const int sb_pos         = (pos+1) / meta->freq_cnt_sb; //floor(pos/sb_size) : the sb count element preceding pos
 
   const int b_rel_pos      = (pos+1) % meta->freq_cnt_b; //  how close is pos to the boundary corresponding to b_pos
   int up_b                 = 2*b_rel_pos/meta->freq_cnt_b; //1 if pos is expected to be closer to the boundary of b_pos+1, 0 otherwise
   int landmark             = ((b_pos+up_b)*(meta->freq_cnt_b)) - 1 ;
+
 
   if (landmark >= fm->N) { // special case: for a count in the final block, just count from the bottom
     up_b      = 0;
@@ -387,6 +383,7 @@ fm_getOccCountLT (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c, uint
   }
 
   // get the cnt stored at the nearest checkpoint
+  *cntlt = 0;
   *cnteq = FM_OCC_CNT(sb, sb_pos, c );
   for (i=0; i<c; i++)
     *cntlt += FM_OCC_CNT(sb, sb_pos, i );
@@ -403,7 +400,7 @@ fm_getOccCountLT (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c, uint
 
 
 
-  if ( landmark < fm->N || landmark == -1 ) {
+  if ( landmark < fm->N - 1 || landmark == -1 ) {
 
     const uint8_t * BWT = fm->BWT;
 
@@ -587,17 +584,23 @@ fm_getOccCountLT (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c, uint
 
     }
 
-    counts_v_lt = _mm_xor_si128(counts_v_lt, cfg->fm_neg128_v); //counts are stored in signed bytes, base -128. Move them to unsigned bytes
-    FM_GATHER_8BIT_COUNTS(counts_v_lt,counts_v_lt,counts_v_lt);
-    (*cntlt)  +=   ( up_b == 1 ?  -1 : 1) * ( _mm_extract_epi16(counts_v_lt, 0) );
+    if (c>0) {
+      counts_v_lt = _mm_xor_si128(counts_v_lt, cfg->fm_neg128_v); //counts are stored in signed bytes, base -128. Move them to unsigned bytes
+      FM_GATHER_8BIT_COUNTS(counts_v_lt,counts_v_lt,counts_v_lt);
+      (*cntlt)  +=   ( up_b == 1 ?  -1 : 1) * ( _mm_extract_epi16(counts_v_lt, 0) );
+    }
 
     counts_v_eq = _mm_xor_si128(counts_v_eq, cfg->fm_neg128_v);
     FM_GATHER_8BIT_COUNTS(counts_v_eq,counts_v_eq,counts_v_eq);
     (*cnteq)  +=   ( up_b == 1 ?  -1 : 1) * ( _mm_extract_epi16(counts_v_eq, 0) );
   }
 
-  if (c==0 && pos >= fm->term_loc) { // I overcounted 'A' by one, because '$' was replaced with an 'A'
-    (*cnteq)--;
+
+  if ( pos >= fm->term_loc) {
+    if (c == 0) { // deal with the fact that '$' was replaced with an 'A'
+      (*cnteq)--; // I overcounted 'A' by one
+      (*cntlt) = 1; // '$' is lexicographically lower than 'A', but I didn't count it in the method above
+    }
   }
 
 
