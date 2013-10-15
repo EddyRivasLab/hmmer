@@ -798,13 +798,12 @@ typedef struct p7_scoredata_s {
 typedef struct p7_hmm_window_s {
   float      score;
   float      null_sc;
-  int32_t    id;    //sequence id of the database sequence hit
-  int32_t    n;     //position in database sequence at which the diagonal/window starts
-  int32_t    fm_n;  //position in the concatenated fm-index sequence at which the diagonal starts
-  int32_t    length; // length of the diagonal/window
-  int16_t    k;  //position of the model at which the diagonal ends
-  int32_t    target_len;  //full length of target sequence
-  int32_t    target_seg_end;  //in FM, target sequence may be broken into segments; this is position of the end of this segment
+  int32_t    id;          //sequence id of the database sequence hit
+  int64_t    n;           //position in database sequence at which the diagonal/window starts
+  int64_t    fm_n;        //position in the concatenated fm-index sequence at which the diagonal starts
+  int32_t    length;      // length of the diagonal/window
+  int16_t    k;           //position of the model at which the diagonal ends
+  int64_t    target_len;  //length of the target sequence
   int8_t     complementarity;
   int8_t     used_to_extend;
 } P7_HMM_WINDOW;
@@ -868,12 +867,23 @@ typedef struct fm_hit_s {
 } FM_HIT;
 
 
+
+typedef struct fm_ambiglist_s {
+  FM_INTERVAL *ranges;
+  uint32_t     count;
+  uint32_t     size;
+} FM_AMBIGLIST;
+
+
 typedef struct fm_seqdata_s {
-  uint32_t id;      //which sequence in the target database did this block come from (can be multiple blocks per sequence, e.g. if a sequence has Ns)
-  uint32_t start;   //the position in sequence {id} in the target database at which this sequence-block starts
-  uint32_t length;  //length of this sequence block
-  uint32_t full_seq_length;  //length of the full sequence from which this block is drawn
-  uint32_t offset;  //the position in the FM at which this sequence-block starts
+
+  uint32_t target_id;      // Which sequence in the target database did this segment come from (can be multiple segment per sequence, if a sequence has Ns)
+  uint64_t target_start;   // The position in sequence {id} in the target database at which this sequence-block starts (usually 1, unless its a long sequence split out over multiple FMs)
+  uint32_t fm_start;       // The position in the FM block at which this sequence begins
+  uint32_t length;         // Length of this sequence segment  (usually the length of the target sequence, unless its a long sequence split out over multiple FMs)
+
+
+  //meta data taken from the sequence this segment was taken from
   uint16_t name_length;
   uint16_t source_length;
   uint16_t acc_length;
@@ -899,23 +909,25 @@ typedef struct fm_metadata_s {
   char     *alph;
   char     *inv_alph;
   int      *compl_alph;
-  FILE       *fp;
-  FM_SEQDATA *seq_data;
+  FILE         *fp;
+  FM_SEQDATA   *seq_data;
+  FM_AMBIGLIST *ambig_list;
 } FM_METADATA;
 
 
-
 typedef struct fm_data_s {
-  uint32_t N; //length of text
+  uint64_t N; //length of text
   uint32_t term_loc; // location in the BWT at which the '$' char is found (replaced in the sequence with 'a')
   uint32_t seq_offset;
-  uint32_t overlap; // number of bases at the beginning that overlap the FM-index for the preceding block
+  uint32_t ambig_offset;
   uint16_t seq_cnt;
+  uint16_t ambig_cnt;
+  uint32_t overlap; // number of bases at the beginning that overlap the FM-index for the preceding block
   uint8_t  *T;  //text corresponding to the BWT
   uint8_t  *BWT_mem;
   uint8_t  *BWT;
   uint32_t *SA; // sampled suffix array
-  int32_t  *C; //the first position of each letter of the alphabet if all of T is sorted.  (signed, as I use that to keep tract of presence/absence)
+  int64_t  *C; //the first position of each letter of the alphabet if all of T is sorted.  (signed, as I use that to keep tract of presence/absence)
   uint32_t *occCnts_sb;
   uint16_t *occCnts_b;
 } FM_DATA;
@@ -933,7 +945,7 @@ typedef struct fm_dp_pair_s {
 
 
 typedef struct fm_diag_s {
-  uint32_t    n;  //position of the database sequence at which the diagonal starts
+  uint64_t    n;  //position of the database sequence at which the diagonal starts
   union {
     double    sortkey;
     double    score;
@@ -943,13 +955,11 @@ typedef struct fm_diag_s {
   uint8_t     complementarity;
 } FM_DIAG;
 
-
 typedef struct fm_diaglist_s {
   FM_DIAG   *diags;
   int       count;
   int       size;
 } FM_DIAGLIST;
-
 
 
 /* Effectively global variables, to be initialized once in fm_initConfig(),
@@ -986,9 +996,11 @@ typedef struct {
   float drop_lim;  // 0.2 ; in seed, max drop in a run of length [fm_drop_max_len]
   int drop_max_len; // 4 ; maximum run length with score under (max - [fm_drop_lim])
   int consec_pos_req; //5
-  float score_ratio_req; //.45
+  float score_ratio_req; //.5
   int ssv_length;
   float max_scthreshFM;
+  float min_scthreshFM;
+  float fmF1; //0.5
 
   /*pointer to FM-index metadata*/
   FM_METADATA *meta;
@@ -1566,7 +1578,7 @@ extern int  p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset);
 
 /* p7_hmmwindow.c */
 int p7_hmmwindow_init (P7_HMM_WINDOWLIST *list);
-P7_HMM_WINDOW *p7_hmmwindow_new (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity, uint32_t target_len, uint32_t target_seg_len);
+P7_HMM_WINDOW *p7_hmmwindow_new (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity, uint32_t target_len);
 
 
 
@@ -1736,7 +1748,7 @@ extern int fm_getComplement (char c, uint8_t alph_type);
 
 
 /* fm_general.c */
-extern uint32_t fm_computeSequenceOffset (const FM_DATA *fms, const FM_METADATA *meta, int block, int pos);
+extern uint64_t fm_computeSequenceOffset (const FM_DATA *fms, const FM_METADATA *meta, int block, uint64_t pos);
 extern int fm_getOriginalPosition (const FM_DATA *fms, const FM_METADATA *meta, int fm_id, int length, int direction, uint64_t fm_pos,
                                     uint32_t *segment_id, uint64_t *seg_pos);
 extern int fm_readFMmeta( FM_METADATA *meta);
@@ -1752,7 +1764,9 @@ extern int fm_updateIntervalForward( const FM_DATA *fm, const FM_CFG *cfg, char 
 extern int fm_updateIntervalReverse( const FM_DATA *fm, const FM_CFG *cfg, char c, FM_INTERVAL *interval);
 extern int fm_initSeeds (FM_DIAGLIST *list) ;
 extern FM_DIAG * fm_newSeed (FM_DIAGLIST *list);
-extern int fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, int first, int length, int complementarity, ESL_SQ *sq );
+extern int fm_initAmbiguityList (FM_AMBIGLIST *list);
+extern int fm_addAmbiguityRange (FM_AMBIGLIST *list, uint32_t start, uint32_t stop);
+extern int fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, uint64_t first, int length, int complementarity, ESL_SQ *sq, int fix_ambiguities );
 extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
 
 /* fm_ssv.c */

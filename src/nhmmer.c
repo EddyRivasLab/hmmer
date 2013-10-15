@@ -123,13 +123,16 @@ static ESL_OPTIONS options[] = {
   { "--rna",        eslARG_NONE,        FALSE, NULL, NULL,   "--dna",  NULL,  NULL,          "input alignment is RNA sequence data",                         8 },
 
   /* Control of FM pruning/extension */
-  { "--fm_ssv_length",   eslARG_INT,            "70", NULL, NULL,    NULL,  NULL, NULL,          "max length used when extending seed for MSV",                 9 },
   { "--fm_max_depth",    eslARG_INT,  /*16*/    "14", NULL, NULL,    NULL,  NULL, NULL,          "seed length at which bit threshold must be met",             9 },
-  { "--fm_drop_lim",     eslARG_REAL,          "0.2", NULL, NULL,   NULL,  NULL, NULL,           "in seed, max drop in a run of length [fm_drop_max_len]",     9 },
-  { "--fm_drop_max_len",  eslARG_INT,            "4", NULL, NULL,    NULL,  NULL, NULL,          "maximum run length with score under (max - [fm_drop_lim])",  9 },
-  { "--fm_req_pos",      eslARG_INT,             "5", NULL, NULL,    NULL,  NULL, NULL,          "minimum number consecutive positive scores in seed" ,        9 },
+  { "--fm_F1",           eslARG_REAL,         "0.50", NULL, NULL,    NULL,  NULL, NULL,          "promote length --fm_max_depth seeds w/ P<=fm_F1",            9 },
+  { "--fm_max_scthresh", eslARG_REAL, /*10.5*/"12.0", NULL, NULL,    NULL,  NULL, NULL,          "max req. score for FM seed (nats, before transition costs)", 9 },
+  { "--fm_min_scthresh", eslARG_REAL,         "10.0", NULL, NULL,    NULL,  NULL, NULL,          "min req. score for FM seed (nats, before transition costs)", 9 },
   { "--fm_sc_ratio",     eslARG_REAL, /*0.45*/"0.50", NULL, NULL,    NULL,  NULL, NULL,          "seed must maintain this bit ratio from one of two ends",     9 },
-  { "--fm_max_scthresh", eslARG_REAL, /*10.5*/"12.0", NULL, NULL,    NULL,  NULL, NULL,          "max total bits required in seed of length fm_max_depth",     9 },
+  { "--fm_drop_max_len",  eslARG_INT,            "4", NULL, NULL,    NULL,  NULL, NULL,          "maximum run length with score under (max - [fm_drop_lim])",  9 },
+  { "--fm_drop_lim",     eslARG_REAL,          "0.2", NULL, NULL,   NULL,  NULL, NULL,           "in seed, max drop in a run of length [fm_drop_max_len]",     9 },
+  { "--fm_req_pos",      eslARG_INT,             "5", NULL, NULL,    NULL,  NULL, NULL,          "minimum number consecutive positive scores in seed" ,        9 },
+  { "--fm_ssv_length",   eslARG_INT,            "70", NULL, NULL,    NULL,  NULL, NULL,          "length of window around FM seed to get full SSV diagonal",   9 },
+
 
 /* Other options */
   { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,     "assert target <seqdb> is in format <s>",                        12 },
@@ -159,7 +162,7 @@ static ESL_OPTIONS options[] = {
    */
   { "--B1",         eslARG_INT,         "110", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (SSV)",          99 },
   { "--B2",         eslARG_INT,         "240", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Vit)",          99 },
-  { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",         9 },
+  { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",         99 },
 
 
 
@@ -326,17 +329,28 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *queryfile, char *seqfile, 
   if (esl_opt_IsUsed(go, "--cut_nc")     && fprintf(ofp, "# model-specific thresholding:     NC cutoffs\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--cut_tc")     && fprintf(ofp, "# model-specific thresholding:     TC cutoffs\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--max")        && fprintf(ofp, "# Max sensitivity mode:            on [all heuristic filters off]\n")                       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--F1")         && fprintf(ofp, "# MSV filter P threshold:       <= %g\n",             esl_opt_GetReal(go, "--F1"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--F1")         && fprintf(ofp, "# SSV filter P threshold:       <= %g\n",             esl_opt_GetReal(go, "--F1"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--F2")         && fprintf(ofp, "# Vit filter P threshold:       <= %g\n",             esl_opt_GetReal(go, "--F2"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--F3")         && fprintf(ofp, "# Fwd filter P threshold:       <= %g\n",             esl_opt_GetReal(go, "--F3"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--nobias")     && fprintf(ofp, "# biased composition HMM filter:   off\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
-  if (esl_opt_IsUsed(go, "--B1")         && fprintf(ofp, "# biased comp MSV window len:      %d\n",             esl_opt_GetInteger(go, "--B1"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--B1")         && fprintf(ofp, "# biased comp SSV window len:      %d\n",             esl_opt_GetInteger(go, "--B1"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--B2")         && fprintf(ofp, "# biased comp Viterbi window len:  %d\n",             esl_opt_GetInteger(go, "--B2"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--B3")         && fprintf(ofp, "# biased comp Forward window len:  %d\n",             esl_opt_GetInteger(go, "--B3"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--dna")        && fprintf(ofp, "# input query is asserted as:      DNA\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--rna")        && fprintf(ofp, "# input query is asserted as:      RNA\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+
+
+  if (esl_opt_IsUsed(go, "--fm_max_depth")    && fprintf(ofp, "# FM Seed length:               <= %d\n",             esl_opt_GetInteger(go, "--fm_max_depth"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fm_F1")           && fprintf(ofp, "# FM seed P threshold:          <= %g\n",             esl_opt_GetReal(go, "--fm_F1"))              < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fm_max_scthresh") && fprintf(ofp, "# FM max threshhold (nats):     <= %g\n",             esl_opt_GetReal(go, "--fm_max_scthresh"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fm_min_scthresh") && fprintf(ofp, "# FM min threshhold (nats):     <= %g\n",             esl_opt_GetReal(go, "--fm_min_scthresh"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fm_sc_ratio")     && fprintf(ofp, "# FM score ratio req:           <= %g\n",             esl_opt_GetReal(go, "--fm_sc_ratio"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fm_drop_max_len") && fprintf(ofp, "# FM max neg-growth length:     <= %d\n",             esl_opt_GetInteger(go, "--fm_drop_max_len")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fm_drop_lim")     && fprintf(ofp, "# FM max run drop:              <= %g\n",             esl_opt_GetReal(go, "--fm_drop_lim"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fm_req_pos")      && fprintf(ofp, "# FM req positive run length:   <= %d\n",             esl_opt_GetInteger(go, "--fm_req_pos"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fm_ssv_length")   && fprintf(ofp, "# FM len used fot Vit window    <= %d\n",             esl_opt_GetInteger(go, "--fm_ssv_length"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 
   if (esl_opt_IsUsed(go, "--restrictdb_stkey") && fprintf(ofp, "# Restrict db to start at seq key: %s\n",            esl_opt_GetString(go, "--restrictdb_stkey"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -900,7 +914,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (dbformat == eslSQFILE_FMINDEX) {
 
         for(i=0; i<fm_cfg->meta->seq_count; i++)
-          add_id_length(id_length_list, fm_cfg->meta->seq_data[i].id, fm_cfg->meta->seq_data[i].start + fm_cfg->meta->seq_data[i].length - 1);
+          add_id_length(id_length_list, fm_cfg->meta->seq_data[i].target_id, fm_cfg->meta->seq_data[i].target_start + fm_cfg->meta->seq_data[i].length - 1);
 
         if (ncpus > 0)  sstatus = thread_loop_FM (info, threadObj, queue, dbfp);
         else            sstatus = serial_loop_FM (info, dbfp, ssv_watch_master, postssv_watch_master, read_watch_master, watch_slave);
@@ -965,7 +979,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       }
 
       if (dbformat == eslSQFILE_FMINDEX) {
-        info[0].pli->nseqs = fm_meta->seq_data[fm_meta->seq_count-1].id + 1;
+        info[0].pli->nseqs = fm_meta->seq_data[fm_meta->seq_count-1].target_id + 1;
         info[0].pli->nres  = resCnt;
       }
 
@@ -1270,7 +1284,6 @@ serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp, ESL_STOPWATCH *ssv_watch_mas
 
     esl_stopwatch_Stop(watch_slave);
     esl_stopwatch_Include(read_watch_master, watch_slave);
-
 
     fmb.SA = fmf.SA;
     fmb.T  = fmf.T;

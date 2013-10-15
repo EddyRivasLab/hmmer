@@ -12,7 +12,7 @@
 
 
 #define FM_BLOCK_COUNT 100000 //max number of SQ objects in a block
-#define FM_BLOCK_OVERLAP 100000 //100 Kbases of overlap, at most, between adjascent FM-index blocks
+#define FM_BLOCK_OVERLAP 20000 //20 Kbases of overlap, at most, between adjascent FM-index blocks
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
@@ -149,20 +149,21 @@ ERROR:
  *
  *            if SAsamp == NULL, don't store/write T or SAsamp
  */
-int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_cnt, uint32_t overlap,
+int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint32_t ambig_offset,
+                        uint16_t seq_cnt, uint16_t ambig_cnt, uint32_t overlap,
                         uint8_t *T, uint8_t *BWT,
                         int *SA, uint32_t *SAsamp,
                         uint32_t *occCnts_sb, uint32_t *cnts_sb,
                         uint16_t *occCnts_b, uint16_t *cnts_b,
-                        int N, FILE *fp
+                        uint64_t N, FILE *fp
     ) {
 
 
   int status;
-  int i,j,c,joffset;
+  uint64_t i,j,c,joffset;
   int chars_per_byte = 8/meta->charBits;
-  int compressed_bytes =   ((chars_per_byte-1+N)/chars_per_byte);
-  int term_loc;
+  uint32_t compressed_bytes =   ((chars_per_byte-1+N)/chars_per_byte);
+  uint32_t term_loc;
 
   int num_freq_cnts_b  = 1+ceil((double)N/(meta->freq_cnt_b));
   int num_freq_cnts_sb = 1+ceil((double)N/meta->freq_cnt_sb);
@@ -301,16 +302,20 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint16_t seq_c
 
 
   // Write the FM-index meta data
-  if(fwrite(&N, sizeof(N), 1, fp) !=  1)
+  if(fwrite(&N, sizeof(uint64_t), 1, fp) !=  1)
     esl_fatal( "buildAndWriteFMIndex: Error writing block_length in FM index.\n");
-  if(fwrite(&term_loc, sizeof(term_loc), 1, fp) !=  1)
+  if(fwrite(&term_loc, sizeof(uint32_t), 1, fp) !=  1)
     esl_fatal( "buildAndWriteFMIndex: Error writing terminal location in FM index.\n");
-  if(fwrite(&seq_offset, sizeof(seq_offset), 1, fp) !=  1)
+  if(fwrite(&seq_offset, sizeof(uint32_t), 1, fp) !=  1)
     esl_fatal( "buildAndWriteFMIndex: Error writing seq_offset in FM index.\n");
-  if(fwrite(&overlap, sizeof(overlap), 1, fp) !=  1)
+  if(fwrite(&ambig_offset, sizeof(uint32_t), 1, fp) !=  1)
+    esl_fatal( "buildAndWriteFMIndex: Error writing ambig_offset in FM index.\n");
+  if(fwrite(&overlap, sizeof(uint32_t), 1, fp) !=  1)
     esl_fatal( "buildAndWriteFMIndex: Error writing overlap in FM index.\n");
-  if(fwrite(&seq_cnt, sizeof(seq_cnt), 1, fp) !=  1)
+  if(fwrite(&seq_cnt, sizeof(uint16_t), 1, fp) !=  1)
     esl_fatal( "buildAndWriteFMIndex: Error writing seq_cnt in FM index.\n");
+  if(fwrite(&ambig_cnt, sizeof(uint16_t), 1, fp) !=  1)
+    esl_fatal( "buildAndWriteFMIndex: Error writing ambig_cnt in FM index.\n");
 
   // don't write Tcompressed or SAsamp if SAsamp == NULL
   if(Tcompressed != NULL && fwrite(Tcompressed, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
@@ -364,7 +369,7 @@ main(int argc, char **argv)
   clock_t t1, t2;
   struct tms ts1, ts2;
 
-  long i,j,k, c;
+  long i,j,c;
   int status = eslOK;
 
   int chars_per_byte;
@@ -387,29 +392,42 @@ main(int argc, char **argv)
   int block_size = 50000000;
   int sq_cnt = 0;
   int use_tmpsq = 0;
-  int reported_N = 0;
-  uint32_t block_length;
+  uint64_t block_length;
   uint64_t total_char_count = 0;
 
   int max_block_size;
 
-  int namelengths;
   int numblocks = 0;
   uint32_t numseqs = 0;
+
+
   int allocedseqs = 1000;
   uint32_t seq_offset = 0;
+  uint32_t ambig_offset = 0;
   uint32_t overlap = 0;
   uint16_t seq_cnt;
+  uint16_t ambig_cnt;
 
+  uint32_t prev_numseqs = 0;
 
   int compressed_bytes;
-  int term_loc;
+  uint32_t term_loc;
 
   ESL_GETOPTS     *go  = NULL;    /* command line processing                 */
+
+  uint8_t        ambig_repl = 0;
+  int            in_ambig_run = 0;
+  FM_AMBIGLIST   ambig_list;
 
   ESL_ALLOC (meta, sizeof(FM_METADATA));
   if (meta == NULL)
     esl_fatal("unable to allocate memory to store FM meta data\n");
+
+  ESL_ALLOC (meta->ambig_list, sizeof(FM_AMBIGLIST));
+  if (meta->ambig_list == NULL)
+      esl_fatal("unable to allocate memory to store FM ambiguity data\n");
+  fm_initAmbiguityList(meta->ambig_list);
+
 
   meta->alph_type   = fm_DNA;
   meta->freq_SA     = 8;
@@ -511,6 +529,10 @@ main(int argc, char **argv)
 //  max_block_size = FM_BLOCK_OVERLAP+block_size+1  + block_size*.2; // +1 for the '$'
   max_block_size = FM_BLOCK_OVERLAP+block_size+1  + block_size; // temporary hack to avoid memory over-runs (see end of 1101_fmindex_benchmarking/00NOTES)
 
+  if (alphatype == fm_DNA)
+    fm_initAmbiguityList(&ambig_list);
+
+
   /* Allocate BWT, Text, SA, and FM-index data structures, allowing storage of maximally large sequence*/
   ESL_ALLOC (T, max_block_size * sizeof(uint8_t));
   ESL_ALLOC (BWT, max_block_size * sizeof(uint8_t));
@@ -552,6 +574,7 @@ main(int argc, char **argv)
     if (status != eslOK)  ESL_XEXCEPTION(status, "failure reading sequence block");
 
     seq_offset = numseqs;
+    ambig_offset = meta->ambig_list->count;
 
     if (block->complete || block->count == 0) {
         use_tmpsq = FALSE;
@@ -582,11 +605,10 @@ main(int argc, char **argv)
       allocateSeqdata(meta, block->list+i, numseqs, &allocedseqs);
 
       //meta data
-      meta->seq_data[numseqs].id              = block->first_seqidx + i ;
-      meta->seq_data[numseqs].start           = block->list[i].start;
-      meta->seq_data[numseqs].offset          =  block_length; //meta->seq_data[numseqs-1].length + ( numseqs == 0 ? 0 : meta->seq_data[numseqs-1].offset);
-      meta->seq_data[numseqs].length          = 0;
-      meta->seq_data[numseqs].full_seq_length = 0;
+      meta->seq_data[numseqs].target_id       = block->first_seqidx + i ;
+      meta->seq_data[numseqs].target_start    = block->list[i].start;
+      meta->seq_data[numseqs].fm_start        = block_length;
+
       if (block->list[i].name == NULL) meta->seq_data[numseqs].name[0] = '\0';
           else  strcpy(meta->seq_data[numseqs].name, block->list[i].name );
       if (block->list[i].acc == NULL) meta->seq_data[numseqs].acc[0] = '\0';
@@ -600,39 +622,18 @@ main(int argc, char **argv)
         c = abc->sym[block->list[i].dsq[j]];
         if ( meta->alph_type == fm_DNA) {
           if (meta->inv_alph[c] == -1) {
-            if (!reported_N) {
-              printf ("You have selected alph_type 'dna', but your sequence database contains an ambiguity code.\n");
-              printf ("The database will be built, but seeds will not be formed around these positions.\n");
-              printf ("Use alph_type 'dna_full' if this bothers you.\n");
-              reported_N = 1;
-            }
+            // replace ambiguity characters by rotating through A,C,G, and T.
+            c = meta->alph[ambig_repl];
+            ambig_repl = (ambig_repl+1)%4;
 
-            if (meta->seq_data[numseqs].length > 0) {
-              //start a new sequence if the one I'm currently working on isn't empty
-              numseqs++;
-              allocateSeqdata(meta, block->list+i, numseqs, &allocedseqs);
-              //meta data
-              meta->seq_data[numseqs].id   = block->first_seqidx + i ;
-              meta->seq_data[numseqs].start = block->list[i].start + j;
-              meta->seq_data[numseqs].offset =  meta->seq_data[numseqs-1].length + ( numseqs == 0 ? 0 : meta->seq_data[numseqs-1].offset);
-              meta->seq_data[numseqs].length = 0;
-              meta->seq_data[numseqs].full_seq_length = 0;
-
-              if (block->list[i].name == NULL) meta->seq_data[numseqs].name[0] = '\0';
-                  else  strcpy(meta->seq_data[numseqs].name, block->list[i].name );
-              if (block->list[i].acc == NULL) meta->seq_data[numseqs].acc[0] = '\0';
-                  else  strcpy(meta->seq_data[numseqs].acc, block->list[i].acc );
-              if (block->list[i].source == NULL) meta->seq_data[numseqs].source[0] = '\0';
-                  else  strcpy(meta->seq_data[numseqs].source, block->list[i].source );
-              if (block->list[i].desc == NULL) meta->seq_data[numseqs].desc[0] = '\0';
-                  else  strcpy(meta->seq_data[numseqs].desc, block->list[i].desc );
-
+            if (!in_ambig_run) {
+              fm_addAmbiguityRange(meta->ambig_list, block_length, block_length);
+              in_ambig_run=1;
             } else {
-              meta->seq_data[numseqs].start++;
+              meta->ambig_list->ranges[meta->ambig_list->count - 1].upper = block_length;
             }
-
-            if (j>block->list[i].C) total_char_count++;
-            continue;
+          } else {
+            in_ambig_run=0;
           }
         } else if (meta->inv_alph[c] == -1) {
           esl_fatal("requested alphabet doesn't match input text\n");
@@ -648,41 +649,26 @@ main(int argc, char **argv)
       numseqs++;
     }
 
-    //spread the full sequence length of each sequence among its various segments
-    i=0;
-
-    while (i<numseqs) {
-      uint64_t len = meta->seq_data[i].length;
-      j=i+1;
-      while (j<numseqs && meta->seq_data[i].id == meta->seq_data[j].id) {
-        len += meta->seq_data[j].start +  meta->seq_data[j].length - meta->seq_data[i].start - meta->seq_data[i].length  ; // offsetting '-1's
-        j++;
-      }
-
-      for (k=i; k<j; k++)
-        meta->seq_data[k].full_seq_length = len;
-
-      i=j;
-    }
-
-
     T[block_length] = 0; // last character 0 is effectively '$' for suffix array
     block_length++;
 
     seq_cnt = numseqs-seq_offset;
+    ambig_cnt = meta->ambig_list->count - ambig_offset;
+
     //build and write FM-index for T.  This will be a BWT on the reverse of the sequence, required for reverse-traversal of the BWT
-    buildAndWriteFMIndex(meta, seq_offset, seq_cnt, (uint32_t)block->list[0].C, T, BWT, SA, SAsamp,
+    buildAndWriteFMIndex(meta, seq_offset, ambig_offset, seq_cnt, ambig_cnt, (uint32_t)block->list[0].C, T, BWT, SA, SAsamp,
         occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);
 
 
     if ( ! meta->fwd_only ) {
       //build and write FM-index for un-reversed T  (used to find reverse hits using forward traversal of the BWT
-      buildAndWriteFMIndex(meta, seq_offset, seq_cnt, 0, T, BWT, SA, NULL,
+      buildAndWriteFMIndex(meta, seq_offset, ambig_offset, seq_cnt, ambig_cnt, 0, T, BWT, SA, NULL,
           occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);
     }
 
-    numblocks++;
+    prev_numseqs = numseqs;
 
+    numblocks++;
   }
 
 
@@ -694,6 +680,7 @@ main(int argc, char **argv)
 
   meta->seq_count = numseqs;
   meta->block_count = numblocks;
+
 
 
     /* Finished writing the FM-index data to a temporary file. Now write
@@ -713,17 +700,17 @@ main(int argc, char **argv)
       fwrite(&(meta->freq_cnt_b),   sizeof(meta->freq_cnt_b),   1, fp) != 1 ||
       fwrite(&(meta->block_count),  sizeof(meta->block_count),  1, fp) != 1 ||
       fwrite(&(meta->seq_count),    sizeof(meta->seq_count),    1, fp) != 1 ||
+      fwrite(&(meta->ambig_list->count),  sizeof(meta->ambig_list->count),    1, fp) != 1 ||
       fwrite(&total_char_count,     sizeof(total_char_count),   1, fp) != 1
   )
     esl_fatal( "%s: Error writing meta data for FM index.\n", argv[0]);
 
 
-  for (i=0; i<numseqs; i++) {
-    if( fwrite(&(meta->seq_data[i].id),           sizeof(meta->seq_data[i].id),          1, fp) != 1 ||
-        fwrite(&(meta->seq_data[i].start),        sizeof(meta->seq_data[i].start),       1, fp) != 1 ||
-        fwrite(&(meta->seq_data[i].length),       sizeof(meta->seq_data[i].length),      1, fp) != 1 ||
-        fwrite(&(meta->seq_data[i].full_seq_length),  sizeof(meta->seq_data[i].full_seq_length), 1, fp) != 1 ||
-        fwrite(&(meta->seq_data[i].offset),       sizeof(meta->seq_data[i].offset),      1, fp) != 1 ||
+  for (i=0; i<meta->seq_count; i++) {
+    if( fwrite(&(meta->seq_data[i].target_id),    sizeof(meta->seq_data[i].target_id),          1, fp) != 1 ||
+        fwrite(&(meta->seq_data[i].target_start), sizeof(meta->seq_data[i].target_start),       1, fp) != 1 ||
+        fwrite(&(meta->seq_data[i].fm_start),     sizeof(meta->seq_data[i].fm_start),  1, fp) != 1 ||
+        fwrite(&(meta->seq_data[i].length),       sizeof(meta->seq_data[i].length), 1, fp) != 1 ||
         fwrite(&(meta->seq_data[i].name_length),  sizeof(meta->seq_data[i].name_length), 1, fp) != 1 ||
         fwrite(&(meta->seq_data[i].acc_length),   sizeof(meta->seq_data[i].acc_length), 1, fp) != 1 ||
         fwrite(&(meta->seq_data[i].source_length),sizeof(meta->seq_data[i].source_length), 1, fp) != 1 ||
@@ -736,10 +723,13 @@ main(int argc, char **argv)
       esl_fatal( "%s: Error writing meta data for FM index.\n", argv[0]);
   }
 
-  namelengths = 0;
+  for (i=0; i<meta->ambig_list->count; i++) {
+    if( fwrite(&(meta->ambig_list->ranges[i].lower), sizeof(meta->ambig_list->ranges[i].lower),       1, fp) != 1 ||
+        fwrite(&(meta->ambig_list->ranges[i].upper), sizeof(meta->ambig_list->ranges[i].upper),       1, fp) != 1
+    )
+      esl_fatal( "%s: Error writing ambiguity data for FM index.\n", argv[0]);
+  }
 
-  for (i=0; i<numseqs; i++)
-    namelengths += meta->seq_data[i].name_length + 1;
 
   /* now append the FM-index data in fptmp to the desired output file, fp */
   rewind(fptmp);
@@ -753,10 +743,14 @@ main(int argc, char **argv)
       esl_fatal( "%s: Error reading terminal location in FM index.\n", argv[0]);
     if(fread(&seq_offset, sizeof(seq_offset), 1, fptmp) !=  1)
       esl_fatal( "%s: Error reading seq_offset in FM index.\n", argv[0]);
+    if(fread(&ambig_offset, sizeof(ambig_offset ), 1, fptmp) !=  1)
+      esl_fatal( "%s: Error reading ambig_offset in FM index.\n", argv[0]);
     if(fread(&overlap, sizeof(overlap), 1, fptmp) !=  1)
       esl_fatal( "%s: Error reading overlap in FM index.\n", argv[0]);
     if(fread(&seq_cnt, sizeof(seq_cnt), 1, fptmp) !=  1)
       esl_fatal( "%s: Error reading seq_cnt in FM index.\n", argv[0]);
+    if(fread(&ambig_cnt, sizeof(ambig_cnt), 1, fptmp) !=  1)
+      esl_fatal( "%s: Error reading ambig_cnt in FM index.\n", argv[0]);
 
 
     compressed_bytes =   ((chars_per_byte-1+block_length)/chars_per_byte);
@@ -786,10 +780,14 @@ main(int argc, char **argv)
       esl_fatal( "%s: Error writing terminal location in FM index.\n", argv[0]);
     if(fwrite(&seq_offset, sizeof(seq_offset), 1, fp) !=  1)
       esl_fatal( "%s: Error writing seq_offset in FM index.\n", argv[0]);
+    if(fwrite(&ambig_offset, sizeof(ambig_offset), 1, fp) !=  1)
+      esl_fatal( "%s: Error writing ambig_offset in FM index.\n", argv[0]);
     if(fwrite(&overlap, sizeof(overlap), 1, fp) !=  1)
       esl_fatal( "%s: Error writing overlap in FM index.\n", argv[0]);
     if(fwrite(&seq_cnt, sizeof(seq_cnt), 1, fp) !=  1)
       esl_fatal( "%s: Error writing seq_cnt in FM index.\n", argv[0]);
+    if(fwrite(&ambig_cnt, sizeof(ambig_cnt), 1, fp) !=  1)
+      esl_fatal( "%s: Error writing ambig_cnt in FM index.\n", argv[0]);
 
 
     if(j==0 && fwrite(T, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
@@ -851,15 +849,11 @@ ERROR:
   if (cnts_b)     free(cnts_b);
   if (occCnts_sb) free(occCnts_sb);
   if (cnts_sb)    free(cnts_sb);
+  if (ambig_list.ranges) free(ambig_list.ranges);
 
-  if (meta) {
-    for (i=0; i<numseqs; i++)
-      free(meta->seq_data[i].name);
-    free(meta->seq_data);
-    free(meta->inv_alph);
-    free(meta->alph);
-    free(meta);
-  }
+  fm_metaDestroy(meta);
+  esl_getopts_Destroy(go);
+
 
   esl_sqfile_Close(sqfp);
   esl_alphabet_Destroy(abc);

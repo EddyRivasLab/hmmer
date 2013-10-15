@@ -63,6 +63,60 @@ ERROR:
 
 
 
+/* Function:  fm_initAmbiguityList()
+ *
+ * Synopsis:  initialize the object used to store a list of ambiguity ranges
+ *
+ * Returns:   eslEMEM in event of allocation failure, otherwise eslOK
+ */
+int
+fm_initAmbiguityList (FM_AMBIGLIST *list) {
+
+  int status;
+
+  list->size = 1000;
+
+  ESL_ALLOC(list->ranges, list->size * sizeof(FM_INTERVAL));
+  list->count = 0;
+
+  return eslOK;
+
+ERROR:
+  return eslEMEM;
+
+}
+
+/* Function:  fm_addAmbiguityRange()
+ *
+ * Synopsis:  return a pointer to the next seed element on the list,
+ *            increasing the size of the list, if necessary.
+ *
+ * Returns:   NULL in event of allocation failure, otherwise pointer to
+ *            the next seed diagonal
+ */
+int
+fm_addAmbiguityRange (FM_AMBIGLIST *list, uint32_t start, uint32_t stop) {
+  int status;
+
+  if (list->count == list->size) {
+    list->size *= 4;
+    ESL_REALLOC(list->ranges, list->size * sizeof(FM_INTERVAL));
+  }
+
+  list->ranges[list->count].lower = start;
+  list->ranges[list->count].upper = stop;
+  list->count++;
+
+  return eslOK;
+
+ERROR:
+  return eslFAIL;
+}
+
+
+
+
+
 /*********************************************************************
  *# 2. Interval / range computation
  *********************************************************************/
@@ -224,6 +278,37 @@ fm_getChar(uint8_t alph_type, int j, const uint8_t *B )
 
 
 
+/* Function:  fm_findOverlappingAmbiguityBlock()
+ * Synopsis:  Search in the meta->ambig_list array for the first
+ *            ambiguity range starting after <start>. That index is
+ *            returned
+ */
+int32_t
+fm_findOverlappingAmbiguityBlock (const FM_DATA *fm, const FM_METADATA *meta, uint32_t start, uint32_t end)
+{
+
+  uint64_t lo = fm->ambig_offset;
+  uint64_t hi = lo + fm->ambig_cnt - 1;
+  uint64_t mid;
+
+
+  // (1) Search in the meta->ambig_list array for the last ambiguity range
+  // ending before <start>, using binary search, first handling edge cases:
+  if (meta->ambig_list->ranges[lo].lower > end)     return -1;
+  if (meta->ambig_list->ranges[hi].upper < start)   return -1;
+  if (lo==hi)                                       return lo;
+
+  while (1) {
+    mid = (lo + hi + 1) / 2;  /* round up */
+    if      (meta->ambig_list->ranges[mid].upper     < start) lo = mid; /* too far left  */
+    else if (meta->ambig_list->ranges[mid-1].lower   > end ) hi = mid; /* too far right */
+    else return mid-1;          /* found it */
+  }
+
+
+}
+
+
 /* Function:  fm_convertRange2DSQ()
  * Synopsis:  Convert the BWT range into a DSQ.
  *
@@ -235,10 +320,11 @@ fm_getChar(uint8_t alph_type, int j, const uint8_t *B )
  *            that the positions are relative to the revcomp.
  */
 int
-fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, int first, int length, int complementarity, ESL_SQ *sq )
+fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, uint64_t first, int length, int complementarity, ESL_SQ *sq, int fix_ambiguities )
 {
-  int i;
+  uint64_t i, j;
   uint8_t c;
+
 
   if (complementarity == p7_COMPLEMENT)
     first = fm->N-(first+length)-1;
@@ -255,25 +341,28 @@ fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, int first, int l
      *  The char bits are the two starting at position 2*j'.
      *  Without branching, grab them by shifting B[j/4] right 6-2*j' bits,
      *  then masking to keep the final two bits
-     *
-     *  Need to account for the fact that in the DNA alphabet without ambiguity codes,
-     *  makehmmerdb skips ambiguity codes. Need to stick an N back in place
      */
-    int ambig_added = 0;
-    int segment_id = fm_computeSequenceOffset( fm, meta, 0, first);
-    for (i = first; i+ambig_added <= first+length-1; i++) {
-      if ( (segment_id < meta->seq_count - 1 )  &&
-           (i==(meta->seq_data[segment_id].start + meta->seq_data[segment_id].length -1) )
-         ) {
-        segment_id++;
-        while (i+ambig_added+1 < meta->seq_data[segment_id].start) {
-          sq->dsq[i+ambig_added-first+1] = sq->abc->Kp-3; //'N'
-          ambig_added++;
+    for (i = first; i <= first+length-1; i++)
+      sq->dsq[i-first+1] = (fm->T[i/4] >> ( 0x6 - ((i&0x3)*2) ) & 0x3);
+    sq->dsq[length+1] = eslDSQ_SENTINEL;
+
+    if (fix_ambiguities) {
+      /*  Account for the fact that in the DNA alphabet without ambiguity codes,
+       *  makehmmerdb turns ambiguity codes into one of the nucleotides. Need
+       *  to replace with an N.
+       */
+      int32_t pos  = fm_findOverlappingAmbiguityBlock (fm, meta, first, first+length-1 );
+      if (pos != -1) {
+        while (pos <= fm->ambig_offset + fm->ambig_cnt -1 && meta->ambig_list->ranges[pos].lower <= first+length-1) {
+          for (j=meta->ambig_list->ranges[pos].lower; j<=meta->ambig_list->ranges[pos].upper; j++)
+            if (j>=first && j<=first+length-1)
+              sq->dsq[j-first+1] = sq->abc->Kp-3; //'N'
+          pos++;
         }
       }
-      sq->dsq[i+ambig_added-first+1] = (fm->T[i/4] >> ( 0x6 - ((i&0x3)*2) ) & 0x3);
     }
-    sq->dsq[length+1] = eslDSQ_SENTINEL;
+
+
   } else if (meta->alph_type == fm_DNA_full) {
     for (i = first; i<= first+length-1; i++) {
       c = (fm->T[i/2] >> (((i&0x1)^0x1)*4) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
@@ -300,25 +389,24 @@ fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, int first, int l
  *            requested position. The matching entry is the one with the largest index i
  *            such that seq_data[i].offset < pos
  */
-uint32_t
-fm_computeSequenceOffset (const FM_DATA *fms, const FM_METADATA *meta, int block, int pos)
+uint64_t
+fm_computeSequenceOffset (const FM_DATA *fms, const FM_METADATA *meta, int block, uint64_t pos)
 {
 
-  uint32_t lo = fms[block].seq_offset;
-  uint32_t hi  = lo + fms[block].seq_cnt - 1;
-  uint32_t mid;
+  uint64_t lo = fms[block].seq_offset;
+  uint64_t hi  = lo + fms[block].seq_cnt - 1;
+  uint64_t mid;
 
   //binary search, first handling edge cases
-  if (lo==hi)                           return lo;
-  if (meta->seq_data[hi].offset <= pos) return hi;
+  if (lo==hi)                             return lo;
+  if (meta->seq_data[hi].fm_start <= pos) return hi;
 
   while (1) {
     mid = (lo + hi + 1) / 2;  /* round up */
-    if      (meta->seq_data[mid].offset <= pos) lo = mid; /* too far left  */
-    else if (meta->seq_data[mid-1].offset > pos) hi = mid; /* too far right */
+    if      (meta->seq_data[mid].fm_start <= pos) lo = mid; /* too far left  */
+    else if (meta->seq_data[mid-1].fm_start > pos) hi = mid; /* too far right */
     else return mid-1;                 /* found it */
   }
-
 
 }
 
@@ -349,22 +437,16 @@ fm_getOriginalPosition (const FM_DATA *fms, const FM_METADATA *meta, int fm_id, 
   if (complementarity == p7_COMPLEMENT)  // need location in forward context:
     fm_pos = fms->N - fm_pos - 1;
 
-
   *segment_id = fm_computeSequenceOffset( fms, meta, fm_id, fm_pos);
-  *seg_pos    =  ( fm_pos - meta->seq_data[ *segment_id ].offset) + 1;
+  *seg_pos    =  ( fm_pos - meta->seq_data[ *segment_id ].fm_start) + 1;
 
   if (complementarity == p7_COMPLEMENT) // now reverse orientation
     *seg_pos    =  meta->seq_data[ *segment_id ].length - *seg_pos + 1;
 
 
   //verify that the hit doesn't extend beyond the bounds of the target sequence
-  if (complementarity == p7_COMPLEMENT) {
-    if (*seg_pos + length  > meta->seq_data[ *segment_id ].start + meta->seq_data[ *segment_id ].length )
-      return eslERANGE;
-  } else {
-    if (*seg_pos + length - 1 >  meta->seq_data[ *segment_id ].full_seq_length  -  meta->seq_data[ *segment_id ].start + 1)
-      return eslERANGE;
-  }
+  if (*seg_pos + length - 1  > meta->seq_data[ *segment_id ].length )
+    return eslERANGE;
 
   return eslOK;
 }
@@ -383,6 +465,7 @@ fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go ) {
   cfg->consec_pos_req  = (go ? esl_opt_GetInteger(go, "--fm_req_pos") : -1);
   cfg->score_ratio_req = (go ? esl_opt_GetReal(go, "--fm_sc_ratio") : -1.0);
   cfg->max_scthreshFM  = (go ? esl_opt_GetReal(go, "--fm_max_scthresh") : -1.0);
+  cfg->min_scthreshFM  = (go ? esl_opt_GetReal(go, "--fm_min_scthresh") : -1.0);
 
   return eslOK;
 }
@@ -403,7 +486,7 @@ fm_FM_destroy ( FM_DATA *fm, int isMainFM)
   if (isMainFM && fm->SA) free (fm->SA);
 }
 
-/* Function:  readFM()
+/* Function:  fm_FM_read()
  * Synopsis:  Read the FM index off disk
  * Purpose:   Read the FM-index as written by fmbuild.
  *            First read the metadata header, then allocate space for the full index,
@@ -413,7 +496,7 @@ int
 fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
 {
   //shortcut variables
-  int *C               = NULL;
+  int64_t *C               = NULL;
 
   int status;
   int i;
@@ -421,26 +504,29 @@ fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
   uint16_t *occCnts_b  = NULL;  //convenience variables, used to simplify macro calls
   uint32_t *occCnts_sb = NULL;
 
-  int compressed_bytes;
+  int32_t compressed_bytes;
   int num_freq_cnts_b;
   int num_freq_cnts_sb;
   int num_SA_samples;
-  int prevC;
+  int64_t prevC;
   int cnt;
   int chars_per_byte = 8/meta->charBits;
 
 
-  if(fread(&(fm->N), sizeof(fm->N), 1, meta->fp) !=  1)
+  if(fread(&(fm->N), sizeof(uint64_t), 1, meta->fp) !=  1)
     esl_fatal( "%s: Error reading block_length in FM index.\n", __FILE__);
-  if(fread(&(fm->term_loc), sizeof(fm->term_loc), 1, meta->fp) !=  1)
+  if(fread(&(fm->term_loc), sizeof(uint32_t), 1, meta->fp) !=  1)
     esl_fatal( "%s: Error reading terminal location in FM index.\n", __FILE__);
-  if(fread(&(fm->seq_offset), sizeof(fm->seq_offset), 1, meta->fp) !=  1)
+  if(fread(&(fm->seq_offset), sizeof(uint32_t), 1, meta->fp) !=  1)
     esl_fatal( "%s: Error reading seq_offset in FM index.\n", __FILE__);
-  if(fread(&(fm->overlap), sizeof(fm->overlap), 1, meta->fp) !=  1)
+  if(fread(&(fm->ambig_offset), sizeof(uint32_t), 1, meta->fp) !=  1)
+    esl_fatal( "%s: Error reading ambig_offset in FM index.\n", __FILE__);
+  if(fread(&(fm->overlap), sizeof(uint32_t), 1, meta->fp) !=  1)
     esl_fatal( "%s: Error reading overlap in FM index.\n", __FILE__);
-  if(fread(&(fm->seq_cnt), sizeof(fm->seq_cnt), 1, meta->fp) !=  1)
+  if(fread(&(fm->seq_cnt), sizeof(uint16_t), 1, meta->fp) !=  1)
     esl_fatal( "%s: Error reading seq_cnt in FM index.\n", __FILE__);
-
+  if(fread(&(fm->ambig_cnt), sizeof(uint16_t), 1, meta->fp) !=  1)
+    esl_fatal( "%s: Error reading ambig_cnt in FM index.\n", __FILE__);
 
   compressed_bytes =   ((chars_per_byte-1+fm->N)/chars_per_byte);
   num_freq_cnts_b  = 1+ceil((double)fm->N/meta->freq_cnt_b);
@@ -448,18 +534,18 @@ fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
   num_SA_samples   = 1+floor((double)fm->N/meta->freq_SA);
 
   // allocate space, then read the data
-  if (getAll) ESL_ALLOC (fm->T, compressed_bytes );
-  ESL_ALLOC (fm->BWT_mem, compressed_bytes + 31 ); // +31 for manual 16-byte alignment  ( typically only need +15, but this allows offset in memory, plus offset in case of <16 bytes of characters at the end)
+  if (getAll) ESL_ALLOC (fm->T, sizeof(uint8_t) * compressed_bytes );
+  ESL_ALLOC (fm->BWT_mem,  sizeof(uint8_t) * (compressed_bytes + 31) ); // +31 for manual 16-byte alignment  ( typically only need +15, but this allows offset in memory, plus offset in case of <16 bytes of characters at the end)
      fm->BWT =   (uint8_t *) (((unsigned long int)fm->BWT_mem + 15) & (~0xf));   // align vector memory on 16-byte boundaries
   if (getAll) ESL_ALLOC (fm->SA, num_SA_samples * sizeof(uint32_t));
-  ESL_ALLOC (fm->C, (1+meta->alph_size) * sizeof(uint32_t));
+  ESL_ALLOC (fm->C, (1+meta->alph_size) * sizeof(int64_t));
   ESL_ALLOC (fm->occCnts_b,  num_freq_cnts_b *  (meta->alph_size ) * sizeof(uint16_t)); // every freq_cnt positions, store an array of ints
   ESL_ALLOC (fm->occCnts_sb,  num_freq_cnts_sb *  (meta->alph_size ) * sizeof(uint32_t)); // every freq_cnt positions, store an array of ints
 
 
   if(getAll && fread(fm->T, sizeof(uint8_t), compressed_bytes, meta->fp) != compressed_bytes)
     esl_fatal( "%s: Error reading T in FM index.\n", __FILE__);
-  if(fread(fm->BWT, sizeof(uint8_t), compressed_bytes, meta->fp) != compressed_bytes)
+  if( fread(fm->BWT, sizeof(uint8_t), compressed_bytes, meta->fp)  != compressed_bytes)
     esl_fatal( "%s: Error reading BWT in FM index.\n", __FILE__);
   if(getAll && fread(fm->SA, sizeof(uint32_t), (size_t)num_SA_samples, meta->fp) != (size_t)num_SA_samples)
     esl_fatal( "%s: Error reading SA in FM index.\n", __FILE__);
@@ -517,6 +603,9 @@ fm_readFMmeta( FM_METADATA *meta)
   int status;
   int i;
 
+
+  fm_initAmbiguityList(meta->ambig_list);
+
   if( fread(&(meta->fwd_only),     sizeof(meta->fwd_only),     1, meta->fp) != 1 ||
       fread(&(meta->alph_type),    sizeof(meta->alph_type),    1, meta->fp) != 1 ||
       fread(&(meta->alph_size),    sizeof(meta->alph_size),    1, meta->fp) != 1 ||
@@ -526,6 +615,7 @@ fm_readFMmeta( FM_METADATA *meta)
       fread(&(meta->freq_cnt_b),   sizeof(meta->freq_cnt_b),   1, meta->fp) != 1 ||
       fread(&(meta->block_count),  sizeof(meta->block_count),  1, meta->fp) != 1 ||
       fread(&(meta->seq_count),    sizeof(meta->seq_count),    1, meta->fp) != 1 ||
+      fread(&(meta->ambig_list->count), sizeof(meta->ambig_list->count),    1, meta->fp) != 1 ||
       fread(&(meta->char_count),   sizeof(meta->char_count),   1, meta->fp) != 1
   )
     esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
@@ -535,13 +625,13 @@ fm_readFMmeta( FM_METADATA *meta)
   if (meta->seq_data == NULL  )
     esl_fatal("unable to allocate memory to store FM meta data\n");
 
+  printf("===================\n");
 
   for (i=0; i<meta->seq_count; i++) {
-    if( fread(&(meta->seq_data[i].id),           sizeof(meta->seq_data[i].id),           1, meta->fp) != 1 ||
-        fread(&(meta->seq_data[i].start),        sizeof(meta->seq_data[i].start),        1, meta->fp) != 1 ||
+    if( fread(&(meta->seq_data[i].target_id),    sizeof(meta->seq_data[i].target_id),           1, meta->fp) != 1 ||
+        fread(&(meta->seq_data[i].target_start), sizeof(meta->seq_data[i].target_start),        1, meta->fp) != 1 ||
+        fread(&(meta->seq_data[i].fm_start),     sizeof(meta->seq_data[i].fm_start),        1, meta->fp) != 1 ||
         fread(&(meta->seq_data[i].length),       sizeof(meta->seq_data[i].length),       1, meta->fp) != 1 ||
-        fread(&(meta->seq_data[i].full_seq_length), sizeof(meta->seq_data[i].full_seq_length), 1, meta->fp) != 1 ||
-        fread(&(meta->seq_data[i].offset),       sizeof(meta->seq_data[i].offset),       1, meta->fp) != 1 ||
         fread(&(meta->seq_data[i].name_length),  sizeof(meta->seq_data[i].name_length),  1, meta->fp) != 1 ||
         fread(&(meta->seq_data[i].acc_length),   sizeof(meta->seq_data[i].acc_length),   1, meta->fp) != 1 ||
         fread(&(meta->seq_data[i].source_length),sizeof(meta->seq_data[i].source_length),1, meta->fp) != 1 ||
@@ -562,6 +652,20 @@ fm_readFMmeta( FM_METADATA *meta)
       esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
 
   }
+
+
+  ESL_ALLOC (meta->ambig_list->ranges,  meta->ambig_list->count  * sizeof(FM_INTERVAL));
+  if (meta->ambig_list->ranges == NULL  )
+    esl_fatal("unable to allocate memory to store FM ambiguity data\n");
+  meta->ambig_list->size = meta->ambig_list->count;
+
+  for (i=0; i<meta->ambig_list->count; i++) {
+    if( fread(&(meta->ambig_list->ranges[i].lower),   sizeof(meta->ambig_list->ranges[i].lower),       1, meta->fp) != 1 ||
+        fread(&(meta->ambig_list->ranges[i].upper),   sizeof(meta->ambig_list->ranges[i].upper),       1, meta->fp) != 1
+    )
+      esl_fatal( "%s: Error reading ambiguity data for FM index.\n", __FILE__);
+  }
+
 
   return eslOK;
 
@@ -593,8 +697,19 @@ fm_configAlloc(FM_CFG **cfg)
   *cfg = NULL;
 
   ESL_ALLOC(*cfg, sizeof(FM_CFG) );
+  if ((*cfg) == NULL)
+    esl_fatal("unable to allocate memory to store FM config data\n");
 
   ESL_ALLOC((*cfg)->meta, sizeof(FM_METADATA));
+  if ((*cfg)->meta == NULL)
+    esl_fatal("unable to allocate memory to store FM meta data\n");
+
+  ESL_ALLOC ((*cfg)->meta->ambig_list, sizeof(FM_AMBIGLIST));
+  if ((*cfg)->meta->ambig_list == NULL)
+      esl_fatal("unable to allocate memory to store FM ambiguity data\n");
+
+
+
 
   return eslOK;
 
@@ -641,6 +756,11 @@ fm_metaDestroy(FM_METADATA *meta ) {
 
     }
     free(meta->seq_data);
+
+    if (meta->ambig_list) {
+      if (meta->ambig_list->ranges) free(meta->ambig_list->ranges);
+      free(meta->ambig_list);
+    }
 
     fm_alphabetDestroy(meta);
     free (meta);

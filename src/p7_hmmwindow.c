@@ -51,7 +51,7 @@ ERROR:
  */
 
 P7_HMM_WINDOW *
-p7_hmmwindow_new (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity, uint32_t target_len, uint32_t target_seg_end) {
+p7_hmmwindow_new (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity, uint32_t target_len) {
   int status;
   P7_HMM_WINDOW *window;
 
@@ -69,7 +69,6 @@ p7_hmmwindow_new (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t f
   window->score            = score;
   window->complementarity  = complementarity;
   window->target_len       = target_len;
-  window->target_seg_end   = target_seg_end;
 
   list->count++;
 

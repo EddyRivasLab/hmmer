@@ -366,9 +366,7 @@ main(int argc,  char *argv[])
         for (i = 0; i< hit_num; i++) {
 
           status = fm_getOriginalPosition (fmsf, meta, hits[i].block, hits[i].length, hits[i].direction, hits[i].start,  &(hits[i].block), &(hits[i].start) );
-          hits[i].sortkey = (status==eslERANGE ? -1 : meta->seq_data[ hits[i].block ].id);
-
-          //printf("block %d , start %d\n", hits[i].block, hits[i].start);
+          hits[i].sortkey = (status==eslERANGE ? -1 : meta->seq_data[ hits[i].block ].target_id);
 
           if (hits[i].sortkey != -1)
             hit_num2++; // legitimate hit
