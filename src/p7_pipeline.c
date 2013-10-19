@@ -1517,16 +1517,19 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
    * This variant of SSV will scan a long sequence and find
    * short high-scoring regions.
    */
-  esl_stopwatch_Start(watch_slave);
+  if (watch_slave) {
+    esl_stopwatch_Start(watch_slave);
+  }
   if (fmf) // using an FM-index
     p7_SSVFM_longlarget(om, 2.0, bg, pli->F1, fmf, fmb, fm_cfg, data, &msv_windowlist );
   else // compare directly to sequence
     p7_SSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, data, bg, pli->F1, &msv_windowlist);
-  esl_stopwatch_Stop(watch_slave);
-  esl_stopwatch_Include(ssv_watch_master, watch_slave);
+  if (watch_slave) {
+    esl_stopwatch_Stop(watch_slave);
+    esl_stopwatch_Include(ssv_watch_master, watch_slave);
+    esl_stopwatch_Start(watch_slave);
+  }
 
-
-  esl_stopwatch_Start(watch_slave);
   /* convert hits to windows, merging neighboring windows
    */
   if ( msv_windowlist.count > 0 ) {
@@ -1662,10 +1665,10 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
     esl_sq_Destroy(pli_tmp->tmpseq);
     free (vit_windowlist.windows);
   }
-
-  esl_stopwatch_Stop(watch_slave);
-  esl_stopwatch_Include(postssv_watch_master, watch_slave);
-
+  if (watch_slave) {
+    esl_stopwatch_Stop(watch_slave);
+    esl_stopwatch_Include(postssv_watch_master, watch_slave);
+  }
 
   if (msv_windowlist.windows != NULL) free (msv_windowlist.windows);
 

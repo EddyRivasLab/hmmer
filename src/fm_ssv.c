@@ -804,11 +804,8 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
 
   invP_FM = esl_gumbel_invsurv(P_fm, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   sc_threshFM = ESL_MIN(fm_cfg->max_scthreshFM,  (invP_FM * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec) ) ;
-
   sc_threshFM = ESL_MAX(sc_threshFM, ESL_MIN(sc_thresh, fm_cfg->min_scthreshFM));
 
-  printf ("threshFM: %15s %d  th:%.2f  FMth: %.2f\n", om->name, om->M, sc_thresh, sc_threshFM);
-  exit(0);
 
   //get diagonals that score above sc_threshFM
   status = FM_getSeeds(fmf, fmb, fm_cfg, ssvdata, om->abc->Kp, sc_threshFM, &seeds );
