@@ -1154,7 +1154,6 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
       dom_score  = (bitscore - (nullsc))  / eslCONST_LOG2;
       dom_lnP   = esl_exp_logsurv(dom_score, om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
 
-
       if (pli->do_alignment_score_calc)
         p7_pli_computeAliScores(dom, subseq, data, om->abc->Kp);
 

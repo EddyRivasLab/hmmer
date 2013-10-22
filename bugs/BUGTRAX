@@ -1,3 +1,18 @@
+ID              h103
+TITLE           Funny characters printed in E-value for hits with score >1000
+AFFECTS         3.1b1
+FIXED_IN        -
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     Brian Osborne <bosborne11@verizon.net>
+OPENED_DATE     TJW, Tue Oct 22 17:35:33 2013
+CLOSED_DATE
+DESCRIPTION
+  Printf prints bad characters in response to a band of nearly-zero values,
+  unless the flush-to-zero and denormals-are-zero flags are set. These were
+  being set for worker threads, but not the main thread, where final E-values
+  are calculated.
+//
 ID              h102
 TITLE           Marginal hits late in target might be filtered in an nhmmer search
 AFFECTS         3.1b1

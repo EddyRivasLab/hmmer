@@ -757,7 +757,7 @@ pipeline_thread(void *arg)
 #endif /*eslAUGMENT_ALPHABET*/
   
 
-  impl_ThreadInit();
+  impl_Init();
 
   obj = (ESL_THREADS *) arg;
   esl_threads_Started(obj, &workeridx);

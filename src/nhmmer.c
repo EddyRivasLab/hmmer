@@ -551,6 +551,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if((fm_meta->fp = fopen(cfg->dbfile, "rb")) == NULL)
       p7_Fail("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
 
+
     esl_stopwatch_Start(watch_slave);
     if ( (status = fm_readFMmeta(fm_meta)) != eslOK)
       p7_Fail("Failed to read FM meta data from target sequence database %s\n",      cfg->dbfile);
@@ -1422,7 +1423,7 @@ pipeline_thread(void *arg)
   ESL_SQ_BLOCK  *block = NULL;
   void          *newBlock;
   
-  impl_ThreadInit();
+  impl_Init();
 
   obj = (ESL_THREADS *) arg;
   esl_threads_Started(obj, &workeridx);
@@ -1558,7 +1559,7 @@ pipeline_thread_FM(void *arg)
   void           *newFMinfo = NULL;
 
 
-  impl_ThreadInit();
+  impl_Init();
 
   obj = (ESL_THREADS *) arg;
   esl_threads_Started(obj, &workeridx);

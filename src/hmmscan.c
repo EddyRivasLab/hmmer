@@ -1258,7 +1258,7 @@ pipeline_thread(void *arg)
   P7_OM_BLOCK   *block;
   void          *newBlock;
   
-  impl_ThreadInit();
+  impl_Init();
 
   obj = (ESL_THREADS *) arg;
   esl_threads_Started(obj, &workeridx);

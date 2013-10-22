@@ -14,10 +14,9 @@
 
 #include <xmmintrin.h>    /* SSE  */
 #include <emmintrin.h>    /* SSE2 */
-#ifdef _PMMINTRIN_H_INCLUDED
+#ifdef __SSE3__
 #include <pmmintrin.h>   /* DENORMAL_MODE */
 #endif
-
 #include "hmmer.h"
 
 /* In calculating Q, the number of vectors we need in a row, we have
@@ -362,21 +361,6 @@ impl_Init(void)
    */
   _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
 #endif
-}
-
-
-static inline void
-impl_ThreadInit(void)
-{
-#ifdef HAVE_FLUSH_ZERO_MODE
-  /* In order to avoid the performance penalty dealing with sub-normal
-   * values in the floating point calculations, set the processor flag
-   * so sub-normals are "flushed" immediately to zero.
-   * On OS X, need to reset this flag for each thread
-   * (see TW notes 05/08/10 for details)
-   */
-  _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
-#endif
 
 #ifdef _PMMINTRIN_H_INCLUDED
   /*
@@ -387,9 +371,7 @@ impl_ThreadInit(void)
    */
   _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
 #endif
-
 }
-
 #endif /* P7_IMPL_SSE_INCLUDED */
 
 
