@@ -14,10 +14,11 @@
 static int
 FM_hit_sorter(const void *a, const void *b)
 {
-    FM_DIAG *d1 = (FM_DIAG*)a;
-    FM_DIAG *d2 = (FM_DIAG*)b;
 
-    return 2 * (d1->sortkey > d2->sortkey) - 1;  // same as the test below
+    return 2 * (((FM_DIAG*)a)->sortkey > ((FM_DIAG*)b)->sortkey) - 1;  // same as the test below
+
+//    FM_DIAG *d1 = (FM_DIAG*)a;
+//    FM_DIAG *d2 = (FM_DIAG*)b;
 //    if      ( d1->sortkey > d2->sortkey) return 1;
 //    else                                 return -1;
 
@@ -258,25 +259,12 @@ FM_Recurse( int depth, int Kp, int fm_direction,
 
   int c, i, k;
   FM_INTERVAL interval_1_new, interval_2_new;
-  float cnts[4];
-  float bias_corr = 0.0;
-
 
   for (c=0; c< fm_cfg->meta->alph_size; c++) {//acgt
     int dppos = last;
     seq[depth-1] = fm_cfg->meta->alph[c];
     seq[depth] = '\0';
 
-/*
-    //correct for biased composition with modest-length sequence
-    bias_corr = 0.0;
-    if (depth > 6 && fm_cfg->meta->alph_type == fm_DNA) {
-      int j;
-      for (j=0; j<4; j++)     cnts[j] = (float)depth/8.0;  //50% of count will be pseudo count, cut it in half
-      for (j=0; j<depth; j++) cnts[fm_cfg->meta->inv_alph[seq[j]]] += 0.5;
-      for (j=0; j<4; j++)     bias_corr +=   cnts[j]/depth * log( 4.0*cnts[j]/depth);   //   p * log(p/q)
-    }
-*/
     for (i=first; i<=last; i++) { // for each surviving diagonal from the previous round
 
         if (dp_pairs[i].model_direction == fm_forward)
@@ -289,7 +277,7 @@ FM_Recurse( int depth, int Kp, int fm_direction,
         } else
           next_score = ssvdata->ssv_scores_f[k*Kp + c];
 
-        sc = dp_pairs[i].score + next_score - bias_corr;
+        sc = dp_pairs[i].score + next_score;
 
 
 
@@ -326,7 +314,7 @@ FM_Recurse( int depth, int Kp, int fm_direction,
         } else if (  sc <= 0                                                                                        //some other path in the string enumeration tree will do the job
             || depth == fm_cfg->max_depth                                                                            //can't extend anymore, 'cause we've reached the pruning length
             || (depth == dp_pairs[i].score_peak_len + fm_cfg->drop_max_len)                                        //too many consecutive positions with a negative total score contribution (sort of like Xdrop)
-            || (depth >4 && (float)sc/(float)depth < fm_cfg->score_ratio_req)                                      //score density is too low (don't bother checking in the first couple slots
+            || (depth >4 && (float)sc/(float)depth < fm_cfg->score_density_req)                                      //score density is too low (don't bother checking in the first couple slots
             || (dp_pairs[i].max_consec_pos < fm_cfg->consec_pos_req  &&                                            //a seed is expected to have at least one run of positive-scoring matches at least length consec_pos_req;  if it hasn't,  (see Tue Nov 23 09:39:54 EST 2010)
                    ( (depth >= 10 &&  (float)sc/(float)depth < sc_threshFM/(float)(fm_cfg->max_depth))                  // if we're at least half way across the sequence, and score density is too low, abort -- if the density on the other side is high enough, I'll find it on the reverse sweep
                    || depth == fm_cfg->max_depth-fm_cfg->consec_pos_req+1 )                                             // if we're close to the end of the sequence, abort -- if that end does have sufficiently long all-positive run, I'll find it on the reverse sweep
@@ -748,9 +736,8 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
          const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_SCOREDATA *ssvdata,
          P7_HMM_WINDOWLIST *windowlist)
 {
-  float P_fm = 0.5;
   float sc_thresh, sc_threshFM;
-  float invP, invP_FM;
+  float invP;
   float nullsc;
 
   int i;
@@ -799,12 +786,13 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
    *  really matter - in any case, both the bg and om models will change with roughly
    *  1 bit for each doubling of the length model, so they offset.
    */
+
   invP = esl_gumbel_invsurv(F1, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   sc_thresh =   (invP * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec);
 
-  invP_FM = esl_gumbel_invsurv(P_fm, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-  sc_threshFM = ESL_MIN(fm_cfg->max_scthreshFM,  (invP_FM * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec) ) ;
-  sc_threshFM = ESL_MAX(sc_threshFM, ESL_MIN(sc_thresh, fm_cfg->min_scthreshFM));
+  sc_threshFM = ESL_MAX(7.5,  fm_cfg->scthreshFM * fm_cfg->info_deficit_ratio); // that's 7.5 nats. Any lower than this, and I get nervous about run time.
+
+
 
 
   //get diagonals that score above sc_threshFM

@@ -920,6 +920,9 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
 
     p7_oprofile_ReconfigRestLength(om, orig_L);
 
+    if (domcorrection < envsc)  //negative bias correction shouldn't happen. Stick with the original score.
+      envsc = domcorrection;
+
     dom->domcorrection = domcorrection - envsc;
 
   }  else {

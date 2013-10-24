@@ -526,12 +526,9 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 
         if ( cfg->abc->type == eslDNA || cfg->abc->type == eslRNA ) {
           //If user hasn't overridden defaults, assign the nucleotide defaults
-          if ( !esl_opt_IsUsed(go, "--mx") )
-            mx      = "DNA1";
-          if ( !esl_opt_IsUsed(go, "--popen") )
-            popen   = 0.03125;
-          if ( !esl_opt_IsUsed(go, "--pextend") )
-            pextend = 0.75;
+          if ( !esl_opt_IsUsed(go, "--mx") )       mx      = "DNA1";
+          if ( !esl_opt_IsUsed(go, "--popen") )    popen   = 0.03125;
+          if ( !esl_opt_IsUsed(go, "--pextend") )  pextend = 0.75;
         }
         if (esl_opt_IsOn(go, "--mxfile")) status = p7_builder_SetScoreSystem (info[i].bld, esl_opt_GetString(go, "--mxfile"), NULL, popen, pextend, info[i].bg);
         else                              status = p7_builder_LoadScoreSystem(info[i].bld, mx,                                      popen, pextend, info[i].bg);
