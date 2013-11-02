@@ -624,7 +624,6 @@ fm_readFMmeta( FM_METADATA *meta)
   if (meta->seq_data == NULL  )
     esl_fatal("unable to allocate memory to store FM meta data\n");
 
-  printf("===================\n");
 
   for (i=0; i<meta->seq_count; i++) {
     if( fread(&(meta->seq_data[i].target_id),    sizeof(meta->seq_data[i].target_id),           1, meta->fp) != 1 ||

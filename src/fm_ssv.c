@@ -279,8 +279,6 @@ FM_Recurse( int depth, int Kp, int fm_direction,
 
         sc = dp_pairs[i].score + next_score;
 
-
-
         if ( sc >= sc_threshFM ) { // this is a seed I want to extend
 
           interval_1_new.lower = interval_1->lower;
@@ -314,7 +312,7 @@ FM_Recurse( int depth, int Kp, int fm_direction,
         } else if (  sc <= 0                                                                                        //some other path in the string enumeration tree will do the job
             || depth == fm_cfg->max_depth                                                                            //can't extend anymore, 'cause we've reached the pruning length
             || (depth == dp_pairs[i].score_peak_len + fm_cfg->drop_max_len)                                        //too many consecutive positions with a negative total score contribution (sort of like Xdrop)
-            || (depth >4 && (float)sc/(float)depth < fm_cfg->score_density_req)                                      //score density is too low (don't bother checking in the first couple slots
+            || (depth > 4 && (float)sc/(float)depth < fm_cfg->score_density_req)                                      //score density is too low (don't bother checking in the first couple slots
             || (dp_pairs[i].max_consec_pos < fm_cfg->consec_pos_req  &&                                            //a seed is expected to have at least one run of positive-scoring matches at least length consec_pos_req;  if it hasn't,  (see Tue Nov 23 09:39:54 EST 2010)
                    ( (depth >= 10 &&  (float)sc/(float)depth < sc_threshFM/(float)(fm_cfg->max_depth))                  // if we're at least half way across the sequence, and score density is too low, abort -- if the density on the other side is high enough, I'll find it on the reverse sweep
                    || depth == fm_cfg->max_depth-fm_cfg->consec_pos_req+1 )                                             // if we're close to the end of the sequence, abort -- if that end does have sufficiently long all-positive run, I'll find it on the reverse sweep
@@ -459,7 +457,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
 
   ESL_ALLOC(seq, 50*sizeof(char));
 
-
   for (i=0; i<fm_cfg->meta->alph_size; i++) {
     int fwd_cnt=0;
     int rev_cnt=0;
@@ -480,7 +477,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
     for (k = 1; k <= ssvdata->M; k++) // there's no need to bother keeping an entry starting at the last position (gm->M)
     {
 
-
       sc = ssvdata->ssv_scores_f[k*Kp + i];
       if (sc>0) { // we'll extend any positive-scoring diagonal
         /* fwd on model, fwd on FM (really, reverse on FM, but the FM is on a reversed string, so its fwd*/
@@ -498,9 +494,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
           fwd_cnt++;
         }
 
-
         /* rev on model, rev on FM (the FM is on the unreversed string)*/
-
         if (k > 4) { // don't bother starting a reverse diagonal so close to the start of the model
           dp_pairs_rev[rev_cnt].pos =             k;
           dp_pairs_rev[rev_cnt].score =           sc;
@@ -512,7 +506,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
           dp_pairs_rev[rev_cnt].model_direction = fm_backward;
           rev_cnt++;
         }
-
       }
 
 
@@ -571,7 +564,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
 
   //merge duplicates
   FM_mergeSeeds(seeds, fmf->N, fm_cfg->ssv_length);
-
 
   free (dp_pairs_fwd);
   free (dp_pairs_rev);
@@ -737,7 +729,7 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
          P7_HMM_WINDOWLIST *windowlist)
 {
   float sc_thresh, sc_threshFM;
-  float invP;
+  float invP, invP_FM;
   float nullsc;
 
   int i;
@@ -790,10 +782,11 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
   invP = esl_gumbel_invsurv(F1, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   sc_thresh =   (invP * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec);
 
-  sc_threshFM = ESL_MAX(7.5,  fm_cfg->scthreshFM * fm_cfg->info_deficit_ratio); // that's 7.5 nats. Any lower than this, and I get nervous about run time.
 
-
-
+  invP_FM = esl_gumbel_invsurv(0.5, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  sc_threshFM = ESL_MAX(fm_cfg->scthreshFM,  (invP_FM * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec) ) ;
+  sc_threshFM *= fm_cfg->info_deficit_ratio;
+  sc_threshFM = ESL_MAX(7.0, sc_threshFM);
 
   //get diagonals that score above sc_threshFM
   status = FM_getSeeds(fmf, fmb, fm_cfg, ssvdata, om->abc->Kp, sc_threshFM, &seeds );

@@ -341,7 +341,7 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *queryfile, char *seqfile, 
 
   if (esl_opt_IsUsed(go, "--fm_max_depth")    && fprintf(ofp, "# FM Seed length:               <= %d\n",             esl_opt_GetInteger(go, "--fm_max_depth"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--fm_sc_thresh")    && fprintf(ofp, "# FM score threshhold (bits):   <= %g\n",             esl_opt_GetReal(go, "--fm_sc_thresh"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--fm_sc_density")   && fprintf(ofp, "# FM score density (bits/pos):  <= %g\n",             esl_opt_GetReal(go, "--fm_sc_ratio"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fm_sc_density")   && fprintf(ofp, "# FM score density (bits/pos):  <= %g\n",             esl_opt_GetReal(go, "--fm_sc_density"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--fm_drop_max_len") && fprintf(ofp, "# FM max neg-growth length:     <= %d\n",             esl_opt_GetInteger(go, "--fm_drop_max_len")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--fm_drop_lim")     && fprintf(ofp, "# FM max run drop:              <= %g\n",             esl_opt_GetReal(go, "--fm_drop_lim"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--fm_req_pos")      && fprintf(ofp, "# FM req positive run length:   <= %d\n",             esl_opt_GetInteger(go, "--fm_req_pos"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
