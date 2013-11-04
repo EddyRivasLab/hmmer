@@ -24,7 +24,7 @@
 #include "esl_getopts.h"
 
 #include "hmmer.h"
-#include "impl_dummy."
+#include "impl_dummy.h"
 
 /*****************************************************************
  * 1. Communicating P7_OPROFILE, an optimized model.
