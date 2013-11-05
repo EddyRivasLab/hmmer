@@ -305,9 +305,10 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
   P7_HIT            *hits    = NULL;              /* an array of hits, at the appropriate offset in data */
 
   P7_TOPHITS         th;
+  P7_DOMAIN         *dom;
   P7_ALIDISPLAY     *ad, *ad2;
 
-  float *cover, *id, *similar; //store statistics result per hit
+  int *cover, *id, *similar; //store statistics result per hit
   int readPos, writePos;     //for converting alignment contents into model indexing
 
   char              *p     = (char*)data;        /*pointer used to walk along data, must be char* to allow pointer arithmetic */
@@ -375,10 +376,14 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
   for (i = 0; i < th.N; i++) 
   {
     ESL_ALLOC( th.hit[i]->dcl, sizeof(P7_DOMAIN) *  th.hit[i]->ndom);
-   /* first grab all the P7_DOMAINs for the hit */
+   
+    if(th.hit[i]->flags & p7_IS_INCLUDED) th.nincluded++;
+
+    /* first grab all the P7_DOMAINs for the hit */
     for (j=0; j < th.hit[i]->ndom; j++) 
     {
-      th.hit[i]->dcl[j].is_included = 1;
+      dom = (P7_DOMAIN*)p;
+      th.hit[i]->dcl[j].is_included = dom->is_included;
       p += sizeof(P7_DOMAIN);
     }
     
@@ -424,32 +429,35 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
       
       p7_alidisplay_Deserialize(ad2);
       
-      writePos = ad2->hmmfrom-1;  
-      readPos = 0;
-      while(readPos < ad2->N)
+      if(th.hit[i]->flags & p7_IS_INCLUDED && th.hit[i]->dcl[j].is_included)
       {
-        //check if model covers residue
-        if(isupper(ad2->aseq[readPos]) || ad2->aseq[readPos] == '-')
-        {          
-          cover[writePos]++;
-        
-          //check mline for id
-          if(isalpha(ad2->mline[readPos]))
-          {
-            id[writePos]++;
-            similar[writePos]++;
-          }
-          //check mline for not-a-space
-          else if(ad2->mline[readPos] == '+')
-          {
-            similar[writePos]++;
-          }
-          writePos++;
-        }       
-        readPos++;
+        writePos = ad2->hmmfrom-1;  
+        readPos = 0;
+        while(readPos < ad2->N)
+        {
+          //check if model covers residue
+          if(isupper(ad2->aseq[readPos]) || ad2->aseq[readPos] == '-')
+          {          
+            cover[writePos]++;
+          
+            //check mline for id
+            if(isalpha(ad2->mline[readPos]))
+            {
+              id[writePos]++;
+              similar[writePos]++;
+            }
+            //check mline for not-a-space
+            else if(ad2->mline[readPos] == '+')
+            {
+              similar[writePos]++;
+            }
+            writePos++;
+          }       
+          readPos++;
+        }
       }
     }
-  
+      
     //increment output, adjusting for overlaps
     for(k = 0; k < hmm->M; k++)
     {
@@ -463,11 +471,12 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
       
       cover[k] = 0;
     }
+    
   }
 
   for(i = 0; i < hmm->M*3; i++)
   {
-    (*statsOut)[i] = (*statsOut)[i]/(stats->nhits);
+    (*statsOut)[i] = (*statsOut)[i]/(th.nincluded);
   }
 
   for(i = hmm->M; i < hmm->M*3; i++)
