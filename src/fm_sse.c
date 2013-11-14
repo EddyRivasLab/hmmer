@@ -405,7 +405,7 @@ fm_getOccCountLT (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c, uint
     const uint8_t * BWT = fm->BWT;
 
 
-    register __m128i c_v;
+    register __m128i c_v = cfg->fm_zeros_v;
     register __m128i BWT_v;
     register __m128i tmp_v;
     register __m128i tmp2_v;

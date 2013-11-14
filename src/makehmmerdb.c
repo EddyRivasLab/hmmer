@@ -384,8 +384,8 @@ main(int argc, char **argv)
   ESL_SQ         *sq        = NULL;
   ESL_SQFILE     *sqfp      = NULL;
 
-  ESL_SQ       *tmpsq;
-  ESL_SQ_BLOCK *block;
+  ESL_SQ       *tmpsq = NULL;
+  ESL_SQ_BLOCK *block = NULL;
 
   char *fname_in = NULL;
   char *fname_out= NULL;
@@ -858,8 +858,8 @@ ERROR:
   esl_sqfile_Close(sqfp);
   esl_alphabet_Destroy(abc);
   esl_sq_Destroy(sq);
-  esl_sq_Destroy(tmpsq);
-  esl_sq_DestroyBlock(block);
+  if (tmpsq) esl_sq_Destroy(tmpsq);
+  if (block) esl_sq_DestroyBlock(block);
 
   fprintf (stderr, "failure during memory allocation\n");
 

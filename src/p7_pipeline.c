@@ -1466,9 +1466,10 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
                         P7_BG *bg, P7_TOPHITS *hitlist,
                         int64_t seqidx, const ESL_SQ *sq, int complementarity,
                         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg
-                        , ESL_STOPWATCH *ssv_watch_master
+/*                        , ESL_STOPWATCH *ssv_watch_master
                         , ESL_STOPWATCH *postssv_watch_master
                         , ESL_STOPWATCH *watch_slave
+*/
                         )
 {
   int              i;
@@ -1516,19 +1517,20 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
    * This variant of SSV will scan a long sequence and find
    * short high-scoring regions.
    */
-  if (watch_slave) {
+/*  if (watch_slave) {
     esl_stopwatch_Start(watch_slave);
   }
+  */
   if (fmf) // using an FM-index
     p7_SSVFM_longlarget(om, 2.0, bg, pli->F1, fmf, fmb, fm_cfg, data, &msv_windowlist );
   else // compare directly to sequence
     p7_SSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, data, bg, pli->F1, &msv_windowlist);
-  if (watch_slave) {
+/*  if (watch_slave) {
     esl_stopwatch_Stop(watch_slave);
     esl_stopwatch_Include(ssv_watch_master, watch_slave);
     esl_stopwatch_Start(watch_slave);
   }
-
+*/
   /* convert hits to windows, merging neighboring windows
    */
   if ( msv_windowlist.count > 0 ) {
@@ -1570,7 +1572,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
 
           if (status == eslERANGE) {
             int overext;
-            int incr;
             int use_length;
             int is_compl = (window->complementarity == p7_COMPLEMENT);
 
@@ -1578,17 +1579,13 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
 
             use_length = window->length - overext + 1;
 
-            if (use_length >= 8 && window->length-incr >= 8) { // if both halves are kinda long, split the first half off as a new window
+            if (use_length >= 8 && window->length >= 8) { // if both halves are kinda long, split the first half off as a new window
               p7_hmmwindow_new(&msv_windowlist, seg_id + (is_compl?-1:1), window->n, window->fm_n, window->k+use_length-1, use_length, window->score, window->complementarity, fm_cfg->meta->seq_data[seg_id].length);
               window = msv_windowlist.windows + i; // it may have moved due a a realloc
-              window->n      +=  incr;
-              window->fm_n   +=  incr;
               window->k      +=  use_length;
               window->length  =  overext;
               again         = TRUE;
-            } else if (window->length-incr >= 8) { //if just the right half is long enough, shift numbers over
-              window->n      +=  incr;
-              window->fm_n   +=  incr;
+            } else if (window->length >= 8) { //if just the right half is long enough, shift numbers over
               window->k      +=  use_length;
               window->length  =  overext;
             } else { //just limit the length of the left half
@@ -1664,10 +1661,12 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
     esl_sq_Destroy(pli_tmp->tmpseq);
     free (vit_windowlist.windows);
   }
+  /*
   if (watch_slave) {
     esl_stopwatch_Stop(watch_slave);
     esl_stopwatch_Include(postssv_watch_master, watch_slave);
   }
+  */
 
   if (msv_windowlist.windows != NULL) free (msv_windowlist.windows);
 

@@ -228,7 +228,7 @@ emit_sequences(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM
   int         do_profile   = esl_opt_GetBoolean(go, "-p");
   int         N            = esl_opt_GetInteger(go, "-N");
   int         L            = esl_opt_GetInteger(go, "-L");
-  int         mode;
+  int         mode         = p7_LOCAL;
   int         nseq;
   int         status;
 

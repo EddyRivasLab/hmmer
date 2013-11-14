@@ -179,6 +179,60 @@ output_header(const ESL_GETOPTS *go, FILE *ofp, char *alifile, char *postmsafile
 }
 
 
+/* Function:  p7_Alimask_MakeModel2AliMap()
+ * Synopsis:  Compute map of coordinate in the alignment corresponding to each model position.
+ *
+ * Args:      msa     - The alignment for which the mapped model is to be computed. We assume
+ *                      the MSA has already been manipulated to account for model building
+ *                      flags (e.g. weighting).
+ *            do_hand - TRUE when the model is to follow a hand-build RF line (which must be
+ *                      part of the file.
+ *            symfraq - if weighted occupancy exceeds this value, include the column in the model.
+ *            map     - int array into which the map values will be stored. Calling function
+ *                      must allocate (msa->alen+1) ints.
+ *
+ * Returns:   The number of mapped model positions.
+ */
+int
+p7_Alimask_MakeModel2AliMap(ESL_MSA *msa, int do_hand, float symfrac, int *map )
+{
+  int      i = 0;
+  int      apos, idx;
+  float    r;            /* weighted residue count              */
+  float    totwgt;       /* weighted residue+gap count          */
+
+  i = 0;
+  if ( do_hand ) {
+     if (msa->rf == NULL)      p7_Fail("Model file does not contain an RF line, required for --hand.\n");
+     /* Watch for off-by-one. rf is [0..alen-1]*/
+     for (apos = 1; apos <= msa->alen; apos++) {
+       if (!esl_abc_CIsGap(msa->abc, msa->rf[apos-1]) ) {
+         map[i] = apos;
+         i++;
+       }
+     }
+
+  } else {
+
+    for (apos = 1; apos <= msa->alen; apos++)
+    {
+        r = totwgt = 0.;
+        for (idx = 0; idx < msa->nseq; idx++)
+        {
+          if       (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos])) { r += msa->wgt[idx]; totwgt += msa->wgt[idx]; }
+          else if  (esl_abc_XIsGap(msa->abc,     msa->ax[idx][apos])) {                     totwgt += msa->wgt[idx]; }
+          else if  (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos])) continue;
+        }
+
+        if (r > 0. && r / totwgt >= symfrac) {
+          map[i] = apos;
+          i++;
+        }
+    }
+  }
+  return i;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -267,10 +321,8 @@ main(int argc, char **argv)
   }
 
 
-
   /* Start timing. */
   esl_stopwatch_Start(w);
-
 
 
   /* Open files, set alphabet.
@@ -323,10 +375,10 @@ main(int argc, char **argv)
 
   // convert model coordinates to alignment coordinates, if necessary
   if (esl_opt_IsUsed(go, "--modelrange") || esl_opt_IsUsed(go, "--model2ali") || esl_opt_IsUsed(go, "--ali2model") ) {
-    int      apos, idx;
-    float    r;            /* weighted residue count              */
-    float    totwgt;       /* weighted residue+gap count          */
-    float    symfrac;
+
+    float symfrac = esl_opt_GetReal(go, "--symfrac");
+    int do_hand  =  esl_opt_IsOn(go, "--hand");
+    int L;
 
     //same as p7_builder relative_weights
     if      (esl_opt_IsOn(go, "--wnone")  )                  { esl_vec_DSet(msa->wgt, msa->nseq, 1.); }
@@ -335,45 +387,11 @@ main(int argc, char **argv)
     else if (esl_opt_IsOn(go, "--wgsc")   )                  status = esl_msaweight_GSC(msa);
     else if (esl_opt_IsOn(go, "--wblosum"))                  status = esl_msaweight_BLOSUM(msa, esl_opt_GetReal(go, "--wid"));
 
-
-
-    symfrac = esl_opt_GetReal(go, "--symfrac");
-
     if ((status =  esl_msa_MarkFragments(msa, esl_opt_GetReal(go, "--fragthresh")))           != eslOK) goto ERROR;
 
-    // Determine weighted sym freq in each column, build a map of model mask coordinates to alignment coords
+    //build a map of model mask coordinates to alignment coords
     ESL_ALLOC(map, sizeof(int)     * (msa->alen+1));
-    i = 0;
-
-    if ( esl_opt_IsOn(go, "--hand")) {
-      if (msa->rf == NULL)      p7_Fail("Model file doe not contain an RF line, required for --hand.\n");
-        /* Watch for off-by-one. rf is [0..alen-1]*/
-       for (apos = 1; apos <= msa->alen; apos++) {
-         if (!esl_abc_CIsGap(msa->abc, msa->rf[apos-1]) ) {
-           map[i] = apos;
-           i++;
-         }
-       }
-
-    } else {
-
-      for (apos = 1; apos <= msa->alen; apos++)
-      {
-
-          r = totwgt = 0.;
-          for (idx = 0; idx < msa->nseq; idx++)
-          {
-            if       (esl_abc_XIsResidue(msa->abc, msa->ax[idx][apos])) { r += msa->wgt[idx]; totwgt += msa->wgt[idx]; }
-            else if  (esl_abc_XIsGap(msa->abc,     msa->ax[idx][apos])) {                     totwgt += msa->wgt[idx]; }
-            else if  (esl_abc_XIsMissing(msa->abc, msa->ax[idx][apos])) continue;
-          }
-
-          if (r > 0. && r / totwgt >= symfrac) {
-            map[i] = apos;
-            i++;
-          }
-      }
-    }
+    L = p7_Alimask_MakeModel2AliMap(msa, do_hand, symfrac, map );
 
 
     if ( esl_opt_IsUsed(go, "--model2ali") ) {
@@ -381,6 +399,13 @@ main(int argc, char **argv)
       printf ("model coordinates     alignment coordinates\n");
       for (i=0; i<mask_range_cnt; i++)
         printf ("%8d..%-8d -> %8d..%-8d\n", mask_starts[i], mask_ends[i], map[mask_starts[i]-1], map[mask_ends[i]-1]);
+      /* If I wanted to, I could print all the map values independently:
+        printf("\n\n-----------\n");
+        printf("Map\n");
+        printf("---\n");
+        for (i=0; i<L; i++)
+          printf("%d -> %d\n", i+1, map[i]);
+      */
     } else if ( esl_opt_IsUsed(go, "--ali2model") ) {
       //print mapping  (requires scanning the inverted map
       int alistart = 0;

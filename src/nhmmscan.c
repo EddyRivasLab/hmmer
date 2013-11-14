@@ -651,7 +651,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
       //reverse complement
       if (info->pli->strand != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL )
       {
-        p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, sq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL, NULL, NULL, NULL);
+        p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, sq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
         p7_pipeline_Reuse(info->pli); // prepare for next search
         seq_len = info->qsq->n;
       }
@@ -659,7 +659,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
 
 
       if (info->pli->strand != p7_STRAND_BOTTOMONLY) {
-        p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, info->qsq, p7_NOCOMPLEMENT, NULL, NULL, NULL, NULL, NULL, NULL);
+        p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, info->qsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
         p7_pipeline_Reuse(info->pli);
         seq_len += info->qsq->n;
       }
@@ -799,13 +799,13 @@ pipeline_thread(void *arg)
         //reverse complement
         if (info->pli->strand != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL )
         {
-          p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, sq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL, NULL, NULL, NULL);
+          p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, sq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
           p7_pipeline_Reuse(info->pli); // prepare for next search
           seq_len = info->qsq->n;
         }
 #endif
         if (info->pli->strand != p7_STRAND_BOTTOMONLY) {
-          p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, info->qsq, p7_NOCOMPLEMENT, NULL, NULL, NULL, NULL, NULL, NULL);
+          p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, info->qsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
           p7_pipeline_Reuse(info->pli);
           seq_len += info->qsq->n;
         }
