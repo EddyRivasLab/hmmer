@@ -824,15 +824,16 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
       tailp  = 1.0;
 
       /* mu, lambda, E10 fields are for ML Gumbel fit to the observed data */
-      esl_gumbel_FitComplete(scores, cfg->N, &mu, &lambda);
+      if (esl_gumbel_FitComplete(scores, cfg->N, &mu, &lambda) != eslOK) 	esl_fatal("gumbel complete data fit failed");
+
       E10    = cfg->N * esl_gumbel_surv(x10, mu, lambda); 
 
       /* mufix, E10fix fields:   assume lambda = log2; fit an ML mu to the data */
-      esl_gumbel_FitCompleteLoc(scores, cfg->N, 0.693147, &mufix);
+      if (esl_gumbel_FitCompleteLoc(scores, cfg->N, 0.693147, &mufix) != eslOK) esl_fatal("gumbel mu- (location-)only data fit failed for lambda = log2");
       E10fix = cfg->N * esl_gumbel_surv(x10, mufix, 0.693147); 
 
       /* mufix2, E10fix2 fields: assume H3's own lambda estimate; fit ML mu */
-      esl_gumbel_FitCompleteLoc(scores, cfg->N, plambda, &mufix2);
+      if (esl_gumbel_FitCompleteLoc(scores, cfg->N, plambda, &mufix2) != eslOK) esl_fatal("gumbel mu- (location-)only data fit failed for fitted lambda");
       E10fix2 = cfg->N * esl_gumbel_surv(x10, mufix2, plambda); 
       
       /* pmu, plambda, E10p:  use H3 expectation estimates (pmu, plambda) */
@@ -886,7 +887,7 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
 	if (tailp > 1.0)       tailp = 1.0;
 	esl_histogram_GetTailByMass(h, tailp, &xv, &n, NULL);
 	
-	esl_exp_FitComplete(xv, n, &mu, &lambda);
+	if (esl_exp_FitComplete(xv, n, &mu, &lambda) != eslOK) esl_fatal("exponential fit failed");
 	E10    = cfg->N * tailp * esl_exp_surv(x10, mu,  lambda);
 	mufix  = mu;
 	E10fix = cfg->N * tailp * esl_exp_surv(x10, mu,  0.693147);
