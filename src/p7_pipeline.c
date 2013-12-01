@@ -1095,11 +1095,11 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
   status = p7_domaindef_ByPosteriorHeuristics(pli_tmp->tmpseq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef, bg, TRUE,
                                               pli_tmp->bg, (pli->do_null2?pli_tmp->scores:NULL), pli_tmp->fwd_emissions_arr);
 
+
   pli_tmp->tmpseq->dsq = dsq_holder;
   if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen */
   if (pli->ddef->nregions   == 0)  return eslOK; /* score passed threshold but there's no discrete domains here       */
   if (pli->ddef->nenvelopes == 0)  return eslOK; /* rarer: region was found, stochastic clustered, no envelopes found */
-
 
 
   /* Put these hits ("domains") into the hit list.
@@ -1232,7 +1232,6 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
 
   }
 
-
   return eslOK;
 
 ERROR:
@@ -1311,11 +1310,10 @@ p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
   int   loc_window_len;  //used to re-parameterize to shorter target windows
 
   int max_window_len      = 80000;
-  int smaller_window_len  = 40000;
+  int overlap_len         = ESL_MIN(40000, om->max_length); // Won't allow more than 40K overlap - that's an absurdly long MAXL.
 
   int F1_L = ESL_MIN( window_len,  pli->B1);
   int F2_L = ESL_MIN( window_len,  pli->B2);
-
 
   //initial bias filter, based on the input window_len
   if (pli->do_biasfilter) {
@@ -1350,11 +1348,11 @@ p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
   /* Second level filter: ViterbiFilter(), multihit with <om> */
   p7_omx_GrowTo(pli->oxf, om->M, 0, window_len);
 
-
   //use window_len instead of loc_window_len, because length parameterization is done, just need to loop over subseq
   p7_ViterbiFilter_longtarget(subseq, window_len, om, pli->oxf, filtersc, pli->F2, vit_windowlist);
 
   p7_pli_ExtendAndMergeWindows (om, data, vit_windowlist, 0.5);
+
 
 
   // if a window is still too long (>80Kb), need to split it up to
@@ -1366,15 +1364,17 @@ p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
          //new windows with max length 40K, and MAXL overlap w/ preceding window
          new_n   = vit_windowlist->windows[i].n ;
          new_len = vit_windowlist->windows[i].length ;
-         vit_windowlist->windows[i].length = smaller_window_len;
+         vit_windowlist->windows[i].length = max_window_len;
 
          do {
-           new_n   +=  (smaller_window_len - om->max_length);
-           new_len -=  (smaller_window_len - om->max_length);
-           p7_hmmwindow_new(vit_windowlist, 0, new_n, 0, 0, ESL_MIN(smaller_window_len,new_len), 0.0, p7_NOCOMPLEMENT, new_len );
-         } while (new_len > smaller_window_len);
+           int shift = max_window_len - overlap_len;
+           new_n   +=  shift;
+           new_len -=  shift;
+           p7_hmmwindow_new(vit_windowlist, 0, new_n, 0, 0, ESL_MIN(max_window_len,new_len), 0.0, p7_NOCOMPLEMENT, new_len );
+         } while (new_len > max_window_len);
       }
   }
+
 
   overlap = 0;
   for (i=0; i<vit_windowlist->count; i++) {
@@ -1389,7 +1389,6 @@ p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
         seq_start, seq_name, seq_source, seq_acc, seq_desc, seq_len, complementarity, &overlap,
         pli_tmp
     );
-
     if (overlap == -1 && i<vit_windowlist->count-1) {
       overlap = ESL_MAX(0,  vit_windowlist->windows[i].n + vit_windowlist->windows[i].length - vit_windowlist->windows[i+1].n );
     } else {
@@ -1400,7 +1399,6 @@ p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
     pli->ddef->ndom = 0;
 
   }
-
 
   return eslOK;
 
@@ -1490,7 +1488,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
 
   P7_PIPELINE_LONGTARGET_OBJS *pli_tmp;
 
-
   if ((sq && (sq->n == 0)) || (fmf && (fmf->N == 0))) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
 
@@ -1499,7 +1496,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
   pli_tmp->om = p7_oprofile_Create(om->M, om->abc);
   ESL_ALLOC(pli_tmp->scores, sizeof(float) * om->abc->Kp * 4);
   ESL_ALLOC(pli_tmp->fwd_emissions_arr, sizeof(float) *  om->abc->Kp * (om->M+1));
-
 
   msv_windowlist.windows = NULL;
   vit_windowlist.windows = NULL;
@@ -1606,7 +1602,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
 
     for (i=0; i<msv_windowlist.count; i++){
       window =  msv_windowlist.windows + i ;
-
       if (fmf) {
         fm_convertRange2DSQ( fmf, fm_cfg->meta, window->fm_n, window->length, window->complementarity, pli_tmp->tmpseq, FALSE );
         subseq = pli_tmp->tmpseq->dsq;

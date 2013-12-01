@@ -545,8 +545,8 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
  *
  * The idea is to find the length such that all but e.g. 1e-7 sequences emitted
  * by the model are at most that long. The method conceptually fills in a table of
- * length at most max_len (set to 100,000), though in practice, only two columns are
- * used to store values;
+ * length at most length_bound (usually 20 * model_length, up to at most 100,000),
+ * though in practice, only two columns are used to store values;
  *
  * Letting i correspond to the ith state of the model,
  *         j to a length j of emitted sequence, and
@@ -631,6 +631,9 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
  * (1) each M[i] should contribute (1-t_md)M[i] to Y.
  * (2) each D[i] should contribute (1-t_dd)D[i] to Y.
  *
+ * If the probability threshold isn't met before reaching length_bound, then MAXL is
+ * simply set to length_bound (usually 20 * model_length).
+ *
  *
  * Args:      hmm         - p7_HMM (required for the transition probabilities)
  *
@@ -646,17 +649,19 @@ p7_Builder_MaxLength (P7_HMM *hmm, double emit_thresh)
   double   surv;                  // surviving probability mass at length L; Y from above
   int      k;                     // active state in model
   int      i;
-  int      length_bound = 200000; // default cap on # iterations (aka max model length)
   double **I            = NULL;
   double **M            = NULL;
   double **D            = NULL;
-  int      model_len    = hmm->M; // model length                
+  int      model_len    = hmm->M; // model length
+  int      length_bound = ESL_MAX(model_len, ESL_MIN(20*model_len, 100000)); // cap on # iterations (aka max model length)
   int      status;
   
   if (model_len==1) {
     hmm->max_length = 1;
     return eslOK;
   }
+
+  hmm->max_length = length_bound;  //default, if it never reaches the target surviving density
 
 
   //    double I[model_len+1][2], M[model_len+1][2], D[model_len+1][2]; //2 columns for each way of ending a subpath
@@ -738,7 +743,7 @@ p7_Builder_MaxLength (P7_HMM *hmm, double emit_thresh)
   free(M);
   free(D);
 
-  if (hmm->max_length >= length_bound) return eslERANGE;
+  if (hmm->max_length > length_bound) return eslERANGE;
   return eslOK;
   
  ERROR:

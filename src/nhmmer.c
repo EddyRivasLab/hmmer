@@ -588,8 +588,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 
 
-
-
   /* We're about to see if this is an HMM file. If we already know it isn't, based on --qformat, just skip the test*/
   if ( esl_opt_IsOn(go, "--qformat") )
     status = eslENORESULT; // so it'll fail into the section that opens an alignment
@@ -851,7 +849,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_ProfileConfig(hmm, info->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
       p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
 
-
       if (dbformat == eslSQFILE_FMINDEX) {
         //capture the information content deficit ratio, for use in FM threshold setting
         double relent, target_relent;
@@ -925,7 +922,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       } else {
         if (ncpus > 0)  sstatus = thread_loop    (info, id_length_list, threadObj, queue, dbfp, cfg->firstseq_key, cfg->n_targetseq);
         else            sstatus = serial_loop    (info, id_length_list, dbfp, cfg->firstseq_key, cfg->n_targetseq/*, ssv_watch_master, postssv_watch_master, read_watch_master, watch_slave*/);
-
       }
 
 #else
@@ -1214,9 +1210,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
 
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
         prev_hit_cnt = info->th->N;
-
         p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, info->pli->nseqs, dbsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, ssv_watch_master, postssv_watch_master, watch_slave*/);
-
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
       } else {
@@ -1583,9 +1577,6 @@ pipeline_thread_FM(void *arg)
 
       fm_FM_destroy(fminfo->fmf, 1);
       fm_FM_destroy(fminfo->fmb, 0);
-
-//      info->pli->nseqs = meta->seq_data[meta->seq_count-1].id + 1;
-//      info->pli->nres = 2 *  fminfo->fmf->N; // this is approximately right, but misses cases of ambiguity codes being lost to compression. Is fixed in the calling function anyway.
 
       status = esl_workqueue_WorkerUpdate(info->queue, fminfo, &newFMinfo);
       if (status != eslOK) esl_fatal("Work queue worker failed");
