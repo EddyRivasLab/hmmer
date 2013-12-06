@@ -744,7 +744,54 @@ sparsemask_set_from_trace(ESL_RANDOMNESS *rng, P7_SPARSEMASK *sm, P7_TRACE *tr)
   return;
 }
 
+/* trace_compare_loosely()
+ * A replacement for p7_trace_Compare().
+ * 
+ * When we say "reference and sparse traces must be identical" in the
+ * tests below, we don't really mean it. It is possible to have two
+ * (or more) possible traces with exactly the same score, such that
+ * any of them are valid Viterbi paths. It is possible for sparse
+ * trace to find one, and reference trace to find another.
+ * 
+ * The most common example is on a single-residue alignment. Suppose
+ * the reference trace has state ML31 aligned to residue Y64, and
+ * that's the only aligned residue, with all other residues explained
+ * by N/C. That is, SN...NB->ML31->EC...CT. Now any and all other Y
+ * residues in the target sequence can also be aligned to ML31,
+ * necessarily receiving the same emission score, and the trace
+ * necessarily receives the same overall score.
+ * 
+ * Of course, this is a pathological case. I didn't expect alternative
+ * traces with identical scores, for position-specific floating-point
+ * scores, but an example like that above showed up in a unit test
+ * failure. If p7_trace_Compare() is used in the tests below, it will
+ * sometimes fail.
+ * 
+ * Thus the trace_compare_loosely() variant, which allows emitting M/I
+ * states to emit exactly the same subsequence in the target: that is,
+ * it checks that the residue identities match (as opposed to more
+ * stringently requiring the i indices to match), for all M/I states.
+ */
+static int
+trace_compare_loosely(P7_TRACE *tr1, P7_TRACE *tr2, ESL_DSQ *dsq)
+{
+  int z1 = 0;			/* position in <tr1>: 0..tr1->N-1 */
+  int z2 = 0;			/* position in <tr2>: 0..tr2->N-1 */
 
+  for (z1 = 0; z1 < tr1->N; z1++)
+    {
+      if (p7_trace_IsM(tr1->st[z1]) || p7_trace_IsI(tr1->st[z1]))
+	{
+	  while (z2 < tr2->N-1 && tr1->st[z1] != tr2->st[z2]) z2++;
+	  
+	  if (tr1->st[z1]     != tr2->st[z2])      return eslFAIL;
+	  if (tr1->k[z1]      != tr2->k[z2])       return eslFAIL;
+	  if (dsq[tr1->i[z1]] != dsq[tr2->i[z2]])  return eslFAIL;
+	  z2++;
+	}
+    }
+  return eslOK;
+}
 
 /* utest_compare_reference: 
  * 
@@ -825,7 +872,7 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
       if ( esl_FCompareAbs(vsc_s, vsc_r, tol)          != eslOK) esl_fatal(msg); /* (1): reference and sparse scores (V,F,B) identical within tolerance */
       if ( esl_FCompareAbs(fsc_s, fsc_r, tol)          != eslOK) esl_fatal(msg);
       if ( esl_FCompareAbs(bsc_s, bsc_r, tol)          != eslOK) esl_fatal(msg);
-      if ( p7_trace_Compare(rtr, str, 0.0f)            != eslOK) esl_fatal(msg); /* (2): reference, sparse Viterbi tracebacks identical */
+      if ( trace_compare_loosely(rtr, str, sq->dsq)    != eslOK) esl_fatal(msg); /* (2): reference, sparse Viterbi tracebacks identical; see notes on trace_compare_loosely */
       if ( p7_sparsemx_Validate(sxv, NULL)             != eslOK) esl_fatal(msg); /* (3): All sparse DP matrices Validate() (V,F,B,D) */
       if ( p7_sparsemx_Validate(sxf, NULL)             != eslOK) esl_fatal(msg); /*      (the <NULL> arg is an optional <errbuf>)    */
       if ( p7_sparsemx_Validate(sxb, NULL)             != eslOK) esl_fatal(msg);       
@@ -951,12 +998,13 @@ utest_reference_constrained(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, i
 
       //p7_trace_DumpAnnotated(stdout, str, gm, sq->dsq);
       //p7_trace_DumpAnnotated(stdout, rtr, gm, sq->dsq);
+      //p7_sparsemask_Dump(stdout, sm);
       //p7_sparsemx_Dump(stdout, sxv);
       //p7_refmx_Dump(stdout, rxv);
 
       /* Tests */
       if ( esl_FCompare(vsc_s, vsc_r, tol)                    != eslOK) esl_fatal(msg); /* (1) sparse, reference V scores equal */
-      if ( p7_trace_Compare(str, rtr, 0.0f)                   != eslOK) esl_fatal(msg); /* (2) sparse, reference V traces identical (0.0f arg is <pptol>, unused) */
+      if ( trace_compare_loosely(str, rtr, sq->dsq)           != eslOK) esl_fatal(msg); /* (2) sparse, reference V traces identical; see notes on trace_compare_loosely */
       if ( ! (fsc_s - vsc_r + tol > 0.0f))                              esl_fatal(msg); /* (3) sparse F,B scores >= reference V score. */
       if ( esl_FCompare(fsc_s, bsc_s, tol)                    != eslOK) esl_fatal(msg); /* (4) sparse F score = B score */
       if ( p7_sparsemx_CompareReferenceAsBound(sxv, rxv, tol) != eslOK) esl_fatal(msg); /* (5) All V,F,B matrix values satisfy v_ref >= v_sparse */

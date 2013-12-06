@@ -805,7 +805,6 @@ p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol)
 
 
 
-
 /* Function:  p7_trace_Score()
  *
  * Purpose:   Score path <tr> for digital target sequence <dsq> 
