@@ -16,6 +16,7 @@
 
 #include "hmmer.h"
 
+static int     map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount, int **ret_matuse, int **ret_matmap, int *ret_alen);
 static ESL_DSQ get_dsq_z(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int idx, int z);
 static int     make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const int *matuse, const int *matmap, int M, int alen, int optflags, ESL_MSA **ret_msa);
 static int     make_text_msa   (ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const int *matuse, const int *matmap, int M, int alen, int optflags, ESL_MSA **ret_msa);
@@ -106,7 +107,7 @@ p7_tracealign_Seqs(ESL_SQ **sq, P7_TRACE **tr, int nseq, int M, int optflags, P7
   int           alen;		        /* width of alignment */
   int           status;
 
-  if ((status = p7_tracealign_MapNewMSA(tr, nseq, M, optflags, &inscount, &matuse, &matmap, &alen)) != eslOK) return status;
+  if ((status = map_new_msa(tr, nseq, M, optflags, &inscount, &matuse, &matmap, &alen)) != eslOK) return status;
 
   if (optflags & p7_DIGITIZE) { if ((status = make_digital_msa(sq, NULL, tr, nseq, matuse, matmap, M, alen, optflags, &msa)) != eslOK) goto ERROR; }
   else                        { if ((status = make_text_msa   (sq, NULL, tr, nseq, matuse, matmap, M, alen, optflags, &msa)) != eslOK) goto ERROR; }
@@ -174,7 +175,7 @@ p7_tracealign_MSA(const ESL_MSA *premsa, P7_TRACE **tr, int M, int optflags, ESL
   int           alen;		        /* width of alignment */
   int           status;
 
-  if ((status = p7_tracealign_MapNewMSA(tr, premsa->nseq, M, optflags, &inscount, &matuse, &matmap, &alen)) != eslOK) return status;
+  if ((status = map_new_msa(tr, premsa->nseq, M, optflags, &inscount, &matuse, &matmap, &alen)) != eslOK) return status;
  
   if (optflags & p7_DIGITIZE) { if ((status = make_digital_msa(NULL, premsa, tr, premsa->nseq, matuse, matmap, M, alen, optflags, &msa)) != eslOK) goto ERROR; }
   else                        { if ((status = make_text_msa   (NULL, premsa, tr, premsa->nseq, matuse, matmap, M, alen, optflags, &msa)) != eslOK) goto ERROR; }
@@ -460,61 +461,64 @@ ERROR:
 }
 
 
-/* Function: p7_tracealign_MapNewMSA()
- *
- * Synopsis:  Construct <inscount[0..M]>, <matuse[1..M]>, and <matmap[1..M]>
- *            arrays for mapping model consensus nodes <1..M> onto columns
- *            <1..alen> of a new MSA. This function is primarily used as
- *            for internal purposes in tracealign functions, but is made
- *            exposed in the API for use by inline scripts.
+/*--------------- end, exposed API ------------------------------*/
 
+
+
+
+/*****************************************************************
+ * 2. Internal functions used by the API
+ *****************************************************************/
+
+/* map_new_msa()
  *
- * Purpose:  Here's the problem. We want to align the match states in columns,
- *           but some sequences have inserted symbols in them; we need some
- *           sort of overall knowledge of where the inserts are and how long
- *           they are in order to create the alignment.
+ * Construct <inscount[0..M]>, <matuse[1..M]>, and <matmap[1..M]>
+ * arrays for mapping model consensus nodes <1..M> onto columns
+ * <1..alen> of a new MSA.
  *
- *           Here's our trick. inscount[] is a 0..M array; inserts[k] stores
- *           the maximum number of times insert substate k was used. This
- *           is the maximum number of gaps to insert between canonical
- *           column k and k+1.  inserts[0] is the N-term tail; inserts[M] is
- *           the C-term tail.
+ * Here's the problem. We want to align the match states in columns,
+ * but some sequences have inserted symbols in them; we need some
+ * sort of overall knowledge of where the inserts are and how long
+ * they are in order to create the alignment.
+ *
+ * Here's our trick. inscount[] is a 0..M array; inserts[k] stores
+ * the maximum number of times insert substate k was used. This
+ * is the maximum number of gaps to insert between canonical
+ * column k and k+1.  inserts[0] is the N-term tail; inserts[M] is
+ * the C-term tail.
  * 
- *           Additionally, matuse[k=1..M] says whether we're going to make an
- *           alignment column for consensus position k. By default this is
- *           <TRUE> only if there is at least one residue in the column. If
- *           the <p7_ALL_CONSENSUS_COLS> option flag is set, though, all
- *           matuse[1..M] are set <TRUE>. (matuse[0] is unused, always <FALSE>.)
+ * Additionally, matuse[k=1..M] says whether we're going to make an
+ * alignment column for consensus position k. By default this is
+ * <TRUE> only if there is at least one residue in the column. If
+ * the <p7_ALL_CONSENSUS_COLS> option flag is set, though, all
+ * matuse[1..M] are set <TRUE>. (matuse[0] is unused, always <FALSE>.)
  * 
- *           Then, using these arrays, we construct matmap[] and determine alen.
- *           If match state k is represented as an alignment column,
- *           matmap[1..M] = that position, <1..alen>.
- *           If match state k is not in the alignment (<matuse[k] == FALSE>),
- *           matmap[k] = matmap[k-1] = the last alignment column that a match
- *           state did map to; this is a trick to make some apos coordinate setting
- *           work cleanly.
- *
- *           Because of this trick, you can't just assume because matmap[k] is
- *           nonzero that match state k maps somewhere in the alignment;
- *           you have to check matuse[k] == TRUE, then look at what matmap[k] says.
- *           Remember that N and C emit on transition, hence the check for an
- *           N->N or C->C transition before bumping nins.
- *           <matmap[0]> is unused; by convention, <matmap[0] = 0>.
- *
- * Return:   eslOK if no errors
+ * Then, using these arrays, we construct matmap[] and determine alen.
+ * If match state k is represented as an alignment column,
+ * matmap[1..M] = that position, <1..alen>.
+ * If match state k is not in the alignment (<matuse[k] == FALSE>),
+ * matmap[k] = matmap[k-1] = the last alignment column that a match
+ * state did map to; this is a trick to make some apos coordinate setting
+ * work cleanly.
+ * Because of this trick, you can't just assume because matmap[k] is
+ * nonzero that match state k maps somewhere in the alignment;
+ * you have to check matuse[k] == TRUE, then look at what matmap[k] says.
+ * Remember that N and C emit on transition, hence the check for an
+ * N->N or C->C transition before bumping nins.
+ * <matmap[0]> is unused; by convention, <matmap[0] = 0>.
  */
-int
-p7_tracealign_MapNewMSA(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount,
-      int **ret_matuse, int **ret_matmap, int *ret_alen)
+static int
+map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount,
+	    int **ret_matuse, int **ret_matmap, int *ret_alen)
 {
-  int *inscount = NULL;   /* inscount[k=0..M] == max # of inserts in node k */
+  int *inscount = NULL;	  /* inscount[k=0..M] == max # of inserts in node k */
   int *insnum   = NULL;   /* insct[k=0..M] == # of inserts in node k in current trace */
-  int *matuse   = NULL;   /* matuse[k=1..M] == TRUE|FALSE: does node k map to an alignment column */
-  int *matmap   = NULL;   /* matmap[k=1..M]: if matuse[k] TRUE, what column 1..alen does node k map to */
-  int  idx;     /* counter over sequences */
-  int  z;     /* index into trace positions */
-  int  alen;      /* length of alignment */
-  int  k;     /* counter over nodes 1..M */
+  int *matuse   = NULL;	  /* matuse[k=1..M] == TRUE|FALSE: does node k map to an alignment column */
+  int *matmap   = NULL;	  /* matmap[k=1..M]: if matuse[k] TRUE, what column 1..alen does node k map to */
+  int  idx;		  /* counter over sequences */
+  int  z;		  /* index into trace positions */
+  int  alen;		  /* length of alignment */
+  int  k;		  /* counter over nodes 1..M */
   int  status;
   
   ESL_ALLOC(inscount, sizeof(int) * (M+1));   
@@ -532,18 +536,18 @@ p7_tracealign_MapNewMSA(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_
     {
       esl_vec_ISet(insnum, M+1, 0);
       for (z = 1; z < tr[idx]->N; z++) 
-  {
-          switch (tr[idx]->st[z]) {
-    case p7T_I:                                insnum[tr[idx]->k[z]]++; break;
-    case p7T_N: if (tr[idx]->st[z-1] == p7T_N) insnum[0]++;             break;
-    case p7T_C: if (tr[idx]->st[z-1] == p7T_C) insnum[M]++;             break;
-    case p7T_M: matuse[tr[idx]->k[z]] = TRUE;                           break;
-    case p7T_J: p7_Die("J state unsupported");
-    default:                                                            break;
-    }
-  }
+	{
+      	  switch (tr[idx]->st[z]) {
+	  case p7T_I:                                insnum[tr[idx]->k[z]]++; break;
+	  case p7T_N: if (tr[idx]->st[z-1] == p7T_N) insnum[0]++;             break;
+	  case p7T_C: if (tr[idx]->st[z-1] == p7T_C) insnum[M]++;             break;
+	  case p7T_M: matuse[tr[idx]->k[z]] = TRUE;                           break;
+	  case p7T_J: p7_Die("J state unsupported");
+	  default:                                                            break;
+	  }
+	}
       for (k = 0; k <= M; k++) 
-  inscount[k] = ESL_MAX(inscount[k], insnum[k]);
+	inscount[k] = ESL_MAX(inscount[k], insnum[k]);
     }
 
   /* if we're trimming N and C off, reset inscount[0], inscount[M] to 0. */
@@ -574,17 +578,6 @@ p7_tracealign_MapNewMSA(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_
   *ret_alen     = 0;
   return status;
 }
-
-
-/*--------------- end, exposed API ------------------------------*/
-
-
-
-
-/*****************************************************************
- * 2. Internal functions used by the API
- *****************************************************************/
-
 
 
 /* get_dsq_z()
