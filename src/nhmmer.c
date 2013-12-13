@@ -816,7 +816,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       resCnt = 0;
       esl_stopwatch_Start(w);
 
-
       /* seqfile may need to be rewound (multiquery mode) */
       if (nquery > 1) {
         if (dbformat == eslSQFILE_FMINDEX) { //rewind
@@ -916,14 +915,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
         if (ncpus > 0)  sstatus = thread_loop_FM (info, threadObj, queue, dbfp);
         else            sstatus = serial_loop_FM (info, dbfp/*, ssv_watch_master, postssv_watch_master, read_watch_master, watch_slave*/);
-
-
-
       } else {
         if (ncpus > 0)  sstatus = thread_loop    (info, id_length_list, threadObj, queue, dbfp, cfg->firstseq_key, cfg->n_targetseq);
         else            sstatus = serial_loop    (info, id_length_list, dbfp, cfg->firstseq_key, cfg->n_targetseq/*, ssv_watch_master, postssv_watch_master, read_watch_master, watch_slave*/);
       }
-
 #else
       if (dbformat == eslSQFILE_FMINDEX)
         sstatus = serial_loop_FM (info, dbfp);
@@ -966,7 +961,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 0; i < infocnt; ++i)
           p7_tophits_ComputeNhmmerEvalues(info[i].th, resCnt, info[i].om->max_length);
 
-
       /* merge the results of the search results */
       for (i = 1; i < infocnt; ++i) {
           p7_tophits_Merge(info[0].th, info[i].th);
@@ -1002,14 +996,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           }
       }
 
-
       p7_tophits_Targets(ofp, info->th, info->pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
       p7_tophits_Domains(ofp, info->th, info->pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
       if (tblfp)     p7_tophits_TabularTargets(tblfp,    hmm->name, hmm->acc, info->th, info->pli, (nquery == 1));
       if (dfamtblfp) p7_tophits_TabularXfam(dfamtblfp,   hmm->name, hmm->acc, info->th, info->pli);
       if (aliscoresfp) p7_tophits_AliScores(aliscoresfp, hmm->name, info->th );
-
 
       esl_stopwatch_Stop(w);
 
@@ -1058,7 +1050,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       destroy_id_length(id_length_list);
       if (qsq != NULL) esl_sq_Reuse(qsq);
 
-
       if (hfp != NULL) {
         qhstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
       } else if (qfp_msa != NULL){
@@ -1067,7 +1058,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       } else { // qfp_sq
         qhstatus = esl_sqio_Read(qfp_sq, qsq);
       }
-
 
   } /* end outer loop over queries */
 
@@ -1271,7 +1261,6 @@ serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp/*, ESL_STOPWATCH *ssv_watch_m
 
   for ( i=0; i<info->fm_cfg->meta->block_count; i++ ) {
 
-
     //esl_stopwatch_Start(watch_slave);
 
     wstatus = fm_FM_read( &fmf, meta, TRUE );
@@ -1285,15 +1274,12 @@ serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp/*, ESL_STOPWATCH *ssv_watch_m
     fmb.SA = fmf.SA;
     fmb.T  = fmf.T;
 
-
     wstatus = p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg,
         info->th, -1, NULL, -1,  &fmf, &fmb, info->fm_cfg/*, ssv_watch_master, postssv_watch_master, watch_slave */);
     if (wstatus != eslOK) return wstatus;
 
-
     fm_FM_destroy(&fmf, 1);
     fm_FM_destroy(&fmb, 0);
-
   }
 
   return wstatus;

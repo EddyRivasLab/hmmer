@@ -142,9 +142,7 @@ FM_backtrackSeed(const FM_DATA *fmf, const FM_CFG *fm_cfg, int i) {
     len++;
   }
 
-
   return len + (j==fmf->term_loc ? 0 : fmf->SA[ j / fm_cfg->meta->freq_SA ]) ; // len is how many backward steps we had to take to find a sampled SA position
-
 }
 
 /* Function:  FM_getPassingDiags()
@@ -176,7 +174,6 @@ FM_getPassingDiags(const FM_DATA *fmf, const FM_CFG *fm_cfg,
             FM_DIAGLIST *seeds
             )
 {
-
   int i;
   FM_DIAG *seed;
 
@@ -265,8 +262,8 @@ FM_Recurse( int depth, int Kp, int fm_direction,
     seq[depth-1] = fm_cfg->meta->alph[c];
     seq[depth] = '\0';
 
-    for (i=first; i<=last; i++) { // for each surviving diagonal from the previous round
 
+    for (i=first; i<=last; i++) { // for each surviving diagonal from the previous round
         if (dp_pairs[i].model_direction == fm_forward)
           k = dp_pairs[i].pos + 1;
         else  //fm_backward
@@ -460,7 +457,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
   for (i=0; i<fm_cfg->meta->alph_size; i++) {
     int fwd_cnt=0;
     int rev_cnt=0;
-
     interval_f1.lower = interval_f2.lower = interval_bk.lower = fmf->C[i];
     interval_f1.upper = interval_f2.upper = interval_bk.upper = abs(fmf->C[i+1])-1;
 
@@ -476,7 +472,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
     // There will be 4 DP columns for each character, (1) fwd-std, (2) fwd-complement, (3) rev-std, (4) rev-complement
     for (k = 1; k <= ssvdata->M; k++) // there's no need to bother keeping an entry starting at the last position (gm->M)
     {
-
       sc = ssvdata->ssv_scores_f[k*Kp + i];
       if (sc>0) { // we'll extend any positive-scoring diagonal
         /* fwd on model, fwd on FM (really, reverse on FM, but the FM is on a reversed string, so its fwd*/
@@ -526,7 +521,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
           fwd_cnt++;
         }
 
-
         /* fwd on model, rev on FM (the FM is on the unreversed string - complemented)*/
 
         if (k < ssvdata->M-3) { // don't bother starting a forward diagonal so close to the end of the model
@@ -540,7 +534,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
           dp_pairs_rev[rev_cnt].model_direction = fm_forward;
           rev_cnt++;
         }
-
       }
     }
 
@@ -551,7 +544,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
                  seeds
                  , seq
             );
-
     FM_Recurse ( 2, Kp, fm_backward,
                  fmf, fmb, fm_cfg, ssvdata, sc_threshFM,
                  dp_pairs_rev, 0, rev_cnt-1,
@@ -559,7 +551,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
                  seeds
                  , seq
             );
-
   }
 
   //merge duplicates
@@ -782,7 +773,6 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
   invP = esl_gumbel_invsurv(F1, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   sc_thresh =   (invP * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec);
 
-
   invP_FM = esl_gumbel_invsurv(0.5, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   sc_threshFM = ESL_MAX(fm_cfg->scthreshFM,  (invP_FM * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec) ) ;
   sc_threshFM *= fm_cfg->info_deficit_ratio;
@@ -792,7 +782,6 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
   status = FM_getSeeds(fmf, fmb, fm_cfg, ssvdata, om->abc->Kp, sc_threshFM, &seeds );
   if (status != eslOK)
     ESL_EXCEPTION(eslEMEM, "Error allocating memory for seed computation\n");
-
 
   //now extend those diagonals to find ones scoring above sc_thresh
   for(i=0; i<seeds.count; i++) {
@@ -804,7 +793,6 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
     if (diag->score >= sc_thresh)
       FM_window_from_diag(diag, fmf, fm_cfg->meta, windowlist );
   }
-
 
   esl_sq_Destroy(tmp_sq);
 

@@ -280,8 +280,8 @@ fm_getChar(uint8_t alph_type, int j, const uint8_t *B )
 
 /* Function:  fm_findOverlappingAmbiguityBlock()
  * Synopsis:  Search in the meta->ambig_list array for the first
- *            ambiguity range starting after <start>. That index is
- *            returned
+ *            ambiguity range starting after <start>. If that index
+ *            comes before <end>, return it. Otherwise, return -1.
  */
 int32_t
 fm_findOverlappingAmbiguityBlock (const FM_DATA *fm, const FM_METADATA *meta, uint32_t start, uint32_t end)
@@ -290,7 +290,7 @@ fm_findOverlappingAmbiguityBlock (const FM_DATA *fm, const FM_METADATA *meta, ui
   uint64_t lo = fm->ambig_offset;
   uint64_t hi = lo + fm->ambig_cnt - 1;
   uint64_t mid;
-
+  FM_INTERVAL *ranges = meta->ambig_list->ranges;
 
   // (1) Search in the meta->ambig_list array for the last ambiguity range
   // ending before <start>, using binary search, first handling edge cases:
@@ -298,13 +298,15 @@ fm_findOverlappingAmbiguityBlock (const FM_DATA *fm, const FM_METADATA *meta, ui
   if (meta->ambig_list->ranges[hi].upper < start)   return -1;
   if (lo==hi)                                       return lo;
 
-  while (1) {
-    mid = (lo + hi + 1) / 2;  /* round up */
-    if      (meta->ambig_list->ranges[mid].upper     < start) lo = mid; /* too far left  */
-    else if (meta->ambig_list->ranges[mid-1].lower   > end ) hi = mid; /* too far right */
-    else return mid-1;          /* found it */
+
+  while (lo < hi) {
+    mid = (lo + hi) / 2;  /* round up */
+    if      (ranges[mid].lower   < start)  lo = mid + 1; /* too far left  */
+    else                                   hi = mid;    /* might be too far right */
   }
 
+  if ( ranges[lo].upper >= start && ranges[lo].lower <= end)   return lo;
+  else return -1;
 
 }
 
@@ -351,7 +353,7 @@ fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, uint64_t first, 
        *  makehmmerdb turns ambiguity codes into one of the nucleotides. Need
        *  to replace with an N.
        */
-      int32_t pos  = fm_findOverlappingAmbiguityBlock (fm, meta, first, first+length-1 );
+      int32_t pos = fm_findOverlappingAmbiguityBlock (fm, meta, first, first+length-1 );
       if (pos != -1) {
         while (pos <= fm->ambig_offset + fm->ambig_cnt -1 && meta->ambig_list->ranges[pos].lower <= first+length-1) {
           for (j=meta->ambig_list->ranges[pos].lower; j<=meta->ambig_list->ranges[pos].upper; j++)

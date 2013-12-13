@@ -1593,7 +1593,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
       }
     }
 
-
   /* Pass each remaining window on to the remaining pipeline */
     p7_hmmwindow_init(&vit_windowlist);
     pli_tmp->tmpseq = esl_sq_CreateDigital(om->abc);
@@ -1602,8 +1601,9 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
 
     for (i=0; i<msv_windowlist.count; i++){
       window =  msv_windowlist.windows + i ;
+
       if (fmf) {
-        fm_convertRange2DSQ( fmf, fm_cfg->meta, window->fm_n, window->length, window->complementarity, pli_tmp->tmpseq, FALSE );
+        fm_convertRange2DSQ( fmf, fm_cfg->meta, window->fm_n, window->length, window->complementarity, pli_tmp->tmpseq, TRUE );
         subseq = pli_tmp->tmpseq->dsq;
       } else {
         subseq = sq->dsq + window->n - 1;
@@ -1619,7 +1619,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
       p7_MSVFilter(subseq, window->length, om, pli->oxf, &usc);
       P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
       if (P > pli->F1 ) continue;
-
       pli->pos_past_msv += window->length;
 
       if (fmf) {
@@ -1628,7 +1627,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
         if (window->complementarity == p7_COMPLEMENT)
           seq_start += seq_data.length - 2;
       }
-
       status = p7_pli_postSSV_LongTarget(pli, om, bg, hitlist, data,
             (fmf != NULL ? seq_data.target_id     : seqidx),
             window->n, window->length, subseq,
@@ -1644,7 +1642,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
             &vit_windowlist,
             pli_tmp
         );
-
         if (status != eslOK) goto ERROR;
 
     }
@@ -1656,6 +1653,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
     esl_sq_Destroy(pli_tmp->tmpseq);
     free (vit_windowlist.windows);
   }
+
   /*
   if (watch_slave) {
     esl_stopwatch_Stop(watch_slave);
