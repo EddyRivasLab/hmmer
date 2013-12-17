@@ -123,13 +123,13 @@ static ESL_OPTIONS options[] = {
   { "--rna",        eslARG_NONE,        FALSE, NULL, NULL,   "--dna",  NULL,  NULL,          "input alignment is RNA sequence data",                         8 },
 
   /* Control of FM pruning/extension */
-  { "--fm_max_depth",    eslARG_INT,            "14", NULL, NULL,    NULL,  NULL, NULL,          "seed length at which bit threshold must be met",             9 },
-  { "--fm_sc_thresh",    eslARG_REAL,         "16.0", NULL, NULL,    NULL,  NULL, NULL,          "Default req. score for FM seed (bits)",                      9 },
-  { "--fm_sc_density",   eslARG_REAL,          "0.7", NULL, NULL,    NULL,  NULL, NULL,          "seed must maintain this bit density from one of two ends",   9 },
-  { "--fm_drop_max_len", eslARG_INT,             "4", NULL, NULL,    NULL,  NULL, NULL,           "maximum run length with score under (max - [fm_drop_lim])",  9 },
-  { "--fm_drop_lim",     eslARG_REAL,          "0.3", NULL, NULL,    NULL,  NULL, NULL,           "in seed, max drop in a run of length [fm_drop_max_len]",     9 },
-  { "--fm_req_pos",      eslARG_INT,             "5", NULL, NULL,    NULL,  NULL, NULL,          "minimum number consecutive positive scores in seed" ,        9 },
-  { "--fm_ssv_length",   eslARG_INT,            "70", NULL, NULL,    NULL,  NULL, NULL,          "length of window around FM seed to get full SSV diagonal",   9 },
+  { "--seed_max_depth",    eslARG_INT,          "14", NULL, NULL,    NULL,  NULL, NULL,          "seed length at which bit threshold must be met",             9 },
+  { "--seed_sc_thresh",    eslARG_REAL,       "16.0", NULL, NULL,    NULL,  NULL, NULL,          "Default req. score for FM seed (bits)",                      9 },
+  { "--seed_sc_density",   eslARG_REAL,        "0.7", NULL, NULL,    NULL,  NULL, NULL,          "seed must maintain this bit density from one of two ends",   9 },
+  { "--seed_drop_max_len", eslARG_INT,           "4", NULL, NULL,    NULL,  NULL, NULL,          "maximum run length with score under (max - [fm_drop_lim])",  9 },
+  { "--seed_drop_lim",     eslARG_REAL,        "0.3", NULL, NULL,    NULL,  NULL, NULL,          "in seed, max drop in a run of length [fm_drop_max_len]",     9 },
+  { "--seed_req_pos",      eslARG_INT,           "5", NULL, NULL,    NULL,  NULL, NULL,          "minimum number consecutive positive scores in seed" ,        9 },
+  { "--seed_ssv_length",   eslARG_INT,          "70", NULL, NULL,    NULL,  NULL, NULL,          "length of window around FM seed to get full SSV diagonal",   9 },
 
 /* Other options */
   { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,     "assert target <seqdb> is in format <s>",                        12 },
@@ -339,13 +339,13 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *queryfile, char *seqfile, 
   if (esl_opt_IsUsed(go, "--rna")        && fprintf(ofp, "# input query is asserted as:      RNA\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 
-  if (esl_opt_IsUsed(go, "--fm_max_depth")    && fprintf(ofp, "# FM Seed length:               <= %d\n",             esl_opt_GetInteger(go, "--fm_max_depth"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--fm_sc_thresh")    && fprintf(ofp, "# FM score threshhold (bits):   <= %g\n",             esl_opt_GetReal(go, "--fm_sc_thresh"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--fm_sc_density")   && fprintf(ofp, "# FM score density (bits/pos):  <= %g\n",             esl_opt_GetReal(go, "--fm_sc_density"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--fm_drop_max_len") && fprintf(ofp, "# FM max neg-growth length:     <= %d\n",             esl_opt_GetInteger(go, "--fm_drop_max_len")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--fm_drop_lim")     && fprintf(ofp, "# FM max run drop:              <= %g\n",             esl_opt_GetReal(go, "--fm_drop_lim"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--fm_req_pos")      && fprintf(ofp, "# FM req positive run length:   <= %d\n",             esl_opt_GetInteger(go, "--fm_req_pos"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--fm_ssv_length")   && fprintf(ofp, "# FM len used fot Vit window    <= %d\n",             esl_opt_GetInteger(go, "--fm_ssv_length"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--seed_max_depth")    && fprintf(ofp, "# FM Seed length:               <= %d\n",             esl_opt_GetInteger(go, "--seed_max_depth"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--seed_sc_thresh")    && fprintf(ofp, "# FM score threshhold (bits):   <= %g\n",             esl_opt_GetReal(go, "--seed_sc_thresh"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--seed_sc_density")   && fprintf(ofp, "# FM score density (bits/pos):  <= %g\n",             esl_opt_GetReal(go, "--seed_sc_density"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--seed_drop_max_len") && fprintf(ofp, "# FM max neg-growth length:     <= %d\n",             esl_opt_GetInteger(go, "--seed_drop_max_len")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--seed_drop_lim")     && fprintf(ofp, "# FM max run drop:              <= %g\n",             esl_opt_GetReal(go, "--seed_drop_lim"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--seed_req_pos")      && fprintf(ofp, "# FM req positive run length:   <= %d\n",             esl_opt_GetInteger(go, "--seed_req_pos"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--seed_ssv_length")   && fprintf(ofp, "# FM len used fot Vit window    <= %d\n",             esl_opt_GetInteger(go, "--seed_ssv_length"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 
   if (esl_opt_IsUsed(go, "--restrictdb_stkey") && fprintf(ofp, "# Restrict db to start at seq key: %s\n",            esl_opt_GetString(go, "--restrictdb_stkey"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");

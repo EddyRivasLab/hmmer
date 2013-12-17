@@ -461,13 +461,13 @@ fm_getOriginalPosition (const FM_DATA *fms, const FM_METADATA *meta, int fm_id, 
 int
 fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go ) {
 
-  cfg->ssv_length        = (go ? esl_opt_GetInteger(go, "--fm_ssv_length") : -1);
-  cfg->max_depth         = (go ? esl_opt_GetInteger(go, "--fm_max_depth") :  -1);
-  cfg->drop_max_len      = (go ? esl_opt_GetInteger(go, "--fm_drop_max_len") : -1);
-  cfg->consec_pos_req    = (go ? esl_opt_GetInteger(go, "--fm_req_pos") : -1);
-  cfg->drop_lim          = eslCONST_LOG2 * (go ? esl_opt_GetReal(go, "--fm_drop_lim") : -1.0);  // convert from bits to nats
-  cfg->score_density_req = eslCONST_LOG2 * (go ? esl_opt_GetReal(go, "--fm_sc_density") : -1.0);// convert from bits to nats
-  cfg->scthreshFM        = eslCONST_LOG2 * (go ? esl_opt_GetReal(go, "--fm_sc_thresh") : -1.0); // convert from bits to nats
+  cfg->ssv_length        = (go ? esl_opt_GetInteger(go, "--seed_ssv_length") : -1);
+  cfg->max_depth         = (go ? esl_opt_GetInteger(go, "--seed_max_depth") :  -1);
+  cfg->drop_max_len      = (go ? esl_opt_GetInteger(go, "--seed_drop_max_len") : -1);
+  cfg->consec_pos_req    = (go ? esl_opt_GetInteger(go, "--seed_req_pos") : -1);
+  cfg->drop_lim          = eslCONST_LOG2 * (go ? esl_opt_GetReal(go, "--seed_drop_lim") : -1.0);  // convert from bits to nats
+  cfg->score_density_req = eslCONST_LOG2 * (go ? esl_opt_GetReal(go, "--seed_sc_density") : -1.0);// convert from bits to nats
+  cfg->scthreshFM        = eslCONST_LOG2 * (go ? esl_opt_GetReal(go, "--seed_sc_thresh") : -1.0); // convert from bits to nats
 
   return eslOK;
 }
