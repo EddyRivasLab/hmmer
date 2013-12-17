@@ -843,9 +843,13 @@ typedef struct p7_hmm_window_list_s {
 
 enum fm_alphabettypes_e {
   fm_DNA        = 0,  //acgt,  2 bit
-  fm_DNA_full   = 1,  //includes ambiguity codes, 4 bit
+  //fm_DNA_full   = 1,  //includes ambiguity codes, 4 bit.
   fm_AMINO      = 4,  // 5 bit
 };
+/*TODO: fm_DNA_full has currently been disabled because of problems with how the
+ * FM index handles very long runs of the same character (in this case, Ns).
+ * See wheelert/notebook/2013/12-11-FM-alphabet-speed notes on 12/12.
+ */
 
 enum fm_direction_e {
   fm_forward    = 0,

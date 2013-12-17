@@ -34,9 +34,11 @@ fm_alphabetCreate (FM_METADATA *meta, uint8_t *alph_bits) {
 	if ( meta->alph_type ==  fm_DNA) {
       meta->alph_size = 4;
       if (alph_bits) *alph_bits = 2;
+/*
 	} else if ( meta->alph_type ==  fm_DNA_full) {
       meta->alph_size = 15;
       if (alph_bits) *alph_bits = 4;
+*/
 	} else if ( meta->alph_type ==  fm_AMINO) {
 	    meta->alph_size = 26;
       if (alph_bits) *alph_bits = 5;
@@ -47,7 +49,7 @@ fm_alphabetCreate (FM_METADATA *meta, uint8_t *alph_bits) {
 	ESL_ALLOC(meta->alph, (1+meta->alph_size)*sizeof(char));
 	ESL_ALLOC(meta->inv_alph, 256*sizeof(char));
 
-	if ( meta->alph_type ==  fm_DNA || meta->alph_type ==  fm_DNA_full)
+	if ( meta->alph_type ==  fm_DNA /*|| meta->alph_type ==  fm_DNA_full*/)
 	  ESL_ALLOC(meta->compl_alph, (1+meta->alph_size)*sizeof(int));
 
 
@@ -56,23 +58,29 @@ fm_alphabetCreate (FM_METADATA *meta, uint8_t *alph_bits) {
 		esl_memstrcpy("ACGT", 4, meta->alph);
 		for (i=0; i<4; i++)
 		  meta->compl_alph[i] = 3-i;
+
+/* TODO: fm_DNA_full has currently been disabled because of problems with how the
+ * FM index handles very long runs of the same character (in this case, Ns).
+ * See wheelert/notebook/2013/12-11-FM-alphabet-speed notes on 12/12.
+ *
 	} else if ( meta->alph_type ==  fm_DNA_full) {
 		esl_memstrcpy("ACGTRYMKSWHBVDN", 15, meta->alph);
-	  meta->compl_alph[0] = 3;    /* A->T */
-		meta->compl_alph[1] = 2;    /* C->G */
-	  meta->compl_alph[2] = 1;    /* G->C */
-	  meta->compl_alph[3] = 0;    /* T->A */
-	  meta->compl_alph[4] = 5;    /* R->Y */
-	  meta->compl_alph[5] = 4;    /* Y->R */
-	  meta->compl_alph[6] = 7;    /* M->K */
-	  meta->compl_alph[7] = 6;    /* K->M */
-	  meta->compl_alph[8] = 8;    /* S  S */
-	  meta->compl_alph[9] = 9;    /* W  W */
-	  meta->compl_alph[10]= 13;   /* H->D */
-	  meta->compl_alph[11]= 12;   /* B->V */
-	  meta->compl_alph[12]= 11;   /* V->B */
-	  meta->compl_alph[13]= 10;   /* D->H */
-	  meta->compl_alph[14]= 14;   /* N  N */
+	  meta->compl_alph[0] = 3;    // A->T
+		meta->compl_alph[1] = 2;    // C->G
+	  meta->compl_alph[2] = 1;    // G->C
+	  meta->compl_alph[3] = 0;    // T->A
+	  meta->compl_alph[4] = 5;    // R->Y
+	  meta->compl_alph[5] = 4;    // Y->R
+	  meta->compl_alph[6] = 7;    // M->K
+	  meta->compl_alph[7] = 6;    // K->M
+	  meta->compl_alph[8] = 8;    // S  S
+	  meta->compl_alph[9] = 9;    // W  W
+	  meta->compl_alph[10]= 13;   // H->D
+	  meta->compl_alph[11]= 12;   // B->V
+	  meta->compl_alph[12]= 11;   // V->B
+	  meta->compl_alph[13]= 10;   // D->H
+	  meta->compl_alph[14]= 14;   // N  N
+*/
 	} else if ( meta->alph_type ==  fm_AMINO) {
 		esl_memstrcpy("ACDEFGHIKLMNPQRSTVWYBJZOUX", meta->alph_size, meta->alph);
 	}
@@ -84,7 +92,7 @@ fm_alphabetCreate (FM_METADATA *meta, uint8_t *alph_bits) {
 	  meta->inv_alph[tolower(meta->alph[i])] = meta->inv_alph[toupper(meta->alph[i])] = i;
 
 	  //special case for RNA, equate U to T:
-	  if (   (meta->alph_type ==  fm_DNA || meta->alph_type ==  fm_DNA_full) && toupper(meta->alph[i]) == 'T')
+	  if (   (meta->alph_type ==  fm_DNA /*|| meta->alph_type ==  fm_DNA_full*/) && toupper(meta->alph[i]) == 'T')
 	    meta->inv_alph['u'] = meta->inv_alph['U'] = i;
 	}
 
@@ -154,8 +162,10 @@ fm_getComplement (char c, uint8_t alph_type)
 {
     if ( alph_type ==  fm_DNA ) {
         return 3-c;
+/*
     } else if ( alph_type ==  fm_DNA_full) {
         esl_fatal("complement for DNA_full not yet implemented\n");
+*/
     } else if ( alph_type ==  fm_AMINO) {
         esl_fatal("complement for amino acids is undefined\n");
     } else {

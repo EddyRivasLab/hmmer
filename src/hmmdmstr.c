@@ -1895,7 +1895,7 @@ workerside_thread(void *arg)
   WORKERSIDE_ARGS  *parent  = (WORKERSIDE_ARGS *)worker->parent;
   HMMD_HEADER       hdr;
   int               n;
-  int               fd;
+  int               fd = 0;
   int               version;
   int               updated;
   int               status = eslOK;
@@ -1920,7 +1920,8 @@ workerside_thread(void *arg)
     if (parent->seq_db != NULL) n += strlen(parent->seq_db->name) + 1;
     if (parent->hmm_db != NULL) n += strlen(parent->hmm_db->name) + 1;
 
-    if ((cmd = malloc(n)) == NULL) {
+    cmd = malloc(n);
+    if (cmd == NULL) {
       p7_syslog(LOG_ERR,"[%s:%d] - malloc %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
       goto EXIT;
     }

@@ -77,6 +77,9 @@ fm_initAmbiguityList (FM_AMBIGLIST *list) {
   list->size = 1000;
 
   ESL_ALLOC(list->ranges, list->size * sizeof(FM_INTERVAL));
+  if (list->ranges == NULL  )
+    esl_fatal("unable to allocate memory to store FM ambiguity data\n");
+
   list->count = 0;
 
   return eslOK;
@@ -230,8 +233,6 @@ fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
 
     fm_updateIntervalReverse(fm, cfg, c, interval);
 
-    //fprintf (stderr, "2: %d : %12d..%12d\n", c, interval->lower, interval->upper );
-
     cfg->occCallCnt+=2;
   }
 
@@ -267,8 +268,10 @@ fm_getChar(uint8_t alph_type, int j, const uint8_t *B )
      *  then masking to keep the final two bits
      */
     c = (B[j/4] >> ( 0x6 - ((j&0x3)*2) ) & 0x3);
-  } else if (alph_type == fm_DNA_full /* || alph_type == fm_RNA_full */) {
+/*
+  } else if (alph_type == fm_DNA_full ) {
     c = (B[j/2] >> (((j&0x1)^0x1)*4) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
+*/
   } else { // amino
     c = B[j];
   }
@@ -287,17 +290,16 @@ int32_t
 fm_findOverlappingAmbiguityBlock (const FM_DATA *fm, const FM_METADATA *meta, uint32_t start, uint32_t end)
 {
 
-  uint64_t lo = fm->ambig_offset;
-  uint64_t hi = lo + fm->ambig_cnt - 1;
-  uint64_t mid;
+  int lo = fm->ambig_offset;
+  int hi = lo + fm->ambig_cnt - 1;
+  int mid;
   FM_INTERVAL *ranges = meta->ambig_list->ranges;
 
   // (1) Search in the meta->ambig_list array for the last ambiguity range
   // ending before <start>, using binary search, first handling edge cases:
-  if (meta->ambig_list->ranges[lo].lower > end)     return -1;
-  if (meta->ambig_list->ranges[hi].upper < start)   return -1;
-  if (lo==hi)                                       return lo;
-
+  if (hi <= lo)                   return hi; // either 0 or -1
+  if (ranges[lo].lower > end)     return -1;
+  if (ranges[hi].upper < start)   return -1;
 
   while (lo < hi) {
     mid = (lo + hi) / 2;  /* round up */
@@ -325,8 +327,6 @@ int
 fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, uint64_t first, int length, int complementarity, ESL_SQ *sq, int fix_ambiguities )
 {
   uint64_t i, j;
-  uint8_t c;
-
 
   if (complementarity == p7_COMPLEMENT)
     first = fm->N-(first+length)-1;
@@ -364,13 +364,14 @@ fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, uint64_t first, 
       }
     }
 
-
+/*
   } else if (meta->alph_type == fm_DNA_full) {
     for (i = first; i<= first+length-1; i++) {
       c = (fm->T[i/2] >> (((i&0x1)^0x1)*4) ) & 0xf;  //unpack the char: shift 4 bits right if it's odd, then mask off left bits in any case
       sq->dsq[i-first+1] = c + (c < 4 ? 0 : 1); //increment by one for ambiguity codes
     }
     sq->dsq[length+1] = eslDSQ_SENTINEL;
+*/
   } else { // amino
     for (i = first; i<= first+length-1; i++)
       sq->dsq[i-first+1] = fm->T[i] + (fm->T[i] < 20 ? 0 : 1); //increment by one for ambiguity codes
@@ -653,11 +654,12 @@ fm_readFMmeta( FM_METADATA *meta)
 
   }
 
-
-  ESL_ALLOC (meta->ambig_list->ranges,  meta->ambig_list->count  * sizeof(FM_INTERVAL));
-  if (meta->ambig_list->ranges == NULL  )
-    esl_fatal("unable to allocate memory to store FM ambiguity data\n");
-  meta->ambig_list->size = meta->ambig_list->count;
+  if (meta->ambig_list->count > meta->ambig_list->size) {
+    ESL_REALLOC(meta->ambig_list->ranges,  meta->ambig_list->count  * sizeof(FM_INTERVAL));
+    if (meta->ambig_list->ranges == NULL  )
+      esl_fatal("unable to allocate memory to store FM ambiguity data\n");
+    meta->ambig_list->size = meta->ambig_list->count;
+  }
 
   for (i=0; i<meta->ambig_list->count; i++) {
     if( fread(&(meta->ambig_list->ranges[i].lower),   sizeof(meta->ambig_list->ranges[i].lower),       1, meta->fp) != 1 ||

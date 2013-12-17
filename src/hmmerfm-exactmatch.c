@@ -96,7 +96,7 @@ output_header(FM_METADATA *meta, FILE *ofp, const ESL_GETOPTS *go, char *fmfile,
   int   status;
 
   if      (meta->alph_type == fm_DNA)       alph = "dna";
-  else if (meta->alph_type == fm_DNA_full)  alph = "dna_full";
+  //else if (meta->alph_type == fm_DNA_full)  alph = "dna_full";
   else if (meta->alph_type == fm_AMINO)     alph = "amino";
 
   if ((status = esl_FileTail(go->argv[0], FALSE, &appname)) != eslOK) return status;

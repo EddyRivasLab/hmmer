@@ -140,15 +140,17 @@ p7_ProfileConfig(const P7_HMM *hmm, const P7_BG *bg, P7_PROFILE *gm, int L, int 
   sc[hmm->abc->Kp-2]  = -eslINFINITY; /* nonresidue character */
   sc[hmm->abc->Kp-1]  = -eslINFINITY; /* missing data character */
   for (k = 1; k <= hmm->M; k++) {
-    for (x = 0; x < hmm->abc->K; x++) 
-      sc[x] = log(hmm->mat[k][x] / bg->f[x]);
+    for (x = 0; x < hmm->abc->K; x++)
+     sc[x] = log((double)hmm->mat[k][x] / bg->f[x]);
+
     esl_abc_FExpectScVec(hmm->abc, sc, bg->f); 
+
     for (x = 0; x < hmm->abc->Kp; x++) {
       rp = gm->rsc[x] + k * p7P_NR;
       rp[p7P_MSC] = sc[x];
     }
   }
-  
+
   /* Insert emission scores */
   /* SRE, Fri Dec 5 08:41:08 2008: We currently hardwire insert scores
    * to 0, i.e. corresponding to the insertion emission probabilities

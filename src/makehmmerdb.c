@@ -13,16 +13,26 @@
 
 #define FM_BLOCK_COUNT 100000 //max number of SQ objects in a block
 #define FM_BLOCK_OVERLAP 20000 //20 Kbases of overlap, at most, between adjascent FM-index blocks
+#define ALPHOPTS "--amino,--dna,--rna"                         /* Exclusive options for alphabet choice */
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
   { "-h",           eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,       "show brief help on version and usage",                      1 },
-  { "--informat",   eslARG_STRING,     FALSE, NULL, NULL, NULL, NULL,      NULL,        "specify that input file is in format <s>",                  2 },
-  { "--alph",       eslARG_STRING,     NULL, NULL, NULL,    NULL,  NULL,  NULL,         "alphabet [dna,dna_full,rna,rna_full,amino]",                             2 },
-  { "--bin_length", eslARG_INT,        "256", NULL, NULL,    NULL,  NULL,  NULL,        "bin length (power of 2;  32<=b<=4096)",                     2 },
-  { "--sa_freq",    eslARG_INT,        "8",   NULL, NULL,    NULL,  NULL,  NULL,        "suffix array sample rate (power of 2)",                     2 },
-  { "--block_size", eslARG_INT,        "50",  NULL, NULL,    NULL,  NULL,  NULL,        "input sequence broken into chunks this size (Mbases)",      2 },
-  { "--fwd_only",   eslARG_NONE,       FALSE, NULL, NULL,    NULL,  NULL,  NULL,        "build FM-index only for forward search (not for HMMER)",    2 },
+
+  /* Selecting the alphabet rather than autoguessing it */
+  { "--amino",   eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL,       "input is protein sequence",                                 2 },
+  { "--dna",     eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL,       "input is DNA sequence",                                     2 },
+  { "--rna",     eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL,       "input is RNA sequence",                                     2 },
+//  { "--alph",       eslARG_STRING,     NULL, NULL, NULL,    NULL,  NULL,  NULL,         "alphabet [dna,rna,amino]",                                  2 },   /*"alphabet [dna,dna_full,rna,rna_full,amino]"*/
+
+  /* Other options */
+  { "--informat",   eslARG_STRING,     FALSE, NULL, NULL,    NULL,  NULL,  NULL,        "specify that input file is in format <s>",                  3 },
+  { "--bin_length", eslARG_INT,        "256", NULL, NULL,    NULL,  NULL,  NULL,        "bin length (power of 2;  32<=b<=4096)",                     3 },
+  { "--sa_freq",    eslARG_INT,        "8",   NULL, NULL,    NULL,  NULL,  NULL,        "suffix array sample rate (power of 2)",                     3 },
+  { "--block_size", eslARG_INT,        "50",  NULL, NULL,    NULL,  NULL,  NULL,        "input sequence broken into chunks this size (Mbases)",      3 },
+
+  /* hidden*/
+  { "--fwd_only",   eslARG_NONE,       FALSE, NULL, NULL,    NULL,  NULL,  NULL,        "build FM-index only for forward search (not for HMMER)",    9 },
 
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -49,8 +59,11 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_seqf
       if (puts("\nBasic options:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 120=textwidth*/
 
+      if (puts("\nOptions for selecting alphabet rather than guessing it:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+      esl_opt_DisplayHelp(stdout, go, 2, 2, 80);
+
       if (puts("\nSpecial options:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 2, 2, 80); /* 2= group; 2 = indentation; 120=textwidth*/
+      esl_opt_DisplayHelp(stdout, go, 3, 2, 80); /* 2= group; 2 = indentation; 120=textwidth*/
 
       exit(0);
   }
@@ -87,11 +100,13 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *seqfile, char *fmfile)
 {
   p7_banner(ofp, go->argv[0], banner);
 
-  if (fprintf(ofp, "# input sequence file:                     %s\n", seqfile)                                < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (                                      fprintf(ofp, "# input sequence file:                     %s\n", seqfile)                                < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (fprintf(ofp, "# output binary-formatted HMMER database:  %s\n", fmfile)                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (fprintf(ofp, "# alphabet     :                           %s\n", esl_opt_GetString(go, "--alph"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (fprintf(ofp, "# bin_length   :                           %d\n", esl_opt_GetInteger(go, "--bin_length")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (fprintf(ofp, "# bin_length:                              %d\n", esl_opt_GetInteger(go, "--bin_length")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (fprintf(ofp, "# suffix array sample rate:                %d\n", esl_opt_GetInteger(go, "--sa_freq"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--amino")      && fprintf(ofp, "# input is asserted to be:                 protein\n")                                        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--dna")        && fprintf(ofp, "# input is asserted to be:                 DNA\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--rna")        && fprintf(ofp, "# input is asserted to be:                 RNA\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n")           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   return eslOK;
 }
@@ -255,13 +270,14 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint32_t ambig
         BWT[i/4]           |=  BWT[i+1]<<4;
       if (i+2 <= N-1)
         BWT[i/4]           |=  BWT[i+2]<<2;
-
+/*
   } else if (meta->alph_type == fm_DNA_full ) {
     //2 chars per byte.  Counting will be done based on quadruples 0..3; 4..7; 8..11; etc.
       for(i=0; i < N-1; i+=2)
         BWT[i/2]           = BWT[i]<<4 | BWT[i+1];
       if (i==N-1)
         BWT[i/2]           =  BWT[i]<<4 ;
+*/
   }
 
 
@@ -281,13 +297,14 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint32_t ambig
         Tcompressed[i/4] |=   T[i+1]<<4;
       if (i+2 <= N-1)
         Tcompressed[i/4] |=   T[i+2]<<2;
-
+/*
     } else if (meta->alph_type == fm_DNA_full) {
       //2 chars per byte.  Counting will be done based on quadruples 0..3; 4..7; 8..11; etc.
       for(i=0; i < N-1; i+=2)
         Tcompressed[i/2] =   T[i]<<4 |   T[i+1];
       if (i==N-1)
         Tcompressed[i/2] =    T[i]<<4 ;
+*/
     } else {
       for(i=0; i < N-1; i++)
         Tcompressed[i] =    T[i];
@@ -422,6 +439,8 @@ main(int argc, char **argv)
   ESL_ALLOC (meta, sizeof(FM_METADATA));
   if (meta == NULL)
     esl_fatal("unable to allocate memory to store FM meta data\n");
+  meta->alph = NULL;
+
 
   ESL_ALLOC (meta->ambig_list, sizeof(FM_AMBIGLIST));
   if (meta->ambig_list == NULL)
@@ -471,21 +490,16 @@ main(int argc, char **argv)
 
   meta->fwd_only = 0;
 
-  if (esl_opt_IsUsed(go, "--alph")) {
-    meta->alph    = esl_opt_GetString(go, "--alph") ;
-    if ( esl_strcmp(meta->alph, "dna")==0  ||  esl_strcmp(meta->alph, "rna")==0) {
-      meta->alph_type = fm_DNA;
-      alphatype = eslDNA;
-    } else if (esl_strcmp(meta->alph, "dna_full")==0  || esl_strcmp(meta->alph, "rna_full")==0) {
-      meta->alph_type = fm_DNA_full;
-      alphatype = eslDNA;
-    } else if (esl_strcmp(meta->alph, "amino")==0) {
-      meta->alph_type = fm_AMINO;
-      alphatype = eslAMINO;
-      meta->fwd_only = 1;
-    } else {
-      esl_fatal("Unknown alphabet type. Try 'dna', 'dna_full', or 'amino'\n%s", "");
-    }
+
+  if ( esl_opt_IsUsed(go, "--amino")  ) {
+    meta->alph_type = fm_AMINO;
+    alphatype = eslAMINO;
+    meta->fwd_only = 1;
+  } else if (esl_opt_IsUsed(go, "--dna") || esl_opt_IsUsed(go, "--rna") ){
+    //meta->alph = "dna"; //esl_opt_IsUsed(go, "--dna") ? "dna" || "rna";
+    meta->alph_type = fm_DNA;
+    alphatype = eslDNA;
+
   } else {
     esl_sqfile_GuessAlphabet(sqfp, &alphaguess);
 
@@ -497,17 +511,12 @@ main(int argc, char **argv)
       alphatype = eslAMINO;
       meta->fwd_only = 1;
     } else {
-      esl_fatal("Unknown alphabet type. Try 'dna', 'dna_full', or 'amino'\n%s", "");
+      esl_fatal("Unable to guess alphabet. Try '--dna' or '--amino'\n%s", ""); //'dna_full'
     }
   }
 
-
   if (esl_opt_IsOn(go, "--fwd_only") )
     meta->fwd_only = 1;
-
-  meta->alph = NULL;
-
-
 
   //getInverseAlphabet
   fm_alphabetCreate(meta, &(meta->charBits));

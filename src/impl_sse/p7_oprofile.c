@@ -446,14 +446,14 @@ p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emiss
     //First compute the core characters of the alphabet
     for (x = 0; x < K; x++) {
       for (z = 0; z < 4; z++) {
-        if (k+ z*nq <= M)  sc_arr[z*Kp + x] =  (om->mm && om->mm[(k+z*nq)]=='m') ? 0 : log(fwd_emissions[Kp * (k+z*nq) + x]/bg->f[x]);
+        if (k+ z*nq <= M)  sc_arr[z*Kp + x] =  (om->mm && om->mm[(k+z*nq)]=='m') ? 0 : log( (double)(fwd_emissions[Kp * (k+z*nq) + x])/bg->f[x]);
         else               sc_arr[z*Kp + x] =  -eslINFINITY;
 
         tmp.x[z] = sc_arr[z*Kp + x];
       }
       om->rfv[x][q] = esl_sse_expf(tmp.v);
-    }
 
+    }
 
     // Then compute corresponding scores for ambiguity codes.
     for (z = 0; z < 4; z++)
@@ -468,7 +468,6 @@ p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emiss
   }
 
   return eslOK;
-
 }
 
 
@@ -776,6 +775,7 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 	for (z = 0; z < 4; z++) tmp.x[z] = (k+ z*nq <= M) ? p7P_MSC(gm, k+z*nq, x) : -eslINFINITY;
 	om->rfv[x][q] = esl_sse_expf(tmp.v);
       }
+
 
   /* Transition scores, all but the DD's. */
   for (j = 0, k = 1, q = 0; q < nq; q++, k++)

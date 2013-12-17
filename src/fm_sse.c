@@ -97,8 +97,8 @@ fm_configInit( FM_CFG *cfg, ESL_GETOPTS *go )
    */
   if (cfg->meta->alph_type == fm_DNA)
     trim_chunk_count = 64; //2-bit steps
-  else //(meta->alph_type == fm_DNA_full)
-    trim_chunk_count = 16; //8-bit steps
+//  else //(meta->alph_type == fm_DNA_full)
+//    trim_chunk_count = 16; //8-bit steps
 
   //chars_per_vector = 128/meta->charBits;
   cfg->fm_masks_v         = NULL;
@@ -141,12 +141,12 @@ fm_configInit( FM_CFG *cfg, ESL_GETOPTS *go )
 
     }
   }
-
+/*
   if (cfg->meta->alph_type == fm_DNA_full) {
     cfg->fm_masks_v[16]          = cfg->fm_allones_v;
     cfg->fm_reverse_masks_v[16]  = cfg->fm_allones_v;
   }
-
+*/
   return eslOK;
 
 ERROR:
@@ -257,7 +257,7 @@ fm_getOccCount (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c) {
                     FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v);
         }
       }
-
+/*
     } else if ( meta->alph_type == fm_DNA_full ) {
 
       if (!up_b) { // count forward, adding
@@ -291,6 +291,7 @@ fm_getOccCount (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c) {
           FM_COUNT_4BIT(tmp_v, tmp2_v, counts_v);
         }
       }
+*/
     } else { //amino
 
       if (!up_b) { // count forward, adding
@@ -486,7 +487,7 @@ fm_getOccCountLT (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c, uint
           FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v_eq);
         }
       }
-
+/*
     } else if ( meta->alph_type == fm_DNA_full) {
       c_v = *(cfg->fm_chars_v + c);
 
@@ -538,6 +539,7 @@ fm_getOccCountLT (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c, uint
 
         }
       }
+*/
     } else { //amino
       if (!up_b) { // count forward, adding
         for (i=1+landmark ; i+15<(pos+1);  i+=16) { // keep running until i begins a run that shouldn't all be counted

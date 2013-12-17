@@ -547,13 +547,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if((fm_meta->fp = fopen(cfg->dbfile, "rb")) == NULL)
       p7_Fail("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
 
-
     //esl_stopwatch_Start(watch_slave);
     if ( (status = fm_readFMmeta(fm_meta)) != eslOK)
       p7_Fail("Failed to read FM meta data from target sequence database %s\n",      cfg->dbfile);
     //esl_stopwatch_Stop(watch_slave);
     //esl_stopwatch_Include(read_watch_master, watch_slave);
-
 
     if ( (status = fm_configInit(fm_cfg, go)) != eslOK)
       p7_Fail("Failed to initialize FM configuration for target sequence database %s\n",      cfg->dbfile);
@@ -644,7 +642,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     qsq  = esl_sq_CreateDigital(abc); // only need this in the case of a single sequence ... but that could come from an MSA
 
 
-    if ( (abc->type == eslDNA || abc->type == eslRNA) && !(fm_meta->alph_type == fm_DNA || fm_meta->alph_type == fm_DNA_full) )
+    if ( (abc->type == eslDNA || abc->type == eslRNA) && !(fm_meta->alph_type == fm_DNA /*|| fm_meta->alph_type == fm_DNA_full*/) )
       p7_Fail("incompatible alphabets - the HMM is a nucleotide alphabet, but the database isn't");
     if ( (abc->type == eslAMINO ) && !(fm_meta->alph_type == fm_AMINO ) )
       p7_Fail("incompatible alphabets - the HMM is an amino alphabet, but the database isn't");
@@ -956,7 +954,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
             resCnt += info[i].pli->nres;
         }
       }
-
 
       for (i = 0; i < infocnt; ++i)
           p7_tophits_ComputeNhmmerEvalues(info[i].th, resCnt, info[i].om->max_length);
