@@ -276,7 +276,7 @@ In contrast to
 the 
 .I --max
 flag in 
-.B nhmmscan
+.B nhmmer
 sets the scanning-SSV filter threshold to 0.4, not 1.0. Use of this
 flag increases sensitivity somewhat, at a large cost in speed.
 
