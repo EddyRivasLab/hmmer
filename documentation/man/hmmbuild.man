@@ -166,8 +166,9 @@ insertions/deletions) will be assigned as consensus.
 We only want to count terminal gaps as deletions if the aligned
 sequence is known to be full-length, not if it is a fragment (for
 instance, because only part of it was sequenced). HMMER uses a simple
-rule to infer fragments: if the sequence length L is less than 
-or equal to a fraction
+rule to infer fragments: if the range of a sequence in the alignment 
+(the number of alignment columns between the first and last positions 
+of the sequence) is less than or equal to a fraction
 .I <x> 
 times the alignment length in columns,
 then the sequence is handled as a fragment. The default is 0.5.

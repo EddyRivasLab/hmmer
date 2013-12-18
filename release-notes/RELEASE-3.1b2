@@ -27,19 +27,24 @@ ________________________________________________________________
     preprocessed into a binary file format. The new tool makehmmerdb 
     performs this task
     
-    
 -:- New method of deciding if a sequence is a fragment. 
     
-    For each fragment, all leading and trailing gap symbols (all gaps 
-    before the first residue and after the last residue) are converted to 
-    missing data symbols, and thus do not count as observed gaps. The idea 
-    is that relatively "short" sequences are treated as fragments. 
+    If hmmbuild determines that a sequence is a fragment, all leading and 
+    trailing gap symbols (all gaps before the first residue and after the 
+    last residue) are treated as missing data symbols, and thus do not 
+    count as observed gaps.
     
     In H3.0 and H3.1b1, a sequence was called a fragment if its length was
-    less than fragthresh (default: 1/2) * the length of the alignment. The 
-    should have been, and now is, "less than fragthresh * the average 
-    sequence length in the alignment".
-    
+    less than a specified fraction of the alignment length. In the case of 
+    alignments with many sequences, this often resulted in all sequences
+    being labeled as fragments, which could lead to unexpected terminal 
+    match states when a small fraction of sequences contained a long 
+    terminal extension. Now, a sequence is labeled a fragment if its range 
+    in the alignment (the number of alignment columns between the first 
+    and last positions of the sequence) is not greater than a specified 
+    fraction of the full alignment length. This should improve HMMER's 
+    ability to model alignments with ragged ends.
+        
     
 Other changes include:
 
