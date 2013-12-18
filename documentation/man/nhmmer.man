@@ -30,7 +30,8 @@ queries can be in a number of formats (see
 .BR --qformat ), 
 and can typically be autodetected. Note that only 
 .I Stockholm
-format supports the use of multiple sequence-based queries.
+format supports queries made up of more than one sequence 
+alignment.
 
 
 
@@ -120,8 +121,8 @@ different models.
 
 .TP 
 .BI --hmmout " <f>" 
-If <queryfile> is sequence-based, the internally-computed HMM(s)
-are written to
+If <queryfile> is sequence-based, write the internally-computed 
+HMM(s) to
 .IR <f> . 
 
 
@@ -313,25 +314,25 @@ abnormally heavy load.
 
 The alphabet type of the target database (DNA or RNA) is autodetected 
 by default, by looking at the composition of the
-.IR seqdb .
+.IR <seqdb> .
 Autodetection is normally quite reliable, but occasionally alphabet
 type may be ambiguous and autodetection can fail (for instance, when
 the first sequence starts with a run of ambiguous characters). To 
 avoid this, or to increase robustness in automated analysis pipelines, 
 you may specify the alphabet type of
-.I seqdb
+.I <seqdb>
 with these options.
 
 .TP
 .B --dna
 Specify that all sequences in 
-.I seqdb
+.I <seqdb>
 are DNAs.
 
 .TP
 .B --rna
 Specify that all sequences in 
-.I seqdb
+.I <seqdb>
 are RNAs.
 
 
@@ -344,20 +345,20 @@ one may optionally precompute a binary version of the target database, using
 then search against that database. Using default settings, this yields a
 roughly 10-fold acceleration with minimal loss of sensitivity on benchmarks.
 This is achieved using a heuristic method that searches for seeds (ungapped 
-alignments) around which full processing is done. This can be thought of as 
-a replacement to the SSV stage. These options only impact 
+alignments) around which full processing is done. This is essentially  
+a replacement to the SSV stage. The following options only impact 
 .I nhmmer
 if the value of 
 .B --tformat
 is
-.IR hmmerdb .
+.IR <hmmerdb> .
 
 Changing parameters for this seed-finding step will impact both speed and 
 sensitivity - typically faster search leads to lower sensitivity. 
 
 .TP
 .BI --seed_max_depth " <n>"
-The seed step requires that a specified bit score in a seed 
+The seed step requires that a seed reach a specified bit score in length 
 no longer than 
 .BR <n> . 
 By default, this value is 14.  
@@ -381,7 +382,7 @@ A seed may not have a run of length
 .B <n>
 in which the score drops by 
 .I --seed_drop_lim
-or more. Basically, this prunes extension through long
+or more. Basically, this prunes seeds that go through long
 slightly-negative seed extensions. The default is 4.  
 
 .TP
@@ -431,13 +432,14 @@ and
 The default is to autodetect the format of the file. The format
 .I hmmerbin
 indicates that the database file is a binary file produced using
-makehmmerdb (this format is not currently autodetected). 
+.I makehmmerdb 
+(this format is not currently autodetected). 
 
 
 .TP 
 .BI --qformat " <s>"
 Declare that the input
-.I queryfile
+.I <queryfile>
 is in format 
 .IR <s> .
 This is used when the query is sequence-based, rather than made

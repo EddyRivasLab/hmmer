@@ -90,9 +90,10 @@ Bin length. The binary file depends on a data structure called the
 FM index, which organizes a permuted copy of the sequence in bins 
 of length
 .IR <n> .
-Longer bin length will lead to smaller files and possibly slower 
-query time. The default is 256. Much more than 512 may lead to
-notable reduction in speed.
+Longer bin length will lead to smaller files (because data is 
+captured about each bin) and possibly slower query time. The 
+default is 256. Much more than 512 may lead to notable reduction 
+in speed.
 
 
 .TP 
@@ -110,9 +111,9 @@ is 8. Must be a power of 2.
 .BI ----block_size " <n>"
 The input sequence is broken into blocks of size
 .I <n>
-million letters, rather than build an FM index for the entire 
-sequence database. Default is 50. Larger blocks do not seem to yield 
-substantial speed increase. 
+million letters. An FM index is built for each block, rather than 
+building an FM index for the entire sequence database. Default is 
+50. Larger blocks do not seem to yield substantial speed increase. 
 
 
 

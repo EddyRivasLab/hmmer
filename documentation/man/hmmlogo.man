@@ -15,14 +15,14 @@ hmmlogo - given an HMM, produce data required to build an HMM logo
 .PP
 .B hmmlogo 
 computes letter height and indel parameters that can be used to 
-produce a profile HMM logo. This tool can be thought of as a 
-command-line interface for the data underlying the Skylign 
+produce a profile HMM logo. This tool is essentially a 
+command-line interface for much of the data underlying the Skylign 
 logo server (skylign.org).
 
 By default, 
 .B hmmlogo
-prints out a table of per-position letter heights, dependent on the 
-requested height method, then prints a table of per-position gap
+prints out a table of per-position letter heights (dependent on the 
+requested height method), then prints a table of per-position gap
 probabilities. 
 
 In a typical logo, the total height of a stack of letters for one
@@ -42,7 +42,7 @@ options.
 .TP
 .B --height_relent_all
 Total height = relative entropy (aka information content); all letters 
-are give a positive height.  (default)
+are given a positive height.  (default)
 
 .TP
 .B --height_relent_abovebg
