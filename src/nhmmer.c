@@ -262,7 +262,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_quer
 //      if (puts("\nOptions for restricting search to a range of target database sequences:")             < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
 //      esl_opt_DisplayHelp(stdout, go, 8, 2, 100);
 
-      if (puts("\nOptions controlling FM-index pruning and extension:")         < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+      if (puts("\nOptions controlling seed search heuristic:")               < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 9, 2, 100);
 
       if (puts("\nOther expert options:")                                    < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");

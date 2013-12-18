@@ -1,7 +1,7 @@
 .TH "hmmlogo" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-hmmlogo - given an hmm, produce data required to build an hmm logo
+hmmlogo - given an HMM, produce data required to build an HMM logo
 
 
 .SH SYNOPSIS
@@ -41,20 +41,21 @@ options.
 
 .TP
 .B --height_relent_all
-Total height = relative entropy; all letters are give a positive
-height.  (default)
+Total height = relative entropy (aka information content); all letters 
+are give a positive height.  (default)
 
 .TP
 .B --height_relent_abovebg
-Total height = relative entropy; only letters with above-background
-probability are given positive height.
+Total height = relative entropy (aka information content); only letters 
+with above-background probability are given positive height.
 
 .TP
 .B --height_score
 Total height = sums of scores of positive-scoring letters; letter
 height depends on the score of that letter at that position. Only 
 letters with above-background probability (positive score) are 
-given positive height.
+given positive height. (Note that only letter height is meaningful -
+stack height has no inherent meaning).
 
 .TP
 .B --no_indel

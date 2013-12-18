@@ -13,17 +13,18 @@
 
 #define FM_BLOCK_COUNT 100000 //max number of SQ objects in a block
 #define FM_BLOCK_OVERLAP 20000 //20 Kbases of overlap, at most, between adjascent FM-index blocks
-#define ALPHOPTS "--amino,--dna,--rna"                         /* Exclusive options for alphabet choice */
+//#define ALPHOPTS "--amino,--dna,--rna"                         /* Exclusive options for alphabet choice */
+
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
   { "-h",           eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,       "show brief help on version and usage",                      1 },
 
   /* Selecting the alphabet rather than autoguessing it */
-  { "--amino",   eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL,       "input is protein sequence",                                 2 },
-  { "--dna",     eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL,       "input is DNA sequence",                                     2 },
-  { "--rna",     eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL,       "input is RNA sequence",                                     2 },
-//  { "--alph",       eslARG_STRING,     NULL, NULL, NULL,    NULL,  NULL,  NULL,         "alphabet [dna,rna,amino]",                                  2 },   /*"alphabet [dna,dna_full,rna,rna_full,amino]"*/
+  //TODO: when I make the FM method work for amino acids, re-enable this selection
+//  { "--amino",   eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL,       "input is protein sequence",                                 2 },
+//  { "--dna",     eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL,       "input is DNA sequence",                                     2 },
+//  { "--rna",     eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL,       "input is RNA sequence",                                     2 },
 
   /* Other options */
   { "--informat",   eslARG_STRING,     FALSE, NULL, NULL,    NULL,  NULL,  NULL,        "specify that input file is in format <s>",                  3 },
@@ -59,8 +60,8 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_seqf
       if (puts("\nBasic options:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 120=textwidth*/
 
-      if (puts("\nOptions for selecting alphabet rather than guessing it:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
-      esl_opt_DisplayHelp(stdout, go, 2, 2, 80);
+//      if (puts("\nOptions for selecting alphabet rather than guessing it:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+//      esl_opt_DisplayHelp(stdout, go, 2, 2, 80);
 
       if (puts("\nSpecial options:") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 3, 2, 80); /* 2= group; 2 = indentation; 120=textwidth*/
@@ -104,9 +105,9 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *seqfile, char *fmfile)
   if (fprintf(ofp, "# output binary-formatted HMMER database:  %s\n", fmfile)                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (fprintf(ofp, "# bin_length:                              %d\n", esl_opt_GetInteger(go, "--bin_length")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (fprintf(ofp, "# suffix array sample rate:                %d\n", esl_opt_GetInteger(go, "--sa_freq"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--amino")      && fprintf(ofp, "# input is asserted to be:                 protein\n")                                        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--dna")        && fprintf(ofp, "# input is asserted to be:                 DNA\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--rna")        && fprintf(ofp, "# input is asserted to be:                 RNA\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+//  if (esl_opt_IsUsed(go, "--amino")      && fprintf(ofp, "# input is asserted to be:                 protein\n")                                        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+//  if (esl_opt_IsUsed(go, "--dna")        && fprintf(ofp, "# input is asserted to be:                 DNA\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+//  if (esl_opt_IsUsed(go, "--rna")        && fprintf(ofp, "# input is asserted to be:                 RNA\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n")           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   return eslOK;
 }
@@ -490,16 +491,17 @@ main(int argc, char **argv)
 
   meta->fwd_only = 0;
 
-
+/* TODO: when I make the FM method work for amino acids, re-enable this selection
   if ( esl_opt_IsUsed(go, "--amino")  ) {
     meta->alph_type = fm_AMINO;
     alphatype = eslAMINO;
     meta->fwd_only = 1;
   } else if (esl_opt_IsUsed(go, "--dna") || esl_opt_IsUsed(go, "--rna") ){
+  */
     //meta->alph = "dna"; //esl_opt_IsUsed(go, "--dna") ? "dna" || "rna";
     meta->alph_type = fm_DNA;
     alphatype = eslDNA;
-
+/*
   } else {
     esl_sqfile_GuessAlphabet(sqfp, &alphaguess);
 
@@ -514,6 +516,7 @@ main(int argc, char **argv)
       esl_fatal("Unable to guess alphabet. Try '--dna' or '--amino'\n%s", ""); //'dna_full'
     }
   }
+*/
 
   if (esl_opt_IsOn(go, "--fwd_only") )
     meta->fwd_only = 1;

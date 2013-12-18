@@ -308,6 +308,108 @@ computationally intensive Forward/Backward algorithms shoulder an
 abnormally heavy load.
 
 
+
+.SH OPTIONS FOR SPECIFYING THE ALPHABET
+
+The alphabet type of the target database (DNA or RNA) is autodetected 
+by default, by looking at the composition of the
+.IR seqdb .
+Autodetection is normally quite reliable, but occasionally alphabet
+type may be ambiguous and autodetection can fail (for instance, when
+the first sequence starts with a run of ambiguous characters). To 
+avoid this, or to increase robustness in automated analysis pipelines, 
+you may specify the alphabet type of
+.I seqdb
+with these options.
+
+.TP
+.B --dna
+Specify that all sequences in 
+.I seqdb
+are DNAs.
+
+.TP
+.B --rna
+Specify that all sequences in 
+.I seqdb
+are RNAs.
+
+
+.SH OPTIONS CONTROLLING SEED SEARCH HEURISTIC
+
+When searching with 
+.IR nhmmer ,
+one may optionally precompute a binary version of the target database, using
+.IR makehmmerdb ,
+then search against that database. Using default settings, this yields a
+roughly 10-fold acceleration with minimal loss of sensitivity on benchmarks.
+This is achieved using a heuristic method that searches for seeds (ungapped 
+alignments) around which full processing is done. This can be thought of as 
+a replacement to the SSV stage. These options only impact 
+.I nhmmer
+if the value of 
+.B --tformat
+is
+.IR hmmerdb .
+
+Changing parameters for this seed-finding step will impact both speed and 
+sensitivity - typically faster search leads to lower sensitivity. 
+
+.TP
+.BI --seed_max_depth " <n>"
+The seed step requires that a specified bit score in a seed 
+no longer than 
+.BR <n> . 
+By default, this value is 14.  
+
+.TP
+.BI --seed_sc_thresh " <x>"
+The seed must reach score 
+.B <x>
+(in bits). The default is 16.0 bits.
+
+.TP
+.BI --seed_sc_density " <x>"
+Either all prefixes or all suffixes of a seed must have 
+bit density (bits per aligned position) of at least 
+.BR <x> . 
+The default is 0.7 bits/position.
+
+.TP
+.BI --seed_drop_max_len " <n>"
+A seed may not have a run of length
+.B <n>
+in which the score drops by 
+.I --seed_drop_lim
+or more. Basically, this prunes extension through long
+slightly-negative seed extensions. The default is 4.  
+
+.TP
+.BI --seed_drop_lim " <x>"
+In a seed, there may be no run of length 
+.I --seed_drop_max_len
+in which the score drops by 
+.IR --seed_drop_lim .
+The default is 0.3 bits.
+
+.TP
+.BI --seed_req_pos " <n>"
+A seed must contain a run of at least 
+.B <n>
+positive-scoring matches. The default is 5.  
+
+.TP
+.BI --seed_ssv_length " <n>"
+After finding a short seed, an ungapped alignment is extended 
+in both directions in an attempt to meet the 
+.I --F1
+score threshold. The window through which this ungapped alignment
+extends is length 
+.BR <n> .
+The default is 70.  
+
+
+
 .SH OTHER OPTIONS
 
 .TP
@@ -323,9 +425,13 @@ Accepted formats include
 .IR stockholm , 
 .IR pfam , 
 .IR a2m , 
+.IR afa , 
 and 
-.IR afa .
-The default is to autodetect the format of the file.
+.IR hmmerbin .
+The default is to autodetect the format of the file. The format
+.I hmmerbin
+indicates that the database file is a binary file produced using
+makehmmerdb (this format is not currently autodetected). 
 
 
 .TP 

@@ -1,7 +1,7 @@
 .TH "makehmmerdb" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-makehmmerdb - build a HMMER binary-formatted database from an input sequence file
+makehmmerdb - build a HMMER binary database file from a sequence file
 
 
 .SH SYNOPSIS
@@ -15,8 +15,8 @@ makehmmerdb - build a HMMER binary-formatted database from an input sequence fil
 
 .PP
 .B makehmmerdb 
-is used to create a binary file from a sequence file. This binary
-file may be used as a target database for the DNA search tool
+is used to create a binary file from a DNA sequence file. This 
+binary file may be used as a target database for the DNA search tool
 .BR nhmmer .
 
 
@@ -29,38 +29,38 @@ Help; print a brief reminder of command line usage and all available
 options.
 
 
-.SH OPTIONS FOR SPECIFYING THE ALPHABET
-
-The alphabet type (amino, DNA, or RNA) is autodetected by default, by
-looking at the composition of the
-.IR seqfile .
-Autodetection is normally quite reliable, but occasionally alphabet
-type may be ambiguous and autodetection can fail (for instance, when
-the first sequence starts with a run of ambiguous chracters). To avoid 
-this, or to increase robustness in automated analysis pipelines, you 
-may specify the alphabet type of
-.I seqfile
-with these options.
-
-.TP
-.B --dna
-Specify that all sequences in 
-.I msafile
-are DNAs.
-
-.TP
-.B --rna
-Specify that all sequences in 
-.I msafile
-are RNAs.
-
-.TP
-.B --amino
-Specify that all sequences in 
-.I msafile
-are proteins. Note that currently, a binary database of amino
-acid sequence cannot be used as target to hmmsearch of phmmer
-(only nhmmer can use the binary format).
+.\" .SH OPTIONS FOR SPECIFYING THE ALPHABET
+.\" 
+.\" The alphabet type (amino, DNA, or RNA) is autodetected by default, by
+.\" looking at the composition of the
+.\" .IR seqfile .
+.\" Autodetection is normally quite reliable, but occasionally alphabet
+.\" type may be ambiguous and autodetection can fail (for instance, when
+.\" the first sequence starts with a run of ambiguous characters). To avoid 
+.\" this, or to increase robustness in automated analysis pipelines, you 
+.\" may specify the alphabet type of
+.\" .I seqfile
+.\" with these options.
+.\" 
+.\" .TP
+.\" .B --dna
+.\" Specify that all sequences in 
+.\" .I msafile
+.\" are DNAs.
+.\" 
+.\" .TP
+.\" .B --rna
+.\" Specify that all sequences in 
+.\" .I msafile
+.\" are RNAs.
+.\" 
+.\" .TP
+.\" .B --amino
+.\" Specify that all sequences in 
+.\" .I msafile
+.\" are proteins. Note that currently, a binary database of amino
+.\" acid sequence cannot be used as target to hmmsearch of phmmer
+.\" (only nhmmer can use the binary format).
 
 
 
@@ -98,10 +98,11 @@ notable reduction in speed.
 .TP 
 .BI --sa_freq " <n>"
 Suffix array sample rate. The FM index structure also samples from 
-the underlying suffix for the sequence database. More frequent 
+the underlying suffix array for the sequence database. More frequent 
 sampling (smaller value for 
 .IR <n> )
-will yield faster search at larger file size. The default value
+will yield larger file size and faster search (until file size becomes
+large enough to cause I/O to be a bottleneck). The default value
 is 8. Must be a power of 2.
 
 
