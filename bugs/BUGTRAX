@@ -1,7 +1,40 @@
+ID              h105
+TITLE           Make clean/distclean fail within binary distributions
+AFFECTS         3.1b1
+FIXED_IN        3.1b2
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     -
+OPENED_DATE     TJW, Tue Jun 18 15:59:58 2013
+CLOSED_DATE     Tue Jun 18 16:15:00 2013
+DESCRIPTION
+  Some files and folders are removed from our source prior to release of 
+  HMMER binaries, namely userguide and LICENSE.txt. This was leading to 
+  errors in 'make clean' and 'make distclean'. Added tests to make the 
+  requested actions conditional on file/directory existence.
+//
+ID              h104
+TITLE           Compile error on OpenBSD, netinet/in.h.
+AFFECTS         3.1b1
+FIXED_IN        3.1b2
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     Senthil Kumar M <senthil.murugapiran@unlv.edu>
+OPENED_DATE     TJW, Tue Jun 11 15:54:02 2013
+CLOSED_DATE     Wed Jun 12 13:07:33 2013
+DESCRIPTION
+  Three hmmd implementation depends on the struct 'sockaddr_in', which is
+  defined in netinet/in.h. On our testing systems, this is provided by using
+  #include <arpa/inet.h>
+  (which itself includes <netinet/in.h>).
+  
+  On OpenBSD - inet.h doesn't include the in.h file. The fix is to 
+  directly include netinet/in.h within those three files. 
+//
 ID              h103
 TITLE           Funny characters printed in E-value for hits with score >1000
 AFFECTS         3.1b1
-FIXED_IN        -
+FIXED_IN        3.1b2
 STATUS          CLOSED
 XREF            -
 REPORTED_BY     Brian Osborne <bosborne11@verizon.net>
@@ -16,7 +49,7 @@ DESCRIPTION
 ID              h102
 TITLE           Marginal hits late in target might be filtered in an nhmmer search
 AFFECTS         3.1b1
-FIXED_IN        -
+FIXED_IN        3.1b2
 STATUS          CLOSED
 XREF            -
 REPORTED_BY     Jim Notwell <jimnotwell@gmail.com>
@@ -33,7 +66,7 @@ DESCRIPTION
 ID              h101
 TITLE           hmmsearch segfaults if a DNA HMM is searched against a protein db
 AFFECTS         3.1b1
-FIXED_IN        -
+FIXED_IN        3.1b2
 STATUS          CLOSED
 XREF            -
 REPORTED_BY     Stephanie Pearl <spearl@plantbio.uga.edu>
@@ -53,7 +86,7 @@ DESCRIPTION
 ID              h100
 TITLE           hmmalign segfaults on zero length input sequences.
 AFFECTS         3.1b1
-FIXED_IN        -
+FIXED_IN        3.1b2
 STATUS          CLOSED
 XREF            -
 REPORTED_BY     "Kapucija, Stefanie" <stefanie.kapucija.626@my.csun.edu>
@@ -1128,7 +1161,7 @@ ID              h50
 TITLE           hmmbuild -n (assign name to HMM) option doesn't have any effect
 STATUS          CLOSED
 XREF            -
-REPORTED_BY     Benjamin Schuster-Bˆckler <benjamin.schuster@crg.es>
+REPORTED_BY     Benjamin Schuster-BÔøΩckler <benjamin.schuster@crg.es>
 OPENED_DATE     SRE, Tue Apr 28 13:10:48 2009
 CLOSED_DATE     SRE, Tue Apr 28 14:04:24 2009
 DESCRIPTION     
@@ -1626,7 +1659,7 @@ ID              h21
 TITLE           "make install" doesn't create target directories
 STATUS          CLOSED
 XREF            STL7 p.70
-REPORTED_BY     Gisle SÅÅÊlensminde <gisle@ii.uib.no> [10 Jun 2003]
+REPORTED_BY     Gisle SÔøΩÔøΩÔøΩlensminde <gisle@ii.uib.no> [10 Jun 2003]
 CLOSED_DATE     SRE, Thu Jun 12 12:37:54 2003
 DESCRIPTION     
   "make install" doesn't create target directories if they 

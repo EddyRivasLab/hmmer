@@ -176,7 +176,7 @@ static ESL_OPTIONS options[] = {
 };
 
 
-static char usage[]  = "<hmmfile> [options]";
+static char usage[]  = "[options] <hmmfile>";
 static char banner[] = "given an hmm, produce data required to build an hmm logo";
 
 int
