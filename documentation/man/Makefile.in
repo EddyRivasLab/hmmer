@@ -26,6 +26,7 @@ MANS =  hmmer\
 	hmmconvert\
 	hmmemit\
 	hmmfetch\
+	hmmlogo\
 	hmmpgmd\
 	hmmpress\
 	hmmscan\
@@ -33,6 +34,7 @@ MANS =  hmmer\
 	hmmsim\
 	hmmstat\
 	jackhmmer\
+	makehmmerdb\
 	phmmer\
 	nhmmer\
 	nhmmscan\

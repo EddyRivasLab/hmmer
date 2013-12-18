@@ -34,6 +34,7 @@ MANPAGES = \
 	${top_srcdir}/documentation/man/hmmconvert.man\
 	${top_srcdir}/documentation/man/hmmemit.man\
 	${top_srcdir}/documentation/man/hmmfetch.man\
+	${top_srcdir}/documentation/man/hmmlogo.man\
 	${top_srcdir}/documentation/man/hmmpgmd.man\
 	${top_srcdir}/documentation/man/hmmpress.man\
 	${top_srcdir}/documentation/man/hmmscan.man\
@@ -41,6 +42,7 @@ MANPAGES = \
 	${top_srcdir}/documentation/man/hmmsim.man\
 	${top_srcdir}/documentation/man/hmmstat.man\
 	${top_srcdir}/documentation/man/jackhmmer.man\
+	${top_srcdir}/documentation/man/makehmmerdb.man\
 	${top_srcdir}/documentation/man/nhmmer.man\
 	${top_srcdir}/documentation/man/nhmmscan.man\
 	${top_srcdir}/documentation/man/phmmer.man
