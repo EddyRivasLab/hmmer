@@ -1,6 +1,6 @@
 Checklist for a HMMER release
 SRE, Thu Feb  4 10:56:25 2010
-updated by TJW, Tue May 21 14:56:12 EDT 2013
+updated by TJW, Tue Dec 17 14:56:12 EDT 2013
 --------------------------------------------------------
 When editing this 00CHECKLIST, edit it in the trunk, not in a release
 branch; it isn't included in releases anyway.
@@ -17,13 +17,13 @@ major branch. A snapshot is from the development trunk.
 Version naming:                                               example
 major             <lineage>.<major-release>                   3.0
 minor             <lineage>.<major-release>.<minor-release>   3.0.1
-alpha             <lineage>.<major-release>a<n>               3.0a1 
-beta              <lineage>.<major-release>b<n>               3.0b3 
-release candidate <lineage>.<major-release>rc<n>              3.0rc2 
+alpha             <lineage>.<major-release>a<n>               3.0a1
+beta              <lineage>.<major-release>b<n>               3.0b3
+release candidate <lineage>.<major-release>rc<n>              3.0rc2
 snapshot          <lineage>.<major-release>.snap<yyyymmdd>    3.0.snap20080325
 
 
-* Announce intent to release to all developers. 
+* Announce intent to release to all developers.
    Commit working copies on all machines.
    Check for stray uncommitted files:
 	 ./configure
@@ -46,10 +46,10 @@ development of the next main release.
    Compile should be entirely clean when compiled -Wall.
    'make check' should be clean.
    'make dev' should be clean.
-   'make pdf' should work 
+   'make pdf' should work
 
 
-   When trunk is clean, 
+   When trunk is clean,
    svn commit
    We're (usually) next going to move out of the trunk to the release branch.
 
@@ -58,10 +58,10 @@ development of the next main release.
 
    svn copy https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk\
             https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0\
-            -m "created HMMER 3.0 release branch"          
+            -m "created HMMER 3.0 release branch"
    svn copy https://svn.janelia.org/eddylab/eddys/easel/trunk\
             https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0\
-            -m "created HMMER 3.0 release branch"          
+            -m "created HMMER 3.0 release branch"
 
 ================================================================
 = Work in the current release branch (~/releases/hmmer-release)
@@ -154,19 +154,19 @@ wrong, it's easy enough to come back and make a new tarball.
 
 * Edit .bashrc
   I use the following environment variables in the scripting below:
-    HMMER_VERSION     The current version.  
+    HMMER_VERSION     The current version.
     HMMER_OLDVERSION  The version we regress against. (found in ~releases/hmmer-${HMMER_OLDVERSION}
     HMMER_RELEASE_NOTEBOOK  The e-notebook dir        ({HOME}/notebook/xxx)
 
-  Having these set everywhere, in all the ssh'ing you're about to 
-  do, simplifies the scripting below, and reduces the odds of 
+  Having these set everywhere, in all the ssh'ing you're about to
+  do, simplifies the scripting below, and reduces the odds of
   cut/paste errors.
 
    . ~/.bashrc
 
 * Build versions for the Tutorial runs.
 
-This needs to be an icc/MPI version - mpi tests are included. 
+This needs to be an icc/MPI version - mpi tests are included.
 Build a previous version (${HMMER_OLDVERSION}) in addition to the release candidate.
 
 icc 11.1 with IntelMPI; on login-eddy
@@ -243,7 +243,7 @@ Release candidate:
 * Clean up.
     make distclean
     svn status
-do any cleanup... 
+do any cleanup...
     svn commit
 
 
@@ -261,7 +261,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    rm -f  hmmer-${HMMER_VERSION}.tar
    rm -f  hmmer-${HMMER_VERSION}.tar.gz
 
-* Export a snapshot, alpha, beta, or release candidate from the development trunk: 
+* Export a snapshot, alpha, beta, or release candidate from the development trunk:
    svn export https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk hmmer-${HMMER_VERSION}
    cd hmmer-${HMMER_VERSION}
 
@@ -272,6 +272,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    ./configure
    . release-notes/LICENSE.sh
 
+  3.1b2   exported 4580/898
   3.1b1   exported 4452/866
   3.0:    exported 3243/575
   3.0rc2: exported 3224/554
@@ -289,7 +290,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    easel/devkit/sedition EASEL_VERSION ${EASEL_VERSION} EASEL_DATE "${EASEL_DATE}" EASEL_COPYRIGHT "${EASEL_COPYRIGHT}" easel/COPYRIGHT
    easel/devkit/sedition EASEL_VERSION ${EASEL_VERSION} EASEL_DATE "${EASEL_DATE}" EASEL_COPYRIGHT "${EASEL_COPYRIGHT}" easel/INSTALL
    easel/devkit/sedition EASEL_VERSION ${EASEL_VERSION} EASEL_DATE "${EASEL_DATE}" EASEL_COPYRIGHT "${EASEL_COPYRIGHT}" easel/LICENSE.tag
-   find easel -type f -exec easel/devkit/sedition-pp LICENSE easel/LICENSE.tag {} \;   
+   find easel -type f -exec easel/devkit/sedition-pp LICENSE easel/LICENSE.tag {} \;
 
    easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" README
    easel/devkit/sedition HMMER_VERSION ${HMMER_VERSION} HMMER_DATE "${HMMER_DATE}" HMMER_COPYRIGHT "${HMMER_COPYRIGHT}" COPYRIGHT
@@ -312,13 +313,6 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
 
 * clean up files that don't belong in the distro
 
-  NOTE from EPN, Tue Jul 10 08:56:32 2012: 
-  Be careful here to either (a) not delete documentation/userguide and
-  easel/documentation or (b) fix a problem with 'make clean' and 'make
-  distclean' that will result in a distro if you do delete them. As of 
-  HMMER trunk rev 4159 and Easel trunk rev 780 you should be fine with
-  doing (a). See those svn logs for details.
-
    make distclean
    cp   release-notes/RELEASE-${HMMER_VERSION} RELEASE-NOTES-TMP
    rm -rf release-notes
@@ -331,7 +325,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    rm -rf autom4te.cache
 
    cd easel
-   rm -f  00CHECKLIST LICENSE.csh.in LICENSE.tag 
+   rm -f  00CHECKLIST LICENSE.csh.in LICENSE.tag
    rm -rf documentation
    cd ..
 
@@ -347,6 +341,7 @@ Delete TO-DO sections and clean up for public consumption.
    tar cvf hmmer-${HMMER_VERSION}.tar hmmer-${HMMER_VERSION}
    gzip hmmer-${HMMER_VERSION}.tar
 
+   3.1b2    5.7 Mb
    3.1b1    5.5 Mb
    3.0:     4.0 Mb (source only)
    3.0rc2:  3.9 Mb (source only)
@@ -384,7 +379,7 @@ On login-eddy (our compile host):
 = Testing
 ================================================================
 
-See latest e-notebook (~wheelert/notebook/2013/05-04-hmmer-3.1b1-release-try2/)
+See latest e-notebook (~wheelert/notebook/2013/12-17-hmmer3.1b2-release/)
 for tests.  [TODO: Organize/systematize this better.]
 
 They include:
@@ -397,13 +392,14 @@ They include:
 ================================================================
 = Binary distros
 ================================================================
-  
+
   cd ${HMMER_RELEASE_NOTEBOOK}
   mkdir Distros; cd Distros
 
   linux-intel-ia32
   linux-intel-x86_64
   macosx-intel
+  cygwin
 
 ia32 build:
   ssh login-eddy
@@ -415,7 +411,7 @@ ia32 build:
   setup_icc_ia32
   mkdir build-${HMMER_DISTRO}
   cd build-${HMMER_DISTRO}
-  ../configure CC=icc LDFLAGS=-static-intel --bindir=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/binaries > ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out 2>&1
+  ../configure CC=icc LDFLAGS=-static-intel --prefix=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/ --bindir=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/binaries > ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out 2>&1
   make                             >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
   make dev                         >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
   make check                       >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
@@ -424,7 +420,7 @@ ia32 build:
 
   cd ..
   rm -rf build-${HMMER_DISTRO}
-  cd .. 
+  cd ..
   tar cf hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar  hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
   gzip hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar
 
@@ -438,7 +434,7 @@ intel64 build:
   setup_icc_intel64
   mkdir build-${HMMER_DISTRO}
   cd build-${HMMER_DISTRO}
-  ../configure CC=icc LDFLAGS=-static-intel --bindir=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/binaries  > ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out 2>&1
+  ../configure CC=icc LDFLAGS=-static-intel --prefix=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/ --bindir=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/binaries  > ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out 2>&1
   make                             >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
   make dev                         >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
   make check                       >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
@@ -447,13 +443,16 @@ intel64 build:
 
   cd ..
   rm -rf build-${HMMER_DISTRO}
-  cd .. 
+  cd ..
   tar cf hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar  hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
   gzip hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar
-  
-macosx-intel build:
-  export HMMER_DISTRO=macosx-intel
 
+macosx-intel build:
+  # Notice the --mmacosx-version-min flag in the configure script below.
+  # For explanation, see :
+    ~/notebook/2013/12-17-hmmer3.1b2-release/00NOTES-H3.1b1
+
+  export HMMER_DISTRO=macosx-intel
   cd ${HMMER_RELEASE_NOTEBOOK}/Distros
   tar zxf ~/releases/hmmer-${HMMER_VERSION}.tar.gz
   mv hmmer-${HMMER_VERSION} hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
@@ -461,7 +460,7 @@ macosx-intel build:
 
   mkdir build-${HMMER_DISTRO}
   cd build-${HMMER_DISTRO}
-  ../configure --bindir=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/binaries  > ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out  2>&1
+  ../configure CFLAGS="-O3 -fomit-frame-pointer -fstrict-aliasing -mpentiumpro -mmacosx-version-min=10.1" --prefix=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/ --bindir=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/binaries  > ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out  2>&1
   make                             >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
   make dev                         >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
   make check                       >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
@@ -470,13 +469,56 @@ macosx-intel build:
 
   cd ..
   rm -rf build-${HMMER_DISTRO}
-  cd .. 
+  cd ..
+
+  #Do this on login-eddy, because new versions of tar on OS X seem
+  # to do something that causes errors in older versions.
+  # For explanation, see :
+  ~/notebook/2013/12-17-hmmer3.1b2-release/00NOTES-H3.1b1
+
+  export HMMER_DISTRO=macosx-intel
   tar cf hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar  hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
   gzip hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar
 
 
-  
-  
+Cygwin build:
+
+  First, need VirtualBox and a VM, e.g. from http://www.modern.ie/en-us
+  I picked IE8 in XP.
+  % curl -O -L "http://www.modern.ie/vmdownload?platform=mac&virtPlatform=virtualbox&browserOS=IE8-WinXP&filename=VirtualBox/IE8_WinXP/Mac/IE8.WinXP.For.MacVirtualBox.part{1.sfx,2.rar}"
+  % chmod +x filename.sfx on the SFX file only.
+  # Run the SFX file from a terminal, such as by ./filename.sfx and it will expand into the OVA you can open with VirtualBox.
+
+  Install cygwin, with make, automake, autoconf, gcc.
+
+
+  #get the source .tar.gz file, move it into ~/Distro, then
+  export HMMER_DISTRO=cygwin
+  export HMMER_VERSION=3.1b2
+  export HMMER_RELEASE_NOTEBOOK=~
+  cd ${HMMER_RELEASE_NOTEBOOK}/Distros
+  tar zxf ~/releases/hmmer-${HMMER_VERSION}.tar.gz
+  mv hmmer-${HMMER_VERSION} hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
+  cd hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
+
+  mkdir build-${HMMER_DISTRO}
+  cd build-${HMMER_DISTRO}
+  ../configure --prefix=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/ --bindir=${HMMER_RELEASE_NOTEBOOK}/Distros/hmmer-${HMMER_VERSION}-${HMMER_DISTRO}/binaries  > ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out  2>&1
+  make                             >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
+  make dev                         >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
+  make check                       >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
+  make install                     >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1
+  (cd easel/miniapps; make install >> ${HMMER_RELEASE_NOTEBOOK}/Distros/build-${HMMER_DISTRO}.out   2>&1)
+
+  cd ..
+  rm -rf build-${HMMER_DISTRO}
+  cd ..
+  tar cf hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar  hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
+  gzip hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar
+
+
+
+
 
 ================================================================
 = Distribution
@@ -491,26 +533,26 @@ macosx-intel build:
    scp hmmer-${HMMER_VERSION}/RELEASE-NOTES selab:/opt/www/ftp/pub/software/hmmer3/${HMMER_VERSION}/
    scp hmmer-${HMMER_VERSION}/Userguide.pdf selab:/opt/www/ftp/pub/software/hmmer3/${HMMER_VERSION}/
    echo ftp://selab.janelia.org/pub/software/hmmer3/${HMMER_VERSION}/hmmer-${HMMER_VERSION}.tar.gz
-   
+
    cd ${HMMER_RELEASE_NOTEBOOK}/Distros
-   for distro in linux-intel-ia32  linux-intel-x86_64  macosx-intel
-   do  
+   for distro in linux-intel-ia32  linux-intel-x86_64  macosx-intel  cygwin
+   do
      scp hmmer-${HMMER_VERSION}-${distro}.tar.gz    selab:/opt/www/ftp/pub/software/hmmer3/${HMMER_VERSION}/
    done
 
 * Update the web site and the blog
 
 
-   
+
 * tag the release. Replace version # below!
    cd ~/releases/hmmer-release
 
-   svn copy https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0\
+   svn copy https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.1\
             https://svn.janelia.org/eddylab/eddys/src/hmmer/tags/${HMMER_VERSION}\
-            -m "tagged 3.0 release, from 3.0 branch"          
-   svn copy https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0\
+            -m "tagged 3.1b2 release, from 3.1 branch"
+   svn copy https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.1\
             https://svn.janelia.org/eddylab/eddys/easel/tags/hmmer/${HMMER_VERSION}\
-            -m "tagged Easel for HMMER 3.0 release, from HMMER 3.0 branch"          
+            -m "tagged Easel for HMMER 3.1b2 release, from HMMER 3.1 branch"
 
    3.0:    svn r3244/576
    3.0rc2: svn r3224/557
@@ -529,14 +571,14 @@ macosx-intel build:
   cd easel
   svn diff -r XXX:XXX  https://svn.janelia.org/eddylab/eddys/easel/branches/hmmer/3.0 | more
   cd ..
-No changes in Easel 
+No changes in Easel
 
   svn update
   svn merge -r 3242:3243 https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.0
 
   svn commit
-   
-   
+
+
 Release history
 ---------------
 
@@ -553,4 +595,5 @@ Release           Date            SVN (HMMER/Easel)
 3.0rc1            10 Feb 2010     r3161/r511
 3.0rc2            11 Mar 2010     r3228/r557
 3.0               28 Mar 2010     r3244/r576
-3.1b1             25 May 2013     r4452/r866
+3.1b1             25 May 2013     r4462/r866
+3.1b2             20 Dec 2013     r4580/r898
