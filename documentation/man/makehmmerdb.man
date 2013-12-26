@@ -108,7 +108,7 @@ is 8. Must be a power of 2.
 
 
 .TP 
-.BI ----block_size " <n>"
+.BI --block_size " <n>"
 The input sequence is broken into blocks of size
 .I <n>
 million letters. An FM index is built for each block, rather than 

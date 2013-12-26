@@ -433,9 +433,11 @@ main(int argc, char **argv)
 
   ESL_GETOPTS     *go  = NULL;    /* command line processing                 */
 
-  uint8_t        ambig_repl = 0;
   int            in_ambig_run = 0;
   FM_AMBIGLIST   ambig_list;
+
+  ESL_RANDOMNESS *r   = esl_randomness_CreateFast(42);
+
 
   ESL_ALLOC (meta, sizeof(FM_METADATA));
   if (meta == NULL)
@@ -635,8 +637,7 @@ main(int argc, char **argv)
         if ( meta->alph_type == fm_DNA) {
           if (meta->inv_alph[c] == -1) {
             // replace ambiguity characters by rotating through A,C,G, and T.
-            c = meta->alph[ambig_repl];
-            ambig_repl = (ambig_repl+1)%4;
+            c = meta->alph[(int)(esl_random(r)*4)];
 
             if (!in_ambig_run) {
               fm_addAmbiguityRange(meta->ambig_list, block_length, block_length);
@@ -689,6 +690,8 @@ main(int argc, char **argv)
   esl_sq_Destroy(sq);
   esl_sq_Destroy(tmpsq);
   esl_sq_DestroyBlock(block);
+
+  esl_randomness_Destroy(r);
 
   meta->seq_count = numseqs;
   meta->block_count = numblocks;
