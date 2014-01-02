@@ -1126,7 +1126,7 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
 
 
       if (ali_len < 8)
-        continue; // anything less than this is a funny byproduct of the Forward score passing a very low threshold, but no alignment existing that supports it
+        continue; // anything less than this is a funny byproduct of the Forward score passing a very low threshold, but no reliable alignment existing that supports it
 
      /* note: this bitscore was computed under a model with length of
       * env_len (jenv-ienv+1). Here, the score is modified (reduced) by
@@ -1627,6 +1627,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
         if (window->complementarity == p7_COMPLEMENT)
           seq_start += seq_data.length - 2;
       }
+
       status = p7_pli_postSSV_LongTarget(pli, om, bg, hitlist, data,
             (fmf != NULL ? seq_data.target_id     : seqidx),
             window->n, window->length, subseq,

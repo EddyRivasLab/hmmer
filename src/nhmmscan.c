@@ -20,14 +20,7 @@
 #endif /*HMMER_THREADS*/
 
 #include "hmmer.h"
-
-//#ifdef P7_IMPL_DUMMY_INCLUDED
-//#include "esl_vectorops.h"
-//#define NHMMER_MAX_RESIDUE_COUNT (1024 * 100)
-//#else
-//#define NHMMER_MAX_RESIDUE_COUNT (10000000)  /* 10 million bases */
-//#endif
-
+#include "esl_vectorops.h"
 
 
 typedef struct {
@@ -96,8 +89,6 @@ static ESL_OPTIONS options[] = {
   { "--w_length",   eslARG_INT,     NULL, NULL, NULL,    NULL,  NULL,           NULL,    "window length - essentially max expected hit length ",                                                12 },
   { "--toponly",     eslARG_NONE,   NULL, NULL, NULL,    NULL,  NULL,   "--bottomonly",  "only search the top strand",                                    12 },
   { "--bottomonly",  eslARG_NONE,   NULL, NULL, NULL,    NULL,  NULL,      "--toponly",  "only search the bottom strand",                                    12 },
-
-
 
   /* Not used, but retained because esl option-handling code errors if it isn't kept here.  Placed in group 99 so it doesn't print to help*/
   { "--domE",       eslARG_REAL,  "10.0", NULL, "x>0",   NULL,  NULL,  DOMREPOPTS,      "report domains <= this E-value threshold in output",            99 },
@@ -413,12 +404,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_ALLOC(info, sizeof(*info) * infocnt);
 
   for (i = 0; i < infocnt; ++i)
-    {
+  {
       info[i].bg    = p7_bg_Create(abc);
 #ifdef HMMER_THREADS
       info[i].queue = queue;
 #endif
-    }
+  }
+
+
 
 #ifdef HMMER_THREADS
   for (i = 0; i < ncpus * 2; ++i)

@@ -126,6 +126,11 @@ static ESL_OPTIONS options[] = {
   { "--w_beta",   eslARG_REAL,       NULL, NULL, NULL,    NULL,     NULL,    NULL, "tail mass at which window length is determined",        8 },
   { "--w_length", eslARG_INT,        NULL, NULL, NULL,    NULL,     NULL,    NULL, "window length ",                                        8 },
   { "--maxinsertlen",  eslARG_INT,   NULL, NULL, "n>=5",  NULL,     NULL,    NULL, "pretend all inserts are length <= <n>",   8 },
+
+  /* expert-only option (for now), hidden from view, for altering bg probs */
+  { "--bgfile",     eslARG_INFILE,       NULL, NULL, NULL,    NULL,  NULL,   NULL,           "override default background probs with values in file <f>",    99 },
+
+
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -449,6 +454,8 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
   int              i;
   int              status;
+  char   errbuf[eslERRBUFSIZE];
+  P7_BG            *bg_tmp;
 
   /* Open files, set alphabet.
    *   cfg->afp       - open alignment file for input
@@ -502,12 +509,24 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
     }
 #endif
 
+
+  if (esl_opt_IsOn(go, "--bgfile")) {
+    bg_tmp = p7_bg_Create(cfg->abc);
+    status = p7_bg_Read(esl_opt_GetString(go, "--bgfile"), bg_tmp, errbuf);
+    if (status != eslOK) p7_Fail("Trouble reading bgfile: %s\n", errbuf);
+  }
+
+
   infocnt = (ncpus == 0) ? 1 : ncpus;
   ESL_ALLOC(info, sizeof(*info) * infocnt);
 
   for (i = 0; i < infocnt; ++i)
-    {
-      info[i].bg = p7_bg_Create(cfg->abc);
+  {
+      if (esl_opt_IsOn(go, "--bgfile"))
+        info[i].bg = p7_bg_Clone(bg_tmp);
+      else
+        info[i].bg = p7_bg_Create(cfg->abc);
+
       info[i].bld = p7_builder_Create(go, cfg->abc);
 
       if (info[i].bld == NULL)  p7_Fail("p7_builder_Create failed");
@@ -545,11 +564,11 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
       info[i].queue = queue;
       if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
 #endif
-    }
+  }
 
 #ifdef HMMER_THREADS
   for (i = 0; i < ncpus * 2; ++i)
-    {
+  {
       ESL_ALLOC(item, sizeof(*item));
 
       item->nali      = 0;
@@ -561,7 +580,7 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 
       status = esl_workqueue_Init(queue, item);
       if (status != eslOK) esl_fatal("Failed to add block to work queue");
-    }
+  }
 #endif
 
 #ifdef HMMER_THREADS
@@ -572,22 +591,22 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
 
   for (i = 0; i < infocnt; ++i)
-    {
+  {
       p7_bg_Destroy(info[i].bg);
       p7_builder_Destroy(info[i].bld);
-    }
+  }
 
 #ifdef HMMER_THREADS
   if (ncpus > 0)
-    {
+  {
       esl_workqueue_Reset(queue);
       while (esl_workqueue_Remove(queue, (void **) &item) == eslOK)
-	{
-	  free(item);
-	}
+      {
+        free(item);
+      }
       esl_workqueue_Destroy(queue);
       esl_threads_Destroy(threadObj);
-    }
+  }
 #endif
 
   free(info);

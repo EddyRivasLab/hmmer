@@ -26,7 +26,6 @@
 
 #include "hmmer.h"
 
-
 /* set the max residue count to 1/4 meg when reading a block */
 #ifdef P7_IMPL_DUMMY_INCLUDED
 #include "esl_vectorops.h"
@@ -159,9 +158,7 @@ static ESL_OPTIONS options[] = {
    */
   { "--B1",         eslARG_INT,         "110", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (SSV)",          99 },
   { "--B2",         eslARG_INT,         "240", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Vit)",          99 },
-  { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",         99 },
-
-
+  { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",          99 },
 
 /* Not used, but retained because esl option-handling code errors if it isn't kept here.  Placed in group 99 so it doesn't print to help*/
   { "--domZ",       eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "Not used",   99 },
@@ -721,8 +718,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].queue = queue;
 #endif
       }
-
-
 
 #ifdef HMMER_THREADS
       for (i = 0; i < ncpus * 2; ++i) {
