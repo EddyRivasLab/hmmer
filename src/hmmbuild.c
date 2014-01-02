@@ -455,7 +455,7 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
   int              i;
   int              status;
   char   errbuf[eslERRBUFSIZE];
-  P7_BG            *bg_tmp;
+  P7_BG            *bg_tmp  = NULL;
 
   /* Open files, set alphabet.
    *   cfg->afp       - open alignment file for input
@@ -522,7 +522,7 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 
   for (i = 0; i < infocnt; ++i)
   {
-      if (esl_opt_IsOn(go, "--bgfile"))
+      if (bg_tmp != NULL)
         info[i].bg = p7_bg_Clone(bg_tmp);
       else
         info[i].bg = p7_bg_Create(cfg->abc);
