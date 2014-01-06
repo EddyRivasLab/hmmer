@@ -2,11 +2,8 @@
  * decoding, and gamma-centroid alignment, with a dual-mode glocal/local
  * model.
  *
- * This code is for testing. It is not used in HMMER3's main executables.
- *
- * Reference implementation of reference_fwdback/p7_refmx closely
- * mirrors banded implementation in banded_fwdback/p7_bandmx.  The
- * banded implementation is the production version, more complicated.
+ * All reference implementation code is for testing. It is not used in
+ * HMMER's main executables. Sparse DP code is the production version.
  *   
  * Contents:  
  *   1. Forward.

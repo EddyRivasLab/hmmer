@@ -347,8 +347,8 @@ masstrace_down(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEM
 /* Function:  p7_SparseMasstrace()
  * Synopsis:  Calculate envelope coords, given a domain's anchor point.
  *
- * Purpose:   Determine envelope coords for an individual domain by the "mass trace"
- *            algorithm.
+ * Purpose:   Determine envelope coords for an individual domain by the
+ *            "mass trace" algorithm.
  *
  *            The caller has compared profile <gm> to digital sequence
  *            <dsq> of length <L>, obtaining Forward matrix <fwd> and
@@ -388,8 +388,8 @@ masstrace_down(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEM
  *            Define envelope coords as:
  *               iae = \min_{i \leq i0} P(ia \leq i) \geq massthresh
  *               ibe = \max_{i \geq i0} P(ib \geq i) \geq massthresh
- *               kae = \min_{k \leq k0} P(ka \leq k) \leq massthresh
- *               kbe = \max_{k \geq k0} P(kb \geq k) \leq massthresh
+ *               kae = \min_{k \leq k0} P(ka \leq k) \geq massthresh
+ *               kbe = \max_{k \geq k0} P(kb \geq k) \geq massthresh
  *            
  *            i.e. the widest start/end points that contain at least a
  *            posterior probability of <massthresh>, (Put another way:
