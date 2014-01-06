@@ -3,6 +3,7 @@ MODULE = dp_reference
 LIBOBJS =  p7_refmx.o\
 	   reference_decoding.o\
 	   reference_fwdback.o\
+	   reference_mpl_fwd.o\
 	   reference_trace.o\
 	   reference_viterbi.o
 

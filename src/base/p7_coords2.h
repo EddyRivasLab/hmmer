@@ -1,7 +1,7 @@
 #ifndef P7_COORDS2_INCLUDED
 #define P7_COORDS2_INCLUDED
-#include "p7_config.h"
 
+#include "p7_config.h"
 
 typedef struct {
   int start;

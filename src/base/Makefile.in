@@ -4,6 +4,7 @@ LIBOBJS =  general.o\
 	   p7_alidisplay.o\
 	   p7_alidisplay_mpi.o\
 	   p7_bg.o\
+	   p7_coords2.o\
 	   p7_domain.o\
 	   p7_domain_mpi.o\
 	   p7_hmm.o\

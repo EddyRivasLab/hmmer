@@ -7,12 +7,16 @@
  */
 #include "p7_config.h"
 
+#include <stdlib.h>
+
+#include "easel.h"
+
 #include "base/p7_coords2.h"
 
 P7_COORDS2 *
 p7_coords2_Create(int nalloc, int nredline)
 {
-  P7_COORDS2 *c = NULL;
+  P7_COORDS2 *c2 = NULL;
   int         status;
 
   if (nalloc   <= 0) nalloc   = p7COORDS2_INITALLOC_DEFAULT;
