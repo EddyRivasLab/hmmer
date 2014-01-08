@@ -25,6 +25,7 @@ BENCHMARKS = reference_fwdback_benchmark
 
 EXAMPLES = reference_decoding_example \
            reference_fwdback_example  \
+	   reference_mpl_fwd_example  \
            reference_viterbi_example
 
 

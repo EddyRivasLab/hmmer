@@ -106,7 +106,7 @@ p7_ReferenceMPLForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 
   /* Contract checks, arg validation */
   ESL_DASSERT1( (gm->L == L || gm->L == 0) );  /* length model in profile is either L (usually) or 0 (some unit tests) */
-  ESL_DASSERT1( ( d > 0) );		       /* has to be at least one domain */
+  ESL_DASSERT1( (ndom > 0) );		       /* has to be at least one domain */
   
   /* Reallocation, if needed */
   if ( (status = p7_refmx_GrowTo(rmx, gm->M, L)) != eslOK) return status;
@@ -310,6 +310,122 @@ p7_ReferenceMPLForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 /*****************************************************************
  * x. Example
  *****************************************************************/
+#ifdef p7REFERENCE_MPL_FWD_EXAMPLE
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_sq.h"
+#include "esl_sqio.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile> <seqfile>";
+static char banner[] = "example of MPL Forward reference implementation";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  char           *seqfile = esl_opt_GetArg(go, 2);
+  ESL_ALPHABET   *abc     = NULL;
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_BG          *bg      = NULL;
+  P7_PROFILE     *gm      = NULL;
+  ESL_SQ         *sq      = NULL;
+  ESL_SQFILE     *sqfp    = NULL;
+  int             format  = eslSQFILE_UNKNOWN;
+  P7_REFMX       *fwd     = p7_refmx_Create(100, 100);
+  P7_REFMX       *vit     = p7_refmx_Create(100, 100);
+  P7_REFMX       *mpl     = p7_refmx_Create(100, 100);
+  P7_TRACE       *tr      = p7_trace_Create();
+  P7_COORD2      *dom     = NULL;
+  float           fsc, vsc, mplsc;
+  int             d;
+  int             status;
+
+  /* Read in one HMM */
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  p7_hmmfile_Close(hfp);
+ 
+  /* Open sequence file */
+  sq     = esl_sq_CreateDigital(abc);
+  status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
+  if      (status == eslENOTFOUND) p7_Fail("No such file.");
+  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+ 
+  /* Configure a profile from the HMM */
+  bg = p7_bg_Create(abc);
+  gm = p7_profile_Create(hmm->M, abc);
+  p7_profile_Config(gm, hmm, bg);
+
+  while ( (status = esl_sqio_Read(sqfp, sq)) != eslEOF)
+    {
+      if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
+      else if (status != eslOK)      p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
+
+      /* Set the profile and null model's target length models */
+      p7_bg_SetLength     (bg, sq->n);
+      p7_profile_SetLength(gm, sq->n);
+
+      p7_ReferenceViterbi (sq->dsq, sq->n, gm, vit, tr, &vsc);
+      p7_ReferenceForward (sq->dsq, sq->n, gm, fwd, &fsc);   
+
+      /* Create a coord2 list, crudely. We can do better later. */
+      p7_trace_Index(tr);
+      ESL_ALLOC(dom, sizeof(P7_COORD2) * tr->ndom);
+      for (d = 0; d < tr->ndom; d++)
+	{
+	  dom[d].start = tr->sqfrom[d];
+	  dom[d].end   = tr->sqto[d];
+	}
+
+      p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom, tr->ndom, mpl, &mplsc);
+
+      printf("%-30s   %10.4f %10.4f %10.4f %10.4g\n", 
+	     sq->name, 
+	     vsc, 
+	     mplsc,
+	     fsc, 
+	     exp(mplsc - fsc));
+
+      p7_refmx_Reuse(vit);
+      p7_refmx_Reuse(fwd);
+      p7_refmx_Reuse(mpl);
+      p7_trace_Reuse(tr);
+      esl_sq_Reuse(sq);
+      free(dom);
+    }
+
+  esl_sqfile_Close(sqfp);
+  esl_sq_Destroy(sq);
+  p7_trace_Destroy(tr);
+  p7_refmx_Destroy(mpl);
+  p7_refmx_Destroy(fwd);
+  p7_refmx_Destroy(vit);
+  p7_profile_Destroy(gm);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
+  return 0;
+
+ ERROR:
+  return status;
+}
+#endif /*p7REFERENCE_MPL_FWD_EXAMPLE*/
+
 
 
 

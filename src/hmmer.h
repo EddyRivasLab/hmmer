@@ -1,4 +1,3 @@
-
 /* Master include file; this includes the entire HMMER3 header tree.
  * Programs can be built against a HMMER3 library (libhmmer.a) by including this
  * single header file. 
@@ -21,8 +20,10 @@
 #include "base/p7_domain.h"	     /* P7_DOMAIN     : information about a match to a model in a target seq                     */
 #include "base/p7_domain_mpi.h"      /*               :    ... add-on: MPI communication                                         */
 #include "base/p7_alidisplay.h"	     /* P7_ALIDISPLAY : an alignment formatted for output                                        */
+#include "base/p7_alidisplay_mpi.h"  /*               :    ... add-on: MPI communication                                         */
 #include "base/p7_tophits.h"	     /* P7_HIT, P7_TOPHITS : accumulated information about hits (scores, alis) during search     */
 #include "base/p7_tophits_mpi.h"     /*               :    ... add-on: MPI communication                                         */
+#include "base/p7_coords2.h"         /* P7_COORD2, P7_COORDS2 : segment start/end coord pairs, used in domain definition         */
 #include "base/p7_hmmwindow.h"	     /* P7_HMM_WINDOW, P7_HMM_WINDOWLIST : {nhmmer}                                              */
 #include "base/p7_scoredata.h"	     /* P7_SCOREDATA  : {nhmmer}                                                                 */
 
@@ -77,6 +78,7 @@
 #include "dp_reference/reference_viterbi.h"   /* reference implementation of glocal/local Viterbi              */
 #include "dp_reference/reference_decoding.h"  /* reference implementation of glocal/local posterior Decoding   */
 #include "dp_reference/reference_trace.h"     /* reference implementation of glocal/local tracebacks           */
+#include "dp_reference/reference_mpl_fwd.h"   /* reference implementation of most probable labeling Forward    */
 
 /* 'daemon' subdir: Michael Farrar's daemon for HMMER3 web services                                       */
 #include "daemon/p7_hmmcache.h"	              /* P7_HMMCACHE : cached profile DB (such as Pfam)           */
