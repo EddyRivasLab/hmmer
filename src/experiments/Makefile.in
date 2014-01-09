@@ -4,7 +4,8 @@ OBJS = heatmap.o
 
 HDRS =  heatmap.h
 
-PROGS = hmmsim \
+PROGS = exp-decoding \
+	hmmsim \
         sim-alignment
 
 UTESTS = 

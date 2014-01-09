@@ -721,8 +721,31 @@ p7_pipeline_WriteStats(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
  *            accumulates beancounting information about how many comparisons
  *            flow through the pipeline while it's active.
  *            
+ *            Each time <p7_Pipeline()> is called on a new sequence,
+ *            caller must first call <p7_pipeline_NewSeq()> as an
+ *            initialization step. Each time it is called on a new
+ *            model, caller must first call <p7_pipeline_NewModel()>.
+ *
+ *            Caller must first configure the length parameterization
+ *            of <om> and <bg> as it wants; that will not be done
+ *            here. Probably caller wants to do
+ *            <p7_oprofile_ReconfigLength(om, sq->n)> and
+ *            <p7_bg_SetLength(bg, sq->n)>.
+ *            
+ *            Caller does not need to worry about the allocation sizes
+ *            of the DP matrices inside the <pli> object. DP routines
+ *            automatically resize these matrices as needed for the
+ *            <gm->M> by <sq->n> comparison. As a result, note that
+ *            the internals of these matrices in <pli> may have
+ *            changed upon return, because of reallocation; caller
+ *            cannot expect any pointers to remain valid.
+ *            
  * Returns:   <eslOK> on success. If a significant hit is obtained,
  *            its information is added to the growing <hitlist>. 
+ *            Statistics in <pli> are updated; DP matrices in <pli>
+ *            may have been reallocated. We currently do not guarantee
+ *            anything about the state of the data in those matrices;
+ *            it is considered to be internal data for <pli>.
  *            
  *            <eslEINVAL> if (in a scan pipeline) we're supposed to
  *            set GA/TC/NC bit score thresholds but the model doesn't
