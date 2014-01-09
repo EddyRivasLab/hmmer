@@ -18,10 +18,18 @@
 
 #include "hmmer.h"
 
+/* Note that --diplot should really only be used when there's a single HMM vs. single seq comparison.
+ * We're overloading this program a little, using it both to screen large #'s of seqs, and to 
+ * study individual examples in detail.
+ */
 static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
-  { "-h",      eslARG_NONE,    FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "--hist",  eslARG_OUTFILE, NULL,  NULL, NULL,   NULL,  NULL, NULL, "output histograms to <f> (xmgrace format)",        0 },
+  /* name           type           default  env  range  toggles reqs incomp  help                                       docgroup*/
+  { "-h",          eslARG_NONE,    FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",                  0 },
+  { "-Z",          eslARG_INT,      "1",  NULL, NULL,   NULL,  NULL, NULL, "set sequence # to <n>, for E-value calculations",       0 },
+  { "--diplot",    eslARG_OUTFILE, NULL,  NULL, NULL,   NULL,  NULL, NULL, "output domain inference plot to <f> (xmgrace format)",  0 },
+  { "--histplot",  eslARG_OUTFILE, NULL,  NULL, NULL,   NULL,  NULL, NULL, "output histograms to <f> (xmgrace format)",             0 },
+  { "--ldiplot",   eslARG_OUTFILE, NULL,  NULL, NULL,   NULL,  NULL, NULL, "output local-only domain plot to <f> (xmgrace format)", 0 },
+  { "--lhistplot", eslARG_OUTFILE, NULL,  NULL, NULL,   NULL,  NULL, NULL, "output local-only histograms to <f> (xmgrace format)",  0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -30,41 +38,61 @@ static char banner[] = "testing importance of ensemble calculations";
 static int acceleration_filter(ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg,
 			       P7_FILTERMX *fx, P7_CHECKPTMX *cx, P7_SPARSEMASK *sm);
 static int update_histograms(P7_REFMX *pp, P7_COORD2 *dom, int ndom, ESL_HISTOGRAM *indom, ESL_HISTOGRAM *outdom);
-static int count_nin_nout(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *ret_nin, int *ret_nout);
+static int count_nin_nout_above(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *opt_nin, int *opt_nout);
+static int count_nin_nout_below(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *opt_nin, int *opt_nout);
 
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go       = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  char           *hmmfile  = esl_opt_GetArg(go, 1);
-  P7_HMMFILE     *hfp      = NULL;
-  ESL_ALPHABET   *abc      = NULL;
-  char           *seqfile  = esl_opt_GetArg(go, 2);
-  ESL_SQ         *sq       = NULL;
-  int             format   = eslSQFILE_UNKNOWN;
-  ESL_SQFILE     *sqfp     = NULL;
-  P7_BG          *bg       = NULL;
-  P7_HMM         *hmm      = NULL;
-  P7_PROFILE     *gm       = NULL;
-  P7_OPROFILE    *om       = NULL;
-  P7_FILTERMX    *fx       = p7_filtermx_Create(100);
-  P7_CHECKPTMX   *cx       = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_RAMLIMIT));
-  P7_SPARSEMASK  *sm       = p7_sparsemask_Create(100, 100);
-  P7_REFMX       *vit      = p7_refmx_Create(100, 100);
-  P7_REFMX       *fwd      = p7_refmx_Create(100, 100);
-  P7_REFMX       *bck      = p7_refmx_Create(100, 100);
-  P7_REFMX       *pp       = p7_refmx_Create(100, 100);
-  P7_REFMX       *mpl      = p7_refmx_Create(100, 100);
-  P7_TRACE       *tr       = p7_trace_Create();
-  P7_COORD2      *dom      = NULL;
-  ESL_HISTOGRAM  *invit    = NULL;
-  ESL_HISTOGRAM  *outvit   = NULL;
-  char           *histfile = esl_opt_GetString(go, "--hist");
-  FILE           *histfp   = NULL;
-  float           inthresh = 0.9;
-  float           fsc, vsc, bsc, mplsc;
+  ESL_GETOPTS    *go         = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  char           *hmmfile    = esl_opt_GetArg(go, 1);
+  P7_HMMFILE     *hfp        = NULL;
+  ESL_ALPHABET   *abc        = NULL;
+  char           *seqfile    = esl_opt_GetArg(go, 2);
+  ESL_SQ         *sq         = NULL;
+  int             format     = eslSQFILE_UNKNOWN;
+  ESL_SQFILE     *sqfp       = NULL;
+  P7_BG          *bg         = NULL;
+  P7_HMM         *hmm        = NULL;
+  P7_PROFILE     *gm         = NULL;           /* profile in H4's standard dual-mode local/glocal */
+  P7_PROFILE     *lgm        = NULL;           /* profile in local-only mode, emulating H3        */
+  P7_OPROFILE    *om         = NULL;
+  P7_FILTERMX    *fx         = p7_filtermx_Create(100);
+  P7_CHECKPTMX   *cx         = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_RAMLIMIT));
+  P7_SPARSEMASK  *sm         = p7_sparsemask_Create(100, 100);
+  P7_REFMX       *vit        = p7_refmx_Create(100, 100);
+  P7_REFMX       *fwd        = p7_refmx_Create(100, 100);
+  P7_REFMX       *bck        = p7_refmx_Create(100, 100);
+  P7_REFMX       *pp         = p7_refmx_Create(100, 100);
+  P7_REFMX       *mpl        = p7_refmx_Create(100, 100);
+  P7_TRACE       *tr         = p7_trace_Create();
+  P7_COORD2      *dom        = NULL;
+  ESL_HISTOGRAM  *invit      = NULL;
+  ESL_HISTOGRAM  *outvit     = NULL;
+  char           *histfile   = esl_opt_GetString(go, "--histplot");
+  FILE           *histfp     = NULL;
+  char           *difile     = esl_opt_GetString(go, "--diplot");
+  FILE           *difp       = NULL;
+  P7_REFMX       *vit_l      = p7_refmx_Create(100, 100);
+  P7_REFMX       *fwd_l      = p7_refmx_Create(100, 100);
+  P7_REFMX       *bck_l      = p7_refmx_Create(100, 100);
+  P7_REFMX       *pp_l       = p7_refmx_Create(100, 100);
+  P7_REFMX       *mpl_l      = p7_refmx_Create(100, 100);
+  P7_TRACE       *tr_l       = p7_trace_Create();
+  P7_COORD2      *dom_l      = NULL;
+  ESL_HISTOGRAM  *invit_l    = NULL;
+  ESL_HISTOGRAM  *outvit_l   = NULL;
+  char           *histfile_l = esl_opt_GetString(go, "--lhistplot");
+  FILE           *histfp_l   = NULL;
+  char           *difile_l   = esl_opt_GetString(go, "--ldiplot");
+  FILE           *difp_l     = NULL;
+  int             Z          = esl_opt_GetInteger(go, "-Z");
+  float           fsc,   vsc,   bsc,   mplsc;
+  float           fsc_l, vsc_l, bsc_l, mplsc_l;
+  int             nintotal,   nin90,   nout90,   nin50,   nout50,   nin0;
+  int             nintotal_l, nin90_l, nout90_l, nin50_l, nout50_l, nin0_l;
   int             d;
-  int             nintotal, nin, nout;
+  float           nullsc;
   int             status;
 
   /* Read in one HMM. Set alphabet to whatever the HMM's alphabet is. */
@@ -72,11 +100,16 @@ main(int argc, char **argv)
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
 
-  /* Configure vector and dual-mode profiles from HMM */
+  /* Configure vector, dual-mode, and local-only profiles from HMM */
   bg = p7_bg_Create(abc);
+
   gm = p7_profile_Create(hmm->M, abc);
-  om = p7_oprofile_Create(hmm->M, abc);
   p7_profile_Config(gm, hmm, bg);
+
+  lgm = p7_profile_Create(hmm->M, abc);
+  p7_profile_ConfigLocal(lgm, hmm, bg, 100);
+
+  om = p7_oprofile_Create(hmm->M, abc);
   p7_oprofile_Convert(gm, om);
   
   /* Open sequence file */
@@ -92,15 +125,29 @@ main(int argc, char **argv)
   outvit = esl_histogram_Create(0.0, 1.0, 0.1);
   if (histfile && (histfp = fopen(histfile, "w")) == NULL) p7_Fail("Failed to open histogram file %s for writing.", histfile);
 
+  invit_l  = esl_histogram_Create(0.0, 1.0, 0.1);
+  outvit_l = esl_histogram_Create(0.0, 1.0, 0.1);
+  if (histfile_l && (histfp_l = fopen(histfile_l, "w")) == NULL) p7_Fail("Failed to open local histogram file %s for writing.", histfile_l);
+
+  /* Other optional plots */
+  if (difile   && (difp   = fopen(difile,   "w")) == NULL) p7_Fail("Failed to open domain inference plot file %s for writing.", difile);
+  if (difile_l && (difp_l = fopen(difile_l, "w")) == NULL) p7_Fail("Failed to open local domain inference plot file %s for writing.", difile_l);
+
   /* For each target sequence... */
   while (( status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
-      p7_bg_SetLength           (bg, sq->n);
-      p7_profile_SetLength      (gm, sq->n);
-      p7_oprofile_ReconfigLength(om, sq->n);
+      p7_bg_SetLength           (bg,  sq->n);
+      p7_profile_SetLength      (gm,  sq->n);
+      p7_profile_SetLength      (lgm, sq->n);
+      p7_oprofile_ReconfigLength(om,  sq->n);
 
       if (( status = acceleration_filter(sq->dsq, sq->n, om, bg, fx, cx, sm)) == eslOK)
 	{
+	  printf("%15s  %30s  ", gm->name, sq->name);
+
+	  p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
+
+	  /* glocal/local dual-mode */
 	  p7_ReferenceViterbi (sq->dsq, sq->n, gm, vit, tr,  &vsc);
 	  p7_ReferenceForward (sq->dsq, sq->n, gm, fwd,      &fsc);   
 	  p7_ReferenceBackward(sq->dsq, sq->n, gm, bck,      &bsc);
@@ -119,17 +166,61 @@ main(int argc, char **argv)
 	     
 	  p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom, tr->ndom, mpl, &mplsc);
 	     
-	  update_histograms(pp, dom, tr->ndom, invit, outvit);
-	  count_nin_nout   (pp, dom, tr->ndom, inthresh, &nin, &nout);
+	  update_histograms   (pp, dom, tr->ndom, invit, outvit);
+	  count_nin_nout_above(pp, dom, tr->ndom, 0.9,   &nin90, &nout90); /* # of res labeled as in domain w/ pp >= 0.9; and outside domain yet pp >= 0.9 */
+	  count_nin_nout_above(pp, dom, tr->ndom, 0.5,   &nin50, &nout50); /* ditto, for 0.5 threshold */
+	  count_nin_nout_below(pp, dom, tr->ndom, 0.1,   &nin0,  NULL);    /* # of residues labeled by Viterbi as in a domain, yet pp < 0.1 */
+	  
+	  if (difp) p7_refmx_PlotDomainInference(difp, pp, 1, sq->n, tr);
 
-	  printf("%-30s   %10.4f %10.4f %10.4f %10.4g %5d %5d %5d %5d\n", 
-		 sq->name, 
+	  printf("%10.4g %10.4g %10.4f %10.4f %10.4f %10.4g ",
+		 (double) Z * esl_gumbel_surv( (vsc - nullsc) / eslCONST_LOG2, gm->evparam[p7_VMU],  gm->evparam[p7_VLAMBDA]),
+		 (double) Z * esl_exp_surv   ( (fsc - nullsc) / eslCONST_LOG2, gm->evparam[p7_FTAU], gm->evparam[p7_FLAMBDA]),
 		 vsc, 
 		 mplsc,
 		 fsc, 
-		 exp(mplsc - fsc),
-		 nin, nintotal,
-		 nout, (int) sq->n - nintotal);
+		 exp(mplsc - fsc));
+
+	  printf("%5d %5d %5d %5d ",  nintotal, nin90, nin50, nin0);
+	  printf("%5d %5d %5d ",      (int) sq->n - nintotal, nout90, nout50);
+
+
+	  /* now repeat, w/ local-only model */
+	  p7_ReferenceViterbi (sq->dsq, sq->n, lgm, vit_l, tr_l,  &vsc_l);
+	  p7_ReferenceForward (sq->dsq, sq->n, lgm, fwd_l,        &fsc_l);   
+	  p7_ReferenceBackward(sq->dsq, sq->n, lgm, bck_l,        &bsc_l);
+	  p7_ReferenceDecoding(sq->dsq, sq->n, lgm, fwd_l, bck_l, pp_l);
+
+	  p7_trace_Index(tr_l);
+	  ESL_ALLOC(dom_l, sizeof(P7_COORD2) * tr_l->ndom);
+	  nintotal_l = 0;
+	  for (d = 0; d < tr_l->ndom; d++)
+	    {
+	      dom_l[d].start = tr_l->sqfrom[d];
+	      dom_l[d].end   = tr_l->sqto[d];
+	      nintotal_l    += tr_l->sqto[d] - tr_l->sqfrom[d] + 1;
+	    }
+
+	  p7_ReferenceMPLForward(sq->dsq, sq->n, lgm, dom_l, tr_l->ndom, mpl_l, &mplsc_l);
+	     
+	  update_histograms   (pp_l, dom_l, tr_l->ndom, invit_l, outvit_l);
+	  count_nin_nout_above(pp_l, dom_l, tr_l->ndom, 0.9,   &nin90_l, &nout90_l); /* # of res labeled as in domain w/ pp >= 0.9; and outside domain yet pp >= 0.9 */
+	  count_nin_nout_above(pp_l, dom_l, tr_l->ndom, 0.5,   &nin50_l, &nout50_l); /* ditto, for 0.5 threshold */
+	  count_nin_nout_below(pp_l, dom_l, tr_l->ndom, 0.1,   &nin0_l,  NULL);    /* # of residues labeled by Viterbi as in a domain, yet pp < 0.1 */
+	  
+	  if (difp_l) p7_refmx_PlotDomainInference(difp_l, pp_l, 1, sq->n, tr_l);
+
+	  printf("%10.4g %10.4g %10.4f %10.4f %10.4f %10.4g ",
+		 (double) Z * esl_gumbel_surv( (vsc_l - nullsc) / eslCONST_LOG2, gm->evparam[p7_VMU],  gm->evparam[p7_VLAMBDA]),
+		 (double) Z * esl_exp_surv   ( (fsc_l - nullsc) / eslCONST_LOG2, gm->evparam[p7_FTAU], gm->evparam[p7_FLAMBDA]),
+		 vsc_l, 
+		 mplsc_l,
+		 fsc_l, 
+		 exp(mplsc_l - fsc_l));
+
+	  printf("%5d %5d %5d %5d ",  nintotal_l, nin90_l, nin50_l, nin0_l);
+	  printf("%5d %5d %5d ",      (int) sq->n - nintotal_l, nout90_l, nout50_l);
+	  printf("\n");
 
 
 	  p7_trace_Reuse(tr);
@@ -138,6 +229,13 @@ main(int argc, char **argv)
 	  p7_refmx_Reuse(bck);
 	  p7_refmx_Reuse(pp);
 	  p7_refmx_Reuse(mpl);
+
+	  p7_trace_Reuse(tr_l);
+	  p7_refmx_Reuse(vit_l);
+	  p7_refmx_Reuse(fwd_l);
+	  p7_refmx_Reuse(bck_l);
+	  p7_refmx_Reuse(pp_l);
+	  p7_refmx_Reuse(mpl_l);
 	}
 
       p7_filtermx_Reuse(fx);
@@ -155,9 +253,15 @@ main(int argc, char **argv)
     {
       esl_histogram_Plot(histfp, invit);
       esl_histogram_Plot(histfp, outvit);
-      fclose(histfp);
+    }
+  if (histfp_l) 
+    {
+      esl_histogram_Plot(histfp_l, invit_l);
+      esl_histogram_Plot(histfp_l, outvit_l);
     }
 
+  if (histfp) fclose(histfp);
+  if (difp)   fclose(difp);
   esl_histogram_Destroy(outvit);
   esl_histogram_Destroy(invit);
   p7_trace_Destroy(tr);
@@ -167,9 +271,22 @@ main(int argc, char **argv)
   p7_refmx_Destroy(bck);
   p7_refmx_Destroy(fwd);
   p7_sparsemask_Destroy(sm);
+
+  if (histfp_l) fclose(histfp_l);
+  if (difp_l)   fclose(difp_l);
+  esl_histogram_Destroy(outvit_l);
+  esl_histogram_Destroy(invit_l);
+  p7_trace_Destroy(tr_l);
+  p7_refmx_Destroy(mpl_l);
+  p7_refmx_Destroy(pp_l);
+  p7_refmx_Destroy(vit_l);
+  p7_refmx_Destroy(bck_l);
+  p7_refmx_Destroy(fwd_l);
+
   p7_checkptmx_Destroy(cx);
   p7_filtermx_Destroy(fx);
   p7_oprofile_Destroy(om);
+  p7_profile_Destroy(lgm);
   p7_profile_Destroy(gm);
   p7_hmm_Destroy(hmm);
   p7_bg_Destroy(bg);
@@ -306,7 +423,7 @@ update_histograms(P7_REFMX *pp, P7_COORD2 *dom, int ndom, ESL_HISTOGRAM *indom, 
 }  
 
 static int 
-count_nin_nout(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *ret_nin, int *ret_nout)
+count_nin_nout_above(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *opt_nin, int *opt_nout)
 {
   float phomology;
   int   i;
@@ -328,8 +445,35 @@ count_nin_nout(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *ret_ni
       if (d < ndom && i == dom[d].end) d++;
     }
 
-  *ret_nin  = nin;
-  *ret_nout = nout;
+  if (opt_nin)  *opt_nin  = nin;
+  if (opt_nout) *opt_nout = nout;
+  return eslOK;
+}
+
+static int 
+count_nin_nout_below(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *opt_nin, int *opt_nout)
+{
+  float phomology;
+  int   i;
+  int   nin  = 0;
+  int   nout = 0;
+  int   d    = 0;			/* index of current or next domain in <dom> */
+
+  for (i = 1; i <= pp->L; i++)
+    {
+      phomology = 1.0 - (P7R_XMX(pp, i, p7R_N) + P7R_XMX(pp, i, p7R_JJ) + P7R_XMX(pp, i, p7R_CC)); /* JJ,CC, not J,C because we only want emitting J,C */
+      
+      if (phomology < thresh)
+	{
+	  if (d >= ndom || i < dom[d].start) nout++;
+	  else                               nin++;
+	}
+
+      if (d < ndom && i == dom[d].end) d++;
+    }
+
+  if (opt_nin)  *opt_nin  = nin;
+  if (opt_nout) *opt_nout = nout;
   return eslOK;
 }
 

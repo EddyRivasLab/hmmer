@@ -286,7 +286,7 @@ p7_ReferenceMPLForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
       else                                      dpc[p7R_C] = -eslINFINITY;
 
       /* Advance d to next domain, before doing the B/L/G states, which need to test for whether we're on row before next domain start */
-      if (i == dom[d].end) d++;	
+      if (d < ndom && i == dom[d].end) d++;	
 	
       if (d < ndom && i+1 == dom[d].start)
 	{
