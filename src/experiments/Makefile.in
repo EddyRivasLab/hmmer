@@ -1,8 +1,8 @@
 MODULE = experiments
 
-OBJS = heatmap.o
+OBJS = 
 
-HDRS =  heatmap.h
+HDRS = 
 
 PROGS = exp-decoding \
 	hmmsim \

@@ -15,6 +15,7 @@
 #include <stdio.h>
 
 #include "easel.h"
+#include "esl_dmatrix.h"	/* ESL_DMATRIX is used for heat map visualization, in p7_refmx_PlotHeatMap() */
 #include "esl_vectorops.h"
 
 #include "base/p7_trace.h"
@@ -581,6 +582,42 @@ p7_refmx_DumpCSV(FILE *fp, P7_REFMX *pp, int istart, int iend, int kstart, int k
 	}
     }
   return eslOK;
+}
+
+int
+p7_refmx_PlotHeatMap(FILE *ofp, P7_REFMX *pp, int istart, int iend, int kstart, int kend)
+{
+  ESL_DMATRIX *dmx  = NULL;
+  int          nrow = iend - istart + 1;
+  int          ncol = kend - kstart + 1;
+  int          i,k;
+  float        val;
+  int          status;
+
+  /* Copy to an <ESL_DMATRIX>, which has heat mapping tools.
+   * Marginalize local+glocal paths, MDI.
+   */
+  if ((dmx = esl_dmatrix_Create(nrow, ncol)) == NULL) { status = eslEMEM; goto ERROR; }
+  for (i = istart; i <= iend; i++)
+    for (k = kstart; k <= kend; k++)
+      {
+	val = 
+	  pp->dp[i][k * p7R_NSCELLS + p7R_ML] + pp->dp[i][k * p7R_NSCELLS + p7R_MG] + 
+	  pp->dp[i][k * p7R_NSCELLS + p7R_IL] + pp->dp[i][k * p7R_NSCELLS + p7R_IG] + 
+	  pp->dp[i][k * p7R_NSCELLS + p7R_DL] + pp->dp[i][k * p7R_NSCELLS + p7R_DG];
+
+	dmx->mx[iend-i][k-kstart] = val;
+      }
+
+  /* Plot it. */
+  if ((status = esl_dmatrix_PlotHeatMap(ofp, dmx, 0.0, 1.0)) != eslOK) goto ERROR;
+
+  esl_dmatrix_Destroy(dmx);
+  return eslOK;
+
+ ERROR:
+  if (dmx) esl_dmatrix_Destroy(dmx);
+  return status;
 }
 
 /* Function:  p7_refmx_PlotDomainInference()
