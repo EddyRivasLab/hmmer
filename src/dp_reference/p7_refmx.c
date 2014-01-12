@@ -555,7 +555,10 @@ p7_refmx_DumpWindow(FILE *ofp, P7_REFMX *rmx, int istart, int iend, int kstart, 
 }
 
 
-/* a private hack for making heatmaps */
+/* a private hack for making heatmaps via a CSV file, using R, rather than
+ * going via PlotHeatMap(). Using R from raw data, we have more flexibility
+ * in formatting the plot.
+ */
 int
 p7_refmx_DumpCSV(FILE *fp, P7_REFMX *pp, int istart, int iend, int kstart, int kend)
 {
@@ -584,6 +587,55 @@ p7_refmx_DumpCSV(FILE *fp, P7_REFMX *pp, int istart, int iend, int kstart, int k
   return eslOK;
 }
 
+/* Function:  p7_refmx_PlotHeatMap()
+ * Synopsis:  Plot heat map representation of decoding matrix, PostScript.
+ *
+ * Purpose:   Plot a heat map representation of a window of the decoding
+ *            matrix <pp> to open stream <ofp>, in PostScript format.
+ *            Window is sequence position <istart>..<iend>, and model node
+ *            <kstart>..<kend>. To plot the whole matrix, pass <istart=1>,
+ *            <iend=pp->L>, <kstart=1>, <kend=pp->M>.
+ *            
+ *            One cell (i,k) is plotted for each sequence position i
+ *            and model position k. The value in this cell is the sum
+ *            of the posterior probabilities of all states s at
+ *            (i,k,s): including M,D,I and including both glocal and
+ *            local.
+ *
+ *            The format of the plot is hardcoded in several respects,
+ *            just sufficient for some visualization purposes I had.
+ *            The plot is always a single PostScript 8x11.5" page,
+ *            792x612pt, with 20pt margins. The color scheme is a
+ *            10-level scheme modified from ColorBrewer
+ *            (colorbrewer2.org), their 9-class Red plus a light blue
+ *            zero bin (pp $<$ 0.1). No coords are plotted on the axes
+ *            of the matrix. All this is dictated by
+ *            <esl_dmatrix_PlotHeatMap()>, and the documentation there
+ *            may be more up to date than this.
+ *            
+ *            The sneakiest thing to watch for is that the sequence
+ *            coord (vertical on the page) is numbered with 1 at the
+ *            bottom, and L at the top; whereas the model coord axis
+ *            1..M runs left to right horizontally. This is so I can
+ *            rotate the plot to the right, and get plots that have
+ *            the (usually longer) sequence running left to right
+ *            across a slide or figure.
+ *            
+ *            Don't try to plot anything but a posterior probability
+ *            matrix, because another thing that's hardcoded here is
+ *            the expectation that DP matrix values range from 0 to 1.
+ *
+ * Args:      ofp    - open stream for writing PostScript output
+ *            pp     - decoding matrix to visualize
+ *            istart - seq coord start (1..L; perhaps 1)
+ *            iend   - seq coord end   (1..L; perhaps pp->L)
+ *            kstart - model coord start (1..M; perhaps 1)
+ *            kend   - model coord end   (1..M; perhaps pp->M)
+ *
+ * Returns:   <eslOK > on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
 int
 p7_refmx_PlotHeatMap(FILE *ofp, P7_REFMX *pp, int istart, int iend, int kstart, int kend)
 {
@@ -660,7 +712,7 @@ p7_refmx_PlotDomainInference(FILE *ofp, const P7_REFMX *rxd, int ia, int ib, con
     fprintf(ofp, "%-6d %.5f\n", i, 1.0 - ( P7R_XMX(rxd, i, p7R_N) + P7R_XMX(rxd, i, p7R_JJ) + P7R_XMX(rxd, i, p7R_CC)));
   fprintf(ofp, "&\n");
   
-  for (i = ia; i <= ib; i++)      /* Set #1 is P(B), the begin state */
+  for (i = ia-1; i <= ib; i++)    /* Set #1 is P(B), the begin state. Start at ia-1, because P(B) is on start-1 for domain */
     fprintf(ofp, "%-6d %.5f\n", i, P7R_XMX(rxd, i, p7R_B));
   fprintf(ofp, "&\n");
 

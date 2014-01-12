@@ -88,22 +88,23 @@ typedef struct p7_trace_s {
 
 
 
-/* p7_trace.c */
+/* 1. The P7_TRACE structure */
 extern P7_TRACE *p7_trace_Create(void);
 extern P7_TRACE *p7_trace_CreateWithPP(void);
-extern int  p7_trace_Reuse(P7_TRACE *tr);
-extern int  p7_trace_Grow(P7_TRACE *tr);
-extern int  p7_trace_GrowIndex(P7_TRACE *tr);
-extern int  p7_trace_GrowTo(P7_TRACE *tr, int N);
-extern int  p7_trace_GrowIndexTo(P7_TRACE *tr, int ndom);
-extern void p7_trace_Destroy(P7_TRACE *tr);
-extern void p7_trace_DestroyArray(P7_TRACE **tr, int N);
+extern int       p7_trace_Reuse       (P7_TRACE *tr);
+extern int       p7_trace_Grow        (P7_TRACE *tr);
+extern int       p7_trace_GrowIndex   (P7_TRACE *tr);
+extern int       p7_trace_GrowTo      (P7_TRACE *tr, int N);
+extern int       p7_trace_GrowIndexTo (P7_TRACE *tr, int ndom);
+extern void      p7_trace_Destroy     (P7_TRACE *tr);
+extern void      p7_trace_DestroyArray(P7_TRACE **tr, int N);
 
+/* 2. Access routines */
 extern int  p7_trace_GetDomainCount   (const P7_TRACE *tr, int *ret_ndom);
 extern int  p7_trace_GetStateUseCounts(const P7_TRACE *tr, int *counts);
-extern int  p7_trace_GetDomainCoords  (const P7_TRACE *tr, int which, int *ret_i1, int *ret_i2,
-				       int *ret_k1, int *ret_k2);
+extern int  p7_trace_GetDomainCoords  (const P7_TRACE *tr, int which, int *ret_i1, int *ret_i2, int *ret_k1, int *ret_k2);
 
+/* 3. Debugging tools */
 extern char *p7_trace_DecodeStatetype(char st);
 extern int   p7_trace_Validate(const P7_TRACE *tr, const ESL_ALPHABET *abc, const ESL_DSQ *dsq, char *errbuf);
 extern int   p7_trace_Dump         (FILE *fp, const P7_TRACE *tr);
@@ -113,14 +114,21 @@ extern int   p7_trace_Score      (P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm,   
 extern int   p7_trace_ScoreDomain(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, int which, float *ret_sc);
 extern float p7_trace_GetExpectedAccuracy(const P7_TRACE *tr);
 
+/* 4. Visualization tools */
+extern int  p7_trace_PlotDomainInference(FILE *ofp, const P7_TRACE *tr, int ia, int ib);
+extern int  p7_trace_PlotHeatMap(FILE *ofp, P7_TRACE *tr, int ia, int ib, int ka, int kb);
+
+/* 5. Creating traces by DP traceback */
 extern int  p7_trace_Append(P7_TRACE *tr, char st, int k, int i);
 extern int  p7_trace_AppendWithPP(P7_TRACE *tr, char st, int k, int i, float pp);
 extern int  p7_trace_Reverse(P7_TRACE *tr);
 extern int  p7_trace_Index(P7_TRACE *tr);
 
+/* 6. Creating faux traces from MSAs */
 extern int  p7_trace_FauxFromMSA(ESL_MSA *msa, int *matassign, int optflags, P7_TRACE **tr);
 extern int  p7_trace_Doctor(P7_TRACE *tr, int *opt_ndi, int *opt_nid);
 
+/* 7. Counting traces into new HMMs */
 extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
 
 #endif /*P7_TRACE_INCLUDED*/

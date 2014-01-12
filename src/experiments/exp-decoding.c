@@ -180,6 +180,9 @@ main(int argc, char **argv)
 	  nintotal = 0;
 	  for (d = 0; d < tr->ndom; d++)
 	    {
+	      //printf("domain %2d:  seq pos %5d..%-5d  model pos %5d..%5d\n",
+	      //d+1, tr->sqfrom[d], tr->sqto[d], tr->hmmfrom[d], tr->hmmto[d]);
+
 	      dom[d].start = tr->sqfrom[d];
 	      dom[d].end   = tr->sqto[d];
 	      nintotal    += tr->sqto[d] - tr->sqfrom[d] + 1;
@@ -218,6 +221,8 @@ main(int argc, char **argv)
 	  nintotal_l = 0;
 	  for (d = 0; d < tr_l->ndom; d++)
 	    {
+	      //printf("local %2d:  seq pos %5d..%-5d  model pos %5d..%5d\n",
+	      //d+1, tr_l->sqfrom[d], tr_l->sqto[d], tr_l->hmmfrom[d], tr_l->hmmto[d]);
 	      dom_l[d].start = tr_l->sqfrom[d];
 	      dom_l[d].end   = tr_l->sqto[d];
 	      nintotal_l    += tr_l->sqto[d] - tr_l->sqfrom[d] + 1;

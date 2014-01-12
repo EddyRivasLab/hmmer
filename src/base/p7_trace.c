@@ -4,13 +4,14 @@
  *   1. The P7_TRACE structure
  *   2. Access routines
  *   3. Debugging tools
- *   4. Creating traces by DP traceback
- *   5. Creating faux traces from existing MSAs
- *   6. Counting traces into new HMMs
- *   7. Unit tests
- *   8. Test driver
- *   9. Example
- *  10. Copyright and license information
+ *   4. Visualization tools
+ *   5. Creating traces by DP traceback
+ *   6. Creating faux traces from existing MSAs
+ *   7. Counting traces into new HMMs
+ *   8. Unit tests
+ *   9. Test driver
+ *  10. Example
+ *  11. Copyright and license information
  * 
  * Stylistic note: elements in a trace path are usually indexed by z.
  */
@@ -23,6 +24,7 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_dmatrix.h"	/* used in _PlotHeatMap() */
 #include "esl_msa.h"
 
 #include "base/p7_hmm.h"
@@ -926,9 +928,194 @@ p7_trace_GetExpectedAccuracy(const P7_TRACE *tr)
 
 
 
+/*****************************************************************
+ * 4. Visualization tools.
+ *****************************************************************/
+
+/* Function:  p7_trace_PlotDomainInference()
+ * Synopsis:  Plot a discrete trace in the same style as we plot decoding matrix data.
+ *
+ * Purpose:   Write a "domain inference plot" in xmgrace XY format to
+ *            the open stream <ofp>, for indexed trace <tr>, for sequence
+ *            region <ia>..<ib>.
+ *            
+ *            If you want the whole sequence, pass <ia=1>,<ib=tr->L>.
+ *
+ *            Trace <tr> must be indexed with <p7_trace_Index()>.
+ *            
+ *            The output graph is in the same style as, for example,
+ *            <p7_refmx_PlotDomainInference()>, the plots we use to
+ *            study posterior decoding of domain position. Purpose is
+ *            to enable comparing discrete traces (optimal or sampled)
+ *            to posterior decoding results.
+ *
+ * Args:      ofp  : open output stream for writing xmgrace plot
+ *            tr   : trace to plot
+ *            ia   : start of plot, in sequence coords (1, perhaps)
+ *            ib   : end of plot, in seq coords (tr->L, perhaps)
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_trace_PlotDomainInference(FILE *ofp, const P7_TRACE *tr, int ia, int ib)
+{
+  int   i;
+  int   d         = 0;
+  float tr_height = 1.2;
+
+  /* Special case: tr->N==0 means there's no trace at all.
+   * This case gets handled correctly because ndom==0, so sets 0,1,2,3
+   * will be flatline at 0, and there's no individual domain sets.
+   */
+
+  /* Set #0 is P(homology), which for a trace is discrete 1.0 or 0.0, in/out of domains */
+  d = 0;
+  for (i = 1; i <= tr->L; i++)
+    {
+      if (i >= ia && i <= ib)
+	{
+	  if (d >= tr->ndom || i < tr->sqfrom[d]) fprintf(ofp, "%-6d 0.0\n", i); /* nonhomologous position */
+	  else			                  fprintf(ofp, "%-6d 1.0\n", i); /* inside homology region */
+	}
+      if (d < tr->ndom && i == tr->sqto[d]) d++;
+    }
+  fprintf(ofp, "&\n");
+
+  /* Set #1 is P(B), the begin state. 1.0 at -1 position before a domain */
+  d = 0;
+  for (i = 0; i <= tr->L; i++)
+    {
+      if (i >= ia && i <= ib)
+	{
+	  if (d >= tr->ndom || i != tr->sqfrom[d]-1) fprintf(ofp, "%-6d 0.0\n", i); 
+	  else                                       fprintf(ofp, "%-6d 1.0\n", i); /* begin = 1.0 at start-1 position */
+	}
+      if (d < tr->ndom && i == tr->sqto[d]) d++;
+    }
+  fprintf(ofp, "&\n");
+
+  /* Set #2 is P(E), the end state. 1.0 at last position in domain */
+  d = 0;
+  for (i = 0; i <= tr->L; i++)
+    {
+      if (i >= ia && i <= ib)
+	{
+	  if (d >= tr->ndom || i != tr->sqto[d]) fprintf(ofp, "%-6d 0.0\n", i); 
+	  else                                   fprintf(ofp, "%-6d 1.0\n", i); 
+	}
+      if (d < tr->ndom && i == tr->sqto[d]) d++;
+    }
+  fprintf(ofp, "&\n");
+
+  /* Set #3 is max rather than sum of pp's for M,I states; here, for
+   * Viterbi, same as set #0, and we include it only for completeness,
+   * to exactly match the style of the main routine we're emulating,
+   * <p7_refmx_PlotDomainInference()>.
+   */
+  d = 0;
+  for (i = 1; i <= tr->L; i++) {
+    if (i >= ia && i <= ib) {
+      if (d >= tr->ndom || i < tr->sqfrom[d]) fprintf(ofp, "%-6d 0.0\n", i); /* nonhomologous position */
+      else			              fprintf(ofp, "%-6d 1.0\n", i); /* inside homology region */
+    }
+    if (d < tr->ndom && i == tr->sqto[d]) d++;
+  }
+  fprintf(ofp, "&\n");
+
+  /* Remaining sets are horiz lines, representing individual domains appearing in the optional <tr> */
+  for (d = 0; d < tr->ndom; d++)
+    {
+      fprintf(ofp, "%-6d %.5f\n", tr->sqfrom[d], tr_height);
+      fprintf(ofp, "%-6d %.5f\n", tr->sqto[d],   tr_height);
+      fprintf(ofp, "&\n");
+    }
+
+  return eslOK;
+}
+
+
+/* Function:  p7_trace_PlotHeatMap()
+ * Synopsis:  Plot heat map visualization of single trace in DP matrix, in PostScript
+ *
+ * Purpose:   Plot a heat map representation of a single trace <tr> in a
+ *            window of its DP matrix, writing it to open stream <ofp>
+ *            in PostScript format. Window is sequence position
+ *            <ia>..<ib>, and model node <ka>..<kb>. To plot the whole
+ *            matrix, pass <ia=1>, <ib=tr->L>, <ka=1>, <kb=tr->M>.
+ *            
+ *            Obviously this "heat map" is a trivialized one,
+ *            discretized at 0.0/1.0 values, for the discrete
+ *            trace. The purpose is to be able to compare discrete
+ *            traces to the results of posterior decoding, plotted
+ *            with <p7_refmx_PlotHeatMap()>.
+ *            
+ *            See <p7_refmx_PlotHeatMap()> for more information, and
+ *            perhaps also <esl_dmatrix_PlotHeatMap()>.
+ *            
+ *            Note that the plot is constructed with the sequence
+ *            coords running along the vertical axis from bottom to
+ *            top (NOT top to bottom), and model coords running along
+ *            the horizontal axis from left to right. This enables a
+ *            rotate-right of the PostScript to make the plot have the
+ *            sequence run left to right and model top to bottom,
+ *            which has become sort of standard in how I show these
+ *            matrices in slides and figures, but is different from
+ *            how I think about them in the code.
+ *
+ * Args:      ofp : open stream for writing PostScript output
+ *            tr  : trace to visualize in a DP matrix
+ *            ia  : seq coord start (1..L; perhaps 1)
+ *            ib  : seq coord end   (1..L; perhaps tr->L)
+ *            ka  : model coord start (1..M; perhaps 1)
+ *            kb  : model coord end   (1..M; perhaps tr->M)
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+int
+p7_trace_PlotHeatMap(FILE *ofp, P7_TRACE *tr, int ia, int ib, int ka, int kb)
+{
+  ESL_DMATRIX *dmx  = NULL;
+  int          nrow = ib - ia + 1;
+  int          ncol = kb - ka + 1;
+  int          i,k,z;
+  int          status;
+  
+  /* Copy to an <ESL_DMATRIX>, which has heat mapping tools.
+   * With a discrete trace, cell values are either 1.0 or 0.0.
+   * Init the whole matrix to 0, then traverse the (linear)
+   * trace and write 1.0 in every cell it visits.
+   * Remember that i[] coord of D states is 0 in the trace.
+   */
+  if ((dmx = esl_dmatrix_Create(nrow, ncol)) == NULL) { status = eslEMEM; goto ERROR; }
+  esl_dmatrix_SetZero(dmx);
+
+  for (z = 0; z < tr->N; z++)
+    {
+      i = (tr->i[z] ? tr->i[z] : i); /* last i we emitted: coord we'll use for D states */
+
+      if (p7_trace_IsMain(tr->st[z]) ) /* any {MDI}{LG} */
+	dmx->mx[ib-i][k-ka] = 1.0;
+    }
+
+  /* Now plot it using dmatrix heatmapping */
+  if ((status = esl_dmatrix_PlotHeatMap(ofp, dmx, 0.0, 1.0)) != eslOK) goto ERROR;
+
+  esl_dmatrix_Destroy(dmx);
+  return eslOK;
+
+ ERROR:
+  if (dmx) esl_dmatrix_Destroy(dmx);
+  return status;
+}
+
+
 
 /*****************************************************************
- * 4. Creating traces by DP traceback
+ * 5. Creating traces by DP traceback
  *****************************************************************/
 
 /* Function:  p7_trace_Append()
@@ -1156,7 +1343,7 @@ p7_trace_Index(P7_TRACE *tr)
 
 
 /*****************************************************************
- * 5. Creating faux traces from MSAs
+ * 6. Creating faux traces from MSAs
  *****************************************************************/
 
 /* Function:  p7_trace_FauxFromMSA()
@@ -1485,7 +1672,7 @@ p7_trace_Doctor(P7_TRACE *tr, int *opt_ndi, int *opt_nid)
 
 
 /*****************************************************************
- * 6. Counting traces into new HMMs.
+ * 7. Counting traces into new HMMs.
  *****************************************************************/
 
 /* Function: p7_trace_Count()
@@ -1612,7 +1799,7 @@ p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
 
 
 /*****************************************************************
- * 7. Unit tests
+ * 8. Unit tests
  *****************************************************************/			 
 #ifdef p7TRACE_TESTDRIVE
 
@@ -2010,7 +2197,7 @@ utest_faux_tracealign(ESL_MSA *msa, int *matassign, int M)
 
 
 /*****************************************************************
- * 8. Test driver
+ * 9. Test driver
  *****************************************************************/			 
 #ifdef p7TRACE_TESTDRIVE
 #include "p7_config.h"
@@ -2067,7 +2254,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 9. Example
+ * 10. Example
  *****************************************************************/
 #ifdef p7TRACE_EXAMPLE
 

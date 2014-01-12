@@ -106,9 +106,9 @@ extern int   p7_refmx_CountTrace(const P7_TRACE *tr, P7_REFMX *rx);
 extern char *p7_refmx_DecodeSpecial(int type);
 extern char *p7_refmx_DecodeState(int type);
 extern int   p7_refmx_Dump(FILE *ofp, P7_REFMX *rmx);
-extern int   p7_refmx_DumpWindow(FILE *ofp, P7_REFMX *rmx, int istart, int iend, int kstart, int kend);
-extern int   p7_refmx_DumpCSV(FILE *fp, P7_REFMX *pp, int istart, int iend, int kstart, int kend);
-extern int   p7_refmx_PlotHeatMap(FILE *ofp, P7_REFMX *pp, int istart, int iend, int kstart, int kend);
+extern int   p7_refmx_DumpWindow (FILE *ofp, P7_REFMX *rmx, int istart, int iend, int kstart, int kend);
+extern int   p7_refmx_DumpCSV    (FILE *fp,  P7_REFMX *pp,  int istart, int iend, int kstart, int kend);
+extern int   p7_refmx_PlotHeatMap(FILE *ofp, P7_REFMX *pp,  int istart, int iend, int kstart, int kend);
 extern int   p7_refmx_PlotDomainInference(FILE *ofp, const P7_REFMX *rxd, int ia, int ib, const P7_TRACE *tr);
 
 extern int   p7_refmx_Validate(P7_REFMX *rmx, char *errbuf);
