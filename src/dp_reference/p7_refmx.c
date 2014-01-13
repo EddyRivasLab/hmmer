@@ -185,6 +185,18 @@ p7_refmx_Zero(P7_REFMX *rmx, int M, int L)
 }
 
 int
+p7_refmx_Copy(const P7_REFMX *src, P7_REFMX *dst)
+{
+  int i;
+  for (i = 0; i <= src->L; i++)
+    esl_vec_FCopy(src->dp[i], (src->M+1)*p7R_NSCELLS + p7R_NXCELLS, dst->dp[i]);
+  dst->M    = src->M;
+  dst->L    = src->L;
+  dst->type = src->type;
+  return eslOK;
+}
+
+int
 p7_refmx_Rescale(P7_REFMX *rmx, float scale)
 {
   int i;

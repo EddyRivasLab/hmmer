@@ -1,9 +1,6 @@
-/* A vehicle for asking questions about the importance of using
- * ensemble calculations instead of optimal alignment.
- * 
- * 
- * 
- * 
+/* Collect data on the effectiveness of using ensemble calculations
+ * as opposed to optimal alignment; search a sequence database with
+ * one profile, collect various statistics.
  */
 #include "p7_config.h"
 
@@ -13,28 +10,17 @@
 #include "esl_getopts.h"
 #include "esl_gumbel.h"
 #include "esl_histogram.h"
-#include "esl_regexp.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
 #include "hmmer.h"
 
-/* Note that --diplot should really only be used when there's a single HMM vs. single seq comparison.
- * We're overloading this program a little, using it both to screen large #'s of seqs, and to 
- * study individual examples in detail.
- */
 static ESL_OPTIONS options[] = {
   /* name           type           default  env  range  toggles reqs incomp  help                                       docgroup*/
   { "-h",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",                   0 },
-  { "-i",          eslARG_STRING, FALSE,  NULL, NULL,   NULL,  NULL, NULL, "when plotting, restrict plot to rows <i1>..<i2>",        0 },
-  { "-k",          eslARG_STRING, FALSE,  NULL, NULL,   NULL,  NULL, NULL, "when plotting, restrict plot to columns <k1>..<k2>",     0 },
   { "-Z",          eslARG_INT,      "1",  NULL, NULL,   NULL,  NULL, NULL, "set sequence # to <n>, for E-value calculations",        0 },
-  { "--diplot",    eslARG_OUTFILE, NULL,  NULL, NULL,   NULL,  NULL, NULL, "output domain inference plot to <f> (xmgrace format)",   0 },
   { "--histplot",  eslARG_OUTFILE, NULL,  NULL, NULL,   NULL,  NULL, NULL, "output histograms to <f> (xmgrace format)",              0 },
-  { "--heatmap",   eslARG_OUTFILE, NULL,  NULL, NULL,   NULL,  NULL, NULL, "output heat map of decoding matrix to <f> (PostScript)", 0 },
-  { "--ldiplot",   eslARG_OUTFILE, NULL,  NULL, NULL,   NULL,  NULL, NULL, "output local-only domain plot to <f> (xmgrace format)",  0 },
   { "--lhistplot", eslARG_OUTFILE, NULL,  NULL, NULL,   NULL,  NULL, NULL, "output local-only histograms to <f> (xmgrace format)",   0 },
-  { "--lheatmap",  eslARG_OUTFILE, NULL,  NULL, NULL,   NULL,  NULL, NULL, "output heat map of local pp matrix to <f> (PostScript)", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -45,7 +31,6 @@ static int acceleration_filter(ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg,
 static int update_histograms(P7_REFMX *pp, P7_COORD2 *dom, int ndom, ESL_HISTOGRAM *indom, ESL_HISTOGRAM *outdom);
 static int count_nin_nout_above(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *opt_nin, int *opt_nout);
 static int count_nin_nout_below(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *opt_nin, int *opt_nout);
-static int parse_coord_string(const char *cstring, int *ret_start, int *ret_end);
 
 
 int 
@@ -78,10 +63,6 @@ main(int argc, char **argv)
   ESL_HISTOGRAM  *outvit     = NULL;
   char           *histfile   = esl_opt_GetString(go, "--histplot");
   FILE           *histfp     = NULL;
-  char           *difile     = esl_opt_GetString(go, "--diplot");
-  FILE           *difp       = NULL;
-  char           *heatfile   = esl_opt_GetString(go, "--heatmap");
-  FILE           *heatfp     = NULL;
   P7_REFMX       *vit_l      = p7_refmx_Create(100, 100);
   P7_REFMX       *fwd_l      = p7_refmx_Create(100, 100);
   P7_REFMX       *bck_l      = p7_refmx_Create(100, 100);
@@ -93,10 +74,6 @@ main(int argc, char **argv)
   ESL_HISTOGRAM  *outvit_l   = NULL;
   char           *histfile_l = esl_opt_GetString(go, "--lhistplot");
   FILE           *histfp_l   = NULL;
-  char           *difile_l   = esl_opt_GetString(go, "--ldiplot");
-  FILE           *difp_l     = NULL;
-  char           *heatfile_l = esl_opt_GetString(go, "--lheatmap");
-  FILE           *heatfp_l   = NULL;
   int             Z          = esl_opt_GetInteger(go, "-Z");
   float           fsc,   vsc,   bsc,   mplsc;
   float           fsc_l, vsc_l, bsc_l, mplsc_l;
@@ -104,13 +81,7 @@ main(int argc, char **argv)
   int             nintotal_l, nin90_l, nout90_l, nin50_l, nout50_l, nin0_l;
   int             d;
   float           nullsc;
-  int             ia,ib,ka,kb;	/* optional bounds of a plot window */
   int             status;
-
-  /* Determine coords of dump plot, if any */
-  ia = ib = ka = kb = 0;
-  if ( esl_opt_IsOn(go, "-i")) parse_coord_string(esl_opt_GetString(go, "-i"), &ia, &ib);
-  if ( esl_opt_IsOn(go, "-k")) parse_coord_string(esl_opt_GetString(go, "-k"), &ka, &kb);
 
   /* Read in one HMM. Set alphabet to whatever the HMM's alphabet is. */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
@@ -145,14 +116,6 @@ main(int argc, char **argv)
   invit_l  = esl_histogram_Create(0.0, 1.0, 0.1);
   outvit_l = esl_histogram_Create(0.0, 1.0, 0.1);
   if (histfile_l && (histfp_l = fopen(histfile_l, "w")) == NULL) p7_Fail("Failed to open local histogram file %s for writing.", histfile_l);
-
-  /* Other optional plots */
-  if (difile     && (difp     = fopen(difile,     "w")) == NULL) p7_Fail("Failed to open domain inference plot file %s for writing.", difile);
-  if (difile_l   && (difp_l   = fopen(difile_l,   "w")) == NULL) p7_Fail("Failed to open local domain inference plot file %s for writing.", difile_l);
-
-  if (heatfile   && (heatfp   = fopen(heatfile,   "w")) == NULL) p7_Fail("Failed to open heatmap plot file %s for writing.", heatfile);
-  if (heatfile_l && (heatfp_l = fopen(heatfile_l, "w")) == NULL) p7_Fail("Failed to open local heatmap plot file %s for writing.", heatfile_l);
-
 
   /* For each target sequence... */
   while (( status = esl_sqio_Read(sqfp, sq)) == eslOK)
@@ -195,9 +158,6 @@ main(int argc, char **argv)
 	  count_nin_nout_above(pp, dom, tr->ndom, 0.5,   &nin50, &nout50); /* ditto, for 0.5 threshold */
 	  count_nin_nout_below(pp, dom, tr->ndom, 0.1,   &nin0,  NULL);    /* # of residues labeled by Viterbi as in a domain, yet pp < 0.1 */
 	  
-	  if (difp)   p7_refmx_PlotDomainInference(difp,   pp, (ia ? ia : 1), (ib ? ib : sq->n), tr);
-	  if (heatfp) p7_refmx_PlotHeatMap        (heatfp, pp, (ia ? ia : 1), (ib ? ib : sq->n), (ka ? ka : 1), (kb ? kb : gm->M));
-
 	  printf("%10.4g %10.4g %10.4f %10.4f %10.4f %10.4g ",
 		 (double) Z * esl_gumbel_surv( (vsc - nullsc) / eslCONST_LOG2, gm->evparam[p7_VMU],  gm->evparam[p7_VLAMBDA]),
 		 (double) Z * esl_exp_surv   ( (fsc - nullsc) / eslCONST_LOG2, gm->evparam[p7_FTAU], gm->evparam[p7_FLAMBDA]),
@@ -235,9 +195,6 @@ main(int argc, char **argv)
 	  count_nin_nout_above(pp_l, dom_l, tr_l->ndom, 0.5,   &nin50_l, &nout50_l); /* ditto, for 0.5 threshold */
 	  count_nin_nout_below(pp_l, dom_l, tr_l->ndom, 0.1,   &nin0_l,  NULL);    /* # of residues labeled by Viterbi as in a domain, yet pp < 0.1 */
 	  
-	  if (difp_l)   p7_refmx_PlotDomainInference(difp_l,   pp_l, (ia ? ia : 1), (ib ? ib : sq->n), tr_l);
-	  if (heatfp_l) p7_refmx_PlotHeatMap        (heatfp_l, pp_l, (ia ? ia : 1), (ib ? ib : sq->n), (ka ? ka : 1), (kb ? kb : gm->M));
-
 	  printf("%10.4g %10.4g %10.4f %10.4f %10.4f %10.4g ",
 		 (double) Z * esl_gumbel_surv( (vsc_l - nullsc) / eslCONST_LOG2, gm->evparam[p7_VMU],  gm->evparam[p7_VLAMBDA]),
 		 (double) Z * esl_exp_surv   ( (fsc_l - nullsc) / eslCONST_LOG2, gm->evparam[p7_FTAU], gm->evparam[p7_FLAMBDA]),
@@ -289,8 +246,6 @@ main(int argc, char **argv)
     }
 
   if (histfp) fclose(histfp);
-  if (difp)   fclose(difp);
-  if (heatfp) fclose(heatfp);
   esl_histogram_Destroy(outvit);
   esl_histogram_Destroy(invit);
   p7_trace_Destroy(tr);
@@ -302,8 +257,6 @@ main(int argc, char **argv)
   p7_sparsemask_Destroy(sm);
 
   if (histfp_l) fclose(histfp_l);
-  if (difp_l)   fclose(difp_l);
-  if (heatfp_l) fclose(heatfp_l);
   esl_histogram_Destroy(outvit_l);
   esl_histogram_Destroy(invit_l);
   p7_trace_Destroy(tr_l);
@@ -507,23 +460,6 @@ count_nin_nout_below(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *
   return eslOK;
 }
 
-static int
-parse_coord_string(const char *cstring, int *ret_start, int *ret_end)
-{
-  ESL_REGEXP *re = esl_regexp_Create();
-  char        tok1[32];
-  char        tok2[32];
-
-  if (esl_regexp_Match(re, "^(\\d+)\\D+(\\d*)$", cstring) != eslOK) esl_fatal("-c takes arg of subseq coords <from>..<to>; %s not recognized", cstring);
-  if (esl_regexp_SubmatchCopy(re, 1, tok1, 32)            != eslOK) esl_fatal("Failed to find <from> coord in %s", cstring);
-  if (esl_regexp_SubmatchCopy(re, 2, tok2, 32)            != eslOK) esl_fatal("Failed to find <to> coord in %s",   cstring);
-  
-  *ret_start = atol(tok1);
-  *ret_end   = (tok2[0] == '\0') ? 0 : atol(tok2);
-  
-  esl_regexp_Destroy(re);
-  return eslOK;
-}
 
 
 /*****************************************************************

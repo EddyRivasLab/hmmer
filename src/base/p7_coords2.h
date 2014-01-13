@@ -22,6 +22,7 @@ typedef struct {
 
 extern P7_COORDS2 *p7_coords2_Create (int nalloc, int nredline);
 extern int         p7_coords2_Grow   (P7_COORDS2 *c2);
+extern int         p7_coords2_GrowTo (P7_COORDS2 *c2, int nalloc);
 extern int         p7_coords2_Reuse  (P7_COORDS2 *c2);
 extern void        p7_coords2_Destroy(P7_COORDS2 *c2);
 

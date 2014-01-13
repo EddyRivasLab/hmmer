@@ -55,6 +55,22 @@ p7_coords2_Grow(P7_COORDS2 *c2)
 }
 
 int
+p7_coords2_GrowTo(P7_COORDS2 *c2, int nalloc)
+{
+  int status;
+
+  if (c2->nalloc > nalloc) return eslOK;
+
+  ESL_REALLOC(c2->seg, sizeof(P7_COORD2) * nalloc);
+  c2->nalloc = nalloc;
+  return eslOK;
+
+ ERROR:
+  return status;
+}
+
+
+int
 p7_coords2_Reuse(P7_COORDS2 *c2)
 {
   int status;

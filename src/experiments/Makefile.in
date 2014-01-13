@@ -4,7 +4,9 @@ OBJS =
 
 HDRS = 
 
-PROGS = exp-decoding \
+PROGS = decoding-animate \
+	decoding-hunt \
+	decoding-study \
 	hmmsim \
         sim-alignment
 

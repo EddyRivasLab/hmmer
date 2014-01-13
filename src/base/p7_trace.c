@@ -1096,6 +1096,7 @@ p7_trace_PlotHeatMap(FILE *ofp, P7_TRACE *tr, int ia, int ib, int ka, int kb)
   for (z = 0; z < tr->N; z++)
     {
       i = (tr->i[z] ? tr->i[z] : i); /* last i we emitted: coord we'll use for D states */
+      k = tr->k[z];
 
       if (p7_trace_IsMain(tr->st[z]) ) /* any {MDI}{LG} */
 	dmx->mx[ib-i][k-ka] = 1.0;
