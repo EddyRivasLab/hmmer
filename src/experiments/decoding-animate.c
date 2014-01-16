@@ -151,7 +151,7 @@ main(int argc, char **argv)
 
   /* set up the movie image structure */
   /* The ppm image has the seq running horizontally, profile running vertically */
-  mxi = mximage_Create(gm->M, sq->n, cellsz);
+  mxi = mximage_Create((ka && kb) ? kb-ka+1 : gm->M, (ia && ib) ? ib-ia+1 : sq->n, cellsz);
 
   /* Frame 0 of the movie is just the Viterbi parse */
   /* you have to make filenames as .000001.ppm, not just .1.ppm, or unix cmdline won't keep them in numeric order */
