@@ -1,3 +1,26 @@
+ID              h106
+TITLE           H3 fails to read old H2 save file
+AFFECTS         3.0 and later
+FIXED_IN        -
+STATUS          CLOSED
+XREF            SRE:2014/0116-bug-h104-h2-savefile
+REPORTED_BY     Qing-dong Zeng <zqdong2010@hotmail.com> 
+OPENED_DATE     SRE, 16 Jan 2014
+CLOSED_DATE     SRE, 16 Jan 2014
+DESCRIPTION     
+  Zeng provides an example H2 save file that H3 won't read.
+  H3 claims bad format. The save file appears to be from 
+  a 1998 version of SMART.
+
+  Two problems identified. One is that the file has a DESC
+  line but no description. Fixed p7_hmmfile.c::read_asc20hmm()
+  to allow this.
+
+  Second is that hmmemit (only?) complains "whoops, HMM is bad!",
+  because hmmemit does a p7_hmm_Validate() on the model, and it's
+  slightly nonnormalized. Fixed by adding a p7_hmm_Renormalize() call
+  to the end of read_asc20hmm().
+//
 ID              h105
 TITLE           Make clean/distclean fail within binary distributions
 AFFECTS         3.1b1
@@ -23,7 +46,7 @@ REPORTED_BY     Senthil Kumar M <senthil.murugapiran@unlv.edu>
 OPENED_DATE     TJW, Tue Jun 11 15:54:02 2013
 CLOSED_DATE     Wed Jun 12 13:07:33 2013
 DESCRIPTION
-  Three hmmd implementation depends on the struct 'sockaddr_in', which is
+  Three hmmd implementations depend on the struct 'sockaddr_in', which is
   defined in netinet/in.h. On our testing systems, this is provided by using
   #include <arpa/inet.h>
   (which itself includes <netinet/in.h>).

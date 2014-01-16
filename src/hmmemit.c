@@ -97,7 +97,7 @@ main(int argc, char **argv)
 
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslEOF)
     {
-      if      (status == eslEFORMAT)    esl_fatal("Bad file format in HMM file %s:\n:%s\n",         hfp->fname, hfp->errbuf);
+      if      (status == eslEFORMAT)    esl_fatal("Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
       else if (status == eslEINCOMPAT)  esl_fatal("HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
       else if (status != eslOK)         esl_fatal("Unexpected error in reading HMMs from %s\n",     hfp->fname);
       nhmms++;
