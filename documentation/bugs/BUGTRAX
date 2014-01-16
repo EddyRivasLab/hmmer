@@ -1,3 +1,26 @@
+ID              h104
+TITLE           H3 fails to read old H2 save file
+AFFECTS         3.0 and later
+FIXED_IN        -
+STATUS          CLOSED
+XREF            SRE:2014/0116-bug-h104-h2-savefile
+REPORTED_BY     Qing-dong Zeng <zqdong2010@hotmail.com> 
+OPENED_DATE     SRE, 16 Jan 2014
+CLOSED_DATE     SRE, 16 Jan 2014
+DESCRIPTION     
+  Zeng provides an example H2 save file that H3 won't read.
+  H3 claims bad format. The save file appears to be from 
+  a 1998 version of SMART.
+
+  Two problems identified. One is that the file has a DESC
+  line but no description. Fixed p7_hmmfile.c::read_asc20hmm()
+  to allow this.
+
+  Second is that hmmemit (only?) complains "whoops, HMM is bad!",
+  because hmmemit does a p7_hmm_Validate() on the model, and it's
+  slightly nonnormalized. Fixed by adding a p7_hmm_Renormalize() call
+  to the end of read_asc20hmm().
+//
 ID              h103
 TITLE           Funny characters printed in E-value for hits with score >1000
 AFFECTS         3.1b1
