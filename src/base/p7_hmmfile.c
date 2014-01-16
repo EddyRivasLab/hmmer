@@ -1814,7 +1814,7 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       }  
 
       else if (strcmp(tag, "DESC") == 0) {
-	/* #h104. Allow "DESC" bare, with nothing following. Looks like some SMART models circa 1998 are like this. */
+	/* #h106. Allow "DESC" bare, with nothing following. Looks like some SMART models circa 1998 are like this. */
 	if ((status = esl_fileparser_GetRemainingLine(hfp->efp, &tok1)) == eslOK) p7_hmm_SetDescription(hmm, tok1);
       } 
 
@@ -1995,7 +1995,7 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   if (hmm->M    <= 0)       ESL_XFAIL(eslEFORMAT, hfp->errbuf, "No LENG found for HMM (or LENG <= 0)");
   if (abc       == NULL)    ESL_XFAIL(eslEFORMAT, hfp->errbuf, "No ALPH found for HMM");
 
-  /* Part of #h104 fix: */
+  /* Part of #h106 fix: */
   if ((status = p7_hmm_Renormalize(hmm)) != eslOK) return status;
 
   /* legacy issues */
