@@ -1,4 +1,4 @@
-ID              h104
+ID              h106
 TITLE           H3 fails to read old H2 save file
 AFFECTS         3.0 and later
 FIXED_IN        -
@@ -20,6 +20,39 @@ DESCRIPTION
   because hmmemit does a p7_hmm_Validate() on the model, and it's
   slightly nonnormalized. Fixed by adding a p7_hmm_Renormalize() call
   to the end of read_asc20hmm().
+//
+ID              h105
+TITLE           Make clean/distclean fail within binary distributions
+AFFECTS         3.1b1
+FIXED_IN        3.1b2
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     -
+OPENED_DATE     TJW, Tue Jun 18 15:59:58 2013
+CLOSED_DATE     Tue Jun 18 16:15:00 2013
+DESCRIPTION
+  Some files and folders are removed from our source prior to release of 
+  HMMER binaries, namely userguide and LICENSE.txt. This was leading to 
+  errors in 'make clean' and 'make distclean'. Added tests to make the 
+  requested actions conditional on file/directory existence.
+//
+ID              h104
+TITLE           Compile error on OpenBSD, netinet/in.h.
+AFFECTS         3.1b1
+FIXED_IN        3.1b2
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     Senthil Kumar M <senthil.murugapiran@unlv.edu>
+OPENED_DATE     TJW, Tue Jun 11 15:54:02 2013
+CLOSED_DATE     Wed Jun 12 13:07:33 2013
+DESCRIPTION
+  Three hmmd implementation depend on the struct 'sockaddr_in', which is
+  defined in netinet/in.h. On our testing systems, this is provided by using
+  #include <arpa/inet.h>
+  (which itself includes <netinet/in.h>).
+  
+  On OpenBSD - inet.h doesn't include the in.h file. The fix is to 
+  directly include netinet/in.h within those three files. 
 //
 ID              h103
 TITLE           Funny characters printed in E-value for hits with score >1000
