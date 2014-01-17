@@ -82,9 +82,16 @@ Bugfixes:
           not included. This header file is included via arpa/inet.h 
           on most other systems, but not on OpenBSD.
  
--:- #h105 Some files and folders are removed from the HMMER source 
-          prior to release of HMMER binaries, namely userguide and 
-          LICENSE.txt. This was leading to errors in 'make clean' and 
-          'make distclean'.
-
-         
+-:- #h105 Errors encountered while running 'make clean' and 'make distclean'
+          in binary builds. This was the result of the Makefile trying to
+          remove the userguide folder and LICENSE.txt file, which are 
+          already removed in the release process. The Makefile now accounts
+          for this possibility.
+          
+-:- #h106 H3 failed to read some old H2 HMM files. This happened in the 
+          cases that (1) there was an empty DESC field in the file, or (2) 
+          the model was not normalized. Both cases have been resolved.
+          
+-:- #h107 hmmsim only worked for Amino Acid models. It now works for 
+          nucleotide models, also.
+                   
