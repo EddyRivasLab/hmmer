@@ -428,9 +428,9 @@ Accepted formats include
 .IR a2m , 
 .IR afa , 
 and 
-.IR hmmerbin .
+.IR hmmerfm .
 The default is to autodetect the format of the file. The format
-.I hmmerbin
+.I hmmerfm
 indicates that the database file is a binary file produced using
 .I makehmmerdb 
 (this format is not currently autodetected). 
