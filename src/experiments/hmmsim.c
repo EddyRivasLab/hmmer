@@ -204,10 +204,8 @@ main(int argc, char **argv)
    */
   cfg.hmmfile  = esl_opt_GetArg(go, 1);
   cfg.r        = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
-  cfg.abc      = esl_alphabet_Create(eslAMINO);
+//  cfg.abc      = esl_alphabet_Create(eslAMINO);
 
-  if (esl_opt_GetBoolean(go, "--bgflat")) cfg.bg = p7_bg_CreateUniform(cfg.abc);
-  else                                    cfg.bg = p7_bg_Create(cfg.abc);
 
   cfg.my_rank  = 0;		/* MPI init will change this soon, if --mpi was set */
   cfg.nproc    = 0;		/* MPI init will change this soon, if --mpi was set */
@@ -222,8 +220,7 @@ main(int argc, char **argv)
   cfg.ffp      = NULL;
   cfg.xfp      = NULL;
   cfg.alfp     = NULL;
-
-  p7_bg_SetLength(cfg.bg, esl_opt_GetInteger(go, "-L"));  /* set the null model background length in both master and workers. */
+  cfg.bg       = NULL;
 
 
   /* This is our stall point, if we need to wait until we get a
@@ -389,8 +386,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       else if (status == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   cfg->hmmfile);
       else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s",   cfg->hmmfile);
 
+      if (cfg->bg == NULL) {
+        if (esl_opt_GetBoolean(go, "--bgflat")) cfg->bg = p7_bg_CreateUniform(cfg->abc);
+        else                                    cfg->bg = p7_bg_Create(cfg->abc);
+        p7_bg_SetLength(cfg->bg, esl_opt_GetInteger(go, "-L"));  /* set the null model background length in both master and workers. */
+      }
+
+
       if (esl_opt_GetBoolean(go, "--recal")) {
-	if (recalibrate_model(go, cfg, errbuf, hmm)      != eslOK) p7_Fail(errbuf);
+        if (recalibrate_model(go, cfg, errbuf, hmm)      != eslOK) p7_Fail(errbuf);
       }
       if (process_workunit(go, cfg, errbuf, hmm, xv, av) != eslOK) p7_Fail(errbuf);
       if (output_result   (go, cfg, errbuf, hmm, xv, av) != eslOK) p7_Fail(errbuf);
@@ -464,6 +468,16 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      else if (status == eslEFORMAT)   { xstatus = status; sprintf(errbuf, "bad file format in HMM file %s",             cfg->hmmfile); }
 	      else if (status == eslEINCOMPAT) { xstatus = status; sprintf(errbuf, "HMM file %s contains different alphabets",   cfg->hmmfile); }
 	      else if (status != eslEOF)       { xstatus = status; sprintf(errbuf, "Unexpected error in reading HMMs from %s",   cfg->hmmfile); }
+
+
+        if (cfg->bg == NULL) { // first time only
+          if (esl_opt_GetBoolean(go, "--bgflat")) cfg->bg = p7_bg_CreateUniform(cfg->abc);
+          else                                    cfg->bg = p7_bg_Create(cfg->abc);
+        }
+        //this next step is redundant, but it avoids a race condition above.
+        p7_bg_SetLength(cfg->bg, esl_opt_GetInteger(go, "-L"));  /* set the null model background length in both master and workers. */
+
+
 	    }
 	}
 
