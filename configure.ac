@@ -76,7 +76,7 @@ HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
-EASEL_DATE="December 2014"
+EASEL_DATE="January 2014"
 EASEL_COPYRIGHT="Copyright (C) 2014 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the Janelia Farm Software License."
 EASEL_VERSION="h$PACKAGE_VERSION"
