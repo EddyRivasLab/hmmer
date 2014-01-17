@@ -1,7 +1,24 @@
+ID              h107
+TITLE           hmmsim only worked for Amino Acid models
+AFFECTS         3.0 and later
+FIXED_IN        3.1b2
+STATUS          CLOSED
+XREF            -
+REPORTED_BY     Marco Galardini <marco.galardini@unifi.it> 
+OPENED_DATE     TJW, 16 Jan 2014
+CLOSED_DATE     TJW, 16 Jan 2014
+DESCRIPTION     
+  Running hmmsim on a DNA HMM produced the error:
+  "Error: HMM file tutorial/MADE1.hmm contains different alphabets"
+  
+  An amino acid alphabet was assumed in the hmmsim implementation,
+  so an HMM with a DNA alphabet produced an error. Removed this 
+  assumption - now the alphabet is determined from the HMM.  
+//
 ID              h106
 TITLE           H3 fails to read old H2 save file
 AFFECTS         3.0 and later
-FIXED_IN        -
+FIXED_IN        3.1b2
 STATUS          CLOSED
 XREF            SRE:2014/0116-bug-h104-h2-savefile
 REPORTED_BY     Qing-dong Zeng <zqdong2010@hotmail.com> 
