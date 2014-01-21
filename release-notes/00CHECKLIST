@@ -1,6 +1,6 @@
 Checklist for a HMMER release
 SRE, Thu Feb  4 10:56:25 2010
-updated by TJW, Tue Dec 17 14:56:12 EDT 2013
+updated by TJW, Mon Jan 20 14:56:12 EDT 2013
 --------------------------------------------------------
 When editing this 00CHECKLIST, edit it in the trunk, not in a release
 branch; it isn't included in releases anyway.
@@ -272,7 +272,7 @@ ${HMMER_VERSION} tag used below should match @HMMER_VERSION@ in configure.ac, Ma
    ./configure
    . release-notes/LICENSE.sh
 
-  3.1b2   exported 4580/898
+  3.1b2   exported 4605/899
   3.1b1   exported 4452/866
   3.0:    exported 3243/575
   3.0rc2: exported 3224/554
@@ -379,7 +379,7 @@ On login-eddy (our compile host):
 = Testing
 ================================================================
 
-See latest e-notebook (~wheelert/notebook/2013/12-17-hmmer3.1b2-release/)
+See latest e-notebook (~wheelert/notebook/2014/01-17-hmmer3.1b2-release-2nd-try/)
 for tests.  [TODO: Organize/systematize this better.]
 
 They include:
@@ -387,7 +387,6 @@ They include:
               regressions, timings, MPI.
   ROC:        profmark benchmarks, regressed against prev version.
   Speed:      speed benchmarks, regressed against prev version.
-
 
 ================================================================
 = Binary distros
@@ -450,7 +449,7 @@ intel64 build:
 macosx-intel build:
   # Notice the --mmacosx-version-min flag in the configure script below.
   # For explanation, see :
-    ~/notebook/2013/12-17-hmmer3.1b2-release/00NOTES-H3.1b1
+    ~wheelert/notebook/2014/01-17-hmmer3.1b2-release-2nd-try/00NOTES-H3.1b2
 
   export HMMER_DISTRO=macosx-intel
   cd ${HMMER_RELEASE_NOTEBOOK}/Distros
@@ -474,7 +473,7 @@ macosx-intel build:
   #Do this on login-eddy, because new versions of tar on OS X seem
   # to do something that causes errors in older versions.
   # For explanation, see :
-  ~/notebook/2013/12-17-hmmer3.1b2-release/00NOTES-H3.1b1
+  ~/notebook/2014/01-17-hmmer3.1b2-release-2nd-try/00NOTES-H3.1b2
 
   export HMMER_DISTRO=macosx-intel
   tar cf hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar  hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
@@ -596,4 +595,4 @@ Release           Date            SVN (HMMER/Easel)
 3.0rc2            11 Mar 2010     r3228/r557
 3.0               28 Mar 2010     r3244/r576
 3.1b1             25 May 2013     r4462/r866
-3.1b2             20 Dec 2013     r4580/r898
+3.1b2             20 Jan 2014     r4605/r899
