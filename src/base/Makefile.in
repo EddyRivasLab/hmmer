@@ -51,6 +51,7 @@ BENCHMARKS = p7_bg_benchmark \
 EXAMPLES =   p7_alidisplay_example \
 	     p7_bg_example \
 	     p7_bg_example2 \
+	     p7_coords2_example \
 	     p7_hmmfile_example \
 	     p7_profile_example \
 	     p7_trace_example

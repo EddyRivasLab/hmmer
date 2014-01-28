@@ -37,7 +37,6 @@ static char usage[]  = "[-options] <hmmfile> <seqfile>";
 static char banner[] = "testing importance of ensemble calculations";
 
 static int parse_coord_string(const char *cstring, int *ret_start, int *ret_end);
-static int trace_to_coords   (const P7_TRACE *tr, P7_COORDS2 *dom);
 
 int 
 main(int argc, char **argv)
@@ -129,7 +128,7 @@ main(int argc, char **argv)
 
   /* Create a coord2 list, crudely. We can do better later. */
   p7_trace_Index(tr);
-  trace_to_coords(tr, dom);
+  p7_coords2_SetFromTrace(dom, tr);
 
   p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom->seg, dom->nseg, mpl, &mplsc);
 	     
@@ -154,7 +153,7 @@ main(int argc, char **argv)
   /* One suboptimal alignment - sampled from fwd matrix */
   p7_reference_trace_Stochastic(rng, NULL, gm, fwd, tr);	  
   p7_trace_Index(tr);
-  trace_to_coords(tr, dom);
+  p7_coords2_SetFromTrace(dom, tr);
 
   p7_trace_Score(tr, sq->dsq, gm, &vsc);
   p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom->seg, dom->nseg, mpl, &mplsc);
@@ -217,24 +216,6 @@ parse_coord_string(const char *cstring, int *ret_start, int *ret_end)
   return eslOK;
 }
 
-/* trace must be indexed first */
-static int
-trace_to_coords(const P7_TRACE *tr, P7_COORDS2 *dom)
-{
-  int d;
-
-  p7_coords2_GrowTo(dom, tr->ndom);
-
-  for (d = 0; d < tr->ndom; d++)
-    {
-      dom->seg[d].start = tr->sqfrom[d];
-      dom->seg[d].end   = tr->sqto[d];
-    }
-
-  dom->nseg = tr->ndom;
-  dom->L    = tr->L;
-  return eslOK;
-}
 
 
 /*****************************************************************

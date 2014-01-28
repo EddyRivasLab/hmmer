@@ -32,7 +32,7 @@ ifneq (,$(wildcard userguide/.))
 	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} clean
 endif
 	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} clean;
--rm -f *~
+	-rm -f *~
 
 distclean:
 #See above for explanation of 'ifneq' usage

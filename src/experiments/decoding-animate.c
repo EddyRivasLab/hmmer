@@ -67,7 +67,6 @@ static int      mximage_plot_trace(MXIMAGE *mxi, P7_TRACE *tr, int ia, int ib, i
 
 /* these functions are duplicated from decoding-study */
 static int parse_coord_string(const char *cstring, int *ret_start, int *ret_end);
-static int trace_to_coords   (const P7_TRACE *tr, P7_COORDS2 *dom);
 
 int 
 main(int argc, char **argv)
@@ -146,7 +145,7 @@ main(int argc, char **argv)
   p7_ReferenceBackward(sq->dsq, sq->n, gm, bck,      &bsc);
   p7_ReferenceDecoding(sq->dsq, sq->n, gm, fwd, bck, pp);
   p7_trace_Index(tr);
-  trace_to_coords(tr, dom);
+  p7_coords2_SetFromTrace(dom, tr);
   p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom->seg, dom->nseg, mpl, &mplsc);
 
   /* set up the movie image structure */
@@ -186,7 +185,7 @@ main(int argc, char **argv)
       p7_reference_trace_Stochastic(rng, &wrk, gm, fwd, tr);	  
 
       p7_trace_Index(tr);
-      trace_to_coords(tr, dom);
+      p7_coords2_SetFromTrace(dom, tr);
       p7_trace_Score(tr, sq->dsq, gm, &vsc);
       p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom->seg, dom->nseg, mpl, &mplsc);
 
@@ -385,26 +384,6 @@ parse_coord_string(const char *cstring, int *ret_start, int *ret_end)
   esl_regexp_Destroy(re);
   return eslOK;
 }
-
-/* trace must be indexed first */
-static int
-trace_to_coords(const P7_TRACE *tr, P7_COORDS2 *dom)
-{
-  int d;
-
-  p7_coords2_GrowTo(dom, tr->ndom);
-
-  for (d = 0; d < tr->ndom; d++)
-    {
-      dom->seg[d].start = tr->sqfrom[d];
-      dom->seg[d].end   = tr->sqto[d];
-    }
-
-  dom->nseg = tr->ndom;
-  dom->L    = tr->L;
-  return eslOK;
-}
-
 
 #if 0
 static int
