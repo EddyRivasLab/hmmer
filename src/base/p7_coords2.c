@@ -25,36 +25,22 @@
  * 1. The P7_COORDS2 object.
  *****************************************************************/
 
-/* Function:  
- * Synopsis:  
- *
- * Purpose:   
- *
- * Args:      
- *
- * Returns:   
- *
- * Throws:    (no abnormal error conditions)
- *
- * Note:      Need to document redline, and convention
- *            for default allocation size, in codestyle.
- */
-
 P7_COORDS2 *
-p7_coords2_Create(int nalloc, int nredline)
+p7_coords2_Create(int32_t nalloc, int32_t nredline)
 {
   P7_COORDS2 *c2 = NULL;
   int         status;
 
   ESL_ALLOC(c2, sizeof(P7_COORDS2));
-  c2->seg  = NULL;
-  c2->nseg = 0;
-  c2->L    = 0;  
+  c2->arr  = NULL;
+  c2->n    = 0;
+  c2->dim1 = 0;  
+  c2->dim2 = 0;
 
   c2->nalloc   = (nalloc   > 0 ? nalloc   : 8);
   c2->nredline = (nredline > 0 ? nredline : 64);
 
-  ESL_ALLOC(c2->seg, sizeof(P7_COORD2) * (c2->nalloc));
+  ESL_ALLOC(c2->arr, sizeof(P7_COORD2) * (c2->nalloc));
 
   return c2;
 
@@ -68,9 +54,9 @@ p7_coords2_Grow(P7_COORDS2 *c2)
 {
   int status;
 
-  if (c2->nseg < c2->nalloc) return eslOK;
+  if (c2->n < c2->nalloc) return eslOK;
 
-  ESL_REALLOC(c2->seg, sizeof(P7_COORD2) * c2->nalloc * 2);
+  ESL_REALLOC(c2->arr, sizeof(P7_COORD2) * c2->nalloc * 2);
   c2->nalloc = c2->nalloc * 2;
   return eslOK;
 
@@ -79,13 +65,13 @@ p7_coords2_Grow(P7_COORDS2 *c2)
 }
 
 int
-p7_coords2_GrowTo(P7_COORDS2 *c2, int nalloc)
+p7_coords2_GrowTo(P7_COORDS2 *c2, int32_t nalloc)
 {
   int status;
 
   if (c2->nalloc >= nalloc) return eslOK;
 
-  ESL_REALLOC(c2->seg, sizeof(P7_COORD2) * nalloc);
+  ESL_REALLOC(c2->arr, sizeof(P7_COORD2) * nalloc);
   c2->nalloc = nalloc;
   return eslOK;
 
@@ -96,18 +82,19 @@ p7_coords2_GrowTo(P7_COORDS2 *c2, int nalloc)
 int
 p7_coords2_Copy(const P7_COORDS2 *src, P7_COORDS2 *dst)
 {
-  int d;
-  int status;
+  int32_t d;
+  int     status;
 
-  if ((status = p7_coords2_GrowTo(dst, src->nseg)) != eslOK) goto ERROR;
+  if ((status = p7_coords2_GrowTo(dst, src->n)) != eslOK) goto ERROR;
   
-  for (d = 0; d < src->nseg; d++)
+  for (d = 0; d < src->n; d++)
     {
-      dst->seg[d].start = src->seg[d].start;
-      dst->seg[d].end   = src->seg[d].end;
+      dst->arr[d].n1 = src->arr[d].n1;
+      dst->arr[d].n2 = src->arr[d].n2;
     }
-  dst->nseg = src->nseg;
-  dst->L    = src->L;
+  dst->n    = src->n;
+  dst->dim1 = src->dim1;
+  dst->dim2 = src->dim2;
   return eslOK;
 
  ERROR:
@@ -119,7 +106,8 @@ p7_coords2_Copy(const P7_COORDS2 *src, P7_COORDS2 *dst)
  *
  * Purpose:   Given an indexed trace <tr>, convert the domain
  *            start/end coords on the sequence into the 
- *            <P7_COORDS2> object <c2>. 
+ *            <P7_COORDS2> object <c2>, using <arr[].n1> for
+ *            start and <.n2> for end.
  *
  *            If needed, <c2> will be reallocated to fit the
  *            number of domains in the <tr>.
@@ -141,19 +129,20 @@ p7_coords2_Copy(const P7_COORDS2 *src, P7_COORDS2 *dst)
 int
 p7_coords2_SetFromTrace(P7_COORDS2 *c2, const P7_TRACE *tr)
 {
-  int d;
-  int status;
+  int32_t d;
+  int     status;
 
   if ((status = p7_coords2_GrowTo(c2, tr->ndom)) != eslOK) goto ERROR;
 
   for (d = 0; d < tr->ndom; d++)
     {
-      c2->seg[d].start = tr->sqfrom[d];
-      c2->seg[d].end   = tr->sqto[d];
+      c2->arr[d].n1 = tr->sqfrom[d];
+      c2->arr[d].n2 = tr->sqto[d];
     }
 
-  c2->nseg = tr->ndom;
-  c2->L    = tr->L;
+  c2->n    = tr->ndom;
+  c2->dim1 = tr->L;
+  c2->dim2 = tr->L;
   return eslOK;
 
  ERROR:
@@ -167,12 +156,13 @@ p7_coords2_Reuse(P7_COORDS2 *c2)
 
   if (c2->nalloc > c2->nredline) 
     {
-      ESL_REALLOC(c2->seg, sizeof(P7_COORD2) * c2->nredline);
+      ESL_REALLOC(c2->arr, sizeof(P7_COORD2) * c2->nredline);
       c2->nalloc = c2->nredline;
     }
 
-  c2->nseg = 0;
-  c2->L    = 0;
+  c2->n    = 0;
+  c2->dim1 = 0;
+  c2->dim2 = 0;
   return eslOK;
 
  ERROR:
@@ -184,7 +174,7 @@ p7_coords2_Destroy(P7_COORDS2 *c2)
 {
   if (c2) 
     {
-      if (c2->seg) free(c2->seg);
+      if (c2->arr) free(c2->arr);
       free(c2);
     }
   return;
@@ -194,18 +184,20 @@ p7_coords2_Destroy(P7_COORDS2 *c2)
  * 2. Debugging and development tools, P7_COORDS2
  *****************************************************************/
 
+/* Sample random domain segment positions, start/end pairs, sorted and nonoverlapping.
+ */
 int
-p7_coords2_Sample(ESL_RANDOMNESS *rng, P7_COORDS2 *c2, int maxseg, int L, int **byp_wrk)
+p7_coords2_Sample(ESL_RANDOMNESS *rng, P7_COORDS2 *c2, int32_t maxseg, int32_t L, int32_t **byp_wrk)
 {
-  int *wrk  = NULL;
-  int  nseg = 1 + esl_rnd_Roll(rng, maxseg); /* 1..maxseg */
-  int  i;
-  int  status;
+  int32_t *wrk  = NULL;
+  int32_t  nseg = 1 + esl_rnd_Roll(rng, maxseg); /* 1..maxseg */
+  int32_t  i;
+  int      status;
 
   /* Using the bypass idiom, make sure we have a workspace for <L> coords */
-  if      (esl_byp_IsInternal(byp_wrk) ) ESL_ALLOC(wrk, sizeof(int) * L);
-  else if (esl_byp_IsReturned(byp_wrk) ) ESL_ALLOC(wrk, sizeof(int) * L);
-  else if (esl_byp_IsProvided(byp_wrk) ) { wrk = *byp_wrk; ESL_REALLOC(wrk, sizeof(int) * L); }
+  if      (esl_byp_IsInternal(byp_wrk) ) ESL_ALLOC(wrk, sizeof(int32_t) * L);
+  else if (esl_byp_IsReturned(byp_wrk) ) ESL_ALLOC(wrk, sizeof(int32_t) * L);
+  else if (esl_byp_IsProvided(byp_wrk) ) { wrk = *byp_wrk; ESL_REALLOC(wrk, sizeof(int32_t) * L); }
 			      
   /* We put the numbers 1..L into the workspace <wrk>; shuffle them;
    * then sort the top nseg*2 of them. This gives us <nseg>
@@ -217,12 +209,13 @@ p7_coords2_Sample(ESL_RANDOMNESS *rng, P7_COORDS2 *c2, int maxseg, int L, int **
 
   /* Store those randomized coords now in the data structure. */
   p7_coords2_GrowTo(c2, nseg);
-  c2->L    = L;
-  c2->nseg = nseg;
+  c2->dim1 = L;
+  c2->dim2 = L;
+  c2->n    = nseg;
   for (i = 0; i < nseg; i++)
     {
-      c2->seg[i].start = wrk[i*2];
-      c2->seg[i].end   = wrk[i*2+1];
+      c2->arr[i].n1 = wrk[i*2];
+      c2->arr[i].n2 = wrk[i*2+1];
     }
   
   /* Using the bypass idiom, recycle workspace, if we're supposed to */
@@ -240,9 +233,9 @@ p7_coords2_Sample(ESL_RANDOMNESS *rng, P7_COORDS2 *c2, int maxseg, int L, int **
 /*****************************************************************
  * 3. The P7_COORD2_HASH object
  *****************************************************************/
-static uint32_t p7_coord2_hash_function    (const P7_COORD2 *seg, int nseg, uint32_t hashsize);
+static uint32_t p7_coord2_hash_function    (const P7_COORD2 *seg, int32_t nseg, uint32_t hashsize);
 static uint32_t p7_coord2_hash_function_alt(int32_t *keydata, int32_t hashsize);
-static int      p7_coord2_hash_compare     (const P7_COORD2 *seg, int nseg,  int32_t *keydata);
+static int      p7_coord2_hash_compare     (const P7_COORD2 *seg, int32_t nseg,  int32_t *keydata);
 static int      p7_coord2_hash_upsize      (P7_COORD2_HASH *ch);
 
 /* Function:  p7_coord2_hash_Create()
@@ -282,7 +275,7 @@ P7_COORD2_HASH *
 p7_coord2_hash_Create(int32_t init_hashsize, int32_t init_nkeyalloc, int32_t init_calloc)
 {
   P7_COORD2_HASH *ch = NULL;
-  int             i;
+  int32_t         i;
   int             status;
 
   ESL_DASSERT1(( init_hashsize == 0 || (init_hashsize && ((init_hashsize & (init_hashsize-1)) == 0)))); /* hashsize is a power of 2 (bitshifting trickery) */
@@ -348,19 +341,19 @@ p7_coord2_hash_Destroy(P7_COORD2_HASH *ch)
 /* Function:  p7_coord2_hash_Store()
  * Synopsis:  Store a <P7_COORD2> array and get a key index for it.
  *
- * Purpose:   In the hash table <ch>, store <P7_COORD2> array <seg> containing
- *            <nseg> start/end pairs. Associate it with a unique key index, 
+ * Purpose:   In the hash table <ch>, store <P7_COORD2> array <arr> containing
+ *            <n> start/end pairs. Associate it with a unique key index, 
  *            counting from 0. This index lets us map the hashed data to
  *            integer-based C arrays. 
  *            
- *            If an identical <seg>,<nseg> array has already been
+ *            If an identical <arr>,<n> array has already been
  *            stored, do nothing, and return <eslEDUP>.
  *            
  *            Optionally, return the index through <opt_index>.
  *
  * Args:      ch
- *            seg
- *            nseg
+ *            arr
+ *            n
  *            opt_index 
  *            
  * Returns:   <eslOK> if <seg>/<nseg> is new; the data are stored, 
@@ -375,18 +368,18 @@ p7_coord2_hash_Destroy(P7_COORD2_HASH *ch)
  *            is -1.
  */
 int
-p7_coord2_hash_Store(P7_COORD2_HASH *ch, const P7_COORD2 *seg, int nseg, int *opt_index)
+p7_coord2_hash_Store(P7_COORD2_HASH *ch, const P7_COORD2 *arr, int32_t n, int32_t *opt_index)
 {
-  uint32_t  val = p7_coord2_hash_function(seg, nseg, ch->hashsize);
+  uint32_t  val = p7_coord2_hash_function(arr, n, ch->hashsize);
   int32_t  *ptr;
-  int       idx;
-  int       d;
+  int32_t   idx;
+  int32_t   d;
   int       status;
   
   /* Was this key already stored? */
   for (idx = ch->hashtable[val]; idx != -1; idx = ch->nxt[idx])
     {
-      if (p7_coord2_hash_compare(seg, nseg, ch->cmem + ch->key_offset[idx]) == eslOK)
+      if (p7_coord2_hash_compare(arr, n, ch->cmem + ch->key_offset[idx]) == eslOK)
 	{
 	  if (opt_index) *opt_index = idx;
 	  return eslEDUP;
@@ -402,7 +395,7 @@ p7_coord2_hash_Store(P7_COORD2_HASH *ch, const P7_COORD2 *seg, int nseg, int *op
     }
 
   /* Reallocate key data memory if needed */
-  while (ch->cn + 2*nseg + 1 > ch->calloc)
+  while (ch->cn + 2*n + 1 > ch->calloc)
     {
       ESL_REALLOC(ch->cmem, sizeof(int32_t) * ch->calloc * 2);
       ch->calloc *= 2;
@@ -411,15 +404,15 @@ p7_coord2_hash_Store(P7_COORD2_HASH *ch, const P7_COORD2 *seg, int nseg, int *op
   /* Copy the key, assign its index */
   idx                 = ch->nkeys;
   ch->key_offset[idx] = ch->cn;
-  ch->cn             += 2*nseg + 1;
+  ch->cn             += 2*n + 1;
   ch->nkeys++;
 
   ptr  = ch->cmem + ch->key_offset[idx];
-  *ptr = nseg;
-  for (d = 0; d < nseg; d++) 
+  *ptr = n;
+  for (d = 0; d < n; d++) 
     {
-      ptr++; *ptr = seg[d].start;
-      ptr++; *ptr = seg[d].end;
+      ptr++; *ptr = arr[d].n1;
+      ptr++; *ptr = arr[d].n2;
     }
 
   /* Insert new element at head of the approp chain in hashtable */
@@ -456,22 +449,23 @@ p7_coord2_hash_Store(P7_COORD2_HASH *ch, const P7_COORD2 *seg, int nseg, int *op
  * Throws:    <eslEMEM> on failure, and the state of <c2> is undefined.
  */
 int
-p7_coord2_hash_Get(const P7_COORD2_HASH *ch, int L, int keyidx, P7_COORDS2 *c2)
+p7_coord2_hash_Get(const P7_COORD2_HASH *ch, int32_t L, int32_t keyidx, P7_COORDS2 *c2)
 {
   int32_t *ptr  = ch->cmem + ch->key_offset[keyidx];
-  int      nseg = *ptr;
-  int      d;
+  int32_t  n    = *ptr;
+  int32_t  d;
   int      status;
 
-  if ((status = p7_coords2_GrowTo(c2, nseg)) != eslOK) goto ERROR;
+  if ((status = p7_coords2_GrowTo(c2, n)) != eslOK) goto ERROR;
 
-  for (d = 0; d < nseg; d++)
+  for (d = 0; d < n; d++)
     {
-      ptr++; c2->seg[d].start = *ptr;
-      ptr++; c2->seg[d].end   = *ptr;
+      ptr++; c2->arr[d].n1 = *ptr;
+      ptr++; c2->arr[d].n2 = *ptr;
     }
-  c2->nseg = nseg;
-  c2->L    = L;
+  c2->n    = n;
+  c2->dim1 = L;
+  c2->dim2 = L;
   return eslOK;
 
  ERROR:
@@ -483,20 +477,20 @@ p7_coord2_hash_Get(const P7_COORD2_HASH *ch, int L, int keyidx, P7_COORDS2 *c2)
 
 /* p7_coord2_hash_function()
  *   
- * Given <seg>/<nseg> data, and the current <hashsize>;
+ * Given <arr>/<n> data, and the current <hashsize>;
  * calculate and return a hash function on that data, in range <0..hashsize-1>.
  */
 static uint32_t
-p7_coord2_hash_function(const P7_COORD2 *seg, int nseg, uint32_t hashsize)
+p7_coord2_hash_function(const P7_COORD2 *arr, int32_t n, uint32_t hashsize)
 {
   uint32_t hashval = 0;
-  int      d;
+  int32_t  d;
 
-  hashval = (hashval * 33 + nseg) % hashsize;
-  for (d = 0; d < nseg; d++)
+  hashval = (hashval * 33 + n) % hashsize;
+  for (d = 0; d < n; d++)
     {
-      hashval = (hashval * 33 + seg[d].start) % hashsize;
-      hashval = (hashval * 33 + seg[d].end)   % hashsize;
+      hashval = (hashval * 33 + arr[d].n1) % hashsize;
+      hashval = (hashval * 33 + arr[d].n2)   % hashsize;
     }
   return hashval;
 }
@@ -504,7 +498,7 @@ p7_coord2_hash_function(const P7_COORD2 *seg, int nseg, uint32_t hashsize)
 /* p7_coord2_hash_function_alt()
  * 
  * Exactly the same as above (indeed, MUST be the same hash function),
- * but it works on the internal stored version of the <seg>/<nseg> data,
+ * but it works on the internal stored version of the <arr>/<n> data,
  * given a pointer to the start of the data.
  * 
  * The data are stored in an array of 2n+1 integers:
@@ -514,11 +508,11 @@ static uint32_t
 p7_coord2_hash_function_alt(int32_t *keydata, int32_t hashsize)
 {
   uint32_t hashval = 0;
-  int      d;
-  int      nseg    = (int) keydata[0];
+  int32_t  d;
+  int32_t  n = keydata[0];
 
-  hashval = (hashval * 33 + nseg) % hashsize;
-  for (d = 0; d < nseg; d++)
+  hashval = (hashval * 33 + n) % hashsize;
+  for (d = 0; d < n; d++)
     {
       keydata++; hashval = (hashval * 33 + *keydata) % hashsize;
       keydata++; hashval = (hashval * 33 + *keydata) % hashsize;
@@ -536,14 +530,14 @@ p7_coord2_hash_function_alt(int32_t *keydata, int32_t hashsize)
  * return <eslFAIL> if not.
  */
 static int
-p7_coord2_hash_compare(const P7_COORD2 *seg, int nseg, int32_t *keydata)
+p7_coord2_hash_compare(const P7_COORD2 *arr, int n, int32_t *keydata)
 {                  /* <keydata> = [ <n> <s1> <e1> ... <sn> <en> */
   int d;
-  if (nseg != (int) *keydata) return eslFAIL;
-  for (d = 0; d < nseg; d++) 
+  if (n != *keydata) return eslFAIL;
+  for (d = 0; d < n; d++) 
     {
-      keydata++; if ((int) *keydata != seg[d].start) return eslFAIL; 
-      keydata++; if ((int) *keydata != seg[d].end)   return eslFAIL; 
+      keydata++; if (*keydata != arr[d].n1) return eslFAIL; 
+      keydata++; if (*keydata != arr[d].n2) return eslFAIL; 
     }
   return eslOK;
 }
@@ -594,12 +588,12 @@ p7_coord2_hash_upsize(P7_COORD2_HASH *ch)
 int
 p7_coord2_hash_Dump(FILE *ofp, const P7_COORD2_HASH *ch)
 {
-  int nempty  = 0;
-  int maxkeys = -1;
-  int minkeys = INT_MAX;
-  int h;
-  int idx;
-  int n;
+  int32_t nempty  = 0;
+  int32_t maxkeys = -1;
+  int32_t minkeys = INT32_MAX;
+  int32_t h;
+  int32_t idx;
+  int32_t n;
 
   for (h = 0; h < ch->hashsize; h++)
     {
@@ -661,8 +655,8 @@ main(int argc, char **argv)
   int             L        = 20;
   int             maxseg   = 1;
   int             nsamples = 1000;
-  int            *wrk      = NULL;
-  int             keyidx;
+  int32_t        *wrk      = NULL;
+  int32_t         keyidx;
   int             i;
 
   for (i = 0; i < nsamples; i++)

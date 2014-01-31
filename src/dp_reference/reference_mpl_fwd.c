@@ -62,7 +62,7 @@
  *            
  *            <dom> and <ndom> might be data in a <P7_COORDS2> list
  *            management container: for example, for <P7_COORDS2 *c2>,
- *            you would pass <c2->seg> and <c2->nseg>.
+ *            you would pass <c2->arr> and <c2->n>.
  *
  * Args:      dsq    : digital target sequence dsq[1..L] 
  *            L      : length of <dsq> in residues
@@ -120,7 +120,7 @@ p7_ReferenceMPLForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
   dpc[p7R_E]      = -eslINFINITY;	                           
   dpc[p7R_N]      = 0.0;			                   
   dpc[p7R_J]      = -eslINFINITY;                                  
-  dpc[p7R_B]      = (dom[d].start == 1) ? gm->xsc[p7P_N][p7P_MOVE] : -eslINFINITY; /* MPL restriction. B only before a domain starts */
+  dpc[p7R_B]      = (dom[d].n1 == 1) ? gm->xsc[p7P_N][p7P_MOVE] : -eslINFINITY; /* MPL restriction. B only before a domain starts */
   dpc[p7R_L] = xL = gm->xsc[p7P_N][p7P_MOVE] + gm->xsc[p7P_B][0];  
   dpc[p7R_G] = xG = gm->xsc[p7P_N][p7P_MOVE] + gm->xsc[p7P_B][1];  
   dpc[p7R_C]      = -eslINFINITY;                                  
@@ -155,7 +155,7 @@ p7_ReferenceMPLForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
        *      1. no entries from L, G: because that can only happen in i==start.
        *      2. We collect xE, but we will only store it if i==end.
        */
-      if (d < ndom && i > dom[d].start && i <= dom[d].end)
+      if (d < ndom && i > dom[d].n1 && i <= dom[d].n2)
 	{
 	  /* Main inner loop of the standard Forward recursion. */
 	  for (k = 1; k < M; k++)
@@ -219,7 +219,7 @@ p7_ReferenceMPLForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
        *    We can reach delete states as usual.
        *    dpp main states are unused: we'll advance it once, immediately to its specials.
        */
-      else if (d < ndom && i == dom[d].start)
+      else if (d < ndom && i == dom[d].n1)
 	{
 	  for (k = 1; k < M; k++)
 	    {
@@ -260,7 +260,7 @@ p7_ReferenceMPLForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 	}
 
       /* MPL restriction, case 3:
-       *    We're not in a domain. d = index of our *next* domain. (So i < dom[d].start)
+       *    We're not in a domain. d = index of our *next* domain. (So i < dom[d].n1)
        *    Here, no main state is possible.
        *    We set everything to -inf but the only reason to do that is prettification, so 
        *    the matrix looks good in debugging/development. The MPL Forward code doesn't 
@@ -274,21 +274,21 @@ p7_ReferenceMPLForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 	}
   
       /* Specials. For all three MPL cases -- we can now calculate the specials at the end of *dpc row */
-      dpc[p7R_E]      = (d < ndom && i == dom[d].end)  ? xE                                    : -eslINFINITY;
-      dpc[p7R_N]      = (d == 0   && i < dom[0].start) ? dpp[p7R_N] + gm->xsc[p7P_N][p7P_LOOP] : -eslINFINITY; /* note: yes, that's dom[0]! */
+      dpc[p7R_E]      = (d < ndom && i == dom[d].n2)  ? xE                                    : -eslINFINITY;
+      dpc[p7R_N]      = (d == 0   && i < dom[0].n1) ? dpp[p7R_N] + gm->xsc[p7P_N][p7P_LOOP] : -eslINFINITY; /* note: yes, that's dom[0]! */
 
-      if      (d < ndom && i < dom[d].start) dpc[p7R_J] = dpp[p7R_J] + gm->xsc[p7P_J][p7P_LOOP];
-      else if (d < ndom && i == dom[d].end)  dpc[p7R_J] = dpc[p7R_E] + gm->xsc[p7P_E][p7P_LOOP]; 
+      if      (d < ndom && i < dom[d].n1) dpc[p7R_J] = dpp[p7R_J] + gm->xsc[p7P_J][p7P_LOOP];
+      else if (d < ndom && i == dom[d].n2)  dpc[p7R_J] = dpc[p7R_E] + gm->xsc[p7P_E][p7P_LOOP]; 
       else                                   dpc[p7R_J] = -eslINFINITY;
 
-      if      (d == ndom-1 &&  i == dom[d].end) dpc[p7R_C] = dpc[p7R_E] + gm->xsc[p7P_E][p7P_MOVE];
+      if      (d == ndom-1 &&  i == dom[d].n2) dpc[p7R_C] = dpc[p7R_E] + gm->xsc[p7P_E][p7P_MOVE];
       else if (d >= ndom)                       dpc[p7R_C] = dpp[p7R_C] + gm->xsc[p7P_C][p7P_LOOP];
       else                                      dpc[p7R_C] = -eslINFINITY;
 
       /* Advance d to next domain, before doing the B/L/G states, which need to test for whether we're on row before next domain start */
-      if (d < ndom && i == dom[d].end) d++;	
+      if (d < ndom && i == dom[d].n2) d++;	
 	
-      if (d < ndom && i+1 == dom[d].start)
+      if (d < ndom && i+1 == dom[d].n1)
 	{
 	  dpc[p7R_B]      = p7_FLogsum( dpc[p7R_N] + gm->xsc[p7P_N][p7P_MOVE], dpc[p7R_J] + gm->xsc[p7P_J][p7P_MOVE]); 
 	  dpc[p7R_L] = xL =             dpc[p7R_B] + gm->xsc[p7P_B][0]; 
@@ -387,8 +387,8 @@ main(int argc, char **argv)
       ESL_ALLOC(dom, sizeof(P7_COORD2) * tr->ndom);
       for (d = 0; d < tr->ndom; d++)
 	{
-	  dom[d].start = tr->sqfrom[d];
-	  dom[d].end   = tr->sqto[d];
+	  dom[d].n1 = tr->sqfrom[d];
+	  dom[d].n2 = tr->sqto[d];
 	}
 
       p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom, tr->ndom, mpl, &mplsc);

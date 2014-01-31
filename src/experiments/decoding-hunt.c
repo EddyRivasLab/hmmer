@@ -146,8 +146,8 @@ main(int argc, char **argv)
 	      //printf("domain %2d:  seq pos %5d..%-5d  model pos %5d..%5d\n",
 	      //d+1, tr->sqfrom[d], tr->sqto[d], tr->hmmfrom[d], tr->hmmto[d]);
 
-	      dom[d].start = tr->sqfrom[d];
-	      dom[d].end   = tr->sqto[d];
+	      dom[d].n1 = tr->sqfrom[d];
+	      dom[d].n2   = tr->sqto[d];
 	      nintotal    += tr->sqto[d] - tr->sqfrom[d] + 1;
 	    }
 	     
@@ -183,8 +183,8 @@ main(int argc, char **argv)
 	    {
 	      //printf("local %2d:  seq pos %5d..%-5d  model pos %5d..%5d\n",
 	      //d+1, tr_l->sqfrom[d], tr_l->sqto[d], tr_l->hmmfrom[d], tr_l->hmmto[d]);
-	      dom_l[d].start = tr_l->sqfrom[d];
-	      dom_l[d].end   = tr_l->sqto[d];
+	      dom_l[d].n1 = tr_l->sqfrom[d];
+	      dom_l[d].n2   = tr_l->sqto[d];
 	      nintotal_l    += tr_l->sqto[d] - tr_l->sqfrom[d] + 1;
 	    }
 
@@ -393,14 +393,14 @@ update_histograms(P7_REFMX *pp, P7_COORD2 *dom, int ndom, ESL_HISTOGRAM *indom, 
       phomology = 1.0 - (P7R_XMX(pp, i, p7R_N) + P7R_XMX(pp, i, p7R_JJ) + P7R_XMX(pp, i, p7R_CC)); /* JJ,CC, not J,C because we only want emitting J,C */
       
       /* Test for whether i is in the current or next domain:
-       *   if there's a domain d to come, but i isn't in it: i < dom[d].start
+       *   if there's a domain d to come, but i isn't in it: i < dom[d].n1
        *   if i is beyond all domain segments:               d >= ndom
-       *   and the d >= ndom test has to be first, to avoid evaluating dom[d].start for invalid d
+       *   and the d >= ndom test has to be first, to avoid evaluating dom[d].n1 for invalid d
        */
-      if (d >= ndom || i < dom[d].start) esl_histogram_Add(outdom, phomology); /* i is outside annotated domains */
+      if (d >= ndom || i < dom[d].n1) esl_histogram_Add(outdom, phomology); /* i is outside annotated domains */
       else                               esl_histogram_Add(indom,  phomology); /* i is within annotated domain   */
       
-      if (d < ndom && i == dom[d].end) d++;
+      if (d < ndom && i == dom[d].n2) d++;
     }
   return eslOK;
 }  
@@ -421,11 +421,11 @@ count_nin_nout_above(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *
       
       if (phomology >= thresh)
 	{
-	  if (d >= ndom || i < dom[d].start) nout++;
+	  if (d >= ndom || i < dom[d].n1) nout++;
 	  else                               nin++;
 	}
 
-      if (d < ndom && i == dom[d].end) d++;
+      if (d < ndom && i == dom[d].n2) d++;
     }
 
   if (opt_nin)  *opt_nin  = nin;
@@ -448,11 +448,11 @@ count_nin_nout_below(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *
       
       if (phomology < thresh)
 	{
-	  if (d >= ndom || i < dom[d].start) nout++;
+	  if (d >= ndom || i < dom[d].n1) nout++;
 	  else                               nin++;
 	}
 
-      if (d < ndom && i == dom[d].end) d++;
+      if (d < ndom && i == dom[d].n2) d++;
     }
 
   if (opt_nin)  *opt_nin  = nin;

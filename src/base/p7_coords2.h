@@ -8,15 +8,14 @@
 #include "esl_random.h"
 
 /* P7_COORD2 
- *    Is just a start/end coord pair, usually used in an array.
+ *    Is just an integer pair, usually used in an array.
  *    Doesn't need Create/Destroy; arrays of these are just
  *    allocated normally.
  */
 typedef struct {
-  int start;
-  int end;
+  int32_t n1;
+  int32_t n2;
 } P7_COORD2;
-
 
 
 /* P7_COORDS2
@@ -28,12 +27,14 @@ typedef struct {
  *    perhaps we should make more distinctive names.
  */
 typedef struct {
-  P7_COORD2 *seg;
-  int        nseg;
-  int        L;
+  P7_COORD2 *arr;		/* array of coord pairs                  */
+  int32_t    n;			/* number of coord pairs in <arr>        */
 
-  int        nalloc;		/* current allocation size for <seg> */
-  int        nredline;		/* Reuse() will pull a large allocation back down to this */
+  int32_t    dim1;		/* max value of coordinate 1, arr[].n1   */
+  int32_t    dim2;		/* max value of coordinate 2, arr[].n2   */
+
+  int32_t    nalloc;		/* current allocation size for <arr>     */
+  int32_t    nredline;		/* Reuse() pulls alloc back down to this */
 } P7_COORDS2;
 
 
@@ -78,9 +79,9 @@ typedef struct {
   int32_t   cn;		  /* current used size of coord2 data */
 } P7_COORD2_HASH;
 
-extern P7_COORDS2 *p7_coords2_Create (int nalloc, int nredline);
+extern P7_COORDS2 *p7_coords2_Create      (int32_t nalloc, int32_t nredline);
 extern int         p7_coords2_Grow        (P7_COORDS2 *c2);
-extern int         p7_coords2_GrowTo      (P7_COORDS2 *c2, int nalloc);
+extern int         p7_coords2_GrowTo      (P7_COORDS2 *c2, int32_t nalloc);
 extern int         p7_coords2_Copy        (const P7_COORDS2 *src, P7_COORDS2 *dst);
 extern int         p7_coords2_SetFromTrace(P7_COORDS2 *c2, const P7_TRACE *tr);
 extern int         p7_coords2_Reuse       (P7_COORDS2 *c2);
@@ -89,11 +90,11 @@ extern void        p7_coords2_Destroy     (P7_COORDS2 *c2);
 extern P7_COORD2_HASH *p7_coord2_hash_Create (int32_t init_hashsize, int32_t init_nkeyalloc, int32_t init_calloc);
 extern size_t          p7_coord2_hash_Sizeof (const P7_COORD2_HASH *ch);
 extern void            p7_coord2_hash_Destroy(P7_COORD2_HASH *ch);
-extern int             p7_coord2_hash_Store  (P7_COORD2_HASH *ch, const P7_COORD2 *seg, int nseg, int *opt_index);
-extern int             p7_coord2_hash_Get    (const P7_COORD2_HASH *ch, int L, int keyidx, P7_COORDS2 *c2);
+extern int             p7_coord2_hash_Store  (P7_COORD2_HASH *ch, const P7_COORD2 *seg, int32_t nseg, int32_t *opt_index);
+extern int             p7_coord2_hash_Get    (const P7_COORD2_HASH *ch, int32_t L, int32_t keyidx, P7_COORDS2 *c2);
 extern int             p7_coord2_hash_Dump   (FILE *ofp, const P7_COORD2_HASH *ch);
 
-extern int p7_coords2_Sample(ESL_RANDOMNESS *rng, P7_COORDS2 *c2, int maxseg, int L, int **byp_wrk);
+extern int p7_coords2_Sample(ESL_RANDOMNESS *rng, P7_COORDS2 *c2, int32_t maxseg, int32_t L, int32_t **byp_wrk);
 
 #endif /* P7_COORDS2_INCLUDED */
 

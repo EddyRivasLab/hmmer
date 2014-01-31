@@ -39,16 +39,16 @@ p7_ReferenceMPLSearch(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_P
   p7_ReferenceViterbi(dsq, L, gm, mpl, tr, &sc);
   p7_trace_Index(tr);
   p7_coords2_SetFromTrace(dom, tr);                                      /* sets <dom>      */
-  p7_coord2_hash_Store(hashtbl, dom->seg, dom->nseg, &bestidx);          /* stores <dom> in the hash */
+  p7_coord2_hash_Store(hashtbl, dom->arr, dom->n, &bestidx);          /* stores <dom> in the hash */
   p7_refmx_Reuse(mpl);
 
-  p7_ReferenceMPLForward(dsq, L, gm, dom->seg, dom->nseg, mpl, &sc);   
+  p7_ReferenceMPLForward(dsq, L, gm, dom->arr, dom->n, mpl, &sc);   
   bestprob = exp(sc - fwdsc);	                                         /* sets <bestprob> */
   remprob  = 1.0 - bestprob;
 
   printf("Vit %6.2f %8.2g %8.2g ", sc, bestprob, remprob);
-  printf("%2d ", dom->nseg);
-  for (d = 0; d < dom->nseg; d++) printf("%4d %4d ", dom->seg[d].start, dom->seg[d].end);
+  printf("%2d ", dom->n);
+  for (d = 0; d < dom->n; d++) printf("%4d %4d ", dom->arr[d].n1, dom->arr[d].n2);
   printf("\n");
 
   if (bestprob > remprob) goto DONE; /* we're already done: guaranteed we have the MPL */
@@ -63,18 +63,18 @@ p7_ReferenceMPLSearch(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_P
       p7_reference_trace_Stochastic(rng, &wrk, gm, fwd, tr);
       p7_trace_Index(tr);
       p7_coords2_SetFromTrace(dom, tr);
-      status = p7_coord2_hash_Store(hashtbl, dom->seg, dom->nseg, &keyidx);
+      status = p7_coord2_hash_Store(hashtbl, dom->arr, dom->n, &keyidx);
       /* That status is either eslOK or eslEDUP. */
 
       if (status == eslOK)	/* eslOK = the trace implies a new labeling we haven't seen yet */
 	{
-	  p7_ReferenceMPLForward(dsq, L, gm, dom->seg, dom->nseg, mpl, &sc);
+	  p7_ReferenceMPLForward(dsq, L, gm, dom->arr, dom->n, mpl, &sc);
 	  mplprob  = exp(sc - fwdsc);
 	  remprob -= mplprob;
 
 	  printf("NEW %6.2f %8.2g %8.2g ", sc, mplprob, remprob);
-	  printf("%2d ", dom->nseg);
-	  for (d = 0; d < dom->nseg; d++) printf("%4d %4d ", dom->seg[d].start, dom->seg[d].end);
+	  printf("%2d ", dom->n);
+	  for (d = 0; d < dom->n; d++) printf("%4d %4d ", dom->arr[d].n1, dom->arr[d].n2);
 	  printf("\n");
 
 	  if (mplprob > bestprob) 
@@ -86,8 +86,8 @@ p7_ReferenceMPLSearch(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_P
       else 
 	{
 	  printf("dup %6s %8s %8s ", "-", "-", "-");
-	  printf("%2d ", dom->nseg);
-	  for (d = 0; d < dom->nseg; d++) printf("%4d %4d ", dom->seg[d].start, dom->seg[d].end);
+	  printf("%2d ", dom->n);
+	  for (d = 0; d < dom->n; d++) printf("%4d %4d ", dom->arr[d].n1, dom->arr[d].n2);
 	  printf("\n");
 	}
 

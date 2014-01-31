@@ -130,7 +130,7 @@ main(int argc, char **argv)
   p7_trace_Index(tr);
   p7_coords2_SetFromTrace(dom, tr);
 
-  p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom->seg, dom->nseg, mpl, &mplsc);
+  p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom->arr, dom->n, mpl, &mplsc);
 	     
   if (difp)    p7_refmx_PlotDomainInference(difp,   pp, (ia ? ia : 1), (ib ? ib : sq->n), tr);
   if (heatfp)  p7_refmx_PlotHeatMap        (heatfp, pp, (ia ? ia : 1), (ib ? ib : sq->n), (ka ? ka : 1), (kb ? kb : gm->M));
@@ -139,8 +139,8 @@ main(int argc, char **argv)
   if (vheatfp) p7_trace_PlotHeatMap        (vheatfp, tr, (ia ? ia : 1), (ib ? ib : sq->n), (ka ? ka : 1), (kb ? kb : gm->M));
 
   printf("Viterbi:\n");
-  for (d = 0; d < dom->nseg; d++)
-    printf("   domain %3d : %5d ... %5d\n", d+1, dom->seg[d].start, dom->seg[d].end);
+  for (d = 0; d < dom->n; d++)
+    printf("   domain %3d : %5d ... %5d\n", d+1, dom->arr[d].n1, dom->arr[d].n2);
   printf("tracesc:  %.2f\n", vsc);
   printf("    MPL:  %.2f\n", mplsc);
   printf("    fwd:  %.2f\n", fsc);
@@ -156,11 +156,11 @@ main(int argc, char **argv)
   p7_coords2_SetFromTrace(dom, tr);
 
   p7_trace_Score(tr, sq->dsq, gm, &vsc);
-  p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom->seg, dom->nseg, mpl, &mplsc);
+  p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom->arr, dom->n, mpl, &mplsc);
 
   printf("suboptimal (rng seed %" PRIu32 ")\n", esl_randomness_GetSeed(rng));
-  for (d = 0; d < dom->nseg; d++)
-    printf("   domain %3d : %5d ... %5d\n", d+1, dom->seg[d].start, dom->seg[d].end);
+  for (d = 0; d < dom->n; d++)
+    printf("   domain %3d : %5d ... %5d\n", d+1, dom->arr[d].n1, dom->arr[d].n2);
   printf("tracesc:  %.2f\n", vsc);
   printf("    MPL:  %.2f\n", mplsc);
   printf("    fwd:  %.2f\n", fsc);

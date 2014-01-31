@@ -146,7 +146,7 @@ main(int argc, char **argv)
   p7_ReferenceDecoding(sq->dsq, sq->n, gm, fwd, bck, pp);
   p7_trace_Index(tr);
   p7_coords2_SetFromTrace(dom, tr);
-  p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom->seg, dom->nseg, mpl, &mplsc);
+  p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom->arr, dom->n, mpl, &mplsc);
 
   /* set up the movie image structure */
   /* The ppm image has the seq running horizontally, profile running vertically */
@@ -187,7 +187,7 @@ main(int argc, char **argv)
       p7_trace_Index(tr);
       p7_coords2_SetFromTrace(dom, tr);
       p7_trace_Score(tr, sq->dsq, gm, &vsc);
-      p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom->seg, dom->nseg, mpl, &mplsc);
+      p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom->arr, dom->n, mpl, &mplsc);
 
       p7_refmx_CountTrace(tr, tct);
       p7_refmx_Copy(tct, ppa);
@@ -357,7 +357,9 @@ mximage_plot_trace(MXIMAGE *mxi, P7_TRACE *tr, int ia, int ib, int ka, int kb, R
       i = (tr->i[z] ? tr->i[z] : i); /* last i we emitted: coord we'll use for D states */
       k = tr->k[z];
 
-      if (p7_trace_IsMain(tr->st[z]) ) /* any {MDI}{LG} */
+      if (   p7_trace_IsMain(tr->st[z])   /* any {MDI}{LG} */
+	     && ( i >= ia && i <= ib) 
+	     && ( k >= ka && k <= kb))
 	mximage_SetCell(mxi, k-ka, i-ia, color);
     }
   return eslOK;

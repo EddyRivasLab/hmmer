@@ -187,6 +187,7 @@ p7_profile_ConfigCustom(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int 
   if (( status = set_local_entry (gm, hmm)) != eslOK) return status;   // L->MLk params: uniform fragment length parameterization 
   if (( status = set_glocal_entry(gm, hmm)) != eslOK) return status;   // G->MGk params: left wing retraction : glocal entry
   if (( status = set_glocal_exit (gm, hmm)) != eslOK) return status;   // MGk->E params: right wing retraction : glocal exit
+  /* Note that because set_local_entry() uses gm->rsc[0] as a malloc-saving hack, it just overwrote gm->rsc[0][0] for M,I */
 
   /* Remaining transition scores (BLM, BGM, MGE entries/exits were
    * just set, above). 
@@ -237,6 +238,13 @@ p7_profile_ConfigCustom(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int 
   for (k = 1; k <= hmm->M; k++) P7P_ISC(gm, k, gm->abc->K)    = -eslINFINITY; /* gap symbol */
   for (k = 1; k <= hmm->M; k++) P7P_ISC(gm, k, gm->abc->Kp-2) = -eslINFINITY; /* nonresidue symbol */
   for (k = 1; k <= hmm->M; k++) P7P_ISC(gm, k, gm->abc->Kp-1) = -eslINFINITY; /* missing data symbol */
+
+  /* Restore the -inf initialization to k=0 M,I emissions for residue 0 (A), which
+   * set_local_entry() hacked across.
+   */
+  rp = gm->rsc[0];
+  rp[p7P_M] = -eslINFINITY;
+  rp[p7P_I] = -eslINFINITY;
 
   /* Remaining specials, [NCJ][MOVE | LOOP] are set by length model */
   gm->nj      = nj;
@@ -371,9 +379,10 @@ set_glocal_entry(P7_PROFILE *gm, const P7_HMM *hmm)
  *   TSC(k,DGE) = t(Dk+1->...Dm->E) 
  *              = [\prod_j=k+1..m-1 t(Dj->Dj+1)] * Dm->E
  *              = \prod_j=k+1..m-1 t(Dj->Dj+1)              | because Dm->E=1.0
- *  valid for k=0..M
+ *  valid for k=0..M, but k=0 is unused (mute path), so here k=1..M is stored
  *  boundaries: TSC(M,DGE)   = 0
  *              TSC(M-1,DGE) = 0
+ *              TSC(0,DGE)   = -inf (already set earlier, and left alone here)
  * note off by one. 
  * to get the glocal exit path from an Mk: t(k,MD) + t(k,DGE)
  * to get the glocal exit path from a Dk:  t(k,DD) + t(k,DGE)

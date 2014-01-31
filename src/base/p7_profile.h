@@ -46,6 +46,31 @@
 #define p7P_M    0
 #define p7P_I    1
 
+/* A brief cheat sheet on the boundary conditions / edge cases of the
+ * profile's transition and emission score arrays:
+ * 
+ *               k = 0                             k = 1                                   k = M-1                             k = M
+ * tsc: [ MM IM DM LM GM MD DD MI II DGE ] [ MM IM DM LM GM MD DD MI II DGE ] ... [ MM IM DM LM GM MD DD MI II DGE ] [ MM IM DM LM GM MD DD MI II DGE ] 
+ *         *  *  *  .  .  *  *  *  *   *      .  .  .  .  .  .  .  .  .   .          .  .  .  .  .  .  .  .  .   0      *  *  *  *  *  0  0  *  *   0
+ *                  ^  ^ {LG}->Mk are stored off-by-one. These are {LG}->M1, for example
+ *                  
+ *        k=0 -inf: p7_profile_Create(). D_0 does not exist. I_0 exists in core HMM, but is removed from profile.
+ *        k=M -inf: p7_profile_ConfigCustom().
+ *        DGE_M 0:  modelconfig.c::set_glocal_exit().
+ *        DGE_M-1 0: modelconfig.c::set_glocal_exit().
+ *        DGE_0:  That would be the D1->Dm->E path, which is valid, but mute; we elide it by leaving DGE0 to -inf
+ *                  
+ *              k = 0     k = 1      k = M-1    k = M
+ * rsc[x]:     [ M  I ] [ M  I ] ... [ M  I ] [ M  I ] 
+ *  [gap]:       *  *     *  *         *  *     *  *
+ *  [missing]:   *  *     *  *         *  *     *  * 
+ *  [residues]:  *  *     .  0         .  0     .  *
+ * 
+ *        k=0 -inf: p7_profile_Create(). M_0, I_0 are nonexistent.
+ *        all k -inf for gap, missing residue: p7_profile_Create()
+ *        insert emissions (1..M-1) hardwired to 0: modelconfig.c::p7_profile_ConfigCustom()
+ *        k=M insert emission -inf: modelconfig.c::p7_profile_ConfigCustom()
+ */
 typedef struct p7_profile_s {
   /* Model parameters:                                                               */
   int     M;		/* number of nodes in the model                              */

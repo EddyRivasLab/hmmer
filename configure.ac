@@ -529,6 +529,7 @@ AC_CONFIG_FILES([
   src/experiments/Makefile
   src/misc/Makefile
   src/programs/Makefile
+  src/sandbox/Makefile
   src/search/Makefile
   src/utilities/Makefile
   testsuite/Makefile

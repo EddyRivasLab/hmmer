@@ -1,0 +1,39 @@
+MODULE = sandbox
+
+LIBOBJS =  reference_asc_forward.o
+
+LIBHDRS =  
+
+OBJS =
+
+HDRS =
+
+PROGS =
+
+UTESTS =
+        
+        
+
+STATS  = 
+
+BENCHMARKS =
+
+EXAMPLES = reference_asc_forward_example
+
+LIBTMP = 
+
+top_srcdir   = @top_srcdir@
+top_builddir = @top_builddir@
+srcdir       = @srcdir@
+VPATH        = @srcdir@ 
+SHELL        = /bin/sh
+
+include ../Makefile-subdirs.mk
+
+################################################################
+# @LICENSE@
+#
+# SVN $URL$
+# SVN $Id$
+################################################################
+

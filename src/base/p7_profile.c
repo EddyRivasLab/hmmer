@@ -463,7 +463,7 @@ p7_profile_Dump(FILE *fp, P7_PROFILE *gm)
   for (x = 0; x < p7P_NTRANS; x++) fprintf(fp, "%*s ", width, "-------");
   fputs("\n", fp);
 
-  for (k = 1; k < gm->M; k++) 	/* transitions are valid for k=1..M-1 */
+  for (k = 0; k <= gm->M; k++) 	/* transitions are valid for k=1..M-1, but stored for 0..M */
     {
       fprintf(fp, "%5d    %c ", k, gm->consensus[k]);
       for (x = 0; x < p7P_NTRANS; x++) fprintf(fp, "%*.*f ", width, precision, P7P_TSC(gm, k, x));
@@ -480,7 +480,7 @@ p7_profile_Dump(FILE *fp, P7_PROFILE *gm)
   for (x = 0; x < gm->abc->K; x++) fprintf(fp, "%*s ", width, "-------");
   fputs("\n", fp);
 
-  for (k = 1; k <= gm->M; k++) 
+  for (k = 0; k <= gm->M; k++) 
     {
       fprintf(fp, "%5d    %c    %c    %c ", k, gm->consensus[k], gm->rf[0] ? gm->rf[k] : '-', gm->cs[0] ? gm->cs[k] : '-');
       for (x = 0; x < gm->abc->K; x++) fprintf(fp, "%*.*f ", width, precision, P7P_MSC(gm, k, x));
@@ -497,7 +497,7 @@ p7_profile_Dump(FILE *fp, P7_PROFILE *gm)
   for (x = 0; x < gm->abc->K; x++) fprintf(fp, "%*s ", width, "-------");
   fputs("\n", fp);
 
-  for (k = 1; k < gm->M; k++) 	/* no insert state I_M, so k=1..M-1 */
+  for (k = 0; k <= gm->M; k++) 	/* no insert state I_M, so k=1..M-1 */
     {
       fprintf(fp, "%5d    %c ", k, gm->consensus[k]);
       for (x = 0; x < gm->abc->K; x++) fprintf(fp, "%*.*f ", width, precision, P7P_ISC(gm, k, x));
