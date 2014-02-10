@@ -285,7 +285,6 @@ void
 p7_domaindef_Destroy(P7_DOMAINDEF *ddef)
 {
   int d;
-
   if (ddef == NULL) return;
 
   if (ddef->mocc != NULL) free(ddef->mocc);
@@ -488,6 +487,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
         triggered = FALSE;
     }
   }
+
 
   /* Restore model to uni/multihit mode, and to its original length model */
   if (p7_IsMulti(save_mode)) p7_oprofile_ReconfigMultihit(om, saveL); 
@@ -838,10 +838,8 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
     reparameterize_model (bg, om, sq, i, j-i+1, fwd_emissions_arr, bg_tmp->f, scores_arr);
   }
 
-
   p7_Forward (sq->dsq + i-1, Ld, om,      ox1, &envsc);
   p7_Backward(sq->dsq + i-1, Ld, om, ox1, ox2, NULL);
-
 
   status = p7_Decoding(om, ox1, ox2, ox2);      /* <ox2> is now overwritten with post probabilities     */
   if (status == eslERANGE) return eslFAIL;      /* rare: numeric overflow; domain is assumed to be repetitive garbage [J3/119-212] */
@@ -863,19 +861,21 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
   dom->ad             = p7_alidisplay_Create(ddef->tr, 0, om, sq);
   dom->scores_per_pos = NULL;
 
+
   /* For long target DNA, it's common to see a huge envelope (>1Kb longer than alignment), usually
    * involving simple repeat part of model that attracted similar segments of the repeatedly, to
-   * acquire a large total score. Now that we have alignment boundaries, re-run Fwd/Bkwd to trim away such a long envelope and estimate
-   * the true score of the hit region
+   * acquire a large total score. Now that we have alignment boundaries, re-run Fwd/Bkwd to trim away
+   * such a long envelope and estimate the true score of the hit region
    */
   if (long_target) {
-    if (     i < ddef->dcl[ddef->ndom].ad->sqfrom-max_env_extra   //trim the left side of the envelope
-        ||   j > ddef->dcl[ddef->ndom].ad->sqto+max_env_extra     //trim the right side of the envelope
+
+    if (     i < dom->ad->sqfrom-max_env_extra   //trim the left side of the envelope
+        ||   j > dom->ad->sqto+max_env_extra     //trim the right side of the envelope
         ) {
 
       //trim in the envelope, and do it again
-      i = ESL_MAX(i,ddef->dcl[ddef->ndom].ad->sqfrom-max_env_extra);
-      j = ESL_MIN(j,ddef->dcl[ddef->ndom].ad->sqto+max_env_extra);
+      i = ESL_MAX(i,dom->ad->sqfrom-max_env_extra);
+      j = ESL_MIN(j,dom->ad->sqto+max_env_extra);
       Ld = j - i + 1;
 
       //temporarily change model length to env_len. The nhmmer pipeline will tack
@@ -961,7 +961,6 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
 
 
   ddef->ndom++;
-
 
   p7_trace_Reuse(ddef->tr);
   return eslOK;

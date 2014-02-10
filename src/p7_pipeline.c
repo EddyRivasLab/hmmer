@@ -375,8 +375,9 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_
 
     if (  prev_window->complementarity == curr_window->complementarity &&
           prev_window->id == curr_window->id &&
-          (float)(window_len)/ESL_MIN(prev_window->length, curr_window->length) > pct_overlap  &&
-          curr_window->n + curr_window->length >=  prev_window->n + prev_window->length  )
+          (float)(window_len)/ESL_MIN(prev_window->length, curr_window->length) > pct_overlap // &&
+          //curr_window->n + curr_window->length >=  prev_window->n + prev_window->length
+          )
     {
       //merge windows
       window_start        = ESL_MIN(prev_window->n, curr_window->n);
@@ -1095,7 +1096,6 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
   status = p7_domaindef_ByPosteriorHeuristics(pli_tmp->tmpseq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef, bg, TRUE,
                                               pli_tmp->bg, (pli->do_null2?pli_tmp->scores:NULL), pli_tmp->fwd_emissions_arr);
 
-
   pli_tmp->tmpseq->dsq = dsq_holder;
   if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen */
   if (pli->ddef->nregions   == 0)  return eslOK; /* score passed threshold but there's no discrete domains here       */
@@ -1125,8 +1125,10 @@ p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_T
       bitscore = dom->envsc ;
 
 
-      if (ali_len < 8)
+      if (ali_len < 8) {
+        p7_alidisplay_Destroy(dom->ad);
         continue; // anything less than this is a funny byproduct of the Forward score passing a very low threshold, but no reliable alignment existing that supports it
+      }
 
      /* note: this bitscore was computed under a model with length of
       * env_len (jenv-ienv+1). Here, the score is modified (reduced) by
@@ -1341,7 +1343,6 @@ p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
   // possibly shorter length model
   filtersc =  nullsc + (bias_filtersc * ( F2_L>window_len ? 1.0 : (float)F2_L/window_len) );
 
-
   //Then configure the model length based on the possibly shorter window length
   p7_oprofile_ReconfigRestLength(om, loc_window_len);
 
@@ -1352,8 +1353,6 @@ p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
   p7_ViterbiFilter_longtarget(subseq, window_len, om, pli->oxf, filtersc, pli->F2, vit_windowlist);
 
   p7_pli_ExtendAndMergeWindows (om, data, vit_windowlist, 0.5);
-
-
 
   // if a window is still too long (>80Kb), need to split it up to
   // ensure numeric stability in Fwd.
@@ -1374,7 +1373,6 @@ p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
          } while (new_len > max_window_len);
       }
   }
-
 
   overlap = 0;
   for (i=0; i<vit_windowlist->count; i++) {
@@ -1527,6 +1525,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
     esl_stopwatch_Start(watch_slave);
   }
 */
+
   /* convert hits to windows, merging neighboring windows
    */
   if ( msv_windowlist.count > 0 ) {
@@ -1598,6 +1597,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
     pli_tmp->tmpseq = esl_sq_CreateDigital(om->abc);
     if (!fmf )
       free (pli_tmp->tmpseq->dsq);  //this ESL_SQ object is just a container that'll point to a series of other DSQs, so free the one we just created inside the larger SQ object
+
 
     for (i=0; i<msv_windowlist.count; i++){
       window =  msv_windowlist.windows + i ;
