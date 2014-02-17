@@ -24,6 +24,7 @@
 #include <stdio.h>
 
 #include "base/p7_trace.h"
+#include "base/p7_profile.h"
 
 /*****************************************************************
  * 1. The P7_REFMX object and its access macros
@@ -109,6 +110,7 @@ extern char *p7_refmx_DecodeState(int type);
 extern int   p7_refmx_Dump(FILE *ofp, P7_REFMX *rmx);
 extern int   p7_refmx_DumpWindow (FILE *ofp, P7_REFMX *rmx, int istart, int iend, int kstart, int kend);
 extern int   p7_refmx_DumpCSV    (FILE *fp,  P7_REFMX *pp,  int istart, int iend, int kstart, int kend);
+extern int   p7_refmx_DumpBestDecoding(FILE *ofp, ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_REFMX *rxd);
 extern int   p7_refmx_PlotHeatMap(FILE *ofp, P7_REFMX *pp,  int istart, int iend, int kstart, int kend);
 extern int   p7_refmx_PlotDomainInference(FILE *ofp, const P7_REFMX *rxd, int ia, int ib, const P7_TRACE *tr);
 

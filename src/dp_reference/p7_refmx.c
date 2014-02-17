@@ -18,6 +18,7 @@
 #include "esl_dmatrix.h"	/* ESL_DMATRIX is used for heat map visualization, in p7_refmx_PlotHeatMap() */
 #include "esl_vectorops.h"
 
+#include "base/p7_profile.h"
 #include "base/p7_trace.h"
 
 #include "dp_reference/p7_refmx.h"
@@ -598,6 +599,96 @@ p7_refmx_DumpCSV(FILE *fp, P7_REFMX *pp, int istart, int iend, int kstart, int k
     }
   return eslOK;
 }
+
+
+/* Function:  p7_refmx_DumpBestDecoding()
+ * Synopsis:  Dump best posterior decoding info on each seq position.
+ *
+ * Purpose:   Dump best posterior decoding info for each sequence position.
+ *            For each row (sequence position) in posterior decoding matrix <rxd>,
+ *            output a table with 8 columns to open stream <ofp>.
+ *            
+ *            <dsq>, <L>, and <gm> are optional, and are only used to
+ *            obtain extra annotation for the table. They can be
+ *            passed as <NULL>, <0>, <NULL>.
+ *            
+ *            The first two columns are just position i, and symbol at that 
+ *            position. 
+ *            
+ *            3rd column is the decoded probability that i is
+ *            homologous to the model: a sum over all emitting main
+ *            states, as in <_PlotDomainInference()>.
+ *            
+ *            4th, 5th column: best (i,k) decoding, marginal over all
+ *            main states at k, including D states; as in heat map
+ *            functions. 4th col = best k; 5th col = best probability.
+ *            
+ *            6th, 7th, 8th column: best (i,k,s) decoding, for main
+ *            model emitting states (ML, MG, IL, IG), as in
+ *            <_PlotDomainInference()>. 6th = best k; 7th = best s (as
+ *            string, i.e. MG); 8th = best probability.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_refmx_DumpBestDecoding(FILE *ofp, ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_REFMX *rxd)
+{
+  float *dpc;
+  int   i, k;
+  int   kmax, smax;
+  float ppval, ppmax;
+
+  /* Header 
+   * <i> <sym> <p_homologous> <best_k> <best_pp> <best_k> <best_s> <best_pp>
+   */
+  fprintf(ofp, "# %12s %12s %15s\n", "", "(i,k)", "(i,k,s)");
+  fprintf(ofp, "# %12s %12s %15s\n", "", "------------", "---------------");
+  fprintf(ofp, "# %3s %1s %6s %5s %6s %5s %2s %6s\n",
+	  "i", "X", "p(hom)", "bestk", "pp", "bestk", "s", "pp");
+  fprintf(ofp, "# %3s %1s %6s %5s %6s %5s %2s %6s\n",
+	  "---", "-", "------", "-----", "------", "-----", "--", "------");
+
+  for (i = 1; i <= rxd->L; i++)
+    {
+      /* <i> <sym> <p_homologous>
+       */
+      fprintf(ofp, "%-5d %c %6.4f ",
+	      i, 
+	      ( (dsq && gm) ? gm->abc->sym[ dsq[i] ] : '?'),
+	      1.0 - ( P7R_XMX(rxd, i, p7R_N) + P7R_XMX(rxd, i, p7R_JJ) + P7R_XMX(rxd, i, p7R_CC)));
+ 
+      /* Best (i,k) decoding. D states included, as in heat maps.
+       * <best_k> <best_pp>
+       */
+      for ( ppmax = -1., k = 1; k <= rxd->M; k++)
+	{
+	  ppval = 
+	    rxd->dp[i][k * p7R_NSCELLS + p7R_ML] + rxd->dp[i][k * p7R_NSCELLS + p7R_MG] + 
+	    rxd->dp[i][k * p7R_NSCELLS + p7R_IL] + rxd->dp[i][k * p7R_NSCELLS + p7R_IG] + 
+	    rxd->dp[i][k * p7R_NSCELLS + p7R_DL] + rxd->dp[i][k * p7R_NSCELLS + p7R_DG];
+
+	  if (ppval > ppmax) { ppmax = ppval;  kmax  = k; }
+	}
+      fprintf(ofp, "%-5d %6.4f ", kmax, ppmax);
+
+      /* Best (i,k,s) decoding. Emitters only, as in PlotDomainInference().
+       * <best_k> <best_s> <best_pp>
+       */
+      dpc = rxd->dp[i] + p7R_NSCELLS; /* on k=1; skip k=0 cells */
+      for ( ppmax = -1., k = 1; k <= rxd->M; k++)
+	{
+	  if (dpc[p7R_ML] > ppmax) { ppmax = dpc[p7R_ML]; kmax = k; smax = p7R_ML; }
+	  if (dpc[p7R_MG] > ppmax) { ppmax = dpc[p7R_MG]; kmax = k; smax = p7R_MG; }
+	  if (dpc[p7R_IL] > ppmax) { ppmax = dpc[p7R_IL]; kmax = k; smax = p7R_IL; }
+	  if (dpc[p7R_IG] > ppmax) { ppmax = dpc[p7R_IG]; kmax = k; smax = p7R_IG; }
+	  dpc += p7R_NSCELLS;
+	}
+      fprintf(ofp, "%-5d %2s %6.4f\n", kmax, p7_refmx_DecodeState(smax), ppmax);
+    }
+
+  return eslOK;
+}
+
 
 /* Function:  p7_refmx_PlotHeatMap()
  * Synopsis:  Plot heat map representation of decoding matrix, PostScript.

@@ -243,8 +243,8 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_COORD
 		 p7_FLogsum( xE, p7_FLogsum( dlv, dgv)) :  // We know all non-anchor-cell M's are -inf on top row, so 
 		 p7_FLogsum( xE, dlv));			   //  we don't include M in these sums.
 	  
-	  dlv    = dlv + (*tsc + p7P_DD);
-	  dgv    = dgv + (*tsc + p7P_DD);
+	  dlv    = dlv + *(tsc + p7P_DD);
+	  dgv    = dgv + *(tsc + p7P_DD);
 	}
 
       /* dpc now sits on the start of the specials, in mxd */
@@ -260,7 +260,7 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_COORD
       xc[p7R_CC] = -eslINFINITY;
 
       /* Now we can do the remaining rows in the Down sector of domain d. */
-      iend = (d < D-1 ? anch[d+1].n1 : L);
+      iend = (d < D-1 ? anch[d+1].n1 : L+1);
       for (i = i+1 ; i < iend; i++)
 	{
 	  rsc = gm->rsc[dsq[i]] + anch[d].n2     * p7P_NR;         // Start <rsc> on (x_i, anchor_k, MAT) */
@@ -381,6 +381,7 @@ compute_anchors_from_trace(const P7_REFMX *pp, const P7_TRACE *tr, P7_COORD2 **r
 	    {
 	      anch[d].n1 = i;
 	      anch[d].n2 = k;
+	      best_pp    = ppv;
 	    }
 	}
       else if (tr->st[z] == p7T_E)
@@ -464,18 +465,67 @@ main(int argc, char **argv)
 
       //p7_trace_Dump(stdout, tr);
 
-      compute_anchors_from_trace(pp, tr, &anch, &D);
+      //compute_anchors_from_trace(pp, tr, &anch, &D);
 
-      //      printf("%d anchors/domains in trace:\n", D);
-      //for (d = 0; d < D; d++)
-      // printf("  domain %3d: anchor at i = %d, k = %d\n", d, anch[d].n1, anch[d].n2);
+      /* Handcoded for HNRPL_HUMAN vs RRM_1 */
+#if 0
+      D    = 4;
+      anch = malloc(sizeof(P7_COORD2) * D);
+      anch[0].n1 = 141;        anch[0].n2 = 43;
+      anch[1].n1 = 219;        anch[1].n2 = 23;
+      anch[2].n1 = 425;        anch[2].n2 = 45;
+      anch[3].n1 = 550;        anch[3].n2 = 47;
+#endif
+
+      /* Handcoded for PTPRJ_MOUSE vs fn3 */
+#if 0
+      D = 10;
+      anch = malloc(sizeof(P7_COORD2) * D);
+      anch[0].n1 =  92;        anch[0].n2 = 62;
+      anch[1].n1 = 132;        anch[1].n2 = 12;
+      anch[2].n1 = 168;        anch[2].n2 = 64;
+      anch[3].n1 = 241;        anch[3].n2 = 68;
+      anch[4].n1 = 330;        anch[4].n2 = 68;
+      anch[5].n1 = 415;        anch[5].n2 = 68;
+      anch[6].n1 = 501;        anch[6].n2 = 66;
+      anch[7].n1 = 590;        anch[7].n2 = 66;
+      anch[8].n1 = 690;        anch[8].n2 = 70;
+      anch[9].n1 = 734;        anch[9].n2 = 17;
+#endif
+
+#if 0
+      D = 9;
+      anch = malloc(sizeof(P7_COORD2) * D);
+      anch[0].n1 =  92;        anch[0].n2 = 62;
+      anch[1].n1 = 168;        anch[1].n2 = 64;
+      anch[2].n1 = 241;        anch[2].n2 = 68;
+      anch[3].n1 = 330;        anch[3].n2 = 68;
+      anch[4].n1 = 415;        anch[4].n2 = 68;
+      anch[5].n1 = 501;        anch[5].n2 = 66;
+      anch[6].n1 = 590;        anch[6].n2 = 66;
+      anch[7].n1 = 690;        anch[7].n2 = 70;
+      anch[8].n1 = 734;        anch[8].n2 = 17;
+#endif
+
+      /* Handcoded for INAR1_HUMAN vs. fn3 */
+      D    = 0;
+      anch = malloc(sizeof(P7_COORD2) * 100);
+      //anch[D].n1 =  49;        anch[D].n2 = 21;     D++;
+      //anch[D].n1 = 196;        anch[D].n2 = 68;     D++;
+      anch[D].n1 = 307;        anch[D].n2 = 74;     D++;
+      anch[D].n1 = 397;        anch[D].n2 = 65;     D++;
 
 
+      printf("%d anchors/domains in trace:\n", D);
+      for (d = 0; d < D; d++)
+	printf("  domain %3d: anchor at i = %d, k = %d\n", d, anch[d].n1, anch[d].n2);
 
       p7_ReferenceASCForward(sq->dsq, sq->n, gm, anch, D, mxu, mxd, &asc_sc);
 
       //p7_refmx_Dump(stdout, mxu);
       //p7_refmx_Dump(stdout, mxd);
+
+      p7_refmx_DumpBestDecoding(stdout, sq->dsq, sq->n, gm, pp);
 
       printf("%-30s   %10.4f %10.4f %10.4f %10.4g\n", 
 	     sq->name, 
@@ -509,7 +559,7 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /*p7REFERENCE_MPL_FWD_EXAMPLE*/
+#endif /*p7REFERENCE_ASC_FWD_EXAMPLE*/
 
 
 
