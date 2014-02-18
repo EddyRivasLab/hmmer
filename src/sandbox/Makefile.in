@@ -1,6 +1,7 @@
 MODULE = sandbox
 
-LIBOBJS =  reference_asc_forward.o
+LIBOBJS =  reference_asc.o \
+	   reference_asc_forward.o
 
 LIBHDRS =  
 
@@ -18,7 +19,8 @@ STATS  =
 
 BENCHMARKS =
 
-EXAMPLES = reference_asc_forward_example
+EXAMPLES = reference_asc_example \
+	   reference_asc_forward_example
 
 LIBTMP = 
 
