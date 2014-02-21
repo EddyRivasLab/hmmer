@@ -64,14 +64,15 @@ p7_ReferenceASCSearch(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_P
   P7_COORD2_HASH *hashtbl = p7_coord2_hash_Create(0,0,0);
   float          *wrk     = NULL;                        /* tmp work space needed by stochastic traceback */
   float           fwdsc;
-  float           asc;
+  float           asc, vsc;
   float           ascprob;
   float           best_ascprob;
   int32_t         keyidx, best_keyidx;
   int             iteration;
-  int             max_iterations = 10000;
+  int             max_iterations = 1000;
   int             d;
   float           lossthresh = log(0.001);
+  int             am_done    = FALSE;
   int             status;
   
   /* Calculate a Forward matrix, for sampling traces;
@@ -82,8 +83,25 @@ p7_ReferenceASCSearch(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_P
   p7_ReferenceBackward(dsq, L, gm, rxd, NULL);   
   p7_ReferenceDecoding(dsq, L, gm, rxf, rxd, rxd);   
 
-  best_ascprob = -1.;
-  best_keyidx  = -1;
+  /* Labelling implied by the Viterbi path is a good initial guess. */
+  p7_ReferenceViterbi(dsq, L, gm, rxau, tr, &vsc);
+  p7_trace_Index(tr);
+  p7_coords2_SetAnchorsFromTrace(rxd, tr, anch);
+  p7_coord2_hash_Store(hashtbl, anch->arr, anch->n, &best_keyidx);
+
+  p7_refmx_Reuse(rxau);
+  p7_trace_Reuse(tr);
+
+  p7_ReferenceASCForward(dsq, L, gm, anch->arr, anch->n, rxau, rxad, &asc);
+  best_ascprob = exp(asc - fwdsc);
+
+  printf("# Forward score: %6.2f nats\n", fwdsc);
+  printf("# Viterbi score: %6.2f nats\n", vsc);
+
+  printf("VIT %6.2f %8.4g ", asc, best_ascprob);
+  printf("%2d ", anch->n);
+  for (d = 0; d < anch->n; d++) printf("%4d %4d ", anch->arr[d].n1, anch->arr[d].n2);
+  printf("\n");
 
   /* Sample paths from the posterior, to sample anchor sets
    */
@@ -125,7 +143,11 @@ p7_ReferenceASCSearch(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_P
 	  printf("\n");
 	}
       
-      if (iteration * log(1.0 - best_ascprob) < lossthresh) goto DONE;
+      if (! am_done && iteration * log(1.0 - best_ascprob) < lossthresh) 
+	{
+	  am_done = TRUE;
+	  printf("### I think I'm done.\n");
+	}
 
       p7_coords2_Reuse(anch);
       p7_trace_Reuse(tr);
@@ -173,7 +195,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng     = esl_randomness_Create(2);
+  ESL_RANDOMNESS *rng     = esl_randomness_Create(0);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
   ESL_ALPHABET   *abc     = NULL;
