@@ -152,6 +152,9 @@ extern int p7_pipeline_WriteStats(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
 extern int p7_Pipeline              (P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *th);
 extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCOREDATA *msvdata, P7_BG *bg, const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx);
 
+extern int p7_pipeline_AccelerationFilter(ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg,
+					  P7_FILTERMX *fx, P7_CHECKPTMX *cx, P7_SPARSEMASK *sm);
+
 #endif /*P7_PIPELINE_INCLUDED*/
 
 /*****************************************************************

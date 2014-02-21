@@ -15,7 +15,7 @@ UTESTS =
         
         
 
-STATS  = 
+STATS  =   reference_asc_stats
 
 BENCHMARKS =
 

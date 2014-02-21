@@ -7,9 +7,10 @@
  *   4. Statistics output from a completed pipeline.
  *   5. The main pipeline call: p7_Pipeline().
  *   6. The pipeline specialized for nhmmer/longtarget.
- *   7. Example 1: search mode (in a sequence db)
- *   8. Example 2: scan mode (in an HMM db)
- *   9. Copyright and license information
+ *   7. The acceleration pipeline, vastly simplified, as one call. 
+ *   8. Example 1: search mode (in a sequence db)
+ *   9. Example 2: scan mode (in an HMM db)
+ *   10. Copyright and license information
  * 
  */
 #include "p7_config.h"
@@ -2192,7 +2193,107 @@ ERROR:
 /*------------- end, nhmmer/longtarget pipelines ----------------*/
 
 /*****************************************************************
- * 7. Example 1: "search mode" in a sequence db
+ * 7. The acceleration pipeline, vastly simplified, as one call.
+ *****************************************************************/
+
+/* Function: p7_pipeline_AccelerationFilter()
+ * Synopsis: Simplified version of the standard HMMER acceleration filter of [Eddy11].
+ *
+ * Purpose:  Implements a simpified version of the HMMER acceleration
+ *           pipeline in <p7_Pipeline()>: only the vector acceleration
+ *           steps, and without the bias filter. Compares vector
+ *           profile <om> against digital sequence <dsq> of length
+ *           <L>, calculating bit scores against null model
+ *           <bg>. Returns <eslOK> if the comparison passes the
+ *           acceleration filters, and <eslFAIL> if it does not.
+ * 
+ *           Caller provides vector DP matrices: <fx> for SSV/MSV and
+ *           <cx> for checkpointed Forward/Backward. These DP matrices
+ *           can have any previous allocation size because they will
+ *           be reallocated as needed by the vector DP routines.  Upon
+ *           return, <fx> contains the Viterbi filter data from
+ *           <p7_ViterbiFilter()>, and <cx> contains the checkpointed
+ *           DP Forward/Backward matrix from <p7_ForwardFilter()> and
+ *           <p7_BackwardFilter()>.
+ *           
+ *           Caller also provides a sparse mask object <sm>, which
+ *           upon successful return will contain the sparse mask. It
+ *           too can be provided in any valid allocation size, because
+ *           it is reallocated as needed.
+ *           
+ *           Acceleration filter thresholds are set to defaults: P
+ *           $\leq$ 0.02 for MSV, P $\leq$ 1e-3 for Viterbi, and P
+ *           $\leq$ 1e-5 for Forward filters.
+ *           
+ * Args:     dsq  : digital sequence, 1..L
+ *           L    : length of <dsq>
+ *           om   : vector profile, with length parameterization set
+ *           bg   : null model, with length parameterization set
+ *           fx   : vector MSV/Vit DP matrix, at any valid alloc size
+ *           cx   : vector checkpointed Fwd/Bck DP mx, any valid size
+ *           sm   : RETURN: sparse mask
+ *
+ * Returns:  <eslOK> if <dsq> is a high-scoring target that passes the
+ *           acceleration filter thresholds. <sm> contains the sparse
+ *           DP mask for the <dsq>/<om> comparison. <fx> and <cx> DP
+ *           matrices are valid too, if caller wants to use them for 
+ *           something.
+ *           
+ *           <eslFAIL> if <dsq> is a low-scoring target that fails the
+ *           filter thresholds. Now the data in <fx>, <cx>, <sm> are
+ *           undefined though they remain validly allocated and can be
+ *           reused.
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      J12/120.
+ * 
+ * To do:     We could use this to streamline p7_Pipeline itself.
+ *            We could add pipeline stats as an optional
+ *            argument, add the bias filter, add an optional input arg
+ *            for the F1/F2/F3 parameters, and do something about
+ *            SCAN_MODELS mode -- perhaps just making two versions of
+ *            this call, one for search mode and one for scan mode.
+ */
+int
+p7_pipeline_AccelerationFilter(ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg,
+			       P7_FILTERMX *fx, P7_CHECKPTMX *cx, P7_SPARSEMASK *sm)
+{
+  float  usc, vitsc, fwdsc;
+  float  nullsc;
+  float  seq_score;
+  double P;
+  float  F1 = 0.02;
+  float  F2 = 1e-3;
+  float  F3 = 1e-5;
+
+  if (L == 0) return eslFAIL;
+
+  p7_bg_NullOne(bg, dsq, L, &nullsc);
+
+  p7_MSVFilter(dsq, L, om, fx, &usc);
+  seq_score = (usc - nullsc) / eslCONST_LOG2;
+  P = esl_gumbel_surv(seq_score, om->evparam[p7_MMU], om->evparam[p7_MLAMBDA]);
+  if (P > F1) return eslFAIL;
+
+  p7_ViterbiFilter(dsq, L, om, fx, &vitsc);  
+  seq_score = (vitsc - nullsc) / eslCONST_LOG2;
+  P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
+  if (P > F2) return eslFAIL;
+  
+  p7_ForwardFilter(dsq, L, om, cx, &fwdsc);
+  seq_score = (fwdsc - nullsc) / eslCONST_LOG2;
+  P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
+  if (P > F3) return eslFAIL;
+ 
+  p7_BackwardFilter(dsq, L, om, cx, sm, p7_SPARSEMASK_THRESH_DEFAULT);
+
+  return eslOK;
+}
+
+
+/*****************************************************************
+ * 8. Example 1: "search mode" in a sequence db
  *****************************************************************/
 
 #ifdef p7PIPELINE_EXAMPLE
@@ -2329,7 +2430,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 8. Example 2: "scan mode" in an HMM db
+ * 9. Example 2: "scan mode" in an HMM db
  *****************************************************************/
 #ifdef p7PIPELINE_EXAMPLE2
 /* ./pipeline_example2 <hmmdb> <sqfile>
