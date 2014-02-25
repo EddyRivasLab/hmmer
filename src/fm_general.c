@@ -469,6 +469,10 @@ fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go ) {
   cfg->score_density_req = eslCONST_LOG2 * (go ? esl_opt_GetReal(go, "--seed_sc_density") : -1.0);// convert from bits to nats
   cfg->scthreshFM        = eslCONST_LOG2 * (go ? esl_opt_GetReal(go, "--seed_sc_thresh") : -1.0); // convert from bits to nats
 
+  //here for testing pruning with BWTWS scoring
+  cfg->match_override    = (go ? esl_opt_GetReal(go, "--bwtsw_match") : 0.0);
+  cfg->mismatch_override = (go ? esl_opt_GetReal(go, "--bwtsw_mismatch") : 0.0);
+
   return eslOK;
 }
 

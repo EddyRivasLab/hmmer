@@ -248,6 +248,8 @@ FM_Recurse( int depth, int Kp, int fm_direction,
             FM_INTERVAL *interval_1, FM_INTERVAL *interval_2,
             FM_DIAGLIST *seeds
             , char *seq
+            , uint64_t *row_cnt
+            , uint64_t *cell_cnt
           )
 {
 
@@ -263,7 +265,12 @@ FM_Recurse( int depth, int Kp, int fm_direction,
     seq[depth] = '\0';
 
 
+
+
+    (*row_cnt)++;
+
     for (i=first; i<=last; i++) { // for each surviving diagonal from the previous round
+        (*cell_cnt)++;
         if (dp_pairs[i].model_direction == fm_forward)
           k = dp_pairs[i].pos + 1;
         else  //fm_backward
@@ -314,18 +321,18 @@ FM_Recurse( int depth, int Kp, int fm_direction,
                    ( (depth >= 10 &&  (float)sc/(float)depth < sc_threshFM/(float)(fm_cfg->max_depth))                  // if we're at least half way across the sequence, and score density is too low, abort -- if the density on the other side is high enough, I'll find it on the reverse sweep
                    || depth == fm_cfg->max_depth-fm_cfg->consec_pos_req+1 )                                             // if we're close to the end of the sequence, abort -- if that end does have sufficiently long all-positive run, I'll find it on the reverse sweep
                )
-            || (dp_pairs[i].model_direction == fm_forward  &&
+               //the match_override test is for pruning with BWTSW scoring
+            || (fm_cfg->match_override == 0.0 && dp_pairs[i].model_direction == fm_forward  &&
                    ( (k == ssvdata->M)                                                                                                          //can't extend anymore, 'cause we're at the end of the model, going forward
                   || ( (depth > (fm_cfg->max_depth - 10)) &&  sc + ssvdata->opt_ext_fwd[k][fm_cfg->max_depth-depth-1] < sc_threshFM)   //can't hit threshold, even with best possible forward extension up to length ssv_req
                   ))
-            || (dp_pairs[i].model_direction == fm_backward &&
+                  //the match_override test is for pruning with BWTSW scoring
+            || (fm_cfg->match_override == 0.0 && dp_pairs[i].model_direction == fm_backward &&
                    ( (k == 1)                                                                                                          //can't extend anymore, 'cause we're at the beginning of the model, going backwards
                   || ( (depth > (fm_cfg->max_depth - 10)) &&  sc + ssvdata->opt_ext_rev[k][fm_cfg->max_depth-depth-1] < sc_threshFM )  //can't hit threshold, even with best possible extension up to length ssv_req
                   ))
          )
         {
-
-
 
           //do nothing - it's been pruned
 
@@ -374,6 +381,8 @@ FM_Recurse( int depth, int Kp, int fm_direction,
                   &interval_1_new, NULL,
                   seeds
                   , seq
+                  , row_cnt
+                  , cell_cnt
                   );
 
 
@@ -395,6 +404,8 @@ FM_Recurse( int depth, int Kp, int fm_direction,
                   &interval_1_new, &interval_2_new,
                   seeds
                   , seq
+                  , row_cnt
+                  , cell_cnt
                   );
 
       }
@@ -449,6 +460,28 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
   FM_DP_PAIR *dp_pairs_fwd;
   FM_DP_PAIR *dp_pairs_rev;
 
+  uint64_t row_cnt  = 0;
+  uint64_t cell_cnt = 0;
+
+  if (fm_cfg->match_override > 0) {
+    // Only for testing the impact ov BWT-SW style scores on pruning.
+    // Resetting scores to be match_override(+) for the highest-scoring letter, and mismatch_override(-) for the others ... position by position.
+    for (k = 1; k <= ssvdata->M; k++) {
+       int best;
+       float best_sc = 0;
+
+       for (i=0; i<fm_cfg->meta->alph_size; i++) {
+          if (ssvdata->ssv_scores_f[k*Kp + i] > best_sc) {
+            best_sc = ssvdata->ssv_scores_f[k*Kp + i];
+            best = i;
+          }
+       }
+       for (i=0; i<fm_cfg->meta->alph_size; i++)
+          ssvdata->ssv_scores_f[k*Kp + i] = fm_cfg->mismatch_override;
+       ssvdata->ssv_scores_f[k*Kp + best] = fm_cfg->match_override;
+    }
+  }
+
   ESL_ALLOC(dp_pairs_fwd, ssvdata->M * fm_cfg->max_depth * sizeof(FM_DP_PAIR)); // guaranteed to be enough to hold all diagonals
   ESL_ALLOC(dp_pairs_rev, ssvdata->M * fm_cfg->max_depth * sizeof(FM_DP_PAIR));
 
@@ -467,15 +500,25 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
     seq[0] = fm_cfg->meta->alph[i];
     seq[1] = '\0';
 
-
+    //Only for testing Pruning efficacy
+    row_cnt+=2;
+    if (fm_cfg->match_override == 0.0 && fm_cfg->score_density_req > 0.0) { //Only need to search the reverse BWT if doing FM density pruning
+      row_cnt+=2;
+    }
     // Fill in a DP column for the character c, (compressed so that only positive-scoring entries are kept)
     // There will be 4 DP columns for each character, (1) fwd-std, (2) fwd-complement, (3) rev-std, (4) rev-complement
     for (k = 1; k <= ssvdata->M; k++) // there's no need to bother keeping an entry starting at the last position (gm->M)
     {
+
+      //Only for testing Pruning efficacy
+      cell_cnt+=2;
+      if (fm_cfg->match_override == 0.0 && fm_cfg->score_density_req > 0.0) { //Only need to search the reverse BWT if doing FM density pruning
+            cell_cnt+=2;
+      }
+
       sc = ssvdata->ssv_scores_f[k*Kp + i];
       if (sc>0) { // we'll extend any positive-scoring diagonal
         /* fwd on model, fwd on FM (really, reverse on FM, but the FM is on a reversed string, so its fwd*/
-
         if (k < ssvdata->M-3) { // don't bother starting a forward diagonal so close to the end of the model
           //Forward pass on the FM-index
           dp_pairs_fwd[fwd_cnt].pos =             k;
@@ -508,7 +551,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
       sc = ssvdata->ssv_scores_f[k*Kp + fm_cfg->meta->compl_alph[i]];
       if (sc>0) { // we'll extend any positive-scoring diagonal
         /* rev on model, fwd on FM (really, reverse on FM, but the FM is on a reversed string, so its fwd*/
-
         if (k > 4) { // don't bother starting a reverse diagonal so close to the start of the model
           dp_pairs_fwd[fwd_cnt].pos =             k;
           dp_pairs_fwd[fwd_cnt].score =           sc;
@@ -522,7 +564,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
         }
 
         /* fwd on model, rev on FM (the FM is on the unreversed string - complemented)*/
-
         if (k < ssvdata->M-3) { // don't bother starting a forward diagonal so close to the end of the model
           dp_pairs_rev[rev_cnt].pos =             k;
           dp_pairs_rev[rev_cnt].score =           sc;
@@ -543,15 +584,28 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
                  &interval_f1, NULL,
                  seeds
                  , seq
+                 , &row_cnt
+                 , &cell_cnt
             );
-    FM_Recurse ( 2, Kp, fm_backward,
-                 fmf, fmb, fm_cfg, ssvdata, sc_threshFM,
-                 dp_pairs_rev, 0, rev_cnt-1,
-                 &interval_bk, &interval_f2,
-                 seeds
-                 , seq
-            );
+
+    //Next line Only for testing Pruning efficacy
+    if (fm_cfg->match_override == 0.0 && fm_cfg->score_density_req > 0.0) { //Only need to search the reverse BWT if doing FM density pruning
+      FM_Recurse ( 2, Kp, fm_backward,
+                   fmf, fmb, fm_cfg, ssvdata, sc_threshFM,
+                   dp_pairs_rev, 0, rev_cnt-1,
+                   &interval_bk, &interval_f2,
+                   seeds
+                   , seq
+                   , &row_cnt
+                   , &cell_cnt
+              );
+    }
   }
+
+  fprintf (stderr, "Rows  :  %ld\n", (long)row_cnt);
+  fprintf (stderr, "Cells  : %ld\n", (long)cell_cnt);
+  //exit(0);
+
 
   //merge duplicates
   FM_mergeSeeds(seeds, fmf->N, fm_cfg->ssv_length);
@@ -775,6 +829,7 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
 
   invP_FM = esl_gumbel_invsurv(0.5, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   sc_threshFM = ESL_MAX(fm_cfg->scthreshFM,  (invP_FM * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec) ) ;
+
   sc_threshFM *= fm_cfg->info_deficit_ratio;
   sc_threshFM = ESL_MAX(7.0, sc_threshFM);
 
