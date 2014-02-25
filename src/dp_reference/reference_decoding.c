@@ -572,6 +572,7 @@ static ESL_OPTIONS options[] = {
   { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward DP matrix for examination",            0 },
   { "-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward DP matrix for examination",           0 },
   { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Decoding matrix for examination",              0 },
+  { "-X",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump best decoding for each residue position",      0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -636,9 +637,12 @@ main(int argc, char **argv)
   p7_ReferenceBackward(sq->dsq, sq->n, gm, pp,  &bsc);     if (esl_opt_GetBoolean(go, "-B")) p7_refmx_Dump(stdout, pp);
   p7_ReferenceDecoding(sq->dsq, sq->n, gm, fwd, pp, pp);   if (esl_opt_GetBoolean(go, "-D")) p7_refmx_Dump(stdout, pp);
 
+  if (esl_opt_GetBoolean(go, "-X")) p7_refmx_DumpBestDecoding(stdout, sq->dsq, sq->n, gm, pp);
+
   printf("# Forward raw nat score = %9.3f\n", fsc);
   printf("# Backward raw nat score = %9.3f\n", bsc);
   
+#if 0
   /* Row sums. */
   for (i = 1; i <= sq->n; i++)
     {
@@ -648,6 +652,7 @@ main(int argc, char **argv)
 
       printf("row %3d : %f\n", i, rowsum-1.0f);
     }
+#endif
 
   esl_sq_Destroy(sq);
   p7_refmx_Destroy(pp);

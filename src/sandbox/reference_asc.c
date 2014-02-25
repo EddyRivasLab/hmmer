@@ -17,8 +17,9 @@ p7_coords2_SetAnchorsFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_COORDS
   float *dpc;
   float  ppv;
   int z;
-  int i,k,s;
+  int k,s;
   int d = 0;
+  int   i       = 0;
   float best_pp = -1.;
   int status;
 
@@ -78,7 +79,7 @@ p7_ReferenceASCSearch(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_P
   int             d;
   float           lossthresh = log(0.001);
   int             am_done    = FALSE;
-  int             be_verbose = FALSE;
+  int             be_verbose = TRUE;
   int             status;
   
   stats->tot_iterations       = max_iterations;
@@ -196,6 +197,14 @@ p7_ReferenceASCSearch(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_P
   stats->best_asc     = best_asc;
   stats->best_ascprob = best_ascprob;
   compare_anchorset_to_trace(vtr, anch, stats);
+
+  if (be_verbose)
+    {
+      printf("BEST %6.2f %8.4g ", stats->best_asc, stats->best_ascprob);
+      printf("%2d ", anch->n);
+      for (d = 0; d < anch->n; d++) printf("%4d %4d ", anch->arr[d].n1, anch->arr[d].n2);
+      printf("\n");
+    }
 
   free(wrk);
   p7_coord2_hash_Destroy(hashtbl);
