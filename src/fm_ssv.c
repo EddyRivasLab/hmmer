@@ -258,14 +258,12 @@ FM_Recurse( int depth, int Kp, int fm_direction,
 
   int c, i, k;
   FM_INTERVAL interval_1_new, interval_2_new;
+  uint8_t positive_run = 0;
 
   for (c=0; c< fm_cfg->meta->alph_size; c++) {//acgt
     int dppos = last;
     seq[depth-1] = fm_cfg->meta->alph[c];
     seq[depth] = '\0';
-
-
-
 
     (*row_cnt)++;
 
@@ -278,12 +276,17 @@ FM_Recurse( int depth, int Kp, int fm_direction,
 
         if (dp_pairs[i].complementarity == p7_COMPLEMENT) {
           next_score = ssvdata->ssv_scores_f[k*Kp + fm_cfg->meta->compl_alph[c]];
-        } else
+        } else {
           next_score = ssvdata->ssv_scores_f[k*Kp + c];
+        }
 
         sc = dp_pairs[i].score + next_score;
+        positive_run =  (next_score > 0 ? dp_pairs[i].consec_pos + 1 : 0);
+
 
         if ( sc >= sc_threshFM ) { // this is a seed I want to extend
+
+          //fprintf(stderr, "%s %.3f %d\n", seq,  sc,  k);
 
           interval_1_new.lower = interval_1->lower;
           interval_1_new.upper = interval_1->upper;
@@ -313,24 +316,26 @@ FM_Recurse( int depth, int Kp, int fm_direction,
             }
           }
 
-        } else if (  sc <= 0                                                                                        //some other path in the string enumeration tree will do the job
+        } else if (  sc <= 0                                                                                         //some other path in the string enumeration tree will do the job
             || depth == fm_cfg->max_depth                                                                            //can't extend anymore, 'cause we've reached the pruning length
-            || (depth == dp_pairs[i].score_peak_len + fm_cfg->drop_max_len)                                        //too many consecutive positions with a negative total score contribution (sort of like Xdrop)
-            || (depth > 4 && (float)sc/(float)depth < fm_cfg->score_density_req)                                      //score density is too low (don't bother checking in the first couple slots
-            || (dp_pairs[i].max_consec_pos < fm_cfg->consec_pos_req  &&                                            //a seed is expected to have at least one run of positive-scoring matches at least length consec_pos_req;  if it hasn't,  (see Tue Nov 23 09:39:54 EST 2010)
-                   ( (depth >= 10 &&  (float)sc/(float)depth < sc_threshFM/(float)(fm_cfg->max_depth))                  // if we're at least half way across the sequence, and score density is too low, abort -- if the density on the other side is high enough, I'll find it on the reverse sweep
-                   || depth == fm_cfg->max_depth-fm_cfg->consec_pos_req+1 )                                             // if we're close to the end of the sequence, abort -- if that end does have sufficiently long all-positive run, I'll find it on the reverse sweep
+            || ( dp_pairs[i].model_direction == fm_forward  && k == ssvdata->M)                                     //can't extend anymore, 'cause we're at the end of the model, going forward
+            || ( dp_pairs[i].model_direction == fm_backward && k == 1 )                                             //can't extend anymore, 'cause we're at the beginning of the model, going backwards
+            || (fm_cfg->match_override == 0.0 && depth == dp_pairs[i].score_peak_len + fm_cfg->drop_max_len)                                        //too many consecutive positions with a negative total score contribution (sort of like Xdrop)
+            //the score_density_req test is for pruning without density of any kind (in case we want to remove reverse BWT)
+            || (fm_cfg->match_override == 0.0 && fm_cfg->score_density_req > 0.0 && depth > 4 && (float)sc/(float)depth < fm_cfg->score_density_req)                                      //score density is too low (don't bother checking in the first couple slots
+            || (fm_cfg->match_override == 0.0 && fm_cfg->score_density_req > 0.0 && depth >= 10 &&  (float)sc/(float)depth < sc_threshFM/(float)(fm_cfg->max_depth))                      // if we're at least half way across the sequence, and score density is too low, abort -- if the density on the other side is high enough, I'll find it on the reverse sweep
+            || (fm_cfg->match_override == 0.0 && dp_pairs[i].max_consec_pos < fm_cfg->consec_pos_req  &&                                               //a seed is expected to have at least one run of positive-scoring matches at least length consec_pos_req;  if it hasn't,  (see Tue Nov 23 09:39:54 EST 2010)
+                (fm_cfg->consec_pos_req - positive_run) ==  (fm_cfg->max_depth - depth + 1)                 // if we're close to the end of the sequence, abort -- if that end does have sufficiently long all-positive run, I'll find it on the reverse sweep
                )
                //the match_override test is for pruning with BWTSW scoring
-            || (fm_cfg->match_override == 0.0 && dp_pairs[i].model_direction == fm_forward  &&
-                   ( (k == ssvdata->M)                                                                                                          //can't extend anymore, 'cause we're at the end of the model, going forward
-                  || ( (depth > (fm_cfg->max_depth - 10)) &&  sc + ssvdata->opt_ext_fwd[k][fm_cfg->max_depth-depth-1] < sc_threshFM)   //can't hit threshold, even with best possible forward extension up to length ssv_req
-                  ))
+            || (!fm_cfg->skip_boundprune && fm_cfg->match_override == 0.0 && dp_pairs[i].model_direction == fm_forward  &&
+                   ( (depth > (fm_cfg->max_depth - 10)) &&  sc + ssvdata->opt_ext_fwd[k][fm_cfg->max_depth-depth-1] < sc_threshFM)   //can't hit threshold, even with best possible forward extension up to length ssv_req
+                  )
                   //the match_override test is for pruning with BWTSW scoring
-            || (fm_cfg->match_override == 0.0 && dp_pairs[i].model_direction == fm_backward &&
-                   ( (k == 1)                                                                                                          //can't extend anymore, 'cause we're at the beginning of the model, going backwards
-                  || ( (depth > (fm_cfg->max_depth - 10)) &&  sc + ssvdata->opt_ext_rev[k][fm_cfg->max_depth-depth-1] < sc_threshFM )  //can't hit threshold, even with best possible extension up to length ssv_req
-                  ))
+            || (!fm_cfg->skip_boundprune && fm_cfg->match_override == 0.0 && dp_pairs[i].model_direction == fm_backward &&
+                   ( (depth > (fm_cfg->max_depth - 10)) &&  sc + ssvdata->opt_ext_rev[k-1][fm_cfg->max_depth-depth-1] < sc_threshFM )  //can't hit threshold, even with best possible extension up to length ssv_req
+                  )
+
          )
         {
 
@@ -356,8 +361,8 @@ FM_Recurse( int depth, int Kp, int fm_direction,
                 dp_pairs[dppos].score_peak_len = dp_pairs[i].score_peak_len;
             }
 
-            dp_pairs[dppos].consec_pos =  (next_score > 0 ? dp_pairs[i].consec_pos + 1 : 0);
-            dp_pairs[dppos].max_consec_pos = ESL_MAX( dp_pairs[dppos].consec_pos, dp_pairs[i].max_consec_pos);
+            dp_pairs[dppos].consec_pos =  positive_run;
+            dp_pairs[dppos].max_consec_pos = ESL_MAX( positive_run, dp_pairs[i].max_consec_pos);
 
         }
     }
@@ -469,16 +474,15 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
     for (k = 1; k <= ssvdata->M; k++) {
        int best;
        float best_sc = 0;
-
        for (i=0; i<fm_cfg->meta->alph_size; i++) {
           if (ssvdata->ssv_scores_f[k*Kp + i] > best_sc) {
             best_sc = ssvdata->ssv_scores_f[k*Kp + i];
             best = i;
           }
+          ssvdata->ssv_scores_f[k*Kp + i] = fm_cfg->mismatch_override * eslCONST_LOG2;
        }
-       for (i=0; i<fm_cfg->meta->alph_size; i++)
-          ssvdata->ssv_scores_f[k*Kp + i] = fm_cfg->mismatch_override;
-       ssvdata->ssv_scores_f[k*Kp + best] = fm_cfg->match_override;
+
+       ssvdata->ssv_scores_f[k*Kp + best] = fm_cfg->match_override  * eslCONST_LOG2;
     }
   }
 
@@ -575,8 +579,10 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
           dp_pairs_rev[rev_cnt].model_direction = fm_forward;
           rev_cnt++;
         }
+
       }
     }
+
 
     FM_Recurse ( 2, Kp, fm_forward,
                  fmf, fmb, fm_cfg, ssvdata, sc_threshFM,
@@ -604,7 +610,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
 
   fprintf (stderr, "Rows  :  %ld\n", (long)row_cnt);
   fprintf (stderr, "Cells  : %ld\n", (long)cell_cnt);
-  //exit(0);
 
 
   //merge duplicates

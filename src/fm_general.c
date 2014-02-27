@@ -472,6 +472,7 @@ fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go ) {
   //here for testing pruning with BWTWS scoring
   cfg->match_override    = (go ? esl_opt_GetReal(go, "--bwtsw_match") : 0.0);
   cfg->mismatch_override = (go ? esl_opt_GetReal(go, "--bwtsw_mismatch") : 0.0);
+  cfg->skip_boundprune   = ( (go && esl_opt_IsUsed(go, "--fm_skip_boundprune")) ? TRUE: FALSE);
 
   return eslOK;
 }

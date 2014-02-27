@@ -243,7 +243,7 @@ p7_hmm_ScoreDataClone(P7_SCOREDATA *src, int Kp) {
     memcpy(new->ssv_scores, src->ssv_scores, (src->M + 1) * Kp * sizeof(uint8_t)  );
   } else {
     ESL_ALLOC(new->ssv_scores_f, (src->M + 1) * Kp * sizeof(float));
-    memcpy(new->ssv_scores, src->ssv_scores_f, (src->M + 1) * Kp * sizeof(float)  );
+    memcpy(new->ssv_scores_f, src->ssv_scores_f, (src->M + 1) * Kp * sizeof(float)  );
   }
 
 

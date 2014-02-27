@@ -1011,6 +1011,7 @@ typedef struct {
   /* Placed here for testing pruning with BWTSW scoring */
   float match_override;
   float mismatch_override;
+  int skip_boundprune;
 
 } FM_CFG;
 

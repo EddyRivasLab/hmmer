@@ -133,6 +133,7 @@ static ESL_OPTIONS options[] = {
   //for testing pruning with BWTSW scoring
   { "--bwtsw_match",      eslARG_REAL,        "0.0", NULL, NULL,    NULL,  NULL, NULL,          "BWTSW match score",   9 },
   { "--bwtsw_mismatch",   eslARG_REAL,        "0.0", NULL, NULL,    NULL,  NULL, NULL,          "BWTSW mismatch score",   9 },
+  { "--fm_skip_boundprune", eslARG_NONE,       NULL, NULL, NULL,    NULL,  NULL, NULL,          "turn off bound pruning (for pruning tests only)",                 9 },
 
 
 

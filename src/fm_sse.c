@@ -95,8 +95,8 @@ fm_configInit( FM_CFG *cfg, ESL_GETOPTS *go )
    * Incrementally chew off the 1s in chunks of 2 (for DNA) or 4 (for DNA_full)
    * from the right side, and stick each result into an element of a __m128 array
    */
-  if (cfg->meta->alph_type == fm_DNA)
-    trim_chunk_count = 64; //2-bit steps
+  //if (cfg->meta->alph_type == fm_DNA)
+   trim_chunk_count = 64; //2-bit steps
 //  else //(meta->alph_type == fm_DNA_full)
 //    trim_chunk_count = 16; //8-bit steps
 

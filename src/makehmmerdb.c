@@ -397,7 +397,6 @@ main(int argc, char **argv)
 
   int             infmt     = eslSQFILE_UNKNOWN;
   int             alphatype = eslUNKNOWN;
-  int             alphaguess =eslUNKNOWN;
   ESL_ALPHABET   *abc       = NULL;
   ESL_SQ         *sq        = NULL;
   ESL_SQFILE     *sqfp      = NULL;
