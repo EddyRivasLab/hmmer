@@ -130,13 +130,6 @@ static ESL_OPTIONS options[] = {
   { "--seed_req_pos",      eslARG_INT,           "5", NULL, NULL,    NULL,  NULL, NULL,          "minimum number consecutive positive scores in seed" ,        9 },
   { "--seed_ssv_length",   eslARG_INT,          "70", NULL, NULL,    NULL,  NULL, NULL,          "length of window around FM seed to get full SSV diagonal",   9 },
 
-  //for testing pruning with BWTSW scoring
-  { "--bwtsw_match",      eslARG_REAL,        "0.0", NULL, NULL,    NULL,  NULL, NULL,          "BWTSW match score",   9 },
-  { "--bwtsw_mismatch",   eslARG_REAL,        "0.0", NULL, NULL,    NULL,  NULL, NULL,          "BWTSW mismatch score",   9 },
-  { "--fm_skip_boundprune", eslARG_NONE,       NULL, NULL, NULL,    NULL,  NULL, NULL,          "turn off bound pruning (for pruning tests only)",                 9 },
-
-
-
 
 /* Other options */
   { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,     "assert target <seqdb> is in format <s>",                        12 },
@@ -849,14 +842,24 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
 
       if (dbformat == eslSQFILE_FMINDEX) {
-        //capture the information content deficit ratio, for use in FM threshold setting
-        double relent, target_relent;
-        float sigma = 45.0; //this could perhaps be made an option, but probably not necessary
+        //capture a measure of score density multiplied by something I conjecture to be related to
+        //the expected longest common subsequence (sqrt(M)).  If less than a default target
+        //(7 bits of expected LCS), then the requested score threshold will be shifted down
+        // according to this ratio.
+        // Xref: ~wheelert/notebook/2014/03-04-FM-time-v-len/00NOTES -- Thu Mar  6 14:40:48 EST 2014
+        float best_sc_avg = 0;
+        for (i = 1; i <= om->M; i++) {
+          float max_score = 0;
+          for (int j=0; j<hmm->abc->K; j++) {
+            if ( esl_abc_XIsResidue(om->abc,j) &&  gm->rsc[j][(i) * p7P_NR     + p7P_MSC]   > max_score)   max_score   = gm->rsc[j][(i) * p7P_NR     + p7P_MSC];
+          }
+          best_sc_avg += max_score;
+        }
+        best_sc_avg /= sqrt((double) hmm->M);   //that's dividing by M to get score density, then multiplying by sqrt(M) as a proxy for expected LCS
+        best_sc_avg = ESL_MAX(5.0,best_sc_avg); // don't let it get too low, or run time will dramatically suffer
 
-        relent = p7_MeanMatchRelativeEntropy(hmm, info->bg);
-        target_relent = (sigma - eslCONST_LOG2R * log( 2.0 / ((double) hmm->M * (double) (hmm->M+1)))) / (double) hmm->M; /* like effective_seqnumber() in p7_builder */
-        target_relent = ESL_MAX(relent, target_relent);
-        fm_cfg->info_deficit_ratio = relent / target_relent;
+        fm_cfg->sc_thresh_ratio = ESL_MIN(best_sc_avg/7.0, 1.0);
+
       }
 
       if (dbformat == eslSQFILE_FMINDEX)

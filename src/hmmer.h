@@ -1003,15 +1003,10 @@ typedef struct {
   float score_density_req; //.5
   int ssv_length;
   float scthreshFM;
-  float info_deficit_ratio; //information content deficit,  actual_relent/target_relent
+  float sc_thresh_ratio; //information content deficit,  actual_relent/target_relent
 
   /*pointer to FM-index metadata*/
   FM_METADATA *meta;
-
-  /* Placed here for testing pruning with BWTSW scoring */
-  float match_override;
-  float mismatch_override;
-  int skip_boundprune;
 
 } FM_CFG;
 
