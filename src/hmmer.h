@@ -924,8 +924,8 @@ typedef struct fm_data_s {
   uint32_t term_loc; // location in the BWT at which the '$' char is found (replaced in the sequence with 'a')
   uint32_t seq_offset;
   uint32_t ambig_offset;
-  uint16_t seq_cnt;
-  uint16_t ambig_cnt;
+  uint32_t seq_cnt;
+  uint32_t ambig_cnt;
   uint32_t overlap; // number of bases at the beginning that overlap the FM-index for the preceding block
   uint8_t  *T;  //text corresponding to the BWT
   uint8_t  *BWT_mem;

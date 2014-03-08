@@ -638,12 +638,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
     qsq  = esl_sq_CreateDigital(abc); // only need this in the case of a single sequence ... but that could come from an MSA
 
-
-    if ( (abc->type == eslDNA || abc->type == eslRNA) && !(fm_meta->alph_type == fm_DNA /*|| fm_meta->alph_type == fm_DNA_full*/) )
-      p7_Fail("incompatible alphabets - the HMM is a nucleotide alphabet, but the database isn't");
-    if ( (abc->type == eslAMINO ) && !(fm_meta->alph_type == fm_AMINO ) )
-      p7_Fail("incompatible alphabets - the HMM is an amino alphabet, but the database isn't");
-
+    if (dbformat == eslSQFILE_FMINDEX) {
+      if ( (abc->type == eslDNA || abc->type == eslRNA) && !(fm_meta->alph_type == fm_DNA /*|| fm_meta->alph_type == fm_DNA_full*/) )
+        p7_Fail("incompatible alphabets - the HMM is a nucleotide alphabet, but the database isn't");
+      if ( (abc->type == eslAMINO ) && !(fm_meta->alph_type == fm_AMINO ) )
+        p7_Fail("incompatible alphabets - the HMM is an amino alphabet, but the database isn't");
+    }
 
     builder = p7_builder_Create(NULL, abc);
     if (builder == NULL)  p7_Fail("p7_builder_Create failed");

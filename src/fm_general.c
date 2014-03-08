@@ -108,6 +108,7 @@ fm_addAmbiguityRange (FM_AMBIGLIST *list, uint32_t start, uint32_t stop) {
 
   list->ranges[list->count].lower = start;
   list->ranges[list->count].upper = stop;
+
   list->count++;
 
   return eslOK;
@@ -302,12 +303,14 @@ fm_findOverlappingAmbiguityBlock (const FM_DATA *fm, const FM_METADATA *meta, ui
   if (ranges[hi].upper < start)   return -1;
 
   while (lo < hi) {
-    mid = (lo + hi) / 2;  /* round up */
-    if      (ranges[mid].lower   < start)  lo = mid + 1; /* too far left  */
-    else                                   hi = mid;    /* might be too far right */
+    mid = (lo + hi) / 2;  // round down
+    if      (ranges[mid].lower   < start)  lo = mid + 1; // too far left
+    else                                   hi = mid;    // might be too far right
   }
 
-  if ( ranges[lo].upper >= start && ranges[lo].lower <= end)   return lo;
+  //the range test above may have pushed the target one too far to the right
+  if      (lo>0 &&  ranges[lo-1].upper   >= start && ranges[lo-1].lower <= end) return lo-1;
+  else if (         ranges[lo].upper     >= start && ranges[lo].lower   <= end) return lo;
   else return -1;
 
 }
@@ -324,7 +327,7 @@ fm_findOverlappingAmbiguityBlock (const FM_DATA *fm, const FM_METADATA *meta, ui
  *            that the positions are relative to the revcomp.
  */
 int
-fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, uint64_t first, int length, int complementarity, ESL_SQ *sq, int fix_ambiguities )
+fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, uint64_t first, int length, int complementarity, ESL_SQ *sq, int fix_ambiguities)
 {
   uint64_t i, j;
 
@@ -356,8 +359,9 @@ fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, uint64_t first, 
       int32_t pos = fm_findOverlappingAmbiguityBlock (fm, meta, first, first+length-1 );
       if (pos != -1) {
         while (pos <= fm->ambig_offset + fm->ambig_cnt -1 && meta->ambig_list->ranges[pos].lower <= first+length-1) {
-          for (j=meta->ambig_list->ranges[pos].lower; j<=meta->ambig_list->ranges[pos].upper; j++)
-            if (j>=first && j<=first+length-1)
+          int start = ESL_MAX(first,          meta->ambig_list->ranges[pos].lower);
+          int end =   ESL_MIN(first+length-1, meta->ambig_list->ranges[pos].upper);
+          for (j= start; j<=end; j++)
               sq->dsq[j-first+1] = sq->abc->Kp-3; //'N'
           pos++;
         }
@@ -525,9 +529,9 @@ fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
     esl_fatal( "%s: Error reading ambig_offset in FM index.\n", __FILE__);
   if(fread(&(fm->overlap), sizeof(uint32_t), 1, meta->fp) !=  1)
     esl_fatal( "%s: Error reading overlap in FM index.\n", __FILE__);
-  if(fread(&(fm->seq_cnt), sizeof(uint16_t), 1, meta->fp) !=  1)
+  if(fread(&(fm->seq_cnt), sizeof(uint32_t), 1, meta->fp) !=  1)
     esl_fatal( "%s: Error reading seq_cnt in FM index.\n", __FILE__);
-  if(fread(&(fm->ambig_cnt), sizeof(uint16_t), 1, meta->fp) !=  1)
+  if(fread(&(fm->ambig_cnt), sizeof(uint32_t), 1, meta->fp) !=  1)
     esl_fatal( "%s: Error reading ambig_cnt in FM index.\n", __FILE__);
 
   compressed_bytes =   ((chars_per_byte-1+fm->N)/chars_per_byte);
@@ -667,7 +671,6 @@ fm_readFMmeta( FM_METADATA *meta)
     )
       esl_fatal( "%s: Error reading ambiguity data for FM index.\n", __FILE__);
   }
-
 
   return eslOK;
 

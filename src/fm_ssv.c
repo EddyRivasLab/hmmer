@@ -729,7 +729,8 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
          P7_HMM_WINDOWLIST *windowlist)
 {
   float sc_thresh, sc_threshFM;
-  float invP, invP_FM;
+  float invP;
+  //, invP_FM;
   float nullsc;
 
   int i;
@@ -782,8 +783,9 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
   invP = esl_gumbel_invsurv(F1, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   sc_thresh =   (invP * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec);
 
+//  invP_FM = esl_gumbel_invsurv(0.5, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+//  sc_threshFM = ESL_MAX(fm_cfg->scthreshFM,  (invP_FM * eslCONST_LOG2) + nullsc - (tmove + tloop_total + tmove + tbmk + tec) ) ;
   sc_threshFM = fm_cfg->scthreshFM * fm_cfg->sc_thresh_ratio;
-
 
   //get diagonals that score above sc_threshFM
   status = FM_getSeeds(fmf, fmb, fm_cfg, ssvdata, om->abc->Kp, sc_threshFM, &seeds );

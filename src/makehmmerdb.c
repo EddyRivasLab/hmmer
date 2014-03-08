@@ -166,7 +166,7 @@ ERROR:
  *            if SAsamp == NULL, don't store/write T or SAsamp
  */
 int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint32_t ambig_offset,
-                        uint16_t seq_cnt, uint16_t ambig_cnt, uint32_t overlap,
+                        uint32_t seq_cnt, uint32_t ambig_cnt, uint32_t overlap,
                         uint8_t *T, uint8_t *BWT,
                         int *SA, uint32_t *SAsamp,
                         uint32_t *occCnts_sb, uint32_t *cnts_sb,
@@ -330,9 +330,9 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint32_t ambig
     esl_fatal( "buildAndWriteFMIndex: Error writing ambig_offset in FM index.\n");
   if(fwrite(&overlap, sizeof(uint32_t), 1, fp) !=  1)
     esl_fatal( "buildAndWriteFMIndex: Error writing overlap in FM index.\n");
-  if(fwrite(&seq_cnt, sizeof(uint16_t), 1, fp) !=  1)
+  if(fwrite(&seq_cnt, sizeof(uint32_t), 1, fp) !=  1)
     esl_fatal( "buildAndWriteFMIndex: Error writing seq_cnt in FM index.\n");
-  if(fwrite(&ambig_cnt, sizeof(uint16_t), 1, fp) !=  1)
+  if(fwrite(&ambig_cnt, sizeof(uint32_t), 1, fp) !=  1)
     esl_fatal( "buildAndWriteFMIndex: Error writing ambig_cnt in FM index.\n");
 
   // don't write Tcompressed or SAsamp if SAsamp == NULL
@@ -422,8 +422,8 @@ main(int argc, char **argv)
   uint32_t seq_offset = 0;
   uint32_t ambig_offset = 0;
   uint32_t overlap = 0;
-  uint16_t seq_cnt;
-  uint16_t ambig_cnt;
+  uint32_t seq_cnt;
+  uint32_t ambig_cnt;
 
   uint32_t prev_numseqs = 0;
 
@@ -635,7 +635,7 @@ main(int argc, char **argv)
         c = abc->sym[block->list[i].dsq[j]];
         if ( meta->alph_type == fm_DNA) {
           if (meta->inv_alph[c] == -1) {
-            // replace ambiguity characters by rotating through A,C,G, and T.
+            // replace ambiguity characters by random choice of A,C,G, and T.
             c = meta->alph[(int)(esl_random(r)*4)];
 
             if (!in_ambig_run) {
@@ -656,9 +656,9 @@ main(int argc, char **argv)
         block_length++;
         if (j>block->list[i].C) total_char_count++; // add to total count, only if it's not redundant with earlier read
         meta->seq_data[numseqs].length++;
-
       }
       numseqs++;
+      in_ambig_run = 0;
     }
 
     T[block_length] = 0; // last character 0 is effectively '$' for suffix array
@@ -666,6 +666,7 @@ main(int argc, char **argv)
 
     seq_cnt = numseqs-seq_offset;
     ambig_cnt = meta->ambig_list->count - ambig_offset;
+
 
     //build and write FM-index for T.  This will be a BWT on the reverse of the sequence, required for reverse-traversal of the BWT
     buildAndWriteFMIndex(meta, seq_offset, ambig_offset, seq_cnt, ambig_cnt, (uint32_t)block->list[0].C, T, BWT, SA, SAsamp,
@@ -694,8 +695,6 @@ main(int argc, char **argv)
 
   meta->seq_count = numseqs;
   meta->block_count = numblocks;
-
-
 
     /* Finished writing the FM-index data to a temporary file. Now write
      * metadata to fname_out, than append FM-index data from temp file
@@ -736,6 +735,7 @@ main(int argc, char **argv)
     )
       esl_fatal( "%s: Error writing meta data for FM index.\n", argv[0]);
   }
+
 
   for (i=0; i<meta->ambig_list->count; i++) {
     if( fwrite(&(meta->ambig_list->ranges[i].lower), sizeof(meta->ambig_list->ranges[i].lower),       1, fp) != 1 ||
@@ -817,11 +817,6 @@ main(int argc, char **argv)
 
     }
   }
-
-
-  fprintf (stderr, "Number of characters in index:  %ld\n", (long)total_char_count);
-  fprintf (stderr, "Number of FM-index blocks:      %ld\n", (long)meta->block_count);
-
 
   fclose(fp);
   fclose(fptmp);
