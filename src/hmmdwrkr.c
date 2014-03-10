@@ -766,6 +766,8 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
   P7_DOMAIN          *dcl;
   int                 i, j, n;
   esl_pos_t           offset;
+  char               *pEnd; /* pointer used by strtol to locate the taxonomy id on the description line. */
+
 
   memset(&status, 0, sizeof(HMMD_SEARCH_STATUS)); /* silence valgrind errors - zero out entire structure including its padding */
   status.status     = eslOK;
@@ -807,17 +809,31 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
 
     /* the name will be an integer value of the sequence index */
     h1->name = (char *) strtol(h2->name, NULL, 10);
-    h1->acc  = NULL;
+//    h1->acc  = NULL;
 
     /* We want to override the sequence description as a container
      * for the domain architecture.
      * We have already assigned the architecture when generating
      * the sequence database, and comparing it to the latest version
      * of Pfam. Copying the example above, convert the string to
-     * a long and cast back to the a char. Nasty hack, but atleast
+     * a long and cast back to a char. Nasty hack, but at least
      * then it gets written back out to the socket. rdf
      */
-    if(h2->desc != NULL) h1->desc = (char *) strtol(h2->desc, NULL, 10);
+    //if(h2->desc != NULL) h1->desc = (char *) strtol(h2->desc, NULL, 10);
+    if (h2->desc != NULL) {
+      h1->desc = (char *) strtol(h2->desc, &pEnd, 10);
+      /* Given the sequence header:
+       * >1 000101001 12343829483298 1234
+       * This will grab the last value (1234) if present and place it in
+       * the acc entry as it is not being used by hmmpgmd. This is the same
+       * way that we hijacked the desc field to pass the architecture
+       * information back. Currently used to pass the taxonomy id to the
+       * hmmer website.
+       */
+       h1->acc  = (char *) strtol(pEnd, &pEnd, 10);
+    }
+
+
     h1->offset = offset;
 
     /* figure out how big the domains are and their offset */
