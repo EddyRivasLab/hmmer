@@ -17,6 +17,7 @@
 #include "esl_sqio.h"
 
 #include "hmmer.h"
+#include "sandbox/reference_mpl_fwd.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type           default  env  range  toggles reqs incomp  help                                       docgroup*/

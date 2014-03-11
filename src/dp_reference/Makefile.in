@@ -1,12 +1,13 @@
 MODULE = dp_reference
 
-LIBOBJS =  p7_refmx.o          \
-	   reference_decoding.o\
-	   reference_fwdback.o \
-	   reference_mpl.o     \
-	   reference_mpl_fwd.o \
-	   reference_trace.o   \
-	   reference_viterbi.o
+LIBOBJS =  p7_refmx.o                       \
+	   ref_anchors.o                    \
+	   reference_viterbi.o              \
+	   reference_trace.o                \
+	   reference_fwdback.o              \
+	   reference_decoding.o             \
+	   reference_anchorset_definition.o \
+	   reference_asc_forward.o 
 
 LIBHDRS =  
 
@@ -20,14 +21,14 @@ UTESTS = reference_decoding_utest \
          reference_fwdback_utest  \
          reference_viterbi_utest 
 
-STATS  = 
+STATS  = reference_anchorset_definition_stats
 
 BENCHMARKS = reference_fwdback_benchmark
 
-EXAMPLES = reference_decoding_example \
-           reference_fwdback_example  \
-	   reference_mpl_example      \
-	   reference_mpl_fwd_example  \
+EXAMPLES = reference_anchorset_definition_example \
+	   reference_asc_forward_example \
+           reference_decoding_example    \
+           reference_fwdback_example     \
            reference_viterbi_example
 
 

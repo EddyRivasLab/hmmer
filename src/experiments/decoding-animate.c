@@ -12,6 +12,7 @@
 #include "esl_sqio.h"
 
 #include "hmmer.h"
+#include "sandbox/reference_mpl_fwd.h"
 
 /* pixel in a ppm file = 0..255 R,G,B */
 typedef struct {

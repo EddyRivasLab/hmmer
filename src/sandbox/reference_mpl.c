@@ -6,6 +6,7 @@
 
 #include "hmmer.h"
 
+#include "sandbox/reference_mpl_fwd.h"
 
 int
 p7_ReferenceMPLSearch(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,

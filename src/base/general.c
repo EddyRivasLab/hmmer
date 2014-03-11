@@ -177,7 +177,7 @@ p7_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char
       esl_opt_DisplayHelp(stdout, go, 0, 2, 80);
       exit(0);
     }
-  if (esl_opt_ArgNumber(go) != nargs) 
+  if (nargs != -1 && esl_opt_ArgNumber(go) != nargs) 
     {
       puts("Incorrect number of command line arguments.");
       esl_usage(stdout, argv[0], usage);

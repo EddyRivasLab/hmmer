@@ -4,8 +4,8 @@
 #include "esl_random.h"
 
 #include "hmmer.h"
-#include "sandbox/reference_asc_forward.h"
-#include "sandbox/reference_asc.h"
+#include "dp_reference/reference_asc_forward.h"
+#include "dp_reference/reference_anchorset_definition.h"
 
 static int dump_xstats_asc(FILE *ofp, P7_XSTATS_ASC *stats);
 static int compare_anchorset_to_trace(P7_TRACE *tr, P7_COORDS2 *anch, P7_XSTATS_ASC *stats);
