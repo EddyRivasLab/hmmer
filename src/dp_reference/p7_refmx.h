@@ -53,12 +53,21 @@
  * the <type> field gets set by each algorithm implementation,
  * so p7_refmx_Validate() knows what type of DP matrix it is.
  */
-#define p7R_UNSET     0
-#define p7R_FORWARD   1
-#define p7R_BACKWARD  2
-#define p7R_DECODING  3
-#define p7R_ALIGNMENT 4
-#define p7R_VITERBI   5
+#define p7R_UNSET            0
+#define p7R_FORWARD          1
+#define p7R_BACKWARD         2
+#define p7R_DECODING         3
+#define p7R_ALIGNMENT        4
+#define p7R_VITERBI          5
+#define p7R_ASC_FWD_UP       6
+#define p7R_ASC_FWD_DOWN     7
+#define p7R_ASC_BCK_UP       8
+#define p7R_ASC_BCK_DOWN     9
+#define p7R_ASC_DECODE_UP   10
+#define p7R_ASC_DECODE_DOWN 11
+
+
+
 
 typedef struct p7_refmx_s {
   int      M;	     /* current DP matrix values valid for model of length M   */

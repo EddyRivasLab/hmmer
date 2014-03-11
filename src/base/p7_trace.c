@@ -831,7 +831,7 @@ p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol)
  *            Now <*ret_sc> is returned as $-\infty$.
  */
 int 
-p7_trace_Score(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, float *ret_sc)
+p7_trace_Score(const P7_TRACE *tr, const ESL_DSQ *dsq, const P7_PROFILE *gm, float *ret_sc)
 {
   float  sc;		/* total lod score   */
   int    z;             /* position in tr */
