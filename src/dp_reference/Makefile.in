@@ -7,7 +7,8 @@ LIBOBJS =  p7_refmx.o                       \
 	   reference_fwdback.o              \
 	   reference_decoding.o             \
 	   reference_anchorset_definition.o \
-	   reference_asc_forward.o 
+	   reference_asc_fwdback.o          \
+	   reference_asc_decoding.o
 
 LIBHDRS =  
 
@@ -26,7 +27,7 @@ STATS  = reference_anchorset_definition_stats
 BENCHMARKS = reference_fwdback_benchmark
 
 EXAMPLES = reference_anchorset_definition_example \
-	   reference_asc_forward_example \
+	   reference_asc_fwdback_example \
            reference_decoding_example    \
            reference_fwdback_example     \
            reference_viterbi_example

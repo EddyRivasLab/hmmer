@@ -72,13 +72,15 @@
 #include "dp_sparse/sparse_envscore.h"	   /* Modified Forward algorithm for scoring a single envelope       */
 #include "dp_sparse/sparse_null2.h"	   /* 'null2' algorithm for compensating for biased composition      */
 
-/* 'dp_reference' subdir: "reference" implementations of key algorithms, used for regression and other testing */
-#include "dp_reference/p7_refmx.h"            /* P7_REFMX: a O(ML) DP matrix for reference DP algorithms       */
-#include "dp_reference/ref_anchors.h"	      /* anchor set definition                                         */
-#include "dp_reference/reference_fwdback.h"   /* reference implementation of glocal/local Forward, Backward    */
-#include "dp_reference/reference_viterbi.h"   /* reference implementation of glocal/local Viterbi              */
-#include "dp_reference/reference_decoding.h"  /* reference implementation of glocal/local posterior Decoding   */
-#include "dp_reference/reference_trace.h"     /* reference implementation of glocal/local tracebacks           */
+/* 'dp_reference' subdir: "reference" implementations of key algorithms, used for regression and other testing  */
+#include "dp_reference/p7_refmx.h"               /* P7_REFMX: a O(ML) DP matrix for reference DP algorithms     */
+#include "dp_reference/ref_anchors.h"	         /* anchor set definition                                       */
+#include "dp_reference/reference_fwdback.h"      /* reference implementation of glocal/local Forward, Backward  */
+#include "dp_reference/reference_viterbi.h"      /* reference implementation of glocal/local Viterbi            */
+#include "dp_reference/reference_decoding.h"     /* reference implementation of glocal/local posterior Decoding */
+#include "dp_reference/reference_trace.h"        /* reference implementation of glocal/local tracebacks         */
+#include "dp_reference/reference_asc_fwdback.h"  /* anchor set constrained Forward, Backward                    */
+#include "dp_reference/reference_asc_decoding.h" /* anchor set constrained posterior decoding                   */
 
 /* 'daemon' subdir: Michael Farrar's daemon for HMMER3 web services                                       */
 #include "daemon/p7_hmmcache.h"	              /* P7_HMMCACHE : cached profile DB (such as Pfam)           */
