@@ -1462,10 +1462,10 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
                         P7_BG *bg, P7_TOPHITS *hitlist,
                         int64_t seqidx, const ESL_SQ *sq, int complementarity,
                         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg
-/*                        , ESL_STOPWATCH *ssv_watch_master
+                        , ESL_STOPWATCH *ssv_watch_master
                         , ESL_STOPWATCH *postssv_watch_master
                         , ESL_STOPWATCH *watch_slave
-*/
+
                         )
 {
   int              i;
@@ -1511,20 +1511,20 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
    * This variant of SSV will scan a long sequence and find
    * short high-scoring regions.
    */
-/*  if (watch_slave) {
+  if (watch_slave) {
     esl_stopwatch_Start(watch_slave);
   }
-  */
+
   if (fmf) // using an FM-index
     p7_SSVFM_longlarget(om, 2.0, bg, pli->F1, fmf, fmb, fm_cfg, data, &msv_windowlist );
   else // compare directly to sequence
     p7_SSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, data, bg, pli->F1, &msv_windowlist);
-/*  if (watch_slave) {
+  if (watch_slave) {
     esl_stopwatch_Stop(watch_slave);
     esl_stopwatch_Include(ssv_watch_master, watch_slave);
     esl_stopwatch_Start(watch_slave);
   }
-*/
+
 
   /* convert hits to windows, merging neighboring windows
    */
@@ -1655,12 +1655,11 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
     free (vit_windowlist.windows);
   }
 
-  /*
+
   if (watch_slave) {
     esl_stopwatch_Stop(watch_slave);
     esl_stopwatch_Include(postssv_watch_master, watch_slave);
   }
-  */
 
   if (msv_windowlist.windows != NULL) free (msv_windowlist.windows);
 
