@@ -165,7 +165,7 @@ getFMHits( FM_DATA *fm, FM_CFG *cfg, FM_INTERVAL *interval, int block_id, int hi
     hits_ptr[hit_offset + i - interval->lower].direction = fm_direction;
     hits_ptr[hit_offset + i - interval->lower].length    = hit_length;
 
-    dist_from_end = len + (j==fm->term_loc ? 0 : fm->SA[ j / cfg->meta->freq_SA ]) ; // len is how many backward steps we had to take to find a sampled SA position
+    dist_from_end = 1 + len + (j==fm->term_loc ? 0 : fm->SA[ j / cfg->meta->freq_SA ]) ; // len is how many backward steps we had to take to find a sampled SA position
 
     if (fm_direction == fm_forward)
       dist_from_end += hit_length;
@@ -319,7 +319,7 @@ main(int argc,  char *argv[])
     for (i=0; i<meta->block_count; i++) {
 
       fm_getSARangeReverse(fmsf+i, cfg, line, meta->inv_alph, &interval);
-      if (interval.lower>0 && interval.lower <= interval.upper) {
+      if (interval.lower>=0 && interval.lower <= interval.upper) {
         int new_hit_num =  interval.upper - interval.lower + 1;
         hit_num += new_hit_num;
         if (!count_only) {
@@ -336,7 +336,7 @@ main(int argc,  char *argv[])
       /* find reverse hits, using backward search on the forward FM*/
       if (!meta->fwd_only) {
         fm_getSARangeForward(fmsb+i, cfg, line, meta->inv_alph, &interval);// yes, use the backward fm to produce the equivalent of a forward search on the forward fm
-        if (interval.lower>0 && interval.lower <= interval.upper) {
+        if (interval.lower>=0 && interval.lower <= interval.upper) {
           int new_hit_num =  interval.upper - interval.lower + 1;
           hit_num += new_hit_num;
           if (!count_only) {
@@ -365,7 +365,7 @@ main(int argc,  char *argv[])
         //for each hit, identify the sequence id and position within that sequence
         for (i = 0; i< hit_num; i++) {
 
-          status = fm_getOriginalPosition (fmsf, meta, hits[i].block, hits[i].length, hits[i].direction, hits[i].start,  &(hits[i].block), &(hits[i].start) );
+          status = fm_getOriginalPosition (fmsf, meta, hits[i].block, hits[i].length, fm_forward, hits[i].start,  &(hits[i].block), &(hits[i].start) );
           hits[i].sortkey = (status==eslERANGE ? -1 : meta->seq_data[ hits[i].block ].target_id);
 
           if (hits[i].sortkey != -1)
@@ -381,7 +381,7 @@ main(int argc,  char *argv[])
         //skim past the skipped entries
         i = 0;
         while ( i < hit_num ) {
-          if (hits[i].block != -1 )
+          if (hits[i].sortkey != -1 )
             break;  //
           i++;
         }
@@ -391,7 +391,7 @@ main(int argc,  char *argv[])
           if (out != NULL) {
             fprintf (out, "%s\n",line);
             //fprintf (out, "\t%10s (%8d %s)\n",meta->seq_data[ hits[i].block ].name, hits[i].start, (hits[i].direction==fm_forward?"+":"-"));
-            fprintf (out, "    %8ld %s %10s\n", (long)(hits[i].start), (hits[i].direction==fm_forward?"f":"b"), meta->seq_data[ hits[i].block ].name);
+            fprintf (out, "    %8ld %s %10s\n", (long)(hits[i].start), (hits[i].direction==fm_forward?"f":"r"), meta->seq_data[ hits[i].block ].name);
           }
           hit_indiv_cnt++;
           i++; // skip the first one, since I'll be comparing each to the previous
@@ -404,7 +404,7 @@ main(int argc,  char *argv[])
             {
               if (out != NULL)
                 //fprintf (out, "\t%10s (%8d %s)\n",meta->seq_data[ hits[i].block ].name, hits[i].start, (hits[i].direction==fm_forward?"+":"-"));
-                fprintf (out, "    %8ld %s %10s\n", (long)(hits[i].start), (hits[i].direction==fm_forward?"f":"b"), meta->seq_data[ hits[i].block ].name);
+                fprintf (out, "    %8ld %s %10s\n", (long)(hits[i].start), (hits[i].direction==fm_forward?"f":"r"), meta->seq_data[ hits[i].block ].name);
               hit_indiv_cnt++;
             }
           }

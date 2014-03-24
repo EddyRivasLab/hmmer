@@ -174,7 +174,7 @@ fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
   //  fprintf (stderr, "%d : %12d..%12d\n", c, interval->lower, interval->upper );
 
 
-  while (interval_bk.lower>0 && interval_bk.lower <= interval_bk.upper) {
+  while (interval_bk.lower>=0 && interval_bk.lower <= interval_bk.upper) {
     c = query[++i];
     if (c == '\0')  // end of query - the current range defines the hits
       break;
@@ -225,7 +225,7 @@ fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
 
   //fprintf (stderr, "1: %d : %12d..%12d\n", c, interval->lower, interval->upper );
 
-  while (interval->lower>0 && interval->lower <= interval->upper) {
+  while (interval->lower>=0 && interval->lower <= interval->upper) {
     c = query[++i];
     if (c == '\0')  // end of query - the current range defines the hits
       break;

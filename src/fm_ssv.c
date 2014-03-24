@@ -295,7 +295,7 @@ FM_Recurse( int depth, int Kp, int fm_direction,
                                  dp_pairs[i].model_direction, dp_pairs[i].complementarity,
                                  &interval_1_new, seeds);
             }
-          } else {
+          } else { // fm_direction == fm_reverse
             //searching for forward matches on the FM-index
             interval_2_new.lower = interval_2->lower;
             interval_2_new.upper = interval_2->upper;
@@ -383,7 +383,7 @@ FM_Recurse( int depth, int Kp, int fm_direction,
                   );
 
 
-      } else {
+      } else { // fm_direction == fm_reverse
 
         interval_2_new.lower = interval_2->lower;
         interval_2_new.upper = interval_2->upper;
