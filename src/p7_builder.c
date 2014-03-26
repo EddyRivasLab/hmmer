@@ -141,6 +141,10 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
 
   bld->abc       = abc;
   bld->errbuf[0] = '\0';
+
+  bld->popen   = -1;
+  bld->pextend = -1;
+
   return bld;
   
  ERROR:

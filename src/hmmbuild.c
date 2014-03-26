@@ -97,10 +97,13 @@ static ESL_OPTIONS options[] = {
 /* Alternative prior strategies */
   { "--pnone",   eslARG_NONE,  FALSE,  NULL, NULL,       NULL,  NULL,"--plaplace", "don't use any prior; parameters are frequencies",      9 },
   { "--plaplace",eslARG_NONE,  FALSE,  NULL, NULL,       NULL,  NULL,   "--pnone", "use a Laplace +1 prior",                               9 },
+  { "--popen",    eslARG_REAL,  NULL,  NULL,"0<=x<0.5",NULL, NULL,           "",   "force gap open prob. (w/ --singlemx, aa default 0.02, nt 0.031)",       9 },
+  { "--pextend",  eslARG_REAL,  NULL,  NULL, "0<=x<1", NULL, NULL,           "",   "force gap extend prob. (w/ --singlemx, aa default 0.4, nt 0.75)",      9 },
+
 /* Single sequence methods */
   { "--singlemx", eslARG_NONE,   FALSE, NULL,   NULL,   NULL,  NULL,           "",   "use substitution score matrix for single-sequence inputs",     10 },
-  { "--popen",    eslARG_REAL,   "0.02", NULL,"0<=x<0.5",NULL, NULL,           "",   "gap open probability (with --singlemx)",                         10 },
-  { "--pextend",  eslARG_REAL,    "0.4", NULL, "0<=x<1", NULL, NULL,           "",   "gap extend probability (with --singlemx)",                       10 },
+//  { "--popen",    eslARG_REAL,   "0.02", NULL,"0<=x<0.5",NULL, NULL,           "",   "gap open probability (with --singlemx)",                         10 },
+//  { "--pextend",  eslARG_REAL,    "0.4", NULL, "0<=x<1", NULL, NULL,           "",   "gap extend probability (with --singlemx)",                       10 },
   { "--mx",     eslARG_STRING, "BLOSUM62", NULL, NULL,   NULL, NULL,   "--mxfile",   "substitution score matrix (built-in matrices, with --singlemx)", 10 },
   { "--mxfile", eslARG_INFILE,     NULL, NULL,   NULL,   NULL, NULL,       "--mx",   "read substitution score matrix from file <f> (with --singlemx)", 10 },
 
@@ -535,24 +538,35 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
       if ( esl_opt_IsOn(go, "--maxinsertlen") )
         info[i].bld->max_insert_len    = esl_opt_GetInteger(go, "--maxinsertlen");
 
+
+      double popen   ;
+      double pextend ;
+      if ( cfg->abc->type == eslDNA || cfg->abc->type == eslRNA ) {
+        //If user hasn't overridden defaults, assign the nucleotide defaults
+        popen   = esl_opt_IsUsed(go, "--popen")   ? esl_opt_GetReal(go, "--popen") : 0.03125;
+        pextend = esl_opt_IsUsed(go, "--pextend") ? esl_opt_GetReal(go, "--pextend") : 0.75;
+      } else {
+        //protein defaults
+        popen   = esl_opt_IsUsed(go, "--popen")   ? esl_opt_GetReal(go, "--popen") : 0.02;
+        pextend = esl_opt_IsUsed(go, "--pextend") ? esl_opt_GetReal(go, "--pextend") : 0.4;
+      }
+
       /* Default matrix is stored in the --mx option, so it's always IsOn().
        * Check --mxfile first; then go to the --mx option and the default.
        */
       if ( esl_opt_IsUsed(go, "--singlemx") ) {
         char  *mx      = esl_opt_GetString(go, "--mx");
-        double popen   = esl_opt_GetReal(go, "--popen");
-        double pextend = esl_opt_GetReal(go, "--pextend");
 
         if ( cfg->abc->type == eslDNA || cfg->abc->type == eslRNA ) {
           //If user hasn't overridden defaults, assign the nucleotide defaults
           if ( !esl_opt_IsUsed(go, "--mx") )       mx      = "DNA1";
-          if ( !esl_opt_IsUsed(go, "--popen") )    popen   = 0.03125;
-          if ( !esl_opt_IsUsed(go, "--pextend") )  pextend = 0.75;
         }
         if (esl_opt_IsOn(go, "--mxfile")) status = p7_builder_SetScoreSystem (info[i].bld, esl_opt_GetString(go, "--mxfile"), NULL, popen, pextend, info[i].bg);
         else                              status = p7_builder_LoadScoreSystem(info[i].bld, mx,                                      popen, pextend, info[i].bg);
         if (status != eslOK) p7_Fail("Failed to set single query seq score system:\n%s\n", info[i].bld->errbuf);
-
+      } else {
+        if (esl_opt_IsUsed(go, "--popen") )  info[i].bld->popen   = popen;
+        if (esl_opt_IsUsed(go, "--pextend")) info[i].bld->pextend = pextend;
       }
 
       /* special arguments for hmmbuild */
@@ -997,7 +1011,37 @@ serial_loop(WORKER_INFO *info, struct cfg_s *cfg, const ESL_GETOPTS *go)
         sq = NULL;
         hmm->eff_nseq = 1;
       } else {
+        int k;
         if ((status = p7_Builder(info->bld, msa, info->bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
+
+        //if not --singlemx, but the user set the popen/pextend flags, override the computed
+        //gap params now:
+        if (info->bld->popen != -1 || info->bld->pextend != -1) {
+          for (k = 0; k <= hmm->M; k++)
+          {
+             if (info->bld->popen != -1) {
+                hmm->t[k][p7H_MM] = 1.0 - 2 * info->bld->popen;
+                hmm->t[k][p7H_MI] = info->bld->popen;
+                hmm->t[k][p7H_MD] = info->bld->popen;
+             }
+             if (info->bld->pextend != -1) {
+                hmm->t[k][p7H_IM] = 1.0 - info->bld->pextend;
+                hmm->t[k][p7H_II] = info->bld->pextend;
+                hmm->t[k][p7H_DM] = 1.0 - info->bld->pextend;
+                hmm->t[k][p7H_DD] = info->bld->pextend;
+             }
+          }
+
+          /* Deal w/ special stuff at node M, overwriting a little of what we
+           * just did.
+           */
+          if (info->bld->popen != -1) {
+            hmm->t[hmm->M][p7H_MM] = 1.0 - info->bld->popen;
+          }
+          hmm->t[hmm->M][p7H_MD] = 0.;
+          hmm->t[hmm->M][p7H_DM] = 1.0;
+          hmm->t[hmm->M][p7H_DD] = 0.;
+        }
       }
       entropy = p7_MeanMatchRelativeEntropy(hmm, info->bg);
       if ((status = output_result(cfg, errmsg, cfg->nali, msa, hmm, postmsa, entropy))         != eslOK) p7_Fail(errmsg);
