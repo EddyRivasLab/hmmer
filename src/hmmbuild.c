@@ -341,6 +341,36 @@ output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
   return eslOK;
 }
 
+void
+apply_fixed_gap_params(P7_HMM *hmm, double popen, double pextend){
+  int k;
+  for (k = 0; k <= hmm->M; k++)
+  {
+     if (popen != -1) {
+        hmm->t[k][p7H_MM] = 1.0 - 2 * popen;
+        hmm->t[k][p7H_MI] = popen;
+        hmm->t[k][p7H_MD] = popen;
+     }
+     if (pextend != -1) {
+        hmm->t[k][p7H_IM] = 1.0 - pextend;
+        hmm->t[k][p7H_II] = pextend;
+        hmm->t[k][p7H_DM] = 1.0 - pextend;
+        hmm->t[k][p7H_DD] = pextend;
+     }
+  }
+
+  /* Deal w/ special stuff at node M, overwriting a little of what we
+   * just did.
+   */
+  if (popen != -1) {
+    hmm->t[hmm->M][p7H_MM] = 1.0 - popen;
+  }
+  hmm->t[hmm->M][p7H_MD] = 0.;
+  hmm->t[hmm->M][p7H_DM] = 1.0;
+  hmm->t[hmm->M][p7H_DD] = 0.;
+
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1014,33 +1044,9 @@ serial_loop(WORKER_INFO *info, struct cfg_s *cfg, const ESL_GETOPTS *go)
         int k;
         if ((status = p7_Builder(info->bld, msa, info->bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
 
-        //if not --singlemx, but the user set the popen/pextend flags, override the computed
-        //gap params now:
+        //if not --singlemx, but the user set the popen/pextend flags, override the computed gap params now:
         if (info->bld->popen != -1 || info->bld->pextend != -1) {
-          for (k = 0; k <= hmm->M; k++)
-          {
-             if (info->bld->popen != -1) {
-                hmm->t[k][p7H_MM] = 1.0 - 2 * info->bld->popen;
-                hmm->t[k][p7H_MI] = info->bld->popen;
-                hmm->t[k][p7H_MD] = info->bld->popen;
-             }
-             if (info->bld->pextend != -1) {
-                hmm->t[k][p7H_IM] = 1.0 - info->bld->pextend;
-                hmm->t[k][p7H_II] = info->bld->pextend;
-                hmm->t[k][p7H_DM] = 1.0 - info->bld->pextend;
-                hmm->t[k][p7H_DD] = info->bld->pextend;
-             }
-          }
-
-          /* Deal w/ special stuff at node M, overwriting a little of what we
-           * just did.
-           */
-          if (info->bld->popen != -1) {
-            hmm->t[hmm->M][p7H_MM] = 1.0 - info->bld->popen;
-          }
-          hmm->t[hmm->M][p7H_MD] = 0.;
-          hmm->t[hmm->M][p7H_DM] = 1.0;
-          hmm->t[hmm->M][p7H_DD] = 0.;
+          apply_fixed_gap_params(hmm, info->bld->popen, info->bld->pextend);
         }
       }
       entropy = p7_MeanMatchRelativeEntropy(hmm, info->bg);
@@ -1232,6 +1238,11 @@ pipeline_thread(void *arg)
       } else {
         status = p7_Builder(info->bld, item->msa, info->bg, &item->hmm, NULL, NULL, NULL, &item->postmsa);
         if (status != eslOK) p7_Fail("build failed: %s", info->bld->errbuf);
+
+        //if not --singlemx, but the user set the popen/pextend flags, override the computed gap params now:
+        if (info->bld->popen != -1 || info->bld->pextend != -1) {
+          apply_fixed_gap_params(item->hmm, info->bld->popen, info->bld->pextend);
+        }
       }
 
       item->entropy   = p7_MeanMatchRelativeEntropy(item->hmm, info->bg);
