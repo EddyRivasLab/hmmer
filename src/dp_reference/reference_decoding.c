@@ -595,10 +595,7 @@ main(int argc, char **argv)
   P7_PROFILE     *gm      = NULL;
   P7_REFMX       *fwd     = NULL;
   P7_REFMX       *pp      = NULL;
-  int           i,k;
-  float         fsc, bsc;
-  float         rowsum;
-  float        *dpc;
+  float           fsc, bsc;
   int             status;
 
   /* Read in one HMM */

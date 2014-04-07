@@ -3,10 +3,11 @@
  * 
  * Contents:
  *    1. MPAS algorithm 
- *    2. Internal (static) functions used by MPAS
- *    3. Statistics collection driver
- *    4. Example
- *    5. License and copyright information.
+ *    2. Making trial anchor sets (from traces, for example)
+ *    3. Internal (static) functions used by MPAS
+ *    4. Statistics collection driver
+ *    5. Example
+ *    6. License and copyright information.
  */
 #include "p7_config.h"
 
@@ -21,12 +22,11 @@
 #include "dp_reference/reference_asc_fwdback.h"
 #include "dp_reference/reference_trace.h"
 
-#include "dp_reference/reference_anchorset_definition.h"
+#include "dp_reference/reference_anchors.h"
 
 
 #include "search/p7_mpas.h"
 
-static int set_anchors_from_trace(const P7_REFMX *pp, const P7_TRACE *tr, P7_COORDS2 *anch);
 static int dump_current_anchorset(FILE *ofp, const P7_COORDS2 *anch);
 
 
@@ -176,7 +176,7 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
     {
       /* First time thru, <tr> is the Viterbi path, from caller; after that, it's a stochastic sampled path */
       p7_coords2_Reuse(anch);
-      set_anchors_from_trace(rxd, tr, anch);
+      p7_reference_anchors_SetFromTrace(rxd, tr, anch);
       status = p7_coords2_hash_Store(hashtbl, anch, &keyidx);
 
       /* <status> is either eslOK or eslEDUP.
@@ -317,29 +317,30 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
 /*-------------------- end, MPAS algorithm ----------------------*/
 
 
-
 /*****************************************************************
- * 2. Internal (static) functions used by MPAS
+ * 2. Making trial anchor sets
  *****************************************************************/
 
-/* set_anchors_from_trace()
+/* Function:  p7_reference_anchors_SetFromTrace()
+ * Synopsis:  Make an anchor set from a traceback path.
  *
- * Given a path <tr>, and posterior decoding matrix <pp>, for every
- * domain in <tr> choose the best anchor <(i,k)> by choosing the match
- * state (ML/MG) with highest posterior probability. Put the anchor
- * coordinates and count into <anch>, an allocated, empty structure
- * provided by the caller.
+ * Purpose:   Given a path <tr>, and posterior decoding matrix <pp>, for
+ *            every domain in <tr> choose the best anchor i,k by
+ *            choosing the match state (ML+MG, marginalized) with
+ *            highest posterior probability. Put the anchor
+ *            coordinates and count into <anch>, an allocated, empty
+ *            structure provided by the caller.
  *            
- * <anch> may get reallocated here, if needed.
- *
- * Trace <tr> does not need to be indexed.
- *
+ *            <anch> may be reallocated here, if needed.
+ *            
+ *            <tr> does not need to be indexed.
+ *            
  * Returns:   <eslOK> on success.
  *
- * Throws:    <eslEMEM> on reallocation failure.
+ * Throws:    <eslEMEM> on reallocation failure. 
  */
-static int
-set_anchors_from_trace(const P7_REFMX *pp, const P7_TRACE *tr, P7_COORDS2 *anch)
+int
+p7_reference_anchors_SetFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_COORDS2 *anch)
 {
   const float *dpc;
   int          z;		/* index in trace position */
@@ -375,6 +376,13 @@ set_anchors_from_trace(const P7_REFMX *pp, const P7_TRACE *tr, P7_COORDS2 *anch)
  ERROR:
   return status;
 }
+/*-------------- end, trial anchor set making -------------------*/
+
+
+
+/*****************************************************************
+ * 3. Internal (static) functions used by MPAS
+ *****************************************************************/
 
 static int
 dump_current_anchorset(FILE *ofp, const P7_COORDS2 *anch)
@@ -393,9 +401,9 @@ dump_current_anchorset(FILE *ofp, const P7_COORDS2 *anch)
 
 
 /*****************************************************************
- * 3. Statistics collection driver.
+ * 4. Statistics collection driver.
  *****************************************************************/
-#ifdef p7REFERENCE_ANCHORSET_DEFINITION_STATS
+#ifdef p7REFERENCE_ANCHORS_STATS
 #include "p7_config.h"
 
 #include "easel.h"
@@ -574,7 +582,7 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return eslOK;
 }
-#endif /*p7REFERENCE_ANCHORSET_DEFINITION_STATS*/
+#endif /*p7REFERENCE_ANCHORS_STATS*/
 
 /*----------------- end, statistics driver ----------------------*/
 
@@ -583,9 +591,9 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 4. Example
+ * 5. Example
  *****************************************************************/
-#ifdef p7REFERENCE_ANCHORSET_DEFINITION_EXAMPLE
+#ifdef p7REFERENCE_ANCHORS_EXAMPLE
 #include "p7_config.h"
 
 #include "easel.h"
@@ -710,7 +718,7 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /*p7REFERENCE_ANCHORSET_DEFINITION_EXAMPLE*/
+#endif /*p7REFERENCE_ANCHORS_EXAMPLE*/
 
 
 /*****************************************************************

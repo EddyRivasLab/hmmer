@@ -1,6 +1,6 @@
 
-#ifndef p7REFERENCE_ENVELOPE_DEFINITION_INCLUDED
-#define p7REFERENCE_ENVELOPE_DEFINITION_INCLUDED
+#ifndef p7REFERENCE_ENVELOPES_INCLUDED
+#define p7REFERENCE_ENVELOPES_INCLUDED
 #include "p7_config.h"
 
 #include "easel.h"
@@ -16,4 +16,4 @@ extern int p7_reference_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *g
 				  P7_REFMX *afu, P7_REFMX *afd, P7_ENVELOPE *env);
 
 
-#endif /*p7REFERENCE_ENVELOPE_DEFINITION_INCLUDED*/
+#endif /*p7REFERENCE_ENVELOPES_INCLUDED*/

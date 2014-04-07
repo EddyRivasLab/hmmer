@@ -13,6 +13,7 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_composition.h"
 #include "esl_dmatrix.h"
 #include "esl_vectorops.h"
 

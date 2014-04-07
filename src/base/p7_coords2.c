@@ -726,7 +726,7 @@ main(int argc, char **argv)
   ESL_GETOPTS    *go       = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   ESL_RANDOMNESS *rng      = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   P7_COORDS2     *c2       = p7_coords2_Create(0, 0);
-  P7_COORDS2_HASH *hash     = p7_coords2_hash_Create(0, 0, 0);
+  P7_COORDS2_HASH *hash    = p7_coords2_hash_Create(0, 0, 0);
   int             L        = 20;
   int             maxseg   = 1;
   int             nsamples = 1000;
@@ -737,9 +737,7 @@ main(int argc, char **argv)
   for (i = 0; i < nsamples; i++)
     {
       p7_coords2_Sample(rng, c2, maxseg, L, &wrk);
-
-      p7_coords2_hash_Store(hash, c2->seg, c2->nseg, &keyidx);
-
+      p7_coords2_hash_Store(hash, c2, &keyidx);
       p7_coords2_Reuse(c2);
     }
   

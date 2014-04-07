@@ -704,9 +704,6 @@ main(int argc, char **argv)
       anchm->arr[d].n2 = strtol( esl_opt_GetArg(go, i), NULL, 10); i++;
     }
   anchm->n    = D;
-  anchm->dim1 = sq->n;
-  anchm->dim2 = gm->M;
-
 
   p7_ReferenceViterbi (sq->dsq, sq->n, gm, vit, tr, &vsc);
   p7_ReferenceForward (sq->dsq, sq->n, gm, fwd, &fsc);   
@@ -716,7 +713,7 @@ main(int argc, char **argv)
   p7_refmx_DumpBestDecoding(stdout, sq->dsq, sq->n, gm, pp);
   //p7_trace_Dump(stdout, tr);
 
-  p7_ref_anchors_SetFromTrace(pp, tr, anchv);
+  p7_reference_anchors_SetFromTrace(pp, tr, anchv);
   p7_ReferenceASCForward(sq->dsq, sq->n, gm, anchv->arr, anchv->n, mxu, mxd, &asc);
 
   //p7_refmx_Dump(stdout, mxu);
