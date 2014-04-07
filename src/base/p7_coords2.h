@@ -30,21 +30,38 @@ typedef struct {
   P7_COORD2 *arr;		/* array of coord pairs                  */
   int32_t    n;			/* number of coord pairs in <arr>        */
 
-  int32_t    dim1;		/* max value of coordinate 1, arr[].n1   */
-  int32_t    dim2;		/* max value of coordinate 2, arr[].n2   */
-
   int32_t    nalloc;		/* current allocation size for <arr>     */
   int32_t    nredline;		/* Reuse() pulls alloc back down to this */
 } P7_COORDS2;
 
 
-/* P7_COORD2_HASH
- *    Experimental, for now.
+/* P7_COORDS2_HASH
  *    A hash table for storing P7_COORD2 arrays.
- *    To support ongoing experiments with MPL domain definition.
  *    Patterned on ESL_KEYHASH implementation.
  *    Pointerless, to facilitate copying.
  *
+ * Each "element" we store is one coord2 array:  n (x0,y0)..(xn-1,yn-1)
+ * Each element is associated with a unique integer key, 0..nkeys-1.
+ *
+ * <cmem> consists of packed data for all stored elements. 
+ * <cn> is the total number of integers stored in cmem now.
+ * 
+ * Element <i> data starts at cmem+key_offset[i]. 
+ * We use offsets, rather than pointers, because we may need
+ * to reallocate <cmem>, which would invalidate pointers.
+ * 
+ * To read the data from element <i>, you first read its <n> at
+ * *(cmem+key_offset[i]), then read <n> integer pairs.
+ * 
+ * Each element is hashed, generating a hash value from 0..hashsize-1,
+ * and integer keys are stored in a hashtable of linked lists.
+ * hashtable[z] is the head node of the list for hash value z.
+ * It's either -1 if the list is empty, or a key 0..nkeys-1.
+ * The linked list is implemented by having <nxt> values for
+ * each key; also -1 (no more keys in list) or a key 0..nkeys-1.
+ * Again, implementing this in terms of keys, not pointers, is
+ * important because we will need to reallocate memory sometimes.
+ * 
  * Example: 
  *   suppose we've stored 2 different domain definitions for seq of length 100.
  *   1. Two domains, 42..61 72..90
@@ -77,7 +94,7 @@ typedef struct {
   int32_t  *cmem;	  /* memory for storing coord2 data */
   int32_t   calloc;	  /* current allocated size of <cmem>, in # of ints */
   int32_t   cn;		  /* current used size of coord2 data */
-} P7_COORD2_HASH;
+} P7_COORDS2_HASH;
 
 extern P7_COORDS2 *p7_coords2_Create      (int32_t nalloc, int32_t nredline);
 extern int         p7_coords2_Grow        (P7_COORDS2 *c2);
@@ -87,12 +104,14 @@ extern int         p7_coords2_SetFromTrace(P7_COORDS2 *c2, const P7_TRACE *tr);
 extern int         p7_coords2_Reuse       (P7_COORDS2 *c2);
 extern void        p7_coords2_Destroy     (P7_COORDS2 *c2);
 
-extern P7_COORD2_HASH *p7_coord2_hash_Create (int32_t init_hashsize, int32_t init_nkeyalloc, int32_t init_calloc);
-extern size_t          p7_coord2_hash_Sizeof (const P7_COORD2_HASH *ch);
-extern void            p7_coord2_hash_Destroy(P7_COORD2_HASH *ch);
-extern int             p7_coord2_hash_Store  (P7_COORD2_HASH *ch, const P7_COORD2 *seg, int32_t nseg, int32_t *opt_index);
-extern int             p7_coord2_hash_Get    (const P7_COORD2_HASH *ch, int32_t L, int32_t keyidx, P7_COORDS2 *c2);
-extern int             p7_coord2_hash_Dump   (FILE *ofp, const P7_COORD2_HASH *ch);
+extern P7_COORDS2_HASH *p7_coords2_hash_Create (int32_t init_hashsize, int32_t init_nkeyalloc, int32_t init_calloc);
+extern size_t           p7_coords2_hash_Sizeof (const P7_COORDS2_HASH *ch);
+extern int              p7_coords2_hash_Reuse  (P7_COORDS2_HASH *ch);
+extern void             p7_coords2_hash_Destroy(P7_COORDS2_HASH *ch);
+
+extern int              p7_coords2_hash_Store  (P7_COORDS2_HASH *ch, const P7_COORDS2 *c2, int32_t *opt_index);
+extern int              p7_coords2_hash_Get    (const P7_COORDS2_HASH *ch, int32_t keyidx, P7_COORDS2 *c2);
+extern int              p7_coords2_hash_Dump   (FILE *ofp, const P7_COORDS2_HASH *ch);
 
 extern int p7_coords2_Sample(ESL_RANDOMNESS *rng, P7_COORDS2 *c2, int32_t maxseg, int32_t L, int32_t **byp_wrk);
 

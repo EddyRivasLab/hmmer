@@ -1,12 +1,12 @@
 MODULE = dp_reference
 
 LIBOBJS =  p7_refmx.o                       \
-	   ref_anchors.o                    \
 	   reference_viterbi.o              \
 	   reference_trace.o                \
 	   reference_fwdback.o              \
 	   reference_decoding.o             \
 	   reference_anchorset_definition.o \
+	   reference_envelope_definition.o  \
 	   reference_asc_fwdback.o          \
 	   reference_asc_decoding.o
 

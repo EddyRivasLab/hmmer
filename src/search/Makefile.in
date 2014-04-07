@@ -1,9 +1,10 @@
 MODULE = search
 
-LIBOBJS =  modelconfig.o\
-	   p7_pipeline.o\
-	   p7_pipeline_mpi.o\
-	   tophits_output.o\
+LIBOBJS =  modelconfig.o     \
+	   p7_mpas.o         \
+	   p7_pipeline.o     \
+	   p7_pipeline_mpi.o \
+	   tophits_output.o  \
 	   tophits_output_tabular.o
 
 LIBHDRS =  

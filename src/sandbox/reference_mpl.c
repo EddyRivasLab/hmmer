@@ -12,10 +12,10 @@ int
 p7_ReferenceMPLSearch(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 		      P7_COORDS2 *dom)
 {
-  P7_REFMX       *fwd     = p7_refmx_Create(gm->M, L);
-  P7_REFMX       *mpl     = p7_refmx_Create(gm->M, L);
-  P7_TRACE       *tr      = p7_trace_Create();
-  P7_COORD2_HASH *hashtbl = p7_coord2_hash_Create(0,0,0);
+  P7_REFMX        *fwd     = p7_refmx_Create(gm->M, L);
+  P7_REFMX        *mpl     = p7_refmx_Create(gm->M, L);
+  P7_TRACE        *tr      = p7_trace_Create();
+  P7_COORDS2_HASH *hashtbl = p7_coords2_hash_Create(0,0,0);
   double          remprob = 1.0;
   float          *wrk     = NULL; /* reusable workspace needed for stochastic trace */
   int      max_iterations = 100000;
@@ -39,8 +39,8 @@ p7_ReferenceMPLSearch(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_P
    */
   p7_ReferenceViterbi(dsq, L, gm, mpl, tr, &sc);
   p7_trace_Index(tr);
-  p7_coords2_SetFromTrace(dom, tr);                                      /* sets <dom>      */
-  p7_coord2_hash_Store(hashtbl, dom->arr, dom->n, &bestidx);          /* stores <dom> in the hash */
+  p7_coords2_SetFromTrace(dom, tr);                 /* sets <dom>      */
+  p7_coords2_hash_Store(hashtbl, dom, &bestidx);    /* stores <dom> in the hash */
   p7_refmx_Reuse(mpl);
 
   p7_ReferenceMPLForward(dsq, L, gm, dom->arr, dom->n, mpl, &sc);   
@@ -64,7 +64,7 @@ p7_ReferenceMPLSearch(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_P
       p7_reference_trace_Stochastic(rng, &wrk, gm, fwd, tr);
       p7_trace_Index(tr);
       p7_coords2_SetFromTrace(dom, tr);
-      status = p7_coord2_hash_Store(hashtbl, dom->arr, dom->n, &keyidx);
+      status = p7_coords2_hash_Store(hashtbl, dom, &keyidx);
       /* That status is either eslOK or eslEDUP. */
 
       if (status == eslOK)	/* eslOK = the trace implies a new labeling we haven't seen yet */
@@ -100,10 +100,10 @@ p7_ReferenceMPLSearch(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_P
     }
   
  DONE:
-  p7_coord2_hash_Get(hashtbl, L, bestidx, dom);
+  p7_coords2_hash_Get(hashtbl, bestidx, dom);
 
   if (wrk) free(wrk);
-  p7_coord2_hash_Destroy(hashtbl);
+  p7_coords2_hash_Destroy(hashtbl);
   p7_trace_Destroy(tr);
   p7_refmx_Destroy(mpl);
   p7_refmx_Destroy(fwd);

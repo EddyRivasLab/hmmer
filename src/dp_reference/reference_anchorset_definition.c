@@ -1,311 +1,400 @@
+/* Most probable anchor set (MPAS) algorithm
+ * Reference implementation: test/development.
+ * 
+ * Contents:
+ *    1. MPAS algorithm 
+ *    2. Internal (static) functions used by MPAS
+ *    3. Statistics collection driver
+ *    4. Example
+ *    5. License and copyright information.
+ */
 #include "p7_config.h"
 
 #include "easel.h"
 #include "esl_random.h"
 
-#include "hmmer.h"
+#include "base/p7_coords2.h"
+#include "base/p7_profile.h"
+#include "base/p7_trace.h"
+
+#include "dp_reference/p7_refmx.h"
 #include "dp_reference/reference_asc_fwdback.h"
+#include "dp_reference/reference_trace.h"
+
 #include "dp_reference/reference_anchorset_definition.h"
 
-static int dump_xstats_asc(FILE *ofp, P7_XSTATS_ASC *stats);
-static int compare_anchorset_to_trace(P7_TRACE *tr, P7_COORDS2 *anch, P7_XSTATS_ASC *stats);
+
+#include "search/p7_mpas.h"
+
+static int set_anchors_from_trace(const P7_REFMX *pp, const P7_TRACE *tr, P7_COORDS2 *anch);
+static int dump_current_anchorset(FILE *ofp, const P7_COORDS2 *anch);
 
 
+/*****************************************************************
+ * 1. MPAS algorithm
+ *****************************************************************/
+
+/* Function:  p7_reference_Anchors()
+ * Synopsis:  The most probable anchor set (MPAS) algorithm.
+ *
+ * Purpose:   Find the most probable anchor set for comparison of 
+ *            query profile <gm> to target digital sequence <dsq>
+ *            of length <L>.
+ *            
+ *            An "anchor set" defines the number and locations of
+ *            domains in the target sequence (i.e. homologous
+ *            subsequences that each match the model). Each "anchor" is
+ *            a correspondence (i0,k0) between a residue i0 in the
+ *            sequence and a match state k0 in the profile.  The
+ *            probability mass of a domain is defined as the sum of
+ *            all paths that pass through the domain's anchor (either
+ *            using the glocal MG or the local ML match state). The
+ *            probability mass of a domain structure of D domains is
+ *            defined as the sum of all paths that pass through each
+ *            of the D anchors in separate domains (i.e., paths that
+ *            look like SN..NB..(Mk0)..EJ..JB..(Mk0)..EC..CT.)
+ *            
+ *            The MPAS algorithm depends on stochastic path sampling,
+ *            so caller provides a random number generator <rng>.
+ *
+ *            Caller has already done what we call "First Analysis" on
+ *            the sequence: standard Viterbi, Forward/Backward, and
+ *            posterior Decoding. From this, caller provides the
+ *            Forward matrix <rxf>, the Decoding matrix <rxd>, and the
+ *            Viterbi trace <tr>. The matrices will remain unchanged,
+ *            returned just as they came in. <tr> will be overwritten
+ *            by newly sampled paths.
+ *            
+ *            Caller provides two workspaces. <byp_wrk> is a "bypass"
+ *            workspace that the stochastic trace algorithm knows how
+ *            to deal with. A caller will generally set <float *wrk =
+ *            NULL>, pass <&wrk> for the argument, and <free(wrk)>
+ *            when done. The other workspace is an empty <hashtbl>
+ *            that we need for fast checking of which anchor sets
+ *            we've already calculated scores for.
+ *
+ *            For retrieving the result, caller provides two empty
+ *            matrices <afu>, <afd>; an empty anchor set <anch>; and
+ *            <asc_sc>. Upon return, <afu> and <afd> are the ASC UP
+ *            and ASC DOWN matrices for the most probable anchor set;
+ *            <anch> is that anchor set; and <asc_sc> is the raw
+ *            anchor-set-constrained score in nats.
+ *            
+ *            Optionally, caller may override default parameters by
+ *            passing in a <prm> structure. Pass <NULL> to use
+ *            defaults.
+ *
+ *            Also optionally, caller may provide a pointer to a
+ *            <stats> structure, to collect and retrieve statistics
+ *            about the MPAS algorithm's performance. Pass <NULL> if
+ *            this information isn't needed.
+ *            
+ *            The statistics in <stats> are collected in two phases.
+ *            The first phase is collected here. A second phase
+ *            requires having both the Viterbi trace and the anchor
+ *            set, in order to compare the two. That requires having
+ *            two trace structures around, one for sampling in the
+ *            MPAS algorithm and one for remembering the Viterbi
+ *            trace. We split the collection into these two phases
+ *            because we don't want to force the caller to always have
+ *            two trace structures, even if the caller isn't
+ *            collecting the extra statistics; this way, the caller
+ *            that is interested, can make its own copy of the Viterbi
+ *            path. The <stats> structure has flags for whether it has
+ *            the data for phase 1, phase 2, or both.
+ *            
+ *            Collecting <stats> does come with some computational
+ *            overhead; avoid it in production code (of course, the
+ *            reference implementation isn't supposed to be in
+ *            production code in the first place).
+ *
+ * Args:      rng       : random number generator
+ *            dsq       : target sequence, digital (1..L) 
+ *            L         : length of <dsq>
+ *            gm        : query profile, dual-mode, (1..M)
+ *            rxf       : Forward matrix for <gm> x <dsq> comparison
+ *            rxd       : Decoding matrix for <gm> x <dsq> comparison
+ *            tr        : Viterbi trace for <gm> x <dsq>, then used as space for sampled paths  
+ *            byp_wrk   : BYPASS: workspace array for stochastic tracebacks
+ *            hashtbl   : empty hash table for alternative <anch> solutions
+ *            afu       : empty matrix to be used for ASC UP calculations
+ *            afd       : empty matrix to be used for ASC DOWN calculations
+ *            anch      : empty anchor data structure to hold result
+ *            ret_asc   : score of the most probable anchor set (raw, nats)
+ *            prm       : OPTIONAL : non-default control parameters
+ *            stats     : OPTIONAL : detailed data collection for development, debugging (or NULL)
+ *
+ * Returns:   <eslOK> on success, and:
+ *            anch    : contains most probable anchor set
+ *            afu     : contains ASC Forward UP matrix for MPAS solution
+ *            afd     : contains ASC Forward DOWN matrix for it
+ *            ret_asc : is the ASC Forward score of it, raw (nats)
+ *            stats   : if provided, contains statistics on the optimization that was done
+ *            
+ *            hashtbl : undefined (contains hashed data on all anchorsets that were tried)
+ *            tr      : undefined (contains last path that that algorithm happened to sample)
+ *            rng     : internal state changed (because we sampled numbers from it)
+ */
 int
-p7_coords2_SetAnchorsFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_COORDS2 *anch)
+p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, 
+		     const P7_REFMX *rxf, const P7_REFMX *rxd,
+		     P7_TRACE *tr,  float **byp_wrk,  P7_COORDS2_HASH *hashtbl,
+		     P7_REFMX *afu, P7_REFMX *afd, P7_COORDS2 *anch,  float *ret_asc,
+		     P7_MPAS_PARAMS *prm, P7_MPAS_STATS *stats)
 {
-  float *dpc;
-  float  ppv;
-  int z;
-  int k,s;
-  int d = 0;
-  int   i       = 0;
-  float best_pp = -1.;
-  int status;
+  float           fwdsc          = P7R_XMX(rxf, L, p7R_C) + gm->xsc[p7P_C][p7P_MOVE];  // if this lookup seems iffy, efficiency-wise, make fwdsc an argument; caller has it
+  int             max_iterations = (prm ? prm->max_iterations      : 1000);
+  float           loglossthresh  = (prm ? log(prm->loss_threshold) : log(0.001));
+  int             be_verbose     = (prm ? prm->be_verbose          : FALSE);
+  int             M              = gm->M;
+  float           best_asc       = -eslINFINITY;
+  int             iteration      = 0;   // Counter for stochastic samples. Is 0 for the Viterbi trace, 1st path thru main loop
+  float           asc,    best_ascprob;
+  int32_t         keyidx, best_keyidx;
+  int             status;
+  
+  /* Contract checks / argument validation */
+  ESL_DASSERT1(( rxf->type == p7R_FORWARD  ));
+  ESL_DASSERT1(( rxd->type == p7R_DECODING ));
+  ESL_DASSERT1(( rxf->L == L && rxf->M == M ));
+  ESL_DASSERT1(( rxd->L == L && rxd->M == M ));
+  ESL_DASSERT1(( tr->L  == L && tr->M  == M ));
+  /* afu, afd will be checked, reallocated, initialized in ASCForward() calls */
 
-  if (( status = p7_coords2_GrowTo(anch, tr->ndom) ) != eslOK) goto ERROR;
+  /* Initialize optional <stats> */
+  if (stats) {
+    p7_mpas_stats_Init(stats);
+    p7_trace_Score(tr, dsq, gm, &(stats->vsc));
+    stats->fsc = fwdsc;
+  }
+
+  if (be_verbose) printf("# Forward score: %6.2f nats\n", fwdsc);
+
+  /* MPAS algorithm main loop */
+  while (1) // ends on convergence tests at end of loop
+    {
+      /* First time thru, <tr> is the Viterbi path, from caller; after that, it's a stochastic sampled path */
+      p7_coords2_Reuse(anch);
+      set_anchors_from_trace(rxd, tr, anch);
+      status = p7_coords2_hash_Store(hashtbl, anch, &keyidx);
+
+      /* <status> is either eslOK or eslEDUP.
+       *    <eslOK>   = <anch> is new and needs to be scored;
+       *    <eslEDUP> = <anch> is a duplicate, doesn't need scoring, only counting
+       */
+      if (status == eslOK)
+	{
+	  /* Get the ASC score for this new anchor set */
+	  p7_refmx_Reuse(afu);
+	  p7_refmx_Reuse(afd);
+	  p7_ReferenceASCForward(dsq, L, gm, anch->arr, anch->n, afu, afd, &asc);
+	  
+	  ESL_DASSERT1(( asc != -eslINFINITY ));
+
+	  if (stats) 
+	    {
+	      stats->tot_asc_calculations++;
+	      if (iteration == 0) {
+		stats->vit_asc     = asc;
+		stats->vit_ascprob = exp(asc - fwdsc);
+	      } 	      
+	    }
+
+	  if (be_verbose)
+	    {
+	      if      (iteration == 0) printf("VIT      %5d %6.2f %10.4g ", keyidx, asc, exp(asc-fwdsc));
+	      else if (asc > best_asc) printf("NEW/BEST %5d %6.2f %10.4g ", keyidx, asc, exp(asc-fwdsc));
+	      else                     printf("NEW      %5d %6.2f %10.4g ", keyidx, asc, exp(asc-fwdsc));
+	      dump_current_anchorset(stdout, anch);
+	    }
+
+	  /* If it's better than our best solution so far, store it. */
+	  if (asc > best_asc)
+	    {
+	      best_asc     = asc;
+	      best_ascprob = exp(asc - fwdsc);
+	      best_keyidx  = keyidx;
+	      
+	      if (stats) 
+		{
+		  if (iteration > 0) stats->best_is_viterbi = FALSE;
+		  stats->nsamples_in_best = 1;
+		}
+	    }
+	}	  
+      else if (status == eslEDUP)
+	{
+	  if (stats && keyidx == best_keyidx) stats->nsamples_in_best++;
+
+	  if (be_verbose)
+	    {
+	      printf("dup      %5d %6s %10s ", keyidx, "-", "-");
+	      dump_current_anchorset(stdout, anch);
+	    }
+	}
+
+      /* Convergence / termination tests. See note [1] at end of file for details.  */
+      if (best_ascprob >= 0.5 || iteration * log(1.0 - best_ascprob) < loglossthresh)
+	break;
+      if (iteration == max_iterations) {
+	if (stats) stats->solution_not_found = TRUE;
+	break; 
+      }
+
+      /* Otherwise, sample a new path and loop around again */
+      p7_trace_Reuse(tr);
+      p7_reference_trace_Stochastic(rng, byp_wrk, gm, rxf, tr);
+
+      iteration++;
+    }
+
+  if (keyidx != best_keyidx)
+    {
+      p7_coords2_hash_Get(hashtbl, best_keyidx, anch);
+      p7_ReferenceASCForward(dsq, L, gm, anch->arr, anch->n, afu, afd, &asc);
+    }
+
+  if (stats) 
+    {
+      stats->tot_iterations = iteration;
+      stats->best_asc       = asc;
+      stats->best_ascprob   = exp(asc - fwdsc);
+      stats->has_part1      = TRUE;
+    }
+
+  if (be_verbose)
+    {
+      printf("WINNER   %5d %6.2f %10.4g ", best_keyidx, best_asc, exp(best_asc-fwdsc));
+      dump_current_anchorset(stdout, anch);
+    }
+
+  *ret_asc = asc;
+  return eslOK;
+}
+
+/*****************************************************************
+ * Footnotes 
+ * Additional note [1]. On the convergence tests.
+ *
+ * The three convergence tests for the MPAS algorithm work
+ * as follows.
+ * 
+ * 1. i * log(1 - p) < log(t)
+ *    Assume that by sampling paths from posterior probability
+ *    P(\pi), we're sampling anchor sets A from P(A). (This is
+ *    almost, but not quite true, so the test is a heuristic,
+ *    not an actual proof.) Suppose there's an AS that's better
+ *    than our current best, with probability p >
+ *    best_ascprob. The probability that we haven't sampled such
+ *    an AS yet, in i iterations, is < (1-best_ascprob)^i.  If
+ *    this probability falls below some low/negligible
+ *    threshold, we can declare that we've probably found the
+ *    solution already: hence, i log (1-best_ascprob) < log t.
+ * 
+ *    If this test succeeds, we don't know that afu, afd, asc
+ *    are on the best solution, so we may need to recalculate
+ *    them one last time before being done; hence the 
+ *    keyidx != best_keyidx test and the recalculation. (The
+ *    other way to do it is to keep the best matrices somewhere,
+ *    but we would rather burn a small amount of time than a lot
+ *    of memory.
+ *
+ * 2. best_ascprob >= 0.5 
+ *    If this AS happens to dominate, we know we're done (probably
+ *    quickly); moreover, this will be triggered immediately after we
+ *    calculated a new ASC score, so we know that what's in afu, afd,
+ *    asc is from that solution, and keyidx == best_keyidx.
+ *    
+ * 3. iteration == max_iterations
+ *    I believe the MPAS problem is NP-hard. The algorithm usually
+ *    works in reasonable time by testing the probabilities above (and
+ *    accepting the error probability in test [1]). But we may need to
+ *    stop the search and end with the best solution we've found so
+ *    far.
+ *****************************************************************/
+
+/*-------------------- end, MPAS algorithm ----------------------*/
+
+
+
+/*****************************************************************
+ * 2. Internal (static) functions used by MPAS
+ *****************************************************************/
+
+/* set_anchors_from_trace()
+ *
+ * Given a path <tr>, and posterior decoding matrix <pp>, for every
+ * domain in <tr> choose the best anchor <(i,k)> by choosing the match
+ * state (ML/MG) with highest posterior probability. Put the anchor
+ * coordinates and count into <anch>, an allocated, empty structure
+ * provided by the caller.
+ *            
+ * <anch> may get reallocated here, if needed.
+ *
+ * Trace <tr> does not need to be indexed.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on reallocation failure.
+ */
+static int
+set_anchors_from_trace(const P7_REFMX *pp, const P7_TRACE *tr, P7_COORDS2 *anch)
+{
+  const float *dpc;
+  int          z;		/* index in trace position */
+  float        ppv;
+  float        best_ppv = -1.;
+  int          status;
+
+  /* contract check */
+  ESL_DASSERT1(( anch->n == 0 ));
 
   for (z = 0; z < tr->N; z++)
     {
-      if (tr->i[z]) i = tr->i[z]; /* keeps track of last i emitted, for when a D state is best */
-
-      if (p7_trace_IsMain(tr->st[z]))
+      if (p7_trace_IsM(tr->st[z]))
 	{
-	  k   = tr->k[z];
-	  dpc = pp->dp[i] + k * p7R_NSCELLS;
-	  ppv = 0.0;
-	  for (s = 0; s < p7R_NSCELLS; s++) ppv += dpc[s];
-	  if (ppv > best_pp)
+	  dpc = pp->dp[tr->i[z]] + tr->k[z] * p7R_NSCELLS;
+	  ppv = dpc[p7R_ML] + dpc[p7R_MG];
+	  if (ppv > best_ppv)
 	    {
-	      anch->arr[d].n1 = i;
-	      anch->arr[d].n2 = k;
-	      best_pp         = ppv;
+	      anch->arr[anch->n].n1 = tr->i[z];
+	      anch->arr[anch->n].n2 = tr->k[z];
+	      best_ppv   = ppv;
 	    }
 	}
       else if (tr->st[z] == p7T_E)
 	{
-	  d++;
-	  best_pp = -1.;
+	  anch->n++;
+	  best_ppv = -1.;
+	  if ((status = p7_coords2_Grow(anch)) != eslOK) goto ERROR; /* Make sure we have room for another domain */
 	}
     }
-
-  anch->n    = d;
-  anch->dim1 = pp->L;
-  anch->dim2 = pp->M;
   return eslOK;
   
  ERROR:
   return status;
 }
 
-
-int
-p7_ReferenceASCSearch(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_COORDS2 *anch, P7_XSTATS_ASC *stats)
-{
-  P7_REFMX       *rxf     = p7_refmx_Create(gm->M, L);
-  P7_REFMX       *rxd     = p7_refmx_Create(gm->M, L);
-  P7_REFMX       *rxau    = p7_refmx_Create(gm->M, L);
-  P7_REFMX       *rxad    = p7_refmx_Create(gm->M, L);
-  P7_TRACE       *vtr     = p7_trace_Create();
-  P7_TRACE       *tr      = p7_trace_Create();
-  P7_COORD2_HASH *hashtbl = p7_coord2_hash_Create(0,0,0);
-  float          *wrk     = NULL;                        /* tmp work space needed by stochastic traceback */
-  float           fwdsc;
-  float           asc, vsc, best_asc;
-  float           ascprob,  best_ascprob;
-  int32_t         keyidx, best_keyidx;
-  int             iteration;
-  int             max_iterations = 1000;
-  int             d;
-  float           lossthresh = log(0.001);
-  int             am_done    = FALSE;
-  int             be_verbose = TRUE;
-  int             status;
-  
-  stats->tot_iterations       = max_iterations;
-  stats->tot_asc_calculations = 0;
-  stats->n_to_find            = -1;
-  stats->nsamples_in_best     = 0;	/* Viterbi path doesn't count as a sample */
-  stats->best_is_viterbi      = TRUE;	/* until it's not */  
-  stats->best_found_late      = FALSE;
-
-  /* Calculate a Forward matrix, for sampling traces;
-   *   the Forward score, for normalization;
-   *   and a Decoding matrix, for posterior (i,k) probabilities.
-   */
-  p7_ReferenceForward (dsq, L, gm, rxf, &fwdsc);
-  p7_ReferenceBackward(dsq, L, gm, rxd, NULL);   
-  p7_ReferenceDecoding(dsq, L, gm, rxf, rxd, rxd);   
-
-  /* Labelling implied by the Viterbi path is a good initial guess. */
-  p7_ReferenceViterbi(dsq, L, gm, rxau, vtr, &vsc);
-  p7_trace_Index(vtr);
-  p7_coords2_SetAnchorsFromTrace(rxd, vtr, anch);
-  p7_coord2_hash_Store(hashtbl, anch->arr, anch->n, &best_keyidx);
-
-  p7_refmx_Reuse(rxau);
-  /* don't reuse Viterbi trace! we need it again at end - just keep it */
-
-  p7_ReferenceASCForward(dsq, L, gm, anch->arr, anch->n, rxau, rxad, &best_asc);
-  best_ascprob            = exp(best_asc - fwdsc);
-
-  stats->fsc         = fwdsc;
-  stats->vsc         = vsc;
-  stats->vit_asc     = best_asc;
-  stats->vit_ascprob = best_ascprob;
-
-  if (be_verbose) 
-    {
-      printf("# Forward score: %6.2f nats\n", fwdsc);
-      printf("# Viterbi score: %6.2f nats\n", vsc);
-
-      printf("VIT %6.2f %8.4g ", asc, best_ascprob);
-      printf("%2d ", anch->n);
-      for (d = 0; d < anch->n; d++) printf("%4d %4d ", anch->arr[d].n1, anch->arr[d].n2);
-      printf("\n");
-    }
-
-  /* Sample paths from the posterior, to sample anchor sets
-   */
-  for (iteration = 1; iteration <= max_iterations; iteration++)
-    {
-      p7_reference_trace_Stochastic(rng, &wrk, gm, rxf, tr);
-      p7_trace_Index(tr);
-      p7_coords2_SetAnchorsFromTrace(rxd, tr, anch);
-      
-      status = p7_coord2_hash_Store(hashtbl, anch->arr, anch->n, &keyidx);
-      /* status = eslOK means it's a new anchor set;
-       *          eslEDUP means we've seen this anchor set before
-       */
-
-      if (status == eslOK)
-	{
-	  p7_ReferenceASCForward(dsq, L, gm, anch->arr, anch->n, rxau, rxad, &asc);
-	  ascprob  = exp(asc - fwdsc);
-	  
-	  if (! am_done) stats->tot_asc_calculations++;
-
-	  if (be_verbose) 
-	    {
-	      printf("NEW %6.2f %8.4g ", asc, ascprob);
-	      printf("%2d ", anch->n);
-	      for (d = 0; d < anch->n; d++) printf("%4d %4d ", anch->arr[d].n1, anch->arr[d].n2);
-	      printf("\n");
-	    }
-
-	  if (ascprob > best_ascprob)
-	    {
-	      best_asc         = asc;
-	      best_ascprob     = ascprob;
-	      best_keyidx      = keyidx;
-
-	      stats->nsamples_in_best = 1;
-	      stats->best_is_viterbi  = FALSE;
-	      if (am_done) stats->best_found_late = TRUE;
-	    }
-
-	  p7_refmx_Reuse(rxau);
-	  p7_refmx_Reuse(rxad);
-	}
-      else 
-	{
-	  if (keyidx == best_keyidx) stats->nsamples_in_best++;
-
-	  if (be_verbose)
-	    {
-	      printf("dup %6s %8s %8s ", "-", "-", "-");
-	      printf("%2d ", anch->n);
-	      for (d = 0; d < anch->n; d++) printf("%4d %4d ", anch->arr[d].n1, anch->arr[d].n2);
-	      printf("\n");
-	    }
-	}
-      
-      if (! am_done && iteration * log(1.0 - best_ascprob) < lossthresh) 
-	{
-	  am_done          = TRUE;
-	  stats->n_to_find = iteration;
-	  if (be_verbose) printf("### I think I'm done.\n");
-	}
-
-      p7_coords2_Reuse(anch);
-      p7_trace_Reuse(tr);
-    }
-
-  // DONE:
-  p7_coord2_hash_Get(hashtbl, L, best_keyidx, anch);
-  stats->solution_not_found = ( am_done ? FALSE : TRUE );
-  stats->best_asc     = best_asc;
-  stats->best_ascprob = best_ascprob;
-  compare_anchorset_to_trace(vtr, anch, stats);
-
-  if (be_verbose)
-    {
-      printf("BEST %6.2f %8.4g ", stats->best_asc, stats->best_ascprob);
-      printf("%2d ", anch->n);
-      for (d = 0; d < anch->n; d++) printf("%4d %4d ", anch->arr[d].n1, anch->arr[d].n2);
-      printf("\n");
-    }
-
-  free(wrk);
-  p7_coord2_hash_Destroy(hashtbl);
-  p7_trace_Destroy(vtr);
-  p7_trace_Destroy(tr);
-  p7_refmx_Destroy(rxad);
-  p7_refmx_Destroy(rxau);
-  p7_refmx_Destroy(rxd);
-  p7_refmx_Destroy(rxf);
-  return eslOK;
-}
-
-
-/* trace must be indexed */
 static int
-compare_anchorset_to_trace(P7_TRACE *tr, P7_COORDS2 *anch, P7_XSTATS_ASC *stats)
+dump_current_anchorset(FILE *ofp, const P7_COORDS2 *anch)
 {
-  int ad;
-  int td              = 0;
-  int anch_in_this_td = 0;
+  int d;
 
-  stats->anch_outside    = 0;
-  stats->anch_unique     = 0;
-  stats->anch_multiple   = 0;
-
-  stats->dom_zero        = 0;
-  stats->dom_one         = 0;
-  stats->dom_multiple    = 0;
-
-  /* For n domains in tr:
-   *   they can either be hit 0 times, 1 time, or 2+ times by anchors.
-   * For m anchors in anch:
-   *   they can either fall outside any domain, uniquely in a domain, or multiply in a domain.
-   */
-  for (ad = 0; ad < anch->n; ad++)
-    {
-      if   (anch->arr[ad].n1 < tr->sqfrom[td] || td == tr->ndom) 
-	stats->anch_outside++;
-      else if (anch->arr[ad].n1 >= tr->sqfrom[td] && anch->arr[ad].n1 <= tr->sqto[td])
-	anch_in_this_td++;
-      else 
-	{
-	  /* we have to advance <td>, and try again */
-	  if      (anch_in_this_td == 0) { stats->dom_zero++; }
-	  else if (anch_in_this_td == 1) { stats->anch_unique++; stats->dom_one++; }
-	  else if (anch_in_this_td > 1)  { stats->anch_multiple += anch_in_this_td; stats->dom_multiple++; }
-	  anch_in_this_td = 0;
-	  td++;
-	  ad--;			/* forces reevaluation of <ad> when we go back around; a bit hacky! */
-	}
-    }
-  
-  /* we're out of anchors. If td == tr->ndom, we also know we
-   * handled what happened with anchors in the last <td>. But if
-   * td == tr->ndom-1, we haven't yet resolved what happened with final <td> yet,
-   * and if td is even smaller, we have some dom_zero's to count.
-   */
-  for (; td < tr->ndom; td++)
-    {
-      if      (anch_in_this_td == 0) { stats->dom_zero++; }
-      else if (anch_in_this_td == 1) { stats->anch_unique++; stats->dom_one++; }
-      else if (anch_in_this_td > 1)  { stats->anch_multiple += anch_in_this_td; stats->dom_multiple++; }
-      anch_in_this_td = 0;
-    }
-
-  ESL_DASSERT1(( stats->dom_zero     + stats->dom_one     + stats->dom_multiple  == tr->ndom ));
-  ESL_DASSERT1(( stats->anch_outside + stats->anch_unique + stats->anch_multiple == anch->n  ));
-
+  fprintf(ofp, "%2d ", anch->n);
+  for (d = 0; d < anch->n; d++)
+    fprintf(ofp, "%4d %4d ", anch->arr[d].n1, anch->arr[d].n2);
+  fprintf(ofp, "\n");
   return eslOK;
 }
+/*--------------------- end, static functions -------------------*/
 
-static int
-dump_xstats_asc(FILE *ofp, P7_XSTATS_ASC *stats)
-{
-  fprintf(ofp, "# Stats on the ASC solution:\n");
-  fprintf(ofp, "# tot_iterations       = %d\n",    stats->tot_iterations);
-  fprintf(ofp, "# tot_asc_calculations = %d\n",    stats->tot_asc_calculations);
-  fprintf(ofp, "# n_to_find            = %d\n",    stats->n_to_find);
-  fprintf(ofp, "# Viterbi score (nats) = %.2f\n",  stats->vsc);
-  fprintf(ofp, "# Forward score (nats) = %.2f\n",  stats->fsc);
-  fprintf(ofp, "# best_asc             = %.2f\n",  stats->best_asc);
-  fprintf(ofp, "# vit_asc              = %.2f\n",  stats->vit_asc);
-  fprintf(ofp, "# vit_ascprob          = %6.4f\n", stats->vit_ascprob);
-  fprintf(ofp, "# best_ascprob         = %6.4f\n", stats->best_ascprob);
-  fprintf(ofp, "# nsamples_in_best     = %d\n",    stats->nsamples_in_best);
-  fprintf(ofp, "# best_is_viterbi      = %s\n",    (stats->best_is_viterbi    ? "TRUE" : "FALSE"));
-  fprintf(ofp, "# best_found_late      = %s\n",    (stats->best_found_late    ? "TRUE" : "FALSE"));
-  fprintf(ofp, "# solution_not_found   = %s\n",    (stats->solution_not_found ? "TRUE" : "FALSE"));
-  fprintf(ofp, "# anch_outside         = %d\n",    stats->anch_outside);
-  fprintf(ofp, "# anch_unique          = %d\n",    stats->anch_unique);
-  fprintf(ofp, "# anch_multiple        = %d\n",    stats->anch_multiple);
-  fprintf(ofp, "# dom_zero             = %d\n",    stats->dom_zero);
-  fprintf(ofp, "# dom_one              = %d\n",    stats->dom_one);
-  fprintf(ofp, "# dom_multiple         = %d\n",    stats->dom_multiple);
-  return eslOK;
-}
+
+
 
 /*****************************************************************
- * x. Statistics collection driver.
+ * 3. Statistics collection driver.
  *****************************************************************/
-#ifdef p7REFERENCE_ASC_STATS
+#ifdef p7REFERENCE_ANCHORSET_DEFINITION_STATS
 #include "p7_config.h"
 
 #include "easel.h"
@@ -348,9 +437,17 @@ main(int argc, char **argv)
   P7_CHECKPTMX   *cx         = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_RAMLIMIT));
   P7_SPARSEMASK  *sm         = p7_sparsemask_Create(100, 100);
   P7_COORDS2     *anch       = p7_coords2_Create(0,0);
-  P7_XSTATS_ASC   stats;
+  P7_REFMX       *rxf        = p7_refmx_Create(100,100);
+  P7_REFMX       *rxd        = p7_refmx_Create(100,100);
+  P7_REFMX       *afu        = p7_refmx_Create(100,100);
+  P7_REFMX       *afd        = p7_refmx_Create(100,100);
+  P7_TRACE       *tr         = p7_trace_Create();
+  P7_TRACE       *vtr        = p7_trace_Create();
+  P7_COORDS2_HASH *hashtbl   = p7_coords2_hash_Create(0,0,0);
+  float          *wrk        = NULL;
   int             Z          = esl_opt_GetInteger(go, "-Z");
-  float           nullsc;
+  P7_MPAS_STATS   stats;
+  float           nullsc, vsc, fsc, asc;
   int             status;
 
   /* Read in one HMM. Set alphabet to whatever the HMM's alphabet is. */
@@ -387,8 +484,18 @@ main(int argc, char **argv)
 
 	  p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
 
-	  p7_ReferenceASCSearch(rng, sq->dsq, sq->n, gm, anch, &stats);
+	  p7_ReferenceViterbi (sq->dsq, sq->n, gm, rxf, vtr, &vsc);
+	  p7_reference_trace_Viterbi(gm, rxf, tr);         // a second copy; we have no p7_trace_Copy() function yet
+	  p7_ReferenceForward (sq->dsq, sq->n, gm, rxf, &fsc);
+	  p7_ReferenceBackward(sq->dsq, sq->n, gm, rxd, NULL);   
+	  p7_ReferenceDecoding(sq->dsq, sq->n, gm, rxf, rxd, rxd);   
+
+	  p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, tr, &wrk, hashtbl,
+			       afu, afd, anch, &asc, NULL, &stats);
 	     
+	  p7_trace_Index(vtr);
+	  p7_mpas_stats_CompareAS2Trace(&stats, anch, vtr);
+
 	  printf("%8.2f %10.4g %8.2f %10.4g ",
 		 stats.fsc, 
 		 (double) Z * esl_exp_surv   ( (stats.fsc - nullsc) / eslCONST_LOG2, gm->evparam[p7_FTAU], gm->evparam[p7_FLAMBDA]),
@@ -406,10 +513,8 @@ main(int argc, char **argv)
 		 stats.best_ascprob,
 		 (float) stats.nsamples_in_best / (float) stats.tot_iterations);
 	  
-	  printf("%4d %4d %3s %3s ", 
-		 stats.n_to_find,
+	  printf("%4d %3s ", 
 		 stats.tot_asc_calculations,
-		 (stats.best_found_late    ? "YES" : "no"),
 		 (stats.solution_not_found ? "YES" : "no"));
 	    
 	  printf("%4d %4d %4d ", 
@@ -423,6 +528,15 @@ main(int argc, char **argv)
 		 stats.dom_multiple);
 
 	  printf("\n");
+	  
+	  p7_refmx_Reuse(rxf);
+	  p7_refmx_Reuse(rxd);
+	  p7_refmx_Reuse(afd);
+	  p7_refmx_Reuse(afu);
+	  p7_trace_Reuse(tr);
+	  p7_trace_Reuse(vtr);
+	  p7_coords2_hash_Reuse(hashtbl);
+	  p7_coords2_Reuse(anch);
 	}
 
       p7_filtermx_Reuse(fx);
@@ -433,6 +547,15 @@ main(int argc, char **argv)
   if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));
   else if (status != eslEOF)     p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
 
+  if (wrk) free(wrk);
+  p7_coords2_hash_Destroy(hashtbl);
+  p7_trace_Destroy(tr);
+  p7_trace_Destroy(vtr);
+  p7_refmx_Destroy(afd);
+  p7_refmx_Destroy(afu);
+  p7_refmx_Destroy(rxf);
+  p7_refmx_Destroy(rxd);
+  p7_coords2_Destroy(anch);
   p7_sparsemask_Destroy(sm);
   p7_checkptmx_Destroy(cx);
   p7_filtermx_Destroy(fx);
@@ -447,15 +570,18 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return eslOK;
 }
-#endif /*p7REFERENCE_ASC_STATS*/
+#endif /*p7REFERENCE_ANCHORSET_DEFINITION_STATS*/
+
+/*----------------- end, statistics driver ----------------------*/
+
 
 
 
 
 /*****************************************************************
- * x. Example
+ * 4. Example
  *****************************************************************/
-#ifdef p7REFERENCE_ASC_EXAMPLE
+#ifdef p7REFERENCE_ANCHORSET_DEFINITION_EXAMPLE
 #include "p7_config.h"
 
 #include "easel.h"
@@ -490,7 +616,17 @@ main(int argc, char **argv)
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
   P7_COORDS2     *anch    = p7_coords2_Create(0,0);
-  P7_XSTATS_ASC   stats;
+  P7_REFMX       *rxf     = NULL;
+  P7_REFMX       *rxd     = NULL;
+  P7_REFMX       *afu     = NULL;
+  P7_REFMX       *afd     = NULL;
+  P7_TRACE       *tr      = NULL;
+  P7_TRACE       *vtr     = NULL;
+  float          *wrk     = NULL;
+  P7_COORDS2_HASH *hashtbl = p7_coords2_hash_Create(0,0,0);
+  P7_MPAS_PARAMS  prm;
+  P7_MPAS_STATS   stats;
+  float           fsc, vsc, asc;
   int             status;
 
   /* Read in one HMM */
@@ -521,11 +657,44 @@ main(int argc, char **argv)
   p7_bg_SetLength     (bg, sq->n);
   p7_profile_SetLength(gm, sq->n);
 
+  /* Allocate DP matrices and tracebacks */
+  rxf = p7_refmx_Create(gm->M, sq->n);
+  rxd = p7_refmx_Create(gm->M, sq->n);
+  tr  = p7_trace_Create();
+  vtr = p7_trace_Create();
+  afu = p7_refmx_Create(gm->M, sq->n);
+  afd = p7_refmx_Create(gm->M, sq->n);
+
+  /* First pass analysis */
+  p7_ReferenceViterbi (sq->dsq, sq->n, gm, rxf, vtr, &vsc);
+  p7_reference_trace_Viterbi(gm, rxf, tr);         // a second copy; we have no p7_trace_Copy() function yet
+  p7_ReferenceForward (sq->dsq, sq->n, gm, rxf,      &fsc);
+  p7_ReferenceBackward(sq->dsq, sq->n, gm, rxd, NULL);   
+  p7_ReferenceDecoding(sq->dsq, sq->n, gm, rxf, rxd, rxd);   
+
+  /* Customize parameters */
+  prm.max_iterations = 1000;
+  prm.loss_threshold = 0.001;
+  prm.be_verbose     = TRUE;
+
   /* Do it. */
-  p7_ReferenceASCSearch(rng, sq->dsq, sq->n, gm, anch, &stats);
+  p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, tr, &wrk, hashtbl,
+		       afu, afd, anch, &asc, &prm, &stats);
 
-  dump_xstats_asc(stdout, &stats);
+  p7_trace_Index(vtr);
+  p7_mpas_stats_CompareAS2Trace(&stats, anch, vtr);
+  p7_mpas_stats_Dump(stdout, &stats);
 
+
+
+  p7_coords2_hash_Destroy(hashtbl);
+  if (wrk) free(wrk);
+  p7_trace_Destroy(tr);
+  p7_trace_Destroy(vtr);
+  p7_refmx_Destroy(afd);
+  p7_refmx_Destroy(afu);
+  p7_refmx_Destroy(rxd);
+  p7_refmx_Destroy(rxf);
   p7_coords2_Destroy(anch);
   esl_sq_Destroy(sq);
   p7_profile_Destroy(gm);
@@ -536,4 +705,12 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /*p7REFERENCE_ASC_FWD_EXAMPLE*/
+#endif /*p7REFERENCE_ANCHORSET_DEFINITION_EXAMPLE*/
+
+
+/*****************************************************************
+ * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
+ *****************************************************************/

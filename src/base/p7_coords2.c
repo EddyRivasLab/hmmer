@@ -1,11 +1,14 @@
-/* P7_COORDS2 maintains a resizeable array of start/end coord pairs. 
- * Used for domain segment coords in a target sequence, for example.
+/* P7_COORDS2 maintains a resizeable array of coordinate pairs.
+ * 
+ * The coord pair might be a start/end (i,j) pair on one thing (domain
+ * locations, for example), or an (i,k) correspondence between two
+ * things (as in anchor points for profile/seq comparison).
  * 
  * Contents:
  *   1. P7_COORDS2: domain or segment start/end coordinates object.
  *   2. Debugging and development, for P7_COORDS2
- *   3. P7_COORD2_HASH: hash table for storing alternative <P7_COORDS2> data.
- *   4. Debugging and development, for P7_COORD2_HASH
+ *   3. P7_COORDS2_HASH: hash table for storing alternative <P7_COORDS2> data.
+ *   4. Debugging and development, for P7_COORDS2_HASH
  *   x. Unit tests.
  *   x. Example driver
  *   x. Copyright and license information.
@@ -25,6 +28,29 @@
  * 1. The P7_COORDS2 object.
  *****************************************************************/
 
+/* Function:  p7_coords2_Create()
+ * Synopsis:  Create a new <P7_COORDS2>
+ *
+ * Purpose:   Returns a pointer to a newly created <P7_COORDS2> 
+ *            object. 
+ *            
+ *            Caller will typically pass 0's for both arguments, which
+ *            means to use default initial allocation sizes: thus,
+ *            <p7_coords2_Create(0,0)> is typical.
+ *            
+ *            To customize allocation sizes, use nonzero arguments for
+ *            <nalloc> and/or <nredline>.  <nalloc> is the initially
+ *            allocated number of coord pairs; default is
+ *            8. <nredline> is the maximum allocation retained after
+ *            the object is Reuse()'d; default is 64.
+ *            
+ * Args:      nalloc   - initial allocation for # of coord pairs; or 0 to use default
+ *            nredline - max allocation retained after Reuse();   or 0 to use default           
+ *
+ * Returns:   pointer to the new <P7_COORDS2>
+ *
+ * Throws:    <NULL> on allocation failure.
+ */
 P7_COORDS2 *
 p7_coords2_Create(int32_t nalloc, int32_t nredline)
 {
@@ -34,8 +60,6 @@ p7_coords2_Create(int32_t nalloc, int32_t nredline)
   ESL_ALLOC(c2, sizeof(P7_COORDS2));
   c2->arr  = NULL;
   c2->n    = 0;
-  c2->dim1 = 0;  
-  c2->dim2 = 0;
 
   c2->nalloc   = (nalloc   > 0 ? nalloc   : 8);
   c2->nredline = (nredline > 0 ? nredline : 64);
@@ -49,6 +73,19 @@ p7_coords2_Create(int32_t nalloc, int32_t nredline)
   return NULL;
 }
 
+/* Function:  p7_coords2_Grow()
+ * Synopsis:  Increase allocation for coord pairs, if needed.
+ *
+ * Purpose:   Check if there's enough space in <c2> to hold
+ *            a new coord pair. If not, increase the allocation
+ *            in <c2> by doubling it.
+ *
+ * Args:      c2  : coord pair array
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
 int
 p7_coords2_Grow(P7_COORDS2 *c2)
 {
@@ -93,8 +130,6 @@ p7_coords2_Copy(const P7_COORDS2 *src, P7_COORDS2 *dst)
       dst->arr[d].n2 = src->arr[d].n2;
     }
   dst->n    = src->n;
-  dst->dim1 = src->dim1;
-  dst->dim2 = src->dim2;
   return eslOK;
 
  ERROR:
@@ -141,8 +176,6 @@ p7_coords2_SetFromTrace(P7_COORDS2 *c2, const P7_TRACE *tr)
     }
 
   c2->n    = tr->ndom;
-  c2->dim1 = tr->L;
-  c2->dim2 = tr->L;
   return eslOK;
 
  ERROR:
@@ -154,15 +187,11 @@ p7_coords2_Reuse(P7_COORDS2 *c2)
 {
   int status;
 
-  if (c2->nalloc > c2->nredline) 
-    {
-      ESL_REALLOC(c2->arr, sizeof(P7_COORD2) * c2->nredline);
-      c2->nalloc = c2->nredline;
-    }
-
+  if (c2->nalloc > c2->nredline) {
+    ESL_REALLOC(c2->arr, sizeof(P7_COORD2) * c2->nredline);
+    c2->nalloc = c2->nredline;
+  }
   c2->n    = 0;
-  c2->dim1 = 0;
-  c2->dim2 = 0;
   return eslOK;
 
  ERROR:
@@ -172,11 +201,10 @@ p7_coords2_Reuse(P7_COORDS2 *c2)
 void
 p7_coords2_Destroy(P7_COORDS2 *c2)
 {
-  if (c2) 
-    {
-      if (c2->arr) free(c2->arr);
-      free(c2);
-    }
+  if (c2) {
+    if (c2->arr) free(c2->arr);
+    free(c2);
+  }
   return;
 }
 
@@ -209,8 +237,6 @@ p7_coords2_Sample(ESL_RANDOMNESS *rng, P7_COORDS2 *c2, int32_t maxseg, int32_t L
 
   /* Store those randomized coords now in the data structure. */
   p7_coords2_GrowTo(c2, nseg);
-  c2->dim1 = L;
-  c2->dim2 = L;
   c2->n    = nseg;
   for (i = 0; i < nseg; i++)
     {
@@ -231,17 +257,17 @@ p7_coords2_Sample(ESL_RANDOMNESS *rng, P7_COORDS2 *c2, int32_t maxseg, int32_t L
 
 
 /*****************************************************************
- * 3. The P7_COORD2_HASH object
+ * 3. The P7_COORDS2_HASH object
  *****************************************************************/
-static uint32_t p7_coord2_hash_function    (const P7_COORD2 *seg, int32_t nseg, uint32_t hashsize);
-static uint32_t p7_coord2_hash_function_alt(int32_t *keydata, int32_t hashsize);
-static int      p7_coord2_hash_compare     (const P7_COORD2 *seg, int32_t nseg,  int32_t *keydata);
-static int      p7_coord2_hash_upsize      (P7_COORD2_HASH *ch);
+static uint32_t p7_coords2_hash_function    (const P7_COORD2 *seg, int32_t nseg, uint32_t hashsize);
+static uint32_t p7_coords2_hash_function_alt(int32_t *keydata, int32_t hashsize);
+static int      p7_coords2_hash_compare     (const P7_COORD2 *seg, int32_t nseg,  int32_t *keydata);
+static int      p7_coords2_hash_upsize      (P7_COORDS2_HASH *ch);
 
-/* Function:  p7_coord2_hash_Create()
- * Synopsis:  Create a <P7_COORD2_HASH>
+/* Function:  p7_coords2_hash_Create()
+ * Synopsis:  Create a <P7_COORDS2_HASH>
  *
- * Purpose:   Allocate and initialize a <P7_COORD2_HASH> hash table for storing
+ * Purpose:   Allocate and initialize a <P7_COORDS2_HASH> hash table for storing
  *            lots of coord2 arrays (i.e. domain annotations).
  * 
  *            The <init_*> arguments let you set non-default initial
@@ -267,20 +293,20 @@ static int      p7_coord2_hash_upsize      (P7_COORD2_HASH *ch);
  *            init_keyalloc : initial allocation for # keys. >0.
  *            init_calloc   : initial allocation for key data. >0.
  *
- * Returns:   pointer to the new <P7_COORD2_HASH> object on success.
+ * Returns:   pointer to the new <P7_COORDS2_HASH> object on success.
  *
  * Throws:    <NULL> on allocation failure.
  */
-P7_COORD2_HASH *
-p7_coord2_hash_Create(int32_t init_hashsize, int32_t init_nkeyalloc, int32_t init_calloc)
+P7_COORDS2_HASH *
+p7_coords2_hash_Create(int32_t init_hashsize, int32_t init_nkeyalloc, int32_t init_calloc)
 {
-  P7_COORD2_HASH *ch = NULL;
-  int32_t         i;
-  int             status;
+  P7_COORDS2_HASH *ch = NULL;
+  int32_t          i;
+  int              status;
 
   ESL_DASSERT1(( init_hashsize == 0 || (init_hashsize && ((init_hashsize & (init_hashsize-1)) == 0)))); /* hashsize is a power of 2 (bitshifting trickery) */
   
-  ESL_ALLOC(ch, sizeof(P7_COORD2_HASH));
+  ESL_ALLOC(ch, sizeof(P7_COORDS2_HASH));
   ch->hashtable  = NULL;
   ch->key_offset = NULL;
   ch->nxt        = NULL;
@@ -302,16 +328,16 @@ p7_coord2_hash_Create(int32_t init_hashsize, int32_t init_nkeyalloc, int32_t ini
   return ch;
   
  ERROR:
-  p7_coord2_hash_Destroy(ch);
+  p7_coords2_hash_Destroy(ch);
   return NULL;
 }
 
 size_t
-p7_coord2_hash_Sizeof(const P7_COORD2_HASH *ch)
+p7_coords2_hash_Sizeof(const P7_COORDS2_HASH *ch)
 {
   size_t n = 0;
 
-  n += sizeof(P7_COORD2_HASH);
+  n += sizeof(P7_COORDS2_HASH);
   n += sizeof(int32_t) * ch->hashsize;	 /* hashtable */
   n += sizeof(int32_t) * ch->kalloc * 2; /* key_offset, nxt */
   n += sizeof(int32_t) * ch->calloc;	 /* cmem */
@@ -319,12 +345,68 @@ p7_coord2_hash_Sizeof(const P7_COORD2_HASH *ch)
 }
 
 
+/* Function:  p7_coords2_hash_Reuse()
+ * Synopsis:  Reuse a <P7_COORDS2>
+ *
+ * Purpose:   Clear a <P7_COORDS2_HASH> hash table for reuse.
+ *
+ *            If any allocations are overly large, drop them
+ *            back to 'redline' values. Default redlines
+ *            are 1024 keys (i.e. different coord pair arrays),
+ *            1024 hash values, and 16384 total integers of
+ *            raw data. Redlines are all 8x the default
+ *            initial allocations.
+ *
+ * Args:      ch :  hash table to reuse
+ *
+ * Returns:   <eslOK> on success
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ *            (But any reallocations here are shrinkages, so I don't
+ *            believe they can fail.)
+ */
+int
+p7_coords2_hash_Reuse(P7_COORDS2_HASH *ch)
+{
+  int hashsize_redline = 1024;
+  int kalloc_redline   = 1024;
+  int calloc_redline   = 16384;
+  int i;
+  int status;
 
-/* Function:  p7_coord2_hash_Destroy()
- * Synopsis:  Destroys a <P7_COORD2_HASH> hash table.
+  if (ch->hashsize > hashsize_redline)
+    {
+      ESL_REALLOC(ch->hashtable, sizeof(int32_t) * hashsize_redline);
+      ch->hashsize = hashsize_redline;
+    }
+  if (ch->kalloc > kalloc_redline)
+    { 
+      ESL_REALLOC(ch->nxt,        sizeof(int32_t) * kalloc_redline);
+      ESL_REALLOC(ch->key_offset, sizeof(int32_t) * kalloc_redline);
+      ch->kalloc = kalloc_redline;
+    }
+  if (ch->calloc > calloc_redline)
+    {
+      ESL_REALLOC(ch->cmem, sizeof(int32_t) * ch->calloc);
+      ch->calloc = calloc_redline;
+    }
+
+  for (i = 0; i < ch->hashsize; i++) ch->hashtable[i] = -1;
+  ch->nkeys = 0;
+  ch->cn    = 0;
+  return eslOK;
+
+ ERROR:
+  return status;
+}
+
+
+
+/* Function:  p7_coords2_hash_Destroy()
+ * Synopsis:  Destroys a <P7_COORDS2_HASH> hash table.
  */
 void
-p7_coord2_hash_Destroy(P7_COORD2_HASH *ch)
+p7_coords2_hash_Destroy(P7_COORDS2_HASH *ch)
 {
   if (ch)
     {
@@ -338,23 +420,21 @@ p7_coord2_hash_Destroy(P7_COORD2_HASH *ch)
 }
 
 
-/* Function:  p7_coord2_hash_Store()
- * Synopsis:  Store a <P7_COORD2> array and get a key index for it.
+/* Function:  p7_coords2_hash_Store()
+ * Synopsis:  Store a <P7_COORDS2> array and get a key index for it.
  *
- * Purpose:   In the hash table <ch>, store <P7_COORD2> array <arr> containing
- *            <n> start/end pairs. Associate it with a unique key index, 
- *            counting from 0. This index lets us map the hashed data to
- *            integer-based C arrays. 
+ * Purpose:   In the hash table <ch>, store the array of coordinate
+ *            pairs in <c2>.  Associate it with a unique key index,
+ *            counting from 0. This index lets us map the hashed data
+ *            to integer-based C arrays. Return the index through <opt_index>.
  *            
- *            If an identical <arr>,<n> array has already been
- *            stored, do nothing, and return <eslEDUP>.
- *            
- *            Optionally, return the index through <opt_index>.
+ *            If an identical array of paired coords has already been
+ *            stored, then set <*opt_index> to the index of where the
+ *            data were already stored, and return <eslEDUP>
  *
- * Args:      ch
- *            arr
- *            n
- *            opt_index 
+ * Args:      ch         : hash table holding different arrays of coord pairs
+ *            c2         : new array of coord pairs to try to store
+ *            opt_index  : optRETURN: index of stored data
  *            
  * Returns:   <eslOK> if <seg>/<nseg> is new; the data are stored, 
  *            and <opt_index>, if requested, is set to the lookup 
@@ -364,13 +444,12 @@ p7_coord2_hash_Destroy(P7_COORD2_HASH *ch)
  *            <opt_index>, if requested, is set to the lookup key
  *            index of the previously stored data.
  *
- * Throws:    <eslEMEM> on allocation failure; <opt_index>, if requested,
- *            is -1.
+ * Throws:    <eslEMEM> on allocation failure. 
  */
 int
-p7_coord2_hash_Store(P7_COORD2_HASH *ch, const P7_COORD2 *arr, int32_t n, int32_t *opt_index)
+p7_coords2_hash_Store(P7_COORDS2_HASH *ch, const P7_COORDS2 *c2, int32_t *opt_index)
 {
-  uint32_t  val = p7_coord2_hash_function(arr, n, ch->hashsize);
+  uint32_t  val = p7_coords2_hash_function(c2->arr, c2->n, ch->hashsize);
   int32_t  *ptr;
   int32_t   idx;
   int32_t   d;
@@ -379,7 +458,7 @@ p7_coord2_hash_Store(P7_COORD2_HASH *ch, const P7_COORD2 *arr, int32_t n, int32_
   /* Was this key already stored? */
   for (idx = ch->hashtable[val]; idx != -1; idx = ch->nxt[idx])
     {
-      if (p7_coord2_hash_compare(arr, n, ch->cmem + ch->key_offset[idx]) == eslOK)
+      if (p7_coords2_hash_compare(c2->arr, c2->n, ch->cmem + ch->key_offset[idx]) == eslOK)
 	{
 	  if (opt_index) *opt_index = idx;
 	  return eslEDUP;
@@ -395,7 +474,7 @@ p7_coord2_hash_Store(P7_COORD2_HASH *ch, const P7_COORD2 *arr, int32_t n, int32_
     }
 
   /* Reallocate key data memory if needed */
-  while (ch->cn + 2*n + 1 > ch->calloc)
+  while (ch->cn + 2 * c2->n + 1 > ch->calloc)
     {
       ESL_REALLOC(ch->cmem, sizeof(int32_t) * ch->calloc * 2);
       ch->calloc *= 2;
@@ -404,15 +483,15 @@ p7_coord2_hash_Store(P7_COORD2_HASH *ch, const P7_COORD2 *arr, int32_t n, int32_
   /* Copy the key, assign its index */
   idx                 = ch->nkeys;
   ch->key_offset[idx] = ch->cn;
-  ch->cn             += 2*n + 1;
+  ch->cn             += 2 * c2->n + 1;
   ch->nkeys++;
 
   ptr  = ch->cmem + ch->key_offset[idx];
-  *ptr = n;
-  for (d = 0; d < n; d++) 
+  *ptr = c2->n;
+  for (d = 0; d < c2->n; d++) 
     {
-      ptr++; *ptr = arr[d].n1;
-      ptr++; *ptr = arr[d].n2;
+      ptr++; *ptr = c2->arr[d].n1;
+      ptr++; *ptr = c2->arr[d].n2;
     }
 
   /* Insert new element at head of the approp chain in hashtable */
@@ -421,7 +500,7 @@ p7_coord2_hash_Store(P7_COORD2_HASH *ch, const P7_COORD2 *arr, int32_t n, int32_
 
   /* Time to upsize? If we're 3x saturated, expand the hash table */
   if (ch->nkeys > 3 * ch->hashsize)
-    if ((status = p7_coord2_hash_upsize(ch)) != eslOK) goto ERROR;
+    if ((status = p7_coords2_hash_upsize(ch)) != eslOK) goto ERROR;
 
   if (opt_index) *opt_index = idx;
   return eslOK;
@@ -432,24 +511,22 @@ p7_coord2_hash_Store(P7_COORD2_HASH *ch, const P7_COORD2 *arr, int32_t n, int32_
 
 }
 
-/* Function:  p7_coord2_hash_Get()
- * Synopsis:  Get a set of segment coords back from the hash.
+/* Function:  p7_coords2_hash_Get()
+ * Synopsis:  Get a set of coordinate pairs back from the hash.
  *
- * Purpose:   From hash <ch>, retrieve annotation number <keyidx>,
- *            for a sequence of length <L>. Store this segment
- *            set in <c2>. <c2> is reallocated if necessary.
+ * Purpose:   From hash <ch>, retrieve coord pair array <keyidx>,
+ *            putting it in <c2>. <c2> is reallocated if necessary.
  *            
  * Args:      ch      : hash storage for alternative annotations
- *            L       : length of the annotated sequence
  *            keyidx  : which annotation to get [0..ch->nkeys-1]
- *            c2      : RETURN: domain segment coords
+ *            c2      : RETURN: coord pair array
  *
  * Returns:   <eslOK> on success.
  *
  * Throws:    <eslEMEM> on failure, and the state of <c2> is undefined.
  */
 int
-p7_coord2_hash_Get(const P7_COORD2_HASH *ch, int32_t L, int32_t keyidx, P7_COORDS2 *c2)
+p7_coords2_hash_Get(const P7_COORDS2_HASH *ch, int32_t keyidx, P7_COORDS2 *c2)
 {
   int32_t *ptr  = ch->cmem + ch->key_offset[keyidx];
   int32_t  n    = *ptr;
@@ -464,8 +541,6 @@ p7_coord2_hash_Get(const P7_COORD2_HASH *ch, int32_t L, int32_t keyidx, P7_COORD
       ptr++; c2->arr[d].n2 = *ptr;
     }
   c2->n    = n;
-  c2->dim1 = L;
-  c2->dim2 = L;
   return eslOK;
 
  ERROR:
@@ -475,13 +550,13 @@ p7_coord2_hash_Get(const P7_COORD2_HASH *ch, int32_t L, int32_t keyidx, P7_COORD
 
 
 
-/* p7_coord2_hash_function()
+/* p7_coords2_hash_function()
  *   
  * Given <arr>/<n> data, and the current <hashsize>;
  * calculate and return a hash function on that data, in range <0..hashsize-1>.
  */
 static uint32_t
-p7_coord2_hash_function(const P7_COORD2 *arr, int32_t n, uint32_t hashsize)
+p7_coords2_hash_function(const P7_COORD2 *arr, int32_t n, uint32_t hashsize)
 {
   uint32_t hashval = 0;
   int32_t  d;
@@ -495,7 +570,7 @@ p7_coord2_hash_function(const P7_COORD2 *arr, int32_t n, uint32_t hashsize)
   return hashval;
 }
 
-/* p7_coord2_hash_function_alt()
+/* p7_coords2_hash_function_alt()
  * 
  * Exactly the same as above (indeed, MUST be the same hash function),
  * but it works on the internal stored version of the <arr>/<n> data,
@@ -505,7 +580,7 @@ p7_coord2_hash_function(const P7_COORD2 *arr, int32_t n, uint32_t hashsize)
  *    <n> <s1> <e1> ... <sn> <en>
  */
 static uint32_t
-p7_coord2_hash_function_alt(int32_t *keydata, int32_t hashsize)
+p7_coords2_hash_function_alt(int32_t *keydata, int32_t hashsize)
 {
   uint32_t hashval = 0;
   int32_t  d;
@@ -520,7 +595,7 @@ p7_coord2_hash_function_alt(int32_t *keydata, int32_t hashsize)
   return hashval;
 }
 
-/* p7_coord2_hash_compare()
+/* p7_coords2_hash_compare()
  * 
  * Compare a <seg>/<nseg> array (a P7_COORD2 array) to 
  * data from a P7_COORD2 array that's already been stored,
@@ -530,7 +605,7 @@ p7_coord2_hash_function_alt(int32_t *keydata, int32_t hashsize)
  * return <eslFAIL> if not.
  */
 static int
-p7_coord2_hash_compare(const P7_COORD2 *arr, int n, int32_t *keydata)
+p7_coords2_hash_compare(const P7_COORD2 *arr, int n, int32_t *keydata)
 {                  /* <keydata> = [ <n> <s1> <e1> ... <sn> <en> */
   int d;
   if (n != *keydata) return eslFAIL;
@@ -542,7 +617,7 @@ p7_coord2_hash_compare(const P7_COORD2 *arr, int n, int32_t *keydata)
   return eslOK;
 }
       
-/* p7_coord2_hash_upsize()
+/* p7_coords2_hash_upsize()
  * 
  * Increase the hash table size in <ch>, because it's getting
  * too full. This requires recalculating the hash functions for
@@ -551,7 +626,7 @@ p7_coord2_hash_compare(const P7_COORD2 *arr, int n, int32_t *keydata)
  * Throws: <eslEMEM> on allocation failure.
  */
 int
-p7_coord2_hash_upsize(P7_COORD2_HASH *ch)
+p7_coords2_hash_upsize(P7_COORDS2_HASH *ch)
 {
   uint32_t val;
   int32_t  i;
@@ -571,7 +646,7 @@ p7_coord2_hash_upsize(P7_COORD2_HASH *ch)
 
   for (i = 0; i < ch->nkeys; i++)
     {
-      val        = p7_coord2_hash_function_alt(ch->cmem + ch->key_offset[i], ch->hashsize);
+      val        = p7_coords2_hash_function_alt(ch->cmem + ch->key_offset[i], ch->hashsize);
       ch->nxt[i] = ch->hashtable[val];
       ch->hashtable[val] = i;
     }
@@ -582,11 +657,11 @@ p7_coord2_hash_upsize(P7_COORD2_HASH *ch)
 }
 
 /*****************************************************************
- * 4. Debugging and development tools, P7_COORD2_HASH
+ * 4. Debugging and development tools, P7_COORDS2_HASH
  *****************************************************************/
 
 int
-p7_coord2_hash_Dump(FILE *ofp, const P7_COORD2_HASH *ch)
+p7_coords2_hash_Dump(FILE *ofp, const P7_COORDS2_HASH *ch)
 {
   int32_t nempty  = 0;
   int32_t maxkeys = -1;
@@ -613,7 +688,7 @@ p7_coord2_hash_Dump(FILE *ofp, const P7_COORD2_HASH *ch)
   fprintf(ofp, "Keys allocated for:     %d\n", ch->kalloc);
   fprintf(ofp, "Key data space alloc:   %d\n", ch->calloc);
   fprintf(ofp, "Key data space used:    %d\n", ch->cn);
-  fprintf(ofp, "Total obj size, bytes:  %d\n", (int) p7_coord2_hash_Sizeof(ch));
+  fprintf(ofp, "Total obj size, bytes:  %d\n", (int) p7_coords2_hash_Sizeof(ch));
 
   return eslOK;
 }
@@ -651,7 +726,7 @@ main(int argc, char **argv)
   ESL_GETOPTS    *go       = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   ESL_RANDOMNESS *rng      = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   P7_COORDS2     *c2       = p7_coords2_Create(0, 0);
-  P7_COORD2_HASH *hash     = p7_coord2_hash_Create(0, 0, 0);
+  P7_COORDS2_HASH *hash     = p7_coords2_hash_Create(0, 0, 0);
   int             L        = 20;
   int             maxseg   = 1;
   int             nsamples = 1000;
@@ -663,15 +738,15 @@ main(int argc, char **argv)
     {
       p7_coords2_Sample(rng, c2, maxseg, L, &wrk);
 
-      p7_coord2_hash_Store(hash, c2->seg, c2->nseg, &keyidx);
+      p7_coords2_hash_Store(hash, c2->seg, c2->nseg, &keyidx);
 
       p7_coords2_Reuse(c2);
     }
   
-  p7_coord2_hash_Dump(stdout, hash);
+  p7_coords2_hash_Dump(stdout, hash);
 
   if (wrk) free(wrk);
-  p7_coord2_hash_Destroy(hash);
+  p7_coords2_hash_Destroy(hash);
   p7_coords2_Destroy(c2);
   esl_randomness_Destroy(rng);
   esl_getopts_Destroy(go);
