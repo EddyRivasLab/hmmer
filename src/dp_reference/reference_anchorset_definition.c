@@ -151,6 +151,7 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
   int             iteration      = 0;   // Counter for stochastic samples. Is 0 for the Viterbi trace, 1st path thru main loop
   float           asc,    best_ascprob;
   int32_t         keyidx, best_keyidx;
+  int32_t         asc_keyidx;	        // keyidx that our current <asc>, <afu>, <afd> are for
   int             status;
   
   /* Contract checks / argument validation */
@@ -188,9 +189,8 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
 	  p7_refmx_Reuse(afu);
 	  p7_refmx_Reuse(afd);
 	  p7_ReferenceASCForward(dsq, L, gm, anch->arr, anch->n, afu, afd, &asc);
+	  asc_keyidx = keyidx;
 	  
-	  ESL_DASSERT1(( asc != -eslINFINITY ));
-
 	  if (stats) 
 	    {
 	      stats->tot_asc_calculations++;
@@ -248,11 +248,12 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
       iteration++;
     }
 
-  if (keyidx != best_keyidx)
-    {
-      p7_coords2_hash_Get(hashtbl, best_keyidx, anch);
-      p7_ReferenceASCForward(dsq, L, gm, anch->arr, anch->n, afu, afd, &asc);
-    }
+  /* <anch> contains the solution corresponding to <keyidx>;
+   * <afu>, <afd> contain sol'n corresponding to <asc_keyidx>.
+   * If either doesn't match best_keyidx we need to update it.
+   */
+  if (keyidx     != best_keyidx) p7_coords2_hash_Get(hashtbl, best_keyidx, anch);
+  if (asc_keyidx != best_keyidx) p7_ReferenceASCForward(dsq, L, gm, anch->arr, anch->n, afu, afd, &asc);
 
   if (stats) 
     {
@@ -411,7 +412,9 @@ dump_current_anchorset(FILE *ofp, const P7_COORDS2 *anch)
 static ESL_OPTIONS options[] = {
   /* name           type           default  env  range  toggles reqs incomp  help                                       docgroup*/
   { "-h",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",                   0 },
+  { "-s",          eslARG_INT,      "0",  NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                          0 },
   { "-Z",          eslARG_INT,      "1",  NULL, NULL,   NULL,  NULL, NULL, "set sequence # to <n>, for E-value calculations",        0 },
+
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -421,7 +424,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go         = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng        = esl_randomness_Create(0);
+  ESL_RANDOMNESS *rng        = esl_randomness_Create( esl_opt_GetInteger(go, "-s"));
   char           *hmmfile    = esl_opt_GetArg(go, 1);
   P7_HMMFILE     *hfp        = NULL;
   ESL_ALPHABET   *abc        = NULL;
@@ -513,7 +516,8 @@ main(int argc, char **argv)
 		 stats.best_ascprob,
 		 (float) stats.nsamples_in_best / (float) stats.tot_iterations);
 	  
-	  printf("%4d %3s ", 
+	  printf("%5d %4d %3s ", 
+		 stats.tot_iterations,
 		 stats.tot_asc_calculations,
 		 (stats.solution_not_found ? "YES" : "no"));
 	    
@@ -595,6 +599,7 @@ main(int argc, char **argv)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -604,7 +609,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng     = esl_randomness_Create(0);
+  ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
   ESL_ALPHABET   *abc     = NULL;
