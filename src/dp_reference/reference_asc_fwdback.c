@@ -98,8 +98,8 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
   ESL_DASSERT1( ( gm->L == L || gm->L == 0) ); /* length model in profile is either L (usually) or 0 (some unit tests) */
 
   /* reallocation, if needed */
-  if ( (status = p7_refmx_GrowTo(mxu, gm->M, L)) != eslOK) return status;
-  if ( (status = p7_refmx_GrowTo(mxd, gm->M, L)) != eslOK) return status;
+  if ( (status = p7_refmx_GrowTo(mxu, M, L)) != eslOK) return status;
+  if ( (status = p7_refmx_GrowTo(mxd, M, L)) != eslOK) return status;
   mxu->M    = mxd->M    = M;
   mxu->L    = mxd->L    = L;
   mxu->type = p7R_ASC_FWD_UP;
