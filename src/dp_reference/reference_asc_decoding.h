@@ -12,8 +12,8 @@
 #include "dp_reference/reference_asc_fwdback.h"
 
 extern int p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_COORD2 *anch, int D, 
-				   const P7_REFMX *afu,       P7_REFMX *afd,
-				         P7_REFMX *abu, const P7_REFMX *abd, 
+				   const P7_REFMX *afu, const P7_REFMX *afd,
+				         P7_REFMX *abu,       P7_REFMX *abd, 
 				         P7_REFMX *apu,       P7_REFMX *apd);
 
 #endif /*p7REFERENCE_ASC_DECODING_INCLUDED*/

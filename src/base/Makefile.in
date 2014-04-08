@@ -1,23 +1,24 @@
 MODULE = base
 
-LIBOBJS =  general.o\
-	   p7_alidisplay.o\
-	   p7_alidisplay_mpi.o\
-	   p7_bg.o\
-	   p7_coords2.o\
-	   p7_domain.o\
-	   p7_domain_mpi.o\
-	   p7_hmm.o\
-	   p7_hmm_mpi.o\
-	   p7_hmmfile.o\
-	   p7_hmmwindow.o\
-	   p7_masstrace.o\
-	   p7_prior.o\
-	   p7_profile.o\
-	   p7_profile_mpi.o\
-	   p7_scoredata.o\
-	   p7_tophits.o\
-	   p7_tophits_mpi.o\
+LIBOBJS =  general.o           \
+	   p7_alidisplay.o     \
+	   p7_alidisplay_mpi.o \
+	   p7_bg.o             \
+	   p7_coords2.o        \
+	   p7_domain.o         \
+	   p7_domain_mpi.o     \
+	   p7_envelopes.o      \
+	   p7_hmm.o            \
+	   p7_hmm_mpi.o        \
+	   p7_hmmfile.o        \
+	   p7_hmmwindow.o      \
+	   p7_masstrace.o      \
+	   p7_prior.o          \
+	   p7_profile.o        \
+	   p7_profile_mpi.o    \
+	   p7_scoredata.o      \
+	   p7_tophits.o        \
+	   p7_tophits_mpi.o    \
 	   p7_trace.o
 
 LIBHDRS =  

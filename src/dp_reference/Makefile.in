@@ -26,7 +26,8 @@ STATS  = reference_anchors_stats
 
 BENCHMARKS = reference_fwdback_benchmark
 
-EXAMPLES = reference_anchors_example \
+EXAMPLES = reference_anchors_example     \
+	   reference_envelopes_example   \
 	   reference_asc_fwdback_example \
            reference_decoding_example    \
            reference_fwdback_example     \

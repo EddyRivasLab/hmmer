@@ -44,13 +44,10 @@
  *            <apd>.  They can be of any allocated size, and they will
  *            be reallocated as needed.
  *            
- *            Alternatively, the caller can overwrite two of the
- *            matrices by passing <abu> for <apu>, and <afd> for
+ *            Alternatively, the caller can overwrite the ASC Backward 
+ *            matrices by passing <abu> for <apu>, and <abd> for
  *            <apd>. That is, the call would look like <(... afu, afd,
- *            abu, abd, abu, afd)>.  The reason that you can only
- *            overwrite those two matrices is that <afu> and <abd> are
- *            needed for endpoint definition by mass trace in a later
- *            step in domain postprocessing.
+ *            abu, abd, abu, abd)>. 
  *            
  *            Caller must have initialized at least once (per program                                                                             
  *            invocation) with a <p7_FLogsumInit()> call, because this                                                                            
@@ -75,7 +72,7 @@
  *            abu  : ASC Backward UP matrix
  *            abd  : ASC Backward DOWN matrix
  *            apu  : RESULT : ASC Decoding UP matrix   (can be <abu>)
- *            apd  : RESULT : ASC Decoding DOWN matrix (can be <afd>)
+ *            apd  : RESULT : ASC Decoding DOWN matrix (can be <abd>)
  *
  * Returns:   <eslOK> on success.
  *
@@ -83,7 +80,7 @@
  */
 int
 p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_COORD2 *anch, int D, 
-			const P7_REFMX *afu, P7_REFMX *afd, P7_REFMX *abu, const P7_REFMX *abd, P7_REFMX *apu, P7_REFMX *apd)
+			const P7_REFMX *afu, const P7_REFMX *afd, P7_REFMX *abu, P7_REFMX *abd, P7_REFMX *apu, P7_REFMX *apd)
 {
   const float *tsc = gm->tsc;	/* activates TSC() convenience macro, used in G->Mk wing unfolding */
   const float *rsc;		/* ptr to current row's residue emission scores in <gm>            */
@@ -109,10 +106,10 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
   ESL_DASSERT1( (afu->M == M && afd->M == M && abu->M == M && abd->M == M) );
   
   /* Reallocation, if needed. 
-   * Caller is allowed to overwrite abu -> apu, afd -> apd
+   * Caller is allowed to overwrite abu -> apu, abd -> apd
    */
   if ( apu != abu && ( status = p7_refmx_GrowTo(apu, M, L)) != eslOK) return status;
-  if ( apd != afd && ( status = p7_refmx_GrowTo(apd, M, L)) != eslOK) return status;
+  if ( apd != abd && ( status = p7_refmx_GrowTo(apd, M, L)) != eslOK) return status;
   apu->L = apd->L = L;
   apu->M = apd->M = M;
   apu->type = p7R_ASC_DECODE_UP;

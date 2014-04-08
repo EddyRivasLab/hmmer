@@ -46,6 +46,12 @@ typedef struct {
 
 
 
+extern P7_ENVELOPES *p7_envelopes_Create (int32_t nalloc, int32_t nredline);
+extern int           p7_envelopes_GrowTo (P7_ENVELOPES *envs, int32_t nalloc);
+extern int           p7_envelopes_Reuse  (P7_ENVELOPES *envs);
+extern void          p7_envelopes_Destroy(P7_ENVELOPES *envs);
+
+
 #endif /* P7_ENVELOPES_INCLUDED */
 /*****************************************************************
  * @LICENSE@

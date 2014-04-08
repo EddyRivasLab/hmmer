@@ -611,7 +611,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
-static char banner[] = "example of ASC search mplementation";
+static char banner[] = "example of running MPAS (most probable anchor set) algorithm";
 
 int 
 main(int argc, char **argv)

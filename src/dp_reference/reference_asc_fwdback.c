@@ -94,8 +94,10 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
   int   M = gm->M;		/* for a bit more clarity, less dereference clutter      */
   int   status;
 
-  /* contract checks / arg validation */
-  ESL_DASSERT1( ( gm->L == L || gm->L == 0) ); /* length model in profile is either L (usually) or 0 (some unit tests) */
+  /* Don't try to contract check the <gm> length model like we do elsewhere.
+   * Envelope determination calls ASC Forward on arbitrary subsequences to
+   * recalculate envelope scores.
+   */
 
   /* reallocation, if needed */
   if ( (status = p7_refmx_GrowTo(mxu, M, L)) != eslOK) return status;

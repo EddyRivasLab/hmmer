@@ -1,5 +1,12 @@
 /* P7_ENVELOPES
  */
+#include "p7_config.h"
+
+#include <stdlib.h>
+
+#include "easel.h"
+
+#include "base/p7_envelopes.h"
 
 
 /*****************************************************************
