@@ -25,6 +25,9 @@ extern int     p7_hmm_SampleSinglePathed(ESL_RANDOMNESS *r, int M, const ESL_ALP
 extern int     p7_hmm_SampleSinglePathedSeq(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 					    P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
 					    P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc);
+extern int     p7_hmm_SampleSinglePathedASC(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
+					    P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
+					    P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc);
 #endif /*P7_HMM_SAMPLE_INCLUDED*/
 
 /*****************************************************************
