@@ -273,7 +273,9 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***opt_tr
   int      M;                   /* length of new model in match states */
   int      idx;                 /* counter over sequences              */
   int      apos;                /* counter for aligned columns         */
-  char errbuf[eslERRBUFSIZE];
+#ifdef p7_DEBUGGING
+  char     errbuf[eslERRBUFSIZE];
+#endif
 
   /* apply the model mask in the 'GC MM' row */
   do_modelmask(msa);

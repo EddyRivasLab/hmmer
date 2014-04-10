@@ -110,6 +110,10 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
    */
   if ( apu != abu && ( status = p7_refmx_GrowTo(apu, M, L)) != eslOK) return status;
   if ( apd != abd && ( status = p7_refmx_GrowTo(apd, M, L)) != eslOK) return status;
+#if eslDEBUGLEVEL >= 1
+  p7_refmx_Zero(apu, M, L);
+  p7_refmx_Zero(apd, M, L);
+#endif
   apu->L = apd->L = L;
   apu->M = apd->M = M;
   apu->type = p7R_ASC_DECODE_UP;
@@ -127,6 +131,8 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
       ppp   = apd->dp[i] + (M+1) * p7R_NSCELLS;
       denom = 0.0;
 
+      if (i == 0) totsc = bckp[p7R_N]; 
+
       ppp[p7R_JJ] = 0.0;	
       ppp[p7R_CC] = 0.0; 
       ppp[p7R_E]  = 0.0; 
@@ -137,8 +143,7 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
       ppp[p7R_G]  = expf(fwdp[p7R_G] + bckp[p7R_G] - totsc); 
       ppp[p7R_C]  = 0.0;
 
-      if (i == 0) totsc = bckp[p7R_N]; 
-      else        *(apu->dp[i]) = ppp[p7R_N];  // that's a hack. We stash denom (here, p7R_N) in k=0,ML slot of UP, which is unused
+      *(apu->dp[i]) = ppp[p7R_N];  // that's a hack. We stash denom (here, p7R_N) in k=0,ML slot of UP, which is unused
     }
 
 
@@ -146,7 +151,7 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
     {
       /* UP matrix 
        */
-      iend = (d = 0 ? 1 : anch[d-1].n1 + 1);
+      iend = (d == 0 ? 1 : anch[d-1].n1 + 1);
       for (i = iend; i < anch[d].n1; i++)
 	{
 	  /* Wing retraction of G->D1..Dk-1->MGk paths.

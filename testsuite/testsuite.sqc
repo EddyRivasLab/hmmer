@@ -55,6 +55,7 @@
 1 exercise p7_trace             @src/base/p7_trace_utest@
 
 1 exercise build                @src/build/build_utest@
+1 exercise modelsample          @src/build/modelsample_utest@
 1 exercise seqmodel             @src/build/seqmodel_utest@
 
 1 exercise reference_decoding   @src/dp_reference/reference_decoding_utest@

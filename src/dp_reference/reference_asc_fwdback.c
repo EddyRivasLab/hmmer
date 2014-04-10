@@ -102,6 +102,10 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
   /* reallocation, if needed */
   if ( (status = p7_refmx_GrowTo(mxu, M, L)) != eslOK) return status;
   if ( (status = p7_refmx_GrowTo(mxd, M, L)) != eslOK) return status;
+#if eslDEBUGLEVEL >= 1
+  p7_refmx_Zero(mxu, M, L);
+  p7_refmx_Zero(mxd, M, L);
+#endif
   mxu->M    = mxd->M    = M;
   mxu->L    = mxd->L    = L;
   mxu->type = p7R_ASC_FWD_UP;
@@ -439,6 +443,10 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
   /* reallocation, if needed */
   if ( (status = p7_refmx_GrowTo(abu, gm->M, L)) != eslOK) return status;
   if ( (status = p7_refmx_GrowTo(abd, gm->M, L)) != eslOK) return status;
+#if eslDEBUGLEVEL >= 1
+  p7_refmx_Zero(abu, M, L);
+  p7_refmx_Zero(abd, M, L);
+#endif
   abu->M    = abd->M    = M;
   abu->L    = abd->L    = L;
   abu->type = p7R_ASC_BCK_UP;
@@ -458,6 +466,9 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
       xc[p7R_N]  = -eslINFINITY;
       xc[p7R_E]  = xC + gm->xsc[p7P_E][p7P_MOVE];
     }
+
+  printf("ASC Backward UP after init:\n");    p7_refmx_Dump(stdout, abu);
+  printf("ASC Backward DOWN after init:\n");  p7_refmx_Dump(stdout, abd);
 
   /* The code below is designed to be easily convertible to one-row memory efficient DP, if needed */
   for (d = D-1; d >= 0; d--)

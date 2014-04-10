@@ -16,14 +16,16 @@ HDRS =
 
 PROGS =
 
-UTESTS = build_utest \
+UTESTS = build_utest       \
+	 modelsample_utest \
 	 seqmodel_utest 
 
 STATS  = evalues_stats
 
 BENCHMARKS = evalues_benchmark
 
-EXAMPLES = build_example\
+EXAMPLES = build_example       \
+	   modelsample_example \
 	   seqmodel_example
 
 LIBTMP = 

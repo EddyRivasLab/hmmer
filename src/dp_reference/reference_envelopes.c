@@ -304,6 +304,8 @@ main(int argc, char **argv)
   float           fsc, vsc, asc, asc_b;
   int             status;
 
+  p7_Init();
+
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
@@ -354,6 +356,10 @@ main(int argc, char **argv)
   p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, tr, &wrk, hashtbl,
 		       afu, afd, anch, &asc, &prm, &stats);
 
+  
+  printf("# ASC Forward UP:\n");    p7_refmx_Dump(stdout, afu);
+  printf("# ASC Forward DOWN:\n"); p7_refmx_Dump(stdout, afd);
+
   /* We no longer need rxf and rxd. 
    * Use their space for apu/apd pair, which will briefly
    * hold ASC Backward matrices, then get used for ASC Decoding.
@@ -363,10 +369,18 @@ main(int argc, char **argv)
 
   p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->arr, anch->n, apu, apd, &asc_b);
   
+  printf("# Backward score (raw, nats): %.2f\n", asc_b);
+  printf("# ASC Backward UP:\n");   p7_refmx_Dump(stdout, apu);
+  printf("# ASC Backward DOWN:\n"); p7_refmx_Dump(stdout, apd);
+
   /* ASC Decoding takes afu/afd and abu/abd as input;
    * overwrites abu/abd with decoding matrices
    */
   p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->arr, anch->n, afu, afd, apu, apd, apu, apd);
+
+  printf("# ASC Decoding UP matrix:\n");  p7_refmx_Dump(stdout, apu);
+  printf("# ASC Decoding DOWN:\n");       p7_refmx_Dump(stdout, apu);
+
 
   /* Envelope calculation needs to get four matrices:
    * ASC Decoding pair, apu/apd, and it will leave these constant;
