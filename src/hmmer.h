@@ -1008,6 +1008,11 @@ typedef struct {
   /*pointer to FM-index metadata*/
   FM_METADATA *meta;
 
+  /* Placed here for testing pruning with BWTSW scoring */
+  float match_override;
+  float mismatch_override;
+  int skip_boundprune;
+
 } FM_CFG;
 
 

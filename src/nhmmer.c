@@ -130,6 +130,10 @@ static ESL_OPTIONS options[] = {
   { "--seed_req_pos",      eslARG_INT,           "5", NULL, NULL,    NULL,  NULL, NULL,          "minimum number consecutive positive scores in seed" ,        9 },
   { "--seed_ssv_length",   eslARG_INT,          "70", NULL, NULL,    NULL,  NULL, NULL,          "length of window around FM seed to get full SSV diagonal",   9 },
 
+  //for testing pruning with BWTSW scoring
+  { "--bwtsw_match",      eslARG_REAL,        "0.0", NULL, NULL,    NULL,  NULL, NULL,          "BWTSW match score",   9 },
+  { "--bwtsw_mismatch",   eslARG_REAL,        "0.0", NULL, NULL,    NULL,  NULL, NULL,          "BWTSW mismatch score",   9 },
+  { "--fm_skip_boundprune", eslARG_NONE,       NULL, NULL, NULL,    NULL,  NULL, NULL,          "turn off bound pruning (for pruning tests only)",                 9 },
 
 /* Other options */
   { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,     "assert target <seqdb> is in format <s>",                        12 },
