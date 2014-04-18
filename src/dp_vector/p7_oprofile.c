@@ -1555,7 +1555,7 @@ p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, 
   if ((gm = p7_profile_Create (M, abc)) == NULL)  { status = eslEMEM; goto ERROR; }
   if ((om = p7_oprofile_Create(M, abc)) == NULL)  { status = eslEMEM; goto ERROR; }
 
-  if ((status = p7_hmm_Sample(r, M, abc, &hmm))         != eslOK) goto ERROR;
+  if ((status = p7_modelsample(r, M, abc, &hmm))        != eslOK) goto ERROR;
   if ((status = p7_profile_ConfigLocal(gm, hmm, bg, L)) != eslOK) goto ERROR;
   if ((status = p7_oprofile_Convert(gm, om))            != eslOK) goto ERROR;
   if ((status = p7_oprofile_ReconfigLength(om, L))      != eslOK) goto ERROR;

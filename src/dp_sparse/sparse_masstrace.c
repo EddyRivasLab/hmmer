@@ -538,7 +538,7 @@ utest_approx_masstrace(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M,
   char           errbuf[eslERRBUFSIZE];
 
   /* Sample a profile from prior. Config as usual, multihit dial-mode. 
-   * We sample from the prior, as opposed to uniform p7_hmm_Sample(), 
+   * We sample from the prior, as opposed to uniform p7_modelsample(), 
    * in order to get a more realistic, info-rich profile. This utest
    * needs high posterior prob anchors in its domain alignment paths,
    * to be able to sample domain endpoints effectively.
@@ -548,9 +548,9 @@ utest_approx_masstrace(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M,
   else if  (abc->type == eslRNA)   pri = p7_prior_CreateNucleic();
   else                             pri = p7_prior_CreateLaplace(abc);
 
-  if ( p7_hmm_SamplePrior(rng, M, abc, pri, &hmm)  != eslOK) esl_fatal(msg);
-  if ( p7_profile_Config(gm, hmm, bg)              != eslOK) esl_fatal(msg);
-  if ( p7_oprofile_Convert(gm, om)                 != eslOK) esl_fatal(msg);
+  if ( p7_modelsample_Prior(rng, M, abc, pri, &hmm) != eslOK) esl_fatal(msg);
+  if ( p7_profile_Config(gm, hmm, bg)               != eslOK) esl_fatal(msg);
+  if ( p7_oprofile_Convert(gm, om)                  != eslOK) esl_fatal(msg);
 
   /* Generate (sample) a sequence from the profile */
   if ( p7_profile_SetLength(gm, L)                 != eslOK) esl_fatal(msg);

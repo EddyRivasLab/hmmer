@@ -330,8 +330,8 @@ set_local_entry(P7_PROFILE *gm, const P7_HMM *hmm)
       if (( status  = p7_hmm_CalculateOccupancy(hmm, occ, NULL)) != eslOK) return status; /* NULL=iocc[k], I state expected uses, which we don't need here */
       for (k = 1; k <= hmm->M; k++) 
 	Z += occ[k] * (float) (hmm->M-k+1);
-      for (k = 1; k <= hmm->M; k++) 
-	P7P_TSC(gm, k-1, p7P_LM) = logf(occ[k] / Z); /* note off-by-one: entry at Mk stored as [k-1][LM] */
+      for (k = 1; k <= hmm->M; k++)                       // note off-by-one: entry at Mk stored as [k-1][LM];
+	P7P_TSC(gm, k-1, p7P_LM) = esl_logf(occ[k] / Z);  // watch out for occ[k] = 0; esl_logf() is a wrapper that catches logf(0), makes it -inf
       /* leave tsc[M,LM] as -inf, as we'd already initialized it */
     }
   return eslOK;
@@ -485,7 +485,7 @@ main(int argc, char **argv)
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
   if ((abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("failed to create amino alphabet");
-  if (p7_hmm_Sample(rng, M, abc, &hmm)      != eslOK) esl_fatal("failed to sample random HMM");
+  if (p7_modelsample(rng, M, abc, &hmm)     != eslOK) esl_fatal("failed to sample random HMM");
   if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to created null model");
 
   utest_config(hmm, bg);

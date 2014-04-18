@@ -739,7 +739,7 @@ utest_engine(int do_intersected_mask, char *msg, ESL_RANDOMNESS *rng, ESL_ALPHAB
   int            a1_status, a2_status;
 
   /* Sample a profile. Config as requested for the utest version. */
-  if (p7_hmm_Sample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+  if (p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
   if (do_zeroed_emissions) {
     prohibit_all_ac_in_hmm(hmm);
     if (! do_glocal) prohibit_delete_transitions(hmm);

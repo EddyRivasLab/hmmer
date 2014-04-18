@@ -799,9 +799,9 @@ utest_randomseq(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
   int           idx;
   char          errbuf[eslERRBUFSIZE];
   
-  if ( p7_hmm_Sample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
-  if ( p7_profile_Config(gm, hmm, bg)   != eslOK) esl_fatal(msg);
-  if ( p7_profile_SetLength(gm, L)      != eslOK) esl_fatal(msg);
+  if ( p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+  if ( p7_profile_Config(gm, hmm, bg)    != eslOK) esl_fatal(msg);
+  if ( p7_profile_SetLength(gm, L)       != eslOK) esl_fatal(msg);
 
   for (idx = 0; idx < N; idx++)
     {
@@ -866,8 +866,8 @@ utest_generation(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
   int           idx;
   char          errbuf[eslERRBUFSIZE];
   
-  if ( p7_hmm_Sample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
-  if ( p7_profile_Config(gm, hmm, bg)   != eslOK) esl_fatal(msg);
+  if ( p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+  if ( p7_profile_Config(gm, hmm, bg)    != eslOK) esl_fatal(msg);
 
   for (idx = 0; idx < N; idx++)
     {
@@ -950,7 +950,7 @@ utest_duality(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
   int           idx;
 
   if ((abc = esl_alphabet_Create(eslAMINO))   == NULL)  esl_fatal(msg);
-  if ( p7_hmm_Sample(rng, M, abc, &hmm)       != eslOK) esl_fatal(msg);
+  if ( p7_modelsample(rng, M, abc, &hmm)      != eslOK) esl_fatal(msg);
   if ((bg = p7_bg_Create(abc))                == NULL)  esl_fatal(msg);
 
   if (( gmd = p7_profile_Create(hmm->M, abc) )   == NULL)  esl_fatal(msg);
@@ -1022,8 +1022,8 @@ utest_duality(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
  * alphabet, and whether HMMER can deal with non-bio alphabets.
  *
  * The enumeration test in generic_fwdback.c is similar, but uses
- * a different enumeration: p7_hmm_SampleEnumerable() instead of
- * p7_hmm_SampleEnumerable2(). p7_hmm_SampleEnumerable() sets all
+ * a different enumeration: p7_modelsample_Enumerable() instead of
+ * p7_modelsample_Enumerable2(). p7_modelsample_Enumerable() sets all
  * transitions to insert to 0, so it enumerates a smaller seq space of
  * L=0..M (no inserts are possible at all.)
  * 
@@ -1053,9 +1053,9 @@ utest_enumeration(ESL_RANDOMNESS *rng, int M)
   double        fp;
   double        total_p = 0.0;
 
-  if ( p7_hmm_SampleEnumerable2(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
-  if (( bg = p7_bg_Create(abc))                    == NULL)  esl_fatal(msg);
-  if (( gm = p7_profile_Create(hmm->M, abc))       == NULL)  esl_fatal(msg);
+  if ( p7_modelsample_Enumerable2(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+  if (( bg = p7_bg_Create(abc))                      == NULL)  esl_fatal(msg);
+  if (( gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal(msg);
   
                                          /* L, nj,  pglocal:  L=0 unihit dual-mode */
   if ( p7_profile_ConfigCustom(gm, hmm, bg, 0, 0.0, 0.5) != eslOK) esl_fatal(msg);
@@ -1150,8 +1150,8 @@ utest_singlepath(ESL_RANDOMNESS *rng, int alphatype, int M)
   /* Create a profile that has only a single possible path (including
    * emissions) thru it; requires configuring in uniglocal mode w/ L=0
    */
-  if ( p7_hmm_SampleSinglePathed(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
-  if ( p7_profile_ConfigUniglocal(gm, hmm, bg, 0)   != eslOK) esl_fatal(msg);
+  if ( p7_modelsample_SinglePathed(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+  if ( p7_profile_ConfigUniglocal(gm, hmm, bg, 0)     != eslOK) esl_fatal(msg);
 
   /* Sample that sequence and path */
   if ( p7_ProfileEmit(rng, hmm, gm, bg, sq, gtr)    != eslOK) esl_fatal(msg);
@@ -1687,12 +1687,13 @@ utest_brute(ESL_RANDOMNESS *rng, int N)
 #include "easel.h"
 #include "esl_getopts.h"
 #include "esl_msa.h"
+#include "esl_random.h"
 
 #include "hmmer.h"
 
 /* This unit test can fail normally. It compares scores for equality,
  * within an acceptable tolerance. There is no tolerance that we can
- * absoluteluy guarantee, because routines that use FLogsum()
+ * absolutely guarantee, because routines that use FLogsum()
  * accumulate numeric error, and this error has an approximately
  * normal distribution, so it's possible for stochastic outliers to
  * occur. Default RNG seed is set to a constant to prevent this from

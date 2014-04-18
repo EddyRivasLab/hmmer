@@ -605,7 +605,7 @@ utest_oprofileSendRecv(int my_rank, int nproc)
   int             i;
   char            errbuf[eslERRBUFSIZE];
 
-  p7_hmm_Sample(r, M, abc, &hmm); /* master and worker's sampled profiles are identical */
+  p7_modelsample(r, M, abc, &hmm); /* master and worker's sampled profiles are identical */
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
   om = p7_oprofile_Create(hmm->M, abc);

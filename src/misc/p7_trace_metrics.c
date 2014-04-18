@@ -323,9 +323,9 @@ utest_consistency(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
       if ( p7_trace_metrics_Zero(tm) != eslOK) esl_fatal(msg);
 
       /* Sample a random HMM, and config a profile (multihit local/glocal) from it */
-      if ( p7_hmm_Sample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
-      if ( p7_profile_Config(gm, hmm, bg)   != eslOK) esl_fatal(msg);
-      if ( p7_profile_SetLength(gm, L)      != eslOK) esl_fatal(msg);
+      if ( p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+      if ( p7_profile_Config(gm, hmm, bg)    != eslOK) esl_fatal(msg);
+      if ( p7_profile_SetLength(gm, L)       != eslOK) esl_fatal(msg);
 
       /* Emit a sequence and keep its trace as the reference */
       if ( p7_profile_SetLength(gm, L)                 != eslOK) esl_fatal(msg);

@@ -695,7 +695,7 @@ main(int argc, char **argv)
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
-  p7_hmm_Sample(rng, M, abc, &hmm);
+  p7_modelsample(rng, M, abc, &hmm);
   p7_profile_Config   (gm, hmm, bg);   
   p7_profile_SetLength(gm, L);
 

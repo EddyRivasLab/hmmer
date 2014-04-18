@@ -224,8 +224,8 @@ utest_overwrite(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L)
   float         tol   = 0.0f;	/* exact match is expected! */
   char          errbuf[eslERRBUFSIZE];
 
-  if ( p7_hmm_Sample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
-  if ( p7_profile_Config(gm, hmm, bg)   != eslOK) esl_fatal(msg);
+  if ( p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+  if ( p7_profile_Config(gm, hmm, bg)    != eslOK) esl_fatal(msg);
   
   /* Emit sequence from model, using a length model of <L>;
    * restrict the emitted sequence length to 3x (L+M), arbitrarily, to 
@@ -281,8 +281,8 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
   float         rowsum;
   float        *dpc;
 
-  if ( p7_hmm_Sample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
-  if ( p7_profile_Config(gm, hmm, bg)   != eslOK) esl_fatal(msg);
+  if ( p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+  if ( p7_profile_Config(gm, hmm, bg)    != eslOK) esl_fatal(msg);
   
   for (idx = 0; idx < N; idx++)
     {
@@ -347,7 +347,7 @@ utest_colsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
   float        *colsum = malloc(sizeof(float) * (M+1));
   float        *dpc;
 
-  if ( p7_hmm_Sample(rng, M, abc, &hmm)           != eslOK) esl_fatal(msg);
+  if ( p7_modelsample(rng, M, abc, &hmm)          != eslOK) esl_fatal(msg);
   if ( p7_profile_ConfigUniglocal(gm, hmm, bg, L) != eslOK) esl_fatal(msg);
 
   for (idx = 0; idx < N; idx++)
@@ -437,9 +437,9 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
   /* Sample a profile. 
    * Config as usual: multihit dual-mode local/glocal, so all paths in it are valid.
    */
-  if ( p7_hmm_Sample(rng, M, abc, &hmm)  != eslOK) esl_fatal(msg);  
-  if ( p7_profile_Config(gm, hmm, bg)    != eslOK) esl_fatal(msg);
-  if ( p7_profile_SetLength(gm, L)       != eslOK) esl_fatal(msg);  
+  if ( p7_modelsample(rng, M, abc, &hmm)  != eslOK) esl_fatal(msg);  
+  if ( p7_profile_Config(gm, hmm, bg)     != eslOK) esl_fatal(msg);
+  if ( p7_profile_SetLength(gm, L)        != eslOK) esl_fatal(msg);  
 
   /* Generate (sample) a sequence from the profile */
   do {   

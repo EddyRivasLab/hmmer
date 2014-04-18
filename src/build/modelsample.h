@@ -1,5 +1,5 @@
-#ifndef P7_HMM_SAMPLE_INCLUDED
-#define P7_HMM_SAMPLE_INCLUDED
+#ifndef P7_MODELSAMPLE_INCLUDED
+#define P7_MODELSAMPLE_INCLUDED
 
 #include "p7_config.h"
 
@@ -14,21 +14,27 @@
 #include "base/p7_profile.h"
 #include "base/p7_trace.h"
 
-extern int     p7_hmm_Sample           (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
-extern int     p7_hmm_SamplePrior      (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, const P7_PRIOR *pri, P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleUngapped   (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleEnumerable (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleEnumerable2(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleUniform    (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, 
-					float tmi, float tii, float tmd, float tdd,  P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleSinglePathed(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleSinglePathedSeq(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
+extern int     p7_modelsample            (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
+extern int     p7_modelsample_Prior      (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, const P7_PRIOR *pri, P7_HMM **ret_hmm);
+extern int     p7_modelsample_Ungapped   (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
+extern int     p7_modelsample_Enumerable (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
+extern int     p7_modelsample_Enumerable2(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
+extern int     p7_modelsample_Uniform    (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, 
+					  float tmi, float tii, float tmd, float tdd,  P7_HMM **ret_hmm);
+extern int     p7_modelsample_SinglePathed(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
+extern int     p7_modelsample_SinglePathedSeq(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
+					      P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
+					      P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc);
+extern int     p7_modelsample_SinglePathedASC(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
+					      P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
+					      P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc);
+extern int     p7_modelsample_AnchoredUni(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
+					  P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
+					  P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc);
+extern int     p7_modelsample_AnchoredMulti(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 					    P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
 					    P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc);
-extern int     p7_hmm_SampleSinglePathedASC(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
-					    P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-					    P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc);
-#endif /*P7_HMM_SAMPLE_INCLUDED*/
+#endif /*P7_MODELSAMPLE_INCLUDED*/
 
 /*****************************************************************
  * @LICENSE@

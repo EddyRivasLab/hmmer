@@ -473,7 +473,7 @@ utest_SendRecv(ESL_RANDOMNESS *rng, int my_rank, int nproc)
 	if (MPI_Send( &rngseed, 1, MPI_UNSIGNED, i, 0, MPI_COMM_WORLD) != MPI_SUCCESS) esl_fatal(msg);
 
       /* We sample an HMM that's going to be identical to the workers' */
-      if (p7_hmm_Sample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+      if (p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
 
       for (i = 1; i < nproc; i++)
 	{
@@ -494,7 +494,7 @@ utest_SendRecv(ESL_RANDOMNESS *rng, int my_rank, int nproc)
       rng = esl_randomness_CreateFast(rngseed);
 
       /* so when the worker samples this HMM, the master has independently sampled an exact duplicate of it... */
-      if (p7_hmm_Sample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+      if (p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
 
       /* each worker sends the HMM to the master (it's the same HMM for each worker. The test is intended for one master, one worker.) */
       if (p7_hmm_mpi_Send(hmm, 0, 0, MPI_COMM_WORLD, &wbuf, &wn) != eslOK) esl_fatal(msg);

@@ -2498,13 +2498,13 @@ main(int argc, char **argv)
   fclose(fp);
 
   /* Protein HMMs */
-  p7_hmm_Sample(r, M, aa_abc, &hmm);
+  p7_modelsample(r, M, aa_abc, &hmm);
   utest_io_current(tmpfile, hmm);
   utest_io_3a     (tmpfile, hmm);
   p7_hmm_Destroy(hmm);
 
   /* Nucleic acid HMMs */
-  p7_hmm_Sample(r, M, nt_abc, &hmm);
+  p7_modelsample(r, M, nt_abc, &hmm);
   utest_io_current(tmpfile, hmm);
   utest_io_3a     (tmpfile, hmm);
   p7_hmm_Destroy(hmm);

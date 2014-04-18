@@ -336,7 +336,7 @@ main(int argc, char **argv)
   P7_HMM         *hmm          = NULL;
   P7_PROFILE     *gm           = p7_profile_Create(M, abc);
   
-  p7_hmm_Sample(rng, M, abc, &hmm);
+  p7_modelsample(rng, M, abc, &hmm);
   p7_profile_Config   (gm, hmm, bg);   
   p7_profile_SetLength(gm, L);
 

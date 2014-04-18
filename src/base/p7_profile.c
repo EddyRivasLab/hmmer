@@ -630,8 +630,10 @@ p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol)
    * to calculate the M(M+1)/2 fragment probabilities accordingly.
    */
   pstart[0] = 0.0;
-  for (k = 1; k <= gm->M; k++)
-    pstart[k] = exp(P7P_TSC(gm, k-1, p7P_LM)) * (gm->M - k + 1); /* multiply p_ij by the number of exits j; note off-by-one storage, L->Mk in tsc[k-1] */
+  for (k = 1; k <= gm->M; k++) {
+    pstart[k] = exp(P7P_TSC(gm, k-1, p7P_LM)) * (gm->M - k + 1);     /* multiply p_ij by the number of exits j; note off-by-one storage, L->Mk in tsc[k-1] */
+    if (pstart[k] > 1.0 && pstart[k] <= 1.0 + tol) pstart[k] = 1.0;  // There's a special case, where only one M state is occupiable, with entry prob 1.0/(M-k+1). (M-k+1)*exp(log(1.0/M-k+1)) can give 1+epsilon. 
+  }
   if (esl_vec_DValidate(pstart, gm->M+1, tol, NULL) != eslOK) ESL_XFAIL(eslFAIL, errbuf, "local entry distribution is not normalized properly");
 
   /* Validate the glocal entry distribution.  This is an explicit
@@ -750,7 +752,7 @@ utest_Compare(void)
   int             M    = 200;
   int             L    = 400;
 
-  p7_hmm_Sample(r, M, abc, &hmm); /* master and worker's sampled profiles are identical */
+  p7_modelsample(r, M, abc, &hmm); /* master and worker's sampled profiles are identical */
   bg  = p7_bg_Create(abc);
 
   gm  = p7_profile_Create(hmm->M, abc);

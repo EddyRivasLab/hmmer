@@ -615,7 +615,7 @@ utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L,
   int            idx;
   float          tol  = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
    
-  if ( p7_hmm_Sample(rng, M, abc, &hmm)  != eslOK) esl_fatal(msg);
+  if ( p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
   if ( p7_profile_Config(gm, hmm, bg)    != eslOK) esl_fatal(msg);
   if ( p7_oprofile_Convert(gm, om)       != eslOK) esl_fatal(msg);
   if ( p7_profile_SetLength(gm, L)       != eslOK) esl_fatal(msg);
@@ -836,8 +836,8 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
   char           errbuf[eslERRBUFSIZE];
   
   /* Sample a profile. Config as usual, multihit dual-mode local/glocal. */
-  if ( p7_hmm_Sample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
-  if ( p7_profile_Config(gm, hmm, bg)   != eslOK) esl_fatal(msg);
+  if ( p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+  if ( p7_profile_Config(gm, hmm, bg)    != eslOK) esl_fatal(msg);
 
   for (idx = 0; idx < N; idx++)
     {
@@ -968,7 +968,7 @@ utest_reference_constrained(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, i
   /* Sample a profile. 
    * Config as usual: multihit dual-mode local/glocal, so all paths in it are valid.
    */
-  if ( p7_hmm_Sample(rng, M, abc, &hmm)  != eslOK) esl_fatal(msg);
+  if ( p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
   if ( p7_profile_Config(gm, hmm, bg)    != eslOK) esl_fatal(msg);
 
   for (idx = 0; idx < N; idx++)
@@ -1088,8 +1088,8 @@ utest_singlepath(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int N
       /* Create a profile that has only a single possible path (including
        * emissions) thru it; requires configuring in uniglocal mode w/ L=0
        */
-      if ( p7_hmm_SampleSinglePathed(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
-      if ( p7_profile_ConfigUniglocal(gm, hmm, bg, 0)   != eslOK) esl_fatal(msg);
+      if ( p7_modelsample_SinglePathed(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+      if ( p7_profile_ConfigUniglocal(gm, hmm, bg, 0)     != eslOK) esl_fatal(msg);
 
       /* Sample that sequence and path; get its trace score */
       if ( p7_ProfileEmit(rng, hmm, gm, bg, sq, gtr)    != eslOK) esl_fatal(msg);

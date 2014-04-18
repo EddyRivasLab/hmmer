@@ -975,9 +975,10 @@ p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *iocc)
 
   mocc[0] = 0.;			                     /* no M_0 state */
   mocc[1] = hmm->t[0][p7H_MI] + hmm->t[0][p7H_MM];   /* initialize w/ 1 - B->D_1 */
-  for (k = 2; k <= hmm->M; k++)
-    mocc[k] = mocc[k-1] * (hmm->t[k-1][p7H_MM] + hmm->t[k-1][p7H_MI]) +
-      (1.0-mocc[k-1]) * hmm->t[k-1][p7H_DM];  
+  for (k = 2; k <= hmm->M; k++) {
+    mocc[k]  = mocc[k-1] * (hmm->t[k-1][p7H_MM] + hmm->t[k-1][p7H_MI]);
+    mocc[k] += (1.0-mocc[k-1]) > 0. ? (1.0-mocc[k-1]) * hmm->t[k-1][p7H_DM] : 0.0;  // floating point error can give 1-mocc = -epsilon, and logf(-epsilon) later on = nan.
+  }
 
   if (iocc != NULL) {
     iocc[0] = hmm->t[0][p7H_MI] / hmm->t[0][p7H_IM];
@@ -1013,7 +1014,7 @@ utest_occupancy(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
   float   *occ = malloc(sizeof(float) * (M+1));
   float      x;
 
-  if (p7_hmm_Sample(r, M, abc, &hmm)            != eslOK) esl_fatal(msg);
+  if (p7_modelsample(r, M, abc, &hmm)           != eslOK) esl_fatal(msg);
   if (p7_hmm_CalculateOccupancy(hmm, occ, NULL) != eslOK) esl_fatal(msg);
   x = esl_vec_FSum(occ+1, hmm->M) / (float) hmm->M;
 
@@ -1033,7 +1034,7 @@ utest_occupancy(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
 /* The composition unit test validates the SetComposition()
  * calculation against the composition of a large number of sampled
  * core HMM traces. This also exercises the correctness of
- * p7_hmm_Sample() and p7_hmm_SetOccupancy(). 
+ * p7_modelsample() and p7_hmm_SetOccupancy(). 
  * 
  * SRE, Fri Dec  4 13:04:52 2009 [#h71; J5/120]
  */
@@ -1048,8 +1049,8 @@ utest_composition(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
   float          *fq   = malloc(sizeof(float) * abc->K);
   int             i,pos;
 
-  if (p7_hmm_Sample(r, M, abc, &hmm) != eslOK)  esl_fatal(msg);
-  if (p7_hmm_SetComposition(hmm)     != eslOK)  esl_fatal(msg);
+  if (p7_modelsample(r, M, abc, &hmm) != eslOK)  esl_fatal(msg);
+  if (p7_hmm_SetComposition(hmm)      != eslOK)  esl_fatal(msg);
 
   esl_vec_FSet(fq, abc->K, 0.0);
   for (i = 0; i < N; i++)

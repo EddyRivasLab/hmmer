@@ -481,7 +481,7 @@ utest_SendRecv(ESL_RANDOMNESS *rng, int my_rank, int nproc)
 	if (MPI_Send( &rngseed, 1, MPI_UNSIGNED, i, 0, MPI_COMM_WORLD) != MPI_SUCCESS) esl_fatal(msg);
 
       /* We sample a profile that the workers can sample identically, given the shared RNG seed */
-      if (p7_hmm_Sample(rng, M, abc, &hmm)       != eslOK) esl_fatal(msg);
+      if (p7_modelsample(rng, M, abc, &hmm)      != eslOK) esl_fatal(msg);
       if (( bg = p7_bg_Create(abc))              == NULL)  esl_fatal(msg);
       if (( gm = p7_profile_Create(hmm->M, abc)) == NULL)  esl_fatal(msg);
       if ( p7_profile_Config(gm, hmm, bg)        != eslOK) esl_fatal(msg);
@@ -509,7 +509,7 @@ utest_SendRecv(ESL_RANDOMNESS *rng, int my_rank, int nproc)
       rng = esl_randomness_CreateFast(rngseed);
 
       /* so when the worker samples this profile, the master has independently sampled an exact duplicate of it... */
-      if (p7_hmm_Sample(rng, M, abc, &hmm)       != eslOK) esl_fatal(msg);
+      if (p7_modelsample(rng, M, abc, &hmm)      != eslOK) esl_fatal(msg);
       if (( bg = p7_bg_Create(abc))              == NULL)  esl_fatal(msg);
       if (( gm = p7_profile_Create(hmm->M, abc)) == NULL)  esl_fatal(msg);
       if ( p7_profile_Config(gm, hmm, bg)        != eslOK) esl_fatal(msg);

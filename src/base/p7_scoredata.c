@@ -371,7 +371,7 @@ utest_createScoreData(ESL_GETOPTS *go, ESL_RANDOMNESS *r )
 
   if ( (abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal(msg);
 
-  if (  p7_hmm_Sample(r, 100, abc, &hmm)        != eslOK) esl_fatal(msg);
+  if (  p7_modelsample(r, 100, abc, &hmm)       != eslOK) esl_fatal(msg);
   if (  (gm = p7_profile_Create (hmm->M, abc))  == NULL ) esl_fatal(msg);
   if (  (om = p7_oprofile_Create(hmm->M, abc))  == NULL ) esl_fatal(msg);
 

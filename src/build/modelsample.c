@@ -1,13 +1,15 @@
 /* Sampling profile HMMs.
  * These routines are used primarily in unit testing.
- * The models are often contrived and/or constrained to enable particular tests.
+ * The models are often contrived and/or constrained in various ways
+ * that enable particular tests.
  * 
  * Contents:
  *   1. Model sampling routines.
- *   2. Unit tests.
- *   3. Test driver.
- *   4. Example driver.
- *   5. Copyright and license information.
+ *   2. Internal (static) functions.
+ *   3. Unit tests.
+ *   4. Test driver.
+ *   5. Example driver.
+ *   6. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -30,12 +32,17 @@
 
 #include "build/modelsample.h"
 
+static int modelsample_engine(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
+static int sample_single_pathed_seq_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
+					   P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
+					   P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc,
+					   int do_asc_version);
 
 /*****************************************************************
  * 1. Model sampling routines.
  *****************************************************************/
 
-/* Function:  p7_hmm_Sample()
+/* Function:  p7_modelsample()
  * Synopsis:  Sample an HMM at random.
  *
  * Purpose:   Creates a random HMM of length <M> nodes,
@@ -55,35 +62,14 @@
  * Throws:    <eslEMEM> on allocation error.
  */
 int
-p7_hmm_Sample(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
+p7_modelsample(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
 {
   P7_HMM *hmm    = NULL;
   char   *logmsg = "[random HMM created by uniform sampling]";
-  int     k;
   int     status;
 
-  if ( (hmm = p7_hmm_Create(M, abc)) == NULL) { status = eslEMEM; goto ERROR; }
-  
-  for (k = 0; k <= M; k++)
-    {
-      if (k > 0) esl_dirichlet_FSampleUniform(r, abc->K, hmm->mat[k]);
-      esl_dirichlet_FSampleUniform(r, abc->K,    hmm->ins[k]);
-      esl_dirichlet_FSampleUniform(r, p7H_NTMAT, P7H_TMAT(hmm, k));
-      do {  /* put a cap on tII, because tII~1.0 leads to infinite-length sequence samples */
-	esl_dirichlet_FSampleUniform(r, p7H_NTINS, P7H_TINS(hmm, k));
-      } while (hmm->t[k][p7H_II] > p7H_II_SAMPLE_MAX);
-      if (k > 0) esl_dirichlet_FSampleUniform(r, p7H_NTDEL, P7H_TDEL(hmm, k));
-    }
-  /* Node M is special: no transitions to D, transitions to M
-   * are interpreted as transitions to E. Overwrite a little of
-   * what we did in node M.
-   */
-  hmm->t[M][p7H_MD] = 0.0;
-  esl_vec_FNorm(P7H_TMAT(hmm, M), p7H_NTMAT);
-  
-  esl_vec_FSet(P7H_TDEL(hmm, M), p7H_NTDEL, 0.0);
-  hmm->t[M][p7H_DM] = 1.0;
-  
+  if (( status = modelsample_engine(r, M, abc, &hmm) ) != eslOK) goto ERROR;
+
   /* Add mandatory annotation, and some relevant optional annotation  */
   p7_hmm_SetName(hmm, "sampled-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
@@ -100,7 +86,7 @@ p7_hmm_Sample(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hm
   return status;
 }
 
-/* Function:  p7_hmm_SamplePrior()
+/* Function:  p7_modelsample_Prior()
  * Synopsis:  Sample an HMM from a prior distribution.
  *
  * Purpose:   Creates a random HMM of length <M> nodes, for 
@@ -109,12 +95,12 @@ p7_hmm_Sample(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hm
  *            given in <pri>.
  *            
  *            In general this should give more 'realistic' profile
- *            HMMs than <p7_hmm_Sample()> does.  In unit testing, we
- *            tend to use <p7_hmm_Sample()> for tests that should be
+ *            HMMs than <p7_modelsample()> does.  In unit testing, we
+ *            tend to use <p7_modelsample()> for tests that should be
  *            able to deal with any profile, no matter how
  *            pathological. A few tests need to see typical,
  *            reasonable (high-posterior-probability) alignment paths,
- *            and we use <p7_hmm_SamplePrior()> in these cases.
+ *            and we use <p7_modelsample_Prior()> in these cases.
  *            
  * Args:      r       : random number generator
  *            M       : length of profile HMM to sample
@@ -129,7 +115,7 @@ p7_hmm_Sample(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hm
  * Throws:    <eslEMEM> on allocation error.
  */
 int
-p7_hmm_SamplePrior(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, const P7_PRIOR *pri, P7_HMM **ret_hmm)
+p7_modelsample_Prior(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, const P7_PRIOR *pri, P7_HMM **ret_hmm)
 {
   P7_HMM *hmm      = NULL;
   char   *logmsg   = "[random HMM created by sampling prior]";
@@ -198,10 +184,10 @@ p7_hmm_SamplePrior(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, const P7_P
   return status;
 }
 
-/* Function:  p7_hmm_SampleUngapped()
+/* Function:  p7_modelsample_Ungapped()
  * Synopsis:  Sample a random HMM with no nonzero indel transitions.
  *
- * Purpose:   Same as <p7_hmm_Sample()>, except all 
+ * Purpose:   Same as <p7_modelsample()>, except all 
  *            M $\rightarrow$ M transitions are 1.0:
  *            an ungapped model. Useful for testing 
  *            as a limit case.
@@ -215,18 +201,29 @@ p7_hmm_SamplePrior(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, const P7_P
  * Xref:      STL11/140
  */
 int
-p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
+p7_modelsample_Ungapped(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
 {
   P7_HMM *hmm    = NULL;
+  char   *logmsg = "[ungapped HMM sample]";
   int     k;
   int     status;
 
-  if ((status = p7_hmm_Sample(r, M, abc, &hmm)) != eslOK) goto ERROR;
+  if ( (status = modelsample_engine(r, M, abc, &hmm)) != eslOK) goto ERROR;
+
   for (k = 0; k <= M; k++) {
     hmm->t[k][p7H_MM] = 1.0;
     hmm->t[k][p7H_MD] = 0.0;
     hmm->t[k][p7H_MI] = 0.0;
   }
+
+  /* Add mandatory annotation, and some relevant optional annotation  */
+  p7_hmm_SetName(hmm, "sampled-ungapped-hmm");
+  p7_hmm_AppendComlog(hmm, 1, &logmsg);
+  p7_hmm_SetCtime(hmm);
+  p7_hmm_SetConsensus(hmm, NULL);
+  p7_hmm_SetComposition(hmm);
+
+
   *ret_hmm = hmm;
   return eslOK;
 
@@ -236,7 +233,7 @@ p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM 
   return status;
 }
 
-/* Function:  p7_hmm_SampleEnumerable()
+/* Function:  p7_modelsample_Enumerable()
  * Synopsis:  Sample an random HMM with no nonzero transitions to insert.
  *
  * Purpose:   Sample a random HMM with random emission and 
@@ -255,7 +252,7 @@ p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM 
  *            Useful for debugging and validating Forward/Viterbi
  *            algorithms.
  *
- *            Compare <p7_hmm_SampleEnumerable2()>, which only makes
+ *            Compare <p7_modelsample_Enumerable2()>, which only makes
  *            tII transitions zero, and thus enumerates a space consisting
  *            of sequences of length 0..2M+1 (and for an enumerable profile,
  *            1..2M-1).
@@ -267,7 +264,7 @@ p7_hmm_SampleUngapped(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM 
  * Throws:    <eslEMEM> on allocation error.
  */
 int
-p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
+p7_modelsample_Enumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
 {
   P7_HMM *hmm    = NULL;
   char   *logmsg = "[random enumerable HMM created by sampling]";
@@ -275,8 +272,7 @@ p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HM
   float   tmp[2];
   int     status;
   
-  hmm = p7_hmm_Create(M, abc);
-  if (hmm == NULL) { status = eslEMEM; goto ERROR; }
+  if ((hmm = p7_hmm_Create(M, abc)) == NULL)  { status = eslEMEM; goto ERROR; }
 
   for (k = 0; k <= M; k++)
     {
@@ -319,7 +315,7 @@ p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HM
 
 
 
-/* Function:  p7_hmm_SampleEnumerable2()
+/* Function:  p7_modelsample_Enumerable2()
  * Synopsis:  Sample an random HMM with no nonzero insert-insert transitions.
  *
  * Purpose:   Sample a random HMM with random emission and 
@@ -341,7 +337,7 @@ p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HM
  *            Useful for debugging and validating Forward/Viterbi
  *            algorithms. 
  *
- *            Compare <p7_hmm_SampleEnumerable()>, which makes all
+ *            Compare <p7_modelsample_Enumerable()>, which makes all
  *            transitions to insert 0, and thus enumerates a smaller
  *            space.
  *            
@@ -352,7 +348,7 @@ p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HM
  * Throws:    <eslEMEM> on allocation error.
  */
 int
-p7_hmm_SampleEnumerable2(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
+p7_modelsample_Enumerable2(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
 {
   P7_HMM *hmm    = NULL;
   char   *logmsg = "[random enumerable HMM, all II=0, created by sampling]";
@@ -401,7 +397,7 @@ p7_hmm_SampleEnumerable2(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_H
 
 
 
-/* Function:  p7_hmm_SampleUniform()
+/* Function:  p7_modelsample_Uniform()
  * Synopsis:  Sample a model that uses fixed (given) transition probs.
  *
  * Purpose:   Sample a model that uses uniform transition probabilities,
@@ -421,17 +417,16 @@ p7_hmm_SampleEnumerable2(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_H
  * Xref:      J1/5.
  */
 int
-p7_hmm_SampleUniform(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, 
-		     float tmi, float tii, float tmd, float tdd,
-		     P7_HMM **ret_hmm)
+p7_modelsample_Uniform(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, 
+		       float tmi, float tii, float tmd, float tdd,
+		       P7_HMM **ret_hmm)
 {
   P7_HMM *hmm    = NULL;
   char   *logmsg = "[HMM with uniform transitions, random emissions]";
   int     k;
   int     status;
 
-  hmm = p7_hmm_Create(M, abc);
-  if (hmm == NULL) { status = eslEMEM; goto ERROR; }
+  if ((hmm = p7_hmm_Create(M, abc)) == NULL) { status = eslEMEM; goto ERROR; }
   
   for (k = 0; k <= M; k++)
     {
@@ -472,7 +467,7 @@ p7_hmm_SampleUniform(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,
 }
 
 
-/* Function:  p7_hmm_SampleSinglePathed()
+/* Function:  p7_modelsample_SinglePathed()
  * Synopsis:  Sample a random HMM with only a single P=1.0 path possible.
  *
  * Purpose:   Sample a random HMM that only has 1.0 or 0.0 for its
@@ -491,7 +486,7 @@ p7_hmm_SampleUniform(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,
  * Throws:    <eslEMEM> on allocation error.
  */
 int
-p7_hmm_SampleSinglePathed(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
+p7_modelsample_SinglePathed(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
 {
   P7_HMM *hmm    = NULL;
   char   *logmsg = "[random single-pathed HMM, all t/e probs 0 or 1, created by sampling]";
@@ -559,183 +554,7 @@ p7_hmm_SampleSinglePathed(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_
   return status;
 }
 
-  
-/* see comments on p7_hmm_SampleSinglePathedSeq() and p7_hmm_SampleSinglePathedASC(), below;
- * this is the engine they both share.
- */
-static int
-sample_single_pathed_seq_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
-				P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-				P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc,
-				int do_asc_version)
-{
-  char       *hmmname   = (do_asc_version ? "single_pathed_asc" : "single_pathed_seq");
-  char       *logmsg    = (do_asc_version ? "[Test model produced by p7_hmm_SampleSinglePathedASC()]" : "[Test model produced by p7_hmm_SampleSinglePathedSeq()]");
-  P7_HMM     *hmm       = NULL;
-  P7_PROFILE *gm        = NULL;
-  ESL_SQ     *sq        = NULL;
-  ESL_DSQ    *dsq       = NULL;
-  int         L         = 0;
-  P7_TRACE   *tr        = NULL;
-  P7_COORD2  *anch      = NULL;
-  int         D         = 0;
-  float       sc        = 0.0;
-  int         nm        = 0;
-  int         notX;
-  int         k,s,z,d;
-  int         status;
-
-  if (( hmm = p7_hmm_Create    (M, bg->abc)) == NULL) { status = eslEMEM; goto ERROR; }
-  if ((  gm = p7_profile_Create(M, bg->abc)) == NULL) { status = eslEMEM; goto ERROR; }
-  if ((  sq = esl_sq_CreateDigital(bg->abc)) == NULL) { status = eslEMEM; goto ERROR; }
-  if ((  tr = p7_trace_Create())             == NULL) { status = eslEMEM; goto ERROR; }
-
-  /* Choose the residue that match states can't emit. */
-  notX = esl_rnd_Roll(rng, bg->abc->K);
-
-  /* Sample our specially constructed HMM.
-   * With a wrapper that avoids the pathological case of
-   * using no match states.
-   */
-  while (nm == 0)
-    {
-      p7_hmm_Zero(hmm);
-
-      /* At node k=0 boundary:
-       *    t[0][MM,MI,MD] = B->{MID} distribution. Profile config makes G->M1 = tMM+tMI; G->D1 = tMD.
-       *    t[0][IM,II] = a normal I transition distribution (I0 exists)
-       *    t[0][DM,DD] = 1.0,0.0 by convention (no D0 state)
-       *    mat[0][...] = {1.0,0.0...} by convention (no M_0 state)
-       *    ins[0][...] = a normal I emission distribution (I0 exists)
-       * At node k=M boundary: 
-       *    t[M][MM,MI,MD] = ME,MI, 0.0    
-       *    t[M][IM,II]    = IE,II
-       *    t[M][DM,DD]    = 1.0(DE), 0.0
-       *    mat[M],ins[M] as usual
-       * [xref hmmer.h::P7_HMM documentation]
-       */
-      
-      /* Match emissions. */
-      hmm->mat[0][0] = 1.0;
-      for (k = 1; k <= M; k++) 
-	{
-	  esl_dirichlet_FSampleUniform(rng, bg->abc->K-1, hmm->mat[k]);  // this samples K-1 nonzero probabilities,
-	  ESL_SWAP(hmm->mat[k][bg->abc->K-1], hmm->mat[k][notX], float); // and this swap puts the 0.0 prob into the notX residue.
-	}
-
-      /* Insert emissions. */
-      for (k = 0; k <= M; k++)
-	esl_dirichlet_FSampleUniform(rng, bg->abc->K, hmm->ins[k]);     // remember, profile ignores insert emission probs, assumes e_Ik(x) = f(x) */
-
-      /* Match transitions */
-      for (k = 0; k <= M; k++) 
-	if (esl_rnd_Roll(rng, 2) || k==M) 
-	  esl_dirichlet_FSampleUniform(rng, 2, hmm->t[k]+p7H_MM);  // 50% of the time (and at k=M) t_MD = 0; t_MM,t_MI can be any distribution
-	else
-	  hmm->t[k][p7H_MD] = 1.;                                  // 50% of the time, t_MD = 1; t_MM,t_MI = 0, so profile will have tG->M1 = 0, tG->D1 = 1.
-
-      /* Insert transitions */
-      for (k = 0; k <= M; k++)                                     // Insert transitions are unconstrained,
-	do {                                                       // but put a cap on tII, because tII~1.0 leads to infinite-length sequence samples 
-	  esl_dirichlet_FSampleUniform(rng, 2, hmm->t[k]+p7H_IM);
-	} while (hmm->t[k][p7H_II] > p7H_II_SAMPLE_MAX);
-      
-      /* Delete transitions */
-      for (k = 0; k <= M; k++)
-	hmm->t[k][p7H_DM + (k==M || k == 0 ? 0 : esl_rnd_Roll(rng, 2))] = 1.0f;    // Delete transitions constrained so (t_DM = 0 | t_DD = 0), 	
-
-      /* Count the number of match states visited */
-      s = nm = 0;
-      for (k = 0; k < M; k++)
-	{
-	  if (s == 0) { if (hmm->t[k][p7H_MM] > 0) nm++; else s = 1; }
-	  else if (hmm->t[k][p7H_DM] > 0) { nm++; s = 0; }
-	}
-    }
-
-  /* Add mandatory annotation */
-  p7_hmm_SetName(hmm, hmmname);
-  p7_hmm_AppendComlog(hmm, 1, &logmsg);
-  p7_hmm_SetCtime(hmm);
-  p7_hmm_SetConsensus(hmm, NULL);
-  p7_hmm_SetComposition(hmm);
-
-  /* Create a profile from it.
-   * We don't yet know actual length of the emitted seq, so choose  
-   * a smallish L suitable for sampling smallish path from profile.
-   */
-  if (do_asc_version) p7_profile_ConfigGlocal   (gm, hmm, bg, 10);
-  else                p7_profile_ConfigUniglocal(gm, hmm, bg, 10);
-
-  /* Emit a trace from the profile */
-  p7_ProfileEmit(rng, hmm, gm, bg, sq, tr);
-  p7_trace_Index(tr);
-
-  /* Extract the <dsq> from <sq> container.
-   * We only do this because p7_ProfileEmit() takes <sq>, not <dsq> as arg 
-   */
-  dsq = sq->dsq;
-  L   = sq->n;
-  sq->dsq = NULL;
-  sq->n   = 0;
-  esl_sq_Destroy(sq);
-
-  /* Doctor the emissions so that any N/C/J/I residue is residue notX */
-  for (z = 1; z < tr->N-1; z++)
-    if (tr->i[z] && ! p7_trace_IsM(tr->st[z])) dsq[tr->i[z]] = notX;
-
-  /* Select an anchor set 
-   * We know that each domain uses <nm> match states, and
-   * any of them are suitable anchors; choose randomly for each 
-   * domain.
-   */
-  ESL_ALLOC(anch, sizeof(P7_COORD2) * tr->ndom);
-  D = tr->ndom;
-  z = 0;
-  for (d = 0; d < D; d++)
-    {
-      s = esl_rnd_Roll(rng, nm);   // use the s'th match state as anchor
-      while (s || ! p7_trace_IsM(tr->st[z])) {
-	if (p7_trace_IsM(tr->st[z])) s--;
-	z++;
-      }
-      anch[d].n1 = tr->i[z];
-      anch[d].n2 = tr->k[z];
-      z++;
-    }
-  
-  /* Configure final length model of <gm> before returning */
-  p7_profile_SetLength(gm, L);
-  
-  if (opt_hmm)  *opt_hmm  = hmm;  else p7_hmm_Destroy(hmm);
-  if (opt_gm)   *opt_gm   = gm;   else p7_profile_Destroy(gm); 
-  if (opt_dsq)  *opt_dsq  = dsq;  else free(dsq);
-  if (opt_L)    *opt_L    = L;   
-  if (opt_tr)   *opt_tr   = tr;   else p7_trace_Destroy(tr);
-  if (opt_anch) *opt_anch = anch; else free(anch);
-  if (opt_D)    *opt_D    = D;
-  if (opt_sc)   *opt_sc   = sc;
-  return eslOK;
-
- ERROR:
-  if (hmm)  p7_hmm_Destroy(hmm);
-  if (gm)   p7_profile_Destroy(gm);
-  if (sq)   esl_sq_Destroy(sq);
-  if (dsq)  free(dsq);
-  if (tr)   p7_trace_Destroy(tr);
-  if (anch) free(anch);
-  if (opt_hmm)  *opt_hmm  = NULL;
-  if (opt_gm)   *opt_gm   = NULL;
-  if (opt_dsq)  *opt_dsq  = NULL;
-  if (opt_L)    *opt_L    = 0;
-  if (opt_tr)   *opt_tr   = NULL;
-  if (opt_anch) *opt_anch = NULL;
-  if (opt_D)    *opt_D    = 0;
-  if (opt_sc)   *opt_sc   = 0.;
-  return status;
-}
-
-/* Function:  p7_hmm_SampleSinglePathedSeq()
+/* Function:  p7_modelsample_SinglePathedSeq()
  * Synopsis:  Sample model/seq pair such that only one P=1.0 path exists for seq.
  *
  * Purpose:   Sample a model and a sequence that have been contrived
@@ -845,14 +664,14 @@ sample_single_pathed_seq_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
  *            and any requested return value is returned 0.0.
  */
 int
-p7_hmm_SampleSinglePathedSeq(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
-			     P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-			     P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc)
+p7_modelsample_SinglePathedSeq(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
+			       P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
+			       P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc)
 {
   return sample_single_pathed_seq_engine(rng, M, bg, opt_hmm, opt_gm, opt_dsq, opt_L, opt_tr, opt_anch, opt_D, opt_sc, /*do_asc_version=*/FALSE);
 }
 
-/* Function:  p7_hmm_SampleSinglePathedASC()
+/* Function:  p7_modelsample_SinglePathedASC()
  * Synopsis:  Sample profile/seq/anch triplet such that only one P=1.0 path exists for anchored seq comparison.
  *
  * Purpose:   Sample a profile, sequence, anchor set combination that have been
@@ -860,7 +679,7 @@ p7_hmm_SampleSinglePathedSeq(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
  *            can generate that sequence and satisfy the anchor set constraint.
  *            That is, $P(\pi | x, A, M) = 1$ for one and only one $\pi$.
  *            
- *            Essentially the same as <p7_hmm_SampleSinglePathedSeq(),
+ *            Essentially the same as <p7_modelsample_SinglePathedSeq(),
  *            so for more information, see documentation there.
  *            
  *            The difference is that this profile is in multiglocal
@@ -871,24 +690,682 @@ p7_hmm_SampleSinglePathedSeq(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
  *            multidomain sequences.
  */
 int
-p7_hmm_SampleSinglePathedASC(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
-			     P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-			     P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc)
+p7_modelsample_SinglePathedASC(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
+			       P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
+			       P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc)
 {
   return sample_single_pathed_seq_engine(rng, M, bg, opt_hmm, opt_gm, opt_dsq, opt_L, opt_tr, opt_anch, opt_D, opt_sc, /*do_asc_version=*/TRUE);
 }
 
 
 
+
+/* Function:  p7_modelsample_AnchoredUni()
+ * Synopsis:  Model/seq/anchor triplet such that all paths use anchor.
+ *
+ * Purpose:   Sample a model, a sequence, and an anchor, contrived such
+ *            that all paths for the model/sequence comparison must
+ *            use the anchor set even when unconstrained by an ASC
+ *            algorithm. Thus, the standard Forward, Backward, and
+ *            Decoding algorithms give the same scores (and to a
+ *            well-defined extent, the same DP matrix values) as ASC
+ *            F/B/D. This enables unit tests of ASC algorithms,
+ *            comparing to standard algorithms.
+ *            
+ *            The idea is to pick an anchor match state k0; make it
+ *            generate a residue X with probability e_Mk0(X) = 1; make
+ *            a model that forces all paths to include state Mk; and
+ *            make a sequence that only contains X's where Mk0 emits
+ *            them. 
+ *            
+ *            Because N/C/J/I can emit any residue, to guarantee an
+ *            Mk0-xi0 correspondence, we have to either disallow
+ *            emissions from these states, or use a uniglocal model.
+ *            Both versions are useful. This is the uniglocal version.
+ *            For the other, see <p7_modelsample_AnchoredMulti()>.
+ *            
+ *            In this version, we make a uniglocal profile, and
+ *            additionally we make t_{k0-1}(MD) = 0, t_{k0-1}(DM) = 1,
+ *            t_{k0-1}(DD) = 0 so that match state k0 must be occupied
+ *            (in a glocal path) with probability 1.
+ *
+ *            For this to work, the alphabet must contain at least two
+ *            different symbols (<bg->abc->K >= 2>).
+ *
+ * Args:      rng      ; random number generator
+ *            M        : length of <hmm>/<gm> to sample
+ *            bg       : background model (contains digital alphabet to use too)
+ *            opt_hmm  : optRETURN: model
+ *            opt_gm   : optRETURN: profile (glocal, L)
+ *            opt_dsq  : optRETURN: digital sequence
+ *            opt_L    : optRETURN: length of <dsq>
+ *            opt_tr   : optRETURN: traceback, state path and emitted seq
+ *            opt_anch : optRETURN: array of anchors i0,k0 for each domain d (always 1 of them)
+ *            opt_D    : optRETURN: number of domains d in <anch>, <tr> (always 1)
+ *            opt_sc   : optRETURN: raw lod score, in nats
+ *
+ * Returns:   <eslOK> on success,  and any results that were requested
+ *            by passing non-<NULL> pointers for result arguments are
+ *            now available.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ *            On any exception, any requested result pointer is returned <NULL>,
+ *            and any requested return value is returned 0.0.
+ *
+ * Xref:      SRE:J13/51
+ */
+int
+p7_modelsample_AnchoredUni(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
+			   P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
+			   P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc)
+{
+  char       *hmmname   = "anchored_uni";
+  char       *logmsg    = "[Test model produced by p7_modelsample_AnchoredUni()]";
+  P7_HMM     *hmm       = NULL;
+  P7_PROFILE *gm        = NULL;
+  P7_TRACE   *tr        = NULL;
+  ESL_SQ     *sq        = NULL;
+  ESL_DSQ    *dsq       = NULL;
+  P7_COORD2  *anch      = NULL;
+  int         D         = 1;        // Because we're unihit, D must be 1.
+  int         L;
+  int         k,z;
+  int         k0;                   // Anchor state Mk0; (1..M)
+  ESL_DSQ     anchX;                // Residue emitted with p=1 by the anchor Mk0; (0..K-1 in bg->abc)
+  float       sc;
+  int         status;
+
+  /* allocations that we know how to make already */
+  if ((  gm = p7_profile_Create(M, bg->abc)) == NULL) { status = eslEMEM; goto ERROR; }
+  if ((  sq = esl_sq_CreateDigital(bg->abc)) == NULL) { status = eslEMEM; goto ERROR; }
+  if ((  tr = p7_trace_Create())             == NULL) { status = eslEMEM; goto ERROR; }
+  ESL_ALLOC(anch, sizeof(P7_COORD2) * D);
+
+  /* Start with a randomly sampled model, that we'll tweak slightly. */
+  if (( status = modelsample_engine(rng, M, bg->abc, &hmm)) != eslOK) goto ERROR;
+
+  /* Select anchor position k0 in model, 1..M */
+  k0 = 1 + esl_rnd_Roll(rng, M);
+
+  /* Tweak transitions to guarantee that Mk0 is occupied w/ P=1;
+   * tweak emission so that Mk0 generates one residue w/ P=1.
+   */
+  hmm->t[k0-1][p7H_MM] += hmm->t[k0-1][p7H_MD];
+  hmm->t[k0-1][p7H_MD]  = 0.0;
+  hmm->t[k0-1][p7H_DM]  = 1.0;    // also works at k=0, where t0[DM]=1 is convention for nonexistent D0 state
+  hmm->t[k0-1][p7H_DD]  = 0.0;
+
+  anchX = esl_rnd_Roll(rng, bg->abc->K);
+  for (k = 1; k <= M; k++) 
+    {
+      if (k == k0) 
+	{
+	  esl_vec_FSet(hmm->mat[k0], bg->abc->K, 0.);
+	  hmm->mat[k0][anchX] = 1.0;
+	} 
+      else
+	{                                     // avoid a pathological case where e_Mk(X) = 1 for a nonanchor position 
+	  while (hmm->mat[k][anchX] > 0.5)    // the 0.5 is arbitrary. It can't be 1, and we want to be able to resample a non-X residue efficiently.
+	    esl_dirichlet_FSampleUniform(rng, bg->abc->K, hmm->mat[k]);
+	}
+    }
+  ESL_DASSERT1(( bg->abc->K  >= 2   ));
+  ESL_DASSERT1(( bg->f[anchX] < 1.0 ));     // avoid a pathological case that would break a while loop below
+
+  /* Add mandatory annotation */
+  p7_hmm_SetName(hmm, hmmname);
+  p7_hmm_AppendComlog(hmm, 1, &logmsg);
+  p7_hmm_SetCtime(hmm);
+  p7_hmm_SetConsensus(hmm, NULL);
+  p7_hmm_SetComposition(hmm);
+
+  /* Create a profile; emit a trace from it.
+   * We don't yet know actual L of target seq, so here we're 
+   * just choosing a smallish L suitable for sampling smallish
+   * path from profile.
+   */
+  if (( status = p7_profile_ConfigUniglocal(gm, hmm, bg, 10)) != eslOK) goto ERROR;
+  if (( status = p7_ProfileEmit(rng, hmm, gm, bg, sq, tr))    != eslOK) goto ERROR;
+  if (( status = p7_trace_Index(tr))                          != eslOK) goto ERROR;
+
+  /* Extract <dsq> from <sq> container. Doctor it so that the only X
+   * residues in it were emitted by Mk0.  You can't just willy-nilly
+   * change X's to any old Y at Mk != k0, in case e_k(Y) = 0; also,
+   * we rely on having already made sure that there is no Mk != k0
+   * that is forced to generate X.
+   */
+  dsq = sq->dsq;
+  L   = sq->n;
+  sq->dsq = NULL;
+  sq->n   = 0;
+  esl_sq_Destroy(sq);
+  sq = NULL;
+
+  for (z = 1; z < tr->N-1; z++)
+    if (tr->i[z])
+      {
+	if (p7_trace_IsM(tr->st[z]) && tr->k[z] != k0)
+	  while (dsq[tr->i[z]] == anchX)   // while loop must terminate, because we made sure e_Mk(y != X) has good probability
+	    dsq[tr->i[z]] = esl_rnd_FChoose(rng, hmm->mat[tr->k[z]], bg->abc->K);
+	else if (! p7_trace_IsM(tr->st[z]))
+	  while (dsq[tr->i[z]] == anchX)   // while loop will terminate so long as bg->f distribution isn't pathological (p_X = 1), which we asserted above
+	      dsq[tr->i[z]] = esl_rnd_FChoose(rng, bg->f, bg->abc->K);
+      }
+
+  /* Make the anchor "set", which we know has one anchor for 
+   * one domain. We know k0, we just need to find i0.
+   */
+  ESL_DASSERT1(( tr->ndom == 1 ));
+  anch[0].n2 = k0;
+  for (z = 1; z < tr->N-1; z++)
+    if (tr->k[z] == k0 && p7_trace_IsM(tr->st[z]))
+      {
+	anch[0].n1 = tr->i[z];
+	break;
+      }
+
+  /* Finish up; set the length model, then find the trace score.
+   */
+  p7_profile_SetLength(gm, L);
+  p7_trace_Score(tr, dsq, gm, &sc);
+
+  if (opt_hmm)  *opt_hmm  = hmm;  else p7_hmm_Destroy(hmm);
+  if (opt_gm)   *opt_gm   = gm;   else p7_profile_Destroy(gm); 
+  if (opt_dsq)  *opt_dsq  = dsq;  else free(dsq);
+  if (opt_L)    *opt_L    = L;   
+  if (opt_tr)   *opt_tr   = tr;   else p7_trace_Destroy(tr);
+  if (opt_anch) *opt_anch = anch; else free(anch);
+  if (opt_D)    *opt_D    = D;
+  if (opt_sc)   *opt_sc   = sc;
+  return eslOK;
+
+ ERROR:
+  if (hmm)  p7_hmm_Destroy(hmm);
+  if (gm)   p7_profile_Destroy(gm);
+  if (sq)   esl_sq_Destroy(sq);
+  if (dsq)  free(dsq);
+  if (tr)   p7_trace_Destroy(tr);
+  if (anch) free(anch);
+  if (opt_hmm)  *opt_hmm  = NULL;
+  if (opt_gm)   *opt_gm   = NULL;
+  if (opt_dsq)  *opt_dsq  = NULL;
+  if (opt_L)    *opt_L    = 0;
+  if (opt_tr)   *opt_tr   = NULL;
+  if (opt_anch) *opt_anch = NULL;
+  if (opt_D)    *opt_D    = 0;
+  if (opt_sc)   *opt_sc   = 0.;
+  return status;
+}
+
+
+/* Function:  p7_modelsample_AnchoredMulti()
+ * Synopsis:  Sample a model/seq/anchorset triplet, such that all paths use anchor.
+ *
+ * Purpose:   Sample a model, sequence, and anchor set, contrived such that
+ *            all paths for the model/sequence comparison must use the anchor
+ *            set even when unconstrained by the ASC algorithm. 
+ *
+ *            See <p7_modelsample_AnchoredUni()> for more explanation.
+ *            This is another version of the same idea. In this version, we
+ *            guarantee Mk0-xi0 correspondences by disallowing N/C/J
+ *            state emissions (by setting length model to 0) and I
+ *            states (by setting all tMI_k transitions to 0). We
+ *            guarantee that Mk0 is used in all paths by setting
+ *            t_{k0-1}(MD) = 0, t_{k0-1}(DM) = 1, t_{k0-1}(DD) = 0,
+ *            and by making a sequence that contains X's only where
+ *            Mk0 emits them with probability 1.0.
+ *            
+ *            Unlike <p7_modelsample_AnchoredUni()>, though, in this
+ *            version we can allow a multihit dual mode model,
+ *            allowing testing of paths using local and multihit
+ *            transitions.
+ *            
+ * Args:      rng      ; random number generator
+ *            M        : length of <hmm>/<gm> to sample
+ *            bg       : background model (contains digital alphabet to use too)
+ *            opt_hmm  : optRETURN: model
+ *            opt_gm   : optRETURN: profile (glocal, L)
+ *            opt_dsq  : optRETURN: digital sequence
+ *            opt_L    : optRETURN: length of <dsq>
+ *            opt_tr   : optRETURN: traceback, state path and emitted seq
+ *            opt_anch : optRETURN: array of anchors i0,k0 for each domain d (always 1 of them)
+ *            opt_D    : optRETURN: number of domains d in <anch>, <tr> (always 1)
+ *            opt_sc   : optRETURN: raw lod score, in nats
+ *
+ * Returns:   <eslOK> on success,  and any results that were requested
+ *            by passing non-<NULL> pointers for result arguments are
+ *            now available.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ *            On any exception, any requested result pointer is returned <NULL>,
+ *            and any requested return value is returned 0.0.
+ *
+ * Xref:      SRE:J13/51
+ */
+int
+p7_modelsample_AnchoredMulti(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
+			     P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
+			     P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc)
+{
+  char       *hmmname   = "anchored_multi";
+  char       *logmsg    = "[Test model produced by p7_modelsample_AnchoredMulti()]";
+  P7_HMM     *hmm       = NULL;
+  P7_PROFILE *gm        = NULL;
+  P7_TRACE   *tr        = NULL;
+  ESL_SQ     *sq        = NULL;
+  ESL_DSQ    *dsq       = NULL;
+  P7_COORD2  *anch      = NULL;
+  int         D,d;
+  int         L;
+  int         k,z;
+  int         k0;                   // Anchor state Mk0; (1..M)
+  ESL_DSQ     anchX;                // Residue emitted with p=1 by the anchor Mk0; (0..K-1 in bg->abc)
+  int         nanch;
+  float       sc;
+  int         status;
+
+  /* allocations that we know how to make already */
+  if ((  gm = p7_profile_Create(M, bg->abc)) == NULL) { status = eslEMEM; goto ERROR; }
+  if ((  sq = esl_sq_CreateDigital(bg->abc)) == NULL) { status = eslEMEM; goto ERROR; }
+  if ((  tr = p7_trace_Create())             == NULL) { status = eslEMEM; goto ERROR; }
+
+  /* Sample an HMM in the usual way, which we'll then tweak as we need. */
+  if (( status = modelsample_engine(rng, M, bg->abc, &hmm)) != eslOK) goto ERROR;
+
+  /* Sampled HMM has all tkMI = 0 */
+  for (k = 0; k < M; k++)
+    {
+      hmm->t[k][p7H_MM] = esl_random(rng);
+      hmm->t[k][p7H_MI] = 0.0;
+      hmm->t[k][p7H_MD] = 1.0 - hmm->t[k][p7H_MM];
+    }
+  hmm->t[M][p7H_MM] = 1.0;
+  hmm->t[M][p7H_MI] = 0.0;
+  hmm->t[M][p7H_MD] = 0.0;
+
+  /* Select anchor position k0 in model (1..M),
+   * and tweak transitions to guarantee that Mk0 is occupied w/ P=1.
+   */
+  k0 = 1 + esl_rnd_Roll(rng, M);
+  hmm->t[k0-1][p7H_MM]  = 1.0;
+  hmm->t[k0-1][p7H_MD]  = 0.0;
+  hmm->t[k0-1][p7H_DM]  = 1.0;    // even works at k=0, where t0[DM]=1 is convention for nonexistent D0 state
+  hmm->t[k0-1][p7H_DD]  = 0.0;
+
+  /* Select a residue that the anchor state Mk0 must emit.  */
+  anchX = esl_rnd_Roll(rng, bg->abc->K);
+  for (k = 1; k <= M; k++) 
+    {
+      if (k == k0) 
+	{
+	  esl_vec_FSet(hmm->mat[k0], bg->abc->K, 0.);
+	  hmm->mat[k0][anchX] = 1.0;
+	} 
+      else
+	{                                     // avoid a pathological case where e_Mk(X) = 1 for a nonanchor position 
+	  while (hmm->mat[k][anchX] > 0.5)    // the 0.5 is arbitrary. It can't be 1, and we want to be able to resample a non-X residue efficiently.
+	    esl_dirichlet_FSampleUniform(rng, bg->abc->K, hmm->mat[k]);
+	}
+    }
+  ESL_DASSERT1(( bg->abc->K  >= 2   ));
+  ESL_DASSERT1(( bg->f[anchX] < 1.0 ));     // avoid a pathological case that would break a while loop below
+
+  /* Add mandatory annotation */
+  p7_hmm_SetName(hmm, hmmname);
+  p7_hmm_AppendComlog(hmm, 1, &logmsg);
+  p7_hmm_SetCtime(hmm);
+  p7_hmm_SetConsensus(hmm, NULL);
+  p7_hmm_SetComposition(hmm);
+
+  /* Create a profile in L=0 mode.
+   */
+  if (( status = p7_profile_Config(gm, hmm, bg))           != eslOK) goto ERROR;
+  if (( status = p7_profile_SetLength(gm, 0))              != eslOK) goto ERROR;
+
+  /* Emit a trace from it.
+   * Because the profile is in dual mode, it can generate
+   * local alignments that don't include the anchor k0. 
+   * Reject such traces until we get one in which all domains
+   * pass thru the anchor k0.
+   */
+  do {
+    if (( status = p7_ProfileEmit(rng, hmm, gm, bg, sq, tr)) != eslOK) goto ERROR;
+    if (( status = p7_trace_Index(tr))                       != eslOK) goto ERROR;
+    nanch = 0;
+    for (z = 0; z < tr->N; z++)
+      if (tr->k[z] == k0)  nanch++;   // shouldn't need to verify that it's an M
+  } while (nanch != tr->ndom);
+  
+
+  /* Extract <dsq> from <sq> container. Doctor it so that the only X
+   * residues in it were emitted by Mk0.  You can't just willy-nilly
+   * change X's to any old Y at Mk != k0, in case e_k(Y) = 0. Also,
+   * we rely on having already made sure that there is no Mk != k0
+   * that is forced to generate X.
+   */
+  dsq = sq->dsq;
+  L   = sq->n;
+  sq->dsq = NULL;
+  sq->n   = 0;
+  esl_sq_Destroy(sq);
+  sq = NULL;
+
+  /* Remove all anchX residues from the sequence that don't correspond to an anchor  */
+  for (z = 1; z < tr->N-1; z++)
+    if (tr->i[z])
+      {
+	if (p7_trace_IsM(tr->st[z]) && tr->k[z] != k0)   // i.e. all non-anchor M states: re-emit the residue (which makes sure it's a residue this state can emit!)
+	  while (dsq[tr->i[z]] == anchX)                 // while loop must terminate, because we made sure e_Mk(y != X) has good probability
+	    dsq[tr->i[z]] = esl_rnd_FChoose(rng, hmm->mat[tr->k[z]], bg->abc->K);
+	else if (! p7_trace_IsM(tr->st[z]))              // i.e. residues emitted by N,C,J,I states, which use the background distribution
+	  while (dsq[tr->i[z]] == anchX)                 // while loop will terminate so long as bg->f distribution isn't pathological (p_X = 1), which we asserted above
+	      dsq[tr->i[z]] = esl_rnd_FChoose(rng, bg->f, bg->abc->K);
+      }
+
+  /* Make the anchor set, which we know has one anchor for 
+   * one domain. We know k0, we just need to find i0's.
+   */
+  D = tr->ndom;  // ok because we indexed the trace
+  ESL_ALLOC(anch, sizeof(P7_COORD2) * D);
+
+  d = 0;
+  for (z = 1; z < tr->N-1; z++)
+    if (tr->k[z] == k0 && p7_trace_IsM(tr->st[z]))
+      {
+	anch[d].n1 = tr->i[z];
+	anch[d].n2 = k0;
+	d++;
+      }
+
+  /* Finish up by finding the trace score.
+   */
+  p7_trace_Score(tr, dsq, gm, &sc);
+
+  if (opt_hmm)  *opt_hmm  = hmm;  else p7_hmm_Destroy(hmm);
+  if (opt_gm)   *opt_gm   = gm;   else p7_profile_Destroy(gm); 
+  if (opt_dsq)  *opt_dsq  = dsq;  else free(dsq);
+  if (opt_L)    *opt_L    = L;   
+  if (opt_tr)   *opt_tr   = tr;   else p7_trace_Destroy(tr);
+  if (opt_anch) *opt_anch = anch; else free(anch);
+  if (opt_D)    *opt_D    = D;
+  if (opt_sc)   *opt_sc   = sc;
+  return eslOK;
+
+ ERROR:
+  if (hmm)  p7_hmm_Destroy(hmm);
+  if (gm)   p7_profile_Destroy(gm);
+  if (sq)   esl_sq_Destroy(sq);
+  if (dsq)  free(dsq);
+  if (tr)   p7_trace_Destroy(tr);
+  if (anch) free(anch);
+  if (opt_hmm)  *opt_hmm  = NULL;
+  if (opt_gm)   *opt_gm   = NULL;
+  if (opt_dsq)  *opt_dsq  = NULL;
+  if (opt_L)    *opt_L    = 0;
+  if (opt_tr)   *opt_tr   = NULL;
+  if (opt_anch) *opt_anch = NULL;
+  if (opt_D)    *opt_D    = 0;
+  if (opt_sc)   *opt_sc   = 0.;
+  return status;
+}
+/*------------------- end, model sampling -----------------------*/
+
+
+
 /*****************************************************************
- * 2. Unit tests
+ * 2. Internal (static) functions
+ *****************************************************************/
+
+static int
+modelsample_engine(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
+{
+  P7_HMM *hmm = NULL;
+  int     k;
+  int     status;
+
+  if ( (hmm = p7_hmm_Create(M, abc)) == NULL) { status = eslEMEM; goto ERROR; }
+
+  /* _Create() has already initialized conventions of nonexistent states at k=0,
+   * where M0 is treated as B.
+   *   - mat[0] emission distribution is { 1.0, 0.0, ... }
+   *   - t[0][DM] = 1.0 and DD is 0.0.
+   * Now the rest of node 0.
+   */
+  esl_dirichlet_FSampleUniform(rng, abc->K,    hmm->ins[0]);
+  esl_dirichlet_FSampleUniform(rng, p7H_NTMAT, P7H_TMAT(hmm, 0));
+  hmm->t[0][p7H_II] = esl_random(rng) * p7H_II_SAMPLE_MAX;
+  hmm->t[0][p7H_IM] = 1.0 - hmm->t[0][p7H_II];
+
+  /* Main recursion over most nodes */
+  for (k = 1; k < M; k++)
+    {
+      esl_dirichlet_FSampleUniform(rng, abc->K, hmm->mat[k]);
+      esl_dirichlet_FSampleUniform(rng, abc->K, hmm->ins[k]);
+      esl_dirichlet_FSampleUniform(rng, p7H_NTMAT, P7H_TMAT(hmm, k));
+      hmm->t[k][p7H_II] = esl_random(rng) * p7H_II_SAMPLE_MAX;
+      hmm->t[k][p7H_IM] = 1.0 - hmm->t[k][p7H_II];
+      esl_dirichlet_FSampleUniform(rng, p7H_NTDEL, P7H_TDEL(hmm, k));
+    }
+
+  /* Node M is special: no transitions to D, transitions to M
+   * are interpreted as transitions to E.
+   */
+  esl_dirichlet_FSampleUniform(rng, abc->K, hmm->mat[M]);
+  esl_dirichlet_FSampleUniform(rng, abc->K, hmm->ins[M]);
+  hmm->t[M][p7H_MM] = esl_random(rng); 
+  hmm->t[M][p7H_MI] = 1.0 - hmm->t[M][p7H_MM];
+  hmm->t[M][p7H_MD] = 0.0;
+  hmm->t[M][p7H_II] = esl_random(rng) * p7H_II_SAMPLE_MAX;
+  hmm->t[M][p7H_IM] = 1.0 - hmm->t[k][p7H_II];
+  hmm->t[M][p7H_DM] = 1.0;
+  hmm->t[M][p7H_DD] = 0.0;
+  
+  /* Do not add other annotation here. That's the caller's job. */
+  
+  *ret_hmm = hmm;
+  return eslOK;
+  
+ ERROR:
+  if (hmm) p7_hmm_Destroy(hmm);
+  *ret_hmm = NULL;
+  return status;
+}
+
+
+  
+/* see comments on p7_modelsample_SinglePathedSeq() and p7_modelsample_SinglePathedASC(), below;
+ * this is the engine they both share.
+ */
+static int
+sample_single_pathed_seq_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
+				P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
+				P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc,
+				int do_asc_version)
+{
+  char       *hmmname   = (do_asc_version ? "single_pathed_asc" : "single_pathed_seq");
+  char       *logmsg    = (do_asc_version ? "[Test model produced by p7_modelsample_SinglePathedASC()]" : "[Test model produced by p7_modelsample_SinglePathedSeq()]");
+  P7_HMM     *hmm       = NULL;
+  P7_PROFILE *gm        = NULL;
+  ESL_SQ     *sq        = NULL;
+  ESL_DSQ    *dsq       = NULL;
+  int         L         = 0;
+  P7_TRACE   *tr        = NULL;
+  P7_COORD2  *anch      = NULL;
+  int         D         = 0;
+  float       sc        = 0.0;
+  int         nm        = 0;
+  int         notX;
+  int         k,s,z,d;
+  int         status;
+
+  if (( hmm = p7_hmm_Create    (M, bg->abc)) == NULL) { status = eslEMEM; goto ERROR; }
+  if ((  gm = p7_profile_Create(M, bg->abc)) == NULL) { status = eslEMEM; goto ERROR; }
+  if ((  sq = esl_sq_CreateDigital(bg->abc)) == NULL) { status = eslEMEM; goto ERROR; }
+  if ((  tr = p7_trace_Create())             == NULL) { status = eslEMEM; goto ERROR; }
+
+  /* Choose the residue that match states can't emit. */
+  notX = esl_rnd_Roll(rng, bg->abc->K);
+
+  /* Sample our specially constructed HMM.
+   * With a wrapper that avoids the pathological case of
+   * using no match states.
+   */
+  while (nm == 0)
+    {
+      p7_hmm_Zero(hmm);
+
+      /* At node k=0 boundary:
+       *    t[0][MM,MI,MD] = B->{MID} distribution. Profile config makes G->M1 = tMM+tMI; G->D1 = tMD.
+       *    t[0][IM,II] = a normal I transition distribution (I0 exists)
+       *    t[0][DM,DD] = 1.0,0.0 by convention (no D0 state)
+       *    mat[0][...] = {1.0,0.0...} by convention (no M_0 state)
+       *    ins[0][...] = a normal I emission distribution (I0 exists)
+       * At node k=M boundary: 
+       *    t[M][MM,MI,MD] = ME,MI, 0.0    
+       *    t[M][IM,II]    = IE,II
+       *    t[M][DM,DD]    = 1.0(DE), 0.0
+       *    mat[M],ins[M] as usual
+       * [xref hmmer.h::P7_HMM documentation]
+       */
+      
+      /* Match emissions. */
+      hmm->mat[0][0] = 1.0;
+      for (k = 1; k <= M; k++) 
+	{
+	  esl_dirichlet_FSampleUniform(rng, bg->abc->K-1, hmm->mat[k]);  // this samples K-1 nonzero probabilities,
+	  ESL_SWAP(hmm->mat[k][bg->abc->K-1], hmm->mat[k][notX], float); // and this swap puts the 0.0 prob into the notX residue.
+	}
+
+      /* Insert emissions. */
+      for (k = 0; k <= M; k++)
+	esl_dirichlet_FSampleUniform(rng, bg->abc->K, hmm->ins[k]);     // remember, profile ignores insert emission probs, assumes e_Ik(x) = f(x) */
+
+      /* Match transitions */
+      for (k = 0; k <= M; k++) 
+	if (esl_rnd_Roll(rng, 2) || k==M) 
+	  esl_dirichlet_FSampleUniform(rng, 2, hmm->t[k]+p7H_MM);  // 50% of the time (and at k=M) t_MD = 0; t_MM,t_MI can be any distribution
+	else
+	  hmm->t[k][p7H_MD] = 1.;                                  // 50% of the time, t_MD = 1; t_MM,t_MI = 0, so profile will have tG->M1 = 0, tG->D1 = 1.
+
+      /* Insert transitions */
+      for (k = 0; k <= M; k++)                                     // Insert transitions are unconstrained,
+	do {                                                       // but put a cap on tII, because tII~1.0 leads to infinite-length sequence samples 
+	  esl_dirichlet_FSampleUniform(rng, 2, hmm->t[k]+p7H_IM);
+	} while (hmm->t[k][p7H_II] > p7H_II_SAMPLE_MAX);
+      
+      /* Delete transitions */
+      for (k = 0; k <= M; k++)
+	hmm->t[k][p7H_DM + (k==M || k == 0 ? 0 : esl_rnd_Roll(rng, 2))] = 1.0f;    // Delete transitions constrained so (t_DM = 0 | t_DD = 0), 	
+
+      /* Count the number of match states visited */
+      s = nm = 0;
+      for (k = 0; k < M; k++)
+	{
+	  if (s == 0) { if (hmm->t[k][p7H_MM] > 0) nm++; else s = 1; }
+	  else if (hmm->t[k][p7H_DM] > 0) { nm++; s = 0; }
+	}
+    }
+
+  /* Add mandatory annotation */
+  p7_hmm_SetName(hmm, hmmname);
+  p7_hmm_AppendComlog(hmm, 1, &logmsg);
+  p7_hmm_SetCtime(hmm);
+  p7_hmm_SetConsensus(hmm, NULL);
+  p7_hmm_SetComposition(hmm);
+
+  /* Create a profile from it.
+   * We don't yet know actual length of the emitted seq, so choose  
+   * a smallish L suitable for sampling smallish path from profile.
+   */
+  if (do_asc_version) p7_profile_ConfigGlocal   (gm, hmm, bg, 10);
+  else                p7_profile_ConfigUniglocal(gm, hmm, bg, 10);
+
+  /* Emit a trace from the profile */
+  p7_ProfileEmit(rng, hmm, gm, bg, sq, tr);
+  p7_trace_Index(tr);
+
+  /* Extract the <dsq> from <sq> container.
+   * We only do this because p7_ProfileEmit() takes <sq>, not <dsq> as arg 
+   */
+  dsq = sq->dsq;
+  L   = sq->n;
+  sq->dsq = NULL;
+  sq->n   = 0;
+  esl_sq_Destroy(sq);
+  sq = NULL;
+
+  /* Doctor the emissions so that any N/C/J/I residue is residue notX */
+  for (z = 1; z < tr->N-1; z++)
+    if (tr->i[z] && ! p7_trace_IsM(tr->st[z])) dsq[tr->i[z]] = notX;
+
+  /* Select an anchor set 
+   * We know that each domain uses <nm> match states, and
+   * any of them are suitable anchors; choose randomly for each 
+   * domain.
+   */
+  ESL_ALLOC(anch, sizeof(P7_COORD2) * tr->ndom);
+  D = tr->ndom;
+  z = 0;
+  for (d = 0; d < D; d++)
+    {
+      while (tr->st[z] != p7T_B) z++;
+      s = esl_rnd_Roll(rng, nm);   // use the s'th match state as anchor
+      while (s || ! p7_trace_IsM(tr->st[z])) {
+	if (p7_trace_IsM(tr->st[z])) s--;
+	z++;
+      }
+      anch[d].n1 = tr->i[z];
+      anch[d].n2 = tr->k[z];
+    }
+  
+  /* Configure final length model of <gm> before returning */
+  p7_profile_SetLength(gm, L);
+  
+  /* Calculate the score of the trace.
+   * This has to come after length model config.
+   */
+  p7_trace_Score(tr, dsq, gm, &sc);
+
+  if (opt_hmm)  *opt_hmm  = hmm;  else p7_hmm_Destroy(hmm);
+  if (opt_gm)   *opt_gm   = gm;   else p7_profile_Destroy(gm); 
+  if (opt_dsq)  *opt_dsq  = dsq;  else free(dsq);
+  if (opt_L)    *opt_L    = L;   
+  if (opt_tr)   *opt_tr   = tr;   else p7_trace_Destroy(tr);
+  if (opt_anch) *opt_anch = anch; else free(anch);
+  if (opt_D)    *opt_D    = D;
+  if (opt_sc)   *opt_sc   = sc;
+  return eslOK;
+
+ ERROR:
+  if (hmm)  p7_hmm_Destroy(hmm);
+  if (gm)   p7_profile_Destroy(gm);
+  if (sq)   esl_sq_Destroy(sq);
+  if (dsq)  free(dsq);
+  if (tr)   p7_trace_Destroy(tr);
+  if (anch) free(anch);
+  if (opt_hmm)  *opt_hmm  = NULL;
+  if (opt_gm)   *opt_gm   = NULL;
+  if (opt_dsq)  *opt_dsq  = NULL;
+  if (opt_L)    *opt_L    = 0;
+  if (opt_tr)   *opt_tr   = NULL;
+  if (opt_anch) *opt_anch = NULL;
+  if (opt_D)    *opt_D    = 0;
+  if (opt_sc)   *opt_sc   = 0.;
+  return status;
+}
+/*------------------- end, internal functions -------------------*/
+
+
+
+/*****************************************************************
+ * 3. Unit tests
  *****************************************************************/
 #ifdef p7MODELSAMPLE_TESTDRIVE
 
 static void
-utest_sample(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_modelsample(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
-  char    failmsg[] = "modelsample::p7_hmm_Sample() unit test failed";
+  char    failmsg[] = "modelsample::p7_modelsample() unit test failed";
   P7_HMM *hmm       = NULL;
   int     ntrials   = 10;
   char    errmsg[eslERRBUFSIZE];
@@ -897,16 +1374,16 @@ utest_sample(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   
   for (i = 0; i < ntrials; i++)
     {
-      if (( status = p7_hmm_Sample(rng, M, abc, &hmm))     != eslOK) esl_fatal(failmsg);
+      if (( status = p7_modelsample(rng, M, abc, &hmm))    != eslOK) esl_fatal(failmsg);
       if (( status = p7_hmm_Validate(hmm, errmsg, 0.0001)) != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
       p7_hmm_Destroy(hmm);
     }
 }
 
 static void
-utest_sample_prior(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_prior(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
-  char      failmsg[] = "modelsample::p7_hmm_SamplePrior() unit test failed";
+  char      failmsg[] = "modelsample::p7_modelsample_Prior() unit test failed";
   P7_HMM   *hmm       = NULL;
   P7_PRIOR *pri       = NULL;
   int       ntrials   = 10;
@@ -922,8 +1399,8 @@ utest_sample_prior(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   
   for (i = 0; i < ntrials; i++)
     {
-      if (( status = p7_hmm_SamplePrior(rng, M, abc, pri, &hmm)) != eslOK) esl_fatal(failmsg);
-      if (( status = p7_hmm_Validate(hmm, errmsg, 0.0001))       != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+      if (( status = p7_modelsample_Prior(rng, M, abc, pri, &hmm)) != eslOK) esl_fatal(failmsg);
+      if (( status = p7_hmm_Validate(hmm, errmsg, 0.0001))         != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
       p7_hmm_Destroy(hmm);
     }
 
@@ -931,9 +1408,9 @@ utest_sample_prior(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 }
 
 static void
-utest_sample_ungapped(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_ungapped(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
-  char      failmsg[] = "modelsample::p7_hmm_SampleUngapped() unit test failed";
+  char      failmsg[] = "modelsample::p7_modelsample_Ungapped() unit test failed";
   P7_HMM   *hmm       = NULL;
   ESL_SQ   *sq        = esl_sq_CreateDigital(abc);
   P7_TRACE *tr        = p7_trace_Create();
@@ -947,7 +1424,7 @@ utest_sample_ungapped(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   
   for (i = 0; i < ntrials; i++)
     {
-      if (( status = p7_hmm_SampleUngapped(rng, M, abc, &hmm))    != eslOK) esl_fatal(failmsg);
+      if (( status = p7_modelsample_Ungapped(rng, M, abc, &hmm))  != eslOK) esl_fatal(failmsg);
       if (( status = p7_hmm_Validate(hmm, errmsg, 0.0001))        != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
 
       if (( status = p7_CoreEmit(rng, hmm, sq, tr))               != eslOK) esl_fatal(failmsg);
@@ -967,9 +1444,9 @@ utest_sample_ungapped(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 
 
 static void
-utest_sample_enumerable(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_enumerable(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
-  char      failmsg[] = "modelsample::p7_hmm_SampleEnumerable() unit test failed";
+  char      failmsg[] = "modelsample::p7_modelsample_Enumerable() unit test failed";
   P7_HMM   *hmm       = NULL;
   ESL_SQ   *sq        = esl_sq_CreateDigital(abc);
   P7_TRACE *tr        = p7_trace_Create();
@@ -983,11 +1460,11 @@ utest_sample_enumerable(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   
   for (i = 0; i < ntrials; i++)
     {
-      if (( status = p7_hmm_SampleEnumerable(rng, M, abc, &hmm))  != eslOK) esl_fatal(failmsg);
-      if (( status = p7_hmm_Validate(hmm, errmsg, 0.0001))        != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+      if (( status = p7_modelsample_Enumerable(rng, M, abc, &hmm)) != eslOK) esl_fatal(failmsg);
+      if (( status = p7_hmm_Validate(hmm, errmsg, 0.0001))         != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
 
-      if (( status = p7_CoreEmit(rng, hmm, sq, tr))               != eslOK) esl_fatal(failmsg);
-      if (( status = p7_trace_Validate(tr, abc, sq->dsq, errmsg)) != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+      if (( status = p7_CoreEmit(rng, hmm, sq, tr))                != eslOK) esl_fatal(failmsg);
+      if (( status = p7_trace_Validate(tr, abc, sq->dsq, errmsg))  != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
       
       for (z = 0; z < tr->N; z++)
 	if (p7_trace_IsI(tr->st[z])) esl_fatal(failmsg);
@@ -1003,9 +1480,9 @@ utest_sample_enumerable(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 
 
 static void
-utest_sample_enumerable2(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_enumerable2(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
-  char      failmsg[] = "modelsample::p7_hmm_Sample_Enumerable2() unit test failed";
+  char      failmsg[] = "modelsample::p7_modelsample__Enumerable2() unit test failed";
   P7_HMM   *hmm       = NULL;
   ESL_SQ   *sq        = esl_sq_CreateDigital(abc);
   P7_TRACE *tr        = p7_trace_Create();
@@ -1019,11 +1496,11 @@ utest_sample_enumerable2(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   
   for (i = 0; i < ntrials; i++)
     {
-      if (( status = p7_hmm_SampleEnumerable2(rng, M, abc, &hmm)) != eslOK) esl_fatal(failmsg);
-      if (( status = p7_hmm_Validate(hmm, errmsg, 0.0001))        != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+      if (( status = p7_modelsample_Enumerable2(rng, M, abc, &hmm)) != eslOK) esl_fatal(failmsg);
+      if (( status = p7_hmm_Validate(hmm, errmsg, 0.0001))          != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
 
-      if (( status = p7_CoreEmit(rng, hmm, sq, tr))               != eslOK) esl_fatal(failmsg);
-      if (( status = p7_trace_Validate(tr, abc, sq->dsq, errmsg)) != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+      if (( status = p7_CoreEmit(rng, hmm, sq, tr))                 != eslOK) esl_fatal(failmsg);
+      if (( status = p7_trace_Validate(tr, abc, sq->dsq, errmsg))   != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
       
       for (z = 0; z < tr->N-1; z++)
 	if (p7_trace_IsI(tr->st[z]) && p7_trace_IsI(tr->st[z+1])) esl_fatal(failmsg);
@@ -1038,9 +1515,9 @@ utest_sample_enumerable2(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 }
 
 static void
-utest_sample_uniform(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_uniform(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
-  char    failmsg[] = "modelsample::p7_hmm_SampleUniform() unit test failed";
+  char    failmsg[] = "modelsample::p7_modelsample_Uniform() unit test failed";
   P7_HMM *hmm       = NULL;
   int     ntrials   = 10;
   char    errmsg[eslERRBUFSIZE];
@@ -1049,16 +1526,16 @@ utest_sample_uniform(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   
   for (i = 0; i < ntrials; i++)
     {
-      if (( status = p7_hmm_SampleUniform(rng, M, abc, 0.1, 0.4, 0.1, 0.4, &hmm)) != eslOK) esl_fatal(failmsg);
-      if (( status = p7_hmm_Validate(hmm, errmsg, 0.0001))                        != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+      if (( status = p7_modelsample_Uniform(rng, M, abc, 0.1, 0.4, 0.1, 0.4, &hmm)) != eslOK) esl_fatal(failmsg);
+      if (( status = p7_hmm_Validate(hmm, errmsg, 0.0001))                          != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
       p7_hmm_Destroy(hmm);
     }
 }
 
 static void
-utest_sample_singlepathed(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_singlepathed(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
-  char        failmsg[] = "modelsample::p7_hmm_SampleSinglePathed() unit test failed";
+  char        failmsg[] = "modelsample::p7_modelsample_SinglePathed() unit test failed";
   P7_HMM     *hmm       = NULL;
   ESL_SQ     *sq1       = esl_sq_CreateDigital(abc);
   ESL_SQ     *sq2       = esl_sq_CreateDigital(abc);
@@ -1076,7 +1553,7 @@ utest_sample_singlepathed(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   
   for (h = 0; h < nhmm; h++)
     {
-      if (( status = p7_hmm_SampleSinglePathed(rng, M, abc, &hmm))      != eslOK) esl_fatal(failmsg);
+      if (( status = p7_modelsample_SinglePathed(rng, M, abc, &hmm))    != eslOK) esl_fatal(failmsg);
       if (( status = p7_hmm_Validate(hmm, errmsg, 0.0001))              != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
 
       if (( status = p7_CoreEmit(rng, hmm, sq1, tr1))                   != eslOK) esl_fatal(failmsg);
@@ -1127,9 +1604,9 @@ utest_sample_singlepathed(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 
 
 static void
-utest_sample_singlepathed_seq(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int do_asc_version)
+utest_singlepathed_seq(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int do_asc_version)
 {
-  char        failmsg[] = "modelsample::p7_hmm_SampleSinglePathedSeq() unit test failed";
+  char        failmsg[] = "modelsample::p7_modelsample_SinglePathedSeq() unit test failed";
   P7_HMM     *hmm       = NULL;
   ESL_DSQ    *dsq1      = NULL;
   ESL_SQ     *sq2       = esl_sq_CreateDigital(abc);
@@ -1153,8 +1630,8 @@ utest_sample_singlepathed_seq(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *ab
 
   for (h = 0; h < nhmm; h++)
     {
-      if (do_asc_version) status = p7_hmm_SampleSinglePathedASC(rng, M, bg, &hmm, &gm, &dsq1, &L1, &tr1, &anch, &D1, &sc1);
-      else                status = p7_hmm_SampleSinglePathedSeq(rng, M, bg, &hmm, &gm, &dsq1, &L1, &tr1, &anch, &D1, &sc1);
+      if (do_asc_version) status = p7_modelsample_SinglePathedASC(rng, M, bg, &hmm, &gm, &dsq1, &L1, &tr1, &anch, &D1, &sc1);
+      else                status = p7_modelsample_SinglePathedSeq(rng, M, bg, &hmm, &gm, &dsq1, &L1, &tr1, &anch, &D1, &sc1);
       if (status != eslOK) esl_fatal(failmsg);
 	
       if (( status = p7_hmm_Validate    (hmm, errmsg, 0.0001))            != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
@@ -1204,6 +1681,183 @@ utest_sample_singlepathed_seq(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *ab
   p7_trace_Destroy(tr2);
 }
 
+static void
+utest_anchored_uni(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+{
+  char        failmsg[] = "modelsample::p7_modelsample_AnchoredUni() unit test failed";
+  P7_BG      *bg        = p7_bg_Create(abc);
+  P7_HMM     *hmm       = NULL;
+  P7_PROFILE *gm        = NULL;
+  ESL_DSQ    *dsq       = NULL;
+  ESL_SQ     *sq        = esl_sq_CreateDigital(abc);
+  int         L;
+  P7_TRACE   *tr        = NULL;
+  P7_COORD2  *anch      = NULL;
+  int         D;
+  float       sc;
+  int         nhmm      = 10;
+  int         ntrace    = 10;
+  int         h,t,z,i;
+  int         anchX     = -1;
+  int         nvisit;
+  char        errmsg[eslERRBUFSIZE];
+  int         status;
+
+  if (bg == NULL || sq == NULL) esl_fatal(failmsg);
+
+  for (h = 0; h < nhmm; h++)
+    {
+      if (( status = p7_modelsample_AnchoredUni(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc)) != eslOK) esl_fatal(failmsg);
+
+      if (D != 1) esl_fatal(failmsg);
+      if (( status = p7_hmm_Validate    (hmm, errmsg, 0.0001))   != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+      if (( status = p7_profile_Validate(gm,  errmsg, 0.0001))   != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+      if (( status = p7_trace_Validate  (tr, abc, dsq, errmsg))  != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+
+      /* We don't directly know what the magic anchor residue is, so 
+       * figure that out first.
+       */
+      for (z = 1; z < tr->N-1; z++)
+	if (tr->k[z] == anch[0].n2 && p7_trace_IsM(tr->st[z])) { anchX = dsq[tr->i[z]]; break; }
+
+      if (hmm->mat[anch[0].n2][anchX] != 1.0)   esl_fatal(failmsg);
+      for (i = 1; i <= L; i++)
+	if (dsq[i] == anchX && i != anch[0].n1) esl_fatal(failmsg);  // Check that dsq has only one X, at the anchor position.
+
+      /* Emit a few traces from the profile.
+       * Verify that they all visit the anchor state Mk0, and that the anchor residue is X.
+       */
+      p7_trace_Reuse(tr);
+      for (t = 0; t < ntrace; t++)
+	{
+	  if (( status = p7_ProfileEmit(rng, hmm, gm, bg, sq, tr))    != eslOK) esl_fatal(failmsg);
+	  if (( status = p7_trace_Validate(tr, abc, sq->dsq, errmsg)) != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+	  
+	  nvisit = 0;
+	  for (z = 0; z < tr->N; z++)
+	    if (tr->k[z] == anch[0].n2 && p7_trace_IsM(tr->st[z]))
+	      {
+		nvisit++;          
+		if (sq->dsq[tr->i[z]] != anchX) esl_fatal(failmsg);  // Anchor i0 residue is an X. (In emitted sequences, there can be more than one X)
+	      } 
+	  if (nvisit != 1) esl_fatal(failmsg);                   // Check that all traces visit anchor i0,k0,M once.
+
+	  esl_sq_Reuse(sq);
+	  p7_trace_Reuse(tr);
+	}
+
+      free(dsq);
+      free(anch);      
+      p7_trace_Destroy(tr);
+      p7_profile_Destroy(gm);
+      p7_hmm_Destroy(hmm);
+    }
+
+  esl_sq_Destroy(sq);
+  p7_bg_Destroy(bg);
+}
+
+static void
+utest_anchored_multi(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+{
+  char        failmsg[] = "modelsample::p7_modelsample_AnchoredMulti() unit test failed";
+  P7_BG      *bg        = p7_bg_Create(abc);
+  P7_HMM     *hmm       = NULL;
+  P7_PROFILE *gm        = NULL;
+  ESL_DSQ    *dsq       = NULL;
+  ESL_SQ     *sq        = esl_sq_CreateDigital(abc);
+  int         L;
+  P7_TRACE   *tr        = NULL;
+  P7_COORD2  *anch      = NULL;
+  int         D;
+  float       sc;
+  int         nhmm      = 10;
+  int         ntrace    = 10;
+  int         h,t,z,i,d;
+  int         anchX     = -1;
+  char        errmsg[eslERRBUFSIZE];
+  int         status;
+
+  if (bg == NULL || sq == NULL) esl_fatal(failmsg);
+
+  for (h = 0; h < nhmm; h++)
+    {
+      if (( status = p7_modelsample_AnchoredMulti(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc)) != eslOK) esl_fatal(failmsg);
+
+      if (( status = p7_hmm_Validate    (hmm, errmsg, 0.0001))   != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+      if (( status = p7_profile_Validate(gm,  errmsg, 0.0001))   != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+      if (( status = p7_trace_Validate  (tr, abc, dsq, errmsg))  != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+
+      /* We don't directly know what the magic anchor residue is, so figure that out first. */
+      for (z = 1; z < tr->N-1; z++)
+	if (tr->k[z] == anch[0].n2 && p7_trace_IsM(tr->st[z])) { anchX = dsq[tr->i[z]]; break; }
+
+      /* The emission prob of residue anchX at anchor state k0 should be 1.0,
+       * and the only anchX's in the sequence come from Mk0
+       */
+      if (hmm->mat[anch[0].n2][anchX] != 1.0)   esl_fatal(failmsg);
+      d = 0;
+      for (i = 1; i <= L; i++)
+	if (dsq[i] == anchX) {
+	  if (i != anch[d++].n1) esl_fatal(failmsg);  // Check that dsq has only one X, at the anchor position.
+	}
+
+      /* The trace may not contain emitting N/C/J, and may not contain I */
+      for (z = 1; z < tr->N; z++)
+	{
+	  if (p7_trace_IsI(tr->st[z])) esl_fatal(failmsg);
+	  if (tr->st[z] == p7T_N && tr->st[z-1] == p7T_N) esl_fatal(failmsg);
+	  if (tr->st[z] == p7T_J && tr->st[z-1] == p7T_J) esl_fatal(failmsg);
+	  if (tr->st[z] == p7T_C && tr->st[z-1] == p7T_C) esl_fatal(failmsg); 
+	}
+
+      /* Emit a few more traces from the profile.
+       */
+      p7_trace_Reuse(tr);
+      for (t = 0; t < ntrace; t++)
+	{
+	  if (( status = p7_ProfileEmit(rng, hmm, gm, bg, sq, tr))    != eslOK) esl_fatal(failmsg);
+	  if (( status = p7_trace_Validate(tr, abc, sq->dsq, errmsg)) != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+
+	  /* They need not contain an anchor state k0 at every domain,
+	   * because the model is emitting in dual local/glocal mode.
+	   * (Remember, the particular seq/profile pair is contrived
+	   * such that every domain *does* contain the anchor k0.) 
+	   * But we can verify that when they do have node k0, it's
+	   * a match state, and that the anchor residue is X.
+	   */
+	  for (z = 0; z < tr->N; z++)
+	    {
+	      if (tr->k[z] == anch[0].n2)
+		{
+		  if (! p7_trace_IsM(tr->st[z]))  esl_fatal(failmsg);
+		  if (sq->dsq[tr->i[z]] != anchX) esl_fatal(failmsg);  // Anchor i0 residue is an X. (In emitted sequences, there can be more than one X)
+		}
+	    }
+
+	  /* The trace may not contain emitting N/C/J, and may not contain I */
+	  for (z = 1; z < tr->N; z++)
+	    {
+	      if (p7_trace_IsI(tr->st[z])) esl_fatal(failmsg);
+	      if (tr->st[z] == p7T_N && tr->st[z-1] == p7T_N) esl_fatal(failmsg);
+	      if (tr->st[z] == p7T_J && tr->st[z-1] == p7T_J) esl_fatal(failmsg);
+	      if (tr->st[z] == p7T_C && tr->st[z-1] == p7T_C) esl_fatal(failmsg); 
+	    }
+
+	  esl_sq_Reuse(sq);
+	  p7_trace_Reuse(tr);
+	}
+
+      free(dsq);
+      free(anch);      
+      p7_trace_Destroy(tr);
+      p7_profile_Destroy(gm);
+      p7_hmm_Destroy(hmm);
+    }
+
+  esl_sq_Destroy(sq);
+  p7_bg_Destroy(bg);
+}
 
 
 #endif /*p7MODELSAMPLE_TESTDRIVE*/
@@ -1211,7 +1865,7 @@ utest_sample_singlepathed_seq(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *ab
 
 
 /*****************************************************************
- * 3. Test driver
+ * 4. Test driver
  *****************************************************************/
 #ifdef p7MODELSAMPLE_TESTDRIVE
 
@@ -1244,15 +1898,17 @@ main(int argc, char **argv)
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
-  utest_sample                 (rng, M, abc);
-  utest_sample_prior           (rng, M, abc);
-  utest_sample_ungapped        (rng, M, abc);
-  utest_sample_enumerable      (rng, M, abc);
-  utest_sample_enumerable2     (rng, M, abc);
-  utest_sample_uniform         (rng, M, abc);
-  utest_sample_singlepathed    (rng, M, abc);
-  utest_sample_singlepathed_seq(rng, M, abc, FALSE); /* tests p7_hmm_SampleSinglePathedSeq(), which uses uniglocal model   */
-  utest_sample_singlepathed_seq(rng, M, abc, TRUE);  /* tests p7_hmm_SampleSinglePathedASC(), which uses multiglocal model */
+  utest_modelsample     (rng, M, abc);
+  utest_prior           (rng, M, abc);
+  utest_ungapped        (rng, M, abc);
+  utest_enumerable      (rng, M, abc);
+  utest_enumerable2     (rng, M, abc);
+  utest_uniform         (rng, M, abc);
+  utest_singlepathed    (rng, M, abc);
+  utest_singlepathed_seq(rng, M, abc, FALSE); /* tests p7_modelsample_SinglePathedSeq(), which uses uniglocal model   */
+  utest_singlepathed_seq(rng, M, abc, TRUE);  /* tests p7_modelsample_SinglePathedASC(), which uses multiglocal model */
+  utest_anchored_uni    (rng, M, abc);
+  utest_anchored_multi  (rng, M, abc);
 
   fprintf(stderr, "#  status = ok\n");
 
@@ -1266,8 +1922,10 @@ main(int argc, char **argv)
 /*-------------------- end of test driver ---------------------*/
 
 
+
+
 /*****************************************************************
- * 4. Example driver
+ * 5. Example driver
  *****************************************************************/
 #ifdef p7MODELSAMPLE_EXAMPLE
 
@@ -1308,7 +1966,9 @@ main(int argc, char **argv)
   float           sc      = 0.;
   char            errmsg[eslERRBUFSIZE];
   
-  p7_hmm_SampleSinglePathedSeq(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc);
+  //p7_modelsample_SinglePathedSeq(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc);
+  //p7_modelsample_AnchoredUni(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc);
+  p7_modelsample_AnchoredMulti(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc);
 
   if (p7_hmm_Validate(hmm, errmsg, 0.0001) != eslOK ) esl_fatal(errmsg);
 
