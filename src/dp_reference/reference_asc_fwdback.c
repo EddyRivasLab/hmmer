@@ -850,8 +850,7 @@ utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  * Mk0 anchor state is forced to generate a particular residue anchX,
  * by setting e_Mk0(anchX) = 1. The sequence is contrived such that
  * it has exactly one anchX residue per domain.
- * 
-
+ */
 
 #endif /*p7REFERENCE_ASC_FWDBACK_TESTDRIVE*/
 /*----------------- end, unit tests -----------------------------*/
