@@ -120,11 +120,12 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
    * i.e. i = 0..anch[0].n1-1, k=M+1..M (nothing).
    */
   iend = (D == 0) ? 1 : anch[0].n1;
+  xp   = NULL;
   for (i = 0; i < iend; i++)
     {
       xc = mxd->dp[i] + (M+1) * p7R_NSCELLS; 
       xc[p7R_E]  = -eslINFINITY;
-      xc[p7R_N]  = gm->xsc[p7P_N][p7P_LOOP] * i;
+      xc[p7R_N]  = (i == 0 ? 0. : xp[p7R_N] + gm->xsc[p7P_N][p7P_LOOP]);
       xc[p7R_J]  = -eslINFINITY;
       xc[p7R_B]  = xc[p7R_N] + gm->xsc[p7P_N][p7P_MOVE];
       xc[p7R_L]  = xc[p7R_B] + gm->xsc[p7P_B][0]; 
@@ -132,6 +133,7 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
       xc[p7R_C]  = -eslINFINITY;
       xc[p7R_JJ] = -eslINFINITY;
       xc[p7R_CC] = -eslINFINITY;
+      xp = xc;
     }
 
   /* Iterate over domains d=0..D-1: */
@@ -842,16 +844,70 @@ utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  * To get multiple domains, this uses a different contrivance than
  * the one used in the "multisingle" test.
  * 
- * The contrivance: prevent any N/C/J/I emission (because these can
- * emit any residue) by setting L=0 length model and all tMI = 0.
- * Model is multidomain, dual-mode: multiple domains are allowed, and
- * both local and glocal paths are allowed. It is still forced to use
- * Mk0, by setting tMD(k0-1) = tDD(k0-1) = 0, tMM(k0-1) = tDM(k0-1) = 1.
- * Mk0 anchor state is forced to generate a particular residue anchX,
- * by setting e_Mk0(anchX) = 1. The sequence is contrived such that
- * it has exactly one anchX residue per domain.
+ * The contrivance: Only M states can generate residues. Prevent any
+ * N/C/J/I emission (because these can emit any residue) by setting
+ * L=0 length model and all tMI = 0.  Model is multidomain, dual-mode:
+ * multiple domains are allowed, and both local and glocal paths are
+ * allowed. Choose a special residue X; only the anchor state Mk0 can
+ * generate this residue with nonzero probability. The target sequence
+ * has exactly one X residue per domain, at the anchor position k0.
+ * 
+ * Now:
+ *    1. Fwd score = ASC Fwd score = Bck score = ASC Bck score.
  */
+static void
+utest_multimulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+{
+  char        failmsg[] = "reference_asc_fwdback multimulti unit test failed";
+  P7_BG      *bg        = p7_bg_Create(abc);
+  P7_HMM     *hmm       = NULL;
+  P7_PROFILE *gm        = NULL;
+  ESL_DSQ    *dsq       = NULL; 
+  int         L;
+  P7_TRACE   *tr        = NULL;
+  P7_COORD2  *anch      = NULL;
+  P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
+  P7_REFMX   *rxb       = p7_refmx_Create(M, 20);
+  P7_REFMX   *afu       = p7_refmx_Create(M, 20);
+  P7_REFMX   *afd       = p7_refmx_Create(M, 20);
+  P7_REFMX   *abu       = p7_refmx_Create(M, 20);
+  P7_REFMX   *abd       = p7_refmx_Create(M, 20);
+  int         D;
+  float       sc, fsc, bsc, asc_f, asc_b;
+  int         status;
+  
+  if (bg  == NULL || rxf == NULL || rxb == NULL || afu == NULL ||
+      afd == NULL || abu == NULL || abd == NULL)   esl_fatal(failmsg);
 
+  if ((status = p7_modelsample_AnchoredMulti(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc)) != eslOK) esl_fatal(failmsg);
+
+  if ((status = p7_ReferenceForward    (dsq, L, gm,          rxf,      &fsc))   != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceBackward   (dsq, L, gm,          rxb,      &bsc))   != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceASCForward (dsq, L, gm, anch, D, afu, afd, &asc_f)) != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceASCBackward(dsq, L, gm, anch, D, abu, abd, &asc_b)) != eslOK) esl_fatal(failmsg);
+
+  //printf("### Reference Fwd:\n"); p7_refmx_Dump(stdout, rxf);
+  //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
+  //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
+  //printf("FWD = BCK = ASC_FWD = ASC_BCK = %.2f\n", fsc);
+
+  if (esl_FCompare(fsc, bsc,   0.001) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(fsc, asc_f, 0.001) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(bsc, asc_b, 0.001) != eslOK) esl_fatal(failmsg);
+  
+  free(anch);
+  free(dsq);
+  p7_refmx_Destroy(afu);
+  p7_refmx_Destroy(afd);
+  p7_refmx_Destroy(abu);
+  p7_refmx_Destroy(abd);
+  p7_refmx_Destroy(rxb);
+  p7_refmx_Destroy(rxf);
+  p7_trace_Destroy(tr);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+  p7_bg_Destroy(bg);
+}
 #endif /*p7REFERENCE_ASC_FWDBACK_TESTDRIVE*/
 /*----------------- end, unit tests -----------------------------*/
 
@@ -889,6 +945,8 @@ main(int argc, char **argv)
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+
+  utest_multimulti  (rng, M, abc);
 
   utest_singlesingle(rng, M, abc);
   utest_singlemulti (rng, M, abc);
