@@ -637,13 +637,235 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 #ifdef p7REFERENCE_ASC_FWDBACK_TESTDRIVE
 #include "hmmer.h"
 
-/* The "singlesingle" test (for single path, single domain) samples a
- * contrived profile/seq pair that has only one possible path with
- * probability 1 (that is, P(\pi | x, H) = 1). This must be a glocal
- * single domain path. Choose any anchor A in that domain. Then,
- * Viterbi = Fwd = Bck = ASC Fwd = ASC Bck scores; and in the DP
- * matrices, V=F, and within the valid ASC contrained regions, F=ASC F
- * and B=ASC B.
+/* Compare a standard DP matrix <std> to ASC UP and DOWN matrices
+ * <ascu> and <ascd>, using anchor set <anch> for <D> domains.
+ * Compare all valid values in the ASC matrices to their counterparts
+ * in the standard matrix for equality within absolute (not relative)
+ * tolerance <epsilon>. (Ignore cells that are valid in the standard
+ * matrix, but not in the ASC matrices.) Return <eslOK> if all
+ * cell comparisons succeed; <eslFAIL> if not. 
+ * 
+ * Similar to p7_refmx_Compare(). See notes there for why we prefer
+ * absolute, not relative epsilon (short version: error accumulates
+ * more as an absolute # per term added; DP cells with values close to
+ * zero may have large relative errors).
+ */
+static int
+ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_COORD2 *anch, int D, float epsilon)
+{
+  int M         = std->M;
+  int L         = std->L;
+  int killmenow = FALSE;
+  int d,i,k,s,iz;
+#ifdef p7_DEBUGGING
+  killmenow = TRUE;
+#endif
+
+  ESL_DASSERT1( (ascu->M == M && ascu->L == L));
+  ESL_DASSERT1( (ascd->M == M && ascd->L == L));
+  ESL_DASSERT1( ((std->type == p7R_FORWARD  && ascu->type == p7R_ASC_FWD_UP && ascd->type == p7R_ASC_FWD_DOWN) ||
+		 (std->type == p7R_BACKWARD && ascu->type == p7R_ASC_BCK_UP && ascd->type == p7R_ASC_BCK_DOWN)));
+
+
+  /* i=0..anch[0].i-1 specials are a boundary case... */
+  iz = (D == 0 ? 1 : anch[0].n1);
+  for (i = 0; i < iz; i++)
+    {
+      /* In Backwards, don't look at J or L cells. */
+      if (std->type == p7R_FORWARD) 
+	{
+	  for (s = 0; s < p7R_NXCELLS; s++)
+	    if (P7R_XMX(ascd,i,s) != -eslINFINITY && esl_FCompareAbs( P7R_XMX(std,i,s), P7R_XMX(ascd,i,s), epsilon) == eslFAIL) 
+	      { if (killmenow) abort(); return eslFAIL; }
+	}
+      else
+	{
+	  if (esl_FCompareAbs( P7R_XMX(std,i,p7R_N), P7R_XMX(ascd,i,p7R_N), epsilon) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	  if (esl_FCompareAbs( P7R_XMX(std,i,p7R_B), P7R_XMX(ascd,i,p7R_B), epsilon) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	  if (esl_FCompareAbs( P7R_XMX(std,i,p7R_G), P7R_XMX(ascd,i,p7R_G), epsilon) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	}
+    }
+
+  for (d = 0; d < D; d++)
+    {
+      /* UP sector for domain d */
+      iz = (d == 0 ? 1  : anch[d-1].n1+1);
+      for (i = iz; i < anch[d].n1; i++)
+	{
+	  for (k = 1; k < anch[d].n2; k++)
+	    {
+	      for (s = 0; s < p7R_NSCELLS; s++)
+		if (P7R_MX(ascu,i,k,s) != -eslINFINITY && esl_FCompareAbs( P7R_MX(std,i,k,s), P7R_MX(ascu,i,k,s), epsilon) == eslFAIL)
+		  { if (killmenow) abort(); return eslFAIL; }
+	    }
+	}
+
+      /* DOWN sector for domain d */
+      iz = ( d < D-1 ? anch[d+1].n1 : L+1);
+      for (i = anch[d].n1; i < iz; i++)
+	{
+	  for (k = anch[d].n2; k <= M; k++)
+	    {
+	      for (s = 0; s < p7R_NSCELLS; s++)
+		if (P7R_MX(ascd,i,k,s) != -eslINFINITY && esl_FCompareAbs( P7R_MX(std,i,k,s), P7R_MX(ascd,i,k,s), epsilon) == eslFAIL) 
+		  { if (killmenow) abort(); return eslFAIL; }
+	    }
+
+	  /* In specials, ASC has some known discrepancies from standard implementation.
+	   * Standard implementation fills in C and J identically because it doesn't know where last domain is,
+	   * and continues into J->B->{LG}. In ASC, J/B/L/G are -inf after final domain d. 
+	   */
+	  if (d < D-1) 
+	    {
+	      for (s = 0; s < p7R_NXCELLS; s++)
+		if (P7R_XMX(ascd,i,s) != -eslINFINITY && s != p7R_C && esl_FCompareAbs( P7R_XMX(std,i,s), P7R_XMX(ascd,i,s), epsilon) == eslFAIL) 
+		  { if (killmenow) abort(); return eslFAIL; }
+	    }
+	  else 
+	    {
+	      if (esl_FCompareAbs( P7R_XMX(std,i,p7R_E), P7R_XMX(ascd,i,p7R_E), epsilon) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	      if (esl_FCompareAbs( P7R_XMX(std,i,p7R_C), P7R_XMX(ascd,i,p7R_C), epsilon) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	    }
+	}
+    }
+  return eslOK;
+}
+
+
+
+/* The "singlepath" test uses p7_modelsample_SinglePathed() to sample
+ * a contrived HMM that has only one possible path with probability 1;
+ * that is, P(\pi | H) = 1. A uniglocal L=0 profile of that HMM also
+ * has only one possible path. Any match state in that path is suitable
+ * as an anchor, for comparison/testing of ASC algorithms. 
+ *
+ * Because there is literally only a single path, every cell in the
+ * valid area of the ASC DP UP/DOWN matrices is identical (within 
+ * floating point epsilon) to the standard DP matrix cells, for both
+ * Forward/Backward. The same is not true of other unit tests, where
+ * some prefixes/suffixes that ASC disallows have finite mass in standard Fwd/Bck but 
+ * cannot reach finished paths.
+ * 
+ * For this situation:
+ *   1. Viterbi = Fwd = Bck = ASC Fwd = ASC Bck scores.
+ *   2. Viterbi trace == trace that generated the test sequence.
+ *   3. Viterbi DP matrix cells == Forward DP matrix cells
+ *   4. ASC Forward U/D matrix cells == std F matrix cells, within ASC regions.
+ *   5. Ditto for ASC Backward cells compared to standard Backward.
+ */
+static void
+utest_singlepath(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+{
+  char        failmsg[] = "reference_asc_fwdback singlepath unit test failed";
+  P7_BG      *bg        = p7_bg_Create(abc);
+  P7_HMM     *hmm       = NULL;
+  P7_PROFILE *gm        = p7_profile_Create(M, bg->abc);
+  ESL_SQ     *sq        = esl_sq_CreateDigital(bg->abc);
+  P7_TRACE   *tr        = p7_trace_Create();
+  P7_TRACE   *vtr       = p7_trace_Create();
+  P7_COORD2  *anch      = malloc(sizeof(P7_COORD2));
+  P7_REFMX   *rxv       = p7_refmx_Create(M, 20);
+  P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
+  P7_REFMX   *rxb       = p7_refmx_Create(M, 20);
+  P7_REFMX   *afu       = p7_refmx_Create(M, 20);
+  P7_REFMX   *afd       = p7_refmx_Create(M, 20);
+  P7_REFMX   *abu       = p7_refmx_Create(M, 20);
+  P7_REFMX   *abd       = p7_refmx_Create(M, 20);
+  int         D;
+  int         nm, z, which;
+  float       sc, vsc, fsc, bsc, asc_f, asc_b;
+  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  int         status;
+  
+  if (gm  == NULL || sq  == NULL || tr  == NULL ||
+      bg  == NULL || vtr == NULL || rxv == NULL ||
+      rxf == NULL || rxb == NULL || afu == NULL ||
+      afd == NULL || abu == NULL || abd == NULL || anch == NULL)   esl_fatal(failmsg);
+
+  /* Sample single-pathed HMM, create uniglocal L=0 profile */
+  if ((status = p7_modelsample_SinglePathed(rng, M, bg->abc, &hmm)) != eslOK) esl_fatal(failmsg);
+  if ( p7_profile_ConfigUniglocal(gm, hmm, bg, 0)                   != eslOK) esl_fatal(failmsg); 
+
+  /* Emit sequence and trace. Get the trace score. */
+  if (p7_ProfileEmit(rng, hmm, gm, bg, sq, tr) != eslOK) esl_fatal(failmsg);
+  if (p7_trace_Index(tr)                       != eslOK) esl_fatal(failmsg);
+  if (p7_trace_Score(tr, sq->dsq, gm, &sc)     != eslOK) esl_fatal(failmsg);
+
+  /* Create anchor set. We know it's uniglocal, so D=1. */
+  D  = 1;
+  nm = 0;
+  for (z = 1; z < tr->N; z++) if (p7_trace_IsM(tr->st[z])) nm++;
+  which = 1 + esl_rnd_Roll(rng, nm);
+  for (z = 1; z < tr->N; z++) {
+    if (p7_trace_IsM(tr->st[z])) {
+      which--;
+      if (which == 0) {
+	anch[0].n1 = tr->i[z];
+	anch[0].n2 = tr->k[z];
+	break;
+      }
+    }
+  }
+
+  if ((status = p7_ReferenceViterbi (sq->dsq, sq->n, gm, rxv, vtr, &vsc)) != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceForward (sq->dsq, sq->n, gm, rxf,      &fsc)) != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceBackward(sq->dsq, sq->n, gm, rxb,      &bsc)) != eslOK) esl_fatal(failmsg);
+
+  if ((status = p7_ReferenceASCForward (sq->dsq, sq->n, gm, anch, D, afu, afd, &asc_f)) != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch, D, abu, abd, &asc_b)) != eslOK) esl_fatal(failmsg);
+
+  //printf("### Reference Vit:\n"); p7_refmx_Dump(stdout, rxv);
+  //printf("### Reference Fwd:\n"); p7_refmx_Dump(stdout, rxf);
+  //printf("### Reference Bck:\n"); p7_refmx_Dump(stdout, rxb);
+  //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
+  //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
+  //printf("### ASC Bck UP:\n");    p7_refmx_Dump(stdout, abu);
+  //printf("### ASC Bck DOWN:\n");  p7_refmx_Dump(stdout, abd);
+  //p7_trace_DumpAnnotated(stdout, tr,  gm, sq->dsq);
+  //p7_trace_DumpAnnotated(stdout, vtr, gm, sq->dsq);
+
+  if (esl_FCompare(sc, vsc,   epsilon) != eslOK) esl_fatal(failmsg);  // generated trace score = Viterbi score
+  if (esl_FCompare(sc, fsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Forward score
+  if (esl_FCompare(sc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Backward score
+  if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Forward score
+  if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Backward score
+  if (p7_trace_Compare(tr, vtr, 0) != eslOK) esl_fatal(failmsg);      // generated trace = Viterbi trace
+
+  /* to compare Viterbi to Fwd matrix, we have to hack around a safety check in the structures */
+  rxv->type = p7R_FORWARD;
+  if (p7_refmx_Compare(rxf, rxv, epsilon) != eslOK) esl_fatal(failmsg);
+  rxv->type = p7R_VITERBI;
+
+  if (ascmatrix_compare(rxf, afu, afd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+  if (ascmatrix_compare(rxb, abu, abd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+  
+  free(anch);
+  esl_sq_Destroy(sq);
+  p7_refmx_Destroy(afu);
+  p7_refmx_Destroy(afd);
+  p7_refmx_Destroy(abu);
+  p7_refmx_Destroy(abd);
+  p7_refmx_Destroy(rxb);
+  p7_refmx_Destroy(rxf);
+  p7_refmx_Destroy(rxv);
+  p7_trace_Destroy(vtr);
+  p7_trace_Destroy(tr);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+  p7_bg_Destroy(bg);
+}
+
+
+
+/* The "singlesingle" test (for single path, single domain) uses
+ * p7_modelsample_SinglePathedSeq() to sample a contrived profile/seq
+ * pair that has only one possible path with probability 1 (that is,
+ * P(\pi | x, H) = 1). This must be a glocal single domain
+ * path. Choose any anchor A in that domain. 
+ * 
+ * Then:
+ *   1. Viterbi = Fwd = Bck = ASC Fwd = ASC Bck scores.
+ *   2. Viterbi trace = trace that generated the test sequence. 
  */
 static void
 utest_singlesingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
@@ -666,6 +888,7 @@ utest_singlesingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   P7_REFMX   *abd       = p7_refmx_Create(M, 20);
   int         D;
   float       sc, vsc, fsc, bsc, asc_f, asc_b;
+  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
   int         status;
   
   if (bg  == NULL || vtr == NULL || rxv == NULL ||
@@ -678,24 +901,24 @@ utest_singlesingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   if ((status = p7_ReferenceForward (dsq, L, gm, rxf,      &fsc)) != eslOK) esl_fatal(failmsg);
   if ((status = p7_ReferenceBackward(dsq, L, gm, rxb,      &bsc)) != eslOK) esl_fatal(failmsg);
 
-  //p7_trace_DumpAnnotated(stdout, tr,  gm, dsq);
-  //p7_trace_DumpAnnotated(stdout, vtr, gm, dsq);
-
-  if (esl_FCompare(sc, vsc, 0.001) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(sc, fsc, 0.001) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(sc, bsc, 0.001) != eslOK) esl_fatal(failmsg);
-  if (p7_trace_Compare(tr, vtr, 0) != eslOK) esl_fatal(failmsg);
-
   if ((status = p7_ReferenceASCForward (dsq, L, gm, anch, D, afu, afd, &asc_f)) != eslOK) esl_fatal(failmsg);
   if ((status = p7_ReferenceASCBackward(dsq, L, gm, anch, D, abu, abd, &asc_b)) != eslOK) esl_fatal(failmsg);
 
+  //printf("### Reference Vit:\n"); p7_refmx_Dump(stdout, rxv);
   //printf("### Reference Fwd:\n"); p7_refmx_Dump(stdout, rxf);
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
+  //p7_trace_DumpAnnotated(stdout, tr,  gm, dsq);
+  //p7_trace_DumpAnnotated(stdout, vtr, gm, dsq);
 
-  if (esl_FCompare(sc, asc_f, 0.001) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(sc, asc_b, 0.001) != eslOK) esl_fatal(failmsg);
-  
+  if (esl_FCompare(sc, vsc, epsilon)   != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(sc, fsc, epsilon)   != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(sc, bsc, epsilon)   != eslOK) esl_fatal(failmsg);
+  if (p7_trace_Compare(tr, vtr, 0)     != eslOK) esl_fatal(failmsg);
+
+  if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+
   free(anch);
   free(dsq);
   p7_refmx_Destroy(afu);
@@ -711,6 +934,7 @@ utest_singlesingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   p7_hmm_Destroy(hmm);
   p7_bg_Destroy(bg);
 }
+
 
 
 /* The "singlemulti" test (single path, multiple domains) samples
@@ -738,6 +962,7 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   P7_REFMX   *abd       = p7_refmx_Create(M, 20);
   int         D;
   float       sc, asc_f, asc_b;
+  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
   int         status;
   
   if (bg  == NULL || afu == NULL || afd == NULL || abu == NULL || abd == NULL) 
@@ -752,8 +977,8 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
 
-  if (esl_FCompare(sc, asc_f, 0.001) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(sc, asc_b, 0.001) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
 
   free(anch);
   free(dsq);
@@ -766,6 +991,8 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   p7_hmm_Destroy(hmm);
   p7_bg_Destroy(bg);
 }
+
+
 
 /* The "multisingle" test (multiple path, single domain) samples
  * a contrived profile/seq/anchor triplet for which all paths must
@@ -779,8 +1006,9 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  * algorithm).
  *
  * Then: 
- *    1. Fwd score = ASC Fwd score.
- *    2. Bck score = ASC Bck score.
+ *    1. Fwd score = ASC Fwd score = Bck score = ASC Bck score.
+ *    2. Viterbi score >= sampled trace score.
+ *    3. Fwd/Bck scores >= Viterbi score.
  */
 static void
 utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
@@ -793,6 +1021,7 @@ utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   int         L;
   P7_TRACE   *tr        = NULL;
   P7_COORD2  *anch      = NULL;
+  P7_REFMX   *rxv       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxb       = p7_refmx_Create(M, 20);
   P7_REFMX   *afu       = p7_refmx_Create(M, 20);
@@ -800,27 +1029,31 @@ utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   P7_REFMX   *abu       = p7_refmx_Create(M, 20);
   P7_REFMX   *abd       = p7_refmx_Create(M, 20);
   int         D;
-  float       sc, fsc, bsc, asc_f, asc_b;
+  float       sc, vsc, fsc, bsc, asc_f, asc_b;
+  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
   int         status;
   
   if (bg  == NULL || rxf == NULL || rxb == NULL || afu == NULL ||
-      afd == NULL || abu == NULL || abd == NULL)   esl_fatal(failmsg);
+      rxv == NULL || afd == NULL || abu == NULL || abd == NULL)   esl_fatal(failmsg);
 
   if ((status = p7_modelsample_AnchoredUni(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc)) != eslOK) esl_fatal(failmsg);
 
-  if ((status = p7_ReferenceForward    (dsq, L, gm,          rxf,      &fsc))   != eslOK) esl_fatal(failmsg);
-  if ((status = p7_ReferenceBackward   (dsq, L, gm,          rxb,      &bsc))   != eslOK) esl_fatal(failmsg);
-  if ((status = p7_ReferenceASCForward (dsq, L, gm, anch, D, afu, afd, &asc_f)) != eslOK) esl_fatal(failmsg);
-  if ((status = p7_ReferenceASCBackward(dsq, L, gm, anch, D, abu, abd, &asc_b)) != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceViterbi    (dsq, L, gm,          rxv, NULL, &vsc))   != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceForward    (dsq, L, gm,          rxf ,      &fsc))   != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceBackward   (dsq, L, gm,          rxb,       &bsc))   != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceASCForward (dsq, L, gm, anch, D, afu, afd,  &asc_f)) != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceASCBackward(dsq, L, gm, anch, D, abu, abd,  &asc_b)) != eslOK) esl_fatal(failmsg);
 
   //printf("### Reference Fwd:\n"); p7_refmx_Dump(stdout, rxf);
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
   //printf("FWD = BCK = ASC_FWD = ASC_BCK = %.2f\n", fsc);
 
-  if (esl_FCompare(fsc, bsc,   0.001) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(fsc, asc_f, 0.001) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(bsc, asc_b, 0.001) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+  if (sc  > vsc+epsilon)                          esl_fatal(failmsg);
+  if (vsc > fsc+epsilon)                          esl_fatal(failmsg);
   
   free(anch);
   free(dsq);
@@ -830,11 +1063,94 @@ utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   p7_refmx_Destroy(abd);
   p7_refmx_Destroy(rxb);
   p7_refmx_Destroy(rxf);
+  p7_refmx_Destroy(rxv);
   p7_trace_Destroy(tr);
   p7_profile_Destroy(gm);
   p7_hmm_Destroy(hmm);
   p7_bg_Destroy(bg);
 }
+
+/* The "multipath_local" test (multiple path, local alignment allowed), like
+ * "multisingle", samples a contrived profile/seq/anchorset triplet
+ * for which all paths must pass through the anchor set. Thus,
+ * standard and ASC F/B give the same results.
+ * 
+ * This version of the various multi* tests is unique in that it 
+ * tests local alignment transitions.
+ * 
+ * The contrivance is similar for both the multilocal and multimulti
+ * tests. Only M states can generate residues. Prevent any
+ * N/C/J/I emission (because these can emit any residue) by setting
+ * L=0 length model and all tMI = 0.  Model is unihit L=0 dual-mode:
+ * local/glocal transitions are allowed, but only for one domain.
+ * Choose a special residue X; only the anchor state Mk0 can
+ * generate this residue with nonzero probability. The target sequence
+ * has exactly 1 X residue, at the anchor.
+ * 
+ * Then:
+ *    1. Fwd score = ASC Fwd score = Bck score = ASC Bck score.
+ *    2. Viterbi score >= sampled trace score.
+ *    3. Fwd/Bck scores >= Viterbi score.
+ */
+static void
+utest_multipath_local(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+{
+  char        failmsg[] = "reference_asc_fwdback multipath_local unit test failed";
+  P7_BG      *bg        = p7_bg_Create(abc);
+  P7_HMM     *hmm       = NULL;
+  P7_PROFILE *gm        = NULL;
+  ESL_DSQ    *dsq       = NULL; 
+  int         L;
+  P7_TRACE   *tr        = NULL;
+  P7_COORD2  *anch      = NULL;
+  P7_REFMX   *rxv       = p7_refmx_Create(M, 20);
+  P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
+  P7_REFMX   *rxb       = p7_refmx_Create(M, 20);
+  P7_REFMX   *afu       = p7_refmx_Create(M, 20);
+  P7_REFMX   *afd       = p7_refmx_Create(M, 20);
+  P7_REFMX   *abu       = p7_refmx_Create(M, 20);
+  P7_REFMX   *abd       = p7_refmx_Create(M, 20);
+  int         D;
+  float       sc, vsc, fsc, bsc, asc_f, asc_b;
+  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  int         status;
+  
+  if (bg  == NULL || rxf == NULL || rxb == NULL || afu == NULL ||
+      rxv == NULL || afd == NULL || abu == NULL || abd == NULL)   esl_fatal(failmsg);
+
+  if ((status = p7_modelsample_AnchoredLocal(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc)) != eslOK) esl_fatal(failmsg);
+
+  if ((status = p7_ReferenceViterbi    (dsq, L, gm,          rxv, NULL, &vsc))   != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceForward    (dsq, L, gm,          rxf,       &fsc))   != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceBackward   (dsq, L, gm,          rxb,       &bsc))   != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceASCForward (dsq, L, gm, anch, D, afu, afd,  &asc_f)) != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceASCBackward(dsq, L, gm, anch, D, abu, abd,  &asc_b)) != eslOK) esl_fatal(failmsg);
+
+  //printf("### Reference Fwd:\n"); p7_refmx_Dump(stdout, rxf);
+  //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
+  //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
+
+  if (esl_FCompare(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+  if (sc  > vsc+epsilon)                          esl_fatal(failmsg);
+  if (vsc > fsc+epsilon)                          esl_fatal(failmsg);
+  
+  free(anch);
+  free(dsq);
+  p7_refmx_Destroy(afu);
+  p7_refmx_Destroy(afd);
+  p7_refmx_Destroy(abu);
+  p7_refmx_Destroy(abd);
+  p7_refmx_Destroy(rxb);
+  p7_refmx_Destroy(rxf);
+  p7_refmx_Destroy(rxv);
+  p7_trace_Destroy(tr);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+  p7_bg_Destroy(bg);
+}
+
 
 /* The "multimulti" test (multiple path, multiple domain), like
  * "multisingle", samples a contrived profile/seq/anchorset triplet
@@ -846,14 +1162,16 @@ utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  * 
  * The contrivance: Only M states can generate residues. Prevent any
  * N/C/J/I emission (because these can emit any residue) by setting
- * L=0 length model and all tMI = 0.  Model is multidomain, dual-mode:
- * multiple domains are allowed, and both local and glocal paths are
- * allowed. Choose a special residue X; only the anchor state Mk0 can
+ * L=0 length model and all tMI = 0.  Model is multihit glocal;
+ * multiple domains are allowed, but only in glocal mode.
+ * Choose a special residue X; only the anchor state Mk0 can
  * generate this residue with nonzero probability. The target sequence
- * has exactly one X residue per domain, at the anchor position k0.
+ * has exactly D X residues, one per domain.
  * 
  * Now:
  *    1. Fwd score = ASC Fwd score = Bck score = ASC Bck score.
+ *    2. Viterbi score >= sampled trace score.
+ *    3. Fwd/Bck scores >= Viterbi score.
  */
 static void
 utest_multimulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
@@ -866,6 +1184,7 @@ utest_multimulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   int         L;
   P7_TRACE   *tr        = NULL;
   P7_COORD2  *anch      = NULL;
+  P7_REFMX   *rxv       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxb       = p7_refmx_Create(M, 20);
   P7_REFMX   *afu       = p7_refmx_Create(M, 20);
@@ -873,28 +1192,31 @@ utest_multimulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   P7_REFMX   *abu       = p7_refmx_Create(M, 20);
   P7_REFMX   *abd       = p7_refmx_Create(M, 20);
   int         D;
-  float       sc, fsc, bsc, asc_f, asc_b;
+  float       sc, vsc, fsc, bsc, asc_f, asc_b;
+  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
   int         status;
   
   if (bg  == NULL || rxf == NULL || rxb == NULL || afu == NULL ||
-      afd == NULL || abu == NULL || abd == NULL)   esl_fatal(failmsg);
+      rxv == NULL || afd == NULL || abu == NULL || abd == NULL)   esl_fatal(failmsg);
 
   if ((status = p7_modelsample_AnchoredMulti(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc)) != eslOK) esl_fatal(failmsg);
 
-  if ((status = p7_ReferenceForward    (dsq, L, gm,          rxf,      &fsc))   != eslOK) esl_fatal(failmsg);
-  if ((status = p7_ReferenceBackward   (dsq, L, gm,          rxb,      &bsc))   != eslOK) esl_fatal(failmsg);
-  if ((status = p7_ReferenceASCForward (dsq, L, gm, anch, D, afu, afd, &asc_f)) != eslOK) esl_fatal(failmsg);
-  if ((status = p7_ReferenceASCBackward(dsq, L, gm, anch, D, abu, abd, &asc_b)) != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceViterbi    (dsq, L, gm,          rxv, NULL, &vsc))   != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceForward    (dsq, L, gm,          rxf,       &fsc))   != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceBackward   (dsq, L, gm,          rxb,       &bsc))   != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceASCForward (dsq, L, gm, anch, D, afu, afd,  &asc_f)) != eslOK) esl_fatal(failmsg);
+  if ((status = p7_ReferenceASCBackward(dsq, L, gm, anch, D, abu, abd,  &asc_b)) != eslOK) esl_fatal(failmsg);
 
   //printf("### Reference Fwd:\n"); p7_refmx_Dump(stdout, rxf);
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
-  //printf("FWD = BCK = ASC_FWD = ASC_BCK = %.2f\n", fsc);
 
-  if (esl_FCompare(fsc, bsc,   0.001) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(fsc, asc_f, 0.001) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(bsc, asc_b, 0.001) != eslOK) esl_fatal(failmsg);
-  
+  if (esl_FCompare(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+  if (sc  > vsc+epsilon)                          esl_fatal(failmsg);
+  if (vsc > fsc+epsilon)                          esl_fatal(failmsg);
+
   free(anch);
   free(dsq);
   p7_refmx_Destroy(afu);
@@ -903,6 +1225,7 @@ utest_multimulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   p7_refmx_Destroy(abd);
   p7_refmx_Destroy(rxb);
   p7_refmx_Destroy(rxf);
+  p7_refmx_Destroy(rxv);
   p7_trace_Destroy(tr);
   p7_profile_Destroy(gm);
   p7_hmm_Destroy(hmm);
@@ -946,11 +1269,12 @@ main(int argc, char **argv)
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
-  utest_multimulti  (rng, M, abc);
-
-  utest_singlesingle(rng, M, abc);
-  utest_singlemulti (rng, M, abc);
-  utest_multisingle (rng, M, abc);
+  utest_singlepath     (rng, M, abc);
+  utest_singlesingle   (rng, M, abc);
+  utest_singlemulti    (rng, M, abc);
+  utest_multisingle    (rng, M, abc);
+  utest_multipath_local(rng, M, abc);
+  utest_multimulti     (rng, M, abc);
 
   fprintf(stderr, "#  status = ok\n");
 

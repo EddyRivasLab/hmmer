@@ -1,15 +1,19 @@
 /* Sampling profile HMMs.
- * These routines are used primarily in unit testing.
- * The models are often contrived and/or constrained in various ways
- * that enable particular tests.
+ * 
+ * These routines are used primarily in unit testing.  Models are
+ * often contrived and/or constrained in various ways that enable
+ * particular tests.
  * 
  * Contents:
  *   1. Model sampling routines.
- *   2. Internal (static) functions.
- *   3. Unit tests.
- *   4. Test driver.
- *   5. Example driver.
- *   6. Copyright and license information.
+ *   2. Models with finite enumerable path #
+ *   3. Models with only a single valid path
+ *   4. Models such that ASC paths == all paths 
+ *   5. Internal (static) functions.
+ *   6. Unit tests.
+ *   7. Test driver.
+ *   8. Example driver.
+ *   9. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -37,6 +41,10 @@ static int sample_single_pathed_seq_engine(ESL_RANDOMNESS *rng, int M, const P7_
 					   P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
 					   P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc,
 					   int do_asc_version);
+static int sample_anchored_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
+				  P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
+				  P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc,
+				  int do_local_version);
 
 /*****************************************************************
  * 1. Model sampling routines.
@@ -233,6 +241,83 @@ p7_modelsample_Ungapped(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HM
   return status;
 }
 
+
+/* Function:  p7_modelsample_Uniform()
+ * Synopsis:  Sample a model that uses fixed (given) transition probs.
+ *
+ * Purpose:   Sample a model that uses uniform transition probabilities,
+ *            determined by <tmi>, <tii>, <tmd>, and <tdd>,
+ *            the probabilistic equivalent of gap-open/gap-extend for
+ *            inserts, deletes.
+ *            
+ *            Useful for testing expected behavior on single-sequence
+ *            models, where transitions are position-independent.
+ *
+ * Returns:   <eslOK> on success, and the new hmm is returned
+ *            through <ret_hmm); caller is responsible for 
+ *            freeing this object with <p7_hmm_Destroy()>.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ *
+ * Xref:      J1/5.
+ */
+int
+p7_modelsample_Uniform(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, 
+		       float tmi, float tii, float tmd, float tdd,
+		       P7_HMM **ret_hmm)
+{
+  P7_HMM *hmm    = NULL;
+  char   *logmsg = "[HMM with uniform transitions, random emissions]";
+  int     k;
+  int     status;
+
+  if ((hmm = p7_hmm_Create(M, abc)) == NULL) { status = eslEMEM; goto ERROR; }
+  
+  for (k = 0; k <= M; k++)
+    {
+      if (k > 0) esl_dirichlet_FSampleUniform(r, abc->K, hmm->mat[k]);
+      esl_dirichlet_FSampleUniform(r, abc->K, hmm->ins[k]);
+      hmm->t[k][p7H_MM] = 1.0 - tmi - tmd;
+      hmm->t[k][p7H_MI] = tmi;
+      hmm->t[k][p7H_MD] = tmd;
+      hmm->t[k][p7H_IM] = 1.0 - tii;
+      hmm->t[k][p7H_II] = tii;
+      hmm->t[k][p7H_DM] = 1.0 - tdd;
+      hmm->t[k][p7H_DD] = tdd;
+    }
+
+  /* Deal w/ special stuff at node 0, M, overwriting some of what we
+   * just did. 
+   */
+  hmm->t[M][p7H_MM] = 1.0 - tmi;
+  hmm->t[M][p7H_MD] = 0.;
+  hmm->t[M][p7H_DM] = 1.0;
+  hmm->t[M][p7H_DD] = 0.;
+  
+  /* Add mandatory annotation
+   */
+  p7_hmm_SetName(hmm, "sampled-hmm");
+  p7_hmm_AppendComlog(hmm, 1, &logmsg);
+  p7_hmm_SetCtime(hmm);
+  p7_hmm_SetConsensus(hmm, NULL);
+  p7_hmm_SetComposition(hmm);
+
+  *ret_hmm = hmm;
+  return eslOK;
+  
+ ERROR:
+  if (hmm != NULL) p7_hmm_Destroy(hmm);
+  *ret_hmm = NULL;
+  return status;
+}
+/*-------------- end, basic model sampling ----------------------*/
+
+
+
+/*****************************************************************
+ * 2. Models with finite enumerable path #
+ *****************************************************************/
+
 /* Function:  p7_modelsample_Enumerable()
  * Synopsis:  Sample an random HMM with no nonzero transitions to insert.
  *
@@ -394,78 +479,15 @@ p7_modelsample_Enumerable2(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7
   *ret_hmm = NULL;
   return status;
 }
+/*--------- end, models with enumerable paths -------------------*/
 
 
 
-/* Function:  p7_modelsample_Uniform()
- * Synopsis:  Sample a model that uses fixed (given) transition probs.
- *
- * Purpose:   Sample a model that uses uniform transition probabilities,
- *            determined by <tmi>, <tii>, <tmd>, and <tdd>,
- *            the probabilistic equivalent of gap-open/gap-extend for
- *            inserts, deletes.
- *            
- *            Useful for testing expected behavior on single-sequence
- *            models, where transitions are position-independent.
- *
- * Returns:   <eslOK> on success, and the new hmm is returned
- *            through <ret_hmm); caller is responsible for 
- *            freeing this object with <p7_hmm_Destroy()>.
- *
- * Throws:    <eslEMEM> on allocation error.
- *
- * Xref:      J1/5.
- */
-int
-p7_modelsample_Uniform(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, 
-		       float tmi, float tii, float tmd, float tdd,
-		       P7_HMM **ret_hmm)
-{
-  P7_HMM *hmm    = NULL;
-  char   *logmsg = "[HMM with uniform transitions, random emissions]";
-  int     k;
-  int     status;
 
-  if ((hmm = p7_hmm_Create(M, abc)) == NULL) { status = eslEMEM; goto ERROR; }
-  
-  for (k = 0; k <= M; k++)
-    {
-      if (k > 0) esl_dirichlet_FSampleUniform(r, abc->K, hmm->mat[k]);
-      esl_dirichlet_FSampleUniform(r, abc->K, hmm->ins[k]);
-      hmm->t[k][p7H_MM] = 1.0 - tmi - tmd;
-      hmm->t[k][p7H_MI] = tmi;
-      hmm->t[k][p7H_MD] = tmd;
-      hmm->t[k][p7H_IM] = 1.0 - tii;
-      hmm->t[k][p7H_II] = tii;
-      hmm->t[k][p7H_DM] = 1.0 - tdd;
-      hmm->t[k][p7H_DD] = tdd;
-    }
 
-  /* Deal w/ special stuff at node 0, M, overwriting some of what we
-   * just did. 
-   */
-  hmm->t[M][p7H_MM] = 1.0 - tmi;
-  hmm->t[M][p7H_MD] = 0.;
-  hmm->t[M][p7H_DM] = 1.0;
-  hmm->t[M][p7H_DD] = 0.;
-  
-  /* Add mandatory annotation
-   */
-  p7_hmm_SetName(hmm, "sampled-hmm");
-  p7_hmm_AppendComlog(hmm, 1, &logmsg);
-  p7_hmm_SetCtime(hmm);
-  p7_hmm_SetConsensus(hmm, NULL);
-  p7_hmm_SetComposition(hmm);
-
-  *ret_hmm = hmm;
-  return eslOK;
-  
- ERROR:
-  if (hmm != NULL) p7_hmm_Destroy(hmm);
-  *ret_hmm = NULL;
-  return status;
-}
-
+/*****************************************************************
+ * 3. Models with only a single valid path
+ *****************************************************************/
 
 /* Function:  p7_modelsample_SinglePathed()
  * Synopsis:  Sample a random HMM with only a single P=1.0 path possible.
@@ -696,9 +718,12 @@ p7_modelsample_SinglePathedASC(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 {
   return sample_single_pathed_seq_engine(rng, M, bg, opt_hmm, opt_gm, opt_dsq, opt_L, opt_tr, opt_anch, opt_D, opt_sc, /*do_asc_version=*/TRUE);
 }
+/*---------- end, models w/ only one valid path -----------------*/
 
 
-
+/*****************************************************************
+ * 4. Models such that ASC paths == all paths
+ *****************************************************************/
 
 /* Function:  p7_modelsample_AnchoredUni()
  * Synopsis:  Model/seq/anchor triplet such that all paths use anchor.
@@ -712,31 +737,37 @@ p7_modelsample_SinglePathedASC(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
  *            F/B/D. This enables unit tests of ASC algorithms,
  *            comparing to standard algorithms.
  *            
- *            The idea is to pick an anchor match state k0; make it
- *            generate a residue X with probability e_Mk0(X) = 1; make
- *            a model that forces all paths to include state Mk; and
- *            make a sequence that only contains X's where Mk0 emits
- *            them. 
+ *            <_AnchoredUni()> allows multiple paths to contribute to
+ *            the Forward/Backward sums, and allows N/C/J and insert
+ *            states to emit. However, the model is in uniglocal mode,
+ *            so local transitions and multiple domains aren't used or
+ *            tested.
  *            
- *            Because N/C/J/I can emit any residue, to guarantee an
- *            Mk0-xi0 correspondence, we have to either disallow
- *            emissions from these states, or use a uniglocal model.
- *            Both versions are useful. This is the uniglocal version.
- *            For the other, see <p7_modelsample_AnchoredMulti()>.
+ *            The key idea is to pick an anchor match state k0 that
+ *            must be visited in all paths, and must generate residue
+ *            X; and make a sequence with one X in it. Thus, path must
+ *            assign X to Mk0, because Mk0 has to emit something in
+ *            the path and that's the only residue it can.
  *            
- *            In this version, we make a uniglocal profile, and
- *            additionally we make t_{k0-1}(MD) = 0, t_{k0-1}(DM) = 1,
- *            t_{k0-1}(DD) = 0 so that match state k0 must be occupied
- *            (in a glocal path) with probability 1.
+ *            The HMM is a standard HMM sample (all
+ *            transition/emission probabilities valid) except: Mk0
+ *            must emit residue X with p=1, and transitions force all
+ *            paths to include Mk0 by having t_{k0-1}(MD) = 0,
+ *            t_{k0-1}(DM) = 1, t_{k0-1}(DD) = 0.
+ *            
+ *            The profile is in glocal mode, to force all paths to
+ *            include the Mk0, and in unihit mode, to assure that
+ *            residue X is uniquely aligned to Mk0, rather than to
+ *            N/C/J/I states that can emit anything.
+ *            
+ *            The sequence is created such that it only contains 1 X
+ *            residue, at the anchor position.
  *
- *            For this to work, the alphabet must contain at least two
- *            different symbols (<bg->abc->K >= 2>).
- *
- * Args:      rng      ; random number generator
+ * Args:      rng      : random number generator
  *            M        : length of <hmm>/<gm> to sample
  *            bg       : background model (contains digital alphabet to use too)
  *            opt_hmm  : optRETURN: model
- *            opt_gm   : optRETURN: profile (glocal, L)
+ *            opt_gm   : optRETURN: profile (uniglocal, L)
  *            opt_dsq  : optRETURN: digital sequence
  *            opt_L    : optRETURN: length of <dsq>
  *            opt_tr   : optRETURN: traceback, state path and emitted seq
@@ -796,19 +827,13 @@ p7_modelsample_AnchoredUni(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
   hmm->t[k0-1][p7H_DD]  = 0.0;
 
   anchX = esl_rnd_Roll(rng, bg->abc->K);
+  esl_vec_FSet(hmm->mat[k0], bg->abc->K, 0.);
+  hmm->mat[k0][anchX] = 1.0;
   for (k = 1; k <= M; k++) 
-    {
-      if (k == k0) 
-	{
-	  esl_vec_FSet(hmm->mat[k0], bg->abc->K, 0.);
-	  hmm->mat[k0][anchX] = 1.0;
-	} 
-      else
-	{                                     // avoid a pathological case where e_Mk(X) = 1 for a nonanchor position 
-	  while (hmm->mat[k][anchX] > 0.5)    // the 0.5 is arbitrary. It can't be 1, and we want to be able to resample a non-X residue efficiently.
-	    esl_dirichlet_FSampleUniform(rng, bg->abc->K, hmm->mat[k]);
-	}
-    }
+    if (k != k0)                            // avoid a pathological case where e_Mk(X) = 1 for a nonanchor position 
+      while (hmm->mat[k][anchX] > 0.5)      // the 0.5 is arbitrary. It can't be 1, and we want to be able to resample a non-X residue efficiently.
+	esl_dirichlet_FSampleUniform(rng, bg->abc->K, hmm->mat[k]);
+
   ESL_DASSERT1(( bg->abc->K  >= 2   ));
   ESL_DASSERT1(( bg->f[anchX] < 1.0 ));     // avoid a pathological case that would break a while loop below
 
@@ -898,36 +923,49 @@ p7_modelsample_AnchoredUni(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 }
 
 
-/* Function:  p7_modelsample_AnchoredMulti()
+/* Function:  p7_modelsample_AnchoredLocal()
  * Synopsis:  Sample a model/seq/anchorset triplet, such that all paths use anchor.
  *
  * Purpose:   Sample a model, sequence, and anchor set, contrived such that
  *            all paths for the model/sequence comparison must use the anchor
  *            set even when unconstrained by the ASC algorithm. 
  *
- *            See <p7_modelsample_AnchoredUni()> for more explanation.
- *            This is another version of the same idea. In this
- *            version, we guarantee Mk0-xi0 correspondences more by
- *            manipulating the emission probabilities and the
- *            sequence. The sequence contains a particular residue
- *            (call it X) only at the anchor(s); all other residues in
- *            the sequence are non-X. Only the anchor Mk0 can generate
- *            X with e_Mk0(X) > 0. At all other k, e_Mk(X) = 0. Only
- *            match states can generate residues: N/C/J state
- *            emissions are disallowed by setting length model to 0,
- *            and I states are disallowed by setting all tMI_k
- *            transitions to 0. Because local alignment must always
- *            visit at least one match state, and only Mk0 can
- *            generate an X, this forces all possible paths to use the
- *            anchor k0,i for each xi=X. We can allow multihit,
- *            glocal/local, and arbitrary transition probabilities
- *            into the k0 node.
+ *            <_AnchoredLocal()> is unique in that it allows and tests
+ *            local transitions; <_AnchoredUni()> and
+ *            <_AnchoredMulti()> do not. <_AnchoredLocal()> prohibits
+ *            N/C/J states from emitting residues, prohibits I states,
+ *            and prohibits multiple domains. Paths essentially consist
+ *            only of M/D states.
+ *            
+ *            The key idea is that only match states can generate
+ *            residues, and only the anchor Mk0 can generate a special
+ *            residue X with emission prob > 0. Thus, every X in the
+ *            sequence must be assigned to the anchor. In
+ *            <_AnchoredLocal()>, the target sequence contains exactly
+ *            1 X residue, and therefore all paths (including local
+ *            entry/exit) must assign that X to the anchor.
+ *            
+ *            The HMM has all t_k(MI) = 0; e_Mk0(X) > 0; and e_Mk(X) =
+ *            0 for all k != k0.
+ *            
+ *            The profile is unihit L=0 dual-mode glocal/local. To
+ *            allow local paths, it has to prohibit N/C emissions,
+ *            because otherwise the X residue could be assigned to N
+ *            or C, and a local path could simply avoid using the
+ *            Mk0. (That is, with local paths, there is no way we can
+ *            use transition probabilities to guarantee that Mk0 will
+ *            be visited.) Similarly, the model must be unihit,
+ *            because otherwise non-X residues can be assigned to
+ *            various combinations of additional local hits.
+ *            
+ *            The sequence has only one X, and because only Mk0 can
+ *            generate it, this is forced to be the anchor.
  *            
  * Args:      rng      : random number generator
  *            M        : length of <hmm>/<gm> to sample
  *            bg       : background model (contains digital alphabet to use too)
  *            opt_hmm  : optRETURN: model
- *            opt_gm   : optRETURN: profile (glocal, L)
+ *            opt_gm   : optRETURN: profile (dual-mode local/glocal, L=0, unihit)
  *            opt_dsq  : optRETURN: digital sequence
  *            opt_L    : optRETURN: length of <dsq>
  *            opt_tr   : optRETURN: traceback, state path and emitted seq
@@ -942,169 +980,92 @@ p7_modelsample_AnchoredUni(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
  * Throws:    <eslEMEM> on allocation failure.
  *            On any exception, any requested result pointer is returned <NULL>,
  *            and any requested return value is returned 0.0.
+ */
+int
+p7_modelsample_AnchoredLocal(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
+			     P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
+			     P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc)
+{
+  return sample_anchored_engine(rng, M, bg, opt_hmm, opt_gm, opt_dsq, opt_L, opt_tr, opt_anch, opt_D, opt_sc, TRUE);
+}
+
+/* Function:  p7_modelsample_AnchoredMulti()
+ * Synopsis:  Sample model/seq/anchorset triplet such that all paths use anchor
  *
- * Xref:      SRE:J13/51
+ * Purpose:   Sample a model, sequence, and anchor set contrived such that all 
+ *            paths for the model/sequence comparison must use the anchor set
+ *            even when unconstrained by the ASC algorithm.
+ *            
+ *            Of the three <_Anchored*> sample strategies,
+ *            <_AnchoredMulti()> is unique in that it allows and tests
+ *            multiple hit mode. <_AnchoredUni()> and
+ *            <_AnchoredLocal()> do not. <_AnchoredLocal()> and
+ *            <_AnchoredMulti()> are similar to each other, and both
+ *            prohibit N/C/J states from emitting residues and
+ *            prohibit I states. Paths essentially consist only of M/D
+ *            states.
+ *            
+ *            Like <_AnchoredLocal()>, the key idea is that only match
+ *            states can generate residues, and only the anchor Mk0
+ *            can generate a special residue X; here, with e_Mk0(X)
+ *            strictly 1.  The transition probabilities are crafted
+ *            such that Mk0 must be visited in every domain.  Thus,
+ *            every X in the sequence must be assigned to the anchor
+ *            Mk0, and every domain must contain an Mk0.  In
+ *            <_AnchoredMulti()>, there can be more than one X, each
+ *            of which corresponds to an anchor to Mk0.
+ *            
+ *            The HMM has all t_k(MI) = 0; e_Mk0(X) = 1; e_Mk(X) = 0
+ *            for all k != k0; and Mk0 inclusion is forced with
+ *            t_{k0-1}(MD) = 0, t_{k0-1}(DM) = 1, t_{k0-1}(DD) = 0.
+ *            
+ *            The profile is in multiglocal L=0 mode. It cannot allow
+ *            local transitions while allowing multiple hits, because
+ *            otherwise non-X residues could be aligned to various
+ *            different combinations of local segments of the model;
+ *            whereas in glocal mode, each X must be uniquely assigned
+ *            to Mk0.
+ *            
+ *            The sequence has D X's, one for each of D anchor/domains.
+ *
+ * Args:      rng      : random number generator
+ *            M        : length of <hmm>/<gm> to sample
+ *            bg       : background model (contains digital alphabet to use too)
+ *            opt_hmm  : optRETURN: model
+ *            opt_gm   : optRETURN: profile (multiglocal, L=0)
+ *            opt_dsq  : optRETURN: digital sequence
+ *            opt_L    : optRETURN: length of <dsq>
+ *            opt_tr   : optRETURN: traceback, state path and emitted seq
+ *            opt_anch : optRETURN: array of anchors i0,k0 for each domain d 
+ *            opt_D    : optRETURN: number of domains d in <anch>, <tr> 
+ *            opt_sc   : optRETURN: raw lod score, in nats
+ *
+ * Returns:   <eslOK> on success,  and any results that were requested
+ *            by passing non-<NULL> pointers for result arguments are
+ *            now available.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ *            On any exception, any requested result pointer is returned <NULL>,
+ *            and any requested return value is returned 0.0.
  */
 int
 p7_modelsample_AnchoredMulti(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 			     P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
 			     P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc)
 {
-  char       *hmmname   = "anchored_multi";
-  char       *logmsg    = "[Test model produced by p7_modelsample_AnchoredMulti()]";
-  P7_HMM     *hmm       = NULL;
-  P7_PROFILE *gm        = NULL;
-  P7_TRACE   *tr        = NULL;
-  ESL_SQ     *sq        = NULL;
-  ESL_DSQ    *dsq       = NULL;
-  P7_COORD2  *anch      = NULL;
-  int         D,d;
-  int         L;
-  int         k,z;
-  int         k0;                   // Anchor state Mk0; (1..M)
-  ESL_DSQ     anchX;                // Residue emitted with p=1 by the anchor Mk0; (0..K-1 in bg->abc)
-  int         nanch;
-  float       sc;
-  int         status;
-
-  /* allocations that we know how to make already */
-  if ((  gm = p7_profile_Create(M, bg->abc)) == NULL) { status = eslEMEM; goto ERROR; }
-  if ((  sq = esl_sq_CreateDigital(bg->abc)) == NULL) { status = eslEMEM; goto ERROR; }
-  if ((  tr = p7_trace_Create())             == NULL) { status = eslEMEM; goto ERROR; }
-
-  /* Select anchor position k0 in model (1..M), and
-   * select residue that only the anchor Mk0 will be able to emit with e_Mk0>0.
-   */
-  k0    = 1 + esl_rnd_Roll(rng, M);
-  anchX = esl_rnd_Roll(rng, bg->abc->K);
-
-  /* Sample an HMM in the usual way, which we'll then tweak as we need. 
-   * It can have arbitrary transitions into node k0 -- even tXMk0 = 0 is ok,
-   * because Mk0 can still be reached by a local start.
-   */
-  if (( status = modelsample_engine(rng, M, bg->abc, &hmm)) != eslOK) goto ERROR;
-
-  /* Overwrite some transitions in sampled HMM now, so all tkMI = 0 */
-  for (k = 0; k < M; k++)
-    {
-      hmm->t[k][p7H_MM] = esl_random(rng);
-      hmm->t[k][p7H_MI] = 0.0;
-      hmm->t[k][p7H_MD] = 1.0 - hmm->t[k][p7H_MM];
-    }
-  hmm->t[M][p7H_MM] = 1.0;
-  hmm->t[M][p7H_MI] = 0.0;
-  hmm->t[M][p7H_MD] = 0.0;
-
-  /* Overwrite match emissions;
-   * Only Mk0 can emit anch0 with e>0. No other Mk can.  
-   */
-  for (k = 1; k <= M; k++) 
-    {
-      if (k == k0) 
-	{    // Make sure anchX has emission prob > 0
-	  while (hmm->mat[k][anchX] == 0.0f)  esl_dirichlet_FSampleUniform(rng, bg->abc->K, hmm->mat[k]);	  
-	} 
-      else
-	{    
-	  hmm->mat[k][bg->abc->K-1] = 0.0;
-	  esl_dirichlet_FSampleUniform(rng, bg->abc->K-1, hmm->mat[k]);	  
-	  hmm->mat[k][bg->abc->K-1] = hmm->mat[k][anchX];
-	  hmm->mat[k][anchX]        = 0.0;
-	}
-    }
-
-  /* Add mandatory annotation */
-  p7_hmm_SetName(hmm, hmmname);
-  p7_hmm_AppendComlog(hmm, 1, &logmsg);
-  p7_hmm_SetCtime(hmm);
-  p7_hmm_SetConsensus(hmm, NULL);
-  p7_hmm_SetComposition(hmm);
-
-  /* Create a profile in L=0 mode.
-   */
-  if (( status = p7_profile_Config(gm, hmm, bg))           != eslOK) goto ERROR;
-  if (( status = p7_profile_SetLength(gm, 0))              != eslOK) goto ERROR;
-
-  /* Emit a trace from it.  Because the profile is in dual mode, it
-   * can generate local alignments that don't include the anchor Mk0;
-   * paths can also pass thru a Dk0 state.  Reject such traces until
-   * we get one in which all domains pass thru the anchor Mk0.
-   *  
-   */
-  do {
-    if (( status = p7_ProfileEmit(rng, hmm, gm, bg, sq, tr)) != eslOK) goto ERROR;
-    if (( status = p7_trace_Index(tr))                       != eslOK) goto ERROR;
-    nanch = 0;
-    for (z = 0; z < tr->N; z++)
-      if (tr->k[z] == k0 && p7_trace_IsM(tr->st[z])) nanch++;
-  } while (nanch != tr->ndom);
-  /* Note that this condition required that all the anchor k0's are M states */
-
-  /* Extract <dsq> from <sq> container.
-   * At each anchor, an X is emitted; at each non-anchor, a non-X is
-   * emitted. No editing is needed.
-   */
-  dsq = sq->dsq;
-  L   = sq->n;
-  sq->dsq = NULL;
-  sq->n   = 0;
-  esl_sq_Destroy(sq);
-  sq = NULL;
-
-  /* Make the anchor set, which we know has one anchor for 
-   * one domain. We know k0, we just need to find i0's.
-   * Also, on every anchor, make the dsq[] residue == anchX.
-   */
-  D = tr->ndom;  // ok because we indexed the trace
-  ESL_ALLOC(anch, sizeof(P7_COORD2) * D);
-
-  d = 0;
-  for (z = 1; z < tr->N-1; z++)
-    if (tr->k[z] == k0 && p7_trace_IsM(tr->st[z]))
-      {
-	anch[d].n1    = tr->i[z];
-	anch[d].n2    = k0;
-	dsq[tr->i[z]] = anchX;
-	d++;
-      }
-
-  /* Finish up by finding the trace score.
-   */
-  p7_trace_Score(tr, dsq, gm, &sc);
-
-  if (opt_hmm)  *opt_hmm  = hmm;  else p7_hmm_Destroy(hmm);
-  if (opt_gm)   *opt_gm   = gm;   else p7_profile_Destroy(gm); 
-  if (opt_dsq)  *opt_dsq  = dsq;  else free(dsq);
-  if (opt_L)    *opt_L    = L;   
-  if (opt_tr)   *opt_tr   = tr;   else p7_trace_Destroy(tr);
-  if (opt_anch) *opt_anch = anch; else free(anch);
-  if (opt_D)    *opt_D    = D;
-  if (opt_sc)   *opt_sc   = sc;
-  return eslOK;
-
- ERROR:
-  if (hmm)  p7_hmm_Destroy(hmm);
-  if (gm)   p7_profile_Destroy(gm);
-  if (sq)   esl_sq_Destroy(sq);
-  if (dsq)  free(dsq);
-  if (tr)   p7_trace_Destroy(tr);
-  if (anch) free(anch);
-  if (opt_hmm)  *opt_hmm  = NULL;
-  if (opt_gm)   *opt_gm   = NULL;
-  if (opt_dsq)  *opt_dsq  = NULL;
-  if (opt_L)    *opt_L    = 0;
-  if (opt_tr)   *opt_tr   = NULL;
-  if (opt_anch) *opt_anch = NULL;
-  if (opt_D)    *opt_D    = 0;
-  if (opt_sc)   *opt_sc   = 0.;
-  return status;
+  return sample_anchored_engine(rng, M, bg, opt_hmm, opt_gm, opt_dsq, opt_L, opt_tr, opt_anch, opt_D, opt_sc, FALSE);
 }
-/*------------------- end, model sampling -----------------------*/
+
+
+
+
+
+/*----------- end, models with ASC paths == all paths -----------*/
 
 
 
 /*****************************************************************
- * 2. Internal (static) functions
+ * 5. Internal (static) functions
  *****************************************************************/
 
 static int
@@ -1344,12 +1305,188 @@ sample_single_pathed_seq_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
   if (opt_sc)   *opt_sc   = 0.;
   return status;
 }
+
+
+/* Shared by p7_modelsample_AnchoredLocal(), p7_modelsample_AnchoredMulti().
+ * See documentation on them, above.
+ */
+static int
+sample_anchored_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
+		       P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
+		       P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc,
+		       int do_local_version)
+{
+  char       *hmmname   = (do_local_version ? "anchored_local" : "anchored_multihit");
+  char       *logmsg    = (do_local_version ? "[Test model produced by p7_modelsample_AnchoredLocal()]" : "[Test model produced by p7_modelsample_AnchoredMulti()]");
+  P7_HMM     *hmm       = NULL;
+  P7_PROFILE *gm        = NULL;
+  P7_TRACE   *tr        = NULL;
+  ESL_SQ     *sq        = NULL;
+  ESL_DSQ    *dsq       = NULL;
+  P7_COORD2  *anch      = NULL;
+  int         D,d;
+  int         L;
+  int         k,z;
+  int         k0;                   // Anchor state Mk0; (1..M)
+  ESL_DSQ     anchX;                // Residue emitted with p=1 by the anchor Mk0; (0..K-1 in bg->abc)
+  int         nanch;
+  float       sc;
+  int         status;
+
+  /* allocations that we know how to make already */
+  if ((  gm = p7_profile_Create(M, bg->abc)) == NULL) { status = eslEMEM; goto ERROR; }
+  if ((  sq = esl_sq_CreateDigital(bg->abc)) == NULL) { status = eslEMEM; goto ERROR; }
+  if ((  tr = p7_trace_Create())             == NULL) { status = eslEMEM; goto ERROR; }
+
+  /* Select anchor position k0 in model (1..M), and
+   * select residue that only the anchor Mk0 will be able to emit with e_Mk0>0.
+   */
+  k0    = 1 + esl_rnd_Roll(rng, M);
+  anchX = esl_rnd_Roll(rng, bg->abc->K);
+
+  /* Sample an HMM in the usual way, which we'll then tweak as we need. 
+   * It can have arbitrary transitions into node k0 -- even tXMk0 = 0 is ok,
+   * because Mk0 can still be reached by a local start.
+   */
+  if (( status = modelsample_engine(rng, M, bg->abc, &hmm)) != eslOK) goto ERROR;
+
+  /* Overwrite some transitions in sampled HMM now, so all tkMI = 0 */
+  for (k = 0; k < M; k++)
+    {
+      hmm->t[k][p7H_MM] = esl_random(rng);
+      hmm->t[k][p7H_MI] = 0.0;
+      hmm->t[k][p7H_MD] = 1.0 - hmm->t[k][p7H_MM];
+    }
+  hmm->t[M][p7H_MM] = 1.0;
+  hmm->t[M][p7H_MI] = 0.0;
+  hmm->t[M][p7H_MD] = 0.0;
+
+  /* In multihit version, we must force inclusion of Mk0 in every glocal domain */
+  if (! do_local_version) 
+    {
+      hmm->t[k0-1][p7H_MM] += hmm->t[k0-1][p7H_MD];
+      hmm->t[k0-1][p7H_MD]  = 0.0;
+      hmm->t[k0-1][p7H_DM]  = 1.0;    // also works at k0=1, k=0, where t0[DM]=1 is convention for nonexistent D0 state
+      hmm->t[k0-1][p7H_DD]  = 0.0;
+    }
+
+  /* Overwrite match emissions;
+   * Only Mk0 can emit anch0 with e>0. No other Mk can.  
+   * In multihit version, eMk0(X) = 1, not just >0.
+   */
+  if (do_local_version) { 
+    while (hmm->mat[k0][anchX] == 0.0f)  esl_dirichlet_FSampleUniform(rng, bg->abc->K, hmm->mat[k0]);	  
+  } else {
+    esl_vec_FSet(hmm->mat[k0], bg->abc->K, 0.);
+    hmm->mat[k0][anchX] = 1.0;
+  }
+
+  for (k = 1; k <= M; k++) 
+    if (k != k0) 
+      {
+	hmm->mat[k][bg->abc->K-1] = 0.0;
+	esl_dirichlet_FSampleUniform(rng, bg->abc->K-1, hmm->mat[k]);	  
+	hmm->mat[k][bg->abc->K-1] = hmm->mat[k][anchX];
+	hmm->mat[k][anchX]        = 0.0;
+      }
+
+  /* Add mandatory annotation */
+  p7_hmm_SetName(hmm, hmmname);
+  p7_hmm_AppendComlog(hmm, 1, &logmsg);
+  p7_hmm_SetCtime(hmm);
+  p7_hmm_SetConsensus(hmm, NULL);
+  p7_hmm_SetComposition(hmm);
+
+  /* Create a profile in L=0 mode.
+   * Params are:  
+   */
+  if (do_local_version) { /* L=0: no N/C/J emission; nj=0.0: unihit;  pglocal=0.5: dual-mode glocal/local */
+    if (( status = p7_profile_ConfigCustom(gm, hmm, bg, 0, 0.0, 0.5))  != eslOK) goto ERROR;  
+  } else {                /* multihit glocal */
+    if (( status = p7_profile_ConfigGlocal(gm, hmm, bg, 0))            != eslOK) goto ERROR;
+  }
+
+  /* Emit a trace from it.  When the profile is in dual mode, it can
+   * generate local alignments that don't include the anchor Mk0.
+   * Also, glocal or local paths can also pass thru Dk0 instead of
+   * Mk0.  Reject such traces until we get one in which all domains
+   * pass thru the anchor Mk0.
+   */
+  do {
+    if (( status = p7_ProfileEmit(rng, hmm, gm, bg, sq, tr)) != eslOK) goto ERROR;
+    if (( status = p7_trace_Index(tr))                       != eslOK) goto ERROR;
+    nanch = 0;
+    for (z = 0; z < tr->N; z++)
+      if (tr->k[z] == k0 && p7_trace_IsM(tr->st[z])) nanch++;
+  } while (nanch != tr->ndom);
+  /* Note that this condition required that all the anchor k0's are M states */
+
+  /* Extract <dsq> from <sq> container.
+   */
+  dsq = sq->dsq;
+  L   = sq->n;
+  sq->dsq = NULL;
+  sq->n   = 0;
+  esl_sq_Destroy(sq);
+  sq = NULL;
+
+  /* Make the anchor set, which we know has one anchor for 
+   * one domain. We know k0, we just need to find i0's.
+   * On every anchor, make the dsq[] residue == anchX.
+   */
+  D = tr->ndom;  // ok because we indexed the trace
+  ESL_ALLOC(anch, sizeof(P7_COORD2) * D);
+
+  d = 0;
+  for (z = 1; z < tr->N-1; z++)
+    if (tr->k[z] == k0 && p7_trace_IsM(tr->st[z]))
+      {
+	anch[d].n1    = tr->i[z];
+	anch[d].n2    = k0;
+	dsq[tr->i[z]] = anchX;
+	d++;
+      }
+
+  /* Finish up by finding the trace score.
+   */
+  p7_trace_Score(tr, dsq, gm, &sc);
+
+  if (opt_hmm)  *opt_hmm  = hmm;  else p7_hmm_Destroy(hmm);
+  if (opt_gm)   *opt_gm   = gm;   else p7_profile_Destroy(gm); 
+  if (opt_dsq)  *opt_dsq  = dsq;  else free(dsq);
+  if (opt_L)    *opt_L    = L;   
+  if (opt_tr)   *opt_tr   = tr;   else p7_trace_Destroy(tr);
+  if (opt_anch) *opt_anch = anch; else free(anch);
+  if (opt_D)    *opt_D    = D;
+  if (opt_sc)   *opt_sc   = sc;
+  return eslOK;
+
+ ERROR:
+  if (hmm)  p7_hmm_Destroy(hmm);
+  if (gm)   p7_profile_Destroy(gm);
+  if (sq)   esl_sq_Destroy(sq);
+  if (dsq)  free(dsq);
+  if (tr)   p7_trace_Destroy(tr);
+  if (anch) free(anch);
+  if (opt_hmm)  *opt_hmm  = NULL;
+  if (opt_gm)   *opt_gm   = NULL;
+  if (opt_dsq)  *opt_dsq  = NULL;
+  if (opt_L)    *opt_L    = 0;
+  if (opt_tr)   *opt_tr   = NULL;
+  if (opt_anch) *opt_anch = NULL;
+  if (opt_D)    *opt_D    = 0;
+  if (opt_sc)   *opt_sc   = 0.;
+  return status;
+}
+
+
+
 /*------------------- end, internal functions -------------------*/
 
 
 
 /*****************************************************************
- * 3. Unit tests
+ * 6. Unit tests
  *****************************************************************/
 #ifdef p7MODELSAMPLE_TESTDRIVE
 
@@ -1749,6 +1886,84 @@ utest_anchored_uni(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 }
 
 static void
+utest_anchored_local(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+{
+  char        failmsg[] = "modelsample::p7_modelsample_AnchoredLocal() unit test failed";
+  P7_BG      *bg        = p7_bg_Create(abc);
+  P7_HMM     *hmm       = NULL;
+  P7_PROFILE *gm        = NULL;
+  ESL_DSQ    *dsq       = NULL;
+  ESL_SQ     *sq        = esl_sq_CreateDigital(abc);
+  int         L;
+  P7_TRACE   *tr        = NULL;
+  P7_COORD2  *anch      = NULL;
+  int         D;
+  float       sc;
+  int         nhmm      = 10;
+  int         h,z,i,d;
+  int         anchX     = -1;
+  int         k,k0;
+  char        errmsg[eslERRBUFSIZE];
+  int         status;
+
+  if (bg == NULL || sq == NULL) esl_fatal(failmsg);
+
+  for (h = 0; h < nhmm; h++)
+    {
+      if (( status = p7_modelsample_AnchoredLocal(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc)) != eslOK) esl_fatal(failmsg);
+
+      if (( status = p7_hmm_Validate    (hmm, errmsg, 0.0001))   != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+      if (( status = p7_profile_Validate(gm,  errmsg, 0.0001))   != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+      if (( status = p7_trace_Validate  (tr, abc, dsq, errmsg))  != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
+
+      if (D        != 1) esl_fatal(failmsg);
+      if (tr->ndom != 1) esl_fatal(failmsg);
+
+      /* We don't directly know what the magic anchor residue is, so figure that out first. */
+      k0 = anch[0].n2;
+      for (z = 1; z < tr->N-1; z++)
+	if (tr->k[z] == k0 && p7_trace_IsM(tr->st[z])) { anchX = dsq[tr->i[z]]; break; }
+
+      /* The emission prob of residue anchX at anchor state k0 should be >0,
+       * and the only anchX's in the sequence come from Mk0
+       */
+      if (hmm->mat[k0][anchX] == 0.) esl_fatal(failmsg);
+      for (k = 1; k <= hmm->M; k++)
+	if (k != k0 &&  hmm->mat[k][anchX] != 0.)  esl_fatal(failmsg);
+
+      /* All t_k(MI) are 0 */
+      for (k = 0; k <= hmm->M; k++)
+	if (hmm->t[k][p7H_MI] != 0.) esl_fatal(failmsg);
+
+      /* The dsq has only one X, at the anchor position.
+       */
+      d = 0;
+      for (i = 1; i <= L; i++)
+	if (dsq[i] == anchX) {
+	  if (i != anch[d++].n1) esl_fatal(failmsg); 
+	}
+      if (d != 1) esl_fatal(failmsg);
+
+      /* The trace may not contain emitting N/C/J, nor any I */
+      for (z = 1; z < tr->N; z++)
+	{
+	  if (p7_trace_IsI(tr->st[z])) esl_fatal(failmsg);
+	  if (tr->st[z] == p7T_N && tr->st[z-1] == p7T_N) esl_fatal(failmsg);
+	  if (tr->st[z] == p7T_J && tr->st[z-1] == p7T_J) esl_fatal(failmsg);
+	  if (tr->st[z] == p7T_C && tr->st[z-1] == p7T_C) esl_fatal(failmsg); 
+	}
+
+      free(dsq);
+      free(anch);      
+      p7_trace_Destroy(tr);
+      p7_profile_Destroy(gm);
+      p7_hmm_Destroy(hmm);
+    }
+
+  p7_bg_Destroy(bg);
+}
+
+static void
 utest_anchored_multi(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
   char        failmsg[] = "modelsample::p7_modelsample_AnchoredMulti() unit test failed";
@@ -1763,9 +1978,9 @@ utest_anchored_multi(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   int         D;
   float       sc;
   int         nhmm      = 10;
-  int         ntrace    = 10;
-  int         h,t,z,i,d;
+  int         h,z,i,d;
   int         anchX     = -1;
+  int         k,k0;
   char        errmsg[eslERRBUFSIZE];
   int         status;
 
@@ -1779,64 +1994,40 @@ utest_anchored_multi(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
       if (( status = p7_profile_Validate(gm,  errmsg, 0.0001))   != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
       if (( status = p7_trace_Validate  (tr, abc, dsq, errmsg))  != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
 
-      /* We don't directly know what the magic anchor residue is, so figure that out first. */
-      for (z = 1; z < tr->N-1; z++)
-	if (tr->k[z] == anch[0].n2 && p7_trace_IsM(tr->st[z])) { anchX = dsq[tr->i[z]]; break; }
+      if (D != tr->ndom) esl_fatal(failmsg);
 
-      /* The emission prob of residue anchX at anchor state k0 should be 1.0,
+      /* We don't directly know what the magic anchor residue is, so figure that out first. */
+      k0 = anch[0].n2;
+      for (z = 1; z < tr->N-1; z++)
+	if (tr->k[z] == k0 && p7_trace_IsM(tr->st[z])) { anchX = dsq[tr->i[z]]; break; }
+
+      /* The emission prob of residue anchX at anchor state k0 should be >0,
        * and the only anchX's in the sequence come from Mk0
        */
-      if (hmm->mat[anch[0].n2][anchX] != 1.0)   esl_fatal(failmsg);
+      if (hmm->mat[k0][anchX] == 0.) esl_fatal(failmsg);
+      for (k = 1; k <= hmm->M; k++)
+	if (k != k0 &&  hmm->mat[k][anchX] != 0.)  esl_fatal(failmsg);
+
+      /* All t_k(MI) are 0 */
+      for (k = 0; k <= hmm->M; k++)
+	if (hmm->t[k][p7H_MI] != 0.) esl_fatal(failmsg);
+
+      /* The dsq has D X's, one at each anchor position.
+       */
       d = 0;
       for (i = 1; i <= L; i++)
 	if (dsq[i] == anchX) {
-	  if (i != anch[d++].n1) esl_fatal(failmsg);  // Check that dsq has only one X, at the anchor position.
+	  if (i != anch[d++].n1) esl_fatal(failmsg); 
 	}
+      if (d != D) esl_fatal(failmsg);
 
-      /* The trace may not contain emitting N/C/J, and may not contain I */
+      /* The trace may not contain emitting N/C/J, nor any I */
       for (z = 1; z < tr->N; z++)
 	{
 	  if (p7_trace_IsI(tr->st[z])) esl_fatal(failmsg);
 	  if (tr->st[z] == p7T_N && tr->st[z-1] == p7T_N) esl_fatal(failmsg);
 	  if (tr->st[z] == p7T_J && tr->st[z-1] == p7T_J) esl_fatal(failmsg);
 	  if (tr->st[z] == p7T_C && tr->st[z-1] == p7T_C) esl_fatal(failmsg); 
-	}
-
-      /* Emit a few more traces from the profile.
-       */
-      p7_trace_Reuse(tr);
-      for (t = 0; t < ntrace; t++)
-	{
-	  if (( status = p7_ProfileEmit(rng, hmm, gm, bg, sq, tr))    != eslOK) esl_fatal(failmsg);
-	  if (( status = p7_trace_Validate(tr, abc, sq->dsq, errmsg)) != eslOK) esl_fatal("%s\n  %s", failmsg, errmsg);
-
-	  /* They need not contain an anchor state k0 at every domain,
-	   * because the model is emitting in dual local/glocal mode.
-	   * (Remember, the particular seq/profile pair is contrived
-	   * such that every domain *does* contain the anchor k0.) 
-	   * But we can verify that when they do have node k0, it's
-	   * a match state, and that the anchor residue is X.
-	   */
-	  for (z = 0; z < tr->N; z++)
-	    {
-	      if (tr->k[z] == anch[0].n2)
-		{
-		  if (! p7_trace_IsM(tr->st[z]))  esl_fatal(failmsg);
-		  if (sq->dsq[tr->i[z]] != anchX) esl_fatal(failmsg);  // Anchor i0 residue is an X. (In emitted sequences, there can be more than one X)
-		}
-	    }
-
-	  /* The trace may not contain emitting N/C/J, and may not contain I */
-	  for (z = 1; z < tr->N; z++)
-	    {
-	      if (p7_trace_IsI(tr->st[z])) esl_fatal(failmsg);
-	      if (tr->st[z] == p7T_N && tr->st[z-1] == p7T_N) esl_fatal(failmsg);
-	      if (tr->st[z] == p7T_J && tr->st[z-1] == p7T_J) esl_fatal(failmsg);
-	      if (tr->st[z] == p7T_C && tr->st[z-1] == p7T_C) esl_fatal(failmsg); 
-	    }
-
-	  esl_sq_Reuse(sq);
-	  p7_trace_Reuse(tr);
 	}
 
       free(dsq);
@@ -1846,7 +2037,6 @@ utest_anchored_multi(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
       p7_hmm_Destroy(hmm);
     }
 
-  esl_sq_Destroy(sq);
   p7_bg_Destroy(bg);
 }
 
@@ -1856,7 +2046,7 @@ utest_anchored_multi(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 
 
 /*****************************************************************
- * 4. Test driver
+ * 7. Test driver
  *****************************************************************/
 #ifdef p7MODELSAMPLE_TESTDRIVE
 
@@ -1899,6 +2089,7 @@ main(int argc, char **argv)
   utest_singlepathed_seq(rng, M, abc, FALSE); /* tests p7_modelsample_SinglePathedSeq(), which uses uniglocal model   */
   utest_singlepathed_seq(rng, M, abc, TRUE);  /* tests p7_modelsample_SinglePathedASC(), which uses multiglocal model */
   utest_anchored_uni    (rng, M, abc);
+  utest_anchored_local  (rng, M, abc);
   utest_anchored_multi  (rng, M, abc);
 
   fprintf(stderr, "#  status = ok\n");
@@ -1916,7 +2107,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 5. Example driver
+ * 8. Example driver
  *****************************************************************/
 #ifdef p7MODELSAMPLE_EXAMPLE
 

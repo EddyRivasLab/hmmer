@@ -181,7 +181,7 @@ distclean: clean
 
 clean:
 	-rm -f libhmmer-${MODULE}.stamp lib${MODULE}.a ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
-	-rm -f *.o *~ Makefile.bak core TAGS gmon.out cscope.out *.gcno
+	-rm -f *.o *~ Makefile.bak core TAGS gmon.out cscope.out *.gcno *.gcda *.gcov
 	${QUIET}for prog in ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do \
 	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi ;\
 	done
