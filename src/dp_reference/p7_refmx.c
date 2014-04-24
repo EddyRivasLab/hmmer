@@ -427,11 +427,10 @@ p7_refmx_CountTrace(const P7_TRACE *tr, P7_REFMX *rx)
   int i = 0;
   int z;
 
-#ifdef p7_DEBUGGING
-  if (rx->type != p7R_DECODING)  ESL_EXCEPTION(eslEINVAL, "need a decoding matrix");
-  if (rx->L    != tr->L)         ESL_EXCEPTION(eslEINVAL, "sequence lengths don't agree");
-  if (rx->M    != tr->M)         ESL_EXCEPTION(eslEINVAL, "profile lengths don't agree");
-#endif
+  /* Contract checks || arg validation */
+  ESL_DASSERT1( (rx->type == p7R_DECODING) );
+  ESL_DASSERT1( (rx->L == tr->L) );
+  ESL_DASSERT1( (rx->M == tr->M) );
 
   for (z = 1; z < tr->N-1; z++)	/* z=0 is S; z=N-1 is T; neither is represented in DP matrix, so avoid */
     {
