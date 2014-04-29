@@ -39,6 +39,21 @@
  *            that could account for each residue $x_i$.) The resulting
  *            posterior decoding matrix is left in <pp>, which has
  *            been allocated and provided by the caller.
+ *
+ *            Because of a design issue that the code refers to as the
+ *            'mute partial cycle flaw', values for DG states are
+ *            really expected counts, not posterior probabilities,
+ *            because it is theoretically possible for a multihit
+ *            glocal alignment path to visit an internal DG state
+ *            (internal: 1<k<M) twice on the same DP matrix row. With
+ *            HMMER's default multihit parameterization, DGk states
+ *            can get values of up to 1.33, not 1.0. The 'mute partial
+ *            cycle flaw' rarely if ever expresses itself, though, so
+ *            I have not yet seen a need to fix it somehow. Instead,
+ *            the existence of the flaw is documented. See the
+ *            utest_mute_partial_cycle() test, which deliberately
+ *            crafts a test case that illustrates the issue; also see
+ *            SRE:J13/60.
  *            
  * Args:      dsq - digital sequence, 1..L
  *            L   - length of <dsq>
@@ -191,6 +206,8 @@ p7_ReferenceDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_R
 #ifdef p7REFERENCE_DECODING_TESTDRIVE
 #include "esl_alphabet.h"
 #include "esl_random.h"
+#include "esl_randomseq.h"
+#include "esl_vectorops.h"
 
 #include "base/p7_bg.h"
 
@@ -203,6 +220,55 @@ p7_ReferenceDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_R
 #include "dp_reference/reference_fwdback.h"
 #include "dp_reference/reference_trace.h"
 
+/* The "randomseq" unit test compares a randomly sampled profile
+ * to random sequences, and tests that the resulting Decoding 
+ * matrix passes validation.
+ * 
+ * In principle, this test can detect the mute partial cycle flaw.  In
+ * practice, I have not seen it fail, which is one piece of evidence
+ * that the flaw is negligible ( also supported by theoretical
+ * analysis; SRE:J13/60). In theory, smaller values of M,L make the mute partial
+ * cycle flaw more visible, but even for M=10,L=10 I don't see this
+ * test fail.
+ */
+static void
+utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
+{
+  char        msg[] = "reference_decoding: randomseq unit test failed";
+  ESL_DSQ    *dsq   = malloc(sizeof(ESL_DSQ) * (L+2));
+  P7_HMM     *hmm   = NULL;
+  P7_PROFILE *gm    = p7_profile_Create(M, abc);
+  P7_REFMX   *rxf   = p7_refmx_Create(M, L);
+  P7_REFMX   *rxd   = p7_refmx_Create(M, L);
+  int         idx;
+  char        errbuf[eslERRBUFSIZE];
+
+  if ( p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+  if ( p7_profile_Config(gm, hmm, bg)    != eslOK) esl_fatal(msg);
+  if ( p7_profile_SetLength(gm, L)       != eslOK) esl_fatal(msg);
+
+  for (idx = 0; idx < N; idx++)
+    {
+      if (esl_rsq_xfIID(rng, bg->f, abc->K, L, dsq)       != eslOK) esl_fatal(msg);
+      if (p7_ReferenceForward (dsq, L, gm, rxf, NULL)     != eslOK) esl_fatal(msg);
+      if (p7_ReferenceBackward(dsq, L, gm, rxd, NULL)     != eslOK) esl_fatal(msg);
+      if (p7_ReferenceDecoding(dsq, L, gm, rxf, rxd, rxd) != eslOK) esl_fatal(msg);
+
+      /* matrices pass Validate() */
+      if (p7_refmx_Validate(rxf, errbuf) != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+      if (p7_refmx_Validate(rxd, errbuf) != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+
+      p7_refmx_Reuse(rxf);
+      p7_refmx_Reuse(rxd);
+    }
+  
+  p7_refmx_Destroy(rxd);
+  p7_refmx_Destroy(rxf);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+  free(dsq);
+}
+
 /* The "overwrite" utest verifies an important wrinkle in the API:
  * we're allowed to overwrite the input Backwards matrix with the new
  * posterior decoding matrix, thus saving a matrix allocation.  The
@@ -210,6 +276,10 @@ p7_ReferenceDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_R
  * sequence, decodes it both with and without overwriting, and
  * verifies that the resulting decoding matrices are valid and
  * identical.
+ * 
+ * In principle, this test can detect the mute partial cycle flaw, but
+ * the flaw rarely (if ever) expresses itself, and the test has always
+ * passed (to date).
  */
 static void
 utest_overwrite(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L)
@@ -265,6 +335,10 @@ utest_overwrite(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L)
 /* The "rowsum" utest verifies that the sum of posterior probs for all
  * emitters (M,I,NN,CC,JJ) on any row 1..L is ~1.0, for comparisons of
  * a randomly sampled profile to <N> randomly sampled homologs.
+ * 
+ * This test fails to detect the mute partial cycle flaw because it
+ * only looks at emitting states. The mute partial cycle flaw involves
+ * overcounting in DGk states.
  */
 static void
 utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
@@ -330,6 +404,10 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
  * This (\sum_i = 1.0) is also true for E,B,G, which can only
  * be visited once in a uniglocal path. L, J and JJ must be 0.0,
  * because the model is uniglocal.
+ *
+ * This test does not detect the mute partial cycle flaw, because
+ * it uses a uniglocal model. The mute partial cycle flaw only 
+ * pertains to multihit models.
  */
 static void
 utest_colsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
@@ -407,6 +485,9 @@ utest_colsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
  * (generated) sequence. (Only one sequence, not <N>, because the
  * stochastic tracebacks are computationally expensive.)
  * 
+ * Note that both stochastic sampling and the exact calculation are
+ * subject to the 'mute partial cycle' design flaw.
+ * 
  * Tests:
  * 1. The two decoding approaches give identical matrices within 
  *    a given sampling error tolerance. (Additionally, cells that
@@ -469,6 +550,7 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
     }
   p7_refmx_Rescale(ppa, 1./(float)ntr);
 
+
   //p7_refmx_Dump(stdout, ppe);
   //p7_refmx_Dump(stdout, ppa);
 
@@ -487,6 +569,150 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
   p7_hmm_Destroy(hmm);
   esl_sq_Destroy(sq);
 }
+
+
+/* utest_mute_partial_cycle()
+ * 
+ * HMMER's design goes to some lengths to avoid a "mute cycle" in
+ * which the state path would go B->D1..DDD..DM->E without emitting
+ * anything. Technically, you can't do dynamic programming on models
+ * with mute cycles. This is why HMMER "folds" the G->D1...Dk-1->Mk
+ * glocal entry paths into aggregate G->Mk entry probabilities, and
+ * simply disallows the mute cycle, which amounts to neglecting the
+ * small amount of probability mass in the mute cycle. Forward and
+ * Backward DP algorithms then are technically correct. This only
+ * affects glocal paths, not local paths (local paths cannot enter on
+ * delete states anyway.)
+ * 
+ * But in posterior decoding, we do need to know the probability of
+ * occupying D states, so we unfold the G->Mk entry paths when we
+ * unfold. Now an artifact appears, which usually has negligible
+ * probability. This unit test tests for the presence of that design
+ * "feature". That makes this a weird unit test. It is not that it's a
+ * desirable thing that we want to be there; it's that it's something
+ * that's there, a little time bomb you should know about, and
+ * documenting it in a unit test seems like a good way to not forget
+ * that it's there.
+ * 
+ * The problem is that DGk's can be counted twice in the same DP
+ * cell. This is why we say that for DGk states (and *only* DGk
+ * states) posterior decoding collects expected occupancy counts, not
+ * probabilities.  In a glocal alignment, when decoding doese "wing
+ * unfolding" of G->Mk entries, a long "mute suffix" for one domain,
+ * followed immediately by a long "mute prefix" for another domain,
+ * can create a partial but overlapping mute cycle.
+ * 
+ * This example is contrived to maximize the problem.  The profile
+ * allows two different paths for a sequence of length 6, where MG/DG
+ * glocal states are abbreviated M/D:
+ *  
+ *                ___========___________________________========
+ *  S N B G M1 M2 M3 D4 D5 D6 D7 D8 D9 E J B G D1 D2 D3 D4 D5 D6 M7 M8 M9 E C T
+ *                ___========___
+ *  S N B G M1 M2 M3 D4 D5 D6 M7 M8 M9 E C T
+ *  
+ *  The overlined regions are all on the same row (3) in a DP matrix, starting
+ *  from the M3/x3 alignment. The double overlined regions show how the first
+ *  path uses D4/D5/D6 twice on the same row. Posterior decoding of this path
+ *  will result in overcounting DGk states on row 3.
+ *  
+ *  To maximize the problem, we want to maximize the probability of
+ *  the first path.  The second path has a strict subset of the
+ *  transition/emission probabilities as the first model, so the
+ *  second path cannot have less probability than the first.  To
+ *  maximize the probability of the first path, we want to maximize
+ *  the probability of the transitions that only it uses. Thus:
+ *    B->G  = 1   glocal-only
+ *    G->D1 ~ 1   can't be exactly 1, because we need G->M1 > 0 too
+ *    D1->D2 = 1  and ditto for D2,D3,D7,D8-> DD transitions
+ *    D6->D7 ~ 1  again can't be exactly 1, because D6->M7 > 0 too
+ *    E->J = large  Let it be the standard multihit 0.5.
+ *    J->B = 1      Which we get from an L=0 length model.
+ *    
+ *  Thus the tEJ=0.5 term for standard multihit alignment sets an
+ *  upper bound of 0.5 for the probability of path 1 relative to path
+ *  2. Thus the maximum decoded DGk expected count is 1.33 ( 1 + 0.5*2
+ *  / ( 1 + 0.5). (In this test, you'll see 1.3289 as the decoded
+ *  "probabilities" for DG4,5,6 on row i=3.) A validation that looks
+ *  for probabilities exceeding 1.0 will obviously fail on such DGk's.
+ *  
+ *  xref:J13/60, Apr 2014, while I was doing ASC Decoding
+ *  development. The problem becomes obvious when you look at ASC
+ *  decoding matrices. ASC decoding, because it (in effect) also
+ *  indexes by domain #, is not subject to the mute partial cycle
+ *  problem; the two domains go to different cells in ASC.
+ */
+static void
+utest_mute_partial_cycle(void)
+{
+  char          msg[] = "reference_decoding: mute partial cycle test failed";
+  ESL_ALPHABET *abc   = esl_alphabet_Create(eslAMINO);
+  int           M     = 9;
+  P7_HMM       *hmm   = p7_hmm_Create(M, abc);
+  P7_BG        *bg    = p7_bg_Create(abc);
+  P7_PROFILE   *gm    = p7_profile_Create(M, abc);
+  int           L     = 6;
+  ESL_DSQ      *dsq   = malloc(sizeof(ESL_DSQ) * (L+2));
+  P7_REFMX     *rxf   = p7_refmx_Create(M, L);
+  P7_REFMX     *rxb   = p7_refmx_Create(M, L);
+  P7_REFMX     *rxd   = p7_refmx_Create(M, L);
+  int           k;
+
+  /* Assume that _Create has called _Zero, so we don't need to set any zeros below. */
+
+  hmm->t[0][p7H_MM] = 0.01;  hmm->t[1][p7H_MM] = 1.0;   hmm->t[2][p7H_MM] = 1.0;   
+  hmm->t[0][p7H_MD] = 0.99;  hmm->t[1][p7H_DD] = 1.0;   hmm->t[2][p7H_DD] = 1.0;   
+
+  hmm->t[3][p7H_MD] = 1.0;   hmm->t[4][p7H_MM] = 1.0;   hmm->t[5][p7H_MM] = 1.0;
+  hmm->t[3][p7H_DD] = 1.0;   hmm->t[4][p7H_DD] = 1.0;   hmm->t[5][p7H_DD] = 1.0;
+
+  hmm->t[6][p7H_MM] = 1.0;   hmm->t[7][p7H_MM] = 1.0;   hmm->t[8][p7H_MM] = 1.0;
+  hmm->t[6][p7H_DD] = 0.99;  hmm->t[7][p7H_DD] = 1.0;   hmm->t[8][p7H_DD] = 1.0;
+  hmm->t[6][p7H_DM] = 0.01;
+
+  hmm->t[9][p7H_MM] = 1.0;
+  hmm->t[9][p7H_DM] = 1.0;
+
+  for (k = 0; k <= 9; k++) {
+    hmm->t[k][p7H_IM] = 1.0;
+    esl_vec_FCopy(bg->f, abc->K, hmm->ins[k]);  // inserts aren't reached in this test model, so this doesn't actually matter
+  }
+
+  for (k = 1; k <= 9; k++)
+    hmm->mat[k][k] = 1.0;   // state 1 = A, 2 = C, 3 = D... : ACDEFGHIK
+
+  p7_hmm_SetName(hmm, "partial_cycle");
+  p7_hmm_SetConsensus(hmm, NULL);
+
+  if (( p7_profile_ConfigGlocal(gm, hmm, bg, 0)) != eslOK) esl_fatal(msg);
+
+  dsq[0] = dsq[L+1] = eslDSQ_SENTINEL;
+  dsq[1] = 1; dsq[2] = 2; dsq[3] = 3;
+  dsq[4] = 7; dsq[5] = 8; dsq[6] = 9;  // That's "ACDHIK"; to be aligned "ACD---HIK".
+  
+  if ( p7_ReferenceForward (dsq, L, gm, rxf, NULL)     != eslOK) esl_fatal(msg);
+  if ( p7_ReferenceBackward(dsq, L, gm, rxb, NULL)     != eslOK) esl_fatal(msg);
+  if ( p7_ReferenceDecoding(dsq, L, gm, rxf, rxb, rxd) != eslOK) esl_fatal(msg);
+  
+  //p7_refmx_Dump(stdout, rxd);   // Look at row i=3, DG4..6: values = 1.3289.
+
+  /* This is not really a test, of course;
+   * more of a reminder that this (thankfully rare) situation
+   * is a flaw, and the decoding matrix will fail validation.
+   */
+  if ( p7_refmx_Validate(rxd, NULL) != eslFAIL) esl_fatal(msg);
+  
+  p7_refmx_Destroy(rxf);
+  p7_refmx_Destroy(rxb);
+  p7_refmx_Destroy(rxd);
+  free(dsq);
+  p7_bg_Destroy(bg);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+}
+
+
 #endif /*p7REFERENCE_DECODING_TESTDRIVE*/
 /*---------------- end, unit tests ------------------------------*/
 
@@ -530,11 +756,13 @@ main(int argc, char **argv)
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
 
-  utest_approx_decoding(r, abc, bg, M, L);
-
+  utest_randomseq      (r, abc, bg, 10, 10, N); // 10,10 because some issues may express better at small M,L
   utest_overwrite      (r, abc, bg, M, L);
   utest_rowsum         (r, abc, bg, M, L, N);
   utest_colsum         (r, abc, bg, M, L, N);
+  utest_approx_decoding(r, abc, bg, M, L);
+
+  utest_mute_partial_cycle();                   // Not so much a test, as a reminder of an existing flaw.
 
   fprintf(stderr, "#  status = ok\n");
 

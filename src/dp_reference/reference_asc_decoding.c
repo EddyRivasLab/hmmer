@@ -363,27 +363,36 @@ ascmatrix_validate(P7_REFMX *apu, P7_REFMX *apd, P7_COORD2 *anch, int D, float e
 
 
 /* ascmatrix_compare()
+ *
+ * This version of ascmatrix_compare() is similar to the one in
+ * reference_asc_fwdback.c, but is specialized to decoding
+ * matrices. Because Fwd and Bck calculations score prefixes and
+ * suffixes, respectively, there are some expected differences when
+ * comparing ASC to Std F/B matrices (i.e. there are path
+ * prefixes/suffixes that can have finite probability in standard DP,
+ * but not in ASC, but even in standard DP those paths cannot be
+ * completed with nonzero probability).
  * 
- * This version of ascmatrix_compare() is very similar to
- * the one in reference_asc_fwdback.c, but is specialized
- * to decoding matrices. Because Fwd and Bck calculations
- * score prefixes and suffixes, respectively, there are
- * some expected differences when comparing ASC to Std
- * F/B matrices (i.e. there are path prefixes/suffixes that
- * can have finite probability in standard DP, but not
- * in ASC, but even in standard DP those paths cannot 
- * be completed with nonzero probability).
+ * Returns <eslOK> if standard DP matrix matches the ASC matrices,
+ * <eslFAIL> if they don't.
  * 
- * Returns <eslOK> if standard DP matrices match the
- * ASC matrices, <eslFAIL> if they don't.
+ * A trick in doing this comparison is that you need to know whether
+ * an alignment correspondence is in the UP or the DOWN matrix: i.e.
+ * if it is upstream or downstream of the anchor in its domain. 
+ * That is, cell Xik may be present in both ASC matrices, depending
+ * on where the anchors are (for exactly the same reason that we need
+ * at most two standard matrices for the ASC calculation!), but 
+ * it is occupied with probability 1 in one cell, and 0 in the other.
  */
 static int
 ascmatrix_compare(P7_REFMX *std, P7_REFMX *apu, P7_REFMX *apd, P7_COORD2 *anch, int D, float epsilon)
 {
-  int M         = std->M;
   int L         = std->L;
+  int M         = std->M;
+  int which     = p7R_ASC_DECODE_UP;       // the path starts in the UP quadrant of domain 0 
+  int d         = 0;
   int killmenow = FALSE;
-  int d,i,k,s,iz;
+  int i,k,s;
 #ifdef p7_DEBUGGING
   killmenow = TRUE;
 #endif
@@ -392,40 +401,56 @@ ascmatrix_compare(P7_REFMX *std, P7_REFMX *apu, P7_REFMX *apd, P7_COORD2 *anch, 
   ESL_DASSERT1( (apd->M == M && apd->L == L));
   ESL_DASSERT1( (std->type == p7R_DECODING  && apu->type == p7R_ASC_DECODE_UP && apd->type == p7R_ASC_DECODE_DOWN) );
 
-  /* i=0..anch[0].i-1 specials are a boundary case... */
-  iz = (D == 0 ? 1 : anch[0].n1);
-  for (i = 0; i < iz; i++)
-    for (s = 0; s < p7R_NXCELLS; s++)
-      if (esl_FCompareAbs( P7R_XMX(std,i,s), P7R_XMX(apd,i,s), epsilon) == eslFAIL) 
-	{ if (killmenow) abort(); return eslFAIL; }
+  for (i = 0; i <= L; i++)
+    {
+      if (d <= D-1 && i == anch[d].n1) { which = p7R_ASC_DECODE_DOWN; d++; }  // when we reach the anchor row, now we expect the path to be in the DOWN quadrant
 
-  for (d = 0; d < D; d++)
-    {  
-      /* UP sector for domain d */
-      iz = (d == 0 ? 1  : anch[d-1].n1+1);
-      for (i = iz; i < anch[d].n1; i++)
-	for (k = 1; k < anch[d].n2; k++)
-	  for (s = 0; s < p7R_NSCELLS; s++)
-	    if (esl_FCompareAbs( P7R_MX(std,i,k,s), P7R_MX(apu,i,k,s), epsilon) == eslFAIL)
-	      { if (killmenow) abort(); return eslFAIL; }
-      
-      /* DOWN sector for domain d */
-      iz = ( d < D-1 ? anch[d+1].n1 : L+1);
-      for (i = anch[d].n1; i < iz; i++)
+      /* If the path is in the down matrix, compare this row to <std> */
+      if (which == p7R_ASC_DECODE_DOWN)
 	{
-	  for (k = anch[d].n2; k <= M; k++)
+	  for (k = anch[d-1].n2; k <= M; k++)
 	    for (s = 0; s < p7R_NSCELLS; s++)
 	      if (esl_FCompareAbs( P7R_MX(std,i,k,s), P7R_MX(apd,i,k,s), epsilon) == eslFAIL) 
 		{ if (killmenow) abort(); return eslFAIL; }
+	}
+      else if (d > 0) 
+	{ // otherwise, all cells should be exactly 0
+	  for (k = anch[d-1].n2; k <= M; k++)
+	    for (s = 0; s < p7R_NSCELLS; s++)
+	      if (P7R_MX(apd,i,k,s) != 0.0f) { if (killmenow) abort(); return eslFAIL; }
+	}
+      
+      /* Now check the specials, which are in <apd> for ASC calculation.
+       * If we use E in <std>, that means the path finishes one domain,
+       * and will move to the next: so switch to expecting our 1's
+       * in the UP matrix.
+       */
+      if (P7R_XMX(std, i, p7R_E) == 1.0) // exact comparison ok; 1.0 was explicitly set
+	which = (d < D-1 ? p7R_ASC_DECODE_UP : p7R_UNSET); // UNSET is sufficient to force remainder of path to be in specials (specifically, C).
+      for (s = 0; s < p7R_NXCELLS; s++)
+	if (esl_FCompareAbs( P7R_XMX(std,i,s), P7R_XMX(apd,i,s), epsilon) == eslFAIL) 
+	  { if (killmenow) abort(); return eslFAIL; }
 
-	  /* Specials are in the DOWN matrix */
-	  for (s = 0; s < p7R_NXCELLS; s++)
-	    if (esl_FCompareAbs( P7R_XMX(std,i,s), P7R_XMX(apd,i,s), epsilon) == eslFAIL) 
-	      { if (killmenow) abort(); return eslFAIL; }
+      if (which == p7R_ASC_DECODE_UP)
+	{
+	  for (k = 1; k < anch[d].n2; k++)
+	    for  (s = 0; s < p7R_NSCELLS; s++)
+	      if (esl_FCompareAbs( P7R_MX(std,i,k,s), P7R_MX(apu,i,k,s), epsilon) == eslFAIL)
+		{ if (killmenow) abort(); return eslFAIL; }
+	}
+      else if (d < D-1) // last domain (D-1) has no UP sector, only DOWN
+	{
+	  for (k = 1; k < anch[d].n2; k++)
+	    for  (s = 0; s < p7R_NSCELLS; s++)
+	      if (P7R_MX(apu,i,k,s) != 0.0f)
+		{ if (killmenow) abort(); return eslFAIL; }
 	}
     }
   return eslOK;
 }
+
+
+
 
 
 
@@ -815,11 +840,11 @@ utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   if ((status = p7_ReferenceASCDecoding(dsq, L, gm, anch, D, afu, afd, abu, abd, apu, apd)) != eslOK) esl_fatal(failmsg);
 
   //printf("### Reference Fwd:\n");    p7_refmx_Dump(stdout, rxf);
-  printf("### Reference Decode:\n");    p7_refmx_Dump(stdout, rxd);
+  //printf("### Reference Decode:\n");    p7_refmx_Dump(stdout, rxd);
   //printf("### ASC Fwd UP:\n");       p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");     p7_refmx_Dump(stdout, afd);
-  printf("### ASC Decode UP:\n");    p7_refmx_Dump(stdout, apu);
-  printf("### ASC Decode DOWN:\n");  p7_refmx_Dump(stdout, apd);
+  //printf("### ASC Decode UP:\n");    p7_refmx_Dump(stdout, apu);
+  //printf("### ASC Decode DOWN:\n");  p7_refmx_Dump(stdout, apd);
   //printf("FWD = BCK = ASC_FWD = ASC_BCK = %.2f\n", fsc);
 
   if (esl_FCompare(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);

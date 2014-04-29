@@ -21,6 +21,8 @@
 #include "base/p7_profile.h"
 #include "base/p7_trace.h"
 
+#include "misc/logsum.h"
+
 #include "dp_reference/p7_refmx.h"
 
 
@@ -900,6 +902,30 @@ validate_no_nan(P7_REFMX *rmx, char *errbuf)
   return eslOK;
 }
 
+/* Decoding only: 
+ * verify that values v are 0 <= v <= 1 + epsilon
+ * epsilon, because normalization/roundoff error accumulation;
+ * someday, with a more robust normalization, make this <= 1.
+ */
+static inline int
+validate_probs(P7_REFMX *rmx, char *errbuf)
+{
+  float  epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  int    i,k,s;
+
+  for (i = 0; i <= rmx->L; i++)
+    for (k = 0; k <= rmx->M; k++)
+      {
+	for (s = 0; s < p7R_NSCELLS; s++)
+	  if (P7R_MX(rmx, i, k, s) < 0.0 || P7R_MX(rmx, i, k, s) > 1.0 + epsilon)
+	    ESL_FAIL(eslFAIL, errbuf, "bad probability %f at i=%d, k=%d, %s", P7R_MX(rmx, i,k,s), i, k, p7_refmx_DecodeState(s));      
+	for (s = 0; s < p7R_NXCELLS; s++)
+	  if (P7R_XMX(rmx, i, s) < 0.0 || P7R_XMX(rmx, i, s) > 1.0 + epsilon)
+	    ESL_FAIL(eslFAIL, errbuf, "bad probability %f at i=%d, %s", P7R_XMX(rmx, i,s), i, p7_refmx_DecodeSpecial(s));      
+      }
+  return eslOK;
+}
+ 
 static inline int
 validate_column_zero(P7_REFMX *rmx, float val, char *errbuf)
 {
@@ -1046,6 +1072,12 @@ validate_decoding(P7_REFMX *rmx, char *errbuf)
   if ((status = validate_special  (rmx, rmx->L, p7R_L,  0.0f, errbuf)) != eslOK) return status;
   if ((status = validate_special  (rmx, rmx->L, p7R_G,  0.0f, errbuf)) != eslOK) return status;
   if ((status = validate_special  (rmx, rmx->L, p7R_JJ, 0.0f, errbuf)) != eslOK) return status;
+
+  /* All values v in decoding mx should be 0 <= v <= 1+epsilon,
+   * (where epsilon allows for roundoff error accumulation)
+   * (SRE: NOT TRUE) 
+   */
+  if ((status = validate_probs(rmx, errbuf)) != eslOK) return status;
 
   return eslOK;
 }

@@ -937,7 +937,7 @@ utest_generation(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
 static void
 utest_duality(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
 {
-  char          msg[]  = "generic_fwdback_dual : duality unit test failed";
+  char          msg[]  = "reference_fwdback: duality unit test failed";
   ESL_DSQ      *dsq    = NULL;
   ESL_ALPHABET *abc    = NULL;
   P7_HMM       *hmm    = NULL;
