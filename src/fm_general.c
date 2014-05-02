@@ -469,6 +469,7 @@ fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go ) {
   cfg->max_depth         = (go ? esl_opt_GetInteger(go, "--seed_max_depth") :  -1);
   cfg->drop_max_len      = (go ? esl_opt_GetInteger(go, "--seed_drop_max_len") : -1);
   cfg->consec_pos_req    = (go ? esl_opt_GetInteger(go, "--seed_req_pos") : -1);
+  cfg->consensus_match_req = (go ? esl_opt_GetInteger(go, "--seed_consens_match") : 10);
   cfg->drop_lim          = eslCONST_LOG2 * (go ? esl_opt_GetReal(go, "--seed_drop_lim") : -1.0);  // convert from bits to nats
   cfg->score_density_req = eslCONST_LOG2 * (go ? esl_opt_GetReal(go, "--seed_sc_density") : -1.0);// convert from bits to nats
   cfg->scthreshFM        = eslCONST_LOG2 * (go ? esl_opt_GetReal(go, "--seed_sc_thresh") : -1.0); // convert from bits to nats

@@ -128,6 +128,7 @@ static ESL_OPTIONS options[] = {
   { "--seed_drop_max_len", eslARG_INT,           "4", NULL, NULL,    NULL,  NULL, NULL,          "maximum run length with score under (max - [fm_drop_lim])",  9 },
   { "--seed_drop_lim",     eslARG_REAL,        "0.3", NULL, NULL,    NULL,  NULL, NULL,          "in seed, max drop in a run of length [fm_drop_max_len]",     9 },
   { "--seed_req_pos",      eslARG_INT,           "5", NULL, NULL,    NULL,  NULL, NULL,          "minimum number consecutive positive scores in seed" ,        9 },
+  { "--seed_consens_match", eslARG_INT,           "10", NULL, NULL,    NULL,  NULL, NULL,        "<n> consecutive matches to consensus will override score threshold" , 9 },
   { "--seed_ssv_length",   eslARG_INT,          "70", NULL, NULL,    NULL,  NULL, NULL,          "length of window around FM seed to get full SSV diagonal",   9 },
 
 
@@ -337,14 +338,14 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *queryfile, char *seqfile, 
   if (esl_opt_IsUsed(go, "--rna")        && fprintf(ofp, "# input query is asserted as:      RNA\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 
-  if (esl_opt_IsUsed(go, "--seed_max_depth")    && fprintf(ofp, "# FM Seed length:               <= %d\n",             esl_opt_GetInteger(go, "--seed_max_depth"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--seed_sc_thresh")    && fprintf(ofp, "# FM score threshhold (bits):   <= %g\n",             esl_opt_GetReal(go, "--seed_sc_thresh"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--seed_sc_density")   && fprintf(ofp, "# FM score density (bits/pos):  <= %g\n",             esl_opt_GetReal(go, "--seed_sc_density"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--seed_drop_max_len") && fprintf(ofp, "# FM max neg-growth length:     <= %d\n",             esl_opt_GetInteger(go, "--seed_drop_max_len")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--seed_drop_lim")     && fprintf(ofp, "# FM max run drop:              <= %g\n",             esl_opt_GetReal(go, "--seed_drop_lim"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--seed_req_pos")      && fprintf(ofp, "# FM req positive run length:   <= %d\n",             esl_opt_GetInteger(go, "--seed_req_pos"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--seed_ssv_length")   && fprintf(ofp, "# FM len used fot Vit window    <= %d\n",             esl_opt_GetInteger(go, "--seed_ssv_length"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-
+  if (esl_opt_IsUsed(go, "--seed_max_depth")    && fprintf(ofp, "# FM Seed length:                  %d\n",             esl_opt_GetInteger(go, "--seed_max_depth"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--seed_sc_thresh")    && fprintf(ofp, "# FM score threshhold (bits):      %g\n",             esl_opt_GetReal(go, "--seed_sc_thresh"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--seed_sc_density")   && fprintf(ofp, "# FM score density (bits/pos):     %g\n",             esl_opt_GetReal(go, "--seed_sc_density"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--seed_drop_max_len") && fprintf(ofp, "# FM max neg-growth length:        %d\n",             esl_opt_GetInteger(go, "--seed_drop_max_len")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--seed_drop_lim")     && fprintf(ofp, "# FM max run drop:                 %g\n",             esl_opt_GetReal(go, "--seed_drop_lim"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--seed_req_pos")      && fprintf(ofp, "# FM req positive run length:      %d\n",             esl_opt_GetInteger(go, "--seed_req_pos"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--seed_consens_match") && fprintf(ofp, "# FM consec consensus match req:   %d\n",             esl_opt_GetInteger(go, "--seed_consens_match"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--seed_ssv_length")   && fprintf(ofp, "# FM len used for Vit window:      %d\n",             esl_opt_GetInteger(go, "--seed_ssv_length"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--restrictdb_stkey") && fprintf(ofp, "# Restrict db to start at seq key: %s\n",            esl_opt_GetString(go, "--restrictdb_stkey"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--restrictdb_n")     && fprintf(ofp, "# Restrict db to # target seqs:    %d\n",            esl_opt_GetInteger(go, "--restrictdb_n")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--ssifile")          && fprintf(ofp, "# Override ssi file to:            %s\n",            esl_opt_GetString(go, "--ssifile"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -509,8 +510,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   ESL_STOPWATCH *watch_slave  = esl_stopwatch_Create();
 
-
-
   if (esl_opt_IsUsed(go, "--w_beta")) { if (  ( window_beta   = esl_opt_GetReal(go, "--w_beta") )  < 0 || window_beta > 1  ) esl_fatal("Invalid window-length beta value\n"); }
   if (esl_opt_IsUsed(go, "--w_length")) { if (( window_length = esl_opt_GetInteger(go, "--w_length")) < 4  ) esl_fatal("Invalid window length value\n"); }
 
@@ -575,7 +574,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       abc     = esl_alphabet_Create(eslRNA);
 
   }
-
 
   /* We're about to see if this is an HMM file. If we already know it isn't, based on --qformat, just skip the test*/
   if ( esl_opt_IsOn(go, "--qformat") )
@@ -778,11 +776,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           if ((qhstatus = p7_Builder(builder, msa, info->bg, &hmm, NULL, NULL, NULL, NULL)) != eslOK) p7_Fail("build failed: %s", builder->errbuf);
         }
 
-
       } else if ( qfp_sq != NULL) {//  FASTA format, so they all have names
         //Turn sequence into an HMM
         if ((qhstatus = p7_SingleBuilder(builder, qsq, info->bg, &hmm, NULL, NULL, NULL)) != eslOK) p7_Fail("build failed: %s", builder->errbuf);
       }
+
 
       // Assign HMM max_length
       if      (window_length > 0)     hmm->max_length = window_length;
@@ -831,6 +829,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_ProfileConfig(hmm, info->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
       p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
 
+
       if (dbformat == eslSQFILE_FMINDEX) {
         //capture a measure of score density multiplied by something I conjecture to be related to
         //the expected longest common subsequence (sqrt(M)).  If less than a default target
@@ -856,7 +855,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         scoredata = p7_hmm_ScoreDataCreate(om, gm);
       else
         scoredata = p7_hmm_ScoreDataCreate(om, NULL);
-
 
       for (i = 0; i < infocnt; ++i) {
           /* Create processing pipeline and hit list */
@@ -1175,6 +1173,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
 #endif /*eslAUGMENT_ALPHABET*/
 
   wstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
+
 
   while (wstatus == eslOK && (n_targetseqs==-1 || seq_id < n_targetseqs) ) {
       dbsq->idx = seq_id;

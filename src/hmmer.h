@@ -943,6 +943,7 @@ typedef struct fm_dp_pair_s {
   uint8_t     score_peak_len; // how long was the diagonal when the most recent peak (within fm_drop_lim of the max score) was seen?
   uint8_t     consec_pos;
   uint8_t     max_consec_pos;
+  uint8_t     consec_consensus;
   uint8_t     model_direction;
   uint8_t     complementarity;
 } FM_DP_PAIR;
@@ -1000,6 +1001,7 @@ typedef struct {
   float drop_lim;  // 0.2 ; in seed, max drop in a run of length [fm_drop_max_len]
   int drop_max_len; // 4 ; maximum run length with score under (max - [fm_drop_lim])
   int consec_pos_req; //5
+  int consensus_match_req; //10
   float score_density_req; //.5
   int ssv_length;
   float scthreshFM;

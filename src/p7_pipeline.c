@@ -1303,7 +1303,7 @@ p7_pli_postSSV_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHI
   float            filtersc;           /* HMM null filter score                   */
   float            bias_filtersc;      /* HMM null filter score                   */
   float            seq_score;          /* the corrected per-seq bit score */
-  double           P;               /* P-value of a hit */
+  double           P;                  /* P-value of a hit */
   int i;
   int overlap;
   uint64_t new_n;
@@ -1514,6 +1514,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
   if (watch_slave) {
     esl_stopwatch_Start(watch_slave);
   }
+
 
   if (fmf) // using an FM-index
     p7_SSVFM_longlarget(om, 2.0, bg, pli->F1, fmf, fmb, fm_cfg, data, &msv_windowlist );
