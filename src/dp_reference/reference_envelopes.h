@@ -13,7 +13,7 @@
 
 extern int p7_reference_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_COORD2 *anch, int D,
 				  const P7_REFMX *apu, const P7_REFMX *apd,
-				  P7_REFMX *afu, P7_REFMX *afd, P7_ENVELOPE *env);
+				  P7_REFMX *afu, P7_REFMX *afd, P7_ENVELOPES *env);
 
 
 #endif /*p7REFERENCE_ENVELOPES_INCLUDED*/

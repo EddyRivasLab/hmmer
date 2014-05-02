@@ -6,12 +6,9 @@
  * Contents:
  *    1. Envelope definition API call.
  *    2. Internal functions: the steps of envelope definition.
+ *    3. Example.
  *    3. Copyright and license information.
  */
-// TODO:
-//       write an example driver
-//       get reference anchor set definition coded as designed
-
 #include "p7_config.h"
 
 #include "easel.h"
@@ -24,66 +21,198 @@
 #include "dp_reference/reference_asc_fwdback.h"
 
 
-static int envcoords(P7_ENVELOPE *env, int D, const P7_REFMX *apd, float threshold);
-static int glocality(P7_ENVELOPE *env, int D, const P7_REFMX *apd);
-static int outcoords(P7_ENVELOPE *env, int D, const P7_REFMX *apd, float epsilon);
-static int approxsc (P7_ENVELOPE *env, int D, const P7_REFMX *afd, const P7_PROFILE *gm);
+static int envcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float threshold);
+static int glocality(P7_ENVELOPES *env, int D, const P7_REFMX *apd);
+static int outcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float epsilon);
+static int approxsc (P7_ENVELOPES *env, int D, const P7_REFMX *afd, const P7_PROFILE *gm);
 
+/*****************************************************************
+ * 1. Envelope definition API call.
+ *****************************************************************/
 
+/* Function:  p7_reference_Envelopes()
+ * Synopsis:  Define domain envelopes, given anchors.
+ *
+ * Purpose:   We're doing a comparison of profile <gm> and digital
+ *            sequence <dsq> of length <L>. We have an anchor set
+ *            <anch> defining <D> domains in the sequence (perhaps by
+ *            using the most probable anchor set (MPAS) algorithm; see
+ *            <p7_reference_Anchors()>). We've calculated the
+ *            anchor-set-constrained (ASC) posterior decoding UP and
+ *            DOWN matrices <apu> and <apd>, using ASC Forward
+ *            matrices <afu> and <afd>. Now, calculate the envelope
+ *            for each domain. 
+ * 
+ *            Return the envelope data in <env>. All the fields in the
+ *            envelope structures are set except for the <ka> and <kb>
+ *            fields, the alignment start/stop coords on the model.
+ *            These two fields will be set when alignments are
+ *            determined from the envelopes.
+ *            
+ *            <env> will be reallocated here as needed.
+ *            
+ *            The <afu> and <afd> matrices are probably re-used and
+ *            overwritten here, for doing envelope score calculations
+ *            -- Forward scores on isolated single domains. Caller
+ *            must assume that their data has been invalidated.
+ *            
+ *            The envelope coords <ia>,<ib> are defined as the
+ *            outermost coords that have p >= <threshold>
+ *            (default=0.5) of generating x_i as part of the
+ *            homologous domain.
+ *            
+ *            The envelope is defined as a local or glocal alignment
+ *            by calculating the total marginal probability of using L
+ *            or G in the ASC ensemble for this domain, and asking
+ *            which is greater. If pG >= pL, the <p7E_IS_GLOCAL> flag
+ *            is set in the envelope's <flags>.
+ *            
+ *            The 'outer envelope coords' <oea>, <oeb> are defined the
+ *            same as the envelope coords, but for a lower p >=
+ *            <epsilon> (default 0.005).
+ *            
+ *            The domain is considered to be 'well defined' (well
+ *            separated from paths of adjacent domains) if
+ *            D([N|J](oea-1)) >= 1-2*epsilon and D([J|C](oeb)) >=
+ *            1-2*epsilon. If these conditions are met, we can
+ *            calculate the envelope score (see below) by a fast
+ *            approximation, just by arithmetic on the ASC Forward
+ *            matrix, and we are guaranteed to obtain a score within
+ *            ~4\epsilon nats (default=0.02) of the true envelope
+ *            score. If these conditions are met, the
+ *            <p7E_ENVSC_APPROX> flag is set in the envelope's
+ *            <flags>, and the envelope score is calculated by the
+ *            approximate method.
+ *            
+ *            The envelope score is the raw nat score of the ensemble
+ *            of all paths through this domain's anchor, while erasing
+ *            the influence of all other homology domains, as if this
+ *            were the only domain in the entire sequence. For domains
+ *            with the <p7E_ENVSC_APPROX> flag, it is calculated as
+ *            above; for all other domains, it is calculated by an ASC
+ *            Forward calculation on the isolated domain sequence
+ *            <oea..oeb>, with the length model of <gm> left at <L>,
+ *            and adding back the missing tNN/CC/JJ contributions for
+ *            <L-Ld> residues outside the domain.
+ *            
+ * Args:      dsq  : digital sequence, 1..L
+ *            L    : length of <dsq>
+ *            gm   : profile, with length model already set to <L>
+ *            anch : anchor set for <dsq>/<gm> comparison
+ *            D    : number of domains defined by the anchor set
+ *            apu  : ASC posterior decoding UP matrix
+ *            apd  : ASC posterior decoding DOWN matrix
+ *            afu  : ASC Forward UP matrix
+ *            afd  : ASC Forward DOWN matrix
+ *            env  : RETURN : envelope data for all <D> domains
+ *
+ * Returns:   <eslOK> on success. <env> may have been reallocated,
+ *            and now contains the envelope data. <afu> and <afd> 
+ *            must be assumed to be overwritten; caller can <_Reuse()>
+ *            or <_Destroy()> them.
+ *
+ * Throws:    <eslEMEM> on allocation failure. State of data in <afu>, <afd>, 
+ *            and <env> is undefined; they can be Reuse'd or Destroy'd.
+ */
 int
 p7_reference_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_COORD2 *anch, int D,
 		       const P7_REFMX *apu, const P7_REFMX *apd,
-		       P7_REFMX *afu, P7_REFMX *afd, P7_ENVELOPE *env)
+		       P7_REFMX *afu, P7_REFMX *afd, P7_ENVELOPES *env)
 {
-  int d;
-  int status;
+  P7_COORD2 reanch;   // If we recalculate env score on isolated domain, must offset its anchor
+  int       offset;   // Offset (in residues) to the domain start
+  int       d;        // Index of domain
+  int       status;   
 
+  /* Reallocate <env> if needed, and initialize it */
+  if (( status = p7_envelopes_GrowTo(env, D)) != eslOK) goto ERROR;
   for (d = 0; d < D; d++)
     {
-      env[d].i0    = anch[d].n1;
-      env[d].k0    = anch[d].n2;
-      env[d].flags = 0;
+      env->arr[d].i0    = anch[d].n1;
+      env->arr[d].k0    = anch[d].n2;
+      env->arr[d].ka    = 0;
+      env->arr[d].kb    = 0;
+      env->arr[d].flags = 0;
     }
+  env->n = D;
+  env->L = L;
+  env->M = gm->M;
   
+
   if ((status = envcoords(env, D, apd, 0.5))   != eslOK) goto ERROR;
   if ((status = glocality(env, D, apd))        != eslOK) goto ERROR;
   if ((status = outcoords(env, D, apd, 0.005)) != eslOK) goto ERROR;
 
   if (D > 0)
     {
+      /* All approximate scores must be calculated first, while we
+       * still have the original <afd> matrix
+       */
       if ((status = approxsc(env, D, afd, gm)) != eslOK) goto ERROR;
 
-      p7_refmx_Reuse(afu);
-      p7_refmx_Reuse(afd);
+      /* Now, we can reuse the <afu>/<afd> matrix pair for any exact
+       * env score calculations 
+       */
+      p7_refmx_Reuse(afu); p7_refmx_Reuse(afd);
       
       for (d = 0; d < D; d++)
-	if (! (env[d].flags & p7E_ENVSC_APPROX))
+	if (! (env->arr[d].flags & p7E_ENVSC_APPROX))
 	  {
-	    status = p7_ReferenceASCForward( dsq+env[d].oea-1, env[d].oeb-env[d].oea+1, gm,
-					     &(anch[d]), 1, afu, afd, &(env[d].env_sc));
+	    offset    = env->arr[d].oea - 1;
+	    reanch.n1 = anch[d].n1 - offset;  // You can't use <anch> itself because of coord offset
+	    reanch.n2 = anch[d].n2;
+
+	    status = p7_ReferenceASCForward( dsq+offset, env->arr[d].oeb-offset, gm,
+					     &reanch, 1, afu, afd, &(env->arr[d].env_sc));
 	    if (status != eslOK) goto ERROR;
 
-	    p7_refmx_Reuse(afu);
-	    p7_refmx_Reuse(afd);
+	    /* Add back tNN/JJ/CC terms for <L-Ld> flanking residues, 
+	     * as if this domain were alone in the sequence.
+	     */
+	    env->arr[d].env_sc += ( L - env->arr[d].oeb + offset ) * gm->xsc[p7P_N][p7P_LOOP];
+
+	    p7_refmx_Reuse(afu); p7_refmx_Reuse(afd);
 	  }
     }
-  else 
-    env[0].env_sc = P7R_XMX(afd, L, p7R_C) + gm->xsc[p7P_C][p7P_MOVE];
-
-  /* ka,kb are not set yet. alignment does that part...
-   * even though we already know for glocal alis that ka=1,kb=M.
+  /* What if there's 0 domains in the sequence?  This will still all
+   * work fine, and the returned <env> will be empty, with env->n = 0.
    */
   return eslOK;
   
  ERROR:
   return status;
-
 }
 
-/* all specials are in <apd> */
-/* threshold = 0.5 */
+/*****************************************************************
+ * 2. Internal functions, implementing most of the steps
+ *****************************************************************/
+
+/* envcoords()
+ * 
+ * Sets <ia>,<ib> fields for all D domains.
+ * 
+ *   ia = min_{i <= i0) P(x_i in domain d) >= threshold
+ *   ib = max_{i >= i0) P(x_i in domain d) >= threshold
+ *   
+ * where P(x_i in domain d) is the probability that x_i is emitted by
+ * an M/I state on a path that includes the anchor in the same domain;
+ * it is calculated cumulatively, by subtracting mass that leaves 
+ * the homology domain:
+ * 
+ * P(x_i in d) = 
+ *   i <= i0 :  1.0 - \sum_{j=i..i0-1} B(j)  
+ *   i >= i0 :  1.0 - \sum_{j=i0..i-1} E(j)
+ * 
+ * where B(j) and E(j) are ASC decoding probabilities on row j.
+ * 
+ * All specials including B,E values are in the DOWN decoding matrix
+ * <apd>, which is why we only need to see the DOWN matrix here.
+ *
+ * The default threshold is 0.5, but saying that is the caller's
+ * job.
+ */
 static int
-envcoords(P7_ENVELOPE *env, int D, const P7_REFMX *apd, float threshold)
+envcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float threshold)
 {
   float  phomology;
   int    d, i, iz;
@@ -95,122 +224,189 @@ envcoords(P7_ENVELOPE *env, int D, const P7_REFMX *apd, float threshold)
        *  min_{i <= i0} P(x_i in domain d) >= threshold
        */
       phomology = 1.0;
-      iz        = (d == 0 ? 0 : env[d-1].i0);
-      for (i = env[d].i0 - 1; i >= iz; i--)
+      iz        = (d == 0 ? 0 : env->arr[d-1].i0);
+      for (i = env->arr[d].i0 - 1; i >= iz; i--)
 	{
 	  phomology -= P7R_XMX(apd, i, p7R_B);   // now phomology = P(res i in domain d)
 	  if (phomology < threshold) break;      // if i is not in domain...
 	}
-      env[d].ia = i+1;                           // but i+1 was, so ia = i+1.
+      env->arr[d].ia = i+1;                      // but i+1 was, so ia = i+1.
 
       /* Determine ib, envelope end position;
        *   max_{i >= i0} P(x_i in domain d) >= threshold
        */
       phomology = 1.0;
-      iz        = (d == D-1 ? L+1 : env[d+1].i0);
-      for (i = env[d].i0 + 1; i < iz; i++)
+      iz        = (d == D-1 ? L+1 : env->arr[d+1].i0);
+      for (i = env->arr[d].i0; i < iz; i++)
 	{
-	  phomology -= P7R_XMX(apd, i, p7R_E);    // now phomology = P(x_i in dom_d)
-	  if (phomology < threshold) break;       // if i is not in domain...
+	  phomology -= P7R_XMX(apd, i, p7R_E);    // now phomology = P(x_i+1 in dom_d)
+	  if (phomology < threshold) break;       // if i+1 is not in domain...
 	}
-      env[d].ib = i-1;		                  // but i-1 was, so ib = i-1.
+      env->arr[d].ib = i;		          // but i was, so ib = i.
     }
-
   return eslOK;
 }
 
 
 
-/* 
- *  For each domain d,
+/* glocality()
+ *
+ * Determine whether each domain is glocal or local,
+ * by marginalization over ensemble.
+ *
+ * Specifically, for each domain d,
  *    pL = \sum_i=i0(d-1)..i0(d)-1 P(i,L)
  *    pG = \sum_i=i0(d-1)..i0(d)-1 P(i,G)
- *  and if pG >= pL, it's a glocal alignment.
- *  
- *  We do need the i0(d)-1 row, though it may not look like it at
- *  first. From a B on i0(d)-1 row, we need to use B->G->DDDDk0-1 path
- *  to be able to reach the anchor Mk on row i0(d). In decoding, we
- *  wing unfold the G->DD->Mk paths, so this path exists in a decoding
- *  matrix. Only for G, though; P(L, i0(d)) is 0.
  * 
+ * If pG >= pL, it's a glocal alignment; set the p7E_IS_GLOCAL
+ * flag for this domain envelope.
+ *  
+ * We do need the i0(d)-1 row, though it may not look like it at
+ * first. From a B on i0(d)-1 row, we need to use B->G->DDDDk0-1 path
+ * to be able to reach the anchor Mk on row i0(d). In decoding, we
+ * wing unfold the G->DD->Mk paths, so this path exists in a decoding
+ * matrix. Only for G, though; P(L, i0(d)) is 0.
+ * 
+ * (Because we're working in an ASC decoding matrix, not a standard
+ * one, the mute partial cycle flaw is not relevant here.)
  */
 static int
-glocality(P7_ENVELOPE *env, int D, const P7_REFMX *apd)
+glocality(P7_ENVELOPES *env, int D, const P7_REFMX *apd)
 {
-  float pL = 0.0;
-  float pG = 0.0;
+  float pL, pG;
   int   d, i, iz;
 
   for (d = 0; d < D; d++)
     {
-      iz = (d == 0 ? 0 : env[d-1].i0);
-      for (i = iz; i < env[d].i0; i++)
+      pL = pG = 0.0;  
+
+      iz = (d == 0 ? 0 : env->arr[d-1].i0);
+      for (i = iz; i < env->arr[d].i0; i++)
 	{
 	  pL += P7R_XMX(apd, i, p7R_L);
 	  pG += P7R_XMX(apd, i, p7R_G);
 	}
-      if (pG >= pL) env[d].flags |= p7E_IS_GLOCAL;
+      if (pG >= pL) env->arr[d].flags |= p7E_IS_GLOCAL;
     }
   return eslOK;
 }
 
 
-/* "outer envelope", oea..oeb, for env score purposes */
-/* for epsilon = 0.005 (allowing 0.005 of the probability
- * mass to be in paths that extend beyond the envelope on 
- * each side), we lose a max of 0.01 of the mass, which
- * is a log-odds score of ~0.01 in nats; negligible.
+/* outcoords()
+ * Determine the "outer envelope", oea..oeb, for env score purposes.
+ *
+ * Outer envelope coords are defined in the same way as the envelope
+ * coords, but with a much lower threshold, \epsilon. The objective is
+ * to identify coords that encompass essentially all of the probability
+ * mass for this domain. 
+ * 
+ *   oea = min_{i <= i0} P(x_i in domain d) >= \epsilon (default 0.005)
+ *   oeb = max_{i >= i0} P(x_i in domain d) >= \epsilon (default 0.005)
+ *   
+ * where P(x_i in domain d) =   
+ *   i <= i0 :  1.0 - \sum_{j=i..i0-1} B(j)  
+ *   i >= i0 :  1.0 - \sum_{j=i0..i-1} E(j)
+ * 
+ * i.e. a cumulative subtraction of the mass that's leaving the
+ * homology domain as we move left or right from the anchor.
+ * 
+ * We are especially interested in whether we can identify flanking
+ * "choke points" in the N/C/J states, through which passes all but a
+ * negligible amount of path mass. If we can prove that oae and oeb
+ * also define choke points, then we can use a fast approximation to
+ * calculate the envelope score for this domain's ensemble, using
+ * algebra in the Forward matrix of the entire ensemble. That lets us
+ * avoid recalculating Forward on the isolated domain. 
+ * 
+ * Choke points don't have to exist, because path mass can flow into
+ * (oea+1..i0) from a previous domain, and out of (i0..oeb-1) to a
+ * next domain. If the domain is "well-defined", these flows are
+ * negligible. 
+ * 
+ * Let's make that notion more formal now.
+ * 
+ * From the domain #, we know whether the domain is flanked on the
+ * left by N or J, and on the right by J or C; call these X, Y
+ * respectively. Let q be the total amount of probability mass on
+ * paths into the previous (resp. next) domain.
+ * 
+ * For oea as our left bound:
+ *   P(oea-1 in D) < epsilon              (1) // by construction; that's how we chose oae.
+ *   X(oea-1) = 1 - P(oea-1 in D) - q     (2) // mass flows back, accumulates in state X; eventually flows back to prev domain
+ *   1-X(oea-1) < epsilon + q             (3) // substitute (1) in (2)
+ *   X(oea-1) >= 1 - epsilon - q.         (4) // rearrange (3)
+ * If q <= epsilon:                       (5)
+ *   X(oea-1) >= 1 - 2*epsilon.           (6) // substitute (5) in (4).
+ * 
+ * So, our definition of "well-definedness" of the left edge is that
+ * if X(oea-1) >= 1-2*epsilon, we know that the amount of probability
+ * mass in paths that enter to our right from a previous domain
+ * (without bottlenecking through X(oea-1) is <= epsilon, and we know
+ * that the amount of probability mass that's still in the homology
+ * model is < epsilon. We've lost up to 2*epsilon of the probability
+ * mass in paths at the left edge.
+ * 
+ * Similar analysis holds for right edge. 
+ * 
+ * Therefore, if the condition on X(oea-1) and Y(oeb) hold, we know
+ * that if we only look at paths that pass through X(oea-1) and
+ * Y(oeb), we are neglecting at most a mass of 4\epsilon in other
+ * paths that use this domain's anchor.
+ * 
+ * For \epsilon = 0.005, we lose up to 0.02 in total mass of the ensemble
+ * we count, corresponding to a maximum log-odds score loss of ~0.02 nats;
+ * a negligible score difference.
  */
 static int
-outcoords(P7_ENVELOPE *env, int D, const P7_REFMX *apd, float epsilon)
+outcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float epsilon)
 {
-  int d, i, iz;
+  int   d, i, iz, s;
   float phomology;
-  int   s;
   int   L = apd->L;
-  int   leftchoked; 
-  int   rightchoked;
+  int   leftchoked, rightchoked; 
 
   for (d = 0; d < D; d++)
     {
-      leftchoked = rightchoked = FALSE;
-
       phomology = 1.0;
-      iz = (d == 0 ? 0 : env[d-1].i0);
+      iz = (d == 0 ? 0 : env->arr[d-1].i0);
       s  = (d == 0 ? p7R_N : p7R_J);
-      for (i = env[d].i0 - 1; i >= iz; i--)
+      for (i = env->arr[d].i0 - 1; i >= iz; i--)
 	{
-	  if (P7R_XMX(apd, i, s) >= 1.0 - epsilon) { leftchoked = TRUE; break; }
-	  phomology -= P7R_XMX(apd, i, p7R_B);
-	  if (phomology < epsilon) break;
+	  phomology -= P7R_XMX(apd, i, p7R_B);  // now phomology = P(x_i in domain d)
+	  if (phomology < epsilon) break;       // if i is not in the domain...
 	}
-      env[d].oea = i+1;
+      env->arr[d].oea = i+1;                    // but i+1 was, so oea = i+1.
+      leftchoked = ( P7R_XMX(apd, i, s) >= 1.0 - (2*epsilon) ? TRUE : FALSE );
 
       phomology = 1.0;
-      iz = (d == D-1 ? L : env[d+1].i0-1);
+      iz = (d == D-1 ? L : env->arr[d+1].i0-1);
       s  = (d == D-1 ? p7R_C : p7R_J);
-      for (i = env[d].i0; i < iz; i++)
+      for (i = env->arr[d].i0; i <= iz; i++)
 	{
-	  if (P7R_XMX(apd, i, s) >= 1.0 - epsilon) { rightchoked = TRUE; break; }
-	  phomology -= P7R_XMX(apd, i+1, p7R_E); // now phomology = P(x_i+1 in dom_d)
+	  phomology -= P7R_XMX(apd, i, p7R_E);   // now phomology = P(x_i+1 in dom_d)
 	  if (phomology < epsilon) break;        // if i+1 is not in domain...
 	}
-      env[d].oeb = i;		                 // but i=1 was, so oeb = i.
+      env->arr[d].oeb  = i;	                 // but i=1 was, so oeb = i.
+      rightchoked = (P7R_XMX(apd, i, s) >= 1.0 - (2*epsilon) ? TRUE : FALSE );
 
-      if (leftchoked && rightchoked) 
-	env[d].flags |= p7E_ENVSC_APPROX;
+      if (leftchoked && rightchoked)
+	env->arr[d].flags |= p7E_ENVSC_APPROX;
     }
   return eslOK;
 }
 
 
 
-/* If t_NN = t_JJ = t_CC, then we can often calculate the envelope
+/* approxsc()
+ * Where we can, calculate the env score by a fast approximation
+ * in the main ASC Forward matrix.
+ * 
+ * If t_NN = t_JJ = t_CC, then we can often calculate the envelope
  * score of a single domain by an accurate approximation from the ASC
  * Forward matrix for the whole sequence.
  * 
  * Assume that we know that Xi and Yj are "choke points" flanking our
- * domain, such that >= 1.0-epsilon of the posterior path probability
+ * domain, such that >= 1.0-2*epsilon of the posterior path probability
  * flows through each of them.
  * 
  * For d=0, X=N, Y=J; for d=D-1, X=J, Y=C; for internal d, X=Y=J.
@@ -224,26 +420,25 @@ outcoords(P7_ENVELOPE *env, int D, const P7_REFMX *apd, float epsilon)
  * (L-j) * t_CC + t_CT. (And t_SN = 0).
  */
 static int
-approxsc(P7_ENVELOPE *env, int D, const P7_REFMX *afd, const P7_PROFILE *gm) 
+approxsc(P7_ENVELOPES *env, int D, const P7_REFMX *afd, const P7_PROFILE *gm) 
 {
   int d;
   int L = afd->L;
   int s1, s2;
 
-
   for (d = 0; d < D; d++)
-    if (env[d].flags & p7E_ENVSC_APPROX)
+    if (env->arr[d].flags & p7E_ENVSC_APPROX)
       {
 	s1 = (d == 0   ? p7R_N : p7R_J);
 	s2 = (d == D-1 ? p7R_C : p7R_J);
 
-	env[d].env_sc = 
-	  P7R_XMX(afd, env[d].oeb,   s2) -
-	  P7R_XMX(afd, env[d].oea-1, s1);
+	env->arr[d].env_sc = 
+	  P7R_XMX(afd, env->arr[d].oeb,   s2) -
+	  P7R_XMX(afd, env->arr[d].oea-1, s1);
 
-	env[d].env_sc += 
-	  gm->xsc[p7P_N][p7P_LOOP] * (env[d].oea-1) +
-	  gm->xsc[p7P_C][p7P_LOOP] * (L-env[d].oeb) +
+	env->arr[d].env_sc += 
+	  gm->xsc[p7P_N][p7P_LOOP] * (env->arr[d].oea-1) +
+	  gm->xsc[p7P_C][p7P_LOOP] * (L-env->arr[d].oeb) +
 	  gm->xsc[p7P_C][p7P_MOVE];
       }
   return eslOK;
@@ -251,7 +446,7 @@ approxsc(P7_ENVELOPE *env, int D, const P7_REFMX *afd, const P7_PROFILE *gm)
 
 
 /*****************************************************************
- * x. Example
+ * 3. Example
  *****************************************************************/
 #ifdef p7REFERENCE_ENVELOPES_EXAMPLE
 #include "p7_config.h"
@@ -357,8 +552,8 @@ main(int argc, char **argv)
 		       afu, afd, anch, &asc, &prm, &stats);
 
   
-  printf("# ASC Forward UP:\n");    p7_refmx_Dump(stdout, afu);
-  printf("# ASC Forward DOWN:\n"); p7_refmx_Dump(stdout, afd);
+  //printf("# ASC Forward UP:\n");    p7_refmx_Dump(stdout, afu);
+  //printf("# ASC Forward DOWN:\n"); p7_refmx_Dump(stdout, afd);
 
   /* We no longer need rxf and rxd. 
    * Use their space for apu/apd pair, which will briefly
@@ -369,26 +564,26 @@ main(int argc, char **argv)
 
   p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->arr, anch->n, apu, apd, &asc_b);
   
-  printf("# Backward score (raw, nats): %.2f\n", asc_b);
-  printf("# ASC Backward UP:\n");   p7_refmx_Dump(stdout, apu);
-  printf("# ASC Backward DOWN:\n"); p7_refmx_Dump(stdout, apd);
+  //printf("# Backward score (raw, nats): %.2f\n", asc_b);
+  //printf("# ASC Backward UP:\n");   p7_refmx_Dump(stdout, apu);
+  //printf("# ASC Backward DOWN:\n"); p7_refmx_Dump(stdout, apd);
 
   /* ASC Decoding takes afu/afd and abu/abd as input;
    * overwrites abu/abd with decoding matrices
    */
   p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->arr, anch->n, afu, afd, apu, apd, apu, apd);
 
-  printf("# ASC Decoding UP matrix:\n");  p7_refmx_Dump(stdout, apu);
-  printf("# ASC Decoding DOWN:\n");       p7_refmx_Dump(stdout, apu);
+  //printf("# ASC Decoding UP matrix:\n");  p7_refmx_Dump(stdout, apu);
+  //printf("# ASC Decoding DOWN:\n");       p7_refmx_Dump(stdout, apu);
 
 
   /* Envelope calculation needs to get four matrices:
    * ASC Decoding pair, apu/apd, and it will leave these constant;
    * ASC Forward pair,  afu/afd, and it will overwrite these.
    */
-  p7_envelopes_GrowTo(env, anch->n);
-  p7_reference_Envelopes(sq->dsq, sq->n, gm, anch->arr, anch->n, apu, apd, afu, afd, env->arr);
+  p7_reference_Envelopes(sq->dsq, sq->n, gm, anch->arr, anch->n, apu, apd, afu, afd, env);
 
+  p7_envelopes_Dump(stdout, env);
 
   p7_envelopes_Destroy(env);
   p7_coords2_hash_Destroy(hashtbl);

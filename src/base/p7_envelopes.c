@@ -81,3 +81,37 @@ p7_envelopes_Destroy(P7_ENVELOPES *envs)
     }
   return;
 }
+
+
+/*****************************************************************
+ * 2. Debugging and development tools
+ *****************************************************************/
+
+int
+p7_envelopes_Dump(FILE *ofp, P7_ENVELOPES *env)
+{
+  int e;
+
+  fprintf(ofp, "#%3s %5s %5s %5s %5s %5s %5s %5s %5s %6s %3s %3s\n",
+	  "dom", "ia",  "ib", "i0",  "k0", "ka",  "kb", 
+	  "oea",  "oeb", "env_sc", "app", "glo");
+  fprintf(ofp, "#%3s %5s %5s %5s %5s %5s %5s %5s %5s %6s %3s %3s\n",
+	  "---", "-----",  "-----", "-----",  "-----", "-----",  "-----", 
+	  "-----",  "-----", "------", "---", "---");
+  for (e = 0; e < env->n; e++)
+    fprintf(ofp, "%-4d %5d %5d %5d %5d %5d %5d %5d %5d %6.2f %3s %3s\n",
+	    e+1,
+	    env->arr[e].ia,  env->arr[e].ib,
+	    env->arr[e].i0,  env->arr[e].k0,
+	    env->arr[e].ka,  env->arr[e].kb,
+	    env->arr[e].oea, env->arr[e].oeb,
+	    env->arr[e].env_sc,
+	    (env->arr[e].flags & p7E_ENVSC_APPROX ? "YES" : "n"),
+	    (env->arr[e].flags & p7E_IS_GLOCAL    ? "YES" : "n"));
+
+  fprintf(ofp, "# Total domains = %d\n", env->n);
+  fprintf(ofp, "# M,L           = %d,%d\n", env->M, env->L);
+  fprintf(ofp, "# nalloc        = %d\n", env->nalloc);
+  fprintf(ofp, "# nredline      = %d\n", env->nredline);
+  return eslOK;
+}

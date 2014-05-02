@@ -51,6 +51,8 @@ extern int           p7_envelopes_GrowTo (P7_ENVELOPES *envs, int32_t nalloc);
 extern int           p7_envelopes_Reuse  (P7_ENVELOPES *envs);
 extern void          p7_envelopes_Destroy(P7_ENVELOPES *envs);
 
+extern int p7_envelopes_Dump(FILE *ofp, P7_ENVELOPES *env);
+
 
 #endif /* P7_ENVELOPES_INCLUDED */
 /*****************************************************************
