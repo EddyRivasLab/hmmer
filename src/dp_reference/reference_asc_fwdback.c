@@ -637,6 +637,8 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 #ifdef p7REFERENCE_ASC_FWDBACK_TESTDRIVE
 #include "hmmer.h"
 
+
+
 /* Compare a standard DP matrix <std> to ASC UP and DOWN matrices
  * <ascu> and <ascd>, using anchor set <anch> for <D> domains.
  * Compare all valid values in the ASC matrices to their counterparts
