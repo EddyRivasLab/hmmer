@@ -146,7 +146,6 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
   int             max_iterations = (prm ? prm->max_iterations      : 1000);
   float           loglossthresh  = (prm ? log(prm->loss_threshold) : log(0.001));
   int             be_verbose     = (prm ? prm->be_verbose          : FALSE);
-  int             M              = gm->M;
   float           best_asc       = -eslINFINITY;
   int             iteration      = 0;   // Counter for stochastic samples. Is 0 for the Viterbi trace, 1st path thru main loop
   float           asc,    best_ascprob;
@@ -157,9 +156,9 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
   /* Contract checks / argument validation */
   ESL_DASSERT1(( rxf->type == p7R_FORWARD  ));
   ESL_DASSERT1(( rxd->type == p7R_DECODING ));
-  ESL_DASSERT1(( rxf->L == L && rxf->M == M ));
-  ESL_DASSERT1(( rxd->L == L && rxd->M == M ));
-  ESL_DASSERT1(( tr->L  == L && tr->M  == M ));
+  ESL_DASSERT1(( rxf->L == L && rxf->M == gm->M ));
+  ESL_DASSERT1(( rxd->L == L && rxd->M == gm->M ));
+  ESL_DASSERT1(( tr->L  == L && tr->M  == gm->M ));
   /* afu, afd will be checked, reallocated, initialized in ASCForward() calls */
 
   /* Initialize optional <stats> */

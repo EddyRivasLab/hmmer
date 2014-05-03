@@ -1035,7 +1035,7 @@ p7_modelsample_AnchoredLocal(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
  *            opt_gm   : optRETURN: profile (multiglocal, L=0)
  *            opt_dsq  : optRETURN: digital sequence
  *            opt_L    : optRETURN: length of <dsq>
- *            opt_tr   : optRETURN: traceback, state path and emitted seq
+ *            opt_tr   : optRETURN: traceback, state path and emitted seq (w/ index)
  *            opt_anch : optRETURN: array of anchors i0,k0 for each domain d 
  *            opt_D    : optRETURN: number of domains d in <anch>, <tr> 
  *            opt_sc   : optRETURN: raw lod score, in nats

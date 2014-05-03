@@ -307,7 +307,9 @@ p7_checkptmx_MinSizeof(int M, int L)
 int
 p7_checkptmx_Reuse(P7_CHECKPTMX *ox)
 {
+#ifdef p7_DEBUGGING
   int status;
+#endif
 
   ox->M  = 0;
   ox->L  = 0;
