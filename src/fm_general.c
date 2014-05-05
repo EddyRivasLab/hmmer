@@ -319,8 +319,7 @@ fm_findOverlappingAmbiguityBlock (const FM_DATA *fm, const FM_METADATA *meta, ui
 /* Function:  fm_convertRange2DSQ()
  * Synopsis:  Convert the BWT range into a DSQ.
  *
- * Purpose:   Must account for the possible compression of the BWT.
- *            The input value of <first> is the 0-based position at which
+ * Purpose:   The input value of <first> is the 0-based position at which
  *            the requested range starts on either FM->T or revcomp(FM->T),
  *            depending on <complementarity>. Since only FM->T is stored,
  *            the necessary work is done to correct positions in the case

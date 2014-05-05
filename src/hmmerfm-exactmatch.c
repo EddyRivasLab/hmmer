@@ -96,7 +96,6 @@ output_header(FM_METADATA *meta, FILE *ofp, const ESL_GETOPTS *go, char *fmfile,
   int   status;
 
   if      (meta->alph_type == fm_DNA)       alph = "dna";
-  //else if (meta->alph_type == fm_DNA_full)  alph = "dna_full";
   else if (meta->alph_type == fm_AMINO)     alph = "amino";
 
   if ((status = esl_FileTail(go->argv[0], FALSE, &appname)) != eslOK) return status;
@@ -226,7 +225,7 @@ main(int argc,  char *argv[])
   int hit_num       = 0;
   int hit_num2       = 0;
   int hits_size     = 0;
-  int i;
+  int i,j;
   int count_only    = 0;
 
   FM_INTERVAL interval;
@@ -240,6 +239,10 @@ main(int argc,  char *argv[])
   ESL_GETOPTS     *go  = NULL;    /* command line processing                 */
   FM_CFG *cfg;
   FM_METADATA *meta;
+
+  ESL_SQ       *tmpseq;  // used for sequence validation
+  ESL_ALPHABET *abc;
+
 
   //start timer
   t1 = times(&ts1);
@@ -272,6 +275,13 @@ main(int argc,  char *argv[])
 
 
   fm_readFMmeta( meta);
+
+
+
+  if      (meta->alph_type == fm_DNA)   abc     = esl_alphabet_Create(eslDNA);
+  else if (meta->alph_type == fm_AMINO) abc     = esl_alphabet_Create(eslAMINO);
+  tmpseq = esl_sq_CreateDigital(abc);
+
 
 
   //read in FM-index blocks
@@ -367,6 +377,15 @@ main(int argc,  char *argv[])
 
           status = fm_getOriginalPosition (fmsf, meta, hits[i].block, hits[i].length, fm_forward, hits[i].start,  &(hits[i].block), &(hits[i].start) );
           hits[i].sortkey = (status==eslERANGE ? -1 : meta->seq_data[ hits[i].block ].target_id);
+
+          //validate match - if any characters in orig sequence were ambiguities, reject
+          fm_convertRange2DSQ( fmsf, meta, hits[i].start, hits[i].length, p7_NOCOMPLEMENT, tmpseq, TRUE );
+          for (j=1; j<=hits[i].length; j++) {
+            if (tmpseq->dsq[j] >= abc->K) {
+              hits[i].sortkey = -1; //reject
+              j = hits[i].length+1; //quit looking
+            }
+          }
 
           if (hits[i].sortkey != -1)
             hit_num2++; // legitimate hit
