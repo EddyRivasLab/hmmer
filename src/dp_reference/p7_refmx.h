@@ -65,7 +65,7 @@
 #define p7R_ASC_BCK_DOWN     9
 #define p7R_ASC_DECODE_UP   10
 #define p7R_ASC_DECODE_DOWN 11
-#define p7R_ASC_ALIGN       12
+#define p7R_AEC_MEG_ALIGN   12
 
 
 

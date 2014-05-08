@@ -19,7 +19,7 @@
  *****************************************************************/
 
 static inline int
-meg_select_m(ESL_RANDOMESS *rng, const P7_PROFILE *mx, int i, int k)
+meg_select_m(const P7_PROFILE *mx, int i, int k)
 {
   ESL_UNUSED(rng);
   int   state[4] = { p7T_ML, p7T_IL, p7T_DL, p7T_B };
@@ -33,7 +33,7 @@ meg_select_m(ESL_RANDOMESS *rng, const P7_PROFILE *mx, int i, int k)
 }
 
 static inline int
-meg_select_e(ESL_RANDOMNESS *rng, const P7_PROFILE *gm,...)
+meg_select_c(ESL_RANDOMNESS *rng, const P7_PROFILE *gm,...)
 {
   
   if (env->flags & p7E_IS_GLOCAL)
@@ -63,13 +63,15 @@ reference_asc_trace_engine()
   for (d = env->n-1; d >= 0; d--)
     {
 
-      /* From previous ia-1 (L) to ib-1 : we know they're C/J */
+      /* From previous ia-1 (L) to ib : we know they're C/J */
       scur = sprv; /* C|J; tricky */
       k    = 0;
-      for ( ; i > env[d].ib; i--)
+      for ( ; i >= env[d].ib; i--)
 	if ((status = p7_trace_Append(tr, scur,  k, i)) != eslOK) return status;
-      
-      /* now you're on ib, in E */
+
+      /* now i=ib for this domain, and we've already added C|J for ib.
+       * sprv is C|J.
+       */
       while (sprv != p7T_B)
 	{
 	  switch (sprv) {
