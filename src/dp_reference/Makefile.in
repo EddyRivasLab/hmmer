@@ -8,7 +8,8 @@ LIBOBJS =  p7_refmx.o               \
 	   reference_anchors.o      \
 	   reference_envelopes.o    \
 	   reference_asc_fwdback.o  \
-	   reference_asc_decoding.o
+	   reference_asc_decoding.o \
+	   reference_asc_align.o
 
 LIBHDRS =  
 
@@ -33,6 +34,7 @@ EXAMPLES = reference_anchors_example      \
 	   reference_envelopes_example    \
 	   reference_asc_fwdback_example  \
 	   reference_asc_decoding_example \
+	   reference_asc_align_example    \
            reference_decoding_example     \
            reference_fwdback_example      \
            reference_viterbi_example
