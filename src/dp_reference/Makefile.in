@@ -20,12 +20,13 @@ HDRS =
 
 PROGS =
 
-UTESTS = reference_viterbi_utest     \
-         reference_fwdback_utest     \
-	 reference_decoding_utest    \
-	 reference_envelopes_utest   \
-         reference_asc_fwdback_utest \
-	 reference_asc_decoding_utest 
+UTESTS = reference_viterbi_utest      \
+         reference_fwdback_utest      \
+	 reference_decoding_utest     \
+	 reference_envelopes_utest    \
+         reference_asc_fwdback_utest  \
+	 reference_asc_decoding_utest \
+	 reference_aec_align_utest
 
 STATS  = reference_anchors_stats
 

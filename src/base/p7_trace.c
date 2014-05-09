@@ -799,7 +799,7 @@ p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol)
 	  if (tr1->sqto[d]    != tr2->sqto[d])     ESL_EXCEPTION(eslFAIL, "traces' sqto differs, domain %d",      d);
 	  if (tr1->hmmfrom[d] != tr2->hmmfrom[d])  ESL_EXCEPTION(eslFAIL, "traces' hmmfrom differs, domain %d",   d);
 	  if (tr1->hmmto[d]   != tr2->hmmto[d])    ESL_EXCEPTION(eslFAIL, "traces' hmmto differs, domain %d",     d);
-	  if (tr1->anch[d]    != tr2->anch[d])     ESL_EXCEPTION(eslFAIL, "traces' anchors differ for domain %d", d);
+	  //if (tr1->anch[d]    != tr2->anch[d])     ESL_EXCEPTION(eslFAIL, "traces' anchors differ for domain %d", d);  // I think <anch> is only used by mass trace.
 	}
     }
   return eslOK;

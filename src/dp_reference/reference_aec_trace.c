@@ -57,7 +57,7 @@ aec_meg_select_mg(const P7_PROFILE *gm, const P7_REFMX *mx, int i, int k)
   path[0] = P7_DELTAT( P7R_MX(mx, i-1, k-1, p7R_MG), P7P_TSC(gm, k-1, p7P_MM));
   path[1] = P7_DELTAT( P7R_MX(mx, i-1, k-1, p7R_IG), P7P_TSC(gm, k-1, p7P_IM));
   path[2] = P7_DELTAT( P7R_MX(mx, i-1, k-1, p7R_DG), P7P_TSC(gm, k-1, p7P_DM));
-  path[3] = P7_DELTAT( P7R_XMX(mx, i-1, p7R_L),      P7P_TSC(gm, k-1, p7P_LM));
+  path[3] = P7_DELTAT( P7R_XMX(mx, i-1, p7R_G),      P7P_TSC(gm, k-1, p7P_GM));
   return state[esl_vec_FArgMax(path, 4)];
 }
 
@@ -104,20 +104,21 @@ aec_meg_select_dg(const P7_PROFILE *gm, const P7_REFMX *mx, int i, int k)
 static inline int
 aec_meg_select_e(const P7_PROFILE *gm, const P7_REFMX *mx, int i, int *ret_k, const P7_ENVELOPE *env)
 {
-  float *dpc = mx->dp[i] + env->k0*p7R_NSCELLS; /* position at k0 */
-  float max  = -eslINFINITY;
-  int   smax = -1;
-  int   kmax = -1;
-  int   k;
+  float *dpc  = NULL;
+  float  max  = -eslINFINITY;
+  int    smax = -1;
+  int    kmax = -1;
+  int    k;
 
   if ( env->flags & p7E_IS_GLOCAL)
     {
-      dpc  = mx->dp[i] + gm->M * p7R_NSCELLS;
+      dpc  = mx->dp[i] + (gm->M+1) * p7R_NSCELLS;
       kmax = gm->M;
       smax = P7R_MX(mx, i, gm->M, p7R_MG) >= P7R_MX(mx, i, gm->M, p7R_DG) ? p7T_MG : p7T_DG;
     }
   else
     {
+      dpc = mx->dp[i] + env->k0*p7R_NSCELLS; /* position at k0 */
       for (k = env->k0; k <= gm->M; k++)
 	{ 
 	  if (dpc[p7R_ML] > max) { max = dpc[p7R_ML]; smax = p7T_ML; kmax = k; }   
@@ -212,95 +213,57 @@ reference_aec_trace_engine(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REF
   else esl_fatal("can't trace that matrix type; not AEC?");
 
 
-  /* Now the main recursion.
-   * The code below could be simpler. The standard engine
-   * (reference_trace.c) will work fine with just one exception: we
-   * must be careful on rows i==ia that we don't use select_{ml,mg},
-   * because we cannot look at row ia-1; it might be the ib row of a
-   * prev domain d-1. However, the code below also breaks out the
-   * flanking and interdomain N/C/J chunks, because I think it will
-   * eventually prove advantageous to use a new trace structure (instead
-   * of P7_TRACE) that does not bother to represent N/C/J paths
-   * explicitly. 
-   */
+  d = env->n-1;
   if   ((status = p7_trace_Append(tr, p7T_T, 0, i)) != eslOK) return status;
   if   ((status = p7_trace_Append(tr, p7T_C, 0, i)) != eslOK) return status; 
-  for (i = mx->L; i > env->arr[env->n-1].ib; i--)
-    if ((status = p7_trace_Append(tr, p7T_C, 0, i)) != eslOK) return status;
-  /* Now i=ib for last domain D-1, in the C state. */
-
-  for (d = env->n-1; d >= 0; d--)
+  while (sprv != p7T_S)
     {
-      /* now i=ib for this domain, and we've already added C|J for ib.
-       * sprv is C|J. Work backward until we get to the B state.
+      /* on rows i=ia, you cannot use select_{ml,mg}, because you cannot
+       * look at row i-1; that could be an ib row of prev domain d-1
        */
-      while (sprv != p7T_B)
-	{
-	  /* on rows i=ia, you cannot use select_{ml,mg}, because you cannot
-	   * look at row i-1; that could be an ib row of prev domain d-1
-	   */
-	  if      (i == env->arr[d].ia && sprv == p7T_ML) { scur = p7T_L; k--; i--; } // k-- because we have to act like select_{ml,mg}; ali endpoints depend on it
-	  else if (i == env->arr[d].ia && sprv == p7T_MG) { scur = p7T_G; k--; i--; }
-	  else {
-	    switch (sprv) {
-	    case p7T_ML: scur = (*select_ml)(gm, mx, i, k);        k--; i--; break;
-	    case p7T_MG: scur = (*select_mg)(gm, mx, i, k);        k--; i--; break;
-	    case p7T_IL: scur = (*select_il)(gm, mx, i, k);             i--; break;
-	    case p7T_IG: scur = (*select_ig)(gm, mx, i, k);             i--; break;
-	    case p7T_DL: scur = (*select_dl)(gm, mx, i, k);        k--;      break;
-	    case p7T_DG: scur = (*select_dg)(gm, mx, i, k);        k--;      break;
-	    case p7T_E:  scur = (*select_e) (gm, mx, i, &k, &(env->arr[d])); break;
-	    case p7T_J:  scur = (*select_j) (gm, mx, i, apd);                break;
-	    case p7T_L:  scur = p7T_B;                                       break;
-	    case p7T_G:  scur = p7T_B;                                       break;
-	    case p7T_C:  scur = (*select_c) (gm, mx, i, apd);                break;
-	    default: ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in aec traceback");
-	    }
-	  }
-
-	  /* Unfold the left wing */
-	  if (scur == p7T_G) {  
-	    while (k > 0) {
-	      if  ( (status = p7_trace_Append(tr, p7T_DG, k, i)) != eslOK) return status;
-	      k--;
-	    }
-	  }
-
-	  /* Record start, end points of alignment in <env>.
-	   * This must follow left wing unfolding, to get glocal ka=1 right
-           * ka setting is a bit subtle. Takes advantage of the fact that switch() 
-           * above has decremented k; also, that glocal wing unfolding leaves k=0.
-	   */
-	  if (sprv == p7T_E) { env->arr[d].alib = i;   env->arr[d].kb   = k;   }
-	  if (scur == p7T_B) { env->arr[d].alia = i+1; env->arr[d].ka   = k+1; }
-
-	  if ( (status = p7_trace_Append(tr, scur, k, i)) != eslOK) return status;
-	  /* For NCJ, we had to defer i decrement. */
-	  if ( (scur == p7T_N || scur == p7T_J || scur == p7T_C) && scur == sprv) i--;
-	  sprv = scur;
+      if      (sprv == p7T_ML && i == env->arr[d].ia) { scur = p7T_L; k--; i--; } // k-- because we have to act like select_{ml,mg}; ali endpoints depend on it
+      else if (sprv == p7T_MG && i == env->arr[d].ia) { scur = p7T_G; k--; i--; } // sprv test must go before ia test, because d can be -1, but sprv=ML/MG guarantees d>=0.
+      else {
+	switch (sprv) {
+	case p7T_ML: scur = (*select_ml)(gm, mx, i, k);        k--; i--; break;
+	case p7T_MG: scur = (*select_mg)(gm, mx, i, k);        k--; i--; break;
+	case p7T_IL: scur = (*select_il)(gm, mx, i, k);             i--; break;
+	case p7T_IG: scur = (*select_ig)(gm, mx, i, k);             i--; break;
+	case p7T_DL: scur = (*select_dl)(gm, mx, i, k);        k--;      break;
+	case p7T_DG: scur = (*select_dg)(gm, mx, i, k);        k--;      break;
+	case p7T_E:  scur = (*select_e) (gm, mx, i, &k, &(env->arr[d])); break;
+	case p7T_N:  scur = (i==0 ? p7T_S : p7T_N);                      break;
+	case p7T_J:  scur = (*select_j) (gm, mx, i, apd);                break;
+	case p7T_B:  scur = (d == 0 ? p7T_N : p7T_J); d--;               break;
+	case p7T_L:  scur = p7T_B;                                       break;
+	case p7T_G:  scur = p7T_B;                                       break;
+	case p7T_C:  scur = (*select_c) (gm, mx, i, apd);                break;
+	default: ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in aec traceback");
 	}
+      }
 
-      /* Now, sprv = B, i == -1 from first i of alignment; >= ia-1 of envelope.
-       * Residues i back to ib+1 for prev domain (or 1) are generated by J (or N).
-       * This might be no residues; it's possible i==ib (or i==0) already.
-       * We always add at least one J/N state, for i==ib (or i==0) itself.
-       * In reversed traces (like what we have now), the first J we add is 
-       * a nonemitter.
+      /* Unfold the left wing */
+      if (scur == p7T_G) {  
+	while (k > 0) {
+	  if  ( (status = p7_trace_Append(tr, p7T_DG, k, i)) != eslOK) return status;
+	  k--;
+	}
+      }
+
+      /* Record start, end points of alignment in <env>.
+       * This must follow left wing unfolding, to get glocal ka=1 right
+       * ka setting is a bit subtle. Takes advantage of the fact that switch() 
+       * above has decremented k; also, that glocal wing unfolding leaves k=0.
        */
-      if (d > 0)
-	{
-	  if ((status = p7_trace_Append(tr, p7T_J, 0, i)) != eslOK) return status;  // always at least one J added, as a nonemitter
-	  for ( ; i > env->arr[d-1].ib; i--)
-	    if ((status = p7_trace_Append(tr, p7T_J, 0, i)) != eslOK) return status;
-	  /* Now we're on row ib[d-1], in the J state. */
-	  sprv = p7T_J;
-	}
+      if (sprv == p7T_E) { env->arr[d].alib = i;   env->arr[d].kb   = k;   }
+      if (scur == p7T_B) { env->arr[d].alia = i+1; env->arr[d].ka   = k+1; }
+
+      if ( (status = p7_trace_Append(tr, scur, k, i)) != eslOK) return status;
+
+      /* For NCJ, we had to defer i decrement. */
+      if ( (scur == p7T_N || scur == p7T_J || scur == p7T_C) && scur == sprv) i--;
+      sprv = scur;
     }
-  
-  if ((status = p7_trace_Append(tr, p7T_N, 0, i)) != eslOK) return status;
-  for ( ; i >= 1; i--)
-    if ((status = p7_trace_Append(tr, p7T_N, 0, i)) != eslOK) return status;
-  if   ((status = p7_trace_Append(tr, p7T_S, 0, 0)) != eslOK) return status;
 
   tr->M = mx->M;
   tr->L = mx->L;

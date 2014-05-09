@@ -61,6 +61,10 @@
 1 exercise reference_decoding   @src/dp_reference/reference_decoding_utest@
 1 exercise reference_fwdback    @src/dp_reference/reference_fwdback_utest@
 1 exercise reference_viterbi    @src/dp_reference/reference_viterbi_utest@
+1 exercise reference_envelopes  @src/dp_reference/reference_envelopes_utest@
+1 exercise ref..asc_fwdback     @src/dp_reference/reference_asc_fwdback_utest@
+1 exercise ref..asc_decoding    @src/dp_reference/reference_asc_decoding_utest@
+1 exercise ref..aec_align       @src/dp_reference/reference_aec_align_utest@
 
 1 exercise sparse_decoding	@src/dp_sparse/sparse_decoding_utest@
 1 exercise sparse_envscore	@src/dp_sparse/sparse_decoding_utest@

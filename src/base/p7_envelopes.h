@@ -10,13 +10,14 @@
  *    Create/Destroy; arrays of P7_ENVELOPE are just
  *    allocated normally. 
  * 
- *    40 bytes per domain.
+ *    48 bytes per domain.
  */
 typedef struct {
-  int32_t  ia, ib;	/* envelope start, end on sequence   (1..L) */
   int32_t  i0, k0;	/* anchor for this domain                   */
-  int32_t  ka, kb;	/* ali start, end on model           (1..M) */
   int32_t  oea, oeb;	/* outer envelope start, stop on seq (1..L) */
+  int32_t  ia, ib;	/* envelope start, end on sequence   (1..L) */
+  int32_t  alia, alib;	/* ali start, end on sequence        (1..L) */
+  int32_t  ka, kb;	/* ali start, end on model           (1..M) */
   float    env_sc;	/* envelope score (nats)                    */
   uint32_t flags;
 } P7_ENVELOPE;

@@ -7,7 +7,10 @@
  * 
  * Contents:
  *    1. AEC MEG alignment, fill.
- *    x. Copyright and license information
+ *    2. Unit tests.
+ *    3. Test driver.
+ *    4. Example.
+ *    5. Copyright and license information
  */
 #include "p7_config.h"
 
@@ -267,6 +270,7 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
 	  xc[p7R_JJ]     = -eslINFINITY;
 	  xc[p7R_CC]     = -eslINFINITY;
 	} /* ends loop over rows i in UP sector d */
+      /* as we leave: xB = L|G for row i0-1 */
 
 
       /*****************************************************************
@@ -275,7 +279,7 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
       /* now setup on the anchor cell i0,k0 */
       i   = env->arr[d].i0;
       dpp = mx->dp[i-1] + (env->arr[d].k0-1) * p7R_NSCELLS;   
-      tsc = gm->tsc     + (env->arr[d].k0-1) * p7R_NSCELLS;   
+      tsc = gm->tsc     + (env->arr[d].k0-1) * p7P_NTRANS;
       ppp = apd->dp[i]  +  env->arr[d].k0    * p7R_NSCELLS;   // ppp[] on k0
       dpc = mx->dp[i];
       for (s = 0; s < p7R_NSCELLS * env->arr[d].k0; s++) *dpc++ = -eslINFINITY; // dpc[] now on k0
@@ -295,7 +299,7 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
 
 	  tsc        += p7P_NTRANS;
 	  dpc[p7R_IL] = dpc[p7R_IG] = -eslINFINITY;
-	  dpc[p7R_DL] = dpc[p7R_IL] = -eslINFINITY;
+	  dpc[p7R_DL] = dpc[p7R_DG] = -eslINFINITY;
 
 	  xE          = mgv;
 	  dgv         = P7_DELTAT(mgv, tsc[p7P_MD]);
@@ -311,12 +315,13 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
 				 P7_DELTAT(         xB, tsc[p7P_LM])));
 	  else // special case, no cells in UP sector: we must enter anchor on LMk/GMk entry
 	    dpc[p7R_ML] = mlv = ppp[p7R_ML] + ppp[p7R_MG] + P7_DELTAT( xB, tsc[p7P_LM]);
+
 	  dpc[p7R_MG] = -eslINFINITY;
 
 	  tsc        += p7P_NTRANS;
 
 	  dpc[p7R_IL] = dpc[p7R_IG] = -eslINFINITY;
-	  dpc[p7R_DL] = dpc[p7R_IL] = -eslINFINITY;
+	  dpc[p7R_DL] = dpc[p7R_DG] = -eslINFINITY;
 
 	  xE          = mlv;
 	  dlv         = P7_DELTAT(mlv, tsc[p7P_MD]);
@@ -335,7 +340,7 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
 	    tsc        += p7P_NTRANS;
 	    dpc[p7R_DL] = -eslINFINITY;
 	    dpc[p7R_DG] = dgv;
-	    dgv         = P7_DELTAT(mgv, tsc[p7P_MD]);
+	    dgv         = P7_DELTAT(dgv, tsc[p7P_DD]);
 	    dpc        += p7R_NSCELLS;
 	  }
       else 
@@ -346,7 +351,7 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
 	    tsc        += p7P_NTRANS;
 	    dpc[p7R_DL] = dlv;
 	    dpc[p7R_DG] = -eslINFINITY;
-	    dlv         = P7_DELTAT(mlv, tsc[p7P_MD]);
+	    dlv         = P7_DELTAT(dlv, tsc[p7P_DD]);
 	    dpc        += p7R_NSCELLS;
 	  }
 
@@ -510,10 +515,364 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
 
   return p7_reference_aec_trace_MEG(gm, env, apd, mx, tr);
 }
+/*---------------- end, AEC/MEG alignment fill ------------------*/
+
+
 
 
 /*****************************************************************
- * x. Example
+ * 2. Unit tests
+ *****************************************************************/
+#ifdef p7REFERENCE_AEC_ALIGN_TESTDRIVE
+#include "hmmer.h"
+
+
+/* "crashtestdummy" test
+ * Compare randomly selected profile to sequences sampled
+ * from that profile. 
+ * 
+ * The test is not very stringent, because we don't know the
+ * true alignment. This is just a test that nothing obviously
+ * horrible happens, like a crash, or obviously invalid data
+ * structures.
+ * 
+ * Extended from reference_envelopes.c unit tests.
+ *
+ * We test:
+ *    1. Coordinates of each envelope/alignment are coherent:
+ *       1 <= oea <= ia <= alia <= i0 <= alib <= ib <= oeb <= L
+ *       1 <= ka <= k0 <= kb <= M
+ *       
+ *    2. Envelopes do not overlap (assuming default threshold of
+ *       0.5 when defining them):
+ *         ia(d) > ib(d-1)  for d = 1..D-1
+ *       (Outer envelopes, in contrast, can overlap.)
+ *       
+ *    3. envsc(d) <= asc_sc <= fwdsc.
+ *    
+ *    4. If D=1 (single domain) in both the generated trace
+ *       and the inferred envelopes, and the domain coords in 
+ *       the trace are encompassed by the outer envelope,
+ *       then envsc(d) >= generated trace score.
+ *
+ *    5. MEG trace passes validation.
+ *
+ *    6. Indexed trace domains agree with envelope data.
+ */
+static void
+utest_crashtestdummy(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
+{
+  char             msg[] = "reference_aec_align:: crash test dummy failed";
+  ESL_SQ          *sq    = esl_sq_CreateDigital(abc);
+  P7_BG           *bg    = p7_bg_Create(abc);
+  P7_HMM          *hmm   = NULL;
+  P7_PROFILE      *gm    = p7_profile_Create(M, abc);
+  P7_TRACE        *gtr   = p7_trace_Create();            // generated trace
+  P7_TRACE        *vtr   = p7_trace_Create();            // Viterbi trace
+  P7_TRACE        *tr    = p7_trace_Create();            // MEG trace
+  P7_REFMX        *rxf   = p7_refmx_Create(M, 20);       // Fwd, Vit ~~> ASC Decode UP
+  P7_REFMX        *rxd   = p7_refmx_Create(M, 20);       // Bck, Decode ~~> ASC Decode DOWN
+  P7_REFMX        *afu   = p7_refmx_Create(M, 20);       // ASC Fwd UP
+  P7_REFMX        *afd   = p7_refmx_Create(M, 20);       // ASC Fwd DOWN
+  P7_REFMX        *apu   = rxf;                          // for 'clarity' we use two names for this mx
+  P7_REFMX        *apd   = rxd;                          //   ... and this one too.
+  float           *wrk   = NULL;
+  P7_COORDS2      *anch  = p7_coords2_Create(0,0);
+  P7_COORDS2_HASH *htbl  = p7_coords2_hash_Create(0,0,0);
+  P7_ENVELOPES    *env   = p7_envelopes_Create(0,0);
+  float            tol   = 0.001;
+  char             errbuf[eslERRBUFSIZE];
+  float  gsc, fsc, asc;
+  int    idx;
+  int    d;
+  
+  if ( p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+  if ( p7_profile_Config(gm, hmm, bg)    != eslOK) esl_fatal(msg);
+
+  for (idx = 0; idx < N; idx++)
+    {
+      /* Emit sequence from model, using an arbitrary length model of <M>;
+       * restrict the emitted sequence length to 6M, arbitrarily, to 
+       * keep it down to something reasonable.
+       */
+      if ( p7_profile_SetLength(gm, M) != eslOK) esl_fatal(msg);
+      do {
+	esl_sq_Reuse(sq);
+	if (p7_ProfileEmit(rng, hmm, gm, bg, sq, gtr) != eslOK) esl_fatal(msg);
+      } while (sq->n > M * 6); 
+      if (p7_trace_Index   (gtr)                      != eslOK) esl_fatal(msg);
+      if (p7_trace_Score   (gtr, sq->dsq, gm, &gsc)   != eslOK) esl_fatal(msg);
+
+      /* Reset the length model to the actual length sq->n, then
+       * put it through the domain postprocessing analysis pipeline
+       */
+      if ( p7_profile_SetLength(gm, sq->n)                          != eslOK) esl_fatal(msg);
+     
+      /* First pass analysis */
+      if ( p7_ReferenceViterbi (sq->dsq, sq->n, gm, rxf, vtr, NULL) != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceForward (sq->dsq, sq->n, gm, rxf,      &fsc) != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceBackward(sq->dsq, sq->n, gm, rxd,      NULL) != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceDecoding(sq->dsq, sq->n, gm, rxf, rxd, rxd)  != eslOK) esl_fatal(msg);
+
+      /* Anchor determination (MPAS algorithm) */
+      if ( p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, vtr, &wrk, htbl,
+				afu, afd, anch, &asc, NULL, NULL)  != eslOK) esl_fatal(msg);
+
+      /* Reuse rxf,rxd as apu, apd; finish ASC analysis with Backward, Decoding */
+      p7_refmx_Reuse(apu);  p7_refmx_Reuse(apd);
+      if ( p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->arr, anch->n, apu, apd, NULL)               != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->arr, anch->n, afu, afd, apu, apd, apu, apd) != eslOK) esl_fatal(msg);
+
+      /* Envelope calculation */
+      if ( p7_reference_Envelopes(sq->dsq, sq->n, gm, anch->arr, anch->n, apu, apd, afu, afd, env) != eslOK) esl_fatal(msg);
+
+      //p7_envelopes_Dump(stdout, env);
+
+      p7_refmx_Reuse(afu);
+      if ( p7_reference_AEC_Align(gm, env, apu, apd, afu, tr) != eslOK) esl_fatal(msg);
+
+      //p7_refmx_Dump(stdout, afu);
+      //p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
+
+      /* Test 1. Coords of each domain are coherent */
+      if (anch->n != env->n) esl_fatal(msg);
+      for (d = 0; d < anch->n; d++)
+	{
+	  if (! (1 <= env->arr[d].oea &&
+		 env->arr[d].oea  <= env->arr[d].ia    &&
+		 env->arr[d].ia   <= env->arr[d].alia  &&
+		 env->arr[d].alia <= env->arr[d].i0    &&
+		 env->arr[d].i0   <= env->arr[d].alib  &&
+		 env->arr[d].alib <= env->arr[d].ib    &&
+		 env->arr[d].ib   <= env->arr[d].oeb   &&
+		 env->arr[d].oeb  <= sq->n)) esl_fatal(msg);
+	  if (! (1 <= env->arr[d].ka &&
+		 env->arr[d].ka <= env->arr[d].k0 &&
+		 env->arr[d].k0 <= env->arr[d].kb &&
+		 env->arr[d].kb <= gm->M)) esl_fatal(msg);
+	}
+
+      /* Test 2. Envelopes do not overlap. */
+      for (d = 1; d < anch->n; d++)
+	if (! (env->arr[d].ia > env->arr[d-1].ib)) esl_fatal(msg);
+
+      /* Test 3. envsc(d) <= asc_sc <= fwdsc */
+      for (d = 0; d < anch->n; d++)
+	if (! (env->arr[d].env_sc <= asc+tol && asc <= fsc+tol)) esl_fatal(msg);
+
+      /* Test 4, only on D=1 case with generated trace's domain 
+       * encompassed by the outer envelope 
+       */
+      if (gtr->ndom == 1 &&  anch->n   == 1 && 
+	  gtr->sqfrom[0] >= env->arr[0].oea &&
+	  gtr->sqto[0]   <= env->arr[0].oeb)
+	if (! ( env->arr[0].env_sc >= gsc)) esl_fatal(msg);
+
+      /* Test 5. MEG trace passes validation */
+      if (p7_trace_Validate(tr,  abc, sq->dsq, errbuf)  != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+      if (p7_trace_Validate(gtr, abc, sq->dsq, errbuf)  != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+      if (p7_trace_Validate(vtr, abc, sq->dsq, errbuf)  != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+
+      /* Test 6. Indexed domains agree with envelope data */
+      p7_trace_Index(tr);
+      if (tr->ndom != env->n) esl_fatal(msg);
+      for (d = 0; d < env->n; d++)
+	if (! ( tr->sqfrom[d]  == env->arr[d].alia &&
+		tr->sqto[d]    == env->arr[d].alib &&
+		tr->hmmfrom[d] == env->arr[d].ka   &&
+		tr->hmmto[d]   == env->arr[d].kb)) esl_fatal(msg);
+
+
+      p7_envelopes_Reuse(env);
+      p7_coords2_Reuse(anch);
+      p7_coords2_hash_Reuse(htbl);
+      p7_refmx_Reuse(rxf); p7_refmx_Reuse(rxd);
+      p7_refmx_Reuse(afu); p7_refmx_Reuse(afd);
+      p7_trace_Reuse(gtr); p7_trace_Reuse(vtr); p7_trace_Reuse(tr);
+      esl_sq_Reuse(sq);
+    }
+      
+  if (wrk) free(wrk);
+  p7_envelopes_Destroy(env);
+  p7_coords2_Destroy(anch);
+  p7_coords2_hash_Destroy(htbl);
+  p7_refmx_Destroy(afu); p7_refmx_Destroy(afd);
+  p7_refmx_Destroy(rxf); p7_refmx_Destroy(rxd);
+  p7_trace_Destroy(vtr); p7_trace_Destroy(gtr); p7_trace_Destroy(tr);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+  p7_bg_Destroy(bg);
+  esl_sq_Destroy(sq);
+}
+
+/* "singlemulti" test.
+ * 
+ * Use p7_modelsample_SinglePathedASC() to create a
+ * profile/sequence/anchorset comparison that has only a single
+ * possible path when anchor set constrained. Now the expected true
+ * path and envelope(s) are known, from that single path, so we can compare.
+ * 
+ * In order to guarantee only one possible path, while allowing
+ * multiple domains, the profile is limited to glocal-only.
+ *
+ * This is an extension of a very similar unit test from
+ * reference_envelopes.c.
+ * 
+ * We test:
+ *     1. The MEG trace is identical to the generated path.
+ *     1. Trace and envelopes agree on number of domains.
+ *     2. For each domain, oea==ia, oeb==ib, and these coords
+ *        agree with the trace.
+ *     3. In the case of a single domain (D=1), the envelope
+ *        score == the trace score.
+ */
+static void
+utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
+{
+  char          msg[] = "reference_aec_align:: singlemulti unit test failed";
+  P7_BG        *bg    = p7_bg_Create(abc);
+  P7_HMM       *hmm   = NULL;
+  P7_PROFILE   *gm    = NULL;
+  ESL_DSQ      *dsq   = NULL;
+  int           L;
+  P7_TRACE     *gtr   = NULL;
+  P7_TRACE     *tr    = p7_trace_Create();
+  P7_COORD2    *anch  = NULL;
+  int           D;
+  P7_REFMX     *afu   = p7_refmx_Create(M, 20);
+  P7_REFMX     *afd   = p7_refmx_Create(M, 20);
+  P7_REFMX     *apu   = p7_refmx_Create(M, 20);
+  P7_REFMX     *apd   = p7_refmx_Create(M, 20);
+  P7_ENVELOPES *env   = p7_envelopes_Create(0,0);
+  float         gsc;
+  float         tol   = 0.001;
+  int           idx;
+  int           d;
+  
+  for (idx = 0; idx < N; idx++)
+    {
+      if ( p7_modelsample_SinglePathedASC(rng, M, bg, &hmm, &gm, &dsq, &L, &gtr, &anch, &D, &gsc) != eslOK) esl_fatal(msg);
+
+      if ( p7_ReferenceASCForward (dsq, L, gm, anch, D, afu, afd, NULL)               != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceASCBackward(dsq, L, gm, anch, D, apu, apd, NULL)               != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceASCDecoding(dsq, L, gm, anch, D, afu, afd, apu, apd, apu, apd) != eslOK) esl_fatal(msg);
+
+      if ( p7_reference_Envelopes (dsq, L, gm, anch, D, apu, apd, afu, afd, env)      != eslOK) esl_fatal(msg);
+
+      p7_refmx_Reuse(afu);
+      if ( p7_reference_AEC_Align( gm, env, apu, apd, afu, tr) != eslOK) esl_fatal(msg);
+      if ( p7_trace_Index(tr)                                  != eslOK) esl_fatal(msg);
+
+      //p7_refmx_Dump(stdout, afu);
+      //p7_trace_DumpAnnotated(stdout, gtr, gm, dsq);
+      //p7_trace_DumpAnnotated(stdout,  tr, gm, dsq);
+
+      /* Test 1. The traces are identical. */
+      if ( p7_trace_Compare(gtr, tr, 0.0) != eslOK) esl_fatal(msg);
+
+      /* Test 2. Domain #'s agree */
+      if (! (gtr->ndom == D && env->n == D)) esl_fatal(msg);
+      if (! (tr->ndom  == D))                esl_fatal(msg);
+
+      /* Test 3. Envelope coords (and outer env coords) match trace */
+      for (d = 0; d < D; d++)
+	{
+	  if (! (env->arr[d].alia == gtr->sqfrom[d] &&
+		 env->arr[d].alia ==  tr->sqfrom[d] &&
+		 env->arr[d].alia == env->arr[d].ia &&
+		 env->arr[d].alia == env->arr[d].oea)) esl_fatal(msg);
+
+	  if (! (env->arr[d].alib == gtr->sqto[d]   &&
+		 env->arr[d].alib ==  tr->sqto[d]   &&
+		 env->arr[d].alib == env->arr[d].ib &&
+		 env->arr[d].alib == env->arr[d].oeb)) esl_fatal(msg);
+
+	  if (! (env->arr[d].ka == gtr->hmmfrom[d] &&
+		 env->arr[d].ka ==  tr->hmmfrom[d])) esl_fatal(msg);
+
+	  if (! (env->arr[d].kb == gtr->hmmto[d] &&
+		 env->arr[d].kb ==  tr->hmmto[d])) esl_fatal(msg);
+	}
+
+      /* Test 4. If D == 1, envelope score == trace score. */
+      if (D == 1 &&  esl_FCompare(env->arr[0].env_sc, gsc, tol) != eslOK) esl_fatal(msg);
+
+      p7_envelopes_Reuse(env);
+      p7_refmx_Reuse(afu); p7_refmx_Reuse(afd);
+      p7_refmx_Reuse(apu); p7_refmx_Reuse(apd);
+      p7_trace_Reuse(tr);
+
+      free(dsq);
+      free(anch);
+      p7_trace_Destroy(gtr);
+      p7_hmm_Destroy(hmm);
+      p7_profile_Destroy(gm);
+    }
+     
+  p7_trace_Destroy(tr);
+  p7_envelopes_Destroy(env);
+  p7_refmx_Destroy(afu); p7_refmx_Destroy(afd);
+  p7_refmx_Destroy(apu); p7_refmx_Destroy(apd);
+  p7_bg_Destroy(bg);
+}
+
+
+#endif /*p7REFERENCE_AEC_ALIGN_TESTDRIVE*/
+/*----------------- end, unit tests -----------------------------*/
+
+
+/*****************************************************************
+ * 3. Test driver
+ *****************************************************************/
+#ifdef p7REFERENCE_AEC_ALIGN_TESTDRIVE
+
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "unit test driver for AEC/MEG alignment inference";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *rng  = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
+  int             M    = 20;
+
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+
+  utest_crashtestdummy(rng, M, abc, 10);  
+  utest_singlemulti   (rng, M, abc, 10);
+
+  fprintf(stderr, "#  status = ok\n");
+
+  esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(rng);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+
+#endif /*p7REFERENCE_AEC_ALIGN_TESTDRIVE*/
+/*------------------- end, test driver --------------------------*/
+
+
+
+/*****************************************************************
+ * 4. Example
  *****************************************************************/
 #ifdef p7REFERENCE_AEC_ALIGN_EXAMPLE
 #include "p7_config.h"
