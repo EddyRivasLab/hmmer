@@ -131,8 +131,11 @@ p7_reference_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
     {
       env->arr[d].i0    = anch[d].n1;
       env->arr[d].k0    = anch[d].n2;
+      env->arr[d].alia  = 0;
+      env->arr[d].alib  = 0;
       env->arr[d].ka    = 0;
       env->arr[d].kb    = 0;
+
       env->arr[d].flags = 0;
     }
   env->n = D;

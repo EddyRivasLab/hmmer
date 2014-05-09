@@ -17,6 +17,8 @@
 #include "base/p7_profile.h"
 
 #include "dp_reference/p7_refmx.h"
+#include "dp_reference/reference_aec_align.h"
+#include "dp_reference/reference_aec_trace.h"
 
 /*****************************************************************
  * 1. AEC MEG alignment, fill.
@@ -47,13 +49,14 @@
  *            apu  : ASC Decoding UP matrix
  *            apd  : ASC Decoding DOWN matrix
  *            mx   : MEG alignment matrix space
+ *            tr   : RETURN: MEG path
  *
  * Returns:   <eslOK> on success.
  *
  * Throws:    <eslEMEM> on reallocation failure.
  */
 int
-p7_reference_ASC_Align(const P7_PROFILE *gm, const P7_ENVELOPES *env, const P7_REFMX *apu, const P7_REFMX *apd, P7_REFMX *mx)
+p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *apu, const P7_REFMX *apd, P7_REFMX *mx, P7_TRACE *tr)
 {
   int    M = env->M;
   int    L = env->L;
@@ -128,7 +131,7 @@ p7_reference_ASC_Align(const P7_PROFILE *gm, const P7_ENVELOPES *env, const P7_R
 	  ppp = apu->dp[i] + p7R_NSCELLS;   // on k=1 of UP decoding matrix, current row
 	  dlv = dgv = -eslINFINITY;
 
-	  if (env->arr[0].flags & p7E_IS_GLOCAL)
+	  if (env->arr[d].flags & p7E_IS_GLOCAL)
 	    {
 	      for (k = 1; k < env->arr[d].k0; k++)
 		{
@@ -193,7 +196,7 @@ p7_reference_ASC_Align(const P7_PROFILE *gm, const P7_ENVELOPES *env, const P7_R
 	  for (s = 0; s < p7R_NSCELLS; s++) *dpc++ = -eslINFINITY; // now dpc is on k=1.
 	  dlv = dgv = -eslINFINITY;
 	  
-	  if (env->arr[0].flags & p7E_IS_GLOCAL)
+	  if (env->arr[d].flags & p7E_IS_GLOCAL)
 	    {
 	      for (k = 1; k < env->arr[d].k0; k++)
 		{ 
@@ -477,8 +480,8 @@ p7_reference_ASC_Align(const P7_PROFILE *gm, const P7_ENVELOPES *env, const P7_R
 	      xc[p7R_CC]     = -eslINFINITY;
 	    }
 	  xc[p7R_B] = xB;
-	  xc[p7R_L] = ( env->arr[0].flags & p7E_IS_GLOCAL ? -eslINFINITY : xB );
-	  xc[p7R_G] = ( env->arr[0].flags & p7E_IS_GLOCAL ? xB : -eslINFINITY );
+	  xc[p7R_L] = ( env->arr[d].flags & p7E_IS_GLOCAL ? -eslINFINITY : xB );
+	  xc[p7R_G] = ( env->arr[d].flags & p7E_IS_GLOCAL ? xB : -eslINFINITY );
 	}
       else
 	{ // Here we know there's no more domains. We're in C until the end. No B.
@@ -505,14 +508,14 @@ p7_reference_ASC_Align(const P7_PROFILE *gm, const P7_ENVELOPES *env, const P7_R
 
     } /* end loop over domains d */
 
-  return eslOK;
+  return p7_reference_aec_trace_MEG(gm, env, apd, mx, tr);
 }
 
 
 /*****************************************************************
  * x. Example
  *****************************************************************/
-#ifdef p7REFERENCE_ASC_ALIGN_EXAMPLE
+#ifdef p7REFERENCE_AEC_ALIGN_EXAMPLE
 #include "p7_config.h"
 
 #include "easel.h"
@@ -631,9 +634,12 @@ main(int argc, char **argv)
 
   /* MEG alignment step uses afu as its matrix; apu/apd decoding matrices as its input */
   p7_refmx_Reuse(afu);
-  p7_reference_ASC_Align(gm, env, apu, apd, afu);
+  p7_trace_Reuse(tr);
+  p7_reference_AEC_Align(gm, env, apu, apd, afu, tr);
 
-  p7_refmx_Dump(stdout, afu);
+  //p7_refmx_Dump(stdout, afu);
+  //p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
+  p7_envelopes_Dump(stdout, env);
 
   p7_envelopes_Destroy(env);
   p7_coords2_hash_Destroy(hashtbl);
@@ -653,7 +659,7 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-#endif /*p7REFERENCE_ASC_ALIGN_EXAMPLE*/
+#endif /*p7REFERENCE_AEC_ALIGN_EXAMPLE*/
 
 
 /*****************************************************************

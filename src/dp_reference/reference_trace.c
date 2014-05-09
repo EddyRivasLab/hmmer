@@ -521,6 +521,7 @@ reference_trace_engine(ESL_RANDOMNESS *rng, float *wrk, const P7_PROFILE *gm, co
   
   tr->M = rmx->M;
   tr->L = rmx->L;
+
   return p7_trace_Reverse(tr);
 }
 /*---------------- end, traceback engine ------------------------*/
