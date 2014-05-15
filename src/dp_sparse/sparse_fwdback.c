@@ -234,8 +234,8 @@ p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPAR
   sx->type = p7S_BACKWARD;
 
   /* In Backwards, we traverse DP matrix backwards; init ptrs to last elements */
-  xp  = sx->xmx + (sm->nrow + sm->nseg - 1)*p7S_NXCELLS; // last supercell in xmx 
-  dpc = sx->dp  + (sm->ncells-1)*p7S_NSCELLS;		 // last supercell in dp  
+  xp  = sx->xmx + (sm->nrow + sm->S - 1)*p7S_NXCELLS; // last supercell in xmx 
+  dpc = sx->dp  + (sm->ncells-1)*p7S_NSCELLS;	      // last supercell in dp  
 
   /* xC/N/J follow a convention that as we start a row i, they already include
    * all contribution from row i+1; i.e. they are calculated as a lookahead, 

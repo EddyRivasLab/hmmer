@@ -330,10 +330,10 @@ p7_SparseEnvscoreApprox(P7_PROFILE *gm, P7_SPARSEMX *sxf, int iae, int ibe, floa
 
   /* Accessing the {CN}(iae-1) and C(ibe) entries is complicated because of sparse storage; please forgive. */
   /* Find first stored special row i>=iae; get C(i-1), N(i-1) from there; reset iae=i */
-  for (g = 0; g < sxf->sm->nseg; g++)
+  for (g = 1; g <= sxf->sm->S; g++)
     {
-      ia = sxf->sm->i[g*2];
-      ib = sxf->sm->i[g*2+1];
+      ia = sxf->sm->seg[g].ia;
+      ib = sxf->sm->seg[g].ib;
       
       if      (iae < ia)   {                             iae = ia;  Ci1 = xc[p7S_C]; Ni1 = xc[p7S_N]; break; }
       else if (iae <= ib)  { xc += (iae-ia)*p7S_NXCELLS; ia  = iae; Ci1 = xc[p7S_C]; Ni1 = xc[p7S_N]; break; }
@@ -349,10 +349,10 @@ p7_SparseEnvscoreApprox(P7_PROFILE *gm, P7_SPARSEMX *sxf, int iae, int ibe, floa
   } else {
     xc     += (ib-ia+1) * p7S_NXCELLS; // xc was on ia-1. Move it to (ib) in that previous segment
     last_ib = ib;	 	       /* Now we're looking for ibe' = max_i i <= ibe such that xc[i] is stored  */
-    for (g = g+1; g < sxf->sm->nseg; g++)
+    for (g = g+1; g <= sxf->sm->S; g++)
       {
-	ia = sxf->sm->i[g*2];
-	ib = sxf->sm->i[g*2+1];
+	ia = sxf->sm->seg[g].ia;
+	ib = sxf->sm->seg[g].ib;
 	
 	if      (ibe < ia-1) { ibe = last_ib;                 Cj = xc[p7S_C]; break; }
 	else if (ibe <= ib)  { xc += (ibe-ia+2)*p7S_NXCELLS;  Cj = xc[p7S_C]; break; }
@@ -361,7 +361,7 @@ p7_SparseEnvscoreApprox(P7_PROFILE *gm, P7_SPARSEMX *sxf, int iae, int ibe, floa
 	  last_ib = ib;
 	}
       }
-    if (g == sxf->sm->nseg) { ibe = last_ib; Cj = xc[p7S_C]; }
+    if (g == sxf->sm->S+1) { ibe = last_ib; Cj = xc[p7S_C]; }
   }
   /* now iae,ibe may have been moved, to correspond to outermost stored rows in the envelope */
 

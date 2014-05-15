@@ -480,7 +480,8 @@ ascmatrix_trace_compare(P7_TRACE *tr, P7_REFMX *apu, P7_REFMX *apd, P7_COORD2 *a
 	if (tr->st[z] == p7T_J && tr->i[z]) P7R_XMX(ppt, i, p7R_JJ) = 1.0;
       }
     }
-  //p7_refmx_Dump(stdout, ppt);
+
+  printf("### Trace Matrix:\n"); p7_refmx_Dump(stdout, ppt);
       
   /* Now we can just compare this std DP matrix to the ASC matrices */
   status = ascmatrix_compare_std(ppt, apu, apd, anch, D, epsilon);
@@ -896,6 +897,9 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
+  printf("### ASC Decode UP:\n");    p7_refmx_Dump(stdout, apu);
+  printf("### ASC Decode DOWN:\n");  p7_refmx_Dump(stdout, apd);
+  p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
 
   if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
   if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);

@@ -70,7 +70,7 @@ P7_SPARSEMASK *
 p7_sparsemask_Create(int M, int L)
 {
   P7_SPARSEMASK *sm             = NULL;
-  int            default_ialloc = 4;
+  int            default_salloc = 8;
   int64_t        default_kalloc = 4096;
   int            i,r;
   int            status;
@@ -80,12 +80,12 @@ p7_sparsemask_Create(int M, int L)
   sm->M      = M;
   sm->Q      = P7_NVF(M);  // approx M/4, for striped vectors of four floats
 		
-  sm->i      = NULL;
+  sm->seg    = NULL;
   sm->k      = NULL;
   sm->n      = NULL;
   sm->kmem   = NULL;
 
-  sm->nseg    = 0;
+  sm->S       = 0;
   sm->nrow    = 0;
   sm->ncells  = 0;
   sm->last_i  = L+1;     	 // sentinel to assure StartRow() is called in reverse L..1 order 
@@ -102,16 +102,16 @@ p7_sparsemask_Create(int M, int L)
   while (sm->kalloc < p7_VNF*sm->Q) sm->kalloc *= 2;
 
   sm->ralloc   = L+1;		
-  sm->ialloc   = default_ialloc;
+  sm->salloc   = default_salloc;
 
   sm->n_krealloc = 0;
-  sm->n_irealloc = 0;
   sm->n_rrealloc = 0;
+  sm->n_srealloc = 0;
 
-  ESL_ALLOC(sm->i,    sizeof(int)   * 2 * sm->ialloc); // *2 because ia,ib pairs 
-  ESL_ALLOC(sm->k,    sizeof(int *) * sm->ralloc);
-  ESL_ALLOC(sm->n,    sizeof(int)   * sm->ralloc);
-  ESL_ALLOC(sm->kmem, sizeof(int)   * sm->kalloc);
+  ESL_ALLOC(sm->seg,  sm->salloc * sizeof(struct p7_sparsemask_seg_s)); // salloc is the actual allocation, inclusive of +2 for sentinels
+  ESL_ALLOC(sm->k,    sm->ralloc * sizeof(int *));
+  ESL_ALLOC(sm->n,    sm->ralloc * sizeof(int));
+  ESL_ALLOC(sm->kmem, sm->kalloc * sizeof(int));
 
   sm->k[0]   = NULL;		// always. 
   for (i = 0; i <= L; i++)	// n[0] will always be 0; n[i=1..L] initialized to 0, then count as cells are added 
@@ -143,7 +143,7 @@ p7_sparsemask_Reinit(P7_SPARSEMASK *sm, int M, int L)
   sm->M  = M;
   sm->Q  = P7_NVF(M);
 		
-  /* i[], kmem stay at their previous ialloc, kalloc
+  /* seg[], kmem stay at their previous salloc, kalloc
    * but do we need to reallocate rows for k[] and n[]? 
    */
   if (sm->ralloc < L+1) {
@@ -153,7 +153,7 @@ p7_sparsemask_Reinit(P7_SPARSEMASK *sm, int M, int L)
     sm->n_rrealloc++;
   }
 
-  sm->nseg    = 0;
+  sm->S       = 0;
   sm->nrow    = 0;
   sm->ncells  = 0;
   sm->last_i  = sm->L+1;
@@ -179,10 +179,10 @@ size_t
 p7_sparsemask_Sizeof(const P7_SPARSEMASK *sm)
 {
   size_t n = sizeof(P7_SPARSEMASK);
-  n += sm->ialloc * sizeof(int)   * 2; // <i>; *2 = ia,ib pairs 
-  n += sm->ralloc * sizeof(int *);     // <k>                   
-  n += sm->ralloc * sizeof(int);       // <n>                   
-  n += sm->kalloc * sizeof(int);       // <kmem>                
+  n += sm->salloc * sizeof(struct p7_sparsemask_seg_s); // <seg>
+  n += sm->ralloc * sizeof(int *);                      // <k>                   
+  n += sm->ralloc * sizeof(int);                        // <n>                   
+  n += sm->kalloc * sizeof(int);                        // <kmem>                
   return n;
 }
 
@@ -193,10 +193,10 @@ size_t
 p7_sparsemask_MinSizeof(const P7_SPARSEMASK *sm)
 {
   size_t n = sizeof(P7_SPARSEMASK);
-  n += sm->nseg   * sizeof(int) * 2;  // <i>
-  n += (sm->L+1)  * sizeof(int *);    // <k>
-  n += (sm->L+1)  * sizeof(int);      // <n>
-  n += sm->ncells * sizeof(int);      // <kmem>
+  n += (sm->S+2)  * sizeof(struct p7_sparsemask_seg_s);  // <seg>; includes sentinels at 0,S+1
+  n += (sm->L+1)  * sizeof(int *);                       // <k>
+  n += (sm->L+1)  * sizeof(int);                         // <n>
+  n += sm->ncells * sizeof(int);                         // <kmem>
   return n;
 }
 
@@ -230,7 +230,7 @@ void
 p7_sparsemask_Destroy(P7_SPARSEMASK *sm)
 {
   if (sm) {
-    if (sm->i)    free(sm->i);
+    if (sm->seg)  free(sm->seg);
     if (sm->k)    free(sm->k);
     if (sm->n)    free(sm->n);
     if (sm->kmem) free(sm->kmem);
@@ -442,9 +442,18 @@ p7_sparsemask_FinishRow(P7_SPARSEMASK *sm)
  *            are valid, though <kmem> is reversed.
  *            
  *            Here we reverse <kmem>, then set the rest: k[i] pointers
- *            into <kmem>, the <i[]> coord pairs ia,ib for each
- *            segment, the <nseg> counter for segments, and the <nrow>
+ *            into <kmem>, the <seg[]> coord pairs ia,ib for each
+ *            segment, the <S> counter for segment number, and the <nrow>
  *            counter for the nonzero <n[i]>.
+ *            
+ *            Sentinels for <seg>: <seg[0].ia> and <seg[0].ib> are set
+ *            to -1. For some boundary conditions, we need seg[0].ib < 
+ *            seg[1].ia to always succeed; for another, we need seg[0].ib +1
+ *            to be 0 (so seg[s].ib+1 always starts us at a valid i in n[i]).
+ *            <seg[S+1].ia> and
+ *            <seg[S+1].ib> are set to <L+2>; for some boundary
+ *            conditions, we need a test of <i < seg[S+1].ia-1> to
+ *            fail for all i up to L.
  *
  * Returns:   <eslOK> on success.
  *
@@ -455,44 +464,47 @@ int
 p7_sparsemask_Finish(P7_SPARSEMASK *sm)
 {
   int i,r;
+  int s;
   int *p;
   int status;
+
 
   /* Reverse kmem. */
   esl_vec_IReverse(sm->kmem, sm->kmem, sm->ncells);
 
-  /* Set the k[] pointers; count <nseg> and <nrow> */
+  /* Set the k[] pointers; count <S> and <nrow> */
   p = sm->kmem;
-  sm->nseg = sm->nrow = 0;
+  sm->S = sm->nrow = 0;
   for (i = 1; i <= sm->L; i++)
     if (sm->n[i]) 
       {
 	sm->nrow++;
 	sm->k[i] = p;
 	p       += sm->n[i];
-	if (sm->n[i-1] == 0) sm->nseg++;
+	if (sm->n[i-1] == 0) sm->S++;
       } 
     else 
-      {
-	sm->k[i] = NULL;
-      }
+      sm->k[i] = NULL;
 
-  /* Reallocate i[] if needed. */
-  if (sm->nseg > sm->ialloc) 
+  /* Reallocate seg[] if needed. */
+  if ( (sm->S+2) > sm->salloc) 
     {
-      ESL_REALLOC(sm->i, sizeof(int) * 2 * sm->nseg); /* *2, for ia,ib pairs */
-      sm->ialloc = sm->nseg;
-      sm->n_irealloc++;
+      ESL_REALLOC(sm->seg, (sm->S+2) * sizeof(struct p7_sparsemask_seg_s)); /* +2, for sentinels */
+      sm->salloc = sm->S + 2; // inclusive of sentinels
+      sm->n_srealloc++;
     }
       
-  /* Set i[] coord pairs. */
-  p = sm->i;
-  for (i = 1; i <= sm->L; i++) 
+  /* Set seg[] coord pairs. */
+  sm->seg[0].ia = sm->seg[0].ib = -1;
+  for (s = 1, i = 1; i <= sm->L; i++)
     {
-      if (sm->n[i-1] > 0 && sm->n[i] == 0) *p++ = i-1; /* end of a previous segment, ib coord */
-      if (sm->n[i] > 0 && sm->n[i-1] == 0) *p++ = i;   /* start a new segment, ia coord */
+      if (sm->n[i]   && sm->n[i-1] == 0)                 sm->seg[s].ia   = i; 
+      if (sm->n[i]   && (i == sm->L || sm->n[i+1] == 0)) sm->seg[s++].ib = i; 
     }
-  if (sm->n[sm->L]) *p = sm->L;	/* last segment ended exactly at L. */
+  ESL_DASSERT1(( s == sm->S+1 ));
+  sm->seg[s].ia = sm->seg[s].ib = sm->L+2;
+
+  
 
   sm->last_i = -1;
   for (r = 0; r < p7_VNF; r++) 
@@ -550,6 +562,7 @@ int
 p7_sparsemask_Compare(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2)
 {
   int i;
+  int s;
   int killmenow = FALSE;
 #ifdef p7_DEBUGGING
   killmenow = TRUE;
@@ -557,12 +570,16 @@ p7_sparsemask_Compare(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2)
 
   if ( (sm1->L      != sm2->L)      ||
        (sm1->M      != sm2->M)      ||
-       (sm1->nseg   != sm2->nseg)   ||
+       (sm1->S      != sm2->S)      ||
        (sm1->nrow   != sm2->nrow)   ||
        (sm1->ncells != sm2->ncells)) 
     { if (killmenow) abort(); return eslFAIL; }
 
-  if ( esl_vec_ICompare(sm1->i, sm2->i, sm1->nseg*2) != eslOK)  { if (killmenow) abort(); return eslFAIL; }
+  for (s = 0; s <= sm1->S+1; s++)
+    {
+      if (sm1->seg[s].ia != sm2->seg[s].ia)   { if (killmenow) abort(); return eslFAIL; }
+      if (sm1->seg[s].ib != sm2->seg[s].ib)   { if (killmenow) abort(); return eslFAIL; }
+    }
   if ( esl_vec_ICompare(sm1->n, sm2->n, sm1->L+1)    != eslOK)  { if (killmenow) abort(); return eslFAIL; }
   for (i = 0; i <= sm1->L; i++)
     if ( esl_vec_ICompare(sm1->k[i], sm2->k[i], sm1->n[i]) != eslOK) { if (killmenow) abort(); return eslFAIL; }
@@ -596,32 +613,31 @@ p7_sparsemask_Compare(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2)
 int
 p7_sparsemask_Validate(const P7_SPARSEMASK *sm, char *errbuf)
 {
-  int g, i, ia, ib, last_ib;
+  int g, i;
 
   if (errbuf) errbuf[0] = '\0';
 
   if ( sm->L < 1) ESL_FAIL(eslFAIL, errbuf, "L must be >=1");
   if ( sm->M < 1) ESL_FAIL(eslFAIL, errbuf, "M must be >=1");
+  if ( sm->S < 0) ESL_FAIL(eslFAIL, errbuf, "S must be >=0");
 
-  last_ib = 0;
-  for (g = 0; g < sm->nseg; g++)
+  for (g = 1; g <= sm->S; g++)
     {
-      ia = sm->i[g*2];
-      ib = sm->i[g*2+1];
-      if (last_ib > ia) ESL_FAIL(eslFAIL, errbuf, "last_ib > ia?");
-      if (ia > ib)      ESL_FAIL(eslFAIL, errbuf, "ia..ib not in order");
-      if (ib > sm->L)   ESL_FAIL(eslFAIL, errbuf, "ib > L");
+      if (sm->seg[g-1].ib >= sm->seg[g].ia)           ESL_FAIL(eslFAIL, errbuf, "seg %d overlaps with previous one", g);  // Note boundary condition, seg[0].ib=-1
+      if (sm->seg[g].ia   >  sm->seg[g].ib)           ESL_FAIL(eslFAIL, errbuf, "ia..ib are not in order for seg %d", g);
+      if (sm->seg[g].ia < 1 || sm->seg[g].ia > sm->L) ESL_FAIL(eslFAIL, errbuf, "ia[%d] is invalid", g);
+      if (sm->seg[g].ib < 1 || sm->seg[g].ib > sm->L) ESL_FAIL(eslFAIL, errbuf, "ib[%d] is invalid", g);
 
-      for (i = last_ib+1; i < ia; i++)
+      for (i = sm->seg[g-1].ib+1; i < sm->seg[g].ia; i++)   // Note boundary condition. Sentinel seg[0].ib == -1, so (i = seg[0]+1) means 0
 	if (sm->n[i] != 0) ESL_FAIL(eslFAIL, errbuf, "n[i] != 0 for i unmarked, not in sparse segment");
-      for (i = ia; i <= ib; i++)
+      for (i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)
 	if (sm->n[i] == 0) ESL_FAIL(eslFAIL, errbuf, "n[i] == 0 for i supposedly marked in sparse seg");
-
-      last_ib = ib;
     }
+  for (i = sm->seg[sm->S].ib+1; i <= sm->L; i++)
+    if (sm->n[i] != 0) ESL_FAIL(eslFAIL, errbuf, "n[i] != 0 for i unmarked, not in sparse segment");
+
   return eslOK;
 }
-
 /*-------- end, P7_SPARSEMASK debugging tools -------------------*/
 
 
@@ -657,8 +673,8 @@ p7_sparsemx_Create(P7_SPARSEMASK *sm)
   sx->sm   = sm;
   sx->type = p7S_UNSET;
 
-  sx->dalloc = (sm ? sm->ncells          : default_ncell);
-  sx->xalloc = (sm ? sm->nrow + sm->nseg : default_nx);
+  sx->dalloc = (sm ? sm->ncells       : default_ncell);
+  sx->xalloc = (sm ? sm->nrow + sm->S : default_nx);
 
   ESL_ALLOC(sx->dp,  sizeof(float) * p7S_NSCELLS * sx->dalloc);
   ESL_ALLOC(sx->xmx, sizeof(float) * p7S_NXCELLS * sx->xalloc);
@@ -692,7 +708,7 @@ int
 p7_sparsemx_Reinit(P7_SPARSEMX *sx, const P7_SPARSEMASK *sm)
 {
   int64_t dalloc_req = sm->ncells;
-  int     xalloc_req = sm->nrow + sm->nseg;
+  int     xalloc_req = sm->nrow + sm->S;
   int     status;
 
   if (sx->dalloc < dalloc_req) {
@@ -715,8 +731,8 @@ p7_sparsemx_Reinit(P7_SPARSEMX *sx, const P7_SPARSEMASK *sm)
 int
 p7_sparsemx_Zero(P7_SPARSEMX *sx)
 {
-  esl_vec_FSet(sx->dp,   sx->sm->ncells*p7S_NSCELLS,             0.0f);
-  esl_vec_FSet(sx->xmx, (sx->sm->nrow+sx->sm->nseg)*p7S_NXCELLS, 0.0f);
+  esl_vec_FSet(sx->dp,   sx->sm->ncells*p7S_NSCELLS,          0.0f);
+  esl_vec_FSet(sx->xmx, (sx->sm->nrow+sx->sm->S)*p7S_NXCELLS, 0.0f);
   return eslOK;
 }
 
@@ -751,8 +767,8 @@ size_t
 p7_sparsemx_MinSizeof(const P7_SPARSEMASK *sm)
 {
   size_t n = sizeof(P7_SPARSEMX);
-  n += sizeof(float) * p7S_NSCELLS * sm->ncells;             // dp[]
-  n += sizeof(float) * p7S_NXCELLS * (sm->nrow + sm->nseg);  // xmx[]; for each seg ia..ib, ia-1..ib has special cells
+  n += sizeof(float) * p7S_NSCELLS * sm->ncells;          // dp[]
+  n += sizeof(float) * p7S_NXCELLS * (sm->nrow + sm->S);  // xmx[]; for each seg ia..ib, ia-1..ib has special cells
   return n;
 }
 
@@ -789,10 +805,10 @@ p7_sparsemx_GetSpecial(const P7_SPARSEMX *sx, int i, int s)
   float *xc = sx->xmx;
   int g, ia, ib;
 
-  for (g = 0; g < sx->sm->nseg; g++)
+  for (g = 1; g <= sx->sm->S; g++)
     {
-      ia = sx->sm->i[2*g];
-      ib = sx->sm->i[2*g+1];
+      ia = sx->sm->seg[g].ia;
+      ib = sx->sm->seg[g].ib;
       
       if      (i > ib)    { xc += p7S_NXCELLS * (ib-ia+2); continue;     }
       else if (i >= ia-1) { xc += p7S_NXCELLS * (i-ia+1);  return xc[s]; } // normal return
@@ -1151,7 +1167,6 @@ p7_sparsemx_Copy2Reference(const P7_SPARSEMX *sx, P7_REFMX *rx)
   int             L = sm->L;
   int             W = (M+1)*p7R_NSCELLS + p7R_NXCELLS; /* total width of a reference DP row, in cells */
   float           vimp;
-  int            *imem;
   float          *xc  = sx->xmx;
   float          *dpc = sx->dp;
   int g,i,ia,ib,k,x,z;
@@ -1170,11 +1185,10 @@ p7_sparsemx_Copy2Reference(const P7_SPARSEMX *sx, P7_REFMX *rx)
   rx->M    = sm->M;
 
   /* now traverse the sparse <sx> */
-  imem = sm->i;
-  for (g = 0; g < sm->nseg; g++)
+  for (g = 1; g <= sm->S; g++)
     {
-      ia = *imem++;
-      ib = *imem++;
+      ia = sm->seg[g].ia;
+      ib = sm->seg[g].ib;
 
       /* specials on row ia-1 before each segment are stored. */
       /* don't rely on the order being the same in ref, sparse */
@@ -1225,8 +1239,8 @@ p7_sparsemx_Compare(const P7_SPARSEMX *sx1, const P7_SPARSEMX *sx2, float tol)
 
   if ( sx1->type != sx2->type)                            { if (killmenow) abort(); return eslFAIL; }
   if ( p7_sparsemask_Compare(sx1->sm, sx2->sm) != eslOK)  { if (killmenow) abort(); return eslFAIL; }
-  if ( esl_vec_FCompare(sx1->dp,  sx2->dp,   p7S_NSCELLS*sx1->sm->ncells,               tol) != eslOK) { if (killmenow) abort(); return eslFAIL; }
-  if ( esl_vec_FCompare(sx1->xmx, sx2->xmx,  p7S_NXCELLS*(sx1->sm->nrow+sx1->sm->nseg), tol) != eslOK) { if (killmenow) abort(); return eslFAIL; }
+  if ( esl_vec_FCompare(sx1->dp,  sx2->dp,   p7S_NSCELLS*sx1->sm->ncells,            tol) != eslOK) { if (killmenow) abort(); return eslFAIL; }
+  if ( esl_vec_FCompare(sx1->xmx, sx2->xmx,  p7S_NXCELLS*(sx1->sm->nrow+sx1->sm->S), tol) != eslOK) { if (killmenow) abort(); return eslFAIL; }
   return eslOK;
 }
 
@@ -1322,10 +1336,10 @@ p7_sparsemx_CompareReference(const P7_SPARSEMX *sx, const P7_REFMX *rx, float to
   /* Second way: "segments" */
   dpc2 = sx->dp;
   xc2  = sx->xmx;
-  for (g = 0; g < sm->nseg; g++)
+  for (g = 1; g <= sm->S; g++)
     {
-      ia = sm->i[g*2];
-      ib = sm->i[g*2+1];
+      ia = sm->seg[g].ia;
+      ib = sm->seg[g].ib;
 
       for (s = 0; s < p7S_NXCELLS; xc2++, s++)        /* ia-1 specials at segment start */
 	if (esl_FCompareAbs(*xc2, P7R_XMX(rx,ia-1,s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
@@ -1602,10 +1616,10 @@ static int
 validate_dimensions(const P7_SPARSEMX *sx, char *errbuf)
 {
   const P7_SPARSEMASK *sm  = sx->sm;
-  int            g      = 0;
-  int            r      = 0;
-  int            ncells = 0;
-  int            i;
+  int   g      = 0;
+  int   r      = 0;
+  int   ncells = 0;
+  int   i;
 
   if ( sm->M <= 0)              ESL_FAIL(eslFAIL, errbuf, "nonpositive M");
   if ( sm->L <= 0)              ESL_FAIL(eslFAIL, errbuf, "nonpositive L");
@@ -1616,13 +1630,13 @@ validate_dimensions(const P7_SPARSEMX *sx, char *errbuf)
     if (sm->n[i])                r++; /* sparse row count */
     ncells += sm->n[i];
   }
-  if (g      != sm->nseg)       ESL_FAIL(eslFAIL, errbuf, "nseg is wrong");
+  if (g      != sm->S)          ESL_FAIL(eslFAIL, errbuf, "S (nseg) is wrong");
   if (r      != sm->nrow)       ESL_FAIL(eslFAIL, errbuf, "nrow is wrong");
   if (ncells != sm->ncells)     ESL_FAIL(eslFAIL, errbuf, "ncells is wrong");
 
   if (sm->L+1    > sm->ralloc)  ESL_FAIL(eslFAIL, errbuf, "k[] row allocation too small");
   if (sm->ncells > sm->kalloc)  ESL_FAIL(eslFAIL, errbuf, "kmem[] cell allocation too small");
-  if (sm->nseg   > sm->ialloc)  ESL_FAIL(eslFAIL, errbuf, "i[] segment allocation too small");
+  if (sm->S+2    > sm->salloc)  ESL_FAIL(eslFAIL, errbuf, "seg[] segment allocation too small");
   return eslOK;
 }
 
@@ -1709,7 +1723,7 @@ validate_backward(const P7_SPARSEMX *sx, char *errbuf)
 {
   const P7_SPARSEMASK *sm     = sx->sm;
   float         *dpc    = sx->dp  + (sm->ncells-1)*p7S_NSCELLS;		// last supercell in dp  
-  float         *xc     = sx->xmx + (sm->nrow + sm->nseg - 1)*p7S_NXCELLS; // last supercell in xmx 
+  float         *xc     = sx->xmx + (sm->nrow + sm->S - 1)*p7S_NXCELLS; // last supercell in xmx 
   int            last_n = 0;
   int            i,z;
 
@@ -1793,7 +1807,7 @@ validate_decoding(const P7_SPARSEMX *sx, char *errbuf)
 
   /* Backwards sweep, looking only at ib end rows. */
   dpc    = sx->dp  + (sm->ncells-1)*p7S_NSCELLS;		 // last supercell in dp  
-  xc     = sx->xmx + (sm->nrow + sm->nseg - 1)*p7S_NXCELLS; // last supercell in xmx 
+  xc     = sx->xmx + (sm->nrow + sm->S - 1)*p7S_NXCELLS; // last supercell in xmx 
   last_n = 0;
   /* special cases on absolute final stored row ib: */
   if (esl_FCompareAbs(xc[p7S_N], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "N on last row not 0");

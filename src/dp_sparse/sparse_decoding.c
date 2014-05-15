@@ -492,8 +492,8 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
       if ( p7_sparsemx_CountTrace(tr, sxs)                    != eslOK) esl_fatal(msg);
       if ( p7_trace_Reuse(tr)                                 != eslOK) esl_fatal(msg);
     }
-  esl_vec_FScale(sxs->dp,   sxs->sm->ncells*p7S_NSCELLS,              1./(float)ntr);
-  esl_vec_FScale(sxs->xmx, (sxs->sm->nrow+sxs->sm->nseg)*p7S_NXCELLS, 1./(float)ntr);
+  esl_vec_FScale(sxs->dp,   sxs->sm->ncells*p7S_NSCELLS,           1./(float)ntr);
+  esl_vec_FScale(sxs->xmx, (sxs->sm->nrow+sxs->sm->S)*p7S_NXCELLS, 1./(float)ntr);
 
   //  p7_sparsemx_Dump(stdout, sxd);
   //  p7_sparsemx_Dump(stdout, sxs);

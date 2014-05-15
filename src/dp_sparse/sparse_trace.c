@@ -412,8 +412,8 @@ sparse_traceback_engine(ESL_RANDOMNESS *rng, float *wrk, const P7_PROFILE *gm, c
    * always pass current k,i even for nonemitting states.
    */
 
-  xc      = sx->xmx + (sm->nrow+sm->nseg-1)*p7S_NXCELLS; /* initialized to last stored row, an end-of-seg ib; may be <L */
-  xc_on_i = (sm->n[sm->L] ? TRUE : FALSE);		 /* if last row is in segment, stored, ib==L, then xc points to stored special row */
+  xc      = sx->xmx + (sm->nrow+sm->S-1)*p7S_NXCELLS; /* initialized to last stored row, an end-of-seg ib; may be <L */
+  xc_on_i = (sm->n[sm->L] ? TRUE : FALSE);	      /* if last row is in segment, stored, ib==L, then xc points to stored special row */
 
   dp      = sx->dp  + (sm->ncells - sm->n[sm->L]) * p7S_NSCELLS; /* <dp> is initialized on row ip=L, which might be empty */
       
@@ -695,8 +695,8 @@ main(int argc, char **argv)
     }
 
   /* Renormalize <sxd2> */
-  esl_vec_FScale(sxd2->dp,   sxd2->sm->ncells*p7S_NSCELLS,               1./(float)N);
-  esl_vec_FScale(sxd2->xmx, (sxd2->sm->nrow+sxd2->sm->nseg)*p7S_NXCELLS, 1./(float)N);
+  esl_vec_FScale(sxd2->dp,   sxd2->sm->ncells*p7S_NSCELLS,            1./(float)N);
+  esl_vec_FScale(sxd2->xmx, (sxd2->sm->nrow+sxd2->sm->S)*p7S_NXCELLS, 1./(float)N);
   
   if (esl_opt_GetBoolean(go, "-D")) p7_sparsemx_Dump(stdout, sxd2);
 

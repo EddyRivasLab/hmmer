@@ -32,18 +32,21 @@ typedef struct {
   int      M;		// profile has 1..M positions 
   int      Q;		// number of striped vectors in fwdfilter; width of each striped segment; width of "slots"
 
-  int     *i;    	// ia,ib pairs for each segment. i[0..2*nseg-1] 
+  struct p7_sparsemask_seg_s {
+    int ia;               // <seg[s]> = ia,ib pairs for each segment <s>, s=1..nseg. 
+    int ib;               //    also, seg[0] and seg[nseg+1] contain sentinel values. 
+  }       *seg;         
   int    **k;		// k[0,1..L] = ptrs into kmem, rows of sparse k indices; k[0]=NULL; k[i]=NULL if n[i]=0 
   int     *n;		// number of cells included on each row; n[0]=0; n[i] <= M 
   int     *kmem;	// memory that k[] are pointing into, storing k indices of included cells, kmem[0..ncells-1]
 
-  int      nseg;	// number of sparsified segments 
+  int      S;   	// number of sparsified segments 
   int      nrow;        // number of included rows; \sum_{i=1}^{L} \delta(n[i]) 
   int64_t  ncells;	// number of included supercells; \sum_{i=1}^{L} n[i]        
 
   int      ralloc;	// k[] is allocated for ralloc rows; L+1 <= ralloc 
   int64_t  kalloc;	// kmem[] is allocated for kalloc cells; ncells <= kalloc 
-  int      ialloc;	// i[] is allocated for up to 2*ialloc coords ia,ib; nseg <= ialloc 
+  int      salloc;	// seg[] is allocated for salloc ia,ib pairs; nseg+2 <= salloc, +2 because of sentinels at 0,nseg+1
 
   /* "Slots" are used to convert striped vectors in f/b filter into correct M..1 cell index order in <kmem>; see note [3] */
   int  *s[p7_VNF];	// slot pointers s[0..3] into <kmem>, for temporary storage of a striped vector row's sparse cells 
@@ -55,8 +58,8 @@ typedef struct {
 
   /* memory allocation profiling, statistics */
   int   n_krealloc;	// number of times we reallocated <kmem> in this instance of the structure 
-  int   n_irealloc;	// ditto for <i>      
   int   n_rrealloc;	// ditto for <k>, <n> 
+  int   n_srealloc;	// ditto for <seg>      
 } P7_SPARSEMASK;
 
 
@@ -101,7 +104,7 @@ typedef struct {
 
 typedef struct {
   float  *dp;		// main DP supercells. sm->ncells <= dalloc. each supercell contains p7S_NSCELLS values. 
-  float  *xmx;		// special DP supercells. there are <sm->nrow>+<sm->nseg> of these, each w/ p7S_NXCELLS values. 
+  float  *xmx;		// special DP supercells. there are <sm->nrow>+<sm->S> of these, each w/ p7S_NXCELLS values. 
 
   int64_t dalloc;	// current <dp> allocation, denominated in supercells, (each p7S_NSCELLS wide) 
   int     xalloc;	// current <xmx> allocation, denominated in total rows (each p7S_NXCELLS wide; xalloc >= nrow+nseg) 
@@ -242,8 +245,8 @@ extern int   p7_sparsemx_PlotDomainInference(FILE *ofp, const P7_SPARSEMX *sxd, 
  *     
  *     At finish time, we reverse kmem[], then set everything
  *     else. Row pointers <k[]> are set, using <n[]>. Segments are
- *     determined, reallocating <i[]> and resetting <ialloc> if
- *     needed, setting <i[]>, <nseg>, and <nrow>.
+ *     determined, reallocating <seg[]> and resetting <salloc> if
+ *     needed, setting <seg[]>, <nseg>, and <nrow>.
  *     
  *     
  *     

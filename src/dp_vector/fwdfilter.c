@@ -1289,7 +1289,7 @@ main(int argc, char **argv)
     }
 
   printf("# SPARSEMASK: kmem reallocs: %d\n", sm->n_krealloc);
-  printf("#             seg reallocs:  %d\n", sm->n_irealloc);
+  printf("#             seg reallocs:  %d\n", sm->n_srealloc);
   printf("#             row reallocs:  %d\n", sm->n_rrealloc);
 
   esl_sq_Destroy(sq);
