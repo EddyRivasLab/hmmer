@@ -162,6 +162,10 @@ static ESL_OPTIONS options[] = {
   { "--B2",         eslARG_INT,         "240", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Vit)",          99 },
   { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",          99 },
 
+  /* expert-only option (for now), hidden from view, for altering bg probs. May not keep. */
+  { "--bgfile",     eslARG_INFILE,       NULL, NULL, NULL,    NULL,  NULL,   NULL,           "override default background probs with values in file <f>",    99 },
+
+
 /* Not used, but retained because esl option-handling code errors if it isn't kept here.  Placed in group 99 so it doesn't print to help*/
   { "--domZ",       eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "Not used",   99 },
   { "--domE",       eslARG_REAL,       "10.0", NULL, "x>0",   NULL,  NULL,  DOMREPOPTS,      "Not used",   99 },
@@ -333,6 +337,7 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *queryfile, char *seqfile, 
   if (esl_opt_IsUsed(go, "--B1")         && fprintf(ofp, "# biased comp SSV window len:      %d\n",             esl_opt_GetInteger(go, "--B1"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--B2")         && fprintf(ofp, "# biased comp Viterbi window len:  %d\n",             esl_opt_GetInteger(go, "--B2"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--B3")         && fprintf(ofp, "# biased comp Forward window len:  %d\n",             esl_opt_GetInteger(go, "--B3"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--bgfile")     && fprintf(ofp, "# file with custom bg probs:       %s\n",             esl_opt_GetString(go, "--bgfile"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--dna")        && fprintf(ofp, "# input query is asserted as:      DNA\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--rna")        && fprintf(ofp, "# input query is asserted as:      RNA\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -460,6 +465,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   int              dbformat  =  eslSQFILE_UNKNOWN;  /* format of dbfile                                 */
   ESL_SQFILE      *dbfp      = NULL;              /* open input sequence file                        */
+
+  P7_BG           *bg_manual  = NULL;
 
   ESL_ALPHABET    *abc       = NULL;              /* digital alphabet                                */
   ESL_STOPWATCH   *w;
@@ -683,6 +690,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 #endif
 
+  if (esl_opt_IsOn(go, "--bgfile")) {
+    bg_manual = p7_bg_Create(abc);
+    status = p7_bg_Read(esl_opt_GetString(go, "--bgfile"), bg_manual, errbuf);
+    if (status != eslOK) p7_Fail("Trouble reading bgfile: %s\n", errbuf);
+  }
+
+
   infocnt = (ncpus == 0) ? 1 : ncpus;
   ESL_ALLOC(info, sizeof(*info) * infocnt);
 
@@ -700,7 +714,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].pli    = NULL;
           info[i].th     = NULL;
           info[i].om     = NULL;
-          info[i].bg     = p7_bg_Create(abc);
+          if (bg_manual != NULL)
+            info[i].bg = p7_bg_Clone(bg_manual);
+          else
+            info[i].bg = p7_bg_Create(abc);
 
 #ifdef HMMER_THREADS
           info[i].queue = queue;

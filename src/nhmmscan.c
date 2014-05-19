@@ -76,19 +76,29 @@ static ESL_OPTIONS options[] = {
   { "--F2",         eslARG_REAL,  "3e-3", NULL, NULL,    NULL,  NULL, "--max",          "Vit threshold: promote hits w/ P <= F2",                        7 },
   { "--F3",         eslARG_REAL,  "3e-5", NULL, NULL,    NULL,  NULL, "--max",          "Fwd threshold: promote hits w/ P <= F3",                        7 },
   { "--nobias",     eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL, "--max",          "turn off composition bias filter",                              7 },
-  { "--B1",         eslARG_INT,         "110", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (MSV)",          7 },
-  { "--B2",         eslARG_INT,         "240", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Vit)",          7 },
-  { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",          7 },
 
   /* Other options */
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,             "assert input <seqfile> is in format <s>",                      12 },
   { "--nonull2",    eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  NULL,             "turn off biased composition score corrections",                12 },
   { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,             "set # of comparisons done, for E-value calculation",           12 },
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,             "set RNG seed to <n> (if 0: one-time arbitrary seed)",          12 },
-  { "--w_beta",     eslARG_REAL,    NULL, NULL, NULL,    NULL,  NULL,           NULL,    "tail mass at which window length is determined",                12 },
+  { "--w_beta",     eslARG_REAL,    NULL, NULL, NULL,    NULL,  NULL,           NULL,    "tail mass at which window length is determined",               12 },
   { "--w_length",   eslARG_INT,     NULL, NULL, NULL,    NULL,  NULL,           NULL,    "window length - essentially max expected hit length ",                                                12 },
-  { "--toponly",     eslARG_NONE,   NULL, NULL, NULL,    NULL,  NULL,   "--bottomonly",  "only search the top strand",                                    12 },
-  { "--bottomonly",  eslARG_NONE,   NULL, NULL, NULL,    NULL,  NULL,      "--toponly",  "only search the bottom strand",                                    12 },
+  { "--toponly",     eslARG_NONE,   NULL, NULL, NULL,    NULL,  NULL,   "--bottomonly",  "only search the top strand",                                   12 },
+  { "--bottomonly",  eslARG_NONE,   NULL, NULL, NULL,    NULL,  NULL,      "--toponly",  "only search the bottom strand",                                12 },
+
+
+  /* stage-specific window length used for bias composition estimate,
+   * hidden because they are confusing/expert options. May drag them out
+   * into the daylight eventually
+   */
+  { "--B1",         eslARG_INT,         "110", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (MSV)",          99 },
+  { "--B2",         eslARG_INT,         "240", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Vit)",          99 },
+  { "--B3",         eslARG_INT,        "1000", NULL, NULL,    NULL,  NULL, "--max,--nobias", "window length for biased-composition modifier (Fwd)",          99 },
+
+  /* expert-only option (for now), hidden from view, for altering bg probs.  May not keep. */
+  { "--bgfile",     eslARG_INFILE,       NULL, NULL, NULL,    NULL,  NULL,   NULL,           "override default background probs with values in file <f>",    99 },
+
 
   /* Not used, but retained because esl option-handling code errors if it isn't kept here.  Placed in group 99 so it doesn't print to help*/
   { "--domE",       eslARG_REAL,  "10.0", NULL, "x>0",   NULL,  NULL,  DOMREPOPTS,      "report domains <= this E-value threshold in output",            99 },
@@ -231,10 +241,11 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--F2")        && fprintf(ofp, "# Vit filter P threshold:       <= %g\n",            esl_opt_GetReal(go, "--F2"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--F3")        && fprintf(ofp, "# Fwd filter P threshold:       <= %g\n",            esl_opt_GetReal(go, "--F3"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--nobias")    && fprintf(ofp, "# biased composition HMM filter:   off\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+
   if (esl_opt_IsUsed(go, "--B1")         && fprintf(ofp, "# biased comp MSV window len:      %d\n",             esl_opt_GetInteger(go, "--B1"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--B2")         && fprintf(ofp, "# biased comp Viterbi window len:  %d\n",             esl_opt_GetInteger(go, "--B2"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--B3")         && fprintf(ofp, "# biased comp Forward window len:  %d\n",             esl_opt_GetInteger(go, "--B3"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-
+  if (esl_opt_IsUsed(go, "--bgfile")     && fprintf(ofp, "# file with custom bg probs:       %s\n",             esl_opt_GetString(go, "--bgfile"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--nonull2")   && fprintf(ofp, "# null2 bias corrections:          off\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
@@ -299,8 +310,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   FILE            *dfamtblfp    = NULL;            /* output stream for tabular Dfam format (--dfamtblout)    */
   FILE            *aliscoresfp  = NULL;            /* output stream for alignment scores (--aliscoresout)    */
 
-//  P7_HMM          *hmm        = NULL;              /* one HMM query                                   */
-//  P7_SCOREDATA    *scoredata  = NULL;
+  P7_BG           *bg_manual  = NULL;
 
   int              seqfmt   = eslSQFILE_UNKNOWN; /* format of seqfile                               */
   ESL_SQFILE      *sqfp     = NULL;              /* open seqfile                                    */
@@ -400,12 +410,22 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     }
 #endif
 
+  if (esl_opt_IsOn(go, "--bgfile")) {
+    bg_manual = p7_bg_Create(abc);
+    status = p7_bg_Read(esl_opt_GetString(go, "--bgfile"), bg_manual, errbuf);
+    if (status != eslOK) p7_Fail("Trouble reading bgfile: %s\n", errbuf);
+  }
+
   infocnt = (ncpus == 0) ? 1 : ncpus;
   ESL_ALLOC(info, sizeof(*info) * infocnt);
 
   for (i = 0; i < infocnt; ++i)
   {
-      info[i].bg    = p7_bg_Create(abc);
+    if (bg_manual != NULL)
+      info[i].bg = p7_bg_Clone(bg_manual);
+    else
+      info[i].bg = p7_bg_Create(abc);
+
 #ifdef HMMER_THREADS
       info[i].queue = queue;
 #endif
