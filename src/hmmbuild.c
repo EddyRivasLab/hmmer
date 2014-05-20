@@ -484,8 +484,6 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
   int              i;
   int              status;
-  char   errbuf[eslERRBUFSIZE];
-
 
   /* Open files, set alphabet.
    *   cfg->afp       - open alignment file for input
@@ -545,7 +543,7 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 
   for (i = 0; i < infocnt; ++i)
   {
-
+      info[i].bg = p7_bg_Create(cfg->abc);
       info[i].bld = p7_builder_Create(go, cfg->abc);
 
       if (info[i].bld == NULL)  p7_Fail("p7_builder_Create failed");
@@ -1027,7 +1025,6 @@ serial_loop(WORKER_INFO *info, struct cfg_s *cfg, const ESL_GETOPTS *go)
         sq = NULL;
         hmm->eff_nseq = 1;
       } else {
-        int k;
         if ((status = p7_Builder(info->bld, msa, info->bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
 
         //if not --singlemx, but the user set the popen/pextend flags, override the computed gap params now:
