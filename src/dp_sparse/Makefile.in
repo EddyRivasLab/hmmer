@@ -1,12 +1,14 @@
 MODULE = dp_sparse
 
-LIBOBJS =  p7_sparsemx.o\
-	   sparse_decoding.o\
-	   sparse_envscore.o\
-	   sparse_fwdback.o\
-	   sparse_masstrace.o\
-	   sparse_null2.o\
-	   sparse_trace.o\
+LIBOBJS =  p7_sparsemx.o        \
+	   p7_spascmx.o         \
+	   sparse_asc_fwdback.o \
+	   sparse_decoding.o    \
+	   sparse_envscore.o    \
+	   sparse_fwdback.o     \
+	   sparse_masstrace.o   \
+	   sparse_null2.o       \
+	   sparse_trace.o       \
 	   sparse_viterbi.o
 
 LIBHDRS =
@@ -22,14 +24,15 @@ UTESTS = sparse_decoding_utest \
          sparse_fwdback_utest  \
          sparse_masstrace_utest
 
-STATS  = 
+STATS  =  p7_spascmx_stats
 
 BENCHMARKS = sparse_fwdback_benchmark
 
-EXAMPLES = sparse_envscore_example \
-           sparse_fwdback_example \
-           sparse_masstrace_example \
-           sparse_trace_example 
+EXAMPLES = sparse_envscore_example    \
+           sparse_fwdback_example     \
+           sparse_masstrace_example   \
+           sparse_trace_example       \
+	   sparse_asc_fwdback_example 
 
 
 LIBTMP = 

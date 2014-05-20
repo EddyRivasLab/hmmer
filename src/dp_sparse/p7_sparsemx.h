@@ -93,14 +93,18 @@ typedef struct {
  * <type> field gets set by each algorithm implementation, and this
  * gets used for example by a _Validate() call.
  */
-#define p7S_UNSET     0
-#define p7S_FORWARD   1
-#define p7S_BACKWARD  2
-#define p7S_DECODING  3
-#define p7S_ALIGNMENT 4
-#define p7S_VITERBI   5
-#define p7S_MASSTRACE 6
-#define p7S_ENVSCORE  7
+#define p7S_UNSET         0
+#define p7S_FORWARD       1
+#define p7S_BACKWARD      2
+#define p7S_DECODING      3
+#define p7S_ALIGNMENT     4
+#define p7S_VITERBI       5
+#define p7S_ASC_FWD       6
+#define p7S_ASC_BCK       7
+#define p7S_ASC_DECODE    8
+#define p7S_AEC_MEG_ALIGN 9  
+#define p7S_ENVSCORE      10  // deprecated. Will remove, when sparse_envscore.c goes away.
+#define p7S_MASSTRACE     11  //  ... ditto, for sparse_masstrace.c
 
 typedef struct {
   float  *dp;		// main DP supercells. sm->ncells <= dalloc. each supercell contains p7S_NSCELLS values. 

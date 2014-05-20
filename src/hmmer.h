@@ -64,6 +64,7 @@
 
 /* 'dp_sparse' subdir: glocal/local alignment in sparse dynamic programming */
 #include "dp_sparse/p7_sparsemx.h"         /* P7_SPARSEMASK, P7_SPARSEMX : sparse mask and sparse DP matrix  */
+#include "dp_sparse/p7_spascmx.h"          /*   ... using P7_SPARSEMX in context of sparse ASC DP            */
 #include "dp_sparse/sparse_fwdback.h"	   /* Viterbi glocal/local alignment in sparse DP                    */
 #include "dp_sparse/sparse_viterbi.h"	   /* Forward, Backward glocal/local in sparse DP                    */
 #include "dp_sparse/sparse_decoding.h"	   /* Posterior decoding in sparse DP                                */
@@ -71,6 +72,7 @@
 #include "dp_sparse/sparse_masstrace.h"	   /* 'Mass trace' algorithm for determining envelope bounds         */
 #include "dp_sparse/sparse_envscore.h"	   /* Modified Forward algorithm for scoring a single envelope       */
 #include "dp_sparse/sparse_null2.h"	   /* 'null2' algorithm for compensating for biased composition      */
+#include "dp_sparse/sparse_asc_fwdback.h"  /* anchor set constrained (ASC) Forward, Backward                 */
 
 /* 'dp_reference' subdir: "reference" implementations of key algorithms, used for regression and other testing  */
 #include "dp_reference/p7_refmx.h"               /* P7_REFMX: a O(ML) DP matrix for reference DP algorithms     */
@@ -78,10 +80,12 @@
 #include "dp_reference/reference_viterbi.h"      /* reference implementation of glocal/local Viterbi            */
 #include "dp_reference/reference_decoding.h"     /* reference implementation of glocal/local posterior Decoding */
 #include "dp_reference/reference_trace.h"        /* reference implementation of glocal/local tracebacks         */
-#include "dp_reference/reference_asc_fwdback.h"  /* anchor set constrained Forward, Backward                    */
-#include "dp_reference/reference_asc_decoding.h" /* anchor set constrained posterior decoding                   */
 #include "dp_reference/reference_anchors.h"      /* MPAS (most probable anchor set) algorithm                   */
 #include "dp_reference/reference_envelopes.h"    /* Envelope definition given an anchor set and decoding        */
+#include "dp_reference/reference_asc_fwdback.h"  /* anchor set constrained Forward, Backward                    */
+#include "dp_reference/reference_asc_decoding.h" /* anchor set constrained posterior decoding                   */
+#include "dp_reference/reference_aec_align.h"    /* anchor- and envelope-constrained MEG alignment              */
+#include "dp_reference/reference_aec_trace.h"    /* anchor- and envelope-constrained MEG alignment traceback    */
 
 
 /* 'daemon' subdir: Michael Farrar's daemon for HMMER3 web services                                       */

@@ -545,20 +545,20 @@ p7_refmx_DumpWindow(FILE *ofp, P7_REFMX *rmx, int istart, int iend, int kstart, 
       for (x = 0;  x <  p7R_NXCELLS; x++)  fprintf(ofp, "%*.*f ", width, precision, rmx->dp[i][ (rmx->M+1) * p7R_NSCELLS + x]);
       fprintf(ofp, "\n");
 
-      fprintf(ofp, "%3d IL ", i);
-      for (k = kstart; k <= kend;    k++)  fprintf(ofp, "%*.*f ", width, precision, rmx->dp[i][k * p7R_NSCELLS + p7R_IL]);
-      fprintf(ofp, "\n");
-
-      fprintf(ofp, "%3d DL ", i);
-      for (k = kstart; k <= kend;    k++)  fprintf(ofp, "%*.*f ", width, precision, rmx->dp[i][k * p7R_NSCELLS + p7R_DL]);
-      fprintf(ofp, "\n");
-
       fprintf(ofp, "%3d MG ", i);
       for (k = kstart; k <= kend;    k++)  fprintf(ofp, "%*.*f ", width, precision, rmx->dp[i][k * p7R_NSCELLS + p7R_MG]);
       fprintf(ofp, "\n");
 
+      fprintf(ofp, "%3d IL ", i);
+      for (k = kstart; k <= kend;    k++)  fprintf(ofp, "%*.*f ", width, precision, rmx->dp[i][k * p7R_NSCELLS + p7R_IL]);
+      fprintf(ofp, "\n");
+
       fprintf(ofp, "%3d IG ", i);
       for (k = kstart; k <= kend;    k++)  fprintf(ofp, "%*.*f ", width, precision, rmx->dp[i][k * p7R_NSCELLS + p7R_IG]);
+      fprintf(ofp, "\n");
+
+      fprintf(ofp, "%3d DL ", i);
+      for (k = kstart; k <= kend;    k++)  fprintf(ofp, "%*.*f ", width, precision, rmx->dp[i][k * p7R_NSCELLS + p7R_DL]);
       fprintf(ofp, "\n");
 
       fprintf(ofp, "%3d DG ", i);

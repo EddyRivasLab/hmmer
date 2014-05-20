@@ -1113,22 +1113,6 @@ p7_sparsemx_DumpWindow(FILE *ofp, const P7_SPARSEMX *sx, int i1, int i2, int k1,
       for (x = 0; x < p7S_NXCELLS; x++) fprintf(ofp, "%*.*f ", width, precision, xc[x]);
       fputc('\n', ofp);
 
-      fprintf(ofp, "%3d IL ", i);
-      for (z = 0, k = k1; k <= k2; k++) { 
-	while (z < sm->n[i] && sm->k[i][z] < k)  z++;
-	if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*p7R_NSCELLS + p7R_IL));
-	else                                     fprintf(ofp, "%*s ",   width, ".....");
-      }
-      fputc('\n', ofp);
-
-      fprintf(ofp, "%3d DL ", i);
-      for (z = 0, k = k1; k <= k2; k++) { 
-	while (z < sm->n[i] && sm->k[i][z] < k)  z++; 
-	if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*p7R_NSCELLS + p7R_DL));
-	else                                     fprintf(ofp, "%*s ",   width, ".....");
-      }
-      fputc('\n', ofp);
-
       fprintf(ofp, "%3d MG ", i);
       for (z = 0, k = k1; k <= k2; k++) { 
 	while (z < sm->n[i] && sm->k[i][z] < k)  z++; 
@@ -1137,10 +1121,26 @@ p7_sparsemx_DumpWindow(FILE *ofp, const P7_SPARSEMX *sx, int i1, int i2, int k1,
       }
       fputc('\n', ofp);
 
+      fprintf(ofp, "%3d IL ", i);
+      for (z = 0, k = k1; k <= k2; k++) { 
+	while (z < sm->n[i] && sm->k[i][z] < k)  z++;
+	if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*p7R_NSCELLS + p7R_IL));
+	else                                     fprintf(ofp, "%*s ",   width, ".....");
+      }
+      fputc('\n', ofp);
+
       fprintf(ofp, "%3d IG ", i);
       for (z = 0, k = k1; k <= k2; k++) { 
 	while (z < sm->n[i] && sm->k[i][z] < k)  z++; 
 	if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*p7R_NSCELLS + p7R_IG));
+	else                                     fprintf(ofp, "%*s ",   width, ".....");
+      }
+      fputc('\n', ofp);
+
+      fprintf(ofp, "%3d DL ", i);
+      for (z = 0, k = k1; k <= k2; k++) { 
+	while (z < sm->n[i] && sm->k[i][z] < k)  z++; 
+	if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*p7R_NSCELLS + p7R_DL));
 	else                                     fprintf(ofp, "%*s ",   width, ".....");
       }
       fputc('\n', ofp);
@@ -1890,8 +1890,6 @@ p7_sparsemx_Validate(const P7_SPARSEMX *sx, char *errbuf)
   case p7S_DECODING:   if ( (status = validate_decoding(sx, errbuf)) != eslOK) return status; break;
   case p7S_ALIGNMENT:  ESL_FAIL(eslFAIL, errbuf, "unimplemented");
   case p7S_VITERBI:    if ( (status = validate_fwdvit  (sx, errbuf)) != eslOK) return status; break;
-  case p7S_MASSTRACE:  ESL_FAIL(eslFAIL, errbuf, "unimplemented");
-  case p7S_ENVSCORE:   ESL_FAIL(eslFAIL, errbuf, "unimplemented");
   default:             ESL_FAIL(eslFAIL, errbuf, "no such spare DP matrix type %d", sx->type);
   }
   return eslOK;
