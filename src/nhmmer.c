@@ -123,12 +123,12 @@ static ESL_OPTIONS options[] = {
 
   /* Control of FM pruning/extension */
   { "--seed_max_depth",    eslARG_INT,          "15", NULL, NULL,    NULL,  NULL, NULL,          "seed length at which bit threshold must be met",             9 },
-  { "--seed_sc_thresh",    eslARG_REAL,       "15.5", NULL, NULL,    NULL,  NULL, NULL,          "Default req. score for FM seed (bits)",                      9 },
+  { "--seed_sc_thresh",    eslARG_REAL,         "15", NULL, NULL,    NULL,  NULL, NULL,          "Default req. score for FM seed (bits)",                      9 },
   { "--seed_sc_density",   eslARG_REAL,        "0.8", NULL, NULL,    NULL,  NULL, NULL,          "seed must maintain this bit density from one of two ends",   9 },
   { "--seed_drop_max_len", eslARG_INT,           "4", NULL, NULL,    NULL,  NULL, NULL,          "maximum run length with score under (max - [fm_drop_lim])",  9 },
   { "--seed_drop_lim",     eslARG_REAL,        "0.3", NULL, NULL,    NULL,  NULL, NULL,          "in seed, max drop in a run of length [fm_drop_max_len]",     9 },
   { "--seed_req_pos",      eslARG_INT,           "5", NULL, NULL,    NULL,  NULL, NULL,          "minimum number consecutive positive scores in seed" ,        9 },
-  { "--seed_consens_match", eslARG_INT,           "10", NULL, NULL,    NULL,  NULL, NULL,        "<n> consecutive matches to consensus will override score threshold" , 9 },
+  { "--seed_consens_match", eslARG_INT,         "11", NULL, NULL,    NULL,  NULL, NULL,          "<n> consecutive matches to consensus will override score threshold" , 9 },
   { "--seed_ssv_length",   eslARG_INT,          "70", NULL, NULL,    NULL,  NULL, NULL,          "length of window around FM seed to get full SSV diagonal",   9 },
 
 
