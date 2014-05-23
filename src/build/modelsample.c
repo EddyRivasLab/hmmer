@@ -24,7 +24,7 @@
 #include "esl_vectorops.h"
 
 #include "base/p7_bg.h"
-#include "base/p7_coords2.h"
+#include "base/p7_anchors.h"
 #include "base/p7_hmm.h"
 #include "base/p7_prior.h"
 #include "base/p7_profile.h"
@@ -39,11 +39,11 @@
 static int modelsample_engine(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
 static int sample_single_pathed_seq_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 					   P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-					   P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc,
+					   P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc,
 					   int do_asc_version);
 static int sample_anchored_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 				  P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-				  P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc,
+				  P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc,
 				  int do_local_version);
 
 /*****************************************************************
@@ -688,7 +688,7 @@ p7_modelsample_SinglePathed(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P
 int
 p7_modelsample_SinglePathedSeq(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 			       P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-			       P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc)
+			       P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc)
 {
   return sample_single_pathed_seq_engine(rng, M, bg, opt_hmm, opt_gm, opt_dsq, opt_L, opt_tr, opt_anch, opt_D, opt_sc, /*do_asc_version=*/FALSE);
 }
@@ -714,7 +714,7 @@ p7_modelsample_SinglePathedSeq(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 int
 p7_modelsample_SinglePathedASC(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 			       P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-			       P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc)
+			       P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc)
 {
   return sample_single_pathed_seq_engine(rng, M, bg, opt_hmm, opt_gm, opt_dsq, opt_L, opt_tr, opt_anch, opt_D, opt_sc, /*do_asc_version=*/TRUE);
 }
@@ -788,7 +788,7 @@ p7_modelsample_SinglePathedASC(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 int
 p7_modelsample_AnchoredUni(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 			   P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-			   P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc)
+			   P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc)
 {
   char       *hmmname   = "anchored_uni";
   char       *logmsg    = "[Test model produced by p7_modelsample_AnchoredUni()]";
@@ -797,7 +797,7 @@ p7_modelsample_AnchoredUni(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
   P7_TRACE   *tr        = NULL;
   ESL_SQ     *sq        = NULL;
   ESL_DSQ    *dsq       = NULL;
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   int         D         = 1;        // Because we're unihit, D must be 1.
   int         L;
   int         k,z;
@@ -810,7 +810,6 @@ p7_modelsample_AnchoredUni(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
   if ((  gm = p7_profile_Create(M, bg->abc)) == NULL) { status = eslEMEM; goto ERROR; }
   if ((  sq = esl_sq_CreateDigital(bg->abc)) == NULL) { status = eslEMEM; goto ERROR; }
   if ((  tr = p7_trace_Create())             == NULL) { status = eslEMEM; goto ERROR; }
-  ESL_ALLOC(anch, sizeof(P7_COORD2) * D);
 
   /* Start with a randomly sampled model, that we'll tweak slightly. */
   if (( status = modelsample_engine(rng, M, bg->abc, &hmm)) != eslOK) goto ERROR;
@@ -880,14 +879,17 @@ p7_modelsample_AnchoredUni(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
   /* Make the anchor "set", which we know has one anchor for 
    * one domain. We know k0, we just need to find i0.
    */
-  ESL_DASSERT1(( tr->ndom == 1 ));
-  anch[0].n2 = k0;
+  ESL_DASSERT1(( tr->ndom == D ));  // and D=1
+
+  ESL_ALLOC(anch, sizeof(P7_ANCHOR) * (D+2)); // +2 for sentinels
+  anch[D].k0 = k0;                            // D=1. There's only a single domain.
   for (z = 1; z < tr->N-1; z++)
     if (tr->k[z] == k0 && p7_trace_IsM(tr->st[z]))
       {
-	anch[0].n1 = tr->i[z];
+	anch[D].i0 = tr->i[z];
 	break;
       }
+  p7_anchor_SetSentinels(anch, D, sq->n, gm->M);
 
   /* Finish up; set the length model, then find the trace score.
    */
@@ -984,7 +986,7 @@ p7_modelsample_AnchoredUni(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 int
 p7_modelsample_AnchoredLocal(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 			     P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-			     P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc)
+			     P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc)
 {
   return sample_anchored_engine(rng, M, bg, opt_hmm, opt_gm, opt_dsq, opt_L, opt_tr, opt_anch, opt_D, opt_sc, TRUE);
 }
@@ -1051,7 +1053,7 @@ p7_modelsample_AnchoredLocal(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 int
 p7_modelsample_AnchoredMulti(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 			     P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-			     P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc)
+			     P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc)
 {
   return sample_anchored_engine(rng, M, bg, opt_hmm, opt_gm, opt_dsq, opt_L, opt_tr, opt_anch, opt_D, opt_sc, FALSE);
 }
@@ -1131,7 +1133,7 @@ modelsample_engine(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, P7_HMM *
 static int
 sample_single_pathed_seq_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 				P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-				P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc,
+				P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc,
 				int do_asc_version)
 {
   char       *hmmname   = (do_asc_version ? "single_pathed_asc" : "single_pathed_seq");
@@ -1142,7 +1144,7 @@ sample_single_pathed_seq_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
   ESL_DSQ    *dsq       = NULL;
   int         L         = 0;
   P7_TRACE   *tr        = NULL;
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   int         D         = 0;
   float       sc        = 0.0;
   int         nm        = 0;
@@ -1255,10 +1257,10 @@ sample_single_pathed_seq_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
    * any of them are suitable anchors; choose randomly for each 
    * domain.
    */
-  ESL_ALLOC(anch, sizeof(P7_COORD2) * tr->ndom);
+  ESL_ALLOC(anch, sizeof(P7_ANCHOR) * (tr->ndom+2)); // +2 for sentinels
   D = tr->ndom;
   z = 0;
-  for (d = 0; d < D; d++)
+  for (d = 1; d <= D; d++)
     {
       while (tr->st[z] != p7T_B) z++;
       s = esl_rnd_Roll(rng, nm);   // use the s'th match state as anchor
@@ -1266,9 +1268,10 @@ sample_single_pathed_seq_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 	if (p7_trace_IsM(tr->st[z])) s--;
 	z++;
       }
-      anch[d].n1 = tr->i[z];
-      anch[d].n2 = tr->k[z];
+      anch[d].i0 = tr->i[z];
+      anch[d].k0 = tr->k[z];
     }
+  p7_anchor_SetSentinels(anch, D, L, gm->M);
   
   /* Configure final length model of <gm> before returning */
   p7_profile_SetLength(gm, L);
@@ -1313,7 +1316,7 @@ sample_single_pathed_seq_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 static int
 sample_anchored_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 		       P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-		       P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc,
+		       P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc,
 		       int do_local_version)
 {
   char       *hmmname   = (do_local_version ? "anchored_local" : "anchored_multihit");
@@ -1323,7 +1326,7 @@ sample_anchored_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
   P7_TRACE   *tr        = NULL;
   ESL_SQ     *sq        = NULL;
   ESL_DSQ    *dsq       = NULL;
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   int         D,d;
   int         L;
   int         k,z;
@@ -1434,18 +1437,19 @@ sample_anchored_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
    * one domain. We know k0, we just need to find i0's.
    * On every anchor, make the dsq[] residue == anchX.
    */
-  D = tr->ndom;  // ok because we indexed the trace
-  ESL_ALLOC(anch, sizeof(P7_COORD2) * D);
+  D = tr->ndom;                                // ok because we indexed the trace
+  ESL_ALLOC(anch, sizeof(P7_ANCHOR) * (D+2));  // +2 for sentinels
 
-  d = 0;
+  d = 1;
   for (z = 1; z < tr->N-1; z++)
     if (tr->k[z] == k0 && p7_trace_IsM(tr->st[z]))
       {
-	anch[d].n1    = tr->i[z];
-	anch[d].n2    = k0;
+	anch[d].i0    = tr->i[z];
+	anch[d].k0    = k0;
 	dsq[tr->i[z]] = anchX;
 	d++;
       }
+  p7_anchor_SetSentinels(anch, D, L, gm->M);
 
   /* Finish up by finding the trace score.
    */
@@ -1743,7 +1747,7 @@ utest_singlepathed_seq(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int 
   P7_PROFILE *gm        = NULL;
   P7_TRACE   *tr1       = NULL;
   P7_TRACE   *tr2       = p7_trace_Create();
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   int         D1;
   float       sc1;
   int         nhmm      = 10;
@@ -1820,7 +1824,7 @@ utest_anchored_uni(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   ESL_SQ     *sq        = esl_sq_CreateDigital(abc);
   int         L;
   P7_TRACE   *tr        = NULL;
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   int         D;
   float       sc;
   int         nhmm      = 10;
@@ -1846,11 +1850,11 @@ utest_anchored_uni(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
        * figure that out first.
        */
       for (z = 1; z < tr->N-1; z++)
-	if (tr->k[z] == anch[0].n2 && p7_trace_IsM(tr->st[z])) { anchX = dsq[tr->i[z]]; break; }
+	if (tr->k[z] == anch[D].k0 && p7_trace_IsM(tr->st[z])) { anchX = dsq[tr->i[z]]; break; }  // D=1
 
-      if (hmm->mat[anch[0].n2][anchX] != 1.0)   esl_fatal(failmsg);
+      if (hmm->mat[anch[D].k0][anchX] != 1.0)   esl_fatal(failmsg);
       for (i = 1; i <= L; i++)
-	if (dsq[i] == anchX && i != anch[0].n1) esl_fatal(failmsg);  // Check that dsq has only one X, at the anchor position.
+	if (dsq[i] == anchX && i != anch[D].i0) esl_fatal(failmsg);  // Check that dsq has only one X, at the anchor position.
 
       /* Emit a few traces from the profile.
        * Verify that they all visit the anchor state Mk0, and that the anchor residue is X.
@@ -1863,7 +1867,7 @@ utest_anchored_uni(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 	  
 	  nvisit = 0;
 	  for (z = 0; z < tr->N; z++)
-	    if (tr->k[z] == anch[0].n2 && p7_trace_IsM(tr->st[z]))
+	    if (tr->k[z] == anch[D].k0 && p7_trace_IsM(tr->st[z]))
 	      {
 		nvisit++;          
 		if (sq->dsq[tr->i[z]] != anchX) esl_fatal(failmsg);  // Anchor i0 residue is an X. (In emitted sequences, there can be more than one X)
@@ -1896,7 +1900,7 @@ utest_anchored_local(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   ESL_SQ     *sq        = esl_sq_CreateDigital(abc);
   int         L;
   P7_TRACE   *tr        = NULL;
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   int         D;
   float       sc;
   int         nhmm      = 10;
@@ -1920,7 +1924,7 @@ utest_anchored_local(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
       if (tr->ndom != 1) esl_fatal(failmsg);
 
       /* We don't directly know what the magic anchor residue is, so figure that out first. */
-      k0 = anch[0].n2;
+      k0 = anch[D].k0;
       for (z = 1; z < tr->N-1; z++)
 	if (tr->k[z] == k0 && p7_trace_IsM(tr->st[z])) { anchX = dsq[tr->i[z]]; break; }
 
@@ -1937,12 +1941,12 @@ utest_anchored_local(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 
       /* The dsq has only one X, at the anchor position.
        */
-      d = 0;
+      d = 1;
       for (i = 1; i <= L; i++)
 	if (dsq[i] == anchX) {
-	  if (i != anch[d++].n1) esl_fatal(failmsg); 
+	  if (i != anch[d++].i0) esl_fatal(failmsg); 
 	}
-      if (d != 1) esl_fatal(failmsg);
+      if (d != D+1) esl_fatal(failmsg);
 
       /* The trace may not contain emitting N/C/J, nor any I */
       for (z = 1; z < tr->N; z++)
@@ -1974,7 +1978,7 @@ utest_anchored_multi(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   ESL_SQ     *sq        = esl_sq_CreateDigital(abc);
   int         L;
   P7_TRACE   *tr        = NULL;
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   int         D;
   float       sc;
   int         nhmm      = 10;
@@ -1997,7 +2001,7 @@ utest_anchored_multi(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
       if (D != tr->ndom) esl_fatal(failmsg);
 
       /* We don't directly know what the magic anchor residue is, so figure that out first. */
-      k0 = anch[0].n2;
+      k0 = anch[1].k0;
       for (z = 1; z < tr->N-1; z++)
 	if (tr->k[z] == k0 && p7_trace_IsM(tr->st[z])) { anchX = dsq[tr->i[z]]; break; }
 
@@ -2014,12 +2018,12 @@ utest_anchored_multi(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 
       /* The dsq has D X's, one at each anchor position.
        */
-      d = 0;
+      d = 1;
       for (i = 1; i <= L; i++)
 	if (dsq[i] == anchX) {
-	  if (i != anch[d++].n1) esl_fatal(failmsg); 
+	  if (i != anch[d++].i0) esl_fatal(failmsg); 
 	}
-      if (d != D) esl_fatal(failmsg);
+      if (d != D+1) esl_fatal(failmsg);
 
       /* The trace may not contain emitting N/C/J, nor any I */
       for (z = 1; z < tr->N; z++)
@@ -2143,7 +2147,7 @@ main(int argc, char **argv)
   ESL_DSQ        *dsq     = NULL;
   int             L       = 0;
   P7_TRACE       *tr      = NULL;
-  P7_COORD2      *anch    = NULL;
+  P7_ANCHOR      *anch    = NULL;
   int             D       = 0;
   float           sc      = 0.;
   char            errmsg[eslERRBUFSIZE];

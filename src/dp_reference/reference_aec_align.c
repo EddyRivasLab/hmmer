@@ -92,7 +92,7 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
    * because we're the reference implementation.
    */
   xN = 0.;
-  for (i = 0; i < env->arr[0].ia; i++)
+  for (i = 0; i < env->arr[1].ia; i++)
     {
       dpc = mx->dp[i];
       for (s = 0; s < (M+1)*p7R_NSCELLS; s++) *dpc++ = -eslINFINITY;
@@ -111,11 +111,11 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
     }
   /* As we leave: xN retains the value for N(ia-1), which we need below. */
   xc[p7R_B] = xB = xN;
-  xc[p7R_L]      = ( env->arr[0].flags & p7E_IS_GLOCAL ? -eslINFINITY : xB );
-  xc[p7R_G]      = ( env->arr[0].flags & p7E_IS_GLOCAL ? xB : -eslINFINITY );
+  xc[p7R_L]      = ( env->arr[1].flags & p7E_IS_GLOCAL ? -eslINFINITY : xB );
+  xc[p7R_G]      = ( env->arr[1].flags & p7E_IS_GLOCAL ? xB : -eslINFINITY );
 
 
-  for (d = 0; d < env->n; d++)
+  for (d = 1; d <= env->D; d++)
     {
       /*****************************************************************
        * UP sector for domain d: rows i= ia[d]..i0[d]-1
@@ -457,7 +457,7 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
       /* Now, interdomain rows ib[d]+1 to ia[d]-1. 
        * We know we're going to stay in either J|C on these rows.
        */
-      if (d < env->n-1)
+      if (d < env->D)
 	{ // Here we know we're in J, between two domains d and d+1:
 	  /* a little overwriting of row ib(d), which might transition directly to an ia(d+1) */
 	  xB = xc[p7R_J];
@@ -489,7 +489,7 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
 	  xc[p7R_G] = ( env->arr[d].flags & p7E_IS_GLOCAL ? xB : -eslINFINITY );
 	}
       else
-	{ // Here we know there's no more domains. We're in C until the end. No B.
+	{ // Here we have d=D, and we know there's no more domains. We're in C until the end. No B.
 	  xB = xc[p7R_C];  // we're going to misuse "xB" instead of declaring a new variable for this
 	  for (i = env->arr[d].ib+1; i <= L; i++)
 	    {
@@ -577,8 +577,8 @@ utest_crashtestdummy(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
   P7_REFMX        *apu   = rxf;                          // for 'clarity' we use two names for this mx
   P7_REFMX        *apd   = rxd;                          //   ... and this one too.
   float           *wrk   = NULL;
-  P7_COORDS2      *anch  = p7_coords2_Create(0,0);
-  P7_COORDS2_HASH *htbl  = p7_coords2_hash_Create(0,0,0);
+  P7_ANCHORS      *anch  = p7_anchors_Create();
+  P7_ANCHORHASH   *ah    = p7_anchor_hash_Create();
   P7_ENVELOPES    *env   = p7_envelopes_Create(0,0);
   float            tol   = 0.001;
   char             errbuf[eslERRBUFSIZE];
@@ -615,16 +615,16 @@ utest_crashtestdummy(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
       if ( p7_ReferenceDecoding(sq->dsq, sq->n, gm, rxf, rxd, rxd)  != eslOK) esl_fatal(msg);
 
       /* Anchor determination (MPAS algorithm) */
-      if ( p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, vtr, &wrk, htbl,
+      if ( p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, vtr, &wrk, ah,
 				afu, afd, anch, &asc, NULL, NULL)  != eslOK) esl_fatal(msg);
 
       /* Reuse rxf,rxd as apu, apd; finish ASC analysis with Backward, Decoding */
       p7_refmx_Reuse(apu);  p7_refmx_Reuse(apd);
-      if ( p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->arr, anch->n, apu, apd, NULL)               != eslOK) esl_fatal(msg);
-      if ( p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->arr, anch->n, afu, afd, apu, apd, apu, apd) != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->a, anch->D, apu, apd, NULL)               != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->a, anch->D, afu, afd, apu, apd, apu, apd) != eslOK) esl_fatal(msg);
 
       /* Envelope calculation */
-      if ( p7_reference_Envelopes(sq->dsq, sq->n, gm, anch->arr, anch->n, apu, apd, afu, afd, env) != eslOK) esl_fatal(msg);
+      if ( p7_reference_Envelopes (sq->dsq, sq->n, gm, anch->a, anch->D, apu, apd, afu, afd, env) != eslOK) esl_fatal(msg);
 
       //p7_envelopes_Dump(stdout, env);
 
@@ -635,8 +635,8 @@ utest_crashtestdummy(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
       //p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 
       /* Test 1. Coords of each domain are coherent */
-      if (anch->n != env->n) esl_fatal(msg);
-      for (d = 0; d < anch->n; d++)
+      if (anch->D != env->D) esl_fatal(msg);
+      for (d = 1; d <= anch->D; d++)
 	{
 	  if (! (1 <= env->arr[d].oea &&
 		 env->arr[d].oea  <= env->arr[d].ia    &&
@@ -653,20 +653,20 @@ utest_crashtestdummy(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
 	}
 
       /* Test 2. Envelopes do not overlap. */
-      for (d = 1; d < anch->n; d++)
-	if (! (env->arr[d].ia > env->arr[d-1].ib)) esl_fatal(msg);
+      for (d = 1; d <= anch->D; d++)
+	if (! (env->arr[d].ia > env->arr[d-1].ib)) esl_fatal(msg);  // at d=1, env->arr[d-1=0].ib is a sentinel, 0
 
       /* Test 3. envsc(d) <= asc_sc <= fwdsc */
-      for (d = 0; d < anch->n; d++)
+      for (d = 1; d <= anch->D; d++)
 	if (! (env->arr[d].env_sc <= asc+tol && asc <= fsc+tol)) esl_fatal(msg);
 
       /* Test 4, only on D=1 case with generated trace's domain 
        * encompassed by the outer envelope 
        */
-      if (gtr->ndom == 1 &&  anch->n   == 1 && 
-	  gtr->sqfrom[0] >= env->arr[0].oea &&
-	  gtr->sqto[0]   <= env->arr[0].oeb)
-	if (! ( env->arr[0].env_sc >= gsc)) esl_fatal(msg);
+      if (gtr->ndom == 1 &&  anch->D   == 1 && 
+	  gtr->sqfrom[0] >= env->arr[1].oea &&
+	  gtr->sqto[0]   <= env->arr[1].oeb)
+	if (! ( env->arr[1].env_sc >= gsc)) esl_fatal(msg);
 
       /* Test 5. MEG trace passes validation */
       if (p7_trace_Validate(tr,  abc, sq->dsq, errbuf)  != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
@@ -675,17 +675,17 @@ utest_crashtestdummy(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
 
       /* Test 6. Indexed domains agree with envelope data */
       p7_trace_Index(tr);
-      if (tr->ndom != env->n) esl_fatal(msg);
-      for (d = 0; d < env->n; d++)
-	if (! ( tr->sqfrom[d]  == env->arr[d].alia &&
-		tr->sqto[d]    == env->arr[d].alib &&
-		tr->hmmfrom[d] == env->arr[d].ka   &&
-		tr->hmmto[d]   == env->arr[d].kb)) esl_fatal(msg);
+      if (tr->ndom != env->D) esl_fatal(msg);
+      for (d = 1; d <= env->D; d++)                          // domain numbering in traces is 0..ndom-1, off by one from 1..D in anchors, envelopes
+	if (! ( tr->sqfrom[d-1]  == env->arr[d].alia &&
+		tr->sqto[d-1]    == env->arr[d].alib &&
+		tr->hmmfrom[d-1] == env->arr[d].ka   &&
+		tr->hmmto[d-1]   == env->arr[d].kb)) esl_fatal(msg);
 
 
       p7_envelopes_Reuse(env);
-      p7_coords2_Reuse(anch);
-      p7_coords2_hash_Reuse(htbl);
+      p7_anchors_Reuse(anch);
+      p7_anchorhash_Reuse(ah);
       p7_refmx_Reuse(rxf); p7_refmx_Reuse(rxd);
       p7_refmx_Reuse(afu); p7_refmx_Reuse(afd);
       p7_trace_Reuse(gtr); p7_trace_Reuse(vtr); p7_trace_Reuse(tr);
@@ -694,8 +694,8 @@ utest_crashtestdummy(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
       
   if (wrk) free(wrk);
   p7_envelopes_Destroy(env);
-  p7_coords2_Destroy(anch);
-  p7_coords2_hash_Destroy(htbl);
+  p7_anchors_Destroy(anch);
+  p7_anchorhash_Destroy(ah);
   p7_refmx_Destroy(afu); p7_refmx_Destroy(afd);
   p7_refmx_Destroy(rxf); p7_refmx_Destroy(rxd);
   p7_trace_Destroy(vtr); p7_trace_Destroy(gtr); p7_trace_Destroy(tr);
@@ -737,7 +737,7 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
   int           L;
   P7_TRACE     *gtr   = NULL;
   P7_TRACE     *tr    = p7_trace_Create();
-  P7_COORD2    *anch  = NULL;
+  P7_ANCHOR    *anch  = NULL;
   int           D;
   P7_REFMX     *afu   = p7_refmx_Create(M, 20);
   P7_REFMX     *afd   = p7_refmx_Create(M, 20);
@@ -775,27 +775,27 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
       if (! (tr->ndom  == D))                esl_fatal(msg);
 
       /* Test 3. Envelope coords (and outer env coords) match trace */
-      for (d = 0; d < D; d++)
+      for (d = 1; d <= D; d++)
 	{
-	  if (! (env->arr[d].alia == gtr->sqfrom[d] &&
-		 env->arr[d].alia ==  tr->sqfrom[d] &&
+	  if (! (env->arr[d].alia == gtr->sqfrom[d-1] &&   // beware: domains in trace are 0..ndom-1, off by one from env's 1..D
+		 env->arr[d].alia ==  tr->sqfrom[d-1] &&
 		 env->arr[d].alia == env->arr[d].ia &&
 		 env->arr[d].alia == env->arr[d].oea)) esl_fatal(msg);
 
-	  if (! (env->arr[d].alib == gtr->sqto[d]   &&
-		 env->arr[d].alib ==  tr->sqto[d]   &&
-		 env->arr[d].alib == env->arr[d].ib &&
+	  if (! (env->arr[d].alib == gtr->sqto[d-1]   &&
+		 env->arr[d].alib ==  tr->sqto[d-1]   &&
+		 env->arr[d].alib == env->arr[d].ib   &&
 		 env->arr[d].alib == env->arr[d].oeb)) esl_fatal(msg);
 
-	  if (! (env->arr[d].ka == gtr->hmmfrom[d] &&
-		 env->arr[d].ka ==  tr->hmmfrom[d])) esl_fatal(msg);
+	  if (! (env->arr[d].ka == gtr->hmmfrom[d-1] &&
+		 env->arr[d].ka ==  tr->hmmfrom[d-1])) esl_fatal(msg);
 
-	  if (! (env->arr[d].kb == gtr->hmmto[d] &&
-		 env->arr[d].kb ==  tr->hmmto[d])) esl_fatal(msg);
+	  if (! (env->arr[d].kb == gtr->hmmto[d-1] &&
+		 env->arr[d].kb ==  tr->hmmto[d-1])) esl_fatal(msg);
 	}
 
       /* Test 4. If D == 1, envelope score == trace score. */
-      if (D == 1 &&  esl_FCompare(env->arr[0].env_sc, gsc, tol) != eslOK) esl_fatal(msg);
+      if (D == 1 &&  esl_FCompare(env->arr[1].env_sc, gsc, tol) != eslOK) esl_fatal(msg);
 
       p7_envelopes_Reuse(env);
       p7_refmx_Reuse(afu); p7_refmx_Reuse(afd);
@@ -909,7 +909,8 @@ main(int argc, char **argv)
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
-  P7_COORDS2     *anch    = p7_coords2_Create(0,0);
+  P7_ANCHORS     *anch    = p7_anchors_Create();
+  P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
   P7_REFMX       *rxf     = NULL;
   P7_REFMX       *rxd     = NULL;
   P7_REFMX       *afu     = NULL;
@@ -919,7 +920,6 @@ main(int argc, char **argv)
   P7_TRACE       *tr      = NULL;
   float          *wrk     = NULL;
   P7_ENVELOPES   *env     = p7_envelopes_Create(0,0);
-  P7_COORDS2_HASH *hashtbl = p7_coords2_hash_Create(0,0,0);
   float           fsc, vsc, asc, asc_b;
   int             status;
 
@@ -965,7 +965,7 @@ main(int argc, char **argv)
   p7_ReferenceDecoding(sq->dsq, sq->n, gm, rxf, rxd, rxd);   
 
   /* MPAS algorithm gets us an anchor set */
-  p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, tr, &wrk, hashtbl,
+  p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, tr, &wrk, ah,
 		       afu, afd, anch, &asc, NULL, NULL);
 
   
@@ -976,18 +976,18 @@ main(int argc, char **argv)
   apu = rxf; p7_refmx_Reuse(apu);
   apd = rxd; p7_refmx_Reuse(apd);
 
-  p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->arr, anch->n, apu, apd, &asc_b);
+  p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->a, anch->D, apu, apd, &asc_b);
   
   /* ASC Decoding takes afu/afd and abu/abd as input;
    * overwrites abu/abd with decoding matrices
    */
-  p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->arr, anch->n, afu, afd, apu, apd, apu, apd);
+  p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->a, anch->D, afu, afd, apu, apd, apu, apd);
 
   /* Envelope calculation needs to get four matrices:
    * ASC Decoding pair, apu/apd, and it will leave these constant;
    * ASC Forward pair,  afu/afd, and it will overwrite these.
    */
-  p7_reference_Envelopes(sq->dsq, sq->n, gm, anch->arr, anch->n, apu, apd, afu, afd, env);
+  p7_reference_Envelopes(sq->dsq, sq->n, gm, anch->a, anch->D, apu, apd, afu, afd, env);
 
   p7_envelopes_Dump(stdout, env);
 
@@ -1001,14 +1001,14 @@ main(int argc, char **argv)
   p7_envelopes_Dump(stdout, env);
 
   p7_envelopes_Destroy(env);
-  p7_coords2_hash_Destroy(hashtbl);
+  p7_anchors_Destroy(anch);
+  p7_anchorhash_Destroy(ah);
   if (wrk) free(wrk);
   p7_trace_Destroy(tr);
   p7_refmx_Destroy(afd);
   p7_refmx_Destroy(afu);
   p7_refmx_Destroy(rxd);
   p7_refmx_Destroy(rxf);
-  p7_coords2_Destroy(anch);
   esl_sq_Destroy(sq);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);

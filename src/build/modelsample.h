@@ -8,7 +8,7 @@
 #include "esl_random.h"
 
 #include "base/p7_bg.h"
-#include "base/p7_coords2.h"
+#include "base/p7_anchors.h"
 #include "base/p7_hmm.h"
 #include "base/p7_prior.h"
 #include "base/p7_profile.h"
@@ -29,21 +29,21 @@ extern int     p7_modelsample_Enumerable2(ESL_RANDOMNESS *r, int M, const ESL_AL
 extern int     p7_modelsample_SinglePathed(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
 extern int     p7_modelsample_SinglePathedSeq(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 					      P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-					      P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc);
+					      P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc);
 extern int     p7_modelsample_SinglePathedASC(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 					      P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-					      P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc);
+					      P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc);
 
 /* 4. Models such that ASC paths == all paths */
 extern int     p7_modelsample_AnchoredUni(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 					  P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-					  P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc);
+					  P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc);
 extern int     p7_modelsample_AnchoredLocal(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 					    P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-					    P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc);
+					    P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc);
 extern int     p7_modelsample_AnchoredMulti(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 					    P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
-					    P7_TRACE **opt_tr, P7_COORD2 **opt_anch, int *opt_D, float *opt_sc);
+					    P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc);
 #endif /*P7_MODELSAMPLE_INCLUDED*/
 
 /*****************************************************************

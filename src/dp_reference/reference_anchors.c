@@ -14,7 +14,8 @@
 #include "easel.h"
 #include "esl_random.h"
 
-#include "base/p7_coords2.h"
+#include "base/p7_anchorhash.h"
+#include "base/p7_anchors.h"
 #include "base/p7_profile.h"
 #include "base/p7_trace.h"
 
@@ -27,7 +28,7 @@
 
 #include "search/p7_mpas.h"
 
-static int dump_current_anchorset(FILE *ofp, const P7_COORDS2 *anch);
+static int dump_current_anchorset(FILE *ofp, const P7_ANCHORS *anch);
 
 
 /*****************************************************************
@@ -69,7 +70,7 @@ static int dump_current_anchorset(FILE *ofp, const P7_COORDS2 *anch);
  *            workspace that the stochastic trace algorithm knows how
  *            to deal with. A caller will generally set <float *wrk =
  *            NULL>, pass <&wrk> for the argument, and <free(wrk)>
- *            when done. The other workspace is an empty <hashtbl>
+ *            when done. The other workspace is an empty hash table <ah>
  *            that we need for fast checking of which anchor sets
  *            we've already calculated scores for.
  *
@@ -116,7 +117,7 @@ static int dump_current_anchorset(FILE *ofp, const P7_COORDS2 *anch);
  *            rxd       : Decoding matrix for <gm> x <dsq> comparison
  *            tr        : Viterbi trace for <gm> x <dsq>, then used as space for sampled paths  
  *            byp_wrk   : BYPASS: workspace array for stochastic tracebacks
- *            hashtbl   : empty hash table for alternative <anch> solutions
+ *            ah        : empty hash table for alternative <anch> solutions
  *            afu       : empty matrix to be used for ASC UP calculations
  *            afd       : empty matrix to be used for ASC DOWN calculations
  *            anch      : empty anchor data structure to hold result
@@ -131,15 +132,15 @@ static int dump_current_anchorset(FILE *ofp, const P7_COORDS2 *anch);
  *            ret_asc : is the ASC Forward score of it, raw (nats)
  *            stats   : if provided, contains statistics on the optimization that was done
  *            
- *            hashtbl : undefined (contains hashed data on all anchorsets that were tried)
+ *            ah      : undefined (contains hashed data on all anchorsets that were tried)
  *            tr      : undefined (contains last path that that algorithm happened to sample)
  *            rng     : internal state changed (because we sampled numbers from it)
  */
 int
 p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, 
 		     const P7_REFMX *rxf, const P7_REFMX *rxd,
-		     P7_TRACE *tr,  float **byp_wrk,  P7_COORDS2_HASH *hashtbl,
-		     P7_REFMX *afu, P7_REFMX *afd, P7_COORDS2 *anch,  float *ret_asc,
+		     P7_TRACE *tr,  float **byp_wrk,  P7_ANCHORHASH *ah,
+		     P7_REFMX *afu, P7_REFMX *afd, P7_ANCHORS *anch,  float *ret_asc,
 		     P7_MPAS_PARAMS *prm, P7_MPAS_STATS *stats)
 {
   float           fwdsc          = P7R_XMX(rxf, L, p7R_C) + gm->xsc[p7P_C][p7P_MOVE];  // if this lookup seems iffy, efficiency-wise, make fwdsc an argument; caller has it
@@ -174,9 +175,8 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
   while (1) // ends on convergence tests at end of loop
     {
       /* First time thru, <tr> is the Viterbi path, from caller; after that, it's a stochastic sampled path */
-      p7_coords2_Reuse(anch);
       p7_reference_anchors_SetFromTrace(rxd, tr, anch);
-      status = p7_coords2_hash_Store(hashtbl, anch, &keyidx);
+      status = p7_anchorhash_Store(ah, anch, &keyidx);
 
       /* <status> is either eslOK or eslEDUP.
        *    <eslOK>   = <anch> is new and needs to be scored;
@@ -187,7 +187,7 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
 	  /* Get the ASC score for this new anchor set */
 	  p7_refmx_Reuse(afu);
 	  p7_refmx_Reuse(afd);
-	  p7_ReferenceASCForward(dsq, L, gm, anch->arr, anch->n, afu, afd, &asc);
+	  p7_ReferenceASCForward(dsq, L, gm, anch->a, anch->D, afu, afd, &asc);
 	  asc_keyidx = keyidx;
 	  
 	  if (stats) 
@@ -251,8 +251,8 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
    * <afu>, <afd> contain sol'n corresponding to <asc_keyidx>.
    * If either doesn't match best_keyidx we need to update it.
    */
-  if (keyidx     != best_keyidx) p7_coords2_hash_Get(hashtbl, best_keyidx, anch);
-  if (asc_keyidx != best_keyidx) p7_ReferenceASCForward(dsq, L, gm, anch->arr, anch->n, afu, afd, &asc);
+  if (keyidx     != best_keyidx) p7_anchorhash_Get(ah, best_keyidx, anch);
+  if (asc_keyidx != best_keyidx) p7_ReferenceASCForward(dsq, L, gm, anch->a, anch->D, afu, afd, &asc);
 
   if (stats) 
     {
@@ -339,7 +339,7 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
  * Throws:    <eslEMEM> on reallocation failure. 
  */
 int
-p7_reference_anchors_SetFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_COORDS2 *anch)
+p7_reference_anchors_SetFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_ANCHORS *anch)
 {
   const float *dpc;
   int          z;		/* index in trace position */
@@ -347,8 +347,8 @@ p7_reference_anchors_SetFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_COO
   float        best_ppv = -1.;
   int          status;
 
-  /* contract check */
-  ESL_DASSERT1(( anch->n == 0 ));
+  p7_anchors_Reuse(anch);
+  anch->D = 1;  // we'll increment this every time we find an E state
 
   for (z = 0; z < tr->N; z++)
     {
@@ -358,18 +358,21 @@ p7_reference_anchors_SetFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_COO
 	  ppv = dpc[p7R_ML] + dpc[p7R_MG];
 	  if (ppv > best_ppv)
 	    {
-	      anch->arr[anch->n].n1 = tr->i[z];
-	      anch->arr[anch->n].n2 = tr->k[z];
+	      anch->a[anch->D].i0 = tr->i[z];
+	      anch->a[anch->D].k0 = tr->k[z];
 	      best_ppv   = ppv;
 	    }
 	}
       else if (tr->st[z] == p7T_E)
 	{
-	  anch->n++;
+	  anch->D++;
 	  best_ppv = -1.;
-	  if ((status = p7_coords2_Grow(anch)) != eslOK) goto ERROR; /* Make sure we have room for another domain */
+	  if ((status = p7_anchors_Grow(anch)) != eslOK) goto ERROR; /* Make sure we have room for another domain */
 	}
     }
+
+  anch->D--;  			// because it's D+1 at end of the loop above
+  p7_anchor_SetSentinels(anch->a, anch->D, tr->L, tr->M);
   return eslOK;
   
  ERROR:
@@ -384,13 +387,13 @@ p7_reference_anchors_SetFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_COO
  *****************************************************************/
 
 static int
-dump_current_anchorset(FILE *ofp, const P7_COORDS2 *anch)
+dump_current_anchorset(FILE *ofp, const P7_ANCHORS *anch)
 {
   int d;
 
-  fprintf(ofp, "%2d ", anch->n);
-  for (d = 0; d < anch->n; d++)
-    fprintf(ofp, "%4d %4d ", anch->arr[d].n1, anch->arr[d].n2);
+  fprintf(ofp, "%2d ", anch->D);
+  for (d = 1; d <= anch->D; d++)
+    fprintf(ofp, "%4d %4d ", anch->a[d].i0, anch->a[d].k0);
   fprintf(ofp, "\n");
   return eslOK;
 }
@@ -421,7 +424,6 @@ static ESL_OPTIONS options[] = {
   { "-h",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",                   0 },
   { "-s",          eslARG_INT,      "0",  NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                          0 },
   { "-Z",          eslARG_INT,      "1",  NULL, NULL,   NULL,  NULL, NULL, "set sequence # to <n>, for E-value calculations",        0 },
-
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -430,32 +432,32 @@ static char banner[] = "statistics collection on anchor set constraint calculati
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go         = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng        = esl_randomness_Create( esl_opt_GetInteger(go, "-s"));
-  char           *hmmfile    = esl_opt_GetArg(go, 1);
-  P7_HMMFILE     *hfp        = NULL;
-  ESL_ALPHABET   *abc        = NULL;
-  char           *seqfile    = esl_opt_GetArg(go, 2);
-  ESL_SQ         *sq         = NULL;
-  int             format     = eslSQFILE_UNKNOWN;
-  ESL_SQFILE     *sqfp       = NULL;
-  P7_BG          *bg         = NULL;
-  P7_HMM         *hmm        = NULL;
-  P7_PROFILE     *gm         = NULL;           /* profile in H4's standard dual-mode local/glocal */
-  P7_OPROFILE    *om         = NULL;
-  P7_FILTERMX    *fx         = p7_filtermx_Create(100);
-  P7_CHECKPTMX   *cx         = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_RAMLIMIT));
-  P7_SPARSEMASK  *sm         = p7_sparsemask_Create(100, 100);
-  P7_COORDS2     *anch       = p7_coords2_Create(0,0);
-  P7_REFMX       *rxf        = p7_refmx_Create(100,100);
-  P7_REFMX       *rxd        = p7_refmx_Create(100,100);
-  P7_REFMX       *afu        = p7_refmx_Create(100,100);
-  P7_REFMX       *afd        = p7_refmx_Create(100,100);
-  P7_TRACE       *tr         = p7_trace_Create();
-  P7_TRACE       *vtr        = p7_trace_Create();
-  P7_COORDS2_HASH *hashtbl   = p7_coords2_hash_Create(0,0,0);
-  float          *wrk        = NULL;
-  int             Z          = esl_opt_GetInteger(go, "-Z");
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_RANDOMNESS *rng     = esl_randomness_Create( esl_opt_GetInteger(go, "-s"));
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  P7_HMMFILE     *hfp     = NULL;
+  ESL_ALPHABET   *abc     = NULL;
+  char           *seqfile = esl_opt_GetArg(go, 2);
+  ESL_SQ         *sq      = NULL;
+  int             format  = eslSQFILE_UNKNOWN;
+  ESL_SQFILE     *sqfp    = NULL;
+  P7_BG          *bg      = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_PROFILE     *gm      = NULL;           /* profile in H4's standard dual-mode local/glocal */
+  P7_OPROFILE    *om      = NULL;
+  P7_FILTERMX    *fx      = p7_filtermx_Create(100);
+  P7_CHECKPTMX   *cx      = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_RAMLIMIT));
+  P7_SPARSEMASK  *sm      = p7_sparsemask_Create(100, 100);
+  P7_ANCHORS     *anch    = p7_anchors_Create();
+  P7_REFMX       *rxf     = p7_refmx_Create(100,100);
+  P7_REFMX       *rxd     = p7_refmx_Create(100,100);
+  P7_REFMX       *afu     = p7_refmx_Create(100,100);
+  P7_REFMX       *afd     = p7_refmx_Create(100,100);
+  P7_TRACE       *tr      = p7_trace_Create();
+  P7_TRACE       *vtr     = p7_trace_Create();
+  P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
+  float          *wrk     = NULL;
+  int             Z       = esl_opt_GetInteger(go, "-Z");
   P7_MPAS_STATS   stats;
   float           nullsc, vsc, fsc, asc;
   int             status;
@@ -500,7 +502,7 @@ main(int argc, char **argv)
 	  p7_ReferenceBackward(sq->dsq, sq->n, gm, rxd, NULL);   
 	  p7_ReferenceDecoding(sq->dsq, sq->n, gm, rxf, rxd, rxd);   
 
-	  p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, tr, &wrk, hashtbl,
+	  p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, tr, &wrk, ah,
 			       afu, afd, anch, &asc, NULL, &stats);
 	     
 	  p7_trace_Index(vtr);
@@ -546,8 +548,8 @@ main(int argc, char **argv)
 	  p7_refmx_Reuse(afu);
 	  p7_trace_Reuse(tr);
 	  p7_trace_Reuse(vtr);
-	  p7_coords2_hash_Reuse(hashtbl);
-	  p7_coords2_Reuse(anch);
+	  p7_anchorhash_Reuse(ah);
+	  p7_anchors_Reuse(anch);
 	}
 
       p7_filtermx_Reuse(fx);
@@ -559,14 +561,14 @@ main(int argc, char **argv)
   else if (status != eslEOF)     p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
 
   if (wrk) free(wrk);
-  p7_coords2_hash_Destroy(hashtbl);
+  p7_anchors_Destroy(anch);
+  p7_anchorhash_Destroy(ah);
   p7_trace_Destroy(tr);
   p7_trace_Destroy(vtr);
   p7_refmx_Destroy(afd);
   p7_refmx_Destroy(afu);
   p7_refmx_Destroy(rxf);
   p7_refmx_Destroy(rxd);
-  p7_coords2_Destroy(anch);
   p7_sparsemask_Destroy(sm);
   p7_checkptmx_Destroy(cx);
   p7_filtermx_Destroy(fx);
@@ -627,7 +629,8 @@ main(int argc, char **argv)
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
-  P7_COORDS2     *anch    = p7_coords2_Create(0,0);
+  P7_ANCHORS     *anch    = p7_anchors_Create();
+  P7_ANCHORHASH  *hashtbl = p7_anchorhash_Create();
   P7_REFMX       *rxf     = NULL;
   P7_REFMX       *rxd     = NULL;
   P7_REFMX       *afu     = NULL;
@@ -635,7 +638,6 @@ main(int argc, char **argv)
   P7_TRACE       *tr      = NULL;
   P7_TRACE       *vtr     = NULL;
   float          *wrk     = NULL;
-  P7_COORDS2_HASH *hashtbl = p7_coords2_hash_Create(0,0,0);
   P7_MPAS_PARAMS  prm;
   P7_MPAS_STATS   stats;
   float           fsc, vsc, asc;
@@ -690,7 +692,7 @@ main(int argc, char **argv)
   prm.be_verbose     = TRUE;
 
   /* Do it. */
-  p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, tr, &wrk, hashtbl,
+  p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, tr, &wrk, ah,
 		       afu, afd, anch, &asc, &prm, &stats);
 
   p7_trace_Index(vtr);
@@ -698,8 +700,8 @@ main(int argc, char **argv)
   p7_mpas_stats_Dump(stdout, &stats);
 
 
-
-  p7_coords2_hash_Destroy(hashtbl);
+  p7_anchors_Destroy(anch);
+  p7_anchorhash_Destroy(ah);
   if (wrk) free(wrk);
   p7_trace_Destroy(tr);
   p7_trace_Destroy(vtr);
@@ -707,7 +709,6 @@ main(int argc, char **argv)
   p7_refmx_Destroy(afu);
   p7_refmx_Destroy(rxd);
   p7_refmx_Destroy(rxf);
-  p7_coords2_Destroy(anch);
   esl_sq_Destroy(sq);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);

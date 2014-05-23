@@ -3,6 +3,8 @@ MODULE = base
 LIBOBJS =  general.o           \
 	   p7_alidisplay.o     \
 	   p7_alidisplay_mpi.o \
+	   p7_anchors.o        \
+	   p7_anchorhash.o     \
 	   p7_bg.o             \
 	   p7_coords2.o        \
 	   p7_domain.o         \
@@ -29,18 +31,20 @@ HDRS =
 
 PROGS =
 
-UTESTS =     p7_alidisplay_utest \
+UTESTS =     p7_alidisplay_utest     \
 	     p7_alidisplay_mpi_utest \
-	     p7_bg_utest \
-	     p7_domain_mpi_utest \
-	     p7_hmm_utest \
-	     p7_hmm_mpi_utest \
-	     p7_hmmfile_utest \
-	     p7_profile_utest \
-	     p7_profile_mpi_utest \
-	     p7_scoredata_utest \
-	     p7_tophits_utest \
-	     p7_tophits_mpi_utest \
+	     p7_anchorhash_utest     \
+	     p7_anchors_utest        \
+	     p7_bg_utest             \
+	     p7_domain_mpi_utest     \
+	     p7_hmm_utest            \
+	     p7_hmm_mpi_utest        \
+	     p7_hmmfile_utest        \
+	     p7_profile_utest        \
+	     p7_profile_mpi_utest    \
+	     p7_scoredata_utest      \
+	     p7_tophits_utest        \
+	     p7_tophits_mpi_utest    \
 	     p7_trace_utest
 
 STATS  = 
@@ -50,11 +54,12 @@ BENCHMARKS = p7_bg_benchmark \
 	     p7_tophits_benchmark
 
 EXAMPLES =   p7_alidisplay_example \
-	     p7_bg_example \
-	     p7_bg_example2 \
-	     p7_coords2_example \
-	     p7_hmmfile_example \
-	     p7_profile_example \
+	     p7_anchorhash_example \
+	     p7_bg_example         \
+	     p7_bg_example2        \
+	     p7_coords2_example    \
+	     p7_hmmfile_example    \
+	     p7_profile_example    \
 	     p7_trace_example
 
 LIBTMP =

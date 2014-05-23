@@ -20,7 +20,7 @@
 #include "easel.h"
 
 #include "base/p7_profile.h"
-#include "base/p7_coords2.h"
+#include "base/p7_anchors.h"
 
 #include "misc/logsum.h"
 
@@ -53,19 +53,19 @@
  *            invocation) with a <p7_FLogsumInit()> call, because this
  *            function uses <p7_FLogsum()>.
  *            
- *            The two coords in <anch>, <anch[].n1> and <anch[].n2>,
+ *            The two coords in <anch>, <anch[].i0> and <anch[].k0>,
  *            are assigned to (i,k) pairs (in that order). The anchors
  *            in <anch> must be sorted in order of increasing sequence
- *            position <i>.
+ *            position <i>, for domains <d=1..D>.
  *            
- *            <anch> and <D> might be data in a <P7_COORDS2> list
- *            management container: for example, for <P7_COORDS2 *dom>,
- *            you would pass <dom->arr> and <dom->n>.
+ *            <anch> and <D> might be data in a <P7_ANCHORS> list
+ *            management container: for example, for <P7_ANCHORS *dom>,
+ *            you would pass <dom->a> and <dom->D>.
  *
  * Args:      dsq    : digital target sequence 1..L
  *            L      : length of <dsq>
  *            gm     : profile
- *            anch   : array of (i,k) anchors defining <dsq>'s domain structure
+ *            anch   : array of (i,k) anchors defining <dsq>'s domain structure (0) 1..D (D+1) with sentinels
  *            D      : number of anchors in <anch> array -- # of domains
  *            mxu    : UP matrix
  *            mxd    : DOWN matrix
@@ -76,7 +76,7 @@
  * Throws:    <eslEMEM> on reallocation failure.
  */
 int
-p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_COORD2 *anch, int D,
+p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_ANCHOR *anch, int D,
 		       P7_REFMX *mxu, P7_REFMX *mxd, float *opt_sc)
 {
   const float *tsc;		/* ptr for stepping thru profile's transition parameters */
@@ -92,7 +92,6 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
   float mlv, mgv;		/* tmp variables for ML, MG scores...                    */
   float dlv, dgv;		/*   ... and for DL, DG scores                           */
   float xE;			/* tmp var for accumulating E score for a row            */
-  int   iend;			/* tmp var for row index for end of a DOWN sector        */
   int   M = gm->M;		/* for a bit more clarity, less dereference clutter      */
   int   status;
 
@@ -115,13 +114,9 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
 
   /* Initialize i=0..anch[0].i-1 specials. 
    * All specials are stored in DOWN matrix.
-   * You can think of this as a DOWN matrix for
-   * a boundary condition anchor at 0,M+1: 
-   * i.e. i = 0..anch[0].n1-1, k=M+1..M (nothing).
    */
-  iend = (D == 0) ? 1 : anch[0].n1;
   xp   = NULL;
-  for (i = 0; i < iend; i++)
+  for (i = 0; i < anch[1].i0; i++)   // Note this even works for D=0/L=0 case, because then anch[D+1] = L+1 sentinel, and we'll do row 0 (only) here
     {
       xc = mxd->dp[i] + (M+1) * p7R_NSCELLS; 
       xc[p7R_E]  = -eslINFINITY;
@@ -136,8 +131,8 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
       xp = xc;
     }
 
-  /* Iterate over domains d=0..D-1: */
-  for (d = 0; d < D; d++)
+  /* Iterate over domains d=1..D: */
+  for (d = 1; d <= D; d++)
     {
       /*****************************************************************
        * Part 1. UP matrix sector for domain d
@@ -145,29 +140,43 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
        *    so we make use of L,G state values from a previous row.
        *
        *    The UP sector includes:
-       *       i = anch[d-1].i+1 to anch[d].i-1 (1..anch[d].i-1 for d==0)
-       *       k = 1 to anch[d].k-1
+       *       i = i0(d-1) .. i0(d)-1   (for d=1, sentinel i0(0)=0 makes first UP sector 0..i0(1)-1)
+       *       k = 1 to k0(d)-1       
        *
-       *    We'll initialize row anch[d-1].i; then do the remaining rows.
+       *    Supercells in the top UP row, i0(d-1), are only used in
+       *    decoding, for delete states in G->D1DDDk-1->Mk wing unfolding.
+       *    So here, in fwd, we'll initialize row i0(d-1) to all -inf,
+       *    which somewhat simplifies the boundary condition for the next row.
        *    
-       *    It's possible for the UP matrix to be empty (no cells), when
-       *    anch[d].i == anch[d-1].i+1, including the case of anch[0].i = 1.
-       *    It's also possible for the UP matrix to only consist of
-       *    the initialization column k=0, when anch[d].k == 1.
+       *    There's a potentially tricky case when i0(d) = i0(d-1)+1, anchors
+       *    on adjacent rows. We need to connect the lower right UP supercell
+       *    to the anchor supercell in DOWN; we do this by making sure <dpc>
+       *    has a well-defined final state, at i0(d-1),k0. When we go to 
+       *    connect to DOWN, we'll back it up one supercell, setting dpp = dpc - p7R_NSCELLS.
+       *                                                                         
+       *    Because the REFMX has a column k=0 allocated for us, we may 
+       *    as well use it; so we also initialize supercells in k=0 at
+       *    every UP row to -inf, again to somewhat simplify boundary conditions.
+       *    
+       *    It's possible to have no cells in the UP matrix at all, if
+       *    k0(d) = 1. In that case, the way we handle initialization,
+       *    the combination of the above two points is important: 
+       *    we initialize k=0 on the previous row, and dpc is left hovering
+       *    just after it.
        *****************************************************************/
 
-      /* Initialization of previous row, anch[d-1].i (or, 0 for d=0) */
-      i   = (d == 0 ? 0 : anch[d-1].n1);                                      // i is always our current row index, 0.1..L 
-      dpc = mxu->dp[i];                                        
-      for (s = 0; s < p7R_NSCELLS * anch[d].n2; s++) *dpc++ = -eslINFINITY;   // initialize previous row above UP matrix (0..anch[d].k-1) to -inf
-      /* dpc is now sitting on (anch[d].i-1, anch[d].k): supercell above the anchor. 
-       * We rely on that position, if UP matrix has no cells.
+      /* Initialization of top row, i0(d-1), to -inf's */
+      dpc = mxu->dp[ anch[d-1].i0 ];                                          // that's dp[0] for d=1 
+      for (s = 0; s < p7R_NSCELLS * anch[d].k0; s++) *dpc++ = -eslINFINITY;   
+      /* in the special case of i0(d)=i0(d-1)+1,
+       * dpc is now sitting on i0(d)-1, k0(d).k): supercell above the anchor, 
+       * where it needs to be to make the connection to DOWN.
        */
 
-      /* Now we recurse for remaining rows, down to anch[d].i-1 row.
+      /* Now we recurse for remaining rows, i0(d-1)+1..i0[d].i-1 row.
        * (It's possible that no such rows exist, depending where that next anchor is.)
        */
-      for (i = i+1 ; i < anch[d].n1; i++)
+      for (i = anch[d-1].i0+1 ; i < anch[d].n1; i++)
 	{
 	  rsc = gm->rsc[dsq[i]] + p7P_NR;                           // Start <rsc> at k=1 on row i 
 	  tsc = gm->tsc;                                            // Start <tsc> at k=0, where off-by-one {LG}->M transition scores are
@@ -177,7 +186,7 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
 	  for (s = 0; s < p7R_NSCELLS; s++) *dpc++ = -eslINFINITY;  //   ... initialize that cell, and now <dpc> is on k=1.
 	  dlv = dgv = -eslINFINITY;
 
-	  for (k = 1; k < anch[d].n2; k++)
+	  for (k = 1; k < anch[d].k0; k++)
 	    {
 	      mlv = *dpc++ = *rsc + p7_FLogsum( p7_FLogsum(*(dpp+p7R_ML) + *(tsc + p7P_MM),
 							   *(dpp+p7R_IL) + *(tsc + p7P_IM)),
@@ -213,13 +222,16 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
 
       /*****************************************************************
        * Part 2. DOWN matrix sector for domain d
-       *    In a DOWN sector, we can exit the model, but not enter,
-       *    so we collect xE on each row,
-       *    and use it to set the specials for that row.
        *    
-       *    The DOWN sector includes:
-       *       i = anch[d].i to anch[d+1].i-1  (anch[d].i to L, for last domain d=D-1)
-       *       k = anch[d].k to M
+       *    In a DOWN sector, we can exit the model, but we can only
+       *    enter at the anchor state itself; so we collect xE on each row,
+       *    and we handle the special case of anchor state entry when we
+       *    initialize that supercell. After each main row is calculated,
+       *    we use xE to set the specials on that same row.
+       *
+       *    DOWN sector d includes:
+       *       i = i0(d) to i0(d+1)-1  (for d=D, sentinel i0(D+1) makes last DOWN sector i0(D)..L)
+       *       k = k0(d) to M
        *       
        *    We'll initialize the top row with a partial DP calc, then
        *    do the remaining rows with the full calculation.  (With
@@ -227,20 +239,19 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
        *    with the DOWN matrices, they are exactly abutting when we
        *    squeeze them down into two-matrix form.) 
        *    
-       *    The top row starts with the anchor cell, which is
-       *    initialized with one final UP calculation that allows
-       *    entry exactly on the anchor.
+       *    We do, however, take advantage of being able to initialize 
+       *    the supercell at k0(d)-1 to -inf.
        *****************************************************************/
 
       /* Start with anch[d].k-1 on first row, and set all cells to -inf*/
-      i   = anch[d].n1;
-      tsc = gm->tsc +         (anch[d].n2-1) * p7P_NTRANS;    // Start <tsc> on anch.k, i.e. k-1 relative to start of calculation
-      rsc = gm->rsc[dsq[i]] + (anch[d].n2    * p7P_NR);       // <rsc> is on scores for anch.k
+      i   = anch[d].i0;
+      tsc = gm->tsc +         (anch[d].k0-1) * p7P_NTRANS;    // Start <tsc> on k0-1, i.e. k-1 relative to start of calculation
+      rsc = gm->rsc[dsq[i]] + (anch[d].k0    * p7P_NR);       // <rsc> is on scores for k0
       xp  = mxd->dp[i-1] + (M+1) * p7R_NSCELLS;               // <xp> on specials for anch.i-1
-      dpc = mxd->dp[i] + (anch[d].n2-1) * p7R_NSCELLS;
-      for (s = 0; s < p7R_NSCELLS; s++) *dpc++ = -eslINFINITY;// <dpc> now sits on anch.k
+      dpc = mxd->dp[i] + (anch[d].k0-1) * p7R_NSCELLS;        // We will initialize k0(d)-1 supercell...
+      for (s = 0; s < p7R_NSCELLS; s++) *dpc++ = -eslINFINITY;//   ... and now <dpc> now sits on k0(d)
 
-      /* Then calculate the anchor cell (anch.i, anch.k) as an UP calc, using
+      /* Then calculate the anchor cell (i0,k0) as an UP calc, using
        * <dpp> which was already set, above. 
        */
       mlv = *dpc++ = *rsc + p7_FLogsum( p7_FLogsum(*(dpp+p7R_ML) + *(tsc + p7P_MM),
@@ -266,12 +277,12 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
        * glocal exit case when the anchor cell (unusually) sits on M
        * itself.
        */
-      xE  = (anch[d].n2 == M ? p7_FLogsum(mlv, mgv) : mlv);
+      xE  = (anch[d].k0 == M ? p7_FLogsum(mlv, mgv) : mlv);
 
-      /* Initialization of the rest of the top row from k=anch.k+1 to M,
+      /* Now we initialize the rest of the top row i0(d) from k=k0(d)+1 to M,
        * which is only reachable on deletion paths from the anchor.
        */
-      for (k = anch[d].n2+1; k <= M; k++)
+      for (k = anch[d].k0+1; k <= M; k++)
 	{
 	  *dpc++ = -eslINFINITY; // ML. No entry, and unreachable from other cells too. 
 	  *dpc++ = -eslINFINITY; // MG. Ditto.
@@ -294,27 +305,26 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
       xc = dpc;
       xc[p7R_E]  = xE;
       xc[p7R_N]  = -eslINFINITY; 
-      xc[p7R_J]  = (d == D-1 ? -eslINFINITY : xc[p7R_E] + gm->xsc[p7P_E][p7P_LOOP]);
+      xc[p7R_J]  = (d == D ? -eslINFINITY : xc[p7R_E] + gm->xsc[p7P_E][p7P_LOOP]);
       xc[p7R_B]  = xc[p7R_J] + gm->xsc[p7P_J][p7P_MOVE];
       xc[p7R_L]  = xc[p7R_B] + gm->xsc[p7P_B][0]; 
       xc[p7R_G]  = xc[p7R_B] + gm->xsc[p7P_B][1]; 
-      xc[p7R_C]  = (d == D-1 ? xc[p7R_E] + gm->xsc[p7P_E][p7P_MOVE] : -eslINFINITY);
+      xc[p7R_C]  = (d == D ? xc[p7R_E] + gm->xsc[p7P_E][p7P_MOVE] : -eslINFINITY);
       xc[p7R_JJ] = -eslINFINITY;
       xc[p7R_CC] = -eslINFINITY;
 
       /* Now we can do the remaining rows in the Down sector of domain d. */
-      iend = (d < D-1 ? anch[d+1].n1 : L+1);
-      for (i = i+1 ; i < iend; i++)
+      for (i = anch[d].i0+1 ; i < anch[d+1].i0; i++)               // sentinel i0(D+1) = L+1 
 	{
-	  rsc = gm->rsc[dsq[i]] + anch[d].n2     * p7P_NR;         // Start <rsc> on (x_i, anchor_k, MAT) */
-	  tsc = gm->tsc         + (anch[d].n2-1) * p7P_NTRANS;	   // Start <tsc> on (anchor_k-1), to pick up LMk,GMk entries 
-	  dpp = mxd->dp[i-1]    + (anch[d].n2-1) * p7R_NSCELLS;	   // Start <dpp> on (i-1, anchor_k-1) 
-	  dpc = mxd->dp[i]      + (anch[d].n2-1) * p7R_NSCELLS;	   // Start <dpc> on (i, anchor_k-1)... 
+	  rsc = gm->rsc[dsq[i]] + anch[d].k0     * p7P_NR;         // Start <rsc> on (x_i, anchor_k, MAT) */
+	  tsc = gm->tsc         + (anch[d].k0-1) * p7P_NTRANS;	   // Start <tsc> on (anchor_k-1), to pick up LMk,GMk entries 
+	  dpp = mxd->dp[i-1]    + (anch[d].k0-1) * p7R_NSCELLS;	   // Start <dpp> on (i-1, anchor_k-1) 
+	  dpc = mxd->dp[i]      + (anch[d].k0-1) * p7R_NSCELLS;	   // Start <dpc> on (i, anchor_k-1)... 
 	  for (s = 0; s < p7R_NSCELLS; s++) *dpc++ = -eslINFINITY; //  ... and initialize the k-1 cells to -inf... 
                                                            	   //  ... so, now dpc is on anchor_k.
 	  dlv = dgv = xE = -eslINFINITY;
 
-  	  for (k = anch[d].n2; k <= M; k++) 
+  	  for (k = anch[d].k0; k <= M; k++) 
 	    {				  
 	      mlv = *dpc++ = *rsc + p7_FLogsum( p7_FLogsum(*(dpp+p7R_ML) + *(tsc + p7P_MM),
 							   *(dpp+p7R_IL) + *(tsc + p7P_IM)),
@@ -351,11 +361,11 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
 	  xp = dpp + p7R_NSCELLS;	
 	  xc[p7R_E]  = xE;		
 	  xc[p7R_N]  = -eslINFINITY; 
-	  xc[p7R_J]  = (d == D-1 ? -eslINFINITY : p7_FLogsum( xp[p7R_J] + gm->xsc[p7P_J][p7P_LOOP], xc[p7R_E] + gm->xsc[p7P_E][p7P_LOOP]));
+	  xc[p7R_J]  = (d == D ? -eslINFINITY : p7_FLogsum( xp[p7R_J] + gm->xsc[p7P_J][p7P_LOOP], xc[p7R_E] + gm->xsc[p7P_E][p7P_LOOP]));
 	  xc[p7R_B]  = xc[p7R_J] + gm->xsc[p7P_J][p7P_MOVE]; 
 	  xc[p7R_L]  = xc[p7R_B] + gm->xsc[p7P_B][0]; 
 	  xc[p7R_G]  = xc[p7R_B] + gm->xsc[p7P_B][1]; 
-	  xc[p7R_C]  = (d == D-1 ? p7_FLogsum( xp[p7R_C] + gm->xsc[p7P_C][p7P_LOOP], xc[p7R_E] + gm->xsc[p7P_E][p7P_MOVE]) : -eslINFINITY);
+	  xc[p7R_C]  = (d == D ? p7_FLogsum( xp[p7R_C] + gm->xsc[p7P_C][p7P_LOOP], xc[p7R_E] + gm->xsc[p7P_E][p7P_MOVE]) : -eslINFINITY);
 	  xc[p7R_JJ] = -eslINFINITY;                                                                           
 	  xc[p7R_CC] = -eslINFINITY;       
 	} /* end loop over rows i of DOWN sector for domain d */
@@ -396,19 +406,14 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
  *            invocation) with a <p7_FLogsumInit()> call, because this
  *            function uses <p7_FLogsum()>.
  *            
- *            The two coords in <anch>, <anch[].n1> and <anch[].n2>,
- *            are assigned to (i,k) pairs (in that order). The anchors
- *            in <anch> must be sorted in order of increasing sequence
- *            position <i>.
- *            
- *            <anch> and <D> might be data in a <P7_COORDS2> list
- *            management container: for example, for <P7_COORDS2 *dom>,
- *            you would pass <dom->arr> and <dom->n>.
+ *            <anch> and <D> might be data in a <P7_ANCHORS> list
+ *            management container: for example, for <P7_ANCHORS *dom>,
+ *            you would pass <dom->a> and <dom->D>.
  *
  * Args:      dsq    : digital target sequence 1..L
  *            L      : length of <dsq>
  *            gm     : profile
- *            anch   : array of (i,k) anchors defining <dsq>'s domain structure
+ *            anch   : array of (i0,k0) anchors defining <dsq>'s domain structure; (0) 1..D (D+1) with sentinels
  *            D      : number of anchors in <anch> array -- # of domains
  *            abu    : UP matrix
  *            abd    : DOWN matrix
@@ -419,9 +424,10 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
  * Throws:    <eslEMEM> on reallocation failure.
  */
 int
-p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_COORD2 *anch, int D,
+p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_ANCHOR *anch, int D,
 			P7_REFMX *abu, P7_REFMX *abd, float *opt_sc)
 {
+  int    M = gm->M;
   const float *tsc;		/* ptr into transition scores of <gm> */
   const float *rsc;		/* ptr into emission scores of <gm> for residue dsq[i] on current row i  */
   const float *rsn;		/* ptr into emission scores of <gm> for residue dsq[i+1] on next row i+1 */
@@ -438,7 +444,6 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
   float  xE;
   float  xG,  xL;
   float  xC, xJ, xN;
-  int    M = gm->M;
   int    status;
 
   /* contract checks / arg validation */
@@ -455,6 +460,8 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
   abu->L    = abd->L    = L;
   abu->type = p7R_ASC_BCK_UP;
   abd->type = p7R_ASC_BCK_DOWN;
+
+  // SRE STOPPED HERE
 
   iend = (D == 0 ? 0 : anch[D-1].n1);
   for (i = L; i >= iend; i--)
@@ -1334,8 +1341,8 @@ main(int argc, char **argv)
   P7_REFMX       *mxu     = p7_refmx_Create(100, 100);
   P7_REFMX       *mxd     = p7_refmx_Create(100, 100);
   P7_TRACE       *tr      = p7_trace_Create();
-  P7_COORDS2     *anchv   = p7_coords2_Create(0,0);
-  P7_COORDS2     *anchm   = p7_coords2_Create(0,0);
+  P7_ANCHORS     *anchv   = p7_anchors_Create(0,0);
+  P7_ANCHORS     *anchm   = p7_anchors_Create(0,0);
   int             D;
   int             d,i;
   float           fsc, vsc, asc, asc_b;
@@ -1368,7 +1375,7 @@ main(int argc, char **argv)
 
   /* Read anchor coords from command line */
   D = strtol( esl_opt_GetArg(go, 3), NULL, 10);
-  p7_coords2_GrowTo(anchm, D);
+  p7_anchors_GrowTo(anchm, D);
   for (i = 4, d = 0; d < D; d++)
     {
       anchm->arr[d].n1 = strtol( esl_opt_GetArg(go, i), NULL, 10); i++;
@@ -1418,8 +1425,8 @@ main(int argc, char **argv)
 
   esl_sqfile_Close(sqfp);
   esl_sq_Destroy(sq);
-  p7_coords2_Destroy(anchm);
-  p7_coords2_Destroy(anchv);
+  p7_anchors_Destroy(anchm);
+  p7_anchors_Destroy(anchv);
   p7_trace_Destroy(tr);
   p7_refmx_Destroy(mxu);
   p7_refmx_Destroy(mxd);

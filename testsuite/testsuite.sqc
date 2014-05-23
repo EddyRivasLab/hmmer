@@ -46,6 +46,8 @@
 
 # ........ ....................
 1 exercise p7_alidisplay        @src/base/p7_alidisplay_utest@
+1 exercise p7_anchors           @src/base/p7_anchors_utest@
+1 exercise p7_anchorhash        @src/base/p7_anchorhash_utest@
 1 exercise p7_bg                @src/base/p7_bg_utest@
 1 exercise p7_hmm               @src/base/p7_hmm_utest@
 1 exercise p7_hmmfile           @src/base/p7_hmmfile_utest@

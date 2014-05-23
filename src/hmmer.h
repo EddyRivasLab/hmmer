@@ -6,26 +6,29 @@
  */
 #include "p7_config.h"
 
-/* 'base' subdir: contains code for many of HMMER3's data structures                                                             */
+/* 'base' subdir: contains code for many of HMMER's data structures                                                             */
 #include "base/general.h"	     /* Widely used definitions, error handling, initialization                                  */
-#include "base/p7_hmm.h"	     /* P7_HMM        : basic model, probability parameters or counts                            */
-#include "base/p7_hmm_mpi.h"	     /*               :    ... add-on: MPI communication                                         */
-#include "base/p7_profile.h"	     /* P7_PROFILE    : search model, glocal/local, with additional states for nonhomologous seq */
-#include "base/p7_profile_mpi.h"     /*               :    ... add-on: MPI communication                                         */
-#include "base/p7_hmmfile.h"	     /* P7_HMMFILE    : reading models from files                                                */
-#include "base/p7_trace.h"	     /* P7_TRACE      : alignment of a model to a sequence: an HMM state path                    */
-#include "base/p7_bg.h"		     /* P7_BG         : null model, of an entirely nonhomologous target seq                      */
-#include "base/p7_prior.h"	     /* P7_PRIOR      : Dirichlet mixture prior on model parameters                              */
-#include "base/p7_masstrace.h"	     /* P7_MASSTRACE  : workspace used in calculating envelope bounds for a domain               */
-#include "base/p7_domain.h"	     /* P7_DOMAIN     : information about a match to a model in a target seq                     */
-#include "base/p7_domain_mpi.h"      /*               :    ... add-on: MPI communication                                         */
 #include "base/p7_alidisplay.h"	     /* P7_ALIDISPLAY : an alignment formatted for output                                        */
 #include "base/p7_alidisplay_mpi.h"  /*               :    ... add-on: MPI communication                                         */
+#include "base/p7_anchors.h"         /* P7_ANCHORS    : array of (i0,k0) anchors for defining domain locations in target seq     */
+#include "base/p7_anchorhash.h"      /* P7_ANCHORHASH : auxiliary data structure in MPAS (most probable anchor set) algorithms   */
+#include "base/p7_bg.h"		     /* P7_BG         : null model, of an entirely nonhomologous target seq                      */
+#include "base/p7_coords2.h"         /* P7_COORD2, P7_COORDS2 : segment start/end coord pairs, used in domain definition         */  // DEPRECATED; J13/92
+#include "base/p7_domain.h"	     /* P7_DOMAIN     : information about a match to a model in a target seq                     */  // needs to be reconciled with newer P7_ENVELOPES
+#include "base/p7_domain_mpi.h"      /*               :    ... add-on: MPI communication                                         */
+#include "base/p7_envelopes.h"       /* P7_ENVELOPES  : information about locations of domains on a target sequence              */
+#include "base/p7_hmm.h"	     /* P7_HMM        : basic model, probability parameters or counts                            */
+#include "base/p7_hmm_mpi.h"	     /*               :    ... add-on: MPI communication                                         */
+#include "base/p7_hmmfile.h"	     /* P7_HMMFILE    : reading models from files                                                */
+#include "base/p7_hmmwindow.h"	     /* P7_HMM_WINDOW, P7_HMM_WINDOWLIST : {nhmmer}                                              */
+#include "base/p7_masstrace.h"	     /* P7_MASSTRACE  : workspace used in calculating envelope bounds for a domain               */  // DEPRECATED
+#include "base/p7_prior.h"	     /* P7_PRIOR      : Dirichlet mixture prior on model parameters                              */
+#include "base/p7_profile.h"	     /* P7_PROFILE    : search model, glocal/local, with additional states for nonhomologous seq */
+#include "base/p7_profile_mpi.h"     /*               :    ... add-on: MPI communication                                         */
+#include "base/p7_scoredata.h"	     /* P7_SCOREDATA  : {nhmmer}                                                                 */
 #include "base/p7_tophits.h"	     /* P7_HIT, P7_TOPHITS : accumulated information about hits (scores, alis) during search     */
 #include "base/p7_tophits_mpi.h"     /*               :    ... add-on: MPI communication                                         */
-#include "base/p7_coords2.h"         /* P7_COORD2, P7_COORDS2 : segment start/end coord pairs, used in domain definition         */
-#include "base/p7_hmmwindow.h"	     /* P7_HMM_WINDOW, P7_HMM_WINDOWLIST : {nhmmer}                                              */
-#include "base/p7_scoredata.h"	     /* P7_SCOREDATA  : {nhmmer}                                                                 */
+#include "base/p7_trace.h"	     /* P7_TRACE      : alignment of a model to a sequence: an HMM state path                    */
 
 /* 'misc' subdir: various other support functions                                                                         */
 #include "misc/emit.h"		           /* emitting (sampling) sequences from HMM or profile                           */

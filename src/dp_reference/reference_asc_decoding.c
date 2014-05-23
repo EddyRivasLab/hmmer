@@ -17,7 +17,7 @@
 #include "easel.h"
 
 #include "base/p7_profile.h"
-#include "base/p7_coords2.h"
+#include "base/p7_anchors.h"
 
 #include "misc/logsum.h"
 
@@ -54,19 +54,11 @@
  *            invocation) with a <p7_FLogsumInit()> call, because this                                                                            
  *            function uses <p7_FLogsum()>.                                                                                                       
  *
- *            The two coords in <anch>, <anch[].n1> and <anch[].n2>,                                                                              
- *            are assigned to (i,k) pairs (in that order). The anchors                                                                            
- *            in <anch> must be sorted in order of increasing sequence                                                                            
- *            position <i>.                                                                                                                       
- *
- *            <anch> and <D> might be data in a <P7_COORDS2> list                                                                                 
- *            management container: for example, for <P7_COORDS2 *dom>,                                                                           
- *            you would pass <dom->arr> and <dom->n>.                                                                                             
  *
  * Args:      dsq  : digital target sequence 1..L
  *            L    : length of <dsq>
  *            gm   : profile
- *            anch : array of (i,k) anchors defining <dsq>'s domain structure
+ *            anch : array of (i0,k0) anchors defining <dsq>'s domain structure; (0) 1..D (D+1) with sentinels
  *            D    : number of anchors in <anch> array = # of domains in <dsq>
  *            afu  : ASC Forward UP matrix
  *            afd  : ASC Forward DOWN matrix
@@ -80,7 +72,7 @@
  * Throws:    <eslEMEM> on reallocation failure.
  */
 int
-p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_COORD2 *anch, int D, 
+p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_ANCHOR *anch, int D, 
 			const P7_REFMX *afu, const P7_REFMX *afd, P7_REFMX *abu, P7_REFMX *abd, P7_REFMX *apu, P7_REFMX *apd)
 {
   const float *tsc = gm->tsc;	/* activates TSC() convenience macro, used in G->Mk wing unfolding */
@@ -117,11 +109,11 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
   apd->type = p7R_ASC_DECODE_DOWN;
 
 
-  /* Initialize specials on rows 1..anch[0].i-1 
+  /* Initialize specials on rows 1..anch[1].i-1 
    * We've above the first anchor, so only S->N->B->LG is possible in specials. 
    * We pick up totsc from row 0 of backwards.
    */
-  for (i = 0; i < anch[0].n1; i++)
+  for (i = 0; i < anch[1].i0; i++)
     {
       fwdp  = afd->dp[i] + (M+1) * p7R_NSCELLS;
       bckp  = abd->dp[i] + (M+1) * p7R_NSCELLS;
@@ -144,17 +136,17 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
     }
 
 
-  for (d = 0; d < D; d++)
+  for (d = 1; d <= D; d++)
     {
       /* UP matrix */
-      iend = (d == 0 ? 1 : anch[d-1].n1+1);
 
       /* Row iend-1 (0, for example, but also the top edge of each UP matrix) is a boundary case:
-       * only reachable by wing retraction. Set it all to zero, 
+       * only reachable by wing retraction. Set it all to zero.
        */
+      iend = anch[d-1].i0+1;
       for (s = 0; s < anch[d].n2*p7R_NSCELLS; s++) apu->dp[iend-1][s] = 0.;
 
-      for (i = iend; i < anch[d].n1; i++)
+      for (i = iend; i < anch[d].i0; i++)
 	{
 	  /* Wing retraction of G->D1..Dk-1->MGk paths.
 	   * 
@@ -165,13 +157,13 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
            * This step is the only reason we need <rsc>, hence <dsq>,
            * in this function.
 	   */
-	  bckp  = abu->dp[i]      + (anch[d].n2-1) * p7R_NSCELLS;  // bckp on i, k0-1
-	  ppp   = apu->dp[i-1]    + (anch[d].n2-1) * p7R_NSCELLS;  // ppp starts on i+1, k0-1 (PREVIOUS row)
-	  rsc   = gm->rsc[dsq[i]] + (anch[d].n2-1) * p7P_NR;
+	  bckp  = abu->dp[i]      + (anch[d].k0-1) * p7R_NSCELLS;  // bckp on i, k0-1
+	  ppp   = apu->dp[i-1]    + (anch[d].k0-1) * p7R_NSCELLS;  // ppp starts on i+1, k0-1 (PREVIOUS row)
+	  rsc   = gm->rsc[dsq[i]] + (anch[d].k0-1) * p7P_NR;
     	  xG    = *(afd->dp[i-1] + (M+1) * p7R_NSCELLS + p7R_G);   // I don't see any good way of avoiding this reach out into memory
 	  delta = 0.0;
     
-	  for (k = anch[d].n2-1; k >= 1; k--)
+	  for (k = anch[d].k0-1; k >= 1; k--)
 	    {
 	      ppp[p7R_DG] += delta;
 	      delta       += expf(xG + TSC(p7P_GM, k-1) + *rsc + bckp[p7R_MG] - totsc);
@@ -190,7 +182,7 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 	  /* Main decoding recursion:
 	   * [ ML MG IL IG DL DG ] 
 	   */
-	  for (k = 1; k < anch[d].n2; k++)
+	  for (k = 1; k < anch[d].k0; k++)
 	    {
 	      ppp[p7R_ML] = expf(fwdp[p7R_ML] + bckp[p7R_ML] - totsc); denom += ppp[p7R_ML];
 	      ppp[p7R_MG] = expf(fwdp[p7R_MG] + bckp[p7R_MG] - totsc); denom += ppp[p7R_MG];
@@ -207,9 +199,9 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 	  //#ifndef p7REFERENCE_ASC_DECODING_TESTDRIVE
 	  denom = 1.0 / denom;		                                             // multiplication may be faster than division
 	  ppp   = apu->dp[i] + p7R_NSCELLS;                                          // that's k=1 in UP
-	  for (s = 0; s < (anch[d].n2-1) * p7R_NSCELLS; s++) *ppp++ *= denom;        // UP matrix row i renormalized
-	  ppp   = apd->dp[i] + (anch[d].n2) * p7R_NSCELLS;                           // that's k0 in DOWN
-	  for (s = 0; s < (M - anch[d].n2 + 1) * p7R_NSCELLS; s++) *ppp++ *= denom;  // DOWN matrix row i renormalized
+	  for (s = 0; s < (anch[d].k0-1) * p7R_NSCELLS; s++) *ppp++ *= denom;        // UP matrix row i renormalized
+	  ppp   = apd->dp[i] + (anch[d].k0) * p7R_NSCELLS;                           // that's k0 in DOWN
+	  for (s = 0; s < (M - anch[d].k0 + 1) * p7R_NSCELLS; s++) *ppp++ *= denom;  // DOWN matrix row i renormalized
 	  for (s = 0; s < p7R_NXCELLS; s++) ppp[s] *= denom;
 	  //#endif
 	} /* end loop over i's in UP chunk for domain d */
@@ -220,14 +212,14 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
        * need to unfold; and that MG(i+1,k) is the anchor itself,
        * whose value is in the DOWN matrix.
        */
-      i     = anch[d].n1;	
-      k     = anch[d].n2;
+      i     = anch[d].i0;	
+      k     = anch[d].k0;
       xG    = *(afd->dp[i-1] + (M+1) * p7R_NSCELLS + p7R_G); // ugly, sorry. Reach out and get the xG value on row i.
       bckp  = abd->dp[i]      + k * p7R_NSCELLS;             // *bckp is the anchor cell i0,k0 (in DOWN)
       rsc   = gm->rsc[dsq[i]] + k * p7P_NR;
       delta = expf(xG + TSC(p7P_GM, k-1) + *rsc + bckp[p7R_MG] - totsc);  // k-1 in TSC because GMk is stored off by one, in -1 slot
       ppp   = apu->dp[i-1] + p7R_NSCELLS;                    // ppp starts on i-1,k=1 cells
-      for (k = 1; k < anch[d].n2; k++) 
+      for (k = 1; k < anch[d].k0; k++) 
 	{
 	  ppp[p7R_DG] += delta;   // unlike the main wing retraction above, there's only one path going through these 
 	  ppp += p7R_NSCELLS;     //   DGk's (the G->Mk0 entry into the anchor cell), so there's no retro-accumulation of delta
@@ -236,15 +228,14 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 
       /* DOWN matrix */
       xJ = xC = -eslINFINITY;
-      iend = (d == D-1 ? L+1 : anch[d+1].n1);
-      for (i = anch[d].n1; i < iend; i++)
+      for (i = anch[d].i0; i < anch[d+1].i0); i++)
 	{
-	  fwdp  = afd->dp[i] + anch[d].n2 * p7R_NSCELLS;
-	  bckp  = abd->dp[i] + anch[d].n2 * p7R_NSCELLS;
-	  ppp   = apd->dp[i] + anch[d].n2 * p7R_NSCELLS;
+	  fwdp  = afd->dp[i] + anch[d].k0 * p7R_NSCELLS;
+	  bckp  = abd->dp[i] + anch[d].k0 * p7R_NSCELLS;
+	  ppp   = apd->dp[i] + anch[d].k0 * p7R_NSCELLS;
 	  denom = 0.0;
 	  
-	  for (k = anch[d].n2; k <= M; k++)
+	  for (k = anch[d].k0; k <= M; k++)
 	    {
 	      ppp[p7R_ML] = expf(fwdp[p7R_ML] + bckp[p7R_ML] - totsc); denom += ppp[p7R_ML];
 	      ppp[p7R_MG] = expf(fwdp[p7R_MG] + bckp[p7R_MG] - totsc); denom += ppp[p7R_MG];
@@ -259,24 +250,24 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 	    }
 	  /* fwdp, bckp, ppp now all sit at M+1, start of specials */
 
-	  ppp[p7R_JJ] = (d == D-1 ? 0.0 : expf(xJ + gm->xsc[p7P_J][p7P_LOOP] + bckp[p7R_J] - totsc)); xJ = fwdp[p7R_J]; denom += ppp[p7R_JJ];
-	  ppp[p7R_CC] = (d  < D-1 ? 0.0 : expf(xC + gm->xsc[p7P_C][p7P_LOOP] + bckp[p7R_C] - totsc)); xC = fwdp[p7R_C]; denom += ppp[p7R_CC];
+	  ppp[p7R_JJ] = (d == D ? 0.0 : expf(xJ + gm->xsc[p7P_J][p7P_LOOP] + bckp[p7R_J] - totsc)); xJ = fwdp[p7R_J]; denom += ppp[p7R_JJ];
+	  ppp[p7R_CC] = (d  < D ? 0.0 : expf(xC + gm->xsc[p7P_C][p7P_LOOP] + bckp[p7R_C] - totsc)); xC = fwdp[p7R_C]; denom += ppp[p7R_CC];
 	  ppp[p7R_E]  = expf(fwdp[p7R_E] + bckp[p7R_E] - totsc); 
 	  ppp[p7R_N]  = 0.0;
-	  ppp[p7R_J]  = (d == D-1 ? 0.0 : expf(fwdp[p7R_J] + bckp[p7R_J] - totsc));
+	  ppp[p7R_J]  = (d == D ? 0.0 : expf(fwdp[p7R_J] + bckp[p7R_J] - totsc));
 	  ppp[p7R_B]  = expf(fwdp[p7R_B] + bckp[p7R_B] - totsc); 
 	  ppp[p7R_L]  = expf(fwdp[p7R_L] + bckp[p7R_L] - totsc);
 	  ppp[p7R_G]  = expf(fwdp[p7R_G] + bckp[p7R_G] - totsc);  
-	  ppp[p7R_C]  = (d  < D-1 ? 0.0 : expf(fwdp[p7R_C] + bckp[p7R_C] - totsc));
+	  ppp[p7R_C]  = (d  < D ? 0.0 : expf(fwdp[p7R_C] + bckp[p7R_C] - totsc));
 
 	  
-	  if (d < D-1) *(apu->dp[i]) = denom;  // hack: stash denom, which we'll pick up again when we do the next UP matrix.
+	  if (d < D) *(apu->dp[i]) = denom;  // hack: stash denom, which we'll pick up again when we do the next UP matrix.
 	  //#ifndef p7REFERENCE_ASC_DECODING_TESTDRIVE
-	  if (d == D-1) 
-	    { // UP matrices only go through anch[D-1].i-1, so for last DOWN chunk, we need to renormalize.
+	  if (d == D) 
+	    { // UP matrices only go through anch[D].i-1, so for last DOWN chunk, we need to renormalize.
 	      denom = 1.0 / denom;
-	      ppp = apd->dp[i] + (anch[d].n2) * p7R_NSCELLS;                           // that's k0 in DOWN
-	      for (s = 0; s < (M - anch[d].n2 + 1) * p7R_NSCELLS; s++) *ppp++ *= denom; 
+	      ppp = apd->dp[i] + (anch[d].k0) * p7R_NSCELLS;                           // that's k0 in DOWN
+	      for (s = 0; s < (M - anch[d].k0 + 1) * p7R_NSCELLS; s++) *ppp++ *= denom; 
 	      for (s = 0; s < p7R_NXCELLS; s++) ppp[s] *= denom;
 	    }
 	  //#endif
@@ -352,7 +343,7 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
  * <apu>/<apd>; <eslFAIL> if they don't.
  */
 static int
-ascmatrix_compare_std(P7_REFMX *rxd, P7_REFMX *apu, P7_REFMX *apd, P7_COORD2 *anch, int D, float epsilon)
+ascmatrix_compare_std(P7_REFMX *rxd, P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *anch, int D, float epsilon)
 {
   int M = rxd->M;
   int L = rxd->L;
@@ -371,15 +362,15 @@ ascmatrix_compare_std(P7_REFMX *rxd, P7_REFMX *apu, P7_REFMX *apd, P7_COORD2 *an
   /* We use an access pattern that lets us check UP and DOWN sectors
    * for the same i,k,s,d cell at the same time
    */
-  for (d = 0, i = 0; i <= L; i++)
+  for (d = 1, i = 0; i <= L; i++)
     {      
-      if (d < D && i == anch[d].n1) d++;            // d = index of current UP matrix. d-1 = DOWN matrix
-      for (k = 1; k <= M; k++)
+      if (i == anch[d].i0) d++;            // d = index of current UP matrix. d-1 = DOWN matrix;  d will be D+1 for final chunk
+      for (k = 1; k <= M; k++)             //   ... other way to think about it: d = index of next anchor we will reach
 	for (s = 0; s < p7R_NSCELLS; s++)
 	  {
 	    ascval = 0.0;
-	    if (d > 0 && k >= anch[d-1].n2) ascval += P7R_MX(apd,i,k,s);
-	    if (d < D && k <  anch[d].n2)   ascval += P7R_MX(apu,i,k,s);
+	    if (k >= anch[d-1].k0) ascval += P7R_MX(apd,i,k,s);   // sentinel k0(0)   = M+1, so no k gets evaluated for DOWN(d-1=0) 
+	    if (k <  anch[d].k0)   ascval += P7R_MX(apu,i,k,s);   // sentinel k0(D+1) = 0,   so no k gets evaluated for UP(d=D+1)
 	    
 	    if (esl_FCompare( ascval, P7R_MX(rxd,i,k,s), epsilon) != eslOK)
 	      { if (killmenow) abort(); return eslFAIL; }
@@ -395,7 +386,7 @@ ascmatrix_compare_std(P7_REFMX *rxd, P7_REFMX *apu, P7_REFMX *apd, P7_COORD2 *an
 /* ascmatrix_compare_asc()
  */
 static int
-ascmatrix_compare_asc(P7_REFMX *apu1, P7_REFMX *apd1, P7_REFMX *apu2, P7_REFMX *apd2, P7_COORD2 *anch, int D, float epsilon)
+ascmatrix_compare_asc(P7_REFMX *apu1, P7_REFMX *apd1, P7_REFMX *apu2, P7_REFMX *apd2, P7_ANCHOR *anch, int D, float epsilon)
 {
   int M = apu1->M;
   int L = apu1->L;
@@ -411,25 +402,26 @@ ascmatrix_compare_asc(P7_REFMX *apu1, P7_REFMX *apd1, P7_REFMX *apu2, P7_REFMX *
   ESL_DASSERT1(( apu1->type == p7R_ASC_DECODE_UP && apd1->type == p7R_ASC_DECODE_DOWN ));
   ESL_DASSERT1(( apu2->type == p7R_ASC_DECODE_UP && apd2->type == p7R_ASC_DECODE_DOWN ));
 
-  for (d = 0, i = 0; i <= L; i++)
+  for (d = 1, i = 0; i <= L; i++)
     {
-      if (d < D && i == anch[d].n1) d++;
+      if (i == anch[d].i0) d++;             // d=1..D+1, with D+1 in final leg; think of d as "index of next anchor we will reach"
 
-      if (d > 0)
-	for (k = anch[d-1].n2; k <= M; k++)
-	  for (s = 0; s < p7R_NSCELLS; s++)
-	    if (esl_FCompare( P7R_MX(apd1,i,k,s), P7R_MX(apd2,i,k,s), epsilon) != eslOK)
-	      { if (killmenow) abort(); return eslFAIL; }
+      /* DOWN row, if one exists for this i */
+      for (k = anch[d-1].k0; k <= M; k++)   // sentinel k0(0) = M+1, so no k gets evaluated at d=1 for nonexistent DOWN(0)
+	for (s = 0; s < p7R_NSCELLS; s++)   //   ... i.e., first leg has only an UP(1) matrix.
+	  if (esl_FCompare( P7R_MX(apd1,i,k,s), P7R_MX(apd2,i,k,s), epsilon) != eslOK)
+	    { if (killmenow) abort(); return eslFAIL; }
 
+      /* specials exist for all rows. */
       for (s = 0; s < p7R_NXCELLS; s++)
 	if (esl_FCompare( P7R_XMX(apd1,i,s), P7R_XMX(apd2,i,s), epsilon) != eslOK)
 	  { if (killmenow) abort(); return eslFAIL; }
 
-      if (d < D) 
-	for (k = 1; k < anch[d].n2-1; k++)
-	  for (s = 0; s < p7R_NSCELLS; s++)
-	    if (esl_FCompare( P7R_MX(apu1,i,k,s), P7R_MX(apu2,i,k,s), epsilon) != eslOK)
-	      { if (killmenow) abort(); return eslFAIL; }
+      /* UP row, if one exists for this i */
+      for (k = 1; k < anch[d].k0; k++)   // sentinel k0(D+1) = 0, so no k gets evaluated at d=D+1 for nonexistent UP(D+1)
+	for (s = 0; s < p7R_NSCELLS; s++)
+	  if (esl_FCompare( P7R_MX(apu1,i,k,s), P7R_MX(apu2,i,k,s), epsilon) != eslOK)
+	    { if (killmenow) abort(); return eslFAIL; }
     }
   return eslOK;
 }
@@ -450,7 +442,7 @@ ascmatrix_compare_asc(P7_REFMX *apu1, P7_REFMX *apd1, P7_REFMX *apu2, P7_REFMX *
  * CC/JJ cells in the decoding matrix.
  */
 static int
-ascmatrix_trace_compare(P7_TRACE *tr, P7_REFMX *apu, P7_REFMX *apd, P7_COORD2 *anch, int D, float epsilon)
+ascmatrix_trace_compare(P7_TRACE *tr, P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *anch, int D, float epsilon)
 {
   static int sttype[p7T_NSTATETYPES] = { -1, p7R_ML, p7R_MG, p7R_IL, p7R_IG, p7R_DL, p7R_DG, -1, p7R_N, p7R_B, p7R_L, p7R_G, p7R_E, p7R_C, p7R_J, -1 }; /* sttype[] translates trace idx to DP matrix idx*/
   P7_REFMX *ppt  = NULL;
@@ -500,56 +492,42 @@ ascmatrix_trace_compare(P7_TRACE *tr, P7_REFMX *apu, P7_REFMX *apd, P7_COORD2 *a
  * Throws <eslFAIL> if validation fails.
  */
 static int
-ascmatrix_validate(P7_REFMX *apu, P7_REFMX *apd, P7_COORD2 *anch, int D, float epsilon, char *errbuf)
+ascmatrix_validate(P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *anch, int D, float epsilon, char *errbuf)
 {
   int L = apu->L;
   int M = apu->M;
-  int d,iz,i,k,s;
+  int d,i,k,s;
   float val;
   
-  /* i=0..anch[0].i-1 specials are a boundary case... */
-  iz = (D == 0 ? 1 : anch[0].n1);
-  for (i = 0; i < iz; i++)
-    for (s = 0; s < p7R_NXCELLS; s++)
-      {
-	val = P7R_XMX(apd,i,s);
-	if (isnan(val) || val < 0. || val > 1.0+epsilon) 
-	  ESL_FAIL(eslFAIL, errbuf, "bad special value at i=%d, %s", i, p7_refmx_DecodeSpecial(s));
-      }	
+  for (d = 1, i = 0; i <= L; i++)
+    {
+      if (i == anch[d].i0) d++;
 
-  for (d = 0; d < D; d++)
-    {  
-      /* UP sector for domain d */
-      iz = (d == 0 ? 1  : anch[d-1].n1+1);
-      for (i = iz; i < anch[d].n1; i++)
-	for (k = 1; k < anch[d].n2; k++)
-	  for (s = 0; s < p7R_NSCELLS; s++)
-	    {
-	      val = P7R_MX(apu,i,k,s);
-	      if (isnan(val) || val < 0. || val > 1.0+epsilon) 
-		ESL_FAIL(eslFAIL, errbuf, "bad UP value %f at i=%d, k=%d, %s", val, i, k, p7_refmx_DecodeState(s));
-	    }	
-      
-      /* DOWN sector for domain d */
-      iz = ( d < D-1 ? anch[d+1].n1 : L+1);
-      for (i = anch[d].n1; i < iz; i++)
+      /* DOWN sector for domain d, if one exists for this i */
+      for (k = anch[d-1].k0; k <= M; k++)
+	for (s = 0; s < p7R_NSCELLS; s++)
+	  {
+	    val = P7R_MX(apd,i,k,s);
+	    if (isnan(val) || val < 0. || val > 1.0+epsilon) 
+	      ESL_FAIL(eslFAIL, errbuf, "bad DOWN value %f at i=%d, k=%d, %s", val, i, k, p7_refmx_DecodeState(s));
+	  }	
+
+      /* specials exist on all rows, stored in <apd> */
+      for (s = 0; s < p7R_NXCELLS; s++)
 	{
-	  for (k = anch[d].n2; k <= M; k++)
-	    for (s = 0; s < p7R_NSCELLS; s++)
-	    {
-	      val = P7R_MX(apd,i,k,s);
-	      if (isnan(val) || val < 0. || val > 1.0+epsilon) 
-		ESL_FAIL(eslFAIL, errbuf, "bad DOWN value %f at i=%d, k=%d, %s", val, i, k, p7_refmx_DecodeState(s));
-	    }	
+	  val = P7R_XMX(apd,i,s);
+	  if (isnan(val) || val < 0. || val > 1.0+epsilon) 
+	    ESL_FAIL(eslFAIL, errbuf, "bad special value at i=%d, %s", i, p7_refmx_DecodeSpecial(s));
+	}	
 
-	  /* Specials are in the DOWN matrix */
-	  for (s = 0; s < p7R_NXCELLS; s++)
-	    {
-	      val = P7R_XMX(apd,i,s);
-	      if (isnan(val) || val < 0. || val > 1.0+epsilon) 
-		ESL_FAIL(eslFAIL, errbuf, "bad special value at i=%d, %s", i, p7_refmx_DecodeSpecial(s));
+      /* UP sector for domain d */
+      for (k = 1; k < anch[d].k0; k++)
+	for (s = 0; s < p7R_NSCELLS; s++)
+	  {
+	    val = P7R_MX(apu,i,k,s);
+	    if (isnan(val) || val < 0. || val > 1.0+epsilon) 
+	      ESL_FAIL(eslFAIL, errbuf, "bad UP value %f at i=%d, k=%d, %s", val, i, k, p7_refmx_DecodeState(s));
 	    }	
-	}
     }
   return eslOK;
 }
@@ -574,7 +552,7 @@ utest_overwrite(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   P7_BG      *bg        = p7_bg_Create(abc);
   P7_HMM     *hmm       = NULL;
   P7_PROFILE *gm        = p7_profile_Create(M, abc);
-  P7_COORDS2 *anch      = p7_coords2_Create(0,0);
+  P7_ANCHORS *anch      = p7_anchors_Create();
   P7_TRACE   *vtr       = p7_trace_Create();
   P7_REFMX   *rxv       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
@@ -613,10 +591,10 @@ utest_overwrite(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   if ( p7_reference_anchors_SetFromTrace(rxd, vtr, anch)        != eslOK) esl_fatal(failmsg);
 
   /* F/B, then decode both ways */
-  if ( p7_ReferenceASCForward (sq->dsq, sq->n, gm, anch->arr, anch->n, afu, afd, NULL)               != eslOK) esl_fatal(failmsg);
-  if ( p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->arr, anch->n, abu, abd, NULL)               != eslOK) esl_fatal(failmsg);
-  if ( p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->arr, anch->n, afu, afd, abu, abd, apu, apd) != eslOK) esl_fatal(failmsg);
-  if ( p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->arr, anch->n, afu, afd, abu, abd, abu, abd) != eslOK) esl_fatal(failmsg);
+  if ( p7_ReferenceASCForward (sq->dsq, sq->n, gm, anch->a, anch->D, afu, afd, NULL)               != eslOK) esl_fatal(failmsg);
+  if ( p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->a, anch->D, abu, abd, NULL)               != eslOK) esl_fatal(failmsg);
+  if ( p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->a, anch->D, afu, afd, abu, abd, apu, apd) != eslOK) esl_fatal(failmsg);
+  if ( p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->a, anch->D, afu, afd, abu, abd, abu, abd) != eslOK) esl_fatal(failmsg);
 
   //printf("### no overwrite: ASC Up:\n");     p7_refmx_Dump(stdout, apu);
   //printf("### no overwrite: ASC Down:\n");   p7_refmx_Dump(stdout, apd);
@@ -624,11 +602,11 @@ utest_overwrite(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //printf("### with overwrite: ASC Down:\n"); p7_refmx_Dump(stdout, abd);
 
   /* Now both apu/apd and abu/abd should contain valid and equal ASC Decoding matrices */
-  if ( ascmatrix_validate(apu, apd, anch->arr, anch->n, epsilon, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
-  if ( ascmatrix_validate(abu, abd, anch->arr, anch->n, epsilon, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
-  if ( ascmatrix_compare_asc(apu, apd, abu, abd, anch->arr, anch->n, 0.0) != eslOK) esl_fatal(failmsg);  // expect exact match, so epsilon = 0.
+  if ( ascmatrix_validate(apu, apd, anch->a, anch->D, epsilon, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
+  if ( ascmatrix_validate(abu, abd, anch->a, anch->D, epsilon, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
+  if ( ascmatrix_compare_asc(apu, apd, abu, abd, anch->a, anch->D, 0.0) != eslOK) esl_fatal(failmsg);  // expect exact match, so epsilon = 0.
 
-  p7_coords2_Destroy(anch);
+  p7_anchors_Destroy(anch);
   p7_trace_Destroy(vtr);
   p7_refmx_Destroy(apu); p7_refmx_Destroy(apd);
   p7_refmx_Destroy(abu); p7_refmx_Destroy(abd);
@@ -667,8 +645,8 @@ utest_singlepath(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   ESL_SQ     *sq        = esl_sq_CreateDigital(bg->abc);
   P7_TRACE   *tr        = p7_trace_Create();
   P7_TRACE   *vtr       = p7_trace_Create();
-  P7_COORD2  *anch      = malloc(sizeof(P7_COORD2));   // utest is uniglocal, so it will have D=1 and only one anchor.
-  P7_REFMX   *rxv       = p7_refmx_Create(M, 20);      // 20 is arbitrary; all DP routines will reallocate as needed.
+  P7_ANCHOR  *anch      = malloc(sizeof(P7_ANCHOR)* 3);   // utest is uniglocal, so it will have D=1 and only one anchor; +2 for sentinels
+  P7_REFMX   *rxv       = p7_refmx_Create(M, 20);          // 20 is arbitrary; all DP routines will reallocate as needed.
   P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxb       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxd       = p7_refmx_Create(M, 20);
@@ -705,11 +683,12 @@ utest_singlepath(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
       {
 	which--;
 	if (which == 0) {
-	  anch[0].n1 = tr->i[z];
-	  anch[0].n2 = tr->k[z];
+	  anch[D].n1 = tr->i[z];
+	  anch[D].n2 = tr->k[z];
 	  break;
 	}
       }
+  p7_anchor_SetSentinels(anch, D, tr->L, tr->M);
 
   /* Run the DP routines, both standard and ASC */
   if ( p7_ReferenceViterbi (sq->dsq, sq->n, gm, rxv, vtr, &vsc) != eslOK) esl_fatal(failmsg);
@@ -795,7 +774,7 @@ utest_singlesingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   int         L;
   P7_TRACE   *tr        = NULL;
   P7_TRACE   *vtr       = p7_trace_Create();
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   P7_REFMX   *rxv       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxb       = p7_refmx_Create(M, 20);
@@ -876,7 +855,7 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   ESL_DSQ    *dsq       = NULL; 
   int         L;
   P7_TRACE   *tr        = NULL;
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   P7_REFMX   *afu       = p7_refmx_Create(M, 20);
   P7_REFMX   *afd       = p7_refmx_Create(M, 20);
   P7_REFMX   *abu       = p7_refmx_Create(M, 20);
@@ -945,7 +924,7 @@ utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   ESL_DSQ    *dsq       = NULL; 
   int         L;
   P7_TRACE   *tr        = NULL;
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxd       = p7_refmx_Create(M, 20);
   P7_REFMX   *afu       = p7_refmx_Create(M, 20);
@@ -1028,7 +1007,7 @@ utest_multipath_local(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   ESL_DSQ    *dsq       = NULL; 
   int         L;
   P7_TRACE   *tr        = NULL;
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxd       = p7_refmx_Create(M, 20);
   P7_REFMX   *afu       = p7_refmx_Create(M, 20);
@@ -1102,7 +1081,7 @@ utest_multimulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   ESL_DSQ    *dsq       = NULL; 
   int         L;
   P7_TRACE   *tr        = NULL;
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxd       = p7_refmx_Create(M, 20);
   P7_REFMX   *afu       = p7_refmx_Create(M, 20);
