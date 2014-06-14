@@ -6,7 +6,7 @@
 #include "easel.h"
 
 #include "base/p7_profile.h"
-#include "base/p7_coords2.h"
+#include "base/p7_anchors.h"
 
 #include "dp_reference/p7_refmx.h"
 

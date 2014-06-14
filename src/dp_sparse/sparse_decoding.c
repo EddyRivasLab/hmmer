@@ -140,9 +140,19 @@ p7_SparseDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPAR
 	  xd += p7S_NXCELLS;
 	}
 
-      /* For each sparse cell z (k=k[i][z]) on row: */
-      /* DG is special, because we have to unfold the wing-retracted entries and exits. */
-      /* Exits: unfolding right wing retractions */
+      /* For each sparse cell z (k=k[i][z]) on row: 
+       * DG is special, because we have to unfold the wing-retracted entries and exits. 
+       * Exits: unfolding right wing retractions 
+       *
+       * Caution: Although we're unfolding wings correctly, by design,
+       * we're only storing that probability mass in i,k cells in the
+       * sparse mask. The sparse mask was created by local-only
+       * decoding in ForwardFilter(). Suppose there's a high
+       * probability G->DDDD->Mk entry, for example. The D's won't
+       * necessarily be in the mask! Thus, sparse decoding does NOT
+       * give you a complete decoding of D's. I don't think we care;
+       * but I'm leaving a bread crumb here, just in case.
+       */
       dpd2 = dpd;
       for (delta = 0.0f, z = 0; z < sm->n[i]; z++)
 	{

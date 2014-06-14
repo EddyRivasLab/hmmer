@@ -144,7 +144,7 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
        * only reachable by wing retraction. Set it all to zero.
        */
       iend = anch[d-1].i0+1;
-      for (s = 0; s < anch[d].n2*p7R_NSCELLS; s++) apu->dp[iend-1][s] = 0.;
+      for (s = 0; s < anch[d].k0*p7R_NSCELLS; s++) apu->dp[iend-1][s] = 0.;
 
       for (i = iend; i < anch[d].i0; i++)
 	{
@@ -228,7 +228,7 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 
       /* DOWN matrix */
       xJ = xC = -eslINFINITY;
-      for (i = anch[d].i0; i < anch[d+1].i0); i++)
+      for (i = anch[d].i0; i < anch[d+1].i0; i++)
 	{
 	  fwdp  = afd->dp[i] + anch[d].k0 * p7R_NSCELLS;
 	  bckp  = abd->dp[i] + anch[d].k0 * p7R_NSCELLS;
@@ -473,7 +473,7 @@ ascmatrix_trace_compare(P7_TRACE *tr, P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *a
       }
     }
 
-  printf("### Trace Matrix:\n"); p7_refmx_Dump(stdout, ppt);
+  //printf("### Trace Matrix:\n"); p7_refmx_Dump(stdout, ppt);
       
   /* Now we can just compare this std DP matrix to the ASC matrices */
   status = ascmatrix_compare_std(ppt, apu, apd, anch, D, epsilon);
@@ -683,8 +683,8 @@ utest_singlepath(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
       {
 	which--;
 	if (which == 0) {
-	  anch[D].n1 = tr->i[z];
-	  anch[D].n2 = tr->k[z];
+	  anch[D].i0 = tr->i[z];
+	  anch[D].k0 = tr->k[z];
 	  break;
 	}
       }
@@ -876,9 +876,9 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
-  printf("### ASC Decode UP:\n");    p7_refmx_Dump(stdout, apu);
-  printf("### ASC Decode DOWN:\n");  p7_refmx_Dump(stdout, apd);
-  p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
+  //printf("### ASC Decode UP:\n");    p7_refmx_Dump(stdout, apu);
+  //printf("### ASC Decode DOWN:\n");  p7_refmx_Dump(stdout, apd);
+  //p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
 
   if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
   if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);

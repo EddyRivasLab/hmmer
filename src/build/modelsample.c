@@ -889,7 +889,7 @@ p7_modelsample_AnchoredUni(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 	anch[D].i0 = tr->i[z];
 	break;
       }
-  p7_anchor_SetSentinels(anch, D, sq->n, gm->M);
+  p7_anchor_SetSentinels(anch, D, L, gm->M);
 
   /* Finish up; set the length model, then find the trace score.
    */

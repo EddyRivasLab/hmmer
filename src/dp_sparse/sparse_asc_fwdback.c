@@ -348,6 +348,68 @@ p7_sparse_asc_Backward(void)
 #ifdef p7SPARSE_ASC_FWDBACK_TESTDRIVE
 
 
+/* "compare_reference" unit test.
+ * 
+ * When we include all i,k supercells in the sparse mask, then sparse
+ * DP calculations give the same results as reference calculations,
+ * even at the level of individual DP cells.
+ * 
+ * Sample a random profile of length <M>.  Generate <N> sequences from
+ * that profile, using a length model of <L> during sampling.  For
+ * each sampled sequence, Make a sparse mask that contains all i,k
+ * cells. Make an anchor set from the generating trace (the anchor set
+ * just needs to be reasonable, not optimal).
+ * 
+ * Then:
+ *   1. Reference and sparse Forward scores must be identical (within 
+ *      numerical tolerance).
+ *   2. Cells of reference and sparse DP matrix have identical values
+ *      (within numerical tolerance).
+ *   3. Sparse Fwd matrix structure passes Validate().
+ */
+static void
+utest_compare_reference(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int L, int N)
+{
+  char           msg[] = "sparse_asc_fwdback :: compare_reference unit test failed";
+  P7_BG         *bg    = p7_bg_Create(abc);
+  P7_HMM        *hmm   = NULL;
+  P7_PROFILE    *gm    = p7_profile_Create(M, abc);
+  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L);
+  int            idx;
+
+  /* Sample a profile. Config as usual, multihit dual-mode local/glocal. */
+  if ( p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+  if ( p7_profile_Config(gm, hmm, bg)    != eslOK) esl_fatal(msg);
+
+  for (idx = 0; idx < N; idx++)
+    {
+      /* Generate (sample) a sequence from the profile */
+      if ( p7_profile_SetLength(gm, L)  != eslOK) esl_fatal(msg);   /* config to generate mean length of L (length was probably reset by last emitted seq) */
+      do {
+	esl_sq_Reuse(sq);
+	p7_ProfileEmit(rng, hmm, gm, bg, sq, gtr);
+      } while (sq->n > L * 3); /* keep sequence length from getting ridiculous; long seqs do have higher abs error per cell */
+      if ( p7_profile_SetLength(gm, sq->n) != eslOK) esl_fatal(msg);
+
+      /* Mark all cells in sparse mask */
+      if ( p7_sparsemask_Reinit(sm, M, sq->n) != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_AddAll(sm)           != eslOK) esl_fatal(msg);
+
+      /* Use generating trace to create a plausible anchor set */
+
+      
+      p7_sparsemask_Reuse(sm);
+      p7_trace_Reuse(gtr);
+      esl_sq_Reuse(sq);
+    }
+
+  p7_sparsemask_Destroy(sm);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+  p7_bg_Destroy(bg);
+}
+
+
 #endif /*p7SPARSE_ASC_FWDBACK_TESTDRIVE*/
 /*------------------- end, unit tests ---------------------------*/
 

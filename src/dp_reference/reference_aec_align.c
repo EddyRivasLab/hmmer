@@ -359,11 +359,11 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
       xc = dpc;
       xc[p7R_E]  = xE;
       xc[p7R_N]  = -eslINFINITY;
-      xc[p7R_J]  = (d == env->n-1 ? -eslINFINITY : xE);  // Only reachable by E->J, on this first row of DOWN sector.
+      xc[p7R_J]  = (d == env->D ? -eslINFINITY : xE);  // Only reachable by E->J, on this first row of DOWN sector.
       xc[p7R_B]  = -eslINFINITY;
       xc[p7R_L]  = -eslINFINITY;
       xc[p7R_G]  = -eslINFINITY;
-      xc[p7R_C]  = (d == env->n-1 ? xE : -eslINFINITY);
+      xc[p7R_C]  = (d == env->D ? xE : -eslINFINITY);
       xc[p7R_JJ] = -eslINFINITY;
       xc[p7R_CC] = -eslINFINITY;
 
@@ -445,11 +445,11 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
 
 	  xc[p7R_E]  = xE;
 	  xc[p7R_N]  = -eslINFINITY;
-	  xc[p7R_J]  = (d == env->n-1 ? -eslINFINITY : ESL_MAX(xE, xp[p7R_J] + ppp[p7R_JJ]));
+	  xc[p7R_J]  = (d == env->D ? -eslINFINITY : ESL_MAX(xE, xp[p7R_J] + ppp[p7R_JJ]));
 	  xc[p7R_B]  = -eslINFINITY;
 	  xc[p7R_L]  = -eslINFINITY;
 	  xc[p7R_G]  = -eslINFINITY;
-	  xc[p7R_C]  = (d == env->n-1 ? ESL_MAX(xE, xp[p7R_J] + ppp[p7R_JJ]) : -eslINFINITY);
+	  xc[p7R_C]  = (d == env->D ? ESL_MAX(xE, xp[p7R_J] + ppp[p7R_JJ]) : -eslINFINITY);
 	  xc[p7R_JJ] = -eslINFINITY;
 	  xc[p7R_CC] = -eslINFINITY;
 	} /* end loop over i up to ib(d) */
@@ -578,8 +578,8 @@ utest_crashtestdummy(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
   P7_REFMX        *apd   = rxd;                          //   ... and this one too.
   float           *wrk   = NULL;
   P7_ANCHORS      *anch  = p7_anchors_Create();
-  P7_ANCHORHASH   *ah    = p7_anchor_hash_Create();
-  P7_ENVELOPES    *env   = p7_envelopes_Create(0,0);
+  P7_ANCHORHASH   *ah    = p7_anchorhash_Create();
+  P7_ENVELOPES    *env   = p7_envelopes_Create();
   float            tol   = 0.001;
   char             errbuf[eslERRBUFSIZE];
   float  gsc, fsc, asc;
@@ -743,7 +743,7 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
   P7_REFMX     *afd   = p7_refmx_Create(M, 20);
   P7_REFMX     *apu   = p7_refmx_Create(M, 20);
   P7_REFMX     *apd   = p7_refmx_Create(M, 20);
-  P7_ENVELOPES *env   = p7_envelopes_Create(0,0);
+  P7_ENVELOPES *env   = p7_envelopes_Create();
   float         gsc;
   float         tol   = 0.001;
   int           idx;
@@ -771,7 +771,7 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
       if ( p7_trace_Compare(gtr, tr, 0.0) != eslOK) esl_fatal(msg);
 
       /* Test 2. Domain #'s agree */
-      if (! (gtr->ndom == D && env->n == D)) esl_fatal(msg);
+      if (! (gtr->ndom == D && env->D == D)) esl_fatal(msg);
       if (! (tr->ndom  == D))                esl_fatal(msg);
 
       /* Test 3. Envelope coords (and outer env coords) match trace */
@@ -919,7 +919,7 @@ main(int argc, char **argv)
   P7_REFMX       *apd     = NULL;
   P7_TRACE       *tr      = NULL;
   float          *wrk     = NULL;
-  P7_ENVELOPES   *env     = p7_envelopes_Create(0,0);
+  P7_ENVELOPES   *env     = p7_envelopes_Create();
   float           fsc, vsc, asc, asc_b;
   int             status;
 

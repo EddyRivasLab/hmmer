@@ -17,6 +17,14 @@
  * added to the sparse DP mask for subsequent local/glocal
  * reprocessing.  The sparse DP mask is returned in a <P7_SPARSEMASK>
  * structure.
+ * 
+ * Any cell (i,k) with total posterior probability (i.e., summed over
+ * M,D,I) >= sm_thresh is marked and included in the sparse mask.
+ * Cells needed for glocal entry/exit delete paths (G->DDDD->Mk,
+ * Mk->DDDD->E) are not marked, because the filter only uses local
+ * alignment, not glocal. The default for sm_thresh is
+ * <p7_SPARSEMASK_THRESH_DEFAULT>, in <p7_config.h.in>; currently set
+ * to 0.01.
  *
  * ForwardFilter() and BackwardFilter() are a dependent pair, sharing
  * the same DP matrix object. They must be called sequentially,
@@ -901,14 +909,14 @@ posterior_decode_row(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm_thr
   if (pnonhomology <= 1.0f - sm_thresh)
     {
       if ((status = p7_sparsemask_StartRow(sm, rowi)) != eslOK) return status;
-      for (q = Q-1; q >= 0; q--)	/* reverse, because SPARSEMASK is entirely in reversed order */
+      for (q = Q-1; q >= 0; q--)	           // reverse, because SPARSEMASK is entirely in reversed order 
 	{
 	  pv       =                _mm_mul_ps(P7C_MQ(fwd, q), P7C_MQ(bck, q));
 	  pv       = _mm_add_ps(pv, _mm_mul_ps(P7C_IQ(fwd, q), P7C_IQ(bck, q)));
 	  pv       = _mm_add_ps(pv, _mm_mul_ps(P7C_DQ(fwd, q), P7C_DQ(bck, q)));
-	  pv       = _mm_mul_ps(pv, cv);           /* pv is now the posterior probability of elements q,r=0..3 */
-	  mask     = _mm_cmpge_ps(pv, threshv);    /* mask now has all 0's in elems r that failed thresh; all 1's for r that passed */
-	  maskbits = _mm_movemask_ps(mask);	       /* maskbits is now something like 0100: 1's indicate which cell passed. */
+	  pv       = _mm_mul_ps(pv, cv);           // pv is now the posterior probability of elements q,r=0..3 
+	  mask     = _mm_cmpge_ps(pv, threshv);    // mask now has all 0's in elems r that failed thresh; all 1's for r that passed 
+	  maskbits = _mm_movemask_ps(mask);	   // maskbits is now something like 0100: 1's indicate which cell passed. 
 	  
 	  for (r = 0; r < p7_VNF; r++) 
 	    if ( maskbits & (1<<r)) 

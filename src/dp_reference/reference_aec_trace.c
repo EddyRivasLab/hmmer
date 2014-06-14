@@ -101,6 +101,9 @@ aec_meg_select_dg(const P7_PROFILE *gm, const P7_REFMX *mx, int i, int k)
   return ( (path[0] >= path[1]) ? p7T_MG : p7T_DG);
 }
 
+/* Here <env> is a pointer to a single <P7_ENVELOPE> structure, not an array;
+ * there's no sentinels
+ */
 static inline int
 aec_meg_select_e(const P7_PROFILE *gm, const P7_REFMX *mx, int i, int *ret_k, const P7_ENVELOPE *env)
 {
@@ -213,7 +216,7 @@ reference_aec_trace_engine(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REF
   else esl_fatal("can't trace that matrix type; not AEC?");
 
 
-  d = env->n-1;
+  d = env->D;
   if   ((status = p7_trace_Append(tr, p7T_T, 0, i)) != eslOK) return status;
   if   ((status = p7_trace_Append(tr, p7T_C, 0, i)) != eslOK) return status; 
   while (sprv != p7T_S)

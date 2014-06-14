@@ -63,7 +63,7 @@ typedef struct {
   int32_t      nredline;	// _Reuse() pulls alloc back down to this 
 } P7_ENVELOPES;
 
-extern int           p7_envelope_Set(P7_ENVELOPE *env, int i, int k);
+extern int           p7_envelope_SetSentinels(P7_ENVELOPE *env, int D, int L, int M);
 
 extern P7_ENVELOPES *p7_envelopes_Create (void);
 extern int           p7_envelopes_Reinit (P7_ENVELOPES *envs, int D);

@@ -271,7 +271,7 @@ extern int   p7_sparsemx_PlotDomainInference(FILE *ofp, const P7_SPARSEMX *sxd, 
  *           p7_sparsemask_Add(sm, i, k, slot)
  *             appends k index to slot vector s[slot], increments slot count sn[slot]
  *             
- *         p7_sparsemask_FihishRow(sm, i)
+ *         p7_sparsemask_FinishRow(sm, i)
  *           Concats slots onto kmem, increments ncells. 
  *           Slots are now invalid until the next StartRow().
  *           

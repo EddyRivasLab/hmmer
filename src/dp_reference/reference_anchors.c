@@ -630,7 +630,7 @@ main(int argc, char **argv)
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
   P7_ANCHORS     *anch    = p7_anchors_Create();
-  P7_ANCHORHASH  *hashtbl = p7_anchorhash_Create();
+  P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
   P7_REFMX       *rxf     = NULL;
   P7_REFMX       *rxd     = NULL;
   P7_REFMX       *afu     = NULL;

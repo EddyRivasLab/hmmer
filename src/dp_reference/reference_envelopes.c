@@ -16,7 +16,7 @@
 #include "easel.h"
 
 #include "base/p7_envelopes.h" 
-#include "base/p7_coords2.h"
+#include "base/p7_anchors.h"
 #include "base/p7_profile.h"
 
 #include "dp_reference/p7_refmx.h"
@@ -117,20 +117,20 @@ static int approxsc (P7_ENVELOPES *env, int D, const P7_REFMX *afd, const P7_PRO
  *            and <env> is undefined; they can be Reuse'd or Destroy'd.
  */
 int
-p7_reference_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_COORD2 *anch, int D,
+p7_reference_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_ANCHOR *anch, int D,
 		       const P7_REFMX *apu, const P7_REFMX *apd, P7_REFMX *afu, P7_REFMX *afd, P7_ENVELOPES *env)
 {
-  P7_COORD2 reanch;   // If we recalculate env score on isolated domain, must offset its anchor
-  int       offset;   // Offset (in residues) to the domain start
-  int       d;        // Index of domain
+  P7_ANCHOR reanch[3];  // If we recalculate env score on isolated domain, must offset its anchor. [3] because of anchors.
+  int       offset;     // Offset (in residues) to the domain start
+  int       d;          // Index of domain
   int       status;   
 
   /* Reallocate <env> if needed, and initialize it */
-  if (( status = p7_envelopes_GrowTo(env, D)) != eslOK) goto ERROR;
-  for (d = 0; d < D; d++)
+  if (( status = p7_envelopes_Reinit(env, D)) != eslOK) goto ERROR;
+  for (d = 1; d <= D; d++)
     {
-      env->arr[d].i0    = anch[d].n1;
-      env->arr[d].k0    = anch[d].n2;
+      env->arr[d].i0    = anch[d].i0;
+      env->arr[d].k0    = anch[d].k0;
       env->arr[d].alia  = 0;
       env->arr[d].alib  = 0;
       env->arr[d].ka    = 0;
@@ -138,10 +138,13 @@ p7_reference_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
 
       env->arr[d].flags = 0;
     }
-  env->n = D;
+  env->D = D;
   env->L = L;
   env->M = gm->M;
+  p7_envelope_SetSentinels(env->arr, D, L, gm->M);
   
+  /* <reanch> is a D=1 anchor set; set its sentinels */
+  p7_anchor_SetSentinels(reanch, 1, L, gm->M);
 
   if ((status = envcoords(env, D, apd, 0.5))   != eslOK) goto ERROR;
   if ((status = glocality(env, D, apd))        != eslOK) goto ERROR;
@@ -159,15 +162,15 @@ p7_reference_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
        */
       p7_refmx_Reuse(afu); p7_refmx_Reuse(afd);
       
-      for (d = 0; d < D; d++)
+      for (d = 1; d <= D; d++)
 	if (! (env->arr[d].flags & p7E_ENVSC_APPROX))
 	  {
-	    offset    = env->arr[d].oea - 1;
-	    reanch.n1 = anch[d].n1 - offset;  // You can't use <anch> itself because of coord offset
-	    reanch.n2 = anch[d].n2;
+	    offset       = env->arr[d].oea - 1;
+	    reanch[1].i0 = anch[d].i0 - offset;  // You can't use <anch> itself because of coord offset
+	    reanch[1].k0 = anch[d].k0;
 
 	    status = p7_ReferenceASCForward( dsq+offset, env->arr[d].oeb-offset, gm,
-					     &reanch, 1, afu, afd, &(env->arr[d].env_sc));
+					     reanch, 1, afu, afd, &(env->arr[d].env_sc));
 	    if (status != eslOK) goto ERROR;
 
 	    /* Add back tNN/JJ/CC terms for <L-Ld> flanking residues, 
@@ -222,17 +225,15 @@ static int
 envcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float threshold)
 {
   float  phomology;
-  int    d, i, iz;
-  int    L = apd->L;
+  int    d, i;
   
-  for (d = 0; d < D; d++)
+  for (d = 1; d <= D; d++)
     {
       /* Determine ia, envelope start position;
        *  min_{i <= i0} P(x_i in domain d) >= threshold
        */
       phomology = 1.0;
-      iz        = (d == 0 ? 0 : env->arr[d-1].i0);
-      for (i = env->arr[d].i0 - 1; i >= iz; i--)
+      for (i = env->arr[d].i0 - 1; i >= env->arr[d-1].i0; i--)  // at d=1, i0(0)=0 sentinel makes this i0(1)-1 down to 0
 	{
 	  phomology -= P7R_XMX(apd, i, p7R_B);   // now phomology = P(res i in domain d)
 	  if (phomology < threshold) break;      // if i is not in domain...
@@ -243,8 +244,7 @@ envcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float threshold)
        *   max_{i >= i0} P(x_i in domain d) >= threshold
        */
       phomology = 1.0;
-      iz        = (d == D-1 ? L+1 : env->arr[d+1].i0);
-      for (i = env->arr[d].i0; i < iz; i++)
+      for (i = env->arr[d].i0; i < env->arr[d+1].i0; i++) // at d=D, i0(D+1)=L+1 sentinel makes this i0(d) to L
 	{
 	  phomology -= P7R_XMX(apd, i, p7R_E);    // now phomology = P(x_i+1 in dom_d)
 	  if (phomology < threshold) break;       // if i+1 is not in domain...
@@ -281,14 +281,13 @@ static int
 glocality(P7_ENVELOPES *env, int D, const P7_REFMX *apd)
 {
   float pL, pG;
-  int   d, i, iz;
+  int   d, i;
 
-  for (d = 0; d < D; d++)
+  for (d = 1; d <= D; d++)
     {
       pL = pG = 0.0;  
 
-      iz = (d == 0 ? 0 : env->arr[d-1].i0);
-      for (i = iz; i < env->arr[d].i0; i++)
+      for (i = env->arr[d-1].i0; i < env->arr[d].i0; i++)  // at d=1, i0(0)=0 sentinel makes this 0..i0(1)-1
 	{
 	  pL += P7R_XMX(apd, i, p7R_L);
 	  pG += P7R_XMX(apd, i, p7R_G);
@@ -367,17 +366,15 @@ glocality(P7_ENVELOPES *env, int D, const P7_REFMX *apd)
 static int
 outcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float epsilon)
 {
-  int   d, i, iz, s;
+  int   d, i, s;
   float phomology;
-  int   L = apd->L;
   int   leftchoked, rightchoked; 
 
-  for (d = 0; d < D; d++)
+  for (d = 1; d <= D; d++)
     {
       phomology = 1.0;
-      iz = (d == 0 ? 0 : env->arr[d-1].i0);
       s  = (d == 0 ? p7R_N : p7R_J);
-      for (i = env->arr[d].i0 - 1; i >= iz; i--)
+      for (i = env->arr[d].i0 - 1; i >= env->arr[d-1].i0; i--)   // at d=1, i0(0)=0 sentinel makes this i0(1)-1 down to 0
 	{
 	  phomology -= P7R_XMX(apd, i, p7R_B);  // now phomology = P(x_i in domain d)
 	  if (phomology < epsilon) break;       // if i is not in the domain...
@@ -386,9 +383,8 @@ outcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float epsilon)
       leftchoked = ( P7R_XMX(apd, i, s) >= 1.0 - (2*epsilon) ? TRUE : FALSE );
 
       phomology = 1.0;
-      iz = (d == D-1 ? L : env->arr[d+1].i0-1);
-      s  = (d == D-1 ? p7R_C : p7R_J);
-      for (i = env->arr[d].i0; i <= iz; i++)
+      s  = (d == D ? p7R_C : p7R_J);
+      for (i = env->arr[d].i0; i < env->arr[d+1].i0; i++)   // at D=D, i0(D+1)=L+1 sentinel makes this i0(D)..L
 	{
 	  phomology -= P7R_XMX(apd, i, p7R_E);   // now phomology = P(x_i+1 in dom_d)
 	  if (phomology < epsilon) break;        // if i+1 is not in domain...
@@ -416,7 +412,7 @@ outcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float epsilon)
  * domain, such that >= 1.0-2*epsilon of the posterior path probability
  * flows through each of them.
  * 
- * For d=0, X=N, Y=J; for d=D-1, X=J, Y=C; for internal d, X=Y=J.
+ * For d=1, X=N, Y=J; for d=D, X=J, Y=C; for internal d, X=Y=J.
  * 
  * Then F(j,X) - F(i,X) = the sum of all path suffixes that start in
  * Xi and end at Xj.
@@ -433,11 +429,11 @@ approxsc(P7_ENVELOPES *env, int D, const P7_REFMX *afd, const P7_PROFILE *gm)
   int L = afd->L;
   int s1, s2;
 
-  for (d = 0; d < D; d++)
+  for (d = 1; d <= D; d++)
     if (env->arr[d].flags & p7E_ENVSC_APPROX)
       {
-	s1 = (d == 0   ? p7R_N : p7R_J);
-	s2 = (d == D-1 ? p7R_C : p7R_J);
+	s1 = (d == 1 ? p7R_N : p7R_J);
+	s2 = (d == D ? p7R_C : p7R_J);
 
 	env->arr[d].env_sc = 
 	  P7R_XMX(afd, env->arr[d].oeb,   s2) -
@@ -471,7 +467,7 @@ approxsc(P7_ENVELOPES *env, int D, const P7_REFMX *afd, const P7_PROFILE *gm)
  *       
  *    2. Envelopes do not overlap (assuming default threshold of
  *       0.5 when defining them):
- *         ia(d) > ib(d-1)  for d = 1..D-1
+ *         ia(d) > ib(d-1)  for d = 2..D
  *       (Outer envelopes, in contrast, can overlap.)
  *       
  *    3. envsc(d) <= asc_sc <= fwdsc.
@@ -498,9 +494,9 @@ utest_generation(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
   P7_REFMX        *apu   = rxf;                          // for 'clarity' we use two names for this mx
   P7_REFMX        *apd   = rxd;                          //   ... and this one too.
   float           *wrk   = NULL;
-  P7_COORDS2      *anch  = p7_coords2_Create(0,0);
-  P7_COORDS2_HASH *htbl  = p7_coords2_hash_Create(0,0,0);
-  P7_ENVELOPES    *env   = p7_envelopes_Create(0,0);
+  P7_ANCHORS      *anch  = p7_anchors_Create();
+  P7_ANCHORHASH   *ah    = p7_anchorhash_Create();
+  P7_ENVELOPES    *env   = p7_envelopes_Create();
   float            tol   = 0.001;
   float  gsc, fsc, asc;
   int    idx;
@@ -535,21 +531,21 @@ utest_generation(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
       if ( p7_ReferenceDecoding(sq->dsq, sq->n, gm, rxf, rxd, rxd)  != eslOK) esl_fatal(msg);
 
       /* Anchor determination (MPAS algorithm) */
-      if ( p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, vtr, &wrk, htbl,
+      if ( p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, vtr, &wrk, ah,
 				afu, afd, anch, &asc, NULL, NULL)  != eslOK) esl_fatal(msg);
 
       /* Reuse rxf,rxd as apu, apd; finish ASC analysis with Backward, Decoding */
       p7_refmx_Reuse(apu);  p7_refmx_Reuse(apd);
-      if ( p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->arr, anch->n, apu, apd, NULL)               != eslOK) esl_fatal(msg);
-      if ( p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->arr, anch->n, afu, afd, apu, apd, apu, apd) != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->a, anch->D, apu, apd, NULL)               != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->a, anch->D, afu, afd, apu, apd, apu, apd) != eslOK) esl_fatal(msg);
 
       /* Envelope calculation */
-      if ( p7_reference_Envelopes(sq->dsq, sq->n, gm, anch->arr, anch->n, apu, apd, afu, afd, env) != eslOK) esl_fatal(msg);
+      if ( p7_reference_Envelopes(sq->dsq, sq->n, gm, anch->a, anch->D, apu, apd, afu, afd, env) != eslOK) esl_fatal(msg);
 
 
       /* Test 1. Coords of each domain are coherent */
-      if (anch->n != env->n) esl_fatal(msg);
-      for (d = 0; d < anch->n; d++)
+      if (anch->D != env->D) esl_fatal(msg);
+      for (d = 1; d <= anch->D; d++)
 	if (! (1 <= env->arr[d].oea &&
 	       env->arr[d].oea <= env->arr[d].ia  &&
 	       env->arr[d].ia  <= env->arr[d].i0  &&
@@ -558,24 +554,24 @@ utest_generation(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
 	       env->arr[d].oeb <= sq->n)) esl_fatal(msg);
 
       /* Test 2. Envelopes do not overlap. */
-      for (d = 1; d < anch->n; d++)
+      for (d = 1; d <= anch->D; d++)
 	if (! (env->arr[d].ia > env->arr[d-1].ib)) esl_fatal(msg);
 
       /* Test 3. envsc(d) <= asc_sc <= fwdsc */
-      for (d = 0; d < anch->n; d++)
+      for (d = 1; d <= anch->D; d++)
 	if (! (env->arr[d].env_sc <= asc+tol && asc <= fsc+tol)) esl_fatal(msg);
 
       /* Test 4, only on D=1 case with generated trace's domain 
        * encompassed by the outer envelope 
        */
-      if (gtr->ndom == 1 &&  anch->n   == 1 && 
-	  gtr->sqfrom[0] >= env->arr[0].oea &&
-	  gtr->sqto[0]   <= env->arr[0].oeb)
-	if (! ( env->arr[0].env_sc >= gsc)) esl_fatal(msg);
+      if (gtr->ndom == 1 &&  anch->D   == 1 && 
+	  gtr->sqfrom[0] >= env->arr[1].oea &&    // in <gtr>, domains are 0..D-1; in <env>, 1..D
+	  gtr->sqto[0]   <= env->arr[1].oeb)
+	if (! ( env->arr[1].env_sc >= gsc)) esl_fatal(msg);
 
       p7_envelopes_Reuse(env);
-      p7_coords2_Reuse(anch);
-      p7_coords2_hash_Reuse(htbl);
+      p7_anchors_Reuse(anch);
+      p7_anchorhash_Reuse(ah);
       p7_refmx_Reuse(rxf); p7_refmx_Reuse(rxd);
       p7_refmx_Reuse(afu); p7_refmx_Reuse(afd);
       p7_trace_Reuse(gtr); p7_trace_Reuse(vtr);
@@ -584,8 +580,8 @@ utest_generation(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
       
   if (wrk) free(wrk);
   p7_envelopes_Destroy(env);
-  p7_coords2_Destroy(anch);
-  p7_coords2_hash_Destroy(htbl);
+  p7_anchors_Destroy(anch);
+  p7_anchorhash_Destroy(ah);
   p7_refmx_Destroy(afu); p7_refmx_Destroy(afd);
   p7_refmx_Destroy(rxf); p7_refmx_Destroy(rxd);
   p7_trace_Destroy(vtr); p7_trace_Destroy(gtr);
@@ -622,13 +618,13 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
   ESL_DSQ      *dsq   = NULL;
   int           L;
   P7_TRACE     *gtr   = NULL;
-  P7_COORD2    *anch  = NULL;
+  P7_ANCHOR    *anch  = NULL;
   int           D;
   P7_REFMX     *afu   = p7_refmx_Create(M, 20);
   P7_REFMX     *afd   = p7_refmx_Create(M, 20);
   P7_REFMX     *apu   = p7_refmx_Create(M, 20);
   P7_REFMX     *apd   = p7_refmx_Create(M, 20);
-  P7_ENVELOPES *env   = p7_envelopes_Create(0,0);
+  P7_ENVELOPES *env   = p7_envelopes_Create();
   float         gsc;
   float         tol   = 0.001;
   int           idx;
@@ -645,19 +641,21 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
       if ( p7_reference_Envelopes (dsq, L, gm, anch, D, apu, apd, afu, afd, env)      != eslOK) esl_fatal(msg);
 
       /* Test 1. Domain #'s agree */
-      if (! (gtr->ndom == D && env->n == D)) esl_fatal(msg);
+      if (! (gtr->ndom == D && env->D == D)) esl_fatal(msg);
 
-      /* Test 2. Envelope coords (and outer env coords) match trace */
-      for (d = 0; d < D; d++)
+      /* Test 2. Envelope coords (and outer env coords) match trace.
+       *         (Beware, trace domains are numbered 0..D-1, env domains are 1..D )
+       */
+      for (d = 1; d <= D; d++)
 	{
-	  if (! (env->arr[d].ia == gtr->sqfrom[d] &&
+	  if (! (env->arr[d].ia == gtr->sqfrom[d-1] &&
 		 env->arr[d].ia == env->arr[d].oea)) esl_fatal(msg);
-	  if (! (env->arr[d].ib == gtr->sqto[d] &&
+	  if (! (env->arr[d].ib == gtr->sqto[d-1] &&
 		 env->arr[d].ib == env->arr[d].oeb)) esl_fatal(msg);
 	}
 
       /* Test 3. If D == 1, envelope score == trace score. */
-      if (D == 1 &&  esl_FCompare(env->arr[0].env_sc, gsc, tol) != eslOK) esl_fatal(msg);
+      if (D == 1 &&  esl_FCompare(env->arr[1].env_sc, gsc, tol) != eslOK) esl_fatal(msg);
 
       p7_envelopes_Reuse(env);
       p7_refmx_Reuse(afu); p7_refmx_Reuse(afd);
@@ -764,7 +762,9 @@ main(int argc, char **argv)
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
-  P7_COORDS2     *anch    = p7_coords2_Create(0,0);
+  P7_ANCHORS    *anch     = p7_anchors_Create();
+  P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
+  P7_ENVELOPES   *env     = p7_envelopes_Create();
   P7_REFMX       *rxf     = NULL;
   P7_REFMX       *rxd     = NULL;
   P7_REFMX       *afu     = NULL;
@@ -773,8 +773,6 @@ main(int argc, char **argv)
   P7_REFMX       *apd     = NULL;
   P7_TRACE       *tr      = NULL;
   float          *wrk     = NULL;
-  P7_ENVELOPES   *env     = p7_envelopes_Create(0,0);
-  P7_COORDS2_HASH *hashtbl = p7_coords2_hash_Create(0,0,0);
   P7_MPAS_PARAMS  prm;
   P7_MPAS_STATS   stats;
   float           fsc, vsc, asc, asc_b;
@@ -827,7 +825,7 @@ main(int argc, char **argv)
   prm.be_verbose     = TRUE;
 
   /* MPAS algorithm gets us an anchor set */
-  p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, tr, &wrk, hashtbl,
+  p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, tr, &wrk, ah,
 		       afu, afd, anch, &asc, &prm, &stats);
 
   
@@ -841,7 +839,7 @@ main(int argc, char **argv)
   apu = rxf; p7_refmx_Reuse(apu);
   apd = rxd; p7_refmx_Reuse(apd);
 
-  p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->arr, anch->n, apu, apd, &asc_b);
+  p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->a, anch->D, apu, apd, &asc_b);
   
   //printf("# Backward score (raw, nats): %.2f\n", asc_b);
   //printf("# ASC Backward UP:\n");   p7_refmx_Dump(stdout, apu);
@@ -850,7 +848,7 @@ main(int argc, char **argv)
   /* ASC Decoding takes afu/afd and abu/abd as input;
    * overwrites abu/abd with decoding matrices
    */
-  p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->arr, anch->n, afu, afd, apu, apd, apu, apd);
+  p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->a, anch->D, afu, afd, apu, apd, apu, apd);
 
   //printf("# ASC Decoding UP matrix:\n");  p7_refmx_Dump(stdout, apu);
   //printf("# ASC Decoding DOWN:\n");       p7_refmx_Dump(stdout, apu);
@@ -860,19 +858,19 @@ main(int argc, char **argv)
    * ASC Decoding pair, apu/apd, and it will leave these constant;
    * ASC Forward pair,  afu/afd, and it will overwrite these.
    */
-  p7_reference_Envelopes(sq->dsq, sq->n, gm, anch->arr, anch->n, apu, apd, afu, afd, env);
+  p7_reference_Envelopes(sq->dsq, sq->n, gm, anch->a, anch->D, apu, apd, afu, afd, env);
 
   p7_envelopes_Dump(stdout, env);
 
   p7_envelopes_Destroy(env);
-  p7_coords2_hash_Destroy(hashtbl);
+  p7_anchorhash_Destroy(ah);
+  p7_anchors_Destroy(anch);
   if (wrk) free(wrk);
   p7_trace_Destroy(tr);
   p7_refmx_Destroy(afd);
   p7_refmx_Destroy(afu);
   p7_refmx_Destroy(rxd);
   p7_refmx_Destroy(rxf);
-  p7_coords2_Destroy(anch);
   esl_sq_Destroy(sq);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);

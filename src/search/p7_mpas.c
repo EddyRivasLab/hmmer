@@ -11,7 +11,7 @@
  */
 #include "p7_config.h"
 
-#include "base/p7_coords2.h"
+#include "base/p7_anchors.h"
 #include "base/p7_trace.h"
 
 #include "search/p7_mpas.h"
@@ -77,7 +77,7 @@ p7_mpas_stats_Dump(FILE *ofp, P7_MPAS_STATS *stats)
 }
 
 int
-p7_mpas_stats_CompareAS2Trace(P7_MPAS_STATS *stats, const P7_COORDS2 *anch, const P7_TRACE *tr)
+p7_mpas_stats_CompareAS2Trace(P7_MPAS_STATS *stats, const P7_ANCHORS *anch, const P7_TRACE *tr)
 {
   int ad;
   int td              = 0;
@@ -95,12 +95,14 @@ p7_mpas_stats_CompareAS2Trace(P7_MPAS_STATS *stats, const P7_COORDS2 *anch, cons
    *   they can either be hit 0 times, 1 time, or 2+ times by anchors.
    * For m anchors in anch:
    *   they can either fall outside any domain, uniquely in a domain, or multiply in a domain.
+   *   
+   * Watch out: ad (in anchor set) is 1..D; td (in trace) is 0..D-1.  
    */
-  for (ad = 0; ad < anch->n; ad++)
+  for (ad = 1; ad <= anch->D; ad++)
     {
-      if   (anch->arr[ad].n1 < tr->sqfrom[td] || td == tr->ndom) 
+      if   (anch->a[ad].i0 < tr->sqfrom[td] || td == tr->ndom) 
 	stats->anch_outside++;
-      else if (anch->arr[ad].n1 >= tr->sqfrom[td] && anch->arr[ad].n1 <= tr->sqto[td])
+      else if (anch->a[ad].i0 >= tr->sqfrom[td] && anch->a[ad].i0 <= tr->sqto[td])
 	anch_in_this_td++;
       else 
 	{
@@ -128,7 +130,7 @@ p7_mpas_stats_CompareAS2Trace(P7_MPAS_STATS *stats, const P7_COORDS2 *anch, cons
     }
 
   ESL_DASSERT1(( stats->dom_zero     + stats->dom_one     + stats->dom_multiple  == tr->ndom ));
-  ESL_DASSERT1(( stats->anch_outside + stats->anch_unique + stats->anch_multiple == anch->n  ));
+  ESL_DASSERT1(( stats->anch_outside + stats->anch_unique + stats->anch_multiple == anch->D  ));
 
   stats->has_part2 = TRUE;
   return eslOK;

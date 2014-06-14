@@ -9,7 +9,7 @@
 
 #include <stdio.h>
 
-#include "base/p7_coords2.h"
+#include "base/p7_anchors.h"
 #include "base/p7_trace.h"
 
 
@@ -46,7 +46,7 @@ typedef struct {
 
 extern int p7_mpas_stats_Init(P7_MPAS_STATS *stats);
 extern int p7_mpas_stats_Dump(FILE *ofp, P7_MPAS_STATS *stats);
-extern int p7_mpas_stats_CompareAS2Trace(P7_MPAS_STATS *stats, const P7_COORDS2 *anch, const P7_TRACE *tr);
+extern int p7_mpas_stats_CompareAS2Trace(P7_MPAS_STATS *stats, const P7_ANCHORS *anch, const P7_TRACE *tr);
 
 #endif /*p7_MPAS_INCLUDED*/
 

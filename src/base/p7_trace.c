@@ -708,8 +708,8 @@ p7_trace_Dump(FILE *fp, const P7_TRACE *tr)
 int
 p7_trace_DumpAnnotated(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ *dsq)
 {
-  float sc       = 0.0;
   float accuracy = 0.0;
+  float sc;
   float esc, tsc;
   int   z;
 
@@ -739,9 +739,10 @@ p7_trace_DumpAnnotated(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const
 	      esc, 
 	      (tr->pp ? tr->pp[z] : 0.0f));
 
-      sc       += tsc + esc;
       accuracy += (tr->pp ? tr->pp[z] : 0.0f);
     }
+  p7_trace_Score(tr, dsq, gm, &sc);
+
   fprintf(fp, "%5d %2s\n", z, p7_trace_DecodeStatetype(tr->st[z])); /* T state */
   fprintf(fp, "                                   -------- --------\n");
   fprintf(fp, "                          total:   %8.4f %8.4f\n", sc, accuracy);
@@ -836,21 +837,46 @@ p7_trace_Score(const P7_TRACE *tr, const ESL_DSQ *dsq, const P7_PROFILE *gm, flo
   float  sc;		/* total lod score   */
   int    z;             /* position in tr */
   int    xi;		/* digitized symbol in dsq */
+  float  y,t,c;		/* Kahan compensated summation */
 
   sc = (tr->N ? 0.0f : -eslINFINITY);
+  c  = 0.0;
   for (z = 0; z < tr->N-1; z++) {
     xi = dsq[tr->i[z]];
 
-    if      (tr->st[z] == p7T_ML || tr->st[z] == p7T_MG) sc += P7P_MSC(gm, tr->k[z], xi);
-    else if (tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) sc += P7P_ISC(gm, tr->k[z], xi);
+    if      (tr->st[z] == p7T_ML || tr->st[z] == p7T_MG) { y = P7P_MSC(gm, tr->k[z], xi) - c; t = sc + y; c = (t-sc)-y; sc = t; }
+    else if (tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) { y = P7P_ISC(gm, tr->k[z], xi) - c; t = sc + y; c = (t-sc)-y; sc = t; }
 
-    sc += p7_profile_GetT(gm, tr->st[z], tr->k[z], tr->st[z+1], tr->k[z+1]);
+    y = p7_profile_GetT(gm, tr->st[z], tr->k[z], tr->st[z+1], tr->k[z+1]) - c; t = sc + y; c = (t-sc)-y; sc = t;
   }
 
   *ret_sc = sc;
   return eslOK;
 }
 
+/* SRE 27 May 14: development only, testing a theory about numerical roundoff. */
+int
+p7_trace_ScoreBackwards(const P7_TRACE *tr, const ESL_DSQ *dsq, const P7_PROFILE *gm, float *ret_sc)
+{
+  float sc = (tr->N ? 0.0f : -eslINFINITY);
+  int   z;
+  int   xi;
+  float y,t,c;   		/* Kahan compensated summation */
+
+  c = 0.0;
+  for (z = tr->N-2; z >= 0; z--) {  
+    xi = dsq[tr->i[z]];
+
+    if      (tr->st[z] == p7T_ML || tr->st[z] == p7T_MG) { y = P7P_MSC(gm, tr->k[z], xi) - c; t = sc + y; c = (t-sc)-y; sc = t; }
+    else if (tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) { y = P7P_ISC(gm, tr->k[z], xi) - c; t = sc + y; c = (t-sc)-y; sc = t; }
+
+    y = p7_profile_GetT(gm, tr->st[z], tr->k[z], tr->st[z+1], tr->k[z+1]) - c; t = sc + y; c = (t-sc)-y; sc = t;
+  }
+
+  *ret_sc = sc;
+  return eslOK;
+}
+    
 
 /* Function:  p7_trace_ScoreDomain()
  * Synopsis:  Return a per-domain trace score for a selected domain.

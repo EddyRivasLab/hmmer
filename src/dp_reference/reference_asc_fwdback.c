@@ -53,15 +53,6 @@
  *            invocation) with a <p7_FLogsumInit()> call, because this
  *            function uses <p7_FLogsum()>.
  *            
- *            The two coords in <anch>, <anch[].i0> and <anch[].k0>,
- *            are assigned to (i,k) pairs (in that order). The anchors
- *            in <anch> must be sorted in order of increasing sequence
- *            position <i>, for domains <d=1..D>.
- *            
- *            <anch> and <D> might be data in a <P7_ANCHORS> list
- *            management container: for example, for <P7_ANCHORS *dom>,
- *            you would pass <dom->a> and <dom->D>.
- *
  * Args:      dsq    : digital target sequence 1..L
  *            L      : length of <dsq>
  *            gm     : profile
@@ -176,7 +167,7 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
       /* Now we recurse for remaining rows, i0(d-1)+1..i0[d].i-1 row.
        * (It's possible that no such rows exist, depending where that next anchor is.)
        */
-      for (i = anch[d-1].i0+1 ; i < anch[d].n1; i++)
+      for (i = anch[d-1].i0+1 ; i < anch[d].i0; i++)
 	{
 	  rsc = gm->rsc[dsq[i]] + p7P_NR;                           // Start <rsc> at k=1 on row i 
 	  tsc = gm->tsc;                                            // Start <tsc> at k=0, where off-by-one {LG}->M transition scores are
@@ -461,10 +452,7 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
   abu->type = p7R_ASC_BCK_UP;
   abd->type = p7R_ASC_BCK_DOWN;
 
-  // SRE STOPPED HERE
-
-  iend = (D == 0 ? 0 : anch[D-1].n1);
-  for (i = L; i >= iend; i--)
+  for (i = L; i >= anch[D].i0; i--)     // L=0,D=0 case: this would be 0..0 (thanks to i0(0)=0 sentinel)
     {
       xc = abd->dp[i] + (M+1) * p7R_NSCELLS;
       xc[p7R_CC] = -eslINFINITY;
@@ -479,18 +467,18 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
     }
 
   /* The code below is designed to be easily convertible to one-row memory efficient DP, if needed */
-  for (d = D-1; d >= 0; d--)
+  for (d = D; d >= 1; d--)
     {
-      /* DOWN matrix.
-       *   i = anch[d].i .. anch[d+1].i-1
-       *   k = anch[d].k .. M
-       *   calculated Backward. 
+      /* DOWN matrix (d)
+       *   i = i0(d)..i0(d+1)-1
+       *   k = k0(d)..M
+       * calculated Backward. 
        * In the DOWN matrix, paths can end from the model, but not start in it,
        * so we evaluate {MD}->E transitions backward, but we don't evaluate 
        * B->{LG}->Mk
        */
-      iend = (d == D-1 ? L : anch[d+1].n1-1);
-      for (i = iend; i >= anch[d].n1; i--)
+      iend = anch[d+1].i0-1;                                            // <i==iend> tests used below for boundary conditions on last DOWN row
+      for (i = iend; i >= anch[d].i0; i--)                              // at d=D, this is (L down to i0(D)), thanks to i0(D+1)=L+1 sentinel
 	{
 	  rsn  = (i == iend ? NULL : gm->rsc[dsq[i+1]] + M * p7P_NR);   // residue scores on next row; start at M
 	  tsc  = gm->tsc + M * p7P_NTRANS;                              // transition scores: start at M
@@ -503,7 +491,7 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 	  ign = iln = -eslINFINITY;
 	  xG  = xL  = -eslINFINITY;
 
-	  for (k = M; k >= anch[d].n2; k--)
+	  for (k = M; k >= anch[d].k0; k--)
 	    {
 	      if (i != iend) {           // in one-row memory-efficient dp, dpc could be same as dpn, so:
 		ign = dpn[p7R_IG];       // pick up I scores, before storing anything in these cells
@@ -542,7 +530,7 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 	}
       /* mgc/mlc are the scores in the anchor cell anch[d].i,k */
       /* tsc is on anch[d].k-1 */
-      rsc = gm->rsc[ dsq[anch[d].n1]] + anch[d].n2 * p7P_NR;
+      rsc = gm->rsc[ dsq[anch[d].i0]] + anch[d].k0 * p7P_NR;
       mgn = mgc + *rsc;  
       mln = mlc + *rsc;
       xG  = mgn + tsc[p7P_GM];
@@ -551,35 +539,35 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
       xJ = xN = -eslINFINITY;
 
       /* UP matrix */
-      iend = (d == 0 ? 1 : anch[d-1].n1+1);
-      for (i = anch[d].n1-1; i >= iend; i--)
+      iend = anch[d].i0-1;                              // <i == iend> tests for boundary condition on last UP row, shorthand for <i == anch[d].i0-1>
+      for (i = iend; i > anch[d-1].i0; i--)             // at d=1, this is i0(1)-1 down to 1, thanks to i0(0)=0 sentinel
 	{
-	  xc = abd->dp[i] + (M+1) * p7R_NSCELLS;   // on specials, which are in DOWN matrix
-	  xc[p7R_CC] = -eslINFINITY;  // CC,JJ are only used in decoding matrices
+	  xc = abd->dp[i] + (M+1) * p7R_NSCELLS;        // on specials, which are in DOWN matrix
+	  xc[p7R_CC] = -eslINFINITY;                    // CC,JJ are only used in decoding matrices
 	  xc[p7R_JJ] = -eslINFINITY;
-	  xc[p7R_C]  = -eslINFINITY;  // C is now unreachable, when anchor set constrained.
-	  xc[p7R_G]  = xG;            // xG was accumulated during prev row; G->Mk wing unfolded
-	  xc[p7R_L]  = xL;            // xL accumulated on prev row
+	  xc[p7R_C]  = -eslINFINITY;                    // C is now unreachable, when anchor set constrained.
+	  xc[p7R_G]  = xG;                              // xG was accumulated during prev row; G->Mk wing unfolded
+	  xc[p7R_L]  = xL;                              // xL accumulated on prev row
 	  xc[p7R_B]  = p7_FLogsum(xG + gm->xsc[p7P_B][1],  xL + gm->xsc[p7P_B][0]); 
-	  xc[p7R_J]  = xJ = (d == 0 ? -eslINFINITY : p7_FLogsum(xJ + gm->xsc[p7P_J][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_J][p7P_MOVE]));
-	  xc[p7R_N]  = xN = (d  > 0 ? -eslINFINITY : p7_FLogsum(xN + gm->xsc[p7P_N][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_N][p7P_MOVE]));
+	  xc[p7R_J]  = xJ = (d == 1 ? -eslINFINITY : p7_FLogsum(xJ + gm->xsc[p7P_J][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_J][p7P_MOVE]));
+	  xc[p7R_N]  = xN = (d  > 1 ? -eslINFINITY : p7_FLogsum(xN + gm->xsc[p7P_N][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_N][p7P_MOVE]));
 	  xc[p7R_E]  = xc[p7R_J] + gm->xsc[p7P_E][p7P_LOOP];  
 
-	  tsc = gm->tsc    + (anch[d].n2-1) * p7P_NTRANS;                                    // transition scores: start at anch[d].k-1
-	  dpc = abu->dp[i] + (anch[d].n2-1) * p7R_NSCELLS;                                   // on anch[d].k-1
-	  dpn = (i == anch[d].n1-1 ? NULL : abu->dp[i+1] + (anch[d].n2 - 1) * p7R_NSCELLS);  // on anch[d].k-1
-	  rsc = gm->rsc[dsq[i]] + (anch[d].n2-1) * p7P_NR;
-	  rsn = (i == anch[d].n1-1 ? NULL : gm->rsc[dsq[i+1]] + (anch[d].n2-1) * p7P_NR);
+	  tsc = gm->tsc    + (anch[d].k0-1) * p7P_NTRANS;                                    // transition scores: start at anch[d].k-1
+	  dpc = abu->dp[i] + (anch[d].k0-1) * p7R_NSCELLS;                                   // on anch[d].k-1
+	  dpn = (i == anch[d].i0-1 ? NULL : abu->dp[i+1] + (anch[d].k0 - 1) * p7R_NSCELLS);  // on anch[d].k-1
+	  rsc = gm->rsc[dsq[i]] + (anch[d].k0-1) * p7P_NR;
+	  rsn = (i == anch[d].i0-1 ? NULL : gm->rsc[dsq[i+1]] + (anch[d].k0-1) * p7P_NR);
 
 	  xG  = xL  = -eslINFINITY; 
 	  dgn = dln = -eslINFINITY;
 	  ign = iln = -eslINFINITY;
-	  if (i < anch[d].n1-1) mgn = mln = -eslINFINITY; /* allow mgn/mln to carry over from anchor cell */
+	  if (i < iend) mgn = mln = -eslINFINITY;       // not on iend, because there we allow mgn/mln to carry over from anchor cell 
 
 	  /* The recursion is the same as for the DOWN matrix, so only differences are commented on: */
-	  for (k = anch[d].n2-1; k >= 1; k--)
+	  for (k = anch[d].k0-1; k >= 1; k--)
 	    {
-	      if (i < anch[d].n1-1) {           
+	      if (i < iend) {           
 		ign = dpn[p7R_IG];       
 		iln = dpn[p7R_IL];       
 	      }
@@ -603,7 +591,7 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 	      dpc[p7R_IG] = p7_FLogsum(mgn + tsc[p7P_IM], ign + tsc[p7P_II]);
 	      dpc[p7R_IL] = p7_FLogsum(mln + tsc[p7P_IM], iln + tsc[p7P_II]);
 	      
-	      if (i < anch[d].n1-1) {       
+	      if (i < iend) {       
 		mgn =  dpn[p7R_MG] + *rsn;  // when we loop around, these become M[i+1][k+1] values we need for DP
 		mln =  dpn[p7R_ML] + *rsn;
 		rsn -= p7P_NR;
@@ -628,8 +616,8 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
       xc[p7R_G]  = xG;            // xG was accumulated during prev row; G->Mk wing unfolded
       xc[p7R_L]  = xL;            // xL accumulated on prev row
       xc[p7R_B]  = p7_FLogsum(xG + gm->xsc[p7P_B][1],  xL + gm->xsc[p7P_B][0]); 
-      xc[p7R_J]  = xJ = (d == 0 ? -eslINFINITY : p7_FLogsum(xJ + gm->xsc[p7P_J][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_J][p7P_MOVE]));
-      xc[p7R_N]  = xN = (d  > 0 ? -eslINFINITY : p7_FLogsum(xN + gm->xsc[p7P_N][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_N][p7P_MOVE]));
+      xc[p7R_J]  = xJ = (d == 1 ? -eslINFINITY : p7_FLogsum(xJ + gm->xsc[p7P_J][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_J][p7P_MOVE]));
+      xc[p7R_N]  = xN = (d  > 1 ? -eslINFINITY : p7_FLogsum(xN + gm->xsc[p7P_N][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_N][p7P_MOVE]));
       xc[p7R_E]  = xc[p7R_J] + gm->xsc[p7P_E][p7P_LOOP];  
 
     } /* end loop over domains d */
@@ -658,14 +646,17 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
  * absolute, not relative epsilon (short version: error accumulates
  * more as an absolute # per term added; DP cells with values close to
  * zero may have large relative errors).
+ * 
+ * SRE: this could be cleaner, using an access pattern like one
+ * in _decoding.c.
  */
 static int
-ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_COORD2 *anch, int D, float epsilon)
+ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_ANCHOR *anch, int D, float epsilon)
 {
   int M         = std->M;
   int L         = std->L;
   int killmenow = FALSE;
-  int d,i,k,s,iz;
+  int d,i,k,s;
 #ifdef p7_DEBUGGING
   killmenow = TRUE;
 #endif
@@ -676,9 +667,8 @@ ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_COORD2 *anch
 		 (std->type == p7R_BACKWARD && ascu->type == p7R_ASC_BCK_UP && ascd->type == p7R_ASC_BCK_DOWN)));
 
 
-  /* i=0..anch[0].i-1 specials are a boundary case... */
-  iz = (D == 0 ? 1 : anch[0].n1);
-  for (i = 0; i < iz; i++)
+  /* i=0..i0(1)-1 specials are a boundary case... */
+  for (i = 0; i < anch[1].i0; i++)   // Works for D=0/L=0 case, because of i0(D+1)=L+1 => i0(1)=1 sentinel; then we do 0 row only
     {
       /* In Backwards, don't look at J or L cells. */
       if (std->type == p7R_FORWARD) 
@@ -695,13 +685,12 @@ ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_COORD2 *anch
 	}
     }
 
-  for (d = 0; d < D; d++)
+  for (d = 1; d <= D; d++)
     {
       /* UP sector for domain d */
-      iz = (d == 0 ? 1  : anch[d-1].n1+1);
-      for (i = iz; i < anch[d].n1; i++)
+      for (i = anch[d-1].i0+1; i < anch[d].i0; i++)
 	{
-	  for (k = 1; k < anch[d].n2; k++)
+	  for (k = 1; k < anch[d].k0; k++)
 	    {
 	      for (s = 0; s < p7R_NSCELLS; s++)
 		if (P7R_MX(ascu,i,k,s) != -eslINFINITY && esl_FCompareAbs( P7R_MX(std,i,k,s), P7R_MX(ascu,i,k,s), epsilon) == eslFAIL)
@@ -710,10 +699,9 @@ ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_COORD2 *anch
 	}
 
       /* DOWN sector for domain d */
-      iz = ( d < D-1 ? anch[d+1].n1 : L+1);
-      for (i = anch[d].n1; i < iz; i++)
+      for (i = anch[d].i0; i < anch[d+1].i0; i++)
 	{
-	  for (k = anch[d].n2; k <= M; k++)
+	  for (k = anch[d].k0; k <= M; k++)
 	    {
 	      for (s = 0; s < p7R_NSCELLS; s++)
 		if (P7R_MX(ascd,i,k,s) != -eslINFINITY && esl_FCompareAbs( P7R_MX(std,i,k,s), P7R_MX(ascd,i,k,s), epsilon) == eslFAIL) 
@@ -724,7 +712,7 @@ ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_COORD2 *anch
 	   * Standard implementation fills in C and J identically because it doesn't know where last domain is,
 	   * and continues into J->B->{LG}. In ASC, J/B/L/G are -inf after final domain d. 
 	   */
-	  if (d < D-1) 
+	  if (d < D) 
 	    {
 	      for (s = 0; s < p7R_NXCELLS; s++)
 		if (P7R_XMX(ascd,i,s) != -eslINFINITY && s != p7R_C && esl_FCompareAbs( P7R_XMX(std,i,s), P7R_XMX(ascd,i,s), epsilon) == eslFAIL) 
@@ -772,7 +760,7 @@ utest_singlepath(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   ESL_SQ     *sq        = esl_sq_CreateDigital(bg->abc);
   P7_TRACE   *tr        = p7_trace_Create();
   P7_TRACE   *vtr       = p7_trace_Create();
-  P7_COORD2  *anch      = malloc(sizeof(P7_COORD2));
+  P7_ANCHOR  *anch      = malloc(sizeof(P7_ANCHOR) * 3);  // *3, because of sentinels
   P7_REFMX   *rxv       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxb       = p7_refmx_Create(M, 20);
@@ -809,12 +797,13 @@ utest_singlepath(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
     if (p7_trace_IsM(tr->st[z])) {
       which--;
       if (which == 0) {
-	anch[0].n1 = tr->i[z];
-	anch[0].n2 = tr->k[z];
+	anch[1].i0 = tr->i[z];
+	anch[1].k0 = tr->k[z];
 	break;
       }
     }
   }
+  p7_anchor_SetSentinels(anch, D, tr->L, tr->M);
 
   if ((status = p7_ReferenceViterbi (sq->dsq, sq->n, gm, rxv, vtr, &vsc)) != eslOK) esl_fatal(failmsg);
   if ((status = p7_ReferenceForward (sq->dsq, sq->n, gm, rxf,      &fsc)) != eslOK) esl_fatal(failmsg);
@@ -833,12 +822,12 @@ utest_singlepath(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //p7_trace_DumpAnnotated(stdout, tr,  gm, sq->dsq);
   //p7_trace_DumpAnnotated(stdout, vtr, gm, sq->dsq);
 
-  if (esl_FCompare(sc, vsc,   epsilon) != eslOK) esl_fatal(failmsg);  // generated trace score = Viterbi score
-  if (esl_FCompare(sc, fsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Forward score
-  if (esl_FCompare(sc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Backward score
-  if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Forward score
-  if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Backward score
-  if (p7_trace_Compare(tr, vtr, 0) != eslOK) esl_fatal(failmsg);      // generated trace = Viterbi trace
+  if (esl_FCompareAbs(sc, vsc,   epsilon) != eslOK) esl_fatal(failmsg);  // generated trace score = Viterbi score
+  if (esl_FCompareAbs(sc, fsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Forward score
+  if (esl_FCompareAbs(sc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Backward score
+  if (esl_FCompareAbs(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Forward score
+  if (esl_FCompareAbs(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Backward score
+  if (p7_trace_Compare(tr, vtr, 0)        != eslOK) esl_fatal(failmsg);      // generated trace = Viterbi trace
 
   /* to compare Viterbi to Fwd matrix, we have to hack around a safety check in the structures */
   rxv->type = p7R_FORWARD;
@@ -887,7 +876,7 @@ utest_singlesingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   int         L;
   P7_TRACE   *tr        = NULL;
   P7_TRACE   *vtr       = p7_trace_Create();
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   P7_REFMX   *rxv       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxb       = p7_refmx_Create(M, 20);
@@ -899,6 +888,8 @@ utest_singlesingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   float       sc, vsc, fsc, bsc, asc_f, asc_b;
   float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
   int         status;
+
+  float       tsc1, tsc2;  // dev only, testing a theory
   
   if (bg  == NULL || vtr == NULL || rxv == NULL ||
       rxf == NULL || rxb == NULL || afu == NULL ||
@@ -913,20 +904,23 @@ utest_singlesingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   if ((status = p7_ReferenceASCForward (dsq, L, gm, anch, D, afu, afd, &asc_f)) != eslOK) esl_fatal(failmsg);
   if ((status = p7_ReferenceASCBackward(dsq, L, gm, anch, D, abu, abd, &asc_b)) != eslOK) esl_fatal(failmsg);
 
+  p7_trace_Score         (vtr, dsq, gm, &tsc1);
+  p7_trace_ScoreBackwards(vtr, dsq, gm, &tsc2);
+
   //printf("### Reference Vit:\n"); p7_refmx_Dump(stdout, rxv);
   //printf("### Reference Fwd:\n"); p7_refmx_Dump(stdout, rxf);
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
   //p7_trace_DumpAnnotated(stdout, tr,  gm, dsq);
-  //p7_trace_DumpAnnotated(stdout, vtr, gm, dsq);
+  p7_trace_DumpAnnotated(stdout, vtr, gm, dsq);
 
-  if (esl_FCompare(sc, vsc, epsilon)   != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(sc, fsc, epsilon)   != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(sc, bsc, epsilon)   != eslOK) esl_fatal(failmsg);
-  if (p7_trace_Compare(tr, vtr, 0)     != eslOK) esl_fatal(failmsg);
+  if (esl_FCompareAbs(sc, vsc, epsilon)   != eslOK) esl_fatal(failmsg);
+  if (esl_FCompareAbs(sc, fsc, epsilon)   != eslOK) esl_fatal(failmsg);
+  if (esl_FCompareAbs(sc, bsc, epsilon)   != eslOK) esl_fatal(failmsg);
+  if (p7_trace_Compare(tr, vtr, 0)        != eslOK) esl_fatal(failmsg);
 
-  if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompareAbs(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompareAbs(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
 
   free(anch);
   free(dsq);
@@ -964,7 +958,7 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   ESL_DSQ    *dsq       = NULL; 
   int         L;
   P7_TRACE   *tr        = NULL;
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   P7_REFMX   *afu       = p7_refmx_Create(M, 20);
   P7_REFMX   *afd       = p7_refmx_Create(M, 20);
   P7_REFMX   *abu       = p7_refmx_Create(M, 20);
@@ -986,8 +980,8 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
 
-  if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompareAbs(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompareAbs(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
 
   free(anch);
   free(dsq);
@@ -1029,7 +1023,7 @@ utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   ESL_DSQ    *dsq       = NULL; 
   int         L;
   P7_TRACE   *tr        = NULL;
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   P7_REFMX   *rxv       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxb       = p7_refmx_Create(M, 20);
@@ -1058,11 +1052,11 @@ utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
   //printf("FWD = BCK = ASC_FWD = ASC_BCK = %.2f\n", fsc);
 
-  if (esl_FCompare(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
-  if (sc  > vsc+epsilon)                          esl_fatal(failmsg);
-  if (vsc > fsc+epsilon)                          esl_fatal(failmsg);
+  if (esl_FCompareAbs(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompareAbs(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompareAbs(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+  if (sc  > vsc+epsilon)                             esl_fatal(failmsg);
+  if (vsc > fsc+epsilon)                             esl_fatal(failmsg);
   
   free(anch);
   free(dsq);
@@ -1111,7 +1105,7 @@ utest_multipath_local(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   ESL_DSQ    *dsq       = NULL; 
   int         L;
   P7_TRACE   *tr        = NULL;
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   P7_REFMX   *rxv       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxb       = p7_refmx_Create(M, 20);
@@ -1139,11 +1133,11 @@ utest_multipath_local(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
 
-  if (esl_FCompare(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
-  if (sc  > vsc+epsilon)                          esl_fatal(failmsg);
-  if (vsc > fsc+epsilon)                          esl_fatal(failmsg);
+  if (esl_FCompareAbs(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompareAbs(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompareAbs(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+  if (sc  > vsc+epsilon)                             esl_fatal(failmsg);
+  if (vsc > fsc+epsilon)                             esl_fatal(failmsg);
   
   free(anch);
   free(dsq);
@@ -1192,7 +1186,7 @@ utest_multimulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   ESL_DSQ    *dsq       = NULL; 
   int         L;
   P7_TRACE   *tr        = NULL;
-  P7_COORD2  *anch      = NULL;
+  P7_ANCHOR  *anch      = NULL;
   P7_REFMX   *rxv       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxb       = p7_refmx_Create(M, 20);
@@ -1220,11 +1214,11 @@ utest_multimulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
 
-  if (esl_FCompare(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
-  if (sc  > vsc+epsilon)                          esl_fatal(failmsg);
-  if (vsc > fsc+epsilon)                          esl_fatal(failmsg);
+  if (esl_FCompareAbs(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompareAbs(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompareAbs(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+  if (sc  > vsc+epsilon)                             esl_fatal(failmsg);
+  if (vsc > fsc+epsilon)                             esl_fatal(failmsg);
 
   free(anch);
   free(dsq);
@@ -1341,8 +1335,8 @@ main(int argc, char **argv)
   P7_REFMX       *mxu     = p7_refmx_Create(100, 100);
   P7_REFMX       *mxd     = p7_refmx_Create(100, 100);
   P7_TRACE       *tr      = p7_trace_Create();
-  P7_ANCHORS     *anchv   = p7_anchors_Create(0,0);
-  P7_ANCHORS     *anchm   = p7_anchors_Create(0,0);
+  P7_ANCHORS     *anchv   = p7_anchors_Create();
+  P7_ANCHORS     *anchm   = p7_anchors_Create();
   int             D;
   int             d,i;
   float           fsc, vsc, asc, asc_b;
@@ -1375,13 +1369,14 @@ main(int argc, char **argv)
 
   /* Read anchor coords from command line */
   D = strtol( esl_opt_GetArg(go, 3), NULL, 10);
-  p7_anchors_GrowTo(anchm, D);
-  for (i = 4, d = 0; d < D; d++)
+  p7_anchors_Reinit(anchm, D);
+  for (i = 4, d = 1; d <= D; d++)
     {
-      anchm->arr[d].n1 = strtol( esl_opt_GetArg(go, i), NULL, 10); i++;
-      anchm->arr[d].n2 = strtol( esl_opt_GetArg(go, i), NULL, 10); i++;
+      anchm->a[d].i0 = strtol( esl_opt_GetArg(go, i), NULL, 10); i++;
+      anchm->a[d].i0 = strtol( esl_opt_GetArg(go, i), NULL, 10); i++;
     }
-  anchm->n    = D;
+  anchm->D = D;
+  p7_anchor_SetSentinels(anchm->a, D, sq->n, gm->M);
 
   p7_ReferenceViterbi (sq->dsq, sq->n, gm, vit, tr, &vsc);
   p7_ReferenceForward (sq->dsq, sq->n, gm, fwd, &fsc);   
@@ -1392,21 +1387,21 @@ main(int argc, char **argv)
   //p7_trace_Dump(stdout, tr);
 
   p7_reference_anchors_SetFromTrace(pp, tr, anchv);
-  p7_ReferenceASCForward(sq->dsq, sq->n, gm, anchv->arr, anchv->n, mxu, mxd, &asc);
+  p7_ReferenceASCForward(sq->dsq, sq->n, gm, anchv->a, anchv->D, mxu, mxd, &asc);
 
   //p7_refmx_Dump(stdout, mxu);
   //p7_refmx_Dump(stdout, mxd);
 
   p7_refmx_Reuse(mxu);
   p7_refmx_Reuse(mxd);
-  p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anchv->arr, anchv->n, mxu, mxd, &asc_b);
+  p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anchv->a, anchv->D, mxu, mxd, &asc_b);
 
   p7_refmx_Dump(stdout, mxu);
   p7_refmx_Dump(stdout, mxd);
 
   printf("%-20s VIT   %6.2f %6.2f %6.2f %6.2f %8.4g ", sq->name, vsc, asc, asc_b, fsc, exp(asc-fsc));
-  printf("%2d ", anchv->n);
-  for (d = 0; d < anchv->n; d++) printf("%4d %4d ", anchv->arr[d].n1, anchv->arr[d].n2);
+  printf("%2d ", anchv->D);
+  for (d = 1; d <= anchv->D; d++) printf("%4d %4d ", anchv->a[d].i0, anchv->a[d].k0);
   printf("\n");
 
 
@@ -1415,11 +1410,11 @@ main(int argc, char **argv)
     {
       p7_refmx_Reuse(mxu);
       p7_refmx_Reuse(mxd);
-      p7_ReferenceASCForward(sq->dsq, sq->n, gm, anchm->arr, anchm->n, mxu, mxd, &asc);
+      p7_ReferenceASCForward(sq->dsq, sq->n, gm, anchm->a, anchm->D, mxu, mxd, &asc);
 
       printf("%-20s YOURS %6s %6.2f %6.2f %8.4g ", sq->name, "", asc, fsc, exp(asc-fsc));
-      printf("%2d ", anchm->n);
-      for (d = 0; d < anchm->n; d++) printf("%4d %4d ", anchm->arr[d].n1, anchm->arr[d].n2);
+      printf("%2d ", anchm->D);
+      for (d = 1; d <= anchm->D; d++) printf("%4d %4d ", anchm->a[d].i0, anchm->a[d].k0);
       printf("\n");
     }
 
