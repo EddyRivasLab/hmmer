@@ -28,7 +28,8 @@ UTESTS = reference_viterbi_utest      \
 	 reference_asc_decoding_utest \
 	 reference_aec_align_utest
 
-STATS  = reference_anchors_stats
+STATS  = reference_anchors_stats \
+	 reference_viterbi_stats
 
 BENCHMARKS = reference_fwdback_benchmark
 

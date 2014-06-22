@@ -10,7 +10,7 @@
  * 
  * Contents:
  *   1. Viterbi DP fill.
- *   2. Viterbi optimal traceback.
+ *   2. Stats driver: numerical error characterization.
  *   3. Unit tests.
  *   4. Test driver.
  *   5. Example.
@@ -191,6 +191,181 @@ p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
 
 
 /*****************************************************************
+ * 2. Statistics collection driver
+ *****************************************************************/
+/* This stats driver characterizes numerical error in Viterbi
+ * calculation.
+ * 
+ * Xref:  [SRE:J13/121 22-Jun-14]  Incept
+ */
+#ifdef p7REFERENCE_VITERBI_STATS
+
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+#include "esl_randomseq.h"
+
+#include "hmmer.h"
+
+/* Characterize the distribution of difference between Viterbi score
+ * (from ReferenceViterbi) and score of the optimal Viterbi trace
+ * (from trace_Score()), for setting comparison threshold in
+ * utest_randomseq().
+ * 
+ * Output is 
+ *   <Vit score, sc1> <Trace score, sc2> <sc1-sc2>  <abs(sc1-sc2)>
+ *   
+ * Time (dev: wol, --enable-debugging):
+ *    M=145, L=200, N=100 default = 2.9Mc; about 0.3sec at 10Mc/s.
+ *
+ * Result:
+ *    All differences should be exactly zero.  We believe that
+ *    trace_Score() of an optimal Viterbi trace returns exactly the
+ *    calculated Viterbi score, because trace_Score() evaluates
+ *    summation in same order as Viterbi algorithm.
+ *    
+ * Xref: [SRE:J13/121 22-Jun-14] Incept
+ */
+static void
+stats_randomseq(FILE *ofp, ESL_RANDOMNESS *rng, P7_PROFILE *gm, P7_BG *bg, int nseq, int L)
+{
+  ESL_DSQ   *dsq    = malloc(sizeof(ESL_DSQ) * (L+2));
+  P7_REFMX  *rmx    = p7_refmx_Create(gm->M, L);
+  P7_TRACE  *tr     = p7_trace_Create(); 
+  int        idx;
+  float      sc1, sc2;
+
+  for (idx = 0; idx < nseq; idx++)
+    {
+      esl_rsq_xfIID(rng, bg->f, gm->abc->K, L, dsq);
+      p7_ReferenceViterbi(dsq, L, gm, rmx, tr, &sc1);
+      p7_trace_Score(tr, dsq, gm, &sc2);               
+
+      fprintf(ofp, "%20g %20g %20g %20g\n", sc1, sc2, sc1-sc2, fabs(sc1-sc2));
+
+      p7_trace_Reuse(tr);
+      p7_refmx_Reuse(rmx);
+    }
+  p7_refmx_Destroy(rmx);
+  p7_trace_Destroy(tr);
+  free(dsq);
+}
+
+/* stats_generation:
+ * Characterize distribution of score differences that are tested
+ * by utest_generation(). 
+ * 
+ * sc1 = score of generated trace for dsq
+ * sc2 = Viterbi score, optimal realignment of dsq (sc2 >= sc1)
+ * sc3 = score of Viterbi trace                    (sc3 == sc2)
+ * 
+ * Output:
+ *    <sc1> <sc2> <sc3> <sc2-sc1> <sc3-sc2>
+ *   
+ * Field 4, <sc2-sc1>, should always be positive.
+ * Field 5, <sc3-sc2>, should always be 0.
+ * 
+ * If so, utest_generation() does not need any comparison tolerances.
+ * It still uses one for the sc3-sc2 difference because I haven't
+ * proven that we can guarantee this exact equality on all platforms.
+ *
+ * Time (dev, wol, --enable-debugging):
+ *   M=145, L=200, N=100 default = 2.9Mc; about 0.7s.
+ * 
+ * Xref: [SRE:J13/121 22-Jun-14] Incept
+ */
+static void
+stats_generation(FILE *ofp, ESL_RANDOMNESS *rng, P7_HMM *hmm, P7_PROFILE *gm, P7_BG *bg, int nseq, int L)
+{
+  ESL_SQ    *sq     = esl_sq_CreateDigital(gm->abc);
+  P7_REFMX  *rmx    = p7_refmx_Create(gm->M, 400);
+  P7_TRACE  *tr     = p7_trace_Create();
+  int        idx;
+  float      sc1, sc2, sc3;
+
+  for (idx = 0; idx < nseq; idx++)
+    {
+      p7_profile_SetLength(gm, L);
+      do {
+	esl_sq_Reuse(sq);
+	p7_ProfileEmit(rng, hmm, gm, bg, sq, tr);
+      } while (sq->n > (gm->M+gm->L) * 3); 
+
+      p7_profile_SetLength(gm, sq->n); 
+      p7_trace_Score(tr, sq->dsq, gm, &sc1);                   // sc1 = score of generated trace
+
+      p7_trace_Reuse(tr);
+      p7_ReferenceViterbi(sq->dsq, sq->n, gm, rmx, tr, &sc2);  // sc2 = Viterbi score, optimal realignment of dsq
+      p7_trace_Score(tr, sq->dsq, gm, &sc3);                   // sc3 = trace score of Viterbi realignment
+
+      fprintf(ofp, "%20g %20g %20g %20g %20g\n", sc1, sc2, sc3, sc2-sc1, sc3-sc2);
+
+      esl_sq_Reuse(sq);
+      p7_trace_Reuse(tr);
+      p7_refmx_Reuse(rmx);
+    }
+  p7_refmx_Destroy(rmx);
+  p7_trace_Destroy(tr);
+  esl_sq_Destroy(sq);
+}
+
+
+
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 }, 
+  { "-L",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
+  { "-M",        eslARG_INT,    "145", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
+  { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "stats driver for reference Viterbi implementation";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go            = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  int             M             = esl_opt_GetInteger(go, "-M");
+  int             L             = esl_opt_GetInteger(go, "-L");
+  int             N             = esl_opt_GetInteger(go, "-N");
+  ESL_RANDOMNESS *rng           = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET   *abc           = esl_alphabet_Create(eslAMINO);
+  P7_BG          *bg            = p7_bg_Create(abc);
+  P7_HMM         *hmm           = NULL;
+  P7_PROFILE     *gm            = p7_profile_Create(M, abc);
+
+  /* Which utest do you want to collect on?
+   * One and only one of the flags below should be TRUE at compile time.
+   */
+  int             do_randomseq  = FALSE;
+  int             do_generation = TRUE;
+
+  p7_modelsample(rng, M, abc, &hmm);
+  p7_profile_Config   (gm, hmm, bg);   
+  p7_profile_SetLength(gm, L);
+
+  if (do_randomseq)  stats_randomseq (stdout, rng,      gm, bg, N, L);
+  if (do_generation) stats_generation(stdout, rng, hmm, gm, bg, N, L);
+
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+  p7_bg_Destroy(bg);
+  esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(rng);
+  esl_getopts_Destroy(go);
+}
+
+#endif /*p7REFERENCE_VITERBI_STATS*/
+/*---------------- end, stats driver ----------------------------*/
+
+
+/*****************************************************************
  * 3. Unit tests
  *****************************************************************/
 #ifdef p7REFERENCE_VITERBI_TESTDRIVE
@@ -218,7 +393,7 @@ utest_randomseq(ESL_RANDOMNESS *rng, P7_PROFILE *gm, P7_BG *bg, int nseq, int L)
   P7_TRACE  *tr     = NULL;
   int        idx;
   float      sc1, sc2;
-  float      tol    = 1e-4;
+  float      tol    = 1e-4;            // actually we expect sc1,sc2 to be exactly identical [SRE:J13/121]
   char       errbuf[eslERRBUFSIZE];
 
   if (( dsq = malloc(sizeof(ESL_DSQ) * (L+2))) == NULL) esl_fatal(msg);

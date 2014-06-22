@@ -111,6 +111,7 @@ extern int   p7_trace_Dump         (FILE *fp, const P7_TRACE *tr);
 extern int   p7_trace_DumpAnnotated(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ *dsq);
 extern int   p7_trace_Compare    (P7_TRACE *tr1, P7_TRACE *tr2, float pptol);
 extern int   p7_trace_Score         (const P7_TRACE *tr, const ESL_DSQ *dsq, const P7_PROFILE *gm, float *ret_sc);
+extern int   p7_trace_ScoreKahan    (const P7_TRACE *tr, const ESL_DSQ *dsq, const P7_PROFILE *gm, float *ret_sc);
 extern int   p7_trace_ScoreBackwards(const P7_TRACE *tr, const ESL_DSQ *dsq, const P7_PROFILE *gm, float *ret_sc);
 extern int   p7_trace_ScoreDomain(P7_TRACE *tr, ESL_DSQ *dsq, P7_PROFILE *gm, int which, float *ret_sc);
 extern float p7_trace_GetExpectedAccuracy(const P7_TRACE *tr);

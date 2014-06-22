@@ -811,7 +811,7 @@ p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol)
 /* Function:  p7_trace_Score()
  *
  * Purpose:   Score path <tr> for digital target sequence <dsq> 
- *            using profile <gm>. Return the lod score in
+ *            using profile <gm>. Return the raw lod score (nats) in
  *            <*ret_sc>.
  *            
  *            If <tr> is empty (an 'impossible' trace, with <tr->N=0>),
@@ -819,7 +819,7 @@ p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol)
  *            when there is no possible path at all that can generate
  *            a sequence, hence the sequence correctly scores <-eslINFINITY>;
  *            by convention, traces in this situation have <tr->N=0>.
- *
+ *            
  * Args:      tr     - traceback path to score
  *            dsq    - digitized sequence
  *            gm     - score profile
@@ -830,9 +830,56 @@ p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol)
  *
  * Throws:    <eslEINVAL> if something's wrong with the trace.
  *            Now <*ret_sc> is returned as $-\infty$.
+ *            
+ * Note:      On numerical roundoff error: Because we sum terms in the
+ *            forward direction, exactly the same order as the Viterbi
+ *            algorithm does, the trace score of an optimal Viterbi
+ *            trace should be identical to the Viterbi score
+ *            calculated by the Viterbi algorithm. To calculate the
+ *            trace score with minimal roundoff error, see
+ *            <p7_trace_ScoreKahan()>. To calculate the trace score in
+ *            the backwards direction, see <p7_trace_ScoreBackwards()>.
+ *
+ * Xref:      [SRE:J13/121 22-Jun-14]: numerical accuracy considerations
  */
 int 
 p7_trace_Score(const P7_TRACE *tr, const ESL_DSQ *dsq, const P7_PROFILE *gm, float *ret_sc)
+{
+  float sc = (tr->N ? 0.0f : -eslINFINITY);
+  int   z;
+  int   xi;
+
+  for (z = 0; z < tr->N-1; z++) {
+    xi = dsq[tr->i[z]];
+    
+    if      (tr->st[z] == p7T_ML || tr->st[z] == p7T_MG) sc += P7P_MSC(gm, tr->k[z], xi);
+    else if (tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) sc += P7P_ISC(gm, tr->k[z], xi);
+
+    sc += p7_profile_GetT(gm, tr->st[z], tr->k[z], tr->st[z+1], tr->k[z+1]);
+  }
+  *ret_sc = sc;
+  return eslOK;
+}
+
+
+/* Function:  p7_trace_ScoreKahan()
+ * Synopsis:  Calculate trace score with high numerical accuracy.
+ *
+ * Purpose:   Same as <p7_trace_Score()>, except using Kahan compensated
+ *            summation to minimize roundoff error accumulation.
+ *            
+ *            Because Viterbi itself does not use compensated
+ *            summation, trace score of an optimal Viterbi trace using
+ *            <p7_trace_ScoreKahan()> is not necessarily identical to
+ *            the Viterbi score; they will usually differ by a small
+ *            amount of roundoff error accumulation.
+ *            <p7_trace_ScoreKahan()> is used in development to
+ *            characterize that numerical error.
+ *
+ * Xref:      [SRE:J13/121 22-Jun-14]: incept
+ */
+int
+p7_trace_ScoreKahan(const P7_TRACE *tr, const ESL_DSQ *dsq, const P7_PROFILE *gm, float *ret_sc)
 {
   float  sc;		/* total lod score   */
   int    z;             /* position in tr */
@@ -854,23 +901,31 @@ p7_trace_Score(const P7_TRACE *tr, const ESL_DSQ *dsq, const P7_PROFILE *gm, flo
   return eslOK;
 }
 
-/* SRE 27 May 14: development only, testing a theory about numerical roundoff. */
+/* Function:  p7_trace_ScoreBackwards()
+ * Synopsis:  Calculate trace score, summing terms in reverse order.
+ *
+ * Purpose:   Same as <p7_trace_Score()> but we sum terms in reverse
+ *            order.  Result will generally differ from that of
+ *            <p7_trace_Score()> because of numerical roundoff. This
+ *            routine is here for characterizing that numerical
+ *            roundoff error during code development.
+ *
+ * Xref:      [SRE:J13/121 22-Jun-14]: incept
+ */
 int
 p7_trace_ScoreBackwards(const P7_TRACE *tr, const ESL_DSQ *dsq, const P7_PROFILE *gm, float *ret_sc)
 {
   float sc = (tr->N ? 0.0f : -eslINFINITY);
   int   z;
   int   xi;
-  float y,t,c;   		/* Kahan compensated summation */
-
-  c = 0.0;
+ 
   for (z = tr->N-2; z >= 0; z--) {  
     xi = dsq[tr->i[z]];
 
-    if      (tr->st[z] == p7T_ML || tr->st[z] == p7T_MG) { y = P7P_MSC(gm, tr->k[z], xi) - c; t = sc + y; c = (t-sc)-y; sc = t; }
-    else if (tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) { y = P7P_ISC(gm, tr->k[z], xi) - c; t = sc + y; c = (t-sc)-y; sc = t; }
+    if      (tr->st[z] == p7T_ML || tr->st[z] == p7T_MG) sc += P7P_MSC(gm, tr->k[z], xi);
+    else if (tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) sc += P7P_ISC(gm, tr->k[z], xi);
 
-    y = p7_profile_GetT(gm, tr->st[z], tr->k[z], tr->st[z+1], tr->k[z+1]) - c; t = sc + y; c = (t-sc)-y; sc = t;
+    sc += p7_profile_GetT(gm, tr->st[z], tr->k[z], tr->st[z+1], tr->k[z+1]);
   }
 
   *ret_sc = sc;
