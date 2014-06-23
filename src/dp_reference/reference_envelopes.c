@@ -143,9 +143,6 @@ p7_reference_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
   env->M = gm->M;
   p7_envelope_SetSentinels(env->arr, D, L, gm->M);
   
-  /* <reanch> is a D=1 anchor set; set its sentinels */
-  p7_anchor_SetSentinels(reanch, 1, L, gm->M);
-
   if ((status = envcoords(env, D, apd, 0.5))   != eslOK) goto ERROR;
   if ((status = glocality(env, D, apd))        != eslOK) goto ERROR;
   if ((status = outcoords(env, D, apd, 0.005)) != eslOK) goto ERROR;
@@ -164,10 +161,12 @@ p7_reference_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
       
       for (d = 1; d <= D; d++)
 	if (! (env->arr[d].flags & p7E_ENVSC_APPROX))
-	  {
-	    offset       = env->arr[d].oea - 1;
+	  {                                      
+	    offset       = env->arr[d].oea - 1;  // oea..oeb is our subseq; its len = oeb-oea+1, or equivalently, oeb-offset
 	    reanch[1].i0 = anch[d].i0 - offset;  // You can't use <anch> itself because of coord offset
 	    reanch[1].k0 = anch[d].k0;
+
+	    p7_anchor_SetSentinels(reanch, 1, env->arr[d].oeb-offset, gm->M);  // sentinel [D+1] has i0 = L+1, and our subseq L is new, so we must reinit sentinels
 
 	    status = p7_ReferenceASCForward( dsq+offset, env->arr[d].oeb-offset, gm,
 					     reanch, 1, afu, afd, &(env->arr[d].env_sc));

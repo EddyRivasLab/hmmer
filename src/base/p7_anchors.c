@@ -23,6 +23,18 @@
  * 1. P7_ANCHOR arrays, either naked or as part of P7_ANCHORS
  *****************************************************************/
 
+/* Function:  p7_anchor_SetSentinels()
+ * Synopsis:  Initialize sentinel values for a P7_ANCHOR array.
+ *
+ * Purpose:   Initialize sentinels <0> and <D+1> in a <P7_ANCHOR>
+ *            array <anch> defining <1..D> domains, for a (sub)sequence
+ *            of length <L> and a profile of length <M>.
+ *            
+ *            <anch[0]> is set to <(i0,k0) = (0, M+1)>.
+ *            <anch[D+1] is set to <(i0,k0) = (L+1, 0)>.
+ *
+ * Returns:   <eslOK> on success.
+ */
 int
 p7_anchor_SetSentinels(P7_ANCHOR *anch, int D, int L, int M)
 {
