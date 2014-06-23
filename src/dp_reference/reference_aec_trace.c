@@ -237,7 +237,7 @@ reference_aec_trace_engine(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REF
 	case p7T_E:  scur = (*select_e) (gm, mx, i, &k, &(env->arr[d])); break;
 	case p7T_N:  scur = (i==0 ? p7T_S : p7T_N);                      break;
 	case p7T_J:  scur = (*select_j) (gm, mx, i, apd);                break;
-	case p7T_B:  scur = (d == 0 ? p7T_N : p7T_J); d--;               break;
+	case p7T_B:  scur = (d == 1 ? p7T_N : p7T_J); d--;               break;
 	case p7T_L:  scur = p7T_B;                                       break;
 	case p7T_G:  scur = p7T_B;                                       break;
 	case p7T_C:  scur = (*select_c) (gm, mx, i, apd);                break;
