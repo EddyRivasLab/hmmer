@@ -439,7 +439,7 @@ FM_Recurse( int depth, int Kp, int fm_direction,
 static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
                          const FM_CFG *fm_cfg, const P7_SCOREDATA *ssvdata,
                          uint8_t  *consensus, int Kp, float sc_threshFM,
-                         FM_DIAGLIST *seeds
+                         FM_DIAGLIST *seeds, int strands
                  )
 {
   FM_INTERVAL interval_f1, interval_f2, interval_bk;
@@ -474,71 +474,75 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
     for (k = 1; k <= ssvdata->M; k++) // there's no need to bother keeping an entry starting at the last position (gm->M)
     {
 
-      sc = ssvdata->ssv_scores_f[k*Kp + i];
-      if (sc>0) { // we'll extend any positive-scoring diagonal
-        /* fwd on model, fwd on FM (really, reverse on FM, but the FM is on a reversed string, so its fwd*/
-        if (k < ssvdata->M-3) { // don't bother starting a forward diagonal so close to the end of the model
-          //Forward pass on the FM-index
-          dp_pairs_fwd[fwd_cnt].pos =             k;
-          dp_pairs_fwd[fwd_cnt].score =           sc;
-          dp_pairs_fwd[fwd_cnt].max_score =       sc;
-          dp_pairs_fwd[fwd_cnt].score_peak_len =  1;
-          dp_pairs_fwd[fwd_cnt].consec_pos =      1;
-          dp_pairs_fwd[fwd_cnt].max_consec_pos =  1;
-          dp_pairs_fwd[fwd_cnt].consec_consensus = (i==consensus[k] ? 1 : 0);
-          dp_pairs_fwd[fwd_cnt].complementarity = p7_NOCOMPLEMENT;
-          dp_pairs_fwd[fwd_cnt].model_direction = fm_forward;
-          fwd_cnt++;
-        }
+      if (strands != p7_STRAND_BOTTOMONLY) {
+        sc = ssvdata->ssv_scores_f[k*Kp + i];
+        if (sc>0) { // we'll extend any positive-scoring diagonal
+          /* fwd on model, fwd on FM (really, reverse on FM, but the FM is on a reversed string, so its fwd*/
+          if (k < ssvdata->M-3) { // don't bother starting a forward diagonal so close to the end of the model
+            //Forward pass on the FM-index
+            dp_pairs_fwd[fwd_cnt].pos =             k;
+            dp_pairs_fwd[fwd_cnt].score =           sc;
+            dp_pairs_fwd[fwd_cnt].max_score =       sc;
+            dp_pairs_fwd[fwd_cnt].score_peak_len =  1;
+            dp_pairs_fwd[fwd_cnt].consec_pos =      1;
+            dp_pairs_fwd[fwd_cnt].max_consec_pos =  1;
+            dp_pairs_fwd[fwd_cnt].consec_consensus = (i==consensus[k] ? 1 : 0);
+            dp_pairs_fwd[fwd_cnt].complementarity = p7_NOCOMPLEMENT;
+            dp_pairs_fwd[fwd_cnt].model_direction = fm_forward;
+            fwd_cnt++;
+          }
 
-        /* rev on model, rev on FM (the FM is on the unreversed string)*/
-        if (k > 4) { // don't bother starting a reverse diagonal so close to the start of the model
-          dp_pairs_rev[rev_cnt].pos =             k;
-          dp_pairs_rev[rev_cnt].score =           sc;
-          dp_pairs_rev[rev_cnt].max_score =       sc;
-          dp_pairs_rev[rev_cnt].score_peak_len =  1;
-          dp_pairs_rev[rev_cnt].consec_pos =      1;
-          dp_pairs_rev[rev_cnt].max_consec_pos =  1;
-          dp_pairs_rev[rev_cnt].consec_consensus = (i==consensus[k] ? 1: 0);
-          dp_pairs_rev[rev_cnt].complementarity = p7_NOCOMPLEMENT;
-          dp_pairs_rev[rev_cnt].model_direction = fm_backward;
-          rev_cnt++;
+          /* rev on model, rev on FM (the FM is on the unreversed string)*/
+          if (k > 4) { // don't bother starting a reverse diagonal so close to the start of the model
+            dp_pairs_rev[rev_cnt].pos =             k;
+            dp_pairs_rev[rev_cnt].score =           sc;
+            dp_pairs_rev[rev_cnt].max_score =       sc;
+            dp_pairs_rev[rev_cnt].score_peak_len =  1;
+            dp_pairs_rev[rev_cnt].consec_pos =      1;
+            dp_pairs_rev[rev_cnt].max_consec_pos =  1;
+            dp_pairs_rev[rev_cnt].consec_consensus = (i==consensus[k] ? 1: 0);
+            dp_pairs_rev[rev_cnt].complementarity = p7_NOCOMPLEMENT;
+            dp_pairs_rev[rev_cnt].model_direction = fm_backward;
+            rev_cnt++;
+          }
         }
       }
+
 
       // Now do the reverse complement
-      sc = ssvdata->ssv_scores_f[k*Kp + fm_cfg->meta->compl_alph[i]];
-      if (sc>0) { // we'll extend any positive-scoring diagonal
-        /* rev on model, fwd on FM (really, reverse on FM, but the FM is on a reversed string, so its fwd*/
-        if (k > 4) { // don't bother starting a reverse diagonal so close to the start of the model
-          dp_pairs_fwd[fwd_cnt].pos =             k;
-          dp_pairs_fwd[fwd_cnt].score =           sc;
-          dp_pairs_fwd[fwd_cnt].max_score =       sc;
-          dp_pairs_fwd[fwd_cnt].score_peak_len =  1;
-          dp_pairs_fwd[fwd_cnt].consec_pos =      1;
-          dp_pairs_fwd[fwd_cnt].max_consec_pos =  1;
-          dp_pairs_fwd[fwd_cnt].consec_consensus = (i==consensus[k] ? 1: 0);
-          dp_pairs_fwd[fwd_cnt].complementarity = p7_COMPLEMENT;
-          dp_pairs_fwd[fwd_cnt].model_direction = fm_backward;
-          fwd_cnt++;
-        }
+      if (strands != p7_STRAND_TOPONLY) {
+        sc = ssvdata->ssv_scores_f[k*Kp + fm_cfg->meta->compl_alph[i]];
+        if (sc>0) { // we'll extend any positive-scoring diagonal
+          /* rev on model, fwd on FM (really, reverse on FM, but the FM is on a reversed string, so its fwd*/
+          if (k > 4) { // don't bother starting a reverse diagonal so close to the start of the model
+            dp_pairs_fwd[fwd_cnt].pos =             k;
+            dp_pairs_fwd[fwd_cnt].score =           sc;
+            dp_pairs_fwd[fwd_cnt].max_score =       sc;
+            dp_pairs_fwd[fwd_cnt].score_peak_len =  1;
+            dp_pairs_fwd[fwd_cnt].consec_pos =      1;
+            dp_pairs_fwd[fwd_cnt].max_consec_pos =  1;
+            dp_pairs_fwd[fwd_cnt].consec_consensus = (i==consensus[k] ? 1: 0);
+            dp_pairs_fwd[fwd_cnt].complementarity = p7_COMPLEMENT;
+            dp_pairs_fwd[fwd_cnt].model_direction = fm_backward;
+            fwd_cnt++;
+          }
 
-        /* fwd on model, rev on FM (the FM is on the unreversed string - complemented)*/
-        if (k < ssvdata->M-3) { // don't bother starting a forward diagonal so close to the end of the model
-          dp_pairs_rev[rev_cnt].pos =             k;
-          dp_pairs_rev[rev_cnt].score =           sc;
-          dp_pairs_rev[rev_cnt].max_score =       sc;
-          dp_pairs_rev[rev_cnt].score_peak_len =  1;
-          dp_pairs_rev[rev_cnt].consec_pos =      1;
-          dp_pairs_rev[rev_cnt].max_consec_pos =  1;
-          dp_pairs_rev[rev_cnt].consec_consensus = (i==consensus[k] ? 1: 0);
-          dp_pairs_rev[rev_cnt].complementarity = p7_COMPLEMENT;
-          dp_pairs_rev[rev_cnt].model_direction = fm_forward;
-          rev_cnt++;
-        }
+          /* fwd on model, rev on FM (the FM is on the unreversed string - complemented)*/
+          if (k < ssvdata->M-3) { // don't bother starting a forward diagonal so close to the end of the model
+            dp_pairs_rev[rev_cnt].pos =             k;
+            dp_pairs_rev[rev_cnt].score =           sc;
+            dp_pairs_rev[rev_cnt].max_score =       sc;
+            dp_pairs_rev[rev_cnt].score_peak_len =  1;
+            dp_pairs_rev[rev_cnt].consec_pos =      1;
+            dp_pairs_rev[rev_cnt].max_consec_pos =  1;
+            dp_pairs_rev[rev_cnt].consec_consensus = (i==consensus[k] ? 1: 0);
+            dp_pairs_rev[rev_cnt].complementarity = p7_COMPLEMENT;
+            dp_pairs_rev[rev_cnt].model_direction = fm_forward;
+            rev_cnt++;
+          }
 
+        }
       }
-
     }
 
 
@@ -722,7 +726,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const P7_SCOREDATA *ssvdata, FM_
 int
 p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
          const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_SCOREDATA *ssvdata,
-         P7_HMM_WINDOWLIST *windowlist)
+         P7_HMM_WINDOWLIST *windowlist, int strands)
 {
   float sc_thresh, sc_threshFM;
   float invP;
@@ -792,7 +796,7 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
   sc_threshFM = fm_cfg->scthreshFM * fm_cfg->sc_thresh_ratio;
 
   //get diagonals that score above sc_threshFM
-  status = FM_getSeeds(fmf, fmb, fm_cfg, ssvdata, consensus, om->abc->Kp, sc_threshFM, &seeds );
+  status = FM_getSeeds(fmf, fmb, fm_cfg, ssvdata, consensus, om->abc->Kp, sc_threshFM, &seeds, strands );
   if (status != eslOK)
     ESL_EXCEPTION(eslEMEM, "Error allocating memory for seed computation\n");
 

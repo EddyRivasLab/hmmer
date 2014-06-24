@@ -865,7 +865,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         best_sc_avg = ESL_MAX(5.0,best_sc_avg); // don't let it get too low, or run time will dramatically suffer
 
         fm_cfg->sc_thresh_ratio = ESL_MIN(best_sc_avg/7.0, 1.0);
-
       }
 
       if (dbformat == eslSQFILE_FMINDEX)
@@ -890,14 +889,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
           info[i].pli->do_alignment_score_calc = esl_opt_IsOn(go, "--aliscoresout") ;
 
-          if (dbformat != eslSQFILE_FMINDEX) {
-            if (  esl_opt_IsUsed(go, "--toponly") )
-              info[i].pli->strand = p7_STRAND_TOPONLY;
-            else if (  esl_opt_IsUsed(go, "--bottomonly") )
-              info[i].pli->strand = p7_STRAND_BOTTOMONLY;
-            else
-              info[i].pli->strand = p7_STRAND_BOTH;
+          if (  esl_opt_IsUsed(go, "--toponly") )
+            info[i].pli->strand = p7_STRAND_TOPONLY;
+          else if (  esl_opt_IsUsed(go, "--bottomonly") )
+            info[i].pli->strand = p7_STRAND_BOTTOMONLY;
+          else
+            info[i].pli->strand = p7_STRAND_BOTH;
 
+
+          if (dbformat != eslSQFILE_FMINDEX) {
             if (  esl_opt_IsUsed(go, "--block_length") )
               info[i].pli->block_length = esl_opt_GetInteger(go, "--block_length");
             else
