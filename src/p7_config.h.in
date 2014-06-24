@@ -168,10 +168,11 @@
  */
 #undef HAVE_FLUSH_ZERO_MODE
 
-/* Debugging hooks
+/* Debugging and development hooks
  */
-#undef p7_DEBUGGING
-#undef p7_LOGSUM_SLOWEXACT	/* replace fast FLogsum() with slow exact one. Testing purposes only! 20x slower. */
+#define p7_DEVELOPMENT  1       // TRUE when code is in development. Allow things like stochastic test failures that would frighten civilians.
+#undef  p7_DEBUGGING            // TRUE when --enable-debugging is set from ./configure.
+#undef  p7_LOGSUM_SLOWEXACT	// TRUE when --enable-exact-logsum is set from ./configure. Replace fast FLogsum() with slow exact one. Testing purposes only! 20x slower. 
 
 #endif /*P7_CONFIGH_INCLUDED*/
 /*****************************************************************

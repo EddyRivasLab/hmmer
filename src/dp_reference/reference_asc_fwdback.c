@@ -912,7 +912,7 @@ utest_singlesingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
   //p7_trace_DumpAnnotated(stdout, tr,  gm, dsq);
-  p7_trace_DumpAnnotated(stdout, vtr, gm, dsq);
+  //p7_trace_DumpAnnotated(stdout, vtr, gm, dsq);
 
   if (esl_FCompareAbs(sc, vsc, epsilon)   != eslOK) esl_fatal(failmsg);
   if (esl_FCompareAbs(sc, fsc, epsilon)   != eslOK) esl_fatal(failmsg);

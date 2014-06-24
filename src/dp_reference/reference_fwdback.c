@@ -1,19 +1,17 @@
-/* Reference implementation of Forward/Backward alignment, posterior
- * decoding, and gamma-centroid alignment, with a dual-mode glocal/local
- * model.
+/* Reference implementation of Forward and Backward algorithms
+ * for dual-mode glocal/local model.
  *
  * All reference implementation code is for testing. It is not used in
  * HMMER's main executables. Sparse DP code is the production version.
  *   
  * Contents:  
- *   1. Forward.
- *   2. Backward.
- *   3. Alignment (MEG, gamma-centroid)
- *   4. Benchmark driver.
- *   5. Unit tests.
- *   6. Test driver.
- *   7. Example.
- *   8. Copyright and license information.
+ *   1. Forward
+ *   2. Backward
+ *   3. Benchmark driver
+ *   4. Unit tests
+ *   5. Test driver
+ *   6. Example
+ *   7. Copyright and license information
  */
 
 #include "p7_config.h"
@@ -28,7 +26,8 @@
 
 #include "dp_reference/p7_refmx.h"
 #include "dp_reference/reference_fwdback.h"
-#include "dp_reference/reference_trace.h"
+
+
 
 /*****************************************************************
  * 1. Forward 
@@ -460,172 +459,10 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
 
 
 
-/*****************************************************************
- * 3. Alignment (maximum expected gain, gamma-centroid)
- *****************************************************************/
-
-
-/* Function:  p7_ReferenceAlign()
- * Synopsis:  Reference implementation of gamma-centroid alignment
- *
- * Purpose:   Compute a gamma-centroid alignment of the query
- *            profile <gm> to a target sequence, given the computed posterior 
- *            decoding matrix <pp> for that query/target comparison,
- *            using DP matrix <rmx> for storage during the alignment
- *            computation. <rmx> will be reallocated if needed, so it
- *            can be reused from a previous computation, even a smaller one.
- *
- *            Return the alignment traceback in
- *            <tr>, storage provided and initialized by caller, and grown
- *            here as needed. Also optionally return the gain score,
- *            the total sum of pp - (1-(1+gamma)) for each state 
- *            in the state path.
- *            
- *            <gamma> is the parameter of gamma-centroid alignment.
- *            Higher <gamma> increases sensitivity; lower <gamma>
- *            increases specificity.  Given posterior probabilities
- *            pp(i,x) for every state x at every target position i in
- *            the DP matrix, the algorithm finds a state path
- *            consistent with the model that maximizes the sum of
- *            pp(i,x) - 1/(1+gamma).  Thus states with posterior
- *            probabilities < 1/(1+gamma) will be penalized, and those
- *            > 1/(1+gamma) are rewarded.
- *
- * Args:      gm       - query profile
- *            gamma    - gamma-centroid parameter
- *            pp       - posterior decoding matrix, previously calculated
- *            rmx      - RESULT: filled alignment DP matrix
- *            tr       - RESULT: alignment traceback
- *            opt_gain - optRETURN: gain score       
- *
- * Returns:   <eslOK> on success
- *
- * Xref:      [HamadaAsai11] for details of gamma-centroid estimators
- *            SRE:J9/137 for notes on extending Hamada/Asai gamma-centroid
- *                       from simple residue ij alignment to full state path
- *            [Kall05] for more on why the delta function on transitions is needed
- */
-int
-p7_ReferenceAlign(const P7_PROFILE *gm, float gamma, const P7_REFMX *pp, P7_REFMX *rmx, P7_TRACE *tr, float *opt_gain)
-{
-  float       *dpp;		     /* ptr into previous DP row in <rmx> */
-  float       *dpc;		     /* ptr into current DP row in <rmx> */
-  const float *tsc;		     /* ptr into transition scores in <gm> */
-  const float *ppp;		     /* ptr into decoded posterior probs in <pp> */
-  const int    L    = pp->L;
-  const int    M    = pp->M;
-  float        dlv, dgv;
-  float        mlv, mgv;
-  float        xE,xG,xL;
-  int          i,k,s;
-  float        gammaterm = -1.0f/(1.0f+gamma);
-  int          status;
-
-  /* Contract checks / argument validation */
-  ESL_DASSERT1( (pp->type == p7R_DECODING) );
-  ESL_DASSERT1( (pp->M    == gm->M) );
-
-  /* DP matrix reallocation, if needed */
-  if ( (status = p7_refmx_GrowTo(rmx, gm->M, L)) != eslOK) return status;
-  rmx->M    = M;
-  rmx->L    = L;
-  rmx->type = p7R_ALIGNMENT;
-
-  /* Initialization of the zero row. 
-   * Main states    [ ML MG IL IG DL DG] 0..M; then special states [E N J B L G C] 
-   * Gamma-centroid values can be negative, so "impossible" is -eslINFINITY.
-   * P7_DELTAT() causes impossible transitions to result in impossible-scoring paths
-   */
-  dpc = rmx->dp[0];
-  for (s = 0; s < (M+1) * p7R_NSCELLS; s++) *dpc++ = -eslINFINITY;   /* all M,I,D; k=0..M */
-  ppp = pp->dp[0] + (M+1)*p7R_NSCELLS;
-  dpc[p7R_E]       = -eslINFINITY;	      
-  dpc[p7R_N]       = 2.0f + 2.*gammaterm;  /* S->N always have pp=1.0 at start of any trace, by construction. */
-  dpc[p7R_J]       = -eslINFINITY;                     
-  dpc[p7R_B]       = ppp[p7R_B] + gammaterm + P7_DELTAT( dpc[p7R_N], gm->xsc[p7P_N][p7P_LOOP]);
-  dpc[p7R_L]  = xL = ppp[p7R_L] + gammaterm + P7_DELTAT( dpc[p7R_B], gm->xsc[p7P_B][0]);
-  dpc[p7R_G]  = xG = ppp[p7R_G] + gammaterm + P7_DELTAT( dpc[p7R_B], gm->xsc[p7P_B][1]); 
-  dpc[p7R_C]       = -eslINFINITY;		    
-  dpc[p7R_JJ]      = -eslINFINITY;	/* JJ - unused in alignment, only used in decoding */
-  dpc[p7R_CC]      = -eslINFINITY;	/* CC - ditto */
-
-  /* Main DP recursion for rows 1..L */
-  for (i = 1; i <= L; i++)
-    {
-      ppp = pp->dp[i] + p7R_NSCELLS;  /* positioned at pp[i,k=1,ML]     */
-      tsc = gm->tsc;		      /* model on k=0 transitions (k-1 as we enter loop) */
-      dpp = rmx->dp[i-1];	      /* prev row on k=0 (k-1 as we enter loop) */
-      dpc = rmx->dp[i];		      /* dpc will be on k=1 as we enter the loop */
-      for (s = 0; s < p7R_NSCELLS; s++) *dpc++ = -eslINFINITY;
-
-      dlv = dgv = xE = -eslINFINITY;
-
-      for (k = 1; k <= M; k++)
-	{ /* main states [ ML MG IL IG DL DG] */ 	 
-	  mlv = dpc[p7R_ML] = ppp[p7R_ML] + gammaterm + 
-	    ESL_MAX( ESL_MAX( P7_DELTAT(dpp[p7R_ML], tsc[p7P_MM]),
-			      P7_DELTAT(dpp[p7R_IL], tsc[p7P_IM])),
-		     ESL_MAX( P7_DELTAT(dpp[p7R_DL], tsc[p7P_DM]),
-			      P7_DELTAT( xL,         tsc[p7P_LM])));
-
-	  mgv = dpc[p7R_MG] = ppp[p7R_MG] + gammaterm + 
-	    ESL_MAX( ESL_MAX( P7_DELTAT(dpp[p7R_MG], tsc[p7P_MM]),
-			      P7_DELTAT(dpp[p7R_IG], tsc[p7P_IM])),
-		     ESL_MAX( P7_DELTAT(dpp[p7R_DG], tsc[p7P_DM]),
-			      P7_DELTAT( xG,         tsc[p7P_GM])));
-
-	  tsc += p7P_NTRANS;	/* transition scores now on gm->tsc[k] transitions */
-	  dpp += p7R_NSCELLS;	/* prev row now on dp[i-1][k] cells       */
-
-	  /* IL/IG calculation. */
-	  dpc[p7R_IL] = ppp[p7R_IL] + gammaterm + 
-	    ESL_MAX( P7_DELTAT(dpp[p7R_ML], tsc[p7P_MI]),
-		     P7_DELTAT(dpp[p7R_IL], tsc[p7P_II]));
-
-	  dpc[p7R_IG] = ppp[p7R_IG] + gammaterm + 
-	    ESL_MAX( P7_DELTAT(dpp[p7R_MG], tsc[p7P_MI]),
-		     P7_DELTAT(dpp[p7R_IG], tsc[p7P_II]));
-
-	  /* E state update with ML->E and DL->E local exits k<M */
-	  xE = ESL_MAX(xE, ESL_MAX(mlv, dlv));
-
-	  /* Delete states: delayed storage trick */
-	  dpc[p7R_DL] = dlv + ppp[p7R_DL] + gammaterm;
-	  dpc[p7R_DG] = dgv + ppp[p7R_DG] + gammaterm;
-
-	  dlv = ESL_MAX( P7_DELTAT( mlv, tsc[p7P_MD]), P7_DELTAT( dlv, tsc[p7P_DD]));
-	  dgv = ESL_MAX( P7_DELTAT( mgv, tsc[p7P_MD]), P7_DELTAT( dgv, tsc[p7P_DD]));
-
-	  dpc += p7R_NSCELLS;
-	  ppp += p7R_NSCELLS;
-	}
-      /* IL/IG prohibited at k=M; boundary conditions on tsc make that so (txn into Im =-inf) */
-
-      /* Special states [E N J B L G C] */
-      /* row i main states finished; dpc, ppp are now on first special state, E */
-      dpp += p7R_NSCELLS;	/* and now dpp is too */
-      
-      dpc[p7R_E]      = ppp[p7R_E] + gammaterm + ESL_MAX( xE, ESL_MAX(mgv, dgv));
-      dpc[p7R_N]      = ppp[p7R_N] + gammaterm +          P7_DELTAT(dpp[p7R_N], gm->xsc[p7P_N][p7P_LOOP]);
-      dpc[p7R_J]      = ppp[p7R_J] + gammaterm + ESL_MAX( P7_DELTAT(dpp[p7R_J], gm->xsc[p7P_J][p7P_LOOP]), P7_DELTAT(dpc[p7R_E], gm->xsc[p7P_E][p7P_LOOP]));
-      dpc[p7R_B]      = ppp[p7R_B] + gammaterm + ESL_MAX( P7_DELTAT(dpc[p7R_N], gm->xsc[p7P_N][p7P_MOVE]), P7_DELTAT(dpc[p7R_J], gm->xsc[p7P_J][p7P_MOVE]));
-      dpc[p7R_L] = xL = ppp[p7R_L] + gammaterm +          P7_DELTAT(dpc[p7R_B], gm->xsc[p7P_B][0]);
-      dpc[p7R_G] = xG = ppp[p7R_G] + gammaterm +          P7_DELTAT(dpc[p7R_B], gm->xsc[p7P_B][1]);
-      dpc[p7R_C]      = ppp[p7R_C] + gammaterm + ESL_MAX( P7_DELTAT(dpp[p7R_C], gm->xsc[p7P_C][p7P_LOOP]), P7_DELTAT(dpc[p7R_E], gm->xsc[p7P_E][p7P_MOVE]));
-      dpc[p7R_JJ]     = -eslINFINITY;
-      dpc[p7R_CC]     = -eslINFINITY;
-    }
-
-  rmx->type = p7R_ALIGNMENT;
-  if (opt_gain) *opt_gain = dpc[p7R_C] + 1.0f + gammaterm; /* C->T; T has pp=1.0f */
-  return p7_reference_trace_MGE(gm, rmx, tr);
-}
-/*--------------- end, gamma-centroid alignment  ---------------*/
-
 
 
 /*****************************************************************
- * 4. Benchmark driver.
+ * 3. Benchmark driver.
  *****************************************************************/
 #ifdef p7REFERENCE_FWDBACK_BENCHMARK
 #include "p7_config.h"
@@ -751,7 +588,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 5. Unit tests
+ * 4. Unit tests
  *****************************************************************/
 #ifdef p7REFERENCE_FWDBACK_TESTDRIVE
 #include "esl_dirichlet.h"
@@ -781,9 +618,25 @@ main(int argc, char **argv)
  * random sequences, but to guarantee that, we'd have to sample
  * sequences from the null model (including their length), rather than
  * sampling fixed-length sequences.
+ *
+ *****************************************************************
+ * May fail stochastically.
+ * Pass non-NULL <diagfp> to collect diagnostic data on Fwd-Bck diff.
+ *   
+ * ./reference_fwdback_utest --diag randomseq -N 10000 
+ * field 5 is Fwd-Bck diff
+ *
+ * default:  ~50s to collect 
+ *  Roughly Gaussian w/ mean=-9e-6 and s.d. 0.000113;
+ *    tol1 = 10*sigma + abs(mean) = 0.001
+ *
+ * exact logsum: ~2m to collect
+ *  diff is bimodal and negatively biased, but if we treat it as normal,
+ *  mean = -8.7e-6, stddev = 3.06e-6
+ *  tol1 = 10sigma + abs(mean) = 4e-5 = 0.00004
  */
 static void
-utest_randomseq(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
+utest_randomseq(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
 {
   char          msg[] = "reference fwdback randomseq unit test failed";
   ESL_ALPHABET *abc   = esl_alphabet_Create(alphatype);
@@ -794,7 +647,7 @@ utest_randomseq(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
   P7_REFMX     *vit   = p7_refmx_Create(M, L);
   P7_REFMX     *fwd   = p7_refmx_Create(M, L);
   P7_REFMX     *bck   = p7_refmx_Create(M, L);
-  float         tol1  = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float         tol1  = ( p7_logsum_IsSlowExact() ? 0.00004 : 0.001);
   float         vsc, fsc, bsc;
   int           idx;
   char          errbuf[eslERRBUFSIZE];
@@ -815,13 +668,17 @@ utest_randomseq(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
       if (p7_refmx_Validate(bck, errbuf) != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
       if (p7_refmx_Validate(vit, errbuf) != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
 
-      //printf("fsc = %.4f  bsc = %.4f  difference = %g\n", fsc, bsc, fabs(fsc-bsc));
-
       if (! isfinite(vsc))                          esl_fatal(msg);
       if (! isfinite(fsc))                          esl_fatal(msg);
       if (! isfinite(bsc))                          esl_fatal(msg);
-      if (vsc > fsc)                                esl_fatal(msg); // fwd >= vit score
-      if (esl_FCompareAbs(fsc, bsc, tol1) != eslOK) esl_fatal(msg); // fwd = bck score
+
+      if (!diagfp)
+	{ // Tests that can fail by chance
+	  if (vsc > fsc)                                esl_fatal(msg); // fwd >= vit score
+	  if (esl_FCompareAbs(fsc, bsc, tol1) != eslOK) esl_fatal(msg); // fwd = bck score
+	}
+      else // non-NULL diagfp dumps data we can use to estimate chance failure rates
+	fprintf(diagfp, "%20g %20g %20g %20g %20g\n", vsc, fsc, bsc, fsc-vsc, fsc-bsc);
 
       p7_refmx_Reuse(bck);
       p7_refmx_Reuse(fwd);
@@ -846,9 +703,28 @@ utest_randomseq(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
  *   3. Forward score >= Viterbi score
  *   4. Forward score == Backward score
  *   5. All matrices Validate() (fwd, bck, vit)
+ *   
+ *****************************************************************
+ * May fail stochastically.
+ * Pass non-NULL <diagfp> to collect diagnostic data.
+ * 
+ * ./reference_fwdback_utest --diag generation -N 10000
+ * Field 5 = Fwd score - Trace score(generated path). Always nonnegative (we believe).
+ * Field 6 = Fwd score - Vit score.                   Always nonnegative (we believe).
+ * Field 7 = Fwd-Bck diff. Subject to nonnegligible roundoff error.         
+ * Field 8 = fabs(Fwd-Bck).
+ * 
+ * Default:  90s to collect. 
+ *   Roughly normal. mean = 3.3e-6, stddev = 0.00024; range -0.0011 .. 0.0017
+ *   10sigma + abs(mean) rule:  0.003
+ *
+ * Exact logsum:  ~200s to collect.
+ *   Obviously fat-tailed.  mean = -1.8e-7 s.d. = 1.1e-5; range -0.00014 .. 0.000094
+ *   Fat tails make me distrust the 10sigma rule.
+ *   Instead go with 10x the range: 0.001
  */  
 static void
-utest_generation(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
+utest_generation(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
 {
   char          msg[] = "reference fwdback generation unit test failed";
   ESL_ALPHABET *abc   = esl_alphabet_Create(alphatype);
@@ -861,7 +737,7 @@ utest_generation(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
   P7_REFMX     *bck   = p7_refmx_Create(M, L);
   P7_TRACE     *tr    = p7_trace_Create();
   float         avgsc = 0.0f;
-  float         tol1  = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float         tol1  = ( p7_logsum_IsSlowExact() ? 0.001 : 0.003 );
   float         tsc, vsc, fsc, bsc, nullsc;
   int           idx;
   char          errbuf[eslERRBUFSIZE];
@@ -902,10 +778,18 @@ utest_generation(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
       if (! isfinite(vsc))                          esl_fatal(msg);
       if (! isfinite(fsc))                          esl_fatal(msg);
       if (! isfinite(bsc))                          esl_fatal(msg);
-      if (tsc > fsc)                                esl_fatal(msg); // fwd >= emitted trace score
-      if (vsc > fsc)                                esl_fatal(msg); // fwd >= vit score
-      if (esl_FCompareAbs(fsc, bsc, tol1) != eslOK) esl_fatal(msg); // fwd = bck score
 
+      if (! diagfp) 
+	{
+	  if (tsc > fsc)                                esl_fatal(msg); // fwd >= emitted trace score
+	  if (vsc > fsc)                                esl_fatal(msg); // fwd >= vit score
+	  if (esl_FCompareAbs(fsc, bsc, tol1) != eslOK) esl_fatal(msg); // fwd = bck score
+	}
+      else
+	{
+	  fprintf(diagfp, "%20g %20g %20g %20g %20g %20g %20g %20g\n", vsc, tsc, fsc, bsc, fsc-tsc, fsc-vsc, fsc-bsc, fabs(fsc-bsc));
+	}
+      
       esl_sq_Reuse(sq);
       p7_trace_Reuse(tr);
       p7_refmx_Reuse(bck);
@@ -933,9 +817,27 @@ utest_generation(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
 /* The "duality" test uses the fact that for unihit models, the
  * dual-mode score should be equal to FLogsum(local_score +
  * glocal_score) - 1 bit.
+ *                 
+ *****************************************************************
+ * May fail stochastically. 
+ * Pass non-NULL <diagfp> to collect distribution data.
+ * 
+ * ./reference_fwdback_utest --diag duality -N 10000 
+ * Field 5 = dual_sc - combined_sc
+ * 
+ * Default:  40s to collect
+ *   esl-histplot -w 0.00005 -f5 --normal foo > foo.xy
+ *   Roughly normal; mean= 5.8e-7 sd= 9.9e-5 range= -0.0004 .. 0.0004
+ *   tol = 10sd rule = 0.001
+ *   
+ * Exact logsum:  90s to collect
+ *   esl-histplot -w 0.0000003 -f5 --normal foo > foo.xy
+ *   Call it roughly normal; mean= 5.4e-8 sd= 5.9e-7 range= -2.4e-6 .. 3.3e-6
+ *   Range is a little large compared to 10sd though, so use 100x range:
+ *   tol = 3.3e4 = 0.0004
  */
 static void
-utest_duality(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
+utest_duality(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
 {
   char          msg[]  = "reference_fwdback: duality unit test failed";
   ESL_DSQ      *dsq    = NULL;
@@ -947,6 +849,7 @@ utest_duality(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
   P7_PROFILE   *gmg    = NULL;
   P7_REFMX     *rmx    = NULL;
   float         dual_sc, local_sc, glocal_sc, combined_sc;
+  float         tol    = ( p7_logsum_IsSlowExact() ? 0.0004 : 0.001 );
   int           idx;
 
   if ((abc = esl_alphabet_Create(eslAMINO))   == NULL)  esl_fatal(msg);
@@ -979,7 +882,13 @@ utest_duality(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
 
       combined_sc = p7_FLogsum(local_sc, glocal_sc) - eslCONST_LOG2;
 
-      if (fabs(dual_sc-combined_sc) > 0.001)  esl_fatal(msg);
+      if (! diagfp)
+	{ 
+	  if (fabs(dual_sc-combined_sc) > tol)  esl_fatal(msg);
+	}
+      else
+	fprintf(diagfp, "%20g %20g %20g %20g %20g\n", dual_sc, local_sc, glocal_sc, combined_sc, dual_sc - combined_sc);
+
     }
   
   p7_refmx_Destroy(rmx);
@@ -1031,13 +940,29 @@ utest_duality(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
  * small, or the test will take a long time. There's a combinatorial
  * explosion of paths.
  *
- * This test will fail normally, with randomly chosen rng seeds,
- * at about a 1% rate with its currently set thresholds. This is
- * one reason why the production test driver uses a fixed rng seed,
- * which we know succeeds.
+ *****************************************************************
+ * May fail stochastically. 
+ * Pass non-null <diagfp> to collect distribution data.
+ * 
+ * ./reference_fwdback_utest --diag enumeration -N 10000
+ * Field 1 = total_p - 1.0
+ *                     
+ * Default: Collecting 10^4 samples requires cluster run, concat 100 results of 100 each
+ *     for n in {1..100}; do qsub -N def.$n -V -cwd -b y -j y -o def.out.$n "./reference_fwdback_utest -s 0 --diag"; done
+ *     cat def.out.* > foo
+ *     esl-histplot -w 0.00001 --normal foo > foo.xy
+ *     avg foo
+ *   Roughly normal. mean -5.5e-8. sd 2.3e-5. range -0.00015 .. 0.00013
+ *   Use 10x range: tol = 0.002
+ *
+ * Exact logsum: 
+ *    for n in {1..100}; do qsub -N exact.$n -V -cwd -b y -j y -o exact.out.$n "./reference_fwdback_utest -s 0 --diag"; done
+ *    cat exact.out.* > foo
+ *  Error is miniscule. Treat as normal. Mean= -9e-9. sd = 1.0e-7. 
+ *  10sigma rule: 1e-6 , but I don't trust making a tolerance so close to epsilon, so make it 1e-5.
  */
 static void
-utest_enumeration(ESL_RANDOMNESS *rng, int M)
+utest_enumeration(FILE *diagfp, ESL_RANDOMNESS *rng, int M)
 {
   char          msg[] = "enumeration unit test failed";
   ESL_ALPHABET *abc   = esl_alphabet_Create(eslCOINS); // using the eslCOINS alphabet helps keep the enumeration's size down.
@@ -1052,6 +977,7 @@ utest_enumeration(ESL_RANDOMNESS *rng, int M)
   float         bg_ll;
   double        fp;
   double        total_p = 0.0;
+  double        tol     = ( p7_logsum_IsSlowExact() ? 0.00001 : 0.002 );
 
   if ( p7_modelsample_Enumerable2(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
   if (( bg = p7_bg_Create(abc))                      == NULL)  esl_fatal(msg);
@@ -1103,8 +1029,13 @@ utest_enumeration(ESL_RANDOMNESS *rng, int M)
   /* That sum is subject to significant numerical error because of
    * discretization error in FLogsum(); don't expect it to be too close.
    */
-  //printf("enumeration test: total_p = %g\n", total_p);
-  if (total_p < 0.999 || total_p > 1.001) esl_fatal(msg);
+  if (!diagfp)
+    {
+      if (fabs(total_p - 1.0) > tol) esl_fatal(msg);
+    }
+  else
+    fprintf(diagfp, "%g\n", total_p - 1.0f);
+
 
   /* And any sequence of length L > maxL should get score -infinity. */
   if ( esl_rsq_xfIID(rng, bg->f, abc->K, maxL+1, dsq) != eslOK) esl_fatal(msg);
@@ -1129,9 +1060,29 @@ utest_enumeration(ESL_RANDOMNESS *rng, int M)
  *    2. Generated trace score is the same as Viterbi score.
  *    3. Forward score = Backward score.
  *    4. Forward score = score of generated trace
+ *    
+ *****************************************************************
+ * May fail stochastically.
+ * Pass non-NULL <diagfp> to collect data on expected distributions.
+ * 
+ * ./reference_fwdback_utest --diag singlepath -N 10000
+ * Field 1 is trace score - Viterbi score;  should be exactly zero (but I'm not sure this is guaranteed across platforms)
+ * Field 2 is Fwd - Bck
+ * Field 3 is Fwd - trace score; should be exactly zero
+ * 
+ * Default: ~10s to collect
+ *   F-B: Multimodal, but if we treat as roughly Gaussian:
+ *   mean = 1.0e-7 sd = 1.0e-5
+ *   10 sigma = 0.0001
+ *   
+ * Exact logsum: ~10s to collect
+ *   Almost exactly as for default, which is as expected, because
+ *   in a singlepath test, FLogSum should do nothing.
+ *   mean = -3.8e-10 sd = 1.0e-5
+ *   10 sigma = 0.0001
  */
 static void
-utest_singlepath(ESL_RANDOMNESS *rng, int alphatype, int M)
+utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M)
 {
   char          msg[] = "reference fwdback singlepath unit test failed";
   ESL_ALPHABET *abc   = esl_alphabet_Create(alphatype);
@@ -1145,7 +1096,7 @@ utest_singlepath(ESL_RANDOMNESS *rng, int alphatype, int M)
   P7_REFMX     *bck   = NULL;
   P7_REFMX     *vit   = NULL;
   float         tsc, vsc, fsc, bsc;
-  float         tol   = 1e-4;
+  float         tol   = 0.0001;
 
   /* Create a profile that has only a single possible path (including
    * emissions) thru it; requires configuring in uniglocal mode w/ L=0
@@ -1167,10 +1118,16 @@ utest_singlepath(ESL_RANDOMNESS *rng, int alphatype, int M)
   if (p7_ReferenceBackward(sq->dsq, sq->n, gm, bck,      &bsc)  != eslOK) esl_fatal(msg);
   if (p7_ReferenceViterbi (sq->dsq, sq->n, gm, vit, vtr, &vsc)  != eslOK) esl_fatal(msg);  
 
-  if (esl_FCompareAbs(tsc, vsc, tol)   != eslOK) esl_fatal(msg);
-  if (esl_FCompareAbs(fsc, bsc, tol)   != eslOK) esl_fatal(msg);
-  if (esl_FCompareAbs(fsc, tsc, tol)   != eslOK) esl_fatal(msg);
   if (p7_trace_Compare(gtr, vtr, 0.0f) != eslOK) esl_fatal(msg); // 0.0 is <pptol> arg, unused, because neither trace has PP annotation
+
+  if (! diagfp)
+    {
+      if (esl_FCompareAbs(tsc, vsc, tol)   != eslOK) esl_fatal(msg);
+      if (esl_FCompareAbs(fsc, bsc, tol)   != eslOK) esl_fatal(msg);
+      if (esl_FCompareAbs(fsc, tsc, tol)   != eslOK) esl_fatal(msg);
+    }
+  else
+    fprintf(diagfp, "%20g %20g %20g\n", tsc-vsc, fsc-bsc, fsc-tsc);
 
   p7_refmx_Destroy(fwd);
   p7_refmx_Destroy(bck);
@@ -1588,9 +1545,33 @@ score_brute(struct p7_brute_utest_s *prm, P7_BG *bg, int do_viterbi, double sc[5
   }
 }
 
-/* finally: the test itself. */
+/* finally: the test itself. 
+ *
+ *****************************************************************
+ * Which may fail stochastically.
+ * Pass non-NULL <diagfp> to collect data on expected distributions.
+ * 
+ * ./reference_fwdback_utest --diag brute -N 10000
+ * Fields 1,4,7,10 : Viterbi score - brute force path max  (L=1..4)
+ * Fields 2,5,8,11 : Forward score - brute force path sum  (L=1..4)
+ * Fields 3,6,9,12 : Backward score - brute force path sum (L=1..4)
+ * 
+ *   awk '{print $1, "\n", $4, "\n", $7, "\n", $10}' foo | grep -v "nan" | avg
+ *   awk '{print $2, "\n", $5, "\n", $8, "\n", $11}' foo | grep -v "nan" | avg 
+ *   awk '{print $3, "\n", $6, "\n", $9, "\n", $12}' foo | grep -v "nan" | avg 
+ *           
+ * Default FLogSum(). ~1s to collect.          
+ *  Viterbi: mean -8e-10 sd 2.3e-7 => 10 sigma   => call it 0.00001
+ *  Forward: mean -1.2e-5 sd 0.00013 => 10 sigma => 0.002
+ *  Backward: mean -8e-6 sd 0.00013  => 10 sigma => 0.002
+ *  
+ * Exact logsum: ~1s to collect.
+ *  Viterbi: mean -8e-10 sd 2.3e-7; 10 sigma = 2e-6; call it 0.00001
+ *  Forward: mean -1.8e-9 sd 2e-7;  10 sigma = 2e-6; call it 0.00001
+ *  Backward: mean -2.6e-9 sd 2.1e-7;                call it 0.00001
+ */
 static void
-utest_brute(ESL_RANDOMNESS *rng, int N)
+utest_brute(FILE *diagfp, ESL_RANDOMNESS *rng, int N)
 {
   char          msg[] = "brute test failed";
   struct p7_brute_utest_s prm;	/* 20 free parameters of the brute test */
@@ -1611,8 +1592,8 @@ utest_brute(ESL_RANDOMNESS *rng, int N)
   int           idx;
   int           L;			/* sequence lengths 1..4 */
   int           pos;
-  float         vprecision = 1e-4;
-  float         fprecision = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float         vtol = 1e-4;
+  float         ftol = ( p7_logsum_IsSlowExact() ? 1e-5 : 0.002 );
 
   for (idx = 0; idx < N; idx++)
     {
@@ -1648,11 +1629,18 @@ utest_brute(ESL_RANDOMNESS *rng, int N)
            *  and     G->D1=0
            *  and     DG1->DG2=0,DG2->DG3=0;
            * now both L=1 and L=2 target seqs are impossible and -inf.
+           * 
+           * esl_FCompareAbs() considers -inf and -inf to be identical
+           * and returns eslOK; however, (-inf) - (-inf) = nan.
 	   */
-	  //if (idx==67) p7_trace_DumpAnnotated(stdout, vtr, gm, dsq);
-	  if (esl_FCompareAbs(vsc[L], brute_vit[L], vprecision) != eslOK) esl_fatal(msg);
-	  if (esl_FCompareAbs(fsc[L], brute_fwd[L], fprecision) != eslOK) esl_fatal(msg);
-	  if (esl_FCompareAbs(bsc[L], brute_fwd[L], fprecision) != eslOK) esl_fatal(msg);
+	  if (!diagfp)
+	    {
+	      if (esl_FCompareAbs(vsc[L], brute_vit[L], vtol) != eslOK) esl_fatal(msg);
+	      if (esl_FCompareAbs(fsc[L], brute_fwd[L], ftol) != eslOK) esl_fatal(msg);
+	      if (esl_FCompareAbs(bsc[L], brute_fwd[L], ftol) != eslOK) esl_fatal(msg);
+	    }
+	  else
+	    fprintf(diagfp, "%20g %20g %20g%c", vsc[L]-brute_vit[L], fsc[L]-brute_fwd[L], bsc[L]-brute_fwd[L], L==4 ? '\n' : ' ');
 
 	  p7_trace_Reuse(vtr);
 	  p7_refmx_Reuse(vit);
@@ -1678,11 +1666,14 @@ utest_brute(ESL_RANDOMNESS *rng, int N)
 
 
 /*****************************************************************
- * 6. Test driver
+ * 5. Test driver
  *****************************************************************/
 #ifdef p7REFERENCE_FWDBACK_TESTDRIVE
 
 #include "p7_config.h"
+
+#include <stdio.h>
+#include <string.h>
 
 #include "easel.h"
 #include "esl_getopts.h"
@@ -1691,25 +1682,28 @@ utest_brute(ESL_RANDOMNESS *rng, int N)
 
 #include "hmmer.h"
 
-/* This unit test can fail normally. It compares scores for equality,
- * within an acceptable tolerance. There is no tolerance that we can
- * absolutely guarantee, because routines that use FLogsum()
- * accumulate numeric error, and this error has an approximately
- * normal distribution, so it's possible for stochastic outliers to
- * occur. Default RNG seed is set to a constant to prevent this from
- * happening in production 'make check's.
+/* These tests can fail stochastically with probability epsilon.
+ * To avoid frightening civilians, production release code
+ * runs with fixed RNG seed to guarantee success. Must be
+ * a quoted string because it's going to esl_getopts data.
  */
+#if p7_DEVELOPMENT
+#define p7_RNGSEED "0"
+#else 
+#define p7_RNGSEED "42"
+#endif
 
 static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
-  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose",                                     0 },
-  { "--vv",      eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be very verbose",                                0 },
-  { "-L",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
-  { "-M",        eslARG_INT,     "50", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
-  { "-m",        eslARG_INT,      "8", NULL, NULL,  NULL,  NULL, NULL, "size of random model in enumeration test",       0 },
-  { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
+  /* name           type      default  env  range toggles reqs incomp  help                                             docgroup*/
+  { "-h",      eslARG_NONE,     FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",                0 },
+  { "-s",      eslARG_INT, p7_RNGSEED, NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                       0 },
+  { "-v",      eslARG_NONE,     FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose",                                          0 },
+  { "--vv",    eslARG_NONE,     FALSE, NULL, NULL,  NULL,  NULL, NULL, "be very verbose",                                     0 },
+  { "-L",      eslARG_INT,      "100", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",                  0 },
+  { "-M",      eslARG_INT,       "50", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                     0 },
+  { "-m",      eslARG_INT,        "8", NULL, NULL,  NULL,  NULL, NULL, "size of random model in enumeration test",            0 },
+  { "-N",      eslARG_INT,      "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",                0 },
+  { "--diag",  eslARG_STRING,    NULL, NULL, NULL,  NULL,  NULL, NULL, "dump diagnostic data on utest's chance failure rate", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -1725,18 +1719,34 @@ main(int argc, char **argv)
   int             N    = esl_opt_GetInteger(go, "-N");
   int         enumM    = esl_opt_GetInteger(go, "-m");
 
-  fprintf(stderr, "## %s\n", argv[0]);
-  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
+  if (esl_opt_IsOn(go, "--diag"))  // --diag is for studying error distributions, to set tolerances
+    {                              // passing an open <FILE> as first arg to unit test toggles diagnostics mode
+      char *which = esl_opt_GetString(go, "--diag");
 
-  utest_brute      (r, N);
+      if      (strcmp(which, "randomseq")   == 0) utest_randomseq (stdout, r, eslAMINO, M, L, N);
+      else if (strcmp(which, "generation")  == 0) utest_generation(stdout, r, eslAMINO, M, L, N);
+      else if (strcmp(which, "duality")     == 0) utest_duality   (stdout, r, eslAMINO, M, L, N);
+      else if (strcmp(which, "enumeration") == 0) { while (N--) utest_enumeration(stdout, r, enumM);       }
+      else if (strcmp(which, "singlepath")  == 0) { while (N--) utest_singlepath (stdout, r, eslAMINO, M); }
+      else if (strcmp(which, "brute")       == 0) utest_brute     (stdout, r, N);
+      else esl_fatal("--diag takes: randomseq, generation, duality, enumeration, singlepath, brute");
+    }
+  else // running the unit tests is what we usually do:
+    {
+      fprintf(stderr, "## %s\n", argv[0]);
+      fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
 
-  utest_randomseq  (r, eslAMINO, M, L, N);
-  utest_generation (r, eslAMINO, M, L, N);
-  utest_duality    (r, eslAMINO, M, L, N);
-  utest_enumeration(r, enumM);	       // test hardcodes eslCOINS and a fixed enumeration of target sequences. enumM should be <= 8; test is expensive
-  utest_singlepath (r, eslAMINO, M);
+      utest_randomseq  (NULL, r, eslAMINO, M, L, N);
+      utest_generation (NULL, r, eslAMINO, M, L, N);
+      utest_duality    (NULL, r, eslAMINO, M, L, N);
+      utest_enumeration(NULL, r, enumM);	       // test hardcodes eslCOINS and a fixed enumeration of target sequences. enumM should be <= 8; test is expensive
+      utest_singlepath (NULL, r, eslAMINO, M);
+      utest_brute      (NULL, r, N);
 
-  fprintf(stderr, "#  status = ok\n");
+      fprintf(stderr, "#  status = ok\n");
+    }
+
+
   esl_randomness_Destroy(r);
   esl_getopts_Destroy(go);
   return 0;
@@ -1748,7 +1758,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 7. Example
+ * 6. Example
  *****************************************************************/
 #ifdef p7REFERENCE_FWDBACK_EXAMPLE
 #include "p7_config.h"
@@ -1804,7 +1814,6 @@ main(int argc, char **argv)
   P7_REFMX       *fwd     = p7_refmx_Create(100, 100);
   P7_REFMX       *bck     = p7_refmx_Create(100, 100);
   P7_REFMX       *pp      = p7_refmx_Create(100, 100);
-  P7_REFMX       *mge     = p7_refmx_Create(100, 100);
   P7_TRACE       *tr      = p7_trace_Create();
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
@@ -1875,8 +1884,6 @@ main(int argc, char **argv)
       p7_ReferenceForward (sq->dsq, sq->n, gm, fwd, &fsc);            if (esl_opt_GetBoolean(go, "-F")) p7_refmx_DumpWindow(stdout, fwd, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
       p7_ReferenceBackward(sq->dsq, sq->n, gm, bck, &bsc);            if (esl_opt_GetBoolean(go, "-B")) p7_refmx_DumpWindow(stdout, bck, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
       p7_ReferenceDecoding(sq->dsq, sq->n, gm, fwd, bck, pp);         if (esl_opt_GetBoolean(go, "-D")) p7_refmx_DumpWindow(stdout, pp,  (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
-      p7_ReferenceAlign   (gm, /*gamma=*/1.0, pp, mge, tr, &gain);    if (esl_opt_GetBoolean(go, "-A")) p7_refmx_DumpWindow(stdout, mge, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
-      /*                                    */                        if (esl_opt_GetBoolean(go, "-T")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 
       if (esl_opt_GetBoolean(go, "-S")) 
 	{
@@ -1909,7 +1916,6 @@ main(int argc, char **argv)
       p7_refmx_Reuse(fwd);
       p7_refmx_Reuse(bck);
       p7_refmx_Reuse(pp);
-      p7_refmx_Reuse(mge);
       p7_trace_Reuse(tr);
       esl_sq_Reuse(sq);
     }
@@ -1919,7 +1925,6 @@ main(int argc, char **argv)
   esl_sqfile_Close(sqfp);
   esl_sq_Destroy(sq);
   p7_trace_Destroy(tr);
-  p7_refmx_Destroy(mge);
   p7_refmx_Destroy(pp);
   p7_refmx_Destroy(fwd);
   p7_refmx_Destroy(bck);

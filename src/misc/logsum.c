@@ -87,7 +87,7 @@ p7_FLogsumInit(void)
   if (logsum_initialized) return eslOK;
 
   for (i = 0; i < p7_LOGSUM_TBL; i++) 
-    flogsum_lookup[i] = log(1. + exp((double) -i / p7_LOGSUM_SCALE));
+    flogsum_lookup[i] = log(1. + exp(- ((double) i + 0.5) / p7_LOGSUM_SCALE)); // +0.5 serves to reduce roundoff error.
   logsum_initialized = TRUE;
   return eslOK;
 }
