@@ -1237,7 +1237,7 @@ typedef struct p7_pipeline_s {
 
   enum p7_pipemodes_e mode;    	/* p7_SCAN_MODELS | p7_SEARCH_SEQS          */
   int           long_targets;   /* TRUE if the target sequences are expected to be very long (e.g. dna chromosome search in nhmmer) */
-  int           strand;         /* TRUE if the search should ignore the revcomp (used for nhmmer only) */
+  int           strands;         /*  p7_STRAND_TOPONLY  | p7_STRAND_BOTTOMONLY |  p7_STRAND_BOTH */
   int 		    	W;              /* window length for nhmmer scan - essentially maximum length of model that we expect to find*/
   int           block_length;   /* length of overlapping blocks read in the multi-threaded variant (default MAX_RESIDUE_COUNT) */
 
@@ -1777,7 +1777,7 @@ extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
 /* fm_ssv.c */
 extern int p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
                       const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_SCOREDATA *ssvdata,
-                      P7_HMM_WINDOWLIST *windowlist, int strands);
+                      int strands, P7_HMM_WINDOWLIST *windowlist);
 
 
 /* fm_sse.c */

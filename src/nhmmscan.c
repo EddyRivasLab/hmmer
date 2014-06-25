@@ -483,11 +483,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         info[i].qsq = qsq;
 
         if (  esl_opt_IsUsed(go, "--toponly") )
-          info[i].pli->strand = p7_STRAND_TOPONLY;
+          info[i].pli->strands = p7_STRAND_TOPONLY;
         else if (  esl_opt_IsUsed(go, "--bottomonly") )
-          info[i].pli->strand = p7_STRAND_BOTTOMONLY;
+          info[i].pli->strands = p7_STRAND_BOTTOMONLY;
         else
-          info[i].pli->strand = p7_STRAND_BOTH;
+          info[i].pli->strands = p7_STRAND_BOTH;
 
 
         #ifdef HMMER_THREADS
@@ -639,7 +639,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
 
 #ifdef eslAUGMENT_ALPHABET
   ESL_SQ        *sq_revcmp = NULL;
-  if (info->pli->strand != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL ) {
+  if (info->pli->strands != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL ) {
     sq_revcmp =  esl_sq_CreateDigital(info->qsq->abc);
     esl_sq_Copy(info->qsq,sq_revcmp);
     esl_sq_ReverseComplement(sq_revcmp);
@@ -662,7 +662,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
 
 #ifdef eslAUGMENT_ALPHABET
       //reverse complement
-      if (info->pli->strand != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL )
+      if (info->pli->strands != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL )
       {
         p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, sq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL, NULL, NULL, NULL);
         p7_pipeline_Reuse(info->pli); // prepare for next search
@@ -671,7 +671,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
 #endif
 
 
-      if (info->pli->strand != p7_STRAND_BOTTOMONLY) {
+      if (info->pli->strands != p7_STRAND_BOTTOMONLY) {
         p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, info->qsq, p7_NOCOMPLEMENT, NULL, NULL, NULL, NULL, NULL, NULL);
         p7_pipeline_Reuse(info->pli);
         seq_len += info->qsq->n;
@@ -782,7 +782,7 @@ pipeline_thread(void *arg)
 
 #ifdef eslAUGMENT_ALPHABET
   //reverse complement
-  if (info->pli->strand != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL ) {
+  if (info->pli->strands != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL ) {
     sq_revcmp =  esl_sq_CreateDigital(info->qsq->abc);
     esl_sq_Copy(info->qsq,sq_revcmp);
     esl_sq_ReverseComplement(sq_revcmp);
@@ -810,14 +810,14 @@ pipeline_thread(void *arg)
 
 #ifdef eslAUGMENT_ALPHABET
         //reverse complement
-        if (info->pli->strand != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL )
+        if (info->pli->strands != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL )
         {
           p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, sq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL, NULL, NULL, NULL);
           p7_pipeline_Reuse(info->pli); // prepare for next search
           seq_len = info->qsq->n;
         }
 #endif
-        if (info->pli->strand != p7_STRAND_BOTTOMONLY) {
+        if (info->pli->strands != p7_STRAND_BOTTOMONLY) {
           p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, info->qsq, p7_NOCOMPLEMENT, NULL, NULL, NULL, NULL, NULL, NULL);
           p7_pipeline_Reuse(info->pli);
           seq_len += info->qsq->n;

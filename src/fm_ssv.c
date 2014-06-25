@@ -432,6 +432,7 @@ FM_Recurse( int depth, int Kp, int fm_direction,
  *            ssvdata     - compact data required for computing SSV scores
  *            Kp          - Alphabet size (including ambiguity chars)
  *            sc_threshFM - Score that a short diagonal must pass to warrant extension to a full diagonal
+ *            strands     - p7_STRAND_TOPONLY  | p7_STRAND_BOTTOMONLY |  p7_STRAND_BOTH
  *            seeds       - RETURN: collection of threshold-passing windows
  *
  * Returns:   <eslOK> on success.
@@ -439,7 +440,7 @@ FM_Recurse( int depth, int Kp, int fm_direction,
 static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
                          const FM_CFG *fm_cfg, const P7_SCOREDATA *ssvdata,
                          uint8_t  *consensus, int Kp, float sc_threshFM,
-                         FM_DIAGLIST *seeds, int strands
+                         int strands, FM_DIAGLIST *seeds
                  )
 {
   FM_INTERVAL interval_f1, interval_f2, interval_bk;
@@ -717,6 +718,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const P7_SCOREDATA *ssvdata, FM_
  *            fmb     - data for backward traversal of the FM-index
  *            fm_cfg  - FM-index meta data
  *            ssvdata - compact data required for computing SSV scores
+ *            strands     - p7_STRAND_TOPONLY  | p7_STRAND_BOTTOMONLY |  p7_STRAND_BOTH
  *            windowlist - RETURN: collection of SSV-passing windows, with meta data required for downstream stages.
  *
  * Returns:   <eslOK> on success.
@@ -726,7 +728,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const P7_SCOREDATA *ssvdata, FM_
 int
 p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
          const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_SCOREDATA *ssvdata,
-         P7_HMM_WINDOWLIST *windowlist, int strands)
+         int strands, P7_HMM_WINDOWLIST *windowlist)
 {
   float sc_thresh, sc_threshFM;
   float invP;
@@ -796,7 +798,7 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
   sc_threshFM = fm_cfg->scthreshFM * fm_cfg->sc_thresh_ratio;
 
   //get diagonals that score above sc_threshFM
-  status = FM_getSeeds(fmf, fmb, fm_cfg, ssvdata, consensus, om->abc->Kp, sc_threshFM, &seeds, strands );
+  status = FM_getSeeds(fmf, fmb, fm_cfg, ssvdata, consensus, om->abc->Kp, sc_threshFM, strands, &seeds );
   if (status != eslOK)
     ESL_EXCEPTION(eslEMEM, "Error allocating memory for seed computation\n");
 

@@ -890,11 +890,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].pli->do_alignment_score_calc = esl_opt_IsOn(go, "--aliscoresout") ;
 
           if (  esl_opt_IsUsed(go, "--toponly") )
-            info[i].pli->strand = p7_STRAND_TOPONLY;
+            info[i].pli->strands = p7_STRAND_TOPONLY;
           else if (  esl_opt_IsUsed(go, "--bottomonly") )
-            info[i].pli->strand = p7_STRAND_BOTTOMONLY;
+            info[i].pli->strands = p7_STRAND_BOTTOMONLY;
           else
-            info[i].pli->strand = p7_STRAND_BOTH;
+            info[i].pli->strands = p7_STRAND_BOTH;
 
 
           if (dbformat != eslSQFILE_FMINDEX) {
@@ -952,7 +952,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (esl_opt_IsUsed(go, "-Z")) {
     	  resCnt = 1000000*esl_opt_GetReal(go, "-Z");
 
-    	  if ( info[0].pli->strand == p7_STRAND_BOTH)
+    	  if ( info[0].pli->strands == p7_STRAND_BOTH)
     	    resCnt *= 2;
 
       } else {
@@ -1197,7 +1197,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
 
       p7_pli_NewSeq(info->pli, dbsq);
 
-      if (info->pli->strand != p7_STRAND_BOTTOMONLY) {
+      if (info->pli->strands != p7_STRAND_BOTTOMONLY) {
 
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
         prev_hit_cnt = info->th->N;
@@ -1209,7 +1209,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
       }
 #ifdef eslAUGMENT_ALPHABET
       //reverse complement
-      if (info->pli->strand != p7_STRAND_TOPONLY && dbsq->abc->complement != NULL )
+      if (info->pli->strands != p7_STRAND_TOPONLY && dbsq->abc->complement != NULL )
       {
           prev_hit_cnt = info->th->N;
           esl_sq_Copy(dbsq,dbsq_revcmp);
@@ -1421,7 +1421,7 @@ pipeline_thread(void *arg)
 
       p7_pli_NewSeq(info->pli, dbsq);
 
-      if (info->pli->strand != p7_STRAND_BOTTOMONLY) {
+      if (info->pli->strands != p7_STRAND_BOTTOMONLY) {
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
 
         prev_hit_cnt = info->th->N;
@@ -1434,7 +1434,7 @@ pipeline_thread(void *arg)
 
 #ifdef eslAUGMENT_ALPHABET
       //reverse complement
-      if (info->pli->strand != p7_STRAND_TOPONLY && dbsq->abc->complement != NULL)
+      if (info->pli->strands != p7_STRAND_TOPONLY && dbsq->abc->complement != NULL)
       {
           prev_hit_cnt = info->th->N;
           esl_sq_ReverseComplement(dbsq);
