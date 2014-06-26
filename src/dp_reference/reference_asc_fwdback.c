@@ -672,9 +672,8 @@ ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_ANCHOR *anch
 	    if (k >= anch[d-1].k0) val = p7_FLogsum(val, P7R_MX(ascd,i,k,s)); // DOWN
 	    if (k <  anch[d].k0)   val = p7_FLogsum(val, P7R_MX(ascu,i,k,s)); // UP
 	    
-	    if (k >= anch[d-1].k0 || k < anch[d].k0) 
-	      if (esl_FCompareAbs(val, P7R_MX(std,i,k,s), tolerance) != eslOK)
-		{ if (killmenow) abort(); return eslFAIL; }
+	    if (val != -eslINFINITY && esl_FCompareAbs(val, P7R_MX(std,i,k,s), tolerance) != eslOK)
+	      { if (killmenow) abort(); return eslFAIL; }
 	  }
 
       for (s = 0; s < p7R_NXCELLS; s++)
