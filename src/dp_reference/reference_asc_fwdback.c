@@ -6,11 +6,11 @@
  * code uses sparse dynamic programming.
  * 
  * Contents:
- *    1. ASC Forward.
- *    2. ASC Backward.
- *    3. Unit tests.
- *    4. Test driver.
- *    5. Example.
+ *    1. ASC Forward
+ *    2. ASC Backward
+ *    3. Unit tests
+ *    4. Test driver
+ *    5. Example
  *    6. Copyright and license information
  */
 
@@ -94,10 +94,6 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
   /* reallocation, if needed */
   if ( (status = p7_refmx_GrowTo(mxu, M, L)) != eslOK) return status;
   if ( (status = p7_refmx_GrowTo(mxd, M, L)) != eslOK) return status;
-#if eslDEBUGLEVEL >= 1
-  p7_refmx_Zero(mxu, M, L);
-  p7_refmx_Zero(mxd, M, L);
-#endif
   mxu->M    = mxd->M    = M;
   mxu->L    = mxd->L    = L;
   mxu->type = p7R_ASC_FWD_UP;
@@ -427,6 +423,7 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
   int    d;                   	/* counter over domains 0..D-1 */
   int    i;			/* counter over sequence positions 0.1..L (DP rows) */
   int    k;			/* counter over model positions 0.1..M (DP columns) */
+  int    s;
   int    iend;
   float  mgc, mlc;
   float  mgn, mln;
@@ -443,10 +440,6 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
   /* reallocation, if needed */
   if ( (status = p7_refmx_GrowTo(abu, gm->M, L)) != eslOK) return status;
   if ( (status = p7_refmx_GrowTo(abd, gm->M, L)) != eslOK) return status;
-#if eslDEBUGLEVEL >= 1
-  p7_refmx_Zero(abu, M, L);
-  p7_refmx_Zero(abd, M, L);
-#endif
   abu->M    = abd->M    = M;
   abu->L    = abd->L    = L;
   abu->type = p7R_ASC_BCK_UP;
@@ -609,6 +602,9 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 	} /* end backwards loop over i for UP matrix d */
       /* i is now on anch[d-1].i, or 0 */
 
+      dpc = abu->dp[i];
+      for (s = 0; s < p7R_NSCELLS * anch[d].k0; s++) *dpc++ = -eslINFINITY;   
+
       xc = abd->dp[i] + (M+1) * p7R_NSCELLS;   // on specials, which are in DOWN matrix
       xc[p7R_CC] = -eslINFINITY;  // CC,JJ are only used in decoding matrices
       xc[p7R_JJ] = -eslINFINITY;
@@ -619,12 +615,14 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
       xc[p7R_J]  = xJ = (d == 1 ? -eslINFINITY : p7_FLogsum(xJ + gm->xsc[p7P_J][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_J][p7P_MOVE]));
       xc[p7R_N]  = xN = (d  > 1 ? -eslINFINITY : p7_FLogsum(xN + gm->xsc[p7P_N][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_N][p7P_MOVE]));
       xc[p7R_E]  = xc[p7R_J] + gm->xsc[p7P_E][p7P_LOOP];  
-
     } /* end loop over domains d */
 
   if (opt_sc) *opt_sc = xN;
   return eslOK;
 }
+
+
+
 
 /*****************************************************************
  * 3. Unit tests
@@ -632,97 +630,67 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 #ifdef p7REFERENCE_ASC_FWDBACK_TESTDRIVE
 #include "hmmer.h"
 
-
-
-/* Compare a standard DP matrix <std> to ASC UP and DOWN matrices
+/* ascmatrix_compare()
+ * 
+ * Compare a standard DP matrix <std> to ASC UP and DOWN matrices
  * <ascu> and <ascd>, using anchor set <anch> for <D> domains.
  * Compare all valid values in the ASC matrices to their counterparts
- * in the standard matrix for equality within absolute (not relative)
- * tolerance <epsilon>. (Ignore cells that are valid in the standard
- * matrix, but not in the ASC matrices.) Return <eslOK> if all
- * cell comparisons succeed; <eslFAIL> if not. 
+ * in the standard matrix. If any absolute difference exceeds <tolerance>,
+ * return <eslFAIL>. Else return <eslOK>.
  * 
  * Similar to p7_refmx_Compare(). See notes there for why we prefer
- * absolute, not relative epsilon (short version: error accumulates
+ * absolute, not relative difference (short version: error accumulates
  * more as an absolute # per term added; DP cells with values close to
  * zero may have large relative errors).
- * 
- * SRE: this could be cleaner, using an access pattern like one
- * in _decoding.c.
  */
 static int
-ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_ANCHOR *anch, int D, float epsilon)
+ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_ANCHOR *anch, int D, float tolerance)
 {
-  int M         = std->M;
-  int L         = std->L;
-  int killmenow = FALSE;
-  int d,i,k,s;
+  int   M         = std->M;
+  int   L         = std->L;
+  float val;
+  int   d,i,k,s;
+  int   killmenow = FALSE;
 #ifdef p7_DEBUGGING
   killmenow = TRUE;
 #endif
 
+  /* Contract checks */
   ESL_DASSERT1( (ascu->M == M && ascu->L == L));
   ESL_DASSERT1( (ascd->M == M && ascd->L == L));
   ESL_DASSERT1( ((std->type == p7R_FORWARD  && ascu->type == p7R_ASC_FWD_UP && ascd->type == p7R_ASC_FWD_DOWN) ||
 		 (std->type == p7R_BACKWARD && ascu->type == p7R_ASC_BCK_UP && ascd->type == p7R_ASC_BCK_DOWN)));
 
 
-  /* i=0..i0(1)-1 specials are a boundary case... */
-  for (i = 0; i < anch[1].i0; i++)   // Works for D=0/L=0 case, because of i0(D+1)=L+1 => i0(1)=1 sentinel; then we do 0 row only
+  for (d = 1, i = 0; i <= L; i++)
     {
-      /* In Backwards, don't look at J or L cells. */
-      if (std->type == p7R_FORWARD) 
-	{
-	  for (s = 0; s < p7R_NXCELLS; s++)
-	    if (P7R_XMX(ascd,i,s) != -eslINFINITY && esl_FCompareAbs( P7R_XMX(std,i,s), P7R_XMX(ascd,i,s), epsilon) == eslFAIL) 
-	      { if (killmenow) abort(); return eslFAIL; }
-	}
-      else
-	{
-	  if (esl_FCompareAbs( P7R_XMX(std,i,p7R_N), P7R_XMX(ascd,i,p7R_N), epsilon) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
-	  if (esl_FCompareAbs( P7R_XMX(std,i,p7R_B), P7R_XMX(ascd,i,p7R_B), epsilon) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
-	  if (esl_FCompareAbs( P7R_XMX(std,i,p7R_G), P7R_XMX(ascd,i,p7R_G), epsilon) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
-	}
-    }
+      if (i == anch[d].i0) d++;  // d = idx of current UP matrix; d-1 is current DOWN
+      for (k = 1; k <= M; k++)   //   ... alternatively, you can think d = idx of next anchor we'll reach (1..D)
+	for (s = 0; s < p7R_NSCELLS; s++)
+	  {
+	    val = -eslINFINITY;
+	    if (k >= anch[d-1].k0) val = p7_FLogsum(val, P7R_MX(ascd,i,k,s)); // DOWN
+	    if (k <  anch[d].k0)   val = p7_FLogsum(val, P7R_MX(ascu,i,k,s)); // UP
+	    
+	    if (k >= anch[d-1].k0 || k < anch[d].k0) 
+	      if (esl_FCompareAbs(val, P7R_MX(std,i,k,s), tolerance) != eslOK)
+		{ if (killmenow) abort(); return eslFAIL; }
+	  }
 
-  for (d = 1; d <= D; d++)
-    {
-      /* UP sector for domain d */
-      for (i = anch[d-1].i0+1; i < anch[d].i0; i++)
+      for (s = 0; s < p7R_NXCELLS; s++)
 	{
-	  for (k = 1; k < anch[d].k0; k++)
-	    {
-	      for (s = 0; s < p7R_NSCELLS; s++)
-		if (P7R_MX(ascu,i,k,s) != -eslINFINITY && esl_FCompareAbs( P7R_MX(std,i,k,s), P7R_MX(ascu,i,k,s), epsilon) == eslFAIL)
-		  { if (killmenow) abort(); return eslFAIL; }
-	    }
-	}
+	  switch (s) {
+	  case p7R_E: if (std->type == p7R_BACKWARD && d == 1) continue;  // ASC Backwards knows E(i) = -inf in d=1; standard Backwards has a finite but unused value here
+	  case p7R_N: if (d > 1)                               continue;  // ASC F/B knows N(i) = -inf for d>1; standard F/B doesn't and has finite unused val
+	  case p7R_J: if (d == D+1)                            continue;  // ASC F/B knows J,B,L,G(i) = -inf for last d=D+1
+	  case p7R_B: if (d == D+1)                            continue;  
+	  case p7R_L: if (d == D+1)                            continue;
+	  case p7R_G: if (d == D+1)                            continue;
+	  case p7R_C: if (d < D+1)                             continue;  // ASC F/B knows C(i) = -inf for all domains except last one
+	  }
 
-      /* DOWN sector for domain d */
-      for (i = anch[d].i0; i < anch[d+1].i0; i++)
-	{
-	  for (k = anch[d].k0; k <= M; k++)
-	    {
-	      for (s = 0; s < p7R_NSCELLS; s++)
-		if (P7R_MX(ascd,i,k,s) != -eslINFINITY && esl_FCompareAbs( P7R_MX(std,i,k,s), P7R_MX(ascd,i,k,s), epsilon) == eslFAIL) 
-		  { if (killmenow) abort(); return eslFAIL; }
-	    }
-
-	  /* In specials, ASC has some known discrepancies from standard implementation.
-	   * Standard implementation fills in C and J identically because it doesn't know where last domain is,
-	   * and continues into J->B->{LG}. In ASC, J/B/L/G are -inf after final domain d. 
-	   */
-	  if (d < D) 
-	    {
-	      for (s = 0; s < p7R_NXCELLS; s++)
-		if (P7R_XMX(ascd,i,s) != -eslINFINITY && s != p7R_C && esl_FCompareAbs( P7R_XMX(std,i,s), P7R_XMX(ascd,i,s), epsilon) == eslFAIL) 
-		  { if (killmenow) abort(); return eslFAIL; }
-	    }
-	  else 
-	    {
-	      if (esl_FCompareAbs( P7R_XMX(std,i,p7R_E), P7R_XMX(ascd,i,p7R_E), epsilon) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
-	      if (esl_FCompareAbs( P7R_XMX(std,i,p7R_C), P7R_XMX(ascd,i,p7R_C), epsilon) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
-	    }
+	  if (esl_FCompareAbs(P7R_XMX(ascd,i,s), P7R_XMX(std,i,s), tolerance) != eslOK)
+	    { if (killmenow) abort(); return eslFAIL; }
 	}
     }
   return eslOK;
@@ -751,7 +719,7 @@ ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_ANCHOR *anch
  *   5. Ditto for ASC Backward cells compared to standard Backward.
  */
 static void
-utest_singlepath(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
   char        failmsg[] = "reference_asc_fwdback singlepath unit test failed";
   P7_BG      *bg        = p7_bg_Create(abc);
@@ -774,10 +742,9 @@ utest_singlepath(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
   int         status;
   
-  if (gm  == NULL || sq  == NULL || tr  == NULL ||
-      bg  == NULL || vtr == NULL || rxv == NULL ||
-      rxf == NULL || rxb == NULL || afu == NULL ||
-      afd == NULL || abu == NULL || abd == NULL || anch == NULL)   esl_fatal(failmsg);
+  if (gm  == NULL || sq  == NULL || tr  == NULL || bg  == NULL || vtr == NULL || rxv == NULL ||
+      rxf == NULL || rxb == NULL || afu == NULL || afd == NULL || abu == NULL || abd == NULL || anch == NULL) 
+    esl_fatal(failmsg);
 
   /* Sample single-pathed HMM, create uniglocal L=0 profile */
   if ((status = p7_modelsample_SinglePathed(rng, M, bg->abc, &hmm)) != eslOK) esl_fatal(failmsg);
@@ -822,20 +789,26 @@ utest_singlepath(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //p7_trace_DumpAnnotated(stdout, tr,  gm, sq->dsq);
   //p7_trace_DumpAnnotated(stdout, vtr, gm, sq->dsq);
 
-  if (esl_FCompareAbs(sc, vsc,   epsilon) != eslOK) esl_fatal(failmsg);  // generated trace score = Viterbi score
-  if (esl_FCompareAbs(sc, fsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Forward score
-  if (esl_FCompareAbs(sc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Backward score
-  if (esl_FCompareAbs(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Forward score
-  if (esl_FCompareAbs(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Backward score
-  if (p7_trace_Compare(tr, vtr, 0)        != eslOK) esl_fatal(failmsg);      // generated trace = Viterbi trace
+  if (p7_trace_Compare(tr, vtr, 0)        != eslOK) esl_fatal(failmsg);  // generated trace = Viterbi trace
 
-  /* to compare Viterbi to Fwd matrix, we have to hack around a safety check in the structures */
-  rxv->type = p7R_FORWARD;
-  if (p7_refmx_Compare(rxf, rxv, epsilon) != eslOK) esl_fatal(failmsg);
-  rxv->type = p7R_VITERBI;
+  if (! diagfp) 
+    {
+      if (esl_FCompareAbs(sc, vsc,   epsilon) != eslOK) esl_fatal(failmsg);  // generated trace score = Viterbi score
+      if (esl_FCompareAbs(sc, fsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Forward score
+      if (esl_FCompareAbs(sc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Backward score
+      if (esl_FCompareAbs(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Forward score
+      if (esl_FCompareAbs(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Backward score
 
-  if (ascmatrix_compare(rxf, afu, afd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
-  if (ascmatrix_compare(rxb, abu, abd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      /* to compare Viterbi to Fwd matrix, we have to hack around a safety check in the structures */
+      rxv->type = p7R_FORWARD;
+      if (p7_refmx_Compare(rxf, rxv, epsilon) != eslOK) esl_fatal(failmsg);
+      rxv->type = p7R_VITERBI;
+
+      if (ascmatrix_compare(rxf, afu, afd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_compare(rxb, abu, abd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+    }
+  else
+    fprintf(diagfp, "%20g %20g %20g %20g %20g\n", sc-vsc, sc-fsc, sc-bsc, sc-asc_f, sc-asc_b);
   
   free(anch);
   esl_sq_Destroy(sq);
@@ -866,7 +839,7 @@ utest_singlepath(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  *   2. Viterbi trace = trace that generated the test sequence. 
  */
 static void
-utest_singlesingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
   char        failmsg[] = "reference_asc_fwdback singlesingle unit test failed";
   P7_BG      *bg        = p7_bg_Create(abc);
@@ -914,13 +887,18 @@ utest_singlesingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //p7_trace_DumpAnnotated(stdout, tr,  gm, dsq);
   //p7_trace_DumpAnnotated(stdout, vtr, gm, dsq);
 
-  if (esl_FCompareAbs(sc, vsc, epsilon)   != eslOK) esl_fatal(failmsg);
-  if (esl_FCompareAbs(sc, fsc, epsilon)   != eslOK) esl_fatal(failmsg);
-  if (esl_FCompareAbs(sc, bsc, epsilon)   != eslOK) esl_fatal(failmsg);
   if (p7_trace_Compare(tr, vtr, 0)        != eslOK) esl_fatal(failmsg);
 
-  if (esl_FCompareAbs(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompareAbs(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+  if (! diagfp)
+    {
+      if (esl_FCompareAbs(sc, vsc,   epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, fsc,   epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+    }
+  else
+    fprintf(diagfp, "%20g %20g %20g %20g %20g\n", sc-vsc, sc-fsc, sc-bsc, sc-asc_f, sc-asc_b);
 
   free(anch);
   free(dsq);
@@ -949,7 +927,7 @@ utest_singlesingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  *   1. Trace score = ASC Fwd score = ASC Bck score.
  */
 static void
-utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
   char        failmsg[] = "reference_asc_fwdback singlemulti unit test failed";
   P7_BG      *bg        = p7_bg_Create(abc);
@@ -980,8 +958,13 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
 
-  if (esl_FCompareAbs(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompareAbs(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+  if (!diagfp)
+    {
+      if (esl_FCompareAbs(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+    }
+  else
+    fprintf(diagfp, "%20g %20g\n", sc-asc_f, sc-asc_b);
 
   free(anch);
   free(dsq);
@@ -1014,7 +997,7 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  *    3. Fwd/Bck scores >= Viterbi score.
  */
 static void
-utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
   char        failmsg[] = "reference_asc_fwdback multisingle unit test failed";
   P7_BG      *bg        = p7_bg_Create(abc);
@@ -1052,11 +1035,16 @@ utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
   //printf("FWD = BCK = ASC_FWD = ASC_BCK = %.2f\n", fsc);
 
-  if (esl_FCompareAbs(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompareAbs(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompareAbs(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
-  if (sc  > vsc+epsilon)                             esl_fatal(failmsg);
-  if (vsc > fsc+epsilon)                             esl_fatal(failmsg);
+  if (!diagfp) 
+    {
+      if (esl_FCompareAbs(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+      if (sc  > vsc+epsilon)                             esl_fatal(failmsg);
+      if (vsc > fsc+epsilon)                             esl_fatal(failmsg);
+    }
+  else
+    fprintf(diagfp, "%20g %20g %20g %20g %20g\n", fsc-bsc, fsc-asc_f, bsc-asc_b, vsc-sc, fsc-vsc);
   
   free(anch);
   free(dsq);
@@ -1096,7 +1084,7 @@ utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  *    3. Fwd/Bck scores >= Viterbi score.
  */
 static void
-utest_multipath_local(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
   char        failmsg[] = "reference_asc_fwdback multipath_local unit test failed";
   P7_BG      *bg        = p7_bg_Create(abc);
@@ -1133,11 +1121,16 @@ utest_multipath_local(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
 
-  if (esl_FCompareAbs(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompareAbs(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompareAbs(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
-  if (sc  > vsc+epsilon)                             esl_fatal(failmsg);
-  if (vsc > fsc+epsilon)                             esl_fatal(failmsg);
+  if (!diagfp) 
+    {
+      if (esl_FCompareAbs(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+      if (sc  > vsc+epsilon)                             esl_fatal(failmsg);
+      if (vsc > fsc+epsilon)                             esl_fatal(failmsg);
+    }
+  else
+    fprintf(diagfp, "%20g %20g %20g %20g %20g\n", fsc-bsc, fsc-asc_f, bsc-asc_b, vsc-sc, fsc-vsc);
   
   free(anch);
   free(dsq);
@@ -1177,7 +1170,7 @@ utest_multipath_local(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  *    3. Fwd/Bck scores >= Viterbi score.
  */
 static void
-utest_multimulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
   char        failmsg[] = "reference_asc_fwdback multimulti unit test failed";
   P7_BG      *bg        = p7_bg_Create(abc);
@@ -1214,11 +1207,16 @@ utest_multimulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
 
-  if (esl_FCompareAbs(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompareAbs(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompareAbs(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
-  if (sc  > vsc+epsilon)                             esl_fatal(failmsg);
-  if (vsc > fsc+epsilon)                             esl_fatal(failmsg);
+  if (!diagfp) 
+    {
+      if (esl_FCompareAbs(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+      if (sc  > vsc+epsilon)                             esl_fatal(failmsg);
+      if (vsc > fsc+epsilon)                             esl_fatal(failmsg);
+    }
+  else
+    fprintf(diagfp, "%20g %20g %20g %20g %20g\n", fsc-bsc, fsc-asc_f, bsc-asc_b, vsc-sc, fsc-vsc);
 
   free(anch);
   free(dsq);
@@ -1245,6 +1243,9 @@ utest_multimulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 
 #include "p7_config.h"
 
+#include <stdio.h>
+#include <string.h>
+
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
@@ -1252,10 +1253,18 @@ utest_multimulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 
 #include "hmmer.h"
 
+#if p7_DEVELOPMENT
+#define p7_RNGSEED "0"
+#else
+#define p7_RNGSEED "42"
+#endif
+
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-h",     eslARG_NONE,        FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-s",     eslARG_INT,    p7_RNGSEED, NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-N",     eslARG_INT,         "100", NULL, NULL,  NULL,  NULL, NULL, "number of times to run utest for --diag",        0 },
+  { "--diag", eslARG_STRING,       NULL, NULL, NULL,  NULL,  NULL, NULL, "dump data on a utest's chance failure rate",     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -1268,18 +1277,34 @@ main(int argc, char **argv)
   ESL_RANDOMNESS *rng  = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
   int             M    = 10;
+  int             N    = esl_opt_GetInteger(go, "-N");
 
-  fprintf(stderr, "## %s\n", argv[0]);
-  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+  if (esl_opt_IsOn(go, "--diag"))
+    {  // --diag is for studying chance failure rates, error distributions
+      char *which = esl_opt_GetString(go, "--diag");
 
-  utest_singlepath     (rng, M, abc);
-  utest_singlesingle   (rng, M, abc);
-  utest_singlemulti    (rng, M, abc);
-  utest_multisingle    (rng, M, abc);
-  utest_multipath_local(rng, M, abc);
-  utest_multimulti     (rng, M, abc);
+      if      (strcmp(which, "singlepath")      == 0) while (N--) utest_singlepath     (stdout, rng, M, abc);
+      else if (strcmp(which, "singlesingle")    == 0) while (N--) utest_singlesingle   (stdout, rng, M, abc);
+      else if (strcmp(which, "singlemulti")     == 0) while (N--) utest_singlemulti    (stdout, rng, M, abc);
+      else if (strcmp(which, "multisingle")     == 0) while (N--) utest_multisingle    (stdout, rng, M, abc);
+      else if (strcmp(which, "multipath_local") == 0) while (N--) utest_multipath_local(stdout, rng, M, abc);
+      else if (strcmp(which, "multimulti")      == 0) while (N--) utest_multimulti     (stdout, rng, M, abc);
+      else esl_fatal("--diag takes: singlepath, singlesingle, singlemulti, multisingle, multipath_local, multimulti");
+    }
+  else  // Running the unit tests is what we usually do:
+    {
+      fprintf(stderr, "## %s\n", argv[0]);
+      fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
-  fprintf(stderr, "#  status = ok\n");
+      utest_singlepath     (NULL, rng, M, abc);
+      utest_singlesingle   (NULL, rng, M, abc);
+      utest_singlemulti    (NULL, rng, M, abc);
+      utest_multisingle    (NULL, rng, M, abc);
+      utest_multipath_local(NULL, rng, M, abc);
+      utest_multimulti     (NULL, rng, M, abc);
+
+      fprintf(stderr, "#  status = ok\n");
+    }
 
   esl_alphabet_Destroy(abc);
   esl_randomness_Destroy(rng);

@@ -1703,7 +1703,7 @@ static ESL_OPTIONS options[] = {
   { "-M",      eslARG_INT,       "50", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                     0 },
   { "-m",      eslARG_INT,        "8", NULL, NULL,  NULL,  NULL, NULL, "size of random model in enumeration test",            0 },
   { "-N",      eslARG_INT,      "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",                0 },
-  { "--diag",  eslARG_STRING,    NULL, NULL, NULL,  NULL,  NULL, NULL, "dump diagnostic data on utest's chance failure rate", 0 },
+  { "--diag",  eslARG_STRING,    NULL, NULL, NULL,  NULL,  NULL, NULL, "dump data on a utest's chance failure rate",          0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";

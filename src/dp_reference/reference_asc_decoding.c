@@ -382,6 +382,41 @@ ascmatrix_compare_std(P7_REFMX *rxd, P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *an
   return eslOK;
 }
 
+/* Same as above, except for use with --diag: collect the largest
+ * absolute difference seen for any cell in the compared matrices;
+ * i.e. maxdiff = max fabs(diff(i,k,s))
+ */
+static float 
+ascmatrix_maxdiff_std(P7_REFMX *rxd, P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *anch, int D)
+{
+  int   d,i,k,s;
+  float ascval;
+  float diff;
+  float maxdiff = 0.;
+
+  for (d = 1, i = 0; i <= rxd->L; i++)
+    {
+      if (i == anch[d].i0) d++;
+      for (k = 1; k <= rxd->M; k++)
+	for (s = 0; s < p7R_NSCELLS; s++)
+	  {
+	    ascval = 0.0;	
+	    if (k >= anch[d-1].k0) ascval += P7R_MX(apd,i,k,s); 
+	    if (k <  anch[d].k0)   ascval += P7R_MX(apu,i,k,s); 
+
+	    diff = ascval - P7R_MX(rxd,i,k,s);  
+	    if (fabs(diff) > fabs(maxdiff)) maxdiff = diff;
+	  }
+      for (s = 0; s < p7R_NXCELLS; s++)
+	{
+	  diff = P7R_XMX(apd,i,s) - P7R_XMX(rxd,i,s);
+	  if (fabs(diff) > fabs(maxdiff)) maxdiff = diff;
+	}
+    }
+  return maxdiff;
+}
+
+
 
 /* ascmatrix_compare_asc()
  */
@@ -426,6 +461,37 @@ ascmatrix_compare_asc(P7_REFMX *apu1, P7_REFMX *apd1, P7_REFMX *apu2, P7_REFMX *
   return eslOK;
 }
 
+/* refmx_trace_embed()
+ * 
+ * Create a posterior decoding matrix for a single path <tr>. Return
+ * the new standard decoding matrix in <ret_ppt>. This matrix has values
+ * of 0.0 or 1.0.
+ * 
+ * Used by both ascmatrix_trace_compare() and ascmatrix_trace_maxdiff().
+ */
+static int
+refmx_trace_embed(P7_TRACE *tr, P7_REFMX **ret_ppt)
+{
+  static int sttype[p7T_NSTATETYPES] = { -1, p7R_ML, p7R_MG, p7R_IL, p7R_IG, p7R_DL, p7R_DG, -1, p7R_N, p7R_B, p7R_L, p7R_G, p7R_E, p7R_C, p7R_J, -1 }; /* sttype[] translates trace idx to DP matrix idx*/
+  P7_REFMX *ppt = p7_refmx_Create(tr->M, tr->L);
+  int       i,z;
+
+  p7_refmx_Zero(ppt, tr->M, tr->L);   // This also sets M, L, and type=decoding in <ppt>.
+  for (i = 0, z = 1; z < tr->N-1; z++)
+    {
+      if (tr->i[z]) i = tr->i[z];
+      if (p7_trace_IsMain(tr->st[z]))  
+	P7R_MX (ppt, i, tr->k[z], sttype[(int)tr->st[z]]) = 1.0;
+      else {
+	P7R_XMX(ppt, i, sttype[(int)tr->st[z]]) = 1.0;
+	if (tr->st[z] == p7T_C && tr->i[z]) P7R_XMX(ppt, i, p7R_CC) = 1.0;
+	if (tr->st[z] == p7T_J && tr->i[z]) P7R_XMX(ppt, i, p7R_JJ) = 1.0;
+      }
+    }
+  *ret_ppt = ppt;
+  return eslOK;
+}
+
 
 /* ascmatrix_trace_compare()
  * 
@@ -444,11 +510,9 @@ ascmatrix_compare_asc(P7_REFMX *apu1, P7_REFMX *apd1, P7_REFMX *apu2, P7_REFMX *
 static int
 ascmatrix_trace_compare(P7_TRACE *tr, P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *anch, int D, float epsilon)
 {
-  static int sttype[p7T_NSTATETYPES] = { -1, p7R_ML, p7R_MG, p7R_IL, p7R_IG, p7R_DL, p7R_DG, -1, p7R_N, p7R_B, p7R_L, p7R_G, p7R_E, p7R_C, p7R_J, -1 }; /* sttype[] translates trace idx to DP matrix idx*/
   P7_REFMX *ppt  = NULL;
   int       M    = apu->M;
   int       L    = apu->L;
-  int       z, i;
   int       status;
 
   /* Contract checks */
@@ -456,22 +520,7 @@ ascmatrix_trace_compare(P7_TRACE *tr, P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *a
   ESL_DASSERT1(( apd->L == L && tr->L == L));
   ESL_DASSERT1(( apu->type == p7R_ASC_DECODE_UP && apd->type == p7R_ASC_DECODE_DOWN ));
 
-  /* Make a standard decoding matrix with 1.0 whereever
-   * the trace visits a cell, and 0.0 elsewhere
-   */
-  ppt = p7_refmx_Create(M, L);
-  p7_refmx_Zero(ppt, M, L);     // This also sets M,L, and type=decoding in <ppt>.
-  for (i = 0, z = 1; z < tr->N-1; z++)
-    {
-      if (tr->i[z]) i = tr->i[z];
-      if (p7_trace_IsMain(tr->st[z]))  
-	P7R_MX (ppt, i, tr->k[z], sttype[(int)tr->st[z]]) = 1.0;
-      else {
-	P7R_XMX(ppt, i, sttype[(int)tr->st[z]]) = 1.0;
-	if (tr->st[z] == p7T_C && tr->i[z]) P7R_XMX(ppt, i, p7R_CC) = 1.0;
-	if (tr->st[z] == p7T_J && tr->i[z]) P7R_XMX(ppt, i, p7R_JJ) = 1.0;
-      }
-    }
+  refmx_trace_embed(tr, &ppt);
 
   //printf("### Trace Matrix:\n"); p7_refmx_Dump(stdout, ppt);
       
@@ -482,6 +531,25 @@ ascmatrix_trace_compare(P7_TRACE *tr, P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *a
   return status;
 }
 
+/* ascmatrix_trace_maxdiff()
+ * 
+ * Same as above, but for --diag: return the maximum absolute
+ * difference between the actual values in <apu/apd> and the expected
+ * 0.0/1.0 for decoded cells in a single pathed test, for the path
+ * <tr>.
+ */
+static float 
+ascmatrix_trace_maxdiff(P7_TRACE *tr, P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *anch, int D)
+{
+  P7_REFMX *ppt  = NULL;
+  float     maxdiff;
+
+  refmx_trace_embed(tr, &ppt);
+  maxdiff = ascmatrix_maxdiff_std(ppt, apu, apd, anch, D);
+
+  p7_refmx_Destroy(ppt);
+  return maxdiff;
+}
 
 /* ascmatrix_validate()
  *
@@ -532,6 +600,37 @@ ascmatrix_validate(P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *anch, int D, float e
   return eslOK;
 }
 
+/* ascmatrix_max_over_one()
+ * 
+ * Like ascmatrix_validate(), except for --diag: look for values
+ * in the decoding matrix > 1.0, and return the maximum excursion
+ * seen (i.e. max(val-1.0) for val>1.0).
+ */
+static float
+ascmatrix_max_over_one(P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *anch, int D)
+{
+  int d, i, k, s;
+  float max = 0.;
+  
+  for (d = 1, i = 0; i <= apu->L; i++)
+    {
+      if (i == anch[d].i0) d++;
+
+      for (k = anch[d-1].k0; k <= apu->M; k++)
+	for (s = 0; s < p7R_NSCELLS; s++)
+	  if (P7R_MX(apd,i,k,s) > max) max = P7R_MX(apd,i,k,s);
+
+      for (s = 0; s < p7R_NXCELLS; s++)
+	if (P7R_XMX(apd,i,s) > max) max = P7R_XMX(apd,i,s);
+
+      for (k = 1; k < anch[d].k0; k++)
+	for (s = 0; s < p7R_NSCELLS; s++)
+	  if (P7R_MX(apu,i,k,s) > max) max = P7R_MX(apu,i,k,s);
+    }
+  
+  return (max > 1.0 ? max-1.0 : 0.0);
+}
+
 
 /* "overwrite" test
  * 
@@ -542,7 +641,8 @@ ascmatrix_validate(P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *anch, int D, float e
  * 
  * The unit tests samples a random profile/sequence comparison,
  * decodes it with and without overwriting, and verifies that the
- * resulting ASC decoding matrices are valid and identical.
+ * resulting ASC decoding matrices are valid and exactly identical.
+ * (Exactly. There can be no normal stochastic error here.)
  */
 static void
 utest_overwrite(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
@@ -636,7 +736,7 @@ utest_overwrite(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  *    4. ASC Decoding matrix = standard Decoding mx, cell by cell.
  */
 static void
-utest_singlepath(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
   char        failmsg[] = "reference_asc_decoding singlepath unit test failed";
   P7_BG      *bg        = p7_bg_Create(abc);
@@ -700,9 +800,6 @@ utest_singlepath(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   if ( p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch, D, abu, abd, &asc_b)             != eslOK) esl_fatal(failmsg);
   if ( p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch, D, afu, afd, abu, abd, apu, apd) != eslOK) esl_fatal(failmsg);
 
-  /* Dumping, for debugging. 
-   * Uncomment what you need, for what problems you have.
-   */
   //printf("### Reference Vit:\n");      p7_refmx_Dump(stdout, rxv);
   //printf("### Reference Fwd:\n");      p7_refmx_Dump(stdout, rxf);
   //printf("### Reference Bck:\n");      p7_refmx_Dump(stdout, rxb);
@@ -716,21 +813,28 @@ utest_singlepath(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //p7_trace_DumpAnnotated(stdout, tr,  gm, sq->dsq);
   //p7_trace_DumpAnnotated(stdout, vtr, gm, sq->dsq);
 
-
   /* Tests.
    * Some tests are redundant with what we do in asc_fwdback,
    * but that's ok.
    */
-  if (esl_FCompare(sc, vsc,   epsilon) != eslOK) esl_fatal(failmsg);  // generated trace score = Viterbi score
-  if (esl_FCompare(sc, fsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Forward score
-  if (esl_FCompare(sc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Backward score
-  if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Forward score
-  if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Backward score
-  if (p7_trace_Compare(tr, vtr, 0)     != eslOK) esl_fatal(failmsg);  // generated trace = Viterbi trace
+  if (!diagfp)
+    {
+      if (esl_FCompare(sc, vsc,   epsilon) != eslOK) esl_fatal(failmsg);  // generated trace score = Viterbi score
+      if (esl_FCompare(sc, fsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Forward score
+      if (esl_FCompare(sc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Backward score
+      if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Forward score
+      if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Backward score
+      if (p7_trace_Compare(tr, vtr, 0)     != eslOK) esl_fatal(failmsg);  // generated trace = Viterbi trace
 
-  if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
-  if (ascmatrix_trace_compare(tr, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
-  if (ascmatrix_compare_std     (rxd, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
+      if (ascmatrix_trace_compare(tr, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_compare_std (rxd, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+    }
+  else
+    fprintf(diagfp, "%20g %20g %20g\n",
+	    ascmatrix_max_over_one(apu, apd, anch, D),
+	    ascmatrix_trace_maxdiff(tr, apu, apd, anch, D),
+	    ascmatrix_maxdiff_std(rxd, apu, apd, anch, D));
 
   p7_refmx_Destroy(apu);   p7_refmx_Destroy(apd);
   p7_refmx_Destroy(abu);   p7_refmx_Destroy(abd);
@@ -764,7 +868,7 @@ utest_singlepath(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  *   4. ASC Decoding matrix = standard Decoding mx, cell by cell.
  */
 static void
-utest_singlesingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
   char        failmsg[] = "reference_asc_decoding singlesingle unit test failed";
   P7_BG      *bg        = p7_bg_Create(abc);
@@ -810,16 +914,24 @@ utest_singlesingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //p7_trace_DumpAnnotated(stdout, tr,  gm, dsq);
   //p7_trace_DumpAnnotated(stdout, vtr, gm, dsq);
 
-  if (esl_FCompare(sc, vsc, epsilon)   != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(sc, fsc, epsilon)   != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(sc, bsc, epsilon)   != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
-  if (p7_trace_Compare(tr, vtr, 0)     != eslOK) esl_fatal(failmsg);
+  if (!diagfp) 
+    {
+      if (esl_FCompare(sc, vsc, epsilon)   != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, fsc, epsilon)   != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, bsc, epsilon)   != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+      if (p7_trace_Compare(tr, vtr, 0)     != eslOK) esl_fatal(failmsg);
 
-  if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
-  if (ascmatrix_trace_compare(tr, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
-  if (ascmatrix_compare_std (rxd, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
+      if (ascmatrix_trace_compare(tr, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_compare_std (rxd, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+    }
+  else
+    fprintf(diagfp, "%20g %20g %20g\n",
+	    ascmatrix_max_over_one(apu, apd, anch, D),
+	    ascmatrix_trace_maxdiff(tr, apu, apd, anch, D),
+	    ascmatrix_maxdiff_std(rxd, apu, apd, anch, D));
 
   free(anch);
   free(dsq);
@@ -846,7 +958,7 @@ utest_singlesingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  *   2. ASC Decoding matrix has 1.0 for all cells in trace
  */
 static void
-utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
   char        failmsg[] = "reference_asc_decoding singlemulti unit test failed";
   P7_BG      *bg        = p7_bg_Create(abc);
@@ -880,11 +992,18 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //printf("### ASC Decode DOWN:\n");  p7_refmx_Dump(stdout, apd);
   //p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
 
-  if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+  if (!diagfp)
+    {
+      if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
 
-  if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
-  if (ascmatrix_trace_compare(tr, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
+      if (ascmatrix_trace_compare(tr, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+    }
+  else
+    fprintf(diagfp, "%20g %20g\n",
+	    ascmatrix_max_over_one(apu, apd, anch, D),
+	    ascmatrix_trace_maxdiff(tr, apu, apd, anch, D));	    
 
   free(anch);
   free(dsq);
@@ -915,7 +1034,7 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  *    2. ASC Decoding matrix = standard Decoding mx, cell by cell.
  */
 static void
-utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
   char        failmsg[] = "reference_asc_decoding multisingle unit test failed";
   P7_BG      *bg        = p7_bg_Create(abc);
@@ -954,12 +1073,19 @@ utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //printf("### ASC Decode DOWN:\n");  p7_refmx_Dump(stdout, apd);
   //printf("FWD = BCK = ASC_FWD = ASC_BCK = %.2f\n", fsc);
 
-  if (esl_FCompare(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+  if (!diagfp) 
+    {
+      if (esl_FCompare(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
 
-  if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf) != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
-  if (ascmatrix_compare_std(rxd, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf) != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
+      if (ascmatrix_compare_std(rxd, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+    }
+  else
+    fprintf(diagfp, "%20g %20g\n",
+	    ascmatrix_max_over_one(apu, apd, anch, D),
+	    ascmatrix_maxdiff_std(rxd, apu, apd, anch, D));
 
   free(anch);
   free(dsq);
@@ -998,7 +1124,7 @@ utest_multisingle(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  *       standard decoding, cell by cell.   
  */
 static void
-utest_multipath_local(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
   char        failmsg[] = "reference_asc_decoding multipath_local unit test failed";
   P7_BG      *bg        = p7_bg_Create(abc);
@@ -1033,12 +1159,19 @@ utest_multipath_local(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
 
-  if (esl_FCompare(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+  if (!diagfp)
+    {
+      if (esl_FCompare(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
 
-  if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf) != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
-  if (ascmatrix_compare_std(rxd, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf) != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
+      if (ascmatrix_compare_std(rxd, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+    }
+  else
+    fprintf(diagfp, "%20g %20g\n",
+	    ascmatrix_max_over_one(apu, apd, anch, D),
+	    ascmatrix_maxdiff_std(rxd, apu, apd, anch, D));    
 
   free(anch);
   free(dsq);
@@ -1072,7 +1205,7 @@ utest_multipath_local(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  *    3. Std, ASC decoding matrices are equal cell-by-cell.
  */
 static void
-utest_multimulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
   char        failmsg[] = "reference_asc_decoding multimulti unit test failed";
   P7_BG      *bg        = p7_bg_Create(abc);
@@ -1107,12 +1240,19 @@ utest_multimulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
   //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
 
-  if (esl_FCompare(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompare(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+  if (!diagfp)
+    {
+      if (esl_FCompare(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
 
-  if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf) != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
-  if (ascmatrix_compare_std(rxd, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf) != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
+      if (ascmatrix_compare_std(rxd, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+    }
+  else
+    fprintf(diagfp, "%20g %20g\n",
+	    ascmatrix_max_over_one(apu, apd, anch, D),
+	    ascmatrix_maxdiff_std(rxd, apu, apd, anch, D));    
 
   free(anch);
   free(dsq);
@@ -1136,6 +1276,9 @@ utest_multimulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 
 #include "p7_config.h"
 
+#include <stdio.h>
+#include <string.h>
+
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
@@ -1143,10 +1286,18 @@ utest_multimulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 
 #include "hmmer.h"
 
+#if p7_DEVELOPMENT
+#define p7_RNGSEED "0"
+#else
+#define p7_RNGSEED "42"
+#endif
+
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-h",     eslARG_NONE,      FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-s",     eslARG_INT,  p7_RNGSEED, NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-N",     eslARG_INT,       "100", NULL, NULL,  NULL,  NULL, NULL, "number of times to run utest for --diag",        0 },
+  { "--diag", eslARG_STRING,     NULL, NULL, NULL,  NULL,  NULL, NULL, "dump data on a utest's chance failure rate",     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -1159,19 +1310,36 @@ main(int argc, char **argv)
   ESL_RANDOMNESS *rng  = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
   int             M    = 10;
+  int             N    = esl_opt_GetInteger(go, "-N");
 
-  fprintf(stderr, "## %s\n", argv[0]);
-  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+  if (esl_opt_IsOn(go, "--diag"))
+    {  // --diag is for studying chance failure rates, error distributions
+      char *which = esl_opt_GetString(go, "--diag");
 
-  utest_overwrite      (rng, M, abc);
-  utest_singlepath     (rng, M, abc);
-  utest_singlesingle   (rng, M, abc);
-  utest_singlemulti    (rng, M, abc);
-  utest_multisingle    (rng, M, abc);
-  utest_multipath_local(rng, M, abc);
-  utest_multimulti     (rng, M, abc);
+      // overwrite has no stochastic normal error
+      if      (strcmp(which, "singlepath")      == 0) while (N--) utest_singlepath     (stdout, rng, M, abc);
+      else if (strcmp(which, "singlesingle")    == 0) while (N--) utest_singlesingle   (stdout, rng, M, abc);
+      else if (strcmp(which, "singlemulti")     == 0) while (N--) utest_singlemulti    (stdout, rng, M, abc);
+      else if (strcmp(which, "multisingle")     == 0) while (N--) utest_multisingle    (stdout, rng, M, abc);
+      else if (strcmp(which, "multipath_local") == 0) while (N--) utest_multipath_local(stdout, rng, M, abc);
+      else if (strcmp(which, "multimulti")      == 0) while (N--) utest_multimulti     (stdout, rng, M, abc);
+      else esl_fatal("--diag takes: singlepath, singlesingle, singlemulti, multisingle, multipath_local, multimulti");
+    }
+  else // Running the unit tests is what we usually do:
+    {
+      fprintf(stderr, "## %s\n", argv[0]);
+      fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
-  fprintf(stderr, "#  status = ok\n");
+      utest_overwrite      (      rng, M, abc);  
+      utest_singlepath     (NULL, rng, M, abc);
+      utest_singlesingle   (NULL, rng, M, abc);
+      utest_singlemulti    (NULL, rng, M, abc);
+      utest_multisingle    (NULL, rng, M, abc);
+      utest_multipath_local(NULL, rng, M, abc);
+      utest_multimulti     (NULL, rng, M, abc);
+
+      fprintf(stderr, "#  status = ok\n");
+    }
 
   esl_alphabet_Destroy(abc);
   esl_randomness_Destroy(rng);
