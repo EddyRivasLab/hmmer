@@ -512,6 +512,19 @@ int main(int argc, char *argv[])
           char   *base;
           P7_HIT *hit = th->unsrt + i;
 
+
+          /* Given the sequence header:
+           * >1 000101001 12343829483298 1234
+           * hmmpgmd hijacks the desc and acc fields to pass back domain
+           * architecture and taxonomy id information to the hmmer webserver.
+           * This means the fields are non-NULL, but don't point to real
+           * addresses, so will break any attempt to print non-NULL desc
+           * or acc fields. So we simply clear them out here
+           */
+          hit->desc = NULL;
+          hit->acc  = NULL;
+
+
           hit->dcl = (P7_DOMAIN *)(data + ((char *)hit->dcl - (char *)NULL));
 
           /* the hit string pointers contain the length of the string including
