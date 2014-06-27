@@ -716,6 +716,32 @@ ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_ANCHOR *anch
  *   3. Viterbi DP matrix cells == Forward DP matrix cells
  *   4. ASC Forward U/D matrix cells == std F matrix cells, within ASC regions.
  *   5. Ditto for ASC Backward cells compared to standard Backward.
+ *   
+ *****************************************************************
+ * May fail stochastically. Analysis: SRE:J13/126
+ *  ./reference_fwdback_utest --diag singlepath -N 10000
+ * Field 1 = trace sc - vsc
+ * Field 2 = trace sc - fsc
+ * Field 3 = trace sc - bsc
+ * Field 4 = trace sc - asc_f
+ * Field 5 = trace_sc - asc_b                     
+ * 
+ * Because the trace score is summed in the same order as a Viterbi or
+ * Forwards DP calculation, we expect exactly 0 difference for 1,2,4.
+ * Backwards DP summation order, however, gives rise to roundoff
+ * error.  Because this is a single-pathed test, we expect no
+ * significant difference between default and exact logsum calculations.
+ * 
+ * Default:
+ *    Zero difference for vsc, fsc, asc_f.
+ *    trace_sc - bsc   : mean -2e-8 sd 1e-6 => 10 sigma and some => 1e-4
+ *    trace_sc - asc_b : mean -2e-8 sd 1e-6 
+ * 
+ * Exact logsum:
+ *    Zero difference for vsc, fsc, asc_f.
+ *    trace_sc - bsc   : mean  2e-8 sd 1e-6 => 10 sigma and some => 1e-4
+ *    trace_sc - asc_b : mean -2e-8 sd 1e-6
+ *   
  */
 static void
 utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
@@ -738,7 +764,7 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
   int         D;
   int         nm, z, which;
   float       sc, vsc, fsc, bsc, asc_f, asc_b;
-  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float       tolerance = 0.0001;
   int         status;
   
   if (gm  == NULL || sq  == NULL || tr  == NULL || bg  == NULL || vtr == NULL || rxv == NULL ||
@@ -792,19 +818,19 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
 
   if (! diagfp) 
     {
-      if (esl_FCompareAbs(sc, vsc,   epsilon) != eslOK) esl_fatal(failmsg);  // generated trace score = Viterbi score
-      if (esl_FCompareAbs(sc, fsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Forward score
-      if (esl_FCompareAbs(sc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Backward score
-      if (esl_FCompareAbs(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Forward score
-      if (esl_FCompareAbs(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Backward score
+      if (esl_FCompareAbs(sc, vsc,   tolerance) != eslOK) esl_fatal(failmsg);  // generated trace score = Viterbi score
+      if (esl_FCompareAbs(sc, fsc,   tolerance) != eslOK) esl_fatal(failmsg);  //  ... = Forward score
+      if (esl_FCompareAbs(sc, bsc,   tolerance) != eslOK) esl_fatal(failmsg);  //  ... = Backward score
+      if (esl_FCompareAbs(sc, asc_f, tolerance) != eslOK) esl_fatal(failmsg);  //  ... = ASC Forward score
+      if (esl_FCompareAbs(sc, asc_b, tolerance) != eslOK) esl_fatal(failmsg);  //  ... = ASC Backward score
 
       /* to compare Viterbi to Fwd matrix, we have to hack around a safety check in the structures */
       rxv->type = p7R_FORWARD;
-      if (p7_refmx_Compare(rxf, rxv, epsilon) != eslOK) esl_fatal(failmsg);
+      if (p7_refmx_Compare(rxf, rxv, tolerance) != eslOK) esl_fatal(failmsg);
       rxv->type = p7R_VITERBI;
 
-      if (ascmatrix_compare(rxf, afu, afd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
-      if (ascmatrix_compare(rxb, abu, abd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_compare(rxf, afu, afd, anch, D, tolerance) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_compare(rxb, abu, abd, anch, D, tolerance) != eslOK) esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g %20g %20g %20g\n", sc-vsc, sc-fsc, sc-bsc, sc-asc_f, sc-asc_b);
@@ -836,6 +862,33 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
  * Then:
  *   1. Viterbi = Fwd = Bck = ASC Fwd = ASC Bck scores.
  *   2. Viterbi trace = trace that generated the test sequence. 
+ * 
+ *****************************************************************
+ * May fail stochastically. Analysis: SRE:J13/126
+ *  ./reference_fwdback_utest --diag singlesingle -N 10000
+ * Field 1 = trace sc - vsc
+ * Field 2 = trace sc - fsc
+ * Field 3 = trace sc - bsc
+ * Field 4 = trace sc - asc_f
+ * Field 5 = trace_sc - asc_b                     
+ * 
+ * Because the trace score is summed in the same order as a Viterbi or
+ * Forwards DP calculation, we expect exactly 0 difference for 1,2,4,
+ * but we use a tolerance anyway because we haven't proven this
+ * exact order is architecture independent. Backwards DP summation order, 
+ * however, gives rise to roundoff error.  Because this is a single-pathed 
+ * test, we expect no significant difference between default and exact
+ * logsum calculations.
+ * 
+ * Default:
+ *    Zero difference for vsc, fsc, asc_f.
+ *    trace_sc - bsc   : mean -4e-8 sd 6e-6  range -0.0002 .. 0.0001 => 10x range => 0.001
+ *    trace_sc - asc_b : mean -4e-8 sd 6e-6 
+ * 
+ * Exact logsum:
+ *    Zero difference for vsc, fsc, asc_f.
+ *    trace_sc - bsc   : mean -2e-8 sd 4e-6 range -0.0002 .. 0.0001  => 10x range => 0.001
+ *    trace_sc - asc_b : mean -2e-8 sd 4e-6
  */
 static void
 utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
@@ -858,10 +911,8 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET 
   P7_REFMX   *abd       = p7_refmx_Create(M, 20);
   int         D;
   float       sc, vsc, fsc, bsc, asc_f, asc_b;
-  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float       tolerance = 0.001;
   int         status;
-
-  float       tsc1, tsc2;  // dev only, testing a theory
   
   if (bg  == NULL || vtr == NULL || rxv == NULL ||
       rxf == NULL || rxb == NULL || afu == NULL ||
@@ -876,9 +927,6 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET 
   if ((status = p7_ReferenceASCForward (dsq, L, gm, anch, D, afu, afd, &asc_f)) != eslOK) esl_fatal(failmsg);
   if ((status = p7_ReferenceASCBackward(dsq, L, gm, anch, D, abu, abd, &asc_b)) != eslOK) esl_fatal(failmsg);
 
-  p7_trace_Score         (vtr, dsq, gm, &tsc1);
-  p7_trace_ScoreBackwards(vtr, dsq, gm, &tsc2);
-
   //printf("### Reference Vit:\n"); p7_refmx_Dump(stdout, rxv);
   //printf("### Reference Fwd:\n"); p7_refmx_Dump(stdout, rxf);
   //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
@@ -890,11 +938,11 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET 
 
   if (! diagfp)
     {
-      if (esl_FCompareAbs(sc, vsc,   epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(sc, fsc,   epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(sc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, vsc,   tolerance) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, fsc,   tolerance) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, bsc,   tolerance) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, asc_f, tolerance) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, asc_b, tolerance) != eslOK) esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g %20g %20g %20g\n", sc-vsc, sc-fsc, sc-bsc, sc-asc_f, sc-asc_b);
@@ -924,6 +972,27 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET 
  * 
  * Then:
  *   1. Trace score = ASC Fwd score = ASC Bck score.
+ *   
+ *****************************************************************
+ * May fail stochastically. Analysis: SRE:J13/126.
+ *   ./reference_fwdback_utest --diag singlemulti -N 10000
+ * Field 1 = trace_sc - asc_f
+ * Field 2 = trace_sc - asc_b
+ * 
+ * Trace score is summed in same order as ASC Forward, so we expect
+ * exactly zero difference for (tsc - asc_f); however, because we haven't
+ * proven this is architecture independent, we still use a tolerance.
+ * Backwards is subject to roundoff error accumulation. Because this
+ * is a singlepath test, we expect no significant difference between 
+ * default and logsum calculations.
+ * 
+ * Default: 
+ *   Zero difference for asc_f.
+ *   tsc - asc_b:  mean 6e-8, sd 1.2e-5, range -0.0004 .. 0.0004 => 50x range => 0.002
+ *   
+ * Exact:
+ *   Zero difference for asc_f
+ *   tsc - asc_b: mean 3e-7, sd 1.3e-5, range -0.0004 .. 0.0005 => 50x range => 0.002
  */
 static void
 utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
@@ -942,7 +1011,7 @@ utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *
   P7_REFMX   *abd       = p7_refmx_Create(M, 20);
   int         D;
   float       sc, asc_f, asc_b;
-  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float       tolerance = 0.002;
   int         status;
   
   if (bg  == NULL || afu == NULL || afd == NULL || abu == NULL || abd == NULL) 
@@ -959,8 +1028,8 @@ utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *
 
   if (!diagfp)
     {
-      if (esl_FCompareAbs(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, asc_f, tolerance) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, asc_b, tolerance) != eslOK) esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g\n", sc-asc_f, sc-asc_b);
@@ -994,6 +1063,41 @@ utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *
  *    1. Fwd score = ASC Fwd score = Bck score = ASC Bck score.
  *    2. Viterbi score >= sampled trace score.
  *    3. Fwd/Bck scores >= Viterbi score.
+ *
+ *****************************************************************
+ * May fail stochastically. Analysis: SRE:J13/126
+ *  ./reference_fwdback_utest --diag multisingle -N 10000
+ * Field 1 = fsc - bsc; same as reference_fwdback_utest
+ * Field 2 = fsc - asc_f
+ * Field 3 = bsc - asc_b
+ * Field 4 = vsc - sampled trace score. 
+ * Field 5 = fsc - vsc.                 
+ * 
+ * Because ASC and reference Fwd, Bck are computed in identical orders,
+ * we expect 2,3 to be exactly zero with no roundoff error. We still use
+ * a tolerance though, because I haven't proven this must be
+ * true across all platforms. Field1 is the F-B roundoff error.
+ * Field 4 is usually large, because the sampled trace is suboptimal,
+ * but sometimes the trace is identical to the optimal one (in which 
+ * case we get zero with no roundoff error -- or, yes it's true,
+ * a trace that's "better" than Viterbi, because of numerical roundoff
+ * error -- so we need to use a tolerance.
+ * Field 5 should always be >=0 because this is a multipath test.
+ * Also, since this is a multipath test, default logsums do have 
+ * higher error than exact logsums.
+ *
+ * Default:
+ *   Zero difference for 2,3.
+ *   fsc - bsc: mean -2e-6, s.d. 0.0002 range -0.0008 .. 0.0009 =>  0.002
+ *   vsc - tsc: minimum -1e-6                                   =>  1e-5
+ *   fsc - vsc: minimum 0.04
+ *
+ * Exact:
+ *   Zero difference for 2,3
+ *   fsc - bsc: mean -5e-8 sd 2.4e-6 range -6e-5 .. 6e-5 => 0.001
+ *   vsc - tsc: min -1e-6                                => 1e-5
+ *   fsc - vsc: min 0
+ * 
  */
 static void
 utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
@@ -1015,7 +1119,8 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *
   P7_REFMX   *abd       = p7_refmx_Create(M, 20);
   int         D;
   float       sc, vsc, fsc, bsc, asc_f, asc_b;
-  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float       ftol      = ( p7_logsum_IsSlowExact() ? 0.001 : 0.002 );
+  float       vtol      = 1e-5;
   int         status;
   
   if (bg  == NULL || rxf == NULL || rxb == NULL || afu == NULL ||
@@ -1036,11 +1141,11 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *
 
   if (!diagfp) 
     {
-      if (esl_FCompareAbs(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
-      if (sc  > vsc+epsilon)                             esl_fatal(failmsg);
-      if (vsc > fsc+epsilon)                             esl_fatal(failmsg);
+      if (esl_FCompareAbs(fsc, bsc,   ftol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(fsc, asc_f, ftol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(bsc, asc_b, ftol) != eslOK) esl_fatal(failmsg);
+      if (sc  > vsc+vtol)                             esl_fatal(failmsg);
+      if (vsc > fsc)                                  esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g %20g %20g %20g\n", fsc-bsc, fsc-asc_f, bsc-asc_b, vsc-sc, fsc-vsc);
@@ -1081,6 +1186,29 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *
  *    1. Fwd score = ASC Fwd score = Bck score = ASC Bck score.
  *    2. Viterbi score >= sampled trace score.
  *    3. Fwd/Bck scores >= Viterbi score.
+ *    
+ *****************************************************************
+ * May fail stochastically. Analysis: SRE:J13/126
+ * ./reference_fwdback_utest --diag multipath_local -N 10000
+ * Field 1 = fsc - bsc; same as reference_fwdback_utest
+ * Field 2 = fsc - asc_f
+ * Field 3 = bsc - asc_b
+ * Field 4 = vsc - sampled trace score. 
+ * Field 5 = fsc - vsc.                 
+ *                 
+ * Same issues as the multisingle test; see notes there, above.
+ * 
+ * Default:
+ *  Zero difference for 2,3.
+ *  fsc-bsc : mean 8e-7 sd 0.0002 range -0.0006 .. 0.0007 => 0.002
+ *  vsc-tsc : min -1e-6                                   => 1e-5
+ *  fsc-vsc : min 5e-6
+ *  
+ * Exact:
+ *  Zero difference for 2,3
+ *  fsc-bsc : mean 3e-9 sd 4e-7 range -2e-6 .. 2e-6  => 0.0001
+ *  vsc-tsc : min -1e-6                              => 1e-5
+ *  fsc-vsc : min 3e-6                 
  */
 static void
 utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
@@ -1102,7 +1230,8 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHAB
   P7_REFMX   *abd       = p7_refmx_Create(M, 20);
   int         D;
   float       sc, vsc, fsc, bsc, asc_f, asc_b;
-  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float       ftol      = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.002 );
+  float       vtol      = 1e-5;
   int         status;
   
   if (bg  == NULL || rxf == NULL || rxb == NULL || afu == NULL ||
@@ -1122,11 +1251,11 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHAB
 
   if (!diagfp) 
     {
-      if (esl_FCompareAbs(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
-      if (sc  > vsc+epsilon)                             esl_fatal(failmsg);
-      if (vsc > fsc+epsilon)                             esl_fatal(failmsg);
+      if (esl_FCompareAbs(fsc, bsc,   ftol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(fsc, asc_f, ftol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(bsc, asc_b, ftol) != eslOK) esl_fatal(failmsg);
+      if (sc  > vsc+vtol)                             esl_fatal(failmsg);
+      if (vsc > fsc)                                  esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g %20g %20g %20g\n", fsc-bsc, fsc-asc_f, bsc-asc_b, vsc-sc, fsc-vsc);
@@ -1167,6 +1296,29 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHAB
  *    1. Fwd score = ASC Fwd score = Bck score = ASC Bck score.
  *    2. Viterbi score >= sampled trace score.
  *    3. Fwd/Bck scores >= Viterbi score.
+ *    
+ *****************************************************************
+ * May fail stochastically. Analysis: SRE:J13/126.
+ * ./reference_fwdback_utest --diag multimulti -N 10000
+ * Field 1:  fsc-bsc   Same as reference_fwdback_utest
+ * Field 2 = fsc - asc_f
+ * Field 3 = bsc - asc_b
+ * Field 4 = vsc - sampled trace score. 
+ * Field 5 = fsc - vsc.            
+ * 
+ * Same numerical issues as in multisingle; see comments there.
+ * 
+ * Default:
+ *    Zero difference for 2,3
+ *    fwd-bck: mean -3e-6 sd 0.0002 range -0.001 .. 0.001  => 0.01
+ *    vsc-tsc: min -1e-6                                   => 1e-5
+ *    fsc-vsc: min 0
+ *    
+ * Exact:
+ *    Zero difference for 2,3
+ *    fwd-bck: mean -2e-8 sd 1e-6 range -2e-5 .. 1e-5      => 0.0001
+ *    vsc-tsc: min -2e-6                                   => 1e-5
+ *    fsc-vsc: min 0
  */
 static void
 utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
@@ -1188,7 +1340,8 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
   P7_REFMX   *abd       = p7_refmx_Create(M, 20);
   int         D;
   float       sc, vsc, fsc, bsc, asc_f, asc_b;
-  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float       ftol      = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float       vtol      = 1e-5;
   int         status;
   
   if (bg  == NULL || rxf == NULL || rxb == NULL || afu == NULL ||
@@ -1208,11 +1361,11 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
 
   if (!diagfp) 
     {
-      if (esl_FCompareAbs(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
-      if (sc  > vsc+epsilon)                             esl_fatal(failmsg);
-      if (vsc > fsc+epsilon)                             esl_fatal(failmsg);
+      if (esl_FCompareAbs(fsc, bsc,   ftol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(fsc, asc_f, ftol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(bsc, asc_b, ftol) != eslOK) esl_fatal(failmsg);
+      if (sc  > vsc+vtol)                             esl_fatal(failmsg);
+      if (vsc > fsc)                                  esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g %20g %20g %20g\n", fsc-bsc, fsc-asc_f, bsc-asc_b, vsc-sc, fsc-vsc);

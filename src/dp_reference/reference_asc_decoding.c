@@ -261,6 +261,13 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 	  ppp[p7R_C]  = (d  < D ? 0.0 : expf(fwdp[p7R_C] + bckp[p7R_C] - totsc));
 
 	  
+	  /* Even with forced renormalization, I don't think you can
+	   * do much better than the error inherent in the default
+	   * FLogsum() calculation. For example, the calculation of
+	   * ppp[C] above can give a pp of > 1.0, even if the sum of
+	   * all emitters on the row is denom=1.0, because of FLogsum
+	   * table approximation error in fwdp[C].
+	   */
 	  if (d < D) *(apu->dp[i]) = denom;  // hack: stash denom, which we'll pick up again when we do the next UP matrix.
 	  //#ifndef p7REFERENCE_ASC_DECODING_TESTDRIVE
 	  if (d == D) 
@@ -372,11 +379,11 @@ ascmatrix_compare_std(P7_REFMX *rxd, P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *an
 	    if (k >= anch[d-1].k0) ascval += P7R_MX(apd,i,k,s);   // sentinel k0(0)   = M+1, so no k gets evaluated for DOWN(d-1=0) 
 	    if (k <  anch[d].k0)   ascval += P7R_MX(apu,i,k,s);   // sentinel k0(D+1) = 0,   so no k gets evaluated for UP(d=D+1)
 	    
-	    if (esl_FCompare( ascval, P7R_MX(rxd,i,k,s), epsilon) != eslOK)
+	    if (esl_FCompareAbs( ascval, P7R_MX(rxd,i,k,s), epsilon) != eslOK)
 	      { if (killmenow) abort(); return eslFAIL; }
 	  }
       for (s = 0; s < p7R_NXCELLS; s++)
-	if (esl_FCompare( P7R_XMX(apd,i,s), P7R_XMX(rxd,i,s), epsilon) != eslOK)
+	if (esl_FCompareAbs( P7R_XMX(apd,i,s), P7R_XMX(rxd,i,s), epsilon) != eslOK)
 	  { if (killmenow) abort(); return eslFAIL; }
     }
   return eslOK;
@@ -444,18 +451,18 @@ ascmatrix_compare_asc(P7_REFMX *apu1, P7_REFMX *apd1, P7_REFMX *apu2, P7_REFMX *
       /* DOWN row, if one exists for this i */
       for (k = anch[d-1].k0; k <= M; k++)   // sentinel k0(0) = M+1, so no k gets evaluated at d=1 for nonexistent DOWN(0)
 	for (s = 0; s < p7R_NSCELLS; s++)   //   ... i.e., first leg has only an UP(1) matrix.
-	  if (esl_FCompare( P7R_MX(apd1,i,k,s), P7R_MX(apd2,i,k,s), epsilon) != eslOK)
+	  if (esl_FCompareAbs( P7R_MX(apd1,i,k,s), P7R_MX(apd2,i,k,s), epsilon) != eslOK)
 	    { if (killmenow) abort(); return eslFAIL; }
 
       /* specials exist for all rows. */
       for (s = 0; s < p7R_NXCELLS; s++)
-	if (esl_FCompare( P7R_XMX(apd1,i,s), P7R_XMX(apd2,i,s), epsilon) != eslOK)
+	if (esl_FCompareAbs( P7R_XMX(apd1,i,s), P7R_XMX(apd2,i,s), epsilon) != eslOK)
 	  { if (killmenow) abort(); return eslFAIL; }
 
       /* UP row, if one exists for this i */
       for (k = 1; k < anch[d].k0; k++)   // sentinel k0(D+1) = 0, so no k gets evaluated at d=D+1 for nonexistent UP(D+1)
 	for (s = 0; s < p7R_NSCELLS; s++)
-	  if (esl_FCompare( P7R_MX(apu1,i,k,s), P7R_MX(apu2,i,k,s), epsilon) != eslOK)
+	  if (esl_FCompareAbs( P7R_MX(apu1,i,k,s), P7R_MX(apu2,i,k,s), epsilon) != eslOK)
 	    { if (killmenow) abort(); return eslFAIL; }
     }
   return eslOK;
@@ -642,10 +649,23 @@ ascmatrix_max_over_one(P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *anch, int D)
  * The unit tests samples a random profile/sequence comparison,
  * decodes it with and without overwriting, and verifies that the
  * resulting ASC decoding matrices are valid and exactly identical.
- * (Exactly. There can be no normal stochastic error here.)
+ * 
+ *****************************************************************
+ * May fail stochastically. SRE:J11/128 27-Jun-14
+ *  ./reference_asc_decoding_utest --diag overwrite -N 10000
+ * Field 1: max_over_one
+ * 
+ * Though the main test is for exact equality of decoding matrices
+ * produced in the two alternative call styles, the test also 
+ * calls Validate() on the decoding matrices, and a validate call
+ * checks for values > 1.0. This can happen because of roundoff
+ * and FLogsum() error.
+ * 
+ * Default: mean 2e-5 sd 4e-5 max 0.0004 => 0.01
+ * Exact:   mean 9e-8 sd 1e-7 max 1e-6   => 0.0001
  */
 static void
-utest_overwrite(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+utest_overwrite(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 {
   char        failmsg[] = "reference_asc_decoding overwrite unit test failed";
   ESL_SQ     *sq        = esl_sq_CreateDigital(abc);
@@ -663,7 +683,7 @@ utest_overwrite(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   P7_REFMX   *abd       = p7_refmx_Create(M, 20);
   P7_REFMX   *apu       = p7_refmx_Create(M, 20);
   P7_REFMX   *apd       = p7_refmx_Create(M, 20);
-  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float       tolerance = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
   char        errbuf[eslERRBUFSIZE];
 
   if ( p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(failmsg);
@@ -702,9 +722,14 @@ utest_overwrite(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
   //printf("### with overwrite: ASC Down:\n"); p7_refmx_Dump(stdout, abd);
 
   /* Now both apu/apd and abu/abd should contain valid and equal ASC Decoding matrices */
-  if ( ascmatrix_validate(apu, apd, anch->a, anch->D, epsilon, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
-  if ( ascmatrix_validate(abu, abd, anch->a, anch->D, epsilon, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
-  if ( ascmatrix_compare_asc(apu, apd, abu, abd, anch->a, anch->D, 0.0) != eslOK) esl_fatal(failmsg);  // expect exact match, so epsilon = 0.
+  if (!diagfp) 
+    {
+      if ( ascmatrix_validate(apu, apd, anch->a, anch->D, tolerance, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
+      if ( ascmatrix_validate(abu, abd, anch->a, anch->D, tolerance, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
+      if ( ascmatrix_compare_asc(apu, apd, abu, abd, anch->a, anch->D, 0.0)   != eslOK) esl_fatal(failmsg);  // expect exact match, so tolerance = 0.
+    }
+  else
+    fprintf(diagfp, "%20g\n", ascmatrix_max_over_one(apu, apd, anch->a, anch->D));
 
   p7_anchors_Destroy(anch);
   p7_trace_Destroy(vtr);
@@ -734,6 +759,22 @@ utest_overwrite(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  *    2. Vit trace = generated trace
  *    3. ASC Decoding matrix has 1.0 for all cells in trace
  *    4. ASC Decoding matrix = standard Decoding mx, cell by cell.
+ *    
+ *****************************************************************
+ * May fail stochastically. Analysis: SRE: J13/126.
+ *    ./reference_asc_decoding_utest --diag singlepath -N 10000
+ * 1: max_over_one  (in Validation, how much can a cell's P > 1.0)
+ * 2: trace_maxdiff (in trace_compare, how much can a cell differ)
+ * 3: maxdiff_std   (in compare_std, how much can a cell differ)
+ * 
+ * We expect all of these to be exactly zero. The singlepath test
+ * creates a model that must generate a unique sequence with 
+ * P=1, and that sets all emission/transition probs to 1.0 or 0.0,
+ * which can be exactly represented both in probspace and logspace.
+ *
+ * For tests that duplicate fwdback_utest, see analysis over there.
+ * 
+ * Both default and exact logsum do indeed show all zero difference. 
  */
 static void
 utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
@@ -759,7 +800,8 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
   int         D;
   int         nm, z, which;
   float       sc, vsc, fsc, bsc, asc_f, asc_b;
-  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float       fbtol     = 0.0001;                // floating pt tolerance on fwdback tests
+  float       dectol    = 0.;                    // zero floating pt tolerance (demand exact equality) on decoding tests
   char        errbuf[eslERRBUFSIZE];
 
   /* Sample single-pathed HMM, create uniglocal L=0 profile */
@@ -819,16 +861,16 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
    */
   if (!diagfp)
     {
-      if (esl_FCompare(sc, vsc,   epsilon) != eslOK) esl_fatal(failmsg);  // generated trace score = Viterbi score
-      if (esl_FCompare(sc, fsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Forward score
-      if (esl_FCompare(sc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);  //  ... = Backward score
-      if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Forward score
-      if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);  //  ... = ASC Backward score
-      if (p7_trace_Compare(tr, vtr, 0)     != eslOK) esl_fatal(failmsg);  // generated trace = Viterbi trace
+      if (esl_FCompareAbs(sc, vsc,   fbtol) != eslOK) esl_fatal(failmsg);  // generated trace score = Viterbi score
+      if (esl_FCompareAbs(sc, fsc,   fbtol) != eslOK) esl_fatal(failmsg);  //  ... = Forward score
+      if (esl_FCompareAbs(sc, bsc,   fbtol) != eslOK) esl_fatal(failmsg);  //  ... = Backward score
+      if (esl_FCompareAbs(sc, asc_f, fbtol) != eslOK) esl_fatal(failmsg);  //  ... = ASC Forward score
+      if (esl_FCompareAbs(sc, asc_b, fbtol) != eslOK) esl_fatal(failmsg);  //  ... = ASC Backward score
+      if (p7_trace_Compare(tr, vtr, 0)      != eslOK) esl_fatal(failmsg);  // generated trace = Viterbi trace
 
-      if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
-      if (ascmatrix_trace_compare(tr, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
-      if (ascmatrix_compare_std (rxd, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_validate(apu, apd, anch, D, dectol, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
+      if (ascmatrix_trace_compare(tr, apu, apd, anch, D, dectol) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_compare_std (rxd, apu, apd, anch, D, dectol) != eslOK) esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g %20g\n",
@@ -858,7 +900,7 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
  * The "singlesingle" test (for single path, single domain) uses
  * p7_modelsample_SinglePathedSeq() to sample a contrived profile/seq
  * pair that has only one possible path with probability 1 (that is,
- * P(\pi | x, H) = 1). This must be a glocal single domain
+ * P(\pi | x, H) = 1) for this sequence. This must be a glocal single domain
  * path. Choose any anchor A in that domain. 
  * 
  * Then:
@@ -866,6 +908,31 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
  *   2. Viterbi trace = trace that generated the test sequence. 
  *   3. ASC Decoding matrix has 1.0 for all cells in trace
  *   4. ASC Decoding matrix = standard Decoding mx, cell by cell.
+ *
+ *****************************************************************
+ * May fail stochastically. Analysis: SRE:J13/126 26-Jun-14
+ *  ./reference_asc_decoding_utest --diag singlesingle -N 10000
+ * 1: max_over_one  (in Validation, how much can a cell's P > 1.0)
+ * 2: trace_maxdiff (in trace_compare, how much can a cell differ)
+ * 3: maxdiff_std   (in compare_std, how much can a cell differ)
+ * 
+ * Unlike the singlepath test, now we have a model with various
+ * emission/transition probabilities, subject to roundoff error.
+ * maxdiff_std is exactly zero because order of operations is
+ * identical (I believe), but I haven't proven that that is
+ * platform-independent. 
+ * 
+ * logsum error has no effect in a single path test, so we set
+ * same tolerance for default and exact logsum cases.
+ *
+ * For tests that duplicate fwdback_utest, see analysis over there,
+ * which determined tolerance of 0.001.
+ *
+ * Default:
+ *   max_over_one:  mean 2e-7, sd 7e-7, range up to 2.2e-5  => 0.0001
+ *   trace_maxdiff: mean 5e-8, sd 1e-6, range -3e-5 .. 2e-5 => 0.0001
+ *   maxdiff_std:   zero
+ * Exact is similar.  
  */
 static void
 utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
@@ -891,7 +958,8 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET 
   P7_REFMX   *apd       = p7_refmx_Create(M, 20);
   int         D;
   float       sc, vsc, fsc, bsc, asc_f, asc_b;
-  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float       fbtol      = 0.001;
+  float       dectol     = 0.0001;
   char        errbuf[eslERRBUFSIZE];
 
   if ( p7_modelsample_SinglePathedSeq(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc) != eslOK) esl_fatal(failmsg);
@@ -916,16 +984,16 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET 
 
   if (!diagfp) 
     {
-      if (esl_FCompare(sc, vsc, epsilon)   != eslOK) esl_fatal(failmsg);
-      if (esl_FCompare(sc, fsc, epsilon)   != eslOK) esl_fatal(failmsg);
-      if (esl_FCompare(sc, bsc, epsilon)   != eslOK) esl_fatal(failmsg);
-      if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
-      if (p7_trace_Compare(tr, vtr, 0)     != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, vsc,   fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, fsc,   fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, bsc,   fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, asc_f, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, asc_b, fbtol) != eslOK) esl_fatal(failmsg);
+      if (p7_trace_Compare(tr, vtr, 0)      != eslOK) esl_fatal(failmsg);
 
-      if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
-      if (ascmatrix_trace_compare(tr, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
-      if (ascmatrix_compare_std (rxd, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_validate(apu, apd, anch, D, dectol, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
+      if (ascmatrix_trace_compare(tr, apu, apd, anch, D, dectol) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_compare_std (rxd, apu, apd, anch, D, dectol) != eslOK) esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g %20g\n",
@@ -956,6 +1024,23 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET 
  * Then:
  *   1. Trace score = ASC Fwd score = ASC Bck score.
  *   2. ASC Decoding matrix has 1.0 for all cells in trace
+ *   
+ *****************************************************************
+ * May fail stochastically. Analysis: SRE:J13/126 26-Jun-14
+ *  ./reference_asc_decoding_utest --diag singlemulti -N 10000
+ * Field 1: max_over_one  (cells in Validation)
+ * Field 2: trace_maxdiff (cells in trace_compare)
+ * 
+ * For fb tests redone here, use tolerance from reference_asc_fwdbacK: 0.002.
+ * 
+ * Single pathed test, so default vs. exact logsum has no effect; single tolerance.
+ * 
+ * Default:
+ *    max_over_one: mean 1.5e-6 sd 9e-6 range up to 0.0006   => 0.01
+ *    trace_maxdiff:  mean 1e-7 sd 1e-5 range -0.001..0.0003 => 0.01
+ * Exact is similar.
+ * This seems excessively fat tailed, but I think it's because the test
+ * can generate quite long test sequences on occasion.
  */
 static void
 utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
@@ -976,7 +1061,8 @@ utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *
   P7_REFMX   *apd       = p7_refmx_Create(M, 20);
   int         D;
   float       sc, asc_f, asc_b;
-  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float       fbtol     = 0.002;
+  float       dectol    = 0.01;
   char        errbuf[eslERRBUFSIZE];
   
   if ( p7_modelsample_SinglePathedASC(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc) != eslOK) esl_fatal(failmsg);
@@ -994,11 +1080,11 @@ utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *
 
   if (!diagfp)
     {
-      if (esl_FCompare(sc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompare(sc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, asc_f, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(sc, asc_b, fbtol) != eslOK) esl_fatal(failmsg);
 
-      if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
-      if (ascmatrix_trace_compare(tr, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_validate(apu, apd, anch, D, dectol, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
+      if (ascmatrix_trace_compare(tr, apu, apd, anch, D, dectol) != eslOK) esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g\n",
@@ -1032,6 +1118,23 @@ utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *
  * Then: 
  *    1. Fwd score = ASC Fwd score = Bck score = ASC Bck score.
  *    2. ASC Decoding matrix = standard Decoding mx, cell by cell.
+ *    
+ *****************************************************************
+ * May fail stochastically. Analysis SRE:J13/126 26-Jun-14
+ *  ./reference_asc_decoding_utest --diag multisingle -N 10000
+ * Field 1 = max_over_one (ASC Matrix cells in Validate())
+ * Field 2 = maxdiff_std  (reference decoding cells compared to ASC decoding)
+ * 
+ * Also repeats fwdback tests; analysis in reference_asc_fwdback 
+ * gave fbtol = 0.001 | 0.002.
+ * 
+ * Default:
+ *  max_over_one: mean 1e-5 sd 3e-5 max 0.0003           => 0.01
+ *  maxdiff_std:  mean 8e-9 sd 1e-7 range -1e-7 .. 1e-7  => 1e-5
+ *
+ * Exact:
+ *  max_over_one: mean 4e-8 sd 9e-8 max 1e-6             => 1e-4
+ *  maxdiff_std:  mean 1e-8 sd 1e-7 range -2e-7 .. 3e-7  => 1e-5
  */
 static void
 utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
@@ -1052,7 +1155,9 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *
   P7_REFMX   *apd       = p7_refmx_Create(M, 20);
   int         D;
   float       sc, fsc, bsc, asc_f, asc_b;
-  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float       fbtol     = ( p7_logsum_IsSlowExact() ? 0.001 : 0.002 );
+  float       onetol    = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float       dectol    = 1e-5;
   char        errbuf[eslERRBUFSIZE];
   
   if ( p7_modelsample_AnchoredUni(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc) != eslOK) esl_fatal(failmsg);
@@ -1075,12 +1180,12 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *
 
   if (!diagfp) 
     {
-      if (esl_FCompare(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompare(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompare(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(fsc, bsc,   fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(fsc, asc_f, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(bsc, asc_b, fbtol) != eslOK) esl_fatal(failmsg);
 
-      if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf) != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
-      if (ascmatrix_compare_std(rxd, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_validate(apu, apd, anch, D, onetol, errbuf) != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
+      if (ascmatrix_compare_std(rxd, apu, apd, anch, D, dectol) != eslOK) esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g\n",
@@ -1122,6 +1227,26 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *
  *    3. ASC DP UP/DOWN matrices pass validation.
  *    4. When marginalized UP+DOWN, ASC decoding matrices ==
  *       standard decoding, cell by cell.   
+ *       
+ *****************************************************************
+ * May fail stochastically. SRE:J13/126 26-Jun-14
+ *  ./reference_asc_decoding_utest --diag multipath_local -N 10000
+ * Field 1: max_over_one
+ * Field 2: maxdiff_std
+ * 
+ * For F/B tests, borrows tolerance analysis from reference_asc_fwdback:
+ * 0.0001 | 0.002.
+ *
+ * maxdiff_std gives me zeros empirically, but I don't understand why
+ * it should, so I set a nonzero threshold anyway.
+ *   
+ * Default: 
+ *   max_over_one: mean 3e-5 sd 6e-5 max 0.0004 => 0.01
+ *   maxdiff_std:  all zero (!)                 => 1e-6
+ * 
+ * Exact: 
+ *   max_over_one: mean 6e-8 sd 1e-7 max 2e-6   => 0.0001
+ *   maxdiff_std:  all zero                     
  */
 static void
 utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
@@ -1142,7 +1267,9 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHAB
   P7_REFMX   *apd       = p7_refmx_Create(M, 20);   // ditto
   int         D;
   float       sc, fsc, bsc, asc_f, asc_b;
-  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float       fbtol     = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.002 );
+  float       onetol    = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01  );
+  float       dectol    = 1e-6;
   char        errbuf[eslERRBUFSIZE];
   
   if ( p7_modelsample_AnchoredLocal(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc) != eslOK) esl_fatal(failmsg);
@@ -1161,12 +1288,12 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHAB
 
   if (!diagfp)
     {
-      if (esl_FCompare(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompare(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompare(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(fsc, bsc,   fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(fsc, asc_f, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(bsc, asc_b, fbtol) != eslOK) esl_fatal(failmsg);
 
-      if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf) != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
-      if (ascmatrix_compare_std(rxd, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_validate(apu, apd, anch, D, onetol, errbuf) != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
+      if (ascmatrix_compare_std(rxd, apu, apd, anch, D, dectol) != eslOK) esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g\n",
@@ -1203,6 +1330,21 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHAB
  *    1. Fwd score = Bck score = ASC Fwd score = ASC Bck score
  *    2. ASC Decoding matrices pass validation.
  *    3. Std, ASC decoding matrices are equal cell-by-cell.
+ *    
+ *****************************************************************
+ * May follow stochastically. SRE J13:126 26-Jun-14
+ *  ./reference_asc_decoding_utest --diag multimulti -N 10000
+ * Field 1: max_over_one
+ * Field 2: maxdiff_std
+ * 
+ * For f/b comparisons, fbtol from reference_asc_fwdback: 0.0001 : 0.01
+ *    
+ * Default:
+ *    max_over_one: mean 5e-5 sd 0.0001 max 0.001              => 0.01
+ *    maxdiff_std:  mean -9e-7 sd 0.0001 range -0.001 .. 0.001 => 0.01
+ * Exact:
+ *    max_over_one: mean 3e-7 sd 7e-7 max 2e-4                 => 0.001
+ *    maxdiff_std:  mean 1e-8 sd 1e-6 range -2e-5 .. 2e-5      => 0.001
  */
 static void
 utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
@@ -1223,7 +1365,8 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
   P7_REFMX   *apd       = p7_refmx_Create(M, 20);
   int         D;
   float       sc, fsc, bsc, asc_f, asc_b;
-  float       epsilon   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float       fbtol     = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  float       dectol    = ( p7_logsum_IsSlowExact() ? 0.001  : 0.01 );
   char        errbuf[eslERRBUFSIZE];
   
   if ( p7_modelsample_AnchoredMulti(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc) != eslOK) esl_fatal(failmsg);
@@ -1242,12 +1385,12 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
 
   if (!diagfp)
     {
-      if (esl_FCompare(fsc, bsc,   epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompare(fsc, asc_f, epsilon) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompare(bsc, asc_b, epsilon) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(fsc, bsc,   fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(fsc, asc_f, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompareAbs(bsc, asc_b, fbtol) != eslOK) esl_fatal(failmsg);
 
-      if (ascmatrix_validate(apu, apd, anch, D, epsilon, errbuf) != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
-      if (ascmatrix_compare_std(rxd, apu, apd, anch, D, epsilon) != eslOK) esl_fatal(failmsg);
+      if (ascmatrix_validate(apu, apd, anch, D, dectol, errbuf) != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
+      if (ascmatrix_compare_std(rxd, apu, apd, anch, D, dectol) != eslOK) esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g\n",
@@ -1316,21 +1459,21 @@ main(int argc, char **argv)
     {  // --diag is for studying chance failure rates, error distributions
       char *which = esl_opt_GetString(go, "--diag");
 
-      // overwrite has no stochastic normal error
-      if      (strcmp(which, "singlepath")      == 0) while (N--) utest_singlepath     (stdout, rng, M, abc);
+      if      (strcmp(which, "overwrite")       == 0) while (N--) utest_overwrite      (stdout, rng, M, abc);
+      else if (strcmp(which, "singlepath")      == 0) while (N--) utest_singlepath     (stdout, rng, M, abc);
       else if (strcmp(which, "singlesingle")    == 0) while (N--) utest_singlesingle   (stdout, rng, M, abc);
       else if (strcmp(which, "singlemulti")     == 0) while (N--) utest_singlemulti    (stdout, rng, M, abc);
       else if (strcmp(which, "multisingle")     == 0) while (N--) utest_multisingle    (stdout, rng, M, abc);
       else if (strcmp(which, "multipath_local") == 0) while (N--) utest_multipath_local(stdout, rng, M, abc);
       else if (strcmp(which, "multimulti")      == 0) while (N--) utest_multimulti     (stdout, rng, M, abc);
-      else esl_fatal("--diag takes: singlepath, singlesingle, singlemulti, multisingle, multipath_local, multimulti");
+      else esl_fatal("--diag takes: overwrite, singlepath, singlesingle, singlemulti, multisingle, multipath_local, multimulti");
     }
   else // Running the unit tests is what we usually do:
     {
       fprintf(stderr, "## %s\n", argv[0]);
       fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
-      utest_overwrite      (      rng, M, abc);  
+      utest_overwrite      (NULL, rng, M, abc);  
       utest_singlepath     (NULL, rng, M, abc);
       utest_singlesingle   (NULL, rng, M, abc);
       utest_singlemulti    (NULL, rng, M, abc);
