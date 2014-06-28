@@ -456,10 +456,10 @@ is calculated after taking relative sequence weighting into account,
 and ignoring gap characters corresponding to ends of sequence
 fragments
 (as opposed to internal insertions/deletions).
-Setting this to 1.0 means that every alignment column will be assigned
-as consensus, which may be useful in some cases. Setting it to 0.0 is
-a bad idea, because no columns will be assigned as consensus, and
-you'll get a model of zero length.
+Setting this to 0.0 means that every alignment column will be assigned
+as consensus, which may be useful in some cases. Setting it to 1.0
+means that only columns that include 0 gaps (internal
+insertions/deletions) will be assigned as consensus.
 
 .TP
 .BI --fragthresh " <x>"
