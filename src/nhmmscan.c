@@ -28,12 +28,12 @@ typedef struct {
   ESL_WORK_QUEUE   *queue;
 #endif /*HMMER_THREADS*/
   ESL_SQ           *qsq;
-  P7_BG            *bg;	         /* null model                              */
+  P7_BG            *bg;	         /* null/background model                              */
+  P7_BG            *bg_default;  /* The default null/bg model. This should only be set (non-NULL) if bg has been overriden by --bgfile */
   P7_PIPELINE      *pli;         /* work pipeline                           */
   P7_TOPHITS       *th;          /* top hit results                         */
-//  P7_OPROFILE      *om;          /* optimized query profile                 */
-//  P7_SCOREDATA     *scoredata;   /* hmm-specific data used by nhmmer */
-//  P7_HMM           *hmm;
+  float            *scores;
+  float            *fwd_emissions; /* to hold residue emission probabilities in serial order (gathered from the optimized striped <om> with p7_oprofile_GetFwdEmissionArray() ). */
 } WORKER_INFO;
 
 #define REPOPTS     "-E,-T,--cut_ga,--cut_nc,--cut_tc"
@@ -421,17 +421,20 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   for (i = 0; i < infocnt; ++i)
   {
-    if (bg_manual != NULL)
-      info[i].bg = p7_bg_Clone(bg_manual);
-    else
-      info[i].bg = p7_bg_Create(abc);
-
+    if (bg_manual != NULL) {
+      info[i].bg         = p7_bg_Clone(bg_manual);
+      info[i].bg_default = p7_bg_Create(abc);
+    } else {
+      info[i].bg         = p7_bg_Create(abc);
+      info[i].bg_default = NULL;
+    }
 #ifdef HMMER_THREADS
       info[i].queue = queue;
 #endif
+    ESL_ALLOC(info[i].scores, sizeof(float) * abc->Kp * 16); //allocation of space to store scores that will be used in p7_oprofile_Update(Fwd|Vit|MSV)EmissionScores
+    ESL_ALLOC(info[i].fwd_emissions, sizeof(float) *  abc->Kp * (om->M+1));
+
   }
-
-
 
 #ifdef HMMER_THREADS
   for (i = 0; i < ncpus * 2; ++i)
@@ -477,7 +480,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         info[i].th  = p7_tophits_Create();
         info[i].pli = p7_pipeline_Create(go, 100, 100, TRUE, p7_SCAN_MODELS); /* M_hint = 100, L_hint = 100 are just dummies for now */
         info[i].pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
-
 
         p7_pli_NewSeq(info[i].pli, qsq);
         info[i].qsq = qsq;
@@ -657,6 +659,20 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
       p7_pli_NewModel(info->pli, om, info->bg);
       p7_bg_SetLength(info->bg, info->qsq->n);
       p7_oprofile_ReconfigLength(om, info->qsq->n);
+
+      if (info->bg_default != NULL) {
+        /*bg was overridden by --bgfile; we need to fix all the scores
+         *-First, compute emissions based on bg_default
+         *-Then use those emissions to compute new scores for fwd, vit and msv, based on bg
+         *We need to ReadRest now, so we correctly compute fwd_emissions
+         */
+        p7_oprofile_ReadRest(info->pli->hfp, om);
+        if ((status = p7_pli_NewModelThresholds(info->pli, om)) != eslOK)  return status;
+        p7_oprofile_GetFwdEmissionArray(om, info->bg_default, info->fwd_emissions);
+        p7_oprofile_UpdateFwdEmissionScores(om, info->bg, info->fwd_emissions, info->scores);
+        p7_oprofile_UpdateVitEmissionScores(om, info->bg, info->fwd_emissions, info->scores);
+        p7_oprofile_UpdateMSVEmissionScores(om, info->bg, info->fwd_emissions, info->scores);
+      }
 
       scoredata = p7_hmm_ScoreDataCreate(om, FALSE);
 

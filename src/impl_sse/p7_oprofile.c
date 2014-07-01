@@ -29,6 +29,11 @@
 #include "hmmer.h"
 #include "impl_sse.h"
 
+static uint8_t unbiased_byteify(P7_OPROFILE *om, float sc);
+static uint8_t biased_byteify(P7_OPROFILE *om, float sc);
+static int16_t wordify(P7_OPROFILE *om, float sc);
+
+
 /*****************************************************************
  * 1. The P7_OPROFILE structure: a score profile.
  *****************************************************************/
@@ -413,25 +418,26 @@ p7_oprofile_Clone(const P7_OPROFILE *om1)
   return NULL;
 }
 
-/*
-   *
-   *
-   */
-
 
 /* Function:  p7_oprofile_UpdateFwdEmissionScores()
- * Synopsis:  Update om match emissions to account for new bg, using
- *            preallocated sc_tmp[].
- *            This is re-ordering of the loops used, for example in
- *            fb_conversion, done with the aim of reducing the
- *            required size of sc_arr. Depends on precomputed values
- *            in fwd_emissions array.
+ * Synopsis:  Update the Forward/Backward part of the optimized profile
+ *            match emissions to account for new background distribution.
  *
- * Purpose:   Change scores based on updated background model
+ * Purpose:   This implementation re-orders the loops used to access/modify
+ *            the rfv array relative to how it's accessed for example in
+ *            fb_conversion(), to minimize the required size of sc_arr.
  *
+ * Args:      om              - optimized profile to be updated.
+ *            bg              - the new bg distribution
+ *            fwd_emissions   - precomputed Fwd (float) residue emission
+ *                              probabilities in serial order (gathered from
+ *                              the optimized striped <om> with
+ *                              p7_oprofile_GetFwdEmissionArray() ).
+ *            sc_arr            Preallocated array of at least Kp*4 floats
  */
 int
-p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr)
+p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions,
+                               float *sc_arr)
 {
   int     M   = om->M;    /* length of the query                                          */
   int     k, q, x, z;
@@ -471,8 +477,164 @@ p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emiss
 }
 
 
+/* Function:  p7_oprofile_UpdateVitEmissionScores()
+ * Synopsis:  Update the Viterbi part of the optimized profile match
+ *            emissions to account for new background distribution.
+ *.
+ * Purpose:   This implementation re-orders the loops used to access/modify
+ *            the rmv array relative to how it's accessed for example in
+ *            vf_conversion(), to minimize the required size of sc_arr.
+ *
+ * Args:      om              - optimized profile to be updated.
+ *            bg              - the new bg distribution
+ *            fwd_emissions   - precomputed Fwd (float) residue emission
+ *                              probabilities in serial order (gathered from
+ *                              the optimized striped <om> with
+ *                              p7_oprofile_GetFwdEmissionArray() ).
+ *            sc_arr            Preallocated array of at least Kp*8 floats
+ */
+int
+p7_oprofile_UpdateVitEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr)
+{
+  int     M   = om->M;    /* length of the query                                          */
+  int     k, q, x, z;
+  int     nq  = p7O_NQW(M);     /* segment length; total # of striped vectors needed            */
+  int     K   = om->abc->K;
+  int     Kp  = om->abc->Kp;
+  int     idx;
+  union   { __m128i v; int16_t i[8]; } tmp; /* used to align and load simd minivectors            */
+
+  for (k = 1, q = 0; q < nq; q++, k++) {
+
+    //First compute the core characters of the alphabet
+    for (x = 0; x < K; x++) {
+      for (z = 0; z < 8; z++) {
+        idx = z*Kp + x;
+        if (k+ z*nq <= M)  {
+          sc_arr[idx] = (om->mm && om->mm[(k+z*nq)]=='m') ? 0 : log( (double)(fwd_emissions[Kp * (k+z*nq) + x])/bg->f[x]);
+          tmp.i[z]    = wordify(om, sc_arr[idx]);
+        }
+        else
+        {
+          sc_arr[idx] =  -eslINFINITY;
+          tmp.i[z]    =  -32768;
+        }
+
+      }
+      om->rwv[x][q] = tmp.v;
+
+    }
+
+    // Then compute corresponding scores for ambiguity codes.
+    for (z = 0; z < 8; z++)
+      esl_abc_FExpectScVec(om->abc, sc_arr+(z*Kp), bg->f);
+
+    //finish off the interleaved values
+    for (x = K; x < Kp; x++) {
+      for (z = 0; z < 8; z++) {
+        idx = z*Kp + x;
+        if (x==K || x>Kp-3 || sc_arr[idx] == -eslINFINITY)
+          tmp.i[z]  =  -32768;
+        else
+          tmp.i[z]  = wordify(om, sc_arr[idx]);
+      }
+      om->rwv[x][q] = tmp.v;
+    }
+  }
+
+  return eslOK;
+}
 
 
+
+/* Function:  p7_oprofile_UpdateMSVEmissionScores()
+ * Synopsis:  Update the MSV part of the optimized profile match
+ *            emissions to account for new background distribution.
+ *.
+ * Purpose:   This implementation re-orders the loops used to access/modify
+ *            the rbv array relative to how it's accessed for example in
+ *            mf_conversion(), to minimize the required size of sc_arr.
+ *
+ * Args:      om              - optimized profile to be updated.
+ *            bg              - the new bg distribution
+ *            fwd_emissions   - precomputed Fwd (float) residue emission
+ *                              probabilities in serial order (gathered from
+ *                              the optimized striped <om> with
+ *                              p7_oprofile_GetFwdEmissionArray() ).
+ *            sc_arr            Preallocated array of at least Kp*16 floats
+ */
+int
+p7_oprofile_UpdateMSVEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr)
+{
+  int     M   = om->M;    /* length of the query                                          */
+  int     k, q, x, z;
+  int     nq  = p7O_NQB(M);     /* segment length; total # of striped vectors needed            */
+  int     K   = om->abc->K;
+  int     Kp  = om->abc->Kp;
+  int     idx;
+  float   max = 0.0;    /* maximum residue score: used for unsigned emission score bias */
+  union   { __m128i v; uint8_t i[16]; } tmp; /* used to align and load simd minivectors           */
+
+
+  /* First we determine the basis for the limited-precision MSVFilter scoring system.
+   * Default: 1/3 bit units, base offset 190:  range 0..255 => -190..65 => -63.3..21.7 bits
+   * See J2/66, J4/138 for analysis.
+   * This depends on having computed scores. I do this in a first pass, to get the max
+   * score ... then re-compute those scores so they can be converted to 8bit scores
+   */
+  for (k = 1, q = 0; q < nq; q++, k++) {
+    for (x = 0; x < K; x++) {
+      for (z = 0; z < 16; z++) {
+        idx = z*Kp + x;
+        if (k+ z*nq <= M && !(om->mm && om->mm[(k+z*nq)]=='m'))
+          max = ESL_MAX(max, log( (double)(fwd_emissions[Kp * (k+z*nq) + x])/bg->f[x]));
+      }
+    }
+  }
+  om->scale_b = 3.0 / eslCONST_LOG2;                    /* scores in units of third-bits */
+  om->base_b  = 190;
+  om->bias_b  = unbiased_byteify(om, -1.0 * max);
+
+  for (k = 1, q = 0; q < nq; q++, k++) {
+
+    //First compute the core characters of the alphabet
+    for (x = 0; x < K; x++) {
+      for (z = 0; z < 16; z++) {
+        idx = z*Kp + x;
+        if (k+ z*nq <= M)  {
+          sc_arr[idx] = (om->mm && om->mm[(k+z*nq)]=='m') ? 0 : log( (double)(fwd_emissions[Kp * (k+z*nq) + x])/bg->f[x]);
+          tmp.i[z]    = biased_byteify(om, sc_arr[idx]);
+        }
+        else
+        {
+          sc_arr[idx] =  -eslINFINITY;
+          tmp.i[z]    =  255;
+        }
+
+      }
+      om->rbv[x][q] = tmp.v;
+
+    }
+
+    // Then compute corresponding scores for ambiguity codes.
+    for (z = 0; z < 16; z++)
+      esl_abc_FExpectScVec(om->abc, sc_arr+(z*Kp), bg->f);
+
+    //finish off the interleaved values
+    for (x = K; x < Kp; x++) {
+      for (z = 0; z < 16; z++) {
+        idx = z*Kp + x;
+        if (x==K || x>Kp-3 || sc_arr[idx] == -eslINFINITY)
+          tmp.i[z]  =  255;
+        else
+          tmp.i[z]  = biased_byteify(om, sc_arr[idx]);
+      }
+      om->rbv[x][q] = tmp.v;
+    }
+  }
+
+  return eslOK;
+}
 
 
 /*----------------- end, P7_OPROFILE structure ------------------*/
@@ -622,11 +784,13 @@ mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 
   /* striped match costs: start at k=1.  */
   for (x = 0; x < gm->abc->Kp; x++)
+  {
     for (q = 0, k = 1; q < nq; q++, k++)
-      {
-	for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_byteify(om, p7P_MSC(gm, k+z*nq, x)) : 255);
-	om->rbv[x][q]   = tmp.v;	
-      }
+    {
+      for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_byteify(om, p7P_MSC(gm, k+z*nq, x)) : 255);
+      om->rbv[x][q]   = tmp.v;
+    }
+  }
 
   /* transition costs */
   om->tbm_b = unbiased_byteify(om, logf(2.0f / ((float) gm->M * (float) (gm->M+1)))); /* constant B->Mk penalty        */

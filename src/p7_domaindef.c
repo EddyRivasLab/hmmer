@@ -706,11 +706,11 @@ region_trace_ensemble(P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *
  *             If sq == NULL: return <bg> and <om> to original state.
  *
  *             Only used in the longtarget (nhmmer) case. In-place
- *             modification is done to avoid making copies. Doing this
- *             requires that (a) each thread has its own independent copy
- *             of <bg> and <om>, and (b) those are returned to their
- *             original state before being used outside the function
- *             using the modified structures.
+ *             modification is done to avoid rampant memory allocation.
+ *             Doing this requires that (a) each thread has its own
+ *             independent copy of <bg> and <om>, and (b) those are
+ *             returned to their original state before being used
+ *             outside the function using the modified structures.
  *
  *             The pre-allocated array <sc_tmp> must be passed, for use
  *             in p7_oprofile_UpdateFwdEmissionScores().
