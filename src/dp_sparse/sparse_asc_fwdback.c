@@ -375,6 +375,11 @@ utest_compare_reference(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int
   P7_HMM        *hmm   = NULL;
   P7_PROFILE    *gm    = p7_profile_Create(M, abc);
   P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L);
+  P7_ANCHORS    *anch  = p7_anchors_Create();
+  P7_REFMX      *afu   = p7_refmx_Create(100,100);
+  P7_REFMX      *afd   = p7_refmx_Create(100,100);
+  P7_SPARSEMX   *asf   = p7_sparsemx_Create(NULL);
+  float          sc1, sc2;
   int            idx;
 
   /* Sample a profile. Config as usual, multihit dual-mode local/glocal. */
@@ -396,13 +401,28 @@ utest_compare_reference(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int
       if ( p7_sparsemask_AddAll(sm)           != eslOK) esl_fatal(msg);
 
       /* Use generating trace to create a plausible anchor set */
+      if ( p7_anchors_SampleFromTrace(rng, gtr, anch) != eslOK) esl_fatal(msg);
 
+      /* reference ASC forward calculation */
+      if ( p7_ReferenceASCForward(sq->dsq, sq->n, gm, anch->a, anch->D, afu, afd, &sc1) != eslOK) esl_fatal(msg);
       
+      /* sparse ASC forward calculation */
+      if ( p7_sparse_asc_Forward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &sc2)   != eslOK) esl_fatal(msg);
+      
+
+
       p7_sparsemask_Reuse(sm);
+      p7_anchors_Reuse(anch);
       p7_trace_Reuse(gtr);
+      p7_refmx_Reuse(afu);
+      p7_refmx_Reuse(afd);
+      p7_sparsemx_Reuse(asf);
       esl_sq_Reuse(sq);
     }
 
+  p7_refmx_Destroy(afu);
+  p7_refmx_Destroy(afd);
+  p7_anchors_Destroy(anch);
   p7_sparsemask_Destroy(sm);
   p7_profile_Destroy(gm);
   p7_hmm_Destroy(hmm);

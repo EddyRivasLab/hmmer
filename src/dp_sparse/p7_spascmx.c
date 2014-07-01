@@ -1,5 +1,64 @@
+/* The p7_spascmx module does not provide an independent data
+ * structure, but rather a set of routines for using P7_SPARSEMX and
+ * P7_SPARSEMASK for sparse anchor set contrained DP calculations.
+ * 
+ * To be included in a sparse ASC matrix, a main supercell i,k must
+ * satisfy all of the following three conditions:
+ * 
+ * 1. It's in the sparse mask. 
+ * 2. It's in an ASC UP or DOWN sector.
+ * 3. It is "connected to" its anchor.
+ * 
+ * In more detail:
+ *    
+ * 1. Row i is in the sparse mask segment g if  seg[g].ia <= i <= seg[g].ib;
+ *    Cell (i,k) is in the mask if for some z,  sm->k[i][z] == k
+ *    
+ * 2. Suppose d is the index of the anchor on or after i:
+ *       d = argmin_d anch[d].i0 >= i
+ *    Then (i,k) is in UP(d) if k < anch[d].k0;
+ *    and (i,k) is in DOWN(d-1) if k >= anch[d-1].k0
+ *    (It is possible to be in both UP and DOWN.)
+ *    
+ * 3. In principle, we only need to calculate (i,k,s) cell if
+ *    there is a valid DP path that connects it to "its anchor":
+ *    where "its anchor" means anch[d].i0,k0 for a cell in UP(d)
+ *    (the anchor down and right from i,k), or anch[d-1].i0,k0 
+ *    for a cell in DOWN(d-1) (anchor up/left from i,k). However,
+ *    calculating whether an individual i,k,s cell is connected
+ *    to its anchor appears to require a DP calculation all of its
+ *    own, so we don't do that.
+ *    
+ *    Instead, we use a less stringent criterion for "connected to its
+ *    anchor", based only on whether rows i,i0 are connected, rather
+ *    than a detailed path through cells. For cell (i,k),
+ *    row i and its anchor i0 must be in the same segment g:
+ *          seg[g].ia <= (i, i0) <= seg[g].ib
+ *          
+ * Another way to think about why we have the 3rd criterion for
+ * connectedness, instead of just taking the intersection of the
+ * sparse mask and the ASC UP/DOWN sectors: Consider a segment that
+ * contains 0 anchors. Here we don't have to do anything (not even
+ * storing specials), because no path through any cells in this
+ * segment can pass thru an anchor. Consider a segment that contains 1
+ * anchor. Now we'll just have an UP and a DOWN sector, with no rows
+ * that have both UP and DOWN cells. The only time we can have a row
+ * with both UP and DOWN cells in it is when there's 2 or more anchors
+ * in the same sparse segment.
+ * 
+ *          
+ * For a simple example of traversing a sparse ASC matrix, see
+ * p7_spascmx_MinSizeof().
+ * 
+ * 
+ * Contents:
+ *    1. Using P7_SPARSEMX for ASC calculations.
+ * 
+ */
+
 #include "p7_config.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "easel.h"
@@ -9,11 +68,37 @@
 #include "dp_sparse/p7_spascmx.h"
 
 
+/*****************************************************************
+ * 1. Using P7_SPARSEMX for ASC calculations
+ ***************************************************************** 
+
+
+/* Function:  p7_spascmx_Reinit()
+ * Synopsis:  Reinitialize, reallocate sparse ASC matrix for new DP problem.
+ *
+ * Purpose:   Reinitialize and, if necessary, reallocate an existing sparse
+ *            matrix <asx> for a new ASC DP calculation that will be
+ *            constrained both by the sparse mask <sm> and the 
+ *            anchor array <anch>.
+ *            
+ *            <asx> keeps an internal pointer to <sm>, so the caller
+ *            must not modify <sm> while <asx> remains in use.
+ *
+ * Args:      asx   : sparse ASC matrix to reinitialize
+ *            sm    : sparse mask that will constrain the new ASC DP calculation
+ *            anch  : anchor array (1..D, with sentinels) that constrains new ASC DP calc
+ *            D     : number of domains defined by anchors in <anch>
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation error. Now <asx> is in an undefined state,
+ *            and can only be <_Destroy>'ed.
+ */
 int
-p7_spascmx_Reinit(P7_SPARSEMX *asx, const P7_SPARSEMASK *sm, const P7_COORD2 *anch, int D)
+p7_spascmx_Reinit(P7_SPARSEMX *asx, const P7_SPARSEMASK *sm, const P7_ANCHOR *anch, int D)
 {
-  int64_t dalloc_req;
-  int     xalloc_req;
+  int64_t dalloc_req;    // denominated in i,k supercells, each w/ p7_NSCELLS; number of i,k main supercells stored by a sparse ASC DP calculation
+  int     xalloc_req;    // denominated in i supercells, each w/ p7_NXCELLS:   number of rows that have specials stored
   int     status;
 
   p7_spascmx_MinSizeof(sm, anch, D, &dalloc_req, &xalloc_req);
@@ -27,7 +112,7 @@ p7_spascmx_Reinit(P7_SPARSEMX *asx, const P7_SPARSEMASK *sm, const P7_COORD2 *an
     asx->xalloc = xalloc_req;
   }
   asx->sm   = sm;
-  asx->type = p7S_UNSET;
+  asx->type = p7S_UNSET;   // DP routines themselves set this.
   return eslOK;
   
  ERROR: 
@@ -35,62 +120,78 @@ p7_spascmx_Reinit(P7_SPARSEMX *asx, const P7_SPARSEMASK *sm, const P7_COORD2 *an
 }
 
 
-
+/* Function:  p7_spascmx_MinSizeof()
+ * Synopsis:  Calculate minimum allocation size needed for sparse ASC DP calculation.
+ *
+ * Purpose:   For a sparse ASC DP calculation constrained by sparse mask
+ *            <sm> and anchor array <anch> for <1..D> domains,
+ *            calculate minimum required allocation size. Return the
+ *            total size in bytes. You might use this for collecting
+ *            statistics on how much memory is required by sparse ASC
+ *            DP calculations.
+ *            
+ *            Optionally, return in <opt_dalloc> the number of (i,k)
+ *            main supercells that need to be stored, and in
+ *            <opt_xalloc> the number of i rows for which specials
+ *            need to be stored. <p7_spascmx_Reinit()> uses these
+ *            numbers when it reallocates a matrix for a new DP problem.
+ *            
+ *            This routine also makes a good example of how to
+ *            traverse a sparse ASC matrix.
+ *
+ * Args:      sm         : sparse mask that constrains the DP calc
+ *            anch       : anchor set array 1..D (with sentinels 0,D+1) 
+ *            D          : number of domains/anchors in <anch>
+ *            opt_dalloc : optRETURN: number of main i,k supercells that need to be stored
+ *            opt_xalloc : optRETURN: number of rows for which specials need to be stored
+ *
+ * Returns:   Minimum allocation size required for the complete <P7_SPARSEMX>
+ *            structure, in bytes.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
 size_t
 p7_spascmx_MinSizeof(const P7_SPARSEMASK *sm, const P7_COORD2 *anch, int D, int64_t *opt_dalloc, int *opt_xalloc)
 {
   size_t  n       = sizeof(P7_SPARSEMX);
   int     g       = 1;		// index of next or current segment. When we enter it, and while we're in it, in_seg = TRUE.
   int     in_seg  = FALSE;      //   ... this bumps to TRUE when we see ia(g), first row of segment; to FALSE on ib(g), last row.
-  int     d       = 0;          // how many domain anchors we've reached so far. Row i may be in sector UP(d), DOWN(d-1).
-  int     in_down = FALSE;      //   ... this bumps to TRUE when i reaches an anchor; back to FALSE when we end a segment. 
+  int     d       = 1;          // index of next anchor we will reach; thus a current cell may be in UP(d) or DOWN(d-1) sector.
+  int     ndown   = 0;          //   ... this bumps to 1 when i reaches an anchor, then counts rows in the DOWN sector, then goes to 0 when we leave seg g. Using counter allows knowing when we're on top DOWN row.
   int64_t dalloc  = 0;          // number of supercells in main DP matrix
   int     xalloc  = 0;          // number of special supercells 
   int     i,z;
-  
-  /* A tad more exegesis...  You might think we're just going to take
-   * the intersection of the sparse mask and the UP/DOWN sectors of
-   * the ASC matrix. But there's an additional trick. We only need to
-   * evaluate UP sector d's rows i when they're in the same segment as
-   * the anchor(d); likewise, for DOWN sector d's rows i. 
-   * 
-   * For a segment that contains 0 anchors, we don't have to do
-   * anything, not even storing specials. For a segment that contains
-   * 1 anchor, we'll just have an UP and a DOWN sector, with no rows
-   * that have both UP and DOWN segments. The only time we have
-   * a row with both UP and DOWN cells in it is when there's 2 or
-   * more anchors in the same sparse segment.
-   */
 
   for (i = 0; i <= sm->L; i++)
     {
-      if      (d < D && i == anch[d].n1) { in_down = TRUE;  d++; }   // when i reaches next anchor; bump d to next domain index, and DOWN sector is active...
-      else if (sm->n[i] == 0)            { in_down = FALSE;      }   //  ... until when we reach end of segment, when DOWN becomes inactive again.
+      if      (i == anch[d].i0)     { ndown = 1;  d++;     }    // when i reaches next anchor; bump d to next domain index, and DOWN sector is active...
+      else if (sm->n[i] == 0)       { ndown = 0;           }    //  ... until when we reach end of segment, when DOWN becomes inactive again.
+      else                          { ndown++;             }    // counting ndown lets us easily test if we're on the special top row. Not used in this routine; here for pedagogy, since this is a traversal example
 
-      if      (i >  sm->seg[g].ib)  { in_seg = FALSE; g++; }         // g bumps, to start expecting to see start of segment <g> next.
-      else if (i == sm->seg[g].ia)  { in_seg = TRUE; }               // g might be S+1, but this is safe because of sentinel seg[S+1].ia=ib=L+2      
+      if      (i >  sm->seg[g].ib)  { in_seg = FALSE; g++; }    // g bumps, to start expecting to see start of segment <g> next.
+      else if (i == sm->seg[g].ia)  { in_seg = TRUE;       }    // g might be S+1, but this is safe because of sentinel seg[S+1].ia=ib=L+2      
 
-      if (in_down)                                                   // if i is in a DOWN sector:
+      if (in_down)                                              // if i is in a DOWN sector:
 	{
 	  for (z  = 0; z < sm->n[i]; z++)
-	    if (sm->k[i][z] >= anch[d-1].n2) break;                  // d-1 is safe here; you can't be in_down with d=0.
-	  dalloc += (sm->n[i] - z);                                  // z is now on first cell in DOWN row; remainder of line is valid
+	    if (sm->k[i][z] >= anch[d-1].k0) break;             // d-1 is safe here; you can't be in_down with d=0.
+	  dalloc += (sm->n[i] - z);                             // z is now on first cell in DOWN row; remainder of line is valid
 	}
 
-      if ( (i >= sm->seg[g].ia-1 && d < D && anch[d].n1 <= sm->seg[g].ib) ||  // if we need to store specials for row i because of UP xB...
+      if ( (i >= sm->seg[g].ia-1 && anch[d].i0 <= sm->seg[g].ib) ||  // if we need to store specials for row i because of UP xB...
 	   (in_down))                                                //   .. or because of DOWN xE ...
 	xalloc++;
       
-      if (in_seg && d < D && anch[d].n1 <= sm->seg[g].ib)            // if i is in an UP sector:
+      if (in_seg && anch[d].i0 <= sm->seg[g].ib)               // if i is in an UP sector:
 	{
 	  for (z = 0; z < sm->n[i]; z++)
-	    if (sm->k[i][z] >= anch[d].n2) break;   	            
-	  dalloc += z;                                               // z is now +1 past the last sparse cell on the UP row
+	    if (sm->k[i][z] >= anch[d].k0) break;   	       
+	  dalloc += z;                                        // z is now +1 past the last sparse cell on the UP row
 	}
     }
 
-  n      += dalloc * sizeof(float) * p7S_NSCELLS;
-  n      += xalloc * sizeof(float) * p7S_NXCELLS;
+  n += dalloc * sizeof(float) * p7S_NSCELLS;
+  n += xalloc * sizeof(float) * p7S_NXCELLS;
   if (opt_dalloc) *opt_dalloc  = dalloc;
   if (opt_xalloc) *opt_xalloc  = xalloc;
   return n;
@@ -284,6 +385,39 @@ p7_spascmx_Dump(FILE *fp, const P7_SPARSEMX *asx, const P7_COORD2 *anch, int D)
     }
 
   return eslOK;
+}
+
+
+int
+p7_spascmx_CompareReference(const P7_SPARSEMX *sx, const P7_REFMX *rxu, const P7_REFMX *rxd, float tol)
+{
+  const P7_SPARSEMASK *sm = sx->sm;
+  int i;                              // index over rows in DP matrices, 0.1..L
+  int g      = 1;                     // idx of next or current segment, 1..S, with sentinels. When we enter it, & while we're in it, in_seg = TRUE
+  int in_seg = FALSE;                 //  ... => TRUE when starting ia(g), 1st row of segment; => FALSE when we pass ib(g).
+  int d      = 1;                     // idx of next domain anchor we will see. Row i may be in sector UP(d), DOWN(d-1). 
+  int ndown  = 0;                     // row # of DOWN sector, 1..; becomes 1 when i reaches anchor.
+  int z;                              // index over sparse cell list for a row
+
+  for (i = 0; i <= sm->L; i++)
+    {
+      if      (i == anch[d].n1)    { ndown = 1; d++;      }
+      else if (sm->n[i] == 0)      { ndown = 0;           }
+      else if (ndown)              { ndown++;             }
+
+      if      (i > sm->seg[g].ib)  { in_seg = FALSE; g++; }
+      else if (i == sm->seg[g].ia) { in_seg = TRUE;       }
+
+      if (in_down)
+	{
+	  for (z = 0; z < sm->n[i]; z++)              // Skip ahead in sparse cell list to first z in DOWN sector (anch[d-1].k0).
+	    if (sm->k[i][z] >= anch[d-1].n2) break;
+
+	}
+
+
+
+
 }
 
 

@@ -687,7 +687,7 @@ p7_sparsemx_Create(P7_SPARSEMASK *sm)
 
 
 /* Function:  p7_sparsemx_Reinit()
- * Synopsis:  Reinitialize a sparse DP matrix.
+ * Synopsis:  Reinitialize, reallocate sparse DP matrix for new calculation.
  *
  * Purpose:   Reinitialize an existing sparse matrix <sx> to use the
  *            sparse mask <sm>. Equivalent to a call to
