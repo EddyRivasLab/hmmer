@@ -42,14 +42,14 @@
  * Xref:      
  */
 int
-p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_COORD2 *anch, int D, 
+p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_ANCHOR *anch, int D, 
 		      const P7_SPARSEMASK *sm, P7_SPARSEMX *asf, float *opt_sc)
 {
   float const *tsc = gm->tsc;	 // sets up TSC() macro, access to profile's transitions      
   float const *rsc = NULL;	 // will be set up for MSC(), ISC() macros for residue scores for each row i
   int    g         = 1;	         // index of next or current segment. When we enter it, and while we're in it, in_seg = TRUE. s=1..S, with sentinels.
   int    in_seg    = FALSE;      //   ... this bumps to TRUE when we see ia(g), first row of segment; to FALSE on ib(g), last row.
-  int    d         = 0;          // how many domain anchors we've reached so far. Row i may be in sector UP(d), DOWN(d-1).
+  int    d         = 1;          // idx of next domain anchor we reach. Row i may be in sector UP(d), DOWN(d-1).
   int    ndown     = 0;          //   ... this bumps to 1 when i reaches an anchor; row # of DOWN sector; back to 0 at seg end
   float *dpc       = asf->dp;    // all indexing is relative! This ptr walks through the sparse ASC matrix main cells.
   float *xc        = asf->xmx;   //   ... and this one, through the specials.
@@ -76,9 +76,9 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
   for (i = 0; i <= L; i++)
     {
       /* Mechanics of traversing a sparse ASC matrix, row by row */
-      if      (d < D && i == anch[d].n1) { ndown = 1; d++; }  // when i reaches next anchor; bump d to next domain index, and DOWN sector is active...
-      else if (sm->n[i] == 0)            { ndown = 0;      }  //  ... until when we reach end of segment, when DOWN becomes inactive again.
-      else if (ndown)                    { ndown++;        }  // counting ndown lets us determine when we're in 1st, 2nd row; useful for boundary conditions on UP.
+      if      (i == anch[d].i0) { ndown = 1; d++; }  // when i reaches next anchor; bump d to next domain index, and DOWN sector is active...
+      else if (sm->n[i] == 0)   { ndown = 0;      }  //  ... until when we reach end of segment, when DOWN becomes inactive again.
+      else if (ndown)           { ndown++;        }  // counting ndown lets us determine when we're in 1st, 2nd row; useful for boundary conditions on UP.
 
       if      (i >  sm->seg[g].ib)  { in_seg  = FALSE; g++; }  // g bumps, to start expecting to see start of segment <g> next.
       else if (i == sm->seg[g].ia)  { in_seg  = TRUE;       }  // g might be S+1, but this is safe because of sentinel seg[S+1].ia=ib=L+2      
@@ -88,14 +88,14 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
       /*****************************************************************
        * Computing row i when it is in a DOWN sector
        *****************************************************************/
-      if (ndown == 1)                                    // topmost row of a DOWN sector is a special case for initialization.
+      if (ndown == 1)                                // topmost row of a DOWN sector is a special case for initialization.
 	{
-	  rsc       = gm->rsc[dsq[i]];	                   // now MSC(k), ISC(k) residue score macros work 
-	  dpp       = last_up;                             // yes, UP: this initialization of i0,k0 in DOWN is the connecting thread from UP to DOWN.
+	  rsc       = gm->rsc[dsq[i]];	             // now MSC(k), ISC(k) residue score macros work 
+	  dpp       = last_up;                       // yes, UP: this initialization of i0,k0 in DOWN is the connecting thread from UP to DOWN.
 	  last_down = dpc;
 	  y = z     = 0;
 
-	  while ( sm->k[i][z]   <  anch[d-1].n2) z++;                                  // skip z to the anchor cell for row i. (Which MUST exist; we don't even need to check z<n[i])
+	  while ( sm->k[i][z] < anch[d-1].k0) z++;   // skip z to the anchor cell for row i. (Which MUST exist; we don't even need to check z<n[i])
 	  k = sm->k[i][z];
 
 	  mlc = xL + TSC(p7P_LM, k-1);
@@ -149,21 +149,21 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
 
       else if (ndown)                                             // Main recursion for DOWN rows. 
 	{
-	  rsc = gm->rsc[dsq[i]];	                            // now MSC(k), ISC(k) residue score macros work 
+	  rsc = gm->rsc[dsq[i]];	                          // now MSC(k), ISC(k) residue score macros work 
 	  y = z = 0; 
 	  dlc = dgc = -eslINFINITY;
 
 	  dpp        = last_down;
 	  last_down  = dpc;
 
-	  while (z < sm->n[i] && sm->k[i][z] < anch[d-1].n2) z++;   // skip sparse cells that aren't in DOWN sector (which is k0..M) 
+	  while (z < sm->n[i] && sm->k[i][z] < anch[d-1].k0) z++;   // skip sparse cells that aren't in DOWN sector (which is k0..M) 
 	  for (; z < sm->n[i]; z++)                                 // then calculate the rest of the row.
-	    {                                                       //   note: d-1 is safe, because ndown can only be TRUE for d>=1
+	    {                                  
 	      k = sm->k[i][z];  // for notational convenience
 
 	      /* Try to find cell i-1,k-1; then compute M(i,k) from it */
 	      mlc = mgc = -eslINFINITY;
-	      while (y < sm->n[i-1] && sm->k[i-1][y] < anch[d-1].n2) y++;                           // skip cells on prev row that aren't in DOWN at all
+	      while (y < sm->n[i-1] && sm->k[i-1][y] < anch[d-1].k0) y++;                           // skip cells on prev row that aren't in DOWN at all
 	      while (y < sm->n[i-1] && sm->k[i-1][y] < k-1)        { y++; dpp += p7S_NSCELLS; }     // skip cells that exist in sparse ASC matrix, but aren't (i-1,k-1)
 	      if    (y < sm->n[i-1] && sm->k[i-1][y] == k-1) {
 		mlc = p7_FLogsum( p7_FLogsum( dpp[p7R_ML] + TSC(p7P_MM, k-1),
@@ -212,14 +212,14 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
        * Computing row i when it's in an UP sector 
        *****************************************************************/
 
-      if (i == sm->seg[g].ia || (ndown == 2 && d < D))                   // top row of UP. No previous row, so you can't enter from M,I; only by {LG}->Mk entry, followed by ->DDD paths.
+      if (i == sm->seg[g].ia || (ndown == 2 && d <= D))                  // top row of UP. No previous row, so you can't enter from M,I; only by {LG}->Mk entry, followed by ->DDD paths.
 	{
 	  rsc       = gm->rsc[dsq[i]];
 	  dpp       = NULL;
 	  last_up   = dpc;
 	  dlc = dgc = -eslINFINITY;
 
-	  for (z=0, y=0; z < sm->n[i] && sm->k[i][z] < anch[d].n2; z++)  // for all sparse cells in UP sector on this row
+	  for (z=0, y=0; z < sm->n[i] && sm->k[i][z] < anch[d].k0; z++)  // for all sparse cells in UP sector on this row
 	    {
 	      k = sm->k[i][z];
 
@@ -238,14 +238,14 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
 	    }
 	}
 
-      else if (in_seg && d < D && anch[d].n1 <= sm->seg[g].ib)      // if i is in UP sector [d]. d may be =D here, hence the guard d<D before anch[d] access
+      else if (in_seg && anch[d].i0 <= sm->seg[g].ib)      // if i is in UP sector [d]. d may be =D+1 here: if so, sentinel makes the the comparison to seg[g].ib fail
 	{
-	  rsc = gm->rsc[dsq[i]];	                            // now MSC(k), ISC(k) residue score macros work 
+	  rsc = gm->rsc[dsq[i]];	                   // now MSC(k), ISC(k) residue score macros work 
 	  dpp       = last_up;
 	  last_up   = dpc;
 	  dlc = dgc = -eslINFINITY;
 
-	  for (z=0, y=0; z < sm->n[i] && sm->k[i][z] < anch[d].n2; z++)  // for all sparse cells in UP sector on this row
+	  for (z=0, y=0; z < sm->n[i] && sm->k[i][z] < anch[d].k0; z++)  // for all sparse cells in UP sector on this row
 	    {
 	      k = sm->k[i][z];
 
@@ -298,13 +298,13 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
        *****************************************************************/
 
       xN = (i == 0 ? 0. : (d == 0 ? xN + gm->xsc[p7P_N][p7P_LOOP] : -eslINFINITY));
-      xJ = (d > 0 && d < D  ? p7_FLogsum(xJ + gm->xsc[p7P_J][p7P_LOOP],  xE + gm->xsc[p7P_E][p7P_LOOP]) : -eslINFINITY);
+      xJ = (d > 1 && d <= D  ? p7_FLogsum(xJ + gm->xsc[p7P_J][p7P_LOOP],  xE + gm->xsc[p7P_E][p7P_LOOP]) : -eslINFINITY);
       xB = (d == 0 ? xN + gm->xsc[p7P_N][p7P_MOVE] : xJ + gm->xsc[p7P_J][p7P_MOVE]);
       xL = xB + gm->xsc[p7P_B][0]; /* B->L */
       xG = xB + gm->xsc[p7P_B][1]; /* B->G */
-      xC = (d == D ? p7_FLogsum(xE + gm->xsc[p7P_E][p7P_MOVE],  xC + gm->xsc[p7P_C][p7P_LOOP]) : -eslINFINITY);
+      xC = (d == D+1 ? p7_FLogsum(xE + gm->xsc[p7P_E][p7P_MOVE],  xC + gm->xsc[p7P_C][p7P_LOOP]) : -eslINFINITY);
       
-      if ( (i >= sm->seg[g].ia-1 && d < D && anch[d].n1 <= sm->seg[g].ib) || ndown)
+      if ( (i >= sm->seg[g].ia-1 && anch[d].i0 <= sm->seg[g].ib) || ndown)
 	{
 	  *xc++ = xE;
 	  *xc++ = xN;
@@ -316,8 +316,6 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
 	  *xc++ = -eslINFINITY; // JJ; only valid in a decoding mx
 	  *xc++ = -eslINFINITY; // CC; ditto
 	}
-
-
     } // end of i=0..L. Sparse ASC DP matrix complete. Mission accomplished.
 
   if (opt_sc) *opt_sc = xC + gm->xsc[p7P_C][p7P_MOVE];
@@ -409,7 +407,8 @@ utest_compare_reference(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int
       /* sparse ASC forward calculation */
       if ( p7_sparse_asc_Forward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &sc2)   != eslOK) esl_fatal(msg);
       
-
+      /* comparisons */
+      if ( p7_spascmx_CompareReference(asf, anch->a, anch->D, afu, afd, tol) != eslOK) esl_fatal(msg);
 
       p7_sparsemask_Reuse(sm);
       p7_anchors_Reuse(anch);
@@ -495,9 +494,9 @@ main(int argc, char **argv)
   P7_REFMX       *afu     = NULL;
   P7_REFMX       *afd     = NULL;
   P7_SPARSEMX    *asf     = NULL;
-  P7_COORDS2     *anch    = p7_coords2_Create(0,0);
+  P7_ANCHORS     *anch    = p7_anchors_Create();
   float          *wrk     = NULL;
-  P7_COORDS2_HASH *hashtbl = p7_coords2_hash_Create(0,0,0);
+  P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
   float           fsc, vsc, asc, asc_sparse;
   int             status;
 
@@ -556,7 +555,7 @@ main(int argc, char **argv)
   p7_ReferenceBackward(sq->dsq, sq->n, gm, rxd,      NULL);   
   p7_ReferenceDecoding(sq->dsq, sq->n, gm, rxf, rxd, rxd);   
 
-  p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, vtr, &wrk, hashtbl,
+  p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, vtr, &wrk, ah,
 		       afu, afd, anch, &asc, NULL, NULL);
 
 
@@ -576,10 +575,10 @@ main(int argc, char **argv)
   printf("Reference ASC fwd score = %.2f nats\n", asc);
   printf("Sparse ASC fwd score    = %.2f nats\n", asc_sparse);
 
-  p7_coords2_hash_Destroy(hashtbl);
+  p7_anchorhash_Destroy(ah);
   if (wrk) free(wrk);
   p7_sparsemx_Destroy(asf);
-  p7_coords2_Destroy(anch);
+  p7_anchors_Destroy(anch);
   p7_trace_Destroy(vtr);
   p7_sparsemask_Destroy(sm);
   p7_checkptmx_Destroy(cx);

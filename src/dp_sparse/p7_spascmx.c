@@ -53,6 +53,7 @@
  * 
  * Contents:
  *    1. Using P7_SPARSEMX for ASC calculations.
+ *    2. Debugging and development tools.
  * 
  */
 
@@ -63,14 +64,14 @@
 
 #include "easel.h"
 
-#include "base/p7_coords2.h"
+#include "base/p7_anchors.h"
 #include "dp_sparse/p7_sparsemx.h"
 #include "dp_sparse/p7_spascmx.h"
 
 
 /*****************************************************************
  * 1. Using P7_SPARSEMX for ASC calculations
- ***************************************************************** 
+ *****************************************************************/
 
 
 /* Function:  p7_spascmx_Reinit()
@@ -151,7 +152,7 @@ p7_spascmx_Reinit(P7_SPARSEMX *asx, const P7_SPARSEMASK *sm, const P7_ANCHOR *an
  * Throws:    (no abnormal error conditions)
  */
 size_t
-p7_spascmx_MinSizeof(const P7_SPARSEMASK *sm, const P7_COORD2 *anch, int D, int64_t *opt_dalloc, int *opt_xalloc)
+p7_spascmx_MinSizeof(const P7_SPARSEMASK *sm, const P7_ANCHOR *anch, int D, int64_t *opt_dalloc, int *opt_xalloc)
 {
   size_t  n       = sizeof(P7_SPARSEMX);
   int     g       = 1;		// index of next or current segment. When we enter it, and while we're in it, in_seg = TRUE.
@@ -171,15 +172,15 @@ p7_spascmx_MinSizeof(const P7_SPARSEMASK *sm, const P7_COORD2 *anch, int D, int6
       if      (i >  sm->seg[g].ib)  { in_seg = FALSE; g++; }    // g bumps, to start expecting to see start of segment <g> next.
       else if (i == sm->seg[g].ia)  { in_seg = TRUE;       }    // g might be S+1, but this is safe because of sentinel seg[S+1].ia=ib=L+2      
 
-      if (in_down)                                              // if i is in a DOWN sector:
+      if (ndown)                                                // if i is in a DOWN sector:
 	{
 	  for (z  = 0; z < sm->n[i]; z++)
-	    if (sm->k[i][z] >= anch[d-1].k0) break;             // d-1 is safe here; you can't be in_down with d=0.
+	    if (sm->k[i][z] >= anch[d-1].k0) break;             
 	  dalloc += (sm->n[i] - z);                             // z is now on first cell in DOWN row; remainder of line is valid
 	}
 
       if ( (i >= sm->seg[g].ia-1 && anch[d].i0 <= sm->seg[g].ib) ||  // if we need to store specials for row i because of UP xB...
-	   (in_down))                                                //   .. or because of DOWN xE ...
+	   (ndown))                                                  //   .. or because of DOWN xE ...
 	xalloc++;
       
       if (in_seg && anch[d].i0 <= sm->seg[g].ib)               // if i is in an UP sector:
@@ -198,9 +199,10 @@ p7_spascmx_MinSizeof(const P7_SPARSEMASK *sm, const P7_COORD2 *anch, int D, int6
 }
 
 
-/* useful side effect: pass -1 for k0, and it will print the whole line
- *
-  */
+/*****************************************************************
+ * 2. Debugging and development tools
+ *****************************************************************/
+
 
 static void
 dump_up_header(FILE *fp, int k1, int k2)
@@ -208,7 +210,7 @@ dump_up_header(FILE *fp, int k1, int k2)
   int  width     = 9;
   int k;
 
-  fprintf(fp, "\n# UP component(s) of sparse matrix\n");
+  fprintf(fp, "\n# UP component(s) of sparse ASC matrix\n");
   fprintf(fp, "       ");
   for (k = k1; k <= k2;         k++) fprintf(fp, "%*d ", width, k);
   fprintf(fp, "\n");
@@ -224,7 +226,7 @@ dump_down_header(FILE *fp, int k1, int k2)
   int  width     = 9;
   int k,x;
 
-  fprintf(fp, "\n# DOWN component(s) of sparse matrix\n");
+  fprintf(fp, "\n# DOWN component(s) of sparse ASC matrix\n");
   fprintf(fp, "       ");
   for (k = k1; k <= k2;         k++) fprintf(fp, "%*d ", width, k);
   for (x = 0;  x < p7S_NXCELLS; x++) fprintf(fp, "%*s ", width, p7_sparsemx_DecodeSpecial(x));
@@ -244,14 +246,18 @@ dump_up_row(FILE *fp, int i, const P7_SPARSEMASK *sm, const float *dpc, int k0, 
   int  precision = 4;
   int  k,z;
 
-
+  /* as a useful side effect, if you pass -1 for k0,
+   * the first loop will do nothing, and the second loop 
+   * will dump a full blank line from k1..k2: hence, for
+   * rows i that aren't connected to an anchor, we pass k0=-1.
+   */
   fprintf(fp, "%3d %2s ", i, p7_sparsemx_DecodeState(s));
-  for (z = 0, k = k1; k <= k2 && k < k0; k++) {   
+  for (z = 0, k = k1; k <= k2 && k < k0; k++) {               // from k1..k0-1, you're in potentially valid UP cells
     while (z < sm->n[i] && sm->k[i][z]  < k) z++;
-    if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(fp, "%*.*f ", width, precision, *(dpc + z*p7R_NSCELLS + s));
+    if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(fp, "%*.*f ", width, precision, *(dpc + z*p7R_NSCELLS + s));  
     else                                     fprintf(fp, "%*s ",   width, "......");
   }
-  for ( ; k <= k2; k++) {
+  for ( ; k <= k2; k++) {                                    // from k0..k2, you're outside the UP sector
     while (z < sm->n[i] && sm->k[i][z]  < k) z++;
     if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(fp, "%*s ", width, "...xx.");
     else                                     fprintf(fp, "%*s ", width, "......");
@@ -266,6 +272,11 @@ dump_down_row(FILE *fp, int i, const P7_SPARSEMASK *sm, const float *dpc, int k0
   int precision = 4;
   int k,z0,z;
 
+  /* Similar to the side effect mentioned in dump_up_row,
+   * if you pass k0 == M+1 and k2 = M+1, you'll dump a completely
+   * blank row; hence, that's what we do for rows i that are
+   * unconnected to an anchor.
+   */
   fprintf(fp, "%3d %2s ", i, p7_sparsemx_DecodeState(s));
   for (z = 0, k = k1; k <= k2 && k < k0; k++) {
     while (z < sm->n[i] && sm->k[i][z]  < k) z++;
@@ -281,8 +292,11 @@ dump_down_row(FILE *fp, int i, const P7_SPARSEMASK *sm, const float *dpc, int k0
 }
 
 
+/* Function:  p7_spascmx_Dump()
+ * Synopsis:  Dump a sparse ASC matrix for examination.
+ */
 int
-p7_spascmx_Dump(FILE *fp, const P7_SPARSEMX *asx, const P7_COORD2 *anch, int D)
+p7_spascmx_Dump(FILE *fp, const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
 {
   const P7_SPARSEMASK *sm  = asx->sm;
   const float         *dpc;
@@ -293,32 +307,32 @@ p7_spascmx_Dump(FILE *fp, const P7_SPARSEMX *asx, const P7_COORD2 *anch, int D)
   int   i2        = sm->L;
   int   k1        = 0;
   int   k2        = sm->M;
-  int   in_seg, in_up, in_down, in_x;
+  int   in_seg, in_up, ndown, in_x;
   int   i,g,d,z,s,k0;
 
   /* First pass: print the UP sectors, skip DOWN; do nothing to xc yet  */
   dump_up_header(fp, k1, k2);
-  d        = 0;
-  in_seg   = FALSE;
-  in_up    = FALSE;
-  in_down  = FALSE;
   g        = 1;
+  in_seg   = FALSE;
+  d        = 1;
+  ndown    = 0;
+  in_up    = FALSE;
   dpc      = asx->dp;
   for (i = 0; i <= sm->L; i++)
     {
-      if      (d < D && i == anch[d].n1) { in_down = TRUE;  d++;  }  
-      else if (sm->n[i] == 0)            { in_down = FALSE;       }  
+      if      (i == anch[d].i0)     { ndown = 1;  d++;  }  
+      else if (sm->n[i] == 0)       { ndown = 0;        }  
 
       if      (i >  sm->seg[g].ib)  { in_seg = FALSE; g++; }
-      else if (i == sm->seg[g].ia)  { in_seg = TRUE; }      
+      else if (i == sm->seg[g].ia)  { in_seg = TRUE;       }      
 
-      if (in_seg && d < D && anch[d].n1 <= sm->seg[g].ib)  { in_up = TRUE;  k0 = anch[d].n2; }
-      else                                                 { in_up = FALSE; k0 = -1; }
+      if (in_seg && anch[d].i0 <= sm->seg[g].ib)  { in_up = TRUE;  k0 = anch[d].k0; }
+      else                                        { in_up = FALSE; k0 = -1;         }
 
-      if (in_down)
+      if (ndown)
 	{
 	  for (z  = 0; z < sm->n[i]; z++)
-	    if (sm->k[i][z] >= anch[d-1].n2) break;  // d-1 safe because you can't be in DOWN sector with d=0.
+	    if (sm->k[i][z] >= anch[d-1].k0) break;  // d-1 safe because you can't be in DOWN sector with d=0.
 	  dpc += (sm->n[i] - z) * p7S_NSCELLS;       // skip past DOWN rows in the matrix in this pass
 	}
 
@@ -329,31 +343,31 @@ p7_spascmx_Dump(FILE *fp, const P7_SPARSEMX *asx, const P7_COORD2 *anch, int D)
 	  
       if (in_up) {
 	for (z = 0; z < sm->n[i]; z++)
-	  if (sm->k[i][z] >= anch[d].n2) break;    
+	  if (sm->k[i][z] >= anch[d].k0) break;    
 	dpc += z * p7S_NSCELLS;
       }
     }
   
   /* Second pass: print DOWN sectors and xc rows */
   dump_down_header(fp, k1, k2);
-  d        = 0;
-  in_seg   = FALSE;
-  in_up    = FALSE;
-  in_down  = FALSE;
   g        = 1;
+  in_seg   = FALSE;
+  d        = 0;
+  ndown    = FALSE;
+  in_up    = FALSE;
   dpc      = asx->dp;
   xc       = asx->xmx;
   for (i = 0; i <= sm->L; i++)
     {
-      if      (d < D && i == anch[d].n1) { in_down = TRUE;  d++;  }  
-      else if (sm->n[i] == 0)            { in_down = FALSE;       }  
+      if      (i == anch[d].i0) { ndown = 1;  d++;  }  
+      else if (sm->n[i] == 0)   { ndown = FALSE;    }  
 
       if      (i >  sm->seg[g].ib)  { in_seg = FALSE; g++; }
-      else if (i == sm->seg[g].ia)  { in_seg = TRUE; }      
+      else if (i == sm->seg[g].ia)  { in_seg = TRUE;       }      
 
-      k0 = (in_down ? anch[d-1].n2 : sm->M+1);
+      k0 = (ndown ? anch[d-1].k0 : sm->M+1);
 
-      if ( (i >= sm->seg[g].ia-1 && d < D && anch[d].n1 <= sm->seg[g].ib) ||  in_down) in_x = TRUE;
+      if ( (i >= sm->seg[g].ia-1 && anch[d].i0 <= sm->seg[g].ib) ||  ndown) in_x = TRUE;
       else in_x = FALSE;
 
       if (i >= i1 && i <= i2) {
@@ -368,18 +382,18 @@ p7_spascmx_Dump(FILE *fp, const P7_SPARSEMX *asx, const P7_COORD2 *anch, int D)
 	fprintf(fp, "\n");
       }
 
-      if (in_down) {
+      if (ndown) {
 	for (z  = 0; z < sm->n[i]; z++)
-	  if (sm->k[i][z] >= anch[d-1].n2) break;  // d-1 safe because you can't be in DOWN sector with d=0.
+	  if (sm->k[i][z] >= anch[d-1].k0) break;  
 	dpc += (sm->n[i] - z) * p7S_NSCELLS;       // skip past DOWN rows in the matrix in this pass
       }
 
       if (in_x) 
 	xc += p7S_NXCELLS;
 
-      if (in_seg && d < D && anch[d].n1 <= sm->seg[g].ib) {
+      if (in_seg && anch[d].i0 <= sm->seg[g].ib) {
 	for (z = 0; z < sm->n[i]; z++)
-	  if (sm->k[i][z] >= anch[d].n2) break;    
+	  if (sm->k[i][z] >= anch[d].k0) break;    
 	dpc += z * p7S_NSCELLS;
       }
     }
@@ -387,37 +401,87 @@ p7_spascmx_Dump(FILE *fp, const P7_SPARSEMX *asx, const P7_COORD2 *anch, int D)
   return eslOK;
 }
 
-
+/* Function:  p7_spascmx_CompareReference()
+ * Synopsis:  Compare sparse and reference ASC DP calculations, cell by cell.
+ *
+ * Purpose:   Compare each cell in the sparse ASC matrix <asx> to the
+ *            corresponding value in the reference ASC UP and DOWN
+ *            matrices <rxu> and <rxd>, allowing an absolute
+ *            difference of up to <tol>. If any value differs by more
+ *            than that, return <eslFAIL>.
+ *            
+ *            You only expect a sparse ASC matrix to compare
+ *            identically to a reference ASC calculation if the sparse
+ *            mask was set full, marking all cells, as in some unit
+ *            tests.
+ */
 int
-p7_spascmx_CompareReference(const P7_SPARSEMX *sx, const P7_REFMX *rxu, const P7_REFMX *rxd, float tol)
+p7_spascmx_CompareReference(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D, const P7_REFMX *rxu, const P7_REFMX *rxd, float tol)
 {
-  const P7_SPARSEMASK *sm = sx->sm;
+  const P7_SPARSEMASK *sm  = asx->sm;
+  const float         *dpc = asx->dp;
+  const float         *xc  = asx->xmx;
   int i;                              // index over rows in DP matrices, 0.1..L
   int g      = 1;                     // idx of next or current segment, 1..S, with sentinels. When we enter it, & while we're in it, in_seg = TRUE
   int in_seg = FALSE;                 //  ... => TRUE when starting ia(g), 1st row of segment; => FALSE when we pass ib(g).
   int d      = 1;                     // idx of next domain anchor we will see. Row i may be in sector UP(d), DOWN(d-1). 
   int ndown  = 0;                     // row # of DOWN sector, 1..; becomes 1 when i reaches anchor.
   int z;                              // index over sparse cell list for a row
+  int k,s;
+  int killmenow = FALSE;
+#ifdef p7_DEBUGGING
+  killmenow = TRUE;
+#endif
+
+
+  ESL_DASSERT1(( p7R_ML      == p7S_ML      ));  // We assume that the main states come in the same order in both sparse, reference matrices. Spot check that.
+  ESL_DASSERT1(( p7R_E       == p7S_E       ));
+  ESL_DASSERT1(( p7R_NSCELLS == p7S_NSCELLS ));
+  ESL_DASSERT1(( p7R_NXCELLS == p7S_NXCELLS ));
 
   for (i = 0; i <= sm->L; i++)
     {
-      if      (i == anch[d].n1)    { ndown = 1; d++;      }
+      if      (i == anch[d].i0)    { ndown = 1; d++;      }
       else if (sm->n[i] == 0)      { ndown = 0;           }
       else if (ndown)              { ndown++;             }
 
       if      (i > sm->seg[g].ib)  { in_seg = FALSE; g++; }
       else if (i == sm->seg[g].ia) { in_seg = TRUE;       }
 
-      if (in_down)
+      if (ndown)
 	{
 	  for (z = 0; z < sm->n[i]; z++)              // Skip ahead in sparse cell list to first z in DOWN sector (anch[d-1].k0).
-	    if (sm->k[i][z] >= anch[d-1].n2) break;
-
+	    if (sm->k[i][z] >= anch[d-1].k0) break;
+	  
+	  for (; z < sm->n[i]; z++)
+	    {
+	      k = sm->k[i][z];
+	      for (s = 0; s < p7R_NSCELLS; s++, dpc++)
+		if (esl_FCompareAbs(*dpc, P7R_MX(rxd,i,k,s), tol) == eslFAIL) 
+		  { if (killmenow) abort(); return eslFAIL; }
+	    }
 	}
 
-
-
-
+      if ( (i >= sm->seg[g].ia-1 && anch[d].i0 <= sm->seg[g].ib) || ndown)
+	{
+	  for (s = 0; s < p7R_NXCELLS; s++, xc++)
+	    if (esl_FCompareAbs(*xc, P7R_XMX(rxd,i,s), tol) == eslFAIL)
+	      { if (killmenow) abort(); return eslFAIL; }
+	}
+	   
+      /* Cells in UP sector on row i, if any  */
+      if (in_seg && anch[d].i0 <= sm->seg[g].ib)
+	{
+	  for (z = 0; z < sm->n[i]; z++)
+	    {
+	      k = sm->k[i][z];
+	      for (s = 0; s < p7R_NSCELLS; s++, dpc++)
+		if (esl_FCompareAbs(*dpc, P7R_MX(rxu,i,k,s), tol) == eslFAIL) 
+		  { if (killmenow) abort(); return eslFAIL; }
+	    }
+	}
+    }
+  return eslOK;
 }
 
 
@@ -461,7 +525,7 @@ main(int argc, char **argv)
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
-  P7_COORDS2     *anch    = p7_coords2_Create(0,0);
+  P7_ANCHORS     *anch    = p7_anchors_Create();
   P7_REFMX       *rxf     = NULL;
   P7_REFMX       *rxd     = NULL;
   P7_REFMX       *afu     = NULL;
@@ -471,7 +535,7 @@ main(int argc, char **argv)
   P7_CHECKPTMX   *cx      = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_RAMLIMIT));
   P7_SPARSEMASK  *sm      = p7_sparsemask_Create(100, 100);
   float          *wrk     = NULL;
-  P7_COORDS2_HASH *hashtbl = p7_coords2_hash_Create(0,0,0);
+  P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
   float           fsc, vsc, asc;
   int             dalloc, xalloc, spascmxsize;
   int             status;
@@ -520,7 +584,7 @@ main(int argc, char **argv)
 	  p7_ReferenceDecoding(sq->dsq, sq->n, gm, rxf, rxd, rxd);   
 
 	  /* Find most probable anchor set */
-	  p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, vtr, &wrk, hashtbl,
+	  p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, vtr, &wrk, ah,
 			       afu, afd, anch, &asc, NULL, NULL);
 
       
@@ -548,8 +612,8 @@ main(int argc, char **argv)
 	  p7_trace_Reuse(vtr);
 	  p7_refmx_Reuse(rxf);   p7_refmx_Reuse(rxd);
 	  p7_refmx_Reuse(afu);   p7_refmx_Reuse(afd);
-	  p7_coords2_hash_Reuse(hashtbl);
-	  p7_coords2_Reuse(anch);
+	  p7_anchorhash_Reuse(ah);
+	  p7_anchors_Reuse(anch);
 	}
 
       esl_sq_Reuse(sq);
@@ -564,12 +628,12 @@ main(int argc, char **argv)
   p7_filtermx_Destroy(fx);
   p7_checkptmx_Destroy(cx);
   p7_sparsemask_Destroy(sm);
-  p7_coords2_hash_Destroy(hashtbl);
+  p7_anchorhash_Destroy(ah)
   if (wrk) free(wrk);
   p7_trace_Destroy(vtr);
   p7_refmx_Destroy(afd);  p7_refmx_Destroy(afu);
   p7_refmx_Destroy(rxd);  p7_refmx_Destroy(rxf);
-  p7_coords2_Destroy(anch);
+  p7_anchors_Destroy(anch);
   esl_sq_Destroy(sq);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
