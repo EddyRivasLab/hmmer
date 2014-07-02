@@ -238,6 +238,7 @@ p7_anchors_Dump(FILE *fp, P7_ANCHORS *anch)
 {
   int d;
 
+  fprintf(fp, "# anchors: for D=%d\n", anch->D);
   for (d = 0; d <= anch->D+1; d++)
     fprintf(fp, "%-4d %6d %6d\n", d, anch->a[d].i0, anch->a[d].k0);
   return eslOK;
@@ -358,12 +359,12 @@ p7_anchors_SampleFromTrace(ESL_RANDOMNESS *rng, const P7_TRACE *tr, P7_ANCHORS *
 
       w = 1+esl_rnd_Roll(rng, nM);               // w = 1..nM : choice of which M state to make the anchor
       
-      for ( z = tr->tfrom[d-1]; w; z++)          // when w reaches 0, tr->st[z] is the M state we want to make the anchor, and we break out
+      for ( z = tr->tfrom[d-1]; w; z++)          // when w reaches 0, tr->st[z] is the M state we want to make the anchor, and we break out; there's a final z++, so the state we want ends up being z-1
 	if (p7_trace_IsM(tr->st[z])) w--;   
-      ESL_DASSERT1(( p7_trace_IsM(tr->st[z]) )); // since the logic above is overly elegant... better doublecheck.
+      ESL_DASSERT1(( p7_trace_IsM(tr->st[z-1]) )); // since the logic above is overly elegant... better doublecheck.
       
-      anch->a[d].i0 = tr->i[z];
-      anch->a[d].k0 = tr->k[z];
+      anch->a[d].i0 = tr->i[z-1];
+      anch->a[d].k0 = tr->k[z-1];
     }
   
   p7_anchor_SetSentinels(anch->a, D, tr->L, tr->M);

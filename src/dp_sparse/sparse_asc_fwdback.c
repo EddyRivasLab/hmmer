@@ -63,6 +63,7 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
   int k;                         // index of model positions 1..M
   int z;                         // index for sparse cell indices k[i][z] along a row
   int y;			 //   ... and for previous row, k[i-1][y].
+  int s;                         // index of individual states
   int status;
 
   /* Contract checks, argument validation */
@@ -100,8 +101,8 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
 
 	  mlc = xL + TSC(p7P_LM, k-1);
 	  mgc = xG + TSC(p7P_GM, k-1);
-	  while (y < sm->n[i-1] && sm->k[i-1][y] <  k-1) { y++; dpp += p7S_NSCELLS; }  // dpp is an UP row. i-1,k-1 may not exist (UP sector can be empty)
-	  if    (y < sm->n[i-1] && sm->k[i-1][y] == k-1) {                             //   ... but usually, there's an UP sector with a i-1,k-1 cell 
+	  while (dpp && y < sm->n[i-1] && sm->k[i-1][y] <  k-1) { y++; dpp += p7S_NSCELLS; }  // dpp is an UP row. i-1,k-1 may not exist (UP sector can be empty), hence the check for non-NULL dpp
+	  if    (dpp && y < sm->n[i-1] && sm->k[i-1][y] == k-1) {                             //   ... but usually, there's an UP sector with a i-1,k-1 cell 
 	    mlc = p7_FLogsum( p7_FLogsum( dpp[p7R_ML] + TSC(p7P_MM, k-1),
 					  dpp[p7R_IL] + TSC(p7P_IM, k-1)),
 			      p7_FLogsum( dpp[p7R_DL] + TSC(p7P_DM, k-1),
@@ -115,14 +116,14 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
 	  *dpc++ = mgc = MSC(k) + mgc;
 	  *dpc++ = -eslINFINITY;       // IL(i0,k0)
 	  *dpc++ = -eslINFINITY;       // IG(i0,k0)
-	  xE     = p7_FLogsum(xE, mlc);
+	  xE     = p7_FLogsum(xE, mlc);               // dlc is -inf, not included in sum
 	  *dpc++ = -eslINFINITY;       // DL(i0,k0)
 	  *dpc++ = -eslINFINITY;       // DG(i0,k0)
 	  if (z < sm->n[i]-1 && sm->k[i][z+1] == k+1) {                     // is there a (i,k+1) cell to our right? 
 	    dlc =  mlc + TSC(p7P_MD, k);                                    //  ... then ->Dk+1 is precalculated as usual.
 	    dgc =  mgc + TSC(p7P_MD, k);                                    // Since we know we're the first cell (the anchor) we initialize dlc, dgc here.
 	  } else {                                                          // If not, we MUST add {MD}l->Dk+1..E glocal exit path, even from internal sparse cells - not just last cell! 
-	    xE  = p7_FLogsum( xE, dgc + TSC(p7P_DGE, k) + TSC(p7P_MD, k));  // this line must come BEFORE you set dgc to -inf.
+	    xE  = p7_FLogsum( xE, mgc + TSC(p7P_DGE, k) + TSC(p7P_MD, k));
 	    dlc = dgc = -eslINFINITY;
 	  }
 	  
@@ -212,94 +213,106 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
        * Computing row i when it's in an UP sector 
        *****************************************************************/
 
-      if (i == sm->seg[g].ia || (ndown == 2 && d <= D))                  // top row of UP. No previous row, so you can't enter from M,I; only by {LG}->Mk entry, followed by ->DDD paths.
+      if (in_seg && anch[d].i0 <= sm->seg[g].ib)                             // d may be D+1 here: if so, sentinel makes the the comparison to seg[g].ib fail
 	{
-	  rsc       = gm->rsc[dsq[i]];
-	  dpp       = NULL;
-	  last_up   = dpc;
-	  dlc = dgc = -eslINFINITY;
-
-	  for (z=0, y=0; z < sm->n[i] && sm->k[i][z] < anch[d].k0; z++)  // for all sparse cells in UP sector on this row
-	    {
-	      k = sm->k[i][z];
-
-	      *dpc++ = mlc = xL  + TSC(p7P_LM, k-1) + MSC(k);
-	      *dpc++ = mgc = xG  + TSC(p7P_GM, k-1) + MSC(k);
-	      *dpc++       = -eslINFINITY;
-	      *dpc++       = -eslINFINITY;
-	      *dpc++       = dlc;
-	      *dpc++       = dgc;
-	      // Advance calculation of next D_k+1, if it's there
-	      if (z < sm->n[i]-1 && sm->k[i][z+1] == k+1) {  // is there an (i,k+1) cell to our right?
-		dlc = p7_FLogsum( mlc + TSC(p7P_MD, k), dlc + TSC(p7P_DD, k));
-		dgc = p7_FLogsum( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k));
-	      } else 
-		dlc = dgc = -eslINFINITY;
+	  if (ndown == 1)       // The first row of an UP matrix for subsequent domains in a segment is the anchor row i0.
+	    {                   // All sparse cells in this row are unreachable, initialized to -inf. They only get used for G->DDDD->Mk,i+1 decoding, wing unfolding.
+	      last_up = dpc;
+	      for (z = 0; z < sm->n[i] && sm->k[i][z] < anch[d].k0; z++)
+		for (s = 0; s < p7S_NSCELLS; s++)
+		  *dpc++ = -eslINFINITY;
 	    }
-	}
 
-      else if (in_seg && anch[d].i0 <= sm->seg[g].ib)      // if i is in UP sector [d]. d may be =D+1 here: if so, sentinel makes the the comparison to seg[g].ib fail
-	{
-	  rsc = gm->rsc[dsq[i]];	                   // now MSC(k), ISC(k) residue score macros work 
-	  dpp       = last_up;
-	  last_up   = dpc;
-	  dlc = dgc = -eslINFINITY;
+	  else if (i == sm->seg[g].ia)         // The first row of UP(d) when d is the first domain in a segment
+	    {                                  // is the first row of the segment. Cells on this row can be reached
+	      rsc       = gm->rsc[dsq[i]];     // by {GL}->Mk entries, followed by {Dk,Mk}->Dk+1 delete transitions.
+	      dpp       = NULL;                // The (ndown==1) code must precede this, to deal with a case of an anchor on first row of a segment, which means a nonexistent UP sector and immediate init in DOWN
+	      last_up   = dpc;
+	      dlc = dgc = -eslINFINITY;
 
-	  for (z=0, y=0; z < sm->n[i] && sm->k[i][z] < anch[d].k0; z++)  // for all sparse cells in UP sector on this row
-	    {
-	      k = sm->k[i][z];
+	      for (z=0, y=0; z < sm->n[i] && sm->k[i][z] < anch[d].k0; z++)  // for all sparse cells in UP sector on this row
+		{
+		  k = sm->k[i][z];
 
-	      // Try to find cell i-1,k-1. Then compute M(i,k) from it.
-	      mlc = xL  + TSC(p7P_LM, k-1);
-	      mgc = xG  + TSC(p7P_GM, k-1);
-	      while (y < sm->n[i-1] && sm->k[i-1][y] < k-1)  { y++; dpp+= p7S_NSCELLS; }
-	      if    (y < sm->n[i-1] && sm->k[i-1][y] == k-1) {
-		mlc = p7_FLogsum( p7_FLogsum( dpp[p7R_ML] + TSC(p7P_MM, k-1),
-					      dpp[p7R_IL] + TSC(p7P_IM, k-1)),
-				  p7_FLogsum( dpp[p7R_DL] + TSC(p7P_DM, k-1),
-					      mlc));
-		mgc = p7_FLogsum( p7_FLogsum( dpp[p7R_MG] + TSC(p7P_MM, k-1),
-					      dpp[p7R_IG] + TSC(p7P_IM, k-1)),
-				  p7_FLogsum( dpp[p7R_DG] + TSC(p7P_DM, k-1),
-					      mgc));
-	      }
-	      *dpc++ = mlc = MSC(k) + mlc;
-	      *dpc++ = mgc = MSC(k) + mgc;
+		  *dpc++ = mlc = xL  + TSC(p7P_LM, k-1) + MSC(k);
+		  *dpc++ = mgc = xG  + TSC(p7P_GM, k-1) + MSC(k);
+		  *dpc++       = -eslINFINITY;
+		  *dpc++       = -eslINFINITY;
+		  *dpc++       = dlc;
+		  *dpc++       = dgc;
+		  // Advance calculation of next D_k+1, if it's there
+		  if (z < sm->n[i]-1 && sm->k[i][z+1] == k+1) {  // is there an (i,k+1) cell to our right?
+		    dlc = p7_FLogsum( mlc + TSC(p7P_MD, k), dlc + TSC(p7P_DD, k));
+		    dgc = p7_FLogsum( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k));
+		  } else 
+		    dlc = dgc = -eslINFINITY;
+		}
+	    }
 
-	      // Try to find cell i-1, k. Then compute I(i,k) from it.
-	      if (y < sm->n[i-1] && sm->k[i-1][y] < k) { y++; dpp += p7S_NSCELLS; }
-	      if (y < sm->n[i-1] && sm->k[i-1][y] == k) {
-		*dpc++ = p7_FLogsum( dpp[p7R_ML] + TSC(p7P_MI,k),  dpp[p7R_IL] + TSC(p7P_II, k)); // +ISC(k) if we weren't enforcing it to zero
-		*dpc++ = p7_FLogsum( dpp[p7R_MG] + TSC(p7P_MI,k),  dpp[p7R_IG] + TSC(p7P_II, k)); // ditto
-	      } else {
-		*dpc++ = -eslINFINITY;
-		*dpc++ = -eslINFINITY;
-	      }
+	  else                      // all other cases: we're within UP(d), not on its first row; 
+	    {                       // so i-1 row exists in UP(d) and sparse mask; we may look at dp[i-1] and sm->k[i-1]
+	      rsc = gm->rsc[dsq[i]];	                   // now MSC(k), ISC(k) residue score macros work 
+	      dpp       = last_up;
+	      last_up   = dpc;
+	      dlc = dgc = -eslINFINITY;
 
-	      // Delayed store of Dk
-	      *dpc++ = dlc;
-	      *dpc++ = dgc;
+	      for (z=0, y=0; z < sm->n[i] && sm->k[i][z] < anch[d].k0; z++)  // for all sparse cells in UP sector on this row
+		{
+		  k = sm->k[i][z];
 
-	      // Advance calculation of next D_k+1, if it's there
-	      if (z < sm->n[i]-1 && sm->k[i][z+1] == k+1) {  // is there an (i,k+1) cell to our right?
-		dlc = p7_FLogsum( mlc + TSC(p7P_MD, k), dlc + TSC(p7P_DD, k));
-		dgc = p7_FLogsum( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k));
-	      } else 
-		dlc = dgc = -eslINFINITY;
+		  // Try to find cell i-1,k-1. Then compute M(i,k) from it.
+		  mlc = xL  + TSC(p7P_LM, k-1);
+		  mgc = xG  + TSC(p7P_GM, k-1);
+		  while (y < sm->n[i-1] && sm->k[i-1][y] < k-1)  { y++; dpp+= p7S_NSCELLS; }
+		  if    (y < sm->n[i-1] && sm->k[i-1][y] == k-1) {
+		    mlc = p7_FLogsum( p7_FLogsum( dpp[p7R_ML] + TSC(p7P_MM, k-1),
+						  dpp[p7R_IL] + TSC(p7P_IM, k-1)),
+				      p7_FLogsum( dpp[p7R_DL] + TSC(p7P_DM, k-1),
+						  mlc));
+		    mgc = p7_FLogsum( p7_FLogsum( dpp[p7R_MG] + TSC(p7P_MM, k-1),
+						  dpp[p7R_IG] + TSC(p7P_IM, k-1)),
+				      p7_FLogsum( dpp[p7R_DG] + TSC(p7P_DM, k-1),
+						  mgc));
+		  }
+		  *dpc++ = mlc = MSC(k) + mlc;
+		  *dpc++ = mgc = MSC(k) + mgc;
+
+		  // Try to find cell i-1, k. Then compute I(i,k) from it.
+		  if (y < sm->n[i-1] && sm->k[i-1][y] < k) { y++; dpp += p7S_NSCELLS; }
+		  if (y < sm->n[i-1] && sm->k[i-1][y] == k) {
+		    *dpc++ = p7_FLogsum( dpp[p7R_ML] + TSC(p7P_MI,k),  dpp[p7R_IL] + TSC(p7P_II, k)); // +ISC(k) if we weren't enforcing it to zero
+		    *dpc++ = p7_FLogsum( dpp[p7R_MG] + TSC(p7P_MI,k),  dpp[p7R_IG] + TSC(p7P_II, k)); // ditto
+		  } else {
+		    *dpc++ = -eslINFINITY;
+		    *dpc++ = -eslINFINITY;
+		  }
+
+		  // Delayed store of Dk
+		  *dpc++ = dlc;
+		  *dpc++ = dgc;
+
+		  // Advance calculation of next D_k+1, if it's there
+		  if (z < sm->n[i]-1 && sm->k[i][z+1] == k+1) {  // is there an (i,k+1) cell to our right?
+		    dlc = p7_FLogsum( mlc + TSC(p7P_MD, k), dlc + TSC(p7P_DD, k));
+		    dgc = p7_FLogsum( mgc + TSC(p7P_MD, k), dgc + TSC(p7P_DD, k));
+		  } else 
+		    dlc = dgc = -eslINFINITY;
 	      
-	    } // End of loop over z, sparse cells on row i
-
-
-	} // End of row i in UP sector
-
+		} // End of loop over z, sparse cells on row i
+	    } // End of dealing with all but the first row in an UP sector
+	} // End of UP sector.
 
       /*****************************************************************
        * Specials. Always calculated; sometimes stored.
        *****************************************************************/
 
-      xN = (i == 0 ? 0. : (d == 0 ? xN + gm->xsc[p7P_N][p7P_LOOP] : -eslINFINITY));
-      xJ = (d > 1 && d <= D  ? p7_FLogsum(xJ + gm->xsc[p7P_J][p7P_LOOP],  xE + gm->xsc[p7P_E][p7P_LOOP]) : -eslINFINITY);
-      xB = (d == 0 ? xN + gm->xsc[p7P_N][p7P_MOVE] : xJ + gm->xsc[p7P_J][p7P_MOVE]);
+      xN = (i == 0 ? 0. : (d == 1 ? xN + gm->xsc[p7P_N][p7P_LOOP] : -eslINFINITY));
+
+      if      (d == 1 || d == D+1) xJ = -eslINFINITY;
+      else if (ndown == 1)         xJ = xE + gm->xsc[p7P_E][p7P_LOOP];  // don't propagate J->J across DOWN sector boundaries
+      else                         xJ = p7_FLogsum(xJ + gm->xsc[p7P_J][p7P_LOOP],  xE + gm->xsc[p7P_E][p7P_LOOP]);
+
+      xB = (d == 1 ? xN + gm->xsc[p7P_N][p7P_MOVE] : xJ + gm->xsc[p7P_J][p7P_MOVE]);
       xL = xB + gm->xsc[p7P_B][0]; /* B->L */
       xG = xB + gm->xsc[p7P_B][1]; /* B->G */
       xC = (d == D+1 ? p7_FLogsum(xE + gm->xsc[p7P_E][p7P_MOVE],  xC + gm->xsc[p7P_C][p7P_LOOP]) : -eslINFINITY);
@@ -344,7 +357,7 @@ p7_sparse_asc_Backward(void)
  * 3. Unit tests
  *****************************************************************/
 #ifdef p7SPARSE_ASC_FWDBACK_TESTDRIVE
-
+#include "hmmer.h"
 
 /* "compare_reference" unit test.
  * 
@@ -366,12 +379,14 @@ p7_sparse_asc_Backward(void)
  *   3. Sparse Fwd matrix structure passes Validate().
  */
 static void
-utest_compare_reference(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int L, int N)
+utest_compare_reference(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int L, int N)
 {
   char           msg[] = "sparse_asc_fwdback :: compare_reference unit test failed";
   P7_BG         *bg    = p7_bg_Create(abc);
   P7_HMM        *hmm   = NULL;
+  ESL_SQ        *sq    = esl_sq_CreateDigital(abc);
   P7_PROFILE    *gm    = p7_profile_Create(M, abc);
+  P7_TRACE      *gtr   = p7_trace_Create();
   P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L);
   P7_ANCHORS    *anch  = p7_anchors_Create();
   P7_REFMX      *afu   = p7_refmx_Create(100,100);
@@ -379,6 +394,7 @@ utest_compare_reference(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int
   P7_SPARSEMX   *asf   = p7_sparsemx_Create(NULL);
   float          sc1, sc2;
   int            idx;
+  float          tol   = 0.01;
 
   /* Sample a profile. Config as usual, multihit dual-mode local/glocal. */
   if ( p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
@@ -398,17 +414,32 @@ utest_compare_reference(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int
       if ( p7_sparsemask_Reinit(sm, M, sq->n) != eslOK) esl_fatal(msg);
       if ( p7_sparsemask_AddAll(sm)           != eslOK) esl_fatal(msg);
 
+      //p7_trace_DumpAnnotated(stdout, gtr, gm, sq->dsq);
+
       /* Use generating trace to create a plausible anchor set */
+      if ( p7_trace_Index(gtr)                        != eslOK) esl_fatal(msg);
       if ( p7_anchors_SampleFromTrace(rng, gtr, anch) != eslOK) esl_fatal(msg);
+
+      //p7_anchors_Dump(stdout, anch);
 
       /* reference ASC forward calculation */
       if ( p7_ReferenceASCForward(sq->dsq, sq->n, gm, anch->a, anch->D, afu, afd, &sc1) != eslOK) esl_fatal(msg);
       
       /* sparse ASC forward calculation */
       if ( p7_sparse_asc_Forward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &sc2)   != eslOK) esl_fatal(msg);
-      
+
+      //p7_refmx_Dump(stdout, afu);
+      //p7_refmx_Dump(stdout, afd);
+      //p7_spascmx_Dump(stdout, asf, anch->a, anch->D);
+
       /* comparisons */
-      if ( p7_spascmx_CompareReference(asf, anch->a, anch->D, afu, afd, tol) != eslOK) esl_fatal(msg);
+      if (! diagfp) 
+	{
+	  if ( p7_spascmx_CompareReference(asf, anch->a, anch->D, afu, afd, tol) != eslOK) esl_fatal(msg); // test this first; makes debugging easier, if there's a bad difference, make it fail on the bad cell in the DP matrix
+	  if ( esl_FCompareAbs(sc1, sc2, tol) != eslOK) esl_fatal(msg);
+	}
+      else
+	fprintf(diagfp, "%20g\n", sc1-sc2);
 
       p7_sparsemask_Reuse(sm);
       p7_anchors_Reuse(anch);
@@ -422,13 +453,13 @@ utest_compare_reference(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int
   p7_refmx_Destroy(afu);
   p7_refmx_Destroy(afd);
   p7_anchors_Destroy(anch);
+  p7_trace_Destroy(gtr);
   p7_sparsemask_Destroy(sm);
   p7_profile_Destroy(gm);
   p7_hmm_Destroy(hmm);
   p7_bg_Destroy(bg);
+  esl_sq_Destroy(sq);
 }
-
-
 #endif /*p7SPARSE_ASC_FWDBACK_TESTDRIVE*/
 /*------------------- end, unit tests ---------------------------*/
 
@@ -439,7 +470,69 @@ utest_compare_reference(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int
  *****************************************************************/
 #ifdef p7SPARSE_ASC_FWDBACK_TESTDRIVE
 
+#include "p7_config.h"
 
+#include <stdio.h>
+#include <string.h>
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+
+#include "hmmer.h"
+
+#if p7_DEVELOPMENT
+#define p7_RNGSEED "0"
+#else
+#define p7_RNGSEED "42"
+#endif
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",     eslARG_NONE,        FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-s",     eslARG_INT,    p7_RNGSEED, NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-L",     eslARG_INT,          "10", NULL, NULL,  NULL,  NULL, NULL, "mean sequence length to generate",               0 },
+  { "-M",     eslARG_INT,          "10", NULL, NULL,  NULL,  NULL, NULL, "length of sampled profile",                      0 },
+  { "-N",     eslARG_INT,         "100", NULL, NULL,  NULL,  NULL, NULL, "number of times to run utest for --diag",        0 },
+  { "--diag", eslARG_STRING,       NULL, NULL, NULL,  NULL,  NULL, NULL, "dump data on a utest's chance failure rate",     0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "unit test driver for sparse ASC Forward/Backward dynamic programming";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *rng  = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
+  int             M    = 10;
+  int             L    = 10;
+  int             N    = esl_opt_GetInteger(go, "-N");
+
+  if (esl_opt_IsOn(go, "--diag"))
+    { 
+      char *which = esl_opt_GetString(go, "--diag");
+
+      if (strcmp(which, "compare_reference") == 0) utest_compare_reference(stdout, rng, abc, M, L, N);
+      else esl_fatal("--diag takes: compare_reference");
+    }
+  else
+    {
+      fprintf(stderr, "## %s\n", argv[0]);
+      fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+
+      utest_compare_reference(NULL, rng, abc, M, L, N);
+
+      fprintf(stderr, "#  status = ok\n");
+    }
+
+  esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(rng);
+  esl_getopts_Destroy(go);
+  return 0;
+}
 #endif /*p7SPARSE_ASC_FWDBACK_TESTDRIVE*/
 /*------------------- end, test driver --------------------------*/
 

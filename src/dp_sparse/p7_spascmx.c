@@ -475,6 +475,8 @@ p7_spascmx_CompareReference(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D
 	  for (z = 0; z < sm->n[i]; z++)
 	    {
 	      k = sm->k[i][z];
+	      if (k >= anch[d].k0) break;
+
 	      for (s = 0; s < p7R_NSCELLS; s++, dpc++)
 		if (esl_FCompareAbs(*dpc, P7R_MX(rxu,i,k,s), tol) == eslFAIL) 
 		  { if (killmenow) abort(); return eslFAIL; }

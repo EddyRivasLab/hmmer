@@ -19,9 +19,10 @@ HDRS =
 
 PROGS =
 
-UTESTS = sparse_decoding_utest \
-         sparse_envscore_utest \
-         sparse_fwdback_utest  \
+UTESTS = sparse_asc_fwdback_utest \
+	 sparse_decoding_utest    \
+         sparse_envscore_utest    \
+         sparse_fwdback_utest     \
          sparse_masstrace_utest
 
 STATS  =  p7_spascmx_stats
