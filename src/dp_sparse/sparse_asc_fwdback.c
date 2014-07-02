@@ -51,8 +51,8 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
   int    in_seg    = FALSE;      //   ... this bumps to TRUE when we see ia(g), first row of segment; to FALSE on ib(g), last row.
   int    d         = 1;          // idx of next domain anchor we reach. Row i may be in sector UP(d), DOWN(d-1).
   int    ndown     = 0;          //   ... this bumps to 1 when i reaches an anchor; row # of DOWN sector; back to 0 at seg end
-  float *dpc       = asf->dp;    // all indexing is relative! This ptr walks through the sparse ASC matrix main cells.
-  float *xc        = asf->xmx;   //   ... and this one, through the specials.
+  float *dpc       = NULL;       // all indexing is relative! This ptr walks through the sparse ASC matrix main cells.
+  float *xc        = NULL;       //   ... and this one, through the specials.
   float *dpp       = NULL;       // ptr for stepping thru DP cells on a previous row. Gets initialized by...
   float *last_down = NULL;       //   ... remembering the <dpc> start of each DOWN...
   float *last_up   = NULL;       //   ... or UP sector as we compute them.
@@ -73,7 +73,9 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
   /* Assure that <asf> is allocated large enough. */
   if (( status = p7_spascmx_Reinit(asf, sm, anch, D)) != eslOK) return status;
   asf->type = p7S_ASC_FWD;
-
+  
+  dpc = asf->dp;   // you can't initialize <dpc> until AFTER the _Reinit() call above, because Reinit might move the memory.
+  xc  = asf->xmx;  //   ... ditto for <xc>.
   for (i = 0; i <= L; i++)
     {
       /* Mechanics of traversing a sparse ASC matrix, row by row */
@@ -415,10 +417,10 @@ utest_compare_reference(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *a
       if ( p7_sparsemask_AddAll(sm)           != eslOK) esl_fatal(msg);
 
       //p7_trace_DumpAnnotated(stdout, gtr, gm, sq->dsq);
-
+      
       /* Use generating trace to create a plausible anchor set */
       if ( p7_trace_Index(gtr)                        != eslOK) esl_fatal(msg);
-      if ( p7_anchors_SampleFromTrace(rng, gtr, anch) != eslOK) esl_fatal(msg);
+      if ( p7_anchors_SampleFromTrace(anch, rng, gtr) != eslOK) esl_fatal(msg);
 
       //p7_anchors_Dump(stdout, anch);
 
@@ -460,6 +462,90 @@ utest_compare_reference(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *a
   p7_bg_Destroy(bg);
   esl_sq_Destroy(sq);
 }
+
+
+
+/* "singlesingle"
+ * 
+ * The "singlesingle" path uses p7_modelsample_SinglePathedSeq()
+ * to sample a contrived profile/seq pair that has only a one possible
+ * path with probability 1: that is, P(\pi | x, H) = 1.
+ * 
+ * This is restricted to a single domain and glocal alignment.  Local
+ * alignment and multihit paths are not tested.
+ * 
+ * To get an anchor set, we randomly choose an anchor MG state in the
+ * trace's single domain.
+ * 
+ * To get a sparse mask, we use p7_sparsemask_SetFromTrace() to
+ * include all of the trace's cells, plus a randomized scattering of
+ * others.
+ * 
+ * Because only a single path is possible, it doesn't matter whether
+ * we are sparse or reference, ASC or unconstrained, Viterbi or
+ * Forward: all scores are the same. We don't have to test all
+ * possible combinations, because we use the "singlesingle" style test
+ * elsewhere. Here it suffices to compare to the trace score.
+ * 
+ * Thus:
+ *    1. Sparse ASC fwd score = trace score
+ *    
+ *****************************************************************
+ * Analysis of stochastic error:
+ *
+ * tsc-fsc difference is exactly zero. Order of summation is exactly
+ * the same.
+ */
+static void
+utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int N)
+{
+  char           failmsg[] = "sparse_asc_fwdback :: singlesingle unit test failed";
+  P7_BG         *bg        = p7_bg_Create(abc);
+  P7_HMM        *hmm       = NULL;
+  P7_PROFILE    *gm        = NULL;
+  ESL_DSQ       *dsq       = NULL;
+  P7_TRACE      *tr        = NULL;
+  P7_ANCHOR     *anch      = NULL;
+  P7_SPARSEMASK *sm        = NULL;
+  P7_SPARSEMX   *asf       = p7_sparsemx_Create(NULL);
+  int   D,L;
+  int   idx;
+  float tsc, fsc;
+  float tol = 0.0;
+
+  for (idx = 0; idx < N; idx++)
+    {
+      if ( p7_modelsample_SinglePathedSeq(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &tsc) != eslOK) esl_fatal(failmsg);
+
+      if ((sm = p7_sparsemask_Create(M, L))            == NULL) esl_fatal(failmsg);
+      if ( p7_sparsemask_SetFromTrace(sm, rng, tr)    != eslOK) esl_fatal(failmsg);
+
+      if ( p7_sparse_asc_Forward(dsq, L, gm, anch, D, sm, asf, &fsc) != eslOK) esl_fatal(failmsg);
+
+      //p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
+      //p7_spascmx_Dump(stdout, asf, anch, D);
+      
+      if (!diagfp)
+	{
+	  if (esl_FCompareAbs(tsc, fsc, tol) != eslOK) esl_fatal(failmsg);
+	}
+      else
+	fprintf(diagfp, "%20g\n", tsc-fsc);
+
+      p7_sparsemx_Reuse(asf);
+
+      free(anch);
+      p7_trace_Destroy(tr);
+      p7_hmm_Destroy(hmm);
+      p7_profile_Destroy(gm);
+      p7_sparsemask_Destroy(sm);
+      free(dsq);
+    }
+
+  p7_sparsemx_Destroy(asf);
+  p7_bg_Destroy(bg);
+}
+
 #endif /*p7SPARSE_ASC_FWDBACK_TESTDRIVE*/
 /*------------------- end, unit tests ---------------------------*/
 
@@ -494,7 +580,7 @@ static ESL_OPTIONS options[] = {
   { "-s",     eslARG_INT,    p7_RNGSEED, NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-L",     eslARG_INT,          "10", NULL, NULL,  NULL,  NULL, NULL, "mean sequence length to generate",               0 },
   { "-M",     eslARG_INT,          "10", NULL, NULL,  NULL,  NULL, NULL, "length of sampled profile",                      0 },
-  { "-N",     eslARG_INT,         "100", NULL, NULL,  NULL,  NULL, NULL, "number of times to run utest for --diag",        0 },
+  { "-N",     eslARG_INT,          "10", NULL, NULL,  NULL,  NULL, NULL, "number of samples to attempt per unit test",     0 },
   { "--diag", eslARG_STRING,       NULL, NULL, NULL,  NULL,  NULL, NULL, "dump data on a utest's chance failure rate",     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -515,7 +601,8 @@ main(int argc, char **argv)
     { 
       char *which = esl_opt_GetString(go, "--diag");
 
-      if (strcmp(which, "compare_reference") == 0) utest_compare_reference(stdout, rng, abc, M, L, N);
+      if      (strcmp(which, "compare_reference") == 0) utest_compare_reference(stdout, rng, abc, M, L, N);
+      else if (strcmp(which, "singlesingle")      == 0) utest_singlesingle     (stdout, rng, abc, M,    N);
       else esl_fatal("--diag takes: compare_reference");
     }
   else
@@ -523,7 +610,9 @@ main(int argc, char **argv)
       fprintf(stderr, "## %s\n", argv[0]);
       fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
+      utest_singlesingle     (NULL, rng, abc, M,    N);
       utest_compare_reference(NULL, rng, abc, M, L, N);
+
 
       fprintf(stderr, "#  status = ok\n");
     }

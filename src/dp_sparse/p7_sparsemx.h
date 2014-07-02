@@ -20,6 +20,8 @@
 
 #include "p7_config.h"
 
+#include "esl_random.h"
+
 #include "base/p7_trace.h"
 #include "dp_reference/p7_refmx.h"
 
@@ -141,6 +143,7 @@ extern int            p7_sparsemask_Finish   (P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Compare(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2);
 extern int            p7_sparsemask_Validate(const P7_SPARSEMASK *sm, char *errbuf);
+extern int            p7_sparsemask_SetFromTrace(P7_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const P7_TRACE *tr);
 
 /* P7_SPARSEMX object management */
 extern P7_SPARSEMX   *p7_sparsemx_Create   (P7_SPARSEMASK *sm);

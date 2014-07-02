@@ -26,6 +26,7 @@
 #include "esl_alphabet.h"
 #include "esl_dmatrix.h"	/* used in _PlotHeatMap() */
 #include "esl_msa.h"
+#include "esl_random.h"
 
 #include "base/p7_hmm.h"
 #include "base/p7_profile.h"
@@ -801,6 +802,61 @@ p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol)
 	  if (tr1->hmmfrom[d] != tr2->hmmfrom[d])  ESL_EXCEPTION(eslFAIL, "traces' hmmfrom differs, domain %d",   d);
 	  if (tr1->hmmto[d]   != tr2->hmmto[d])    ESL_EXCEPTION(eslFAIL, "traces' hmmto differs, domain %d",     d);
 	  //if (tr1->anch[d]    != tr2->anch[d])     ESL_EXCEPTION(eslFAIL, "traces' anchors differ for domain %d", d);  // I think <anch> is only used by mass trace.
+	}
+    }
+  return eslOK;
+}
+
+
+/* Function:  p7_trace_CompareLoosely()
+ * Synopsis:  Weaker version of p7_trace_Compare().
+ *
+ * Purpose:   When we say "reference and sparse traces must be
+ *            identical" in some of the sparse DP unit tests, we don't
+ *            really mean it.  It is possible to have two (or more)
+ *            possible traces with exactly the same score, such that
+ *            any of them are valid Viterbi paths. It is possible for
+ *            sparse trace to find one, and reference trace to find
+ *            another.
+ * 
+ *            The most common example is on a single-residue
+ *            alignment. Suppose the reference trace has state ML31
+ *            aligned to residue Y64, and that's the only aligned
+ *            residue, with all other residues explained by N/C. That
+ *            is, SN...NB->ML31->EC...CT. Now any and all other Y
+ *            residues in the target sequence can also be aligned to
+ *            ML31, necessarily receiving the same emission score, and
+ *            the trace necessarily receives the same overall score.
+ * 
+ *            Of course, this is a pathological case. I didn't expect
+ *            alternative traces with identical scores, for
+ *            position-specific floating-point scores, but an example
+ *            like that above showed up in a unit test failure. If
+ *            <p7_trace_Compare()> is used in sparse DP unit tests
+ *            that are subject to this issue, they will sometimes fail.
+ * 
+ *            Thus the <p7_trace_CompareLoosely() variant, which
+ *            allows emitting M/I states to emit exactly the same
+ *            subsequence in the target: that is, it checks that the
+ *            residue identities match (as opposed to more stringently
+ *            requiring the i indices to match), for all M/I states.
+ */
+int
+p7_trace_CompareLoosely(P7_TRACE *tr1, P7_TRACE *tr2, ESL_DSQ *dsq)
+{
+  int z1 = 0;			/* position in <tr1>: 0..tr1->N-1 */
+  int z2 = 0;			/* position in <tr2>: 0..tr2->N-1 */
+
+  for (z1 = 0; z1 < tr1->N; z1++)
+    {
+      if (p7_trace_IsM(tr1->st[z1]) || p7_trace_IsI(tr1->st[z1]))
+	{
+	  while (z2 < tr2->N-1 && tr1->st[z1] != tr2->st[z2]) z2++;
+	  
+	  if (tr1->st[z1]     != tr2->st[z2])      return eslFAIL;
+	  if (tr1->k[z1]      != tr2->k[z2])       return eslFAIL;
+	  if (dsq[tr1->i[z1]] != dsq[tr2->i[z2]])  return eslFAIL;
+	  z2++;
 	}
     }
   return eslOK;

@@ -342,7 +342,7 @@ p7_anchors_Sample(ESL_RANDOMNESS *rng, int L, int M, int maxD, P7_ANCHORS *anch)
  * Throws:    <eslEMEM> on reallocation failure.
  */
 int
-p7_anchors_SampleFromTrace(ESL_RANDOMNESS *rng, const P7_TRACE *tr, P7_ANCHORS *anch)
+p7_anchors_SampleFromTrace(P7_ANCHORS *anch, ESL_RANDOMNESS *rng, const P7_TRACE *tr)
 {
   int D = tr->ndom;
   int d,z,w;

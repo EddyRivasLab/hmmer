@@ -678,120 +678,6 @@ utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L,
 }
 
 
-/* sparsemask_set_from_trace()
- * 
- * Add every supercell <i,k> in trace <tr> to the sparse mask <sm>.
- * On rows <i> with at least one such cell, and on 20% of empty rows,
- * also mark random sparse supercells with 50% probability each.
- * 
- * This creates a sparse mask in which the path defined by <tr> is
- * marked and can be scored by sparse DP routines; plus additional
- * random cells, to try to exercise possible failure modes.
- */
-static void
-sparsemask_set_from_trace(ESL_RANDOMNESS *rng, P7_SPARSEMASK *sm, P7_TRACE *tr)
-{
-  char  msg[] = "sparse fwdback, sparse mask creation from trace failed";
-  float cellprob = 0.5;
-  float rowprob  = 0.2;
-  int   i,k,z;
-  int   status;
-  
-  z = tr->N-1;
-  for (i = sm->L; i >= 1; i--) /* sparsemask api requires building it backwards */
-    {
-      while (tr->i[z] != i) z--; /* find trace position that generated this residue. */
-    
-      if ( (status = p7_sparsemask_StartRow(sm, i)) != eslOK) esl_fatal(msg);
-
-      /* If this residue was emitted by the model, at least that cell
-       * must be present; thus the row must be present. 
-       * Tricky: in addition to the actual emitting cell i,k, we may
-       * also need to add one or more delete cells i,k-1... 
-       */
-      if (p7_trace_IsM(tr->st[z]) || p7_trace_IsI(tr->st[z])) 
-	{
-	  while (p7_trace_IsD(tr->st[z+1])) z++;
-	  
-	  for (k = sm->M; k > tr->k[z]; k--) 
-	    if (esl_random(rng) < cellprob)
-	      if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) esl_fatal(msg); 
-
-	  while (p7_trace_IsD(tr->st[z])) {
-	    k = tr->k[z]; 
-	    if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) esl_fatal(msg); 
-	    z--;
-	  }
-
-	  k = tr->k[z];
-	  if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) esl_fatal(msg); 
-	  
-	  for (k = k-1; k >= 1; k--)
-	    if (esl_random(rng) < cellprob)
-	      if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) esl_fatal(msg); 
-	}
-      else
-	{
-	  if (esl_random(rng) < rowprob)
-	    for (k = sm->M; k >= 1; k--)
-	      if (esl_random(rng) < cellprob)
-		if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) esl_fatal(msg); /* append to k[i] list, increment n[i] count, reallocating as needed; doesn't deal w/ segments (nrow,nseg,i[]) */
-	}
-
-      if ((status = p7_sparsemask_FinishRow(sm)) != eslOK) esl_fatal(msg);
-    }
-  if ( (status = p7_sparsemask_Finish(sm)) != eslOK) esl_fatal(msg);
-  return;
-}
-
-/* trace_compare_loosely()
- * A replacement for p7_trace_Compare().
- * 
- * When we say "reference and sparse traces must be identical" in the
- * tests below, we don't really mean it. It is possible to have two
- * (or more) possible traces with exactly the same score, such that
- * any of them are valid Viterbi paths. It is possible for sparse
- * trace to find one, and reference trace to find another.
- * 
- * The most common example is on a single-residue alignment. Suppose
- * the reference trace has state ML31 aligned to residue Y64, and
- * that's the only aligned residue, with all other residues explained
- * by N/C. That is, SN...NB->ML31->EC...CT. Now any and all other Y
- * residues in the target sequence can also be aligned to ML31,
- * necessarily receiving the same emission score, and the trace
- * necessarily receives the same overall score.
- * 
- * Of course, this is a pathological case. I didn't expect alternative
- * traces with identical scores, for position-specific floating-point
- * scores, but an example like that above showed up in a unit test
- * failure. If p7_trace_Compare() is used in the tests below, it will
- * sometimes fail.
- * 
- * Thus the trace_compare_loosely() variant, which allows emitting M/I
- * states to emit exactly the same subsequence in the target: that is,
- * it checks that the residue identities match (as opposed to more
- * stringently requiring the i indices to match), for all M/I states.
- */
-static int
-trace_compare_loosely(P7_TRACE *tr1, P7_TRACE *tr2, ESL_DSQ *dsq)
-{
-  int z1 = 0;			/* position in <tr1>: 0..tr1->N-1 */
-  int z2 = 0;			/* position in <tr2>: 0..tr2->N-1 */
-
-  for (z1 = 0; z1 < tr1->N; z1++)
-    {
-      if (p7_trace_IsM(tr1->st[z1]) || p7_trace_IsI(tr1->st[z1]))
-	{
-	  while (z2 < tr2->N-1 && tr1->st[z1] != tr2->st[z2]) z2++;
-	  
-	  if (tr1->st[z1]     != tr2->st[z2])      return eslFAIL;
-	  if (tr1->k[z1]      != tr2->k[z2])       return eslFAIL;
-	  if (dsq[tr1->i[z1]] != dsq[tr2->i[z2]])  return eslFAIL;
-	  z2++;
-	}
-    }
-  return eslOK;
-}
 
 /* utest_compare_reference: 
  * 
@@ -872,7 +758,7 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
       if ( esl_FCompareAbs(vsc_s, vsc_r, tol)          != eslOK) esl_fatal(msg); /* (1): reference and sparse scores (V,F,B) identical within tolerance */
       if ( esl_FCompareAbs(fsc_s, fsc_r, tol)          != eslOK) esl_fatal(msg);
       if ( esl_FCompareAbs(bsc_s, bsc_r, tol)          != eslOK) esl_fatal(msg);
-      if ( trace_compare_loosely(rtr, str, sq->dsq)    != eslOK) esl_fatal(msg); /* (2): reference, sparse Viterbi tracebacks identical; see notes on trace_compare_loosely */
+      if ( p7_trace_CompareLoosely(rtr, str, sq->dsq)  != eslOK) esl_fatal(msg); /* (2): reference, sparse Viterbi tracebacks identical; see notes on p7_trace_CompareLoosely */
       if ( p7_sparsemx_Validate(sxv, NULL)             != eslOK) esl_fatal(msg); /* (3): All sparse DP matrices Validate() (V,F,B,D) */
       if ( p7_sparsemx_Validate(sxf, NULL)             != eslOK) esl_fatal(msg); /*      (the <NULL> arg is an optional <errbuf>)    */
       if ( p7_sparsemx_Validate(sxb, NULL)             != eslOK) esl_fatal(msg);       
@@ -988,7 +874,7 @@ utest_reference_constrained(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, i
       
       /* Use the reference Viterbi trace to create a sparse mask */
       if ( p7_sparsemask_Reinit(sm, M, sq->n)  != eslOK) esl_fatal(msg);
-      sparsemask_set_from_trace(rng, sm, rtr);
+      p7_sparsemask_SetFromTrace(sm, rng, rtr);
 
       /* Sparse DP calculations, in which we know the reference Viterbi trace will be scored */
       if ( p7_SparseViterbi (sq->dsq, sq->n, gm, sm, sxv, str, &vsc_s) != eslOK) esl_fatal(msg);
@@ -1004,7 +890,7 @@ utest_reference_constrained(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, i
 
       /* Tests */
       if ( esl_FCompare(vsc_s, vsc_r, tol)                    != eslOK) esl_fatal(msg); /* (1) sparse, reference V scores equal */
-      if ( trace_compare_loosely(str, rtr, sq->dsq)           != eslOK) esl_fatal(msg); /* (2) sparse, reference V traces identical; see notes on trace_compare_loosely */
+      if ( p7_trace_CompareLoosely(str, rtr, sq->dsq)         != eslOK) esl_fatal(msg); /* (2) sparse, reference V traces identical; see notes on p7_trace_CompareLoosely */
       if ( ! (fsc_s - vsc_r + tol > 0.0f))                              esl_fatal(msg); /* (3) sparse F,B scores >= reference V score. */
       if ( esl_FCompare(fsc_s, bsc_s, tol)                    != eslOK) esl_fatal(msg); /* (4) sparse F score = B score */
       if ( p7_sparsemx_CompareReferenceAsBound(sxv, rxv, tol) != eslOK) esl_fatal(msg); /* (5) All V,F,B matrix values satisfy v_ref >= v_sparse */
@@ -1099,7 +985,7 @@ utest_singlepath(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int N
 
       /* Build a randomized sparse mask around that trace */
       if ( p7_sparsemask_Reinit(sm, M, sq->n)  != eslOK) esl_fatal(msg); 
-      sparsemask_set_from_trace(rng, sm, gtr);
+      p7_sparsemask_SetFromTrace(sm, rng, gtr);
 
       //p7_sparsemask_Dump(stdout, sm);
 

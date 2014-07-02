@@ -31,6 +31,7 @@
 #include <string.h>
 
 #include "easel.h"
+#include "esl_random.h"
 #include "esl_vectorops.h"
 
 #include "base/p7_trace.h"
@@ -635,6 +636,76 @@ p7_sparsemask_Validate(const P7_SPARSEMASK *sm, char *errbuf)
     }
   for (i = sm->seg[sm->S].ib+1; i <= sm->L; i++)
     if (sm->n[i] != 0) ESL_FAIL(eslFAIL, errbuf, "n[i] != 0 for i unmarked, not in sparse segment");
+
+  return eslOK;
+}
+
+/* Function:  p7_sparsemask_SetFromTrace()
+ * Synopsis:  Set a sparse mask to contain cells in given trace, plus random scatter of others.
+ *
+ * Purpose:   Add every supercell <i,k> in trace <tr> to the sparse mask <sm>.
+ *            
+ *            If <rng> is provided (i.e. non-<NULL>), on rows <i> with
+ *            at least one such cell, and on 20% of empty rows, also
+ *            mark random sparse supercells with 50% probability
+ *            each. This creates a sparse mask in which the path
+ *            defined by <tr> is marked and can be scored by sparse DP
+ *            routines; plus additional random cells, to try to
+ *            exercise possible failure modes.
+ *            
+ */
+int
+p7_sparsemask_SetFromTrace(P7_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const P7_TRACE *tr)
+{
+  float cellprob = 0.5;
+  float rowprob  = 0.2;
+  int   i,k,z;
+  int   status;
+  
+  z = tr->N-1;
+  for (i = sm->L; i >= 1; i--) /* sparsemask api requires building it backwards */
+    {
+      while (tr->i[z] != i) z--; /* find trace position that generated this residue. */
+    
+      if ( (status = p7_sparsemask_StartRow(sm, i)) != eslOK) return status;
+
+      /* If this residue was emitted by the model, at least that cell
+       * must be present; thus the row must be present. 
+       * Tricky: in addition to the actual emitting cell i,k, we may
+       * also need to add one or more delete cells i,k-1... 
+       */
+      if (p7_trace_IsM(tr->st[z]) || p7_trace_IsI(tr->st[z])) 
+	{
+	  while (p7_trace_IsD(tr->st[z+1])) z++;
+	  
+	  for (k = sm->M; k > tr->k[z]; k--) 
+	    if (rng && esl_random(rng) < cellprob)
+	      if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
+
+	  while (p7_trace_IsD(tr->st[z])) {
+	    k = tr->k[z]; 
+	    if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
+	    z--;
+	  }
+
+	  k = tr->k[z];
+	  if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
+	  
+	  for (k = k-1; k >= 1; k--)
+	    if (rng && esl_random(rng) < cellprob)
+	      if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
+	}
+      else
+	{
+	  if (rng && esl_random(rng) < rowprob)
+	    for (k = sm->M; k >= 1; k--)
+	      if (rng && esl_random(rng) < cellprob)
+		if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status; /* append to k[i] list, increment n[i] count, reallocating as needed; doesn't deal w/ segments (nrow,nseg,i[]) */
+	}
+
+      if ((status = p7_sparsemask_FinishRow(sm)) != eslOK) return status;
+    }
+  if ( (status = p7_sparsemask_Finish(sm)) != eslOK) return status;
 
   return eslOK;
 }
