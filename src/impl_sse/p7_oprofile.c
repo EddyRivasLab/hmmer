@@ -32,7 +32,7 @@
 static uint8_t unbiased_byteify(P7_OPROFILE *om, float sc);
 static uint8_t biased_byteify(P7_OPROFILE *om, float sc);
 static int16_t wordify(P7_OPROFILE *om, float sc);
-
+static int     sf_conversion(P7_OPROFILE *om);
 
 /*****************************************************************
  * 1. The P7_OPROFILE structure: a score profile.
@@ -436,8 +436,7 @@ p7_oprofile_Clone(const P7_OPROFILE *om1)
  *            sc_arr            Preallocated array of at least Kp*4 floats
  */
 int
-p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions,
-                               float *sc_arr)
+p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr)
 {
   int     M   = om->M;    /* length of the query                                          */
   int     k, q, x, z;
@@ -632,6 +631,8 @@ p7_oprofile_UpdateMSVEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emiss
       om->rbv[x][q] = tmp.v;
     }
   }
+
+  sf_conversion(om);
 
   return eslOK;
 }

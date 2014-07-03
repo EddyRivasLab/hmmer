@@ -294,8 +294,8 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
 
 
 
-/* Function:  p7_oprofile_GetMSVEmissionArray()
- * Synopsis:  Retrieve MSV residue emission scores from an optimized
+/* Function:  p7_oprofile_GetSSVEmissionScoreArray()
+ * Synopsis:  Retrieve MSV residue emission scores from a
  *            profile into an array
  *
  * Purpose:   Extract an implicitly 2D array of 8-bit int MSV residue
@@ -310,7 +310,7 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
  *            is based on code from the function mf_conversion in impl_sse's
  *            p7_oprofile.c
  *
- * Args:      <om>   - optimized profile, containing emission information
+ * Args:      <om>   - profile, containing emission information
  *            <arr>  - preallocated array into which scores will be placed
  *
  * Returns:   <eslOK> on success.
@@ -451,7 +451,26 @@ p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emiss
 
 }
 
+/* Function:  p7_oprofile_UpdateVitEmissionScores()
+ * Synopsis:  Dummy function - no need to update Viterbi-specific scores in dummy
+ *
+ */
+int
+p7_oprofile_UpdateVitEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr)
+{
+  return eslOK;
+}
 
+
+/* Function:  p7_oprofile_UpdateMSVEmissionScores()
+ * Synopsis:  Dummy function - no need to update Viterbi-specific scores in dummy
+ */
+int
+p7_oprofile_UpdateMSVEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr)
+{
+  return eslOK;
+
+}
 /*------------ end, conversions from P7_OPROFILE ------------------*/
 
 

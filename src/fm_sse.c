@@ -2,13 +2,16 @@
 
 #include <stdio.h>
 
+#if   defined (p7_IMPL_SSE)
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
+#endif
 
 #include "easel.h"
 #include "esl_getopts.h"
 #include "hmmer.h"
 
+#if   defined (p7_IMPL_SSE)
 int
 fm_getbits_m128 (__m128i in, char *buf, int reverse) 
 {
@@ -49,6 +52,7 @@ fm_print_m128_rev (__m128i in)
   fprintf (stderr, "%s\n", str);
   return eslOK;
 }
+#endif //#if   defined (p7_IMPL_SSE)
 
 
 /* Function:  fm_initConfig()
@@ -62,6 +66,8 @@ fm_configInit( FM_CFG *cfg, ESL_GETOPTS *go )
   int trim_chunk_count;
 
   fm_initConfigGeneric(cfg, go);
+
+#if   defined (p7_IMPL_SSE)
 
   cfg->fm_allones_v = _mm_set1_epi8(0xff);
   cfg->fm_neg128_v  = _mm_set1_epi8((int8_t) -128);
@@ -141,6 +147,8 @@ fm_configInit( FM_CFG *cfg, ESL_GETOPTS *go )
 
     }
   }
+#endif //#if   defined (p7_IMPL_SSE)
+
 /*
   if (cfg->meta->alph_type == fm_DNA_full) {
     cfg->fm_masks_v[16]          = cfg->fm_allones_v;
@@ -150,9 +158,11 @@ fm_configInit( FM_CFG *cfg, ESL_GETOPTS *go )
   return eslOK;
 
 ERROR:
+#if   defined (p7_IMPL_SSE)
   if (cfg->fm_chars_mem)         free(cfg->fm_chars_mem);
   if (cfg->fm_masks_mem)         free(cfg->fm_masks_mem);
   if (cfg->fm_reverse_masks_mem) free(cfg->fm_reverse_masks_mem);
+#endif
 
   esl_fatal("Error allocating memory in initGlobals\n");
   return eslFAIL;
@@ -201,6 +211,8 @@ fm_getOccCount (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c) {
     landmark  = (b_pos*(meta->freq_cnt_b)) - 1 ;
   }
 
+#if   defined (p7_IMPL_SSE)
+
 
   // get the cnt stored at the nearest checkpoint
   cnt =  FM_OCC_CNT(sb, sb_pos, c );
@@ -209,7 +221,6 @@ fm_getOccCount (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c) {
     cnt += FM_OCC_CNT(b, b_pos + 1, c ) ;
   else if ( b_pos !=  sb_pos * (meta->freq_cnt_sb / meta->freq_cnt_b) )
     cnt += FM_OCC_CNT(b, b_pos, c )  ;// b_pos has cumulative counts since the prior sb_pos - if sb_pos references the same count as b_pos, it'll doublecount
-
 
   if ( landmark < fm->N || landmark == -1 ) {
 
@@ -335,6 +346,7 @@ fm_getOccCount (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c) {
     cnt--;
   }
 
+#endif //#if   defined (p7_IMPL_SSE)
 
 
   return cnt ;
@@ -399,7 +411,7 @@ fm_getOccCountLT (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c, uint
       *cntlt += FM_OCC_CNT(b, b_pos, i ) ;
   }
 
-
+#if   defined (p7_IMPL_SSE)
 
   if ( landmark < fm->N - 1 || landmark == -1 ) {
 
@@ -605,12 +617,11 @@ fm_getOccCountLT (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c, uint
     }
   }
 
-
+#endif //#if   defined (p7_IMPL_SSE)
 
   return eslOK ;
 
 }
-
 
 
 /*****************************************************************

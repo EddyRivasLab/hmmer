@@ -104,6 +104,7 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
 
   ESL_ALLOC(pli, sizeof(P7_PIPELINE));
 
+  pli->do_alignment_score_calc = 0;
   pli->long_targets = long_targets;
 
   if ((pli->fwd = p7_omx_Create(M_hint, L_hint, L_hint)) == NULL) goto ERROR;
@@ -1619,6 +1620,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
       p7_oprofile_ReconfigMSVLength(om, window->length);
       p7_MSVFilter(subseq, window->length, om, pli->oxf, &usc);
       P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+
       if (P > pli->F1 ) continue;
       pli->pos_past_msv += window->length;
 

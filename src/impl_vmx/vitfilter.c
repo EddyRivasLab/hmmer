@@ -421,7 +421,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
           for (z = 0; z < 8; z++)  { // unstripe
             if ( tmp.i[z] == xE && (q+Q*z+1) <= om->M) {
               // (q+Q*z+1) is the model position k at which the xE score is found
-              p7_hmmwindow_new(windowlist, 0, i, 0, (q+Q*z+1), 1, 0.0, p7_NOCOMPLEMENT );
+              p7_hmmwindow_new(windowlist, 0, i, i-1, (q+Q*z+1), 1, 0.0, p7_NOCOMPLEMENT, L );
             }
           }
           MMXo(q) = IMXo(q) = DMXo(q) = negInfv; //reset score to start search for next vit window.

@@ -432,8 +432,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       info[i].queue = queue;
 #endif
     ESL_ALLOC(info[i].scores, sizeof(float) * abc->Kp * 16); //allocation of space to store scores that will be used in p7_oprofile_Update(Fwd|Vit|MSV)EmissionScores
-    ESL_ALLOC(info[i].fwd_emissions, sizeof(float) *  abc->Kp * (om->M+1));
-
   }
 
 #ifdef HMMER_THREADS
@@ -491,6 +489,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         else
           info[i].pli->strands = p7_STRAND_BOTH;
 
+        info[i].fwd_emissions = NULL;
 
         #ifdef HMMER_THREADS
           if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
@@ -589,8 +588,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* Cleanup - prepare for successful exit
    */
-  for (i = 0; i < infocnt; ++i)
+  for (i = 0; i < infocnt; ++i) {
     p7_bg_Destroy(info[i].bg);
+    p7_bg_Destroy(info[i].bg_default);
+    if (info[i].scores != NULL) free(info[i].scores);
+  }
 
 #ifdef HMMER_THREADS
   if (ncpus > 0)
@@ -603,28 +605,23 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     }
 #endif
 
-  free(info);
+  ERROR:
 
-  esl_sq_Destroy(qsq);
-  esl_stopwatch_Destroy(w);
-  esl_alphabet_Destroy(abc);
-  esl_sqfile_Close(sqfp);
+  p7_bg_Destroy(bg_manual);
+
+  if (info!=NULL) free(info);
+
+  if (qsq!=NULL)  esl_sq_Destroy(qsq);
+  if (w!=NULL)    esl_stopwatch_Destroy(w);
+  if (abc!=NULL)  esl_alphabet_Destroy(abc);
+  if (sqfp!=NULL) esl_sqfile_Close(sqfp);
 
   if (ofp != stdout) fclose(ofp);
   if (tblfp)         fclose(tblfp);
   if (dfamtblfp)     fclose(dfamtblfp);
   if (aliscoresfp)   fclose(aliscoresfp);
 
-  return eslOK;
-
- ERROR:
-
- if (ofp != stdout) fclose(ofp);
- if (tblfp)         fclose(tblfp);
- if (dfamtblfp)     fclose(dfamtblfp);
- if (aliscoresfp)   fclose(aliscoresfp);
-
- return status;
+  return status;
 }
 
 
@@ -668,6 +665,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
          */
         p7_oprofile_ReadRest(info->pli->hfp, om);
         if ((status = p7_pli_NewModelThresholds(info->pli, om)) != eslOK)  return status;
+        ESL_REALLOC(info->fwd_emissions, sizeof(float) *  abc->Kp * (om->M+1));
         p7_oprofile_GetFwdEmissionArray(om, info->bg_default, info->fwd_emissions);
         p7_oprofile_UpdateFwdEmissionScores(om, info->bg, info->fwd_emissions, info->scores);
         p7_oprofile_UpdateVitEmissionScores(om, info->bg, info->fwd_emissions, info->scores);
@@ -706,12 +704,21 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
       p7_oprofile_Destroy(om);
       p7_hmm_ScoreDataDestroy(scoredata);
 
+
+
+
   }
 
   esl_alphabet_Destroy(abc);
 #ifdef eslAUGMENT_ALPHABET
   esl_sq_Destroy(sq_revcmp);
 #endif
+
+  if (info->fwd_emissions != NULL) free(info->fwd_emissions);
+
+
+ERROR:
+
   return status;
 }
 
@@ -821,6 +828,21 @@ pipeline_thread(void *arg)
         p7_bg_SetLength(info->bg, info->qsq->n);
         p7_oprofile_ReconfigLength(om, info->qsq->n);
 
+        if (info->bg_default != NULL) {
+          /*bg was overridden by --bgfile; we need to fix all the scores
+           *-First, compute emissions based on bg_default
+           *-Then use those emissions to compute new scores for fwd, vit and msv, based on bg
+           *We need to ReadRest now, so we correctly compute fwd_emissions
+           */
+          p7_oprofile_ReadRest(info->pli->hfp, om);
+          if ((status = p7_pli_NewModelThresholds(info->pli, om)) != eslOK)  esl_fatal("Error setting thresholds in worker thread");
+          ESL_REALLOC(info->fwd_emissions, sizeof(float) *  info->qsq->abc->Kp * (om->M+1));
+          p7_oprofile_GetFwdEmissionArray(om, info->bg_default, info->fwd_emissions);
+          p7_oprofile_UpdateFwdEmissionScores(om, info->bg, info->fwd_emissions, info->scores);
+          p7_oprofile_UpdateVitEmissionScores(om, info->bg, info->fwd_emissions, info->scores);
+          p7_oprofile_UpdateMSVEmissionScores(om, info->bg, info->fwd_emissions, info->scores);
+        }
+
         scoredata = p7_hmm_ScoreDataCreate(om, FALSE);
 
 
@@ -864,12 +886,21 @@ pipeline_thread(void *arg)
   esl_sq_Destroy(sq_revcmp);
 #endif
 
+  if (info->fwd_emissions != NULL) free(info->fwd_emissions);
 
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
   if (status != eslOK) esl_fatal("Work queue worker failed");
 
   esl_threads_Finished(obj, workeridx);
   return;
+
+
+ERROR:
+
+  esl_fatal("Error allocating memory in work queue");
+  return;
+
+
 }
 #endif   /* HMMER_THREADS */
 

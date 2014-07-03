@@ -171,8 +171,6 @@ fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
   interval->lower  = interval_bk.lower = abs(fm->C[c]);
   interval->upper  = interval_bk.upper = abs(fm->C[c+1])-1;
 
-  //  fprintf (stderr, "%d : %12d..%12d\n", c, interval->lower, interval->upper );
-
 
   while (interval_bk.lower>=0 && interval_bk.lower <= interval_bk.upper) {
     c = query[++i];
@@ -181,7 +179,6 @@ fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
 
     c = inv_alph[c];
     fm_updateIntervalForward( fm, cfg, c, &interval_bk, interval);
-    //    fprintf (stderr, "%d : %12d..%12d\n", c, interval->lower, interval->upper );
     cfg->occCallCnt+=2;
   }
 
@@ -222,8 +219,6 @@ fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
   char c = inv_alph[(int)query[0]];
   interval->lower  = abs(fm->C[(int)c]);
   interval->upper  = abs(fm->C[(int)c+1])-1;
-
-  //fprintf (stderr, "1: %d : %12d..%12d\n", c, interval->lower, interval->upper );
 
   while (interval->lower>=0 && interval->lower <= interval->upper) {
     c = query[++i];
@@ -737,9 +732,11 @@ ERROR:
 int
 fm_configDestroy(FM_CFG *cfg ) {
   if (cfg) {
+#if   defined (p7_IMPL_SSE)
     if (cfg->fm_chars_mem)         free(cfg->fm_chars_mem);
     if (cfg->fm_masks_mem)         free(cfg->fm_masks_mem);
     if (cfg->fm_reverse_masks_mem) free(cfg->fm_reverse_masks_mem);
+#endif
     fm_metaDestroy(cfg->meta);
     free(cfg);
   }

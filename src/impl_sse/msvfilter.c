@@ -131,7 +131,6 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   }
 #endif
 
-
   for (i = 1; i <= L; i++)
   {
       rsc = om->rbv[dsq[i]];
@@ -292,7 +291,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
   union { __m128i v; uint8_t b[16]; } u;
 
-
   /*
    * Computing the score required to let P meet the F1 prob threshold
    * In original code, converting from a scaled int MSV
@@ -329,7 +327,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 
   sc_thresh = (int) ceil( ( ( nullsc  + (invP * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b );
   sc_threshv = _mm_set1_epi8((int8_t) 255 - sc_thresh);
-
 
   /* Initialization. In offset unsigned  arithmetic, -infinity is 0, and 0 is om->base.
    */
@@ -371,7 +368,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
 	  cmp = _mm_movemask_epi8(tempv);
 
 	  if (cmp != 0) {  //hit pthresh, so add position to list and reset values
-
 	    //figure out which model state hit threshold
 	    end = -1;
 	    rem_sc = -1;
@@ -433,7 +429,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       p7_hmmwindow_new(  windowlist,
                          0,                  // sequence_id; used in the FM-based filter, but not here
                          target_start,       // position in the target at which the diagonal starts
-                         0,                  // position in the target fm_index at which diagonal starts;  not used here, just in FM-based filter (was k, but that was a red herring)
+                         0,                  // position in the target fm_index at which diagonal starts;  not used here, just in FM-based filter
                          end,                // position in the model at which the diagonal ends
                          end-start+1 ,       // length of diagonal
                          ret_sc,             // score of diagonal

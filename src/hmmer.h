@@ -831,7 +831,6 @@ typedef struct p7_hmm_window_list_s {
 /*****************************************************************
  * 15. The FM-index acceleration to the SSV filter.  Only works for SSE
  *****************************************************************/
-
 #define FM_MAX_LINE 256
 
 /* Structure the 2D occ array into a single array.  "type" is either b or sb.
@@ -966,7 +965,6 @@ typedef struct fm_diaglist_s {
   int       size;
 } FM_DIAGLIST;
 
-
 /* Effectively global variables, to be initialized once in fm_initConfig(),
  * then passed around among threads to avoid recomputing them
  *
@@ -974,6 +972,7 @@ typedef struct fm_diaglist_s {
  * must precede other types
  */
 typedef struct {
+#if   defined (p7_IMPL_SSE)
   /* mask arrays, and 16-byte-offsets into them */
   __m128i *fm_masks_mem;
   __m128i *fm_masks_v;
@@ -991,7 +990,7 @@ typedef struct {
   __m128i fm_m11;  //00 00 00 11
 
   /* no non-__m128i- elements above this line */
-
+#endif //#if   defined (p7_IMPL_SSE)
 
   /*counter, to compute FM-index speed*/
   int occCallCnt;
@@ -1013,6 +1012,7 @@ typedef struct {
 } FM_CFG;
 
 
+#if   defined (p7_IMPL_SSE)
 //used to convert from a byte array to an __m128i
 typedef union {
         uint8_t bytes[16];
@@ -1162,6 +1162,7 @@ typedef union {
   } while (0)
 
 
+#endif  // if  defined (p7_IMPL_SSE)
 
 /*****************************************************************
  * 16. P7_PIPELINE: H3's accelerated seq/profile comparison pipeline

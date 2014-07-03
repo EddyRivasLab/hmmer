@@ -419,7 +419,18 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
       ret_sc /= om->scale_b;
       ret_sc -= 3.0; // that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ
 
-      p7_hmmwindow_new(windowlist, 0, target_start, -1, end, end-start+1 , ret_sc, p7_NOCOMPLEMENT );
+      p7_hmmwindow_new(  windowlist,
+                         0,                  // sequence_id; used in the FM-based filter, but not here
+                         target_start,       // position in the target at which the diagonal starts
+                         0,                  // position in the target fm_index at which diagonal starts;  not used here, just in FM-based filter
+                         end,                // position in the model at which the diagonal ends
+                         end-start+1 ,       // length of diagonal
+                         ret_sc,             // score of diagonal
+                         p7_NOCOMPLEMENT,    // always p7_NOCOMPLEMENT here;  varies in FM-based filter
+                         L
+                       );
+
+
 
       i = target_end; // skip forward
 
