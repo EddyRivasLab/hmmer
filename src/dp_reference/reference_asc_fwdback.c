@@ -918,7 +918,7 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET 
       rxf == NULL || rxb == NULL || afu == NULL ||
       afd == NULL || abu == NULL || abd == NULL)   esl_fatal(failmsg);
 
-  if ((status = p7_modelsample_SinglePathedSeq(rng, M, bg, &taghmm, &gm, &dsq, &L, &tr, &anch, &D, &sc)) != eslOK) esl_fatal(failmsg);
+  if ((status = p7_modelsample_SinglePathedSeq(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &sc)) != eslOK) esl_fatal(failmsg);
 
   if ((status = p7_ReferenceViterbi (dsq, L, gm, rxv, vtr, &vsc)) != eslOK) esl_fatal(failmsg);
   if ((status = p7_ReferenceForward (dsq, L, gm, rxf,      &fsc)) != eslOK) esl_fatal(failmsg);

@@ -336,24 +336,49 @@ sto_select_b(ESL_RANDOMNESS *rng, const P7_PROFILE *gm, const float *xc)
  * 3. Traceback engine, shared by V and Sto tracing
  *****************************************************************/
 
-/* Throws:    <eslEMEM> on allocation failure.
- *            <eslEINVAL> if trace object isn't suitable, like if it
- *            was already used and not reinitialized (with _Reuse()).
+/* 
+ * Can work either as a complete-sequence traceback of a forward
+ * matrix, or a "segment trace" of a single segment. (A segment trace
+ * is a hack used in the sparse MPAS algorithm; see sparse_anchors.c,
+ * including footnote [4] in that .c file.) 
+ * 
+ * For a normal (complete-sequence) traceback: pass <g=0>. (And then
+ * it doesn't matter what you pass for <dp>, <xc>, so you may as well
+ * pass NULL for them.)
+ * 
+ * For a segment traceback, pass <g=1..G>, the segment number you want
+ * to trace. Now <dp>, <xc> can be used as hints to speed up access to
+ * the sparse matrix: if the caller knows a ptr to the start of the
+ * main matrix row for the last row <ib> of the segment, pass that as
+ * <dp>; if it knows a ptr to the start of the specials for the last
+ * row of the segment g, pass that as <xc>. If these aren't known, no
+ * problem, pass <dp> and <xc> as <NULL>, and they'll be determined by
+ * a slower method.
+ * 
+ * Optionally, can return the number of domains in the trace in <*opt_D>.
+ * 
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure, 
+ *            in <p7_trace_Append()> for example.
  */
 static int
-sparse_traceback_engine(ESL_RANDOMNESS *rng, float *wrk, const P7_PROFILE *gm, const P7_SPARSEMX *sx, P7_TRACE *tr)
+sparse_traceback_engine(ESL_RANDOMNESS *rng, float *wrk, const P7_PROFILE *gm, const P7_SPARSEMX *sx, P7_TRACE *tr,
+			int g, float *dp, float *xc, int *opt_D)
 {
   const P7_SPARSEMASK *sm = sx->sm;
   int            k  = 0;	/* current coord in profile consensus */
-  int            i  = sm->L;	/* current coord in sequence (that snxt is on) */
-  float         *dp;		/* points to main model DP cells for next valid row i */
-  int            ip = sm->L;    /* current coord that <dp> is on (cur or prev row) */
-  float         *xc;		/* points to xmx[i] special cells for current row (if it was stored; or prev stored row <i) */
+  int            i;	        /* current coord in sequence (that snxt is on) */
+  int            ip;            /* current coord that <dp> is on (cur or prev row) */
   int            xc_on_i;       /* TRUE if <xc> is on row i; FALSE if xc points at a special row < i */
   int            scur, snxt;
   int            k2;		/* extra k counter while extending wings */
   int            z;		/* current position in n[i] sparse k array entries on current row dp[] */
+  int            istart;        /* row we're tracing back to: 0 for complete, ia-1 for segment trace */
+  int            D  = 0;	/* counts number of domains in the trace, by counting E states. */
   int            status;
+
+  ESL_DASSERT1(( tr->N == 0 ));   // trace must be empty - _Reuse() was called on it
 
   int (*select_ml)(ESL_RANDOMNESS *rng,             const P7_PROFILE *gm, int k, const float *dpp, int *kp, int np, float *xp, int *ret_z);
   int (*select_mg)(ESL_RANDOMNESS *rng,             const P7_PROFILE *gm, int k, const float *dpp, int *kp, int np, float *xp, int *ret_z);
@@ -383,9 +408,7 @@ sparse_traceback_engine(ESL_RANDOMNESS *rng, float *wrk, const P7_PROFILE *gm, c
       select_e  = &sto_select_e;       select_b  = &sto_select_b;
     }
 
-#ifdef p7_DEBUGGING
-  if (tr->N) ESL_EXCEPTION(eslEINVAL, "trace isn't empty - forgot to Reuse()?");
-#endif
+
 
   /* <dp> points to the main sparse row we're tracing to, when we can
    * trace to an <snxt> in the model, and <ip> is the index of that
@@ -411,16 +434,44 @@ sparse_traceback_engine(ESL_RANDOMNESS *rng, float *wrk, const P7_PROFILE *gm, c
    * them where it makes sense for the particular state, so it's harmless to
    * always pass current k,i even for nonemitting states.
    */
+  if (g)  // segment trace version.
+    {
+      if (dp == NULL)
+	{
+	  dp = sx->dp;
+	  for (i =  1; i < sm->seg[g].ia; i++)
+	    dp += p7S_NSCELLS * sm->n[i];
+	}
+      if (xc == NULL)
+	{
+	  xc = sx->xmx;
+	  int g2;
+	  for (g2 = 1; g2 < g; g++)
+	    xc += p7S_NXCELLS * (sm->seg[g].ib - sm->seg[g].ia+2);  // ia-1..ib = ib-ia+2 to skip segment
+	}
 
-  xc      = sx->xmx + (sm->nrow+sm->S-1)*p7S_NXCELLS; /* initialized to last stored row, an end-of-seg ib; may be <L */
-  xc_on_i = (sm->n[sm->L] ? TRUE : FALSE);	      /* if last row is in segment, stored, ib==L, then xc points to stored special row */
+      i = ip = sm->seg[g].ib;   
+      xc_on_i = TRUE;   // we know ib is stored, it's in a segment.		
+      if ((status = p7_trace_Append(tr, p7T_J, k, i)) != eslOK) return status;   // _Append() will actually set i[0] = 0, not i; there's always one mute J state.
+      scur = p7T_J;                                                              // If we do use a J to generate ib, that gets handled and added by the main recursion.
+      istart = sm->seg[g].ia;
+    }
+  else  // complete-sequence trace version
+    {
+      i = ip  = sm->L;
+      xc      = sx->xmx + (sm->nrow+sm->S-1)*p7S_NXCELLS; /* initialized to last stored row, an end-of-seg ib; may be <L */
+      xc_on_i = (sm->n[sm->L] ? TRUE : FALSE);	          /* if last row is in segment, stored, ib==L, then xc points to stored special row */
 
-  dp      = sx->dp  + (sm->ncells - sm->n[sm->L]) * p7S_NSCELLS; /* <dp> is initialized on row ip=L, which might be empty */
-      
-  if ((status = p7_trace_Append(tr, p7T_T, k, i)) != eslOK) return status;
-  if ((status = p7_trace_Append(tr, p7T_C, k, i)) != eslOK) return status;
-  scur = p7T_C;
-  while (scur != p7T_S)
+      dp      = sx->dp  + (sm->ncells - sm->n[sm->L]) * p7S_NSCELLS; /* <dp> is initialized on row ip=L, which might be empty */
+
+      if ((status = p7_trace_Append(tr, p7T_T, k, i)) != eslOK) return status;
+      if ((status = p7_trace_Append(tr, p7T_C, k, i)) != eslOK) return status;
+      scur   = p7T_C;
+      istart = 0;
+    }
+
+  /* Main recursion. */
+  while ( i > istart || (scur != p7T_N && scur != p7T_J))    // Normally we trace to N(0). Segment trace goes to {N|J}(ia-1). This while() logic handles both.
     {
       switch (scur) {
       case p7T_ML: snxt = (*select_ml)(rng, gm, k, dp, sm->k[i-1], sm->n[i-1], xc-p7S_NXCELLS, &z); i--; k--;      xc -= p7S_NXCELLS; break;
@@ -429,10 +480,10 @@ sparse_traceback_engine(ESL_RANDOMNESS *rng, float *wrk, const P7_PROFILE *gm, c
       case p7T_IG: snxt = (*select_ig)(rng, gm, k, dp, sm->k[i-1], sm->n[i-1],                 &z); i--;           xc -= p7S_NXCELLS; break;
       case p7T_DL: snxt = (*select_dl)(rng, gm, k, dp + (z-1)*p7S_NSCELLS);                              k--; z--;                    break; 
       case p7T_DG: snxt = (*select_dg)(rng, gm, k, dp + (z-1)*p7S_NSCELLS);                              k--; z--;                    break;
-      case p7T_N:  snxt =    (i == 0 ? p7T_S : p7T_N);                                                                                break;
+      case p7T_N:  snxt = p7T_N;                                                                                                      break;
       case p7T_J:  snxt = (sm->n[i] ? (*select_j)(rng, gm, xc) : p7T_J);                                                              break; 
       case p7T_C:  snxt = (sm->n[i] ? (*select_c)(rng, gm, xc) : p7T_C);                                                              break; // connect to E(i), C(i-1). E(i) valid if n[i]>0; and if E(i) valid, C(i-1) must be stored too. if E(i) invalid, connect to C, and it doesn't matter if xc is valid or not
-      case p7T_E:  snxt = (*select_e)(rng, wrk, gm, dp, sm->k[i], sm->n[i], &z);                         k=sm->k[i][z];               break;
+      case p7T_E:  snxt = (*select_e)(rng, wrk, gm, dp, sm->k[i], sm->n[i], &z);                         k=sm->k[i][z];   D++;        break;
       case p7T_B:  snxt = (*select_b)(rng, gm, xc);                                                                                   break; // {NJ}(i) -> B(i). If we reached B(i), xc[i] valid, so NJ must also be valid.
       case p7T_L:  snxt = p7T_B;                                                                                                      break;
       case p7T_G:  snxt = p7T_B;                                                                                                      break;
@@ -471,9 +522,13 @@ sparse_traceback_engine(ESL_RANDOMNESS *rng, float *wrk, const P7_PROFILE *gm, c
       scur = snxt;
     }
 
+  if (g == 0)  // only for a complete trace, we add the S state. Segment trace ends with N or J.
+    if ((status = p7_trace_Append(tr, p7T_S, 0, 0)) != eslOK) return status;
+
   tr->M = sm->M;
   tr->L = sm->L;
-  return p7_trace_Reverse(tr);
+  if (opt_D) *opt_D = D;
+  return p7_trace_Reverse(tr);  // trace_Reverse doesn't care if it's a complete trace or a segment trace.
 }
 /*--------------- end, traceback engine -------------------------*/
 
@@ -504,7 +559,7 @@ sparse_traceback_engine(ESL_RANDOMNESS *rng, float *wrk, const P7_PROFILE *gm, c
 int
 p7_sparse_trace_Viterbi(const P7_PROFILE *gm, const P7_SPARSEMX *sx, P7_TRACE *tr)
 {
-  return (sparse_traceback_engine(NULL, NULL, gm, sx, tr));
+  return (sparse_traceback_engine(NULL, NULL, gm, sx, tr, 0, NULL, NULL, NULL));
 }
 
 /* Function:  p7_sparse_trace_Stochastic()
@@ -562,7 +617,7 @@ p7_sparse_trace_Stochastic(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PROFIL
   else if (esl_byp_IsReturned(wrk_byp)) { ESL_ALLOC  (*wrk_byp, sxf->sm->M * p7S_NSCELLS * sizeof(float)); wrk = *wrk_byp; }
   else if (esl_byp_IsProvided(wrk_byp)) { ESL_REALLOC(*wrk_byp, sxf->sm->M * p7S_NSCELLS * sizeof(float)); wrk = *wrk_byp; }
 
-  status = sparse_traceback_engine(rng, wrk, gm, sxf, tr);
+  status = sparse_traceback_engine(rng, wrk, gm, sxf, tr, 0, NULL, NULL, NULL);
 
   if  (esl_byp_IsInternal(wrk_byp)) { free(wrk); }
   return status;
@@ -570,6 +625,98 @@ p7_sparse_trace_Stochastic(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PROFIL
  ERROR:
   return status;
 }
+
+
+
+/* Function:  p7_sparse_trace_SegmentStochastic()
+ * Synopsis:  Stochastic traceback of a single sparse segment. Used in MPAS.
+ *
+ * Purpose:   Caller wants a stochastic traceback for segment <g> of a
+ *            sparse Forward matrix <sxf>. Caller provides random number
+ *            generator <rng>, and the profile <gm> that was used in
+ *            calculating <sxf>. 
+ *            
+ *            It's possible (indeed likely) that the segment contains
+ *            no domains. This case gets handled specially, and the
+ *            caller must provide the segment forward score <sF> for
+ *            this handling (see footnote [6] in sparse_anchors.c for
+ *            full explanation). Rather than wasting time constructing
+ *            the empty path in <tr> explicitly, we simply return an
+ *            empty <tr> (i.e. one with <tr->N = 0>). Caller must
+ *            check for this case.
+ *            
+ *            Stochastic tracebacks require some auxiliary working
+ *            memory, of at least <M*p7S_NSCELLS> floats. Caller may
+ *            provide an existing scratch space via <wrk_byp>,
+ *            following Easel's bypass idiom. You can pass <NULL>, and
+ *            the necessary work space will be allocated and
+ *            deallocated internally. See
+ *            <p7_sparse_trace_Stochastic()> documentation for more
+ *            information.
+ *            
+ *            If caller happens to know where row <ib> (i.e. the start
+ *            point of the traceback) starts in the sparse Forward
+ *            matrix storage in <sxf>, it should provide a ptr to the
+ *            main matrix row <ib> via <dpc>, and to the specials via
+ *            <xc>. If these are unknown, pass <NULL> for both, and
+ *            they will be determined (at some cost of time).
+ *            
+ *            The resulting trace, stored in <tr>, is a hacked
+ *            "segment trace". It starts with N|J and ends with J, and
+ *            accounts for residues ia..ib. See footnote [4] in
+ *            sparse_anchors.c. Although footnote [4] says that
+ *            segment traces allow empty paths (all JJ...JJ), because
+ *            the caller is responsible for predetermining whether the
+ *            empty path is sampled, this function only returns
+ *            segment traces with D>0.
+ *
+ * Returns:   <eslOK> on success. <tr> contains a segment trace
+ *            sampled from the deltaS + p0 ensemble. If the empty 
+ *            path p0 was sampled, <tr> is empty, with <tr->N=0>.
+ *
+ * Throws:    <eslEMEM> on allocation failure (in <wrk_byp>, or 
+ *            in p7_trace_Append(), for example).
+ * 
+ *            <eslNOHALT> if rejection sampling in the deltaS ensemble 
+ *            appears to be caught in an infinite loop. 
+ */
+int
+p7_sparse_trace_SegmentStochastic(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PROFILE *gm, const P7_SPARSEMX *sxf, float sF, int g, float *dpc, float *xc, P7_TRACE *tr)
+{
+  float *wrk      = NULL;
+  float  p0       = gm->xsc[p7P_J][p7P_J] * (sxf->sm->seg[g].ib - sxf->sm->seg[g].ia + 1);
+  float  pempty   = exp(p0 - sF);
+  int    failsafe = 0;
+  int    D;
+  int    status;
+
+  /* Contract checks. */
+  ESL_DASSERT1(( gm->xsc[p7P_N][p7P_N] == gm->xsc[p7P_J][p7P_J] ));   // Use of segmented MPAS requires t_NN = t_JJ = tCC. See footnote [1] in sparse_anchors.c.
+  ESL_DASSERT1(( gm->xsc[p7P_N][p7P_N] == gm->xsc[p7P_C][p7P_C] ));
+  ESL_DASSERT1(( pempty <= 0.5 ));                                    // See footnote [6] in sparse_anchors.c for detailed explanation.
+  ESL_DASSERT1(( tr->N  == 0 ));                                      // Caller has done a _Reuse(), which we depend on.
+  ESL_DASSERT1(( sxf->type == p7S_FORWARD ));
+  
+  /* Idiomatic handling of a "bypass" variable. wrk_byp=NULL: internal. *wrk_byp=NULL: allocate one for me and pass it back. Else: use the wrk buffer I'm giving you. */
+  if      (esl_byp_IsInternal(wrk_byp)) { ESL_ALLOC  (wrk,      sxf->sm->M * p7S_NSCELLS * sizeof(float));                 }
+  else if (esl_byp_IsReturned(wrk_byp)) { ESL_ALLOC  (*wrk_byp, sxf->sm->M * p7S_NSCELLS * sizeof(float)); wrk = *wrk_byp; }
+  else if (esl_byp_IsProvided(wrk_byp)) { ESL_REALLOC(*wrk_byp, sxf->sm->M * p7S_NSCELLS * sizeof(float)); wrk = *wrk_byp; }
+
+  if (esl_random(rng) >= pempty)           // else, we sample the p0 empty path, leave tr->N=0, and return success.
+    do {
+      status = sparse_traceback_engine(rng, wrk, gm, sxf, tr, g, dpc, xc, &D);
+      if (failsafe++ >= 100000) ESL_XEXCEPTION(eslENOHALT, "so much for footnote [6]");
+    } while (status == eslOK && D == 0);   // reject empty JJ...JJ traces. 
+  
+  if  (esl_byp_IsInternal(wrk_byp)) { free(wrk); }
+  return status;
+
+ ERROR:
+  if  (esl_byp_IsInternal(wrk_byp)) { free(wrk); }
+  return status;
+}
+
+
 
 /*****************************************************************
  * 5. Example
