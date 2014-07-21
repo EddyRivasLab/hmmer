@@ -360,6 +360,8 @@ p7_reference_anchors_SetFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_ANC
 	      anch->a[anch->D].i0 = tr->i[z];
 	      anch->a[anch->D].k0 = tr->k[z];
 	      best_ppv   = ppv;
+
+	      //	      printf("Setting new anchor i,k = %d,%d w/ ppv %.4f\n", tr->i[z], tr->k[z], ppv);
 	    }
 	}
       else if (tr->st[z] == p7T_E)
@@ -671,6 +673,8 @@ main(int argc, char **argv)
   prm.max_iterations = 1000;
   prm.loss_threshold = 0.001;
   prm.be_verbose     = TRUE;
+
+  //p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 
   /* Do it. */
   p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, tr, &wrk, ah,

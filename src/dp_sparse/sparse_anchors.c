@@ -288,17 +288,6 @@ p7_sparse_AnchorsSeg(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
  * 3. Making trial anchor sets
  *****************************************************************/
 
-
-/* Function:  
- * Synopsis:  
- *
- * Purpose:   
- *
- *
- * Xref:      
- */
-
-
 /* Function:  p7_sparse_anchors_SetFromTrace()
  * Synopsis:  Select an anchor set from a path.
  * 
@@ -358,6 +347,9 @@ p7_sparse_anchors_SetFromTrace(const P7_SPARSEMX *sxd, const P7_TRACE *tr, P7_AN
 	  if (ppv > best_ppv) {
 	    anch->a[anch->D+1].i0 = tr->i[z];         // D+1 because anchors are numbered 1..D, but D here is a counter that starts at 0
 	    anch->a[anch->D+1].k0 = tr->k[z];
+	    best_ppv = ppv;
+	    
+	    //printf("Setting new anchor i,k = %d,%d w/ ppv %.4f\n", tr->i[z], tr->k[z], ppv);
 	  }
 	}
       else if (tr->st[z] == p7T_E)
@@ -871,6 +863,8 @@ main(int argc, char **argv)
   p7_SparseBackward(sq->dsq, sq->n, gm, sm,  sxd,      NULL);
   p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxd,      sxd);
   p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
+
+  //p7_trace_DumpAnnotated(stdout, vtr, gm, sq->dsq);
 
   /* Do it */
   p7_sparse_Anchors(rng, sq->dsq, sq->n, gm, fsc, sxf, sxd, vtr, &wrk, 
