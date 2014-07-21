@@ -234,13 +234,25 @@ p7_anchors_Destroy(P7_ANCHORS *anch)
  *****************************************************************/
 
 int
-p7_anchors_Dump(FILE *fp, P7_ANCHORS *anch)
+p7_anchors_Dump(FILE *fp, const P7_ANCHORS *anch)
 {
   int d;
 
   fprintf(fp, "# anchors: for D=%d\n", anch->D);
   for (d = 0; d <= anch->D+1; d++)
     fprintf(fp, "%-4d %6d %6d\n", d, anch->a[d].i0, anch->a[d].k0);
+  return eslOK;
+}
+
+int
+p7_anchors_DumpOneLine(FILE *ofp, const P7_ANCHORS *anch)
+{
+  int d;
+  
+  fprintf(ofp, "%2d ", anch->D);
+  for (d = 1; d <= anch->D; d++)
+    fprintf(ofp, "%4d %4d ", anch->a[d].i0, anch->a[d].k0);
+  fprintf(ofp, "\n");
   return eslOK;
 }
 

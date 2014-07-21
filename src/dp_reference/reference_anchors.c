@@ -4,10 +4,9 @@
  * Contents:
  *    1. MPAS algorithm 
  *    2. Making trial anchor sets (from traces, for example)
- *    3. Internal (static) functions used by MPAS
- *    4. Statistics collection driver
- *    5. Example
- *    6. License and copyright information.
+ *    3. Statistics collection driver
+ *    4. Example
+ *    5. License and copyright information.
  */
 #include "p7_config.h"
 
@@ -23,12 +22,12 @@
 #include "dp_reference/reference_asc_fwdback.h"
 #include "dp_reference/reference_trace.h"
 
+#include "search/p7_mpas.h"
+
 #include "dp_reference/reference_anchors.h"
 
 
-#include "search/p7_mpas.h"
 
-static int dump_current_anchorset(FILE *ofp, const P7_ANCHORS *anch);
 
 
 /*****************************************************************
@@ -204,7 +203,7 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
 	      if      (iteration == 0) printf("VIT      %5d %6.2f %10.4g ", keyidx, asc, exp(asc-fwdsc));
 	      else if (asc > best_asc) printf("NEW/BEST %5d %6.2f %10.4g ", keyidx, asc, exp(asc-fwdsc));
 	      else                     printf("NEW      %5d %6.2f %10.4g ", keyidx, asc, exp(asc-fwdsc));
-	      dump_current_anchorset(stdout, anch);
+	      p7_anchors_DumpOneLine(stdout, anch);
 	    }
 
 	  /* If it's better than our best solution so far, store it. */
@@ -228,7 +227,7 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
 	  if (be_verbose)
 	    {
 	      printf("dup      %5d %6s %10s ", keyidx, "-", "-");
-	      dump_current_anchorset(stdout, anch);
+	      p7_anchors_DumpOneLine(stdout, anch);
 	    }
 	}
 
@@ -265,7 +264,7 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
   if (be_verbose)
     {
       printf("WINNER   %5d %6.2f %10.4g ", best_keyidx, best_asc, exp(best_asc-fwdsc));
-      dump_current_anchorset(stdout, anch);
+      p7_anchors_DumpOneLine(stdout, anch);
     }
 
   *ret_asc = asc;
@@ -382,28 +381,10 @@ p7_reference_anchors_SetFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_ANC
 
 
 
-/*****************************************************************
- * 3. Internal (static) functions used by MPAS
- *****************************************************************/
-
-static int
-dump_current_anchorset(FILE *ofp, const P7_ANCHORS *anch)
-{
-  int d;
-
-  fprintf(ofp, "%2d ", anch->D);
-  for (d = 1; d <= anch->D; d++)
-    fprintf(ofp, "%4d %4d ", anch->a[d].i0, anch->a[d].k0);
-  fprintf(ofp, "\n");
-  return eslOK;
-}
-/*--------------------- end, static functions -------------------*/
-
-
 
 
 /*****************************************************************
- * 4. Statistics collection driver.
+ * 3. Statistics collection driver.
  *****************************************************************/
 #ifdef p7REFERENCE_ANCHORS_STATS
 #include "p7_config.h"
@@ -592,7 +573,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 5. Example
+ * 4. Example
  *****************************************************************/
 #ifdef p7REFERENCE_ANCHORS_EXAMPLE
 #include "p7_config.h"

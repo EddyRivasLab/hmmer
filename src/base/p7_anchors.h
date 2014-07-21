@@ -64,7 +64,8 @@ extern int         p7_anchors_Reuse  (P7_ANCHORS *anch);
 extern void        p7_anchors_Destroy(P7_ANCHORS *anch);
 
 /* 3. Debugging and development tools */
-extern int  p7_anchors_Dump(FILE *fp, P7_ANCHORS *anch);
+extern int  p7_anchors_Dump(FILE *fp, const P7_ANCHORS *anch);
+extern int  p7_anchors_DumpOneLine(FILE *ofp, const P7_ANCHORS *anch);
 extern int  p7_anchors_Compare(P7_ANCHORS *anch1, P7_ANCHORS *anch2);
 extern int  p7_anchors_Validate(P7_ANCHORS *anch, char *errbuf);
 extern int  p7_anchors_Sample(ESL_RANDOMNESS *rng, int L, int M, int maxD, P7_ANCHORS *anch);
