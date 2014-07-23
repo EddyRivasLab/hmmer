@@ -26,7 +26,8 @@ UTESTS = sparse_asc_fwdback_utest \
          sparse_fwdback_utest     \
          sparse_masstrace_utest
 
-STATS  =  p7_spascmx_stats
+STATS  =  p7_spascmx_stats     \
+	  sparse_anchors_stats
 
 BENCHMARKS = sparse_fwdback_benchmark
 

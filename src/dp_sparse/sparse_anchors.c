@@ -6,7 +6,9 @@
  *     2. Sparse MPAS algorithm, segmental divide & conquer version
  *     3. Making trial anchor sets
  *     4. Footnotes 
- *     x. Copyright and license information.
+ *     5. Statistics driver
+ *     6. Example
+ *     7. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -744,11 +746,206 @@ segment_forward_score(const P7_PROFILE *gm, const P7_SPARSEMX *sx, int g, float 
  * minimum 50% probability of getting D>0 sample.
  */
 
+/*****************************************************************
+ * 5. Statistics driver
+ *****************************************************************/
+#ifdef p7SPARSE_ANCHORS_STATS
+
+#include "p7_config.h"
+
+#include <time.h>
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_exponential.h"
+#include "esl_getopts.h"
+#include "esl_gumbel.h"
+#include "esl_random.h"
+#include "esl_sq.h"
+#include "esl_sqio.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type           default  env  range  toggles reqs incomp  help                                       docgroup*/
+  { "-h",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",                   0 },
+  { "-s",          eslARG_INT,      "0",  NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                          0 },
+  { "-Z",          eslARG_INT,      "1",  NULL, NULL,   NULL,  NULL, NULL, "set sequence # to <n>, for E-value calculations",        0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile> <seqfile>";
+static char banner[] = "statistics collection on sparse MPAS algorithm";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_RANDOMNESS *rng     = esl_randomness_Create( esl_opt_GetInteger(go, "-s"));
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  P7_HMMFILE     *hfp     = NULL;
+  ESL_ALPHABET   *abc     = NULL;
+  char           *seqfile = esl_opt_GetArg(go, 2);
+  ESL_SQ         *sq      = NULL;
+  int             format  = eslSQFILE_UNKNOWN;
+  ESL_SQFILE     *sqfp    = NULL;
+  P7_BG          *bg      = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_PROFILE     *gm      = NULL;           /* profile in H4's standard dual-mode local/glocal */
+  P7_OPROFILE    *om      = NULL;
+  P7_FILTERMX    *fx      = p7_filtermx_Create(100);
+  P7_CHECKPTMX   *cx      = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_RAMLIMIT));
+  P7_SPARSEMASK  *sm      = p7_sparsemask_Create(100, 100);
+  P7_ANCHORS     *anch    = p7_anchors_Create();
+  P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
+  P7_SPARSEMX    *sxf     = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX    *sxd     = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX    *asf     = p7_sparsemx_Create(NULL);
+  P7_TRACE       *vtr     = p7_trace_Create();
+  P7_TRACE       *vtr2    = p7_trace_Create();
+  float          *wrk     = NULL;
+  int             Z       = esl_opt_GetInteger(go, "-Z");
+  P7_MPAS_STATS   stats;
+  float           nullsc, vsc, fsc, asc;
+  clock_t         start_c, end_c;
+  clock_t         total_c = 0;
+  int             status;
+
+  /* Read in one HMM. Set alphabet to whatever the HMM's alphabet is. */
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  p7_hmmfile_Close(hfp);
+
+  /* Configure vector, dual-mode, and local-only profiles from HMM */
+  bg = p7_bg_Create(abc);
+  gm = p7_profile_Create (hmm->M, abc);
+  om = p7_oprofile_Create(hmm->M, abc);
+  p7_profile_Config(gm, hmm, bg);
+  p7_oprofile_Convert(gm, om);
+  
+  /* Open sequence file */
+  sq     = esl_sq_CreateDigital(abc);
+  status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
+  if      (status == eslENOTFOUND) p7_Fail("No such file.");
+  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+
+  /* For each target sequence... */
+  while (( status = esl_sqio_Read(sqfp, sq)) == eslOK)
+    {
+      p7_bg_SetLength           (bg,  sq->n);
+      p7_profile_SetLength      (gm,  sq->n);
+      p7_oprofile_ReconfigLength(om,  sq->n);
+
+      if (( status = p7_pipeline_AccelerationFilter(sq->dsq, sq->n, om, bg, fx, cx, sm)) == eslOK)
+	{
+	  printf("%-15s  %-30s  ", gm->name, sq->name);
+
+	  p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
+
+	  p7_SparseViterbi (sq->dsq, sq->n, gm, sm, sxf, vtr, &vsc);
+	  p7_sparse_trace_Viterbi(gm, sxf, vtr2);         // a second copy; we have no p7_trace_Copy() function yet
+	  p7_SparseForward (sq->dsq, sq->n, gm, sm, sxf, &fsc);
+	  p7_SparseBackward(sq->dsq, sq->n, gm, sm, sxd, NULL);   
+	  p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxd, sxd);   
+
+	  start_c = clock();
+
+	  p7_sparse_Anchors(rng, sq->dsq, sq->n, gm, fsc, sxf, sxd, vtr, &wrk, ah,
+			    asf, anch, &asc, NULL, &stats);
+
+	  end_c   = clock();
+	  total_c += end_c - start_c;
+	     
+	  p7_trace_Index(vtr2);
+	  p7_mpas_stats_CompareAS2Trace(&stats, anch, vtr2);
+
+	  printf("%8.2f %10.4g %8.2f %10.4g ",
+		 stats.fsc, 
+		 (double) Z * esl_exp_surv   ( (stats.fsc - nullsc) / eslCONST_LOG2, gm->evparam[p7_FTAU], gm->evparam[p7_FLAMBDA]),
+		 stats.vsc, 
+		 (double) Z * esl_gumbel_surv( (stats.vsc - nullsc) / eslCONST_LOG2, gm->evparam[p7_VMU],  gm->evparam[p7_VLAMBDA]));
+		   
+		 
+	  printf("%8.2f %6.4f %3s ", 
+		 stats.vit_asc,
+		 stats.vit_ascprob,
+		 (stats.best_is_viterbi    ? "YES" : "no"));
+
+	  printf("%8.2f %6.4f %6.4f ", 
+		 stats.best_asc,
+		 stats.best_ascprob,
+		 (float) stats.nsamples_in_best / (float) stats.tot_iterations);
+	  
+	  printf("%5d %4d %3s ", 
+		 stats.tot_iterations,
+		 stats.tot_asc_calculations,
+		 (stats.solution_not_found ? "YES" : "no"));
+	    
+	  printf("%4d %4d %4d ", 
+		 stats.anch_outside,
+		 stats.anch_unique,
+		 stats.anch_multiple);
+
+	  printf("%4d %4d %4d ",
+		 stats.dom_zero,
+		 stats.dom_one,
+		 stats.dom_multiple);
+
+	  printf("%10.4f ", (double) (end_c - start_c) / (double) CLOCKS_PER_SEC);
+
+	  printf("\n");
+	  
+	  p7_sparsemx_Reuse(sxf);
+	  p7_sparsemx_Reuse(sxd);
+	  p7_sparsemx_Reuse(asf);
+	  p7_trace_Reuse(vtr);
+	  p7_trace_Reuse(vtr2);
+	  p7_anchorhash_Reuse(ah);
+	  p7_anchors_Reuse(anch);
+	}
+
+      p7_filtermx_Reuse(fx);
+      p7_checkptmx_Reuse(cx);
+      p7_sparsemask_Reuse(sm);
+      esl_sq_Reuse(sq);
+    }
+  if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));
+  else if (status != eslEOF)     p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
+
+  printf("# Total time in p7_sparse_Anchors = %.4f sec\n", (double) total_c / (double) CLOCKS_PER_SEC);
+
+  if (wrk) free(wrk);
+  p7_anchors_Destroy(anch);
+  p7_anchorhash_Destroy(ah);
+  p7_trace_Destroy(vtr);
+  p7_trace_Destroy(vtr2);
+  p7_sparsemx_Destroy(asf);
+  p7_sparsemx_Destroy(sxf);
+  p7_sparsemx_Destroy(sxd);
+  p7_sparsemask_Destroy(sm);
+  p7_checkptmx_Destroy(cx);
+  p7_filtermx_Destroy(fx);
+  p7_oprofile_Destroy(om);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+  p7_bg_Destroy(bg);
+  esl_sqfile_Close(sqfp);
+  esl_sq_Destroy(sq);
+  esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(rng);
+  esl_getopts_Destroy(go);
+  return eslOK;
+}
+#endif /*p7SPARSE_ANCHORS_STATS*/
+
+/*----------------- end, statistics driver ----------------------*/
+
 
 
 
 /*****************************************************************
- * 5. Example
+ * 6. Example
  *****************************************************************/
 #ifdef p7SPARSE_ANCHORS_EXAMPLE
 #include "p7_config.h"
@@ -871,7 +1068,7 @@ main(int argc, char **argv)
 		    ah, asf, anch, &asc, &prm, &stats);
 
   /* Finish collecting statistics and dump them. */
-  p7_trace_Index(vtr);
+  p7_trace_Index(vtr2);
   p7_mpas_stats_CompareAS2Trace(&stats, anch, vtr);
   p7_mpas_stats_Dump(stdout, &stats);
 
