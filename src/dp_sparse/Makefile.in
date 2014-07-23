@@ -4,7 +4,6 @@ LIBOBJS =  p7_sparsemx.o        \
 	   p7_spascmx.o         \
 	   sparse_anchors.o     \
 	   sparse_asc_fwdback.o \
-	   sparse_asc_viterbi.o \
 	   sparse_decoding.o    \
 	   sparse_envscore.o    \
 	   sparse_fwdback.o     \
@@ -36,9 +35,7 @@ EXAMPLES = sparse_anchors_example     \
            sparse_fwdback_example     \
            sparse_masstrace_example   \
            sparse_trace_example       \
-	   sparse_asc_fwdback_example \
-	   sparse_asc_viterbi_example
-
+	   sparse_asc_fwdback_example 
 
 LIBTMP = 
 

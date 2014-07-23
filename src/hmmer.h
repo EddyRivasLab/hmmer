@@ -77,7 +77,6 @@
 #include "dp_sparse/sparse_envscore.h"	   /* Modified Forward algorithm for scoring a single envelope       */
 #include "dp_sparse/sparse_null2.h"	   /* 'null2' algorithm for compensating for biased composition      */
 #include "dp_sparse/sparse_asc_fwdback.h"  /* anchor set constrained (ASC) Forward, Backward                 */
-#include "dp_sparse/sparse_asc_viterbi.h"  /* anchor set constrained (ASC) Viterbi                           */
 
 /* 'dp_reference' subdir: "reference" implementations of key algorithms, used for regression and other testing  */
 #include "dp_reference/p7_refmx.h"               /* P7_REFMX: a O(ML) DP matrix for reference DP algorithms     */

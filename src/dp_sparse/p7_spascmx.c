@@ -539,7 +539,8 @@ main(int argc, char **argv)
   float          *wrk     = NULL;
   P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
   float           fsc, vsc, asc;
-  int             dalloc, xalloc, spascmxsize;
+  int64_t         dalloc;
+  int             xalloc, spascmxsize;
   int             status;
 
   /* Read in one HMM */
@@ -605,7 +606,7 @@ main(int argc, char **argv)
 		 (int) p7_sparsemx_MinSizeof(sm));
 
 	  /* Sparse ASC matrix size: UP cells, DOWN cells, total cells, special rows, total in bytes */
-	  spascmxsize = p7_spascmx_MinSizeof(sm, anch->arr, anch->n, &dalloc, &xalloc);
+	  spascmxsize = p7_spascmx_MinSizeof(sm, anch->a, anch->D, &dalloc, &xalloc);
 	  printf("%10d %10d %10d\n",
 		 (int) dalloc,
 		 (int) xalloc,
@@ -630,7 +631,7 @@ main(int argc, char **argv)
   p7_filtermx_Destroy(fx);
   p7_checkptmx_Destroy(cx);
   p7_sparsemask_Destroy(sm);
-  p7_anchorhash_Destroy(ah)
+  p7_anchorhash_Destroy(ah);
   if (wrk) free(wrk);
   p7_trace_Destroy(vtr);
   p7_refmx_Destroy(afd);  p7_refmx_Destroy(afu);
