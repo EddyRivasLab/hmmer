@@ -131,10 +131,12 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX 
   int     w;			/* counter down through rows in a checkpointed block  */
 
   /* Contract checks */
-  ESL_DASSERT1(( om->mode == p7_LOCAL )); /* Production code assumes multilocal mode w/ length model <L> */
-  ESL_DASSERT1(( om->L    == L ));	  /*  ... and it's easy to forget to set <om> that way           */
-  ESL_DASSERT1(( om->nj   == 1.0f ));	  /*  ... hence the check                                        */
+  //  ESL_DASSERT1(( om->mode == p7_LOCAL )); /* Production code assumes multilocal mode w/ length model <L> */
+  //  ESL_DASSERT1(( om->L    == L ));	  /*  ... and it's easy to forget to set <om> that way           */
+  //  ESL_DASSERT1(( om->nj   == 1.0f ));	  /*  ... hence the check                                        */
                                           /*  ... which you can disable, if you're playing w/ config     */
+  // SRE: disabled 21 Jul 14 because unit tests in sparse_asc_fwdback need to create
+  // sparse mask w/ checkpointed F/B w/ unilocal L=0 models
 
   /* Make sure <ox> is allocated big enough.
    * DO NOT set any ptrs into the matrix until after this potential reallocation!
@@ -252,10 +254,12 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
   p7_sparsemask_Reinit(sm, om->M, L);
 
   /* Contract checks */
-  ESL_DASSERT1(( om->mode == p7_LOCAL )); /* Production code assumes multilocal mode w/ length model <L> */
-  ESL_DASSERT1(( om->L    == L ));	  /*  ... and it's easy to forget to set <om> that way           */
-  ESL_DASSERT1(( om->nj   == 1.0f ));	  /*  ... hence the check                                        */
+  //ESL_DASSERT1(( om->mode == p7_LOCAL )); /* Production code assumes multilocal mode w/ length model <L> */
+  //ESL_DASSERT1(( om->L    == L ));	  /*  ... and it's easy to forget to set <om> that way           */
+  //ESL_DASSERT1(( om->nj   == 1.0f ));	  /*  ... hence the check                                        */
                                           /*  ... which you can disable, if you're playing w/ config     */
+  // SRE: disabled 21 Jul 14 because unit tests in sparse_asc_fwdback need to create
+  // sparse mask w/ checkpointed F/B w/ unilocal L=0 models
 
 #ifdef p7_DEBUGGING
   /* Debugging instrumentations. */

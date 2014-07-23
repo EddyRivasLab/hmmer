@@ -107,6 +107,7 @@ typedef struct {
 #define p7S_AEC_MEG_ALIGN 9  
 #define p7S_ENVSCORE      10  // deprecated. Will remove, when sparse_envscore.c goes away.
 #define p7S_MASSTRACE     11  //  ... ditto, for sparse_masstrace.c
+#define p7S_ASC_VITERBI   12
 
 typedef struct {
   float  *dp;		// main DP supercells. sm->ncells <= dalloc. each supercell contains p7S_NSCELLS values. 

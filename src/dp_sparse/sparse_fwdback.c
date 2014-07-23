@@ -94,7 +94,7 @@ p7_SparseForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARS
       if (! sm->n[i]) { ng++; continue; }   /* skip rows that have no included cells */
 
       /* Reinitialize and store specials for row ia-1 just outside sparsified segment */
-      if (i == 1 || ng) {
+      if (i == 1 || ng) {   // need for i=1 here may be confusing. here's why: We only reach i == 1 test when sm->n[1] > 0, i.e. seg[1].ia = 1, ia-1 = 0, ng = 0
 	*xpc++ = xE = -eslINFINITY;
 	*xpc++ = xN  = xN + ( ng ? ng * gm->xsc[p7P_N][p7P_LOOP] : 0.0); /* test ng, because we must watch out for 0*-inf special case */
 	*xpc++ = xJ  = xJ + ( ng ? ng * gm->xsc[p7P_J][p7P_LOOP] : 0.0);

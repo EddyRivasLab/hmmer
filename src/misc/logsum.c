@@ -1,12 +1,14 @@
 /* p7_FLogsum() function used in the Forward() algorithm.
  * 
  * Contents:
- *    1. Floating point log-sum-exp-2arg: LSE2.
- *    2. Benchmark driver.
- *    3. Unit tests.
- *    4. Test driver.
- *    5. Example.
- *    6. Copyright and license information.
+ *    1. Floating point log-sum-exp-2arg: LSE2
+ *    2. Debugging/development tools
+ *    3. Footnotes
+ *    4. Benchmark driver
+ *    5. Unit tests
+ *    6. Test driver
+ *    7. Example
+ *    8. Copyright and license information
  *
  * Exegesis:
  * 
@@ -60,8 +62,9 @@
 #define p7_LOGSUM_SCALE 1000.f
 #define p7_LOGSUM_TBL   16000
 
-static float flogsum_lookup[p7_LOGSUM_TBL]; /* p7_LOGSUM_TBL=16000: (A-B) = 0..16 nats, steps of 0.001 */
-static int   logsum_initialized = FALSE;
+static float flogsum_lookup[p7_LOGSUM_TBL]; // p7_LOGSUM_TBL=16000: (A-B) = 0..16 nats, steps of 0.001 
+static int   logsum_initialized = FALSE;    // A flag to allow us to crash out of FLogsum() if lookup table wasn't initialized
+static int   logsum_max         = FALSE;    // Some debugging tests force FLogsum() to do max(), and we need a flag to get the slow/exact mode to do it
 
 /*****************************************************************
  *# 1. floating point log-sum-exp-2arg: LSE2
@@ -89,6 +92,7 @@ p7_FLogsumInit(void)
   for (i = 0; i < p7_LOGSUM_TBL; i++) 
     flogsum_lookup[i] = log(1. + exp(- ((double) i + 0.5) / p7_LOGSUM_SCALE)); // +0.5 serves to reduce roundoff error.
   logsum_initialized = TRUE;
+  logsum_max         = FALSE;
   return eslOK;
 }
 
@@ -107,39 +111,37 @@ p7_FLogsumInit(void)
  *            Compiling with the <p7_LOGSUM_SLOWEXACT> flag bypasses
  *            the table-driven approximation and uses the exact 
  *            calculation instead; useful for debugging.
+ *            
+ *            Because this is in critical path, we don't test
+ *            logsum_max, like we do in slow/exact mode. Instead,
+ *            debugging tools that want this function to yield max()
+ *            instead of logsum() use p7_logsum_InitMax() to
+ *            initialize the lookup table to all 0. This way, we don't
+ *            put any other instructions in the critical path just to
+ *            get that rarely-used debugging functionality.
  */
 float
 p7_FLogsum(float a, float b)
 {
   const float max = ESL_MAX(a, b);
   const float min = ESL_MIN(a, b);
-#ifdef p7_DEBUGGING
-  if (! logsum_initialized) esl_fatal("p7_FLogsumInit() was not called");
-#endif
+
+  ESL_DASSERT1(( logsum_initialized ));
+
 #ifdef p7_LOGSUM_SLOWEXACT
-  return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + log(1.0 + exp(min-max));  
+  return (logsum_max || min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + log(1.0 + exp(min-max));  
 #else
-  return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + flogsum_lookup[(int)((max-min)*p7_LOGSUM_SCALE)];
+  return               (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + flogsum_lookup[(int)((max-min)*p7_LOGSUM_SCALE)];
 #endif
 } 
 
-/* Function:  p7_logsum_exact()
- * Synopsis:  Exact calculation of $\log(e^a + e^b)$, without fast approximation.
- *
- * Purpose:   Calculates $\log(e^a + e^b)$ exactly, without the fast
- *            table driven approximation. Rarely used - just for some
- *            debugging and unit testing situations. To get
- *            p7_FLogsum() itself to use the exact calculation,
- *            compile with the <p7_LOGSUM_SLOWEXACT> flag.
- */
-float 
-p7_logsum_exact(float a, float b)
-{
-  const float max = ESL_MAX(a, b);
-  const float min = ESL_MIN(a, b);
-  return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + log(1.0 + exp(min-max));  
-}
 
+
+
+
+/*****************************************************************
+ * 2. Debugging/development tools
+ *****************************************************************/
 
 /* Function:  p7_logsum_IsSlowExact()
  * Synopsis:  Return TRUE if compiled for slow but exact calculation.
@@ -167,8 +169,102 @@ p7_logsum_IsSlowExact(void)
 #endif
 }
 
+
+/* Function:  p7_logsum_InitMax()
+ * Synopsis:  Initialize the lookup table for max rather than logsum
+ *
+ * Purpose:   Make FLogsum(a,b) calls return max(a,b), by setting all
+ *            lookup table values to 0. This converts any log-space
+ *            Forward/Inside (or Backward/Outside) algorithm to a
+ *            Viterbi/CYK algorithm, at no cost in speed. Useful for debugging and unit
+ *            tests, where we can make sure that a complex
+ *            path-summing algorithm is correctly scoring at least the
+ *            single optimal path, using the native code for that
+ *            algorithm.
+ *            
+ *            Caller must call <p7_logsum_Reinit()> when it's finished,
+ *            to rebuild the lookup table correctly. For
+ *            example, a unit test will call <p7_logsum_InitMax()> on
+ *            entry, and <p7_logsum_Reinit()> on exit. Calling
+ *            <p7_logsum_Init()> doesn't work, because of an 
+ *            internal flag (<logsum_initialized>) that prevents
+ *            <_Init()> from rebuilding a table that's already valid.
+ */
+int
+p7_logsum_InitMax(void)
+{
+  int i;
+  
+  for (i = 0; i < p7_LOGSUM_TBL; i++)
+    flogsum_lookup[i] = 0.;
+  logsum_initialized = TRUE;
+  logsum_max         = TRUE;   // so we get max() even if in slow/exact mode
+  return eslOK;
+}
+  
+int
+p7_logsum_Reinit(void)
+{
+  logsum_initialized = FALSE;
+  return p7_FLogsumInit();
+}
+
+
+/* p7_logsum_exact()
+ *
+ * Purpose:   Calculates $\log(e^a + e^b)$ exactly, without the fast
+ *            table driven approximation. Rarely used - just for some
+ *            debugging and unit testing situations. To get
+ *            p7_FLogsum() itself to use the exact calculation,
+ *            compile with the <p7_LOGSUM_SLOWEXACT> flag.
+ */
+static float 
+p7_logsum_exact(float a, float b)
+{
+  const float max = ESL_MAX(a, b);
+  const float min = ESL_MIN(a, b);
+  return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + log(1.0 + exp(min-max));  
+}
+
+
 /*****************************************************************
- * 2. Benchmark driver.
+ * 3. Footnotes
+ ***************************************************************** 
+ * 
+ * [1] The maximum relative error is on the order of 1/SCALE, or 0.001.
+ *     [xref SRE:J8/71].
+ *     
+ * [2] SIMD vectorization of a log-space Forward remains vexing.
+ *     Sparse-rescaled probability-space Forward vector
+ *     implemementation only works for local; glocal or global may
+ *     underflow long delete paths. Would be desirable to use a
+ *     log-space implementation if we could make it fast. Problem is
+ *     implementing the lookup table in SIMD. Lookup tables of this
+ *     size in current SSE, Altivec appear to be infeasible.  For my
+ *     best implementation of a SIMD lse2, see [SRE:J8/71-74; SRE
+ *     notebook/Archive2011/0810-logsum and 0816-logsum-in-h3]. Those
+ *     notes give a SSSE3 implementation using a piecewise linear fit
+ *     (PWL) approximation, a 16-way LUT for the PWL coefficients, and
+ *     a reduced-precision custom 8-bit float representation (5
+ *     exponent and 3 mantissa bits). Despite its complexity, and its
+ *     loss of accuracy (from the PWL fit), this vector implementation
+ *     is hardly faster (if at all) than the serial LUT implementation
+ *     in FLogsum().
+ *     
+ *     One way to think about this: the table-driven approach seems to
+ *     require about 10 clocks, compared to about 200 for the direct
+ *     log,exp calculation. Even if we could get an lse2(x)
+ *     calculation to be as efficient as log(x) -- say 100 clocks --
+ *     the 4x SIMD vectorization does not compensate for the 10x hit
+ *     in speed. So it's unlikely that any vectorized functional
+ *     approximation is going to compete with the serial LUT approach.
+ */
+
+
+
+
+/*****************************************************************
+ * 4. Benchmark driver.
  *****************************************************************/
 #ifdef p7LOGSUM_BENCHMARK
 /* ./logsum_benchmark
@@ -273,8 +369,10 @@ main(int argc, char **argv)
 /*-------------------- end, benchmark ---------------------------*/
 
 
+
+
 /*****************************************************************
- * 3. Unit tests
+ * 5. Unit tests
  *****************************************************************/
 #ifdef p7LOGSUM_TESTDRIVE
 
@@ -331,8 +429,10 @@ utest_FLogsumSpecials(void)
 #endif /*p7LOGSUM_TESTDRIVE*/
 /*------------------- end, unit tests ---------------------------*/
 
+
+
 /*****************************************************************
- * 4. Test driver.
+ * 6. Test driver.
  *****************************************************************/
 #ifdef p7LOGSUM_TESTDRIVE
 #include "p7_config.h"
@@ -380,8 +480,10 @@ main(int argc, char **argv)
 /*------------------ end, test driver ---------------------------*/
 
 
+
+
 /*****************************************************************
- * 5. Example.
+ * 7. Example.
  *****************************************************************/
 #ifdef p7LOGSUM_EXAMPLE
 /* ./example -0.5 -0.5
@@ -418,34 +520,4 @@ main(int argc, char **argv)
  * SVN $Id: logsum.c 3474 2011-01-17 13:25:32Z eddys $
  *****************************************************************/
 
-/* Footnotes.
- * 
- * [1] The maximum relative error is on the order of 1/SCALE, or 0.001.
- *     [xref SRE:J8/71].
- *     
- * [2] SIMD vectorization of a log-space Forward remains vexing.
- *     Sparse-rescaled probability-space Forward vector
- *     implemementation only works for local; glocal or global may
- *     underflow long delete paths. Would be desirable to use a
- *     log-space implementation if we could make it fast. Problem is
- *     implementing the lookup table in SIMD. Lookup tables of this
- *     size in current SSE, Altivec appear to be infeasible.  For my
- *     best implementation of a SIMD lse2, see [SRE:J8/71-74; SRE
- *     notebook/Archive2011/0810-logsum and 0816-logsum-in-h3]. Those
- *     notes give a SSSE3 implementation using a piecewise linear fit
- *     (PWL) approximation, a 16-way LUT for the PWL coefficients, and
- *     a reduced-precision custom 8-bit float representation (5
- *     exponent and 3 mantissa bits). Despite its complexity, and its
- *     loss of accuracy (from the PWL fit), this vector implementation
- *     is hardly faster (if at all) than the serial LUT implementation
- *     in FLogsum().
- *     
- *     One way to think about this: the table-driven approach seems to
- *     require about 10 clocks, compared to about 200 for the direct
- *     log,exp calculation. Even if we could get an lse2(x)
- *     calculation to be as efficient as log(x) -- say 100 clocks --
- *     the 4x SIMD vectorization does not compensate for the 10x hit
- *     in speed. So it's unlikely that any vectorized functional
- *     approximation is going to compete with the serial LUT approach.
- */
 

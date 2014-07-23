@@ -68,6 +68,7 @@
 1 exercise ref..asc_decoding    @src/dp_reference/reference_asc_decoding_utest@
 1 exercise ref..aec_align       @src/dp_reference/reference_aec_align_utest@
 
+1 exercise sparse_asc_fwdback   @src/dp_sparse/sparse_asc_fwdback_utest@
 1 exercise sparse_decoding	@src/dp_sparse/sparse_decoding_utest@
 1 exercise sparse_envscore	@src/dp_sparse/sparse_decoding_utest@
 1 exercise sparse_fwdback	@src/dp_sparse/sparse_fwdback_utest@
