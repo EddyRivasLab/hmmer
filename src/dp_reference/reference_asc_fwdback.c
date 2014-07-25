@@ -8,10 +8,11 @@
  * Contents:
  *    1. ASC Forward
  *    2. ASC Backward
- *    3. Unit tests
- *    4. Test driver
- *    5. Example
- *    6. Copyright and license information
+ *    3. Footnotes
+ *    4. Unit tests
+ *    5. Test driver
+ *    6. Example
+ *    7. Copyright and license information
  */
 
 
@@ -292,11 +293,11 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
       xc = dpc;
       xc[p7R_E]  = xE;
       xc[p7R_N]  = -eslINFINITY; 
-      xc[p7R_J]  = (d == D ? -eslINFINITY : xc[p7R_E] + gm->xsc[p7P_E][p7P_LOOP]);
+      xc[p7R_J]  = xc[p7R_E] + gm->xsc[p7P_E][p7P_LOOP];
       xc[p7R_B]  = xc[p7R_J] + gm->xsc[p7P_J][p7P_MOVE];
       xc[p7R_L]  = xc[p7R_B] + gm->xsc[p7P_B][0]; 
       xc[p7R_G]  = xc[p7R_B] + gm->xsc[p7P_B][1]; 
-      xc[p7R_C]  = (d == D ? xc[p7R_E] + gm->xsc[p7P_E][p7P_MOVE] : -eslINFINITY);
+      xc[p7R_C]  = xc[p7R_E] + gm->xsc[p7P_E][p7P_MOVE];
       xc[p7R_JJ] = -eslINFINITY;
       xc[p7R_CC] = -eslINFINITY;
 
@@ -348,11 +349,11 @@ p7_ReferenceASCForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
 	  xp = dpp + p7R_NSCELLS;	
 	  xc[p7R_E]  = xE;		
 	  xc[p7R_N]  = -eslINFINITY; 
-	  xc[p7R_J]  = (d == D ? -eslINFINITY : p7_FLogsum( xp[p7R_J] + gm->xsc[p7P_J][p7P_LOOP], xc[p7R_E] + gm->xsc[p7P_E][p7P_LOOP]));
+	  xc[p7R_J]  = p7_FLogsum( xp[p7R_J] + gm->xsc[p7P_J][p7P_LOOP], xc[p7R_E] + gm->xsc[p7P_E][p7P_LOOP] );
 	  xc[p7R_B]  = xc[p7R_J] + gm->xsc[p7P_J][p7P_MOVE]; 
 	  xc[p7R_L]  = xc[p7R_B] + gm->xsc[p7P_B][0]; 
 	  xc[p7R_G]  = xc[p7R_B] + gm->xsc[p7P_B][1]; 
-	  xc[p7R_C]  = (d == D ? p7_FLogsum( xp[p7R_C] + gm->xsc[p7P_C][p7P_LOOP], xc[p7R_E] + gm->xsc[p7P_E][p7P_MOVE]) : -eslINFINITY);
+	  xc[p7R_C]  = p7_FLogsum( xp[p7R_C] + gm->xsc[p7P_C][p7P_LOOP], xc[p7R_E] + gm->xsc[p7P_E][p7P_MOVE] );
 	  xc[p7R_JJ] = -eslINFINITY;                                                                           
 	  xc[p7R_CC] = -eslINFINITY;       
 	} /* end loop over rows i of DOWN sector for domain d */
@@ -542,8 +543,8 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 	  xc[p7R_G]  = xG;                              // xG was accumulated during prev row; G->Mk wing unfolded
 	  xc[p7R_L]  = xL;                              // xL accumulated on prev row
 	  xc[p7R_B]  = p7_FLogsum(xG + gm->xsc[p7P_B][1],  xL + gm->xsc[p7P_B][0]); 
-	  xc[p7R_J]  = xJ = (d == 1 ? -eslINFINITY : p7_FLogsum(xJ + gm->xsc[p7P_J][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_J][p7P_MOVE]));
-	  xc[p7R_N]  = xN = (d  > 1 ? -eslINFINITY : p7_FLogsum(xN + gm->xsc[p7P_N][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_N][p7P_MOVE]));
+	  xc[p7R_J]  = xJ = p7_FLogsum(xJ + gm->xsc[p7P_J][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_J][p7P_MOVE]);
+	  xc[p7R_N]  = xN = p7_FLogsum(xN + gm->xsc[p7P_N][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_N][p7P_MOVE]);
 	  xc[p7R_E]  = xc[p7R_J] + gm->xsc[p7P_E][p7P_LOOP];  
 
 	  tsc = gm->tsc    + (anch[d].k0-1) * p7P_NTRANS;                                    // transition scores: start at anch[d].k-1
@@ -612,8 +613,8 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
       xc[p7R_G]  = xG;            // xG was accumulated during prev row; G->Mk wing unfolded
       xc[p7R_L]  = xL;            // xL accumulated on prev row
       xc[p7R_B]  = p7_FLogsum(xG + gm->xsc[p7P_B][1],  xL + gm->xsc[p7P_B][0]); 
-      xc[p7R_J]  = xJ = (d == 1 ? -eslINFINITY : p7_FLogsum(xJ + gm->xsc[p7P_J][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_J][p7P_MOVE]));
-      xc[p7R_N]  = xN = (d  > 1 ? -eslINFINITY : p7_FLogsum(xN + gm->xsc[p7P_N][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_N][p7P_MOVE]));
+      xc[p7R_J]  = xJ = p7_FLogsum(xJ + gm->xsc[p7P_J][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_J][p7P_MOVE]);
+      xc[p7R_N]  = xN = p7_FLogsum(xN + gm->xsc[p7P_N][p7P_LOOP], xc[p7R_B] + gm->xsc[p7P_N][p7P_MOVE]);
       xc[p7R_E]  = xc[p7R_J] + gm->xsc[p7P_E][p7P_LOOP];  
     } /* end loop over domains d */
 
@@ -622,10 +623,26 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 }
 
 
+/*****************************************************************
+ * 3. Footnotes
+ ***************************************************************** 
+ *
+ * [1] xC VS xJ IN FORWARD; xN VS xJ IN BACKWARD
+ * 
+ * In a standard Forward algorithm, we can't look ahead to know
+ * whether we're going to have an additional domain later in the
+ * sequence, so both xC and xJ can have valid scores. In an ASC
+ * algorithm, we do know, because we have the anchors -- so in
+ * principle, we could calculate ASC Forward so that xC == -inf until
+ * we hit the last anchor, then xJ == -inf after that. We don't do
+ * that, because we can't always do it, and we don't want to create
+ * unnecessary discrepancies with other Forward algorithms. Same goes
+ * for xN/xJ in the backward direction.
+ */
 
 
 /*****************************************************************
- * 3. Unit tests
+ * 4. Unit tests
  *****************************************************************/
 #ifdef p7REFERENCE_ASC_FWDBACK_TESTDRIVE
 #include "hmmer.h"
@@ -678,17 +695,8 @@ ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_ANCHOR *anch
 
       for (s = 0; s < p7R_NXCELLS; s++)
 	{
-	  switch (s) {
-	  case p7R_E: if (std->type == p7R_BACKWARD && d == 1) continue;  // ASC Backwards knows E(i) = -inf in d=1; standard Backwards has a finite but unused value here
-	  case p7R_N: if (d > 1)                               continue;  // ASC F/B knows N(i) = -inf for d>1; standard F/B doesn't and has finite unused val
-	  case p7R_J: if (d == D+1)                            continue;  // ASC F/B knows J,B,L,G(i) = -inf for last d=D+1
-	  case p7R_B: if (d == D+1)                            continue;  
-	  case p7R_L: if (d == D+1)                            continue;
-	  case p7R_G: if (d == D+1)                            continue;
-	  case p7R_C: if (d < D+1)                             continue;  // ASC F/B knows C(i) = -inf for all domains except last one
-	  }
-
-	  if (esl_FCompareAbs(P7R_XMX(ascd,i,s), P7R_XMX(std,i,s), tolerance) != eslOK)
+	  val = P7R_XMX(ascd,i,s);
+	  if (val != -eslINFINITY && esl_FCompareAbs(val, P7R_XMX(std,i,s), tolerance) != eslOK)
 	    { if (killmenow) abort(); return eslFAIL; }
 	}
     }
@@ -1389,7 +1397,7 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
 
 
 /*****************************************************************
- * 4. Test driver.
+ * 5. Test driver.
  *****************************************************************/
 #ifdef p7REFERENCE_ASC_FWDBACK_TESTDRIVE
 
@@ -1469,7 +1477,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 5. Example
+ * 6. Example
  *****************************************************************/
 #ifdef p7REFERENCE_ASC_FWDBACK_EXAMPLE
 #include "p7_config.h"

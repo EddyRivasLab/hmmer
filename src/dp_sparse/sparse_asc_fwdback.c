@@ -3,12 +3,13 @@
  * 
  * Contents:
  *    1. Sparse ASC Forward
- *    2. Sparse ASC Backward
- *    3. Footnotes
- *    4. Unit tests
- *    5. Test driver
- *    6. Example
- *    7. Copyright and license information
+ *    2. Sparse ASC Forward Segment
+ *    3. Sparse ASC Backward
+ *    4. Footnotes
+ *    5. Unit tests
+ *    6. Test driver
+ *    7. Example
+ *    8. Copyright and license information
  */
 
 #include "p7_config.h"
@@ -23,6 +24,7 @@
 #include "dp_sparse/p7_sparsemx.h"
 #include "dp_sparse/p7_spascmx.h"
 
+#include "dp_sparse/sparse_asc_fwdback.h"
 
 /*****************************************************************
  * 1. Sparse ASC Forward 
@@ -57,29 +59,16 @@
  */
 int
 p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_ANCHOR *anch, int D, 
-		      const P7_SPARSEMASK *sm, P7_SPARSEMX *asf, float *opt_sc)
+			  const P7_SPARSEMASK *sm, P7_SPARSEMX *asf, float *opt_sc)
 {
-  float const *tsc = gm->tsc;	 // sets up TSC() macro, access to profile's transitions      
-  float const *rsc = NULL;	 // will be set up for MSC(), ISC() macros for residue scores for each row i
-  int    g         = 1;	         // index of next or current segment. When we enter it, and while we're in it, in_seg = TRUE. s=1..S, with sentinels.
-  int    in_seg    = FALSE;      //   ... this bumps to TRUE when we see ia(g), first row of segment; to FALSE on ib(g), last row.
-  int    d         = 1;          // idx of next domain anchor we reach. Row i may be in sector UP(d), DOWN(d-1).
-  int    ndown     = 0;          //   ... this bumps to 1 when i reaches an anchor; row # of DOWN sector; back to 0 at seg end
-  float *dpc       = NULL;       // all indexing is relative! This ptr walks through the sparse ASC matrix main cells.
-  float *xc        = NULL;       //   ... and this one, through the specials.
-  float *dpp       = NULL;       // ptr for stepping thru DP cells on a previous row. Gets initialized by...
-  float *last_down = NULL;       //   ... remembering the <dpc> start of each DOWN...
-  float *last_up   = NULL;       //   ... or UP sector as we compute them.
-  float  mlc, mgc;               // tmp variables for computing MLk, MGk score
-  float  dlc, dgc;               //   ... and DLk, DGk.
-  float  xE,xN,xJ,xB,xL,xG,xC;   // current special state values on this row; specials are not always stored
-  int i;                         // index for dsq[i] seq position/rows 0..L
-  int k;                         // index of model positions 1..M
-  int z;                         // index for sparse cell indices k[i][z] along a row
-  int y;			 //   ... and for previous row, k[i-1][y].
-  int s;                         // index of individual states
-  int ngap;                      // number of residues in an intersegment interval, all must be accounted for by N, J, or C, depending on what anchor we're on
-  int status;
+  float *dpc;
+  float *xc;
+  float xN  = 0.;
+  float xJ  = -eslINFINITY;
+  float xC  = -eslINFINITY;
+  int   d   = 1;
+  int   g;
+  int   status;
 
   /* Contract checks, argument validation */
   ESL_DASSERT1(( sm->L == L     ));
@@ -89,19 +78,209 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
    */
   if (( status = p7_spascmx_Reinit(asf, sm, anch, D)) != eslOK) return status;
   asf->type = p7S_ASC_FWD;
-  
-  dpc = asf->dp;   // you can't initialize <dpc> until AFTER the _Reinit() call above, because Reinit might move the memory.
-  xc  = asf->xmx;  //   ... ditto for <xc>, as well as other tmp ptrs into the DP matrix memory.
-  xN  = 0.;
-  for (i = 0; i <= L; i++)
-    {
-      /* Mechanics of traversing a sparse ASC matrix, row by row */
-      if      (i == anch[d].i0) { ndown = 1; d++; }            // when i reaches next anchor; bump d to next domain index, and DOWN sector is active...
-      else if (sm->n[i] == 0)   { ndown = 0;      }            //  ... until when we reach end of segment, when DOWN becomes inactive again.
-      else if (ndown)           { ndown++;        }            // counting ndown lets us determine when we're in 1st, 2nd row; useful for boundary conditions on UP.
 
-      if      (i >  sm->seg[g].ib)  { in_seg  = FALSE; g++; }  // g bumps, to start expecting to see start of segment <g> next.
-      else if (i == sm->seg[g].ia)  { in_seg  = TRUE;       }  // g might be S+1, but this is safe because of sentinel seg[S+1].ia=ib=L+2      
+  /* Iterate the ForwardSeg algorithm over each segment in turn. 
+   */
+  dpc = asf->dp;
+  xc  = asf->xmx;
+  for (g = 1; g <= sm->S; g++)
+    p7_sparse_asc_ForwardSeg(dsq, L, gm, anch, D, d, sm, g, asf, xN, xJ, xC, dpc, xc, 
+			     &xN, &xJ, &xC, &d, &dpc, &xc, NULL);
+  
+  /* Account for the last ib(S)+1..L residues in ...CCCC path.
+   */
+  if (L > sm->seg[sm->S].ib) 
+    xC +=  (float) (L - sm->seg[sm->S].ib) * gm->xsc[p7P_C][p7P_LOOP];
+  if (opt_sc) *opt_sc = xC + gm->xsc[p7P_C][p7P_MOVE];
+  return eslOK;
+}
+/*--------------- end, sparse ASC Forward -----------------------*/
+
+
+
+
+
+/*****************************************************************
+ * 2. Sparse ASC Forward Segment
+ *****************************************************************/
+
+
+/* Function:  p7_sparse_asc_ForwardSeg()
+ * Synopsis:  Computes sparse ASC Forward on a single sparse segment
+ *
+ * Purpose:   A sparse ASC Forward calculation is done segment by
+ *            segment, so we can share the same DP recursion between a
+ *            complete-sequence sparse ASC Forward and the segmental
+ *            divide and conquer that's used in the fastest MPAS
+ *            algorithm.
+ *            
+ *            We're comparing profile <gm> to digital target sequence
+ *            <dsq> of length <L>, constrained both by sparse mask
+ *            <sm> and by anchor set <anch> containing <D> domain
+ *            anchors. 
+ *            
+ *            Caller provides sparse ASC matrix <asf> and (unlike our
+ *            other DP implementations), we do no reallocation
+ *            here. Caller is responsible for making sure that <asf>
+ *            has sufficient memory to hold the calculation. This is
+ *            because the demands of complete-sequence ASC Forward
+ *            vs. segmental divide and conquer MPAS are different.
+ *            
+ *            Caller must also provide a bunch of state information
+ *            about where we are in an ongoing DP calculation, from
+ *            previous segments we've calculated:
+ *            
+ *            <d> is the index (1..D,D+1) of the next domain anchor in
+ *            <anch> that we can reach in <dsq> (even if it is
+ *            downstream of the current segment, and thus not reached
+ *            in this segment); if it is D+1, that means we're already
+ *            past all anchors (and no anchors occur in this segment).
+ *            <anch> can either be the anchor set for the entire
+ *            sequence (in which case <d> may be somewhere inside that
+ *            array; if there is no anchor in the segment, <i0(d) >
+ *            ib(g)>), or it may be an anchor set only for this
+ *            segment (in which case <d==1>; if there is no anchor in
+ *            the segment <d==1> and <D==0>.).
+ *            
+ *            <g> is the index (1..sm->S) of the current segment we're
+ *            to calculate.
+ *            
+ *            <xN>, <xJ>, <xC> are the ASC Forward values at states
+ *            N,J,C on the last row of the previor segment <ib(g-1)>.
+ *            
+ *            <dpc>, <xc> are pointers into the sparse ASC DP matrix
+ *            to the first main supercell and first special supercell
+ *            for this segment, respectively (i.e. the next supercells
+ *            after the previous segment's calculation). (We need this
+ *            state information because addressing in sparse matrices
+ *            is implicit; we only know where we are by sequentially
+ *            traversing the matrix.)
+ *            
+ *            After the DP calculation for this segment is complete,
+ *            we get state information back, for use at the next call.
+ *            <ret_xN>, <ret_xJ>, <ret_xN> contain the N/J/C Forward
+ *            values at <ib(g)>. <ret_d> contains the index of the
+ *            next anchor we can reach. <ret_dpc> and <ret_xc> are
+ *            pointers to the next supercells we can store in <asf>.
+ *            It is safe for these to be ptrs to the same variables as
+ *            the input state variables, allowing input to be
+ *            overwritten with the output.
+ *            
+ *            For initialization conditions on the first segment in a
+ *            sequence, we would pass <d=1>, <g=1>, <xN=0>,
+ *            <xJ=xC=-inf>, <dpc=asf->dp>, and <xc=asf->xmx>.
+ *            
+ *            In a complete sequence Forward, for subsequent segments,
+ *            we pass the state information we got from the previous
+ *            segment's return. In a segmental divide-and-conquer
+ *            MPAS, to recalculate the same segment with a different
+ *            anchor set, we can call as many times as we like using
+ *            the same state information, which results in overwriting
+ *            previous calculation of this segment.
+ *            
+ *            When we calculate the last segment <g=sm->S>, <xC> is
+ *            the C value at <ib(S)>. To obtain a complete-sequence
+ *            ASC Forward score, we must add CC terms for residues
+ *            <ib(S)+1..L> (there are L-ib(S) of them), and the <t_CT>
+ *            term.
+ *            
+ *            Upon return, <asf> has been extended to include the DP
+ *            matrix storage for this segment, and <ret_asc> contains
+ *            the sparse ASC Forward segment score. This segment score
+ *            is the log sum of all paths from the starting N or J
+ *            state at <ia(g)-1> to the ending N or J state at <ib(g)>.
+ *            
+ *            The segment score makes the assumption that
+ *            <t_NN>=<t_JJ>= <t_CC>. However, nothing else in this
+ *            routine makes that assumption. Segmental divide and
+ *            conquer MPAS requires the assumption (and uses segment
+ *            scores). Complete-sequence ASC Forward does not require
+ *            the assumption (and does not use segment scores).
+ *
+ * Args:      dsq     : digital sequence
+ *            L       : length of <dsq>
+ *            gm      : profile
+ *            anch    : array of anchors 1..D, with sentinels at 0,D+1
+ *            D       : number of anchors in <anch>
+ *            d       : next anchor that we can reach in this or subsequent segments; 1..D+1 (D+1 means no anchors in this or subseq segments)
+ *            sm      : sparse mask
+ *            g       : which segment we're to calculate, 1..sm->S
+ *            asf     : sparse ASC matrix that already contains calculation for segments 1..g-1;
+ *                      caller guarantees that <asf> is allocated for the DP calculation of segment g
+ *            xN      : last N value at ib(g-1), or 0 for g=1
+ *            xJ      : last J value at ib(g-1), or -eslINFINITY for g=1
+ *            xC      : last C value at ib(g-1), or -eslINFINITY for g=1
+ *            dpc     : ptr to next main supercell in <asf> where this segment g is to start storage
+ *            xc      : ptr to next special supercell in <asf> where segment g is to start storage
+ *            ret_xN  : RETURN: N value at ib(g)
+ *            ret_xJ  : RETURN: J value at ib(g)
+ *            ret_xC  : RETURN: C value at ib(g)
+ *            ret_d   : RETURN: next anchor we can see. ib(g) < ia(g+1) <= i0(*ret_d)
+ *            ret_dpc : RETURN: ptr to next main supercell in <asf>, where next segment starts storage.
+ *                              For last segment <g==sm->S>, may point outside valid memory.    
+ *            ret_xc  : RETURN: ptr to next special supercell in <asf>, where next segment will start storage. 
+ *                              For last segment <g==sm->S>, may point outside valid memory.
+ *            opt_asc : optRETURN: sparse ASC Forward segment score. Invalid unless t_NN=t_JJ=t_CC.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_sparse_asc_ForwardSeg(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, 
+			 const P7_ANCHOR     *anch, int D, int d,
+			 const P7_SPARSEMASK *sm,   int g,
+			 P7_SPARSEMX *asf, float xN, float xJ, float xC, float *dpc, float *xc,
+			 float *ret_xN, float *ret_xJ, float *ret_xC, int *ret_d, float **ret_dpc, float **ret_xc, float *opt_asc)
+{
+  float const *tsc = gm->tsc;	 // sets up TSC() macro, access to profile's transitions      
+  float const *rsc = NULL;	 // will be set up for MSC(), ISC() macros for residue scores for each row i
+  int    ndown     = 0;          //   ... this bumps to 1 when i reaches an anchor; row # of DOWN sector; back to 0 at seg end
+  float *dpp       = NULL;       // ptr for stepping thru DP cells on a previous row. Gets initialized by...
+  float *last_down = NULL;       //   ... remembering the <dpc> start of each DOWN...
+  float *last_up   = NULL;       //   ... or UP sector as we compute them.
+  int    Ds        = 0;          // # of anchors we see in this domain; if we see 0 we need to know that for some special casing
+  float  mlc, mgc;               // tmp variables for computing MLk, MGk score
+  float  dlc, dgc;               //   ... and DLk, DGk.
+  float  xE,xB,xL,xG;            // current special state values on this row; specials are not always stored
+  int    i;                      // index for dsq[i] seq position/rows 0..L
+  int    k;                      // index of model positions 1..M
+  int    z;                      // index for sparse cell indices k[i][z] along a row
+  int    y;			 //   ... and for previous row, k[i-1][y].
+  int    s;                      // index of individual states
+  float  xNJbase;                // Save xN | xJ at ia(g)-1, whichever one wasn't -inf
+  int    ngap;                   // number of residues in an intersegment interval, all must be accounted for by N, J, or C, depending on what anchor we're on
+
+  
+  /* Initialize on row ia(g)-1
+   * Follows "always calculate, sometimes store" rule for syncing numerical error w/ SparseForward(); see footnote [1].
+   */
+  xNJbase = ESL_MAX(xN, xJ);                                                  // Either xN == -inf || xJ == -inf, depending on whether we've seen an anchor yet in dsq
+  ngap = (g == 1 ? sm->seg[g].ia - 1 : sm->seg[g].ia - sm->seg[g-1].ib - 1);  // seg[0].ib sentinel is -1, not 0, alas. 
+  
+  xE = -eslINFINITY;
+  xN = (ngap == 0 ? xN : xN + (float) ngap * gm->xsc[p7P_N][p7P_LOOP]);       // ngap=0 only occurs for g=1, ia(1)=1 (1st residue is in 1st seg)
+  xJ = (ngap == 0 ? xJ : xJ + (float) ngap * gm->xsc[p7P_J][p7P_LOOP]);       // ngap==0 test is there because t_NN may be -inf; must avoid 0 * -inf = NaN
+  xB = ESL_MAX(xN + gm->xsc[p7P_N][p7P_MOVE], xJ + gm->xsc[p7P_J][p7P_MOVE]); // Either xN == -inf || xJ == -inf, depending on whether we've seen an anchor yet in dsq
+  xL = xB + gm->xsc[p7P_B][0];                                                // [0] is B->L 
+  xG = xB + gm->xsc[p7P_B][1];                                                // [1] is B->G
+  xC = (ngap == 0 ? xC : xC + (float) ngap * gm->xsc[p7P_C][p7P_LOOP]);       // Up 'til 1st anchor is reached, xJ=xC=-inf; afterwards, xN=-inf. 
+
+  if ( anch[d].i0 <= sm->seg[g].ib)                                           // suffices to test if there's an anchor in this segment or not
+    {
+      *xc++ = xE;  
+      *xc++ = xN; 
+      *xc++ = xJ;  
+      *xc++ = xB; 
+      *xc++ = xL; 
+      *xc++ = xG;  
+      *xc++ = xC;
+      *xc++ = -eslINFINITY; // JJ; only valid in a decoding mx
+      *xc++ = -eslINFINITY; // CC; ditto
+    }
+
+  for (i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)
+    {
+      if      (i == anch[d].i0) { ndown = 1; d++; Ds++; }  // When i reaches next anchor, bump d to next domain index, and DOWN sector becomes active.
+      else if (ndown)           { ndown++;              }  // Counting ndown lets us determine when we're in 1st vs. subsequent rows; useful for boundary conditions on DP 
 
       xE = -eslINFINITY;
 
@@ -133,11 +312,11 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
 	  }
 	  *dpc++ = mlc = MSC(k) + mlc;
 	  *dpc++ = mgc = MSC(k) + mgc;
-	  *dpc++ = -eslINFINITY;       // IL(i0,k0)
-	  *dpc++ = -eslINFINITY;       // IG(i0,k0)
+	  *dpc++ = -eslINFINITY;                      // IL(i0,k0)
+	  *dpc++ = -eslINFINITY;                      // IG(i0,k0)
 	  xE     = p7_FLogsum(xE, mlc);               // dlc is -inf, not included in sum
-	  *dpc++ = -eslINFINITY;       // DL(i0,k0)
-	  *dpc++ = -eslINFINITY;       // DG(i0,k0)
+	  *dpc++ = -eslINFINITY;                      // DL(i0,k0)
+	  *dpc++ = -eslINFINITY;                      // DG(i0,k0)
 	  if (z < sm->n[i]-1 && sm->k[i][z+1] == k+1) {                     // is there a (i,k+1) cell to our right? 
 	    dlc =  mlc + TSC(p7P_MD, k);                                    //  ... then ->Dk+1 is precalculated as usual.
 	    dgc =  mgc + TSC(p7P_MD, k);                                    // Since we know we're the first cell (the anchor) we initialize dlc, dgc here.
@@ -225,16 +404,14 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
 	} // end of <ndown> block, calculation of DOWN row i
 	  
 
-
-
       /*****************************************************************
        * Computing row i when it's in an UP sector 
        *****************************************************************/
 
-      if (in_seg && anch[d].i0 <= sm->seg[g].ib)                             // d may be D+1 here: if so, sentinel makes the the comparison to seg[g].ib fail
+      if (anch[d].i0 <= sm->seg[g].ib)   // d may be D+1 here: if so, sentinel makes the the comparison to seg[g].ib fail
 	{
-	  if (ndown == 1)       // The first row of an UP matrix for subsequent domains in a segment is the anchor row i0.
-	    {                   // All sparse cells in this row are unreachable, initialized to -inf. They only get used for G->DDDD->Mk,i+1 decoding, wing unfolding.
+	  if (ndown == 1)                // The first row of an UP matrix for subsequent domains in a segment is the anchor row i0.
+	    {                            // All sparse cells in this row are unreachable, initialized to -inf. They only get used for G->DDDD->Mk,i+1 decoding, wing unfolding.
 	      last_up = dpc;
 	      for (z = 0; z < sm->n[i] && sm->k[i][z] < anch[d].k0; z++)
 		for (s = 0; s < p7S_NSCELLS; s++)
@@ -320,6 +497,7 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
 	    } // End of dealing with all but the first row in an UP sector
 	} // End of UP sector.
 
+
       /*****************************************************************
        * Specials. Always calculated; sometimes stored.
        *****************************************************************/
@@ -332,42 +510,22 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
        * *storage* of specials (by ASC rules).  For full explanation
        * of why this is so, see footnote [1].
        */
-      if (i == sm->seg[g].ia-1)
+
+      /* Again, this follows "always calculate, sometimes store": see footnote [1] */
+      /* xE was already collected above */
+      if (Ds == 0)    xN = xN + gm->xsc[p7P_N][p7P_LOOP];                             // which might still be -inf, if xN started as -inf in this seg
+      else            xN = -eslINFINITY;
+      if (ndown != 1) xJ = p7_FLogsum(xE + gm->xsc[p7P_E][p7P_LOOP], xJ + gm->xsc[p7P_J][p7P_LOOP]);
+      else            xJ =            xE + gm->xsc[p7P_E][p7P_LOOP];                  // block J->J propagation across anchor i0
+      if (ndown != 1) xC = p7_FLogsum(xE + gm->xsc[p7P_E][p7P_MOVE], xC + gm->xsc[p7P_C][p7P_LOOP]);  
+      else            xC =            xE + gm->xsc[p7P_E][p7P_MOVE];
+      xB = p7_FLogsum(xN + gm->xsc[p7P_N][p7P_MOVE], xJ + gm->xsc[p7P_J][p7P_MOVE]);  // only one term is finite, so the FLogsum() is overkill
+      xL = xB + gm->xsc[p7P_B][0];                                                
+      xG = xB + gm->xsc[p7P_B][1];                                                
+
+
+      if (anch[d].i0 <= sm->seg[g].ib || ndown)
 	{
-	  ngap =  (g == 1 ? i : sm->seg[g].ia - sm->seg[g-1].ib - 1);
-
-	  if (d == 1)                  xN = xN + (ngap == 0 ? 0. : (float) ngap * gm->xsc[p7P_N][p7P_LOOP]);
-	  else                         xN = -eslINFINITY;
-
-	  if      (d == 1 || d == D+1) xJ = -eslINFINITY;
-	  else                         xJ = p7_FLogsum(xJ + (float) ngap * gm->xsc[p7P_J][p7P_LOOP], 
-						       xE +                gm->xsc[p7P_E][p7P_LOOP]);
-
-	  if      (d == D+1)           xC = p7_FLogsum(xC + (float) ngap * gm->xsc[p7P_C][p7P_LOOP], 
-						       xE +                gm->xsc[p7P_E][p7P_MOVE]);
-	  else                         xC = -eslINFINITY;
-
-	  xB = (d == 1 ? xN + gm->xsc[p7P_N][p7P_MOVE] : xJ + gm->xsc[p7P_J][p7P_MOVE]);
-	  xL = xB + gm->xsc[p7P_B][0]; /* B->L */
-	  xG = xB + gm->xsc[p7P_B][1]; /* B->G */
-	}
-      else if (i >= sm->seg[g].ia && i <= sm->seg[g].ib)
-	{
-	  xN = (d == 1 ? xN + gm->xsc[p7P_N][p7P_LOOP] : -eslINFINITY);
-
-	  if      (d == 1 || d == D+1) xJ = -eslINFINITY;
-	  else if (ndown == 1)         xJ = xE + gm->xsc[p7P_E][p7P_LOOP];  // don't propagate J->J across DOWN sector boundaries
-	  else                         xJ = p7_FLogsum(xJ + gm->xsc[p7P_J][p7P_LOOP],  xE + gm->xsc[p7P_E][p7P_LOOP]);
-
-	  xB = (d == 1 ? xN + gm->xsc[p7P_N][p7P_MOVE] : xJ + gm->xsc[p7P_J][p7P_MOVE]);
-	  xL = xB + gm->xsc[p7P_B][0]; /* B->L */
-	  xG = xB + gm->xsc[p7P_B][1]; /* B->G */
-	  xC = (d == D+1 ? p7_FLogsum(xE + gm->xsc[p7P_E][p7P_MOVE],  xC + gm->xsc[p7P_C][p7P_LOOP]) : -eslINFINITY);
-	}
-      
-      /* ASC only stores specials on ia(g)-1..ib(g) for segments g that contain >= 1 anchor. simple to say, a little awkward to test for: */
-      if ( (i >= sm->seg[g].ia-1 && anch[d].i0 <= sm->seg[g].ib) || ndown)   // d is next anchor we'll see. i0(d) <= ib until we're in last DOWN sector in seg.
-	{                                                                    // in last DOWN sector in seg, i0(d) is in a later seg... hence we need the <ndown> test too here
 	  *xc++ = xE;
 	  *xc++ = xN;
 	  *xc++ = xJ;
@@ -378,19 +536,25 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
 	  *xc++ = -eslINFINITY; // JJ; only valid in a decoding mx
 	  *xc++ = -eslINFINITY; // CC; ditto
 	}
-    } // end of i=0..L. Sparse ASC DP matrix complete. Mission accomplished.
+    }
 
-  ngap = L - sm->seg[sm->S].ib;
-  xC   = (ngap == 0 ? xC : xC + (float) ngap * gm->xsc[p7P_C][p7P_LOOP]);
-  if (opt_sc) *opt_sc = xC + gm->xsc[p7P_C][p7P_MOVE];
+  *ret_xN  = xN;
+  *ret_xJ  = xJ;
+  *ret_xC  = xC;
+  *ret_d   = d;
+  *ret_dpc = dpc;
+  *ret_xc  = xc;
+  if (opt_asc) *opt_asc = (xN != -eslINFINITY && Ds==0) ?  xN - xNJbase : xJ - xNJbase;  // Usually J(ib) - (J(ia-1) || N(ia-1)) suffices, but watch out for N..N empty path ending in N(ib)
   return eslOK;
 }
-/*--------------- end, sparse ASC Forward -----------------------*/
+			 
+/*------------ end, sparse ASC Forward segment ------------------*/
+
 
 
 
 /*****************************************************************
- * 2. Sparse ASC Backward
+ * 3. Sparse ASC Backward
  *****************************************************************/
 
 int
@@ -405,7 +569,7 @@ p7_sparse_asc_Backward(void)
 
 
 /*****************************************************************
- * 3. Footnotes
+ * 4. Footnotes
  *****************************************************************
  *
  * [1] NUMERICAL ERROR MATCHED TO SPARSE FORWARD/BACKWARD
@@ -442,8 +606,10 @@ p7_sparse_asc_Backward(void)
  *
  *------------------ end, footnotes -----------------------------*/
 
+
+
 /*****************************************************************
- * 3. Unit tests
+ * 5. Unit tests
  *****************************************************************/
 #ifdef p7SPARSE_ASC_FWDBACK_TESTDRIVE
 #include "hmmer.h"
@@ -1045,7 +1211,7 @@ utest_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M,
 
 
 /*****************************************************************
- * 4. Test driver
+ * 6. Test driver
  *****************************************************************/
 #ifdef p7SPARSE_ASC_FWDBACK_TESTDRIVE
 
@@ -1128,7 +1294,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 5. Example
+ * 7. Example
  *****************************************************************/
 #ifdef p7SPARSE_ASC_FWDBACK_EXAMPLE
 
@@ -1180,7 +1346,7 @@ main(int argc, char **argv)
   P7_ANCHORS     *anch    = p7_anchors_Create();
   float          *wrk     = NULL;
   P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
-  float           fsc, vsc, asc, asc_sparse;
+  float           fsc, vsc, asc, asc_sparse, asc_sparse2;
   int             status;
 
   /* Read in one HMM */
@@ -1249,14 +1415,17 @@ main(int argc, char **argv)
    * Run sparse ASC Forward.
    */
   asf = p7_sparsemx_Create(sm);
-  p7_sparse_asc_Forward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &asc_sparse);
+  old_p7_sparse_asc_Forward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &asc_sparse);
 
-  
+  //p7_spascmx_Dump(stdout, asf, anch->a, anch->D);
 
-  //p7_spascmx_Dump(stdout, asf, anch->arr, anch->n);
+  p7_sparse_asc_Forward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &asc_sparse2);
+
+  //p7_spascmx_Dump(stdout, asf, anch->a, anch->D);
 
   printf("Reference ASC fwd score = %.2f nats\n", asc);
   printf("Sparse ASC fwd score    = %.2f nats\n", asc_sparse);
+  printf("NEW ASC fwd score       = %.2f nats\n", asc_sparse2);
 
   p7_anchorhash_Destroy(ah);
   if (wrk) free(wrk);
