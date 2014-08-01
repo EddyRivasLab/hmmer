@@ -452,9 +452,9 @@ sparse_traceback_engine(ESL_RANDOMNESS *rng, float *wrk, const P7_PROFILE *gm, c
 
       i = ip = sm->seg[g].ib;   
       xc_on_i = TRUE;   // we know ib is stored, it's in a segment.		
-      if ((status = p7_trace_Append(tr, p7T_J, k, i)) != eslOK) return status;   // _Append() will actually set i[0] = 0, not i; there's always one mute J state.
+      if ((status = p7_trace_Append(tr, p7T_J, 0, 0)) != eslOK) return status;   // i=0 arg must be explicit, else _Append will try to look at prev state, which doesn't exist.
       scur = p7T_J;                                                              // If we do use a J to generate ib, that gets handled and added by the main recursion.
-      istart = sm->seg[g].ia;
+      istart = sm->seg[g].ia-1;
     }
   else  // complete-sequence trace version
     {
@@ -628,7 +628,7 @@ p7_sparse_trace_Stochastic(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PROFIL
 
 
 
-/* Function:  p7_sparse_trace_SegmentStochastic()
+/* Function:  p7_sparse_trace_StochasticSeg()
  * Synopsis:  Stochastic traceback of a single sparse segment. Used in MPAS.
  *
  * Purpose:   Caller wants a stochastic traceback for segment <g> of a
@@ -636,6 +636,14 @@ p7_sparse_trace_Stochastic(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PROFIL
  *            generator <rng>, and the profile <gm> that was used in
  *            calculating <sxf>. 
  *            
+ *            Caller provides <p0>, the log probability of the empty
+ *            path with D=0, no homology domains in the segment. This
+ *            needs to be calculated by summation, not multiplication,
+ *            in order to match numerical error in other DP
+ *            calculations.  We only want to do that summation once,
+ *            and the caller did it (in the way we code segmental
+ *            MPAS).
+ *
  *            It's possible (indeed likely) that the segment contains
  *            no domains. This case gets handled specially, and the
  *            caller must provide the segment forward score <sF> for
@@ -668,7 +676,9 @@ p7_sparse_trace_Stochastic(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PROFIL
  *            segment traces allow empty paths (all JJ...JJ), because
  *            the caller is responsible for predetermining whether the
  *            empty path is sampled, this function only returns
- *            segment traces with D>0.
+ *            segment traces with D>0; as stated above, a D=0 'empty trace'
+ *            is handled as a special case and returned as a <tr->N=0>
+ *            empty trace structure.
  *
  * Returns:   <eslOK> on success. <tr> contains a segment trace
  *            sampled from the deltaS + p0 ensemble. If the empty 
@@ -681,20 +691,20 @@ p7_sparse_trace_Stochastic(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PROFIL
  *            appears to be caught in an infinite loop. 
  */
 int
-p7_sparse_trace_SegmentStochastic(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PROFILE *gm, const P7_SPARSEMX *sxf, float sF, int g, float *dpc, float *xc, P7_TRACE *tr)
+p7_sparse_trace_StochasticSeg(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PROFILE *gm, const P7_SPARSEMX *sxf,
+			      float p0, float sF, int g, float *dpc, float *xc, P7_TRACE *tr)
 {
   float *wrk      = NULL;
-  float  p0       = gm->xsc[p7P_J][p7P_J] * (sxf->sm->seg[g].ib - sxf->sm->seg[g].ia + 1);
   float  pempty   = exp(p0 - sF);
   int    failsafe = 0;
   int    D;
   int    status;
 
   /* Contract checks. */
-  ESL_DASSERT1(( gm->xsc[p7P_N][p7P_N] == gm->xsc[p7P_J][p7P_J] ));   // Use of segmented MPAS requires t_NN = t_JJ = tCC. See footnote [1] in sparse_anchors.c.
-  ESL_DASSERT1(( gm->xsc[p7P_N][p7P_N] == gm->xsc[p7P_C][p7P_C] ));
-  ESL_DASSERT1(( pempty <= 0.5 ));                                    // See footnote [6] in sparse_anchors.c for detailed explanation.
-  ESL_DASSERT1(( tr->N  == 0 ));                                      // Caller has done a _Reuse(), which we depend on.
+  ESL_DASSERT1(( gm->xsc[p7P_N][p7P_LOOP] == gm->xsc[p7P_J][p7P_LOOP] ));   // Use of segmented MPAS requires t_NN = t_JJ = tCC. See footnote [1] in sparse_anchors.c.
+  ESL_DASSERT1(( gm->xsc[p7P_N][p7P_LOOP] == gm->xsc[p7P_C][p7P_LOOP] ));
+  ESL_DASSERT1(( pempty <= 0.5 ));                                          // See footnote [6] in sparse_anchors.c for detailed explanation.
+  ESL_DASSERT1(( tr->N  == 0 ));                                            // Caller has done a _Reuse(), which we depend on.
   ESL_DASSERT1(( sxf->type == p7S_FORWARD ));
   
   /* Idiomatic handling of a "bypass" variable. wrk_byp=NULL: internal. *wrk_byp=NULL: allocate one for me and pass it back. Else: use the wrk buffer I'm giving you. */
@@ -702,12 +712,29 @@ p7_sparse_trace_SegmentStochastic(ESL_RANDOMNESS *rng, float **wrk_byp, const P7
   else if (esl_byp_IsReturned(wrk_byp)) { ESL_ALLOC  (*wrk_byp, sxf->sm->M * p7S_NSCELLS * sizeof(float)); wrk = *wrk_byp; }
   else if (esl_byp_IsProvided(wrk_byp)) { ESL_REALLOC(*wrk_byp, sxf->sm->M * p7S_NSCELLS * sizeof(float)); wrk = *wrk_byp; }
 
-  if (esl_random(rng) >= pempty)           // else, we sample the p0 empty path, leave tr->N=0, and return success.
-    do {
-      status = sparse_traceback_engine(rng, wrk, gm, sxf, tr, g, dpc, xc, &D);
-      if (failsafe++ >= 100000) ESL_XEXCEPTION(eslENOHALT, "so much for footnote [6]");
-    } while (status == eslOK && D == 0);   // reject empty JJ...JJ traces. 
+  if (esl_random(rng) >= pempty) 
+    {
+      do {
+	p7_trace_Reuse(tr);
+	status = sparse_traceback_engine(rng, wrk, gm, sxf, tr, g, dpc, xc, &D);
+	if (failsafe++ >= 100000) ESL_XEXCEPTION(eslENOHALT, "so much for footnote [6]");
+      } while (status == eslOK && D == 0);   // reject empty JJ...JJ traces. 
+    }
+  else          // else, we sample the p0 empty path, leave tr->N=0, and return success.
+    {           
+      tr->L = sxf->sm->L;
+      tr->M = sxf->sm->M;
+    }
   
+#if p7_DEBUGGING
+  if (tr->N)
+    {
+      int z;
+      for (z = 0;       z < tr->N; z++) if (tr->i[z]) break;  if (tr->i[z] != sxf->sm->seg[g].ia) esl_fatal("bad trace");
+      for (z = tr->N-1; z >= 0;    z--) if (tr->i[z]) break;  if (tr->i[z] != sxf->sm->seg[g].ib) esl_fatal("bad trace");
+    }
+#endif
+
   if  (esl_byp_IsInternal(wrk_byp)) { free(wrk); }
   return status;
 

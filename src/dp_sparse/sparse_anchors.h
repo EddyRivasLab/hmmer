@@ -20,6 +20,13 @@ extern int p7_sparse_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, con
 			     P7_SPARSEMX *asf, P7_ANCHORS *anch, float *ret_asc,
 			     P7_MPAS_PARAMS *prm, P7_MPAS_STATS *stats);
 
+extern int p7_sparse_AnchorsSeg(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
+				const P7_SPARSEMX *sxf, const P7_SPARSEMX *sxd,
+				float vsc, float fsc,
+				P7_TRACE *tr, float **byp_wrk, P7_ANCHORHASH *ah, P7_ANCHORS *vanch,
+				P7_SPARSEMX *asf, P7_ANCHORS *anch, float *ret_asc,
+				P7_MPAS_PARAMS *prm);
+
 
 extern int p7_sparse_anchors_SetFromTrace(const P7_SPARSEMX *sxd, const P7_TRACE *tr, P7_ANCHORS *anch);
 

@@ -23,6 +23,23 @@
  * 1. P7_ANCHOR arrays, either naked or as part of P7_ANCHORS
  *****************************************************************/
 
+/* Function:  p7_anchor_GetSentinels()
+ * Synopsis:  Get L,M from existing sentinels
+ *
+ * Purpose:   Use the existing sentinels at <0,D+1> to retrieve
+ *            sequence length <L> and profile length <M>. This gets
+ *            used when we need to change the anchor set length
+ *            and set new sentinels.
+ */
+int
+p7_anchor_GetSentinels(P7_ANCHOR *arr, int D, int *ret_L, int *ret_M)
+{
+  *ret_L = arr[D+1].i0 - 1;
+  *ret_M = arr[0].k0   - 1;
+  return eslOK;
+}
+
+
 /* Function:  p7_anchor_SetSentinels()
  * Synopsis:  Initialize sentinel values for a P7_ANCHOR array.
  *
@@ -59,9 +76,7 @@ p7_anchor_SetSentinels(P7_ANCHOR *anch, int D, int L, int M)
  *            
  *            The object is allocated with a default initial size,
  *            which happens to be <D=8> right now. The caller will
- *            resize it as needed, either to a known fixed size <D>
- *            using <p7_anchors_Reinit()>, or by incrementally
- *            expanding the allocation using <p7_anchors_Grow()>.
+ *            resize it as needed using <p7_anchors_Resize()>.
  *            
  *            Sentinels are not set. Caller needs to call 
  *            <p7_anchor_SetSentinels(anch->a, D, L, M)> when 
@@ -80,8 +95,8 @@ P7_ANCHORS *
 p7_anchors_Create(void)
 {
   P7_ANCHORS *anch             = NULL;
-  int32_t     default_nalloc   = 8;     // i.e. for up to D=6
-  int32_t     default_nredline = 64;    // i.e. for up to D=62
+  int32_t     default_nalloc   = 8;     // i.e. for up to D=6;  +2 sentinels
+  int32_t     default_nredline = 64;    // i.e. for up to D=62; +2 sentinels
   int         status;
 
   ESL_ALLOC(anch, sizeof(P7_ANCHORS));
@@ -98,73 +113,48 @@ p7_anchors_Create(void)
   return NULL;
 }
 
-/* Function:  p7_anchors_Reinit()
- * Synopsis:  Reinitialize (and reallocate), for a known number of anchors.
+
+/* Function:  p7_anchors_Resize()
+ * Synopsis:  Reallocate a P7_ANCHORS object, if necessary
  *
- * Purpose:   Reinitialize <anch> to hold up to <D> anchors. Reallocate
- *            if needed. 
- *
- *            State of the sentinels is undefined. Just like after <_Create()>,
- *            caller needs to call <p7_anchor_SetSentinels(anch->a, D, L, M)> when 
- *            it knows <D>, <L>, and <M>.
+ * Purpose:   Make sure that <anch> can hold an array of
+ *            at least <D> anchors.
  *            
- *            This only reinitializes an object big enough to contain
- *            <D> anchors. It does not set <anch->D>, because the
- *            object does not contain valid anchor data yet. Rather,
- *            as in a <Create()> call, <anch->D> is initialized to
- *            zero. Caller will set D, probably when it sets the
- *            sentinels.
- *
- * Args:      anch  : <P7_ANCHORS> object
- *            D     : number of anchors to prepare for
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    <eslEMEM> on reallocation failure.
+ *            Does not alter any data that are already stored
+ *            in <anch>, so it's safe to resize an anchor
+ *            array that we're growing incrementally (as in
+ *            segmental divide and conquer MPAS algorithm).
+ *            
+ *            D=0 is a valid argument and may occur in normal use; it
+ *            results in a no-op, because the structure is always big
+ *            enough to hold zero anchors.
+ *            
+ * Xref:      First example of a new pattern for how we 
+ *            can handle reallocation/reuse strategy, 
+ *            replacing _Reinit() and _Grow() interfaces.
+ *            [SRE:J14/1]
  */
 int
-p7_anchors_Reinit(P7_ANCHORS *anch, int D)
+p7_anchors_Resize(P7_ANCHORS *anch, int D)
 {
+  int nalloc;
   int status;
+  
+  /* Contract checks, argument validation */
+  ESL_DASSERT1(( anch->nalloc > 0 ));               
 
-  if (D+2 > anch->nalloc) { // grow?
-    ESL_REALLOC(anch->a, sizeof(P7_ANCHOR) * (D+2));  
-    anch->nalloc = D+2;
-  } 
-  else if (anch->nalloc > anch->nredline && D+2 <= anch->nredline) {  // shrink?
-    ESL_REALLOC(anch->a, sizeof(P7_ANCHOR) * anch->nredline);
-    anch->nalloc = anch->nredline;
-  }
-
-  anch->D       = 0;
-  return eslOK;
-
- ERROR:
-  return status;
-}
-
-/* Function:  p7_anchors_Grow()
- * Synopsis:  Increase allocation for anchors, if needed.
- *
- * Purpose:   Check if there's enough space in <anch> to hold
- *            one new anchor. If not, increase the allocation
- *            in <anch> by doubling it.
- *
- * Args:      anch  : the anchors object
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    <eslEMEM> on allocation failure.
- */
-int
-p7_anchors_Grow(P7_ANCHORS *anch)
-{
-  int status;
-
-  if (anch->D+2 < anch->nalloc) return eslOK;                  // +2 because of the sentinels
-
-  ESL_REALLOC(anch->a, sizeof(P7_ANCHOR) * anch->nalloc * 2);  // reallocation may exceed redline - until we Reuse() or Reinit().
-  anch->nalloc = anch->nalloc * 2;                            
+  if      (D+2 <= anch->nalloc) return eslOK;       // If we're big enough already, do nothing;
+  else if (D+2 <  anch->nredline || anch->D > 0)    // If we're under the redline max, or if it looks like
+    {                                               //   we're building the anchor array incrementally,
+      nalloc = anch->nalloc;                        //   we reallocate by doubling, trying to minimize 
+      while (nalloc < D+2) nalloc *= 2;             //   the need for more reallocations soon.
+    }                                               // If we're over redline AND it looks like we're
+  else nalloc = D+2;                                //   starting an empty object, allocate exactly.
+                                                    //   Now nalloc will probably not be a multiple of two -- 
+                                                    //   but the next _Reuse() call will pull it back
+                                                    //   to the redline, which is.
+  ESL_REALLOC(anch->a, sizeof(P7_ANCHOR) * nalloc);
+  anch->nalloc = nalloc;
   return eslOK;
 
  ERROR:
@@ -188,10 +178,9 @@ p7_anchors_Copy(const P7_ANCHORS *src, P7_ANCHORS *dst)
   int32_t d;
   int     status;
 
-  if (src->D+2 > dst->nalloc &&
-      (status = p7_anchors_Reinit(dst, src->D)) != eslOK) goto ERROR;
+  if (( status = p7_anchors_Resize(dst, src->D) ) != eslOK) goto ERROR;
   
-  for (d = 0; d <= src->D+1; d++)       // inclusive of sentinels
+  for (d = 0; d <= src->D+1; d++)       // inclusive of sentinels!
     {
       dst->a[d].i0 = src->a[d].i0;
       dst->a[d].k0 = src->a[d].k0;
@@ -202,6 +191,51 @@ p7_anchors_Copy(const P7_ANCHORS *src, P7_ANCHORS *dst)
  ERROR:
   return status;
 }
+
+
+/* Function:  p7_anchors_Catenate()
+ * Synopsis:  Append anchors to an anchor set, possibly with some overwriting.
+ *
+ * Purpose:   Append the <Dg> anchors in <arr[1..Dg]> to the anchor set
+ *            in <anch->a[1..D0]> to form a new anchor set in <anch> of
+ *            <D=D0+Dg> anchors; reset the sentinels at <0,D0+Dg+1>. 
+ *
+ *            This is used in segmental divide and conquer MPAS
+ *            algorithm, where the optimal anchor set is determined
+ *            segment by segment.  We have a prefix of <D0> anchors
+ *            that are already optimal, and we are testing different
+ *            suffixes, overwriting suffixes as we try them.
+ *            
+ *            <anch> is reallocated, if necessary, to hold the new
+ *            anchor set.
+ *            
+ * Returns:   <eslOK> on success.
+ * 
+ * Throws:    <eslEMEM> on reallocation failure.           
+ */
+int
+p7_anchors_Catenate(P7_ANCHORS *anch, int D0, P7_ANCHOR *arr, int Dg)
+{
+  int L;
+  int M;
+  int d;
+  int status;
+
+  if (( status = p7_anchors_Resize(anch, D0+Dg)) != eslOK) return status;
+
+  p7_anchor_GetSentinels(anch->a, anch->D, &L, &M);
+  for (d = 1; d <= Dg; d++)
+    {
+      anch->a[D0+d].i0 = arr[d].i0;
+      anch->a[D0+d].k0 = arr[d].k0;
+    }
+  anch->D = D0 + Dg;
+  p7_anchor_SetSentinels(anch->a, anch->D, L, M);
+  return eslOK;
+}
+
+
+
 
 int
 p7_anchors_Reuse(P7_ANCHORS *anch)
@@ -228,6 +262,7 @@ p7_anchors_Destroy(P7_ANCHORS *anch)
   }
   return;
 }
+
 
 /*****************************************************************
  * 3. Debugging and development tools
@@ -308,7 +343,7 @@ p7_anchors_Sample(ESL_RANDOMNESS *rng, int L, int M, int maxD, P7_ANCHORS *anch)
   int      i,d,r;
   int      status;
 
-  if ((status = p7_anchors_Reinit(anch, D)) != eslOK) goto ERROR;
+  if ((status = p7_anchors_Resize(anch, D)) != eslOK) goto ERROR;
 
   /* A reservoir sort like algorithm samples a combination of <D> i0 anchors, w/o replacement */
   ESL_ALLOC(tmp, sizeof(int32_t) * D);
@@ -361,7 +396,7 @@ p7_anchors_SampleFromTrace(P7_ANCHORS *anch, ESL_RANDOMNESS *rng, const P7_TRACE
   int nM;
   int status;
 
-  if ((status = p7_anchors_Reinit(anch, D)) != eslOK) goto ERROR;
+  if ((status = p7_anchors_Resize(anch, D)) != eslOK) goto ERROR;
   
   for (d = 1; d <= D; d++)
     {

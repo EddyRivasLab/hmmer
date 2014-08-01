@@ -1260,7 +1260,7 @@ p7_trace_PlotHeatMap(FILE *ofp, P7_TRACE *tr, int ia, int ib, int ka, int kb)
  * Synopsis:  Add an element (state/residue) to a growing trace.
  *
  * Purpose:   Adds an element to a trace <tr> that is growing
- *            left-to-right. The element is defined by a state type
+ *            incrementally. The element is defined by a state type
  *            <st> (such as <p7T_ML>); a node index <k> (1..M for
  *            M,D,I main states; else 0); and a dsq position <i> (1..L
  *            for emitters, else 0).
@@ -1271,9 +1271,6 @@ p7_trace_PlotHeatMap(FILE *ofp, P7_TRACE *tr, int ia, int ib, int ka, int kb)
  *            
  *            Reallocates the trace (by doubling) if necessary.
  *            
- *            Caller can grow a trace right-to-left too, if it
- *            plans to call <p7_trace_Reverse()>. 
- *
  * Returns:   <eslOK> on success.
  *
  * Throws:    <eslEMEM> on reallocation failure. The element is successfully
@@ -1293,7 +1290,7 @@ p7_trace_Append(P7_TRACE *tr, char st, int k, int i)
   switch (st) {
     /* Emit-on-transition states: */
   case p7T_N: case p7T_C: case p7T_J: 
-    tr->i[tr->N] = ( (tr->st[tr->N-1] == st) ? i : 0);
+    tr->i[tr->N] = ( (i && tr->st[tr->N-1] == st) ? i : 0);   // Segment traces start with J. First J is attached with explicit i=0 argument. That avoids a st[-1] out of bounds reference.
     tr->k[tr->N] = 0;
     break;
 
@@ -1370,7 +1367,7 @@ p7_trace_Reverse(P7_TRACE *tr)
    * just before reversing them. (Other ways of doing this would be
    * fine too.
    */
-  for (z = 0; z < tr->N; z++)
+  for (z = 0; z < tr->N-1; z++)
     {
       if ( (tr->st[z] == p7T_N && tr->st[z+1] == p7T_N) ||
 	   (tr->st[z] == p7T_C && tr->st[z+1] == p7T_C) ||

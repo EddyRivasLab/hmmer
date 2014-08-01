@@ -1,5 +1,11 @@
-/* P7_ANCHORHASH implements an auxiliary data structure that the
- * MPAS (most probable anchor set) algorithm uses.
+/* P7_ANCHORHASH implements an auxiliary data structure that the MPAS
+ * (most probable anchor set) algorithm uses to store anchor sets it's
+ * already seen.
+ * 
+ * Needs to deal with both complete anchor sets, and suffixes of
+ * partial anchor sets. (The segmental divide & conquer version of the
+ * MPAS algorithm solves the optimal anchor set sequentially, one
+ * segment at a time.)
  * 
  * Contents:
  *   1. P7_ANCHORHASH object
@@ -24,7 +30,7 @@
  *****************************************************************/
 static uint32_t anchorhash_function    (const P7_ANCHOR *arr, int32_t D, uint32_t hashsize);
 static uint32_t anchorhash_function_alt(int32_t *keydata, int32_t hashsize);
-static int      anchorhash_compare     (const P7_ANCHOR *arr, int32_t D,  int32_t *keydata);
+static int      anchorhash_compare     (const P7_ANCHOR *arr, int32_t D, int32_t *keydata);
 static int      anchorhash_upsize      (P7_ANCHORHASH *ah);
 
 /* Function:  p7_anchorhash_Create()
@@ -174,15 +180,22 @@ p7_anchorhash_Destroy(P7_ANCHORHASH *ah)
  *            integer-based C arrays. Return the index through
  *            <opt_index>.
  *            
+ *            <D0> allows us to store suffixes, supporting the
+ *            segmental divide and conquer version of the MPAS
+ *            algorithm. Do not store the first <D0> anchors; only
+ *            store <D0+1..D>. To store the complete anchor set, pass
+ *            <D0=0>.
+ *
  *            If an identical anchor set is already stored in <ah>,
  *            set <*opt_index> to the key for that anchor set, and
  *            return <eslEDUP>.
  *
  * Args:      ah         : hash table holding different anchor sets
  *            anch       : new anchor set to try to store
+ *            D0         : ignore first <D0> anchors, store <D0+1..D> (0 = store all)
  *            opt_index  : optRETURN: index of stored data
  *            
- * Returns:   <eslOK> if <anch>/<D> is new; the anchor set data are stored, 
+ * Returns:   <eslOK> if <anch> is new; the anchor set data are stored, 
  *            and <opt_index>, if requested, is set to the lookup 
  *            key index for the stored data.
  *            
@@ -193,9 +206,9 @@ p7_anchorhash_Destroy(P7_ANCHORHASH *ah)
  * Throws:    <eslEMEM> on allocation failure. 
  */
 int
-p7_anchorhash_Store(P7_ANCHORHASH *ah, const P7_ANCHORS *anch, int32_t *opt_index)
+p7_anchorhash_Store(P7_ANCHORHASH *ah, const P7_ANCHORS *anch, int D0, int32_t *opt_index)
 {
-  uint32_t  val = anchorhash_function(anch->a, anch->D, ah->hashsize);
+  uint32_t  val = anchorhash_function(anch->a + D0, anch->D - D0, ah->hashsize);
   int32_t  *ptr;
   int32_t   idx;
   int32_t   d;
@@ -204,7 +217,7 @@ p7_anchorhash_Store(P7_ANCHORHASH *ah, const P7_ANCHORS *anch, int32_t *opt_inde
   /* Was this key already stored? */
   for (idx = ah->hashtable[val]; idx != -1; idx = ah->nxt[idx])
     {
-      if (anchorhash_compare(anch->a, anch->D, ah->amem + ah->key_offset[idx]) == eslOK)
+      if (anchorhash_compare(anch->a + D0, anch->D - D0, ah->amem + ah->key_offset[idx]) == eslOK)
 	{
 	  if (opt_index) *opt_index = idx;
 	  return eslEDUP;
@@ -220,7 +233,7 @@ p7_anchorhash_Store(P7_ANCHORHASH *ah, const P7_ANCHORS *anch, int32_t *opt_inde
     }
 
   /* Reallocate key data memory if needed (by doubling) */
-  while (ah->an + 2 * anch->D + 1 > ah->aalloc)
+  while (ah->an + 2 * (anch->D - D0) + 1 > ah->aalloc)
     {
       ESL_REALLOC(ah->amem, sizeof(int32_t) * ah->aalloc * 2);
       ah->aalloc *= 2;
@@ -229,23 +242,26 @@ p7_anchorhash_Store(P7_ANCHORHASH *ah, const P7_ANCHORS *anch, int32_t *opt_inde
   /* Copy the key, assign its index */
   idx                 = ah->nkeys;
   ah->key_offset[idx] = ah->an;
-  ah->an             += 2 * anch->D + 1;
+  ah->an             += 2 * (anch->D - D0) + 1;
   ah->nkeys++;
 
   ptr  = ah->amem + ah->key_offset[idx];
-  *ptr = anch->D;
-  for (d = 1; d <= anch->D; d++) 
+  *ptr = anch->D - D0;
+  for (d = D0 + 1; d <= anch->D; d++) 
     {
       ptr++; *ptr = anch->a[d].i0;
       ptr++; *ptr = anch->a[d].k0;
     }
   
-  /* Trailing sentinel */
-  if (ah->nkeys == 1)    // first one?
-    {
-      ah->L = anch->a[anch->D+1].i0 - 1;  // L+1 -> stored as L
-      ah->M = anch->a[0].k0 - 1;          // M+1 -> stored as M
-    }
+  /* anchorhash needs to remember L,M so when caller asks
+   * to _Get() an anchor set, anchorhash can set the sentinels
+   * correctly. Fortunately even when we're only storing a 
+   * suffix of <anch>, we still get the whole <anch> object,
+   * which has valid sentinels, so we can deduce from them
+   * what L,M are.
+   */
+  if (ah->nkeys == 1) 
+    p7_anchor_GetSentinels(anch->a, anch->D, &(ah->L), &(ah->M));
   ESL_DASSERT1(( anch->a[anch->D+1].i0 = ah->L+1 ));
   ESL_DASSERT1(( anch->a[0].k0         = ah->M+1 ));
 
@@ -272,8 +288,17 @@ p7_anchorhash_Store(P7_ANCHORHASH *ah, const P7_ANCHORS *anch, int32_t *opt_inde
  * Purpose:   Retrieve anchor set <keyidx> from hash <ah>, and put
  *            it in <anch>. <anch> is reallocated if necessary.
  *            
+ *            <D0> supports the segmental divide and conquer version
+ *            of the MPAS algorithm, where we're storing and
+ *            retrieving suffixes of a growing anchor set, rather than
+ *            complete anchor sets. <D0> says to keep the first <D0>
+ *            anchors in a growing <anch>, and appending the retrieved
+ *            anchorset starting at <D0+1>. To get a complete anchor
+ *            set, pass <D0=0>.
+ *            
  * Args:      ah      : hash storage for alternative annotations
  *            keyidx  : which annotation to get [0..ah->nkeys-1]
+ *            D0      : keep 1..D0 in <anch>; append starting at D0+1; 0=get complete anchor set
  *            anch    : RETURN: anchor set
  *
  * Returns:   <eslOK> on success.
@@ -281,16 +306,17 @@ p7_anchorhash_Store(P7_ANCHORHASH *ah, const P7_ANCHORS *anch, int32_t *opt_inde
  * Throws:    <eslEMEM> on failure, and the state of <anch> is undefined.
  */
 int
-p7_anchorhash_Get(const P7_ANCHORHASH *ah, int32_t keyidx, P7_ANCHORS *anch)
+p7_anchorhash_Get(const P7_ANCHORHASH *ah, int32_t keyidx, int D0, P7_ANCHORS *anch)
 {
   int32_t *ptr  = ah->amem + ah->key_offset[keyidx];
-  int32_t  D    = *ptr;
+  int32_t  D    = *ptr + D0;                          // deal w/ case where *ptr is Dg, a suffix, to be added to D0
   int32_t  d;
   int      status;
 
-  if ((status = p7_anchors_Reinit(anch, D)) != eslOK) goto ERROR;
+  if ((status = p7_anchors_Resize(anch, D)) != eslOK) goto ERROR;
 
-  for (d = 1; d <= D; d++)
+  /* Get the data and append it to <anch> */
+  for (d = D0+1; d <= D; d++)
     {
       ptr++; anch->a[d].i0 = *ptr;
       ptr++; anch->a[d].k0 = *ptr;
@@ -311,6 +337,11 @@ p7_anchorhash_Get(const P7_ANCHORHASH *ah, int32_t keyidx, P7_ANCHORS *anch)
  *   
  * Given <arr>/<n> data, and the current <hashsize>;
  * calculate and return a hash function on that data, in range <0..hashsize-1>.
+ * 
+ * Does not depend on, nor access, sentinels; so may be safely called on
+ * a subsequence of an anchor set. For example, when segmental divide and
+ * conquer MPAS stores/retrieves a suffix D0+1..D of an anchor set,
+ * we pass <arr = anch->a+D0> and <D = anch->D-D0>.
  */
 static uint32_t
 anchorhash_function(const P7_ANCHOR *arr, int32_t D, uint32_t hashsize)
@@ -357,6 +388,13 @@ anchorhash_function_alt(int32_t *keydata, int32_t hashsize)
  * Compare a <arr>/<D> anchor set (a P7_ANCHOR array) to 
  * data from a P7_ANCHOR array that's already been stored,
  * starting at <keydata>.
+ *
+ * When comparing a suffix of an anchor set, <arr> is <anch->a + D0>,
+ * and D is really D-D0,
+ * and we start accessing at <anch->a + D0 + 1>.  This internal access
+ * of a subsequence of <anch->a> array is fine because
+ * <anchorhash_compare> does not depend on the sentinel values at
+ * <0,D+1>.
  * 
  * Return <eslOK> if the two are identical; 
  * return <eslFAIL> if not.
@@ -488,7 +526,7 @@ utest_sampling(ESL_RANDOMNESS *rng)
 	  if ( p7_anchors_Sample(rng, L, M, maxD, anch) != eslOK) esl_fatal(msg);
 	  if ( p7_anchors_Copy(anch, aarr[s])           != eslOK) esl_fatal(msg);
 
-	  status = p7_anchorhash_Store(ah, anch, &keyidx);
+	  status = p7_anchorhash_Store(ah, anch, 0, &keyidx);
 	  keys[s] = keyidx;
 	  if      (status == eslOK)   { if (keyidx != nk) esl_fatal(msg); nk++; }
 	  else if (status == eslEDUP) { if (keyidx >= nk) esl_fatal(msg);       }
@@ -499,7 +537,7 @@ utest_sampling(ESL_RANDOMNESS *rng)
 
       for (s = 0; s < nsamples; s++)
 	{
-	  if ( p7_anchorhash_Get(ah, keys[s], anch) != eslOK) esl_fatal(msg);
+	  if ( p7_anchorhash_Get(ah, keys[s], 0, anch) != eslOK) esl_fatal(msg);
 
 	  //p7_anchors_Dump(stdout, anch);
 
@@ -606,7 +644,7 @@ main(int argc, char **argv)
   for (s = 0; s < nsamples; s++)
     {
       p7_anchors_Sample(rng, L, M, maxD, anch);
-      p7_anchorhash_Store(ah, anch, &keyidx);
+      p7_anchorhash_Store(ah, anch, 0, &keyidx);
       p7_anchors_Reuse(anch);
     }
   

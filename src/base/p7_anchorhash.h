@@ -89,8 +89,8 @@ extern size_t         p7_anchorhash_Sizeof (const P7_ANCHORHASH *ah);
 extern int            p7_anchorhash_Reuse  (P7_ANCHORHASH *ah);
 extern void           p7_anchorhash_Destroy(P7_ANCHORHASH *ah);
 
-extern int            p7_anchorhash_Store  (P7_ANCHORHASH *ah, const P7_ANCHORS *anch, int32_t *opt_index);
-extern int            p7_anchorhash_Get    (const P7_ANCHORHASH *ah, int32_t keyidx, P7_ANCHORS *anch);
+extern int            p7_anchorhash_Store  (P7_ANCHORHASH *ah, const P7_ANCHORS *anch, int D0, int32_t *opt_index);
+extern int            p7_anchorhash_Get    (const P7_ANCHORHASH *ah, int32_t keyidx, int D0, P7_ANCHORS *anch);
 extern int            p7_anchorhash_Dump   (FILE *ofp, const P7_ANCHORHASH *ah);
 
 #endif /* P7_ANCHORHASH_INCLUDED */

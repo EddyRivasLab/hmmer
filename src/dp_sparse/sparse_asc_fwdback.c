@@ -76,7 +76,7 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
 
   /* Assure that <asf> is allocated large enough. 
    */
-  if (( status = p7_spascmx_Reinit(asf, sm, anch, D)) != eslOK) return status;
+  if (( status = p7_spascmx_Resize(asf, sm, anch, D)) != eslOK) return status;
   asf->type = p7S_ASC_FWD;
 
   /* Iterate the ForwardSeg algorithm over each segment in turn. 
@@ -158,13 +158,14 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
  *            
  *            After the DP calculation for this segment is complete,
  *            we get state information back, for use at the next call.
- *            <ret_xN>, <ret_xJ>, <ret_xN> contain the N/J/C Forward
- *            values at <ib(g)>. <ret_d> contains the index of the
- *            next anchor we can reach. <ret_dpc> and <ret_xc> are
- *            pointers to the next supercells we can store in <asf>.
- *            It is safe for these to be ptrs to the same variables as
- *            the input state variables, allowing input to be
- *            overwritten with the output.
+ *            <ret_xN>, <ret_xJ>, <ret_xC> contain the N/J/C Forward
+ *            values at <ib(g)>. <opt_d> optionally contains the index
+ *            of the next anchor we can reach (it's optional because
+ *            segmental MPAS doesn't need it). <ret_dpn> and <ret_xn>
+ *            are pointers to the next supercells we can store in
+ *            <asf>.  It is safe for these to be ptrs to the same
+ *            variables as the input state variables, allowing input
+ *            to be overwritten with the output.
  *            
  *            For initialization conditions on the first segment in a
  *            sequence, we would pass <d=1>, <g=1>, <xN=0>,
@@ -215,10 +216,10 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
  *            ret_xN  : RETURN: N value at ib(g)
  *            ret_xJ  : RETURN: J value at ib(g)
  *            ret_xC  : RETURN: C value at ib(g)
- *            ret_d   : RETURN: next anchor we can see. ib(g) < ia(g+1) <= i0(*ret_d)
- *            ret_dpc : RETURN: ptr to next main supercell in <asf>, where next segment starts storage.
+ *            opt_d   : optRETURN: next anchor we can see. ib(g) < ia(g+1) <= i0(*ret_d)
+ *            ret_dpn : RETURN: ptr to next main supercell in <asf>, where next segment starts storage.
  *                              For last segment <g==sm->S>, may point outside valid memory.    
- *            ret_xc  : RETURN: ptr to next special supercell in <asf>, where next segment will start storage. 
+ *            ret_xn  : RETURN: ptr to next special supercell in <asf>, where next segment will start storage. 
  *                              For last segment <g==sm->S>, may point outside valid memory.
  *            opt_asc : optRETURN: sparse ASC Forward segment score. Invalid unless t_NN=t_JJ=t_CC.
  *
@@ -229,7 +230,7 @@ p7_sparse_asc_ForwardSeg(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 			 const P7_ANCHOR     *anch, int D, int d,
 			 const P7_SPARSEMASK *sm,   int g,
 			 P7_SPARSEMX *asf, float xN, float xJ, float xC, float *dpc, float *xc,
-			 float *ret_xN, float *ret_xJ, float *ret_xC, int *ret_d, float **ret_dpc, float **ret_xc, float *opt_asc)
+			 float *ret_xN, float *ret_xJ, float *ret_xC, int *opt_d, float **ret_dpn, float **ret_xn, float *opt_asc)
 {
   float const *tsc = gm->tsc;	 // sets up TSC() macro, access to profile's transitions      
   float const *rsc = NULL;	 // will be set up for MSC(), ISC() macros for residue scores for each row i
@@ -541,9 +542,9 @@ p7_sparse_asc_ForwardSeg(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
   *ret_xN  = xN;
   *ret_xJ  = xJ;
   *ret_xC  = xC;
-  *ret_d   = d;
-  *ret_dpc = dpc;
-  *ret_xc  = xc;
+  if (opt_d) *opt_d = d;
+  *ret_dpn = dpc;
+  *ret_xn  = xc;
   if (opt_asc) *opt_asc = (xN != -eslINFINITY && Ds==0) ?  xN - xNJbase : xJ - xNJbase;  // Usually J(ib) - (J(ia-1) || N(ia-1)) suffices, but watch out for N..N empty path ending in N(ib)
   return eslOK;
 }
@@ -1273,13 +1274,12 @@ main(int argc, char **argv)
       fprintf(stderr, "## %s\n", argv[0]);
       fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
-      utest_viterbi          (NULL, rng, abc, M, L, N);
-
       utest_compare_reference(NULL, rng, abc, M, L, N);
       utest_singlesingle     (NULL, rng, abc, M,    N);
       utest_multisingle      (NULL, rng, abc, M,    N);
       utest_multipath_local  (NULL, rng, abc, M,    N);
       utest_multimulti       (NULL, rng, abc, M,    N);
+      utest_viterbi          (NULL, rng, abc, M, L, N);
 
       fprintf(stderr, "#  status = ok\n");
     }
@@ -1346,7 +1346,7 @@ main(int argc, char **argv)
   P7_ANCHORS     *anch    = p7_anchors_Create();
   float          *wrk     = NULL;
   P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
-  float           fsc, vsc, asc, asc_sparse, asc_sparse2;
+  float           fsc, vsc, asc, asc_sparse;
   int             status;
 
   /* Read in one HMM */
@@ -1415,17 +1415,15 @@ main(int argc, char **argv)
    * Run sparse ASC Forward.
    */
   asf = p7_sparsemx_Create(sm);
-  old_p7_sparse_asc_Forward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &asc_sparse);
 
   //p7_spascmx_Dump(stdout, asf, anch->a, anch->D);
 
-  p7_sparse_asc_Forward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &asc_sparse2);
+  p7_sparse_asc_Forward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &asc_sparse);
 
   //p7_spascmx_Dump(stdout, asf, anch->a, anch->D);
 
   printf("Reference ASC fwd score = %.2f nats\n", asc);
   printf("Sparse ASC fwd score    = %.2f nats\n", asc_sparse);
-  printf("NEW ASC fwd score       = %.2f nats\n", asc_sparse2);
 
   p7_anchorhash_Destroy(ah);
   if (wrk) free(wrk);

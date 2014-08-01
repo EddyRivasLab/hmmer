@@ -74,13 +74,21 @@
  *****************************************************************/
 
 
-/* Function:  p7_spascmx_Reinit()
+/* Function:  p7_spascmx_Resize()
  * Synopsis:  Reinitialize, reallocate sparse ASC matrix for new DP problem.
  *
  * Purpose:   Reinitialize and, if necessary, reallocate an existing sparse
  *            matrix <asx> for a new ASC DP calculation that will be
  *            constrained both by the sparse mask <sm> and the 
  *            anchor array <anch>.
+ *            
+ *            In an MPAS algorithm, where we're optimizing the anchor
+ *            set, we don't know what it is yet (more precisely: we're
+ *            going to try different anchor sets) so we want to do an
+ *            allocation that will work for any anchor set. In this
+ *            case, pass <NULL> for <anch> (and anything for <D>; 0 is
+ *            fine).  Then <_Resize()> will allocate space sufficient
+ *            for any anchor set.
  *            
  *            <asx> keeps an internal pointer to <sm>, so the caller
  *            must not modify <sm> while <asx> remains in use.
@@ -94,16 +102,31 @@
  *
  * Throws:    <eslEMEM> on allocation error. Now <asx> is in an undefined state,
  *            and can only be <_Destroy>'ed.
+ *            
+ * Notes:     When <anch> is <NULL>, we allocate the upper bound on space:
+ *            2x sparse matrices, where typically we end up using less
+ *            than 1x.  If memory use becomes an issue, we can explore
+ *            more space-efficient memory reallocation strategies. In
+ *            the current design, we can reallocate at most once in
+ *            MPAS per profile/seq comparison, a design that
+ *            prioritizes minimum reallocation (i.e. speed) over memory
+ *            use.
  */
 int
-p7_spascmx_Reinit(P7_SPARSEMX *asx, const P7_SPARSEMASK *sm, const P7_ANCHOR *anch, int D)
+p7_spascmx_Resize(P7_SPARSEMX *asx, const P7_SPARSEMASK *sm, const P7_ANCHOR *anch, int D)
 {
   int64_t dalloc_req;    // denominated in i,k supercells, each w/ p7_NSCELLS; number of i,k main supercells stored by a sparse ASC DP calculation
   int     xalloc_req;    // denominated in i supercells, each w/ p7_NXCELLS:   number of rows that have specials stored
   int     status;
 
-  p7_spascmx_MinSizeof(sm, anch, D, &dalloc_req, &xalloc_req);
-
+  if (anch) 
+    p7_spascmx_MinSizeof(sm, anch, D, &dalloc_req, &xalloc_req);
+  else
+    {
+      dalloc_req = sm->ncells * 2;   // unknown anchor set: upper bound on space is 2x sparse matrices
+      xalloc_req = (sm->S + sm->nrow);
+    }
+      
   if (dalloc_req > asx->dalloc) {
     ESL_REALLOC(asx->dp, sizeof(float) * p7S_NSCELLS * dalloc_req);
     asx->dalloc = dalloc_req;
@@ -113,7 +136,6 @@ p7_spascmx_Reinit(P7_SPARSEMX *asx, const P7_SPARSEMASK *sm, const P7_ANCHOR *an
     asx->xalloc = xalloc_req;
   }
   asx->sm   = sm;
-  asx->type = p7S_UNSET;   // DP routines themselves set this.
   return eslOK;
   
  ERROR: 
@@ -134,7 +156,7 @@ p7_spascmx_Reinit(P7_SPARSEMX *asx, const P7_SPARSEMASK *sm, const P7_ANCHOR *an
  *            Optionally, return in <opt_dalloc> the number of (i,k)
  *            main supercells that need to be stored, and in
  *            <opt_xalloc> the number of i rows for which specials
- *            need to be stored. <p7_spascmx_Reinit()> uses these
+ *            need to be stored. <p7_spascmx_Resize()> uses these
  *            numbers when it reallocates a matrix for a new DP problem.
  *            
  *            This routine also makes a good example of how to
@@ -198,6 +220,44 @@ p7_spascmx_MinSizeof(const P7_SPARSEMASK *sm, const P7_ANCHOR *anch, int D, int6
   return n;
 }
 
+
+int
+p7_spascmx_MinSizeofSeg(const P7_SPARSEMASK *sm, const P7_ANCHOR *anch, int D, int d, int g, 
+			int64_t *ret_dalloc, int *ret_xalloc)
+{
+  int     in_down = FALSE;
+  int64_t dalloc  = 0;
+  int     xalloc  = 0;
+  int i,z;
+  
+  if (anch[d].i0 <= sm->seg[g].ib)  // If there's no anchor in this segment: no storage needed.
+    {
+      xalloc = sm->seg[g].ib - sm->seg[g].ia + 2;
+
+      for (i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)
+	{
+	  if (i == anch[d].i0) { in_down = TRUE; d++; }
+	  
+	  if (in_down)
+	    {
+	      for (z = 0; z < sm->n[i]; z++)
+		if (sm->k[i][z] >= anch[d-1].k0) break;
+	      dalloc += (sm->n[i] - z);
+	    }
+      
+	  if (anch[d].i0 <= sm->seg[g].ib)
+	    {
+	      for (z = 0; z < sm->n[i]; z++)
+		if (sm->k[i][z] >= anch[d].k0) break;
+	      dalloc += z;;
+	    }
+	}
+    }
+
+  *ret_dalloc = dalloc;
+  *ret_xalloc = xalloc;
+  return eslOK;
+}
 
 /*****************************************************************
  * 2. Debugging and development tools

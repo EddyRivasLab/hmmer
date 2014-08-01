@@ -19,7 +19,7 @@
  * need to know the exact # of cells in the sparse ASC matrix.
  */
 
-extern int    p7_spascmx_Reinit(P7_SPARSEMX *asx, const P7_SPARSEMASK *sm, const P7_ANCHOR *anch, int D);
+extern int    p7_spascmx_Resize(P7_SPARSEMX *asx, const P7_SPARSEMASK *sm, const P7_ANCHOR *anch, int D);
 extern size_t p7_spascmx_MinSizeof(const P7_SPARSEMASK *sm, const P7_ANCHOR *anch, int D, int64_t *opt_dalloc, int *opt_xalloc);
 extern int    p7_spascmx_Dump(FILE *fp, const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D);
 extern int    p7_spascmx_CompareReference(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D, const P7_REFMX *rxu, const P7_REFMX *rxd, float tol);

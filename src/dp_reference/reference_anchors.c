@@ -175,7 +175,7 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
     {
       /* First time thru, <tr> is the Viterbi path, from caller; after that, it's a stochastic sampled path */
       p7_reference_anchors_SetFromTrace(rxd, tr, anch);
-      status = p7_anchorhash_Store(ah, anch, &keyidx);
+      status = p7_anchorhash_Store(ah, anch, 0, &keyidx);
 
       /* <status> is either eslOK or eslEDUP.
        *    <eslOK>   = <anch> is new and needs to be scored;
@@ -240,6 +240,7 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
       }
 
       /* Otherwise, sample a new path and loop around again */
+      p7_anchors_Reuse(anch);
       p7_trace_Reuse(tr);
       p7_reference_trace_Stochastic(rng, byp_wrk, gm, rxf, tr);
 
@@ -250,7 +251,7 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
    * <afu>, <afd> contain sol'n corresponding to <asc_keyidx>.
    * If either doesn't match best_keyidx we need to update it.
    */
-  if (keyidx     != best_keyidx) p7_anchorhash_Get(ah, best_keyidx, anch);
+  if (keyidx     != best_keyidx) p7_anchorhash_Get(ah, best_keyidx, 0, anch);
   if (asc_keyidx != best_keyidx) p7_ReferenceASCForward(dsq, L, gm, anch->a, anch->D, afu, afd, &asc);
 
   if (stats) 
@@ -346,8 +347,7 @@ p7_reference_anchors_SetFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_ANC
   float        best_ppv = -1.;
   int          status;
 
-  p7_anchors_Reuse(anch);
-  anch->D = 1;  // we'll increment this every time we find an E state
+  ESL_DASSERT1(( anch->D == 0 ));
 
   for (z = 0; z < tr->N; z++)
     {
@@ -357,22 +357,18 @@ p7_reference_anchors_SetFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_ANC
 	  ppv = dpc[p7R_ML] + dpc[p7R_MG];
 	  if (ppv > best_ppv)
 	    {
-	      anch->a[anch->D].i0 = tr->i[z];
-	      anch->a[anch->D].k0 = tr->k[z];
+	      anch->a[anch->D+1].i0 = tr->i[z];
+	      anch->a[anch->D+1].k0 = tr->k[z];
 	      best_ppv   = ppv;
-
-	      //	      printf("Setting new anchor i,k = %d,%d w/ ppv %.4f\n", tr->i[z], tr->k[z], ppv);
 	    }
 	}
       else if (tr->st[z] == p7T_E)
 	{
 	  anch->D++;
+	  if ((status = p7_anchors_Resize(anch, anch->D+1)) != eslOK) goto ERROR; // Make sure we have room for another domain 
 	  best_ppv = -1.;
-	  if ((status = p7_anchors_Grow(anch)) != eslOK) goto ERROR; /* Make sure we have room for another domain */
 	}
     }
-
-  anch->D--;  			// because it's D+1 at end of the loop above
   p7_anchor_SetSentinels(anch->a, anch->D, tr->L, tr->M);
   return eslOK;
   

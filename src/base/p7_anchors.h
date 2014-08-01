@@ -53,15 +53,16 @@ typedef struct {
 
 
 /* 1. P7_ANCHOR arrays, either naked or as part of P7_ANCHORS */
-extern int p7_anchor_SetSentinels(P7_ANCHOR *anch, int D, int L, int M);
+extern int p7_anchor_GetSentinels(P7_ANCHOR *anch, int D, int *ret_L, int *ret_M);
+extern int p7_anchor_SetSentinels(P7_ANCHOR *anch, int D, int L,      int M);
 
 /* 2. Standard object stuff for P7_ANCHORS */
-extern P7_ANCHORS *p7_anchors_Create (void);
-extern int         p7_anchors_Reinit (P7_ANCHORS *anch, int32_t D);
-extern int         p7_anchors_Grow   (P7_ANCHORS *anch);
-extern int         p7_anchors_Copy   (const P7_ANCHORS *src, P7_ANCHORS *dst);
-extern int         p7_anchors_Reuse  (P7_ANCHORS *anch);
-extern void        p7_anchors_Destroy(P7_ANCHORS *anch);
+extern P7_ANCHORS *p7_anchors_Create  (void);
+extern int         p7_anchors_Resize  (P7_ANCHORS *anch, int D);
+extern int         p7_anchors_Copy    (const P7_ANCHORS *src, P7_ANCHORS *dst);
+extern int         p7_anchors_Catenate(P7_ANCHORS *anch, int D0, P7_ANCHOR *arr, int Dg);
+extern int         p7_anchors_Reuse   (P7_ANCHORS *anch);
+extern void        p7_anchors_Destroy (P7_ANCHORS *anch);
 
 /* 3. Debugging and development tools */
 extern int  p7_anchors_Dump(FILE *fp, const P7_ANCHORS *anch);

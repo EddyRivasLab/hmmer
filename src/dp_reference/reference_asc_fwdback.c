@@ -1554,7 +1554,7 @@ main(int argc, char **argv)
 
   /* Read anchor coords from command line */
   D = strtol( esl_opt_GetArg(go, 3), NULL, 10);
-  p7_anchors_Reinit(anchm, D);
+  p7_anchors_Resize(anchm, D);
   for (i = 4, d = 1; d <= D; d++)
     {
       anchm->a[d].i0 = strtol( esl_opt_GetArg(go, i), NULL, 10); i++;
