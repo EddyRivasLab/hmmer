@@ -189,7 +189,7 @@ p7_spascmx_MinSizeof(const P7_SPARSEMASK *sm, const P7_ANCHOR *anch, int D, int6
     {
       if      (i == anch[d].i0)     { ndown = 1;  d++;     }    // when i reaches next anchor; bump d to next domain index, and DOWN sector is active...
       else if (sm->n[i] == 0)       { ndown = 0;           }    //  ... until when we reach end of segment, when DOWN becomes inactive again.
-      else                          { ndown++;             }    // counting ndown lets us easily test if we're on the special top row. Not used in this routine; here for pedagogy, since this is a traversal example
+      else if (ndown)               { ndown++;             }    // counting ndown lets us easily test if we're on the special top row. Not used in this routine; here for pedagogy, since this is a traversal example
 
       if      (i >  sm->seg[g].ib)  { in_seg = FALSE; g++; }    // g bumps, to start expecting to see start of segment <g> next.
       else if (i == sm->seg[g].ia)  { in_seg = TRUE;       }    // g might be S+1, but this is safe because of sentinel seg[S+1].ia=ib=L+2      
@@ -343,7 +343,10 @@ dump_down_row(FILE *fp, int i, const P7_SPARSEMASK *sm, const float *dpc, int k0
     if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(fp, "%*s ", width, "...xx.");
     else                                     fprintf(fp, "%*s ", width, "......");
   }
-  z0 = z + 1;
+
+  z0 = z;
+  while (z0 < sm->n[i] && sm->k[i][z0] < k0) z0++;
+
   for ( ; k <= k2; k++) {
     while (z < sm->n[i] && sm->k[i][z]  < k) z++;
     if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(fp, "%*.*f ", width, precision, *(dpc + (z-z0)*p7R_NSCELLS + s));
@@ -367,21 +370,22 @@ p7_spascmx_Dump(FILE *fp, const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
   int   i2        = sm->L;
   int   k1        = 0;
   int   k2        = sm->M;
-  int   in_seg, in_up, ndown, in_x;
-  int   i,g,d,z,s,k0;
+  int   in_seg, ndown, in_x;
+  int   i,g,d,z,s;
+  int   k0;
+  int   in_up;
 
   /* First pass: print the UP sectors, skip DOWN; do nothing to xc yet  */
   dump_up_header(fp, k1, k2);
   g        = 1;
   in_seg   = FALSE;
   d        = 1;
-  ndown    = 0;
-  in_up    = FALSE;
+  ndown    = FALSE;
   dpc      = asx->dp;
   for (i = 0; i <= sm->L; i++)
     {
-      if      (i == anch[d].i0)     { ndown = 1;  d++;  }  
-      else if (sm->n[i] == 0)       { ndown = 0;        }  
+      if      (i == anch[d].i0)     { ndown = TRUE;  d++;  }  
+      else if (sm->n[i] == 0)       { ndown = FALSE;       }  
 
       if      (i >  sm->seg[g].ib)  { in_seg = FALSE; g++; }
       else if (i == sm->seg[g].ia)  { in_seg = TRUE;       }      
@@ -401,7 +405,7 @@ p7_spascmx_Dump(FILE *fp, const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
 	fprintf(fp, "\n");
       }
 	  
-      if (in_up) {
+      if (in_up) { // if in UP... skip past those rows
 	for (z = 0; z < sm->n[i]; z++)
 	  if (sm->k[i][z] >= anch[d].k0) break;    
 	dpc += z * p7S_NSCELLS;
@@ -412,15 +416,14 @@ p7_spascmx_Dump(FILE *fp, const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
   dump_down_header(fp, k1, k2);
   g        = 1;
   in_seg   = FALSE;
-  d        = 0;
+  d        = 1;
   ndown    = FALSE;
-  in_up    = FALSE;
   dpc      = asx->dp;
   xc       = asx->xmx;
   for (i = 0; i <= sm->L; i++)
     {
-      if      (i == anch[d].i0) { ndown = 1;  d++;  }  
-      else if (sm->n[i] == 0)   { ndown = FALSE;    }  
+      if      (i == anch[d].i0) { ndown = TRUE;  d++;  }  
+      else if (sm->n[i] == 0)   { ndown = FALSE;       }  
 
       if      (i >  sm->seg[g].ib)  { in_seg = FALSE; g++; }
       else if (i == sm->seg[g].ia)  { in_seg = TRUE;       }      

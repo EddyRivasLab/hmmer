@@ -488,7 +488,7 @@ p7_sparse_AnchorsSeg(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
 	      Dg = 0;              
 	    }
 	  else if (iteration == 1)                                            // 2nd guess: Viterbi path for this segment yields optimal anchor set.
-	    {
+	    {                                                                 // (Even if V segment score alone is enough to prove that it's the seg's MPAS, we do still need ASC Fwd matrix across the segment.)
 	      for (Dg = 0, i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)        // Figure out how many anchors are in the Viterbi path for this segment
 		if (i == vanch->a[D0v+Dg+1].i0) Dg++;
 	      p7_anchors_Catenate(anch, D0, vanch->a + D0v, Dg);	      // anch [ 1..D0 ] gets vanch [D0v+1..D0v+Dg+1] appended to it; <anch> now has D = D0+Dg

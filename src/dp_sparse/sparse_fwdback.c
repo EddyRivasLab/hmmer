@@ -258,15 +258,15 @@ p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPAR
 	  continue;
 	}
 
-      /* Else we continune: this row i is stored, both as a main row (in dpc) and specials (in xmx) */
+      /* Else we continue: this row i is stored, both as a main row (in dpc) and specials (in xmx) */
       xp[p7S_CC] = -eslINFINITY;     // CC only stored in a decoding matrix 
       xp[p7S_JJ] = -eslINFINITY;     // ditto JJ 
       xp[p7S_C]  = xC;               // deferred store of xC. 
       xp[p7S_G]  = xG;               // on i=ib segment start, xG cannot be reached; it will be -inf
       xp[p7S_L]  = xL;               // ditto xL
       xp[p7S_B]  = xB = p7_FLogsum( xL + gm->xsc[p7P_B][0],        xG + gm->xsc[p7P_B][1]);         // on i=ib segment start, evaluates to -inf
-      xp[p7S_J]  = xJ = p7_FLogsum( xJ, 		              xB + gm->xsc[p7P_J][p7P_MOVE]);  // on i=ib, evaluates to xJ
-      xp[p7S_N]  = xN = p7_FLogsum( xN, 	                      xB + gm->xsc[p7P_N][p7P_MOVE]);  // ditto xN
+      xp[p7S_J]  = xJ = p7_FLogsum( xJ, 		           xB + gm->xsc[p7P_J][p7P_MOVE]);  // on i=ib, evaluates to xJ
+      xp[p7S_N]  = xN = p7_FLogsum( xN, 	                   xB + gm->xsc[p7P_N][p7P_MOVE]);  // ditto xN
       xp[p7S_E]  = xE = p7_FLogsum( xJ + gm->xsc[p7P_E][p7P_LOOP], xC + gm->xsc[p7P_E][p7P_MOVE]);  // on i=ib, i<L, E->{JC} are both possible; i=L, evaluates to xC + tEC.
       xp -= p7S_NXCELLS;
 
@@ -341,7 +341,7 @@ p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPAR
 	} // end loop over sparse cells k on this row.
       dpn = last_dpc;
 
-      /* precalculate what xC/xJ/xN will be on previous row i+1... these values get stored as we roll around i loop */
+      /* precalculate what xC/xJ/xN will be on previous row i-1... these values get stored as we roll around i loop */
       xC += gm->xsc[p7P_C][p7P_LOOP];
       xJ += gm->xsc[p7P_J][p7P_LOOP];
       xN += gm->xsc[p7P_N][p7P_LOOP];
@@ -353,7 +353,7 @@ p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPAR
       if (sm->n[i-1] == 0) 
 	{
 	  xp[p7S_CC] = -eslINFINITY;	/* CC only stored in a Decoding matrix. */
-	  xp[p7S_JJ] = -eslINFINITY; /* JJ only stored in a Decoding matrix. */
+	  xp[p7S_JJ] = -eslINFINITY;    /* JJ only stored in a Decoding matrix. */
 	  xp[p7S_C]  = xC;
 	  xp[p7S_G]  = xG;
 	  xp[p7S_L]  = xL;

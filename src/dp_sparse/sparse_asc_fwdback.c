@@ -507,7 +507,7 @@ p7_sparse_asc_ForwardSeg(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
        * accumulation, calculation of specials must mirror what
        * SparseForward() does, reinitializing every ia(g)-1 even if
        * that segment g isn't stored by ASC. Thus we separate
-       * *calculation* of specials (by SparseForward()) rules from
+       * *calculation* of specials (by SparseForward() rules) from
        * *storage* of specials (by ASC rules).  For full explanation
        * of why this is so, see footnote [1].
        */
@@ -558,10 +558,424 @@ p7_sparse_asc_ForwardSeg(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
  * 3. Sparse ASC Backward
  *****************************************************************/
 
-int
-p7_sparse_asc_Backward(void)
-{
+/* Numerical error matching w/ sparse backward: necessary? */
 
+int
+p7_sparse_asc_Backward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, 
+		       const P7_ANCHOR *anch, int D, const P7_SPARSEMASK *sm,
+		       P7_SPARSEMX *asb, float *opt_sc)
+{
+  const float *tsc = gm->tsc;        // ptr into model transition score vector; enables TSC(k,s) macro shorthand 
+  const float *rsc = NULL;	     // ptr into emission scores on current row i; enables MSC(k),ISC(k) macro shorthand 
+  const float *rsn;		     // ptr into emission scores on next row i+1; enables MSN(k),ISN(k) 
+  const float *last_rsc = NULL;      
+  float       *dpc;		     // ptr stepping through current DP row i sparse cells 
+  float       *dpn = NULL;	     // ptr stepping through next DP row (i+1) sparse cells; NULL when no i+1 row stored 
+  float       *last_dpc;
+  float       *xc;
+  int          i,k,y,z;
+  int          g;                    // index over sparse segments, 1..S
+  int          d;                    // index of the next anchor we will see as we decrement i. d=D..1,(0); i0(d) <= i
+  float        xC,xG,xL,xB,xJ,xN,xE; // tmp vars for special cells on this row i
+  float        dlc,dgc;		     // tmp vars for D vals on current row i  
+  float        mln,mgn,iln,ign;	     // tmp vars for M+e, I+e on next row i+1 
+  float        mlc,mgc;
+  int          nup = 0;              // counter for how many rows into an UP sector we are
+  int          ngap;                 // number of residues in an intersegment gap
+  int64_t      asc_ncells;
+  int          asc_nrows;
+  int          status;
+
+  /* Assure that <asb> is allocated large enough.
+   */
+  if ((status = p7_spascmx_Resize(asb, sm, anch, D)) != eslOK) return status;
+  asb->type = p7S_ASC_BCK;
+
+  /* TODO:
+   * We need a more efficient way to find the end of the dp and xmx
+   * sparse arrays in <asb>. We end up calling p7_spascmx_MinSizeof()
+   * three times (each _Resize()) calls it), but we really only need
+   * to do it once. But for now, this is fine; right now we're more
+   * concerned with correctness of p7_sparse_asc_Backward() than
+   * efficiency.
+   */
+  p7_spascmx_MinSizeof(sm, anch, D, &asc_ncells, &asc_nrows);
+
+  dpc = asb->dp  + (asc_ncells - 1) * p7S_NSCELLS;
+  xc  = asb->xmx + (asc_nrows  - 1) * p7S_NXCELLS;
+
+  d   = D;
+  xC  = gm->xsc[p7P_C][p7P_MOVE];   // initialize with C->T on i=L. Because this is C(L), this dictates that xC is a partial "precalculation" of value C(i), including tCC
+  xJ  = -eslINFINITY;
+  xN  = -eslINFINITY;
+  for (g = sm->S; g >= 1; g--)
+    {
+
+      /* Starting a new segment, we're on ib(g) row.
+       * Our convention in starting the i loop below is that:
+       *     xC/J/N already include contribution of tCC/tJJ/tNN to reach row i from i+1
+       *     xL/G have been accumulated on row i+1
+       * And our convention for finishing the previous segment is that 
+       *     xC/J/N include terms to reach ia(g+1)-1 (or L)
+       *     
+       * So in initializing for a new row ib, we must account for
+       * transitions from ib(g) to ia(g+1)-1 (or L). That means
+       * assessing a number of tXX transitions equal to the number of 
+       * residues in the intersegment gap.
+       */
+      ngap = (g == sm->S ?  L - sm->seg[g].ib : sm->seg[g+1].ia - sm->seg[g].ib - 1);   // xC/J/N must account for ib->..->ia-1 transitions; ib+1..ia-1 residues
+      xC +=  (ngap == 0  ?  0. : (float) ngap * gm->xsc[p7P_C][p7P_LOOP]);              // beware 0 * -inf = NaN; hence test on ngap == 0
+      xJ +=  (ngap == 0  ?  0. : (float) ngap * gm->xsc[p7P_J][p7P_LOOP]);
+      xN +=  (ngap == 0  ?  0. : (float) ngap * gm->xsc[p7P_N][p7P_LOOP]);     
+      xL =   -eslINFINITY;                                                              // xL/xG remain -inf while in the last DOWN sector in the segment,
+      xG =   -eslINFINITY;                                                              // until we reach that sector's anchor. After that, xL/xG will accumulate
+                                                                                        // {LG}->Mi+1,k paths back from Mk's in UP row, or from anchor cell in DOWN.
+      nup = 0;
+
+      for (i = sm->seg[g].ib; i >= sm->seg[g].ia; i--)
+	{
+	  rsn = last_rsc;                     // MSN(),ISN() macros will now work for row i+1 
+	  rsc = last_rsc = gm->rsc[dsq[i]];   // MSC(),ISC() macros will now work for row i
+
+	  /*****************************************************************
+	   * Specials first.
+	   * We have to "always calculate, sometimes store"... but here, we've
+	   * already partially calculated xC/J/N by including the tXX contribution
+	   * that gets us back to this row i; and if we're in a segment with no
+	   * anchors, that's the only contribution. So we can go directly to storage code:
+	   */
+	  if (nup || anch[d].i0 >= sm->seg[g].ia) // if there's at least one anchor in this segment...
+	    {
+	      ESL_DASSERT1(( xc >= asb->xmx ));
+
+	      xc[p7S_CC] = -eslINFINITY;
+	      xc[p7S_JJ] = -eslINFINITY;
+	      xc[p7S_C]  = xC;                // C(i) can only be reached from C(i+1) tC->C (or tC->T for i=L), and we already included that.
+	      xc[p7S_G]  = xG;
+	      xc[p7S_L]  = xL;
+	      xc[p7S_B]  = xB = p7_FLogsum( xL + gm->xsc[p7P_B][0],        xG + gm->xsc[p7P_B][1]);         // on i=ib segment start, evaluates to -inf, because xL=xG=-inf there
+	      xc[p7S_J]  = xJ = p7_FLogsum( xJ, 		           xB + gm->xsc[p7P_J][p7P_MOVE]);  // on i=ib, evaluates to xJ (only path is J->J(i+1))
+	      xc[p7S_N]  = xN = p7_FLogsum( xN, 	                   xB + gm->xsc[p7P_N][p7P_MOVE]);  // ditto xN
+	      xc[p7S_E]  = xE = p7_FLogsum( xJ + gm->xsc[p7P_E][p7P_LOOP], xC + gm->xsc[p7P_E][p7P_MOVE]);  // on i=ib, i<L, E->{JC} are both possible; on i=L, evaluates to xC + tEC.
+	      xc -= p7S_NXCELLS;
+	    }
+
+	  /*****************************************************************
+	   * UP sector.
+	   *****************************************************************/
+
+	  /* Two cases to deal with: First, initialization case, when
+	   * i is the final row of an UP sector. 
+	   * 
+	   * As we enter: 
+	   *    dpc      is on last supercell of row i.
+	   *    last_dpc happens to be on last supercell of previous row, but
+	   *             we don't use it.
+	   *    mlc,mgc  are values from the anchor cell diagonal i+1,k+1 from dpc
+	   * 
+	   * As we finish the row:
+	   *   dpc        is at the last supercell of the next supercell we need to calculate.
+	   *              That's either a DOWN sector on this same row i, or (if we're the first,
+	   *              topmost UP sector in the segment) the previous row i-1 of this same 
+	   *              UP sector.
+	   *   last_dpc   has been set to the last supercell of row i, where <dpc> started.     
+	   *   dpn        is NULL, though that doesn't matter.
+	   */
+	  if (nup == 1)  
+	    {
+	      last_dpc = dpc;
+	      dpn      = NULL;
+
+	      dlc = dgc = -eslINFINITY;
+	      xL  = xG  = -eslINFINITY;
+	      z = sm->n[i]-1;
+	      while (z >= 0 && sm->k[i][z] >= anch[d+1].k0) z--;
+	      if    (z >= 0 && sm->k[i][z] == anch[d+1].k0-1)             
+		{
+		  k = sm->k[i][z];
+		  dpc[p7S_ML] =        mlc + TSC(p7P_MM, k);   // mlc/mgc were precalculated and held over from 
+		  dpc[p7S_MG] =        mgc + TSC(p7P_MM, k);   //   when we calculated the anchor cell in DOWN;
+		  dpc[p7S_IL] =        mlc + TSC(p7P_IM, k);   //   we already included the emission score there.
+		  dpc[p7S_IG] =        mgc + TSC(p7P_IM, k);
+		  dpc[p7S_DL] = dlc =  mlc + TSC(p7P_DM, k);
+		  dpc[p7S_DG] = dgc =  mgc + TSC(p7P_DM, k);
+		  xL          = dpc[p7S_ML] + MSC(k) + TSC(p7P_LM, k-1);
+		  xG          = dpc[p7S_MG] + MSC(k) + TSC(p7P_GM, k-1);
+		  z--;
+		  dpc -= p7S_NSCELLS;
+		}
+	      
+	      for ( ; z >= 0; z--)
+		{
+		  k = sm->k[i][z];
+		  if (sm->k[i][z+1] != k+1) { dlc = dgc = -eslINFINITY; }
+
+		  dpc[p7S_ML] = dlc + TSC(p7P_MD, k);
+		  dpc[p7S_MG] = dgc + TSC(p7P_MD, k);
+		  dpc[p7S_IL] = -eslINFINITY;
+		  dpc[p7S_IG] = -eslINFINITY;
+		  dpc[p7S_DL] = dlc = dlc + TSC(p7P_DD, k);
+		  dpc[p7S_DG] = dgc = dgc + TSC(p7P_DD, k);
+		  xL          = p7_FLogsum(xL, dpc[p7S_ML] + MSC(k) + TSC(p7P_LM, k-1));
+		  xG          = p7_FLogsum(xG, dpc[p7S_MG] + MSC(k) + TSC(p7P_GM, k-1));
+		  dpc -= p7S_NSCELLS;
+		}
+	    }
+
+
+	  else if (nup)
+	    {
+	      dpn      = last_dpc;
+	      last_dpc = dpc;
+
+	      dlc = dgc = -eslINFINITY;
+	      xL  = xG  = -eslINFINITY;
+	      z   = sm->n[i]-1;   while (z >= 0 && sm->k[i][z]   >= anch[d+1].k0) z--;
+	      y   = sm->n[i+1]-1; while (y >= 0 && sm->k[i+1][y] >= anch[d+1].k0) y--;
+
+	      for ( ; z >= 0; z--)
+		{
+		  k = sm->k[i][z];
+
+		  /* Try to find and pick up mln, mgn from i+1,k+1 */
+		  while (y >= 0 && sm->k[i+1][y]  > k+1) { y--; dpn -= p7S_NSCELLS; }  // if y is already on i+1,k+1, it doesn't move
+		  if    (y >= 0 && sm->k[i+1][y] == k+1) {
+		    mln = dpn[p7S_ML] + MSN(k+1);
+		    mgn = dpn[p7S_MG] + MSN(k+1);
+		  } else { mln = mgn = -eslINFINITY; }
+		      
+		  /* Try to pick up iln,ign from i+1,k */
+		  while (y >= 0 && sm->k[i+1][y]  > k)  { y--; dpn -= p7S_NSCELLS; }  // if y is already on i+1,k, it doesn't move
+		  if    (y >= 0 && sm->k[i+1][y] == k) {
+		    iln = dpn[p7S_IL]; // + ISN(k), if it weren't fixed to 0
+		    ign = dpn[p7S_IG]; // + ISN(k), ditto
+		  } else { iln = ign = -eslINFINITY; }
+
+		  /* Check if dlc,dgc have become invalid because there is no k+1 sparse cell */
+		  if (z < sm->n[i]-1 && sm->k[i][z+1] != k+1) 
+		    dlc = dgc = -eslINFINITY;
+
+		  /* M(i,k) calculations need to use dgc,dlc before we
+		   * change them, while they're still D(i,k+1). 
+		   */
+		  dpc[p7S_ML] = mlc = p7_FLogsum( p7_FLogsum(mln + TSC(p7P_MM, k),      // ML(i,k) =   ML(i+1,k+1) * t(k,MM) * e_M(k+1, x_i+1)      | mln = log[ ML(i+1,k+1) * e_M(k+1,x_i+1)]
+							     iln + TSC(p7P_MI, k)),     //           + IL(i+1,k)   * t(k,MI) * e_I(k, x_i+1)        | iln = log[ IL(i+1,k)   * e_I(k,  x_i+1)]
+						             dlc + TSC(p7P_MD, k));     //           + DL(i,  k+1) * t(k,DD)                        | dlc = DL(i,k+1), wrapped around from prev loop iteration. This has tricky boundary conditions at k=kbc, and k=kbc=M
+		  dpc[p7S_MG] = mgc = p7_FLogsum( p7_FLogsum(mgn + TSC(p7P_MM, k),      // MG(i,k) is essentially the same recursion.
+							     ign + TSC(p7P_MI, k)),     
+						             dgc + TSC(p7P_MD, k));     
+		  
+		  /* Accumulate xG, xL as we sweep over the current row; 
+		   * they will get used to initialize the next row we calculate (i-1). Note
+		   * how we need emission scores on current row for this,
+		   * and on next row for the mgn/mln calculations above.
+		   */
+		  xG = p7_FLogsum( xG, dpc[p7S_MG] + MSC(k) + TSC(p7P_GM, k-1));   // t(k-1,p7P_GM) = left wing retraction, entry at Mk, stored off-by-one at k-1 
+		  xL = p7_FLogsum( xL, dpc[p7S_ML] + MSC(k) + TSC(p7P_LM, k-1));   // t(k-1,p7P_LM) = uniform local entry at Mk, off-by-one storage at k-1 
+
+		  /* I(i,k) calculations */
+		  dpc[p7S_IL] = p7_FLogsum( mln + TSC(p7P_IM, k), iln + TSC(p7P_II, k));
+		  dpc[p7S_IG] = p7_FLogsum( mgn + TSC(p7P_IM, k), ign + TSC(p7P_II, k));
+	  
+		  /* D(i,k) calculations; 
+		   * we can start storing results in <dpc> and decrementing;
+		   * and we're done with dgc,dlc, so can update them for
+		   * time thru the k loop.
+		   * Dg has no exit to E; ...DGm->E paths have been wrapped into the right wing retraction in t(k,MGE).
+		   */
+		  dpc[p7S_DL] = dlc = p7_FLogsum(mln + TSC(p7P_DM, k), dlc  + TSC(p7P_DD, k));
+		  dpc[p7S_DG] = dgc = p7_FLogsum(mgn + TSC(p7P_DM, k), dgc  + TSC(p7P_DD, k)); 
+
+		  dpc -= p7S_NSCELLS;
+		}
+	      
+	      // dpn may be on first supercell on row i+1, or -1 from that;
+	      // we need it to be -1 for sure. If we go to a row i in a DOWN sector
+	      // next, the DOWN sector code depends on dpn moving smoothly from this
+	      // UP row to the end of the DOWN row.
+	      while (y >= 0) { y--; dpn -= p7S_NSCELLS; }
+	    }
+
+	  /* DOWN sector: 
+           *    Compute sparse supercells k0(d)..M 
+	   *    Can only exit from DOWN, not enter; paths back from E are computed,
+	   *    but not paths back to G,L.
+	   *    Exception: can enter the anchor cell i0,k0.
+	   */
+
+	  // We depend on the following state of things:
+	  //   dpc : currently points at the last sparse cell on DOWN row i
+
+
+	  if ( anch[d].i0 >= sm->seg[g].ia)  // d may be 0 here, and if so, sentinel i0(0) makes the test fail
+	    {
+
+	      /* Last row of DOWN sector: initialization case. 
+	       * No next row i+1. Cells only reachable from E, D 
+	       */
+	      if (nup == 1 || i == sm->seg[g].ib)  
+		{                                  
+		  if (! nup) last_dpc = dpc;
+		  dpn = NULL;
+		  dlc = -eslINFINITY;
+		  dgc = xE + TSC(p7P_DGE, sm->k[i][sm->n[i]-1]);       // tDGE wing-retracted exit term needed on any Dk with no adjacent Dk+1.
+		                                                       // tDGEk is Dk+1..Dm->E path sum; DGE[M] and [M-1] are 0
+		  for (z = sm->n[i]-1; z >= 0 && sm->k[i][z] >= anch[d].k0; z--)
+		    {
+		      k = sm->k[i][z];
+
+		      if (z < sm->n[i]-1 && sm->k[i][z+1] != k+1) {    // If supercell k has no adjacent k+1, reinitialize D paths
+			dlc = -eslINFINITY;
+			dgc = xE + TSC(p7P_DGE, k);
+		      }
+
+		      dpc[p7S_ML] = mlc = p7_FLogsum(dlc + TSC(p7P_MD, k), xE);
+		      dpc[p7S_MG] = mgc =            dgc + TSC(p7P_MD, k);
+		      dpc[p7S_IL] =       -eslINFINITY;
+		      dpc[p7S_IG] =       -eslINFINITY;
+		      dpc[p7S_DL] = dlc = p7_FLogsum(dlc + TSC(p7P_DD, k), xE);
+		      dpc[p7S_DG] = dgc =            dgc + TSC(p7P_DD, k);        // Yes it's correct. Suppose k=M. DD term is DM->M+1 edge = 0. Initialization w/ DGE was also 0. Total = 0.
+                                                                                  // Now suppose we start on an internal k. DD term is Dk->Dk+1; DGE is Dk+1..Dm->E; that's the complete Dk->E exit path
+
+		      dpc -= p7S_NSCELLS;
+		    } // end loop over z. Calculation of all sparse cells k on current DOWN row i completed.
+                      // dpc now -1 from first DOWN sparse supercell on row i: i.e. last supercell of prev row (in up or down sector, depending)
+		} // end code block for initialization of the last row of a DOWN sector
+
+	      /* Any other row i of DOWN sector.
+	       * We have a next row i+1. 
+	       */
+	      else  // We're interior in a DOWN sector, with at least one DOWN row below us at i+1, so all i+1 indices (in sm->n[] for example) are safe
+                {   // Cells k = k0(d)..M must be computed.
+		    // From a DOWN sector, paths can end from the model, but not start in it,
+		    // so we pull {MD}->E transitions backward from xE, but we don't evaluate B->{LG}->Mk
+		  if (! nup) {
+		    dpn      = last_dpc;  // if we're the last DOWN sector in segment, we're the first access to dpn; set it.
+		    last_dpc = dpc;      
+		  }
+
+		  dlc = -eslINFINITY;
+		  dgc = xE + TSC(p7P_DGE, sm->k[i][sm->n[i]-1]);  // ?? 
+		  y   = sm->n[i+1] - 1;   
+		  for (z = sm->n[i]-1; z >= 0 && sm->k[i][z] >= anch[d].k0; z--)
+		    {
+		      k = sm->k[i][z];
+
+		      /* Try to find and pick up mln, mgn from i+1,k+1 */
+		      while (y >= 0 && sm->k[i+1][y]  > k+1) { y--; dpn -= p7S_NSCELLS; }  // if y is already on i+1,k+1, it doesn't move
+		      if    (y >= 0 && sm->k[i+1][y] == k+1) {
+			mln = dpn[p7S_ML] + MSN(k+1);
+			mgn = dpn[p7S_MG] + MSN(k+1);
+		      } else { mln = mgn = -eslINFINITY; }
+		      
+		      /* Try to pick up iln,ign from i+1,k */
+		      while (y >= 0 && sm->k[i+1][y]  > k)  { y--; dpn -= p7S_NSCELLS; }  // if y is already on i+1,k, it doesn't move
+		      if    (y >= 0 && sm->k[i+1][y] == k) {
+			iln = dpn[p7S_IL]; // + ISN(k), if it weren't fixed to 0
+			ign = dpn[p7S_IG]; // + ISN(k), ditto
+		      } else { iln = ign = -eslINFINITY; }
+
+		      /* Check if dlc,dgc are invalid and need to be reinitialized */
+		      if (z < sm->n[i]-1 && sm->k[i][z+1] != k+1) {
+			dlc = -eslINFINITY;
+			dgc = xE + TSC(p7P_DGE, k);
+		      }
+
+		      /* M(i,k) calculations need to use dgc,dlc before we
+		       * change them, while they're still D(i,k+1). 
+		       */
+		      dpc[p7S_ML] = mlc = p7_FLogsum( p7_FLogsum(mln + TSC(p7P_MM, k),      // ML(i,k) =   ML(i+1,k+1) * t(k,MM) * e_M(k+1, x_i+1)      | mln = log[ ML(i+1,k+1) * e_M(k+1,x_i+1)]
+								 iln + TSC(p7P_MI, k)),     //           + IL(i+1,k)   * t(k,MI) * e_I(k, x_i+1)        | iln = log[ IL(i+1,k)   * e_I(k,  x_i+1)]
+						      p7_FLogsum(dlc + TSC(p7P_MD, k),      //           + DL(i,  k+1) * t(k,DD)                        | dlc = DL(i,k+1), wrapped around from prev loop iteration. This has tricky boundary conditions at k=kbc, and k=kbc=M
+								 xE));                      //           +  E(i)       * t(MkE)=1.0
+		      dpc[p7S_MG] = mgc = p7_FLogsum( p7_FLogsum(mgn + TSC(p7P_MM, k),      // MG(i,k) is essentially the same recursion, without a transition to E.
+								 ign + TSC(p7P_MI, k)),     
+						                 dgc + TSC(p7P_MD, k));     
+
+		      /* I(i,k) calculations */
+		      dpc[p7S_IL] = p7_FLogsum( mln + TSC(p7P_IM, k), iln + TSC(p7P_II, k));
+		      dpc[p7S_IG] = p7_FLogsum( mgn + TSC(p7P_IM, k), ign + TSC(p7P_II, k));
+
+		      /* D(i,k) calculations; 
+		       * we can start storing results in <dpc> and decrementing;
+		       * and we're done with dgc,dlc, so can update them for
+		       * time thru the k loop.
+		       * Dg has no exit to E; ...DGm->E paths have been wrapped into the right wing retraction in t(k,MGE).
+		       */
+		      dpc[p7S_DL] = dlc = p7_FLogsum( p7_FLogsum(mln  + TSC(p7P_DM, k), 
+								 dlc  + TSC(p7P_DD, k)),
+						      xE);                   
+		      dpc[p7S_DG] = dgc = p7_FLogsum( mgn  + TSC(p7P_DM, k),  
+						      dgc  + TSC(p7P_DD, k)); 
+
+		      dpc -= p7S_NSCELLS;
+
+		    } // end loop over sparse cells k in DOWN sector.
+		      // dpc is now one supercell beyond: i.e. on last supercell of UP
+		} // end of code block when i is an interior DOWN row, where we have a valid i+1 row to look at
+	      
+
+
+	      /* The handoff: from anchor cell (top left corner of
+               * DOWN sector) to bottom right corner of UP sector. All
+               * paths must pass thru anchor cell; they either start
+               * exactly there (via {LG}->M) or they continue back to
+               * the lower right corner of UP. We precalculate
+               * mlc/mgc, which will be used to initialize that UP
+               * supercell when we get to the prev row i-1; we also
+               * precalculate xL/xG for i-1 which can only come from
+               * the anchor cell when we're in DOWN (as opposed to UP
+               * sector supercells, all of which can go back to xL/xG.
+               * Meanwhile (because paths have to go thru anchor cell)
+               * we set C/J/N to -inf. J,N will be restarted on row
+               * i-1 when we pull from L,G back to B back to J,N.
+	       */
+	      if (i == anch[d].i0) 
+		{
+		  mlc += MSC(anch[d].k0);               // now, don't touch mlc/mgc again until UP initialization of prev row
+		  mgc += MSC(anch[d].k0);
+		  xL = mlc + TSC(p7P_LM, anch[d].k0-1);
+		  xG = mgc + TSC(p7P_GM, anch[d].k0-1);
+		  xJ = -eslINFINITY;
+		  xC = -eslINFINITY;
+		  xN = -eslINFINITY;
+		}
+	    } // end of all DOWN sector calculations for row i
+	  
+	  /* Partial precalculation of xC/J/N for row i-1 we'll do next.
+	   * When loop starts new row i, xC/xJ/xN must already include 
+	   * tCC/JJ/NN transition that reaches that row
+	   */
+	  xC += gm->xsc[p7P_C][p7P_LOOP];
+	  xJ += gm->xsc[p7P_J][p7P_LOOP];
+	  xN += gm->xsc[p7P_N][p7P_LOOP];
+
+	  if      (i == anch[d].i0) { nup  = 1; d--; }
+	  else if (nup)             { nup++;         }
+	} // end loop over rows i of a segment
+
+      /* Finally the ia(g)-1 row specials */
+      if (nup)
+	{
+	  xc[p7S_CC] = -eslINFINITY;
+	  xc[p7S_JJ] = -eslINFINITY;
+	  xc[p7S_C]  = xC;   
+	  xc[p7S_G]  = xG;
+	  xc[p7S_L]  = xL;
+	  xc[p7S_B]  = xB = p7_FLogsum( xL + gm->xsc[p7P_B][0],        xG + gm->xsc[p7P_B][1]);         // on i=ib segment start, evaluates to -inf, because xL=xG=-inf there
+	  xc[p7S_J]  = xJ = p7_FLogsum( xJ, 		           xB + gm->xsc[p7P_J][p7P_MOVE]);  // on i=ib, evaluates to xJ (only path is J->J(i+1))
+	  xc[p7S_N]  = xN = p7_FLogsum( xN, 	                   xB + gm->xsc[p7P_N][p7P_MOVE]);  // ditto xN
+	  xc[p7S_E]  = xE = p7_FLogsum( xJ + gm->xsc[p7P_E][p7P_LOOP], xC + gm->xsc[p7P_E][p7P_MOVE]);  // on i=ib, i<L, E->{JC} are both possible; on i=L, evaluates to xC + tEC.
+	  xc -= p7S_NXCELLS;
+	}
+
+      last_rsc = NULL;
+    } // end loop over segments g
+
+  /* Account for 1..ia(1)-1 residues in NNNN... path */
+  if ( sm->seg[1].ia > 1 )
+    xN += (float) (sm->seg[1].ia - 1) * gm->xsc[p7P_N][p7P_LOOP];
+  if (opt_sc) *opt_sc = xN;	 // S->N = 1.0, so no transition score needs to be added.
   return eslOK;
 }
 
@@ -647,8 +1061,12 @@ utest_compare_reference(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *a
   P7_ANCHORS    *anch  = p7_anchors_Create();
   P7_REFMX      *afu   = p7_refmx_Create(100,100);
   P7_REFMX      *afd   = p7_refmx_Create(100,100);
+  P7_REFMX      *abu   = p7_refmx_Create(100,100);
+  P7_REFMX      *abd   = p7_refmx_Create(100,100);
   P7_SPARSEMX   *asf   = p7_sparsemx_Create(NULL);
-  float          sc1, sc2;
+  P7_SPARSEMX   *asb   = p7_sparsemx_Create(NULL);
+  float          fsc_r, bsc_r;
+  float          fsc, bsc;
   int            idx;
   float          tol   = 0.01;
 
@@ -678,11 +1096,13 @@ utest_compare_reference(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *a
 
       //p7_anchors_Dump(stdout, anch);
 
-      /* reference ASC forward calculation */
-      if ( p7_ReferenceASCForward(sq->dsq, sq->n, gm, anch->a, anch->D, afu, afd, &sc1) != eslOK) esl_fatal(msg);
+      /* reference ASC calculations */
+      if ( p7_ReferenceASCForward (sq->dsq, sq->n, gm, anch->a, anch->D, afu, afd, &fsc_r) != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->a, anch->D, abu, abd, &bsc_r) != eslOK) esl_fatal(msg);
       
-      /* sparse ASC forward calculation */
-      if ( p7_sparse_asc_Forward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &sc2)   != eslOK) esl_fatal(msg);
+      /* sparse ASC calculations */
+      if ( p7_sparse_asc_Forward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &fsc)   != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Forward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asb, &bsc)   != eslOK) esl_fatal(msg);
 
       //p7_refmx_Dump(stdout, afu);
       //p7_refmx_Dump(stdout, afd);
@@ -692,26 +1112,28 @@ utest_compare_reference(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *a
       if (! diagfp) 
 	{
 	  if ( p7_spascmx_CompareReference(asf, anch->a, anch->D, afu, afd, tol) != eslOK) esl_fatal(msg); // test this first; makes debugging easier, if there's a bad difference, make it fail on the bad cell in the DP matrix
-	  if ( esl_FCompareAbs(sc1, sc2, tol) != eslOK) esl_fatal(msg);
+	  if ( esl_FCompareAbs(fsc, fsc_r, tol) != eslOK) esl_fatal(msg);
+	  if ( esl_FCompareAbs(bsc, bsc_r, tol) != eslOK) esl_fatal(msg);
+	  if ( esl_FCompareAbs(fsc, bsc,   tol) != eslOK) esl_fatal(msg);
 	}
       else
-	fprintf(diagfp, "%20g\n", sc1-sc2);
+	fprintf(diagfp, "%20g %20g %20g\n", fsc_r-fsc, bsc_r-bsc, fsc-bsc);
 
       p7_sparsemask_Reuse(sm);
       p7_anchors_Reuse(anch);
       p7_trace_Reuse(gtr);
-      p7_refmx_Reuse(afu);
-      p7_refmx_Reuse(afd);
-      p7_sparsemx_Reuse(asf);
+      p7_refmx_Reuse(afu);    p7_refmx_Reuse(afd);
+      p7_refmx_Reuse(abu);    p7_refmx_Reuse(abd);
+      p7_sparsemx_Reuse(asf); p7_sparsemx_Reuse(asb);
       esl_sq_Reuse(sq);
     }
 
-  p7_refmx_Destroy(afu);
-  p7_refmx_Destroy(afd);
+  p7_sparsemx_Destroy(asf); p7_sparsemx_Destroy(asb);
+  p7_refmx_Destroy(afu);    p7_refmx_Destroy(afd);
+  p7_refmx_Destroy(abu);    p7_refmx_Destroy(abd);
   p7_anchors_Destroy(anch);
   p7_trace_Destroy(gtr);
   p7_sparsemask_Destroy(sm);
-  p7_sparsemx_Destroy(asf);
   p7_profile_Destroy(gm);
   p7_hmm_Destroy(hmm);
   p7_bg_Destroy(bg);
@@ -744,6 +1166,7 @@ utest_compare_reference(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *a
  * 
  * Thus:
  *    1. Sparse ASC fwd score = trace score
+ *    2. Sparse ASC bck score, ditto.
  *    
  *****************************************************************
  * Analysis of stochastic error:
@@ -763,10 +1186,11 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
   P7_ANCHOR     *anch      = NULL;
   P7_SPARSEMASK *sm        = NULL;
   P7_SPARSEMX   *asf       = p7_sparsemx_Create(NULL);
-  int   D,L;
-  int   idx;
-  float tsc, fsc;
-  float tol = 0.0001;
+  P7_SPARSEMX   *asb       = p7_sparsemx_Create(NULL);
+  int           D,L;
+  int           idx;
+  float         tsc, fsc, bsc;
+  float         tol = 0.0001;
 
   for (idx = 0; idx < N; idx++)
     {
@@ -775,20 +1199,23 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
       if ((sm = p7_sparsemask_Create(M, L))            == NULL) esl_fatal(failmsg);
       if ( p7_sparsemask_SetFromTrace(sm, rng, tr)    != eslOK) esl_fatal(failmsg);
 
-      if ( p7_sparse_asc_Forward(dsq, L, gm, anch, D, sm, asf, &fsc) != eslOK) esl_fatal(failmsg);
+      if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf, &fsc) != eslOK) esl_fatal(failmsg);
+      if ( p7_sparse_asc_Backward(dsq, L, gm, anch, D, sm, asb, &bsc) != eslOK) esl_fatal(failmsg);
 
       //p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
       //p7_spascmx_Dump(stdout, asf, anch, D);
-      
+      //p7_spascmx_Dump(stdout, asb, anch, D);
+
       if (!diagfp)
 	{
 	  if (esl_FCompareAbs(tsc, fsc, tol) != eslOK) esl_fatal(failmsg);
+	  if (esl_FCompareAbs(tsc, bsc, tol) != eslOK) esl_fatal(failmsg);
 	}
       else
-	fprintf(diagfp, "%20g\n", tsc-fsc);
+	fprintf(diagfp, "%20g %20g\n", tsc-fsc, tsc-bsc);
 
       p7_sparsemx_Reuse(asf);
-
+      p7_sparsemx_Reuse(asb);
       free(anch);
       p7_trace_Destroy(tr);
       p7_hmm_Destroy(hmm);
@@ -798,6 +1225,7 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
     }
 
   p7_sparsemx_Destroy(asf);
+  p7_sparsemx_Destroy(asb);
   p7_bg_Destroy(bg);
 }
 
@@ -851,10 +1279,12 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
   P7_CHECKPTMX  *cx  = NULL;
   P7_SPARSEMASK *sm  = NULL;
   P7_SPARSEMX   *sxf = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *sxb = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *asf = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *asb = p7_sparsemx_Create(NULL);
   int            idx;
-  float          vsc, fsc, asc_f;
-  float          tol = 0.0001;
+  float          vsc, fsc, bsc, asc_f, asc_b;
+  float          tol = 0.002;
 
   for (idx = 0; idx < N; idx++)
     {
@@ -878,22 +1308,26 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
 	if ( p7_sparsemask_SetFromTrace(sm, rng, gtr) != eslOK) esl_fatal(msg);
 
 
-      if ( p7_SparseViterbi     (dsq, L, gm,          sm, sxf, NULL, &vsc) != eslOK) esl_fatal(msg);
-      if ( p7_SparseForward     (dsq, L, gm,          sm, sxf,       &fsc) != eslOK) esl_fatal(msg);
-      if ( p7_sparse_asc_Forward(dsq, L, gm, anch, D, sm, asf,     &asc_f) != eslOK) esl_fatal(msg);
+      if ( p7_SparseViterbi      (dsq, L, gm,          sm, sxf, NULL, &vsc) != eslOK) esl_fatal(msg);
+      if ( p7_SparseForward      (dsq, L, gm,          sm, sxf,       &fsc) != eslOK) esl_fatal(msg);
+      if ( p7_SparseBackward     (dsq, L, gm,          sm, sxb,       &bsc) != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf,     &asc_f) != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Backward(dsq, L, gm, anch, D, sm, asb,     &asc_b) != eslOK) esl_fatal(msg);
       
       if (! diagfp)
 	{
 	  if (esl_FCompareAbs( fsc, asc_f, tol) != eslOK) esl_fatal(msg);
-	  // bck score test here
+	  if (esl_FCompareAbs( fsc, asc_b, tol) != eslOK) esl_fatal(msg);
 	  if (gsc > vsc+tol)                              esl_fatal(msg);
 	  if (vsc > fsc)                                  esl_fatal(msg);
 	}
       else
-	fprintf(diagfp, "%20g %20g %20g\n", fsc-asc_f, vsc-gsc, fsc-vsc);
+	fprintf(diagfp, "%20g %20g %20g %20g %20g\n", fsc-asc_f, fsc-asc_b, bsc-asc_b, vsc-gsc, fsc-vsc);
   
       p7_sparsemx_Reuse(asf);
+      p7_sparsemx_Reuse(asb);
       p7_sparsemx_Reuse(sxf);
+      p7_sparsemx_Reuse(sxb);
 
       p7_hmm_Destroy(hmm);
       p7_profile_Destroy(gm);
@@ -904,7 +1338,9 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
     }
 
   p7_sparsemx_Destroy(asf);
+  p7_sparsemx_Destroy(asb);
   p7_sparsemx_Destroy(sxf);
+  p7_sparsemx_Destroy(sxb);
   p7_bg_Destroy(bg);
 }
 
@@ -956,9 +1392,11 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc
   P7_CHECKPTMX  *cx  = NULL;
   P7_SPARSEMASK *sm  = NULL;
   P7_SPARSEMX   *sxf = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *sxb = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *asf = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *asb = p7_sparsemx_Create(NULL);
   int            idx;
-  float          vsc, fsc, asc_f;
+  float          vsc, fsc, bsc, asc_f, asc_b;
   float          tol = 0.0001;
 
   for (idx = 0; idx < N; idx++)
@@ -982,22 +1420,26 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc
       } else 
 	if ( p7_sparsemask_SetFromTrace(sm, rng, gtr) != eslOK) esl_fatal(msg);
   
-      if ( p7_SparseViterbi     (dsq, L, gm,          sm, sxf, NULL, &vsc) != eslOK) esl_fatal(msg);
-      if ( p7_SparseForward     (dsq, L, gm,          sm, sxf,       &fsc) != eslOK) esl_fatal(msg);
-      if ( p7_sparse_asc_Forward(dsq, L, gm, anch, D, sm, asf,     &asc_f) != eslOK) esl_fatal(msg);
+      if ( p7_SparseViterbi      (dsq, L, gm,          sm, sxf, NULL, &vsc) != eslOK) esl_fatal(msg);
+      if ( p7_SparseForward      (dsq, L, gm,          sm, sxf,       &fsc) != eslOK) esl_fatal(msg);
+      if ( p7_SparseBackward     (dsq, L, gm,          sm, sxb,       &bsc) != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf,     &asc_f) != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Backward(dsq, L, gm, anch, D, sm, asb,     &asc_b) != eslOK) esl_fatal(msg);
    
       if (! diagfp)
 	{
 	  if (esl_FCompareAbs( fsc, asc_f, tol) != eslOK) esl_fatal(msg);
-	  // bck score test here
+	  if (esl_FCompareAbs( bsc, asc_b, tol) != eslOK) esl_fatal(msg);
 	  if (gsc > vsc+tol)                              esl_fatal(msg);
 	  if (vsc > fsc)                                  esl_fatal(msg);
 	}
       else
-	fprintf(diagfp, "%20g %20g %20g\n", fsc-asc_f, vsc-gsc, fsc-vsc);
+	fprintf(diagfp, "%20g %20g %20g %20g %20g\n", fsc-asc_f, bsc-asc_b, asc_f-asc_b, vsc-gsc, fsc-vsc);
   
       p7_sparsemx_Reuse(asf);
+      p7_sparsemx_Reuse(asb);
       p7_sparsemx_Reuse(sxf);
+      p7_sparsemx_Reuse(sxb);
 
       p7_hmm_Destroy(hmm);
       p7_profile_Destroy(gm);
@@ -1008,7 +1450,9 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc
     }
 
   p7_sparsemx_Destroy(asf);
+  p7_sparsemx_Destroy(asb);
   p7_sparsemx_Destroy(sxf);
+  p7_sparsemx_Destroy(sxb);
   p7_bg_Destroy(bg);
 }
 
@@ -1058,10 +1502,12 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
   P7_CHECKPTMX  *cx  = NULL;
   P7_SPARSEMASK *sm  = NULL;
   P7_SPARSEMX   *sxf = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *sxb = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *asf = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *asb = p7_sparsemx_Create(NULL);
   int            idx;
-  float          vsc, fsc, asc_f;
-  float          tol = 0.0001;
+  float          vsc, fsc, bsc, asc_f, asc_b;
+  float          tol = 0.01;
 
   for (idx = 0; idx < N; idx++)
     {
@@ -1084,22 +1530,27 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
       } else 
 	if ( p7_sparsemask_SetFromTrace(sm, rng, gtr) != eslOK) esl_fatal(msg);
   
-      if ( p7_SparseViterbi     (dsq, L, gm,          sm, sxf, NULL, &vsc) != eslOK) esl_fatal(msg);
-      if ( p7_SparseForward     (dsq, L, gm,          sm, sxf,       &fsc) != eslOK) esl_fatal(msg);
-      if ( p7_sparse_asc_Forward(dsq, L, gm, anch, D, sm, asf,     &asc_f) != eslOK) esl_fatal(msg);
+      if ( p7_SparseViterbi      (dsq, L, gm,          sm, sxf, NULL, &vsc) != eslOK) esl_fatal(msg);
+      if ( p7_SparseForward      (dsq, L, gm,          sm, sxf,       &fsc) != eslOK) esl_fatal(msg);
+      if ( p7_SparseBackward     (dsq, L, gm,          sm, sxb,       &bsc) != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf,     &asc_f) != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Backward(dsq, L, gm, anch, D, sm, asb,     &asc_b) != eslOK) esl_fatal(msg);
    
       if (! diagfp)
 	{
-	  if (esl_FCompareAbs( fsc, asc_f, tol) != eslOK) esl_fatal(msg);
-	  // bck score test here
-	  if (gsc > vsc+tol)                              esl_fatal(msg);
-	  if (vsc > fsc)                                  esl_fatal(msg);
+	  if (esl_FCompareAbs( fsc,   asc_f, tol) != eslOK) esl_fatal(msg);
+	  if (esl_FCompareAbs( bsc,   asc_b, tol) != eslOK) esl_fatal(msg);
+	  if (esl_FCompareAbs( asc_f, asc_b, tol) != eslOK) esl_fatal(msg);
+	  if (gsc > vsc+tol)                                esl_fatal(msg);
+	  if (vsc > fsc)                                    esl_fatal(msg);
 	}
       else
-	fprintf(diagfp, "%20g %20g %20g\n", fsc-asc_f, vsc-gsc, fsc-vsc);
+	fprintf(diagfp, "%20g %20g %20g %20g %20g\n", fsc-asc_f, bsc-asc_b, asc_f-asc_b, vsc-gsc, fsc-vsc);
   
       p7_sparsemx_Reuse(asf);
+      p7_sparsemx_Reuse(asb);
       p7_sparsemx_Reuse(sxf);
+      p7_sparsemx_Reuse(sxb);
 
       p7_hmm_Destroy(hmm);
       p7_profile_Destroy(gm);
@@ -1110,10 +1561,26 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
     }
 
   p7_sparsemx_Destroy(asf);
+  p7_sparsemx_Destroy(asb);
   p7_sparsemx_Destroy(sxf);
+  p7_sparsemx_Destroy(sxb);
   p7_bg_Destroy(bg);
 }
 
+/* "viterbi" utest
+ * 
+ * If we choose an anchor set implied by the unconstrained Viterbi
+ * path, then the ASC Viterbi path is identical to that path.
+ * 
+ * We use this fact to test ASC Forward and Backward
+ * implementations. Any F/B implementation can be converted to Viterbi
+ * scoring by making the p7_FLogsum() function do a max instead of a
+ * log-sum. Our logsum implementation includes the necessary machinery
+ * for a temporary switch in its logic, by using p7_logsum_InitMax()
+ * and p7_logsum_Reinit().
+ * 
+ * Holds true for any model in any configuration, and any sequence.
+ */
 static void
 utest_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int L, int N)
 {
@@ -1130,9 +1597,10 @@ utest_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M,
   P7_SPARSEMX   *sxf   = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxd   = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *asf   = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *asb   = p7_sparsemx_Create(NULL);
   P7_TRACE      *vtr   = p7_trace_Create();
   P7_ANCHORS    *anch  = p7_anchors_Create();
-  float          vsc, fsc, asc;
+  float          vsc, fsc, asc, asc_b;
   float          tol   = 0.0001;
 
   if      (abc->type == eslAMINO) pri = p7_prior_CreateAmino();
@@ -1165,17 +1633,19 @@ utest_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M,
       if ( p7_sparse_anchors_SetFromTrace(sxd, vtr, anch)            != eslOK) esl_fatal(msg);
 
       p7_logsum_InitMax();    // Zero the logsum lookup table; now FLogsum() calls will compute max()
-      if ( p7_SparseForward     (sq->dsq, sq->n, gm,                   sm, sxf, &fsc) != eslOK) esl_fatal(msg);
-      if ( p7_sparse_asc_Forward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &asc) != eslOK) esl_fatal(msg);
+      if ( p7_SparseForward      (sq->dsq, sq->n, gm,                   sm, sxf, &fsc)   != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Forward (sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &asc)   != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Backward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asb, &asc_b) != eslOK) esl_fatal(msg);
       p7_logsum_Reinit();     // Reset the logsum lookup table
       
       if ( ! diagfp)
 	{
-	  if (esl_FCompareAbs( vsc, fsc, tol) != eslOK) esl_fatal(msg);
-	  if (esl_FCompareAbs( fsc, asc, tol) != eslOK) esl_fatal(msg);
+	  if (esl_FCompareAbs( vsc, fsc,   tol) != eslOK) esl_fatal(msg);
+	  if (esl_FCompareAbs( fsc, asc,   tol) != eslOK) esl_fatal(msg);
+	  if (esl_FCompareAbs( fsc, asc_b, tol) != eslOK) esl_fatal(msg);
 	}
       else
-	fprintf(diagfp, "%4d %4d %20g %20g %20g\n", (int) sq->n, anch->D, vsc, vsc-fsc, fsc-asc);
+	fprintf(diagfp, "%4d %4d %20g %20g %20g %20g\n", (int) sq->n, anch->D, vsc, vsc-fsc, fsc-asc, fsc-asc_b);
 
       
       p7_anchors_Reuse(anch);
@@ -1183,6 +1653,7 @@ utest_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M,
       p7_sparsemx_Reuse(sxf);
       p7_sparsemx_Reuse(sxd);	
       p7_sparsemx_Reuse(asf);	
+      p7_sparsemx_Reuse(asb);	
       p7_sparsemask_Reuse(sm);
       esl_sq_Reuse(sq);
       p7_profile_Reuse(gm);
@@ -1199,9 +1670,11 @@ utest_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M,
   p7_sparsemx_Destroy(sxf);  
   p7_sparsemx_Destroy(sxd);  
   p7_sparsemx_Destroy(asf);  
+  p7_sparsemx_Destroy(asb);  
   p7_sparsemask_Destroy(sm);
   esl_sq_Destroy(sq);
   p7_profile_Destroy(gm);
+  p7_prior_Destroy(pri);
   p7_bg_Destroy(bg);
 }
 
@@ -1343,10 +1816,11 @@ main(int argc, char **argv)
   P7_REFMX       *afu     = NULL;
   P7_REFMX       *afd     = NULL;
   P7_SPARSEMX    *asf     = NULL;
+  P7_SPARSEMX    *asb     = NULL;
   P7_ANCHORS     *anch    = p7_anchors_Create();
   float          *wrk     = NULL;
   P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
-  float           fsc, vsc, asc, asc_sparse;
+  float           fsc, vsc, asc, asc_f, asc_b;
   int             status;
 
   /* Read in one HMM */
@@ -1408,25 +1882,36 @@ main(int argc, char **argv)
 		       afu, afd, anch, &asc, NULL, NULL);
 
 
-  //p7_refmx_Dump(stdout, afu);
-  //p7_refmx_Dump(stdout, afd);
+  /* Reference ASC Backward */
+#if 0
+  p7_refmx_Reuse(rxf);
+  p7_refmx_Reuse(rxd);
+  p7_refmx_Zero(rxf, gm->M, sq->n);
+  p7_refmx_Zero(rxd, gm->M, sq->n);
+  p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->a, anch->D, 
+			  rxf, rxd, NULL);
+  p7_refmx_Dump(stdout, rxf);
+  p7_refmx_Dump(stdout, rxd);
+#endif
 
   /* Finally...
    * Run sparse ASC Forward.
    */
   asf = p7_sparsemx_Create(sm);
+  asb = p7_sparsemx_Create(sm);
 
-  //p7_spascmx_Dump(stdout, asf, anch->a, anch->D);
+  p7_sparse_asc_Forward (sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &asc_f);
+  p7_sparse_asc_Backward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asb, &asc_b);
 
-  p7_sparse_asc_Forward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &asc_sparse);
-
-  //p7_spascmx_Dump(stdout, asf, anch->a, anch->D);
+  //p7_spascmx_Dump(stdout, asb, anch->a, anch->D);
 
   printf("Reference ASC fwd score = %.2f nats\n", asc);
-  printf("Sparse ASC fwd score    = %.2f nats\n", asc_sparse);
+  printf("Sparse ASC fwd score    = %.2f nats\n", asc_f);
+  printf("Sparse ASC bck score    = %.2f nats\n", asc_b);
 
   p7_anchorhash_Destroy(ah);
   if (wrk) free(wrk);
+  p7_sparsemx_Destroy(asb);
   p7_sparsemx_Destroy(asf);
   p7_anchors_Destroy(anch);
   p7_trace_Destroy(vtr);

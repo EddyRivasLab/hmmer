@@ -20,6 +20,10 @@ extern int p7_sparse_asc_ForwardSeg(const ESL_DSQ *dsq, int L, const P7_PROFILE 
 				    P7_SPARSEMX *asf, float xN, float xJ, float xC, float *dpc, float *xc,
 				    float *ret_xN, float *ret_xJ, float *ret_xC, int *ret_d, float **ret_dpc, float **ret_xc, float *opt_asc);
 
+extern int p7_sparse_asc_Backward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, 
+				  const P7_ANCHOR *anch, int D, const P7_SPARSEMASK *sm,
+				  P7_SPARSEMX *asb, float *opt_sc);
+
 #endif /*P7_SPARSE_ASC_FWDBACK_INCLUDED*/
 
 /*****************************************************************

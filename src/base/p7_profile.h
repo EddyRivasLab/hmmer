@@ -211,8 +211,8 @@ extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float to
  * Wing retraction:        
  *   For the local path, all algorithms must use the L->Mk "uniform"
  *   entry distribution, and assume that all Mk->E and Dk->E are
- *   1.0. The L->Mk entry distribution supercedes all paths involving
- *   terminal deletion. This is the "implicit probabilitistic model"
+ *   1.0. The L->Mk entry distribution supersedes all paths involving
+ *   terminal deletion. This is the "implicit probabilistic model"
  *   of local alignment [Eddy08].  The D_1 and I_M states don't exist
  *   on the local path, and algorithms must treat them as zero probability.
  * 
@@ -236,8 +236,8 @@ extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float to
  *      boundary conditions:
  *      TSC(M,DGE) = TSC(M-1,DGE) = 0    
  *   
- *   Wing retracted exits are used in banded DP calculations: see
- *   banded_fwdback.c. A DP calculation may also use Mm->E and Dm->E
+ *   Wing retracted exits are used in sparse DP calculations: see
+ *   sparse_fwdback.c. A DP calculation may also use Mm->E and Dm->E
  *   (both 1.0) explicitly, rather than using the DGE wing retracted
  *   exit.  The reference implementation does this, for example (see
  *   reference_fwdback.c or reference_viterbi.c).
