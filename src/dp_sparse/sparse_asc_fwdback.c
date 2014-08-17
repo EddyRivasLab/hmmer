@@ -1102,9 +1102,9 @@ p7_sparse_asc_Decoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
       nup = 0;
       for (i = sm->seg[g].ib; i >= sm->seg[g].ia; i--)
 	{
-	  ESL_DASSERT1(( dpcF >= asf->dp  || (d == 0 && anch[1].k0 == 1 && dpcF == asf->dp-p7S_NSCELLS) ));   // if UP(1) is an empty set (has no valid cells) because anch[d+1=1].k0 = 1, dpc{FBD} are oob and that's ok
-	  ESL_DASSERT1(( dpcB >= asb->dp  || (d == 0 && anch[1].k0 == 1 && dpcB == asb->dp-p7S_NSCELLS) ));  
-	  ESL_DASSERT1(( dpcD >= asd->dp  || (d == 0 && anch[1].k0 == 1 && dpcD == asd->dp-p7S_NSCELLS) ));  
+	  ESL_DASSERT1(( dpcF >= asf->dp-p7S_NSCELLS ));   // we can run out of supercells before running out of rows. When we run out of supercells, dpc{FBD} are oob at -6.
+	  ESL_DASSERT1(( dpcB >= asb->dp-p7S_NSCELLS ));  
+	  ESL_DASSERT1(( dpcD >= asd->dp-p7S_NSCELLS ));  
 	  ESL_DASSERT1(( xcF  >= asf->xmx ));
 	  ESL_DASSERT1(( xcB  >= asb->xmx ));
 	  ESL_DASSERT1(( xcD  >= asd->xmx ));
@@ -1207,6 +1207,14 @@ p7_sparse_asc_Decoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
       xcB -= p7S_NXCELLS;
       xcD -= p7S_NXCELLS;
     } // end loop over segments g
+
+  ESL_DASSERT1(( dpcF == asf->dp-p7S_NSCELLS  ));  
+  ESL_DASSERT1(( dpcB == asb->dp-p7S_NSCELLS  ));  
+  ESL_DASSERT1(( dpcD == asd->dp-p7S_NSCELLS  ));  
+  ESL_DASSERT1(( xcF  == asf->xmx-p7S_NXCELLS ));  
+  ESL_DASSERT1(( xcB  == asb->xmx-p7S_NXCELLS ));  
+  ESL_DASSERT1(( xcD  == asd->xmx-p7S_NXCELLS ));  
+
   return eslOK;
 }
 
@@ -1417,10 +1425,11 @@ utest_compare_reference(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *a
  * Forward: all scores are the same. We don't have to test all
  * possible combinations, because we use the "singlesingle" style test
  * elsewhere. Here it suffices to compare to the trace score.
- * 
+ *
  * Thus:
  *    1. Sparse ASC fwd score = trace score
  *    2. Sparse ASC bck score, ditto.
+ *    3. Sparse ASC decoding matrix has 1.0 where trace passes thru.
  *    
  *****************************************************************
  * Analysis of stochastic error:
@@ -1441,10 +1450,13 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
   P7_SPARSEMASK *sm        = NULL;
   P7_SPARSEMX   *asf       = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *asb       = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *asd       = p7_sparsemx_Create(NULL);
+  P7_REFMX      *rxd       = p7_refmx_Create(100, 100);
   int           D,L;
   int           idx;
   float         tsc, fsc, bsc;
   float         tol = 0.0001;
+  char          errbuf[eslERRBUFSIZE];
 
   for (idx = 0; idx < N; idx++)
     {
@@ -1453,15 +1465,35 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
       if ((sm = p7_sparsemask_Create(M, L))            == NULL) esl_fatal(failmsg);
       if ( p7_sparsemask_SetFromTrace(sm, rng, tr)    != eslOK) esl_fatal(failmsg);
 
-      if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf, &fsc) != eslOK) esl_fatal(failmsg);
-      if ( p7_sparse_asc_Backward(dsq, L, gm, anch, D, sm, asb, &bsc) != eslOK) esl_fatal(failmsg);
+      if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf, &fsc)      != eslOK) esl_fatal(failmsg);
+      if ( p7_sparse_asc_Backward(dsq, L, gm, anch, D, sm, asb, &bsc)      != eslOK) esl_fatal(failmsg);
+      if ( p7_sparse_asc_Decoding(dsq, L, gm, anch, D, fsc, asf, asb, asd) != eslOK) esl_fatal(failmsg);
+
+      /* To check that ASC decoding left us with 1.0's in cells along
+       * <tr> and 0.0 elsewhere, we use some trickery. We count the
+       * trace into a reference matrix.  Because we only count 1 trace
+       * in, now <rxd> elements are only 0.0, 1.0 as we need them; no
+       * normalization is needed. Then we call the
+       * spascmx_CompareReference() routine. Even though that routine
+       * is designed for comparison to reference ASC (with two
+       * matrices UP and DOWN), it will work in this case when we pass
+       * the same matrix <rxd> for both.
+       */
+      if ( p7_refmx_GrowTo(rxd, gm->M, L) != eslOK) esl_fatal(failmsg);      
+      if ( p7_refmx_Zero  (rxd, gm->M, L) != eslOK) esl_fatal(failmsg);
+      if ( p7_refmx_CountTrace(tr, rxd)   != eslOK) esl_fatal(failmsg);  
 
       //p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
       //p7_spascmx_Dump(stdout, asf, anch, D);
       //p7_spascmx_Dump(stdout, asb, anch, D);
+      p7_spascmx_Dump(stdout, asd, anch, D);
 
       if (!diagfp)
 	{
+	  if ( p7_spascmx_CompareReference(asd, anch, D, rxd, rxd, tol) != eslOK) esl_fatal(failmsg);
+
+	  if ( p7_spascmx_Validate(asd, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", failmsg, errbuf); 
+
 	  if (esl_FCompareAbs(tsc, fsc, tol) != eslOK) esl_fatal(failmsg);
 	  if (esl_FCompareAbs(tsc, bsc, tol) != eslOK) esl_fatal(failmsg);
 	}
@@ -1470,6 +1502,8 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
 
       p7_sparsemx_Reuse(asf);
       p7_sparsemx_Reuse(asb);
+      p7_sparsemx_Reuse(asd);
+      p7_refmx_Reuse(rxd);
       free(anch);
       p7_trace_Destroy(tr);
       p7_hmm_Destroy(hmm);
@@ -1480,6 +1514,8 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
 
   p7_sparsemx_Destroy(asf);
   p7_sparsemx_Destroy(asb);
+  p7_sparsemx_Destroy(asd);
+  p7_refmx_Destroy(rxd);
   p7_bg_Destroy(bg);
 }
 
@@ -2202,3 +2238,5 @@ main(int argc, char **argv)
  * SVN $Id$
  * SVN $URL$
  *****************************************************************/
+
+// 3744393649

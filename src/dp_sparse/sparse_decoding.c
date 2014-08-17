@@ -330,6 +330,9 @@ utest_overwrite(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L)
 /* The "rowsum" utest verifies that the sum of posterior probs for all
  * emitters (M,I,NN,CC,JJ) on any row 1..L is ~1.0, for comparisons of
  * a randomly sampled profile to <N> randomly sampled homologs.
+ * 
+ * TODO: sparse_asc does this better, by making rowsum test part of
+ * Validate().
  */
 static void
 utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)

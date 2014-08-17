@@ -8,6 +8,7 @@
 #include "p7_config.h"
 
 #include "base/p7_anchors.h"
+#include "base/p7_profile.h"
 #include "dp_sparse/p7_sparsemx.h"
 
 

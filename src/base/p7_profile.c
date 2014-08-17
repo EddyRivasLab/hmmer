@@ -325,15 +325,21 @@ p7_profile_Destroy(P7_PROFILE *gm)
  *****************************************************************/
 
 /* Function:  p7_profile_IsLocal()
- * Synopsis:  Return TRUE if profile is in a local alignment mode.
+ * Synopsis:  Return TRUE if profile is in a local alignment mode
  *
- * Purpose:   Return <TRUE> if profile is in a local alignment mode.
+ * Purpose:   Return <TRUE> if profile is in a pure local alignment mode (only),
+ *            not dual-mode or glocal-only mode.
  */
 int
 p7_profile_IsLocal(const P7_PROFILE *gm)
 {
-  if (gm->pglocal == 0.0f) return TRUE;
-  return FALSE;
+  return (gm->pglocal == 0.0f ? TRUE : FALSE);
+}
+
+int
+p7_profile_IsGlocal(const P7_PROFILE *gm)
+{
+  return (gm->pglocal == 1.0f ? TRUE : FALSE);
 }
 
 /* Function:  p7_profile_IsMultihit()

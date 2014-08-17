@@ -478,6 +478,12 @@ p7_spascmx_Dump(FILE *fp, const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
  *            identically to a reference ASC calculation if the sparse
  *            mask was set full, marking all cells, as in some unit
  *            tests.
+ *            
+ *            In some rare cases, it makes sense to compare a sparse
+ *            ASC matrix to a normal (non-ASC) reference matrix
+ *            <rx>. To do that, you can pass the same matrix ptr <rx>
+ *            for <rxu> and <rxd>. An example is in the singlesingle
+ *            unit test of sparse_asc_fwdback.
  */
 int
 p7_spascmx_CompareReference(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D, const P7_REFMX *rxu, const P7_REFMX *rxd, float tol)
@@ -613,6 +619,142 @@ xcell_pp(float xv, int X_used, float tol)
   return eslOK;
 }
 
+static int
+decoding_rowsums(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
+{
+  const P7_SPARSEMASK *sm  = asx->sm;
+  const float         *dpc = asx->dp;
+  const float         *xc  = asx->xmx;
+  float                rowsum;
+  float                tol = 0.01;
+  int                  d,g,i,z;
+  
+  d = 1;
+  for (g = 1; g <= sm->S; g++)
+    {
+      if (anch[d].i0 > sm->seg[g].ib) continue;
+
+      /* Row ia-1, just before a segment. */
+      rowsum = xc[p7S_N] + xc[p7S_JJ] + xc[p7S_CC];
+      if (esl_FCompare(rowsum, 1.0, tol) != eslOK) ESL_AOF();
+      xc += p7S_NXCELLS;
+
+      for (i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)
+	{
+	  if (i == anch[d].i0) d++; 
+
+	  rowsum = xc[p7S_N] + xc[p7S_JJ] + xc[p7S_CC];
+	  xc += p7S_NXCELLS;
+
+	  if (anch[d-1].i0 >= sm->seg[g].ia)
+	    {
+	      z = 0; while (z < sm->n[i] && sm->k[i][z] < anch[d-1].k0) z++;
+	      for (; z < sm->n[i]; z++, dpc += p7S_NSCELLS)
+		{
+		  rowsum += dpc[p7S_ML] + dpc[p7S_MG];
+		  rowsum += dpc[p7S_IL] + dpc[p7S_IG];
+		}
+	    }
+	  
+	  if (anch[d].i0 <= sm->seg[g].ib)
+	    {
+	      for (z = 0; z < sm->n[i] && sm->k[i][z] < anch[d].k0; z++, dpc += p7S_NSCELLS)
+		{
+		  rowsum += dpc[p7S_ML] + dpc[p7S_MG];
+		  rowsum += dpc[p7S_IL] + dpc[p7S_IG];
+		}
+	    }
+
+	  if (esl_FCompare(rowsum, 1.0, tol) != eslOK) ESL_AOF();
+	}
+    }
+  return eslOK;
+}
+	  
+/* decoding_colsums()
+ * 
+ * Iff profile is in glocal-only mode, then we know that it visits M/D
+ * for every position k=1..M, for each of the D domains. Therefore in
+ * a full matrix the sum of posterior probability in each column k
+ * must be D.
+ * 
+ * However (alas) in sparse matrices, including sparse ASC, decoding
+ * only decodes the DG mass for G->DG1...DGk-1->Mk entry for cells
+ * that happen to be in the sparse mask. So in sparse DP, because of
+ * this lossage in DG states, colsum tests are less powerful than when
+ * we have a complete matrix (as in the reference
+ * implementation). Here we only test the bound, colsum <= D, rather
+ * than equality, colsum == D.
+ * 
+ * For any profile, regardless of mode, \sum_i = D for E, B, and L+G.
+ */
+static int
+decoding_colsums(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
+{
+  const P7_SPARSEMASK *sm       = asx->sm;
+  const float         *dpc      = asx->dp;
+  const float         *xc       = asx->xmx;
+  int                  M        = sm->M;
+  float               *colsum   = malloc(sizeof(float) * (M+1));
+  float                tol      = 0.01;
+  float                xsum[p7S_NXCELLS];
+  int   k,s,d,i,z,g;
+
+  for (k = 0; k <= M;          k++) colsum[k] = 0.0f;
+  for (s = 0; s < p7S_NXCELLS; s++) xsum[s]   = 0.0f;
+
+  d = 1;
+  for (g = 1; g <= sm->S; g++)
+    {
+      if (anch[d].i0 > sm->seg[g].ib) continue;
+
+      for (s = 0; s < p7S_NXCELLS; s++) xsum[s] += xc[s];
+      xc += p7S_NXCELLS;
+
+      for (i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)
+	{
+	  if (i == anch[d].i0) d++;
+
+	  for (s = 0; s < p7S_NXCELLS; s++) xsum[s] += xc[s];
+	  xc += p7S_NXCELLS;
+
+	  if (anch[d-1].i0 >= sm->seg[g].ia)
+	    {
+	      z = 0; while (z < sm->n[i] && sm->k[i][z] < anch[d-1].k0) z++;
+	      for (; z < sm->n[i]; z++, dpc += p7S_NSCELLS)
+		{
+		  colsum[sm->k[i][z]] += dpc[p7S_ML] + dpc[p7S_MG];
+		  colsum[sm->k[i][z]] += dpc[p7S_DL] + dpc[p7S_DG];
+		}
+	    }
+
+	  if (anch[d].i0 <= sm->seg[g].ib)
+	    {
+	      for (z = 0; z < sm->n[i] && sm->k[i][z] < anch[d].k0; z++, dpc += p7S_NSCELLS)
+		{
+		  colsum[sm->k[i][z]] += dpc[p7S_ML] + dpc[p7S_MG];
+		  colsum[sm->k[i][z]] += dpc[p7S_DL] + dpc[p7S_DG];
+		}
+	    }
+	}
+    }
+
+  if (colsum[0]   != 0.) ESL_AOG();
+  for (k = 1; k <= M; k++)
+    if (colsum[k] < 0.0 || colsum[k] > (float) D + tol) ESL_AOG();
+  if (esl_FCompareAbs(xsum[p7S_E],               (float) D, tol) != eslOK) ESL_AOG();
+  if (esl_FCompareAbs(xsum[p7S_B],               (float) D, tol) != eslOK) ESL_AOG();
+  if (esl_FCompareAbs(xsum[p7S_G] + xsum[p7S_L], (float) D, tol) != eslOK) ESL_AOG();
+
+  free(colsum);
+  return eslOK;
+
+ ERROR:
+  free(colsum);
+  return eslFAIL;
+}
+
+
 
 static int
 validate_decoding(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
@@ -631,6 +773,9 @@ validate_decoding(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
   int k;
   int z;
   int i;
+
+  if (decoding_rowsums(asx, anch, D) != eslOK) return eslFAIL;
+  if (decoding_colsums(asx, anch, D) != eslOK) return eslFAIL;
 
   d = 1;
   for (g = 1; g <= sm->S; g++)
@@ -700,7 +845,7 @@ validate_decoding(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
 	  if (in_down)
 	    {
 	      k0 = anch[d-1].k0;
-	      z  = 0; while (sm->k[i][z] < k0) z++;
+	      z  = 0; while (z < sm->n[i] && sm->k[i][z] < k0) z++;        
 	      for (; z < sm->n[i]; z++, dpc += p7S_NSCELLS) 
 		{
 		  k  = sm->k[i][z];
@@ -999,7 +1144,24 @@ validate_backward(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
   return eslOK;
 }
 
-
+/* Function:  p7_spascmx_Validate()
+ * Synopsis:  Validate a sparse ASC DP matrix.
+ *
+ * Purpose:   
+ * 
+ *            Caller may optionally provide <gm>, a pointer to the
+ *            profile that was used in calculating the <asx> matrix.
+ *            If <gm> is provided (non-<NULL>), validation tests that
+ *            require the profile to be in a particular mode can be
+ *            performed. Currently there's only one such validation
+ *            test: the "colsum" test for a decoding matrix.
+ *
+ * Args:      gm  - profile that <asx> was computed with. Optional; can pass <NULL>.
+ *
+ * Returns:   
+ *
+ * Throws:    (no abnormal error conditions)
+ */
 int
 p7_spascmx_Validate(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D, char *errbuf)
 {
