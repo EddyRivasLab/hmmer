@@ -24,6 +24,10 @@ extern int p7_sparse_asc_Backward(const ESL_DSQ *dsq, int L, const P7_PROFILE *g
 				  const P7_ANCHOR *anch, int D, const P7_SPARSEMASK *sm,
 				  P7_SPARSEMX *asb, float *opt_sc);
 
+extern int p7_sparse_asc_Decoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, 
+				  const P7_ANCHOR *anch, int D,
+				  float totsc, const P7_SPARSEMX *asf, P7_SPARSEMX *asb, P7_SPARSEMX *asd);
+
 #endif /*P7_SPARSE_ASC_FWDBACK_INCLUDED*/
 
 /*****************************************************************

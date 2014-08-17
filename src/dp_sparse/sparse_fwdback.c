@@ -679,7 +679,7 @@ utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L,
 
 
 
-/* utest_compare_reference: 
+/* "compare_reference" unit test.
  * 
  *  Tests that the sparse implementations of Viterbi, Forward,
  *  Backward, and Decoding give the same results as

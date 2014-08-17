@@ -54,7 +54,8 @@
  * Contents:
  *    1. Using P7_SPARSEMX for ASC calculations.
  *    2. Debugging and development tools.
- * 
+ *    3. Debugging and dev: Validation routine.
+ *    4. Copyright and license information.
  */
 
 #include "p7_config.h"
@@ -549,6 +550,479 @@ p7_spascmx_CompareReference(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D
   return eslOK;
 }
 
+
+/*****************************************************************
+ * 3. Debugging and dev: Validation routine
+ *****************************************************************/ 
+
+/* Validation of a SPARSEMX structure used for ASC calculations:
+ *   we check for the correct pattern of unreached cells (see notes in p7_sparsemx.h);
+ *   for no NaN's;
+ *   and in posterior decoding, that values are probabilities 0 <= p <= 1.+tol
+ *   
+ * Validation routines, by Easel spec, must return normal errors (eslFAIL), 
+ *   with an error message.
+ */
+
+static int
+supercell_sc(const float *dpc, int M_used, int I_used, int D_used)
+{
+  int s;
+  for (s = 0; s < p7S_NSCELLS; s++)
+    if (isnan(dpc[s])) ESL_AOF();
+
+  if (! M_used && (dpc[p7S_ML] != -eslINFINITY || dpc[p7S_MG] != -eslINFINITY)) ESL_AOF();
+  if (! I_used && (dpc[p7S_IL] != -eslINFINITY || dpc[p7S_IG] != -eslINFINITY)) ESL_AOF();
+  if (! D_used && (dpc[p7S_DL] != -eslINFINITY || dpc[p7S_DG] != -eslINFINITY)) ESL_AOF();
+  
+  return eslOK;
+}
+
+
+static int
+supercell_pp(const float *dpc, int M_used, int I_used, int D_used, float tol)
+{
+  int s;
+  for (s = 0; s < p7S_NSCELLS; s++) 
+    {
+      if (! isfinite(dpc[s]))             ESL_AOF();
+      if (dpc[s] < 0. || dpc[s] > 1.+tol) ESL_AOF();
+    }
+
+  if (! M_used && (dpc[p7S_ML] != 0. || dpc[p7S_MG] != 0.)) ESL_AOF();
+  if (! I_used && (dpc[p7S_IL] != 0. || dpc[p7S_IG] != 0.)) ESL_AOF();
+  if (! D_used && (dpc[p7S_DL] != 0. || dpc[p7S_DG] != 0.)) ESL_AOF();
+
+  return eslOK;
+}
+
+static int
+xcell_sc(float xv, int X_used)
+{
+  if (isnan(xv))                      ESL_AOF();
+  if (! X_used && xv != -eslINFINITY) ESL_AOF();
+  return eslOK;
+}
+
+static int
+xcell_pp(float xv, int X_used, float tol)
+{
+  if (! isfinite(xv))          ESL_AOF();
+  if ( xv < 0. || xv > 1.+tol) ESL_AOF();
+  if (! X_used && xv != 0.)    ESL_AOF();
+  return eslOK;
+}
+
+
+static int
+validate_decoding(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
+{
+  const P7_SPARSEMASK *sm  = asx->sm;
+  const float         *dpc = asx->dp;
+  const float         *xc  = asx->xmx;
+  int                  M   = sm->M;
+  float                tol = 0.01;
+  int in_up, in_down;
+  int u1, u2;
+  int i0, d2;
+  int k0;
+  int d;
+  int g;
+  int k;
+  int z;
+  int i;
+
+  d = 1;
+  for (g = 1; g <= sm->S; g++)
+    {
+      if (anch[d].i0 > sm->seg[g].ib) continue;
+
+      in_up   = TRUE;
+      in_down = FALSE;
+      u1      = sm->seg[g].ia;
+      u2      = anch[d].i0-1;
+      i0      = -1;
+      d2      = -1;
+
+      /* SPECIALS on row ia-1:
+       *   E only reachable when i is in DOWN sector
+       *   N only reachable above first anchor
+       *   J only reachable between 1st, last anchor
+       *   C not reachable above an anchor
+       *   B, L, G always reachable in UP sector and its initialization
+       *   JJ, CC zero; no emission on this initialization row
+       */
+      if (xcell_pp(xc[p7S_E],  0,               tol) != eslOK) return eslFAIL;
+      if (xcell_pp(xc[p7S_N],  (d==1),          tol) != eslOK) return eslFAIL;
+      if (xcell_pp(xc[p7S_J],  (d>1 && d <= D), tol) != eslOK) return eslFAIL;
+      if (xcell_pp(xc[p7S_C],  0,               tol) != eslOK) return eslFAIL;
+      if (xcell_pp(xc[p7S_B],  1,               tol) != eslOK) return eslFAIL;
+      if (xcell_pp(xc[p7S_L],  1,               tol) != eslOK) return eslFAIL;
+      if (xcell_pp(xc[p7S_G],  1,               tol) != eslOK) return eslFAIL;
+      if (xcell_pp(xc[p7S_JJ], 0,               tol) != eslOK) return eslFAIL;
+      if (xcell_pp(xc[p7S_CC], 0,               tol) != eslOK) return eslFAIL;
+      xc += p7S_NXCELLS;
+
+      for (i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)
+	{
+	  if (i == anch[d].i0) 
+	    {
+	      in_down = TRUE;
+	      i0      = anch[d].i0;
+	      d2      = ESL_MIN(sm->seg[g].ib, anch[d+1].i0 - 1);
+
+	      if (anch[d+1].i0 > sm->seg[g].ib)
+		{
+		  in_up = FALSE;
+		  u1 = u2 = -1;
+		}
+	      else 
+		{
+		  u1 = anch[d].i0+1;
+		  u2 = anch[d+1].i0-1;
+		}
+	      d++;
+	    }
+
+	  /* SPECIALS */
+	  if (xcell_pp(xc[p7S_E],  in_down,                      tol) != eslOK) return eslFAIL;
+	  if (xcell_pp(xc[p7S_N],  (d==1),                       tol) != eslOK) return eslFAIL;  
+	  if (xcell_pp(xc[p7S_J],  (d>1 && d <= D),              tol) != eslOK) return eslFAIL;  
+	  if (xcell_pp(xc[p7S_C],  (d == D+1),                   tol) != eslOK) return eslFAIL;  
+	  if (xcell_pp(xc[p7S_B],  (i >= u1-1 && i <= u2),       tol) != eslOK) return eslFAIL;
+	  if (xcell_pp(xc[p7S_L],  (i >= u1-1 && i <= u2),       tol) != eslOK) return eslFAIL;
+	  if (xcell_pp(xc[p7S_G],  (i >= u1-1 && i <= u2),       tol) != eslOK) return eslFAIL;
+	  if (xcell_pp(xc[p7S_JJ], (i != i0 && (d>1 && d <= D)), tol) != eslOK) return eslFAIL;
+	  if (xcell_pp(xc[p7S_CC], (d == D+1),                   tol) != eslOK) return eslFAIL;
+	  xc += p7S_NXCELLS;
+
+	  /* DOWN sector */
+	  if (in_down)
+	    {
+	      k0 = anch[d-1].k0;
+	      z  = 0; while (sm->k[i][z] < k0) z++;
+	      for (; z < sm->n[i]; z++, dpc += p7S_NSCELLS) 
+		{
+		  k  = sm->k[i][z];
+		  if        (i == i0)
+		    {                           
+		      if        (k == k0)   { if (supercell_pp(dpc, 1, 0, 0, tol) != eslOK) return eslFAIL; }
+		      else                  { if (supercell_pp(dpc, 0, 0, 1, tol) != eslOK) return eslFAIL; }
+		    } 
+		  else if (i == d2)    
+		    {
+		      if      (k == k0)     { if (supercell_pp(dpc, 0, 0, 0, tol) != eslOK) return eslFAIL; }
+		      else if (k == k0+1)   { if (supercell_pp(dpc, 1, 0, 0, tol) != eslOK) return eslFAIL; }
+		      else                  { if (supercell_pp(dpc, 1, 0, 1, tol) != eslOK) return eslFAIL; }
+		    } 
+		  else if (i == i0+1) 
+		    { 
+		      if      (k == k0)     { if (supercell_pp(dpc, 0, 1, 0, tol) != eslOK) return eslFAIL; }
+		      else if (k == k0+1)   { if (supercell_pp(dpc, 1, 0, 0, tol) != eslOK) return eslFAIL; }
+		      else                  { if (supercell_pp(dpc, 1, 0, 1, tol) != eslOK) return eslFAIL; }
+		    }
+		  else
+		    {
+		      if      (k == k0)     { if (supercell_pp(dpc, 0, 1, 0, tol) != eslOK) return eslFAIL; }
+		      else if (k == k0+1)   { if (supercell_pp(dpc, 1, 1, 0, tol) != eslOK) return eslFAIL; }
+		      else if (k == M)      { if (supercell_pp(dpc, 1, 0, 1, tol) != eslOK) return eslFAIL; }
+		      else                  { if (supercell_pp(dpc, 1, 1, 1, tol) != eslOK) return eslFAIL; }
+		    }
+		}
+	    }
+		    
+	  /* UP sector */
+	  if (in_up)
+	    {
+	      k0 = anch[d].k0;
+	      for (z = 0; z < sm->n[i] && sm->k[i][z] < k0; z++, dpc+=p7S_NSCELLS)
+		{
+		  k = sm->k[i][z];
+		  if      (i == u1-1)    
+		    {
+		      if      (k == k0-1) { if (supercell_pp(dpc, 0, 0, (i == u2), tol) != eslOK) return eslFAIL; }  // i==u2 is tricksy. Possible for UP to have just the u1-1 row, 
+		      else                { if (supercell_pp(dpc, 0, 0, 1,         tol) != eslOK) return eslFAIL; }  //   when anchors occur on adjacent rows. In that case, G->DDD->Mk can 
+		    }                                                                                                //   pass thru k0-1 cell of u1-1 row to the anchor cell.
+		  else if (i == u2)
+		    { 
+		      if      (k == k0-1) { if (supercell_pp(dpc, 1, 1, 1, tol) != eslOK) return eslFAIL; }
+		      else                { if (supercell_pp(dpc, 1, 0, 1, tol) != eslOK) return eslFAIL; }
+		    }
+		  else if (i == u1)
+		    {
+		      if      (k == k0-1) { if (supercell_pp(dpc, 1, 0, 0, tol) != eslOK) return eslFAIL; }
+		      else                { if (supercell_pp(dpc, 1, 0, 1, tol) != eslOK) return eslFAIL; }
+		    }
+		  else 
+		    {
+		      if      (k == k0-1) { if (supercell_pp(dpc, 1, 1, 0, tol) != eslOK) return eslFAIL; }
+		      else                { if (supercell_pp(dpc, 1, 1, 1, tol) != eslOK) return eslFAIL; }
+		    }
+		}
+	    }
+	} // end loop over i=ia..ib in one segment g
+    } // end loop over segments g
+  return eslOK;
+}
+
+static int
+validate_forward(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
+{
+  const P7_SPARSEMASK *sm  = asx->sm;
+  const float         *dpc = asx->dp;
+  const float         *xc  = asx->xmx;
+  int                  M   = sm->M;
+  int in_up, in_down;
+  int u1, u2;
+  int i0, d2;
+  int d,g,k,z,i,k0;
+
+  d = 1;
+  for (g = 1; g <= sm->S; g++)
+    {
+      if (anch[d].i0 > sm->seg[g].ib) continue;
+
+      in_up   = TRUE;
+      in_down = FALSE;
+      u1      = sm->seg[g].ia;
+      u2      = anch[d].i0-1;
+      i0      = -1;
+      d2      = -1;
+
+      if (xcell_sc(xc[p7S_E],  0)      != eslOK) return eslFAIL;
+      if (xcell_sc(xc[p7S_N],  (d==1)) != eslOK) return eslFAIL;
+      if (xcell_sc(xc[p7S_J],  (d>1))  != eslOK) return eslFAIL; // In Fwd direction, J may be finite even after last anchor
+      if (xcell_sc(xc[p7S_C],  (d>1))  != eslOK) return eslFAIL; // and similarly, C may be finite even with anchors to come
+      if (xcell_sc(xc[p7S_B],  1)      != eslOK) return eslFAIL;
+      if (xcell_sc(xc[p7S_L],  1)      != eslOK) return eslFAIL;
+      if (xcell_sc(xc[p7S_G],  1)      != eslOK) return eslFAIL;
+      if (xcell_sc(xc[p7S_JJ], 0)      != eslOK) return eslFAIL; // JJ, CC only used in Decoding; -inf in F/B
+      if (xcell_sc(xc[p7S_CC], 0)      != eslOK) return eslFAIL;
+      xc += p7S_NXCELLS;
+
+      for (i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)
+	{
+	  if (i == anch[d].i0) 
+	    {
+	      in_down = TRUE;
+	      i0      = anch[d].i0;
+	      d2      = ESL_MIN(sm->seg[g].ib, anch[d+1].i0 - 1);
+
+	      if (anch[d+1].i0 > sm->seg[g].ib)
+		{
+		  in_up = FALSE;
+		  u1 = u2 = -1;
+		}
+	      else 
+		{
+		  u1 = anch[d].i0+1;
+		  u2 = anch[d+1].i0-1;
+		}
+	      d++;
+	    }
+
+	  if (xcell_sc(xc[p7S_E],  in_down)                != eslOK) return eslFAIL;
+	  if (xcell_sc(xc[p7S_N],  (d==1))                 != eslOK) return eslFAIL;  
+	  if (xcell_sc(xc[p7S_J],  (d>1))                  != eslOK) return eslFAIL;  
+	  if (xcell_sc(xc[p7S_C],  (d>1))                  != eslOK) return eslFAIL;  
+	  if (xcell_sc(xc[p7S_B],  1)                      != eslOK) return eslFAIL; // in Fwd direction, can always enter {NJ}->B...
+	  if (xcell_sc(xc[p7S_L],  1)                      != eslOK) return eslFAIL; //   ... and thence B->{LG}, even though Bck will be -inf on DOWN-only rows
+	  if (xcell_sc(xc[p7S_G],  1)                      != eslOK) return eslFAIL;
+	  if (xcell_sc(xc[p7S_JJ], 0)                      != eslOK) return eslFAIL;
+	  if (xcell_sc(xc[p7S_CC], 0)                      != eslOK) return eslFAIL;
+	  xc += p7S_NXCELLS;
+
+	  if (in_down)
+	    {
+	      k0 = anch[d-1].k0;
+	      z  = 0; while (sm->k[i][z] < k0) z++;
+	      for (; z < sm->n[i]; z++, dpc += p7S_NSCELLS) 
+		{
+		  k  = sm->k[i][z];
+		  if        (i == i0)
+		    {                           
+		      if        (k == k0)   { if (supercell_sc(dpc, 1, 0, 0) != eslOK) return eslFAIL; }
+		      else                  { if (supercell_sc(dpc, 0, 0, 1) != eslOK) return eslFAIL; }
+		    } 
+		  else if (i == i0+1) 
+		    { 
+		      if      (k == k0)     { if (supercell_sc(dpc, 0, 1, 0) != eslOK) return eslFAIL; }   // if k == M too, it'd be 0 0 0
+		      else if (k == k0+1)   { if (supercell_sc(dpc, 1, 0, 0) != eslOK) return eslFAIL; }
+		      else                  { if (supercell_sc(dpc, 1, 0, 1) != eslOK) return eslFAIL; }
+		    }
+		  else 
+		    {
+		      if      (k == k0)     { if (supercell_sc(dpc, 0, 1, 0) != eslOK) return eslFAIL; }   // if k == k0   && k == M, it'd be 0 0 0; so we're underchecking that case
+		      else if (k == k0+1)   { if (supercell_sc(dpc, 1, 1, 0) != eslOK) return eslFAIL; }   // if k == k0+1 && k == M, it'd be 1 0 0 
+		      else if (k == M)      { if (supercell_sc(dpc, 1, 0, 1) != eslOK) return eslFAIL; }
+		      else                  { if (supercell_sc(dpc, 1, 1, 1) != eslOK) return eslFAIL; }
+		    } 
+		}
+	    }
+		    
+	  /* UP sector */
+	  if (in_up)
+	    {
+	      k0 = anch[d].k0;
+	      for (z = 0; z < sm->n[i] && sm->k[i][z] < k0; z++, dpc+=p7S_NSCELLS)
+		{
+		  k = sm->k[i][z];
+		  if      (i == u1-1)     { if (supercell_sc(dpc, 0, 0, 0) != eslOK) return eslFAIL; }
+		  else if (i == u2)
+		    { 
+		      if      (k == 1)    { if (supercell_sc(dpc, 1, 1, 0) != eslOK) return eslFAIL; }
+		      else                { if (supercell_sc(dpc, 1, 1, 1) != eslOK) return eslFAIL; }
+		    }
+		  else if (i == u1)
+		    {
+		      if      (k == 1)    { if (supercell_sc(dpc, 1, 0, 0) != eslOK) return eslFAIL; }
+		      else                { if (supercell_sc(dpc, 1, 0, 1) != eslOK) return eslFAIL; }
+		    }
+		  else 
+		    {
+		      if      (k == 1)    { if (supercell_sc(dpc, 1, 1, 0) != eslOK) return eslFAIL; }
+		      else                { if (supercell_sc(dpc, 1, 1, 1) != eslOK) return eslFAIL; }
+		    }
+		}
+	    }
+	} // end loop over i=ia..ib in one segment g
+    } // end loop over segments g
+  return eslOK;
+}
+
+
+static int
+validate_backward(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
+{
+  const P7_SPARSEMASK *sm  = asx->sm;
+  const float         *dpc = asx->dp;
+  const float         *xc  = asx->xmx;
+  int                  M   = sm->M;
+  int in_up, in_down;
+  int u1, u2;
+  int i0, d2;
+  int d,g,k,z,i,k0;
+
+  d = 1;
+  for (g = 1; g <= sm->S; g++)
+    {
+      if (anch[d].i0 > sm->seg[g].ib) continue;
+
+      in_up   = TRUE;
+      in_down = FALSE;
+      u1      = sm->seg[g].ia;
+      u2      = anch[d].i0-1;
+      i0      = -1;
+      d2      = -1;
+
+      if (xcell_sc(xc[p7S_E],  1)        != eslOK) return eslFAIL; // E->{JC} means E always reachable in Backwards direction, like B in the Fwd direction
+      if (xcell_sc(xc[p7S_N],  (d<=D))   != eslOK) return eslFAIL; // N is reachable after we pass 1st anchor on the way back...
+      if (xcell_sc(xc[p7S_J],  (d<=D))   != eslOK) return eslFAIL; //   ... as is J.
+      if (xcell_sc(xc[p7S_C],  (d==D+1)) != eslOK) return eslFAIL; // C only reachable below last anchor
+      if (xcell_sc(xc[p7S_B],  1)        != eslOK) return eslFAIL;
+      if (xcell_sc(xc[p7S_L],  1)        != eslOK) return eslFAIL;
+      if (xcell_sc(xc[p7S_G],  1)        != eslOK) return eslFAIL;
+      if (xcell_sc(xc[p7S_JJ], 0)        != eslOK) return eslFAIL; // JJ, CC only used in Decoding; -inf in F/B
+      if (xcell_sc(xc[p7S_CC], 0)        != eslOK) return eslFAIL;
+      xc += p7S_NXCELLS;
+
+      for (i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)
+	{
+	  if (i == anch[d].i0) 
+	    {
+	      in_down = TRUE;
+	      i0      = anch[d].i0;
+	      d2      = ESL_MIN(sm->seg[g].ib, anch[d+1].i0 - 1);
+
+	      if (anch[d+1].i0 > sm->seg[g].ib)
+		{
+		  in_up = FALSE;
+		  u1 = u2 = -1;
+		}
+	      else 
+		{
+		  u1 = anch[d].i0+1;
+		  u2 = anch[d+1].i0-1;
+		}
+	      d++;
+	    }
+
+	  if (xcell_sc(xc[p7S_E],  1)                      != eslOK) return eslFAIL;
+	  if (xcell_sc(xc[p7S_N],  (d<=D))                 != eslOK) return eslFAIL;  
+	  if (xcell_sc(xc[p7S_J],  (d<=D))                 != eslOK) return eslFAIL;  
+	  if (xcell_sc(xc[p7S_C],  (d==D+1))               != eslOK) return eslFAIL;  
+	  if (xcell_sc(xc[p7S_B],  (i >= u1-1 && i <= u2)) != eslOK) return eslFAIL;
+	  if (xcell_sc(xc[p7S_L],  (i >= u1-1 && i <= u2)) != eslOK) return eslFAIL;
+	  if (xcell_sc(xc[p7S_G],  (i >= u1-1 && i <= u2)) != eslOK) return eslFAIL;
+	  if (xcell_sc(xc[p7S_JJ], 0)                      != eslOK) return eslFAIL;
+	  if (xcell_sc(xc[p7S_CC], 0)                      != eslOK) return eslFAIL;
+	  xc += p7S_NXCELLS;
+
+	  if (in_down)
+	    {
+	      k0 = anch[d-1].k0;
+	      z  = 0; while (sm->k[i][z] < k0) z++;
+	      for (; z < sm->n[i]; z++, dpc += p7S_NSCELLS) 
+		{
+		  k  = sm->k[i][z];
+		  if (i == d2)              { if (supercell_sc(dpc, 1, 0, 1) != eslOK) return eslFAIL; }
+		  else                      
+		    {
+		      if      (k == M)      { if (supercell_sc(dpc, 1, 0, 1) != eslOK) return eslFAIL; } 
+		      else                  { if (supercell_sc(dpc, 1, 1, 1) != eslOK) return eslFAIL; }
+		    } 
+		}
+	    }
+		    
+	  /* UP sector */
+	  if (in_up)
+	    {
+	      k0 = anch[d].k0;
+	      for (z = 0; z < sm->n[i] && sm->k[i][z] < k0; z++, dpc+=p7S_NSCELLS)
+		{
+		  k = sm->k[i][z];
+		  if      (i == u1-1)     { if (supercell_sc(dpc, 0, 0, 0) != eslOK) return eslFAIL; }
+		  else if (i == u2)
+		    { 
+		      if      (k == k0-1) { if (supercell_sc(dpc, 1, 1, 1) != eslOK) return eslFAIL; }
+		      else                { if (supercell_sc(dpc, 1, 0, 1) != eslOK) return eslFAIL; }
+		    }
+		  else
+		    {
+		      if      (k == k0-1) { if (supercell_sc(dpc, 1, 1, 0) != eslOK) return eslFAIL; }
+		      else                { if (supercell_sc(dpc, 1, 1, 1) != eslOK) return eslFAIL; }
+		    }
+		}
+	    }
+	} // end loop over i=ia..ib in one segment g
+    } // end loop over segments g
+  return eslOK;
+}
+
+
+int
+p7_spascmx_Validate(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D, char *errbuf)
+{
+  if (asx->type == p7S_ASC_DECODE) 
+    {
+      if (validate_decoding(asx, anch, D) != eslOK) 
+	ESL_FAIL(eslFAIL, errbuf, "Sparse ASC posterior decoding matrix failed validation");
+    } 
+  else if (asx->type == p7S_ASC_FWD)
+    {
+      if (validate_forward(asx, anch, D) != eslOK) 
+	ESL_FAIL(eslFAIL, errbuf, "Sparse ASC forward matrix failed validation");
+    }
+  else if (asx->type == p7S_ASC_BCK)
+    {
+      if (validate_backward(asx, anch, D) != eslOK) 
+	ESL_FAIL(eslFAIL, errbuf, "Sparse ASC forward matrix failed validation");
+    }
+  else 
+    ESL_FAIL(eslFAIL, errbuf, "validation of other sparse ASC matrix types unimplemented");
+  
+  return eslOK;
+}
 
 
 /*****************************************************************

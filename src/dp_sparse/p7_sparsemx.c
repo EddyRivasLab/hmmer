@@ -1830,7 +1830,7 @@ validate_backward(const P7_SPARSEMX *sx, char *errbuf)
 static int
 is_prob(float val, float tol)
 {
-  if (val < 0.0-tol || val > 1.0+tol) return FALSE; 
+  if (val < 0. || val > 1.+tol) return FALSE; 
   return TRUE;
 }
 

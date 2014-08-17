@@ -145,9 +145,9 @@ extern int   p7_refmx_Validate(P7_REFMX *rmx, char *errbuf);
  *      L:   *  *  *  *  *  *    .  .  *  *  .  .    .  .  *  *  .  .          .  .  *  *  .  .     .  *  *  *  *  *  .  *  *
  * Decoding:
  *      0:   0  0  0  0  0  0    0  0  0  0  0  0    0  0  0  0  0  0          0  0  0  0  0  0     0  .  0  .  .  .  0  0  0 
- *      1:   0  0  0  0  0  0    .  .  0  0  0  0    .  .  0  0  .  .          .  .  0  0  .  .     .  .  .  .  .  .  .  0  0  
- * 2..L-1:   0  0  0  0  0  0    .  .  .  .  0  0    .  .  .  .  .  .          .  .  0  0  .  .     .  .  .  .  .  .  .  .  .
- *      L:   0  0  0  0  0  0    .  .  0  0  0  0    .  .  0  0  .  .          .  .  0  0  .  .     .  0  0  0  0  0  .  0  .
+ *      1:   0  0  0  0  0  0    .  .  0  0  0  .    .  .  0  0  .  .          .  .  0  0  .  .     .  .  .  .  .  .  .  0  0  
+ * 2..L-1:   0  0  0  0  0  0    .  .  .  .  0  .    .  .  .  .  .  .          .  .  0  0  .  .     .  .  .  .  .  .  .  .  .
+ *      L:   0  0  0  0  0  0    .  .  0  0  0  .    .  .  0  0  .  .          .  .  0  0  .  .     .  0  0  0  0  0  .  0  .
  * Alignment:
  *      0:   *  *  *  *  *  *    *  *  *  *  *  *    *  *  *  *  *  *          *  *  *  *  *  *     *  .  *  .  .  .  *  *  *
  *      1:   *  *  *  *  *  *    .  .  *  *  *  *    .  .  *  *  .  .          .  .  *  *  .  .     .  .  .  .  .  .  .  *  *
@@ -158,7 +158,8 @@ extern int   p7_refmx_Validate(P7_REFMX *rmx, char *errbuf);
  *   k=0 columns are only present for indexing k=1..M conveniently
  *   i=0 row is Forward's initialization condition: only S->N->B->{LG} path prefix is possible, and S->N is 1.0
  *   i=0 row is Backward's termination condition: unneeded for posterior decoding; if we need Backwards score, we need N->B->{LG}-> path
- *   DL1,DG1 states removed by entry transition distributions (uniform entry, wing retraction)
+ *   DL1 state removed by entry transition distributions (uniform entry)
+ *   DG1 state is also removed by G->Mk wing retracted entry in Fwd/Bck, but is valid in decoding because of G->DG1..DGk-1->MGk wing unfolding
  *   DL1 value is valid in Backward because it can be reached (via D->E local exit) but isn't ever used; saves having to special case its nonexistence.
  *   DG1 value is valid in Backward because we intentionally leave D1->{DM} distribution in the P7_PROFILE, for use outside DP algorithms;
  *     in p7_trace_Score() for example. Forward's initialization of DG1 to -inf is sufficient to make DG1 unused in Decoding.
