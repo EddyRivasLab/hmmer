@@ -260,6 +260,64 @@ p7_spascmx_MinSizeofSeg(const P7_SPARSEMASK *sm, const P7_ANCHOR *anch, int D, i
   return eslOK;
 }
 
+
+int
+p7_spascmx_Renormalize(P7_SPARSEMX *asd, P7_ANCHOR *anch, int D)
+{
+  const P7_SPARSEMASK *sm  = asd->sm;
+  float *dpc = asd->dp;
+  float *xc  = asd->xmx;
+  float *dpc0;
+  int d = 1;
+  float  norm;
+  int i,g,x,z;
+
+  for (g = 1; g <= sm->S; g++)
+    {
+      if (anch[d].i0 > sm->seg[g].ib) continue;
+
+      norm = xc[p7S_N] + xc[p7S_JJ] + xc[p7S_CC];
+      for (x = 0; x < p7S_NXCELLS; x++)
+	xc[x] /= norm;
+      xc += p7S_NXCELLS;
+
+      for (i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)
+	{
+	  if (i == anch[d].i0) d++;
+
+	  dpc0 = dpc;
+	  norm = xc[p7S_N] + xc[p7S_JJ] + xc[p7S_CC];
+
+	  if (anch[d-1].i0 >= sm->seg[g].ia) // in DOWN
+	    {
+	      z = 0; while (z < sm->n[i] && sm->k[i][z] < anch[d-1].k0) z++;
+	      for (; z < sm->n[i]; z++, dpc += p7S_NSCELLS) 
+		{
+		  norm += dpc[p7S_ML] + dpc[p7S_MG];
+		  norm += dpc[p7S_IL] + dpc[p7S_IG];
+		}
+	    }
+
+	  if (anch[d].i0 <= sm->seg[g].ib) // in UP
+	    {
+	      for (z = 0; z < sm->n[i] && sm->k[i][z] < anch[d].k0; z++, dpc+=p7S_NSCELLS)
+		{
+		  norm += dpc[p7S_ML] + dpc[p7S_MG];
+		  norm += dpc[p7S_IL] + dpc[p7S_IG];
+		}
+	    }
+
+	  /* Renormalize all of row i */
+	  for (; dpc0 < dpc; dpc0++)        *dpc0 /= norm;
+	  for (x = 0; x < p7S_NXCELLS; x++) xc[x] /= norm;
+
+	  xc += p7S_NXCELLS;
+	}
+    }
+  return eslOK;
+}
+
+
 /*****************************************************************
  * 2. Debugging and development tools
  *****************************************************************/
@@ -464,6 +522,51 @@ p7_spascmx_Dump(FILE *fp, const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
 
   return eslOK;
 }
+
+
+int
+p7_spascmx_DumpSpecials(FILE *fp, const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
+{
+  const P7_SPARSEMASK *sm        = asx->sm;
+  const float         *xc        = asx->xmx;
+  int                  width     = 9;
+  int                  precision = 4;
+  int d,g,x,i;
+
+  fprintf(fp, "     ");
+  for (x = 0; x < p7S_NXCELLS; x++)
+    fprintf(fp, "%*s ", width, p7_sparsemx_DecodeSpecial(x));
+  fprintf(fp, "\n");
+
+  fprintf(fp, "     ");
+  for (x = 0; x < p7S_NXCELLS; x++) 
+    fprintf(fp, "%*.*s ", width, width, "----------");
+  fprintf(fp, "\n");
+
+  d = 1;
+  for (g = 1; g <= sm->S; g++)
+    {
+      if (anch[d].i0 > sm->seg[g].ib) continue;
+
+      fprintf(fp, "\n");
+      fprintf(fp, "%4d ", sm->seg[g].ia-1);
+      for (x = 0; x < p7S_NXCELLS; x++)
+	fprintf(fp, "%*.*f ", width, precision, xc[x]);
+      fprintf(fp, "\n");
+      xc += p7S_NXCELLS;
+      
+      for (i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)
+	{
+	  fprintf(fp, "%4d ", i);
+	  for (x = 0; x < p7S_NXCELLS; x++)
+	    fprintf(fp, "%*.*f ", width, precision, xc[x]);
+	  fprintf(fp, "\n");
+	  xc += p7S_NXCELLS;
+	}
+    }
+  return eslOK;
+}
+
 
 /* Function:  p7_spascmx_CompareReference()
  * Synopsis:  Compare sparse and reference ASC DP calculations, cell by cell.
@@ -980,7 +1083,7 @@ validate_forward(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
 	  if (in_down)
 	    {
 	      k0 = anch[d-1].k0;
-	      z  = 0; while (sm->k[i][z] < k0) z++;
+	      z  = 0; while (z < sm->n[i] && sm->k[i][z] < k0) z++;
 	      for (; z < sm->n[i]; z++, dpc += p7S_NSCELLS) 
 		{
 		  k  = sm->k[i][z];
@@ -1106,7 +1209,7 @@ validate_backward(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
 	  if (in_down)
 	    {
 	      k0 = anch[d-1].k0;
-	      z  = 0; while (sm->k[i][z] < k0) z++;
+	      z  = 0; while (z < sm->n[i] && sm->k[i][z] < k0) z++;
 	      for (; z < sm->n[i]; z++, dpc += p7S_NSCELLS) 
 		{
 		  k  = sm->k[i][z];

@@ -372,10 +372,11 @@ outcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float epsilon)
   for (d = 1; d <= D; d++)
     {
       phomology = 1.0;
-      s  = (d == 0 ? p7R_N : p7R_J);
+      s  = (d == 1 ? p7R_N : p7R_J);
       for (i = env->arr[d].i0 - 1; i >= env->arr[d-1].i0; i--)   // at d=1, i0(0)=0 sentinel makes this i0(1)-1 down to 0
 	{
 	  phomology -= P7R_XMX(apd, i, p7R_B);  // now phomology = P(x_i in domain d)
+	  printf("%4d %.4f\n", i, phomology);
 	  if (phomology < epsilon) break;       // if i is not in the domain...
 	}
       env->arr[d].oea = i+1;                    // but i+1 was, so oea = i+1.
@@ -386,6 +387,7 @@ outcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float epsilon)
       for (i = env->arr[d].i0; i < env->arr[d+1].i0; i++)   // at D=D, i0(D+1)=L+1 sentinel makes this i0(D)..L
 	{
 	  phomology -= P7R_XMX(apd, i, p7R_E);   // now phomology = P(x_i+1 in dom_d)
+	  //	  printf("%4d %.4f\n", i, phomology);
 	  if (phomology < epsilon) break;        // if i+1 is not in domain...
 	}
       env->arr[d].oeb  = i;	                 // but i=1 was, so oeb = i.

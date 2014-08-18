@@ -5,6 +5,7 @@ LIBOBJS =  p7_sparsemx.o        \
 	   sparse_anchors.o     \
 	   sparse_asc_fwdback.o \
 	   sparse_decoding.o    \
+	   sparse_envelopes.o   \
 	   sparse_envscore.o    \
 	   sparse_fwdback.o     \
 	   sparse_masstrace.o   \
@@ -32,6 +33,7 @@ STATS  =  p7_spascmx_stats     \
 BENCHMARKS = sparse_fwdback_benchmark
 
 EXAMPLES = sparse_anchors_example     \
+	   sparse_envelopes_example   \
 	   sparse_envscore_example    \
            sparse_fwdback_example     \
            sparse_masstrace_example   \

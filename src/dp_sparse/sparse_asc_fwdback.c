@@ -1485,13 +1485,13 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
 
       //p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
       //p7_spascmx_Dump(stdout, asf, anch, D);
-      //p7_spascmx_Dump(stdout, asb, anch, D);
-      p7_spascmx_Dump(stdout, asd, anch, D);
 
       if (!diagfp)
 	{
 	  if ( p7_spascmx_CompareReference(asd, anch, D, rxd, rxd, tol) != eslOK) esl_fatal(failmsg);
 
+	  if ( p7_spascmx_Validate(asf, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", failmsg, errbuf);
+	  if ( p7_spascmx_Validate(asb, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", failmsg, errbuf); 
 	  if ( p7_spascmx_Validate(asd, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", failmsg, errbuf); 
 
 	  if (esl_FCompareAbs(tsc, fsc, tol) != eslOK) esl_fatal(failmsg);
