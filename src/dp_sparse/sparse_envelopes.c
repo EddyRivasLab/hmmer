@@ -75,7 +75,7 @@ p7_sparse_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 		  if (xD[s] < 1.0 - (2.*epsilon)) env->arr[d-1].flags &= (~p7E_ENVSC_APPROX);
 		  
 		  env->arr[d-1].env_sc += xF[s];
-		  env->arr[d-1].env_sc += gm->xsc[p7P_C][p7P_LOOP] * (L-env->arr[d].oeb) + gm->xsc[p7P_C][p7P_MOVE];
+		  env->arr[d-1].env_sc += gm->xsc[p7P_C][p7P_LOOP] * (L-env->arr[d-1].oeb) + gm->xsc[p7P_C][p7P_MOVE];
 		}
 	    }
 
@@ -193,7 +193,7 @@ main(int argc, char **argv)
   P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
   P7_ENVELOPES   *env     = p7_envelopes_Create();
   float          *wrk     = NULL;
-  float           fsc, vsc, asc, asc_f, asc_b;
+  float           fsc, vsc, asc_f, asc_b;
   int             status;
 
   /* Read in one HMM */
@@ -258,14 +258,14 @@ main(int argc, char **argv)
   p7_sparse_Anchors(rng, sq->dsq, sq->n, gm,
 		    vsc, fsc, sxf, sxd, vanch,
 		    tr, &wrk, ah,
-		    asf, anch, &asc, 
+		    asf, anch, &asc_f, 
 		    NULL);
 
   /* Remaining ASC calculations; MPAS did <asf> */
   p7_sparse_asc_Backward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asb, &asc_b);
   p7_sparse_asc_Decoding(sq->dsq, sq->n, gm, anch->a, anch->D, asc_f, asf, asb, asd);
   
-  p7_spascmx_DumpSpecials(stdout, asd, anch->a, anch->D);
+  //  p7_spascmx_DumpSpecials(stdout, asd, anch->a, anch->D);
 
   /* Envelope determination. */
   p7_sparse_Envelopes(sq->dsq, sq->n, gm, anch->a, anch->D, asf, asd, env);
