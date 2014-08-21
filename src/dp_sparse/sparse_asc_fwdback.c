@@ -69,6 +69,7 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
   float xC  = -eslINFINITY;
   int   d   = 1;
   int   g;
+  int   ngap;
   int   status;
 
   /* Contract checks, argument validation */
@@ -85,8 +86,12 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
   dpc = asf->dp;
   xc  = asf->xmx;
   for (g = 1; g <= sm->S; g++)
-    p7_sparse_asc_ForwardSeg(dsq, L, gm, anch, D, d, sm, g, asf, xN, xJ, xC, dpc, xc, 
-			     &xN, &xJ, &xC, &d, &dpc, &xc, NULL);
+    {
+      ngap = (g == 1 ? sm->seg[g].ia-1 : sm->seg[g].ia - sm->seg[g-1].ib - 1);
+      p7_sparse_asc_ForwardSeg(dsq, L, gm, anch, D, d, sm, ngap, sm->seg[g].ia, sm->seg[g].ib, 
+			       asf, xN, xJ, xC, dpc, xc, 
+			       &xN, &xJ, &xC, &d, &dpc, &xc, NULL);
+    }
   
   /* Account for the last ib(S)+1..L residues in ...CCCC path.
    */
@@ -109,23 +114,54 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
 /* Function:  p7_sparse_asc_ForwardSeg()
  * Synopsis:  Computes sparse ASC Forward on a single sparse segment
  *
- * Purpose:   A sparse ASC Forward calculation is done segment by
- *            segment, so we can share the same DP recursion between a
- *            complete-sequence sparse ASC Forward and the segmental
- *            divide and conquer that's used in the fastest MPAS
- *            algorithm.
+ * Purpose:   This routine is used in three ways:
+ *            
+ *            First, we use it in segmental divide and conquer in the
+ *            fastest MPAS algorithm. There we need to calculate (and
+ *            re-calculate) the ASC Forward matrix for a sparse
+ *            segment, using different guesses for anchor sets within
+ *            it.
+ *            
+ *            Second, we compose the overall ASC Forward algorithm
+ *            (for one known anchor set) by calling ForwardSeg on each
+ *            segment in turn.
+ *            
+ *            Third, to calculate envelope scores, we may need to do
+ *            an ASC Forward calculation for a single anchor between
+ *            two specific coordinates <ia..ib> that lie within some
+ *            sparse segment.
+ *            
+ *            The first and second uses require precise handling of
+ *            information about the starting and ending values at
+ *            N/J/C states and position of ptrs into the ASC Forward
+ *            DP matrix because we're building up a complete matrix,
+ *            one segment at a time (and in the MPAS case, rewriting
+ *            the currently last segment many times).
+ *            
+ *            The third use (envelope scores) doesn't need to build up
+ *            a complete matrix, but does require using ia/ib coords
+ *            that are within a segment g, rather than being exactly
+ *            that sparse segment's endpoints.
+ *            
+ *            So here's how we do all that:
  *            
  *            We're comparing profile <gm> to digital target sequence
  *            <dsq> of length <L>, constrained both by sparse mask
  *            <sm> and by anchor set <anch> containing <D> domain
  *            anchors. 
  *            
+ *            In D&C MPAS, <anch> is a prefix up to and including the
+ *            current segment. In full ASC Forward <anch> is a
+ *            complete set. In envelope scores, <anch> is a single
+ *            anchor (with sentinels) and <D=1>.
+ *            
  *            Caller provides sparse ASC matrix <asf> and (unlike our
  *            other DP implementations), we do no reallocation
  *            here. Caller is responsible for making sure that <asf>
  *            has sufficient memory to hold the calculation. This is
  *            because the demands of complete-sequence ASC Forward
- *            vs. segmental divide and conquer MPAS are different.
+ *            vs. segmental divide and conquer MPAS vs. envelope
+ *            scoring are different.
  *            
  *            Caller must also provide a bunch of state information
  *            about where we are in an ongoing DP calculation, from
@@ -139,15 +175,25 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
  *            <anch> can either be the anchor set for the entire
  *            sequence (in which case <d> may be somewhere inside that
  *            array; if there is no anchor in the segment, <i0(d) >
- *            ib(g)>), or it may be an anchor set only for this
+ *            ib>), or it may be an anchor set only for this
  *            segment (in which case <d==1>; if there is no anchor in
- *            the segment <d==1> and <D==0>.).
+ *            the segment <d==1> and <D==0>). 
  *            
- *            <g> is the index (1..sm->S) of the current segment we're
- *            to calculate.
+ *            <ngap> is the number of residues since the last segment
+ *            we calculated. This is either <ia-1> (if this is first
+ *            or only segment), or <ia(g) - ib(g-1) - 1> (if there was
+ *            a previous segment <g-1>, as in MPAS or Forward).
+
+ *            <ia>..<ib> are the coords of the segment we're to calculate.
+ *            For MPAS and full Forward, they are <seg[g].ia..seg[g].ib>
+ *            for the current segment <g>. For envelope scores, they are
+ *            <seg[g].ia <= ia <= ib <= seg[g].ib> coords within whatever
+ *            segment the envelope is in (and we don't need to know <g>).
  *            
  *            <xN>, <xJ>, <xC> are the ASC Forward values at states
- *            N,J,C on the last row of the previor segment <ib(g-1)>.
+ *            N,J,C on the last row of the previous segment <ib(g-1)>.
+ *            For envelope scores, or for the first segment, <xN=0>
+ *            and <xJ=xC=-inf>.
  *            
  *            <dpc>, <xc> are pointers into the sparse ASC DP matrix
  *            to the first main supercell and first special supercell
@@ -155,22 +201,32 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
  *            after the previous segment's calculation). (We need this
  *            state information because addressing in sparse matrices
  *            is implicit; we only know where we are by sequentially
- *            traversing the matrix.)
+ *            traversing the matrix.) For envelope scores, or for the
+ *            first segment, <dpc=asf->dp> and <xc=asf->xmx>.
  *            
  *            After the DP calculation for this segment is complete,
- *            we get state information back, for use at the next call.
- *            <ret_xN>, <ret_xJ>, <ret_xC> contain the N/J/C Forward
- *            values at <ib(g)>. <opt_d> optionally contains the index
- *            of the next anchor we can reach (it's optional because
- *            segmental MPAS doesn't need it). <ret_dpn> and <ret_xn>
- *            are pointers to the next supercells we can store in
- *            <asf>.  It is safe for these to be ptrs to the same
- *            variables as the input state variables, allowing input
- *            to be overwritten with the output.
+ *            we optionally get state information back, for use at the
+ *            next call (if any).  <opt_xN>, <opt_xJ>, <opt_xC>
+ *            contain the N/J/C Forward values at <ib> (env scores
+ *            don't need these). <opt_d> optionally contains the index
+ *            of the next anchor we can reach (neither MPAS nor env
+ *            scores need this). <opt_dpn> and <opt_xn> are pointers
+ *            to the next supercells we can store in <asf> (env scores
+ *            don't need these).  It is safe for these to be ptrs to
+ *            the same variables as the input state variables,
+ *            allowing input to be overwritten with the output.
  *            
  *            For initialization conditions on the first segment in a
- *            sequence, we would pass <d=1>, <g=1>, <xN=0>,
- *            <xJ=xC=-inf>, <dpc=asf->dp>, and <xc=asf->xmx>.
+ *            sequence, we would pass <d=1>, <ngap = seg[1].ia-1>, <ia
+ *            = seg[1].ia>, <ib = seg[1].ib>, <xN=0>, <xJ=xC=-inf>,
+ *            <dpc=asf->dp>, and <xc=asf->xmx>.
+ *            
+ *            For envelope score of <oea..oeb>, we create an anchor
+ *            set containing the one anchor for our envelope (<D=1>),
+ *            and pass <d=1>, <ngap = oea-1>, <ia=oea>, <ib=oeb>,
+ *            <xN=0>, <xJ=xC=-inf>, <dpc=asf->dp>, and <xc=asf->xmx>.
+ *            The only state information that an envelope score needs
+ *            to get back is <opt_xC>.
  *            
  *            In a complete sequence Forward, for subsequent segments,
  *            we pass the state information we got from the previous
@@ -180,11 +236,11 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
  *            the same state information, which results in overwriting
  *            previous calculation of this segment.
  *            
- *            When we calculate the last segment <g=sm->S>, <xC> is
- *            the C value at <ib(S)>. To obtain a complete-sequence
- *            ASC Forward score, we must add CC terms for residues
- *            <ib(S)+1..L> (there are L-ib(S) of them), and the <t_CT>
- *            term.
+ *            When we calculate the last segment <g=sm->S>, <opt_xC>
+ *            is the C value at <ib(S)>. To obtain a complete-sequence
+ *            ASC Forward or envelope score, caller then must add CC
+ *            terms for residues <ib+1..L> (there are L-ib of
+ *            them), and the <t_CT> term.
  *            
  *            Upon return, <asf> has been extended to include the DP
  *            matrix storage for this segment, and <ret_asc> contains
@@ -206,7 +262,9 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
  *            D       : number of anchors in <anch>
  *            d       : next anchor that we can reach in this or subsequent segments; 1..D+1 (D+1 means no anchors in this or subseq segments)
  *            sm      : sparse mask
- *            g       : which segment we're to calculate, 1..sm->S
+ *            ngap    : number of previous residues since last segment: ia-1 or ia-ib(g-1)-1
+ *            ia      : start coord of segment: ia(g), or oea for an envelope score
+ *            ib      : end coord of segment:   ib(g), or oeb for an envelope score
  *            asf     : sparse ASC matrix that already contains calculation for segments 1..g-1;
  *                      caller guarantees that <asf> is allocated for the DP calculation of segment g
  *            xN      : last N value at ib(g-1), or 0 for g=1
@@ -214,13 +272,13 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
  *            xC      : last C value at ib(g-1), or -eslINFINITY for g=1
  *            dpc     : ptr to next main supercell in <asf> where this segment g is to start storage
  *            xc      : ptr to next special supercell in <asf> where segment g is to start storage
- *            ret_xN  : RETURN: N value at ib(g)
- *            ret_xJ  : RETURN: J value at ib(g)
- *            ret_xC  : RETURN: C value at ib(g)
+ *            opt_xN  : RETURN: N value at ib(g)
+ *            opt_xJ  : RETURN: J value at ib(g)
+ *            opt_xC  : RETURN: C value at ib(g)
  *            opt_d   : optRETURN: next anchor we can see. ib(g) < ia(g+1) <= i0(*ret_d)
- *            ret_dpn : RETURN: ptr to next main supercell in <asf>, where next segment starts storage.
+ *            opt_dpn : RETURN: ptr to next main supercell in <asf>, where next segment starts storage.
  *                              For last segment <g==sm->S>, may point outside valid memory.    
- *            ret_xn  : RETURN: ptr to next special supercell in <asf>, where next segment will start storage. 
+ *            opt_xn  : RETURN: ptr to next special supercell in <asf>, where next segment will start storage. 
  *                              For last segment <g==sm->S>, may point outside valid memory.
  *            opt_asc : optRETURN: sparse ASC Forward segment score. Invalid unless t_NN=t_JJ=t_CC.
  *
@@ -229,9 +287,9 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
 int
 p7_sparse_asc_ForwardSeg(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, 
 			 const P7_ANCHOR     *anch, int D, int d,
-			 const P7_SPARSEMASK *sm,   int g,
+			 const P7_SPARSEMASK *sm,   int ngap, int ia, int ib,
 			 P7_SPARSEMX *asf, float xN, float xJ, float xC, float *dpc, float *xc,
-			 float *ret_xN, float *ret_xJ, float *ret_xC, int *opt_d, float **ret_dpn, float **ret_xn, float *opt_asc)
+			 float *opt_xN, float *opt_xJ, float *opt_xC, int *opt_d, float **opt_dpn, float **opt_xn, float *opt_asc)
 {
   float const *tsc = gm->tsc;	 // sets up TSC() macro, access to profile's transitions      
   float const *rsc = NULL;	 // will be set up for MSC(), ISC() macros for residue scores for each row i
@@ -239,7 +297,7 @@ p7_sparse_asc_ForwardSeg(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
   float *dpp       = NULL;       // ptr for stepping thru DP cells on a previous row. Gets initialized by...
   float *last_down = NULL;       //   ... remembering the <dpc> start of each DOWN...
   float *last_up   = NULL;       //   ... or UP sector as we compute them.
-  int    Ds        = 0;          // # of anchors we see in this domain; if we see 0 we need to know that for some special casing
+  int    Ds        = 0;          // # of anchors we see in this segment; if we see 0 we need to know that for some special casing
   float  mlc, mgc;               // tmp variables for computing MLk, MGk score
   float  dlc, dgc;               //   ... and DLk, DGk.
   float  xE,xB,xL,xG;            // current special state values on this row; specials are not always stored
@@ -249,15 +307,15 @@ p7_sparse_asc_ForwardSeg(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
   int    y;			 //   ... and for previous row, k[i-1][y].
   int    s;                      // index of individual states
   float  xNJbase;                // Save xN | xJ at ia(g)-1, whichever one wasn't -inf
-  int    ngap;                   // number of residues in an intersegment interval, all must be accounted for by N, J, or C, depending on what anchor we're on
 
   
+  ESL_DASSERT1(( asf->type == p7S_ASC_FWD ));  // Caller already allocated <asf> and set its type
+
+
   /* Initialize on row ia(g)-1
    * Follows "always calculate, sometimes store" rule for syncing numerical error w/ SparseForward(); see footnote [1].
    */
   xNJbase = ESL_MAX(xN, xJ);                                                  // Either xN == -inf || xJ == -inf, depending on whether we've seen an anchor yet in dsq
-  ngap = (g == 1 ? sm->seg[g].ia - 1 : sm->seg[g].ia - sm->seg[g-1].ib - 1);  // seg[0].ib sentinel is -1, not 0, alas. 
-  
   xE = -eslINFINITY;
   xN = (ngap == 0 ? xN : xN + (float) ngap * gm->xsc[p7P_N][p7P_LOOP]);       // ngap=0 only occurs for g=1, ia(1)=1 (1st residue is in 1st seg)
   xJ = (ngap == 0 ? xJ : xJ + (float) ngap * gm->xsc[p7P_J][p7P_LOOP]);       // ngap==0 test is there because t_NN may be -inf; must avoid 0 * -inf = NaN
@@ -266,7 +324,7 @@ p7_sparse_asc_ForwardSeg(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
   xG = xB + gm->xsc[p7P_B][1];                                                // [1] is B->G
   xC = (ngap == 0 ? xC : xC + (float) ngap * gm->xsc[p7P_C][p7P_LOOP]);       // Up 'til 1st anchor is reached, xJ=xC=-inf; afterwards, xN=-inf. 
 
-  if ( anch[d].i0 <= sm->seg[g].ib)                                           // suffices to test if there's an anchor in this segment or not
+  if ( anch[d].i0 <= ib)  // suffices to test if there's an anchor in this segment or not
     {
       *xc++ = xE;  
       *xc++ = xN; 
@@ -279,7 +337,7 @@ p7_sparse_asc_ForwardSeg(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
       *xc++ = -eslINFINITY; // CC; ditto
     }
 
-  for (i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)
+  for (i = ia; i <= ib; i++)
     {
       if      (i == anch[d].i0) { ndown = 1; d++; Ds++; }  // When i reaches next anchor, bump d to next domain index, and DOWN sector becomes active.
       else if (ndown)           { ndown++;              }  // Counting ndown lets us determine when we're in 1st vs. subsequent rows; useful for boundary conditions on DP 
@@ -410,7 +468,7 @@ p7_sparse_asc_ForwardSeg(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
        * Computing row i when it's in an UP sector 
        *****************************************************************/
 
-      if (anch[d].i0 <= sm->seg[g].ib)   // d may be D+1 here: if so, sentinel makes the the comparison to seg[g].ib fail
+      if (anch[d].i0 <= ib)              // d may be D+1 here: if so, sentinel makes the the comparison to seg[g].ib fail
 	{
 	  if (ndown == 1)                // The first row of an UP matrix for subsequent domains in a segment is the anchor row i0.
 	    {                            // All sparse cells in this row are unreachable, initialized to -inf. They only get used for G->DDDD->Mk,i+1 decoding, wing unfolding.
@@ -420,7 +478,7 @@ p7_sparse_asc_ForwardSeg(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 		  *dpc++ = -eslINFINITY;
 	    }
 
-	  else if (i == sm->seg[g].ia)         // The first row of UP(d) when d is the first domain in a segment
+	  else if (i == ia)                    // The first row of UP(d) when d is the first domain in a segment
 	    {                                  // is the first row of the segment. Cells on this row can be reached
 	      rsc       = gm->rsc[dsq[i]];     // by {GL}->Mk entries, followed by {Dk,Mk}->Dk+1 delete transitions.
 	      dpp       = NULL;                // The (ndown==1) code must precede this, to deal with a case of an anchor on first row of a segment, which means a nonexistent UP sector and immediate init in DOWN
@@ -526,7 +584,7 @@ p7_sparse_asc_ForwardSeg(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
       xG = xB + gm->xsc[p7P_B][1];                                                
 
 
-      if (anch[d].i0 <= sm->seg[g].ib || ndown)
+      if (anch[d].i0 <= ib || ndown)
 	{
 	  *xc++ = xE;
 	  *xc++ = xN;
@@ -540,17 +598,17 @@ p7_sparse_asc_ForwardSeg(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 	}
     }
 
-  *ret_xN  = xN;
-  *ret_xJ  = xJ;
-  *ret_xC  = xC;
-  if (opt_d) *opt_d = d;
-  *ret_dpn = dpc;
-  *ret_xn  = xc;
+  if (opt_xN)  *opt_xN  = xN;
+  if (opt_xJ)  *opt_xJ  = xJ;
+  if (opt_xC)  *opt_xC  = xC;
+  if (opt_d)   *opt_d   = d;
+  if (opt_dpn) *opt_dpn = dpc;
+  if (opt_xn)  *opt_xn  = xc;
   if (opt_asc) *opt_asc = (xN != -eslINFINITY && Ds==0) ?  xN - xNJbase : xJ - xNJbase;  // Usually J(ib) - (J(ia-1) || N(ia-1)) suffices, but watch out for N..N empty path ending in N(ib)
   return eslOK;
 }
-			 
 /*------------ end, sparse ASC Forward segment ------------------*/
+
 
 
 
@@ -1193,16 +1251,16 @@ p7_sparse_asc_Decoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 	  else if (nup)             { nup++;        }
 	} // end loop over rows i for one segment g
       
-      /* Now we're on ia-1 specials */
-      xcD[p7S_CC] = 0.;
-      xcD[p7S_JJ] = 0.;
-      xcD[p7S_C]  = exp(xcF[p7S_C]  + xcB[p7S_C] - totsc);
-      xcD[p7S_G]  = exp(xcF[p7S_G]  + xcB[p7S_G] - totsc);
+      /* Now we're on ia-1 specials. */
+      xcD[p7S_CC] = 0.;                                    // There must be an anchor below us; C is now impossible
+      xcD[p7S_JJ] = exp(xcF[p7S_J]  + xcB[p7S_J] - totsc); // E is impossible, so no E->J mass; all prob mass in J(ia-1) must come from ia-2, w/ emission at ia-1
+      xcD[p7S_C]  = 0.;                                    // Don't bother calculating it, we know it's zero by construction.
+      xcD[p7S_G]  = exp(xcF[p7S_G]  + xcB[p7S_G] - totsc); 
       xcD[p7S_L]  = exp(xcF[p7S_L]  + xcB[p7S_L] - totsc);
       xcD[p7S_B]  = exp(xcF[p7S_B]  + xcB[p7S_B] - totsc);
-      xcD[p7S_J]  = exp(xcF[p7S_J]  + xcB[p7S_J] - totsc);
+      xcD[p7S_J]  = xcD[p7S_JJ];
       xcD[p7S_N]  = exp(xcF[p7S_N]  + xcB[p7S_N] - totsc);
-      xcD[p7S_E]  = exp(xcF[p7S_E]  + xcB[p7S_E] - totsc);
+      xcD[p7S_E]  = 0.;                                    // Known by construction.
       xcF -= p7S_NXCELLS;
       xcB -= p7S_NXCELLS;
       xcD -= p7S_NXCELLS;
@@ -1215,6 +1273,7 @@ p7_sparse_asc_Decoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
   ESL_DASSERT1(( xcB  == asb->xmx-p7S_NXCELLS ));  
   ESL_DASSERT1(( xcD  == asd->xmx-p7S_NXCELLS ));  
 
+  p7_spascmx_Renormalize(asd, anch, D);
   return eslOK;
 }
 
@@ -1267,6 +1326,143 @@ p7_sparse_asc_Decoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 #ifdef p7SPARSE_ASC_FWDBACK_TESTDRIVE
 #include "hmmer.h"
 
+/* "generation" test.
+ * 
+ * Sample a profile, generate some synthetic homologous sequences from
+ * it. For each seq, run the standard analysis pipeline: vector local checkpointed
+ * decoding to get a sparse mask, and sparse segmental MPAS to get 
+ * the anchor set. Finish the sparse ASC analysis w/ Backward, Decoding.
+ *
+ * Not a very stringent test, since we have no guarantees or constraints on paths or
+ * scores: basically just a test for obvious crashes and invalid DP cells.
+ * Advantage, though, is that we're generating a thorough and unconstrained sample
+ * of profiles and sequences.
+ *
+ * Tests:
+ *   - ASC fwd and bck scores equal (within tolerance)
+ *   - F/B/D sparse ASC matrices pass Validation
+ */
+static void
+utest_generation(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int L, int N)
+{
+  char           msg[] = "sparse_asc_fwdback :: generation unit test failed";
+  P7_BG         *bg    = p7_bg_Create(abc);
+  P7_PRIOR      *pri   = NULL;
+  P7_HMM        *hmm   = NULL;
+  P7_PROFILE    *gm    = p7_profile_Create(M, abc);
+  P7_OPROFILE   *om    = p7_oprofile_Create(M, abc);
+  ESL_SQ        *sq    = esl_sq_CreateDigital(abc);
+  P7_CHECKPTMX  *cx    = p7_checkptmx_Create(M, 100, ESL_MBYTES(32));
+  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, 100);
+  P7_TRACE      *tr    = p7_trace_Create();
+  P7_SPARSEMX   *sxf   = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *sxd   = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *asf   = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *asb   = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *asd   = p7_sparsemx_Create(NULL);
+  P7_ANCHORS    *anch  = p7_anchors_Create();
+  P7_ANCHORS    *vanch = p7_anchors_Create();
+  P7_ANCHORHASH *ah    = p7_anchorhash_Create();
+  float         *wrk   = NULL;
+  float          vsc, fsc, asc_f, asc_b;
+  int            idx;
+  char           errbuf[eslERRBUFSIZE];
+  float          tol   = 0.01;
+
+  
+  if      (abc->type == eslAMINO) pri = p7_prior_CreateAmino();
+  else if (abc->type == eslDNA)   pri = p7_prior_CreateNucleic();
+  else if (abc->type == eslRNA)   pri = p7_prior_CreateNucleic();
+  else                            pri = p7_prior_CreateLaplace(abc);
+
+  /* Sample a random profile. Do it from prior, so it has good/realistic scores. */
+  if ( p7_modelsample_Prior(rng, M, abc, pri, &hmm) != eslOK) esl_fatal(msg);
+  if ( p7_profile_Config(gm, hmm, bg)               != eslOK) esl_fatal(msg);
+  if ( p7_oprofile_Convert(gm, om)                  != eslOK) esl_fatal(msg);
+
+  for (idx = 0; idx < N; idx++)
+    {
+      /* Sample a synthetic homologous sequence from profile, of mean length <L> */
+      if ( p7_profile_SetLength(gm, L)  != eslOK) esl_fatal(msg);   /* config to generate mean length of L (length was probably reset by last emitted seq) */
+      do {
+	esl_sq_Reuse(sq);
+	p7_ProfileEmit(rng, hmm, gm, bg, sq, NULL);
+      } while (sq->n > L * 10); /* allow many domains, but keep sequence length from getting ridiculous; long seqs do have higher abs error per cell */
+
+      /* Set profile length models appropriately for new seq length  */
+      if ( p7_bg_SetLength           (bg, sq->n) != eslOK) esl_fatal(msg);
+      if ( p7_profile_SetLength      (gm, sq->n) != eslOK) esl_fatal(msg);
+      if ( p7_oprofile_ReconfigLength(om, sq->n) != eslOK) esl_fatal(msg);
+
+      /* Use vector local checkpointed F/B/D to set sparse mask */
+      if ( p7_checkptmx_GrowTo(cx, gm->M, sq->n)                                       != eslOK) esl_fatal(msg);
+      if ( p7_ForwardFilter (sq->dsq, sq->n, om, cx, /*fsc=*/NULL)                     != eslOK) esl_fatal(msg);
+      if ( p7_BackwardFilter(sq->dsq, sq->n, om, cx, sm, p7_SPARSEMASK_THRESH_DEFAULT) != eslOK) esl_fatal(msg);
+
+      /* First pass sparse analysis */
+      if ( p7_SparseViterbi (sq->dsq, sq->n, gm, sm,  sxf, tr, &vsc) != eslOK) esl_fatal(msg);
+      if ( p7_SparseForward (sq->dsq, sq->n, gm, sm,  sxf,     &fsc) != eslOK) esl_fatal(msg);
+      if ( p7_SparseBackward(sq->dsq, sq->n, gm, sm,  sxd,     NULL) != eslOK) esl_fatal(msg);
+      if ( p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxd,     sxd)  != eslOK) esl_fatal(msg);
+
+      /* MPAS to get the anchor set and sparse ASC Forward */
+      if ( p7_sparse_anchors_SetFromTrace(sxd, tr, vanch) != eslOK) esl_fatal(msg);
+      if ( p7_trace_Reuse(tr)                             != eslOK) esl_fatal(msg);
+      if ( p7_sparse_Anchors(rng, sq->dsq, sq->n, gm,
+			     vsc, fsc, sxf, sxd, vanch,
+			     tr, &wrk, ah, 
+			     asf, anch, &asc_f, 
+			     NULL)     != eslOK) esl_fatal(msg);
+
+      /* Remainder of sparse ASC analysis */
+      if ( p7_sparse_asc_Backward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asb, &asc_b)      != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Decoding(sq->dsq, sq->n, gm, anch->a, anch->D, asc_f, asf, asb, asd) != eslOK) esl_fatal(msg);
+
+      /* Tests */
+      if (! diagfp)
+	{
+	  if ( p7_spascmx_Validate(asf, anch->a, anch->D, errbuf) != eslOK) esl_fatal("%s\n   %s\n", msg, errbuf);
+	  if ( p7_spascmx_Validate(asb, anch->a, anch->D, errbuf) != eslOK) esl_fatal("%s\n   %s\n", msg, errbuf);
+	  if ( p7_spascmx_Validate(asd, anch->a, anch->D, errbuf) != eslOK) esl_fatal("%s\n   %s\n", msg, errbuf);
+
+	  if ( esl_FCompareAbs(asc_f, asc_b, tol) != eslOK) esl_fatal(msg);
+	}
+      else
+	fprintf(diagfp, "%20g\n", asc_f - asc_b);
+
+      p7_anchors_Reuse(vanch);
+      p7_anchors_Reuse(anch);
+      p7_anchorhash_Reuse(ah);
+      p7_sparsemx_Reuse(asf);
+      p7_sparsemx_Reuse(asb);
+      p7_sparsemx_Reuse(asd);
+      p7_sparsemx_Reuse(sxf);
+      p7_sparsemx_Reuse(sxd);
+      p7_trace_Reuse(tr);
+      p7_sparsemask_Reuse(sm);
+      p7_checkptmx_Reuse(cx);
+      esl_sq_Reuse(sq);
+    }
+
+
+  if (wrk) free(wrk);
+  p7_anchors_Destroy(vanch);
+  p7_anchors_Destroy(anch);
+  p7_anchorhash_Destroy(ah);
+  p7_sparsemx_Destroy(asf);
+  p7_sparsemx_Destroy(asb);
+  p7_sparsemx_Destroy(asd);
+  p7_sparsemx_Destroy(sxf);
+  p7_sparsemx_Destroy(sxd);
+  p7_trace_Destroy(tr);
+  p7_sparsemask_Destroy(sm);
+  p7_checkptmx_Destroy(cx);
+  esl_sq_Destroy(sq);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+  p7_prior_Destroy(pri);
+  p7_bg_Destroy(bg);
+}
 
 /* "compare_reference" unit test.
  * 
@@ -1440,18 +1636,18 @@ utest_compare_reference(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *a
 static void
 utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int N)
 {
-  char           failmsg[] = "sparse_asc_fwdback :: singlesingle unit test failed";
-  P7_BG         *bg        = p7_bg_Create(abc);
-  P7_HMM        *hmm       = NULL;
-  P7_PROFILE    *gm        = NULL;
-  ESL_DSQ       *dsq       = NULL;
-  P7_TRACE      *tr        = NULL;
-  P7_ANCHOR     *anch      = NULL;
-  P7_SPARSEMASK *sm        = NULL;
-  P7_SPARSEMX   *asf       = p7_sparsemx_Create(NULL);
-  P7_SPARSEMX   *asb       = p7_sparsemx_Create(NULL);
-  P7_SPARSEMX   *asd       = p7_sparsemx_Create(NULL);
-  P7_REFMX      *rxd       = p7_refmx_Create(100, 100);
+  char           msg[] = "sparse_asc_fwdback :: singlesingle unit test failed";
+  P7_BG         *bg    = p7_bg_Create(abc);
+  P7_HMM        *hmm   = NULL;
+  P7_PROFILE    *gm    = NULL;
+  ESL_DSQ       *dsq   = NULL;
+  P7_TRACE      *tr    = NULL;
+  P7_ANCHOR     *anch  = NULL;
+  P7_SPARSEMASK *sm    = NULL;
+  P7_SPARSEMX   *asf   = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *asb   = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *asd   = p7_sparsemx_Create(NULL);
+  P7_REFMX      *rxd   = p7_refmx_Create(100, 100);
   int           D,L;
   int           idx;
   float         tsc, fsc, bsc;
@@ -1460,14 +1656,14 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
 
   for (idx = 0; idx < N; idx++)
     {
-      if ( p7_modelsample_SinglePathedSeq(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &tsc) != eslOK) esl_fatal(failmsg);
+      if ( p7_modelsample_SinglePathedSeq(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &tsc) != eslOK) esl_fatal(msg);
 
-      if ((sm = p7_sparsemask_Create(M, L))            == NULL) esl_fatal(failmsg);
-      if ( p7_sparsemask_SetFromTrace(sm, rng, tr)    != eslOK) esl_fatal(failmsg);
+      if ((sm = p7_sparsemask_Create(M, L))            == NULL) esl_fatal(msg);
+      if ( p7_sparsemask_SetFromTrace(sm, rng, tr)    != eslOK) esl_fatal(msg);
 
-      if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf, &fsc)      != eslOK) esl_fatal(failmsg);
-      if ( p7_sparse_asc_Backward(dsq, L, gm, anch, D, sm, asb, &bsc)      != eslOK) esl_fatal(failmsg);
-      if ( p7_sparse_asc_Decoding(dsq, L, gm, anch, D, fsc, asf, asb, asd) != eslOK) esl_fatal(failmsg);
+      if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf, &fsc)      != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Backward(dsq, L, gm, anch, D, sm, asb, &bsc)      != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Decoding(dsq, L, gm, anch, D, fsc, asf, asb, asd) != eslOK) esl_fatal(msg);
 
       /* To check that ASC decoding left us with 1.0's in cells along
        * <tr> and 0.0 elsewhere, we use some trickery. We count the
@@ -1479,23 +1675,23 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
        * matrices UP and DOWN), it will work in this case when we pass
        * the same matrix <rxd> for both.
        */
-      if ( p7_refmx_GrowTo(rxd, gm->M, L) != eslOK) esl_fatal(failmsg);      
-      if ( p7_refmx_Zero  (rxd, gm->M, L) != eslOK) esl_fatal(failmsg);
-      if ( p7_refmx_CountTrace(tr, rxd)   != eslOK) esl_fatal(failmsg);  
+      if ( p7_refmx_GrowTo(rxd, gm->M, L) != eslOK) esl_fatal(msg);      
+      if ( p7_refmx_Zero  (rxd, gm->M, L) != eslOK) esl_fatal(msg);
+      if ( p7_refmx_CountTrace(tr, rxd)   != eslOK) esl_fatal(msg);  
 
       //p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
       //p7_spascmx_Dump(stdout, asf, anch, D);
 
       if (!diagfp)
 	{
-	  if ( p7_spascmx_CompareReference(asd, anch, D, rxd, rxd, tol) != eslOK) esl_fatal(failmsg);
+	  if ( p7_spascmx_CompareReference(asd, anch, D, rxd, rxd, tol) != eslOK) esl_fatal(msg); // TODO: should tol be 0.0?
 
-	  if ( p7_spascmx_Validate(asf, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", failmsg, errbuf);
-	  if ( p7_spascmx_Validate(asb, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", failmsg, errbuf); 
-	  if ( p7_spascmx_Validate(asd, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", failmsg, errbuf); 
+	  if ( p7_spascmx_Validate(asf, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf);
+	  if ( p7_spascmx_Validate(asb, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
+	  if ( p7_spascmx_Validate(asd, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
 
-	  if (esl_FCompareAbs(tsc, fsc, tol) != eslOK) esl_fatal(failmsg);
-	  if (esl_FCompareAbs(tsc, bsc, tol) != eslOK) esl_fatal(failmsg);
+	  if (esl_FCompareAbs(tsc, fsc, tol) != eslOK) esl_fatal(msg);
+	  if (esl_FCompareAbs(tsc, bsc, tol) != eslOK) esl_fatal(msg);
 	}
       else
 	fprintf(diagfp, "%20g %20g\n", tsc-fsc, tsc-bsc);
@@ -1572,8 +1768,10 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
   P7_SPARSEMX   *sxb = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *asf = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *asb = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *asd = p7_sparsemx_Create(NULL);
   int            idx;
   float          vsc, fsc, bsc, asc_f, asc_b;
+  char           errbuf[eslERRBUFSIZE];
   float          tol = 0.002;
 
   for (idx = 0; idx < N; idx++)
@@ -1601,11 +1799,17 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
       if ( p7_SparseViterbi      (dsq, L, gm,          sm, sxf, NULL, &vsc) != eslOK) esl_fatal(msg);
       if ( p7_SparseForward      (dsq, L, gm,          sm, sxf,       &fsc) != eslOK) esl_fatal(msg);
       if ( p7_SparseBackward     (dsq, L, gm,          sm, sxb,       &bsc) != eslOK) esl_fatal(msg);
-      if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf,     &asc_f) != eslOK) esl_fatal(msg);
-      if ( p7_sparse_asc_Backward(dsq, L, gm, anch, D, sm, asb,     &asc_b) != eslOK) esl_fatal(msg);
+
+      if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf,     &asc_f)   != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Backward(dsq, L, gm, anch, D, sm, asb,     &asc_b)   != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Decoding(dsq, L, gm, anch, D, asc_f, asf, asb, asd)  != eslOK) esl_fatal(msg);
       
       if (! diagfp)
 	{
+	  if ( p7_spascmx_Validate(asf, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf);
+	  if ( p7_spascmx_Validate(asb, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
+	  if ( p7_spascmx_Validate(asd, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
+
 	  if (esl_FCompareAbs( fsc, asc_f, tol) != eslOK) esl_fatal(msg);
 	  if (esl_FCompareAbs( fsc, asc_b, tol) != eslOK) esl_fatal(msg);
 	  if (gsc > vsc+tol)                              esl_fatal(msg);
@@ -1616,6 +1820,7 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
   
       p7_sparsemx_Reuse(asf);
       p7_sparsemx_Reuse(asb);
+      p7_sparsemx_Reuse(asd);
       p7_sparsemx_Reuse(sxf);
       p7_sparsemx_Reuse(sxb);
 
@@ -1629,6 +1834,7 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
 
   p7_sparsemx_Destroy(asf);
   p7_sparsemx_Destroy(asb);
+  p7_sparsemx_Destroy(asd);
   p7_sparsemx_Destroy(sxf);
   p7_sparsemx_Destroy(sxb);
   p7_bg_Destroy(bg);
@@ -1685,8 +1891,10 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc
   P7_SPARSEMX   *sxb = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *asf = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *asb = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *asd = p7_sparsemx_Create(NULL);
   int            idx;
   float          vsc, fsc, bsc, asc_f, asc_b;
+  char           errbuf[eslERRBUFSIZE];
   float          tol = 0.0001;
 
   for (idx = 0; idx < N; idx++)
@@ -1713,11 +1921,17 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc
       if ( p7_SparseViterbi      (dsq, L, gm,          sm, sxf, NULL, &vsc) != eslOK) esl_fatal(msg);
       if ( p7_SparseForward      (dsq, L, gm,          sm, sxf,       &fsc) != eslOK) esl_fatal(msg);
       if ( p7_SparseBackward     (dsq, L, gm,          sm, sxb,       &bsc) != eslOK) esl_fatal(msg);
-      if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf,     &asc_f) != eslOK) esl_fatal(msg);
-      if ( p7_sparse_asc_Backward(dsq, L, gm, anch, D, sm, asb,     &asc_b) != eslOK) esl_fatal(msg);
+
+      if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf,     &asc_f)  != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Backward(dsq, L, gm, anch, D, sm, asb,     &asc_b)  != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Decoding(dsq, L, gm, anch, D, asc_f, asf, asb, asd) != eslOK) esl_fatal(msg);
    
       if (! diagfp)
 	{
+	  if ( p7_spascmx_Validate(asf, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf);
+	  if ( p7_spascmx_Validate(asb, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
+	  if ( p7_spascmx_Validate(asd, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
+
 	  if (esl_FCompareAbs( fsc, asc_f, tol) != eslOK) esl_fatal(msg);
 	  if (esl_FCompareAbs( bsc, asc_b, tol) != eslOK) esl_fatal(msg);
 	  if (gsc > vsc+tol)                              esl_fatal(msg);
@@ -1728,6 +1942,7 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc
   
       p7_sparsemx_Reuse(asf);
       p7_sparsemx_Reuse(asb);
+      p7_sparsemx_Reuse(asd);
       p7_sparsemx_Reuse(sxf);
       p7_sparsemx_Reuse(sxb);
 
@@ -1741,6 +1956,7 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc
 
   p7_sparsemx_Destroy(asf);
   p7_sparsemx_Destroy(asb);
+  p7_sparsemx_Destroy(asd);
   p7_sparsemx_Destroy(sxf);
   p7_sparsemx_Destroy(sxb);
   p7_bg_Destroy(bg);
@@ -1795,8 +2011,10 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
   P7_SPARSEMX   *sxb = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *asf = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *asb = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *asd = p7_sparsemx_Create(NULL);
   int            idx;
   float          vsc, fsc, bsc, asc_f, asc_b;
+  char           errbuf[eslERRBUFSIZE];
   float          tol = 0.01;
 
   for (idx = 0; idx < N; idx++)
@@ -1823,11 +2041,17 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
       if ( p7_SparseViterbi      (dsq, L, gm,          sm, sxf, NULL, &vsc) != eslOK) esl_fatal(msg);
       if ( p7_SparseForward      (dsq, L, gm,          sm, sxf,       &fsc) != eslOK) esl_fatal(msg);
       if ( p7_SparseBackward     (dsq, L, gm,          sm, sxb,       &bsc) != eslOK) esl_fatal(msg);
-      if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf,     &asc_f) != eslOK) esl_fatal(msg);
-      if ( p7_sparse_asc_Backward(dsq, L, gm, anch, D, sm, asb,     &asc_b) != eslOK) esl_fatal(msg);
+
+      if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf,     &asc_f)  != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Backward(dsq, L, gm, anch, D, sm, asb,     &asc_b)  != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Decoding(dsq, L, gm, anch, D, asc_f, asf, asb, asd) != eslOK) esl_fatal(msg);
    
       if (! diagfp)
 	{
+	  if ( p7_spascmx_Validate(asf, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf);
+	  if ( p7_spascmx_Validate(asb, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
+	  if ( p7_spascmx_Validate(asd, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
+
 	  if (esl_FCompareAbs( fsc,   asc_f, tol) != eslOK) esl_fatal(msg);
 	  if (esl_FCompareAbs( bsc,   asc_b, tol) != eslOK) esl_fatal(msg);
 	  if (esl_FCompareAbs( asc_f, asc_b, tol) != eslOK) esl_fatal(msg);
@@ -1839,6 +2063,7 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
   
       p7_sparsemx_Reuse(asf);
       p7_sparsemx_Reuse(asb);
+      p7_sparsemx_Reuse(asd);
       p7_sparsemx_Reuse(sxf);
       p7_sparsemx_Reuse(sxb);
 
@@ -1852,29 +2077,33 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
 
   p7_sparsemx_Destroy(asf);
   p7_sparsemx_Destroy(asb);
+  p7_sparsemx_Destroy(asd);
   p7_sparsemx_Destroy(sxf);
   p7_sparsemx_Destroy(sxb);
   p7_bg_Destroy(bg);
 }
 
-/* "viterbi" utest
+/* "emulated_viterbi" utest
  * 
- * If we choose an anchor set implied by the unconstrained Viterbi
- * path, then the ASC Viterbi path is identical to that path.
+ * If we choose an anchor set implied by the unconstrained sparse
+ * Viterbi path, then sparse ASC Viterbi path is identical to that
+ * path.
  * 
- * We use this fact to test ASC Forward and Backward
- * implementations. Any F/B implementation can be converted to Viterbi
- * scoring by making the p7_FLogsum() function do a max instead of a
- * log-sum. Our logsum implementation includes the necessary machinery
- * for a temporary switch in its logic, by using p7_logsum_InitMax()
- * and p7_logsum_Reinit().
- * 
- * Holds true for any model in any configuration, and any sequence.
+ * We can use this fact to test Forward and Backward, even though we
+ * don't have (or need) a sparse ASC Viterbi implementation.  Any F/B
+ * implementation can be converted to Viterbi scoring by making the
+ * p7_FLogsum() function do a max instead of a log-sum. Our logsum
+ * implementation includes the necessary machinery for a temporary
+ * switch in its logic, by using p7_logsum_InitMax() and
+ * p7_logsum_Reinit().
+ *
+ * Holds true for any model in any configuration, and any sequence,
+ * and any sparse mask.
  */
 static void
-utest_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int L, int N)
+utest_emulated_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int L, int N)
 {
-  char           msg[] = "sparse_asc_fwdback :: viterbi unit test failed";
+  char           msg[] = "sparse_asc_fwdback :: emulated_viterbi unit test failed";
   P7_BG         *bg    = p7_bg_Create(abc);
   P7_PRIOR      *pri   = NULL;
   P7_HMM        *hmm;
@@ -1891,6 +2120,7 @@ utest_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M,
   P7_TRACE      *vtr   = p7_trace_Create();
   P7_ANCHORS    *anch  = p7_anchors_Create();
   float          vsc, fsc, asc, asc_b;
+  char           errbuf[eslERRBUFSIZE];
   float          tol   = 0.0001;
 
   if      (abc->type == eslAMINO) pri = p7_prior_CreateAmino();
@@ -1923,13 +2153,16 @@ utest_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M,
       if ( p7_sparse_anchors_SetFromTrace(sxd, vtr, anch)            != eslOK) esl_fatal(msg);
 
       p7_logsum_InitMax();    // Zero the logsum lookup table; now FLogsum() calls will compute max()
-      if ( p7_SparseForward      (sq->dsq, sq->n, gm,                   sm, sxf, &fsc)   != eslOK) esl_fatal(msg);
-      if ( p7_sparse_asc_Forward (sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &asc)   != eslOK) esl_fatal(msg);
-      if ( p7_sparse_asc_Backward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asb, &asc_b) != eslOK) esl_fatal(msg);
+      if ( p7_SparseForward      (sq->dsq, sq->n, gm,                   sm, sxf, &fsc)      != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Forward (sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &asc)      != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Backward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asb, &asc_b)    != eslOK) esl_fatal(msg);
       p7_logsum_Reinit();     // Reset the logsum lookup table
       
       if ( ! diagfp)
 	{
+	  if ( p7_spascmx_Validate(asf, anch->a, anch->D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf);
+	  if ( p7_spascmx_Validate(asb, anch->a, anch->D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
+
 	  if (esl_FCompareAbs( vsc, fsc,   tol) != eslOK) esl_fatal(msg);
 	  if (esl_FCompareAbs( fsc, asc,   tol) != eslOK) esl_fatal(msg);
 	  if (esl_FCompareAbs( fsc, asc_b, tol) != eslOK) esl_fatal(msg);
@@ -1969,8 +2202,8 @@ utest_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M,
 }
 
 #endif /*p7SPARSE_ASC_FWDBACK_TESTDRIVE*/
-
 /*------------------- end, unit tests ---------------------------*/
+
 
 
 
@@ -2024,12 +2257,13 @@ main(int argc, char **argv)
     { 
       char *which = esl_opt_GetString(go, "--diag");
 
-      if      (strcmp(which, "compare_reference") == 0) utest_compare_reference(stdout, rng, abc, M, L, N);
+      if      (strcmp(which, "generation")        == 0) utest_generation       (stdout, rng, abc, M, L, N);
+      else if (strcmp(which, "compare_reference") == 0) utest_compare_reference(stdout, rng, abc, M, L, N);
       else if (strcmp(which, "singlesingle")      == 0) utest_singlesingle     (stdout, rng, abc, M,    N);
       else if (strcmp(which, "multisingle")       == 0) utest_multisingle      (stdout, rng, abc, M,    N);
       else if (strcmp(which, "multipath_local")   == 0) utest_multipath_local  (stdout, rng, abc, M,    N);
       else if (strcmp(which, "multimulti")        == 0) utest_multimulti       (stdout, rng, abc, M,    N);
-      else if (strcmp(which, "viterbi")           == 0) utest_viterbi          (stdout, rng, abc, M, L, N);
+      else if (strcmp(which, "viterbi")           == 0) utest_emulated_viterbi (stdout, rng, abc, M, L, N);
       else esl_fatal("--diag takes: compare_reference, singlesingle, multisingle");
     }
   else
@@ -2037,12 +2271,13 @@ main(int argc, char **argv)
       fprintf(stderr, "## %s\n", argv[0]);
       fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
+      utest_generation       (NULL, rng, abc, M, L, N);
       utest_compare_reference(NULL, rng, abc, M, L, N);
       utest_singlesingle     (NULL, rng, abc, M,    N);
       utest_multisingle      (NULL, rng, abc, M,    N);
       utest_multipath_local  (NULL, rng, abc, M,    N);
       utest_multimulti       (NULL, rng, abc, M,    N);
-      utest_viterbi          (NULL, rng, abc, M, L, N);
+      utest_emulated_viterbi (NULL, rng, abc, M, L, N);
 
       fprintf(stderr, "#  status = ok\n");
     }
@@ -2157,12 +2392,14 @@ main(int argc, char **argv)
   /* We need an anchor set <anch>.
    * To get it, run the reference prototype code;
    * (we don't have the MPAS algorithm in its sparse production form yet)
+   * TODO: now we do. Convert these to sparse versions.
    */
   vtr = p7_trace_Create();
   rxf = p7_refmx_Create(gm->M, sq->n);
   rxd = p7_refmx_Create(gm->M, sq->n);
   afu = p7_refmx_Create(gm->M, sq->n);
   afd = p7_refmx_Create(gm->M, sq->n);
+
 
   p7_ReferenceViterbi (sq->dsq, sq->n, gm, rxf, vtr, &vsc);
   p7_ReferenceForward (sq->dsq, sq->n, gm, rxf,      &fsc);   
@@ -2196,7 +2433,7 @@ main(int argc, char **argv)
   p7_sparse_asc_Backward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asb, &asc_b);
   p7_sparse_asc_Decoding(sq->dsq, sq->n, gm, anch->a, anch->D, asc_f, asf, asb, asd);
 
-  p7_spascmx_Dump(stdout, asb, anch->a, anch->D);
+  //p7_spascmx_Dump(stdout, asb, anch->a, anch->D);
 
   p7_spascmx_Validate(asf, anch->a, anch->D, NULL);
   p7_spascmx_Validate(asb, anch->a, anch->D, NULL);
@@ -2239,4 +2476,3 @@ main(int argc, char **argv)
  * SVN $URL$
  *****************************************************************/
 
-// 3744393649

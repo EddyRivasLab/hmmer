@@ -2,8 +2,8 @@
  * Sparse implementation: production code.
  * 
  * Contents:
- *     1. Sparse MPAS algorithm, complete sequence version
- *     2. Sparse MPAS algorithm, segmental divide & conquer version
+ *     1. Sparse MPAS algorithm, fast version (segmental divide & conquer)
+ *     2. Sparse MPAS algorithm, fallback version (global)
  *     3. Making trial anchor sets
  *     4. Footnotes 
  *     5. Statistics driver
@@ -33,324 +33,75 @@
 
 
 /*****************************************************************
- * 1. MPAS algorithm, complete sequence version
- *****************************************************************/
-
-/* Function:  p7_sparse_Anchors()
- * Synopsis:  The most probable anchor set (MPAS) algorithm; sparse version.
- *
- * Purpose:   Find the most probable anchor set for comparison of query profile
- *            <gm> to digital sequence <dsq> of length <L>. 
- *            
- *            The MPAS algorithm depends on stochastic path sampling,
- *            so caller provides a random number generator <rng>.
- *            
- *            Caller has already done what we call "First Analysis" on
- *            the sequence: standard Viterbi, Forward/Backward, and
- *            posterior Decoding. From this, caller gives us the
- *            Forward score <fwdsc>, the sparse Forward matrix <sxf>,
- *            the sparse Decoding matrix <sxd>, and the Viterbi trace
- *            <tr>. The two matrices remain constant during the MPAS
- *            calculation and are returned unchanged. The trace is
- *            overwritten by newly sampled paths.
- *            
- *            Caller provides two workspaces. <byp_wrk> is a "bypass"
- *            workspace that the stochastic trace algorithm knows how
- *            to deal with. A caller will generally set <float *wrk =
- *            NULL>, pass <&wrk> for the argument, and <free(wrk)>
- *            when done. The other workspace is an empty hash table <ah>
- *            that we need for fast checking of which anchor sets
- *            we've already calculated scores for.
- *            
- *            For retrieving the result, caller provides an empty
- *            sparse matrix <asf> and an empty anchor set <anch>.
- *            Upon return, <asf> contains the sparse ASC Forward
- *            matrix (both UP and DOWN components are stored in the
- *            same sparse matrix; this differs from the two-matrix
- *            style used in the reference implementation); <anch> is
- *            that anchor set; and <asc_sc> is the raw ASC Forward
- *            score in nats.
- *            
- *            Optionally, caller may override default parameters by
- *            passing in a <prm> structure. Pass <NULL> to use
- *            defaults.
- *
- *            Also optionally, caller may provide a pointer to a
- *            <stats> structure, to collect and retrieve statistics
- *            about the MPAS algorithm's performance. Pass <NULL> if
- *            this information isn't needed.
- *            
- *            The statistics in <stats> are collected in two phases.
- *            The first phase is collected here. A second phase
- *            requires having both the Viterbi trace and the anchor
- *            set, in order to compare the two. That requires having
- *            two trace structures around, one for sampling in the
- *            MPAS algorithm and one for remembering the Viterbi
- *            trace. We split the collection into these two phases
- *            because we don't want to force the caller to always have
- *            two trace structures, even if the caller isn't
- *            collecting the extra statistics; this way, the caller
- *            that is interested, can make its own copy of the Viterbi
- *            path. The <stats> structure has flags for whether it has
- *            the data for phase 1, phase 2, or both.
- *            
- *            Collecting <stats> does come with some computational
- *            overhead; avoid it in production code.
- *
- * Args:      rng     : random number generator
- *            dsq     : target sequence, digital (1..L)
- *            L       : length of <dsq>
- *            gm      : query profile, dual-mode (1..M)
- *            fwdsc   : sparse Forward score
- *            sxf     : sparse Forward matrix calculated for <gm>/<dsq> comparison
- *            sxd     : sparse Decoding matrix calculated for <gm>/<dsq> comparison
- *            tr      : Viterbi trace for <gm>,<dsq>; then used as space for sampled traces.
- *            byp_wrk : BYPASS: workspace array for stochastic tracebacks
- *            ah      : empty hash table for alternative <anch> solutions
- *            asf     : empty sparse matrix, to be used for sparse ASC Forward calculations
- *            anch    : empty anchor data structure to hold the result, the MPAS
- *            ret_asc : score of most probable anchor set (raw, nats)
- *            prm     : OPTIONAL: non-default control parameters
- *            stats   : OPTIONAL: detailed data collection for development, debugging
- *
- * Returns:   <eslOK> on success, and:
- *            anch    : contains most probable anchor set
- *            asf     : contains sparse ASC Forward matrix for MPAS solution
- *            ret_asc : ASC forward score of it, raw (nats)
- *            stats   : if provided, contains stats on the optimization that was done
- *            
- *            ah      : undefined (contains hashed data on all anchorsets that were tried)
- *            tr      : undefined (contains last path that algorithm happened to sample)
- *            rng     : state changed, because we sampled numbers from it
- *            
- * Xref:      For additional information, see the reference implementation
- *            in reference_anchors.c. If you're trying to understand
- *            MPAS the first time, the reference implementation might
- *            be a better place to start. Sparse DP adds complexity.
- */
-int
-p7_sparse_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
-		  float fwdsc, const P7_SPARSEMX *sxf, const P7_SPARSEMX *sxd,
-		  P7_TRACE *tr, float **byp_wrk, P7_ANCHORHASH *ah,
-		  P7_SPARSEMX *asf, P7_ANCHORS *anch, float *ret_asc,
-		  P7_MPAS_PARAMS *prm, P7_MPAS_STATS *stats)
-{
-  int     max_iterations = (prm ? prm->max_iterations      : 1000);
-  float   loglossthresh  = (prm ? log(prm->loss_threshold) : log (0.001));
-  int     be_verbose     = (prm ? prm->be_verbose          : FALSE);
-  float   best_asc       = -eslINFINITY;
-  int     iteration      = 0;
-  float   asc, best_ascprob;
-  int32_t keyidx, asc_keyidx, best_keyidx;
-  int     status;
-
-  /* Contract checks, argument validation */
-  ESL_DASSERT1(( sxf->type == p7S_FORWARD  ));
-  ESL_DASSERT1(( sxd->type == p7S_DECODING ));
-  ESL_DASSERT1(( sxf->sm->L == L && sxf->sm->M == gm->M ));
-  ESL_DASSERT1(( sxd->sm->L == L && sxd->sm->M == gm->M ));
-  ESL_DASSERT1(( tr->L      == L && tr->M      == gm->M ));  // it's a Viterbi trace when we start
-
-  /* Initialize optional <stats> */
-  if (stats) {
-    p7_mpas_stats_Init(stats);
-    p7_trace_Score(tr, dsq, gm, &(stats->vsc));
-    stats->fsc = fwdsc;
-  }
-
-  if (be_verbose) printf("# Forward score: %6.2f nats\n", fwdsc);
-
-  while (1)
-    {
-      p7_sparse_anchors_SetFromTrace(sxd, tr, anch);
-      status = p7_anchorhash_Store(ah, anch, 0, &keyidx);
-
-      if (status == eslOK)
-	{
-	  p7_sparsemx_Reuse(asf);
-	  p7_sparse_asc_Forward(dsq, L, gm, anch->a, anch->D, sxf->sm, asf, &asc);
-	  asc_keyidx = keyidx;   // asc_keyidx remembers which <keyidx> corresponds to <asf>
-
-	  if (stats) 
-	    {
-	      stats->tot_asc_calculations++;
-	      if (iteration == 0) {
-		stats->vit_asc     = asc;
-		stats->vit_ascprob = exp(asc - fwdsc);
-	      } 	      
-	    }
-
-	  if (be_verbose)
-	    {
-	      if      (iteration == 0) printf("VIT      %5d %6.2f %10.4g ", keyidx, asc, exp(asc-fwdsc));
-	      else if (asc > best_asc) printf("NEW/BEST %5d %6.2f %10.4g ", keyidx, asc, exp(asc-fwdsc));
-	      else                     printf("NEW      %5d %6.2f %10.4g ", keyidx, asc, exp(asc-fwdsc));
-	      p7_anchors_DumpOneLine(stdout, anch);
-	    }
-
-	  if (asc > best_asc) {
-	    best_asc     = asc;
-	    best_ascprob = exp(asc - fwdsc);
-	    best_keyidx  = keyidx;
-
-	    if (stats)  {
-	      if (iteration > 0) stats->best_is_viterbi = FALSE;
-	      stats->nsamples_in_best = 1;
-	    }
-	  }
-
-	} 
-      else if (status == eslEDUP) {
-	if (stats && keyidx == best_keyidx) stats->nsamples_in_best++;
-
-	if (be_verbose)
-	  {
-	    printf("dup      %5d %6s %10s ", keyidx, "-", "-");
-	    p7_anchors_DumpOneLine(stdout, anch);
-	  }
-      }
-
-      if (best_ascprob >= 0.5) break;
-      if (iteration * log(1.0 - best_ascprob) < loglossthresh) break;
-      if (iteration == max_iterations) {
-	stats->solution_not_found = TRUE;
-	break;
-      }
-
-      p7_trace_Reuse(tr);
-      p7_anchors_Reuse(anch);
-      p7_sparse_trace_Stochastic(rng, byp_wrk, gm, sxf, tr);
-
-      iteration++;
-    }
-
-  if (keyidx     != best_keyidx) p7_anchorhash_Get(ah, best_keyidx, 0, anch);
-  if (asc_keyidx != best_keyidx) p7_sparse_asc_Forward(dsq, L, gm, anch->a, anch->D, sxf->sm, asf, &asc);
-
-  if (stats) 
-    {
-      stats->tot_iterations = iteration;
-      stats->best_asc       = asc;
-      stats->best_ascprob   = exp(asc - fwdsc);
-      stats->has_part1      = TRUE;
-    }
-
-  if (be_verbose)
-    {
-      printf("WINNER   %5d %6.2f %10.4g ", best_keyidx, best_asc, exp(best_asc-fwdsc));
-      p7_anchors_DumpOneLine(stdout, anch);
-    }
-
-  *ret_asc = asc;
-  return eslOK;
-}
-
-
-
-/*****************************************************************
- * 2. MPAS algorithm, segmental divide & conquer version
+ * 1. MPAS algorithm, segmental divide & conquer version
  *****************************************************************/
 
 static int segment_forward_score(const P7_PROFILE *gm, const P7_SPARSEMX *sxf, int g, float *dpc, float *xc, 
 				 float **opt_dpn, float **opt_xn, float *ret_p0, float *ret_sF);
 static int sparse_anchors_CatenateFromSegTrace(const P7_SPARSEMX *sxd, const P7_TRACE *tr, int g, float *dpc, P7_ANCHORS *anch, int D0, float **opt_dpn);
 
-/* Function:  p7_sparse_AnchorsSeg()
+
+
+/* Function:  p7_sparse_Anchors()
  * Synopsis:  Most probable anchor set (MPAS) algorithm: sparse segmental version.
  *
  * Purpose:   Find the most probable anchor set for comparison of query
  *            profile <gm> to digital sequence <dsq> of length <L>.
  *            
- *            The 'Seg' segmental divide and conquer version of MPAS
- *            differs from <p7_sparse_Anchors()> by building the
+ *            This is a segmental divide and conquer version of MPAS.
+ *            It differs from <p7_sparse_AnchorsGlobal()> by building the
  *            optimal anchor set sequentially, one segment at a time,
  *            exploiting things we can prove from sparsity in the DP
- *            matrix.
+ *            matrix. 
+ *            
+ *            Rarely, no individual segment wants to have an anchor,
+ *            yielding a D=0 solution overall, which isn't possible; a
+ *            profile must pass through the homology model at least
+ *            once. In this case, the routine fails over to the global
+ *            version of MPAS to find the correct solution.
  *
- *            MPAS algorithm uses stochastic path sampling, so caller provides
- *            random number generator <rng>.
+ *            MPAS algorithm uses stochastic path sampling, so caller
+ *            provides random number generator <rng>.
  *            
  *            Caller has already done a so-called "First Analysis" on
- *            the sequence: unconstrained sparse Viterbi,
+ *            the sequence: (unconstrained) sparse Viterbi,
  *            Forward/Backward, and posterior Decoding. From this,
- *            caller gives us the Viterbi and Forward scores <vsc> and
+ *            caller gives us the Viterbi and Forward raw nat scores <vsc> and
  *            <fsc>; the sparse Forward and Decoding matrices <sxf>
- *            and <sxd>; and the Viterbi trace <tr>. The
- *            two matrices remain constant during the MPAS calculation
- *            and are returned unchanged. The trace is overwritten by
- *            newly sampled paths.
+ *            and <sxd>; and <vanch>, the anchor set implied by the
+ *            Viterbi path. These remain constant during the MPAS
+ *            calculation and are returned unchanged.
  *            
- *            Caller provides a workspace <byp_wrk> that the
- *            stochastic traceback algorithm needs. This memory uses
- *            the Easel 'bypass' idiom to minimize reallocation. A
- *            caller will generally set <float *wrk = NULL> and pass
- *            <&wrk> for the argument; it will be allocated the first
- *            time and reused on all calls thereafter; and eventually
- *            the caller does a <free(wrk)> when done.
- *            
- *            Caller provides an allocated empty hash table <ah>.
- *            This is used for fast checking of which anchor set
- *            suffixes we've already calculated scores for.
- *            
- *            Caller provides an allocated empty anchor set <vanch>.
- *            This will get used as tmp space during the algorithm.
- *            Specifically, it is used to hold the anchor set implied
- *            by the complete Viterbi path. At each segment, that
- *            segment's Viterbi anchors are one of the first guesses
- *            at what the optimal segment anchor set suffix might be.
- *            (I don't see a way of avoiding this tmp space; I either
- *            need an extra trace structure to remember the Viterbi
- *            trace, or I need an extra anchor set, and the anchor set
- *            is a much smaller structure. Once the Viterbi-implied
- *            anchor set is calculated, <tr> is available for reuse in
- *            stochastic trace sampling.)
+ *            Caller provides three empty workspaces. All of these
+ *            will be reallocated as needed, so they can be of any
+ *            initial allocation size. <tr> is a trace structure used
+ *            for stochastic path samples. <byp_wrk> is an array using
+ *            the Easel 'bypass' idiom, needed by the stochastic
+ *            traceback algorithm. <ah> is an anchorset hash table,
+ *            used for fast checking of which anchor set suffixes
+ *            we've already calculated scores for. 
  *            
  *            For retrieving the result, caller provides an empty
  *            sparse matrix <asf>, an empty anchor set <anch>, and
  *            <ret_asc> for the ASC score. Upon return, <asf>
- *            contains the sparse ASC Forward matrix (both UP and DOWN
- *            components are stored in the same sparse matrix; this
- *            differs from the two-matrix style used in the reference
- *            implementation); <anch> is that anchor set; and <asc_sc>
+ *            contains the sparse ASC Forward matrix for the optimal
+ *            anchor set; <anch> is that anchor set; and <asc_sc>
  *            is the raw ASC Forward score in nats.
  *            
  *            Optionally, caller may override default parameters by
  *            passing in a <prm> structure. Pass <NULL> to use
  *            defaults.
  *
- *            Also optionally, caller may provide a pointer to a
- *            <stats> structure, to collect and retrieve statistics
- *            about the MPAS algorithm's performance. Pass <NULL> if
- *            this information isn't needed.
- *            
- *            The statistics in <stats> are collected in two phases.
- *            The first phase is collected here. A second phase
- *            requires having both the Viterbi trace and the anchor
- *            set, in order to compare the two. That requires having
- *            two trace structures around, one for sampling in the
- *            MPAS algorithm and one for remembering the Viterbi
- *            trace. We split the collection into these two phases
- *            because we don't want to force the caller to always have
- *            two trace structures, even if the caller isn't
- *            collecting the extra statistics; this way, the caller
- *            that is interested, can make its own copy of the Viterbi
- *            path. The <stats> structure has flags for whether it has
- *            the data for phase 1, phase 2, or both.
- *            
- *            Collecting <stats> does come with some computational
- *            overhead; avoid it in production code.
- *
  * Returns:   <eslOK> on success.
  *
  * Throws:    <eslEMEM> on reallocation failure.
  */
 int
-p7_sparse_AnchorsSeg(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
-		     const P7_SPARSEMX *sxf, const P7_SPARSEMX *sxd,
-		     float vsc, float fsc,
-		     P7_TRACE *tr, float **byp_wrk, P7_ANCHORHASH *ah, P7_ANCHORS *vanch,
-		     P7_SPARSEMX *asf, P7_ANCHORS *anch, float *ret_asc,
-		     P7_MPAS_PARAMS *prm)
+p7_sparse_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
+		  float vsc, float fsc, const P7_SPARSEMX *sxf, const P7_SPARSEMX *sxd, const P7_ANCHORS *vanch,
+		  P7_TRACE *tr, float **byp_wrk, P7_ANCHORHASH *ah,
+		  P7_SPARSEMX *asf, P7_ANCHORS *anch, float *ret_asc,
+		  P7_MPAS_PARAMS *prm)
 {
   int     max_iterations  = (prm ? prm->max_iterations      : 1000);
   float   loglossthresh   = (prm ? log(prm->loss_threshold) : log (0.001));
@@ -384,15 +135,16 @@ p7_sparse_AnchorsSeg(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
   int     status;
 
   /* Contract checks and argument validation */
-  ESL_DASSERT1(( anch->D   == 0 ));                                        // <anch> is provided empty
-  ESL_DASSERT1(( vanch->D  == 0 ));                                        //   ... so is <vanch>
-  ESL_DASSERT1(( ah->nkeys == 0 ));                                        //   ... so is <ah>
+
   ESL_DASSERT1(( gm->xsc[p7P_N][p7P_LOOP] == gm->xsc[p7P_J][p7P_LOOP] ));  // segment Fwd score depends on assumption tNN=tJJ=tCC
   ESL_DASSERT1(( gm->xsc[p7P_N][p7P_LOOP] == gm->xsc[p7P_C][p7P_LOOP] ));
   ESL_DASSERT1(( sxf->type == p7S_FORWARD  ));
   ESL_DASSERT1(( sxd->type == p7S_DECODING ));
   ESL_DASSERT1(( sm->L == L && sm->M == gm->M ));
-  ESL_DASSERT1(( tr->N > 0 ));                                            // <tr> is a Viterbi path on input
+  ESL_DASSERT1(( vanch->D  >  0 ));                                        // <vanch> is anchorset implied by Viterbi path
+  ESL_DASSERT1(( anch->D   == 0 ));                                        // <anch> is provided empty
+  ESL_DASSERT1(( tr->N     == 0 ));                                        //   ... so it <tr> 
+  ESL_DASSERT1(( ah->nkeys == 0 ));                                        //   ... so is <ah>
 
   /* If we're lucky, we can immediately prove that the Viterbi-implied
    * anchor set has to be the MPAS, in which case we're immediately
@@ -400,19 +152,13 @@ p7_sparse_AnchorsSeg(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
    */
   if (exp(vsc - fsc) > 0.5)
     {
-      p7_sparse_anchors_SetFromTrace(sxd, tr, anch);                          // Sets <anch> to Viterbi-implied anchor set, for complete seq.
+      p7_anchors_Copy(vanch, anch);
       p7_sparse_asc_Forward(dsq, L, gm, anch->a, anch->D, sm, asf, ret_asc);  // Determines overall <asc>; fills ASC Fwd matrix <asf>. <asf> is resized by sparse_asc_Forward as needed.
       return eslOK;
     }
+  /* Otherwise, on to the segmental MPAS algorithm. */
 
-  /* Otherwise, on to the segmental MPAS algorithm.
-   * First step: get the Viterbi-implied anchor set for the whole seq;
-   * as we go each segment, one of our first two guesses for
-   * the anchor set suffix g is the Viterbi-implied set for that
-   * segment, which we'll fetch from <vanch> and append on 
-   * our current <anch>.
-   */
-  p7_sparse_anchors_SetFromTrace(sxd, tr, vanch);   
+
 
   /* Reallocate <asf> sufficient to work with any anchor set. 
    * We may revisit this allocation strategy. This allocates
@@ -427,8 +173,9 @@ p7_sparse_AnchorsSeg(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
    * titin x titin.
    */
   p7_spascmx_Resize(asf, sm, NULL, 0);
-  dpc_a = asf->dp;
-  xc_a  = asf->xmx;
+  asf->type = p7S_ASC_FWD;
+  dpc_a     = asf->dp;
+  xc_a      = asf->xmx;
 
   /* anchor set in <anch> must be valid even when empty:
    * must set its sentinels at start. They will be copied
@@ -496,7 +243,6 @@ p7_sparse_AnchorsSeg(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
 	    }
 	  else                                                                // Else: all remaining tries take a stochastic trace for this segment.
 	    {
-	      p7_trace_Reuse(tr);
 	      p7_sparse_trace_StochasticSeg(rng, byp_wrk, gm, sxf, p0, sF, g, dpc_f, xc_f, tr);   // returned tr->N can be 0 here, in the special case of the empty path being sampled.
 	      sparse_anchors_CatenateFromSegTrace(sxd, tr, g, dpc_d, anch, D0, &dpn_d);           // dpn_d moves to start of seg g+1 in <sxd>
 	      Dg = anch->D - D0;                                                                  // Dg may be 0, in the case of the empty trace tr->N=0
@@ -523,9 +269,9 @@ p7_sparse_AnchorsSeg(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
 	   */
 	  if (status == eslOK)
 	    {            
+	      ngap  = (g == 1 ? sm->seg[g].ia - 1 : sm->seg[g].ia - sm->seg[g-1].ib - 1); // Length of intersegment space ib(g-1)+1..ia(g)-1. First segment must be special cased because sentinel ib(0) is -1, not 0
 	      if (Dg == 0) 
 		{ 
-		  ngap  = (g == 1 ? sm->seg[g].ia - 1 : sm->seg[g].ia - sm->seg[g-1].ib - 1); // Length of intersegment space ib(g-1)+1..ia(g)-1. First segment must be special cased because sentinel ib(0) is -1, not 0
 		  xNn   = xNc + p0 + (ngap ? (float) ngap * gm->xsc[p7P_N][p7P_LOOP] : 0.);   // Update state of xC/xN/xJ by adding score for crossing intersegment space,
 		  xJn   = xJc + p0 + (ngap ? (float) ngap * gm->xsc[p7P_J][p7P_LOOP] : 0.);   //   and score for crossing segment <g>. Numerical error must match other sparse DP 
 		  xCn   = xCc + p0 + (ngap ? (float) ngap * gm->xsc[p7P_C][p7P_LOOP] : 0.);   //   algorithms: interseg is done by multiplication, within-seg by summation
@@ -534,7 +280,8 @@ p7_sparse_AnchorsSeg(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
 		  asc   = p0; 
 		}
 	      else 
-		p7_sparse_asc_ForwardSeg(dsq, L, gm, anch->a, anch->D, D0+1, sm, g, asf,                // <asf> has already been reallocated. We must not Reuse() it; it contains a growing prefix we need to keep!
+		p7_sparse_asc_ForwardSeg(dsq, L, gm, anch->a, anch->D, D0+1, sm, ngap, sm->seg[g].ia, sm->seg[g].ib, 
+					 asf,                // <asf> has already been reallocated. We must not Reuse() it; it contains a growing prefix we need to keep!
 					 xNc, xJc, xCc, dpc_a, xc_a,
 					 &xNn, &xJn, &xCn, /*opt_d:*/NULL, &dpn_a, &xn_a, &asc);
 	      asc_keyidx = keyidx;     // asc_keyidx remembers which <keyidx> corresponds to <asf>
@@ -546,6 +293,8 @@ p7_sparse_AnchorsSeg(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
 	      }
 	    }
 	  
+	  p7_trace_Reuse(tr);
+
 	  /* Termination conditions */
 	  if (best_ascprob >= 0.5) break;
 	  if ((iteration - 1) * log(1.0 - best_ascprob) < loglossthresh) break;
@@ -574,7 +323,8 @@ p7_sparse_AnchorsSeg(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
 	    }
 	  else  // but if the optimum is Dg>0, then we do need an ASC Fwd calculation for this segment.
 	    {
-	      p7_sparse_asc_ForwardSeg(dsq, L, gm, anch->a, anch->D, D0+1, sm, g, asf, 
+	      ngap  = (g == 1 ? sm->seg[g].ia - 1 : sm->seg[g].ia - sm->seg[g-1].ib - 1);
+	      p7_sparse_asc_ForwardSeg(dsq, L, gm, anch->a, anch->D, D0+1, sm, ngap, sm->seg[g].ia, sm->seg[g].ib, asf, 
 				       xNc, xJc, xCc, dpc_a, xc_a, 
 				       &xNn, &xJn, &xCn, /*opt_d:*/NULL, &dpn_a, &xn_a, &asc);
 	    }
@@ -602,11 +352,176 @@ p7_sparse_AnchorsSeg(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
       D0    = anch->D;
     } // end loop over all segments <g>
 
-  if (L > sm->seg[sm->S].ib) 
-    xCc +=  (float) (L - sm->seg[sm->S].ib) * gm->xsc[p7P_C][p7P_LOOP];
-  *ret_asc = xCc +  gm->xsc[p7P_C][p7P_MOVE];
+  /* It's possible for segmental D&C MPAS to find a D=0 solution,
+   * where no individual segment wants to have any anchors.  A D=0
+   * solution is not allowed, because the profile must have at
+   * least one pass thru the homology model. Therefore D=0 is a
+   * special case failure mode; we have to fail over to the
+   * slower, global version of MPAS.
+   */
+  if (anch->D == 0)
+    {
+      p7_trace_Reuse(tr);
+      p7_anchorhash_Reuse(ah);
+      p7_sparsemx_Reuse(asf);
+      p7_anchors_Reuse(anch);
+      
+      return p7_sparse_AnchorsGlobal(rng, dsq, L, gm,
+				     vsc, fsc, sxf, sxd, vanch,
+				     tr, byp_wrk, ah, 
+				     asf, anch, ret_asc,
+				     prm);
+    }
+  else
+    {
+      if (L > sm->seg[sm->S].ib) 
+	xCc +=  (float) (L - sm->seg[sm->S].ib) * gm->xsc[p7P_C][p7P_LOOP];
+      *ret_asc = xCc +  gm->xsc[p7P_C][p7P_MOVE];
+      return eslOK;
+    }
+}
+
+
+
+/*****************************************************************
+ * 2. MPAS algorithm, complete sequence version
+ *****************************************************************/
+
+/* Function:  p7_sparse_AnchorsGlobal()
+ * Synopsis:  The most probable anchor set (MPAS) algorithm; sparse, complete-seq version.
+ *
+ * Purpose:   Find the most probable anchor set for comparison of query profile
+ *            <gm> to digital sequence <dsq> of length <L>. 
+ *
+ *            This version of sparse MPAS solves for the optimum
+ *            anchor set of the complete sequence as a whole.
+ *            Normally we use <p7_sparse_Anchors()>, which uses a
+ *            faster divide and conquer algorithm, but that algorithm
+ *            has a (rare) failure mode in which it can produce a
+ *            <D=0> 'solution', in which case we need to fail over to
+ *            this algorithm.
+ *            
+ *            The MPAS algorithm depends on stochastic path sampling,
+ *            so caller provides a random number generator <rng>.
+ *            
+ *            Caller has already done what we call "First Analysis" on
+ *            the sequence: standard Viterbi, Forward/Backward, and
+ *            posterior Decoding. From this, caller gives us the
+ *            Viterbi and Forward raw nat scores <vsc> and <fsc>; the
+ *            sparse Forward and Decoding matrices <sxf> and <sxd>;
+ *            and <vanch>, the anchorset implied by the Viterbi path.
+ *            These remain constant during the MPAS calculations and
+ *            are returned unchanged.
+ *            
+ *            Caller provides three empty workspaces. All are
+ *            reallocated as needed, so they can be of any initial
+ *            allocation size. <tr> is a trace structure used for
+ *            stochastic path samples. <byp_wrk> is a "bypass"
+ *            workspace that the stochastic trace algorithm knows how
+ *            to deal with.  <ah> is an empty hash table that we need
+ *            for fast checking of which anchor sets we've already
+ *            calculated scores for.
+ *            
+ *            For retrieving the result, caller provides an empty
+ *            sparse matrix <asf>, an empty anchor set <anch>, and
+ *            <ret_asc> for the ASC score.  Upon return, <asf>
+ *            contains the sparse ASC Forward matrix for the optimal
+ *            anchor set; <anch> is that anchor set; and <asc_sc> is
+ *            the raw ASC Forward score in nats.
+ *            
+ *            Optionally, caller may override default parameters by
+ *            passing in a <prm> structure. Pass <NULL> to use
+ *            defaults.
+ *
+ * Args:      rng     : random number generator
+ *            dsq     : target sequence, digital (1..L)
+ *            L       : length of <dsq>
+ *            gm      : query profile, dual-mode (1..M)
+ *            vsc     : sparse Viterbi score (raw, nats)
+ *            fsc     : sparse Forward score
+ *            sxf     : sparse Forward matrix calculated for <gm>/<dsq> comparison
+ *            sxd     : sparse Decoding matrix calculated for <gm>/<dsq> comparison
+ *            vanch   : anchorset implied by the Viterbi trace
+ *            tr      : empty traceback; used as space for sampled traces.
+ *            byp_wrk : BYPASS: workspace array for stochastic tracebacks
+ *            ah      : empty hash table for alternative <anch> solutions
+ *            asf     : empty sparse matrix, to be used for sparse ASC Forward calculations
+ *            anch    : empty anchor data structure to hold the result, the MPAS
+ *            ret_asc : score of most probable anchor set (raw, nats)
+ *            prm     : OPTIONAL: non-default control parameters
+ *
+ * Returns:   <eslOK> on success, and:
+ *            anch    : contains most probable anchor set
+ *            asf     : contains sparse ASC Forward matrix for MPAS solution
+ *            ret_asc : ASC forward score of it, raw (nats)
+ *            
+ */
+int
+p7_sparse_AnchorsGlobal(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
+			float vsc, float fsc, const P7_SPARSEMX *sxf, const P7_SPARSEMX *sxd, const P7_ANCHORS *vanch,
+			P7_TRACE *tr, float **byp_wrk, P7_ANCHORHASH *ah,
+			P7_SPARSEMX *asf, P7_ANCHORS *anch, float *ret_asc,
+			P7_MPAS_PARAMS *prm)
+{
+  int     max_iterations = (prm ? prm->max_iterations      : 1000);
+  float   loglossthresh  = (prm ? log(prm->loss_threshold) : log (0.001));
+  float   best_asc       = -eslINFINITY;
+  int     iteration      = 0;
+  float   asc, best_ascprob;
+  int32_t keyidx, asc_keyidx, best_keyidx;
+  int     status;
+
+  /* Contract checks, argument validation */
+  ESL_DASSERT1(( sxf->type == p7S_FORWARD  ));
+  ESL_DASSERT1(( sxd->type == p7S_DECODING ));
+  ESL_DASSERT1(( sxf->sm->L == L && sxf->sm->M == gm->M ));
+  ESL_DASSERT1(( sxd->sm->L == L && sxd->sm->M == gm->M ));
+  ESL_DASSERT1(( vanch->D  >  0 ));                                        // <vanch> is anchorset implied by Viterbi path
+  ESL_DASSERT1(( anch->D   == 0 ));                                        // <anch> is provided empty
+  ESL_DASSERT1(( tr->N     == 0 ));                                        //   ... so it <tr> 
+  ESL_DASSERT1(( ah->nkeys == 0 ));                                        //   ... so is <ah>
+
+  /* anchorset implied by Viterbi path is our initial guess */
+  p7_anchors_Copy(vanch, anch);
+
+  while (1)
+    {
+      status = p7_anchorhash_Store(ah, anch, 0, &keyidx);
+
+      if (status == eslOK)
+	{
+	  p7_sparsemx_Reuse(asf);
+	  p7_sparse_asc_Forward(dsq, L, gm, anch->a, anch->D, sxf->sm, asf, &asc);
+	  asc_keyidx = keyidx;   // asc_keyidx remembers which <keyidx> corresponds to <asf>
+
+	  if (asc > best_asc) {
+	    best_asc     = asc;
+	    best_ascprob = exp(asc - fsc);
+	    best_keyidx  = keyidx;
+	  }
+
+	} 
+
+      if (best_ascprob >= 0.5)                                 break;
+      if (iteration * log(1.0 - best_ascprob) < loglossthresh) break;
+      if (iteration == max_iterations)                         break;
+
+      p7_trace_Reuse(tr);
+      p7_anchors_Reuse(anch);
+      p7_sparse_trace_Stochastic(rng, byp_wrk, gm, sxf, tr);
+      p7_sparse_anchors_SetFromTrace(sxd, tr, anch);
+
+      iteration++;
+    }
+
+  if (keyidx     != best_keyidx) p7_anchorhash_Get(ah, best_keyidx, 0, anch);
+  if (asc_keyidx != best_keyidx) p7_sparse_asc_Forward(dsq, L, gm, anch->a, anch->D, sxf->sm, asf, &asc);
+
+  *ret_asc = asc;
   return eslOK;
 }
+
+
 
 
 
@@ -1144,7 +1059,7 @@ static ESL_OPTIONS options[] = {
   /* name           type           default  env  range  toggles reqs incomp  help                                       docgroup*/
   { "-h",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",                   0 },
   { "-s",          eslARG_INT,      "0",  NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                          0 },
-  { "-X",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "run experimental segmental D&C version",                 0 },
+  { "-G",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "run 'global' version instead of segmental D&C",          0 },
   { "-Z",          eslARG_INT,      "1",  NULL, NULL,   NULL,  NULL, NULL, "set sequence # to <n>, for E-value calculations",        0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -1176,11 +1091,9 @@ main(int argc, char **argv)
   P7_SPARSEMX    *sxf     = p7_sparsemx_Create(NULL);
   P7_SPARSEMX    *sxd     = p7_sparsemx_Create(NULL);
   P7_SPARSEMX    *asf     = p7_sparsemx_Create(NULL);
-  P7_TRACE       *vtr     = p7_trace_Create();
-  P7_TRACE       *vtr2    = p7_trace_Create();
+  P7_TRACE       *tr      = p7_trace_Create();
   float          *wrk     = NULL;
   int             Z       = esl_opt_GetInteger(go, "-Z");
-  P7_MPAS_STATS   stats;
   float           nullsc, vsc, fsc, asc;
   clock_t         start_c, end_c;
   clock_t         total_c = 0;
@@ -1219,70 +1132,36 @@ main(int argc, char **argv)
 
 	  p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
 
-	  p7_SparseViterbi (sq->dsq, sq->n, gm, sm, sxf, vtr, &vsc);
-	  p7_sparse_trace_Viterbi(gm, sxf, vtr2);         // a second copy; we have no p7_trace_Copy() function yet
+	  p7_SparseViterbi (sq->dsq, sq->n, gm, sm, sxf, tr, &vsc);
 	  p7_SparseForward (sq->dsq, sq->n, gm, sm, sxf, &fsc);
 	  p7_SparseBackward(sq->dsq, sq->n, gm, sm, sxd, NULL);   
 	  p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxd, sxd);   
 
+
 	  start_c = clock();
 
-	  if (esl_opt_GetBoolean(go, "-X"))
-	    p7_sparse_AnchorsSeg(rng, sq->dsq, sq->n, gm, sxf, sxd, vsc, fsc, vtr, &wrk, 
-				 ah, vanch, asf, anch, &asc, NULL);
+	  p7_sparse_anchors_SetFromTrace(sxd, tr, vanch);
+	  p7_trace_Reuse(tr);
+
+	  if (esl_opt_GetBoolean(go, "-G"))
+	    p7_sparse_AnchorsGlobal(rng, sq->dsq, sq->n, gm, 
+				    vsc, fsc, sxf, sxd, vanch,
+				    tr, &wrk, ah, 
+				    asf, anch, &asc,
+				    NULL);
 	  else
-	    p7_sparse_Anchors(rng, sq->dsq, sq->n, gm, fsc, sxf, sxd, vtr, &wrk, ah,
-			      asf, anch, &asc, NULL, &stats);
+	    p7_sparse_Anchors(rng, sq->dsq, sq->n, gm, 
+			      vsc, fsc, sxf, sxd, vanch, 
+			      tr, &wrk, ah,
+			      asf, anch, &asc, NULL);
 
 	  end_c   = clock();
 	  total_c += end_c - start_c;
 	     
-	  if (! esl_opt_GetBoolean(go, "-X"))
-	    {
-	      p7_trace_Index(vtr2);
-	      p7_mpas_stats_CompareAS2Trace(&stats, anch, vtr2);
-
-	      printf("%8.2f %10.4g %8.2f %10.4g ",
-		     stats.fsc, 
-		     (double) Z * esl_exp_surv   ( (stats.fsc - nullsc) / eslCONST_LOG2, gm->evparam[p7_FTAU], gm->evparam[p7_FLAMBDA]),
-		     stats.vsc, 
-		     (double) Z * esl_gumbel_surv( (stats.vsc - nullsc) / eslCONST_LOG2, gm->evparam[p7_VMU],  gm->evparam[p7_VLAMBDA]));
-		   
-		 
-	      printf("%8.2f %6.4f %3s ", 
-		     stats.vit_asc,
-		     stats.vit_ascprob,
-		     (stats.best_is_viterbi    ? "YES" : "no"));
-
-	      printf("%8.2f %6.4f %6.4f ", 
-		     stats.best_asc,
-		     stats.best_ascprob,
-		     (float) stats.nsamples_in_best / (float) stats.tot_iterations);
-	  
-	      printf("%5d %4d %3s ", 
-		     stats.tot_iterations,
-		     stats.tot_asc_calculations,
-		     (stats.solution_not_found ? "YES" : "no"));
-	    
-	      printf("%4d %4d %4d ", 
-		     stats.anch_outside,
-		     stats.anch_unique,
-		     stats.anch_multiple);
-
-	      printf("%4d %4d %4d ",
-		     stats.dom_zero,
-		     stats.dom_one,
-		     stats.dom_multiple);
-	    } 
-
-	  printf("%10.4f ", (double) (end_c - start_c) / (double) CLOCKS_PER_SEC);
-	  printf("\n");
-	  
 	  p7_sparsemx_Reuse(sxf);
 	  p7_sparsemx_Reuse(sxd);
 	  p7_sparsemx_Reuse(asf);
-	  p7_trace_Reuse(vtr);
-	  p7_trace_Reuse(vtr2);
+	  p7_trace_Reuse(tr);
 	  p7_anchorhash_Reuse(ah);
 	  p7_anchors_Reuse(anch);
 	  p7_anchors_Reuse(vanch);
@@ -1299,10 +1178,10 @@ main(int argc, char **argv)
   printf("# Total time in p7_sparse_Anchors = %.4f sec\n", (double) total_c / (double) CLOCKS_PER_SEC);
 
   if (wrk) free(wrk);
+  p7_anchors_Destroy(vanch);
   p7_anchors_Destroy(anch);
   p7_anchorhash_Destroy(ah);
-  p7_trace_Destroy(vtr);
-  p7_trace_Destroy(vtr2);
+  p7_trace_Destroy(tr);
   p7_sparsemx_Destroy(asf);
   p7_sparsemx_Destroy(sxf);
   p7_sparsemx_Destroy(sxd);
@@ -1346,7 +1225,7 @@ static ESL_OPTIONS options[] = {
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
   { "-a",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "include all cells in sparse mx",                   0 },
   { "-s",        eslARG_INT,      "0", NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
-  { "-X",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "run experimental AnchorSeg() version instead",     0 },
+  { "-G",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "run 'global' version instead of segmental D&C",    0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -1376,11 +1255,9 @@ main(int argc, char **argv)
   P7_SPARSEMX    *sxf     = NULL;
   P7_SPARSEMX    *sxd     = NULL;
   P7_SPARSEMX    *asf     = NULL;
-  P7_TRACE       *vtr     = NULL;
-  P7_TRACE       *vtr2    = NULL;
+  P7_TRACE       *tr      = NULL;
   float          *wrk     = NULL;
   P7_MPAS_PARAMS  prm;
-  P7_MPAS_STATS   stats;
   float           fsc, vsc, asc, nullsc;
   int             status;
 
@@ -1434,13 +1311,10 @@ main(int argc, char **argv)
   sxf  = p7_sparsemx_Create(sm);
   sxd  = p7_sparsemx_Create(sm);
   asf  = p7_sparsemx_Create(sm);
-  vtr  = p7_trace_Create();
-  vtr2 = p7_trace_Create();
-
+  tr   = p7_trace_Create();
 
   /* First pass analysis */
-  p7_SparseViterbi (sq->dsq, sq->n, gm, sm,  sxf, vtr, &vsc);
-  p7_sparse_trace_Viterbi(gm, sxf, vtr2);                     // a second copy, for stats; awkward
+  p7_SparseViterbi (sq->dsq, sq->n, gm, sm,  sxf,  tr, &vsc);
   p7_SparseForward (sq->dsq, sq->n, gm, sm,  sxf,      &fsc);
   p7_SparseBackward(sq->dsq, sq->n, gm, sm,  sxd,      NULL);
   p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxd,      sxd);
@@ -1449,19 +1323,21 @@ main(int argc, char **argv)
   //p7_trace_DumpAnnotated(stdout, vtr, gm, sq->dsq);
 
   /* Do it */
-  if (esl_opt_GetBoolean(go, "-X")) 
-    p7_sparse_AnchorsSeg(rng, sq->dsq, sq->n, gm, sxf, sxd, vsc, fsc, vtr, &wrk, 
-			 ah, vanch, asf, anch, &asc, &prm);
-  else
-    {
-      p7_sparse_Anchors(rng, sq->dsq, sq->n, gm, fsc, sxf, sxd, vtr, &wrk, 
-			ah, asf, anch, &asc, &prm, &stats);
 
-      /* Finish collecting statistics and dump them. */
-      p7_trace_Index(vtr2);
-      p7_mpas_stats_CompareAS2Trace(&stats, anch, vtr);
-      p7_mpas_stats_Dump(stdout, &stats);
-    }
+  p7_sparse_anchors_SetFromTrace(sxd, tr, vanch);
+  p7_trace_Reuse(tr);
+
+  if (esl_opt_GetBoolean(go, "-G")) 
+    p7_sparse_AnchorsGlobal(rng, sq->dsq, sq->n, gm, 
+			    vsc, fsc, sxf, sxd, vanch, 
+			    tr, &wrk, ah, 
+			    asf, anch, &asc, 
+			    &prm);
+  else
+    p7_sparse_Anchors(rng, sq->dsq, sq->n, gm, 
+		      vsc, fsc, sxf, sxd, vanch,
+		      tr, &wrk, ah,
+		      asf, anch, &asc, &prm);
 
   printf("Viterbi score = %.2f nats\n", vsc);
   printf("Forward score = %.2f nats\n", fsc);
@@ -1471,8 +1347,7 @@ main(int argc, char **argv)
   printf("ASC prob      = %.4f\n", exp(asc - fsc));
 
   if (wrk) free(wrk);
-  p7_trace_Destroy(vtr2);
-  p7_trace_Destroy(vtr);
+  p7_trace_Destroy(tr);
   p7_sparsemx_Destroy(asf);
   p7_sparsemx_Destroy(sxd);
   p7_sparsemx_Destroy(sxf);

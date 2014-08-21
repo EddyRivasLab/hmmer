@@ -262,7 +262,7 @@ p7_spascmx_MinSizeofSeg(const P7_SPARSEMASK *sm, const P7_ANCHOR *anch, int D, i
 
 
 int
-p7_spascmx_Renormalize(P7_SPARSEMX *asd, P7_ANCHOR *anch, int D)
+p7_spascmx_Renormalize(P7_SPARSEMX *asd, const P7_ANCHOR *anch, int D)
 {
   const P7_SPARSEMASK *sm  = asd->sm;
   float *dpc = asd->dp;
@@ -893,12 +893,13 @@ validate_decoding(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
       d2      = -1;
 
       /* SPECIALS on row ia-1:
-       *   E only reachable when i is in DOWN sector
+       *   E only reachable when i is in DOWN sector, so E(ia-1) must be 0.
        *   N only reachable above first anchor
        *   J only reachable between 1st, last anchor
        *   C not reachable above an anchor
        *   B, L, G always reachable in UP sector and its initialization
-       *   JJ, CC zero; no emission on this initialization row
+       *   If J is used, all its mass is in JJ.
+       *   CC not reachable because C isn't.
        */
       if (xcell_pp(xc[p7S_E],  0,               tol) != eslOK) return eslFAIL;
       if (xcell_pp(xc[p7S_N],  (d==1),          tol) != eslOK) return eslFAIL;
@@ -907,7 +908,7 @@ validate_decoding(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
       if (xcell_pp(xc[p7S_B],  1,               tol) != eslOK) return eslFAIL;
       if (xcell_pp(xc[p7S_L],  1,               tol) != eslOK) return eslFAIL;
       if (xcell_pp(xc[p7S_G],  1,               tol) != eslOK) return eslFAIL;
-      if (xcell_pp(xc[p7S_JJ], 0,               tol) != eslOK) return eslFAIL;
+      if (xcell_pp(xc[p7S_JJ], (d>1 && d <= D), tol) != eslOK) return eslFAIL;
       if (xcell_pp(xc[p7S_CC], 0,               tol) != eslOK) return eslFAIL;
       xc += p7S_NXCELLS;
 
