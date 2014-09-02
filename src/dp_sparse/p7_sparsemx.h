@@ -94,20 +94,21 @@ typedef struct {
  * Forward, or Backward matrix, impossible cells are -eslINFINITY. The
  * <type> field gets set by each algorithm implementation, and this
  * gets used for example by a _Validate() call.
+ * 
+ * Some of these codes must be sync'ed with p7_refmx.h. Some unit tests
+ * compare reference, sparse matrices, including their type codes.
  */
-#define p7S_UNSET         0
-#define p7S_FORWARD       1
-#define p7S_BACKWARD      2
-#define p7S_DECODING      3
-#define p7S_ALIGNMENT     4
-#define p7S_VITERBI       5
+#define p7S_UNSET         0  // = p7R_UNSET
+#define p7S_FORWARD       1  // = p7R_FORWARD
+#define p7S_BACKWARD      2  // = p7R_BACKWARD
+#define p7S_DECODING      3  // = p7R_DECODING
+#define p7S_VITERBI       4  // = p7R_VITERBI
+#define p7S_AEC_ALIGN     5  // = p7R_AEC_ALIGN
 #define p7S_ASC_FWD       6
 #define p7S_ASC_BCK       7
 #define p7S_ASC_DECODE    8
-#define p7S_AEC_MEG_ALIGN 9  
-#define p7S_ENVSCORE      10  // deprecated. Will remove, when sparse_envscore.c goes away.
-#define p7S_MASSTRACE     11  //  ... ditto, for sparse_masstrace.c
-#define p7S_ASC_VITERBI   12
+#define p7S_ENVSCORE      9   // deprecated. Will remove, when sparse_envscore.c goes away.
+#define p7S_MASSTRACE     10  //  ... ditto, for sparse_masstrace.c
 
 typedef struct {
   float  *dp;		// main DP supercells. sm->ncells <= dalloc. each supercell contains p7S_NSCELLS values. 

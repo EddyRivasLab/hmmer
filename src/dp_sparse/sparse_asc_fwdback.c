@@ -18,7 +18,7 @@
 #include "easel.h"
 
 #include "base/p7_profile.h"
-#include "base/p7_coords2.h"
+#include "base/p7_anchors.h"
 
 #include "misc/logsum.h"
 
@@ -415,14 +415,14 @@ p7_sparse_asc_ForwardSeg(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 	  dpp        = last_down;
 	  last_down  = dpc;
 
-	  while (z < sm->n[i] && sm->k[i][z] < anch[d-1].k0) z++;   // skip sparse cells that aren't in DOWN sector (which is k0..M) 
+	  while (z < sm->n[i]   && sm->k[i][z]   < anch[d-1].k0) z++;   // skip sparse cells that aren't in DOWN sector (which is k0..M) 
+	  while (y < sm->n[i-1] && sm->k[i-1][y] < anch[d-1].k0) y++;   //   .. and on prev row too.
 	  for (; z < sm->n[i]; z++)                                 // then calculate the rest of the row.
 	    {                                  
 	      k = sm->k[i][z];  // for notational convenience
 
 	      /* Try to find cell i-1,k-1; then compute M(i,k) from it */
 	      mlc = mgc = -eslINFINITY;
-	      while (y < sm->n[i-1] && sm->k[i-1][y] < anch[d-1].k0) y++;                           // skip cells on prev row that aren't in DOWN at all
 	      while (y < sm->n[i-1] && sm->k[i-1][y] < k-1)        { y++; dpp += p7S_NSCELLS; }     // skip cells that exist in sparse ASC matrix, but aren't (i-1,k-1)
 	      if    (y < sm->n[i-1] && sm->k[i-1][y] == k-1) {
 		mlc = p7_FLogsum( p7_FLogsum( dpp[p7R_ML] + TSC(p7P_MM, k-1),

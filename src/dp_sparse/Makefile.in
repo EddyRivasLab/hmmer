@@ -2,6 +2,7 @@ MODULE = dp_sparse
 
 LIBOBJS =  p7_sparsemx.o        \
 	   p7_spascmx.o         \
+	   sparse_aec_align.o   \
 	   sparse_anchors.o     \
 	   sparse_asc_fwdback.o \
 	   sparse_decoding.o    \

@@ -1082,57 +1082,6 @@ validate_decoding(P7_REFMX *rmx, char *errbuf)
   return eslOK;
 }
 
-static inline int
-validate_alignment(P7_REFMX *rmx, char *errbuf)
-{
-  int i,k,s;
-  int status;
-
-  if (( status = validate_column_zero(rmx, -eslINFINITY, errbuf)) != eslOK) return status;  
-
-  /* Row i=0 */
-  for (k = 1; k <= rmx->M; k++)
-    for (s = 0; s <= p7R_NSCELLS; s++)
-      if ( (status = validate_mainstate(rmx, 0, k, s, -eslINFINITY, errbuf)) != eslOK) return status;
-  if ( ( status = validate_special(rmx, 0, p7R_E,     -eslINFINITY, errbuf)) != eslOK) return status;
-  if ( ( status = validate_special(rmx, 0, p7R_J,     -eslINFINITY, errbuf)) != eslOK) return status;
-  if ( ( status = validate_special(rmx, 0, p7R_C,     -eslINFINITY, errbuf)) != eslOK) return status;
-
-  /* Row i=1 has some additional expected -inf's, different from the remaining rows 2..L */
-  for (k = 1; k <= rmx->M; k++) {
-    if ( (status = validate_mainstate(rmx, 1, k, p7R_IL, -eslINFINITY, errbuf)) != eslOK) return status;
-    if ( (status = validate_mainstate(rmx, 1, k, p7R_IG, -eslINFINITY, errbuf)) != eslOK) return status;
-  }
-
-  /* Rows 2..L, plus the row i=1 cells we didn't just check */
-  for (i = 1; i <= rmx->L; i++)
-    {
-      if ((status =    validate_mainstate(rmx, i,      1, p7R_DL, -eslINFINITY, errbuf)) != eslOK) return status;
-      if ((status =    validate_mainstate(rmx, i,      1, p7R_DG, -eslINFINITY, errbuf)) != eslOK) return status;
-      if ((status =    validate_mainstate(rmx, i, rmx->M, p7R_IL, -eslINFINITY, errbuf)) != eslOK) return status;
-      if ((status =    validate_mainstate(rmx, i, rmx->M, p7R_IG, -eslINFINITY, errbuf)) != eslOK) return status;
-    }
-
-  /* Row i=L has some additional expected -inf's, different from the remaining rows */
-  for (k = 1; k <= rmx->M; k++) {
-    if ( (status = validate_mainstate(rmx, rmx->L, k, p7R_IL, -eslINFINITY, errbuf)) != eslOK) return status;
-    if ( (status = validate_mainstate(rmx, rmx->L, k, p7R_IG, -eslINFINITY, errbuf)) != eslOK) return status;
-  }
-  if ( (status = validate_special  (rmx, rmx->L,    p7R_N,  -eslINFINITY, errbuf)) != eslOK) return status;
-  if ( (status = validate_special  (rmx, rmx->L,    p7R_J,  -eslINFINITY, errbuf)) != eslOK) return status;
-  if ( (status = validate_special  (rmx, rmx->L,    p7R_B,  -eslINFINITY, errbuf)) != eslOK) return status;
-  if ( (status = validate_special  (rmx, rmx->L,    p7R_L,  -eslINFINITY, errbuf)) != eslOK) return status;
-  if ( (status = validate_special  (rmx, rmx->L,    p7R_G,  -eslINFINITY, errbuf)) != eslOK) return status;
-
-  /* and throughout, CC/JJ are only for decoding; Alignment matrix has them as -inf */
-  for (i = 0; i <= rmx->L; i++)
-    {
-      if ( ( status = validate_special(rmx, 0, p7R_JJ,    -eslINFINITY, errbuf)) != eslOK) return status;
-      if ( ( status = validate_special(rmx, 0, p7R_CC,    -eslINFINITY, errbuf)) != eslOK) return status;
-    }
-
-  return eslOK;
-}
 
 
 /* Function:  p7_refmx_Validate()
@@ -1166,7 +1115,6 @@ p7_refmx_Validate(P7_REFMX *rmx, char *errbuf)
   case p7R_VITERBI:   if ( (status = validate_forward    (rmx,               errbuf)) != eslOK) return status;  break; // Viterbi has same pattern as Forward
   case p7R_BACKWARD:  if ( (status = validate_backward   (rmx,               errbuf)) != eslOK) return status;  break;
   case p7R_DECODING:  if ( (status = validate_decoding   (rmx,               errbuf)) != eslOK) return status;  break;     
-  case p7R_ALIGNMENT: if ( (status = validate_alignment  (rmx,               errbuf)) != eslOK) return status;  break; 
   case p7R_UNSET:     if ( (status = validate_column_zero(rmx, -eslINFINITY, errbuf)) != eslOK) return status;  break;
   default:            ESL_FAIL(eslFAIL, errbuf, "no such reference DP algorithm type %d", rmx->type);
   }

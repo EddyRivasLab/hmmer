@@ -82,7 +82,7 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
   if ( (status = p7_refmx_GrowTo(mx, M, L)) != eslOK) return status;
   mx->M    = M;
   mx->L    = L;
-  mx->type = p7R_AEC_MEG_ALIGN;
+  mx->type = p7R_AEC_ALIGN;
 
   /* Initialize rows 0..ia[0]-1.
    * Note that we don't really have to do this. We know,

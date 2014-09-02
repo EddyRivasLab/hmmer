@@ -52,20 +52,24 @@
 /* the same data structure gets used in several DP contexts.
  * the <type> field gets set by each algorithm implementation,
  * so p7_refmx_Validate() knows what type of DP matrix it is.
+ * 
+ * Some of these codes must be sync'ed with p7_sparsemx.h. Some unit
+ * tests compare reference, sparse matrices, including their
+ * type codes.
  */
-#define p7R_UNSET            0
-#define p7R_FORWARD          1
-#define p7R_BACKWARD         2
-#define p7R_DECODING         3
-#define p7R_ALIGNMENT        4
-#define p7R_VITERBI          5
+#define p7R_UNSET            0   // = p7S_UNSET
+#define p7R_FORWARD          1   // = p7S_FORWARD
+#define p7R_BACKWARD         2   // = p7S_BACKWARD
+#define p7R_DECODING         3   // = p7S_DECODING
+#define p7R_VITERBI          4   // = p7S_VITERBI
+#define p7R_AEC_ALIGN        5   // = p7S_AEC_ALIGN
 #define p7R_ASC_FWD_UP       6
 #define p7R_ASC_FWD_DOWN     7
 #define p7R_ASC_BCK_UP       8
 #define p7R_ASC_BCK_DOWN     9
 #define p7R_ASC_DECODE_UP   10
 #define p7R_ASC_DECODE_DOWN 11
-#define p7R_AEC_MEG_ALIGN   12
+
 
 
 

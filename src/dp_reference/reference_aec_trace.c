@@ -205,7 +205,7 @@ reference_aec_trace_engine(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REF
    * reference_trace.c, design allows for generalization to other
    * optimization criteria.
    */
-  if (mx->type == p7R_AEC_MEG_ALIGN)
+  if (mx->type == p7R_AEC_ALIGN)
     {
       select_ml = &aec_meg_select_ml;   select_mg = &aec_meg_select_mg;
       select_il = &aec_meg_select_il;   select_ig = &aec_meg_select_ig;

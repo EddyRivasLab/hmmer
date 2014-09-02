@@ -1959,9 +1959,8 @@ p7_sparsemx_Validate(const P7_SPARSEMX *sx, char *errbuf)
   case p7S_FORWARD:    if ( (status = validate_fwdvit  (sx, errbuf)) != eslOK) return status; break;
   case p7S_BACKWARD:   if ( (status = validate_backward(sx, errbuf)) != eslOK) return status; break;
   case p7S_DECODING:   if ( (status = validate_decoding(sx, errbuf)) != eslOK) return status; break;
-  case p7S_ALIGNMENT:  ESL_FAIL(eslFAIL, errbuf, "unimplemented");
   case p7S_VITERBI:    if ( (status = validate_fwdvit  (sx, errbuf)) != eslOK) return status; break;
-  default:             ESL_FAIL(eslFAIL, errbuf, "no such spare DP matrix type %d", sx->type);
+  default:             ESL_FAIL(eslFAIL, errbuf, "no such sparse DP matrix type %d", sx->type);
   }
   return eslOK;
 }
