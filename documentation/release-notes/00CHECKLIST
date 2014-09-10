@@ -338,8 +338,12 @@ Delete TO-DO sections and clean up for public consumption.
    texclean
 
 * package
+* The 'h' option on tar is --dereference: it may only be 
+* available in gnu tar. It dereferences symlinks and makes
+* them copies instead. Windows systems can't deal w/ symlinks,
+* I'm told.
    cd ..
-   tar cvf hmmer-${HMMER_VERSION}.tar hmmer-${HMMER_VERSION}
+   tar cvfh hmmer-${HMMER_VERSION}.tar hmmer-${HMMER_VERSION}
    gzip hmmer-${HMMER_VERSION}.tar
 
    3.0:     4.0 Mb (source only)
