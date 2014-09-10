@@ -423,7 +423,7 @@ ia32 build:
   cd ..
   rm -rf build-${HMMER_DISTRO}
   cd .. 
-  tar cf hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar  hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
+  tar cfh hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar  hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
   gzip hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar
 
 intel64 build:
@@ -446,7 +446,7 @@ intel64 build:
   cd ..
   rm -rf build-${HMMER_DISTRO}
   cd .. 
-  tar cf hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar  hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
+  tar cfh hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar  hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
   gzip hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar
   
 macosx-intel build:
@@ -469,7 +469,7 @@ macosx-intel build:
   cd ..
   rm -rf build-${HMMER_DISTRO}
   cd .. 
-  tar cf hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar  hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
+  tar cfh hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar  hmmer-${HMMER_VERSION}-${HMMER_DISTRO}
   gzip hmmer-${HMMER_VERSION}-${HMMER_DISTRO}.tar
 
 
