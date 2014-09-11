@@ -1267,7 +1267,12 @@ p7_trace_PlotHeatMap(FILE *ofp, P7_TRACE *tr, int ia, int ib, int ka, int kb)
  *            
  *            For CNJ states, which emit on transition, by convention
  *            we associate the emission with the downstream state; therefore
- *            the first state in any run of CNJ states has i=0. 
+ *            the first state in any run of CNJ states has i=0 (even
+ *            if a nonzero argument <i> is provided). (This convention
+ *            even holds true in traces that we build backwards and
+ *            intend to Reverse(). The Reverse() routine slides the 
+ *            i indices appropriately, so the first CNJ state in the
+ *            reversed trace is i=0.)
  *            
  *            Reallocates the trace (by doubling) if necessary.
  *            

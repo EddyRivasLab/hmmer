@@ -88,6 +88,7 @@ typedef struct {
 #define p7S_JJ 7	/* in decoding (only) we separately decode J occupancy vs JJ emission */
 #define p7S_CC 8	/* ditto for C */
 
+
 /* the same data structure gets used in several DP contexts, which
  * have different boundary conditions/sentinel values; for example, in
  * a Decoding matrix, impossible cells are 0.0, whereas in a Viterbi,

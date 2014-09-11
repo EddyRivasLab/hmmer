@@ -281,6 +281,123 @@ aec_fill(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, int d
 }
 
 
+/*****************************************************************
+ * x. Choice selection functions for traceback
+ *****************************************************************/
+
+#if 0  // SRE TODO
+
+/* <dpc> and <ppc> point at DP supercell i,k in AEC mx, ASC PP mx, respectively.
+ * z is index of that supercell in sparse mask (i.e. k = k[i][z])
+ */
+
+static inline int
+select_down_m(const P7_PROFILE *gm, const float **mod_dpc, int *mod_k, int *mod_z)
+{
+  const float *dpp = *mod_dpc;
+  int          k   = *mod_k;
+  int          z   = *mod_z;
+  int          y;
+
+  y = z;          while (y >= 0 && sm->k[i][y]   > env->arr[d].k0) { y--; dpp--; }  // skip back over rest of DOWN(i) row. 
+  y = sm->n[i-1]; while (y >= 0 && sm->k[i-1][y] > k-1)            { y--; dpp--; }  // skip back to i-1,k-1 cell on DOWN(i-1) row.
+  /* Now dpp,ppp are on the i-1,k-1 supercell in AEC, ASC PP matrices, respectively,
+   * and that's supercell y in the sparse mask for row i-1
+   */
+  /* TODO: will fail on i0(d) row, because i-1,k-1 is in UP, not DOWN */
+
+  if (y >= 0 && sm->k[i-1][y] == k-1)
+    {
+      path[0] = P7_DELTAT(dpp[p7S_MG], TSC(p7P_MM, k-1));
+      path[1] = P7_DELTAT(dpp[p7S_IG], TSC(p7P_IM, k-1));
+      path[2] = P7_DELTAT(dpp[p7S_DG], TSC(p7P_DM, k-1));
+    }
+  
+  *mod_dpc = dpp;
+  *mod_k   = k-1;
+  *mod_z   = y;
+  return state[esl_vec_FArgMax(path, 3)];
+}
+
+
+
+static inline int
+select_e(const P7_PROFILE *gm, const float **mod_dpc, int *mod_k, int *mod_z)
+{
+  float *dpc = *mod_dpc;
+
+  for (z = sm->n[i]-1; sm->k[i][z] >= k0; k--)
+    
+    
+}
+
+
+
+int
+aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, P7_TRACE *tr)
+{
+  int sprv;
+  int d;
+
+  if ((status = p7_trace_Append(tr, p7T_T, 0, 0)) != eslOK) return status;
+  if ((status = p7_trace_Append(tr, p7T_C, 0, 0)) != eslOK) return status;
+
+  for (d = env->D; d >= 1; d--)  
+    {
+      k = gm->M+1;
+
+      /* Residues ib(d)+1 .. ia(d+1)-1 are assigned to C | J.
+       * Sentinel at ia(D+1) = L+1, so we're clean, don't need a special case there.
+       */
+      for (i = env->arr[d+1].ia-1; i > env->arr[d].ib; i--)
+	if ((status = p7_trace_Append(tr, (d == env->D ? p7T_C : p7T_J), 0, i)) != eslOK) return status;
+      if ((status = p7_trace_Append(tr, p7T_E, 0, i)) != eslOK) return status;
+      scur = p7T_E;
+      // i is now ib(d), and we're in the E state
+
+      /* DOWN matrix: trace back until we reach the anchor, which always exists */
+
+      while (i > env->arr[d].i0 || k > env->arr[d].k0)
+	{
+	  switch (scur) {
+	  case p7T_E:    sprv = select_e( &k); break;
+	  default:       ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in sparse AEC traceback");
+	  }
+	  
+	  /* Left wing unfolding, on glocal G->Mk entry. Can happen in DOWN only for G->Mk0,i0 to anchor, when i0(d)=ia(d) */
+	  if ( scur == p7T_G )
+	    for (; k >= 1; k--)
+	      if ( (status = p7_trace_Append(tr, p7T_DG, k, i)) != eslOK) return status;
+
+	  /* Right wing unfolding, on glocal Mk->E exit. Can only happen from DOWN. */
+	  if ( scur == p7T_E && (env->arr[d].flags & p7E_IS_GLOCAL))
+	    for (k2 = gm->M; k2 > k; k2--)
+	      if ( (status = p7_trace_Append(tr, p7T_DG, k2, i)) != eslOK) return status;
+      
+	  /* Append selected state - then move there, and iterate. */
+	  if ( (status = p7_trace_Append(tr, sprv, k, i)) != eslOK) return status;
+	  scur = sprv;
+	}
+
+      
+
+      
+
+      // i is now ia(d), and we're on B.
+      if ((status = p7_trace_Append(tr, (d == 1 ? p7T_N : p7T_J),                            0, i)) != eslOK) return status;
+    }
+
+  for (i = env->arr[1].ia-1; i >= 1; i--)
+    if ((status = p7_trace_Append(tr, p7T_N, 0, i)) != eslOK) return status;
+  if ((status = p7_trace_Append(tr, p7T_S, 0, 0))   != eslOK) return status;
+  
+  tr->M = sm->M;
+  tr->L = sm->L;
+  return p7_trace_Reverse(tr);
+}
+
+#endif // SRE TODO
+
 
 /*****************************************************************
  * x. Footnotes

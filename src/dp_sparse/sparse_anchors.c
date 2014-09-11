@@ -1097,6 +1097,7 @@ main(int argc, char **argv)
   float           nullsc, vsc, fsc, asc;
   clock_t         start_c, end_c;
   clock_t         total_c = 0;
+  clock_t         init_c  = clock();
   int             status;
 
   /* Read in one HMM. Set alphabet to whatever the HMM's alphabet is. */
@@ -1176,6 +1177,7 @@ main(int argc, char **argv)
   else if (status != eslEOF)     p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
 
   printf("# Total time in p7_sparse_Anchors = %.4f sec\n", (double) total_c / (double) CLOCKS_PER_SEC);
+  printf("# Total time overall              = %.4f sec\n", (double) (clock() - init_c) / (double) CLOCKS_PER_SEC);
 
   if (wrk) free(wrk);
   p7_anchors_Destroy(vanch);
