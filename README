@@ -9,22 +9,22 @@ using either single sequences or multiple sequence alignments as
 queries. HMMER implements a technology called "profile hidden Markov
 models" (profile HMMs). HMMER is the software engine underlying many
 protein family domain databases and large-scale annotation pipelines,
-including the Pfam and SMART databases.
+including Pfam (pfam.xfam.org) and several other members of the
+InterPro Consortium (http://www.ebi.ac.uk/interpro/).
 
 Other files to read in the top-level source directory:
 
     INSTALL          Brief installation instructions.
     Userguide.pdf    The HMMER User's Guide.
-    COPYRIGHT        Copyright and license information.
-    LICENSE          The GNU General Public License (GPLv3).
+    LICENSE          Open source BSD license, plus credits, copyrights,
+                     patent, and trademark information.
 
 To get started after installation, see the Tutorial section in the
 HMMER User's Guide (Userguide.pdf).
 
-
 -------------------------------------------------------------------
 The HMMER development team
-HHMI Janelia Farm Research Campus
+HHMI Janelia Research Campus
 http://hmmer.org/
 
 

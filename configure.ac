@@ -84,17 +84,17 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="January 2013"
-HMMER_COPYRIGHT="Copyright (C) 2013 Howard Hughes Medical Institute."
-HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)."
+HMMER_DATE="September 2014"
+HMMER_COPYRIGHT="Copyright (C) 2014 Howard Hughes Medical Institute."
+HMMER_LICENSE="Freely distributed under the open source BSD license."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="lib/easel"
 HMMER_SADIR="lib/libdivsufsort"
 
-EASEL_DATE="January 2013"
-EASEL_COPYRIGHT="Copyright (C) 2013 Howard Hughes Medical Institute."
-EASEL_LICENSE="Freely distributed under the Janelia Farm Software License."
+EASEL_DATE="September 2014"
+EASEL_COPYRIGHT="Copyright (C) 2014 Howard Hughes Medical Institute."
+EASEL_LICENSE="Freely distributed under the open source BSD license."
 EASEL_VERSION="h$PACKAGE_VERSION"
 EASEL_URL="http://bioeasel.org/"
 

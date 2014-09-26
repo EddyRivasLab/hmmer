@@ -1,8 +1,24 @@
-/* Anchor/envelope constrained (AEC) alignment, by maximum expected
- * gain (MEG).
+/* Anchor/envelope constrained (AEC) alignment.
+ *
+ * Given envelopes and anchors for our domains in the target sequence,
+ * now we determine an optimal alignment for each domain. Each of
+ * these alignments is global with respect to the envelope-defined
+ * subsequence ia(d)..ib(d); constrained to use only i,k supercells in
+ * the sparse mask; and constrained to pass through the domain anchor
+ * i0(d),k0(d).
  * 
+ * The optimal alignment is
+ *     \hat{\pi} = \argmax{\pi} \sum_{i=ia(d)}^{ib(d)} P(\pi_i),
+ * where P(\pi_i) is the posterior probability of generating x_i with
+ * state \pi_i, as obtained by sparse ASC posterior decoding.  This
+ * optimization criterion has been called a "label gain function"
+ * [HamadaAsai2012]. It was first introduced by [Kall2005].
  * 
+ * Contents:
+ *   1. 
+ *   x. Footnotes.
  */
+#if 0
 
 #include "p7_config.h"
 
@@ -31,7 +47,6 @@ p7_sparse_aec_Align(const P7_PROFILE *gm, const P7_SPARSEMX *asd,
   int          g;
   int          d;
   float        xX;
-  
 
   /* Contract checks / argument validation */
   ESL_DASSERT1(( gm->M == M ));
@@ -285,50 +300,133 @@ aec_fill(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, int d
  * x. Choice selection functions for traceback
  *****************************************************************/
 
-#if 0  // SRE TODO
 
 /* <dpc> and <ppc> point at DP supercell i,k in AEC mx, ASC PP mx, respectively.
  * z is index of that supercell in sparse mask (i.e. k = k[i][z])
  */
 
 static inline int
-select_down_m(const P7_PROFILE *gm, const float **mod_dpc, int *mod_k, int *mod_z)
+select_down_m(const P7_SPARSEMASK *sm, const P7_ENVELOPES *env, int d, int i, const float **mod_dpc, int *mod_z)
 {
   const float *dpp = *mod_dpc;
-  int          k   = *mod_k;
   int          z   = *mod_z;
-  int          y;
+  int          k   = sm->k[i][z];
+  int          gstate[3] = { p7T_MG, p7T_IG, p7T_DG };  
+  int          lstate[3] = { p7T_ML, p7T_IL, p7T_DL };
+  float        path[3];
 
-  y = z;          while (y >= 0 && sm->k[i][y]   > env->arr[d].k0) { y--; dpp--; }  // skip back over rest of DOWN(i) row. 
-  y = sm->n[i-1]; while (y >= 0 && sm->k[i-1][y] > k-1)            { y--; dpp--; }  // skip back to i-1,k-1 cell on DOWN(i-1) row.
-  /* Now dpp,ppp are on the i-1,k-1 supercell in AEC, ASC PP matrices, respectively,
-   * and that's supercell y in the sparse mask for row i-1
-   */
-  /* TODO: will fail on i0(d) row, because i-1,k-1 is in UP, not DOWN */
+  while (sm->k[i][z]   >= env->arr[d].k0) { z--; dpp -= p7S_NSCELLS; }  // skip back over rest of DOWN(i) row. z>=0 check not needed, because k0>=1.
+  z = sm->n[i-1];
+  while (sm->k[i-1][z] >  k-1)            { z--; dpp -= p7S_NSCELLS; }  // skip back to i-1,k-1 cell on DOWN(i-1) row. no z>=0 check, because i-1,k-1 supercell must exist.
+  ESL_DASSERT1(( z >= 0 && sm->k[i-1][z] == k-1 ));                     // connected supercell i-1,k-1 must exist, by construction.
+  /* Now dpp is the i-1, k-1 supercell, which is k[i-1][y] in the sparse mask for row i-1  */
 
-  if (y >= 0 && sm->k[i-1][y] == k-1)
-    {
-      path[0] = P7_DELTAT(dpp[p7S_MG], TSC(p7P_MM, k-1));
-      path[1] = P7_DELTAT(dpp[p7S_IG], TSC(p7P_IM, k-1));
-      path[2] = P7_DELTAT(dpp[p7S_DG], TSC(p7P_DM, k-1));
-    }
+  path[0] = dpp[p7S_ML];
+  path[1] = dpp[p7S_IL];
+  path[2] = dpp[p7S_DL];
   
   *mod_dpc = dpp;
-  *mod_k   = k-1;
-  *mod_z   = y;
-  return state[esl_vec_FArgMax(path, 3)];
+  *mod_z   = z;
+  return (env->arr[d].flags & p7E_IS_GLOCAL ? gstate[esl_vec_FArgMax(path, 3)] : lstate[esl_vec_FArgMax(path, 3)]);
+}
+
+static inline int
+select_up_m(const P7_SPARSEMASK *sm, const P7_ENVELOPES *env, int d, int i, const float **mod_dpc, int *mod_z)
+{
+  const float *dpp       = *mod_dpc;
+  int          z         = *mod_z;
+  int          k         =  sm->k[i][z];
+  int          gstate[3] = { p7T_MG, p7T_IG, p7T_DG };  
+  int          lstate[3] = { p7T_ML, p7T_IL, p7T_DL };
+  float        path[3];
+  
+  dpp -= z * p7S_NSCELLS;                                                // skip remainder of UP(i)
+  z    = sm->n[i-1]; 
+  while (sm->k[i-1][z] >= env->arr[d].k0)   z--;                         // skip z back until we're in the UP sector. z>=0 check not needed, we know there's at least 1 supercell 
+  while (sm->k[i-1][z] >  k-1)            { z--; dpp -= p7S_NSCELLS; }   // skip back to i-1,k-1 cell on UP(i-1) row; again z>=0 check not needed
+  ESL_DASSERT1(( z >= 0 && sm->k[i-1][z] == k-1 ));
+
+  path[0] = dpp[p7S_ML];
+  path[1] = dpp[p7S_IL];
+  path[2] = dpp[p7S_DL];
+  
+  *mod_dpc = dpp;
+  *mod_z   = z;
+  return (env->arr[d].flags & p7E_IS_GLOCAL ? gstate[esl_vec_FArgMax(path, 3)] : lstate[esl_vec_FArgMax(path, 3)]);
+}	       
+  
+
+static inline int
+select_down_i(const P7_SPARSEMASK *sm, const P7_ENVELOPES *env, int d, int i, const float **mod_dpc, int *mod_z)
+{
+  const float *dpp = *mod_dpc;
+  int          z   = *mod_z;
+  int          k   = sm->k[i][z];
+
+  while (z >= 0 && sm->k[i][z]  >= env->arr[d].k0) { z--; dpp--; }  // skip back over rest of DOWN(i).
+  z = sm->n[i-1]; while (sm->k[i-1][z] >  k)       { z--; dpp--; }  // skip back to i-1,k cell on DOWN(i-1)
+  ESL_DASSERT1(( z >= 0 && sm->k[i-1][z] == k ));                   // connected supercell i-1,k must exist, and must have >=1 value >= -inf, by construction.
+
+  *mod_dpc = dpp;
+  *mod_z   = z;
+  if (dpp[p7S_ML] >= dpp[p7S_IL]) { return (env->arr[d].flags & p7E_IS_GLOCAL ? p7T_MG : p7T_ML); }
+  else                            { return (env->arr[d].flags & p7E_IS_GLOCAL ? p7T_IG : p7T_IL); }
+}
+
+static inline int
+select_up_i(const P7_SPARSEMASK *sm, const P7_ENVELOPES *env, int d, int i, const float **mod_dpc, int *mod_z)
+{
+  const float *dpp = *mod_dpc;
+  int          z   = *mod_z;
+  int          k   = sm->k[i][z];
+  
+  dpp -= z * p7S_NSCELLS;                                                // skip remainder of UP(i)
+  z    = sm->n[i-1]; 
+  while (sm->k[i-1][z] >= env->arr[d].k0)   z--;                         // skip z back until we're in the UP sector. z>=0 check not needed, we know there's at least 1 supercell 
+  while (sm->k[i-1][z] >  k)              { z--; dpp -= p7S_NSCELLS; }   // skip back to i-1,k cell on UP(i-1) row; again z>=0 check not needed
+  ESL_DASSERT1(( z >= 0 && sm->k[i-1][z] == k ));
+
+  *mod_dpc = dpp;
+  *mod_z   = z;
+  if (dpp[p7S_ML] >= dpp[p7S_IL]) { return (env->arr[d].flags & p7E_IS_GLOCAL ? p7T_MG : p7T_ML); }
+  else                            { return (env->arr[d].flags & p7E_IS_GLOCAL ? p7T_IG : p7T_IL); }
+}
+
+static inline int
+select_d(const P7_ENVELOPES *env, int d, const float **mod_dpc);
+{
+  const float *dpp;
+
+  *mod_dpc = dpp = *mod_dpc - p7S_NSCELLS;
+  
+  if (dpp[p7S_ML] >= dpp[p7S_DL]) { return (env->arr[d].flags & p7E_IS_GLOCAL ? p7T_MG : p7T_ML); }
+  else                            { return (env->arr[d].flags & p7E_IS_GLOCAL ? p7T_DG : p7T_DL); }
 }
 
 
 
+/* Mk->E only occurs on final row ib(d), in a DOWN sector.
+ *    kp is the sparse cell list k[ib(d)]. (passing kp, nk terser than passing i and sm)
+ *    nk is length of kp[] list
+ *    k0 is k0(d) anchor for this domain.
+ *   *mod_dpc points at last sparse cell on row ib(d);
+ *            upon return, it's been updated to the supercell of the connected M.
+ *    upon return, *ret_z is the index of the connected M in kp[].
+ */
 static inline int
-select_e(const P7_PROFILE *gm, const float **mod_dpc, int *mod_k, int *mod_z)
+select_e(const P7_SPARSEMASK *sm, const P7_ENVELOPES *env, int d, int i, const float **mod_dpc, int *ret_z)
 {
-  float *dpc = *mod_dpc;
+  const float *dpp      = *mod_dpc;
+  const float *best_dpp = dpp;
+  int          best_z   = sm->n[i]-1;
+  int          z;
 
-  for (z = sm->n[i]-1; sm->k[i][z] >= k0; k--)
-    
-    
+  for (z = sm->n[i]-1; sm->k[i][z] >= env->arr[d].k0; z--, dpp -= p7S_NSCELLS)
+    if (dpp[p7S_ML] > best_dpp[p7S_ML]) { best_dpp = dpp; best_z = z; }
+
+  *mod_dpc = best_dpp;
+  *ret_z   = best_z;
+  return ( env->arr[d].flags & p7E_IS_GLOCAL ? p7T_MG : p7T_ML );
 }
 
 
@@ -353,22 +451,19 @@ aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, P7_T
 	if ((status = p7_trace_Append(tr, (d == env->D ? p7T_C : p7T_J), 0, i)) != eslOK) return status;
       if ((status = p7_trace_Append(tr, p7T_E, 0, i)) != eslOK) return status;
       scur = p7T_E;
-      // i is now ib(d), and we're in the E state
+      // i now ib(d); scur now E; k is now 
 
       /* DOWN matrix: trace back until we reach the anchor, which always exists */
-
       while (i > env->arr[d].i0 || k > env->arr[d].k0)
 	{
 	  switch (scur) {
-	  case p7T_E:    sprv = select_e( &k); break;
-	  default:       ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in sparse AEC traceback");
+	  case p7T_ML: case p7T_MG:   sprv = select_down_m(sm, env, d, i, &dpc, &z);  i--; k--;              break;
+	  case p7T_IL: case p7T_IG:   sprv = select_down_i(sm, env, d, i, &dpc, &z);  i--;                   break;
+	  case p7T_DL: case p7T_DG:   sprv = select_d     (    env, d,    &dpc);           k--; z--;         break;   
+	  case p7T_E:                 sprv = select_e     (sm, env, d, i, &dpc, &z);       k = sm->k[i][z];  break;  
+	  default: ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in sparse AEC traceback");
 	  }
 	  
-	  /* Left wing unfolding, on glocal G->Mk entry. Can happen in DOWN only for G->Mk0,i0 to anchor, when i0(d)=ia(d) */
-	  if ( scur == p7T_G )
-	    for (; k >= 1; k--)
-	      if ( (status = p7_trace_Append(tr, p7T_DG, k, i)) != eslOK) return status;
-
 	  /* Right wing unfolding, on glocal Mk->E exit. Can only happen from DOWN. */
 	  if ( scur == p7T_E && (env->arr[d].flags & p7E_IS_GLOCAL))
 	    for (k2 = gm->M; k2 > k; k2--)
@@ -379,12 +474,34 @@ aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, P7_T
 	  scur = sprv;
 	}
 
-      
+      /* Now we're on the anchor. i == i0; k == k0; scur == M. */
 
-      
+      /* UP matrix. Trace back until we reach Mk, ia(d).
+       *   If ia(d) == i0, this block is simply skipped; there's no UP sector, B->{LG}->Mk0,i0 entry into anchor.
+       */
+      while (i > env->arr[d].ia  ||  (scur == p7T_DG || scur == p7T_DL))  // in other words: stop when we get to M state of row ia(d).
+	{
+	  switch (scur) {
+	  case p7T_ML: case p7T_MG:  sprv = select_up_m(sm, env, d, i, &dpc, &z);  i--; k--;      break;
+	  case p7T_IL: case p7T_IG:  sprv = select_up_i(sm, env, d, i, &dpc, &z);  i--;           break;
+	  case p7T_DL: case p7T_DG:  sprv = select_d   (    env, d,    &dpc);           k--; z--; break;
+	  default: ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in sparse AEC traceback");
+	  }
+	  
+	  /* Append selected state - then move there, and iterate. */
+	  if ( (status = p7_trace_Append(tr, sprv, k, i)) != eslOK) return status;
+	  scur = sprv;
+	}
 
+
+      sprv = (env->arr[d].flags & p7E_IS_GLOCAL ? p7T_G : p7T_L );
+      if ( sprv == p7T_G )  // Left wing unfolding, on glocal G->Mk entry.
+	for (; k >= 1; k--)
+	  if ( (status = p7_trace_Append(tr, p7T_DG, k, i)) != eslOK) return status;
+      if ( (status = p7_trace_Append(tr, sprv,                     0, i)) != eslOK) return status;
+      if ( (status = p7_trace_Append(tr, p7T_B,                    0, i)) != eslOK) return status;
+      if ( (status = p7_trace_Append(tr, (d == 1 ? p7T_N : p7T_J), 0, i)) != eslOK) return status;
       // i is now ia(d), and we're on B.
-      if ((status = p7_trace_Append(tr, (d == 1 ? p7T_N : p7T_J),                            0, i)) != eslOK) return status;
     }
 
   for (i = env->arr[1].ia-1; i >= 1; i--)
@@ -396,11 +513,18 @@ aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, P7_T
   return p7_trace_Reverse(tr);
 }
 
-#endif // SRE TODO
 
 
 /*****************************************************************
- * x. Footnotes
+ * x. Exegesis.
+ ***************************************************************** 
+ * 
+
+ */
+
+
+/*****************************************************************
+ * x. Exegesis, footnotes
  ***************************************************************** 
  * 
  * [1] HACKY MISUSE OF P7_SPARSEMX
@@ -445,8 +569,8 @@ aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, P7_T
  * [5] BEAUTIFICATION CAMPAIGN SOMEDAY
  * 
  * All this stuff with pointers, <dpc> and such, is ugly. Stepping by
- * non-unit values, p7S_NSCELLS and such, is ugly. The boundary
- * checking on UP and DOWN sparse row traversal is ugly.  
+ * non-unit values, p7S_NSCELLS and such, is ugly. Boundary
+ * checking on UP and DOWN sparse row traversal: ugly.
  * 
  * May be cleaner and more efficient if DP matrices were arrays of
  * structures, dp[c].s, where <c> counts over sparse supercells and a
@@ -460,4 +584,14 @@ aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, P7_T
  * NULL. If anchors is non-NULL, it's a sparse ASC matrix, w/
  * traversal aids set for ASC DP. If envelopes non-NULL, it's a sparse
  * AEC matrix.
+ *
  */
+
+/*****************************************************************
+ * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
+ *****************************************************************/
+
+#endif /*0*/
