@@ -1820,7 +1820,6 @@ main(int argc, char **argv)
   float          *wrk     = NULL;
   int             format  = eslSQFILE_UNKNOWN;
   float           fsc, bsc;
-  float           gain;
   float           nullsc;
   char           *cstring;
   int             istart, iend, kstart, kend;
@@ -1905,13 +1904,12 @@ main(int argc, char **argv)
        */
       p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
 
-      printf("%-30s   %10.4f %10.4f   %10.4f %10.4f %10.4f\n", 
+      printf("%-30s   %10.4f %10.4f   %10.4f %10.4f\n", 
 	     sq->name, 
 	     fsc, 
 	     bsc, 
 	     (fsc - nullsc) / eslCONST_LOG2,
-	     (bsc - nullsc) / eslCONST_LOG2,
-	     gain);
+	     (bsc - nullsc) / eslCONST_LOG2);
 
       p7_refmx_Reuse(fwd);
       p7_refmx_Reuse(bck);

@@ -1023,7 +1023,7 @@ validate_forward(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
   int                  M   = sm->M;
   int in_up, in_down;
   int u1, u2;
-  int i0, d2;
+  int i0;
   int d,g,k,z,i,k0;
 
   d = 1;
@@ -1036,7 +1036,6 @@ validate_forward(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
       u1      = sm->seg[g].ia;
       u2      = anch[d].i0-1;
       i0      = -1;
-      d2      = -1;
 
       if (xcell_sc(xc[p7S_E],  0)      != eslOK) return eslFAIL;
       if (xcell_sc(xc[p7S_N],  (d==1)) != eslOK) return eslFAIL;
@@ -1055,7 +1054,6 @@ validate_forward(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
 	    {
 	      in_down = TRUE;
 	      i0      = anch[d].i0;
-	      d2      = ESL_MIN(sm->seg[g].ib, anch[d+1].i0 - 1);
 
 	      if (anch[d+1].i0 > sm->seg[g].ib)
 		{
@@ -1149,7 +1147,7 @@ validate_backward(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
   int                  M   = sm->M;
   int in_up, in_down;
   int u1, u2;
-  int i0, d2;
+  int d2;
   int d,g,k,z,i,k0;
 
   d = 1;
@@ -1161,7 +1159,6 @@ validate_backward(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
       in_down = FALSE;
       u1      = sm->seg[g].ia;
       u2      = anch[d].i0-1;
-      i0      = -1;
       d2      = -1;
 
       if (xcell_sc(xc[p7S_E],  1)        != eslOK) return eslFAIL; // E->{JC} means E always reachable in Backwards direction, like B in the Fwd direction
@@ -1180,7 +1177,6 @@ validate_backward(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
 	  if (i == anch[d].i0) 
 	    {
 	      in_down = TRUE;
-	      i0      = anch[d].i0;
 	      d2      = ESL_MIN(sm->seg[g].ib, anch[d+1].i0 - 1);
 
 	      if (anch[d+1].i0 > sm->seg[g].ib)

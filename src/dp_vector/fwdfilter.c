@@ -1707,7 +1707,7 @@ main(int argc, char **argv)
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
   float           fraw, nullsc, fsc, bsc;
-  float           gfraw, gbraw, gfsc, gbsc;
+  float           gfraw, gbraw, gfsc;
   float           gmem, cmem, bmem;
   double          P, gP;
   int             status;
@@ -1787,7 +1787,6 @@ main(int argc, char **argv)
 
       fsc  =  (fraw-nullsc) / eslCONST_LOG2;
       gfsc = (gfraw-nullsc) / eslCONST_LOG2;
-      gbsc = (gbraw-nullsc) / eslCONST_LOG2;
       P  = esl_exp_surv(fsc,   om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
       gP = esl_exp_surv(gfsc,  gm->evparam[p7_FTAU],  gm->evparam[p7_FLAMBDA]);
 

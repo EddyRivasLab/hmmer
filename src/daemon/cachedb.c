@@ -339,7 +339,6 @@ main(int argc, char **argv)
 {
   FILE           *ofp     = stdout;
   int             i;
-  int             cnt;
   int             inx;
   int             status;
   int             seq_cnt;
@@ -397,11 +396,8 @@ main(int argc, char **argv)
 
   res_cnt = 0;
   seq_cnt = 0;
-
-  cnt = 0;
-
-  db_key = 1;
-  db_inx = 1;
+  db_key  = 1;
+  db_inx  = 1;
 
   while (db_inx <= esl_opt_ArgNumber(go)) {
 

@@ -269,7 +269,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
   int Q        = P7_NVB(om->M);    /* segment length: # of vectors                              */
   __m128i *dp  = ox->dp;           /* one DP row of memory                                      */
   __m128i *rsc;			   /* will point at om->rbv[x] for residue x[i]                 */
-  __m128i tecv;                    /* vector for E->C  cost                                     */
   __m128i tjbmv;                   /* vector for J->B move cost + B->M move costs               */
   __m128i basev;                   /* offset for scores                                         */
   __m128i ceilingv;                /* saturated simd value used to test for overflow            */
@@ -337,7 +336,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
   for (q = 0; q < Q; q++) dp[q] = _mm_setzero_si128();
 
   basev = _mm_set1_epi8((int8_t) om->base_b);
-  tecv = _mm_set1_epi8((int8_t) om->tec_b);
   tjbmv = _mm_set1_epi8((int8_t) om->tjb_b + (int8_t) om->tbm_b);
 
   xBv = _mm_subs_epu8(basev, tjbmv);

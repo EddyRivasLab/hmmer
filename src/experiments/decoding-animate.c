@@ -155,8 +155,8 @@ main(int argc, char **argv)
 
   /* Frame 0 of the movie is just the Viterbi parse */
   /* you have to make filenames as .000001.ppm, not just .1.ppm, or unix cmdline won't keep them in numeric order */
-  if (esl_sprintf(&outfile, "%s.%06d.ppm", outpfx, 0, s) != eslOK) p7_Fail("allocation failed for outfile");
-  if ((outfp = fopen(outfile, "w"))                 == NULL) p7_Fail("failed to open %s for writing", outfile);  
+  if (esl_sprintf(&outfile, "%s.%06d.ppm", outpfx, 0) != eslOK) p7_Fail("allocation failed for outfile");
+  if ((outfp = fopen(outfile, "w"))                   == NULL)  p7_Fail("failed to open %s for writing", outfile);  
 
   mximage_SetAll(mxi, heatmap_colors[0]);
   mximage_plot_trace(mxi, tr, (ia ? ia : 1), (ib ? ib : sq->n), (ka ? ka : 1), (kb ? kb : gm->M), blackpixel);

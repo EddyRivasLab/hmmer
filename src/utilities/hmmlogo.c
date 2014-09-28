@@ -112,12 +112,9 @@ hmmlogo_ScoreHeights (P7_HMM *hmm, P7_BG *bg, float **heights ) {
 
   float p;
   float logodds;
-  float pos_scoresum;
 
   for (i = 1; i <= M; i++) {
-
     // height of column, to be split among the residues; also sum of of positive scores
-    pos_scoresum = 0.0;
     for (j=0; j<K; j++) {
       p       = hmm->mat[i][j];
       logodds = eslCONST_LOG2R * log(p / bg->f[j]);  //bits

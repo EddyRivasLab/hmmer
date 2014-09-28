@@ -436,7 +436,7 @@ ascmatrix_compare_asc(P7_REFMX *apu1, P7_REFMX *apd1, P7_REFMX *apu2, P7_REFMX *
   int killmenow = FALSE;
 #ifdef p7_DEBUGGING
   killmenow = TRUE;
-#endif;
+#endif
 
   /* contract check, argument validation */
   ESL_DASSERT1(( apu1->M == apd1->M && apu1->M == apu2->M && apu1->M == apd2->M));

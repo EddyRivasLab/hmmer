@@ -1060,7 +1060,6 @@ static ESL_OPTIONS options[] = {
   { "-h",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",                   0 },
   { "-s",          eslARG_INT,      "0",  NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                          0 },
   { "-G",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "run 'global' version instead of segmental D&C",          0 },
-  { "-Z",          eslARG_INT,      "1",  NULL, NULL,   NULL,  NULL, NULL, "set sequence # to <n>, for E-value calculations",        0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -1093,7 +1092,6 @@ main(int argc, char **argv)
   P7_SPARSEMX    *asf     = p7_sparsemx_Create(NULL);
   P7_TRACE       *tr      = p7_trace_Create();
   float          *wrk     = NULL;
-  int             Z       = esl_opt_GetInteger(go, "-Z");
   float           nullsc, vsc, fsc, asc;
   clock_t         start_c, end_c;
   clock_t         total_c = 0;

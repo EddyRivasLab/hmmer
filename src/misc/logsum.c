@@ -218,6 +218,7 @@ p7_logsum_Reinit(void)
  *            p7_FLogsum() itself to use the exact calculation,
  *            compile with the <p7_LOGSUM_SLOWEXACT> flag.
  */
+#if defined p7LOGSUM_TESTDRIVE || defined p7LOGSUM_EXAMPLE
 static float 
 p7_logsum_exact(float a, float b)
 {
@@ -225,7 +226,7 @@ p7_logsum_exact(float a, float b)
   const float min = ESL_MIN(a, b);
   return (min == -eslINFINITY || (max-min) >= 15.7f) ? max : max + log(1.0 + exp(min-max));  
 }
-
+#endif /* p7LOGSUM_TESTDRIVE || p7LOGSUM_EXAMPLE */
 
 /*****************************************************************
  * 3. Footnotes

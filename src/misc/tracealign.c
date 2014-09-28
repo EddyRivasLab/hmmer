@@ -557,7 +557,6 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
   int           idx;
   int           apos;
   int           z;
-  int           is_local;
   int           status;
 
   if ((msa = esl_msa_CreateDigital(abc, nseq, alen)) == NULL) { status = eslEMEM; goto ERROR;  }
@@ -568,7 +567,6 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
       for (apos = 1; apos <= alen; apos++) msa->ax[idx][apos] = esl_abc_XGetGap(abc);
       msa->ax[idx][alen+1] = eslDSQ_SENTINEL;
 
-      is_local = FALSE;		/* until shown otherwise */
       apos     = 1;
       for (z = 1; z < tr[idx]->N; z++) /* start at z=1 so that we can peek back at z-1 in code below */
 	{
@@ -606,7 +604,7 @@ make_digital_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, co
 	    break;
 	    
 	  case p7T_E:  apos     = matmap[M]+1; break; /* set position for C-terminal tail */
-	  case p7T_L:  is_local = TRUE;        break;
+	  case p7T_L:                          break;
 	  case p7T_J:  ESL_EXCEPTION(eslEINCONCEIVABLE, "can't tracealign a J");
 	  default:                             break; /* do nothing on other states */
 	  } /* end switch over state type at trace position z */
@@ -645,7 +643,6 @@ make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const
   int           apos;
   int           z;
   int           k;
-  int           is_local;
   int           status;
 
   if ((msa = esl_msa_Create(nseq, alen)) == NULL) { status = eslEMEM; goto ERROR; }
@@ -656,7 +653,6 @@ make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const
       for (k    = 1; k    <= M;   k++)    if (matuse[k]) msa->aseq[idx][-1+matmap[k]] = '-';
       msa->aseq[idx][apos] = '\0';
 
-      is_local = FALSE;
       apos     = 0;
       for (z = 0; z < tr[idx]->N; z++)
 	{
@@ -694,7 +690,7 @@ make_text_msa(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int nseq, const
 	    break;
 	    
 	  case p7T_E:  apos = matmap[M]; break;	/* set position for C-terminal tail */
-	  case p7T_L:  is_local = TRUE;  break;
+	  case p7T_L:                    break;
 	  default:                       break;
 	  }
 	}

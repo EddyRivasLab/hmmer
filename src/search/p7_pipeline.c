@@ -1456,7 +1456,6 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
   int              z,i;
   int              noverlaps;
   int              last_ibe;
-  int              best_d;
   int              ii, zz;
   int              env_offset;
 
@@ -1527,7 +1526,6 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
 
    noverlaps  = 0;
    last_ibe   = -1;
-   best_d     = 0;
 
 
   /* For each domain range identified above,
