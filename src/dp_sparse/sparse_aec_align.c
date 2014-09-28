@@ -1,13 +1,17 @@
+#if 0
 /* Anchor/envelope constrained (AEC) alignment.
  *
  * Given envelopes and anchors for our domains in the target sequence,
- * now we determine an optimal alignment for each domain. Each of
- * these alignments is global with respect to the envelope-defined
+ * now we determine an optimal alignment for each domain.
+ *
+ * Each alignment is global with respect to the envelope-defined
  * subsequence ia(d)..ib(d); constrained to use only i,k supercells in
  * the sparse mask; and constrained to pass through the domain anchor
  * i0(d),k0(d).
  * 
- * The optimal alignment is
+ * The optimality criterion is a "maximum expected accuracy"
+ * criterion.  We maximize the expected accuracy of the assignment of
+ * profile states to each aligned residue; i.e.
  *     \hat{\pi} = \argmax{\pi} \sum_{i=ia(d)}^{ib(d)} P(\pi_i),
  * where P(\pi_i) is the posterior probability of generating x_i with
  * state \pi_i, as obtained by sparse ASC posterior decoding.  This
@@ -18,14 +22,11 @@
  *   1. 
  *   x. Footnotes.
  */
-#if 0
-
 #include "p7_config.h"
 
 #include "easel.h"
 
 #include "base/p7_profile.h"
-#include "base/p7_anchors.h"
 #include "base/p7_envelopes.h"
 #include "base/p7_trace.h"
 
@@ -35,18 +36,51 @@
 static int aec_fill(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, int d,
 		    const float **ret_ppp, float **ret_dpc, int *ret_g, float *ret_xX);
 
+
+/* Function:  p7_sparse_aec_Align()
+ * Synopsis:  Anchor/envelope constrained optimal alignment of profile to sequence.
+ *
+ * Purpose:   Given a profile <gm>, the sparse posterior decoding matrix
+ *            <asd> that we got from aligning <gm> to a target
+ *            sequence, and the envelope set <env> that defines
+ *            domains and anchors that we've called on the target
+ *            sequence; we perform a maximum expected accuracy
+ *            anchor/envelope-constrained alignment to each domain.
+ *            
+ *            This requires a sparse AEC DP matrix, <aec>. Caller
+ *            provides us with this empty object. It will be
+ *            reallocated if needed. Upon return, the <aec> object
+ *            contains the filled sparse AEC DP matrix.
+ *            
+ *            The optimal alignment trace for the complete sequence is
+ *            stored in <tr>. Caller provides us an empty <tr> object, 
+ *            and it will be reallocated as needed too.
+ *            
+ * Args:      gm  : profile
+ *            asd : sparse posterior decoding matrix for gm/seq comparison
+ *            env : envelope set determined for seq
+ *            aec : caller-provided sparse DP matrix for AEC alignment fill
+ *            tr  : RETURN: optimal alignment
+ *
+ * Returns:   <eslOK> on success. <tr> contains the optimal alignment path
+ *            for the complete sequence. <aec> contains the sparse
+ *            AEC DP matrix.
+ *
+ * Throws:    <eslEMEM> on allocation failure. State of <tr>, <aec> 
+ *            undefined.
+ */
 int
 p7_sparse_aec_Align(const P7_PROFILE *gm, const P7_SPARSEMX *asd, 
 		    P7_ENVELOPES *env, P7_SPARSEMX *aec, P7_TRACE *tr)
 {
-  const P7_SPARSEMASK *sm = asd->sm;
-  const float *ppp = asd->dp;
-  float       *dpc = NULL;
-  int          M = env->M;
-  int          L = env->L;
-  int          g;
-  int          d;
-  float        xX;
+  const P7_SPARSEMASK *sm  = asd->sm;   
+  const float         *ppp = asd->dp;
+  float               *dpc = NULL;
+  int    M = env->M;
+  int    L = env->L;
+  int    g;
+  int    d;
+  float  xX;                            
 
   /* Contract checks / argument validation */
   ESL_DASSERT1(( gm->M == M ));
@@ -55,17 +89,33 @@ p7_sparse_aec_Align(const P7_PROFILE *gm, const P7_SPARSEMX *asd,
   ESL_DASSERT1(( aec->type == p7S_UNSET ));
   ESL_DASSERT1(( tr->N == 0 ));
 
-  /* Reallocation if needed. */
-  // TODO. 
+  /* Reallocation if needed. TODO */
   aec->type = p7S_AEC_ALIGN;
   dpc       = aec->dp;
 
+  /* AEC matrix only needs main state supercells
+   * (no specials), and it only needs them for
+   * ia(d)..i0/k0(d)..ib(d) for each domain d.
+   */
   xX = 0.;
   for (g = 1, d = 1; d <= env->D; d++)
     aec_fill(gm, sm, env, d, &ppp, &dpc, &g, &xX);
 
+
+
   return eslOK;
 }
+
+
+/* aec_fill()
+ * Fill stage of AEC DP, one domain <d> at a time.
+ * 
+ * Maintaining state in posterior decoding matrix <asd> and the AEC DP
+ * matrix <aec> is detail-oriented, so listen up. We only need main
+ * states, no specials, so this routine only deals with ptrs into
+ * <asd> and <aec> main state memory: <ppp> and <dpc>, respectively.
+ * 
+ */
 
 static int
 aec_fill(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, int d,

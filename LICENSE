@@ -77,10 +77,11 @@ places in source files. These include:
 HMMER uses the Easel software library, which is also open source and
 BSD licensed. See lib/easel/LICENSE.
 
-HMMER includes patent-pending SIMD technology under nonexclusive
-license from Michael Farrar. You are sublicensed to use this
-technology specifically for the use, modification, and redistribution
-of HMMER source code.
+HMMER includes patent-pending SIMD technology provided to us under
+nonexclusive license from Michael Farrar (USPTO application
+11/696,338, 2008). You are sublicensed to use this technology
+specifically for the use, modification, and redistribution of HMMER
+source code.
 
 "HMMER" is a trademark of the Howard Hughes Medical Institute.
 
