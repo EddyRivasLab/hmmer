@@ -1,4 +1,3 @@
-#if 0
 /* Anchor/envelope constrained (AEC) alignment.
  *
  * Given envelopes and anchors for our domains in the target sequence,
@@ -9,22 +8,27 @@
  * the sparse mask; and constrained to pass through the domain anchor
  * i0(d),k0(d).
  * 
- * The optimality criterion is a "maximum expected accuracy"
- * criterion.  We maximize the expected accuracy of the assignment of
- * profile states to each aligned residue; i.e.
+ * The optimality criterion is "maximum expected accuracy".  We
+ * maximize the expected accuracy of the assignment of profile states
+ * to each aligned residue; i.e.
  *     \hat{\pi} = \argmax{\pi} \sum_{i=ia(d)}^{ib(d)} P(\pi_i),
  * where P(\pi_i) is the posterior probability of generating x_i with
  * state \pi_i, as obtained by sparse ASC posterior decoding.  This
- * optimization criterion has been called a "label gain function"
+ * criterion has been called a "label gain function"
  * [HamadaAsai2012]. It was first introduced by [Kall2005].
  * 
  * Contents:
- *   1. 
+ *   1. p7_sparse_aec_Align(), the outer wrapper.
+ *   2. aec_fill(), the DP recursion.
+ *   3. Choice selection functions for the traceback.
+ *   4. aec_trace(), the traceback.
  *   x. Footnotes.
  */
 #include "p7_config.h"
 
 #include "easel.h"
+#include "esl_vectorops.h"
+
 
 #include "base/p7_profile.h"
 #include "base/p7_envelopes.h"
@@ -33,8 +37,8 @@
 #include "dp_sparse/p7_sparsemx.h"
 
 
-static int aec_fill(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, int d,
-		    const float **ret_ppp, float **ret_dpc, int *ret_g, float *ret_xX);
+static int aec_fill (const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, int d,   const float **mod_ppp, float **mod_dpc, int *mod_g, float *mod_xX);
+static int aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env,  const float *dpc, P7_TRACE *tr);
 
 
 /* Function:  p7_sparse_aec_Align()
@@ -93,19 +97,24 @@ p7_sparse_aec_Align(const P7_PROFILE *gm, const P7_SPARSEMX *asd,
   aec->type = p7S_AEC_ALIGN;
   dpc       = aec->dp;
 
-  /* AEC matrix only needs main state supercells
-   * (no specials), and it only needs them for
-   * ia(d)..i0/k0(d)..ib(d) for each domain d.
+  /* AEC matrix only needs main state supercells (no specials), and it
+   * only needs them for ia(d)..i0/k0(d)..ib(d) for each domain d.
    */
   xX = 0.;
-  for (g = 1, d = 1; d <= env->D; d++)
+  g  = 0;
+  for (d = 1; d <= env->D; d++)
     aec_fill(gm, sm, env, d, &ppp, &dpc, &g, &xX);
 
-
-
+  aec_trace(gm, sm, env, dpc-p7S_NSCELLS, tr);     // dpc is +1 from last supercell; so, -1 before passing to trace.
   return eslOK;
 }
 
+
+
+
+/*****************************************************************
+ * 2. aec_fill(), the DP recursion
+ *****************************************************************/
 
 /* aec_fill()
  * Fill stage of AEC DP, one domain <d> at a time.
@@ -115,41 +124,88 @@ p7_sparse_aec_Align(const P7_PROFILE *gm, const P7_SPARSEMX *asd,
  * states, no specials, so this routine only deals with ptrs into
  * <asd> and <aec> main state memory: <ppp> and <dpc>, respectively.
  * 
+ * <d>   : Caller makes D calls to aec_fill(), d=1..D.
+ * <ppp> : If <d> is in the same segment as the previous one, then <ppp>
+ *         is on next ASC row, ib(d-1)+1. If <d> is in a new segment,
+ *         <ppp> is at start of first row of that segment g, ia(g).
+ *         Starts at asd->dp.
+ * <dpc> : Start of DP supercells for domain <d> in AEC matrix. Starts at
+ *         aec->dp.
+ * <xX>  : Running total posterior prob for all homologous rows in alignment;
+ *         (nonhomologous rows, outside domains, are not counted).
+ *         Starts at 0.
+ *
+ * At end, when all domains have been looped over, <dpc> is +1 from
+ * the final supercell of the AEC matrix.  <dpc> - <aec->dp> is then
+ * the number of supercells.
  */
-
 static int
-aec_fill(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, int d,
-	 const float **ret_ppp, float **ret_dpc, int *ret_g, float *ret_xX)
+aec_fill(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, int d, 
+	 const float **mod_ppp, float **mod_dpc, int *mod_g, float *mod_xX)
 {
-  const float *tsc       = gm->tsc;  // sets up TSC() macro, access to profile's transitions      
-  const float *ppp       = *ret_ppp;
-  float       *dpc       = *ret_dpc;
+  const float *tsc       = gm->tsc;    // sets up TSC() macro, access to profile's transitions      
+  const float *ppp       = *mod_ppp;   
+  float       *dpc       = *mod_dpc;
   const float *dpp       = NULL;
   float       *last_dpc  = NULL;
   int          is_glocal = (env->arr[d].flags & p7E_IS_GLOCAL);
-  int          g         = *ret_g;
-  float        xX        = *ret_xX;
-  float dc;
-  int   i,k,y,z;
+  int          i         = env->arr[d-1].ib+1;                  // for case where <d> is in current <g>; if not, initialization below will reset i. For d=1, d-1 sentinel gives i=1.
+  int          g         = *mod_g;
+  float        xX        = *mod_xX;
+  float        dc;
+  int          k,y,z;
 
-  /* <ppp> maintenance (1): skip leading rows in segment, catch up to row ia(d) */
-  while ( env->arr[d].i0 > sm->seg[g].ib) g++;                                           // Find seg g that anchor d is in. Must succeed for some g <= sm->S.
-  for (i = sm->seg[g].ia; i < env->arr[d].ia; i++)                                       // Skip ASC rows ia(g)..ia(d)-1, which must be in UP.
-    for (z = 0; z < sm->n[i] && sm->k[i][z] < env->arr[d].k0; z++)                       // UP row includes any supercells 1..k0(d)-1
-      ppp += p7S_NSCELLS;      
+  /* <ppp> maintenance (1): skip leading rows <i>, catch <i> and <ppp> up to row ia(d), where <dpc> already is.
+   *
+   * Two cases: 
+   *   1. <d> is first domain in a new segment <g>. 
+   *        In this case, we advance <g> to the correct segment, and set i=ia(g).
+   *        In the ASC matrix <ppp>, we skip rows ia(g)..ia(d)-1; we know these are only UP sector rows.
+   *   2. <d> isn't the first domain in <g>, we're still working on a <g>.
+   *        Now we leave <g> as it is and we use i=ib(d-1)+1, which was already set above
+   *        In the ASC matrix <ppp>, we skip rows ib(d-1)+1..ia(d)-1.
+   *        We know caller has given us i == ib(d-1)+1.
+   *        We know each row has both a DOWN and an UP sector that <ppp> must be skipped past.
+   * 
+   * When this maintenance is complete:
+   *    i = ia(d)
+   *    <dpc> is on the AEC supercell for first sparse supercell in UP(i) 
+   *    <ppp> is on first ASC supercell on row i (which still might be in a DOWN sector and need more skipping)
+   */
+  while ( env->arr[d].i0 > sm->seg[g].ib)                                           // Find seg that anchor d is in. Must succeed for some g <= sm->S. 
+    { g++; i = sm->seg[g].ia; }                                                     // <ppp> has no storage in anchorless segments.        
 
-  /* UP sector */
+  if (env->arr[d-1].i0 < sm->seg[g].ia)                                             // If <d> is 1st domain in seg <g>: 
+    {                                                                               // then for ASC rows ia(g)..ia(d)-1, ASC is only in UP sector; <ppp> advances over UP(i) rows.
+      for ( ; i < env->arr[d].ia; i++)      
+	for (z = 0;  z < sm->n[i] && sm->k[i][z] < env->arr[d].k0;  z++)            // UP row includes any supercells 1..k0(d)-1
+	  ppp += p7S_NSCELLS;  
+    }
+  else                                                                              // If <d> isn't 1st domain in segment <g>:
+    {                                                                               // then for ASC rows ib(d-1)+1..ia(d)-1, must advance ppp past DOWN(i) and UP(i)
+      for ( ; i < env->arr[d].ia; i++) {
+	for (z = sm->n[i]-1; z >= 0       && sm->k[i][z] >= env->arr[d-1].k0; z--)  // Order of access doesn't matter here; only # of sparse supercells in DOWN(i)
+	  ppp += p7S_NSCELLS;  
+	for (z = 0;          z < sm->n[i] && sm->k[i][z] <  env->arr[d].k0;   z++)  // UP row includes any supercells 1..k0(d)-1
+	  ppp += p7S_NSCELLS; 
+      }
+    }
+
+
+
+  /* Recursion starts with the UP sector for domain <d>.
+   *    This runs from ia(d)..i0(d)-1,  1..k0(d)-1.
+   */
   for (i = env->arr[d].ia; i < env->arr[d].i0; i++)
     {
       /* <ppp> maintenance (2): skip leading DOWN supercells when i is ASC DOWN+UP row */
-      if (env->arr[d-1].i0 >= sm->seg[g].ia) {                               // If there's an anchor above us in this seg, ASC matrix row includes DOWN.
-	z = 0; while (z < sm->n[i] && sm->k[i][z] < env->arr[d-1].k0) z++;   // DOWN is k0(d-1)..M, so skip 1..k0(d-1)-1 in the sparse list
-	for (; z < sm->n[i]; z++) ppp += p7S_NSCELLS;
-      }
+      if (env->arr[d-1].i0 >= sm->seg[g].ia)                                     // If there's an anchor above us in this seg, ASC matrix row includes DOWN.
+	for (z = sm->n[i]-1; z >= 0 && sm->k[i][z] >= env->arr[d-1].k0; z--)     // DOWN is k0(d-1)..M, and the order we skip them doesn't matter, only the order.
+	  ppp += p7S_NSCELLS;    
 
       /* UP top row ia(d) is initialization. 
-       * We must enter G->Mk on this row, and only on this row.
-       * There is no prev row (not directly, anyway), so no entries from M/I.
+       * We must enter G->Mk on this row, and *only* on this row.
+       * There are no entries from M/I on any prev row, but we can do M->D along the row.
        */
       if (i == env->arr[d].ia) 
 	{
@@ -220,10 +276,13 @@ aec_fill(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, int d
     } 
   /* end of UP sector calculation */
 
+
+
   /* Normal handoff to the anchor cell is relatively easy:
    * we know bottom UP corner is -1 supercell from where <dpc> is now,
    * because we just computed it.
    */
+
 
   /* Now the DOWN sector */
   for (i = env->arr[d].i0; i <= env->arr[d].ib; i++)
@@ -236,23 +295,21 @@ aec_fill(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, int d
 	  z = 0; while (sm->k[i][z] < env->arr[d-1].k0) z++;  // here we know we must reach the anchor cell k0; sm->n[i] boundary check unnecessary
 	  k = env->arr[d-1].k0;
 
-	  if (env->arr[d].i0 == env->arr[d].ia)
+	  if (env->arr[d].i0 == env->arr[d].ia)                                          // This handles the special case of no UP sector, in which case we MUST enter at the anchor.
 	    dpc[p7S_ML] = ppp[p7S_ML] + ppp[p7S_MG] + 
                           (is_glocal ? P7_DELTAT(xX, TSC(p7P_GM, k-1)) : 
                                        P7_DELTAT(xX, TSC(p7P_LM, k-1)));
 	  else
-	    dpc[p7S_ML] = ppp[p7S_ML] + ppp[p7S_MG] + 
+	    dpc[p7S_ML] = ppp[p7S_ML] + ppp[p7S_MG] +                                    // Otherwise, you can't enter at the anchor at all, because ali is global on ia..ib. 
 	                  ESL_MAX( ESL_MAX( P7_DELTAT( dpp[p7S_MG], TSC(p7P_MM, k-1)),   
-					    P7_DELTAT( dpp[p7S_IG], TSC(p7P_IM, k-1))),  
-					    P7_DELTAT( dpp[p7S_DG], TSC(p7P_DM, k-1)));
+			        	    P7_DELTAT( dpp[p7S_IG], TSC(p7P_IM, k-1))),  
+		                            P7_DELTAT( dpp[p7S_DG], TSC(p7P_DM, k-1)));
 	  dpc[p7S_IL] = -eslINFINITY;
 	  dpc[p7S_DL] = -eslINFINITY;
 
-	  xX = (is_glocal ? P7_DELTAT( P7_DELTAT(dpc[p7S_ML], TSC(p7P_MD, k)), TSC(p7P_DGE, k)) :
-		            dpc[p7S_ML]);
-
-	  /* Advance calculation of next Dk+1.
-	   * We*/
+	  xX = (is_glocal ? P7_DELTAT( P7_DELTAT(dpc[p7S_ML], TSC(p7P_MD, k)), TSC(p7P_DGE, k)) : dpc[p7S_ML]);
+	  
+	  /* Advance calculation of next Dk+1. */
 	  if (z < sm->n[i]-1 && sm->k[i][z+1] == k+1) 
 	    dc = P7_DELTAT( dpc[p7S_ML], TSC(p7P_MD, k));
 	  else 
@@ -268,10 +325,8 @@ aec_fill(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, int d
 	      dpc[p7S_DL] = dc;
 
 	      /* Advance calculation of next Dk+1 */
-	      if (z < sm->n[i]-1 && sm->k[i][z+1] == k+1) 
-		dc = P7_DELTAT( dc, TSC(p7P_DD, k));
-	      else 
-		dc = -eslINFINITY;
+	      if (z < sm->n[i]-1 && sm->k[i][z+1] == k+1) dc = P7_DELTAT( dc, TSC(p7P_DD, k));
+	      else                                  	  dc = -eslINFINITY;
 	    } // end loop over sparse supercells z on initial row i0, glocal path
 	} // end initialization of row i0
 
@@ -333,23 +388,20 @@ aec_fill(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, int d
   /* <ppp> maintenance (4): If <d> is the last anchor in segment, skip trailing rows ib(d)+1..ib(g), which must be DOWN only rows */
   if (env->arr[d].i0 > sm->seg[g].ib)
     for (i = env->arr[d].ib+1; i <= sm->seg[g].ib; i++)
-      {
-	z = 0; while (z < sm->n[i] && sm->k[i][z] < env->arr[d-1].i0) z++;   // DOWN is k0(d-1)..M, so skip 1..k0(d-1)-1
-	for (; z < sm->n[i]; z++) ppp += p7S_NSCELLS;
-      }
+      for (z = sm->n[i]-1; z >= 0 && sm->k[i][z] >= env->arr[d-1].k0; z--)  // DOWN is k0(d-1)..M; order doesn't matter, so we can skip it backwards.
+	ppp += p7S_NSCELLS;
 
-  *ret_ppp = ppp;
-  *ret_dpc = dpc;
-  *ret_g   = g;
-  *ret_xX  = xX;
+  *mod_ppp = ppp;  // <ppp> either sits on start of next row (if there are more domains in this segment), or start of next segment. 
+  *mod_dpc = dpc;  // <dpc> sits on ia(d) for next domain in the AEC DP
+  *mod_g   = g;    // <g> is the segment we're in, or just finished.
+  *mod_xX  = xX;   // <xX> is the total labeling posterior probability so far, for rows included in domains (nonhomologous rows are excluded from xX).
   return eslOK;
 }
 
 
 /*****************************************************************
- * x. Choice selection functions for traceback
+ * 3. Choice selection functions for traceback
  *****************************************************************/
-
 
 /* <dpc> and <ppc> point at DP supercell i,k in AEC mx, ASC PP mx, respectively.
  * z is index of that supercell in sparse mask (i.e. k = k[i][z])
@@ -443,7 +495,7 @@ select_up_i(const P7_SPARSEMASK *sm, const P7_ENVELOPES *env, int d, int i, cons
 }
 
 static inline int
-select_d(const P7_ENVELOPES *env, int d, const float **mod_dpc);
+select_d(const P7_ENVELOPES *env, int d, const float **mod_dpc)
 {
   const float *dpp;
 
@@ -479,13 +531,17 @@ select_e(const P7_SPARSEMASK *sm, const P7_ENVELOPES *env, int d, int i, const f
   return ( env->arr[d].flags & p7E_IS_GLOCAL ? p7T_MG : p7T_ML );
 }
 
+/*****************************************************************
+ * 4. aec_trace(), the traceback. 
+ *****************************************************************/
 
-
-int
-aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, P7_TRACE *tr)
+static int
+aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, const float *dpc, P7_TRACE *tr)
 {
-  int sprv;
+  int scur,sprv;
   int d;
+  int i,k,k2,z;
+  int status;
 
   if ((status = p7_trace_Append(tr, p7T_T, 0, 0)) != eslOK) return status;
   if ((status = p7_trace_Append(tr, p7T_C, 0, 0)) != eslOK) return status;
@@ -643,5 +699,3 @@ aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, P7_T
  * SVN $Id$
  * SVN $URL$
  *****************************************************************/
-
-#endif /*0*/
