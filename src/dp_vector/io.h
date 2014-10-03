@@ -1,5 +1,5 @@
-#ifndef P7_IO_INCLUDED
-#define P7_IO_INCLUDED
+#ifndef p7IO_INCLUDED
+#define p7IO_INCLUDED
 
 #include "p7_config.h"
 #include <stdio.h>
@@ -21,8 +21,7 @@ extern int p7_oprofile_Position(P7_HMMFILE *hfp, off_t offset);
 extern P7_OM_BLOCK *p7_oprofile_CreateBlock(int size);
 extern void p7_oprofile_DestroyBlock(P7_OM_BLOCK *block);
 
-#endif /*P7_IO_INCLUDED*/
-
+#endif /*p7IO_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  *

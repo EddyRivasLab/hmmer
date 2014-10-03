@@ -1,5 +1,5 @@
-#ifndef P7_SPARSE_VITERBI_INCLUDED
-#define P7_SPARSE_VITERBI_INCLUDED
+#ifndef p7SPARSE_VITERBI_INCLUDED
+#define p7SPARSE_VITERBI_INCLUDED
 
 #include "p7_config.h"
 
@@ -11,7 +11,7 @@
 
 extern int p7_SparseViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_SPARSEMX *sx,  P7_TRACE *opt_tr, float *opt_sc);
 
-#endif /*P7_SPARSE_VITERBI_INCLUDED*/
+#endif /*p7SPARSE_VITERBI_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

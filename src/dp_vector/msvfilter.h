@@ -1,5 +1,5 @@
-#ifndef P7_MSVFILTER_INCLUDED
-#define P7_MSVFILTER_INCLUDED
+#ifndef p7MSVFILTER_INCLUDED
+#define p7MSVFILTER_INCLUDED
 
 #include "p7_config.h"
 
@@ -14,6 +14,10 @@
 extern int p7_MSVFilter           (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc);
 extern int p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_SCOREDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist);
 
-
-
-#endif  /*P7_MSVFILTER_INCLUDED*/
+#endif  /*p7MSVFILTER_INCLUDED*/
+/*****************************************************************
+ * @LICENSE@
+ * 
+ * SVN $Id$
+ * SVN $URL$
+ *****************************************************************/

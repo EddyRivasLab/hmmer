@@ -1,5 +1,5 @@
-#ifndef P7_HMMWINDOW_INCLUDED
-#define P7_HMMWINDOW_INCLUDED
+#ifndef p7HMMWINDOW_INCLUDED
+#define p7HMMWINDOW_INCLUDED
 
 #include "p7_config.h"
 #include "easel.h"		/* Easel handles portable declaration of int32_t, etc. */
@@ -25,8 +25,7 @@ typedef struct p7_hmm_window_list_s {
 extern int           p7_hmmwindow_init (P7_HMM_WINDOWLIST *list);
 extern P7_HMM_WINDOW *p7_hmmwindow_new (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity);
 
-#endif /*P7_HMMWINDOW_INCLUDED*/
-
+#endif /*p7HMMWINDOW_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

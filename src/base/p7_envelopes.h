@@ -10,11 +10,12 @@
  * because the meaning is unambiguous if you're alert to the context;
  * so beware the distinction between the singular and plural forms.
  */
-#ifndef P7_ENVELOPES_INCLUDED
-#define P7_ENVELOPES_INCLUDED
+#ifndef p7ENVELOPES_INCLUDED
+#define p7ENVELOPES_INCLUDED
 
 #include "p7_config.h"
 
+#include "easel.h"       // Needed for int32_t
 
 /* P7_ENVELOPE
  *    Contains information about a domain's "envelope",
@@ -73,7 +74,7 @@ extern void          p7_envelopes_Destroy(P7_ENVELOPES *envs);
 extern int p7_envelopes_Dump(FILE *ofp, P7_ENVELOPES *env);
 
 
-#endif /* P7_ENVELOPES_INCLUDED */
+#endif /*p7ENVELOPES_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

@@ -1,5 +1,5 @@
-#ifndef P7_TOPHITS_MPI_INCLUDED
-#define P7_TOPHITS_MPI_INCLUDED
+#ifndef p7TOPHITS_MPI_INCLUDED
+#define p7TOPHITS_MPI_INCLUDED
 #include "p7_config.h"
 
 #ifdef HAVE_MPI
@@ -22,8 +22,7 @@ extern int p7_hit_mpi_Unpack  (char *buf, int n, int *pos, MPI_Comm comm, P7_HIT
 extern int p7_hit_mpi_Recv    (int source, int tag, MPI_Comm comm, char **buf, int *nalloc, P7_HIT *hit, int nhit);
 
 #endif /*HAVE_MPI*/
-#endif /*P7_TOPHITS_MPI_INCLUDED*/
-
+#endif /*p7TOPHITS_MPI_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

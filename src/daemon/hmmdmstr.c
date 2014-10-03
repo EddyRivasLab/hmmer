@@ -1831,7 +1831,7 @@ workerside_thread(void *arg)
   WORKERSIDE_ARGS  *parent  = (WORKERSIDE_ARGS *)worker->parent;
   HMMD_HEADER       hdr;
   int               n;
-  int               fd;
+  int               fd = -1;
   int               version;
   int               updated;
   int               status = eslOK;
@@ -1985,7 +1985,7 @@ workerside_thread(void *arg)
   fflush(stdout);
 
   if (cmd != NULL) free(cmd);
-  close(fd);
+  if (fd  != -1)   close(fd);
 
   pthread_exit(NULL);
 }

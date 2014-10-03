@@ -1,5 +1,5 @@
-#ifndef P7_EMIT_INCLUDED
-#define P7_EMIT_INCLUDED
+#ifndef p7EMIT_INCLUDED
+#define p7EMIT_INCLUDED
 
 #include "p7_config.h"
 
@@ -17,8 +17,7 @@ extern int p7_ProfileEmit(ESL_RANDOMNESS *r, const P7_HMM *hmm, const P7_PROFILE
 extern int p7_emit_SimpleConsensus(const P7_HMM *hmm, ESL_SQ *sq);
 extern int p7_emit_FancyConsensus (const P7_HMM *hmm, float min_lower, float min_upper, ESL_SQ *sq);
 
-#endif /*P7_EMIT_INCLUDED*/
-
+#endif /*p7EMIT_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

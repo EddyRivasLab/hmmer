@@ -1,5 +1,5 @@
-#ifndef P7_EVALUES_INCLUDED
-#define P7_EVALUES_INCLUDED
+#ifndef p7EVALUES_INCLUDED
+#define p7EVALUES_INCLUDED
 
 #include "p7_config.h"
 
@@ -20,8 +20,7 @@ extern int p7_MSVMu     (ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, i
 extern int p7_ViterbiMu (ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda,               double *ret_vmu);
 extern int p7_Tau       (ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_tau);
 
-#endif /*P7_EVALUES_INCLUDED*/
-
+#endif /*p7EVALUES_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

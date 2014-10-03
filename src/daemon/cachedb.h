@@ -1,5 +1,5 @@
-#ifndef P7_CACHEDB_INCLUDED
-#define P7_CACHEDB_INCLUDED
+#ifndef p7CACHEDB_INCLUDED
+#define p7CACHEDB_INCLUDED
 
 #include "p7_config.h"
 
@@ -43,8 +43,7 @@ typedef struct {
 extern int    p7_seqcache_Open(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf);
 extern void   p7_seqcache_Close(P7_SEQCACHE *cache);
 
-#endif /*P7_CACHEDB_INCLUDED*/
-
+#endif /*p7CACHEDB_INCLUDED*/
 /************************************************************
  * @LICENSE@
  *

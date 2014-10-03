@@ -1,5 +1,5 @@
-#ifndef P7_HMMDUTILS_INCLUDED
-#define P7_HMMDUTILS_INCLUDED
+#ifndef p7HMMDUTILS_INCLUDED
+#define p7HMMDUTILS_INCLUDED
 
 #include "p7_config.h"
 
@@ -139,8 +139,7 @@ extern int  process_searchopts(int fd, char *cmdstr, ESL_GETOPTS **ret_opts);
 
 extern void free_QueueData(QUEUE_DATA *data);
 
-#endif /*P7_HMMDUTILS_INCLUDED*/
-
+#endif /*p7HMMDUTILS_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

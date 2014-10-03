@@ -1,5 +1,6 @@
-#ifndef P7_DOMAIN_MPI_INCLUDED
-#define P7_DOMAIN_MPI_INCLUDED
+#ifndef p7DOMAIN_MPI_INCLUDED
+#define p7DOMAIN_MPI_INCLUDED
+
 #include "p7_config.h"
 
 #ifdef HAVE_MPI
@@ -12,8 +13,7 @@ extern int p7_domain_mpi_Pack    (const P7_DOMAIN *dcl, int ndom, char *buf, int
 extern int p7_domain_mpi_Unpack  (char *buf, int n, int *pos, MPI_Comm comm, P7_DOMAIN **ret_dcl, int ndom);
 
 #endif /*HAVE_MPI*/
-#endif /*P7_DOMAIN_MPI_INCLUDED*/
-
+#endif /*p7DOMAIN_MPI_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

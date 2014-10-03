@@ -77,9 +77,7 @@ p7_Init(void)
  *            
  *            \begin{cchunk}
  *            # hmmsim :: collect profile HMM score distributions
- *            # HMMER 3.0 (May 2007)
- *            # Copyright (C) 2004-2007 HHMI Janelia Farm Research Campus
- *            # Freely licensed under the Janelia Software License.
+ *            # HMMER 4.0 (Sept 2014); hmmer.org
  *            # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
  *            \end{cchunk}
  *              
@@ -96,10 +94,9 @@ p7_Init(void)
  *            
  *    symbol          example
  *    ------          ----------------
- *    HMMER_VERSION   "3.0"
- *    HMMER_DATE      "May 2007"
- *    HMMER_COPYRIGHT "Copyright (C) 2004-2007 HHMI Janelia Farm Research Campus"
- *    HMMER_LICENSE   "Freely licensed under the Janelia Software License."
+ *    HMMER_VERSION   "4.0"
+ *    HMMER_DATE      "Sept 2014"
+ *    HMMER_URL       "hmmer.org"
  *
  * Returns:   (void)
  */
@@ -112,8 +109,6 @@ p7_banner(FILE *fp, char *progname, char *banner)
 
   fprintf(fp, "# %s :: %s\n", appname, banner);
   fprintf(fp, "# HMMER %s (%s); %s\n", HMMER_VERSION, HMMER_DATE, HMMER_URL);
-  fprintf(fp, "# %s\n", HMMER_COPYRIGHT);
-  fprintf(fp, "# %s\n", HMMER_LICENSE);
   fprintf(fp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
 
   if (appname != NULL) free(appname);

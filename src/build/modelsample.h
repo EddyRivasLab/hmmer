@@ -1,5 +1,5 @@
-#ifndef P7_MODELSAMPLE_INCLUDED
-#define P7_MODELSAMPLE_INCLUDED
+#ifndef p7MODELSAMPLE_INCLUDED
+#define p7MODELSAMPLE_INCLUDED
 
 #include "p7_config.h"
 
@@ -44,8 +44,7 @@ extern int     p7_modelsample_AnchoredLocal(ESL_RANDOMNESS *rng, int M, const P7
 extern int     p7_modelsample_AnchoredMulti(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 					    P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
 					    P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc);
-#endif /*P7_MODELSAMPLE_INCLUDED*/
-
+#endif /*p7MODELSAMPLE_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

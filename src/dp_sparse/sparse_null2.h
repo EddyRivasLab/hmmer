@@ -1,5 +1,5 @@
-#ifndef P7_SPARSE_NULL2_INCLUDED
-#define P7_SPARSE_NULL2_INCLUDED
+#ifndef p7SPARSE_NULL2_INCLUDED
+#define p7SPARSE_NULL2_INCLUDED
 
 #include "p7_config.h"
 
@@ -10,8 +10,7 @@ extern int p7_sparse_Null2ByExpectation(const P7_PROFILE *gm, const P7_SPARSEMX 
 					int iae, int ibe, int kae, int kbe,
 					float *wrk, float *null2);
 
-#endif /*P7_SPARSE_NULL2_INCLUDED*/
-
+#endif /*p7SPARSE_NULL2_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

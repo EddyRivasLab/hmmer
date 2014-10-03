@@ -1,5 +1,5 @@
-#ifndef P7_BUILDER_INCLUDED
-#define P7_BUILDER_INCLUDED
+#ifndef p7BUILDER_INCLUDED
+#define p7BUILDER_INCLUDED
 
 #include "p7_config.h"
 
@@ -82,8 +82,7 @@ extern int p7_Builder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **o
 extern int p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq,   P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE  **opt_tr,    P7_PROFILE **opt_gm, P7_OPROFILE **opt_om); 
 extern int p7_Builder_MaxLength      (P7_HMM *hmm, double emit_thresh);
 
-#endif /*P7_BUILDER_INCLUDED*/
-
+#endif /*p7BUILDER_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

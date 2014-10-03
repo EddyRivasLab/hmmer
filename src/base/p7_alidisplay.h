@@ -36,8 +36,8 @@
  * Note that we could reduce that quite a bit, w/ a little more work;
  * there's a lot of redundancy in this information.
  */
-#ifndef P7_ALIDISPLAY_INCLUDED
-#define P7_ALIDISPLAY_INCLUDED
+#ifndef p7ALIDISPLAY_INCLUDED
+#define p7ALIDISPLAY_INCLUDED
 
 #include "p7_config.h"
 
@@ -102,8 +102,8 @@ extern int            p7_alidisplay_Dump(FILE *fp, const P7_ALIDISPLAY *ad);
 extern int            p7_alidisplay_Validate(const P7_ALIDISPLAY *ad, char *errbuf);
 extern int            p7_alidisplay_Compare(const P7_ALIDISPLAY *ad1, const P7_ALIDISPLAY *ad2);
 
-#endif /*P7_ALIDISPLAY_INCLUDED*/
 
+#endif /*p7ALIDISPLAY_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

@@ -60,8 +60,8 @@
  *  of any integer array.
  *  
  */
-#ifndef P7_ANCHORHASH_INCLUDED
-#define P7_ANCHORHASH_INCLUDED
+#ifndef p7ANCHORHASH_INCLUDED
+#define p7ANCHORHASH_INCLUDED
 
 #include "p7_config.h"
 
@@ -93,8 +93,7 @@ extern int            p7_anchorhash_Store  (P7_ANCHORHASH *ah, const P7_ANCHORS 
 extern int            p7_anchorhash_Get    (const P7_ANCHORHASH *ah, int32_t keyidx, int D0, P7_ANCHORS *anch);
 extern int            p7_anchorhash_Dump   (FILE *ofp, const P7_ANCHORHASH *ah);
 
-#endif /* P7_ANCHORHASH_INCLUDED */
-
+#endif /*p7ANCHORHASH_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

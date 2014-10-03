@@ -15,8 +15,8 @@
  *        [3] On sorting striped indices; why four "slots" are used, then contiguated.
  *    5. Copyright and license information
  */
-#ifndef P7_SPARSEMX_INCLUDED
-#define P7_SPARSEMX_INCLUDED
+#ifndef p7SPARSEMX_INCLUDED
+#define p7SPARSEMX_INCLUDED
 
 #include "p7_config.h"
 
@@ -305,7 +305,7 @@ extern int   p7_sparsemx_PlotDomainInference(FILE *ofp, const P7_SPARSEMX *sxd, 
  */
 
 
-#endif /*P7_SPARSEMX_INCLUDED*/ 
+#endif /*p7SPARSEMX_INCLUDED*/ 
 /*****************************************************************
  * @LICENSE@
  * 

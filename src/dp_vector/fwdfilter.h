@@ -1,5 +1,5 @@
-#ifndef P7_FWDFILTER_INCLUDED
-#define P7_FWDFILTER_INCLUDED
+#ifndef p7FWDFILTER_INCLUDED
+#define p7FWDFILTER_INCLUDED
 
 #include "p7_config.h"
 
@@ -13,8 +13,7 @@ extern int p7_ForwardFilter (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P
 extern int p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh);
 
 
-#endif /*P7_FWDFILTER_INCLUDED*/
-
+#endif /*p7FWDFILTER_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

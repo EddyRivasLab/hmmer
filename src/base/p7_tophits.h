@@ -1,7 +1,7 @@
 /* P7_TOPHITS: ranking lists of top-scoring hits
  */
-#ifndef P7_TOPHITS_INCLUDED
-#define P7_TOPHITS_INCLUDED
+#ifndef p7TOPHITS_INCLUDED
+#define p7TOPHITS_INCLUDED
 
 #include "p7_config.h"
 
@@ -112,8 +112,7 @@ extern int p7_hit_Validate(const P7_HIT *hit, char *errbuf);
 extern int p7_hit_Compare(const P7_HIT *h1, const P7_HIT *h2, float tol);
 
 
-#endif /*P7_TOPHITS_INCLUDED*/
-
+#endif /*p7TOPHITS_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

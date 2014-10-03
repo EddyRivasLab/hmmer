@@ -1101,7 +1101,7 @@ p7_sparsemx_DecodeState(int type)
   case p7S_DL: return "DL";
   case p7S_DG: return "DG";
   }
-  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such P7_REFMX main state code %d\n", type);
+  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such P7_SPARSEMX main state code %d\n", type);
   return NULL;
 }
 

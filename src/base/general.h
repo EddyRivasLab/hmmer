@@ -1,5 +1,5 @@
-#ifndef P7_GENERAL_INCLUDED
-#define P7_GENERAL_INCLUDED
+#ifndef p7GENERAL_INCLUDED
+#define p7GENERAL_INCLUDED
 
 #include "p7_config.h"
 #include "esl_getopts.h"
@@ -76,7 +76,7 @@ extern void         p7_Fail(char *format, ...);
 extern ESL_GETOPTS *p7_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char *banner, char *usage);
 extern int          p7_AminoFrequencies(float *f);
 
-#endif /*P7_GENERAL_INCLUDED*/
+#endif /*p7GENERAL_INCLUDED*/
 
 /************************************************************
  * @LICENSE@

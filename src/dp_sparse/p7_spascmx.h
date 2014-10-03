@@ -2,8 +2,8 @@
  * provides for using P7_SPARSEMX and P7_SPARSEMASK in anchor set
  * constrained DP calculations.
  */
-#ifndef P7_SPASCMX_INCLUDED
-#define P7_SPASCMX_INCLUDED
+#ifndef p7SPASCMX_INCLUDED
+#define p7SPASCMX_INCLUDED
 
 #include "p7_config.h"
 
@@ -149,7 +149,7 @@ extern int    p7_spascmx_Validate(const P7_SPARSEMX *asx, const P7_ANCHOR *anch,
  */
 
 
-#endif /*P7_SPASCMX_INCLUDED*/
+#endif /*p7SPASCMX_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  *

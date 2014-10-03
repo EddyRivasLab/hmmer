@@ -1,5 +1,5 @@
-#ifndef P7_TOPHITS_OUTPUT_INCLUDED
-#define P7_TOPHITS_OUTPUT_INCLUDED
+#ifndef p7TOPHITS_OUTPUT_INCLUDED
+#define p7TOPHITS_OUTPUT_INCLUDED
 
 #include "p7_config.h"
 
@@ -25,8 +25,7 @@ extern int p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc,
 extern int p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th );
 
 
-#endif /*P7_TOPHITS_OUTPUT_INCLUDED*/
-
+#endif /*p7TOPHITS_OUTPUT_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

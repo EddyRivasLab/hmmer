@@ -11,8 +11,8 @@
  *       [b] Layout of one row, in vectors and floats
  *    4. Copyright and license information.
  */
-#ifndef P7_CHECKPTMX_INCLUDED
-#define P7_CHECKPTMX_INCLUDED
+#ifndef p7CHECKPTMX_INCLUDED
+#define p7CHECKPTMX_INCLUDED
 
 #include "p7_config.h"
 
@@ -179,7 +179,7 @@ extern int           p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, __m128 *
  *
  */
 
-#endif /*P7_CHECKPTMX_INCLUDED*/
+#endif /*p7CHECKPTMX_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

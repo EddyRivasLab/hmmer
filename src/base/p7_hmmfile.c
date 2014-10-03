@@ -712,7 +712,7 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
   int coffset = 0;
   /* These 3 chars and int are used in the size determiantion */
   int size;
-  int n;
+  int n = 0;
   char buff[100];
   char *end   = NULL;
   char *sptr;
@@ -740,7 +740,7 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
   size += (hmm->ctime != NULL ? (7 + strlen(hmm->ctime)) : 0);                                              /*DATE line*/
 
   /* Complicated as it can cover multiple lines */
-  if(hmm->comlog != NULL){
+  if (hmm->comlog != NULL) {
     /* Determine the number of COM lines by counting the number of '\n' */
     sptr = hmm->comlog;
     do {

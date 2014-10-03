@@ -1,7 +1,7 @@
 /* P7_HMM: a core model.
  */
-#ifndef P7_HMM_INCLUDED
-#define P7_HMM_INCLUDED
+#ifndef p7HMM_INCLUDED
+#define p7HMM_INCLUDED
 
 #include "p7_config.h"
 
@@ -150,8 +150,7 @@ extern int     p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol);
 extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *iocc);
 
 
-#endif /*P7_HMM_INCLUDED*/
-
+#endif /*p7HMM_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

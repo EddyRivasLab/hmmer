@@ -1,7 +1,7 @@
 /* P7_HMMFILE:  an HMM save file or database, open for reading.
  */
-#ifndef P7_HMMFILE_INCLUDED
-#define P7_HMMFILE_INCLUDED
+#ifndef p7HMMFILE_INCLUDED
+#define p7HMMFILE_INCLUDED
 
 #include "p7_config.h"
 
@@ -86,8 +86,7 @@ extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **o
 extern int  p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key);
 extern int  p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset);
 
-#endif /*P7_HMMFILE_INCLUDED*/
-
+#endif /*p7HMMFILE_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

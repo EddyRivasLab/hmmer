@@ -1,5 +1,5 @@
-#ifndef P7_DOMAIN_INCLUDED
-#define P7_DOMAIN_INCLUDED
+#ifndef p7DOMAIN_INCLUDED
+#define p7DOMAIN_INCLUDED
 
 #include "p7_config.h"
 
@@ -32,8 +32,7 @@ extern int        p7_domain_TestSample(ESL_RANDOMNESS *rng, int alen, P7_DOMAIN 
 extern int        p7_domain_Validate(const P7_DOMAIN *dcl, char *errbuf);
 extern int        p7_domain_Compare(const P7_DOMAIN *dcl1, const P7_DOMAIN *dcl2, float tol);
 
-#endif /*P7_DOMAIN_INCLUDED*/
-
+#endif /*p7DOMAIN_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

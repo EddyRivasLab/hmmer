@@ -1,5 +1,5 @@
-#ifndef P7_COORDS2_INCLUDED
-#define P7_COORDS2_INCLUDED
+#ifndef p7_COORDS2_INCLUDED
+#define p7_COORDS2_INCLUDED
 
 #include "p7_config.h"
 
@@ -115,8 +115,7 @@ extern int              p7_coords2_hash_Dump   (FILE *ofp, const P7_COORDS2_HASH
 
 extern int p7_coords2_Sample(ESL_RANDOMNESS *rng, P7_COORDS2 *c2, int32_t maxseg, int32_t L, int32_t **byp_wrk);
 
-#endif /* P7_COORDS2_INCLUDED */
-
+#endif /*p7COORDS2_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

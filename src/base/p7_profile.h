@@ -1,8 +1,7 @@
 /* P7_PROFILE: a scoring profile, and its implicit model.
  */
-
-#ifndef P7_PROFILE_INCLUDED
-#define P7_PROFILE_INCLUDED
+#ifndef p7PROFILE_INCLUDED
+#define p7PROFILE_INCLUDED
 
 #include "p7_config.h"
 
@@ -135,7 +134,7 @@ extern char       *p7_profile_DecodeT(int tidx);
 extern int         p7_profile_GetMutePathLogProb(const P7_PROFILE *gm, double *ret_mute_lnp);
 extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol);
 
-#endif /*P7_PROFILE_INCLUDED*/
+
 /* Whereas the core HMM is a model of a single global alignment to a
  * homologous domain, a profile is a model of local and glocal homologous
  * alignments embedded in a longer sequence. The profile is constructed
@@ -254,8 +253,7 @@ extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float to
  *   parameterization is still present in the P7_PROFILE.
  */
 
-
-
+#endif /*p7PROFILE_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

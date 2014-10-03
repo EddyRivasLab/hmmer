@@ -1,5 +1,5 @@
-#ifndef P7_PROFILE_MPI_INCLUDED
-#define P7_PROFILE_MPI_INCLUDED
+#ifndef p7PROFILE_MPI_INCLUDED
+#define p7PROFILE_MPI_INCLUDED
 #ifdef  HAVE_MPI
 
 #include "p7_config.h"
@@ -18,8 +18,7 @@ extern int p7_profile_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm,     
 extern int p7_profile_mpi_Recv(int source, int tag,          MPI_Comm comm, char **buf, int *nalloc, ESL_ALPHABET **byp_abc, P7_PROFILE **ret_gm);
 
 #endif /*HAVE_MPI*/
-#endif /*P7_HMM_MPI_INCLUDED*/
-
+#endif /*p7HMM_MPI_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

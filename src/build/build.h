@@ -1,5 +1,5 @@
-#ifndef P7_BUILD_INCLUDED
-#define P7_BUILD_INCLUDED
+#ifndef p7BUILD_INCLUDED
+#define p7BUILD_INCLUDED
 
 #include "p7_config.h"
 
@@ -14,8 +14,7 @@
 extern int p7_Handmodelmaker(ESL_MSA *msa,                P7_BUILDER *bld, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_BUILDER *bld, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 
-#endif /*P7_BUILD_INCLUDED*/
-
+#endif /*p7BUILD_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

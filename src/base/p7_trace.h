@@ -30,8 +30,8 @@
  * tr->k[] values are only nonzero for a main model state; so special
  * states {SNBLGECJT} always have k[] = 0.
  */
-#ifndef P7_TRACE_INCLUDED
-#define P7_TRACE_INCLUDED
+#ifndef p7TRACE_INCLUDED
+#define p7TRACE_INCLUDED
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -134,8 +134,7 @@ extern int  p7_trace_Doctor(P7_TRACE *tr, int *opt_ndi, int *opt_nid);
 /* 7. Counting traces into new HMMs */
 extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
 
-#endif /*P7_TRACE_INCLUDED*/
-
+#endif /*p7TRACE_INCLUDED*/
 /************************************************************
  * @LICENSE@
  *

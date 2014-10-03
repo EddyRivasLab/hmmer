@@ -1,5 +1,5 @@
-#ifndef P7_SEQMODEL_INCLUDED
-#define P7_SEQMODEL_INCLUDED
+#ifndef p7SEQMODEL_INCLUDED
+#define p7SEQMODEL_INCLUDED
 
 #include "p7_config.h"
 
@@ -13,8 +13,7 @@ extern int p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
 		       ESL_DMATRIX *P, float *f, double popen, double pextend,
 		       P7_HMM **ret_hmm);
 
-#endif /*P7_SEQMODEL_INCLUDED*/
-
+#endif /*p7SEQMODEL_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

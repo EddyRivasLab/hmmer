@@ -19,8 +19,8 @@
  * Someday we might pull this apart into two or three separate
  * objects.
  */
-#ifndef P7_BG_INCLUDED
-#define P7_BG_INCLUDED
+#ifndef p7BG_INCLUDED
+#define p7BG_INCLUDED
 
 #include "p7_config.h"
 
@@ -59,8 +59,7 @@ extern int    p7_bg_SetFilter  (P7_BG *bg, int M, const float *compo);
 extern int    p7_bg_FilterScore(P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc);
 
 
-#endif /*P7_BG_INCLUDED*/
-
+#endif /*p7BG_INCLUDED*/
 /************************************************************
  * @LICENSE@
  *

@@ -1,5 +1,5 @@
-#ifndef P7_VITFILTER_INCLUDED
-#define P7_VITFILTER_INCLUDED
+#ifndef p7VITFILTER_INCLUDED
+#define p7VITFILTER_INCLUDED
 
 #include "p7_config.h"
 
@@ -14,8 +14,7 @@ extern int p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 extern int p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox,
                                         float filtersc, double P, P7_HMM_WINDOWLIST *windowlist);
 
-#endif /*P7_VITFILTER_INCLUDED*/
-
+#endif /*p7VITFILTER_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

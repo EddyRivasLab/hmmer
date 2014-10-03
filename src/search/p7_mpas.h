@@ -3,8 +3,8 @@
  * both reference and production versions.
  * 
  */
-#ifndef p7_MPAS_INCLUDED
-#define p7_MPAS_INCLUDED
+#ifndef p7MPAS_INCLUDED
+#define p7MPAS_INCLUDED
 #include "p7_config.h"
 
 #include <stdio.h>
@@ -48,8 +48,7 @@ extern int p7_mpas_stats_Init(P7_MPAS_STATS *stats);
 extern int p7_mpas_stats_Dump(FILE *ofp, P7_MPAS_STATS *stats);
 extern int p7_mpas_stats_CompareAS2Trace(P7_MPAS_STATS *stats, const P7_ANCHORS *anch, const P7_TRACE *tr);
 
-#endif /*p7_MPAS_INCLUDED*/
-
+#endif /*p7MPAS_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

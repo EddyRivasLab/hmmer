@@ -1,5 +1,5 @@
-#ifndef P7_PIPELINE_MPI_INCLUDED
-#define P7_PIPELINE_MPI_INCLUDED
+#ifndef p7_PIPELINE_MPI_INCLUDED
+#define p7_PIPELINE_MPI_INCLUDED
 #ifdef  HAVE_MPI
 
 #include "p7_config.h"
@@ -15,8 +15,7 @@ extern int p7_pipeline_stats_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm com
 extern int p7_pipeline_stats_mpi_Recv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, P7_PIPELINE_STATS *stats);
 
 #endif /*HAVE_MPI*/
-#endif /*P7_PIPELINE_MPI_INCLUDED*/
-
+#endif /*p7PIPELINE_MPI_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

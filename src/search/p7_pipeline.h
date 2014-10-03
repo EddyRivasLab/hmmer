@@ -2,9 +2,8 @@
  * comparison, from the fast filters down through domain postprocessing,
  * alignment, and scoring.
  */
-
-#ifndef P7_PIPELINE_INCLUDED
-#define P7_PIPELINE_INCLUDED
+#ifndef p7PIPELINE_INCLUDED
+#define p7PIPELINE_INCLUDED
 
 #include "p7_config.h"
 
@@ -155,8 +154,7 @@ extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFI
 extern int p7_pipeline_AccelerationFilter(ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg,
 					  P7_FILTERMX *fx, P7_CHECKPTMX *cx, P7_SPARSEMASK *sm);
 
-#endif /*P7_PIPELINE_INCLUDED*/
-
+#endif /*p7PIPELINE_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

@@ -1,5 +1,6 @@
-#ifndef P7_HMM_MPI_INCLUDED
-#define P7_HMM_MPI_INCLUDED
+#ifndef p7HMM_MPI_INCLUDED
+#define p7HMM_MPI_INCLUDED
+
 #include "p7_config.h"
 
 #ifdef  HAVE_MPI
@@ -16,8 +17,7 @@ extern int p7_hmm_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm,         
 extern int p7_hmm_mpi_Recv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL_ALPHABET **byp_abc, P7_HMM **ret_hmm);
 
 #endif /*HAVE_MPI*/
-#endif /*P7_HMM_MPI_INCLUDED*/
-
+#endif /*p7HMM_MPI_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

@@ -77,7 +77,7 @@ fi
 #     HMMER_LICENSE     one-line license string
 #     HMMER_LICENSETAG  which license to bundle from Licenses/ subdirectory.
 #     HMMER_VERSION     copy of version code, e.g. "3.0"
-#     HMMER_URL         URL home for HMMER.
+#     HMMER_URL         URL home for HMMER:   e.g. "hmmer.org"
 # And we have to define the relevant package variables for Easel as well.
 #
 # We avoid using AC_INIT's PACKAGE_ variables anywhere, because we want to be able
@@ -88,7 +88,7 @@ HMMER_DATE="September 2014"
 HMMER_COPYRIGHT="Copyright (C) 2014 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the open source BSD license."
 HMMER_VERSION=$PACKAGE_VERSION
-HMMER_URL="http://hmmer.org/"
+HMMER_URL="hmmer.org"
 HMMER_ESLDIR="lib/easel"
 HMMER_SADIR="lib/libdivsufsort"
 
@@ -96,7 +96,7 @@ EASEL_DATE="September 2014"
 EASEL_COPYRIGHT="Copyright (C) 2014 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the open source BSD license."
 EASEL_VERSION="h$PACKAGE_VERSION"
-EASEL_URL="http://bioeasel.org/"
+EASEL_URL="bioeasel.org"
 
 # Output variables  (AC_OUTPUT replaces @var@ in input files, such as Makefiles)
 AC_SUBST(HMMER_DATE)

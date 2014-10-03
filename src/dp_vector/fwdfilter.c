@@ -819,6 +819,7 @@ backward_row_rescale(float *xc, __m128 *dpc, int Q, float scalefactor)
 
 /* Only needed during development, for memory profiling; J10/29
  */
+#if 0
 static inline int
 sse_countge(__m128 v, float thresh)
 {
@@ -829,7 +830,7 @@ sse_countge(__m128 v, float thresh)
   for (z = 0; z < 4; z++) if (u.x[z] >= thresh) c++;
   return c;
 }
-
+#endif
 
 
 /* posterior_decode_row()

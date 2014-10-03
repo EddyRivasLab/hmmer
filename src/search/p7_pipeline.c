@@ -2058,12 +2058,12 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
   pli_tmp->om = p7_oprofile_Create(gm->M, gm->abc);
   pli_tmp->sm = p7_sparsemask_Create(gm->M, 100);
   ESL_ALLOC(pli_tmp->scores, sizeof(float) * om->abc->Kp);
-  if ( (pli_tmp->trc = p7_trace_CreateWithPP())            == NULL) goto ERROR;
-  if ( (pli_tmp->sxf = p7_sparsemx_Create (pli_tmp->sm))   == NULL) goto ERROR;
-  if ( (pli_tmp->sxb = p7_sparsemx_Create (pli_tmp->sm))   == NULL) goto ERROR;
-  if ( (pli_tmp->sxd = p7_sparsemx_Create (pli_tmp->sm))   == NULL) goto ERROR;
-  if ( (pli_tmp->sxx = p7_sparsemx_Create (pli_tmp->sm))   == NULL) goto ERROR;
-  if ( (pli_tmp->mt  = p7_masstrace_Create (gm->M, 100))   == NULL) goto ERROR;
+  if ( (pli_tmp->trc = p7_trace_CreateWithPP())            == NULL) { status = eslEMEM; goto ERROR; }
+  if ( (pli_tmp->sxf = p7_sparsemx_Create (pli_tmp->sm))   == NULL) { status = eslEMEM; goto ERROR; }
+  if ( (pli_tmp->sxb = p7_sparsemx_Create (pli_tmp->sm))   == NULL) { status = eslEMEM; goto ERROR; }
+  if ( (pli_tmp->sxd = p7_sparsemx_Create (pli_tmp->sm))   == NULL) { status = eslEMEM; goto ERROR; }
+  if ( (pli_tmp->sxx = p7_sparsemx_Create (pli_tmp->sm))   == NULL) { status = eslEMEM; goto ERROR; }
+  if ( (pli_tmp->mt  = p7_masstrace_Create (gm->M, 100))   == NULL) { status = eslEMEM; goto ERROR; }
 
   msv_windowlist.windows = NULL;
   vit_windowlist.windows = NULL;

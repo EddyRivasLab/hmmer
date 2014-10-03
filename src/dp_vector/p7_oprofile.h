@@ -1,5 +1,5 @@
-#ifndef P7_OPROFILE_INCLUDED
-#define P7_OPROFILE_INCLUDED
+#ifndef p7OPROFILE_INCLUDED
+#define p7OPROFILE_INCLUDED
 
 #include "p7_config.h"
 
@@ -183,8 +183,7 @@ extern int          p7_oprofile_GetMSVEmissionScoreArray(const P7_OPROFILE *om, 
 extern int          p7_oprofile_GetFwdEmissionScoreArray(const P7_OPROFILE *om, float *arr );
 extern int          p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, P7_BG *bg, float *arr );
 
-#endif /*P7_OPROFILE_INCLUDED*/
-
+#endif /*p7OPROFILE_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

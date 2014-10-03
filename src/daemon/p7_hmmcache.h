@@ -1,7 +1,7 @@
 /* A cached profile database. Used by the hmmpgmd daemon.
  */
-#ifndef P7_HMMCACHE_INCLUDED
-#define P7_HMMCACHE_INCLUDED
+#ifndef p7HMMCACHE_INCLUDED
+#define p7HMMCACHE_INCLUDED
 
 #include "p7_config.h"
 
@@ -27,8 +27,7 @@ extern size_t p7_hmmcache_Sizeof         (P7_HMMCACHE *cache);
 extern int    p7_hmmcache_SetNumericNames(P7_HMMCACHE *cache);
 extern void   p7_hmmcache_Close          (P7_HMMCACHE *cache);
 
-#endif /*P7_HMMCACHE_INCLUDED*/
-
+#endif /*p7HMMCACHE_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

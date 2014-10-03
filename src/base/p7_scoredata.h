@@ -3,8 +3,8 @@
  * along with MAXL-associated prefix- and suffix-lengths, and optimal extensions
  * for FM-MSV.
  */
-#ifndef P7_SCOREDATA_INCLUDED
-#define P7_SCOREDATA_INCLUDED
+#ifndef p7SCOREDATA_INCLUDED
+#define p7SCOREDATA_INCLUDED
 
 #include "p7_config.h"
 
@@ -30,8 +30,7 @@ extern void           p7_hmm_ScoreDataDestroy( P7_SCOREDATA *data );
 extern int            p7_hmm_initWindows (P7_HMM_WINDOWLIST *list);
 extern P7_HMM_WINDOW *p7_hmm_newWindow (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity);
 
-#endif /*P7_SCOREDATA_INCLUDED*/
-
+#endif /*p7SCOREDATA_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

@@ -1,5 +1,5 @@
-#ifndef P7_MASSTRACE_INCLUDED
-#define P7_MASSTRACE_INCLUDED
+#ifndef p7MASSTRACE_INCLUDED
+#define p7MASSTRACE_INCLUDED
 
 #include <stdio.h>
 
@@ -48,8 +48,6 @@ extern int   p7_masstrace_Compare(const P7_MASSTRACE *mte, const P7_MASSTRACE *m
 extern float p7_masstrace_GetMaxAbsDiff(const P7_MASSTRACE *mte, const P7_MASSTRACE *mta);
 extern int   p7_masstrace_Validate(const P7_MASSTRACE *mt, char *errbuf);
 
-
-#endif /*P7_MASSTRACE_INCLUDED*/
 
 /* 
  * A "domain" is one pass through the model, a subpath that starts
@@ -138,6 +136,7 @@ extern int   p7_masstrace_Validate(const P7_MASSTRACE *mt, char *errbuf);
  * used, and P7_MASSTRACE objects are compared.
  */
 
+#endif /*p7MASSTRACE_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  *

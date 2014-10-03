@@ -373,7 +373,7 @@ dump_up_row(FILE *fp, int i, const P7_SPARSEMASK *sm, const float *dpc, int k0, 
   fprintf(fp, "%3d %2s ", i, p7_sparsemx_DecodeState(s));
   for (z = 0, k = k1; k <= k2 && k < k0; k++) {               // from k1..k0-1, you're in potentially valid UP cells
     while (z < sm->n[i] && sm->k[i][z]  < k) z++;
-    if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(fp, "%*.*f ", width, precision, *(dpc + z*p7R_NSCELLS + s));  
+    if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(fp, "%*.*f ", width, precision, *(dpc + z*p7S_NSCELLS + s));  
     else                                     fprintf(fp, "%*s ",   width, "......");
   }
   for ( ; k <= k2; k++) {                                    // from k0..k2, you're outside the UP sector
@@ -1447,3 +1447,10 @@ main(int argc, char **argv)
   return 0;
 }
 #endif /*p7SPASCMX_STATS*/
+
+/*****************************************************************
+ * @LICENSE@
+ *
+ * SVN $Id$
+ * SVN $URL$
+ *****************************************************************/

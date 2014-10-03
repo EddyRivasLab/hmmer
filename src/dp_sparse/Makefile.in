@@ -2,6 +2,7 @@ MODULE = dp_sparse
 
 LIBOBJS =  p7_sparsemx.o        \
 	   p7_spascmx.o         \
+	   p7_spaecmx.o         \
 	   sparse_aec_align.o   \
 	   sparse_anchors.o     \
 	   sparse_asc_fwdback.o \
@@ -20,7 +21,7 @@ OBJS =
 
 HDRS =  
 
-PROGS =
+PROGS =  
 
 UTESTS = sparse_asc_fwdback_utest \
 	 sparse_decoding_utest    \
@@ -39,7 +40,8 @@ EXAMPLES = sparse_anchors_example     \
            sparse_fwdback_example     \
            sparse_masstrace_example   \
            sparse_trace_example       \
-	   sparse_asc_fwdback_example 
+	   sparse_asc_fwdback_example \
+	   sparse_aec_align_example
 
 LIBTMP = 
 

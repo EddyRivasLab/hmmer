@@ -1,5 +1,5 @@
-#ifndef P7_SSVFILTER_INCLUDED
-#define P7_SSVFILTER_INCLUDED
+#ifndef p7SSVFILTER_INCLUDED
+#define p7SSVFILTER_INCLUDED
 
 #include "p7_config.h"
 #include "easel.h"
@@ -7,8 +7,7 @@
 
 extern int p7_SSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
 
-#endif /*P7_SSVFILTER_INCLUDED*/
-
+#endif /*p7SSVFILTER_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  *

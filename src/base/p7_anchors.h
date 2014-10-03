@@ -9,8 +9,8 @@
  * call both the array and the container <anch> in the code, so beware
  * the distinction between the singular and plural.
  */
-#ifndef P7_ANCHORS_INCLUDED
-#define P7_ANCHORS_INCLUDED
+#ifndef p7ANCHORS_INCLUDED
+#define p7ANCHORS_INCLUDED
 
 #include "p7_config.h"
 
@@ -72,8 +72,7 @@ extern int  p7_anchors_Validate(P7_ANCHORS *anch, char *errbuf);
 extern int  p7_anchors_Sample(ESL_RANDOMNESS *rng, int L, int M, int maxD, P7_ANCHORS *anch);
 extern int  p7_anchors_SampleFromTrace(P7_ANCHORS *anch, ESL_RANDOMNESS *rng, const P7_TRACE *tr);
 
-#endif /* P7_ANCHORS_INCLUDED */
-
+#endif /* p7ANCHORS_INCLUDED */
 /*****************************************************************
  * @LICENSE@
  * 

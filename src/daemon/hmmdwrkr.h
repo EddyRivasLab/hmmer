@@ -1,12 +1,11 @@
-#ifndef P7_HMMDWRKR_INCLUDED
-#define P7_HMMDWRKR_INCLUDED
+#ifndef p7HMMDWRKR_INCLUDED
+#define p7HMMDWRKR_INCLUDED
 
 #include "esl_getopts.h"
 
 extern void worker_process(ESL_GETOPTS *go);
 
-#endif /*P7_HMMDWRKR_INCLUDED*/
-
+#endif /*p7HMMDWRKR_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

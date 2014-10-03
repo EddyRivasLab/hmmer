@@ -1,5 +1,5 @@
-#ifndef P7_TRACEALIGN_INCLUDED
-#define P7_TRACEALIGN_INCLUDED
+#ifndef p7TRACEALIGN_INCLUDED
+#define p7TRACEALIGN_INCLUDED
 
 #include "p7_config.h"
 
@@ -15,8 +15,7 @@ extern int p7_tracealign_MSA (const ESL_MSA *premsa, P7_TRACE **tr,           in
 extern int p7_tracealign_ComputeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRACE  **tr);
 extern int p7_tracealign_getMSAandStats(P7_HMM *hmm, ESL_SQ  **sq, int N, ESL_MSA **ret_msa, float **ret_pp, float **ret_relent, float **ret_scores );
 
-#endif /*P7_TRACEALIGN_INCLUDED*/
-
+#endif /*p7TRACEALIGN_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

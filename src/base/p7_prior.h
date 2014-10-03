@@ -1,5 +1,5 @@
-#ifndef P7_PRIOR_INCLUDED
-#define P7_PRIOR_INCLUDED
+#ifndef p7PRIOR_INCLUDED
+#define p7PRIOR_INCLUDED
 
 #include "p7_config.h"
 
@@ -24,8 +24,7 @@ extern void       p7_prior_Destroy(P7_PRIOR *pri);
 
 extern int        p7_ParameterEstimation(P7_HMM *hmm, const P7_PRIOR *pri);
 
-#endif /*P7_PRIOR_INCLUDED*/
-
+#endif /*p7PRIOR_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

@@ -1,5 +1,5 @@
-#ifndef P7_TOPHITS_OUTPUT_TABULAR_INCLUDED
-#define P7_TOPHITS_OUTPUT_TABULAR_INCLUDED
+#ifndef p7TOPHITS_OUTPUT_TABULAR_INCLUDED
+#define p7TOPHITS_OUTPUT_TABULAR_INCLUDED
 
 #include "p7_config.h"
 #include <stdio.h>
@@ -17,8 +17,7 @@ extern int p7_tophits_TabularTail(FILE *ofp, const char *progname, enum p7_pipem
 				  const char *qfile, const char *tfile, const ESL_GETOPTS *go);
 
 
-#endif /*P7_TOPHITS_OUTPUT_TABULAR_INCLUDED*/
-
+#endif /*p7TOPHITS_OUTPUT_TABULAR_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

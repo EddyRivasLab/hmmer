@@ -4,8 +4,8 @@
  * P7_SPARSEMASK code that is called by the vectorized fwd-bck local
  * decoder.
  */
-#ifndef P7_SIMDVEC_INCLUDED
-#define P7_SIMDVEC_INCLUDED
+#ifndef p7SIMDVEC_INCLUDED
+#define p7SIMDVEC_INCLUDED
 
 /* Define our SIMD vector sizes.
  * SSE, Altivec/VMX are 128b/16B vectors, but we anticipate others.
@@ -63,7 +63,7 @@ extern void p7_simdvec_Init(void);
  * 
  * See also: posix_memalign(), as an alternative.
  */
-#endif  /*P7_SIMDVEC_INCLUDED*/
+#endif  /*p7SIMDVEC_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  *

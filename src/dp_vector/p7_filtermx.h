@@ -1,5 +1,5 @@
-#ifndef P7_FILTERMX_INCLUDED
-#define P7_FILTERMX_INCLUDED
+#ifndef p7FILTERMX_INCLUDED
+#define p7FILTERMX_INCLUDED
 
 #include "p7_config.h"
 
@@ -48,7 +48,7 @@ extern int p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, ui
 extern int p7_filtermx_DumpVFRow(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
 #endif
 
-#endif /*P7_FILTERMX_INCLUDED*/
+#endif /*p7FILTERMX_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

@@ -1,5 +1,6 @@
-#ifndef P7_ALIDISPLAY_MPI_INCLUDED
-#define P7_ALIDISPLAY_MPI_INCLUDED
+#ifndef p7ALIDISPLAY_MPI_INCLUDED
+#define p7ALIDISPLAY_MPI_INCLUDED
+
 #include "p7_config.h"
 
 #ifdef  HAVE_MPI
@@ -12,8 +13,7 @@ extern int p7_alidisplay_mpi_Pack    (const P7_ALIDISPLAY *ad, char *buf, int n,
 extern int p7_alidisplay_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, P7_ALIDISPLAY **ret_ad);
 
 #endif /*HAVE_MPI*/
-#endif /*P7_ALIDISPLAY_MPI_INCLUDED*/
-
+#endif /*p7ALIDISPLAY_MPI_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 
