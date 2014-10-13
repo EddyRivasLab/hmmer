@@ -694,7 +694,7 @@ p7_modelsample_SinglePathedSeq(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 }
 
 /* Function:  p7_modelsample_SinglePathedASC()
- * Synopsis:  Sample profile/seq/anch triplet such that only one P=1.0 path exists for anchored seq comparison.
+ * Synopsis:  Sample profile/seq/anch triplet with only one possible path when ASC.
  *
  * Purpose:   Sample a profile, sequence, anchor set combination that have been
  *            contrived such that there is only a single possible path that

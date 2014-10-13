@@ -131,11 +131,8 @@ p7_reference_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
     {
       env->arr[d].i0    = anch[d].i0;
       env->arr[d].k0    = anch[d].k0;
-      env->arr[d].alia  = 0;
-      env->arr[d].alib  = 0;
       env->arr[d].ka    = 0;
       env->arr[d].kb    = 0;
-
       env->arr[d].flags = 0;
     }
   env->D = D;
@@ -376,7 +373,6 @@ outcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float epsilon)
       for (i = env->arr[d].i0 - 1; i >= env->arr[d-1].i0; i--)   // at d=1, i0(0)=0 sentinel makes this i0(1)-1 down to 0
 	{
 	  phomology -= P7R_XMX(apd, i, p7R_B);  // now phomology = P(x_i in domain d)
-	  printf("%4d %.4f\n", i, phomology);
 	  if (phomology < epsilon) break;       // if i is not in the domain...
 	}
       env->arr[d].oea = i+1;                    // but i+1 was, so oea = i+1.

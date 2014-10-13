@@ -1,5 +1,6 @@
 Brief installation instructions 
 HMMER @HMMER_VERSION@; @HMMER_DATE@
+http://hmmer.org
 -------------------------------------------------------------
 
 Starting from a source distribution, hmmer-@HMMER_VERSION@.tar.gz:
@@ -16,9 +17,9 @@ troubleshooting, see the Installation chapter in the HMMER User's
 Guide (Userguide.pdf).
 
 HMMER is written in C (ANSI C99) for Intel/AMD-compatible processors
-on POSIX-compliant systems (including UNIX, Linux, Mac OS/X, and
-Windows with optional POSIX-compatibility software installed such as
-Cygwin).
+on POSIX-compliant systems (including UNIX, Linux, and Mac OS/X).
+HMMER will work on Windows if you install POSIX-compatibility software
+such as Cygwin.
 
 -------------------------------------------------------------
 Starting from a Subversion (SVN) working copy:

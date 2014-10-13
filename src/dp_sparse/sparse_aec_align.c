@@ -18,13 +18,15 @@
  * [HamadaAsai2012]. It was first introduced by [Kall2005].
  * 
  * Contents:
- *   1. p7_sparse_aec_Align(), the outer wrapper.
- *   2. aec_fill(), the DP recursion.
+ *   1. API wrapper, p7_sparse_aec_Align().
+ *   2. DP recursion, aec_fill().
  *   3. Choice selection functions for the traceback.
- *   4. aec_trace(), the traceback.
+ *   4. Traceback, aec_trace().
  *   5. Footnotes.
- *   6. Example.
- *   7. Copyright and licence information.
+ *   6. Unit tests.
+ *   7. Test driver.
+ *   8. Example.
+ *   9. Copyright and licence information.
  */
 #include "p7_config.h"
 
@@ -42,6 +44,10 @@
 static int aec_fill (const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, int d,   const float **mod_ppp, float **mod_dpc, int *mod_g, float *mod_xX);
 static int aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env,  const float *dpc, P7_TRACE *tr);
 
+
+/*****************************************************************
+ * 1. API wrapper, p7_sparse_aec_Align()
+ *****************************************************************/
 
 /* Function:  p7_sparse_aec_Align()
  * Synopsis:  Anchor/envelope constrained optimal alignment of profile to sequence.
@@ -107,7 +113,7 @@ p7_sparse_aec_Align(const P7_PROFILE *gm, const P7_SPARSEMX *asd,
   for (d = 1; d <= env->D; d++)
     aec_fill(gm, sm, env, d, &ppp, &dpc, &g, &xX);
 
-  p7_spaecmx_Dump(stdout, aec, env);
+  //p7_spaecmx_Dump(stdout, aec, env);  
 
   aec_trace(gm, sm, env, dpc, tr);     // dpc is +1 from last supercell. aec_trace knows to back it up -1 supercell, because it does that for each successive domain anyway
   return eslOK;
@@ -117,7 +123,7 @@ p7_sparse_aec_Align(const P7_PROFILE *gm, const P7_SPARSEMX *asd,
 
 
 /*****************************************************************
- * 2. aec_fill(), the DP recursion
+ * 2. DP recursion, aec_fill()
  *****************************************************************/
 
 /* aec_fill()
@@ -220,11 +226,7 @@ aec_fill(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, int d
 	  for (z = 0; z < sm->n[i] && sm->k[i][z] < env->arr[d].k0; z++, dpc += p7S_NSCELLS, ppp += p7S_NSCELLS)
 	    {
 	      k = sm->k[i][z];
-	      dpc[p7S_ML] = ppp[p7S_ML] + ppp[p7S_MG] + 
-	 	            (is_glocal ? ESL_MAX( P7_DELTAT(dc, TSC(p7P_DM, k-1)),
-						  P7_DELTAT(xX, TSC(p7P_GM, k-1))) :
-		                         ESL_MAX( P7_DELTAT(dc, TSC(p7P_DM, k-1)),
-						  P7_DELTAT(xX, TSC(p7P_LM, k-1))));
+	      dpc[p7S_ML] = ppp[p7S_ML] + ppp[p7S_MG] + ( is_glocal ?  P7_DELTAT(xX, TSC(p7P_GM, k-1)) : P7_DELTAT(xX, TSC(p7P_LM, k-1)));
 	      dpc[p7S_IL] = -eslINFINITY;                                
 	      dpc[p7S_DL] = dc;
 
@@ -332,6 +334,7 @@ aec_fill(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, int d
 	      dpc[p7S_DL] = dc;
 
 	      /* Advance calculation of next Dk+1 */
+	      k = sm->k[i][z];
 	      if (z < sm->n[i]-1 && sm->k[i][z+1] == k+1) dc = P7_DELTAT( dc, TSC(p7P_DD, k));
 	      else                                  	  dc = -eslINFINITY;
 	    } // end loop over sparse supercells z on initial row i0, glocal path
@@ -432,7 +435,7 @@ select_down_m(const P7_SPARSEMASK *sm, const P7_ENVELOPES *env, int d, int i, co
   path[1] = dpp[p7S_IL];
   path[2] = dpp[p7S_DL];
   
-  printf("down_m choosing from M=%.4f  I=%.4f  D=%.4f\n", path[0], path[1], path[2]);
+  //printf("down_m choosing from M=%.4f  I=%.4f  D=%.4f\n", path[0], path[1], path[2]);
 
   *mod_dpc = dpp;
   *mod_z   = z;
@@ -463,7 +466,7 @@ select_up_m(const P7_SPARSEMASK *sm, const P7_ENVELOPES *env, int d, int i, cons
   path[1] = dpp[p7S_IL];
   path[2] = dpp[p7S_DL];
   
-  printf("up_m choosing from M=%.4f  I=%.4f  D=%.4f\n", path[0], path[1], path[2]);
+  //printf("up_m choosing from M=%.4f  I=%.4f  D=%.4f\n", path[0], path[1], path[2]);
 
   *mod_dpc = dpp;
   *mod_z   = z;
@@ -482,7 +485,7 @@ select_down_i(const P7_SPARSEMASK *sm, const P7_ENVELOPES *env, int d, int i, co
   z = sm->n[i-1]-1; while (sm->k[i-1][z] >  k)     { z--; dpp -= p7S_NSCELLS; }  // skip back to i-1,k cell on DOWN(i-1)
   ESL_DASSERT1(( z >= 0 && sm->k[i-1][z] == k ));                                // connected supercell i-1,k must exist, and must have >=1 value >= -inf, by construction.
 
-  printf("down_i choosing from M=%.4f  I=%.4f\n", dpp[p7S_ML], dpp[p7S_IL]);
+  //printf("down_i choosing from M=%.4f  I=%.4f\n", dpp[p7S_ML], dpp[p7S_IL]);
 
   *mod_dpc = dpp;
   *mod_z   = z;
@@ -503,7 +506,7 @@ select_up_i(const P7_SPARSEMASK *sm, const P7_ENVELOPES *env, int d, int i, cons
   while (sm->k[i-1][z] >  k)              { z--; dpp -= p7S_NSCELLS; }   // skip back to i-1,k cell on UP(i-1) row; again z>=0 check not needed
   ESL_DASSERT1(( z >= 0 && sm->k[i-1][z] == k ));
 
-  printf("up_i choosing from M=%.4f  I=%.4f\n", dpp[p7S_ML], dpp[p7S_IL]);
+  //printf("up_i choosing from M=%.4f  I=%.4f\n", dpp[p7S_ML], dpp[p7S_IL]);
 
   *mod_dpc = dpp;
   *mod_z   = z;
@@ -550,8 +553,10 @@ select_e(const P7_SPARSEMASK *sm, const P7_ENVELOPES *env, int d, int i, const f
   return ( env->arr[d].flags & p7E_IS_GLOCAL ? p7T_MG : p7T_ML );
 }
 
+
+
 /*****************************************************************
- * 4. aec_trace(), the traceback. 
+ * 4. Traceback, aec_trace()
  *****************************************************************/
 
 static int
@@ -581,7 +586,7 @@ aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, cons
       /* DOWN matrix: trace back until we reach the anchor, which always exists */
       while (i > env->arr[d].i0 || k > env->arr[d].k0)
 	{
-	  printf("I am now on i=%d, k=%d and scur=%d(%s)\n", i, k, scur, p7_trace_DecodeStatetype(scur));
+	  //printf("I am now on i=%d, k=%d and scur=%d(%s)\n", i, k, scur, p7_trace_DecodeStatetype(scur));
 
 	  switch (scur) {
 	  case p7T_ML: case p7T_MG:   sprv = select_down_m(sm, env, d, i, &dpc, &z);  i--; k--;              break;
@@ -591,10 +596,19 @@ aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, cons
 	  default: ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in sparse AEC traceback");
 	  }
 	  
-	  /* Right wing unfolding, on glocal Mk->E exit. Can only happen from DOWN. */
-	  if ( scur == p7T_E && (env->arr[d].flags & p7E_IS_GLOCAL))
-	    for (k2 = gm->M; k2 > k; k2--)
-	      if ( (status = p7_trace_Append(tr, p7T_DG, k2, i)) != eslOK) return status;
+	  /* When we trace E back, deducing Mk->E exit: record kb boundary, and 
+	   * do right wing unfolding.
+	   */
+	  if ( scur == p7T_E )
+	    {
+	      if (env->arr[d].flags & p7E_IS_GLOCAL) 
+		{
+		  env->arr[d].kb = gm->M;
+		  for (k2 = gm->M; k2 > k; k2--)
+		    if ( (status = p7_trace_Append(tr, p7T_DG, k2, i)) != eslOK) return status;		  
+		}
+	      else env->arr[d].kb = k;
+	    }
       
 	  /* Append selected state - then move there, and iterate. */
 	  if ( (status = p7_trace_Append(tr, sprv, k, i)) != eslOK) return status;
@@ -620,16 +634,23 @@ aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, cons
 	  scur = sprv;
 	}
 
-      /* We're on ia(d), in th optimal Mk. There may be still supercells on this dpc row < k,
+      /* We're on ia(d), in the optimal Mk. There may be still supercells on this dpc row < k,
        * but we're obligated to leave dpc on first supercell, i.e. +1 from ib(d-1), so select_e
-       * will be able to work
+       * will be able to work.
+       * (We can only have supercells < k if ia(d) is in UP sector, which it usually is.
+       *  Watch out for rare case where ia==i0, in which case first supercell is the anchor itself.)
        */
-      dpc -= z * p7S_NSCELLS;
+      if (env->arr[d].ia < env->arr[d].i0) dpc -= z * p7S_NSCELLS; 
 
       sprv = (env->arr[d].flags & p7E_IS_GLOCAL ? p7T_G : p7T_L );
       if ( sprv == p7T_G )  // Left wing unfolding, on glocal G->Mk entry.
-	for (; k > 1; k--)
-	  if ( (status = p7_trace_Append(tr, p7T_DG, k-1, i))             != eslOK) return status;
+	{
+	  for (; k > 1; k--)
+	    if ( (status = p7_trace_Append(tr, p7T_DG, k-1, i))             != eslOK) return status;
+	  env->arr[d].ka = 1;
+	}
+      else env->arr[d].ka = k;
+	    
       if ( (status = p7_trace_Append(tr, sprv,                     0, i)) != eslOK) return status;
       if ( (status = p7_trace_Append(tr, p7T_B,                    0, i)) != eslOK) return status;
       if ( (status = p7_trace_Append(tr, (d == 1 ? p7T_N : p7T_J), 0, i)) != eslOK) return status;
@@ -650,7 +671,7 @@ aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, cons
 
 
 /*****************************************************************
- * x. Footnotes
+ * 5. Footnotes
  ***************************************************************** 
  * 
  * [1] HACKY MISUSE OF P7_SPARSEMX
@@ -712,9 +733,195 @@ aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, cons
  * AEC matrix.
  */
 
+/*****************************************************************
+ * 6. Unit tests
+ *****************************************************************/
+#ifdef p7SPARSE_AEC_ALIGN_TESTDRIVE
+
+#include "hmmer.h"
+
+/* "singlemulti" test
+ * 
+ * Create <N> profile/seq/anchorset comparisons that have only one
+ * possible path once it's anchor set constrained, using
+ * p7_modelsample_SinglePathedASC(). For each, create a sparse mask that
+ * includes that path (50% of the time by dirtying around the path;
+ * 50% of the time by adding all cells). AEC alignment must recover
+ * exactly that path.
+ * 
+ * To achieve this, the model is in multiglocal mode (no local
+ * alignments). Anchor set constraint is what allows it to be
+ * multidomain, because the anchor set defines a unique number of
+ * domains. The key idea is that the profile generates a fixed number
+ * of match states (possibly involving D state usage, using transition
+ * probs of 0 to force using either M or D deterministically at each
+ * k), and match states cannot generate some residue X. We construct a
+ * target sequence that uses X for all N/J/C/I-aligned residues, and
+ * non-X for match states. 
+ * 
+ * We test:
+ *   1. The MEG trace is identical to the generated path.
+ *   2. For each domain envelope, oea=ia, oeb=ib, and these
+ *      coords agree with the trace.
+ *   3. In the case of a single domain (D=1), envelope score == 
+ *      trace score.    
+ */
+static void
+utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N, int be_verbose)
+{
+  char           msg[] = "sparse_aec_align :: singlemulti unit test failed";
+  P7_BG         *bg    = p7_bg_Create(abc);
+  P7_HMM        *hmm   = NULL;
+  P7_PROFILE    *gm    = NULL;
+  ESL_DSQ       *dsq   = NULL;
+  int            L;
+  P7_TRACE      *gtr   = NULL;
+  P7_ANCHOR     *anch  = NULL;
+  int            D;
+  float          gsc, fsc, bsc;
+  P7_SPARSEMASK *sm    = NULL;
+  P7_SPARSEMX   *asf   = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *asb   = p7_sparsemx_Create(NULL);
+  P7_SPARSEMX   *asd   = p7_sparsemx_Create(NULL);
+  P7_ENVELOPES  *env   = p7_envelopes_Create();
+  P7_SPARSEMX   *aec   = NULL;
+  P7_TRACE      *tr    = p7_trace_Create();
+  float          tol   = 0.001;
+  int            idx;
+  int            d;
+
+  for (idx = 0; idx < N; idx++)
+    {
+      if ( p7_modelsample_SinglePathedASC(rng, M, bg, &hmm, &gm, &dsq, &L, &gtr, &anch, &D, &gsc) != eslOK) esl_fatal(msg);
+      
+      if (be_verbose) p7_trace_DumpAnnotated(stdout, gtr, gm, dsq);
+
+      if (( sm = p7_sparsemask_Create(M, L)) == NULL) esl_fatal(msg);
+      if (idx%2) { if ( p7_sparsemask_AddAll(sm)                 != eslOK) esl_fatal(msg); }
+      else       { if ( p7_sparsemask_SetFromTrace(sm, rng, gtr) != eslOK) esl_fatal(msg); }
+
+      if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf, &fsc)      != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Backward(dsq, L, gm, anch, D, sm, asb, &bsc)      != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Decoding(dsq, L, gm, anch, D, fsc, asf, asb, asd) != eslOK) esl_fatal(msg);
+
+      if ( p7_sparse_Envelopes(dsq, L, gm, anch, D, asf, asd, env) != eslOK) esl_fatal(msg);
+
+      if (be_verbose) p7_spascmx_Dump(stdout, asd, anch, D);
+
+      aec = asf;
+      p7_sparsemx_Reuse(aec);
+      if ( p7_sparse_aec_Align(gm, asd, env, aec, tr) != eslOK) esl_fatal(msg);
+      if ( p7_trace_Index(tr)                         != eslOK) esl_fatal(msg);
+      
+      if (be_verbose) p7_spaecmx_Dump(stdout, aec, env);
+
+      if (be_verbose) p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
+
+      /* Test 1. Traces are identical. */
+      if ( p7_trace_Compare(gtr, tr, 0.0) != eslOK) esl_fatal(msg);
+
+      /* Test 2. Domain #'s agree */
+      if (! (gtr->ndom == D && env->D == D)) esl_fatal(msg);
+      if (! (tr->ndom  == D))                esl_fatal(msg);
+
+      /* Test 3. Envelope coords (and outer env coords) match trace */
+      for (d = 1; d <= D; d++)
+	{
+	  if (! (env->arr[d].ia == gtr->sqfrom[d-1] &&   // beware: domains in trace are 0..ndom-1, off by one from env's 1..D
+		 env->arr[d].ia ==  tr->sqfrom[d-1] &&
+		 env->arr[d].ia == env->arr[d].oea)) esl_fatal(msg);
+
+	  if (! (env->arr[d].ib == gtr->sqto[d-1]   &&
+		 env->arr[d].ib ==  tr->sqto[d-1]   &&
+		 env->arr[d].ib == env->arr[d].oeb)) esl_fatal(msg);
+
+	  if (! (env->arr[d].ka == gtr->hmmfrom[d-1] &&
+		 env->arr[d].ka ==  tr->hmmfrom[d-1])) esl_fatal(msg);
+
+	  if (! (env->arr[d].kb == gtr->hmmto[d-1] &&
+		 env->arr[d].kb ==  tr->hmmto[d-1])) esl_fatal(msg);
+	}
+      
+      /* Test 4. If D == 1, envelope score == trace score. */
+      if (D == 1 &&  esl_FCompare(env->arr[1].env_sc, gsc, tol) != eslOK) esl_fatal(msg);
+
+      p7_envelopes_Reuse(env);
+      p7_sparsemx_Reuse(asf);
+      p7_sparsemx_Reuse(asb);
+      p7_sparsemx_Reuse(asd);
+      p7_trace_Reuse(tr);
+
+      p7_sparsemask_Destroy(sm);
+      free(dsq);
+      free(anch);
+      p7_trace_Destroy(gtr);
+      p7_profile_Destroy(gm);
+      p7_hmm_Destroy(hmm);
+    }
+
+
+  p7_trace_Destroy(tr);
+  p7_envelopes_Destroy(env);
+  p7_sparsemx_Destroy(asf);
+  p7_sparsemx_Destroy(asb);
+  p7_sparsemx_Destroy(asd);
+  p7_bg_Destroy(bg);
+}
+
+
+#endif /*p7SPARSE_AEC_ALIGN_TESTDRIVE*/
+/*-------------------- end, unit tests --------------------------*/
+
 
 /*****************************************************************
- * 6. Example
+ * 7. Test driver
+ *****************************************************************/
+#ifdef p7SPARSE_AEC_ALIGN_TESTDRIVE
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "unit test driver for sparse AEC/MEG alignment inference";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *rng  = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
+  int             M    = 20; 
+
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+
+  utest_singlemulti   (rng, M, abc, 10, FALSE); 
+
+  fprintf(stderr, "#  status = ok\n");
+
+  esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(rng);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7SPARSE_AEC_ALIGN_TESTDRIVE*/
+/*------------------- end, test driver --------------------------*/
+
+
+
+/*****************************************************************
+ * 8. Example
  *****************************************************************/
 #ifdef p7SPARSE_AEC_ALIGN_EXAMPLE
 

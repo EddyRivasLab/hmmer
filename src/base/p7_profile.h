@@ -227,14 +227,14 @@ extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float to
  *   Wing retracted entry, see modelconfig.c::set_glocal_entry()
  *      tGM1 = log t(G->M1) 
  *      tGMk = log t(G->D1) + \sum_j={1..k-2} log t(Dj->Dj+1) + log t(Dk-1->Mk)
- *      stored off-by-one: tGMk is stored at TSC(k-1, p7P_GM) in profile structure.
+ *      stored off-by-one: tGMk is stored at TSC(p7P_GM, k-1) in profile structure.
  *      
  *   Wing retracted exit, see modelconfig.c::set_glocal_exit()
  *      tDGkE = log t(Dk+1->...Dm->E)
  *            = \sum_j={k+1..m-1} log t(Dj->Dj+1)    (recall that Dm->E = 1.0)
  *      valid for k=0..M: 
  *      boundary conditions:
- *      TSC(M,DGE) = TSC(M-1,DGE) = 0    
+ *      TSC(DGE,M) = TSC(DGE,M-1) = 0    
  *   
  *   Wing retracted exits are used in sparse DP calculations: see
  *   sparse_fwdback.c. A DP calculation may also use Mm->E and Dm->E

@@ -151,39 +151,53 @@ p7_refmx_GrowTo(P7_REFMX *rmx, int M, int L)
   return status;
 }
 	
-/* Function:  p7_refmx_Zero()
- * Synopsis:  Initialize a decoding matrix to all zeros.
+int
+p7_refmx_SetType(P7_REFMX *rmx, int M, int L, int type)
+{
+  ESL_DASSERT1(( rmx->validR >= L+1 ));
+  ESL_DASSERT1(( rmx->allocR >= L+1 ));
+  ESL_DASSERT1(( rmx->allocW >= (M+1)*p7R_NSCELLS + p7R_NXCELLS ));
+
+  rmx->M    = M;
+  rmx->L    = L;
+  rmx->type = type;
+  return eslOK;
+}
+
+/* Function:  p7_refmx_SetValues()
+ * Synopsis:  Initialize all values in decoding matrix to a value.
  *
- * Purpose:   We're going to use <rmx> to count stochastic traces, to
- *            create an approximate posterior decoding matrix.  (We do
- *            this in unit testing of posterior decoding, for
- *            example.) First we need to set the whole matrix to
- *            zeros, before we start counting traces into it.  A newly
- *            allocated <rmx> only knows its allocation size, not the
- *            dimensions <M>,<L> of a DP comparison, so we need to
- *            pass that information too, for the comparison we're
- *            about to collect a stochastic trace ensemble from.
+ * Purpose:   Set all values (main and special) in matrix <rmx> to
+ *            <val>. 
+ * 
+ *            Caller has already set <M> and <L> dimensions in <rmx>,
+ *            for profile of length <M> and target sequence of length
+ *            <L>, and should also have set <type>.
  *            
- *            Upon return, the <M> and <L> fields in the <rmx>
- *            structure have been set, the <type> field has been set
- *            to <p7R_DECODING>, and all DP cells are 0.0.
+ *            One use of this is when we're going to use <rmx> to
+ *            count stochastic traces, to create an approximate
+ *            posterior decoding matrix.  (We do this in unit testing
+ *            of posterior decoding, for example.) First we need to
+ *            set the whole matrix to zeros, before we start counting
+ *            traces into it. 
+ *
+ *            Another use is when we're doing dynamic programming
+ *            algorithms that only use part of the matrix, such as
+ *            ASC or AEC, and we're going to dump the entire matrix for 
+ *            debugging/development; then it's good to set everything
+ *            to -inf or such first.
  *            
  * Args:      rmx  - posterior decoding matrix to zero
- *            M    - profile length
- *            L    - sequence length
+ *            val  - value to set everything to.
  *
  * Returns:   <eslOK> on success.
  */
 int
-p7_refmx_Zero(P7_REFMX *rmx, int M, int L)
+p7_refmx_SetValues(P7_REFMX *rmx, float val)
 {
   int i;
-
-  rmx->type = p7R_DECODING; 
-  rmx->M    = M; 
-  rmx->L    = L; 
-  for (i = 0; i <= L; i++)
-    esl_vec_FSet(rmx->dp[i], (rmx->M+1)*p7R_NSCELLS + p7R_NXCELLS, 0.0f);
+  for (i = 0; i <= rmx->L; i++)
+    esl_vec_FSet(rmx->dp[i], (rmx->M+1)*p7R_NSCELLS + p7R_NXCELLS, val);
   return eslOK;
 }
 

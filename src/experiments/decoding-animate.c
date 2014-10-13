@@ -175,8 +175,10 @@ main(int argc, char **argv)
 
   tct = p7_refmx_Create(gm->M, sq->n); /* counts matrix */
   ppa = p7_refmx_Create(gm->M, sq->n); /* normalized counts - pp approx by sampling */
-  p7_refmx_Zero(tct, gm->M, sq->n);
-  p7_refmx_Zero(ppa, gm->M, sq->n);
+  p7_refmx_SetType  (tct, gm->M, sq->n, p7R_DECODING);
+  p7_refmx_SetType  (ppa, gm->M, sq->n, p7R_DECODING);
+  p7_refmx_SetValues(tct, 0.0);
+  p7_refmx_SetValues(ppa, 0.0);
 
   for (s = 1; s <= N; s++)
     {

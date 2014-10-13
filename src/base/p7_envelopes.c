@@ -34,11 +34,9 @@ p7_envelope_SetSentinels(P7_ENVELOPE *env, int D, int L, int M)
    */
   env[0].oea  = env[0].oeb  = 0;
   env[0].ia   = env[0].ib   = 0;
-  env[0].alia = env[0].alib = 0;
 
   env[D+1].oea  = env[D+1].oeb  = L+1;
   env[D+1].ia   = env[D+1].ib   = L+1;
-  env[D+1].alia = env[D+1].alib = L+1;
 
   env[0].ka   = env[0].kb   = M+1;
   env[D+1].ka = env[D+1].kb = 0;
@@ -141,18 +139,17 @@ p7_envelopes_Dump(FILE *ofp, P7_ENVELOPES *env)
 {
   int e;
 
-  fprintf(ofp, "#%3s %5s %5s %5s %5s %5s %5s %5s %5s %5s %5s %6s %3s %3s\n",
-	  "dom", "ia",  "ib", "i0",  "k0", "alia", "alib", "ka",  "kb", 
+  fprintf(ofp, "#%3s %5s %5s %5s %5s %5s %5s %5s %5s %6s %3s %3s\n",
+	  "dom", "ia",  "ib", "i0",  "k0", "ka",  "kb", 
 	  "oea",  "oeb", "env_sc", "app", "glo");
-  fprintf(ofp, "#%3s %5s %5s %5s %5s %5s %5s %5s %5s %5s %5s %6s %3s %3s\n",
-	  "---", "-----",  "-----", "-----",  "-----", "-----", "-----", "-----",  "-----", 
+  fprintf(ofp, "#%3s %5s %5s %5s %5s %5s %5s %5s %5s %6s %3s %3s\n",
+	  "---", "-----",  "-----", "-----",  "-----", "-----",  "-----", 
 	  "-----",  "-----", "------", "---", "---");
   for (e = 1; e <= env->D; e++)
-    fprintf(ofp, "%-4d %5d %5d %5d %5d %5d %5d %5d %5d %5d %5d %6.2f %3s %3s\n",
+    fprintf(ofp, "%-4d %5d %5d %5d %5d %5d %5d %5d %5d %6.2f %3s %3s\n",
 	    e,
 	    env->arr[e].ia,   env->arr[e].ib,
 	    env->arr[e].i0,   env->arr[e].k0,
-	    env->arr[e].alia, env->arr[e].alib,
 	    env->arr[e].ka,   env->arr[e].kb,
 	    env->arr[e].oea,  env->arr[e].oeb,
 	    env->arr[e].env_sc,

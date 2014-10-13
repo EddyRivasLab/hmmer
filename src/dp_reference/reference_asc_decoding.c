@@ -483,7 +483,8 @@ refmx_trace_embed(P7_TRACE *tr, P7_REFMX **ret_ppt)
   P7_REFMX *ppt = p7_refmx_Create(tr->M, tr->L);
   int       i,z;
 
-  p7_refmx_Zero(ppt, tr->M, tr->L);   // This also sets M, L, and type=decoding in <ppt>.
+  p7_refmx_SetType  (ppt, tr->M, tr->L, p7R_DECODING);
+  p7_refmx_SetValues(ppt, 0.0);
   for (i = 0, z = 1; z < tr->N-1; z++)
     {
       if (tr->i[z]) i = tr->i[z];

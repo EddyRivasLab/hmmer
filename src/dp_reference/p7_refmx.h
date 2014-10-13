@@ -106,7 +106,8 @@ typedef struct p7_refmx_s {
 
 extern P7_REFMX *p7_refmx_Create   (int M, int L);
 extern int       p7_refmx_GrowTo   (P7_REFMX *rmx, int M, int L);
-extern int       p7_refmx_Zero     (P7_REFMX *rmx, int M, int L);
+extern int       p7_refmx_SetType  (P7_REFMX *rmx, int M, int L, int type);
+extern int       p7_refmx_SetValues(P7_REFMX *rmx, float val);
 extern int       p7_refmx_Copy(const P7_REFMX *src, P7_REFMX *dst);
 extern int       p7_refmx_Rescale  (P7_REFMX *rmx, float scale);
 extern size_t    p7_refmx_Sizeof   (const P7_REFMX *rmx);

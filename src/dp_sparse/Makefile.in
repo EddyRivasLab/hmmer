@@ -23,7 +23,8 @@ HDRS =
 
 PROGS =  
 
-UTESTS = sparse_asc_fwdback_utest \
+UTESTS = sparse_aec_align_utest   \
+	 sparse_asc_fwdback_utest \
 	 sparse_decoding_utest    \
          sparse_envscore_utest    \
          sparse_fwdback_utest     \

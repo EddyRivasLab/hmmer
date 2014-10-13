@@ -31,8 +31,6 @@ p7_sparse_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
     {
       env->arr[d].i0     = anch[d].i0;
       env->arr[d].k0     = anch[d].k0;
-      env->arr[d].alia   = 0;
-      env->arr[d].alib   = 0;
       env->arr[d].ka     = 0;
       env->arr[d].kb     = 0;
       env->arr[d].ia     = 0;

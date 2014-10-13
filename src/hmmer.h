@@ -93,7 +93,6 @@
 #include "dp_reference/reference_asc_fwdback.h"  /* anchor set constrained Forward, Backward                    */
 #include "dp_reference/reference_asc_decoding.h" /* anchor set constrained posterior decoding                   */
 #include "dp_reference/reference_aec_align.h"    /* anchor- and envelope-constrained MEG alignment              */
-#include "dp_reference/reference_aec_trace.h"    /* anchor- and envelope-constrained MEG alignment traceback    */
 
 
 /* 'daemon' subdir: Michael Farrar's daemon for HMMER3 web services                                       */

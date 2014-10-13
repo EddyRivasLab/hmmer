@@ -1537,9 +1537,6 @@ utest_compare_reference(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *a
       //p7_anchors_Dump(stdout, anch);
 
       /* reference ASC calculations */
-      //p7_refmx_Zero(abu, gm->M, sq->n);   // If you're dumping a reference mx, better zero it first, it'll be more interpretable.
-      //p7_refmx_Zero(abd, gm->M, sq->n);   // If you're not dumping it, no need to zero it.
-
       if ( p7_ReferenceASCForward (sq->dsq, sq->n, gm, anch->a, anch->D, afu, afd, &fsc_r)             != eslOK) esl_fatal(msg);
       if ( p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->a, anch->D, abu, abd, &bsc_r)             != eslOK) esl_fatal(msg);
       if ( p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->a, anch->D, afu, afd, abu, abd, apu, apd) != eslOK) esl_fatal(msg);
@@ -1675,9 +1672,10 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
        * matrices UP and DOWN), it will work in this case when we pass
        * the same matrix <rxd> for both.
        */
-      if ( p7_refmx_GrowTo(rxd, gm->M, L) != eslOK) esl_fatal(msg);      
-      if ( p7_refmx_Zero  (rxd, gm->M, L) != eslOK) esl_fatal(msg);
-      if ( p7_refmx_CountTrace(tr, rxd)   != eslOK) esl_fatal(msg);  
+      if ( p7_refmx_GrowTo   (rxd, gm->M, L)               != eslOK) esl_fatal(msg);      
+      if ( p7_refmx_SetType  (rxd, gm->M, L, p7R_DECODING) != eslOK) esl_fatal(msg);
+      if ( p7_refmx_SetValues(rxd, 0.0)                    != eslOK) esl_fatal(msg);
+      if ( p7_refmx_CountTrace(tr, rxd)                    != eslOK) esl_fatal(msg);  
 
       //p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
       //p7_spascmx_Dump(stdout, asf, anch, D);
@@ -2409,18 +2407,6 @@ main(int argc, char **argv)
   p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, vtr, &wrk, ah,
 		       afu, afd, anch, &asc, NULL, NULL);
 
-
-  /* Reference ASC Backward */
-#if 0
-  p7_refmx_Reuse(rxf);
-  p7_refmx_Reuse(rxd);
-  p7_refmx_Zero(rxf, gm->M, sq->n);
-  p7_refmx_Zero(rxd, gm->M, sq->n);
-  p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->a, anch->D, 
-			  rxf, rxd, NULL);
-  p7_refmx_Dump(stdout, rxf);
-  p7_refmx_Dump(stdout, rxd);
-#endif
 
   /* Finally...
    * Run sparse ASC Forward.

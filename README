@@ -1,7 +1,7 @@
 HMMER - profile hidden Markov models for biological sequence analysis
-http://hmmer.org/
 Version @HMMER_VERSION@; @HMMER_DATE@
 @HMMER_COPYRIGHT@
+http://hmmer.org/
 ------------------------------------------------------------------
 
 HMMER searches biological sequence databases for homologous sequences,
@@ -9,15 +9,15 @@ using either single sequences or multiple sequence alignments as
 queries. HMMER implements a technology called "profile hidden Markov
 models" (profile HMMs). HMMER is the software engine underlying many
 protein family domain databases and large-scale annotation pipelines,
-including Pfam (pfam.xfam.org) and several other members of the
-InterPro Consortium (http://www.ebi.ac.uk/interpro/).
+including Pfam (pfam.xfam.org) and other members of the InterPro
+Consortium (http://www.ebi.ac.uk/interpro/).
 
 Other files to read in the top-level source directory:
 
     INSTALL          Brief installation instructions.
     Userguide.pdf    The HMMER User's Guide.
-    LICENSE          Open source BSD license, plus credits, copyrights,
-                     patent, and trademark information.
+    LICENSE          Open source license, plus authorship credits, 
+                     copyrights, patent, and trademark information.
 
 To get started after installation, see the Tutorial section in the
 HMMER User's Guide (Userguide.pdf).

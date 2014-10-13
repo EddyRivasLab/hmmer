@@ -539,9 +539,10 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
   if ( p7_ReferenceDecoding(sq->dsq, sq->n, gm, fwd, bck, ppe) != eslOK) esl_fatal(msg);
 
   /* Approximate decoding by stochastic traceback  */
-  if ( (ppa = p7_refmx_Create(gm->M, sq->n)) == NULL) esl_fatal(msg);
-  if ( (tr  = p7_trace_Create())             == NULL) esl_fatal(msg);
-  if ( p7_refmx_Zero(ppa, gm->M, sq->n)     != eslOK) esl_fatal(msg);
+  if ( (ppa = p7_refmx_Create(gm->M, sq->n))               == NULL)  esl_fatal(msg);
+  if ( (tr  = p7_trace_Create())                           == NULL)  esl_fatal(msg);
+  if ( p7_refmx_SetType  (ppa, gm->M, sq->n, p7R_DECODING) != eslOK) esl_fatal(msg);      
+  if ( p7_refmx_SetValues(ppa, 0.0)                        != eslOK) esl_fatal(msg);
   for (idx = 0; idx < ntr; idx++)
     {
       if ( p7_reference_trace_Stochastic(rng, &wrk, gm, fwd, tr) != eslOK) esl_fatal(msg);

@@ -1,41 +1,38 @@
 /* Reference implementation of anchor/envelope constrained (AEC) alignment;
  * by maximum expected gain (MEG).
  * 
- * All reference implementation code is for development and
- * testing. It is not used in HMMER's main executables. Production
- * code uses sparse dynamic programming.
+ * Reference implementation is for development and testing. Not used
+ * in HMMER's main executables. Production code uses sparse dynamic
+ * programming; see src/dp_sparse.
  * 
  * Contents:
- *    1. AEC MEG alignment, fill.
- *    2. Unit tests.
- *    3. Test driver.
- *    4. Example.
- *    5. Copyright and license information
+ *    1. AEC MEG alignment
+ *    2. Choice functions for traceback
+ *    3. Traceback routine
+ *    4. Footnotes
+ *    5. Unit tests.
+ *    6. Test driver
+ *    7. Example
+ *    8. Copyright and license information
  */
 #include "p7_config.h"
 
 #include "easel.h"
+#include "esl_vectorops.h"
 
 #include "base/p7_envelopes.h"
 #include "base/p7_profile.h"
+#include "base/p7_trace.h"
 
 #include "dp_reference/p7_refmx.h"
 #include "dp_reference/reference_aec_align.h"
-#include "dp_reference/reference_aec_trace.h"
+
+static int reference_aec_trace(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *mx, P7_TRACE *tr);
+
 
 /*****************************************************************
  * 1. AEC MEG alignment, fill.
  *****************************************************************/
-
-/* If we were using Plan9, we could do this as a "1-state" model,
- * 1 DP cell per i,k. But since we need to prohibit D->I,I->D, we
- * can't.
- * 
- * Because we fit the calculation into one matrix, we can't 
- * initialize an ia-1 top row for the up matrices, because 
- * we may be adjacent to an ib row of an immediately preceding
- * domain.
- */
 
 /* Function:  p7_reference_AEC_Align()
  * Synopsis:  Maximum expected gain, anchor/envelope-constrained alignment.
@@ -44,11 +41,12 @@
  *            gain (MEG) alignment, given profile <gm>, envelope data <env>,
  *            and ASC posterior decoding matrix UP/DOWN pair <apu>/<apd>.
  *
- *            Caller provides <mx> as space for the DP calculation; this
- *            can be of any allocated size, and will be reallocated if needed.
+ *            Caller provides <mx> as space for the DP
+ *            calculation. This will be reallocated if needed, so it
+ *            can be of any allocated size.
  *
  * Args:      gm   : profile
- *            env  : envelopes (env->n of them)
+ *            env  : envelopes 
  *            apu  : ASC Decoding UP matrix
  *            apd  : ASC Decoding DOWN matrix
  *            mx   : MEG alignment matrix space
@@ -61,16 +59,13 @@
 int
 p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *apu, const P7_REFMX *apd, P7_REFMX *mx, P7_TRACE *tr)
 {
-  int    M = env->M;
-  int    L = env->L;
-  float *tsc;
-  float *dpp;
-  float *dpc;
-  float *ppp;
-  float *xc, *xp;
-  float  mlv, dlv, xB, xE, xN;
-  float  mgv, dgv;
-  int    d,i,k,s;
+  float *tsc = gm->tsc;      // TSC() access macro now works
+  int    M   = env->M;
+  int    L   = env->L;
+  int    d,i,k;
+  int    ia,i0,k0,ib;        // tmp vars for simplifying notation.
+  int    is_glocal;
+  float  xX;                 // AEC only needs one special, and doesn't need to store it.
   int    status;
 
   /* Contract checks / argument validation */
@@ -79,441 +74,99 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
   ESL_DASSERT1(( apd->M == M && apd->L == L && apd->type == p7R_ASC_DECODE_DOWN));
   
   /* Reallocation if needed */
-  if ( (status = p7_refmx_GrowTo(mx, M, L)) != eslOK) return status;
-  mx->M    = M;
-  mx->L    = L;
-  mx->type = p7R_AEC_ALIGN;
+  if ( (status = p7_refmx_GrowTo   (mx, M, L))                != eslOK) return status;
+  if ( (status = p7_refmx_SetType  (mx, M, L, p7R_AEC_ALIGN)) != eslOK) return status;
+  if ( (status = p7_refmx_SetValues(mx, -eslINFINITY))        != eslOK) return status; 
 
-  /* Initialize rows 0..ia[0]-1.
-   * Note that we don't really have to do this. We know,
-   * from the envelope constraint, that the path is SNNNNN...
-   * up to ia(0); only at ia(0) do we start worrying about
-   * other transitions. We work it all out without shortcuts
-   * because we're the reference implementation.
-   */
-  xN = 0.;
-  for (i = 0; i < env->arr[1].ia; i++)
-    {
-      dpc = mx->dp[i];
-      for (s = 0; s < (M+1)*p7R_NSCELLS; s++) *dpc++ = -eslINFINITY;
-
-      xc  = dpc;
-      ppp = apd->dp[i] + (M+1)*p7R_NSCELLS;        
-      xc[p7R_E]      = -eslINFINITY;
-      xc[p7R_N] = xN = (i == 0 ? 0. : xN + ppp[p7R_N]);
-      xc[p7R_J]      = -eslINFINITY;
-      xc[p7R_B]      = -eslINFINITY;
-      xc[p7R_L]      = -eslINFINITY;
-      xc[p7R_G]      = -eslINFINITY;
-      xc[p7R_C]      = -eslINFINITY;
-      xc[p7R_JJ]     = -eslINFINITY;
-      xc[p7R_CC]     = -eslINFINITY;
-    }
-  /* As we leave: xN retains the value for N(ia-1), which we need below. */
-  xc[p7R_B] = xB = xN;
-  xc[p7R_L]      = ( env->arr[1].flags & p7E_IS_GLOCAL ? -eslINFINITY : xB );
-  xc[p7R_G]      = ( env->arr[1].flags & p7E_IS_GLOCAL ? xB : -eslINFINITY );
-
-
+  xX = 0.;
   for (d = 1; d <= env->D; d++)
     {
-      /*****************************************************************
-       * UP sector for domain d: rows i= ia[d]..i0[d]-1
-       * It's possible to have zero rows in an UP sector, when ia==i0
-       */
-
-      /* ia row is boundary case; and it may not even exist.
-       * xB is already set to B(ia-1)
-       */
-      i   = env->arr[d].ia;             // for notation 'clarity'
-      dpc = mx->dp[i];                  //  we need dpc outside block below, so transition to DOWN works
-      for (s = 0; s < p7R_NSCELLS; s++) *dpc++ = -eslINFINITY; // now dpc is on k=1.
-      if (i < env->arr[d].i0)
+      /* Simplify notation with some tmp vars for the coords of this domain <d>. */
+      ia        = env->arr[d].ia; 
+      i0        = env->arr[d].i0;
+      k0        = env->arr[d].k0;
+      ib        = env->arr[d].ib;
+      is_glocal = (env->arr[d].flags & p7E_IS_GLOCAL);
+      
+      /* Initialization of row ia(d), if UP sector exists (usually does) */
+      if (ia < i0)
 	{
-	  tsc = gm->tsc;                    // on k=0 (w/ LM, GM entries off-by-one: for k=1)
-	  ppp = apu->dp[i] + p7R_NSCELLS;   // on k=1 of UP decoding matrix, current row
-	  dlv = dgv = -eslINFINITY;
-
-	  if (env->arr[d].flags & p7E_IS_GLOCAL)
+	  for (k = 1; k < k0; k++)
 	    {
-	      for (k = 1; k < env->arr[d].k0; k++)
-		{
-		  dpc[p7R_ML]       = -eslINFINITY;
-		  dpc[p7R_MG] = mgv = ppp[p7R_ML] + ppp[p7R_MG] + P7_DELTAT(xB, tsc[p7P_GM]);  // only way into M on 1st row is an entry
-		  tsc += p7P_NTRANS;  
-		  dpc[p7R_IL] = dpc[p7R_IG] = -eslINFINITY;                      // no way into I
-		  dpc[p7R_DL] = -eslINFINITY;
-		  dpc[p7R_DG] = dgv;
-		  dgv         = ESL_MAX( P7_DELTAT(mgv, tsc[p7P_MD]), P7_DELTAT(dgv, tsc[p7P_DD]));
-
-		  dpc += p7R_NSCELLS; 
-		  ppp += p7R_NSCELLS; 
-		}
+	      P7R_MX(mx,ia,k,p7R_ML) = P7R_MX(apu,ia,k,p7R_ML) + P7R_MX(apu,ia,k,p7R_MG) + 
+	 	                       (is_glocal ? P7_DELTAT(xX, TSC(p7P_GM, k-1)) :
+					            P7_DELTAT(xX, TSC(p7P_LM, k-1)));
+	      P7R_MX(mx,ia,k,p7R_IL) = -eslINFINITY;              
+	      P7R_MX(mx,ia,k,p7R_DL) = ESL_MAX( P7_DELTAT(P7R_MX(mx,ia,k-1,p7R_ML), TSC(p7P_MD,k-1)),
+						P7_DELTAT(P7R_MX(mx,ia,k-1,p7R_DL), TSC(p7P_DD,k-1)));
 	    }
-	  else
-	    {
-	      for (k = 1; k < env->arr[d].k0; k++)
-		{                                         
-		  dpc[p7R_ML] = mlv = ppp[p7R_ML] + ppp[p7R_MG] + P7_DELTAT(xB, tsc[p7P_LM]);
-		  dpc[p7R_MG]       = -eslINFINITY;
-
-		  tsc += p7P_NTRANS;  
-		  
-		  dpc[p7R_IL] = dpc[p7R_IG] = -eslINFINITY;                      // no way into I
-		  dpc[p7R_DL] = dlv;
-		  dpc[p7R_DG] = -eslINFINITY;
-		  dlv         = ESL_MAX( P7_DELTAT(mlv, tsc[p7P_MD]), P7_DELTAT(dlv, tsc[p7P_DD]));
-
-		  dpc += p7R_NSCELLS; 
-		  ppp += p7R_NSCELLS; 
-		}
-	    }
-
-	  for (k = env->arr[d].k0; k <= M; k++)   // Initialize unused remainder of UP row in standard REFMX
-	    for (s = 0; s < p7R_NSCELLS; s++) 
-	      *dpc++ = -eslINFINITY;
-
-	  /* Specials, for first row ia.
-	   */
-	  ppp = apd->dp[i] + (M+1) * p7R_NSCELLS;  
-	  xc  = dpc;
-	  xc[p7R_E]      = -eslINFINITY;
-	  xc[p7R_N]      = (d == 0 ? xB + ppp[p7R_N] : -eslINFINITY);
-	  xc[p7R_J]      = (d == 0 ? -eslINFINITY    : xB + ppp[p7R_JJ]);
-	  xc[p7R_B] = xB = (d == 0 ? xc[p7R_N] : xc[p7R_J]);
-	  xc[p7R_L]      = (env->arr[d].flags & p7E_IS_GLOCAL ? -eslINFINITY : xB);
-	  xc[p7R_G]      = (env->arr[d].flags & p7E_IS_GLOCAL ? xB : -eslINFINITY);
-	  xc[p7R_C]      = -eslINFINITY;
-	  xc[p7R_JJ]     = -eslINFINITY;
-	  xc[p7R_CC]     = -eslINFINITY;
 	}
 
-      /* remaining rows of UP sector (if any) */
-      for (i = env->arr[d].ia + 1; i < env->arr[d].i0; i++)
-	{
-	  /* setup, as above */
-	  tsc = gm->tsc;
-	  ppp = apu->dp[i] + p7R_NSCELLS;
-	  dpp = mx->dp[i-1];               // k=0. No valid values here. We will ++ before access.
-	  dpc = mx->dp[i];
-	  for (s = 0; s < p7R_NSCELLS; s++) *dpc++ = -eslINFINITY; // now dpc is on k=1.
-	  dlv = dgv = -eslINFINITY;
-	  
-	  if (env->arr[d].flags & p7E_IS_GLOCAL)
-	    {
-	      for (k = 1; k < env->arr[d].k0; k++)
-		{ 
-		  dpc[p7R_ML] = -eslINFINITY;
-		  dpc[p7R_MG] = mgv = ppp[p7R_ML] + ppp[p7R_MG] + 
-		    ESL_MAX( ESL_MAX ( P7_DELTAT(dpp[p7R_MG], tsc[p7P_MM]),
-				       P7_DELTAT(dpp[p7R_IG], tsc[p7P_IM])),
-			     ESL_MAX ( P7_DELTAT(dpp[p7R_DG], tsc[p7P_DM]), 
-				       P7_DELTAT(         xB, tsc[p7P_GM])));
-
-		  tsc += p7P_NTRANS;
-		  dpp += p7R_NSCELLS;
-	      
-		  dpc[p7R_IL] = -eslINFINITY;
-		  dpc[p7R_IG] = ppp[p7R_IL] + ppp[p7R_IG] +
-		    ESL_MAX( P7_DELTAT(dpp[p7R_MG], tsc[p7P_MI]),
-			     P7_DELTAT(dpp[p7R_IG], tsc[p7P_II]));
-		
-		  dpc[p7R_DL] = -eslINFINITY;
-		  dpc[p7R_DG] = dgv;
-		  dgv         = ESL_MAX( P7_DELTAT(mgv, tsc[p7P_MD]), P7_DELTAT(dgv, tsc[p7P_DD]));
-
-		  dpc += p7R_NSCELLS;
-		  ppp += p7R_NSCELLS;
-		}
-	    }
-	  else 
-	    {
-	      for (k = 1; k < env->arr[d].k0; k++)
-		{ 
-		  dpc[p7R_ML] = mlv = ppp[p7R_ML] + ppp[p7R_MG] + 
-		    ESL_MAX( ESL_MAX ( P7_DELTAT(dpp[p7R_ML], tsc[p7P_MM]),
-				       P7_DELTAT(dpp[p7R_IL], tsc[p7P_IM])),
-			     ESL_MAX ( P7_DELTAT(dpp[p7R_DL], tsc[p7P_DM]), 
-				       P7_DELTAT(         xB, tsc[p7P_LM])));
-		  dpc[p7R_MG] = -eslINFINITY;
-
-		  tsc += p7P_NTRANS;
-		  dpp += p7R_NSCELLS;
-	      
-		  dpc[p7R_IL] = ppp[p7R_IL] + ppp[p7R_IG] +
-		    ESL_MAX( P7_DELTAT(dpp[p7R_ML], tsc[p7P_MI]),
-			     P7_DELTAT(dpp[p7R_IL], tsc[p7P_II]));
-		  dpc[p7R_IG] = -eslINFINITY;
-		
-		  dpc[p7R_DL] = dlv;
-		  dpc[p7R_DG] = -eslINFINITY;
-		  dlv = ESL_MAX( P7_DELTAT(mlv, tsc[p7P_MD]), P7_DELTAT(dlv, tsc[p7P_DD]));
-
-		  dpc += p7R_NSCELLS;
-		  ppp += p7R_NSCELLS;
-		}
-	    }
-
-	  for (k = env->arr[d].k0; k <= M; k++)   // Initialize unused remainder of UP row in standard REFMX
-	    for (s = 0; s < p7R_NSCELLS; s++) 
-	      *dpc++ = -eslINFINITY;
-
-	  ppp = apd->dp[i] + (M+1) * p7R_NSCELLS;  
-	  xc  = dpc;
-	  xc[p7R_E]      = -eslINFINITY;
-	  xc[p7R_N]      = (d == 0 ? xB + ppp[p7R_N] : -eslINFINITY);
-	  xc[p7R_J]      = (d == 0 ?    -eslINFINITY : xB + ppp[p7R_JJ]);
-	  xc[p7R_B] = xB = (d == 0 ? xc[p7R_N] : xc[p7R_J]);
-	  xc[p7R_L]      = (env->arr[d].flags & p7E_IS_GLOCAL ? -eslINFINITY : xB);
-	  xc[p7R_G]      = (env->arr[d].flags & p7E_IS_GLOCAL ? xB : -eslINFINITY);
-	  xc[p7R_C]      = -eslINFINITY;
-	  xc[p7R_JJ]     = -eslINFINITY;
-	  xc[p7R_CC]     = -eslINFINITY;
-	} /* ends loop over rows i in UP sector d */
-      /* as we leave: xB = L|G for row i0-1 */
-
-
-      /*****************************************************************
-       * Now the DOWN sector: rows i = i0[d]..ib[d]
-       */
-      /* now setup on the anchor cell i0,k0 */
-      i   = env->arr[d].i0;
-      dpp = mx->dp[i-1] + (env->arr[d].k0-1) * p7R_NSCELLS;   
-      tsc = gm->tsc     + (env->arr[d].k0-1) * p7P_NTRANS;
-      ppp = apd->dp[i]  +  env->arr[d].k0    * p7R_NSCELLS;   // ppp[] on k0
-      dpc = mx->dp[i];
-      for (s = 0; s < p7R_NSCELLS * env->arr[d].k0; s++) *dpc++ = -eslINFINITY; // dpc[] now on k0
-
-      if (env->arr[d].flags & p7E_IS_GLOCAL)
-	{
-	  dpc[p7R_ML] = -eslINFINITY;
-	  if (env->arr[d].ia < env->arr[d].i0)
-	    dpc[p7R_MG] = mgv = ppp[p7R_ML] + ppp[p7R_MG] + 
-	      ESL_MAX( ESL_MAX ( P7_DELTAT(dpp[p7R_MG], tsc[p7P_MM]),
-				 P7_DELTAT(dpp[p7R_IG], tsc[p7P_IM])),
-		       ESL_MAX ( P7_DELTAT(dpp[p7R_DG], tsc[p7P_DM]), 
-				 P7_DELTAT(         xB, tsc[p7P_GM])));
-	  else // special case, no cells in UP sector: we must enter anchor on LMk/GMk entry
-	    dpc[p7R_MG] = mgv = ppp[p7R_ML] + ppp[p7R_MG] + P7_DELTAT( xB, tsc[p7P_LM]);
-
-
-	  tsc        += p7P_NTRANS;
-	  dpc[p7R_IL] = dpc[p7R_IG] = -eslINFINITY;
-	  dpc[p7R_DL] = dpc[p7R_DG] = -eslINFINITY;
-
-	  xE          = mgv;
-	  dgv         = P7_DELTAT(mgv, tsc[p7P_MD]);
-	  dpc        += p7R_NSCELLS;
-	}
-      else
-	{
-	  if (env->arr[d].ia < env->arr[d].i0)
-	    dpc[p7R_ML] = mlv = ppp[p7R_ML] + ppp[p7R_MG] + 
-	      ESL_MAX( ESL_MAX ( P7_DELTAT(dpp[p7R_ML], tsc[p7P_MM]),
-				 P7_DELTAT(dpp[p7R_IL], tsc[p7P_IM])),
-		       ESL_MAX ( P7_DELTAT(dpp[p7R_DL], tsc[p7P_DM]), 
-				 P7_DELTAT(         xB, tsc[p7P_LM])));
-	  else // special case, no cells in UP sector: we must enter anchor on LMk/GMk entry
-	    dpc[p7R_ML] = mlv = ppp[p7R_ML] + ppp[p7R_MG] + P7_DELTAT( xB, tsc[p7P_LM]);
-
-	  dpc[p7R_MG] = -eslINFINITY;
-
-	  tsc        += p7P_NTRANS;
-
-	  dpc[p7R_IL] = dpc[p7R_IG] = -eslINFINITY;
-	  dpc[p7R_DL] = dpc[p7R_DG] = -eslINFINITY;
-
-	  xE          = mlv;
-	  dlv         = P7_DELTAT(mlv, tsc[p7P_MD]);
-	  dpc        += p7R_NSCELLS;
-	}
-      /* now dpc[] is on k0+1 */
-
-      /* Remainder of anchor row i0 in DOWN 
-       * is only reachable on deletion paths from anchor.
-       */
-      if (env->arr[d].flags & p7E_IS_GLOCAL)
-	for (k = env->arr[d].k0+1; k <= M; k++)
+      /* Remaining rows of UP sector (if any) */
+      for (i = ia+1; i < i0; i++)
+	for (k = 1; k < k0; k++)
 	  {
-	    dpc[p7R_ML] = dpc[p7R_MG] = -eslINFINITY;
-	    dpc[p7R_IL] = dpc[p7R_IG] = -eslINFINITY;
-	    tsc        += p7P_NTRANS;
-	    dpc[p7R_DL] = -eslINFINITY;
-	    dpc[p7R_DG] = dgv;
-	    dgv         = P7_DELTAT(dgv, tsc[p7P_DD]);
-	    dpc        += p7R_NSCELLS;
+	    P7R_MX(mx,i,k,p7R_ML) = P7R_MX(apu,i,k,p7R_ML) + P7R_MX(apu,i,k,p7R_MG) + 
+	                            ESL_MAX( ESL_MAX( P7_DELTAT( P7R_MX(mx,i-1,k-1,p7R_ML), TSC(p7P_MM,k-1)),
+				                      P7_DELTAT( P7R_MX(mx,i-1,k-1,p7R_IL), TSC(p7P_IM,k-1))),
+		                                      P7_DELTAT( P7R_MX(mx,i-1,k-1,p7R_DL), TSC(p7P_DM,k-1)));
+	    P7R_MX(mx,i,k,p7R_IL) = P7R_MX(apu,i,k,p7R_IL) + P7R_MX(apu,i,k,p7R_IG) + 
+	                            ESL_MAX( P7_DELTAT( P7R_MX(mx,i-1,k,p7R_ML), TSC(p7P_MI,k)),
+				             P7_DELTAT( P7R_MX(mx,i-1,k,p7R_IL), TSC(p7P_II,k)));
+	    P7R_MX(mx,i,k,p7R_DL) = ESL_MAX( P7_DELTAT( P7R_MX(mx,i,k-1,p7R_ML), TSC(p7P_MD,k-1)),
+					     P7_DELTAT( P7R_MX(mx,i,k-1,p7R_DL), TSC(p7P_DD,k-1)));
 	  }
-      else 
-	for (k = env->arr[d].k0+1; k <= M; k++)
+	      
+      /* Anchor cell i0(d),k0(d); usually initialized from last
+       * supercell of UP sector, but rarely UP sector may not
+       * exist. 
+       */
+      if (ia < i0) P7R_MX(mx,i0,k0,p7R_ML) = P7R_MX(apd,i0,k0,p7R_ML) + P7R_MX(apd,i0,k0,p7R_MG) + 
+		                             ESL_MAX( ESL_MAX( P7_DELTAT( P7R_MX(mx,i0-1,k0-1,p7R_ML), TSC(p7P_MM,k0-1)),
+				                               P7_DELTAT( P7R_MX(mx,i0-1,k0-1,p7R_IL), TSC(p7P_IM,k0-1))),
+		                                               P7_DELTAT( P7R_MX(mx,i0-1,k0-1,p7R_DL), TSC(p7P_DM,k0-1)));
+      else         P7R_MX(mx,i0,k0,p7R_ML) = P7R_MX(apd,i0,k0,p7R_ML) + P7R_MX(apd,i0,k0,p7R_MG) +
+	 	                             (is_glocal ? P7_DELTAT(xX, TSC(p7P_GM, k0-1)) :
+					                  P7_DELTAT(xX, TSC(p7P_LM, k0-1)));
+      P7R_MX(mx,i0,k0,p7R_IL) = -eslINFINITY;
+      P7R_MX(mx,i0,k0,p7R_DL) = -eslINFINITY;
+
+      /* Remainder of the top DOWN row, i0 for k>k0 */
+      for (k = k0+1; k <= M; k++)
+	{
+	  P7R_MX(mx,i0,k,p7R_ML) = -eslINFINITY;
+	  P7R_MX(mx,i0,k,p7R_IL) = -eslINFINITY;
+	  P7R_MX(mx,i0,k,p7R_DL) = ESL_MAX( P7_DELTAT( P7R_MX(mx,i0,k-1,p7R_ML), TSC(p7P_MD,k-1)),
+				            P7_DELTAT( P7R_MX(mx,i0,k-1,p7R_DL), TSC(p7P_DD,k-1)));
+	}
+
+      /* DOWN sector recursion */
+      for (i = i0+1; i <= ib; i++)
+	for (k = k0; k <= M; k++)
 	  {
-	    dpc[p7R_ML] = dpc[p7R_MG] = -eslINFINITY;
-	    dpc[p7R_IL] = dpc[p7R_IG] = -eslINFINITY;
-	    tsc        += p7P_NTRANS;
-	    dpc[p7R_DL] = dlv;
-	    dpc[p7R_DG] = -eslINFINITY;
-	    dlv         = P7_DELTAT(dlv, tsc[p7P_DD]);
-	    dpc        += p7R_NSCELLS;
+	    P7R_MX(mx,i,k,p7R_ML) = P7R_MX(apd,i,k,p7R_ML) + P7R_MX(apd,i,k,p7R_MG) + 
+	                            ESL_MAX( ESL_MAX( P7_DELTAT( P7R_MX(mx,i-1,k-1,p7R_ML), TSC(p7P_MM,k-1)),
+				                      P7_DELTAT( P7R_MX(mx,i-1,k-1,p7R_IL), TSC(p7P_IM,k-1))),
+		                                      P7_DELTAT( P7R_MX(mx,i-1,k-1,p7R_DL), TSC(p7P_DM,k-1)));
+	    P7R_MX(mx,i,k,p7R_IL) = P7R_MX(apd,i,k,p7R_IL) + P7R_MX(apd,i,k,p7R_IG) + 
+	                            ESL_MAX( P7_DELTAT( P7R_MX(mx,i-1,k,p7R_ML), TSC(p7P_MI,k)),
+				             P7_DELTAT( P7R_MX(mx,i-1,k,p7R_IL), TSC(p7P_II,k)));
+	    P7R_MX(mx,i,k,p7R_DL) = ESL_MAX( P7_DELTAT( P7R_MX(mx,i,k-1,p7R_ML), TSC(p7P_MD,k-1)),
+					     P7_DELTAT( P7R_MX(mx,i,k-1,p7R_DL), TSC(p7P_DD,k-1)));
 	  }
 
-      /* dpc now sits on start of specials in mx */
-      xc = dpc;
-      xc[p7R_E]  = xE;
-      xc[p7R_N]  = -eslINFINITY;
-      xc[p7R_J]  = (d == env->D ? -eslINFINITY : xE);  // Only reachable by E->J, on this first row of DOWN sector.
-      xc[p7R_B]  = -eslINFINITY;
-      xc[p7R_L]  = -eslINFINITY;
-      xc[p7R_G]  = -eslINFINITY;
-      xc[p7R_C]  = (d == env->D ? xE : -eslINFINITY);
-      xc[p7R_JJ] = -eslINFINITY;
-      xc[p7R_CC] = -eslINFINITY;
-
-      /* rest of the DOWN sector rows for domain d:
-       *  i = i0..ib; k=k0..M.
-       */
-      for (i = env->arr[d].i0+1; i <= env->arr[d].ib; i++)
-	{
-	  tsc = gm->tsc      + (env->arr[d].k0-1) * p7P_NTRANS;
-	  dpp = mx->dp[i-1]  + (env->arr[d].k0-1) * p7R_NSCELLS;
-	  ppp = apd->dp[i]   +  env->arr[d].k0    * p7R_NSCELLS;
-
-	  dpc = mx->dp[i];
-	  for (s = 0; s < p7R_NSCELLS * env->arr[d].k0; s++) *dpc++ = -eslINFINITY; // dpc[] now on k0
-	  dlv = dgv = xE = -eslINFINITY;
-
-	  if (env->arr[d].flags & p7E_IS_GLOCAL)
-	    {
-	      for (k = env->arr[d].k0; k <= M; k++)
-		{
-		  dpc[p7R_ML] = -eslINFINITY;
-		  dpc[p7R_MG] = mgv = ppp[p7R_ML] + ppp[p7R_MG] + 
-		    ESL_MAX( ESL_MAX ( P7_DELTAT(dpp[p7R_MG], tsc[p7P_MM]),
-				       P7_DELTAT(dpp[p7R_IG], tsc[p7P_IM])),
-		                       P7_DELTAT(dpp[p7R_DG], tsc[p7P_DM])); 
-		  tsc += p7P_NTRANS;
-		  dpp += p7R_NSCELLS;
-
-		  dpc[p7R_IL] = -eslINFINITY;
-		  dpc[p7R_IG] = ppp[p7R_IL] + ppp[p7R_IG] +
-		    ESL_MAX( P7_DELTAT(dpp[p7R_MG], tsc[p7P_MI]),
-			     P7_DELTAT(dpp[p7R_IG], tsc[p7P_II]));
-
-		  dpc[p7R_DL] = -eslINFINITY;
-		  dpc[p7R_DG] = dgv;
-		  dgv         = ESL_MAX( P7_DELTAT(mgv, tsc[p7P_MD]), 
-					 P7_DELTAT(dgv, tsc[p7P_DD]));
-
-		  dpc += p7R_NSCELLS;
-		  ppp += p7R_NSCELLS;
-
-		}
-	      /* dpc is on specials, +1 past [M] cells, hence the hacky -p7R_NSCELLS here: */
-	      xE = ESL_MAX( dpc[p7R_MG-p7R_NSCELLS], dpc[p7R_DG-p7R_NSCELLS]);
-	    }
-	  else
-	    {
-	      for (k = env->arr[d].k0; k <= M; k++)
-		{
-		  dpc[p7R_ML] = mlv = ppp[p7R_ML] + ppp[p7R_MG] + 
-		    ESL_MAX( ESL_MAX ( P7_DELTAT(dpp[p7R_ML], tsc[p7P_MM]),
-				       P7_DELTAT(dpp[p7R_IL], tsc[p7P_IM])),
-			               P7_DELTAT(dpp[p7R_DL], tsc[p7P_DM])); 
-		  dpc[p7R_MG] = -eslINFINITY;
-		  tsc += p7P_NTRANS;
-		  dpp += p7R_NSCELLS;
-
-		  dpc[p7R_IL] = ppp[p7R_IL] + ppp[p7R_IG] +
-		    ESL_MAX( P7_DELTAT(dpp[p7R_ML], tsc[p7P_MI]),
-			     P7_DELTAT(dpp[p7R_IL], tsc[p7P_II]));
-		  dpc[p7R_IG] = -eslINFINITY;
-		
-		  xE = ESL_MAX(xE, ESL_MAX(mlv, dlv));
-
-		  dpc[p7R_DL] = dlv;
-		  dpc[p7R_DG] = -eslINFINITY;
-		  dlv         = ESL_MAX( P7_DELTAT(mlv, tsc[p7P_MD]), 
-					 P7_DELTAT(dlv, tsc[p7P_DD]));
-
-		  dpc += p7R_NSCELLS;
-		  ppp += p7R_NSCELLS;
-		}
-	    }
-
-	  /* Specials, at the end of each row. */
-	  xp   = dpp + p7R_NSCELLS;
-	  xc   = dpc;
-	  ppp  = apd->dp[i] + (M+1) * p7R_NSCELLS;  
-
-	  xc[p7R_E]  = xE;
-	  xc[p7R_N]  = -eslINFINITY;
-	  xc[p7R_J]  = (d == env->D ? -eslINFINITY : ESL_MAX(xE, xp[p7R_J] + ppp[p7R_JJ]));
-	  xc[p7R_B]  = -eslINFINITY;
-	  xc[p7R_L]  = -eslINFINITY;
-	  xc[p7R_G]  = -eslINFINITY;
-	  xc[p7R_C]  = (d == env->D ? ESL_MAX(xE, xp[p7R_J] + ppp[p7R_JJ]) : -eslINFINITY);
-	  xc[p7R_JJ] = -eslINFINITY;
-	  xc[p7R_CC] = -eslINFINITY;
-	} /* end loop over i up to ib(d) */
-
-      /* Now, interdomain rows ib[d]+1 to ia[d]-1. 
-       * We know we're going to stay in either J|C on these rows.
-       */
-      if (d < env->D)
-	{ // Here we know we're in J, between two domains d and d+1:
-	  /* a little overwriting of row ib(d), which might transition directly to an ia(d+1) */
-	  xB = xc[p7R_J];
-
-	  /* Now, from ib(d)+1 to ia(d+1)-1 (or L), we know we stay
-	   * in J|C. It's possible that ib(d)+1 == ia, in which case
-	   * we won't do anything in this loop.
-	   */
-	  for (i = env->arr[d].ib+1; i < env->arr[d+1].ia; i++)
-	    {
-	      dpc = mx->dp[i];
-	      for (s = 0; s < (M+1)*p7R_NSCELLS; s++) *dpc++ = -eslINFINITY;
-
-	      xc = dpc;
-	      ppp = apd->dp[i] + (M+1)*p7R_NSCELLS;        
-	      
-	      xc[p7R_E]      = -eslINFINITY;
-	      xc[p7R_N]      = -eslINFINITY;
-	      xc[p7R_J] = xB = (i == 0 ? 0. : xB + ppp[p7R_JJ]);
-	      xc[p7R_B]      = -eslINFINITY;
-	      xc[p7R_L]      = -eslINFINITY;
-	      xc[p7R_G]      = -eslINFINITY;
-	      xc[p7R_C]      = -eslINFINITY;
-	      xc[p7R_JJ]     = -eslINFINITY;
-	      xc[p7R_CC]     = -eslINFINITY;
-	    }
-	  xc[p7R_B] = xB;
-	  xc[p7R_L] = ( env->arr[d].flags & p7E_IS_GLOCAL ? -eslINFINITY : xB );
-	  xc[p7R_G] = ( env->arr[d].flags & p7E_IS_GLOCAL ? xB : -eslINFINITY );
+      /* Termination: exits from row ib. */
+      if (is_glocal)
+	xX = ESL_MAX(P7R_MX(mx,ib,M,p7R_ML), 
+		     P7R_MX(mx,ib,M,p7R_DL));
+      else           
+	for (k = k0; k <= M; k++) {
+	  xX = ESL_MAX(xX, P7R_MX(mx,ib,k,p7R_ML));
+	  xX = ESL_MAX(xX, P7R_MX(mx,ib,k,p7R_DL));
 	}
-      else
-	{ // Here we have d=D, and we know there's no more domains. We're in C until the end. No B.
-	  xB = xc[p7R_C];  // we're going to misuse "xB" instead of declaring a new variable for this
-	  for (i = env->arr[d].ib+1; i <= L; i++)
-	    {
-	      dpc = mx->dp[i];
-	      for (s = 0; s < (M+1)*p7R_NSCELLS; s++) *dpc++ = -eslINFINITY;
-
-	      xc = dpc;
-	      ppp = apd->dp[i] + (M+1)*p7R_NSCELLS;        
-	      
-	      xc[p7R_E]      = -eslINFINITY;
-	      xc[p7R_N]      = -eslINFINITY;
-	      xc[p7R_J]      = -eslINFINITY;
-	      xc[p7R_B]      = -eslINFINITY;
-	      xc[p7R_L]      = -eslINFINITY;
-	      xc[p7R_G]      = -eslINFINITY;
-	      xc[p7R_C] = xB = xB + ppp[p7R_CC];   
-	      xc[p7R_JJ]     = -eslINFINITY;
-	      xc[p7R_CC]     = -eslINFINITY;
-	    }
-	}
-
     } /* end loop over domains d */
 
-  return p7_reference_aec_trace_MEG(gm, env, apd, mx, tr);
+  return reference_aec_trace(gm, env, mx, tr);
 }
 /*---------------- end, AEC/MEG alignment fill ------------------*/
 
@@ -521,11 +174,179 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
 
 
 /*****************************************************************
- * 2. Unit tests
+ * 2. Choice functions for AEC/MEG traceback.
+ *****************************************************************/
+
+/* Style here is taken from reference_trace.c. The choice functions
+ * are abstracted, so the same traceback engine works on any
+ * optimization criterion for the AEC path. (Even though the only
+ * currently implemented optimization is MEG.)
+ */
+
+static inline int
+reference_aec_select_m(const P7_PROFILE *gm, const P7_REFMX *mx, int is_glocal, int i, int k)
+{
+  int          gstate[3] = { p7T_MG, p7T_IG, p7T_DG };  
+  int          lstate[3] = { p7T_ML, p7T_IL, p7T_DL };
+  float        path[3];
+
+  path[0] = P7_DELTAT( P7R_MX(mx, i-1, k-1, p7R_ML), P7P_TSC(gm, k-1, p7P_MM));
+  path[1] = P7_DELTAT( P7R_MX(mx, i-1, k-1, p7R_IL), P7P_TSC(gm, k-1, p7P_IM));
+  path[2] = P7_DELTAT( P7R_MX(mx, i-1, k-1, p7R_DL), P7P_TSC(gm, k-1, p7P_DM));
+  
+  return (is_glocal ? gstate[esl_vec_FArgMax(path, 3)] : lstate[esl_vec_FArgMax(path, 3)]);
+}
+
+static inline int
+reference_aec_select_i(const P7_PROFILE *gm, const P7_REFMX *mx, int is_glocal, int i, int k)
+{
+  float        path[2];
+  path[0] = P7_DELTAT( P7R_MX(mx, i-1, k, p7R_ML), P7P_TSC(gm, k, p7P_MI));
+  path[1] = P7_DELTAT( P7R_MX(mx, i-1, k, p7R_IL), P7P_TSC(gm, k, p7P_II));
+  
+  if (is_glocal)  return ( path[0] >= path[1] ? p7T_MG : p7T_IG);
+  else            return ( path[0] >= path[1] ? p7T_ML : p7T_IL);
+}
+
+static inline int
+reference_aec_select_d(const P7_PROFILE *gm, const P7_REFMX *mx, int is_glocal, int i, int k)
+{
+  float        path[2];
+  path[0] = P7_DELTAT( P7R_MX(mx, i, k-1, p7R_ML), P7P_TSC(gm, k-1, p7P_MD));
+  path[1] = P7_DELTAT( P7R_MX(mx, i, k-1, p7R_DL), P7P_TSC(gm, k-1, p7P_DD));
+  
+  if (is_glocal)  return ( path[0] >= path[1] ? p7T_MG : p7T_DG);
+  else            return ( path[0] >= path[1] ? p7T_ML : p7T_DL);
+}
+
+static inline int
+reference_aec_select_e(const P7_PROFILE *gm, const P7_REFMX *mx, int is_glocal, int ib, int k0, int *ret_k)
+{
+  float max  = -eslINFINITY;
+  int   kmax = -1;
+  int   smax = -1;  
+  int   k;
+
+  if (is_glocal) 
+    {
+      kmax = gm->M;
+      smax = ( P7R_MX(mx,ib,gm->M,p7R_ML) >= P7R_MX(mx,ib,gm->M,p7R_DL) ? p7T_MG : p7T_DG);
+    }
+  else 
+    {
+      for (k = k0; k <= gm->M; k++)
+	{
+	  if (P7R_MX(mx,ib,k,p7R_ML) > max) { max = P7R_MX(mx,ib,k,p7R_ML); smax = p7T_ML; kmax = k; }
+	  if (P7R_MX(mx,ib,k,p7R_DL) > max) { max = P7R_MX(mx,ib,k,p7R_DL); smax = p7T_DL; kmax = k; }
+	}
+    }
+  *ret_k = kmax;
+  return   smax;
+}
+
+
+/*****************************************************************
+ * 3. Traceback routine.
+ *****************************************************************/
+
+static int
+reference_aec_trace(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *mx, P7_TRACE *tr)
+{
+  int i,k,d;
+  int sprv, scur;
+  int status;
+
+  /* Contract checks, argument validation */
+  ESL_DASSERT1(( mx->M == gm->M && gm->M == env->M ));
+  ESL_DASSERT1(( mx->L == env->L ));
+  ESL_DASSERT1(( mx->type == p7R_AEC_ALIGN ));
+
+  if   ((status = p7_trace_Append(tr, p7T_T, 0, 0)) != eslOK) return status;
+  if   ((status = p7_trace_Append(tr, p7T_C, 0, 0)) != eslOK) return status; 
+
+  for (d = env->D; d >= 1; d--)
+    {
+      /* Residues ib(d)+1 .. ia(d+1)-1 are assigned to C|J.
+       * Sentinel at ia(D+1) = L+1, so no special case needed for ia(d+1)-1 at d=D.
+       */
+      for (i = env->arr[d+1].ia-1; i > env->arr[d].ib; i--)
+	if ((status = p7_trace_Append(tr, (d == env->D ? p7T_C : p7T_J), 0, i)) != eslOK) return status;
+      if ((status = p7_trace_Append(tr, p7T_E, 0, i)) != eslOK) return status;
+      scur = p7T_E;
+      k    = gm->M+1;
+      // i now ib(d); scur now E; k is M+1 awaiting traceback from E
+
+      /* Weird but true, we don't need to do DOWN and UP sectors separately here.
+       * We're guaranteed that the path will pass thru the anchor i0,k0,M.
+       * From there, we know we'll connect to i-1,k-1 supercell.
+       * (Sparse, though, can't get away with this, and must do DOWN, UP separately
+       * because of its more complicated traversal of matrix supercells.)
+       */
+      while (i > env->arr[d].ia || (scur != p7T_ML && scur != p7T_MG)) // that is: until we reach M on first row ia(d)...
+	{
+	  switch (scur) {
+	  case p7T_ML: case p7T_MG: sprv = reference_aec_select_m(gm, mx, (env->arr[d].flags & p7E_IS_GLOCAL), i, k);        i--; k--; break;
+	  case p7T_IL: case p7T_IG: sprv = reference_aec_select_i(gm, mx, (env->arr[d].flags & p7E_IS_GLOCAL), i, k);        i--;      break;
+	  case p7T_DL: case p7T_DG: sprv = reference_aec_select_d(gm, mx, (env->arr[d].flags & p7E_IS_GLOCAL), i, k);             k--; break;
+	  case p7T_E:               sprv = reference_aec_select_e(gm, mx, (env->arr[d].flags & p7E_IS_GLOCAL), i, env->arr[d].k0, &k); break;
+	  default: ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in reference AEC traceback");
+	  }
+
+	  if (scur == p7T_E) env->arr[d].kb = k;
+
+	  if ( (status = p7_trace_Append(tr, sprv, k, i)) != eslOK) return status;
+	  scur = sprv;
+	}
+
+      /* Now we're on ia(d) and scur = ML|MG, k=ka(d).
+       * Glocal alignments must do a left wing unfolding.
+       */
+      if (env->arr[d].flags & p7E_IS_GLOCAL)
+	{
+	  for (; k > 1; k--) 
+	    if ( (status = p7_trace_Append(tr, p7T_DG, k-1, i))  != eslOK) return status;
+	  sprv = p7T_G;
+	}
+      else sprv = p7T_L;
+      env->arr[d].ka = k;
+
+      if ( (status = p7_trace_Append(tr, sprv,                     0, i)) != eslOK) return status;
+      if ( (status = p7_trace_Append(tr, p7T_B,                    0, i)) != eslOK) return status;
+      if ( (status = p7_trace_Append(tr, (d == 1 ? p7T_N : p7T_J), 0, i)) != eslOK) return status;
+      // i is now ia(d), and we're on B. 
+    }
+      
+  for (i = env->arr[1].ia-1; i >= 1; i--)
+    if ((status = p7_trace_Append(tr, p7T_N, 0, i)) != eslOK) return status;
+  if ((status = p7_trace_Append(tr, p7T_S, 0, 0))   != eslOK) return status;
+  
+  tr->M = env->M;
+  tr->L = env->L;
+  return p7_trace_Reverse(tr);
+}
+
+
+
+/*****************************************************************
+ * 4. Footnotes
+ *****************************************************************/
+
+/* If we were using Plan9, we could do this as a "1-state" model,
+ * 1 DP cell per i,k. But since we need to prohibit D->I,I->D, we
+ * can't.
+ * 
+ * Because we fit the calculation into one matrix, we can't 
+ * initialize an ia-1 top row for the up matrices, because 
+ * we may be adjacent to an ib row of an immediately preceding
+ * domain.
+ */
+
+
+/*****************************************************************
+ * 5. Unit tests
  *****************************************************************/
 #ifdef p7REFERENCE_AEC_ALIGN_TESTDRIVE
 #include "hmmer.h"
-
 
 /* "crashtestdummy" test
  * Compare randomly selected profile to sequences sampled
@@ -540,7 +361,7 @@ p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *
  *
  * We test:
  *    1. Coordinates of each envelope/alignment are coherent:
- *       1 <= oea <= ia <= alia <= i0 <= alib <= ib <= oeb <= L
+ *       1 <= oea <= ia <= i0 <= ib <= oeb <= L
  *       1 <= ka <= k0 <= kb <= M
  *       
  *    2. Envelopes do not overlap (assuming default threshold of
@@ -640,10 +461,8 @@ utest_crashtestdummy(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
 	{
 	  if (! (1 <= env->arr[d].oea &&
 		 env->arr[d].oea  <= env->arr[d].ia    &&
-		 env->arr[d].ia   <= env->arr[d].alia  &&
-		 env->arr[d].alia <= env->arr[d].i0    &&
-		 env->arr[d].i0   <= env->arr[d].alib  &&
-		 env->arr[d].alib <= env->arr[d].ib    &&
+		 env->arr[d].ia   <= env->arr[d].i0    &&
+		 env->arr[d].i0   <= env->arr[d].ib    &&
 		 env->arr[d].ib   <= env->arr[d].oeb   &&
 		 env->arr[d].oeb  <= sq->n)) esl_fatal(msg);
 	  if (! (1 <= env->arr[d].ka &&
@@ -677,9 +496,9 @@ utest_crashtestdummy(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
       p7_trace_Index(tr);
       if (tr->ndom != env->D) esl_fatal(msg);
       for (d = 1; d <= env->D; d++)                          // domain numbering in traces is 0..ndom-1, off by one from 1..D in anchors, envelopes
-	if (! ( tr->sqfrom[d-1]  == env->arr[d].alia &&
-		tr->sqto[d-1]    == env->arr[d].alib &&
-		tr->hmmfrom[d-1] == env->arr[d].ka   &&
+	if (! ( tr->sqfrom[d-1]  == env->arr[d].ia  &&
+		tr->sqto[d-1]    == env->arr[d].ib  &&
+		tr->hmmfrom[d-1] == env->arr[d].ka  &&
 		tr->hmmto[d-1]   == env->arr[d].kb)) esl_fatal(msg);
 
 
@@ -720,10 +539,10 @@ utest_crashtestdummy(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
  * 
  * We test:
  *     1. The MEG trace is identical to the generated path.
- *     1. Trace and envelopes agree on number of domains.
- *     2. For each domain, oea==ia, oeb==ib, and these coords
+ *     2. Trace and envelopes agree on number of domains.
+ *     3. For each domain, oea==ia, oeb==ib, and these coords
  *        agree with the trace.
- *     3. In the case of a single domain (D=1), the envelope
+ *     4. In the case of a single domain (D=1), the envelope
  *        score == the trace score.
  */
 static void
@@ -777,15 +596,13 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
       /* Test 3. Envelope coords (and outer env coords) match trace */
       for (d = 1; d <= D; d++)
 	{
-	  if (! (env->arr[d].alia == gtr->sqfrom[d-1] &&   // beware: domains in trace are 0..ndom-1, off by one from env's 1..D
-		 env->arr[d].alia ==  tr->sqfrom[d-1] &&
-		 env->arr[d].alia == env->arr[d].ia &&
-		 env->arr[d].alia == env->arr[d].oea)) esl_fatal(msg);
+	  if (! (env->arr[d].ia == gtr->sqfrom[d-1] &&   // beware: domains in trace are 0..ndom-1, off by one from env's 1..D
+		 env->arr[d].ia ==  tr->sqfrom[d-1] &&
+		 env->arr[d].ia == env->arr[d].oea)) esl_fatal(msg);
 
-	  if (! (env->arr[d].alib == gtr->sqto[d-1]   &&
-		 env->arr[d].alib ==  tr->sqto[d-1]   &&
-		 env->arr[d].alib == env->arr[d].ib   &&
-		 env->arr[d].alib == env->arr[d].oeb)) esl_fatal(msg);
+	  if (! (env->arr[d].ib == gtr->sqto[d-1]   &&
+		 env->arr[d].ib ==  tr->sqto[d-1]   &&
+		 env->arr[d].ib == env->arr[d].oeb)) esl_fatal(msg);
 
 	  if (! (env->arr[d].ka == gtr->hmmfrom[d-1] &&
 		 env->arr[d].ka ==  tr->hmmfrom[d-1])) esl_fatal(msg);
@@ -822,7 +639,7 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
 
 
 /*****************************************************************
- * 3. Test driver
+ * 6. Test driver
  *****************************************************************/
 #ifdef p7REFERENCE_AEC_ALIGN_TESTDRIVE
 
@@ -855,7 +672,7 @@ main(int argc, char **argv)
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
-  utest_crashtestdummy(rng, M, abc, 10);  
+  utest_crashtestdummy(rng, M, abc, 10);
   utest_singlemulti   (rng, M, abc, 10);
 
   fprintf(stderr, "#  status = ok\n");
@@ -872,7 +689,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 4. Example
+ * 7. Example
  *****************************************************************/
 #ifdef p7REFERENCE_AEC_ALIGN_EXAMPLE
 #include "p7_config.h"
@@ -989,15 +806,13 @@ main(int argc, char **argv)
    */
   p7_reference_Envelopes(sq->dsq, sq->n, gm, anch->a, anch->D, apu, apd, afu, afd, env);
 
-  p7_envelopes_Dump(stdout, env);
-
   /* MEG alignment step uses afu as its matrix; apu/apd decoding matrices as its input */
   p7_refmx_Reuse(afu);
   p7_trace_Reuse(tr);
   p7_reference_AEC_Align(gm, env, apu, apd, afu, tr);
 
   //p7_refmx_Dump(stdout, afu);
-  //p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
+  p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
   p7_envelopes_Dump(stdout, env);
 
   p7_envelopes_Destroy(env);

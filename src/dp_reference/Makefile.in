@@ -9,8 +9,7 @@ LIBOBJS =  p7_refmx.o               \
 	   reference_envelopes.o    \
 	   reference_asc_fwdback.o  \
 	   reference_asc_decoding.o \
-	   reference_aec_align.o    \
-	   reference_aec_trace.o
+	   reference_aec_align.o    
 
 LIBHDRS =  
 
