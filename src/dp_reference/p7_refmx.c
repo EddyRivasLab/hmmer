@@ -315,23 +315,20 @@ p7_refmx_Destroy(P7_REFMX *rmx)
 int
 p7_refmx_Compare(const P7_REFMX *rx1, const P7_REFMX *rx2, float tolerance)
 {
+  char msg[] = "P7_REFMX comparison failed";
   int i,k,s;
-  int killmenow = FALSE;
-#ifdef p7_DEBUGGING
-  killmenow = TRUE;	/* Setting <killmenow> during debugging helps find where a comparison fails */
-#endif /*p7_DEBUGGING*/
   
-  if (rx1->M    != rx2->M)    { if (killmenow) abort(); return eslFAIL; }
-  if (rx1->L    != rx2->L)    { if (killmenow) abort(); return eslFAIL; }
-  if (rx1->type != rx2->type) { if (killmenow) abort(); return eslFAIL; }
+  if (rx1->M    != rx2->M)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (rx1->L    != rx2->L)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (rx1->type != rx2->type) ESL_FAIL(eslFAIL, NULL, msg);
   
   for (i = 0; i <= rx1->L; i++)
     {
       for (k = 0; k <= rx1->M; k++)   
 	for (s = 0; s < p7R_NSCELLS; s++)
-	  if ( esl_FCompareAbs(P7R_MX(rx1,i,k,s), P7R_MX(rx2,i,k,s), tolerance) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	  if ( esl_FCompareAbs(P7R_MX(rx1,i,k,s), P7R_MX(rx2,i,k,s), tolerance) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
       for (s = 0; s < p7R_NXCELLS; s++)
-	if ( esl_FCompareAbs(P7R_XMX(rx1,i,s), P7R_XMX(rx2,i,s), tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
+	if ( esl_FCompareAbs(P7R_XMX(rx1,i,s), P7R_XMX(rx2,i,s), tolerance) == eslFAIL)     ESL_FAIL(eslFAIL, NULL, msg);
     }
   return eslOK;	
 }
@@ -356,32 +353,29 @@ p7_refmx_Compare(const P7_REFMX *rx1, const P7_REFMX *rx2, float tolerance)
 int
 p7_refmx_CompareLocal(const P7_REFMX *rx1, const P7_REFMX *rx2, float tolerance)
 {
+  char msg[] = "P7_REFMX local path comparison failed";
   int i,k;
-  int killmenow = FALSE;
-#ifdef p7_DEBUGGING
-  killmenow = TRUE;	/* Setting <killmenow> during debugging helps find where a comparison fails */
-#endif /*p7_DEBUGGING*/
   
-  if (rx1->M    != rx2->M)    { if (killmenow) abort(); return eslFAIL; }
-  if (rx1->L    != rx2->L)    { if (killmenow) abort(); return eslFAIL; }
-  if (rx1->type != rx2->type) { if (killmenow) abort(); return eslFAIL; }
+  if (rx1->M    != rx2->M)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (rx1->L    != rx2->L)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (rx1->type != rx2->type) ESL_FAIL(eslFAIL, NULL, msg);
   
   for (i = 0; i <= rx1->L; i++)
     {
       for (k = 0; k <= rx1->M; k++)   
 	{
-	  if ( esl_FCompareAbs(P7R_MX(rx1,i,k,p7R_ML), P7R_MX(rx2,i,k,p7R_ML), tolerance) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
-	  if ( esl_FCompareAbs(P7R_MX(rx1,i,k,p7R_IL), P7R_MX(rx2,i,k,p7R_IL), tolerance) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
-	  if ( esl_FCompareAbs(P7R_MX(rx1,i,k,p7R_DL), P7R_MX(rx2,i,k,p7R_DL), tolerance) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	  if ( esl_FCompareAbs(P7R_MX(rx1,i,k,p7R_ML), P7R_MX(rx2,i,k,p7R_ML), tolerance) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+	  if ( esl_FCompareAbs(P7R_MX(rx1,i,k,p7R_IL), P7R_MX(rx2,i,k,p7R_IL), tolerance) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+	  if ( esl_FCompareAbs(P7R_MX(rx1,i,k,p7R_DL), P7R_MX(rx2,i,k,p7R_DL), tolerance) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
 	}
-      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_E),  P7R_XMX(rx2,i,p7R_E),  tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
-      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_N),  P7R_XMX(rx2,i,p7R_N),  tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
-      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_J),  P7R_XMX(rx2,i,p7R_J),  tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
-      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_B),  P7R_XMX(rx2,i,p7R_B),  tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
-      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_L),  P7R_XMX(rx2,i,p7R_L),  tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
-      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_C),  P7R_XMX(rx2,i,p7R_C),  tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
-      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_JJ), P7R_XMX(rx2,i,p7R_JJ), tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
-      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_CC), P7R_XMX(rx2,i,p7R_CC), tolerance) == eslFAIL)   { if (killmenow) abort(); return eslFAIL; }
+      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_E),  P7R_XMX(rx2,i,p7R_E),  tolerance) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_N),  P7R_XMX(rx2,i,p7R_N),  tolerance) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_J),  P7R_XMX(rx2,i,p7R_J),  tolerance) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_B),  P7R_XMX(rx2,i,p7R_B),  tolerance) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_L),  P7R_XMX(rx2,i,p7R_L),  tolerance) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_C),  P7R_XMX(rx2,i,p7R_C),  tolerance) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_JJ), P7R_XMX(rx2,i,p7R_JJ), tolerance) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareAbs(P7R_XMX(rx1,i,p7R_CC), P7R_XMX(rx2,i,p7R_CC), tolerance) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
     }
   return eslOK;	
 }
@@ -411,27 +405,25 @@ p7_refmx_CompareLocal(const P7_REFMX *rx1, const P7_REFMX *rx2, float tolerance)
 int
 p7_refmx_CompareDecoding(const P7_REFMX *ppe, const P7_REFMX *ppa, float tol)
 {
+  char msg[] = "P7_REFMX posterior decoding matrix comparison failed";
   float *dpe, *dpa;
   int i,k,s;
-  int killmenow = FALSE;
-#ifdef p7_DEBUGGING
-  killmenow = TRUE;
-#endif
 
-  if (ppe->M    != ppa->M)       { if (killmenow) abort(); return eslFAIL; }
-  if (ppe->L    != ppa->L)       { if (killmenow) abort(); return eslFAIL; }
-  if (ppe->type != ppa->type)    { if (killmenow) abort(); return eslFAIL; }
-  if (ppe->type != p7R_DECODING) { if (killmenow) abort(); return eslFAIL; }
+  if (ppe->M    != ppa->M)       ESL_FAIL(eslFAIL, NULL, msg);
+  if (ppe->L    != ppa->L)       ESL_FAIL(eslFAIL, NULL, msg);
+  if (ppe->type != ppa->type)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (ppe->type != p7R_DECODING) ESL_FAIL(eslFAIL, NULL, msg);
 
   for (i = 0; i <= ppe->L; i++)	/* include i=0; DG0's have nonzero pp, as do N/B/L/G */
     {
       for (dpe = ppe->dp[i], dpa = ppa->dp[i], k = 0; k <= ppe->M; k++)
 	for (s = 0; s < p7R_NSCELLS; s++, dpe++, dpa++)
 	  if ( (*dpe == 0. && *dpa != 0.0) || esl_FCompareAbs(*dpe, *dpa, tol) != eslOK) 
-	    { if (killmenow) abort(); return eslFAIL; }
+	    ESL_FAIL(eslFAIL, NULL, msg);
+
       for (s = 0; s < p7R_NXCELLS; s++, dpe++, dpa++)
 	if ( (*dpe == 0. && *dpa != 0.0) || esl_FCompareAbs(*dpe, *dpa, tol) != eslOK) 
-	  { if (killmenow) abort(); return eslFAIL; }
+	  ESL_FAIL(eslFAIL, NULL, msg);
     }
   return eslOK;
 }

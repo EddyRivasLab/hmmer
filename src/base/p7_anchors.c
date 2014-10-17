@@ -307,13 +307,37 @@ p7_anchors_Compare(P7_ANCHORS *anch1, P7_ANCHORS *anch2)
   return eslOK;
 }
 
+/* Function:  p7_anchors_Validate()
+ * Synopsis:  Validate an anchor set object. 
+ *
+ * Purpose:   Validates an anchor set object.
+ * 
+ *            If <M>,<L> dimensions are provided, then the sentinels
+ *            at <0> and <D+1> are validated too. If <M> or <L> are
+ *            unknown they can be passed as 0, and the sentinels in
+ *            <anch> will be used to determine them -- which of course
+ *            depends on the sentinels being valid, so is less strong.
+ *
+ * Args:      anch   - anchors to validate
+ *            L      - sequence length if known; else 0
+ *            M      - profile length if known; else 0
+ *            errbuf - optional error message, allocated for eslERRBUFSIZE; or NULL
+ *
+ * Returns:   <eslOK> on success.
+ *            <eslFAIL> on failure, and if <errbuf> was provided, it contains
+ *            an informative error message.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
 int
-p7_anchors_Validate(P7_ANCHORS *anch, char *errbuf)
+p7_anchors_Validate(P7_ANCHORS *anch, int L, int M, char *errbuf)
 {
   int D = anch->D;
-  int L = anch->a[D+1].i0 - 1;
-  int M = anch->a[0].k0 - 1;
   int d;
+
+  /* If M or L aren't provided, set them from the sentinels */
+  if (!L) L = anch->a[D+1].i0 - 1;
+  if (!M) M = anch->a[0].k0 - 1;
 
   for (d = 0; d <= D; d++)
     if (! (anch->a[d].i0 < anch->a[d+1].i0)) ESL_FAIL(eslFAIL, errbuf, "i0 anchors not sorted");
@@ -322,6 +346,10 @@ p7_anchors_Validate(P7_ANCHORS *anch, char *errbuf)
     if (! (anch->a[d].i0 >= 1 && anch->a[d].i0 <= L)) ESL_FAIL(eslFAIL, errbuf, "i0 %d not in range 1..L", d);
     if (! (anch->a[d].k0 >= 1 && anch->a[d].k0 <= M)) ESL_FAIL(eslFAIL, errbuf, "k0 %d not in range 1..M", d);
   }
+
+  if (anch->a[0].i0   != 0   || anch->a[0].k0   != M+1) ESL_FAIL(eslFAIL, errbuf, "sentinel 0 invalid");
+  if (anch->a[D+1].i0 != L+1 || anch->a[D+1].k0 != 0)   ESL_FAIL(eslFAIL, errbuf, "sentinel D+1 invalid");
+
   return eslOK;
 }
 
@@ -451,7 +479,7 @@ utest_sampling(ESL_RANDOMNESS *rng)
       if ( p7_anchors_Sample(rng, L, M, maxD, anch) != eslOK) esl_fatal(msg);
       if ( p7_anchors_Copy(anch, anch2)             != eslOK) esl_fatal(msg);
       if ( p7_anchors_Compare(anch, anch2)          != eslOK) esl_fatal(msg);
-      if ( p7_anchors_Validate(anch, errmsg)        != eslOK) esl_fatal("%s:\n  %s", msg, errmsg);
+      if ( p7_anchors_Validate(anch, L, M, errmsg)  != eslOK) esl_fatal("%s:\n  %s", msg, errmsg);
       if ( p7_anchors_Reuse(anch)                   != eslOK) esl_fatal(msg);
     }
   p7_anchors_Destroy(anch);

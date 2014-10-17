@@ -562,28 +562,25 @@ p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm)
 int
 p7_sparsemask_Compare(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2)
 {
-  int i;
-  int s;
-  int killmenow = FALSE;
-#ifdef p7_DEBUGGING
-  killmenow = TRUE;
-#endif
+  char msg[] = "P7_SPARSEMASK comparison failed";
+  int  i;
+  int  s;
 
   if ( (sm1->L      != sm2->L)      ||
        (sm1->M      != sm2->M)      ||
        (sm1->S      != sm2->S)      ||
        (sm1->nrow   != sm2->nrow)   ||
        (sm1->ncells != sm2->ncells)) 
-    { if (killmenow) abort(); return eslFAIL; }
+    ESL_FAIL(eslFAIL, NULL, msg);
 
   for (s = 0; s <= sm1->S+1; s++)
     {
-      if (sm1->seg[s].ia != sm2->seg[s].ia)   { if (killmenow) abort(); return eslFAIL; }
-      if (sm1->seg[s].ib != sm2->seg[s].ib)   { if (killmenow) abort(); return eslFAIL; }
+      if (sm1->seg[s].ia != sm2->seg[s].ia)   ESL_FAIL(eslFAIL, NULL, msg);
+      if (sm1->seg[s].ib != sm2->seg[s].ib)   ESL_FAIL(eslFAIL, NULL, msg);
     }
-  if ( esl_vec_ICompare(sm1->n, sm2->n, sm1->L+1)    != eslOK)  { if (killmenow) abort(); return eslFAIL; }
+  if ( esl_vec_ICompare(sm1->n, sm2->n, sm1->L+1)    != eslOK)  ESL_FAIL(eslFAIL, NULL, msg);
   for (i = 0; i <= sm1->L; i++)
-    if ( esl_vec_ICompare(sm1->k[i], sm2->k[i], sm1->n[i]) != eslOK) { if (killmenow) abort(); return eslFAIL; }
+    if ( esl_vec_ICompare(sm1->k[i], sm2->k[i], sm1->n[i]) != eslOK) ESL_FAIL(eslFAIL, NULL, msg);
   return eslOK;
 }
 
@@ -1303,15 +1300,12 @@ p7_sparsemx_Copy2Reference(const P7_SPARSEMX *sx, P7_REFMX *rx)
 int
 p7_sparsemx_Compare(const P7_SPARSEMX *sx1, const P7_SPARSEMX *sx2, float tol)
 {
-  int killmenow = FALSE;
-#ifdef p7_DEBUGGING
-  killmenow = TRUE;
-#endif
+  char msg[] = "P7_SPARSEMX comparison failed";
 
-  if ( sx1->type != sx2->type)                            { if (killmenow) abort(); return eslFAIL; }
-  if ( p7_sparsemask_Compare(sx1->sm, sx2->sm) != eslOK)  { if (killmenow) abort(); return eslFAIL; }
-  if ( esl_vec_FCompare(sx1->dp,  sx2->dp,   p7S_NSCELLS*sx1->sm->ncells,            tol) != eslOK) { if (killmenow) abort(); return eslFAIL; }
-  if ( esl_vec_FCompare(sx1->xmx, sx2->xmx,  p7S_NXCELLS*(sx1->sm->nrow+sx1->sm->S), tol) != eslOK) { if (killmenow) abort(); return eslFAIL; }
+  if ( sx1->type != sx2->type)                            ESL_FAIL(eslFAIL, NULL, msg);                          
+  if ( p7_sparsemask_Compare(sx1->sm, sx2->sm) != eslOK)  ESL_FAIL(eslFAIL, NULL, msg);
+  if ( esl_vec_FCompare(sx1->dp,  sx2->dp,   p7S_NSCELLS*sx1->sm->ncells,            tol) != eslOK)  ESL_FAIL(eslFAIL, NULL, msg);
+  if ( esl_vec_FCompare(sx1->xmx, sx2->xmx,  p7S_NXCELLS*(sx1->sm->nrow+sx1->sm->S), tol) != eslOK)  ESL_FAIL(eslFAIL, NULL, msg);
   return eslOK;
 }
 
@@ -1365,19 +1359,16 @@ p7_sparsemx_Compare(const P7_SPARSEMX *sx1, const P7_SPARSEMX *sx2, float tol)
 int
 p7_sparsemx_CompareReference(const P7_SPARSEMX *sx, const P7_REFMX *rx, float tol)
 {
-  const P7_SPARSEMASK *sm  = sx->sm;
-  int            killmenow = FALSE;
+  char                 msg[] = "comparison of P7_SPARSEMX to P7_REFMX failed";
+  const P7_SPARSEMASK *sm    = sx->sm;
   const float   *dpc, *dpc2;
   const float   *xc,  *xc2;
   int            g,i,s,z;
   int            ia,ib;
-#ifdef p7_DEBUGGING
-  killmenow = TRUE;
-#endif
   
-  if (sx->type != rx->type) { if (killmenow) abort(); return eslFAIL; }
-  if (sm->M    != rx->M)    { if (killmenow) abort(); return eslFAIL; }
-  if (sm->L    != rx->L)    { if (killmenow) abort(); return eslFAIL; }
+  if (sx->type != rx->type) ESL_FAIL(eslFAIL, NULL, msg);
+  if (sm->M    != rx->M)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (sm->L    != rx->L)    ESL_FAIL(eslFAIL, NULL, msg);
 
   /* First traversal way: sm->dp[] is just one big array */
   dpc = sx->dp;
@@ -1387,19 +1378,19 @@ p7_sparsemx_CompareReference(const P7_SPARSEMX *sx, const P7_REFMX *rx, float to
       if (sm->n[i] && !sm->n[i-1])         /* ia-1 specials at a segment start */
 	{
 	  for (s = 0; s < p7S_NXCELLS; xc++, s++) 
-	    if (esl_FCompareAbs(*xc, P7R_XMX(rx,i-1,s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	    if (esl_FCompareAbs(*xc, P7R_XMX(rx,i-1,s), tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
 	}
 
       for (z = 0; z < sm->n[i]; z++)       /* sparse cells */
 	{
 	  for (s = 0; s < p7S_NSCELLS; dpc++, s++) 
-	    if (esl_FCompareAbs(*dpc, P7R_MX(rx,i,sm->k[i][z],s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	    if (esl_FCompareAbs(*dpc, P7R_MX(rx,i,sm->k[i][z],s), tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
 	}
   
       if (sm->n[i])       /* specials */
 	{
 	  for (s = 0; s < p7S_NXCELLS; xc++, s++) 
-	    if (esl_FCompareAbs(*xc, P7R_XMX(rx,i,s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	    if (esl_FCompareAbs(*xc, P7R_XMX(rx,i,s), tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
 	}
     }
 
@@ -1413,24 +1404,23 @@ p7_sparsemx_CompareReference(const P7_SPARSEMX *sx, const P7_REFMX *rx, float to
       ib = sm->seg[g].ib;
 
       for (s = 0; s < p7S_NXCELLS; xc2++, s++)        /* ia-1 specials at segment start */
-	if (esl_FCompareAbs(*xc2, P7R_XMX(rx,ia-1,s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	if (esl_FCompareAbs(*xc2, P7R_XMX(rx,ia-1,s), tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
 
       for (i = ia; i <= ib; i++) 
 	{
 	  for (z = 0; z < sm->n[i]; z++)      	  /* sparse main cells */
 	    {
 	      for (s = 0; s < p7S_NSCELLS; dpc2++, s++) 
-		if (esl_FCompareAbs(*dpc2, P7R_MX(rx,i,sm->k[i][z],s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+		if (esl_FCompareAbs(*dpc2, P7R_MX(rx,i,sm->k[i][z],s), tol) == eslFAIL)  ESL_FAIL(eslFAIL, NULL, msg);
 	    }
 	  for (s = 0; s < p7S_NXCELLS; xc2++, s++)  	  /* specials */
-	    if (esl_FCompareAbs(*xc2, P7R_XMX(rx,i,s), tol) == eslFAIL) { if (killmenow) abort(); return eslFAIL; }
+	    if (esl_FCompareAbs(*xc2, P7R_XMX(rx,i,s), tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
 	}
     }
   
   /* Both ways must reach the same end */
-  if (dpc != dpc2)  { if (killmenow) abort(); return eslFAIL; }
-  if (xc  != xc2)   { if (killmenow) abort(); return eslFAIL; }
-  
+  if (dpc != dpc2) ESL_FAIL(eslFAIL, NULL, msg);
+  if (xc  != xc2)  ESL_FAIL(eslFAIL, NULL, msg);
   return eslOK;
 }
 
@@ -1460,31 +1450,31 @@ p7_sparsemx_CompareReference(const P7_SPARSEMX *sx, const P7_REFMX *rx, float to
 int
 p7_sparsemx_CompareReferenceAsBound(const P7_SPARSEMX *sx, const P7_REFMX *rx, float tol)
 {
-  const P7_SPARSEMASK *sm  = sx->sm;
-  int            killmenow = FALSE;
-  const float   *dpc       = sx->dp;
-  const float   *xc        = sx->xmx;
-  int            i,s,z;
-#ifdef p7_DEBUGGING
-  killmenow = TRUE;
-#endif
+  char                 msg[] = "failed comparison of P7_SPARSEMX to upper bound in P7_REFMX"; 
+  const P7_SPARSEMASK *sm    = sx->sm;
+  const float         *dpc   = sx->dp;
+  const float         *xc    = sx->xmx;
+  int   i,s,z;
 
-  if (sx->type != rx->type) { if (killmenow) abort(); return eslFAIL; }
-  if (sm->M    != rx->M)    { if (killmenow) abort(); return eslFAIL; }
-  if (sm->L    != rx->L)    { if (killmenow) abort(); return eslFAIL; }
+  if (sx->type != rx->type) ESL_FAIL(eslFAIL, NULL, msg);
+  if (sm->M    != rx->M)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (sm->L    != rx->L)    ESL_FAIL(eslFAIL, NULL, msg);
   for (i = 1; i <= sm->L; i++)
     {
       if (sm->n[i] && !sm->n[i-1]) {    /* ia-1 specials at a segment start */
 	for (s = 0; s < p7S_NXCELLS; xc++, s++) 
-	  if (*xc > P7R_XMX(rx,i-1,s)+tol)           { if (killmenow) abort(); return eslFAIL; }
+	  if (*xc > P7R_XMX(rx,i-1,s)+tol) 
+	    ESL_FAIL(eslFAIL, NULL, msg);
       }
       for (z = 0; z < sm->n[i]; z++)    /* sparse cells */
 	for (s = 0; s < p7S_NSCELLS; dpc++, s++) 
-	  if (*dpc > P7R_MX(rx,i,sm->k[i][z],s)+tol) { if (killmenow) abort(); return eslFAIL; }
+	  if (*dpc > P7R_MX(rx,i,sm->k[i][z],s)+tol) 
+	    ESL_FAIL(eslFAIL, NULL, msg);
   
       if (sm->n[i]) {    /* specials */
 	for (s = 0; s < p7S_NXCELLS; xc++, s++) 
-	  if (*xc > P7R_XMX(rx,i,s)+tol)             { if (killmenow) abort(); return eslFAIL;  }
+	  if (*xc > P7R_XMX(rx,i,s)+tol) 
+	    ESL_FAIL(eslFAIL, NULL, msg);
       }
     }
   return eslOK;
@@ -1515,18 +1505,15 @@ p7_sparsemx_CompareReferenceAsBound(const P7_SPARSEMX *sx, const P7_REFMX *rx, f
 int
 p7_sparsemx_CompareDecoding(const P7_SPARSEMX *sxe, const P7_SPARSEMX *sxa, float tol)
 {
+  char                 msg[] = "failed comparison of exact and sampled sparse decoding matrices";
   const P7_SPARSEMASK *sm  = sxe->sm;
   const float         *dpe = sxe->dp;
   const float         *dpa = sxa->dp;
   const float         *xce = sxe->xmx;
   const float         *xca = sxa->xmx;
-  int   killmenow          = FALSE;             
   int   i,s,z;
   float diff;
   float max = 0.;
-#ifdef p7_DEBUGGING
-  killmenow = TRUE;
-#endif
 
   for (i = 1; i <= sm->L; i++)
     {
@@ -1536,7 +1523,8 @@ p7_sparsemx_CompareDecoding(const P7_SPARSEMX *sxe, const P7_SPARSEMX *sxa, floa
 	    diff = *xce-*xca;
 	    max  = ESL_MAX(fabs(diff), max);
 	    //printf(" diff %9.4f  i=%d %s\n", diff, i-1, p7_sparsemx_DecodeSpecial(s));
-	    if ( (*xce == 0. && *xca != 0.) || fabs(*xce-*xca) > tol) { if (killmenow) abort(); return eslFAIL; } 
+	    if ( (*xce == 0. && *xca != 0.) || fabs(*xce-*xca) > tol) 
+	      ESL_FAIL(eslFAIL, NULL, msg);
 	  }	    
       }
       for (z = 0; z < sm->n[i]; z++)    /* sparse cells */
@@ -1545,7 +1533,8 @@ p7_sparsemx_CompareDecoding(const P7_SPARSEMX *sxe, const P7_SPARSEMX *sxa, floa
 	    diff = *dpe-*dpa;
 	    max  = ESL_MAX(fabs(diff),max);
 	    //printf(" diff %9.4f  i=%d k=%d %s  %9.4f %9.4f\n", diff, i, sm->k[i][z], p7_sparsemx_DecodeState(s), *dpe, *dpa);
-	    if ( (*dpe == 0. && *dpa != 0.) || fabs(*dpe-*dpa) > tol) { if (killmenow) abort(); return eslFAIL; } 
+	    if ( (*dpe == 0. && *dpa != 0.) || fabs(*dpe-*dpa) > tol) 
+	      ESL_FAIL(eslFAIL, NULL, msg);
 	  }
       if (sm->n[i]) {		        /* specials */
 	for (s = 0; s < p7S_NSCELLS; xce++, xca++, s++)
@@ -1553,7 +1542,8 @@ p7_sparsemx_CompareDecoding(const P7_SPARSEMX *sxe, const P7_SPARSEMX *sxa, floa
 	    diff = *xce-*xca;
 	    max  = ESL_MAX(fabs(diff),max);
 	    //printf(" diff %9.4f  i=%d %s\n", diff, i, p7_sparsemx_DecodeSpecial(s));
-	    if ( (*xce == 0. && *xca != 0.) || fabs(*xce-*xca) > tol) { if (killmenow) abort(); return eslFAIL; } 
+	    if ( (*xce == 0. && *xca != 0.) || fabs(*xce-*xca) > tol) 
+	      ESL_FAIL(eslFAIL, NULL, msg);
 	  }
       }
     }

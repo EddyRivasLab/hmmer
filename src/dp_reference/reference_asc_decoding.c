@@ -352,14 +352,11 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 static int
 ascmatrix_compare_std(P7_REFMX *rxd, P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *anch, int D, float epsilon)
 {
-  int M = rxd->M;
-  int L = rxd->L;
-  int d, i, k, s;
+  char  msg[] = "comparison of ASC decoding to standard decoding matrices failed";
+  int   M     = rxd->M;
+  int   L     = rxd->L;
+  int   d, i, k, s;
   float ascval;
-  int killmenow = FALSE;
-#ifdef p7_DEBUGGING
-  killmenow = TRUE;
-#endif
 
   /* contract check, argument validation */
   ESL_DASSERT1( (apu->M == M && apu->L == L));
@@ -380,11 +377,11 @@ ascmatrix_compare_std(P7_REFMX *rxd, P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *an
 	    if (k <  anch[d].k0)   ascval += P7R_MX(apu,i,k,s);   // sentinel k0(D+1) = 0,   so no k gets evaluated for UP(d=D+1)
 	    
 	    if (esl_FCompareAbs( ascval, P7R_MX(rxd,i,k,s), epsilon) != eslOK)
-	      { if (killmenow) abort(); return eslFAIL; }
+	      ESL_FAIL(eslFAIL, NULL, msg);
 	  }
       for (s = 0; s < p7R_NXCELLS; s++)
 	if (esl_FCompareAbs( P7R_XMX(apd,i,s), P7R_XMX(rxd,i,s), epsilon) != eslOK)
-	  { if (killmenow) abort(); return eslFAIL; }
+	  ESL_FAIL(eslFAIL, NULL, msg);
     }
   return eslOK;
 }
@@ -426,17 +423,18 @@ ascmatrix_maxdiff_std(P7_REFMX *rxd, P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *an
 
 
 /* ascmatrix_compare_asc()
+ * 
+ * Compare two ASC up/down matrix pairs for equality (for the
+ * identical anchor set array <anch>,<D>).
  */
 static int
 ascmatrix_compare_asc(P7_REFMX *apu1, P7_REFMX *apd1, P7_REFMX *apu2, P7_REFMX *apd2, P7_ANCHOR *anch, int D, float epsilon)
 {
-  int M = apu1->M;
-  int L = apu1->L;
-  int d, i, k, s;
-  int killmenow = FALSE;
-#ifdef p7_DEBUGGING
-  killmenow = TRUE;
-#endif
+  char msg[] = "comparison of two reference ASC DP matrices failed";
+  int  M     = apu1->M;
+  int  L     = apu1->L;
+  int  d, i, k, s;
+
 
   /* contract check, argument validation */
   ESL_DASSERT1(( apu1->M == apd1->M && apu1->M == apu2->M && apu1->M == apd2->M));
@@ -452,18 +450,19 @@ ascmatrix_compare_asc(P7_REFMX *apu1, P7_REFMX *apd1, P7_REFMX *apu2, P7_REFMX *
       for (k = anch[d-1].k0; k <= M; k++)   // sentinel k0(0) = M+1, so no k gets evaluated at d=1 for nonexistent DOWN(0)
 	for (s = 0; s < p7R_NSCELLS; s++)   //   ... i.e., first leg has only an UP(1) matrix.
 	  if (esl_FCompareAbs( P7R_MX(apd1,i,k,s), P7R_MX(apd2,i,k,s), epsilon) != eslOK)
-	    { if (killmenow) abort(); return eslFAIL; }
+	    ESL_FAIL(eslFAIL, NULL, msg);
 
       /* specials exist for all rows. */
       for (s = 0; s < p7R_NXCELLS; s++)
 	if (esl_FCompareAbs( P7R_XMX(apd1,i,s), P7R_XMX(apd2,i,s), epsilon) != eslOK)
-	  { if (killmenow) abort(); return eslFAIL; }
+	  ESL_FAIL(eslFAIL, NULL, msg);
+
 
       /* UP row, if one exists for this i */
       for (k = 1; k < anch[d].k0; k++)   // sentinel k0(D+1) = 0, so no k gets evaluated at d=D+1 for nonexistent UP(D+1)
 	for (s = 0; s < p7R_NSCELLS; s++)
 	  if (esl_FCompareAbs( P7R_MX(apu1,i,k,s), P7R_MX(apu2,i,k,s), epsilon) != eslOK)
-	    { if (killmenow) abort(); return eslFAIL; }
+	    ESL_FAIL(eslFAIL, NULL, msg);
     }
   return eslOK;
 }

@@ -740,6 +740,111 @@ aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, cons
 
 #include "hmmer.h"
 
+/* "compare_reference" test
+ *
+ */
+static void
+utest_compare_reference(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N, int be_verbose)
+{
+  char            msg[]  = "sparse_aec_align:: compare_reference unit test failed";
+  ESL_SQ          *sq    = esl_sq_CreateDigital(abc);
+  P7_BG           *bg    = p7_bg_Create(abc);
+  P7_HMM          *hmm   = NULL;
+  P7_PROFILE      *gm    = p7_profile_Create(M, abc);
+  P7_ANCHORS      *anch  = p7_anchors_Create();
+  P7_TRACE        *gtr   = p7_trace_Create();            // generated trace
+  P7_TRACE        *rtr   = p7_trace_Create();            // trace from reference AEC
+  P7_TRACE        *str   = p7_trace_Create();            // trace from sparse AEC
+  P7_REFMX        *rfu   = p7_refmx_Create(M, 20);       // ASC Forward UP;  and AEC alignment.
+  P7_REFMX        *rfd   = p7_refmx_Create(M, 20);       // ASC Forward DOWN
+  P7_REFMX        *rpu   = p7_refmx_Create(M, 20);       // ASC posterior decoding UP
+  P7_REFMX        *rpd   = p7_refmx_Create(M, 20);       // ASC posterior decoding DOWN
+  P7_ENVELOPES    *renv  = p7_envelopes_Create();        // Envelopes calculated by reference impl
+  P7_ENVELOPES    *senv  = p7_envelopes_Create();        // Envelopes calculated by sparse impl
+  P7_SPARSEMASK   *sm    = p7_sparsemask_Create(M, M);
+  P7_SPARSEMX     *asf   = p7_sparsemx_Create(NULL);     // sparse ASC Forward
+  P7_SPARSEMX     *asx   = p7_sparsemx_Create(NULL);     // sparse ASC Backward, and AEC alignment
+  P7_SPARSEMX     *asd   = p7_sparsemx_Create(NULL);     // sparse ASC Decoding
+  float fsc;
+  int   idx;
+
+  /* Sample a random standard profile, no special constraints. */
+  if ( p7_modelsample(rng, M, abc, &hmm) != eslOK) esl_fatal(msg);
+  if ( p7_profile_Config(gm, hmm, bg)    != eslOK) esl_fatal(msg);
+
+  /* For N different test sequences... */
+  for (idx = 0; idx < N; idx++)
+    {
+      /* ... emit sequence from model, using an arbitrary length model of <M>;
+       * restrict the emitted sequence length to 6M, arbitrarily, to 
+       * keep it down to something reasonable.
+       */
+      if ( p7_profile_SetLength(gm, M) != eslOK) esl_fatal(msg);
+      do {
+	esl_sq_Reuse(sq);
+	if (p7_ProfileEmit(rng, hmm, gm, bg, sq, gtr) != eslOK) esl_fatal(msg);
+      } while (sq->n > M * 6); 
+      if ( p7_profile_SetLength(gm, sq->n) != eslOK) esl_fatal(msg);
+
+      /* Use generated trace to create a plausible anchor set; doesn't need to be MPAS */
+      if ( p7_trace_Index(gtr)                        != eslOK) esl_fatal(msg);
+      if ( p7_anchors_SampleFromTrace(anch, rng, gtr) != eslOK) esl_fatal(msg);
+
+      /* Reference calculations */
+      if ( p7_ReferenceASCForward (sq->dsq, sq->n, gm, anch->a, anch->D, rfu, rfd, NULL)               != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch->a, anch->D, rpu, rpd, NULL)               != eslOK) esl_fatal(msg);
+      if ( p7_ReferenceASCDecoding(sq->dsq, sq->n, gm, anch->a, anch->D, rfu, rfd, rpu, rpd, rpu, rpd) != eslOK) esl_fatal(msg);  // Reference ASC decoding can overwrite backwards matrix
+      if ( p7_reference_Envelopes (sq->dsq, sq->n, gm, anch->a, anch->D, rpu, rpd, rfu, rfd, renv)     != eslOK) esl_fatal(msg);
+
+      if ( p7_refmx_Reuse(rfu)                                   != eslOK) esl_fatal(msg);
+      if ( p7_reference_AEC_Align( gm, renv, rpu, rpd, rfu, rtr) != eslOK) esl_fatal(msg);
+      if ( p7_trace_Index(rtr)                                   != eslOK) esl_fatal(msg);
+
+      /* Mark all cells in sparse mask */
+      if ( p7_sparsemask_Reinit(sm, M, sq->n) != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_AddAll(sm)           != eslOK) esl_fatal(msg);
+
+      /* Sparse calculations */
+      if ( p7_sparse_asc_Forward (sq->dsq, sq->n, gm, anch->a, anch->D, sm, asf, &fsc)      != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Backward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asx, NULL)      != eslOK) esl_fatal(msg);
+      if ( p7_sparse_asc_Decoding(sq->dsq, sq->n, gm, anch->a, anch->D, fsc, asf, asx, asd) != eslOK) esl_fatal(msg);
+      if ( p7_sparse_Envelopes   (sq->dsq, sq->n, gm, anch->a, anch->D, asf, asd, senv)     != eslOK) esl_fatal(msg);
+
+      if ( p7_sparsemx_Reuse(asx)                       != eslOK) esl_fatal(msg);
+      if ( p7_sparse_aec_Align(gm, asd, senv, asx, str) != eslOK) esl_fatal(msg);
+      if ( p7_trace_Index(str)                          != eslOK) esl_fatal(msg);
+   
+      if (be_verbose) p7_trace_DumpAnnotated(stdout, rtr, gm, sq->dsq);
+      if (be_verbose) p7_trace_DumpAnnotated(stdout, str, gm, sq->dsq);
+
+      /* Test 1. Traces are identical */
+      if ( p7_trace_Compare(rtr, str, 0.0) != eslOK) esl_fatal(msg);
+
+      
+      p7_anchors_Reuse(anch);
+      p7_sparsemask_Reuse(sm);
+      p7_envelopes_Reuse(senv);  p7_envelopes_Reuse(renv);
+      p7_trace_Reuse(str);       p7_trace_Reuse(rtr);        p7_trace_Reuse(gtr);
+      p7_refmx_Reuse(rfu);       p7_refmx_Reuse(rfd);
+      p7_refmx_Reuse(rpu);       p7_refmx_Reuse(rpd);
+      p7_sparsemx_Reuse(asf);    p7_sparsemx_Reuse(asx);     p7_sparsemx_Reuse(asd);
+      esl_sq_Reuse(sq);
+    }
+
+  p7_anchors_Destroy(anch);
+  p7_sparsemask_Destroy(sm);
+  p7_envelopes_Destroy(senv); p7_envelopes_Destroy(renv);
+  p7_trace_Destroy(str);      p7_trace_Destroy(rtr);         p7_trace_Destroy(gtr);
+  p7_sparsemx_Destroy(asf);   p7_sparsemx_Destroy(asx);      p7_sparsemx_Destroy(asd);
+  p7_refmx_Destroy(rfu);      p7_refmx_Destroy(rfd);
+  p7_refmx_Destroy(rpu);      p7_refmx_Destroy(rpd);
+  p7_profile_Destroy(gm);
+  p7_hmm_Destroy(hmm);
+  p7_bg_Destroy(bg);
+  esl_sq_Destroy(sq);
+}
+
+
 /* "singlemulti" test
  * 
  * Create <N> profile/seq/anchorset comparisons that have only one
@@ -761,7 +866,7 @@ aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, cons
  * 
  * We test:
  *   1. The MEG trace is identical to the generated path.
- *   2. For each domain envelope, oea=ia, oeb=ib, and these
+ *   2. For each domain envelope, oa=ia, ob=ib, and these
  *      coords agree with the trace.
  *   3. In the case of a single domain (D=1), envelope score == 
  *      trace score.    
@@ -814,8 +919,11 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N, in
       if ( p7_trace_Index(tr)                         != eslOK) esl_fatal(msg);
       
       if (be_verbose) p7_spaecmx_Dump(stdout, aec, env);
-
       if (be_verbose) p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
+
+      /* Data objects should be valid, of course */
+      if ( p7_spaecmx_Validate(aec, env, NULL)       != eslOK) esl_fatal(msg);
+      if ( p7_trace_Validate(tr, gm->abc, dsq, NULL) != eslOK) esl_fatal(msg);
 
       /* Test 1. Traces are identical. */
       if ( p7_trace_Compare(gtr, tr, 0.0) != eslOK) esl_fatal(msg);
@@ -829,11 +937,11 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N, in
 	{
 	  if (! (env->arr[d].ia == gtr->sqfrom[d-1] &&   // beware: domains in trace are 0..ndom-1, off by one from env's 1..D
 		 env->arr[d].ia ==  tr->sqfrom[d-1] &&
-		 env->arr[d].ia == env->arr[d].oea)) esl_fatal(msg);
+		 env->arr[d].ia == env->arr[d].oa)) esl_fatal(msg);
 
 	  if (! (env->arr[d].ib == gtr->sqto[d-1]   &&
 		 env->arr[d].ib ==  tr->sqto[d-1]   &&
-		 env->arr[d].ib == env->arr[d].oeb)) esl_fatal(msg);
+		 env->arr[d].ib == env->arr[d].ob)) esl_fatal(msg);
 
 	  if (! (env->arr[d].ka == gtr->hmmfrom[d-1] &&
 		 env->arr[d].ka ==  tr->hmmfrom[d-1])) esl_fatal(msg);
@@ -906,7 +1014,8 @@ main(int argc, char **argv)
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
-  utest_singlemulti   (rng, M, abc, 10, FALSE); 
+  utest_compare_reference(rng, M, abc, 10, /*be_verbose=*/FALSE);
+  utest_singlemulti      (rng, M, abc, 10, /*be_verbose=*/FALSE); 
 
   fprintf(stderr, "#  status = ok\n");
 
@@ -1070,6 +1179,7 @@ main(int argc, char **argv)
   p7_sparsemx_Reuse(sxf);
   p7_sparse_aec_Align(gm, asd, env, sxf, tr);
 
+  if ( p7_spaecmx_Validate(sxf, env, NULL) != eslOK) esl_fatal("AEC matrix failed validation");
 
   p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 

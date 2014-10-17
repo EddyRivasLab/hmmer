@@ -1,15 +1,26 @@
-/* Reference implementation of envelope definition.
+/* Envelope determination.
+ * Reference implementation: debugging, development, pedagogy.
  * 
- * Envelope definition step comes after we define the anchor set, and
- * before we do the alignment.
- * 
+ * We've defined an anchor set, and we've done anchor-set-constrained
+ * (ASC) decoding. Now we use marginalized ASC decoding data to
+ * determine our "envelope" information for each domain:
+ *     - whether domain d is glocal or local;
+ *     - ha..hb, the bounds of the "homologous region";
+ *     - ia..ib, the bounds of the "envelope": the alignable homologous region
+ *     - oa..ob, the bound of the "outer envelope"
+ *     - env_sc, the "envelope score".
+ *     
+ * After we have the envelope, the next step is anchor/envelope
+ * constrained (AEC) alignment.
+ *
  * Contents:
  *    1. Envelope definition API call.
  *    2. Internal functions: steps of envelope definition.
- *    3. Unit tests.
- *    4. Test driver.
- *    5. Example.
- *    6. Copyright and license information.
+ *    3. Footnotes.
+ *    4. Unit tests.
+ *    5. Test driver.
+ *    6. Example.
+ *    7. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -23,7 +34,7 @@
 #include "dp_reference/reference_asc_fwdback.h"
 
 
-static int envcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float threshold);
+static int envcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd);
 static int glocality(P7_ENVELOPES *env, int D, const P7_REFMX *apd);
 static int outcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float epsilon);
 static int approxsc (P7_ENVELOPES *env, int D, const P7_REFMX *afd, const P7_PROFILE *gm);
@@ -37,13 +48,11 @@ static int approxsc (P7_ENVELOPES *env, int D, const P7_REFMX *afd, const P7_PRO
  *
  * Purpose:   We're doing a comparison of profile <gm> and digital
  *            sequence <dsq> of length <L>. We have an anchor set
- *            <anch> defining <D> domains in the sequence (perhaps by
- *            using the most probable anchor set (MPAS) algorithm; see
- *            <p7_reference_Anchors()>). We've calculated the
- *            anchor-set-constrained (ASC) posterior decoding UP and
- *            DOWN matrices <apu> and <apd>, using ASC Forward
- *            matrices <afu> and <afd>. Now, calculate the envelope
- *            for each domain. 
+ *            <anch> defining <D> domains in the sequence. We've
+ *            calculated the anchor-set-constrained (ASC) posterior
+ *            decoding UP and DOWN matrices <apu> and <apd>, using ASC
+ *            Forward matrices <afu> and <afd>. Now, calculate the
+ *            envelope for each domain.
  * 
  *            Return the envelope data in <env>. All the fields in the
  *            envelope structures are set except for the <ka> and <kb>
@@ -57,45 +66,6 @@ static int approxsc (P7_ENVELOPES *env, int D, const P7_REFMX *afd, const P7_PRO
  *            overwritten here, for doing envelope score calculations
  *            -- Forward scores on isolated single domains. Caller
  *            must assume that their data has been invalidated.
- *            
- *            The envelope coords <ia>,<ib> are defined as the
- *            outermost coords that have p >= <threshold>
- *            (default=0.5) of generating x_i as part of the
- *            homologous domain.
- *            
- *            The envelope is defined as a local or glocal alignment
- *            by calculating the total marginal probability of using L
- *            or G in the ASC ensemble for this domain, and asking
- *            which is greater. If pG >= pL, the <p7E_IS_GLOCAL> flag
- *            is set in the envelope's <flags>.
- *            
- *            The 'outer envelope coords' <oea>, <oeb> are defined the
- *            same as the envelope coords, but for a lower p >=
- *            <epsilon> (default 0.005).
- *            
- *            The domain is considered to be 'well defined' (well
- *            separated from paths of adjacent domains) if
- *            D([N|J](oea-1)) >= 1-2*epsilon and D([J|C](oeb)) >=
- *            1-2*epsilon. If these conditions are met, we can
- *            calculate the envelope score (see below) by a fast
- *            approximation, just by arithmetic on the ASC Forward
- *            matrix, and we are guaranteed to obtain a score within
- *            ~4\epsilon nats (default=0.02) of the true envelope
- *            score. If these conditions are met, the
- *            <p7E_ENVSC_APPROX> flag is set in the envelope's
- *            <flags>, and the envelope score is calculated by the
- *            approximate method.
- *            
- *            The envelope score is the raw nat score of the ensemble
- *            of all paths through this domain's anchor, while erasing
- *            the influence of all other homology domains, as if this
- *            were the only domain in the entire sequence. For domains
- *            with the <p7E_ENVSC_APPROX> flag, it is calculated as
- *            above; for all other domains, it is calculated by an ASC
- *            Forward calculation on the isolated domain sequence
- *            <oea..oeb>, with the length model of <gm> left at <L>,
- *            and adding back the missing tNN/CC/JJ contributions for
- *            <L-Ld> residues outside the domain.
  *            
  * Args:      dsq  : digital sequence, 1..L
  *            L    : length of <dsq>
@@ -115,6 +85,9 @@ static int approxsc (P7_ENVELOPES *env, int D, const P7_REFMX *afd, const P7_PRO
  *
  * Throws:    <eslEMEM> on allocation failure. State of data in <afu>, <afd>, 
  *            and <env> is undefined; they can be Reuse'd or Destroy'd.
+ *
+ * Notes:     See footnote [1] for definitions of the elements of the
+ *            envelope.
  */
 int
 p7_reference_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_ANCHOR *anch, int D,
@@ -140,9 +113,9 @@ p7_reference_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
   env->M = gm->M;
   p7_envelope_SetSentinels(env->arr, D, L, gm->M);
   
-  if ((status = envcoords(env, D, apd, 0.5))   != eslOK) goto ERROR;
-  if ((status = glocality(env, D, apd))        != eslOK) goto ERROR;
-  if ((status = outcoords(env, D, apd, 0.005)) != eslOK) goto ERROR;
+  if ((status = envcoords(env, D, apd))        != eslOK) goto ERROR;  // ia,ib (also ha,hb which aren't stored)
+  if ((status = glocality(env, D, apd))        != eslOK) goto ERROR;  // is_glocal
+  if ((status = outcoords(env, D, apd, 0.005)) != eslOK) goto ERROR;  // oa,ob
 
   if (D > 0)
     {
@@ -159,20 +132,20 @@ p7_reference_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
       for (d = 1; d <= D; d++)
 	if (! (env->arr[d].flags & p7E_ENVSC_APPROX))
 	  {                                      
-	    offset       = env->arr[d].oea - 1;  // oea..oeb is our subseq; its len = oeb-oea+1, or equivalently, oeb-offset
+	    offset       = env->arr[d].oa - 1;   // oa..ob is our subseq; its len = ob-oa+1, or equivalently, ob-offset
 	    reanch[1].i0 = anch[d].i0 - offset;  // You can't use <anch> itself because of coord offset
 	    reanch[1].k0 = anch[d].k0;
 
-	    p7_anchor_SetSentinels(reanch, 1, env->arr[d].oeb-offset, gm->M);  // sentinel [D+1] has i0 = L+1, and our subseq L is new, so we must reinit sentinels
+	    p7_anchor_SetSentinels(reanch, 1, env->arr[d].ob-offset, gm->M);  // sentinel [D+1] has i0 = L+1, and our subseq L is new, so we must reinit sentinels
 
-	    status = p7_ReferenceASCForward( dsq+offset, env->arr[d].oeb-offset, gm,
+	    status = p7_ReferenceASCForward( dsq+offset, env->arr[d].ob-offset, gm,
 					     reanch, 1, afu, afd, &(env->arr[d].env_sc));
 	    if (status != eslOK) goto ERROR;
 
 	    /* Add back tNN/JJ/CC terms for <L-Ld> flanking residues, 
 	     * as if this domain were alone in the sequence.
 	     */
-	    env->arr[d].env_sc += ( L - env->arr[d].oeb + offset ) * gm->xsc[p7P_N][p7P_LOOP];
+	    env->arr[d].env_sc += ( L - env->arr[d].ob + offset ) * gm->xsc[p7P_N][p7P_LOOP];
 
 	    p7_refmx_Reuse(afu); p7_refmx_Reuse(afd);
 	  }
@@ -197,55 +170,53 @@ p7_reference_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7
  * 
  * Sets <ia>,<ib> fields for all D domains.
  * 
- *   ia = min_{i <= i0) P(x_i in domain d) >= threshold
- *   ib = max_{i >= i0) P(x_i in domain d) >= threshold
- *   
- * where P(x_i in domain d) is the probability that x_i is emitted by
- * an M/I state on a path that includes the anchor in the same domain;
- * it is calculated cumulatively, by subtracting mass that leaves 
- * the homology domain:
- * 
- * P(x_i in d) = 
- *   i <= i0 :  1.0 - \sum_{j=i..i0-1} B(j)  
- *   i >= i0 :  1.0 - \sum_{j=i0..i-1} E(j)
- * 
- * where B(j) and E(j) are ASC decoding probabilities on row j.
- * 
+ * First:
+ *   ha = min_{i = i0(d-1)+1..i0(d)} P(x_i in domain d) > 0.5
+ *   hb = max_{i = i0(d)..i0(d+1)-1} P(x_i in domain d) > 0.5
+ *  equiv 
+ *   hb = min_{i = i0(d)..i0(d+1)-1} P(x_{i+1} \in domain d) <= 0.5
+ *            
+ * Then: 
+ *   ia = 1 + \argmax_{i=ha-1..i0(d)-1} \rho(i,B)
+ *   ib =     \argmax_{i=i0(d)..hb} \rho(i,E)
+ *  
  * All specials including B,E values are in the DOWN decoding matrix
  * <apd>, which is why we only need to see the DOWN matrix here.
- *
- * The default threshold is 0.5, but saying that is the caller's
- * job.
  */
 static int
-envcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float threshold)
+envcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd)
 {
-  float  phomology;
+  float  pB, pE;
+  float  maxB, maxE;
   int    d, i;
   
   for (d = 1; d <= D; d++)
     {
-      /* Determine ia, envelope start position;
-       *  min_{i <= i0} P(x_i in domain d) >= threshold
-       */
-      phomology = 1.0;
-      for (i = env->arr[d].i0 - 1; i >= env->arr[d-1].i0; i--)  // at d=1, i0(0)=0 sentinel makes this i0(1)-1 down to 0
+      /* <ia> start position */
+      maxB = 0.;
+      pB   = 0.;
+      for (i = env->arr[d-1].i0; i < env->arr[d].i0; i++)
 	{
-	  phomology -= P7R_XMX(apd, i, p7R_B);   // now phomology = P(res i in domain d)
-	  if (phomology < threshold) break;      // if i is not in domain...
+	  pB += P7R_XMX(apd, i, p7R_B);            // now pB = P(x_{i+1} \in d)
+	  if ( P7R_XMX(apd, i, p7R_B) > maxB && pB > 0.5 )  
+	  { 
+	    env->arr[d].ia = i+1;
+	    maxB = P7R_XMX(apd, i, p7R_B);
+	  }
 	}
-      env->arr[d].ia = i+1;                      // but i+1 was, so ia = i+1.
-
-      /* Determine ib, envelope end position;
-       *   max_{i >= i0} P(x_i in domain d) >= threshold
-       */
-      phomology = 1.0;
-      for (i = env->arr[d].i0; i < env->arr[d+1].i0; i++) // at d=D, i0(D+1)=L+1 sentinel makes this i0(d) to L
+      
+      /* <ib> end positions */
+      maxE = 0.;
+      pE   = 0.;
+      for (i = env->arr[d].i0; i < env->arr[d+1].i0; i++)
 	{
-	  phomology -= P7R_XMX(apd, i, p7R_E);    // now phomology = P(x_i+1 in dom_d)
-	  if (phomology < threshold) break;       // if i+1 is not in domain...
+	  if ( P7R_XMX(apd, i, p7R_E) >= maxE && pE <= 0.5)  
+	    {
+	      env->arr[d].ib = i;
+	      maxE = P7R_XMX(apd, i, p7R_E);
+	    }	  
+	  pE += P7R_XMX(apd, i, p7R_E);          // now pE = 1.0 - P(x_{i+1} \in d)
 	}
-      env->arr[d].ib = i;		          // but i was, so ib = i.
     }
   return eslOK;
 }
@@ -268,7 +239,8 @@ envcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float threshold)
  * first. From a B on i0(d)-1 row, we need to use B->G->DDDDk0-1 path
  * to be able to reach the anchor Mk on row i0(d). In decoding, we
  * wing unfold the G->DD->Mk paths, so this path exists in a decoding
- * matrix. Only for G, though; P(L, i0(d)) is 0.
+ * matrix. Only necessary for G, though; \rho_L(i0(d)) = 0
+ * by construction.
  * 
  * (Because we're working in an ASC decoding matrix, not a standard
  * one, the mute partial cycle flaw is not relevant here.)
@@ -282,7 +254,6 @@ glocality(P7_ENVELOPES *env, int D, const P7_REFMX *apd)
   for (d = 1; d <= D; d++)
     {
       pL = pG = 0.0;  
-
       for (i = env->arr[d-1].i0; i < env->arr[d].i0; i++)  // at d=1, i0(0)=0 sentinel makes this 0..i0(1)-1
 	{
 	  pL += P7R_XMX(apd, i, p7R_L);
@@ -295,69 +266,30 @@ glocality(P7_ENVELOPES *env, int D, const P7_REFMX *apd)
 
 
 /* outcoords()
- * Determine the "outer envelope", oea..oeb, for env score purposes.
+ * Determine the "outer envelope", oa..ob, for env score purposes.
  *
- * Outer envelope coords are defined in the same way as the envelope
- * coords, but with a much lower threshold, \epsilon. The objective is
- * to identify coords that encompass essentially all of the probability
- * mass for this domain. 
+ * Outer envelope coords are defined in the same way as the homologous
+ * region in envcoords(), but with a much lower threshold,
+ * \epsilon. The objective is to identify coords that encompass
+ * essentially all of the probability mass for this domain.
  * 
- *   oea = min_{i <= i0} P(x_i in domain d) >= \epsilon (default 0.005)
- *   oeb = max_{i >= i0} P(x_i in domain d) >= \epsilon (default 0.005)
+ *   oa = min_{i <= i0} P(x_i in domain d) >= \epsilon
+ *   ob = max_{i >= i0} P(x_i in domain d) >= \epsilon
  *   
- * where P(x_i in domain d) =   
- *   i <= i0 :  1.0 - \sum_{j=i..i0-1} B(j)  
- *   i >= i0 :  1.0 - \sum_{j=i0..i-1} E(j)
+ * where the default epsilon is 0.005,
+ *
+ * and where P(x_i in domain d) =   
+ *  P(x_i \in d) = 
+ *           \sum_{j=i0(d-1)..i-1} \rho_B(j)      for i0(d-1)+1 <= i <= i0(d)       
+ *     1.0 - \sum_{j=i0(d)..i-1}   \rho_E(j)      for     i0(d) <= i <= i0(d+1)-1
+ *
+ * i.e. a cumulative addition of the mass that's entering the homology
+ * domain as we move left from the anchor, or a cumulative subtraction
+ * of mass leaving the domain as we move right.
  * 
- * i.e. a cumulative subtraction of the mass that's leaving the
- * homology domain as we move left or right from the anchor.
- * 
- * We are especially interested in whether we can identify flanking
- * "choke points" in the N/C/J states, through which passes all but a
- * negligible amount of path mass. If we can prove that oae and oeb
- * also define choke points, then we can use a fast approximation to
- * calculate the envelope score for this domain's ensemble, using
- * algebra in the Forward matrix of the entire ensemble. That lets us
- * avoid recalculating Forward on the isolated domain. 
- * 
- * Choke points don't have to exist, because path mass can flow into
- * (oea+1..i0) from a previous domain, and out of (i0..oeb-1) to a
- * next domain. If the domain is "well-defined", these flows are
- * negligible. 
- * 
- * Let's make that notion more formal now.
- * 
- * From the domain #, we know whether the domain is flanked on the
- * left by N or J, and on the right by J or C; call these X, Y
- * respectively. Let q be the total amount of probability mass on
- * paths into the previous (resp. next) domain.
- * 
- * For oea as our left bound:
- *   P(oea-1 in D) < epsilon              (1) // by construction; that's how we chose oae.
- *   X(oea-1) = 1 - P(oea-1 in D) - q     (2) // mass flows back, accumulates in state X; eventually flows back to prev domain
- *   1-X(oea-1) < epsilon + q             (3) // substitute (1) in (2)
- *   X(oea-1) >= 1 - epsilon - q.         (4) // rearrange (3)
- * If q <= epsilon:                       (5)
- *   X(oea-1) >= 1 - 2*epsilon.           (6) // substitute (5) in (4).
- * 
- * So, our definition of "well-definedness" of the left edge is that
- * if X(oea-1) >= 1-2*epsilon, we know that the amount of probability
- * mass in paths that enter to our right from a previous domain
- * (without bottlenecking through X(oea-1) is <= epsilon, and we know
- * that the amount of probability mass that's still in the homology
- * model is < epsilon. We've lost up to 2*epsilon of the probability
- * mass in paths at the left edge.
- * 
- * Similar analysis holds for right edge. 
- * 
- * Therefore, if the condition on X(oea-1) and Y(oeb) hold, we know
- * that if we only look at paths that pass through X(oea-1) and
- * Y(oeb), we are neglecting at most a mass of 4\epsilon in other
- * paths that use this domain's anchor.
- * 
- * For \epsilon = 0.005, we lose up to 0.02 in total mass of the ensemble
- * we count, corresponding to a maximum log-odds score loss of ~0.02 nats;
- * a negligible score difference.
+ * See footnote [3] for why we think \epsilon = 0.005 is a reasonable
+ * default, and for the proof of when the fast envelope score
+ * approximation is valid.
  */
 static int
 outcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float epsilon)
@@ -375,7 +307,7 @@ outcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float epsilon)
 	  phomology -= P7R_XMX(apd, i, p7R_B);  // now phomology = P(x_i in domain d)
 	  if (phomology < epsilon) break;       // if i is not in the domain...
 	}
-      env->arr[d].oea = i+1;                    // but i+1 was, so oea = i+1.
+      env->arr[d].oa = i+1;                     // but i+1 was, so oa = i+1.
       leftchoked = ( P7R_XMX(apd, i, s) >= 1.0 - (2*epsilon) ? TRUE : FALSE );
 
       phomology = 1.0;
@@ -386,11 +318,20 @@ outcoords(P7_ENVELOPES *env, int D, const P7_REFMX *apd, float epsilon)
 	  //	  printf("%4d %.4f\n", i, phomology);
 	  if (phomology < epsilon) break;        // if i+1 is not in domain...
 	}
-      env->arr[d].oeb  = i;	                 // but i=1 was, so oeb = i.
+      env->arr[d].ob  = i;	                 // but i=1 was, so ob = i.
       rightchoked = (P7R_XMX(apd, i, s) >= 1.0 - (2*epsilon) ? TRUE : FALSE );
 
       if (leftchoked && rightchoked)
 	env->arr[d].flags |= p7E_ENVSC_APPROX;
+    }
+
+  /* Do the oa = min(oa, ia); ob = max(ob, ib) part that
+   * deals w/ rare pathological case
+   */
+  for (d = 1; d <= D; d++)
+    {
+      if (env->arr[d].oa > env->arr[d].ia) env->arr[d].oa = env->arr[d].ia;
+      if (env->arr[d].ob > env->arr[d].ib) env->arr[d].ob = env->arr[d].ib;
     }
   return eslOK;
 }
@@ -433,19 +374,200 @@ approxsc(P7_ENVELOPES *env, int D, const P7_REFMX *afd, const P7_PROFILE *gm)
 	s2 = (d == D ? p7R_C : p7R_J);
 
 	env->arr[d].env_sc = 
-	  P7R_XMX(afd, env->arr[d].oeb,   s2) -
-	  P7R_XMX(afd, env->arr[d].oea-1, s1);
+	  P7R_XMX(afd, env->arr[d].ob,   s2) -
+	  P7R_XMX(afd, env->arr[d].oa-1, s1);
 
 	env->arr[d].env_sc += 
-	  gm->xsc[p7P_N][p7P_LOOP] * (env->arr[d].oea-1) +
-	  gm->xsc[p7P_C][p7P_LOOP] * (L-env->arr[d].oeb) +
+	  gm->xsc[p7P_N][p7P_LOOP] * (env->arr[d].oa-1) +
+	  gm->xsc[p7P_C][p7P_LOOP] * (L-env->arr[d].ob) +
 	  gm->xsc[p7P_C][p7P_MOVE];
       }
   return eslOK;
 }
 
 /*****************************************************************
- * 3. Unit tests
+ * 3. Footnotes
+ *****************************************************************
+ *
+ * [1] DEFINITIONS
+ * 
+ * Whether envelope <d> is glocal or local is defined by the
+ * marginalized probabilities of using the G vs L state in the
+ * path ensemble for domain <d>:
+ *      pL = \sum_{i=i0(d-1)..i0(d)-1} \rho_L(i)
+ *      pG = \sum_{i=i0(d-1)..i0(d)-1} \rho_G(i)
+ *      Domain d is glocal if pG >= pL 
+ *      
+ * The "homologous region" ha..hb for domain d is defined as the
+ * region that is more likely homologous to the model than not, as
+ * determined by posterior decoding:
+ *     ha = min_{i = i0(d-1)+1..i0(d)} P(x_i in domain d) > 0.5
+ *     hb = max_{i = i0(d)..i0(d+1)-1} P(x_i in domain d) > 0.5
+ * The threshold of 0.5 is chosen to prevent adjacent inferred domains
+ * from overlapping. The <ha..hb> coords are only used in defining the
+ * alignable homologous region <ia..ib>; they are not recorded in the
+ * envelope data structure.
+ * 
+ * The "envelope" ia..ib defines the bounds of the inferred alignment.
+ * These bounds are defined as the most probable start/end
+ * positions within the homologous region ha..hb:
+ *      ia = 1 + \argmax_{i=ha-1..i0(d)-1} \rho(i,B)
+ *      ib =     \argmax_{i=i0(d)..hb}     \rho(i,E)
+ * This helps make sure that glocal alignments end at plausible
+ * endpoints, which probability mass alone does not assure.     
+ * 
+ * The "outer envelope" oa..ob includes the ia..ib envelope, plus any
+ * additional residues with non-negligible probability mass. The outer
+ * envelope is used to calculate envelope scores (see below).  Outer
+ * envelope coords <oa>,<ob> are defined as:
+ *      oa = min_{i <= i0} P(x_i in domain d) >= epsilon 
+ *      ob = max_{i >= i0} P(x_i in domain d) >= epsilon 
+ * Since epsilon < 0.5 (default 0.005), oa <= ha and ob >= hb.
+ *        
+ * The "envelope score" <envsc> is the raw nat score of the
+ * ensemble of all paths through this domain's anchor and
+ * no other, as if this were the only domain in the entire
+ * sequence.
+ *      
+ * A domain is considered to be "well defined" if
+ *    \rho_{N|J}(oa-1) \geq 1 - 2 \epsilon; and
+ *    \rho_{J|C}(ob-1) \geq 1 - 2 \epsilon 
+ * on its left and right sides. When these conditions are met, we can
+ * calculate the envelope score by a fast approximation using
+ * arithmetic on existing ASC Forward matrix values, and we are
+ * guaranteed to obtain a score within $4\epsilon$ nats (default =
+ * 0.02) of the true envelope score. The <p7E_ENVSC_APPROX> flag is
+ * set when this has been done. Otherwise, if the domain is not well
+ * defined, we recalculate the envelope score by ASC Forward on its
+ * oa..ob outer envelope.
+ * 
+ * 
+ * 
+ * [2] TRICKSY OFF-BY-ONE ISSUES 
+ * 
+ * When we calculate <oa>,<ob>, we rearrange the definition of <ob>
+ * so that both calculations are minima over i:
+ *    oa(d) = min_{i <= ia(d)} P(x_i \in domain d) >= epsilon    
+ *    ob(d) = min_{i >= ib(d)} P(x_{i+1} \in domain d) < epsilon 
+ * Then the calculation can work in a single left to right pass
+ * of increasing i, by identifying the first i that satisfies the
+ * criterion. We do the same for <ha>,<hb>.  
+ *
+ * We could obtain P(x_i \in domain d) by marginalization over the
+ * posterior probabilities in homologous M,I emitting states at i.
+ * But equivalently -- and more conveniently -- we can obtain it by
+ * summing up a cumulative distribution over B(i) and E(i) start and
+ * endpoint posterior probabilities.
+ * 
+ * This can get confusing because of off-by-one issues. First think
+ * about what coords are in play. Domain d must include its anchor
+ * i0(d), and cannot include the anchors of adjacent domains, so:
+ * 
+ *    possible startpoints range [ i0(d-1)+1 .. i0(d) ];
+ *    possible endpoints range                [ i0(d) .. i0(d+1)-1 ].
+ *    
+ * (Anchor sentinels i0(0)=0 and i0(D+1)=L+1 make this work even for
+ * first, last domains.)
+ * 
+ * Next, let's look at exactly how we have to do our sums over B(i)
+ * and E(i), because there's an off-by-one issue to keep in mind.  The
+ * probability that you end exactly at residue <i> is E(i), but the
+ * probability that you start exactly at <i> is B(i-1). Thus:
+ * 
+ *  P(x_i \in d) = 
+ *           \sum_{j=i0(d-1)..i-1} \rho_B(j)      for i0(d-1)+1 <= i <= i0(d)       
+ *     1.0 - \sum_{j=i0(d)..i-1}   \rho_E(j)      for     i0(d) <= i <= i0(d+1)-1
+ *           
+ * That is, as you move left to right in <i> on the left (starting)
+ * side of the domain, the probability that x_i is in the left side of
+ * the domain is the sum of B's up to i-1, including B(i-1)->Mk(x_i)
+ * starts at x_i. On the right (ending) side, the probability that
+ * you're still in the domain starts at 1.0 at the anchor i0(d), and
+ * afterwards is 1.0 - the sum of E up to i-1, including
+ * Mk(x_{i-1}->E) exits on the previous row i-1.
+ * 
+ * Next, think about writing that down in pseudocode as two independent
+ * calculations:
+ * 
+ * For <oa> start point:
+ *    pB = 0.0
+ *    for i = i0(d-1) to i0(d)-1  // note off by one!
+ *      pB += B(i)                // pB is now P(x_i+1 \in d)
+ *      if (pB >= epsilon)        // if x_i+1 has met threshold
+ *        oa(d) = i+1             //   then i+1 is the first x_i satisfying it
+ *        break
+ *
+ * For <ob> end point:
+ *    pE = 0.0                      // pE starts with P(x_i0(d) \in d)=1.0 at the anchor
+ *    for i = i0(d) to i0(d+1) - 1: // then for each possible endpoint i:
+ *      pE += E(i)                  //   pE is now 1.0 - P(x_i+1 \in d)
+ *      if (1.0 - pE < epsilon)     //   if x_i+1 has dropped below threshold
+ *        ob(d) = i                 //     then i was the last x_i satisfying it.
+ *        break
+ * 
+ * After candidate oa..ob endpoints have been determined, we need to
+ * go back through and do oa = min(oa, ia) and ob = max(ib, ob).  This
+ * is to handle the pathological case that may arise if a maximum
+ * likely endpoint has probability < epsilon. This final step makes
+ * sure the outer envelope includes the alignable region, and assures
+ * oa <= ia <= i0 <= ib <= oe coordinate order.
+ * 
+ * Then the last thing to do is make this work as a single
+ * calculation, over all domains and i in a single pass, which is what
+ * the implementation does.
+ * 
+ * 
+ * 
+ * [3] PROOF OF APPROXIMATION FOR ENVELOPE SCORES
+ * 
+ * To prove that a domain is "well defined", so we can use a fast
+ * approximation to obtain the envelope score, we want to identify
+ * that the outer envelope bounds oa/ob also serve as "choke points"
+ * in the N/C/J states, through which passes all but a negligible
+ * amount of path mass.
+ * 
+ * Choke points don't have to exist, because path mass can flow into
+ * (oa+1..i0) from a previous domain, and out of (i0..ob-1) to a next
+ * domain; but if the domain is "well-defined", these flows are
+ * negligible.
+ * 
+ * Let's make the notion of "negligible" more formal now.
+ * 
+ * From the domain #, we know whether the domain is flanked on the
+ * left by N or J, and on the right by J or C; we call these X, Y
+ * respectively. Let q be the total amount of probability mass on
+ * paths into the previous (resp. next) domain.
+ * 
+ * For oa as our left bound:
+ *   P(oa-1 in D) < epsilon              (1) // by construction; that's how we chose oa.
+ *   X(oa-1) = 1 - P(oa-1 in D) - q      (2) // mass flows back, accumulates in state X; eventually flows back to prev domain
+ *   1-X(oa-1) < epsilon + q             (3) // substitute (1) in (2)
+ *   X(oa-1) >= 1 - epsilon - q.         (4) // rearrange (3)
+ * If q <= epsilon:                      (5)
+ *   X(oa-1) >= 1 - 2*epsilon.           (6) // substitute (5) in (4).
+ * 
+ * So, our definition of "well-definedness" of the left edge is that
+ * if X(oa-1) >= 1-2*epsilon, we know that the amount of probability
+ * mass in paths that enter to our right from a previous domain
+ * (without bottlenecking through X(oa-1)) is <= epsilon, and we know
+ * that the amount of probability mass that's still in the homology
+ * model (outside of the outer envelope) is < epsilon. So we've lost
+ * up to 2*epsilon of the probability mass in paths at the left edge.
+ * 
+ * Analogous analysis holds for right edge. 
+ * 
+ * Therefore, if the condition on X(oa-1) and Y(ob) hold, we know that
+ * if we only look at paths that pass through X(oa-1) and Y(ob), we
+ * are neglecting at most a relative mass of 4\epsilon in other paths
+ * that use this domain's anchor.
+ * 
+ * For \epsilon = 0.005, we lose up to 0.02 in total mass of the ensemble
+ * we count, corresponding to a maximum log-odds score loss of ~0.02 nats;
+ * we consider this to be a negligible score difference.
+ */
+
+/*****************************************************************
+ * 4. Unit tests
  *****************************************************************/
 #ifdef p7REFERENCE_ENVELOPES_TESTDRIVE
 #include "hmmer.h"
@@ -460,7 +582,7 @@ approxsc(P7_ENVELOPES *env, int D, const P7_REFMX *afd, const P7_PROFILE *gm)
  * 
  * We test:
  *    1. Seq coordinates of each envelope are coherent:
- *       1 <= oea <= ia <= i0 <= ib <= oeb <= L
+ *       1 <= oa <= ia <= i0 <= ib <= ob <= L
  *       
  *    2. Envelopes do not overlap (assuming default threshold of
  *       0.5 when defining them):
@@ -543,12 +665,12 @@ utest_generation(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
       /* Test 1. Coords of each domain are coherent */
       if (anch->D != env->D) esl_fatal(msg);
       for (d = 1; d <= anch->D; d++)
-	if (! (1 <= env->arr[d].oea &&
-	       env->arr[d].oea <= env->arr[d].ia  &&
-	       env->arr[d].ia  <= env->arr[d].i0  &&
-	       env->arr[d].i0  <= env->arr[d].ib  &&
-	       env->arr[d].ib  <= env->arr[d].oeb &&
-	       env->arr[d].oeb <= sq->n)) esl_fatal(msg);
+	if (! (1 <= env->arr[d].oa &&
+	       env->arr[d].oa <= env->arr[d].ia  &&
+	       env->arr[d].ia <= env->arr[d].i0  &&
+	       env->arr[d].i0 <= env->arr[d].ib  &&
+	       env->arr[d].ib <= env->arr[d].ob &&
+	       env->arr[d].ob <= sq->n)) esl_fatal(msg);
 
       /* Test 2. Envelopes do not overlap. */
       for (d = 1; d <= anch->D; d++)
@@ -562,8 +684,8 @@ utest_generation(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
        * encompassed by the outer envelope 
        */
       if (gtr->ndom == 1 &&  anch->D   == 1 && 
-	  gtr->sqfrom[0] >= env->arr[1].oea &&    // in <gtr>, domains are 0..D-1; in <env>, 1..D
-	  gtr->sqto[0]   <= env->arr[1].oeb)
+	  gtr->sqfrom[0] >= env->arr[1].oa &&    // in <gtr>, domains are 0..D-1; in <env>, 1..D
+	  gtr->sqto[0]   <= env->arr[1].ob)
 	if (! ( env->arr[1].env_sc >= gsc)) esl_fatal(msg);
 
       p7_envelopes_Reuse(env);
@@ -600,7 +722,7 @@ utest_generation(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
  * 
  * We test:
  *     1. Trace and envelopes agree on number of domains.
- *     2. For each domain, oea==ia, oeb==ib, and these coords
+ *     2. For each domain, oa==ia, ob==ib, and these coords
  *        agree with the trace.
  *     3. In the case of a single domain (D=1), the envelope
  *        score == the trace score.
@@ -646,9 +768,9 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
       for (d = 1; d <= D; d++)
 	{
 	  if (! (env->arr[d].ia == gtr->sqfrom[d-1] &&
-		 env->arr[d].ia == env->arr[d].oea)) esl_fatal(msg);
+		 env->arr[d].ia == env->arr[d].oa)) esl_fatal(msg);
 	  if (! (env->arr[d].ib == gtr->sqto[d-1] &&
-		 env->arr[d].ib == env->arr[d].oeb)) esl_fatal(msg);
+		 env->arr[d].ib == env->arr[d].ob)) esl_fatal(msg);
 	}
 
       /* Test 3. If D == 1, envelope score == trace score. */
@@ -675,7 +797,7 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
 
 
 /*****************************************************************
- * 4. Test driver
+ * 5. Test driver
  *****************************************************************/
 #ifdef p7REFERENCE_ENVELOPES_TESTDRIVE
 
@@ -722,7 +844,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 3. Example
+ * 6. Example
  *****************************************************************/
 #ifdef p7REFERENCE_ENVELOPES_EXAMPLE
 #include "p7_config.h"
@@ -819,7 +941,7 @@ main(int argc, char **argv)
   /* Customize MPAS parameters if you want; these are the defaults. */
   prm.max_iterations = 1000;
   prm.loss_threshold = 0.001;
-  prm.be_verbose     = TRUE;
+  prm.be_verbose     = FALSE;
 
   /* MPAS algorithm gets us an anchor set */
   p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, tr, &wrk, ah,

@@ -361,7 +361,7 @@ reference_aec_trace(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *mx,
  *
  * We test:
  *    1. Coordinates of each envelope/alignment are coherent:
- *       1 <= oea <= ia <= i0 <= ib <= oeb <= L
+ *       1 <= oa <= ia <= i0 <= ib <= ob <= L
  *       1 <= ka <= k0 <= kb <= M
  *       
  *    2. Envelopes do not overlap (assuming default threshold of
@@ -459,12 +459,12 @@ utest_crashtestdummy(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
       if (anch->D != env->D) esl_fatal(msg);
       for (d = 1; d <= anch->D; d++)
 	{
-	  if (! (1 <= env->arr[d].oea &&
-		 env->arr[d].oea  <= env->arr[d].ia    &&
-		 env->arr[d].ia   <= env->arr[d].i0    &&
-		 env->arr[d].i0   <= env->arr[d].ib    &&
-		 env->arr[d].ib   <= env->arr[d].oeb   &&
-		 env->arr[d].oeb  <= sq->n)) esl_fatal(msg);
+	  if (! (1 <= env->arr[d].oa &&
+		 env->arr[d].oa  <= env->arr[d].ia   &&
+		 env->arr[d].ia  <= env->arr[d].i0   &&
+		 env->arr[d].i0  <= env->arr[d].ib   &&
+		 env->arr[d].ib  <= env->arr[d].ob   &&
+		 env->arr[d].ob  <= sq->n)) esl_fatal(msg);
 	  if (! (1 <= env->arr[d].ka &&
 		 env->arr[d].ka <= env->arr[d].k0 &&
 		 env->arr[d].k0 <= env->arr[d].kb &&
@@ -483,8 +483,8 @@ utest_crashtestdummy(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
        * encompassed by the outer envelope 
        */
       if (gtr->ndom == 1 &&  anch->D   == 1 && 
-	  gtr->sqfrom[0] >= env->arr[1].oea &&
-	  gtr->sqto[0]   <= env->arr[1].oeb)
+	  gtr->sqfrom[0] >= env->arr[1].oa &&
+	  gtr->sqto[0]   <= env->arr[1].ob)
 	if (! ( env->arr[1].env_sc >= gsc)) esl_fatal(msg);
 
       /* Test 5. MEG trace passes validation */
@@ -540,7 +540,7 @@ utest_crashtestdummy(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
  * We test:
  *     1. The MEG trace is identical to the generated path.
  *     2. Trace and envelopes agree on number of domains.
- *     3. For each domain, oea==ia, oeb==ib, and these coords
+ *     3. For each domain, oa==ia, ob==ib, and these coords
  *        agree with the trace.
  *     4. In the case of a single domain (D=1), the envelope
  *        score == the trace score.
@@ -598,11 +598,11 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
 	{
 	  if (! (env->arr[d].ia == gtr->sqfrom[d-1] &&   // beware: domains in trace are 0..ndom-1, off by one from env's 1..D
 		 env->arr[d].ia ==  tr->sqfrom[d-1] &&
-		 env->arr[d].ia == env->arr[d].oea)) esl_fatal(msg);
+		 env->arr[d].ia == env->arr[d].oa)) esl_fatal(msg);
 
 	  if (! (env->arr[d].ib == gtr->sqto[d-1]   &&
 		 env->arr[d].ib ==  tr->sqto[d-1]   &&
-		 env->arr[d].ib == env->arr[d].oeb)) esl_fatal(msg);
+		 env->arr[d].ib == env->arr[d].ob)) esl_fatal(msg);
 
 	  if (! (env->arr[d].ka == gtr->hmmfrom[d-1] &&
 		 env->arr[d].ka ==  tr->hmmfrom[d-1])) esl_fatal(msg);

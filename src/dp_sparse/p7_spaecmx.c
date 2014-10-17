@@ -116,6 +116,106 @@ p7_spaecmx_Dump(FILE *fp, const P7_SPARSEMX *aec, const P7_ENVELOPES *env)
 
 
 /*****************************************************************
+ * 2. AEC matrix validation.
+ *****************************************************************/
+
+/* Only L (local) cells in main supercells are used in an AEC
+ * matrix. G (glocal) cells and specials are unused, untouched, may be
+ * arbitrary values.
+ * 
+ * For ML/IL/DL cells, AEC score values are either -inf or >= 0.0.
+ */
+static int
+aec_supercell(const float *dpc, int M_used, int I_used, int D_used)
+{
+  int aectype[3] = { p7S_ML, p7S_IL, p7S_DL };
+  int s;
+  for (s = 0; s < 3; s++)
+    if      (isfinite(dpc[aectype[s]]) && dpc[aectype[s]] >= 0.0) continue;
+    else if (dpc[aectype[s]] == -eslINFINITY)                     continue;
+    else  ESL_FAIL(eslFAIL, NULL, NULL);
+
+  if (! M_used && (dpc[p7S_ML] != -eslINFINITY)) ESL_FAIL(eslFAIL, NULL, NULL);
+  if (! I_used && (dpc[p7S_IL] != -eslINFINITY)) ESL_FAIL(eslFAIL, NULL, NULL);
+  if (! D_used && (dpc[p7S_DL] != -eslINFINITY)) ESL_FAIL(eslFAIL, NULL, NULL);
+  return eslOK;
+}
+
+/* Function:  p7_spaecmx_Validate()
+ * Synopsis:  Validate a sparse AEC DP matrix.
+ *
+ * Purpose:   Validate sparse AEC DP alignment matrix <aec>, which was 
+ *            constrained by envelopes <env>. Return <eslOK> if it's ok.
+ *            Else if <aec> fails validation, return <eslFAIL>; if
+ *            <errbuf> is non-NULL, leave an error message in it.
+ */
+int
+p7_spaecmx_Validate(const P7_SPARSEMX *aec, const P7_ENVELOPES *env, char *errbuf)
+{
+  char                 msg[] = "sparse AEC matrix validation failed";
+  const P7_SPARSEMASK *sm    = aec->sm;
+  const float         *dpc   = aec->dp;
+  int d,z,i;
+  int ia,i0,k0,ib;
+
+
+  if ( aec->type != p7S_AEC_ALIGN ) ESL_FAIL(eslFAIL, errbuf, msg);
+
+  for (d = 1; d <= env->D; d++)
+    {
+      ia      =  env->arr[d].ia;
+      i0      =  env->arr[d].i0;
+      k0      =  env->arr[d].k0;
+      ib      =  env->arr[d].ib;
+
+      /* First row ia of UP sector, if there's an UP sector */
+      if (ia < i0)
+	{
+	  for (z = 0; z < sm->n[ia] && sm->k[ia][z] < k0; z++, dpc += p7S_NSCELLS)
+	    {
+	      if (sm->k[ia][z] == 1) { if (aec_supercell(dpc, 1, 0, 0) != eslOK) ESL_FAIL(eslFAIL, errbuf, msg); }
+	      else                   { if (aec_supercell(dpc, 1, 0, 1) != eslOK) ESL_FAIL(eslFAIL, errbuf, msg); }
+	    }
+	}
+
+      /* Remaining rows ia+1..i0-1 of UP sector, if there's an UP sector */
+      for (i = ia+1; i < i0; i++)
+	{
+	  for (z = 0; z < sm->n[i] && sm->k[i][z] < k0; z++, dpc += p7S_NSCELLS)
+	    {
+	      if (sm->k[i][z] == 1) { if (aec_supercell(dpc, 1, 1, 0) != eslOK) ESL_FAIL(eslFAIL, errbuf, msg); }
+	      else                  { if (aec_supercell(dpc, 1, 1, 1) != eslOK) ESL_FAIL(eslFAIL, errbuf, msg); }
+	    }
+	}
+	  
+      /* Anchor row i0, top of DOWN sector */
+      z = 0; while (z < sm->n[i0] && sm->k[i0][z] < k0) z++;
+      for (;        z < sm->n[i0];                      z++, dpc += p7S_NSCELLS)
+	{
+	  if   (sm->k[i0][z] == k0) { if (aec_supercell(dpc, 1, 0, 0) != eslOK) ESL_FAIL(eslFAIL, errbuf, msg); }
+	  else                      { if (aec_supercell(dpc, 0, 0, 1) != eslOK) ESL_FAIL(eslFAIL, errbuf, msg); }
+	}
+
+      /* Remaining rows i0+1..ib of DOWN sector, if any */
+      for (i = i0+1; i <= ib; i++)
+	{
+	  z = 0; while (z < sm->n[i] && sm->k[i][z] < k0) z++;
+	  for (;        z < sm->n[i];                     z++, dpc += p7S_NSCELLS)
+	    {
+	      if      (sm->k[i][z] == k0)     { if (aec_supercell(dpc, 0, 1, 0) != eslOK) ESL_FAIL(eslFAIL, errbuf, msg); }  // k0   == M impossible for i>i0
+	      else if (sm->k[i][z] == k0+1)   { if (aec_supercell(dpc, 1, 1, 0) != eslOK) ESL_FAIL(eslFAIL, errbuf, msg); }  // k0+1 == M possible for i0+1 only; could check I=-inf but we don't
+	      else if (sm->k[i][z] == env->M) { if (aec_supercell(dpc, 1, 0, 1) != eslOK) ESL_FAIL(eslFAIL, errbuf, msg); }  
+	      else                            { if (aec_supercell(dpc, 1, 1, 1) != eslOK) ESL_FAIL(eslFAIL, errbuf, msg); }  
+	    }
+	}
+    }
+
+  return eslOK;
+}
+
+
+
+/*****************************************************************
  * @LICENSE@
  *
  * SVN $Id$

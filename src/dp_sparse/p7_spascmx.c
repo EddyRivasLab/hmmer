@@ -591,9 +591,10 @@ p7_spascmx_DumpSpecials(FILE *fp, const P7_SPARSEMX *asx, const P7_ANCHOR *anch,
 int
 p7_spascmx_CompareReference(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D, const P7_REFMX *rxu, const P7_REFMX *rxd, float tol)
 {
-  const P7_SPARSEMASK *sm  = asx->sm;
-  const float         *dpc = asx->dp;
-  const float         *xc  = asx->xmx;
+  char                 msg[] = "failed comparison of sparse ASC and reference ASC matrices";
+  const P7_SPARSEMASK *sm    = asx->sm;
+  const float         *dpc   = asx->dp;
+  const float         *xc    = asx->xmx;
   int i;                              // index over rows in DP matrices, 0.1..L
   int g      = 1;                     // idx of next or current segment, 1..S, with sentinels. When we enter it, & while we're in it, in_seg = TRUE
   int in_seg = FALSE;                 //  ... => TRUE when starting ia(g), 1st row of segment; => FALSE when we pass ib(g).
@@ -601,10 +602,6 @@ p7_spascmx_CompareReference(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D
   int ndown  = 0;                     // row # of DOWN sector, 1..; becomes 1 when i reaches anchor.
   int z;                              // index over sparse cell list for a row
   int k,s;
-  int killmenow = FALSE;
-#ifdef p7_DEBUGGING
-  killmenow = TRUE;
-#endif
 
 
   ESL_DASSERT1(( p7R_ML      == p7S_ML      ));  // We assume that the main states come in the same order in both sparse, reference matrices. Spot check that.
@@ -631,7 +628,7 @@ p7_spascmx_CompareReference(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D
 	      k = sm->k[i][z];
 	      for (s = 0; s < p7R_NSCELLS; s++, dpc++)
 		if (esl_FCompareAbs(*dpc, P7R_MX(rxd,i,k,s), tol) == eslFAIL) 
-		  { if (killmenow) abort(); return eslFAIL; }
+		  ESL_FAIL(eslFAIL, NULL, msg);
 	    }
 	}
 
@@ -639,7 +636,7 @@ p7_spascmx_CompareReference(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D
 	{
 	  for (s = 0; s < p7R_NXCELLS; s++, xc++)
 	    if (esl_FCompareAbs(*xc, P7R_XMX(rxd,i,s), tol) == eslFAIL)
-	      { if (killmenow) abort(); return eslFAIL; }
+	      ESL_FAIL(eslFAIL, NULL, msg);
 	}
 	   
       /* Cells in UP sector on row i, if any  */
@@ -652,7 +649,7 @@ p7_spascmx_CompareReference(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D
 
 	      for (s = 0; s < p7R_NSCELLS; s++, dpc++)
 		if (esl_FCompareAbs(*dpc, P7R_MX(rxu,i,k,s), tol) == eslFAIL) 
-		  { if (killmenow) abort(); return eslFAIL; }
+		  ESL_FAIL(eslFAIL, NULL, msg);
 	    }
 	}
     }
@@ -665,9 +662,10 @@ p7_spascmx_CompareReference(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D
  *****************************************************************/ 
 
 /* Validation of a SPARSEMX structure used for ASC calculations:
- *   we check for the correct pattern of unreached cells (see notes in p7_sparsemx.h);
+ *   we check for the correct pattern of unreached cells 
+ *   (see notes in p7_sparsemx.h);
  *   for no NaN's;
- *   and in posterior decoding, that values are probabilities 0 <= p <= 1.+tol
+ *   and in posterior decoding, that values are probabilities, 0 <= p <= 1.+tol
  *   
  * Validation routines, by Easel spec, must return normal errors (eslFAIL), 
  *   with an error message.
@@ -678,11 +676,11 @@ supercell_sc(const float *dpc, int M_used, int I_used, int D_used)
 {
   int s;
   for (s = 0; s < p7S_NSCELLS; s++)
-    if (isnan(dpc[s])) ESL_AOF();
+    if (isnan(dpc[s])) ESL_FAIL(eslFAIL, NULL, NULL);
 
-  if (! M_used && (dpc[p7S_ML] != -eslINFINITY || dpc[p7S_MG] != -eslINFINITY)) ESL_AOF();
-  if (! I_used && (dpc[p7S_IL] != -eslINFINITY || dpc[p7S_IG] != -eslINFINITY)) ESL_AOF();
-  if (! D_used && (dpc[p7S_DL] != -eslINFINITY || dpc[p7S_DG] != -eslINFINITY)) ESL_AOF();
+  if (! M_used && (dpc[p7S_ML] != -eslINFINITY || dpc[p7S_MG] != -eslINFINITY)) ESL_FAIL(eslFAIL, NULL, NULL);
+  if (! I_used && (dpc[p7S_IL] != -eslINFINITY || dpc[p7S_IG] != -eslINFINITY)) ESL_FAIL(eslFAIL, NULL, NULL);
+  if (! D_used && (dpc[p7S_DL] != -eslINFINITY || dpc[p7S_DG] != -eslINFINITY)) ESL_FAIL(eslFAIL, NULL, NULL);
   
   return eslOK;
 }
@@ -694,13 +692,13 @@ supercell_pp(const float *dpc, int M_used, int I_used, int D_used, float tol)
   int s;
   for (s = 0; s < p7S_NSCELLS; s++) 
     {
-      if (! isfinite(dpc[s]))             ESL_AOF();
-      if (dpc[s] < 0. || dpc[s] > 1.+tol) ESL_AOF();
+      if (! isfinite(dpc[s]))             ESL_FAIL(eslFAIL, NULL, NULL);
+      if (dpc[s] < 0. || dpc[s] > 1.+tol) ESL_FAIL(eslFAIL, NULL, NULL);
     }
 
-  if (! M_used && (dpc[p7S_ML] != 0. || dpc[p7S_MG] != 0.)) ESL_AOF();
-  if (! I_used && (dpc[p7S_IL] != 0. || dpc[p7S_IG] != 0.)) ESL_AOF();
-  if (! D_used && (dpc[p7S_DL] != 0. || dpc[p7S_DG] != 0.)) ESL_AOF();
+  if (! M_used && (dpc[p7S_ML] != 0. || dpc[p7S_MG] != 0.)) ESL_FAIL(eslFAIL, NULL, NULL);
+  if (! I_used && (dpc[p7S_IL] != 0. || dpc[p7S_IG] != 0.)) ESL_FAIL(eslFAIL, NULL, NULL);
+  if (! D_used && (dpc[p7S_DL] != 0. || dpc[p7S_DG] != 0.)) ESL_FAIL(eslFAIL, NULL, NULL);
 
   return eslOK;
 }
@@ -708,17 +706,17 @@ supercell_pp(const float *dpc, int M_used, int I_used, int D_used, float tol)
 static int
 xcell_sc(float xv, int X_used)
 {
-  if (isnan(xv))                      ESL_AOF();
-  if (! X_used && xv != -eslINFINITY) ESL_AOF();
+  if (isnan(xv))                      ESL_FAIL(eslFAIL, NULL, NULL);
+  if (! X_used && xv != -eslINFINITY) ESL_FAIL(eslFAIL, NULL, NULL);
   return eslOK;
 }
 
 static int
 xcell_pp(float xv, int X_used, float tol)
 {
-  if (! isfinite(xv))          ESL_AOF();
-  if ( xv < 0. || xv > 1.+tol) ESL_AOF();
-  if (! X_used && xv != 0.)    ESL_AOF();
+  if (! isfinite(xv))          ESL_FAIL(eslFAIL, NULL, NULL);
+  if ( xv < 0. || xv > 1.+tol) ESL_FAIL(eslFAIL, NULL, NULL);
+  if (! X_used && xv != 0.)    ESL_FAIL(eslFAIL, NULL, NULL);
   return eslOK;
 }
 
@@ -739,7 +737,7 @@ decoding_rowsums(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
 
       /* Row ia-1, just before a segment. */
       rowsum = xc[p7S_N] + xc[p7S_JJ] + xc[p7S_CC];
-      if (esl_FCompare(rowsum, 1.0, tol) != eslOK) ESL_AOF();
+      if (esl_FCompare(rowsum, 1.0, tol) != eslOK) ESL_FAIL(eslFAIL, NULL, NULL);
       xc += p7S_NXCELLS;
 
       for (i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)
@@ -768,7 +766,7 @@ decoding_rowsums(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
 		}
 	    }
 
-	  if (esl_FCompare(rowsum, 1.0, tol) != eslOK) ESL_AOF();
+	  if (esl_FCompare(rowsum, 1.0, tol) != eslOK) ESL_FAIL(eslFAIL, NULL, NULL);
 	}
     }
   return eslOK;
@@ -802,6 +800,7 @@ decoding_colsums(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
   float                tol      = 0.01;
   float                xsum[p7S_NXCELLS];
   int   k,s,d,i,z,g;
+  int   status;
 
   for (k = 0; k <= M;          k++) colsum[k] = 0.0f;
   for (s = 0; s < p7S_NXCELLS; s++) xsum[s]   = 0.0f;
@@ -842,19 +841,19 @@ decoding_colsums(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
 	}
     }
 
-  if (colsum[0]   != 0.) ESL_AOG();
+  if (colsum[0]   != 0.) ESL_XFAIL(eslFAIL, NULL, NULL);
   for (k = 1; k <= M; k++)
-    if (colsum[k] < 0.0 || colsum[k] > (float) D + tol) ESL_AOG();
-  if (esl_FCompareAbs(xsum[p7S_E],               (float) D, tol) != eslOK) ESL_AOG();
-  if (esl_FCompareAbs(xsum[p7S_B],               (float) D, tol) != eslOK) ESL_AOG();
-  if (esl_FCompareAbs(xsum[p7S_G] + xsum[p7S_L], (float) D, tol) != eslOK) ESL_AOG();
+    if (colsum[k] < 0.0 || colsum[k] > (float) D + tol)                    ESL_XFAIL(eslFAIL, NULL, NULL);
+  if (esl_FCompareAbs(xsum[p7S_E],               (float) D, tol) != eslOK) ESL_XFAIL(eslFAIL, NULL, NULL);
+  if (esl_FCompareAbs(xsum[p7S_B],               (float) D, tol) != eslOK) ESL_XFAIL(eslFAIL, NULL, NULL);
+  if (esl_FCompareAbs(xsum[p7S_G] + xsum[p7S_L], (float) D, tol) != eslOK) ESL_XFAIL(eslFAIL, NULL, NULL);
 
   free(colsum);
   return eslOK;
 
  ERROR:
   free(colsum);
-  return eslFAIL;
+  return status;
 }
 
 

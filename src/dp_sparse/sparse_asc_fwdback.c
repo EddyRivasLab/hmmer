@@ -221,9 +221,9 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
  *            = seg[1].ia>, <ib = seg[1].ib>, <xN=0>, <xJ=xC=-inf>,
  *            <dpc=asf->dp>, and <xc=asf->xmx>.
  *            
- *            For envelope score of <oea..oeb>, we create an anchor
+ *            For envelope score of <oa..ob>, we create an anchor
  *            set containing the one anchor for our envelope (<D=1>),
- *            and pass <d=1>, <ngap = oea-1>, <ia=oea>, <ib=oeb>,
+ *            and pass <d=1>, <ngap = oa-1>, <ia=oa>, <ib=ob>,
  *            <xN=0>, <xJ=xC=-inf>, <dpc=asf->dp>, and <xc=asf->xmx>.
  *            The only state information that an envelope score needs
  *            to get back is <opt_xC>.
@@ -263,8 +263,8 @@ p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_
  *            d       : next anchor that we can reach in this or subsequent segments; 1..D+1 (D+1 means no anchors in this or subseq segments)
  *            sm      : sparse mask
  *            ngap    : number of previous residues since last segment: ia-1 or ia-ib(g-1)-1
- *            ia      : start coord of segment: ia(g), or oea for an envelope score
- *            ib      : end coord of segment:   ib(g), or oeb for an envelope score
+ *            ia      : start coord of segment: ia(g), or oa for an envelope score
+ *            ib      : end coord of segment:   ib(g), or ob for an envelope score
  *            asf     : sparse ASC matrix that already contains calculation for segments 1..g-1;
  *                      caller guarantees that <asf> is allocated for the DP calculation of segment g
  *            xN      : last N value at ib(g-1), or 0 for g=1
@@ -1413,6 +1413,8 @@ utest_generation(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
 			     tr, &wrk, ah, 
 			     asf, anch, &asc_f, 
 			     NULL)     != eslOK) esl_fatal(msg);
+
+      if ( p7_anchors_Validate(anch, sq->n, gm->M, errbuf)    != eslOK) esl_fatal("%s\n   %s\n", msg, errbuf);
 
       /* Remainder of sparse ASC analysis */
       if ( p7_sparse_asc_Backward(sq->dsq, sq->n, gm, anch->a, anch->D, sm, asb, &asc_b)      != eslOK) esl_fatal(msg);

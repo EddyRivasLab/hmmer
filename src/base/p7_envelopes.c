@@ -22,21 +22,29 @@
 int
 p7_envelope_SetSentinels(P7_ENVELOPE *env, int D, int L, int M)
 {
-  /* Anchor i0,k0 sentinels are set exactly as p7_anchor_SetSentinels() does; see explanation over there */
+  /* Anchor i0,k0 sentinels are set exactly as
+   * p7_anchor_SetSentinels() does; see explanation over there.
+   *
+   * Likewise, in envelope determination we want maximum envelope
+   * bounds to be i0(d-1)+1..i0(d)..i0(d+1)-1; i.e. 
+   *    i0(d-1) + 1 <= oa(d) <= ia(d) <= i0(d), and
+   *    i0(d)       <= ib(d) <= ob(d) <= i0(d+1)-1
+   * so for that too, we need i0(0) = 0, i0(D+1) = L+1.
+   */
   env[0].i0   = 0;
   env[D+1].i0 = L+1;
   env[0].k0   = M+1;
   env[D+1].k0 = 0;
 
   /* I don't think other sentinel values matter, but here's a
-   * guess what they would be if they mattered; make i 
+   * guess what they would be if they did matter; make i 
    * coords = i0, and k coords = k0.
    */
-  env[0].oea  = env[0].oeb  = 0;
-  env[0].ia   = env[0].ib   = 0;
+  env[0].oa    = env[0].ob    = 0;
+  env[D+1].oa  = env[D+1].ob  = L+1;
 
-  env[D+1].oea  = env[D+1].oeb  = L+1;
-  env[D+1].ia   = env[D+1].ib   = L+1;
+  env[0].ia    = env[0].ib    = 0;
+  env[D+1].ia  = env[D+1].ib  = L+1;
 
   env[0].ka   = env[0].kb   = M+1;
   env[D+1].ka = env[D+1].kb = 0;
@@ -141,17 +149,17 @@ p7_envelopes_Dump(FILE *ofp, P7_ENVELOPES *env)
 
   fprintf(ofp, "#%3s %5s %5s %5s %5s %5s %5s %5s %5s %6s %3s %3s\n",
 	  "dom", "ia",  "ib", "i0",  "k0", "ka",  "kb", 
-	  "oea",  "oeb", "env_sc", "app", "glo");
+	  "oa",  "ob", "env_sc", "app", "glo");
   fprintf(ofp, "#%3s %5s %5s %5s %5s %5s %5s %5s %5s %6s %3s %3s\n",
 	  "---", "-----",  "-----", "-----",  "-----", "-----",  "-----", 
 	  "-----",  "-----", "------", "---", "---");
   for (e = 1; e <= env->D; e++)
     fprintf(ofp, "%-4d %5d %5d %5d %5d %5d %5d %5d %5d %6.2f %3s %3s\n",
 	    e,
-	    env->arr[e].ia,   env->arr[e].ib,
-	    env->arr[e].i0,   env->arr[e].k0,
-	    env->arr[e].ka,   env->arr[e].kb,
-	    env->arr[e].oea,  env->arr[e].oeb,
+	    env->arr[e].ia,  env->arr[e].ib,
+	    env->arr[e].i0,  env->arr[e].k0,
+	    env->arr[e].ka,  env->arr[e].kb,
+	    env->arr[e].oa,  env->arr[e].ob,
 	    env->arr[e].env_sc,
 	    (env->arr[e].flags & p7E_ENVSC_APPROX ? "YES" : "n"),
 	    (env->arr[e].flags & p7E_IS_GLOCAL    ? "YES" : "n"));

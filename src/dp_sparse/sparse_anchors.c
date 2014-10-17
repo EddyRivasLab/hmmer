@@ -305,8 +305,12 @@ p7_sparse_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PROFI
 
       if (keyidx != best_keyidx)                               // ... then <anch> does not currently have the optimal suffix; fetch it back.
 	{
-	  if   (best_keyidx == -1)  anch->D = D0;              // if best_keyidx is -1, that's the Dg=0 empty set
-	  else p7_anchorhash_Get(ah, best_keyidx, D0, anch);   // else, get a suffix Dg>0.
+	  if   (best_keyidx == -1)                                  // if best_keyidx is -1, that's the Dg=0 empty set; truncate back to D0
+	    {
+	      anch->D = D0;                                         // ... so set D to what we had up to the previous seg g
+	      p7_anchor_SetSentinels(anch->a, anch->D, L, gm->M);   // ... remember to reset sentinels! if last anch was for Dg>0
+	    }
+	  else p7_anchorhash_Get(ah, best_keyidx, D0, anch);   // else, get a suffix Dg>0. _Get resets sentinels
 	}
       if (asc_keyidx != best_keyidx)                           // ... then <asf> does not currently have the DP matrix for the optimal suffix; recalculate it
 	{                                                      //     also, the state information associated <asf> needs to be recalculated.

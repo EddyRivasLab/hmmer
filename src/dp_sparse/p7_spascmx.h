@@ -85,7 +85,6 @@ extern int    p7_spascmx_Validate(const P7_SPARSEMX *asx, const P7_ANCHOR *anch,
  * 
  * Rationale for UP sector unreachable special cases:
  *  u1-1 (prev to 1st row) not in UP sector, but has special needs; see [1].
- *  M states are always reachable.
  *  In top row u1, IL/IG unreached in Fwd, because no M/I on row u1-1.
  *  In bot row u2, for all k<k0-1, IL/IG unreached in Bck, because no row u2+1;
  *     IL/IG(k0-1) do have path to anchor cell. 

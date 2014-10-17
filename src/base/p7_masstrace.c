@@ -332,30 +332,27 @@ p7_masstrace_PlotKmass(FILE *ofp, P7_MASSTRACE *mt)
 int
 p7_masstrace_Compare(const P7_MASSTRACE *mte, const P7_MASSTRACE *mta, float tol)
 {
+  char msg[] = "masstrace object comparison failed";
   int i,k;
-  int killmenow = FALSE;
-#ifdef p7_DEBUGGING
-  killmenow = TRUE;
-#endif
 
-  if (mte->L   != mta->L)   { if (killmenow) abort(); return eslFAIL; }
-  if (mte->M   != mta->M)   { if (killmenow) abort(); return eslFAIL; }
-  if (mte->i0  != mta->i0)  { if (killmenow) abort(); return eslFAIL; }
-  if (mte->k0  != mta->k0)  { if (killmenow) abort(); return eslFAIL; }
-  if (mte->st0 != mta->st0) { if (killmenow) abort(); return eslFAIL; }
+  if (mte->L   != mta->L)   ESL_FAIL(eslFAIL, NULL, msg);
+  if (mte->M   != mta->M)   ESL_FAIL(eslFAIL, NULL, msg);
+  if (mte->i0  != mta->i0)  ESL_FAIL(eslFAIL, NULL, msg);
+  if (mte->k0  != mta->k0)  ESL_FAIL(eslFAIL, NULL, msg);
+  if (mte->st0 != mta->st0) ESL_FAIL(eslFAIL, NULL, msg);
 
   if (mte->imass && mta->imass)
     {
       for (i = 1; i <= mte->L; i++)
 	{
-	  if (mte->imass[i] == 0.0 && mta->imass[i] > 0.0)                  { if (killmenow) abort(); return eslFAIL; }
-	  if (esl_FCompareAbs(mte->imass[i], mta->imass[i], tol) != eslOK)  { if (killmenow) abort(); return eslFAIL; }
+	  if (mte->imass[i] == 0.0 && mta->imass[i] > 0.0)                  ESL_FAIL(eslFAIL, NULL, msg);
+	  if (esl_FCompareAbs(mte->imass[i], mta->imass[i], tol) != eslOK)  ESL_FAIL(eslFAIL, NULL, msg);
 	}
     }
   for (k = 1; k <= mte->M; k++)
     {
-      if (mte->kmass[k] == 0.0 && mta->kmass[k] > 0.0)                  { if (killmenow) abort(); return eslFAIL; }
-      if (esl_FCompareAbs(mte->kmass[k], mta->kmass[k], tol) != eslOK)  { if (killmenow) abort(); return eslFAIL; }
+      if (mte->kmass[k] == 0.0 && mta->kmass[k] > 0.0)                  ESL_FAIL(eslFAIL, NULL, msg);
+      if (esl_FCompareAbs(mte->kmass[k], mta->kmass[k], tol) != eslOK)  ESL_FAIL(eslFAIL, NULL, msg);
     }
   return eslOK;
 }

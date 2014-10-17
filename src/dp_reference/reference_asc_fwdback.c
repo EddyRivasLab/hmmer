@@ -663,14 +663,11 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 static int
 ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_ANCHOR *anch, int D, float tolerance)
 {
-  int   M         = std->M;
-  int   L         = std->L;
+  char  msg[] = "comparison of ASC DP F|B matrix to standard DP F|B matrix failed";
+  int   M     = std->M;
+  int   L     = std->L;
   float val;
   int   d,i,k,s;
-  int   killmenow = FALSE;
-#ifdef p7_DEBUGGING
-  killmenow = TRUE;
-#endif
 
   /* Contract checks */
   ESL_DASSERT1( (ascu->M == M && ascu->L == L));
@@ -690,14 +687,14 @@ ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_ANCHOR *anch
 	    if (k <  anch[d].k0)   val = p7_FLogsum(val, P7R_MX(ascu,i,k,s)); // UP
 	    
 	    if (val != -eslINFINITY && esl_FCompareAbs(val, P7R_MX(std,i,k,s), tolerance) != eslOK)
-	      { if (killmenow) abort(); return eslFAIL; }
+	      ESL_FAIL(eslFAIL, NULL, msg);
 	  }
 
       for (s = 0; s < p7R_NXCELLS; s++)
 	{
 	  val = P7R_XMX(ascd,i,s);
 	  if (val != -eslINFINITY && esl_FCompareAbs(val, P7R_XMX(std,i,s), tolerance) != eslOK)
-	    { if (killmenow) abort(); return eslFAIL; }
+	    ESL_FAIL(eslFAIL, NULL, msg);
 	}
     }
   return eslOK;

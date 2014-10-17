@@ -541,9 +541,9 @@ utest_sampling(ESL_RANDOMNESS *rng)
 
 	  //p7_anchors_Dump(stdout, anch);
 
-	  if ( p7_anchors_Validate(anch, errmsg)    != eslOK) esl_fatal("%s:\n  %s", msg, errmsg);
-	  if ( p7_anchors_Compare(anch, aarr[s])    != eslOK) esl_fatal(msg);
-	  if ( p7_anchors_Reuse(anch)               != eslOK) esl_fatal(msg);
+	  if ( p7_anchors_Validate(anch, L, M, errmsg) != eslOK) esl_fatal("%s:\n  %s", msg, errmsg);
+	  if ( p7_anchors_Compare(anch, aarr[s])       != eslOK) esl_fatal(msg);
+	  if ( p7_anchors_Reuse(anch)                  != eslOK) esl_fatal(msg);
 	}
 
       for (s = 0; s < nsamples; s++)
