@@ -736,7 +736,7 @@ p7_sparse_trace_StochasticSeg(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PRO
 #endif
 
   if  (esl_byp_IsInternal(wrk_byp)) { free(wrk); }
-  return status;
+  return eslOK;
 
  ERROR:
   if  (esl_byp_IsInternal(wrk_byp)) { free(wrk); }

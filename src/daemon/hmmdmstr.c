@@ -1285,10 +1285,12 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     /* Receive message from client */
     if ((n = read(data->sock_fd, ptr, remaining)) < 0) {
       p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
+      free(buffer);
+      free(opt_str);
       return 1;
     }
 
-    if (n == 0) return 1;
+    if (n == 0) { free(buffer); free(opt_str); return 1; }
 
     ptr += n;
     amount += n;

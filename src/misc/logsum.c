@@ -364,6 +364,9 @@ main(int argc, char **argv)
   esl_stopwatch_Destroy(w);
   esl_randomness_Destroy(r);
   esl_getopts_Destroy(go);
+  free(A);
+  free(B);
+  free(C);
   return 0;
 }
 #endif /*p7LOGSUM_BENCHMARK*/

@@ -355,6 +355,7 @@ mximage_plot_trace(MXIMAGE *mxi, P7_TRACE *tr, int ia, int ib, int ka, int kb, R
 {
   int i,k,z;
   
+  i = 0;
   for (z = 0; z < tr->N; z++)
     {
       i = (tr->i[z] ? tr->i[z] : i); /* last i we emitted: coord we'll use for D states */

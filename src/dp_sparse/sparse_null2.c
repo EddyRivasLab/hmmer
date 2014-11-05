@@ -12,6 +12,71 @@
 #include "dp_sparse/p7_sparsemx.h"
 #include "dp_sparse/sparse_null2.h"
 
+#if 0 /* during dev */
+
+int
+p7_sparse_Null2(const P7_SPARSEMX *apd, const P7_ENVELOPES *env)
+{
+  const P7_SPARSEMASK *sm  = apd->sm;
+  const float         *ppp = apd->dp;
+  int d,g;
+  
+  g = 0;
+  for (d = 1; d <= env->D; d++)
+    {
+      
+      while (env->arr[d].i0 > sm->seg[g].ib)  // seg[0].ib = -1 sentinel, so this will always succeed at least once
+	{ g++; i = sm->seg[g].ia; }
+
+      
+      
+
+      /* UP sector ia(d)..i0(d)-1; 1..k0(d)-1 */
+      for (i = env->arr[d].ia; i < env->arr[d].i0; i++)
+	{
+	  /* <ppp> maintenance (2): skip leading DOWN supercells when i in ASC DOWN+UP row */
+	  if (env->arr[d-1].i0 >= sm->seg[g].ia)
+	    for (z = sm->n[i]-1; z >= 0 && sm->k[i][z] >= env->arr[d-1].k0; z--)
+	      ppp += p7S_NSCELLS;
+	  
+	  for (z = 0; z < sm->n[i] && sm->k[i][z] < env->arr[d].k0; z++, ppp += p7S_NSCELLS)
+	    {
+	      // ppp is i, sm->k[i][z]
+	    }
+	}
+
+      /* DOWN sector i0(d)..ib(d); k0(d)..M */
+      for (i = env->arr[d].i0; i <= env->arr[d].ib; i++)
+	{
+	  z = 0; while (z < sm->n[i] && sm->k[i][z] < env->arr[d].k0) z++;
+	  for (; z < sm->n[i]; z++, ppp += p7S_NSCELLS)
+	    {
+	      // ppp is (i, sm->k[i][z])
+	    }
+
+	  /* <ppp> maintenance (3); skip trailing UP supercells when i is ASC DOWN/UP row */
+	  if (env->arr[d+1].i0 <= sm->seg[g].ib)
+	    for (z = 0; z < sm->n[i] && sm->k[i][z] < env->arr[d+1].k0; z++)   
+	      ppp += p7S_NSCELLS;
+	}
+	
+      /* <ppp> maintenance (4): if <d> is last anchor in seg, 
+       * skip trailing rows ib(d)+1..ib(g), which must be
+       * DOWN only rows.
+       */
+      if (env->arr[d+1].i0 > sm->seg[g].ib)
+	for (i = env->arr[d].ib+1; i <= sm->seg[g].ib; i++)
+	  for (z = sm->n[i]-1; z >= 0 && sm->k[i][z] >= env->arr[d].k0; z--)  // DOWN is k0(d)..M; order doesn't matter, so we can skip it backwards.
+	    ppp += p7S_NSCELLS;
+      
+
+    } // end loop over domains <d>
+
+
+}
+#endif /* during dev */
+
+
 
 /* Function:  p7_sparse_Null2ByExpectation()
  * Synopsis:  Calculate null2 lod scores, from sparse decoding matrix.
@@ -146,3 +211,4 @@ p7_sparse_Null2ByExpectation(const P7_PROFILE *gm, const P7_SPARSEMX *sxd,
  *****************************************************************/
 
   
+

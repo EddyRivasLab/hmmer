@@ -133,6 +133,7 @@ read_Command(HMMD_COMMAND **ret_cmd, WORKER_ENV *env)
   if (hdr.length > 0) {
     if (readn(env->fd, &cmd->init, hdr.length) == -1) {
       if (errno && errno != ECONNREFUSED) LOG_FATAL_MSG("read", errno);
+      *ret_cmd = cmd;
       return eslEOD;
     }
   }
