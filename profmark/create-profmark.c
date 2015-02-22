@@ -634,7 +634,7 @@ set_random_segment(ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq
   char    *pkey         = NULL;
   int      start, end;
   int64_t  Lseq;
-  int      status;
+  int      status = eslOK;
 
   if (L==0) return eslOK;
   if (L > cfg->db_maxL) esl_fatal("can't fetch a segment of length %d; database max is %d\n", L, cfg->db_maxL);

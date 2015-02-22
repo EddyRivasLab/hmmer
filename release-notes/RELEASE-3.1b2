@@ -1,7 +1,7 @@
 HMMER 3.1b2 release notes 
 HMMER3.1 beta test, release 2
 http://hmmer.org/
-TJW, Wed Dec 18 10:16:44 2013
+TJW, Sun Feb 22 07:59:45 2015
 ________________________________________________________________
 
 # Previous release: 3.1b1; 27 May 2013
@@ -18,14 +18,14 @@ ________________________________________________________________
 
     We have developed a new algorithm that accelerates DNA search in 
     nhmmer. The acceleration can be tuned, such that greater speed will
-    tend to decrease sensitivity. The default settings yield nearly 
+    tend to decrease sensitivity. The default settings yield roughly 
     10-fold acceleration while retaining nearly complete sensitivity 
-    among hits with E-value < 1e-3 (a few hits are sometimes lost in 
-    the more marginal 1e-3<E<10)
+    among hits with E-value < 1e-3 (with a modest loss in sensitivity 
+    among marginal hits with  E > 1e-3)
     
     This algorithm requires that the sequence database first be 
     preprocessed into a binary file format. The new tool makehmmerdb 
-    performs this task
+    performs this task.
     
 -:- New method of deciding if a sequence is a fragment. 
     

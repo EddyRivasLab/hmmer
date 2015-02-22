@@ -343,10 +343,12 @@ When searching with
 one may optionally precompute a binary version of the target database, using
 .IR makehmmerdb ,
 then search against that database. Using default settings, this yields a
-roughly 10-fold acceleration with minimal loss of sensitivity on benchmarks.
+roughly 10-fold acceleration with small loss of sensitivity on benchmarks.
 This is achieved using a heuristic method that searches for seeds (ungapped 
 alignments) around which full processing is done. This is essentially  
-a replacement to the SSV stage. The following options only impact 
+a replacement to the SSV stage. (This method has been extensively tested, 
+but should still be treated as somewhat experimental.)
+The following options only impact 
 .I nhmmer
 if the value of 
 .B --tformat
@@ -361,20 +363,26 @@ sensitivity - typically faster search leads to lower sensitivity.
 The seed step requires that a seed reach a specified bit score in length 
 no longer than 
 .BR <n> . 
-By default, this value is 14.  
+By default, this value is 15. Longer seeds allow a greater chance of 
+meeting the bit score threshold, leading to diminished filtering
+(greater sensitivity, slower run time).
 
 .TP
 .BI --seed_sc_thresh " <x>"
 The seed must reach score 
 .B <x>
-(in bits). The default is 16.0 bits.
+(in bits). The default is 15.0 bits. A higher threshold increases 
+filtering stringency, leading to faster run times and lower 
+sensitivity.
 
 .TP
 .BI --seed_sc_density " <x>"
 Either all prefixes or all suffixes of a seed must have 
 bit density (bits per aligned position) of at least 
 .BR <x> . 
-The default is 0.7 bits/position.
+The default is 0.8 bits/position. An increase in the density 
+requirement leads to increased filtering stringency, thus faster 
+run times and lower sensitivity.
 
 .TP
 .BI --seed_drop_max_len " <n>"
@@ -383,7 +391,9 @@ A seed may not have a run of length
 in which the score drops by 
 .I --seed_drop_lim
 or more. Basically, this prunes seeds that go through long
-slightly-negative seed extensions. The default is 4.  
+slightly-negative seed extensions. The default is 4.  Increasing 
+the limit causes (slightly) diminished filtering efficiency, thus 
+slower run times and higher sensitivity. (minor tuning option)
 
 .TP
 .BI --seed_drop_lim " <x>"
@@ -391,13 +401,16 @@ In a seed, there may be no run of length
 .I --seed_drop_max_len
 in which the score drops by 
 .IR --seed_drop_lim .
-The default is 0.3 bits.
+The default is 0.3 bits. Larger numbers mean less filtering.
+(minor tuning option)
 
 .TP
 .BI --seed_req_pos " <n>"
 A seed must contain a run of at least 
 .B <n>
-positive-scoring matches. The default is 5.  
+positive-scoring matches. The default is 5. Larger values mean
+increased filtering.
+(minor tuning option)
 
 .TP
 .BI --seed_ssv_length " <n>"
@@ -408,7 +421,8 @@ score threshold. The window through which this ungapped alignment
 extends is length 
 .BR <n> .
 The default is 70.  
-
+Decreasing this value slightly reduces run time, at a small risk of
+reduced sensitivity. (minor tuning option)
 
 
 .SH OTHER OPTIONS

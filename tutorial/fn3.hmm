@@ -1,4 +1,4 @@
-HMMER3/f [3.1 | February 2013]
+HMMER3/f [3.1b1 | May 2013]
 NAME  fn3
 ACC   PF00041.13
 DESC  Fibronectin type III domain
@@ -9,7 +9,7 @@ MM    no
 CONS  yes
 CS    yes
 MAP   yes
-DATE  Fri Feb 15 06:04:13 2013
+DATE  Fri Jun 20 08:22:31 2014
 NSEQ  106
 EFFN  11.415833
 CKSUM 3564431818

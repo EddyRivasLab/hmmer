@@ -303,7 +303,20 @@ Genbank), usually with autodetection.
  first stage in the accelerated "filter pipeline") that increases 
  overall HMMER3 speed by about two-fold. This speed improvement
  has no impact on sensitivity.
-    
+
+\paragraph{More sequence input formats.} This beta release includes a new
+option for increasing the speed of searching DNA sequence files. A
+binary file is created in a preprocessing step, using the tool 
+.BR makehmmerdb ,
+and 
+.I nhmmer 
+then utilizes this binary format to support a fast new seed-finding 
+stage. Using default settings in 
+.IR nhmmer ,
+we have observed a roughly 10-fold acceleration with small loss of 
+sensitivity on benchmarks. (This method has been extensively tested, 
+but should still be treated as somewhat experimental.)
+
 
 \subsection{What's still missing in HMMER3.1}
 
@@ -326,8 +339,8 @@ power, and at HMMER3 speed.
 
 \vspace{2em}
 
-We also have some technical and usability issues we will be addressing
-Real Soon Now:
+\paragraph{} We also have some technical and usability issues we will be 
+addressing Real Soon Now:
 
 \paragraph{More alignment modes.} HMMER3 \emph{only} does local
 alignment. HMMER2 also could do glocal alignment (align a complete
