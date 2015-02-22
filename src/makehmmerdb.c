@@ -588,7 +588,8 @@ main(int argc, char **argv)
 
     status = esl_sqio_ReadBlock(sqfp, block, block_size, -1, alphatype != eslAMINO);
     if (status == eslEOF) continue;
-    if (status != eslOK)  ESL_XEXCEPTION(status, "failure reading sequence block");
+    if (status != eslOK)  esl_fatal("Parse failed (sequence file %s):\n%s\n",
+                                                  sqfp->filename, esl_sqfile_GetErrorBuf(sqfp));
 
     seq_offset = numseqs;
     ambig_offset = meta->ambig_list->count;

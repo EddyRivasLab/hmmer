@@ -241,7 +241,7 @@ main(int argc,  char *argv[])
   FM_METADATA *meta;
 
   ESL_SQ       *tmpseq;  // used for sequence validation
-  ESL_ALPHABET *abc;
+  ESL_ALPHABET *abc = NULL;
 
 
   //start timer

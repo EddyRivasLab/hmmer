@@ -536,7 +536,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if (dbformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
 
-
   if (dbformat == eslSQFILE_FMINDEX) {
 
 #if !defined (p7_IMPL_SSE)
@@ -603,7 +602,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   } else if (status == eslOK) {
     //Successfully read HMM file
     qhstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
-
+    if (qhstatus != eslOK) p7_Fail("reading hmm from file %s (%d)\n", cfg->queryfile, qhstatus);
   } else {
     //It's not an HMM. Maybe an alignment file, or a fasta file
     if (strcmp(cfg->queryfile, "-") == 0 && ! esl_opt_IsOn(go, "--qformat")) {
@@ -662,14 +661,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if (qfp_sq != NULL) {
       // read first sequence
       qhstatus = esl_sqio_Read(qfp_sq, qsq);
+      if (qhstatus != eslOK) p7_Fail("reading sequence from file %s (%d)\n", cfg->queryfile, qhstatus);
 
     } else {
       // read first sequence alignment
       qhstatus = eslx_msafile_Read(qfp_msa, &msa);
+      if (qhstatus != eslOK) p7_Fail("reading alignment from file %s (%d)\n", cfg->queryfile, qhstatus);
     }
 
   }
-
 
   /* Open the results output files */
   if (esl_opt_IsOn(go, "-o"))              { if ((ofp      = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) p7_Fail("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o")); }
@@ -708,7 +708,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     status = p7_bg_Read(esl_opt_GetString(go, "--bgfile"), bg_manual, errbuf);
     if (status != eslOK) p7_Fail("Trouble reading bgfile: %s\n", errbuf);
   }
-
 
   infocnt = (ncpus == 0) ? 1 : ncpus;
   ESL_ALLOC(info, sizeof(*info) * infocnt);
@@ -876,9 +875,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         // according to this ratio.
         // Xref: ~wheelert/notebook/2014/03-04-FM-time-v-len/00NOTES -- Thu Mar  6 14:40:48 EST 2014
         float best_sc_avg = 0;
+        int j;
         for (i = 1; i <= om->M; i++) {
           float max_score = 0;
-          for (int j=0; j<hmm->abc->K; j++) {
+          for (j=0; j<hmm->abc->K; j++) {
             if ( esl_abc_XIsResidue(om->abc,j) &&  gm->rsc[j][(i) * p7P_NR     + p7P_MSC]   > max_score)   max_score   = gm->rsc[j][(i) * p7P_NR     + p7P_MSC];
           }
           best_sc_avg += max_score;

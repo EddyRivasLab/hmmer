@@ -588,7 +588,6 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
   if (format >= p7_HMMFILE_3e && fprintf(fp, "CONS  %s\n", (hmm->flags & p7H_CONS)  ? "yes" : "no") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
   if (fprintf(fp, "CS    %s\n", (hmm->flags & p7H_CS)    ? "yes" : "no")                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
   if (fprintf(fp, "MAP   %s\n", (hmm->flags & p7H_MAP)   ? "yes" : "no")                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
-
   if (hmm->ctime    != NULL)   { if (           fprintf  (fp, "DATE  %s\n", hmm->ctime)        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
   if (hmm->comlog   != NULL)   { if ( (status = multiline(fp, "COM  ",      hmm->comlog)) != eslOK) return status; }
   if (hmm->nseq     >= 0)      { if (           fprintf  (fp, "NSEQ  %d\n", hmm->nseq)         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
@@ -622,7 +621,6 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
   if (fputc('\n', fp)                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
   if (fprintf(fp, "        %8s %8s %8s %8s %8s %8s %8s\n",
         "m->m", "m->i", "m->d", "i->m", "i->i", "d->m", "d->d") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
-  
   if (hmm->flags & p7H_COMPO) {
     if (fprintf(fp, "  COMPO ") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
     for (x = 0; x < hmm->abc->K; x++) 
@@ -640,7 +638,6 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
   for (x = 0; x < p7H_NTRANSITIONS; x++) 
     { if ( (status = printprob(fp, 8, hmm->t[0][x])) != eslOK) return status; }    
   if (fputc('\n', fp)       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
-  
   for (k = 1; k <= hmm->M; k++) {
     /* Line 1: k; match emissions; optional map, RF, MM, CS */
     if (fprintf(fp, " %6d ",  k) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
@@ -656,6 +653,9 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
         x = tolower(hmm->abc->sym[hmm->abc->Kp-3]);
       if (fprintf(fp, " %c",   (hmm->flags & p7H_CONS) ? x : '-') < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
     }
+
+
+    if (hmm->rf && hmm->rf[k] == ' ') ESL_EXCEPTION_SYS(eslEWRITE, "input alignment contains an RF line with spaces");
     if (fprintf(fp, " %c",   (hmm->flags & p7H_RF)    ? hmm->rf[k]        : '-') < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
     if (format >= p7_HMMFILE_3f) { if (fprintf(fp, " %c",   (hmm->flags & p7H_MMASK) ? hmm->mm[k]       : '-') < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
     if (fprintf(fp, " %c\n", (hmm->flags & p7H_CS)    ? hmm->cs[k]        : '-') < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
@@ -664,7 +664,6 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
     if (fputs("        ", fp) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
     for (x = 0; x < hmm->abc->K; x++)
     { if ( (status = printprob(fp, 8, hmm->ins[k][x])) != eslOK) return status; }
-
     /* Line 3:   transitions */
     if (fputs("\n        ", fp) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
     for (x = 0; x < p7H_NTRANSITIONS; x++)
@@ -708,7 +707,7 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
   int coffset = 0;
   /* These 3 chars and int are used in the size determiantion */
   int size;
-  int n;
+  int n = 0;
   char buff[100];
   char *end   = NULL;
   char *sptr;
@@ -1514,6 +1513,7 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       else if (strcmp(tag, "HMM") == 0) 
   break;
     } /* end, loop over possible header tags */
+
   if (status != eslOK) goto ERROR;
 
   /* If we saw one STATS line, we need all 3. (True for both 3/a and 3/b formats) */
@@ -1554,6 +1554,7 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   /* The main model section. */
   for (k = 1; k <= hmm->M; k++)
     {
+
       if ((status = esl_fileparser_NextLine(hfp->efp))                        != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Premature end of data in main model section, at node %d (expected %d)", k, hmm->M);
       if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))     != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Premature end of data in main model section, at node %d (expected %d)", k, hmm->M);
       if (atoi(tok1) != k)                                                               ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Expected match line to start with %d (of %d); saw %s", k, hmm->M, tok1);
@@ -1570,7 +1571,6 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Missing CONS field on match line for node %d: should at least be -", k);
   if (hmm->flags & p7H_CONS) hmm->consensus[k] = *tok1;
       }
-      
       if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))     != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Missing RF field on match line for node %d: should at least be -",  k);
       if (hmm->flags & p7H_RF) hmm->rf[k]   = *tok1;
 
@@ -1589,7 +1589,6 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few probability fields on insert line, node %d: expected %d, got %d\n", k, abc->K, x);
   hmm->ins[k][x] = (*tok1 == '*' ? 0.0 : expf(-1.0 *atof(tok1)));
       }
-      
       if ((status = esl_fileparser_NextLine(hfp->efp))                        != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Premature end of data in main model: no transition line, node %d", k);
       for (x = 0; x < p7H_NTRANSITIONS; x++) {
   if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few probability fields on transition line, node %d: expected %d, got %d\n", k, abc->K, x);
