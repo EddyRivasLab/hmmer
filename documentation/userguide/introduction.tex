@@ -307,12 +307,9 @@ Genbank), usually with autodetection.
 \paragraph{Faster DNA search.} This beta release includes a new
 option for increasing the speed of searching DNA sequence files. A
 binary file is created in a preprocessing step, using the tool 
-.BR makehmmerdb ,
-and 
-.I nhmmer 
+\prog{makehmmerdb}. The tool \prog{nhmmer} 
 then utilizes this binary format to support a fast new seed-finding 
-stage. Using default settings in 
-.IR nhmmer ,
+stage. Using default settings in \prog{nhmmer},
 we have observed a roughly 10-fold acceleration with small loss of 
 sensitivity on benchmarks. (This method has been extensively tested, 
 but should still be treated as somewhat experimental.)
