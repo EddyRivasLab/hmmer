@@ -209,9 +209,9 @@ static char banner[] = "search a DNA model or alignment against a DNA database";
 
 
 static int  serial_master  (ESL_GETOPTS *go, struct cfg_s *cfg);
-static int  serial_loop    (WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs, ESL_STOPWATCH *ssv_watch_master, ESL_STOPWATCH *postssv_watch_master, ESL_STOPWATCH *watch_slave);
+static int  serial_loop    (WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs /*, ESL_STOPWATCH *ssv_watch_master, ESL_STOPWATCH *postssv_watch_master, ESL_STOPWATCH *watch_slave*/);
 #if defined (p7_IMPL_SSE)
-  static int  serial_loop_FM (WORKER_INFO *info, ESL_SQFILE *dbfp, ESL_STOPWATCH *ssv_watch_master, ESL_STOPWATCH *postssv_watch_master, ESL_STOPWATCH *watch_slave);
+  static int  serial_loop_FM (WORKER_INFO *info, ESL_SQFILE *dbfp /*, ESL_STOPWATCH *ssv_watch_master, ESL_STOPWATCH *postssv_watch_master, ESL_STOPWATCH *watch_slave*/);
 #endif
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
@@ -513,13 +513,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int               force_single = ( esl_opt_IsOn(go, "--singlemx") ? TRUE : FALSE );
 
 
-  ESL_STOPWATCH *ssv_watch_master = esl_stopwatch_Create();
-  ESL_STOPWATCH *ssv_watch_master_tot = esl_stopwatch_Create();
+//  ESL_STOPWATCH *ssv_watch_master = esl_stopwatch_Create();
+//  ESL_STOPWATCH *ssv_watch_master_tot = esl_stopwatch_Create();
 
-  ESL_STOPWATCH *postssv_watch_master = esl_stopwatch_Create();
-  ESL_STOPWATCH *postssv_watch_master_tot = esl_stopwatch_Create();
+//  ESL_STOPWATCH *postssv_watch_master = esl_stopwatch_Create();
+//  ESL_STOPWATCH *postssv_watch_master_tot = esl_stopwatch_Create();
 
-  ESL_STOPWATCH *watch_slave  = esl_stopwatch_Create();
+//  ESL_STOPWATCH *watch_slave  = esl_stopwatch_Create();
 
   if (esl_opt_IsUsed(go, "--w_beta")) { if (  ( window_beta   = esl_opt_GetReal(go, "--w_beta") )  < 0 || window_beta > 1  ) esl_fatal("Invalid window-length beta value\n"); }
   if (esl_opt_IsUsed(go, "--w_length")) { if (( window_length = esl_opt_GetInteger(go, "--w_length")) < 4  ) esl_fatal("Invalid window length value\n"); }
@@ -949,13 +949,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           add_id_length(id_length_list, fm_cfg->meta->seq_data[i].target_id, fm_cfg->meta->seq_data[i].target_start + fm_cfg->meta->seq_data[i].length - 1);
 
         if (ncpus > 0)  sstatus = thread_loop_FM (info, threadObj, queue, dbfp);
-        else            sstatus = serial_loop_FM (info, dbfp, ssv_watch_master, postssv_watch_master, watch_slave);
+        else            sstatus = serial_loop_FM (info, dbfp/*, ssv_watch_master, postssv_watch_master, watch_slave*/);
       }
       else
   #endif //defined (p7_IMPL_SSE)
       {
         if (ncpus > 0)  sstatus = thread_loop    (info, id_length_list, threadObj, queue, dbfp, cfg->firstseq_key, cfg->n_targetseq);
-        else            sstatus = serial_loop    (info, id_length_list, dbfp, cfg->firstseq_key, cfg->n_targetseq, ssv_watch_master, postssv_watch_master, watch_slave);
+        else            sstatus = serial_loop    (info, id_length_list, dbfp, cfg->firstseq_key, cfg->n_targetseq/*, ssv_watch_master, postssv_watch_master, watch_slave*/);
       }
 #else //HMMER_THREADS
   #if defined (p7_IMPL_SSE)
@@ -963,7 +963,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         sstatus = serial_loop_FM (info, dbfp);
       else
   #endif // defined (p7_IMPL_SSE)
-        sstatus = serial_loop    (info, id_length_list, dbfp, cfg->firstseq_key, cfg->n_targetseq, ssv_watch_master, postssv_watch_master, watch_slave);
+        sstatus = serial_loop    (info, id_length_list, dbfp, cfg->firstseq_key, cfg->n_targetseq/*, ssv_watch_master, postssv_watch_master, watch_slave*/);
 #endif //HMMER_THREADS
 
 
@@ -1049,15 +1049,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       p7_pli_Statistics(ofp, info->pli, w);
 
-      esl_stopwatch_Display(stdout, ssv_watch_master,     "# SSV time: ");
-      esl_stopwatch_Display(stdout, postssv_watch_master, "# POSTSSV time: ");
+//      esl_stopwatch_Display(stdout, ssv_watch_master,     "# SSV time: ");
+//      esl_stopwatch_Display(stdout, postssv_watch_master, "# POSTSSV time: ");
 
-      esl_stopwatch_Include(ssv_watch_master_tot, ssv_watch_master);
-      esl_stopwatch_Include(postssv_watch_master_tot, postssv_watch_master);
+//      esl_stopwatch_Include(ssv_watch_master_tot, ssv_watch_master);
+//      esl_stopwatch_Include(postssv_watch_master_tot, postssv_watch_master);
 
       //reset the per-query master stopwatches
-      esl_stopwatch_Start(ssv_watch_master);      esl_stopwatch_Stop(ssv_watch_master);
-      esl_stopwatch_Start(postssv_watch_master);  esl_stopwatch_Stop(postssv_watch_master);
+//      esl_stopwatch_Start(ssv_watch_master);      esl_stopwatch_Stop(ssv_watch_master);
+//      esl_stopwatch_Start(postssv_watch_master);  esl_stopwatch_Stop(postssv_watch_master);
 
       if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
@@ -1216,7 +1216,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 //TODO: MPI code needs to be added here
 static int
-serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs, ESL_STOPWATCH *ssv_watch_master, ESL_STOPWATCH *postssv_watch_master, ESL_STOPWATCH *watch_slave)
+serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs/*, ESL_STOPWATCH *ssv_watch_master, ESL_STOPWATCH *postssv_watch_master, ESL_STOPWATCH *watch_slave*/)
 {
 
   int      wstatus = eslOK;
@@ -1243,7 +1243,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
 
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
         prev_hit_cnt = info->th->N;
-        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, info->pli->nseqs, dbsq, p7_NOCOMPLEMENT, NULL, NULL, NULL, ssv_watch_master, postssv_watch_master, watch_slave);
+        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, info->pli->nseqs, dbsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, ssv_watch_master, postssv_watch_master, watch_slave*/);
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
       } else {
@@ -1256,7 +1256,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
           prev_hit_cnt = info->th->N;
           esl_sq_Copy(dbsq,dbsq_revcmp);
           esl_sq_ReverseComplement(dbsq_revcmp);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, info->pli->nseqs, dbsq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL, ssv_watch_master, postssv_watch_master, watch_slave);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, info->pli->nseqs, dbsq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL/*, ssv_watch_master, postssv_watch_master, watch_slave*/);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           info->pli->nres += dbsq_revcmp->W;
@@ -1288,7 +1288,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
 
 #if defined (p7_IMPL_SSE)
 static int
-serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp, ESL_STOPWATCH *ssv_watch_master, ESL_STOPWATCH *postssv_watch_master, ESL_STOPWATCH *watch_slave)
+serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp /*, ESL_STOPWATCH *ssv_watch_master, ESL_STOPWATCH *postssv_watch_master, ESL_STOPWATCH *watch_slave*/)
 {
 
   int      wstatus = eslOK;
@@ -1311,7 +1311,7 @@ serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp, ESL_STOPWATCH *ssv_watch_mas
     fmb.T  = fmf.T;
 
     wstatus = p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg,
-        info->th, -1, NULL, -1,  &fmf, &fmb, info->fm_cfg, ssv_watch_master, postssv_watch_master, watch_slave);
+        info->th, -1, NULL, -1,  &fmf, &fmb, info->fm_cfg/*, ssv_watch_master, postssv_watch_master, watch_slave*/);
     if (wstatus != eslOK) return wstatus;
 
     fm_FM_destroy(&fmf, 1);
@@ -1468,7 +1468,7 @@ pipeline_thread(void *arg)
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
 
         prev_hit_cnt = info->th->N;
-        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, block->first_seqidx + i, dbsq, p7_NOCOMPLEMENT, NULL, NULL, NULL, NULL, NULL, NULL);
+        p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, block->first_seqidx + i, dbsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
       } else {
@@ -1481,7 +1481,7 @@ pipeline_thread(void *arg)
       {
           prev_hit_cnt = info->th->N;
           esl_sq_ReverseComplement(dbsq);
-          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, block->first_seqidx + i, dbsq, p7_COMPLEMENT, NULL, NULL, NULL, NULL, NULL, NULL);
+          p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, block->first_seqidx + i, dbsq, p7_COMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
           p7_pipeline_Reuse(info->pli); // prepare for next search
 
           info->pli->nres += dbsq->W;
@@ -1594,7 +1594,7 @@ pipeline_thread_FM(void *arg)
   while (fminfo->active)
   {
       status = p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg,
-          info->th, -1, NULL, -1,  fminfo->fmf, fminfo->fmb, info->fm_cfg, NULL, NULL, NULL );
+          info->th, -1, NULL, -1,  fminfo->fmf, fminfo->fmb, info->fm_cfg/*, NULL, NULL, NULL */);
       if (status != eslOK) esl_fatal ("Work queue worker failed");
 
       fm_FM_destroy(fminfo->fmf, 1);
