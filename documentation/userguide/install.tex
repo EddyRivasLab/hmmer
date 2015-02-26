@@ -4,14 +4,21 @@
 
 \subsection{Quick installation instructions}
 
-Download \prog{hmmer-3.1b2.tar.gz} from \url{http://hmmer.org/}, or
-directly from
-\url{ftp://selab.janelia.org/pub/software/hmmer3/3.1b2/hmmer-3.1b2.tar.gz};
-unpack it, configure, and make:
-
+Download \prog{hmmer-3.1b2.tar.gz} from \url{http://hmmer.org/};
+%, or
+%directly from the ftp
+%\url{ftp://selab.janelia.org/pub/software/hmmer3/3.1b2/hmmer-3.1b2.tar.gz};
+unpack it:
 \user{wget ftp://selab.janelia.org/pub/software/hmmer3/3.1b2/hmmer-3.1b2.tar.gz}\\
 \user{tar xf hmmer-3.1b2.tar.gz}\\
-\user{cd hmmer-3.1b1}\\
+\user{cd hmmer-3.1b1}
+
+If you have downloaded a variant "with binaries", the pre-compiled binaries are 
+found in the directory \user{./binaries}. You may copy these into a directory of 
+your choosing, or simply add this directory to your \user{$PATH} variable.
+
+If you have downloaded the HMMER source code, you'll need to compile the software
+with configure and make:
 \user{./configure}\\ 
 \user{make}
 

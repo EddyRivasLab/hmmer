@@ -273,8 +273,10 @@ postprocessing.
 Turn off (nearly) all filters, including the bias filter, and run full
 Forward/Backward postprocessing on most of the target sequence. 
 In contrast to 
-.BR hmmscan ,
-the 
+.B phmmer
+and
+.BR hmmsearch ,
+where this flag really does turn off the filters entirely, the
 .I --max
 flag in 
 .B nhmmer

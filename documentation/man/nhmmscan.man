@@ -264,7 +264,7 @@ Turn off (nearly) all filters, including the bias filter, and run full
 Forward/Backward postprocessing on most of the target sequence.
 In contrast to  
 .B hmmscan,
-the 
+where this flag really does turn off the filters entirely, the 
 .I --max
 flag in 
 .B nhmmscan
