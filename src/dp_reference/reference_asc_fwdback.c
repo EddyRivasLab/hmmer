@@ -457,7 +457,7 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
       xc[p7R_B]  = -eslINFINITY;
       xc[p7R_J]  = -eslINFINITY;
       xc[p7R_N]  = -eslINFINITY;
-      xc[p7R_E]  = xC + gm->xsc[p7P_E][p7P_MOVE];
+      xc[p7R_E]  = xC + gm->xsc[p7P_E][p7P_MOVE];  // cppcheck thinks xC can be uninitialized here, but it can't; xC is initialized at i==L, 1st pass thru loop
     }
 
   /* The code below is designed to be easily convertible to one-row memory efficient DP, if needed */

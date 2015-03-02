@@ -1829,6 +1829,7 @@ static void *
 workerside_thread(void *arg)
 {
   HMMD_COMMAND     *cmd     = NULL;
+
   WORKER_DATA      *worker  = (WORKER_DATA *)arg;
   WORKERSIDE_ARGS  *parent  = (WORKERSIDE_ARGS *)worker->parent;
   HMMD_HEADER       hdr;
@@ -1911,7 +1912,7 @@ workerside_thread(void *arg)
      *    the total malloc size for an HMMD_COMMAND is calculated from the header, using MSG_SIZE(cmd)
      */
     n = MSG_SIZE(&hdr);
-    if ((cmd = realloc(cmd, n)) == NULL) {
+    if (realloc(cmd, n) == NULL) {
       p7_syslog(LOG_ERR,"[%s:%d] - realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
       status = eslFAIL;
     }

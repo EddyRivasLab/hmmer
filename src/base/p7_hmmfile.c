@@ -686,7 +686,7 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
  * Purpose:   Write a profile HMM <hmm> in to string <ascii_hmm> in ASCII
  *            format.
  *
- *            Should produce same output as p7_hmmfile_WriteASCII
+ *            Produces same output as p7_hmmfile_WriteASCII().
  *
  *            Legacy file formats in the 3.x release series are
  *            supported by specifying the <format> code. Pass <-1> to
@@ -700,7 +700,9 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
  *            format    - -1 for default format, or a 3.x format code like <p7_HMMFILE_3a>
  *            hmm       - HMM to save
  *
- * Returns:   <eslOK> on success or <eslEWRITE> on error.
+ * Returns:   <eslOK> on success.
+ *
+ *            <eslEWRITE> if an sprintf() fails.
  */
 int
 p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
@@ -710,14 +712,13 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
 
   int offset;
   int coffset = 0;
-  /* These 3 chars and int are used in the size determiantion */
+  /* These 3 chars and int are used in the size determination */
   int size;
   int n = 0;
   char buff[100];
   char *end   = NULL;
   char *sptr;
-
-  char *ret_hmm;
+  char *hmmstring = NULL;
 
   if (format == -1) format = p7_HMMFILE_3f;
 
@@ -786,102 +787,102 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
   size += 3;                                                        /* Final terminating line */
 
   /* Now allocate the memory for the HMM string */
-  ret_hmm = malloc(sizeof(char) * (size));
+  ESL_ALLOC(hmmstring, sizeof(char) * (size));
 
   /* Now added the HMM text to the string, remembering to offset the position */
   /* If anything fails, return an eslEWRITE error */
 
   /* Header block */
-  if      (format == p7_HMMFILE_3f)  { if ((offset = sprintf(ret_hmm, "HMMER3/f [%s | %s]\n",  HMMER_VERSION, HMMER_DATE))                              < 0) return eslEWRITE; }
-  else if (format == p7_HMMFILE_3e)  { if ((offset = sprintf(ret_hmm, "HMMER3/e [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))   < 0) return eslEWRITE; }
-  else if (format == p7_HMMFILE_3d)  { if ((offset = sprintf(ret_hmm, "HMMER3/d [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))   < 0) return eslEWRITE; }
-  else if (format == p7_HMMFILE_3c)  { if ((offset = sprintf(ret_hmm, "HMMER3/c [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))    < 0) return eslEWRITE; }
-  else if (format == p7_HMMFILE_3b)  { if ((offset = sprintf(ret_hmm, "HMMER3/b [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))    < 0) return eslEWRITE; }
-  else if (format == p7_HMMFILE_3a)  { if ((offset = sprintf(ret_hmm, "HMMER3/a [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))    < 0) return eslEWRITE; }
-  else return eslEINVAL;
+  if      (format == p7_HMMFILE_3f)  { if ((offset = sprintf(hmmstring, "HMMER3/f [%s | %s]\n",  HMMER_VERSION, HMMER_DATE))                              < 0) { status = eslEWRITE; goto ERROR; } }
+  else if (format == p7_HMMFILE_3e)  { if ((offset = sprintf(hmmstring, "HMMER3/e [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))   < 0) { status = eslEWRITE; goto ERROR; } }
+  else if (format == p7_HMMFILE_3d)  { if ((offset = sprintf(hmmstring, "HMMER3/d [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))   < 0) { status = eslEWRITE; goto ERROR; } }
+  else if (format == p7_HMMFILE_3c)  { if ((offset = sprintf(hmmstring, "HMMER3/c [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))   < 0) { status = eslEWRITE; goto ERROR; } }
+  else if (format == p7_HMMFILE_3b)  { if ((offset = sprintf(hmmstring, "HMMER3/b [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))   < 0) { status = eslEWRITE; goto ERROR; } }
+  else if (format == p7_HMMFILE_3a)  { if ((offset = sprintf(hmmstring, "HMMER3/a [%s | %s; reverse compatibility mode]\n", HMMER_VERSION, HMMER_DATE))   < 0) { status = eslEWRITE; goto ERROR; } }
+  else { status = eslEINVAL; goto ERROR; }
   coffset = offset;
 
-  if ((offset = sprintf(ret_hmm + coffset, "NAME  %s\n", hmm->name))                              < 0) return eslEWRITE;
+  if ((offset = sprintf(hmmstring + coffset, "NAME  %s\n", hmm->name))                              < 0) { status = eslEWRITE; goto ERROR; } 
   coffset += offset;
 
   if (hmm->acc){
-    if((offset = sprintf(ret_hmm + coffset, "ACC   %s\n", hmm->acc))                              < 0) return eslEWRITE;
+    if((offset = sprintf(hmmstring + coffset, "ACC   %s\n", hmm->acc))                              < 0) { status = eslEWRITE; goto ERROR; } 
     coffset += offset;
   }
 
   if (hmm->desc){
-    if ((offset = sprintf(ret_hmm + coffset, "DESC  %s\n", hmm->desc))                            < 0) return eslEWRITE;
+    if ((offset = sprintf(hmmstring + coffset, "DESC  %s\n", hmm->desc))                            < 0) { status = eslEWRITE; goto ERROR; }
     coffset += offset;
   }
 
-  if ((offset = sprintf(ret_hmm + coffset, "LENG  %d\n", hmm->M))                                 < 0) return eslEWRITE;
+  if ((offset = sprintf(hmmstring + coffset, "LENG  %d\n", hmm->M))                                 < 0) { status = eslEWRITE; goto ERROR; }
   coffset += offset;
 
   if (format >= p7_HMMFILE_3c && hmm->max_length > 0){
-    if((offset = sprintf(ret_hmm + coffset, "MAXL  %d\n", hmm->max_length))                       < 0) return eslEWRITE;
+    if((offset = sprintf(hmmstring + coffset, "MAXL  %d\n", hmm->max_length))                       < 0) { status = eslEWRITE; goto ERROR; }
     coffset += offset;
   }
 
-  if ((offset = sprintf(ret_hmm + coffset, "ALPH  %s\n", esl_abc_DecodeType(hmm->abc->type)))     < 0) return eslEWRITE;
+  if ((offset = sprintf(hmmstring + coffset, "ALPH  %s\n", esl_abc_DecodeType(hmm->abc->type)))     < 0) { status = eslEWRITE; goto ERROR; }
   coffset += offset;
 
-  if ((offset = sprintf(ret_hmm+coffset, "RF    %s\n", (hmm->flags & p7H_RF)    ? "yes" : "no"))  < 0) return eslEWRITE;
+  if ((offset = sprintf(hmmstring+coffset, "RF    %s\n", (hmm->flags & p7H_RF)    ? "yes" : "no"))  < 0) { status = eslEWRITE; goto ERROR; } 
   coffset += offset;
 
   if ((format >= p7_HMMFILE_3f)){
-    if ((offset = sprintf(ret_hmm+coffset, "MM    %s\n", (hmm->flags & p7H_MMASK) ? "yes" : "no"))  < 0) return eslEWRITE;
+    if ((offset = sprintf(hmmstring+coffset, "MM    %s\n", (hmm->flags & p7H_MMASK) ? "yes" : "no"))  < 0) { status = eslEWRITE; goto ERROR; }
     coffset += offset;
   }
 
   if ((format >= p7_HMMFILE_3e)){
-    if((offset = sprintf(ret_hmm+coffset, "CONS  %s\n", (hmm->flags & p7H_CONS)  ? "yes" : "no")) < 0) return eslEWRITE;
+    if((offset = sprintf(hmmstring+coffset, "CONS  %s\n", (hmm->flags & p7H_CONS)  ? "yes" : "no")) < 0) { status = eslEWRITE; goto ERROR; } 
     coffset += offset;
   }
 
-  if ((offset = sprintf(ret_hmm+coffset, "CS    %s\n", (hmm->flags & p7H_CS)    ? "yes" : "no"))  < 0) return eslEWRITE;
+  if ((offset = sprintf(hmmstring+coffset, "CS    %s\n", (hmm->flags & p7H_CS)    ? "yes" : "no"))  < 0) { status = eslEWRITE; goto ERROR; } 
   coffset += offset;
 
-  if ((offset = sprintf(ret_hmm+coffset, "MAP   %s\n", (hmm->flags & p7H_MAP)   ? "yes" : "no"))  < 0) return eslEWRITE;
+  if ((offset = sprintf(hmmstring+coffset, "MAP   %s\n", (hmm->flags & p7H_MAP)   ? "yes" : "no"))  < 0) { status = eslEWRITE; goto ERROR; } 
   coffset += offset;
 
   if (hmm->ctime    != NULL){
-      if((offset = sprintf(ret_hmm + coffset, "DATE  %s\n", hmm->ctime))                          < 0) return eslEWRITE;
+      if((offset = sprintf(hmmstring + coffset, "DATE  %s\n", hmm->ctime))                          < 0) { status = eslEWRITE; goto ERROR; } 
       coffset += offset;
   }
 
   if (hmm->comlog   != NULL)   {
-    if ( (status = multilineString(&ret_hmm, "COM  ", hmm->comlog, &coffset)) != eslOK) return status; }
+    if ( (status = multilineString(&hmmstring, "COM  ", hmm->comlog, &coffset)) != eslOK) goto ERROR; }
 
 
   if (hmm->nseq   >= 0){
-    if((offset = sprintf(ret_hmm + coffset, "NSEQ  %d\n", hmm->nseq))                            < 0) return eslEWRITE;
+    if((offset = sprintf(hmmstring + coffset, "NSEQ  %d\n", hmm->nseq))                            < 0) { status = eslEWRITE; goto ERROR; } 
     coffset += offset;
   }
 
   if (hmm->eff_nseq   >= 0){
-    if((offset = sprintf(ret_hmm + coffset, "EFFN  %f\n", hmm->eff_nseq))                        < 0) return eslEWRITE;
+    if((offset = sprintf(hmmstring + coffset, "EFFN  %f\n", hmm->eff_nseq))                        < 0) { status = eslEWRITE; goto ERROR; } 
     coffset += offset;
   }
 
   if (hmm->flags & p7H_CHKSUM) {
-    if ((offset = sprintf  (ret_hmm + coffset, "CKSUM %u\n", hmm->checksum))                     < 0) return eslEWRITE;
+    if ((offset = sprintf  (hmmstring + coffset, "CKSUM %u\n", hmm->checksum))                     < 0) { status = eslEWRITE; goto ERROR; } 
     coffset += offset;
   } /* unsigned 32-bit */
 
 
   /* Thresholds */
   if ((hmm->flags & p7H_GA)){
-    if(( offset = sprintf(ret_hmm + coffset , "GA    %.2f %.2f\n", hmm->cutoff[p7_GA1], hmm->cutoff[p7_GA2])) < 0) return eslEWRITE;
+    if(( offset = sprintf(hmmstring + coffset , "GA    %.2f %.2f\n", hmm->cutoff[p7_GA1], hmm->cutoff[p7_GA2])) < 0) { status = eslEWRITE; goto ERROR; } 
     coffset += offset;
   }
 
   if ((hmm->flags & p7H_TC)){
-     if(( offset = sprintf(ret_hmm + coffset , "TC    %.2f %.2f\n", hmm->cutoff[p7_TC1], hmm->cutoff[p7_TC2])) < 0) return eslEWRITE;
+     if(( offset = sprintf(hmmstring + coffset , "TC    %.2f %.2f\n", hmm->cutoff[p7_TC1], hmm->cutoff[p7_TC2])) < 0) { status = eslEWRITE; goto ERROR; } 
      coffset += offset;
   }
 
   if ((hmm->flags & p7H_NC)){
-     if(( offset = sprintf(ret_hmm + coffset , "NC    %.2f %.2f\n", hmm->cutoff[p7_NC1], hmm->cutoff[p7_NC2])) < 0) return eslEWRITE;
+     if(( offset = sprintf(hmmstring + coffset , "NC    %.2f %.2f\n", hmm->cutoff[p7_NC1], hmm->cutoff[p7_NC2])) < 0) { status = eslEWRITE; goto ERROR; } 
      coffset += offset;
   }
 
@@ -889,18 +890,18 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
   /* E-value stats */
   if (hmm->flags & p7H_STATS) {
     if (format == p7_HMMFILE_3a){
-      if ((offset =sprintf(ret_hmm + coffset, "STATS LOCAL     VLAMBDA %f\n", hmm->evparam[p7_MLAMBDA]))                               < 0) return eslEWRITE;
+      if ((offset =sprintf(hmmstring + coffset, "STATS LOCAL     VLAMBDA %f\n", hmm->evparam[p7_MLAMBDA]))                               < 0) { status = eslEWRITE; goto ERROR; }
       coffset += offset;
-      if ((offset =sprintf(ret_hmm + coffset, "STATS LOCAL         VMU %f\n", hmm->evparam[p7_MMU]))                                   < 0) return eslEWRITE;
+      if ((offset =sprintf(hmmstring + coffset, "STATS LOCAL         VMU %f\n", hmm->evparam[p7_MMU]))                                   < 0) { status = eslEWRITE; goto ERROR; }
       coffset += offset;
-      if ((offset =sprintf(ret_hmm + coffset, "STATS LOCAL        FTAU %f\n", hmm->evparam[p7_FTAU]))                                  < 0) return eslEWRITE;
+      if ((offset =sprintf(hmmstring + coffset, "STATS LOCAL        FTAU %f\n", hmm->evparam[p7_FTAU]))                                  < 0) { status = eslEWRITE; goto ERROR; }
       coffset += offset;
     }else{
-      if ((offset =sprintf(ret_hmm + coffset, "STATS LOCAL MSV      %8.4f %8.5f\n", hmm->evparam[p7_MMU],  hmm->evparam[p7_MLAMBDA]))  < 0) return eslEWRITE;
+      if ((offset =sprintf(hmmstring + coffset, "STATS LOCAL MSV      %8.4f %8.5f\n", hmm->evparam[p7_MMU],  hmm->evparam[p7_MLAMBDA]))  < 0) { status = eslEWRITE; goto ERROR; }
       coffset += offset;
-      if ((offset = sprintf(ret_hmm + coffset, "STATS LOCAL VITERBI  %8.4f %8.5f\n", hmm->evparam[p7_VMU],  hmm->evparam[p7_VLAMBDA])) < 0) return eslEWRITE;
+      if ((offset = sprintf(hmmstring + coffset, "STATS LOCAL VITERBI  %8.4f %8.5f\n", hmm->evparam[p7_VMU],  hmm->evparam[p7_VLAMBDA])) < 0) { status = eslEWRITE; goto ERROR; }
       coffset += offset;
-      if ((offset = sprintf(ret_hmm + coffset, "STATS LOCAL FORWARD  %8.4f %8.5f\n", hmm->evparam[p7_FTAU], hmm->evparam[p7_FLAMBDA])) < 0) return eslEWRITE;
+      if ((offset = sprintf(hmmstring + coffset, "STATS LOCAL FORWARD  %8.4f %8.5f\n", hmm->evparam[p7_FTAU], hmm->evparam[p7_FLAMBDA])) < 0) { status = eslEWRITE; goto ERROR; }
       coffset += offset;
     }
   }
@@ -908,112 +909,117 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
 
 
   /* HMM body */
-  if ((offset = sprintf(ret_hmm + coffset, "HMM     "))                         < 0) return eslEWRITE;
+  if ((offset = sprintf(hmmstring + coffset, "HMM     "))                         < 0) { status = eslEWRITE; goto ERROR; }
   coffset += offset;
 
   for (x = 0; x < hmm->abc->K; x++){
-    if ((offset = sprintf(ret_hmm + coffset, "     %c   ", hmm->abc->sym[x]))   < 0) return eslEWRITE;
+    if ((offset = sprintf(hmmstring + coffset, "     %c   ", hmm->abc->sym[x]))   < 0) { status = eslEWRITE; goto ERROR; }
     coffset += offset;
   }
-  if((offset = sprintf(ret_hmm + coffset, "\n"))                                < 0) return eslEWRITE;
+  if((offset = sprintf(hmmstring + coffset, "\n"))                                < 0) { status = eslEWRITE; goto ERROR; }
   coffset += offset;
 
-  if ((offset = sprintf(ret_hmm + coffset, "        %8s %8s %8s %8s %8s %8s %8s\n",
-         "m->m", "m->i", "m->d", "i->m", "i->i", "d->m", "d->d"))               < 0) return eslEWRITE;
+  if ((offset = sprintf(hmmstring + coffset, "        %8s %8s %8s %8s %8s %8s %8s\n",
+         "m->m", "m->i", "m->d", "i->m", "i->i", "d->m", "d->d"))               < 0) { status = eslEWRITE; goto ERROR; }
   coffset += offset;
 
   if (hmm->flags & p7H_COMPO) {
-    if ((offset = sprintf(ret_hmm + coffset, "  COMPO ")) < 0) return eslEWRITE;
+    if ((offset = sprintf(hmmstring + coffset, "  COMPO ")) < 0) { status = eslEWRITE; goto ERROR; }
       coffset += offset;
       for (x = 0; x < hmm->abc->K; x++){
-        if ( (status = probToString(&ret_hmm, 8, hmm->compo[x], coffset)) != eslOK) return status;
+        if ( (status = probToString(&hmmstring, 8, hmm->compo[x], coffset)) != eslOK) goto ERROR;
         coffset += 9;
       }
-   if((offset = sprintf(ret_hmm + coffset, "\n"))                               < 0) return eslEWRITE;
+   if((offset = sprintf(hmmstring + coffset, "\n"))                               < 0) { status = eslEWRITE; goto ERROR; }
    coffset += offset;
   }
 
   /* node 0 is special: insert emissions, and B-> transitions */
-  if ((offset = sprintf(ret_hmm + coffset, "        "))                         < 0) return eslEWRITE;
+  if ((offset = sprintf(hmmstring + coffset, "        "))                         < 0) { status = eslEWRITE; goto ERROR; }
   coffset += offset;
   for (x = 0; x < hmm->abc->K; x++){
-    if ( (status = probToString(&ret_hmm, 8, hmm->ins[0][x], coffset)) != eslOK) return status;
+    if ( (status = probToString(&hmmstring, 8, hmm->ins[0][x], coffset)) != eslOK) goto ERROR;
     coffset += 9;
   }
 
-  if((offset = sprintf(ret_hmm + coffset, "\n"))                                < 0) return eslEWRITE;
+  if((offset = sprintf(hmmstring + coffset, "\n"))                                < 0) { status = eslEWRITE; goto ERROR; }
   coffset += offset;
 
-  if ((offset = sprintf(ret_hmm + coffset, "        "))                         < 0) return eslEWRITE;
+  if ((offset = sprintf(hmmstring + coffset, "        "))                         < 0) { status = eslEWRITE; goto ERROR; }
   coffset += offset;
   for (x = 0; x <  p7H_NTRANSITIONS; x++){
-    if ( (status = probToString(&ret_hmm, 8, hmm->t[0][x], coffset)) != eslOK)  return status;
+    if ( (status = probToString(&hmmstring, 8, hmm->t[0][x], coffset)) != eslOK)  goto ERROR;
     coffset += 9;
   }
 
-  if((offset = sprintf(ret_hmm + coffset, "\n"))                                < 0) return eslEWRITE;
+  if((offset = sprintf(hmmstring + coffset, "\n"))                                < 0) { status = eslEWRITE; goto ERROR; }
   coffset += offset;
 
 
   for (k = 1; k <= hmm->M; k++) {
     /* Line 1: k; match emissions; optional map, RF, CS */
-    if ((offset = sprintf(ret_hmm + coffset, " %6d ",  k))                    < 0) return eslEWRITE;
+    if ((offset = sprintf(hmmstring + coffset, " %6d ",  k))                    < 0) { status = eslEWRITE; goto ERROR; }
     coffset += offset;
 
     for (x = 0; x < hmm->abc->K; x++){
-      if ( (status = probToString(&ret_hmm, 8, hmm->mat[k][x], coffset)) != eslOK) return status;
+      if ( (status = probToString(&hmmstring, 8, hmm->mat[k][x], coffset)) != eslOK) goto ERROR;
       coffset += 9;
     }
 
     if (hmm->flags & p7H_MAP) {
-      if ((offset = sprintf(ret_hmm + coffset, " %6d", hmm->map[k]))          < 0) return eslEWRITE;
+      if ((offset = sprintf(hmmstring + coffset, " %6d", hmm->map[k]))          < 0) { status = eslEWRITE; goto ERROR; }
       coffset += offset;
     } else {
-      if ((offset = sprintf(ret_hmm + coffset, " %6s", "-"))         < 0) return eslEWRITE;
+      if ((offset = sprintf(hmmstring + coffset, " %6s", "-"))         < 0) { status = eslEWRITE; goto ERROR; }
       coffset += offset;
     }
 
     if (format >= p7_HMMFILE_3e) {
-      if ((offset = sprintf(ret_hmm + coffset, " %c",  (hmm->flags & p7H_CONS)  ? hmm->consensus[k] : '-')) < 0) return eslEWRITE;
+      if ((offset = sprintf(hmmstring + coffset, " %c",  (hmm->flags & p7H_CONS)  ? hmm->consensus[k] : '-')) < 0) { status = eslEWRITE; goto ERROR; }
       coffset += offset;
     }
 
-    if ((offset = sprintf(ret_hmm + coffset, " %c",    (hmm->flags & p7H_RF)    ? hmm->rf[k]        : '-')) < 0) return eslEWRITE;
+    if ((offset = sprintf(hmmstring + coffset, " %c",    (hmm->flags & p7H_RF)    ? hmm->rf[k]        : '-')) < 0) { status = eslEWRITE; goto ERROR; }
     coffset += offset;
 
     if (format >= p7_HMMFILE_3f) {
-      if ((offset = sprintf(ret_hmm + coffset, " %c",  (hmm->flags & p7H_MMASK) ? hmm->mm[k]        : '.')) < 0) return eslEWRITE;
+      if ((offset = sprintf(hmmstring + coffset, " %c",  (hmm->flags & p7H_MMASK) ? hmm->mm[k]        : '.')) < 0) { status = eslEWRITE; goto ERROR; }
       coffset += offset;
     }
 
-    if ((offset = sprintf(ret_hmm + coffset, " %c\n",  (hmm->flags & p7H_CS)    ? hmm->cs[k]        : '-')) < 0) return eslEWRITE;
+    if ((offset = sprintf(hmmstring + coffset, " %c\n",  (hmm->flags & p7H_CS)    ? hmm->cs[k]        : '-')) < 0) { status = eslEWRITE; goto ERROR; }
     coffset += offset;
 
     /* Line 2:   insert emissions */
-    if ((offset = sprintf(ret_hmm + coffset, "        ")) < 0) return eslEWRITE;
+    if ((offset = sprintf(hmmstring + coffset, "        ")) < 0) { status = eslEWRITE; goto ERROR; }
     coffset += offset;
 
     for (x = 0; x < hmm->abc->K; x++){
-      if( (status = probToString(&ret_hmm, 8, hmm->ins[k][x], coffset)) != eslOK) return status;
+      if( (status = probToString(&hmmstring, 8, hmm->ins[k][x], coffset)) != eslOK) goto ERROR;
       coffset += 9; /*Fieldwidth + 1 for space*/
     }
 
     /* Line 3:   transitions */
-    if ((offset = sprintf(ret_hmm + coffset, "\n        ")) < 0) return eslEWRITE;
+    if ((offset = sprintf(hmmstring + coffset, "\n        ")) < 0) { status = eslEWRITE; goto ERROR; }
     coffset += offset;
 
     for (x = 0; x < p7H_NTRANSITIONS; x++){
-      if ( (status = probToString(&ret_hmm, 8, hmm->t[k][x], coffset)) != eslOK) return status;
+      if ( (status = probToString(&hmmstring, 8, hmm->t[k][x], coffset)) != eslOK) goto ERROR;
       coffset += 9;/*Fieldwidth + 1 for space*/
     }
-    if ((offset = sprintf(ret_hmm + coffset, "\n")) < 0) return eslEWRITE;
+    if ((offset = sprintf(hmmstring + coffset, "\n")) < 0) { status = eslEWRITE; goto ERROR; }
     coffset += offset;
   }
 
-  if (sprintf(ret_hmm + coffset, "//\n") < 0) return eslEWRITE;
-  *ascii_hmm = ret_hmm;
+  if (sprintf(hmmstring + coffset, "//\n") < 0) { status = eslEWRITE; goto ERROR; }
+  *ascii_hmm = hmmstring;
 
   return eslOK;
+
+ ERROR:
+  if (hmmstring) free(hmmstring);
+  return status;
+
 }
 
 /* Function:  p7_hmmfile_WriteBinary()

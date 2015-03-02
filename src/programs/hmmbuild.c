@@ -958,12 +958,12 @@ serial_loop(WORKER_INFO *info, struct cfg_s *cfg, const ESL_GETOPTS *go)
 
       /*         bg   new-HMM trarr gm   om  */
       if ( msa->nseq > 1 || cfg->abc->type != eslAMINO || !esl_opt_IsUsed(go, "--single")) {
-        if ((status = p7_Builder(info->bld, msa, info->bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
+        if ((status = p7_Builder(info->bld, msa, info->bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) p7_Fail("build failed: %s", info->bld->errbuf);
       } else {
         //for protein, single sequence, use blosum matrix:
         sq = esl_sq_CreateDigital(cfg->abc);
-        if ((status = esl_sq_FetchFromMSA(msa, 0, &sq)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
-        if ((status = p7_SingleBuilder(info->bld, sq, info->bg, &hmm, NULL, NULL, NULL)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
+        if ((status = esl_sq_FetchFromMSA(msa, 0, &sq))                                  != eslOK) p7_Fail("build failed: failed to extract seq from msa");
+        if ((status = p7_SingleBuilder(info->bld, sq, info->bg, &hmm, NULL, NULL, NULL)) != eslOK) p7_Fail("build failed: %s", info->bld->errbuf);
         esl_sq_Destroy(sq);
         sq = NULL;
         hmm->eff_nseq = 1;
