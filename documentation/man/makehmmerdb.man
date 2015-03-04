@@ -17,7 +17,8 @@ makehmmerdb - build a HMMER binary database file from a sequence file
 .B makehmmerdb 
 is used to create a binary file from a DNA sequence file. This 
 binary file may be used as a target database for the DNA search tool
-.BR nhmmer . Using default settings in 
+.BR nhmmer . 
+Using default settings in 
 .IR nhmmer ,
 this yields a roughly 10-fold acceleration with small loss of 
 sensitivity on benchmarks. (This method has been extensively tested, 
