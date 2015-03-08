@@ -214,7 +214,7 @@ main(int argc, char **argv)
 
   if ((yv       = malloc(sizeof(double *) * plot->nxpts)) == NULL) esl_fatal("malloc failed");
   for (xi = 0; xi < plot->nxpts; xi++)
-    if ((yv[xi]   = malloc(sizeof(double *) * nboots)) == NULL) esl_fatal("malloc failed");
+    if ((yv[xi]   = malloc(sizeof(double) * nboots)) == NULL) esl_fatal("malloc failed");
 
 
   /* "Bayesian" bootstraps:  */

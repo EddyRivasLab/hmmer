@@ -951,6 +951,10 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
 
     if ((dcl = malloc(sizeof(void *) * results->stats.nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
     th.hit = (P7_HIT **)dcl;
+    // SRE: the code above looks fishy. dcl should be <P7_DOMAIN **>;
+    // th.hit should be <P7_HIT **>. They are not the same size.
+    // But Farrar is being tricksy below; is this an error, or by design?
+    // I don't dare "fix" it quickly; it needs careful thought.
 
     for (i = 0; i < th.N; ++i) th.hit[i] = hits + i;
     p7_tophits_Threshold(&th, pli);
@@ -1121,8 +1125,8 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
   s = strsep(&ptr, " \t");
   if (strcmp(s, "shutdown") == 0) 
     {
-      if ((cmd = malloc(sizeof(HMMD_HEADER))) == NULL) LOG_FATAL_MSG("malloc", errno);
-      memset(cmd, 0, sizeof(HMMD_HEADER)); /* avoid uninit bytes & valgrind bitching. Remove, if we ever serialize structs correctly. */
+      if ((cmd = malloc(sizeof(HMMD_COMMAND))) == NULL) LOG_FATAL_MSG("malloc", errno);
+      memset(cmd, 0, sizeof(HMMD_COMMAND)); /* avoid uninit bytes & valgrind bitching. Remove, if we ever serialize structs correctly. */
       cmd->hdr.length  = 0;
       cmd->hdr.command = HMMD_CMD_SHUTDOWN;
     } 

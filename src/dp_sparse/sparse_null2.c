@@ -14,23 +14,61 @@
 
 #if 0 /* during dev */
 
+/* Function:  
+ * Synopsis:  
+ *
+ * Purpose:   
+ *
+ * Args:      wrk : space for M+1 floats. wrk[0] = inserts; wrk[1..M] = match k=1..M
+ *
+ * Returns:   
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      
+ */
+
+
 int
-p7_sparse_Null2(const P7_SPARSEMX *apd, const P7_ENVELOPES *env)
+p7_sparse_Null2(const P7_SPARSEMX *apd, const P7_ENVELOPES *env, float *wrk)
 {
   const P7_SPARSEMASK *sm  = apd->sm;
   const float         *ppp = apd->dp;
-  int d,g;
+  int                  M   = apd->M;
+  int d,g,i,z;
   
   g = 0;
   for (d = 1; d <= env->D; d++)
     {
+      /*****************************************************************
+       * Because of anchor and envelope constrained sparsity,
+       * mechanics of simply enumerating matrix cells ppp[i,k] are
+       * heavy. Don't despair; all the following chunk of code does is to
+       * count
+       *    c_s = \sum_i=ia(d)..ib(d) P(\pi_i = s)
+       * for each emitting state s: c_s counts are stored in wrk[].
+       */
+      /* wrk[0,1..M] accumulates expected usage count of any insert, match[1..M] for domain <d> */
+      esl_vec_FSet(wrk, M+1, 0.0f);
+      /* <ppp> maintenance (1): skip leading rows <i>, get <ppp> onto start of row <ia(d)> */
+      while (env->arr[d].i0 > sm->seg[g].ib)  g++;                          // find which segment <g> that anchor <d> is in
+      if (env->arr[d-1].i0 < sm->seg[g].ia)                                 // If <d> is 1st domain in seg <g>
+	{                                                                   // then for ASC rows ia(g)..ia(d)-1, ASC is only in UP sector;
+	  for (i = sm->seg[g].ia; i < env->arr[d].ia; i++)                  // advance <ppp> over UP(i) rows.
+	    for (z = 0; z < sm->n[i] && sm->k[i][z] < env->arr[d].k0; z++)
+	      ppp += p7S_NSCELLS;
+	}
+      else                                                                  // Else <d> isn't first,
+	{                                                                   // and for ASC rows ib(d-1)..ia(d)-1, 
+	  for (i = sm->arr[d-1].ib+1; i < env->arr[d].ia; i++)              // advance <ppp> over both DOWN(i) and UP(i) supercells.
+	    {
+	      for (z = sm->n[i]-1; z >= 0       && sm->k[i][z] >= env->arr[d-1].k0; z--)  // Order of access doesn't matter here; only # of sparse supercells in DOWN(i)
+		ppp += p7S_NSCELLS;  
+	      for (z = 0;          z < sm->n[i] && sm->k[i][z] <  env->arr[d].k0;   z++)  // UP row includes any supercells 1..k0(d)-1
+		ppp += p7S_NSCELLS; 
+	    }
+	}
       
-      while (env->arr[d].i0 > sm->seg[g].ib)  // seg[0].ib = -1 sentinel, so this will always succeed at least once
-	{ g++; i = sm->seg[g].ia; }
-
-      
-      
-
       /* UP sector ia(d)..i0(d)-1; 1..k0(d)-1 */
       for (i = env->arr[d].ia; i < env->arr[d].i0; i++)
 	{
@@ -41,7 +79,8 @@ p7_sparse_Null2(const P7_SPARSEMX *apd, const P7_ENVELOPES *env)
 	  
 	  for (z = 0; z < sm->n[i] && sm->k[i][z] < env->arr[d].k0; z++, ppp += p7S_NSCELLS)
 	    {
-	      // ppp is i, sm->k[i][z]
+	      wrk[0]           += ppp[p7S_IL] + ppp[p7S_IG];
+	      wrk[sm->k[i][z]] += ppp[p7S_ML] + ppp[p7S_MG];
 	    }
 	}
 
@@ -51,7 +90,8 @@ p7_sparse_Null2(const P7_SPARSEMX *apd, const P7_ENVELOPES *env)
 	  z = 0; while (z < sm->n[i] && sm->k[i][z] < env->arr[d].k0) z++;
 	  for (; z < sm->n[i]; z++, ppp += p7S_NSCELLS)
 	    {
-	      // ppp is (i, sm->k[i][z])
+	      wrk[0]           += ppp[p7S_IL] + ppp[p7S_IG];
+	      wrk[sm->k[i][z]] += ppp[p7S_ML] + ppp[p7S_MG];
 	    }
 
 	  /* <ppp> maintenance (3); skip trailing UP supercells when i is ASC DOWN/UP row */
@@ -68,10 +108,24 @@ p7_sparse_Null2(const P7_SPARSEMX *apd, const P7_ENVELOPES *env)
 	for (i = env->arr[d].ib+1; i <= sm->seg[g].ib; i++)
 	  for (z = sm->n[i]-1; z >= 0 && sm->k[i][z] >= env->arr[d].k0; z--)  // DOWN is k0(d)..M; order doesn't matter, so we can skip it backwards.
 	    ppp += p7S_NSCELLS;
+      /* Heavyweight sparse AEC matrix traversal is now complete.
+       * wrk[] contains expected usage counts.
+       */
+
       
+      /* null2[x] = \sum_s f_s [ e_s(x) / f(x) ]
+       *          = \logsum_s log(f_s) + log [ e_s(x) / f(x) ]
+       */
+      esl_vec_FNorm(wrk, M+1);
+      esl_vec_FLog (wrk, M+1);
+      for (x = 0; x < gm->abc->K; x++)
+	{
+	  
+	}
+
+
 
     } // end loop over domains <d>
-
 
 }
 #endif /* during dev */

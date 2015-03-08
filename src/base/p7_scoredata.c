@@ -70,7 +70,7 @@ scoredata_GetMSVScoreArrays(P7_OPROFILE *om, P7_SCOREDATA *data, int do_opt_ext 
   p7_oprofile_GetMSVEmissionScoreArray(om, data->msv_scores);
 
   if (do_opt_ext) {
-    ESL_ALLOC(max_scores, (om->M + 1) * sizeof(float));
+    ESL_ALLOC(max_scores, (om->M + 1) * sizeof(uint8_t));
     for (i = 1; i <= om->M; i++) {
       max_scores[i] = 0;
       for (j=0; j<K; j++)

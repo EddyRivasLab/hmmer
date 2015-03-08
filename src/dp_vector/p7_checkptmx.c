@@ -95,7 +95,10 @@ p7_checkptmx_Create(int M, int L, int64_t ramlimit)
   /* Level 2 allocations: row pointers and dp cell memory */
   ox->nalloc = ox->allocR * ox->allocW;
   ESL_ALLOC( ox->dp_mem, ox->nalloc + (p7_VALIGN-1));    /* (p7_VALIGN-1) because we'll hand-align memory */
-  ESL_ALLOC( ox->dpf,    sizeof(float *) * ox->allocR);
+  ESL_ALLOC( ox->dpf,    sizeof(float *) * ox->allocR);  
+  // Static analyzers may complain about the above.
+  // sizeof(float *) is correct, even though ox->dpf is char **.
+  // ox->dpf will be cast to __m128 SIMD vector in DP code.
 
   ox->dpf[0] = (char *) ( ((uintptr_t) ox->dp_mem + p7_VALIGN - 1) & p7_VALIMASK); /* hand memory alignment */
   for (r = 1; r < ox->validR; r++)

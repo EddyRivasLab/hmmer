@@ -813,7 +813,7 @@ annotate_posterior_probability(ESL_MSA *msa, P7_TRACE **tr, const int *matmap, i
     if (tr[idx]->pp != NULL) break;
   if (idx == msa->nseq) return eslOK;
 
-  ESL_ALLOC(matuse, sizeof(double) * (msa->alen)); esl_vec_ISet(matuse, msa->alen, 0);
+  ESL_ALLOC(matuse, sizeof(int)    * (msa->alen)); esl_vec_ISet(matuse, msa->alen, 0);
   ESL_ALLOC(totp,   sizeof(double) * (msa->alen)); esl_vec_DSet(totp,   msa->alen, 0.0);
 
   ESL_ALLOC(msa->pp, sizeof(char *) * msa->sqalloc);
