@@ -16,6 +16,8 @@
 typedef struct {
   int     max_iterations;   // limit on # of sampled paths in MPAS (typically ~1000)
   float   loss_threshold;   // max acceptable probability of missing better solution (typical: ~0.001)
+
+  int     nmax_sampling;    // TRUE to sample all n_max, to see if better sol'n is found late
   int     be_verbose;       // TRUE to dump additional debug/devel info as it runs
 } P7_MPAS_PARAMS;
 
@@ -30,9 +32,11 @@ typedef struct {
   float vit_ascprob;		/* probability of the Viterbi annotation         */
   float best_asc;		/* anchor-constrained score of solution          */
   float best_ascprob;		/* probability of the asc: exp(best_asc - fwdsc) */
+  float tot_prob;		/* \sum_A P(A | x,M) for all sampled anchorsets  */
   int   nsamples_in_best;	/* number of samples we saw for the solution     */
   int   best_is_viterbi;	/* TRUE if solution is Viterbi annotation        */
-  int   solution_not_found;	/* TRUE if we find no solution                   */
+  int   late_solution;		/* TRUE if better sol'n found after terminations */
+  int   solution_not_found;	/* TRUE if we reach n_max without finding sol'n  */
 
   int   has_part2;		/* TRUE once we set the remaining stuff below:   */
   int   anch_outside;		/* # of anchors that fall outside any domain in Viterbi trace */

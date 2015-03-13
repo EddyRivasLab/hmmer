@@ -12,7 +12,7 @@
  * <amem> consists of packed data for all stored elements. 
  * <an> is the total number of integers stored in amem now.
  * 
- * Data element <k> starts at amem+key_offset[k]. 
+ * Data element <k=0..nkeys-1> starts at amem+key_offset[k]. 
  * We use offsets, rather than pointers, because we may need
  * to reallocate <amem>, which would invalidate pointers.
  * 
@@ -58,6 +58,12 @@
  *
  * Note: structure is suitable for becoming more general, a hash
  *  of any integer array.
+ *
+ * We also keep <key_count[k]>, the number of times that <_Store()>
+ * has been called for each different key <k>. This allows debug/test
+ * code to compare the observed frequency of an anchor set with its
+ * calculated probability. Production code doesn't need it, but
+ * overhead is negligible.
  *  
  */
 #ifndef p7ANCHORHASH_INCLUDED
@@ -75,6 +81,7 @@ typedef struct {
   int32_t   hashsize;	  // size of the hashtable (# of buckets). Must be a power of 2.
 
   int32_t  *key_offset;	  // [k=0..nkeys-1]; key[k]'s data element starts at amem + key_offset[k] 
+  int32_t  *key_count;    // how many times key[k] has been _Store()'d     
   int32_t  *nxt;  	  // [k=0..nkeys-1]; nxt[k] = next elem in chain, or -1 for end 
   int32_t   nkeys;     	  // number of keys/data elements stored 
   int32_t   kalloc;	  // number of keys allocated for 

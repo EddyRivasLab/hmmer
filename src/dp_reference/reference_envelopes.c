@@ -941,6 +941,7 @@ main(int argc, char **argv)
   /* Customize MPAS parameters if you want; these are the defaults. */
   prm.max_iterations = 1000;
   prm.loss_threshold = 0.001;
+  prm.nmax_sampling  = FALSE;
   prm.be_verbose     = FALSE;
 
   /* MPAS algorithm gets us an anchor set */

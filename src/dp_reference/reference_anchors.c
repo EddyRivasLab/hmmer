@@ -69,9 +69,12 @@
  *            workspace that the stochastic trace algorithm knows how
  *            to deal with. A caller will generally set <float *wrk =
  *            NULL>, pass <&wrk> for the argument, and <free(wrk)>
- *            when done. The other workspace is an empty hash table <ah>
- *            that we need for fast checking of which anchor sets
- *            we've already calculated scores for.
+ *            when done. The other workspace is an empty hash table
+ *            <ah> that we need for fast checking of which anchor sets
+ *            we've already calculated scores for. Upon return, <ah>
+ *            contains hashed data on all anchorsets that were sampled
+ *            and scored; these data are used in some testing
+ *            experiments, but not in production code.
  *
  *            For retrieving the result, caller provides two empty
  *            matrices <afu>, <afd>; an empty anchor set <anch>; and
@@ -130,8 +133,8 @@
  *            afd     : contains ASC Forward DOWN matrix for it
  *            ret_asc : is the ASC Forward score of it, raw (nats)
  *            stats   : if provided, contains statistics on the optimization that was done
- *            
- *            ah      : undefined (contains hashed data on all anchorsets that were tried)
+ *            ah      : contains hashed data on all anchorsets that were sampled 
+ *
  *            tr      : undefined (contains last path that that algorithm happened to sample)
  *            rng     : internal state changed (because we sampled numbers from it)
  */
@@ -145,9 +148,11 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
   float           fwdsc          = P7R_XMX(rxf, L, p7R_C) + gm->xsc[p7P_C][p7P_MOVE];  // if this lookup seems iffy, efficiency-wise, make fwdsc an argument; caller has it
   int             max_iterations = (prm ? prm->max_iterations      : 1000);
   float           loglossthresh  = (prm ? log(prm->loss_threshold) : log(0.001));
+  int             nmax_sampling  = (prm ? prm->nmax_sampling       : FALSE);
   int             be_verbose     = (prm ? prm->be_verbose          : FALSE);
   float           best_asc       = -eslINFINITY;
-  int             iteration      = 0;   // Counter for stochastic samples. Is 0 for the Viterbi trace, 1st path thru main loop
+  int             iteration      = 0;      // Counter for stochastic samples. Is 0 for the Viterbi trace, 1st path thru main loop
+  int             satisfied      = FALSE;  // Flips to TRUE when termination conditions satisfied. If <nmax_sampling> is TRUE, we continue sampling anyway.
   float           asc,    best_ascprob;
   int32_t         keyidx, best_keyidx;
   int32_t         asc_keyidx;	        // keyidx that our current <asc>, <afu>, <afd> are for
@@ -191,6 +196,7 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
 	  
 	  if (stats) 
 	    {
+	      stats->tot_prob += exp(asc-fwdsc);
 	      stats->tot_asc_calculations++;
 	      if (iteration == 0) {
 		stats->vit_asc     = asc;
@@ -216,6 +222,7 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
 	      if (stats) 
 		{
 		  if (iteration > 0) stats->best_is_viterbi = FALSE;
+		  if (satisfied)     stats->late_solution   = TRUE;  // Oops. We already thought we found the "best" anchorset yet here's a better one.
 		  stats->nsamples_in_best = 1;
 		}
 	    }
@@ -231,11 +238,19 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
 	    }
 	}
 
-      /* Convergence / termination tests. See note [1] at end of file for details.  */
+      /* Convergence / termination tests. See note [1] at end of file for details.  
+       * <iteration> ranges from 0..max_iterations; iteration 0 is the Viterbi path
+       * and not a stochastic sample; the <iteration> in the termination condition
+       * is the # of stochastic samples taken.
+       */
       if (best_ascprob >= 0.5 || iteration * log(1.0 - best_ascprob) < loglossthresh)
-	break;
+	{ 
+	  if (!satisfied && be_verbose) printf(" --- termination condition satisfied --- \n");
+	  satisfied = TRUE;           // Usually we stop, having satisfied the termination tests.
+	  if (! nmax_sampling) break; // But in testing, we can set <nmax_sampling> flag to see if 
+	}                             // termination tests work, and no better solution is found later.
       if (iteration == max_iterations) {
-	if (stats) stats->solution_not_found = TRUE;
+	if (!satisfied && stats) stats->solution_not_found = TRUE;
 	break; 
       }
 
@@ -401,7 +416,10 @@ p7_reference_anchors_SetFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_ANC
 static ESL_OPTIONS options[] = {
   /* name           type           default  env  range  toggles reqs incomp  help                                       docgroup*/
   { "-h",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",                   0 },
+  { "-k",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "keep sampling until n_max: test termination conditions", 0 },
+  { "-n",          eslARG_INT,   "1000",  NULL, NULL,   NULL,  NULL, NULL, "maximum number of samples (n_max)",                      0 },
   { "-s",          eslARG_INT,      "0",  NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                          0 },
+  { "-t",         eslARG_REAL,  "0.001",  NULL, NULL,   NULL,  NULL, NULL, "loss threshold",                                         0 },
   { "-Z",          eslARG_INT,      "1",  NULL, NULL,   NULL,  NULL, NULL, "set sequence # to <n>, for E-value calculations",        0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -437,9 +455,16 @@ main(int argc, char **argv)
   P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
   float          *wrk     = NULL;
   int             Z       = esl_opt_GetInteger(go, "-Z");
+  P7_MPAS_PARAMS  prm;
   P7_MPAS_STATS   stats;
   float           nullsc, vsc, fsc, asc;
   int             status;
+
+  /* Customize MPAS algorithm parameters */
+  prm.max_iterations = esl_opt_GetInteger(go, "-n");
+  prm.loss_threshold = esl_opt_GetReal   (go, "-t");
+  prm.nmax_sampling  = esl_opt_GetBoolean(go, "-k");
+  prm.be_verbose     = FALSE;
 
   /* Read in one HMM. Set alphabet to whatever the HMM's alphabet is. */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
@@ -462,6 +487,16 @@ main(int argc, char **argv)
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
   else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
 
+  esl_dataheader(stdout, 
+		 -15, "hmm", -30, "seq",
+		 8, "fsc",    10, "E(fsc)", 8, "vsc",   10, "E(vsc)", 
+		 8, "asc(V)",  6, "P(V)",   3, "V?",
+		 8, "mp",      6, "P(mp)",  6, "fq(mp)", 6, "totp",
+		 5, "n",       4, "nc",     3, ">t",     3, ">nm",
+		 4, "a0",      4,  "a1:1",  4, "a>1",
+		 4, "d0",      4, "d1:1",   4, "d>1",
+		 0);
+
   /* For each target sequence... */
   while (( status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
@@ -471,18 +506,19 @@ main(int argc, char **argv)
 
       if (( status = p7_pipeline_AccelerationFilter(sq->dsq, sq->n, om, bg, fx, cx, sm)) == eslOK)
 	{
-	  printf("%-15s  %-30s  ", gm->name, sq->name);
+	  esl_randomness_Init(rng, esl_randomness_GetSeed(rng));  // Makes results for <dsq> reproducible, for a given seed
+	  printf("%-15s %-30s ", gm->name, sq->name);
 
 	  p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
 
 	  p7_ReferenceViterbi (sq->dsq, sq->n, gm, rxf, vtr, &vsc);
-	  p7_reference_trace_Viterbi(gm, rxf, tr);         // a second copy; we have no p7_trace_Copy() function yet
+	  p7_reference_trace_Viterbi(gm, rxf, tr);               // a second copy; we have no p7_trace_Copy() function yet
 	  p7_ReferenceForward (sq->dsq, sq->n, gm, rxf, &fsc);
 	  p7_ReferenceBackward(sq->dsq, sq->n, gm, rxd, NULL);   
 	  p7_ReferenceDecoding(sq->dsq, sq->n, gm, rxf, rxd, rxd);   
 
 	  p7_reference_Anchors(rng, sq->dsq, sq->n, gm, rxf, rxd, tr, &wrk, ah,
-			       afu, afd, anch, &asc, NULL, &stats);
+			       afu, afd, anch, &asc, &prm, &stats);
 	     
 	  p7_trace_Index(vtr);
 	  p7_mpas_stats_CompareAS2Trace(&stats, anch, vtr);
@@ -499,14 +535,16 @@ main(int argc, char **argv)
 		 stats.vit_ascprob,
 		 (stats.best_is_viterbi    ? "YES" : "no"));
 
-	  printf("%8.2f %6.4f %6.4f ", 
+	  printf("%8.2f %6.4f %6.4f %6.4f ", 
 		 stats.best_asc,
 		 stats.best_ascprob,
-		 (float) stats.nsamples_in_best / (float) stats.tot_iterations);
+		 (float) stats.nsamples_in_best / (float) stats.tot_iterations,
+		 stats.tot_prob);
 	  
-	  printf("%5d %4d %3s ", 
+	  printf("%5d %4d %3s %3s ", 
 		 stats.tot_iterations,
 		 stats.tot_asc_calculations,
+		 (stats.late_solution      ? "YES" : "no"),
 		 (stats.solution_not_found ? "YES" : "no"));
 	    
 	  printf("%4d %4d %4d ", 
@@ -538,6 +576,8 @@ main(int argc, char **argv)
     }
   if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));
   else if (status != eslEOF)     p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
+
+  printf("# rng seed = %ud\n", esl_randomness_GetSeed(rng));
 
   if (wrk) free(wrk);
   p7_anchors_Destroy(anch);
@@ -586,8 +626,12 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
+  { "-a",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump report on all sampled anchorsets",            0 },
+  { "-h",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-k",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "keep sampling until n_max: test termination conditions", 0 },
+  { "-n",      eslARG_INT,   "1000", NULL, NULL,   NULL,  NULL, NULL, "maximum number of samples (n_max)",                      0 },
+  { "-s",      eslARG_INT,      "0", NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
+  { "-t",      eslARG_REAL, "0.001", NULL, NULL,   NULL,  NULL, NULL, "loss threshold",                                         0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -621,6 +665,12 @@ main(int argc, char **argv)
   P7_MPAS_STATS   stats;
   float           fsc, vsc, asc;
   int             status;
+
+  /* Customize MPAS algorithm parameters */
+  prm.max_iterations = esl_opt_GetInteger(go, "-n");
+  prm.loss_threshold = esl_opt_GetReal   (go, "-t");
+  prm.nmax_sampling  = esl_opt_GetBoolean(go, "-k");
+  prm.be_verbose     = TRUE;
 
   /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
@@ -665,11 +715,6 @@ main(int argc, char **argv)
   p7_ReferenceBackward(sq->dsq, sq->n, gm, rxd, NULL);   
   p7_ReferenceDecoding(sq->dsq, sq->n, gm, rxf, rxd, rxd);   
 
-  /* Customize parameters */
-  prm.max_iterations = 1000;
-  prm.loss_threshold = 0.001;
-  prm.be_verbose     = TRUE;
-
   //p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 
   /* Do it. */
@@ -679,6 +724,31 @@ main(int argc, char **argv)
   p7_trace_Index(vtr);
   p7_mpas_stats_CompareAS2Trace(&stats, anch, vtr);
   p7_mpas_stats_Dump(stdout, &stats);
+
+  if (esl_opt_GetBoolean(go, "-a"))
+    {
+      int key;
+
+      p7_anchors_Reuse(anch);
+      p7_refmx_Reuse(afu);
+      p7_refmx_Reuse(afd);
+
+      for (key = 0; key < ah->nkeys; key++)
+	{
+	  p7_anchorhash_Get(ah, key, 0, anch);
+	  p7_ReferenceASCForward(sq->dsq, sq->n, gm, anch->a, anch->D, afu, afd, &asc);
+
+	  printf("anchorset %8d %6.4f %6.4f ",
+		 key+1, 
+		 exp(asc - fsc), 
+		 (float) ah->key_count[key] / (float) (stats.tot_iterations + 1));
+	  p7_anchors_DumpOneLine(stdout, anch);
+
+	  p7_anchors_Reuse(anch);
+	  p7_refmx_Reuse(afu);
+	  p7_refmx_Reuse(afd);
+	}
+    }
 
 
   p7_anchors_Destroy(anch);

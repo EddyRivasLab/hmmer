@@ -28,8 +28,10 @@ p7_mpas_stats_Init(P7_MPAS_STATS *stats)
   stats->vit_ascprob          = 0.0;
   stats->best_asc             = 0.0;
   stats->best_ascprob         = 0.0;
+  stats->tot_prob             = 0.0;
   stats->nsamples_in_best     = 0;      // only counts suboptimal path samples; Viterbi path doesn't count
   stats->best_is_viterbi      = TRUE;   // best is Viterbi, until proven otherwise by MPAS algorithm
+  stats->late_solution        = FALSE;
   stats->solution_not_found   = FALSE;
 
   stats->has_part2            = FALSE;
@@ -59,8 +61,10 @@ p7_mpas_stats_Dump(FILE *ofp, P7_MPAS_STATS *stats)
       fprintf(ofp, "# vit_ascprob          = %6.4f\n", stats->vit_ascprob);
       fprintf(ofp, "# best_asc             = %.2f\n",  stats->best_asc);
       fprintf(ofp, "# best_ascprob         = %6.4f\n", stats->best_ascprob);
+      fprintf(ofp, "# tot_prob             = %6.4f\n", stats->tot_prob);
       fprintf(ofp, "# nsamples_in_best     = %d\n",    stats->nsamples_in_best);
       fprintf(ofp, "# best_is_viterbi      = %s\n",    (stats->best_is_viterbi    ? "TRUE" : "FALSE"));
+      fprintf(ofp, "# late_solution        = %s\n",    (stats->late_solution      ? "TRUE" : "FALSE"));
       fprintf(ofp, "# solution_not_found   = %s\n",    (stats->solution_not_found ? "TRUE" : "FALSE"));
     }
 

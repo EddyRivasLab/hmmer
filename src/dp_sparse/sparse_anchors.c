@@ -1268,6 +1268,7 @@ main(int argc, char **argv)
   /* Customize parameters for MPAS */
   prm.max_iterations = 1000;
   prm.loss_threshold = 0.001;
+  prm.nmax_sampling  = FALSE;
   prm.be_verbose     = TRUE;
 
   /* Read in one HMM */

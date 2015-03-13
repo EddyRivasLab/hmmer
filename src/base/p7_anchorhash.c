@@ -56,6 +56,7 @@ p7_anchorhash_Create(void)
   ESL_ALLOC(ah, sizeof(P7_ANCHORHASH));
   ah->hashtable  = NULL;
   ah->key_offset = NULL;
+  ah->key_count  = NULL;
   ah->nxt        = NULL;
   ah->amem       = NULL;
 
@@ -72,6 +73,7 @@ p7_anchorhash_Create(void)
   for (i = 0; i < ah->hashsize; i++) ah->hashtable[i] = -1;
 
   ESL_ALLOC(ah->key_offset, sizeof(int32_t) * ah->kalloc);
+  ESL_ALLOC(ah->key_count,  sizeof(int32_t) * ah->kalloc);
   ESL_ALLOC(ah->nxt,        sizeof(int32_t) * ah->kalloc);
   ESL_ALLOC(ah->amem,       sizeof(int32_t) * ah->aalloc);
   return ah;
@@ -88,7 +90,7 @@ p7_anchorhash_Sizeof(const P7_ANCHORHASH *ah)
 
   n += sizeof(P7_ANCHORHASH);
   n += sizeof(int32_t) * ah->hashsize;	 // hashtable 
-  n += sizeof(int32_t) * ah->kalloc * 2; // key_offset, nxt 
+  n += sizeof(int32_t) * ah->kalloc * 3; // key_offset, key_count, nxt 
   n += sizeof(int32_t) * ah->aalloc;	 // amem 
   return n;
 }
@@ -132,6 +134,7 @@ p7_anchorhash_Reuse(P7_ANCHORHASH *ah)
     { 
       ESL_REALLOC(ah->nxt,        sizeof(int32_t) * kalloc_redline);
       ESL_REALLOC(ah->key_offset, sizeof(int32_t) * kalloc_redline);
+      ESL_REALLOC(ah->key_count,  sizeof(int32_t) * kalloc_redline);
       ah->kalloc = kalloc_redline;
     }
   if (ah->aalloc > aalloc_redline)
@@ -163,6 +166,7 @@ p7_anchorhash_Destroy(P7_ANCHORHASH *ah)
     {
       if (ah->hashtable)  free(ah->hashtable);
       if (ah->key_offset) free(ah->key_offset);
+      if (ah->key_count)  free(ah->key_count);
       if (ah->nxt)        free(ah->nxt);
       if (ah->amem)       free(ah->amem);
       free(ah);
@@ -189,6 +193,12 @@ p7_anchorhash_Destroy(P7_ANCHORHASH *ah)
  *            If an identical anchor set is already stored in <ah>,
  *            set <*opt_index> to the key for that anchor set, and
  *            return <eslEDUP>.
+ *            
+ *            Increment <ah->key_count[]> counter every time we call
+ *            <_Store()> on a given anchorset suffix (not counting
+ *            D0). This collects the observed frequency of sampling
+ *            the anchorset suffix, which we can compare to its
+ *            calculated probability.
  *
  * Args:      ah         : hash table holding different anchor sets
  *            anch       : new anchor set to try to store
@@ -219,6 +229,7 @@ p7_anchorhash_Store(P7_ANCHORHASH *ah, const P7_ANCHORS *anch, int D0, int32_t *
     {
       if (anchorhash_compare(anch->a + D0, anch->D - D0, ah->amem + ah->key_offset[idx]) == eslOK)
 	{
+	  ah->key_count[idx]++;
 	  if (opt_index) *opt_index = idx;
 	  return eslEDUP;
 	}
@@ -228,6 +239,7 @@ p7_anchorhash_Store(P7_ANCHORHASH *ah, const P7_ANCHORS *anch, int D0, int32_t *
   if (ah->nkeys == ah->kalloc)
     {
       ESL_REALLOC(ah->key_offset, sizeof(int32_t) * ah->kalloc * 2);
+      ESL_REALLOC(ah->key_count,  sizeof(int32_t) * ah->kalloc * 2);
       ESL_REALLOC(ah->nxt,        sizeof(int32_t) * ah->kalloc * 2);
       ah->kalloc *= 2;
     }
@@ -242,6 +254,7 @@ p7_anchorhash_Store(P7_ANCHORHASH *ah, const P7_ANCHORS *anch, int D0, int32_t *
   /* Copy the key, assign its index */
   idx                 = ah->nkeys;
   ah->key_offset[idx] = ah->an;
+  ah->key_count[idx]  = 1;                      // Not ++. This is an initialization.
   ah->an             += 2 * (anch->D - D0) + 1;
   ah->nkeys++;
 
