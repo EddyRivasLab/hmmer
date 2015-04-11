@@ -1,19 +1,19 @@
 #! /usr/bin/perl
 
-# Nightly builds for HMMER3
+# Weekly builds for HMMER
 # 
 # Usage:     hmmer_autobuilds.pl  <srcdir>
-# Example:   hmmer_autobuilds.pl  ~/nightlies/hmmer/trunk > /tmp/hmmer_autobuilds.log
+# Example:   hmmer_autobuilds.pl  ~/weeklies/hmmer/trunk > /tmp/hmmer_autobuilds.log
 
 @buildconfigs = (
-    { name => "intel-macosx-gcc",            host => ".",            use_qsub => 0  },
+#    { name => "intel-macosx-gcc",            host => ".",            use_qsub => 0  },
     { name => "intel-macosx-gcc-debug",      host => ".",            use_qsub => 0  },
-    { name => "intel-macosx-gcc-mpi",        host => ".",            use_qsub => 0  },
-    { name => "intel-linux-gcc",             host => "login-eddy",   use_qsub => 0  },
-    { name => "intel-linux-icc-intel64-mpi", host => "login-eddy",   use_qsub => 1  }, # Actually compiles/tests on a cluster node.
-    { name => "intel-linux-icc-ia32",        host => "login-eddy",   use_qsub => 0  },
-    { name => "intel-linux-gcc-ubuntu32",    host => "cf-ubuntu32",  use_qsub => 0  },
-    { name => "intel-freebsd-gcc",           host => "cf-freebsd",   use_qsub => 0  },
+#    { name => "intel-macosx-gcc-mpi",        host => ".",            use_qsub => 0  },
+#    { name => "intel-linux-gcc",             host => "login-eddy",   use_qsub => 0  },
+#    { name => "intel-linux-icc-intel64-mpi", host => "login-eddy",   use_qsub => 1  }, # Actually compiles/tests on a cluster node.
+#    { name => "intel-linux-icc-ia32",        host => "login-eddy",   use_qsub => 0  },
+#    { name => "intel-linux-gcc-ubuntu32",    host => "cf-ubuntu32",  use_qsub => 0  },
+#    { name => "intel-freebsd-gcc",           host => "cf-freebsd",   use_qsub => 0  },
     );
 
 $autoconf = "/opt/local/bin/autoconf";                          # on the build master: wol
@@ -26,9 +26,9 @@ if (! -d $srcdir) { die "FAIL: source working directory $srcdir not found"; }
 # First we update in the source working directory.
 #
 chdir $srcdir || die "FAIL: couldn't cd to $srcdir"; 
-system("svn update                > autobuilds.log 2>&1");   if ($?) { die "FAIL: svn update"; }
-system("$autoconf                 >> autobuilds.log 2>&1 "); if ($?) { die "FAIL: H3 $autoconf"; }
-system("(cd lib/easel; $autoconf) >> autobuilds.log 2>&1");  if ($?) { die "FAIL: esl $autoconf"; }
+system("svn update                >  autobuilds.log 2>&1");  if ($?) { die "FAIL: svn update"; }
+system("$autoconf                 >> autobuilds.log 2>&1 "); if ($?) { die "FAIL: HMMER $autoconf"; }
+system("(cd lib/easel; $autoconf) >> autobuilds.log 2>&1");  if ($?) { die "FAIL: Easel $autoconf"; }
 
 # Then we try to build on everything
 #

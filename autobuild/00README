@@ -1,28 +1,77 @@
-Automated build system for HMMER3 (i.e., our "nightlies")
+Automated build system for HMMER3 (i.e., our "weeklies")
 
 The automated build system consists of three levels of files.  A build
 can be done at any of the three levels. Each level increases the
-amount of automation of the process.
+amount of automation of the process. 
 
-1. Command scripts (intel-linux-gcc, for example)
-   Minimal script to build one configuration, on current host and in
-   current directory.
 
-   These are the commands to build HMMER in one particular
-   configuration. They don't ssh to the correct compilation machine,
-   change directory, catch errors, save output, or automatically check
-   for success or failure of the build.  You have to manually ssh to
-   the correct machine and cd to a build directory in the trunk to
-   make them work. For example:
+#################################################################
+# The current weekly build
+#################################################################
 
-     ssh login-eddy
-     cd ~/src/hmmer/trunk
-     mkdir build-intel-linux-gcc
-     cd build-intel-linux-gcc
-     sh ../autobuild/intel-linux-gcc > build.out
+The Subversion working directory for weekly builds is:
+  ~eddys/weeklies/hmmer/trunk/
+It is kept separate from the working directory(s) for development,
+so it's a clean copy of the current dev trunk.
 
-   Command scripts are a good reference for how to configure HMMER3
-   for a particular platform.
+Currently we do an automatic build every week on Sean's desktop Mac,
+starting every Friday night at 11:02pm, and a results summary is
+mailed to Sean.
+
+My crontab on eddys-wm1 (my Mac desktop) contains this line:
+  02 23  * * fri  /groups/eddy/home/eddys/weeklies/hmmer/trunk/autobuild/hmmer_autobuilds.pl /groups/eddy/home/eddys/weeklies/hmmer/trunk
+
+To see Sean's crontab:     crontab -l -u eddys
+To edit Sean's crontab:    sudo crontab -e -u eddys
+
+Because the hmmer_autobuilds.pl script that gets run by cron is itself
+part of the working repository in weeklies, if you update the script,
+you should manually 'svn update' in the weeklies working copy.
+
+
+
+################################################################
+# The autobuild script system
+################################################################
+
+
+1. hmmer_autobuilds.pl
+   Usage:    hmmer_autobuilds.pl  <srcdir>
+   Example:  hmmer_autobuilds.pl  ~/weeklies/hmmer/trunk > hmmer_autobuilds.log
+
+   This is the top-level automation script. It moves into the <srcdir>
+   (which is expected to be a Subversion working directory).  It svn
+   updates (and reruns autoconf just in case) to get a freshest copy
+   from Subversion. It then runs through a data table (defined in the
+   script) that defines a list of build configs, and the compilation
+   host for each config. 
+
+   For example:
+
+   @buildconfigs = (
+    { name => "intel-linux-icc-mpi",      host => "login-eddy"  },
+    { name => "intel-linux-gcc",          host => "login-eddy"  },
+    { name => "intel-macosx-gcc-debug",   host => "."           },
+    { name => "intel-macosx-gcc",         host => "."           },
+    );
+
+   This defines four configs. For each, we ssh into the compile host
+   (if necessary; "." means localhost), then call "autobuild.pl" on
+   the build configuration.
+   
+   The output is a table: <buildconfig> <compile host>  <ok or FAIL>
+
+   intel-linux-icc-mpi            login-eddy           ok
+   intel-linux-gcc                login-eddy           ok
+   intel-macosx-gcc-debug         .                    ok
+   intel-macosx-gcc               .                    ok
+
+   A build directory is created for each config, in
+   <srcdir>/ab-<script>; for example, ab-intel-linux-gcc.  In that
+   directory are three log files from autobuild.pl: build.out (output
+   of the build process), build.env (the environment-setting commands
+   from the buildconfig), and build.status (the "ok" or "FAIL" string,
+   same as column 3 in the table above.)
 
 
 2. autobuild.pl 
@@ -78,41 +127,30 @@ amount of automation of the process.
    followed by a short reason, to both stdout and the build.status file.
 
 
-3. hmmer_autobuilds.pl
-   Usage:    hmmer_autobuilds.pl  <srcdir>
-   Example:  hmmer_autobuilds.pl  ~/nightlies/hmmer/trunk > /tmp/hmmer_autobuilds.log
+3. Command scripts (intel-linux-gcc, for example)
+   Minimal script to build one configuration, on current host and in
+   current directory.
 
-   This is the top-level automation script. It moves into the <srcdir>
-   (which is expected to be a Subversion working directory).  It svn
-   update's (and reruns autoconf just in case) to get a freshest copy
-   from Subversion. It then runs through a data table that defines a
-   list of build configs, and the compilation host for each config.
-   For example:
+   These are the commands to build HMMER in one particular
+   configuration. They don't ssh to the correct compilation machine,
+   change directory, catch errors, save output, or automatically check
+   for success or failure of the build.  You have to manually ssh to
+   the correct machine and cd to a build directory in the trunk to
+   make them work. For example:
 
-   @buildconfigs = (
-    { name => "intel-linux-icc-mpi",      host => "login-eddy"  },
-    { name => "intel-linux-gcc",          host => "login-eddy"  },
-    { name => "intel-macosx-gcc-debug",   host => "."           },
-    { name => "intel-macosx-gcc",         host => "."           },
-    );
+     ssh login-eddy
+     cd ~/src/hmmer/trunk
+     mkdir build-intel-linux-gcc
+     cd build-intel-linux-gcc
+     sh ../autobuild/intel-linux-gcc > build.out
 
-   This defines four configs. For each, we ssh into the compile host
-   (if necessary; "." means localhost), then call "autobuild.pl" on
-   the build configuration.
-   
-   The output is a table: <buildconfig> <compile host>  <ok or FAIL>
+   Command scripts are a good reference for how to configure HMMER3
+   for a particular platform.
 
-   intel-linux-icc-mpi            login-eddy           ok
-   intel-linux-gcc                login-eddy           ok
-   intel-macosx-gcc-debug         .                    ok
-   intel-macosx-gcc               .                    ok
 
-   A build directory is created for each config, in
-   <srcdir>/ab-<script>; for example, ab-intel-linux-gcc.  In that
-   directory are three log files from autobuild.pl: build.out (output
-   of the build process), build.env (the environment-setting commands
-   from the buildconfig), and build.status (the "ok" or "FAIL" string,
-   same as column 3 in the table above.)
+
+
+
 
 
   

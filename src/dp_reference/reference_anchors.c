@@ -182,6 +182,18 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
       p7_reference_anchors_SetFromTrace(rxd, tr, anch);
       status = p7_anchorhash_Store(ah, anch, 0, &keyidx);
 
+      // p7_trace_DumpAnnotated(stdout, tr, gm, dsq);
+
+#if 0
+      int d;
+      p7_trace_Index(tr);
+      printf("TRACE SAYS: %3d domains: ", tr->ndom);
+      for (d = 0; d < tr->ndom; d++) 
+	printf("%4d %4d ", tr->sqfrom[d], tr->sqto[d]);
+      printf("\n");
+#endif
+	
+
       /* <status> is either eslOK or eslEDUP.
        *    <eslOK>   = <anch> is new and needs to be scored;
        *    <eslEDUP> = <anch> is a duplicate, doesn't need scoring, only counting
@@ -577,7 +589,7 @@ main(int argc, char **argv)
   if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));
   else if (status != eslEOF)     p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
 
-  printf("# rng seed = %ud\n", esl_randomness_GetSeed(rng));
+  printf("# rng seed = %u\n", esl_randomness_GetSeed(rng));
 
   if (wrk) free(wrk);
   p7_anchors_Destroy(anch);
