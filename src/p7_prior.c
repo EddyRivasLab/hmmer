@@ -229,12 +229,12 @@ p7_prior_CreateNucleic(void)
 
 
   pri->ti->pq[0]       = 1.0;
-  pri->ti->alpha[0][0] = 0.06; // TIM
-  pri->ti->alpha[0][1] = 0.2; // TII
+  pri->ti->alpha[0][0] = 0.12; // TIM   -  was 0.06 before TW changed on 3/19/15, to increase prior strength
+  pri->ti->alpha[0][1] = 0.4; // TII    -  was 0.2 before TW changed on 3/19/15, to increase prior strength
 
   pri->td->pq[0]       = 1.0;
-  pri->td->alpha[0][0] = 0.1; // TDM
-  pri->td->alpha[0][1] = 0.2; // TDD
+  pri->td->alpha[0][0] = 0.5; // TDM    -  was 0.1 before TW changed on 3/19/15, to increase prior strength
+  pri->td->alpha[0][1] = 1.0; // TDD    -  was 0.2 before TW changed on 3/19/15, to increase prior strength
 
 
 

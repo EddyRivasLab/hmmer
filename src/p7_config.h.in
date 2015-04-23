@@ -50,7 +50,7 @@
  * These are empirically tuned constants,
  */
 #define p7_ETARGET_AMINO  0.59 /* bits,  from the work of Steve Johnson. */
-#define p7_ETARGET_DNA    0.45 /* bits,  from the work of Travis Wheeler. */
+#define p7_ETARGET_DNA    0.62 /* bits,  from the work of Travis Wheeler and Robert Hubley. */
 #define p7_ETARGET_OTHER  1.0  /* bits */ /* if you define your own alphabet, set this */
 
 

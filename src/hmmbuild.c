@@ -60,7 +60,7 @@ typedef struct _pending_s {
 
 #define ALPHOPTS "--amino,--dna,--rna"                         /* Exclusive options for alphabet choice */
 #define CONOPTS "--fast,--hand"                                /* Exclusive options for model construction                    */
-#define EFFOPTS "--eent,--eclust,--eset,--enone"               /* Exclusive options for effective sequence number calculation */
+#define EFFOPTS "--eent,--eentexp,--eclust,--eset,--enone"               /* Exclusive options for effective sequence number calculation */
 #define WGTOPTS "--wgsc,--wblosum,--wpb,--wnone,--wgiven"      /* Exclusive options for relative weighting                    */
 
 static ESL_OPTIONS options[] = {
@@ -88,11 +88,12 @@ static ESL_OPTIONS options[] = {
   { "--wid",     eslARG_REAL, "0.62",  NULL,"0<=x<=1",   NULL,"--wblosum",   NULL, "for --wblosum: set identity cutoff",                   4 },
 /* Alternative effective sequence weighting strategies */
   { "--eent",    eslARG_NONE,"default",NULL, NULL,    EFFOPTS,    NULL,      NULL, "adjust eff seq # to achieve relative entropy target",  5 },
+  { "--eentexp", eslARG_NONE,"default",NULL, NULL,    EFFOPTS,    NULL,      NULL, "adjust eff seq # to reach rel. ent. target using exp scaling",  5 },
   { "--eclust",  eslARG_NONE,  FALSE,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "eff seq # is # of single linkage clusters",            5 },
   { "--enone",   eslARG_NONE,  FALSE,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "no effective seq # weighting: just use nseq",          5 },
   { "--eset",    eslARG_REAL,   NULL,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "set eff seq # for all models to <x>",                  5 },
-  { "--ere",     eslARG_REAL,   NULL,  NULL,"x>0",       NULL, "--eent",     NULL, "for --eent: set minimum rel entropy/position to <x>",  5 },
-  { "--esigma",  eslARG_REAL, "45.0",  NULL,"x>0",       NULL, "--eent",     NULL, "for --eent: set sigma param to <x>",                   5 },
+  { "--ere",     eslARG_REAL,   NULL,  NULL,"x>0",       NULL,    NULL,     NULL, "for --eent[exp]: set minimum rel entropy/position to <x>",  5 },
+  { "--esigma",  eslARG_REAL, "45.0",  NULL,"x>0",       NULL,    NULL,     NULL, "for --eent[exp]: set sigma param to <x>",                   5 },
   { "--eid",     eslARG_REAL, "0.62",  NULL,"0<=x<=1",   NULL,"--eclust",    NULL, "for --eclust: set fractional identity cutoff to <x>",  5 },
 /* Alternative prior strategies */
   { "--pnone",   eslARG_NONE,  FALSE,  NULL, NULL,       NULL,  NULL,"--plaplace", "don't use any prior; parameters are frequencies",      9 },
@@ -102,8 +103,6 @@ static ESL_OPTIONS options[] = {
 
 /* Single sequence methods */
   { "--singlemx", eslARG_NONE,   FALSE, NULL,   NULL,   NULL,  NULL,           "",   "use substitution score matrix for single-sequence inputs",     10 },
-//  { "--popen",    eslARG_REAL,   "0.02", NULL,"0<=x<0.5",NULL, NULL,           "",   "gap open probability (with --singlemx)",                         10 },
-//  { "--pextend",  eslARG_REAL,    "0.4", NULL, "0<=x<1", NULL, NULL,           "",   "gap extend probability (with --singlemx)",                       10 },
   { "--mx",     eslARG_STRING, "BLOSUM62", NULL, NULL,   NULL, NULL,   "--mxfile",   "substitution score matrix (built-in matrices, with --singlemx)", 10 },
   { "--mxfile", eslARG_INFILE,     NULL, NULL,   NULL,   NULL, NULL,       "--mx",   "read substitution score matrix from file <f> (with --singlemx)", 10 },
 
@@ -130,6 +129,9 @@ static ESL_OPTIONS options[] = {
   { "--w_length", eslARG_INT,        NULL, NULL, NULL,    NULL,     NULL,    NULL, "window length ",                                        8 },
   { "--maxinsertlen",  eslARG_INT,   NULL, NULL, "n>=5",  NULL,     NULL,    NULL, "pretend all inserts are length <= <n>",   8 },
 
+  /* expert-only option (for now), hidden from view. May not keep. */
+  { "--seq_weights_r",  eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, "write seq weights after relative seq weighting to file <f>",   99 },
+  { "--seq_weights_e",  eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, "write seq weights after entropy weighting to file <f>",   99 },
 
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -154,6 +156,12 @@ struct cfg_s {
 
   char         *postmsafile;	/* optional file to resave annotated, modified MSAs to  */
   FILE         *postmsafp;	/* open <postmsafile>, or NULL */
+
+  char         *seqweights_r_file;  /* optional file to write sequence weights after relative seq weighting */
+  FILE         *seqweights_r_fp;  /* open <seqweights_r_file>, or NULL */
+
+  char         *seqweights_e_file;  /* optional file to write sequence weights after entropy weighting */
+  FILE         *seqweights_e_fp;  /* open <seqweights_e_file>, or NULL */
 
   int           nali;		/* which # alignment this is in file (only valid in serial mode)   */
   int           nnamed;		/* number of alignments that had their own names */
@@ -297,6 +305,7 @@ output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
   if (esl_opt_IsUsed(go, "--wnone")      && fprintf(cfg->ofp, "# relative weighting scheme:        none\n")                                           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--wid")        && fprintf(cfg->ofp, "# frac id cutoff for BLOSUM wgts:   %f\n",        esl_opt_GetReal(go, "--wid"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--eent")       && fprintf(cfg->ofp, "# effective seq number scheme:      entropy weighting\n")                              < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--eentexp")    && fprintf(cfg->ofp, "# effective seq number scheme:      entropy weighting using exponent-based scaling\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--eclust")     && fprintf(cfg->ofp, "# effective seq number scheme:      single linkage clusters\n")                        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--enone")      && fprintf(cfg->ofp, "# effective seq number scheme:      none\n")                                           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--eset")       && fprintf(cfg->ofp, "# effective seq number:             set to %f\n", esl_opt_GetReal(go, "--eset"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -395,7 +404,13 @@ main(int argc, char **argv)
   cfg.abc         = NULL;	           
   cfg.hmmfp       = NULL;	           
   cfg.postmsafile = esl_opt_GetString(go, "-O"); /* NULL by default */
-  cfg.postmsafp   = NULL;                  
+  cfg.postmsafp         = NULL;
+
+  cfg.seqweights_r_file = esl_opt_GetString(go, "--seq_weights_r"); /* NULL by default */
+  cfg.seqweights_r_fp   = NULL;
+
+  cfg.seqweights_e_file = esl_opt_GetString(go, "--seq_weights_e"); /* NULL by default */
+  cfg.seqweights_e_fp   = NULL;
 
   cfg.nali       = 0;		           /* this counter is incremented in masters */
   cfg.nnamed     = 0;		           /* 0 or 1 if a single MSA; == nali if multiple MSAs */
@@ -515,9 +530,10 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
   if (cfg->postmsafile) 
     {
       cfg->postmsafp = fopen(cfg->postmsafile, "w");
-      if (cfg->postmsafp == NULL) p7_Fail("Failed to MSA resave file %s for writing", cfg->postmsafile);
-    } 
+      if (cfg->postmsafp == NULL) p7_Fail("Failed to resave MSA file %s", cfg->postmsafile);
+    }
   else cfg->postmsafp = NULL;
+
 
   /* Looks like the i/o is set up successfully...
    * Initial output to the user
@@ -536,6 +552,26 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
       queue = esl_workqueue_Create(ncpus * 2);
     }
 #endif
+
+
+  if (cfg->seqweights_r_file)
+  {
+      if (ncpus != 0)
+        p7_Fail("--seq_weights_r flag only valid with --cpu=0", NULL);
+      cfg->seqweights_r_fp = fopen(cfg->seqweights_r_file, "w");
+      if (cfg->seqweights_r_fp == NULL) p7_Fail("Failed to write sequence weight (W) file %s", cfg->seqweights_r_file);
+  }
+  else cfg->seqweights_r_fp = NULL;
+
+  if (cfg->seqweights_e_file)
+  {
+      if (ncpus != 0)
+        p7_Fail("--seq_weights_e flag only valid with --cpu=0", NULL);
+      cfg->seqweights_e_fp = fopen(cfg->seqweights_e_file, "w");
+      if (cfg->seqweights_e_fp == NULL) p7_Fail("Failed to write sequence weight (W) file %s", cfg->seqweights_e_file);
+  }
+  else cfg->seqweights_e_fp = NULL;
+
 
 
   infocnt = (ncpus == 0) ? 1 : ncpus;
@@ -948,7 +984,7 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
         sq = NULL;
         hmm->eff_nseq = 1;
       } else {
-        if ((status = p7_Builder(bld, msa, bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) { strcpy(errmsg, bld->errbuf); goto ERROR; }
+        if ((status = p7_Builder(bld, msa, bg, &hmm, NULL, NULL, NULL, postmsa_ptr, NULL, NULL)) != eslOK) { strcpy(errmsg, bld->errbuf); goto ERROR; }
       }
 
 
@@ -1025,7 +1061,7 @@ serial_loop(WORKER_INFO *info, struct cfg_s *cfg, const ESL_GETOPTS *go)
         sq = NULL;
         hmm->eff_nseq = 1;
       } else {
-        if ((status = p7_Builder(info->bld, msa, info->bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
+        if ((status = p7_Builder(info->bld, msa, info->bg, &hmm, NULL, NULL, NULL, postmsa_ptr, cfg->seqweights_r_fp,  cfg->seqweights_e_fp )) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
 
         //if not --singlemx, but the user set the popen/pextend flags, override the computed gap params now:
         if (info->bld->popen != -1 || info->bld->pextend != -1) {
@@ -1219,7 +1255,7 @@ pipeline_thread(void *arg)
         sq = NULL;
         item->hmm->eff_nseq = 1;
       } else {
-        status = p7_Builder(info->bld, item->msa, info->bg, &item->hmm, NULL, NULL, NULL, &item->postmsa);
+        status = p7_Builder(info->bld, item->msa, info->bg, &item->hmm, NULL, NULL, NULL, &item->postmsa, NULL, NULL);
         if (status != eslOK) p7_Fail("build failed: %s", info->bld->errbuf);
 
         //if not --singlemx, but the user set the popen/pextend flags, override the computed gap params now:

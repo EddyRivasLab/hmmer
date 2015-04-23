@@ -84,6 +84,7 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
       else if (esl_opt_GetBoolean(go, "--wgiven"))  bld->wgt_strategy = p7_WGT_GIVEN;
 
       if      (esl_opt_GetBoolean(go, "--eent"))    bld->effn_strategy = p7_EFFN_ENTROPY;
+      else if (esl_opt_GetBoolean(go, "--eentexp")) bld->effn_strategy = p7_EFFN_ENTROPY_EXP;
       else if (esl_opt_GetBoolean(go, "--eclust"))  bld->effn_strategy = p7_EFFN_CLUST;
       else if (esl_opt_GetBoolean(go, "--enone"))   bld->effn_strategy = p7_EFFN_NONE;
       else if (esl_opt_IsOn      (go, "--eset"))  { bld->effn_strategy = p7_EFFN_SET;      bld->eset = esl_opt_GetReal(go, "--eset"); }
@@ -412,7 +413,7 @@ static int    make_post_msa        (P7_BUILDER *bld, const ESL_MSA *premsa, cons
 int
 p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
 	   P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om,
-	   ESL_MSA **opt_postmsa)
+	   ESL_MSA **opt_postmsa, FILE *seqweights_w_fp, FILE *seqweights_e_fp)
 {
   int i,j;
   uint32_t    checksum = 0;	/* checksum calculated for the input MSA. hmmalign --mapali verifies against this. */
@@ -423,8 +424,14 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
   if ((status =  validate_msa         (bld, msa))                       != eslOK) goto ERROR;
   if ((status =  esl_msa_Checksum     (msa, &checksum))                 != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to calculate checksum"); 
   if ((status =  relative_weights     (bld, msa))                       != eslOK) goto ERROR;
+  if (seqweights_w_fp != NULL) {
+    for (i = 0; i < msa->nseq; i++)
+      fprintf( seqweights_w_fp, "%.2f  %s\n", msa->wgt[i], msa->sqname[i]) ;
+  }
+
   if ((status =  esl_msa_MarkFragments(msa, bld->fragthresh))           != eslOK) goto ERROR;
   if ((status =  build_model          (bld, msa, &hmm, tr_ptr))         != eslOK) goto ERROR;
+
 
   //Ensures that the weighted-average I->I count <=  bld->max_insert_len
   //(MI currently contains the number of observed insert-starts)
@@ -433,6 +440,10 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
       hmm->t[i][p7H_II] = ESL_MIN(hmm->t[i][p7H_II], bld->max_insert_len*hmm->t[i][p7H_MI]);
 
   if ((status =  effective_seqnumber  (bld, msa, hmm, bg))              != eslOK) goto ERROR;
+  if (seqweights_e_fp != NULL) {
+    for (i = 0; i < msa->nseq; i++)
+      fprintf( seqweights_e_fp, "%.4f  %s\n", msa->wgt[i], msa->sqname[i]) ;
+  }
   if ((status =  parameterize         (bld, hmm))                       != eslOK) goto ERROR;
   if ((status =  annotate             (bld, msa, hmm))                  != eslOK) goto ERROR;
   if ((status =  calibrate            (bld, hmm, bg, opt_gm, opt_om))   != eslOK) goto ERROR;
@@ -870,35 +881,63 @@ static int
 effective_seqnumber(P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm, const P7_BG *bg)
 {
   int    status;
+  int    i;
 
-  if      (bld->effn_strategy == p7_EFFN_NONE)    hmm->eff_nseq = msa->nseq;
-  else if (bld->effn_strategy == p7_EFFN_SET)     hmm->eff_nseq = bld->eset;
-  else if (bld->effn_strategy == p7_EFFN_CLUST)
-    {
-      int nclust;
-
-      status = esl_msacluster_SingleLinkage(msa, bld->eid, NULL, NULL, &nclust);
-      if      (status == eslEMEM) ESL_XFAIL(status, bld->errbuf, "memory allocation failed");
-      else if (status != eslOK)   ESL_XFAIL(status, bld->errbuf, "single linkage clustering algorithm (at %d%% id) failed", (int)(100 * bld->eid));
-
-      hmm->eff_nseq = (double) nclust;
-    }
-
-  else if (bld->effn_strategy == p7_EFFN_ENTROPY)
-    {
+  if (bld->effn_strategy == p7_EFFN_ENTROPY_EXP) {
       double etarget; 
       double eff_nseq;
-
+      double exp;
       etarget = (bld->esigma - eslCONST_LOG2R * log( 2.0 / ((double) hmm->M * (double) (hmm->M+1)))) / (double) hmm->M; /* xref J5/36. */
       etarget = ESL_MAX(bld->re_target, etarget);
 
-      status = p7_EntropyWeight(hmm, bg, bld->prior, etarget, &eff_nseq);
+      status = p7_EntropyWeight_exp(hmm, bg, bld->prior, etarget, &exp);
       if      (status == eslEMEM) ESL_XFAIL(status, bld->errbuf, "memory allocation failed");
       else if (status != eslOK)   ESL_XFAIL(status, bld->errbuf, "internal failure in entropy weighting algorithm");
+
+      p7_hmm_ScaleExponential(hmm, exp);
+
+      for (i = 1; i <= hmm->M; i++)
+        eff_nseq +=  esl_vec_FSum(hmm->mat[i], hmm->abc->K);
+
+
+      eff_nseq /= hmm->M;
       hmm->eff_nseq = eff_nseq;
+
+  } else {
+
+    if      (bld->effn_strategy == p7_EFFN_NONE)    hmm->eff_nseq = msa->nseq;
+    else if (bld->effn_strategy == p7_EFFN_SET)     hmm->eff_nseq = bld->eset;
+    else if (bld->effn_strategy == p7_EFFN_CLUST)
+    {
+        int nclust;
+
+        status = esl_msacluster_SingleLinkage(msa, bld->eid, NULL, NULL, &nclust);
+        if      (status == eslEMEM) ESL_XFAIL(status, bld->errbuf, "memory allocation failed");
+        else if (status != eslOK)   ESL_XFAIL(status, bld->errbuf, "single linkage clustering algorithm (at %d%% id) failed", (int)(100 * bld->eid));
+
+        hmm->eff_nseq = (double) nclust;
     }
-    
-  p7_hmm_Scale(hmm, hmm->eff_nseq / (double) hmm->nseq);
+    else if (bld->effn_strategy == p7_EFFN_ENTROPY)
+    {
+        double etarget;
+        double eff_nseq;
+        etarget = (bld->esigma - eslCONST_LOG2R * log( 2.0 / ((double) hmm->M * (double) (hmm->M+1)))) / (double) hmm->M; /* xref J5/36. */
+        etarget = ESL_MAX(bld->re_target, etarget);
+
+        status = p7_EntropyWeight(hmm, bg, bld->prior, etarget, &eff_nseq);
+        if      (status == eslEMEM) ESL_XFAIL(status, bld->errbuf, "memory allocation failed");
+        else if (status != eslOK)   ESL_XFAIL(status, bld->errbuf, "internal failure in entropy weighting algorithm");
+        hmm->eff_nseq = eff_nseq;
+    }
+
+    p7_hmm_Scale(hmm, hmm->eff_nseq / (double) hmm->nseq);
+
+  }
+
+  //this re-assignment of the wgt values is done in support of hmmbuild's --seq_weights_e flag
+  for (i = 0; i < msa->nseq; i++)
+    msa->wgt[i] *= (hmm->eff_nseq / (double) hmm->nseq);
+
   return eslOK;
 
  ERROR:

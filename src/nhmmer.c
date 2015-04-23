@@ -173,7 +173,7 @@ static ESL_OPTIONS options[] = {
   { "--domT",       eslARG_REAL,        FALSE, NULL, NULL,    NULL,  NULL,  DOMREPOPTS,      "Not used",   99 },
   { "--incdomE",    eslARG_REAL,       "0.01", NULL, "x>0",   NULL,  NULL,  INCDOMOPTS,      "Not used",    99 },
   { "--incdomT",    eslARG_REAL,        FALSE, NULL, NULL,    NULL,  NULL,  INCDOMOPTS,      "Not used",      99 },
-/* will eventually bring these back, but store in group 99 for now, so they don't print to help*/
+
 
 
 
@@ -632,9 +632,16 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         int               q_type      = eslUNKNOWN;
         status = esl_sqfile_Open(cfg->queryfile, eslSQFILE_FASTA, NULL, &qfp_sq);
         if (status != eslOK)         p7_Fail ("Unexpected error %d opening query file %s\n", status, cfg->queryfile);
-        esl_sqfile_GuessAlphabet(qfp_sq, &q_type);
-        if (q_type == eslUNKNOWN)    p7_Fail ("Unable to guess alphabet for query file %s\n", cfg->queryfile);
-        abc     = esl_alphabet_Create(q_type);
+
+        if ( esl_opt_IsOn(go, "--dna") )
+          abc     = esl_alphabet_Create(eslDNA);
+        else if ( esl_opt_IsOn(go, "--rna") )
+          abc     = esl_alphabet_Create(eslRNA);
+        else {
+          esl_sqfile_GuessAlphabet(qfp_sq, &q_type);
+          if (q_type == eslUNKNOWN)    p7_Fail ("Unable to guess alphabet for query file %s\n", cfg->queryfile);
+          abc     = esl_alphabet_Create(q_type);
+        }
         esl_sqfile_SetDigital(qfp_sq, abc );
       }
     }
@@ -807,7 +814,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           esl_abc_XDealign(qsq->abc, qsq->dsq,  qsq->dsq, &(qsq->n));
           if ((qhstatus = p7_SingleBuilder(builder, qsq, info->bg, &hmm, NULL, NULL, NULL)) != eslOK) p7_Fail("build failed: %s", builder->errbuf);
         } else {
-          if ((qhstatus = p7_Builder(builder, msa, info->bg, &hmm, NULL, NULL, NULL, NULL)) != eslOK) p7_Fail("build failed: %s", builder->errbuf);
+          if ((qhstatus = p7_Builder(builder, msa, info->bg, &hmm, NULL, NULL, NULL, NULL, NULL, NULL)) != eslOK) p7_Fail("build failed: %s", builder->errbuf);
         }
 
       } else if ( qfp_sq != NULL) {//  FASTA format, so they all have names
@@ -1233,10 +1240,8 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
 
   wstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
 
-
   while (wstatus == eslOK && (n_targetseqs==-1 || seq_id < n_targetseqs) ) {
       dbsq->idx = seq_id;
-
       p7_pli_NewSeq(info->pli, dbsq);
 
       if (info->pli->strands != p7_STRAND_BOTTOMONLY) {

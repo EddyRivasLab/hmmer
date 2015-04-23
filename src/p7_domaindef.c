@@ -861,18 +861,26 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
   dom->ad             = p7_alidisplay_Create(ddef->tr, 0, om, sq);
   dom->scores_per_pos = NULL;
 
-
   /* For long target DNA, it's common to see a huge envelope (>1Kb longer than alignment), usually
    * involving simple repeat part of model that attracted similar segments of the repeatedly, to
    * acquire a large total score. Now that we have alignment boundaries, re-run Fwd/Bkwd to trim away
    * such a long envelope and estimate the true score of the hit region
    */
   if (long_target) {
+    int iters = 0;
 
-    if (     i < dom->ad->sqfrom-max_env_extra   //trim the left side of the envelope
-        ||   j > dom->ad->sqto+max_env_extra     //trim the right side of the envelope
+    /*The envelope is absurdly large. We've often seen that composition-biased unaligned
+     * envelopes can lead to high scores with no supporting alignment. Trim that envelope
+     * in so that it's a length you could imagine looking at to see alternative alignments,
+     * then realign (using the new envelope to modify background character frequencies.
+     * In some rare cases, this new smaller envelope leads to a big contraction in the
+     * accepted alignment ... so that the process needs to be iterated.
+     */
+    while ( iters++ < 5 &&  //safety valve in case something really wonky happens
+        (    i < dom->ad->sqfrom-max_env_extra-3   //trim the left side of the envelope, allow a little slop beyond what we'll trim
+          || j > dom->ad->sqto+max_env_extra+3     //trim the right side of the envelope,    "     "      "     "     "     "     "
+        )
         ) {
-
       //trim in the envelope, and do it again
       i = ESL_MAX(i,dom->ad->sqfrom-max_env_extra);
       j = ESL_MIN(j,dom->ad->sqto+max_env_extra);

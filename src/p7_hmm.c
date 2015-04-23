@@ -768,6 +768,78 @@ p7_hmm_Scale(P7_HMM *hmm, double scale)
   return eslOK;
 }
 
+
+/* Function:  p7_hmm_ScaleExponential()
+ * Synopsis:  In a model containing counts, rescale counts by an exponential factor.
+ *
+ * Purpose:   Given a counts-based model <hmm>, scale core by an
+ *            exponential factor <exp>. This should be thought of as
+ *            an alternative to p7_hmm_Scale(). Let C_i be the total
+ *            observed count in column i, and F be the scale. In
+ *            p7_hmm_Scale, the updated total observed count would be
+ *            C_i = C_i * F  (i.e. the scaling factor is uniform across
+ *            all columns). In this function, C_i = C_i ^ F. The result
+ *            is a non-uniform scaling across columns -- columns with
+ *            higher C_i will be reduced to a greater extent than will
+ *            columns with low counts.
+ *
+ *            Consider the case where one column has 30 observations and a
+ *            bunch of others have 300. This can happen when heavily-
+ *            fragmented sequences are used to reconstruct a family MSA, as
+ *            in Dfam models ... but isn't likely to have been seen in Pfam
+ *            alignments. Though the column with 30 observations isn't nearly
+ *            as complete as the one with 300, it still has enough that we
+ *            shouldn't be willing to discount the observations entirely -
+ *            something that might happen if uniform entropy weighting needs
+ *            to push the average observations down 10-fold in order to achieve
+ *            the desired avg relative entropy.
+ *            e.g.
+ *
+ *             C_i    F  ->  C_i
+ *               3   .8      2.4
+ *              30   .8       15
+ *             300   .8       96
+ *               3   .7      2.2
+ *              30   .7       11
+ *             300   .7       54
+ *               3   .6      1.9
+ *              30   .6      7.6
+ *             300   .6       30
+ *
+ *            Note: the observed counts will never drop below 1 in this case.
+ *
+ *            After computing the per-column total scale for column i, that
+ *            scale is applied to the core probability model emissions and
+ *            transitions (<t>, <ins>, and <mat>) for position i.
+ *
+ * Args:      hmm     - counts based HMM.
+ *            exp     - exponential factor; 1.0=no scaling.
+ *            ret_scaleavg - returns the mean of the per-column scale factors corresponding
+ *                           to the factor exp.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_hmm_ScaleExponential(P7_HMM *hmm, double exp)
+{
+
+//  printf ("\n==================\nTry exp = %.4f\n", exp);
+  int k;
+  for (k = 1; k <= hmm->M; k++) {
+
+    float count = esl_vec_FSum(hmm->mat[k], hmm->abc->K);
+    float new_count = pow(count, exp);
+    double scale = new_count / count;
+
+    //printf ("column %d : cnt: %.1f,  new_cnt: %.1f,  scale: %.4f\n", k, count, new_count, scale );
+
+    esl_vec_FScale(hmm->t[k],   p7H_NTRANSITIONS, scale);
+    esl_vec_FScale(hmm->mat[k], hmm->abc->K,      scale);
+    esl_vec_FScale(hmm->ins[k], hmm->abc->K,      scale);
+  }
+  return eslOK;
+}
+
 /* Function: p7_hmm_Renormalize()
  * Synopsis: Renormalize all parameter vectors (emissions/transitions).
  * 
@@ -1256,7 +1328,7 @@ p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol)
  * Synopsis:  Calculate match occupancy and insert expected use count vectors.
  *
  * Purpose:   Calculate a vector <mocc[1..M]> containing probability
- *            that each match state is used in a sampled path through
+ *            that each match state is used in a sampled glocal path through
  *            the model. Caller provides allocated space (<M+1> floats)
  *            for <mocc>.
  *            
@@ -1275,9 +1347,8 @@ p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *iocc)
   mocc[0] = 0.;			                     /* no M_0 state */
   mocc[1] = hmm->t[0][p7H_MI] + hmm->t[0][p7H_MM];   /* initialize w/ 1 - B->D_1 */
   for (k = 2; k <= hmm->M; k++)
-    mocc[k] = mocc[k-1] * (hmm->t[k-1][p7H_MM] + hmm->t[k-1][p7H_MI]) +
-      (1.0-mocc[k-1]) * hmm->t[k-1][p7H_DM];  
-
+      mocc[k] = mocc[k-1] * (hmm->t[k-1][p7H_MM] + hmm->t[k-1][p7H_MI]) +
+        (1.0-mocc[k-1]) * hmm->t[k-1][p7H_DM];
   if (iocc != NULL) {
     iocc[0] = hmm->t[0][p7H_MI] / hmm->t[0][p7H_IM];
     for (k = 1; k <= hmm->M; k++)
