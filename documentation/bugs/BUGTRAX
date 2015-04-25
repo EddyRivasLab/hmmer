@@ -1,3 +1,37 @@
+ID              h108
+TITLE           nhmmer corrupted by * residues in input seqs
+AFFECTS         3.1b2 and later (probably earlier too)
+FIXED_IN        -
+STATUS          CLOSED
+XREF            SRE:J15/28
+REPORTED_BY     Robert Raymond (robr@rams.colostate.edu) 22 Apr 2015
+OPENED_DATE     SRE, Sat Apr 25 08:15:27 2015
+CLOSED_DATE     -
+DESCRIPTION     
+  Original report was for nhmmscan dying with fatal NaN exception in
+  fwdback.c. Narrowed to a test case of a DNA sequence
+  containing a '*' nonresidue character. Three problems fixed:
+  
+  esl_alphabet.c::set_complementarity() - was written for Kp=17 and
+  not updated when we added * residue to DNA/RNA alphabets, making
+  Kp=18. However, this problem was likely not the problem: result is
+  that [17] is not initialized, and that's ~, not *.
+
+  esl_sq.c::esl_sq_ReverseComplement() - similar problem, but for text
+  mode. * is caught as an invalid character, eslEINVAL return.
+  esl-sfetch then errors out, refusing to revcomp DNA seq containing
+  *.  This is also not the cause of the nhmmer crashes, but fixed it
+  anyway.
+
+  p7_oprofile.c::p7_oprofile_UpdateFwdEmissionScores() - this seems to
+  have been the actual problem. It was recalculating scores and
+  passing vectors to esl_abc_FExpectScVec() for dealing with
+  noncanonical residues. esl_abc_FExpectScVec() documentation says
+  that K, Kp-1, Kp-2 must be set by caller; UpdateFwdEmissionScores()
+  was not doing that.  Result: uninitialized scores for -, *, ~.
+  
+
+//
 ID              h107
 TITLE           hmmsim only worked for Amino Acid models
 AFFECTS         3.0 and later
