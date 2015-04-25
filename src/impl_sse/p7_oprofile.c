@@ -460,6 +460,16 @@ p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emiss
 
     }
 
+    /* gap, nonresidue, and missing data residue codes don't get set by FExpectScVec(), 
+     * so do them
+     */
+    for (z = 0; z < 4; z++)
+      {
+	sc_arr[z*Kp + K]        = -eslINFINITY; /* gap char -     */
+	sc_arr[z*Kp + (Kp - 2)] = -eslINFINITY; /* nonresidue *   */
+	sc_arr[z*Kp + (Kp - 1)] = -eslINFINITY; /* missing data ~ */
+      }
+
     // Then compute corresponding scores for ambiguity codes.
     for (z = 0; z < 4; z++)
       esl_abc_FExpectScVec(om->abc, sc_arr+(z*Kp), bg->f);
