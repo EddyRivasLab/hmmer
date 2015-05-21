@@ -580,8 +580,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       else
         esl_sqfile_OpenSSI(dbfp, NULL);
     }
-    if (dbfp->format > 100) // breaking the law!  That range is reserved for msa, for aligned formats
-      p7_Fail("%s contains a multiple sequence alignment; expect unaligned sequences, like FASTA\n",   cfg->dbfile);
 
     if ( esl_opt_IsOn(go, "--dna") )
       abc     = esl_alphabet_Create(eslDNA);

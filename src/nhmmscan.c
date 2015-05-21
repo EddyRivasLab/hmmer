@@ -385,8 +385,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status == eslEFORMAT)   p7_Fail("Sequence file %s is empty or misformatted\n",        cfg->seqfile);
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
   else if (status != eslOK)        p7_Fail("Unexpected error %d opening sequence file %s\n", status, cfg->seqfile);
-  if (sqfp->format > 100) // breaking the law!  That range is reserved for msa, for aligned formats
-    p7_Fail("%s contains a multiple sequence alignment; expect unaligned sequences, like FASTA\n",   cfg->seqfile);
   qsq = esl_sq_CreateDigital(abc);
 
 
