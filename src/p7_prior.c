@@ -210,32 +210,28 @@ p7_prior_CreateNucleic(void)
   ESL_ALLOC(pri, sizeof(P7_PRIOR));
   pri->tm = pri->ti = pri->td = pri->em = pri->ei = NULL;
 
-
-  pri->tm = esl_mixdchlet_Create(1, 3);  // match transitions; single component; 3 params
-  pri->ti = esl_mixdchlet_Create(1, 2);  // insert transitions; single component; 2 params
-  pri->td = esl_mixdchlet_Create(1, 2);  // delete transitions; single component; 2 params
+  pri->tm = esl_mixdchlet_Create(1, 3);        // match transitions; single component; 3 params
+  pri->ti = esl_mixdchlet_Create(1, 2);        // insert transitions; single component; 2 params
+  pri->td = esl_mixdchlet_Create(1, 2);        // delete transitions; single component; 2 params
   pri->em = esl_mixdchlet_Create(num_comp, 4); // match emissions; X component; 4 params
-  pri->ei = esl_mixdchlet_Create(1, 4); // insert emissions; single component; 4 params
-
+  pri->ei = esl_mixdchlet_Create(1, 4);        // insert emissions; single component; 4 params
 
   if (pri->tm == NULL || pri->ti == NULL || pri->td == NULL || pri->em == NULL || pri->ei == NULL) goto ERROR;
 
   /* Transition priors: roughly, learned from rmark benchmark - hand-beautified (trimming overspecified significant digits)
    */
   pri->tm->pq[0]       = 1.0;
-  pri->tm->alpha[0][0] = 2.0; // TMM
-  pri->tm->alpha[0][1] = 0.1; // TMI
-  pri->tm->alpha[0][2] = 0.1; // TMD
-
+  pri->tm->alpha[0][0] = 2.0;  // TMM
+  pri->tm->alpha[0][1] = 0.1;  // TMI
+  pri->tm->alpha[0][2] = 0.1;  // TMD
 
   pri->ti->pq[0]       = 1.0;
-  pri->ti->alpha[0][0] = 0.12; // TIM   -  was 0.06 before TW changed on 3/19/15, to increase prior strength
-  pri->ti->alpha[0][1] = 0.4; // TII    -  was 0.2 before TW changed on 3/19/15, to increase prior strength
+  pri->ti->alpha[0][0] = 0.12; // TIM -  was 0.06 (TW changed 3/19/15)
+  pri->ti->alpha[0][1] = 0.4;  // TII -  was 0.2  (TW changed 3/19/15)
 
   pri->td->pq[0]       = 1.0;
-  pri->td->alpha[0][0] = 0.5; // TDM    -  was 0.1 before TW changed on 3/19/15, to increase prior strength
-  pri->td->alpha[0][1] = 1.0; // TDD    -  was 0.2 before TW changed on 3/19/15, to increase prior strength
-
+  pri->td->alpha[0][0] = 0.5;  // TDM -  was 0.1 (TW changed 3/19/15)
+  pri->td->alpha[0][1] = 1.0;  // TDD -  was 0.2 (TW changed 3/19/15)
 
 
   /* Match emission priors  */
@@ -245,8 +241,7 @@ p7_prior_CreateNucleic(void)
       esl_vec_DCopy(defm[q], 4, pri->em->alpha[q]);
     }
 
-
-  /* Insert emission priors. Should that alphas be lower? higher?
+  /* Insert emission priors. Should alphas be lower? higher?
    */
   pri->ei->pq[0] = 1.0;
   esl_vec_DSet(pri->ei->alpha[0], 4, 1.0);
