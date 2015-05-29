@@ -86,7 +86,6 @@ main(int argc, char **argv)
   char         *outfile = NULL;	  /* output filename               */
   FILE         *ofp     = stdout; /* output stream                 */
   ESL_SQ      **sq      = NULL;	/* array of sequences              */
-  void         *p       = NULL;	/* tmp ptr for reallocation        */
   int           nseq    = 0;	/* # of sequences in <seqfile>     */
   int           mapseq  = 0;	/* # of sequences in mapped MSA    */
   int           totseq  = 0;	/* # of seqs in all sources        */
@@ -177,13 +176,13 @@ main(int argc, char **argv)
   else if (status == eslEFORMAT)   p7_Fail("Sequence file %s is empty or misformatted\n",            seqfile);
   else if (status != eslOK)        p7_Fail("Unexpected error %d opening sequence file %s\n", status, seqfile);
 
-  ESL_RALLOC(sq, p, sizeof(ESL_SQ *) * (totseq + 1));
+  ESL_REALLOC(sq, sizeof(ESL_SQ *) * (totseq + 1));
   sq[totseq] = esl_sq_CreateDigital(abc);
   nseq = 0;
   while ((status = esl_sqio_Read(sqfp, sq[totseq+nseq])) == eslOK)
   {
     nseq++;
-    ESL_RALLOC(sq, p, sizeof(ESL_SQ *) * (totseq+nseq+1));
+    ESL_REALLOC(sq, sizeof(ESL_SQ *) * (totseq+nseq+1));
     sq[totseq+nseq] = esl_sq_CreateDigital(abc);
   }
   if      (status == eslEFORMAT) esl_fatal("Parse failed (sequence file %s):\n%s\n", 
@@ -195,7 +194,8 @@ main(int argc, char **argv)
 
   /* Remaining initializations, including trace array allocation
    */
-  ESL_RALLOC(tr, p, sizeof(P7_TRACE *) * totseq);
+  ESL_DASSERT1(( totseq > 0 ));
+  ESL_REALLOC(tr, sizeof(P7_TRACE *) * totseq);
   for (idx = mapseq; idx < totseq; idx++)
     tr[idx] = p7_trace_CreateWithPP();
 

@@ -457,6 +457,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* initialize thread data */
   if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
   else                           esl_threads_CPUCount(&ncpus);
+  ESL_DASSERT1(( ncpus >= 0 ));
 
   if (ncpus > 0)
     {
@@ -518,9 +519,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  esl_sqfile_Position(dbfp, 0);
 	}
 
-      if (fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-      if (qsq->acc[0]  != '\0' && fprintf(ofp, "Accession:   %s\n", qsq->acc)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-      if (qsq->desc[0] != '\0' && fprintf(ofp, "Description: %s\n", qsq->desc) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
+      if (fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+      if (qsq->acc[0]  != '\0' && fprintf(ofp, "Accession:   %s\n", qsq->acc)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+      if (qsq->desc[0] != '\0' && fprintf(ofp, "Description: %s\n", qsq->desc) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");  
 
 
       /* Build the model */
@@ -576,15 +577,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Print the results.  */
       p7_tophits_SortBySortkey(info->th);
       p7_tophits_Threshold(info->th, info->pli);
-      p7_tophits_Targets(ofp, info->th, info->pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-      p7_tophits_Domains(ofp, info->th, info->pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+      p7_tophits_Targets(ofp, info->th, info->pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+      p7_tophits_Domains(ofp, info->th, info->pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
   
       if (tblfp)    p7_tophits_TabularTargets(tblfp,    qsq->name, qsq->acc, info->th, info->pli, (nquery == 1));
       if (domtblfp) p7_tophits_TabularDomains(domtblfp, qsq->name, qsq->acc, info->th, info->pli, (nquery == 1));
 
       esl_stopwatch_Stop(w);
       p7_pipeline_WriteStats(ofp, info->pli, w);
-      if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+      if (fprintf(ofp, "//\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       fflush(ofp);
 
       /* Output the results in an MSA (-A option) */
@@ -596,10 +597,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	    if (textw > 0) eslx_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	    else           eslx_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 
-	    if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	    if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
 	  }
-	else if (fprintf(ofp, "# No hits satisfy inclusion thresholds; no alignment saved\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-	  
+	else if (fprintf(ofp, "# No hits satisfy inclusion thresholds; no alignment saved\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
 	esl_msa_Destroy(msa);
       }
 
@@ -621,7 +621,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    */
   if (tblfp)    p7_tophits_TabularTail(tblfp,    "phmmer", p7_SEARCH_SEQS, cfg->qfile, cfg->dbfile, go);
   if (domtblfp) p7_tophits_TabularTail(domtblfp, "phmmer", p7_SEARCH_SEQS, cfg->qfile, cfg->dbfile, go);
-  if (ofp)    { if (fprintf(ofp, "[ok]\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
+  if (ofp)    { if (fprintf(ofp, "[ok]\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); }
 
   /* Cleanup - prepare for successful exit
    */
@@ -655,6 +655,36 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   return eslOK;
 
  ERROR:
+  if (info) 
+    {
+      for (i = 0; i < infocnt; ++i)
+	p7_bg_Destroy(info[i].bg);
+      free(info);
+    }
+#ifdef HMMER_THREADS
+  if (ncpus > 0)
+    {
+      if (queue)     {
+	esl_workqueue_Reset(queue);
+	while (esl_workqueue_Remove(queue, (void **) &block) == eslOK)
+	  esl_sq_DestroyBlock(block);
+	esl_workqueue_Destroy(queue);
+      }
+      if (threadObj) esl_threads_Destroy(threadObj);
+    }
+#endif
+  if (w)    esl_stopwatch_Destroy(w);
+  if (bld)  p7_builder_Destroy(bld);
+  if (bg)   p7_bg_Destroy(bg);
+  if (abc)  esl_alphabet_Destroy(abc);
+  if (dbfp) esl_sqfile_Close(dbfp);
+  if (qsq)  esl_sq_Destroy(qsq);
+  if (qfp)  esl_sqfile_Close(qfp);
+
+  if (domtblfp)      fclose(domtblfp);
+  if (tblfp)         fclose(tblfp);
+  if (afp)           fclose(afp);
+  if (ofp != stdout) fclose(ofp);
   return status;
 }
 

@@ -234,8 +234,8 @@ main(int argc, char **argv)
       esl_msa_ConvertDegen2X(origmsa); 
       esl_msa_Hash(origmsa);
 
-      remove_fragments(&cfg, origmsa, &msa, &nfrags);
-      separate_sets   (&cfg, msa, &trainmsa, &teststack);
+      if ( remove_fragments(&cfg, origmsa, &msa, &nfrags)     != eslOK) esl_fatal("remove_fragments failed");
+      if ( separate_sets   (&cfg, msa, &trainmsa, &teststack) != eslOK) esl_fatal("separate_sets failed");
 
       if ( esl_stack_ObjectCount(teststack) >= 2) 
 	{
@@ -251,7 +251,7 @@ main(int argc, char **argv)
 	  
 	  if (esl_opt_GetBoolean(go, "--pid")) write_pids(cfg.pidfp, origmsa, trainmsa, teststack);
 
-	  synthesize_positives(go, &cfg, msa->name, teststack, &ntest);
+	  if (synthesize_positives(go, &cfg, msa->name, teststack, &ntest) != eslOK) esl_fatal("synthesize_positives failed");
 
 	  eslx_msafile_Write(cfg.out_msafp, trainmsa, eslMSAFILE_STOCKHOLM);
 

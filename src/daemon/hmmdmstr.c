@@ -1184,7 +1184,7 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
       if (hmmdb != NULL) {
 	cmd->init.hmmdb_off = s - cmd->init.data;
 	strcpy(s, hmmdb);
-	s += strlen(hmmdb) + 1;
+	//s += strlen(hmmdb) + 1;  // Increment is unnecessary, we're at the end.
       }
       
     } 
@@ -1480,7 +1480,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     n = seq->n + 2;
     memcpy(ptr, seq->dsq, n);
-    ptr += n;
+    //ptr += n;  // increment unnecessary because this is the end.
   } else {
     cmd->srch.query_type   = HMMD_HMM;
     cmd->srch.query_length = hmm->M;
@@ -1513,7 +1513,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     if (hmm->flags & p7H_MAP) {
       n = sizeof(int) * (hmm->M + 1);
       memcpy(ptr, hmm->map, n);
-      ptr += n;
+      //ptr += n;  // increment unnecessary so long as this is the end.
     }
   }
 
@@ -1895,7 +1895,7 @@ workerside_thread(void *arg)
       //cmd->init.hid[sizeof(cmd->init.hid)-1] = 0;
 
       strcpy(p, parent->hmm_db->name);
-      p += strlen(parent->hmm_db->name) + 1;
+      //p += strlen(parent->hmm_db->name) + 1;  // increment unnecessary so long as this remains the end
     }
 
     if (writen(worker->sock_fd, cmd, n) != n) {

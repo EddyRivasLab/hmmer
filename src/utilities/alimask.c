@@ -342,11 +342,9 @@ main(int argc, char **argv)
     //same as p7_builder relative_weights
     if      (esl_opt_IsOn(go, "--wnone")  )                  { esl_vec_DSet(msa->wgt, msa->nseq, 1.); }
     else if (esl_opt_IsOn(go, "--wgiven") )                  ;
-    else if (esl_opt_IsOn(go, "--wpb")    )                  status = esl_msaweight_PB(msa);
-    else if (esl_opt_IsOn(go, "--wgsc")   )                  status = esl_msaweight_GSC(msa);
-    else if (esl_opt_IsOn(go, "--wblosum"))                  status = esl_msaweight_BLOSUM(msa, esl_opt_GetReal(go, "--wid"));
-
-
+    else if (esl_opt_IsOn(go, "--wpb")    )                  esl_msaweight_PB(msa);
+    else if (esl_opt_IsOn(go, "--wgsc")   )                  esl_msaweight_GSC(msa);
+    else if (esl_opt_IsOn(go, "--wblosum"))                  esl_msaweight_BLOSUM(msa, esl_opt_GetReal(go, "--wid"));
 
     symfrac = esl_opt_GetReal(go, "--symfrac");
 
@@ -426,18 +424,21 @@ main(int argc, char **argv)
   }
 
   esl_stopwatch_Stop(w);
-
+  free(map);
   if (esl_opt_IsOn(go, "-o"))  fclose(ofp);
   if (postmsafp) fclose(postmsafp);
-  if (afp)   eslx_msafile_Close(afp);
-  if (abc)   esl_alphabet_Destroy(abc);
+  if (afp)       eslx_msafile_Close(afp);
+  if (abc)       esl_alphabet_Destroy(abc);
 
   esl_getopts_Destroy(go);
   esl_stopwatch_Destroy(w);
   return 0;
 
 
-  ERROR:
+ ERROR:
+  if (map) free(map);
+  if (w)   esl_stopwatch_Destroy(w);
+  if (go)  esl_getopts_Destroy(go);
    return eslFAIL;
 }
 

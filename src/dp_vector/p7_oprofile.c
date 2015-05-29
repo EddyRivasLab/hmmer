@@ -74,6 +74,15 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   om->tfv     = NULL;
   om->clone   = 0;
 
+  om->name    = NULL;
+  om->acc     = NULL;
+  om->desc    = NULL;
+
+  om->rf        = NULL;
+  om->mm        = NULL;
+  om->cs        = NULL;
+  om->consensus = NULL;
+
   /* level 1 */
   ESL_ALLOC(om->rbv_mem, sizeof(__m128i) * nqb  * abc->Kp          +15); /* +15 is for manual 16-byte alignment */
   ESL_ALLOC(om->sbv_mem, sizeof(__m128i) * nqs  * abc->Kp          +15); 
@@ -123,10 +132,6 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   for (x = 0; x < p7_NEVPARAM; x++) om->evparam[x] = p7_EVPARAM_UNSET;
   for (x = 0; x < p7_NCUTOFFS; x++) om->cutoff[x]  = p7_CUTOFF_UNSET;
   for (x = 0; x < p7_MAXABET;  x++) om->compo[x]   = p7_COMPO_UNSET;
-
-  om->name      = NULL;
-  om->acc       = NULL;
-  om->desc      = NULL;
 
   /* in a P7_OPROFILE, we always allocate for the optional RF, CS annotation.  
    * we only rely on the leading \0 to signal that it's unused, but 
@@ -291,6 +296,16 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
   om2->twv     = NULL;
   om2->rfv     = NULL;
   om2->tfv     = NULL;
+  om2->clone   = om1->clone;
+  
+  om2->name      = NULL;
+  om2->acc       = NULL;
+  om2->desc      = NULL;
+  om2->rf        = NULL;
+  om2->mm        = NULL;
+  om2->cs        = NULL;
+  om2->consensus = NULL;
+
 
   /* level 1 */
   ESL_ALLOC(om2->rbv_mem, sizeof(__m128i) * nqb  * abc->Kp    +15);	/* +15 is for manual 16-byte alignment */
@@ -377,16 +392,13 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
   memcpy(om2->cs,        om1->cs,        size);
   memcpy(om2->consensus, om1->consensus, size);
 
-  om2->abc       = om1->abc;
-  om2->L         = om1->L;
-  om2->M         = om1->M;
-  om2->allocM    = om1->allocM;
-  om2->mode      = om1->mode;
-  om2->nj        = om1->nj;
-  om2->max_length   = om1->max_length;
-
-  om2->clone     = om1->clone;
-
+  om2->abc        = om1->abc;
+  om2->L          = om1->L;
+  om2->M          = om1->M;
+  om2->allocM     = om1->allocM;
+  om2->mode       = om1->mode;
+  om2->nj         = om1->nj;
+  om2->max_length = om1->max_length;
   return om2;
 
  ERROR:

@@ -481,6 +481,9 @@ p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, __m128 *dpc, char *pfx)
   }
   fprintf(ox->dfp, "%*s %3d M", maxpfx, pfx, rowi);
   for (k = 0; k <= M; k++) fprintf(ox->dfp, " %*.*f", width, precision, (logify ? esl_logf(v[k]) : v[k]));
+  /* a static analyzer may complain about v[k] being uninitialized
+   * if it isn't smart enough to see that M,Q are linked.
+   */
 
   /* Line 1 end: Specials */
   for (z = 0; z < p7C_NXCELLS; z++)

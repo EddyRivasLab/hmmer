@@ -564,7 +564,8 @@ aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, cons
 {
   int scur,sprv;
   int d;
-  int i,k,k2,z;
+  int i,k,k2;
+  int z = 0;     // initialization is solely to quiet static code analyzers
   int status;
 
   if ((status = p7_trace_Append(tr, p7T_T, 0, 0)) != eslOK) return status;

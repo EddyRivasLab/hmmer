@@ -105,9 +105,9 @@ p7_banner(FILE *fp, char *progname, char *banner)
 {
   char *appname = NULL;
 
-  if (esl_FileTail(progname, FALSE, &appname) != eslOK) appname = progname;
+  esl_FileTail(progname, FALSE, &appname);  // remove leading directory path
 
-  fprintf(fp, "# %s :: %s\n", appname, banner);
+  fprintf(fp, "# %s :: %s\n", appname? appname : progname, banner);
   fprintf(fp, "# HMMER %s (%s); %s\n", HMMER_VERSION, HMMER_DATE, HMMER_URL);
   fprintf(fp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n");
 

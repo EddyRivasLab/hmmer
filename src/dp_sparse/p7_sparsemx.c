@@ -741,8 +741,9 @@ p7_sparsemx_Create(P7_SPARSEMASK *sm)
   sx->sm   = sm;
   sx->type = p7S_UNSET;
 
-  sx->dalloc = (sm ? sm->ncells       : default_ncell);
-  sx->xalloc = (sm ? sm->nrow + sm->S : default_nx);
+  /* We must avoid zero-sized mallocs. If there are no rows or cells, alloc the default sizes */
+  sx->dalloc = ( (sm && sm->ncells)         ? sm->ncells       : default_ncell);
+  sx->xalloc = ( (sm && (sm->nrow + sm->S)) ? sm->nrow + sm->S : default_nx);
 
   ESL_ALLOC(sx->dp,  sizeof(float) * p7S_NSCELLS * sx->dalloc);
   ESL_ALLOC(sx->xmx, sizeof(float) * p7S_NXCELLS * sx->xalloc);
@@ -936,7 +937,7 @@ p7_sparsemx_TracePostprobs(const P7_SPARSEMX *sxd, P7_TRACE *tr)
   const float         *xc  = sxd->xmx;  /* ptr that steps through stored special rows, including ia-1 segment edges */
   int i  = 0;       /* important to start at i=0, <xc> can start there */
   int k;	    /* index in main MI states, 0,1..M */
-  int v;	    /* index that steps through sparse cell list on a row */
+  int v  = 0;	    /* index that steps through sparse cell list on a row. Initialization is solely to silence zealous static code checkers. */
   int z;	    /* index that steps through trace */
   int last_ib;	    /* last stored row index - all i>last_ib are emitted by CC with postprob 1.0 */
 

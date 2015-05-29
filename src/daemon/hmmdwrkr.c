@@ -409,7 +409,7 @@ process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
     if (hmm->flags & p7H_CA)    { memcpy(hmm->ca,        p, n); p += n; }
 
     n = sizeof(int) * (hmm->M + 1);
-    if (hmm->flags & p7H_MAP) {  memcpy(hmm->map,       p, n); p += n; }
+    if (hmm->flags & p7H_MAP) {  memcpy(hmm->map,       p, n);          }  // p += n  increment unnecessary on final copy
 
     query->hmm = hmm;
   }

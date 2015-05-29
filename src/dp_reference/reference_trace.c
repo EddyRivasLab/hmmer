@@ -115,7 +115,7 @@ v_select_e(ESL_RANDOMNESS *r, float *wrk, const P7_PROFILE *gm, const P7_REFMX *
     if (P7R_MX(rmx, i, k, p7R_ML) > max) { max = P7R_MX(rmx, i, k, p7R_ML); smax = p7T_ML; kmax = k; }
 
   if (P7R_MX(rmx, i, gm->M, p7R_MG) > max) { max = P7R_MX(rmx, i, gm->M, p7R_MG); smax = p7T_MG; kmax = gm->M; }
-  if (P7R_MX(rmx, i, gm->M, p7R_DG) > max) { max = P7R_MX(rmx, i, gm->M, p7R_DG); smax = p7T_DG; kmax = gm->M; }
+  if (P7R_MX(rmx, i, gm->M, p7R_DG) > max) {                                      smax = p7T_DG; kmax = gm->M; }
 
   *ret_k = kmax;
   return smax;

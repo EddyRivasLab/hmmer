@@ -69,7 +69,7 @@ static ESL_OPTIONS options[] = {
   { "-a",       eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL, NULL, "all: plot all bootstrap samples individually",         1 },
   { "-n",       eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL, NULL, "plot original data, without any bootstrapping",        1 },
   { "-s",       eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL, NULL, "plot error bars by std. dev. not confidence interval", 1 },
-  { "-N",       eslARG_INT,   "500", NULL, NULL, NULL,NULL, NULL, "number of bootstrap samples to take",                  1 },
+  { "-N",       eslARG_INT,   "500", NULL,"n>0", NULL,NULL, NULL, "number of bootstrap samples to take",                  1 },
   { "--min",    eslARG_REAL,   NULL, NULL, NULL, NULL,NULL, NULL, "set minimum x-axis value (FPs/query) to plot",         1 },
   { "--max",    eslARG_REAL,  "10.", NULL, NULL, NULL,NULL, NULL, "set maximum x-axis value (FPs/query) to plot",         1 },
   { "--steps",  eslARG_INT,    "10", NULL, NULL, NULL,NULL, NULL, "set number of steps to plot per 10x on x-axis",        1 },
@@ -185,6 +185,11 @@ main(int argc, char **argv)
   nneg = esl_keyhash_GetNumber(negkh);
   nseq = npos+nneg;
 
+  ESL_DASSERT1(( nq > 0     ));
+  ESL_DASSERT1(( npos > 0   ));
+  ESL_DASSERT1(( nneg > 0   ));
+  ESL_DASSERT1(( nboots > 0 ));
+
   /* Create a [0..nq-1]x[0..pos-1] matrix preclassifying each pair as +1 (positive), -1 (negative), or 0 (ignore) */
   if ((pni = malloc(sizeof(int *) * nq)) == NULL) esl_fatal("malloc failed");
   for (i = 0; i < nq; i++) 
@@ -210,11 +215,13 @@ main(int argc, char **argv)
    * storing all the bootstrap results in <yv>. The <plot> 
    * holds the information about the x coordinate system.
    */
-  plot = create_plot(go, nq);
+  if ( (plot = create_plot(go, nq)) == NULL) esl_fatal("failed to allocate plot");
 
   if ((yv       = malloc(sizeof(double *) * plot->nxpts)) == NULL) esl_fatal("malloc failed");
-  for (xi = 0; xi < plot->nxpts; xi++)
+  for (xi = 0; xi < plot->nxpts; xi++) {
     if ((yv[xi]   = malloc(sizeof(double) * nboots)) == NULL) esl_fatal("malloc failed");
+    for (i = 0; i < nboots; i++) yv[xi][i] = 0.;
+  }
 
 
   /* "Bayesian" bootstraps:  */
@@ -395,6 +402,7 @@ create_plot(ESL_GETOPTS *go, int nq)
 {
   struct oneplot_s *plot;
   double minfp, maxfp;
+  int    i;
   int    status;
 
   ESL_ALLOC(plot, sizeof(struct oneplot_s));
@@ -407,7 +415,10 @@ create_plot(ESL_GETOPTS *go, int nq)
   plot->base   = (int) floor(log10(minfp) * plot->nsteps);
   plot->nxpts  = (int) ceil(log10(maxfp) * plot->nsteps) - plot->base + 1;
 
+  ESL_DASSERT1(( plot->nxpts > 0 ));
+
   ESL_ALLOC(plot->tp, sizeof(double) * plot->nxpts);
+  for (i = 0; i < plot->nxpts; i++) plot->tp[i] = 0.;
 
   return plot;
 
@@ -477,6 +488,8 @@ make_plot(struct result_s *rp, int nresults, int **pni, double *queryp, int nq, 
 	    if (curr_xi < plot->nxpts) plot->tp[curr_xi] = true_pos;
 	  }
 	}
+      else esl_fatal("class must be 1 or -1");
+
       if (curr_xi >= plot->nxpts) break;
     }
 

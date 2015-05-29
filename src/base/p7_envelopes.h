@@ -33,7 +33,9 @@ typedef struct {
   int32_t  ia,   ib;	// envelope start, end on sequence   (1..L) 
   int32_t  ka,   kb;	// ali start, end on model           (1..M) 
   int32_t  oa,   ob;	// outer envelope start, stop on seq (1..L) 
-  float    env_sc;	// envelope score (nats)                    
+  float    env_sc;	// envelope raw score s_d, nats                    
+  float    null2_sc;    // domain null2 score r_d, nats
+  
   uint32_t flags;       // p7E_ENVSC_APPROX | p7E_IS_GLOCAL | p7E_IS_REPORTED | p7E_IS_INCLUDED
 } P7_ENVELOPE;
   

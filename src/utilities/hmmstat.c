@@ -227,20 +227,21 @@ main(int argc, char **argv)
 
 
 
-      if ( esl_opt_IsOn(go, "--eval2score") ) {
-        float sc;
-        sc = esl_exp_invsurv( e_val / nseq ,  hmm->evparam[p7_FTAU],  hmm->evparam[p7_FLAMBDA]);
-        printf("%13.2f", sc);
-      } else  if ( esl_opt_IsOn(go, "--score2eval") ) {
-        float e;
-        e = nseq * esl_exp_surv( s_val ,  hmm->evparam[p7_FTAU],  hmm->evparam[p7_FLAMBDA]);
-        printf("%13.2g", e);
-      }
-
+      if ( do_eval2score )
+	{
+	  float sc;
+	  sc = esl_exp_invsurv( e_val / nseq ,  hmm->evparam[p7_FTAU],  hmm->evparam[p7_FLAMBDA]);
+	  printf("%13.2f", sc);
+	}
+      else  if ( do_score2eval)  
+	{
+	  float e;
+	  e = nseq * esl_exp_surv( s_val ,  hmm->evparam[p7_FTAU],  hmm->evparam[p7_FLAMBDA]);
+	  printf("%13.2g", e);
+	}
       printf("\n");
 
-	     /*	     p7_MeanForwardScore(hmm, bg)); */
-
+      /* p7_MeanForwardScore(hmm, bg)); */
       p7_hmm_Destroy(hmm);
     }
 

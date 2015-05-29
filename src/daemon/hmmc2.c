@@ -327,7 +327,7 @@ main(int argc, char *argv[])
       if (sstatus.status != eslOK) {
         char *ebuf;
         n = sstatus.msg_size;
-        total += n; 
+        //total += n; 
         ebuf = malloc(n);
         if ((size = readn(sock, ebuf, n)) == -1) {
           fprintf(stderr, "[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
@@ -439,7 +439,7 @@ main(int argc, char *argv[])
         if (sstatus.status != eslOK) {
           char *ebuf;
           n = sstatus.msg_size;
-          total += n; 
+          //total += n; 
           ebuf = malloc(n);
           if ((size = readn(sock, ebuf, n)) == -1) {
             fprintf(stderr, "[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));

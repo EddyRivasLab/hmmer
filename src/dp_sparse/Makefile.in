@@ -40,6 +40,7 @@ EXAMPLES = sparse_anchors_example     \
 	   sparse_envscore_example    \
            sparse_fwdback_example     \
            sparse_masstrace_example   \
+	   sparse_null2_example       \
            sparse_trace_example       \
 	   sparse_asc_fwdback_example \
 	   sparse_aec_align_example

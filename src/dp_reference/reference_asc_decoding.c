@@ -118,7 +118,6 @@ p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
       fwdp  = afd->dp[i] + (M+1) * p7R_NSCELLS;
       bckp  = abd->dp[i] + (M+1) * p7R_NSCELLS;
       ppp   = apd->dp[i] + (M+1) * p7R_NSCELLS;
-      denom = 0.0;
 
       if (i == 0) totsc = bckp[p7R_N]; 
 

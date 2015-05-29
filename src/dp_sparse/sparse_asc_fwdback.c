@@ -639,7 +639,8 @@ p7_sparse_asc_Backward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
   float        xC,xG,xL,xB,xJ,xN,xE; // tmp vars for special cells on this row i
   float        dlc,dgc;		     // tmp vars for D vals on current row i  
   float        mln,mgn,iln,ign;	     // tmp vars for M+e, I+e on next row i+1 
-  float        mlc,mgc;
+  float        mlc = 0.;             // initialization is solely to quiet static code analyzers
+  float        mgc = 0.;             //  ... ditto.
   int          nup = 0;              // counter for how many rows into an UP sector we are
   int          ngap;                 // number of residues in an intersegment gap
   int64_t      asc_ncells;

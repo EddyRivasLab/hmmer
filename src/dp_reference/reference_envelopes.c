@@ -392,8 +392,8 @@ approxsc(P7_ENVELOPES *env, int D, const P7_REFMX *afd, const P7_PROFILE *gm)
  * [1] DEFINITIONS
  * 
  * Whether envelope <d> is glocal or local is defined by the
- * marginalized probabilities of using the G vs L state in the
- * path ensemble for domain <d>:
+ * marginalized probabilities of using the G vs L state in the path
+ * ensemble for domain <d>:
  *      pL = \sum_{i=i0(d-1)..i0(d)-1} \rho_L(i)
  *      pG = \sum_{i=i0(d-1)..i0(d)-1} \rho_G(i)
  *      Domain d is glocal if pG >= pL 

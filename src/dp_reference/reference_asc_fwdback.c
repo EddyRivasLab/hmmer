@@ -483,7 +483,7 @@ p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P
 	  mgn = dgn = -eslINFINITY;
 	  mln = dln = -eslINFINITY;
 	  ign = iln = -eslINFINITY;
-	  xG  = xL  = -eslINFINITY;
+	  xL  = -eslINFINITY;
 
 	  for (k = M; k >= anch[d].k0; k--)
 	    {

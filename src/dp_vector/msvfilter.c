@@ -117,7 +117,6 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
   /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.  */
   biasv = _mm_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
   for (q = 0; q < Q; q++) dp[q] = _mm_setzero_si128();
-  xJ   = 0;
 
   /* saturate simd register for overflow test */
   ceilingv = _mm_cmpeq_epi8(biasv, biasv);

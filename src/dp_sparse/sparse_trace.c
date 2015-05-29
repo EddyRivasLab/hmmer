@@ -160,7 +160,7 @@ v_select_e(ESL_RANDOMNESS *r, float *wrk, const P7_PROFILE *gm, const float *dpp
   /* last cell np-1 is out of loop because we don't want to bump dpp after it */
   if (dpp[p7S_ML] > max) { max = dpp[p7S_ML]; smax = p7T_ML; zmax = z; }
   pathsc = dpp[p7S_MG] + P7P_TSC(gm, kp[z], p7P_MD) + P7P_TSC(gm, kp[z], p7P_DGE);  if (pathsc > max) { max = pathsc; smax = p7T_MG; zmax = z; }  
-  pathsc = dpp[p7S_DG] + P7P_TSC(gm, kp[z], p7P_DD) + P7P_TSC(gm, kp[z], p7P_DGE);  if (pathsc > max) { max = pathsc; smax = p7T_DG; zmax = z; }  
+  pathsc = dpp[p7S_DG] + P7P_TSC(gm, kp[z], p7P_DD) + P7P_TSC(gm, kp[z], p7P_DGE);  if (pathsc > max) {               smax = p7T_DG; zmax = z; }  
   *ret_z = zmax;
   return smax;
 }
@@ -407,7 +407,7 @@ sparse_traceback_engine(ESL_RANDOMNESS *rng, float *wrk, const P7_PROFILE *gm, c
       select_j  = &sto_select_j;       select_c  = &sto_select_c;
       select_e  = &sto_select_e;       select_b  = &sto_select_b;
     }
-
+  else ESL_EXCEPTION(eslEINCONCEIVABLE, "neither Forward or Viterbi?");
 
 
   /* <dp> points to the main sparse row we're tracing to, when we can

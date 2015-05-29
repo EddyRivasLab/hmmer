@@ -145,24 +145,38 @@ p7_envelopes_Destroy(P7_ENVELOPES *envs)
 int
 p7_envelopes_Dump(FILE *ofp, P7_ENVELOPES *env)
 {
-  int e;
+  int   d;
+  float bias;
+  float Sdd;
+  float tCC   = (float) (env->L) / (float) (env->L+3);
+  float omega = log(1./256.);  // hardcoded - FIXME
 
-  fprintf(ofp, "#%3s %5s %5s %5s %5s %5s %5s %5s %5s %6s %3s %3s\n",
-	  "dom", "ia",  "ib", "i0",  "k0", "ka",  "kb", 
-	  "oa",  "ob", "env_sc", "app", "glo");
-  fprintf(ofp, "#%3s %5s %5s %5s %5s %5s %5s %5s %5s %6s %3s %3s\n",
-	  "---", "-----",  "-----", "-----",  "-----", "-----",  "-----", 
-	  "-----",  "-----", "------", "---", "---");
-  for (e = 1; e <= env->D; e++)
-    fprintf(ofp, "%-4d %5d %5d %5d %5d %5d %5d %5d %5d %6.2f %3s %3s\n",
-	    e,
-	    env->arr[e].ia,  env->arr[e].ib,
-	    env->arr[e].i0,  env->arr[e].k0,
-	    env->arr[e].ka,  env->arr[e].kb,
-	    env->arr[e].oa,  env->arr[e].ob,
-	    env->arr[e].env_sc,
-	    (env->arr[e].flags & p7E_ENVSC_APPROX ? "YES" : "n"),
-	    (env->arr[e].flags & p7E_IS_GLOCAL    ? "YES" : "n"));
+  esl_dataheader(ofp, 5, "dom", 5, "ia", 5, "ib", 
+		 5, "i0", 5, "k0", 5, "ka", 5, "kb",
+		 5, "oa", 5, "ob",
+		 6, "env_sc", 6, "null2", 6, "bias", 6, "Sdd",
+		 3, "app", 3, "glo",
+		 0);
+
+  for (d = 1; d <= env->D; d++)
+    {
+      bias = log(1 + exp(env->arr[d].null2_sc + omega));
+      Sdd  = eslCONST_LOG2R * 
+	(env->arr[d].env_sc - ( (float) env->L * log(tCC) + log(1-tCC)) - bias);
+
+      fprintf(ofp, "%-5d %5d %5d %5d %5d %5d %5d %5d %5d %6.2f %6.2f %6.2f %6.2f %3s %3s\n",
+	      d,
+	      env->arr[d].ia,  env->arr[d].ib,
+	      env->arr[d].i0,  env->arr[d].k0,
+	      env->arr[d].ka,  env->arr[d].kb,
+	      env->arr[d].oa,  env->arr[d].ob,
+	      env->arr[d].env_sc,
+	      env->arr[d].null2_sc,
+	      bias, 
+	      Sdd,
+	      (env->arr[d].flags & p7E_ENVSC_APPROX ? "YES" : "n"),
+	      (env->arr[d].flags & p7E_IS_GLOCAL    ? "YES" : "n"));
+    }
 
   fprintf(ofp, "# Total domains = %d\n",    env->D);
   fprintf(ofp, "# M,L           = %d,%d\n", env->M, env->L);

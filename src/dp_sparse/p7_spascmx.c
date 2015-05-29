@@ -127,6 +127,12 @@ p7_spascmx_Resize(P7_SPARSEMX *asx, const P7_SPARSEMASK *sm, const P7_ANCHOR *an
       dalloc_req = sm->ncells * 2;   // unknown anchor set: upper bound on space is 2x sparse matrices
       xalloc_req = (sm->S + sm->nrow);
     }
+
+  /* <sm> could be completely empty. 
+   * Avoid zero length mallocs by assigning arbitrary minimum allocation sizes. 
+   */
+  if (dalloc_req == 0) dalloc_req = 16;
+  if (xalloc_req == 0) xalloc_req = 16;
       
   if (dalloc_req > asx->dalloc) {
     ESL_REALLOC(asx->dp, sizeof(float) * p7S_NSCELLS * dalloc_req);

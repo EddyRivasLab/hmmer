@@ -231,26 +231,37 @@ main(int argc, char **argv)
   else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);
 
-
   status = p7_hmmfile_Read(hfp, &abc, &hmm);
+  if      (status == eslEFORMAT)   p7_Fail("Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
+  else if (status == eslEINCOMPAT) p7_Fail("HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
+  else if (status == eslEOF)       p7_Fail("Empty HMM file %s? No HMM data found.\n",        hfp->fname);
+  else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s\n",     hfp->fname);
 
   bg     = p7_bg_Create(abc);
 
   ESL_ALLOC(rel_ents, (hmm->M+1) * sizeof(float));
   ESL_ALLOC(heights,  (hmm->M+1) * sizeof(float*));
   for (i = 1; i <= hmm->M; i++)
+    heights[i] = NULL;
+  for (i = 1; i <= hmm->M; i++)
     ESL_ALLOC(heights[i], abc->K * sizeof(float));
 
   /* residue heights */
-  if (mode == HMMLOGO_HEIGHT_EMISSION) {
-    printf ("max expected height = %.2f\n", hmmlogo_maxHeight(bg) );
-    hmmlogo_emissionHeightsDivRelent(hmm, bg, rel_ents, heights);
-  } else if (mode == HMMLOGO_HEIGHT_POS_SCORE) {
-    printf ("max expected height = %.2f\n", hmmlogo_maxHeight(bg) );
-    hmmlogo_posScoreHeightsDivRelent(hmm, bg, rel_ents, heights);
-  } else if (mode == HMMLOGO_HEIGHT_BITS) {
-    hmmlogo_ScoreHeights (hmm, bg, heights );
-  }
+  if (mode == HMMLOGO_HEIGHT_EMISSION) 
+    {
+      printf ("max expected height = %.2f\n", hmmlogo_maxHeight(bg) );
+      hmmlogo_emissionHeightsDivRelent(hmm, bg, rel_ents, heights);
+    } 
+  else if (mode == HMMLOGO_HEIGHT_POS_SCORE) 
+    {
+      printf ("max expected height = %.2f\n", hmmlogo_maxHeight(bg) );
+      hmmlogo_posScoreHeightsDivRelent(hmm, bg, rel_ents, heights);
+    } 
+  else if (mode == HMMLOGO_HEIGHT_BITS) 
+    {
+      hmmlogo_ScoreHeights (hmm, bg, heights );
+    }
+  else esl_fatal("invalid mode");
 
   printf ("Residue heights\n");
   for (i = 1; i <= hmm->M; i++) {
@@ -265,20 +276,12 @@ main(int argc, char **argv)
 
   }
 
-  if (rel_ents != NULL) free(rel_ents);
-  if (heights != NULL) {
-    for (i = 1; i <= hmm->M; i++)
-      if (heights[i] != NULL) free(heights[i]);
-    free(heights);
-  }
-
-
   /* indel values */
   if (! esl_opt_IsOn(go, "--no_indel")) {
 
-    ESL_ALLOC(ins_P, (hmm->M+1) * sizeof(float));
+    ESL_ALLOC(ins_P,    (hmm->M+1) * sizeof(float));
     ESL_ALLOC(ins_expL, (hmm->M+1) * sizeof(float));
-    ESL_ALLOC(del_P, (hmm->M+1) * sizeof(float));
+    ESL_ALLOC(del_P,    (hmm->M+1) * sizeof(float));
 
     hmmlogo_IndelValues(hmm, ins_P, ins_expL, del_P);
 
@@ -289,34 +292,32 @@ main(int argc, char **argv)
     free(ins_P);
     free(ins_expL);
     free(del_P);
-
   }
 
 
+  free(rel_ents);
+  for (i = 1; i <= hmm->M; i++) free(heights[i]);
+  free(heights);
   p7_hmmfile_Close(hfp);
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
-
-
   exit(0);
 
+ ERROR:
+  if (rel_ents) free(rel_ents);
+  if (heights) 
+    {
+      for (i = 1; i <= hmm->M; i++)
+	if (heights[i]) free(heights[i]);
+      free(heights);
+    }
+  if (hfp) p7_hmmfile_Close(hfp);
+  if (abc) esl_alphabet_Destroy(abc);
 
-  ERROR:
-  if (rel_ents != NULL) free(rel_ents);
-  if (heights != NULL) {
-    for (i = 1; i <= hmm->M; i++)
-      if (heights[i] != NULL) free(heights[i]);
-    free(heights);
-  }
-  if (hfp != NULL) p7_hmmfile_Close(hfp);
-  if (abc != NULL) esl_alphabet_Destroy(abc);
-
-
-  if (ins_P != NULL)    free(ins_P);
-  if (ins_expL != NULL) free(ins_expL);
-  if (del_P != NULL)    free(del_P);
-
-
+  if (ins_P)    free(ins_P);
+  if (ins_expL) free(ins_expL);
+  if (del_P)    free(del_P);
+  exit(status);
 }
 
 /*---------------- end, hmmlogo application ----------------------*/

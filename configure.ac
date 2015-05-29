@@ -29,28 +29,30 @@
 #    6. Checks for libraries, such as GSL
 #    7. Checks for headers, including SSE headers
 #    8. Checks for types.
-#    9. Checks for functions.
-#   10. Checks for system services
-#   11. AC_CONFIG_FILES
-#   12. AC_OUTPUT
-#   13. Copyright and license information
+#    9. Checks for structures.
+#   10. Checks for compiler characteristics
+#   11. Checks for functions.
+#   12. Checks for system services
+#   13. AC_CONFIG_FILES
+#   14. AC_OUTPUT
+#   15. Copyright and license information
 #
-# (the order of sections above is meant to obey GNU's suggested
-#  section order; see autoconf manual, 3.1.3 "standard configure.ac
-#  layout")
+# Order obeys autoconf manual, "standard configure.ac layout".
+
 
 
 ################################################################
 # 1. autoconf requirements
 ################################################################
-# AUTOCONF 2.61 has a bug in AC_FUNC_FSEEKO; don't use it.
+# autoconf 2.61 has a bug in AC_FUNC_FSEEKO; make sure we don't use it.
 AC_PREREQ(2.63)
+
 
 ################################################################
 # 2. AC_INIT
 ################################################################
 
-AC_INIT(HMMER, 4.0dev, eddys@janelia.hhmi.org, hmmer)
+AC_INIT(HMMER, 4.0dev, sean@eddylab.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -64,13 +66,13 @@ fi
 # 3. Info on the package
 ################################################################
 #
-# The four AC_INIT args set these output variables and preprocessor symbols:
+# The four AC_INIT args above set these output variables and preprocessor symbols:
 #     PACKAGE_NAME      <package>     e.g. "HMMER"
-#     PACKAGE_VERSION   <version>     e.g. "3.0"
-#     PACKAGE_BUGREPORT <bug-report>  e.g. "eddys@janelia.hhmi.org"
+#     PACKAGE_VERSION   <version>     e.g. "4.0dev"
+#     PACKAGE_BUGREPORT <bug-report>  e.g. "sean@eddylab.org"
 #     PACKAGE_TARNAME   <tarname>     e.g. "hmmer"
 # From them, it derives one more:
-#     PACKAGE_STRING    <package> <version>, e.g. "HMMER 3.0"
+#     PACKAGE_STRING    <package> <version>, e.g. "HMMER 4.0dev"
 # We also define additional variables:
 #     HMMER_DATE        release date: e.g. "January 2007"
 #     HMMER_COPYRIGHT   one-line copyright string
@@ -84,19 +86,19 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="September 2014"
-HMMER_COPYRIGHT="Copyright (C) 2014 Howard Hughes Medical Institute."
+HMMER_DATE="Apr 2015"
+HMMER_COPYRIGHT="Copyright (C) 2015 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the open source BSD license."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="hmmer.org"
 HMMER_ESLDIR="lib/easel"
 HMMER_SADIR="lib/libdivsufsort"
 
-EASEL_DATE="September 2014"
-EASEL_COPYRIGHT="Copyright (C) 2014 Howard Hughes Medical Institute."
+EASEL_DATE="Apr 2015"
+EASEL_COPYRIGHT="Copyright (C) 2015 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the open source BSD license."
 EASEL_VERSION="h$PACKAGE_VERSION"
-EASEL_URL="bioeasel.org"
+EASEL_URL="http://bioeasel.org/"
 
 # Output variables  (AC_OUTPUT replaces @var@ in input files, such as Makefiles)
 AC_SUBST(HMMER_DATE)
@@ -302,24 +304,33 @@ AC_ARG_WITH([gsl],
 
 
 ################################################################
-# 5. Checks for programs, including choice of compiler ${CC} and ${CFLAGS}.
+# 5. Checks for programs, including ${CC} and its ${CFLAGS}.
 #################################################################
 AC_PROG_CC
 AC_PROG_INSTALL
-# MPI :  set @CC@ to mpicc, set @MPILIBS@ if needed (usually not; mpicc deals w/ it), defines HAVE_MPI. 
+# MPI :  set @CC@ to mpicc;
+#        set @MPILIBS@ if needed (usually not; mpicc deals w/ it);
+#        defines HAVE_MPI. 
 if test "$enable_mpi" = "yes"; then
    ACX_MPI([], AC_MSG_ERROR([MPI library not found for --enable-mpi]))
    CC=$MPICC
 fi
 AC_PROG_CPP
-AX_COMPILER_VENDOR
+
 # AC_PROG_CC_STDC wants to append -c99 to icc; icc doesn't like this.
+# To autodetect icc, we use the AX_COMPILER_VENDOR macro.
+AX_COMPILER_VENDOR
 if test "$ax_cv_c_compiler_vendor" != "intel"; then
   AC_PROG_CC_STDC
 fi
 AC_PROG_RANLIB
 AC_PATH_PROG([AR], [ar], [:], [$PATH:/usr/ccs/bin:/usr/xpg4/bin])
+
+
+# CHECK_GNU_MAKE sets EXEC_DEPENDENCY for SYSV vs. GNU make,
+# to support Makefile lines of ${PROGS}: ${EXEC_DEPENDENCY}
 CHECK_GNU_MAKE
+
 
 # If the base $CFLAGS isn't already set, select what it should be.
 # We've used AX_CC_MAXOPT in the past (from FFTW), but it's
@@ -474,7 +485,16 @@ AC_CHECK_HEADERS([\
 ################################################################
 # 8. Checks for types
 ################################################################
+#    - Define WORDS_BIGENDIAN on bigendian platforms.
+#    - Make sure we have C99 exact-size integer types; 
+#      ssi uses 16, 32, and 64-bit ints, and we
+#      use 8-bit unsigned chars for digitized sequence.
+#    - Make sure we have off_t.
 AC_C_BIGENDIAN
+AC_TYPE_INT8_T
+AC_TYPE_INT16_T
+AC_TYPE_INT32_T
+AC_TYPE_INT64_T
 AC_TYPE_UINT8_T
 AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
@@ -482,7 +502,29 @@ AC_TYPE_UINT64_T
 AC_TYPE_OFF_T
 
 ################################################################
-# 9. Checks for functions, defining HAVE_FOO when foo is found
+# 9. Checks for structures - currently none
+#################################################################
+
+
+
+################################################################
+# 10. Checks for compiler characteristics
+#################################################################
+
+# __attribute__() tags on function declarations
+# HAVE_FUNC_ATTRIBUTE_NORETURN 
+#
+#   The clang static analyzer can't figure out that some of our
+#   varargs-dependent fatal error handlers (esl_fatal(), for example)
+#   cannot return. To tell it so, we take advantage of __attribute__
+#   tags on function declarations, a non-ISO gcc extension, when
+#   available. gcc, clang, and other gcc-like compilers support this.
+# 
+AX_GCC_FUNC_ATTRIBUTE(noreturn)
+
+
+################################################################
+# 11. Checks for functions, defining HAVE_FOO when foo is found
 #################################################################
 AC_CHECK_FUNCS(mkstemp)
 AC_CHECK_FUNCS(popen)
@@ -494,6 +536,7 @@ AC_CHECK_FUNCS(sysconf)
 AC_CHECK_FUNCS(getcwd)
 AC_CHECK_FUNCS(stat)
 AC_CHECK_FUNCS(fstat)
+AC_CHECK_FUNCS(erfc)
 
 AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
 AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))
@@ -502,13 +545,13 @@ AC_CHECK_FUNCS(htonl, , AC_CHECK_LIB(socket, htonl))
 AC_FUNC_FSEEKO
 
 #################################################################
-# 10. System services
+# 12. System services
 #################################################################
 AC_SYS_LARGEFILE
 
 
 ################################################################
-# 11. Config subdirs and files (except main Makefile, which we defer)
+# 13. Config subdirs and files (except main Makefile, which we defer)
 #################################################################
 if test -d documentation/release-notes; then
   AC_CONFIG_FILES(documentation/release-notes/LICENSE.sh)
@@ -551,7 +594,7 @@ AC_CONFIG_HEADERS([
 ])
 
 ################################################################
-# 12. AC_OUTPUT
+# 12. et voila!
 ################################################################
 # remember that sneaky if statement that wraps the source
 # configuration? well, it ends here.
@@ -576,6 +619,5 @@ HMMER configuration:
 # 
 # SVN $Id$
 # SVN $URL$ 
-# xref autoconf macro archive: //www.gnu.org/software/ac-archive/
 #################################################################
 

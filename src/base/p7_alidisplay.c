@@ -137,7 +137,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   ad->hmmdesc = ad->mem + pos;  pos += hmm_desclen +1;
   ad->sqname  = ad->mem + pos;  pos += sq_namelen +1;
   ad->sqacc   = ad->mem + pos;  pos += sq_acclen +1;
-  ad->sqdesc  = ad->mem + pos;  pos += sq_desclen +1;
+  ad->sqdesc  = ad->mem + pos;  // pos += sq_desclen +1; // increment unnecessary on final.
 
   /* Copy annotation for hmm, seq */
   strcpy(ad->hmmname, om->name);
@@ -389,7 +389,7 @@ p7_alidisplay_Serialize(P7_ALIDISPLAY *ad)
   n = 1 + strlen(ad->hmmdesc);  memcpy(ad->mem + pos, ad->hmmdesc, n); free(ad->hmmdesc); ad->hmmdesc = ad->mem+pos; pos += n;
   n = 1 + strlen(ad->sqname);   memcpy(ad->mem + pos, ad->sqname,  n); free(ad->sqname);  ad->sqname  = ad->mem+pos; pos += n;
   n = 1 + strlen(ad->sqacc);    memcpy(ad->mem + pos, ad->sqacc,   n); free(ad->sqacc);   ad->sqacc   = ad->mem+pos; pos += n;
-  n = 1 + strlen(ad->sqdesc);   memcpy(ad->mem + pos, ad->sqdesc,  n); free(ad->sqdesc);  ad->sqdesc  = ad->mem+pos; pos += n;
+  n = 1 + strlen(ad->sqdesc);   memcpy(ad->mem + pos, ad->sqdesc,  n); free(ad->sqdesc);  ad->sqdesc  = ad->mem+pos; //pos += n;  // increment unnecessary on final 
   
   return eslOK;
 
@@ -437,7 +437,7 @@ p7_alidisplay_Deserialize(P7_ALIDISPLAY *ad)
   n = 1 + strlen(ad->mem+pos);  ESL_ALLOC(ad->hmmdesc,  sizeof(char) * n); memcpy(ad->hmmdesc,  ad->mem+pos, n); pos += n;
   n = 1 + strlen(ad->mem+pos);  ESL_ALLOC(ad->sqname,   sizeof(char) * n); memcpy(ad->sqname,   ad->mem+pos, n); pos += n;
   n = 1 + strlen(ad->mem+pos);  ESL_ALLOC(ad->sqacc,    sizeof(char) * n); memcpy(ad->sqacc,    ad->mem+pos, n); pos += n;
-  n = 1 + strlen(ad->mem+pos);  ESL_ALLOC(ad->sqdesc,   sizeof(char) * n); memcpy(ad->sqdesc,   ad->mem+pos, n); pos += n;
+  n = 1 + strlen(ad->mem+pos);  ESL_ALLOC(ad->sqdesc,   sizeof(char) * n); memcpy(ad->sqdesc,   ad->mem+pos, n); 
 
   free(ad->mem);
   ad->mem     = NULL;
@@ -461,7 +461,7 @@ p7_alidisplay_Deserialize(P7_ALIDISPLAY *ad)
   n = 1 + strlen(ad->hmmname);  if (ad->hmmdesc != ad->mem+pos) { free(ad->hmmdesc); ad->hmmdesc = ad->mem+pos; }  pos += n;
   n = 1 + strlen(ad->sqname);   if (ad->sqname  != ad->mem+pos) { free(ad->sqname);  ad->sqname = ad->mem+pos;  }  pos += n;
   n = 1 + strlen(ad->sqacc);    if (ad->sqacc   != ad->mem+pos) { free(ad->sqacc);   ad->sqacc  = ad->mem+pos;  }  pos += n;
-  n = 1 + strlen(ad->sqname);   if (ad->sqdesc  != ad->mem+pos) { free(ad->sqdesc);  ad->sqdesc = ad->mem+pos;  }  pos += n;
+  n = 1 + strlen(ad->sqname);   if (ad->sqdesc  != ad->mem+pos) { free(ad->sqdesc);  ad->sqdesc = ad->mem+pos;  }  // pos += n;  // increment unnecessary on final.
   return status;
 }
 
