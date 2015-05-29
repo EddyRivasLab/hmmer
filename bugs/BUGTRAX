@@ -145,7 +145,7 @@ STATUS          CLOSED
 XREF            -
 REPORTED_BY     Stephanie Pearl <spearl@plantbio.uga.edu>
 OPENED_DATE     SRE, Sun Jul 14 13:44:30 2013
-CLOSED_DATE     
+CLOSED_DATE     SRE, Sun Jul 14 13:51:18 2013
 DESCRIPTION     
   hmmsearch segfaults when searching a DNA HMM against a protein db. Segfault only
   occurs in Linux, not Mac OS/X; probably corrupted silently on Mac.
