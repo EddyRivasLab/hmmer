@@ -590,7 +590,7 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
   if (fprintf(fp, "MAP   %s\n", (hmm->flags & p7H_MAP)   ? "yes" : "no")                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
   if (hmm->ctime    != NULL)   { if (           fprintf  (fp, "DATE  %s\n", hmm->ctime)        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
   if (hmm->comlog   != NULL)   { if ( (status = multiline(fp, "COM  ",      hmm->comlog)) != eslOK) return status; }
-  if (hmm->nseq     >= 0)      { if (           fprintf  (fp, "NSEQ  %d\n", hmm->nseq)         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
+  if (hmm->nseq     >  0)      { if (           fprintf  (fp, "NSEQ  %d\n", hmm->nseq)         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
   if (hmm->eff_nseq >= 0)      { if (           fprintf  (fp, "EFFN  %f\n", hmm->eff_nseq)     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
   if (hmm->flags & p7H_CHKSUM) { if (           fprintf  (fp, "CKSUM %u\n", hmm->checksum)     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); } /* unsigned 32-bit */
 
@@ -747,7 +747,7 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
     size += strlen(hmm->comlog);
   }
 
-  size += (hmm->nseq  >= 0 ? 7  + sprintf(buff, "%d", hmm->nseq) : 0);                                      /* NSEQ line */
+  size += (hmm->nseq  > 0 ? 7  + sprintf(buff, "%d", hmm->nseq) : 0);                                      /* NSEQ line */
   size += (hmm->eff_nseq  >= 0 ? 7  + sprintf(buff, "%f", hmm->eff_nseq) : 0);                              /* EFFN line */
   size += (hmm->flags & p7H_CHKSUM ? 7 + sprintf(buff, "%u", hmm->checksum) : 0);                           /*CKSUM line */
 
@@ -848,7 +848,7 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
     if ( (status = multilineString(&ret_hmm, "COM  ", hmm->comlog, &coffset)) != eslOK) return status; }
 
 
-  if (hmm->nseq   >= 0){
+  if (hmm->nseq   > 0){
     if((offset = sprintf(ret_hmm + coffset, "NSEQ  %d\n", hmm->nseq))                            < 0) return eslEWRITE;
     coffset += offset;
   }
