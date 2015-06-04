@@ -23,7 +23,6 @@ fast as BLAST for protein search, and roughly 5-10x slower than BLAST
 in DNA search\footnote{NCBI blastn with \texttt{--wordsize 7}; 
 default wordsize of 11 is $\sim$10x faster, but much less sensitive.}.
 
-
 \subsection{How to avoid reading this manual}
 
 We hate reading documentation. If you're like us, you're sitting here
@@ -171,7 +170,6 @@ Another application is the automated construction and maintenance
 of large multiple alignment databases.  It is useful to organize
 sequences into evolutionarily related families. But there are
 thousands of 
-%protein 
 sequence families, some of which comprise tens of
 thousands of sequences -- and the primary sequence databases continue
 to double every year or two. This is a hopeless task for manual
@@ -187,13 +185,13 @@ sequence to the seed consensus.
 You may find other applications as well. Using hidden Markov models to
 make a linear consensus model of a bunch of related strings is a
 pretty generic problem, and not just in biological sequence analysis.
-HMMER3 has already been used to model mouse song [Elena Rivas,
-  personal communication] and in the past HMMER has reportedly been
-used to model music, speech, and even automobile engine telemetry. If
-you use it for something particularly strange, we'd be curious to hear
-about it -- but Sean never, ever wants to see these error messages showing up
-on the console of his Saab.
-
+HMMER3 has been used to model mouse song [Elena Rivas, personal
+  communication] and in the past HMMER has reportedly been used to
+model music, speech, and even automobile engine
+telemetry.\footnote{True. We told the company that did it that we now
+  live in fear of our own error messages showing up on our car's
+  dashboard.}  If you use it for something particularly strange, we'd
+be curious to hear about it.
 
 
 \subsection{Design goals of HMMER3}
@@ -207,8 +205,7 @@ molecular biology's most important sequence analysis applications to
 use more powerful statistical inference engines, without sacrificing
 computational performance.
 
-Specifically, HMMER3 has three main design features that \emph{in
-combination} distinguish it from previous tools:
+Specifically, HMMER3 has three main design features:
 
 \begin{description}
 \item[\textbf{Explicit representation of alignment uncertainty.}]
@@ -285,12 +282,44 @@ to modern hardware architectures. We expect to be able to take good
 advantage of GPUs and other parallel processing environments in the
 near future.
 
-\subsection{What's new in HMMER3.1}
+\subsection{What's different in HMMER3, compared to HMMER2}
+
+If you're upgrading from using HMMER2, you will notice these main
+issues, among many lesser ones:
+
+\paragraph{Speed.} Did we mention, HMMER3 is 100-1000x faster? No more
+coffee breaks waiting for results.
+
+\paragraph{No model calibration: hmmcalibrate is gone.} If you're looking for the
+\prog{hmmcalibrate} program, it's not there any more. We understand
+the statistics of HMMER scores well enough now that a
+compute-intensive calibration step is unnecessary. There's still a
+model statistics calibration step but it's tiny by comparison to what
+HMMER2 had to do, so now it's built into \prog{hmmbuild}, and into
+single sequence searches like \prog{phmmer} and \prog{jackhmmer}.
+
+\paragraph{Local alignments, not glocal alignments.} We only
+understand the statistics of HMMER \emph{local} Forward scores, so
+HMMER3 (for now) only does local alignment. HMMER2 used glocal
+alignment by default (global with respect to the query profile, local
+in the target sequence), and had an option for doing local alignment.
+Whereas we used to build two HMMER2 models for each Pfam domain (a
+glocal mode one and a local mode one) now we build just one HMMER3
+model.  Because HMMER3 does local alignment, you'll notice more
+ragged-ended annotations of Pfam domains, for example. In a few cases
+of short domains, such as zinc fingers, HMMER3 can be less sensitive
+than HMMER2, because even though HMMER3's parameterization is more
+sensitive than HMMER2's, glocal alignment (when a complete domain is
+in fact present) is more sensitive than local. No, we're not happy
+about it either, but the benefits greatly outweigh the costs.
+
+
+\subsection{What's new in HMMER3.1, compared to HMMER 3.0}
 
 \paragraph{DNA sequence comparison.} HMMER now includes tools that are
 specifically designed for DNA/DNA comparison: \prog{nhmmer} and
-\prog{nhmmscan}. The most notable improvement over using HMMER3's tools is
-the ability to search long (e.g. chromosome length) target sequences.
+\prog{nhmmscan}. These give the ability to search long
+(e.g. chromosome length) target sequences.
 
 \paragraph{More sequence input formats.} HMMER now handles a wide variety of
 input sequence file formats, both aligned (Stockholm, Aligned FASTA, Clustal,
@@ -298,32 +327,30 @@ NCBI PSI-BLAST, PHYLIP, Selex, UCSC SAM A2M) and unaligned (FASTA, EMBL,
 Genbank), usually with autodetection.
 
 \paragraph{MSV stage of HMMER acceleration pipeline now even faster.}
- Bjarne Knudsen, Chief Scientific Officer of CLC bio in Denmark, 
- contributed an important optimization of the MSV filter (the
- first stage in the accelerated "filter pipeline") that increases 
- overall HMMER3 speed by about two-fold. This speed improvement
- has no impact on sensitivity.
+ Bjarne Knudsen, chief scientific officer of CLCbio, contributed an
+ important optimization of the MSV filter (the first stage in the
+ accelerated "filter pipeline") that increases overall HMMER3 speed by
+ about two-fold. 
 
-\paragraph{Faster DNA search.} This beta release includes a new
+\paragraph{Faster DNA search using FM-index methods.} This beta release includes a new
 option for increasing the speed of searching DNA sequence files. A
-binary file is created in a preprocessing step, using the tool 
-\prog{makehmmerdb}. The tool \prog{nhmmer} 
-then utilizes this binary format to support a fast new seed-finding 
-stage. Using default settings in \prog{nhmmer},
-we have observed a roughly 10-fold acceleration with small loss of 
-sensitivity on benchmarks. (This method has been extensively tested, 
-but should still be treated as somewhat experimental.)
+binary file is created in a preprocessing step, using the tool
+\prog{makehmmerdb}. The tool \prog{nhmmer} then utilizes this binary
+format to support a fast new seed-finding stage. Using default
+settings in \prog{nhmmer}, we have observed a roughly 10-fold
+acceleration with small loss of sensitivity on benchmarks. (This
+method has been tested, but should still be treated as somewhat
+experimental.)
 
 
 \subsection{What's still missing in HMMER3.1}
 
 Even though this is a stable public release that we consider suitable
 for large-scale production work (genome annotation, Pfam analysis,
-whatever), at the same time, HMMER remains a work in progress. We
-think the codebase is a suitable foundation for development of a
-number of significantly improved approaches to classically important
-problems in sequence analysis. Some of the more important ``holes''
-for us are:
+whatever), at the same time, HMMER is a work in progress. We think the
+codebase is a suitable foundation for development of a number of
+significantly improved approaches to classically important problems in
+sequence analysis. Some of the more important ``holes'' for us are:
 
 \paragraph{Translated comparisons.} We'd of course love to have the HMM
 equivalents of BLASTX, TBLASTN, and TBLASTX. They'll come.
@@ -336,10 +363,10 @@ power, and at HMMER3 speed.
 
 \vspace{2em}
 
-\paragraph{} We also have some technical and usability issues we will be 
-addressing Real Soon Now:
+We also have some technical and usability issues we will be addressing
+Real Soon Now:
 
-\paragraph{More alignment modes.} HMMER3 \emph{only} does local
+\paragraph{More alignment modes.} As mentioned above, HMMER3 \emph{only} does local
 alignment. HMMER2 also could do glocal alignment (align a complete
 model to a subsequence of the target) and global alignment (align a
 complete model to a complete target sequence). The E-value statistics
@@ -370,14 +397,24 @@ but none of this is far along as yet. But this work (combined with the
 parallelization) is partly why we expect to wring significantly more
 speed out of HMMER in the future.
 
+\paragraph{Better parallelization.} HMMER3 is so fast that it's often
+input-bound, rather than CPU-bound: that is, it takes longer to get at
+the sequences than it takes to compare them to a profile. That's
+taxing the simple parallelization methods we use. HMMER3's
+multithreaded parallelization really doesn't scale well beyond 2-4
+processors, on most machines; and possibly worse, if you're on a slow
+filesystem (for example, if you're reading data from a network
+filesystem instead of from local disk). We need to do a lot more work
+on our parallelization and our data input.
+
 
 \subsection{How to learn more about profile HMMs}
 
 \textbf{Cryptogenomicon} (\url{http://cryptogenomicon.org/}) is a blog
-where Sean will be talking about issues as they arise in HMMER3, and where
-you can comment or follow the discussion.
+where we will be talking about issues as they arise in HMMER3, and
+where you can comment or follow the discussion.
 
-Reviews of the profile HMM literature have been written by Sean
+Reviews of the profile HMM literature have been written by us
 \citep{Eddy96,Eddy98} and by Anders Krogh \citep{Krogh98}.
 
 For details on how profile HMMs and probabilistic models are used in
@@ -386,7 +423,7 @@ al. \citep{Krogh94} or our book \emph{Biological Sequence Analysis:
 Probabilistic Models of Proteins and Nucleic Acids} \citep{Durbin98}.
 
 For details on many aspects of the inner workings
-of HMMER3, see recent papers by Sean \citep{Eddy09b,Eddy11}.
+of HMMER3, see recent papers by us \citep{Eddy09b,Eddy11}.
 
 To learn more about HMMs from the perspective of the speech
 recognition community, an excellent tutorial introduction has been
@@ -396,7 +433,7 @@ written by Rabiner \citep{Rabiner89}.
 There is still no ``real'' paper on HMMER. If you're writing for an
 enlightened (url-friendly) journal, the best reference is
 \url{http://hmmer.org/}.
-If you must use a paper reference, the best one to use is Sean's 1998
+If you must use a paper reference, the best one to use is our 1998
 profile HMM review \citep{Eddy98}.
 \end{srefaq}
 
