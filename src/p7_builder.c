@@ -139,7 +139,21 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
       default:       bld->prior = p7_prior_CreateLaplace(abc); break;
       }
       if (bld->prior == NULL) goto ERROR;
+      /*
+      if      (go != NULL) {
+        if (esl_opt_IsOn(go, "--tmm"))  bld->prior->tm->alpha[0][0] = esl_opt_GetReal(go, "--tmm"); // TMM
+        if (esl_opt_IsOn(go, "--tmi"))  bld->prior->tm->alpha[0][1] = esl_opt_GetReal(go, "--tmi"); // TMM
+        if (esl_opt_IsOn(go, "--tmd"))  bld->prior->tm->alpha[0][2] = esl_opt_GetReal(go, "--tmd"); // TMM
+
+        if (esl_opt_IsOn(go, "--tim"))  bld->prior->ti->alpha[0][0] = esl_opt_GetReal(go, "--tim"); // TMM
+        if (esl_opt_IsOn(go, "--tii"))  bld->prior->ti->alpha[0][1] = esl_opt_GetReal(go, "--tii"); // TMM
+
+        if (esl_opt_IsOn(go, "--tdm"))  bld->prior->td->alpha[0][0] = esl_opt_GetReal(go, "--tdm"); // TMM
+        if (esl_opt_IsOn(go, "--tdd"))  bld->prior->td->alpha[0][1] = esl_opt_GetReal(go, "--tdd"); // TMM
+      }
+      */
     }
+
 
   bld->abc       = abc;
   bld->errbuf[0] = '\0';

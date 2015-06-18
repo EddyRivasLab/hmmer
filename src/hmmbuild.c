@@ -101,6 +101,18 @@ static ESL_OPTIONS options[] = {
   { "--popen",    eslARG_REAL,  NULL,  NULL,"0<=x<0.5",NULL, NULL,           "",   "force gap open prob. (w/ --singlemx, aa default 0.02, nt 0.031)",       9 },
   { "--pextend",  eslARG_REAL,  NULL,  NULL, "0<=x<1", NULL, NULL,           "",   "force gap extend prob. (w/ --singlemx, aa default 0.4, nt 0.75)",      9 },
 
+  { "--tmm",  eslARG_REAL,"2.0", NULL, NULL,      NULL,      NULL,    NULL, "MM transition",   9 },
+  { "--tmi",  eslARG_REAL,"0.1", NULL, NULL,      NULL,      NULL,    NULL, "MI transition",   9 },
+  { "--tmd",  eslARG_REAL,"0.1", NULL, NULL,      NULL,      NULL,    NULL, "MD transition",   9 },
+
+  { "--tim",  eslARG_REAL,"0.12", NULL, NULL,      NULL,      NULL,    NULL, "IM transition",   9 },
+  { "--tii",  eslARG_REAL,"0.4", NULL, NULL,      NULL,      NULL,    NULL,  "II transition",   9 },
+
+  { "--tdm",  eslARG_REAL,"0.5", NULL, NULL,      NULL,      NULL,    NULL, "DM transition",   9 },
+  { "--tdd",  eslARG_REAL,"1.0", NULL, NULL,      NULL,      NULL,    NULL, "DD transition",   9 },
+
+
+
 /* Single sequence methods */
   { "--singlemx", eslARG_NONE,   FALSE, NULL,   NULL,   NULL,  NULL,           "",   "use substitution score matrix for single-sequence inputs",     10 },
   { "--mx",     eslARG_STRING, "BLOSUM62", NULL, NULL,   NULL, NULL,   "--mxfile",   "substitution score matrix (built-in matrices, with --singlemx)", 10 },
@@ -132,6 +144,7 @@ static ESL_OPTIONS options[] = {
   /* expert-only option (for now), hidden from view. May not keep. */
   { "--seq_weights_r",  eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, "write seq weights after relative seq weighting to file <f>",   99 },
   { "--seq_weights_e",  eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, "write seq weights after entropy weighting to file <f>",   99 },
+
 
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -584,13 +597,31 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 
       if (info[i].bld == NULL)  p7_Fail("p7_builder_Create failed");
 
+
+
       //do this here instead of in p7_builder_Create(), because it's an hmmbuild-specific option
+
       if ( esl_opt_IsOn(go, "--maxinsertlen") )
         info[i].bld->max_insert_len    = esl_opt_GetInteger(go, "--maxinsertlen");
 
+      if( !esl_opt_GetBoolean(go, "--pnone") && !esl_opt_GetBoolean(go, "--plaplace") )
+      {
+           if (esl_opt_IsUsed(go, "--tmm"))  info[i].bld->prior->tm->alpha[0][0] = esl_opt_GetReal(go, "--tmm"); // TMM
+           if (esl_opt_IsUsed(go, "--tmi"))  info[i].bld->prior->tm->alpha[0][1] = esl_opt_GetReal(go, "--tmi"); // TMM
+           if (esl_opt_IsUsed(go, "--tmd"))  info[i].bld->prior->tm->alpha[0][2] = esl_opt_GetReal(go, "--tmd"); // TMM
 
-      double popen   ;
-      double pextend ;
+           if (esl_opt_IsUsed(go, "--tim"))  info[i].bld->prior->ti->alpha[0][0] = esl_opt_GetReal(go, "--tim"); // TMM
+           if (esl_opt_IsUsed(go, "--tii"))  info[i].bld->prior->ti->alpha[0][1] = esl_opt_GetReal(go, "--tii"); // TMM
+
+           if (esl_opt_IsUsed(go, "--tdm"))  info[i].bld->prior->td->alpha[0][0] = esl_opt_GetReal(go, "--tdm"); // TMM
+           if (esl_opt_IsUsed(go, "--tdd"))  info[i].bld->prior->td->alpha[0][1] = esl_opt_GetReal(go, "--tdd"); // TMM
+
+      }
+
+
+
+      double popen;
+      double pextend;
       if ( cfg->abc->type == eslDNA || cfg->abc->type == eslRNA ) {
         //If user hasn't overridden defaults, assign the nucleotide defaults
         popen   = esl_opt_IsUsed(go, "--popen")   ? esl_opt_GetReal(go, "--popen") : 0.03125;
