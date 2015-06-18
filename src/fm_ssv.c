@@ -243,7 +243,7 @@ FM_Recurse( int depth, int Kp, int fm_direction,
             FM_DP_PAIR *dp_pairs, int first, int last,
             FM_INTERVAL *interval_1, FM_INTERVAL *interval_2,
             FM_DIAGLIST *seeds
-            , char *seq
+//            , char *seq
           )
 {
 
@@ -257,8 +257,8 @@ FM_Recurse( int depth, int Kp, int fm_direction,
 
   for (c=0; c< fm_cfg->meta->alph_size; c++) {//acgt
     int dppos = last;
-    seq[depth-1] = fm_cfg->meta->alph[c];
-    seq[depth] = '\0';
+    //seq[depth-1] = fm_cfg->meta->alph[c];
+    //seq[depth] = '\0';
 
     for (i=first; i<=last; i++) { // for each surviving diagonal from the previous round
 
@@ -375,7 +375,7 @@ FM_Recurse( int depth, int Kp, int fm_direction,
                   sc_threshFM, dp_pairs, last+1, dppos,
                   &interval_1_new, NULL,
                   seeds
-                  , seq
+                  //, seq
                   );
 
 
@@ -396,7 +396,7 @@ FM_Recurse( int depth, int Kp, int fm_direction,
                   sc_threshFM, dp_pairs, last+1, dppos,
                   &interval_1_new, &interval_2_new,
                   seeds
-                  , seq
+                  //, seq
                   );
 
       }
@@ -447,7 +447,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
   int i, k;
   int status;
   float sc;
-  char         *seq;
+  //char         *seq;
 
   FM_DP_PAIR *dp_pairs_fwd;
   FM_DP_PAIR *dp_pairs_rev;
@@ -455,7 +455,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
   ESL_ALLOC(dp_pairs_fwd, ssvdata->M * fm_cfg->max_depth * sizeof(FM_DP_PAIR)); // guaranteed to be enough to hold all diagonals
   ESL_ALLOC(dp_pairs_rev, ssvdata->M * fm_cfg->max_depth * sizeof(FM_DP_PAIR));
 
-  ESL_ALLOC(seq, 50*sizeof(char));
+  //ESL_ALLOC(seq, 50*sizeof(char));
 
   for (i=0; i<fm_cfg->meta->alph_size; i++) {
     int fwd_cnt=0;
@@ -467,8 +467,8 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
       continue;
 
     // This is here for debugging purposes only. Feel free to comment out.
-    seq[0] = fm_cfg->meta->alph[i];
-    seq[1] = '\0';
+    //seq[0] = fm_cfg->meta->alph[i];
+    //seq[1] = '\0';
 
     // Fill in a DP column for the character c, (compressed so that only positive-scoring entries are kept)
     // There will be 4 DP columns for each character, (1) fwd-std, (2) fwd-complement, (3) rev-std, (4) rev-complement
@@ -552,7 +552,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
                  sc_threshFM, dp_pairs_fwd, 0, fwd_cnt-1,
                  &interval_f1, NULL,
                  seeds
-                 , seq
+                 //, seq
             );
 
     FM_Recurse ( 2, Kp, fm_backward,
@@ -560,7 +560,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
                  sc_threshFM, dp_pairs_rev, 0, rev_cnt-1,
                  &interval_bk, &interval_f2,
                  seeds
-                 , seq
+                 //, seq
             );
   }
 
@@ -570,7 +570,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
 
   free (dp_pairs_fwd);
   free (dp_pairs_rev);
-  if (seq) free(seq);
+  //if (seq) free(seq);
   return eslOK;
 
 ERROR:
