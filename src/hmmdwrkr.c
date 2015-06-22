@@ -32,6 +32,8 @@
 #include "esl_stopwatch.h"
 #include "esl_threads.h"
 
+//#include "esl_translate.h" /* For support of nhmmscant 6 frame translation */
+
 #include "hmmer.h"
 #include "hmmpgmd.h"
 #include "cachedb.h"
@@ -64,6 +66,8 @@ typedef struct {
 
   double            elapsed;     /* elapsed search time              */
 
+  ESL_SQ           *ntseq;    /* DNA query sequence that will be in text mode for printing when doing nhmmscant */
+
   /* Structure created and populated by the individual threads.
    * The main thread is responsible for freeing up the memory.
    */
@@ -80,14 +84,15 @@ typedef struct {
 } WORKER_ENV;
 
 static void process_InitCmd(HMMD_COMMAND *cmd, WORKER_ENV *env);
-static void process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env);
+static void process_nhmmscantCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query);
+static void process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query);
 static void process_Shutdown(HMMD_COMMAND *cmd, WORKER_ENV *env);
 
 static QUEUE_DATA *process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env);
 
 static int  setup_masterside_comm(ESL_GETOPTS *opts);
 
-static void send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info);
+static void send_results(int fd, ESL_STOPWATCH *w, P7_TOPHITS *th, P7_PIPELINE *pli);
 
 #define BLOCK_SIZE 1000
 static void search_thread(void *arg);
@@ -146,7 +151,9 @@ worker_process(ESL_GETOPTS *go)
   int           shutdown = 0;
   WORKER_ENV    env;
   int           status;
-    
+   
+  QUEUE_DATA      *query      = NULL;   
+  
   /* Initializations */
   impl_Init();
   p7_FLogsumInit();      /* we're going to use table-driven Logsum() approximations at times */
@@ -162,10 +169,22 @@ worker_process(ESL_GETOPTS *go)
     {
       if ((status = read_Command(&cmd, &env)) != eslOK) break;
 
+
       switch (cmd->hdr.command) {
       case HMMD_CMD_INIT:      process_InitCmd  (cmd, &env);                break;
-      case HMMD_CMD_SCAN:      process_SearchCmd(cmd, &env);                break;
-      case HMMD_CMD_SEARCH:    process_SearchCmd(cmd, &env);                break;
+      case HMMD_CMD_SCAN: 
+	  {	  
+		 query = process_QueryCmd(cmd, &env);
+	     if (esl_opt_IsUsed(query->opts, "--nhmmscant")) {
+	        process_nhmmscantCmd(cmd, &env, query);
+		 }
+		 else {
+	        process_SearchCmd(cmd, &env, query);
+		 }
+         free_QueueData(query);
+	  }
+		 break;
+      case HMMD_CMD_SEARCH:    process_SearchCmd(cmd, &env, query);                break;
       case HMMD_CMD_SHUTDOWN:  process_Shutdown (cmd, &env);  shutdown = 1; break;
       default: p7_syslog(LOG_ERR,"[%s:%d] - unknown command %d (%d)\n", __FILE__, __LINE__, cmd->hdr.command, cmd->hdr.length);
       }
@@ -181,7 +200,7 @@ worker_process(ESL_GETOPTS *go)
 }
 
 static void 
-process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
+process_nhmmscantCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
 { 
   int              i;
   int              cnt;
@@ -194,7 +213,215 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
   ESL_THREADS     *threadObj  = NULL;
   pthread_mutex_t  inx_mutex;
   int              current_index;
-  QUEUE_DATA      *query      = NULL;
+  time_t           date;
+  char             timestamp[32];
+
+  int              j;
+  ESL_SQ           *prot6[6];
+  ESL_SQ           *qsqDNATxt = NULL;    /* DNA query sequence that will be in text mode for printing */
+  ESL_SQ           *qsq      = NULL;		 /* query sequence */
+  P7_TOPHITS       *tophits_accumulator = NULL; /* to hold the top hits information from all 6 frame translations */
+  P7_PIPELINE      *pipelinehits_accumulator = NULL; /* to hold the pipeline hit information from all 6 frame translations */
+  RANGE_LIST       *range_list;  /* (optional) list of ranges searched within the seqdb */
+ 
+  w = esl_stopwatch_Create();
+  abc = esl_alphabet_Create(eslAMINO);
+
+  if (pthread_mutex_init(&inx_mutex, NULL) != 0) p7_Fail("mutex init failed");
+  ESL_ALLOC(info, sizeof(*info) * (env->ncpus));
+
+  /* Log the current time (at search start) */
+  date = time(NULL);
+  ctime_r(&date, timestamp);
+  printf("\n%s", timestamp);	/* note that ctime_r() leaves \n on end of timestamp  */
+
+  /* initialize thread data */
+  esl_stopwatch_Start(w);
+
+  range_list = NULL;
+        
+  if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
+  ESL_ALLOC(range_list, sizeof(RANGE_LIST));
+     hmmpgmd_GetRanges(range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
+  }
+
+  threadObj = esl_threads_Create(&scan_thread);
+
+  if (query->query_type == HMMD_SEQUENCE) {
+    fprintf(stdout, "Search seq %s  [L=%ld]", query->seq->name, (long) query->seq->n);
+  } else {
+    fprintf(stdout, "Search hmm %s  [M=%d]", query->hmm->name, query->hmm->M);
+  }
+  fprintf(stdout, " vs %s DB %d [%d - %d]", "HMM", query->dbx, query->inx, query->inx + query->cnt - 1);
+
+  if (range_list)
+     fprintf(stdout, " in range(s) %s", esl_opt_GetString(query->opts, "--seqdb_ranges"));
+
+  fprintf(stdout, "\n");
+
+
+  /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
+  qsqDNATxt = esl_sq_Create();
+  esl_sq_Copy(query->seq, qsqDNATxt);
+
+#if 0  
+  esl_sqio_Write(stdout, query->seq, eslSQFILE_FASTA, 0); /* DEBUG ONLY !!!!! */
+#endif
+	 
+  /* do 6 frame translation to amino acid sequences */
+//  status = esl_trans_6frame(query->seq, prot6);
+//  if (status != eslOK) p7_Fail("Unexpected error %d in 6 frame translation", status);
+
+#if 0
+  /* DEBUG ONLY !!!!!! */
+  for(j = 0; j < 6; j++) {
+     esl_sqio_Write(stdout, prot6[j], eslSQFILE_FASTA, 0);
+  }
+#endif
+
+  /* Create processing pipeline and hit list accumulators */
+  tophits_accumulator  = p7_tophits_Create(); 
+  pipelinehits_accumulator = p7_pipeline_Create(query->opts, 100, 100, FALSE, p7_SCAN_MODELS);
+
+  /* process each 6 frame translated sequence */
+  for (j = 0; j < 6; ++j) {
+     esl_sq_Digitize(abc, prot6[j]);
+     qsq = prot6[j];
+		
+     /* Create processing pipeline and hit list */   
+     /* info[0] is just an accumulator for the results */
+     for (i = 0; i < env->ncpus; ++i) {
+        info[i].abc   = abc;
+        info[i].hmm   = query->hmm;
+        info[i].seq   = qsq;
+        info[i].opts  = query->opts;
+
+        info[i].range_list  = range_list;
+           
+        info[i].th    = NULL;
+        info[i].pli   = NULL;
+
+	    info[i].ntseq = qsqDNATxt; /* for printing the DNA target sequence in the domain hits display */
+	
+        info[i].inx_mutex = &inx_mutex;
+        info[i].inx       = &current_index;/* this is confusing trickery - to share a single variable across all threads */
+        info[i].blk_size  = &blk_size;     /* ditto */
+        info[i].limit     = &limit;	       /* ditto. TODO: come back and clean this up. */
+
+        if (query->cmd_type == HMMD_CMD_SEARCH) {
+          HMMER_SEQ **list  = env->seq_db->db[query->dbx].list;
+          info[i].sq_list   = &list[query->inx];
+          info[i].sq_cnt    = query->cnt;
+          info[i].db_Z      = env->seq_db->db[query->dbx].K;
+          info[i].om_list   = NULL;
+          info[i].om_cnt    = 0;
+        } else {
+          info[i].sq_list   = NULL;
+          info[i].sq_cnt    = 0;
+          info[i].db_Z      = 0;
+          info[i].om_list   = &env->hmm_db->list[query->inx];
+          info[i].om_cnt    = query->cnt;
+        }
+
+        esl_threads_AddThread(threadObj, &info[i]);
+
+     } /* end for (i = 0; i < env->ncpus+1; ++i) */
+
+     /* try block size of 5000.  we will need enough sequences for four
+      * blocks per thread or better.
+      */
+     blk_size = 5000;
+     cnt = query->cnt / env->ncpus / blk_size;
+     limit = query->cnt * 2 / 3;
+     if (cnt < 4) {
+        /* try block size of 1000  */
+        blk_size /= 5;
+        cnt = query->cnt / env->ncpus / blk_size;
+        if (cnt < 4) {
+           /* still not enough.  just divide it up into one block per thread */
+           blk_size = query->cnt / env->ncpus + 1;
+           limit = query->cnt * 2;
+        }
+     }
+     current_index = 0;
+
+     esl_threads_WaitForStart(threadObj);
+     esl_threads_WaitForFinish(threadObj);
+
+     /* merge the results of each translated sequence search results */
+     for (i = 0; i < env->ncpus; ++i) {
+	    p7_tophits_Merge(tophits_accumulator, info[i].th);
+        p7_pipeline_Merge(pipelinehits_accumulator, info[i].pli);
+     }
+					
+#if 1
+    fprintf (stdout, " Translated sequence frame %d\n", j);
+    fprintf (stdout, "   Sequences  Residues                              Elapsed\n");
+    for (i = 0; i < env->ncpus; ++i) {
+       print_timings(i, info[i].elapsed, info[i].pli);
+    }
+#endif
+
+	/* get rid of the other pli and th to get ready for the next frame */
+    for (i = 0; i < env->ncpus; ++i) {
+       p7_pipeline_Destroy(info[i].pli);
+       p7_tophits_Destroy(info[i].th);
+    }  
+
+  }  /* end of  for (j = 0; j < 6; ++j)... */
+
+  esl_stopwatch_Stop(w);
+
+  /* destroy the 6 frame translated sequences */
+  for (j = 0; j < 6; ++j) {
+     esl_sq_Destroy(prot6[j]);   
+  }
+
+  if (qsqDNATxt  != NULL) esl_sq_Destroy(qsqDNATxt);  
+  
+  print_timings(99, w->elapsed, pipelinehits_accumulator);
+  send_results(env->fd, w, tophits_accumulator, pipelinehits_accumulator);
+
+  /* free the last of the pipeline data */
+  /* also destroys accumulators */
+  p7_pipeline_Destroy(pipelinehits_accumulator);
+  p7_tophits_Destroy(tophits_accumulator);
+
+  esl_threads_Destroy(threadObj);
+
+  pthread_mutex_destroy(&inx_mutex);
+
+  if (range_list) {
+    if (range_list->starts)  free(range_list->starts);
+    if (range_list->ends)    free(range_list->ends);
+    free (range_list);
+  }
+
+  free(info);
+
+  esl_stopwatch_Destroy(w);
+  esl_alphabet_Destroy(abc);
+
+  return;
+
+ ERROR:
+  LOG_FATAL_MSG("malloc", errno);
+}
+
+static void 
+process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
+{ 
+  int              i;
+  int              cnt;
+  int              limit;
+  int              status;
+  int              blk_size;
+  WORKER_INFO     *info       = NULL;
+  ESL_ALPHABET    *abc;
+  ESL_STOPWATCH   *w;
+  ESL_THREADS     *threadObj  = NULL;
+  pthread_mutex_t  inx_mutex;
+  int              current_index;
   time_t           date;
   char             timestamp[32];
 
@@ -210,7 +437,6 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
   printf("\n%s", timestamp);	/* note that ctime_r() leaves \n on end of timestamp  */
 
   /* initialize thread data */
-  query = process_QueryCmd(cmd, env);
   esl_stopwatch_Start(w);
 
   info->range_list = NULL;
@@ -309,13 +535,11 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
   }
 
   print_timings(99, w->elapsed, info[0].pli);
-  send_results(env->fd, w, info);
+  send_results(env->fd, w, info[0].th, info[0].pli);
 
   /* free the last of the pipeline data */
   p7_pipeline_Destroy(info->pli);
   p7_tophits_Destroy(info->th);
-
-  free_QueueData(query);
 
   esl_threads_Destroy(threadObj);
 
@@ -337,7 +561,6 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
  ERROR:
   LOG_FATAL_MSG("malloc", errno);
 }
-
 
 static QUEUE_DATA *
 process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
@@ -374,7 +597,11 @@ process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
 
   query->hmm = NULL;
   query->seq = NULL;
-  query->abc = esl_alphabet_Create(eslAMINO);
+
+  if (esl_opt_IsUsed(query->opts, "--nhmmscant"))
+     query->abc = esl_alphabet_Create(eslDNA);
+  else
+     query->abc = esl_alphabet_Create(eslAMINO);
 
   /* check if we are processing a sequence or hmm */
   if (cmd->srch.query_type == HMMD_SEQUENCE) {
@@ -641,7 +868,7 @@ search_thread(void *arg)
         p7_bg_SetLength(bg, dbsq.n);
         p7_oprofile_ReconfigLength(om, dbsq.n);
 
-        p7_Pipeline(pli, om, bg, &dbsq, th);
+        p7_Pipeline(pli, om, bg, &dbsq, NULL, th);
 
         p7_pipeline_Reuse(pli);
       }
@@ -734,7 +961,7 @@ scan_thread(void *arg)
       p7_bg_SetLength(bg, info->seq->n);
       p7_oprofile_ReconfigLength(*om, info->seq->n);
 	      
-      p7_Pipeline(pli, *om, bg, info->seq, th);
+      p7_Pipeline(pli, *om, bg, info->seq, info->ntseq, th);
       p7_pipeline_Reuse(pli);
     }
   }
@@ -757,8 +984,9 @@ scan_thread(void *arg)
   return;
 }
 
+
 static void
-send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
+send_results(int fd, ESL_STOPWATCH *w, P7_TOPHITS *th, P7_PIPELINE *pli)
 {
   HMMD_SEARCH_STATS   stats;
   HMMD_SEARCH_STATUS  status;
@@ -778,21 +1006,21 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
   stats.user        = w->user;
   stats.sys         = w->sys;
 
-  stats.nmodels     = info->pli->nmodels;
-  stats.nseqs       = info->pli->nseqs;
-  stats.n_past_msv  = info->pli->n_past_msv;
-  stats.n_past_bias = info->pli->n_past_bias;
-  stats.n_past_vit  = info->pli->n_past_vit;
-  stats.n_past_fwd  = info->pli->n_past_fwd;
+  stats.nmodels     = pli->nmodels;
+  stats.nseqs       = pli->nseqs;
+  stats.n_past_msv  = pli->n_past_msv;
+  stats.n_past_bias = pli->n_past_bias;
+  stats.n_past_vit  = pli->n_past_vit;
+  stats.n_past_fwd  = pli->n_past_fwd;
 
-  stats.Z           = info->pli->Z;
-  stats.domZ        = info->pli->domZ;
-  stats.Z_setby     = info->pli->Z_setby;
-  stats.domZ_setby  = info->pli->domZ_setby;
+  stats.Z           = pli->Z;
+  stats.domZ        = pli->domZ;
+  stats.Z_setby     = pli->Z_setby;
+  stats.domZ_setby  = pli->domZ_setby;
 
-  stats.nhits       = info->th->N;
-  stats.nreported   = info->th->nreported;
-  stats.nincluded   = info->th->nincluded;
+  stats.nhits       = th->N;
+  stats.nreported   = th->nreported;
+  stats.nincluded   = th->nincluded;
 
   n = sizeof(P7_HIT) * stats.nhits;
 
@@ -803,7 +1031,7 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
   /* get the data in the right format before we send it */
   for (i = 0; i < stats.nhits; ++i) {
     P7_HIT *h1 = &hit[i];
-    P7_HIT *h2 = &info->th->unsrt[i];
+    P7_HIT *h2 = &th->unsrt[i];
 
     memcpy(h1, h2, sizeof(P7_HIT));
 
@@ -862,7 +1090,7 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
   /* loop through the hit list sending the domains */
   for (i = 0; i < stats.nhits; ++i) {
     char *base;
-    P7_HIT *h2 = &info->th->unsrt[i];
+    P7_HIT *h2 = &th->unsrt[i];
 
     dcl = h2->dcl;
 
@@ -886,6 +1114,7 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
       if (ad->model   != NULL) ad->model   = base + (ad->model   - ad->mem);
       if (ad->mline   != NULL) ad->mline   = base + (ad->mline   - ad->mem);
       if (ad->aseq    != NULL) ad->aseq    = base + (ad->aseq    - ad->mem);
+      if (ad->ntseq   != NULL) ad->ntseq   = base + (ad->ntseq   - ad->mem);
       if (ad->ppline  != NULL) ad->ppline  = base + (ad->ppline  - ad->mem);
       if (ad->hmmname != NULL) ad->hmmname = base + (ad->hmmname - ad->mem);
       if (ad->hmmacc  != NULL) ad->hmmacc  = base + (ad->hmmacc  - ad->mem);
@@ -954,6 +1183,12 @@ setup_masterside_comm(ESL_GETOPTS *opts)
 #endif /*HMMER_THREADS*/
 
 /*****************************************************************
- * @LICENSE@
+ * HMMER - Biological sequence analysis with profile HMMs
+ * Version 3.1b2; February 2015
+ * Copyright (C) 2015 Howard Hughes Medical Institute.
+ * Other copyrights also apply. See the COPYRIGHT file for a full list.
+ * 
+ * HMMER is distributed under the terms of the GNU General Public License
+ * (GPLv3). See the LICENSE file for details.
  *****************************************************************/
 

@@ -315,6 +315,30 @@
 1 exercise  nhmmscan/-Z            @src/nhmmscan@  -Z 45000000                !tutorial/MADE1.hmm! %RNDDB%
 1 exercise  nhmmscan/--seed        @src/nhmmscan@  --seed 42                  !tutorial/MADE1.hmm! %RNDDB%
 
+# nhmmscant    xxxxxxxxxxxxxxxxxxxx
+#1 prep      press                  @src/hmmpress@  -f                        !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm!
+1 exercise  nhmmscant               @src/nhmmscant@                             !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/-h            @src/nhmmscant@  -h
+1 exercise  nhmmscant/-o            @src/nhmmscant@  -o           %nhmmscant.out%  !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/--tblout      @src/nhmmscant@  --tblout     %nhmmscant.tbl%  !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/--acc         @src/nhmmscant@  --acc                      !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/--noali       @src/nhmmscant@  --noali                    !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/--notrans     @src/nhmmscant@  --notrans                  !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/--notextw     @src/nhmmscant@  --notextw                  !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/--textw       @src/nhmmscant@  --textw 256                !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/-E            @src/nhmmscant@  -E 0.01                    !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/-T            @src/nhmmscant@  -T 20                      !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/--incE        @src/nhmmscant@  --incE 0.01                !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/--incT        @src/nhmmscant@  --incT 20                  !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/--max         @src/nhmmscant@  --max                      !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/--F1          @src/nhmmscant@  --F1 0.03                  !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/--F2          @src/nhmmscant@  --F2 0.002                 !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/--F3          @src/nhmmscant@  --F3 0.0002                !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/--nobias      @src/nhmmscant@  --nobias                   !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/--nonull2     @src/nhmmscant@  --nonull2                  !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/-Z            @src/nhmmscant@  -Z 45000000                !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+1 exercise  nhmmscant/--seed        @src/nhmmscant@  --seed 42                  !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
+
 ################################################################
 # Integration tests
 ################################################################
@@ -421,13 +445,20 @@
 3 valgrind  hmmstat               @src/hmmstat@    %MINIFAM.HMM% 
 3 valgrind  jackhmmer             @src/jackhmmer@  !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
 3 valgrind  phmmer                @src/phmmer@     !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+3 valgrind  nhmmscant             @src/nhmmscant@  !tutorial/pfamDNAmark-aa.2OG-FeII_Oxy_3.hmm! !tutorial/pfamDNAmarkQ2T4K0_BURTAandE8WFE5_STRFA.fa!
 
 # some derivatives of tmpfiles created by hmmpress, not sqc itself: clean up
 #1 prep     minifam               rm -f %MINIFAM.HMM%.h3f %MINIFAM.HMM%.h3p %MINIFAM.HMM%.h3m %MINIFAM.HMM%.h3i 
 
 
 #################################################################
-# @LICENSE@
+# HMMER - Biological sequence analysis with profile HMMs
+# Version 3.1b2; February 2015
+# Copyright (C) 2015 Howard Hughes Medical Institute.
+# Other copyrights also apply. See the COPYRIGHT file for a full list.
+# 
+# HMMER is distributed under the terms of the GNU General Public License
+# (GPLv3). See the LICENSE file for details.
 #
 # SVN $Id$
 # SVN $URL$

@@ -39,11 +39,13 @@
 #define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 
 static ESL_OPTIONS searchOpts[] = {
-  /* Control of output */
+      /* name           type          default  env  range toggles  reqs   incomp                         help                                           docgroup*/
+    /* Control of output */
   { "--acc",        eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "prefer accessions over names in output",                       2 },
   { "--noali",      eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't output alignments, so output is smaller",                2 },
   { "--notextw",    eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL, "--textw",        "unlimit ASCII text output line width",                         2 },
   { "--textw",      eslARG_INT,         "120", NULL, "n>=120",NULL,  NULL, "--notextw",      "set max width of ASCII text output lines",                     2 },
+  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,    NULL,  "--nhmmscant",  NULL,   "don't show the translated DNA sequence in domain alignment",   2 }, /*for nhmmscant */
   /* Control of scoring system */
   { "--popen",      eslARG_REAL,       "0.02", NULL, "0<=x<0.5",NULL,  NULL,  NULL,          "gap open probability",                                         3 },
   { "--pextend",    eslARG_REAL,        "0.4", NULL, "0<=x<1",  NULL,  NULL,  NULL,          "gap extend probability",                                       3 },
@@ -83,6 +85,7 @@ static ESL_OPTIONS searchOpts[] = {
   { "-Z",           eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of comparisons done, for E-value calculation",          12 },
   { "--domZ",       eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",   12 },
   { "--hmmdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--seqdb",       "hmm database to search",                                      12 },
+  { "--nhmmscant",  eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  "--seqdb",       "search hmm database with a 6 frame translated DNA sequence",  12 },
   { "--seqdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--hmmdb",       "protein database to search",                                  12 },
   { "--seqdb_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, "--seqdb", NULL,         "range(s) of sequences within --seqdb that will be searched",  12 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -112,6 +115,7 @@ output_header(FILE *ofp, const ESL_GETOPTS *sopt, char *seqfile, char *banner)
   if (esl_opt_IsUsed(sopt, "--noali")     && fprintf(ofp, "# show alignments in output:       no\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(sopt, "--notextw")   && fprintf(ofp, "# max ASCII text line length:      unlimited\n")                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(sopt, "--textw")     && fprintf(ofp, "# max ASCII text line length:      %d\n",             esl_opt_GetInteger(sopt, "--textw"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
+  if (esl_opt_IsUsed(sopt, "--notrans")   && fprintf(ofp, "# show translated DNA sequence:    no\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(sopt, "--popen")     && fprintf(ofp, "# gap open probability:            %f\n",             esl_opt_GetReal   (sopt, "--popen"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(sopt, "--pextend")   && fprintf(ofp, "# gap extend probability:          %f\n",             esl_opt_GetReal   (sopt, "--pextend")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(sopt, "--mx")        && fprintf(ofp, "# subst score matrix (built-in):   %s\n",             esl_opt_GetString (sopt, "--mx"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -393,8 +397,13 @@ int main(int argc, char *argv[])
       ESL_SQ          *sq      = NULL;        /* one target sequence (digital)   */
       ESL_ALPHABET    *abc     = NULL;        /* digital alphabet                */
 
+      ESL_ALPHABET    *abcDNA     = NULL;        /* digital alphabet for DNA          */
+      ESL_SQ          *DNAseq      = NULL;    /* DNA sequence (digital) used for nhmmscant   */
+      ESL_SQ          *DNATxtseq = NULL;    /* DNA query sequence that will be in text mode for printing */
+
       status = eslOK;
       abc = esl_alphabet_Create(eslAMINO);
+	  abcDNA = esl_alphabet_Create(eslDNA); 
 #if 0
       /* try to parse the input buffer as a sequence */
       sq = esl_sq_CreateDigital(abc);
@@ -553,6 +562,7 @@ int main(int argc, char *argv[])
             if (ad->model   != NULL) ad->model   = base + (ad->model   - (char *)NULL);
             if (ad->mline   != NULL) ad->mline   = base + (ad->mline   - (char *)NULL);
             if (ad->aseq    != NULL) ad->aseq    = base + (ad->aseq    - (char *)NULL);
+            if (ad->ntseq   != NULL) ad->ntseq   = base + (ad->ntseq   - (char *)NULL);
             if (ad->ppline  != NULL) ad->ppline  = base + (ad->ppline  - (char *)NULL);
             if (ad->hmmname != NULL) ad->hmmname = base + (ad->hmmname - (char *)NULL);
             if (ad->hmmacc  != NULL) ad->hmmacc  = base + (ad->hmmacc  - (char *)NULL);
@@ -563,6 +573,9 @@ int main(int argc, char *argv[])
 
             ptr += sizeof(P7_ALIDISPLAY) + ad->memsize;
             ++dcl;
+			
+//			printf("ad->aseq:%s\n",ad->aseq);
+//			printf("ad->ntseq:%s\n",ad->ntseq);
           }
         }
 
@@ -570,6 +583,29 @@ int main(int argc, char *argv[])
         //th->is_sorted = FALSE;
         //p7_tophits_Sort(th);
 
+#if 0
+		if (esl_opt_IsUsed(go, "--nhmmscant")) {
+          /* try to parse the input buffer as a sequence */
+		  /* we need the DNA sequence for display purposes */
+          DNAseq = esl_sq_CreateDigital(abcDNA);
+          status = esl_sqio_Parse(ptr, strlen(ptr), DNAseq, eslSQFILE_DAEMON);
+          if (status != eslOK) {
+            esl_sq_Destroy(DNAseq);
+            DNAseq = NULL;
+          }
+		  else {  
+		     DNATxtseq = esl_sq_Create();
+		     esl_sq_Copy(DNAseq, DNATxtseq);
+
+		     printf("DNA seq is:%s\n", DNATxtseq->seq);
+		     esl_sqio_Write(stdout, DNAseq, eslSQFILE_FASTA, 0);
+	         printf("\n");
+			 
+//			 pli->DNAqsq = DNATxtseq;
+		  }
+		}
+#endif
+		
         /* Print the results.  */
         if (scores) p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n");
         if (ali)    p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n");
@@ -589,9 +625,13 @@ int main(int argc, char *argv[])
 
     COMPLETE:
       if (abc) esl_alphabet_Destroy(abc);
+      if (abcDNA) esl_alphabet_Destroy(abcDNA);
       if (hmm) p7_hmm_Destroy(hmm);
       if (sq)  esl_sq_Destroy(sq);
-    }
+
+      if (DNAseq) esl_sq_Destroy(sq);
+      if (DNATxtseq) esl_sq_Destroy(sq);
+	  }
   }
 
   free(seq);
@@ -607,7 +647,13 @@ int main(int argc, char *argv[])
 #endif /*HMMER_THREADS*/
 
 /*****************************************************************
- * @LICENSE@
+ * HMMER - Biological sequence analysis with profile HMMs
+ * Version 3.1b2; February 2015
+ * Copyright (C) 2015 Howard Hughes Medical Institute.
+ * Other copyrights also apply. See the COPYRIGHT file for a full list.
+ * 
+ * HMMER is distributed under the terms of the GNU General Public License
+ * (GPLv3). See the LICENSE file for details.
  *
  * SVN $Id$
  * SVN $URL$

@@ -123,6 +123,7 @@ typedef struct worker_s {
   struct worker_s      *prev;
 } WORKER_DATA;
 
+
 static void setup_clientside_comm(ESL_GETOPTS *opts, CLIENTSIDE_ARGS  *args);
 static void setup_workerside_comm(ESL_GETOPTS *opts, WORKERSIDE_ARGS  *args);
 
@@ -1333,6 +1334,8 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   time_t             date;
   char               timestamp[32];
 
+  ESL_ALPHABET      *abcDNA = NULL;       /* DNA sequence alphabet         */
+
   buf_size = MAX_BUFFER;
   if ((buffer  = malloc(buf_size))   == NULL) LOG_FATAL_MSG("malloc", errno);
   if ((opt_str = malloc(MAX_BUFFER)) == NULL) LOG_FATAL_MSG("malloc", errno);
@@ -1450,7 +1453,15 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     if (*ptr == '>') {
       /* try to parse the input buffer as a FASTA sequence */
-      seq = esl_sq_CreateDigital(abc);
+      if (esl_opt_IsUsed(opts, "--nhmmscant")) {
+        abcDNA = esl_alphabet_Create(eslDNA);
+        seq = esl_sq_CreateDigital(abcDNA);
+        if (abcDNA  != NULL) esl_alphabet_Destroy(abcDNA);
+	  }
+	  else{
+        seq = esl_sq_CreateDigital(abc);
+	  }
+      /* try to parse the input buffer as a FASTA sequence */
       status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
       if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error parsing FASTA sequence");
       if (seq->n < 1) client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error zero length FASTA sequence");
@@ -1605,6 +1616,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   free(opt_str);
   return 0;
 }
+
 
 /* discard_function()
  * function handed to esl_stack_DiscardSelected() to remove
@@ -2137,6 +2149,12 @@ setup_workerside_comm(ESL_GETOPTS *opts, WORKERSIDE_ARGS *args)
 #endif /*HMMER_THREADS*/
 
 /*****************************************************************
- * @LICENSE@
+ * HMMER - Biological sequence analysis with profile HMMs
+ * Version 3.1b2; February 2015
+ * Copyright (C) 2015 Howard Hughes Medical Institute.
+ * Other copyrights also apply. See the COPYRIGHT file for a full list.
+ * 
+ * HMMER is distributed under the terms of the GNU General Public License
+ * (GPLv3). See the LICENSE file for details.
  *****************************************************************/
 

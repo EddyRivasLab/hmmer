@@ -48,7 +48,7 @@
 
 static int is_multidomain_region  (P7_DOMAINDEF *ddef, int i, int j);
 static int region_trace_ensemble  (P7_DOMAINDEF *ddef, const P7_OPROFILE *om, const ESL_DSQ *dsq, int ireg, int jreg, const P7_OMX *fwd, P7_OMX *wrk, int *ret_nc);
-static int rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq, P7_OMX *ox1, P7_OMX *ox2,
+static int rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_OMX *ox1, P7_OMX *ox2,
 				   int i, int j, int null2_is_done, P7_BG *bg, int long_target, P7_BG *bg_tmp, float *scores_arr, float *fwd_emissions_arr);
 
 
@@ -330,7 +330,7 @@ p7_domaindef_Destroy(P7_DOMAINDEF *ddef)
  * Returns:   <eslOK> on success.
  */
 int
-p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx2, P7_DOMAINDEF *ddef) 
+p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_GMX *gx1, P7_GMX *gx2, P7_DOMAINDEF *ddef) 
 {
   int            d;
   int            saveL     = gm->L;    /* need to be able to restore original <gm> config */
@@ -343,7 +343,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
   p7_ReconfigUnihit(gm, 0);	  /* process each domain in unihit L=0 mode */
 
   for (d = 0; d < ddef->gtr->ndom; d++)
-    rescore_isolated_domain(ddef, gm, sq, gx1, gx2, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], FALSE, NULL, FALSE, NULL, NULL, NULL);
+    rescore_isolated_domain(ddef, gm, sq, ntsq, gx1, gx2, ddef->gtr->sqfrom[d], ddef->gtr->sqto[d], FALSE, NULL, FALSE, NULL, NULL, NULL);
 
   /* Restore original model configuration, including length */
   if (p7_IsMulti(save_mode))  p7_ReconfigMultihit(gm, saveL); 
@@ -383,7 +383,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, P7_GMX *gx1, P7_GMX *gx
  *            models.
  */
 int
-p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om, 
+p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, const ESL_SQ *ntsq, P7_OPROFILE *om, 
 				   P7_OMX *oxf, P7_OMX *oxb, P7_OMX *fwd, P7_OMX *bck, 
 				   P7_DOMAINDEF *ddef, P7_BG *bg, int long_target,
 				   P7_BG *bg_tmp, float *scores_arr, float *fwd_emissions_arr
@@ -471,7 +471,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
 
                   /*the !long_target argument will cause the function to recompute null2
                    * scores if this is part of a long_target (nhmmer) pipeline */
-                  if (rescore_isolated_domain(ddef, om, sq, fwd, bck, i2, j2, TRUE, bg, long_target, bg_tmp, scores_arr, fwd_emissions_arr) == eslOK)
+                  if (rescore_isolated_domain(ddef, om, sq, ntsq, fwd, bck, i2, j2, TRUE, bg, long_target, bg_tmp, scores_arr, fwd_emissions_arr) == eslOK)
                        last_j2 = j2;
             }
             p7_spensemble_Reuse(ddef->sp);
@@ -481,7 +481,7 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, P7_OPROFILE *om,
         {
             /* The region looks simple, single domain; convert the region to an envelope. */
             ddef->nenvelopes++;
-            rescore_isolated_domain(ddef, om, sq, fwd, bck, i, j, FALSE, bg, long_target, bg_tmp, scores_arr, fwd_emissions_arr);
+            rescore_isolated_domain(ddef, om, sq, ntsq, fwd, bck, i, j, FALSE, bg, long_target, bg_tmp, scores_arr, fwd_emissions_arr);
         }
         i     = -1;
         triggered = FALSE;
@@ -809,7 +809,7 @@ reparameterize_model (P7_BG *bg, P7_OPROFILE *om, const ESL_SQ *sq, int start, i
  *         spec just makes its contents "undefined".
  */
 static int
-rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
+rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq, const ESL_SQ *ntsq,
 			P7_OMX *ox1, P7_OMX *ox2, int i, int j, int null2_is_done, P7_BG *bg, int long_target,
 			P7_BG *bg_tmp, float *scores_arr, float *fwd_emissions_arr)
 {
@@ -858,8 +858,9 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
     ddef->nalloc *= 2;
   }
   dom = &(ddef->dcl[ddef->ndom]);
-  dom->ad             = p7_alidisplay_Create(ddef->tr, 0, om, sq);
+  dom->ad             = p7_alidisplay_Create(ddef->tr, 0, om, sq, ntsq);
   dom->scores_per_pos = NULL;
+
 
   /* For long target DNA, it's common to see a huge envelope (>1Kb longer than alignment), usually
    * involving simple repeat part of model that attracted similar segments of the repeatedly, to
@@ -867,20 +868,11 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
    * such a long envelope and estimate the true score of the hit region
    */
   if (long_target) {
-    int iters = 0;
 
-    /*The envelope is absurdly large. We've often seen that composition-biased unaligned
-     * envelopes can lead to high scores with no supporting alignment. Trim that envelope
-     * in so that it's a length you could imagine looking at to see alternative alignments,
-     * then realign (using the new envelope to modify background character frequencies.
-     * In some rare cases, this new smaller envelope leads to a big contraction in the
-     * accepted alignment ... so that the process needs to be iterated.
-     */
-    while ( iters++ < 5 &&  //safety valve in case something really wonky happens
-        (    i < dom->ad->sqfrom-max_env_extra-3   //trim the left side of the envelope, allow a little slop beyond what we'll trim
-          || j > dom->ad->sqto+max_env_extra+3     //trim the right side of the envelope,    "     "      "     "     "     "     "
-        )
+    if (     i < dom->ad->sqfrom-max_env_extra   //trim the left side of the envelope
+        ||   j > dom->ad->sqto+max_env_extra     //trim the right side of the envelope
         ) {
+
       //trim in the envelope, and do it again
       i = ESL_MAX(i,dom->ad->sqfrom-max_env_extra);
       j = ESL_MIN(j,dom->ad->sqto+max_env_extra);
@@ -913,7 +905,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq,
 
        /* store the results in it, first destroying the old alidisplay object */
        p7_alidisplay_Destroy(dom->ad);
-       dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq);
+       dom->ad            = p7_alidisplay_Create(ddef->tr, 0, om, sq, NULL);
     }
 
     /* Estimate bias correction, by computing what the score would've been without

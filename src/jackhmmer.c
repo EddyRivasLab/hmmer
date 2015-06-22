@@ -70,6 +70,7 @@ static ESL_OPTIONS options[] = {
   { "--chkhmm",     eslARG_OUTFILE,      NULL, NULL, NULL,      NULL,    NULL,  NULL,            "save HMM checkpoints to files <f>-<iteration>.hmm",            2 },
   { "--chkali",     eslARG_OUTFILE,      NULL, NULL, NULL,      NULL,    NULL,  NULL,            "save alignment checkpoints to files <f>-<iteration>.sto",      2 },
   { "--acc",        eslARG_NONE,        FALSE, NULL, NULL,      NULL,    NULL,  NULL,            "prefer accessions over names in output",                       2 },
+  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,      NULL,    NULL,  NULL,            "don't show the translated DNA sequence in domain alignment",  99 }, /*for nhmmscant */
   { "--noali",      eslARG_NONE,        FALSE, NULL, NULL,      NULL,    NULL,  NULL,            "don't output alignments, so output is smaller",                2 },
   { "--notextw",    eslARG_NONE,         NULL, NULL, NULL,      NULL,    NULL, "--textw",        "unlimit ASCII text output line width",                         2 },
   { "--textw",      eslARG_INT,         "120", NULL, "n>=120",  NULL,    NULL, "--notextw",      "set max width of ASCII text output lines",                     2 },
@@ -113,7 +114,6 @@ static ESL_OPTIONS options[] = {
 /* Alternative effective sequence weighting strategies */
   { "--eent",       eslARG_NONE,    "default", NULL, NULL,   EFFOPTS,    NULL,  NULL,            "adjust eff seq # to achieve relative entropy target",         10 },
   { "--eentexp",    eslARG_NONE,     "default",NULL, NULL,    EFFOPTS,    NULL, NULL,            "adjust eff seq # to reach rel. ent. target using exp scaling",  10 },
-
   { "--eclust",     eslARG_NONE,        FALSE, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "eff seq # is # of single linkage clusters",                   10 },
   { "--enone",      eslARG_NONE,        FALSE, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "no effective seq # weighting: just use nseq",                 10 },
   { "--eset",       eslARG_REAL,         NULL, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "set eff seq # for all models to <x>",                         10 },
@@ -314,7 +314,6 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--wnone")      && fprintf(ofp, "# relative weighting scheme:       none\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--wid")        && fprintf(ofp, "# frac id cutoff for BLOSUM wgts:  %f\n",             esl_opt_GetReal(go, "--wid"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--eent")       && fprintf(ofp, "# effective seq number scheme:     entropy weighting\n")                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--eentexp")    && fprintf(ofp, "# effective seq number scheme:     entropy weighting using exponent-based scaling\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--eclust")     && fprintf(ofp, "# effective seq number scheme:     single linkage clusters\n")                              < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--enone")      && fprintf(ofp, "# effective seq number scheme:     none\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--eset")       && fprintf(ofp, "# effective seq number:            set to %f\n",      esl_opt_GetReal(go, "--eset"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -1470,7 +1469,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 		  p7_bg_SetLength(bg, dbsq->n);
 		  p7_oprofile_ReconfigLength(om, dbsq->n);
       
-		  p7_Pipeline(pli, om, bg, dbsq, th);
+		  p7_Pipeline(pli, om, bg, dbsq, NULL, th);
 
 		  esl_sq_Reuse(dbsq);
 		  p7_pipeline_Reuse(pli);
@@ -1595,7 +1594,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
       p7_bg_SetLength(info->bg, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
       
-      p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
+      p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th);
 
       esl_sq_Reuse(dbsq);
       p7_pipeline_Reuse(info->pli);
@@ -1689,7 +1688,7 @@ pipeline_thread(void *arg)
 	  p7_bg_SetLength(info->bg, dbsq->n);
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
 
-	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->th);
+	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th);
 
 	  esl_sq_Reuse(dbsq);
 	  p7_pipeline_Reuse(info->pli);
@@ -1711,7 +1710,13 @@ pipeline_thread(void *arg)
 
 
 /*****************************************************************
- * @LICENSE@
+ * HMMER - Biological sequence analysis with profile HMMs
+ * Version 3.1b2; February 2015
+ * Copyright (C) 2015 Howard Hughes Medical Institute.
+ * Other copyrights also apply. See the COPYRIGHT file for a full list.
+ * 
+ * HMMER is distributed under the terms of the GNU General Public License
+ * (GPLv3). See the LICENSE file for details.
  *
  * SVN $URL$
  * SVN $Id$
