@@ -32,7 +32,8 @@
 #include "esl_stopwatch.h"
 #include "esl_threads.h"
 
-//#include "esl_translate.h" /* For support of nhmmscant 6 frame translation */
+/* for nhmmscant */
+#include "esl_trans.h" 
 
 #include "hmmer.h"
 #include "hmmpgmd.h"
@@ -199,6 +200,25 @@ worker_process(ESL_GETOPTS *go)
   return;
 }
 
+static int
+do_sq_by_sequences(ESL_GENCODE *gcode, ESL_TRANS_WORKSTATE *wrk, ESL_SQ *sq)
+{
+      if (wrk->do_watson) {
+	esl_trans_ProcessStart(gcode, wrk, sq);
+	esl_trans_ProcessPiece(gcode, wrk, sq);
+	esl_trans_ProcessEnd(wrk, sq);
+      }
+
+      if (wrk->do_crick) {
+	esl_sq_ReverseComplement(sq);
+	esl_trans_ProcessStart(gcode, wrk, sq);
+	esl_trans_ProcessPiece(gcode, wrk, sq);
+	esl_trans_ProcessEnd(wrk, sq);
+      }
+
+  return eslOK;
+}
+
 static void 
 process_nhmmscantCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
 { 
@@ -216,8 +236,10 @@ process_nhmmscantCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
   time_t           date;
   char             timestamp[32];
 
-  int              j;
-  ESL_SQ           *prot6[6];
+  int              k;
+  ESL_ALPHABET     *abcDNA = NULL;       /* DNA sequence alphabet                               */
+  ESL_GENCODE      *gcode       = NULL;
+  ESL_TRANS_WORKSTATE *wrk    = NULL;
   ESL_SQ           *qsqDNATxt = NULL;    /* DNA query sequence that will be in text mode for printing */
   ESL_SQ           *qsq      = NULL;		 /* query sequence */
   P7_TOPHITS       *tophits_accumulator = NULL; /* to hold the top hits information from all 6 frame translations */
@@ -226,6 +248,7 @@ process_nhmmscantCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
  
   w = esl_stopwatch_Create();
   abc = esl_alphabet_Create(eslAMINO);
+  abcDNA = esl_alphabet_Create(eslDNA); 
 
   if (pthread_mutex_init(&inx_mutex, NULL) != 0) p7_Fail("mutex init failed");
   ESL_ALLOC(info, sizeof(*info) * (env->ncpus));
@@ -244,6 +267,21 @@ process_nhmmscantCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
   ESL_ALLOC(range_list, sizeof(RANGE_LIST));
      hmmpgmd_GetRanges(range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
   }
+
+    /* Set up the genetic code. Default = NCBI 1, the standard code; allow ORFs to start at any aa
+   */
+  gcode = esl_gencode_Create(abcDNA, abc);
+  esl_gencode_Set(gcode, esl_opt_GetInteger(query->opts, "-c"));  // default = 1, the standard genetic code
+
+  if      (esl_opt_GetBoolean(query->opts, "-m"))   esl_gencode_SetInitiatorOnlyAUG(gcode);
+  else if (! esl_opt_GetBoolean(query->opts, "-M")) esl_gencode_SetInitiatorAny(gcode);      // note this is the default, if neither -m or -M are set
+
+
+  /* Set up the workstate structure, which contains both stateful 
+   * info about our position in <sqfp> and the DNA <sq>, as well as
+   * one-time config info from options
+   */
+  wrk = esl_trans_WorkstateCreate(query->opts, gcode);
 
   threadObj = esl_threads_Create(&scan_thread);
 
@@ -268,29 +306,24 @@ process_nhmmscantCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
   esl_sqio_Write(stdout, query->seq, eslSQFILE_FASTA, 0); /* DEBUG ONLY !!!!! */
 #endif
 	 
-  /* do 6 frame translation to amino acid sequences */
-//  status = esl_trans_6frame(query->seq, prot6);
-//  if (status != eslOK) p7_Fail("Unexpected error %d in 6 frame translation", status);
+  printf("Creating 6 frame translations\n");
+  /* create sequence block to hold translated ORFs */
+  wrk->orf_block = esl_sq_CreateDigitalBlock(1024, abc);
 
-#if 0
-  /* DEBUG ONLY !!!!!! */
-  for(j = 0; j < 6; j++) {
-     esl_sqio_Write(stdout, prot6[j], eslSQFILE_FASTA, 0);
-  }
-#endif
+  /* translate DNA sequence to 6 frame ORFs */
+  do_sq_by_sequences(gcode, wrk, query->seq);
 
   /* Create processing pipeline and hit list accumulators */
   tophits_accumulator  = p7_tophits_Create(); 
   pipelinehits_accumulator = p7_pipeline_Create(query->opts, 100, 100, FALSE, p7_SCAN_MODELS);
 
   /* process each 6 frame translated sequence */
-  for (j = 0; j < 6; ++j) {
-     esl_sq_Digitize(abc, prot6[j]);
-     qsq = prot6[j];
+  for (k = 0; k < wrk->orf_block->count; ++k)
+   {
+	 qsq = &(wrk->orf_block->list[k]);
 		
      /* Create processing pipeline and hit list */   
-     /* info[0] is just an accumulator for the results */
-     for (i = 0; i < env->ncpus; ++i) {
+      for (i = 0; i < env->ncpus; ++i) {
         info[i].abc   = abc;
         info[i].hmm   = query->hmm;
         info[i].seq   = qsq;
@@ -355,7 +388,7 @@ process_nhmmscantCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
      }
 					
 #if 1
-    fprintf (stdout, " Translated sequence frame %d\n", j);
+    fprintf (stdout, " Translated sequence frame %d\n", k);
     fprintf (stdout, "   Sequences  Residues                              Elapsed\n");
     for (i = 0; i < env->ncpus; ++i) {
        print_timings(i, info[i].elapsed, info[i].pli);
@@ -368,13 +401,13 @@ process_nhmmscantCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
        p7_tophits_Destroy(info[i].th);
     }  
 
-  }  /* end of  for (j = 0; j < 6; ++j)... */
+  }  /* end of  for (k = 0; k < wrk->orf_block->count; ++k)... */
 
   esl_stopwatch_Stop(w);
 
-  /* destroy the 6 frame translated sequences */
-  for (j = 0; j < 6; ++j) {
-     esl_sq_Destroy(prot6[j]);   
+  if(wrk->orf_block != NULL) {
+     esl_sq_DestroyBlock(wrk->orf_block);
+     wrk->orf_block = NULL;
   }
 
   if (qsqDNATxt  != NULL) esl_sq_Destroy(qsqDNATxt);  
@@ -399,8 +432,12 @@ process_nhmmscantCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
 
   free(info);
 
+  esl_trans_WorkstateDestroy(wrk);
+  esl_gencode_Destroy(gcode);
+
   esl_stopwatch_Destroy(w);
   esl_alphabet_Destroy(abc);
+  esl_alphabet_Destroy(abcDNA); 
 
   return;
 

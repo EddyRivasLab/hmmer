@@ -20,7 +20,7 @@
 #include "esl_stopwatch.h"
 
 /* for nhmmscant */
-#include "esl_translate.h" 
+#include "esl_trans.h" 
 
 
 #ifdef HAVE_MPI
@@ -66,355 +66,6 @@ typedef struct {
 #else
 #define DAEMONOPTS  "-o,--tblout,--domtblout,--pfamtblout"
 #endif
-
-
-
-
-
-
-
-
-/* Translate DNA sequence into six frames, into individual ORFs.
- * 
- */
-//#include "esl_config.h"
-
-//#include "easel.h"
-//#include "esl_alphabet.h"
-#include "esl_gencode.h"
-//#include "esl_getopts.h"
-//#include "esl_sq.h"
-//#include "esl_sqio.h"
-
-/*****************************************************************
- * 1. A stateful structure, workstate_s, to support both ReadSeq and ReadWindow()
- *****************************************************************/
-
-/* struct workstate_s 
- *   keeps state in DNA sequence <sq>, allowing us to process a sequence
- *   either in a single gulp (using ReadSeq) or in overlapping windows 
- *   (using ReadWindow).
- *
- *   also contains one-time configuration information
- */
-struct workstate_s {
-  /* stateful info (which may get updated with each new seq, strand, and/or window): */
-  ESL_SQ *psq[3];     // Growing ORFs in each frame
-  int8_t  in_orf[3];  // TRUE|FALSE: TRUE if we're growing an ORF in this frame
-  int     apos;       // 1..L:  current nucleotide we're on (starting a codon) in <sq>
-  int     frame;      // 0..2:  which frame <apos> is in
-  int     codon;      // 0..63: Digitized codon for apos,apos+1,apos+2
-  int     inval;      // 0..3:  how many apos increments we need to get past an ambiguous nucleotide
-  int     is_revcomp; // TRUE|FALSE: TRUE if we're doing reverse complement strand
-  int     orfcount;   // >=0:   How many ORFs we've processed so far
-  ESL_SQ_BLOCK  *orf_block; // block of sequences to which to write ORFs
-
-  /* one-time configuration information (from options) */
-  int     do_watson;         // TRUE|FALSE:  TRUE if we translate the top strand
-  int     do_crick;          // TRUE|FALSE:  TRUE if we translate the reverse complement strand
-  int     using_initiators;  // TRUE|FALSE : TRUE if -m or -M, only valid initiators can start an ORF, and initiator codon always translates to Met
-  int     minlen;            // >=0: minimum orf length that process_orf will deal with
-  FILE   *outfp;             // default stdout: where to write output ORF data
-  int     outformat;         // default eslSQFILE_FASTA: sqfile format to write ORFs in
-};
-
-static void
-workstate_destroy(struct workstate_s *wrk)
-{
-  int f;
-  if (wrk)
-    {
-      for (f = 0; f < 3; f++) esl_sq_Destroy(wrk->psq[f]);
-      free(wrk);
-    }
-}
-
-static struct workstate_s *
-workstate_create(ESL_GETOPTS *go, ESL_GENCODE *gcode)
-{
-  struct workstate_s *wrk = NULL;
-  int    f;
-  int    status;
-
-  ESL_ALLOC(wrk, sizeof(struct workstate_s));
-  for (f = 0; f < 3; f++) wrk->psq[f] = NULL;
-
-  for (f = 0; f < 3; f++)
-    {
-      wrk->psq[f]         = esl_sq_CreateDigital(gcode->aa_abc);
-      wrk->psq[f]->dsq[0] = eslDSQ_SENTINEL;
-      wrk->in_orf[f]      = FALSE;
-    }
-
-  wrk->apos             = 1;
-  wrk->frame            = 0;
-  wrk->codon            = 0;
-  wrk->inval            = 0;
-  wrk->is_revcomp       = FALSE;
-  wrk->orfcount         = 0;
-  wrk->orf_block	    = NULL;
-  
-  wrk->do_watson        = (esl_opt_GetBoolean(go, "--crick")  ? FALSE : TRUE);
-  wrk->do_crick         = (esl_opt_GetBoolean(go, "--watson") ? FALSE : TRUE);
-  wrk->using_initiators = ((esl_opt_GetBoolean(go, "-m") || esl_opt_GetBoolean(go, "-M")) ? TRUE : FALSE);
-  wrk->minlen           = esl_opt_GetInteger(go, "-l");
-  wrk->outfp            = stdout;
-  wrk->outformat        = eslSQFILE_FASTA;
-
-  return wrk;
-
- ERROR:
-  workstate_destroy(wrk);
-  return NULL;
-}
-
-
-
-
-/*****************************************************************
- * 2. Components shared by the two styles, full or windowed reads
- *****************************************************************/
-
-static int
-process_orf(struct workstate_s *wrk, ESL_SQ *sq)
-{
-  ESL_SQ *psq = wrk->psq[wrk->frame];
-
-  psq->end = (wrk->is_revcomp ? wrk->apos+1 : wrk->apos-1);
-
-  if (wrk->in_orf[wrk->frame] && psq->n >= wrk->minlen)
-    {
-      wrk->orfcount++;
-      if (psq->n+2 > psq->salloc) 
-	esl_sq_Grow(psq, /*opt_nsafe=*/NULL);
-      psq->dsq[1+psq->n] = eslDSQ_SENTINEL;
-      
-      esl_sq_FormatName(psq, "orf%d", wrk->orfcount);
-      esl_sq_FormatDesc(psq, "source=%s coords=%d..%d length=%d frame=%d  %s", psq->source, psq->start, psq->end, psq->n, wrk->frame + 1 + (wrk->is_revcomp ? 3 : 0), sq->desc);
-      
-	  /* if we do not have a block to write ORFs to then write ORFs to file */
-	  if (wrk->orf_block == NULL)
-	     esl_sqio_Write(wrk->outfp, psq, wrk->outformat, /*sq ssi offset update=*/FALSE);
-	  else 
-	  {   
-//         if (wrk->orf_block->count == wrk->orf_block->listSize)
-//            esl_sq_BlockResize();
-printf("adding seq to block list num %d\n",wrk->orf_block->count);
-esl_sqio_Write(stdout, psq, eslSQFILE_FASTA, 0);
-printf("\n");
-          esl_sq_Copy(psq, &(wrk->orf_block->list[wrk->orf_block->count]));
-		  wrk->orf_block->count++;
-	  }
-    }
-
-  esl_sq_Reuse(psq);
-  esl_sq_SetSource(psq, sq->name);
-  wrk->in_orf[wrk->frame] = FALSE;
-  return eslOK;
-}
-
-static void
-process_start(ESL_GENCODE *gcode, struct workstate_s *wrk, ESL_SQ *sq)
-{
-  int f;
-
-  ESL_DASSERT1(( sq->n >= 3 ));     
-
-  for (f = 0; f < 3; f++)
-    {
-      esl_sq_SetSource(wrk->psq[f], sq->name);
-      wrk->in_orf[f] = FALSE;
-    }
-  wrk->frame      = 0;
-  wrk->codon      = 0;
-  wrk->inval      = 0;
-  wrk->is_revcomp = (sq->end > sq->start ? FALSE : TRUE  );   // this test fails for seqs of length 1, but we know that L>=3
-  wrk->apos       = (wrk->is_revcomp ?     sq->L : 1     );
-
-  if (esl_abc_XIsCanonical(gcode->nt_abc, sq->dsq[1])) wrk->codon += 4 * sq->dsq[1]; else wrk->inval = 1;
-  if (esl_abc_XIsCanonical(gcode->nt_abc, sq->dsq[2])) wrk->codon +=     sq->dsq[2]; else wrk->inval = 2;
-}
-
-
-static int
-process_piece(ESL_GENCODE *gcode, struct workstate_s *wrk, ESL_SQ *sq)
-{
-  ESL_DSQ aa;
-  int     rpos;
-
-  for (rpos = 1; rpos <= sq->n-2; rpos++)
-    {
-      wrk->codon = (wrk->codon * 4) % 64;
-      if   ( esl_abc_XIsCanonical(gcode->nt_abc, sq->dsq[rpos+2])) wrk->codon += sq->dsq[rpos+2]; 
-      else wrk->inval = 3;
-
-      /* Translate the current codon starting at <pos>;
-       * see if it's an acceptable initiator 
-       */
-      if (wrk->inval > 0) // degenerate codon: needs special, tedious handling
-	{
-	  aa =  esl_gencode_GetTranslation(gcode, sq->dsq+rpos);                         // This function can deal with any degeneracy
-	  if (! wrk->in_orf[wrk->frame] && esl_gencode_IsInitiator(gcode, sq->dsq+rpos)) //   ...as can IsInitiator.
-	    {
-	      if (wrk->using_initiators)  // If we're using initiation codons, initial codon translates to M even if it's something like UUG or CUG
-		aa = esl_abc_DigitizeSymbol(gcode->aa_abc, 'M');
-	      wrk->in_orf[wrk->frame]     = TRUE;            
-	      wrk->psq[wrk->frame]->start = wrk->apos;
-	    }
-	  wrk->inval--; 
-	}
-      else          
-	{
-	  aa = gcode->basic[wrk->codon];                             // If we know the digitized codon has no degeneracy, translation is a simple lookup
-	  if (gcode->is_initiator[wrk->codon] && ! wrk->in_orf[wrk->frame]) 
-	    {
-	      if (wrk->using_initiators)  // If we're using initiation codons, initial codon translates to M even if it's something like UUG or CUG
-		aa = esl_abc_DigitizeSymbol(gcode->aa_abc, 'M');
-	      wrk->psq[wrk->frame]->start = wrk->apos;
-	      wrk->in_orf[wrk->frame]     = TRUE;
-	    }
-	}
-
-      /* Stop codon: deal with this ORF sequence and reinitiate */
-      if ( esl_abc_XIsNonresidue(gcode->aa_abc, aa))
-	process_orf(wrk, sq);  
-      
-      /* Otherwise: we have a residue. If we're in an orf (if we've
-       * seen a suitable initiator), add this residue, reallocating as needed. 
-       */
-      if (wrk->in_orf[wrk->frame])
-	{
-	  if (wrk->psq[wrk->frame]->n + 2 > wrk->psq[wrk->frame]->salloc) 
-	    esl_sq_Grow(wrk->psq[wrk->frame], /*opt_nsafe=*/NULL);
-	  wrk->psq[wrk->frame]->dsq[1+ wrk->psq[wrk->frame]->n] = aa;
-	  wrk->psq[wrk->frame]->n++;
-	}
-
-      /* Advance +1 */
-      if (wrk->is_revcomp) wrk->apos--; else wrk->apos++;
-      wrk->frame = (wrk->frame + 1) % 3;
-    }
-  return eslOK;
-}
-
-
-static int
-process_end(struct workstate_s *wrk, ESL_SQ *sq)
-{
-  int f;
-
-  /* Done with the sequence. Now terminate all the orfs we were working on.
-   * <apos> is sitting at L-1 (or 2, if revcomp) and we're in some <frame> 
-   * there.
-   */
-  ESL_DASSERT1(( (wrk->is_revcomp && wrk->apos == 2) || (! wrk->is_revcomp && wrk->apos == sq->L-1) ));
-  for (f = 0; f < 3; f++) // f counts 0..2, but it is *not* the <frame> index; <frame> is stateful
-    {
-      process_orf(wrk, sq);
-      if (wrk->is_revcomp) wrk->apos--; else wrk->apos++;
-      wrk->frame = (wrk->frame + 1) % 3;
-    }  
-  return eslOK;
-}
-
-
-/*****************************************************************
- * 3. Main loop for reading complete sequences with ReadSeq()
- *****************************************************************/
-
-//static int
-extern int
-//do_by_sequences(ESL_GENCODE *gcode, struct workstate_s *wrk, ESL_SQFILE *sqfp)
-do_sq_by_sequences(ESL_GENCODE *gcode, struct workstate_s *wrk, ESL_SQ *sq)
-{
-//  ESL_SQ *sq = esl_sq_CreateDigital(gcode->nt_abc);
-//  int     status;
-
-//  while (( status = esl_sqio_Read(sqfp, sq )) == eslOK)
-//    {
-//      if (sq->n < 3) continue;
-
-      if (wrk->do_watson) {
-	process_start(gcode, wrk, sq);
-	process_piece(gcode, wrk, sq);
-	process_end(wrk, sq);
-      }
-
-      if (wrk->do_crick) {
-	esl_sq_ReverseComplement(sq);
-	process_start(gcode, wrk, sq);
-	process_piece(gcode, wrk, sq);
-	process_end(wrk, sq);
-      }
-
-//      esl_sq_Reuse(sq);
-//    }
-//  if      (status == eslEFORMAT) esl_fatal("Parse failed (sequence file %s)\n%s\n",
-//					   sqfp->filename, sqfp->get_error(sqfp));     
-//  else if (status != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
-//					   status, sqfp->filename);
-  
-//  esl_sq_Destroy(sq);
-  return eslOK;
-}
-
-
-static int 
-//extern int 
-do_by_windows(ESL_GENCODE *gcode, struct workstate_s *wrk, ESL_SQFILE *sqfp)
-{
-  ESL_SQ *sq = esl_sq_CreateDigital(gcode->nt_abc);
-  int     windowsize  = 4092;                // can be any value, but a multiple of 3 makes most sense. windowsize can be +/-; + means reading top strand; - means bottom strand.
-  int     contextsize = 2;                   // contextsize (adjacent window overlap) must be 2, or translation won't work properly.
-  int     wstatus;
-
-  ESL_DASSERT1(( windowsize  % 3 == 0 ));  
-
-  while (( wstatus = esl_sqio_ReadWindow(sqfp, contextsize, windowsize, sq)) != eslEOF)
-    {
-      if (wstatus == eslEOD)
-	{
-	  if ( (windowsize > 0 && wrk->do_watson) || (windowsize < 0 && wrk->do_crick))
-	    process_end(wrk, sq);
-
-	  if (windowsize > 0 && ! wrk->do_crick) { esl_sq_Reuse(sq); continue; } // Don't switch to revcomp if we don't need do. Allows -W --watson to work on nonrewindable streams
-	  if (windowsize < 0) esl_sq_Reuse(sq);             // Do not Reuse the sq on the switch from watson to crick; ReadWindow needs sq->L
-	  windowsize = -windowsize;                         // switch to other strand.
-	  continue;
-	}
-      else if (wstatus == eslEFORMAT) esl_fatal("Parsing failed in sequence file %s:\n%s",          sqfp->filename, esl_sqfile_GetErrorBuf(sqfp));
-      else if (wstatus == eslEINVAL)  esl_fatal("Invalid residue(s) found in sequence file %s\n%s", sqfp->filename, esl_sqfile_GetErrorBuf(sqfp));
-      else if (wstatus != eslOK)      esl_fatal("Unexpected error %d reading sequence file %s", wstatus, sqfp->filename);
-
-      /* If we're the first window in this input DNA sequence 
-       * (or the first window in its revcomp), then initialize.
-       * sq->C is the actual context overlap; 0=1st window; 2 (i.e. C)= subsequent.
-       */
-      if (sq->C == 0) 
-	{
-	  if (sq->n < 3) continue; // DNA sequence too short; skip it, don't even bother to revcomp, go to next sequence.
-	  if ( (windowsize > 0 && wrk->do_watson) || (windowsize < 0 && wrk->do_crick))
-	    process_start(gcode, wrk, sq);
-	}
-
-      if ( (windowsize > 0 && wrk->do_watson) || (windowsize < 0 && wrk->do_crick))      
-	process_piece(gcode, wrk, sq);
-    }
-  esl_sq_Destroy(sq);
-  return eslOK;
-}
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -687,6 +338,25 @@ main(int argc, char **argv)
 }
 
 
+static int
+do_sq_by_sequences(ESL_GENCODE *gcode, ESL_TRANS_WORKSTATE *wrk, ESL_SQ *sq)
+{
+      if (wrk->do_watson) {
+	esl_trans_ProcessStart(gcode, wrk, sq);
+	esl_trans_ProcessPiece(gcode, wrk, sq);
+	esl_trans_ProcessEnd(wrk, sq);
+      }
+
+      if (wrk->do_crick) {
+	esl_sq_ReverseComplement(sq);
+	esl_trans_ProcessStart(gcode, wrk, sq);
+	esl_trans_ProcessPiece(gcode, wrk, sq);
+	esl_trans_ProcessEnd(wrk, sq);
+      }
+
+  return eslOK;
+}
+
 /* serial_master()
  * The serial version of nhmmscant.
  * For each query HMM in <hmmdb> search the database for hits.
@@ -739,7 +409,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   int             k;
   ESL_GENCODE     *gcode       = NULL;
-  struct workstate_s *wrk    = NULL;
+  ESL_TRANS_WORKSTATE *wrk    = NULL;
   /* end nhmmscant */
 
   w = esl_stopwatch_Create();
@@ -815,7 +485,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    * info about our position in <sqfp> and the DNA <sq>, as well as
    * one-time config info from options
    */
-  wrk = workstate_create(go, gcode);
+  wrk = esl_trans_WorkstateCreate(go, gcode);
   
 #ifdef HMMER_THREADS
   /* initialize thread data */
@@ -858,26 +528,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
      nquery++;
      esl_stopwatch_Start(w);	                          
-     /* Open the target profile database */
-     status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
-     if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n",           status, cfg->hmmfile);  
-  
-#ifdef HMMER_THREADS
-     /* if we are threaded, create a lock to prevent multiple readers */
-     if (ncpus > 0)
-	 {
-	    status = p7_hmmfile_CreateLock(hfp);
-	    if (status != eslOK) p7_Fail("Unexpected error %d creating lock\n", status);
-	 }
-#endif
 	  
 	 /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
      esl_sq_Copy(qsqDNA, qsqDNATxt);
 
-
      printf("Creating 6 frame translations\n");
 	 /* create sequence block to hold translated ORFs */
-	 wrk->orf_block = esl_sq_CreateDigitalBlock(1024, abcAMINO);
+	 wrk->orf_block = esl_sq_CreateDigitalBlock(3, abcAMINO);
 
      /* translate DNA sequence to 6 frame ORFs */
      do_sq_by_sequences(gcode, wrk, qsqDNA);
@@ -885,22 +542,29 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	   /* Create processing pipeline and hit list accumulators */
      tophits_accumulator  = p7_tophits_Create(); 
      pipelinehits_accumulator = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS);
-	 pipelinehits_accumulator->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
 
      /*process each 6 frame translated sequence */
      for (k = 0; k < wrk->orf_block->count; ++k)
 	   {
 	    qsq = &(wrk->orf_block->list[k]);
 
-printf("\n\nAmino seqence %d is:",k);
-esl_sqio_Write(stdout, qsq, eslSQFILE_FASTA, 0);
-printf("\n");
+        /* Open the target profile database */
+        status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
+        if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n",           status, cfg->hmmfile);  
+  
+#ifdef HMMER_THREADS
+        /* if we are threaded, create a lock to prevent multiple readers */
+        if (ncpus > 0)
+	    {
+	       status = p7_hmmfile_CreateLock(hfp);
+	       if (status != eslOK) p7_Fail("Unexpected error %d creating lock\n", status);
+	    }
+#endif
 
-        if (fprintf(ofp, "Translation number:         %d\n", k+1) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+        if (fprintf(ofp, "\nTranslation number:         %d\n", k+1) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
         if (fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
         if (qsq->acc[0]  != 0 && fprintf(ofp, "Accession:   %s\n", qsq->acc)     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
         if (qsq->desc[0] != 0 && fprintf(ofp, "Description: %s\n", qsq->desc)    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-
 
         for (i = 0; i < infocnt; ++i)
 	    {
@@ -919,7 +583,10 @@ printf("\n");
 
 #ifdef HMMER_THREADS
         if (ncpus > 0)  hstatus = thread_loop(threadObj, queue, hfp);
-        else	      hstatus = serial_loop(info, hfp);
+        else
+		{
+          hstatus = serial_loop(info, hfp);	
+		}
 #else
            hstatus = serial_loop(info, hfp);
 #endif
@@ -941,6 +608,8 @@ printf("\n");
 	       p7_tophits_Destroy(info[i].th);
 	    }
 
+		p7_hmmfile_Close(hfp);
+
      } /* end for (k = 0; k < block->count; ++k)... loop */
      
 	 
@@ -956,11 +625,10 @@ printf("\n");
      if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, qsq->name, qsq->acc, tophits_accumulator, pipelinehits_accumulator);
 
      esl_stopwatch_Stop(w);
-     p7_pli_Statistics(ofp, info->pli, w);
+     p7_pli_Statistics(ofp, pipelinehits_accumulator, w);
      if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
      fflush(ofp);
 
-     p7_hmmfile_Close(hfp);
      p7_pipeline_Destroy(pipelinehits_accumulator);
      p7_tophits_Destroy(tophits_accumulator);
 	  
@@ -1006,8 +674,7 @@ printf("\n");
 
   free(info);
 
-  
-  workstate_destroy(wrk);
+  esl_trans_WorkstateDestroy(wrk);
   esl_gencode_Destroy(gcode);
 
   esl_sq_Destroy(qsqDNA);  /* nhmmscant */
@@ -1645,7 +1312,6 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
       p7_pli_NewModel(info->pli, om, info->bg);
       p7_bg_SetLength(info->bg, info->qsq->n);
       p7_oprofile_ReconfigLength(om, info->qsq->n);
-
       p7_Pipeline(info->pli, om, info->bg, info->qsq, info->ntqsq, info->th);
 
       p7_oprofile_Destroy(om);

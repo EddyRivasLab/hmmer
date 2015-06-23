@@ -88,6 +88,16 @@ static ESL_OPTIONS searchOpts[] = {
   { "--nhmmscant",  eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  "--seqdb",       "search hmm database with a 6 frame translated DNA sequence",  12 },
   { "--seqdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--hmmdb",       "protein database to search",                                  12 },
   { "--seqdb_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, "--seqdb", NULL,         "range(s) of sequences within --seqdb that will be searched",  12 },
+
+  /* name           type        default  env  range toggles reqs incomp  help                                          docgroup*/
+  { "-c",         eslARG_INT,       "1", NULL, NULL, NULL,  NULL, "--seqdb",  "use alt genetic code of NCBI transl table <n>", 15 },
+  { "-l",         eslARG_INT,      "20", NULL, NULL, NULL,  NULL, "--seqdb",  "minimum ORF length",                            15 },
+  { "-m",         eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, "-M,--seqdb",  "ORFs must initiate with AUG only",              15 },
+  { "-M",         eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, "-m,--seqdb",  "ORFs must start with allowed initiation codon", 15 },
+  { "--informat", eslARG_STRING,  FALSE, NULL, NULL, NULL,  NULL, "--seqdb",  "specify that input file is in format <s>",      15 },
+  { "--watson",   eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, "--seqdb",  "only translate top strand",                     15 },
+  { "--crick",    eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, "--seqdb",  "only translate bottom strand",                  15 },
+
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
