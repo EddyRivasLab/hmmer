@@ -85,8 +85,9 @@ static ESL_OPTIONS options[] = {
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,             "set RNG seed to <n> (if 0: one-time arbitrary seed)",          12 },
   { "--w_beta",     eslARG_REAL,    NULL, NULL, NULL,    NULL,  NULL,           NULL,    "tail mass at which window length is determined",               12 },
   { "--w_length",   eslARG_INT,     NULL, NULL, NULL,    NULL,  NULL,           NULL,    "window length - essentially max expected hit length ",                                                12 },
-  { "--toponly",     eslARG_NONE,   NULL, NULL, NULL,    NULL,  NULL,   "--bottomonly",  "only search the top strand",                                   12 },
-  { "--bottomonly",  eslARG_NONE,   NULL, NULL, NULL,    NULL,  NULL,      "--toponly",  "only search the bottom strand",                                12 },
+  { "--watson",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,       "--crick",  "only search the top strand",                                    12 },
+  { "--crick",      eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,       "--watson",  "only search the bottom strand",                                 12 },
+
 
 
   /* stage-specific window length used for bias composition estimate,

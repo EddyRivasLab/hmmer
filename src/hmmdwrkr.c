@@ -33,7 +33,7 @@
 #include "esl_threads.h"
 
 /* for nhmmscant */
-#include "esl_trans.h" 
+#include "esl_gencode.h"
 
 #include "hmmer.h"
 #include "hmmpgmd.h"
@@ -201,19 +201,19 @@ worker_process(ESL_GETOPTS *go)
 }
 
 static int
-do_sq_by_sequences(ESL_GENCODE *gcode, ESL_TRANS_WORKSTATE *wrk, ESL_SQ *sq)
+do_sq_by_sequences(ESL_GENCODE *gcode, ESL_GENCODE_WORKSTATE *wrk, ESL_SQ *sq)
 {
       if (wrk->do_watson) {
-	esl_trans_ProcessStart(gcode, wrk, sq);
-	esl_trans_ProcessPiece(gcode, wrk, sq);
-	esl_trans_ProcessEnd(wrk, sq);
+	esl_gencode_ProcessStart(gcode, wrk, sq);
+	esl_gencode_ProcessPiece(gcode, wrk, sq);
+	esl_gencode_ProcessEnd(wrk, sq);
       }
 
       if (wrk->do_crick) {
 	esl_sq_ReverseComplement(sq);
-	esl_trans_ProcessStart(gcode, wrk, sq);
-	esl_trans_ProcessPiece(gcode, wrk, sq);
-	esl_trans_ProcessEnd(wrk, sq);
+	esl_gencode_ProcessStart(gcode, wrk, sq);
+	esl_gencode_ProcessPiece(gcode, wrk, sq);
+	esl_gencode_ProcessEnd(wrk, sq);
       }
 
   return eslOK;
@@ -239,7 +239,7 @@ process_nhmmscantCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
   int              k;
   ESL_ALPHABET     *abcDNA = NULL;       /* DNA sequence alphabet                               */
   ESL_GENCODE      *gcode       = NULL;
-  ESL_TRANS_WORKSTATE *wrk    = NULL;
+  ESL_GENCODE_WORKSTATE *wrk    = NULL;
   ESL_SQ           *qsqDNATxt = NULL;    /* DNA query sequence that will be in text mode for printing */
   ESL_SQ           *qsq      = NULL;		 /* query sequence */
   P7_TOPHITS       *tophits_accumulator = NULL; /* to hold the top hits information from all 6 frame translations */
@@ -281,7 +281,7 @@ process_nhmmscantCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
    * info about our position in <sqfp> and the DNA <sq>, as well as
    * one-time config info from options
    */
-  wrk = esl_trans_WorkstateCreate(query->opts, gcode);
+  wrk = esl_gencode_WorkstateCreate(query->opts, gcode);
 
   threadObj = esl_threads_Create(&scan_thread);
 
@@ -432,7 +432,7 @@ process_nhmmscantCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
 
   free(info);
 
-  esl_trans_WorkstateDestroy(wrk);
+  esl_gencode_WorkstateDestroy(wrk);
   esl_gencode_Destroy(gcode);
 
   esl_stopwatch_Destroy(w);

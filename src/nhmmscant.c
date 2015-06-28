@@ -20,7 +20,7 @@
 #include "esl_stopwatch.h"
 
 /* for nhmmscant */
-#include "esl_trans.h" 
+#include "esl_gencode.h"
 
 
 #ifdef HAVE_MPI
@@ -339,19 +339,19 @@ main(int argc, char **argv)
 
 
 static int
-do_sq_by_sequences(ESL_GENCODE *gcode, ESL_TRANS_WORKSTATE *wrk, ESL_SQ *sq)
+do_sq_by_sequences(ESL_GENCODE *gcode, ESL_GENCODE_WORKSTATE *wrk, ESL_SQ *sq)
 {
       if (wrk->do_watson) {
-	esl_trans_ProcessStart(gcode, wrk, sq);
-	esl_trans_ProcessPiece(gcode, wrk, sq);
-	esl_trans_ProcessEnd(wrk, sq);
+	esl_gencode_ProcessStart(gcode, wrk, sq);
+	esl_gencode_ProcessPiece(gcode, wrk, sq);
+	esl_gencode_ProcessEnd(wrk, sq);
       }
 
       if (wrk->do_crick) {
 	esl_sq_ReverseComplement(sq);
-	esl_trans_ProcessStart(gcode, wrk, sq);
-	esl_trans_ProcessPiece(gcode, wrk, sq);
-	esl_trans_ProcessEnd(wrk, sq);
+	esl_gencode_ProcessStart(gcode, wrk, sq);
+	esl_gencode_ProcessPiece(gcode, wrk, sq);
+	esl_gencode_ProcessEnd(wrk, sq);
       }
 
   return eslOK;
@@ -409,7 +409,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   int             k;
   ESL_GENCODE     *gcode       = NULL;
-  ESL_TRANS_WORKSTATE *wrk    = NULL;
+  ESL_GENCODE_WORKSTATE *wrk    = NULL;
   /* end nhmmscant */
 
   w = esl_stopwatch_Create();
@@ -485,7 +485,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    * info about our position in <sqfp> and the DNA <sq>, as well as
    * one-time config info from options
    */
-  wrk = esl_trans_WorkstateCreate(go, gcode);
+  wrk = esl_gencode_WorkstateCreate(go, gcode);
   
 #ifdef HMMER_THREADS
   /* initialize thread data */
@@ -674,7 +674,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   free(info);
 
-  esl_trans_WorkstateDestroy(wrk);
+  esl_gencode_WorkstateDestroy(wrk);
   esl_gencode_Destroy(gcode);
 
   esl_sq_Destroy(qsqDNA);  /* nhmmscant */

@@ -615,7 +615,10 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
    {
       if ((status = p7_translated_alidisplay_Print(fp, ad, min_aliwidth, linewidth, pli)) != eslOK) return status;
    }
+
+	return status;
 }
+
 /* Function:  p7_translated_alidisplay_Print()
  * Synopsis:  Human readable output of <P7_ALIDISPLAY> for nhmmscant
  *
@@ -778,7 +781,7 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
       if (fprintf(fp, "  %*s", namewidth, show_seqname)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
       if (ni > 0) 
 	   {
- 	      if (fprintf(fp, " %*ld ", coordwidth, j1)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+ 	      if (fprintf(fp, " %*d ", coordwidth, j1)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
 	   }
 	   else
 	   {		  
@@ -793,7 +796,7 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
 
       if (ni > 0)
         {		  
- 	        if (fprintf(fp, " %-*ld\n", coordwidth, j2)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+ 	        if (fprintf(fp, " %-*d\n", coordwidth, j2)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
         }
       else
         {		  
