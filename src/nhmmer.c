@@ -362,8 +362,8 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *queryfile, char *seqfile, 
 
   if (esl_opt_IsUsed(go, "--nonull2")    && fprintf(ofp, "# null2 bias corrections:          off\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
-  if (esl_opt_IsUsed(go, "--toponly")    && fprintf(ofp, "# search only top strand:          on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--bottomonly") && fprintf(ofp, "# search only bottom strand:       on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--watson")    && fprintf(ofp, "# search only top strand:          on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--crick") && fprintf(ofp, "# search only bottom strand:       on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-Z")           && fprintf(ofp, "# database size is set to:         %.1f Mb\n",        esl_opt_GetReal(go, "-Z"))            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--seed"))  {
     if (esl_opt_GetInteger(go, "--seed") == 0 && fprintf(ofp, "# random number seed:              one-time arbitrary\n")                              < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -920,9 +920,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
           info[i].pli->do_alignment_score_calc = esl_opt_IsOn(go, "--aliscoresout") ;
 
-          if (  esl_opt_IsUsed(go, "--toponly") )
+          if (  esl_opt_IsUsed(go, "--watson") )
             info[i].pli->strands = p7_STRAND_TOPONLY;
-          else if (  esl_opt_IsUsed(go, "--bottomonly") )
+          else if (  esl_opt_IsUsed(go, "--crick") )
             info[i].pli->strands = p7_STRAND_BOTTOMONLY;
           else
             info[i].pli->strands = p7_STRAND_BOTH;
@@ -1694,14 +1694,8 @@ assign_Lengths(P7_TOPHITS *th, ID_LENGTH_LIST *id_length_list) {
 }
 
 /*****************************************************************
- * HMMER - Biological sequence analysis with profile HMMs
- * Version 3.1b2; February 2015
- * Copyright (C) 2015 Howard Hughes Medical Institute.
- * Other copyrights also apply. See the COPYRIGHT file for a full list.
- * 
- * HMMER is distributed under the terms of the GNU General Public License
- * (GPLv3). See the LICENSE file for details.
- * 
+ * @LICENSE@
+ *
  * SVN $URL$
  * SVN $Id$
  *****************************************************************/

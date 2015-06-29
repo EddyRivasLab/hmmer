@@ -1220,12 +1220,9 @@ setup_masterside_comm(ESL_GETOPTS *opts)
 #endif /*HMMER_THREADS*/
 
 /*****************************************************************
- * HMMER - Biological sequence analysis with profile HMMs
- * Version 3.1b2; February 2015
- * Copyright (C) 2015 Howard Hughes Medical Institute.
- * Other copyrights also apply. See the COPYRIGHT file for a full list.
- * 
- * HMMER is distributed under the terms of the GNU General Public License
- * (GPLv3). See the LICENSE file for details.
+ * @LICENSE@
+ *
+ * SVN $Id$
+ * SVN $URL$
  *****************************************************************/
 

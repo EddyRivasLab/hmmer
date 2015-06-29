@@ -1430,15 +1430,9 @@ pipeline_thread(void *arg)
 
 
 /*****************************************************************
- * HMMER - Biological sequence analysis with profile HMMs
- * Version 3.1b2; February 2015
- * Copyright (C) 2015 Howard Hughes Medical Institute.
- * Other copyrights also apply. See the COPYRIGHT file for a full list.
- * 
- * HMMER is distributed under the terms of the GNU General Public License
- * (GPLv3). See the LICENSE file for details.
+ * @LICENSE@
  *
- * SVN $Id: hmmscan.c 4583 2013-12-30 18:56:25Z wheelert $
- * SVN $URL: https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.1/src/hmmscan.c $
+ * SVN $Id$
+ * SVN $URL$
  *****************************************************************/
 

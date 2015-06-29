@@ -251,8 +251,8 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
 
   if (esl_opt_IsUsed(go, "--nonull2")   && fprintf(ofp, "# null2 bias corrections:          off\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
-  if (esl_opt_IsUsed(go, "--toponly")    && fprintf(ofp, "# search only top strand:          on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--bottomonly") && fprintf(ofp, "# search only bottom strand:       on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--watson")    && fprintf(ofp, "# search only top strand:          on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--crick") && fprintf(ofp, "# search only bottom strand:       on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "-Z")          && fprintf(ofp, "# sequence search space set to:    %.0f\n",          esl_opt_GetReal(go, "-Z"))            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--seed"))  {
@@ -484,9 +484,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         p7_pli_NewSeq(info[i].pli, qsq);
         info[i].qsq = qsq;
 
-        if (  esl_opt_IsUsed(go, "--toponly") )
+        if (  esl_opt_IsUsed(go, "--watson") )
           info[i].pli->strands = p7_STRAND_TOPONLY;
-        else if (  esl_opt_IsUsed(go, "--bottomonly") )
+        else if (  esl_opt_IsUsed(go, "--crick") )
           info[i].pli->strands = p7_STRAND_BOTTOMONLY;
         else
           info[i].pli->strands = p7_STRAND_BOTH;
@@ -908,13 +908,7 @@ ERROR:
 
 
 /*****************************************************************
- * HMMER - Biological sequence analysis with profile HMMs
- * Version 3.1b2; February 2015
- * Copyright (C) 2015 Howard Hughes Medical Institute.
- * Other copyrights also apply. See the COPYRIGHT file for a full list.
- * 
- * HMMER is distributed under the terms of the GNU General Public License
- * (GPLv3). See the LICENSE file for details.
+ * @LICENSE@
  *
  * SVN $Id: hmmscan.c 3976 2012-04-03 12:09:10Z eddys $
  * SVN $URL: https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk/src/nhmmscan.c $
