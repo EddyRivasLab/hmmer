@@ -1800,7 +1800,6 @@ extern int fm_getOccCountLT   (const FM_DATA *fm, const FM_CFG *cfg, int pos, ui
 
 #endif /*P7_HMMERH_INCLUDED*/
 
-/************************************************************
 /*****************************************************************
  * @LICENSE@
  *

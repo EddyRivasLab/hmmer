@@ -1364,7 +1364,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 
                     if( th->hit[h]->dcl[d].ad->ntseq == NULL || (th->hit[h]->dcl[d].ad->ntseq != NULL && pli->show_translated_sequence)) 
                        {
-                          if (fprintf(ofp, " %9ld %9ld %c%c",
+                          if (fprintf(ofp, " %9d %9d %c%c",
                              th->hit[h]->dcl[d].ienv,
                              th->hit[h]->dcl[d].jenv,
                              (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
@@ -1375,7 +1375,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 					   {
                           if( th->hit[h]->dcl[d].ad->ntseq != NULL)  
 						  {
-                            if (fprintf(ofp, " %9ld %9ld %c%c",
+                            if (fprintf(ofp, " %9d %9d %c%c",
                              th->hit[h]->dcl[d].ienv*3-2,
                              th->hit[h]->dcl[d].jenv*3,
                              (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
