@@ -407,13 +407,8 @@ int main(int argc, char *argv[])
       ESL_SQ          *sq      = NULL;        /* one target sequence (digital)   */
       ESL_ALPHABET    *abc     = NULL;        /* digital alphabet                */
 
-      ESL_ALPHABET    *abcDNA     = NULL;        /* digital alphabet for DNA          */
-      ESL_SQ          *DNAseq      = NULL;    /* DNA sequence (digital) used for nhmmscant   */
-      ESL_SQ          *DNATxtseq = NULL;    /* DNA query sequence that will be in text mode for printing */
-
       status = eslOK;
       abc = esl_alphabet_Create(eslAMINO);
-	  abcDNA = esl_alphabet_Create(eslDNA); 
 #if 0
       /* try to parse the input buffer as a sequence */
       sq = esl_sq_CreateDigital(abc);
@@ -584,37 +579,12 @@ int main(int argc, char *argv[])
             ptr += sizeof(P7_ALIDISPLAY) + ad->memsize;
             ++dcl;
 			
-//			printf("ad->aseq:%s\n",ad->aseq);
-//			printf("ad->ntseq:%s\n",ad->ntseq);
           }
         }
 
         /* adjust the reported and included hits */
         //th->is_sorted = FALSE;
         //p7_tophits_Sort(th);
-
-#if 0
-		if (esl_opt_IsUsed(go, "--nhmmscant")) {
-          /* try to parse the input buffer as a sequence */
-		  /* we need the DNA sequence for display purposes */
-          DNAseq = esl_sq_CreateDigital(abcDNA);
-          status = esl_sqio_Parse(ptr, strlen(ptr), DNAseq, eslSQFILE_DAEMON);
-          if (status != eslOK) {
-            esl_sq_Destroy(DNAseq);
-            DNAseq = NULL;
-          }
-		  else {  
-		     DNATxtseq = esl_sq_Create();
-		     esl_sq_Copy(DNAseq, DNATxtseq);
-
-		     printf("DNA seq is:%s\n", DNATxtseq->seq);
-		     esl_sqio_Write(stdout, DNAseq, eslSQFILE_FASTA, 0);
-	         printf("\n");
-			 
-//			 pli->DNAqsq = DNATxtseq;
-		  }
-		}
-#endif
 		
         /* Print the results.  */
         if (scores) p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n");
@@ -635,12 +605,9 @@ int main(int argc, char *argv[])
 
     COMPLETE:
       if (abc) esl_alphabet_Destroy(abc);
-      if (abcDNA) esl_alphabet_Destroy(abcDNA);
       if (hmm) p7_hmm_Destroy(hmm);
       if (sq)  esl_sq_Destroy(sq);
 
-      if (DNAseq) esl_sq_Destroy(sq);
-      if (DNATxtseq) esl_sq_Destroy(sq);
 	  }
   }
 

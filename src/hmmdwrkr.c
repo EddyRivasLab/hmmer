@@ -334,7 +334,7 @@ process_nhmmscantCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
         info[i].th    = NULL;
         info[i].pli   = NULL;
 
-	    info[i].ntseq = qsqDNATxt; /* for printing the DNA target sequence in the domain hits display */
+        info[i].ntseq = qsqDNATxt; /* for printing the DNA target sequence in the domain hits display */
 	
         info[i].inx_mutex = &inx_mutex;
         info[i].inx       = &current_index;/* this is confusing trickery - to share a single variable across all threads */

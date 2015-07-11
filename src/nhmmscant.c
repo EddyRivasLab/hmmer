@@ -22,7 +22,6 @@
 /* for nhmmscant */
 #include "esl_gencode.h"
 
-
 #ifdef HAVE_MPI
 #include "mpi.h"
 #include "esl_mpi.h"
@@ -121,7 +120,6 @@ static ESL_OPTIONS options[] = {
   { "-l",         eslARG_INT,      "20", NULL, NULL, NULL,  NULL, NULL,  "minimum ORF length",                            15 },
   { "-m",         eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, "-M",  "ORFs must initiate with AUG only",              15 },
   { "-M",         eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, "-m",  "ORFs must start with allowed initiation codon", 15 },
-//  { "-W",         eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, NULL,  "use windowed, memory-efficient seq reading",    15 },
   { "--informat", eslARG_STRING,  FALSE, NULL, NULL, NULL,  NULL, NULL,  "specify that input file is in format <s>",      15 },
   { "--watson",   eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, NULL,  "only translate top strand",                     15 },
   { "--crick",    eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, NULL,  "only translate bottom strand",                  15 },
@@ -337,7 +335,6 @@ main(int argc, char **argv)
   return status;
 }
 
-
 static int
 do_sq_by_sequences(ESL_GENCODE *gcode, ESL_GENCODE_WORKSTATE *wrk, ESL_SQ *sq)
 {
@@ -434,6 +431,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if (strcmp(cfg->seqfile, "-") != 0) esl_fatal("Query sequence file must be '-'\n");
   }
 
+  /*the query sequence will be DNA but will be translated to amino acids */
+  /* TODO can we detect the type???? */
+  abcDNA = esl_alphabet_Create(eslDNA); 
+  abcAMINO = esl_alphabet_Create(eslAMINO); 
+  qsqDNA = esl_sq_CreateDigital(abcDNA);
+  qsqDNATxt = esl_sq_Create();
+ 
   /* Open the target profile database to get the sequence alphabet */
   status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
@@ -446,22 +450,19 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (hstatus == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets", cfg->hmmfile);
   else if (hstatus != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s", cfg->hmmfile); 
 
+  if (abc->type != eslAMINO) p7_Fail("nhmmscant only supports amino acid HMMs; %s uses a different alphabet", cfg->hmmfile); 
+  
   p7_oprofile_Destroy(om);
   p7_hmmfile_Close(hfp);
 
   /* Open the query sequence database */
-  status = esl_sqfile_OpenDigital(abc, cfg->seqfile, seqfmt, NULL, &sqfp);
+  status = esl_sqfile_OpenDigital(abcDNA, cfg->seqfile, seqfmt, NULL, &sqfp);
   if      (status == eslENOTFOUND) p7_Fail("Failed to open sequence file %s for reading\n",      cfg->seqfile);
   else if (status == eslEFORMAT)   p7_Fail("Sequence file %s is empty or misformatted\n",        cfg->seqfile);
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
   else if (status != eslOK)        p7_Fail("Unexpected error %d opening sequence file %s\n", status, cfg->seqfile);
 
- /*the query sequence will be DNA but will be translated to amino acids */
- /* TODO can we detect the type???? */
- abcDNA = esl_alphabet_Create(eslDNA); 
- abcAMINO = esl_alphabet_Create(eslAMINO); 
- qsqDNA = esl_sq_CreateDigital(abcDNA);
- qsqDNATxt = esl_sq_Create();
+
  
   /* Open the results output files */
   if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"),          "w")) == NULL)  esl_fatal("Failed to open output file %s for writing\n",                 esl_opt_GetString(go, "-o")); }
@@ -529,17 +530,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
      nquery++;
      esl_stopwatch_Start(w);	                          
 	  
-	 /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
+     /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
      esl_sq_Copy(qsqDNA, qsqDNATxt);
 
-     printf("Creating 6 frame translations\n");
-	 /* create sequence block to hold translated ORFs */
-	 wrk->orf_block = esl_sq_CreateDigitalBlock(3, abcAMINO);
+     //printf("Creating 6 frame translations\n");
+     /* create sequence block to hold translated ORFs */
+     wrk->orf_block = esl_sq_CreateDigitalBlock(3, abcAMINO);
 
      /* translate DNA sequence to 6 frame ORFs */
      do_sq_by_sequences(gcode, wrk, qsqDNA);
 
-	   /* Create processing pipeline and hit list accumulators */
+     /* Create processing pipeline and hit list accumulators */
      tophits_accumulator  = p7_tophits_Create(); 
      pipelinehits_accumulator = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS);
 
@@ -572,7 +573,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	       info[i].th  = p7_tophits_Create(); 
 	       info[i].pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS); /* M_hint = 100, L_hint = 100 are just dummies for now */
 	       info[i].pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
-           info[i].ntqsq = qsqDNATxt; /* for printing the DNA target sequence in the domain hits display */
+               info[i].ntqsq = qsqDNATxt; /* for printing the DNA target sequence in the domain hits display */
 	       p7_pli_NewSeq(info[i].pli, qsq);
 	       info[i].qsq = qsq;
 
@@ -620,9 +621,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
      p7_tophits_Targets(ofp, tophits_accumulator, pipelinehits_accumulator, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
      p7_tophits_Domains(ofp, tophits_accumulator, pipelinehits_accumulator, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
-     if (tblfp)     p7_tophits_TabularTargets(tblfp,    qsq->name, qsq->acc, tophits_accumulator, pipelinehits_accumulator, (nquery == 1));
-     if (domtblfp)  p7_tophits_TabularDomains(domtblfp, qsq->name, qsq->acc, tophits_accumulator, pipelinehits_accumulator, (nquery == 1));
-     if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, qsq->name, qsq->acc, tophits_accumulator, pipelinehits_accumulator);
+     if (tblfp)     p7_tophits_TabularTargets(tblfp,    qsqDNA->name, qsqDNA->acc, tophits_accumulator, pipelinehits_accumulator, (nquery == 1));
+     if (domtblfp)  p7_tophits_TabularDomains(domtblfp, qsqDNA->name, qsqDNA->acc, tophits_accumulator, pipelinehits_accumulator, (nquery == 1));
+     if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, qsqDNA->name, qsqDNA->acc, tophits_accumulator, pipelinehits_accumulator);
 
      esl_stopwatch_Stop(w);
      p7_pli_Statistics(ofp, pipelinehits_accumulator, w);
