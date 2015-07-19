@@ -53,7 +53,8 @@ static ESL_OPTIONS searchOpts[] = {
   /* Control of output */
   { "--acc",        eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL, NULL,        "prefer accessions over names in output",                       2 },
   { "--noali",      eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL, NULL,        "don't output alignments, so output is smaller",                2 },
-  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  NULL,        "don't show the translated DNA sequence in domain alignment",   2 }, /*for nhmmscant */
+  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL, NULL,        "don't show the translated DNA sequence in domain alignment",   2 }, /*for nhmmscant */
+  { "--vertcodon",  eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL, NULL,        "show the DNA codon vertically in domain alignment",            2 }, /*for nhmmscant */
   /* Control of scoring system */
   { "--popen",      eslARG_REAL,       "0.02", NULL, "0<=x<0.5",NULL,  NULL, NULL,        "gap open probability",                                         3 },
   { "--pextend",    eslARG_REAL,        "0.4", NULL, "0<=x<1",  NULL,  NULL, NULL,        "gap extend probability",                                       3 },

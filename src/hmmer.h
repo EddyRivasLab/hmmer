@@ -1249,6 +1249,7 @@ typedef struct p7_pipeline_s {
 
   P7_HMMFILE   *hfp;		/* COPY of open HMM database (if scan mode) */
   int           show_translated_sequence; /* TRUE to display translated DNA sequence in domain display for nhmmscant */
+  int           show_vertical_codon; /* TRUE to display the DNA codon vertically in the alignment display */
   char          errbuf[eslERRBUFSIZE];
 } P7_PIPELINE;
 

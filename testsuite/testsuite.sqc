@@ -322,9 +322,11 @@
 1 exercise  nhmmscant/-h            @src/nhmmscant@  -h
 1 exercise  nhmmscant/-o            @src/nhmmscant@  -o           %nhmmscant.out%  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  nhmmscant/--tblout      @src/nhmmscant@  --tblout     %nhmmscant.tbl%  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  nhmmscant/--domtblout   @src/nhmmscant@  --domtblout  %nhmmscant.dtbl%  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  nhmmscant/--acc         @src/nhmmscant@  --acc                      !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  nhmmscant/--noali       @src/nhmmscant@  --noali                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  nhmmscant/--notrans     @src/nhmmscant@  --notrans                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  nhmmscant/--vertcodon   @src/nhmmscant@  --vertcodon                !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  nhmmscant/--notextw     @src/nhmmscant@  --notextw                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  nhmmscant/--textw       @src/nhmmscant@  --textw 256                !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  nhmmscant/-E            @src/nhmmscant@  -E 0.01                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%

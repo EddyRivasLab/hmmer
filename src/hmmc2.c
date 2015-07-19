@@ -97,6 +97,7 @@ static ESL_OPTIONS searchOpts[] = {
   { "--informat", eslARG_STRING,  FALSE, NULL, NULL, NULL,  NULL, "--seqdb",  "specify that input file is in format <s>",      15 },
   { "--watson",   eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, "--seqdb",  "only translate top strand",                     15 },
   { "--crick",    eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, "--seqdb",  "only translate bottom strand",                  15 },
+  { "--vertcodon", eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL,  NULL,  "show the DNA vertically in domain alignment",    15 }, /*for nhmmscant */
 
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
