@@ -73,7 +73,7 @@ p7_tophits_Grow(P7_TOPHITS *h)
 {
   void   *p;
   P7_HIT *ori    = h->unsrt;
-  int     Nalloc = h->Nalloc * 2;    /* grow by doubling */
+  uint64_t Nalloc = h->Nalloc * 2;    /* grow by doubling */
   int     i;
   int     status;
 
@@ -405,7 +405,7 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
   P7_HIT  *ori1    = h1->unsrt;    /* original base of h1's data */
   P7_HIT  *new2;
   int      i,j,k;
-  int      Nalloc = h1->Nalloc + h2->Nalloc;
+  uint64_t Nalloc = h1->Nalloc + h2->Nalloc;
   int      status;
 
   /* Make sure the two lists are sorted */
@@ -1720,8 +1720,7 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
   int h,d,nd;
 
   if (show_header)
-    {
-//#if 0
+    {   /* we assume that if there is a hit and it has ntseq set then all the hits will have ntseq set */
       if (th->N > 0 && th->hit[0]->ndom > 0 && th->hit[0]->dcl[0].ad->ntseq != NULL)
 	  {
          if (fprintf(ofp, "#%*s %22s %40s %11s %19s %19s %19s\n", tnamew+qnamew-1+15+taccw+qaccw, "",                                   "--- full sequence ---",        "-------------- this domain -------------",                   "hmm coord",                    "ali coord",                "env coord",            "orf coord") < 0)
@@ -1734,7 +1733,6 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
            ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-domain hit list: write failed");
 	  }
       else
-//#endif		 
       {
          if (fprintf(ofp, "#%*s %22s %40s %11s %11s %11s\n", tnamew+qnamew-1+15+taccw+qaccw, "",                                   "--- full sequence ---",        "-------------- this domain -------------",                "hmm coord",      "ali coord",     "env coord") < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-domain hit list: write failed");

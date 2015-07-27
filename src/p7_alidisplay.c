@@ -184,12 +184,20 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
       x = sq->dsq[i];
       s = tr->st[z];
       if (ntsq != NULL)    { 
+  	     /*
+           if there is a nucleotide sequence then we want to record the location 
+	       of the hit in that sequence and not the location of the hit in the ORF 
+		   provided by esl_gencode_ProcessOrf (esl_gencode.c) used in p7_alidisplay_Create
+		   in p7_alidisplay.c. 
+		   sq->start is the start location of the ORF in the nucleotide sequence and 
+	       ad->sqfrom is the start of the hit in the ORF in amino acid locations
+         */
 	     /* digitized sequence [1..n], or NULL if text */
 		 /* char seq index [0..n-1] so nucleotide text seq index */
          /* is 3*(i-1)		 */
-         n1 = ntsq->seq[3*(i-1)];
-         n2 = ntsq->seq[3*(i-1)+1];
-         n3 = ntsq->seq[3*(i-1)+2];
+         n1 = ntsq->seq[3*(i-1) + sq->start-1];
+         n2 = ntsq->seq[3*(i-1)+1 + sq->start-1];
+         n3 = ntsq->seq[3*(i-1)+2 + sq->start-1];
 	  }
       switch (s) {
       case p7T_M:
@@ -658,20 +666,11 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
   int   k;
 
   int   npos;
-  int   i,j, j1, j2;
+  int   i,j;
   int   dnaaliwidth;
   int   show_accessions;
   int   show_translated_sequence;
   int   show_vertical_codon;
-  int   sq_from;
-  int   sq_to;
-  
-  /* in the case of nhmmscant sqfrom should be the nucleotide sequence start
-   * position; convert this to the amino acid position because we are
-   * using amino acid positions to adjust format below
-   */
-  sq_from = (ad->sqfrom+2)/3;
-  sq_to = (ad->sqto)/3;
   
   show_accessions = pli->show_accessions;
   show_translated_sequence = pli->show_translated_sequence;
@@ -699,7 +698,7 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
   buf[aliwidth] = 0;
 
   /* Break the alignment into multiple blocks of width aliwidth for printing */
-  i1 = sq_from;
+  i1 = ad->sqfrom;
   k1 = ad->hmmfrom;
   for (pos = 0; pos < ad->N; pos += aliwidth)
     {
@@ -712,8 +711,8 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
       }
 
       k2 = k1+nk-1;
-      if (ad->sqfrom < ad->sqto) i2 = i1+ni-1;
-      else                       i2 = i1-ni+1; // revcomp hit for DNA
+      if (ad->sqfrom < ad->sqto) i2 = i1+(ni-1)*3;
+      else                       i2 = i1-(ni+1)*3; // revcomp hit for DNA
 
 	  if (ad->csline != NULL) 
 	  {
@@ -779,7 +778,7 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
 		   if (fprintf(fp, "  %*s", namewidth, show_seqname)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
 		   if (ni > 0) 
 		   {
-			 if (fprintf(fp, " %*ld ", coordwidth, i1)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+			 if (fprintf(fp, " %*ld ", coordwidth, (i1+2)/3)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
 		   }
 		   else
 		   {		  
@@ -796,7 +795,7 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
 		  
 		   if (ni > 0)
 		   {		  
-			 if (fprintf(fp, " %-*ld\n", coordwidth, i2)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+			 if (fprintf(fp, " %-*ld\n", coordwidth, (i2+2)/3)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
 		   }
 		   else
 		   {		  
@@ -804,12 +803,10 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
 		   }
 		}
 	  
-      j1 = i1*3 - 2;
-      j2 = i2*3;	
       if (fprintf(fp, "  %*s", namewidth, show_seqname)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
       if (ni > 0) 
 	   {
- 	      if (fprintf(fp, " %*d ", coordwidth, j1)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+ 	      if (fprintf(fp, " %*d ", coordwidth, i1)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
 	   }
 	   else
 	   {		  
@@ -854,7 +851,7 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
 		
       if (ni > 0)
         {		  
- 	        if (fprintf(fp, " %-*d\n", coordwidth, j2)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+ 	        if (fprintf(fp, " %-*d\n", coordwidth, i2+2)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
         }
       else
         {		  
@@ -876,8 +873,8 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
      /* print DNA sequence */
 
       k1 += nk;
-      if   (ad->sqfrom < ad->sqto)  i1 += ni;
-      else                          i1 -= ni;  // revcomp hit for DNA
+      if   (ad->sqfrom < ad->sqto)  i1 += ni*3;
+      else                          i1 -= ni*3;  // revcomp hit for DNA
     }
   fflush(fp);
   free(buf);
