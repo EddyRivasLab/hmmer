@@ -68,6 +68,8 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   int            sq_namelen,  sq_acclen,  sq_desclen;
   int            status;
   char           n1,n2,n3;
+  int            j;
+  ESL_SQ         *ntorfseqtxt = NULL;
   
   /* First figure out which piece of the trace (from first match to last match) 
    * we're going to represent, and how big it is.
@@ -175,7 +177,29 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
     ad->ppline[z-z1] = '\0';
   }
 
-
+  /*
+     If this is a nhmmscant scan; i.e. scan using a DNA
+	 query, ave the ORF in a buffer so that if
+	 the hit is in a reverse compliment of the query, i.e.
+	 the other DNA strand, we can take the reverse complement
+	 of the nucleotide DNA to print on the alignment display
+   */  
+  if (ntsq != NULL)    { 
+     ntorfseqtxt = esl_sq_Create();
+     if (sq->start < sq->end) {				
+        for(j= sq->start; j <= sq->end; j++) {
+           esl_sq_CAddResidue(ntorfseqtxt, ntsq->seq[j-1]);
+        }
+	 }
+	 else {
+        for(j= sq->end; j <= sq->start; j++) {
+           esl_sq_CAddResidue(ntorfseqtxt, ntsq->seq[j-1]);
+        }		 
+        esl_sq_ReverseComplement(ntorfseqtxt);  
+	 }
+	 esl_sq_CAddResidue(ntorfseqtxt, 0);
+  }
+  
   /* mandatory three alignment display lines: model, mline, aseq */
   for (z = z1; z <= z2; z++) 
     {
@@ -185,20 +209,38 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
       s = tr->st[z];
       if (ntsq != NULL)    { 
   	     /*
-           if there is a nucleotide sequence then we want to record the location 
-	       of the hit in that sequence and not the location of the hit in the ORF 
-		   provided by esl_gencode_ProcessOrf (esl_gencode.c) used in p7_alidisplay_Create
-		   in p7_alidisplay.c. 
-		   sq->start is the start location of the ORF in the nucleotide sequence and 
-	       ad->sqfrom is the start of the hit in the ORF in amino acid locations
-         */
-	     /* digitized sequence [1..n], or NULL if text */
-		 /* char seq index [0..n-1] so nucleotide text seq index */
-         /* is 3*(i-1)		 */
-         n1 = ntsq->seq[3*(i-1) + sq->start-1];
-         n2 = ntsq->seq[3*(i-1)+1 + sq->start-1];
-         n3 = ntsq->seq[3*(i-1)+2 + sq->start-1];
-	  }
+          * if there is a nucleotide sequence then we want to record the location 
+	      * of the hit in that sequence and not the location of the hit in the ORF 
+		  * provided by esl_gencode_ProcessOrf (esl_gencode.c) used in p7_alidisplay_Create
+		  * in p7_alidisplay.c.
+          * The ORF has already been saved in ntorfseqtxt and converted into
+          * a reverse complement if the hit was found in the reverse complement of the
+          * query sequence.		  
+		  * sq->start is the start location of the ORF in the nucleotide sequence and 
+	      * ad->sqfrom is the start of the hit in the ORF in amino acid locations
+          *           
+		      tr->i[z1]=sqfrom=3   tr->i[z2]=sqto=8
+					   |------hit-----|  	       
+		      E  Y  H  A  G  f  G  H  F  H  W  H 
+             GAGTACCACGCGGGCTTTGGCCACTTTCACTGGCAT
+	            |------------ORF----------|	 
+           sq->start=4 		            sq->end=30 
+		  *
+		  *
+		  *
+	      * digitized sequence [1..n], or NULL if text 
+		  * char seq index [0..n-1] so nucleotide text seq index 
+          * is 3*(i-1)		 
+		  */
+         n1 = n2 = n3 = 78; /* use a capital 'N' for a don't know character instead of a sentinel byte used in ad->aseq */
+         if(i > 0)
+		 {
+            n1 = ntorfseqtxt->seq[ 3*(i-1)];
+            n2 = ntorfseqtxt->seq[ 3*(i-1)+1];
+            n3 = ntorfseqtxt->seq[ 3*(i-1)+2];
+         }
+        }
+
       switch (s) {
       case p7T_M:
         ad->model[z-z1] = om->consensus[k];
@@ -245,6 +287,9 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
      ad->ntseq  [3*(z2-z1+1)] = '\0';
   ad->N = z2-z1+1;
 
+  esl_sq_Destroy(ntorfseqtxt);  
+
+	
   return ad;
 
  ERROR:
@@ -711,8 +756,8 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
       }
 
       k2 = k1+nk-1;
-      if (ad->sqfrom < ad->sqto) i2 = i1+(ni-1)*3;
-      else                       i2 = i1-(ni+1)*3; // revcomp hit for DNA
+      if (ad->sqfrom < ad->sqto) i2 = i1+(ni-1)*3+2;
+      else                       i2 = i1-(ni*3)+1; // revcomp hit for DNA
 
 	  if (ad->csline != NULL) 
 	  {
@@ -795,7 +840,7 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
 		  
 		   if (ni > 0)
 		   {		  
-			 if (fprintf(fp, " %-*ld\n", coordwidth, (i2+2)/3)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+			 if (fprintf(fp, " %-*ld\n", coordwidth, i2/3)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
 		   }
 		   else
 		   {		  
@@ -812,8 +857,8 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
 	   {		  
 		 if (fprintf(fp, " %*s ", coordwidth, "-") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
        }
-	  npos = pos * 3;
 
+	  npos = pos * 3;
       if(show_vertical_codon)
 	  {
          /*
@@ -851,7 +896,7 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
 		
       if (ni > 0)
         {		  
- 	        if (fprintf(fp, " %-*d\n", coordwidth, i2+2)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+ 	        if (fprintf(fp, " %-*d\n", coordwidth, i2)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
         }
       else
         {		  

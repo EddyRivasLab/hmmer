@@ -682,7 +682,8 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   int              Ld;               /* # of residues in envelopes */
   int              d;
   int              status;
-   
+  int              tmpenv, tmpsq;
+  
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
   p7_omx_GrowTo(pli->oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
@@ -913,27 +914,27 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
       {
          for (d = 0; d < hit->ndom; d++)
          {
-
-/*	 
-			printf("hit->dcl[d].ienv = %d\n", hit->dcl[d].ienv);
-			printf("hit->dcl[d].jenv = %d\n", hit->dcl[d].jenv);
-			printf("hit->dcl[d].ad->sqfrom = %d\n", hit->dcl[d].ad->sqfrom);
-			printf("hit->dcl[d].ad->sqto = %d\n", hit->dcl[d].ad->sqto);
-			printf("sq->start = %d\n", sq->start);
-			printf("sq->end = %d\n", sq->end);
-*/			
-            hit->dcl[d].iorf       = sq->start;
-            hit->dcl[d].jorf       = sq->end;
-            hit->dcl[d].ienv       = (hit->dcl[d].ienv*3-2) + sq->start-1;
-            hit->dcl[d].jenv       = (hit->dcl[d].jenv*3) + sq->start-1;			
-		    hit->dcl[d].ad->sqfrom = (hit->dcl[d].ad->sqfrom*3-2) + sq->start-1;
-		    hit->dcl[d].ad->sqto   = (hit->dcl[d].ad->sqto*3) + sq->start-1;
-
-/*			
-			printf("hit->dcl[d].iorf = %ld\n", hit->dcl[d].iorf);
-			printf("hit->dcl[d].jorf = %ld\n", hit->dcl[d].jorf);
-*/
-			}		
+            if (sq->start < sq->end)
+			{				
+			   hit->dcl[d].iorf       = sq->start;
+               hit->dcl[d].jorf       = sq->end;
+               hit->dcl[d].ienv       = (hit->dcl[d].ienv*3-2) + sq->start-1;
+               hit->dcl[d].jenv       = (hit->dcl[d].jenv*3) + sq->start-1;			
+		       hit->dcl[d].ad->sqfrom = (hit->dcl[d].ad->sqfrom*3-2) + sq->start-1;
+		       hit->dcl[d].ad->sqto   = (hit->dcl[d].ad->sqto*3) + sq->start-1;
+            }
+			else
+			{
+               hit->dcl[d].iorf       = sq->start;
+               hit->dcl[d].jorf       = sq->end;
+			   tmpenv = hit->dcl[d].ienv;
+               hit->dcl[d].ienv       = (hit->dcl[d].jenv*3) + sq->end-1;
+               hit->dcl[d].jenv       = (tmpenv*3-2) + sq->end-1;			
+			   tmpsq = hit->dcl[d].ad->sqfrom;
+		       hit->dcl[d].ad->sqfrom = (hit->dcl[d].ad->sqto*3) + sq->end-1;
+		       hit->dcl[d].ad->sqto   = (tmpsq*3-2) + sq->end-1;				
+			}
+         }		
 	  }
 	  
 	  

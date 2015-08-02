@@ -546,6 +546,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
      tophits_accumulator  = p7_tophits_Create(); 
      pipelinehits_accumulator = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS);
 
+     if (fprintf(ofp, "Query:       %s  [L=%ld]\n", qsqDNA->name, (long) qsqDNA->n) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+     if (qsqDNA->acc[0]  != 0 && fprintf(ofp, "Accession:   %s\n", qsqDNA->acc)     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+     if (qsqDNA->desc[0] != 0 && fprintf(ofp, "Description: %s\n", qsqDNA->desc)    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+
      /*process each 6 frame translated sequence */
      for (k = 0; k < wrk->orf_block->count; ++k)
 	   {
@@ -571,11 +575,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	       if (status != eslOK) p7_Fail("Unexpected error %d creating lock\n", status);
 	    }
 #endif
-
-        if (fprintf(ofp, "\nTranslation number:         %d\n", k+1) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-        if (fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-        if (qsq->acc[0]  != 0 && fprintf(ofp, "Accession:   %s\n", qsq->acc)     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-        if (qsq->desc[0] != 0 && fprintf(ofp, "Description: %s\n", qsq->desc)    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
         for (i = 0; i < infocnt; ++i)
 	    {
@@ -608,7 +607,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	       case eslEOF: 	  /* do nothing */                                                 	  break;
 	       default: 	   p7_Fail("Unexpected error in reading HMMs from %s",   cfg->hmmfile); 
 	    }
-
+	
         /* merge the results of the search results */
         for (i = 0; i < infocnt; ++i)
 	    {
