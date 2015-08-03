@@ -185,7 +185,10 @@ worker_process(ESL_GETOPTS *go)
          free_QueueData(query);
 	  }
 		 break;
-      case HMMD_CMD_SEARCH:    process_SearchCmd(cmd, &env, query);                break;
+      case HMMD_CMD_SEARCH:
+		 query = process_QueryCmd(cmd, &env);
+	     process_SearchCmd(cmd, &env, query);
+         break;
       case HMMD_CMD_SHUTDOWN:  process_Shutdown (cmd, &env);  shutdown = 1; break;
       default: p7_syslog(LOG_ERR,"[%s:%d] - unknown command %d (%d)\n", __FILE__, __LINE__, cmd->hdr.command, cmd->hdr.length);
       }
@@ -421,6 +424,11 @@ process_nhmmscantCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
 
   if (qsqDNATxt  != NULL) esl_sq_Destroy(qsqDNATxt);  
   
+  /* Sort and remove duplicates */
+  p7_tophits_SortBySeqidxAndAlipos(tophits_accumulator);
+  p7_tophits_RemoveDuplicates(tophits_accumulator, pipelinehits_accumulator->use_bit_cutoffs);
+  
+  
   print_timings(99, w->elapsed, pipelinehits_accumulator);
   send_results(env->fd, w, tophits_accumulator, pipelinehits_accumulator);
 
@@ -520,6 +528,8 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
 
     info[i].th    = NULL;
     info[i].pli   = NULL;
+
+	info[i].ntseq = NULL; /* for printing the DNA target sequence in the domain hits display */
 
     info[i].inx_mutex = &inx_mutex;
     info[i].inx       = &current_index;/* this is confusing trickery - to share a single variable across all threads */

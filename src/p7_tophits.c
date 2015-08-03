@@ -1380,8 +1380,8 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 				else
                 {
                    if (fprintf(ofp, " %7ld %7ld %c%c",
-                       (th->hit[h]->dcl[d].ad->sqfrom+2)/3,
-                       (th->hit[h]->dcl[d].ad->sqto)/3,
+                       th->hit[h]->dcl[d].ad->sqfrom,
+                       th->hit[h]->dcl[d].ad->sqto,
                       (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
 				      (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L*3) ? ']' : '.') < 0)
                           ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");

@@ -730,10 +730,10 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
   coordwidth = ESL_MAX(
                       ESL_MAX(integer_textwidth(ad->hmmfrom), integer_textwidth(ad->hmmto)),
                       ESL_MAX(integer_textwidth(ad->sqfrom), integer_textwidth(ad->sqto)));
-
+					  
   aliwidth   = (linewidth > 0) ? linewidth - namewidth - 2*coordwidth - 5 : ad->N;
   
-
+  
   if (aliwidth < ad->N && aliwidth < min_aliwidth) aliwidth = min_aliwidth; /* at least, regardless of some silly linewidth setting */
 
   
