@@ -408,6 +408,8 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
   uint64_t Nalloc = h1->Nalloc + h2->Nalloc;
   int      status;
 
+  if(h2->N <= 0) return eslOK;
+  
   /* Make sure the two lists are sorted */
   if ((status = p7_tophits_SortBySortkey(h1)) != eslOK) goto ERROR;
   if ((status = p7_tophits_SortBySortkey(h2)) != eslOK) goto ERROR;
@@ -1364,7 +1366,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                        (th->hit[h]->dcl[d].ad->sqfrom+2)/3,
                        (th->hit[h]->dcl[d].ad->sqto)/3,
                        (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
-                       (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L*3) ? ']' : '.') < 0)
+                       (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.') < 0)
                          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
                  }
 
@@ -1383,7 +1385,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                        th->hit[h]->dcl[d].ad->sqfrom,
                        th->hit[h]->dcl[d].ad->sqto,
                       (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
-				      (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L*3) ? ']' : '.') < 0)
+				      (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.') < 0)
                           ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
                 }
 						
@@ -1412,7 +1414,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                        th->hit[h]->dcl[d].iorf,
                        th->hit[h]->dcl[d].jorf,
 		               (th->hit[h]->dcl[d].iorf == 1) ? '[' : '.',
-                       (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L*3) ? ']' : '.') < 0)
+                       (th->hit[h]->dcl[d].jorf == th->hit[h]->dcl[d].ad->L*3) ? ']' : '.') < 0)
                           ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
                }
 		    }		
