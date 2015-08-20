@@ -46,7 +46,7 @@
  *            noncanonical symbols and degeneracies.
  *            
  *            <wrk[1..M]> gets used to collect expected usage counts
- *            $u(d,y)$. <null2[0..K-1;K..Kp-1]> gets used to hold the
+ *            $u_d(y)$. <null2[0..K-1;K..Kp-1]> gets used to hold the
  *            null2 model $W$'s log-odds score parameters.
  *            
  *            Upon successful return, <env->arr[d].null2_sc> fields
@@ -60,24 +60,31 @@
  *            domain <D>. It's hard to imagine this being of any use
  *            to the caller in production code, since it's only for
  *            the final domain. However, it's free information that
- *            might be useful to know in debugging/testing.
+ *            might be useful to know in debugging/testing. This 
+ *            workspace is handled by Easel's "bypass" idiom: usually
+ *            you will initialize <wrk=NULL> and pass <&wrk> for
+ *            the first and all successive calls, and 
+ *            it will be reused while (re)allocating as needed.
  *            
  *            This routine uses <p7_FLogsum()> calculations, so caller
  *            must have initialized it with <p7_FLogsumInit()>.
  *            
- * Args:      dsq   : digital sequence 1..L
- *            L     : length of <dsq>
- *            gm    : search profile
- *            apd   : ASC posterior decoding matrix
- *            env   : envelope data for D domains, including i0/k0, ia..ib, and env_sc.
- *            wrk   : working space for at least gm->M+1 floats
- *            null2 : working space for at least gm->abc->Kp floats
+ * Args:      dsq      : digital sequence 1..L
+ *            L        : length of <dsq>
+ *            gm       : search profile
+ *            apd      : ASC posterior decoding matrix
+ *            env      : envelope data for D domains, including i0/k0, ia..ib, and env_sc.
+ *            wrk_byp  : ptr to working space for at least gm->M+1 floats; or to NULL and it'll be allocated (easel's "bypass" idiom)
+ *            null2    : working space for at least gm->abc->Kp floats
  *
  * Returns:   <eslOK> on success and <env->arr[d].null2_sc> is set for each domain <d>.
+ *
+ * Throws:    <eslEMEM> on (re)allocation failure.
  */
 int
-p7_sparse_Null2(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMX *apd, P7_ENVELOPES *env, float *wrk, float *null2)
+p7_sparse_Null2(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMX *apd, P7_ENVELOPES *env, float **wrk_byp, float *null2)
 {
+  float               *wrk = NULL;       // M+1 floats of working space
   const P7_SPARSEMASK *sm  = apd->sm;    // sparse mask for <apd>
   const float         *ppp = apd->dp;    // <ppp> will step through sparse cells in <apd>
   int                  M   = gm->M;    
@@ -89,11 +96,17 @@ p7_sparse_Null2(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSE
   float                base;             // We cap domain null2 score r_d to a max of s_d - base; above this, the domain call basically shouldn't be made at all
   int                  a,d,g,i,k,z;      // Indices: residues in alphabet, domains, segments, position in dsq, match states in model, sparse cells on row
   float                rd;		 // domain null2 score: this is what we're calculating for each domain <d>
+  int                  status;
   
   /* Contract checks */
   ESL_DASSERT1(( apd->type == p7S_ASC_DECODE ));
   ESL_DASSERT1(( sm->L == L && env->L == L   ));
   ESL_DASSERT1(( sm->M == M && env->M == M   ));
+
+  /* bypass idiom for the workspace */
+  if      (esl_byp_IsInternal(wrk_byp)) { ESL_ALLOC  (wrk,      (gm->M + 1) * sizeof(float));                 }
+  else if (esl_byp_IsReturned(wrk_byp)) { ESL_ALLOC  (*wrk_byp, (gm->M + 1) * sizeof(float)); wrk = *wrk_byp; }
+  else if (esl_byp_IsProvided(wrk_byp)) { ESL_REALLOC(*wrk_byp, (gm->M + 1) * sizeof(float)); wrk = *wrk_byp; }
 
   /* One time initialization of noncanonical residue scores that we shouldn't be using for <dsq> anyway: */
   null2[gm->abc->K]    = 0.0;    /* gap character    */
@@ -103,7 +116,6 @@ p7_sparse_Null2(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSE
   /* We have a cap = s_d - base calculation later, capping the domain null2 correction r_d to a maximum. */
   base = ( L ? (float) L * gm->xsc[p7P_C][p7P_LOOP] : 0.0f) + gm->xsc[p7P_C][p7P_MOVE];
   //        ^^^  must avoid 0 * -inf = NaN  ^^^
-
 
   /* here we go... a pass thru all of <apd>'s sparse cells, stopping
    * to count expected usage counts of M*k states in ia..ib cells for
@@ -198,7 +210,7 @@ p7_sparse_Null2(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSE
 	    ppp += p7S_NSCELLS;
 
       /* Ta-da! Now the heavyweight sparse AEC matrix traversal is complete.
-       * And now wrk[] contains expected usage counts per emitting state: u(d,y) in our notation.
+       * And now wrk[] contains expected usage counts per emitting state: u_d(y) in our notation.
        * ... but not including I/N/C/J emissions, which we'll deduce by difference from domain length Ld.
        */
 
@@ -255,7 +267,12 @@ p7_sparse_Null2(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSE
       env->arr[d].null2_sc = ESL_MIN( rd, env->arr[d].env_sc - base );
     } // end loop over domains <d>
 
+  if (esl_byp_IsInternal(wrk_byp)) { free(wrk); }
   return eslOK;
+
+ ERROR:
+  if (esl_byp_IsInternal(wrk_byp) && wrk) { free(wrk); }
+  return status;
 }
 
 
@@ -483,7 +500,7 @@ main(int argc, char **argv)
     p7_sparsemask_AddAll(sm);
   else {
     p7_ForwardFilter (sq->dsq, sq->n, om, cx, /*fsc=*/NULL);
-    p7_BackwardFilter(sq->dsq, sq->n, om, cx, sm, p7_SPARSEMASK_THRESH_DEFAULT);
+    p7_BackwardFilter(sq->dsq, sq->n, om, cx, sm, p7_SPARSIFY_THRESH);
   }
 
   /* Allocate DP matrices, traceback */
@@ -523,7 +540,7 @@ main(int argc, char **argv)
    */
   ESL_ALLOC(wrk2,  (gm->M+1) * sizeof(float));
   ESL_ALLOC(null2, (gm->abc->Kp) * sizeof(float));
-  p7_sparse_Null2(sq->dsq, sq->n, gm, asd, env, wrk2, null2);
+  p7_sparse_Null2(sq->dsq, sq->n, gm, asd, env, &wrk2, null2);
 
   p7_envelopes_Dump(stdout, env);
 

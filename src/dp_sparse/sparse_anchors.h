@@ -7,6 +7,7 @@
 #include "esl_random.h"
 
 #include "base/p7_anchors.h"
+#include "base/p7_anchorhash.h"
 #include "base/p7_profile.h"
 #include "base/p7_trace.h"
 

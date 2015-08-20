@@ -1338,7 +1338,7 @@ main(int argc, char **argv)
   P7_REFMX       *afd     = NULL;
   P7_TRACE       *vtr     = NULL;
   P7_FILTERMX    *fx      = p7_filtermx_Create(100);
-  P7_CHECKPTMX   *cx      = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_RAMLIMIT));
+  P7_CHECKPTMX   *cx      = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT));
   P7_SPARSEMASK  *sm      = p7_sparsemask_Create(100, 100);
   float          *wrk     = NULL;
   P7_ANCHORHASH  *ah      = p7_anchorhash_Create();

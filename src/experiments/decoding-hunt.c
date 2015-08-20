@@ -51,7 +51,7 @@ main(int argc, char **argv)
   P7_PROFILE     *lgm        = NULL;           /* profile in local-only mode, emulating H3        */
   P7_OPROFILE    *om         = NULL;
   P7_FILTERMX    *fx         = p7_filtermx_Create(100);
-  P7_CHECKPTMX   *cx         = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_RAMLIMIT));
+  P7_CHECKPTMX   *cx         = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT));
   P7_SPARSEMASK  *sm         = p7_sparsemask_Create(100, 100);
   P7_REFMX       *vit        = p7_refmx_Create(100, 100);
   P7_REFMX       *fwd        = p7_refmx_Create(100, 100);
@@ -375,7 +375,7 @@ acceleration_filter(ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg,
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
   if (P > F3) return eslFAIL;
  
-  p7_BackwardFilter(dsq, L, om, cx, sm, p7_SPARSEMASK_THRESH_DEFAULT);
+  p7_BackwardFilter(dsq, L, om, cx, sm, p7_SPARSIFY_THRESH);
 
   return eslOK;
 }

@@ -844,7 +844,7 @@ main(int argc, char **argv)
     p7_sparsemask_AddAll(sm);
   else {
     p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL);
-    p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSEMASK_THRESH_DEFAULT);
+    p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH);
   }
   
   /* Sparse DP calculations */

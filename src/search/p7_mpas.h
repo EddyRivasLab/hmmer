@@ -48,6 +48,9 @@ typedef struct {
 } P7_MPAS_STATS;
 
 
+extern P7_MPAS_PARAMS *p7_mpas_params_Create(void);
+extern void            p7_mpas_params_Destroy(P7_MPAS_PARAMS *params);
+
 extern int p7_mpas_stats_Init(P7_MPAS_STATS *stats);
 extern int p7_mpas_stats_Dump(FILE *ofp, P7_MPAS_STATS *stats);
 extern int p7_mpas_stats_CompareAS2Trace(P7_MPAS_STATS *stats, const P7_ANCHORS *anch, const P7_TRACE *tr);

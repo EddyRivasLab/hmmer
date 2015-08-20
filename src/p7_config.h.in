@@ -14,57 +14,35 @@
 #ifndef P7_CONFIGH_INCLUDED
 #define P7_CONFIGH_INCLUDED
 
-/*****************************************************************
- * 1. Compile-time constants that control HMMER's computational 
- *    behavior (memory and processor use), and output formatting.
- *    It can be edited and configured manually before compilation.
- *****************************************************************/
-
-/* p7_RAMLIMIT controls the default size of the checkpointed
- * decoding dynamic programming matrix in the H3 pipeline:
- * the main memory-use-determining step, other than output itself.
- * Default devotes 128 MB/thread to the checkpoint matrix.
- * (It may redline above this temporarily, on particularly large 
- * comparisons.)
- */
-#ifndef p7_RAMLIMIT
-#define p7_RAMLIMIT   128
-#endif
-
-/* p7_ALILENGTH controls length of displayed alignment lines.
- */
-#ifndef p7_ALILENGTH
-#define p7_ALILENGTH   50
-#endif
 
 /*****************************************************************
- * 2. Compile-time constants that control empirically tuned HMMER
- *    default parameters. You can edit it, but you ought not to, 
- *    unless you're trying to improve on our empirical data.
+ * 1. Default parameters.
  *****************************************************************/
 
-/* Relative entropy target defaults:
- * For proteins, hmmbuild's effective sequence number calculation
- * aims to achieve a certain relative entropy per match emission.
- * (= average score per match emission).
- * These are empirically tuned constants,
- */
-#define p7_ETARGET_AMINO  0.59 /* bits,  from the work of Steve Johnson. */
-#define p7_ETARGET_DNA    0.45 /* bits,  from the work of Travis Wheeler. */
-#define p7_ETARGET_OTHER  1.0  /* bits */ /* if you define your own alphabet, set this */
+/* Model parameterization, relative entropy target defaults, empirically tuned, in bits: */
+#define p7_ETARGET_AMINO         0.59  //  .. for protein; from work of Steve Johnson. 
+#define p7_ETARGET_DNA           0.45  //  .. for nucleic; from work of Travis Wheeler. 
+#define p7_ETARGET_OTHER          1.0  //  .. for other (custom) alphabets.
 
-/* Posterior probability thresholds for determining which i,k cells
- * (from posterior decoding of vectorized local-only alignment in
- * p7_ForwardFilter() and p7_BackwardFilter()) are included in 
- * sparse DP reprocessing using the full local/glocal model.
- */
-#define p7_SPARSEMASK_THRESH_DEFAULT 0.01 /* per-cell posterior prob inclusion threshold */
+/* Sparsification in checkpointed/vectorized local decoding: fwdfilter.c */
+#define p7_SPARSIFY_RAMLIMIT      128  // Memory "redline" cap on the O(M sqrt L) checkpoint mx
+#define p7_SPARSIFY_THRESH       0.01  // per-cell posterior probability inclusion threshold 
 
-/* Posterior probability threshold controlling envelope endpoint determination */
-#define p7_MASSTRACE_THRESH_DEFAULT  0.1
+/* MPAS algorithm: {reference,sparse}_anchors.c */
+#define p7_MPAS_LOSS_THRESHOLD  0.001  // Controls main convergence criterion
+#define p7_MPAS_MAX_ITERATIONS   1000  // Limits to maximum # iterations when unconverged
+#define p7_MPAS_NMAX_SAMPLING   FALSE  // TRUE turns off conv. criteria, always samples to max #
+#define p7_MPAS_BE_VERBOSE      FALSE  // TRUE turns on internal printf info dumping
+
+/* Comparison engine */
+#define p7_ENGINE_FIXED_SEED       42  // if 0, RNG is seeded randomly
+#define p7_ENGINE_REPRODUCIBLE   TRUE  // TRUE reseeds RNG for every comparison, making results order-independent
+#define p7_ENGINE_DO_BIASFILTER  TRUE  // Use ad hoc "bias filter" after MSV/SSV step
 
 #define p7_SEQDBENV          "BLASTDB"
 #define p7_HMMDBENV          "PFAMDB"
+
+#define p7_ALILENGTH   50   // Length of alignment output lines, in characters
 
 /* Controls block_size when reading seq data in nhmmer */
 #define p7_NHMMER_MAX_RESIDUE_COUNT (1024 * 256) /* 0.25 MB */

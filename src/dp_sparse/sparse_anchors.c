@@ -1086,7 +1086,7 @@ main(int argc, char **argv)
   P7_PROFILE     *gm      = NULL;           /* profile in H4's standard dual-mode local/glocal */
   P7_OPROFILE    *om      = NULL;
   P7_FILTERMX    *fx      = p7_filtermx_Create(100);
-  P7_CHECKPTMX   *cx      = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_RAMLIMIT));
+  P7_CHECKPTMX   *cx      = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT));
   P7_SPARSEMASK  *sm      = p7_sparsemask_Create(100, 100);
   P7_ANCHORS     *anch    = p7_anchors_Create();
   P7_ANCHORS     *vanch   = p7_anchors_Create();
@@ -1309,7 +1309,7 @@ main(int argc, char **argv)
     p7_sparsemask_AddAll(sm);
   else {
     p7_ForwardFilter (sq->dsq, sq->n, om, cx, /*fsc=*/NULL);
-    p7_BackwardFilter(sq->dsq, sq->n, om, cx, sm, p7_SPARSEMASK_THRESH_DEFAULT);
+    p7_BackwardFilter(sq->dsq, sq->n, om, cx, sm, p7_SPARSIFY_THRESH);
   }
 
   /* Allocate DP matrices, tracebacks */

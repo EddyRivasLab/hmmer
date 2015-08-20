@@ -321,7 +321,7 @@ main(int argc, char **argv)
     p7_sparsemask_AddAll(sm);
   else {
     p7_ForwardFilter (sq->dsq, sq->n, om, cx, /*fsc=*/NULL);
-    p7_BackwardFilter(sq->dsq, sq->n, om, cx, sm, p7_SPARSEMASK_THRESH_DEFAULT);
+    p7_BackwardFilter(sq->dsq, sq->n, om, cx, sm, p7_SPARSIFY_THRESH);
   }
 
   /* Allocate DP matrices, traceback */

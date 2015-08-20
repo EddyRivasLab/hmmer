@@ -69,7 +69,7 @@
  *            this case, this is a high-scoring hit.
  *            <ox> may have been resized.
  *
- * Throws:    <eslEINVAL> if <ox> allocation is too small.
+ * Throws:    <eslEMEML> if <ox> reallocation fails.
  */
 int
 p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)

@@ -278,7 +278,7 @@ p7_tracealign_ComputeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
   p7_oprofile_Convert(gm, om);	                     /*    ... *multihit* local      */
   p7_profile_ConfigCustom(gm, hmm, bg, 0, 0.0, 0.5); /*    ... *unihit* glocal/local */
 
-  cx  = p7_checkptmx_Create (hmm->M, sq[offset]->n, ESL_MBYTES(p7_RAMLIMIT));
+  cx  = p7_checkptmx_Create (hmm->M, sq[offset]->n, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT));
   sm  = p7_sparsemask_Create(hmm->M, sq[offset]->n);
   sx1 = p7_sparsemx_Create  (sm);
   sx2 = p7_sparsemx_Create  (sm);
@@ -293,7 +293,7 @@ p7_tracealign_ComputeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
 
       /* Sparse mask is constructed by local multihit alignment to <om> in the filters */
       p7_ForwardFilter (sq[idx]->dsq, sq[idx]->n, om, cx, &fwdsc);
-      p7_BackwardFilter(sq[idx]->dsq, sq[idx]->n, om, cx, sm, p7_SPARSEMASK_THRESH_DEFAULT);
+      p7_BackwardFilter(sq[idx]->dsq, sq[idx]->n, om, cx, sm, p7_SPARSIFY_THRESH);
 
       /* Alignment itself is constructed by unihit dual-mode local/glocal to <gm> */
       p7_SparseViterbi (sq[idx]->dsq, sq[idx]->n, gm, sm, sx1, tr[idx], &vsc);

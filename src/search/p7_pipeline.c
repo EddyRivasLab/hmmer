@@ -163,15 +163,15 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, 
   pli->n2sc = NULL;
   pli->wrk  = NULL;
   
-  if ( (pli->fx  = p7_filtermx_Create  (M_hint))                                  == NULL) goto ERROR;
-  if ( (pli->cx  = p7_checkptmx_Create (M_hint, L_hint, ESL_MBYTES(p7_RAMLIMIT))) == NULL) goto ERROR; /* p7_RAMLIMIT=256MB, in p7_config.h.in */
-  if ( (pli->sm  = p7_sparsemask_Create(M_hint, L_hint))                          == NULL) goto ERROR;
-  if ( (pli->sxf = p7_sparsemx_Create  (pli->sm))                                 == NULL) goto ERROR;
-  if ( (pli->sxb = p7_sparsemx_Create  (pli->sm))                                 == NULL) goto ERROR;
-  if ( (pli->sxd = p7_sparsemx_Create  (pli->sm))                                 == NULL) goto ERROR;
-  if ( (pli->sxx = p7_sparsemx_Create  (pli->sm))                                 == NULL) goto ERROR;
-  if ( (pli->tr  = p7_trace_CreateWithPP())                                       == NULL) goto ERROR;
-  if ( (pli->mt  = p7_masstrace_Create (M_hint, L_hint))                          == NULL) goto ERROR;
+  if ( (pli->fx  = p7_filtermx_Create  (M_hint))                                           == NULL) goto ERROR;
+  if ( (pli->cx  = p7_checkptmx_Create (M_hint, L_hint, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT))) == NULL) goto ERROR; /* p7_RAMLIMIT=256MB, in p7_config.h.in */
+  if ( (pli->sm  = p7_sparsemask_Create(M_hint, L_hint))                                   == NULL) goto ERROR;
+  if ( (pli->sxf = p7_sparsemx_Create  (pli->sm))                                          == NULL) goto ERROR;
+  if ( (pli->sxb = p7_sparsemx_Create  (pli->sm))                                          == NULL) goto ERROR;
+  if ( (pli->sxd = p7_sparsemx_Create  (pli->sm))                                          == NULL) goto ERROR;
+  if ( (pli->sxx = p7_sparsemx_Create  (pli->sm))                                          == NULL) goto ERROR;
+  if ( (pli->tr  = p7_trace_CreateWithPP())                                                == NULL) goto ERROR;
+  if ( (pli->mt  = p7_masstrace_Create (M_hint, L_hint))                                   == NULL) goto ERROR;
   ESL_ALLOC(pli->n2sc, sizeof(float) * (L_hint+1));
   ESL_ALLOC(pli->wrk,  sizeof(float) * (M_hint+1));
   esl_vec_FSet(pli->n2sc, L_hint+1, 0.0f);
@@ -843,7 +843,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
   /* ok, it's for real; passes vectorized local scoring filters.
    * Finish with Backwards and Decoding, defining a sparse mask in <sm>.
    */
-  p7_BackwardFilter(sq->dsq, sq->n, om, pli->cx, pli->sm, p7_SPARSEMASK_THRESH_DEFAULT);
+  p7_BackwardFilter(sq->dsq, sq->n, om, pli->cx, pli->sm, p7_SPARSIFY_THRESH);
 
   /* FIXME 3.1
    * hmmscan needs <gm>; read from the hmm file (.h3m) on disk
@@ -875,7 +875,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
   for (d = 0; d < pli->tr->ndom; d++)
     {
       /* Determine envelope coords by mass trace. */
-      p7_SparseMasstrace(sq->dsq, sq->n, gm, pli->sxf, pli->sxb, pli->tr, pli->tr->anch[d], p7_MASSTRACE_THRESH_DEFAULT, pli->sxx, pli->mt, 
+      p7_SparseMasstrace(sq->dsq, sq->n, gm, pli->sxf, pli->sxb, pli->tr, pli->tr->anch[d], /*p7_MASSTRACE_THRESH_DEFAULT*/0.1, pli->sxx, pli->mt, 
                          &(dcl[d].iae), &(dcl[d].ibe), &(dcl[d].kae), &(dcl[d].kbe));
       p7_sparsemx_Reuse (pli->sxx);
       p7_masstrace_Reuse(pli->mt);
@@ -1497,7 +1497,7 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
     * Finish with Backwards and Decoding, defining a sparse mask in <sm>.
     * In this case "domains" will end up being translated as independent "hits"
     */
-   p7_BackwardFilter(subseq, window_len, om, pli->cx, pli->sm, /*p7_SPARSEMASK_THRESH_DEFAULT*/0.005);
+   p7_BackwardFilter(subseq, window_len, om, pli->cx, pli->sm, /*p7_SPARSIFY_THRESH*/0.005);
 
    /* FIXME 3.1
     * hmmscan needs <gm>; read from the hmm file (.h3m) on disk
@@ -1566,7 +1566,7 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
    for (d = 0; d < pli->tr->ndom; d++)
    {
      /* Determine envelope coords by mass trace. (with the default parameters) */
-     p7_SparseMasstrace(subseq, window_len, gm, pli->sxf, pli->sxb, pli->tr, pli->tr->anch[d], p7_MASSTRACE_THRESH_DEFAULT, pli->sxx, pli->mt,
+     p7_SparseMasstrace(subseq, window_len, gm, pli->sxf, pli->sxb, pli->tr, pli->tr->anch[d], /*p7_MASSTRACE_THRESH_DEFAULT*/0.1, pli->sxx, pli->mt,
                         &(dcl[d].iae), &(dcl[d].ibe), &(dcl[d].kae), &(dcl[d].kbe));
      p7_sparsemx_Reuse (pli->sxx);
      p7_masstrace_Reuse(pli->mt);
@@ -1643,7 +1643,7 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
      for (dd = 0; dd < pli_tmp->trc->ndom; dd++) {
        dcl_tmp = p7_domain_Create(1);
 
-       p7_SparseMasstrace(subseq_tmp, env_len, pli_tmp->gm, pli_tmp->sxf, pli_tmp->sxb, pli_tmp->trc, pli_tmp->trc->anch[dd], p7_MASSTRACE_THRESH_DEFAULT, pli_tmp->sxx, pli_tmp->mt,
+       p7_SparseMasstrace(subseq_tmp, env_len, pli_tmp->gm, pli_tmp->sxf, pli_tmp->sxb, pli_tmp->trc, pli_tmp->trc->anch[dd], /*p7_MASSTRACE_THRESH_DEFAULT*/0.1, pli_tmp->sxx, pli_tmp->mt,
                              &(dcl_tmp->iae), &(dcl_tmp->ibe), &(dcl_tmp->kae), &(dcl_tmp->kbe));
        p7_sparsemx_Reuse (pli_tmp->sxx);
        p7_masstrace_Reuse(pli_tmp->mt);
@@ -2284,7 +2284,7 @@ p7_pipeline_AccelerationFilter(ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg,
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
   if (P > F3) return eslFAIL;
  
-  p7_BackwardFilter(dsq, L, om, cx, sm, p7_SPARSEMASK_THRESH_DEFAULT);
+  p7_BackwardFilter(dsq, L, om, cx, sm, p7_SPARSIFY_THRESH);
 
   return eslOK;
 }

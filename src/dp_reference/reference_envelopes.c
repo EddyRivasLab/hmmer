@@ -429,19 +429,19 @@ approxsc(P7_ENVELOPES *env, int D, const P7_REFMX *afd, const P7_PROFILE *gm)
  * no other, as if this were the only domain in the entire
  * sequence.
  *      
- * A domain is considered to be "well defined" if
+ * A domain is considered to be "distinct" if its outer envelope
+ * does not overlap the outer envelope of an adjacent domain. 
+ * Then we know that:
  *    \rho_{N|J}(oa-1) \geq 1 - 2 \epsilon; and
- *    \rho_{J|C}(ob-1) \geq 1 - 2 \epsilon 
+ *    \rho_{J|C}(ob)   \geq 1 - 2 \epsilon 
  * on its left and right sides. When these conditions are met, we can
  * calculate the envelope score by a fast approximation using
  * arithmetic on existing ASC Forward matrix values, and we are
  * guaranteed to obtain a score within $4\epsilon$ nats (default =
  * 0.02) of the true envelope score. The <p7E_ENVSC_APPROX> flag is
- * set when this has been done. Otherwise, if the domain is not well
- * defined, we recalculate the envelope score by ASC Forward on its
+ * set when this has been done. Otherwise, if the domain is not 
+ * distinct, we recalculate the envelope score by ASC Forward on its
  * oa..ob outer envelope.
- * 
- * 
  * 
  * [2] TRICKSY OFF-BY-ONE ISSUES 
  * 
@@ -520,7 +520,7 @@ approxsc(P7_ENVELOPES *env, int D, const P7_REFMX *afd, const P7_PROFILE *gm)
  * 
  * [3] PROOF OF APPROXIMATION FOR ENVELOPE SCORES
  * 
- * To prove that a domain is "well defined", so we can use a fast
+ * To prove that a domain is "distinct", so we can use a fast
  * approximation to obtain the envelope score, we want to identify
  * that the outer envelope bounds oa/ob also serve as "choke points"
  * in the N/C/J states, through which passes all but a negligible

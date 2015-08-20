@@ -498,7 +498,7 @@ select_up_i(const P7_SPARSEMASK *sm, const P7_ENVELOPES *env, int d, int i, cons
 {
   const float *dpp = *mod_dpc;
   int          z   = *mod_z;
-  int          k   = sm->k[i][z];
+ int          k   = sm->k[i][z];
   
   dpp -= (z+1) * p7S_NSCELLS;                                            // skip remainder of UP(i); we can't be the anchor cell (unlike select_up_m)
   z    = sm->n[i-1]-1; 
@@ -1125,7 +1125,7 @@ main(int argc, char **argv)
     p7_sparsemask_AddAll(sm);
   else {
     p7_ForwardFilter (sq->dsq, sq->n, om, cx, /*fsc=*/NULL);
-    p7_BackwardFilter(sq->dsq, sq->n, om, cx, sm, p7_SPARSEMASK_THRESH_DEFAULT);
+    p7_BackwardFilter(sq->dsq, sq->n, om, cx, sm, p7_SPARSIFY_THRESH);
   }
 
   /* Allocate DP matrices, traceback */

@@ -1,6 +1,7 @@
 MODULE = dp_sparse
 
-LIBOBJS =  p7_sparsemx.o        \
+LIBOBJS =  p7_engine.o          \
+	   p7_sparsemx.o        \
 	   p7_spascmx.o         \
 	   p7_spaecmx.o         \
 	   sparse_aec_align.o   \
@@ -35,7 +36,8 @@ STATS  =  p7_spascmx_stats     \
 
 BENCHMARKS = sparse_fwdback_benchmark
 
-EXAMPLES = sparse_anchors_example     \
+EXAMPLES = p7_engine_example          \
+	   sparse_anchors_example     \
 	   sparse_envelopes_example   \
 	   sparse_envscore_example    \
            sparse_fwdback_example     \

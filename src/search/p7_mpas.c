@@ -16,6 +16,40 @@
 
 #include "search/p7_mpas.h"
 
+
+/*****************************************************************
+ * 1. P7_MPAS_PARAMS: MPAS config/control parameters
+ *****************************************************************/
+
+P7_MPAS_PARAMS *
+p7_mpas_params_Create(void)
+{
+  P7_MPAS_PARAMS *params = NULL;
+  int             status;
+
+  ESL_ALLOC(params, sizeof(P7_MPAS_PARAMS));
+  params->max_iterations = p7_MPAS_MAX_ITERATIONS;  // limit MPAS algorithm to <max_iterations> stochastic traces
+  params->loss_threshold = p7_MPAS_LOSS_THRESHOLD;  // stoppage criterion: probability that better AS exists, hasn't been found yet
+  params->nmax_sampling  = p7_MPAS_NMAX_SAMPLING;   // if TRUE, take all <max_iterations> samples, don't apply other stoppage tests
+  params->be_verbose     = p7_MPAS_BE_VERBOSE;      // if TRUE, MPAS procedure printf's internal info for debugging
+  return params;
+
+ ERROR:
+  p7_mpas_params_Destroy(params);
+  return NULL;
+}
+
+void
+p7_mpas_params_Destroy(P7_MPAS_PARAMS *params)
+{
+  if (params) free(params);
+}
+      
+
+/*****************************************************************
+ * 2. P7_MPAS_STATS: MPAS statistics 
+ *****************************************************************/
+
 int
 p7_mpas_stats_Init(P7_MPAS_STATS *stats)
 {

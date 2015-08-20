@@ -23,7 +23,7 @@
  * Cells needed for glocal entry/exit delete paths (G->DDDD->Mk,
  * Mk->DDDD->E) are not marked, because the filter only uses local
  * alignment, not glocal. The default for sm_thresh is
- * <p7_SPARSEMASK_THRESH_DEFAULT>, in <p7_config.h.in>; currently set
+ * <p7_SPARSIFY_THRESH>, in <p7_config.h.in>; currently set
  * to 0.01.
  *
  * ForwardFilter() and BackwardFilter() are a dependent pair, sharing
@@ -112,7 +112,7 @@ static        void  save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dp
  *            Forward matrix calculation, and <*opt_sc> optionally
  *            has the raw Forward score in nats.
  *
- * Throws:    (no abnormal error conditions)
+ * Throws:    <eslEMEM> on reallocation error.
  * 
  * Xref:      For layout of checkpointed <ox> see exegesis in p7_checkptmx.h.
  */
@@ -871,7 +871,7 @@ sse_countge(__m128 v, float thresh)
  * 
  * The threshold for determining 'significant' posterior alignment
  * probability is passed as <sm_thresh> (typically
- * <p7_SPARSEMASK_THRESH_DEFAULT>, in <p7_config.h.in>). We take
+ * <p7_SPARSIFY_THRESH>, in <p7_config.h.in>). We take
  * advantage of the fact that if N/C/J emission postprobs exceed
  * <1.0 - sm_thresh>, we don't even need to look at the vectorized
  * row; no cell can exceed threshold.
@@ -1270,7 +1270,7 @@ main(int argc, char **argv)
       if (P > 0.02) goto NEXT_SEQ;
 
       p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fraw);
-      p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSEMASK_THRESH_DEFAULT);
+      p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH);
 
       /* Calculate minimum memory requirements for each step */
       msvmem = (double) ( P7_NVB(om->M) * sizeof(__m128i))    / 1024.;  
@@ -1409,7 +1409,7 @@ main(int argc, char **argv)
       p7_ForwardFilter(dsq, L, om, ox, &sc);
       if (! esl_opt_GetBoolean(go, "-F")) 
 	{
-	  p7_BackwardFilter(dsq, L, om, ox, sm, p7_SPARSEMASK_THRESH_DEFAULT);
+	  p7_BackwardFilter(dsq, L, om, ox, sm, p7_SPARSIFY_THRESH);
 	  esl_vec_IReverse(sm->kmem, sm->kmem, sm->ncells);
 	}
 
@@ -1527,7 +1527,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
       if ( p7_sparsemask_Reinit(sm,M, tL)     != eslOK) esl_fatal(msg);
 
       p7_ForwardFilter (dsq, tL, om, ox, &fsc1);
-      p7_BackwardFilter(dsq, tL, om, ox,  sm, p7_SPARSEMASK_THRESH_DEFAULT);
+      p7_BackwardFilter(dsq, tL, om, ox,  sm, p7_SPARSIFY_THRESH);
 
       p7_ReferenceForward (dsq, tL, gm, fwd,  &fsc2);
       p7_ReferenceBackward(dsq, tL, gm, bck,  &bsc2);
@@ -1772,7 +1772,7 @@ main(int argc, char **argv)
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
     
       p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fraw);
-      p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSEMASK_THRESH_DEFAULT);
+      p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH);
 
       p7_ReferenceForward (sq->dsq, sq->n, gm, gx, &gfraw);
       p7_ReferenceBackward(sq->dsq, sq->n, gm, gx, &gbraw);

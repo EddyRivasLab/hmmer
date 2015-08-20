@@ -36,14 +36,11 @@ typedef struct {
   float    env_sc;	// envelope raw score s_d, nats                    
   float    null2_sc;    // domain null2 score r_d, nats
   
-  uint32_t flags;       // p7E_ENVSC_APPROX | p7E_IS_GLOCAL | p7E_IS_REPORTED | p7E_IS_INCLUDED
+  uint32_t flags;       // p7E_ENVSC_APPROX | p7E_IS_GLOCAL 
 } P7_ENVELOPE;
   
 #define p7E_ENVSC_APPROX (1<<0)
 #define p7E_IS_GLOCAL    (1<<1)
-#define p7E_IS_REPORTED  (1<<2)
-#define p7E_IS_INCLUDED  (1<<3)
-  
   
 
 /* P7_ENVELOPES

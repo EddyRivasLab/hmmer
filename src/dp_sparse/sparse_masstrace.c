@@ -566,7 +566,7 @@ utest_approx_masstrace(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M,
   if (  (sm = p7_sparsemask_Create(M, sq->n))                   == NULL) esl_fatal(msg);
 
   if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
-  if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSEMASK_THRESH_DEFAULT)           != eslOK) esl_fatal(msg);
+  if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
 
    /* Sparse DP calculations, and exact posterior decoding */
   if ( p7_SparseViterbi   (sq->dsq, sq->n, gm, sm, sxv, vtr, NULL) != eslOK) esl_fatal(msg);
