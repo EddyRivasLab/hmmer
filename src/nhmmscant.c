@@ -144,7 +144,7 @@ struct cfg_s {
 };
 
 static char usage[]  = "[-options] <hmmdb> <seqfile>";
-static char banner[] = "search sequence(s) against a profile database";
+static char banner[] = "search DNA sequence(s) against a protein profile database";
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop  (WORKER_INFO *info, P7_HMMFILE *hfp);
@@ -281,6 +281,15 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
 #ifdef HAVE_MPI
   if (esl_opt_IsUsed(go, "--mpi")       && fprintf(ofp, "# MPI:                             on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 #endif
+  if (esl_opt_IsUsed(go, "-c")           && fprintf(ofp, "# use alt genetic code of NCBI transl table: %d\n",             esl_opt_GetInteger(go, "-c")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "-l")           && fprintf(ofp, "# minimum ORF length: %d\n",                           esl_opt_GetInteger(go, "-l"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "-m")           && fprintf(ofp, "# ORFs must initiate with AUG only:    yes\n")                                                < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "-M")           && fprintf(ofp, "# ORFs must start with allowed initiation codon:    yes\n")                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--informat")   && fprintf(ofp, "# specify that input file is in format %s\n",         esl_opt_GetString(go, "--informat"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--watson")           && fprintf(ofp, "# only translate top strand:    yes\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--crick")           && fprintf(ofp, "# only translate bottom strand:    yes\n")                                               < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+
+
   if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   return eslOK;
 }
