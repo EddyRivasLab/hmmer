@@ -840,7 +840,7 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
 		  
 		   if (ni > 0)
 		   {		  
-			 if (fprintf(fp, " %-*ld\n", coordwidth, i2/3)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+			 if (fprintf(fp, " %-*ld\n", coordwidth, (i2+2)/3)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
 		   }
 		   else
 		   {		  
