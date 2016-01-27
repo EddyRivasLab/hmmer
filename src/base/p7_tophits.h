@@ -62,6 +62,10 @@ typedef struct p7_hit_s {
 
   P7_DOMAIN *dcl;	/* domain coordinate list and alignment display */
   esl_pos_t  offset;	/* used in socket communications, in serialized communication: offset of P7_DOMAIN msg for this P7_HIT */
+
+  float  fwd_score;     /* ER, to use with the e-hmm search methods */
+  float  spfwd_score;   /* ER, to use with the e-hmm search methods */
+  double time;          /* ER, to use with the e-hmm search methods */
 } P7_HIT;
 
 

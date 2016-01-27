@@ -1,14 +1,11 @@
-# Top level Makefile for HMMER3
+# Top level Makefile
 # 
-# On most systems, to build H3 you should only need:
+# On most systems, to build code you should only need:
 #     % ./configure; make
 # Optionally, you can run a test suite:
 #     % make check
 # And optionally, you can install everything more permanently:
 #     % make install
-#
-# For more information, see the Installation chapter of the HMMER
-# User's Guide.
 #
 
 
@@ -161,7 +158,6 @@ distclean:
 ifneq (,$(wildcard ./documentation/release-notes/LICENSE.sh))
 	-rm -f documentation/release-notes/LICENSE.sh
 endif
-	
 
 TAGS:
 	-rm -f ${top_srcdir}/TAGS
