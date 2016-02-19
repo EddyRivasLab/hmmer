@@ -81,6 +81,7 @@
 #include "dp_sparse/sparse_masstrace.h"	   /* 'Mass trace' algorithm for determining envelope bounds         */
 #include "dp_sparse/sparse_envscore.h"	   /* Modified Forward algorithm for scoring a single envelope       */
 
+#include "dp_sparse/p7_engine.h"
 
 /* 'dp_reference' subdir: "reference" implementations of key algorithms, used for regression and other testing  */
 #include "dp_reference/p7_refmx.h"               /* P7_REFMX: a O(ML) DP matrix for reference DP algorithms     */

@@ -1,8 +1,10 @@
 HMMER - Biological sequence analysis with profile hidden Markov models
+
 @HMMER_COPYRIGHT@
-Copyright (C) 1992-2014 Sean R. Eddy
-Copyright (C) 2000-2014 Howard Hughes Medical Institute
-Copyright (C) 1992-2004 Washington University School of Medicine
+Copyright (C) 1992-2016 Sean R. Eddy
+Copyright (C) 2000-2016 Howard Hughes Medical Institute
+Copyright (C) 2015-2016 President and Fellows of Harvard College
+Copyright (C) 1992-2006 Washington University School of Medicine
 Copyright (C) 1992-1994 MRC Laboratory of Molecular Biology
 All rights reserved.
 
@@ -43,10 +45,10 @@ standard BSD (Berkeley Software Distribution) license:
 ------------------------------------------------------------------
 
 HMMER's code includes contributions from the members of the HMMER
-development team and the Eddy/Rivas laboratories at HHMI Janelia Farm,
-whose current and past members include:
+development team and the Eddy/Rivas laboratories at Harvard
+University, whose current and past members include:
 
-   Sean Eddy            HHMI Janelia Research Campus; Harvard University
+   Sean Eddy            HHMI / Harvard University
    Sergi Castellano     Max Planck Leipzig, Germany
    Goran Ceric          HHMI Janelia Research Campus
    Alex Coventry        Cornell University
@@ -55,7 +57,7 @@ whose current and past members include:
    Steve Johnson        Monsanto 
    Diana Kolbe          University of Iowa
    Eric Nawrocki        National Center for Biotechnology Information (NCBI)
-   Elena Rivas          HHMI Janelia Research Campus; Harvard University
+   Elena Rivas          Harvard University
    Travis Wheeler       University of Montana
 
 HMMER also includes contributions from others, including copyrighted
@@ -86,6 +88,6 @@ source code.
 "HMMER" is a trademark of the Howard Hughes Medical Institute.
 
 ------------------------------------------------------------------
-The HMMER development team
-HHMI Janelia Research Campus
+Sean Eddy
+HHMI / Harvard University
 http://hmmer.org/

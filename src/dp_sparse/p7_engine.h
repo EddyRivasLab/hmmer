@@ -1,6 +1,9 @@
 /* The comparison engine.
  * Given a profile and a sequence; calculates scores, anchors, envelopes, and alignments.
  */
+#ifndef p7ENGINE_INCLUDED
+#define p7ENGINE_INCLUDED
+
 #include "p7_config.h"
 
 #include "easel.h"
@@ -105,7 +108,7 @@ extern void       p7_engine_Destroy(P7_ENGINE *eng);
 extern int p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg);
 extern int p7_engine_Main        (P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE  *gm);
 
-
+#endif /*p7ENGINE_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
  * 

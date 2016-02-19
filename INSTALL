@@ -16,25 +16,21 @@ For complete documentation, including customization and
 troubleshooting, see the Installation chapter in the HMMER User's
 Guide (Userguide.pdf).
 
-HMMER is written in C (ANSI C99) for Intel/AMD-compatible processors
-on POSIX-compliant systems (including UNIX, Linux, and Mac OS/X).
-HMMER will work on Windows if you install POSIX-compatibility software
-such as Cygwin.
+The default installation location is under /usr/local, with
+executables in /usr/local/bin.
+
+HMMER is written in C (ANSI C99) for POSIX-compliant systems including
+UNIX, Linux, and Mac OS/X.  HMMER will also work on Windows if you
+install POSIX-compatibility software such as Cygwin.
+
+HMMER is currently only supported on Intel-compatible processors
+(including AMD) and PowerPC-compatible processors, because HMMER's
+acceleration uses SIMD vector instructions (Intel SSE; PowerPC VMX
+instructions).
 
 -------------------------------------------------------------
-Starting from a Subversion (SVN) working copy:
-
-If you have checked HMMER out from its Subversion repository, there's
-some additional stuff you need to do one-time-only in your new working
-directory:
-
-   ln -s easel/aclocal.m4 aclocal.m4
-   autoconf
-   (cd easel; autoconf)
-
--------------------------------------------------------------
-The HMMER development team
-HHMI Janelia Farm Research Campus
+Sean Eddy
+HHMI/Harvard University
 http://hmmer.org/
 
 
