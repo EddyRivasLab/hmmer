@@ -42,7 +42,7 @@
 
 # Autoconf 2.61 has a bug in AC_FUNC_FSEEKO; don't use it.
 AC_PREREQ(2.63)
-AC_INIT(HMMER, 3.0, eddys@janelia.hhmi.org, hmmer)
+AC_INIT(HMMER, s0.1.1, sean@eddylab.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -74,17 +74,17 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="March 2010"
-HMMER_COPYRIGHT="Copyright (C) 2010 Howard Hughes Medical Institute."
-HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)."
-HMMER_VERSION=$PACKAGE_VERSION
-HMMER_URL="http://hmmer.org/"
-HMMER_ESLDIR="easel"
+HMMER_DATE="Feb 2016"
+HMMER_COPYRIGHT="Copyright (C) 2016 Howard Hughes Medical Institute."
+HMMER_LICENSE="Freely distributed under the BSD open source license."
+HMMER_VERSION="$PACKAGE_VERSION"
+HMMER_URL="hmmer.org"
+HMMER_ESLDIR="../easel"
 
-EASEL_DATE="March 2010"
-EASEL_COPYRIGHT="Copyright (C) 2010 Howard Hughes Medical Institute."
-EASEL_LICENSE="Freely distributed under the Janelia Farm Software License."
-EASEL_VERSION="h$PACKAGE_VERSION"
+EASEL_DATE="Feb 2016"
+EASEL_COPYRIGHT="Copyright (C) 2016 HHMI Janelia Farm Research Campus"
+EASEL_LICENSE="Freely distributed under the BSD open source license."
+EASEL_VERSION="$PACKAGE_VERSION"
 EASEL_URL="http://bioeasel.org/"
 
 # Output variables  (AC_OUTPUT replaces @var@ in input files, such as Makefiles)
