@@ -1,1 +1,1 @@
-../easel/aclocal.m4
+lib/easel/aclocal.m4
