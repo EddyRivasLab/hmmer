@@ -131,9 +131,7 @@ typedef struct p7_oprofile_s {
   int    mode;                  /* currently must be p7_LOCAL                        */
   float  nj;                    /* expected # of J's: 0 or 1, uni vs. multihit       */
 
-  int    clone;                 /* this optimized profile structure is just a copy   */
-                                /* of another profile structre.  all pointers of     */
-                                /* this structure should not be freed.               */
+  int    is_shadow;             /* TRUE if this profile shadows another, and its ptrs are references */
 } P7_OPROFILE;
 
 typedef struct {
@@ -157,11 +155,11 @@ p7_oprofile_FGetEmission(const P7_OPROFILE *om, int k, int x)
 
 
 extern P7_OPROFILE *p7_oprofile_Create(int M, const ESL_ALPHABET *abc);
-extern int          p7_oprofile_IsLocal(const P7_OPROFILE *om);
 extern void         p7_oprofile_Destroy(P7_OPROFILE *om);
-extern size_t       p7_oprofile_Sizeof(P7_OPROFILE *om);
-extern P7_OPROFILE *p7_oprofile_Copy(P7_OPROFILE *om);
-extern P7_OPROFILE *p7_oprofile_Clone(const P7_OPROFILE *om);
+extern int          p7_oprofile_IsLocal(const P7_OPROFILE *om);
+extern size_t       p7_oprofile_Sizeof (const P7_OPROFILE *om);
+extern P7_OPROFILE *p7_oprofile_Clone  (const P7_OPROFILE *om);
+extern P7_OPROFILE *p7_oprofile_Shadow (const P7_OPROFILE *om);
 
 
 extern int          p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om);

@@ -37,11 +37,11 @@ typedef struct {
 #ifdef HMMER_THREADS
   ESL_WORK_QUEUE   *queue;
 #endif /*HMMER_THREADS*/
-  P7_BG            *bg;	         /* null model                              */
-  P7_PIPELINE      *pli;         /* work pipeline                           */
-  P7_TOPHITS       *th;          /* top hit results                         */
-  P7_PROFILE       *gm;		 /* profile                                 */
-  P7_OPROFILE      *om;          /* optimized query profile, partially cloned */  // note; p7_oprofile_Clone() doesn't behave like p7_profile_Clone(); revisit
+  P7_BG            *bg;	         /* null model                        */
+  P7_PIPELINE      *pli;         /* work pipeline                     */
+  P7_TOPHITS       *th;          /* top hit results                   */
+  P7_PROFILE       *gm;		 /* profile                           */
+  P7_OPROFILE      *om;          /* optimized query profile, shadowed */  
 } WORKER_INFO;
 
 #define REPOPTS     "-E,-T,--cut_ga,--cut_nc,--cut_tc"
@@ -451,7 +451,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  /* Create processing pipeline and hit list */
 	  info[i].th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
 	  info[i].gm  = p7_profile_Clone(gm);
-	  info[i].om  = p7_oprofile_Clone(om);
+	  info[i].om  = p7_oprofile_Shadow(om);
 	  info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
 	  p7_pipeline_NewModel(info[i].pli, info[i].om, info[i].bg);
 

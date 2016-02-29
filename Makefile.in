@@ -160,37 +160,8 @@ ifneq (,$(wildcard ./documentation/release-notes/LICENSE.sh))
 endif
 
 TAGS:
-	-rm -f ${top_srcdir}/TAGS
-	make tags-append	
+	./makeTAGS.sh
 
-tags-append:
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/Makefile.in
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/COPYRIGHT
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/INSTALL
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/LICENSE
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/README
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/configure.ac
-
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/documentation/man/*.in
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/documentation/man/*.man
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/documentation/man/boilerplate-tail
-
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/documentation/userguide/*.in
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/documentation/userguide/*.tex
-
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/${SADIR}/README
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/${SADIR}/*.in
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/${SADIR}/*.c
-
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/testsuite/*.in
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/testsuite/*.pl
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/testsuite/*.sh
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/testsuite/*.pm
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/testsuite/*.sqc
-
-	${QUIET_SUBDIR0}src        ${QUIET_SUBDIR1} tags-append
-	${QUIET_SUBDIR0}benchmarks ${QUIET_SUBDIR1} tags-append
-	${QUIET_SUBDIR0}${ESLDIR}  ${QUIET_SUBDIR1} tags-append
 
 ################################################################
 # @LICENSE@

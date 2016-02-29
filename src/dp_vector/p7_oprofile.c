@@ -60,19 +60,19 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
 
   /* level 0 */
   ESL_ALLOC(om, sizeof(P7_OPROFILE));
-  om->rbv_mem = NULL;
-  om->sbv_mem = NULL;
-  om->rwv_mem = NULL;
-  om->twv_mem = NULL;
-  om->rfv_mem = NULL;
-  om->tfv_mem = NULL;
-  om->rbv     = NULL;
-  om->sbv     = NULL;
-  om->rwv     = NULL;
-  om->twv     = NULL;
-  om->rfv     = NULL;
-  om->tfv     = NULL;
-  om->clone   = 0;
+  om->rbv_mem   = NULL;
+  om->sbv_mem   = NULL;
+  om->rwv_mem   = NULL;
+  om->twv_mem   = NULL;
+  om->rfv_mem   = NULL;
+  om->tfv_mem   = NULL;
+  om->rbv       = NULL;
+  om->sbv       = NULL;
+  om->rwv       = NULL;
+  om->twv       = NULL;
+  om->rfv       = NULL;
+  om->tfv       = NULL;
+  om->is_shadow = FALSE;
 
   om->name    = NULL;
   om->acc     = NULL;
@@ -183,27 +183,26 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
 {
   if (om == NULL) return;
 
-  if (om->clone == 0)
+  if (! om->is_shadow)
     {
-      if (om->rbv_mem   != NULL) free(om->rbv_mem);
-      if (om->sbv_mem   != NULL) free(om->sbv_mem);
-      if (om->rwv_mem   != NULL) free(om->rwv_mem);
-      if (om->twv_mem   != NULL) free(om->twv_mem);
-      if (om->rfv_mem   != NULL) free(om->rfv_mem);
-      if (om->tfv_mem   != NULL) free(om->tfv_mem);
-      if (om->rbv       != NULL) free(om->rbv);
-      if (om->sbv       != NULL) free(om->sbv);
-      if (om->rwv       != NULL) free(om->rwv);
-      if (om->rfv       != NULL) free(om->rfv);
-      if (om->name      != NULL) free(om->name);
-      if (om->acc       != NULL) free(om->acc);
-      if (om->desc      != NULL) free(om->desc);
-      if (om->rf        != NULL) free(om->rf);
-      if (om->mm        != NULL) free(om->mm);
-      if (om->cs        != NULL) free(om->cs);
-      if (om->consensus != NULL) free(om->consensus);
+      if (om->rbv_mem)   free(om->rbv_mem);
+      if (om->sbv_mem)   free(om->sbv_mem);
+      if (om->rwv_mem)   free(om->rwv_mem);
+      if (om->twv_mem)   free(om->twv_mem);
+      if (om->rfv_mem)   free(om->rfv_mem);
+      if (om->tfv_mem)   free(om->tfv_mem);
+      if (om->rbv)       free(om->rbv);
+      if (om->sbv)       free(om->sbv);
+      if (om->rwv)       free(om->rwv);
+      if (om->rfv)       free(om->rfv);
+      if (om->name)      free(om->name);
+      if (om->acc)       free(om->acc);
+      if (om->desc)      free(om->desc);
+      if (om->rf)        free(om->rf);
+      if (om->mm)        free(om->mm);
+      if (om->cs)        free(om->cs);
+      if (om->consensus) free(om->consensus);
     }
-
   free(om);
 }
 
@@ -219,7 +218,7 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
  *            model.
  */
 size_t
-p7_oprofile_Sizeof(P7_OPROFILE *om)
+p7_oprofile_Sizeof(const P7_OPROFILE *om)
 {
   size_t n   = 0;
   int    nqb = om->allocQ16;	/* # of uchar vectors needed for query */
@@ -255,48 +254,43 @@ p7_oprofile_Sizeof(P7_OPROFILE *om)
 }
 
 
-/* TODO: this is not following the _Copy interface guidelines; it's a _Clone */
-/* TODO: its documentation header is a cut/paste of _Create; FIXME */
-/* Function:  p7_oprofile_Copy()
- * Synopsis:  Allocate an optimized profile structure.
+/* Function:  p7_oprofile_Clone()
+ * Synopsis:  Create a new copy of an optimized profile structure.
  * Incept:    SRE, Sun Nov 25 12:03:19 2007 [Casa de Gatos]
  *
- * Purpose:   Allocate for profiles of up to <allocM> nodes for digital alphabet <abc>.
- *
+ * Purpose:   Create a newly allocated copy of <om1> and return a ptr
+ *            to it.
+ *            
  * Throws:    <NULL> on allocation error.
  */
 P7_OPROFILE *
-p7_oprofile_Copy(P7_OPROFILE *om1)
+p7_oprofile_Clone(const P7_OPROFILE *om1)
 {
-  int           x, y;
-  int           status;
-
+  const ESL_ALPHABET *abc = om1->abc;
+  P7_OPROFILE  *om2  = NULL;
   int           nqb  = P7_NVB(om1->allocM); /* # of uchar vectors needed for query */
   int           nqw  = P7_NVW(om1->allocM); /* # of sword vectors needed for query */
   int           nqf  = P7_NVF(om1->allocM); /* # of float vectors needed for query */
   int           nqs  = nqb + p7O_EXTRA_SB;
-
   size_t        size = sizeof(char) * (om1->allocM+2);
-
-  P7_OPROFILE  *om2  = NULL;
-  
-  const ESL_ALPHABET *abc = om1->abc;
+  int           x, y;
+  int           status;
 
   /* level 0 */
   ESL_ALLOC(om2, sizeof(P7_OPROFILE));
-  om2->rbv_mem = NULL;
-  om2->sbv_mem = NULL;
-  om2->rwv_mem = NULL;
-  om2->twv_mem = NULL;
-  om2->rfv_mem = NULL;
-  om2->tfv_mem = NULL;
-  om2->rbv     = NULL;
-  om2->sbv     = NULL;
-  om2->rwv     = NULL;
-  om2->twv     = NULL;
-  om2->rfv     = NULL;
-  om2->tfv     = NULL;
-  om2->clone   = om1->clone;
+  om2->rbv_mem   = NULL;
+  om2->sbv_mem   = NULL;
+  om2->rwv_mem   = NULL;
+  om2->twv_mem   = NULL;
+  om2->rfv_mem   = NULL;
+  om2->tfv_mem   = NULL;
+  om2->rbv       = NULL;
+  om2->sbv       = NULL;
+  om2->rwv       = NULL;
+  om2->twv       = NULL;
+  om2->rfv       = NULL;
+  om2->tfv       = NULL;
+  om2->is_shadow = FALSE;  // om1 can be a shadow, but the resulting copy is a full-fledged profile
   
   om2->name      = NULL;
   om2->acc       = NULL;
@@ -305,7 +299,6 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
   om2->mm        = NULL;
   om2->cs        = NULL;
   om2->consensus = NULL;
-
 
   /* level 1 */
   ESL_ALLOC(om2->rbv_mem, sizeof(__m128i) * nqb  * abc->Kp    +15);	/* +15 is for manual 16-byte alignment */
@@ -406,33 +399,47 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
   return NULL;
 }
 
-/* TODO: this "Clone" is not what we usually mean by a _Clone routine.
- *       it's sharing allocated memory with another structure: maybe
- *       it's a "shadow", a "golem", or something...
-*/
-/* Function:  p7_oprofile_Clone()
+/* Function:  p7_oprofile_Shadow()
+ * Synopsis:  Create a shadow of an optimized profile, for use in multithreading
+ *
  * Synopsis:  Allocate a cloned copy of the optimized profile structure.  All
  *            allocated memory from the original profile is not reallocated.
  *            The cloned copy will point to the same memory as the original.
- * Incept:    SRE, Sun Nov 25 12:03:19 2007 [Casa de Gatos]
  *
- * Purpose:   Quick copy of an optimized profile used in multiple threads.
+ * Purpose:   Allocate only the shell of a new <P7_OPROFILE>, and memcpy()
+ *            the contents of <om1> into it.
+ *            
+ *            This gets used in multithreading. It's a hack. Almost
+ *            all of the data in a profile is constant during a
+ *            search, so threads can share pointers to it.  The
+ *            exception is the length modeling ENJC transition costs,
+ *            which have to be reconfigured for every new target seq;
+ *            we need that data to be thread-specific and threadsafe.
+ *            It happens that because the length model params are
+ *            runtime arrays in a <P7_OPROFILE>, if we memcpy() the
+ *            contents, we get reference copies of pointers to all the
+ *            dynamic-allocated data (that we treat as constant), but
+ *            actual copies of the static arrays (that we need to
+ *            change).
+ *            
+ *            Caller still frees the shadow with
+ *            <p7_oprofile_Destroy()>; that routine can tell the
+ *            difference between a real (fully allocated) profile and
+ *            a shadow, using the <om->is_shadow> flag.
+ *
+ * Returns:   Pointer to the new shadow. Caller frees with <p7_oprofile_Destroy()>.
  *
  * Throws:    <NULL> on allocation error.
  */
 P7_OPROFILE *
-p7_oprofile_Clone(const P7_OPROFILE *om1)
+p7_oprofile_Shadow(const P7_OPROFILE *om1)
 {
-  int           status;
-
   P7_OPROFILE  *om2  = NULL;
+  int           status;
 
   ESL_ALLOC(om2, sizeof(P7_OPROFILE));
   memcpy(om2, om1, sizeof(P7_OPROFILE));
-  /* note that that copied *pointers*, not their *contents*, which are separately allocated. */
-
-  om2->clone  = 1;
-
+  om2->is_shadow  = TRUE;
   return om2;
 
  ERROR:
@@ -805,9 +812,9 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
  *            <om> comes out in local multihit config, with the same
  *            length model.
  *            
- *            <om> cannot be a "clone" (created by
- *            <p7_oprofile_Clone()>); it must be a real allocation for
- *            the <P7_OPROFILE>.
+ *            <om> cannot be a "shadow" (created by
+ *            <p7_oprofile_Shadow()>); it must be a real allocation
+ *            for the <P7_OPROFILE>.
  *
  * Args:      gm - profile to optimize
  *            om - allocated optimized profile for holding the result.
@@ -821,7 +828,7 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
   int status, z;
 
-  ESL_DASSERT1(( ! om->clone ));
+  ESL_DASSERT1(( ! om->is_shadow ));
   ESL_DASSERT1(( gm->abc->type == om->abc->type));
   ESL_DASSERT1(( gm->M         <= om->allocM));
 
@@ -1938,7 +1945,7 @@ main(int argc, char **argv)
   
   p7_oprofile_Dump(stdout, om1);
 
-  om2 = p7_oprofile_Copy(om1);
+  om2 = p7_oprofile_Clone(om1);
   if (p7_oprofile_Compare(om1, om2, 0.001f, errbuf) != eslOK)    printf ("ERROR %s\n", errbuf);
 
   p7_oprofile_Destroy(om1);
