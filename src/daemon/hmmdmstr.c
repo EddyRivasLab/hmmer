@@ -1250,7 +1250,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
   char              *ptr;
   char              *buffer;
-  char              *opt_str;
+  char               opt_str[MAX_BUFFER];
 
   int                dbx;
   int                buf_size;
@@ -1275,7 +1275,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
   buf_size = MAX_BUFFER;
   if ((buffer  = malloc(buf_size))   == NULL) LOG_FATAL_MSG("malloc", errno);
-  if ((opt_str = malloc(MAX_BUFFER)) == NULL) LOG_FATAL_MSG("malloc", errno);
 
   ptr = buffer;
   remaining = buf_size;
@@ -1290,11 +1289,10 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     if ((n = read(data->sock_fd, ptr, remaining)) < 0) {
       p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
       free(buffer);
-      free(opt_str);
       return 1;
     }
 
-    if (n == 0) { free(buffer); free(opt_str); return 1; }
+    if (n == 0) { free(buffer); return 1; }
 
     ptr += n;
     amount += n;
@@ -1331,7 +1329,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   if (*ptr == '!') {
     process_ServerCmd(ptr, data);
     free(buffer);
-    free(opt_str);
     return 0;
   } else if (*ptr == '@') {
     char *s = ++ptr;
@@ -1343,24 +1340,19 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     /* create a commandline string with dummy program name for
      * the esl_opt_ProcessSpoof() function to parse.
      */
-    strncpy(opt_str, "hmmpgmd ", MAX_BUFFER);
-    strncat(opt_str, s, MAX_BUFFER);
-    strncat(opt_str, "\n", MAX_BUFFER);
-    opt_str[MAX_BUFFER-1] = 0;
+    snprintf(opt_str, sizeof(opt_str), "hmmpgmd %s\n", s);
 
     /* skip remaining white spaces */
     while (*ptr && isspace(*ptr)) ++ptr;
   } else {
     client_msg(data->sock_fd, eslEFORMAT, "Missing options string");
     free(buffer);
-    free(opt_str);
     return 0;
   }
 
   if (strncmp(ptr, "//", 2) == 0) {
     client_msg(data->sock_fd, eslEFORMAT, "Missing search sequence/hmm");
     free(buffer);
-    free(opt_str);
     return 0;
   }
 
@@ -1423,7 +1415,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     if (seq  != NULL) esl_sq_Destroy(seq);
     if (sco  != NULL) esl_scorematrix_Destroy(sco);
 
-    free(opt_str);
     free(buffer);
     return 0;
   }
@@ -1544,7 +1535,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   esl_stack_PPush(cmdstack, parms);
 
   free(buffer);
-  free(opt_str);
   return 0;
 }
 
