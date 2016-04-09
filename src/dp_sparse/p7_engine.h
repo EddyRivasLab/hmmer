@@ -101,7 +101,7 @@ extern void              p7_engine_params_Destroy(P7_ENGINE_PARAMS *prm);
 extern P7_ENGINE_STATS  *p7_engine_stats_Create(void);
 extern void              p7_engine_stats_Destroy(P7_ENGINE_STATS *prm);
 
-extern P7_ENGINE *p7_engine_Create (ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS *stats, int M_hint, int L_hint);
+extern P7_ENGINE *p7_engine_Create (const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS *stats, int M_hint, int L_hint);
 extern int        p7_engine_Reuse  (P7_ENGINE *eng);
 extern void       p7_engine_Destroy(P7_ENGINE *eng);
 

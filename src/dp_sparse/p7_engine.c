@@ -94,7 +94,7 @@ p7_engine_stats_Destroy(P7_ENGINE_STATS *stats)
  *****************************************************************/
 
 P7_ENGINE *
-p7_engine_Create(ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS *stats, int M_hint, int L_hint)
+p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS *stats, int M_hint, int L_hint)
 {
   P7_ENGINE *eng               = NULL;
   uint32_t   rng_seed          = (prm ? prm->rng_seed          : p7_ENGINE_FIXED_SEED);
