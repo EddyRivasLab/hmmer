@@ -186,7 +186,7 @@ int main(int argc, char *argv[])
   int              size;
 
   char            *seq;
-  char            *opts;
+  char             opts[MAX_READ_LEN];
   int              seqlen;
 
   int              ali;
@@ -255,11 +255,6 @@ int main(int argc, char *argv[])
 
   seqlen = MAX_READ_LEN;
   if ((seq = malloc(seqlen)) == NULL) {
-    fprintf(stderr, "[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
-    exit(1);
-  }
-
-  if ((opts = malloc(MAX_READ_LEN)) == NULL) {
     fprintf(stderr, "[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
     exit(1);
   }
@@ -375,10 +370,7 @@ int main(int argc, char *argv[])
       /* create a commandline string with dummy program name for
        * the esl_opt_ProcessSpoof() function to parse.
        */
-      strncpy(opts, "X ", MAX_READ_LEN);
-      strncat(opts, s,    MAX_READ_LEN);
-      strncat(opts, "\n", MAX_READ_LEN);
-      opts[MAX_READ_LEN-1] = 0;
+      snprintf(opts, sizeof(opts), "X %s\n", s);
 
       if (esl_getopts_Reuse(go) != eslOK) p7_Die("Internal failure reusing options object");
       if (esl_opt_ProcessSpoof(go, opts) != eslOK) { 
@@ -613,8 +605,6 @@ int main(int argc, char *argv[])
   }
 
   free(seq);
-  free(opts);
-
   esl_getopts_Destroy(go);
   esl_stopwatch_Destroy(w);
 
