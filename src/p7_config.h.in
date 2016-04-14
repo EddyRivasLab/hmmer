@@ -1,8 +1,8 @@
 /* @configure_input@
- * p7config.h.in -> p7config.h
+ * p7_config.h.in -> p7_config.h
  * 
- * p7config.h is generated from p7config.h.in by the ./configure script.
- * DO NOT EDIT p7config.h; only edit p7config.h.in.
+ * p7_config.h is generated from p7_config.h.in by the ./configure script.
+ * DO NOT EDIT p7_config.h; only edit p7_config.h.in.
  *
  * Configuration of HMMER, including both system-dependent configuration
  * (done by ./configure) and hardcoded configuration that someone might
@@ -12,8 +12,7 @@
  * (for example, LFS support), it must be included before any other
  * header file.
  * 
- * SRE, Mon Jan  1 16:07:28 2007 [Casa de Gatos] [Nirvana, Nevermind]
- * SVN $Id$
+ * SRE, Mon Jan  1 16:07:28 2007 [Casa de Gatos]
  */
 #ifndef P7_CONFIGH_INCLUDED
 #define P7_CONFIGH_INCLUDED

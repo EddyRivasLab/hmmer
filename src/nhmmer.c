@@ -1226,7 +1226,6 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
 {
 
   int      wstatus = eslOK;
-  int prev_hit_cnt;
   int seq_id = 0;
   ESL_SQ   *dbsq   =  esl_sq_CreateDigital(info->om->abc);
 #ifdef eslAUGMENT_ALPHABET
@@ -1246,7 +1245,6 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
       if (info->pli->strands != p7_STRAND_BOTTOMONLY) {
 
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
-        prev_hit_cnt = info->th->N;
         p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, info->pli->nseqs, dbsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, ssv_watch_master, postssv_watch_master, watch_slave*/);
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
@@ -1257,7 +1255,6 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
       //reverse complement
       if (info->pli->strands != p7_STRAND_TOPONLY && dbsq->abc->complement != NULL )
       {
-          prev_hit_cnt = info->th->N;
           esl_sq_Copy(dbsq,dbsq_revcmp);
           esl_sq_ReverseComplement(dbsq_revcmp);
           p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, info->pli->nseqs, dbsq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL/*, ssv_watch_master, postssv_watch_master, watch_slave*/);
@@ -1436,7 +1433,6 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
 static void 
 pipeline_thread(void *arg)
 {
-  int prev_hit_cnt;
   int i;
   int status;
   int workeridx;
@@ -1471,7 +1467,6 @@ pipeline_thread(void *arg)
       if (info->pli->strands != p7_STRAND_BOTTOMONLY) {
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
 
-        prev_hit_cnt = info->th->N;
         p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, block->first_seqidx + i, dbsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
         p7_pipeline_Reuse(info->pli); // prepare for next search
 
@@ -1483,7 +1478,6 @@ pipeline_thread(void *arg)
       //reverse complement
       if (info->pli->strands != p7_STRAND_TOPONLY && dbsq->abc->complement != NULL)
       {
-          prev_hit_cnt = info->th->N;
           esl_sq_ReverseComplement(dbsq);
           p7_Pipeline_LongTarget(info->pli, info->om, info->scoredata, info->bg, info->th, block->first_seqidx + i, dbsq, p7_COMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
           p7_pipeline_Reuse(info->pli); // prepare for next search
@@ -1576,7 +1570,6 @@ pipeline_thread_FM(void *arg)
   int workeridx;
   WORKER_INFO    *info;
   ESL_THREADS    *obj;
-  FM_METADATA    *meta =      NULL;
   FM_THREAD_INFO *fminfo    = NULL;
   void           *newFMinfo = NULL;
 
@@ -1587,7 +1580,6 @@ pipeline_thread_FM(void *arg)
   esl_threads_Started(obj, &workeridx);
 
   info = (WORKER_INFO *) esl_threads_GetData(obj, workeridx);
-  meta = info->fm_cfg->meta;
 
   status = esl_workqueue_WorkerUpdate(info->queue, NULL, &newFMinfo);
   if (status != eslOK) esl_fatal("Work queue worker failed");

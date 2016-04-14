@@ -146,10 +146,8 @@ p7_EntropyWeight_exp(const P7_HMM *hmm, const P7_BG *bg, const P7_PRIOR *pri, do
   int status;
   ESL_ROOTFINDER *R = NULL;
   struct ew_param_s p;
-  double Neff;
   double exp = 1.;
   double fx;
-  int k;
 
   /* Store parameters in the structure we'll pass to the rootfinder
    */

@@ -1,52 +1,67 @@
-# Process this file with autoconf to produce the HMMER configure script.
+# You process this file with autoconf to produce the HMMER configure script.
 #
 # This is synchronized with Easel's configure script, so that HMMER
 # configures Easel in addition to itself. This saves having to do a
-# separate ./configure in Easel. That means that everything that
+# separate ./configure in Easel. It also means that everything that
 # appears in Easel's configure script must also appear here.
 #
-# reminders to save re-reading autoconf manual for the n'th time:
-#    output variables:
+# Wee reminders to save re-reading autoconf manual for the n'th time:
+#    Output variables:
 #      -  are defined here as normal shell variables, e.g. FOO="my string"
 #      -  are made into output variables by calling AC_SUBST(FOO)
-#      -  any occurrence of @FOO@ in an output file is then substituted
-#         I think this only happens in files we assign w/ AC_CONFIG_FILES;
-#         that's the Makefile.in's.
+#      -  any occurrence of @FOO@ in an output file is substituted, for
+#         output files assigned w/ AC_CONFIG_FILES (such as Makefile.in's).
 #
 #   C preprocessor symbols:
 #      -  are defined here by calling AC_DEFINE(FOO) or AC_DEFINE(FOO, [42])
 #      -  then #undef FOO in easel.h.in becomes #define FOO, #define FOO 42
-#         I think this only happens in header files that we assign
-#         w/ AC_CONFIG_HEADERS -- which means, easel.h.in
+#         in header files assigned w/ AC_CONFIG_HEADERS (such as p7_config.h.in)
 #
-# GNU recommends the following order:
-#   1. autoconf requirements
+# Contents:
+#   1. Autoconf requirements
 #   2. AC_INIT
-#   3. info on the package
-#   4. checks for programs
-#   5. checks for libraries
-#   6. checks for header files
-#   7. checks for types
-#   8. checks for structures
-#   9. checks for compiler characteristics
-#  10. checks for library functions
-#  11. checks for system services
-#  12. AC_CONFIG_FILES
-#  13. AC_OUTPUT
+#   3. Info on the package
+#   4. Process ./configure command line
+#   5. Checks for programs, including ${CC}, ${CFLAGS}
+#   6. Checks for libraries
+#   7. Checks for header files, including SIMD vectorization (SSE)
+#   8. Checks for types
+#   9. Checks for structures
+#  10. Checks for compiler characteristics
+#  11. Checks for library functions
+#  12. checks for system services
+#  13. AC_CONFIG_FILES
+#  14. AC_OUTPUT
 
+
+################################################################
+# 1. Autoconf requirements
+################################################################
 
 # Autoconf 2.61 has a bug in AC_FUNC_FSEEKO; don't use it.
 AC_PREREQ(2.63)
-AC_INIT(HMMER, 3.1b2, eddys@janelia.hhmi.org, hmmer)
+
+
+
+################################################################
+# 2. AC_INIT
+################################################################
+
+AC_INIT(HMMER, 3.1b2, sean@eddylab.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER for your system.])
 
 # remember if the user is overriding CFLAGS
 if test x"$CFLAGS" = x; then 
   sre_cflags_env_set=no
+else
+  sre_cflags_env_set=yes
 fi
+
+
 
 ################################################################
 # 3. Info on the package
+################################################################
 #
 # The four AC_INIT args set these output variables and preprocessor symbols:
 #     PACKAGE_NAME      <package>     e.g. "HMMER"
@@ -68,17 +83,17 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="February 2015"
-HMMER_COPYRIGHT="Copyright (C) 2015 Howard Hughes Medical Institute."
-HMMER_LICENSE="Freely distributed under the GNU General Public License (GPLv3)."
+HMMER_DATE="April 2016"
+HMMER_COPYRIGHT="Copyright (C) 2016 Howard Hughes Medical Institute."
+HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
-EASEL_DATE="February 2015"
-EASEL_COPYRIGHT="Copyright (C) 2015 Howard Hughes Medical Institute."
-EASEL_LICENSE="Freely distributed under the Janelia Farm Software License."
+EASEL_DATE="April 2016"
+EASEL_COPYRIGHT="Copyright (C) 2016 Howard Hughes Medical Institute."
+EASEL_LICENSE="Freely distributed under the BSD open source license."
 EASEL_VERSION="h$PACKAGE_VERSION"
 EASEL_URL="http://bioeasel.org/"
 
@@ -136,7 +151,7 @@ AC_MSG_NOTICE([Full HMMER source distribution - using full configuration])
 
 
 ################################################################
-# Process the ./configure command line
+# 4. Process the ./configure command line
 ################################################################
 
 # --enable-debugging      - set basic debugging (level 0)
@@ -337,10 +352,11 @@ fi
 
 
 ################################################################
-# Checks for programs, including choice of compiler ${CC} and ${CFLAGS}.
-#
+# 5. Checks for programs, including choice of compiler ${CC} and ${CFLAGS}.
+################################################################
 AC_PROG_CC
 AC_PROG_INSTALL
+
 # MPI :  set @CC@ to mpicc, sets @MPILIBS@, defines HAVE_MPI. 
 if test "$enable_mpi" = "yes"; then
    ACX_MPI([AC_DEFINE(HAVE_MPI)
@@ -350,34 +366,35 @@ if test "$enable_mpi" = "yes"; then
    CC=$MPICC
 fi
 AC_PROG_CPP
-AX_COMPILER_VENDOR
+
 # AC_PROG_CC_STDC wants to append -c99 to icc; icc doesn't like this.
+AX_COMPILER_VENDOR
 if test "$ax_cv_c_compiler_vendor" != "intel"; then
   AC_PROG_CC_STDC
 fi
 AC_PROG_RANLIB
 AC_PATH_PROG([AR], [ar], [:], [$PATH:/usr/ccs/bin:/usr/xpg4/bin])
+
+# CHECK_GNU_MAKE sets EXEC_DEPENDENCY for SYSV vs. GNU make,
+# supporting Makefile lines of ${PROGS}: ${EXEC_DEPENDENCY}
 CHECK_GNU_MAKE
 
-# Select our optimization level in CFLAGS.
+
+# If the base $CFLAGS isn't already set, select what it should be.
+# We've used AX_CC_MAXOPT in the past (from FFTW), but it's
+# superaggressive and problematic in many respects. Use -O3 instead.
+#
 if test "$enable_debugging" != "no"; then
    AC_DEFINE(p7_DEBUGGING,  1)
    if test "$GCC" = "yes" && test "$sre_cflags_env_set" = "no"; then
       CFLAGS="-g -Wall"
    fi
 else
-   sre_save_ac_test_cflags="$ac_test_CFLAGS"
    if test "$sre_cflags_env_set" = "no"; then
-     ac_test_CFLAGS=""
+      CFLAGS="-O3"	
    fi
-   AX_CC_MAXOPT
-   ac_test_CFLAGS="$sre_save_ac_test_cflags"
-   # That was a workaround. AX_CC_MAXOPT apparently thinks that
-   # $ac_test_CFLAGS only gets set if ${CFLAGS} was set by the
-   # user (in the environment), but that's not so; it gets set
-   # by AC_PROG_CC. Instead of rewriting AX_CC_MAXOPT, we fool
-   # it.
 fi
+
 
 # Figure out how to generate PIC code for shared libraries
 # This sets @PIC_FLAGS@ output variable for Easel.
@@ -567,8 +584,9 @@ else
   AC_DEFINE(HAVE_GZIP)
 fi
 
-# 5. Checks for libraries
-#
+################################################################
+# 6. Checks for libraries
+#################################################################
 LIBGSL=
 AS_IF([test "x$with_gsl" != xno],
       [AC_CHECK_LIB([gsl], [gsl_expm1], 
@@ -588,8 +606,10 @@ AS_IF([test "x$with_gsl" != xno],
 AC_SEARCH_LIBS(clock_gettime, [rt posix4])
 
 
-# Checks for headers
-#
+################################################################
+# 7. Checks for headers
+#################################################################
+
 # Defines HAVE_SYS_TYPES_H, HAVE_STDINT_H, etc.
 AC_CHECK_HEADERS([ \
   endian.h\
@@ -623,8 +643,9 @@ if test "$impl_choice" = "vmx"; then
    CPPFLAGS="$sre_save_CPPFLAGS"
 fi
 
-# Checks for types
-#
+################################################################
+# 8. Checks for types
+#################################################################
 AC_C_BIGENDIAN
 AC_TYPE_UINT8_T
 AC_TYPE_UINT16_T
@@ -632,8 +653,34 @@ AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 AC_TYPE_OFF_T
 
-# Checks for functions, defining HAVE_FOO when foo is found
+
+################################################################
+# 9. Checks for structures - currently none
+################################################################
+
+
+################################################################
+# 10. Checks for compiler characteristics
+################################################################
+
+# __attribute__() tags on function declarations
+# HAVE_FUNC_ATTRIBUTE_NORETURN 
 #
+#   The clang static analyzer can't figure out that some of our
+#   varargs-dependent fatal error handlers (esl_fatal(), for example)
+#   cannot return. To tell it so, we take advantage of __attribute__
+#   tags on function declarations, a non-ISO gcc extension, when
+#   available. gcc, clang, and other gcc-like compilers support this.
+# 
+# This gets set in the Easel esl_config.h.
+#
+AX_GCC_FUNC_ATTRIBUTE(noreturn)
+
+
+################################################################
+# 11. Checks for functions, defining HAVE_FOO when foo is found
+################################################################
+
 AC_CHECK_FUNCS(mkstemp)
 AC_CHECK_FUNCS(popen)
 AC_CHECK_FUNCS(strcasecmp)
@@ -651,15 +698,21 @@ AC_CHECK_FUNCS(htons, , AC_CHECK_LIB(socket, htons))
 AC_CHECK_FUNCS(htonl, , AC_CHECK_LIB(socket, htonl))
 AC_FUNC_FSEEKO
 
-#
-# 11. System services
-#
+
+#################################################################
+# 12. System services
+#################################################################
 AC_SYS_LARGEFILE
 
 
-# Done.
-# Config subdirs and files (except main Makefile, which we defer)
-#
+
+################################################################
+# 13. Config subdirs and files
+################################################################
+
+# Everything except the main Makefile, which we defer; 
+# we need that outside the if clause for source compilation,
+# so the Makefile gets produced for a binary distro too.
 if test -d release-notes; then
   AC_CONFIG_FILES(release-notes/LICENSE.sh)
 fi
@@ -690,7 +743,7 @@ AC_CONFIG_FILES([libdivsufsort/Makefile])
 AC_CONFIG_LINKS([src/impl:${ac_top_build_prefix}src/impl_${impl_choice}])
 
 ################################################################
-# 13. AC_OUTPUT
+# 14. AC_OUTPUT
 ################################################################
 # remember that sneaky if statement that wraps the source
 # configuration? well, it ends here.
@@ -719,9 +772,6 @@ fi
 
 #################################################################
 # @LICENSE@
-# 
-# SVN $Id$
-# SVN $URL$ 
 # xref autoconf macro archive: //www.gnu.org/software/ac-archive/
 #################################################################
 

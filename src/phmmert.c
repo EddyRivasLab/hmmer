@@ -441,9 +441,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_ALPHABET    *abcAMINO = NULL;       /* DNA sequence alphabet                               */
   ESL_SQ          *qsqDNA = NULL;		 /* DNA query sequence                                  */
   ESL_SQ          *qsqDNATxt = NULL;    /* DNA query sequence that will be in text mode for printing */
-  ESL_SQ          *qsq      = NULL;		 /* query sequence                                  */
   int             n_targetseqs = 0;
-  int             k;
   ESL_GENCODE     *gcode       = NULL;
   ESL_GENCODE_WORKSTATE *wrk    = NULL;
   /* end phmmert */

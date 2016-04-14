@@ -378,7 +378,6 @@ main(int argc, char **argv)
 
     float symfrac = esl_opt_GetReal(go, "--symfrac");
     int do_hand  =  esl_opt_IsOn(go, "--hand");
-    int L;
 
     //same as p7_builder relative_weights
     if      (esl_opt_IsOn(go, "--wnone")  )                  { esl_vec_DSet(msa->wgt, msa->nseq, 1.); }
@@ -391,8 +390,7 @@ main(int argc, char **argv)
 
     //build a map of model mask coordinates to alignment coords
     ESL_ALLOC(map, sizeof(int)     * (msa->alen+1));
-    L = p7_Alimask_MakeModel2AliMap(msa, do_hand, symfrac, map );
-
+    p7_Alimask_MakeModel2AliMap(msa, do_hand, symfrac, map );  // Returns <L>, which we don't need.
 
     if ( esl_opt_IsUsed(go, "--model2ali") ) {
       //print mapping
