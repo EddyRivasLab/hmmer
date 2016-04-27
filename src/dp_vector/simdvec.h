@@ -21,6 +21,20 @@
 #define p7_VNB      16		/* Number of bytes per SIMD vector (SSV, MSV)            */
 #define p7_VALIMASK (~0xf)      /* Ptrs are aligned using & p7_VALIMASK                  */
 
+
+// Define new constants for AVX, AVX-512 to support running multiple versions while testing
+#define p7_VALIGN_AVX   32		/* AVX Vector memory must be aligned on 32-byte boundaries   */
+#define p7_VNF_AVX      8		/* Number of floats per AVX SIMD vector (Forward, Backward)  */
+#define p7_VNW_AVX      16		/* Number of shorts (words) per AVX SIMD vector (Viterbi)    */
+#define p7_VNB_AVX      32		/* Number of bytes per AVX SIMD vector (SSV, MSV)            */
+#define p7_VALIMASK_AVX (~0x1f)      /* Ptrs are aligned using & p7_VALIMASK_AVX                  */
+
+#define p7_VALIGN_AVX_512   64		/* AVX-512 Vector memory must be aligned on 64-byte boundaries   */
+#define p7_VNF_AVX_512      16		/* Number of floats per AVX-512 SIMD vector (Forward, Backward)  */
+#define p7_VNW_AVX_512      32		/* Number of shorts (words) per AVX-512 SIMD vector (Viterbi)    */
+#define p7_VNB_AVX_512      64		/* Number of bytes per AVX-512 SIMD vector (SSV, MSV)            */
+#define p7_VALIMASK_AVX_512 (~0x3f)      /* Ptrs are aligned using & p7_VALIMASK                  */
+
 /* In calculating Q, the number of vectors we need in a row, we have
  * to make sure there's at least 2, or a striped implementation fails.
  */
@@ -28,6 +42,15 @@
 #define P7_NVW(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNW) + 1)))   /*  8 words   */
 #define P7_NVF(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNF) + 1)))   /*  4 floats  */
 
+// values for 256-bit AVX vectors
+#define P7_NVB_AVX(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNB_AVX) + 1)))   /* 32 uchars  */
+#define P7_NVW_AVX(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNW_AVX) + 1)))   /*  16 words   */
+#define P7_NVF_AVX(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNF_AVX) + 1)))   /*  8 floats  */
+
+// values for 512-bit AVX-512 vectors
+#define P7_NVB_AVX_512(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNB_AVX_512) + 1)))   /* 32 uchars  */
+#define P7_NVW_AVX_512(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNW_AVX_512) + 1)))   /*  16 words   */
+#define P7_NVF_AVX_512(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNF_AVX_512) + 1)))   /*  8 floats  */
 
 
 

@@ -20,8 +20,6 @@
 #include "dp_vector/simdvec.h"
 #include "dp_vector/p7_filtermx.h"
 
-
-
 /*****************************************************************
  * 1. The P7_FILTERMX object.
  *****************************************************************/
@@ -57,18 +55,57 @@ p7_filtermx_Create(int allocM)
   fx->dp        = NULL;
   fx->dp_mem    = NULL;
   fx->allocM    = 0;
+
+ #ifdef p7_use_AVX
+  fx->dp_AVX    = NULL;
+  fx->dp_mem_AVX = NULL;
+  fx->allocM_AVX = 0;
+ #endif
+
+#ifdef p7_use_AVX_512
+  fx->dp_AVX_512    = NULL;
+  fx->dp_mem_AVX_512 = NULL;
+  fx->allocM_AVX_512 = 0;
+ #endif
+ 
+
   fx->type      = p7F_NONE;
 #ifdef p7_DEBUGGING
   fx->do_dumping= FALSE;
   fx->dfp       = NULL;
 #endif 
   
+//#ifdef p7_use_SSE // allocate different memory buffers depending on which
+  // ISA we're using
   /*                    16B per vector  * (MDI)states *  ~M/4 vectors    + alignment slop */
   ESL_ALLOC(fx->dp_mem, (sizeof(__m128i) * p7F_NSCELLS * P7_NVW(allocM)) + (p7_VALIGN-1));
   fx->allocM = allocM;
 
   /* Manual memory alignment incantation: */
   fx->dp = (__m128i *) ( (unsigned long int) (  (char *) fx->dp_mem + (p7_VALIGN-1) ) & p7_VALIMASK);
+//#endif
+
+  #ifdef p7_use_AVX
+  /*                              32B per vector  * (MDI)states *  ~M/4 vectors    + alignment slop */
+  ESL_ALLOC(fx->dp_mem_AVX, (sizeof(__m256i) * p7F_NSCELLS * P7_NVW_AVX(allocM)) + (p7_VALIGN_AVX-1));
+  fx->allocM_AVX = allocM;
+
+  /* Manual memory alignment incantation: */
+  fx->dp_AVX = (__m256i *) ( (unsigned long int) (  (char *) fx->dp_mem_AVX + (p7_VALIGN_AVX-1) ) & p7_VALIMASK_AVX);
+  #endif
+
+  #ifdef p7_use_AVX_512
+  /*                              64B per vector  * (MDI)states *  ~M/4 vectors    + alignment slop */
+  ESL_ALLOC(fx->dp_mem_AVX_512, (sizeof(__m512i) * p7F_NSCELLS * P7_NVW_AVX_512(allocM)) + (p7_VALIGN_AVX_512-1));
+  fx->allocM_AVX_512 = allocM;
+
+  /* Manual memory alignment incantation: */
+  fx->dp_AVX_512 = (__m512i *) ( (unsigned long int) (  (char *) fx->dp_mem_AVX_512 + (p7_VALIGN_AVX_512-1) ) & p7_VALIMASK_AVX_512);
+  #endif
+
+
+
+
   return fx;
 
  ERROR:
@@ -103,6 +140,12 @@ p7_filtermx_GrowTo(P7_FILTERMX *fx, int allocM)
   /* Contract checks / argument validation */
   ESL_DASSERT1( (allocM >= 1 && allocM <= 100000) );
 
+
+/* 
+This bit is mildly unsafe if more than one of p7_use_SSE, p7_use_AVX, and p7_use_AVX_512 are set.  It relies on any code that grows one or more of dp_mem, dp_mem_AVX, and dp_mem_AVX_512 to grow all of them that are being used.  If not, there can be problems caused by one but not all of the buffers being large enough to hold the current calculation.  This should only
+be an issue during development/testing, but I'm documenting it in case something goes wrong.
+*/
+#ifdef p7_use_SSE
   /* is it already big enough? */
   if (allocM <= fx->allocM) return eslOK;
 
@@ -110,6 +153,31 @@ p7_filtermx_GrowTo(P7_FILTERMX *fx, int allocM)
   ESL_REALLOC(fx->dp_mem, (sizeof(__m128i) * (p7F_NSCELLS * P7_NVW(allocM))) + (p7_VALIGN-1));
   fx->allocM = allocM;
   fx->dp     = (__m128i *) ( (unsigned long int) ( (char *) fx->dp_mem + (p7_VALIGN-1)) & p7_VALIMASK);
+#endif
+
+#ifdef p7_use_AVX
+  /* is it already big enough? */
+  if (allocM <= fx->allocM_AVX) return eslOK;
+
+  /* if not, grow it */
+  ESL_REALLOC(fx->dp_mem_AVX, (sizeof(__m256i) * (p7F_NSCELLS * P7_NVW_AVX(allocM))) + (p7_VALIGN_AVX-1));
+  fx->allocM_AVX = allocM;
+  fx->dp_AVX     = (__m256i *) ( (unsigned long int) ( (char *) fx->dp_mem_AVX + (p7_VALIGN_AVX-1)) & p7_VALIMASK_AVX);
+#endif
+
+#ifdef p7_use_AVX_512
+  /* is it already big enough? */
+  if (allocM <= fx->allocM_AVX_512) return eslOK;
+
+  /* if not, grow it */
+  ESL_REALLOC(fx->dp_mem_AVX_512, (sizeof(__m512i) * (p7F_NSCELLS * P7_NVW_AVX_512(allocM))) + (p7_VALIGN_AVX_512-1));
+  fx->allocM_AVX_512 = allocM;
+  fx->dp_AVX_512     = (__m512i *) ( (unsigned long int) ( (char *) fx->dp_mem_AVX_512 + (p7_VALIGN_AVX_512-1)) & p7_VALIMASK_AVX_512);
+#endif
+
+
+
+
 
   return eslOK;
 
@@ -132,7 +200,18 @@ size_t
 p7_filtermx_Sizeof(const P7_FILTERMX *fx)
 {
   size_t n = sizeof(P7_FILTERMX);
+ 
+#ifdef p7_use_SSE
   n += (sizeof(__m128i) * p7F_NSCELLS * P7_NVW(fx->allocM)) + (p7_VALIGN-1);
+#endif
+
+#ifdef p7_use_AVX
+  n += (sizeof(__m256i) * p7F_NSCELLS * P7_NVW_AVX(fx->allocM_AVX)) + (p7_VALIGN_AVX-1);
+#endif
+
+#ifdef p7_use_AVX_512
+  n += (sizeof(__m512i) * p7F_NSCELLS * P7_NVW_AVX_512(fx->allocM_AVX_512)) + (p7_VALIGN_AVX_512-1);
+#endif
   return n;
 }
 
@@ -191,7 +270,17 @@ void
 p7_filtermx_Destroy(P7_FILTERMX *fx)
 {
   if (fx) {
+#ifdef p7_use_SSE
     if (fx->dp_mem) free(fx->dp_mem);
+#endif
+
+#ifdef p7_use_AVX
+    if (fx->dp_mem_AVX) free(fx->dp_mem_AVX);
+#endif
+
+#ifdef p7_use_AVX_512
+    if (fx->dp_mem_AVX_512) free(fx->dp_mem_AVX_512);
+#endif    
     free(fx);
   }
   return;

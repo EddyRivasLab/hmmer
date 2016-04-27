@@ -5,6 +5,12 @@
 
 #include <xmmintrin.h>    /* SSE  */
 #include <emmintrin.h>    /* SSE2 */
+#ifdef p7_use_AVX
+  #include <immintrin.h>  /* AVX2 */
+#endif
+#ifdef p7_use_AVX_512
+  #include <immintrin.h>  /* AVX-512 */
+#endif
 #ifdef _PMMINTRIN_H_INCLUDED
 #include <pmmintrin.h>   /* DENORMAL_MODE */
 #endif
@@ -69,8 +75,29 @@ enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3, 
 
 typedef struct p7_oprofile_s {
   /* MSVFilter uses scaled, biased uchars: 16x unsigned byte vectors                 */
+  
   __m128i **rbv;                /* match scores [x][q]: rm, rm[0] are allocated      */
-  __m128i **sbv;                /* match scores for ssvfilter                        */
+  /* Our actual vector mallocs, before we align the memory                           */
+  __m128i  *rbv_mem;
+  __m128i  *sbv_mem;
+  __m128i **sbv;                /* match scores for ssvfilter         */
+
+   #ifdef p7_use_AVX
+  __m256i **rbv_AVX;                /* match scores [x][q]: rm, rm[0] are allocated      */
+  __m256i **sbv_AVX;                /* match scores for ssvfilter         */
+  /* Our actual vector mallocs, before we align the memory                           */
+  __m256i  *rbv_mem_AVX;
+  __m256i  *sbv_mem_AVX;
+  #endif
+
+   #ifdef p7_use_AVX_512
+  __m512i **rbv_AVX_512;                /* match scores [x][q]: rm, rm[0] are allocated      */
+  __m512i **sbv_AVX_512;                /* match scores for ssvfilter         */
+  /* Our actual vector mallocs, before we align the memory                           */
+  __m512i  *rbv_mem_AVX_512;
+  __m512i  *sbv_mem_AVX_512;
+  #endif
+
   uint8_t   tbm_b;              /* constant B->Mk cost:    scaled log 2/M(M+1)       */
   uint8_t   tec_b;              /* constant E->C  cost:    scaled log 0.5            */
   uint8_t   tjb_b;              /* constant NCJ move cost: scaled log 3/(L+3)        */
@@ -78,6 +105,8 @@ typedef struct p7_oprofile_s {
   uint8_t   base_b;             /* typically +190: offset of uchar scores            */
   uint8_t   bias_b;             /* positive bias to emission scores, make them >=0   */
 
+
+/* This filter hasn't been converted to AVX, AVX-512 yet */
   /* ViterbiFilter uses scaled swords: 8x signed 16-bit integer vectors              */
   __m128i **rwv;                /* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
   __m128i  *twv;                /* transition score blocks          [8*Q8]           */
@@ -87,14 +116,13 @@ typedef struct p7_oprofile_s {
   int16_t   ddbound_w;          /* threshold precalculated for lazy DD evaluation    */
   float     ncj_roundoff;       /* missing precision on NN,CC,JJ after rounding      */
 
+/* This filter hasn't been converted to AVX, AVX-512 yet */
   /* Forward, Backward use IEEE754 single-precision floats: 4x vectors               */
   __m128 **rfv;                 /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
   __m128  *tfv;                 /* transition probability blocks    [8*Q4]           */
   float    xf[p7O_NXSTATES][p7O_NXTRANS]; /* ENJC transition costs                   */
 
-  /* Our actual vector mallocs, before we align the memory                           */
-  __m128i  *rbv_mem;
-  __m128i  *sbv_mem;
+  
   __m128i  *rwv_mem;
   __m128i  *twv_mem;
   __m128   *tfv_mem;
@@ -125,9 +153,21 @@ typedef struct p7_oprofile_s {
   int    M;                     /* model length                                      */
   int    max_length;            /* upper bound on emitted sequence length            */
   int    allocM;                /* maximum model length currently allocated for      */
+//#ifdef p7_use_SSE  
   int    allocQ4;               /* P7_NVF(allocM): alloc size for tf, rf             */
   int    allocQ8;               /* P7_NVW(allocM): alloc size for tw, rw             */
   int    allocQ16;              /* P7_NVB(allocM): alloc size for rb                 */
+//#endif
+#ifdef p7_use_AVX  
+  int    allocQ4_AVX;               /* P7_NVF_AVX(allocM): alloc size for tf, rf             */
+  int    allocQ8_AVX;               /* P7_NVW_AVX(allocM): alloc size for tw, rw             */
+  int    allocQ16_AVX;              /* P7_NVB_AVX(allocM): alloc size for rb                 */
+#endif
+#ifdef p7_use_AVX_512  
+  int    allocQ4_AVX_512;               /* P7_NVF_AVX_512(allocM): alloc size for tf, rf             */
+  int    allocQ8_AVX_512;               /* P7_NVW_AVX_512(allocM): alloc size for tw, rw             */
+  int    allocQ16_AVX_512;              /* P7_NVB_AVX_512(allocM): alloc size for rb                 */
+#endif
   int    mode;                  /* currently must be p7_LOCAL                        */
   float  nj;                    /* expected # of J's: 0 or 1, uni vs. multihit       */
 

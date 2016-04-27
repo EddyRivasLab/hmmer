@@ -7,15 +7,36 @@
 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
+#ifdef p7_use_AVX
+	#include <immintrin.h>  /* AVX2 */
+#endif
+#ifdef p7_use_AVX_512
+	#include <immintrin.h>  /* AVX-512 */
+#endif
 
 enum p7f_mxtype_e { p7F_NONE = 0, p7F_SSVFILTER = 1, p7F_MSVFILTER = 2, p7F_VITFILTER = 3 };
                                 
 typedef struct p7_filtermx_s {  /* MSV needs P7_NVB(M); VF needs 3*P7_NVW(M) __m128i vectors. */
   int      M;			/* current profile size: determines width of <dp> row    */
+
+//#ifdef p7_use_SSE
   __m128i *dp;			/* aligned, one row of DP memory: >= 3*P7_NVW(M) vectors */
 
   void    *dp_mem;		/* unaligned raw memory, where we allocate    */
   int      allocM;		/* <dp_mem> is allocated to hold up to M=allocM */
+//#endif
+
+#ifdef p7_use_AVX
+	__m256i *dp_AVX;   // add separate versions of each of these to support running the different
+	void *dp_mem_AVX;  // vector ISAs simultaneously for testing.
+	int allocM_AVX;
+#endif
+
+#ifdef p7_use_AVX_512
+	__m512i *dp_AVX_512;   // add separate versions of each of these to support running the different
+	void *dp_mem_AVX_512;  // vector ISAs simultaneously for testing.
+	int allocM_AVX_512;
+#endif
 
   enum p7f_mxtype_e type;	/* p7F_NONE | p7F_SSVFILTER | p7F_MSVFILTER | p7F_VITFILTER */
 

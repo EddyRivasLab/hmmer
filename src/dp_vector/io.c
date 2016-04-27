@@ -118,8 +118,9 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
     if (fwrite( (char *) om->sbv[x],    sizeof(__m128i),  Q16x,        ffp) != Q16x)        ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   
   for (x = 0; x < om->abc->Kp; x++)
+ #ifdef p7_use_SSE
     if (fwrite( (char *) om->rbv[x],    sizeof(__m128i),  Q16,         ffp) != Q16)         ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  
+ #endif 
   if (fwrite((char *) om->evparam,      sizeof(float),    p7_NEVPARAM, ffp) != p7_NEVPARAM) ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   if (fwrite((char *) om->offs,         sizeof(off_t),    p7_NOFFSETS, ffp) != p7_NOFFSETS) ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   if (fwrite((char *) om->compo,        sizeof(float),    p7_MAXABET,  ffp) != p7_MAXABET)  ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
@@ -293,8 +294,10 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   if (! fread((char *) &(om->bias_b),    sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read bias");
   for (x = 0; x < abc->Kp; x++)
     if (! fread((char *) om->sbv[x],     sizeof(__m128i), Q16x,        hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ssv scores at %d [residue %c]", x, abc->sym[x]); 
+  #ifdef p7_use_SSE
   for (x = 0; x < abc->Kp; x++)
     if (! fread((char *) om->rbv[x],     sizeof(__m128i), Q16,         hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read msv scores at %d [residue %c]", x, abc->sym[x]); 
+  #endif
   if (! fread((char *) om->evparam,      sizeof(float),   p7_NEVPARAM, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read stat params");
   if (! fread((char *) om->offs,         sizeof(off_t),   p7_NOFFSETS, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read hmmpfam offsets");
   if (! fread((char *) om->compo,        sizeof(float),   p7_MAXABET,  hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model composition");
