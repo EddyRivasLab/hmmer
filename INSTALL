@@ -10,9 +10,9 @@ Installation chapter in the HMMER User's Guide (Userguide.pdf).
 
 Starting from a distribution "with binaries", such as 
 hmmer-@HMMER_VERSION@-linux-intel-x86_64.tar.gz:
- uncompress:                uncompress hmmer-@HMMER_VERSION@-xyz.tar.gz  
- unpack:                    tar xf hmmer-@HMMER_VERSION@-xyz.tar
- move into new directory:   cd hmmer-@HMMER_VERSION@-xyz
+   uncompress hmmer-@HMMER_VERSION@-xyz.tar.gz  
+   tar xf hmmer-@HMMER_VERSION@-xyz.tar
+   cd hmmer-@HMMER_VERSION@-xyz
  
 The pre-compiled binaries are found in the directory ./binaries.
 You may copy these into a directory of your choosing, or simply add
@@ -21,13 +21,13 @@ this directory to your $PATH variable.
 -------------------------------------------------------------
 
 Starting from a source distribution, hmmer-@HMMER_VERSION@.tar.gz:
- uncompress:                uncompress hmmer-@HMMER_VERSION@.tar.gz  
- unpack:                    tar xf hmmer-@HMMER_VERSION@.tar
- move into new directory:   cd hmmer-@HMMER_VERSION@
- configure:                 ./configure
- build:                     make
- automated tests:           make check
- automated install:         make install
+   uncompress hmmer-@HMMER_VERSION@.tar.gz  
+   tar xf hmmer-@HMMER_VERSION@.tar
+   cd hmmer-@HMMER_VERSION@
+   ./configure
+   make
+   make check                        # optional: automated tests
+   make install                      # optional: installation
 
 -------------------------------------------------------------
 
@@ -39,20 +39,8 @@ including all UNIX and Macintosh systems. A binary version is also
 available for Windows systems with Cygwin installed (Cygwin is 
 optional POSIX compatibility software).
 
--------------------------------------------------------------
-Starting from a Subversion (SVN) working copy:
-
-If you have checked HMMER out from its Subversion repository, there's
-some additional stuff you need to do one-time-only in your new working
-directory:
-
-   ln -s easel/aclocal.m4 aclocal.m4
-   autoconf
-   (cd easel; autoconf)
 
 -------------------------------------------------------------
-The HMMER development team
-HHMI Janelia Farm Research Campus
-http://hmmer.org/
+HMMER development team | HHMI/Harvard | http://hmmer.org/
 
 
