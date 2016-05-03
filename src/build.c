@@ -420,7 +420,7 @@ utest_basic(void)
   char          msafile[16]  = "p7tmpXXXXXX"; /* tmpfile name template */
   FILE         *ofp          = NULL;
   ESL_ALPHABET *abc          = esl_alphabet_Create(eslAMINO);
-  ESLX_MSAFILE *afp          = NULL;
+  ESL_MSAFILE  *afp          = NULL;
   ESL_MSA      *msa          = NULL;
   P7_HMM       *hmm          = NULL;
   float         symfrac      = 0.5;
@@ -435,13 +435,13 @@ utest_basic(void)
   fprintf(ofp, "//\n");
   fclose(ofp);
 
-  if (eslx_msafile_Open(&abc, msafile, NULL, eslMSAFILE_UNKNOWN, NULL, &afp) != eslOK) esl_fatal(failmsg);
-  if (eslx_msafile_Read(afp, &msa)                                           != eslOK) esl_fatal(failmsg);
-  if (p7_Fastmodelmaker(msa, symfrac, NULL, &hmm, NULL)                      != eslOK) esl_fatal(failmsg);
+  if (esl_msafile_Open(&abc, msafile, NULL, eslMSAFILE_UNKNOWN, NULL, &afp) != eslOK) esl_fatal(failmsg);
+  if (esl_msafile_Read(afp, &msa)                                           != eslOK) esl_fatal(failmsg);
+  if (p7_Fastmodelmaker(msa, symfrac, NULL, &hmm, NULL)                     != eslOK) esl_fatal(failmsg);
   
   p7_hmm_Destroy(hmm);
   esl_msa_Destroy(msa);
-  eslx_msafile_Close(afp);
+  esl_msafile_Close(afp);
   esl_alphabet_Destroy(abc);
   remove(msafile);
   return;
@@ -462,7 +462,7 @@ utest_fragments(void)
   char          msafile[16]  = "p7tmpXXXXXX"; /* tmpfile name template */
   FILE         *ofp          = NULL;
   ESL_ALPHABET *abc          = esl_alphabet_Create(eslAMINO);
-  ESLX_MSAFILE *afp          = NULL;
+  ESL_MSAFILE  *afp          = NULL;
   ESL_MSA      *msa          = NULL;
   ESL_MSA      *dmsa         = NULL;
   ESL_MSA      *postmsa      = NULL;
@@ -499,10 +499,10 @@ utest_fragments(void)
   fclose(ofp);
 
   /* Read the original as text for comparison to postmsa. Make a digital copy for construction */
-  if (eslx_msafile_Open(NULL, msafile, NULL, eslMSAFILE_UNKNOWN, NULL, &afp)!= eslOK) esl_fatal(failmsg);
-  if (eslx_msafile_Read(afp, &msa)                                          != eslOK) esl_fatal(failmsg);
-  if ((dmsa = esl_msa_Clone(msa))                                           == NULL)  esl_fatal(failmsg);
-  if (esl_msa_Digitize(abc, dmsa, NULL)                                     != eslOK) esl_fatal(failmsg);
+  if (esl_msafile_Open(NULL, msafile, NULL, eslMSAFILE_UNKNOWN, NULL, &afp)!= eslOK) esl_fatal(failmsg);
+  if (esl_msafile_Read(afp, &msa)                                          != eslOK) esl_fatal(failmsg);
+  if ((dmsa = esl_msa_Clone(msa))                                          == NULL)  esl_fatal(failmsg);
+  if (esl_msa_Digitize(abc, dmsa, NULL)                                    != eslOK) esl_fatal(failmsg);
 
   if (p7_Handmodelmaker(dmsa, NULL, &hmm, &trarr)                                 != eslOK) esl_fatal(failmsg);
   for (i = 0; i < dmsa->nseq; i++)
@@ -522,7 +522,7 @@ utest_fragments(void)
   esl_msa_Destroy(msa);
   esl_msa_Destroy(dmsa);
   esl_msa_Destroy(postmsa);
-  eslx_msafile_Close(afp);
+  esl_msafile_Close(afp);
   esl_alphabet_Destroy(abc);
   remove(msafile);
   return;
@@ -590,7 +590,7 @@ main(int argc, char **argv)
   int           fmt       = eslMSAFILE_UNKNOWN;
   int           alphatype = eslUNKNOWN;
   ESL_ALPHABET *abc       = NULL;
-  ESLX_MSAFILE *afp       = NULL;
+  ESL_MSAFILE  *afp       = NULL;
   ESL_MSA      *msa       = NULL;
   P7_HMM       *hmm       = NULL;
   P7_PRIOR     *prior     = NULL;
@@ -606,8 +606,8 @@ main(int argc, char **argv)
   else if (esl_opt_GetBoolean(go, "--dna"))   alphatype = eslDNA;
   else if (esl_opt_GetBoolean(go, "--amino")) alphatype = eslAMINO;
 
-  if ((status = eslx_msafile_Open(&abc, msafile, NULL, fmt, NULL, &afp)) != eslOK)
-    eslx_msafile_OpenFailure(afp, status);
+  if ((status = esl_msafile_Open(&abc, msafile, NULL, fmt, NULL, &afp)) != eslOK)
+    esl_msafile_OpenFailure(afp, status);
 
   bg  = p7_bg_Create(abc);
 
@@ -619,9 +619,9 @@ main(int argc, char **argv)
   }
   if (prior == NULL) esl_fatal("Failed to initialize prior");
 
-  while ((status = eslx_msafile_Read(afp, &msa)) != eslEOF)
+  while ((status = esl_msafile_Read(afp, &msa)) != eslEOF)
     {
-      if (status != eslOK) eslx_msafile_ReadFailure(afp, status);
+      if (status != eslOK) esl_msafile_ReadFailure(afp, status);
 
       /* The modelmakers collect counts in an HMM structure */
       status = p7_Handmodelmaker(msa, NULL, &hmm, &trarr);
@@ -653,7 +653,7 @@ main(int argc, char **argv)
       status = p7_tracealign_MSA(msa, trarr, hmm->M, p7_DEFAULT, &postmsa);
       if (status != eslOK) esl_fatal("failed to create new MSA from traces\n");
 
-      eslx_msafile_Write(stdout, postmsa, eslMSAFILE_PFAM);
+      esl_msafile_Write(stdout, postmsa, eslMSAFILE_PFAM);
 
       p7_profile_Destroy(gm);
       p7_hmm_Destroy(hmm);
@@ -662,7 +662,7 @@ main(int argc, char **argv)
       esl_msa_Destroy(msa);
     }
 
-  eslx_msafile_Close(afp);
+  esl_msafile_Close(afp);
   p7_bg_Destroy(bg);
   esl_alphabet_Destroy(abc);
   esl_getopts_Destroy(go);
@@ -676,9 +676,6 @@ main(int argc, char **argv)
 
 /************************************************************
  * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id: build.c 3496 2011-02-28 22:18:49Z eddys $
  ************************************************************/
 
 

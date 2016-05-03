@@ -247,8 +247,8 @@ main(int argc, char **argv)
   FILE         *ofp         = NULL;    /* output file (default is stdout) */
   ESL_ALPHABET *abc         = NULL;    /* digital alphabet */
 
-  char         *alifile;  /* name of the alignment file we're building HMMs from  */
-  ESLX_MSAFILE *afp         = NULL;            /* open alifile  */
+  char         *alifile;                             /* name of the alignment file we're building HMMs from  */
+  ESL_MSAFILE  *afp         = NULL;                  /* open alifile  */
   int           infmt       = eslMSAFILE_UNKNOWN;    /* autodetect alignment format by default. */
   int           outfmt      = eslMSAFILE_STOCKHOLM;
 
@@ -288,12 +288,12 @@ main(int argc, char **argv)
   abc         = NULL;
 
   if (esl_opt_IsOn(go, "--informat")) {
-    infmt = eslx_msafile_EncodeFormat(esl_opt_GetString(go, "--informat"));
+    infmt = esl_msafile_EncodeFormat(esl_opt_GetString(go, "--informat"));
     if (infmt == eslMSAFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--informat"));
   }
 
   /* Determine output alignment file format */
-  outfmt = eslx_msafile_EncodeFormat(esl_opt_GetString(go, "--outformat"));
+  outfmt = esl_msafile_EncodeFormat(esl_opt_GetString(go, "--outformat"));
   if (outfmt == eslMSAFILE_UNKNOWN)    p7_Fail(argv[0], "%s is not a recognized output MSA file format\n", esl_opt_GetString(go, "--outformat"));
 
 
@@ -336,8 +336,8 @@ main(int argc, char **argv)
   else if (esl_opt_GetBoolean(go, "--rna"))     abc = esl_alphabet_Create(eslRNA);
   else                                          abc = NULL;
   
-  status = eslx_msafile_Open(&abc, alifile, NULL, infmt, NULL, &afp);
-  if (status != eslOK) eslx_msafile_OpenFailure(afp, status);
+  status = esl_msafile_Open(&abc, alifile, NULL, infmt, NULL, &afp);
+  if (status != eslOK) esl_msafile_OpenFailure(afp, status);
 
   if (esl_opt_IsUsed(go, "--alirange") || esl_opt_IsUsed(go, "--modelrange") ) {
     postmsafp = fopen(postmsafile, "w");
@@ -358,7 +358,7 @@ main(int argc, char **argv)
   output_header(go, ofp, alifile, postmsafile);                                  /* cheery output header                                */
 
   /* read the alignment */
-  if ((status = eslx_msafile_Read(afp, &msa)) != eslOK)  eslx_msafile_ReadFailure(afp, status);
+  if ((status = esl_msafile_Read(afp, &msa)) != eslOK)  esl_msafile_ReadFailure(afp, status);
 
 
   if (esl_opt_IsUsed(go, "--alirange") || esl_opt_IsUsed(go, "--modelrange") ) {
@@ -434,15 +434,15 @@ main(int argc, char **argv)
       for (j=mask_starts[i]; j<=mask_ends[i]; j++)
         msa->mm[j-1] = 'm';
 
-    if ((status = eslx_msafile_Write(postmsafp, msa, outfmt))  != eslOK) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+    if ((status = esl_msafile_Write(postmsafp, msa, outfmt))  != eslOK) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
   }
 
   esl_stopwatch_Stop(w);
 
   if (esl_opt_IsOn(go, "-o"))  fclose(ofp);
   if (postmsafp) fclose(postmsafp);
-  if (afp)   eslx_msafile_Close(afp);
-  if (abc)   esl_alphabet_Destroy(abc);
+  if (afp)       esl_msafile_Close(afp);
+  if (abc)       esl_alphabet_Destroy(abc);
 
   esl_getopts_Destroy(go);
   esl_stopwatch_Destroy(w);

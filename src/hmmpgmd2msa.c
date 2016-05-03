@@ -643,7 +643,7 @@ main(int argc, char **argv) {
 
   if (status != eslOK) goto ERROR;
 
-  //eslx_msafile_Write(stdout, msa, eslMSAFILE_STOCKHOLM);
+  //esl_msafile_Write(stdout, msa, eslMSAFILE_STOCKHOLM);
 
   exit(0);
 
@@ -656,9 +656,6 @@ ERROR:
 
 /************************************************************
  * @LICENSE@
- * 
- * SVN $URL: https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk/src/hmmpgmd2msa.c $
- * SVN $Id: build.c 3496 2011-02-28 22:18:49Z wheelert $
  ************************************************************/
 
 

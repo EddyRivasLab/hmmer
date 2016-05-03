@@ -414,7 +414,7 @@ main(int argc, char **argv)
     if (strcasecmp("fasta", esl_opt_GetString(go, "--qformat")) == 0)
       cfg.qfmt = eslSQFILE_FASTA;
     else
-      cfg.qfmt = eslx_msafile_EncodeFormat(esl_opt_GetString(go, "--qformat"));
+      cfg.qfmt = esl_msafile_EncodeFormat(esl_opt_GetString(go, "--qformat"));
 
     if (cfg.qfmt == eslMSAFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
   }
@@ -454,27 +454,27 @@ main(int argc, char **argv)
 static int
 serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 {
-  FILE            *ofp          = stdout;          /* results output file (-o)                        */
-  FILE            *afp          = NULL;            /* alignment output file (-A)                      */
-  FILE            *tblfp        = NULL;            /* output stream for tabular  (--tblout)    */
-  FILE            *dfamtblfp    = NULL;            /* output stream for tabular Dfam format (--dfamtblout)    */
-  FILE            *aliscoresfp  = NULL;            /* output stream for alignment scores (--aliscoresout)    */
+  FILE            *ofp          = stdout;          /* results output file (-o)                              */
+  FILE            *afp          = NULL;            /* alignment output file (-A)                            */
+  FILE            *tblfp        = NULL;            /* output stream for tabular  (--tblout)                 */
+  FILE            *dfamtblfp    = NULL;            /* output stream for tabular Dfam format (--dfamtblout)  */
+  FILE            *aliscoresfp  = NULL;            /* output stream for alignment scores (--aliscoresout)   */
 
   /*Some fraction of these will be used, depending on what sort of input is used for the query*/
-  P7_HMMFILE      *hfp        = NULL;              /* open input HMM file                             */
-  P7_HMM          *hmm        = NULL;              /* one HMM query                                   */
-  ESLX_MSAFILE    *qfp_msa    = NULL;              /* open query alifile */
-  ESL_SQFILE      *qfp_sq     = NULL;          /* open query seqfile                                       */
-  ESL_SQ          *qsq        = NULL;          /* query sequence                                   */
+  P7_HMMFILE      *hfp        = NULL;              /* open input HMM file    */
+  P7_HMM          *hmm        = NULL;              /* one HMM query          */
+  ESL_MSAFILE     *qfp_msa    = NULL;              /* open query alifile     */
+  ESL_SQFILE      *qfp_sq     = NULL;              /* open query seqfile     */
+  ESL_SQ          *qsq        = NULL;              /* query sequence         */
   FILE            *hmmoutfp   = NULL;              /* output stream for hmms (--hmmout),  only if input is an alignment file    */
-  char            *hmmfile    = NULL;              /* file to write HMM to                    */
+  char            *hmmfile    = NULL;              /* file to write HMM to   */
 
-  int              dbformat  =  eslSQFILE_UNKNOWN;  /* format of dbfile                                 */
-  ESL_SQFILE      *dbfp      = NULL;              /* open input sequence file                        */
+  int              dbformat  =  eslSQFILE_UNKNOWN; /* format of dbfile          */
+  ESL_SQFILE      *dbfp      = NULL;               /* open input sequence file  */
 
   P7_BG           *bg_manual  = NULL;
 
-  ESL_ALPHABET    *abc       = NULL;              /* digital alphabet                                */
+  ESL_ALPHABET    *abc       = NULL;              /* digital alphabet           */
   ESL_STOPWATCH   *w;
   P7_SCOREDATA    *scoredata = NULL;
 
@@ -616,7 +616,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       status = eslENORESULT;
     } else {
       //Haven't already decided that it's a fasta file; try MSA first
-      status = eslx_msafile_Open(&abc, cfg->queryfile, NULL, cfg->qfmt, NULL, &qfp_msa);
+      status = esl_msafile_Open(&abc, cfg->queryfile, NULL, cfg->qfmt, NULL, &qfp_msa);
     }
 
     if      (status == eslENOTFOUND) {
@@ -671,7 +671,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
     } else {
       // read first sequence alignment
-      qhstatus = eslx_msafile_Read(qfp_msa, &msa);
+      qhstatus = esl_msafile_Read(qfp_msa, &msa);
       if (qhstatus != eslOK) p7_Fail("reading alignment from file %s (%d)\n", cfg->queryfile, qhstatus);
     }
 
@@ -1072,8 +1072,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           ESL_MSA *msa = NULL;
 
           if (p7_tophits_Alignment(info->th, abc, NULL, NULL, 0, p7_DEFAULT, &msa) == eslOK) {
-            if (textw > 0) eslx_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
-            else           eslx_msafile_Write(afp, msa, eslMSAFILE_PFAM);
+            if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
+            else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 
             if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
           }  else {
@@ -1099,7 +1099,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         qhstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
       } else if (qfp_msa != NULL){
         esl_msa_Destroy(msa);
-        qhstatus = eslx_msafile_Read(qfp_msa, &msa);
+        qhstatus = esl_msafile_Read(qfp_msa, &msa);
       } else { // qfp_sq
         qhstatus = esl_sqio_Read(qfp_sq, qsq);
       }
@@ -1115,7 +1115,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       default:            p7_Fail("Unexpected error (%d) in reading HMMs from %s", qhstatus, cfg->queryfile);
     }
   } else if (qfp_msa != NULL){
-    if (qhstatus != eslEOF ) eslx_msafile_ReadFailure(qfp_msa, status);
+    if (qhstatus != eslEOF ) esl_msafile_ReadFailure(qfp_msa, status);
   } else { // qfp_sq
     if      (qhstatus == eslEFORMAT) p7_Fail("Parse failed (sequence file %s):\n%s\n",
                 qfp_sq->filename, esl_sqfile_GetErrorBuf(qfp_sq));
@@ -1168,12 +1168,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
 
-  if (hfp != NULL)     p7_hmmfile_Close(hfp);
-  if (qfp_msa != NULL) eslx_msafile_Close(qfp_msa);
-  if (qfp_sq != NULL)  esl_sqfile_Close(qfp_sq);
+  if (hfp)     p7_hmmfile_Close(hfp);
+  if (qfp_msa) esl_msafile_Close(qfp_msa);
+  if (qfp_sq)  esl_sqfile_Close(qfp_sq);
 
-  if (builder != NULL) p7_builder_Destroy(builder);
-  if (qsq != NULL)     esl_sq_Destroy(qsq);
+  if (builder) p7_builder_Destroy(builder);
+  if (qsq)     esl_sq_Destroy(qsq);
 
   esl_sqfile_Close(dbfp);
   esl_alphabet_Destroy(abc);
@@ -1196,12 +1196,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   return eslOK;
 
  ERROR:
-   if (hfp != NULL)     p7_hmmfile_Close(hfp);
-   if (qfp_msa != NULL) eslx_msafile_Close(qfp_msa);
-   if (qfp_sq != NULL)  esl_sqfile_Close(qfp_sq);
+   if (hfp)     p7_hmmfile_Close(hfp);
+   if (qfp_msa) esl_msafile_Close(qfp_msa);
+   if (qfp_sq)  esl_sqfile_Close(qfp_sq);
 
-   if (builder != NULL) p7_builder_Destroy(builder);
-   if (qsq != NULL)     esl_sq_Destroy(qsq);
+   if (builder) p7_builder_Destroy(builder);
+   if (qsq)     esl_sq_Destroy(qsq);
 
    if (ofp != stdout) fclose(ofp);
    if (afp)           fclose(afp);
@@ -1689,9 +1689,6 @@ assign_Lengths(P7_TOPHITS *th, ID_LENGTH_LIST *id_length_list) {
 
 /*****************************************************************
  * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id$
  *****************************************************************/
 
 

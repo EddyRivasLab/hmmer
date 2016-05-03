@@ -1196,7 +1196,7 @@ main(int argc, char **argv)
   }
 
   /* Determine output alignment file format */
-  outfmt = eslx_msafile_EncodeFormat(esl_opt_GetString(go, "--outformat"));
+  outfmt = esl_msafile_EncodeFormat(esl_opt_GetString(go, "--outformat"));
   if (outfmt == eslMSAFILE_UNKNOWN)    esl_fatal(argv[0], "%s is not a recognized output MSA file format\n", esl_opt_GetString(go, "--outformat"));
 
   /* Open output stream */
@@ -1268,7 +1268,7 @@ main(int argc, char **argv)
 
   p7_tracealign_getMSAandStats(hmm, sq, totseq, &msa, pp, relent, scores);
 
-  eslx_msafile_Write(ofp, msa, outfmt);
+  esl_msafile_Write(ofp, msa, outfmt);
 
   for (idx = 0; idx < totseq; idx++) {
     printf("%s\n------------------\n", sq[idx]->name);

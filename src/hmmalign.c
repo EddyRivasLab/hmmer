@@ -1,5 +1,4 @@
 /* hmmalign:  align sequences to a profile HMM
- * 
  */
 #include "p7_config.h"
 
@@ -125,7 +124,7 @@ main(int argc, char **argv)
   }
 
   /* Determine output alignment file format */
-  outfmt = eslx_msafile_EncodeFormat(esl_opt_GetString(go, "--outformat"));
+  outfmt = esl_msafile_EncodeFormat(esl_opt_GetString(go, "--outformat"));
   if (outfmt == eslMSAFILE_UNKNOWN)    cmdline_failure(argv[0], "%s is not a recognized output MSA file format\n", esl_opt_GetString(go, "--outformat"));
 
   /* Open output stream */
@@ -202,7 +201,7 @@ main(int argc, char **argv)
 
   p7_tracealign_Seqs(sq, tr, totseq, hmm->M, msaopts, hmm, &msa);
 
-  eslx_msafile_Write(ofp, msa, outfmt);
+  esl_msafile_Write(ofp, msa, outfmt);
 
   for (idx = 0; idx <= totseq; idx++) esl_sq_Destroy(sq[idx]);    /* including sq[nseq] because we overallocated */
   for (idx = 0; idx <  totseq; idx++) p7_trace_Destroy(tr[idx]); 
@@ -230,7 +229,7 @@ map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_sq, P7_TRACE
 {
   ESL_SQ       **sq        = NULL;
   P7_TRACE     **tr        = NULL;
-  ESLX_MSAFILE  *afp       = NULL;
+  ESL_MSAFILE   *afp       = NULL;
   ESL_MSA       *msa       = NULL;
   ESL_ALPHABET  *abc       = (ESL_ALPHABET *) hmm->abc; /* removing const'ness to make compiler happy. Safe. */
   int           *matassign = NULL;
@@ -238,11 +237,11 @@ map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_sq, P7_TRACE
   int            i,k;
   int            status;
 
-  status = eslx_msafile_Open(&abc, msafile, NULL, eslMSAFILE_UNKNOWN, NULL, &afp);
-  if (status != eslOK) eslx_msafile_OpenFailure(afp, status);
+  status = esl_msafile_Open(&abc, msafile, NULL, eslMSAFILE_UNKNOWN, NULL, &afp);
+  if (status != eslOK) esl_msafile_OpenFailure(afp, status);
 
-  status = eslx_msafile_Read(afp, &msa);
-  if (status != eslOK) eslx_msafile_ReadFailure(afp, status);
+  status = esl_msafile_Read(afp, &msa);
+  if (status != eslOK) esl_msafile_ReadFailure(afp, status);
 
   if (! (hmm->flags & p7H_CHKSUM)  )  esl_fatal("HMM has no checksum. --mapali unreliable without it.");
   if (! (hmm->flags & p7H_MAP)  )     esl_fatal("HMM has no map. --mapali can't work without it.");
@@ -272,7 +271,7 @@ map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_sq, P7_TRACE
   *ret_tr   = tr;
   *ret_sq   = sq;
 
-  eslx_msafile_Close(afp);
+  esl_msafile_Close(afp);
   esl_msa_Destroy(msa);
   free(matassign);
   return eslOK;
@@ -281,7 +280,7 @@ map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_sq, P7_TRACE
   *ret_ntot = 0;
   *ret_tr   = NULL;
   *ret_sq   = NULL;
-  if (afp       != NULL) eslx_msafile_Close(afp);
+  if (afp       != NULL) esl_msafile_Close(afp);
   if (msa       != NULL) esl_msa_Destroy(msa);
   if (matassign != NULL) free(matassign);
   return status;
@@ -292,7 +291,4 @@ map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_sq, P7_TRACE
 
 /*****************************************************************
  * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id: hmmalign.c 3619 2011-07-28 11:14:18Z eddys $
  *****************************************************************/

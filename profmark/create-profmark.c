@@ -158,7 +158,7 @@ main(int argc, char **argv)
   char          outfile[256];	/* name of an output file          */
   int           alifmt;		/* format code for alifile         */
   int           dbfmt;		/* format code for dbfile          */
-  ESLX_MSAFILE  *afp    = NULL;	/* open alignment file             */
+  ESL_MSAFILE   *afp    = NULL;	/* open alignment file             */
   ESL_MSA      *origmsa = NULL;	/* one multiple sequence alignment */
   ESL_MSA      *msa     = NULL;	/* MSA after frags are removed     */
   ESL_MSA      *trainmsa= NULL;	/* training set, aligned           */
@@ -216,8 +216,8 @@ main(int argc, char **argv)
   else if (esl_opt_GetBoolean(go, "--dna"))     cfg.abc = esl_alphabet_Create(eslDNA);
   else if (esl_opt_GetBoolean(go, "--rna"))     cfg.abc = esl_alphabet_Create(eslRNA);
 
-  status = eslx_msafile_Open(&(cfg.abc), alifile, NULL, alifmt, NULL, &afp);
-  if (status != eslOK) eslx_msafile_OpenFailure(afp, status);
+  status = esl_msafile_Open(&(cfg.abc), alifile, NULL, alifmt, NULL, &afp);
+  if (status != eslOK) esl_msafile_OpenFailure(afp, status);
 
   if (cfg.abc->type == eslAMINO) esl_composition_SW34(cfg.fq);
   else                           esl_vec_DSet(cfg.fq, cfg.abc->K, 1.0 / (double) cfg.abc->K);
@@ -227,9 +227,9 @@ main(int argc, char **argv)
 
   /* Read and process MSAs one at a time  */
   nali = 0;
-  while ((status = eslx_msafile_Read(afp, &origmsa)) != eslEOF)
+  while ((status = esl_msafile_Read(afp, &origmsa)) != eslEOF)
     {
-      if (status != eslOK) eslx_msafile_ReadFailure(afp, status);
+      if (status != eslOK) esl_msafile_ReadFailure(afp, status);
       esl_msa_ConvertDegen2X(origmsa); 
       esl_msa_Hash(origmsa);
 
@@ -252,7 +252,7 @@ main(int argc, char **argv)
 
 	  synthesize_positives(go, &cfg, msa->name, teststack, &ntest);
 
-	  eslx_msafile_Write(cfg.out_msafp, trainmsa, eslMSAFILE_STOCKHOLM);
+	  esl_msafile_Write(cfg.out_msafp, trainmsa, eslMSAFILE_STOCKHOLM);
 
 	  esl_dst_XAverageId(cfg.abc, trainmsa->ax, trainmsa->nseq, 10000, &avgid); /* 10000 is max_comparisons, before sampling kicks in */
 	  fprintf(cfg.tblfp, "%-20s  %3.0f%% %6d %6d %6d %6d %6d %6d\n", msa->name, 100.*avgid, (int) trainmsa->alen, msa->nseq, nfrags, trainmsa->nseq, ntestdom, ntest);
@@ -275,7 +275,7 @@ main(int argc, char **argv)
   if (cfg.pidfp) fclose(cfg.pidfp);
   esl_randomness_Destroy(cfg.r);
   esl_alphabet_Destroy(cfg.abc);
-  eslx_msafile_Close(afp);
+  esl_msafile_Close(afp);
   esl_getopts_Destroy(go);
   return 0;
 }
@@ -748,9 +748,6 @@ write_pids(FILE *pidfp, ESL_MSA *origmsa, ESL_MSA *trainmsa, ESL_STACK *teststac
 
 /*****************************************************************
  * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id: create-profmark.c 3267 2010-05-14 17:27:36Z eddys $
  *****************************************************************/
 
   

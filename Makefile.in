@@ -190,62 +190,10 @@ endif
 
 
 TAGS:
-	-rm -f ${top_srcdir}/TAGS
-	make tags-append	
+	./makeTAGS.sh
 
-tags-append:
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/Makefile.in
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/COPYRIGHT
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/INSTALL
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/LICENSE
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/README
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/configure.ac
 
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/src/*.c
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/src/*.h
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/src/*.in
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/src/*.pl
-
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/src/impl_sse/*.c
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/src/impl_sse/*.h
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/src/impl_sse/*.in
-
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/src/impl_dummy/*.c
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/src/impl_dummy/*.h
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/src/impl_dummy/*.in
-
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/src/impl_vmx/*.c
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/src/impl_vmx/*.h
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/src/impl_vmx/*.in
-
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/documentation/man/*.in
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/documentation/man/*.man
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/documentation/man/boilerplate-tail
-
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/documentation/userguide/*.in
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/documentation/userguide/*.tex
-
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/libdivsufsort/README
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/libdivsufsort/*.in
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/libdivsufsort/*.c
-
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/profmark/00README
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/profmark/*.in
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/profmark/*.c
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/profmark/x-*
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/profmark/pmark-*
-
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/testsuite/*.in
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/testsuite/*.pl
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/testsuite/*.sh
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/testsuite/*.pm
-	etags -o ${top_srcdir}/TAGS -a ${srcdir}/testsuite/*.sqc
-
-	${QUIET_SUBDIR0}easel ${QUIET_SUBDIR1} tags-append
 
 ################################################################
 # @LICENSE@
-#
-# SVN $URL$
-# SVN $Id$
 ################################################################
