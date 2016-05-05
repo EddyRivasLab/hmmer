@@ -113,16 +113,16 @@ may be defined for testing, although doing so in actual use will merely slow the
 doing redundant work */
 
 #define p7_use_SSE
-//#define p7_use_AVX
-//#define p7_use_AVX_512 
+#define p7_use_AVX
+#define p7_use_AVX_512 
 
 /* Check code.  Defining p7_check_AVX causes both the final outputs and intermediate steps
 of the AVX code to be checked against the SSE code.  p7_check_AVX_512 compares the AVX_512 code
 against the SSE code.  p7_check_AVX requires that both p7_use_SSE and p7_USE AVX be defined.  
 p7_check_AVX_512 requires both p7_use_SSE and p7_use_AVX_512 */
 
-//#define p7_check_AVX
-//#define p7_check_AVX_512
+#define p7_check_AVX
+#define p7_check_AVX_512
 
 /*****************************************************************
  * 5. The final section isn't meant to be human editable at all.

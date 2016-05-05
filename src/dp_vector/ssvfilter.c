@@ -411,6 +411,9 @@
 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
+#ifdef p7_use_AVX
+ #include<immintrin.h>
+#endif
 
 #include "easel.h"
 #include "esl_sse.h"
@@ -429,21 +432,71 @@
 #define  MAX_BANDS 6
 #endif
 
+//#define p7_log_array
+#ifdef p7_log_array
 
+__m128i *log_array_SSE;  // array to hold logging data for SSE version
+__m256i *log_array_AVX;  // array to hold logging data for AVX version
+__m128i *SSE_log_pointer;
+__m256i	*AVX_log_pointer;
+
+	
+void compare_logs(int M, int L){
+	extern __m128i *log_array_SSE;  
+	extern __m256i *log_array_AVX;
+	int Q = P7_NVB(M);
+	int Q_AVX = P7_NVB_AVX(M);
+	for(int i = 0; i < L; i++){
+		__m128i *SSE_row = log_array_SSE + (i*Q); // Get pointers to the row of each array that we're looking at 
+		__m256i *AVX_row = log_array_AVX + (i * Q_AVX);
+		int check_elem;
+      	char *SSE_bytes = (char *) SSE_row;
+      	char *AVX_bytes = (char *) AVX_row;
+      	for(check_elem = 0; check_elem < M; check_elem++){
+         	uint8_t sse_byte = SSE_bytes[((check_elem % Q) * 16) + (check_elem / Q)];
+          	uint8_t avx_byte = AVX_bytes[((check_elem % Q_AVX) * 32) + (check_elem / Q_AVX)];
+          	if(sse_byte != avx_byte){
+            	printf("SSV log miss-match at row %d position %d: %i (SSE) vs %i (AVX)\n", i, check_elem, sse_byte, avx_byte);
+          	}
+		}
+	}
+}
+#endif
+/* C doesn't allow ifdefs within macros, so we need to define separate macros for the SSE, AVX, AVX-512 code */
+
+#ifdef p7_use_SSE
 #define STEP_SINGLE(sv)                         \
   sv   = _mm_subs_epi8(sv, *rsc); rsc++;        \
-  xEv  = _mm_max_epu8(xEv, sv);
+  xEv  = _mm_max_epu8(xEv, sv);	 /* \
+  extern __m128i *SSE_log_pointer; \
+  *SSE_log_pointer = sv; \
+  SSE_log_pointer++; */
+#endif
 
+#ifdef p7_use_AVX
+#define STEP_SINGLE_AVX(sv_AVX) \
+  sv_AVX   = _mm256_subs_epi8(sv_AVX, *rsc_AVX); rsc_AVX++;        \
+  xEv_AVX  = _mm256_max_epu8(xEv_AVX, sv_AVX);	/*\
+   extern __m256i *AVX_log_pointer; \
+  *AVX_log_pointer = sv_AVX; \
+  AVX_log_pointer++; */
+#endif
 
+#ifdef p7_use_SSE
 #define LENGTH_CHECK(label)                     \
   if (i >= L) goto label;
+#endif
 
+#ifdef p7_use_AVX
+#define LENGTH_CHECK_AVX(label)                     \
+  if (i_AVX >= L) goto label;
+#endif
 
 #define NO_CHECK(label)
 
-
+#ifdef p7_use_SSE
 #define STEP_BANDS_1()                          \
-  STEP_SINGLE(sv00)
+  STEP_SINGLE(sv00) 
 
 #define STEP_BANDS_2()                          \
   STEP_BANDS_1()                                \
@@ -512,8 +565,82 @@
 #define STEP_BANDS_18()                         \
   STEP_BANDS_17()                               \
   STEP_SINGLE(sv17)
+#endif
 
+#ifdef p7_use_AVX
+#define STEP_BANDS_1_AVX()                          \
+  STEP_SINGLE_AVX(sv00_AVX)
 
+#define STEP_BANDS_2_AVX()                          \
+  STEP_BANDS_1_AVX()                                \
+  STEP_SINGLE_AVX(sv01_AVX)
+
+#define STEP_BANDS_3_AVX()                          \
+  STEP_BANDS_2_AVX()                                \
+  STEP_SINGLE_AVX(sv02_AVX)
+
+#define STEP_BANDS_4_AVX()                          \
+  STEP_BANDS_3_AVX()                                \
+  STEP_SINGLE_AVX(sv03_AVX)
+
+#define STEP_BANDS_5_AVX()                          \
+  STEP_BANDS_4_AVX()                                \
+  STEP_SINGLE_AVX(sv04_AVX)
+
+#define STEP_BANDS_6_AVX()                          \
+  STEP_BANDS_5_AVX()                                \
+  STEP_SINGLE_AVX(sv05_AVX)
+
+#define STEP_BANDS_7_AVX()                          \
+  STEP_BANDS_6_AVX()                                \
+  STEP_SINGLE_AVX(sv06_AVX)
+
+#define STEP_BANDS_8_AVX()                          \
+  STEP_BANDS_7_AVX()                                \
+  STEP_SINGLE_AVX(sv07_AVX)
+
+#define STEP_BANDS_9_AVX()                          \
+  STEP_BANDS_8_AVX()                                \
+  STEP_SINGLE_AVX(sv08_AVX)
+
+#define STEP_BANDS_10_AVX()                         \
+  STEP_BANDS_9_AVX()                                \
+  STEP_SINGLE_AVX(sv09_AVX)
+
+#define STEP_BANDS_11_AVX()                         \
+  STEP_BANDS_10_AVX()                               \
+  STEP_SINGLE_AVX(sv10_AVX)
+
+#define STEP_BANDS_12_AVX()                         \
+  STEP_BANDS_11_AVX( )                               \
+  STEP_SINGLE_AVX(sv11_AVX)
+
+#define STEP_BANDS_13_AVX()                         \
+  STEP_BANDS_12_AVX()                               \
+  STEP_SINGLE_AVX(sv12_AVX)
+
+#define STEP_BANDS_14_AVX()                         \
+  STEP_BANDS_13_AVX()                               \
+  STEP_SINGLE_AVX(sv13_AVX)
+
+#define STEP_BANDS_15_AVX()                         \
+  STEP_BANDS_14_AVX()                               \
+  STEP_SINGLE_AVX(sv14_AVX)
+
+#define STEP_BANDS_16_AVX()                         \
+  STEP_BANDS_15_AVX()                               \
+  STEP_SINGLE_AVX(sv15_AVX)
+
+#define STEP_BANDS_17_AVX()                         \
+  STEP_BANDS_16_AVX()                               \
+  STEP_SINGLE_AVX(sv16_AVX)
+
+#define STEP_BANDS_18_AVX()                         \
+  STEP_BANDS_17_AVX()                               \
+  STEP_SINGLE_AVX(sv17_AVX)
+#endif
+
+#ifdef p7_use_SSE
 #define CONVERT_STEP(step, length_check, label, sv, pos)        \
   length_check(label)                                           \
   rsc = om->sbv[dsq[i]] + pos;                                   \
@@ -521,8 +648,21 @@
   sv = _mm_slli_si128(sv, 1);                                   \
   sv = _mm_or_si128(sv, beginv);                                \
   i++;
+#endif
 
+#ifdef p7_use_AVX
+// Note: this uses the two-instruction AVX shift macro from stackoverflow.com, rewritten 
+// to avoid introducing an explicit temporary variable
+#define CONVERT_STEP_AVX(step, length_check, label, sv_AVX, pos)        \
+  length_check(label)                                           \
+  rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + pos;                                   \
+  step()       \
+  sv_AVX = _mm256_alignr_epi8(sv_AVX, _mm256_permute2x128_si256(sv_AVX, sv_AVX, _MM_SHUFFLE(0,0,3,0) ),15); \
+  sv_AVX = _mm256_or_si256(sv_AVX, beginv_AVX);                                \
+  i_AVX++;
+#endif
 
+#ifdef p7_use_SSE
 #define CONVERT_1(step, LENGTH_CHECK, label)            \
   CONVERT_STEP(step, LENGTH_CHECK, label, sv00, Q - 1)
 
@@ -593,8 +733,82 @@
 #define CONVERT_18(step, LENGTH_CHECK, label)           \
   CONVERT_STEP(step, LENGTH_CHECK, label, sv17, Q - 18) \
   CONVERT_17(step, LENGTH_CHECK, label)
+#endif
 
+#ifdef p7_use_AVX
+#define CONVERT_1_AVX(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv00_AVX, Q_AVX - 1)
 
+#define CONVERT_2_AVX(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv01_AVX, Q_AVX - 2)  \
+  CONVERT_1_AVX(step, LENGTH_CHECK, label)
+
+#define CONVERT_3_AVX(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv02_AVX, Q_AVX - 3)  \
+  CONVERT_2_AVX(step, LENGTH_CHECK, label)
+
+#define CONVERT_4_AVX(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv03_AVX, Q_AVX - 4)  \
+  CONVERT_3_AVX(step, LENGTH_CHECK, label)
+
+#define CONVERT_5_AVX(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv04_AVX, Q_AVX - 5)  \
+  CONVERT_4_AVX(step, LENGTH_CHECK, label)
+
+#define CONVERT_6_AVX(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv05_AVX, Q_AVX - 6)  \
+  CONVERT_5_AVX(step, LENGTH_CHECK, label)
+
+#define CONVERT_7_AVX(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv06_AVX, Q_AVX - 7)  \
+  CONVERT_6_AVX(step, LENGTH_CHECK, label)
+
+#define CONVERT_8_AVX(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv07_AVX, Q_AVX - 8)  \
+  CONVERT_7_AVX(step, LENGTH_CHECK, label)
+
+#define CONVERT_9_AVX(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv08_AVX, Q_AVX - 9)  \
+  CONVERT_8_AVX(step, LENGTH_CHECK, label)
+
+#define CONVERT_10_AVX(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv09_AVX, Q_AVX - 10) \
+  CONVERT_9_AVX(step, LENGTH_CHECK, label)
+
+#define CONVERT_11_AVX(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv10_AVX, Q_AVX - 11) \
+  CONVERT_10_AVX(step, LENGTH_CHECK, label)
+
+#define CONVERT_12_AVX(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv11_AVX, Q_AVX - 12) \
+  CONVERT_11_AVX(step, LENGTH_CHECK, label)
+
+#define CONVERT_13_AVX(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv12_AVX, Q_AVX - 13) \
+  CONVERT_12_AVX(step, LENGTH_CHECK, label)
+
+#define CONVERT_14_AVX(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv13_AVX, Q_AVX - 14) \
+  CONVERT_13_AVX(step, LENGTH_CHECK, label)
+
+#define CONVERT_15_AVX(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv14_AVX, Q_AVX - 15) \
+  CONVERT_14_AVX(step, LENGTH_CHECK, label)
+
+#define CONVERT_16_AVX(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv15_AVX, Q_AVX - 16) \
+  CONVERT_15_AVX(step, LENGTH_CHECK, label)
+
+#define CONVERT_17_AVX(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv16_AVX, Q_AVX - 17) \
+  CONVERT_16_AVX(step, LENGTH_CHECK, label)
+
+#define CONVERT_18_AVX(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv17_AVX, Q_AVX - 18) \
+  CONVERT_17_AVX(step, LENGTH_CHECK, label)
+#endif
+
+#ifdef p7_use_SSE  
 #define RESET_1()                               \
   register __m128i sv00 = beginv;
 
@@ -665,8 +879,82 @@
 #define RESET_18()                              \
   RESET_17()                                    \
   register __m128i sv17 = beginv;
+#endif
 
+#ifdef p7_use_AVX 
+#define RESET_1_AVX()                               \
+  register __m256i sv00_AVX = beginv_AVX;
 
+#define RESET_2_AVX()                               \
+  RESET_1_AVX()                                     \
+  register __m256i sv01_AVX = beginv_AVX;
+
+#define RESET_3_AVX()                               \
+  RESET_2_AVX()                                     \
+  register __m256i sv02_AVX = beginv_AVX;
+
+#define RESET_4_AVX()                               \
+  RESET_3_AVX()                                     \
+  register __m256i sv03_AVX = beginv_AVX;
+
+#define RESET_5_AVX()                               \
+  RESET_4_AVX()                                     \
+  register __m256i sv04_AVX = beginv_AVX;
+
+#define RESET_6_AVX()                               \
+  RESET_5_AVX()                                     \
+  register __m256i sv05_AVX = beginv_AVX;
+
+#define RESET_7_AVX()                               \
+  RESET_6_AVX()                                     \
+  register __m256i sv06_AVX = beginv_AVX;
+
+#define RESET_8_AVX()                               \
+  RESET_7_AVX()                                     \
+  register __m256i sv07_AVX = beginv_AVX;
+
+#define RESET_9_AVX()                               \
+  RESET_8_AVX()                                     \
+  register __m256i sv08_AVX = beginv_AVX;
+
+#define RESET_10_AVX()                              \
+  RESET_9_AVX()                                     \
+  register __m256i sv09_AVX = beginv_AVX;
+
+#define RESET_11_AVX()                              \
+  RESET_10_AVX()                                    \
+  register __m256i sv10_AVX = beginv_AVX;
+
+#define RESET_12_AVX()                              \
+  RESET_11_AVX()                                    \
+  register __m256i sv11_AVX = beginv_AVX;
+
+#define RESET_13_AVX()                              \
+  RESET_12_AVX()                                    \
+  register __m256i sv12_AVX = beginv_AVX;
+
+#define RESET_14_AVX()                              \
+  RESET_13_AVX()                                    \
+  register __m256i sv13_AVX = beginv_AVX;
+
+#define RESET_15_AVX()                              \
+  RESET_14_AVX()                                    \
+  register __m256i sv14_AVX = beginv_AVX;
+
+#define RESET_16_AVX()                              \
+  RESET_15_AVX()                                    \
+  register __m256i sv15_AVX = beginv_AVX;
+
+#define RESET_17_AVX()                              \
+  RESET_16_AVX()                                    \
+  register __m256i sv16_AVX = beginv_AVX;
+
+#define RESET_18_AVX()                              \
+  RESET_17_AVX()                                    \
+  register __m256i sv17_AVX = beginv_AVX;
+#endif
+
+#ifdef p7_use_SSE
 #define CALC(reset, step, convert, width)       \
   int i;                                        \
   int i2;                                       \
@@ -683,7 +971,7 @@
     {                                           \
       rsc = om->sbv[dsq[i]] + i + q;            \
       step()                                    \
-    }                                           \
+     }                                           \
                                                 \
   i = Q - q - w;                                \
   convert(step, LENGTH_CHECK, done1)            \
@@ -710,10 +998,58 @@ done1:                                          \
  i+=i2;                                         \
  convert(step, LENGTH_CHECK, done2)             \
 done2:                                          \
+	return xEv;
+#endif
+
+#ifdef p7_use_AVX
+#define CALC_AVX(reset, step, convert, width)       \
+  int i_AVX;                                        \
+  int i2_AVX;                                       \
+  int Q_AVX        = P7_NVB_AVX(om->M);                \
+  __m256i *rsc_AVX;                                 \
                                                 \
- return xEv;
+  int w_AVX = width;                                \
+                                                \
+  dsq++;                                        \
+                                                \
+  reset()                                       \
+                                                \
+  for (i_AVX = 0; i_AVX < L && i_AVX < Q_AVX - q_AVX - w_AVX; i_AVX++)      \
+    {                                           \
+      rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + i_AVX + q_AVX;            \
+      step()                                 \
+    }                                           \
+                                                \
+  i_AVX = Q_AVX - q_AVX - w_AVX;                                \
+  convert(step, LENGTH_CHECK_AVX, done1)            \
+done1:                                          \
+                                                \
+ for (i2_AVX = Q_AVX - q_AVX; i2_AVX < L - Q_AVX; i2_AVX += Q_AVX)          \
+   {                                            \
+     for (i_AVX = 0; i_AVX < Q_AVX - w_AVX; i_AVX++)                \
+       {                                        \
+         rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;        \
+         step()                                 \
+       }                                        \
+                                                \
+     i_AVX += i2_AVX;                                   \
+     convert(step, NO_CHECK, )                  \
+   }                                            \
+                                                \
+ for (i_AVX = 0; i2_AVX + i_AVX < L && i_AVX < Q_AVX - w_AVX; i_AVX++)      \
+   {                                            \
+     rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+     step()                                     \
+   }                                            \
+                                                \
+ i_AVX+=i2_AVX;                                         \
+ convert(step, LENGTH_CHECK_AVX, done2)             \
+done2:                                          \
+                                                \
+ return xEv_AVX;
+#endif
 
-
+#ifdef p7_use_SSE
 __m128i
 calc_band_1(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
@@ -824,6 +1160,122 @@ calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i be
   CALC(RESET_18, STEP_BANDS_18, CONVERT_18, 18)
 }
 #endif /* MAX_BANDS > 14 */
+#endif /* p7_use_SSE */
+
+#ifdef p7_use_AVX
+__m256i
+calc_band_1_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_1_AVX, STEP_BANDS_1_AVX, CONVERT_1_AVX, 1)
+}
+
+__m256i
+calc_band_2_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_2_AVX, STEP_BANDS_2_AVX, CONVERT_2_AVX, 2)
+}
+
+__m256i
+calc_band_3_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_3_AVX, STEP_BANDS_3_AVX, CONVERT_3_AVX, 3)
+}
+
+__m256i
+calc_band_4_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_4_AVX, STEP_BANDS_4_AVX, CONVERT_4_AVX, 4)
+}
+
+__m256i
+calc_band_5_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_5_AVX, STEP_BANDS_5_AVX, CONVERT_5_AVX, 5)
+}
+
+__m256i
+calc_band_6_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_6_AVX, STEP_BANDS_6_AVX, CONVERT_6_AVX, 6)
+}
+
+
+#if MAX_BANDS > 6 /* Only include needed functions to limit object file size */
+__m256i
+calc_band_7_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_7_AVX, STEP_BANDS_7_AVX, CONVERT_7_AVX, 7)
+}
+
+__m256i
+calc_band_8_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_8_AVX, STEP_BANDS_8_AVX, CONVERT_8_AVX, 8)
+}
+
+__m256i
+calc_band_9_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_9_AVX, STEP_BANDS_9_AVX, CONVERT_9_AVX, 9)
+}
+
+__m256i
+calc_band_10_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_10_AVX, STEP_BANDS_10_AVX, CONVERT_10_AVX, 10)
+}
+
+__m256i
+calc_band_11_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_11_AVX, STEP_BANDS_11_AVX, CONVERT_11_AVX, 11)
+}
+
+__m256i
+calc_band_12_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_12_AVX, STEP_BANDS_12_AVX, CONVERT_12_AVX, 1)
+}
+
+__m256i
+calc_band_13_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_13_AVX, STEP_BANDS_13_AVX, CONVERT_13_AVX, 13)
+}
+
+__m256i
+calc_band_14_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_14_AVX, STEP_BANDS_14_AVX, CONVERT_14_AVX, 14)
+}
+
+#endif /* MAX_BANDS > 6 */
+#if MAX_BANDS > 14
+__m256i
+calc_band_15_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_15_AVX, STEP_BANDS_15_AVX, CONVERT_15_AVX, 15)
+}
+
+__m256i
+calc_band_16_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_16_AVX, STEP_BANDS_16_AVX, CONVERT_16_AVX, 16)
+}
+
+__m256i
+calc_band_17_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_17_AVX, STEP_BANDS_17_AVX, CONVERT_17_AVX, 17)
+}
+
+__m256i
+calc_band_18_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
+{
+  CALC_AVX(RESET_18_AVX, STEP_BANDS_18_AVX, CONVERT_18_AVX, 18)
+}
+#endif /* MAX_BANDS > 14 */
+#endif /* p7_use_AVX */
 
 
 /*****************************************************************
@@ -833,16 +1285,23 @@ calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i be
 uint8_t
 get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 {
+#ifdef p7_use_SSE
   __m128i xEv;		           /* E state: keeps max for Mk->E as we go                     */
   __m128i beginv;                  /* begin scores                                              */
-
+  uint8_t retval;
   int q;			   /* counter over vectors 0..nq-1                              */
   int Q        = P7_NVB(om->M);   /* segment length: # of vectors                              */
 
   int bands;                       /* the number of bands (rounds) to use                       */
+  beginv =  _mm_set1_epi8(128);
+  xEv    =  beginv;
 
-  int last_q = 0;                  /* for saving the last q value to find band width            */
-  int i;                           /* counter for bands                                         */
+ #ifdef p7_log_array
+  extern __m128i *log_array_SSE;
+  log_array_SSE = malloc(Q * L * sizeof(__m128i));
+  extern __m128i *SSE_log_pointer;
+  SSE_log_pointer = log_array_SSE;
+ #endif
 
   /* function pointers for the various number of vectors to use */
   __m128i (*fs[MAX_BANDS + 1]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register __m128i, __m128i)
@@ -855,10 +1314,47 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
        , calc_band_15, calc_band_16, calc_band_17, calc_band_18
 #endif
   };
+#endif
 
-  beginv =  _mm_set1_epi8(128);
-  xEv    =  beginv;
+#ifdef p7_use_AVX
+  __m256i xEv_AVX;		           /* E state: keeps max for Mk->E as we go                     */
+  __m256i beginv_AVX;                  /* begin scores                                              */
+  uint8_t retval_AVX;
+  int q_AVX;			   /* counter over vectors 0..nq-1                              */
+  int Q_AVX        = P7_NVB_AVX(om->M);   /* segment length: # of vectors                              */
 
+#ifdef p7_log_array
+  extern __m256i *log_array_AVX;
+  log_array_AVX = malloc(Q_AVX * L * sizeof(__m256i));
+  extern __m256i *AVX_log_pointer;
+  AVX_log_pointer = log_array_AVX;
+ #endif
+
+  int bands_AVX;                       /* the number of bands (rounds) to use                       */
+  beginv_AVX =  _mm256_set1_epi8(128);
+  xEv_AVX    =  beginv_AVX;
+  /* function pointers for the various number of vectors to use */
+  __m256i (*fs_AVX[MAX_BANDS + 1]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register __m256i, __m256i)
+    = {NULL
+       , calc_band_1_AVX,  calc_band_2_AVX,  calc_band_3_AVX,  calc_band_4_AVX,  calc_band_5_AVX,  calc_band_6_AVX
+#if MAX_BANDS > 6
+       , calc_band_7_AVX,  calc_band_8_AVX,  calc_band_9_AVX,  calc_band_10_AVX, calc_band_11_AVX, calc_band_12_AVX
+       , calc_band_13_AVX, calc_band_14_AVX
+#endif
+#if MAX_BANDS > 14
+       , calc_band_15_AVX, calc_band_16_AVX, calc_band_17_AVX, calc_band_18_AVX
+#endif
+  };
+
+
+#endif
+
+  int last_q;                  /* for saving the last q value to find band width            */
+  int i;                           /* counter for bands                                         */
+
+
+#ifdef p7_use_SSE
+  last_q = 0;
   /* Use the highest number of bands but no more than MAX_BANDS */
   bands = (Q + MAX_BANDS - 1) / MAX_BANDS;
 
@@ -869,8 +1365,71 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 
     last_q = q;
   }
+  retval = esl_sse_hmax_epu8(xEv); // assign this here to allow checking vs AVX, AVX-512
+#endif
 
-  return esl_sse_hmax_epu8(xEv);
+#ifdef p7_use_AVX
+  last_q = 0; // reset in case we also ran SSE code
+  /* Use the highest number of bands but no more than MAX_BANDS */
+  bands_AVX = (Q_AVX + MAX_BANDS - 1) / MAX_BANDS;
+
+  for (i = 0; i < bands_AVX; i++) {
+    q_AVX = (Q_AVX * (i + 1)) / bands_AVX;
+
+    xEv_AVX = fs_AVX[q_AVX-last_q](dsq, L, om, last_q, beginv_AVX, xEv_AVX);
+
+    last_q = q_AVX;
+  }
+
+  //Now, find the horizontal max of the bytes in xEv_AVX.  This version is all
+  //AVX instructions to avoid the AVX->SSE switch penalty
+
+  __m256i temp1_AVX = _mm256_permute2x128_si256(xEv_AVX, xEv_AVX, 0x01);
+  // Swap the 128-bit halves from xEv_AVX into temp1
+
+  __m256i temp2_AVX = _mm256_max_epu8(temp1_AVX, xEv_AVX); // each byte in xEv_AVX now has the max of the
+  //corresponding bytes in the high and low halves of xEv_AVX
+
+  temp1_AVX = _mm256_shuffle_epi32(temp2_AVX, 0x8e);  // Swap the 64-bit halves of each 128-bit half of temp2_AVX
+  temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  // Each 64-bit quantity in temp2 now has the max of the corresponding
+  // byte from the 64-bit quarters of xEv_AVX
+
+  temp1_AVX = _mm256_shuffle_epi32(temp2_AVX, 0xb1);  // Swap the 32-bit halves of each 64-bit quarter of temp2_AVX
+  temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  // Each 32-bit quantity in temp2 now has the max of the corresponding
+  // byte from the 32-bit eighths of xEv_AVX
+
+  temp1_AVX = _mm256_shufflelo_epi16(temp2_AVX, 0xb1); // bottom 32-bits of temp1_AVX now contain the swapped 16-bit halves
+  // of the low 32 bits of temp2_AVX
+  temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  //bottom 16 bits of temp2_AVX now contain the max of the odd, even
+  // bytes of xEv_AVX
+
+  temp1_AVX = _mm256_bsrli_epi128(temp2_AVX, 1);  
+  temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  //low byte of temp2_AVX now contains max byte of xEv_AVX
+  retval_AVX = _mm256_extract_epi8(temp2_AVX, 0);  // extract that byte into retval_AVX
+#endif
+
+#ifdef p7_check_AVX
+  #ifdef p7_log_array
+  compare_logs(om->M, L); // Note: this will not work if M > the number of elements in one "band"
+  #endif
+
+
+  if (retval != retval_AVX){
+  	printf("retval miss-match in SSVFilter, %i vs %i\n", retval, retval_AVX);
+  }
+#endif
+
+// In production use only one of these will be defined, and multiple return statements don't cause problems,
+// might see a warning if you have multiple p7_use flags defined.
+#ifdef p7_use_SSE
+  return retval;
+#endif
+
+#ifdef p7_use_AVX
+  return retval_AVX;
+#endif
+
+
 }
 
 

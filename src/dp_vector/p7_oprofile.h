@@ -108,8 +108,25 @@ typedef struct p7_oprofile_s {
 
 /* This filter hasn't been converted to AVX, AVX-512 yet */
   /* ViterbiFilter uses scaled swords: 8x signed 16-bit integer vectors              */
+  
   __m128i **rwv;                /* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
   __m128i  *twv;                /* transition score blocks          [8*Q8]           */
+ __m128i  *rwv_mem;
+  __m128i  *twv_mem;
+
+#ifdef p7_use_AVX
+ __m256i **rwv_AVX;                /* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
+  __m256i  *twv_AVX;                /* transition score blocks          [8*Q8]           */
+ __m256i  *rwv_mem_AVX;
+  __m256i  *twv_mem_AVX;
+#endif
+#ifdef p7_use_AVX_512
+ __m512i **rwv_AVX_512;                /* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
+  __m512i  *twv_AVX_512;                /* transition score blocks          [8*Q8]           */
+ __m512i  *rwv_mem_AVX_512;
+  __m512i  *twv_mem_AVX_512;
+#endif
+
   int16_t   xw[p7O_NXSTATES][p7O_NXTRANS]; /* ENJC state transition costs            */
   float     scale_w;            /* score units: typically 500 / log(2), 1/500 bits   */
   int16_t   base_w;             /* offset of sword scores: typically +12000          */
@@ -123,8 +140,7 @@ typedef struct p7_oprofile_s {
   float    xf[p7O_NXSTATES][p7O_NXTRANS]; /* ENJC transition costs                   */
 
   
-  __m128i  *rwv_mem;
-  __m128i  *twv_mem;
+ 
   __m128   *tfv_mem;
   __m128   *rfv_mem;
   

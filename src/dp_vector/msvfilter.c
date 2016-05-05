@@ -159,9 +159,10 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
 
   /* Try highly optimized Knudsen SSV filter first. 
    * Note that SSV doesn't use any main memory (from <ox>) at all! 
-   */
- // if (( status = p7_SSVFilter(dsq, L, om, ret_sc)) != eslENORESULT) return status;
-//printf("MSVFilter past SSV\n");
+  */
+ //  printf("Calling SSVFilter\n");
+  if (( status = p7_SSVFilter(dsq, L, om, ret_sc)) != eslENORESULT) return status;
+ //  printf("MSVFilter past SSV\n");
   /* Resize the filter mx as needed */
   if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of MSV filter matrix failed");
 
@@ -344,23 +345,32 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
        * max value.  Then the last shuffle will broadcast the max value
        * to all simd elements.
        */
+       // compute the horizontal 8-bit max of xEv
+      __m256i temp1_AVX = _mm256_permute2x128_si256(xEv_AVX, xEv_AVX, 0x01);
+      // Swap the 128-bit halves from xEv_AVX into temp1
 
-      __m128i tempv1 = _mm256_extracti128_si256(xEv_AVX, 0);
-      __m128i tempv2 = _mm256_extracti128_si256(xEv_AVX, 1);
-      tempv1 = _mm_max_epu8(tempv1, tempv2);  //compute byte-wise max of the two 
-      //halves of the vector
+      __m256i temp2_AVX = _mm256_max_epu8(temp1_AVX, xEv_AVX); // each 8-bit field in temp2_AVX now has the max of the
+      //corresponding fields in the high and low halves of Dmaxv_AVX
 
-      // rest of the horizontal max is same as the 128-bit code, just different variables
-      tempv2 = _mm_shuffle_epi32(tempv1, _MM_SHUFFLE(2, 3, 0, 1));
-      tempv1 = _mm_max_epu8(tempv1, tempv2);
-      tempv2 = _mm_shuffle_epi32(tempv1, _MM_SHUFFLE(0, 1, 2, 3));
-      tempv1   = _mm_max_epu8(tempv1, tempv2);
-      tempv2 = _mm_shufflelo_epi16(tempv1, _MM_SHUFFLE(2, 3, 0, 1));
-      tempv1   = _mm_max_epu8(tempv1, tempv2);
-      tempv2 = _mm_srli_si128(tempv1, 1);
-      tempv1   = _mm_max_epu8(tempv1, tempv2);
+      temp1_AVX = _mm256_shuffle_epi32(temp2_AVX, 0x4e);  // Swap the 64-bit halves of each 128-bit half of temp2_AVX
+      temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  // Each 64-bit quantity in temp2 now has the max of the corresponding
+      // 8-bit fields from the 64-bit quarters of Dmaxv_AVX
 
-      xEv_AVX = _mm256_broadcastb_epi8(tempv1);  // broadcast the max byte from original xEv_AVX
+      temp1_AVX = _mm256_shuffle_epi32(temp2_AVX, 0xb1);  // Swap the 32-bit halves of each 64-bit quarter of temp2_AVX
+      temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  // Each 32-bit quantity in temp2 now has the max of the corresponding
+      // 8 bit fields from the 32-bit eighths of Dmaxv_AVX
+
+      temp1_AVX = _mm256_shufflelo_epi16(temp2_AVX, 0xb1); // bottom 32-bits of temp1_AVX now contain the swapped 16-bit halves
+      // of the low 32 bits of temp2_AVX
+      temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  //bottom 16 bits of temp2_AVX now contain the max of the 16-bit fields of Dmaxv_AVX
+
+      uint8_t temp_stash = _mm256_extract_epi8(temp2_AVX, 1);
+      temp1_AVX = _mm256_insert_epi8(temp2_AVX, temp_stash, 0);  // low byte of temp1_AVX now has byte 2 of temp2_AVX
+      temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  //bottom 16 bits of temp2_AVX now contain the max of the 16-bit fields of Dmaxv_AVX
+      temp_stash = _mm256_extract_epi8(temp2_AVX, 0);  // get low byte of temp2_AVX
+      
+
+      xEv_AVX = _mm256_set1_epi8(temp_stash);  // broadcast the max byte from original xEv_AVX
       // to all bytes of xEv_AVX
 
       /* immediately detect overflow */
@@ -435,26 +445,32 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
       __m256i temp3 = _mm512_extracti32x8_epi32(xEv_AVX_512, 0);
       __m256i temp4 = _mm512_extracti32x8_epi32(xEv_AVX_512, 1);
       temp3 = _mm256_max_epu8(temp3, temp4);
+      temp4 = _mm256_permute2x128_si256(temp3, temp3, 0x01);
+      // Swap the 128-bit halves from xEv_AVX into temp1
 
-      // temp3 now contains the byte-wise max values from the high and low halves
-      // of xEv_AVX_512, and the problem reduces to finding the horizontal max of a 256-bit vector
-      __m128i tempv3 = _mm256_extracti128_si256(temp3, 0);
-      __m128i tempv4 = _mm256_extracti128_si256(temp3, 1);
-      tempv3 = _mm_max_epu8(tempv3, tempv4);  //compute byte-wise max of the two 
-      //halves of the vector
+      temp3 = _mm256_max_epu8(temp4, temp3); // each 8-bit field in temp3 now has the max of the
+      //corresponding fields in the high and low halves of Dmaxv_AVX
 
-      // rest of the horizontal max is same as the 128-bit code, just different variables
-      tempv4 = _mm_shuffle_epi32(tempv3, _MM_SHUFFLE(2, 3, 0, 1));
-      tempv3 = _mm_max_epu8(tempv3, tempv4);
-      tempv4 = _mm_shuffle_epi32(tempv3, _MM_SHUFFLE(0, 1, 2, 3));
-      tempv3   = _mm_max_epu8(tempv3, tempv4);
-      tempv4 = _mm_shufflelo_epi16(tempv3, _MM_SHUFFLE(2, 3, 0, 1));
-      tempv3   = _mm_max_epu8(tempv3, tempv4);
-      tempv4 = _mm_srli_si128(tempv3, 1);
-      tempv3   = _mm_max_epu8(tempv3, tempv4);
+      temp4 = _mm256_shuffle_epi32(temp3, 0x4e);  // Swap the 64-bit halves of each 128-bit half of temp3
+      temp3 = _mm256_max_epu8(temp4, temp3);  // Each 64-bit quantity in temp2 now has the max of the corresponding
+      // 8-bit fields from the 64-bit quarters of Dmaxv_AVX
 
-      xEv_AVX_512 = _mm512_broadcastd_epi32(tempv3);  // broadcast the max byte from original xEv_AVX
-      // to all bytes of xEv_AVX
+      temp4 = _mm256_shuffle_epi32(temp3, 0xb1);  // Swap the 32-bit halves of each 64-bit quarter of temp3
+      temp3 = _mm256_max_epu8(temp4, temp3);  // Each 32-bit quantity in temp2 now has the max of the corresponding
+      // 8 bit fields from the 32-bit eighths of Dmaxv_AVX
+
+      temp4 = _mm256_shufflelo_epi16(temp3, 0xb1); // bottom 32-bits of temp4 now contain the swapped 16-bit halves
+      // of the low 32 bits of temp3
+      temp3 = _mm256_max_epu8(temp4, temp3);  //bottom 16 bits of temp3 now contain the max of the 16-bit fields of Dmaxv_AVX
+
+      uint8_t temp_stash2 = _mm256_extract_epi8(temp3, 1);
+      temp4 = _mm256_insert_epi8(temp3, temp_stash, 0);  // low byte of temp4 now has byte 2 of temp3
+      temp3 = _mm256_max_epu8(temp4, temp3);  //bottom 16 bits of temp3 now contain the max of the 16-bit fields of Dmaxv_AVX
+      temp_stash2 = _mm256_extract_epi8(temp3, 0);  // get low byte of temp3
+      
+
+      xEv_AVX_512 = _mm512_set1_epi8(temp_stash2);  // broadcast the max byte from original xEv_AVX
+        // to all bytes of xEv_AVX_512
 
       /* immediately detect overflow */
       if (compare_mask) { *ret_sc = eslINFINITY; return eslERANGE; }
@@ -499,15 +515,16 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
 #ifdef p7_use_AVX_512
   //need to do this in two steps because AVX-512 doesn't have extract byte
   __m256i xJtemp = _mm512_extracti32x8_epi32(xJv_AVX_512, 0);
+  uint8_t xJ_AVX_512 = _mm256_extract_epi8(xJtemp, 0);
 #ifdef p7_check_AVX_512
-   if(_mm256_extract_epi8(xJtemp, 0) == xJ){
-//  printf("AVX matched SSE score, %i vs %i\n", xJ, _mm256_extract_epi8(xJtemp, 0));
+   if(xJ_AVX_512 == xJ){
+//  printf("AVX-512 matched SSE score, %i vs %i\n", xJ, xj_AVX_512;
   }
   else{
-    printf("AVX didn't match SSE score %i vs %i\n", xJ, _mm256_extract_epi8(xJtemp, 0));
+    printf("AVX-512 didn't match SSE score %i vs %i\n", xJ, xJ_AVX_512);
   }
 #endif
-  xJ =  _mm256_extract_epi8(xJtemp, 0);
+  xJ =  xJ_AVX_512;
 #endif
 
   *ret_sc = ((float) (xJ - om->tjb_b) - (float) om->base_b);

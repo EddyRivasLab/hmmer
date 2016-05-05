@@ -56,6 +56,20 @@ enum p7f_scells_e { p7F_M = 0, p7F_D = 1, p7F_I = 2 };
 #define DMXf(q)   (dp[(q) * p7F_NSCELLS + p7F_D])
 #define IMXf(q)   (dp[(q) * p7F_NSCELLS + p7F_I])
 
+#ifdef p7_use_AVX
+/* Viterbi filter uses these macros to improve clarity of accesses */
+#define MMX_AVXf(q)   (dp_AVX[(q) * p7F_NSCELLS + p7F_M])
+#define DMX_AVXf(q)   (dp_AVX[(q) * p7F_NSCELLS + p7F_D])
+#define IMX_AVXf(q)   (dp_AVX[(q) * p7F_NSCELLS + p7F_I])
+#endif
+
+#ifdef p7_use_AVX_512
+/* Viterbi filter uses these macros to improve clarity of accesses */
+#define MMX_AVX_512f(q)   (dp_AVX_512[(q) * p7F_NSCELLS + p7F_M])
+#define DMX_AVX_512f(q)   (dp_AVX_512[(q) * p7F_NSCELLS + p7F_D])
+#define IMX_AVX_512f(q)   (dp_AVX_512[(q) * p7F_NSCELLS + p7F_I])
+#endif
+
 extern P7_FILTERMX *p7_filtermx_Create(int allocM);
 extern int          p7_filtermx_GrowTo(P7_FILTERMX *fx, int allocM);
 extern size_t       p7_filtermx_Sizeof(const P7_FILTERMX *fx);
