@@ -10,17 +10,9 @@ bindir       = ${exec_prefix}/bin
 libdir       = ${exec_prefix}/lib
 includedir   = ${prefix}/include
 
-CC           = icc
-
-CFLAGS       = -g -O0 -pthread -fPIC
-#add -mavx and -mavx2 to enable avx instructions
-#add -mavx512bw and -mavx512dq for AVX-512 This requires GCC 5 because they cleverly changed their AVX 512
-#compiler flags between GCC 4.9 and 5.
-
-#code may crash if you enable instructions that your hardware doesn't have, even if you don't use any of those
-#instructions.  Best guess is that this is because enabling the instructions causes the compiler to worry
-#about saving/restoring the appropriate type of vector registers
-SIMDFLAGS    = -msse2 -msse3 -mavx -mavx2 -mavx512bw -mavx512dq
+CC           = gcc
+CFLAGS       = -O3 -pthread -fPIC
+SIMDFLAGS    = -msse2 -msse3
 CPPFLAGS     = 
 LDFLAGS      = 
 DEFS         = -DHAVE_CONFIG_H

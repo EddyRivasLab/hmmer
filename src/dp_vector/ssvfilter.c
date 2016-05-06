@@ -411,7 +411,7 @@
 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
  #include<immintrin.h>
 #endif
 
@@ -464,7 +464,7 @@ void compare_logs(int M, int L){
 #endif
 /* C doesn't allow ifdefs within macros, so we need to define separate macros for the SSE, AVX, AVX-512 code */
 
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
 #define STEP_SINGLE(sv)                         \
   sv   = _mm_subs_epi8(sv, *rsc); rsc++;        \
   xEv  = _mm_max_epu8(xEv, sv);	 /* \
@@ -473,7 +473,7 @@ void compare_logs(int M, int L){
   SSE_log_pointer++; */
 #endif
 
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
 #define STEP_SINGLE_AVX(sv_AVX) \
   sv_AVX   = _mm256_subs_epi8(sv_AVX, *rsc_AVX); rsc_AVX++;        \
   xEv_AVX  = _mm256_max_epu8(xEv_AVX, sv_AVX);	/*\
@@ -482,19 +482,19 @@ void compare_logs(int M, int L){
   AVX_log_pointer++; */
 #endif
 
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
 #define LENGTH_CHECK(label)                     \
   if (i >= L) goto label;
 #endif
 
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
 #define LENGTH_CHECK_AVX(label)                     \
   if (i_AVX >= L) goto label;
 #endif
 
 #define NO_CHECK(label)
 
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
 #define STEP_BANDS_1()                          \
   STEP_SINGLE(sv00) 
 
@@ -567,7 +567,7 @@ void compare_logs(int M, int L){
   STEP_SINGLE(sv17)
 #endif
 
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
 #define STEP_BANDS_1_AVX()                          \
   STEP_SINGLE_AVX(sv00_AVX)
 
@@ -640,7 +640,7 @@ void compare_logs(int M, int L){
   STEP_SINGLE_AVX(sv17_AVX)
 #endif
 
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
 #define CONVERT_STEP(step, length_check, label, sv, pos)        \
   length_check(label)                                           \
   rsc = om->sbv[dsq[i]] + pos;                                   \
@@ -650,7 +650,7 @@ void compare_logs(int M, int L){
   i++;
 #endif
 
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
 // Note: this uses the two-instruction AVX shift macro from stackoverflow.com, rewritten 
 // to avoid introducing an explicit temporary variable
 #define CONVERT_STEP_AVX(step, length_check, label, sv_AVX, pos)        \
@@ -662,7 +662,7 @@ void compare_logs(int M, int L){
   i_AVX++;
 #endif
 
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
 #define CONVERT_1(step, LENGTH_CHECK, label)            \
   CONVERT_STEP(step, LENGTH_CHECK, label, sv00, Q - 1)
 
@@ -735,7 +735,7 @@ void compare_logs(int M, int L){
   CONVERT_17(step, LENGTH_CHECK, label)
 #endif
 
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
 #define CONVERT_1_AVX(step, LENGTH_CHECK, label)            \
   CONVERT_STEP_AVX(step, LENGTH_CHECK, label, sv00_AVX, Q_AVX - 1)
 
@@ -808,7 +808,7 @@ void compare_logs(int M, int L){
   CONVERT_17_AVX(step, LENGTH_CHECK, label)
 #endif
 
-#ifdef p7_use_SSE  
+#ifdef p7_build_SSE  
 #define RESET_1()                               \
   register __m128i sv00 = beginv;
 
@@ -881,7 +881,7 @@ void compare_logs(int M, int L){
   register __m128i sv17 = beginv;
 #endif
 
-#ifdef p7_use_AVX 
+#ifdef p7_build_AVX2 
 #define RESET_1_AVX()                               \
   register __m256i sv00_AVX = beginv_AVX;
 
@@ -954,7 +954,7 @@ void compare_logs(int M, int L){
   register __m256i sv17_AVX = beginv_AVX;
 #endif
 
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
 #define CALC(reset, step, convert, width)       \
   int i;                                        \
   int i2;                                       \
@@ -1001,7 +1001,7 @@ done2:                                          \
 	return xEv;
 #endif
 
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
 #define CALC_AVX(reset, step, convert, width)       \
   int i_AVX;                                        \
   int i2_AVX;                                       \
@@ -1049,7 +1049,7 @@ done2:                                          \
  return xEv_AVX;
 #endif
 
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
 __m128i
 calc_band_1(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
@@ -1160,9 +1160,9 @@ calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i be
   CALC(RESET_18, STEP_BANDS_18, CONVERT_18, 18)
 }
 #endif /* MAX_BANDS > 14 */
-#endif /* p7_use_SSE */
+#endif /* p7_build_SSE */
 
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
 __m256i
 calc_band_1_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
 {
@@ -1275,7 +1275,7 @@ calc_band_18_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __
   CALC_AVX(RESET_18_AVX, STEP_BANDS_18_AVX, CONVERT_18_AVX, 18)
 }
 #endif /* MAX_BANDS > 14 */
-#endif /* p7_use_AVX */
+#endif /* p7_build_AVX2 */
 
 
 /*****************************************************************
@@ -1285,7 +1285,7 @@ calc_band_18_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __
 uint8_t
 get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 {
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
   __m128i xEv;		           /* E state: keeps max for Mk->E as we go                     */
   __m128i beginv;                  /* begin scores                                              */
   uint8_t retval;
@@ -1316,7 +1316,7 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   };
 #endif
 
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
   __m256i xEv_AVX;		           /* E state: keeps max for Mk->E as we go                     */
   __m256i beginv_AVX;                  /* begin scores                                              */
   uint8_t retval_AVX;
@@ -1353,7 +1353,7 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   int i;                           /* counter for bands                                         */
 
 
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
   last_q = 0;
   /* Use the highest number of bands but no more than MAX_BANDS */
   bands = (Q + MAX_BANDS - 1) / MAX_BANDS;
@@ -1368,7 +1368,7 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   retval = esl_sse_hmax_epu8(xEv); // assign this here to allow checking vs AVX, AVX-512
 #endif
 
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
   last_q = 0; // reset in case we also ran SSE code
   /* Use the highest number of bands but no more than MAX_BANDS */
   bands_AVX = (Q_AVX + MAX_BANDS - 1) / MAX_BANDS;
@@ -1408,7 +1408,7 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   retval_AVX = _mm256_extract_epi8(temp2_AVX, 0);  // extract that byte into retval_AVX
 #endif
 
-#ifdef p7_check_AVX
+#ifdef p7_build_check_AVX2
   #ifdef p7_log_array
   compare_logs(om->M, L); // Note: this will not work if M > the number of elements in one "band"
   #endif
@@ -1421,11 +1421,11 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 
 // In production use only one of these will be defined, and multiple return statements don't cause problems,
 // might see a warning if you have multiple p7_use flags defined.
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
   return retval;
 #endif
 
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
   return retval_AVX;
 #endif
 

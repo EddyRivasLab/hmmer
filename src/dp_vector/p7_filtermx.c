@@ -56,13 +56,13 @@ p7_filtermx_Create(int allocM)
   fx->dp_mem    = NULL;
   fx->allocM    = 0;
 
- #ifdef p7_use_AVX
+ #ifdef p7_build_AVX2
   fx->dp_AVX    = NULL;
   fx->dp_mem_AVX = NULL;
   fx->allocM_AVX = 0;
  #endif
 
-#ifdef p7_use_AVX_512
+#ifdef p7_build_AVX512
   fx->dp_AVX_512    = NULL;
   fx->dp_mem_AVX_512 = NULL;
   fx->allocM_AVX_512 = 0;
@@ -75,7 +75,7 @@ p7_filtermx_Create(int allocM)
   fx->dfp       = NULL;
 #endif 
   
-//#ifdef p7_use_SSE // allocate different memory buffers depending on which
+//#ifdef p7_build_SSE // allocate different memory buffers depending on which
   // ISA we're using
   /*                    16B per vector  * (MDI)states *  ~M/4 vectors    + alignment slop */
   ESL_ALLOC(fx->dp_mem, (sizeof(__m128i) * p7F_NSCELLS * P7_NVW(allocM)) + (p7_VALIGN-1));
@@ -85,7 +85,7 @@ p7_filtermx_Create(int allocM)
   fx->dp = (__m128i *) ( (unsigned long int) (  (char *) fx->dp_mem + (p7_VALIGN-1) ) & p7_VALIMASK);
 //#endif
 
-  #ifdef p7_use_AVX
+  #ifdef p7_build_AVX2
   /*                              32B per vector  * (MDI)states *  ~M/4 vectors    + alignment slop */
   ESL_ALLOC(fx->dp_mem_AVX, (sizeof(__m256i) * p7F_NSCELLS * P7_NVW_AVX(allocM)) + (p7_VALIGN_AVX-1));
   fx->allocM_AVX = allocM;
@@ -94,7 +94,7 @@ p7_filtermx_Create(int allocM)
   fx->dp_AVX = (__m256i *) ( (unsigned long int) (  (char *) fx->dp_mem_AVX + (p7_VALIGN_AVX-1) ) & p7_VALIMASK_AVX);
   #endif
 
-  #ifdef p7_use_AVX_512
+  #ifdef p7_build_AVX512
   /*                              64B per vector  * (MDI)states *  ~M/4 vectors    + alignment slop */
   ESL_ALLOC(fx->dp_mem_AVX_512, (sizeof(__m512i) * p7F_NSCELLS * P7_NVW_AVX_512(allocM)) + (p7_VALIGN_AVX_512-1));
   fx->allocM_AVX_512 = allocM;
@@ -142,10 +142,10 @@ p7_filtermx_GrowTo(P7_FILTERMX *fx, int allocM)
 
 
 /* 
-This bit is mildly unsafe if more than one of p7_use_SSE, p7_use_AVX, and p7_use_AVX_512 are set.  It relies on any code that grows one or more of dp_mem, dp_mem_AVX, and dp_mem_AVX_512 to grow all of them that are being used.  If not, there can be problems caused by one but not all of the buffers being large enough to hold the current calculation.  This should only
+This bit is mildly unsafe if more than one of p7_build_SSE, p7_build_AVX2, and p7_build_AVX512 are set.  It relies on any code that grows one or more of dp_mem, dp_mem_AVX, and dp_mem_AVX_512 to grow all of them that are being used.  If not, there can be problems caused by one but not all of the buffers being large enough to hold the current calculation.  This should only
 be an issue during development/testing, but I'm documenting it in case something goes wrong.
 */
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
   /* is it already big enough? */
   if (allocM <= fx->allocM) return eslOK;
 
@@ -155,7 +155,7 @@ be an issue during development/testing, but I'm documenting it in case something
   fx->dp     = (__m128i *) ( (unsigned long int) ( (char *) fx->dp_mem + (p7_VALIGN-1)) & p7_VALIMASK);
 #endif
 
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
   /* is it already big enough? */
   if (allocM <= fx->allocM_AVX) return eslOK;
 
@@ -165,7 +165,7 @@ be an issue during development/testing, but I'm documenting it in case something
   fx->dp_AVX     = (__m256i *) ( (unsigned long int) ( (char *) fx->dp_mem_AVX + (p7_VALIGN_AVX-1)) & p7_VALIMASK_AVX);
 #endif
 
-#ifdef p7_use_AVX_512
+#ifdef p7_build_AVX512
   /* is it already big enough? */
   if (allocM <= fx->allocM_AVX_512) return eslOK;
 
@@ -201,15 +201,15 @@ p7_filtermx_Sizeof(const P7_FILTERMX *fx)
 {
   size_t n = sizeof(P7_FILTERMX);
  
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
   n += (sizeof(__m128i) * p7F_NSCELLS * P7_NVW(fx->allocM)) + (p7_VALIGN-1);
 #endif
 
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
   n += (sizeof(__m256i) * p7F_NSCELLS * P7_NVW_AVX(fx->allocM_AVX)) + (p7_VALIGN_AVX-1);
 #endif
 
-#ifdef p7_use_AVX_512
+#ifdef p7_build_AVX512
   n += (sizeof(__m512i) * p7F_NSCELLS * P7_NVW_AVX_512(fx->allocM_AVX_512)) + (p7_VALIGN_AVX_512-1);
 #endif
   return n;
@@ -270,15 +270,15 @@ void
 p7_filtermx_Destroy(P7_FILTERMX *fx)
 {
   if (fx) {
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
     if (fx->dp_mem) free(fx->dp_mem);
 #endif
 
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
     if (fx->dp_mem_AVX) free(fx->dp_mem_AVX);
 #endif
 
-#ifdef p7_use_AVX_512
+#ifdef p7_build_AVX512
     if (fx->dp_mem_AVX_512) free(fx->dp_mem_AVX_512);
 #endif    
     free(fx);

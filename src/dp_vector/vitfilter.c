@@ -24,11 +24,17 @@
 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
-#ifdef p7_use_AVX_512
+#ifdef p7_build_AVX512
  #include <immintrin.h>
 #endif
 #include "easel.h"
 #include "esl_sse.h"
+
+#ifdef p7_build_AVX2
+ #include <immintrin.h>
+ #include "esl_avx.h"
+#endif 
+
 #include "esl_gumbel.h"
 
 #include "base/p7_hmmwindow.h"
@@ -36,6 +42,7 @@
 
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/p7_filtermx.h"
+
 
 /*****************************************************************
  * 1. Viterbi filter implementation.
@@ -91,7 +98,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 //printf("Starting ViterbiFilter\n");
   int i;        /* counter over sequence positions 1..L                      */
   
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
   register __m128i mpv, dpv, ipv;  /* previous row values                                       */
   register __m128i sv;		   /* temp storage of 1 curr row value in progress              */
   register __m128i dcv;		   /* delayed storage of D(i,q+1)                               */
@@ -107,7 +114,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   __m128i *tsc;			   /* will point into (and step thru) om->tu                    */
   __m128i negInfv;
 #endif
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
   register __m256i mpv_AVX, dpv_AVX, ipv_AVX; /*  prvious row values                                       */
   register __m256i sv_AVX;       /* temp storage of 1 curr row value in progress              */
   register __m256i dcv_AVX;      /* delayed storage of D(i,q+1)                               */
@@ -123,7 +130,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   __m256i *tsc_AVX;        /* will point into (and step thru) om->tu                    */
   __m256i negInfv_AVX;
 #endif
-#ifdef p7_use_AVX_512
+#ifdef p7_build_AVX512
   register __m512i mpv_AVX_512, dpv_AVX_512, ipv_AVX_512; /*  prvious row values                                       */
   register __m512i sv_AVX_512;       /* temp storage of 1 curr row value in progress              */
   register __m512i dcv_AVX_512;      /* delayed storage of D(i,q+1)                               */
@@ -151,20 +158,20 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 
   /* Resize the filter mx as needed */
   if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of Vit filter matrix failed");
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
   dp = ox->dp;           /* enables MMXf(), IMXf(), DMXf() access macros. Must be set AFTER the GrowTo, because ox->dp may get moved */
 #endif
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
   dp_AVX = ox->dp_AVX;           /* enables MMX_AVXf(), IMX_AVXf(), DMX_AVXf() access macros. Must be set AFTER the GrowTo, because ox->dp may get moved */
 #endif
-#ifdef p7_use_AVX_512
+#ifdef p7_build_AVX512
   dp_AVX_512 = ox->dp_AVX_512;           /* enables MMX_AVX_512f(), IMX_AVX_512f(), DMX_AVX_512f() access macros. Must be set AFTER the GrowTo, because ox->dp may get moved */
 #endif
   /* Matrix type and size must be set early, not late: debugging dump functions need this information. */
   ox->M    = om->M;
   ox->type = p7F_VITFILTER;
 
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
   /* -infinity is -32768 */
   negInfv = _mm_set1_epi16(-32768);
   negInfv = _mm_srli_si128(negInfv, 14);  /* negInfv = 16-byte vector, 14 0 bytes + 2-byte value=-32768, for an OR operation. */
@@ -179,7 +186,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   xC   = -32768;
   xE   = -32768;
 #endif
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
   /* -infinity is -32768 */
   // Want -32768 in the low 16 bits of negInfv_AVX
   negInfv_AVX = _mm256_setzero_si256();
@@ -194,7 +201,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   xC_AVX   = -32768;
   xE_AVX   = -32768;
 #endif
-#ifdef p7_use_AVX_512
+#ifdef p7_build_AVX512
   /* -infinity is -32768 */
   // Want -32768 in the low 16 bits of negInfv_AVX
   __m256i dummy1 = _mm256_setzero_si256();
@@ -218,7 +225,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 
   for (i = 1; i <= L; i++)
     {
-#ifdef p7_use_SSE // This is somewhat ugly, but putting SSE, AVX, AVX-512 versions in the same loop makes it easier to
+#ifdef p7_build_SSE // This is somewhat ugly, but putting SSE, AVX, AVX-512 versions in the same loop makes it easier to
 // check each iteration         
       rsc   = om->rwv[dsq[i]];
       tsc   = om->twv;
@@ -330,7 +337,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 	}
 #endif
 
-#ifdef p7_use_AVX // This is somewhat ugly, but putting SSE, AVX, AVX-512 versions in the same loop makes it easier to
+#ifdef p7_build_AVX2 // This is somewhat ugly, but putting SSE, AVX, AVX-512 versions in the same loop makes it easier to
 // check each iteration         
       rsc_AVX   = om->rwv_AVX[dsq[i]];
       tsc_AVX   = om->twv_AVX;
@@ -513,7 +520,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   }
 #endif
 
-#ifdef p7_use_AVX_512 // This is somewhat ugly, but putting SSE, AVX, AVX-512 versions in the same loop makes it easier to
+#ifdef p7_build_AVX512 // This is somewhat ugly, but putting SSE, AVX, AVX-512 versions in the same loop makes it easier to
 // check each iteration         
       rsc_AVX_512   = om->rwv_AVX_512[dsq[i]];
       tsc_AVX_512   = om->twv_AVX_512;
@@ -729,7 +736,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   }
 #endif
 
-#ifdef p7_check_AVX
+#ifdef p7_build_check_AVX2
     int16_t *unstriped, *unstriped_AVX;
     union { __m128i v; int16_t i[8]; } tmp_check;
     union { __m256i v; int16_t i[16]; } tmp_check_AVX;
@@ -796,7 +803,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
     free(unstriped);
     free(unstriped_AVX);
 #endif
-#ifdef p7_check_AVX_512
+#ifdef p7_build_check_AVX512
     int16_t *unstriped2, *unstriped2_AVX_512;
     union { __m128i v; int16_t i[8]; } tmp_check2;
     union { __m512i v; int16_t i[32]; } tmp_check2_AVX_512;
@@ -869,7 +876,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
     } /* end loop over sequence residues 1..L */
 
 
-#ifdef p7_check_AVX
+#ifdef p7_build_check_AVX2
       if (xC != xC_AVX){
         printf("SSE and AVX result miss-match in viterbi filter %i vs %i \n", xC, xC_AVX);
       }
@@ -878,7 +885,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
       } */
 #endif
 
-#ifdef p7_check_AVX_512
+#ifdef p7_build_check_AVX512
       if (xC != xC_AVX_512){
         printf("SSE and AVX-512 result miss-match in viterbi filter %i vs %i \n", xC, xC_AVX_512);
       }
@@ -888,7 +895,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 #endif
 
 
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
   /* finally C->T */
   if (xC > -32768)
     {
@@ -899,7 +906,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
     }
   else  *ret_sc = -eslINFINITY;
 #endif
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
   /* finally C->T */
   if (xC_AVX > -32768)
     {
@@ -910,7 +917,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
     }
   else  *ret_sc = -eslINFINITY;
 #endif
-#ifdef p7_use_AVX_512
+#ifdef p7_build_AVX512
   /* finally C->T */
   if (xC_AVX_512 > -32768)
     {

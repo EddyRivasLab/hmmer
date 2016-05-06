@@ -94,35 +94,8 @@
 #define p7_VNB      16		/* Number of bytes per SIMD vector (SSV, MSV)            */
 #define p7_VALIMASK (~0xf)      /* Ptrs are aligned using & p7_VALIMASK                  */
 
-#define p7_VALIGN_AVX   32		/* AVX Vector memory must be aligned on 32-byte boundaries   */
-#define p7_VNF_AVX      8		/* Number of floats per SIMD vector (Forward, Backward)  */
-#define p7_VNW_AVX      16		/* Number of shorts (words) per SIMD vector (Viterbi)    */
-#define p7_VNB_AVX      32		/* Number of bytes per SIMD vector (SSV, MSV)            */
-#define p7_VALIMASK_AVX (~0x1f)      /* Ptrs are aligned using & p7_VALIMASK_AVX                  */
-
-#define p7_VALIGN_AVX_512   64		/* AVX Vector memory must be aligned on 64-byte boundaries   */
-#define p7_VNF_AVX_512      16		/* Number of floats per SIMD vector (Forward, Backward)  */
-#define p7_VNW_AVX_512      32		/* Number of shorts (words) per SIMD vector (Viterbi)    */
-#define p7_VNB_AVX_512      64		/* Number of bytes per SIMD vector (SSV, MSV)            */
-#define p7_VALIMASK_AVX_512 (~0x3f)      /* Ptrs are aligned using & p7_VALIMASK_AVX_512                  */
 
 
-/* #defines that select the vector ISA to be used.  At least one of p7_use_SSE, p7_use_AVX or
-p7_use_AVX_512 must be defined for the program to work correctly.  Any combination of the three
-may be defined for testing, although doing so in actual use will merely slow the program down by
-doing redundant work */
-
-#define p7_use_SSE
-#define p7_use_AVX
-#define p7_use_AVX_512 
-
-/* Check code.  Defining p7_check_AVX causes both the final outputs and intermediate steps
-of the AVX code to be checked against the SSE code.  p7_check_AVX_512 compares the AVX_512 code
-against the SSE code.  p7_check_AVX requires that both p7_use_SSE and p7_USE AVX be defined.  
-p7_check_AVX_512 requires both p7_use_SSE and p7_use_AVX_512 */
-
-#define p7_check_AVX
-#define p7_check_AVX_512
 
 /*****************************************************************
  * 5. The final section isn't meant to be human editable at all.
@@ -150,7 +123,7 @@ p7_check_AVX_512 requires both p7_use_SSE and p7_use_AVX_512 */
 #define HAVE_ENDIAN_H 1
 #define HAVE_INTTYPES_H 1
 #define HAVE_STDINT_H 1
-#define HAVE_UNISTD_H 1
+/* #undef HAVE_UNISTD_HS */
 #define HAVE_SYS_TYPES_H 1
 #define HAVE_NETINET_IN_H 1
 
@@ -164,11 +137,22 @@ p7_check_AVX_512 requires both p7_use_SSE and p7_use_AVX_512 */
 /* Optional parallel implementations
  */
 #define HAVE_SSE2 1
+#define HAVE_AVX2 1
 /* #undef HAVE_MPI */
 /* #undef HMMER_PVM */
 #define HMMER_THREADS 1
 /* #undef HAVE_PTHREAD_ATTR_SETSCOPE */
 /* #undef HAVE_PTHREAD_SETCONCURRENCY */
+
+/* Which SIMD code should we build?
+HAVE_x macros define what the compiler supports.
+p7_build_x defines what should get built.
+*/
+#define p7_build_SSE 1
+/* #undef p7_build_AVX2 */
+/* #undef p7_build_AVX512 */
+/* #undef p7_build_check_AVX2 */
+/* #undef p7_build_check_AVX512 */
 
 /* Optional processor specific support
  */
