@@ -599,7 +599,7 @@ AC_CONFIG_HEADERS([
 ])
 
 ################################################################
-# 12. et voila!
+# 14. et voila!
 ################################################################
 # remember that sneaky if statement that wraps the source
 # configuration? well, it ends here.

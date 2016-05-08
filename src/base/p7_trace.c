@@ -2428,7 +2428,7 @@ main(int argc, char **argv)
   char           *msafile   = esl_opt_GetArg(go, 1);
   int             infmt     = eslMSAFILE_UNKNOWN;
   ESL_ALPHABET   *abc       = NULL;
-  ESLX_MSAFILE   *afp       = NULL;
+  ESL_MSAFILE    *afp       = NULL;
   ESL_MSA        *msa       = NULL;
   int            *matassign = NULL;
   int             optflags  = (esl_opt_GetBoolean(go, "-m") ? p7_MSA_COORDS : p7_DEFAULT);
@@ -2436,11 +2436,11 @@ main(int argc, char **argv)
   int             apos,idx;
   int             status;
 
-  if ( (status = eslx_msafile_Open(&abc, msafile, NULL, infmt, NULL, &afp)) != eslOK)
-    eslx_msafile_OpenFailure(afp, status);
+  if ( (status = esl_msafile_Open(&abc, msafile, NULL, infmt, NULL, &afp)) != eslOK)
+    esl_msafile_OpenFailure(afp, status);
 
-  if ( (status = eslx_msafile_Read(afp, &msa)) != eslOK) 
-    eslx_msafile_ReadFailure(afp, status);
+  if ( (status = esl_msafile_Read(afp, &msa)) != eslOK) 
+    esl_msafile_ReadFailure(afp, status);
 
   if (! msa->rf)
     esl_fatal("MSA must have #=GC RF consensus column annotation line for this example to work.");
@@ -2474,7 +2474,7 @@ main(int argc, char **argv)
   free(trarr);
   free(matassign);
   esl_msa_Destroy(msa);
-  eslx_msafile_Close(afp);
+  esl_msafile_Close(afp);
   esl_alphabet_Destroy(abc);
   esl_getopts_Destroy(go);
   return 0;
@@ -2485,8 +2485,5 @@ main(int argc, char **argv)
 
 /************************************************************
  * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id: p7_trace.c 3474 2011-01-17 13:25:32Z eddys $
  ************************************************************/
 

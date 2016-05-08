@@ -71,7 +71,7 @@ ifndef V
 		        ${MAKE} -C $$subdir
 endif
 
-.PHONY: all dev check pdf install uninstall clean distclean TAGS tags-append
+.PHONY: all dev check pdf install uninstall clean distclean TAGS 
 
 # all: Compile all documented executables.
 #      (Excludes test programs.)
