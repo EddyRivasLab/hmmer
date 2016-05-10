@@ -302,6 +302,22 @@ AC_ARG_WITH([gsl],
             ],
 	    [with_gsl=no])
 
+#set this to no by default, which causes configure to auto-detect the SIMD ISAs the CPU supports      
+user_set_simd=no  
+# --enable-SSE       Force use of the SSE vector instructions
+AC_ARG_ENABLE(SSE,[AS_HELP_STRING([--enable-SSE],[force use of the SSE vector instructions])], [enable_sse=yes; user_set_simd=yes], enable_sse=no)
+
+# --enable-AVX2       Force use of the AVX2 (Haswell)  vector instructions
+AC_ARG_ENABLE(AVX2,[AS_HELP_STRING([--enable-AVX2],[force use of the AVX2 (Haswell) vector instructions])], [enable_avx2=yes; user_set_simd=yes], enable_avx2=no)
+
+# --enable-AVX-512       Force use of the AVX-512 vector instructions
+AC_ARG_ENABLE(AVX-512,[AS_HELP_STRING([--enable-AVX-512],[force use of the AVX-512 vector instructions])], [enable_avx512=yes; user_set_simd=yes], enable_avx512=no)
+
+# --enable-AVX2-check       Check AVX2 code against SSE
+AC_ARG_ENABLE(AVX2_check,[AS_HELP_STRING([--enable-AVX2_check],[check AVX2 versions of functions against the SSE versions])], [enable_avx2_check=yes; user_set_simd=yes], enable_avx2_check=no)
+
+# --enable-AVX512-check       Check AVX512 code against SSE
+AC_ARG_ENABLE(AVX512_check,[AS_HELP_STRING([--enable-AVX512_check],[check AVX512 versions of functions against the SSE versions])], [enable_avx512_check=yes; user_set_simd=yes], enable_avx_check512=no)
 
 ################################################################
 # 5. Checks for programs, including ${CC} and its ${CFLAGS}.
@@ -402,6 +418,115 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <emmintrin.h>]],
                    ssecast=yes])
 AC_MSG_RESULT([$ssecast])
 CFLAGS="$sre_save_cflags"
+
+AC_MSG_CHECKING([whether AVX2 is supported])
+sre_save_cflags="$CFLAGS"
+haveavx=no
+CFLAGS="$CFLAGS $SIMD_CFLAGS -mavx2 -mavx"
+AC_COMPILE_IFELSE(  [AC_LANG_PROGRAM([[#include <immintrin.h>]],
+       [[__m256i test1;
+       __m256i test2;
+       test1 = _mm256_set1_epi8(37);
+       test2 = _mm256_set1_epi8(111);
+       test2 = _mm256_adds_epi8(test1, test2);
+     ]])],
+[AC_DEFINE([HAVE_AVX2])
+haveavx=yes])
+AC_MSG_RESULT([$haveavx])
+CFLAGS="$sre_save_cflags"
+
+#Add to SIMD flags if we have AVX2
+if test "$haveavx"="yes"; then
+  case $ax_cv_c_compiler_vendor in
+   gnu)   AX_CHECK_COMPILER_FLAGS([-msse2],        [ SIMD_CFLAGS="-msse2" ])
+          AX_CHECK_COMPILER_FLAGS([-msse2 -msse3], [ SIMD_CFLAGS="-msse2 -msse3" ])
+          AX_CHECK_COMPILER_FLAGS([-msse2 -msse3 -mavx -mavx2], [ SIMD_CFLAGS="-msse2 -msse3 -mavx -mavx2" ])
+    ;;
+   intel) ;;
+   *)     ;;
+   esac
+fi
+AC_SUBST(SIMD_CFLAGS)
+
+#Now that we've both parsed the arguments to configure and checked what the compiler supports
+#we can set the defines that select the SIMD ISA to use.
+#This is temporary.  Eventually, we will compile in support for everything that the OS 
+#can build and select the ISA at run-time
+
+if test "$user_set_simd" = "no"; then
+  AC_MSG_RESULT([Using autodetected SIMD])
+  #use the detected ISA
+  if test "$haveavx" = "yes"; then
+    AC_DEFINE([p7_build_AVX2])
+  else
+    AC_DEFINE([p7_build_SSE])
+  fi
+else
+  AC_MSG_RESULT([Using user-defined SIMD])
+  #Note that it is legal to define multiple of these flags, and the code will build
+  #correctly, so we don't do any checks to see if multiple flags are defined
+  if test "$enable_sse" = "yes"; then
+    AC_DEFINE([p7_build_SSE])
+    #override auto-detected compiler flags since we're forcing a particular ISA
+    case $ax_cv_c_compiler_vendor in
+      gnu)  SIMD_CFLAGS="-msse2 -msse3"
+        ;;
+      intel) ;;
+      *)     ;;
+    esac
+   AC_SUBST(SIMD_CFLAGS)
+  fi
+  if test "$enable_avx2" = "yes"; then
+    AC_DEFINE([p7_build_AVX2])
+    #override auto-detected compiler flags since we're forcing a particular ISA
+    case $ax_cv_c_compiler_vendor in
+      gnu)  SIMD_CFLAGS="-msse2 -msse3 -mavx -mavx2"
+        ;;
+      intel) ;;
+      *)     ;;
+    esac
+   AC_SUBST(SIMD_CFLAGS)
+  fi
+  if test "$enable_avx2_check" = "yes"; then
+    AC_DEFINE([p7_build_SSE])
+    AC_DEFINE([p7_build_AVX2])
+    AC_DEFINE([p7_build_check_AVX2])
+    #override auto-detected compiler flags since we're forcing a particular ISA
+    case $ax_cv_c_compiler_vendor in
+      gnu)  SIMD_CFLAGS="-msse2 -msse3 -mavx -mavx2"
+        ;;
+      intel) ;;
+      *)     ;;
+    esac
+   AC_SUBST(SIMD_CFLAGS)
+  fi
+  #put the avx-512 cases at the end because they require a superset of 
+  #the other cases' compiler flags
+  if test "$enable_avx512" = "yes"; then
+    AC_DEFINE([p7_build_AVX512])
+    #override auto-detected compiler flags since we're forcing a particular ISA
+    case $ax_cv_c_compiler_vendor in
+      gnu)  SIMD_CFLAGS="-msse2 -msse3 -mavx -mavx2 -mavx512bw -mavx512dq"
+        ;;
+      intel) ;;
+      *)     ;;
+    esac
+   AC_SUBST(SIMD_CFLAGS)
+  fi
+  if test "$enable_avx512_check" = "yes"; then
+    AC_DEFINE([p7_build_SSE])
+    AC_DEFINE([p7_build_AVX512])
+    AC_DEFINE([p7_build_check_AVX512])
+    #override auto-detected compiler flags since we're forcing a particular ISA
+    case $ax_cv_c_compiler_vendor in
+      gnu)  SIMD_CFLAGS="-msse2 -msse3 -mavx -mavx2 -mavx512bw -mavx512dq"
+        ;;
+      intel) ;;
+      *)     ;;
+    esac
+    AC_SUBST(SIMD_CFLAGS)
+  fi
+fi
 
 # For x86 processors check if the flush to zero macro is available
 # in order to avoid the performance penalty dealing with sub-normal

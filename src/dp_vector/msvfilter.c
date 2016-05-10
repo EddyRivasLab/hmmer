@@ -21,10 +21,11 @@
 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
   #include <immintrin.h>  /* AVX2 */
+  #include "esl_avx.h"
 #endif
-#ifdef p7_use_AVX_512
+#ifdef p7_build_AVX512
   #include <immintrin.h>  /* AVX-512 */
 #endif
 #include "easel.h"
@@ -40,7 +41,7 @@
 #include "dp_vector/msvfilter.h"
 
 //temporary helper function.  Should not be in release version
- #ifdef p7_use_AVX_512
+ #ifdef p7_build_AVX512
  void print_512(__m512i var){
   uint64_t *val = (uint64_t*) &var;
     printf("%016lx %016lx %016lx %016lx %016lx %016lx %016lx %016lx \n", 
@@ -88,7 +89,7 @@
 int
 p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)
 {
- #ifdef p7_use_SSE // set up variables depending on which vector ISA we're using.  
+ #ifdef p7_build_SSE // set up variables depending on which vector ISA we're using.  
   // Don't reuse names to allow use of multiple ISAs at same time for debugging
   register __m128i mpv;            /* previous row values                                       */
   register __m128i xEv;      /* E state: keeps max for Mk->E as we go                     */
@@ -108,7 +109,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
  #endif
  uint8_t  xJ;                     /* special states' scores                  */
 
-#ifdef p7_use_AVX 
+#ifdef p7_build_AVX2 
   register __m256i mpv_AVX;            /* previous row values                                       */
   register __m256i xEv_AVX;      /* E state: keeps max for Mk->E as we go                     */
   register __m256i xBv_AVX;      /* B state: splatted vector of B[i-1] for B->Mk calculations */
@@ -127,7 +128,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
                                  
  #endif
 
-#ifdef p7_use_AVX_512 
+#ifdef p7_build_AVX512 
   register __m512i mpv_AVX_512;            /* previous row values                                       */
   register __m512i xEv_AVX_512;      /* E state: keeps max for Mk->E as we go                     */
   register __m512i xBv_AVX_512;      /* B state: splatted vector of B[i-1] for B->Mk calculations */
@@ -166,13 +167,13 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
   /* Resize the filter mx as needed */
   if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of MSV filter matrix failed");
 
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
   dp = ox->dp;			/* This MUST be set AFTER the GrowTo() call. */
 #endif
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
   dp_AVX = ox->dp_AVX;  /* ditto this */
 #endif 
-#ifdef p7_use_AVX_512
+#ifdef p7_build_AVX512
   dp_AVX_512 = ox->dp_AVX_512; /* and this */
 #endif
 
@@ -181,7 +182,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
   ox->type = p7F_MSVFILTER;
 
   /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.  */
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
   biasv = _mm_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
   for (q = 0; q < Q; q++) dp[q] = _mm_setzero_si128();
   /* saturate simd register for overflow test */
@@ -193,7 +194,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
   xBv      = _mm_subs_epu8(basev, tjbmv);
 #endif
 
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
 
   biasv_AVX = _mm256_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
 
@@ -209,7 +210,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
 
 #endif
 
-#ifdef p7_use_AVX_512
+#ifdef p7_build_AVX512
   biasv_AVX_512 = _mm512_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
   for (q_AVX_512 = 0; q_AVX_512 < Q_AVX_512; q_AVX_512++) dp_AVX_512[q_AVX_512] = _mm512_setzero_si512();
   /* saturate simd register for overflow test */
@@ -240,7 +241,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
   for (i = 1; i <= L; i++)  /* Outer loop over residues*/
     {
 
-#ifdef p7_use_SSE // SSE Version
+#ifdef p7_build_SSE // SSE Version
       rsc = om->rbv[dsq[i]];
       xEv = _mm_setzero_si128();      
 
@@ -292,7 +293,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
 #endif 	  
 
 //printf("Starting AVX code in loop\n");
-#ifdef p7_use_AVX // AVX Version
+#ifdef p7_build_AVX2 // AVX Version
       rsc_AVX = om->rbv_AVX[dsq[i]];
       xEv_AVX = _mm256_setzero_si256();      
 
@@ -318,7 +319,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
         mpv_AVX   = dp_AVX[q_AVX];      /* Load {MDI}(i-1,q) into mpv */
         dp_AVX[q_AVX] = sv_AVX;           /* Do delayed store of M(i,q) now that memory is usable */
       }
-#ifdef p7_check_AVX
+#ifdef p7_build_check_AVX
       int check_elem;
       char *dp_bytes = (char *) dp;
       char *dp_AVX_bytes = (char *) dp_AVX;
@@ -345,6 +346,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
        * max value.  Then the last shuffle will broadcast the max value
        * to all simd elements.
        */
+       /*
        // compute the horizontal 8-bit max of xEv
       __m256i temp1_AVX = _mm256_permute2x128_si256(xEv_AVX, xEv_AVX, 0x01);
       // Swap the 128-bit halves from xEv_AVX into temp1
@@ -368,9 +370,9 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
       temp1_AVX = _mm256_insert_epi8(temp2_AVX, temp_stash, 0);  // low byte of temp1_AVX now has byte 2 of temp2_AVX
       temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  //bottom 16 bits of temp2_AVX now contain the max of the 16-bit fields of Dmaxv_AVX
       temp_stash = _mm256_extract_epi8(temp2_AVX, 0);  // get low byte of temp2_AVX
-      
+      */
 
-      xEv_AVX = _mm256_set1_epi8(temp_stash);  // broadcast the max byte from original xEv_AVX
+      xEv_AVX = _mm256_set1_epi8(esl_avx_hmax_epu8(xEv_AVX));  // broadcast the max byte from original xEv_AVX
       // to all bytes of xEv_AVX
 
       /* immediately detect overflow */
@@ -383,7 +385,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
  //     printf("Ending AVX code in loop\n");
 #endif    
 
-#ifdef p7_use_AVX_512
+#ifdef p7_build_AVX512
       rsc_AVX_512 = om->rbv_AVX_512[dsq[i]];
       xEv_AVX_512 = _mm512_setzero_si512();      
 
@@ -414,7 +416,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
         mpv_AVX_512   = dp_AVX_512[q_AVX_512];      /* Load {MDI}(i-1,q) into mpv */
         dp_AVX_512[q_AVX_512] = sv_AVX_512;           /* Do delayed store of M(i,q) now that memory is usable */
       }
-#ifdef p7_check_AVX_512
+#ifdef p7_build_check_AVX512
       int check_elem_512;
       char *dp_bytes_512 = (char *) dp;
       char *dp_AVX_512_bytes = (char *) dp_AVX_512;
@@ -464,7 +466,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
       temp3 = _mm256_max_epu8(temp4, temp3);  //bottom 16 bits of temp3 now contain the max of the 16-bit fields of Dmaxv_AVX
 
       uint8_t temp_stash2 = _mm256_extract_epi8(temp3, 1);
-      temp4 = _mm256_insert_epi8(temp3, temp_stash, 0);  // low byte of temp4 now has byte 2 of temp3
+      temp4 = _mm256_insert_epi8(temp3, temp_stash2, 0);  // low byte of temp4 now has byte 2 of temp3
       temp3 = _mm256_max_epu8(temp4, temp3);  //bottom 16 bits of temp3 now contain the max of the 16-bit fields of Dmaxv_AVX
       temp_stash2 = _mm256_extract_epi8(temp3, 0);  // get low byte of temp3
       
@@ -496,10 +498,10 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
     } /* end loop over sequence residues 1..L */
 
   /* finally C->T, and add our missing precision on the NN,CC,JJ back */
-#ifdef p7_use_SSE
+#ifdef p7_build_SSE
   xJ = (uint8_t) _mm_extract_epi16(xJv, 0);
 #endif
-#ifdef p7_check_AVX
+#ifdef p7_build_check_AVX
   uint8_t xJ_temp = _mm256_extract_epi8(xJv_AVX, 0);
   if(xJ_temp == xJ){
   //  printf("AVX matched SSE score, %i vs %i\n", xJ, xJ_temp);
@@ -508,15 +510,15 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
     printf("AVX didn't match SSE score %i vs %i\n", xJ, xJ_temp);
   }
 #endif
-#ifdef p7_use_AVX
+#ifdef p7_build_AVX2
   xJ =  _mm256_extract_epi8(xJv_AVX, 0);
 #endif
 
-#ifdef p7_use_AVX_512
+#ifdef p7_build_AVX512
   //need to do this in two steps because AVX-512 doesn't have extract byte
   __m256i xJtemp = _mm512_extracti32x8_epi32(xJv_AVX_512, 0);
   uint8_t xJ_AVX_512 = _mm256_extract_epi8(xJtemp, 0);
-#ifdef p7_check_AVX_512
+#ifdef p7_build_check_AVX512
    if(xJ_AVX_512 == xJ){
 //  printf("AVX-512 matched SSE score, %i vs %i\n", xJ, xj_AVX_512;
   }
