@@ -404,7 +404,7 @@
  * Ignore the warnings and go look for the calc_band_2 function.
  *
  */
-
+#define p7_log_array
 #include "p7_config.h"
 
 #include <math.h>
@@ -413,6 +413,7 @@
 #include <emmintrin.h>		/* SSE2 */
 #ifdef p7_build_AVX2
  #include<immintrin.h>
+ #include"esl_avx.h"
 #endif
 
 #include "easel.h"
@@ -432,32 +433,38 @@
 #define  MAX_BANDS 6
 #endif
 
+
 //#define p7_log_array
 #ifdef p7_log_array
+__m128i *SSE_log_array;
+__m256i *AVX_log_array;
 
-__m128i *log_array_SSE;  // array to hold logging data for SSE version
-__m256i *log_array_AVX;  // array to hold logging data for AVX version
-__m128i *SSE_log_pointer;
-__m256i	*AVX_log_pointer;
+void SSVlog(__m128i value, int row, uint32_t col, int width){
+	extern __m128i *SSE_log_array;
+	SSE_log_array[(row * width) + col] = value;
+}
 
-	
-void compare_logs(int M, int L){
-	extern __m128i *log_array_SSE;  
-	extern __m256i *log_array_AVX;
-	int Q = P7_NVB(M);
-	int Q_AVX = P7_NVB_AVX(M);
-	for(int i = 0; i < L; i++){
-		__m128i *SSE_row = log_array_SSE + (i*Q); // Get pointers to the row of each array that we're looking at 
-		__m256i *AVX_row = log_array_AVX + (i * Q_AVX);
-		int check_elem;
-      	char *SSE_bytes = (char *) SSE_row;
-      	char *AVX_bytes = (char *) AVX_row;
-      	for(check_elem = 0; check_elem < M; check_elem++){
-         	uint8_t sse_byte = SSE_bytes[((check_elem % Q) * 16) + (check_elem / Q)];
-          	uint8_t avx_byte = AVX_bytes[((check_elem % Q_AVX) * 32) + (check_elem / Q_AVX)];
-          	if(sse_byte != avx_byte){
-            	printf("SSV log miss-match at row %d position %d: %i (SSE) vs %i (AVX)\n", i, check_elem, sse_byte, avx_byte);
-          	}
+
+void SSVlog_AVX(__m256i value, int row, uint32_t col, int width){
+	extern __m256i *AVX_log_array;
+	AVX_log_array[(row * width) + col] = value;
+}
+
+void SSV_compare_logs(int L, int width, int width_AVX, int Q, int Q_AVX){
+	int row = 0, col = 0;
+	uint8_t *SSE_bytes, *AVX_bytes;
+	extern __m128i *SSE_log_array;
+	extern __m256i *AVX_log_array;
+	SSE_bytes = (uint8_t *) SSE_log_array;
+	AVX_bytes = (uint8_t *) AVX_log_array;
+	uint8_t SSE_val, AVX_val;
+	for(row = 0; row < L; row++){
+		for(col = 0; col < width * 16; col++) {
+		SSE_val = SSE_bytes[(row * width * 16) +  ((col %width) * 16) + (col/width)];
+		AVX_val = AVX_bytes[(row * width_AVX * 16) +  ((col %width_AVX) * 16) + (col/width_AVX)];
+		if(SSE_val != AVX_val){
+			printf("SSV log miss-match at row %d, column %d, SSE = %i, AVX = %i.\n", row, col, SSE_val, AVX_val);
+			}
 		}
 	}
 }
@@ -467,19 +474,17 @@ void compare_logs(int M, int L){
 #ifdef p7_build_SSE
 #define STEP_SINGLE(sv)                         \
   sv   = _mm_subs_epi8(sv, *rsc); rsc++;        \
-  xEv  = _mm_max_epu8(xEv, sv);	 /* \
-  extern __m128i *SSE_log_pointer; \
-  *SSE_log_pointer = sv; \
-  SSE_log_pointer++; */
+  xEv  = _mm_max_epu8(xEv, sv);	 \
+  SSVlog(sv, i, col, w);  \
+  col++;
 #endif
 
 #ifdef p7_build_AVX2
 #define STEP_SINGLE_AVX(sv_AVX) \
   sv_AVX   = _mm256_subs_epi8(sv_AVX, *rsc_AVX); rsc_AVX++;        \
-  xEv_AVX  = _mm256_max_epu8(xEv_AVX, sv_AVX);	/*\
-   extern __m256i *AVX_log_pointer; \
-  *AVX_log_pointer = sv_AVX; \
-  AVX_log_pointer++; */
+  xEv_AVX  = _mm256_max_epu8(xEv_AVX, sv_AVX); \
+  SSVlog_AVX(sv_AVX, i_AVX, col_AVX, w_AVX); \
+  col_AVX++;	
 #endif
 
 #ifdef p7_build_SSE
@@ -644,6 +649,7 @@ void compare_logs(int M, int L){
 #define CONVERT_STEP(step, length_check, label, sv, pos)        \
   length_check(label)                                           \
   rsc = om->sbv[dsq[i]] + pos;                                   \
+  col =0; \
   step()                                                        \
   sv = _mm_slli_si128(sv, 1);                                   \
   sv = _mm_or_si128(sv, beginv);                                \
@@ -651,13 +657,12 @@ void compare_logs(int M, int L){
 #endif
 
 #ifdef p7_build_AVX2
-// Note: this uses the two-instruction AVX shift macro from stackoverflow.com, rewritten 
-// to avoid introducing an explicit temporary variable
 #define CONVERT_STEP_AVX(step, length_check, label, sv_AVX, pos)        \
   length_check(label)                                           \
   rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + pos;                                   \
+  col_AVX = 0; \
   step()       \
-  sv_AVX = _mm256_alignr_epi8(sv_AVX, _mm256_permute2x128_si256(sv_AVX, sv_AVX, _MM_SHUFFLE(0,0,3,0) ),15); \
+  sv_AVX = esl_avx_leftshift(sv_AVX, 1); \
   sv_AVX = _mm256_or_si256(sv_AVX, beginv_AVX);                                \
   i_AVX++;
 #endif
@@ -962,25 +967,22 @@ void compare_logs(int M, int L){
   __m128i *rsc;                                 \
                                                 \
   int w = width;                                \
-                                                \
+uint32_t col;                                              \
   dsq++;                                        \
                                                 \
   reset()                                       \
-                                                \
   for (i = 0; i < L && i < Q - q - w; i++)      \
     {                                           \
-      rsc = om->sbv[dsq[i]] + i + q;            \
+      rsc = om->sbv[dsq[i]] + i + q;\
       step()                                    \
      }                                           \
-                                                \
   i = Q - q - w;                                \
   convert(step, LENGTH_CHECK, done1)            \
 done1:                                          \
-                                                \
  for (i2 = Q - q; i2 < L - Q; i2 += Q)          \
    {                                            \
      for (i = 0; i < Q - w; i++)                \
-       {                                        \
+       {        \
          rsc = om->sbv[dsq[i2 + i]] + i;        \
          step()                                 \
        }                                        \
@@ -988,13 +990,11 @@ done1:                                          \
      i += i2;                                   \
      convert(step, NO_CHECK, )                  \
    }                                            \
-                                                \
  for (i = 0; i2 + i < L && i < Q - w; i++)      \
    {                                            \
      rsc = om->sbv[dsq[i2 + i]] + i;            \
      step()                                     \
    }                                            \
-                                                \
  i+=i2;                                         \
  convert(step, LENGTH_CHECK, done2)             \
 done2:                                          \
@@ -1009,7 +1009,7 @@ done2:                                          \
   __m256i *rsc_AVX;                                 \
                                                 \
   int w_AVX = width;                                \
-                                                \
+  uint32_t col_AVX;                                     \
   dsq++;                                        \
                                                 \
   reset()                                       \
@@ -1021,8 +1021,8 @@ done2:                                          \
     }                                           \
                                                 \
   i_AVX = Q_AVX - q_AVX - w_AVX;                                \
-  convert(step, LENGTH_CHECK_AVX, done1)            \
-done1:                                          \
+  convert(step, LENGTH_CHECK_AVX, done1_AVX)            \
+done1_AVX:                                          \
                                                 \
  for (i2_AVX = Q_AVX - q_AVX; i2_AVX < L - Q_AVX; i2_AVX += Q_AVX)          \
    {                                            \
@@ -1043,8 +1043,8 @@ done1:                                          \
    }                                            \
                                                 \
  i_AVX+=i2_AVX;                                         \
- convert(step, LENGTH_CHECK_AVX, done2)             \
-done2:                                          \
+ convert(step, LENGTH_CHECK_AVX, done2_AVX)             \
+done2_AVX:                                          \
                                                 \
  return xEv_AVX;
 #endif
@@ -1234,7 +1234,7 @@ calc_band_11_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __
 __m256i
 calc_band_12_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __m256i beginv_AVX, register __m256i xEv_AVX)
 {
-  CALC_AVX(RESET_12_AVX, STEP_BANDS_12_AVX, CONVERT_12_AVX, 1)
+  CALC_AVX(RESET_12_AVX, STEP_BANDS_12_AVX, CONVERT_12_AVX, 12)
 }
 
 __m256i
@@ -1297,10 +1297,8 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   xEv    =  beginv;
 
  #ifdef p7_log_array
-  extern __m128i *log_array_SSE;
-  log_array_SSE = malloc(Q * L * sizeof(__m128i));
-  extern __m128i *SSE_log_pointer;
-  SSE_log_pointer = log_array_SSE;
+  extern __m128i *SSE_log_array;
+  SSE_log_array = malloc(Q * L * sizeof(__m128i));  // Might be bigger than we need, but who cares for testing
  #endif
 
   /* function pointers for the various number of vectors to use */
@@ -1323,11 +1321,9 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   int q_AVX;			   /* counter over vectors 0..nq-1                              */
   int Q_AVX        = P7_NVB_AVX(om->M);   /* segment length: # of vectors                              */
 
-#ifdef p7_log_array
-  extern __m256i *log_array_AVX;
-  log_array_AVX = malloc(Q_AVX * L * sizeof(__m256i));
-  extern __m256i *AVX_log_pointer;
-  AVX_log_pointer = log_array_AVX;
+ #ifdef p7_log_array
+  extern __m256i *AVX_log_array;
+  AVX_log_array = malloc(Q_AVX * L * sizeof(__m128i));  // Might be bigger than we need, but who cares for testing
  #endif
 
   int bands_AVX;                       /* the number of bands (rounds) to use                       */
@@ -1357,7 +1353,6 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   last_q = 0;
   /* Use the highest number of bands but no more than MAX_BANDS */
   bands = (Q + MAX_BANDS - 1) / MAX_BANDS;
-
   for (i = 0; i < bands; i++) {
     q = (Q * (i + 1)) / bands;
 
@@ -1372,7 +1367,6 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   last_q = 0; // reset in case we also ran SSE code
   /* Use the highest number of bands but no more than MAX_BANDS */
   bands_AVX = (Q_AVX + MAX_BANDS - 1) / MAX_BANDS;
-
   for (i = 0; i < bands_AVX; i++) {
     q_AVX = (Q_AVX * (i + 1)) / bands_AVX;
 
@@ -1381,42 +1375,19 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
     last_q = q_AVX;
   }
 
-  //Now, find the horizontal max of the bytes in xEv_AVX.  This version is all
-  //AVX instructions to avoid the AVX->SSE switch penalty
-
-  __m256i temp1_AVX = _mm256_permute2x128_si256(xEv_AVX, xEv_AVX, 0x01);
-  // Swap the 128-bit halves from xEv_AVX into temp1
-
-  __m256i temp2_AVX = _mm256_max_epu8(temp1_AVX, xEv_AVX); // each byte in xEv_AVX now has the max of the
-  //corresponding bytes in the high and low halves of xEv_AVX
-
-  temp1_AVX = _mm256_shuffle_epi32(temp2_AVX, 0x8e);  // Swap the 64-bit halves of each 128-bit half of temp2_AVX
-  temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  // Each 64-bit quantity in temp2 now has the max of the corresponding
-  // byte from the 64-bit quarters of xEv_AVX
-
-  temp1_AVX = _mm256_shuffle_epi32(temp2_AVX, 0xb1);  // Swap the 32-bit halves of each 64-bit quarter of temp2_AVX
-  temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  // Each 32-bit quantity in temp2 now has the max of the corresponding
-  // byte from the 32-bit eighths of xEv_AVX
-
-  temp1_AVX = _mm256_shufflelo_epi16(temp2_AVX, 0xb1); // bottom 32-bits of temp1_AVX now contain the swapped 16-bit halves
-  // of the low 32 bits of temp2_AVX
-  temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  //bottom 16 bits of temp2_AVX now contain the max of the odd, even
-  // bytes of xEv_AVX
-
-  temp1_AVX = _mm256_bsrli_epi128(temp2_AVX, 1);  
-  temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  //low byte of temp2_AVX now contains max byte of xEv_AVX
-  retval_AVX = _mm256_extract_epi8(temp2_AVX, 0);  // extract that byte into retval_AVX
+ 
+  retval_AVX = esl_avx_hmax_epu8(xEv_AVX);
 #endif
 
 #ifdef p7_build_check_AVX2
-  #ifdef p7_log_array
-  compare_logs(om->M, L); // Note: this will not work if M > the number of elements in one "band"
-  #endif
-
+ 
 
   if (retval != retval_AVX){
   	printf("retval miss-match in SSVFilter, %i vs %i\n", retval, retval_AVX);
   }
+/* else{
+ 	printf("retval match in SSVFilter, %i vs %i\n", retval, retval_AVX);
+  } */
 #endif
 
 // In production use only one of these will be defined, and multiple return statements don't cause problems,
@@ -1439,6 +1410,7 @@ p7_SSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
   /* Use 16 bit values to avoid overflow due to moved baseline */
   uint16_t  xE;
   uint16_t  xJ;
+
 
   if (om->tjb_b + om->tbm_b + om->tec_b + om->bias_b >= 127) {
     /* the optimizations are not guaranteed to work under these

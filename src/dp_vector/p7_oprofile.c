@@ -904,6 +904,8 @@ sf_conversion(P7_OPROFILE *om)
 
   for (x = 0; x < om->abc->Kp; x++)
     {
+
+      //testing code.  Replace once debugged
       for (q = 0;  q < nq;            q++) om->sbv[x][q] = _mm_xor_si128(_mm_subs_epu8(tmp, om->rbv[x][q]), tmp2);
       for (q = nq; q < nq + p7O_EXTRA_SB; q++) om->sbv[x][q] = om->sbv[x][q % nq];
     }

@@ -352,21 +352,15 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
        */
     
       mpv_AVX = MMX_AVXf(Q_AVX-1);  
-         //left-shift macro
-      __m256i temp_mask_AVX = _mm256_permute2x128_si256(mpv_AVX, mpv_AVX, _MM_SHUFFLE(0,0,3,0) );
-      mpv_AVX = _mm256_alignr_epi8(mpv_AVX, temp_mask_AVX,14);
+      mpv_AVX = esl_avx_leftshift(mpv_AVX, 2);
       mpv_AVX = _mm256_or_si256(mpv_AVX, negInfv_AVX);
       
       dpv_AVX = DMX_AVXf(Q_AVX-1);  
-         //left-shift macro
-      temp_mask_AVX = _mm256_permute2x128_si256(dpv_AVX, dpv_AVX, _MM_SHUFFLE(0,0,3,0) );
-      dpv_AVX = _mm256_alignr_epi8(dpv_AVX, temp_mask_AVX,14);
+       dpv_AVX = esl_avx_leftshift(dpv_AVX, 2);
        dpv_AVX = _mm256_or_si256(dpv_AVX, negInfv_AVX);
       
       ipv_AVX = IMX_AVXf(Q_AVX-1);  
-         //left-shift macro
-      temp_mask_AVX = _mm256_permute2x128_si256(ipv_AVX, ipv_AVX, _MM_SHUFFLE(0,0,3,0) );
-      ipv_AVX = _mm256_alignr_epi8(ipv_AVX, temp_mask_AVX,14);
+      ipv_AVX = esl_avx_leftshift(ipv_AVX, 2);
        ipv_AVX = _mm256_or_si256(ipv_AVX, negInfv_AVX);
 
       for (q_AVX = 0; q_AVX < Q_AVX; q_AVX++)
@@ -403,28 +397,8 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
       }
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
-      //Now, find the horizontal max of the 16-bit values in xEv_AVX.  This version is all
-      //AVX instructions to avoid the AVX->SSE switch penalty
-
-      __m256i temp1_AVX = _mm256_permute2x128_si256(xEv_AVX, xEv_AVX, 0x01);
-      // Swap the 128-bit halves from xEv_AVX into temp1
-
-      __m256i temp2_AVX = _mm256_max_epi16(temp1_AVX, xEv_AVX); // each 16-bit field in xEv_AVX now has the max of the
-      //corresponding fields in the high and low halves of xEv_AVX
-
-      temp1_AVX = _mm256_shuffle_epi32(temp2_AVX, 0x4e);  // Swap the 64-bit halves of each 128-bit half of temp2_AVX
-      temp2_AVX = _mm256_max_epi16(temp1_AVX, temp2_AVX);  // Each 64-bit quantity in temp2 now has the max of the corresponding
-      // 16-bit fields from the 64-bit quarters of xEv_AVX
-
-      temp1_AVX = _mm256_shuffle_epi32(temp2_AVX, 0xb1);  // Swap the 32-bit halves of each 64-bit quarter of temp2_AVX
-      temp2_AVX = _mm256_max_epi16(temp1_AVX, temp2_AVX);  // Each 32-bit quantity in temp2 now has the max of the corresponding
-      // 16 bit fields from the 32-bit eighths of xEv_AVX
-
-      temp1_AVX = _mm256_shufflelo_epi16(temp2_AVX, 0xb1); // bottom 32-bits of temp1_AVX now contain the swapped 16-bit halves
-      // of the low 32 bits of temp2_AVX
-      temp2_AVX = _mm256_max_epi16(temp1_AVX, temp2_AVX);  //bottom 16 bits of temp2_AVX now contain the max of the 16-bit fields of xEv_AVX
-
-      xE_AVX = _mm256_extract_epi16(temp2_AVX, 0);  // extract that byte into retval_AVX
+      //Now, find the horizontal max of the 16-bit values in xEv_AVX. 
+      xE_AVX = esl_avx_hmax_epi16(xEv_AVX);
 
       if (xE_AVX >= 32767) {*ret_sc = eslINFINITY; return eslERANGE; } /* immediately detect overflow */
       xN_AVX = xN_AVX + om->xw[p7O_N][p7O_LOOP];
@@ -449,35 +423,14 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
        */
       
       // compute Dmax_AVX = horizontal 16-bit max of Dmaxv_AVX
-
-      temp1_AVX = _mm256_permute2x128_si256(Dmaxv_AVX, Dmaxv_AVX, 0x01);
-      // Swap the 128-bit halves from Dmaxv_AVX into temp1
-
-      temp2_AVX = _mm256_max_epi16(temp1_AVX, Dmaxv_AVX); // each 16-bit field in Dmaxv_AVX now has the max of the
-      //corresponding fields in the high and low halves of Dmaxv_AVX
-
-      temp1_AVX = _mm256_shuffle_epi32(temp2_AVX, 0x4e);  // Swap the 64-bit halves of each 128-bit half of temp2_AVX
-      temp2_AVX = _mm256_max_epi16(temp1_AVX, temp2_AVX);  // Each 64-bit quantity in temp2 now has the max of the corresponding
-      // 16-bit fields from the 64-bit quarters of Dmaxv_AVX
-
-      temp1_AVX = _mm256_shuffle_epi32(temp2_AVX, 0xb1);  // Swap the 32-bit halves of each 64-bit quarter of temp2_AVX
-      temp2_AVX = _mm256_max_epi16(temp1_AVX, temp2_AVX);  // Each 32-bit quantity in temp2 now has the max of the corresponding
-      // 16 bit fields from the 32-bit eighths of Dmaxv_AVX
-
-      temp1_AVX = _mm256_shufflelo_epi16(temp2_AVX, 0xb1); // bottom 32-bits of temp1_AVX now contain the swapped 16-bit halves
-      // of the low 32 bits of temp2_AVX
-      temp2_AVX = _mm256_max_epi16(temp1_AVX, temp2_AVX);  //bottom 16 bits of temp2_AVX now contain the max of the 16-bit fields of Dmaxv_AVX
-
-      Dmax_AVX = _mm256_extract_epi16(temp2_AVX, 0);  // extract that byte into retval_AVX
+      Dmax_AVX = esl_avx_hmax_epi16(Dmaxv_AVX);
 
       if (Dmax_AVX + om->ddbound_w > xB_AVX) 
   {
 //printf("vitfilter AVX doing DD calc, Dmax_AVX = %i\n", Dmax_AVX);
     /* Now we're obligated to do at least one complete DD path to be sure. */
     /* dcv has carried through from end of q loop above */
-    //left-shift macro
-      __m256i temp_mask_AVX = _mm256_permute2x128_si256(dcv_AVX, dcv_AVX, _MM_SHUFFLE(0,0,3,0) );
-      dcv_AVX = _mm256_alignr_epi8(dcv_AVX, temp_mask_AVX,14);
+      dcv_AVX = esl_avx_leftshift(dcv_AVX, 2);
  
     dcv_AVX = _mm256_or_si256(dcv_AVX, negInfv_AVX);
     tsc_AVX = om->twv_AVX + 7*Q_AVX;  /* set tsc to start of the DD's */
@@ -492,9 +445,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
      * our score. 
      */
     do {
-      //left-shift macro
-      __m256i temp_mask_AVX = _mm256_permute2x128_si256(dcv_AVX, dcv_AVX, _MM_SHUFFLE(0,0,3,0) );
-      dcv_AVX = _mm256_alignr_epi8(dcv_AVX, temp_mask_AVX,14);
+         dcv_AVX = esl_avx_leftshift(dcv_AVX, 2);
  
       dcv_AVX = _mm256_or_si256(dcv_AVX, negInfv_AVX);
       tsc_AVX = om->twv_AVX + 7*Q_AVX;  /* set tsc to start of the DD's */
@@ -512,9 +463,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
   {
 //printf("vitfilter AVX skipping DD calc Dmax_AVX = %i\n", Dmax_AVX);
-    //left-shift macro
-    __m256i temp_mask_AVX = _mm256_permute2x128_si256(dcv_AVX, dcv_AVX, _MM_SHUFFLE(0,0,3,0) );
-    dcv_AVX = _mm256_alignr_epi8(dcv_AVX, temp_mask_AVX,14);
+  dcv_AVX = esl_avx_leftshift(dcv_AVX, 2);
    
     DMX_AVXf(0) = _mm256_or_si256(dcv_AVX, negInfv_AVX);
   }

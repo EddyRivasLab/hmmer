@@ -149,9 +149,9 @@ HAVE_x macros define what the compiler supports.
 p7_build_x defines what should get built.
 */
 #define p7_build_SSE 1
-/* #undef p7_build_AVX2 */
+#define p7_build_AVX2 1
 /* #undef p7_build_AVX512 */
-/* #undef p7_build_check_AVX2 */
+#define p7_build_check_AVX2 1
 /* #undef p7_build_check_AVX512 */
 
 /* Optional processor specific support

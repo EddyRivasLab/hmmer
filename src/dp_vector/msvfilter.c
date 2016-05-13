@@ -301,13 +301,9 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
        * Because ia32 is littlendian, this means a left bit shift.
        * Zeros shift on automatically, which is our -infinity.
        */
-      // Shift macro courtesy stackoverflow.com
        __m256i dp_temp_AVX = dp_AVX[Q_AVX -1];
-       __m256i temp_mask_AVX = _mm256_permute2x128_si256(dp_temp_AVX, dp_temp_AVX, _MM_SHUFFLE(0,0,3,0) );
-      mpv_AVX = _mm256_alignr_epi8(dp_temp_AVX, temp_mask_AVX,15);
+      mpv_AVX = esl_avx_leftshift(dp_temp_AVX, 1);
       
-
-
       for (q_AVX = 0; q_AVX < Q_AVX; q_AVX++)
       {
         /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
@@ -346,31 +342,6 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
        * max value.  Then the last shuffle will broadcast the max value
        * to all simd elements.
        */
-       /*
-       // compute the horizontal 8-bit max of xEv
-      __m256i temp1_AVX = _mm256_permute2x128_si256(xEv_AVX, xEv_AVX, 0x01);
-      // Swap the 128-bit halves from xEv_AVX into temp1
-
-      __m256i temp2_AVX = _mm256_max_epu8(temp1_AVX, xEv_AVX); // each 8-bit field in temp2_AVX now has the max of the
-      //corresponding fields in the high and low halves of Dmaxv_AVX
-
-      temp1_AVX = _mm256_shuffle_epi32(temp2_AVX, 0x4e);  // Swap the 64-bit halves of each 128-bit half of temp2_AVX
-      temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  // Each 64-bit quantity in temp2 now has the max of the corresponding
-      // 8-bit fields from the 64-bit quarters of Dmaxv_AVX
-
-      temp1_AVX = _mm256_shuffle_epi32(temp2_AVX, 0xb1);  // Swap the 32-bit halves of each 64-bit quarter of temp2_AVX
-      temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  // Each 32-bit quantity in temp2 now has the max of the corresponding
-      // 8 bit fields from the 32-bit eighths of Dmaxv_AVX
-
-      temp1_AVX = _mm256_shufflelo_epi16(temp2_AVX, 0xb1); // bottom 32-bits of temp1_AVX now contain the swapped 16-bit halves
-      // of the low 32 bits of temp2_AVX
-      temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  //bottom 16 bits of temp2_AVX now contain the max of the 16-bit fields of Dmaxv_AVX
-
-      uint8_t temp_stash = _mm256_extract_epi8(temp2_AVX, 1);
-      temp1_AVX = _mm256_insert_epi8(temp2_AVX, temp_stash, 0);  // low byte of temp1_AVX now has byte 2 of temp2_AVX
-      temp2_AVX = _mm256_max_epu8(temp1_AVX, temp2_AVX);  //bottom 16 bits of temp2_AVX now contain the max of the 16-bit fields of Dmaxv_AVX
-      temp_stash = _mm256_extract_epi8(temp2_AVX, 0);  // get low byte of temp2_AVX
-      */
 
       xEv_AVX = _mm256_set1_epi8(esl_avx_hmax_epu8(xEv_AVX));  // broadcast the max byte from original xEv_AVX
       // to all bytes of xEv_AVX

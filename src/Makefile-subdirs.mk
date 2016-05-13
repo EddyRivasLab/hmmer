@@ -12,7 +12,7 @@ includedir   = ${prefix}/include
 
 CC           = gcc
 CFLAGS       = -O3 -pthread -fPIC
-SIMDFLAGS    = -msse2 -msse3
+SIMDFLAGS    = -msse2 -msse3 -mavx -mavx2
 CPPFLAGS     = 
 LDFLAGS      = 
 DEFS         = -DHAVE_CONFIG_H
