@@ -1,4 +1,3 @@
-/* src/p7_config.h.  Generated from p7_config.h.in by configure.  */
 /* @configure_input@  
  * p7_config.h is generated from p7_config.h.in by the ./configure script.
  * DO NOT EDIT p7_config.h; only edit p7_config.h.in.
@@ -120,7 +119,7 @@
  */
 #define HAVE_STRINGS_H 1
 
-#define HAVE_ENDIAN_H 1
+/* #undef HAVE_ENDIAN_H */
 #define HAVE_INTTYPES_H 1
 #define HAVE_STDINT_H 1
 /* #undef HAVE_UNISTD_HS */
