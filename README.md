@@ -30,9 +30,9 @@ To clone your own copy of HMMER source code for the first time:
    $ git clone https://github.com/EddyRivasLab/hmmer
    $ cd hmmer
    $ git clone https://github.com/EddyRivasLab/easel
+   $ git checkout h3-develop
    $ ln -s easel/aclocal.m4 aclocal.m4
    $ autoconf
-   $ (cd easel; autoconf)
 ```
 
 and to build:
@@ -42,10 +42,15 @@ and to build:
    $ make
 ```
 
-We follow a "git flow" workflow. The "master" branch is a stable
-release branch. The "develop" branch is for integrating feature
-branches. Most new features are developed on specific feature
-branches.
+We have just switched to a "git flow" workflow. We have three active branches:
+ * **h3-master** is to become the stable HMMER3 release branch. 
+ * **h3-develop** is the HMMER3 development branch
+ * **master**, for historical reasons, is the HMMER4 development branch.
 
+To contribute to HMMER3 development, you want to be on the
+**h3-develop** branch, which is where we are currently integrating
+feature branches. We don't currently recommend that you use the master
+branch where H4 is getting assembled. For more information, see the
+[HMMER wiki](https://github.com/EddyRivasLab/hmmer/wiki).
 
 
