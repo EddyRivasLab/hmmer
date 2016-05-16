@@ -511,8 +511,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	if (p7_tophits_Alignment(info->th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK)
 	  {
-	    if (textw > 0) eslx_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
-	    else           eslx_msafile_Write(afp, msa, eslMSAFILE_PFAM);
+	    if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
+	    else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 	  
 	    if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 	  } 
@@ -964,8 +964,8 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	if (p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK)
 	  {
-	    if (textw > 0) eslx_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
-	    else           eslx_msafile_Write(afp, msa, eslMSAFILE_PFAM);
+	    if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
+	    else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 	  
 	    if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 	  } 
@@ -1330,8 +1330,5 @@ pipeline_thread(void *arg)
 
 /*****************************************************************
  * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id: hmmsearch.c 3572 2011-06-20 18:06:12Z wheelert $
  *****************************************************************/
 

@@ -706,8 +706,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (domtblfp) p7_tophits_TabularDomains(domtblfp, qsq->name, qsq->acc, info->th, info->pli, (nquery == 1));
       if (afp) 
 	{
-	  if (textw > 0) eslx_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
-	  else           eslx_msafile_Write(afp, msa, eslMSAFILE_PFAM);
+	  if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
+	  else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 
 	  if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 	}
@@ -1272,8 +1272,8 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (domtblfp) p7_tophits_TabularDomains(domtblfp, qsq->name, qsq->acc, th, pli, (nquery == 1));
       if (afp) 
 	{
-	  if (textw > 0) eslx_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
-	  else           eslx_msafile_Write(afp, msa, eslMSAFILE_PFAM);
+	  if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
+	  else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 
 	  if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 	}
@@ -1575,7 +1575,7 @@ checkpoint_msa(int nquery, ESL_MSA *msa, char *basename, int iteration)
   esl_sprintf(&filename, "%s-%d.sto", basename, iteration);
   if (nquery == 1) { if ((fp = fopen(filename, "w")) == NULL) p7_Fail("Failed to open MSA checkpoint file %s for writing\n", filename); }
   else             { if ((fp = fopen(filename, "a")) == NULL) p7_Fail("Failed to open MSA checkpoint file %s for append\n",  filename); }
-  eslx_msafile_Write(fp, msa, eslMSAFILE_PFAM);
+  esl_msafile_Write(fp, msa, eslMSAFILE_PFAM);
   
   fclose(fp);
   free(filename);
@@ -1716,7 +1716,4 @@ pipeline_thread(void *arg)
 
 /*****************************************************************
  * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id$
  *****************************************************************/
