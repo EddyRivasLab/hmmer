@@ -383,7 +383,7 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_
  *            models.
  */
 int
-p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, const ESL_SQ *ntsq, P7_OPROFILE *om, 
+p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, const ESL_SQ *ntsq, P7_OPROFILE *om,
 				   P7_OMX *oxf, P7_OMX *oxb, P7_OMX *fwd, P7_OMX *bck, 
 				   P7_DOMAINDEF *ddef, P7_BG *bg, int long_target,
 				   P7_BG *bg_tmp, float *scores_arr, float *fwd_emissions_arr
@@ -1074,7 +1074,7 @@ main(int argc, char **argv)
 
   p7_Forward (sq->dsq, sq->n, om,      fwd, &overall_sc); 
   p7_Backward(sq->dsq, sq->n, om, fwd, bck, &sc);       
-  p7_domaindef_ByPosteriorHeuristics(sq, om, oxf, oxb, fwd, bck, ddef, NULL, FALSE, NULL, NULL, NULL);
+  p7_domaindef_ByPosteriorHeuristics(sq, NULL, om, oxf, oxb, fwd, bck, ddef, NULL, FALSE, NULL, NULL, NULL);
 
 
   printf("Overall raw likelihood score: %.2f nats\n", overall_sc);

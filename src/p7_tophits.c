@@ -1358,69 +1358,24 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                     (th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M ) ? ']' : '.') < 0)
                         ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
 			
-			  /* if ntseq is NULL then we are not using nhmmscant so print amino sequence, otherwise we are using nhmmscant */
-			  /* and if option set to print amino sequence then print it */	
-              if( th->hit[h]->dcl[d].ad->ntseq != NULL && pli->show_translated_sequence) 
-                 {
-                    if (fprintf(ofp, " %9ld %9ld %c%c",
-                       (th->hit[h]->dcl[d].ad->sqfrom+2)/3,
-                       (th->hit[h]->dcl[d].ad->sqto+2)/3,
-                       (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
-                       (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.') < 0)
-                         ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-                 }
-
-              if( th->hit[h]->dcl[d].ad->ntseq != NULL)  
-			     {
-                   if (fprintf(ofp, " %9ld %9ld %c%c",
-                      th->hit[h]->dcl[d].ad->sqfrom,
-                      th->hit[h]->dcl[d].ad->sqto,
-                      (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
-				      (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L*3) ? ']' : '.') < 0)
-                          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-			     }	
-				else
-                {
-                   if (fprintf(ofp, " %7ld %7ld %c%c",
+              if (fprintf(ofp, " %7ld %7ld %c%c",
                        th->hit[h]->dcl[d].ad->sqfrom,
                        th->hit[h]->dcl[d].ad->sqto,
-                      (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
-				      (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.') < 0)
+                       (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
+                          (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.') < 0)
                           ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-                }
 						
-              if( th->hit[h]->dcl[d].ad->ntseq != NULL)  
-                {
-                 if (fprintf(ofp, " %9d %9d %c%c",
-                    th->hit[h]->dcl[d].ienv,
-                    th->hit[h]->dcl[d].jenv,
-                    (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
-                    (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L*3) ? ']' : '.') < 0)
-                       ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-				}
-				else
-                {
-                 if (fprintf(ofp, " %7d %7d %c%c",
+              if (fprintf(ofp, " %7d %7d %c%c",
                     th->hit[h]->dcl[d].ienv,
                     th->hit[h]->dcl[d].jenv,
                     (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
                     (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.') < 0)
                        ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");						   
-                }
 
-				if( th->hit[h]->dcl[d].ad->ntseq != NULL)  
-                {
-                   if (fprintf(ofp, " %9d %9d %c%c",
-                       th->hit[h]->dcl[d].iorf,
-                       th->hit[h]->dcl[d].jorf,
-		               (th->hit[h]->dcl[d].iorf == 1) ? '[' : '.',
-                       (th->hit[h]->dcl[d].jorf == th->hit[h]->dcl[d].ad->L*3) ? ']' : '.') < 0)
-                          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-               }
-		    }		
+            }
 								
 								
-			if (fprintf(ofp, " %4.2f\n",
+            if (fprintf(ofp, " %4.2f\n",
                (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv))))) < 0)
                         ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
             
