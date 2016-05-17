@@ -254,6 +254,7 @@ FM_Recurse( int depth, int Kp, int fm_direction,
   FM_INTERVAL interval_1_new, interval_2_new;
   uint8_t positive_run = 0;
   uint8_t consec_consensus = 0;
+  uint8_t cons_c = 0;
 
   for (c=0; c< fm_cfg->meta->alph_size; c++) {//acgt
     int dppos = last;
@@ -269,13 +270,15 @@ FM_Recurse( int depth, int Kp, int fm_direction,
 
         if (dp_pairs[i].complementarity == p7_COMPLEMENT) {
           next_score = ssvdata->ssv_scores_f[k*Kp + fm_cfg->meta->compl_alph[c]];
+          cons_c = fm_cfg->meta->compl_alph[consensus[k]];
         } else {
           next_score = ssvdata->ssv_scores_f[k*Kp + c];
+          cons_c = consensus[k];
         }
 
         sc = dp_pairs[i].score + next_score;
         positive_run =  (next_score > 0 ? dp_pairs[i].consec_pos + 1 : 0);
-        consec_consensus = (c == consensus[k] ? dp_pairs[i].consec_consensus+1 : 0);
+        consec_consensus = (c == cons_c ? dp_pairs[i].consec_consensus+1 : 0);
 
         if ( sc >= sc_threshFM
             || (fm_cfg->consensus_match_req > 0 && consec_consensus == fm_cfg->consensus_match_req)
@@ -600,19 +603,22 @@ ERROR:
  * Returns:   <eslOK> on success.
  */
 static int
-FM_window_from_diag (FM_DIAG *diag, const FM_DATA *fm, const FM_METADATA *meta, P7_HMM_WINDOWLIST *windowlist) 
-{
-  uint32_t seg_id;
-  uint64_t seg_pos;
+FM_window_from_diag (FM_DIAG *diag, const FM_DATA *fm, const FM_METADATA *meta, P7_HMM_WINDOWLIST *windowlist) {
 
   // if diag->complementarity == p7_NOCOMPLEMENT, these positions are in context of FM->T
   // otherwise, they're in context of revcomp(FM->T).
-  fm_getOriginalPosition (fm, meta, 0, diag->length, diag->complementarity, diag->n, &seg_id, &seg_pos);
+
+  int status;
+  uint32_t seg_id;
+  uint64_t seg_pos;
+
+  status = fm_getOriginalPosition (fm, meta, 0, diag->length, diag->complementarity, diag->n, &seg_id, &seg_pos);
 
   p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+diag->length-1, diag->length, diag->score, diag->complementarity,
          meta->seq_data[seg_id].length);
 
   return eslOK;
+
 }
 
 

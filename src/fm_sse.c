@@ -240,32 +240,36 @@ fm_getOccCount (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c) {
 
       if (!up_b) { // count forward, adding
         for (i=1+floor(landmark/4.0) ; i+15<( (pos+1)/4);  i+=16) { // keep running until i begins a run that shouldn't all be counted
-          BWT_v    = *(__m128i*)(BWT+i);
+          //BWT_v    = *(__m128i*)(BWT+i);
+          BWT_v    = _mm_load_ps((float*)(BWT+i));
           FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
           FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v);
         }
 
         int remaining_cnt = pos + 1 -  i*4 ;
         if (remaining_cnt > 0) {
-          BWT_v    = *(__m128i*)(BWT+i);
-                    FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
-                    tmp_v    = _mm_and_si128(tmp_v, *(cfg->fm_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
-                    FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v);
+          //BWT_v    = *(__m128i*)(BWT+i);
+          BWT_v    = _mm_load_ps((float*)(BWT+i));
+          FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
+          tmp_v    = _mm_and_si128(tmp_v, *(cfg->fm_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
+          FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v);
         }
 
       } else { // count backwards, subtracting
         for (i=(landmark/4)-15 ; i>(pos/4);  i-=16) {
-          BWT_v = *(__m128i*)(BWT+i);
-                    FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
-                    FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v);
+          //BWT_v = *(__m128i*)(BWT+i);
+          BWT_v = _mm_load_ps((float*)(BWT+i));
+          FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
+          FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v);
         }
 
         int remaining_cnt = 64 - (pos + 1 - i*4);
         if (remaining_cnt > 0) {
-          BWT_v = *(__m128i*)(BWT+i);
-                    FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
-                    tmp_v    = _mm_and_si128(tmp_v, *(cfg->fm_reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
-                    FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v);
+          //BWT_v = *(__m128i*)(BWT+i);
+          BWT_v = _mm_load_ps((float*)(BWT+i));
+          FM_MATCH_2BIT(BWT_v, c_v, tmp_v, tmp2_v, tmp_v);
+          tmp_v    = _mm_and_si128(tmp_v, *(cfg->fm_reverse_masks_v + remaining_cnt)); // leaves only the remaining_cnt chars in the array
+          FM_COUNT_2BIT(tmp_v, tmp2_v, counts_v);
         }
       }
 /*

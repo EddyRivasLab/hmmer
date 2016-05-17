@@ -425,6 +425,8 @@ main(int argc, char **argv)
   uint32_t seq_cnt;
   uint32_t ambig_cnt;
 
+  uint32_t prev_numseqs = 0;
+
   int compressed_bytes;
   uint32_t term_loc;
 
@@ -544,7 +546,7 @@ main(int argc, char **argv)
 //  max_block_size = FM_BLOCK_OVERLAP+block_size+1  + block_size*.2; // +1 for the '$'
   max_block_size = FM_BLOCK_OVERLAP+block_size+1  + block_size; // temporary hack to avoid memory over-runs (see end of 1101_fmindex_benchmarking/00NOTES)
 
-  if (alphatype == fm_DNA)
+  if (alphatype == eslDNA)
     fm_initAmbiguityList(&ambig_list);
 
 
@@ -681,6 +683,8 @@ main(int argc, char **argv)
       buildAndWriteFMIndex(meta, seq_offset, ambig_offset, seq_cnt, ambig_cnt, 0, T, BWT, SA, NULL,
           occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);
     }
+
+    prev_numseqs = numseqs;
 
     numblocks++;
   }
