@@ -380,6 +380,8 @@ main(int argc,  char *argv[])
 
           //validate match - if any characters in orig sequence were ambiguities, reject
           fm_convertRange2DSQ( fmsf, meta, hits[i].start, hits[i].length, p7_NOCOMPLEMENT, tmpseq, TRUE );
+          hits[i].start += meta->seq_data[ hits[i].block ].target_start - 1;
+
           for (j=1; j<=hits[i].length; j++) {
             if (tmpseq->dsq[j] >= abc->K) {
               hits[i].sortkey = -1; //reject

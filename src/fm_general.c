@@ -502,6 +502,7 @@ fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
   int status;
   int i;
 
+  uint16_t *occCnts_b  = NULL;  //convenience variables, used to simplify macro calls
   uint32_t *occCnts_sb = NULL;
 
   int32_t compressed_bytes;
@@ -558,6 +559,7 @@ fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
 
   //shortcut variables
   C          = fm->C;
+  occCnts_b  = fm->occCnts_b;
   occCnts_sb = fm->occCnts_sb;
 
 
