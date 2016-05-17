@@ -53,8 +53,6 @@ static ESL_OPTIONS searchOpts[] = {
   /* Control of output */
   { "--acc",        eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL, NULL,        "prefer accessions over names in output",                       2 },
   { "--noali",      eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL, NULL,        "don't output alignments, so output is smaller",                2 },
-  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL, NULL,        "don't show the translated DNA sequence in domain alignment",   2 }, /*for nhmmscant */
-  { "--vertcodon",  eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL, NULL,        "show the DNA codon vertically in domain alignment",            2 }, /*for nhmmscant */
   /* Control of scoring system */
   { "--popen",      eslARG_REAL,       "0.02", NULL, "0<=x<0.5",NULL,  NULL, NULL,        "gap open probability",                                         3 },
   { "--pextend",    eslARG_REAL,        "0.4", NULL, "0<=x<1",  NULL,  NULL, NULL,        "gap extend probability",                                       3 },
@@ -94,7 +92,6 @@ static ESL_OPTIONS searchOpts[] = {
   { "-Z",           eslARG_REAL,      FALSE, NULL, "x>0",     NULL,  NULL, NULL,        "set # of comparisons done, for E-value calculation",          12 },
   { "--domZ",       eslARG_REAL,      FALSE, NULL, "x>0",     NULL,  NULL, NULL,        "set # of significant seqs, for domain E-value calculation",   12 },
   { "--hmmdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--seqdb",       "hmm database to search",                                      12 },
-  { "--nhmmscant",  eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  "--seqdb",       "search hmm database with a 6 frame translated DNA sequence",  12 },
   { "--seqdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--hmmdb",       "protein database to search",                                  12 },
   { "--seqdb_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, "--seqdb", NULL,         "range(s) of sequences within --seqdb that will be searched",  12 },
 

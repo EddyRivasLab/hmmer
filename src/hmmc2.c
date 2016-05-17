@@ -45,7 +45,6 @@ static ESL_OPTIONS searchOpts[] = {
   { "--noali",      eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't output alignments, so output is smaller",                2 },
   { "--notextw",    eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL, "--textw",        "unlimit ASCII text output line width",                         2 },
   { "--textw",      eslARG_INT,         "120", NULL, "n>=120",NULL,  NULL, "--notextw",      "set max width of ASCII text output lines",                     2 },
-  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,    NULL,  "--nhmmscant",  NULL,   "don't show the translated DNA sequence in domain alignment",   2 }, /*for nhmmscant */
   /* Control of scoring system */
   { "--popen",      eslARG_REAL,       "0.02", NULL, "0<=x<0.5",NULL,  NULL,  NULL,          "gap open probability",                                         3 },
   { "--pextend",    eslARG_REAL,        "0.4", NULL, "0<=x<1",  NULL,  NULL,  NULL,          "gap extend probability",                                       3 },
@@ -85,7 +84,6 @@ static ESL_OPTIONS searchOpts[] = {
   { "-Z",           eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of comparisons done, for E-value calculation",          12 },
   { "--domZ",       eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",   12 },
   { "--hmmdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--seqdb",       "hmm database to search",                                      12 },
-  { "--nhmmscant",  eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  "--seqdb",       "search hmm database with a 6 frame translated DNA sequence",  12 },
   { "--seqdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--hmmdb",       "protein database to search",                                  12 },
   { "--seqdb_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, "--seqdb", NULL,         "range(s) of sequences within --seqdb that will be searched",  12 },
 
@@ -97,7 +95,6 @@ static ESL_OPTIONS searchOpts[] = {
   { "--informat", eslARG_STRING,  FALSE, NULL, NULL, NULL,  NULL, "--seqdb",  "specify that input file is in format <s>",      15 },
   { "--watson",   eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, "--seqdb",  "only translate top strand",                     15 },
   { "--crick",    eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, "--seqdb",  "only translate bottom strand",                  15 },
-  { "--vertcodon", eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL,  NULL,  "show the DNA vertically in domain alignment",    15 }, /*for nhmmscant */
 
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -126,7 +123,6 @@ output_header(FILE *ofp, const ESL_GETOPTS *sopt, char *seqfile, char *banner)
   if (esl_opt_IsUsed(sopt, "--noali")     && fprintf(ofp, "# show alignments in output:       no\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(sopt, "--notextw")   && fprintf(ofp, "# max ASCII text line length:      unlimited\n")                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(sopt, "--textw")     && fprintf(ofp, "# max ASCII text line length:      %d\n",             esl_opt_GetInteger(sopt, "--textw"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
-  if (esl_opt_IsUsed(sopt, "--notrans")   && fprintf(ofp, "# show translated DNA sequence:    no\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(sopt, "--popen")     && fprintf(ofp, "# gap open probability:            %f\n",             esl_opt_GetReal   (sopt, "--popen"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(sopt, "--pextend")   && fprintf(ofp, "# gap extend probability:          %f\n",             esl_opt_GetReal   (sopt, "--pextend")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(sopt, "--mx")        && fprintf(ofp, "# subst score matrix (built-in):   %s\n",             esl_opt_GetString (sopt, "--mx"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");

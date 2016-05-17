@@ -1445,14 +1445,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     if (*ptr == '>') {
       /* try to parse the input buffer as a FASTA sequence */
-      if (esl_opt_IsUsed(opts, "--nhmmscant")) {
-        abcDNA = esl_alphabet_Create(eslDNA);
-        seq = esl_sq_CreateDigital(abcDNA);
-        if (abcDNA  != NULL) esl_alphabet_Destroy(abcDNA);
-	  }
-	  else{
-        seq = esl_sq_CreateDigital(abc);
-	  }
+      seq = esl_sq_CreateDigital(abc);
       /* try to parse the input buffer as a FASTA sequence */
       status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
       if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error parsing FASTA sequence");
