@@ -1372,12 +1372,12 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                     (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.') < 0)
                        ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");						   
 
-            }
+
 								
-								
-            if (fprintf(ofp, " %4.2f\n",
+              if (fprintf(ofp, " %4.2f\n",
                (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv))))) < 0)
                         ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+            }
             
           }
 
