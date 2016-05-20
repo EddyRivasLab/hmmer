@@ -31,6 +31,7 @@ To clone your own copy of HMMER source code for the first time:
    $ cd hmmer
    $ git clone https://github.com/EddyRivasLab/easel
    $ git checkout h3-develop
+   $ (cd easel; git checkout develop)
    $ ln -s easel/aclocal.m4 aclocal.m4
    $ autoconf
 ```
