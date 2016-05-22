@@ -375,13 +375,16 @@ main(int argc,  char *argv[])
         //for each hit, identify the sequence id and position within that sequence
         for (i = 0; i< hit_num; i++) {
 
-          status = fm_getOriginalPosition (fmsf, meta, hits[i].block, hits[i].length, fm_forward, hits[i].start,  &(hits[i].block), &(hits[i].start) );
-          hits[i].sortkey = (status==eslERANGE ? -1 : meta->seq_data[ hits[i].block ].target_id);
+          hits[i].sortkey = 0;
 
-          //validate match - if any characters in orig sequence were ambiguities, reject
-          fm_convertRange2DSQ( fmsf, meta, hits[i].start, hits[i].length, p7_NOCOMPLEMENT, tmpseq, TRUE );
-          hits[i].start += meta->seq_data[ hits[i].block ].target_start - 1;
+          // validate match - if any characters in orig sequence were ambiguities, reject.
+          // This step gets the letters in the hit range, with ambiguity characters returned.
+          //   (if direction is fm_backwards, then the string is reversed ... doesn't matter for our purposes
+          uint64_t range2DSQ_start = (hits[i].direction == fm_forward ? hits[i].start : hits[i].start-hits[i].length+1);
+          fm_convertRange2DSQ( fmsf + hits[i].block, meta, range2DSQ_start, hits[i].length,
+                  p7_NOCOMPLEMENT, tmpseq, TRUE );
 
+          // Compare to ambig-base corrected hit to filter out made up sequence hits
           for (j=1; j<=hits[i].length; j++) {
             if (tmpseq->dsq[j] >= abc->K) {
               hits[i].sortkey = -1; //reject
@@ -389,10 +392,44 @@ main(int argc,  char *argv[])
             }
           }
 
+
+          if (hits[i].sortkey != -1 ) { // no ambiguity characters
+
+            uint32_t segment_id = fm_computeSequenceOffset( fmsf, meta, hits[i].block, hits[i].start);
+
+            // Make sure that this hit doesn't span two target sequences
+            if ( ( hits[i].start - meta->seq_data[segment_id].fm_start ) + hits[i].length - 1 > meta->seq_data[ segment_id ].length )
+               hits[i].sortkey = -1;
+            else
+               hits[i].sortkey =  meta->seq_data[ segment_id ].target_id;
+
+            // hits[].start:  Absolute position of hit within block ( containing possibly multiple
+            //                concatenated sequences and/or sequence segments.
+            // fm_seq[].target_id: The index into the sequence records for this sequence segment.
+            // fm_seq[].fm_start: Position in block where this sequence segment begins
+            // target_start: The absolute position within sequence ("target_id") where this segment
+            //               start.
+            // Therefore:
+            //   What is the absolute position of this hit against sequence "target_id"?
+            hits[i].start = ( hits[i].start - meta->seq_data[segment_id].fm_start) +
+                                                     meta->seq_data[segment_id].target_start;
+
+
+            // This approach reuses the .block memory to get the segment_id back.
+            // Unfortunately we have lost the information on the actual block the hit
+            // was found in, confusing anyone who assumes that <FM_HIT>.block is actually
+            // the block number. Sorry.
+            // TODO: move away from this approach.
+            hits[i].block = segment_id;
+          }
+
+
           if (hits[i].sortkey != -1)
             hit_num2++; // legitimate hit
 
         }
+
+
         if (hit_num2 > 0)
           hit_cnt++;
 
