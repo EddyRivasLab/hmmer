@@ -899,42 +899,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
         }
       }
 	  
-	  /*
-        if there is a nucleotide sequence then we want to record the location 
-	    of the hit in that sequence and not the location of the hit in the ORF 
-		provided by esl_gencode_ProcessOrf (esl_gencode.c) used in p7_alidisplay_Create
-		in p7_alidisplay.c. 
-		sq->start is the start location of the ORF in the nucleotide sequence and 
-		ad->sqfrom is the start of the hit in the ORF in amino acid locations
-      */
-      if (ntsq != NULL)
-      {
-         for (d = 0; d < hit->ndom; d++)
-         {
-            if (sq->start < sq->end)
-			{				
-			   hit->dcl[d].iorf       = sq->start;
-               hit->dcl[d].jorf       = sq->end;
-               hit->dcl[d].ienv       = (hit->dcl[d].ienv*3-2) + sq->start-1;
-               hit->dcl[d].jenv       = (hit->dcl[d].jenv*3) + sq->start-1;			
-		       hit->dcl[d].ad->sqfrom = (hit->dcl[d].ad->sqfrom*3-2) + sq->start-1;
-		       hit->dcl[d].ad->sqto   = (hit->dcl[d].ad->sqto*3) + sq->start-1;
-            }
-			else
-			{
-               hit->dcl[d].iorf       = sq->start;
-               hit->dcl[d].jorf       = sq->end;
-			
-               hit->dcl[d].ienv       = sq->start - (hit->dcl[d].ienv - 1)*3;
-               hit->dcl[d].jenv       = sq->start - (hit->dcl[d].jenv - 1)*3 - 2;			
-
-		       hit->dcl[d].ad->sqfrom = sq->start - (hit->dcl[d].ad->sqfrom -1)*3;
-		       hit->dcl[d].ad->sqto   = sq->start - (hit->dcl[d].ad->sqto -1)*3 - 2;				
-			}
-         }		
-	  }
-	  
-	  
     }
 
   return eslOK;
