@@ -543,8 +543,7 @@ main(int argc, char **argv)
   esl_sqfile_SetDigital(sqfp, abc);
   block = esl_sq_CreateDigitalBlock(FM_BLOCK_COUNT, abc);
   block->complete = FALSE;
-//  max_block_size = FM_BLOCK_OVERLAP+block_size+1  + block_size*.2; // +1 for the '$'
-  max_block_size = FM_BLOCK_OVERLAP+block_size+1  + block_size; // temporary hack to avoid memory over-runs (see end of 1101_fmindex_benchmarking/00NOTES)
+  max_block_size = FM_BLOCK_OVERLAP+block_size+1  + block_size*.05; // +1 for the '$',  +5% of block size because that's the slop allowed by readwindow
 
 
   /* Allocate BWT, Text, SA, and FM-index data structures, allowing storage of maximally large sequence*/
@@ -594,8 +593,8 @@ main(int argc, char **argv)
 
     status = esl_sqio_ReadBlock(sqfp, block, block_size, -1, alphatype != eslAMINO);
     if (status == eslEOF) continue;
-    if (status != eslOK)  esl_fatal("Parse failed (sequence file %s):\n%s\n",
-                                                  sqfp->filename, esl_sqfile_GetErrorBuf(sqfp));
+    if (status != eslOK)  esl_fatal("Parse failed (sequence file %s): status:%d\n%s\n",
+                                                  sqfp->filename, status, esl_sqfile_GetErrorBuf(sqfp));
 
     seq_offset = numseqs;
     ambig_offset = meta->ambig_list->count;
