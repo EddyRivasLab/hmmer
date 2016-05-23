@@ -478,13 +478,15 @@ void
 fm_FM_destroy ( FM_DATA *fm, int isMainFM)
 {
 
-  if (fm->BWT_mem)      free (fm->BWT_mem);
-  if (fm->C)            free (fm->C);
-  if (fm->occCnts_b)    free (fm->occCnts_b);
-  if (fm->occCnts_sb)   free (fm->occCnts_sb);
+  free (fm->BWT_mem);
+  free (fm->C);
+  free (fm->occCnts_b);
+  free (fm->occCnts_sb);
 
-  if (isMainFM && fm->T)  free (fm->T);
-  if (isMainFM && fm->SA) free (fm->SA);
+  if (isMainFM) {
+     free (fm->T);
+     free (fm->SA);
+  }
 }
 
 /* Function:  fm_FM_read()
@@ -532,7 +534,7 @@ fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
   compressed_bytes =   ((chars_per_byte-1+fm->N)/chars_per_byte);
   num_freq_cnts_b  = 1+ceil((double)fm->N/meta->freq_cnt_b);
   num_freq_cnts_sb = 1+ceil((double)fm->N/meta->freq_cnt_sb);
-  num_SA_samples   = 1+floor((double)fm->N/meta->freq_SA);
+  num_SA_samples   = floor((double)fm->N/meta->freq_SA);
 
   // allocate space, then read the data
   if (getAll) ESL_ALLOC (fm->T, sizeof(uint8_t) * compressed_bytes );
