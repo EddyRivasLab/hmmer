@@ -188,7 +188,7 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint32_t ambig
 
   int num_freq_cnts_b  = 1+ceil((double)N/(meta->freq_cnt_b));
   int num_freq_cnts_sb = 1+ceil((double)N/meta->freq_cnt_sb);
-  int num_SA_samples   = 1+floor((double)N/meta->freq_SA);
+  int num_SA_samples   = floor((double)N/meta->freq_SA);
 
   if (SAsamp != NULL) {
     ESL_REALLOC (Tcompressed, compressed_bytes * sizeof(uint8_t));
@@ -220,6 +220,9 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint32_t ambig
 
   cnts_sb[BWT[0]]++;
   cnts_b[BWT[0]]++;
+
+  if (SAsamp != NULL)
+    SAsamp[0] = 0; // not used, since indexing is base-1. Set for the sake of consistency of output.
 
   //Scan through SA to build the BWT and FM index structures
   for(j=1; j < N; ++j) {
@@ -407,13 +410,13 @@ main(int argc, char **argv)
 
   char *fname_in = NULL;
   char *fname_out= NULL;
-  int block_size = 50000000;
+  uint32_t block_size = 50000000;
   int sq_cnt = 0;
   int use_tmpsq = 0;
   uint64_t block_length;
   uint64_t total_char_count = 0;
 
-  int max_block_size;
+  uint32_t max_block_size;
 
   int numblocks = 0;
   uint32_t numseqs = 0;
@@ -476,8 +479,12 @@ main(int argc, char **argv)
 
 
   if (esl_opt_IsOn(go, "--block_size")) block_size = 1000000 * esl_opt_GetInteger(go, "--block_size");
-  if ( block_size <=0  )
+  if ( block_size <= 0  )
     esl_fatal ("block_size must be a positive number\n");
+
+  if ( block_size > 3500000000  )
+    esl_fatal ("block_size must less than 3500M\n");
+
 
   //start timer
   t1 = times(&ts1);
@@ -545,7 +552,6 @@ main(int argc, char **argv)
   block->complete = FALSE;
   max_block_size = FM_BLOCK_OVERLAP+block_size+1  + block_size*.05; // +1 for the '$',  +5% of block size because that's the slop allowed by readwindow
 
-
   /* Allocate BWT, Text, SA, and FM-index data structures, allowing storage of maximally large sequence*/
   ESL_ALLOC(fm_data, sizeof(FM_DATA) );
 
@@ -557,7 +563,7 @@ main(int argc, char **argv)
   ESL_ALLOC (fm_data->BWT_mem, max_block_size * sizeof(uint8_t));
      fm_data->BWT = fm_data->BWT_mem;  // in SSE code, used to align memory. Here, doesn't matter
   ESL_ALLOC (fm_data->SA, max_block_size * sizeof(int));
-  ESL_ALLOC (SAsamp,     (1+floor((double)max_block_size/meta->freq_SA) ) * sizeof(uint32_t));
+  ESL_ALLOC (SAsamp,     (floor((double)max_block_size/meta->freq_SA) ) * sizeof(uint32_t));
 
   ESL_ALLOC (fm_data->occCnts_sb, (1+ceil((double)max_block_size/meta->freq_cnt_sb)) *  meta->alph_size * sizeof(uint32_t)); // every freq_cnt_sb positions, store an array of ints
   ESL_ALLOC (fm_data->occCnts_b,  ( 1+ceil((double)max_block_size/meta->freq_cnt_b)) *  meta->alph_size * sizeof(uint16_t)); // every freq_cnt_b positions, store an array of 8-byte ints
@@ -780,7 +786,7 @@ main(int argc, char **argv)
     compressed_bytes =   ((chars_per_byte-1+block_length)/chars_per_byte);
     num_freq_cnts_b  = 1+ceil((double)block_length/meta->freq_cnt_b);
     num_freq_cnts_sb = 1+ceil((double)block_length/meta->freq_cnt_sb);
-    num_SA_samples   = 1+floor((double)block_length/meta->freq_SA);
+    num_SA_samples   = floor((double)block_length/meta->freq_SA);
 
 
     //j==0 test cause T and SA to be written only for forward sequence
