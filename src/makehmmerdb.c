@@ -30,7 +30,7 @@ static ESL_OPTIONS options[] = {
   { "--informat",   eslARG_STRING,     FALSE, NULL, NULL,    NULL,  NULL,  NULL,        "specify that input file is in format <s>",                  3 },
   { "--bin_length", eslARG_INT,        "256", NULL, NULL,    NULL,  NULL,  NULL,        "bin length (power of 2;  32<=b<=4096)",                     3 },
   { "--sa_freq",    eslARG_INT,        "8",   NULL, NULL,    NULL,  NULL,  NULL,        "suffix array sample rate (power of 2)",                     3 },
-  { "--block_size", eslARG_INT,        "50",  NULL, NULL,    NULL,  NULL,  NULL,        "input sequence broken into chunks this size (Mbases)",      3 },
+  { "--block_size", eslARG_INT,        "50",  NULL, NULL,    NULL,  NULL,  NULL,        "input sequence broken into blocks this size (Mbases)",      3 },
 
   /* hidden*/
   { "--fwd_only",   eslARG_NONE,       FALSE, NULL, NULL,    NULL,  NULL,  NULL,        "build FM-index only for forward search (not for HMMER)",    9 },
@@ -167,11 +167,9 @@ ERROR:
  */
 int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint32_t ambig_offset,
                         uint32_t seq_cnt, uint32_t ambig_cnt, uint32_t overlap,
-                        uint8_t *T, uint8_t *BWT,
-                        int *SA, uint32_t *SAsamp,
-                        uint32_t *occCnts_sb, uint32_t *cnts_sb,
-                        uint16_t *occCnts_b, uint16_t *cnts_b,
-                        uint64_t N, FILE *fp
+                        FM_DATA *fm_data, uint32_t *SAsamp,
+                        uint32_t *cnts_sb, uint16_t *cnts_b,
+                        uint64_t N, uint8_t *Tcompressed, FILE *fp
     ) {
 
 
@@ -181,21 +179,26 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint32_t ambig
   uint32_t compressed_bytes =   ((chars_per_byte-1+N)/chars_per_byte);
   uint32_t term_loc;
 
+  uint8_t *T             = fm_data->T;
+  uint8_t *BWT           = fm_data->BWT;
+  int *SA                = (int*) fm_data->SA; //cast this way because libdivsufsort requires an int.
+  uint32_t *occCnts_sb   = fm_data->occCnts_sb;
+  uint16_t *occCnts_b    = fm_data->occCnts_b;
+
+
   int num_freq_cnts_b  = 1+ceil((double)N/(meta->freq_cnt_b));
   int num_freq_cnts_sb = 1+ceil((double)N/meta->freq_cnt_sb);
   int num_SA_samples   = 1+floor((double)N/meta->freq_SA);
 
-
-  uint8_t *Tcompressed = NULL;
   if (SAsamp != NULL) {
-    ESL_ALLOC (Tcompressed, compressed_bytes * sizeof(uint8_t));
+    ESL_REALLOC (Tcompressed, compressed_bytes * sizeof(uint8_t));
 
     // Reverse the text T, so the BWT will be on reversed T.  Only used for the 1st pass
     fm_reverseString ((char*)T, N-1);
   }
 
   // Construct the Suffix Array on text T
-  status = divsufsort(T, SA, N);
+  status = divsufsort(fm_data->T, SA, N);
   if ( status < 0 )
     esl_fatal("buildAndWriteFMIndex: Error building BWT.\n");
 
@@ -347,14 +350,10 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint32_t ambig
   if(fwrite(occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, fp) != (size_t)num_freq_cnts_sb)
     esl_fatal( "buildAndWriteFMIndex: Error writing occCnts_sb in FM index.\n");
 
-
-  if (Tcompressed)         free(Tcompressed);
-
   return eslOK;
 
 ERROR:
   /* Deallocate memory. */
-  if (Tcompressed)         free(Tcompressed);
   return eslFAIL;
 
 }
@@ -371,24 +370,26 @@ ERROR:
 int
 main(int argc, char **argv) 
 {
+  int status           = eslOK;
   char tmp_filename[16] = "fmtmpXXXXXX";
   FILE *fptmp          = NULL;
   FILE *fp             = NULL;
-  uint8_t *T           = NULL;
-  uint8_t *BWT         = NULL;
-  int *SA              = NULL; //what I write will be 32-bit ints, but I need to keep this as int so it'll work with libdivsufsort
-  uint32_t *SAsamp     = NULL;
-  uint32_t *occCnts_sb = NULL; // same indexing as above
-  uint32_t *cnts_sb    = NULL;
-  uint16_t *occCnts_b  = NULL; // this is logically a 2D array, but will be indexed as occ_cnts[alph_size*index + char]  (instead of occ_cnts[index][char])
-  uint16_t *cnts_b     = NULL;
+
+
+  // these will be allocated once, and reused for each built block
   FM_METADATA *meta    = NULL;
+  FM_DATA *fm_data     = NULL;
+  uint32_t *SAsamp     = NULL;
+  uint32_t *cnts_sb    = NULL;
+  uint16_t *cnts_b     = NULL;
+  uint8_t *Tcompressed = NULL;
+
+
 
   clock_t t1, t2;
   struct tms ts1, ts2;
 
   long i,j,c;
-  int status = eslOK;
 
   int chars_per_byte;
   int num_freq_cnts_sb ;
@@ -433,7 +434,6 @@ main(int argc, char **argv)
   ESL_GETOPTS     *go  = NULL;    /* command line processing                 */
 
   int            in_ambig_run = 0;
-  FM_AMBIGLIST   ambig_list;
 
   ESL_RANDOMNESS *r   = esl_randomness_CreateFast(42);
 
@@ -546,22 +546,28 @@ main(int argc, char **argv)
 //  max_block_size = FM_BLOCK_OVERLAP+block_size+1  + block_size*.2; // +1 for the '$'
   max_block_size = FM_BLOCK_OVERLAP+block_size+1  + block_size; // temporary hack to avoid memory over-runs (see end of 1101_fmindex_benchmarking/00NOTES)
 
-  if (alphatype == eslDNA)
-    fm_initAmbiguityList(&ambig_list);
-
 
   /* Allocate BWT, Text, SA, and FM-index data structures, allowing storage of maximally large sequence*/
-  ESL_ALLOC (T, max_block_size * sizeof(uint8_t));
-  ESL_ALLOC (BWT, max_block_size * sizeof(uint8_t));
-  ESL_ALLOC (SA, max_block_size * sizeof(int));
+  ESL_ALLOC(fm_data, sizeof(FM_DATA) );
+
+  if (fm_data == NULL) {
+    esl_fatal( "%s: Cannot allocate memory.\n", argv[0]);
+  }
+
+  ESL_ALLOC (fm_data->T, max_block_size * sizeof(uint8_t));
+  ESL_ALLOC (fm_data->BWT_mem, max_block_size * sizeof(uint8_t));
+     fm_data->BWT = fm_data->BWT_mem;  // in SSE code, used to align memory. Here, doesn't matter
+  ESL_ALLOC (fm_data->SA, max_block_size * sizeof(int));
   ESL_ALLOC (SAsamp,     (1+floor((double)max_block_size/meta->freq_SA) ) * sizeof(uint32_t));
 
-  ESL_ALLOC (occCnts_sb, (1+ceil((double)max_block_size/meta->freq_cnt_sb)) *  meta->alph_size * sizeof(uint32_t)); // every freq_cnt_sb positions, store an array of ints
+  ESL_ALLOC (fm_data->occCnts_sb, (1+ceil((double)max_block_size/meta->freq_cnt_sb)) *  meta->alph_size * sizeof(uint32_t)); // every freq_cnt_sb positions, store an array of ints
+  ESL_ALLOC (fm_data->occCnts_b,  ( 1+ceil((double)max_block_size/meta->freq_cnt_b)) *  meta->alph_size * sizeof(uint16_t)); // every freq_cnt_b positions, store an array of 8-byte ints
   ESL_ALLOC (cnts_sb,    meta->alph_size * sizeof(uint32_t));
-  ESL_ALLOC (occCnts_b,  ( 1+ceil((double)max_block_size/meta->freq_cnt_b)) *  meta->alph_size * sizeof(uint16_t)); // every freq_cnt_b positions, store an array of 8-byte ints
   ESL_ALLOC (cnts_b,     meta->alph_size * sizeof(uint16_t));
 
-  if((T == NULL)  || (BWT == NULL)  || (SA==NULL) || (SAsamp==NULL) || (BWT==NULL) || (cnts_b==NULL) || (occCnts_b==NULL) || (cnts_sb==NULL) || (occCnts_sb==NULL) ) {
+  if((fm_data->T == NULL)  || (fm_data->BWT == NULL)  || (fm_data->SA==NULL) ||
+      (fm_data->occCnts_b==NULL)  || (fm_data->occCnts_sb==NULL) ||
+      (SAsamp==NULL) || (cnts_b==NULL) || (cnts_sb==NULL)  ) {
     esl_fatal( "%s: Cannot allocate memory.\n", argv[0]);
   }
 
@@ -656,7 +662,7 @@ main(int argc, char **argv)
           esl_fatal("requested alphabet doesn't match input text\n");
         }
 
-        T[block_length] = meta->inv_alph[c];
+        fm_data->T[block_length] = meta->inv_alph[c];
 
         block_length++;
         if (j>block->list[i].C) total_char_count++; // add to total count, only if it's not redundant with earlier read
@@ -666,7 +672,7 @@ main(int argc, char **argv)
       in_ambig_run = 0;
     }
 
-    T[block_length] = 0; // last character 0 is effectively '$' for suffix array
+    fm_data->T[block_length] = 0; // last character 0 is effectively '$' for suffix array
     block_length++;
 
     seq_cnt = numseqs-seq_offset;
@@ -674,14 +680,14 @@ main(int argc, char **argv)
 
 
     //build and write FM-index for T.  This will be a BWT on the reverse of the sequence, required for reverse-traversal of the BWT
-    buildAndWriteFMIndex(meta, seq_offset, ambig_offset, seq_cnt, ambig_cnt, (uint32_t)block->list[0].C, T, BWT, SA, SAsamp,
-        occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);
+    buildAndWriteFMIndex(meta, seq_offset, ambig_offset, seq_cnt, ambig_cnt, (uint32_t)block->list[0].C, fm_data,
+                         SAsamp, cnts_sb, cnts_b, block_length, Tcompressed, fptmp);
 
 
     if ( ! meta->fwd_only ) {
       //build and write FM-index for un-reversed T  (used to find reverse hits using forward traversal of the BWT
-      buildAndWriteFMIndex(meta, seq_offset, ambig_offset, seq_cnt, ambig_cnt, 0, T, BWT, SA, NULL,
-          occCnts_sb, cnts_sb, occCnts_b, cnts_b, block_length, fptmp);
+      buildAndWriteFMIndex(meta, seq_offset, ambig_offset, seq_cnt, ambig_cnt, 0, fm_data,
+                         NULL, cnts_sb, cnts_b, block_length, Tcompressed, fptmp);
     }
 
     prev_numseqs = numseqs;
@@ -779,15 +785,15 @@ main(int argc, char **argv)
 
 
     //j==0 test cause T and SA to be written only for forward sequence
-    if(j==0 && fread(T, sizeof(uint8_t), compressed_bytes, fptmp) != compressed_bytes)
+    if(j==0 && fread(fm_data->T, sizeof(uint8_t), compressed_bytes, fptmp) != compressed_bytes)
       esl_fatal( "%s: Error reading T in FM index.\n", argv[0]);
-    if(fread(BWT, sizeof(uint8_t), compressed_bytes, fptmp) != compressed_bytes)
+    if(fread(fm_data->BWT, sizeof(uint8_t), compressed_bytes, fptmp) != compressed_bytes)
       esl_fatal( "%s: Error reading BWT in FM index.\n", argv[0]);
     if(j==0 && fread(SAsamp, sizeof(uint32_t), (size_t)num_SA_samples, fptmp) != (size_t)num_SA_samples)
       esl_fatal( "%s: Error reading SA in FM index.\n", argv[0]);
-    if(fread(occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, fptmp) != (size_t)num_freq_cnts_b)
+    if(fread(fm_data->occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, fptmp) != (size_t)num_freq_cnts_b)
       esl_fatal( "%s: Error reading occCnts_b in FM index.\n", argv[0]);
-    if(fread(occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, fptmp) != (size_t)num_freq_cnts_sb)
+    if(fread(fm_data->occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, fptmp) != (size_t)num_freq_cnts_sb)
       esl_fatal( "%s: Error reading occCnts_sb in FM index.\n", argv[0]);
 
 
@@ -809,15 +815,15 @@ main(int argc, char **argv)
       esl_fatal( "%s: Error writing ambig_cnt in FM index.\n", argv[0]);
 
 
-    if(j==0 && fwrite(T, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
+    if(j==0 && fwrite(fm_data->T, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
       esl_fatal( "%s: Error writing T in FM index.\n", argv[0]);
-    if(fwrite(BWT, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
+    if(fwrite(fm_data->BWT, sizeof(uint8_t), compressed_bytes, fp) != compressed_bytes)
       esl_fatal( "%s: Error writing BWT in FM index.\n", argv[0]);
     if(j==0 && fwrite(SAsamp, sizeof(uint32_t), (size_t)num_SA_samples, fp) != (size_t)num_SA_samples)
       esl_fatal( "%s: Error writing SA in FM index.\n", argv[0]);
-    if(fwrite(occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, fp) != (size_t)num_freq_cnts_b)
+    if(fwrite(fm_data->occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, fp) != (size_t)num_freq_cnts_b)
       esl_fatal( "%s: Error writing occCnts_b in FM index.\n", argv[0]);
-    if(fwrite(occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, fp) != (size_t)num_freq_cnts_sb)
+    if(fwrite(fm_data->occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, fp) != (size_t)num_freq_cnts_sb)
       esl_fatal( "%s: Error writing occCnts_sb in FM index.\n", argv[0]);
 
     }
@@ -825,14 +831,14 @@ main(int argc, char **argv)
 
   fclose(fp);
   fclose(fptmp);
-  free(T);
-  free(BWT);
-  free(SA);
+
+  if (fm_data != NULL)
+    fm_FM_destroy(fm_data, TRUE);
+  free(fm_data);
   free(SAsamp);
-  free(occCnts_b);
   free(cnts_b);
-  free(occCnts_sb);
   free(cnts_sb);
+  free(Tcompressed);
 
   fm_metaDestroy(meta);
 
@@ -855,15 +861,12 @@ main(int argc, char **argv)
 ERROR:
   /* Deallocate memory. */
   if (fp)         fclose(fp);
-  if (T)          free(T);
-  if (BWT)        free(BWT);
-  if (SA)         free(SA);
-  if (SAsamp)     free(SAsamp);
-  if (occCnts_b)  free(occCnts_b);
-  if (cnts_b)     free(cnts_b);
-  if (occCnts_sb) free(occCnts_sb);
-  if (cnts_sb)    free(cnts_sb);
-  if (ambig_list.ranges) free(ambig_list.ranges);
+  if (fm_data)    fm_FM_destroy(fm_data, TRUE);
+  free(fm_data);
+
+  free(SAsamp);
+  free(cnts_b);
+  free(cnts_sb);
 
   fm_metaDestroy(meta);
   esl_getopts_Destroy(go);

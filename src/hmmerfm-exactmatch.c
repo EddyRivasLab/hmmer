@@ -4,7 +4,6 @@
 #include <string.h>
 
 #include "easel.h"
-
 #include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
@@ -12,6 +11,7 @@ static ESL_OPTIONS options[] = {
   { "-h",           eslARG_NONE,      FALSE, NULL, NULL,    NULL,  NULL,  NULL,    "show brief help on version and usage",                      1 },
   { "--out",      eslARG_STRING,     "none", NULL, NULL,    NULL,  NULL,  NULL,    "save list of hits to file <s>  ('-' writes to stdout)",     2 },
   { "--count_only", eslARG_NONE,      FALSE, NULL, NULL,    NULL,  NULL,  NULL,    "compute just counts, not locations",                        2 },
+  { "--fwd_only", eslARG_NONE,    FALSE, NULL, NULL,    NULL,  NULL,  NULL,    "don't compute matches to the reversed sequence",            2 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[options] <qfile> <fmfile>";
@@ -116,7 +116,9 @@ output_header(FM_METADATA *meta, FILE *ofp, const ESL_GETOPTS *go, char *fmfile,
     if (fprintf(ofp, "# output file containing list of hits:     %s\n", (esl_strcmp(outfile, "-") == 0 ? "stdout" : outfile)) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); 
   }
 
-  if (esl_opt_IsUsed(go, "--count_only") && fprintf(ofp, "# output only counts, not hit locations\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--count_only")   && fprintf(ofp, "# output only counts, not hit locations\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fwd_only")     && fprintf(ofp, "# don't compute matches to the reversed sequence\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+
 
   if (fprintf(ofp, "# alphabet     :                           %s\n", alph)                         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (fprintf(ofp, "# bin_length   :                           %d\n", meta->freq_cnt_b)             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -243,7 +245,6 @@ main(int argc,  char *argv[])
   ESL_SQ       *tmpseq;  // used for sequence validation
   ESL_ALPHABET *abc = NULL;
 
-
   //start timer
   t1 = times(&ts1);
 
@@ -276,8 +277,6 @@ main(int argc,  char *argv[])
 
   fm_readFMmeta( meta);
 
-
-
   if      (meta->alph_type == fm_DNA)   abc     = esl_alphabet_Create(eslDNA);
   else if (meta->alph_type == fm_AMINO) abc     = esl_alphabet_Create(eslAMINO);
   tmpseq = esl_sq_CreateDigital(abc);
@@ -286,13 +285,13 @@ main(int argc,  char *argv[])
 
   //read in FM-index blocks
   ESL_ALLOC(fmsf, meta->block_count * sizeof(FM_DATA) );
-  if (!meta->fwd_only)
+  if (!meta->fwd_only )
     ESL_ALLOC(fmsb, meta->block_count * sizeof(FM_DATA) );
 
   for (i=0; i<meta->block_count; i++) {
     fm_FM_read( fmsf+i,meta, TRUE );
 
-    if (!meta->fwd_only) {
+    if (!meta->fwd_only) {  // whether or not we're going to search forward, need to read it in
       fm_FM_read(fmsb+i, meta, FALSE );
       fmsb[i].SA = fmsf[i].SA;
       fmsb[i].T = fmsf[i].T;
@@ -344,7 +343,7 @@ main(int argc,  char *argv[])
 
 
       /* find reverse hits, using backward search on the forward FM*/
-      if (!meta->fwd_only) {
+      if (!meta->fwd_only && !(esl_opt_IsOn(go, "--fwd_only")) ) {
         fm_getSARangeForward(fmsb+i, cfg, line, meta->inv_alph, &interval);// yes, use the backward fm to produce the equivalent of a forward search on the forward fm
         if (interval.lower>=0 && interval.lower <= interval.upper) {
           int new_hit_num =  interval.upper - interval.lower + 1;

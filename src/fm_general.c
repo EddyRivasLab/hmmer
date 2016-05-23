@@ -478,13 +478,15 @@ void
 fm_FM_destroy ( FM_DATA *fm, int isMainFM)
 {
 
-  if (fm->BWT_mem)      free (fm->BWT_mem);
-  if (fm->C)            free (fm->C);
-  if (fm->occCnts_b)    free (fm->occCnts_b);
-  if (fm->occCnts_sb)   free (fm->occCnts_sb);
+  free (fm->BWT_mem);
+  free (fm->C);
+  free (fm->occCnts_b);
+  free (fm->occCnts_sb);
 
-  if (isMainFM && fm->T)  free (fm->T);
-  if (isMainFM && fm->SA) free (fm->SA);
+  if (isMainFM) {
+     free (fm->T);
+     free (fm->SA);
+  }
 }
 
 /* Function:  fm_FM_read()
