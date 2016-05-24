@@ -904,8 +904,6 @@ sf_conversion(P7_OPROFILE *om)
 
   for (x = 0; x < om->abc->Kp; x++)
     {
-
-      //testing code.  Replace once debugged
       for (q = 0;  q < nq;            q++) om->sbv[x][q] = _mm_xor_si128(_mm_subs_epu8(tmp, om->rbv[x][q]), tmp2);
       for (q = nq; q < nq + p7O_EXTRA_SB; q++) om->sbv[x][q] = om->sbv[x][q % nq];
     }
@@ -932,6 +930,23 @@ sf_conversion(P7_OPROFILE *om)
       for (q = nq_AVX_512; q < nq_AVX_512 + p7O_EXTRA_SB; q++) om->sbv_AVX_512[x][q] = om->sbv_AVX_512[x][q % nq_AVX_512];
     }
 #endif
+
+  #ifdef p7_build_check_AVX2
+  int Q = P7_NVB(om->M);
+  int Q_AVX        = P7_NVB_AVX(om->M); 
+  int check_elem;
+  for(x = 0; x < om->abc->Kp; x++){
+      char *sbv_bytes = (char *) om->sbv[x];
+      char *sbv_AVX_bytes = (char *) om->sbv_AVX[x];
+      for(check_elem = 0; check_elem < om->M; check_elem++){
+          uint8_t sse_byte = sbv_bytes[((check_elem % Q) * 16) + (check_elem / Q)];
+          uint8_t avx_byte = sbv_AVX_bytes[((check_elem % Q_AVX) * 32) + (check_elem / Q_AVX)];
+          if(sse_byte != avx_byte){
+            printf("sbv miss-match at position %d: %i (SSE) vs %i (AVX)\n", check_elem, sse_byte, avx_byte);
+          }
+        }
+      }
+  #endif    
   return eslOK;
 }
 

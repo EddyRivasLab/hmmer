@@ -352,15 +352,15 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
        */
     
       mpv_AVX = MMX_AVXf(Q_AVX-1);  
-      mpv_AVX = esl_avx_leftshift(mpv_AVX, 2);
+      mpv_AVX = esl_avx_leftshift_two(mpv_AVX);
       mpv_AVX = _mm256_or_si256(mpv_AVX, negInfv_AVX);
       
       dpv_AVX = DMX_AVXf(Q_AVX-1);  
-       dpv_AVX = esl_avx_leftshift(dpv_AVX, 2);
+       dpv_AVX = esl_avx_leftshift_two(dpv_AVX);
        dpv_AVX = _mm256_or_si256(dpv_AVX, negInfv_AVX);
       
       ipv_AVX = IMX_AVXf(Q_AVX-1);  
-      ipv_AVX = esl_avx_leftshift(ipv_AVX, 2);
+      ipv_AVX = esl_avx_leftshift_two(ipv_AVX);
        ipv_AVX = _mm256_or_si256(ipv_AVX, negInfv_AVX);
 
       for (q_AVX = 0; q_AVX < Q_AVX; q_AVX++)
@@ -430,7 +430,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 //printf("vitfilter AVX doing DD calc, Dmax_AVX = %i\n", Dmax_AVX);
     /* Now we're obligated to do at least one complete DD path to be sure. */
     /* dcv has carried through from end of q loop above */
-      dcv_AVX = esl_avx_leftshift(dcv_AVX, 2);
+      dcv_AVX = esl_avx_leftshift_two(dcv_AVX);
  
     dcv_AVX = _mm256_or_si256(dcv_AVX, negInfv_AVX);
     tsc_AVX = om->twv_AVX + 7*Q_AVX;  /* set tsc to start of the DD's */
@@ -445,7 +445,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
      * our score. 
      */
     do {
-         dcv_AVX = esl_avx_leftshift(dcv_AVX, 2);
+         dcv_AVX = esl_avx_leftshift_two(dcv_AVX);
  
       dcv_AVX = _mm256_or_si256(dcv_AVX, negInfv_AVX);
       tsc_AVX = om->twv_AVX + 7*Q_AVX;  /* set tsc to start of the DD's */
@@ -463,7 +463,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
   {
 //printf("vitfilter AVX skipping DD calc Dmax_AVX = %i\n", Dmax_AVX);
-  dcv_AVX = esl_avx_leftshift(dcv_AVX, 2);
+  dcv_AVX = esl_avx_leftshift_two(dcv_AVX);
    
     DMX_AVXf(0) = _mm256_or_si256(dcv_AVX, negInfv_AVX);
   }

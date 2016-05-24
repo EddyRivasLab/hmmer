@@ -137,6 +137,7 @@
  */
 #undef HAVE_SSE2
 #undef HAVE_AVX2
+#undef HAVE_AVX512
 #undef HAVE_MPI
 #undef HMMER_PVM
 #undef HMMER_THREADS

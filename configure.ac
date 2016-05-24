@@ -478,6 +478,7 @@ else
   fi
   if test "$enable_avx2" = "yes"; then
     AC_DEFINE([p7_build_AVX2])
+    AC_DEFINE([HAVE_AVX2])
     #override auto-detected compiler flags since we're forcing a particular ISA
     case $ax_cv_c_compiler_vendor in
       gnu)  SIMD_CFLAGS="-msse2 -msse3 -mavx -mavx2"
@@ -488,6 +489,8 @@ else
    AC_SUBST(SIMD_CFLAGS)
   fi
   if test "$enable_avx2_check" = "yes"; then
+    AC_DEFINE([HAVE_SSE])
+    AC_DEFINE([HAVE_AVX2])
     AC_DEFINE([p7_build_SSE])
     AC_DEFINE([p7_build_AVX2])
     AC_DEFINE([p7_build_check_AVX2])
@@ -504,6 +507,7 @@ else
   #the other cases' compiler flags
   if test "$enable_avx512" = "yes"; then
     AC_DEFINE([p7_build_AVX512])
+    AC_DEFINE([HAVE_AVX512])
     #override auto-detected compiler flags since we're forcing a particular ISA
     case $ax_cv_c_compiler_vendor in
       gnu)  SIMD_CFLAGS="-msse2 -msse3 -mavx -mavx2 -mavx512bw -mavx512dq"
@@ -517,6 +521,8 @@ else
     AC_DEFINE([p7_build_SSE])
     AC_DEFINE([p7_build_AVX512])
     AC_DEFINE([p7_build_check_AVX512])
+    AC_DEFINE([HAVE_SSE])
+    AC_DEFINE([HAVE_AVX512])
     #override auto-detected compiler flags since we're forcing a particular ISA
     case $ax_cv_c_compiler_vendor in
       gnu)  SIMD_CFLAGS="-msse2 -msse3 -mavx -mavx2 -mavx512bw -mavx512dq"

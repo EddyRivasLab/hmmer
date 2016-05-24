@@ -302,7 +302,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
        * Zeros shift on automatically, which is our -infinity.
        */
        __m256i dp_temp_AVX = dp_AVX[Q_AVX -1];
-      mpv_AVX = esl_avx_leftshift(dp_temp_AVX, 1);
+      mpv_AVX = esl_avx_leftshift_one(dp_temp_AVX);
       
       for (q_AVX = 0; q_AVX < Q_AVX; q_AVX++)
       {
