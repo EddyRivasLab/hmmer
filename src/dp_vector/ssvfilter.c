@@ -520,15 +520,13 @@ void SSV_compare_logs(int L, int width, int width_AVX, int Q, int Q_AVX){
 #ifdef p7_build_SSE
 #define STEP_SINGLE(sv)                         \
   sv   = _mm_subs_epi8(sv, *rsc); rsc++;        \
-  xEv  = _mm_max_epu8(xEv, sv);	 \
-  col++;
+  xEv  = _mm_max_epu8(xEv, sv);	 
 #endif
 
 #ifdef p7_build_AVX2
 #define STEP_SINGLE_AVX(sv_AVX) \
   sv_AVX   = _mm256_subs_epi8(sv_AVX, *rsc_AVX); rsc_AVX++;        \
-  xEv_AVX  = _mm256_max_epu8(xEv_AVX, sv_AVX); \
-  col_AVX++;	
+  xEv_AVX  = _mm256_max_epu8(xEv_AVX, sv_AVX);	
 #endif
 
 #ifdef p7_build_AVX512
@@ -775,12 +773,10 @@ void SSV_compare_logs(int L, int width, int width_AVX, int Q, int Q_AVX){
 #endif
 
 
-
 #ifdef p7_build_SSE
 #define CONVERT_STEP(step, length_check, label, sv, pos)        \
   length_check(label)                                           \
   rsc = om->sbv[dsq[i]] + pos;                                   \
-  col =0; \
   step()                                                        \
   sv = _mm_slli_si128(sv, 1);                                   \
   sv = _mm_or_si128(sv, low_byte_128);                                \
@@ -791,7 +787,6 @@ void SSV_compare_logs(int L, int width, int width_AVX, int Q, int Q_AVX){
 #define CONVERT_STEP_AVX(step, length_check, label, sv_AVX, pos)        \
   length_check(label)                                           \
   rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + pos;                                   \
-  col_AVX = 0; \
   step()       \
   sv_AVX = esl_avx_leftshift_one(sv_AVX); \
   sv_AVX = _mm256_or_si256(sv_AVX, low_byte_128_AVX);                                \
@@ -802,7 +797,6 @@ void SSV_compare_logs(int L, int width, int width_AVX, int Q, int Q_AVX){
 #define CONVERT_STEP_AVX_512(step, length_check, label, sv_AVX_512, pos)        \
   length_check(label)                                           \
   rsc_AVX_512 = om->sbv_AVX_512[dsq[i_AVX_512]] + pos;                                   \
-  col_AVX_512 = 0; \
   step()       \
   sv_AVX_512 = esl_avx_512_leftshift_one(sv_AVX_512); \
   sv_AVX_512 = _mm512_or_si512(sv_AVX_512, low_byte_128_AVX_512);                                \
@@ -1249,6 +1243,10 @@ void SSV_compare_logs(int L, int width, int width_AVX, int Q, int Q_AVX){
 
 #endif
 
+
+// We've applied 4:1 loop unrolling to the CALC
+// routines to reduce loop overhead.  Reduces 
+// total program run time by up to 13% on the AVX version
 #ifdef p7_build_SSE
 #define CALC(reset, step, convert, width)       \
   int i;                                        \
@@ -1259,40 +1257,166 @@ void SSV_compare_logs(int L, int width, int width_AVX, int Q, int Q_AVX){
   __m128i low_byte_128 = _mm_setzero_si128();                                            \
   low_byte_128 = _mm_insert_epi16(low_byte_128, 128, 0); \
   int w = width;                                \
-uint32_t col;                                              \
   dsq++;                                        \
                                                 \
   reset()                                       \
-  for (i = 0; i < L && i < Q - q - w; i++)      \
-    {                                           \
-      rsc = om->sbv[dsq[i]] + i + q;\
-      step()                                    \
-     }                                           \
+  int num_iters; \
+  if (L <= Q- q -w){ \
+  	num_iters = L;  \
+  }  \
+  else{  \
+  	num_iters = Q -q -w; \
+  } \
+  i = 0; \
+  while(num_iters >=4){ \
+  	rsc = om->sbv[dsq[i]] + i + q;            \
+    step()    \
+    i++; \
+	rsc = om->sbv[dsq[i]] + i + q;            \
+    step()    \
+    i++; \
+    rsc = om->sbv[dsq[i]] + i + q;            \
+    step()    \
+    i++; \
+    rsc = om->sbv[dsq[i]] + i + q;            \
+    step()    \
+    i++; \
+    num_iters -= 4; \
+  } \
+  while(num_iters >0){ \
+  	  rsc = om->sbv[dsq[i]] + i + q;            \
+      step()                                 \
+      i++; \
+      num_iters--; \
+  }  \
   i = Q - q - w;                                \
   convert(step, LENGTH_CHECK, done1)            \
 done1:                                          \
  for (i2 = Q - q; i2 < L - Q; i2 += Q)          \
    {                                            \
-     for (i = 0; i < Q - w; i++)                \
-       {        \
-         rsc = om->sbv[dsq[i2 + i]] + i;        \
-         step()                                 \
-       }                                        \
-                                                \
+   	i = 0; \
+   	num_iters = Q - w; \
+   	while (num_iters >= 4){  \
+       rsc = om->sbv[dsq[i2 + i]] + i;        \
+       step() \
+       i++; \
+       rsc = om->sbv[dsq[i2 + i]] + i;        \
+       step() \
+       i++; \
+       rsc = om->sbv[dsq[i2 + i]] + i;        \
+       step() \
+       i++; \
+       rsc = om->sbv[dsq[i2 + i]] + i;        \
+       step() \
+       i++; \
+       num_iters-= 4; \
+   	}\
+  	while(num_iters > 0){ \
+  		 rsc = om->sbv[dsq[i2 + i]] + i;        \
+         step()    \
+         i++; \
+         num_iters--;      \
+  	} \
+                                               \
      i += i2;                                   \
-     convert(step, NO_CHECK, )                  \
+     convert(step, NO_CHECK, ) \
    }                                            \
- for (i = 0; i2 + i < L && i < Q - w; i++)      \
-   {                                            \
+if((L - i2) < (Q-w)){                                         \
+ 	num_iters = L -i2; \
+ 	} \
+ else{  \
+ 	num_iters = Q - w; \
+ } \
+ i = 0; \
+ while (num_iters >= 4){ \
      rsc = om->sbv[dsq[i2 + i]] + i;            \
      step()                                     \
+     i+= 1;  \
+     rsc = om->sbv[dsq[i2 + i]] + i;            \
+     step()                                     \
+     i+= 1;  \
+     rsc = om->sbv[dsq[i2 + i]] + i;            \
+     step()                                     \
+     i+= 1;  \
+     rsc = om->sbv[dsq[i2 + i]] + i;            \
+     step()                                     \
+     i+= 1;  \
+     num_iters -= 4; \
    }                                            \
+   while(num_iters > 0) {  \
+   	 rsc = om->sbv[dsq[i2 + i]] + i;            \
+     step()                                     \
+     i+= 1;  \
+     num_iters--; \
+   } \
  i+=i2;                                         \
  convert(step, LENGTH_CHECK, done2)             \
 done2:                                          \
 	return xEv;
 #endif
 
+/* Original first loop from CALC_AVX
+ for (i_AVX = 0; i_AVX < L && i_AVX < Q_AVX - q_AVX - w_AVX; i_AVX++)      \
+    {                                           \
+      rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + i_AVX + q_AVX;            \
+      step()                                 \
+    }                                           \
+*/
+    /* Original Second loop
+   for (i_AVX = 0; i_AVX < Q_AVX - w_AVX; i_AVX++)                \
+       {                                        \
+         rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;        \
+         step()                                 \
+       }  */                                       
+
+   /* Original third loop
+for (i_AVX = 0; i2_AVX + i_AVX < L && i_AVX < Q_AVX - w_AVX; i_AVX++)      \
+   {                                            \
+     rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+     step()                                     \
+   }                                            \
+   */
+/* Unrolled third loop that didn't work so well
+
+
+if((L - i2_AVX) < (Q_AVX-w_AVX)){                                         \
+ 	num_iters_AVX = L -i2_AVX; \
+ 	} \
+ else{  \
+ 	num_iters_AVX = Q_AVX - w_AVX; \
+ } \
+ i_AVX = 0; 
+ while (num_iters_AVX >= 4){ \
+     rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+     step()                                     \
+     i_AVX+= 1;  \
+     rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+     step()                                     \
+     i_AVX+= 1;  \
+     rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+     step()                                     \
+     i_AVX+= 1;  \
+     rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+     step()                                     \
+     i_AVX+= 1;  \
+     num_iters_AVX -= 4; \
+   }                                            \
+   while(num_iters_AVX > 0) {  \
+   	 rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+     step()                                     \
+     i_AVX+= 1;  \
+     num_iters_AVX--; \
+   } \
+*/
+
+ /*
+   for (i_AVX = 0; i2_AVX + i_AVX < L && i_AVX < Q_AVX - w_AVX; i_AVX++)      \
+   {                                            \
+     rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+     step()                                     \
+   }                                                      \
+                                                \
+       */
 #ifdef p7_build_AVX2
 #define CALC_AVX(reset, step, convert, width)       \
   int i_AVX;                                        \
@@ -1306,35 +1430,95 @@ done2:                                          \
   dsq++;                                        \
                                                 \
   reset()                                       \
-                                                \
-  for (i_AVX = 0; i_AVX < L && i_AVX < Q_AVX - q_AVX - w_AVX; i_AVX++)      \
-    {                                           \
-      rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + i_AVX + q_AVX;            \
+  int num_iters_AVX; \
+  if (L <= Q_AVX- q_AVX -w_AVX){ \
+  	num_iters_AVX = L;  \
+  }  \
+  else{  \
+  	num_iters_AVX = Q_AVX -q_AVX -w_AVX; \
+  } \
+  i_AVX = 0; \
+  while(num_iters_AVX >=4){ \
+  	rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + i_AVX + q_AVX;            \
+    step()    \
+    i_AVX++; \
+	rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + i_AVX + q_AVX;            \
+    step()    \
+    i_AVX++; \
+    	rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + i_AVX + q_AVX;            \
+    step()    \
+    i_AVX++; \
+    rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + i_AVX + q_AVX;            \
+    step()    \
+    i_AVX++; \
+    num_iters_AVX -= 4; \
+  } \
+  while(num_iters_AVX >0){ \
+  	  rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + i_AVX + q_AVX;            \
       step()                                 \
-    }                                           \
-                                                \
+      i_AVX++; \
+      num_iters_AVX--; \
+  }  \
   i_AVX = Q_AVX - q_AVX - w_AVX;                                \
   convert(step, LENGTH_CHECK_AVX, done1_AVX)            \
 done1_AVX:                                          \
-                                                \
  for (i2_AVX = Q_AVX - q_AVX; i2_AVX < L - Q_AVX; i2_AVX += Q_AVX)          \
    {                                            \
-     for (i_AVX = 0; i_AVX < Q_AVX - w_AVX; i_AVX++)                \
-       {                                        \
-         rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;        \
-         step()                                 \
-       }                                        \
+   	i_AVX = 0; \
+   	num_iters_AVX = Q_AVX - w_AVX; \
+   	while (num_iters_AVX >= 4){  \
+       rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;        \
+       step() \
+       i_AVX++; \
+       rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;        \
+       step() \
+       i_AVX++; \
+       rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;        \
+       step() \
+       i_AVX++; \
+       rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;        \
+       step() \
+       i_AVX++; \
+       num_iters_AVX-= 4; \
+   	}\
+  	while(num_iters_AVX > 0){ \
+  		 rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;        \
+         step()    \
+         i_AVX++; \
+         num_iters_AVX--;      \
+  	} \
                                                 \
      i_AVX += i2_AVX;                                   \
-     convert(step, NO_CHECK, )                  \
+     convert(step, NO_CHECK, ) \
    }                                            \
-                                                \
- for (i_AVX = 0; i2_AVX + i_AVX < L && i_AVX < Q_AVX - w_AVX; i_AVX++)      \
-   {                                            \
+if((L - i2_AVX) < (Q_AVX-w_AVX)){                                         \
+ 	num_iters_AVX = L -i2_AVX; \
+ 	} \
+ else{  \
+ 	num_iters_AVX = Q_AVX - w_AVX; \
+ } \
+ i_AVX = 0; \
+ while (num_iters_AVX >= 4){ \
      rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
      step()                                     \
+     i_AVX+= 1;  \
+     rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+     step()                                     \
+     i_AVX+= 1;  \
+     rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+     step()                                     \
+     i_AVX+= 1;  \
+     rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+     step()                                     \
+     i_AVX+= 1;  \
+     num_iters_AVX -= 4; \
    }                                            \
-                                                \
+   while(num_iters_AVX > 0) {  \
+   	 rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+     step()                                     \
+     i_AVX+= 1;  \
+     num_iters_AVX--; \
+   } \
  i_AVX+=i2_AVX;                                         \
  convert(step, LENGTH_CHECK_AVX, done2_AVX)             \
 done2_AVX:                                          \
@@ -1357,30 +1541,96 @@ uint32_t col_AVX_512;                                              \
   dsq++;                                        \
                                                 \
   reset()                                       \
-  for (i_AVX_512 = 0; i_AVX_512 < L && i_AVX_512 < Q_AVX_512 - q_AVX_512 - w_AVX_512; i_AVX_512++)      \
-    {                                           \
-      rsc_AVX_512 = om->sbv_AVX_512[dsq[i_AVX_512]] + i_AVX_512 + q_AVX_512;\
-      step()                                    \
-     }                                           \
+  int num_iters_AVX_512; \
+  if (L <= Q_AVX_512- q_AVX_512 -w_AVX_512){ \
+  	num_iters_AVX_512 = L;  \
+  }  \
+  else{  \
+  	num_iters_AVX_512 = Q_AVX_512 -q_AVX_512 -w_AVX_512; \
+  } \
+  i_AVX_512 = 0; \
+  while(num_iters_AVX_512 >=4){ \
+  	rsc_AVX_512 = om->sbv_AVX_512[dsq[i_AVX_512]] + i_AVX_512 + q_AVX_512;            \
+    step()    \
+    i_AVX_512++; \
+	rsc_AVX_512 = om->sbv_AVX_512[dsq[i_AVX_512]] + i_AVX_512 + q_AVX_512;            \
+    step()    \
+    i_AVX_512++; \
+    	rsc_AVX_512 = om->sbv_AVX_512[dsq[i_AVX_512]] + i_AVX_512 + q_AVX_512;            \
+    step()    \
+    i_AVX_512++; \
+    rsc_AVX_512 = om->sbv_AVX_512[dsq[i_AVX_512]] + i_AVX_512 + q_AVX_512;            \
+    step()    \
+    i_AVX_512++; \
+    num_iters_AVX_512 -= 4; \
+  } \
+  while(num_iters_AVX_512 >0){ \
+  	  rsc_AVX_512 = om->sbv_AVX_512[dsq[i_AVX_512]] + i_AVX_512 + q_AVX_512;            \
+      step()                                 \
+      i_AVX_512++; \
+      num_iters_AVX_512--; \
+  }  \
   i_AVX_512 = Q_AVX_512 - q_AVX_512 - w_AVX_512;                                \
   convert(step, LENGTH_CHECK_AVX_512, done1)            \
 done1:                                          \
  for (i2_AVX_512 = Q_AVX_512 - q_AVX_512; i2_AVX_512 < L - Q_AVX_512; i2_AVX_512 += Q_AVX_512)          \
    {                                            \
-     for (i_AVX_512 = 0; i_AVX_512 < Q_AVX_512 - w_AVX_512; i_AVX_512++)                \
-       {        \
-         rsc_AVX_512 = om->sbv_AVX_512[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;        \
-         step()                                 \
-       }                                        \
-                                                \
+  	i_AVX_512 = 0; \
+   	num_iters_AVX_512 = Q_AVX_512 - w_AVX_512; \
+   	while (num_iters_AVX_512 >= 4){  \
+       rsc_AVX_512 = om->sbv_AVX_512[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;        \
+       step() \
+       i_AVX_512++; \
+       rsc_AVX_512 = om->sbv_AVX_512[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;        \
+       step() \
+       i_AVX_512++; \
+       rsc_AVX_512 = om->sbv_AVX_512[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;        \
+       step() \
+       i_AVX_512++; \
+       rsc_AVX_512 = om->sbv_AVX_512[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;        \
+       step() \
+       i_AVX_512++; \
+       num_iters_AVX_512-= 4; \
+   	}\
+  	while(num_iters_AVX_512 > 0){ \
+  		 rsc_AVX_512 = om->sbv_AVX_512[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;        \
+         step()    \
+         i_AVX_512++; \
+         num_iters_AVX_512--;      \
+  	} \
+                           \
      i_AVX_512 += i2_AVX_512;                                   \
      convert(step, NO_CHECK, )                  \
    }                                            \
- for (i_AVX_512 = 0; i2_AVX_512 + i_AVX_512 < L && i_AVX_512 < Q_AVX_512 - w_AVX_512; i_AVX_512++)      \
-   {                                            \
-     rsc_AVX_512 = om->sbv_AVX_512[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;            \
-     step()                                     \
-   }                                            \
+	if((L - i2_AVX_512) < (Q_AVX_512-w_AVX_512)){                                         \
+ 		num_iters_AVX_512 = L -i2_AVX_512; \
+ 		} \
+ 	else{  \
+ 		num_iters_AVX_512 = Q_AVX_512 - w_AVX_512; \
+ 	} \
+ 	i_AVX_512 = 0; \
+ 	while (num_iters_AVX_512 >= 4){ \
+     	rsc_AVX_512 = om->sbv_AVX_512[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;            \
+     	step()                                     \
+     	i_AVX_512+= 1;  \
+     	rsc_AVX_512 = om->sbv_AVX_512[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;            \
+     	step()                                     \
+     	i_AVX_512+= 1;  \
+     	rsc_AVX_512 = om->sbv_AVX_512[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;            \
+     	step()                                     \
+     	i_AVX_512+= 1;  \
+     	rsc_AVX_512 = om->sbv_AVX_512[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;            \
+     	step()                                     \
+     	i_AVX_512+= 1;  \
+     	num_iters_AVX_512 -= 4; \
+   	}                                            \
+   	while(num_iters_AVX_512 > 0) {  \
+   	 	rsc_AVX_512 = om->sbv_AVX_512[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;            \
+     	step()                                     \
+     	i_AVX_512+= 1;  \
+     	num_iters_AVX_512--; \
+   	} \
+                                       \
  i_AVX_512+=i2_AVX_512;                                         \
  convert(step, LENGTH_CHECK_AVX_512, done2)             \
 done2:                                          \
