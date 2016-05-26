@@ -179,7 +179,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
 
   /*
      If this is a nhmmscant scan; i.e. scan using a DNA
-	 query, ave the ORF in a buffer so that if
+	 query, put the ORF in a buffer so that if
 	 the hit is in a reverse compliment of the query, i.e.
 	 the other DNA strand, we can take the reverse complement
 	 of the nucleotide DNA to print on the alignment display
@@ -190,16 +190,16 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
         for(j= sq->start; j <= sq->end; j++) {
            esl_sq_CAddResidue(ntorfseqtxt, ntsq->seq[j-1]);
         }
-	 }
-	 else {
+     }
+     else {
         for(j= sq->end; j <= sq->start; j++) {
            esl_sq_CAddResidue(ntorfseqtxt, ntsq->seq[j-1]);
         }		 
         esl_sq_ReverseComplement(ntorfseqtxt);  
-	 }
-	 esl_sq_CAddResidue(ntorfseqtxt, 0);
+     }
+     esl_sq_CAddResidue(ntorfseqtxt, 0);
   }
-  
+
   /* mandatory three alignment display lines: model, mline, aseq */
   for (z = z1; z <= z2; z++) 
     {
@@ -208,30 +208,30 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
       x = sq->dsq[i];
       s = tr->st[z];
       if (ntsq != NULL)    { 
-  	     /*
+         /*
           * if there is a nucleotide sequence then we want to record the location 
-	      * of the hit in that sequence and not the location of the hit in the ORF 
-		  * provided by esl_gencode_ProcessOrf (esl_gencode.c) used in p7_alidisplay_Create
-		  * in p7_alidisplay.c.
+          * of the hit in that sequence and not the location of the hit in the ORF 
+          * provided by esl_gencode_ProcessOrf (esl_gencode.c) used in p7_alidisplay_Create
+          * in p7_alidisplay.c.
           * The ORF has already been saved in ntorfseqtxt and converted into
           * a reverse complement if the hit was found in the reverse complement of the
           * query sequence.		  
-		  * sq->start is the start location of the ORF in the nucleotide sequence and 
-	      * ad->sqfrom is the start of the hit in the ORF in amino acid locations
+          * sq->start is the start location of the ORF in the nucleotide sequence and 
+          * ad->sqfrom is the start of the hit in the ORF in amino acid locations
           *           
-		      tr->i[z1]=sqfrom=3   tr->i[z2]=sqto=8
-					   |------hit-----|  	       
-		      E  Y  H  A  G  f  G  H  F  H  W  H 
-             GAGTACCACGCGGGCTTTGGCCACTTTCACTGGCAT
+          *     tr->i[z1]=sqfrom=3   tr->i[z2]=sqto=8
+                       |------hit-----|  	       
+                 E  Y  H  A  G  f  G  H  F  H  W  H 
+                GAGTACCACGCGGGCTTTGGCCACTTTCACTGGCAT
 	            |------------ORF----------|	 
            sq->start=4 		            sq->end=30 
-		  *
-		  *
-		  *
-	      * digitized sequence [1..n], or NULL if text 
-		  * char seq index [0..n-1] so nucleotide text seq index 
+          *
+          *
+          *
+          * digitized sequence [1..n], or NULL if text 
+          * char seq index [0..n-1] so nucleotide text seq index 
           * is 3*(i-1)		 
-		  */
+          */
          n1 = n2 = n3 = 78; /* use a capital 'N' for a don't know character instead of a sentinel byte used in ad->aseq */
          if(i > 0)
 		 {

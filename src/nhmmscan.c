@@ -107,6 +107,8 @@ static ESL_OPTIONS options[] = {
   { "--incdomE",    eslARG_REAL,  "0.01", NULL, "x>0",   NULL,  NULL,  INCDOMOPTS,      "consider domains <= this E-value threshold as significant",     99 },
   { "--incdomT",    eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  INCDOMOPTS,      "consider domains >= this score threshold as significant",       99 },
   { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,           "set # of significant seqs, for domain E-value calculation",      99 },
+  { "--notrans",    eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,          "don't show the translated DNA sequence in domain alignment",    99 }, /*for nhmmscant */
+  { "--vertcodon",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,          "show the DNA vertically in domain alignment",                   99 }, /*for nhmmscant */
 
 //  { "--daemon",     eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  DAEMONOPTS,      "run program as a daemon",                                      12 },
 

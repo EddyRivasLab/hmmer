@@ -107,7 +107,10 @@ static ESL_OPTIONS options[] = {
   { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,"--mpi", NULL,            "arrest after start: for debugging MPI under gdb",              12 },  
   { "--mpi",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  MPIOPTS,         "run as an MPI parallel program",                               12 },
 #endif
-  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+   /* Not used, but retained because esl option-handling code errors if it isn't kept here.  Placed in group 99 so it doesn't print to help*/
+  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  NULL,              "don't show the translated DNA sequence in domain alignment",  99 }, /*for nhmmscant */
+  { "--vertcodon",  eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  NULL,              "show the DNA vertically in domain alignment",                 99 }, /*for nhmmscant */
+ {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
 

@@ -82,8 +82,10 @@ PROGOBJS =\
 	hmmstat.o\
 	jackhmmer.o\
 	phmmer.o\
+        phmmert.o\
 	nhmmer.o\
 	nhmmscan.o\
+        nhmmscant.o\
 	hmmpgmd.o\
 	hmmc2.o\
 	makehmmerdb.o\
