@@ -681,6 +681,9 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   int              d;
   int              status;
 
+  long             sq_from;        /* start location in query in amino acids */
+  long             sq_to;          /* end llocation in query in amino acids */
+ 
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
   p7_omx_GrowTo(pli->oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
@@ -910,6 +913,50 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
       if (ntsq != NULL)
       {
          hit->target_len = ntsq->n;
+#if 0
+         for (d = 0; d < hit->ndom; d++)
+         {
+            if (pli->mode == p7_SEARCH_SEQS)
+              {
+                sq_from = hit->dcl[d].ad->hmmfrom;
+                sq_to = hit->dcl[d].ad->hmmto;
+                printf("search set from hmmi\n");
+              }
+            else
+              {
+                sq_from = hit->dcl[d].ad->sqfrom;
+                sq_to = hit->dcl[d].ad->sqto;
+                printf("scan set form ad->\n");
+              }
+
+            printf("sq from:%ld sq to:%ld\n",sq_from, sq_to); //DEBUG !!!!!!
+            printf("start:%ld end:%ld\n",sq->start, sq->end); //DEBUG !!!!!!
+
+            if (sq->start < sq->end)
+            {				
+               hit->dcl[d].iorf       = sq->start;
+               hit->dcl[d].jorf       = sq->end;
+               hit->dcl[d].ienv       = (hit->dcl[d].ienv*3-2) + sq->start-1;
+               hit->dcl[d].jenv       = (hit->dcl[d].jenv*3) + sq->start-1;			
+               hit->dcl[d].ad->sqfrom = (sq_from*3-2) + sq->start-1;
+               hit->dcl[d].ad->sqto   = (sq_to*3) + sq->start-1;
+            }
+            else
+            {
+               hit->dcl[d].iorf       = sq->start;
+               hit->dcl[d].jorf       = sq->end;
+			
+               hit->dcl[d].ienv       = sq->start - (hit->dcl[d].ienv - 1)*3;
+               hit->dcl[d].jenv       = sq->start - (hit->dcl[d].jenv - 1)*3 - 2;			
+
+               hit->dcl[d].ad->sqfrom = sq->start - (sq_from -1)*3;
+               hit->dcl[d].ad->sqto   = sq->start - (sq_to -1)*3 - 2;				
+            }
+
+            printf("ad sq from:%ld ad sq to:%ld\n",hit->dcl[d].ad->sqfrom, hit->dcl[d].ad->sqto); //DEBUG !!!!!!
+         }		
+#endif
+//#if 0
          for (d = 0; d < hit->ndom; d++)
          {
             if (sq->start < sq->end)
@@ -933,6 +980,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
                hit->dcl[d].ad->sqto   = sq->start - (hit->dcl[d].ad->sqto -1)*3 - 2;				
             }
          }		
+//#endif
       }
 	  
     }

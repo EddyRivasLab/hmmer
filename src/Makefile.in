@@ -58,8 +58,10 @@ PROGS = alimask\
 	hmmstat\
 	jackhmmer\
 	phmmer\
+        phmmert\
 	nhmmer\
 	nhmmscan\
+        nhmmscant\
 	hmmpgmd\
 	hmmc2\
 	makehmmerdb\
