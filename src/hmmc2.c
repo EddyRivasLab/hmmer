@@ -87,7 +87,7 @@ static ESL_OPTIONS searchOpts[] = {
   { "--domZ",       eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",   12 },
   { "--hmmdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--seqdb",       "hmm database to search",                                      12 },
   { "--nhmmscant",  eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  "--seqdb",       "search hmm database with a 6 frame translated DNA sequence",  12 },
-  { "--phmmert",    eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  "--hmmdb",       "search sequence database with a 6 frame translated DNA sequence",  12 },
+  //{ "--phmmert",    eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  "--hmmdb",       "search sequence database with a 6 frame translated DNA sequence",  12 },
   { "--seqdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--hmmdb",       "protein database to search",                                  12 },
   { "--seqdb_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, "--seqdb", NULL,         "range(s) of sequences within --seqdb that will be searched",  12 },
 

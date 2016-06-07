@@ -188,12 +188,13 @@ worker_process(ESL_GETOPTS *go)
       case HMMD_CMD_SEARCH:
           {
               query = process_QueryCmd(cmd, &env);
-              if (esl_opt_IsUsed(query->opts, "--phmmert")) {
-	          process_TranslatedSearchCmd(cmd, &env, query);
-              }
-              else {
-                  process_SearchCmd(cmd, &env, query);
-              }
+              process_SearchCmd(cmd, &env, query);
+//              if (esl_opt_IsUsed(query->opts, "--phmmert")) {
+//	          process_TranslatedSearchCmd(cmd, &env, query);
+//              }
+//              else {
+//                  process_SearchCmd(cmd, &env, query);
+//              }
               free_QueueData(query);
           }
           break;
@@ -668,8 +669,9 @@ process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
   query->hmm = NULL;
   query->seq = NULL;
 
-  if (esl_opt_IsUsed(query->opts, "--nhmmscant") ||
-      esl_opt_IsUsed(query->opts, "--phmmert"))
+  //if (esl_opt_IsUsed(query->opts, "--nhmmscant") ||
+  //    esl_opt_IsUsed(query->opts, "--phmmert"))
+  if (esl_opt_IsUsed(query->opts, "--nhmmscant"))
      query->abc = esl_alphabet_Create(eslDNA);
   else
      query->abc = esl_alphabet_Create(eslAMINO);

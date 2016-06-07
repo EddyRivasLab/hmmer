@@ -35,7 +35,7 @@ static ESL_OPTIONS cmdlineOpts[] = {
   { "--seqdb",      eslARG_INFILE,  NULL,     NULL, NULL,           NULL,  NULL,  "--worker",      "protein database to cache for searches",                      12 },
   { "--hmmdb",      eslARG_INFILE,  NULL,     NULL, NULL,           NULL,  NULL,  "--worker",      "hmm database to cache for searches",                          12 },
   { "--nhmmscant",  eslARG_NONE,    NULL,     NULL, NULL,           NULL,  NULL,  "--worker,--master", "search hmm database with a 6 frame translated DNA sequence",  12 },
-  { "--phmmert",    eslARG_NONE,    NULL,     NULL, NULL,           NULL,  NULL,  "--worker,--master", "search sequence database with a 6 frame translated DNA sequence",  12 },
+  //{ "--phmmert",    eslARG_NONE,    NULL,     NULL, NULL,           NULL,  NULL,  "--worker,--master", "search sequence database with a 6 frame translated DNA sequence",  12 },
   { "--cpu",        eslARG_INT,     NULL,"HMMER_NCPU","n>0",        NULL,  NULL,  "--master",      "number of parallel CPU workers to use for multithreads",      12 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 
