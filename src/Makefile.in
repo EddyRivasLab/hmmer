@@ -7,8 +7,7 @@ SUBDIRS = base\
 	  misc\
 	  sandbox \
           search\
-	  programs \
-          utilities \
+	  utilities \
 	  experiments
 
 HDRS =  

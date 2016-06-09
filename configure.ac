@@ -352,13 +352,12 @@ fi
 ESL_PIC_FLAGS
 
 # Figure out our @SIMD_CFLAGS@, if they're not already set.
-# If we're using gcc, we need -msse2.
-# We'd also like to have SSE3, so try to add -msse3.
+# If we're using gcc, we need -mfpu for ARM.
+# 
 if test "x$SIMD_CFLAGS" = x; then
    case $ax_cv_c_compiler_vendor in
-   gnu)   AX_CHECK_COMPILER_FLAGS([-msse2],        [ SIMD_CFLAGS="-msse2" ])
-          AX_CHECK_COMPILER_FLAGS([-msse2 -msse3], [ SIMD_CFLAGS="-msse2 -msse3" ])
-	  ;;
+   gnu)   AX_CHECK_COMPILER_FLAGS([-mfpu],        [ SIMD_CFLAGS="-mfpu" ])
+          ;;
    intel) ;;
    *)     ;;
    esac
@@ -368,22 +367,28 @@ AC_SUBST(SIMD_CFLAGS)
 # Verify that we can build SSE2 code.
 # The test here is cribbed from the Apache configure.ac file.
 #
-AC_MSG_CHECKING([whether SSE2 is supported])
+
+#AC_MSG_CHECKING([whether SSE2 is supported])
 sre_save_cflags="$CFLAGS"
 CFLAGS="$CFLAGS $SIMD_CFLAGS"
-AC_COMPILE_IFELSE(  [AC_LANG_PROGRAM([[#include <emmintrin.h>]],
-			 [[__m128i* one=(__m128i*)_mm_malloc(4, 16);
-		   __m128i* two=(__m128i*)_mm_malloc(4, 16);
-		   __m128i xmm1 = _mm_load_si128(one);
-		   __m128i xmm2 = _mm_load_si128(two);
-		   __m128i xmm3 = _mm_or_si128(xmm1, xmm2);
-		   _mm_store_si128(one, xmm3);
-		   _mm_free(one);
-		   _mm_free(two);
-		 ]])],
-  [ AC_MSG_RESULT([yes])],
-  [ AC_MSG_ERROR([no: HMMER3 requires SSE2 vector instruction support]) ]
-)
+
+# Temporary; ARM does not support SSE
+# TODO: Add checks for ARM NEON instructions
+# 
+#AC_COMPILE_IFELSE(  [AC_LANG_PROGRAM([[#include <emmintrin.h>]],
+#			 [[__m128i* one=(__m128i*)_mm_malloc(4, 16);
+#		   __m128i* two=(__m128i*)_mm_malloc(4, 16);
+#		   __m128i xmm1 = _mm_load_si128(one);
+#		   __m128i xmm2 = _mm_load_si128(two);
+#		   __m128i xmm3 = _mm_or_si128(xmm1, xmm2);
+#		   _mm_store_si128(one, xmm3);
+#		   _mm_free(one);
+#		   _mm_free(two);
+#		 ]])],
+#  [ AC_MSG_RESULT([yes])],
+#  [ AC_MSG_ERROR([no: HMMER3 requires SSE2 vector instruction support]) ]
+#)
+
 CFLAGS="$sre_save_cflags"
 AC_DEFINE([HAVE_SSE2])
 
