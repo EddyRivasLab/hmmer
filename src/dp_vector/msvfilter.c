@@ -50,6 +50,7 @@
  }
 #endif
 
+uint64_t full_MSV_calls;
 /*****************************************************************
  * 1. The p7_MSVFilter() DP implementation.
  *****************************************************************/
@@ -146,7 +147,8 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
   int q_AVX_512;         /* counter over vectors 0..nq-1                              */
  #endif
 
-  
+  extern uint64_t full_MSV_calls;
+
   int i;         /* counter over sequence positions 1..L                      */
   int     cmp;
   int     status;
@@ -163,7 +165,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
   */
  //  printf("Calling SSVFilter\n");
   if (( status = p7_SSVFilter(dsq, L, om, ret_sc)) != eslENORESULT) return status;
- //  printf("MSVFilter past SSV\n");
+full_MSV_calls++;
   /* Resize the filter mx as needed */
   if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of MSV filter matrix failed");
 
@@ -556,7 +558,7 @@ int
 p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_SCOREDATA *msvdata,
                         P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
-
+#ifdef p7_build_SSE // this code hasn't been ported to AVX yet
   register __m128i mpv;            /* previous row values                                       */
   register __m128i xEv;		   /* E state: keeps max for Mk->E for a single iteration       */
   register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
@@ -730,7 +732,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
 
 
   } /* end loop over sequence residues 1..L */
-
+#endif
   return eslOK;
 
 }

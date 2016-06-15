@@ -48,9 +48,9 @@
 #define P7_NVF_AVX(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNF_AVX) + 1)))   /*  8 floats  */
 
 // values for 512-bit AVX-512 vectors
-#define P7_NVB_AVX_512(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNB_AVX_512) + 1)))   /* 32 uchars  */
-#define P7_NVW_AVX_512(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNW_AVX_512) + 1)))   /*  16 words   */
-#define P7_NVF_AVX_512(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNF_AVX_512) + 1)))   /*  8 floats  */
+#define P7_NVB_AVX_512(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNB_AVX_512) + 1)))   /* 64 uchars  */
+#define P7_NVW_AVX_512(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNW_AVX_512) + 1)))   /*  32 words   */
+#define P7_NVF_AVX_512(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNF_AVX_512) + 1)))   /*  16 floats  */
 
 
 

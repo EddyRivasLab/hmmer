@@ -50,8 +50,7 @@ enum p7c_xcells_e {
 typedef struct p7_checkptmx_s {
   int M;	/* current actual query model dimension (consensus positions)         */
   int L;	/* current actual target seq dimension (residues)                     */
-  int R;	/* current actual number of rows (<=Ra+Rb+Rc), excluding R0           */
-  int Qf;	/* current actual number of fb vectors = P7_NVF(M)                    */
+
 
   /* Checkpointed layout, mapping rows 1..R to residues 1..L:                         */
   int R0;	/* # of extra rows: one for fwd[0] boundary, two for bck[prv,cur]     */
@@ -62,16 +61,56 @@ typedef struct p7_checkptmx_s {
   int Lb;      	/* residues La+1..La+Lb are in "between" region                       */
   int Lc;	/* residues La+Lb+1..La+Lb+Lc=L are in "checkpointed" region          */
 
+  int64_t  ramlimit;  /* recommended RAM limit on dp_mem; can temporarily exceed it */
+
+/* Note: for ease of checking, we require the AVX2 and AVX512 versions to allocate the same
+number of rows of matrix storage as the SSE version, even though this might require
+allocating somewhat more memory than the user requested, due to rounding rows up
+to the next multiple of the vector length.  This should be a small effect unless the 
+sequence we're comparing to is very short, since this filter uses floats.  Also, the code 
+exceeds the requested memory when necessary, so the request is already not a hard limit. */
+
+#ifdef p7_build_SSE
   /* Raw memory allocation */
+  int Qf; /* current actual number of fb vectors = P7_NVF(M)                    */
+  int R; /* current actual number of rows (<=Ra+Rb+Rc), excluding R0           */
   char    *dp_mem;	/* raw memory allocation, that dp[] rows point into           */
   int64_t  allocW;	/* alloced width/row, bytes; multiple of p7_VALIGN            */
   int64_t  nalloc;	/* total # of alloc'ed bytes: nalloc >= (validR)(allocW)      */
-  int64_t  ramlimit;	/* recommended RAM limit on dp_mem; can temporarily exceed it */
 
   /* Forward/Backward matrix rows */
   char   **dpf;		/* row ptrs, dpf[0.R0-1,R0..R0+R-1]; aligned on (p7_VALIGN)-byte boundary  */
   int      allocR;	/* allocated size of dpf[]. R+R0 <= R0+Ra+Rb+rc <= validR <= allocR        */
   int      validR;	/* # of dpf[] rows pointing to valid dp_mem; may be < allocR after GrowTo() */
+#endif
+
+#ifdef p7_build_AVX2
+  /* Raw memory allocation */
+  int Qf_AVX; /* current actual number of fb vectors = P7_NVF(M)                    */
+  int R_AVX; /* current actual number of rows (<=Ra+Rb+Rc), excluding R0           */
+  char    *dp_mem_AVX;  /* raw memory allocation, that dp[] rows point into           */
+  int64_t  allocW_AVX;  /* alloced width/row, bytes; multiple of p7_VALIGN            */
+  int64_t  nalloc_AVX;  /* total # of alloc'ed bytes: nalloc >= (validR)(allocW)      */
+
+  /* Forward/Backward matrix rows */
+  char   **dpf_AVX;   /* row ptrs, dpf[0.R0-1,R0..R0+R-1]; aligned on (p7_VALIGN)-byte boundary  */
+  int      allocR_AVX;  /* allocated size of dpf[]. R+R0 <= R0+Ra+Rb+rc <= validR <= allocR        */
+  int      validR_AVX;  /* # of dpf[] rows pointing to valid dp_mem; may be < allocR after GrowTo() */
+#endif
+
+#ifdef p7_build_AVX512
+  int Qf_AVX_512; /* current actual number of fb vectors = P7_NVF(M)                    */
+  int R_AVX_512;  /* current actual number of rows (<=Ra+Rb+Rc), excluding R0           */
+  /* Raw memory allocation */
+  char    *dp_mem_AVX_512;  /* raw memory allocation, that dp[] rows point into           */
+  int64_t  allocW_AVX_512;  /* alloced width/row, bytes; multiple of p7_VALIGN            */
+  int64_t  nalloc_AVX_512;  /* total # of alloc'ed bytes: nalloc >= (validR)(allocW)      */
+
+  /* Forward/Backward matrix rows */
+  char   **dpf_AVX_512;   /* row ptrs, dpf[0.R0-1,R0..R0+R-1]; aligned on (p7_VALIGN)-byte boundary  */
+  int      allocR_AVX_512;  /* allocated size of dpf[]. R+R0 <= R0+Ra+Rb+rc <= validR <= allocR        */
+  int      validR_AVX_512;  /* # of dpf[] rows pointing to valid dp_mem; may be < allocR after GrowTo() */
+#endif
 
 #ifdef p7_DEBUGGING
   /* Info for dumping debugging info, conditionally compiled                        */

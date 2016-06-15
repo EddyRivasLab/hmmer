@@ -58,6 +58,15 @@
 
 #include "easel.h"
 #include "esl_sse.h"
+
+#ifdef p7_build_AVX2
+#include <immintrin.h>
+#include "esl_avx.h"
+#endif
+#ifdef p7_build_AVX512
+#include <immintrin.h>
+#include "esl_avx_512.h"
+#endif
 #include "esl_vectorops.h"
 
 #include "dp_reference/p7_refmx.h"
@@ -72,17 +81,40 @@
  * semblance of clarity, they're broken out into one-page-ish
  * chunks, using static inlined functions.
  */
+#ifdef p7_build_SSE
 static inline float forward_row      (ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dpc, int Q);
 static inline void  backward_row_main(ESL_DSQ xi, const P7_OPROFILE *om,       __m128 *dpp, __m128 *dpc, int Q, float scalefactor);
 static inline void  backward_row_L   (            const P7_OPROFILE *om,                    __m128 *dpc, int Q, float scalefactor);
 static inline void  backward_row_finish(          const P7_OPROFILE *om,                    __m128 *dpc, int Q, __m128 dcv);
 static inline void  backward_row_rescale(float *xc, __m128 *dpc, int Q, float scalefactor);
 static inline int   posterior_decode_row(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm_thresh, float overall_sc);
+#endif
+
+#ifdef p7_build_AVX2
+static inline float
+forward_row_AVX(ESL_DSQ xi, const P7_OPROFILE *om, const __m256 *dpp, __m256 *dpc, int Q);
+static inline void  backward_row_main_AVX(ESL_DSQ xi, const P7_OPROFILE *om,       __m256 *dpp, __m256 *dpc, int Q, float scalefactor);
+static inline void  backward_row_L_AVX   (            const P7_OPROFILE *om,                    __m256 *dpc, int Q, float scalefactor);
+static inline void  backward_row_finish_AVX(          const P7_OPROFILE *om,                    __m256 *dpc, int Q, __m256 dcv);
+static inline void  backward_row_rescale_AVX(float *xc, __m256 *dpc, int Q, float scalefactor);
+static inline int   posterior_decode_row_AVX(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm_thresh, float overall_sc);
+#endif
+
+#ifdef p7_build_AVX512
+static inline float
+forward_row_AVX_512(ESL_DSQ xi, const P7_OPROFILE *om, const __m512 *dpp, __m512 *dpc, int Q);
+static inline void  backward_row_main_AVX_512(ESL_DSQ xi, const P7_OPROFILE *om,       __m512 *dpp, __m512 *dpc, int Q, float scalefactor);
+static inline void  backward_row_L_AVX_512   (            const P7_OPROFILE *om,                    __m512 *dpc, int Q, float scalefactor);
+static inline void  backward_row_finish_AVX_512(          const P7_OPROFILE *om,                    __m512 *dpc, int Q, __m512 dcv);
+static inline void  backward_row_rescale_AVX_512(float *xc, __m512 *dpc, int Q, float scalefactor);
+static inline int   posterior_decode_row_AVX_512(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm_thresh, float overall_sc);
+#endif
 
 #ifdef p7_DEBUGGING
 static inline float backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
 static        void  save_debug_row_pp(P7_CHECKPTMX *ox,               __m128 *dpc, int i);
 static        void  save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float totscale);
+
 #endif
 
 /*****************************************************************
@@ -119,13 +151,38 @@ static        void  save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dp
 int
 p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc)
 {
+#ifdef p7_build_SSE
   int           Q     = P7_NVF(om->M);                   /* segment length; # of MDI vectors on each row      */
   __m128       *dpp   = NULL;                            /* dpp=prev row. start on dpf[2]; rows 0,1=Backwards */
   __m128       *dpc   = NULL;		                 /* dpc points at current row         */
+  const __m128  zerov = _mm_setzero_ps();     
   float        *xc    = NULL;                            /* specials E,N,JJ,J,B,CC,C,SCALE    */
   float         totsc = 0.0f;	                         /* accumulates Forward score in nats */
-  const __m128  zerov = _mm_setzero_ps();		 
-  int     q;			/* counter over vectors 0..Q-1                        */
+  int     q;      /* counter over vectors 0..Q-1                        */
+   ox->Qf = Q;
+#endif
+#ifdef p7_build_AVX2
+  int           Q_AVX     = P7_NVF_AVX(om->M);                   /* segment length; # of MDI vectors on each row      */
+  __m256       *dpp_AVX   = NULL;                            /* dpp=prev row. start on dpf[2]; rows 0,1=Backwards */
+  __m256       *dpc_AVX   = NULL;                    /* dpc points at current row         */
+  const __m256  zerov_AVX = _mm256_setzero_ps();     
+  float        *xc_AVX    = NULL;                            /* specials E,N,JJ,J,B,CC,C,SCALE    */
+  float         totsc_AVX = 0.0f;                          /* accumulates Forward score in nats */
+  int     q_AVX;      /* counter over vectors 0..Q-1                        */
+   ox->Qf_AVX = Q_AVX;
+#endif
+#ifdef p7_build_AVX512
+  int           Q_AVX_512     = P7_NVF_AVX_512(om->M);                   /* segment length; # of MDI vectors on each row      */
+  __m512       *dpp_AVX_512   = NULL;                            /* dpp=prev row. start on dpf[2]; rows 0,1=Backwards */
+  __m512       *dpc_AVX_512   = NULL;                    /* dpc points at current row         */
+  const __m512  zerov_AVX_512 = _mm512_setzero_ps();     
+  float        *xc_AVX_512    = NULL;                            /* specials E,N,JJ,J,B,CC,C,SCALE    */
+  float         totsc_AVX_512 = 0.0f;                          /* accumulates Forward score in nats */
+  int     q_AVX_512;      /* counter over vectors 0..Q-1                        */
+   ox->Qf_AVX_512 = Q_AVX_512;
+#endif
+
+
   int     i;			/* counter over residues/rows 1..L                    */
   int     b;			/* counter down through checkpointed blocks, Rb+Rc..1 */
   int     w;			/* counter down through rows in a checkpointed block  */
@@ -142,16 +199,25 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX 
    * DO NOT set any ptrs into the matrix until after this potential reallocation!
    */
   p7_checkptmx_GrowTo(ox, om->M, L);
+ #ifdef p7_build_SSE
   dpp =  (__m128 *) ox->dpf[ox->R0-1];    /* dpp=prev row. start on dpf[2]; rows 0,1=Backwards */
   xc  =  (float *) (dpp + Q*p7C_NSCELLS); /* specials E,N,JJ,J,B,CC,C,SCALE    */
-
+#endif
+#ifdef p7_build_AVX2
+  dpp_AVX =  (__m256 *) ox->dpf_AVX[ox->R0-1];    /* dpp=prev row. start on dpf[2]; rows 0,1=Backwards */
+  xc_AVX  =  (float *) (dpp_AVX + Q_AVX*p7C_NSCELLS); /* specials E,N,JJ,J,B,CC,C,SCALE    */
+#endif
+#ifdef p7_build_AVX512
+  dpp_AVX_512 =  (__m512 *) ox->dpf_AVX_512[ox->R0-1];    /* dpp=prev row. start on dpf[2]; rows 0,1=Backwards */
+  xc_AVX_512  =  (float *) (dpp_AVX_512 + Q_AVX_512*p7C_NSCELLS); /* specials E,N,JJ,J,B,CC,C,SCALE    */
+#endif
   /* Set the size of the problem in <ox> now, not later
    * Debugging dumps need this information, for example
    * (Ditto for any debugging copy of the fwd mx)
    */
   ox->M  = om->M;	
   ox->L  = L;
-  ox->Qf = Q;
+ 
 #ifdef p7_DEBUGGING
   ox->dump_flags |= p7_SHOW_LOG;                     /* also sets for Backward dumps, since <ox> shared */
   if (ox->do_dumping) p7_checkptmx_DumpFBHeader(ox);
@@ -159,11 +225,28 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX 
 #endif
 
   /* Initialization of the zero row, including specials */
+#ifdef p7_build_SSE
   for (q = 0; q < p7C_NSCELLS*Q; q++) dpp[q] = zerov;
   xc[p7C_N]     = 1.;
   xc[p7C_B]     = om->xf[p7O_N][p7O_MOVE]; 
   xc[p7C_E]     = xc[p7C_JJ] = xc[p7C_J]  = xc[p7C_CC] = xc[p7C_C]  = 0.;			
-  xc[p7C_SCALE] = 1.;			   
+  xc[p7C_SCALE] = 1.;
+#endif
+#ifdef p7_build_AVX2
+  for (q_AVX = 0; q_AVX < p7C_NSCELLS*Q_AVX; q_AVX++) dpp_AVX[q_AVX] = zerov_AVX;
+  xc_AVX[p7C_N]     = 1.;
+  xc_AVX[p7C_B]     = om->xf[p7O_N][p7O_MOVE]; 
+  xc_AVX[p7C_E]     = xc_AVX[p7C_JJ] = xc_AVX[p7C_J]  = xc_AVX[p7C_CC] = xc_AVX[p7C_C]  = 0.;     
+  xc_AVX[p7C_SCALE] = 1.;
+#endif           
+#ifdef p7_build_AVX512
+  for (q_AVX_512 = 0; q_AVX_512 < p7C_NSCELLS*Q_AVX_512; q_AVX_512++) dpp_AVX_512[q_AVX_512] = zerov_AVX_512;
+  xc_AVX_512[p7C_N]     = 1.;
+  xc_AVX_512[p7C_B]     = om->xf[p7O_N][p7O_MOVE]; 
+  xc_AVX_512[p7C_E]     = xc_AVX_512[p7C_JJ] = xc_AVX_512[p7C_J]  = xc_AVX_512[p7C_CC] = xc_AVX_512[p7C_C]  = 0.;     
+  xc_AVX_512[p7C_SCALE] = 1.;
+#endif  
+
 #ifdef p7_DEBUGGING
   if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, 0, dpp, "f1 O"); 
   if (ox->fwd)        save_debug_row_fb(ox, ox->fwd, dpp, 0, totsc); 
@@ -172,10 +255,159 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX 
   /* Phase one: the "a" region: all rows in this region are saved */
   for (i = 1; i <= ox->La; i++)
     {
+#ifdef p7_build_SSE      
       dpc = (__m128 *) ox->dpf[ox->R0+ox->R]; ox->R++;    /* idiomatic for "get next save/checkpoint row" */
 
       totsc += forward_row(dsq[i], om, dpp, dpc, Q);
-      dpp = dpc;	    	                          /* current row becomes prev row */
+      dpp = dpc;	 /* current row becomes prev row */
+#endif
+#ifdef p7_build_AVX2      
+      dpc_AVX = (__m256 *) ox->dpf_AVX[ox->R0+ox->R_AVX]; ox->R_AVX++;    /* idiomatic for "get next save/checkpoint row" */
+
+      totsc_AVX += forward_row_AVX(dsq[i], om, dpp_AVX, dpc_AVX, Q_AVX);
+      dpp_AVX = dpc_AVX;   /* current row becomes prev row */
+#endif 
+
+#ifdef p7_build_AVX512      
+      dpc_AVX_512 = (__m512 *) ox->dpf_AVX_512[ox->R0+ox->R_AVX_512]; ox->R_AVX_512++;    /* idiomatic for "get next save/checkpoint row" */
+
+      totsc_AVX_512 += forward_row_AVX_512(dsq[i], om, dpp_AVX_512, dpc_AVX_512, Q_AVX_512);
+      dpp_AVX_512 = dpc_AVX_512;   /* current row becomes prev row */
+#endif       
+	                          
+#ifdef p7_build_check_AVX2
+
+    float *unstriped, *unstriped_AVX;
+    union { __m128 v; float x[4]; } tmp_check;
+    union { __m256 v; float x[8]; } tmp_check_AVX;
+
+    unstriped = malloc( sizeof(float) * ((Q*4)+1));  // Yes, these allocates are slow,but this is check code that won't be
+    unstriped_AVX = malloc( sizeof(float) * ((Q_AVX*8)+1));  // compiled in production
+    int q_temp;
+    int z_temp;
+    unstriped[0] = 0.;
+    unstriped_AVX[0] = 0.;
+
+    /* Line 1. M cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_MQ(dpc, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+  for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_MQ(dpc_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+
+  // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("forward filter M miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", i, q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+
+  /* Line 2: I cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_IQ(dpc, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+ for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_IQ(dpc_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+ // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("forward filter I miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", i, q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+
+ /* Line 3: D cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_DQ(dpc, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+ for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_DQ(dpc_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+ // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("forward filter D miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", i, q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+  free(unstriped);
+  free(unstriped_AVX); 
+
+#endif      
+
+#ifdef p7_build_check_AVX512
+
+    float *unstriped, *unstriped_AVX_512;
+    union { __m128 v; float x[4]; } tmp_check;
+    union { __m512 v; float x[16]; } tmp_check_AVX_512;
+
+    unstriped = malloc( sizeof(float) * ((Q*4)+1));  // Yes, these allocates are slow,but this is check code that won't be
+    unstriped_AVX_512 = malloc( sizeof(float) * ((Q_AVX_512*16)+1));  // compiled in production
+    int q_temp;
+    int z_temp;
+    unstriped[0] = 0.;
+    unstriped_AVX_512[0] = 0.;
+
+    /* Line 1. M cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_MQ(dpc, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+  for (q_temp = 0; q_temp < Q_AVX_512; q_temp++) {
+    tmp_check_AVX_512.v = P7C_MQ(dpc_AVX_512, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX_512; z_temp++) unstriped_AVX_512[q_temp+Q_AVX_512*z_temp+1] = tmp_check_AVX_512.x[z_temp];
+  }
+
+  // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX_512[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("forward filter M miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX-512)\n", i, q_temp, unstriped[q_temp], unstriped_AVX_512[q_temp]);
+    }
+  }
+
+  /* Line 2: I cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_IQ(dpc, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+ for (q_temp = 0; q_temp < Q_AVX_512; q_temp++) {
+    tmp_check_AVX_512.v = P7C_IQ(dpc_AVX_512, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX_512; z_temp++) unstriped_AVX_512[q_temp+Q_AVX_512*z_temp+1] = tmp_check_AVX_512.x[z_temp];
+  }
+ // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX_512[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("forward filter I miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX-512)\n", i, q_temp, unstriped[q_temp], unstriped_AVX_512[q_temp]);
+    }
+  }
+
+ /* Line 3: D cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_DQ(dpc, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+ for (q_temp = 0; q_temp < Q_AVX_512; q_temp++) {
+    tmp_check_AVX_512.v = P7C_DQ(dpc_AVX_512, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX_512; z_temp++) unstriped_AVX_512[q_temp+Q_AVX_512*z_temp+1] = tmp_check_AVX_512.x[z_temp];
+  }
+ // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX_512[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("forward filter D miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX-512)\n", i, q_temp, unstriped[q_temp], unstriped_AVX_512[q_temp]);
+    }
+  }
+  free(unstriped);
+  free(unstriped_AVX_512); 
+
+#endif      
+
+
 #ifdef p7_DEBUGGING
       if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, dpc, "f1 O"); 
       if (ox->fwd)        save_debug_row_fb(ox, ox->fwd, dpc, i, totsc); 
@@ -185,30 +417,228 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX 
   /* Phase two: "b" and "c" regions: partially and fully checkpointed */
   for (b = ox->Rb + ox->Rc, w = (ox->Rb ? ox->Lb : ox->Rc+1); i <= L; i++)
     {
-      /* this section, deciding whether to get a checkpointed vs. tmp
+      /* this section, deciding whether to get a checkpointed vs. tmp_check
        * row, is why we set <fwd>, <dpp> here, rather than having the
        * inlined forward_row() set them.
        */
       if (! (--w)) { 		                   /* we're on the last row in segment: this row is saved    */
+#ifdef p7_build_SSE       
 	dpc = (__m128 *) ox->dpf[ox->R0+ox->R]; ox->R++;  /* idiomatic for "get next save/checkpoint row"    */
+#endif    
+#ifdef p7_build_AVX2      
+  dpc_AVX = (__m256 *) ox->dpf_AVX[ox->R0+ox->R_AVX]; ox->R_AVX++;  /* idiomatic for "get next save/checkpoint row"    */
+#endif  
+#ifdef p7_build_AVX512      
+  dpc_AVX_512 = (__m512 *) ox->dpf_AVX_512[ox->R0+ox->R_AVX_512]; ox->R_AVX_512++;  /* idiomatic for "get next save/checkpoint row"    */
+#endif    
+
 	w = b;  			           /* next segment has this many rows, ending in a saved row */
 	b--;					   /* decrement segment number counter; last segment is r=1  */
-      } else dpc = (__m128 *) ox->dpf[i%2];        /* idiomatic for "next tmp row", 0/1; i%2 makes sure dpp != dpc */
-      
+      } else{
+#ifdef p7_build_SSE        
+       dpc = (__m128 *) ox->dpf[i%2];        /* idiomatic for "next tmp row", 0/1; i%2 makes sure dpp != dpc */
+#endif
+#ifdef p7_build_AVX2        
+       dpc_AVX = (__m256 *) ox->dpf_AVX[i%2];        /* idiomatic for "next tmp row", 0/1; i%2 makes sure dpp != dpc */
+#endif
+#ifdef p7_build_AVX512        
+       dpc_AVX_512 = (__m512 *) ox->dpf_AVX_512[i%2];        /* idiomatic for "next tmp row", 0/1; i%2 makes sure dpp != dpc */
+#endif      
+      }
+
+#ifdef p7_build_SSE      
       totsc += forward_row(dsq[i], om, dpp, dpc, Q);
       dpp = dpc;
+#endif
+#ifdef p7_build_AVX2      
+      totsc_AVX += forward_row_AVX(dsq[i], om, dpp_AVX, dpc_AVX, Q_AVX);
+      dpp_AVX = dpc_AVX;
+#endif 
+#ifdef p7_build_AVX512      
+      totsc_AVX_512 += forward_row_AVX_512(dsq[i], om, dpp_AVX_512, dpc_AVX_512, Q_AVX_512);
+      dpp_AVX_512 = dpc_AVX_512;
+#endif 
 #ifdef p7_DEBUGGING
       if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, dpc, w ? "f1 X" : "f1 O"); 
       if (ox->fwd)        save_debug_row_fb(ox, ox->fwd, dpc, i, totsc); 
 #endif
+#ifdef p7_build_check_AVX2
+
+    float *unstriped, *unstriped_AVX;
+    union { __m128 v; float x[4]; } tmp_check;
+    union { __m256 v; float x[8]; } tmp_check_AVX;
+
+    unstriped = malloc( sizeof(float) * ((Q*4)+1));  // Yes, these allocates are slow,but this is check code that won't be
+    unstriped_AVX = malloc( sizeof(float) * ((Q_AVX*8)+1));  // compiled in production
+    int q_temp;
+    int z_temp;
+    unstriped[0] = 0.;
+    unstriped_AVX[0] = 0.;
+
+    /* Line 1. M cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_MQ(dpc, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+  for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_MQ(dpc_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+
+  // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("forward filter M miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", i, q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+
+  /* Line 2: I cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_IQ(dpc, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+ for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_IQ(dpc_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+ // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("forward filter I miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", i, q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+
+ /* Line 3: D cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_DQ(dpc, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+ for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_DQ(dpc_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+ // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("forward filter D miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", i, q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+  free(unstriped);
+  free(unstriped_AVX); 
+
+#endif      
+  #ifdef p7_build_check_AVX512
+
+    float *unstriped, *unstriped_AVX_512;
+    union { __m128 v; float x[4]; } tmp_check;
+    union { __m512 v; float x[16]; } tmp_check_AVX_512;
+
+    unstriped = malloc( sizeof(float) * ((Q*4)+1));  // Yes, these allocates are slow,but this is check code that won't be
+    unstriped_AVX_512 = malloc( sizeof(float) * ((Q_AVX_512*16)+1));  // compiled in production
+    int q_temp;
+    int z_temp;
+    unstriped[0] = 0.;
+    unstriped_AVX_512[0] = 0.;
+
+    /* Line 1. M cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_MQ(dpc, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+  for (q_temp = 0; q_temp < Q_AVX_512; q_temp++) {
+    tmp_check_AVX_512.v = P7C_MQ(dpc_AVX_512, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX_512; z_temp++) unstriped_AVX_512[q_temp+Q_AVX_512*z_temp+1] = tmp_check_AVX_512.x[z_temp];
+  }
+
+  // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX_512[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("forward filter M miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX-512)\n", i, q_temp, unstriped[q_temp], unstriped_AVX_512[q_temp]);
+    }
+  }
+
+  /* Line 2: I cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_IQ(dpc, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+ for (q_temp = 0; q_temp < Q_AVX_512; q_temp++) {
+    tmp_check_AVX_512.v = P7C_IQ(dpc_AVX_512, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX_512; z_temp++) unstriped_AVX_512[q_temp+Q_AVX_512*z_temp+1] = tmp_check_AVX_512.x[z_temp];
+  }
+ // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX_512[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("forward filter I miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX-512)\n", i, q_temp, unstriped[q_temp], unstriped_AVX_512[q_temp]);
+    }
+  }
+
+ /* Line 3: D cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_DQ(dpc, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+ for (q_temp = 0; q_temp < Q_AVX_512; q_temp++) {
+    tmp_check_AVX_512.v = P7C_DQ(dpc_AVX_512, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX_512; z_temp++) unstriped_AVX_512[q_temp+Q_AVX_512*z_temp+1] = tmp_check_AVX_512.x[z_temp];
+  }
+ // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX_512[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("forward filter D miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX-512)\n", i, q_temp, unstriped[q_temp], unstriped_AVX_512[q_temp]);
+    }
+  }
+  free(unstriped);
+  free(unstriped_AVX_512); 
+
+#endif      
     }
 
+#ifdef p7_build_SSE
   xc     = (float *) (dpc + Q*p7C_NSCELLS);
 
   ESL_DASSERT1( (ox->R == ox->Ra+ox->Rb+ox->Rc) );
   ESL_DASSERT1( ( (! isnan(xc[p7C_C])) && (! isinf(xc[p7C_C]))) );
 
   if (opt_sc) *opt_sc = totsc + logf(xc[p7C_C] * om->xf[p7O_C][p7O_MOVE]);
+#endif
+#ifdef p7_build_AVX2
+  xc_AVX     = (float *) (dpc_AVX + Q_AVX*p7C_NSCELLS);
+
+  ESL_DASSERT1( (ox->R_AVX == ox->Ra+ox->Rb+ox->Rc) );
+  ESL_DASSERT1( ( (! isnan(xc_AVX[p7C_C])) && (! isinf(xc_AVX[p7C_C]))) );
+
+  if (opt_sc) *opt_sc = totsc_AVX + logf(xc_AVX[p7C_C] * om->xf[p7O_C][p7O_MOVE]);
+#endif
+#ifdef p7_build_AVX512
+  xc_AVX_512     = (float *) (dpc_AVX_512 + Q_AVX_512*p7C_NSCELLS);
+
+  ESL_DASSERT1( (ox->R_AVX_512 == ox->Ra+ox->Rb+ox->Rc) );
+  ESL_DASSERT1( ( (! isnan(xc_AVX_512[p7C_C])) && (! isinf(xc_AVX_512[p7C_C]))) );
+
+  if (opt_sc) *opt_sc = totsc_AVX_512 + logf(xc_AVX_512[p7C_C] * om->xf[p7O_C][p7O_MOVE]);
+#endif
+
+#ifdef p7_build_check_AVX2
+  float check = totsc + logf(xc[p7C_C] * om->xf[p7O_C][p7O_MOVE]);
+  float check_AVX = totsc_AVX + logf(xc_AVX[p7C_C] * om->xf[p7O_C][p7O_MOVE]);
+  if(fabs(check_AVX - check) > fabs(check/1000)){
+    printf("SSE and AVX results disagree in forward filter %f vs %f\n", check, check_AVX);
+  }
+/*  else{
+    printf("SSE and AVX results agree in forward filter %f and %f", totsc, totsc_AVX);
+  } */
+#endif  
+#ifdef p7_build_check_AVX512
+  float check = totsc + logf(xc[p7C_C] * om->xf[p7O_C][p7O_MOVE]);
+  float check_AVX_512 = totsc_AVX_512 + logf(xc_AVX_512[p7C_C] * om->xf[p7O_C][p7O_MOVE]);
+  if(fabs(check_AVX_512 - check) > fabs(check/1000)){
+    printf("SSE and AVX-512 results disagree in forward filter %f vs %f\n", check, check_AVX_512);
+  }
+/*  else{
+    printf("SSE and AVX results agree in forward filter %f and %f", totsc, totsc_AVX);
+  } */
+#endif
   return eslOK;
 }
 
@@ -242,13 +672,37 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX 
 int
 p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh)
 {
+//printf("Calling Backward Filter\n");
+#ifdef p7_build_SSE
+    float  *xf;
   int Q = ox->Qf;
   __m128 *fwd;
   __m128 *bck;
   __m128 *dpp;
-  float  *xf;
-  float   Tvalue;
-  int     i, b, w, i2;
+  int i;
+#endif
+
+#ifdef p7_build_AVX2
+    float  *xf_AVX;
+  int Q_AVX = ox->Qf_AVX;
+  __m256 *fwd_AVX;
+  __m256 *bck_AVX;
+  __m256 *dpp_AVX;
+  int i_AVX;
+#endif
+
+#ifdef p7_build_AVX512
+    float  *xf_AVX_512;
+  int Q_AVX_512 = ox->Qf_AVX_512;
+  __m512 *fwd_AVX_512;
+  __m512 *bck_AVX_512;
+  __m512 *dpp_AVX_512;
+  int i_AVX_512;
+#endif
+
+
+  float   Tvalue, Tvalue_AVX, Tvalue_AVX_512;
+  int     b, w, i2;
   int     status;
 
   p7_sparsemask_Reinit(sm, om->M, L);
@@ -269,7 +723,11 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
 
   /* Row L is a special case for Backwards; so in checkpointed Backward,
    * we have to special-case the last block, rows L-1 and L
-   */
+   */  
+ 
+ 
+
+#ifdef p7_build_SSE
   i = L;
   ox->R--;
   fwd = (__m128 *) ox->dpf[ox->R0 + ox->R];      /* pop row for fwd[L] off the checkpointed stack */
@@ -277,19 +735,102 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
   Tvalue = xf[p7C_C] * om->xf[p7O_C][p7O_MOVE];  /* i.e. scaled fwd[L] val at T state = scaled overall score */
   bck = (__m128 *) ox->dpf[i%2];	         /* get tmp space for bck[L]                                 */
   backward_row_L(om, bck, Q, xf[p7C_SCALE]);     /* calculate bck[L] row                                     */
+
 #ifdef p7_DEBUGGING
   ox->bcksc = logf(xf[p7C_SCALE]);
   if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, L, fwd, "f2 O"); if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, L, bck, "bck");  }
   if (ox->bck)          save_debug_row_fb(ox, ox->bck, bck, L, ox->bcksc); 
+
 #endif
   if ( (status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
   i--;
   dpp = bck;
+#endif
 
+#ifdef p7_build_AVX2
+   i_AVX = L;
+  ox->R_AVX--;
+  fwd_AVX = (__m256 *) ox->dpf_AVX[ox->R0 + ox->R_AVX];      /* pop row for fwd[L] off the checkpointed stack */
+  xf_AVX  = (float *) (fwd_AVX + Q_AVX*p7C_NSCELLS);
+  Tvalue_AVX = xf_AVX[p7C_C] * om->xf[p7O_C][p7O_MOVE];  /* i.e. scaled fwd[L] val at T state = scaled overall score */
+  bck_AVX = (__m256 *) ox->dpf_AVX[i_AVX%2];           /* get tmp space for bck[L]                                 */
+  backward_row_L_AVX(om, bck_AVX, Q_AVX, xf_AVX[p7C_SCALE]);     /* calculate bck[L] row                                     */
+
+  if ( (status = posterior_decode_row_AVX(ox, i_AVX, sm, sm_thresh, Tvalue_AVX)) != eslOK) return status;
+  i_AVX--;
+  dpp_AVX = bck_AVX;
+#endif
+
+#ifdef p7_build_check_AVX2  // Check that the computed rows match
+
+    float *unstriped, *unstriped_AVX;
+    union { __m128 v; float x[4]; } tmp_check;
+    union { __m256 v; float x[8]; } tmp_check_AVX;
+
+    unstriped = malloc( sizeof(float) * ((Q*4)+1));  // Yes, these allocates are slow,but this is check code that won't be
+    unstriped_AVX = malloc( sizeof(float) * ((Q_AVX*8)+1));  // compiled in production
+    int q_temp;
+    int z_temp;
+    unstriped[0] = 0.;
+    unstriped_AVX[0] = 0.;
+
+    /* Line 1. M cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_MQ(bck, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+  for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_MQ(bck_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+
+  // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("backward filter L-type M miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX), R = %d, R_AVX = %d\n", (i+1), q_temp, unstriped[q_temp], unstriped_AVX[q_temp], ox->R, ox->R_AVX);
+    }
+  }
+
+  /* Line 2: I cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_IQ(bck, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+ for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_IQ(bck_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+ // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("backward filter L-type I miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", (i+1), q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+
+ /* Line 3: D cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_DQ(bck, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+ for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_DQ(bck_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+ // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("backward filter L-type D miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", (i+1), q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+  free(unstriped);
+  free(unstriped_AVX); 
+
+#endif      
 
   /* If there's any checkpointing, there's an L-1 row to fill now. */
   if (ox->Rb+ox->Rc > 0)
     {
+#ifdef p7_build_SSE      
       /* Compute fwd[L-1] from last checkpoint, which we know is fwd[L-2] */
       dpp = (__m128 *) ox->dpf[ox->R0+ox->R-1];  /* fwd[L-2] values, already known        */
       fwd = (__m128 *) ox->dpf[ox->R0+ox->R];    /* get free row memory from top of stack */
@@ -312,6 +853,93 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
       if ( (status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
       dpp = bck;
       i--;			/* i is now L-2 if there's checkpointing; else it's L-1 */
+#endif
+
+
+#ifdef p7_build_AVX2     
+      /* Compute fwd[L-1] from last checkpoint, which we know is fwd[L-2] */
+      dpp_AVX = (__m256 *) ox->dpf_AVX[ox->R0+ox->R_AVX-1];  /* fwd[L-2] values, already known        */
+      fwd_AVX = (__m256 *) ox->dpf_AVX[ox->R0+ox->R_AVX];    /* get free row memory from top of stack */
+      forward_row_AVX(dsq[i_AVX], om, dpp_AVX, fwd_AVX, Q_AVX);      /* calculate fwd[L-1]                    */
+
+
+      /* Compute bck[L-1] from bck[L]. */
+      xf_AVX  = (float *) (fwd_AVX + Q_AVX*p7C_NSCELLS);
+      dpp_AVX = (__m256 *) ox->dpf_AVX[(i_AVX+1)%2]; 
+      bck_AVX = (__m256 *) ox->dpf_AVX[i_AVX%2];             /* get space for bck[L-1]                */
+      backward_row_main_AVX(dsq[i_AVX+1], om, dpp_AVX, bck_AVX, Q_AVX, xf_AVX[p7C_SCALE]);
+
+      /* And decode. */
+      if ( (status = posterior_decode_row_AVX(ox, i_AVX, sm, sm_thresh, Tvalue_AVX)) != eslOK) return status;
+      dpp_AVX = bck_AVX;
+      i_AVX--;      /* i is now L-2 if there's checkpointing; else it's L-1 */
+#endif
+
+      #ifdef p7_build_check_AVX2  // Check that the computed rows match
+
+    float *unstriped, *unstriped_AVX;
+    union { __m128 v; float x[4]; } tmp_check;
+    union { __m256 v; float x[8]; } tmp_check_AVX;
+
+    unstriped = malloc( sizeof(float) * ((Q*4)+1));  // Yes, these allocates are slow,but this is check code that won't be
+    unstriped_AVX = malloc( sizeof(float) * ((Q_AVX*8)+1));  // compiled in production
+    int q_temp;
+    int z_temp;
+    unstriped[0] = 0.;
+    unstriped_AVX[0] = 0.;
+
+    /* Line 1. M cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_MQ(bck, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+  for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_MQ(bck_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+
+  // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("backward filter main1-type M miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", (i+1), q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+
+  /* Line 2: I cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_IQ(bck, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+ for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_IQ(bck_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+ // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("backward filter main1-type I miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", (i+1), q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+
+ /* Line 3: D cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_DQ(bck, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+ for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_DQ(bck_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+ // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("backward filter main1-type D miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", (i+1), q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+  free(unstriped);
+  free(unstriped_AVX); 
+
+#endif      
     }
 
   /* Main loop for checkpointed regions (b,c) */
@@ -319,11 +947,12 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
     {				/* i=L-2 as we enter here, and <dpp> is on bck[L-1] */
       w = (b <= ox->Rc ? b+1 : ox->Lb);
 
+#ifdef p7_build_SSE
       /* We know current row i (r=R0+R-1) ends a block and is checkpointed in fwd. */
       ox->R--;
       fwd = (__m128 *) ox->dpf[ox->R0+ox->R];      /* pop checkpointed forward row off "stack" */
       xf  = (float *) (fwd + Q*p7C_NSCELLS);
-
+      Tvalue = xf[p7C_C] * om->xf[p7O_C][p7O_MOVE];  /* i.e. scaled fwd[L] val at T state = scaled overall score */
       /* Calculate bck[i]; <dpp> is already bck[i+1] */
       bck = (__m128 *) ox->dpf[i%2];	    /* get available tmp memory for row     */
       backward_row_main(dsq[i+1], om, dpp, bck, Q, xf[p7C_SCALE]);
@@ -360,17 +989,133 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
 	  if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i2, fwd, "f2 X"); p7_checkptmx_DumpFBRow(ox, i2, bck, "bck"); }
 	  if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i2, ox->bcksc); 
 #endif
+
 	  if ((status = posterior_decode_row(ox, i2, sm, sm_thresh, Tvalue)) != eslOK) return status;
 	  dpp = bck;
 	}
       i -= w;
+#endif
+
+#ifdef p7_build_AVX2
+      /* We know current row i (r=R0+R-1) ends a block and is checkpointed in fwd. */
+      ox->R_AVX--;
+      fwd_AVX = (__m256 *) ox->dpf_AVX[ox->R0+ox->R_AVX];      /* pop checkpointed forward row off "stack" */
+      xf_AVX  = (float *) (fwd_AVX + Q_AVX*p7C_NSCELLS);
+
+      /* Calculate bck[i]; <dpp> is already bck[i+1] */
+      bck_AVX = (__m256 *) ox->dpf_AVX[i_AVX%2];      /* get available tmp memory for row     */
+      backward_row_main_AVX(dsq[i_AVX+1], om, dpp_AVX, bck_AVX, Q_AVX, xf_AVX[p7C_SCALE]);
+
+      /* And decode checkpointed row i. */
+      if ( (status = posterior_decode_row_AVX(ox, i_AVX, sm, sm_thresh, Tvalue_AVX)) != eslOK) return status;
+      
+      /* The rest of the rows in the block weren't checkpointed.
+       * Compute Forwards from last checkpoint ...
+       */
+      dpp_AVX = (__m256 *) ox->dpf_AVX[ox->R0+ox->R_AVX-1];       /* get last Fwd checkpoint. */
+      for (i2 = i_AVX-w+1; i2 <= i_AVX-1; i2++)
+  {
+    fwd_AVX = (__m256 *) ox->dpf_AVX[ox->R0+ox->R_AVX]; ox->R_AVX++;  /* push new forward row on "stack"     */
+    forward_row_AVX(dsq[i2], om, dpp_AVX, fwd_AVX, Q_AVX);
+    dpp_AVX = fwd_AVX;    
+  }
+
+      /* ... and compute Backwards over the block we just calculated, while decoding. */
+      dpp_AVX = bck_AVX;
+      for (i2 = i_AVX-1; i2 >= i_AVX-w+1; i2--)
+  {
+    ox->R_AVX--;
+    fwd_AVX = (__m256 *) ox->dpf_AVX[ox->R0+ox->R_AVX]; /* pop just-calculated forward row i2 off "stack" */
+    xf_AVX  = (float *) (fwd_AVX + Q_AVX*p7C_NSCELLS);
+    bck_AVX = (__m256 *) ox->dpf_AVX[i2%2];   /* get available for calculating bck[i2]          */
+    backward_row_main_AVX(dsq[i2+1], om, dpp_AVX, bck_AVX, Q_AVX, xf_AVX[p7C_SCALE]);
+
+    if ((status = posterior_decode_row_AVX(ox, i2, sm, sm_thresh, Tvalue_AVX)) != eslOK) return status;
+    dpp_AVX = bck_AVX;
+  }
+      i_AVX -= w;
+#endif
+
+#ifdef p7_build_check_AVX2  // Check that the computed rows match
+
+    float *unstriped, *unstriped_AVX;
+    union { __m128 v; float x[4]; } tmp_check;
+    union { __m256 v; float x[8]; } tmp_check_AVX;
+
+    unstriped = malloc( sizeof(float) * ((Q*4)+1));  // Yes, these allocates are slow,but this is check code that won't be
+    unstriped_AVX = malloc( sizeof(float) * ((Q_AVX*8)+1));  // compiled in production
+    int q_temp;
+    int z_temp;
+    unstriped[0] = 0.;
+    unstriped_AVX[0] = 0.;
+
+    /* Line 1. M cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_MQ(bck, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+  for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_MQ(bck_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+
+  // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("backward filter main2-type M miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", i, q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+
+  /* Line 2: I cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_IQ(bck, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+ for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_IQ(bck_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+ // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("backward filter main2-type I miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", i, q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+
+ /* Line 3: D cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_DQ(bck, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+ for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_DQ(bck_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+ // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("backward filter main2-type D miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", i, q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+  free(unstriped);
+  free(unstriped_AVX); 
+
+#endif      
     }
    /* now i=La as we leave the checkpointed regions; or i=L-1 if there was no checkpointing */
-   
+ #ifndef p7_build_SSE // need to set up the i variable for next loop
+    #ifdef p7_build_AVX2
+      int i = i_AVX;
+    #else
+      int i = i_AVX_512;
+    #endif
+#endif
+
 
    /* The uncheckpointed "a" region */
    for (; i >= 1; i--)
      {
+#ifdef p7_build_SSE
        ox->R--; 
        fwd = (__m128 *) ox->dpf[ox->R0+ox->R]; /* pop off calculated row fwd[i]           */
        xf  = (float *) (fwd + Q*p7C_NSCELLS);
@@ -383,8 +1128,85 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
 #endif
        if ((status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
        dpp = bck;
-     }
+#endif
+#ifdef p7_build_AVX2
+     // Use regular i, not i_AVX here because it's the loop iterator variable
+       ox->R_AVX--; 
+       fwd_AVX = (__m256 *) ox->dpf_AVX[ox->R0+ox->R_AVX]; /* pop off calculated row fwd[i]           */
+       xf_AVX  = (float *) (fwd_AVX + Q_AVX*p7C_NSCELLS);
+       bck_AVX = (__m256 *) ox->dpf_AVX[i%2];        /* get open space for bck[i]               */
+       backward_row_main_AVX(dsq[i+1], om, dpp_AVX, bck_AVX, Q_AVX, xf_AVX[p7C_SCALE]);
+ 
+       if ((status = posterior_decode_row_AVX(ox, i, sm, sm_thresh, Tvalue_AVX)) != eslOK) return status;
+       dpp_AVX = bck_AVX;
+#endif
 
+       #ifdef p7_build_check_AVX2  // Check that the computed rows match
+
+    float *unstriped, *unstriped_AVX;
+    union { __m128 v; float x[4]; } tmp_check;
+    union { __m256 v; float x[8]; } tmp_check_AVX;
+
+    unstriped = malloc( sizeof(float) * ((Q*4)+1));  // Yes, these allocates are slow,but this is check code that won't be
+    unstriped_AVX = malloc( sizeof(float) * ((Q_AVX*8)+1));  // compiled in production
+    int q_temp;
+    int z_temp;
+    unstriped[0] = 0.;
+    unstriped_AVX[0] = 0.;
+
+    /* Line 1. M cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_MQ(bck, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+  for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_MQ(bck_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+
+  // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("backward filter main3-type M miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", i, q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+
+  /* Line 2: I cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_IQ(bck, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+ for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_IQ(bck_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+ // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("backward filter main3-type I miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", i, q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+
+ /* Line 3: D cells: unpack, unstripe, print */
+  for (q_temp = 0; q_temp < Q; q_temp++) {
+    tmp_check.v = P7C_DQ(bck, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF; z_temp++) unstriped[q_temp+Q*z_temp+1] = tmp_check.x[z_temp];
+  }
+ for (q_temp = 0; q_temp < Q_AVX; q_temp++) {
+    tmp_check_AVX.v = P7C_DQ(bck_AVX, q_temp);
+    for (z_temp = 0; z_temp < p7_VNF_AVX; z_temp++) unstriped_AVX[q_temp+Q_AVX*z_temp+1] = tmp_check_AVX.x[z_temp];
+  }
+ // now, compare
+  for(q_temp = 0; q_temp < Q * p7_VNF; q_temp++){
+    if(fabs(unstriped[q_temp] - unstriped_AVX[q_temp]) > fabs(unstriped[q_temp]/ 100)){
+      printf("backward filter main3-type D miss-match at row %d, position %d, %.8f (SSE) vs. %.8f (AVX)\n", i, q_temp, unstriped[q_temp], unstriped_AVX[q_temp]);
+    }
+  }
+  free(unstriped);
+  free(unstriped_AVX); 
+
+#endif      
+     }
 #ifdef p7_DEBUGGING
    /* To get the backward score, we need to complete row 0 too, where
     * only the N and B states are reachable: B from Mk, and N from B.
@@ -426,6 +1248,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
  * Returns log(scalevalue), for the caller to accumulate
  * as it accumulates the total Forward score.
  */
+#ifdef p7_build_SSE 
 static inline float
 forward_row(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dpc, int Q)
 {
@@ -568,7 +1391,311 @@ forward_row(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dpc, i
 
   return logf(xc[p7C_SCALE]);
 }
+#endif
 
+#ifdef p7_build_AVX2
+static inline float
+forward_row_AVX(ESL_DSQ xi, const P7_OPROFILE *om, const __m256 *dpp, __m256 *dpc, int Q)
+{
+  const    __m256 *rp   = om->rfv_AVX[xi];
+  const    __m256 zerov = _mm256_setzero_ps();
+  const    __m256 *tp   = om->tfv_AVX;
+  const    float  *xp   = (float *) (dpp + Q * p7C_NSCELLS);
+  float           *xc   = (float *) (dpc + Q * p7C_NSCELLS);
+  __m256          dcv   = _mm256_setzero_ps();
+  __m256          xEv   = _mm256_setzero_ps();
+  __m256          xBv   = _mm256_set1_ps(xp[p7C_B]);
+  __m256 mpv, dpv, ipv;
+  __m256 sv;
+  int    q;
+  int    j;
+
+  mpv = esl_avx_leftshift_ps(P7C_MQ(dpp, Q-1)); 
+  ipv = esl_avx_leftshift_ps(P7C_IQ(dpp, Q-1)); 
+  dpv = esl_avx_leftshift_ps(P7C_DQ(dpp, Q-1)); 
+
+  /* DP recursion for main states, all but the D->D path */
+  for (q = 0; q < Q; q++)
+    {
+      /* Calculate M(i,q); hold it in tmp var <sv> */
+      sv     =                _mm256_mul_ps(xBv, *tp);  tp++; /* B->Mk    */
+      sv     = _mm256_add_ps(sv, _mm256_mul_ps(mpv, *tp)); tp++; /* Mk-1->Mk */
+      sv     = _mm256_add_ps(sv, _mm256_mul_ps(ipv, *tp)); tp++; /* Ik-1->Mk */
+      sv     = _mm256_add_ps(sv, _mm256_mul_ps(dpv, *tp)); tp++; /* Dk-1->Dk */
+      sv     = _mm256_mul_ps(sv, *rp);                  rp++; /* e_Mk(x_i)*/
+      xEv    = _mm256_add_ps(xEv, sv);        /* Mk->E    */
+
+      /* Advance on previous row, picking up M,D,I values. */
+      mpv = *dpp++;
+      dpv = *dpp++;
+      ipv = *dpp++;
+
+      /* Delayed store of M,D */
+      P7C_MQ(dpc, q) = sv;    
+      P7C_DQ(dpc, q) = dcv;
+
+      /* Partial calculation of *next* D(i,q+1); M->D only; delay storage, hold in dcv */
+      dcv    = _mm256_mul_ps(sv, *tp); tp++;
+
+      /* Calculate and store I(i,q) */
+      sv             =                _mm256_mul_ps(mpv, *tp);  tp++;
+      P7C_IQ(dpc, q) = _mm256_add_ps(sv, _mm256_mul_ps(ipv, *tp)); tp++;
+    }
+
+  /* Now the DD paths. We would rather not serialize them but 
+   * in an accurate Forward calculation, we have few options.
+   * dcv has carried through from end of q loop above; store it 
+   * in first pass, we add M->D and D->D path into DMX.
+   */ 
+  /* We're almost certainly're obligated to do at least one complete 
+   * DD path to be sure: 
+   */
+  dcv            = esl_avx_leftshift_ps(dcv);  // Function naming issue: The esl_sse_(right/left)shift_ps functions 
+  // describe the direction of logical shift of the vectors.  The esl_avx_leftshift functions that I wrote for
+  // other filters talk about the direction of the shift instruction, which is influenced by the little-endian 
+  // nature of x86.  For consistency with myself, I'm sticking to function names that match the direction of the 
+  // shift instruction
+  P7C_DQ(dpc, 0) = zerov;
+  tp             = om->tfv_AVX + 7*Q; /* set tp to start of the DD's */
+  for (q = 0; q < Q; q++) 
+    {
+      P7C_DQ(dpc,q) = _mm256_add_ps(dcv, P7C_DQ(dpc,q)); 
+      dcv           = _mm256_mul_ps(P7C_DQ(dpc,q), *tp); tp++; /* extend DMO(q), so we include M->D and D->D paths */
+    }
+  
+  /* now. on small models, it seems best (empirically) to just go
+   * ahead and serialize. on large models, we can do a bit better,
+   * by testing for when dcv (DD path) accrued to DMO(q) is below
+   * machine epsilon for all q, in which case we know DMO(q) are all
+   * at their final values. The tradeoff point is (empirically) somewhere around M=100,
+   * at least on my desktop. We don't worry about the conditional here;
+   * it's outside any inner loops.
+   */
+  if (om->M < 100)
+    {     /* Fully serialized version */
+      for (j = 1; j < 8 /*was 4 */; j++)  /* What is this number?  Should it be vector length? Guess yes because of the 
+      rightshift inside the loop*/
+  { 
+    dcv = esl_avx_leftshift_ps(dcv);
+    tp  = om->tfv_AVX + 7*Q;  /* reset tp to start of the DD's */
+    for (q = 0; q < Q; q++) 
+      { /* note, extend dcv, not DMO(q); only adding DD paths now */
+        P7C_DQ(dpc,q) = _mm256_add_ps(dcv, P7C_DQ(dpc,q)); 
+        dcv           = _mm256_mul_ps(dcv, *tp);   tp++; 
+      }     
+  }
+    } 
+  else
+    {     /* Slightly parallelized version, but which incurs some overhead */
+      for (j = 1; j < 8; j++) /* ditto for this number, see previous j loop */
+  {
+    register __m256 cv = zerov; /* keeps track of whether any DD's change DMO(q) */
+
+    dcv = esl_avx_leftshift_ps(dcv);
+    tp  = om->tfv_AVX + 7*Q;  /* set tp to start of the DD's */
+    for (q = 0; q < Q; q++) 
+      { /* using cmpgt below tests if DD changed any DMO(q) *without* conditional branch */
+        sv            = _mm256_add_ps(dcv, P7C_DQ(dpc,q)); 
+        cv            = _mm256_or_ps(cv, _mm256_cmp_ps(sv, P7C_DQ(dpc,q), 14));   // 14 = code for compare greater than
+        P7C_DQ(dpc,q) = sv;                                     /* store new DMO(q) */
+        dcv           = _mm256_mul_ps(dcv, *tp);   tp++;                 /* note, extend dcv, not DMO(q) */
+      }     
+    if (! _mm256_movemask_ps(cv)) break; /* DD's didn't change any DMO(q)? Then done, break out. */
+  }
+    }
+  
+  /* Add Dk's to xEv */
+  for (q = 0; q < Q; q++) xEv = _mm256_add_ps(P7C_DQ(dpc,q), xEv);
+
+  /* Specials, in order: E N JJ J B CC C */
+  /* xc, xp are pointers into vectors provided as inputs, so should be no problem with running multiple
+  ISAs at same time */
+
+  esl_avx_hsum_ps(xEv, &xc[p7C_E]);  
+  xc[p7C_N]  =                                       xp[p7C_N] * om->xf[p7O_N][p7O_LOOP];
+  xc[p7C_JJ] =                                       xp[p7C_J] * om->xf[p7O_J][p7O_LOOP];
+  xc[p7C_J]  = xc[p7C_JJ]                          + xc[p7C_E] * om->xf[p7O_E][p7O_LOOP];
+  xc[p7C_B]  = xc[p7C_N] * om->xf[p7O_N][p7O_MOVE] + xc[p7C_J] * om->xf[p7O_J][p7O_MOVE];
+  xc[p7C_CC] =                                       xp[p7C_C] * om->xf[p7O_C][p7O_LOOP];
+  xc[p7C_C]  = xc[p7C_CC]                          + xc[p7C_E] * om->xf[p7O_E][p7O_MOVE];
+
+  /* Sparse rescaling. xE above threshold? Then trigger a rescaling event.            */
+  if (xc[p7C_E] > 1.0e4)  /* that's a little less than e^10, ~10% of our dynamic range */
+    {
+      xc[p7C_N]  /= xc[p7C_E];
+      xc[p7C_JJ] /= xc[p7C_E];
+      xc[p7C_J]  /= xc[p7C_E];
+      xc[p7C_B]  /= xc[p7C_E];
+      xc[p7C_CC] /= xc[p7C_E];
+      xc[p7C_C]  /= xc[p7C_E];
+      xEv = _mm256_set1_ps(1.0 / xc[p7C_E]);
+
+      for (q = 0; q < Q; q++)
+  {
+    P7C_MQ(dpc,q) = _mm256_mul_ps(P7C_MQ(dpc,q), xEv);
+    P7C_DQ(dpc,q) = _mm256_mul_ps(P7C_DQ(dpc,q), xEv);
+    P7C_IQ(dpc,q) = _mm256_mul_ps(P7C_IQ(dpc,q), xEv);
+  }
+
+      xc[p7C_SCALE] = xc[p7C_E];
+      xc[p7C_E]     = 1.0f;
+    }
+  else xc[p7C_SCALE] = 1.0f;
+
+  return logf(xc[p7C_SCALE]);
+}
+#endif
+#ifdef p7_build_AVX512
+static inline float
+forward_row_AVX_512(ESL_DSQ xi, const P7_OPROFILE *om, const __m512 *dpp, __m512 *dpc, int Q)
+{
+  const    __m512 *rp   = om->rfv_AVX_512[xi];
+  const    __m512 zerov = _mm512_setzero_ps();
+  const    __m512 *tp   = om->tfv_AVX_512;
+  const    float  *xp   = (float *) (dpp + Q * p7C_NSCELLS);
+  float           *xc   = (float *) (dpc + Q * p7C_NSCELLS);
+  __m512          dcv   = _mm512_setzero_ps();
+  __m512          xEv   = _mm512_setzero_ps();
+  __m512          xBv   = _mm512_set1_ps(xp[p7C_B]);
+  __m512 mpv, dpv, ipv;
+  __m512 sv;
+  int    q;
+  int    j;
+
+  mpv = esl_avx_512_leftshift_ps(P7C_MQ(dpp, Q-1)); 
+  ipv = esl_avx_512_leftshift_ps(P7C_IQ(dpp, Q-1)); 
+  dpv = esl_avx_512_leftshift_ps(P7C_DQ(dpp, Q-1)); 
+
+  /* DP recursion for main states, all but the D->D path */
+  for (q = 0; q < Q; q++)
+    {
+      /* Calculate M(i,q); hold it in tmp var <sv> */
+      sv     =                _mm512_mul_ps(xBv, *tp);  tp++; /* B->Mk    */
+      sv     = _mm512_add_ps(sv, _mm512_mul_ps(mpv, *tp)); tp++; /* Mk-1->Mk */
+      sv     = _mm512_add_ps(sv, _mm512_mul_ps(ipv, *tp)); tp++; /* Ik-1->Mk */
+      sv     = _mm512_add_ps(sv, _mm512_mul_ps(dpv, *tp)); tp++; /* Dk-1->Dk */
+      sv     = _mm512_mul_ps(sv, *rp);                  rp++; /* e_Mk(x_i)*/
+      xEv    = _mm512_add_ps(xEv, sv);        /* Mk->E    */
+
+      /* Advance on previous row, picking up M,D,I values. */
+      mpv = *dpp++;
+      dpv = *dpp++;
+      ipv = *dpp++;
+
+      /* Delayed store of M,D */
+      P7C_MQ(dpc, q) = sv;    
+      P7C_DQ(dpc, q) = dcv;
+
+      /* Partial calculation of *next* D(i,q+1); M->D only; delay storage, hold in dcv */
+      dcv    = _mm512_mul_ps(sv, *tp); tp++;
+
+      /* Calculate and store I(i,q) */
+      sv             =                _mm512_mul_ps(mpv, *tp);  tp++;
+      P7C_IQ(dpc, q) = _mm512_add_ps(sv, _mm512_mul_ps(ipv, *tp)); tp++;
+    }
+
+  /* Now the DD paths. We would rather not serialize them but 
+   * in an accurate Forward calculation, we have few options.
+   * dcv has carried through from end of q loop above; store it 
+   * in first pass, we add M->D and D->D path into DMX.
+   */ 
+  /* We're almost certainly're obligated to do at least one complete 
+   * DD path to be sure: 
+   */
+  dcv            = esl_avx_512_leftshift_ps(dcv);  // Function naming issue: The esl_sse_(right/left)shift_ps functions 
+  // describe the direction of logical shift of the vectors.  The esl_avx_leftshift functions that I wrote for
+  // other filters talk about the direction of the shift instruction, which is influenced by the little-endian 
+  // nature of x86.  For consistency with myself, I'm sticking to function names that match the direction of the 
+  // shift instruction
+  P7C_DQ(dpc, 0) = zerov;
+  tp             = om->tfv_AVX_512 + 7*Q; /* set tp to start of the DD's */
+  for (q = 0; q < Q; q++) 
+    {
+      P7C_DQ(dpc,q) = _mm512_add_ps(dcv, P7C_DQ(dpc,q)); 
+      dcv           = _mm512_mul_ps(P7C_DQ(dpc,q), *tp); tp++; /* extend DMO(q), so we include M->D and D->D paths */
+    }
+  
+  /* now. on small models, it seems best (empirically) to just go
+   * ahead and serialize. on large models, we can do a bit better,
+   * by testing for when dcv (DD path) accrued to DMO(q) is below
+   * machine epsilon for all q, in which case we know DMO(q) are all
+   * at their final values. The tradeoff point is (empirically) somewhere around M=100,
+   * at least on my desktop. We don't worry about the conditional here;
+   * it's outside any inner loops.
+   */
+  if (om->M < 100)
+    {     /* Fully serialized version */
+      for (j = 1; j < 16; j++)  
+  { 
+    dcv = esl_avx_512_leftshift_ps(dcv);
+    tp  = om->tfv_AVX_512 + 7*Q;  /* reset tp to start of the DD's */
+    for (q = 0; q < Q; q++) 
+      { /* note, extend dcv, not DMO(q); only adding DD paths now */
+        P7C_DQ(dpc,q) = _mm512_add_ps(dcv, P7C_DQ(dpc,q)); 
+        dcv           = _mm512_mul_ps(dcv, *tp);   tp++; 
+      }     
+  }
+    } 
+  else
+    {     /* Slightly parallelized version, but which incurs some overhead */
+      for (j = 1; j < 16; j++) 
+  {
+    register __mmask16 cv = 0; /* keeps track of whether any DD's change DMO(q) */
+
+    dcv = esl_avx_512_leftshift_ps(dcv);
+    tp  = om->tfv_AVX_512 + 7*Q;  /* set tp to start of the DD's */
+    for (q = 0; q < Q; q++) 
+      { /* using cmpgt below tests if DD changed any DMO(q) *without* conditional branch */
+        sv            = _mm512_add_ps(dcv, P7C_DQ(dpc,q)); 
+        cv            = _mm512_kor(cv,_mm512_cmp_ps_mask(sv, P7C_DQ(dpc,q), 14));   // 14 = code for compare greater than
+        P7C_DQ(dpc,q) = sv;                                     /* store new DMO(q) */
+        dcv           = _mm512_mul_ps(dcv, *tp);   tp++;                 /* note, extend dcv, not DMO(q) */
+      }     
+    if (! cv) break; /* DD's didn't change any DMO(q)? Then done, break out. */
+  }
+    }
+  
+  /* Add Dk's to xEv */
+  for (q = 0; q < Q; q++) xEv = _mm512_add_ps(P7C_DQ(dpc,q), xEv);
+
+  /* Specials, in order: E N JJ J B CC C */
+  /* xc, xp are pointers into vectors provided as inputs, so should be no problem with running multiple
+  ISAs at same time */
+
+  esl_avx_512_hsum_ps(xEv, &xc[p7C_E]);  
+  xc[p7C_N]  =                                       xp[p7C_N] * om->xf[p7O_N][p7O_LOOP];
+  xc[p7C_JJ] =                                       xp[p7C_J] * om->xf[p7O_J][p7O_LOOP];
+  xc[p7C_J]  = xc[p7C_JJ]                          + xc[p7C_E] * om->xf[p7O_E][p7O_LOOP];
+  xc[p7C_B]  = xc[p7C_N] * om->xf[p7O_N][p7O_MOVE] + xc[p7C_J] * om->xf[p7O_J][p7O_MOVE];
+  xc[p7C_CC] =                                       xp[p7C_C] * om->xf[p7O_C][p7O_LOOP];
+  xc[p7C_C]  = xc[p7C_CC]                          + xc[p7C_E] * om->xf[p7O_E][p7O_MOVE];
+
+  /* Sparse rescaling. xE above threshold? Then trigger a rescaling event.            */
+  if (xc[p7C_E] > 1.0e4)  /* that's a little less than e^10, ~10% of our dynamic range */
+    {
+      xc[p7C_N]  /= xc[p7C_E];
+      xc[p7C_JJ] /= xc[p7C_E];
+      xc[p7C_J]  /= xc[p7C_E];
+      xc[p7C_B]  /= xc[p7C_E];
+      xc[p7C_CC] /= xc[p7C_E];
+      xc[p7C_C]  /= xc[p7C_E];
+      xEv = _mm512_set1_ps(1.0 / xc[p7C_E]);
+
+      for (q = 0; q < Q; q++)
+  {
+    P7C_MQ(dpc,q) = _mm512_mul_ps(P7C_MQ(dpc,q), xEv);
+    P7C_DQ(dpc,q) = _mm512_mul_ps(P7C_DQ(dpc,q), xEv);
+    P7C_IQ(dpc,q) = _mm512_mul_ps(P7C_IQ(dpc,q), xEv);
+  }
+
+      xc[p7C_SCALE] = xc[p7C_E];
+      xc[p7C_E]     = 1.0f;
+    }
+  else xc[p7C_SCALE] = 1.0f;
+
+  return logf(xc[p7C_SCALE]);
+}
+#endif
 
 /* backward_row_main()
  * 
@@ -589,6 +1716,7 @@ forward_row(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dpc, i
  * done for efficiency; better to add them in once and be done with
  * it.
  */
+#ifdef p7_build_SSE 
 static inline void
 backward_row_main(ESL_DSQ xi, const P7_OPROFILE *om, __m128 *dpp, __m128 *dpc, int Q, float scalefactor)
 {
@@ -651,7 +1779,72 @@ backward_row_main(ESL_DSQ xi, const P7_OPROFILE *om, __m128 *dpp, __m128 *dpc, i
   backward_row_finish(om, dpc, Q, dcv);
   backward_row_rescale(xc, dpc, Q, scalefactor);
 }
+#endif
 
+#ifdef p7_build_AVX2
+static inline void
+backward_row_main_AVX(ESL_DSQ xi, const P7_OPROFILE *om, __m256 *dpp, __m256 *dpc, int Q, float scalefactor)
+{
+  const __m256 *rp       = om->rfv_AVX[xi];           /* emission scores on row i+1, for bck; xi = dsq[i+1]  */
+  float       * const xc = (float *) (dpc + Q * p7C_NSCELLS); /* E N JJ J B CC C SCALE */
+  const float * const xp = (float *) (dpp + Q * p7C_NSCELLS);
+  const __m256 *tp, *tpdd;
+  const __m256  zerov = _mm256_setzero_ps();
+  __m256        xBv;
+  __m256       *dp;
+  __m256        xEv;
+  __m256        dcv, mcv, ipv, mpv;
+  int           q;
+  __m256 tmmv, timv, tdmv;           /* copies of transition prob quads; a leftshift is needed as boundary cond */
+ 
+  /* On "previous" row i+1: include emission prob, and sum to get xBv, xB. 
+   * This invalidates <dpp> as a backwards row; its values are now
+   * intermediates in the calculation of the current <dpc> row.
+   */
+  dp  = dpp;
+  xBv = zerov;
+  tp  = om->tfv_AVX;    /* on first transition vector */
+  for (q = 0; q < Q; q++)
+    {
+      *dp = _mm256_mul_ps(*dp, *rp); rp++;
+      xBv = _mm256_add_ps(xBv, _mm256_mul_ps(*dp, *tp)); dp+= p7C_NSCELLS; tp += 7;
+    }
+
+  /* Specials. Dependencies dictate partial order C,CC,B < N,J,JJ < E */
+  xc[p7C_C] = xc[p7C_CC] = xp[p7C_C] * om->xf[p7O_C][p7O_LOOP];
+  esl_avx_hsum_ps(xBv, &(xc[p7C_B]));
+  xc[p7C_J] = xc[p7C_JJ] = xc[p7C_B] * om->xf[p7O_J][p7O_MOVE] + xp[p7C_J] * om->xf[p7O_J][p7O_LOOP];
+  xc[p7C_N]              = xc[p7C_B] * om->xf[p7O_N][p7O_MOVE] + xp[p7C_N] * om->xf[p7O_N][p7O_LOOP];
+  xc[p7C_E]              = xc[p7C_C] * om->xf[p7O_E][p7O_MOVE] + xc[p7C_J] * om->xf[p7O_E][p7O_LOOP];
+
+  /* Initialize for the row calculation */
+  mpv  = esl_avx_rightshift_ps(*dpp      ); /* [1 5 9 13] -> [5 9 13 x], M(i+1,k+1) * e(M_k+1, x_{i+1}) */
+  tmmv = esl_avx_rightshift_ps(om->tfv_AVX[1]);
+  timv = esl_avx_rightshift_ps(om->tfv_AVX[2]);
+  tdmv = esl_avx_rightshift_ps(om->tfv_AVX[3]);
+  xEv  = _mm256_set1_ps(xc[p7C_E]);
+  tp   = om->tfv_AVX + 7*Q - 1;
+  tpdd = tp + Q;
+  dcv  = zerov;
+  for (q = Q-1; q >= 0; q--)
+    {
+      ipv                 = P7C_IQ(dpp, q);
+      P7C_IQ(dpc,q)       = _mm256_add_ps( _mm256_mul_ps(ipv, *tp),   _mm256_mul_ps(mpv, timv)); tp--;   /* II,IM; I is done         */
+      mcv                 = _mm256_add_ps( _mm256_mul_ps(ipv, *tp),   _mm256_mul_ps(mpv, tmmv)); tp-=2;  /* MI,MM; ME,MD remain      */
+      dcv                 = _mm256_add_ps( _mm256_mul_ps(dcv, *tpdd), _mm256_mul_ps(mpv, tdmv)); tpdd--; /* DM and one segment of DD */
+
+      P7C_DQ(dpc,q) = dcv = _mm256_add_ps( xEv, dcv);
+      P7C_MQ(dpc,q)       = _mm256_add_ps( xEv, mcv);
+
+      mpv  = P7C_MQ(dpp, q);
+      tdmv = *tp; tp--;
+      timv = *tp; tp--;
+      tmmv = *tp; tp-=2;
+    }
+  backward_row_finish_AVX(om, dpc, Q, dcv);
+  backward_row_rescale_AVX(xc, dpc, Q, scalefactor);
+}
+#endif
 
 /* backward_row_L()
  * 
@@ -659,6 +1852,7 @@ backward_row_main(ESL_DSQ xi, const P7_OPROFILE *om, __m128 *dpp, __m128 *dpc, i
  * a special case because the matrix <ox> has no 'previous' row L+1.
  * Otherwise identical to backward_row_main().
  */
+ #ifdef p7_build_SSE
 static inline void
 backward_row_L(const P7_OPROFILE *om,  __m128 *dpc, int Q, float scalefactor)
 {
@@ -689,7 +1883,39 @@ backward_row_L(const P7_OPROFILE *om,  __m128 *dpc, int Q, float scalefactor)
   backward_row_finish(om, dpc, Q, dcv);
   backward_row_rescale(xc, dpc, Q, scalefactor);
 }
+#endif
+#ifdef p7_build_AVX2
+static inline void
+backward_row_L_AVX(const P7_OPROFILE *om,  __m256 *dpc, int Q, float scalefactor)
+{
+  const __m256  zerov = _mm256_setzero_ps();
+  float        *xc    = (float *) (dpc + Q * p7C_NSCELLS);
+  const __m256 *tpdd;
+  __m256       *dp;
+  __m256       xEv, dcv;
+  int          q;
 
+  /* Backwards from T <- C,CC <- E;  all other specials unreachable, impossible on row L.
+   * specials are stored in order E N JJ J B CC C.  
+   */
+  xc[p7C_C] = xc[p7C_CC] = om->xf[p7O_C][p7O_MOVE];
+  xc[p7C_B] = xc[p7C_J] = xc[p7C_JJ] = xc[p7C_N] = 0.0;
+  xc[p7C_E] = xc[p7C_C] * om->xf[p7O_E][p7O_MOVE];
+
+  xEv  = _mm256_set1_ps(xc[p7C_E]);
+  dp   = dpc + Q*p7C_NSCELLS - 1;
+  tpdd = om->tfv_AVX + 8*Q - 1;
+  dcv  = zerov;
+  for (q = Q-1; q >= 0; q--) 
+    {
+      *dp--       = zerov;                                  /* I */
+      *dp-- = dcv = _mm256_add_ps(xEv, _mm256_mul_ps(dcv, *tpdd)); tpdd--;  /* D */
+      *dp--       = xEv;                                        /* M */
+    }
+  backward_row_finish_AVX(om, dpc, Q, dcv);
+  backward_row_rescale_AVX(xc, dpc, Q, scalefactor);
+}
+#endif
 
 
 /* backward_row_finish()
@@ -715,6 +1941,7 @@ backward_row_L(const P7_OPROFILE *om,  __m128 *dpc, int Q, float scalefactor)
  * Q     = width of rows in # vectors; ox->Qf
  * dcv   = the first D vector [1 5 9 13] from caller's earlier calculation
  */
+#ifdef p7_build_SSE 
 static inline void
 backward_row_finish(const P7_OPROFILE *om, __m128 *dpc, int Q, __m128 dcv)
 {
@@ -777,7 +2004,71 @@ backward_row_finish(const P7_OPROFILE *om, __m128 *dpc, int Q, __m128 dcv)
       dcv  = *(dp+1);                               dp -= p7C_NSCELLS;
     }
 }
+#endif
+#ifdef p7_build_AVX2
+static inline void
+backward_row_finish_AVX(const P7_OPROFILE *om, __m256 *dpc, int Q, __m256 dcv)
+{
+  const __m256 zerov = _mm256_setzero_ps();
+  const __m256 *tp;
+  __m256       *dp;
+  int           j,q;
+  
+  /* See notes on forward calculation: 
+   * we have two options, either full serialization
+   * or on long models, it becomes worthwhile to
+   * check that all propagating DD contributions have
+   * become negligble.
+   */
+  if (om->M < 100)
+    { /* Full serialization */
+      for (j = 1; j < 8; j++)
+  {
+    dcv = esl_avx_rightshift_ps(dcv); /* [1 5 9 13] => [5 9 13 *]          */
+    tp  = om->tfv_AVX + 8*Q - 1;            /* <*tp> now the [4 8 12 x] TDD quad */
+    dp  = dpc + Q*p7C_NSCELLS - 2;          /* init to point at D(i,q) vector    */
+    for (q = Q-1; q >= 0; q--)
+      {
+        dcv = _mm256_mul_ps(dcv, *tp); tp--;
+        *dp = _mm256_add_ps(*dp, dcv); dp -= p7C_NSCELLS;
+      }
+  }
+    }
+  else
+    { /* With check for early convergence */
+      __m256 sv;
+      __m256 cv;  /* keeps track of whether any DD addition changes DQ(q) value */
+      for (j = 1; j < 8; j++)
+  {
+    dcv = esl_avx_rightshift_ps(dcv);
+    tp  = om->tfv_AVX + 8*Q - 1;  
+    dp  = dpc + Q*p7C_NSCELLS - 2;
+    cv  = zerov;
+    for (q = Q-1; q >= 0; q--)
+      { /* using cmpgt below tests if DD changed any DMO(q) without conditional branch (i.e. no if) */
+        dcv  = _mm256_mul_ps(dcv, *tp); tp--;
+        sv   = _mm256_add_ps(*dp, dcv);
+        cv   = _mm256_or_ps(cv, _mm256_cmp_ps(sv, *dp, 14)); /* if DD path changed DQ(dpc,q), cv bits know it now */
+        *dp  = sv; 
+        dp  -= p7C_NSCELLS;
+      }
+    if (! _mm256_movemask_ps(cv)) break; /* if no DD path changed DQ(q) in this segment, then done, no more segments needed */
+  }
+    }
 
+  /* Finally, M->D path contribution
+   * these couldn't be added to M until we'd finished calculating D values on row.
+   */
+  dcv = esl_avx_rightshift_ps(P7C_DQ(dpc, 0));
+  tp  = om->tfv_AVX + 7*Q - 3;   
+  dp  = dpc + (Q-1)*p7C_NSCELLS; 
+  for (q = Q-1; q >= 0; q--)
+    {
+      *dp  = _mm256_add_ps(*dp, _mm256_mul_ps(dcv, *tp)); tp -= 7; 
+      dcv  = *(dp+1);                               dp -= p7C_NSCELLS;
+    }
+}
+#endif
 /* backward_row_rescale()
  * 
  * Sparse rescaling, using the scalefactor that Forward set and 
@@ -790,6 +2081,7 @@ backward_row_finish(const P7_OPROFILE *om, __m128 *dpc, int Q, __m128 dcv)
  *
  * Upon return, values in current row <dpc> have been rescaled.
  */
+#ifdef p7_build_SSE
 static inline void
 backward_row_rescale(float *xc, __m128 *dpc, int Q, float scalefactor)
 {
@@ -816,6 +2108,35 @@ backward_row_rescale(float *xc, __m128 *dpc, int Q, float scalefactor)
     }
   xc[p7C_SCALE] = scalefactor;
 }
+#endif
+#ifdef p7_build_AVX2
+static inline void
+backward_row_rescale_AVX(float *xc, __m256 *dpc, int Q, float scalefactor)
+{
+  if (scalefactor > 1.0f)
+    {
+      __m256  sv = _mm256_set1_ps(1.0 / scalefactor);
+      __m256 *dp = dpc;
+      int     q;
+
+      xc[p7C_E]  /= scalefactor;
+      xc[p7C_N]  /= scalefactor;
+      xc[p7C_JJ] /= scalefactor;
+      xc[p7C_J]  /= scalefactor;
+      xc[p7C_B]  /= scalefactor;
+      xc[p7C_CC] /= scalefactor;
+      xc[p7C_C]  /= scalefactor;
+
+      for (q = 0; q < Q; q++) 
+  {
+    *dp = _mm256_mul_ps(*dp, sv); dp++; /* M */
+    *dp = _mm256_mul_ps(*dp, sv); dp++; /* D */
+    *dp = _mm256_mul_ps(*dp, sv); dp++; /* I */
+  }
+    }
+  xc[p7C_SCALE] = scalefactor;
+}
+#endif
 
 /* Only needed during development, for memory profiling; J10/29
  */
@@ -879,6 +2200,7 @@ sse_countge(__m128 v, float thresh)
  * Can throw <eslEINVAL> on bad code (something awry in data structure initialization)
  *           <eslEMEM> on allocation failure in sparsemask
  */
+#ifdef p7_build_SSE
 static inline int
 posterior_decode_row(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm_thresh, float overall_sc)
 {
@@ -950,8 +2272,83 @@ posterior_decode_row(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm_thr
 #endif
   return eslOK;
 }
-/*------------------ end, inlined recursions -------------------*/
+#endif
+#ifdef p7_build_AVX2
+static inline int
+posterior_decode_row_AVX(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm_thresh, float overall_sc)
+{
+  int             Q        = ox->Qf_AVX;
+  __m256        *fwd       = (__m256 *) ox->dpf_AVX[ox->R0 + ox->R_AVX]; /* a calculated fwd row R has been popped off */
+  const  __m256 *bck       = (__m256 *) ox->dpf_AVX[rowi%2];
+  float         *xf        = (float *) (fwd + Q*p7C_NSCELLS);
+  const  float  *xb        = (float *) (bck + Q*p7C_NSCELLS);
+  const __m256   threshv   = _mm256_set1_ps(sm_thresh);
+  float          scaleterm = xf[p7C_SCALE] / overall_sc; /* see comments above, on how rescaling affects posterior decoding equations */
+  const __m256   cv        = _mm256_set1_ps(scaleterm);
+  float  pnonhomology;
+  __m256 mask;
+  int    maskbits;    /* xxxx 4-bit mask for which cells 0..3 have passed threshold (if any) */
+  __m256 pv;
+  int    q,r;
+  int    status;
 
+  /* test to see if *any* cells can meet threshold, before wasting
+   * time looking at them all.
+   * 
+   * Useful side effect: row 0 automatically fails this test (all pp
+   * in S->N->B), so posterior_decode_row() can be called on row 0 (in
+   * debugging code, we need to decode and store row zero specials),
+   * without triggering contract check failures in p7_sparsemask_* API
+   * functions that are checking for i=1..L.
+   * 
+   * This code block MAY NOT CHANGE the contents of fwd, bck vectors;
+   * in debugging, we will use them again to recalculate and store the
+   * decoding.
+   */
+  // Need to figure out how to put the sparsemask stuff back when we want to just run AVX 
+  pnonhomology = (xf[p7C_N] * xb[p7C_N] + xf[p7C_JJ] * xb[p7C_JJ] + xf[p7C_CC] * xb[p7C_CC]) * scaleterm;
+  if (pnonhomology <= 1.0f - sm_thresh)
+    {  
+   //   if ((status = p7_sparsemask_StartRow(sm, rowi)) != eslOK) return status;
+      for (q = Q-1; q >= 0; q--)             // reverse, because SPARSEMASK is entirely in reversed order 
+  {
+    pv       =                _mm256_mul_ps(P7C_MQ(fwd, q), P7C_MQ(bck, q));
+    pv       = _mm256_add_ps(pv, _mm256_mul_ps(P7C_IQ(fwd, q), P7C_IQ(bck, q)));
+    pv       = _mm256_add_ps(pv, _mm256_mul_ps(P7C_DQ(fwd, q), P7C_DQ(bck, q)));
+    pv       = _mm256_mul_ps(pv, cv);           // pv is now the posterior probability of elements q,r=0..3 
+    mask     = _mm256_cmp_ps(pv, threshv, 13);  // 13 is magic number for >= 
+     // mask now has all 0's in elems r that failed thresh; all 1's for r that passed 
+    maskbits = _mm256_movemask_ps(mask);    // maskbits is now something like 0100: 1's indicate which cell passed. 
+  
+  /*  for (r = 0; r < p7_VNF; r++) 
+      if ( maskbits & (1<<r)) 
+     //   if ((status = p7_sparsemask_Add(sm, q, r)) != eslOK) return status; */
+  }
+    //  if ((status = p7_sparsemask_FinishRow(sm)) != eslOK) return status;
+    }
+#ifdef p7_DEBUGGING
+  xf[p7C_E]  = xf[p7C_E]  * xb[p7C_E]  * scaleterm;
+  xf[p7C_N]  = (rowi == 0 ? 1.0f : xf[p7C_N]  * xb[p7C_N]  * scaleterm);
+  xf[p7C_JJ] = xf[p7C_JJ] * xb[p7C_JJ] * scaleterm;
+  xf[p7C_J]  = xf[p7C_J]  * xb[p7C_J]  * scaleterm;
+  xf[p7C_B]  = xf[p7C_B]  * xb[p7C_B]  * scaleterm;
+  xf[p7C_CC] = xf[p7C_CC] * xb[p7C_CC] * scaleterm;
+  xf[p7C_C]  = xf[p7C_C]  * xb[p7C_C]  * scaleterm;
+
+  for (q = 0; q < Q; q++) 
+    {
+      P7C_MQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7C_MQ(fwd, q), P7C_MQ(bck, q)));
+      P7C_DQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7C_DQ(fwd, q), P7C_DQ(bck, q)));
+      P7C_IQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7C_IQ(fwd, q), P7C_IQ(bck, q)));
+    }
+
+  if (ox->pp)  save_debug_row_pp(ox, fwd, rowi);
+#endif
+  return eslOK;
+}
+#endif
+
+/*------------------ end, inlined recursions -------------------*/
 
 
 

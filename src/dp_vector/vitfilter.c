@@ -26,6 +26,7 @@
 #include <emmintrin.h>		/* SSE2 */
 #ifdef p7_build_AVX512
  #include <immintrin.h>
+ #include "esl_avx_512.h"
 #endif
 #include "easel.h"
 #include "esl_sse.h"
@@ -484,39 +485,21 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
        */
     
       mpv_AVX_512 = MMX_AVX_512f(Q_AVX_512-1);  
-         //left-shift macro
-
-      // left_shift dp_temp by 128 bits by shuffling and then inzerting zeroes at the low end
-       __m512i temp_mask_AVX_512 = _mm512_shuffle_i32x4(mpv_AVX_512, mpv_AVX_512, 0x90);
-       __m128i zero128 = _mm_setzero_si128();
-       temp_mask_AVX_512 = _mm512_inserti32x4(temp_mask_AVX_512, zero128, 0);
-
-       //now do the same merge and right-shift trick we used with AVX to create a left-shift by two bytes
-      mpv_AVX_512 = _mm512_alignr_epi8(mpv_AVX_512, temp_mask_AVX_512,14);
+     
+      mpv_AVX_512 = esl_avx_512_leftshift_two(mpv_AVX_512);
 
       mpv_AVX_512 = _mm512_or_si512(mpv_AVX_512, negInfv_AVX_512);
       
       dpv_AVX_512 = DMX_AVX_512f(Q_AVX_512-1);  
-         //left-shift macro
-  
-     // left_shift dp_temp by 128 bits by shuffling and then inzerting zeroes at the low end
-       temp_mask_AVX_512 = _mm512_shuffle_i32x4(dpv_AVX_512, dpv_AVX_512, 0x90);
-       temp_mask_AVX_512 = _mm512_inserti32x4(temp_mask_AVX_512, zero128, 0);
+      
+      dpv_AVX_512 = esl_avx_512_leftshift_two(dpv_AVX_512);
 
-       //now do the same merge and right-shift trick we used with AVX to create a left-shift by two bytes
-      dpv_AVX_512 = _mm512_alignr_epi8(dpv_AVX_512, temp_mask_AVX_512,14);
-       dpv_AVX_512 = _mm512_or_si512(dpv_AVX_512, negInfv_AVX_512);
+      dpv_AVX_512 = _mm512_or_si512(dpv_AVX_512, negInfv_AVX_512);
       
       ipv_AVX_512 = IMX_AVX_512f(Q_AVX_512-1);  
          //left-shift macro
-
-     // left_shift dp_temp by 128 bits by shuffling and then inzerting zeroes at the low end
-       temp_mask_AVX_512 = _mm512_shuffle_i32x4(ipv_AVX_512, ipv_AVX_512, 0x90);
-       temp_mask_AVX_512 = _mm512_inserti32x4(temp_mask_AVX_512, zero128, 0);
-
-       //now do the same merge and right-shift trick we used with AVX to create a left-shift by one byte
-      ipv_AVX_512 = _mm512_alignr_epi8(ipv_AVX_512, temp_mask_AVX_512,14);
-       ipv_AVX_512 = _mm512_or_si512(ipv_AVX_512, negInfv_AVX_512);
+      ipv_AVX_512 = esl_avx_512_leftshift_two(ipv_AVX_512);
+      ipv_AVX_512 = _mm512_or_si512(ipv_AVX_512, negInfv_AVX_512);
 
       for (q_AVX_512 = 0; q_AVX_512 < Q_AVX_512; q_AVX_512++)
       {
@@ -633,12 +616,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
     /* Now we're obligated to do at least one complete DD path to be sure. */
     /* dcv has carried through from end of q loop above */
     //left-shift macro
-//printf("vitfilter AVX-512 doing DD calc,  Dmax_AVX_512 = %i\n", Dmax_AVX_512);
-       temp_mask_AVX_512 = _mm512_shuffle_i32x4(dcv_AVX_512, dcv_AVX_512, 0x90);
-       temp_mask_AVX_512 = _mm512_inserti32x4(temp_mask_AVX_512, zero128, 0);
-
-       //now do the same merge and right-shift trick we used with AVX to create a left-shift by one byte
-      dcv_AVX_512 = _mm512_alignr_epi8(dcv_AVX_512, temp_mask_AVX_512,14);
+    dcv_AVX_512 = esl_avx_512_leftshift_two(dcv_AVX_512);
 
     dcv_AVX_512 = _mm512_or_si512(dcv_AVX_512, negInfv_AVX_512);
     tsc_AVX_512 = om->twv_AVX_512 + 7*Q_AVX_512;  /* set tsc to start of the DD's */
@@ -653,12 +631,8 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
      * our score. 
      */
     do {
-      //left-shift macro
-      temp_mask_AVX_512 = _mm512_shuffle_i32x4(dcv_AVX_512, dcv_AVX_512, 0x90);
-       temp_mask_AVX_512 = _mm512_inserti32x4(temp_mask_AVX_512, zero128, 0);
-
-       //now do the same merge and right-shift trick we used with AVX to create a left-shift by one byte
-      dcv_AVX_512 = _mm512_alignr_epi8(dcv_AVX_512, temp_mask_AVX_512,14);
+      
+      dcv_AVX_512 = esl_avx_512_leftshift_two(dcv_AVX_512);
  
       dcv_AVX_512 = _mm512_or_si512(dcv_AVX_512, negInfv_AVX_512);
       tsc_AVX_512 = om->twv_AVX_512 + 7*Q_AVX_512;  /* set tsc to start of the DD's */
@@ -674,13 +648,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   }
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
   {
-    //left-shift macro
-//printf("vitfilter AVX-512 skipping DD calc,  Dmax_AVX_512 = %i\n", Dmax_AVX_512);
-       temp_mask_AVX_512 = _mm512_shuffle_i32x4(dcv_AVX_512, dcv_AVX_512, 0x90);
-       temp_mask_AVX_512 = _mm512_inserti32x4(temp_mask_AVX_512, zero128, 0);
-
-       //now do the same merge and right-shift trick we used with AVX to create a left-shift by one byte
-      dcv_AVX_512 = _mm512_alignr_epi8(dcv_AVX_512, temp_mask_AVX_512,14);
+    dcv_AVX_512 = esl_avx_512_leftshift_two(dcv_AVX_512);
     DMX_AVX_512f(0) = _mm512_or_si512(dcv_AVX_512, negInfv_AVX_512);
   }
 #endif
@@ -925,6 +893,8 @@ int
 p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox,
                             float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
 {
+
+  #ifdef p7_build_SSE // this funciton has not been converted to AVX
   register __m128i mpv, dpv, ipv; /* previous row values                                       */
   register __m128i sv;            /* temp storage of 1 curr row value in progress              */
   register __m128i dcv;           /* delayed storage of D(i,q+1)                               */
@@ -1126,7 +1096,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
       if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);
 #endif
   } /* end loop over sequence residues 1..L */
-
+#endif
 
   return eslOK;
 

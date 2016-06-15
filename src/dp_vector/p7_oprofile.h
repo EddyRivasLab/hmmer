@@ -75,13 +75,13 @@ enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3, 
 
 typedef struct p7_oprofile_s {
   /* MSVFilter uses scaled, biased uchars: 16x unsigned byte vectors                 */
-  
+ #ifdef p7_build_SSE 
   __m128i **rbv;                /* match scores [x][q]: rm, rm[0] are allocated      */
   /* Our actual vector mallocs, before we align the memory                           */
   __m128i  *rbv_mem;
   __m128i  *sbv_mem;
   __m128i **sbv;                /* match scores for ssvfilter         */
-
+#endif
    #ifdef p7_build_AVX2
   __m256i **rbv_AVX;                /* match scores [x][q]: rm, rm[0] are allocated      */
   __m256i **sbv_AVX;                /* match scores for ssvfilter         */
@@ -106,14 +106,13 @@ typedef struct p7_oprofile_s {
   uint8_t   bias_b;             /* positive bias to emission scores, make them >=0   */
 
 
-/* This filter hasn't been converted to AVX, AVX-512 yet */
   /* ViterbiFilter uses scaled swords: 8x signed 16-bit integer vectors              */
-  
+ #ifdef p7_build_SSE 
   __m128i **rwv;                /* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
   __m128i  *twv;                /* transition score blocks          [8*Q8]           */
  __m128i  *rwv_mem;
   __m128i  *twv_mem;
-
+#endif
 #ifdef p7_build_AVX2
  __m256i **rwv_AVX;                /* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
   __m256i  *twv_AVX;                /* transition score blocks          [8*Q8]           */
@@ -133,17 +132,28 @@ typedef struct p7_oprofile_s {
   int16_t   ddbound_w;          /* threshold precalculated for lazy DD evaluation    */
   float     ncj_roundoff;       /* missing precision on NN,CC,JJ after rounding      */
 
-/* This filter hasn't been converted to AVX, AVX-512 yet */
   /* Forward, Backward use IEEE754 single-precision floats: 4x vectors               */
-  __m128 **rfv;                 /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
-  __m128  *tfv;                 /* transition probability blocks    [8*Q4]           */
+  
   float    xf[p7O_NXSTATES][p7O_NXTRANS]; /* ENJC transition costs                   */
 
-  
- 
+  #ifdef p7_build_SSE
+  __m128 **rfv;                 /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
+  __m128  *tfv;                 /* transition probability blocks    [8*Q4]           */
   __m128   *tfv_mem;
   __m128   *rfv_mem;
-  
+  #endif
+ #ifdef p7_build_AVX2
+  __m256 **rfv_AVX;                 /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
+  __m256  *tfv_AVX;                 /* transition probability blocks    [8*Q4]           */
+  __m256   *tfv_mem_AVX;
+  __m256   *rfv_mem_AVX;
+#endif
+#ifdef p7_build_AVX512
+  __m512 **rfv_AVX_512;                 /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
+  __m512  *tfv_AVX_512;                 /* transition probability blocks    [8*Q4]           */
+  __m512   *tfv_mem_AVX_512;
+  __m512   *rfv_mem_AVX_512;
+  #endif
   /* Disk offset information for hmmpfam's fast model retrieval                      */
   off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET, or -1                             */
 
@@ -201,12 +211,30 @@ typedef struct {
 static inline float 
 p7_oprofile_FGetEmission(const P7_OPROFILE *om, int k, int x)
 {
+ #ifdef p7_build_SSE 
   union { __m128 v; float p[4]; } u;
   int   Q = P7_NVF(om->M);
   int   q = ((k-1) % Q);
   int   r = (k-1)/Q;
   u.v = om->rfv[x][q];
   return u.p[r];
+#endif
+ #ifdef p7_build_AVX2 
+  union { __m256 v; float p[8]; } u_AVX;
+  int   Q_AVX = P7_NVF_AVX(om->M);
+  int   q_AVX = ((k-1) % Q);
+  int   r_AVX = (k-1)/Q_AVX;
+  u_AVX.v = om->rfv_AVX[x][q_AVX];
+  return u_AVX.p[r_AVX];
+#endif
+#ifdef p7_build_AVX512 
+  union { __m512 v; float p[16]; } u_AVX_512;
+  int   Q_AVX_512 = P7_NVF_AVX_512(om->M);
+  int   q_AVX_512 = ((k-1) % Q_AVX_512);
+  int   r_AVX_512 = (k-1)/Q_AVX_512;
+  u_AVX_512.v = om->rfv_AVX_512[x][q_AVX_512];
+  return u_AVX_512.p[r_AVX_512];
+#endif
 }
 
 
