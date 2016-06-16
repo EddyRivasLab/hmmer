@@ -726,7 +726,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
    */  
  
  
-
+//printf("L row\n");
 #ifdef p7_build_SSE
   i = L;
   ox->R--;
@@ -830,6 +830,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
   /* If there's any checkpointing, there's an L-1 row to fill now. */
   if (ox->Rb+ox->Rc > 0)
     {
+  //    printf("L-1 row\n");
 #ifdef p7_build_SSE      
       /* Compute fwd[L-1] from last checkpoint, which we know is fwd[L-2] */
       dpp = (__m128 *) ox->dpf[ox->R0+ox->R-1];  /* fwd[L-2] values, already known        */
@@ -946,7 +947,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
    for (b = 2; b <= ox->Rb+ox->Rc; b++)
     {				/* i=L-2 as we enter here, and <dpp> is on bck[L-1] */
       w = (b <= ox->Rc ? b+1 : ox->Lb);
-
+//printf("Checkpointed region\n");
 #ifdef p7_build_SSE
       /* We know current row i (r=R0+R-1) ends a block and is checkpointed in fwd. */
       ox->R--;
@@ -1001,7 +1002,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
       ox->R_AVX--;
       fwd_AVX = (__m256 *) ox->dpf_AVX[ox->R0+ox->R_AVX];      /* pop checkpointed forward row off "stack" */
       xf_AVX  = (float *) (fwd_AVX + Q_AVX*p7C_NSCELLS);
-
+      Tvalue_AVX = xf_AVX[p7C_C] * om->xf[p7O_C][p7O_MOVE];  /* i.e. scaled fwd[L] val at T state = scaled overall score */
       /* Calculate bck[i]; <dpp> is already bck[i+1] */
       bck_AVX = (__m256 *) ox->dpf_AVX[i_AVX%2];      /* get available tmp memory for row     */
       backward_row_main_AVX(dsq[i_AVX+1], om, dpp_AVX, bck_AVX, Q_AVX, xf_AVX[p7C_SCALE]);
@@ -1115,6 +1116,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
    /* The uncheckpointed "a" region */
    for (; i >= 1; i--)
      {
+    //  printf("uncheckpointed region\n");
 #ifdef p7_build_SSE
        ox->R--; 
        fwd = (__m128 *) ox->dpf[ox->R0+ox->R]; /* pop off calculated row fwd[i]           */
@@ -2309,7 +2311,7 @@ posterior_decode_row_AVX(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm
   pnonhomology = (xf[p7C_N] * xb[p7C_N] + xf[p7C_JJ] * xb[p7C_JJ] + xf[p7C_CC] * xb[p7C_CC]) * scaleterm;
   if (pnonhomology <= 1.0f - sm_thresh)
     {  
-   //   if ((status = p7_sparsemask_StartRow(sm, rowi)) != eslOK) return status;
+      if ((status = p7_sparsemask_StartRow_AVX(sm, rowi)) != eslOK) return status;
       for (q = Q-1; q >= 0; q--)             // reverse, because SPARSEMASK is entirely in reversed order 
   {
     pv       =                _mm256_mul_ps(P7C_MQ(fwd, q), P7C_MQ(bck, q));
@@ -2320,11 +2322,11 @@ posterior_decode_row_AVX(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm
      // mask now has all 0's in elems r that failed thresh; all 1's for r that passed 
     maskbits = _mm256_movemask_ps(mask);    // maskbits is now something like 0100: 1's indicate which cell passed. 
   
-  /*  for (r = 0; r < p7_VNF; r++) 
+    for (r = 0; r < p7_VNF_AVX; r++) 
       if ( maskbits & (1<<r)) 
-     //   if ((status = p7_sparsemask_Add(sm, q, r)) != eslOK) return status; */
+         if ((status = p7_sparsemask_Add_AVX(sm, q, r)) != eslOK) return status;
   }
-    //  if ((status = p7_sparsemask_FinishRow(sm)) != eslOK) return status;
+      if ((status = p7_sparsemask_FinishRow_AVX(sm)) != eslOK) return status;
     }
 #ifdef p7_DEBUGGING
   xf[p7C_E]  = xf[p7C_E]  * xb[p7C_E]  * scaleterm;

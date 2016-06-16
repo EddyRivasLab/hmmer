@@ -24,40 +24,91 @@
 
 #include "base/p7_trace.h"
 #include "dp_reference/p7_refmx.h"
-
+#include "dp_vector/simdvec.h"
 /*****************************************************************
  * 1. The P7_SPARSEMASK structure
  *****************************************************************/
+typedef struct p7_sparsemask_seg_s {
+    int ia;               // <seg[s]> = ia,ib pairs for each segment <s>, s=1..nseg. 
+    int ib;               //    also, seg[0] and seg[nseg+1] contain sentinel values. 
+  }       p7_sparsemask_seg_s;
 
 typedef struct {
   int      L;		// sequence has 1..L residues 
   int      M;		// profile has 1..M positions 
+  
   int      Q;		// number of striped vectors in fwdfilter; width of each striped segment; width of "slots"
 
-  struct p7_sparsemask_seg_s {
-    int ia;               // <seg[s]> = ia,ib pairs for each segment <s>, s=1..nseg. 
-    int ib;               //    also, seg[0] and seg[nseg+1] contain sentinel values. 
-  }       *seg;         
+  
+  p7_sparsemask_seg_s *seg;         
   int    **k;		// k[0,1..L] = ptrs into kmem, rows of sparse k indices; k[0]=NULL; k[i]=NULL if n[i]=0 
   int     *n;		// number of cells included on each row; n[0]=0; n[i] <= M 
   int     *kmem;	// memory that k[] are pointing into, storing k indices of included cells, kmem[0..ncells-1]
-
-  int      S;   	// number of sparsified segments 
+  int      S;     // number of sparsified segments 
   int      nrow;        // number of included rows; \sum_{i=1}^{L} \delta(n[i]) 
-  int64_t  ncells;	// number of included supercells; \sum_{i=1}^{L} n[i]        
-
-  int      ralloc;	// k[] is allocated for ralloc rows; L+1 <= ralloc 
-  int64_t  kalloc;	// kmem[] is allocated for kalloc cells; ncells <= kalloc 
-  int      salloc;	// seg[] is allocated for salloc ia,ib pairs; nseg+2 <= salloc, +2 because of sentinels at 0,nseg+1
+  int64_t  ncells;  // number of included supercells; \sum_{i=1}^{L} n[i]        
+  int      ralloc;  // k[] is allocated for ralloc rows; L+1 <= ralloc 
+  int64_t  kalloc;  // kmem[] is allocated for kalloc cells; ncells <= kalloc 
+  int      salloc;  // seg[] is allocated for salloc ia,ib pairs; nseg+2 <= salloc, +2 because of sentinels at 0,nseg+1
 
   /* "Slots" are used to convert striped vectors in f/b filter into correct M..1 cell index order in <kmem>; see note [3] */
-  int  *s[p7_VNF];	// slot pointers s[0..3] into <kmem>, for temporary storage of a striped vector row's sparse cells 
-  int   sn[p7_VNF];	// number of sparse cells stored so far in each slot; sn[0..3]
+  int  *s[p7_VNF];  // slot pointers s[0..3] into <kmem>, for temporary storage of a striped vector row's sparse cells 
+  int   sn[p7_VNF]; // number of sparse cells stored so far in each slot; sn[0..3]
+
+
+#ifdef p7_build_AVX2  
+  int      Q_AVX;   // number of striped vectors in fwdfilter; width of each striped segment; width of "slots"
+
+  p7_sparsemask_seg_s *seg_AVX;         
+  int    **k_AVX;   // k[0,1..L] = ptrs into kmem, rows of sparse k indices; k[0]=NULL; k[i]=NULL if n[i]=0 
+  int     *n_AVX;   // number of cells included on each row; n[0]=0; n[i] <= M 
+  int     *kmem_AVX;  // memory that k[] are pointing into, storing k indices of included cells, kmem[0..ncells-1]
+  int      S_AVX;     // number of sparsified segments 
+  int      nrow_AVX;        // number of included rows; \sum_{i=1}^{L} \delta(n[i]) 
+  int64_t  ncells_AVX;  // number of included supercells; \sum_{i=1}^{L} n[i]        
+
+  int      ralloc_AVX;  // k[] is allocated for ralloc rows; L+1 <= ralloc 
+  int64_t  kalloc_AVX;  // kmem[] is allocated for kalloc cells; ncells <= kalloc 
+  int      salloc_AVX;  // seg[] is allocated for salloc ia,ib pairs; nseg+2 <= salloc, +2 because of sentinels at 0,nseg+1
+
+  /* "Slots" are used to convert striped vectors in f/b filter into correct M..1 cell index order in <kmem>; see note [3] */
+  int  *s_AVX[p7_VNF_AVX];  // slot pointers s[0..7] into <kmem>, for temporary storage of a striped vector row's sparse cells 
+  int   sn_AVX[p7_VNF_AVX]; // number of sparse cells stored so far in each slot; sn[0..7]
+#endif
+
+#ifdef p7_build_AVX512  
+  int      Q_AVX_512;   // number of striped vectors in fwdfilter; width of each striped segment; width of "slots"
+
+  struct p7_sparsemask_seg_s *seg_AVX_512;         
+  int    **k_AVX_512;   // k[0,1..L] = ptrs into kmem, rows of sparse k indices; k[0]=NULL; k[i]=NULL if n[i]=0 
+  int     *n_AVX_512;   // number of cells included on each row; n[0]=0; n[i] <= M 
+  int     *kmem_AVX_512;  // memory that k[] are pointing into, storing k indices of included cells, kmem[0..ncells-1]
+  int      S__AVX_512;     // number of sparsified segments 
+  int      nrow_AVX_512;        // number of included rows; \sum_{i=1}^{L} \delta(n[i]) 
+  int64_t  ncells_AVX_512;  // number of included supercells; \sum_{i=1}^{L} n[i]        
+
+  int      ralloc_AVX_512;  // k[] is allocated for ralloc rows; L+1 <= ralloc 
+  int64_t  kalloc_AVX_512;  // kmem[] is allocated for kalloc cells; ncells <= kalloc 
+  int      salloc_AVX_512;  // seg[] is allocated for salloc ia,ib pairs; nseg+2 <= salloc, +2 because of sentinels at 0,nseg+1
+
+  /* "Slots" are used to convert striped vectors in f/b filter into correct M..1 cell index order in <kmem>; see note [3] */
+  int  *s[p7_VNF_AVX_512];  // slot pointers s[0..3] into <kmem>, for temporary storage of a striped vector row's sparse cells 
+  int   sn[p7_VNF_AVX_512]; // number of sparse cells stored so far in each slot; sn[0..15]
+#endif
+  
+  
 
   /* These are used for argument validation; the construction API is a little counterintuitive because i,q run in reverse */
-  int   last_i;  	// i of last StartRow(i) call; rows must be added in L..1 order; initialized to L+1 
+   int   last_i;    // i of last StartRow(i) call; rows must be added in L..1 order; initialized to L+1 
   int   last_k[p7_VNF]; // k of last cell added in slot r; cells must be added in M..1 order; initialized to M+1 or -1 
-
+#ifdef p7_build_AVX2
+   int   last_i_AVX;    // i of last StartRow(i) call; rows must be added in L..1 order; initialized to L+1 
+  int   last_k_AVX[p7_VNF_AVX]; // k of last cell added in slot r; cells must be added in M..1 order; initialized to M+1 or -1 
+#endif
+#ifdef p7_build_AVX512
+   int   last_i_AVX_512;    // i of last StartRow(i) call; rows must be added in L..1 order; initialized to L+1 
+  int   last_k_AVX_512[p7_VNF_AVX_512]; // k of last cell added in slot r; cells must be added in M..1 order; initialized to M+1 or -1 
+#endif
   /* memory allocation profiling, statistics */
   int   n_krealloc;	// number of times we reallocated <kmem> in this instance of the structure 
   int   n_rrealloc;	// ditto for <k>, <n> 
@@ -140,6 +191,18 @@ extern int            p7_sparsemask_AddAll   (P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_StartRow (P7_SPARSEMASK *sm, int i);
 extern int            p7_sparsemask_Add      (P7_SPARSEMASK *sm, int q, int r);
 extern int            p7_sparsemask_FinishRow(P7_SPARSEMASK *sm);
+
+#ifdef p7_build_AVX2
+extern int            p7_sparsemask_StartRow_AVX (P7_SPARSEMASK *sm, int i);
+extern int            p7_sparsemask_Add_AVX      (P7_SPARSEMASK *sm, int q, int r);
+extern int            p7_sparsemask_FinishRow_AVX(P7_SPARSEMASK *sm);
+#endif
+
+#ifdef p7_build_AVX512
+extern int            p7_sparsemask_StartRow_AVX_512 (P7_SPARSEMASK *sm, int i);
+extern int            p7_sparsemask_Add_AVX_512      (P7_SPARSEMASK *sm, int q, int r);
+extern int            p7_sparsemask_FinishRow_AVX_512(P7_SPARSEMASK *sm);
+#endif
 extern int            p7_sparsemask_Finish   (P7_SPARSEMASK *sm);
 
 /* P7_SPARSEMASK debugging tools */

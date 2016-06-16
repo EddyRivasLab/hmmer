@@ -222,7 +222,7 @@ p7_oprofile_FGetEmission(const P7_OPROFILE *om, int k, int x)
  #ifdef p7_build_AVX2 
   union { __m256 v; float p[8]; } u_AVX;
   int   Q_AVX = P7_NVF_AVX(om->M);
-  int   q_AVX = ((k-1) % Q);
+  int   q_AVX = ((k-1) % Q_AVX);
   int   r_AVX = (k-1)/Q_AVX;
   u_AVX.v = om->rfv_AVX[x][q_AVX];
   return u_AVX.p[r_AVX];
