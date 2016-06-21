@@ -5,11 +5,6 @@
 
 #include "p7_config.h"
 
-#include <xmmintrin.h>    /* SSE  */
-#include <emmintrin.h>    /* SSE2 */
-#ifdef HAVE_PMMINTRIN_H
-#include <pmmintrin.h>   /* DENORMAL_MODE */
-#endif
 
 
 #include "dp_vector/simdvec.h"

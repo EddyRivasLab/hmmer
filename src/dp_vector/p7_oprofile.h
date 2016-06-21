@@ -2,13 +2,6 @@
 #define p7OPROFILE_INCLUDED
 
 #include "p7_config.h"
-
-#include <xmmintrin.h>    /* SSE  */
-#include <emmintrin.h>    /* SSE2 */
-#ifdef _PMMINTRIN_H_INCLUDED
-#include <pmmintrin.h>   /* DENORMAL_MODE */
-#endif
-
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_random.h"
@@ -19,6 +12,7 @@
 #include "base/p7_profile.h"
 
 #include "dp_vector/simdvec.h"
+#include "arm_vector.h"
 
 /* The OPROFILE is striped [Farrar07] and interleaved, as is the DP matrix.
  * For example, the layout of a profile for an M=14 model (xref J2/46):
@@ -69,8 +63,8 @@ enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3, 
 
 typedef struct p7_oprofile_s {
   /* MSVFilter uses scaled, biased uchars: 16x unsigned byte vectors                 */
-  __m128i **rbv;                /* match scores [x][q]: rm, rm[0] are allocated      */
-  __m128i **sbv;                /* match scores for ssvfilter                        */
+  __arm128i **rbv;                /* match scores [x][q]: rm, rm[0] are allocated      */
+  __arm128i **sbv;                /* match scores for ssvfilter                        */
   uint8_t   tbm_b;              /* constant B->Mk cost:    scaled log 2/M(M+1)       */
   uint8_t   tec_b;              /* constant E->C  cost:    scaled log 0.5            */
   uint8_t   tjb_b;              /* constant NCJ move cost: scaled log 3/(L+3)        */
@@ -79,8 +73,8 @@ typedef struct p7_oprofile_s {
   uint8_t   bias_b;             /* positive bias to emission scores, make them >=0   */
 
   /* ViterbiFilter uses scaled swords: 8x signed 16-bit integer vectors              */
-  __m128i **rwv;                /* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
-  __m128i  *twv;                /* transition score blocks          [8*Q8]           */
+  __arm128i **rwv;                /* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
+  __arm128i  *twv;                /* transition score blocks          [8*Q8]           */
   int16_t   xw[p7O_NXSTATES][p7O_NXTRANS]; /* ENJC state transition costs            */
   float     scale_w;            /* score units: typically 500 / log(2), 1/500 bits   */
   int16_t   base_w;             /* offset of sword scores: typically +12000          */
@@ -88,17 +82,17 @@ typedef struct p7_oprofile_s {
   float     ncj_roundoff;       /* missing precision on NN,CC,JJ after rounding      */
 
   /* Forward, Backward use IEEE754 single-precision floats: 4x vectors               */
-  __m128 **rfv;                 /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
-  __m128  *tfv;                 /* transition probability blocks    [8*Q4]           */
+  __arm128f **rfv;                 /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
+  __arm128f  *tfv;                 /* transition probability blocks    [8*Q4]           */
   float    xf[p7O_NXSTATES][p7O_NXTRANS]; /* ENJC transition costs                   */
 
   /* Our actual vector mallocs, before we align the memory                           */
-  __m128i  *rbv_mem;
-  __m128i  *sbv_mem;
-  __m128i  *rwv_mem;
-  __m128i  *twv_mem;
-  __m128   *tfv_mem;
-  __m128   *rfv_mem;
+  __arm128i  *rbv_mem;
+  __arm128i  *sbv_mem;
+  __arm128i  *rwv_mem;
+  __arm128i  *twv_mem;
+  __arm128f   *tfv_mem;
+  __arm128f   *rfv_mem;
   
   /* Disk offset information for hmmpfam's fast model retrieval                      */
   off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET, or -1                             */
@@ -145,7 +139,7 @@ typedef struct {
 static inline float 
 p7_oprofile_FGetEmission(const P7_OPROFILE *om, int k, int x)
 {
-  union { __m128 v; float p[4]; } u;
+  union { __arm128f v; float p[4]; } u;
   int   Q = P7_NVF(om->M);
   int   q = ((k-1) % Q);
   int   r = (k-1)/Q;

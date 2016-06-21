@@ -18,9 +18,6 @@
 
 #include <stdio.h>
 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
-
 #include "dp_reference/p7_refmx.h"
 
 #define p7C_NSCELLS 3

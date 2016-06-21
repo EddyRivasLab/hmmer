@@ -221,7 +221,6 @@ fi
 # --enable-mpi       Enable MPI parallelization
 AC_ARG_ENABLE(mpi,[AS_HELP_STRING([--enable-mpi],[enable MPI parallelization])], enable_mpi=$enableval, enable_mpi=no)
 
-
 # --enable-xlc-arch  Set the code generation for a particular architecture
 #
 # The xlc compiler on AIX seems to need the -qarch flag to be set for a processor

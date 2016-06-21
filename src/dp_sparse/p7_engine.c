@@ -1,21 +1,21 @@
 #include "p7_config.h"
 
 /* SIMD-vectorized acceleration filters, local only: */
-#include "dp_vector/msvfilter.h"          // MSV/SSV primary acceleration filter
-#include "dp_vector/vitfilter.h"          // Viterbi secondary acceleration filter
-#include "dp_vector/fwdfilter.h"          // Sparsification w/ checkpointed local Forward/Backward
+//#include "dp_vector/msvfilter.h"          // MSV/SSV primary acceleration filter
+//#include "dp_vector/vitfilter.h"          // Viterbi secondary acceleration filter
+//#include "dp_vector/fwdfilter.h"          // Sparsification w/ checkpointed local Forward/Backward
 
 /* Sparse DP, dual-mode glocal/local:    */
-#include "dp_sparse/sparse_fwdback.h"     // sparse Forward/Backward
-#include "dp_sparse/sparse_viterbi.h"     // sparse Viterbi
-#include "dp_sparse/sparse_decoding.h"    // sparse Decoding
-#include "dp_sparse/sparse_anchors.h"     // most probable anchor set (MPAS) 
+//#include "dp_sparse/sparse_fwdback.h"     // sparse Forward/Backward
+//#include "dp_sparse/sparse_viterbi.h"     // sparse Viterbi
+//#include "dp_sparse/sparse_decoding.h"    // sparse Decoding
+//#include "dp_sparse/sparse_anchors.h"     // most probable anchor set (MPAS) 
 
 /* Sparse anchor-set-constrained (ASC): */
 #include "dp_sparse/sparse_asc_fwdback.h"   // ASC Forward/Backward
 #include "dp_sparse/sparse_envelopes.h"     // Envelope inference
-#include "dp_sparse/sparse_null2.h"         // Null2 score correction
-#include "dp_sparse/sparse_aec_align.h"     // anchor/envelope constrained alignment
+//#include "dp_sparse/sparse_null2.h"         // Null2 score correction
+//#include "dp_sparse/sparse_aec_align.h"     // anchor/envelope constrained alignment
 
 #include "dp_sparse/p7_engine.h"  // FIXME: we'll move the engine somewhere else, I think
 
@@ -169,7 +169,7 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
   return NULL;
 }
 
-
+/*
 int
 p7_engine_Reuse(P7_ENGINE *eng)
 {
@@ -187,7 +187,7 @@ p7_engine_Reuse(P7_ENGINE *eng)
   /* Most Reuse()'s are cheap, but the p7_anchorhash_Reuse() is a little
    * expensive. That's why we avoid Reuse()'ing the structures that only
    * the main engine uses.
-   */
+   
   if (eng->used_main)
     {
       if ((status = p7_sparsemx_Reuse  (eng->sxf))   != eslOK) return status;
@@ -200,7 +200,7 @@ p7_engine_Reuse(P7_ENGINE *eng)
       if ((status = p7_anchorhash_Reuse(eng->ahash)) != eslOK) return status;  
       if ((status = p7_envelopes_Reuse (eng->env))   != eslOK) return status;  
       if ((status = p7_trace_Reuse     (eng->tr))    != eslOK) return status;
-      /* wrkM and wrkKp are scratch workspaces, don't need to be reused/reinitialized */
+      /* wrkM and wrkKp are scratch workspaces, don't need to be reused/reinitialized 
     }
   eng->used_main = FALSE;
 
@@ -214,10 +214,10 @@ p7_engine_Reuse(P7_ENGINE *eng)
   eng->fsc    = 0.;
   eng->asc_f  = 0.;
 
-  /* F1, F2, F3 are constants, they don't need to be reset. */
+  /* F1, F2, F3 are constants, they don't need to be reset. 
   return eslOK;
 }
-
+*/
 void
 p7_engine_Destroy(P7_ENGINE *eng)
 {
@@ -297,6 +297,7 @@ p7_engine_Destroy(P7_ENGINE *eng)
  * Throws:    <eslEMEM> if a DP matrix reallocation fails.           
  *            
  */
+/*
 int
 p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg)
 {
@@ -310,7 +311,7 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
 
   if ((status = p7_bg_NullOne(bg, dsq, L, &(eng->nullsc))) != eslOK) return status; 
 
-  /* First level: SSV and MSV filters */
+  /* First level: SSV and MSV filters 
   status = p7_MSVFilter(dsq, L, om, eng->fx, &(eng->mfsc));
   if (status != eslOK && status != eslERANGE) return status;
 
@@ -319,7 +320,7 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
   if (P > eng->F1) return eslFAIL;
   if (eng->stats) eng->stats->n_past_msv++;
 
-  /* Biased composition HMM, ad hoc, acts as a modified null */
+  /* Biased composition HMM, ad hoc, acts as a modified null 
   if (do_biasfilter)
     {
       if ((status = p7_bg_FilterScore(bg, dsq, L, &(eng->biassc))) != eslOK) return status;
@@ -333,7 +334,7 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
   // TODO: in scan mode, you have to load the rest of the oprofile now,
   // configure its length model, and get GA/TC/NC thresholds.
 
-  /* Second level: ViterbiFilter(), multihit with <om> */
+  /* Second level: ViterbiFilter(), multihit with <om> 
   if (P > eng->F2)
     {
       if (eng->stats) eng->stats->n_ran_vit++;
@@ -351,9 +352,9 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
 
 
   /* Checkpointed vectorized Forward, local-only.
-   */
+   
   status = p7_ForwardFilter (dsq, L, om, eng->cx, &(eng->ffsc));
-  if (status != eslOK) return status;
+  if i(status != eslOK) return status;
 
   seq_score = (eng->ffsc - eng->biassc) / eslCONST_LOG2;
   P  = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
@@ -362,12 +363,12 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
 
   /* Sequence has passed all acceleration filters.
    * Calculate the sparse mask, by checkpointed vectorized decoding.
-   */
+   
   p7_BackwardFilter(dsq, L, om, eng->cx, eng->sm, sparsify_thresh);
 
   return eslOK;
 }
-
+*/
 
 
 

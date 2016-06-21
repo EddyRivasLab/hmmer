@@ -4,15 +4,13 @@
 #include "p7_config.h"
 
 #include <stdio.h>
-
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
+#include "arm_vector.h"
 
 enum p7f_mxtype_e { p7F_NONE = 0, p7F_SSVFILTER = 1, p7F_MSVFILTER = 2, p7F_VITFILTER = 3 };
                                 
-typedef struct p7_filtermx_s {  /* MSV needs P7_NVB(M); VF needs 3*P7_NVW(M) __m128i vectors. */
+typedef struct p7_filtermx_s {  /* MSV needs P7_NVB(M); VF needs 3*P7_NVW(M) __arm128i vectors. */
   int      M;			/* current profile size: determines width of <dp> row    */
-  __m128i *dp;			/* aligned, one row of DP memory: >= 3*P7_NVW(M) vectors */
+  __arm128i *dp;			/* aligned, one row of DP memory: >= 3*P7_NVW(M) vectors */
 
   void    *dp_mem;		/* unaligned raw memory, where we allocate    */
   int      allocM;		/* <dp_mem> is allocated to hold up to M=allocM */
