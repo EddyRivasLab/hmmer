@@ -1446,7 +1446,7 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
           case p7O_II: tg = p7P_II;  kb = k;   break; 
            }
 
-        for (z = 0; z < 8; z++) tmp_AVX_512.x[z] = (kb+z*nq_AVX_512 < M) ? P7P_TSC(gm, kb+z*nq_AVX_512, tg) : -eslINFINITY;
+        for (z = 0; z < 16; z++) tmp_AVX_512.x[z] = (kb+z*nq_AVX_512 < M) ? P7P_TSC(gm, kb+z*nq_AVX_512, tg) : -eslINFINITY;
         tmp_AVX_512.sse[0] = esl_sse_expf(tmp_AVX_512.sse[0]);  // Hack because we don't currently have AVX version of expf
         tmp_AVX_512.sse[1] = esl_sse_expf(tmp_AVX_512.sse[1]);
         tmp_AVX_512.sse[2] = esl_sse_expf(tmp_AVX_512.sse[2]);  
@@ -1458,7 +1458,7 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   /* And finally the DD's, which are at the end of the optimized tfv vector; (j is already there) */
   for (k = 1, q = 0; q < nq_AVX_512; q++, k++)
     {
-      for (z = 0; z < 8; z++) tmp_AVX_512.x[z] = (k+z*nq_AVX_512 < M) ? P7P_TSC(gm, k+z*nq_AVX_512, p7P_DD) : -eslINFINITY;
+      for (z = 0; z < 16; z++) tmp_AVX_512.x[z] = (k+z*nq_AVX_512 < M) ? P7P_TSC(gm, k+z*nq_AVX_512, p7P_DD) : -eslINFINITY;
       tmp_AVX_512.sse[0] = esl_sse_expf(tmp_AVX_512.sse[0]);  // Hack because we don't currently have AVX version of expf
       tmp_AVX_512.sse[1] = esl_sse_expf(tmp_AVX_512.sse[1]);
       tmp_AVX_512.sse[2] = esl_sse_expf(tmp_AVX_512.sse[2]);  

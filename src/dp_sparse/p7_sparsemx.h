@@ -83,7 +83,7 @@ typedef struct {
   int    **k_AVX_512;   // k[0,1..L] = ptrs into kmem, rows of sparse k indices; k[0]=NULL; k[i]=NULL if n[i]=0 
   int     *n_AVX_512;   // number of cells included on each row; n[0]=0; n[i] <= M 
   int     *kmem_AVX_512;  // memory that k[] are pointing into, storing k indices of included cells, kmem[0..ncells-1]
-  int      S__AVX_512;     // number of sparsified segments 
+  int      S_AVX_512;     // number of sparsified segments 
   int      nrow_AVX_512;        // number of included rows; \sum_{i=1}^{L} \delta(n[i]) 
   int64_t  ncells_AVX_512;  // number of included supercells; \sum_{i=1}^{L} n[i]        
 
@@ -92,8 +92,8 @@ typedef struct {
   int      salloc_AVX_512;  // seg[] is allocated for salloc ia,ib pairs; nseg+2 <= salloc, +2 because of sentinels at 0,nseg+1
 
   /* "Slots" are used to convert striped vectors in f/b filter into correct M..1 cell index order in <kmem>; see note [3] */
-  int  *s[p7_VNF_AVX_512];  // slot pointers s[0..3] into <kmem>, for temporary storage of a striped vector row's sparse cells 
-  int   sn[p7_VNF_AVX_512]; // number of sparse cells stored so far in each slot; sn[0..15]
+  int  *s_AVX_512[p7_VNF_AVX_512];  // slot pointers s[0..3] into <kmem>, for temporary storage of a striped vector row's sparse cells 
+  int   sn_AVX_512[p7_VNF_AVX_512]; // number of sparse cells stored so far in each slot; sn[0..15]
 #endif
   
   

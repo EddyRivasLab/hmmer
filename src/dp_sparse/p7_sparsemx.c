@@ -591,7 +591,45 @@ p7_sparsemask_StartRow_AVX(P7_SPARSEMASK *sm, int i)
 }
 #endif
 
+#ifdef p7_build_AVX512
+int
+p7_sparsemask_StartRow_AVX_512(P7_SPARSEMASK *sm, int i)
+{
+  int r;
+  int status;
+  
+#ifdef p7_DEBUGGING
+  if (i < 1 || i > sm->L) ESL_EXCEPTION(eslEINVAL, "i is 1..L: sequence position");
+  if (sm->last_i <= i)    ESL_EXCEPTION(eslEINVAL, "rows need to be added in reverse order L..1");
+#endif
 
+  /* Make sure kmem has enough memory; if not, double it.
+   * Because we know the original allocation was enough to hold
+   * the slots, we know that doubling (even if ncells has filled
+   * the current kalloc) is sufficient.
+   */
+  if (sm->ncells_AVX_512 + p7_VNF_AVX_512*sm->Q_AVX_512 > sm->kalloc_AVX_512)
+    {
+      int64_t kalloc_req = sm->kalloc_AVX_512 * 2;
+      ESL_REALLOC(sm->kmem_AVX_512, sizeof(int) * kalloc_req);
+      sm->kalloc_AVX_512 = kalloc_req;
+      sm->n_krealloc++;
+    }
+  
+  for (r = 0; r < p7_VNF_AVX_512; r++)
+    {
+      sm->s_AVX_512[p7_VNF_AVX_512-r-1] = sm->kmem_AVX_512 + sm->ncells_AVX_512 + r*sm->Q_AVX_512;
+      sm->sn_AVX_512[r]         = 0;
+    }
+  sm->last_i_AVX_512 = i;
+  for (r = 0; r < p7_VNF_AVX_512; r++) 
+    sm->last_k_AVX_512[r] = sm->M+1;    /* sentinel to be sure that Add() is called in reverse order M..1 */
+  return eslOK;
+  
+ ERROR:
+  return status;
+}
+#endif
 /* Function:  p7_sparsemask_Add()
  * Synopsis:  Add a vector cell q,r to k list on current row.
  *
@@ -660,6 +698,27 @@ p7_sparsemask_Add_AVX(P7_SPARSEMASK *sm, int q, int r)
   return eslOK;
 }
 #endif
+#ifdef p7_build_AVX512 
+int
+p7_sparsemask_Add_AVX_512(P7_SPARSEMASK *sm, int q, int r)
+{
+  int     k = r*sm->Q_AVX_512+q+1;
+
+  //printf("Sparsemask_AVX_512 Adding i=%d q=%d r=%d k=%d M=%d\n", sm->last_i, q, r, k, sm->M);
+
+#ifdef p7_DEBUGGING 
+  if (q < 0 || q >= sm->Q_AVX_512)  ESL_EXCEPTION(eslEINVAL, "q is 0..Q_AVX-1; striped vector index");
+  if (r < 0 || r >= p7_VNF_AVX_512) ESL_EXCEPTION(eslEINVAL, "r is 0..%d-1; segment index in vectors", p7_VNF_AVX);
+  if (sm->last_k_AVX_512[r] == -1)  ESL_EXCEPTION(eslEINVAL, "need to StartRow_AVX() before calling Add_AVX()");
+  if (sm->last_k_AVX_512[r] <= k)   ESL_EXCEPTION(eslEINVAL, "cells must be added in reverse order M..1");
+#endif
+
+  sm->s_AVX_512[r][sm->sn_AVX_512[r]] = k;
+  sm->sn_AVX_512[r]++;
+  sm->last_k_AVX_512[r] = k;
+  return eslOK;
+}
+#endif
 /* Function:  p7_sparsemask_FinishRow()
  * Synopsis:  Done adding sparse cells on a current row.
  *
@@ -719,7 +778,29 @@ p7_sparsemask_FinishRow_AVX(P7_SPARSEMASK *sm)
   return eslOK;
 }
 #endif
-
+#ifdef p7_build_AVX512
+int
+p7_sparsemask_FinishRow_AVX_512(P7_SPARSEMASK *sm)
+{
+  int *p;
+  int  r;
+//printf("sm->ncells_AVX = %li\n", sm->ncells_AVX);
+  /* s[7] is already where it belongs; so we start at p = kmem + ncells + sn[7] */
+  p = sm->kmem_AVX_512 + sm->ncells_AVX_512 + sm->sn_AVX_512[p7_VNF_AVX_512-1];
+  sm->n_AVX_512[sm->last_i_AVX_512] = sm->sn_AVX_512[p7_VNF_AVX_512-1];
+  for (r = p7_VNF_AVX_512-2; r >= 0; r--)
+    {
+      memmove(p, sm->s_AVX_512[r], sizeof(int) * sm->sn_AVX_512[r]);
+      p += sm->sn_AVX_512[r];
+      sm->n_AVX_512[sm->last_i_AVX_512] += sm->sn_AVX_512[r];
+    }
+  /* now the slots are invalid; the next StartRow() will reset them */
+  sm->ncells_AVX_512 += sm->n_AVX_512[sm->last_i_AVX_512];
+  for (r = 0; r < p7_VNF_AVX_512; r++) 
+    sm->last_k_AVX_512[r]  = -1;  /* that'll suffice to prevent Add() from being called after FinishRow(). */
+  return eslOK;
+}
+#endif
 /* Function:  p7_sparsemask_Finish()
  * Synopsis:  Done adding cells to the mask.
  *
@@ -773,7 +854,7 @@ p7_sparsemask_Finish(P7_SPARSEMASK *sm)
   sm->S_AVX = sm->nrow_AVX = 0;
 #endif
 #ifdef p7_build_AVX512 
-  int *p7_VNF_AVX_512;
+  int *p_AVX_512;
   esl_vec_IReverse(sm->kmem_AVX_512, sm->kmem_AVX_512, sm->ncells_AVX_512);
 
   /* Set the k[] pointers; count <S> and <nrow> */
@@ -792,7 +873,18 @@ for(check_index = 0; check_index < sm->ncells; check_index++){
   }
 }
 #endif  
-
+#ifdef p7_build_check_AVX512
+//printf("Checking AVX-512 sparsemask\n");
+if (sm->ncells != sm->ncells_AVX_512){
+  printf("p7_sparsemask_Finish found different numbers of cells: %li (SSE) vs %li (AVX-512)\n", sm->ncells, sm->ncells_AVX_512);
+}
+int check_index;
+for(check_index = 0; check_index < sm->ncells; check_index++){
+  if(sm->kmem[check_index] != sm->kmem_AVX_512[check_index]){
+    printf("Sparsemask index miss-match at position %d, %i (SSE) vs. %i (AVX-512)\n", check_index, sm->kmem[check_index], sm->kmem_AVX_512[check_index]);
+  }
+}
+#endif  
   for (i = 1; i <= sm->L; i++){
 #ifdef p7_build_SSE  
     if (sm->n[i]) 
@@ -815,6 +907,17 @@ for(check_index = 0; check_index < sm->ncells; check_index++){
       } 
     else 
       sm->k_AVX[i] = NULL;
+#endif
+#ifdef p7_build_AVX512
+     if (sm->n_AVX_512[i]) 
+      {
+  sm->nrow_AVX_512++;
+  sm->k_AVX_512[i] = p_AVX_512;
+  p_AVX_512       += sm->n_AVX_512[i];
+  if (sm->n_AVX_512[i-1] == 0) sm->S_AVX_512++;
+      } 
+    else 
+      sm->k_AVX_512[i] = NULL;
 #endif
   }
 
@@ -856,6 +959,24 @@ for(check_index = 0; check_index < sm->ncells; check_index++){
   ESL_DASSERT1(( s == sm->S_AVX+1 ));
   sm->seg_AVX[s].ia = sm->seg_AVX[s].ib = sm->L+2;
 #endif  
+#ifdef p7_build_AVX512
+  if ( (sm->S_AVX_512+2) > sm->salloc_AVX_512) 
+    {
+      ESL_REALLOC(sm->seg_AVX_512, (sm->S_AVX_512+2) * sizeof(p7_sparsemask_seg_s)); /* +2, for sentinels */
+      sm->salloc_AVX_512 = sm->S_AVX_512 + 2; // inclusive of sentinels
+      sm->n_srealloc++;
+    }
+      
+  /* Set seg[] coord pairs. */
+  sm->seg_AVX_512[0].ia = sm->seg_AVX_512[0].ib = -1;
+  for (s = 1, i = 1; i <= sm->L; i++)
+    {
+      if (sm->n_AVX_512[i]   && sm->n_AVX_512[i-1] == 0)                 sm->seg_AVX_512[s].ia   = i; 
+      if (sm->n_AVX_512[i]   && (i == sm->L || sm->n_AVX_512[i+1] == 0)) sm->seg_AVX_512[s++].ib = i; 
+    }
+  ESL_DASSERT1(( s == sm->S_AVX_512+1 ));
+  sm->seg_AVX_512[s].ia = sm->seg_AVX_512[s].ib = sm->L+2;
+#endif  
 #ifdef p7_build_check_AVX2
   if(sm->S != sm->S_AVX){
     printf("SSE reports %d segments, AVX reports %d\n", sm->S, sm->S_AVX);
@@ -869,7 +990,20 @@ for(check_index = 0; check_index < sm->ncells; check_index++){
     }
   }  
 #endif   
- 
+ #ifdef p7_build_check_AVX512
+ // printf("Checking AVX-512 sparsemask segments\n");
+  if(sm->S != sm->S_AVX_512){
+    printf("SSE reports %d segments, AVX-512 reports %d\n", sm->S, sm->S_AVX_512);
+  }
+  for(i = 1; i <= sm->S; i++){
+    if (sm->seg[i].ia != sm->seg_AVX_512[i].ia){
+      printf("ia miss-match at seg[%d]: %d (SSE) vs %d (AVX-512)\n", i, sm->seg[i].ia, sm->seg_AVX_512[i].ia);
+    }
+    if (sm->seg[i].ib != sm->seg_AVX_512[i].ib){
+      printf("ib miss-match at seg[%d]: %d (SSE) vs %d (AVX-512)\n", i, sm->seg[i].ib, sm->seg_AVX_512[i].ib);
+    }
+  }  
+#endif   
  #ifdef p7_build_SSE 
    sm->last_i = -1;
   for (r = 0; r < p7_VNF; r++) 
@@ -880,7 +1014,11 @@ for(check_index = 0; check_index < sm->ncells; check_index++){
   for (r = 0; r < p7_VNF_AVX; r++) 
     sm->last_k_AVX[r] = -1;
  #endif  
-
+#ifdef p7_build_AVX512
+   sm->last_i_AVX_512 = -1;
+  for (r = 0; r < p7_VNF_AVX_512; r++) 
+    sm->last_k_AVX_512[r] = -1;
+ #endif  
 #ifndef p7_build_SSE
 #ifdef p7_build_AVX2
   // if we're running AVX code and not SSE, need to copy some values into the SSE data structure
@@ -893,6 +1031,19 @@ for(check_index = 0; check_index < sm->ncells; check_index++){
   sm->nrow = sm->nrow_AVX;
   sm->ncells = sm->ncells_AVX; 
 #endif
+#ifndef p7_build_AVX2
+#ifdef p7_build_AVX512
+ // if we're running AVX-512 code and not SSE, need to copy some values into the SSE data structure
+  // so the downstream code will see them
+  sm->seg = sm->seg_AVX_512;
+  sm->k = sm->k_AVX_512;
+  sm->n = sm->n_AVX_512;
+  sm->kmem = sm->kmem_AVX_512;
+  sm->S = sm->S_AVX_512;
+  sm->nrow = sm->nrow_AVX_512;
+  sm->ncells = sm->ncells_AVX_512; 
+#endif
+#endif  
 #endif
 
   return eslOK;
