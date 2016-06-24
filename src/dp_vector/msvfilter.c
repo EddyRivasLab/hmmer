@@ -140,7 +140,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
   for (i = 1; i <= L; i++)
     {
       rsc = om->rbv[dsq[i]];
-      xEv.s32x4 = vdupq_n_s32(0);      
+	  xEv.s32x4 = vdupq_n_s32(0);      
 
       /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12. 
        * Because ia32 is littlendian, this means a left bit shift.

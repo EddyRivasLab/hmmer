@@ -469,10 +469,13 @@ static uint8_t
 biased_byteify(P7_OPROFILE *om, float sc)
 {
   uint8_t b;
-
-  sc  = -1.0f * roundf(om->scale_b * sc);                          /* ugh. sc is now an integer cost represented in a float...           */
-  b   = (sc > 255 - om->bias_b) ? 255 : (uint8_t) sc + om->bias_b; /* and now we cast, saturate, and bias it to an unsigned char cost... */
-  return b;
+  sc  = -1.0f * roundf(om->scale_b * sc);
+  int32_t q = round(sc);
+  uint8_t b1 = (uint8_t) q; 
+                        /* ugh. sc is now an integer cost represented in a float...           */
+  b   = (sc > 255 - om->bias_b) ? 255 : b1 + om->bias_b; /* and now we cast, saturate, and bias it to an unsigned char cost... */
+  
+    return b;
 }
  
 /* unbiased_byteify()
@@ -599,7 +602,7 @@ mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
     for (q = 0, k = 1; q < nq; q++, k++)
       {
 	for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_byteify(om, P7P_MSC(gm, k+z*nq, x)) : 255);
-	om->rbv[x][q].s32x4   = tmp.v.s32x4;	
+	om->rbv[x][q].u8x16   = tmp.v.u8x16;	
       }
 
   /* transition costs */
