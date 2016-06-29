@@ -172,27 +172,8 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
        * max value.  Then the last shuffle will broadcast the max value
        * to all simd elements.
        */
-	  union { __arm128i v; uint8_t i[16]; } myvec;
-	  myvec.v = xEv;
-	  uint8_t max = 0, x=0;
-	  for (; x<16; x++)
-		max = ((myvec.i[x] > max) ? myvec.i[x] : max);
 	  
 	  xEv.u8x16 = vdupq_n_u8(esl_neon_hmax_u8(xEv));
-	  uint8_t y = vgetq_lane_u8(xEv.u8x16, 0);
-	  if (max != y) printf("lol, error\n");
-
-      /*
-	  tempv.u8x16 = vreinterpretq_u8_u32(vextq_u32(xEv.u32x4, xEv.u32x4, 2));
-	  xEv.u8x16 = vmaxq_u8(xEv.u8x16, tempv.u8x16);
-	  tempv.u8x16 = vreinterpretq_u8_u32(vextq_u32(xEv.u32x4, xEv.u32x4, 1));
-	  xEv.u8x16 = vmaxq_u8(xEv.u8x16, tempv.u8x16);
-	  tempv.u8x16 = vreinterpretq_u8_u16(vrev64q_u16(xEv.u16x8));
-	  xEv.u8x16 = vmaxq_u8(xEv.u8x16, tempv.u8x16);
-	  tempv.u8x16 = vrev64q_u8(xEv.u8x16);
-	  xEv.u8x16 = vmaxq_u8(xEv.u8x16, tempv.u8x16);
-	  xEv.u8x16 = vdupq_n_u8(vgetq_lane_u8(xEv.u8x16, 15));
- 	  */
 
 	  /* immediately detect overflow */
       if ((l0 | l1) != 0x0000) { *ret_sc = eslINFINITY; return eslERANGE; }
