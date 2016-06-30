@@ -104,7 +104,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
   /* Try highly optimized Knudsen SSV filter first. 
    * Note that SSV doesn't use any main memory (from <ox>) at all! 
    */
-//  if (( status = p7_SSVFilter(dsq, L, om, ret_sc)) != eslENORESULT) return status;
+  if (( status = p7_SSVFilter(dsq, L, om, ret_sc)) != eslENORESULT) return status;
 
   /* Resize the filter mx as needed */
   if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of MSV filter matrix failed");
