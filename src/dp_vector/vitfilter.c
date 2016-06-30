@@ -118,7 +118,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 
   /* -infinity is -32768 */
   negInfv.s16x8 = vdupq_n_s16(0);
-  negInfv.s16x8 = vsetq_lane_s16(-32768, negInfv.s16x8, 0);  /* negInfv = 16-byte vector, 14 0 bytes + 2-byte value=-32768, for an OR operation. */
+  negInfv.s16x8 = vsetq_lane_s16(-32768, negInfv.s16x8, 7);  /* negInfv = 16-byte vector, 14 0 bytes + 2-byte value=-32768, for an OR operation. */
 
 
   /* Initialization. In unsigned arithmetic, -infinity is -32768
