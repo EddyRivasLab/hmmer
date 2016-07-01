@@ -83,6 +83,21 @@ static        void  save_debug_row_pp(P7_CHECKPTMX *ox,               __arm128f 
 static        void  save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, __arm128f *dpc, int i, float totscale);
 #endif
 
+
+/* force IEEE754 compliance on denormals */
+static inline void DisableFZ()
+{
+    __asm__ volatile("vmrs r0, fpscr\n"
+                     "bic r0, $(1 << 24)\n"
+                     "vmsr fpscr, r0" : : : "r0");
+}
+
+static inline void RestoreFZ()
+{
+    __asm__ volatile("vmrs r0, fpscr\n"
+                     "orr r0, $(1 << 24)\n"
+                     "vmsr fpscr, r0" : : : "r0");
+}
 /*****************************************************************
  * 1. Forward and Backward API calls
  *****************************************************************/
@@ -130,6 +145,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX 
   int     b;			/* counter down through checkpointed blocks, Rb+Rc..1 */
   int     w;			/* counter down through rows in a checkpointed block  */
 
+//  DisableFZ(); /* disable flush-to-zero on denormals */
   /* Contract checks */
   //  ESL_DASSERT1(( om->mode == p7_LOCAL )); /* Production code assumes multilocal mode w/ length model <L> */
   //  ESL_DASSERT1(( om->L    == L ));	  /*  ... and it's easy to forget to set <om> that way           */
@@ -209,6 +225,7 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX 
   ESL_DASSERT1( ( (! isnan(xc[p7C_C])) && (! isinf(xc[p7C_C]))) );
 
   if (opt_sc) *opt_sc = totsc + logf(xc[p7C_C] * om->xf[p7O_C][p7O_MOVE]);
+  RestoreFZ(); /* restore flush-to-zero mode */
   return eslOK;
 }
 
@@ -253,6 +270,7 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
 
   p7_sparsemask_Reinit(sm, om->M, L);
 
+//  DisableFZ(); /* disable flush-to-zero on denormals */
   /* Contract checks */
   //ESL_DASSERT1(( om->mode == p7_LOCAL )); /* Production code assumes multilocal mode w/ length model <L> */
   //ESL_DASSERT1(( om->L    == L ));	  /*  ... and it's easy to forget to set <om> that way           */
@@ -282,7 +300,11 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
   if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, L, fwd, "f2 O"); if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, L, bck, "bck");  }
   if (ox->bck)          save_debug_row_fb(ox, ox->bck, bck, L, ox->bcksc); 
 #endif
-  if ( (status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
+  if ( (status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK)
+	{
+	  RestoreFZ(); /* restore flush-to-zero */
+ 	  return status;
+	}
   i--;
   dpp = bck;
 
@@ -309,8 +331,12 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
       if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
       /* And decode. */
-      if ( (status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
-      dpp = bck;
+      if ( (status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK)
+	  {
+		RestoreFZ(); /* restore flush-to-zero */
+	  	return status;
+      }
+	   dpp = bck;
       i--;			/* i is now L-2 if there's checkpointing; else it's L-1 */
     }
 
@@ -333,8 +359,11 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
       if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
       /* And decode checkpointed row i. */
-      if ( (status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
-      
+      if ( (status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK)
+	  {
+		 RestoreFZ();
+		 return status;
+      }
       /* The rest of the rows in the block weren't checkpointed.
        * Compute Forwards from last checkpoint ...
        */
@@ -360,7 +389,11 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
 	  if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i2, fwd, "f2 X"); p7_checkptmx_DumpFBRow(ox, i2, bck, "bck"); }
 	  if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i2, ox->bcksc); 
 #endif
-	  if ((status = posterior_decode_row(ox, i2, sm, sm_thresh, Tvalue)) != eslOK) return status;
+	  if ((status = posterior_decode_row(ox, i2, sm, sm_thresh, Tvalue)) != eslOK) 
+	  {
+		RestoreFZ(); /* restore flush-to-zero */
+		return status;
+	  }
 	  dpp = bck;
 	}
       i -= w;
@@ -381,7 +414,11 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
        if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i, fwd, "f2 O"); p7_checkptmx_DumpFBRow(ox, i, bck, "bck"); }
        if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
-       if ((status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
+       if ((status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK)
+	   {
+		 RestoreFZ(); /* restore flush-to-zero */
+		 return status;
+	   }
        dpp = bck;
      }
 
@@ -399,11 +436,16 @@ p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX
    xN = backward_row_zero(dsq[1], om, ox); 
    if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, 0, fwd, "f2 O"); p7_checkptmx_DumpFBRow(ox, 0, bck, "bck"); }
    if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, 0, ox->bcksc); 
-   if ((status = posterior_decode_row(ox, 0, sm, sm_thresh, Tvalue)) != eslOK) return status;
+   if ((status = posterior_decode_row(ox, 0, sm, sm_thresh, Tvalue)) != eslOK) 
+   {
+	 RestoreFZ(); /* restore flush-to-zero */
+	 return status;
+   }
    ox->bcksc += xN;
 #endif
 
    p7_sparsemask_Finish(sm);
+   RestoreFZ(); /* restore flush-to-zero */
    return eslOK;
 }
 /*----------- end forward/backward API calls --------------------*/
@@ -442,14 +484,18 @@ forward_row(ESL_DSQ xi, const P7_OPROFILE *om, const __arm128f *dpp, __arm128f *
   __arm128f          xEv;
 	xEv.f32x4 = vdupq_n_f32(0);  
   __arm128f          xBv;
-	xBv.f32x4 = vdupq_n_f32(0);   
+	xBv.f32x4 = vdupq_n_f32(xp[p7C_B]);   
   __arm128f mpv, dpv, ipv;
   __arm128f sv;
   int    q;
   int    j;
 
   mpv = esl_neon_rightshift_float(P7C_MQ(dpp, Q-1), zerov); 
-  ipv = esl_neon_rightshift_float(P7C_IQ(dpp, Q-1), zerov); 
+  union { __arm128f v; float f[4]; }ok;
+  ok.v = mpv;
+ // printf("before: %f %f %f %f\n", ok.f[0], ok.f[1], ok.f[2], ok.f[3]);
+ 
+ipv = esl_neon_rightshift_float(P7C_IQ(dpp, Q-1), zerov); 
   dpv = esl_neon_rightshift_float(P7C_DQ(dpp, Q-1), zerov); 
 
   /* DP recursion for main states, all but the D->D path */
@@ -488,7 +534,12 @@ forward_row(ESL_DSQ xi, const P7_OPROFILE *om, const __arm128f *dpp, __arm128f *
   /* We're almost certainly're obligated to do at least one complete 
    * DD path to be sure: 
    */
+  //union { __arm128f v; float f[4]; }ok;
+  ok.v = dcv;
+  //printf("before: %f %f %f %f\n", ok.f[0], ok.f[1], ok.f[2], ok.f[3]);
   dcv            = esl_neon_rightshift_float(dcv, zerov);
+  ok.v = dcv; 
+ // printf("after: %f %f %f %f\n", ok.f[0], ok.f[1], ok.f[2], ok.f[3]);
   P7C_DQ(dpc, 0) = zerov;
   tp             = om->tfv + 7*Q;	/* set tp to start of the DD's */
   for (q = 0; q < Q; q++) 
