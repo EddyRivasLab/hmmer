@@ -270,19 +270,19 @@ AS_IF([test "x$check_threads" != xno],
                       AC_MSG_FAILURE([POSIX multithreading failed])
                     fi])])
 
-#AC_ARG_ENABLE(threads, 
-#[  --enable-threads        enable POSIX multithreading support],
-#[case $enable_threads in 
-#   yes) AC_MSG_NOTICE([enabled POSIX multithreading support])
-#        AC_CHECK_FUNCS(pthread_setconcurrency)
-#        AC_CHECK_FUNCS(pthread_attr_setscope)
-#	ACX_PTHREAD(AC_DEFINE(HMMER_THREADS))
-#	;;
-#   no)  AC_MSG_NOTICE([POSIX multithreading support disabled])
-#        ;;
-#   *)   echo "Ignoring unknown argument to --disable-threads: $enable_threads"
-#	;;
-#esac])
+AC_ARG_ENABLE(threads, 
+[  --enable-threads        enable POSIX multithreading support],
+[case $enable_threads in 
+   yes) AC_MSG_NOTICE([enabled POSIX multithreading support])
+        AC_CHECK_FUNCS(pthread_setconcurrency)
+        AC_CHECK_FUNCS(pthread_attr_setscope)
+	ACX_PTHREAD(AC_DEFINE(HMMER_THREADS))
+	;;
+   no)  AC_MSG_NOTICE([POSIX multithreading support disabled])
+        ;;
+   *)   echo "Ignoring unknown argument to --disable-threads: $enable_threads"
+	;;
+esac])
 
 # --with-gsl        - enable hooks into the GSL (GNU Scientific Library)
 #
@@ -301,7 +301,8 @@ AC_ARG_WITH([gsl],
             ],
 	    [with_gsl=no])
 
-
+# Enable targeting for better performance
+AC_ARG_ENABLE(targeting,[AS_HELP_STRING([--enable-targeting],[enable CPU targeted optimizations])],          enable_targeting=$enableval,   enable_targeting=no)
 ################################################################
 # 5. Checks for programs, including ${CC} and its ${CFLAGS}.
 #################################################################
@@ -363,64 +364,64 @@ if test "x$SIMD_CFLAGS" = x; then
 fi
 AC_SUBST(SIMD_CFLAGS)
 
-# Verify that we can build SSE2 code.
-# The test here is cribbed from the Apache configure.ac file.
-#
 
-#AC_MSG_CHECKING([whether SSE2 is supported])
-sre_save_cflags="$CFLAGS"
-CFLAGS="$CFLAGS $SIMD_CFLAGS"
+# NEON: Check for NEON compiler flag
+# todo: we can always check for other ARM floating point flags later
+#if test "$enable_neon" = "yes" || test "$enable_neon" = "check"; then
+# Determine target if targeting is specified.
+# Do this by attempting to execute code with different 
+# cominations of NEON/VFP compiler options. This allows 
+# us to determine the best compile options for each 
+# ARM architecture. 
+if test "$enable_targeting" = "yes"; then
+  cortex_a5="-mcpu=cortex-a5 -mfpu=neon-fp16"
+  cortex_a7="-mcpu=cortex-a7 -mfpu=neon-vfpv4"
+  cortex_a8="-mcpu=cortex-a8 -mfpu=neon"
+  cortex_a9="-mcpu=cortex-a9 -mfpu=neon-fp16"
+  cortex_a15="-mcpu=cortex-a15 -mfpu=neon-vfpv4"
+  sre_save_CFLAGS="$CFLAGS"
+  sre_save_CPPFLAGS="$CPPFLAGS"
+  CFLAGS="$CFLAGS $cortex_a5"
+  CPPFLAGS="$CPPFLAGS $cortex_a5"     
+  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
+                    [vector_flags="$cortex_a5"], [])
+  CFLAGS="$sre_save_CFLAGS $cortex_a7"  
+  CPPFLAGS="$sre_save_CPPFLAGS $cortex_a7"
+  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
+                    [vector_flags="$cortex_a7"], [])
+  CFLAGS="$sre_save_CFLAGS $cortex_a8"  
+  CPPFLAGS="$sre_save_CPPFLAGS $cortex_a8"
+  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
+                    [vector_flags="$cortex_a8"], [])
+  CFLAGS="$sre_save_CFLAGS $cortex_a9"  
+  CPPFLAGS="$sre_save_CPPFLAGS $cortex_a9"
+  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
+                    [vector_flags="$cortex_a9"], [])
+  CFLAGS="$sre_save_CFLAGS $cortex_a15"  
+  CPPFLAGS="$sre_save_CPPFLAGS $cortex_a15"
+  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
+                    [vector_flags="$cortex_a15"], [])
+  
+  CFLAGS="$sre_save_CFLAGS"
+  CPPFLAGS="$sre_save_CPPFLAGS"
 
-# Temporary; ARM does not support SSE
-# TODO: Add checks for ARM NEON instructions
-# 
-#AC_COMPILE_IFELSE(  [AC_LANG_PROGRAM([[#include <emmintrin.h>]],
-#			 [[__m128i* one=(__m128i*)_mm_malloc(4, 16);
-#		   __m128i* two=(__m128i*)_mm_malloc(4, 16);
-#		   __m128i xmm1 = _mm_load_si128(one);
-#		   __m128i xmm2 = _mm_load_si128(two);
-#		   __m128i xmm3 = _mm_or_si128(xmm1, xmm2);
-#		   _mm_store_si128(one, xmm3);
-#		   _mm_free(one);
-#		   _mm_free(two);
-#		 ]])],
-#  [ AC_MSG_RESULT([yes])],
-#  [ AC_MSG_ERROR([no: HMMER3 requires SSE2 vector instruction support]) ]
-#)
+else
+   if test "x$SIMD_CFLAGS" = x; then
+     case $ax_cv_c_compiler_vendor in
+       gnu)   AX_CHECK_COMPILER_FLAGS(-mfpu=neon,[SIMD_CFLAGS="-mfpu=neon"],
+               [AC_MSG_ERROR([no NEON hardware detected])]);;
+       *)     ;;   
+       esac
+   fi
+fi
 
-CFLAGS="$sre_save_cflags"
-AC_DEFINE([HAVE_SSE2])
+if test "y$vector_flags" != y; then
+  CFLAGS="$CFLAGS $vector_flags"
+  CPPFLAGS="$CPPFLAGS $vector_flags"
+fi
 
-# check if the SSE2 implementation supports cast functions
-AC_MSG_CHECKING([compiler support for sse2 cast functions])
-ssecast=no
-sre_save_cflags="$CFLAGS"
-CFLAGS="$CFLAGS $SIMD_CFLAGS"
-AC_LANG(C)
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <emmintrin.h>]],
-                                   [[__m128 a;
-                                     __m128i b;
-                                     b = _mm_castps_si128(a);
-                                     a = _mm_castsi128_ps(b);]])],
-                  [AC_DEFINE([HAVE_SSE2_CAST])
-                   ssecast=yes])
-AC_MSG_RESULT([$ssecast])
-CFLAGS="$sre_save_cflags"
+AC_SUBST(SIMD_CFLAGS)
 
-# For x86 processors check if the flush to zero macro is available
-# in order to avoid the performance penalty dealing with sub-normal
-# values in the floating point calculations.
-AC_MSG_CHECKING([whether _MM_SET_FLUSH_ZERO_MODE is supported])
-sre_save_cflags="$CFLAGS"
-CFLAGS="$CFLAGS $SIMD_CFLAGS"
-AC_COMPILE_IFELSE(  [AC_LANG_PROGRAM([[#include <xmmintrin.h>]],
-		 [[_MM_SET_FLUSH_ZERO_MODE (_MM_FLUSH_ZERO_ON);
-		 ]])],
-  [ AC_MSG_RESULT([yes])
-    AC_DEFINE([HAVE_FLUSH_ZERO_MODE])],
-  [ AC_MSG_RESULT([no])]
-)
-CFLAGS="$sre_save_cflags"
 
 # Define HAVE_GZIP if gzip is in $PATH (or if HAVE_GZIP is already set)
 AC_PATH_PROG(HAVE_GZIP, "gzip", "no")
@@ -479,16 +480,8 @@ AC_CHECK_HEADERS([sys/sysctl.h], [], [],
 
 
 # Vector-specific headers. 
-# Separated, because we may want to implement
-# other vector languages besides SSE
-# For SSE:
-#  xmmintrin.h = SSE
-#  emmintrin.h = SSE2
-#  pmmintrin.h = SSE3
 AC_CHECK_HEADERS([\
-  emmintrin.h\
-  pmmintrin.h\
-  xmmintrin.h
+  arm_neon.h
 ])
 
 ################################################################

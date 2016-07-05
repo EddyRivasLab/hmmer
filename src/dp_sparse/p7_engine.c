@@ -1,21 +1,21 @@
 #include "p7_config.h"
 
 /* SIMD-vectorized acceleration filters, local only: */
-//#include "dp_vector/msvfilter.h"          // MSV/SSV primary acceleration filter
-//#include "dp_vector/vitfilter.h"          // Viterbi secondary acceleration filter
-//#include "dp_vector/fwdfilter.h"          // Sparsification w/ checkpointed local Forward/Backward
+#include "dp_vector/msvfilter.h"          // MSV/SSV primary acceleration filter
+#include "dp_vector/vitfilter.h"          // Viterbi secondary acceleration filter
+#include "dp_vector/fwdfilter.h"          // Sparsification w/ checkpointed local Forward/Backward
 
 /* Sparse DP, dual-mode glocal/local:    */
-//#include "dp_sparse/sparse_fwdback.h"     // sparse Forward/Backward
-//#include "dp_sparse/sparse_viterbi.h"     // sparse Viterbi
-//#include "dp_sparse/sparse_decoding.h"    // sparse Decoding
-//#include "dp_sparse/sparse_anchors.h"     // most probable anchor set (MPAS) 
+#include "dp_sparse/sparse_fwdback.h"     // sparse Forward/Backward
+#include "dp_sparse/sparse_viterbi.h"     // sparse Viterbi
+#include "dp_sparse/sparse_decoding.h"    // sparse Decoding
+#include "dp_sparse/sparse_anchors.h"     // most probable anchor set (MPAS) 
 
 /* Sparse anchor-set-constrained (ASC): */
 #include "dp_sparse/sparse_asc_fwdback.h"   // ASC Forward/Backward
 #include "dp_sparse/sparse_envelopes.h"     // Envelope inference
-//#include "dp_sparse/sparse_null2.h"         // Null2 score correction
-//#include "dp_sparse/sparse_aec_align.h"     // anchor/envelope constrained alignment
+#include "dp_sparse/sparse_null2.h"         // Null2 score correction
+#include "dp_sparse/sparse_aec_align.h"     // anchor/envelope constrained alignment
 
 #include "dp_sparse/p7_engine.h"  // FIXME: we'll move the engine somewhere else, I think
 
@@ -169,7 +169,7 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
   return NULL;
 }
 
-/*
+
 int
 p7_engine_Reuse(P7_ENGINE *eng)
 {
@@ -184,9 +184,9 @@ p7_engine_Reuse(P7_ENGINE *eng)
   if ((status = p7_checkptmx_Reuse (eng->cx))    != eslOK) return status;
   if ((status = p7_sparsemask_Reuse(eng->sm))    != eslOK) return status;
 
-  /* Most Reuse()'s are cheap, but the p7_anchorhash_Reuse() is a little
+  /* Most Reuse()'s are cheap, but the p7_anchorhash_Reuse() is a little 
    * expensive. That's why we avoid Reuse()'ing the structures that only
-   * the main engine uses.
+   * the main engine uses. */
    
   if (eng->used_main)
     {
@@ -200,7 +200,7 @@ p7_engine_Reuse(P7_ENGINE *eng)
       if ((status = p7_anchorhash_Reuse(eng->ahash)) != eslOK) return status;  
       if ((status = p7_envelopes_Reuse (eng->env))   != eslOK) return status;  
       if ((status = p7_trace_Reuse     (eng->tr))    != eslOK) return status;
-      /* wrkM and wrkKp are scratch workspaces, don't need to be reused/reinitialized 
+      /* wrkM and wrkKp are scratch workspaces, don't need to be reused/reinitialized */
     }
   eng->used_main = FALSE;
 
@@ -214,10 +214,10 @@ p7_engine_Reuse(P7_ENGINE *eng)
   eng->fsc    = 0.;
   eng->asc_f  = 0.;
 
-  /* F1, F2, F3 are constants, they don't need to be reset. 
+  /* F1, F2, F3 are constants, they don't need to be reset. */
   return eslOK;
 }
-*/
+
 void
 p7_engine_Destroy(P7_ENGINE *eng)
 {
