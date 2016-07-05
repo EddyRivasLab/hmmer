@@ -249,8 +249,6 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
   pli->mode            = mode;
   pli->show_accessions = (go && esl_opt_GetBoolean(go, "--acc")   ? TRUE  : FALSE);
   pli->show_alignments = (go && esl_opt_GetBoolean(go, "--noali") ? FALSE : TRUE);
-  pli->show_translated_sequence = (go && esl_opt_GetBoolean(go, "--notrans") ? FALSE : TRUE); /* TRUE to display translated DNA sequence in domain display for nhmmscant */
-  pli->show_vertical_codon = (go && esl_opt_GetBoolean(go, "--vertcodon") ? TRUE : FALSE); /* TRUE to display translated DNA sequence in domain display for nhmmscant */
   pli->hfp             = NULL;
   pli->errbuf[0]       = '\0';
 
@@ -900,42 +898,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
           }
         }
       }
-	  
-	  /*
-        if there is a nucleotide sequence then we want to record the location 
-	    of the hit in that sequence and not the location of the hit in the ORF 
-		provided by esl_gencode_ProcessOrf (esl_gencode.c) used in p7_alidisplay_Create
-		in p7_alidisplay.c. 
-		sq->start is the start location of the ORF in the nucleotide sequence and 
-		ad->sqfrom is the start of the hit in the ORF in amino acid locations
-      */
-      if (ntsq != NULL)
-      {
-         for (d = 0; d < hit->ndom; d++)
-         {
-            if (sq->start < sq->end)
-			{				
-			   hit->dcl[d].iorf       = sq->start;
-               hit->dcl[d].jorf       = sq->end;
-               hit->dcl[d].ienv       = (hit->dcl[d].ienv*3-2) + sq->start-1;
-               hit->dcl[d].jenv       = (hit->dcl[d].jenv*3) + sq->start-1;			
-		       hit->dcl[d].ad->sqfrom = (hit->dcl[d].ad->sqfrom*3-2) + sq->start-1;
-		       hit->dcl[d].ad->sqto   = (hit->dcl[d].ad->sqto*3) + sq->start-1;
-            }
-			else
-			{
-               hit->dcl[d].iorf       = sq->start;
-               hit->dcl[d].jorf       = sq->end;
-			
-               hit->dcl[d].ienv       = sq->start - (hit->dcl[d].ienv - 1)*3;
-               hit->dcl[d].jenv       = sq->start - (hit->dcl[d].jenv - 1)*3 - 2;			
-
-		       hit->dcl[d].ad->sqfrom = sq->start - (hit->dcl[d].ad->sqfrom -1)*3;
-		       hit->dcl[d].ad->sqto   = sq->start - (hit->dcl[d].ad->sqto -1)*3 - 2;				
-			}
-         }		
-	  }
-	  
 	  
     }
 
@@ -1931,7 +1893,7 @@ main(int argc, char **argv)
       p7_bg_SetLength(bg, sq->n);
       p7_oprofile_ReconfigLength(om, sq->n);
   
-      p7_Pipeline(pli, om, bg, sq, hitlist);
+      p7_Pipeline(pli, om, bg, sq, NULL, hitlist);
 
       esl_sq_Reuse(sq);
       p7_pipeline_Reuse(pli);

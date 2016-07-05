@@ -66,7 +66,7 @@ fi
 # The four AC_INIT args set these output variables and preprocessor symbols:
 #     PACKAGE_NAME      <package>     e.g. "HMMER"
 #     PACKAGE_VERSION   <version>     e.g. "3.0"
-#     PACKAGE_BUGREPORT <bug-report>  e.g. "eddys@janelia.hhmi.org"
+#     PACKAGE_BUGREPORT <bug-report>  e.g. "sean@eddylab.org"
 #     PACKAGE_TARNAME   <tarname>     e.g. "hmmer"
 # From them, it derives one more:
 #     PACKAGE_STRING    <package> <version>, e.g. "HMMER 3.0"
@@ -83,7 +83,7 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="May 2016"
+HMMER_DATE="July 2016"
 HMMER_COPYRIGHT="Copyright (C) 2016 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
@@ -91,10 +91,10 @@ HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
-EASEL_DATE="May 2016"
+EASEL_DATE="July 2016"
 EASEL_COPYRIGHT="Copyright (C) 2016 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
-EASEL_VERSION="0.42"
+EASEL_VERSION="0.43"
 EASEL_URL="http://bioeasel.org/"
 
 # Output variables  (AC_OUTPUT replaces @var@ in input files, such as Makefiles)
