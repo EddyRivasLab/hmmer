@@ -270,19 +270,19 @@ AS_IF([test "x$check_threads" != xno],
                       AC_MSG_FAILURE([POSIX multithreading failed])
                     fi])])
 
-AC_ARG_ENABLE(threads, 
-[  --enable-threads        enable POSIX multithreading support],
-[case $enable_threads in 
-   yes) AC_MSG_NOTICE([enabled POSIX multithreading support])
-        AC_CHECK_FUNCS(pthread_setconcurrency)
-        AC_CHECK_FUNCS(pthread_attr_setscope)
-	ACX_PTHREAD(AC_DEFINE(HMMER_THREADS))
-	;;
-   no)  AC_MSG_NOTICE([POSIX multithreading support disabled])
-        ;;
-   *)   echo "Ignoring unknown argument to --disable-threads: $enable_threads"
-	;;
-esac])
+#AC_ARG_ENABLE(threads, 
+#[  --enable-threads        enable POSIX multithreading support],
+#[case $enable_threads in 
+#   yes) AC_MSG_NOTICE([enabled POSIX multithreading support])
+#        AC_CHECK_FUNCS(pthread_setconcurrency)
+#        AC_CHECK_FUNCS(pthread_attr_setscope)
+#	ACX_PTHREAD(AC_DEFINE(HMMER_THREADS))
+#	;;
+#   no)  AC_MSG_NOTICE([POSIX multithreading support disabled])
+#        ;;
+#   *)   echo "Ignoring unknown argument to --disable-threads: $enable_threads"
+#	;;
+#esac])
 
 # --with-gsl        - enable hooks into the GSL (GNU Scientific Library)
 #
