@@ -457,7 +457,7 @@ p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambd
   for (i = 0; i < N; i++)
     {
       if ((status = esl_rsq_xfIID(r, bg->f, om->abc->K, L, dsq)) != eslOK) goto ERROR;
-      //if ((status = p7_ForwardFilter(dsq, L, om, ox, &fsc))      != eslOK) goto ERROR;
+      if ((status = p7_ForwardFilter(dsq, L, om, ox, &fsc))      != eslOK) goto ERROR;
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
       xv[i] = (fsc - nullsc) / eslCONST_LOG2;
 
