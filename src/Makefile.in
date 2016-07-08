@@ -5,6 +5,7 @@ SUBDIRS = base\
 	  dp_sparse\
 	  dp_vector\
 	  misc\
+	  programs\
 	  sandbox \
           search\
 	  utilities \
