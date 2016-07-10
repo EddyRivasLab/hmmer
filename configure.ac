@@ -692,6 +692,12 @@ AC_CHECK_FUNCS(getcwd)
 AC_CHECK_FUNCS(stat)
 AC_CHECK_FUNCS(fstat)
 
+AC_CHECK_FUNCS([strsep])
+AH_VERBATIM([strsep],
+[#ifndef HAVE_STRSEP
+char* strsep(char **str, const char *delim);
+#endif])
+
 AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
 AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))
 AC_CHECK_FUNCS(htons, , AC_CHECK_LIB(socket, htons))

@@ -134,6 +134,46 @@ static void clear_results(WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results);
 static void gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results);
 static void forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results);
 
+#ifndef HAVE_STRSEP
+/*
+ * some OSs lack strsep, e.g. Solaris; implementation taken from gnulib
+ * https://github.com/coreutils/gnulib/blob/master/lib/strsep.c
+ */
+char *
+strsep (char **stringp, const char *delim)
+{
+  char *start = *stringp;
+  char *ptr;
+
+  if (start == NULL)
+    return NULL;
+
+  /* Optimize the case of no delimiters.  */
+  if (delim[0] == '\0')
+    {
+      *stringp = NULL;
+      return start;
+    }
+
+  /* Optimize the case of one delimiter.  */
+  if (delim[1] == '\0')
+    ptr = strchr (start, delim[0]);
+  else
+    /* The general case.  */
+    ptr = strpbrk (start, delim);
+  if (ptr == NULL)
+    {
+      *stringp = NULL;
+      return start;
+    }
+
+  *ptr = '\0';
+  *stringp = ptr + 1;
+
+  return start;
+}
+#endif
+
 static void
 print_client_msg(int fd, int status, char *format, va_list ap)
 {
