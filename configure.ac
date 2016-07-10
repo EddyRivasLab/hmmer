@@ -105,6 +105,7 @@ AC_SUBST(HMMER_VERSION)
 AC_SUBST(HMMER_URL)
 AC_SUBST(HMMER_ESLDIR)
 AC_SUBST(HMMER_SADIR)
+AC_SUBST(SOCKETLIBS)
 
 AC_SUBST(EASEL_DATE)
 AC_SUBST(EASEL_COPYRIGHT)
@@ -702,6 +703,13 @@ AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
 AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))
 AC_CHECK_FUNCS(htons, , AC_CHECK_LIB(socket, htons))
 AC_CHECK_FUNCS(htonl, , AC_CHECK_LIB(socket, htonl))
+
+SOCKETLIBS=
+AC_CHECK_FUNC(socket, , AC_CHECK_LIB(socket, socket, 
+      [ AC_SUBST([SOCKETLIBS], ["-lsocket ${SOCKETLIBS}"])) ])
+AC_CHECK_FUNC(inet_pton, , AC_CHECK_LIB(nsl, inet_pton, 
+      [ AC_SUBST([SOCKETLIBS], ["-lnsl ${SOCKETLIBS}"])) ])
+
 AC_FUNC_FSEEKO
 
 
@@ -766,6 +774,7 @@ HMMER configuration:
      host:                 $host
      linker:               ${LDFLAGS}
      libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
+     socket libraries:     ${SOCKETLIBS}
      DP implementation:    ${impl_choice}
 "
 
