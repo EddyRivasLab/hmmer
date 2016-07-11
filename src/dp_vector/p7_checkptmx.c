@@ -12,7 +12,7 @@
 #include <stdio.h>
 
 #include "easel.h"
-
+#include "arm_vector.h"
 #include "dp_vector/simdvec.h"
 #include "dp_vector/p7_checkptmx.h"
 
@@ -98,7 +98,7 @@ p7_checkptmx_Create(int M, int L, int64_t ramlimit)
   ESL_ALLOC( ox->dpf,    sizeof(float *) * ox->allocR);  
   // Static analyzers may complain about the above.
   // sizeof(float *) is correct, even though ox->dpf is char **.
-  // ox->dpf will be cast to __m128 SIMD vector in DP code.
+  // ox->dpf will be cast to __arm128f SIMD vector in DP code.
 
   ox->dpf[0] = (char *) ( ((uintptr_t) ox->dp_mem + p7_VALIGN - 1) & p7_VALIMASK); /* hand memory alignment */
   for (r = 1; r < ox->validR; r++)
@@ -285,7 +285,7 @@ p7_checkptmx_MinSizeof(int M, int L)
   int    minR = 3 + (int) ceil(minimum_rows(L));  // 3 = Ra, 2 rows for backwards, 1 for fwd[0]
   
   n += p7_VALIGN-1;                                                  // dp_mem has to be hand-aligned for vectors
-  n += minR * (sizeof(float) * p7_VNF * Q * p7C_NSCELLS);            // dp_mem, main: QR supercells; each has p7C_NSCELLS=3 cells, MID; each cell is __m128 vector of four floats (p7_VNF=4 * float)
+  n += minR * (sizeof(float) * p7_VNF * Q * p7C_NSCELLS);            // dp_mem, main: QR supercells; each has p7C_NSCELLS=3 cells, MID; each cell is __arm128f vector of four floats (p7_VNF=4 * float)
   n += minR * (ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN)); // dp_mem, specials: maintaining vector memory alignment 
   n += minR * sizeof(float *);                                       // dpf[] row ptrs
   return n;
@@ -457,9 +457,9 @@ p7_checkptmx_DumpFBHeader(P7_CHECKPTMX *ox)
  *            them in the debugging dump.)
  */
 int
-p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, __m128 *dpc, char *pfx)
+p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, __arm128f *dpc, char *pfx)
 {
-  union { __m128 v; float x[p7_VNF]; } u;
+  union { __arm128f v; float x[p7_VNF]; } u;
   float *v         = NULL;		/*  */
   int    Q         = ox->Qf;
   int    M         = ox->M;

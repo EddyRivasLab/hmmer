@@ -17,7 +17,7 @@
 #include "p7_config.h"
 
 #include <stdio.h>
-
+#include "arm_vector.h"
 #include "dp_reference/p7_refmx.h"
 
 #define p7C_NSCELLS 3
@@ -98,7 +98,7 @@ extern int           p7_checkptmx_SetDumpMode(P7_CHECKPTMX *ox, FILE *dfp, int t
 #ifdef p7_DEBUGGING
 extern char *        p7_checkptmx_DecodeX(enum p7c_xcells_e xcode);
 extern int           p7_checkptmx_DumpFBHeader(P7_CHECKPTMX *ox);
-extern int           p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, __m128 *dpc, char *pfx);
+extern int           p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, __arm128f *dpc, char *pfx);
 #endif /*p7_DEBUGGING*/
 
 /*****************************************************************

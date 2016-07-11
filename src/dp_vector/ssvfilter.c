@@ -517,8 +517,8 @@
   length_check(label)                                           \
   rsc = om->sbv[dsq[i]] + pos;                                   \
   step()                                                        \
-  sv.s8x16 = vextq_s8(beginv.s8x16, sv.s8x16, 15); /*_mm_slli_si128(sv, 1); */  \
-/*  sv = _mm_or_si128(sv, beginv);*/                              \
+  sv.s8x16 = vextq_s8(beginv.s8x16, sv.s8x16, 15);  \
+                             \
   i++;
 
 
@@ -887,7 +887,6 @@ p7_SSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
   }
 
   xE = get_xE(dsq, L, om);
-
   if (xE >= 255 - om->bias_b)
     {
       /* We have an overflow. */

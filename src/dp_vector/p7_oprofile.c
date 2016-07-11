@@ -490,7 +490,9 @@ unbiased_byteify(P7_OPROFILE *om, float sc)
   uint8_t b;
 
   sc  = -1.0f * roundf(om->scale_b * sc);       /* ugh. sc is now an integer cost represented in a float...    */
-  b   = (sc > 255.) ? 255 : (uint8_t) sc;	/* and now we cast and saturate it to an unsigned char cost... */
+  uint32_t q = round(sc);
+  uint8_t b1 = (uint8_t) q;
+  b   = (sc > 255.) ? 255 : q;	/* and now we cast and saturate it to an unsigned char cost... */
   return b;
 }
  
