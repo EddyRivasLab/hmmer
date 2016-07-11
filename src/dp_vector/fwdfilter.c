@@ -170,8 +170,8 @@ p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX 
   ox->Qf = Q;
 #ifdef p7_DEBUGGING
   ox->dump_flags |= p7_SHOW_LOG;                     /* also sets for Backward dumps, since <ox> shared */
-  if (ox->do_dumping) p7_checkptmx_DumpFBHeader(ox);
-  if (ox->fwd) { ox->fwd->M = om->M; ox->fwd->L = L; ox->fwd->type = p7R_FORWARD; }
+  if (ox->do_dumping)  p7_checkptmx_DumpFBHeader(ox);
+  if (ox->fwd)  { ox->fwd->M = om->M; ox->fwd->L = L; ox->fwd->type = p7R_FORWARD; }
 #endif
 
   /* Initialization of the zero row, including specials */
@@ -589,7 +589,7 @@ ipv = esl_neon_rightshift_float(P7C_IQ(dpp, Q-1), zerov);
 	    }	    
 	  union { __arm128f v; uint32_t i[4]; }s;
 	  s.v = cv;
-	  int mask = ((s.i[0] >> 31) | (s.i[1] >> 31) | (s.i[2] >> 31) | (s.i[3] >> 31));
+	  int mask = ((s.i[0] & 0x1) | (s.i[1] & 0x2) | (s.i[2] & 0x4) | (s.i[3] & 0x8));
 	  if (!mask) break; /* DD's didn't change any DMO(q)? Then done, break out. */
 	}
     }
@@ -834,7 +834,7 @@ backward_row_finish(const P7_OPROFILE *om, __arm128f *dpc, int Q, __arm128f dcv)
 	    }
 	  union { __arm128i v; uint32_t i[4]; }s;
 	  s.v = cv;
-	  int mask = ((s.i[0] >> 31) | (s.i[1] >> 31) | (s.i[2] >> 31) | (s.i[3] >> 31));
+	  int mask = ((s.i[0] & 0x1) | (s.i[1] & 0x2) | (s.i[2] & 0x4) | (s.i[3] & 0x8));
 	  if (!mask) break;  /* if no DD path changed DQ(q) in this segment, then done, no more segments needed */
 	  
 	}
@@ -1004,8 +1004,7 @@ posterior_decode_row(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm_thr
 	  mask.u32x4     = vcgeq_f32(pv.f32x4, threshv.f32x4);    // mask now has all 0's in elems r that failed thresh; all 1's for r that passed 
 	  union { __arm128i v; uint32_t i[4]; }s;
 	  s.v = mask;
-	  maskbits = ((s.i[0] >> 31) | (s.i[1] >> 30) | (s.i[2] >> 29) | (s.i[3] >> 28));
-
+	  maskbits = ((s.i[0] & 0x1) | (s.i[1] & 0x2) | (s.i[2] & 0x4) | (s.i[3] & 0x8));
 	  /* maskbits is now something like 0100: 1's indicate which cell passed. */ 
 	  
 	  for (r = 0; r < p7_VNF; r++) 
