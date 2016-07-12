@@ -1703,14 +1703,14 @@ setup_clientside_comm(ESL_GETOPTS *opts, CLIENTSIDE_ARGS *args)
    * reused avoiding the timeout.
    */
   reuse = 1;
-  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&reuse, sizeof(reuse)) < 0) LOG_FATAL_MSG("setsockopt", errno);
+  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (void *)&reuse, sizeof(reuse)) < 0) LOG_FATAL_MSG("setsockopt", errno);
 
   /* the sockets are never closed, so if the server exits, force the kernel to
    * close the socket and clear it so the server can be restarted immediately.
    */
   linger.l_onoff = 1;
   linger.l_linger = 0;
-  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&linger, sizeof(linger)) < 0) LOG_FATAL_MSG("setsockopt", errno);
+  if (setsockopt(sock_fd, SOL_SOCKET, SO_LINGER, (void *)&linger, sizeof(linger)) < 0) LOG_FATAL_MSG("setsockopt", errno);
 
   /* Construct local address structure */
   memset(&addr, 0, sizeof(addr));
@@ -2107,14 +2107,14 @@ setup_workerside_comm(ESL_GETOPTS *opts, WORKERSIDE_ARGS *args)
    * reused avoiding the timeout.
    */
   reuse = 1;
-  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&reuse, sizeof(reuse)) < 0) LOG_FATAL_MSG("setsockopt", errno);
+  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (void *)&reuse, sizeof(reuse)) < 0) LOG_FATAL_MSG("setsockopt", errno);
 
   /* the sockets are never closed, so if the server exits, force the kernel to
    * close the socket and clear it so the server can be restarted immediately.
    */
   linger.l_onoff = 1;
   linger.l_linger = 0;
-  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&linger, sizeof(linger)) < 0) LOG_FATAL_MSG("setsockopt", errno);
+  if (setsockopt(sock_fd, SOL_SOCKET, SO_LINGER, (void *)&linger, sizeof(linger)) < 0) LOG_FATAL_MSG("setsockopt", errno);
 
   /* Construct local address structure */
   memset(&addr, 0, sizeof(addr));
