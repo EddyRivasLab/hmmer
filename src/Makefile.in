@@ -36,6 +36,7 @@ INSTALL   = @INSTALL@
 IMPLDIR   = impl_@IMPL_CHOICE@
 ESLDIR    = @HMMER_ESLDIR@
 SADIR     = @HMMER_SADIR@
+COMPATDIR = compat
 
 MYLIBDIRS = -L../${ESLDIR} -L./${IMPLDIR} -L../${SADIR} -L.
 MYINCDIRS = -I../${ESLDIR} \
@@ -251,14 +252,18 @@ libhmmer-src.stamp: ${OBJS}
 	@echo "src_lib objects compiled:\c" > $@
 	@date >> $@
 
+${COMPATDIR}/libcompat.a: .FORCE
+	${QUIET_SUBDIR0}${COMPATDIR} ${QUIET_SUBDIR1}
+
 .FORCE:
 
 ${OBJS}:     ${HDRS} p7_config.h  
 ${PROGOBJS}: ${HDRS} p7_config.h
 ${NETPROGOBJS}: ${HDRS} p7_config.h
 
-${NETPROGS}: @EXEC_DEPENDENCY@  libhmmer.a ../${ESLDIR}/libeasel.a 
-	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${SOCKETLIBS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
+${NETPROGS}: @EXEC_DEPENDENCY@  libhmmer.a ../${ESLDIR}/libeasel.a ${COMPATDIR}/libcompat.a
+	${QUIET_SUBDIR0}${COMPATDIR} ${QUIET_SUBDIR1} all
+	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${SOCKETLIBS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS} ${COMPATDIR}/libcompat.a
 
 ${PROGS}: @EXEC_DEPENDENCY@  libhmmer.a ../${ESLDIR}/libeasel.a 
 	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
@@ -358,10 +363,12 @@ uninstall:
 
 distclean: clean
 	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} distclean
+	${QUIET_SUBDIR0}${COMPATDIR} ${QUIET_SUBDIR1} distclean
 	-rm -f Makefile p7_config.h
 
 clean:
 	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} clean
+	${QUIET_SUBDIR0}${COMPATDIR} ${QUIET_SUBDIR1} clean
 	-rm -f *.o *~ Makefile.bak core ${PROGS} ${NETPROGS} TAGS gmon.out
 	-rm -f libhmmer.a libhmmer-src.stamp
 	-rm -f ${UTESTS}

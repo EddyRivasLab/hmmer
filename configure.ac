@@ -694,10 +694,6 @@ AC_CHECK_FUNCS(stat)
 AC_CHECK_FUNCS(fstat)
 
 AC_CHECK_FUNCS([strsep])
-AH_VERBATIM([strsep],
-[#ifndef HAVE_STRSEP
-char* strsep(char **str, const char *delim);
-#endif])
 
 AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
 AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))
@@ -737,6 +733,7 @@ if test -d "documentation/userguide"; then
   AC_CONFIG_FILES([documentation/userguide/Makefile])
 fi  
 AC_CONFIG_FILES([src/Makefile])
+AC_CONFIG_FILES([src/compat/Makefile])
 AC_CONFIG_FILES([testsuite/Makefile])
 AC_CONFIG_FILES([profmark/Makefile])
 AC_CONFIG_FILES([src/impl_${impl_choice}/Makefile])
