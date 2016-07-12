@@ -162,10 +162,10 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
       /* test for the overflow condition */
       tempv.u8x16 = vqaddq_u8(xEv.u8x16, biasv.u8x16);
       tempv.u8x16 = vceqq_s8(tempv.s8x16, ceilingv.s8x16);
-      uint64_t l0 = vgetq_lane_u64(tempv.u64x2, 0);	
-	  uint64_t l1 = vgetq_lane_u64(tempv.u64x2, 1);	
-	   
-
+      union { __arm128i v; uint64_t i[2]; }s;
+      s.v = tempv;
+      uint64_t mask = s.i[0] | s.i[1];
+ 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B)
        * Use shuffles instead of shifts so when the last max has completed,
        * the last four elements of the simd register will contain the
@@ -176,7 +176,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
 	  xEv.u8x16 = vdupq_n_u8(esl_neon_hmax_u8(xEv));
 
 	  /* immediately detect overflow */
-      if ((l0 | l1) != 0x0000) { *ret_sc = eslINFINITY; return eslERANGE; }
+      if (mask != 0) { *ret_sc = eslINFINITY; return eslERANGE; }
 
       xEv.u8x16 = vqsubq_u8(xEv.u8x16, tecv.u8x16);
       xJv.u8x16 = vmaxq_u8(xJv.u8x16,xEv.u8x16);
@@ -313,7 +313,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
 
   sc_thresh = (int) ceil( ( ( nullsc  + (invP * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b );
   sc_threshv.s8x16 = vdupq_n_s8((int8_t) 255 - sc_thresh);
-
+  printf("threshold is %d\n", vgetq_lane_s8(sc_threshv.s8x16, 0));
 
   /* Resize the filter mx as needed */
   if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of SSV filter matrix failed");
@@ -356,10 +356,10 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
 	   * note: don't use _mm_cmpgt_epi8, because it's a signed comparison, which won't work on uint8s */
 	  tempv.u8x16 = vqaddq_u8(xEv.u8x16, sc_threshv.u8x16);
 	  tempv.u8x16 = vceqq_s8(tempv.s8x16, ceilingv.s8x16);
-	  tempv.s8x16 = vandq_s8(tempv.s8x16, vdupq_n_s8(0x80));
-	  uint64_t l0 = vgetq_lane_u64(tempv.u64x2, 0);	
-	  uint64_t l1 = vgetq_lane_u64(tempv.u64x2, 1);	
-	  if ((l0 | l1) != 0) {  //hit pthresh, so add position to list and reset values
+	  union { __arm128i v; uint64_t i[2]; }s;
+	  s.v = tempv;
+	  uint64_t mask = s.i[0] | s.i[1];
+	  if (mask != 0) {  //hit pthresh, so add position to list and reset values
 
 	    //figure out which model state hit threshold
 	    end = -1;

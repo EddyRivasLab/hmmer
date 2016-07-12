@@ -297,7 +297,7 @@ p7_engine_Destroy(P7_ENGINE *eng)
  * Throws:    <eslEMEM> if a DP matrix reallocation fails.           
  *            
  */
-/*
+
 int
 p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg)
 {
@@ -311,7 +311,7 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
 
   if ((status = p7_bg_NullOne(bg, dsq, L, &(eng->nullsc))) != eslOK) return status; 
 
-  /* First level: SSV and MSV filters 
+  /* First level: SSV and MSV filters */ 
   status = p7_MSVFilter(dsq, L, om, eng->fx, &(eng->mfsc));
   if (status != eslOK && status != eslERANGE) return status;
 
@@ -320,7 +320,7 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
   if (P > eng->F1) return eslFAIL;
   if (eng->stats) eng->stats->n_past_msv++;
 
-  /* Biased composition HMM, ad hoc, acts as a modified null 
+  /* Biased composition HMM, ad hoc, acts as a modified null */ 
   if (do_biasfilter)
     {
       if ((status = p7_bg_FilterScore(bg, dsq, L, &(eng->biassc))) != eslOK) return status;
@@ -334,7 +334,7 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
   // TODO: in scan mode, you have to load the rest of the oprofile now,
   // configure its length model, and get GA/TC/NC thresholds.
 
-  /* Second level: ViterbiFilter(), multihit with <om> 
+  /* Second level: ViterbiFilter(), multihit with <om> */
   if (P > eng->F2)
     {
       if (eng->stats) eng->stats->n_ran_vit++;
@@ -351,10 +351,10 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
   if (eng->stats) eng->stats->n_past_vit++;
 
 
-  /* Checkpointed vectorized Forward, local-only.
+  /* Checkpointed vectorized Forward, local-only. */
    
   status = p7_ForwardFilter (dsq, L, om, eng->cx, &(eng->ffsc));
-  if i(status != eslOK) return status;
+  if (status != eslOK) return status;
 
   seq_score = (eng->ffsc - eng->biassc) / eslCONST_LOG2;
   P  = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
@@ -362,13 +362,13 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
   if (eng->stats) eng->stats->n_past_fwd++;
 
   /* Sequence has passed all acceleration filters.
-   * Calculate the sparse mask, by checkpointed vectorized decoding.
+   * Calculate the sparse mask, by checkpointed vectorized decoding. */
    
   p7_BackwardFilter(dsq, L, om, eng->cx, eng->sm, sparsify_thresh);
 
   return eslOK;
 }
-*/
+
 
 
 

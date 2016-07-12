@@ -172,23 +172,20 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
         /* Do the delayed stores of {MD}(i,q) now that memory is usable */
         union { __arm128i v; int16_t f[8]; }yes;
 		yes.v = sv;
-//		printf("storing %d %d %d %d\n", yes.f[0], yes.f[1], yes.f[2], yes.f[3]);
 		MMXf(q) = sv;
         DMXf(q) = dcv;
-yes.v = dcv; 
-//		printf("storing %d %d %d %d\n", yes.f[0], yes.f[1], yes.f[2], yes.f[3]);
+		yes.v = dcv; 
         /* Calculate the next D(i,q+1) partially: M->D only;
                * delay storage, holding it in dcv
          */
    
-     dcv.s16x8   = vqaddq_s16(sv.s16x8, (*tsc).s16x8);  tsc++;
+     	dcv.s16x8   = vqaddq_s16(sv.s16x8, (*tsc).s16x8);  tsc++;
         Dmaxv.s16x8 = vmaxq_s16(dcv.s16x8, Dmaxv.s16x8);
 
         /* Calculate and store I(i,q) */
         sv.s16x8      =                    vqaddq_s16(mpv.s16x8, (*tsc).s16x8);  tsc++;
         IMXf(q).s16x8 = vmaxq_s16 (sv.s16x8, vqaddq_s16(ipv.s16x8, (*tsc).s16x8)); tsc++;
         yes.v = IMXf(q); 
-//		printf("storing %d %d %d %d\n", yes.f[0], yes.f[1], yes.f[2], yes.f[3]);
 	  }
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
