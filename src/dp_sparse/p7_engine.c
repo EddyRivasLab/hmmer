@@ -24,6 +24,7 @@
 #include "esl_exponential.h"
 #include "esl_gumbel.h"
 
+#include "hardware/hardware.h"
 
 /*****************************************************************
  * 1. P7_ENGINE_PARAMS: config/control parameters for the Engine.
@@ -128,6 +129,9 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
 
   eng->rng    = esl_randomness_CreateFast(rng_seed);
 
+
+  eng->hw = p7_hardware_Create();  // get information about the machine we're running on
+
   /* All DP algorithms resize their input mx's as needed. 
    * The initial allocation can be anything.
    */
@@ -161,6 +165,47 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
   eng->F1     = 0.02;
   eng->F2     = 0.001;
   eng->F3     = 1e-5;
+
+// Configure pipeline to use the right versions of each filter based on the SIMD we have
+  if(eng->hw->arch == x86){
+    //See what SIMD we support
+    switch(eng->hw->simd){
+      case SSE:
+#ifndef HAVE_SSE2
+      printf("Error: Your system seems to only support the SSE SIMD instructions, but you don't have support for those instructions compiled into HMMER.  HMMER requires SIMD support to run.  Please re-compile HMMER with SSE support.\n");
+      exit(0);
+#endif
+      // If we have SSE versions of the filters, configure the engine to use them
+      printf("Using SSE instructions\n");
+      eng->msv = p7_MSVFilter_sse; 
+      eng->vit = p7_ViterbiFilter_sse;
+      eng->fwd = p7_ForwardFilter_sse;
+      eng->bck = p7_BackwardFilter_sse;
+      break;
+
+      case AVX:
+#ifndef HAVE_AVX2
+#ifdef HAVE_SSE2
+      printf("Warning: your system supports the AVX2 instructions, but HMMER was only compiled with support for the SSE instructions.  Configuring HMMER to use SSE.  Re-compiling HMMER with AVX2 support will increase performance.\n");
+      eng->msv = p7_MSVFilter_sse; 
+      eng->vit = p7_ViterbiFilter_sse;
+      eng->fwd = p7_ForwardFilter_sse;
+      eng->bck = p7_BackwardFilter_sse;
+#endif
+#ifndef HAVE_SSE2:      
+      printf("Error: Your system seems to support the AVX2 SIMD instructions, but HMMER was not compiled with support for either AVX2 or the older SSE instructions.  HMMER requires SIMD support to run.  Please re-compile HMMER with AVX2 or SSE support.\n");
+      exit(0);
+#endif
+#endif 
+      eng->msv = p7_MSVFilter_sse;  // fix me
+      eng->vit = p7_ViterbiFilter_sse;
+      eng->fwd = p7_ForwardFilter_sse;
+      eng->bck = p7_BackwardFilter_sse;
+
+      break;
+    }
+  }
+
 
   return eng;
 

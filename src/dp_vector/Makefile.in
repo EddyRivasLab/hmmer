@@ -12,6 +12,24 @@ LIBOBJS =  \
 	   ssvfilter.o\
 	   vitfilter.o
 
+SSELIBOBJS =  \
+        msvfilter_sse.o\
+        ssvfilter_sse.o\
+        vitfilter_sse.o\
+        fwdfilter_sse.o 
+
+AVXLIBOBJS = \
+       msvfilter_avx.o\
+        ssvfilter_avx.o \
+        vitfilter_avx.o \
+        fwdfilter_avx.o
+
+AVX512LIBOBJS = \
+       msvfilter_avx512.o\
+        ssvfilter_avx512.o \
+        vitfilter_avx512.o \
+        fwdfilter_avx512.o
+
 LIBHDRS =  
 
 OBJS =

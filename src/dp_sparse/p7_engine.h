@@ -24,6 +24,7 @@
 
 #include "search/p7_mpas.h"
 
+#include "hardware/hardware.h"
 
 
 /* P7_ENGINE_PARAMS 
@@ -59,6 +60,8 @@ typedef struct p7_engine_stats_s {
 typedef struct p7_engine_s {
   ESL_RANDOMNESS *rng;    // Random number generator; used for MPAS sampling
 
+  P7_HARDWARE *hw;  // Information about the machine we're running on
+
   P7_FILTERMX    *fx;     // one-row vectorized DP for MSV, Vit filters. O(M) mem
   P7_CHECKPTMX   *cx;     // Checkpointed vector local F/B/D matrix.     O(M \sqrt L) mem.  (p7_SPARSIFY_RAMLIMIT = 128M)
   P7_SPARSEMASK  *sm;     // Sparse mask.                                O(L) mem. 
@@ -93,6 +96,24 @@ typedef struct p7_engine_s {
 
   P7_ENGINE_PARAMS *params; // config/control parameters for the Engine
   P7_ENGINE_STATS  *stats;  // optional stats collection for the Engine, or NULL
+
+  //pointers to the filter routines in the engine.  Used to allow us to compile a binary with support for multiple
+  //variants of the hardware and select the best one at runtime
+
+  //MSV filter
+  int (*msv)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc);
+  
+  //SSV filter is called from within MSV, so don't need apointer to it.
+
+  // Viterbi filter
+  int (*vit)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc);
+
+  // Forward filter
+  int (*fwd)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc);
+  
+  // Backward filter
+  int (*bck)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh);
+
 } P7_ENGINE;
 
 extern P7_ENGINE_PARAMS *p7_engine_params_Create (P7_MPAS_PARAMS *mpas_params);

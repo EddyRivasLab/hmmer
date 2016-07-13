@@ -7,10 +7,10 @@
 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
-#ifdef p7_build_AVX2
+#ifdef HAVE_AVX2
 	#include <immintrin.h>  /* AVX2 */
 #endif
-#ifdef p7_build_AVX512
+#ifdef HAVE_AVX512
 	#include <immintrin.h>  /* AVX-512 */
 #endif
 
@@ -19,20 +19,20 @@ enum p7f_mxtype_e { p7F_NONE = 0, p7F_SSVFILTER = 1, p7F_MSVFILTER = 2, p7F_VITF
 typedef struct p7_filtermx_s {  /* MSV needs P7_NVB(M); VF needs 3*P7_NVW(M) __m128i vectors. */
   int      M;			/* current profile size: determines width of <dp> row    */
 
-//#ifdef p7_build_SSES
+#ifdef HAVE_SSE2
   __m128i *dp;			/* aligned, one row of DP memory: >= 3*P7_NVW(M) vectors */
 
   void    *dp_mem;		/* unaligned raw memory, where we allocate    */
   int      allocM;		/* <dp_mem> is allocated to hold up to M=allocM */
-//#endif
+#endif
 
-#ifdef p7_build_AVX2
+#ifdef HAVE_AVX2
 	__m256i *dp_AVX;   // add separate versions of each of these to support running the different
 	void *dp_mem_AVX;  // vector ISAs simultaneously for testing.
 	int allocM_AVX;
 #endif
 
-#ifdef p7_build_AVX512
+#ifdef HAVE_AVX512
 	__m512i *dp_AVX_512;   // add separate versions of each of these to support running the different
 	void *dp_mem_AVX_512;  // vector ISAs simultaneously for testing.
 	int allocM_AVX_512;
@@ -52,18 +52,19 @@ enum p7f_scells_e { p7F_M = 0, p7F_D = 1, p7F_I = 2 };
 #define p7F_NSCELLS 3
 
 /* Viterbi filter uses these macros to improve clarity of accesses */
+#ifdef HAVE_SSE2
 #define MMXf(q)   (dp[(q) * p7F_NSCELLS + p7F_M])
 #define DMXf(q)   (dp[(q) * p7F_NSCELLS + p7F_D])
 #define IMXf(q)   (dp[(q) * p7F_NSCELLS + p7F_I])
-
-#ifdef p7_build_AVX2
+#endif 
+#ifdef HAVE_AVX2
 /* Viterbi filter uses these macros to improve clarity of accesses */
 #define MMX_AVXf(q)   (dp_AVX[(q) * p7F_NSCELLS + p7F_M])
 #define DMX_AVXf(q)   (dp_AVX[(q) * p7F_NSCELLS + p7F_D])
 #define IMX_AVXf(q)   (dp_AVX[(q) * p7F_NSCELLS + p7F_I])
 #endif
 
-#ifdef p7_build_AVX512
+#ifdef HAVE_AVX512
 /* Viterbi filter uses these macros to improve clarity of accesses */
 #define MMX_AVX_512f(q)   (dp_AVX_512[(q) * p7F_NSCELLS + p7F_M])
 #define DMX_AVX_512f(q)   (dp_AVX_512[(q) * p7F_NSCELLS + p7F_D])

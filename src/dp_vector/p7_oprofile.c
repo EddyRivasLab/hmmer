@@ -52,12 +52,12 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
 {
   int          status;
   P7_OPROFILE *om  = NULL;
- // #ifdef p7_build_SSE
+ #ifdef p7_build_SSE
   int          nqb = P7_NVB(allocM); /* # of uchar vectors needed for query */
   int          nqw = P7_NVW(allocM); /* # of sword vectors needed for query */
   int          nqf = P7_NVF(allocM); /* # of float vectors needed for query */
   int          nqs = nqb + p7O_EXTRA_SB;
- // #endif
+ #endif
 
   #ifdef p7_build_AVX2
   int          nqb_AVX = P7_NVB_AVX(allocM); /* # of uchar vectors needed for query */
@@ -401,12 +401,12 @@ size_t
 p7_oprofile_Sizeof(const P7_OPROFILE *om)
 {
   size_t n   = 0;
-//#ifdef p7_build_SSE
+#ifdef p7_build_SSE
   int    nqb = om->allocQ16;  /* # of uchar vectors needed for query */
   int    nqw = om->allocQ8;     /* # of sword vectors needed for query */
   int    nqf = om->allocQ4;     /* # of float vectors needed for query */
   int    nqs = nqb + p7O_EXTRA_SB;
-//#endif
+#endif
 #ifdef p7_build_AVX2
   int    nqb_AVX = om->allocQ16_AVX;  /* # of uchar vectors needed for query */
   int    nqw_AVX = om->allocQ8_AVX;     /* # of sword vectors needed for query */
@@ -432,44 +432,50 @@ p7_oprofile_Sizeof(const P7_OPROFILE *om)
   n  += sizeof(__m128i) * nqs  * om->abc->Kp +15; /* om->sbv_mem   */
   n  += sizeof(__m128i) * nqw  * om->abc->Kp +15; /* om->rwv_mem   */
   n  += sizeof(__m128i) * nqw  * p7O_NTRANS  +15; /* om->twv_mem   */
+  n  += sizeof(__m128)  * nqf  * om->abc->Kp +15; /* om->rfv_mem   */
+  n  += sizeof(__m128)  * nqf  * p7O_NTRANS  +15; /* om->tfv_mem   */
   #endif
   #ifdef p7_build_AVX2
   n  += sizeof(__m256i) * nqb_AVX  * om->abc->Kp +31; /* om->rbv_mem_AVX   */
   n  += sizeof(__m256i) * nqs_AVX  * om->abc->Kp +31; /* om->sbv_mem_AVX   */
   n  += sizeof(__m256i) * nqw_AVX  * om->abc->Kp +31; /* om->rwv_mem_AVX   */
   n  += sizeof(__m256i) * nqw_AVX  * p7O_NTRANS  +31; /* om->twv_mem_AVX   */
+  n  += sizeof(__m256)  * nqf_AVX  * om->abc->Kp +31; /* om->rfv_mem_AVX   */
+  n  += sizeof(__m256)  * nqf_AVX  * p7O_NTRANS  +31; /* om->tfv_mem_AVX  */
   #endif
   #ifdef p7_build_AVX512
   n  += sizeof(__m512i) * nqb_AVX_512  * om->abc->Kp +63; /* om->rbv_mem_AVX_512   */
   n  += sizeof(__m512i) * nqs_AVX_512  * om->abc->Kp +63; /* om->sbv_mem_AVX_512   */
   n  += sizeof(__m512i) * nqw_AVX_512  * om->abc->Kp +63; /* om->rwv_mem_AVX_512   */
   n  += sizeof(__m512i) * nqw_AVX_512  * p7O_NTRANS  +63; /* om->twv_mem_AVX_512   */
+  n  += sizeof(__m512)  * nqf_AVX_512  * om->abc->Kp +15; /* om->rfv_mem   */
+  n  += sizeof(__m512)  * nqf_AVX_512  * p7O_NTRANS  +15; /* om->tfv_mem   */
   #endif
 
  
-  n  += sizeof(__m128)  * nqf  * om->abc->Kp +15; /* om->rfv_mem   */
-  n  += sizeof(__m128)  * nqf  * p7O_NTRANS  +15; /* om->tfv_mem   */
+
 
 #ifdef p7_build_SSE  
   n  += sizeof(__m128i *) * om->abc->Kp;          /* om->rbv       */
   n  += sizeof(__m128i *) * om->abc->Kp;          /* om->sbv       */
   n  += sizeof(__m128i *) * om->abc->Kp;          /* om->rwv       */
-
+ n  += sizeof(__m128  *) * om->abc->Kp;          /* om->rfv       */
 #endif  
 #ifdef p7_build_AVX2  
   n  += sizeof(__m256i *) * om->abc->Kp;          /* om->rbv_AVX       */
   n  += sizeof(__m256i *) * om->abc->Kp;          /* om->sbv_AVX       */
   n  += sizeof(__m256i *) * om->abc->Kp;          /* om->rwv_AVX       */
+   n  += sizeof(__m256  *) * om->abc->Kp;          /* om->rfv_AVX       */
 
 #endif
 #ifdef p7_build_AVX512 
   n  += sizeof(__m512i *) * om->abc->Kp;          /* om->rbv_AVX_512      */
   n  += sizeof(__m512i *) * om->abc->Kp;          /* om->sbv_AVX_512       */
   n  += sizeof(__m512i *) * om->abc->Kp;          /* om->rwv_AVX_512       */
-
+  n  += sizeof(__m512 *) * om->abc->Kp;          /* om->rfv_AVX_512       */
 #endif  
 
-  n  += sizeof(__m128  *) * om->abc->Kp;          /* om->rfv       */
+ 
   
   n  += sizeof(char) * (om->allocM+2);            /* om->rf        */
   n  += sizeof(char) * (om->allocM+2);            /* om->mm        */

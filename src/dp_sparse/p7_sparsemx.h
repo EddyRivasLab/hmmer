@@ -39,7 +39,7 @@ typedef struct {
   
   int      Q;		// number of striped vectors in fwdfilter; width of each striped segment; width of "slots"
 
-  
+ #ifdef HAVE_SSE2 
   p7_sparsemask_seg_s *seg;         
   int    **k;		// k[0,1..L] = ptrs into kmem, rows of sparse k indices; k[0]=NULL; k[i]=NULL if n[i]=0 
   int     *n;		// number of cells included on each row; n[0]=0; n[i] <= M 
@@ -54,9 +54,9 @@ typedef struct {
   /* "Slots" are used to convert striped vectors in f/b filter into correct M..1 cell index order in <kmem>; see note [3] */
   int  *s[p7_VNF];  // slot pointers s[0..3] into <kmem>, for temporary storage of a striped vector row's sparse cells 
   int   sn[p7_VNF]; // number of sparse cells stored so far in each slot; sn[0..3]
+#endif
 
-
-#ifdef p7_build_AVX2  
+#ifdef HAVE_AVX2  
   int      Q_AVX;   // number of striped vectors in fwdfilter; width of each striped segment; width of "slots"
 
   p7_sparsemask_seg_s *seg_AVX;         
@@ -76,7 +76,7 @@ typedef struct {
   int   sn_AVX[p7_VNF_AVX]; // number of sparse cells stored so far in each slot; sn[0..7]
 #endif
 
-#ifdef p7_build_AVX512  
+#ifdef HAVE_AVX512  
   int      Q_AVX_512;   // number of striped vectors in fwdfilter; width of each striped segment; width of "slots"
 
   struct p7_sparsemask_seg_s *seg_AVX_512;         
@@ -99,13 +99,17 @@ typedef struct {
   
 
   /* These are used for argument validation; the construction API is a little counterintuitive because i,q run in reverse */
+ #ifdef HAVE_SSE2
    int   last_i;    // i of last StartRow(i) call; rows must be added in L..1 order; initialized to L+1 
   int   last_k[p7_VNF]; // k of last cell added in slot r; cells must be added in M..1 order; initialized to M+1 or -1 
-#ifdef p7_build_AVX2
+#endif
+
+#ifdef HAVE_AVX2
    int   last_i_AVX;    // i of last StartRow(i) call; rows must be added in L..1 order; initialized to L+1 
   int   last_k_AVX[p7_VNF_AVX]; // k of last cell added in slot r; cells must be added in M..1 order; initialized to M+1 or -1 
 #endif
-#ifdef p7_build_AVX512
+
+#ifdef HAVE_AVX512
    int   last_i_AVX_512;    // i of last StartRow(i) call; rows must be added in L..1 order; initialized to L+1 
   int   last_k_AVX_512[p7_VNF_AVX_512]; // k of last cell added in slot r; cells must be added in M..1 order; initialized to M+1 or -1 
 #endif
@@ -188,20 +192,26 @@ extern void           p7_sparsemask_Destroy  (P7_SPARSEMASK *sm);
 
 /* P7_SPARSEMASK construction API */
 extern int            p7_sparsemask_AddAll   (P7_SPARSEMASK *sm);
+#ifdef HAVE_SSE2
 extern int            p7_sparsemask_StartRow (P7_SPARSEMASK *sm, int i);
 extern int            p7_sparsemask_Add      (P7_SPARSEMASK *sm, int q, int r);
 extern int            p7_sparsemask_FinishRow(P7_SPARSEMASK *sm);
-
-#ifdef p7_build_AVX2
-extern int            p7_sparsemask_StartRow_AVX (P7_SPARSEMASK *sm, int i);
-extern int            p7_sparsemask_Add_AVX      (P7_SPARSEMASK *sm, int q, int r);
-extern int            p7_sparsemask_FinishRow_AVX(P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_Finish_sse  (P7_SPARSEMASK *sm);
 #endif
 
-#ifdef p7_build_AVX512
-extern int            p7_sparsemask_StartRow_AVX_512 (P7_SPARSEMASK *sm, int i);
-extern int            p7_sparsemask_Add_AVX_512      (P7_SPARSEMASK *sm, int q, int r);
-extern int            p7_sparsemask_FinishRow_AVX_512(P7_SPARSEMASK *sm);
+#ifdef HAVE_AVX2
+extern int            p7_sparsemask_StartRow_avx (P7_SPARSEMASK *sm, int i);
+extern int            p7_sparsemask_Add_avx      (P7_SPARSEMASK *sm, int q, int r);
+extern int            p7_sparsemask_FinishRow_avx(P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_Finish_avx   (P7_SPARSEMASK *sm);
+#endif
+
+#ifdef HAVE_AVX512
+extern int            p7_sparsemask_StartRow_avx512 (P7_SPARSEMASK *sm, int i);
+extern int            p7_sparsemask_Add_avx512      (P7_SPARSEMASK *sm, int q, int r);
+extern int            p7_sparsemask_FinishRow_avx512(P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_FinishRow_avx512   (P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_Finish_avx512   (P7_SPARSEMASK *sm);
 #endif
 extern int            p7_sparsemask_Finish   (P7_SPARSEMASK *sm);
 

@@ -70,7 +70,7 @@ to the next multiple of the vector length.  This should be a small effect unless
 sequence we're comparing to is very short, since this filter uses floats.  Also, the code 
 exceeds the requested memory when necessary, so the request is already not a hard limit. */
 
-#ifdef p7_build_SSE
+#ifdef HAVE_SSE2
   /* Raw memory allocation */
   int Qf; /* current actual number of fb vectors = P7_NVF(M)                    */
   int R; /* current actual number of rows (<=Ra+Rb+Rc), excluding R0           */
@@ -84,7 +84,7 @@ exceeds the requested memory when necessary, so the request is already not a har
   int      validR;	/* # of dpf[] rows pointing to valid dp_mem; may be < allocR after GrowTo() */
 #endif
 
-#ifdef p7_build_AVX2
+#ifdef HAVE_AVX2
   /* Raw memory allocation */
   int Qf_AVX; /* current actual number of fb vectors = P7_NVF(M)                    */
   int R_AVX; /* current actual number of rows (<=Ra+Rb+Rc), excluding R0           */
@@ -98,7 +98,7 @@ exceeds the requested memory when necessary, so the request is already not a har
   int      validR_AVX;  /* # of dpf[] rows pointing to valid dp_mem; may be < allocR after GrowTo() */
 #endif
 
-#ifdef p7_build_AVX512
+#ifdef HAVE_AVX512
   int Qf_AVX_512; /* current actual number of fb vectors = P7_NVF(M)                    */
   int R_AVX_512;  /* current actual number of rows (<=Ra+Rb+Rc), excluding R0           */
   /* Raw memory allocation */

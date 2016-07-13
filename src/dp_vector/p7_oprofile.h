@@ -5,10 +5,10 @@
 
 #include <xmmintrin.h>    /* SSE  */
 #include <emmintrin.h>    /* SSE2 */
-#ifdef p7_build_AVX2
+#ifdef HAVE_AVX2
   #include <immintrin.h>  /* AVX2 */
 #endif
-#ifdef p7_build_AVX512
+#ifdef HAVE_AVX512
   #include <immintrin.h>  /* AVX-512 */
 #endif
 #ifdef _PMMINTRIN_H_INCLUDED
@@ -75,14 +75,14 @@ enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3, 
 
 typedef struct p7_oprofile_s {
   /* MSVFilter uses scaled, biased uchars: 16x unsigned byte vectors                 */
- #ifdef p7_build_SSE 
+ #ifdef HAVE_SSE2 
   __m128i **rbv;                /* match scores [x][q]: rm, rm[0] are allocated      */
   /* Our actual vector mallocs, before we align the memory                           */
   __m128i  *rbv_mem;
   __m128i  *sbv_mem;
   __m128i **sbv;                /* match scores for ssvfilter         */
 #endif
-   #ifdef p7_build_AVX2
+   #ifdef HAVE_AVX2
   __m256i **rbv_AVX;                /* match scores [x][q]: rm, rm[0] are allocated      */
   __m256i **sbv_AVX;                /* match scores for ssvfilter         */
   /* Our actual vector mallocs, before we align the memory                           */
@@ -90,7 +90,7 @@ typedef struct p7_oprofile_s {
   __m256i  *sbv_mem_AVX;
   #endif
 
-   #ifdef p7_build_AVX512
+   #ifdef HAVE_AVX512
   __m512i **rbv_AVX_512;                /* match scores [x][q]: rm, rm[0] are allocated      */
   __m512i **sbv_AVX_512;                /* match scores for ssvfilter         */
   /* Our actual vector mallocs, before we align the memory                           */
@@ -107,19 +107,19 @@ typedef struct p7_oprofile_s {
 
 
   /* ViterbiFilter uses scaled swords: 8x signed 16-bit integer vectors              */
- #ifdef p7_build_SSE 
+ #ifdef HAVE_SSE2 
   __m128i **rwv;                /* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
   __m128i  *twv;                /* transition score blocks          [8*Q8]           */
  __m128i  *rwv_mem;
   __m128i  *twv_mem;
 #endif
-#ifdef p7_build_AVX2
+#ifdef HAVE_AVX2
  __m256i **rwv_AVX;                /* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
   __m256i  *twv_AVX;                /* transition score blocks          [8*Q8]           */
  __m256i  *rwv_mem_AVX;
   __m256i  *twv_mem_AVX;
 #endif
-#ifdef p7_build_AVX512
+#ifdef HAVE_AVX512
  __m512i **rwv_AVX_512;                /* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
   __m512i  *twv_AVX_512;                /* transition score blocks          [8*Q8]           */
  __m512i  *rwv_mem_AVX_512;
@@ -136,19 +136,19 @@ typedef struct p7_oprofile_s {
   
   float    xf[p7O_NXSTATES][p7O_NXTRANS]; /* ENJC transition costs                   */
 
-  #ifdef p7_build_SSE
+  #ifdef HAVE_SSE2
   __m128 **rfv;                 /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
   __m128  *tfv;                 /* transition probability blocks    [8*Q4]           */
   __m128   *tfv_mem;
   __m128   *rfv_mem;
   #endif
- #ifdef p7_build_AVX2
+ #ifdef HAVE_AVX2
   __m256 **rfv_AVX;                 /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
   __m256  *tfv_AVX;                 /* transition probability blocks    [8*Q4]           */
   __m256   *tfv_mem_AVX;
   __m256   *rfv_mem_AVX;
 #endif
-#ifdef p7_build_AVX512
+#ifdef HAVE_AVX512
   __m512 **rfv_AVX_512;                 /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
   __m512  *tfv_AVX_512;                 /* transition probability blocks    [8*Q4]           */
   __m512   *tfv_mem_AVX_512;
@@ -179,17 +179,17 @@ typedef struct p7_oprofile_s {
   int    M;                     /* model length                                      */
   int    max_length;            /* upper bound on emitted sequence length            */
   int    allocM;                /* maximum model length currently allocated for      */
-//#ifdef p7_build_SSE  
+#ifdef HAVE_SSE2  
   int    allocQ4;               /* P7_NVF(allocM): alloc size for tf, rf             */
   int    allocQ8;               /* P7_NVW(allocM): alloc size for tw, rw             */
   int    allocQ16;              /* P7_NVB(allocM): alloc size for rb                 */
-//#endif
-#ifdef p7_build_AVX2  
+#endif
+#ifdef HAVE_AVX2  
   int    allocQ4_AVX;               /* P7_NVF_AVX(allocM): alloc size for tf, rf             */
   int    allocQ8_AVX;               /* P7_NVW_AVX(allocM): alloc size for tw, rw             */
   int    allocQ16_AVX;              /* P7_NVB_AVX(allocM): alloc size for rb                 */
 #endif
-#ifdef p7_build_AVX512  
+#ifdef HAVE_AVX512  
   int    allocQ4_AVX_512;               /* P7_NVF_AVX_512(allocM): alloc size for tf, rf             */
   int    allocQ8_AVX_512;               /* P7_NVW_AVX_512(allocM): alloc size for tw, rw             */
   int    allocQ16_AVX_512;              /* P7_NVB_AVX_512(allocM): alloc size for rb                 */

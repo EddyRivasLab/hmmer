@@ -1,6 +1,6 @@
 # All Makefile.in's in src/ subdirs include the identical
 # block of makefile code below...
-
+V= yes
 SHELL        = /bin/sh
 
 prefix       = @prefix@
@@ -12,7 +12,10 @@ includedir   = @includedir@
 
 CC           = @CC@
 CFLAGS       = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
-SIMDFLAGS    = @SIMD_CFLAGS@
+
+SSEFLAGS    =  @SSE_CFLAGS@
+AVXFLAGS = @AVX_CFLAGS@
+AVX512FLAGS = @AVX512_CFLAGS@
 CPPFLAGS     = @CPPFLAGS@
 LDFLAGS      = @LDFLAGS@
 DEFS         = @DEFS@
@@ -66,8 +69,8 @@ tests: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${UTESTS}
 
 # In some subdirs, ${LIBOBJS} is empty. We can't give an empty arg string to 'ar'.
 # Hence the ! -z shell test on ${LIBOBJS} below.
-libhmmer-${MODULE}.stamp: ${LIBOBJS}
-	${QUIET}+if [ ! -z "${LIBOBJS}" ]; then \
+libhmmer-${MODULE}.stamp: ${LIBOBJS} ${SSELIBOBJS} ${AVXLIBOBJS} ${AVX512LIBOBJS}
+	${QUIET}+if [ ! -z "${LIBOBJS} ${SSELIBOBJS} ${AVXLIBOBJS} ${AVX512LIBOBJS}" ]; then \
 	   echo '    ' AR $@ ;\
 	   ${AR} -r ${top_builddir}/src/libhmmer.a $? > /dev/null 2>&1 ;\
 	   ${RANLIB} ${top_builddir}/src/libhmmer.a ;\
@@ -91,7 +94,14 @@ lib${MODULE}.a: ${OBJS}
 	${QUIET_AR}${AR} -r lib${MODULE}.a $? > /dev/null 2>&1 
 	@${RANLIB} lib${MODULE}.a 
 
-${LIBOBJS}:  ${HDRS}
+${LIBOBJS}:  SIMDFLAGS:= $(SSEFLAGS)
+${LIBOBJS}: ${HDRS}
+${SSELIBOBJS}:  SIMDFLAGS:= $(SSEFLAGS)
+${LIBOBJS}: ${HDRS}
+${AVXLIBOBJS}:  SIMDFLAGS:= $(AVXFLAGS)
+${LIBOBJS}: ${HDRS}
+${AVX512LIBOBJS}:  SIMDFLAGS:= $(AVX512FLAGS)
+${LIBOBJS}: ${HDRS}
 ${OBJS}:     ${HDRS}
 
 .c.o:  

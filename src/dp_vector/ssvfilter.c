@@ -422,7 +422,7 @@
 #endif
 #include "easel.h"
 #include "esl_sse.h"
-
+#include "x86intrin.h"
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
 
@@ -436,6 +436,7 @@
 #else
 #define  MAX_BANDS 6
 #endif
+
 
 
 //#define p7_log_array
@@ -2160,6 +2161,7 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 int
 p7_SSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
 {
+  extern uint64_t SSV_time;
   /* Use 16 bit values to avoid overflow due to moved baseline */
   uint16_t  xE;
   uint16_t  xJ;
@@ -2182,7 +2184,7 @@ p7_SSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
           return eslENORESULT;
         }
 
-      /* We know that the overflow will also occur in the original MSV filter */
+      /* We know that the overflow will also occur in the original MSV filter */ 
       return eslERANGE;
     }
 
@@ -2204,7 +2206,6 @@ p7_SSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
   *ret_sc = ((float) (xJ - om->tjb_b) - (float) om->base_b);
   *ret_sc /= om->scale_b;
   *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
-
   return eslOK;
 }
 

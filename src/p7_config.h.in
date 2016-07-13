@@ -133,6 +133,9 @@
 #undef HAVE_EMMINTRIN_H		/* SSE2 */
 #undef HAVE_PMMINTRIN_H		/* SSE3 */
 
+/* What architecture are we running on? */
+#undef p7_CPU_ARCH
+
 /* Optional parallel implementations
  */
 #undef HAVE_SSE2

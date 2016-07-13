@@ -39,6 +39,7 @@
 #include "dp_vector/p7_filtermx.h"
 #include "dp_vector/ssvfilter.h"
 #include "dp_vector/msvfilter.h"
+#include "x86intrin.h"
 
 //temporary helper function.  Should not be in release version
  #ifdef p7_build_AVX512
@@ -49,7 +50,7 @@
            val[1], val[0]);
  }
 #endif
-
+//uint64_t SSV_time, MSV_time;
 uint64_t full_MSV_calls;
 /*****************************************************************
  * 1. The p7_MSVFilter() DP implementation.
@@ -147,7 +148,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
   int q_AVX_512;         /* counter over vectors 0..nq-1                              */
  #endif
 
-  extern uint64_t full_MSV_calls;
+ // extern uint64_t full_MSV_calls, SSV_time, MSV_time;
 
   int i;         /* counter over sequence positions 1..L                      */
   int     cmp;
@@ -164,8 +165,15 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
    * Note that SSV doesn't use any main memory (from <ox>) at all! 
   */
  //  printf("Calling SSVFilter\n");
-  if (( status = p7_SSVFilter(dsq, L, om, ret_sc)) != eslENORESULT) return status;
-full_MSV_calls++;
+//  if (( status = p7_SSVFilter(dsq, L, om, ret_sc)) != eslENORESULT) return status;
+//   uint64_t SSV_start_time = __rdtsc();
+   status = p7_SSVFilter(dsq, L, om, ret_sc);
+//   uint64_t SSV_end_time = __rdtsc();
+ //  SSV_time += SSV_end_time - SSV_start_time;
+   if (status != eslENORESULT) return status;
+//full_MSV_calls++;
+ // uint64_t MSV_start_time = __rdtsc();
+ // uint64_t MSV_end_time;
   /* Resize the filter mx as needed */
   if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of MSV filter matrix failed");
 
@@ -286,7 +294,10 @@ full_MSV_calls++;
       xEv   = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(0, 0, 0, 0));
 
       /* immediately detect overflow */
-      if (cmp != 0x0000) { *ret_sc = eslINFINITY; return eslERANGE; }
+      if (cmp != 0x0000) {
+    //    MSV_end_time = __rdtsc();
+    //    MSV_time += (MSV_end_time - MSV_start_time);
+       *ret_sc = eslINFINITY; return eslERANGE; }
 
       xEv = _mm_subs_epu8(xEv, tecv);
       xJv = _mm_max_epu8(xJv,xEv);
@@ -317,7 +328,7 @@ full_MSV_calls++;
         mpv_AVX   = dp_AVX[q_AVX];      /* Load {MDI}(i-1,q) into mpv */
         dp_AVX[q_AVX] = sv_AVX;           /* Do delayed store of M(i,q) now that memory is usable */
       }
-#ifdef p7_build_check_AVX
+#ifdef p7_build_check_AVX2
       int check_elem;
       char *dp_bytes = (char *) dp;
       char *dp_AVX_bytes = (char *) dp_AVX;
@@ -349,7 +360,10 @@ full_MSV_calls++;
       // to all bytes of xEv_AVX
 
       /* immediately detect overflow */
-      if (cmp != 0x0000) { *ret_sc = eslINFINITY; return eslERANGE; }
+      if (cmp != 0x0000) {
+   //            MSV_end_time = __rdtsc();
+   //     MSV_time += (MSV_end_time - MSV_start_time);
+        *ret_sc = eslINFINITY; return eslERANGE; }
 
       xEv_AVX = _mm256_subs_epu8(xEv_AVX, tecv_AVX);
       xJv_AVX = _mm256_max_epu8(xJv_AVX,xEv_AVX);
@@ -505,6 +519,8 @@ full_MSV_calls++;
   *ret_sc = ((float) (xJ - om->tjb_b) - (float) om->base_b);
   *ret_sc /= om->scale_b;
   *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
+    /*     MSV_end_time = __rdtsc();
+        MSV_time += (MSV_end_time - MSV_start_time); */
   return eslOK;
   }
 
