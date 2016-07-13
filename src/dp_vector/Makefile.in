@@ -14,6 +14,7 @@ LIBOBJS =  \
 
 SSELIBOBJS =  \
         msvfilter_sse.o\
+        p7_oprofile_sse.o\
         ssvfilter_sse.o\
         vitfilter_sse.o\
         fwdfilter_sse.o 
