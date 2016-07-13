@@ -301,8 +301,8 @@ AC_ARG_WITH([gsl],
             ],
 	    [with_gsl=no])
 
-# Enable targeting for better performance
-AC_ARG_ENABLE(targeting,[AS_HELP_STRING([--enable-targeting],[enable CPU targeted optimizations])],          enable_targeting=$enableval,   enable_targeting=no)
+# Enable NEON extension on ARM processors
+AC_ARG_ENABLE(neon,[AS_HELP_STRING([--enable-neon],[enable NEON extension])],          enable_neon=$enableval,   enable_neon=check)
 ################################################################
 # 5. Checks for programs, including ${CC} and its ${CFLAGS}.
 #################################################################
@@ -351,29 +351,37 @@ fi
 # This sets @PIC_FLAGS@ output variable for Easel.
 ESL_PIC_FLAGS
 
-# Figure out our @SIMD_CFLAGS@, if they're not already set.
-# If we're using gcc, we need -mfpu for ARM.
-# 
-if test "x$SIMD_CFLAGS" = x; then
-   case $ax_cv_c_compiler_vendor in
-   gnu)   AX_CHECK_COMPILER_FLAGS([-mfpu],        [ SIMD_CFLAGS="-mfpu" ])
-          ;;
-   intel) ;;
-   *)     ;;
-   esac
+# ARM and NEON SIMD flags
+if test "$enable_neon" = "yes" || test "$enable_neon" = "check"; then
+   if test "x$SIMD_CFLAGS" = x; then
+     case $ax_cv_c_compiler_vendor in
+       gnu)   AX_CHECK_COMPILER_FLAGS(-mfpu=neon,[SIMD_CFLAGS="-mfpu=neon"],[]);;
+       *)     ;;
+     esac
+   fi
 fi
-AC_SUBST(SIMD_CFLAGS)
+if test "$enable_neon" = "check"; then
+   sre_save_CFLAGS="$CFLAGS"
+   sre_save_CPPFLAGS="$CPPFLAGS"
+   CFLAGS="$CFLAGS $SIMD_CFLAGS"
+   CPPFLAGS="$CPPFLAGS $SIMD_CFLAGS"
+   AC_CHECK_HEADER([arm_neon.h],[
+     AC_MSG_CHECKING([if platform can run NEON instructions])
+     AC_RUN_IFELSE([AC_LANG_PROGRAM( [[#include <arm_neon.h>]],
+                              [[ int32x4_t x = vdupq_n_s32(0);]])],
+                   [AC_MSG_RESULT([yes])
+                     enable_neon=yes],
+                   [AC_MSG_RESULT([no])])])
+   CFLAGS="$sre_save_CFLAGS"
+   CPPFLAGS="$sre_save_CPPFLAGS"
+fi
 
-
-# NEON: Check for NEON compiler flag
-# todo: we can always check for other ARM floating point flags later
-#if test "$enable_neon" = "yes" || test "$enable_neon" = "check"; then
 # Determine target if targeting is specified.
 # Do this by attempting to execute code with different 
 # cominations of NEON/VFP compiler options. This allows 
 # us to determine the best compile options for each 
 # ARM architecture. 
-if test "$enable_targeting" = "yes"; then
+if test "$enable_neon" = "yes" || test "$enable_neon" = "check"; then
   cortex_a5="-mcpu=cortex-a5 -mfpu=neon-fp16"
   cortex_a7="-mcpu=cortex-a7 -mfpu=neon-vfpv4"
   cortex_a8="-mcpu=cortex-a8 -mfpu=neon"
@@ -405,19 +413,19 @@ if test "$enable_targeting" = "yes"; then
   CFLAGS="$sre_save_CFLAGS"
   CPPFLAGS="$sre_save_CPPFLAGS"
 
-else
-   if test "x$SIMD_CFLAGS" = x; then
-     case $ax_cv_c_compiler_vendor in
-       gnu)   AX_CHECK_COMPILER_FLAGS(-mfpu=neon,[SIMD_CFLAGS="-mfpu=neon"],
-               [AC_MSG_ERROR([no NEON hardware detected])]);;
-       *)     ;;   
-       esac
-   fi
+fi
+if test "x$vector_flags" = x; then
+  SIMD_CFLAGS="-mfpu=neon" 
 fi
 
+
 if test "y$vector_flags" != y; then
-  CFLAGS="$CFLAGS $vector_flags"
-  CPPFLAGS="$CPPFLAGS $vector_flags"
+  SIMD_CFLAGS="$vector_flags"
+  enable_neon=yes
+fi
+
+if test "$enable_neon" = yes; then
+  AC_DEFINE(HAVE_NEON,1,[Support NEON instructions])
 fi
 
 AC_SUBST(SIMD_CFLAGS)
@@ -480,9 +488,7 @@ AC_CHECK_HEADERS([sys/sysctl.h], [], [],
 
 
 # Vector-specific headers. 
-AC_CHECK_HEADERS([\
-  arm_neon.h
-])
+AC_CHECK_HEADER([arm_neon.h])
 
 ################################################################
 # 8. Checks for types
