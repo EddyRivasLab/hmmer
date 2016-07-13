@@ -424,7 +424,7 @@ if test "y$vector_flags" != y; then
   enable_neon=yes
 fi
 
-if test "$enable_neon" = yes; then
+if test "$enable_neon" = "yes"; then
   AC_DEFINE(HAVE_NEON,1,[Support NEON instructions])
 fi
 
@@ -487,8 +487,6 @@ AC_CHECK_HEADERS([sys/sysctl.h], [], [],
 ]])
 
 
-# Vector-specific headers. 
-AC_CHECK_HEADER([arm_neon.h])
 
 ################################################################
 # 8. Checks for types

@@ -409,6 +409,7 @@
 
 #include <math.h>
 
+#include <arm_neon.h>
 
 #include "easel.h"
 #include "esl_neon.h"

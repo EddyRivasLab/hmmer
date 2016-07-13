@@ -53,6 +53,7 @@
  */
 #include "p7_config.h"
 
+#include <arm_neon.h>
 
 #include "easel.h"
 #include "esl_neon.h"

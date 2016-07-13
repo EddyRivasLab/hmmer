@@ -136,6 +136,7 @@
 /* Optional parallel implementations
  */
 #undef HAVE_SSE2
+#undef HAVE_NEON
 #undef HAVE_MPI
 #undef HMMER_PVM
 #undef HMMER_THREADS
