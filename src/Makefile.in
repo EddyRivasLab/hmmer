@@ -47,10 +47,12 @@ MYINCDIRS = -I../${ESLDIR} \
 PROGS = alimask\
 	hmmalign\
 	hmmbuild\
+	hmmc2\
 	hmmconvert\
 	hmmemit\
 	hmmfetch\
 	hmmlogo\
+	hmmpgmd\
 	hmmpress\
 	hmmscan\
 	hmmsearch\
@@ -60,21 +62,20 @@ PROGS = alimask\
 	phmmer\
 	nhmmer\
 	nhmmscan\
-	hmmpgmd\
-	hmmc2\
 	makehmmerdb\
 	hmmerfm-exactmatch
-
 
 PROGOBJS =\
 	alimask.o\
 	exactmatch.o\
 	hmmalign.o\
 	hmmbuild.o\
+	hmmc2.o\
 	hmmconvert.o\
 	hmmemit.o\
 	hmmfetch.o\
 	hmmlogo.o\
+	hmmpgmd.o\
 	hmmpress.o\
 	hmmscan.o\
 	hmmsearch.o\
@@ -84,8 +85,6 @@ PROGOBJS =\
 	phmmer.o\
 	nhmmer.o\
 	nhmmscan.o\
-	hmmpgmd.o\
-	hmmc2.o\
 	makehmmerdb.o\
 	hmmerfm-exactmatch.o
 
@@ -250,8 +249,8 @@ libhmmer-src.stamp: ${OBJS}
 
 .FORCE:
 
-${OBJS}:     ${HDRS} p7_config.h  
-${PROGOBJS}: ${HDRS} p7_config.h
+${OBJS}:        ${HDRS} p7_config.h  
+${PROGOBJS}:    ${HDRS} p7_config.h
 
 ${PROGS}: @EXEC_DEPENDENCY@  libhmmer.a ../${ESLDIR}/libeasel.a 
 	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}

@@ -701,19 +701,26 @@ AX_GCC_FUNC_ATTRIBUTE(format)
 
 AC_CHECK_FUNCS(mkstemp)
 AC_CHECK_FUNCS(popen)
+AC_CHECK_FUNCS(putenv)
 AC_CHECK_FUNCS(strcasecmp)
+AC_CHECK_FUNCS(strsep)
 AC_CHECK_FUNCS(times)
 AC_CHECK_FUNCS(getpid)
 AC_CHECK_FUNCS(sysctl)
 AC_CHECK_FUNCS(sysconf)
 AC_CHECK_FUNCS(getcwd)
+AC_CHECK_FUNCS(chmod)
 AC_CHECK_FUNCS(stat)
 AC_CHECK_FUNCS(fstat)
+AC_CHECK_FUNCS(erfc)
 
-AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
-AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))
-AC_CHECK_FUNCS(htons, , AC_CHECK_LIB(socket, htons))
-AC_CHECK_FUNCS(htonl, , AC_CHECK_LIB(socket, htonl))
+AC_SEARCH_LIBS(ntohs,     socket)
+AC_SEARCH_LIBS(ntohl,     socket)
+AC_SEARCH_LIBS(htons,     socket)
+AC_SEARCH_LIBS(htonl,     socket)
+AC_SEARCH_LIBS(socket,    socket)
+AC_SEARCH_LIBS(inet_pton, nsl)
+
 AC_FUNC_FSEEKO
 
 
@@ -786,10 +793,4 @@ if test "$impl_choice" = "dummy"; then
   AC_MSG_WARN([It is slow, about 100x slower than real H3, and is NOT intended for production use!])
   AC_MSG_WARN([It only intended to show the basics of how HMMER3 works, portably.])
 fi
-
-
-#################################################################
-# @LICENSE@
-# xref autoconf macro archive: //www.gnu.org/software/ac-archive/
-#################################################################
 
