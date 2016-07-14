@@ -1,0 +1,59 @@
+# VPATH and shell configuration
+top_srcdir = @top_srcdir@
+srcdir     = @srcdir@
+VPATH      = @srcdir@ 
+SHELL      = /bin/sh
+
+CC        = @CC@
+CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
+SIMDFLAGS = @SIMD_CFLAGS@
+CPPFLAGS  = @CPPFLAGS@
+LDFLAGS   = @LDFLAGS@
+DEFS      = @DEFS@
+LIBS      = @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ 
+MPILIBS   = @MPILIBS@
+SOCKETLIBS = @SOCKETLIBS@
+
+AR        = @AR@ 
+RANLIB    = @RANLIB@
+
+OBJS = $(patsubst %.c,%.o,$(wildcard *.c))
+
+ifndef V
+	QUIET_CC      = @echo '    ' CC $@;
+	QUIET_GEN     = @echo '    ' GEN $@;
+	QUIET_AR      = @echo '    ' AR $@;
+endif
+
+.PHONY: all dev tests check distclean clean TAGS
+
+all:    libcompat.a
+
+dev:    libcompat.a
+
+tests:  
+
+check:  
+
+libcompat.a: ${OBJS}
+	${QUIET_AR}${AR} -r libcompat.a $? > /dev/null 2>&1 
+	@${RANLIB} libcompat.a
+
+.FORCE:
+
+.c.o:
+	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${CPPFLAGS} ${MYINCDIRS} -o $@ -c $<
+
+clean:
+	-rm -f *.o *~ Makefile.bak core libcompat.a
+
+distclean: clean
+	-rm -f Makefile 
+
+
+################################################################
+# @LICENSE@
+#
+# SVN $URL$
+# SVN $Id$
+################################################################

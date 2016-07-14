@@ -113,6 +113,7 @@
 #undef HAVE_NETINET_IN_H        /* On FreeBSD, you need netinet/in.h for struct sockaddr_in */
 #undef HAVE_SYS_PARAM_H         /* On OpenBSD, sys/sysctl.h needs sys/param.h */
 #undef HAVE_SYS_SYSCTL_H
+#undef HAVE_STRSEP		/* At least Solaris doesn't have strsep() */
 
 /* Optional parallel implementations
  */
