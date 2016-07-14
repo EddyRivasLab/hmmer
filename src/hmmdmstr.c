@@ -1334,8 +1334,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   time_t             date;
   char               timestamp[32];
 
-  ESL_ALPHABET      *abcDNA = NULL;       /* DNA sequence alphabet         */
-
   buf_size = MAX_BUFFER;
   if ((buffer  = malloc(buf_size))   == NULL) LOG_FATAL_MSG("malloc", errno);
   ptr = buffer;

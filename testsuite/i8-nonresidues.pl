@@ -11,7 +11,6 @@
 # Example:  ./i8-nonresidues.pl ..         ..        tmpfoo
 #
 # SRE, Thu Oct 29 08:38:09 2009
-# SVN $Id$
 
 BEGIN {
     $builddir = shift;
@@ -69,6 +68,7 @@ if ($h3::domsc[0]   != "64.5") { printf("FAIL: expected domain 1 score of 64.5; 
 print "ok\n";
 unlink "$tmppfx.1";
 unlink "$tmppfx.2";
+unlink "$tmppfx.dom";
 unlink "$tmppfx.out";
 exit 0;
 

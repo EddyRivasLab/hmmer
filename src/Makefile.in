@@ -358,13 +358,8 @@ clean:
 	-rm -f ${EXAMPLES}
 	-rm -f *.gcno
 	-rm -f cscope.out
-	for prog in ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do \
+	for prog in ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES} ${ITESTS}; do \
 	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi ;\
 	done
 
-################################################################
-# @LICENSE@
-#
-# SVN $URL$
-# SVN $Id$
-################################################################
+

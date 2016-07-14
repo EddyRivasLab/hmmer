@@ -676,6 +676,24 @@ AC_TYPE_OFF_T
 #
 AX_GCC_FUNC_ATTRIBUTE(noreturn)
 
+# HAVE_FUNC_ATTRIBUTE_FORMAT
+#   
+#   We have some printf()-style functions that use varargs.
+#   Apparently when you do something like 
+#           int64_t bigint;
+#           my_printf("%d", bigint);
+#   a compiler can't normally detect the size mismatch between the
+#   specifier (%d) and the argument (bigint). Usually this isn't a
+#   problem (apparently most platforms cast appropriately) but we had
+#   problems on ARM. gcc-like compilers allow declaring an attribute
+#   of format(printf, <string_index>, <first-to-check>), enabling the
+#   compiler to typecheck printf()-like arguments, and warn appropriately.
+#   We only need or use this in development.
+#
+# This gets set in the Easel esl_config.h.
+AX_GCC_FUNC_ATTRIBUTE(format)
+
+
 
 ################################################################
 # 11. Checks for functions, defining HAVE_FOO when foo is found

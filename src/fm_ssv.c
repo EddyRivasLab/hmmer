@@ -578,7 +578,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
 
 ERROR:
   return eslEMEM;
-
 }
 
 
@@ -603,22 +602,19 @@ ERROR:
  * Returns:   <eslOK> on success.
  */
 static int
-FM_window_from_diag (FM_DIAG *diag, const FM_DATA *fm, const FM_METADATA *meta, P7_HMM_WINDOWLIST *windowlist) {
-
+FM_window_from_diag (FM_DIAG *diag, const FM_DATA *fm, const FM_METADATA *meta, P7_HMM_WINDOWLIST *windowlist) 
+{
+  uint32_t seg_id;
+  uint64_t seg_pos;
   // if diag->complementarity == p7_NOCOMPLEMENT, these positions are in context of FM->T
   // otherwise, they're in context of revcomp(FM->T).
 
-  int status;
-  uint32_t seg_id;
-  uint64_t seg_pos;
-
-  status = fm_getOriginalPosition (fm, meta, 0, diag->length, diag->complementarity, diag->n, &seg_id, &seg_pos);
+  fm_getOriginalPosition (fm, meta, 0, diag->length, diag->complementarity, diag->n, &seg_id, &seg_pos);
 
   p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+diag->length-1, diag->length, diag->score, diag->complementarity,
          meta->seq_data[seg_id].length);
 
   return eslOK;
-
 }
 
 
@@ -645,7 +641,6 @@ FM_window_from_diag (FM_DIAG *diag, const FM_DATA *fm, const FM_METADATA *meta, 
 static int
 FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const P7_SCOREDATA *ssvdata, FM_CFG *cfg, ESL_SQ  *tmp_sq)
 {
-
   uint64_t k,n;
   int32_t model_start, model_end;
   int64_t target_start, target_end;

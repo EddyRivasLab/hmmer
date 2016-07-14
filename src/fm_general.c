@@ -501,12 +501,8 @@ fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
   //shortcut variables
   int64_t *C               = NULL;
 
-  int status;
   int i;
-
-  uint16_t *occCnts_b  = NULL;  //convenience variables, used to simplify macro calls
   uint32_t *occCnts_sb = NULL;
-
   int32_t compressed_bytes;
   int num_freq_cnts_b;
   int num_freq_cnts_sb;
@@ -514,6 +510,7 @@ fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
   int64_t prevC;
   int cnt;
   int chars_per_byte = 8/meta->charBits;
+  int status;
 
 
   if(fread(&(fm->N), sizeof(uint64_t), 1, meta->fp) !=  1)
@@ -561,9 +558,7 @@ fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
 
   //shortcut variables
   C          = fm->C;
-  occCnts_b  = fm->occCnts_b;
   occCnts_sb = fm->occCnts_sb;
-
 
   /*compute the first position of each letter in the alphabet in a sorted list
   * (with an extra value to simplify lookup of the last position for the last letter).

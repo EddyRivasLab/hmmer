@@ -67,8 +67,6 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   int            hmm_namelen, hmm_acclen, hmm_desclen;
   int            sq_namelen,  sq_acclen,  sq_desclen;
   int            status;
-  char           n1,n2,n3;
-  int            j;
   ESL_SQ         *ntorfseqtxt = NULL;
   
   /* First figure out which piece of the trace (from first match to last match) 
