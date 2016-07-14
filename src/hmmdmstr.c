@@ -1,8 +1,5 @@
 /* master side of the hmmpgmd daemon
- * 
  * MSF, Thu Aug 12, 2010 [Janelia]
- * SVN $Id$
- * SVN $URL$
  */
 #include "p7_config.h"
 
@@ -24,10 +21,6 @@
 #include <syslog.h>
 #include <assert.h>
 #include <time.h>
-
-#ifndef HAVE_STRSEP
-#include "compat/strsep.h"
-#endif
 
 #ifndef HMMER_THREADS
 #error "Program requires pthreads be enabled."
