@@ -1,6 +1,10 @@
 /* Implementation of P7_FILTERMX, the one-row DP memory for MSV and
  * Viterbi filters.
  * 
+* Note: many of the functions in this file now just dispatch to the 
+* appropriate SIMD-versioned function.  Where the SIMD type
+* is known in advance, performance can be improved by calling
+* the appropriate version directly.
  * Contents:
  *   1. The P7_FILTERMX object
  *   2. Debugging and development routines
@@ -16,10 +20,11 @@
 #include <emmintrin.h>
 
 #include "easel.h"
-
+#include "esl_random.h"
 #include "dp_vector/simdvec.h"
 #include "dp_vector/p7_filtermx.h"
-
+#include "hardware/hardware.h"
+#include "base/general.h"
 /*****************************************************************
  * 1. The P7_FILTERMX object.
  *****************************************************************/
@@ -42,75 +47,26 @@
  * Throws:    <NULL> on allocation failure.
  */
 P7_FILTERMX *
-p7_filtermx_Create(int allocM)
+p7_filtermx_Create(int allocM, SIMD_TYPE simd)
 {
-  P7_FILTERMX *fx = NULL;
-  int          status;
 
-  /* Contract checks / argument validation */
-  ESL_DASSERT1( (allocM >= 1 && allocM <= 100000) );
-
-  ESL_ALLOC(fx, sizeof(P7_FILTERMX));
-  fx->M         = 0;
-  fx->dp        = NULL;
-  fx->dp_mem    = NULL;
-  fx->allocM    = 0;
-
- #ifdef p7_build_AVX2
-  fx->dp_AVX    = NULL;
-  fx->dp_mem_AVX = NULL;
-  fx->allocM_AVX = 0;
- #endif
-
-#ifdef p7_build_AVX512
-  fx->dp_AVX_512    = NULL;
-  fx->dp_mem_AVX_512 = NULL;
-  fx->allocM_AVX_512 = 0;
- #endif
- 
-
-  fx->type      = p7F_NONE;
-#ifdef p7_DEBUGGING
-  fx->do_dumping= FALSE;
-  fx->dfp       = NULL;
-#endif 
+  switch(simd){
+    case SSE:
+      return p7_filtermx_Create_sse(allocM);
+      break;
+    case AVX:
+      return p7_filtermx_Create_avx(allocM);
+      break;
+    case AVX512:
+      return p7_filtermx_Create_avx512(allocM);
+      break;
+    case NEON:
+      p7_Fail("Neon support not yet integrated into p7_filtermx_Create");
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_filtermx_Create");  
+  }
   
-//#ifdef p7_build_SSE // allocate different memory buffers depending on which
-  // ISA we're using
-  /*                    16B per vector  * (MDI)states *  ~M/4 vectors    + alignment slop */
-  ESL_ALLOC(fx->dp_mem, (sizeof(__m128i) * p7F_NSCELLS * P7_NVW(allocM)) + (p7_VALIGN-1));
-  fx->allocM = allocM;
-
-  /* Manual memory alignment incantation: */
-  fx->dp = (__m128i *) ( (unsigned long int) (  (char *) fx->dp_mem + (p7_VALIGN-1) ) & p7_VALIMASK);
-//#endif
-
-  #ifdef p7_build_AVX2
-  /*                              32B per vector  * (MDI)states *  ~M/4 vectors    + alignment slop */
-  ESL_ALLOC(fx->dp_mem_AVX, (sizeof(__m256i) * p7F_NSCELLS * P7_NVW_AVX(allocM)) + (p7_VALIGN_AVX-1));
-  fx->allocM_AVX = allocM;
-
-  /* Manual memory alignment incantation: */
-  fx->dp_AVX = (__m256i *) ( (unsigned long int) (  (char *) fx->dp_mem_AVX + (p7_VALIGN_AVX-1) ) & p7_VALIMASK_AVX);
-  #endif
-
-  #ifdef p7_build_AVX512
-  /*                              64B per vector  * (MDI)states *  ~M/4 vectors    + alignment slop */
-  ESL_ALLOC(fx->dp_mem_AVX_512, (sizeof(__m512i) * p7F_NSCELLS * P7_NVW_AVX_512(allocM)) + (p7_VALIGN_AVX_512-1));
-  fx->allocM_AVX_512 = allocM;
-
-  /* Manual memory alignment incantation: */
-  fx->dp_AVX_512 = (__m512i *) ( (unsigned long int) (  (char *) fx->dp_mem_AVX_512 + (p7_VALIGN_AVX_512-1) ) & p7_VALIMASK_AVX_512);
-  #endif
-
-
-
-
-  return fx;
-
- ERROR:
-  p7_filtermx_Destroy(fx);
-  return NULL;
 }
 
 
@@ -135,54 +91,22 @@ p7_filtermx_Create(int allocM)
 int
 p7_filtermx_GrowTo(P7_FILTERMX *fx, int allocM)
 {
-  int status;
-
-  /* Contract checks / argument validation */
-  ESL_DASSERT1( (allocM >= 1 && allocM <= 100000) );
-
-
-/* 
-This bit is mildly unsafe if more than one of p7_build_SSE, p7_build_AVX2, and p7_build_AVX512 are set.  It relies on any code that grows one or more of dp_mem, dp_mem_AVX, and dp_mem_AVX_512 to grow all of them that are being used.  If not, there can be problems caused by one but not all of the buffers being large enough to hold the current calculation.  This should only
-be an issue during development/testing, but I'm documenting it in case something goes wrong.
-*/
-#ifdef p7_build_SSE
-  /* is it already big enough? */
-  if (allocM <= fx->allocM) return eslOK;
-
-  /* if not, grow it */
-  ESL_REALLOC(fx->dp_mem, (sizeof(__m128i) * (p7F_NSCELLS * P7_NVW(allocM))) + (p7_VALIGN-1));
-  fx->allocM = allocM;
-  fx->dp     = (__m128i *) ( (unsigned long int) ( (char *) fx->dp_mem + (p7_VALIGN-1)) & p7_VALIMASK);
-#endif
-
-#ifdef p7_build_AVX2
-  /* is it already big enough? */
-  if (allocM <= fx->allocM_AVX) return eslOK;
-
-  /* if not, grow it */
-  ESL_REALLOC(fx->dp_mem_AVX, (sizeof(__m256i) * (p7F_NSCELLS * P7_NVW_AVX(allocM))) + (p7_VALIGN_AVX-1));
-  fx->allocM_AVX = allocM;
-  fx->dp_AVX     = (__m256i *) ( (unsigned long int) ( (char *) fx->dp_mem_AVX + (p7_VALIGN_AVX-1)) & p7_VALIMASK_AVX);
-#endif
-
-#ifdef p7_build_AVX512
-  /* is it already big enough? */
-  if (allocM <= fx->allocM_AVX_512) return eslOK;
-
-  /* if not, grow it */
-  ESL_REALLOC(fx->dp_mem_AVX_512, (sizeof(__m512i) * (p7F_NSCELLS * P7_NVW_AVX_512(allocM))) + (p7_VALIGN_AVX_512-1));
-  fx->allocM_AVX_512 = allocM;
-  fx->dp_AVX_512     = (__m512i *) ( (unsigned long int) ( (char *) fx->dp_mem_AVX_512 + (p7_VALIGN_AVX_512-1)) & p7_VALIMASK_AVX_512);
-#endif
-
-
-
-
-
-  return eslOK;
-
- ERROR:
-  return status;
+ switch(fx->simd){
+    case SSE:
+      return p7_filtermx_GrowTo_sse(fx, allocM);
+      break;
+    case AVX:
+      return p7_filtermx_GrowTo_avx(fx, allocM);
+      break;
+    case AVX512:
+      return p7_filtermx_GrowTo_avx512(fx, allocM);
+      break;
+    case NEON:
+      p7_Fail("Neon support not yet integrated into p7_filtermx_GrowTo");
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_filtermx_GrowTo");  
+  }
 }
 
 
@@ -199,20 +123,23 @@ be an issue during development/testing, but I'm documenting it in case something
 size_t 
 p7_filtermx_Sizeof(const P7_FILTERMX *fx)
 {
-  size_t n = sizeof(P7_FILTERMX);
- 
-#ifdef p7_build_SSE
-  n += (sizeof(__m128i) * p7F_NSCELLS * P7_NVW(fx->allocM)) + (p7_VALIGN-1);
-#endif
 
-#ifdef p7_build_AVX2
-  n += (sizeof(__m256i) * p7F_NSCELLS * P7_NVW_AVX(fx->allocM_AVX)) + (p7_VALIGN_AVX-1);
-#endif
-
-#ifdef p7_build_AVX512
-  n += (sizeof(__m512i) * p7F_NSCELLS * P7_NVW_AVX_512(fx->allocM_AVX_512)) + (p7_VALIGN_AVX_512-1);
-#endif
-  return n;
+  switch(fx->simd){
+    case SSE:
+      return p7_filtermx_Sizeof_sse(fx);
+      break;
+    case AVX:
+      return p7_filtermx_Sizeof_avx(fx);
+      break;
+    case AVX512:
+      return p7_filtermx_Sizeof_avx512(fx);
+      break;
+    case NEON:
+      p7_Fail("Neon support not yet integrated into p7_filtermx_Sizeof");
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_filtermx_Sizeof");  
+  }
 }
 
 
@@ -224,11 +151,24 @@ p7_filtermx_Sizeof(const P7_FILTERMX *fx)
  *            profile of <M> consensus positions.
  */
 size_t
-p7_filtermx_MinSizeof(int M)
+p7_filtermx_MinSizeof(int M, SIMD_TYPE simd)
 {
-  size_t n = sizeof(P7_FILTERMX);
-  n += (sizeof(__m128i) * p7F_NSCELLS * P7_NVW(M)) + (p7_VALIGN-1);
-  return n;
+switch(simd){
+    case SSE:
+      return p7_filtermx_MinSizeof_sse(M);
+      break;
+    case AVX:
+      return p7_filtermx_MinSizeof_avx(M);
+      break;
+    case AVX512:
+      return p7_filtermx_MinSizeof_avx512(M);
+      break;
+    case NEON:
+      p7_Fail("Neon support not yet integrated into p7_filtermx_MinSizeof");
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_filtermx_MinSizeof");  
+  }
 }
 
 
@@ -269,19 +209,21 @@ p7_filtermx_Reuse(P7_FILTERMX *fx)
 void
 p7_filtermx_Destroy(P7_FILTERMX *fx)
 {
-  if (fx) {
-#ifdef p7_build_SSE
-    if (fx->dp_mem) free(fx->dp_mem);
-#endif
-
-#ifdef p7_build_AVX2
-    if (fx->dp_mem_AVX) free(fx->dp_mem_AVX);
-#endif
-
-#ifdef p7_build_AVX512
-    if (fx->dp_mem_AVX_512) free(fx->dp_mem_AVX_512);
-#endif    
-    free(fx);
+  switch(fx->simd){
+    case SSE:
+      p7_filtermx_Destroy_sse(fx);
+      break;
+    case AVX:
+      p7_filtermx_Destroy_avx(fx);
+      break;
+    case AVX512:
+      p7_filtermx_Destroy_avx512(fx);
+      break;
+    case NEON:
+      p7_Fail("Neon support not yet integrated into p7_filtermx_Destroy");
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_filtermx_Destroy");  
   }
   return;
 }
@@ -353,56 +295,22 @@ p7_filtermx_SetDumpMode(P7_FILTERMX *fx, FILE *dfp, int truefalse)
 int
 p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
-  int      Q  = P7_NVB(fx->M);	/* number of vectors in the MSV row */
-  uint8_t *v  = NULL;		/* array of scores after unstriping them */
-  int      q,z,k;
-  union { __m128i v; uint8_t i[16]; } tmp;
-  int      status;
-
-  ESL_DASSERT1( (fx->type == p7F_MSVFILTER || fx->type == p7F_SSVFILTER) );
-
-  /* We'll unstripe the whole row; then print it in its normal order. */
-  ESL_ALLOC(v, sizeof(unsigned char) * ((Q*16)+1));
-  v[0] = 0;
-
-  /* Header (if we're on the 0th row)  */
-  if (rowi == 0)
-    {
-      fprintf(fx->dfp, "       ");
-      for (k = 0; k <= fx->M;  k++) fprintf(fx->dfp, "%3d ", k);
-      fprintf(fx->dfp, "%3s %3s %3s %3s %3s\n", "E", "N", "J", "B", "C");
-      fprintf(fx->dfp, "       ");
-      for (k = 0; k <= fx->M+5;  k++) fprintf(fx->dfp, "%3s ", "---");
-      fprintf(fx->dfp, "\n");
-    }
-
-  /* Unpack and unstripe, then print M's. */
-  for (q = 0; q < Q; q++) {
-    tmp.v = fx->dp[q];
-    for (z = 0; z < 16; z++) v[q+Q*z+1] = tmp.i[z]; 
+ switch(fx->simd){
+    case SSE:
+      return p7_filtermx_DumpMFRow_sse(fx, rowi, xE, xN, xJ, xB, xC);
+      break;
+    case AVX:
+      return p7_filtermx_DumpMFRow_avx(fx, rowi, xE, xN, xJ, xB, xC);
+      break;
+    case AVX512:
+      return p7_filtermx_DumpMFRow_avx512(fx, rowi, xE, xN, xJ, xB, xC);
+      break;
+    case NEON:
+      p7_Fail("Neon support not yet integrated into p7_filtermx_DumpMFRow");
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_filtermx_DumpMFRow");  
   }
-  fprintf(fx->dfp, "%4d M ", rowi);
-  for (k = 0; k <= fx->M; k++) fprintf(fx->dfp, "%3d ", v[k]);
-
-  /* The specials */
-  fprintf(fx->dfp, "%3d %3d %3d %3d %3d\n", xE, xN, xJ, xB, xC);
-
-  /* I's are all 0's; print just to facilitate comparison to refmx. */
-  fprintf(fx->dfp, "%4d I ", rowi);
-  for (k = 0; k <= fx->M; k++) fprintf(fx->dfp, "%3d ", 0);
-  fprintf(fx->dfp, "\n");
-
-  /* D's are all 0's too */
-  fprintf(fx->dfp, "%4d D ", rowi);
-  for (k = 0; k <= fx->M; k++) fprintf(fx->dfp, "%3d ", 0);
-  fprintf(fx->dfp, "\n\n");
-
-  free(v);
-  return eslOK;
-
-ERROR:
-  free(v);
-  return status;
 }
 
 
@@ -427,64 +335,22 @@ ERROR:
 int
 p7_filtermx_DumpVFRow(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
 {
-  __m128i *dp = fx->dp;		/* enable MMXf(q), DMXf(q), IMXf(q) macros */
-  int      Q  = P7_NVW(fx->M);	/* number of vectors in the VF row */
-  int16_t *v  = NULL;		/* array of unstriped, uninterleaved scores  */
-  int      q,z,k;
-  union { __m128i v; int16_t i[8]; } tmp;
-  int      status;
-
-  ESL_ALLOC(v, sizeof(int16_t) * ((Q*8)+1));
-  v[0] = 0;
-
-  /* Header (if we're on the 0th row)
-   */
-  if (rowi == 0)
-    {
-      fprintf(fx->dfp, "       ");
-      for (k = 0; k <= fx->M;  k++) fprintf(fx->dfp, "%6d ", k);
-      fprintf(fx->dfp, "%6s %6s %6s %6s %6s\n", "E", "N", "J", "B", "C");
-      fprintf(fx->dfp, "       ");
-      for (k = 0; k <= fx->M+5;  k++) fprintf(fx->dfp, "%6s ", "------");
-      fprintf(fx->dfp, "\n");
-    }
-
-  /* Unpack and unstripe, then print M's. */
-  for (q = 0; q < Q; q++) {
-    tmp.v = MMXf(q);
-    for (z = 0; z < 8; z++) v[q+Q*z+1] = tmp.i[z];
+  switch(fx->simd){
+    case SSE:
+      return p7_filtermx_DumpVFRow_sse(fx, rowi, xE, xN, xJ, xB, xC);
+      break;
+    case AVX:
+      return p7_filtermx_DumpVFRow_avx(fx, rowi, xE, xN, xJ, xB, xC);
+      break;
+    case AVX512:
+      return p7_filtermx_DumpVFRow_avx512(fx, rowi, xE, xN, xJ, xB, xC);
+      break;
+    case NEON:
+      p7_Fail("Neon support not yet integrated into p7_filtermx_DumpVFRow");
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_filtermx_DumpVFRow");  
   }
-  fprintf(fx->dfp, "%4d M ", rowi);
-  for (k = 0; k <= fx->M; k++) fprintf(fx->dfp, "%6d ", v[k]);
-
-  /* The specials */
-  fprintf(fx->dfp, "%6d %6d %6d %6d %6d\n", xE, xN, xJ, xB, xC);
-
-  /* Unpack and unstripe, then print I's. */
-  for (q = 0; q < Q; q++) {
-    tmp.v = IMXf(q);
-    for (z = 0; z < 8; z++) v[q+Q*z+1] = tmp.i[z];
-  }
-  fprintf(fx->dfp, "%4d I ", rowi);
-  for (k = 0; k <= fx->M; k++) fprintf(fx->dfp, "%6d ", v[k]);
-  fprintf(fx->dfp, "\n");
-
-  /* Unpack, unstripe, then print D's. */
-  for (q = 0; q < Q; q++) {
-    tmp.v = DMXf(q);
-    for (z = 0; z < 8; z++) v[q+Q*z+1] = tmp.i[z];
-  }
-  fprintf(fx->dfp, "%4d D ", rowi);
-  for (k = 0; k <= fx->M; k++) fprintf(fx->dfp, "%6d ", v[k]);
-  fprintf(fx->dfp, "\n\n");
-
-  free(v);
-  return eslOK;
-
-ERROR:
-  free(v);
-  return status;
-
 }
 #endif /*p7_DEBUGGING*/
 

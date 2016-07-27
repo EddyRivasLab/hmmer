@@ -5,6 +5,8 @@
  *    2. Debugging, development routines.
  *    3. Internal routines.
  *    4. Copyright and license information.
+*    Many of the functions in this file are now dispatch wrappers that just call the appropriate SIMD version of the function
+*   in cases where the correcct version is known, you can achieve (slightly) better performance by calling it directly
  */
 #include "p7_config.h"
 
@@ -15,15 +17,7 @@
 
 #include "dp_vector/simdvec.h"
 #include "dp_vector/p7_checkptmx.h"
-
-static void set_row_layout  (P7_CHECKPTMX *ox, int allocL, int maxR); 
-static void set_full        (P7_CHECKPTMX *ox, int L);
-static void set_checkpointed(P7_CHECKPTMX *ox, int L, int R);
-static void set_redlined    (P7_CHECKPTMX *ox, int L, double minR);
-
-static double minimum_rows     (int L);
-static double checkpointed_rows(int L, int R);
-
+#include "hardware/hardware.h"
 
 /*****************************************************************
  * 1. API for the <P7_CHECKPTMX> object
@@ -62,141 +56,24 @@ static double checkpointed_rows(int L, int R);
  * Throws:    <NULL> on allocation failure.
  */
 P7_CHECKPTMX *
-p7_checkptmx_Create(int M, int L, int64_t ramlimit)
+p7_checkptmx_Create(int M, int L, int64_t ramlimit, SIMD_TYPE simd)
 {
-  P7_CHECKPTMX *ox = NULL;
-  int          maxR;
-  int          r;
-  int          status;
-  
-  /* Validity of integer variable ranges may depend on design spec:                  */
-  ESL_DASSERT1( (M <= 100000) );       /* design spec says, model length M <= 100000 */
-  ESL_DASSERT1( (L <= 100000) );       /*           ... and,  seq length L <= 100000 */
-  ESL_DASSERT1( (L >  0) );
-  ESL_DASSERT1( (M >  0) );
-
-  /* Level 1 allocation: the structure itself */
-  ESL_ALLOC(ox, sizeof(P7_CHECKPTMX));
- 
-#ifdef p7_build_SSE 
-  ox->dp_mem  = NULL;
-  ox->dpf     = NULL;
-#endif
-#ifdef p7_build_AVX2
-  ox->dp_mem_AVX  = NULL;
-  ox->dpf_AVX     = NULL;
-#endif
-#ifdef p7_build_AVX512 
-  ox->dp_mem_AVX_512  = NULL;
-  ox->dpf_AVX_512     = NULL;
-#endif
-
-  /* Set checkpointed row layout: allocR, R{abc}, L{abc} fields */
-  ox->R0          = 3;	                                                   /* fwd[0]; bck[prv,cur] */
-
-  // determine number of rows based on SSE vector sizes to make checking easier
-  int64_t base_row_length = sizeof(float) * P7_NVF(M) * p7C_NSCELLS * p7_VNF;    /* accounts for main vector part of the row       */ 
-  base_row_length     += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN);  /* plus specials (must maintain memory alignment) */
-  ox->ramlimit    = ramlimit;
-  maxR            = (int) (ox->ramlimit / base_row_length); 
-  set_row_layout(ox, L, maxR);
-
-#ifdef p7_build_SSE
-  ox->allocW      = base_row_length;
-  ox->allocR      = ox->R0 + ox->Ra + ox->Rb + ox->Rc;
-  ox->validR      = ox->allocR;
-  ESL_DASSERT1( (ox->allocW % p7_VALIGN == 0) ); /* verify alignment */
-#endif
-
-#ifdef p7_build_AVX2
-  ox->allocW_AVX      = sizeof(float) * P7_NVF_AVX(M) * p7C_NSCELLS * p7_VNF_AVX;    /* accounts for main vector part of the row       */ 
-  ox->allocW_AVX     += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN_AVX);  /* plus specials (must maintain memory alignment) */
-  ox->allocR_AVX      = ox->R0 + ox->Ra + ox->Rb + ox->Rc;
-  ox->validR_AVX      = ox->allocR_AVX;
-  ESL_DASSERT1( (ox->allocW_AVX % p7_VALIGN_AVX == 0) ); /* verify alignment */
-#endif
-
-#ifdef p7_build_AVX512
-  ox->allocW_AVX_512      = sizeof(float) * P7_NVF_AVX_512(M) * p7C_NSCELLS * p7_VNF_AVX_512;    /* accounts for main vector part of the row       */ 
-  ox->allocW_AVX_512     += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN_AVX_512);  /* plus specials (must maintain memory alignment) */
-  ox->allocR_AVX_512      = ox->R0 + ox->Ra + ox->Rb + ox->Rc;
-  ox->validR_AVX_512      = ox->allocR_AVX_512;
-  ESL_DASSERT1( (ox->allocW_AVX_512 % p7_VALIGN_AVX_512 == 0) ); /* verify alignment */
-#endif
-
-  /* Level 2 allocations: row pointers and dp cell memory */
-#ifdef p7_build_SSE
-  ox->nalloc = ox->allocR * ox->allocW;
-  ESL_ALLOC( ox->dp_mem, ox->nalloc + (p7_VALIGN-1));    /* (p7_VALIGN-1) because we'll hand-align memory */
-  ESL_ALLOC( ox->dpf,    sizeof(float *) * ox->allocR);  
-  // Static analyzers may complain about the above.
-  // sizeof(float *) is correct, even though ox->dpf is char **.
-  // ox->dpf will be cast to __m128 SIMD vector in DP code.
-
-  ox->dpf[0] = (char *) ( ((uintptr_t) ox->dp_mem + p7_VALIGN - 1) & p7_VALIMASK); /* hand memory alignment */
-  for (r = 1; r < ox->validR; r++)
-    ox->dpf[r] = ox->dpf[0] + r * ox->allocW;
-#endif
-
-#ifdef p7_build_AVX2
-  ox->nalloc_AVX = ox->allocR_AVX * ox->allocW_AVX;
-  ESL_ALLOC( ox->dp_mem_AVX, ox->nalloc_AVX + (p7_VALIGN_AVX-1));    /* (p7_VALIGN-1) because we'll hand-align memory */
-  ESL_ALLOC( ox->dpf_AVX,    sizeof(float *) * ox->allocR_AVX);  
-  // Static analyzers may complain about the above.
-  // sizeof(float *) is correct, even though ox->dpf is char **.
-  // ox->dpf will be cast to __m128 SIMD vector in DP code.
-
-  ox->dpf_AVX[0] = (char *) ( ((uintptr_t) ox->dp_mem_AVX + p7_VALIGN_AVX - 1) & p7_VALIMASK_AVX); /* hand memory alignment */
-  for (r = 1; r < ox->validR_AVX; r++)
-    ox->dpf_AVX[r] = ox->dpf_AVX[0] + r * ox->allocW_AVX;
-#endif  
-
-#ifdef p7_build_AVX512
-  ox->nalloc_AVX_512 = ox->allocR_AVX_512 * ox->allocW_AVX_512;
-  ESL_ALLOC( ox->dp_mem_AVX_512, ox->nalloc_AVX_512 + (p7_VALIGN_AVX_512-1));    /* (p7_VALIGN-1) because we'll hand-align memory */
-  ESL_ALLOC( ox->dpf_AVX_512,    sizeof(float *) * ox->allocR_AVX_512);  
-  // Static analyzers may complain about the above.
-  // sizeof(float *) is correct, even though ox->dpf is char **.
-  // ox->dpf will be cast to __m128 SIMD vector in DP code.
-
-  ox->dpf_AVX_512[0] = (char *) ( ((uintptr_t) ox->dp_mem_AVX_512 + p7_VALIGN_AVX_512 - 1) & p7_VALIMASK_AVX_512); /* hand memory alignment */
-  for (r = 1; r < ox->validR_AVX_512; r++)
-    ox->dpf_AVX_512[r] = ox->dpf_AVX_512[0] + r * ox->allocW_AVX_512;
-#endif  
-
-#ifdef p7_DEBUGGING
-  ox->do_dumping     = FALSE;
-  ox->dfp            = NULL;
-  ox->dump_maxpfx    = 5;	
-  ox->dump_width     = 9;
-  ox->dump_precision = 4;
-  ox->dump_flags     = p7_DEFAULT;
-  ox->fwd            = NULL;
-  ox->bck            = NULL;
-  ox->pp             = NULL;
-  ox->bcksc          = 0.0f;
-#endif
-
-  ox->M  = 0;
-  ox->L  = 0;
- #ifdef p7_build_SSE
-  ox->R  = 0; 
-  ox->Qf = 0;
- #endif
-#ifdef p7_build_AVX2
-  ox->R_AVX  = 0;
-  ox->Qf_AVX = 0;
- #endif
-#ifdef p7_build_AVX512
-  ox->R_AVX_512  = 0;
-  ox->Qf_AVX_512 = 0;
- #endif
-  
-  return ox;
-
- ERROR:
-  p7_checkptmx_Destroy(ox);
-  return NULL;
+switch(simd){
+    case SSE:
+      return p7_checkptmx_Create_sse(M, L, ramlimit);
+      break;
+    case AVX:
+      return p7_checkptmx_Create_avx(M, L, ramlimit);
+      break;
+    case AVX512:
+      return p7_checkptmx_Create_avx512(M, L, ramlimit);
+      break;
+    case NEON:
+      p7_Fail("Neon support not yet integrated into p7_checkptmx_Create");
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_Create");  
+  }
 }
 
 /* Function:  p7_checkptmx_GrowTo()
@@ -228,216 +105,22 @@ p7_checkptmx_Create(int M, int L, int64_t ramlimit)
 int
 p7_checkptmx_GrowTo(P7_CHECKPTMX *ox, int M, int L)
 {
-  int     minR_chk      = (int) ceil(minimum_rows(L)) + ox->R0; /* minimum number of DP rows needed  */
-  int     reset_dp_ptrs = FALSE;
-  int     maxR;
-  int64_t W;			/* minimum row width needed, bytes */
-  int     r;
-  int     status;
-
-  /* Validity of integer variable ranges may depend on design spec:                  */
-  ESL_DASSERT1( (M <= 100000) );       /* design spec says, model length M <= 100000 */
-  ESL_DASSERT1( (L <= 100000) );       /*           ... and,  seq length L <= 100000 */
-  ESL_DASSERT1( (L >  0) );
-  ESL_DASSERT1( (M >  0) );
-
-  /* If we're debugging and we have stored copies of any matrices,
-   * grow them too.  Must do this first, because we have an early exit
-   * condition coming below.
-   */
-#ifdef p7_DEBUGGING
-  if (ox->fwd && (status = p7_refmx_GrowTo(ox->fwd, M, L)) != eslOK) goto ERROR;
-  if (ox->bck && (status = p7_refmx_GrowTo(ox->bck, M, L)) != eslOK) goto ERROR;
-  if (ox->pp  && (status = p7_refmx_GrowTo(ox->pp,  M, L)) != eslOK) goto ERROR;
-#endif
-
- 
-
-  /* Are current allocations satisfactory ? */
-  /* When more than one p7_build variable is defined, this counts on the fact that we compute the number of 
-  rows to allocate based on SSE data widths and force AVX, AVX2 to use the same number.  With multiple
-  p7_build variables defined, this introduces redundant computation, but that's ok because that should only 
-  happen when we're checking ISAs against each other */
-#ifdef p7_build_SSE 
-  if (W <= ox->allocW && ox->nalloc <= ox->ramlimit)
-    {
-      if      (L + ox->R0 <= ox->validR) { set_full        (ox, L);             return eslOK; }
-      else if (minR_chk   <= ox->validR) { set_checkpointed(ox, L, ox->validR); return eslOK; }
-    }
-#endif
-
-#ifdef p7_build_AVX2 
-  if (W <= ox->allocW_AVX && ox->nalloc_AVX <= ox->ramlimit)
-    {
-      if      (L + ox->R0 <= ox->validR_AVX) { set_full        (ox, L);             return eslOK; }
-      else if (minR_chk   <= ox->validR_AVX) { set_checkpointed(ox, L, ox->validR_AVX); return eslOK; }
-    }
-#endif
-
-#ifdef p7_build_AVX512 
-  if (W <= ox->allocW_AVX_512 && ox->nalloc_AVX_512 <= ox->ramlimit)
-    {
-      if      (L + ox->R0 <= ox->validR_AVX_512) { set_full        (ox, L);             return eslOK; }
-      else if (minR_chk   <= ox->validR_AVX_512) { set_checkpointed(ox, L, ox->validR_AVX_512); return eslOK; }
-    }
-#endif
-
-#ifdef p7_build_SSE    
-  reset_dp_ptrs = FALSE; // Reset this just to prevent any wierdness with multiple ISA builds
-   /* Calculate W, the minimum row width needed, in bytes */
-  W  = sizeof(float) * P7_NVF(M) * p7C_NSCELLS * p7_VNF;     /* vector part of row (MDI)     */
-  W += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN);  /* float part of row (specials); must maintain p7_VALIGN-byte alignment */
-  /* Do individual matrix rows need to expand? */
-  if ( W > ox->allocW) 
-    {
-      ox->allocW    = W;
-      ox->validR    = (int) (ox->nalloc / ox->allocW); /* validR must be <= allocR */
-      reset_dp_ptrs = TRUE;
-    }
-
-  /* Does matrix dp_mem need reallocation, either up or down? */
-  maxR  = (int) (ox->nalloc / ox->allocW);                      /* max rows if we use up to the recommended allocation size.      */
-  if ( (ox->nalloc > ox->ramlimit && minR_chk <= maxR) ||       /* we were redlined, and recommended alloc will work: so downsize */
-       minR_chk > ox->validR)				        /* not enough memory for needed rows: so upsize                   */
-    {
-      set_row_layout(ox, L, maxR); 
-      ox->validR = ox->R0 + ox->Ra + ox->Rb + ox->Rc;   /* this may be > allocR now; we'll reallocate dp[] next, if so     */
-      ox->nalloc = ox->validR * ox->allocW;
-      ESL_REALLOC(ox->dp_mem, ox->nalloc + (p7_VALIGN-1)); /* (p7_VALIGN-1) because we will manually align dpf ptrs into dp_mem */
-      reset_dp_ptrs = TRUE;
-    }
-  else  /* current validR will suffice, either full or checkpointed; we still need to calculate a layout */
-    {
-      if   (L+ox->R0 <= ox->validR) set_full(ox, L); 
-      else                          set_checkpointed(ox, L, ox->validR);
-    }
-  
-  /* Does the array of row ptrs need reallocation? */
-  if (ox->validR > ox->allocR)
-    {
-      ESL_REALLOC(ox->dpf, sizeof(float *) * ox->validR);
-      ox->allocR    = ox->validR;
-      reset_dp_ptrs = TRUE;
-    }
-
-  /* Do the row ptrs need to be reset? */
-  if (reset_dp_ptrs)
-    {
-      ox->dpf[0] = (char *) ( ( (uintptr_t) ox->dp_mem + p7_VALIGN - 1) & p7_VALIMASK); /* vectors must be aligned on p7_VALIGN-byte boundary */
-      for (r = 1; r < ox->validR; r++)
-	ox->dpf[r] = ox->dpf[0] + (r * ox->allocW);
-    }
-#endif
-
-
-#ifdef p7_build_AVX2    
-  reset_dp_ptrs = FALSE; // Reset this just to prevent any wierdness with multiple ISA builds
-  W  = sizeof(float) * P7_NVF_AVX(M) * p7C_NSCELLS * p7_VNF_AVX;     /* vector part of row (MDI)     */
-  W += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN_AVX);  /* float part of row (specials); must maintain p7_VALIGN-byte alignment */
-  /* Do individual matrix rows need to expand? */
-  if ( W > ox->allocW_AVX) 
-    {
-      ox->allocW_AVX    = W;
-  #ifndef p7_build_SSE    
-      ox->validR_AVX    = (int) (ox->nalloc_AVX / ox->allocW_AVX); /* validR must be <= allocR */
-  #endif
-  #ifdef p7_build_SSE
-      ox->validR_AVX = ox->validR; // force AVX and SSE to use same number of rows
-  #endif
-      reset_dp_ptrs = TRUE;
-    }
-
-  /* Does matrix dp_mem need reallocation, either up or down? */
-  maxR  = (int) (ox->nalloc_AVX / ox->allocW_AVX);                      /* max rows if we use up to the recommended allocation size.      */
-  if ( (ox->nalloc_AVX > ox->ramlimit && minR_chk <= maxR) ||       /* we were redlined, and recommended alloc will work: so downsize */
-       minR_chk > ox->validR_AVX)               /* not enough memory for needed rows: so upsize                   */
-    {
-  #ifndef p7_build_SSE    
-      set_row_layout(ox, L, maxR);  // Skip this if we did a layout for SSE to force SSE and AVX to use the same number of rows 
-  #endif     
-      ox->validR_AVX = ox->R0 + ox->Ra + ox->Rb + ox->Rc;   /* this may be > allocR now; we'll reallocate dp[] next, if so     */
-      ox->nalloc_AVX = ox->validR_AVX * ox->allocW_AVX;
-      ESL_REALLOC(ox->dp_mem_AVX, ox->nalloc_AVX + (p7_VALIGN_AVX-1)); /* (p7_VALIGN-1) because we will manually align dpf ptrs into dp_mem */
-      reset_dp_ptrs = TRUE;
-    }
-  else  /* current validR will suffice, either full or checkpointed; we still need to calculate a layout */
-    {
-      if   (L+ox->R0 <= ox->validR_AVX) set_full(ox, L); 
-      else                          set_checkpointed(ox, L, ox->validR_AVX);
-    }
-  
-  /* Does the array of row ptrs need reallocation? */
-  if (ox->validR_AVX > ox->allocR_AVX)
-    {
-      ESL_REALLOC(ox->dpf_AVX, sizeof(float *) * ox->validR_AVX);
-      ox->allocR_AVX    = ox->validR_AVX;
-      reset_dp_ptrs = TRUE;
-    }
-
-  /* Do the row ptrs need to be reset? */
-  if (reset_dp_ptrs)
-    {
-      ox->dpf_AVX[0] = (char *) ( ( (uintptr_t) ox->dp_mem_AVX + p7_VALIGN_AVX - 1) & p7_VALIMASK_AVX); /* vectors must be aligned on p7_VALIGN-byte boundary */
-      for (r = 1; r < ox->validR_AVX; r++)
-  ox->dpf_AVX[r] = ox->dpf_AVX[0] + (r * ox->allocW_AVX);
-    }
-#endif
-#ifdef p7_build_AVX512    
-  reset_dp_ptrs = FALSE; // Reset this just to prevent any wierdness with multiple ISA builds
-  W  = sizeof(float) * P7_NVF_AVX_512(M) * p7C_NSCELLS * p7_VNF_AVX_512;     /* vector part of row (MDI)     */
-  W += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN_AVX_512);  /* float part of row (specials); must maintain p7_VALIGN-byte alignment */
-  /* Do individual matrix rows need to expand? */
-  if ( W > ox->allocW_AVX_512) 
-    {
-      ox->allocW_AVX_512    = W;
-  #ifndef p7_build_SSE    
-      ox->validR_AVX_512    = (int) (ox->nalloc_AVX_512 / ox->allocW_AVX_512); /* validR must be <= allocR */
-  #endif
-  #ifdef p7_build_SSE
-      ox->validR_AVX_512 = ox->validR; // force AVX_512 and SSE to use same number of rows
-  #endif
-      reset_dp_ptrs = TRUE;
-    }
-
-  /* Does matrix dp_mem need reallocation, either up or down? */
-  maxR  = (int) (ox->nalloc_AVX_512 / ox->allocW_AVX_512);                      /* max rows if we use up to the recommended allocation size.      */
-  if ( (ox->nalloc_AVX_512 > ox->ramlimit && minR_chk <= maxR) ||       /* we were redlined, and recommended alloc will work: so downsize */
-       minR_chk > ox->validR_AVX_512)               /* not enough memory for needed rows: so upsize                   */
-    {
-  #ifndef p7_build_SSE    
-      set_row_layout(ox, L, maxR);  // Skip this if we did a layout for SSE to force SSE and AVX_512 to use the same number of rows 
-  #endif     
-      ox->validR_AVX_512 = ox->R0 + ox->Ra + ox->Rb + ox->Rc;   /* this may be > allocR now; we'll reallocate dp[] next, if so     */
-      ox->nalloc_AVX_512 = ox->validR_AVX_512 * ox->allocW_AVX_512;
-      ESL_REALLOC(ox->dp_mem_AVX_512, ox->nalloc_AVX_512 + (p7_VALIGN_AVX_512-1)); /* (p7_VALIGN-1) because we will manually align dpf ptrs into dp_mem */
-      reset_dp_ptrs = TRUE;
-    }
-  else  /* current validR will suffice, either full or checkpointed; we still need to calculate a layout */
-    {
-      if   (L+ox->R0 <= ox->validR_AVX_512) set_full(ox, L); 
-      else                          set_checkpointed(ox, L, ox->validR_AVX_512);
-    }
-  
-  /* Does the array of row ptrs need reallocation? */
-  if (ox->validR_AVX_512 > ox->allocR_AVX_512)
-    {
-      ESL_REALLOC(ox->dpf_AVX_512, sizeof(float *) * ox->validR_AVX_512);
-      ox->allocR_AVX_512    = ox->validR_AVX_512;
-      reset_dp_ptrs = TRUE;
-    }
-
-  /* Do the row ptrs need to be reset? */
-  if (reset_dp_ptrs)
-    {
-      ox->dpf_AVX_512[0] = (char *) ( ( (uintptr_t) ox->dp_mem_AVX_512 + p7_VALIGN_AVX_512 - 1) & p7_VALIMASK_AVX_512); /* vectors must be aligned on p7_VALIGN-byte boundary */
-      for (r = 1; r < ox->validR_AVX_512; r++)
-  ox->dpf_AVX_512[r] = ox->dpf_AVX_512[0] + (r * ox->allocW_AVX_512);
-    }
-#endif 
-  return eslOK;
-
- ERROR:
-  return status;
+switch(ox->simd){
+    case SSE:
+      return p7_checkptmx_GrowTo_sse(ox, M, L);
+      break;
+    case AVX:
+      return p7_checkptmx_GrowTo_avx(ox, M, L);
+      break;
+    case AVX512:
+      return p7_checkptmx_GrowTo_avx512(ox, M, L);
+      break;
+    case NEON:
+      p7_Fail("Neon support not yet integrated into p7_checkptmx_Growto");
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_Growto");  
+  }
 }
 
 
@@ -462,23 +145,22 @@ p7_checkptmx_GrowTo(P7_CHECKPTMX *ox, int M, int L)
 size_t
 p7_checkptmx_Sizeof(const P7_CHECKPTMX *ox)
 {
-  size_t n = sizeof(P7_CHECKPTMX);
- 
- #ifdef p7_build_SSE
-  n += ox->nalloc + (p7_VALIGN-1);	          /* +15 because of manual alignment */
-  n += ox->allocR  * sizeof(float *);	  
- #endif
- 
- #ifdef p7_build_AVX2
-  n += ox->nalloc_AVX + (p7_VALIGN_AVX-1);            /* +31 because of manual alignment */
-  n += 
-  ox->allocR_AVX  * sizeof(float *);   
- #endif
- #ifdef p7_build_AVX512
-  n += ox->nalloc_AVX_512 + (p7_VALIGN_AVX_512-1);            /* +63 because of manual alignment */
-  n += ox->allocR_AVX_512  * sizeof(float *);   
- #endif
-  return n;
+switch(ox->simd){
+    case SSE:
+      return p7_checkptmx_Sizeof_sse(ox);
+      break;
+    case AVX:
+      return p7_checkptmx_Sizeof_avx(ox);
+      break;
+    case AVX512:
+      return p7_checkptmx_Sizeof_avx512(ox);
+      break;
+    case NEON:
+      p7_Fail("Neon support not yet integrated into p7_checkptmx_Sizeof");
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_Sxzeof");  
+  }
 }
 
 /* Function:  p7_checkptmx_MinSizeof()
@@ -493,35 +175,24 @@ p7_checkptmx_Sizeof(const P7_CHECKPTMX *ox)
  *            allocation strategies.
  */
 size_t
-p7_checkptmx_MinSizeof(int M, int L)
+p7_checkptmx_MinSizeof(int M, int L, SIMD_TYPE simd)
 {
-  size_t n    = sizeof(P7_CHECKPTMX);
-  int    Q    = P7_NVF(M);                        // number of vectors needed
-  int    minR = 3 + (int) ceil(minimum_rows(L));  // 3 = Ra, 2 rows for backwards, 1 for fwd[0]
-  
-#ifdef p7_build_SSE
-  n += p7_VALIGN-1;                                                  // dp_mem has to be hand-aligned for vectors
-  n += minR * (sizeof(float) * p7_VNF * Q * p7C_NSCELLS);            // dp_mem, main: QR supercells; each has p7C_NSCELLS=3 cells, MID; each cell is __m128 vector of four floats (p7_VNF=4 * float)
-  n += minR * (ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN)); // dp_mem, specials: maintaining vector memory alignment 
-  n += minR * sizeof(float *);                                       // dpf[] row ptrs
-#endif
-
-#ifdef p7_build_AVX2
-  n += p7_VALIGN_AVX-1;                                                  // dp_mem_AVX has to be hand-aligned for vectors
-  n += minR * (sizeof(float) * p7_VNF_AVX * P7_NVF_AVX(M) * p7C_NSCELLS);            
-  // dp_mem_AVX, main: QR supercells; each has p7C_NSCELLS=3 cells, MID; each cell is __m256 vector of eight floats (p7_VNF=4 * float)
-  n += minR * (ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN_AVX)); // dp_mem, specials: maintaining vector memory alignment 
-  n += minR * sizeof(float *);                                       // dpf[] row ptrs
-#endif
-
-#ifdef p7_build_AVX512
-  n += p7_VALIGN_AVX_512-1;                                                  // dp_mem_AVX_512 has to be hand-aligned for vectors
-  n += minR * (sizeof(float) * p7_VNF_AVX_512 * P7_NVF_AVX_512(M) * p7C_NSCELLS);            
-  // dp_mem_AVX, main: QR supercells; each has p7C_NSCELLS=3 cells, MID; each cell is __m512 vector 16 of floats (p7_VNF_AVX_512 = 16 * float)
-  n += minR * (ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN_AVX_512)); // dp_mem_AVX_512, specials: maintaining vector memory alignment 
-  n += minR * sizeof(float *);                                       // dpf[] row ptrs
-#endif 
-  return n;
+  switch(simd){
+    case SSE:
+      return p7_checkptmx_MinSizeof_sse(M, L);
+      break;
+    case AVX:
+      return p7_checkptmx_MinSizeof_avx(M, L);
+      break;
+    case AVX512:
+      return p7_checkptmx_MinSizeof_avx512(M, L);
+      break;
+    case NEON:
+      p7_Fail("Neon support not yet integrated into p7_checkptmx_MinSizeof");
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_MinSizeof");  
+  }
 }
 
 
@@ -543,34 +214,23 @@ p7_checkptmx_MinSizeof(int M, int L)
 int
 p7_checkptmx_Reuse(P7_CHECKPTMX *ox)
 {
-#ifdef p7_DEBUGGING
-  int status;
-#endif
 
-  ox->M  = 0;
-  ox->L  = 0;
-#ifdef p7_build_SSE  
-  ox->R  = 0;
-  ox->Qf = 0;
-#endif  
-#ifdef p7_build_AVX2 
-  ox->R_AVX  = 0;
-  ox->Qf_AVX = 0;
-#endif  
-#ifdef p7_build_AVX512  
-  ox->R_AVX_512  = 0;
-  ox->Qf_AVX_512 = 0;
-#endif    
-  
-
-#ifdef p7_DEBUGGING
-  if (ox->fwd && (status = p7_refmx_Reuse(ox->fwd)) != eslOK) return status;
-  if (ox->bck && (status = p7_refmx_Reuse(ox->bck)) != eslOK) return status;
-  if (ox->pp  && (status = p7_refmx_Reuse(ox->pp))  != eslOK) return status;
-  ox->bcksc = 0.0f;
-#endif
-
-  return eslOK;
+ switch(ox->simd){
+    case SSE:
+      return p7_checkptmx_Reuse_sse(ox);
+      break;
+    case AVX:
+      return p7_checkptmx_Reuse_avx(ox);
+      break;
+    case AVX512:
+      return p7_checkptmx_Reuse_avx512(ox);
+      break;
+    case NEON:
+      p7_Fail("Neon support not yet integrated into p7_checkptmx_Reuse");
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_Reuse");  
+  } 
 }
 
 
@@ -583,27 +243,22 @@ p7_checkptmx_Reuse(P7_CHECKPTMX *ox)
 void
 p7_checkptmx_Destroy(P7_CHECKPTMX *ox)
 {
- if (ox) {
-#ifdef p7_build_SSE  
-   if (ox->dp_mem) free(ox->dp_mem);
-   if (ox->dpf)    free(ox->dpf);
-#endif
-#ifdef p7_build_AVX2  
-   if (ox->dp_mem_AVX) free(ox->dp_mem_AVX);
-   if (ox->dpf_AVX)    free(ox->dpf_AVX);
-#endif
-#ifdef p7_build_AVX512  
-   if (ox->dp_mem_AVX_512) free(ox->dp_mem_AVX_512);
-   if (ox->dpf_AVX_512)    free(ox->dpf_AVX_512);
-#endif
-
-#ifdef p7_DEBUGGING
-   if (ox->fwd)    p7_refmx_Destroy(ox->fwd);
-   if (ox->bck)    p7_refmx_Destroy(ox->bck);
-   if (ox->pp)     p7_refmx_Destroy(ox->pp);
-#endif
-   free(ox);
- }
+ switch(ox->simd){
+    case SSE:
+      p7_checkptmx_Destroy_sse(ox);
+      break;
+    case AVX:
+      p7_checkptmx_Destroy_avx(ox);
+      break;
+    case AVX512:
+      p7_checkptmx_Destroy_avx512(ox);
+      break;
+    case NEON:
+      p7_Fail("Neon support not yet integrated into p7_checkptmx_Destroy");
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_Destroy");  
+  }
 }
 /*--------------- end, P7_CHECKPTMX object -----------------------*/
 
@@ -714,62 +369,22 @@ p7_checkptmx_DumpFBHeader(P7_CHECKPTMX *ox)
 int
 p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, __m128 *dpc, char *pfx)
 {
-  union { __m128 v; float x[p7_VNF]; } u;
-  float *v         = NULL;		/*  */
-  int    Q         = ox->Qf;
-  int    M         = ox->M;
-  float *xc        = (float *) (dpc + Q*p7C_NSCELLS);
-  int    logify    = (ox->dump_flags & p7_SHOW_LOG) ? TRUE : FALSE;
-  int    maxpfx    = ox->dump_maxpfx;
-  int    width     = ox->dump_width;
-  int    precision = ox->dump_precision;
-  int    k,q,z;
-  int    status;
-
-  ESL_ALLOC(v, sizeof(float) * ( (Q*p7_VNF) + 1));
-  v[0] = 0.;
-
-  /* Line 1. M cells: unpack, unstripe, print */
-  for (q = 0; q < Q; q++) {
-    u.v = P7C_MQ(dpc, q);
-    for (z = 0; z < p7_VNF; z++) v[q+Q*z+1] = u.x[z];
+  switch(ox->simd){
+    case SSE:
+      return p7_checkptmx_DumpFBRow_sse(ox, rowi, dpc, pfx);
+      break;
+    case AVX:
+      return p7_checkptmx_DumpFBRow_avx(ox, rowi, dpc, pfx);
+      break;
+    case AVX512:
+      return p7_checkptmx_DumpFBRow_avx512(ox, rowi, dpc, pfx);
+      break;
+    case NEON:
+      p7_Fail("Neon support not yet integrated into p7_checkptmx_DumpFBRow");
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_DumpFBRow");  
   }
-  fprintf(ox->dfp, "%*s %3d M", maxpfx, pfx, rowi);
-  for (k = 0; k <= M; k++) fprintf(ox->dfp, " %*.*f", width, precision, (logify ? esl_logf(v[k]) : v[k]));
-  /* a static analyzer may complain about v[k] being uninitialized
-   * if it isn't smart enough to see that M,Q are linked.
-   */
-
-  /* Line 1 end: Specials */
-  for (z = 0; z < p7C_NXCELLS; z++)
-    fprintf(ox->dfp, " %*.*f", width, precision, (logify ? esl_logf(xc[z]) : xc[z]));
-  fputc('\n', ox->dfp);
-
-  /* Line 2: I cells: unpack, unstripe, print */
-  for (q = 0; q < Q; q++) {
-    u.v = P7C_IQ(dpc, q);
-    for (z = 0; z < p7_VNF; z++) v[q+Q*z+1] = u.x[z];
-  }
-  fprintf(ox->dfp, "%*s %3d I", maxpfx, pfx, rowi);
-  for (k = 0; k <= M; k++) fprintf(ox->dfp, " %*.*f", width, precision, (logify ? esl_logf(v[k]) : v[k]));
-  fputc('\n', ox->dfp);
-
-  /* Line 3. D cells: unpack, unstripe, print */
-  for (q = 0; q < Q; q++) {
-    u.v = P7C_DQ(dpc, q);
-    for (z = 0; z < p7_VNF; z++) v[q+Q*z+1] = u.x[z];
-  }
-  fprintf(ox->dfp, "%*s %3d D", maxpfx, pfx, rowi);
-  for (k = 0; k <= M; k++) fprintf(ox->dfp, " %*.*f", width, precision, (logify ? esl_logf(v[k]) : v[k]));
-  fputc('\n', ox->dfp);
-  fputc('\n', ox->dfp);
-
-  free(v);
-  return eslOK;
-
- ERROR:
-  if (v) free(v);
-  return status;
 }
 
 #endif /*p7_DEBUGGING*/
@@ -809,7 +424,7 @@ p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, __m128 *dpc, char *pfx)
  *     R0+Ra+Rb+Rc will exceed maxR, and caller will have to 
  *     allocate ("redlined").
  */
-static void
+void
 set_row_layout(P7_CHECKPTMX *ox, int allocL, int maxR)
 {
   double Rbc      = minimum_rows(allocL);               
@@ -822,7 +437,7 @@ set_row_layout(P7_CHECKPTMX *ox, int allocL, int maxR)
 }
 
 /* A "full" matrix is easy: Ra = La = L, using Ra+R0 <= maxR rows total. */
-static void
+void
 set_full(P7_CHECKPTMX *ox, int L)
 {
   ox->Ra     = L;
@@ -840,7 +455,7 @@ set_full(P7_CHECKPTMX *ox, int L)
  * quadratic equation for Rb+Rc given L and maxR: see
  * <checkpointed_rows()> for that solution.
  */
-static void
+void
 set_checkpointed(P7_CHECKPTMX *ox, int L, int R)
 {
   double Rbc = checkpointed_rows(L, R - ox->R0);
@@ -857,7 +472,7 @@ set_checkpointed(P7_CHECKPTMX *ox, int L, int R)
 /* If we can't fit in maxR rows, then we checkpoint
  * the entire matrix; R0+Ra+Rb+Rc > maxR.
  */
-static void
+void
 set_redlined(P7_CHECKPTMX *ox, int L, double minR)
 {
   double Rc = floor(minR);
@@ -884,7 +499,7 @@ set_redlined(P7_CHECKPTMX *ox, int L, double minR)
  *    Rb   = (Rbc > Rc ? 1 : 0);
  *    minR = (int) ceil(Rbc);    // or, Rc+Rb
  */
-static double 
+double 
 minimum_rows(int L)
 {
   return (sqrt(9. + 8. * (double) L) - 3.) / 2.;
@@ -903,7 +518,7 @@ minimum_rows(int L)
  * after substitution Ra = (maxR - Rbc - R0) to get
  * Rbc in terms of L,maxR.
  */
-static double
+double
 checkpointed_rows(int L, int R)
 {
   return (sqrt(1. + 8. * (double) (L - R)) - 1.) / 2.;

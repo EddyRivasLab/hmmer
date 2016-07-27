@@ -13,12 +13,13 @@
 #ifdef HAVE_AVX512
 	#include <immintrin.h>  /* AVX-512 */
 #endif
+#include "hardware/hardware.h"
 
 enum p7f_mxtype_e { p7F_NONE = 0, p7F_SSVFILTER = 1, p7F_MSVFILTER = 2, p7F_VITFILTER = 3 };
                                 
 typedef struct p7_filtermx_s {  /* MSV needs P7_NVB(M); VF needs 3*P7_NVW(M) __m128i vectors. */
   int      M;			/* current profile size: determines width of <dp> row    */
-
+ SIMD_TYPE simd;   //Which SIMD ISA are we using?
 #ifdef HAVE_SSE2
   __m128i *dp;			/* aligned, one row of DP memory: >= 3*P7_NVW(M) vectors */
 
@@ -71,12 +72,31 @@ enum p7f_scells_e { p7F_M = 0, p7F_D = 1, p7F_I = 2 };
 #define IMX_AVX_512f(q)   (dp_AVX_512[(q) * p7F_NSCELLS + p7F_I])
 #endif
 
-extern P7_FILTERMX *p7_filtermx_Create(int allocM);
+extern P7_FILTERMX *p7_filtermx_Create(int allocM, SIMD_TYPE simd);
 extern int          p7_filtermx_GrowTo(P7_FILTERMX *fx, int allocM);
 extern size_t       p7_filtermx_Sizeof(const P7_FILTERMX *fx);
-extern size_t       p7_filtermx_MinSizeof(int M);
+extern size_t       p7_filtermx_MinSizeof(int M, SIMD_TYPE simd);
 extern int          p7_filtermx_Reuse  (P7_FILTERMX *fx);
 extern void         p7_filtermx_Destroy(P7_FILTERMX *fx);
+
+extern P7_FILTERMX *p7_filtermx_Create_sse(int allocM);
+extern int          p7_filtermx_GrowTo_sse(P7_FILTERMX *fx, int allocM);
+extern size_t       p7_filtermx_Sizeof_sse(const P7_FILTERMX *fx);
+extern size_t       p7_filtermx_MinSizeof_sse(int M);
+extern void         p7_filtermx_Destroy_sse(P7_FILTERMX *fx);
+ 
+extern P7_FILTERMX *p7_filtermx_Create_avx(int allocM);
+extern int          p7_filtermx_GrowTo_avx(P7_FILTERMX *fx, int allocM);
+extern size_t       p7_filtermx_Sizeof_avx(const P7_FILTERMX *fx);
+extern size_t       p7_filtermx_MinSizeof_avx(int M);
+extern void         p7_filtermx_Destroy_avx(P7_FILTERMX *fx);
+
+extern P7_FILTERMX *p7_filtermx_Create_avx512(int allocM);
+extern int          p7_filtermx_GrowTo_avx512(P7_FILTERMX *fx, int allocM);
+extern size_t       p7_filtermx_Sizeof_avx512(const P7_FILTERMX *fx);
+extern size_t       p7_filtermx_MinSizeof_avx512(int M);
+extern void         p7_filtermx_Destroy_avx512(P7_FILTERMX *fx);
+
 
 extern int p7_filtermx_SetDumpMode(P7_FILTERMX *fx, FILE *dfp, int truefalse);
 #ifdef p7_DEBUGGING

@@ -23,6 +23,15 @@ LIBOBJS =  general.o           \
 	   p7_tophits_mpi.o    \
 	   p7_trace.o
 
+SSELIBOBJS =  \
+	p7_alidisplay_sse.o 
+
+AVXLIBOBJS = \
+	p7_alidisplay_avx.o
+
+AVX512LIBOBJS = \
+	p7_alidisplay_avx512.o
+	
 LIBHDRS =  
 
 OBJS =

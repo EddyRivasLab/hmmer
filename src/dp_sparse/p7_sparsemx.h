@@ -25,6 +25,7 @@
 #include "base/p7_trace.h"
 #include "dp_reference/p7_refmx.h"
 #include "dp_vector/simdvec.h"
+ #include "hardware/hardware.h"
 /*****************************************************************
  * 1. The P7_SPARSEMASK structure
  *****************************************************************/
@@ -38,7 +39,7 @@ typedef struct {
   int      M;		// profile has 1..M positions 
   
   int      Q;		// number of striped vectors in fwdfilter; width of each striped segment; width of "slots"
-
+  SIMD_TYPE simd;
  #ifdef HAVE_SSE2 
   p7_sparsemask_seg_s *seg;         
   int    **k;		// k[0,1..L] = ptrs into kmem, rows of sparse k indices; k[0]=NULL; k[i]=NULL if n[i]=0 
@@ -183,36 +184,56 @@ typedef struct {
  *****************************************************************/
 
 /* P7_SPARSEMASK object management */
-extern P7_SPARSEMASK *p7_sparsemask_Create   (int M, int L);
+extern P7_SPARSEMASK *p7_sparsemask_Create   (int M, int L, SIMD_TYPE simd);
+extern P7_SPARSEMASK *p7_sparsemask_Create_sse   (int M, int L);
+extern P7_SPARSEMASK *p7_sparsemask_Create_avx   (int M, int L);
+extern P7_SPARSEMASK *p7_sparsemask_Create_avx512   (int M, int L);
+
 extern int            p7_sparsemask_Reinit   (P7_SPARSEMASK *sm, int M, int L);
+extern int            p7_sparsemask_Reinit_sse   (P7_SPARSEMASK *sm, int M, int L);
+extern int            p7_sparsemask_Reinit_avx  (P7_SPARSEMASK *sm, int M, int L);
+extern int            p7_sparsemask_Reinit_avx512   (P7_SPARSEMASK *sm, int M, int L);
+
 extern size_t         p7_sparsemask_Sizeof   (const P7_SPARSEMASK *sm);
+extern size_t         p7_sparsemask_Sizeof_sse   (const P7_SPARSEMASK *sm);
+extern size_t         p7_sparsemask_Sizeof_avx   (const P7_SPARSEMASK *sm);
+extern size_t         p7_sparsemask_Sizeof_avx512  (const P7_SPARSEMASK *sm);
+
 extern size_t         p7_sparsemask_MinSizeof(const P7_SPARSEMASK *sm);
+extern size_t         p7_sparsemask_MinSizeof_sse(const P7_SPARSEMASK *sm);
+extern size_t         p7_sparsemask_MinSizeof_avx(const P7_SPARSEMASK *sm);
+extern size_t         p7_sparsemask_MinSizeof_avx512(const P7_SPARSEMASK *sm);
+
 extern int            p7_sparsemask_Reuse    (P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_Reuse_sse    (P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_Reuse_avx    (P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_Reuse_avx512    (P7_SPARSEMASK *sm);
+
 extern void           p7_sparsemask_Destroy  (P7_SPARSEMASK *sm);
+extern void           p7_sparsemask_Destroy_sse  (P7_SPARSEMASK *sm);
+extern void           p7_sparsemask_Destroy_avx  (P7_SPARSEMASK *sm);
+extern void           p7_sparsemask_Destroy_avx512  (P7_SPARSEMASK *sm);
 
 /* P7_SPARSEMASK construction API */
 extern int            p7_sparsemask_AddAll   (P7_SPARSEMASK *sm);
-#ifdef HAVE_SSE2
 extern int            p7_sparsemask_StartRow (P7_SPARSEMASK *sm, int i);
 extern int            p7_sparsemask_Add      (P7_SPARSEMASK *sm, int q, int r);
-extern int            p7_sparsemask_FinishRow(P7_SPARSEMASK *sm);
-extern int            p7_sparsemask_Finish_sse  (P7_SPARSEMASK *sm);
-#endif
+extern int            p7_sparsemask_StartRow_sse (P7_SPARSEMASK *sm, int i);
+extern int            p7_sparsemask_Add_sse      (P7_SPARSEMASK *sm, int q, int r);
 
-#ifdef HAVE_AVX2
+extern int            p7_sparsemask_FinishRow(P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_FinishRow_sse(P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_Finish_sse  (P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_StartRow_avx (P7_SPARSEMASK *sm, int i);
 extern int            p7_sparsemask_Add_avx      (P7_SPARSEMASK *sm, int q, int r);
 extern int            p7_sparsemask_FinishRow_avx(P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Finish_avx   (P7_SPARSEMASK *sm);
-#endif
 
-#ifdef HAVE_AVX512
 extern int            p7_sparsemask_StartRow_avx512 (P7_SPARSEMASK *sm, int i);
 extern int            p7_sparsemask_Add_avx512      (P7_SPARSEMASK *sm, int q, int r);
 extern int            p7_sparsemask_FinishRow_avx512(P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_FinishRow_avx512   (P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Finish_avx512   (P7_SPARSEMASK *sm);
-#endif
 extern int            p7_sparsemask_Finish   (P7_SPARSEMASK *sm);
 
 /* P7_SPARSEMASK debugging tools */
@@ -220,6 +241,21 @@ extern int            p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Compare(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2);
 extern int            p7_sparsemask_Validate(const P7_SPARSEMASK *sm, char *errbuf);
 extern int            p7_sparsemask_SetFromTrace(P7_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const P7_TRACE *tr);
+
+extern int            p7_sparsemask_Dump_sse(FILE *ofp, P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_Compare_sse(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2);
+extern int            p7_sparsemask_Validate_sse(const P7_SPARSEMASK *sm, char *errbuf);
+extern int            p7_sparsemask_SetFromTrace_sse(P7_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const P7_TRACE *tr);
+
+extern int            p7_sparsemask_Dump_avx(FILE *ofp, P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_Compare_avx(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2);
+extern int            p7_sparsemask_Validate_avx(const P7_SPARSEMASK *sm, char *errbuf);
+extern int            p7_sparsemask_SetFromTrace_avx(P7_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const P7_TRACE *tr);
+
+extern int            p7_sparsemask_Dump_avx512(FILE *ofp, P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_Compare_avx512(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2);
+extern int            p7_sparsemask_Validate_avx512(const P7_SPARSEMASK *sm, char *errbuf);
+extern int            p7_sparsemask_SetFromTrace_avx512(P7_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const P7_TRACE *tr);
 
 /* P7_SPARSEMX object management */
 extern P7_SPARSEMX   *p7_sparsemx_Create   (P7_SPARSEMASK *sm);

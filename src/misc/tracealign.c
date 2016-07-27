@@ -29,6 +29,7 @@
 #include "dp_sparse/sparse_viterbi.h"
 #include "dp_sparse/sparse_fwdback.h"
 #include "dp_sparse/sparse_decoding.h"
+#include "hardware/hardware.h"
 
 static int     map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount, int **ret_matuse, int **ret_matmap, int *ret_alen);
 static ESL_DSQ get_dsq_z(ESL_SQ **sq, const ESL_MSA *premsa, P7_TRACE **tr, int idx, int z);
@@ -265,10 +266,11 @@ p7_tracealign_ComputeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
   int           idx;
   float         fwdsc;  /* Forward raw score, nats         */
   float         vsc;	/* Viterbi raw score, nats         */
-
+P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   bg = p7_bg_Create(hmm->abc);
   gm = p7_profile_Create (hmm->M, hmm->abc);
-  om = p7_oprofile_Create(hmm->M, hmm->abc);
+  om = p7_oprofile_Create(hmm->M, hmm->abc, hw->simd);
 
   /* May need to play with config choice 
    * We want the <om> in local multihit mode for sparsification step
@@ -278,8 +280,8 @@ p7_tracealign_ComputeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
   p7_oprofile_Convert(gm, om);	                     /*    ... *multihit* local      */
   p7_profile_ConfigCustom(gm, hmm, bg, 0, 0.0, 0.5); /*    ... *unihit* glocal/local */
 
-  cx  = p7_checkptmx_Create (hmm->M, sq[offset]->n, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT));
-  sm  = p7_sparsemask_Create(hmm->M, sq[offset]->n);
+  cx  = p7_checkptmx_Create (hmm->M, sq[offset]->n, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT), hw->simd);
+  sm  = p7_sparsemask_Create(hmm->M, sq[offset]->n, hw->simd);
   sx1 = p7_sparsemx_Create  (sm);
   sx2 = p7_sparsemx_Create  (sm);
 

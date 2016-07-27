@@ -209,42 +209,27 @@ typedef struct {
   P7_OPROFILE  **list;        /* array of <P7_OPROFILE> objects               */
 } P7_OM_BLOCK;
 
+
+// The definition of p7_oprofile_FGetEmission has moved into the p7_alidisplay_<simd> files to make it easier to
+// provide SIMD ISA-specific versions of this inlined function.  The original code is retained here for archival purposes
 /* retrieve match odds ratio [k][x]
  * this gets used in p7_alidisplay.c, when we're deciding if a residue is conserved or not */
-static inline float 
+/*static inline float 
 p7_oprofile_FGetEmission(const P7_OPROFILE *om, int k, int x)
 {
- #ifdef p7_build_SSE 
   union { __m128 v; float p[4]; } u;
   int   Q = P7_NVF(om->M);
   int   q = ((k-1) % Q);
   int   r = (k-1)/Q;
   u.v = om->rfv[x][q];
   return u.p[r];
-#endif
- #ifdef p7_build_AVX2 
-  union { __m256 v; float p[8]; } u_AVX;
-  int   Q_AVX = P7_NVF_AVX(om->M);
-  int   q_AVX = ((k-1) % Q_AVX);
-  int   r_AVX = (k-1)/Q_AVX;
-  u_AVX.v = om->rfv_AVX[x][q_AVX];
-  return u_AVX.p[r_AVX];
-#endif
-#ifdef p7_build_AVX512 
-  union { __m512 v; float p[16]; } u_AVX_512;
-  int   Q_AVX_512 = P7_NVF_AVX_512(om->M);
-  int   q_AVX_512 = ((k-1) % Q_AVX_512);
-  int   r_AVX_512 = (k-1)/Q_AVX_512;
-  u_AVX_512.v = om->rfv_AVX_512[x][q_AVX_512];
-  return u_AVX_512.p[r_AVX_512];
-#endif
-}
+} */
 
-static uint8_t unbiased_byteify(P7_OPROFILE *om, float sc);
-static uint8_t biased_byteify(P7_OPROFILE *om, float sc);
-static int16_t wordify(P7_OPROFILE *om, float sc);
+uint8_t unbiased_byteify(P7_OPROFILE *om, float sc);
+uint8_t biased_byteify(P7_OPROFILE *om, float sc);
+int16_t wordify(P7_OPROFILE *om, float sc);
 
-extern P7_OPROFILE *p7_oprofile_Create(int M, const ESL_ALPHABET *abc);
+extern P7_OPROFILE *p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc, SIMD_TYPE simd);
 extern void         p7_oprofile_Destroy(P7_OPROFILE *om);
 extern int          p7_oprofile_IsLocal(const P7_OPROFILE *om);
 extern size_t       p7_oprofile_Sizeof (const P7_OPROFILE *om);
@@ -281,6 +266,14 @@ extern int          p7_oprofile_GetFwdTransitionArray_sse(const P7_OPROFILE *om,
 extern int          p7_oprofile_GetMSVEmissionScoreArray_sse(const P7_OPROFILE *om, uint8_t *arr );
 extern int          p7_oprofile_GetFwdEmissionScoreArray_sse(const P7_OPROFILE *om, float *arr );
 extern int          p7_oprofile_GetFwdEmissionArray_sse(const P7_OPROFILE *om, P7_BG *bg, float *arr );
+int sf_conversion_sse(P7_OPROFILE *om);
+int mf_conversion_sse(const P7_PROFILE *gm, P7_OPROFILE *om);
+int vf_conversion_sse(const P7_PROFILE *gm, P7_OPROFILE *om);
+int fb_conversion_sse(const P7_PROFILE *gm, P7_OPROFILE *om);
+int oprofile_dump_mf_sse(FILE *fp, const P7_OPROFILE *om);
+int oprofile_dump_vf_sse(FILE *fp, const P7_OPROFILE *om);
+int oprofile_dump_fb_sse(FILE *fp, const P7_OPROFILE *om, int width, int precision);
+int p7_oprofile_Compare_sse(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg);
 
 // AVX versions of SIMD functions
 extern P7_OPROFILE *p7_oprofile_Create_avx(int M, const ESL_ALPHABET *abc);
@@ -293,7 +286,14 @@ extern int          p7_oprofile_GetFwdTransitionArray_avx(const P7_OPROFILE *om,
 extern int          p7_oprofile_GetMSVEmissionScoreArray_avx(const P7_OPROFILE *om, uint8_t *arr );
 extern int          p7_oprofile_GetFwdEmissionScoreArray_avx(const P7_OPROFILE *om, float *arr );
 extern int          p7_oprofile_GetFwdEmissionArray_avx(const P7_OPROFILE *om, P7_BG *bg, float *arr );
-
+int sf_conversion_avx(P7_OPROFILE *om);
+int mf_conversion_avx(const P7_PROFILE *gm, P7_OPROFILE *om);
+int vf_conversion_avx(const P7_PROFILE *gm, P7_OPROFILE *om);
+int fb_conversion_avx(const P7_PROFILE *gm, P7_OPROFILE *om);
+int oprofile_dump_mf_avx(FILE *fp, const P7_OPROFILE *om);
+int oprofile_dump_vf_avx(FILE *fp, const P7_OPROFILE *om);
+int oprofile_dump_fb_avx(FILE *fp, const P7_OPROFILE *om, int width, int precision);
+int p7_oprofile_Compare_avx(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg);
 //AVX-512 versions of SIMD functions
 extern P7_OPROFILE *p7_oprofile_Create_avx512(int M, const ESL_ALPHABET *abc);
 extern void         p7_oprofile_Destroy_avx512(P7_OPROFILE *om);
@@ -305,6 +305,14 @@ extern int          p7_oprofile_GetFwdTransitionArray_avx512(const P7_OPROFILE *
 extern int          p7_oprofile_GetMSVEmissionScoreArray_avx512(const P7_OPROFILE *om, uint8_t *arr );
 extern int          p7_oprofile_GetFwdEmissionScoreArray_avx512(const P7_OPROFILE *om, float *arr );
 extern int          p7_oprofile_GetFwdEmissionArray_avx512(const P7_OPROFILE *om, P7_BG *bg, float *arr );
+int sf_conversion_avx512(P7_OPROFILE *om);
+int mf_conversion_avx512(const P7_PROFILE *gm, P7_OPROFILE *om);
+int vf_conversion_avx512(const P7_PROFILE *gm, P7_OPROFILE *om);
+int fb_conversion_avx512(const P7_PROFILE *gm, P7_OPROFILE *om);
+int oprofile_dump_mf_avx512(FILE *fp, const P7_OPROFILE *om);
+int oprofile_dump_vf_avx512(FILE *fp, const P7_OPROFILE *om);
+int oprofile_dump_fb_avx512(FILE *fp, const P7_OPROFILE *om, int width, int precision);
+int p7_oprofile_Compare_avx512(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg);
 #endif /*p7OPROFILE_INCLUDED*/
 /*****************************************************************
  * @LICENSE@

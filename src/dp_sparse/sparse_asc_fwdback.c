@@ -1326,7 +1326,7 @@ p7_sparse_asc_Decoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
  *****************************************************************/
 #ifdef p7SPARSE_ASC_FWDBACK_TESTDRIVE
 #include "hmmer.h"
-
+#include "hardware/hardware.h"
 /* "generation" test.
  * 
  * Sample a profile, generate some synthetic homologous sequences from
@@ -1346,15 +1346,17 @@ p7_sparse_asc_Decoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 static void
 utest_generation(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int L, int N)
 {
+  P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   char           msg[] = "sparse_asc_fwdback :: generation unit test failed";
   P7_BG         *bg    = p7_bg_Create(abc);
   P7_PRIOR      *pri   = NULL;
   P7_HMM        *hmm   = NULL;
   P7_PROFILE    *gm    = p7_profile_Create(M, abc);
-  P7_OPROFILE   *om    = p7_oprofile_Create(M, abc);
+  P7_OPROFILE   *om    = p7_oprofile_Create(M, abc, hw->simd);
   ESL_SQ        *sq    = esl_sq_CreateDigital(abc);
-  P7_CHECKPTMX  *cx    = p7_checkptmx_Create(M, 100, ESL_MBYTES(32));
-  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, 100);
+  P7_CHECKPTMX  *cx    = p7_checkptmx_Create(M, 100, ESL_MBYTES(32), hw->simd);
+  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, 100, hw->simd);
   P7_TRACE      *tr    = p7_trace_Create();
   P7_SPARSEMX   *sxf   = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxd   = p7_sparsemx_Create(NULL);
@@ -1490,13 +1492,15 @@ utest_generation(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
 static void
 utest_compare_reference(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int L, int N)
 {
+  P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   char           msg[] = "sparse_asc_fwdback :: compare_reference unit test failed";
   P7_BG         *bg    = p7_bg_Create(abc);
   P7_HMM        *hmm   = NULL;
   ESL_SQ        *sq    = esl_sq_CreateDigital(abc);
   P7_PROFILE    *gm    = p7_profile_Create(M, abc);
   P7_TRACE      *gtr   = p7_trace_Create();
-  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L);
+  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L, hw->simd);
   P7_ANCHORS    *anch  = p7_anchors_Create();
   P7_REFMX      *afu   = p7_refmx_Create(100,100);
   P7_REFMX      *afd   = p7_refmx_Create(100,100);
@@ -1653,12 +1657,14 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
   float         tsc, fsc, bsc;
   float         tol = 0.0001;
   char          errbuf[eslERRBUFSIZE];
+  P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
 
   for (idx = 0; idx < N; idx++)
     {
       if ( p7_modelsample_SinglePathedSeq(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &tsc) != eslOK) esl_fatal(msg);
 
-      if ((sm = p7_sparsemask_Create(M, L))            == NULL) esl_fatal(msg);
+      if ((sm = p7_sparsemask_Create(M, L, hw->simd))            == NULL) esl_fatal(msg);
       if ( p7_sparsemask_SetFromTrace(sm, rng, tr)    != eslOK) esl_fatal(msg);
 
       if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf, &fsc)      != eslOK) esl_fatal(msg);
@@ -1774,20 +1780,21 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
   float          vsc, fsc, bsc, asc_f, asc_b;
   char           errbuf[eslERRBUFSIZE];
   float          tol = 0.002;
-
+  P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   for (idx = 0; idx < N; idx++)
     {
       if ( p7_modelsample_AnchoredUni(rng, M, bg, &hmm, &gm, &dsq, &L, &gtr, &anch, &D, &gsc) != eslOK) esl_fatal(msg);
 
-      if ((sm = p7_sparsemask_Create(gm->M, L)) == NULL) esl_fatal(msg);
+      if ((sm = p7_sparsemask_Create(gm->M, L, hw->simd)) == NULL) esl_fatal(msg);
       
       if (idx%2) {
-	if ((om = p7_oprofile_Create(hmm->M, abc)) == NULL)  esl_fatal(msg);
+	if ((om = p7_oprofile_Create(hmm->M, abc, hw->simd)) == NULL)  esl_fatal(msg);
 	if ( p7_oprofile_Convert(gm, om)           != eslOK) esl_fatal(msg);
 	if ( p7_oprofile_ReconfigMultihit(om, L)   != eslOK) esl_fatal(msg);
 	om->mode = p7_LOCAL;
 
-	if ((cx = p7_checkptmx_Create(hmm->M, L, ESL_MBYTES(32)))      == NULL)  esl_fatal(msg);
+	if ((cx = p7_checkptmx_Create(hmm->M, L, ESL_MBYTES(32), hw->simd))      == NULL)  esl_fatal(msg);
 	if ( p7_ForwardFilter (dsq, L, om, cx, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
 	if ( p7_BackwardFilter(dsq, L, om, cx, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
 
@@ -1897,20 +1904,21 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc
   float          vsc, fsc, bsc, asc_f, asc_b;
   char           errbuf[eslERRBUFSIZE];
   float          tol = 0.0001;
-
+  P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   for (idx = 0; idx < N; idx++)
     {
       if ( p7_modelsample_AnchoredLocal(rng, M, bg, &hmm, &gm, &dsq, &L, &gtr, &anch, &D, &gsc) != eslOK) esl_fatal(msg);
 
-      if ((sm = p7_sparsemask_Create(gm->M, L)) == NULL) esl_fatal(msg);
+      if ((sm = p7_sparsemask_Create(gm->M, L, hw->simd)) == NULL) esl_fatal(msg);
       
       if (idx%2) {
-	if ((om = p7_oprofile_Create(hmm->M, abc)) == NULL)  esl_fatal(msg);
+	if ((om = p7_oprofile_Create(hmm->M, abc, hw->simd)) == NULL)  esl_fatal(msg);
 	if ( p7_oprofile_Convert(gm, om)           != eslOK) esl_fatal(msg);
 	if ( p7_oprofile_ReconfigMultihit(om, 0)   != eslOK) esl_fatal(msg);
 	om->mode = p7_LOCAL;
 
-	if ((cx = p7_checkptmx_Create(hmm->M, L, ESL_MBYTES(32)))      == NULL)  esl_fatal(msg);
+	if ((cx = p7_checkptmx_Create(hmm->M, L, ESL_MBYTES(32), hw->simd))      == NULL)  esl_fatal(msg);
 	if ( p7_ForwardFilter (dsq, L, om, cx, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
 	if ( p7_BackwardFilter(dsq, L, om, cx, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
 
@@ -2017,20 +2025,21 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
   float          vsc, fsc, bsc, asc_f, asc_b;
   char           errbuf[eslERRBUFSIZE];
   float          tol = 0.01;
-
+  P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   for (idx = 0; idx < N; idx++)
     {
       if ( p7_modelsample_AnchoredMulti(rng, M, bg, &hmm, &gm, &dsq, &L, &gtr, &anch, &D, &gsc) != eslOK) esl_fatal(msg);
 
-      if ((sm = p7_sparsemask_Create(gm->M, L)) == NULL) esl_fatal(msg);
+      if ((sm = p7_sparsemask_Create(gm->M, L, hw->simd)) == NULL) esl_fatal(msg);
       
       if (idx%2) {
-	if ((om = p7_oprofile_Create(hmm->M, abc)) == NULL)  esl_fatal(msg);
+	if ((om = p7_oprofile_Create(hmm->M, abc, hw->simd)) == NULL)  esl_fatal(msg);
 	if ( p7_oprofile_Convert(gm, om)           != eslOK) esl_fatal(msg);
 	if ( p7_oprofile_ReconfigMultihit(om, 0)   != eslOK) esl_fatal(msg);
 	om->mode = p7_LOCAL;
 
-	if ((cx = p7_checkptmx_Create(hmm->M, L, ESL_MBYTES(32)))      == NULL)  esl_fatal(msg);
+	if ((cx = p7_checkptmx_Create(hmm->M, L, ESL_MBYTES(32), hw->simd))      == NULL)  esl_fatal(msg);
 	if ( p7_ForwardFilter (dsq, L, om, cx, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
 	if ( p7_BackwardFilter(dsq, L, om, cx, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
 
@@ -2104,6 +2113,8 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
 static void
 utest_emulated_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int L, int N)
 {
+  P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   char           msg[] = "sparse_asc_fwdback :: emulated_viterbi unit test failed";
   P7_BG         *bg    = p7_bg_Create(abc);
   P7_PRIOR      *pri   = NULL;
@@ -2113,7 +2124,7 @@ utest_emulated_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *ab
   int            idx;
   P7_OPROFILE   *om;
   P7_CHECKPTMX  *cx;
-  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M,L);
+  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M,L, hw->simd);
   P7_SPARSEMX   *sxf   = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxd   = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *asf   = p7_sparsemx_Create(NULL);
@@ -2141,9 +2152,9 @@ utest_emulated_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *ab
       } while (sq->n > L * 10); /* allow many domains, but keep sequence length from getting ridiculous; long seqs do have higher abs error per cell */
       if ( p7_profile_SetLength(gm, sq->n) != eslOK) esl_fatal(msg);
 
-      if ((om = p7_oprofile_Create(hmm->M, abc))                             == NULL)  esl_fatal(msg);
+      if ((om = p7_oprofile_Create(hmm->M, abc, hw->simd))                             == NULL)  esl_fatal(msg);
       if ( p7_oprofile_Convert(gm, om)                                       != eslOK) esl_fatal(msg);
-      if ((cx = p7_checkptmx_Create(hmm->M, sq->n, ESL_MBYTES(32)))          == NULL)  esl_fatal(msg);
+      if ((cx = p7_checkptmx_Create(hmm->M, sq->n, ESL_MBYTES(32), hw->simd))          == NULL)  esl_fatal(msg);
       if ( p7_ForwardFilter (sq->dsq, sq->n, om, cx, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
       if ( p7_BackwardFilter(sq->dsq, sq->n, om, cx, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
 

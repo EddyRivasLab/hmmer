@@ -970,7 +970,174 @@ posterior_decode_row_sse(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm
 
 /*------------------ end, inlined recursions -------------------*/
 
+/*------------------ Debugging Functions --------------------*/
+/* backward_row_zero()
+ * 
+ * Slightly peculiar but true: in production code we don't
+ * need to calculate backward row 0, because we're only doing
+ * posterior decoding on residues 1..L.  We only need row 0
+ * if we need a complete Backward calculation -- which happens
+ * when we're in debugging mode, and we're going to test the
+ * Backwards score or compare the Backwards matrix to the
+ * reference implementation.
+ * 
+ * x1  - residue dsq[1] on row 1
+ * om  - query model
+ * ox  - DP matrix; dpf[0] is the current Backward row
+ * 
+ * Upon return, ox->dpf[0] (backward row 0) has been calculated.
+ * Returns the log of the value in the N cell at row 0. When this 
+ * is added to the sum of the logs of all the scalefactors (which
+ * the caller has been accumulating in <ox->bcksc>), then
+ * the <ox->bcksc> value is finished and equal to the Backwards
+ * raw score in nats.
+ */
+static inline float
+backward_row_zero_sse(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
+{
+#ifdef HAVE_SSE2  
+ #ifdef p7_DEBUGGING 
+  int          Q     = ox->Qf;
+  __m128       *dpc  = (__m128 *) ox->dpf[0];
+  __m128       *dpp  = (__m128 *) ox->dpf[1];
+  const __m128 *rp   = om->rfv[x1];
+  const __m128 zerov = _mm_setzero_ps();
+  float        *xc   = (float *) (dpc + Q * p7C_NSCELLS); /* special states on current row i  */
+  float        *xp   = (float *) (dpp + Q * p7C_NSCELLS); /* special states on "previous" row i+1 */
+  __m128       *dp;
+  __m128       *tp;
+  __m128        xBv  = zerov;
+  int           q;
 
+  /* On "previous" row i+1: include emission prob, and sum to get xBv, xB. */
+  dp  = dpp;
+  tp  = om->tfv;
+  for (q = 0; q < Q; q++)
+    {
+      *dp = _mm_mul_ps(*dp, *rp); rp++;
+      xBv = _mm_add_ps(xBv, _mm_mul_ps(*dp, *tp)); dp+= p7C_NSCELLS; tp += 7;
+    }
+
+  /* Only B,N,E will decode to nonzero posterior probability; C,J,E
+   * can't be reached.  However, Backwards recursion gives C,J,E
+   * nonzero values, because it's the Forward term that makes them
+   * impossible. Though it's tempting to set these values to 0.0 (since
+   * we know they're impossible), just do the calculation anyway;
+   * by convention, all our DP algorithms (sparse, reference, and here)
+   * do this, and we have unit tests comparing the values.
+   */
+  xc[p7C_C] = xc[p7C_CC] = xp[p7C_C] * om->xf[p7O_C][p7O_LOOP];
+  esl_sse_hsum_ps(xBv, &(xc[p7C_B]));
+  xc[p7C_J] = xc[p7C_JJ] = xc[p7C_B] * om->xf[p7O_J][p7O_MOVE] + xp[p7C_J] * om->xf[p7O_J][p7O_LOOP];
+  xc[p7C_N]              = xc[p7C_B] * om->xf[p7O_N][p7O_MOVE] + xp[p7C_N] * om->xf[p7O_N][p7O_LOOP];
+  xc[p7C_E]              = xc[p7C_C] * om->xf[p7O_E][p7O_MOVE] + xc[p7C_J] * om->xf[p7O_E][p7O_LOOP];
+  
+  /* not needed in production code: */
+  for (q = 0; q < Q; q++)
+    P7C_MQ(dpc, q) = P7C_IQ(dpc, q) = P7C_DQ(dpc, q) = zerov;
+
+  return logf(xc[p7C_N]);
+#endif //p7_DEBUGGING  
+#endif // HAVE_SSE2
+#ifndef HAVE_SSE2
+return 0.0;
+#endif  
+}
+
+static void
+save_debug_row_pp_sse(P7_CHECKPTMX *ox, __m128 *dpc, int i)
+{
+#ifdef HAVE_SSE2
+#ifdef p7_DEBUGGING  
+  union { __m128 v; float x[p7_VNF]; } u;
+  int      Q  = ox->Qf;
+  float  *xc  = (float *) (dpc + Q*p7C_NSCELLS);
+  int     q,k,z,s;
+
+  if (! ox->pp) return;
+  
+  P7R_XMX(ox->pp,i,p7R_E)  = xc[p7C_E];
+  P7R_XMX(ox->pp,i,p7R_N)  = xc[p7C_N];
+  P7R_XMX(ox->pp,i,p7R_J)  = xc[p7C_J];
+  P7R_XMX(ox->pp,i,p7R_B)  = xc[p7C_B];
+  P7R_XMX(ox->pp,i,p7R_L)  = xc[p7C_B]; /* all mass in local path */
+  P7R_XMX(ox->pp,i,p7R_G)  = 0.0; /* ... none in glocal     */
+  P7R_XMX(ox->pp,i,p7R_C)  = xc[p7C_C];
+  P7R_XMX(ox->pp,i,p7R_JJ) = xc[p7C_JJ];
+  P7R_XMX(ox->pp,i,p7R_CC) = xc[p7C_CC];
+  
+  /* in a posterior decoding matrix (prob-space), all k=0 cells are 0.0 */
+  for (s = 0; s < p7R_NSCELLS; s++) P7R_MX(ox->pp,i,0,s) = 0.0f;
+
+  /* ... all mass is on local path for the filter, so all glocal cells are 0.0 */
+  for (k =1; k <= ox->M; k++)
+    {
+      P7R_MX(ox->pp,i,k,p7R_MG) = 0.0f;
+      P7R_MX(ox->pp,i,k,p7R_IG) = 0.0f;
+      P7R_MX(ox->pp,i,k,p7R_DG) = 0.0f;
+    }
+
+  /* now the transfer from checkptmx decoding to local cells of refmx */
+  for (q = 0; q < Q; q++)
+    {
+      u.v = P7C_MQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(ox->pp,i,k,p7R_ML) = u.x[z]; }
+      u.v = P7C_DQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(ox->pp,i,k,p7R_DL) = u.x[z]; }
+      u.v = P7C_IQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(ox->pp,i,k,p7R_IL) = u.x[z]; }
+    }
+#endif  //p7_DEBUGGING
+#endif // HAVE_SSE2    
+}
+
+/* save_debug_row_fb()
+ * 
+ * Debugging only. Transfer posterior decoding values (sparse scaled,
+ * prob space) from a vectorized row, to appropriate row of <ox->fwd>
+ * or <ox->bck> (log space, inclusive of partial sum of scalefactors);
+ * <ox->fwd> and <ox->bck> should be identical (within numerical error
+ * tolerance) to a reference implementation Forward/Backward in log
+ * space.
+ */
+static void
+save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float totscale)
+{
+#ifdef HAVE_SSE2  
+#ifdef p7_DEBUGGING  
+  union { __m128 v; float x[p7_VNF]; } u;
+  int      Q  = ox->Qf;
+  float  *xc  = (float *) (dpc + Q*p7C_NSCELLS);
+  int     q,k,z;
+
+  if (! gx) return;
+  
+  P7R_XMX(gx,i,p7R_E)  = logf(xc[p7C_E]) + totscale;
+  P7R_XMX(gx,i,p7R_N)  = logf(xc[p7C_N]) + totscale;
+  P7R_XMX(gx,i,p7R_J)  = logf(xc[p7C_J]) + totscale;
+  P7R_XMX(gx,i,p7R_B)  = logf(xc[p7C_B]) + totscale;
+  P7R_XMX(gx,i,p7R_L)  = P7R_XMX(gx,i,p7R_B);         /* filter is local-mode. all mass assigned to local path */
+  P7R_XMX(gx,i,p7R_G)  = -eslINFINITY;          /* ... and no mass assigned to glocal path               */
+  P7R_XMX(gx,i,p7R_C)  = logf(xc[p7C_C]) + totscale;
+  P7R_XMX(gx,i,p7R_JJ) = -eslINFINITY;                /* JJ only saved in decoding, not fwd/bck */
+  P7R_XMX(gx,i,p7R_CC) = -eslINFINITY;                /* ... CC, ditto                          */
+  
+  /* in P7_REFMX, all k=0 cells are initialized to -eslINFINITY;
+   * set all glocal cells to -eslINFINITY too: */
+  for (k =1; k <= ox->M; k++)
+    {
+      P7R_MX(gx,i,k,p7R_MG) = -eslINFINITY;
+      P7R_MX(gx,i,k,p7R_IG) = -eslINFINITY;
+      P7R_MX(gx,i,k,p7R_DG) = -eslINFINITY;
+    }
+
+  /* now the transfer from checkptmx (scaled prob-space) to local cells of refmx (log-space): */
+  for (q = 0; q < Q; q++)
+    {
+      u.v = P7C_MQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(gx,i,k,p7R_ML) = logf(u.x[z]) + totscale; }
+      u.v = P7C_DQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(gx,i,k,p7R_DL) = logf(u.x[z]) + totscale; }
+      u.v = P7C_IQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(gx,i,k,p7R_IL) = logf(u.x[z]) + totscale; }
+    }
+#endif   //p7_DEBUGGING
+#endif // HAVE_SSE2    
+}
 /*****************************************************************
  * @LICENSE@
  * 

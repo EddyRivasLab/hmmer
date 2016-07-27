@@ -38,6 +38,7 @@
 #include "daemon/hmmdutils.h"
 #include "daemon/cachedb.h"
 #include "daemon/p7_hmmcache.h"
+#include "hardware/hardware.h"
 
 #define MAX_WORKERS  64
 #define MAX_BUFFER   4096
@@ -530,7 +531,8 @@ search_thread(void *arg)
   /* set up the dummy description and accession fields */
   dbsq.desc = "";
   dbsq.acc  = "";
-
+   P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   /* process a query sequence or hmm */
   if (info->seq != NULL) {
     bld = p7_builder_Create(NULL, info->abc);
@@ -558,7 +560,7 @@ search_thread(void *arg)
     p7_builder_Destroy(bld);
   } else {
     gm = p7_profile_Create (info->hmm->M, info->abc);
-    om = p7_oprofile_Create(info->hmm->M, info->abc);
+    om = p7_oprofile_Create(info->hmm->M, info->abc, hw->simd);
     p7_profile_Config(gm, info->hmm, bg);
     p7_oprofile_Convert(gm, om);
   }

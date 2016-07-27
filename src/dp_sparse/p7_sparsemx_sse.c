@@ -29,6 +29,197 @@
 #include "dp_reference/p7_refmx.h"
 #include "dp_sparse/p7_sparsemx.h"
 
+
+/* Function:  p7_sparsemask_Create()
+ * Synopsis:  Creates a new P7_SPARSEMASK object.
+ *
+ * Purpose:   Create a new <P7_SPARSEMASK> for a comparison of a profile
+ *            of length <M> to a sequence of length <L>. Return a ptr to the
+ *            new object.
+ *
+ *            The allocation will generally be for (much) less than <ML> cells;
+ *            the API for creating the sparse mask will grow the structure
+ *            appropriately. The structure does require at least $O(M)$ cells
+ *            of temporary storage, in four "slots" used to sort input
+ *            from striped vector code.  
+ *
+ * Args:      M       - model length
+ *            L       - sequence length
+ *
+ * Returns:   a pointer to a new <P7_SPARSEMASK>
+ *
+ * Throws:    <NULL> on allocation failure.
+ */
+P7_SPARSEMASK *
+p7_sparsemask_Create_sse(int M, int L)
+{
+#ifdef HAVE_SSE2  
+  P7_SPARSEMASK *sm             = NULL;
+  int            default_salloc = 8;
+  int64_t        default_kalloc = 4096;
+  int            i,r;
+  int            status;
+
+  ESL_ALLOC(sm, sizeof(P7_SPARSEMASK));
+  sm->L      = L;
+  sm->M      = M;
+  sm->simd = SSE; 
+  sm->Q      = P7_NVF(M);  // approx M/4, for striped vectors of four floats
+    
+  sm->seg    = NULL;
+  sm->k      = NULL;
+  sm->n      = NULL;
+  sm->kmem   = NULL;
+
+  sm->S       = 0;
+  sm->nrow    = 0;
+  sm->ncells  = 0;
+  sm->last_i  = L+1;       // sentinel to assure StartRow() is called in reverse L..1 order 
+  for (r = 0; r < p7_VNF; r++) 
+    sm->last_k[r]  = -1;        // sentinels to assure StartRow() is called before Add() 
+  /* sn[] are initialized for each sparse row by _StartRow() */
+
+  /* if Ws is really large, we might already know we need a
+   * bigger-than-default allocation, just to enable the slots.
+   * Rather than allocating the default and letting StartRow()
+   * reallocate for the slots, go ahead and figure this out now.
+   */
+  sm->kalloc = default_kalloc;
+  while (sm->kalloc < p7_VNF*sm->Q) sm->kalloc *= 2;
+
+  sm->ralloc   = L+1;   
+  sm->salloc   = default_salloc;
+
+ 
+
+  ESL_ALLOC(sm->seg,  sm->salloc * sizeof(struct p7_sparsemask_seg_s)); // salloc is the actual allocation, inclusive of +2 for sentinels
+  ESL_ALLOC(sm->k,    sm->ralloc * sizeof(int *));
+  ESL_ALLOC(sm->n,    sm->ralloc * sizeof(int));
+  ESL_ALLOC(sm->kmem, sm->kalloc * sizeof(int));
+
+  sm->k[0]   = NULL;    // always. 
+  for (i = 0; i <= L; i++)  // n[0] will always be 0; n[i=1..L] initialized to 0, then count as cells are added 
+    sm->n[i] = 0;
+  sm->n_krealloc = 0;
+  sm->n_rrealloc = 0;
+  sm->n_srealloc = 0;
+  return sm;
+
+ ERROR:
+  p7_sparsemask_Destroy(sm);
+#endif //HAVE_SSE2
+#ifndef HAVE_SSE2
+return NULL;
+#endif  
+
+}
+/* Function:  p7_sparsemask_Reinit()
+ * Synopsis:  Reinitialize an existing P7_SPARSEMASK for a new comparison.
+ *
+ * Purpose:   Same as a <_Create()>, but reusing an existing 
+ *            <P7_SPARSEMASK> to minimize reallocation calls.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+int
+p7_sparsemask_Reinit_sse(P7_SPARSEMASK *sm, int M, int L)
+{
+ // printf("Calling p7_sparsemask_Reinit with M= %d, L = %d\n", M, L);
+  /* Implement one version of this function that handles all possible vector ISAs because we only 
+  call it from one place */
+#ifdef HAVE_SSE2
+  int i,r;
+  int status;
+
+  sm->L  = L;
+  sm->M  = M; 
+  sm->Q  = P7_NVF(M);
+    
+  /* seg[], kmem stay at their previous salloc, kalloc
+   * but do we need to reallocate rows for k[] and n[]? 
+   */
+  if (sm->ralloc < L+1) {
+   // printf("reallocating base\n");
+    ESL_REALLOC(sm->k, sizeof(int *) * (L+1));
+    ESL_REALLOC(sm->n, sizeof(int)   * (L+1));
+    sm->ralloc = L+1;
+    sm->n_rrealloc++;
+  }
+
+  sm->S       = 0;
+  sm->nrow    = 0;
+  sm->ncells  = 0;
+  sm->last_i  = sm->L+1;
+  for (r = 0; r < p7_VNF; r++) 
+    sm->last_k[r]  = -1; 
+  /* sn[] are initialized for each sparse row by _StartRow() */
+
+  /* The realloc counters are NOT reset. They keep accumulating during
+   * the life of the object. 
+   */
+  for (i = 1; i <= L; i++)  /* n[0] will always be 0, but reinit n[1..L] */
+    sm->n[i] = 0;
+
+  return eslOK;
+
+ ERROR:
+  return status;
+#endif //HAVE_SSE2
+#ifndef HAVE_SSE2
+return eslENORESULT;
+#endif  
+}
+
+/* Function:  p7_sparsemask_Sizeof()
+ * Synopsis:  Returns current allocated size of a <P7_SPARSEMASK>, in bytes.
+ */
+size_t
+p7_sparsemask_Sizeof_sse(const P7_SPARSEMASK *sm)
+{
+  size_t n = sizeof(P7_SPARSEMASK);   
+#ifdef HAVE_SSE2  
+  n += sm->salloc * sizeof(p7_sparsemask_seg_s); // <seg>
+  n += sm->ralloc * sizeof(int *);                      // <k>                   
+  n += sm->ralloc * sizeof(int);                        // <n>                   
+  n += sm->kalloc * sizeof(int);                        // <kmem>                
+  return n;
+ #endif
+}
+
+/* Function:  p7_sparsemask_MinSizeof()
+ * Synopsis:  Returns minimum required size of a <P7_SPARSEMASK>, in bytes.
+ */
+size_t
+p7_sparsemask_MinSizeof_sse(const P7_SPARSEMASK *sm)
+{
+  size_t n = sizeof(P7_SPARSEMASK);
+#ifdef HAVE_SSE2 
+  n += (sm->S+2)  * sizeof(struct p7_sparsemask_seg_s);  // <seg>; includes sentinels at 0,S+1
+  n += (sm->L+1)  * sizeof(int *);                       // <k>
+  n += (sm->L+1)  * sizeof(int);                         // <n>
+  n += sm->ncells * sizeof(int);                         // <kmem>
+#endif 
+  return n;
+}
+
+/* Function:  p7_sparsemask_Destroy()
+ * Synopsis:  Destroy a <P7_SPARSEMASK>.
+ */
+void
+p7_sparsemask_Destroy_sse(P7_SPARSEMASK *sm)
+{
+  if (sm) {
+#ifdef HAVE_SSE2    
+    if (sm->seg)  free(sm->seg);
+    if (sm->k)    free(sm->k);
+    if (sm->n)    free(sm->n);
+    if (sm->kmem) free(sm->kmem);
+#endif   
+    free(sm);
+  }
+}
 /* Function:  p7_sparsemask_StartRow()
  * Synopsis:  Prepare to store sparse cells on a new row i.
  *
@@ -61,10 +252,11 @@
 
 // Separate versions of these functions for each ISA because they're called from 
 // ISA-specific functions
-#ifdef HAVE_SSE2
+
 int
 p7_sparsemask_StartRow_sse(P7_SPARSEMASK *sm, int i)
 {
+#ifdef HAVE_SSE2  
   int r;
   int status;
   
@@ -98,8 +290,11 @@ p7_sparsemask_StartRow_sse(P7_SPARSEMASK *sm, int i)
   
  ERROR:
   return status;
+  #endif // HAVE_SSE2
+#ifndef HAVE_SSE2
+  return eslENORESULT;
+  #endif
 }
-#endif
 
 
 /* Function:  p7_sparsemask_Add()
@@ -128,10 +323,10 @@ p7_sparsemask_StartRow_sse(P7_SPARSEMASK *sm, int i)
  *
  * Throws:    <eslEINVAL> on coding errors, failures of contract checks. 
  */
-#ifdef HAVE_SSE2
  int
 p7_sparsemask_Add_sse(P7_SPARSEMASK *sm, int q, int r)
 {
+#ifdef HAVE_SSE2  
   int     k = r*sm->Q+q+1;
 
   //printf("Sparsemask Adding i=%d q=%d r=%d k=%d M=%d\n", sm->last_i, q, r, k, sm->M);
@@ -147,8 +342,12 @@ p7_sparsemask_Add_sse(P7_SPARSEMASK *sm, int q, int r)
   sm->sn[r]++;
   sm->last_k[r] = k;
   return eslOK;
+  #endif // HAVE_SSE2
+#ifndef HAVE_SSE2
+  return eslENORESULT;
+  #endif
 }
-#endif
+
 
 /* Function:  p7_sparsemask_FinishRow()
  * Synopsis:  Done adding sparse cells on a current row.
@@ -163,10 +362,11 @@ p7_sparsemask_Add_sse(P7_SPARSEMASK *sm, int q, int r)
  *
  * Throws:    (no abnormal error conditions)
  */
-#ifdef HAVE_SSE2
+
 int
 p7_sparsemask_FinishRow_sse(P7_SPARSEMASK *sm)
 {
+#ifdef HAVE_SSE2  
   int *p;
   int  r;
 //  printf("sm->ncells = %li\n", sm->ncells);
@@ -184,8 +384,11 @@ p7_sparsemask_FinishRow_sse(P7_SPARSEMASK *sm)
   for (r = 0; r < p7_VNF; r++) 
     sm->last_k[r]  = -1;	/* that'll suffice to prevent Add() from being called after FinishRow(). */
   return eslOK;
+#endif // HAVE_SSE2
+#ifndef HAVE_SSE2
+  return eslENORESULT;
+  #endif
 }
-#endif
 
 /* Function:  p7_sparsemask_Finish()
  * Synopsis:  Done adding cells to the mask.
@@ -268,11 +471,210 @@ p7_sparsemask_Finish_sse(P7_SPARSEMASK *sm)
 
  ERROR:
   return eslEMEM;
+  #endif // HAVE_SSE2
+#ifndef HAVE_SSE2
+  return eslENORESULT;
+  #endif
 }
-#endif
 /*----------------- end, P7_SPARSEMASK API ----------------------*/
 
+int
+p7_sparsemask_Dump_sse(FILE *ofp, P7_SPARSEMASK *sm)
+{
+#ifdef  HAVE_SSE2
+  int i,k,z;
 
+  fprintf(ofp, "# sparse mask: M=%d L=%d Q=%d\n", sm->M, sm->L, sm->Q);
+  fputs("     ", ofp);  for (k = 1; k <= sm->M; k++) fprintf(ofp, "%3d ", k);  fputs(" n \n", ofp);
+  fputs("     ", ofp);  for (k = 1; k <= sm->M; k++) fputs("--- ", ofp);       fputs("---\n", ofp);
+
+  for (i = 1; i <= sm->L; i++)
+    {
+      fprintf(ofp, "%3d: ", i);
+      for (z = 0, k = 1; k <= sm->M; k++)
+  {
+    while (z < sm->n[i] && sm->k[i][z] < k)  z++;
+    if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "  X ");
+    else                                     fprintf(ofp, "  . ");
+  }
+      fprintf(ofp, "%3d\n", sm->n[i]);
+    }
+  return eslOK;
+#endif // HAVE_SSE2
+#ifndef HAVE_SSE2
+  return eslENORESULT;
+  #endif
+}
+/* Function:  p7_sparsemask_Compare()
+ * Synopsis:  Compare two sparse masks for equality.
+ *
+ * Purpose:   Compare <sm1> and <sm2>; return <eslOK> if they
+ *            are equal, <eslFAIL> if they are not.
+ */
+int
+p7_sparsemask_Compare_sse(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2)
+{
+  #ifdef HAVE_SSE2
+  char msg[] = "P7_SPARSEMASK comparison failed";
+  int  i;
+  int  s;
+  if(sm2->simd != SSE){
+    ESL_FAIL(eslFAIL, NULL, "Can't compare sparsemasks generated for different SIMD instruction sets");
+  }
+
+  if ( (sm1->L      != sm2->L)      ||
+       (sm1->M      != sm2->M)      ||
+       (sm1->S      != sm2->S)      ||
+       (sm1->nrow   != sm2->nrow)   ||
+       (sm1->ncells != sm2->ncells)) 
+    ESL_FAIL(eslFAIL, NULL, msg);
+
+  for (s = 0; s <= sm1->S+1; s++)
+    {
+      if (sm1->seg[s].ia != sm2->seg[s].ia)   ESL_FAIL(eslFAIL, NULL, msg);
+      if (sm1->seg[s].ib != sm2->seg[s].ib)   ESL_FAIL(eslFAIL, NULL, msg);
+    }
+  if ( esl_vec_ICompare(sm1->n, sm2->n, sm1->L+1)    != eslOK)  ESL_FAIL(eslFAIL, NULL, msg);
+  for (i = 0; i <= sm1->L; i++)
+    if ( esl_vec_ICompare(sm1->k[i], sm2->k[i], sm1->n[i]) != eslOK) ESL_FAIL(eslFAIL, NULL, msg);
+  return eslOK;
+  #endif //HAVE_SSE2
+#ifndef HAVE_SSE2
+  return eslENORESULT;
+  #endif
+}
+
+
+/* Function:  p7_sparsemask_Validate()
+ * Synopsis:  Validate a P7_SPARSEMASK sparse DP mask.
+ *
+ * Purpose:   Validate the contents of sparse mask <sm>. 
+ *            Return <eslOK> if it passes. Return <eslFAIL>
+ *            if it fails, and set <errbuf> to contain an
+ *            explanation, if caller provides a non-<NULL>
+ *            <errbuf>.
+ *
+ * Args:      sm      - sparse DP mask to validate
+ *            errbuf  - [eslERRBUFSIZE] space for an error msg; or NULL      
+ *
+ * Returns:   <eslOK> on success; <errbuf>, if provided, is set
+ *            to an empty string "\0".
+ *            
+ *            <eslFAIL> on failure; <errbuf>, if provided, contains an
+ *            informative error message.
+ *            
+ * Note:      We don't check for all possible invalidity; the goal of a
+ *            Validate() is primarily to catch any future problems
+ *            similar to past problems that we've already run across
+ *            in debugging/testing.
+ */
+int
+p7_sparsemask_Validate_sse(const P7_SPARSEMASK *sm, char *errbuf)
+{
+#ifdef HAVE_SSE2  
+  int g, i;
+
+  if (errbuf) errbuf[0] = '\0';
+
+  if ( sm->L < 1) ESL_FAIL(eslFAIL, errbuf, "L must be >=1");
+  if ( sm->M < 1) ESL_FAIL(eslFAIL, errbuf, "M must be >=1");
+  if ( sm->S < 0) ESL_FAIL(eslFAIL, errbuf, "S must be >=0");
+
+  for (g = 1; g <= sm->S; g++)
+    {
+      if (sm->seg[g-1].ib >= sm->seg[g].ia)           ESL_FAIL(eslFAIL, errbuf, "seg %d overlaps with previous one", g);  // Note boundary condition, seg[0].ib=-1
+      if (sm->seg[g].ia   >  sm->seg[g].ib)           ESL_FAIL(eslFAIL, errbuf, "ia..ib are not in order for seg %d", g);
+      if (sm->seg[g].ia < 1 || sm->seg[g].ia > sm->L) ESL_FAIL(eslFAIL, errbuf, "ia[%d] is invalid", g);
+      if (sm->seg[g].ib < 1 || sm->seg[g].ib > sm->L) ESL_FAIL(eslFAIL, errbuf, "ib[%d] is invalid", g);
+
+      for (i = sm->seg[g-1].ib+1; i < sm->seg[g].ia; i++)   // Note boundary condition. Sentinel seg[0].ib == -1, so (i = seg[0]+1) means 0
+  if (sm->n[i] != 0) ESL_FAIL(eslFAIL, errbuf, "n[i] != 0 for i unmarked, not in sparse segment");
+      for (i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)
+  if (sm->n[i] == 0) ESL_FAIL(eslFAIL, errbuf, "n[i] == 0 for i supposedly marked in sparse seg");
+    }
+  for (i = sm->seg[sm->S].ib+1; i <= sm->L; i++)
+    if (sm->n[i] != 0) ESL_FAIL(eslFAIL, errbuf, "n[i] != 0 for i unmarked, not in sparse segment");
+
+  return eslOK;
+  #endif //HAVE_SSE2
+#ifndef HAVE_SSE2
+  return eslENORESULT;
+  #endif
+}
+
+/* Function:  p7_sparsemask_SetFromTrace()
+ * Synopsis:  Set a sparse mask to contain cells in given trace, plus random scatter of others.
+ *
+ * Purpose:   Add every supercell <i,k> in trace <tr> to the sparse mask <sm>.
+ *            
+ *            If <rng> is provided (i.e. non-<NULL>), on rows <i> with
+ *            at least one such cell, and on 20% of empty rows, also
+ *            mark random sparse supercells with 50% probability
+ *            each. This creates a sparse mask in which the path
+ *            defined by <tr> is marked and can be scored by sparse DP
+ *            routines; plus additional random cells, to try to
+ *            exercise possible failure modes.
+ *            
+ */
+int
+p7_sparsemask_SetFromTrace_sse(P7_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const P7_TRACE *tr)
+{
+#ifdef HAVE_SSE2
+  float cellprob = 0.5;
+  float rowprob  = 0.2;
+  int   i,k,z;
+  int   status;
+  z = tr->N-1;
+  for (i = sm->L; i >= 1; i--) /* sparsemask api requires building it backwards */
+    {
+      while (tr->i[z] != i) z--; /* find trace position that generated this residue. */
+    
+      if ( (status = p7_sparsemask_StartRow(sm, i)) != eslOK) return status;
+
+      /* If this residue was emitted by the model, at least that cell
+       * must be present; thus the row must be present. 
+       * Tricky: in addition to the actual emitting cell i,k, we may
+       * also need to add one or more delete cells i,k-1... 
+       */
+      if (p7_trace_IsM(tr->st[z]) || p7_trace_IsI(tr->st[z])) 
+  {
+    while (p7_trace_IsD(tr->st[z+1])) z++;
+    
+    for (k = sm->M; k > tr->k[z]; k--) 
+      if (rng && esl_random(rng) < cellprob)
+        if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
+
+    while (p7_trace_IsD(tr->st[z])) {
+      k = tr->k[z]; 
+      if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
+      z--;
+    }
+
+    k = tr->k[z];
+    if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
+    
+    for (k = k-1; k >= 1; k--)
+      if (rng && esl_random(rng) < cellprob)
+        if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
+  }
+      else
+  {
+    if (rng && esl_random(rng) < rowprob)
+      for (k = sm->M; k >= 1; k--)
+        if (rng && esl_random(rng) < cellprob)
+    if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status; /* append to k[i] list, increment n[i] count, reallocating as needed; doesn't deal w/ segments (nrow,nseg,i[]) */
+  }
+
+      if ((status = p7_sparsemask_FinishRow(sm)) != eslOK) return status;
+    }
+  if ( (status = p7_sparsemask_Finish(sm)) != eslOK) return status;
+
+  return eslOK;
+   #endif //HAVE_SSE2
+#ifndef HAVE_SSE2
+  return eslENORESULT;
+  #endif
+}
 
 /*****************************************************************
  * @LICENSE@

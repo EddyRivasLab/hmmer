@@ -22,6 +22,7 @@
 #include <emmintrin.h>		/* SSE2 */
 
 #include "dp_reference/p7_refmx.h"
+#include "hardware/hardware.h"
 
 #define p7C_NSCELLS 3
 enum p7c_scells_e {
@@ -63,9 +64,11 @@ typedef struct p7_checkptmx_s {
 
   int64_t  ramlimit;  /* recommended RAM limit on dp_mem; can temporarily exceed it */
 
+  SIMD_TYPE simd;  // what SIMD architecture are we using?
+
 /* Note: for ease of checking, we require the AVX2 and AVX512 versions to allocate the same
 number of rows of matrix storage as the SSE version, even though this might require
-allocating somewhat more memory than the user requested, due to rounding rows up
+allocating somewhat more memory than the user requested due to rounding rows up
 to the next multiple of the vector length.  This should be a small effect unless the 
 sequence we're comparing to is very short, since this filter uses floats.  Also, the code 
 exceeds the requested memory when necessary, so the request is already not a hard limit. */
@@ -129,14 +132,41 @@ exceeds the requested memory when necessary, so the request is already not a har
 } P7_CHECKPTMX;
 
 
-extern P7_CHECKPTMX *p7_checkptmx_Create   (int M, int L, int64_t ramlimit);
+extern P7_CHECKPTMX *p7_checkptmx_Create   (int M, int L, int64_t ramlimit, SIMD_TYPE simd);
 extern int           p7_checkptmx_GrowTo   (P7_CHECKPTMX *ox, int M, int L);
 extern size_t        p7_checkptmx_Sizeof   (const P7_CHECKPTMX *ox);
-extern size_t        p7_checkptmx_MinSizeof(int M, int L);
+extern size_t        p7_checkptmx_MinSizeof(int M, int L, SIMD_TYPE simd);
 extern int           p7_checkptmx_Reuse    (P7_CHECKPTMX *ox);
 extern void          p7_checkptmx_Destroy  (P7_CHECKPTMX *ox);
 
-extern int           p7_checkptmx_SetDumpMode(P7_CHECKPTMX *ox, FILE *dfp, int truefalse);
+extern P7_CHECKPTMX *p7_checkptmx_Create_sse   (int M, int L, int64_t ramlimit);
+extern int           p7_checkptmx_GrowTo_sse   (P7_CHECKPTMX *ox, int M, int L);
+extern size_t        p7_checkptmx_Sizeof_sse   (const P7_CHECKPTMX *ox);
+extern size_t        p7_checkptmx_MinSizeof_sse(int M, int L);
+extern int           p7_checkptmx_Reuse_sse    (P7_CHECKPTMX *ox);
+extern void          p7_checkptmx_Destroy_sse  (P7_CHECKPTMX *ox);
+extern int           p7_checkptmx_SetDumpMode_sse(P7_CHECKPTMX *ox, FILE *dfp, int truefalse);
+extern P7_CHECKPTMX *p7_checkptmx_Create_avx   (int M, int L, int64_t ramlimit);
+extern int           p7_checkptmx_GrowTo_avx   (P7_CHECKPTMX *ox, int M, int L);
+extern size_t        p7_checkptmx_Sizeof_avx   (const P7_CHECKPTMX *ox);
+extern size_t        p7_checkptmx_MinSizeof_avx(int M, int L);
+extern int           p7_checkptmx_Reuse_avx    (P7_CHECKPTMX *ox);
+extern void          p7_checkptmx_Destroy_avx  (P7_CHECKPTMX *ox);
+extern P7_CHECKPTMX *p7_checkptmx_Create_avx512   (int M, int L, int64_t ramlimit);
+extern int           p7_checkptmx_GrowTo_avx512   (P7_CHECKPTMX *ox, int M, int L);
+extern size_t        p7_checkptmx_Sizeof_avx512   (const P7_CHECKPTMX *ox);
+extern size_t        p7_checkptmx_MinSizeof_avx512(int M, int L);
+extern int           p7_checkptmx_Reuse_avx512    (P7_CHECKPTMX *ox);
+extern void          p7_checkptmx_Destroy_avx512  (P7_CHECKPTMX *ox);
+
+void set_row_layout  (P7_CHECKPTMX *ox, int allocL, int maxR); 
+void set_full        (P7_CHECKPTMX *ox, int L);
+void set_checkpointed(P7_CHECKPTMX *ox, int L, int R);
+void set_redlined    (P7_CHECKPTMX *ox, int L, double minR);
+
+double minimum_rows     (int L);
+double checkpointed_rows(int L, int R);
+
 #ifdef p7_DEBUGGING
 extern char *        p7_checkptmx_DecodeX(enum p7c_xcells_e xcode);
 extern int           p7_checkptmx_DumpFBHeader(P7_CHECKPTMX *ox);

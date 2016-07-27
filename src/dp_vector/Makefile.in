@@ -14,6 +14,8 @@ LIBOBJS =  \
 
 SSELIBOBJS =  \
         msvfilter_sse.o\
+        p7_checkptmx_sse.o\
+        p7_filtermx_sse.o\
         p7_oprofile_sse.o\
         ssvfilter_sse.o\
         vitfilter_sse.o\
@@ -21,12 +23,18 @@ SSELIBOBJS =  \
 
 AVXLIBOBJS = \
        msvfilter_avx.o\
+       p7_checkptmx_avx.o\
+       p7_filtermx_avx.o\
+       p7_oprofile_avx.o\
         ssvfilter_avx.o \
         vitfilter_avx.o \
         fwdfilter_avx.o
 
 AVX512LIBOBJS = \
        msvfilter_avx512.o\
+       p7_checkptmx_avx512.o\
+       p7_filtermx_avx512.o\
+       p7_oprofile_avx512.o\
         ssvfilter_avx512.o \
         vitfilter_avx512.o \
         fwdfilter_avx512.o
