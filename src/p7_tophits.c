@@ -405,7 +405,7 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
   P7_HIT  *ori1    = h1->unsrt;    /* original base of h1's data */
   P7_HIT  *new2;
   int      i,j,k;
-  uint64_t Nalloc = h1->Nalloc + h2->Nalloc;
+  uint64_t Nalloc = h1->N + h2->N;
   int      status;
 
   if(h2->N <= 0) return eslOK;
