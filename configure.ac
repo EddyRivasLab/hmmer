@@ -212,6 +212,9 @@ fi
 # These set $impl_choice to one of sse, vmx, dummy, or none.
 #
 AC_ARG_ENABLE(sse,[AS_HELP_STRING([--enable-sse],[enable SSE implementation])],          enable_sse=$enableval,   enable_sse=check)
+AC_ARG_ENABLE(avx2,[AS_HELP_STRING([--enable-avx2],[force use of the AVX2 (Haswell) vector instructions])], enable_avx2=$enableval, enable_avx2=check)
+AC_ARG_ENABLE(avx512,[AS_HELP_STRING([--enable-AVX-512],[force use of the AVX-512 vector instructions])], enable_avx512=$enableval, enable_avx512=check)
+AC_ARG_ENABLE(neon,[AS_HELP_STRING([--enable-neon],[enable NEON instructions])] ,          enable_neon=$enableval,   enable_neon=check)
 AC_ARG_ENABLE(vmx,[AS_HELP_STRING([--enable-vmx],[enable Altivec/VMX implementation])],  enable_vmx=$enableval,   enable_vmx=check)
 AC_ARG_ENABLE(dummy,[AS_HELP_STRING([--enable-dummy],[enable portable implementation])], enable_dummy=$enableval, enable_dummy=check)
 if test "$enable_sse" = "yes"; then
@@ -399,6 +402,170 @@ fi
 # Figure out how to generate PIC code for shared libraries
 # This sets @PIC_FLAGS@ output variable for Easel.
 ESL_PIC_FLAGS
+
+
+# Set up the SSE_CFLAGS, AVX_CFLAGS, AVX512_CFLAGS, and ARM_CFLAGS 
+# fields that Easel now expects 
+if test "$enable_sse" = "yes" || test "$enable_sse" = "check"; then
+   if test "x$SSE_CFLAGS" = x; then
+     case $ax_cv_c_compiler_vendor in
+       gnu)   AX_CHECK_COMPILER_FLAGS(-msse2,[SSE_CFLAGS="-msse2"],[]);;
+       *)     ;;
+     esac   
+   fi
+fi
+if test "$enable_sse" = "check" && test "$enable_vmx" != "yes"; then
+   sre_save_CFLAGS="$CFLAGS"
+   sre_save_CPPFLAGS="$CPPFLAGS"
+   CFLAGS="$CFLAGS $SSE_CFLAGS"
+   CPPFLAGS="$CPPFLAGS $SSE_CFLAGS"
+   AC_CHECK_HEADER([emmintrin.h],[
+     AC_MSG_CHECKING([if platform can run SSE/SSE2 instructions])
+     AC_RUN_IFELSE([AC_LANG_PROGRAM( [[#include <emmintrin.h>]],
+		                      [[__m128i v = _mm_set1_epi8(0);]])],
+                   [AC_MSG_RESULT([yes])
+                     enable_sse=yes],
+                   [AC_MSG_RESULT([no])])])
+   CFLAGS="$sre_save_CFLAGS"
+   CPPFLAGS="$sre_save_CPPFLAGS"
+fi
+if test "$enable_sse" = "yes"; then
+   AC_DEFINE(HAVE_SSE2,1,[Support SSE2 (Streaming SIMD Extensions 2) instructions])
+fi
+
+if test "$enable_avx2" = "yes" || test "$enable_avx2" = "check"; then
+   if test "x$AVX2_CFLAGS" = x; then
+     case $ax_cv_c_compiler_vendor in
+      gnu)   AX_CHECK_COMPILER_FLAGS([-mavx -mavx2], [ AVX_CFLAGS="-mavx -mavx2" ],[]);;
+       *)     ;;
+     esac   
+   fi
+fi
+if test "$enable_avx2" = "check" && test "$enable_vmx" != "yes"; then
+AC_MSG_CHECKING([whether AVX2 is supported])
+  sre_save_cflags="$CFLAGS"
+  haveavx=no
+  CFLAGS="$CFLAGS $SSE_CFLAGS $AVX_CFLAGS"
+  AC_COMPILE_IFELSE(  [AC_LANG_PROGRAM([[#include <immintrin.h>]],
+        [[__m256i test1;
+         __m256i test2;
+         test1 = _mm256_set1_epi8(37);
+         test2 = _mm256_set1_epi8(111);
+         test2 = _mm256_adds_epi8(test1, test2);
+      ]])],
+  [AC_DEFINE([HAVE_AVX2])
+  haveavx=yes])
+  AC_MSG_RESULT([$haveavx])
+  CFLAGS="$sre_save_cflags"
+fi
+
+if test "$enable_avx512" = "yes" || test "$enable_avx512" = "check"; then
+   if test "x$AVX512_CFLAGS" = x; then
+     case $ax_cv_c_compiler_vendor in
+      gnu)   AX_CHECK_COMPILER_FLAGS([-mavx512bw -mavx512dq], [ AVX512_CFLAGS="-mavx512bw -mavx512dq" ],[]);;
+       *)     ;;
+     esac   
+   fi
+fi
+if test "$enable_avx512" = "check" && test "$enable_vmx" != "yes"; then
+AC_MSG_CHECKING([whether AVX-512 is supported])
+  sre_save_cflags="$CFLAGS"
+  haveavx512=no
+  CFLAGS="$CFLAGS $AVX512_CFLAGS"
+  AC_COMPILE_IFELSE(  [AC_LANG_PROGRAM([[#include <immintrin.h>]],
+        [[__m512i test1;
+         __m512i test2;
+         test1 = _mm512_set1_epi8(37);
+         test2 = _mm512_set1_epi8(111);
+         test2 = _mm512_adds_epi8(test1, test2);
+      ]])],
+  [AC_DEFINE([HAVE_AVX512])
+  haveavx512=yes])
+  AC_MSG_RESULT([$haveavx512])
+  CFLAGS="$sre_save_cflags"
+fi
+
+  AC_SUBST(SSE_CFLAGS)
+  AC_SUBST(AVX_CFLAGS)
+  AC_SUBST(AVX512_CFLAGS)
+
+# ARM and NEON SIMD flags
+if test "$enable_neon" = "yes" || test "$enable_neon" = "check"; then
+   if test "x$ARM_CFLAGS" = x; then
+     case $ax_cv_c_compiler_vendor in
+       gnu)   AX_CHECK_COMPILER_FLAGS(-mfpu=neon,[ARM_CFLAGS="-mfpu=neon"],[]);;
+       *)     ;;
+     esac   
+   fi
+fi
+if test "$enable_neon" = "check"; then
+   sre_save_CFLAGS="$CFLAGS"
+   sre_save_CPPFLAGS="$CPPFLAGS"
+   CFLAGS="$CFLAGS $ARM_CFLAGS"
+   CPPFLAGS="$CPPFLAGS $ARM_CFLAGS"
+   AC_CHECK_HEADER([arm_neon.h],[
+     AC_MSG_CHECKING([if platform can run NEON instructions])
+     AC_RUN_IFELSE([AC_LANG_PROGRAM( [[#include <arm_neon.h>]],
+		                      [[ int32x4_t x = vdupq_n_s32(0);]])],
+                   [AC_MSG_RESULT([yes])
+                     enable_neon=yes],
+                   [AC_MSG_RESULT([no])])])
+   CFLAGS="$sre_save_CFLAGS"
+   CPPFLAGS="$sre_save_CPPFLAGS"
+fi
+if test "$enable_neon" = "yes"; then
+   AC_DEFINE(HAVE_NEON,1,[Support NEON instructions])
+fi
+
+
+
+
+# NEON: Check for NEON compiler flag
+# todo: we can always check for other ARM floating point flags later
+#if test "$enable_neon" = "yes" || test "$enable_neon" = "check"; then
+# Determine target if targeting is specified.
+# Do this by attempting to execute code with different 
+# cominations of NEON/VFP compiler options. This allows 
+# us to determine the best compile options for each 
+# ARM architecture. 
+if test "$enable_neon" = "yes"; then
+  cortex_a5="-mfpu=neon-fp16"
+  cortex_a7="-mfpu=neon-vfpv4"
+  cortex_a8="-mfpu=neon"
+  cortex_a9="-mfpu=neon-fp16"
+  cortex_a15="-mfpu=neon-vfpv4"
+  sre_save_CFLAGS="$CFLAGS"
+  sre_save_CPPFLAGS="$CPPFLAGS"
+  CFLAGS="$CFLAGS $cortex_a5"
+  CPPFLAGS="$CPPFLAGS $cortex_a5"
+  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
+                    [vector_flags="-mcpu=cortex-a5 -mfpu=neon-fp16"], [])
+  CFLAGS="$sre_save_CFLAGS $cortex_a7"
+  CPPFLAGS="$sre_save_CPPFLAGS $cortex_a7"
+  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
+                    [vector_flags="-mcpu=cortex-a7 -mfpu=neon-vfpv4"], [])
+  CFLAGS="$sre_save_CFLAGS $cortex_a8"
+  CPPFLAGS="$sre_save_CPPFLAGS $cortex_a8"
+  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
+                    [vector_flags="-mcpu=cortex-a8 -mfpu=neon"], [])
+  CFLAGS="$sre_save_CFLAGS $cortex_a9"
+  CPPFLAGS="$sre_save_CPPFLAGS $cortex_a9"
+  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
+                    [vector_flags="-mcpu=cortex-a9 -mfpu=neon-fp16"], [])
+  CFLAGS="$sre_save_CFLAGS $cortex_a15"
+  CPPFLAGS="$sre_save_CPPFLAGS $cortex_a15"
+  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
+                    [vector_flags="-mcpu=cortex-a15 -mfpu=neon-vfpv4"], [])
+
+  CFLAGS="$sre_save_CFLAGS"
+  CPPFLAGS="$sre_save_CPPFLAGS"
+fi
+
+if test "y$vector_flags" != "y"; then
+  ARM_CFLAGS="$vector_flags"
+fi
+
+AC_SUBST(ARM_CFLAGS)
 
 # If we're using SSE, figure out our @SIMD_CFLAGS@
 if test "$impl_choice" = "sse" && test "x$SIMD_CFLAGS" = x; then
