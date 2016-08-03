@@ -35,6 +35,17 @@
 #define NHMMER_MAX_RESIDUE_COUNT (1024 * 256)  /* 1/4 Mb */
 #endif
 
+/* These aid in the manual indication of query format for nhmmer
+ * and are used to override autodetection of the query as being an
+ * HMM, MSA, or unaligned fasta.  The values keep out of the way of
+ * sqio formats (<=100) and msa formats (>100, functionally in the
+ * hundreds).
+ */
+#define NHMMER_QFORMAT_UNKNOWN          0      /* query file format is unknown*/
+#define NHMMER_QFORMAT_HMM              10001  /* query file is an HMM */
+#define NHMMER_QFORMAT_MSA_UNSPECIFIED  10002  /* query file is a multiple sequence alignment; the specific format depends on the eslMSAFILE_* defines in esl_msafile.h. */
+
+
 typedef struct {
 #ifdef HMMER_THREADS
   ESL_WORK_QUEUE   *queue;
@@ -76,6 +87,7 @@ static int             assign_Lengths(P7_TOPHITS *th, ID_LENGTH_LIST *id_length_
 #define INCOPTS     "--incE,--incT,--cut_ga,--cut_nc,--cut_tc"
 #define INCDOMOPTS  "--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 #define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
+#define QFORMATS     "--qhmm,--qfasta,--qmsa"
 
 #define CPUOPTS     NULL
 #define MPIOPTS     NULL
@@ -135,16 +147,19 @@ static ESL_OPTIONS options[] = {
 #endif
 
 /* Other options */
+  { "--qhmm",       eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,       QFORMATS,     "assert query is an hmm file",                                   12 },
+  { "--qfasta",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,       QFORMATS,     "assert query is an unaligned fasta file",                       12 },
+  { "--qmsa",       eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,       QFORMATS,     "assert query is an aligned file format; can use --qformat to specify",             12 },
+  { "--qformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  "--qmsa",       NULL,     "assert query msa <seqfile> is in format <s>",                       12 },
   { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,     "assert target <seqdb> is in format <s>",                        12 },
-  { "--qformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,     "assert query <seqfile> is in format <s>",                       12 },
   { "--nonull2",    eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,           NULL,     "turn off biased composition score corrections",                 12 },
   { "-Z",           eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,           NULL,     "set database size (Megabases) to <x> for E-value calculations", 12 },
   { "--seed",       eslARG_INT,          "42", NULL, "n>=0",  NULL,  NULL,           NULL,     "set RNG seed to <n> (if 0: one-time arbitrary seed)",           12 },
   { "--w_beta",     eslARG_REAL,         NULL, NULL, NULL,    NULL,  NULL,           NULL,     "tail mass at which window length is determined",                12 },
   { "--w_length",   eslARG_INT,          NULL, NULL, NULL,    NULL,  NULL,           NULL,     "window length - essentially max expected hit length" ,          12 },
   { "--block_length", eslARG_INT,        NULL, NULL, "n>=50000", NULL, NULL,         NULL,     "length of blocks read from target database (threaded) ",        12 },
-  { "--watson",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,       "--crick",  "only search the top strand",                                    12 },
-  { "--crick",      eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,       "--watson",  "only search the bottom strand",                                 12 },
+  { "--watson",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,       "--crick",    "only search the top strand",                                    12 },
+  { "--crick",      eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,       "--watson",   "only search the bottom strand",                                 12 },
 
 
   /* Restrict search to subset of database - hidden because these flags are
@@ -191,7 +206,7 @@ static ESL_OPTIONS options[] = {
  */
 struct cfg_s {
   char            *dbfile;            /* target sequence database file                   */
-  char            *queryfile;           /* query HMM file                                  */
+  char            *queryfile;           /* query file (hmm, fasta, or some MSA)          */
   int              qfmt;
 
   int              do_mpi;            /* TRUE if we're doing MPI parallelization         */
@@ -202,10 +217,8 @@ struct cfg_s {
   int              n_targetseq;       /* number of sequences in the restricted range */
 };
 
-static char usage[]  = "[options] <query hmmfile|alignfile> <target seqfile>";
-static char banner[] = "search a DNA model or alignment against a DNA database";
-//static char usage[]  = "[options] <hmmfile> <seqdb>";
-//static char banner[] = "search a DNA model against a DNA database";
+static char usage[]  = "[options] <query hmmfile|alignfile|seqfile> <target seqfile>";
+static char banner[] = "search a DNA model, alignment, or sequence against a DNA database";
 
 
 static int  serial_master  (ESL_GETOPTS *go, struct cfg_s *cfg);
@@ -398,7 +411,7 @@ main(int argc, char **argv)
    */
   cfg.queryfile  = NULL;
   cfg.dbfile     = NULL;
-  cfg.qfmt       = eslMSAFILE_UNKNOWN;
+  cfg.qfmt       = NHMMER_QFORMAT_UNKNOWN;
   cfg.do_mpi     = FALSE;               /* this gets reset below, if we init MPI */
   cfg.nproc      = 0;                   /* this gets reset below, if we init MPI */
   cfg.my_rank    = 0;                   /* this gets reset below, if we init MPI */
@@ -408,15 +421,18 @@ main(int argc, char **argv)
 
   process_commandline(argc, argv, &go, &cfg.queryfile, &cfg.dbfile);
 
-  if (esl_opt_IsOn(go, "--qformat")) {
-    if (strcasecmp("fasta", esl_opt_GetString(go, "--qformat")) == 0)
-      cfg.qfmt = eslSQFILE_FASTA;
-    else if (strcasecmp("hmm", esl_opt_GetString(go, "--qformat")) == 0)
-      cfg.qfmt = eslHMMFILE_HMMER;
-    else
-      cfg.qfmt = esl_msafile_EncodeFormat(esl_opt_GetString(go, "--qformat"));
 
-    if (cfg.qfmt == eslMSAFILE_UNKNOWN) p7_Fail("%s is not a recognized input file format\n", esl_opt_GetString(go, "--qformat"));
+  if (esl_opt_IsOn(go, "--qfasta")) {
+      cfg.qfmt = eslSQFILE_FASTA;
+  } else if (esl_opt_IsOn(go, "--qhmm")) {
+      cfg.qfmt = NHMMER_QFORMAT_HMM;
+  } else if (esl_opt_IsOn(go, "--qmsa")) {
+      if (esl_opt_IsOn(go, "--qformat")) {
+        cfg.qfmt = esl_msafile_EncodeFormat(esl_opt_GetString(go, "--qformat"));
+        if (cfg.qfmt == eslMSAFILE_UNKNOWN) p7_Fail("%s is not a recognized input file format\n", esl_opt_GetString(go, "--qformat"));
+      } else {
+        cfg.qfmt = NHMMER_QFORMAT_MSA_UNSPECIFIED;
+      }
   }
 
 
@@ -596,27 +612,30 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    * the file type is.
    */
 
-  /* autodetection is only allowed on rewindable files */
-  if (strcmp(cfg->queryfile, "-") == 0 && cfg->qfmt == eslMSAFILE_UNKNOWN) {
-    p7_Fail("Must specify --qformat to read <alignfile> from stdin ('-')");
-  }
-
   /* (1)
    * first try to read as an HMM.  Fails nicely if it's not.
    */
-  if ( cfg->qfmt == eslHMMFILE_HMMER || cfg->qfmt == eslMSAFILE_UNKNOWN ) {
+  if ( cfg->qfmt == NHMMER_QFORMAT_HMM || cfg->qfmt == NHMMER_QFORMAT_UNKNOWN ) {
     status = p7_hmmfile_OpenE(cfg->queryfile, NULL, &hfp, errbuf);
 
     if  (status == eslENOTFOUND) {
       p7_Fail("File existence/permissions problem in trying to open query file %s.\n%s\n", cfg->queryfile, errbuf);
     } else if (status == eslOK) {
-      //Successfully read HMM file
+      //Successfully opened HMM file
       qhstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
       if (qhstatus != eslOK) p7_Fail("reading hmm from file %s (%d)\n", cfg->queryfile, qhstatus);
-      cfg->qfmt = eslHMMFILE_HMMER;
+      cfg->qfmt = NHMMER_QFORMAT_HMM;
+      //Successfully read HMM file; steps 2 and 3 below won't happen
     } else {
+      //failed when opening the file
       hfp = NULL;
-      if (cfg->qfmt == eslHMMFILE_HMMER) p7_Fail("opening hmm from file %s (%d)\n", cfg->queryfile, qhstatus);
+      if (cfg->qfmt == NHMMER_QFORMAT_HMM) // we were promised that it would be an hmm file. Abort.
+        p7_Fail("opening hmm from file %s (%d)\n", cfg->queryfile, qhstatus);
+      else if (strcmp(cfg->queryfile, "-") == 0 ) {
+        /* we can't rewind a piped file, so we can't perform any more autodetection on the query format*/
+        p7_Fail("Must specify query file type (--qmsa, --qfasta, --qhmm) to read <alignfile> from stdin ('-')");
+      }
+
     }
   }
 
@@ -624,28 +643,43 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    * Next try to read as an MSA. This involves opening, and reading the first alignment.
    * If that alignment is of a single sequence
    */
-  if (cfg->qfmt != eslSQFILE_FASTA && cfg->qfmt != eslHMMFILE_HMMER && hfp == NULL  ) { /*i.e. some MSA type, or unspecified, and HMM didn't work*/
+  if (cfg->qfmt != eslSQFILE_FASTA && cfg->qfmt != NHMMER_QFORMAT_HMM && hfp == NULL  ) { /*i.e. some MSA type; or unspecified, and HMM didn't work*/
 
-    status = esl_msafile_Open(&abc, cfg->queryfile, NULL, cfg->qfmt, NULL, &qfp_msa);
+
+    int qfmt_arg = cfg->qfmt;
+    if (qfmt_arg == NHMMER_QFORMAT_MSA_UNSPECIFIED) {
+      /* The unspecified format was to ensure we didn't try to go through the HMM path;
+       * The Open() routine will set the format in qfp_msa, where it matters
+       */
+      qfmt_arg = eslMSAFILE_UNKNOWN;
+    }
+
+    status = esl_msafile_Open(&abc, cfg->queryfile, NULL, qfmt_arg, NULL, &qfp_msa);
 
     if (abc == NULL) p7_Fail ("Unable to guess alphabet for query file %s\n", cfg->queryfile);
 
     /* Try to read first alignment.
      * This will return eslEFORMAT if it's a fasta file with multiple sequences
      * of different length (i.e. a bunch of individual sequences, instead of
-     * an alignment). If so, fall through to next attempt
+     * an alignment). If so, fall through to next attempt.
+     * (Notice: if all sequences in a fasta file are the same length, they'll get treated like
+     * a single MSA. Not much we can do in that case)
      */
     qhstatus = esl_msafile_Read(qfp_msa, &msa);
     if (qhstatus == eslEFORMAT) { // possibly a fasta file with a bunch of singleton sequences
       esl_msafile_Close(qfp_msa);
       qfp_msa = NULL;
-      if (cfg->qfmt != eslSQFILE_FASTA && cfg->qfmt != eslHMMFILE_HMMER && cfg->qfmt != eslMSAFILE_UNKNOWN) { // was told I'd get an MSA; shouldn't have gotten here
+      if (cfg->qfmt != eslSQFILE_FASTA && cfg->qfmt != NHMMER_QFORMAT_HMM && cfg->qfmt != NHMMER_QFORMAT_UNKNOWN) {
+        /* was told I'd get an MSA; shouldn't have gotten here */
         p7_Fail("reading alignment from file %s (%d)\n", cfg->queryfile, qhstatus);
       }
+
     } else if (qhstatus != eslOK) {
       p7_Fail("reading alignment from file %s (%d)\n", cfg->queryfile, qhstatus);
+    } else {
+      // it's a good MSA, so set cfg->qfmt correctly
+      cfg->qfmt = qfp_msa->format;
     }
-    // it's a good MSA, and cfg->qfmt is correct
 
   }
 
@@ -671,9 +705,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if (qhstatus != eslOK) p7_Fail("reading sequence from file %s (%d)\n", cfg->queryfile, qhstatus);
   }
 
-
   if (! (abc->type == eslRNA || abc->type == eslDNA))
-    p7_Fail("Invalid alphabet type in hmm for nhmmer. Expect DNA or RNA\n");
+    p7_Fail("Invalid alphabet type in query for nhmmer. Expect DNA or RNA\n");
 
 
   if (dbformat == eslSQFILE_FMINDEX) {

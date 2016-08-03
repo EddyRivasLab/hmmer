@@ -538,26 +538,29 @@ p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om)
 {
 
   if (pli->use_bit_cutoffs)
+  {
+    if (pli->use_bit_cutoffs == p7H_GA)
     {
-      if (pli->use_bit_cutoffs == p7H_GA)
-    {
-      if (om->cutoff[p7_GA1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "GA bit thresholds unavailable on model %s\n", om->name);
+      if (om->cutoff[p7_GA1] == p7_CUTOFF_UNSET)
+        ESL_FAIL(eslEINVAL, pli->errbuf, "GA bit thresholds unavailable on model %s\n", om->name);
       pli->T    = pli->incT    = om->cutoff[p7_GA1];
       pli->domT = pli->incdomT = om->cutoff[p7_GA2];
     }
-      else if  (pli->use_bit_cutoffs == p7H_TC)
+    else if  (pli->use_bit_cutoffs == p7H_TC)
     {
-      if (om->cutoff[p7_TC1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "TC bit thresholds unavailable on model %s\n", om->name);
+      if (om->cutoff[p7_TC1] == p7_CUTOFF_UNSET)
+        ESL_FAIL(eslEINVAL, pli->errbuf, "TC bit thresholds unavailable on model %s\n", om->name);
       pli->T    = pli->incT    = om->cutoff[p7_TC1];
       pli->domT = pli->incdomT = om->cutoff[p7_TC2];
     }
-      else if (pli->use_bit_cutoffs == p7H_NC)
+    else if (pli->use_bit_cutoffs == p7H_NC)
     {
-      if (om->cutoff[p7_NC1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "NC bit thresholds unavailable on model %s\n", om->name);
+      if (om->cutoff[p7_NC1] == p7_CUTOFF_UNSET)
+        ESL_FAIL(eslEINVAL, pli->errbuf, "NC bit thresholds unavailable on model %s\n", om->name);
       pli->T    = pli->incT    = om->cutoff[p7_NC1];
       pli->domT = pli->incdomT = om->cutoff[p7_NC2];
     }
-    }
+  }
 
   return eslOK;
 }
