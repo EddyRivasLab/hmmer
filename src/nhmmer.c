@@ -411,10 +411,12 @@ main(int argc, char **argv)
   if (esl_opt_IsOn(go, "--qformat")) {
     if (strcasecmp("fasta", esl_opt_GetString(go, "--qformat")) == 0)
       cfg.qfmt = eslSQFILE_FASTA;
+    else if (strcasecmp("hmm", esl_opt_GetString(go, "--qformat")) == 0)
+      cfg.qfmt = eslHMMFILE_HMMER;
     else
       cfg.qfmt = esl_msafile_EncodeFormat(esl_opt_GetString(go, "--qformat"));
 
-    if (cfg.qfmt == eslMSAFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
+    if (cfg.qfmt == eslMSAFILE_UNKNOWN) p7_Fail("%s is not a recognized input file format\n", esl_opt_GetString(go, "--qformat"));
   }
 
 
@@ -581,99 +583,107 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         esl_sqfile_OpenSSI(dbfp, NULL);
     }
 
-    if ( esl_opt_IsOn(go, "--dna") )
-      abc     = esl_alphabet_Create(eslDNA);
-    else if ( esl_opt_IsOn(go, "--rna") )
-      abc     = esl_alphabet_Create(eslRNA);
-
   }
 
-  /* We're about to see if this is an HMM file. If we already know it isn't, based on --qformat, just skip the test*/
-  if ( esl_opt_IsOn(go, "--qformat") )
-    status = eslENORESULT; // so it'll fail into the section that opens an alignment
-  else
+  if ( esl_opt_IsOn(go, "--dna") )
+    abc     = esl_alphabet_Create(eslDNA);
+  else if ( esl_opt_IsOn(go, "--rna") )
+    abc     = esl_alphabet_Create(eslRNA);
+
+
+  /* nhmmer accepts query files that are either (i) hmm(s), (2) msa(s), or (3) sequence(s).
+   * The following code will follow the mandate of --qformat, and otherwise figure what
+   * the file type is.
+   */
+
+  /* autodetection is only allowed on rewindable files */
+  if (strcmp(cfg->queryfile, "-") == 0 && cfg->qfmt == eslMSAFILE_UNKNOWN) {
+    p7_Fail("Must specify --qformat to read <alignfile> from stdin ('-')");
+  }
+
+  /* (1)
+   * first try to read as an HMM.  Fails nicely if it's not.
+   */
+  if ( cfg->qfmt == eslHMMFILE_HMMER || cfg->qfmt == eslMSAFILE_UNKNOWN ) {
     status = p7_hmmfile_OpenE(cfg->queryfile, NULL, &hfp, errbuf);
 
-  if      (status == eslENOTFOUND) {
-    // File just doesn't exist
-    p7_Fail("File existence/permissions problem in trying to open query file %s.\n%s\n", cfg->queryfile, errbuf);
-  } else if (status == eslOK) {
-    //Successfully read HMM file
-    qhstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
-    if (qhstatus != eslOK) p7_Fail("reading hmm from file %s (%d)\n", cfg->queryfile, qhstatus);
-  } else {
-    //It's not an HMM. Maybe an alignment file, or a fasta file
-    if (strcmp(cfg->queryfile, "-") == 0 && ! esl_opt_IsOn(go, "--qformat")) {
-      p7_Fail("Must specify --qformat to read <alignfile> from stdin ('-')");
-    }
-
-    /* We're about to test if it's recognized as an MSA. If we know it shouldn't be,
-     * because of --qformat=fasta, skip the attempt
-     */
-    if (cfg->qfmt == eslSQFILE_FASTA ) {
-      status = eslENORESULT;
-    } else {
-      //Haven't already decided that it's a fasta file; try MSA first
-      status = esl_msafile_Open(&abc, cfg->queryfile, NULL, cfg->qfmt, NULL, &qfp_msa);
-    }
-
-    if      (status == eslENOTFOUND) {
+    if  (status == eslENOTFOUND) {
       p7_Fail("File existence/permissions problem in trying to open query file %s.\n%s\n", cfg->queryfile, errbuf);
-    } else if (status != eslOK) {
-      // Either we've been told it's expected to be in fasta format, or we just learned
-      //that it's not an MSA, so we should precede assuming it's fasta.
-      cfg->qfmt = eslSQFILE_FASTA;
-      if (abc != NULL) {
-        status = esl_sqfile_OpenDigital(abc, cfg->queryfile, eslSQFILE_FASTA, NULL, &qfp_sq);
-        if (status != eslOK)         p7_Fail ("Unexpected error %d opening query file %s\n", status, cfg->queryfile);
-      } else {
-        int               q_type      = eslUNKNOWN;
-        status = esl_sqfile_Open(cfg->queryfile, eslSQFILE_FASTA, NULL, &qfp_sq);
-        if (status != eslOK)         p7_Fail ("Unexpected error %d opening query file %s\n", status, cfg->queryfile);
-        if ( esl_opt_IsOn(go, "--dna") )
-          abc     = esl_alphabet_Create(eslDNA);
-        else if ( esl_opt_IsOn(go, "--rna") )
-          abc     = esl_alphabet_Create(eslRNA);
-        else {
-          esl_sqfile_GuessAlphabet(qfp_sq, &q_type);
-          if (q_type == eslUNKNOWN)    p7_Fail ("Unable to guess alphabet for query file %s\n", cfg->queryfile);
-          abc     = esl_alphabet_Create(q_type);
-        }
-        esl_sqfile_SetDigital(qfp_sq, abc );
-      }
-    }
-
-    qsq  = esl_sq_CreateDigital(abc); // only need this in the case of a single sequence ... but that could come from an MSA
-
-    if (dbformat == eslSQFILE_FMINDEX) {
-      if ( (abc->type == eslDNA || abc->type == eslRNA) && !(fm_meta->alph_type == fm_DNA /*|| fm_meta->alph_type == fm_DNA_full*/) )
-        p7_Fail("incompatible alphabets - the HMM is a nucleotide alphabet, but the database isn't");
-      if ( (abc->type == eslAMINO ) && !(fm_meta->alph_type == fm_AMINO ) )
-        p7_Fail("incompatible alphabets - the HMM is an amino alphabet, but the database isn't");
-    }
-
-    builder = p7_builder_Create(NULL, abc);
-    if (builder == NULL)  p7_Fail("p7_builder_Create failed");
-
-
-    // special arguments for hmmbuild
-    builder->w_len      = (go != NULL && esl_opt_IsOn (go, "--w_length")) ?  esl_opt_GetInteger(go, "--w_length"): -1;
-    builder->w_beta     = (go != NULL && esl_opt_IsOn (go, "--w_beta"))   ?  esl_opt_GetReal   (go, "--w_beta")    : p7_DEFAULT_WINDOW_BETA;
-    if ( builder->w_beta < 0 || builder->w_beta > 1  ) esl_fatal("Invalid window-length beta value\n");
-
-
-    if (qfp_sq != NULL) {
-      // read first sequence
-      qhstatus = esl_sqio_Read(qfp_sq, qsq);
-      if (qhstatus != eslOK) p7_Fail("reading sequence from file %s (%d)\n", cfg->queryfile, qhstatus);
-
+    } else if (status == eslOK) {
+      //Successfully read HMM file
+      qhstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
+      if (qhstatus != eslOK) p7_Fail("reading hmm from file %s (%d)\n", cfg->queryfile, qhstatus);
+      cfg->qfmt = eslHMMFILE_HMMER;
     } else {
-      // read first sequence alignment
-      qhstatus = esl_msafile_Read(qfp_msa, &msa);
-      if (qhstatus != eslOK) p7_Fail("reading alignment from file %s (%d)\n", cfg->queryfile, qhstatus);
+      hfp = NULL;
+      if (cfg->qfmt == eslHMMFILE_HMMER) p7_Fail("opening hmm from file %s (%d)\n", cfg->queryfile, qhstatus);
     }
+  }
+
+  /* (2)
+   * Next try to read as an MSA. This involves opening, and reading the first alignment.
+   * If that alignment is of a single sequence
+   */
+  if (cfg->qfmt != eslSQFILE_FASTA && cfg->qfmt != eslHMMFILE_HMMER && hfp == NULL  ) { /*i.e. some MSA type, or unspecified, and HMM didn't work*/
+
+    status = esl_msafile_Open(&abc, cfg->queryfile, NULL, cfg->qfmt, NULL, &qfp_msa);
+
+    if (abc == NULL) p7_Fail ("Unable to guess alphabet for query file %s\n", cfg->queryfile);
+
+    /* Try to read first alignment.
+     * This will return eslEFORMAT if it's a fasta file with multiple sequences
+     * of different length (i.e. a bunch of individual sequences, instead of
+     * an alignment). If so, fall through to next attempt
+     */
+    qhstatus = esl_msafile_Read(qfp_msa, &msa);
+    if (qhstatus == eslEFORMAT) { // possibly a fasta file with a bunch of singleton sequences
+      esl_msafile_Close(qfp_msa);
+      qfp_msa = NULL;
+      if (cfg->qfmt != eslSQFILE_FASTA && cfg->qfmt != eslHMMFILE_HMMER && cfg->qfmt != eslMSAFILE_UNKNOWN) { // was told I'd get an MSA; shouldn't have gotten here
+        p7_Fail("reading alignment from file %s (%d)\n", cfg->queryfile, qhstatus);
+      }
+    } else if (qhstatus != eslOK) {
+      p7_Fail("reading alignment from file %s (%d)\n", cfg->queryfile, qhstatus);
+    }
+    // it's a good MSA, and cfg->qfmt is correct
 
   }
+
+  /* (3)
+   * Finally try to read as a sequence file.
+   */
+  if (cfg->qfmt == eslSQFILE_FASTA || (hfp == NULL && qfp_msa == NULL)) {
+
+    cfg->qfmt = eslSQFILE_FASTA;
+    status = esl_sqfile_Open(cfg->queryfile, eslSQFILE_FASTA, NULL, &qfp_sq);
+    if (status != eslOK)         p7_Fail ("Unexpected error %d opening query file %s\n", status, cfg->queryfile);
+    if (abc == NULL) {
+      int q_type      = eslUNKNOWN;
+      esl_sqfile_GuessAlphabet(qfp_sq, &q_type);
+      if (q_type == eslUNKNOWN)    p7_Fail ("Unable to guess alphabet for query file %s\n", cfg->queryfile);
+      abc     = esl_alphabet_Create(q_type);
+    }
+    esl_sqfile_SetDigital(qfp_sq, abc);
+
+    // read first sequence
+    qsq  = esl_sq_CreateDigital(abc);
+    qhstatus = esl_sqio_Read(qfp_sq, qsq);
+    if (qhstatus != eslOK) p7_Fail("reading sequence from file %s (%d)\n", cfg->queryfile, qhstatus);
+  }
+
+
+  if (! (abc->type == eslRNA || abc->type == eslDNA))
+    p7_Fail("Invalid alphabet type in hmm for nhmmer. Expect DNA or RNA\n");
+
+
+  if (dbformat == eslSQFILE_FMINDEX) {
+    if ( !(fm_meta->alph_type == fm_DNA /*|| fm_meta->alph_type == fm_DNA_full*/) )
+      p7_Fail("incompatible alphabets - the HMM is a nucleotide alphabet, but the database isn't");
+    //if ( (abc->type == eslAMINO ) && !(fm_meta->alph_type == fm_AMINO ) )
+    //  p7_Fail("incompatible alphabets - the HMM is an amino alphabet, but the database isn't");
+  }
+
+
 
   /* Open the results output files */
   if (esl_opt_IsOn(go, "-o"))              { if ((ofp      = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) p7_Fail("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o")); }
@@ -715,9 +725,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   infocnt = (ncpus == 0) ? 1 : ncpus;
   ESL_ALLOC(info, sizeof(*info) * infocnt);
-
-  if (! (abc->type == eslRNA || abc->type == eslDNA))
-    p7_Fail("Invalid alphabet type in hmm for nhmmer. Expect DNA or RNA\n");
 
   if (qhstatus == eslOK) {
       /* One-time initializations after alphabet <abc> becomes known */
@@ -770,6 +777,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
   }
 
+  if (qfp_sq != NULL || qfp_msa  != NULL )  {  // need to convert sequence / msa to HMM
+    builder = p7_builder_Create(NULL, abc);
+    if (builder == NULL)  p7_Fail("p7_builder_Create failed");
+
+    // special arguments for hmmbuild
+    builder->w_len      = (go != NULL && esl_opt_IsOn (go, "--w_length")) ?  esl_opt_GetInteger(go, "--w_length"): -1;
+    builder->w_beta     = (go != NULL && esl_opt_IsOn (go, "--w_beta"))   ?  esl_opt_GetReal   (go, "--w_beta")    : p7_DEFAULT_WINDOW_BETA;
+    if ( builder->w_beta < 0 || builder->w_beta > 1  ) esl_fatal("Invalid window-length beta value\n");
+
+  }
+
   if (qfp_sq != NULL || (qfp_msa != NULL && force_single )) {
     /* We'll use this scoring matrix whenever we have a single sequence (even in MSA format)
      * Default is stored in the --mx option, so it's always IsOn(). Check --mxfile first; then go to the --mx option and the default.
@@ -785,12 +803,16 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       P7_PROFILE      *gm      = NULL;
       P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
 
-      if ( qfp_msa != NULL ) {
+      if ( qfp_sq != NULL) {//  FASTA format, each query is a single sequence, they all have names
+        //Turn sequence into an HMM
+        if ((qhstatus = p7_SingleBuilder(builder, qsq, info->bg, &hmm, NULL, NULL, NULL)) != eslOK) p7_Fail("build failed: %s", builder->errbuf);
+
+      } else if ( qfp_msa != NULL ) {
         //deal with recently read MSA
-        //if name isn't assigned, give it one (can only do this if there's a single unnamed alignment, so pick it's filename)
+        //if name isn't assigned, give it one (can only do this if there's a single unnamed alignment, so pick its filename)
         if (msa->name == NULL) {
           char *name = NULL;
-          if (msas_named>0) p7_Fail("I need name annotation on each alignment in a multi MSA file; failed on #%d", nquery+1);
+          if (msas_named>0) p7_Fail("Name annotation is required for each alignment in a multi MSA file; failed on #%d", nquery+1);
 
           if (cfg->queryfile != NULL) {
             if ((status = esl_FileTail(cfg->queryfile, TRUE, &name)) != eslOK) return status; /* TRUE=nosuffix */
@@ -813,10 +835,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         } else {
           if ((qhstatus = p7_Builder(builder, msa, info->bg, &hmm, NULL, NULL, NULL, NULL, NULL, NULL)) != eslOK) p7_Fail("build failed: %s", builder->errbuf);
         }
-
-      } else if ( qfp_sq != NULL) {//  FASTA format, so they all have names
-        //Turn sequence into an HMM
-        if ((qhstatus = p7_SingleBuilder(builder, qsq, info->bg, &hmm, NULL, NULL, NULL)) != eslOK) p7_Fail("build failed: %s", builder->errbuf);
       }
 
 
@@ -1101,6 +1119,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       } else { // qfp_sq
         qhstatus = esl_sqio_Read(qfp_sq, qsq);
       }
+      if (qhstatus != eslOK && qhstatus != eslEOF) p7_Fail("reading from query file %s (%d)\n", cfg->queryfile, qhstatus);
+
+
+
 
   } /* end outer loop over queries */
 
