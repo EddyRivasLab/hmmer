@@ -2034,6 +2034,8 @@ p7_pipeline_postSSV_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om
  * Throws:    <eslEMEM> on allocation failure.
  *
  */
+
+ /* NOTE:  Currently forces use of SSE instructions, as many longtarget functions have not been ported */
 int
 p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCOREDATA *data, P7_BG *bg,
                        const ESL_SQ *sq, P7_TOPHITS *hitlist, int64_t seqidx)
@@ -2059,8 +2061,8 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
   if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   pli_tmp->bg = p7_bg_Clone(bg);
   pli_tmp->gm = p7_profile_Clone(gm);
-  pli_tmp->om = p7_oprofile_Create(gm->M, gm->abc, hw->simd);
-  pli_tmp->sm = p7_sparsemask_Create(gm->M, 100, hw->simd);
+  pli_tmp->om = p7_oprofile_Create(gm->M, gm->abc, SSE);
+  pli_tmp->sm = p7_sparsemask_Create(gm->M, 100, SSE);
   ESL_ALLOC(pli_tmp->scores, sizeof(float) * om->abc->Kp);
   if ( (pli_tmp->trc = p7_trace_CreateWithPP())            == NULL) { status = eslEMEM; goto ERROR; }
   if ( (pli_tmp->sxf = p7_sparsemx_Create (pli_tmp->sm))   == NULL) { status = eslEMEM; goto ERROR; }

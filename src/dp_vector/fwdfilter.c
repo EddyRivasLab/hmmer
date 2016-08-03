@@ -57,16 +57,6 @@
 #include <emmintrin.h>		/* SSE2 */
 
 #include "easel.h"
-#include "esl_sse.h"
-
-#ifdef p7_build_AVX2
-#include <immintrin.h>
-#include "esl_avx.h"
-#endif
-#ifdef p7_build_AVX512
-#include <immintrin.h>
-#include "esl_avx_512.h"
-#endif
 #include "esl_vectorops.h"
 
 #include "dp_reference/p7_refmx.h"

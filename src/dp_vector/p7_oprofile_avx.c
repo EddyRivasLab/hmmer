@@ -1327,7 +1327,7 @@ p7_oprofile_Compare_avx(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float to
     for (q = 0; q < Q16_AVX; q++)
       {
   a16_AVX.v = om1->rbv_AVX[x][q]; b16_AVX.v = om2->rbv_AVX[x][q];
-  for (r = 0; r < 32; r++) if (a16_AVX.c[r] != b16_AVX.c[r]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: rb[%d] elem %d", q, r);
+  for (r = 0; r < 32; r++) if (a16_AVX.c[r] != b16_AVX.c[r]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: rb[%d] vector %d elem %d", x, q, r);
       }
 
   if (om1->tbm_b     != om2->tbm_b)     ESL_FAIL(eslFAIL, errmsg, "comparison failed: tbm_b");

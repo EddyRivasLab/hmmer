@@ -29,6 +29,7 @@
 #include "esl_workqueue.h"
 #endif /*HMMER_THREADS*/
 
+#include "hardware/hardware.h"
 #include "hmmer.h"
 
 typedef struct {
@@ -371,6 +372,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if (strcmp(cfg->seqfile, "-") != 0) esl_fatal("Query sequence file must be '-'\n");
   }
 
+  P7_HARDWARE *hw;  // get information about CPU
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+  
   /* Open the target profile database to get the sequence alphabet */
   status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
@@ -378,7 +382,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
   if (! hfp->is_pressed)           p7_Fail("Failed to open binary auxfiles for %s: use hmmpress first\n",             hfp->fname);
 
-  hstatus = p7_oprofile_ReadMSV(hfp, &abc, &om);
+  hstatus = p7_oprofile_ReadMSV(hfp, &abc, &om, hw->simd);
   if      (hstatus == eslEFORMAT)   p7_Fail("bad format, binary auxfiles, %s:\n%s",     cfg->hmmfile, hfp->errbuf);
   else if (hstatus == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets", cfg->hmmfile);
   else if (hstatus != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s", cfg->hmmfile); 
@@ -1165,8 +1169,10 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
   P7_OPROFILE   *om;
   ESL_ALPHABET  *abc = NULL;
 
+  P7_HARDWARE *hw;  // get information about CPU
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   /* Main loop: */
-  while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK)
+  while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om, hw->simd)) == eslOK)
     {
       p7_pipeline_NewModel(info->pli, om, info->bg);
       p7_bg_SetLength(info->bg, info->qsq->n);
@@ -1194,6 +1200,8 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, P7_HMMFILE *hfp)
   ESL_ALPHABET  *abc = NULL;
   void          *newBlock;
 
+  P7_HARDWARE *hw;  // get information about CPU
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   esl_workqueue_Reset(queue);
   esl_threads_WaitForStart(obj);
 
@@ -1204,7 +1212,7 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, P7_HMMFILE *hfp)
   while (sstatus == eslOK)
     {
       block = (P7_OM_BLOCK *) newBlock;
-      sstatus = p7_oprofile_ReadBlockMSV(hfp, &abc, block);
+      sstatus = p7_oprofile_ReadBlockMSV(hfp, &abc, block, hw->simd);
       if (sstatus == eslEOF)
 	{
 	  if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;

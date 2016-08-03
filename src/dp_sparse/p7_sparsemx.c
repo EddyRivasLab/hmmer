@@ -246,6 +246,23 @@ p7_sparsemask_Destroy(P7_SPARSEMASK *sm)
 int
 p7_sparsemask_AddAll(P7_SPARSEMASK *sm)
 {
+  int Q;
+ switch(sm->simd){
+    case SSE:
+      Q = sm->Q;
+      break;
+    case AVX:
+      Q = sm->Q_AVX;
+      break;
+    case AVX512:
+      Q = sm->Q_AVX_512;
+      break;
+    case NEON:
+      p7_Fail("Neon support not yet integrated into p7_sparsemask_AddAll");
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_AddAll");  
+  }
 
   int  i,k;
   int  status;
@@ -254,7 +271,7 @@ p7_sparsemask_AddAll(P7_SPARSEMASK *sm)
     {
       if (  (status = p7_sparsemask_StartRow(sm, i))                   != eslOK) return status;
       for (k = sm->M; k >= 1; k--)
-	if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
+	if ((status = p7_sparsemask_Add(sm, (k-1)%Q, (k-1)/Q)) != eslOK) return status;
       if (  (status = p7_sparsemask_FinishRow(sm))                     != eslOK) return status;
     }
   return p7_sparsemask_Finish(sm);
@@ -849,10 +866,34 @@ p7_sparsemx_Create(P7_SPARSEMASK *sm)
   sx->xmx  = NULL;
   sx->sm   = sm;
   sx->type = p7S_UNSET;
-
-  /* We must avoid zero-sized mallocs. If there are no rows or cells, alloc the default sizes */
-  sx->dalloc = ( (sm && sm->ncells)         ? sm->ncells       : default_ncell);
-  sx->xalloc = ( (sm && (sm->nrow + sm->S)) ? sm->nrow + sm->S : default_nx);
+  if(sm!= NULL){
+    switch(sm->simd){
+      case SSE:
+         /* We must avoid zero-sized mallocs. If there are no rows or cells, alloc the default sizes */
+        sx->dalloc = ( (sm && sm->ncells)         ? sm->ncells       : default_ncell);
+        sx->xalloc = ( (sm && (sm->nrow + sm->S)) ? sm->nrow + sm->S : default_nx);
+        break;
+      case AVX:
+      /* We must avoid zero-sized mallocs. If there are no rows or cells, alloc the default sizes */
+        sx->dalloc = ( (sm && sm->ncells_AVX)         ? sm->ncells_AVX       : default_ncell);
+        sx->xalloc = ( (sm && (sm->nrow_AVX + sm->S_AVX)) ? sm->nrow_AVX + sm->S_AVX : default_nx);
+        break;
+      case AVX512:
+      /* We must avoid zero-sized mallocs. If there are no rows or cells, alloc the default sizes */
+        sx->dalloc = ( (sm && sm->ncells_AVX_512)         ? sm->ncells_AVX_512       : default_ncell);
+        sx->xalloc = ( (sm && (sm->nrow_AVX_512 + sm->S_AVX_512)) ? sm->nrow_AVX_512 + sm->S_AVX_512 : default_nx);
+        break;
+      case NEON:
+        p7_Fail("Neon support not yet integrated into p7_sparsemx_Create");
+        break;
+      default:
+        p7_Fail("Unrecognized SIMD type passed to p7_sparsemx_Create");  
+    }
+  }
+  else{
+    sx->dalloc = default_ncell;
+    sx->xalloc = default_nx;
+  }
 
   ESL_ALLOC(sx->dp,  sizeof(float) * p7S_NSCELLS * sx->dalloc);
   ESL_ALLOC(sx->xmx, sizeof(float) * p7S_NXCELLS * sx->xalloc);
@@ -2062,22 +2103,22 @@ validate_decoding(const P7_SPARSEMX *sx, char *errbuf)
 int
 p7_sparsemx_Validate(const P7_SPARSEMX *sx, char *errbuf)
 {
-  int status;
-
-  if (errbuf) errbuf[0] = '\0';
-
-  if ( (status = validate_dimensions(sx, errbuf)) != eslOK) return status;
-  if ( (status = validate_no_nan    (sx, errbuf)) != eslOK) return status;
-
-  switch (sx->type) {
-  case p7S_UNSET:      ESL_FAIL(eslFAIL, errbuf, "validating an unset sparse DP matrix? probably not what you meant");
-  case p7S_FORWARD:    if ( (status = validate_fwdvit  (sx, errbuf)) != eslOK) return status; break;
-  case p7S_BACKWARD:   if ( (status = validate_backward(sx, errbuf)) != eslOK) return status; break;
-  case p7S_DECODING:   if ( (status = validate_decoding(sx, errbuf)) != eslOK) return status; break;
-  case p7S_VITERBI:    if ( (status = validate_fwdvit  (sx, errbuf)) != eslOK) return status; break;
-  default:             ESL_FAIL(eslFAIL, errbuf, "no such sparse DP matrix type %d", sx->type);
-  }
-  return eslOK;
+switch(sx->sm->simd){
+    case SSE:
+      return p7_sparsemx_Validate_sse(sx, errbuf);
+      break;
+    case AVX:
+      return p7_sparsemx_Validate_avx(sx, errbuf);
+      break;
+    case AVX512:
+      return p7_sparsemx_Validate_avx(sx, errbuf); // FIXME!!!!
+       break;
+    case NEON:
+      p7_Fail("Neon support not yet integrated into p7_sparsemx_Validate");
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemx_Validate");  
+  } 
 }
 /*----------------- end, P7_SPARSEMX validation -----------------*/
 

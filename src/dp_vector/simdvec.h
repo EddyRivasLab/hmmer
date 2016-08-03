@@ -52,7 +52,10 @@
 #define P7_NVW_AVX_512(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNW_AVX_512) + 1)))   /*  32 words   */
 #define P7_NVF_AVX_512(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNF_AVX_512) + 1)))   /*  16 floats  */
 
-
+// Files to convert striped data from one vector size to another
+extern void p7_restripe_byte(char *source, char *dest, int length, int source_vector_length, int dest_vector_length);
+extern void p7_restripe_short(int16_t *source, int16_t *dest, int length, int source_vector_length, int dest_vector_length);
+extern void p7_restripe_float(float *source, float *dest, int length, int source_vector_length, int dest_vector_length);
 
 extern void p7_simdvec_Init(void);
 

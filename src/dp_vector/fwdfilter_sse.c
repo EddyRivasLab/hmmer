@@ -819,7 +819,7 @@ backward_row_finish_sse(const P7_OPROFILE *om, __m128 *dpc, int Q, __m128 dcv)
  *
  * Upon return, values in current row <dpc> have been rescaled.
  */
-#ifdef p7_build_SSE
+#ifdef HAVE_SSE2
 static inline void
 backward_row_rescale_sse(float *xc, __m128 *dpc, int Q, float scalefactor)
 {

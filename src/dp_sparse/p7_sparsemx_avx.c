@@ -560,7 +560,7 @@ p7_sparsemask_Compare_avx(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2)
   char msg[] = "P7_SPARSEMASK comparison failed";
   int  i;
   int  s;
-if(sm2->simd != SSE){
+if(sm2->simd != AVX){
     ESL_FAIL(eslFAIL, NULL, "Can't compare sparsemasks generated for different SIMD instruction sets");
   }
 
@@ -716,6 +716,293 @@ p7_sparsemask_SetFromTrace_avx(P7_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const P7_
 #ifndef HAVE_AVX2
 return eslENORESULT;
 #endif  
+}
+
+
+/*****************************************************************
+ * 7. Validation of a P7_SPARSEMX
+ *****************************************************************/
+/* also a debugging tool, but in its own section because it's
+ * fiddly and complicated
+ */
+static int
+validate_dimensions_avx(const P7_SPARSEMX *sx, char *errbuf)
+{
+  const P7_SPARSEMASK *sm  = sx->sm;
+  int   g      = 0;
+  int   r      = 0;
+  int   ncells = 0;
+  int   i;
+
+  if ( sm->M <= 0)              ESL_FAIL(eslFAIL, errbuf, "nonpositive M");
+  if ( sm->L <= 0)              ESL_FAIL(eslFAIL, errbuf, "nonpositive L");
+  if ( sm->Q_AVX <  P7_NVF_AVX(sm->M))  ESL_FAIL(eslFAIL, errbuf, "insufficient Q");
+
+  for (r=0, g=0, i = 1; i <= sm->L; i++) {
+    if (sm->n_AVX[i] && !sm->n_AVX[i-1]) g++; /* segment count */
+    if (sm->n_AVX[i])                r++; /* sparse row count */
+    ncells += sm->n_AVX[i];
+  }
+  if (g      != sm->S_AVX)          ESL_FAIL(eslFAIL, errbuf, "S (nseg) is wrong");
+  if (r      != sm->nrow_AVX)       ESL_FAIL(eslFAIL, errbuf, "nrow is wrong");
+  if (ncells != sm->ncells_AVX)     ESL_FAIL(eslFAIL, errbuf, "ncells is wrong");
+
+  if (sm->L+1    > sm->ralloc_AVX)  ESL_FAIL(eslFAIL, errbuf, "k[] row allocation too small");
+  if (sm->ncells > sm->kalloc_AVX)  ESL_FAIL(eslFAIL, errbuf, "kmem[] cell allocation too small");
+  if (sm->S+2    > sm->salloc_AVX)  ESL_FAIL(eslFAIL, errbuf, "seg[] segment allocation too small");
+  return eslOK;
+}
+
+static int
+validate_no_nan_avx(const P7_SPARSEMX *sx, char *errbuf)
+{
+  const P7_SPARSEMASK *sm  = sx->sm;
+  float         *dpc = sx->dp;
+  float         *xc  = sx->xmx;
+  int            i,k,z,s;
+
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n_AVX[i] && !sm->n_AVX[i-1])          /* ia-1 specials at a segment start */
+  {
+    for (s = 0; s < p7S_NXCELLS; s++) {
+      if (isnan(*xc)) ESL_FAIL(eslFAIL, errbuf, "nan at i=%d, %s", i, p7_sparsemx_DecodeSpecial(s));
+      xc++;
+    }
+  }
+      for (z = 0; z < sm->n_AVX[i]; z++)       /* sparse main cells */
+  {
+    k = sm->k_AVX[i][z];
+    for (s = 0; s < p7S_NSCELLS; s++) {
+      if (isnan(*dpc)) ESL_FAIL(eslFAIL, errbuf, "nan at i=%d, k=%d, %s", i, k, p7_sparsemx_DecodeState(s));
+      dpc++;
+    }
+  }
+
+      if (sm->n_AVX[i])                       /* specials on sparse row */
+  {
+    for (s = 0; s < p7S_NXCELLS; s++) {
+      if (isnan(*xc)) ESL_FAIL(eslFAIL, errbuf, "nan at i=%d, %s", i, p7_sparsemx_DecodeSpecial(s));
+      xc++;
+    }
+  }
+    }
+  return eslOK;
+}
+
+static int
+validate_fwdvit_avx(const P7_SPARSEMX *sx, char *errbuf)
+{
+  const P7_SPARSEMASK *sm  = sx->sm;
+  float         *dpc = sx->dp;
+  float         *xc  = sx->xmx;
+  int            i,z;
+
+  /* Check special cases prohibited in the first ia-1 presegment specials: */
+  if ( xc[p7S_J] !=  -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "first J not -inf");
+  if ( xc[p7S_C] !=  -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "first C not -inf");
+  
+  /* Sweep, checking for (the most easily spotchecked) prohibited values (must be -inf) */
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n_AVX[i] && !sm->n_AVX[i-1]) {       /* ia-1 specials at a segment start */
+  if ( xc[p7S_E]  != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "E seg start for ia=%d not -inf", i);
+  if ( xc[p7S_JJ] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "JJ seg start for ia=%d not -inf", i);
+  if ( xc[p7S_CC] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "CC seg start for ia=%d not -inf", i);
+  xc += p7S_NXCELLS;
+      }
+      for (z = 0; z < sm->n_AVX[i]; z++)       /* sparse main cells */
+  {
+    /* if k-1 supercell doesn't exist, can't reach D's */
+    if ((z == 0 || sm->k_AVX[i][z] != sm->k_AVX[i][z-1]+1) && dpc[p7S_DL] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "first DL on i=%d not -inf", i);
+    if ((z == 0 || sm->k_AVX[i][z] != sm->k_AVX[i][z-1]+1) && dpc[p7S_DG] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "first DG on i=%d not -inf", i);
+    if (   sm->k_AVX[i][z] == sm->M                    && dpc[p7S_IL] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "IL on i=%d,k=M not -inf", i);
+    if (   sm->k_AVX[i][z] == sm->M                    && dpc[p7S_IG] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "IG on i=%d,k=M not -inf", i);
+    dpc += p7S_NSCELLS;
+    /* there are other conditions where I(i,k) values must be zero but this is more tedious to check */
+  }
+      if (sm->n_AVX[i]) {                     
+  if ( xc[p7S_JJ] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "JJ at i=%d not -inf", i);
+  if ( xc[p7S_CC] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "CC at i=%d not -inf", i);
+  xc += p7S_NXCELLS;
+      }
+    }
+  return eslOK;
+}
+
+static int
+validate_backward_avx(const P7_SPARSEMX *sx, char *errbuf)
+{
+  const P7_SPARSEMASK *sm     = sx->sm;
+  float         *dpc    = sx->dp  + (sm->ncells_AVX-1)*p7S_NSCELLS;   // last supercell in dp  
+  float         *xc     = sx->xmx + (sm->nrow_AVX + sm->S_AVX - 1)*p7S_NXCELLS; // last supercell in xmx 
+  int            last_n = 0;
+  int            i,z;
+
+  /* Backward sweep; many of our prohibits are on ib segment-end rows */
+  /* first: some special cases on absolute final stored row ib */
+  if (xc[p7S_N] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "N on last row not 0");
+  if (xc[p7S_J] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "N on last row not 0");
+  /* sweep: */
+  for (i = sm->L; i >= 1; i--)
+    {
+      if (sm->n_AVX[i]) {                   /* specials on stored row i */
+  if (               xc[p7S_JJ] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "JJ on row i=%d not -inf", i);
+  if (               xc[p7S_CC] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "CC on row i=%d not -inf", i);
+  if (last_n == 0 && xc[p7S_B]  != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "B on end-seg row ib=%d not -inf", i);
+  if (last_n == 0 && xc[p7S_L]  != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "L on end-seg row ib=%d not -inf", i);
+  if (last_n == 0 && xc[p7S_G]  != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "G on end-seg row ib=%d not -inf", i);
+  xc -= p7S_NXCELLS;
+      }
+      for (z = sm->n_AVX[i]-1; z >= 0; z--) /* sparse main cells */
+  {
+    if (sm->k_AVX[i][z] == sm->M && dpc[p7S_IL] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "IL on i=%d,k=M not -inf", i);
+    if (sm->k_AVX[i][z] == sm->M && dpc[p7S_IL] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "IL on i=%d,k=M not -inf", i);
+    if (     last_n == 0     && dpc[p7S_IL] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "IL on end-segment row ib=%d,k=%d not -inf", i, sm->k[i][z]);
+    if (     last_n == 0     && dpc[p7S_IG] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "IG on end-segment row ib=%d,k=%d not -inf", i, sm->k[i][z]);
+    dpc -= p7S_NSCELLS;
+  }
+      if (sm->n_AVX[i] && sm->n_AVX[i-1] == 0) xc -= p7S_NXCELLS; /* specials on ia-1 row before a start-segment */
+      last_n = sm->n_AVX[i];
+    }
+  return eslOK;
+}
+
+static int
+is_prob(float val, float tol)
+{
+  if (val < 0. || val > 1.+tol) return FALSE; 
+  return TRUE;
+}
+
+static int
+validate_decoding_avx(const P7_SPARSEMX *sx, char *errbuf)
+{
+  const P7_SPARSEMASK *sm  = sx->sm;
+  float         *dpc = sx->dp;
+  float         *xc  = sx->xmx;
+  int            i,z,s;
+  int            last_n;
+  float          tol = 0.001;
+
+  /* Check special cases prohibited in the first ia-1 presegment specials: */
+  if ( esl_FCompareAbs(xc[p7S_J],  0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first J not 0");
+  if ( esl_FCompareAbs(xc[p7S_C],  0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first C not 0");
+  if ( esl_FCompareAbs(xc[p7S_JJ], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first JJ not 0");
+  if ( esl_FCompareAbs(xc[p7S_CC], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first CC not 0");
+
+  /* Sweep, checking for (the most easily spotchecked) prohibited values (must be 0.0's) */
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n_AVX[i] && !sm->n_AVX[i-1]) {       /* ia-1 specials at a segment start */
+  if ( esl_FCompareAbs(xc[p7S_E], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "E seg start for ia=%d not 0", i);
+  if ( xc[p7S_J]+tol < xc[p7S_JJ])                    ESL_FAIL(eslFAIL, errbuf, "JJ>J at seg start for ia=%d ", i);
+  if ( xc[p7S_C]+tol < xc[p7S_CC])                    ESL_FAIL(eslFAIL, errbuf, "CC>C at seg start for ia=%d ", i);
+  xc += p7S_NXCELLS;
+      }
+      for (z = 0; z < sm->n_AVX[i]; z++)       /* sparse main cells */
+  {
+    /* if k-1 supercell doesn't exist, can't reach DL. But all DGk are reachable, because of wing-retracted entry/exit */
+    if ((z == 0 || sm->k_AVX[i][z] != sm->k[i][z-1]+1) && esl_FCompareAbs(dpc[p7S_DL], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first DL on i=%d not 0", i);
+    if (   sm->k_AVX[i][z] == sm->M                    && esl_FCompareAbs(dpc[p7S_IL], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IL on i=%d,M not 0", i);
+    if (   sm->k_AVX[i][z] == sm->M                    && esl_FCompareAbs(dpc[p7S_IG], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IG on i=%d,M not 0", i);
+    dpc += p7S_NSCELLS;
+    /* there are other conditions where I(i,k) values must be zero but this is more tedious to check */
+  }
+      if (sm->n_AVX[i]) {
+  if ( xc[p7S_J]+tol < xc[p7S_JJ])                    ESL_FAIL(eslFAIL, errbuf, "JJ>J at i=%d ", i);
+  if ( xc[p7S_C]+tol < xc[p7S_CC])                    ESL_FAIL(eslFAIL, errbuf, "CC>C at i=%d ", i);
+  xc += p7S_NXCELLS;
+      }
+    }
+
+  /* Backwards sweep, looking only at ib end rows. */
+  dpc    = sx->dp  + (sm->ncells_AVX-1)*p7S_NSCELLS;     // last supercell in dp  
+  xc     = sx->xmx + (sm->nrow_AVX + sm->S_AVX - 1)*p7S_NXCELLS; // last supercell in xmx 
+  last_n = 0;
+  /* special cases on absolute final stored row ib: */
+  if (esl_FCompareAbs(xc[p7S_N], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "N on last row not 0");
+  if (esl_FCompareAbs(xc[p7S_J], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "J on last row not 0");
+  if (esl_FCompareAbs(xc[p7S_B], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "B on last row not 0");
+  if (esl_FCompareAbs(xc[p7S_L], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "L on last row not 0");
+  if (esl_FCompareAbs(xc[p7S_G], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "G on last row not 0");
+  /* sweep: */
+  for (i = sm->L; i >= 1; i--)
+    {
+      if (sm->n_AVX[i]) xc -= p7S_NXCELLS; /* specials on stored row i */
+
+      for (z = sm->n_AVX[i]-1; z >= 0; z--)
+  { // last_n == 0 checks if we're on an end-segment row ib
+    if (last_n == 0 && esl_FCompareAbs(dpc[p7S_IL], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IL on end-seg row ib=%d not 0", i);
+    if (last_n == 0 && esl_FCompareAbs(dpc[p7S_IG], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IG on end-seg row ib=%d not 0", i);
+    dpc -= p7S_NSCELLS;
+  }
+
+      if (sm->n_AVX[i] && sm->n_AVX[i-1] == 0) xc -= p7S_NXCELLS; /* specials on ia-1 row before a start-segment */
+      last_n = sm->n_AVX[i];
+    }
+
+  /* Sweep again; check all values are probabilities, 0<=x<=1, allowing a bit of numerical slop. */
+  dpc = sx->dp;
+  xc  = sx->xmx;
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n_AVX[i] && !sm->n_AVX[i-1]) {       /* ia-1 specials at a segment start */
+  for (s = 0; s < p7S_NXCELLS; xc++, s++) 
+    if (! is_prob(*xc, tol)) ESL_FAIL(eslFAIL, errbuf, "bad decode prob %f for %s, seg start, ia=%d\n", *xc, p7_sparsemx_DecodeSpecial(s), i); 
+      }
+      for (z = 0; z < sm->n_AVX[i]; z++)       /* sparse main cells */
+  for (s = 0; s < p7S_NSCELLS; dpc++, s++) 
+    if (! is_prob(*dpc, tol)) ESL_FAIL(eslFAIL, errbuf, "bad decode prob %f at i=%d,k=%d,%s", *dpc, i,sm->k_AVX[i][z], p7_sparsemx_DecodeState(s));
+      if (sm->n_AVX[i]) {                      /* specials on sparse row */
+  for (s = 0; s < p7S_NXCELLS; xc++, s++) 
+    if (! is_prob(*xc, tol))  ESL_FAIL(eslFAIL, errbuf, "bad decode prob %f at i=%d,%s", *xc, i, p7_sparsemx_DecodeSpecial(s)); 
+      }
+    }
+  return eslOK;
+}
+
+/* Function:  p7_sparsemx_Validate()
+ * Synopsis:  Validate a sparse DP matrix.
+ *
+ * Purpose:   Validate the contents of sparse DP matrix <sx>.
+ *            Return <eslOK> if it passes. Return <eslFAIL> if
+ *            it fails, and set <errbuf> to contain an 
+ *            explanation, if caller provides a non-<NULL>
+ *            <errbuf>.
+ *            
+ *            Currently validation is only implemented for
+ *            Forward, Backward, Viterbi, and Decoding matrix
+ *            types; not for Masstrace or Envscore.
+ *
+ * Args:      sx      - sparse DP matrix to validate
+ *            errbuf  - char[eslERRBUFSIZE] space for error msg, or NULL.
+ *
+ * Returns:   <eslOK> on success.
+ *            <eslFAIL> on failure, with an error message in <errbuf>
+ *            if <errbuf> was provided.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_sparsemx_Validate_avx(const P7_SPARSEMX *sx, char *errbuf)
+{
+  int status;
+
+  if (errbuf) errbuf[0] = '\0';
+
+  if ( (status = validate_dimensions_avx(sx, errbuf)) != eslOK) return status;
+  if ( (status = validate_no_nan_avx    (sx, errbuf)) != eslOK) return status;
+
+  switch (sx->type) {
+  case p7S_UNSET:      ESL_FAIL(eslFAIL, errbuf, "validating an unset sparse DP matrix? probably not what you meant");
+  case p7S_FORWARD:    if ( (status = validate_fwdvit_avx  (sx, errbuf)) != eslOK) return status; break;
+  case p7S_BACKWARD:   if ( (status = validate_backward_avx(sx, errbuf)) != eslOK) return status; break;
+  case p7S_DECODING:   if ( (status = validate_decoding_avx(sx, errbuf)) != eslOK) return status; break;
+  case p7S_VITERBI:    if ( (status = validate_fwdvit_avx  (sx, errbuf)) != eslOK) return status; break;
+  default:             ESL_FAIL(eslFAIL, errbuf, "no such sparse DP matrix type %d", sx->type);
+  }
+  return eslOK;
 }
 /*****************************************************************
  * @LICENSE@

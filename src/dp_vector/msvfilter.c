@@ -165,7 +165,6 @@ int
 p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_SCOREDATA *msvdata,
                         P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
-#ifdef p7_build_SSE // this code hasn't been ported to AVX yet
   register __m128i mpv;            /* previous row values                                       */
   register __m128i xEv;		   /* E state: keeps max for Mk->E for a single iteration       */
   register __m128i xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
@@ -339,7 +338,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
 
 
   } /* end loop over sequence residues 1..L */
-#endif
   return eslOK;
 
 }

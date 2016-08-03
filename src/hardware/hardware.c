@@ -130,19 +130,19 @@ P7_HARDWARE * p7_hardware_Create(){
 
     int sse_support = check_SSE2(&Info1);
 	if (sse_support){
-		printf("Detected SSE2 support\n");
+	//	printf("Detected SSE2 support\n");
             retval->simd = SSE;
 	}
 
     int avx_support = check_AVX2(&Info1, &Info2, &Info3);
     if(avx_support){
-        printf("Detected AVX2 support\n");
+      //  printf("Detected AVX2 support\n");
         retval->simd = AVX;
     }
 
     int avx512_support = check_AVX512(&Info1, &Info2);
     if(avx512_support){
-        printf("Detected AVX-512 support\n");
+      //  printf("Detected AVX-512 support\n");
         retval->simd = AVX512;
     }
 

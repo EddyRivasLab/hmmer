@@ -551,7 +551,7 @@ p7_sparsemask_Compare_avx512(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2)
   char msg[] = "P7_SPARSEMASK comparison failed";
   int  i;
   int  s;
- if(sm2->simd != SSE){
+ if(sm2->simd != AVX512){
     ESL_FAIL(eslFAIL, NULL, "Can't compare sparsemasks generated for different SIMD instruction sets");
   }
   if ( (sm1->L      != sm2->L)      ||
