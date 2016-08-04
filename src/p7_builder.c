@@ -997,9 +997,24 @@ annotate(P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm)
   if ((status = p7_hmm_SetComposition(hmm))                     != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to determine model composition");
   if ((status = p7_hmm_SetConsensus(hmm, NULL))                 != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to set consensus line");
 
-  if (msa->cutset[eslMSA_GA1] && msa->cutset[eslMSA_GA2]) { hmm->cutoff[p7_GA1] = msa->cutoff[eslMSA_GA1]; hmm->cutoff[p7_GA2] = msa->cutoff[eslMSA_GA2]; hmm->flags |= p7H_GA; }
-  if (msa->cutset[eslMSA_TC1] && msa->cutset[eslMSA_TC2]) { hmm->cutoff[p7_TC1] = msa->cutoff[eslMSA_TC1]; hmm->cutoff[p7_TC2] = msa->cutoff[eslMSA_TC2]; hmm->flags |= p7H_TC; }
-  if (msa->cutset[eslMSA_NC1] && msa->cutset[eslMSA_NC2]) { hmm->cutoff[p7_NC1] = msa->cutoff[eslMSA_NC1]; hmm->cutoff[p7_NC2] = msa->cutoff[eslMSA_NC2]; hmm->flags |= p7H_NC; }
+  if (msa->cutset[eslMSA_GA1]) {
+    hmm->cutoff[p7_GA1] = msa->cutoff[eslMSA_GA1];
+    hmm->flags |= p7H_GA;
+    if (msa->cutset[eslMSA_GA2])
+      hmm->cutoff[p7_GA2] = msa->cutoff[eslMSA_GA2];
+  }
+  if (msa->cutset[eslMSA_TC1]) {
+    hmm->cutoff[p7_TC1] = msa->cutoff[eslMSA_TC1];
+    hmm->flags |= p7H_TC;
+    if (msa->cutset[eslMSA_TC2])
+      hmm->cutoff[p7_TC2] = msa->cutoff[eslMSA_TC2];
+  }
+  if (msa->cutset[eslMSA_NC1]) {
+    hmm->cutoff[p7_NC1] = msa->cutoff[eslMSA_NC1];
+    hmm->flags |= p7H_NC;
+    if (msa->cutset[eslMSA_NC2])
+      hmm->cutoff[p7_NC2] = msa->cutoff[eslMSA_NC2];
+  }
 
   return eslOK;
 

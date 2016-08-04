@@ -967,7 +967,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #if defined (p7_IMPL_SSE)
           info[i].fm_cfg = fm_cfg;
 #endif
-          p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
+          status = p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
+          if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
 
           info[i].pli->do_alignment_score_calc = esl_opt_IsOn(go, "--aliscoresout") ;
 
@@ -1012,6 +1013,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         if (ncpus > 0)  sstatus = thread_loop    (info, id_length_list, threadObj, queue, dbfp, cfg->firstseq_key, cfg->n_targetseq);
         else            sstatus = serial_loop    (info, id_length_list, dbfp, cfg->firstseq_key, cfg->n_targetseq/*, ssv_watch_master, postssv_watch_master, watch_slave*/);
       }
+
 #else //HMMER_THREADS
   #if defined (p7_IMPL_SSE)
       if (dbformat == eslSQFILE_FMINDEX)

@@ -501,7 +501,7 @@ p7_pli_NewModel(P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg)
 
   if (pli->do_biasfilter) p7_bg_SetFilter(bg, om->M, om->compo);
 
-  if (pli->mode == p7_SEARCH_SEQS) 
+  if (pli->mode == p7_SEARCH_SEQS)
     status = p7_pli_NewModelThresholds(pli, om);
 
   pli->W = om->max_length;
@@ -1498,6 +1498,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
 
 
   ESL_ALLOC(pli_tmp, sizeof(P7_PIPELINE_LONGTARGET_OBJS));
+  pli_tmp->tmpseq = NULL;
   pli_tmp->bg = p7_bg_Clone(bg);
   pli_tmp->om = p7_oprofile_Create(om->M, om->abc);
   ESL_ALLOC(pli_tmp->scores, sizeof(float) * om->abc->Kp * 4); //allocation of space to store scores that will be used in p7_oprofile_Update(Fwd|Vit|MSV)EmissionScores
