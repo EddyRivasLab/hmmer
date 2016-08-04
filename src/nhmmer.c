@@ -206,8 +206,9 @@ static ESL_OPTIONS options[] = {
  */
 struct cfg_s {
   char            *dbfile;            /* target sequence database file                   */
-  char            *queryfile;           /* query file (hmm, fasta, or some MSA)          */
+  char            *queryfile;         /* query file (hmm, fasta, or some MSA)            */
   int              qfmt;
+
 
   int              do_mpi;            /* TRUE if we're doing MPI parallelization         */
   int              nproc;             /* how many MPI processes, total                   */
@@ -540,58 +541,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else                                     textw = esl_opt_GetInteger(go, "--textw");
 
 
-  /* If caller declared target format, decode it */
-  if (esl_opt_IsOn(go, "--tformat")) {
-    dbformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
-    if (dbformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
-  }
-
-  if (dbformat == eslSQFILE_FMINDEX) {
-
-#if !defined (p7_IMPL_SSE)
-    p7_Fail("%s is a valid sequence database file format only on systems supporting SSE vector instructions\n", esl_opt_GetString(go, "--tformat"));
-#endif
-
-    //For now, this is a separate path from the typical esl_sqfile_Open() function call
-    //TODO: create esl_sqio_fmindex.c, analogous to esl_sqio_ascii.c,
-
-    if (esl_opt_IsOn(go, "--max")) {
-      p7_Fail("--max flag is incompatible with the FMINDEX target type\n");
-    }
-
-    fm_configAlloc(&fm_cfg);
-    fm_meta = fm_cfg->meta;
-
-    if((fm_meta->fp = fopen(cfg->dbfile, "rb")) == NULL)
-      p7_Fail("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
-
-    if ( (status = fm_readFMmeta(fm_meta)) != eslOK)
-      p7_Fail("Failed to read FM meta data from target sequence database %s\n",      cfg->dbfile);
-
-    if ( (status = fm_configInit(fm_cfg, go)) != eslOK)
-      p7_Fail("Failed to initialize FM configuration for target sequence database %s\n",      cfg->dbfile);
-
-    if ( (status = fm_alphabetCreate(fm_meta, NULL)) != eslOK)
-      p7_Fail("Failed to create FM alphabet for target sequence database %s\n",      cfg->dbfile);
-
-    fgetpos( fm_meta->fp, &fm_basepos);
-
-  } else {
-    /* Open the target sequence database */
-    status = esl_sqfile_Open(cfg->dbfile, dbformat, p7_SEQDBENV, &dbfp);
-    if      (status == eslENOTFOUND) p7_Fail("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
-    else if (status == eslEFORMAT)   p7_Fail("Target sequence database file %s is empty or misformatted\n",   cfg->dbfile);
-    else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
-    else if (status != eslOK)        p7_Fail("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
-
-    if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")) {
-      if (esl_opt_IsUsed(go, "--ssifile"))
-        esl_sqfile_OpenSSI(dbfp, esl_opt_GetString(go, "--ssifile"));
-      else
-        esl_sqfile_OpenSSI(dbfp, NULL);
-    }
-
-  }
 
   if ( esl_opt_IsOn(go, "--dna") )
     abc     = esl_alphabet_Create(eslDNA);
@@ -599,7 +548,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     abc     = esl_alphabet_Create(eslRNA);
 
 
-  /* nhmmer accepts query files that are either (i) hmm(s), (2) msa(s), or (3) sequence(s).
+  /* nhmmer accepts _query_ files that are either (i) hmm(s), (2) msa(s), or (3) sequence(s).
    * The following code will follow the mandate of --qformat, and otherwise figure what
    * the file type is.
    */
@@ -701,13 +650,100 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     p7_Fail("Invalid alphabet type in query for nhmmer. Expect DNA or RNA\n");
 
 
-  if (dbformat == eslSQFILE_FMINDEX) {
-    if ( !(fm_meta->alph_type == fm_DNA /*|| fm_meta->alph_type == fm_DNA_full*/) )
-      p7_Fail("incompatible alphabets - the HMM is a nucleotide alphabet, but the database isn't");
-    //if ( (abc->type == eslAMINO ) && !(fm_meta->alph_type == fm_AMINO ) )
-    //  p7_Fail("incompatible alphabets - the HMM is an amino alphabet, but the database isn't");
+
+
+
+
+  /* nhmmer accepts _target_ files that are either (i) some sequence file format, or
+   * (2) the eslSQFILE_FMINDEX format (called fmindex).
+   * The following code will follow the mandate of --tformat, and otherwise figure what
+   * the file type is.
+   */
+
+  /* If caller declared target format, decode it */
+  if (esl_opt_IsOn(go, "--tformat")) {
+    dbformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
+    if (dbformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
 
+  /* (1)
+   * First try to read it as a non-fmindex format, either following
+   * the mandate of the --tformat flag or autodetecting. If tformat is
+   * unspecified and the file isn't readable as one of the other formats,
+   * will fall through to testing the fmindex in step (2)
+   */
+  if (dbformat != eslSQFILE_FMINDEX) { /* either we've been told what it is, or we need to autodetect. Start with sequence file */
+
+    status = esl_sqfile_Open(cfg->dbfile, dbformat, p7_SEQDBENV, &dbfp);
+    if (status == eslEFORMAT) {
+      if (dbformat == eslSQFILE_UNKNOWN) {
+        /* We're expected to autodetect; still need to try fmindex below */
+        esl_sqfile_Close(dbfp);
+        dbfp = NULL;
+      } else {
+        /* we were told the format, but it didn't work */
+        p7_Fail("Target sequence database file %s is empty or misformatted\n",   cfg->dbfile);
+      }
+    }
+    else if (status == eslENOTFOUND) p7_Fail("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
+    else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
+    else if (status != eslOK)        p7_Fail("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
+    else {
+      /*success; move forward with other necessary steps*/
+      if (dbfp->format == eslSQFILE_FASTA && (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n"))) {
+        if (esl_opt_IsUsed(go, "--ssifile"))
+          esl_sqfile_OpenSSI(dbfp, esl_opt_GetString(go, "--ssifile"));
+        else
+          esl_sqfile_OpenSSI(dbfp, NULL);
+      }
+      dbformat = dbfp->format;
+    }
+  }
+
+  /* (2)
+   * We've either been told it's fmindex format, or the autodetect
+   * has fallen through to ask us to check fmindex format
+   */
+  if (dbfp == NULL ) {
+
+#if !defined (p7_IMPL_SSE)
+    p7_Fail("fmindex is a valid sequence database file format only on systems supporting SSE vector instructions\n");
+#endif
+
+    if (dbformat != eslSQFILE_FMINDEX && strcmp(cfg->dbfile, "-") == 0 ) {
+      /* we can't rewind a piped file, so we can't perform any more autodetection on the target format*/
+      p7_Fail("Must specify target file type (fmindex, or a sequence file format) to read <dbfile> from stdin ('-')");
+    }
+
+    if (esl_opt_IsOn(go, "--max")) {
+      p7_Fail("--max flag is incompatible with the fmindex target type\n");
+    }
+
+    fm_configAlloc(&fm_cfg);
+    fm_meta = fm_cfg->meta;
+
+    if((fm_meta->fp = fopen(cfg->dbfile, "rb")) == NULL)
+      p7_Fail("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
+
+    if ( (status = fm_readFMmeta(fm_meta)) != eslOK)
+      p7_Fail("Failed to read FM meta data from target sequence database %s\n",      cfg->dbfile);
+
+    /* Sanity check */
+    if ( ! ( fm_meta->alph_type == fm_DNA && (fm_meta->alph_size > 0 && fm_meta->alph_size < 30)  ) ) {
+      p7_Fail("Unable to autodetect format of %s\n",   cfg->dbfile);
+    }
+
+    if ( (status = fm_configInit(fm_cfg, go)) != eslOK)
+      p7_Fail("Failed to initialize FM configuration for target sequence database %s\n",      cfg->dbfile);
+
+    if ( (status = fm_alphabetCreate(fm_meta, NULL)) != eslOK)
+      p7_Fail("Failed to create FM alphabet for target sequence database %s\n",      cfg->dbfile);
+
+    fgetpos( fm_meta->fp, &fm_basepos);
+
+
+    dbformat = eslSQFILE_FMINDEX;
+  }
 
 
   /* Open the results output files */
