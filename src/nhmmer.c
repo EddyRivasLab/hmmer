@@ -89,6 +89,7 @@ static int             assign_Lengths(P7_TOPHITS *th, ID_LENGTH_LIST *id_length_
 #define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 #define QFORMATS     "--qhmm,--qfasta,--qmsa"
 
+
 #define CPUOPTS     NULL
 #define MPIOPTS     NULL
 
@@ -131,8 +132,8 @@ static ESL_OPTIONS options[] = {
   { "--nobias",     eslARG_NONE,         NULL,      NULL, NULL,    NULL,  NULL, "--max",          "turn off composition bias filter",                             7 },
 
   /* Selecting the alphabet rather than autoguessing it */
-  { "--dna",        eslARG_NONE,        FALSE, NULL, NULL,   "--rna", NULL,   NULL,          "input alignment is DNA sequence data",                         8 },
-  { "--rna",        eslARG_NONE,        FALSE, NULL, NULL,   "--dna",  NULL,  NULL,          "input alignment is RNA sequence data",                         8 },
+  { "--dna",        eslARG_NONE,        FALSE, NULL, NULL,   NULL,  NULL,  "--rna",       "input alignment is DNA sequence data",                         8 },
+  { "--rna",        eslARG_NONE,        FALSE, NULL, NULL,   NULL,  NULL,  "--dna",         "input alignment is RNA sequence data",                         8 },
 
 #if defined (p7_IMPL_SSE)
   /* Control of FM pruning/extension */
@@ -166,9 +167,9 @@ static ESL_OPTIONS options[] = {
    *   (a) currently for internal use
    *   (b) probably going to change
    */
-  { "--restrictdb_stkey", eslARG_STRING, "0",  NULL, NULL,    NULL,  NULL,           NULL,   "Search starts at the sequence with name <s>",                    99 },
-  { "--restrictdb_n",eslARG_INT,        "-1",  NULL, NULL,    NULL,  NULL,           NULL,   "Search <j> target sequences (starting at --restrictdb_stkey)",   99 },
-  { "--ssifile",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,   "restrictdb_x values require ssi file. Override default to <s>",  99 },
+  { "--restrictdb_stkey", eslARG_STRING, "0",  NULL, NULL, NULL,"--restrictdb_n,--ssifile",          NULL,   "Search starts at the sequence with name <s>",                    99 },
+  { "--restrictdb_n",eslARG_INT,        "-1",  NULL, NULL, NULL,"--restrictdb_stkey,--ssifile",      NULL,   "Search <j> target sequences (starting at --restrictdb_stkey)",   99 },
+  { "--ssifile",    eslARG_STRING,       NULL, NULL, NULL, NULL,"--restrictdb_stkey,--restrictdb_n", NULL,   "restrictdb_x values require ssi file. Override default to <s>",  99 },
 
 
   /* stage-specific window length used for bias composition estimate,
@@ -690,7 +691,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     else if (status != eslOK)        p7_Fail("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
     else {
       /*success; move forward with other necessary steps*/
-      if (dbfp->format == eslSQFILE_FASTA && (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n"))) {
+      if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")) {
         if (esl_opt_IsUsed(go, "--ssifile"))
           esl_sqfile_OpenSSI(dbfp, esl_opt_GetString(go, "--ssifile"));
         else
@@ -741,8 +742,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
     fgetpos( fm_meta->fp, &fm_basepos);
 
-
     dbformat = eslSQFILE_FMINDEX;
+  }
+
+
+  if (dbfp->format != eslSQFILE_FASTA && esl_opt_IsUsed(go, "--restrictdb_stkey") ){
+    p7_Fail("--restrictdb_stkey flag only allowed for fasta formatted files\n");
   }
 
 
@@ -838,7 +843,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
   }
 
-  if (qfp_sq != NULL || qfp_msa  != NULL )  {  // need to convert sequence / msa to HMM
+  if (qfp_sq != NULL || qfp_msa  != NULL )  {  // need to convert query sequence / msa to HMM
     builder = p7_builder_Create(NULL, abc);
     if (builder == NULL)  p7_Fail("p7_builder_Create failed");
 
@@ -905,7 +910,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       else if (hmm->max_length == -1 ) p7_Builder_MaxLength(hmm, p7_DEFAULT_WINDOW_BETA);
 
 
-      if (hmmoutfp != NULL) { //
+      if (hmmoutfp != NULL) {
         if ((status = p7_hmmfile_WriteASCII(hmmoutfp, -1, hmm)) != eslOK) ESL_FAIL(status, errbuf, "HMM save failed");
         fclose(hmmoutfp);
       }
@@ -931,7 +936,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         }
       }
 
-      if (dbformat != eslSQFILE_FMINDEX) {
+      if (dbformat == eslSQFILE_FASTA) {
         if ( cfg->firstseq_key != NULL ) { //it's tempting to want to do this once and capture the offset position for future passes, but ncbi files make this non-trivial, so this keeps it general
           sstatus = esl_sqfile_PositionByKey(dbfp, cfg->firstseq_key);
           if (sstatus != eslOK)
