@@ -136,7 +136,6 @@ OBJS =  build.o\
 	p7_hmmcache.o\
 	p7_hmmfile.o\
 	p7_hmmwindow.o\
-	p7_null3.o\
 	p7_pipeline.o\
 	p7_prior.o\
 	p7_profile.o\
