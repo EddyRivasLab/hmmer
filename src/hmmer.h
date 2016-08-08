@@ -597,9 +597,9 @@ typedef struct p7_alidisplay_s {
   char *sqname;			/* name of target sequence              */
   char *sqacc;			/* accession of target seq; or [0]='\0' */
   char *sqdesc;			/* description of targ seq; or [0]='\0' */
-  long  sqfrom;			/* start position on sequence (1..L)    */
-  long  sqto;		    /* end position on sequence   (1..L)    */
-  long  L;			/* length of sequence                   */
+  int64_t  sqfrom;			/* start position on sequence (1..L)    */
+  int64_t  sqto;		    /* end position on sequence   (1..L)    */
+  int64_t  L;			/* length of sequence                   */
 
   int   memsize;                /* size of allocated block of memory    */
   char *mem;			/* memory used for the char data above  */
@@ -611,9 +611,9 @@ typedef struct p7_alidisplay_s {
  *****************************************************************/
 
 typedef struct p7_dom_s { 
-  int            ienv, jenv;
-  int            iali, jali;
-  int            iorf, jorf; /*Used in translated search to capture the range in the DNA sequence of the ORF containing the match to a protein query */
+  int64_t        ienv, jenv;
+  int64_t        iali, jali;
+  int64_t        iorf, jorf; /*Used in translated search to capture the range in the DNA sequence of the ORF containing the match to a protein query */
   float          envsc;  	/* Forward score in envelope ienv..jenv; NATS; without null2 correction       */
   float          domcorrection;	/* null2 score when calculating a per-domain score; NATS                      */
   float          dombias;	/* FLogsum(0, log(bg->omega) + domcorrection): null2 score contribution; NATS */
