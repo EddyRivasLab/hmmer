@@ -16,6 +16,8 @@ CFLAGS       = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
 SSEFLAGS    =  @SSE_CFLAGS@
 AVXFLAGS = @AVX_CFLAGS@
 AVX512FLAGS = @AVX512_CFLAGS@
+NEONFLAGS = @NEON_CFLAGS@
+NEON64FLAGS = @NEON64_CFLAGS@
 CPPFLAGS     = @CPPFLAGS@
 LDFLAGS      = @LDFLAGS@
 DEFS         = @DEFS@
@@ -69,8 +71,8 @@ tests: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${UTESTS}
 
 # In some subdirs, ${LIBOBJS} is empty. We can't give an empty arg string to 'ar'.
 # Hence the ! -z shell test on ${LIBOBJS} below.
-libhmmer-${MODULE}.stamp: ${LIBOBJS} ${SSELIBOBJS} ${AVXLIBOBJS} ${AVX512LIBOBJS}
-	${QUIET}+if [ ! -z "${LIBOBJS} ${SSELIBOBJS} ${AVXLIBOBJS} ${AVX512LIBOBJS}" ]; then \
+libhmmer-${MODULE}.stamp: ${LIBOBJS} ${SSELIBOBJS} ${AVXLIBOBJS} ${AVX512LIBOBJS} ${NEONLIBOBJS} ${NEON64LIBOBJS}
+	${QUIET}+if [ ! -z "${LIBOBJS} ${SSELIBOBJS} ${AVXLIBOBJS} ${AVX512LIBOBJS} ${NEONLIBOBJS} ${NEON64LIBOBJS}" ]; then \
 	   echo '    ' AR $@ ;\
 	   ${AR} -r ${top_builddir}/src/libhmmer.a $? > /dev/null 2>&1 ;\
 	   ${RANLIB} ${top_builddir}/src/libhmmer.a ;\
@@ -101,6 +103,10 @@ ${LIBOBJS}: ${HDRS}
 ${AVXLIBOBJS}:  SIMDFLAGS:= $(AVXFLAGS)
 ${LIBOBJS}: ${HDRS}
 ${AVX512LIBOBJS}:  SIMDFLAGS:= $(AVX512FLAGS)
+${LIBOBJS}: ${HDRS}
+${NEONLIBOBJS}:  SIMDFLAGS:= $(NEONFLAGS)
+${LIBOBJS}: ${HDRS}
+${NEON64LIBOBJS}:  SIMDFLAGS:= $(NEON64FLAGS)
 ${LIBOBJS}: ${HDRS}
 ${OBJS}:     ${HDRS}
 

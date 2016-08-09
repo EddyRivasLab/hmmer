@@ -89,6 +89,20 @@ exceeds the requested memory when necessary, so the request is already not a har
   int      validR;	/* # of dpf[] rows pointing to valid dp_mem; may be < allocR after GrowTo() */
 #endif
 
+#ifdef HAVE_NEON
+  /* Raw memory allocation */
+  int Qf; /* current actual number of fb vectors = P7_NVF(M)                    */
+  int R; /* current actual number of rows (<=Ra+Rb+Rc), excluding R0           */
+  char    *dp_mem;      /* raw memory allocation, that dp[] rows point into           */
+  int64_t  allocW;      /* alloced width/row, bytes; multiple of p7_VALIGN            */
+  int64_t  nalloc;      /* total # of alloc'ed bytes: nalloc >= (validR)(allocW)      */
+
+  /* Forward/Backward matrix rows */
+  char   **dpf;         /* row ptrs, dpf[0.R0-1,R0..R0+R-1]; aligned on (p7_VALIGN)-byte boundary  */
+  int      allocR;      /* allocated size of dpf[]. R+R0 <= R0+Ra+Rb+rc <= validR <= allocR        */
+  int      validR;      /* # of dpf[] rows pointing to valid dp_mem; may be < allocR after GrowTo() */
+#endif
+
 #ifdef HAVE_AVX2
   /* Raw memory allocation */
   int Qf_AVX; /* current actual number of fb vectors = P7_NVF(M)                    */

@@ -86,6 +86,7 @@ extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const 
 extern P7_ALIDISPLAY *p7_alidisplay_Create_sse(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
 extern P7_ALIDISPLAY *p7_alidisplay_Create_avx(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
 extern P7_ALIDISPLAY *p7_alidisplay_Create_avx512(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
+extern P7_ALIDISPLAY *p7_alidisplay_Create_neon(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
 
 
 extern P7_ALIDISPLAY *p7_alidisplay_Clone(const P7_ALIDISPLAY *ad);

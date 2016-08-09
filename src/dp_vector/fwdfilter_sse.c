@@ -53,10 +53,10 @@
  */
 #include "p7_config.h"
 
-#if p7_CPU_ARCH == x86
+#if p7_CPU_ARCH == intel 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
-#endif
+#endif /* intel arch */
 #include "easel.h"
 #include "esl_sse.h"
 

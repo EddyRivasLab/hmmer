@@ -489,7 +489,7 @@ fi
 if test "$enable_neon" = "yes" || test "$enable_neon" = "check" && test "$architecture" != "arm64"; then
    if test "x$SIMD_CFLAGS" = x; then
      case $ax_cv_c_compiler_vendor in
-       gnu)   AX_CHECK_COMPILER_FLAGS(-mfpu=neon,[ARM_CFLAGS="-mfpu=neon"],[]);;
+       gnu)   AX_CHECK_COMPILER_FLAGS(-mfpu=neon,[NEON_CFLAGS="-mfpu=neon"],[]);;
        *)     ;;
      esac   
    fi
@@ -510,13 +510,14 @@ if test "$enable_neon" = "check"; then
 fi
 if test "$haveneon" = "yes" && test "$architecture" = "arm64"; then
     AC_DEFINE([HAVE_NEON64])
+    
 fi
 
   AC_SUBST(SSE_CFLAGS)
   AC_SUBST(AVX_CFLAGS)
   AC_SUBST(AVX512_CFLAGS)
-  AC_SUBST(ARM_CFLAGS)
-
+  AC_SUBST(NEON_CFLAGS)
+  AC_SUBST(NEON64_CFLAGS)
 
 # For x86 processors check if the flush to zero macro is available
 # in order to avoid the performance penalty dealing with sub-normal
