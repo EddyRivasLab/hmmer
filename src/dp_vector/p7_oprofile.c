@@ -29,6 +29,7 @@
 #include "esl_alphabet.h"
 #include "esl_random.h"
 #include "esl_sse.h"
+#include "esl_neon.h"
 #include "esl_vectorops.h"
 
 #include "base/p7_bg.h"

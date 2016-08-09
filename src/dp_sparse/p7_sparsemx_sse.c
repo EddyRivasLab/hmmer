@@ -417,10 +417,11 @@ p7_sparsemask_FinishRow_sse(P7_SPARSEMASK *sm)
  * Throws:    <eslEMEM> on allocation failure. Now <sm> may only be
  *            safely destroyed; its contents are otherwise undefined.
  */
- #ifdef HAVE_SSE2
+
 int
 p7_sparsemask_Finish_sse(P7_SPARSEMASK *sm)
 {
+ #ifdef HAVE_SSE2
   int i,r;
   int s;
   int status;

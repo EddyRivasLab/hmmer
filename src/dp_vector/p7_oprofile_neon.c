@@ -1,4 +1,4 @@
-/*  NEON versions of Routines for the P7_OPROFILE structure:  
+/*  SSE versions of Routines for the P7_OPROFILE structure:  
  * a search profile in an optimized implementation.
  * 
  * Contents:
@@ -17,7 +17,9 @@
 #include <string.h>
 #include <math.h>		/* roundf() */
 
+#if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64 
 #include <arm_neon.h>
+#endif /* arm/arm64 arch */
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -161,13 +163,14 @@ p7_oprofile_Create_neon(int allocM, const ESL_ALPHABET *abc)
   om->mode       = p7_NO_MODE;
   om->nj         = 0.0f;
   return om;
-#endif
-#ifndef HAVE_NEON
-return NULL; // Stub so we have something to link when we don't have SSE support
-#endif
- ERROR:
+ERROR:
   p7_oprofile_Destroy_neon(om);
   return NULL;
+#endif /* HAVE_NEON */
+#ifndef HAVE_NEON
+  return NULL; // Stub so we have something to link when we don't have SSE support
+#endif
+ 
 }
 
 /* Function:  p7_oprofile_Destroy()
@@ -467,12 +470,12 @@ sf_conversion_neon(P7_OPROFILE *om)
    * hmmscan where many models are loaded.
    */
 
-  tmp.s8x16 = vdupq_n_s8((int8_t) (om->bias_b + 127));
-  tmp2.s8x16  = vdupq_n_s8(127);
+  tmp = _mm_set1_epi8((int8_t) (om->bias_b + 127));
+  tmp2  = _mm_set1_epi8(127);
 
   for (x = 0; x < om->abc->Kp; x++)
     {
-      for (q = 0;  q < nq;            q++) om->sbv[x][q].u8x16 = veorq_u8(vqsubq_u8(tmp.u8x16, om->rbv[x][q].u8x16), tmp2.u8x16);
+      for (q = 0;  q < nq;            q++) om->sbv[x][q] = _mm_xor_si128(_mm_subs_epu8(tmp, om->rbv[x][q]), tmp2);
       for (q = nq; q < nq + p7O_EXTRA_SB; q++) om->sbv[x][q] = om->sbv[x][q % nq];
     }
 

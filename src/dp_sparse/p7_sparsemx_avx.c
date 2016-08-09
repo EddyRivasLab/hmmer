@@ -728,6 +728,7 @@ return eslENORESULT;
 static int
 validate_dimensions_avx(const P7_SPARSEMX *sx, char *errbuf)
 {
+#ifdef HAVE_AVX2
   const P7_SPARSEMASK *sm  = sx->sm;
   int   g      = 0;
   int   r      = 0;
@@ -751,11 +752,16 @@ validate_dimensions_avx(const P7_SPARSEMX *sx, char *errbuf)
   if (sm->ncells > sm->kalloc_AVX)  ESL_FAIL(eslFAIL, errbuf, "kmem[] cell allocation too small");
   if (sm->S+2    > sm->salloc_AVX)  ESL_FAIL(eslFAIL, errbuf, "seg[] segment allocation too small");
   return eslOK;
+#endif /* HAVE_AVX2 */
+#ifndef HAVE_AVX2
+  return 0;
+#endif
 }
 
 static int
 validate_no_nan_avx(const P7_SPARSEMX *sx, char *errbuf)
 {
+#ifdef HAVE_AVX2
   const P7_SPARSEMASK *sm  = sx->sm;
   float         *dpc = sx->dp;
   float         *xc  = sx->xmx;
@@ -788,11 +794,16 @@ validate_no_nan_avx(const P7_SPARSEMX *sx, char *errbuf)
   }
     }
   return eslOK;
+#endif /* HAVE_AVX2 */
+#ifndef HAVE_AVX2
+  return 0;
+#endif
 }
 
 static int
 validate_fwdvit_avx(const P7_SPARSEMX *sx, char *errbuf)
 {
+#ifdef HAVE_AVX2
   const P7_SPARSEMASK *sm  = sx->sm;
   float         *dpc = sx->dp;
   float         *xc  = sx->xmx;
@@ -828,11 +839,16 @@ validate_fwdvit_avx(const P7_SPARSEMX *sx, char *errbuf)
       }
     }
   return eslOK;
+#endif /* HAVE_AVX2 */
+#ifndef HAVE_AVX2
+  return 0;
+#endif
 }
 
 static int
 validate_backward_avx(const P7_SPARSEMX *sx, char *errbuf)
 {
+#ifdef HAVE_AVX2
   const P7_SPARSEMASK *sm     = sx->sm;
   float         *dpc    = sx->dp  + (sm->ncells_AVX-1)*p7S_NSCELLS;   // last supercell in dp  
   float         *xc     = sx->xmx + (sm->nrow_AVX + sm->S_AVX - 1)*p7S_NXCELLS; // last supercell in xmx 
@@ -866,6 +882,10 @@ validate_backward_avx(const P7_SPARSEMX *sx, char *errbuf)
       last_n = sm->n_AVX[i];
     }
   return eslOK;
+#endif /* HAVE_AVX2 */
+#ifndef HAVE_AVX2
+  return 0;
+#endif
 }
 
 static int
@@ -878,6 +898,7 @@ is_prob(float val, float tol)
 static int
 validate_decoding_avx(const P7_SPARSEMX *sx, char *errbuf)
 {
+#ifdef HAVE_AVX2
   const P7_SPARSEMASK *sm  = sx->sm;
   float         *dpc = sx->dp;
   float         *xc  = sx->xmx;
@@ -960,6 +981,10 @@ validate_decoding_avx(const P7_SPARSEMX *sx, char *errbuf)
       }
     }
   return eslOK;
+#endif /* HAVE_AVX2 */
+#ifndef HAVE_AVX2
+  return 0;
+#endif
 }
 
 /* Function:  p7_sparsemx_Validate()
@@ -987,6 +1012,7 @@ validate_decoding_avx(const P7_SPARSEMX *sx, char *errbuf)
 int
 p7_sparsemx_Validate_avx(const P7_SPARSEMX *sx, char *errbuf)
 {
+#ifdef HAVE_AVX2
   int status;
 
   if (errbuf) errbuf[0] = '\0';
@@ -1003,6 +1029,10 @@ p7_sparsemx_Validate_avx(const P7_SPARSEMX *sx, char *errbuf)
   default:             ESL_FAIL(eslFAIL, errbuf, "no such sparse DP matrix type %d", sx->type);
   }
   return eslOK;
+#endif /* HAVE_AVX2 */
+#ifndef HAVE_AVX2
+  return 0;
+#endif
 }
 /*****************************************************************
  * @LICENSE@

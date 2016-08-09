@@ -3,7 +3,7 @@
 
 #include "p7_config.h"
 
-#if p7_CPU_ARCH == x86
+#if p7_CPU_ARCH == intel 
 #include <xmmintrin.h>    /* SSE  */
 #include <emmintrin.h>    /* SSE2 */
 #ifdef HAVE_AVX2
@@ -16,7 +16,7 @@
 #include <pmmintrin.h>   /* DENORMAL_MODE */
 #endif
 
-#endif /* p7_CPU_ARCH == x86 */
+#endif /* p7_CPU_ARCH == intel */
 
 #if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
 #include <arm_neon.h>
