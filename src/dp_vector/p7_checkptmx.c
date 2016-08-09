@@ -68,8 +68,8 @@ switch(simd){
     case AVX512:
       return p7_checkptmx_Create_avx512(M, L, ramlimit);
       break;
-    case NEON:
-      p7_Fail("Neon support not yet integrated into p7_checkptmx_Create");
+    case NEON: case NEON64:
+      return p7_checkptmx_Create_neon(M, L, ramlimit);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_Create");  
@@ -115,8 +115,8 @@ switch(ox->simd){
     case AVX512:
       return p7_checkptmx_GrowTo_avx512(ox, M, L);
       break;
-    case NEON:
-      p7_Fail("Neon support not yet integrated into p7_checkptmx_Growto");
+    case NEON: case NEON64:
+      return p7_checkptmx_GrowTo_neon(ox, M, L);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_Growto");  
@@ -155,8 +155,8 @@ switch(ox->simd){
     case AVX512:
       return p7_checkptmx_Sizeof_avx512(ox);
       break;
-    case NEON:
-      p7_Fail("Neon support not yet integrated into p7_checkptmx_Sizeof");
+    case NEON: case NEON64:
+      return p7_checkptmx_Sizeof_neon(ox);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_Sxzeof");  
@@ -187,8 +187,8 @@ p7_checkptmx_MinSizeof(int M, int L, SIMD_TYPE simd)
     case AVX512:
       return p7_checkptmx_MinSizeof_avx512(M, L);
       break;
-    case NEON:
-      p7_Fail("Neon support not yet integrated into p7_checkptmx_MinSizeof");
+    case NEON: case NEON64:
+      return p7_checkptmx_MinSizeof_neon(M, L);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_MinSizeof");  
@@ -225,8 +225,8 @@ p7_checkptmx_Reuse(P7_CHECKPTMX *ox)
     case AVX512:
       return p7_checkptmx_Reuse_avx512(ox);
       break;
-    case NEON:
-      p7_Fail("Neon support not yet integrated into p7_checkptmx_Reuse");
+    case NEON: case NEON64:
+      return p7_checkptmx_Reuse_neon(ox);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_Reuse");  
@@ -253,8 +253,8 @@ p7_checkptmx_Destroy(P7_CHECKPTMX *ox)
     case AVX512:
       p7_checkptmx_Destroy_avx512(ox);
       break;
-    case NEON:
-      p7_Fail("Neon support not yet integrated into p7_checkptmx_Destroy");
+    case NEON: case NEON64:
+      p7_checkptmx_Destroy_neon(ox);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_Destroy");  
@@ -379,8 +379,8 @@ p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, __m128 *dpc, char *pfx)
     case AVX512:
       return p7_checkptmx_DumpFBRow_avx512(ox, rowi, dpc, pfx);
       break;
-    case NEON:
-      p7_Fail("Neon support not yet integrated into p7_checkptmx_DumpFBRow");
+    case NEON: case NEON64:
+      return p7_checkptmx_DumpFBRow_neon(ox, rowi, dpc, pfx);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_DumpFBRow");  

@@ -141,16 +141,27 @@ AC_CANONICAL_HOST
 
 # Parse $host_cpu to set the base architecture of the machine
 architecture=unknown
+AC_DEFINE(intel, 1)
+AC_DEFINE(arm, 2)
+AC_DEFINE(arm64, 3)
 # Figure out our machine's base architecture
 if test "$host_cpu" = "x86_64"; then
   architecture=x86
-  AC_DEFINE(p7_CPU_ARCH, x86)
+  AC_DEFINE(p7_CPU_ARCH, intel)
 fi
 if test "$host_cpu" = "i686"; then
   architecture=x86
-  AC_DEFINE(p7_CPU_ARCH, x86)
+  AC_DEFINE(p7_CPU_ARCH, intel)
 fi
 ## add  checks here for ARM, POWER
+if test "$host_cpu" = armv7*; then
+  architecture=arm
+  AC_DEFINE(p7_CPU_ARCH, arm)
+fi
+if test "$host_cpu" = "aarch64"; then
+  architecture=arm64
+  AC_DEFINE(p7_CPU_ARCH, arm64)
+fi
 if test "$architecture" = "unknown"; then
   AC_MSG_ERROR([Unable to determine base architecture of this machine!  host_cpu is $host_cpu])
 else
@@ -331,6 +342,9 @@ AC_ARG_ENABLE(AVX2,[AS_HELP_STRING([--enable-AVX2],[force use of the AVX2 (Haswe
 # --enable-AVX-512       Force use of the AVX-512 vector instructions
 AC_ARG_ENABLE(AVX-512,[AS_HELP_STRING([--enable-AVX-512],[force use of the AVX-512 vector instructions])], [enable_avx512=yes; user_set_simd=yes], enable_avx512=check)
 
+# --enable-neon       Force use of the NEON vector instructions
+AC_ARG_ENABLE(NEON,[AS_HELP_STRING([--enable-NEON],[force use of the NEON vector instructions])], [enable_neon=yes; user_set_simd=yes], enable_neon=check)
+
 
 ################################################################
 # 5. Checks for programs, including ${CC} and its ${CFLAGS}.
@@ -471,12 +485,8 @@ AC_MSG_CHECKING([whether AVX-512 is supported])
   CFLAGS="$sre_save_cflags"
 fi
 
-  AC_SUBST(SSE_CFLAGS)
-  AC_SUBST(AVX_CFLAGS)
-  AC_SUBST(AVX512_CFLAGS)
-
 # ARM and NEON SIMD flags
-if test "$enable_neon" = "yes" || test "$enable_neon" = "check"; then
+if test "$enable_neon" = "yes" || test "$enable_neon" = "check" && test "$architecture" != "arm64"; then
    if test "x$SIMD_CFLAGS" = x; then
      case $ax_cv_c_compiler_vendor in
        gnu)   AX_CHECK_COMPILER_FLAGS(-mfpu=neon,[ARM_CFLAGS="-mfpu=neon"],[]);;
@@ -489,78 +499,23 @@ if test "$enable_neon" = "check"; then
    sre_save_CPPFLAGS="$CPPFLAGS"
    CFLAGS="$CFLAGS $ARM_CFLAGS"
    CPPFLAGS="$CPPFLAGS $ARM_CFLAGS"
-   AC_CHECK_HEADER([arm_neon.h],[
-     AC_MSG_CHECKING([if platform can run NEON instructions])
-     AC_RUN_IFELSE([AC_LANG_PROGRAM( [[#include <arm_neon.h>]],
+     AC_MSG_CHECKING([whether NEON is supported])
+     AC_COMPILE_IFELSE([AC_LANG_PROGRAM( [[#include <arm_neon.h>]],
                           [[ int32x4_t x = vdupq_n_s32(0);]])],
-                   [AC_MSG_RESULT([yes])
-                     enable_neon=yes],
-                   [AC_MSG_RESULT([no])])])
+     [AC_DEFINE([HAVE_NEON])
+     haveneon=yes])
+     AC_MSG_RESULT([$haveneon])
    CFLAGS="$sre_save_CFLAGS"
    CPPFLAGS="$sre_save_CPPFLAGS"
 fi
-if test "$enable_neon" = "yes"; then
-   AC_DEFINE(HAVE_NEON,1,[Support NEON instructions])
+if test "$haveneon" = "yes" && test "$architecture" = "arm64"; then
+    AC_DEFINE([HAVE_NEON64])
 fi
 
-
-
-
-# NEON: Check for NEON compiler flag
-# todo: we can always check for other ARM floating point flags later
-#if test "$enable_neon" = "yes" || test "$enable_neon" = "check"; then
-# Determine target if targeting is specified.
-# Do this by attempting to execute code with different 
-# cominations of NEON/VFP compiler options. This allows 
-# us to determine the best compile options for each 
-# ARM architecture. 
-if test "$enable_neon" = "yes"; then
-  cortex_a5="-mfpu=neon-fp16"
-  cortex_a7="-mfpu=neon-vfpv4"
-  cortex_a8="-mfpu=neon"
-  cortex_a9="-mfpu=neon-fp16"
-  cortex_a15="-mfpu=neon-vfpv4"
-  sre_save_CFLAGS="$CFLAGS"
-  sre_save_CPPFLAGS="$CPPFLAGS"
-  CFLAGS="$CFLAGS $cortex_a5"
-  CPPFLAGS="$CPPFLAGS $cortex_a5"
-  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
-                    [vector_flags="-mcpu=cortex-a5 -mfpu=neon-fp16"], [])
-  CFLAGS="$sre_save_CFLAGS $cortex_a7"
-  CPPFLAGS="$sre_save_CPPFLAGS $cortex_a7"
-  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
-                    [vector_flags="-mcpu=cortex-a7 -mfpu=neon-vfpv4"], [])
-  CFLAGS="$sre_save_CFLAGS $cortex_a8"
-  CPPFLAGS="$sre_save_CPPFLAGS $cortex_a8"
-  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
-                    [vector_flags="-mcpu=cortex-a8 -mfpu=neon"], [])
-  CFLAGS="$sre_save_CFLAGS $cortex_a9"
-  CPPFLAGS="$sre_save_CPPFLAGS $cortex_a9"
-  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
-                    [vector_flags="-mcpu=cortex-a9 -mfpu=neon-fp16"], [])
-  CFLAGS="$sre_save_CFLAGS $cortex_a15"
-  CPPFLAGS="$sre_save_CPPFLAGS $cortex_a15"
-  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
-                    [vector_flags="-mcpu=cortex-a15 -mfpu=neon-vfpv4"], [])
-
-  CFLAGS="$sre_save_CFLAGS"
-  CPPFLAGS="$sre_save_CPPFLAGS"
-
-else
-   if test "x$SIMD_CFLAGS" = x; then
-     case $ax_cv_c_compiler_vendor in
-       gnu)   AX_CHECK_COMPILER_FLAGS(-mfpu=neon,[SIMD_CFLAGS="-mfpu=neon"],
-               [AC_MSG_WARN([no NEON hardware detected])]);;
-       *)     ;;
-       esac
-   fi
-fi
-
-if test "y$vector_flags" != "y"; then
-  ARM_CFLAGS="$vector_flags"
-fi
-
-AC_SUBST(ARM_CFLAGS)
+  AC_SUBST(SSE_CFLAGS)
+  AC_SUBST(AVX_CFLAGS)
+  AC_SUBST(AVX512_CFLAGS)
+  AC_SUBST(ARM_CFLAGS)
 
 
 # For x86 processors check if the flush to zero macro is available

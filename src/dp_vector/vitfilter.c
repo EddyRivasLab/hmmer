@@ -22,11 +22,17 @@
 #include <stdio.h>
 #include <math.h>
 
+#if p7_CPU_ARCH == x86
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
 #ifdef p7_build_AVX512
  #include <immintrin.h>
  #include "esl_avx_512.h"
+#endif
+#endif /* x86 */
+
+#if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
+#include <arm_neon.h>
 #endif
 #include "easel.h"
 #include "esl_sse.h"

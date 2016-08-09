@@ -53,9 +53,10 @@
  */
 #include "p7_config.h"
 
+#if p7_CPU_ARCH == x86
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
-
+#endif
 #include "easel.h"
 
 #ifdef HAVE_AVX2
@@ -88,9 +89,9 @@ static inline int   posterior_decode_row_avx(P7_CHECKPTMX *ox, int rowi, P7_SPAR
 #endif
 
 #ifdef p7_DEBUGGING
-static inline fl]oat backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
-static        void  save_debug_row_pp(P7_CHECKPTMX *ox,               __m128 *dpc, int i);
-static        void  save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float totscale);
+static inline float backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
+static        void  save_debug_row_pp(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
+static        void  save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
 
 #endif
 
@@ -1064,7 +1065,7 @@ backward_row_zero_avx(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
 }
 
 static void
-save_debug_row_pp_avx(P7_CHECKPTMX *ox, __m256 *dpc, int i)
+save_debug_row_pp_avx(P7_CHECKPTMX *ox, debug_print *dpc, int i)
 {
 #ifdef HAVE_AVX2  
  #ifdef p7_DEBUGGING 
@@ -1118,7 +1119,7 @@ save_debug_row_pp_avx(P7_CHECKPTMX *ox, __m256 *dpc, int i)
  * space.
  */
 static void
-save_debug_row_fb_avx(P7_CHECKPTMX *ox, P7_REFMX *gx, __m256 *dpc, int i, float totscale)
+save_debug_row_fb_avx(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale)
 {
  #ifdef HAVE_AVX2 
  #ifdef p7_DEBUGGING 

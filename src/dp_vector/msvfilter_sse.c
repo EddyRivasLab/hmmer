@@ -18,9 +18,10 @@
 
 #include <stdio.h>
 #include <math.h>
-
+#if p7_CPU_ARCH == x86
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
+#endif
 #include "easel.h"
 #include "esl_sse.h"
 #include "esl_gumbel.h"

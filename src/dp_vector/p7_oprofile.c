@@ -69,7 +69,7 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc, SIMD_TYPE simd)
       return p7_oprofile_Create_avx512(allocM, abc);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into p7_oprofile_Create");
+      return p7_oprofile_Create_neon(allocM, abc);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Create");  
@@ -107,7 +107,7 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
       p7_oprofile_Destroy_avx512(om);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into p7_oprofile_Destroy");
+      p7_oprofile_Destroy_neon(om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Destroy");  
@@ -139,7 +139,7 @@ p7_oprofile_Sizeof(const P7_OPROFILE *om)
       return p7_oprofile_Sizeof_avx512(om);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into p7_oprofile_Sizeof");
+      return p7_oprofile_Sizeof_neon(om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Sizeof");  
@@ -170,7 +170,7 @@ p7_oprofile_Clone(const P7_OPROFILE *om1)
       return p7_oprofile_Clone_avx512(om1);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into p7_oprofile_Clone");
+      return p7_oprofile_Clone_neon(om1);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Clone");  
@@ -248,9 +248,10 @@ uint8_t
 biased_byteify(P7_OPROFILE *om, float sc)
 {
   uint8_t b;
-
-  sc  = -1.0f * roundf(om->scale_b * sc);                          /* ugh. sc is now an integer cost represented in a float...           */
-  b   = (sc > 255 - om->bias_b) ? 255 : (uint8_t) sc + om->bias_b; /* and now we cast, saturate, and bias it to an unsigned char cost... */
+  sc  = -1.0f * roundf(om->scale_b * sc);
+  int32_t q = round(sc);
+  uint8_t b1 = (uint8_t) q;                              /* ugh. sc is now an integer cost represented in a float...           */
+  b   = (sc > 255 - om->bias_b) ? 255 : b1 + om->bias_b; /* and now we cast, saturate, and bias it to an unsigned char cost... */
   return b;
 }
  
@@ -264,9 +265,9 @@ uint8_t
 unbiased_byteify(P7_OPROFILE *om, float sc)
 {
   uint8_t b;
-
   sc  = -1.0f * roundf(om->scale_b * sc);       /* ugh. sc is now an integer cost represented in a float...    */
-  b   = (sc > 255.) ? 255 : (uint8_t) sc;	/* and now we cast and saturate it to an unsigned char cost... */
+  uint32_t q = round(sc);
+  b   = (sc > 255.) ? 255 : (uint8_t) q;        /* and now we cast and saturate it to an unsigned char cost... */
   return b;
 }
  
@@ -316,7 +317,7 @@ sf_conversion(P7_OPROFILE *om)
       sf_conversion_avx512(om);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into sf_conversion");
+      sf_conversion_neon(om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to sf_conversion");  
@@ -350,7 +351,7 @@ mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
       mf_conversion_avx512(gm, om);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into mf_conversion");
+      mf_conversion_neon(gm, om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to mf_conversion");  
@@ -381,7 +382,7 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
       vf_conversion_avx512(gm, om);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into vf_conversion");
+      vf_conversion_neon(gm, om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to vf_conversion");  
@@ -407,7 +408,7 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
       fb_conversion_avx512(gm, om);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into fb_conversion");
+      fb_conversion_neon(gm, om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to fb_conversion");  
@@ -479,7 +480,9 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
         if ((status =  fb_conversion_avx512(gm, om)) != eslOK) return status;   /* ForwardFilter()'s information */
         break;
     case NEON:
-        p7_Fail("Neon support not yet integrated into p7_oprofile_Convert");
+        if ((status =  mf_conversion_neon(gm, om)) != eslOK) return status;   /* MSVFilter()'s information     */
+        if ((status =  vf_conversion_neon(gm, om)) != eslOK) return status;   /* ViterbiFilter()'s information */
+        if ((status =  fb_conversion_neon(gm, om)) != eslOK) return status;   /* ForwardFilter()'s information */
         break;
       default:
         p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Convert");  
@@ -687,7 +690,7 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
       return p7_oprofile_GetFwdTransitionArray_avx512(om, type, arr);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into p7_oprofile_GetFwdTransitionArray");
+      return p7_oprofile_GetFwdTransitionArray_neon(om, type, arr);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_GetFwdTransitionArray");  
@@ -733,8 +736,8 @@ p7_oprofile_GetMSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr )
       return p7_oprofile_GetMSVEmissionScoreArray_avx512(om, arr);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into p7_oprofile_GetMSVEmissionScoreArray");
-      break;
+      return p7_oprofile_GetMSVEmissionScoreArray_neon(om, arr);
+      break; 
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_GetMSVEmissionScoreArray");  
   }
@@ -778,7 +781,7 @@ p7_oprofile_GetFwdEmissionScoreArray(const P7_OPROFILE *om, float *arr )
       return p7_oprofile_GetFwdEmissionScoreArray_avx512(om, arr);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into p7_oprofile_GetFwdEmissionScoreArray");
+      return p7_oprofile_GetFwdEmissionScoreArray_neon(om, arr);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_GetFwdEmissionScoreArray");  
@@ -823,7 +826,7 @@ p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, P7_BG *bg, float *arr )
       return p7_oprofile_GetFwdEmissionArray_avx512(om, bg, arr);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into p7_oprofile_GetFwdEmissionArray");
+      return p7_oprofile_GetFwdEmissionArray_neon(om, bg, arr);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_GetFwdEmissionArray");  
@@ -855,7 +858,7 @@ oprofile_dump_mf(FILE *fp, const P7_OPROFILE *om)
       return oprofile_dump_mf_sse(fp, om);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into oprofile_dump_mf");
+      return oprofile_dump_mf_neon(fp, om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to oprofile_dump_mf");
@@ -880,7 +883,7 @@ oprofile_dump_vf(FILE *fp, const P7_OPROFILE *om)
       return oprofile_dump_vf_sse(fp, om);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into oprofile_dump_vf");
+      return oprofile_dump_vf_neon(fp, om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to oprofile_dump_vf");
@@ -909,7 +912,7 @@ oprofile_dump_fb(FILE *fp, const P7_OPROFILE *om, int width, int precision)
       return oprofile_dump_fb_sse(fp, om, width, precision);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into oprofile_dump_fb");
+      return oprofile_dump_fb_neon(fp, om, width, precision);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to oprofile_dump_fb");
@@ -1052,7 +1055,7 @@ p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, c
       return p7_oprofile_Compare_avx512(om1, om2, tol, errmsg);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into p7_oprofile_Compare");
+      return p7_oprofile_Compare_neon(om1, om2, tol, errmsg);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Compare");
