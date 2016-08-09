@@ -37,8 +37,10 @@
 #include <pthread.h>
 #endif
 
+#if p7_CPU_ARCH == intel
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
+#endif
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -94,7 +96,7 @@ static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file, SSE: "h3ps
 int
 p7_oprofile_Write_avx(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
 {
-
+#ifdef HAVE_AVX2
   int Q4   = P7_NVF_AVX(om->M);
   printf("om->M = %d\n",om->M );
   int Q8   = P7_NVW_AVX(om->M);
@@ -215,6 +217,10 @@ p7_oprofile_Write_avx(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
  ERROR:
   p7_Fail("Unable to allocate memory for temporary buffer in p7_oprofile_Write_avx");
   return eslEMEM;
+#endif /* HAVE_AVX2 */
+#ifndef HAVE_AVX2
+  return 0;
+#endif
 }
 /*---------------- end, writing oprofile ------------------------*/
 
@@ -274,6 +280,7 @@ p7_oprofile_Write_avx(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
 int
 p7_oprofile_ReadMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om)
 {
+#ifdef HAVE_AVX2
   P7_OPROFILE  *om = NULL;
   ESL_ALPHABET *abc = NULL;
   uint32_t      magic;
@@ -369,10 +376,133 @@ p7_oprofile_ReadMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
   if (om != NULL) p7_oprofile_Destroy(om);
   *ret_om = NULL;
   return status;
-
+#endif /* HAVE_AVX2 */
+#ifndef HAVE_AVX2
+  return 0;
+#endif
 }
 
+/* Function:  p7_oprofile_ReadInfoMSV()
+ * Synopsis:  Read MSV filter info, but not the scores.
+ *
+ * Purpose:   Read just enough of the MSV filter header from the
+ *            <.h3f> file associated with an open HMM file <hfp>
+ *            to skip ahead to the next MSV filter. Allocate a new
+ *            model, populate it with just the file offsets of this
+ *            model and return a pointer to it in <*ret_om>. 
+ *            
+ *            The <.h3f> file was opened automatically, if it existed,
+ *            when the HMM file was opened with <p7_hmmfile_OpenE()>.
+ *            
+ *            When no more HMMs remain in the file, return <eslEOF>.
+ *
+ * Args:      hfp     - open HMM file, with associated .h3p file
+ *            byp_abc - BYPASS: <*byp_abc == ESL_ALPHABET *> if known; 
+ *                              <*byp_abc == NULL> if desired; 
+ *                              <NULL> if unwanted.
+ *            ret_om  - RETURN: newly allocated <om> with partial MSV
+ *                      filter data filled in.
+ *            
+ * Returns:   <eslOK> on success. <*ret_om> is allocated here;
+ *            caller free's with <p7_oprofile_Destroy()>.
+ *            <*byp_abc> is allocated here if it was requested;
+ *            caller free's with <esl_alphabet_Destroy()>.
+ *            
+ *            Returns <eslEFORMAT> if <hfp> has no <.h3f> file open,
+ *            or on any parsing error.
+ *            
+ *            Returns <eslEINCOMPAT> if the HMM we read is incompatible
+ *            with the existing alphabet <*byp_abc> led us to expect.
+ *            
+ *            On any returned error, <hfp->errbuf> contains an
+ *            informative error message.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ */
+int
+p7_oprofile_ReadInfoMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om)
+{
+#ifdef HAVE_AVX2
+  P7_OPROFILE  *om = NULL;
+  ESL_ALPHABET *abc = NULL;
+  uint32_t      magic;
+  off_t         roff;
+  int           M, Q16, Q16x;
+  int           n;
+  int           alphatype;
+  int           status;
 
+  hfp->errbuf[0] = '\0';
+  if (hfp->ffp == NULL) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no MSV profile file; hmmpress probably wasn't run");
+  if (feof(hfp->ffp))   { status = eslEOF; goto ERROR; }        /* normal EOF: no more profiles */
+
+  /* keep track of the starting offset of the MSV model */
+  roff = ftello(hfp->ffp);
+
+  if (! fread( (char *) &magic,     sizeof(uint32_t), 1, hfp->ffp)) { status = eslEOF; goto ERROR; }
+  if (magic == v3a_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/a); please hmmpress your HMM file again");
+  if (magic == v3b_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/b); please hmmpress your HMM file again");
+  if (magic == v3c_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/c); please hmmpress your HMM file again");
+  if (magic == v3d_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/d); please hmmpress your HMM file again");
+  if (magic == v3e_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/e); please hmmpress your HMM file again");
+  if (magic != v3f_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
+
+  if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
+  if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");
+  Q16  = P7_NVB(M);
+  Q16x = P7_NVB(M) + p7O_EXTRA_SB;
+
+  /* Set or verify alphabet. */
+  if (byp_abc == NULL || *byp_abc == NULL)      {       /* alphabet unknown: whether wanted or unwanted, make a new one */
+    if ((abc = esl_alphabet_Create(alphatype)) == NULL)  ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: alphabet");
+  } else {                      /* alphabet already known: verify it against what we see in the HMM */
+    abc = *byp_abc;
+    if (abc->type != alphatype)
+      ESL_XFAIL(eslEINCOMPAT, hfp->errbuf, "Alphabet type mismatch: was %s, but current profile says %s",
+                esl_abc_DecodeType(abc->type), esl_abc_DecodeType(alphatype));
+  }
+  /* Now we know the sizes of things, so we can allocate. */
+  P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure");
+  if ((om = p7_oprofile_Create(M, abc, simd)) == NULL)         ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: oprofile");
+  om->M = M;
+  om->roff = roff;
+
+  /* calculate the remaining length of the msv model */
+  om->name = NULL;
+  if (!fread((char *) &n, sizeof(int), 1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name length");
+  roff += (sizeof(int) * 5);                      /* magic, model size, alphabet type, max length, name length */
+  roff += (sizeof(char) * (n + 1));               /* name string and terminator '\0'                           */
+  roff += (sizeof(float) + sizeof(uint8_t) * 5);  /* transition  costs, bias, scale and base                   */
+  roff += (sizeof(__m128i) * abc->Kp * Q16x);     /* ssv scores                                                */
+  roff += (sizeof(__m128i) * abc->Kp * Q16);      /* msv scores                                                */
+  roff += (sizeof(float) * p7_NEVPARAM);          /* stat params                                               */
+  roff += (sizeof(off_t) * p7_NOFFSETS);          /* hmmscan offsets                                           */
+  roff += (sizeof(float) * p7_MAXABET);           /* model composition                                         */
+  roff += sizeof(uint32_t);                       /* sentinel magic                                            */
+
+  /* keep track of the ending offset of the MSV model */
+  p7_oprofile_Position(hfp, roff);
+  om->eoff = ftello(hfp->ffp) - 1;
+
+  /* MSV models are always multilocal. ReadRest() might override this later; that's ok. */
+  om->mode = p7_LOCAL;
+  om->nj   = 1.0f;
+
+  if (byp_abc != NULL) *byp_abc = abc;  /* pass alphabet (whether new or not) back to caller, if caller wanted it */
+  *ret_om = om;
+  return eslOK;
+
+ ERROR:
+  if (abc != NULL && (byp_abc == NULL || *byp_abc == NULL)) esl_alphabet_Destroy(abc); /* destroy alphabet if we created it here */
+  if (om != NULL) p7_oprofile_Destroy(om);
+  *ret_om = NULL;
+  return status;
+#endif /* HAVE_AVX2 */
+#ifndef HAVE_AVX2
+  return 0;
+#endif
+}
 
 /* Function:  p7_oprofile_ReadRest()
  * Synopsis:  Read the rest of an optimized profile.
@@ -406,6 +536,7 @@ p7_oprofile_ReadMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
 int
 p7_oprofile_ReadRest_avx(P7_HMMFILE *hfp, P7_OPROFILE *om)
 {
+#ifdef HAVE_AVX2
   uint32_t      magic;
   int           M, Q4, Q8;
   int           x,n;
@@ -521,6 +652,10 @@ __m128i *tmp_buffer;  // buffer used for restriping values from 128-bit format
 
   if (name != NULL) free(name);
   return status;
+#endif /* HAVE_AVX2 */
+#ifndef HAVE_AVX2
+  return 0;
+#endif
 }
 /*----------- end, reading optimized profiles -------------------*/
 
