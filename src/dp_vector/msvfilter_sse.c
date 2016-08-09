@@ -18,9 +18,10 @@
 
 #include <stdio.h>
 #include <math.h>
-#if p7_CPU_ARCH == x86
+#if p7_CPU_ARCH == intel 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
+#include "x86intrin.h"
 #endif
 #include "easel.h"
 #include "esl_sse.h"
@@ -33,7 +34,7 @@
 #include "dp_vector/p7_filtermx.h"
 #include "dp_vector/ssvfilter.h"
 #include "dp_vector/msvfilter.h"
-#include "x86intrin.h"
+
 
 
 //uint64_t SSV_time, MSV_time;
@@ -250,6 +251,233 @@ p7_MSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 /*------------------ end, p7_MSVFilter_SSE() ------------------------*/
 
 
+/* Function:  p7_SSVFilter_longtarget()
+ * Synopsis:  Finds windows with SSV scores above some threshold (vewy vewy fast, in limited precision)
+ *
+ * Purpose:   Calculates an approximation of the SSV (single ungapped diagonal)
+ *            score for regions of sequence <dsq> of length <L> residues, using
+ *            optimized profile <om>, and a preallocated one-row DP matrix <ox>,
+ *            and captures the positions at which such regions exceed the score
+ *            required to be significant in the eyes of the calling function,
+ *            which depends on the <bg> and <p> (usually p=0.02 for nhmmer).
+ *            Note that this variant performs only SSV computations, never
+ *            passing through the J state - the score required to pass SSV at
+ *            the default threshold (or less restrictive) is sufficient to
+ *            pass MSV in essentially all DNA models we've tested.
+ *
+ *            Above-threshold diagonals are captured into a preallocated list
+ *            <windowlist>. Rather than simply capturing positions at which a
+ *            score threshold is reached, this function establishes windows
+ *            around those high-scoring positions, using scores in <msvdata>.
+ *            These windows can be merged by the calling function.
+ *
+ *
+ * Args:      dsq     - digital target sequence, 1..L
+ *            L       - length of dsq in residues
+ *            om      - optimized profile
+ *            ox      - DP matrix
+ *            msvdata    - compact representation of substitution scores, for backtracking diagonals
+ *            bg         - the background model, required for translating a P-value threshold into a score threshold
+ *            P          - p-value below which a region is captured as being above threshold
+ *            windowlist - preallocated container for all hits (resized if necessary)
+ *
+ *
+ * Note:      We misuse the matrix <ox> here, using only a third of the
+ *            first dp row, accessing it as <dp[0..Q-1]> rather than
+ *            in triplets via <{MDI}MX(q)> macros, since we only need
+ *            to store M state values. We know that if <ox> was big
+ *            enough for normal DP calculations, it must be big enough
+ *            to hold the MSVFilter calculation.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEINVAL> if <ox> allocation is too small.
+ */
+int
+p7_SSVFilter_longtarget_sse(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_SCOREDATA *msvdata,
+                        P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
+{
+#ifdef HAVE_SSE2
+  register __m128i mpv;            /* previous row values                                       */
+  register __m128i xEv;            /* E state: keeps max for Mk->E for a single iteration       */
+  register __m128i xBv;            /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register __m128i sv;             /* temp storage of 1 curr row value in progress              */
+  register __m128i biasv;          /* emission bias in a vector                                 */
+  int i;                           /* counter over sequence positions 1..L                      */
+  int q;                           /* counter over vectors 0..nq-1                              */
+  int Q        = P7_NVB(om->M);    /* segment length: # of vectors                              */
+  __m128i *dp  = ox->dp;           /* one DP row of memory                                      */
+  __m128i *rsc;                    /* will point at om->rbv[x] for residue x[i]                 */
+  __m128i tjbmv;                   /* vector for J->B move cost + B->M move costs               */
+  __m128i basev;                   /* offset for scores                                         */
+  __m128i ceilingv;                /* saturated simd value used to test for overflow            */
+  __m128i tempv;                   /* work vector                                               */
+  int cmp;
+  int k;
+  int n;
+  int end;
+  int rem_sc;
+  int start;
+  int target_end;
+  int target_start;
+  int max_end;
+  int max_sc;
+  int sc;
+  int pos_since_max;
+  float ret_sc;
+  union { __m128i v; uint8_t b[16]; } u;
+  int   status;
+
+
+  /*
+   * Computing the score required to let P meet the F1 prob threshold
+   * In original code, converting from a scaled int MSV
+   * score S (the score getting to state E) to a probability goes like this:
+   *  usc =  S - om->tec_b - om->tjb_b - om->base_b;
+   *  usc /= om->scale_b;
+   *  usc -= 3.0;
+   *  P = f ( (usc - nullsc) / eslCONST_LOG2 , mu, lambda)
+   * and we're computing the threshold usc, so reverse it:
+   *  (usc - nullsc) /  eslCONST_LOG2 = inv_f( P, mu, lambda)
+   *  usc = nullsc + eslCONST_LOG2 * inv_f( P, mu, lambda)
+   *  usc += 3
+   *  usc *= om->scale_b
+   *  S = usc + om->tec_b + om->tjb_b + om->base_b
+   *
+   *  Here, I compute threshold with length model based on max_length.  Doesn't
+   *  matter much - in any case, both the bg and om models will change with roughly
+   *  1 bit for each doubling of the length model, so they offset.
+   */
+  float nullsc;
+  __m128i sc_threshv;
+  uint8_t sc_thresh;
+  float invP = esl_gumbel_invsurv(P, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+
+  p7_bg_SetLength(bg, om->max_length);
+  p7_oprofile_ReconfigMSVLength(om, om->max_length);
+  p7_bg_NullOne  (bg, dsq, om->max_length, &nullsc);
+
+  sc_thresh = (int) ceil( ( ( nullsc  + (invP * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b );
+  sc_threshv = _mm_set1_epi8((int8_t) 255 - sc_thresh);
+
+
+  /* Resize the filter mx as needed */
+  if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of SSV filter matrix failed");
+
+  /* Matrix type and size must be set early, not late: debugging dump functions need this information. */
+  ox->M    = om->M;
+  ox->type = p7F_SSVFILTER;
+
+  /* Initialization. In offset unsigned  arithmetic, -infinity is 0, and 0 is om->base.
+   */
+  biasv = _mm_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
+  ceilingv = _mm_cmpeq_epi8(biasv, biasv);
+  for (q = 0; q < Q; q++) dp[q] = _mm_setzero_si128();
+
+  basev = _mm_set1_epi8((int8_t) om->base_b);
+  tjbmv = _mm_set1_epi8((int8_t) om->tjb_b + (int8_t) om->tbm_b);
+
+  xBv = _mm_subs_epu8(basev, tjbmv);
+  for (i = 1; i <= L; i++) {
+    rsc = om->rbv[dsq[i]];
+    xEv = _mm_setzero_si128();
+
+          /* Right shifts by 1 byte. 4,8,12,x becomes x,4,8,12.
+           * Because ia32 is littlendian, this means a left bit shift.
+           * Zeros shift on automatically, which is our -infinity.
+           */
+          mpv = _mm_slli_si128(dp[Q-1], 1);
+          for (q = 0; q < Q; q++) {
+                  /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
+                  sv   = _mm_max_epu8(mpv, xBv);
+                  sv   = _mm_adds_epu8(sv, biasv);
+                  sv   = _mm_subs_epu8(sv, *rsc);   rsc++;
+                  xEv  = _mm_max_epu8(xEv, sv);
+
+                  mpv   = dp[q];          /* Load {MDI}(i-1,q) into mpv */
+                  dp[q] = sv;             /* Do delayed store of M(i,q) now that memory is usable */
+          }
+
+          /* test if the pthresh significance threshold has been reached;
+           * note: don't use _mm_cmpgt_epi8, because it's a signed comparison, which won't work on uint8s */
+          tempv = _mm_adds_epu8(xEv, sc_threshv);
+          tempv = _mm_cmpeq_epi8(tempv, ceilingv);
+          cmp = _mm_movemask_epi8(tempv);
+
+          if (cmp != 0) {  //hit pthresh, so add position to list and reset values
+
+            //figure out which model state hit threshold
+            end = -1;
+            rem_sc = -1;
+            for (q = 0; q < Q; q++) {  /// Unpack and unstripe, so we can find the state that exceeded pthresh
+          u.v = dp[q];
+          for (k = 0; k < 16; k++) { // unstripe
+            //(q+Q*k+1) is the model position k at which the xE score is found
+            if (u.b[k] >= sc_thresh && u.b[k] > rem_sc && (q+Q*k+1) <= om->M) {
+              end = (q+Q*k+1);
+              rem_sc = u.b[k];
+            }
+          }
+          dp[q] = _mm_set1_epi8(0); // while we're here ... this will cause values to get reset to xB in next dp iteration
+            }
+
+            //recover the diagonal that hit threshold
+            start = end;
+            target_end = target_start = i;
+            sc = rem_sc;
+            while (rem_sc > om->base_b - om->tjb_b - om->tbm_b) {
+              rem_sc -= om->bias_b -  msvdata->msv_scores[start*om->abc->Kp + dsq[target_start]];
+              --start;
+              --target_start;
+            }
+            start++;
+            target_start++;
+
+
+            //extend diagonal further with single diagonal extension
+            k = end+1;
+            n = target_end+1;
+            max_end = target_end;
+            max_sc = sc;
+            pos_since_max = 0;
+            while (k<om->M && n<=L) {
+              sc += om->bias_b -  msvdata->msv_scores[k*om->abc->Kp + dsq[n]];
+
+              if (sc >= max_sc) {
+                max_sc = sc;
+                max_end = n;
+                pos_since_max=0;
+              } else {
+                pos_since_max++;
+                if (pos_since_max == 5)
+                  break;
+              }
+              k++;
+              n++;
+            }
+
+            end  +=  (max_end - target_end);
+            k    +=  (max_end - target_end);
+      target_end = max_end;
+
+      ret_sc = ((float) (max_sc - om->tjb_b) - (float) om->base_b);
+      ret_sc /= om->scale_b;
+      ret_sc -= 3.0; // that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ
+
+      p7_hmmwindow_new(windowlist, 0, target_start, k, end, end-start+1 , ret_sc, p7_NOCOMPLEMENT);
+
+      i = target_end; // skip forward
+          }
+
+
+  } /* end loop over sequence residues 1..L */
+  return eslOK;
+#endif /* HAVE_SSE2 */
+#ifndef HAVE_SSE2
+  return 0;
+#endif
+}
+/*------------------ end, p7_SSVFilter_longtarget() ------------------------*/
 
 /*****************************************************************
  * @LICENSE@

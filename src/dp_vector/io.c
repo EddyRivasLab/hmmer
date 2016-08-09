@@ -238,7 +238,7 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
       return p7_oprofile_ReadInfoMSV_neon(hfp, byp_abc, ret_om);
       break;
     default:
-      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_ReadMSV");  
+      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_ReadInfoMSV");  
   }
 }
 
