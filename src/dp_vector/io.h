@@ -15,6 +15,7 @@ extern int p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om);
 extern int p7_oprofile_Write_sse(FILE *ffp, FILE *pfp, P7_OPROFILE *om);
 extern int p7_oprofile_Write_avx(FILE *ffp, FILE *pfp, P7_OPROFILE *om);
 extern int p7_oprofile_Write_avx512(FILE *ffp, FILE *pfp, P7_OPROFILE *om);
+extern int p7_oprofile_Write_neon(FILE *ffp, FILE *pfp, P7_OPROFILE *om);
 
 extern int p7_oprofile_ReadMSV (P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om, SIMD_TYPE simd);
 extern int p7_oprofile_ReadMSV_sse (P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);

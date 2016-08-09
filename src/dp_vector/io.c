@@ -37,7 +37,6 @@
 #include <pthread.h>
 #endif
 
-
 #include "easel.h"
 #include "esl_alphabet.h"
 
