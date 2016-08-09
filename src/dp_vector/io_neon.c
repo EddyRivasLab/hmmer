@@ -419,7 +419,7 @@ p7_oprofile_ReadInfoMSV_neon(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFIL
   /* Now we know the sizes of things, so we can allocate. */
   P7_HARDWARE *hw;
   if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure");
-  if ((om = p7_oprofile_Create(M, abc, simd)) == NULL)         ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: oprofile");
+  if ((om = p7_oprofile_Create(M, abc, hw->simd)) == NULL)         ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: oprofile");
   om->M = M;
   om->roff = roff;
 
