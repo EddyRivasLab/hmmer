@@ -12,10 +12,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#if p7_CPU_ARCH == intel
-#include <xmmintrin.h>
-#include <emmintrin.h>
-#endif /* intel arch */
+#if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
+#include <arm_neon.h>
+#include "esl_neon.h"
+#endif
 
 #include "easel.h"
 
@@ -44,9 +44,9 @@
  * Throws:    <NULL> on allocation failure.
  */
 P7_FILTERMX *
-p7_filtermx_Create_sse(int allocM)
+p7_filtermx_Create_neon(int allocM)
 {
-#ifdef HAVE_SSE2
+#ifdef HAVE_NEON
   P7_FILTERMX *fx = NULL;
   int          status;
 
@@ -70,11 +70,11 @@ p7_filtermx_Create_sse(int allocM)
 //#ifdef p7_build_SSE // allocate different memory buffers depending on which
   // ISA we're using
   /*                    16B per vector  * (MDI)states *  ~M/4 vectors    + alignment slop */
-  ESL_ALLOC(fx->dp_mem, (sizeof(__m128i) * p7F_NSCELLS * P7_NVW(allocM)) + (p7_VALIGN-1));
+  ESL_ALLOC(fx->dp_mem, (sizeof(esl_neon_128i_t) * p7F_NSCELLS * P7_NVW(allocM)) + (p7_VALIGN-1));
   fx->allocM = allocM;
 
   /* Manual memory alignment incantation: */
-  fx->dp = (__m128i *) ( (unsigned long int) (  (char *) fx->dp_mem + (p7_VALIGN-1) ) & p7_VALIMASK);
+  fx->dp = (esl_neon_128i_t *) ( (unsigned long int) (  (char *) fx->dp_mem + (p7_VALIGN-1) ) & p7_VALIMASK);
 //#endif
 
   return fx;
@@ -82,8 +82,8 @@ p7_filtermx_Create_sse(int allocM)
  ERROR:
   p7_filtermx_Destroy(fx);
   return NULL;
- #endif //HAVE_SSE2
- #ifndef HAVE_SSE2
+ #endif //HAVE_NEON
+ #ifndef HAVE_NEON
  return NULL;
  #endif 
 }
@@ -108,9 +108,9 @@ p7_filtermx_Create_sse(int allocM)
  *            <fx> is now undefined, and it should not be used.
  */
 int
-p7_filtermx_GrowTo_sse(P7_FILTERMX *fx, int allocM)
+p7_filtermx_GrowTo_neon(P7_FILTERMX *fx, int allocM)
 {
-#ifdef HAVE_SSE2  
+#ifdef HAVE_NEON  
   int status;
 
   /* Contract checks / argument validation */
@@ -119,16 +119,16 @@ p7_filtermx_GrowTo_sse(P7_FILTERMX *fx, int allocM)
   if (allocM <= fx->allocM) return eslOK;
 
   /* if not, grow it */
-  ESL_REALLOC(fx->dp_mem, (sizeof(__m128i) * (p7F_NSCELLS * P7_NVW(allocM))) + (p7_VALIGN-1));
+  ESL_REALLOC(fx->dp_mem, (sizeof(esl_neon_128i_t) * (p7F_NSCELLS * P7_NVW(allocM))) + (p7_VALIGN-1));
   fx->allocM = allocM;
-  fx->dp     = (__m128i *) ( (unsigned long int) ( (char *) fx->dp_mem + (p7_VALIGN-1)) & p7_VALIMASK);
+  fx->dp     = (esl_neon_128i_t *) ( (unsigned long int) ( (char *) fx->dp_mem + (p7_VALIGN-1)) & p7_VALIMASK);
 
   return eslOK;
 
  ERROR:
   return status;
-#endif //HAVE_SSE2
- #ifndef HAVE_SSE2
+#endif //HAVE_NEON
+ #ifndef HAVE_NEON
  return eslENORESULT;
  #endif   
 }
@@ -145,12 +145,12 @@ p7_filtermx_GrowTo_sse(P7_FILTERMX *fx, int allocM)
  * Returns:   the allocation size.
  */
 size_t 
-p7_filtermx_Sizeof_sse(const P7_FILTERMX *fx)
+p7_filtermx_Sizeof_neon(const P7_FILTERMX *fx)
 {
   size_t n = sizeof(P7_FILTERMX);
  
-#ifdef HAVE_SSE2
-  n += (sizeof(__m128i) * p7F_NSCELLS * P7_NVW(fx->allocM)) + (p7_VALIGN-1);
+#ifdef HAVE_NEON
+  n += (sizeof(esl_neon_128i_t) * p7F_NSCELLS * P7_NVW(fx->allocM)) + (p7_VALIGN-1);
  #endif 
   return n;
 }
@@ -164,11 +164,11 @@ p7_filtermx_Sizeof_sse(const P7_FILTERMX *fx)
  *            profile of <M> consensus positions.
  */
 size_t
-p7_filtermx_MinSizeof_sse(int M)
+p7_filtermx_MinSizeof_neon(int M)
 {
   size_t n = sizeof(P7_FILTERMX);
- #ifdef HAVE_SSE2 
-  n += (sizeof(__m128i) * p7F_NSCELLS * P7_NVW(M)) + (p7_VALIGN-1);
+ #ifdef HAVE_NEON 
+  n += (sizeof(esl_neon_128i_t) * p7F_NSCELLS * P7_NVW(M)) + (p7_VALIGN-1);
  #endif
 
   return n;
@@ -185,10 +185,10 @@ p7_filtermx_MinSizeof_sse(int M)
  * Returns:   (void)
  */
 void
-p7_filtermx_Destroy_sse(P7_FILTERMX *fx)
+p7_filtermx_Destroy_neon(P7_FILTERMX *fx)
 {
   if (fx) {
-#ifdef HAVE_SSE2
+#ifdef HAVE_NEON
     if (fx->dp_mem) free(fx->dp_mem);
 #endif
 
@@ -226,11 +226,11 @@ p7_filtermx_Destroy_sse(P7_FILTERMX *fx)
 int
 p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
- #ifdef HAVE_SSE2 
+ #ifdef HAVE_NEON 
   int      Q  = P7_NVB(fx->M);	/* number of vectors in the MSV row */
   uint8_t *v  = NULL;		/* array of scores after unstriping them */
   int      q,z,k;
-  union { __m128i v; uint8_t i[16]; } tmp;
+  union { esl_neon_128i_t v; uint8_t i[16]; } tmp;
   int      status;
 
   ESL_DASSERT1( (fx->type == p7F_MSVFILTER || fx->type == p7F_SSVFILTER) );
@@ -277,8 +277,8 @@ p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, u
 ERROR:
   free(v);
   return status;
-#endif //HAVE_SSE2
- #ifndef HAVE_SSE2
+#endif //HAVE_NEON
+ #ifndef HAVE_NEON
  return eslENORESULT;
  #endif   
 }
@@ -305,12 +305,12 @@ ERROR:
 int
 p7_filtermx_DumpVFRow(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
 {
- #ifdef HAVE_SSE2 
-  __m128i *dp = fx->dp;		/* enable MMXf(q), DMXf(q), IMXf(q) macros */
+ #ifdef HAVE_NEON 
+  esl_neon_128i_t *dp = fx->dp;		/* enable MMXf(q), DMXf(q), IMXf(q) macros */
   int      Q  = P7_NVW(fx->M);	/* number of vectors in the VF row */
   int16_t *v  = NULL;		/* array of unstriped, uninterleaved scores  */
   int      q,z,k;
-  union { __m128i v; int16_t i[8]; } tmp;
+  union { esl_neon_128i_t v; int16_t i[8]; } tmp;
   int      status;
 
   ESL_ALLOC(v, sizeof(int16_t) * ((Q*8)+1));
@@ -363,8 +363,8 @@ p7_filtermx_DumpVFRow(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, i
 ERROR:
   free(v);
   return status;
-#endif //HAVE_SSE2
- #ifndef HAVE_SSE2
+#endif //HAVE_NEON
+ #ifndef HAVE_NEON
  return eslENORESULT;
  #endif   
 }

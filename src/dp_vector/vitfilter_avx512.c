@@ -22,8 +22,13 @@
 #include <stdio.h>
 #include <math.h>
 
+#if p7_CPU_ARCH == intel
  #include <immintrin.h>
- #include "esl_avx_512.h"
+#ifdef HAVE_AVX512
+  #include "esl_avx_512.h"
+#endif
+#endif /* intel arch */
+
 #include "easel.h"
 #include "esl_sse.h"
 

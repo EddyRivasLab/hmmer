@@ -131,7 +131,7 @@ p7_checkptmx_Create_avx512(int M, int L, int64_t ramlimit)
   return NULL;
 #endif //HAVE_AVX512
 #ifndef HAVE_AVX512
-  return NULL
+  return NULL;
 #endif      
 }
 

@@ -410,19 +410,7 @@
 
 #include <math.h>
 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
-#ifdef p7_build_AVX2
- #include<immintrin.h>
- #include"esl_avx.h"
-#endif
-#ifdef p7_build_AVX512
- #include<immintrin.h>
- #include"esl_avx_512.h"
-#endif
 #include "easel.h"
-#include "esl_sse.h"
-#include "x86intrin.h"
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
 
@@ -455,7 +443,10 @@ p7_SSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
       return p7_SSVFilter_avx512(dsq, L, om, ret_sc);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into p7_MSVFilter");
+      return p7_SSVFilter_neon(dsq, L, om, ret_sc);
+      break;
+    case NEON64:
+      return p7_SSVFilter_neon64(dsq, L, om, ret_sc);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_MSVFilter");  

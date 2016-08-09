@@ -21,6 +21,7 @@
 #if p7_CPU_ARCH == intel 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
+#include "x86intrin.h"
 #ifdef HAVE_AVX2
   #include <immintrin.h>  /* AVX2 */
   #include "esl_avx.h"
@@ -37,7 +38,7 @@
 #include "dp_vector/p7_filtermx.h"
 #include "dp_vector/ssvfilter.h"
 #include "dp_vector/msvfilter.h"
-#include "x86intrin.h"
+
 
 /*****************************************************************
  * 1. The p7_MSVFilter() DP implementation.
@@ -274,6 +275,7 @@ int
 p7_SSVFilter_longtarget_avx(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_SCOREDATA *msvdata,
                         P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
+#ifdef HAVE_AVX2
   register __m128i mpv;            /* previous row values                                       */
   register __m128i xEv;            /* E state: keeps max for Mk->E for a single iteration       */
   register __m128i xBv;            /* B state: splatted vector of B[i-1] for B->Mk calculations */

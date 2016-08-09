@@ -12,8 +12,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#if p7_CPU_ARCH == intel
 #include <xmmintrin.h>
 #include <emmintrin.h>
+#endif /* intel arch */
 
 #include "easel.h"
 

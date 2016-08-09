@@ -17,8 +17,10 @@
 #include <string.h>
 #include <math.h>		/* roundf() */
 
+#if p7_CPU_ARCH == intel 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
+#endif /* intel arch */
 
 #include "easel.h"
 #include "esl_alphabet.h"

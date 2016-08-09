@@ -25,8 +25,12 @@
 #include "easel.h"
 #include "esl_sse.h"
 
+#if p7_CPU_ARCH == intel
 #include <immintrin.h>
-#include "esl_avx.h"
+#ifdef HAVE_AVX2
+  #include "esl_avx.h"
+#endif
+#endif /* intel arch */
 
 #include "esl_gumbel.h"
 

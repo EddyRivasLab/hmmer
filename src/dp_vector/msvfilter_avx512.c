@@ -314,6 +314,7 @@ int
 p7_SSVFilter_longtarget_avx512(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_SCOREDATA *msvdata,
                         P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
+#ifdef HAVE_AVX512
   register __m128i mpv;            /* previous row values                                       */
   register __m128i xEv;            /* E state: keeps max for Mk->E for a single iteration       */
   register __m128i xBv;            /* B state: splatted vector of B[i-1] for B->Mk calculations */

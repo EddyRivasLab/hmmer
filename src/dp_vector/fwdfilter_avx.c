@@ -1060,7 +1060,7 @@ backward_row_zero_avx(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
  #endif //p7_DEBUGGING 
 #endif // HAVE_AVX2
 #ifndef HAVE_AVX2
-  return 0.0
+  return 0.0;
 #endif
 }
 

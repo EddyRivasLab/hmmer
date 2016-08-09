@@ -411,14 +411,18 @@
 
 #include <math.h>
 
+#if p7_CPU_ARCH == intel
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
 #ifdef HAVE_AVX2
  #include<immintrin.h>
  #include"esl_avx.h"
 #endif
-#include "easel.h"
 #include "x86intrin.h"
+#endif /* intel arch */
+
+#include "easel.h"
+
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
 

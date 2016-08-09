@@ -12,7 +12,10 @@
 #include "p7_config.h"
 
 #include <math.h>
+
+#if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
 #include <arm_neon.h>
+#endif /* arm/arm64 arch */
 
 #include "easel.h"
 #include "esl_neon64.h"
