@@ -77,10 +77,10 @@ EXAMPLES = fwdfilter_example \
 
 LIBTMP =
 
-top_srcdir   = @top_srcdir@
-top_builddir = @top_builddir@
-srcdir       = @srcdir@
-VPATH        = @srcdir@ 
+top_srcdir   = ../..
+top_builddir = ../..
+srcdir       = .
+
 SHELL        = /bin/sh
 
 include ../Makefile-subdirs.mk

@@ -37,8 +37,10 @@
 #include <pthread.h>
 #endif
 
+#if p7_CPU_ARCH == intel
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
+#endif
 
 #include "easel.h"
 #include "esl_alphabet.h"

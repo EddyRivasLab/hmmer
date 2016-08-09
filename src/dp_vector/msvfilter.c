@@ -108,7 +108,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
       return p7_MSVFilter_avx512(dsq, L, om, ox, ret_sc);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into p7_MSVFilter");
+      return p7_MSVFilter_neon(dsq, L, om, ox, ret_sc);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_MSVFilter");  

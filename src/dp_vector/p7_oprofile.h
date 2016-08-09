@@ -3,6 +3,7 @@
 
 #include "p7_config.h"
 
+#if p7_CPU_ARCH == x86
 #include <xmmintrin.h>    /* SSE  */
 #include <emmintrin.h>    /* SSE2 */
 #ifdef HAVE_AVX2
@@ -14,6 +15,15 @@
 #ifdef _PMMINTRIN_H_INCLUDED
 #include <pmmintrin.h>   /* DENORMAL_MODE */
 #endif
+
+#endif /* p7_CPU_ARCH == x86 */
+
+#if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
+#include <arm_neon.h>
+#ifdef HAVE_NEON
+	#include "esl_neon.h"
+#endif
+#endif /* p7_CPU_ARCH == arm/arm64 */
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -101,6 +111,13 @@ typedef struct p7_oprofile_s {
   __m512i  *sbv_mem_AVX_512;
   #endif
 
+  #ifdef HAVE_NEON
+  esl_neon_128i_t **rbv;        /* match scores [x][q]: rm, rm[0] are allocated      */
+  esl_neon_128i_t **sbv;        /* match scores for ssvfilter                        */
+  esl_neon_128i_t  *rbv_mem;
+  esl_neon_128i_t  *sbv_mem;
+  #endif
+
   uint8_t   tbm_b;              /* constant B->Mk cost:    scaled log 2/M(M+1)       */
   uint8_t   tec_b;              /* constant E->C  cost:    scaled log 0.5            */
   uint8_t   tjb_b;              /* constant NCJ move cost: scaled log 3/(L+3)        */
@@ -127,6 +144,13 @@ typedef struct p7_oprofile_s {
   __m512i  *twv_AVX_512;                /* transition score blocks          [8*Q8]           */
  __m512i  *rwv_mem_AVX_512;
   __m512i  *twv_mem_AVX_512;
+#endif
+
+#ifdef HAVE_NEON
+  esl_neon_128i_t **rwv;        /* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
+  esl_neon_128i_t  *twv;        /* transition score blocks          [8*Q8]           */
+  esl_neon_128i_t  *rwv_mem;
+  esl_neon_128i_t  *twv_mem;
 #endif
 
   int16_t   xw[p7O_NXSTATES][p7O_NXTRANS]; /* ENJC state transition costs            */
@@ -157,6 +181,14 @@ typedef struct p7_oprofile_s {
   __m512   *tfv_mem_AVX_512;
   __m512   *rfv_mem_AVX_512;
   #endif
+
+#ifdef HAVE_NEON
+  esl_neon_128f_t **rfv;        /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
+  esl_neon_128f_t  *tfv;        /* transition probability blocks    [8*Q4]           */
+  esl_neon_128f_t  *tfv_mem;
+  esl_neon_128f_t  *rfv_mem;
+#endif
+
   /* Disk offset information for hmmpfam's fast model retrieval                      */
   off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET, or -1                             */
 
@@ -197,6 +229,12 @@ typedef struct p7_oprofile_s {
   int    allocQ8_AVX_512;               /* P7_NVW_AVX_512(allocM): alloc size for tw, rw             */
   int    allocQ16_AVX_512;              /* P7_NVB_AVX_512(allocM): alloc size for rb                 */
 #endif
+#ifdef HAVE_NEON
+  int    allocQ4;               /* P7_NVF(allocM): alloc size for tf, rf             */
+  int    allocQ8;               /* P7_NVW(allocM): alloc size for tw, rw             */
+  int    allocQ16;              /* P7_NVB(allocM): alloc size for rb                 */
+#endif
+
   int    mode;                  /* currently must be p7_LOCAL                        */
   float  nj;                    /* expected # of J's: 0 or 1, uni vs. multihit       */
 
@@ -274,6 +312,27 @@ int oprofile_dump_mf_sse(FILE *fp, const P7_OPROFILE *om);
 int oprofile_dump_vf_sse(FILE *fp, const P7_OPROFILE *om);
 int oprofile_dump_fb_sse(FILE *fp, const P7_OPROFILE *om, int width, int precision);
 int p7_oprofile_Compare_sse(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg);
+
+// NEON versions of SIMD functions
+extern P7_OPROFILE *p7_oprofile_Create_neon(int M, const ESL_ALPHABET *abc);
+extern void         p7_oprofile_Destroy_neon(P7_OPROFILE *om);
+extern size_t       p7_oprofile_Sizeof_neon(const P7_OPROFILE *om);
+extern P7_OPROFILE *p7_oprofile_Clone_neon(const P7_OPROFILE *om);
+extern int          p7_oprofile_Convert_neon(const P7_PROFILE *gm, P7_OPROFILE *om);
+extern int          p7_oprofile_Compare_neon(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg);
+extern int          p7_oprofile_GetFwdTransitionArray_neon(const P7_OPROFILE *om, int type, float *arr );
+extern int          p7_oprofile_GetMSVEmissionScoreArray_neon(const P7_OPROFILE *om, uint8_t *arr );
+extern int          p7_oprofile_GetFwdEmissionScoreArray_neon(const P7_OPROFILE *om, float *arr );
+extern int          p7_oprofile_GetFwdEmissionArray_neon(const P7_OPROFILE *om, P7_BG *bg, float *arr );
+int sf_conversion_neon(P7_OPROFILE *om);
+int mf_conversion_neon(const P7_PROFILE *gm, P7_OPROFILE *om);
+int vf_conversion_neon(const P7_PROFILE *gm, P7_OPROFILE *om);
+int fb_conversion_neon(const P7_PROFILE *gm, P7_OPROFILE *om);
+int oprofile_dump_mf_neon(FILE *fp, const P7_OPROFILE *om);
+int oprofile_dump_vf_neon(FILE *fp, const P7_OPROFILE *om);
+int oprofile_dump_fb_neon(FILE *fp, const P7_OPROFILE *om, int width, int precision);
+int p7_oprofile_Compare_neon(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg);
+
 
 // AVX versions of SIMD functions
 extern P7_OPROFILE *p7_oprofile_Create_avx(int M, const ESL_ALPHABET *abc);

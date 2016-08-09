@@ -18,8 +18,10 @@
 
 #include <stdio.h>
 
+#if p7_CPU_ARCH == x86
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
+#endif
 
 #include "dp_reference/p7_refmx.h"
 #include "hardware/hardware.h"
@@ -158,6 +160,13 @@ extern size_t        p7_checkptmx_Sizeof_avx512   (const P7_CHECKPTMX *ox);
 extern size_t        p7_checkptmx_MinSizeof_avx512(int M, int L);
 extern int           p7_checkptmx_Reuse_avx512    (P7_CHECKPTMX *ox);
 extern void          p7_checkptmx_Destroy_avx512  (P7_CHECKPTMX *ox);
+extern P7_CHECKPTMX *p7_checkptmx_Create_neon   (int M, int L, int64_t ramlimit);
+extern int           p7_checkptmx_GrowTo_neon   (P7_CHECKPTMX *ox, int M, int L);
+extern size_t        p7_checkptmx_Sizeof_neon   (const P7_CHECKPTMX *ox);
+extern size_t        p7_checkptmx_MinSizeof_neon(int M, int L);
+extern int           p7_checkptmx_Reuse_neon    (P7_CHECKPTMX *ox);
+extern void          p7_checkptmx_Destroy_neon  (P7_CHECKPTMX *ox);
+
 
 void set_row_layout  (P7_CHECKPTMX *ox, int allocL, int maxR); 
 void set_full        (P7_CHECKPTMX *ox, int L);

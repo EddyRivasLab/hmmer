@@ -18,13 +18,14 @@
 
 #include <stdio.h>
 #include <math.h>
-
+#if p7_CPU_ARCH == x86
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
 #ifdef HAVE_AVX2
   #include <immintrin.h>  /* AVX2 */
   #include "esl_avx.h"
 #endif
+#endif /* x86 */
 #include "easel.h"
 #include "esl_sse.h"
 #include "esl_gumbel.h"

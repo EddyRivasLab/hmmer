@@ -100,6 +100,7 @@ int check_AVX512(CPUIDinfo *Info1, CPUIDinfo *Info2){
 
 #endif // p7_CPU_ARCH == "x86"
 
+
 P7_HARDWARE * p7_hardware_Create(){
 
   int status; // need this for ESL_ALLOC macro, but we don' t check it
@@ -147,6 +148,22 @@ P7_HARDWARE * p7_hardware_Create(){
     }
 
 #endif //p7_CPU_ARCH == x86
+
+#if p7_CPU_ARCH == arm
+
+  retval->arch = ARM;
+  retval->micro_arch = v7; 
+  retval->SIMD_TYPE = NEON;
+
+#endif
+
+#if p7_CPU_ARCH == arm64
+
+  retval->arch = ARM;
+  retval->micro_arch = v8;
+  retval->SIMD_TYPE = NEON64;
+
+#endif
 
 return retval;
 

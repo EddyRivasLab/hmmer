@@ -132,8 +132,12 @@
 #undef HAVE_XMMINTRIN_H		/* SSE  */
 #undef HAVE_EMMINTRIN_H		/* SSE2 */
 #undef HAVE_PMMINTRIN_H		/* SSE3 */
+#undef HAVE_ARMNEON_H		/* NEON */
 
 /* What architecture are we running on? */
+#undef intel 
+#undef arm
+#undef arm64
 #undef p7_CPU_ARCH
 
 /* Optional parallel implementations
@@ -141,6 +145,8 @@
 #undef HAVE_SSE2
 #undef HAVE_AVX2
 #undef HAVE_AVX512
+#undef HAVE_NEON
+#undef HAVE_NEON64
 #undef HAVE_MPI
 #undef HMMER_PVM
 #undef HMMER_THREADS
@@ -156,7 +162,8 @@ p7_build_x defines what should get built.
 #undef p7_build_AVX512
 #undef p7_build_check_AVX2
 #undef p7_build_check_AVX512
-
+#undef p7_build_NEON
+#undef p7_build_NEON64
 /* Optional processor specific support
  */
 #undef HAVE_FLUSH_ZERO_MODE
