@@ -16,8 +16,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include <xmmintrin.h>
-#include <emmintrin.h>
 
 #include "easel.h"
 #include "esl_random.h"
@@ -60,8 +58,8 @@ p7_filtermx_Create(int allocM, SIMD_TYPE simd)
     case AVX512:
       return p7_filtermx_Create_avx512(allocM);
       break;
-    case NEON:
-      p7_Fail("Neon support not yet integrated into p7_filtermx_Create");
+    case NEON: case NEON64:
+      return p7_filtermx_Create_neon(allocM);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_filtermx_Create");  
@@ -101,8 +99,8 @@ p7_filtermx_GrowTo(P7_FILTERMX *fx, int allocM)
     case AVX512:
       return p7_filtermx_GrowTo_avx512(fx, allocM);
       break;
-    case NEON:
-      p7_Fail("Neon support not yet integrated into p7_filtermx_GrowTo");
+    case NEON: case NEON64:
+      return p7_filtermx_GrowTo_neon(fx, allocM);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_filtermx_GrowTo");  
@@ -134,8 +132,8 @@ p7_filtermx_Sizeof(const P7_FILTERMX *fx)
     case AVX512:
       return p7_filtermx_Sizeof_avx512(fx);
       break;
-    case NEON:
-      p7_Fail("Neon support not yet integrated into p7_filtermx_Sizeof");
+    case NEON: case NEON64:
+      return p7_filtermx_Sizeof_neon(fx);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_filtermx_Sizeof");  
@@ -163,8 +161,8 @@ switch(simd){
     case AVX512:
       return p7_filtermx_MinSizeof_avx512(M);
       break;
-    case NEON:
-      p7_Fail("Neon support not yet integrated into p7_filtermx_MinSizeof");
+    case NEON: case NEON64:
+      return p7_filtermx_MinSizeof_neon(M);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_filtermx_MinSizeof");  
@@ -219,8 +217,8 @@ p7_filtermx_Destroy(P7_FILTERMX *fx)
     case AVX512:
       p7_filtermx_Destroy_avx512(fx);
       break;
-    case NEON:
-      p7_Fail("Neon support not yet integrated into p7_filtermx_Destroy");
+    case NEON: case NEON64:
+      p7_filtermx_Destroy_neon(fx);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_filtermx_Destroy");  
@@ -305,8 +303,8 @@ p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, u
     case AVX512:
       return p7_filtermx_DumpMFRow_avx512(fx, rowi, xE, xN, xJ, xB, xC);
       break;
-    case NEON:
-      p7_Fail("Neon support not yet integrated into p7_filtermx_DumpMFRow");
+    case NEON: case NEON64:
+      return p7_filtermx_DumpMFRow_neon(fx, rowi, xE, xN, xJ, xB, xC);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_filtermx_DumpMFRow");  
@@ -345,8 +343,8 @@ p7_filtermx_DumpVFRow(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, i
     case AVX512:
       return p7_filtermx_DumpVFRow_avx512(fx, rowi, xE, xN, xJ, xB, xC);
       break;
-    case NEON:
-      p7_Fail("Neon support not yet integrated into p7_filtermx_DumpVFRow");
+    case NEON: case NEON64:
+      return p7_filtermx_DumpVFRow_neon(fx, rowi, xE, xN, xJ, xB, xC);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_filtermx_DumpVFRow");  

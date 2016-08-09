@@ -5,7 +5,7 @@
 
 #include <stdio.h>
 
-#if p7_CPU_ARCH == x86
+#if p7_CPU_ARCH == intel 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
 #ifdef HAVE_AVX2
@@ -14,9 +14,9 @@
 #ifdef HAVE_AVX512
 	#include <immintrin.h>  /* AVX-512 */
 #endif
-#endif /* x86 arch */
+#endif /* intel arch */
 
-#if p7_CPU_ARCH == arm || p7_cpu_ARCH == arm64
+#if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
 #include <arm_neon.h>
 #ifdef HAVE_NEON
 	#include "esl_neon.h"
@@ -131,7 +131,15 @@ extern void         p7_filtermx_Destroy_neon(P7_FILTERMX *fx);
 extern int p7_filtermx_SetDumpMode(P7_FILTERMX *fx, FILE *dfp, int truefalse);
 #ifdef p7_DEBUGGING
 extern int p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
+extern int p7_filtermx_DumpMFRow_sse(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
+extern int p7_filtermx_DumpMFRow_avx(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
+extern int p7_filtermx_DumpMFRow_avx512(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
+extern int p7_filtermx_DumpMFRow_neon(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
 extern int p7_filtermx_DumpVFRow(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
+extern int p7_filtermx_DumpVFRow_sse(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
+extern int p7_filtermx_DumpVFRow_avx(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
+extern int p7_filtermx_DumpVFRow_avx512(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
+extern int p7_filtermx_DumpVFRow_neon(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
 #endif
 
 #endif /*p7FILTERMX_INCLUDED*/
