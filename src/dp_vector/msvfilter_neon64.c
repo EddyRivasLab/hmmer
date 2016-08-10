@@ -17,12 +17,14 @@
 #include <stdio.h>
 #include <math.h>
 
+#if p7_CPU_ARCH == arm64
 #include <arm_neon.h>
+#endif /* arm64 arch */
 
+#include "esl_neon64.h"
 #include "easel.h"
 #include "esl_gumbel.h"
 
-#include "esl_neon64.h"
 
 #include "base/p7_hmmwindow.h"
 #include "search/p7_pipeline.h"
@@ -249,10 +251,10 @@ p7_MSVFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERM
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
 int
-p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_SCOREDATA *msvdata,
+p7_SSVFilter_longtarget_neon64(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_SCOREDATA *msvdata,
                         P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
-
+#ifdef HAVE_NEON64
   register esl_neon_128i_t mpv;            /* previous row values                                       */
   register esl_neon_128i_t xEv;            /* E state: keeps max for Mk->E for a single iteration       */
   register esl_neon_128i_t xBv;            /* B state: splatted vector of B[i-1] for B->Mk calculations */

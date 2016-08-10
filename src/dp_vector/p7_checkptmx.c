@@ -367,7 +367,7 @@ p7_checkptmx_DumpFBHeader(P7_CHECKPTMX *ox)
  *            them in the debugging dump.)
  */
 int
-p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, __m128 *dpc, char *pfx)
+p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, debug_print *dpc, char *pfx)
 {
   switch(ox->simd){
     case SSE:

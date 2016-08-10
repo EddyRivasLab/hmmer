@@ -403,7 +403,7 @@ p7_checkptmx_Destroy_avx512(P7_CHECKPTMX *ox)
  *            them in the debugging dump.)
  */
 int
-p7_checkptmx_DumpFBRow_avx512(P7_CHECKPTMX *ox, int rowi, __m512 *dpc, char *pfx)
+p7_checkptmx_DumpFBRow_avx512(P7_CHECKPTMX *ox, int rowi, debug_print *dpc, char *pfx)
 {
 #ifdef HAVE_AVX512
   union { __m512 v; float x[p7_VNF_AVX_512]; } u;
@@ -464,7 +464,7 @@ p7_checkptmx_DumpFBRow_avx512(P7_CHECKPTMX *ox, int rowi, __m512 *dpc, char *pfx
   return status;
 #endif //HAVE_AVX512
 #ifndef HAVE_AVX512
-  return eslENORESULT
+  return eslENORESULT;
 #endif    
 }
 

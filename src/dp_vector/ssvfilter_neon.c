@@ -320,111 +320,111 @@ done2:                                          \
 
 
 esl_neon_128i_t
-calc_band_1(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_1(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_1, STEP_BANDS_1, CONVERT_1, 1)
 }
 
 esl_neon_128i_t
-calc_band_2(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_2(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_2, STEP_BANDS_2, CONVERT_2, 2)
 }
 
 esl_neon_128i_t
-calc_band_3(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_3(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_3, STEP_BANDS_3, CONVERT_3, 3)
 }
 
 esl_neon_128i_t
-calc_band_4(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_4(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_4, STEP_BANDS_4, CONVERT_4, 4)
 }
 
 esl_neon_128i_t
-calc_band_5(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_5(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_5, STEP_BANDS_5, CONVERT_5, 5)
 }
 
 esl_neon_128i_t
-calc_band_6(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_6(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_6, STEP_BANDS_6, CONVERT_6, 6)
 }
 
 #if MAX_BANDS > 6 /* Only include needed functions to limit object file size */
 esl_neon_128i_t
-calc_band_7(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_7(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_7, STEP_BANDS_7, CONVERT_7, 7)
 }
 
 esl_neon_128i_t
-calc_band_8(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_8(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_8, STEP_BANDS_8, CONVERT_8, 8)
 }
 
 esl_neon_128i_t
-calc_band_9(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_9(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_9, STEP_BANDS_9, CONVERT_9, 9)
 }
 
 esl_neon_128i_t
-calc_band_10(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_10(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_10, STEP_BANDS_10, CONVERT_10, 10)
 }
 
 esl_neon_128i_t
-calc_band_11(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_11(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_11, STEP_BANDS_11, CONVERT_11, 11)
 }
 
 esl_neon_128i_t
-calc_band_12(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_12(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_12, STEP_BANDS_12, CONVERT_12, 12)
 }
 
 esl_neon_128i_t
-calc_band_13(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_13(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_13, STEP_BANDS_13, CONVERT_13, 13)
 }
 
 esl_neon_128i_t
-calc_band_14(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_14(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_14, STEP_BANDS_14, CONVERT_14, 14)
 }
 #endif /* MAX_BANDS > 6 */
 #if MAX_BANDS > 14
 esl_neon_128i_t
-calc_band_15(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_15(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_15, STEP_BANDS_15, CONVERT_15, 15)
 }
 
 esl_neon_128i_t
-calc_band_16(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_16(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_16, STEP_BANDS_16, CONVERT_16, 16)
 }
 
 esl_neon_128i_t
-calc_band_17(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_17(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_17, STEP_BANDS_17, CONVERT_17, 17)
 }
 
 esl_neon_128i_t
-calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
+calc_band_neon_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_128i_t beginv, register esl_neon_128i_t xEv)
 {
   CALC(RESET_18, STEP_BANDS_18, CONVERT_18, 18)
 }
@@ -436,7 +436,7 @@ calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_neon_1
  *****************************************************************/
 
 uint8_t
-get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
+get_xE_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 {
   esl_neon_128i_t xEv;		   /* E state: keeps max for Mk->E as we go                     */
   esl_neon_128i_t beginv;          /* begin scores                                              */
@@ -449,12 +449,12 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   /* function pointers for the various number of vectors to use */
   esl_neon_128i_t (*fs[MAX_BANDS + 1]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register esl_neon_128i_t, esl_neon_128i_t)
     = {NULL
-       , calc_band_1,  calc_band_2,  calc_band_3,  calc_band_4,  calc_band_5,  calc_band_6
+       , calc_band_neon_1,  calc_band_neon_2,  calc_band_neon_3,  calc_band_neon_4,  calc_band_neon_5,  calc_band_neon_6
 #if MAX_BANDS > 6
-       , calc_band_7,  calc_band_8,  calc_band_9,  calc_band_10, calc_band_11, calc_band_12, calc_band_13, calc_band_14
+       , calc_band_neon_7,  calc_band_neon_8,  calc_band_neon_9,  calc_band_neon_10, calc_band_neon_11, calc_band_neon_12, calc_band_neon_13, calc_band_neon_14
 #endif
 #if MAX_BANDS > 14
-       , calc_band_15, calc_band_16, calc_band_17, calc_band_18
+       , calc_band_neon_15, calc_band_neon_16, calc_band_neon_17, calc_band_neon_18
 #endif
   };
 
@@ -487,7 +487,7 @@ p7_SSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_s
     return eslENORESULT;
   }
 
-  xE = get_xE(dsq, L, om);
+  xE = get_xE_neon(dsq, L, om);
   if (xE >= 255 - om->bias_b)
     {
       /* We have an overflow. */

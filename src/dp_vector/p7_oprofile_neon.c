@@ -756,11 +756,9 @@ p7_oprofile_Convert_neon(const P7_PROFILE *gm, P7_OPROFILE *om)
   om->M          = gm->M;
   om->nj         = gm->nj;
   om->max_length = gm->max_length;
-
   if ((status =  mf_conversion_neon(gm, om)) != eslOK) return status;   /* MSVFilter()'s information     */
   if ((status =  vf_conversion_neon(gm, om)) != eslOK) return status;   /* ViterbiFilter()'s information */
   if ((status =  fb_conversion_neon(gm, om)) != eslOK) return status;   /* ForwardFilter()'s information */
-
   if (om->name != NULL) free(om->name);
   if (om->acc  != NULL) free(om->acc);
   if (om->desc != NULL) free(om->desc);
@@ -1305,41 +1303,6 @@ oprofile_dump_fb_neon(FILE *fp, const P7_OPROFILE *om, int width, int precision)
   return 0;
 #endif
 }
-
-
-/* Function:  p7_oprofile_Dump()
- * Synopsis:  Dump internals of a <P7_OPROFILE>
- *
- * Purpose:   Dump the internals of <P7_OPROFILE> structure <om>
- *            to stream <fp>; generally for testing or debugging
- *            purposes.
- *
- * Args:      fp   - output stream (often stdout)
- *            om   - optimized profile to dump
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    (no abnormal error conditions)
- */
-int
-p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om)
-{
-  int status;
-
-  fprintf(fp, "Dump of a <P7_OPROFILE> ::\n");
-
-  fprintf(fp, "\n  -- float part, odds ratios for Forward/Backward:\n");
-  if ((status = oprofile_dump_fb_neon(fp, om, 8, 5)) != eslOK) return status;
-
-  fprintf(fp, "\n  -- sword part, log odds for ViterbiFilter(): \n");
-  if ((status = oprofile_dump_vf_neon(fp, om))       != eslOK) return status;
-
-  fprintf(fp, "\n  -- uchar part, log odds for MSVFilter(): \n");
-  if ((status = oprofile_dump_mf_neon(fp, om))       != eslOK) return status;
-
-  return eslOK;
-}
-
 
 
 /* Function:  p7_oprofile_Compare()

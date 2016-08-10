@@ -18,9 +18,14 @@
 
 #include <stdio.h>
 
-#if p7_CPU_ARCH == x86
+#if p7_CPU_ARCH == intel 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
+#endif
+
+#if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
+#include <arm_neon.h>
+#include "esl_neon.h"
 #endif
 
 #include "dp_reference/p7_refmx.h"
@@ -48,6 +53,21 @@ enum p7c_xcells_e {
 #define P7C_MQ(dp, q)     ((dp)[(q) * p7C_NSCELLS + p7C_M])
 #define P7C_DQ(dp, q)     ((dp)[(q) * p7C_NSCELLS + p7C_D])
 #define P7C_IQ(dp, q)     ((dp)[(q) * p7C_NSCELLS + p7C_I])
+
+typedef
+#if p7_CPU_ARCH == intel 
+#if defined HAVE_AVX512
+__m512
+#elif defined HAVE_AVX2
+__m256
+#else
+__m128
+#endif
+#endif /* intel */
+#if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
+esl_neon_128f_t
+#endif
+debug_print;
 
 
 typedef struct p7_checkptmx_s {
@@ -192,8 +212,8 @@ double checkpointed_rows(int L, int R);
 
 #ifdef p7_DEBUGGING
 extern char *        p7_checkptmx_DecodeX(enum p7c_xcells_e xcode);
-extern int           p7_checkptmx_DumpFBHeader(P7_CHECKPTMX *ox);
-extern int           p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, __m128 *dpc, char *pfx);
+int           p7_checkptmx_DumpFBHeader(P7_CHECKPTMX *ox);
+int           p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, debug_print *dpc, char *pfx);
 #endif /*p7_DEBUGGING*/
 
 /*****************************************************************

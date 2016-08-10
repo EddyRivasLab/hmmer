@@ -310,7 +310,7 @@ ERROR:
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_filtermx_DumpVFRow(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
+p7_filtermx_DumpVFRow_avx512(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
 {
 #ifdef HAVE_AVX512  
   __m512i *dp = fx->dp;		/* enable MMXf(q), DMXf(q), IMXf(q) macros */

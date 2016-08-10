@@ -75,8 +75,23 @@
 
 #ifdef p7_DEBUGGING
 static inline float backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
+extern inline float backward_row_zero_sse(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
+extern inline float backward_row_zero_avx(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
+extern inline float backward_row_zero_avx512(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
+extern inline float backward_row_zero_neon(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
+extern inline float backward_row_zero_neon64(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
 static        void  save_debug_row_pp(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
-static        void  save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
+extern void  save_debug_row_pp_sse(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
+extern void  save_debug_row_pp_avx(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
+extern void  save_debug_row_pp_avx512(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
+extern void  save_debug_row_pp_neon(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
+extern void  save_debug_row_pp_neon64(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
+static void  save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
+extern void  save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
+extern void  save_debug_row_fb_avx(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
+extern void  save_debug_row_fb_avx512(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
+extern void  save_debug_row_fb_neon(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
+extern void  save_debug_row_fb_neon64(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
 
 #endif
 
@@ -272,7 +287,7 @@ backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
 static void
 save_debug_row_pp(P7_CHECKPTMX *ox, debug_print *dpc, int i)
 {
-  switch(om->simd){
+  switch(ox->simd){
     case SSE:
       return save_debug_row_pp_sse(ox, dpc, i);
       break;
@@ -305,21 +320,21 @@ save_debug_row_pp(P7_CHECKPTMX *ox, debug_print *dpc, int i)
 static void
 save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale)
 {
-  switch(om->simd){
+  switch(ox->simd){
     case SSE:
-      return save_debug_row_pp_sse(ox, gx, dpc, i, totscale);
+      return save_debug_row_fb_sse(ox, gx, dpc, i, totscale);
       break;
     case AVX:
-      return save_debug_row_pp_avx(ox, gx, dpc, i, totscale);
+      return save_debug_row_fb_avx(ox, gx, dpc, i, totscale);
       break;
     case AVX512:
-      return save_debug_row_pp_avx512(ox, gx, dpc, i, totscale);
+      return save_debug_row_fb_avx512(ox, gx, dpc, i, totscale);
       break;
     case NEON:
-      return save_debug_row_pp_neon(ox, gx, dpc, i, totscale);
+      return save_debug_row_fb_neon(ox, gx, dpc, i, totscale);
       break;
     case NEON64:
-      return save_debug_row_pp_neon64(ox, gx, dpc, i, totscale);
+      return save_debug_row_fb_neon64(ox, gx, dpc, i, totscale);
       break;
    default:
       p7_Fail("Unrecognized SIMD type passed to save_debug_row_fb");  
@@ -793,6 +808,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
 #include "esl_random.h"
 
 #include "hmmer.h"
+#include "hardware/hardware.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/

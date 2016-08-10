@@ -84,10 +84,9 @@ static inline int   posterior_decode_row_sse(P7_CHECKPTMX *ox, int rowi, P7_SPAR
 #endif
 
 #ifdef p7_DEBUGGING
-static inline float backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
-static        void  save_debug_row_pp(P7_CHECKPTMX *ox,               __m128 *dpc, int i);
-static        void  save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float totscale);
-
+inline float backward_row_zero_sse(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
+       void  save_debug_row_pp_sse(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
+       void  save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
 #endif
 
 /*****************************************************************
@@ -168,7 +167,7 @@ p7_ForwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
 
 #ifdef p7_DEBUGGING
   if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, 0, dpp, "f1 O"); 
-  if (ox->fwd)        save_debug_row_fb(ox, ox->fwd, dpp, 0, totsc); 
+  if (ox->fwd)        save_debug_row_fb_sse(ox, ox->fwd, dpp, 0, totsc); 
 #endif
 
   /* Phase one: the "a" region: all rows in this region are saved */
@@ -182,7 +181,7 @@ p7_ForwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
 
 #ifdef p7_DEBUGGING
       if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, dpc, "f1 O"); 
-      if (ox->fwd)        save_debug_row_fb(ox, ox->fwd, dpc, i, totsc); 
+      if (ox->fwd)        save_debug_row_fb_sse(ox, ox->fwd, dpc, i, totsc); 
 #endif
     }
 
@@ -293,7 +292,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
 #ifdef p7_DEBUGGING
   ox->bcksc = logf(xf[p7C_SCALE]);
   if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, L, fwd, "f2 O"); if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, L, bck, "bck");  }
-  if (ox->bck)          save_debug_row_fb(ox, ox->bck, bck, L, ox->bcksc); 
+  if (ox->bck)          save_debug_row_fb_sse(ox, ox->bck, bck, L, ox->bcksc); 
 
 #endif
   if ( (status = posterior_decode_row_sse(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
@@ -320,7 +319,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
 #ifdef p7_DEBUGGING
       ox->bcksc += logf(xf[p7C_SCALE]);
       if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, bck, "bck");
-      if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i, ox->bcksc); 
+      if (ox->bck)        save_debug_row_fb_sse(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
       /* And decode. */
       if ( (status = posterior_decode_row_sse(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
@@ -345,7 +344,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
 #ifdef p7_DEBUGGING
       ox->bcksc += logf(xf[p7C_SCALE]);
       if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i, fwd, "f2 O");	p7_checkptmx_DumpFBRow(ox, i, bck, "bck"); }
-      if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i, ox->bcksc); 
+      if (ox->bck)        save_debug_row_fb_sse(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
       /* And decode checkpointed row i. */
       if ( (status = posterior_decode_row_sse(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
@@ -373,7 +372,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
 #ifdef p7_DEBUGGING
 	  ox->bcksc += logf(xf[p7C_SCALE]);
 	  if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i2, fwd, "f2 X"); p7_checkptmx_DumpFBRow(ox, i2, bck, "bck"); }
-	  if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i2, ox->bcksc); 
+	  if (ox->bck)        save_debug_row_fb_sse(ox, ox->bck, bck, i2, ox->bcksc); 
 #endif
 
 	  if ((status = posterior_decode_row_sse(ox, i2, sm, sm_thresh, Tvalue)) != eslOK) return status;
@@ -395,7 +394,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
 #ifdef p7_DEBUGGING
        ox->bcksc += logf(xf[p7C_SCALE]);
        if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i, fwd, "f2 O"); p7_checkptmx_DumpFBRow(ox, i, bck, "bck"); }
-       if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i, ox->bcksc); 
+       if (ox->bck)        save_debug_row_fb_sse(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
        if ((status = posterior_decode_row_sse(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
        dpp = bck;
@@ -414,7 +413,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
    bck = (__m128 *) ox->dpf[i%2];	       
    xN = backward_row_zero(dsq[1], om, ox); 
    if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, 0, fwd, "f2 O"); p7_checkptmx_DumpFBRow(ox, 0, bck, "bck"); }
-   if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, 0, ox->bcksc); 
+   if (ox->bck)        save_debug_row_fb_sse(ox, ox->bck, bck, 0, ox->bcksc); 
    if ((status = posterior_decode_row(ox, 0, sm, sm_thresh, Tvalue)) != eslOK) return status;
    ox->bcksc += xN;
 #endif
@@ -963,7 +962,7 @@ posterior_decode_row_sse(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm
       P7C_IQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7C_IQ(fwd, q), P7C_IQ(bck, q)));
     }
 
-  if (ox->pp)  save_debug_row_pp(ox, fwd, rowi);
+  if (ox->pp)  save_debug_row_sse(ox, fwd, rowi);
 #endif
   return eslOK;
 }
@@ -1045,7 +1044,7 @@ return 0.0;
 #endif  
 }
 
-static void
+void
 save_debug_row_pp_sse(P7_CHECKPTMX *ox, debug_print *dpc, int i)
 {
 #ifdef HAVE_SSE2
@@ -1098,7 +1097,7 @@ save_debug_row_pp_sse(P7_CHECKPTMX *ox, debug_print *dpc, int i)
  * tolerance) to a reference implementation Forward/Backward in log
  * space.
  */
-static void
+void
 save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale)
 {
 #ifdef HAVE_SSE2  

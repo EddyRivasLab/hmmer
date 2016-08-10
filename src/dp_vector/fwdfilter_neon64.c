@@ -1,4 +1,4 @@
-/* Forwards/Backwards filters: ARM NEON64 version.
+/* Forwards/Backwards filters: ARM NEON version.
  *
  * Ported from Intel/SSE: Tyler Camp (University of Texas, Austin)
  * See Intel/SSE version for general notes.
@@ -14,9 +14,9 @@
  *    8. Example.
  */
 #include "p7_config.h"
-
+#if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
 #include <arm_neon.h>
-
+#endif
 #include "easel.h"
 #include "esl_vectorops.h"
 #include "esl_neon64.h"
@@ -34,19 +34,18 @@
  * chunks, using static inlined functions.
  */
 #ifdef HAVE_NEON64
-static inline float forward_row      (ESL_DSQ xi, const P7_OPROFILE *om, const esl_neon_128f_t *dpp, esl_neon_128f_t *dpc, int Q);
-static inline void  backward_row_main(ESL_DSQ xi, const P7_OPROFILE *om,       esl_neon_128f_t *dpp, esl_neon_128f_t *dpc, int Q, float scalefactor);
-static inline void  backward_row_L   (            const P7_OPROFILE *om,                             esl_neon_128f_t *dpc, int Q, float scalefactor);
-static inline void  backward_row_finish(          const P7_OPROFILE *om,                             esl_neon_128f_t *dpc, int Q, esl_neon_128f_t dcv);
-static inline void  backward_row_rescale(float *xc, esl_neon_128f_t *dpc, int Q, float scalefactor);
-static inline int   posterior_decode_row(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm_thresh, float overall_sc);
+static inline float forward_row_neon64      (ESL_DSQ xi, const P7_OPROFILE *om, const esl_neon_128f_t *dpp, esl_neon_128f_t *dpc, int Q);
+static inline void  backward_row_main_neon64(ESL_DSQ xi, const P7_OPROFILE *om,       esl_neon_128f_t *dpp, esl_neon_128f_t *dpc, int Q, float scalefactor);
+static inline void  backward_row_L_neon64   (            const P7_OPROFILE *om,                             esl_neon_128f_t *dpc, int Q, float scalefactor);
+static inline void  backward_row_finish_neon64(          const P7_OPROFILE *om,                             esl_neon_128f_t *dpc, int Q, esl_neon_128f_t dcv);
+static inline void  backward_row_rescale_neon64(float *xc, esl_neon_128f_t *dpc, int Q, float scalefactor);
+static inline int   posterior_decode_row_neon64(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm_thresh, float overall_sc);
 #endif
 #ifdef p7_DEBUGGING
-static inline float backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
-static        void  save_debug_row_pp(P7_CHECKPTMX *ox,               esl_neon_128f_t *dpc, int i);
-static        void  save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, esl_neon_128f_t *dpc, int i, float totscale);
+static inline float backward_row_zero_neon64(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
+       void  save_debug_row_pp_neon64(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
+       void  save_debug_row_fb_neon64(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
 #endif
-
 /*****************************************************************
  * 1. Forward and Backward API calls
  *****************************************************************/
@@ -132,7 +131,7 @@ p7_ForwardFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHE
   xc[p7C_SCALE] = 1.;			   
 #ifdef p7_DEBUGGING
   if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, 0, dpp, "f1 O"); 
-  if (ox->fwd)        save_debug_row_fb(ox, ox->fwd, dpp, 0, totsc); 
+  if (ox->fwd)        save_debug_row_fb_neon64(ox, ox->fwd, dpp, 0, totsc); 
 #endif
 
   /* Phase one: the "a" region: all rows in this region are saved */
@@ -140,11 +139,11 @@ p7_ForwardFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHE
     {
       dpc = (esl_neon_128f_t *) ox->dpf[ox->R0+ox->R]; ox->R++;    /* idiomatic for "get next save/checkpoint row" */
 
-      totsc += forward_row(dsq[i], om, dpp, dpc, Q);
+      totsc += forward_row_neon64(dsq[i], om, dpp, dpc, Q);
       dpp = dpc;	    	                          /* current row becomes prev row */
 #ifdef p7_DEBUGGING
       if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, dpc, "f1 O"); 
-      if (ox->fwd)        save_debug_row_fb(ox, ox->fwd, dpc, i, totsc); 
+      if (ox->fwd)        save_debug_row_fb_neon64(ox, ox->fwd, dpc, i, totsc); 
 #endif
     }
 
@@ -153,7 +152,7 @@ p7_ForwardFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHE
     {
       /* this section, deciding whether to get a checkpointed vs. tmp
        * row, is why we set <fwd>, <dpp> here, rather than having the
-       * inlined forward_row() set them.
+       * inlined forward_row_neon64() set them.
        */
       if (! (--w)) { 		                   /* we're on the last row in segment: this row is saved    */
 	dpc = (esl_neon_128f_t *) ox->dpf[ox->R0+ox->R]; ox->R++;  /* idiomatic for "get next save/checkpoint row"    */
@@ -161,11 +160,11 @@ p7_ForwardFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHE
 	b--;					   /* decrement segment number counter; last segment is r=1  */
       } else dpc = (esl_neon_128f_t *) ox->dpf[i%2];        /* idiomatic for "next tmp row", 0/1; i%2 makes sure dpp != dpc */
       
-      totsc += forward_row(dsq[i], om, dpp, dpc, Q);
+      totsc += forward_row_neon64(dsq[i], om, dpp, dpc, Q);
       dpp = dpc;
 #ifdef p7_DEBUGGING
       if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, dpc, w ? "f1 X" : "f1 O"); 
-      if (ox->fwd)        save_debug_row_fb(ox, ox->fwd, dpc, i, totsc); 
+      if (ox->fwd)        save_debug_row_fb_neon64(ox, ox->fwd, dpc, i, totsc); 
 #endif
     }
 
@@ -204,7 +203,7 @@ p7_ForwardFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHE
  *            ox        - checkpointed DP matrix, ForwardFilter already run
  *            sm        - allocated P7_SPARSEMASK structure to hold sparse DP mask
  *            sm_thresh - Threshold for determining 'significant' posterior
- *                        alignment probability, passed in to posterior_decode_row()
+ *                        alignment probability, passed in to posterior_decode_row_neon64()
  *
  * Throws:    <eslEINVAL> if something's awry with a data structure's internals.
  *            <eslEMEM> on allocation failure.
@@ -247,13 +246,13 @@ p7_BackwardFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
   xf  = (float *) (fwd + Q*p7C_NSCELLS);
   Tvalue = xf[p7C_C] * om->xf[p7O_C][p7O_MOVE];          /* i.e. scaled fwd[L] val at T state = scaled overall score */
   bck = (esl_neon_128f_t *) ox->dpf[i%2];	         /* get tmp space for bck[L]                                 */
-  backward_row_L(om, bck, Q, xf[p7C_SCALE]);             /* calculate bck[L] row                                     */
+  backward_row_L_neon64(om, bck, Q, xf[p7C_SCALE]);             /* calculate bck[L] row                                     */
 #ifdef p7_DEBUGGING
   ox->bcksc = logf(xf[p7C_SCALE]);
   if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, L, fwd, "f2 O"); if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, L, bck, "bck");  }
-  if (ox->bck)          save_debug_row_fb(ox, ox->bck, bck, L, ox->bcksc); 
+  if (ox->bck)          save_debug_row_fb_neon64(ox, ox->bck, bck, L, ox->bcksc); 
 #endif
-  if ( (status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK)  return status;
+  if ( (status = posterior_decode_row_neon64(ox, i, sm, sm_thresh, Tvalue)) != eslOK)  return status;
   i--;
   dpp = bck;
 
@@ -264,7 +263,7 @@ p7_BackwardFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
       /* Compute fwd[L-1] from last checkpoint, which we know is fwd[L-2] */
       dpp = (esl_neon_128f_t *) ox->dpf[ox->R0+ox->R-1];  /* fwd[L-2] values, already known        */
       fwd = (esl_neon_128f_t *) ox->dpf[ox->R0+ox->R];    /* get free row memory from top of stack */
-      forward_row(dsq[i], om, dpp, fwd, Q);               /* calculate fwd[L-1]                    */
+      forward_row_neon64(dsq[i], om, dpp, fwd, Q);               /* calculate fwd[L-1]                    */
 #ifdef p7_DEBUGGING
       if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, fwd, "f2 X");
 #endif
@@ -273,14 +272,14 @@ p7_BackwardFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
       xf  = (float *) (fwd + Q*p7C_NSCELLS);
       dpp = (esl_neon_128f_t *) ox->dpf[(i+1)%2]; 
       bck = (esl_neon_128f_t *) ox->dpf[i%2];             /* get space for bck[L-1]                */
-      backward_row_main(dsq[i+1], om, dpp, bck, Q, xf[p7C_SCALE]);
+      backward_row_main_neon64(dsq[i+1], om, dpp, bck, Q, xf[p7C_SCALE]);
 #ifdef p7_DEBUGGING
       ox->bcksc += logf(xf[p7C_SCALE]);
       if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, bck, "bck");
-      if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i, ox->bcksc); 
+      if (ox->bck)        save_debug_row_fb_neon64(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
       /* And decode. */
-      if ( (status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK)  return status;
+      if ( (status = posterior_decode_row_neon64(ox, i, sm, sm_thresh, Tvalue)) != eslOK)  return status;
 	   dpp = bck;
       i--;			/* i is now L-2 if there's checkpointing; else it's L-1 */
     }
@@ -297,14 +296,14 @@ p7_BackwardFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
 
       /* Calculate bck[i]; <dpp> is already bck[i+1] */
       bck = (esl_neon_128f_t *) ox->dpf[i%2];	    /* get available tmp memory for row     */
-      backward_row_main(dsq[i+1], om, dpp, bck, Q, xf[p7C_SCALE]);
+      backward_row_main_neon64(dsq[i+1], om, dpp, bck, Q, xf[p7C_SCALE]);
 #ifdef p7_DEBUGGING
       ox->bcksc += logf(xf[p7C_SCALE]);
       if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i, fwd, "f2 O");	p7_checkptmx_DumpFBRow(ox, i, bck, "bck"); }
-      if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i, ox->bcksc); 
+      if (ox->bck)        save_debug_row_fb_neon64(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
       /* And decode checkpointed row i. */
-      if ( (status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK)  return status;
+      if ( (status = posterior_decode_row_neon64(ox, i, sm, sm_thresh, Tvalue)) != eslOK)  return status;
       /* The rest of the rows in the block weren't checkpointed.
        * Compute Forwards from last checkpoint ...
        */
@@ -312,7 +311,7 @@ p7_BackwardFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
       for (i2 = i-w+1; i2 <= i-1; i2++)
 	{
 	  fwd = (esl_neon_128f_t *) ox->dpf[ox->R0+ox->R]; ox->R++;  /* push new forward row on "stack"     */
-	  forward_row(dsq[i2], om, dpp, fwd, Q);
+	  forward_row_neon64(dsq[i2], om, dpp, fwd, Q);
 	  dpp = fwd;	  
 	}
 
@@ -324,13 +323,13 @@ p7_BackwardFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
 	  fwd = (esl_neon_128f_t *) ox->dpf[ox->R0+ox->R]; /* pop just-calculated forward row i2 off "stack" */
 	  xf  = (float *) (fwd + Q*p7C_NSCELLS);
 	  bck = (esl_neon_128f_t *) ox->dpf[i2%2];	  /* get available for calculating bck[i2]          */
-	  backward_row_main(dsq[i2+1], om, dpp, bck, Q, xf[p7C_SCALE]);
+	  backward_row_main_neon64(dsq[i2+1], om, dpp, bck, Q, xf[p7C_SCALE]);
 #ifdef p7_DEBUGGING
 	  ox->bcksc += logf(xf[p7C_SCALE]);
 	  if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i2, fwd, "f2 X"); p7_checkptmx_DumpFBRow(ox, i2, bck, "bck"); }
-	  if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i2, ox->bcksc); 
+	  if (ox->bck)        save_debug_row_fb_neon64(ox, ox->bck, bck, i2, ox->bcksc); 
 #endif
-	  if ((status = posterior_decode_row(ox, i2, sm, sm_thresh, Tvalue)) != eslOK)  return status;
+	  if ((status = posterior_decode_row_neon64(ox, i2, sm, sm_thresh, Tvalue)) != eslOK)  return status;
 	  dpp = bck;
 	}
       i -= w;
@@ -345,13 +344,13 @@ p7_BackwardFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
        fwd = (esl_neon_128f_t *) ox->dpf[ox->R0+ox->R]; /* pop off calculated row fwd[i]           */
        xf  = (float *) (fwd + Q*p7C_NSCELLS);
        bck = (esl_neon_128f_t *) ox->dpf[i%2];	       /* get open space for bck[i]               */
-       backward_row_main(dsq[i+1], om, dpp, bck, Q, xf[p7C_SCALE]);
+       backward_row_main_neon64(dsq[i+1], om, dpp, bck, Q, xf[p7C_SCALE]);
 #ifdef p7_DEBUGGING
        ox->bcksc += logf(xf[p7C_SCALE]);
        if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i, fwd, "f2 O"); p7_checkptmx_DumpFBRow(ox, i, bck, "bck"); }
-       if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, i, ox->bcksc); 
+       if (ox->bck)        save_debug_row_fb_neon64(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
-       if ((status = posterior_decode_row(ox, i, sm, sm_thresh, Tvalue)) != eslOK)  return status;
+       if ((status = posterior_decode_row_neon64(ox, i, sm, sm_thresh, Tvalue)) != eslOK)  return status;
        dpp = bck;
      }
 
@@ -366,10 +365,10 @@ p7_BackwardFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
    ox->R--;
    fwd = (esl_neon_128f_t *) ox->dpf[ox->R0];
    bck = (esl_neon_128f_t *) ox->dpf[i%2];	       
-   xN = backward_row_zero(dsq[1], om, ox); 
+   xN = backward_row_zero_neon64(dsq[1], om, ox); 
    if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, 0, fwd, "f2 O"); p7_checkptmx_DumpFBRow(ox, 0, bck, "bck"); }
-   if (ox->bck)        save_debug_row_fb(ox, ox->bck, bck, 0, ox->bcksc); 
-   if ((status = posterior_decode_row(ox, 0, sm, sm_thresh, Tvalue)) != eslOK)  return status;
+   if (ox->bck)        save_debug_row_fb_neon64(ox, ox->bck, bck, 0, ox->bcksc); 
+   if ((status = posterior_decode_row_neon64(ox, 0, sm, sm_thresh, Tvalue)) != eslOK)  return status;
    ox->bcksc += xN;
 #endif
 
@@ -388,7 +387,7 @@ p7_BackwardFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
  * 2. Internal functions: inlined recursions
  *****************************************************************/
 
-/* forward_row()
+/* forward_row_neon64()
  * 
  * <xi>   dsq[i]; residue on this row.
  * <om>   query model
@@ -423,13 +422,13 @@ forward_row_neon64(ESL_DSQ xi, const P7_OPROFILE *om, const esl_neon_128f_t *dpp
   int    q;
   int    j;
 
-  mpv = esl_neon_rightshift_float(P7C_MQ(dpp, Q-1), zerov); 
+  mpv = esl_neon64_rightshift_float(P7C_MQ(dpp, Q-1), zerov); 
   //union { esl_neon_128f_t v; float f[4]; }ok;
   //ok.v = mpv;
   // printf("before: %f %f %f %f\n", ok.f[0], ok.f[1], ok.f[2], ok.f[3]);
  
-  ipv = esl_neon_rightshift_float(P7C_IQ(dpp, Q-1), zerov); 
-  dpv = esl_neon_rightshift_float(P7C_DQ(dpp, Q-1), zerov); 
+  ipv = esl_neon64_rightshift_float(P7C_IQ(dpp, Q-1), zerov); 
+  dpv = esl_neon64_rightshift_float(P7C_DQ(dpp, Q-1), zerov); 
 
   /* DP recursion for main states, all but the D->D path */
   for (q = 0; q < Q; q++)
@@ -469,7 +468,7 @@ forward_row_neon64(ESL_DSQ xi, const P7_OPROFILE *om, const esl_neon_128f_t *dpp
    */
   //union { esl_neon_128f_t v; float f[4]; }ok;
   //printf("before: %f %f %f %f\n", ok.f[0], ok.f[1], ok.f[2], ok.f[3]);
-  dcv            = esl_neon_rightshift_float(dcv, zerov);
+  dcv            = esl_neon64_rightshift_float(dcv, zerov);
   // printf("after: %f %f %f %f\n", ok.f[0], ok.f[1], ok.f[2], ok.f[3]);
   P7C_DQ(dpc, 0) = zerov;
   tp             = om->tfv + 7*Q;	/* set tp to start of the DD's */
@@ -491,7 +490,7 @@ forward_row_neon64(ESL_DSQ xi, const P7_OPROFILE *om, const esl_neon_128f_t *dpp
     {			/* Fully serialized version */
       for (j = 1; j < 4; j++)
 	{
-	  dcv = esl_neon_rightshift_float(dcv, zerov);
+	  dcv = esl_neon64_rightshift_float(dcv, zerov);
 	  tp  = om->tfv + 7*Q;	/* reset tp to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    { /* note, extend dcv, not DMO(q); only adding DD paths now */
@@ -506,7 +505,7 @@ forward_row_neon64(ESL_DSQ xi, const P7_OPROFILE *om, const esl_neon_128f_t *dpp
 	{
 	  register esl_neon_128f_t cv = zerov;	/* keeps track of whether any DD's change DMO(q) */
 
-	  dcv = esl_neon_rightshift_float(dcv, zerov);
+	  dcv = esl_neon64_rightshift_float(dcv, zerov);
 	  tp  = om->tfv + 7*Q;	/* set tp to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    { /* using cmpgt below tests if DD changed any DMO(q) *without* conditional branch */
@@ -529,7 +528,7 @@ forward_row_neon64(ESL_DSQ xi, const P7_OPROFILE *om, const esl_neon_128f_t *dpp
   for (q = 0; q < Q; q++) xEv.f32x4 = vaddq_f32(P7C_DQ(dpc,q).f32x4, xEv.f32x4);
 
   /* Specials, in order: E N JJ J B CC C */
-  esl_neon_hsum_float(xEv, &xc[p7C_E]);  
+  esl_neon64_hsum_float(xEv, &xc[p7C_E]);  
   xc[p7C_N]  =                                       xp[p7C_N] * om->xf[p7O_N][p7O_LOOP];
   xc[p7C_JJ] =                                       xp[p7C_J] * om->xf[p7O_J][p7O_LOOP];
   xc[p7C_J]  = xc[p7C_JJ]                          + xc[p7C_E] * om->xf[p7O_E][p7O_LOOP];
@@ -564,7 +563,7 @@ forward_row_neon64(ESL_DSQ xi, const P7_OPROFILE *om, const esl_neon_128f_t *dpp
 }
 #endif
 
-/* backward_row_main()
+/* backward_row_main_neon64()
  * 
  * Backward calculation for rows 1..L-1. Rows 0, L are special cases.
  * 
@@ -617,16 +616,16 @@ backward_row_main_neon64(ESL_DSQ xi, const P7_OPROFILE *om, esl_neon_128f_t *dpp
 
   /* Specials. Dependencies dictate partial order C,CC,B < N,J,JJ < E */
   xc[p7C_C] = xc[p7C_CC] = xp[p7C_C] * om->xf[p7O_C][p7O_LOOP];
-  esl_neon_hsum_float(xBv, &(xc[p7C_B]));
+  esl_neon64_hsum_float(xBv, &(xc[p7C_B]));
   xc[p7C_J] = xc[p7C_JJ] = xc[p7C_B] * om->xf[p7O_J][p7O_MOVE] + xp[p7C_J] * om->xf[p7O_J][p7O_LOOP];
   xc[p7C_N]              = xc[p7C_B] * om->xf[p7O_N][p7O_MOVE] + xp[p7C_N] * om->xf[p7O_N][p7O_LOOP];
   xc[p7C_E]              = xc[p7C_C] * om->xf[p7O_E][p7O_MOVE] + xc[p7C_J] * om->xf[p7O_E][p7O_LOOP];
 
   /* Initialize for the row calculation */
-  mpv  = esl_neon_leftshift_float(*dpp,       zerov); /* [1 5 9 13] -> [5 9 13 x], M(i+1,k+1) * e(M_k+1, x_{i+1}) */
-  tmmv = esl_neon_leftshift_float(om->tfv[1], zerov);
-  timv = esl_neon_leftshift_float(om->tfv[2], zerov);
-  tdmv = esl_neon_leftshift_float(om->tfv[3], zerov);
+  mpv  = esl_neon64_leftshift_float(*dpp,       zerov); /* [1 5 9 13] -> [5 9 13 x], M(i+1,k+1) * e(M_k+1, x_{i+1}) */
+  tmmv = esl_neon64_leftshift_float(om->tfv[1], zerov);
+  timv = esl_neon64_leftshift_float(om->tfv[2], zerov);
+  tdmv = esl_neon64_leftshift_float(om->tfv[3], zerov);
   xEv.f32x4  = vdupq_n_f32(xc[p7C_E]);
   tp   = om->tfv + 7*Q - 1;
   tpdd = tp + Q;
@@ -646,16 +645,16 @@ backward_row_main_neon64(ESL_DSQ xi, const P7_OPROFILE *om, esl_neon_128f_t *dpp
       timv = *tp; tp--;
       tmmv = *tp; tp-=2;
     }
-  backward_row_finish(om, dpc, Q, dcv);
-  backward_row_rescale(xc, dpc, Q, scalefactor);
+  backward_row_finish_neon64(om, dpc, Q, dcv);
+  backward_row_rescale_neon64(xc, dpc, Q, scalefactor);
 }
 #endif
 
-/* backward_row_L()
+/* backward_row_L_neon64()
  * 
  * Backward calculation for row L; 
  * a special case because the matrix <ox> has no 'previous' row L+1.
- * Otherwise identical to backward_row_main().
+ * Otherwise identical to backward_row_main_neon64().
  */
 
 #ifdef HAVE_NEON64
@@ -689,13 +688,13 @@ backward_row_L_neon64(const P7_OPROFILE *om,  esl_neon_128f_t *dpc, int Q, float
       *dp--     = dcv; 
       *dp--     = xEv; 	                                                              /* M */
     }
-  backward_row_finish(om, dpc, Q, dcv);
-  backward_row_rescale(xc, dpc, Q, scalefactor);
+  backward_row_finish_neon64(om, dpc, Q, dcv);
+  backward_row_rescale_neon64(xc, dpc, Q, scalefactor);
 }
 #endif
 
 
-/* backward_row_finish()
+/* backward_row_finish_neon64()
  * 
  * Finishing DD and MD path contributions along the row.
  * Both L and main (1..L-1) recursions share this.
@@ -740,7 +739,7 @@ backward_row_finish_neon64(const P7_OPROFILE *om, esl_neon_128f_t *dpc, int Q, e
     { /* Full serialization */
       for (j = 1; j < 4; j++)
 	{
-	  dcv = esl_neon_leftshift_float(dcv, zerov); /* [1 5 9 13] => [5 9 13 *]          */
+	  dcv = esl_neon64_leftshift_float(dcv, zerov); /* [1 5 9 13] => [5 9 13 *]          */
 	  tp  = om->tfv + 8*Q - 1;	          /* <*tp> now the [4 8 12 x] TDD quad */
 	  dp  = dpc + Q*p7C_NSCELLS - 2;          /* init to point at D(i,q) vector    */
 	  for (q = Q-1; q >= 0; q--)
@@ -756,7 +755,7 @@ backward_row_finish_neon64(const P7_OPROFILE *om, esl_neon_128f_t *dpc, int Q, e
       esl_neon_128i_t cv;  /* keeps track of whether any DD addition changes DQ(q) value */
       for (j = 1; j < 4; j++)
 	{
-	  dcv = esl_neon_leftshift_float(dcv, zerov);
+	  dcv = esl_neon64_leftshift_float(dcv, zerov);
 	  tp  = om->tfv + 8*Q - 1;	
 	  dp  = dpc + Q*p7C_NSCELLS - 2;
 	  cv.u32x4  = vreinterpretq_u32_f32(zerov.f32x4);
@@ -779,7 +778,7 @@ backward_row_finish_neon64(const P7_OPROFILE *om, esl_neon_128f_t *dpc, int Q, e
   /* Finally, M->D path contribution
    * these couldn't be added to M until we'd finished calculating D values on row.
    */
-  dcv = esl_neon_leftshift_float(P7C_DQ(dpc, 0), zerov);
+  dcv = esl_neon64_leftshift_float(P7C_DQ(dpc, 0), zerov);
   tp  = om->tfv + 7*Q - 3;	 
   dp  = dpc + (Q-1)*p7C_NSCELLS; 
   for (q = Q-1; q >= 0; q--)
@@ -790,7 +789,7 @@ backward_row_finish_neon64(const P7_OPROFILE *om, esl_neon_128f_t *dpc, int Q, e
 }
 #endif
 
-/* backward_row_rescale()
+/* backward_row_rescale_neon64()
  * 
  * Sparse rescaling, using the scalefactor that Forward set and 
  * Backward shares.
@@ -832,7 +831,7 @@ backward_row_rescale_neon64(float *xc, esl_neon_128f_t *dpc, int Q, float scalef
 }
 #endif
 
-/* posterior_decode_row()
+/* posterior_decode_row_neon64()
  *
  * In production code, we don't have to save results of posterior
  * decoding; we immediately use them to calculate sparse mask on the row.
@@ -866,7 +865,7 @@ backward_row_rescale_neon64(float *xc, esl_neon_128f_t *dpc, int Q, float scalef
  * Note that because the debugging version of posterior decoding
  * code overwrites the forward row, if the caller wants to 
  * dump, copy, or test anything on the forward row, it must do it
- * BEFORE calling posterior_decode_row().
+ * BEFORE calling posterior_decode_row_neon64().
  * 
  * The threshold for determining 'significant' posterior alignment
  * probability is passed as <sm_thresh> (typically
@@ -907,7 +906,7 @@ posterior_decode_row_neon64(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float
    * time looking at them all.
    * 
    * Useful side effect: row 0 automatically fails this test (all pp
-   * in S->N->B), so posterior_decode_row() can be called on row 0 (in
+   * in S->N->B), so posterior_decode_row_neon64() can be called on row 0 (in
    * debugging code, we need to decode and store row zero specials),
    * without triggering contract check failures in p7_sparsemask_* API
    * functions that are checking for i=1..L.
@@ -955,7 +954,7 @@ posterior_decode_row_neon64(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float
       P7C_IQ(fwd, q).f32x4 = vmulq_f32(cv.f32x4, vmulq_f32(P7C_IQ(fwd, q).f32x4, P7C_IQ(bck, q).f32x4));
     }
 
-  if (ox->pp)  save_debug_row_pp(ox, fwd, rowi);
+  if (ox->pp)  save_debug_row_pp_neon64(ox, fwd, rowi);
 #endif
   return eslOK;
 }
@@ -969,7 +968,7 @@ posterior_decode_row_neon64(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float
 /*****************************************************************
  *  Debugging functions 
  *****************************************************************/
-/* backward_row_zero()
+/* backward_row_zero_neon64()
  * 
  * Slightly peculiar but true: in production code we don't
  * need to calculate backward row 0, because we're only doing
@@ -1028,7 +1027,7 @@ backward_row_zero_neon64(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
    * do this, and we have unit tests comparing the values.
    */
   xc[p7C_C] = xc[p7C_CC] = xp[p7C_C] * om->xf[p7O_C][p7O_LOOP];
-  esl_neon_hsum_float(xBv, &(xc[p7C_B]));
+  esl_neon64_hsum_float(xBv, &(xc[p7C_B]));
   xc[p7C_J] = xc[p7C_JJ] = xc[p7C_B] * om->xf[p7O_J][p7O_MOVE] + xp[p7C_J] * om->xf[p7O_J][p7O_LOOP];
   xc[p7C_N]              = xc[p7C_B] * om->xf[p7O_N][p7O_MOVE] + xp[p7C_N] * om->xf[p7O_N][p7O_LOOP];
   xc[p7C_E]              = xc[p7C_C] * om->xf[p7O_E][p7O_MOVE] + xc[p7C_J] * om->xf[p7O_E][p7O_LOOP];
@@ -1045,7 +1044,7 @@ backward_row_zero_neon64(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
   #endif
 }
 
-/* save_debug_row_pp()
+/* save_debug_row_pp_neon64()
  * 
  * Debugging only. Transfer posterior decoding values from a
  * vectorized row to appropriate row of <ox->pp>, as probabilities.
@@ -1062,8 +1061,8 @@ backward_row_zero_neon64(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
  *   D1, IM states
  */
 
-static void
-save_debug_row_pp_neon64(P7_CHECKPTMX *ox, esl_neon_128f_t *dpc, int i)
+void
+save_debug_row_pp_neon64(P7_CHECKPTMX *ox, debug_print *dpc, int i)
 {
   #ifdef HAVE_NEON64
   #ifdef p7_DEBUGGING
@@ -1105,7 +1104,7 @@ save_debug_row_pp_neon64(P7_CHECKPTMX *ox, esl_neon_128f_t *dpc, int i)
   #endif /* p7_DEBUGGING */
   #endif /* HAVE_NEON64 */
 }
-/* save_debug_row_fb()
+/* save_debug_row_fb_neon64()
  * 
  * Debugging only. Transfer posterior decoding values (sparse scaled,
  * prob space) from a vectorized row, to appropriate row of <ox->fwd>
@@ -1115,8 +1114,8 @@ save_debug_row_pp_neon64(P7_CHECKPTMX *ox, esl_neon_128f_t *dpc, int i)
  * space.
  */
 
-static void
-save_debug_row_fb_neon64(P7_CHECKPTMX *ox, P7_REFMX *gx, esl_neon_128f_t *dpc, int i, float totscale)
+void
+save_debug_row_fb_neon64(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale)
 {
   #ifdef HAVE_NEON64
   #ifdef p7_DEBUGGING

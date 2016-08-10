@@ -263,7 +263,7 @@ p7_sparsemask_AddAll(P7_SPARSEMASK *sm)
       Q = sm->Q_AVX_512;
 #endif
       break;
-    case NEON:
+    case NEON: case NEON64:
 #ifdef HAVE_NEON
       Q = sm->Q;
 #endif
@@ -896,8 +896,8 @@ p7_sparsemx_Create(P7_SPARSEMASK *sm)
         sx->xalloc = ( (sm && (sm->nrow_AVX_512 + sm->S_AVX_512)) ? sm->nrow_AVX_512 + sm->S_AVX_512 : default_nx);
 #endif
         break;
-      case NEON:
-#ifdef HAVE_SSE2
+      case NEON: case NEON64:
+#ifdef HAVE_NEON
          /* We must avoid zero-sized mallocs. If there are no rows or cells, alloc the default sizes */
         sx->dalloc = ( (sm && sm->ncells)         ? sm->ncells       : default_ncell);
         sx->xalloc = ( (sm && (sm->nrow + sm->S)) ? sm->nrow + sm->S : default_nx);
@@ -911,7 +911,6 @@ p7_sparsemx_Create(P7_SPARSEMASK *sm)
     sx->dalloc = default_ncell;
     sx->xalloc = default_nx;
   }
-
   ESL_ALLOC(sx->dp,  sizeof(float) * p7S_NSCELLS * sx->dalloc);
   ESL_ALLOC(sx->xmx, sizeof(float) * p7S_NXCELLS * sx->xalloc);
   return sx;
@@ -2130,8 +2129,8 @@ switch(sx->sm->simd){
     case AVX512:
       return p7_sparsemx_Validate_avx(sx, errbuf); // FIXME!!!!
        break;
-    case NEON:
-      p7_Fail("Neon support not yet integrated into p7_sparsemx_Validate");
+    case NEON: case NEON64:
+      return p7_sparsemx_Validate_neon(sx, errbuf); // FIXME!!!!
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_sparsemx_Validate");  

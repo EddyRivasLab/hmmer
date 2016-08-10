@@ -28,7 +28,9 @@ AVX512LIBOBJS = \
 NEONLIBOBJS = \
 	p7_sparsemx_neon.o\
 
-NEON64LIBOBJS = ${NEONLIBOBJS} 
+NEON64LIBOBJS = \
+	p7_sparsemx_neon64.o\
+ 
 	
 LIBHDRS =
 

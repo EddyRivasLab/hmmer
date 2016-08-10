@@ -224,7 +224,7 @@ p7_filtermx_Destroy_neon(P7_FILTERMX *fx)
  * Throws:    <eslEMEM> on allocation failure. 
  */
 int
-p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
+p7_filtermx_DumpMFRow_neon(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
  #ifdef HAVE_NEON 
   int      Q  = P7_NVB(fx->M);	/* number of vectors in the MSV row */
@@ -303,7 +303,7 @@ ERROR:
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_filtermx_DumpVFRow(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
+p7_filtermx_DumpVFRow_neon(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
 {
  #ifdef HAVE_NEON 
   esl_neon_128i_t *dp = fx->dp;		/* enable MMXf(q), DMXf(q), IMXf(q) macros */

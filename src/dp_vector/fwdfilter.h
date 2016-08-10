@@ -16,21 +16,6 @@
 #include "dp_vector/p7_checkptmx.h"
 #include "dp_sparse/p7_sparsemx.h"
 
-typedef
-#if p7_CPU_ARCH == intel 
-#if defined HAVE_AVX512
-__m512
-#elif defined HAVE_AVX2
-__m256
-#else
-__m128
-#endif
-#endif /* intel */
-#if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
-esl_neon_128f_t
-#endif
-debug_print;
-
 extern int p7_ForwardFilter (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc);
 extern int p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh);
 extern int p7_ForwardFilter_sse (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc);
