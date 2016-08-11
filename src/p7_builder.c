@@ -427,7 +427,7 @@ static int    make_post_msa        (P7_BUILDER *bld, const ESL_MSA *premsa, cons
 int
 p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
 	   P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om,
-	   ESL_MSA **opt_postmsa, FILE *seqweights_w_fp, FILE *seqweights_e_fp)
+	   ESL_MSA **opt_postmsa)
 {
   int i,j;
   uint32_t    checksum = 0;	/* checksum calculated for the input MSA. hmmalign --mapali verifies against this. */
@@ -438,11 +438,6 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
   if ((status =  validate_msa         (bld, msa))                       != eslOK) goto ERROR;
   if ((status =  esl_msa_Checksum     (msa, &checksum))                 != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to calculate checksum"); 
   if ((status =  relative_weights     (bld, msa))                       != eslOK) goto ERROR;
-  if (seqweights_w_fp != NULL) {
-    for (i = 0; i < msa->nseq; i++)
-      fprintf( seqweights_w_fp, "%.2f  %s\n", msa->wgt[i], msa->sqname[i]) ;
-  }
-
   if ((status =  esl_msa_MarkFragments(msa, bld->fragthresh))           != eslOK) goto ERROR;
   if ((status =  build_model          (bld, msa, &hmm, tr_ptr))         != eslOK) goto ERROR;
 
@@ -454,10 +449,6 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
       hmm->t[i][p7H_II] = ESL_MIN(hmm->t[i][p7H_II], bld->max_insert_len*hmm->t[i][p7H_MI]);
 
   if ((status =  effective_seqnumber  (bld, msa, hmm, bg))              != eslOK) goto ERROR;
-  if (seqweights_e_fp != NULL) {
-    for (i = 0; i < msa->nseq; i++)
-      fprintf( seqweights_e_fp, "%.4f  %s\n", msa->wgt[i], msa->sqname[i]) ;
-  }
   if ((status =  parameterize         (bld, hmm))                       != eslOK) goto ERROR;
   if ((status =  annotate             (bld, msa, hmm))                  != eslOK) goto ERROR;
   if ((status =  calibrate            (bld, hmm, bg, opt_gm, opt_om))   != eslOK) goto ERROR;
@@ -899,7 +890,7 @@ effective_seqnumber(P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm, const P7_B
 
   if (bld->effn_strategy == p7_EFFN_ENTROPY_EXP) {
       double etarget; 
-      double eff_nseq;
+      double eff_nseq = 0.0;
       double exp;
       etarget = (bld->esigma - eslCONST_LOG2R * log( 2.0 / ((double) hmm->M * (double) (hmm->M+1)))) / (double) hmm->M; /* xref J5/36. */
       etarget = ESL_MAX(bld->re_target, etarget);

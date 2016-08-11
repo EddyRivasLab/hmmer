@@ -88,7 +88,6 @@ static ESL_OPTIONS options[] = {
   { "--wid",     eslARG_REAL, "0.62",  NULL,"0<=x<=1",   NULL,"--wblosum",   NULL, "for --wblosum: set identity cutoff",                   4 },
 /* Alternative effective sequence weighting strategies */
   { "--eent",    eslARG_NONE,"default",NULL, NULL,    EFFOPTS,    NULL,      NULL, "adjust eff seq # to achieve relative entropy target",  5 },
-  { "--eentexp", eslARG_NONE,"default",NULL, NULL,    EFFOPTS,    NULL,      NULL, "adjust eff seq # to reach rel. ent. target using exp scaling",  5 },
   { "--eclust",  eslARG_NONE,  FALSE,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "eff seq # is # of single linkage clusters",            5 },
   { "--enone",   eslARG_NONE,  FALSE,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "no effective seq # weighting: just use nseq",          5 },
   { "--eset",    eslARG_REAL,   NULL,  NULL, NULL,    EFFOPTS,    NULL,      NULL, "set eff seq # for all models to <x>",                  5 },
@@ -141,9 +140,22 @@ static ESL_OPTIONS options[] = {
   { "--w_length", eslARG_INT,        NULL, NULL, NULL,    NULL,     NULL,    NULL, "window length ",                                        8 },
   { "--maxinsertlen",  eslARG_INT,   NULL, NULL, "n>=5",  NULL,     NULL,    NULL, "pretend all inserts are length <= <n>",   8 },
 
-  /* expert-only option (for now), hidden from view. May not keep. */
-  { "--seq_weights_r",  eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, "write seq weights after relative seq weighting to file <f>",   99 },
-  { "--seq_weights_e",  eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, "write seq weights after entropy weighting to file <f>",   99 },
+  /*Expert-only option, hidden from view. Likely to be removed in the future.
+    This is an experimental alternative method for weighting sequence counts.
+    It produces non-uniform scaling across columns -- columns with higher
+    counts are reduced to a greater extent than columns with low counts. It
+    has proven useful in reducing alignment overextension with Dfam models -
+    these are often based on MSAs reconstructed from heavily-fragmented
+    sequences, and thus may have wildly different per-column coverage levels.
+    Uniform scaling causes low-coverage regions to be scaled down to
+    essentially no (weighted) observations, leading to low local relative
+    entropy, which produces high overextension.
+
+    However, we don't recommend using this method in general, as it
+    may show odd behavior (or fail to even work) in the case of low
+    overall observed counts (e.g. an alignemnt of 2 or 4 sequences)
+    */
+    { "--eentexp", eslARG_NONE,"default",NULL, NULL,    EFFOPTS,    NULL,      NULL, "adjust eff seq # to reach rel. ent. target using exp scaling",  99 },
 
 
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -169,12 +181,6 @@ struct cfg_s {
 
   char         *postmsafile;	/* optional file to resave annotated, modified MSAs to  */
   FILE         *postmsafp;	/* open <postmsafile>, or NULL */
-
-  char         *seqweights_r_file;  /* optional file to write sequence weights after relative seq weighting */
-  FILE         *seqweights_r_fp;  /* open <seqweights_r_file>, or NULL */
-
-  char         *seqweights_e_file;  /* optional file to write sequence weights after entropy weighting */
-  FILE         *seqweights_e_fp;  /* open <seqweights_e_file>, or NULL */
 
   int           nali;		/* which # alignment this is in file (only valid in serial mode)   */
   int           nnamed;		/* number of alignments that had their own names */
@@ -419,12 +425,6 @@ main(int argc, char **argv)
   cfg.postmsafile = esl_opt_GetString(go, "-O"); /* NULL by default */
   cfg.postmsafp         = NULL;
 
-  cfg.seqweights_r_file = esl_opt_GetString(go, "--seq_weights_r"); /* NULL by default */
-  cfg.seqweights_r_fp   = NULL;
-
-  cfg.seqweights_e_file = esl_opt_GetString(go, "--seq_weights_e"); /* NULL by default */
-  cfg.seqweights_e_fp   = NULL;
-
   cfg.nali       = 0;		           /* this counter is incremented in masters */
   cfg.nnamed     = 0;		           /* 0 or 1 if a single MSA; == nali if multiple MSAs */
   cfg.do_mpi     = FALSE;	           /* this gets reset below, if we init MPI */
@@ -565,25 +565,6 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
       queue = esl_workqueue_Create(ncpus * 2);
     }
 #endif
-
-
-  if (cfg->seqweights_r_file)
-  {
-      if (ncpus != 0)
-        p7_Fail("--seq_weights_r flag only valid with --cpu=0", NULL);
-      cfg->seqweights_r_fp = fopen(cfg->seqweights_r_file, "w");
-      if (cfg->seqweights_r_fp == NULL) p7_Fail("Failed to write sequence weight (W) file %s", cfg->seqweights_r_file);
-  }
-  else cfg->seqweights_r_fp = NULL;
-
-  if (cfg->seqweights_e_file)
-  {
-      if (ncpus != 0)
-        p7_Fail("--seq_weights_e flag only valid with --cpu=0", NULL);
-      cfg->seqweights_e_fp = fopen(cfg->seqweights_e_file, "w");
-      if (cfg->seqweights_e_fp == NULL) p7_Fail("Failed to write sequence weight (W) file %s", cfg->seqweights_e_file);
-  }
-  else cfg->seqweights_e_fp = NULL;
 
 
 
@@ -1015,7 +996,7 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
         sq = NULL;
         hmm->eff_nseq = 1;
       } else {
-        if ((status = p7_Builder(bld, msa, bg, &hmm, NULL, NULL, NULL, postmsa_ptr, NULL, NULL)) != eslOK) { strcpy(errmsg, bld->errbuf); goto ERROR; }
+        if ((status = p7_Builder(bld, msa, bg, &hmm, NULL, NULL, NULL, postmsa_ptr)) != eslOK) { strcpy(errmsg, bld->errbuf); goto ERROR; }
       }
 
 
@@ -1092,7 +1073,7 @@ serial_loop(WORKER_INFO *info, struct cfg_s *cfg, const ESL_GETOPTS *go)
         sq = NULL;
         hmm->eff_nseq = 1;
       } else {
-        if ((status = p7_Builder(info->bld, msa, info->bg, &hmm, NULL, NULL, NULL, postmsa_ptr, cfg->seqweights_r_fp,  cfg->seqweights_e_fp )) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
+        if ((status = p7_Builder(info->bld, msa, info->bg, &hmm, NULL, NULL, NULL, postmsa_ptr )) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
 
         //if not --singlemx, but the user set the popen/pextend flags, override the computed gap params now:
         if (info->bld->popen != -1 || info->bld->pextend != -1) {
@@ -1286,7 +1267,7 @@ pipeline_thread(void *arg)
         sq = NULL;
         item->hmm->eff_nseq = 1;
       } else {
-        status = p7_Builder(info->bld, item->msa, info->bg, &item->hmm, NULL, NULL, NULL, &item->postmsa, NULL, NULL);
+        status = p7_Builder(info->bld, item->msa, info->bg, &item->hmm, NULL, NULL, NULL, &item->postmsa);
         if (status != eslOK) p7_Fail("build failed: %s", info->bld->errbuf);
 
         //if not --singlemx, but the user set the popen/pextend flags, override the computed gap params now:
