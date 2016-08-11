@@ -61,6 +61,7 @@ p7_oprofile_Create_neon(int allocM, const ESL_ALPHABET *abc)
 
   /* level 0 */
   ESL_ALLOC(om, sizeof(P7_OPROFILE));
+  om->simd = NEON;
   om->rbv_mem   = NULL;
   om->sbv_mem   = NULL;
   om->rwv_mem   = NULL;

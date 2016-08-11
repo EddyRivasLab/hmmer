@@ -333,6 +333,27 @@ int oprofile_dump_vf_neon(FILE *fp, const P7_OPROFILE *om);
 int oprofile_dump_fb_neon(FILE *fp, const P7_OPROFILE *om, int width, int precision);
 int p7_oprofile_Compare_neon(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg);
 
+// NEON64 versions of SIMD functions
+extern P7_OPROFILE *p7_oprofile_Create_neon64(int M, const ESL_ALPHABET *abc);
+extern void         p7_oprofile_Destroy_neon64(P7_OPROFILE *om);
+extern size_t       p7_oprofile_Sizeof_neon64(const P7_OPROFILE *om);
+extern P7_OPROFILE *p7_oprofile_Clone_neon64(const P7_OPROFILE *om);
+extern int          p7_oprofile_Convert_neon64(const P7_PROFILE *gm, P7_OPROFILE *om);
+extern int          p7_oprofile_Compare_neon64(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg);
+extern int          p7_oprofile_GetFwdTransitionArray_neon64(const P7_OPROFILE *om, int type, float *arr );
+extern int          p7_oprofile_GetMSVEmissionScoreArray_neon64(const P7_OPROFILE *om, uint8_t *arr );
+extern int          p7_oprofile_GetFwdEmissionScoreArray_neon64(const P7_OPROFILE *om, float *arr );
+extern int          p7_oprofile_GetFwdEmissionArray_neon64(const P7_OPROFILE *om, P7_BG *bg, float *arr );
+int sf_conversion_neon64(P7_OPROFILE *om);
+int mf_conversion_neon64(const P7_PROFILE *gm, P7_OPROFILE *om);
+int vf_conversion_neon64(const P7_PROFILE *gm, P7_OPROFILE *om);
+int fb_conversion_neon64(const P7_PROFILE *gm, P7_OPROFILE *om);
+int oprofile_dump_mf_neon64(FILE *fp, const P7_OPROFILE *om);
+int oprofile_dump_vf_neon64(FILE *fp, const P7_OPROFILE *om);
+int oprofile_dump_fb_neon64(FILE *fp, const P7_OPROFILE *om, int width, int precision);
+int p7_oprofile_Compare_neon64(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg);
+
+
 
 // AVX versions of SIMD functions
 extern P7_OPROFILE *p7_oprofile_Create_avx(int M, const ESL_ALPHABET *abc);

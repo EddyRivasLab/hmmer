@@ -100,8 +100,11 @@ switch(om->simd){
     case AVX512:
       return p7_oprofile_Write_avx512(ffp, pfp, om);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_oprofile_Write_neon(ffp, pfp, om);
+      break;
+    case NEON64:
+      return p7_oprofile_Write_neon64(ffp, pfp, om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Write");  
@@ -175,8 +178,11 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc,  P7_OPROFILE **ret_
     case AVX512:
       return p7_oprofile_ReadMSV_avx512(hfp, byp_abc, ret_om);
       break;
-    case NEON: case NEON64:
+    case NEON: 
       return p7_oprofile_ReadMSV_neon(hfp, byp_abc, ret_om);
+      break;
+    case NEON64:
+      return p7_oprofile_ReadMSV_neon64(hfp, byp_abc, ret_om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_ReadMSV");  
@@ -234,8 +240,11 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
     case AVX512:
       return p7_oprofile_ReadInfoMSV_avx512(hfp, byp_abc, ret_om);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_oprofile_ReadInfoMSV_neon(hfp, byp_abc, ret_om);
+      break;
+    case NEON64:
+      return p7_oprofile_ReadInfoMSV_neon64(hfp, byp_abc, ret_om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_ReadInfoMSV");  
@@ -321,8 +330,11 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
     case AVX512:
       return p7_oprofile_ReadRest_avx512(hfp, om);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_oprofile_ReadRest_neon(hfp, om);
+      break;
+    case NEON64:
+      return p7_oprofile_ReadRest_neon64(hfp, om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_ReadRest");  

@@ -80,8 +80,11 @@ switch(simd){
     case AVX512:
       return p7_sparsemask_Create_avx512(M, L);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_sparsemask_Create_neon(M, L);
+      break;
+    case NEON64:
+      return p7_sparsemask_Create_neon64(M, L);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Create");  
@@ -111,8 +114,11 @@ p7_sparsemask_Reinit(P7_SPARSEMASK *sm, int M, int L)
     case AVX512:
       return p7_sparsemask_Reinit_avx512(sm, M, L);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_sparsemask_Reinit_neon(sm, M, L);
+      break;
+    case NEON64:
+      return p7_sparsemask_Reinit_neon64(sm, M, L);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Reinit");  
@@ -135,8 +141,11 @@ p7_sparsemask_Sizeof(const P7_SPARSEMASK *sm)
     case AVX512:
       return p7_sparsemask_Sizeof_avx512(sm);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_sparsemask_Sizeof_neon(sm);
+      break;
+    case NEON64:
+      return p7_sparsemask_Sizeof_neon64(sm);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Sizeof");  
@@ -159,8 +168,11 @@ p7_sparsemask_MinSizeof(const P7_SPARSEMASK *sm)
     case AVX512:
       return p7_sparsemask_MinSizeof_avx512(sm);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_sparsemask_MinSizeof_neon(sm);
+      break;
+    case NEON64:
+      return p7_sparsemask_MinSizeof_neon64(sm);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_MinSizeof");  
@@ -206,8 +218,11 @@ p7_sparsemask_Destroy(P7_SPARSEMASK *sm)
     case AVX512:
       p7_sparsemask_Destroy_avx512(sm);
       break;
-    case NEON: case NEON64:
+    case NEON:
       p7_sparsemask_Destroy_neon(sm);
+      break;
+    case NEON64:
+      p7_sparsemask_Destroy_neon64(sm);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Destroy");  
@@ -334,8 +349,11 @@ switch(sm->simd){
     case AVX512:
       return p7_sparsemask_StartRow_avx512(sm, i);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_sparsemask_StartRow_neon(sm, i);
+      break;
+    case NEON64:
+      return p7_sparsemask_StartRow_neon64(sm, i);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_StartRow");  
@@ -382,8 +400,11 @@ switch(sm->simd){
     case AVX512:
       return p7_sparsemask_Add_avx512(sm, q, r);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_sparsemask_Add_neon(sm, q, r);
+      break;
+    case NEON64:
+      return p7_sparsemask_Add_neon64(sm, q, r);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Add");  
@@ -416,8 +437,11 @@ p7_sparsemask_FinishRow(P7_SPARSEMASK *sm)
     case AVX512:
       return p7_sparsemask_FinishRow_avx512(sm);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_sparsemask_FinishRow_neon(sm);
+      break;
+    case NEON64:
+      return p7_sparsemask_FinishRow_neon64(sm);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_FinishRow");  
@@ -464,8 +488,11 @@ p7_sparsemask_Finish(P7_SPARSEMASK *sm)
     case AVX512:
       return p7_sparsemask_Finish_avx512(sm);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_sparsemask_Finish_neon(sm);
+      break;
+    case NEON64:
+      return p7_sparsemask_Finish_neon64(sm);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Finish");  
@@ -726,8 +753,11 @@ p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm)
     case AVX512:
       return p7_sparsemask_Dump_avx512(ofp, sm);
       break;
-    case NEON: case NEON64:
+    case NEON: 
       return p7_sparsemask_Dump_neon(ofp, sm);
+      break;
+    case NEON64: 
+      return p7_sparsemask_Dump_neon64(ofp, sm);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Dump");  
@@ -753,8 +783,11 @@ switch(sm1->simd){
     case AVX512:
       return p7_sparsemask_Compare_avx512(sm1, sm2);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_sparsemask_Compare_neon(sm1, sm2);
+      break;
+    case NEON64:
+      return p7_sparsemask_Compare_neon64(sm1, sm2);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Compare");  
@@ -798,8 +831,11 @@ p7_sparsemask_Validate(const P7_SPARSEMASK *sm, char *errbuf)
     case AVX512:
       return p7_sparsemask_Validate_avx512(sm, errbuf);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_sparsemask_Validate_neon(sm, errbuf);
+      break;
+    case NEON64:
+      return p7_sparsemask_Validate_neon64(sm, errbuf);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Validate");  
@@ -833,8 +869,11 @@ p7_sparsemask_SetFromTrace(P7_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const P7_TRAC
     case AVX512:
       return p7_sparsemask_SetFromTrace_avx512(sm, rng, tr);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_sparsemask_SetFromTrace_neon(sm, rng, tr);
+      break;
+    case NEON64:
+      return p7_sparsemask_SetFromTrace_neon64(sm, rng, tr);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_SetFromTrace");  
@@ -2129,8 +2168,11 @@ switch(sx->sm->simd){
     case AVX512:
       return p7_sparsemx_Validate_avx(sx, errbuf); // FIXME!!!!
        break;
-    case NEON: case NEON64:
+    case NEON: 
       return p7_sparsemx_Validate_neon(sx, errbuf); // FIXME!!!!
+      break;
+    case NEON64: 
+      return p7_sparsemx_Validate_neon64(sx, errbuf); // FIXME!!!!
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_sparsemx_Validate");  

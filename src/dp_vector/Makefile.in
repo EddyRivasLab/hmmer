@@ -53,11 +53,11 @@ NEONLIBOBJS=  \
         fwdfilter_neon.o
 
 NEON64LIBOBJS=  \
-       io_neon.o\
+       io_neon64.o\
        msvfilter_neon64.o\
        p7_checkptmx_neon.o\
        p7_filtermx_neon.o\
-       p7_oprofile_neon.o\
+       p7_oprofile_neon64.o\
         ssvfilter_neon64.o \
         vitfilter_neon64.o \
         fwdfilter_neon64.o

@@ -52,6 +52,7 @@
 #include "dp_vector/io.h"
 
 
+
 static uint32_t  v3f_fmagic = 0xb3e6e6f3; /* 3/f binary MSV file, SSE:     "3ffs" = 0x 33 66 66 73  + 0x80808080 */
 static uint32_t  v3f_pmagic = 0xb3e6f0f3; /* 3/f binary profile file, SSE: "3fps" = 0x 33 66 70 73  + 0x80808080 */
 
@@ -69,6 +70,7 @@ static uint32_t  v3b_pmagic = 0xb3e2f0f3; /* 3/b binary profile file, SSE: "3bps
 
 static uint32_t  v3a_fmagic = 0xe8b3e6f3; /* 3/a binary MSV file, SSE:     "h3fs" = 0x 68 33 66 73  + 0x80808080 */
 static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file, SSE: "h3ps" = 0x 68 33 70 73  + 0x80808080 */
+
 
 
 /*****************************************************************
@@ -286,7 +288,7 @@ p7_oprofile_ReadMSV_neon(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **
 		esl_abc_DecodeType(abc->type), esl_abc_DecodeType(alphatype));
   }
   /* Now we know the sizes of things, so we can allocate. */
-  if ((om = p7_oprofile_Create(M, abc, SSE)) == NULL)         ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: oprofile");
+  if ((om = p7_oprofile_Create(M, abc, NEON)) == NULL)         ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: oprofile");
   om->M = M;
   om->roff = roff;
 

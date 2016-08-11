@@ -67,8 +67,11 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc, SIMD_TYPE simd)
     case AVX512:
       return p7_oprofile_Create_avx512(allocM, abc);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_oprofile_Create_neon(allocM, abc);
+      break;
+    case NEON64:
+      return p7_oprofile_Create_neon64(allocM, abc);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Create");  
@@ -105,8 +108,11 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
     case AVX512:
       p7_oprofile_Destroy_avx512(om);
       break;
-    case NEON: case NEON64:
+    case NEON:
       p7_oprofile_Destroy_neon(om);
+      break;
+    case NEON64:
+      p7_oprofile_Destroy_neon64(om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Destroy");  
@@ -137,8 +143,11 @@ p7_oprofile_Sizeof(const P7_OPROFILE *om)
     case AVX512:
       return p7_oprofile_Sizeof_avx512(om);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_oprofile_Sizeof_neon(om);
+      break;
+    case NEON64:
+      return p7_oprofile_Sizeof_neon64(om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Sizeof");  
@@ -168,8 +177,11 @@ p7_oprofile_Clone(const P7_OPROFILE *om1)
     case AVX512:
       return p7_oprofile_Clone_avx512(om1);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_oprofile_Clone_neon(om1);
+      break;
+    case NEON64:
+      return p7_oprofile_Clone_neon64(om1);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Clone");  
@@ -315,8 +327,11 @@ sf_conversion(P7_OPROFILE *om)
     case AVX512:
       sf_conversion_avx512(om);
       break;
-    case NEON: case NEON64:
+    case NEON:
       sf_conversion_neon(om);
+      break;
+    case NEON64:
+      sf_conversion_neon64(om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to sf_conversion");  
@@ -350,8 +365,11 @@ mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
     case AVX512:
       mf_conversion_avx512(gm, om);
       break;
-    case NEON: case NEON64:
+    case NEON:
       mf_conversion_neon(gm, om);
+      break;
+    case NEON64:
+      mf_conversion_neon64(gm, om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to mf_conversion");  
@@ -382,8 +400,11 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
     case AVX512:
       vf_conversion_avx512(gm, om);
       break;
-    case NEON: case NEON64:
+    case NEON:
       vf_conversion_neon(gm, om);
+      break;
+    case NEON64:
+      vf_conversion_neon64(gm, om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to vf_conversion");  
@@ -409,8 +430,11 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
     case AVX512:
       fb_conversion_avx512(gm, om);
       break;
-    case NEON: case NEON64:
+    case NEON:
       fb_conversion_neon(gm, om);
+      break;
+    case NEON64:
+      fb_conversion_neon64(gm, om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to fb_conversion");  
@@ -482,11 +506,15 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
         if ((status =  vf_conversion_avx512(gm, om)) != eslOK) return status;   /* ViterbiFilter()'s information */
         if ((status =  fb_conversion_avx512(gm, om)) != eslOK) return status;   /* ForwardFilter()'s information */
         break;
-    case NEON: case NEON64:
-printf("ok\n");
+    case NEON:
         if ((status =  mf_conversion_neon(gm, om)) != eslOK) return status;   /* MSVFilter()'s information     */
         if ((status =  vf_conversion_neon(gm, om)) != eslOK) return status;   /* ViterbiFilter()'s information */
         if ((status =  fb_conversion_neon(gm, om)) != eslOK) return status;   /* ForwardFilter()'s information */
+        break;
+    case NEON64:
+        if ((status =  mf_conversion_neon64(gm, om)) != eslOK) return status;   /* MSVFilter()'s information     */
+        if ((status =  vf_conversion_neon64(gm, om)) != eslOK) return status;   /* ViterbiFilter()'s information */
+        if ((status =  fb_conversion_neon64(gm, om)) != eslOK) return status;   /* ForwardFilter()'s information */
         break;
       default:
         p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Convert");  
@@ -693,8 +721,11 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
     case AVX512:
       return p7_oprofile_GetFwdTransitionArray_avx512(om, type, arr);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_oprofile_GetFwdTransitionArray_neon(om, type, arr);
+      break;
+    case NEON64:
+      return p7_oprofile_GetFwdTransitionArray_neon64(om, type, arr);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_GetFwdTransitionArray");  
@@ -739,8 +770,11 @@ p7_oprofile_GetMSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr )
     case AVX512:
       return p7_oprofile_GetMSVEmissionScoreArray_avx512(om, arr);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_oprofile_GetMSVEmissionScoreArray_neon(om, arr);
+      break; 
+    case NEON64:
+      return p7_oprofile_GetMSVEmissionScoreArray_neon64(om, arr);
       break; 
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_GetMSVEmissionScoreArray");  
@@ -784,8 +818,11 @@ p7_oprofile_GetFwdEmissionScoreArray(const P7_OPROFILE *om, float *arr )
     case AVX512:
       return p7_oprofile_GetFwdEmissionScoreArray_avx512(om, arr);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_oprofile_GetFwdEmissionScoreArray_neon(om, arr);
+      break;
+    case NEON64:
+      return p7_oprofile_GetFwdEmissionScoreArray_neon64(om, arr);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_GetFwdEmissionScoreArray");  
@@ -829,8 +866,11 @@ p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, P7_BG *bg, float *arr )
     case AVX512:
       return p7_oprofile_GetFwdEmissionArray_avx512(om, bg, arr);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_oprofile_GetFwdEmissionArray_neon(om, bg, arr);
+      break;
+    case NEON64:
+      return p7_oprofile_GetFwdEmissionArray_neon64(om, bg, arr);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_GetFwdEmissionArray");  
@@ -861,8 +901,11 @@ oprofile_dump_mf(FILE *fp, const P7_OPROFILE *om)
     case AVX512:
       return oprofile_dump_mf_sse(fp, om);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return oprofile_dump_mf_neon(fp, om);
+      break;
+    case NEON64:
+      return oprofile_dump_mf_neon64(fp, om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to oprofile_dump_mf");
@@ -886,8 +929,11 @@ oprofile_dump_vf(FILE *fp, const P7_OPROFILE *om)
     case AVX512:
       return oprofile_dump_vf_sse(fp, om);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return oprofile_dump_vf_neon(fp, om);
+      break;
+    case NEON64:
+      return oprofile_dump_vf_neon64(fp, om);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to oprofile_dump_vf");
@@ -915,8 +961,11 @@ oprofile_dump_fb(FILE *fp, const P7_OPROFILE *om, int width, int precision)
     case AVX512:
       return oprofile_dump_fb_sse(fp, om, width, precision);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return oprofile_dump_fb_neon(fp, om, width, precision);
+      break;
+    case NEON64:
+      return oprofile_dump_fb_neon64(fp, om, width, precision);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to oprofile_dump_fb");
@@ -1058,8 +1107,11 @@ p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, c
     case AVX512:
       return p7_oprofile_Compare_avx512(om1, om2, tol, errmsg);
       break;
-    case NEON: case NEON64:
+    case NEON:
       return p7_oprofile_Compare_neon(om1, om2, tol, errmsg);
+      break;
+    case NEON64:
+      return p7_oprofile_Compare_neon64(om1, om2, tol, errmsg);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Compare");
