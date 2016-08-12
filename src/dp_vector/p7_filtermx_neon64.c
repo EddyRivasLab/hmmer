@@ -14,7 +14,7 @@
 
 #if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
 #include <arm_neon.h>
-#include "esl_neon.h"
+#include "esl_neon64.h"
 #endif
 
 #include "easel.h"
@@ -44,9 +44,9 @@
  * Throws:    <NULL> on allocation failure.
  */
 P7_FILTERMX *
-p7_filtermx_Create_neon(int allocM)
+p7_filtermx_Create_neon64(int allocM)
 {
-#ifdef HAVE_NEON
+#ifdef HAVE_NEON64
   P7_FILTERMX *fx = NULL;
   int          status;
 
@@ -54,7 +54,7 @@ p7_filtermx_Create_neon(int allocM)
   ESL_DASSERT1( (allocM >= 1 && allocM <= 100000) );
 
   ESL_ALLOC(fx, sizeof(P7_FILTERMX));
-  fx->simd = NEON;
+  fx->simd = NEON64;
   fx->M         = 0;
   fx->dp        = NULL;
   fx->dp_mem    = NULL;
@@ -80,8 +80,8 @@ p7_filtermx_Create_neon(int allocM)
  ERROR:
   p7_filtermx_Destroy(fx);
   return NULL;
- #endif //HAVE_NEON
- #ifndef HAVE_NEON
+ #endif //HAVE_NEON64
+ #ifndef HAVE_NEON64
  return NULL;
  #endif 
 }
@@ -106,9 +106,9 @@ p7_filtermx_Create_neon(int allocM)
  *            <fx> is now undefined, and it should not be used.
  */
 int
-p7_filtermx_GrowTo_neon(P7_FILTERMX *fx, int allocM)
+p7_filtermx_GrowTo_neon64(P7_FILTERMX *fx, int allocM)
 {
-#ifdef HAVE_NEON  
+#ifdef HAVE_NEON64  
   int status;
 
   /* Contract checks / argument validation */
@@ -125,8 +125,8 @@ p7_filtermx_GrowTo_neon(P7_FILTERMX *fx, int allocM)
 
  ERROR:
   return status;
-#endif //HAVE_NEON
- #ifndef HAVE_NEON
+#endif //HAVE_NEON64
+ #ifndef HAVE_NEON64
  return eslENORESULT;
  #endif   
 }
@@ -143,11 +143,11 @@ p7_filtermx_GrowTo_neon(P7_FILTERMX *fx, int allocM)
  * Returns:   the allocation size.
  */
 size_t 
-p7_filtermx_Sizeof_neon(const P7_FILTERMX *fx)
+p7_filtermx_Sizeof_neon64(const P7_FILTERMX *fx)
 {
   size_t n = sizeof(P7_FILTERMX);
  
-#ifdef HAVE_NEON
+#ifdef HAVE_NEON64
   n += (sizeof(esl_neon_128i_t) * p7F_NSCELLS * P7_NVW(fx->allocM)) + (p7_VALIGN-1);
  #endif 
   return n;
@@ -162,10 +162,10 @@ p7_filtermx_Sizeof_neon(const P7_FILTERMX *fx)
  *            profile of <M> consensus positions.
  */
 size_t
-p7_filtermx_MinSizeof_neon(int M)
+p7_filtermx_MinSizeof_neon64(int M)
 {
   size_t n = sizeof(P7_FILTERMX);
- #ifdef HAVE_NEON 
+ #ifdef HAVE_NEON64 
   n += (sizeof(esl_neon_128i_t) * p7F_NSCELLS * P7_NVW(M)) + (p7_VALIGN-1);
  #endif
 
@@ -183,10 +183,10 @@ p7_filtermx_MinSizeof_neon(int M)
  * Returns:   (void)
  */
 void
-p7_filtermx_Destroy_neon(P7_FILTERMX *fx)
+p7_filtermx_Destroy_neon64(P7_FILTERMX *fx)
 {
   if (fx) {
-#ifdef HAVE_NEON
+#ifdef HAVE_NEON64
     if (fx->dp_mem) free(fx->dp_mem);
 #endif
 
@@ -222,9 +222,9 @@ p7_filtermx_Destroy_neon(P7_FILTERMX *fx)
  * Throws:    <eslEMEM> on allocation failure. 
  */
 int
-p7_filtermx_DumpMFRow_neon(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
+p7_filtermx_DumpMFRow_neon64(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
- #ifdef HAVE_NEON 
+ #ifdef HAVE_NEON64 
   int      Q  = P7_NVB(fx->M);	/* number of vectors in the MSV row */
   uint8_t *v  = NULL;		/* array of scores after unstriping them */
   int      q,z,k;
@@ -275,8 +275,8 @@ p7_filtermx_DumpMFRow_neon(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t 
 ERROR:
   free(v);
   return status;
-#endif //HAVE_NEON
- #ifndef HAVE_NEON
+#endif //HAVE_NEON64
+ #ifndef HAVE_NEON64
  return eslENORESULT;
  #endif   
 }
@@ -301,9 +301,9 @@ ERROR:
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_filtermx_DumpVFRow_neon(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
+p7_filtermx_DumpVFRow_neon64(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
 {
- #ifdef HAVE_NEON 
+ #ifdef HAVE_NEON64 
   esl_neon_128i_t *dp = fx->dp;		/* enable MMXf(q), DMXf(q), IMXf(q) macros */
   int      Q  = P7_NVW(fx->M);	/* number of vectors in the VF row */
   int16_t *v  = NULL;		/* array of unstriped, uninterleaved scores  */
@@ -361,8 +361,8 @@ p7_filtermx_DumpVFRow_neon(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t 
 ERROR:
   free(v);
   return status;
-#endif //HAVE_NEON
- #ifndef HAVE_NEON
+#endif //HAVE_NEON64
+ #ifndef HAVE_NEON64
  return eslENORESULT;
  #endif   
 }

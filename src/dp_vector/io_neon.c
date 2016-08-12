@@ -510,7 +510,6 @@ p7_oprofile_ReadRest_neon(P7_HMMFILE *hfp, P7_OPROFILE *om)
       if (pthread_mutex_lock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex lock failed");
     }
 #endif
-#ifdef p7_build_SSE 
   hfp->errbuf[0] = '\0';
   if (hfp->pfp == NULL) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no MSV profile file; hmmpress probably wasn't run");
  
@@ -588,7 +587,6 @@ p7_oprofile_ReadRest_neon(P7_HMMFILE *hfp, P7_OPROFILE *om)
 
   free(name);
 
-#endif
   return eslOK;
 
  ERROR:

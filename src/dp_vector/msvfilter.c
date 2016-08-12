@@ -113,6 +113,9 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
     case NEON:
       return p7_MSVFilter_neon(dsq, L, om, ox, ret_sc);
       break;
+    case NEON64:
+      return p7_MSVFilter_neon64(dsq, L, om, ox, ret_sc);
+      break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_MSVFilter");  
   }
