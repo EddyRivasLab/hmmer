@@ -52,11 +52,13 @@ for line in infile:
 			quit()
 
 		test = etree.SubElement(suite, "testcase");
-		testname = tokens[3][:-1]
+		testname = tokens[-3][:-1]
+		if testname[0] == '[':
+			testname = testname[1:]
 		test.set("classname", suite.get("name"))
 		test.set("name", testname)
 		test.set("time", "0")
-		if tokens[5] == "FAILED":
+		if tokens[-1] == "FAILED":
 			suite_failed += 1;
 			total_failed += 1;
 			#test failed, add appropriate fields to record
