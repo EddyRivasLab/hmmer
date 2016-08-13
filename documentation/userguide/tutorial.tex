@@ -1403,9 +1403,14 @@ of sequences, you may wish to annotate all the instances of a collection of HMMs
 found in a single sequence.
 
 In the case of proteins, \prog{hmmscan} is for annotating all the different
-known/detectable domains in a given protein sequence. It takes a single query
-sequence and an HMM database as input. The HMM database might be Pfam,
-SMART, or TIGRFams, for example, or another collection of your choice.
+known/detectable domains in a given protein sequence. It takes as input 
+a query file containing one or more solitary sequences, and an HMM database.
+The HMM database might be Pfam, SMART, or TIGRFams, for example, or another 
+collection of your choice. (An aside: both \prog{hmmsearch} and
+\prog{hmmscan} can compare a set of HMMs to a set of sequences. Due to
+disk access patterns of the two tools, you should
+only use \prog{hmmscan} when the number of HMMs substantially exceeds the 
+number of sequences.)
 
 In the case of DNA, the same purpose is met with \prog{nhmmscan}. In this case,
 the HMM database might be Dfam (a database of HMMs for transposable element
@@ -1478,11 +1483,11 @@ This reduces the time to build all of Pfam to about 40 seconds.
 
 \subsubsection{Step 2: compress and index the flatfile with hmmpress}
 
-The \prog{hmmscan} program has to read a lot of profile HMMs in a
-hurry, and HMMER's ASCII flatfiles are bulky. To accelerate this,
-\prog{hmmscan} uses binary compression and indexing of the flatfiles.
-To use \prog{hmmscan}, you must first compress and index your HMM
-database with the \prog{hmmpress} program:
+The programs \prog{hmmscan} and \prog{nhmmscan} have to read a lot of profile
+HMMs in a hurry, and HMMER's ASCII flatfiles are bulky. To accelerate this,
+both programs depend on binary compression and indexing of the flatfiles.
+To use \prog{hmmscan} and  \prog{nhmmscan}, you must first compress and index
+your HMM database with the \prog{hmmpress} program:
 
 \user{hmmpress minifam}
 

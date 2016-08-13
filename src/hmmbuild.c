@@ -97,18 +97,6 @@ static ESL_OPTIONS options[] = {
 /* Alternative prior strategies */
   { "--pnone",   eslARG_NONE,  FALSE,  NULL, NULL,       NULL,  NULL,"--plaplace", "don't use any prior; parameters are frequencies",      9 },
   { "--plaplace",eslARG_NONE,  FALSE,  NULL, NULL,       NULL,  NULL,   "--pnone", "use a Laplace +1 prior",                               9 },
-  { "--popen",    eslARG_REAL,  NULL,  NULL,"0<=x<0.5",NULL, NULL,           "",   "force gap open prob. (w/ --singlemx, aa default 0.02, nt 0.031)",       9 },
-  { "--pextend",  eslARG_REAL,  NULL,  NULL, "0<=x<1", NULL, NULL,           "",   "force gap extend prob. (w/ --singlemx, aa default 0.4, nt 0.75)",      9 },
-
-  { "--tmm",  eslARG_REAL,"2.0", NULL, NULL,      NULL,      NULL,    NULL, "MM transition",   9 },
-  { "--tmi",  eslARG_REAL,"0.1", NULL, NULL,      NULL,      NULL,    NULL, "MI transition",   9 },
-  { "--tmd",  eslARG_REAL,"0.1", NULL, NULL,      NULL,      NULL,    NULL, "MD transition",   9 },
-
-  { "--tim",  eslARG_REAL,"0.12", NULL, NULL,      NULL,      NULL,    NULL, "IM transition",   9 },
-  { "--tii",  eslARG_REAL,"0.4", NULL, NULL,      NULL,      NULL,    NULL,  "II transition",   9 },
-
-  { "--tdm",  eslARG_REAL,"0.5", NULL, NULL,      NULL,      NULL,    NULL, "DM transition",   9 },
-  { "--tdd",  eslARG_REAL,"1.0", NULL, NULL,      NULL,      NULL,    NULL, "DD transition",   9 },
 
 
 
@@ -116,6 +104,19 @@ static ESL_OPTIONS options[] = {
   { "--singlemx", eslARG_NONE,   FALSE, NULL,   NULL,   NULL,  NULL,           "",   "use substitution score matrix for single-sequence inputs",     10 },
   { "--mx",     eslARG_STRING, "BLOSUM62", NULL, NULL,   NULL, NULL,   "--mxfile",   "substitution score matrix (built-in matrices, with --singlemx)", 10 },
   { "--mxfile", eslARG_INFILE,     NULL, NULL,   NULL,   NULL, NULL,       "--mx",   "read substitution score matrix from file <f> (with --singlemx)", 10 },
+  { "--popen",    eslARG_REAL,  NULL,  NULL,"0<=x<0.5",NULL, NULL,           "",   "force gap open prob. (w/ --singlemx, aa default 0.02, nt 0.031)",  10 },
+  { "--pextend",  eslARG_REAL,  NULL,  NULL, "0<=x<1", NULL, NULL,           "",   "force gap extend prob. (w/ --singlemx, aa default 0.4, nt 0.75)",  10 },
+
+  { "--tmm",  eslARG_REAL,"2.0", NULL, NULL,      NULL,      NULL,  	  NULL, 	"MM transition",   10 },
+  { "--tmi",  eslARG_REAL,"0.1", NULL, NULL,      NULL,      NULL,  	  NULL, 	"MI transition",   10 },
+  { "--tmd",  eslARG_REAL,"0.1", NULL, NULL,      NULL,      NULL,  	  NULL, 	"MD transition",   10 },
+
+  { "--tim",  eslARG_REAL,"0.12", NULL, NULL,      NULL,      NULL, 	  NULL, 	"IM transition",   10 },
+  { "--tii",  eslARG_REAL,"0.4", NULL, NULL,      NULL,      NULL,    	  NULL,  	"II transition",   10 },
+
+  { "--tdm",  eslARG_REAL,"0.5", NULL, NULL,      NULL,      NULL,    	  NULL, 	"DM transition",   10 },
+  { "--tdd",  eslARG_REAL,"1.0", NULL, NULL,      NULL,      NULL,   	  NULL, 	"DD transition",   10 },
+
 
   /* Control of E-value calibration */
   { "--EmL",     eslARG_INT,    "200", NULL,"n>0",       NULL,    NULL,      NULL, "length of sequences for MSV Gumbel mu fit",            6 },   
