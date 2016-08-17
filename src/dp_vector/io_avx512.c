@@ -340,11 +340,11 @@ __m128i *tmp_buffer;  // buffer used for restriping values from 128-bit format
 
    for (x = 0; x < abc->Kp; x++){
     if (! fread((char *) tmp_buffer,     sizeof(char), padded_byte_vector_length,        hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ssv scores at %d [residue %c]", x, abc->sym[x]); 
-     p7_restripe_byte((char *) tmp_buffer, (char*) om->sbv_AVX[x], padded_byte_vector_length, 128, 512);
+     p7_restripe_byte((char *) tmp_buffer, (char*) om->sbv_AVX_512[x], padded_byte_vector_length, 128, 512);
   }
   for (x = 0; x < abc->Kp; x++){
     if (! fread((char *) tmp_buffer,     sizeof(char), byte_vector_length,         hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read msv scores at %d [residue %c]", x, abc->sym[x]); 
-    p7_restripe_byte((char *) tmp_buffer, (char *) om->rbv_AVX[x], byte_vector_length, 128, 512);
+    p7_restripe_byte((char *) tmp_buffer, (char *) om->rbv_AVX_512[x], byte_vector_length, 128, 512);
   }
 
   if (! fread((char *) om->evparam,      sizeof(float),   p7_NEVPARAM, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read stat params");
