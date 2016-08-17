@@ -107,6 +107,7 @@ p7_sparsemask_Create_sse(int M, int L)
 
  ERROR:
   p7_sparsemask_Destroy(sm);
+  return NULL;
 #endif //HAVE_SSE2
 #ifndef HAVE_SSE2
 return NULL;

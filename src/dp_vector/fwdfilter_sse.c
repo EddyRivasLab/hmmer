@@ -1043,7 +1043,10 @@ backward_row_zero_sse(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
     P7C_MQ(dpc, q) = P7C_IQ(dpc, q) = P7C_DQ(dpc, q) = zerov;
 
   return logf(xc[p7C_N]);
-#endif //p7_DEBUGGING  
+#endif //p7_DEBUGGING 
+#ifndef p7_DEBUGGING
+return 0.0; //stub to silence compiler warning
+#endif 
 #endif // HAVE_SSE2
 #ifndef HAVE_SSE2
 return 0.0;

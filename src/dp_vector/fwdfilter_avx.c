@@ -475,7 +475,7 @@ forward_row_avx(ESL_DSQ xi, const P7_OPROFILE *om, const __m256 *dpp, __m256 *dp
   mpv = esl_avx_leftshift_ps(P7C_MQ(dpp, Q-1)); 
   ipv = esl_avx_leftshift_ps(P7C_IQ(dpp, Q-1)); 
   dpv = esl_avx_leftshift_ps(P7C_DQ(dpp, Q-1)); 
-printf("Q= %d\n", Q);
+
   /* DP recursion for main states, all but the D->D path */
   for (q = 0; q < Q; q++)
     {
@@ -1059,6 +1059,9 @@ backward_row_zero_avx(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
 
   return logf(xc[p7C_N]);
  #endif //p7_DEBUGGING 
+ #ifndef p7_DEBUGGING
+  return 0; // stub to silence compiler warnings
+ #endif 
 }
 #endif
 

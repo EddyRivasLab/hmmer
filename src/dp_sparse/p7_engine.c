@@ -237,6 +237,12 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
       eng->fwd = p7_ForwardFilter_avx512;
       eng->bck = p7_BackwardFilter_avx512;
 #endif      
+      case NEON:
+        p7_Fail("NEON Support isn't in this version yet\n");
+        break;
+      case NO_SIMD:
+        p7_Fail("Couldn't determine which SIMD ISA to use\n");
+        break;
     }
   }
 

@@ -1084,6 +1084,26 @@ utest_internal_glocal_exit(void)
   float          vsc_r, fsc_r, bsc_r, tsc_r;
   int            i;
   float          tol = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  int Q; 
+  switch(hw->simd){ // get the correct Q value depending on what SIMD ISA we're using
+  #ifdef HAVE_SSE2  
+    case SSE:
+      Q=sm->Q;    
+      break;
+  #endif
+  #ifdef HAVE_AVX2    
+    case AVX:
+      Q = sm->Q_AVX;
+      break;
+  #endif
+  #ifdef HAVE_AVX512   
+    case AVX512:
+      Q = sm->Q_AVX_512;
+      break;
+  #endif
+    default:
+      esl_fatal("Unknown SIMD type used in utest_internal_glocal_exit\n");    
+  }
 
   /* Create the 40aa A-YA-Y test model */
   if ( esl_abc_CreateDsq(abc, qseq, &qsq)                                                != eslOK) esl_fatal(msg);
@@ -1106,8 +1126,8 @@ utest_internal_glocal_exit(void)
        * API also requires that they're added not as <k> coord but as <q,r> slot coords (see sparsemask.c docs)
        */
       if ( p7_sparsemask_StartRow(sm, i)                   != eslOK) esl_fatal(msg);
-      if ( p7_sparsemask_Add(sm, (M-1)%sm->Q, (M-1)/sm->Q) != eslOK) esl_fatal(msg);
-      if ( p7_sparsemask_Add(sm, (i-1)%sm->Q, (i-1)/sm->Q) != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_Add(sm, (M-1)%Q, (M-1)/Q) != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_Add(sm, (i-1)%Q, (i-1)/Q) != eslOK) esl_fatal(msg);
       if ( p7_sparsemask_FinishRow(sm)                     != eslOK) esl_fatal(msg);
     }
   if ( p7_sparsemask_Finish(sm)          != eslOK) esl_fatal(msg);

@@ -307,19 +307,21 @@ sf_conversion(P7_OPROFILE *om)
 {
  switch(om->simd){
     case SSE:
-      sf_conversion_sse(om);
+      return sf_conversion_sse(om);
       break;
     case AVX:
-      sf_conversion_avx(om);
+      return sf_conversion_avx(om);
       break;
     case AVX512:
-      sf_conversion_avx512(om);
+      return sf_conversion_avx512(om);
       break;
     case NEON:
       p7_Fail("Neon support not yet integrated into sf_conversion");
+      return 0;  // just here to silence compiler warning
       break;
     default:
-      p7_Fail("Unrecognized SIMD type passed to sf_conversion");  
+      p7_Fail("Unrecognized SIMD type passed to sf_conversion");
+      return 0; // just here to silence compiler warning  
   }
 }
 
@@ -341,19 +343,21 @@ mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
   switch(om->simd){
     case SSE:
-      mf_conversion_sse(gm, om);
+      return mf_conversion_sse(gm, om);
       break;
     case AVX:
-      mf_conversion_avx(gm, om);
+      return mf_conversion_avx(gm, om);
       break;
     case AVX512:
-      mf_conversion_avx512(gm, om);
+      return mf_conversion_avx512(gm, om);
       break;
     case NEON:
       p7_Fail("Neon support not yet integrated into mf_conversion");
+      return 0; // just here to silence compiler warnings
       break;
     default:
-      p7_Fail("Unrecognized SIMD type passed to mf_conversion");  
+      p7_Fail("Unrecognized SIMD type passed to mf_conversion"); 
+      return 0; // just here to silence compiler warnings 
   }
 }
 
@@ -372,19 +376,21 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
  switch(om->simd){
     case SSE:
-      vf_conversion_sse(gm, om);
+      return vf_conversion_sse(gm, om);
       break;
     case AVX:
-      vf_conversion_avx(gm, om);
+      return vf_conversion_avx(gm, om);
       break;
     case AVX512:
-      vf_conversion_avx512(gm, om);
+      return vf_conversion_avx512(gm, om);
       break;
     case NEON:
       p7_Fail("Neon support not yet integrated into vf_conversion");
+      return 0; // just here to silence compiler warnings
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to vf_conversion");  
+      return 0; // just here to silence compiler warnings
   }
 }
 
@@ -398,19 +404,21 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
   switch(om->simd){
     case SSE:
-      fb_conversion_sse(gm, om);
+      return fb_conversion_sse(gm, om);
       break;
     case AVX:
-      fb_conversion_avx(gm, om);
+      return fb_conversion_avx(gm, om);
       break;
     case AVX512:
-      fb_conversion_avx512(gm, om);
+      return fb_conversion_avx512(gm, om);
       break;
     case NEON:
       p7_Fail("Neon support not yet integrated into fb_conversion");
+      return 0;  // just here to silence compiler warnings
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to fb_conversion");  
+      return 0; // just here to silence compler warnings
   }
 }
 

@@ -130,14 +130,14 @@ P7_HARDWARE * p7_hardware_Create(){
 
     int sse_support = check_SSE2(&Info1);
 	if (sse_support){
-		printf("Detected SSE2 support\n");
+//		printf("Detected SSE2 support\n");
             retval->simd = SSE;
 	}
 
 #ifdef HAVE_AVX2 // only check for AVX2 support if we compiled in AVX2
     int avx_support = check_AVX2(&Info1, &Info2, &Info3);
     if(avx_support){
-      printf("Detected AVX2 support\n");
+  //    printf("Detected AVX2 support\n");
         retval->simd = AVX;
     }
 #endif
@@ -145,7 +145,7 @@ P7_HARDWARE * p7_hardware_Create(){
 #ifdef HAVE_AVX512  // only check for AVX512 support if we compiled in AVX512
     int avx512_support = check_AVX512(&Info1, &Info2);
     if(avx512_support){
-       printf("Detected AVX-512 support\n");
+   //    printf("Detected AVX-512 support\n");
         retval->simd = AVX512;
     }
 #endif
