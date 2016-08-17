@@ -141,7 +141,7 @@ typedef struct {
  * Throws:    <NULL> on allocation failure.
  */
 P7_PIPELINE *
-p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, enum p7_pipemodes_e mode)
+p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, enum p7_pipemodes_e mode, SIMD_TYPE simd)
 {
   P7_PIPELINE *pli  = NULL;
   int          status;
@@ -162,12 +162,10 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, 
   pli->mt   = NULL;
   pli->n2sc = NULL;
   pli->wrk  = NULL;
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   
-  if ( (pli->fx  = p7_filtermx_Create  (M_hint, hw->simd))                                           == NULL) goto ERROR;
-  if ( (pli->cx  = p7_checkptmx_Create (M_hint, L_hint, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT), hw->simd)) == NULL) goto ERROR; /* p7_RAMLIMIT=256MB, in p7_config.h.in */
-  if ( (pli->sm  = p7_sparsemask_Create(M_hint, L_hint, hw->simd))                                   == NULL) goto ERROR;
+  if ( (pli->fx  = p7_filtermx_Create  (M_hint, simd))                                           == NULL) goto ERROR;
+  if ( (pli->cx  = p7_checkptmx_Create (M_hint, L_hint, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT), simd)) == NULL) goto ERROR; /* p7_RAMLIMIT=256MB, in p7_config.h.in */
+  if ( (pli->sm  = p7_sparsemask_Create(M_hint, L_hint, simd))                                   == NULL) goto ERROR;
   if ( (pli->sxf = p7_sparsemx_Create  (pli->sm))                                          == NULL) goto ERROR;
   if ( (pli->sxb = p7_sparsemx_Create  (pli->sm))                                          == NULL) goto ERROR;
   if ( (pli->sxd = p7_sparsemx_Create  (pli->sm))                                          == NULL) goto ERROR;
@@ -2052,7 +2050,9 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
   P7_HMM_WINDOWLIST vit_windowlist;
 
   P7_PIPELINE_LONGTARGET_OBJS *pli_tmp = NULL;
-
+  if(om->simd != SSE && om->simd != NEON){
+    esl_fatal("p7_Pipeline_LongTarget only supports SSE and NEON SIMD types at the moment");
+  }
 
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
@@ -2061,8 +2061,8 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
   if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   pli_tmp->bg = p7_bg_Clone(bg);
   pli_tmp->gm = p7_profile_Clone(gm);
-  pli_tmp->om = p7_oprofile_Create(gm->M, gm->abc, SSE);
-  pli_tmp->sm = p7_sparsemask_Create(gm->M, 100, SSE);
+  pli_tmp->om = p7_oprofile_Create(gm->M, gm->abc, om->simd);
+  pli_tmp->sm = p7_sparsemask_Create(gm->M, 100, om->simd);
   ESL_ALLOC(pli_tmp->scores, sizeof(float) * om->abc->Kp);
   if ( (pli_tmp->trc = p7_trace_CreateWithPP())            == NULL) { status = eslEMEM; goto ERROR; }
   if ( (pli_tmp->sxf = p7_sparsemx_Create (pli_tmp->sm))   == NULL) { status = eslEMEM; goto ERROR; }

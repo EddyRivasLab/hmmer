@@ -64,7 +64,7 @@ p7_checkptmx_Create_avx(int M, int L, int64_t ramlimit)
   int          maxR;
   int          r;
   int          status;
-  
+  printf("M=%d\n", M);
   /* Validity of integer variable ranges may depend on design spec:                  */
   ESL_DASSERT1( (M <= 100000) );       /* design spec says, model length M <= 100000 */
   ESL_DASSERT1( (L <= 100000) );       /*           ... and,  seq length L <= 100000 */
@@ -187,7 +187,8 @@ p7_checkptmx_GrowTo_avx(P7_CHECKPTMX *ox, int M, int L)
   if (ox->bck && (status = p7_refmx_GrowTo(ox->bck, M, L)) != eslOK) goto ERROR;
   if (ox->pp  && (status = p7_refmx_GrowTo(ox->pp,  M, L)) != eslOK) goto ERROR;
 #endif
-
+  W  = sizeof(float) * P7_NVF_AVX(M) * p7C_NSCELLS * p7_VNF_AVX;     /* vector part of row (MDI)     */
+  W += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN_AVX);  /* float part of row (specials); must maintain p7_VALIGN-byte alignment */
  
 
   /* Are current allocations satisfactory ? */
@@ -201,9 +202,6 @@ p7_checkptmx_GrowTo_avx(P7_CHECKPTMX *ox, int M, int L)
       else if (minR_chk   <= ox->validR_AVX) { set_checkpointed(ox, L, ox->validR_AVX); return eslOK; }
     }
 
-  reset_dp_ptrs = FALSE; // Reset this just to prevent any wierdness with multiple ISA builds
-  W  = sizeof(float) * P7_NVF_AVX(M) * p7C_NSCELLS * p7_VNF_AVX;     /* vector part of row (MDI)     */
-  W += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN_AVX);  /* float part of row (specials); must maintain p7_VALIGN-byte alignment */
   /* Do individual matrix rows need to expand? */
   if ( W > ox->allocW_AVX) 
     {

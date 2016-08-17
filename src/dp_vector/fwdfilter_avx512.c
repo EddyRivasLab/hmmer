@@ -1048,10 +1048,11 @@ backward_row_zero_avx512(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
 
 }
 
+#ifdef HAVE_AVX512
 static void
 save_debug_row_pp_avx512(P7_CHECKPTMX *ox, __m512 *dpc, int i)
 {
-#ifdef HAVE_AVX512
+
 #ifdef p7_DEBUGGING  
   union { __m512 v; float x[p7_VNF_AVX_512]; } u;
   int      Q  = ox->Qf_AVX_512;
@@ -1088,9 +1089,10 @@ save_debug_row_pp_avx512(P7_CHECKPTMX *ox, __m512 *dpc, int i)
       u.v = P7C_DQ(dpc, q); for (z = 0; z < p7_VNF_AVX_512; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(ox->pp,i,k,p7R_DL) = u.x[z]; }
       u.v = P7C_IQ(dpc, q); for (z = 0; z < p7_VNF_AVX_512; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(ox->pp,i,k,p7R_IL) = u.x[z]; }
     }
-#endif // HAVE_AVX512
+
 #endif // p7_DEBUGGING    
 }
+#endif // HAVE_AVX512
 
 /* save_debug_row_fb()
  * 
@@ -1101,10 +1103,11 @@ save_debug_row_pp_avx512(P7_CHECKPTMX *ox, __m512 *dpc, int i)
  * tolerance) to a reference implementation Forward/Backward in log
  * space.
  */
+ #ifdef HAVE_AVX512
 static void
 save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, __m512 *dpc, int i, float totscale)
 {
-#ifdef HAVE_AVX512
+
 #ifdef p7_DEBUGGING   
   union { __m512 v; float x[p7_VNF_AVX_512]; } u;
   int      Q  = ox->Qf;
@@ -1139,10 +1142,10 @@ save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, __m512 *dpc, int i, float tots
       u.v = P7C_DQ(dpc, q); for (z = 0; z < p7_VNF_AVX_512; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(gx,i,k,p7R_DL) = logf(u.x[z]) + totscale; }
       u.v = P7C_IQ(dpc, q); for (z = 0; z < p7_VNF_AVX_512; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(gx,i,k,p7R_IL) = logf(u.x[z]) + totscale; }
     }
- #endif // HAVE_AVX512
+
 #endif // p7_DEBUGGING     
 }
-
+ #endif // HAVE_AVX512
 /*****************************************************************
  * @LICENSE@
  * 

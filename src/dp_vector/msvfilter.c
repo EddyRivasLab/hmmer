@@ -21,11 +21,11 @@
 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
-#ifdef p7_build_AVX2
+#ifdef HAVE_AVX2
   #include <immintrin.h>  /* AVX2 */
-  #include "esl_avx.h"
+  //#include "esl_avx.h"
 #endif
-#ifdef p7_build_AVX512
+#ifdef HAVE_AVX512
   #include <immintrin.h>  /* AVX-512 */
 #endif
 #include "easel.h"
@@ -41,17 +41,8 @@
 #include "dp_vector/msvfilter.h"
 #include "x86intrin.h"
 
-//temporary helper function.  Should not be in release version
- #ifdef p7_build_AVX512
- void print_512(__m512i var){
-  uint64_t *val = (uint64_t*) &var;
-    printf("%016lx %016lx %016lx %016lx %016lx %016lx %016lx %016lx \n", 
-           val[7], val[6], val[5], val[4], val[3], val[2], 
-           val[1], val[0]);
- }
-#endif
 //uint64_t SSV_time, MSV_time;
-uint64_t full_MSV_calls;
+//uint64_t full_MSV_calls;
 /*****************************************************************
  * 1. The p7_MSVFilter() DP implementation.
  *****************************************************************/

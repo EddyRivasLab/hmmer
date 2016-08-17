@@ -94,6 +94,7 @@ static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file, SSE: "h3ps
 int
 p7_oprofile_Write_sse(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
 {
+ #ifdef HAVE_SSE2 
   int Q4   = P7_NVF(om->M);
   int Q8   = P7_NVW(om->M);
   int Q16  = P7_NVB(om->M);
@@ -180,6 +181,10 @@ p7_oprofile_Write_sse(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   if (fwrite((char *) &(v3f_pmagic),    sizeof(uint32_t), 1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed"); /* sentinel */
 
   return eslOK;
+#endif
+#ifndef HAVE_SSE2
+  return eslENORESULT;
+#endif  
 }
 /*---------------- end, writing oprofile ------------------------*/
 
@@ -239,6 +244,7 @@ p7_oprofile_Write_sse(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
 int
 p7_oprofile_ReadMSV_sse(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om)
 {
+#ifdef HAVE_SSE2  
   P7_OPROFILE  *om = NULL;
   ESL_ALPHABET *abc = NULL;
   uint32_t      magic;
@@ -321,7 +327,10 @@ p7_oprofile_ReadMSV_sse(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
   if (om != NULL) p7_oprofile_Destroy(om);
   *ret_om = NULL;
   return status;
-
+#endif
+#ifndef HAVE_SSE2
+  return eslENORESULT;
+#endif
 }
 
 
@@ -358,6 +367,7 @@ p7_oprofile_ReadMSV_sse(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
 int
 p7_oprofile_ReadRest_sse(P7_HMMFILE *hfp, P7_OPROFILE *om)
 {
+#ifdef HAVE_SSE2  
   uint32_t      magic;
   int           M, Q4, Q8;
   int           x,n;
@@ -374,7 +384,6 @@ p7_oprofile_ReadRest_sse(P7_HMMFILE *hfp, P7_OPROFILE *om)
       if (pthread_mutex_lock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex lock failed");
     }
 #endif
-#ifdef p7_build_SSE 
   hfp->errbuf[0] = '\0';
   if (hfp->pfp == NULL) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no MSV profile file; hmmpress probably wasn't run");
  
@@ -452,7 +461,6 @@ p7_oprofile_ReadRest_sse(P7_HMMFILE *hfp, P7_OPROFILE *om)
 
   free(name);
 
-#endif
   return eslOK;
 
  ERROR:
@@ -466,6 +474,10 @@ p7_oprofile_ReadRest_sse(P7_HMMFILE *hfp, P7_OPROFILE *om)
 
   if (name != NULL) free(name);
   return status;
+#endif
+#ifndef HAVE_SSE2
+  return eslENORESULT;
+#endif  
 }
 /*----------- end, reading optimized profiles -------------------*/
 

@@ -1,6 +1,6 @@
 # All Makefile.in's in src/ subdirs include the identical
 # block of makefile code below...
-V= yes
+
 SHELL        = /bin/sh
 
 prefix       = @prefix@

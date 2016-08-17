@@ -246,16 +246,31 @@ p7_sparsemask_Destroy(P7_SPARSEMASK *sm)
 int
 p7_sparsemask_AddAll(P7_SPARSEMASK *sm)
 {
-  int Q;
+  int Q= 0;
  switch(sm->simd){
     case SSE:
+ #ifdef HAVE_SSE2   
       Q = sm->Q;
+ #endif     
+ #ifndef HAVE_SSE2
+       esl_fatal("Attempted to call p7_sparsemx_AddAll with SSE SIMD and no SSE SIMD support compiled in\n");
+#endif        
       break;
     case AVX:
+#ifdef HAVE_AVX2    
       Q = sm->Q_AVX;
+#endif      
+#ifndef HAVE_AVX2
+       esl_fatal("Attempted to call p7_sparsemx_AddAll with AVX SIMD and no AVX SIMD support compiled in\n");
+#endif        
       break;
     case AVX512:
+#ifdef HAVE_AVX512    
       Q = sm->Q_AVX_512;
+#endif       
+      #ifndef HAVE_AVX512
+       esl_fatal("Attempted to call p7_sparsemx_AddAll with AVX-512 SIMD and no AVX-512 SIMD support compiled in\n");
+#endif        
       break;
     case NEON:
       p7_Fail("Neon support not yet integrated into p7_sparsemask_AddAll");
@@ -869,19 +884,35 @@ p7_sparsemx_Create(P7_SPARSEMASK *sm)
   if(sm!= NULL){
     switch(sm->simd){
       case SSE:
+ #ifdef HAVE_SSE2     
          /* We must avoid zero-sized mallocs. If there are no rows or cells, alloc the default sizes */
         sx->dalloc = ( (sm && sm->ncells)         ? sm->ncells       : default_ncell);
         sx->xalloc = ( (sm && (sm->nrow + sm->S)) ? sm->nrow + sm->S : default_nx);
+#endif
+#ifndef HAVE_SSE2
+       esl_fatal("Attempted to call p7_sparsemx_Create with SSE SIMD and no SSE SIMD support compiled in\n");
+#endif               
         break;
       case AVX:
+#ifdef HAVE_AVX2 
       /* We must avoid zero-sized mallocs. If there are no rows or cells, alloc the default sizes */
         sx->dalloc = ( (sm && sm->ncells_AVX)         ? sm->ncells_AVX       : default_ncell);
         sx->xalloc = ( (sm && (sm->nrow_AVX + sm->S_AVX)) ? sm->nrow_AVX + sm->S_AVX : default_nx);
-        break;
+ #endif
+ #ifndef HAVE_AVX2
+       esl_fatal("Attempted to call p7_sparsemx_Create with AVX SIMD and no AVX SIMD support compiled in\n");
+#endif          
+        break;  
+
       case AVX512:
+#ifdef HAVE_AVX512      
       /* We must avoid zero-sized mallocs. If there are no rows or cells, alloc the default sizes */
         sx->dalloc = ( (sm && sm->ncells_AVX_512)         ? sm->ncells_AVX_512       : default_ncell);
         sx->xalloc = ( (sm && (sm->nrow_AVX_512 + sm->S_AVX_512)) ? sm->nrow_AVX_512 + sm->S_AVX_512 : default_nx);
+#endif
+ #ifndef HAVE_AVX512
+       esl_fatal("Attempted to call p7_sparsemx_Create with AVX-512 SIMD and no AVX-512 SIMD support compiled in\n");
+#endif        
         break;
       case NEON:
         p7_Fail("Neon support not yet integrated into p7_sparsemx_Create");

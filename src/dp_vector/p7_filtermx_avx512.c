@@ -114,11 +114,6 @@ p7_filtermx_GrowTo_avx512(P7_FILTERMX *fx, int allocM)
   /* Contract checks / argument validation */
   ESL_DASSERT1( (allocM >= 1 && allocM <= 100000) );
 
-
-/* 
-This bit is mildly unsafe if more than one of p7_build_SSE, p7_build_AVX2, and p7_build_AVX512 are set.  It relies on any code that grows one or more of dp_mem, dp_mem_AVX, and dp_mem_AVX_512 to grow all of them that are being used.  If not, there can be problems caused by one but not all of the buffers being large enough to hold the current calculation.  This should only
-be an issue during development/testing, but I'm documenting it in case something goes wrong.
-*/
   /* is it already big enough? */
   if (allocM <= fx->allocM_AVX_512) return eslOK;
 

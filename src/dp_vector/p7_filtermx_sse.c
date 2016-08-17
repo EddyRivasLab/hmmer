@@ -65,7 +65,6 @@ p7_filtermx_Create_sse(int allocM)
   fx->dfp       = NULL;
 #endif 
   
-//#ifdef p7_build_SSE // allocate different memory buffers depending on which
   // ISA we're using
   /*                    16B per vector  * (MDI)states *  ~M/4 vectors    + alignment slop */
   ESL_ALLOC(fx->dp_mem, (sizeof(__m128i) * p7F_NSCELLS * P7_NVW(allocM)) + (p7_VALIGN-1));

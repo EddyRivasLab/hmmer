@@ -94,7 +94,7 @@ static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file, SSE: "h3ps
 int
 p7_oprofile_Write_avx(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
 {
-
+  #ifdef HAVE_AVX2
   int Q4   = P7_NVF_AVX(om->M);
   printf("om->M = %d\n",om->M );
   int Q8   = P7_NVW_AVX(om->M);
@@ -215,6 +215,10 @@ p7_oprofile_Write_avx(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
  ERROR:
   p7_Fail("Unable to allocate memory for temporary buffer in p7_oprofile_Write_avx");
   return eslEMEM;
+#endif
+#ifndef HAVE_AVX2
+  return eslENORESULT;
+#endif 
 }
 /*---------------- end, writing oprofile ------------------------*/
 
@@ -274,6 +278,7 @@ p7_oprofile_Write_avx(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
 int
 p7_oprofile_ReadMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om)
 {
+#ifdef HAVE_AVX2  
   P7_OPROFILE  *om = NULL;
   ESL_ALPHABET *abc = NULL;
   uint32_t      magic;
@@ -369,7 +374,10 @@ p7_oprofile_ReadMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
   if (om != NULL) p7_oprofile_Destroy(om);
   *ret_om = NULL;
   return status;
-
+#endif
+#ifndef HAVE_AVX2
+  return eslENORESULT;
+#endif    
 }
 
 
@@ -406,6 +414,7 @@ p7_oprofile_ReadMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
 int
 p7_oprofile_ReadRest_avx(P7_HMMFILE *hfp, P7_OPROFILE *om)
 {
+ #ifdef HAVE_AVX2 
   uint32_t      magic;
   int           M, Q4, Q8;
   int           x,n;
@@ -521,6 +530,10 @@ __m128i *tmp_buffer;  // buffer used for restriping values from 128-bit format
 
   if (name != NULL) free(name);
   return status;
+#endif
+#ifndef HAVE_AVX2
+  return eslENORESULT;
+#endif  
 }
 /*----------- end, reading optimized profiles -------------------*/
 

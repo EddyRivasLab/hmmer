@@ -442,7 +442,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_THREADS     *threadObj= NULL;
   ESL_WORK_QUEUE  *queue    = NULL;
 #endif
-
+  P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   /* Initializations */
   abc           = esl_alphabet_Create(eslAMINO);
   w             = esl_stopwatch_Create();
@@ -620,7 +621,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      info[i].th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC);
 	      info[i].gm  = p7_profile_Clone(gm);
 	      info[i].om  = p7_oprofile_Shadow(om);
-	      info[i].pli = p7_pipeline_Create(go, om->M, 400, FALSE, p7_SEARCH_SEQS); /* 400 is a dummy length for now */
+	      info[i].pli = p7_pipeline_Create(go, om->M, 400, FALSE, p7_SEARCH_SEQS, hw->simd); /* 400 is a dummy length for now */
 	      p7_pipeline_NewModel(info[i].pli, info[i].om, info[i].bg);
 
 #ifdef HMMER_THREADS

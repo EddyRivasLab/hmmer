@@ -998,10 +998,7 @@ oprofile_dump_mf_avx512(FILE *fp, const P7_OPROFILE *om)
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
   int     k;			/* counter over nodes 1..M                                      */
   int     z;			/* counter within elements of one SIMD minivector               */
-
-/* This will generate gibberish if more than one of p7_build_SSE, p7_build_AVX2, and p7_build_AVX512
-  are set */
-
+  
   /* Header (rearranged column numbers, in the vectors)  */
   fprintf(fp, "     ");
   for (k =1, q = 0; q < nq_AVX_512; q++, k++)

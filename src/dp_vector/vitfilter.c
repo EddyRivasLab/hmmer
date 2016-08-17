@@ -24,16 +24,16 @@
 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
-#ifdef p7_build_AVX512
+#ifdef HAVE_AVX512
  #include <immintrin.h>
- #include "esl_avx_512.h"
+ //#include "esl_avx_512.h"
 #endif
 #include "easel.h"
 #include "esl_sse.h"
 
-#ifdef p7_build_AVX2
+#ifdef HAVE_AVX2
  #include <immintrin.h>
- #include "esl_avx.h"
+// #include "esl_avx.h"
 #endif 
 
 #include "esl_gumbel.h"
@@ -164,7 +164,6 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
                             float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
 {
 
-  #ifdef p7_build_SSE // this funciton has not been converted to AVX
   register __m128i mpv, dpv, ipv; /* previous row values                                       */
   register __m128i sv;            /* temp storage of 1 curr row value in progress              */
   register __m128i dcv;           /* delayed storage of D(i,q+1)                               */
@@ -366,7 +365,6 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
       if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);
 #endif
   } /* end loop over sequence residues 1..L */
-#endif
 
   return eslOK;
 

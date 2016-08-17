@@ -193,17 +193,15 @@ p7_checkptmx_GrowTo_sse(P7_CHECKPTMX *ox, int M, int L)
   rows to allocate based on SSE data widths and force AVX, AVX2 to use the same number.  With multiple
   p7_build variables defined, this introduces redundant computation, but that's ok because that should only 
   happen when we're checking ISAs against each other */
+   /* Calculate W, the minimum row width needed, in bytes */
+  W  = sizeof(float) * P7_NVF(M) * p7C_NSCELLS * p7_VNF;     /* vector part of row (MDI)     */
+  W += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN);  /* float part of row (specials); must maintain p7_VALIGN-byte alignment */
 
   if (W <= ox->allocW && ox->nalloc <= ox->ramlimit)
     {
       if      (L + ox->R0 <= ox->validR) { set_full        (ox, L);             return eslOK; }
       else if (minR_chk   <= ox->validR) { set_checkpointed(ox, L, ox->validR); return eslOK; }
     }
-
-  reset_dp_ptrs = FALSE; // Reset this just to prevent any wierdness with multiple ISA builds
-   /* Calculate W, the minimum row width needed, in bytes */
-  W  = sizeof(float) * P7_NVF(M) * p7C_NSCELLS * p7_VNF;     /* vector part of row (MDI)     */
-  W += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN);  /* float part of row (specials); must maintain p7_VALIGN-byte alignment */
   /* Do individual matrix rows need to expand? */
   if ( W > ox->allocW) 
     {

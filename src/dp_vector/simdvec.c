@@ -58,10 +58,10 @@ extern void p7_restripe_byte(char *source, char *dest, int length, int source_ve
 
 
   if((source_vector_length != 128) && (source_vector_length != 256) && (source_vector_length != 512)){
-    p7_Fail("Illegal soure vector length passed to p7_restripe_byte");
+    esl_fatal("Illegal soure vector length passed to p7_restripe_byte");
   }
   if((dest_vector_length != 128) && (dest_vector_length != 256) && (dest_vector_length != 512)){
-    p7_Fail("Illegal dest vector length passed to p7_restripe_byte");
+    esl_fatal("Illegal dest vector length passed to p7_restripe_byte");
   }
 
   int i, j; // loop indices
@@ -104,10 +104,10 @@ extern void p7_restripe_short(int16_t *source, int16_t *dest, int length, int so
 
 
   if((source_vector_length != 128) && (source_vector_length != 256) && (source_vector_length != 512)){
-    p7_Fail("Illegal soure vector length passed to p7_restripe_short");
+    esl_fatal("Illegal soure vector length passed to p7_restripe_short");
   }
   if((dest_vector_length != 128) && (dest_vector_length != 256) && (dest_vector_length != 512)){
-    p7_Fail("Illegal dest vector length passed to p7_restripe_short");
+    esl_fatal("Illegal dest vector length passed to p7_restripe_short");
   }
 
   int i, j; // loop indices
@@ -151,10 +151,10 @@ extern void p7_restripe_float(float *source, float *dest, int length, int source
 
 
   if((source_vector_length != 128) && (source_vector_length != 256) && (source_vector_length != 512)){
-    p7_Fail("Illegal soure vector length passed to p7_restripe_float");
+    esl_fatal("Illegal soure vector length passed to p7_restripe_float");
   }
   if((dest_vector_length != 128) && (dest_vector_length != 256) && (dest_vector_length != 512)){
-    p7_Fail("Illegal dest vector length passed to p7_restripe_float");
+    esl_fatal("Illegal dest vector length passed to p7_restripe_float");
   }
 
   int i, j; // loop indices

@@ -412,16 +412,16 @@
 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
-#ifdef p7_build_AVX2
+#ifdef HAVE_AVX2
  #include<immintrin.h>
- #include"esl_avx.h"
+ //#include"esl_avx.h"
 #endif
-#ifdef p7_build_AVX512
+#ifdef HAVE_AVX512
  #include<immintrin.h>
- #include"esl_avx_512.h"
+ //#include"esl_avx_512.h"
 #endif
 #include "easel.h"
-#include "esl_sse.h"
+//#include "esl_sse.h"
 #include "x86intrin.h"
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"

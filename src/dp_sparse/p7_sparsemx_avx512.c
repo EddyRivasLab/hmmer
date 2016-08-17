@@ -127,7 +127,7 @@ p7_sparsemask_Create_avx512(int M, int L)
   return NULL;
 #endif //HAVE_AVX512
 #ifndef  HAVE_AVX512
-  return NULL
+  return NULL;
 #endif  
 }
 

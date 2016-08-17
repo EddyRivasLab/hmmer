@@ -58,9 +58,10 @@
 
 #include "easel.h"
 
-#ifdef HAVE_AVX2
-#include <immintrin.h>
+
+ #ifdef HAVE_AVX2
 #include "esl_avx.h"
+#include <immintrin.h>
 #endif
 
 #include "esl_vectorops.h"
@@ -1011,10 +1012,11 @@ posterior_decode_row_avx(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm
  * the <ox->bcksc> value is finished and equal to the Backwards
  * raw score in nats.
  */
+ #ifdef HAVE_AVX2 
 static inline float
 backward_row_zero_avx(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
 {
-#ifdef HAVE_AVX2 
+
 #ifdef p7_DBUGGING
   int          Q     = ox->Qf_AVX;
   __m256       *dpc  = (__m256 *) ox->dpf_AVX[0];
@@ -1057,16 +1059,14 @@ backward_row_zero_avx(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
 
   return logf(xc[p7C_N]);
  #endif //p7_DEBUGGING 
-#endif // HAVE_AVX2
-#ifndef HAVE_AVX2
-  return 0.0
-#endif
 }
+#endif
 
+#ifdef HAVE_AVX2
 static void
 save_debug_row_pp_avx(P7_CHECKPTMX *ox, __m256 *dpc, int i)
 {
-#ifdef HAVE_AVX2  
+  
  #ifdef p7_DEBUGGING 
   union { __m256 v; float x[p7_VNF_AVX]; } u;
   int      Q  = ox->Qf_AVX;
@@ -1104,10 +1104,10 @@ save_debug_row_pp_avx(P7_CHECKPTMX *ox, __m256 *dpc, int i)
       u.v = P7C_IQ(dpc, q); for (z = 0; z < p7_VNF_AVX; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(ox->pp,i,k,p7R_IL) = u.x[z]; }
     }
   #endif //p7_DEBUGGING  
- #endif   // HAVE_AVX2
+
 
 }
-
+ #endif   // HAVE_AVX2
 /* save_debug_row_fb()
  * 
  * Debugging only. Transfer posterior decoding values (sparse scaled,
@@ -1117,10 +1117,11 @@ save_debug_row_pp_avx(P7_CHECKPTMX *ox, __m256 *dpc, int i)
  * tolerance) to a reference implementation Forward/Backward in log
  * space.
  */
+  #ifdef HAVE_AVX2 
 static void
 save_debug_row_fb_avx(P7_CHECKPTMX *ox, P7_REFMX *gx, __m256 *dpc, int i, float totscale)
 {
- #ifdef HAVE_AVX2 
+
  #ifdef p7_DEBUGGING 
   union { __m256 v; float x[p7_VNF_AVX]; } u;
   int      Q  = ox->Qf_AVX;
@@ -1156,8 +1157,9 @@ save_debug_row_fb_avx(P7_CHECKPTMX *ox, P7_REFMX *gx, __m256 *dpc, int i, float 
       u.v = P7C_IQ(dpc, q); for (z = 0; z < p7_VNF_AVX; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(gx,i,k,p7R_IL) = logf(u.x[z]) + totscale; }
     }
  #endif   //p7_DEBUGGING
- #endif // HAVE_AVX2   
+
 }
+ #endif // HAVE_AVX2   
 /*****************************************************************
  * @LICENSE@
  * 

@@ -38,7 +38,7 @@
 #include "daemon/hmmdutils.h"
 #include "daemon/cachedb.h"
 #include "daemon/p7_hmmcache.h"
-
+#include "hardware/hardware.h"
 
 #define MAX_WORKERS  64
 #define MAX_BUFFER   4096
@@ -126,7 +126,7 @@ static void destroy_worker(WORKER_DATA *worker);
 static void init_results(SEARCH_RESULTS *results);
 static void clear_results(WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results);
 static void gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results);
-static void forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results);
+static void forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results, P7_HARDWARE *hw);
 
 static void
 print_client_msg(int fd, int status, char *format, va_list ap)
@@ -287,7 +287,7 @@ update_workers(WORKERSIDE_ARGS *args)
 }
 
 static void
-process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
+process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query, P7_HARDWARE  *hw)
 {
   ESL_STOPWATCH  *w          = NULL;      /* timer used for profiling statistics             */
   WORKER_DATA    *worker     = NULL;
@@ -388,7 +388,7 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
     client_msg(query->sock, eslFAIL, "Errors running search\n");
     clear_results(args, &results);
   } else {
-    forward_results(query, &results);  
+    forward_results(query, &results, hw);  
   }
 
   esl_stopwatch_Destroy(w);
@@ -677,7 +677,8 @@ master_process(ESL_GETOPTS *go)
   int                 status     = eslOK;
 
   p7_Init();
-
+  P7_HARDWARE *hw;
+  hw = p7_hardware_Create();
   if (esl_opt_IsUsed(go, "--seqdb")) {
     char *name = esl_opt_GetString(go, "--seqdb");
     if ((status = p7_seqcache_Open(name, &seq_db, errbuf)) != eslOK) 
@@ -738,8 +739,8 @@ master_process(ESL_GETOPTS *go)
     fflush(stdout);
 
     switch(query->cmd_type) {
-    case HMMD_CMD_SEARCH:      process_search(&worker_comm, query); break;
-    case HMMD_CMD_SCAN:        process_search(&worker_comm, query); break;
+    case HMMD_CMD_SEARCH:      process_search(&worker_comm, query, hw); break;
+    case HMMD_CMD_SCAN:        process_search(&worker_comm, query, hw); break;
     case HMMD_CMD_INIT:        process_load  (&worker_comm, query); break;
     case HMMD_CMD_RESET:       process_reset (&worker_comm, query); break;
     case HMMD_CMD_SHUTDOWN:    
@@ -765,7 +766,7 @@ master_process(ESL_GETOPTS *go)
   pthread_mutex_destroy(&worker_comm.work_mutex);
   pthread_cond_destroy(&worker_comm.start_cond);
   pthread_cond_destroy(&worker_comm.complete_cond);
-
+  free(hw);
   return;
 }
 
@@ -881,7 +882,7 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
 }
 
 static void
-forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
+forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results, P7_HARDWARE *hw)
 {
   uint32_t           adj;
   esl_pos_t          offset;
@@ -936,7 +937,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
     th.is_sorted_by_sortkey = 0;
     th.is_sorted_by_seqidx  = 0;
       
-    pli = p7_pipeline_Create(query->opts, 100, 100, FALSE, mode);
+    pli = p7_pipeline_Create(query->opts, 100, 100, FALSE, mode, hw->simd);
     pli->stats.nmodels     = results->stats.nmodels;
     pli->stats.nseqs       = results->stats.nseqs;
     pli->stats.n_past_msv  = results->stats.n_past_msv;

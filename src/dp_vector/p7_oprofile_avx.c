@@ -165,14 +165,14 @@ p7_oprofile_Create_avx(int allocM, const ESL_ALPHABET *abc)
   om->mode       = p7_NO_MODE;
   om->nj         = 0.0f;
   return om;
+
+   ERROR:
+  p7_oprofile_Destroy(om);
+  return NULL;
 #endif //HAVE_AVX2
 #ifndef  HAVE_AVX2
   return NULL;  // Stub so there's something to link when we don't have AVX2 support
 #endif
-
- ERROR:
-  p7_oprofile_Destroy(om);
-  return NULL;
 }
 
 /* Function:  p7_oprofile_Destroy()
@@ -414,14 +414,15 @@ const ESL_ALPHABET *abc = om1->abc;
   om2->nj         = om1->nj;
   om2->max_length = om1->max_length;
   return om2;
+
+ ERROR:
+  p7_oprofile_Destroy(om2);
+  return NULL;
 #endif //HAVE_AVX2
 #ifndef HAVE_AVX2
   return NULL;  //stub so we have something to link if we don't have AVX2 support
 #endif
 
- ERROR:
-  p7_oprofile_Destroy(om2);
-  return NULL;
 }
 
 /*----------------- end, P7_OPROFILE structure ------------------*/
@@ -485,7 +486,7 @@ sf_conversion_avx(P7_OPROFILE *om)
   return eslOK;
 #endif //HAVE_AVX2
 #ifndef HAVE_AVX2
-  return eslENORESULT
+  return eslENORESULT;
 #endif
 }
 
@@ -541,7 +542,7 @@ mf_conversion_avx(const P7_PROFILE *gm, P7_OPROFILE *om)
   return eslOK;
 #endif //HAVE_AVX2
 #ifndef HAVE_AVX2
-  return eslENORESULT
+  return eslENORESULT;
 #endif
 }
 
@@ -660,7 +661,7 @@ vf_conversion_avx(const P7_PROFILE *gm, P7_OPROFILE *om)
   return eslOK;
 #endif //HAVE_AVX2
 #ifndef HAVE_AVX2
-  return eslENORESULT
+  return eslENORESULT;
 #endif
 }
 
@@ -744,7 +745,7 @@ fb_conversion_avx(const P7_PROFILE *gm, P7_OPROFILE *om)
   return eslOK;
   #endif //HAVE_AVX2
 #ifndef HAVE_AVX2
-  return eslENORESULT
+  return eslENORESULT;
 #endif
 }
 
@@ -791,7 +792,7 @@ p7_oprofile_GetFwdTransitionArray_avx(const P7_OPROFILE *om, int type, float *ar
   return eslOK;
 #endif //HAVE_AVX2
 #ifndef HAVE_AVX2
-  return eslENORESULT
+  return eslENORESULT;
 #endif
 }
 
@@ -843,7 +844,7 @@ p7_oprofile_GetMSVEmissionScoreArray_avx(const P7_OPROFILE *om, uint8_t *arr )
   return eslOK;
   #endif //HAVE_AVX2
 #ifndef HAVE_AVX2
-  return eslENORESULT
+  return eslENORESULT;
 #endif
 }
 
@@ -894,7 +895,7 @@ p7_oprofile_GetFwdEmissionScoreArray_avx(const P7_OPROFILE *om, float *arr )
   return eslOK;
 #endif //HAVE_AVX2
 #ifndef HAVE_AVX2
-  return eslENORESULT
+  return eslENORESULT;
 #endif
 }
 
@@ -949,7 +950,7 @@ p7_oprofile_GetFwdEmissionArray_avx(const P7_OPROFILE *om, P7_BG *bg, float *arr
   return eslOK;
  #endif //HAVE_AVX2
 #ifndef HAVE_AVX2
-  return eslENORESULT
+  return eslENORESULT;
 #endif 
 }
 /*------------ end, conversions from P7_OPROFILE ------------------*/
@@ -976,9 +977,6 @@ oprofile_dump_mf_avx(FILE *fp, const P7_OPROFILE *om)
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
   int     k;			/* counter over nodes 1..M                                      */
   int     z;			/* counter within elements of one SIMD minivector               */
-
-/* This will generate gibberish if more than one of p7_build_SSE, p7_build_AVX2, and p7_build_AVX512
-  are set */
 
   /* Header (rearranged column numbers, in the vectors)  */
   fprintf(fp, "     ");
@@ -1019,7 +1017,7 @@ oprofile_dump_mf_avx(FILE *fp, const P7_OPROFILE *om)
   return eslOK;
   #endif //HAVE_AVX2
 #ifndef HAVE_AVX2
-  return eslENORESULT
+  return eslENORESULT;
 #endif
 }
 
@@ -1147,7 +1145,7 @@ oprofile_dump_vf_avx(FILE *fp, const P7_OPROFILE *om)
   return eslOK;
   #endif //HAVE_AVX2
 #ifndef HAVE_AVX2
-  return eslENORESULT
+  return eslENORESULT;
 #endif
 }
 
@@ -1272,7 +1270,7 @@ oprofile_dump_fb_avx(FILE *fp, const P7_OPROFILE *om, int width, int precision)
   return eslOK;
 #endif //HAVE_AVX2
 #ifndef HAVE_AVX2
-  return eslENORESULT
+  return eslENORESULT;
 #endif
 }
 

@@ -131,7 +131,7 @@ p7_checkptmx_Create_avx512(int M, int L, int64_t ramlimit)
   return NULL;
 #endif //HAVE_AVX512
 #ifndef HAVE_AVX512
-  return NULL
+  return NULL;
 #endif      
 }
 
@@ -187,7 +187,8 @@ p7_checkptmx_GrowTo_avx512(P7_CHECKPTMX *ox, int M, int L)
   if (ox->bck && (status = p7_refmx_GrowTo(ox->bck, M, L)) != eslOK) goto ERROR;
   if (ox->pp  && (status = p7_refmx_GrowTo(ox->pp,  M, L)) != eslOK) goto ERROR;
 #endif
-
+W  = sizeof(float) * P7_NVF_AVX_512(M) * p7C_NSCELLS * p7_VNF_AVX_512;     /* vector part of row (MDI)     */
+  W += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN_AVX_512);  /* float part of row (specials); must maintain p7_VALIGN-byte alignment */
  
 
   /* Are current allocations satisfactory ? */
@@ -203,8 +204,7 @@ p7_checkptmx_GrowTo_avx512(P7_CHECKPTMX *ox, int M, int L)
     }
 
   reset_dp_ptrs = FALSE; // Reset this just to prevent any wierdness with multiple ISA builds
-  W  = sizeof(float) * P7_NVF_AVX_512(M) * p7C_NSCELLS * p7_VNF_AVX_512;     /* vector part of row (MDI)     */
-  W += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN_AVX_512);  /* float part of row (specials); must maintain p7_VALIGN-byte alignment */
+  
   /* Do individual matrix rows need to expand? */
   if ( W > ox->allocW_AVX_512) 
     {

@@ -138,6 +138,8 @@ p7_ForwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
   int     b;			/* counter down through checkpointed blocks, Rb+Rc..1 */
   int     w;			/* counter down through rows in a checkpointed block  */
 
+   printf("IN p7_ForwardFilter_sse, M = %d, Q = %d\n", om->M, Q);
+
   /* Make sure <ox> is allocated big enough.
    * DO NOT set any ptrs into the matrix until after this potential reallocation!
    */
@@ -194,13 +196,13 @@ p7_ForwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
        */
       if (! (--w)) { 		                   /* we're on the last row in segment: this row is saved    */       
 	dpc = (__m128 *) ox->dpf[ox->R0+ox->R]; ox->R++;  /* idiomatic for "get next save/checkpoint row"    */
-
 	w = b;  			           /* next segment has this many rows, ending in a saved row */
 	b--;					   /* decrement segment number counter; last segment is r=1  */
       } else{      
        dpc = (__m128 *) ox->dpf[i%2];        /* idiomatic for "next tmp row", 0/1; i%2 makes sure dpp != dpc */
 
       }
+
       totsc += forward_row_sse(dsq[i], om, dpp, dpc, Q);
       dpp = dpc;
 
@@ -492,7 +494,9 @@ forward_row_sse(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dp
 
       /* Calculate and store I(i,q) */
       sv             =                _mm_mul_ps(mpv, *tp);  tp++;
+//      printf("q= %d, Q = %d\n", q, Q);
       P7C_IQ(dpc, q) = _mm_add_ps(sv, _mm_mul_ps(ipv, *tp)); tp++;
+
     }
 
   /* Now the DD paths. We would rather not serialize them but 
@@ -508,6 +512,7 @@ forward_row_sse(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dp
   tp             = om->tfv + 7*Q;	/* set tp to start of the DD's */
   for (q = 0; q < Q; q++) 
     {
+ //      printf("q= %d, Q = %d\n", q, Q);
       P7C_DQ(dpc,q) = _mm_add_ps(dcv, P7C_DQ(dpc,q));	
       dcv           = _mm_mul_ps(P7C_DQ(dpc,q), *tp); tp++; /* extend DMO(q), so we include M->D and D->D paths */
     }
@@ -543,7 +548,8 @@ forward_row_sse(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dp
 	  tp  = om->tfv + 7*Q;	/* set tp to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    { /* using cmpgt below tests if DD changed any DMO(q) *without* conditional branch */
-	      sv            = _mm_add_ps(dcv, P7C_DQ(dpc,q));	
+//	   printf("q= %d, Q = %d\n", q, Q);    
+        sv            = _mm_add_ps(dcv, P7C_DQ(dpc,q));	
 	      cv            = _mm_or_ps(cv, _mm_cmpgt_ps(sv, P7C_DQ(dpc,q))); 
 	      P7C_DQ(dpc,q) = sv;	                                    /* store new DMO(q) */
 	      dcv           = _mm_mul_ps(dcv, *tp);   tp++;                 /* note, extend dcv, not DMO(q) */

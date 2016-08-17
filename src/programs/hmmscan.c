@@ -466,7 +466,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	{
 	  /* Create processing pipeline and hit list */
 	  info[i].th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
-	  info[i].pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS); /* M_hint = 100, L_hint = 100 are just dummies for now */
+	  info[i].pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS, hw->simd); /* M_hint = 100, L_hint = 100 are just dummies for now */
 	  info[i].pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
 
 	  p7_pipeline_NewSeq(info[i].pli, qsq);
