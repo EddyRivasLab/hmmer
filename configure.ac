@@ -334,7 +334,7 @@ AC_ARG_ENABLE(AVX2,[AS_HELP_STRING([--enable-AVX2],[force use of the AVX2 (Haswe
 
 # --enable-AVX-512       Compile for the AVX-512 vector instructions
 # Currently turned off by default because only the newest versions of GCC will build our AVX-512 version
-AC_ARG_ENABLE(AVX-512,[AS_HELP_STRING([--enable-AVX-512],[force use of the AVX-512 vector instructions])], [enable_avx512=yes; user_set_simd=yes], enable_avx512=check)
+AC_ARG_ENABLE(AVX-512,[AS_HELP_STRING([--enable-AVX-512],[force use of the AVX-512 vector instructions])], [enable_avx512=yes; user_set_simd=yes], enable_avx512=no)
 
 
 ################################################################
