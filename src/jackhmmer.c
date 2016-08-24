@@ -669,7 +669,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  /* <&qsq, &qtr, 1> included in p7_tophits_Alignment args here => initial query is added to the msa at each round. */
 	  p7_tophits_Alignment(info->th, abc, &qsq, &qtr, 1, p7_ALL_CONSENSUS_COLS, &msa);
 	  esl_msa_Digitize(abc,msa,NULL);
-	  esl_msa_FormatName(msa, "%s-i%d", qsq->name, iteration);
+	  esl_msa_FormatName(msa, "%s-i%d", qsq->name, iteration);  
+	  if (qsq->acc[0]  != '\0') esl_msa_SetAccession(msa, qsq->acc,  -1);
+	  if (qsq->desc[0] != '\0') esl_msa_SetDesc     (msa, qsq->desc, -1);
+	  esl_msa_FormatAuthor(msa, "jackhmmer (HMMER %s)", HMMER_VERSION);
 
 	  /* Optional checkpointing */
 	  if (esl_opt_IsOn(go, "--chkali")) checkpoint_msa(nquery, msa, esl_opt_GetString(go, "--chkali"), iteration);
@@ -1220,7 +1223,10 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  /* Create alignment of the top hits */
 	  p7_tophits_Alignment(th, abc, &qsq, &qtr, 1, p7_ALL_CONSENSUS_COLS, &msa);
 	  esl_msa_Digitize(abc,msa,NULL);
-	  esl_msa_FormatName(msa, "%s-i%d", qsq->name, iteration);
+	  esl_msa_FormatName(msa, "%s-i%d", qsq->name, iteration);  
+	  if (qsq->acc[0]  != '\0') esl_msa_SetAccession(msa, qsq->acc,  -1);
+	  if (qsq->desc[0] != '\0') esl_msa_SetDesc     (msa, qsq->desc, -1);
+	  esl_msa_FormatAuthor(msa, "jackhmmer (HMMER %s)", HMMER_VERSION);
 
 	  /* Optional checkpointing */
 	  if (esl_opt_IsOn(go, "--chkali")) checkpoint_msa(nquery, msa, esl_opt_GetString(go, "--chkali"), iteration);

@@ -1069,14 +1069,22 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (afp) {
           ESL_MSA *msa = NULL;
 
-          if (p7_tophits_Alignment(info->th, abc, NULL, NULL, 0, p7_DEFAULT, &msa) == eslOK) {
-            if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
-            else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
+          if (p7_tophits_Alignment(info->th, abc, NULL, NULL, 0, p7_DEFAULT, &msa) == eslOK) 
+	    {
+	      esl_msa_SetName     (msa, hmm->name, -1);
+	      esl_msa_SetAccession(msa, hmm->acc,  -1);
+	      esl_msa_SetDesc     (msa, hmm->desc, -1);
+	      esl_msa_FormatAuthor(msa, "nhmmer (HMMER %s)", HMMER_VERSION);
 
-            if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-          }  else {
-	    if (fprintf(ofp, "# No hits satisfy inclusion thresholds; no alignment saved\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-          }
+	      if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
+	      else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
+
+	      if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	    }  
+	  else 
+	    {
+	      if (fprintf(ofp, "# No hits satisfy inclusion thresholds; no alignment saved\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	    }
           esl_msa_Destroy(msa);
       }
 
