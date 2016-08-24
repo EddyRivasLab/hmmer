@@ -403,7 +403,7 @@ p7_checkptmx_Destroy_avx(P7_CHECKPTMX *ox)
  *            them in the debugging dump.)
  */
 int
-p7_checkptmx_DumpFBRow_avx(P7_CHECKPTMX *ox, int rowi, __m256 *dpc, char *pfx)
+p7_checkptmx_DumpFBRow_avx(P7_CHECKPTMX *ox, int rowi, debug_print *dpc, char *pfx)
 {
 #ifdef HAVE_AVX2  
   union { __m256 v; float x[p7_VNF_AVX]; } u;

@@ -410,11 +410,15 @@
 
 #include <math.h>
 
+#if p7_CPU_ARCH == intel
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
+
+#include "x86intrin.h"
+#endif /* intel arch */
+
 #include "easel.h"
 #include "esl_sse.h"
-#include "x86intrin.h"
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
 
@@ -987,6 +991,7 @@ p7_SSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc
 }
 #endif //HAVE_SSE
 #ifndef HAVE_SSE2 //null version of the function to avoid compilation problems if we don't have SSE
+int
 p7_SSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc){
  return eslENORESULT;  
 }

@@ -12,8 +12,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#if p7_CPU_ARCH == intel
 #include <xmmintrin.h>
 #include <emmintrin.h>
+#endif /* intel arch */
 
 #include "easel.h"
 
@@ -221,7 +223,7 @@ p7_filtermx_Destroy_sse(P7_FILTERMX *fx)
  * Throws:    <eslEMEM> on allocation failure. 
  */
 int
-p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
+p7_filtermx_DumpMFRow_sse(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
  #ifdef HAVE_SSE2 
   int      Q  = P7_NVB(fx->M);	/* number of vectors in the MSV row */
@@ -300,7 +302,7 @@ ERROR:
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_filtermx_DumpVFRow(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
+p7_filtermx_DumpVFRow_sse(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
 {
  #ifdef HAVE_SSE2 
   __m128i *dp = fx->dp;		/* enable MMXf(q), DMXf(q), IMXf(q) macros */

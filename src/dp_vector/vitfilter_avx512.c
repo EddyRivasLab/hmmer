@@ -22,8 +22,13 @@
 #include <stdio.h>
 #include <math.h>
 
+#if p7_CPU_ARCH == intel
  #include <immintrin.h>
- #include "esl_avx_512.h"
+#ifdef HAVE_AVX512
+  #include "esl_avx_512.h"
+#endif
+#endif /* intel arch */
+
 #include "easel.h"
 #include "esl_sse.h"
 
@@ -344,6 +349,56 @@ p7_ViterbiFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FIL
   return eslOK;
 }
 
+/* Function:  p7_ViterbiFilter_longtarget()
+ * Synopsis:  Finds windows within potentially long sequence blocks with Viterbi
+ *            scores above threshold (vewy vewy fast, in limited precision)
+ *
+ * Purpose:   Calculates an approximation of the Viterbi score for regions
+ *            of sequence <dsq>, using optimized profile <om>, and a pre-
+ *            allocated one-row DP matrix <ox>, and captures the positions
+ *            at which such regions exceed the score required to be
+ *            significant in the eyes of the calling function (usually
+ *            p=0.001).
+ *
+ *            The resulting landmarks are converted to subsequence
+ *            windows by the calling function
+ *
+ *            The model must be in a local alignment mode; other modes
+ *            cannot provide the necessary guarantee of no underflow.
+ *
+ *            This is a striped SIMD Viterbi implementation using Intel
+ *            SSE/SSE2 integer intrinsics \citep{Farrar07}, in reduced
+ *            precision (signed words, 16 bits).
+ *
+ * Args:      dsq     - digital target sequence, 1..L
+ *            L       - length of dsq in residues
+ *            om      - optimized profile
+ *            ox      - DP matrix
+ *            filtersc   - null or bias correction, required for translating a P-value threshold into a score threshold
+ *            P          - p-value below which a region is captured as being above threshold
+ *            windowlist - RETURN: preallocated array of hit windows (start and end of diagonal) for the above-threshold areas
+ *
+ * Returns:   <eslOK> on success;
+ *
+ * Throws:    <eslEINVAL> if <ox> allocation is too small, or if
+ *            profile isn't in a local alignment mode. (Must be in local
+ *            alignment mode because that's what helps us guarantee
+ *            limited dynamic range.)
+ *
+ * Xref:      See p7_ViterbiFilter()
+ */
+int
+p7_ViterbiFilter_longtarget_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox,
+                            float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
+{
+#ifdef HAVE_AVX512
+  /* Not yet ported, but we need a dummy for the linker */
+  return 0;
+#endif /* HAVE_AVX512 */
+#ifndef HAVE_AVX512
+  return 0;
+#endif
+}
 
 /*****************************************************************
  * @LICENSE@

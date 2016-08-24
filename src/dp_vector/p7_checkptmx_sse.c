@@ -400,7 +400,7 @@ p7_checkptmx_Destroy_sse(P7_CHECKPTMX *ox)
  *            them in the debugging dump.)
  */
 int
-p7_checkptmx_DumpFBRow_SSE(P7_CHECKPTMX *ox, int rowi, __m128 *dpc, char *pfx)
+p7_checkptmx_DumpFBRow_sse(P7_CHECKPTMX *ox, int rowi, debug_print *dpc, char *pfx)
 {
 #ifdef HAVE_SSE2
   union { __m128 v; float x[p7_VNF]; } u;

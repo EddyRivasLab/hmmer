@@ -191,7 +191,7 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
       eng->fwd = p7_ForwardFilter_sse;
       eng->bck = p7_BackwardFilter_sse;
 #endif
-#ifndef HAVE_SSE2:      
+#ifndef HAVE_SSE2     
       p7_Fail("Error: Your system seems to support the AVX2 SIMD instructions, but HMMER was not compiled with support for either AVX2 or the older SSE instructions.  HMMER requires SIMD support to run.  Please re-compile HMMER with AVX2 or SSE support.");
       exit(0);
 #endif
@@ -224,7 +224,7 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
       eng->bck = p7_BackwardFilter_sse;
       break;
 #endif // HAVE_SSE2
-#ifndef HAVE_SSE2:      
+#ifndef HAVE_SSE2      
       p7_Fail("Error: Your system seems to support the AVX-512 SIMD instructions, but HMMER was not compiled with support for AVX-512, AVX2, or the older SSE instructions.  HMMER requires SIMD support to run.  Please re-compile HMMER with AVX-512, AVX2, or SSE support.");
       exit(0);
 #endif // HAVE_SSE2

@@ -5,14 +5,15 @@
 #include "hardware.h"
 #include "easel.h"
 #include "p7_config.h"
-#if p7_CPU_ARCH == x86
+
+#if p7_CPU_ARCH == intel 
 // code to detect x86 SIMD versions
 
 // SSE detection code.  Based on https://software.intel.com/en-us/articles/using-cpuid-to-detect-the-presence-of-sse-41-and-sse-42-instruction-sets
 void get_cpuid_info (CPUIDinfo *Info, uint32_t eax, uint32_t ecx)
 {
      uint32_t ebx, edx;
-# if defined( __i386__ ) && defined ( __PIC__ )
+#if defined( __i386__ ) && defined ( __PIC__ )
      /* in case of PIC under 32-bit EBX cannot be clobbered */
     __asm__ ( "movl %%ebx, %%edi \n\t cpuid \n\t xchgl %%ebx, %%edi" : "=D" (ebx),
 # else
@@ -98,7 +99,8 @@ int check_AVX512(CPUIDinfo *Info1, CPUIDinfo *Info2){
     return 1; // If we get here, we have failed to fail, and therefore have succeeded
 }
 
-#endif // p7_CPU_ARCH == "x86"
+#endif // p7_CPU_ARCH == intel 
+
 
 P7_HARDWARE * p7_hardware_Create(){
 
@@ -113,7 +115,7 @@ P7_HARDWARE * p7_hardware_Create(){
   retval->micro_arch = NONE;
   retval->simd = NO_SIMD;
 
-#if p7_CPU_ARCH == x86
+#if p7_CPU_ARCH == intel 
   // Set values for x86 architecture
 
   retval->arch = x86;
@@ -150,7 +152,23 @@ P7_HARDWARE * p7_hardware_Create(){
     }
 #endif
 
-#endif //p7_CPU_ARCH == x86
+#endif //p7_CPU_ARCH == intel 
+
+#if p7_CPU_ARCH == arm
+
+  retval->arch = ARM;
+  retval->micro_arch = v7; 
+  retval->simd = NEON;
+
+#endif
+
+#if p7_CPU_ARCH == arm64
+
+  retval->arch = ARM;
+  retval->micro_arch = v8;
+  retval->simd = NEON64;
+
+#endif
 
 return retval;
 
