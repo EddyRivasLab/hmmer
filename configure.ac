@@ -556,15 +556,16 @@ if test "$enable_neon" = "yes"; then
   CPPFLAGS="$sre_save_CPPFLAGS $cortex_a15"
   AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
                     [vector_flags="-mcpu=cortex-a15 -mfpu=neon-vfpv4"], [])
-
   CFLAGS="$sre_save_CFLAGS"
   CPPFLAGS="$sre_save_CPPFLAGS"
 fi
 
 if test "y$vector_flags" != "y"; then
   ARM_CFLAGS="$vector_flags"
+  NEON_CFLAGS="$vector_flags"
 fi
 
+AC_SUBST(NEON_CFLAGS)
 AC_SUBST(ARM_CFLAGS)
 
 # If we're using SSE, figure out our @SIMD_CFLAGS@
