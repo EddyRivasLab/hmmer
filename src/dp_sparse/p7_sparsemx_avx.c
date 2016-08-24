@@ -728,7 +728,7 @@ return eslENORESULT;
 static int
 validate_dimensions_avx(const P7_SPARSEMX *sx, char *errbuf)
 {
-  #ifdef HAVE_AVX2
+#ifdef HAVE_AVX2
   const P7_SPARSEMASK *sm  = sx->sm;
   int   g      = 0;
   int   r      = 0;
@@ -761,7 +761,7 @@ validate_dimensions_avx(const P7_SPARSEMX *sx, char *errbuf)
 static int
 validate_no_nan_avx(const P7_SPARSEMX *sx, char *errbuf)
 {
- #ifdef HAVE_AVX2 
+#ifdef HAVE_AVX2
   const P7_SPARSEMASK *sm  = sx->sm;
   float         *dpc = sx->dp;
   float         *xc  = sx->xmx;
@@ -776,7 +776,8 @@ validate_no_nan_avx(const P7_SPARSEMX *sx, char *errbuf)
       xc++;
     }
   }
-      for (z = 0; z < sm->n_AVX[i]; z++)       /* sparse main cells */
+      for (z = 0; z < sm->n_AVX[i]; z++)       /* sp
+arse main cells */
   {
     k = sm->k_AVX[i][z];
     for (s = 0; s < p7S_NSCELLS; s++) {
@@ -803,7 +804,7 @@ validate_no_nan_avx(const P7_SPARSEMX *sx, char *errbuf)
 static int
 validate_fwdvit_avx(const P7_SPARSEMX *sx, char *errbuf)
 {
-  #ifdef HAVE_AVX2
+#ifdef HAVE_AVX2
   const P7_SPARSEMASK *sm  = sx->sm;
   float         *dpc = sx->dp;
   float         *xc  = sx->xmx;
@@ -839,7 +840,7 @@ validate_fwdvit_avx(const P7_SPARSEMX *sx, char *errbuf)
       }
     }
   return eslOK;
-   #endif
+  #endif
   #ifndef HAVE_AVX2
   return eslENORESULT;
   #endif
@@ -848,7 +849,7 @@ validate_fwdvit_avx(const P7_SPARSEMX *sx, char *errbuf)
 static int
 validate_backward_avx(const P7_SPARSEMX *sx, char *errbuf)
 {
-  #ifdef HAVE_AVX2
+#ifdef HAVE_AVX2
   const P7_SPARSEMASK *sm     = sx->sm;
   float         *dpc    = sx->dp  + (sm->ncells_AVX-1)*p7S_NSCELLS;   // last supercell in dp  
   float         *xc     = sx->xmx + (sm->nrow_AVX + sm->S_AVX - 1)*p7S_NXCELLS; // last supercell in xmx 
@@ -898,7 +899,7 @@ is_prob(float val, float tol)
 static int
 validate_decoding_avx(const P7_SPARSEMX *sx, char *errbuf)
 {
-  #ifdef HAVE_AVX2
+#ifdef HAVE_AVX2
   const P7_SPARSEMASK *sm  = sx->sm;
   float         *dpc = sx->dp;
   float         *xc  = sx->xmx;
@@ -1012,7 +1013,7 @@ validate_decoding_avx(const P7_SPARSEMX *sx, char *errbuf)
 int
 p7_sparsemx_Validate_avx(const P7_SPARSEMX *sx, char *errbuf)
 {
-  #ifdef HAVE_AVX2
+#ifdef HAVE_AVX2
   int status;
 
   if (errbuf) errbuf[0] = '\0';

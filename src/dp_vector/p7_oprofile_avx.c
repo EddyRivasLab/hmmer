@@ -17,8 +17,10 @@
 #include <string.h>
 #include <math.h>		/* roundf() */
 
+#if p7_CPU_ARCH == intel
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
+#endif /* intel arch */
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -166,7 +168,7 @@ p7_oprofile_Create_avx(int allocM, const ESL_ALPHABET *abc)
   om->nj         = 0.0f;
   return om;
 
-   ERROR:
+ ERROR:
   p7_oprofile_Destroy(om);
   return NULL;
 #endif //HAVE_AVX2
@@ -422,7 +424,6 @@ const ESL_ALPHABET *abc = om1->abc;
 #ifndef HAVE_AVX2
   return NULL;  //stub so we have something to link if we don't have AVX2 support
 #endif
-
 }
 
 /*----------------- end, P7_OPROFILE structure ------------------*/

@@ -16,7 +16,7 @@ typedef enum {v7, v8, NONE} MICRO_ARCH;
 
 // What type of SIMD does the machine support?  Not all architecture/SIMD types are valid,
 // we rely on the runtime detection code to do the right thing.
-typedef enum {SSE, AVX, AVX512, NEON, NO_SIMD} SIMD_TYPE;
+typedef enum {SSE, AVX, AVX512, NEON, NEON64, NO_SIMD} SIMD_TYPE;
 
 typedef struct p7_hardware_s{
 
@@ -46,6 +46,7 @@ int isGenuineIntel (void);
 int isSSE41andSSE42Supported (void);
 
 #endif // p7_CPU_ARCH == "x86"
+
 
 #endif //ifndef p7HARWARE_INCLUDED
 

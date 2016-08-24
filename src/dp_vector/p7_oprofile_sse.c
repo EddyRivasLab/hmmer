@@ -17,8 +17,10 @@
 #include <string.h>
 #include <math.h>		/* roundf() */
 
+#if p7_CPU_ARCH == intel
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
+#endif /* intel arch */
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -162,13 +164,14 @@ p7_oprofile_Create_sse(int allocM, const ESL_ALPHABET *abc)
   om->mode       = p7_NO_MODE;
   om->nj         = 0.0f;
   return om;
-#endif
-#ifndef HAVE_SSE2
-return NULL; // Stub so we have something to link when we don't have SSE support
-#endif
- ERROR:
+ERROR:
   p7_oprofile_Destroy_sse(om);
   return NULL;
+#endif /* HAVE_SSE2 */
+#ifndef HAVE_SSE2
+  return NULL; // Stub so we have something to link when we don't have SSE support
+#endif
+ 
 }
 
 /* Function:  p7_oprofile_Destroy()

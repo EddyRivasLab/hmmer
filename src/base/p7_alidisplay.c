@@ -76,8 +76,8 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
       return(p7_alidisplay_Create_avx512(tr, which, om, sq));
       break;
 
-    case NEON:
-      printf("NEON support not yet integrated into p7_alidisplay_Create");
+    case NEON: case NEON64:
+      return(p7_alidisplay_Create_neon(tr, which, om, sq));
       exit(0);
       break;
 

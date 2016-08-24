@@ -51,11 +51,12 @@
  *       b. On running time, in theory and in practice.
  *       c. Copyright and license information.
  */
-#include "p7_config.h"
 
+#include "p7_config.h"
+#if p7_CPU_ARCH == intel 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
-
+#endif
 #include "easel.h"
 #include "esl_vectorops.h"
 
@@ -73,9 +74,24 @@
  */
 
 #ifdef p7_DEBUGGING
-static inline fl]oat backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
-static        void  save_debug_row_pp(P7_CHECKPTMX *ox,               __m128 *dpc, int i);
-static        void  save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float totscale);
+static inline float backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
+extern inline float backward_row_zero_sse(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
+extern inline float backward_row_zero_avx(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
+extern inline float backward_row_zero_avx512(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
+extern inline float backward_row_zero_neon(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
+extern inline float backward_row_zero_neon64(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
+static        void  save_debug_row_pp(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
+extern void  save_debug_row_pp_sse(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
+extern void  save_debug_row_pp_avx(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
+extern void  save_debug_row_pp_avx512(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
+extern void  save_debug_row_pp_neon(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
+extern void  save_debug_row_pp_neon64(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
+static void  save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
+extern void  save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
+extern void  save_debug_row_fb_avx(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
+extern void  save_debug_row_fb_avx512(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
+extern void  save_debug_row_fb_neon(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
+extern void  save_debug_row_fb_neon64(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
 
 #endif
 
@@ -129,9 +145,12 @@ switch(om->simd){
       return p7_ForwardFilter_avx512(dsq, L, om, ox, opt_sc);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into p7_ForwardFilter");
+      return p7_ForwardFilter_neon(dsq, L, om, ox, opt_sc);
       break;
-    default:
+    case NEON64:
+      return p7_ForwardFilter_neon64(dsq, L, om, ox, opt_sc);
+      break;
+   default:
       p7_Fail("Unrecognized SIMD type passed to p7_ForwardFilter");  
   }
 
@@ -178,9 +197,12 @@ switch(om->simd){
       return p7_BackwardFilter_avx512(dsq, L, om, ox, sm, sm_thresh);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into p7_BackwardFilter");
+      return p7_BackwardFilter_neon(dsq, L, om, ox, sm, sm_thresh);
       break;
-    default:
+    case NEON64:
+      return p7_BackwardFilter_neon64(dsq, L, om, ox, sm, sm_thresh);
+      break;
+   default:
       p7_Fail("Unrecognized SIMD type passed to p7_BackwardFilter");  
   }
    
@@ -235,9 +257,12 @@ backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
       return backward_row_zero_avx512(x1, om, ox);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into backward_row_zero");
+      return backward_row_zero_neon(x1, om, ox);
       break;
-    default:
+    case NEON64:
+      return backward_row_zero_neon64(x1, om, ox);
+      break;
+   default:
       p7_Fail("Unrecognized SIMD type passed to backward_row_zero");  
   }
 }
@@ -260,9 +285,9 @@ backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
  *   D1, IM states
  */
 static void
-save_debug_row_pp(P7_CHECKPTMX *ox, __m128 *dpc, int i)
+save_debug_row_pp(P7_CHECKPTMX *ox, debug_print *dpc, int i)
 {
-  switch(om->simd){
+  switch(ox->simd){
     case SSE:
       return save_debug_row_pp_sse(ox, dpc, i);
       break;
@@ -273,9 +298,12 @@ save_debug_row_pp(P7_CHECKPTMX *ox, __m128 *dpc, int i)
       return save_debug_row_pp_avx512(ox, dpc, i);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into save_debug_row_pp");
+      return save_debug_row_pp_neon(ox, dpc, i);
       break;
-    default:
+    case NEON64:
+      return save_debug_row_pp_neon64(ox, dpc, i);
+      break;
+   default:
       p7_Fail("Unrecognized SIMD type passed to save_debug_row_pp");  
   }
 }
@@ -290,22 +318,25 @@ save_debug_row_pp(P7_CHECKPTMX *ox, __m128 *dpc, int i)
  * space.
  */
 static void
-save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float totscale)
+save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale)
 {
-  switch(om->simd){
+  switch(ox->simd){
     case SSE:
-      return save_debug_row_pp_sse(ox, gx, dpc, i, totscale);
+      return save_debug_row_fb_sse(ox, gx, dpc, i, totscale);
       break;
     case AVX:
-      return save_debug_row_pp_avx(ox, gx, dpc, i, totscale);
+      return save_debug_row_fb_avx(ox, gx, dpc, i, totscale);
       break;
     case AVX512:
-      return save_debug_row_pp_avx512(ox, gx, dpc, i, totscale);
+      return save_debug_row_fb_avx512(ox, gx, dpc, i, totscale);
       break;
     case NEON:
-      p7_Fail("Neon support not yet integrated into save_debug_row_fb");
+      return save_debug_row_fb_neon(ox, gx, dpc, i, totscale);
       break;
-    default:
+    case NEON64:
+      return save_debug_row_fb_neon64(ox, gx, dpc, i, totscale);
+      break;
+   default:
       p7_Fail("Unrecognized SIMD type passed to save_debug_row_fb");  
   } 
 }
@@ -777,6 +808,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
 #include "esl_random.h"
 
 #include "hmmer.h"
+#include "hardware/hardware.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/

@@ -5,12 +5,15 @@
 
 #include "p7_config.h"
 #include "easel.h"
+#include "base/general.h"
+
+#if p7_CPU_ARCH == intel
 #include <xmmintrin.h>    /* SSE  */
 #include <emmintrin.h>    /* SSE2 */
 #ifdef HAVE_PMMINTRIN_H
 #include <pmmintrin.h>   /* DENORMAL_MODE */
 #endif
-
+#endif /* intel arch */
 
 #include "dp_vector/simdvec.h"
 
