@@ -19,7 +19,7 @@
 #endif /* p7_CPU_ARCH == intel */
 
 #if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
-#include <arm_neon.h>
+//#include <arm_neon.h>
 #ifdef HAVE_NEON
 	#include "esl_neon.h"
 #endif
