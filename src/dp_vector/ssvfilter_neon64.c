@@ -527,7 +527,7 @@ p7_SSVFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret
 }
 #endif /* HAVE_NEON64 */
 #ifndef HAVE_NEON64
-p7_SSVFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc){
+int p7_SSVFilter_neon64(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc){
  return eslENORESULT;
 }
 #endif

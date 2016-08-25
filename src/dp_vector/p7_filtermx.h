@@ -127,6 +127,11 @@ extern size_t       p7_filtermx_Sizeof_neon(const P7_FILTERMX *fx);
 extern size_t       p7_filtermx_MinSizeof_neon(int M);
 extern void         p7_filtermx_Destroy_neon(P7_FILTERMX *fx);
 
+extern P7_FILTERMX *p7_filtermx_Create_neon64(int allocM);
+extern int          p7_filtermx_GrowTo_neon64(P7_FILTERMX *fx, int allocM);
+extern size_t       p7_filtermx_Sizeof_neon64(const P7_FILTERMX *fx);
+extern size_t       p7_filtermx_MinSizeof_neon64(int M);
+extern void         p7_filtermx_Destroy_neon64(P7_FILTERMX *fx);
 
 extern int p7_filtermx_SetDumpMode(P7_FILTERMX *fx, FILE *dfp, int truefalse);
 #ifdef p7_DEBUGGING

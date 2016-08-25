@@ -214,36 +214,42 @@ extern P7_SPARSEMASK *p7_sparsemask_Create_sse   (int M, int L);
 extern P7_SPARSEMASK *p7_sparsemask_Create_avx   (int M, int L);
 extern P7_SPARSEMASK *p7_sparsemask_Create_avx512   (int M, int L);
 extern P7_SPARSEMASK *p7_sparsemask_Create_neon   (int M, int L);
+extern P7_SPARSEMASK *p7_sparsemask_Create_neon64   (int M, int L);
 
 extern int            p7_sparsemask_Reinit   (P7_SPARSEMASK *sm, int M, int L);
 extern int            p7_sparsemask_Reinit_sse   (P7_SPARSEMASK *sm, int M, int L);
 extern int            p7_sparsemask_Reinit_avx  (P7_SPARSEMASK *sm, int M, int L);
 extern int            p7_sparsemask_Reinit_avx512   (P7_SPARSEMASK *sm, int M, int L);
 extern int            p7_sparsemask_Reinit_neon   (P7_SPARSEMASK *sm, int M, int L);
+extern int            p7_sparsemask_Reinit_neon64   (P7_SPARSEMASK *sm, int M, int L);
 
 extern size_t         p7_sparsemask_Sizeof   (const P7_SPARSEMASK *sm);
 extern size_t         p7_sparsemask_Sizeof_sse   (const P7_SPARSEMASK *sm);
 extern size_t         p7_sparsemask_Sizeof_avx   (const P7_SPARSEMASK *sm);
 extern size_t         p7_sparsemask_Sizeof_avx512  (const P7_SPARSEMASK *sm);
 extern size_t         p7_sparsemask_Sizeof_neon  (const P7_SPARSEMASK *sm);
+extern size_t         p7_sparsemask_Sizeof_neon64  (const P7_SPARSEMASK *sm);
 
 extern size_t         p7_sparsemask_MinSizeof(const P7_SPARSEMASK *sm);
 extern size_t         p7_sparsemask_MinSizeof_sse(const P7_SPARSEMASK *sm);
 extern size_t         p7_sparsemask_MinSizeof_avx(const P7_SPARSEMASK *sm);
 extern size_t         p7_sparsemask_MinSizeof_avx512(const P7_SPARSEMASK *sm);
 extern size_t         p7_sparsemask_MinSizeof_neon(const P7_SPARSEMASK *sm);
+extern size_t         p7_sparsemask_MinSizeof_neon64(const P7_SPARSEMASK *sm);
 
 extern int            p7_sparsemask_Reuse    (P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Reuse_sse    (P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Reuse_avx    (P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Reuse_avx512    (P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Reuse_neon    (P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_Reuse_neon64    (P7_SPARSEMASK *sm);
 
 extern void           p7_sparsemask_Destroy  (P7_SPARSEMASK *sm);
 extern void           p7_sparsemask_Destroy_sse  (P7_SPARSEMASK *sm);
 extern void           p7_sparsemask_Destroy_avx  (P7_SPARSEMASK *sm);
 extern void           p7_sparsemask_Destroy_avx512  (P7_SPARSEMASK *sm);
 extern void           p7_sparsemask_Destroy_neon  (P7_SPARSEMASK *sm);
+extern void           p7_sparsemask_Destroy_neon64  (P7_SPARSEMASK *sm);
 
 /* P7_SPARSEMASK construction API */
 extern int            p7_sparsemask_AddAll   (P7_SPARSEMASK *sm);
@@ -273,7 +279,11 @@ extern int            p7_sparsemask_FinishRow_neon(P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_FinishRow_neon   (P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Finish_neon   (P7_SPARSEMASK *sm);
 
-
+extern int            p7_sparsemask_StartRow_neon64 (P7_SPARSEMASK *sm, int i);
+extern int            p7_sparsemask_Add_neon64      (P7_SPARSEMASK *sm, int q, int r);
+extern int            p7_sparsemask_FinishRow_neon64 (P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_FinishRow_neon64  (P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_Finish_neon64   (P7_SPARSEMASK *sm);
 /* P7_SPARSEMASK debugging tools */
 extern int            p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Compare(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2);
@@ -299,6 +309,11 @@ extern int            p7_sparsemask_Dump_neon(FILE *ofp, P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Compare_neon(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2);
 extern int            p7_sparsemask_Validate_neon(const P7_SPARSEMASK *sm, char *errbuf);
 extern int            p7_sparsemask_SetFromTrace_neon(P7_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const P7_TRACE *tr);
+
+extern int            p7_sparsemask_Dump_neon64(FILE *ofp, P7_SPARSEMASK *sm);
+extern int            p7_sparsemask_Compare_neon64(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2);
+extern int            p7_sparsemask_Validate_neon64(const P7_SPARSEMASK *sm, char *errbuf);
+extern int            p7_sparsemask_SetFromTrace_neon64(P7_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const P7_TRACE *tr);
 /* P7_SPARSEMX object management */
 extern P7_SPARSEMX   *p7_sparsemx_Create   (P7_SPARSEMASK *sm);
 extern int            p7_sparsemx_Reinit   (P7_SPARSEMX *sx, const P7_SPARSEMASK *sm);
@@ -328,7 +343,9 @@ extern int   p7_sparsemx_Validate(const P7_SPARSEMX *sx, char *errbuf);
 extern int   p7_sparsemx_Validate_sse(const P7_SPARSEMX *sx, char *errbuf);
 extern int   p7_sparsemx_Validate_avx(const P7_SPARSEMX *sx, char *errbuf);
 extern int   p7_sparsemx_Validate_avx512(const P7_SPARSEMX *sx, char *errbuf);
-extern int   p7_sparsemx_Validate_neon(const P7_SPARSEMX *sx, char *errbuf);
+extern int   p7_sparsemx_Validate_neon(const P7_SPARSEMX *sx, char *errbuf); 
+extern int   p7_sparsemx_Validate_neon64(const P7_SPARSEMX *sx, char *errbuf); 
+
 extern int   p7_sparsemx_PlotDomainInference(FILE *ofp, const P7_SPARSEMX *sxd, int ia, int ib, const P7_TRACE *tr);
 
 

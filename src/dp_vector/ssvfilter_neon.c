@@ -525,7 +525,7 @@ p7_SSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_s
 }
 #endif /* HAVE_NEON */
 #ifndef HAVE_NEON 
-p7_SSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
+int p7_SSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
 {
   return eslENORESULT;
 }
