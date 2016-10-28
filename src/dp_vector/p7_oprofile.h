@@ -90,10 +90,10 @@ typedef struct p7_oprofile_s {
 
  #ifdef HAVE_SSE2 
   __m128i **rbv;                /* match scores [x][q]: rm, rm[0] are allocated      */
+  __m128i **sbv;                /* match scores for ssvfilter         */
   /* Our actual vector mallocs, before we align the memory                           */
   __m128i  *rbv_mem;
   __m128i  *sbv_mem;
-  __m128i **sbv;                /* match scores for ssvfilter         */
 #endif
    #ifdef HAVE_AVX2
   __m256i **rbv_AVX;                /* match scores [x][q]: rm, rm[0] are allocated      */

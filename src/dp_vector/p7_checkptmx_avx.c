@@ -64,7 +64,7 @@ p7_checkptmx_Create_avx(int M, int L, int64_t ramlimit)
   int          maxR;
   int          r;
   int          status;
-  printf("M=%d\n", M);
+
   /* Validity of integer variable ranges may depend on design spec:                  */
   ESL_DASSERT1( (M <= 100000) );       /* design spec says, model length M <= 100000 */
   ESL_DASSERT1( (L <= 100000) );       /*           ... and,  seq length L <= 100000 */

@@ -111,10 +111,16 @@ p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   /* Try highly optimized Knudsen SSV filter first. 
    * Note that SSV doesn't use any main memory (from <ox>) at all! 
   */
- 
+ //extern uint64_t SSV_time;
+ uint64_t filter_start_time = __rdtsc();
    status = p7_SSVFilter_avx(dsq, L, om, ret_sc);
+    uint64_t filter_end_time = __rdtsc();
+  //SSV_time += (filter_end_time - filter_start_time);   
    if (status != eslENORESULT) return status;
-
+   extern uint64_t full_MSV_calls;
+  
+  full_MSV_calls++;
+ 
   /* Resize the filter mx as needed */
   if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of MSV filter matrix failed");
 
@@ -220,6 +226,7 @@ p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
     /*     MSV_end_time = __rdtsc();
         MSV_time += (MSV_end_time - MSV_start_time); */
+
   return eslOK;
   #endif
   #ifndef HAVE_AVX2

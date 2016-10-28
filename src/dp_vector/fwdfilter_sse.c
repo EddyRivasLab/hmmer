@@ -138,7 +138,7 @@ p7_ForwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
   int     b;			/* counter down through checkpointed blocks, Rb+Rc..1 */
   int     w;			/* counter down through rows in a checkpointed block  */
 
-   printf("IN p7_ForwardFilter_sse, M = %d, Q = %d\n", om->M, Q);
+  //printf("IN p7_ForwardFilter_sse, M = %d, Q = %d\n", om->M, Q);
 
   /* Make sure <ox> is allocated big enough.
    * DO NOT set any ptrs into the matrix until after this potential reallocation!

@@ -175,7 +175,7 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
       p7_Fail("Error: Your system seems to only support the SSE SIMD instructions, but you don't have support for those instructions compiled into HMMER.  HMMER requires SIMD support to run.  Please re-compile HMMER with SSE support.");  
 #endif
       // If we have SSE versions of the filters, configure the engine to use them
-      printf("Using SSE instructions\n");
+      //printf("Using SSE instructions\n");
       eng->msv = p7_MSVFilter_sse; 
       eng->vit = p7_ViterbiFilter_sse;
       eng->fwd = p7_ForwardFilter_sse;
@@ -197,7 +197,7 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
 #endif
 #endif 
 #ifdef HAVE_AVX2      
-      printf("Using AVX instructions\n");
+      //printf("Using AVX instructions\n");
       eng->msv = p7_MSVFilter_avx; 
       eng->vit = p7_ViterbiFilter_avx;
       eng->fwd = p7_ForwardFilter_avx;
@@ -231,14 +231,17 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
 #endif //HAVE_AVX2
 #endif // HAVE_AVX512
 #ifdef HAVE_AVX512      
-      printf("Using AVX-512 instructions\n");
+     // printf("Using AVX-512 instructions\n");
       eng->msv = p7_MSVFilter_avx512; 
       eng->vit = p7_ViterbiFilter_avx512;
       eng->fwd = p7_ForwardFilter_avx512;
       eng->bck = p7_BackwardFilter_avx512;
 #endif      
       case NEON:
-        p7_Fail("NEON Support isn't in this version yet\n");
+          eng->msv = p7_MSVFilter_neon; 
+      eng->vit = p7_ViterbiFilter_neon;
+      eng->fwd = p7_ForwardFilter_neon;
+      eng->bck = p7_BackwardFilter_neon;
         break;
       case NO_SIMD:
         p7_Fail("Couldn't determine which SIMD ISA to use\n");
