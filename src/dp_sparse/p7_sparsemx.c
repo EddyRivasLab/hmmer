@@ -40,7 +40,7 @@
 
 #include "dp_reference/p7_refmx.h"
 #include "dp_sparse/p7_sparsemx.h"
-
+#include "hardware/hardware.h"
 
 
 /*****************************************************************
@@ -68,60 +68,27 @@
  * Throws:    <NULL> on allocation failure.
  */
 P7_SPARSEMASK *
-p7_sparsemask_Create(int M, int L)
+p7_sparsemask_Create(int M, int L, SIMD_TYPE simd)
 {
-  P7_SPARSEMASK *sm             = NULL;
-  int            default_salloc = 8;
-  int64_t        default_kalloc = 4096;
-  int            i,r;
-  int            status;
-
-  ESL_ALLOC(sm, sizeof(P7_SPARSEMASK));
-  sm->L      = L;
-  sm->M      = M;
-  sm->Q      = P7_NVF(M);  // approx M/4, for striped vectors of four floats
-		
-  sm->seg    = NULL;
-  sm->k      = NULL;
-  sm->n      = NULL;
-  sm->kmem   = NULL;
-
-  sm->S       = 0;
-  sm->nrow    = 0;
-  sm->ncells  = 0;
-  sm->last_i  = L+1;     	 // sentinel to assure StartRow() is called in reverse L..1 order 
-  for (r = 0; r < p7_VNF; r++) 
-    sm->last_k[r]  = -1;        // sentinels to assure StartRow() is called before Add() 
-  /* sn[] are initialized for each sparse row by _StartRow() */
-
-  /* if Ws is really large, we might already know we need a
-   * bigger-than-default allocation, just to enable the slots.
-   * Rather than allocating the default and letting StartRow()
-   * reallocate for the slots, go ahead and figure this out now.
-   */
-  sm->kalloc = default_kalloc;
-  while (sm->kalloc < p7_VNF*sm->Q) sm->kalloc *= 2;
-
-  sm->ralloc   = L+1;		
-  sm->salloc   = default_salloc;
-
-  sm->n_krealloc = 0;
-  sm->n_rrealloc = 0;
-  sm->n_srealloc = 0;
-
-  ESL_ALLOC(sm->seg,  sm->salloc * sizeof(struct p7_sparsemask_seg_s)); // salloc is the actual allocation, inclusive of +2 for sentinels
-  ESL_ALLOC(sm->k,    sm->ralloc * sizeof(int *));
-  ESL_ALLOC(sm->n,    sm->ralloc * sizeof(int));
-  ESL_ALLOC(sm->kmem, sm->kalloc * sizeof(int));
-
-  sm->k[0]   = NULL;		// always. 
-  for (i = 0; i <= L; i++)	// n[0] will always be 0; n[i=1..L] initialized to 0, then count as cells are added 
-    sm->n[i] = 0;
-  return sm;
-
- ERROR:
-  p7_sparsemask_Destroy(sm);
-  return NULL;
+switch(simd){
+    case SSE:
+      return p7_sparsemask_Create_sse(M, L);
+      break;
+    case AVX:
+      return p7_sparsemask_Create_avx(M, L);
+      break;
+    case AVX512:
+      return p7_sparsemask_Create_avx512(M, L);
+      break;
+    case NEON:
+      return p7_sparsemask_Create_neon(M, L);
+      break;
+    case NEON64:
+      return p7_sparsemask_Create_neon64(M, L);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Create");  
+  }
 }
 
 /* Function:  p7_sparsemask_Reinit()
@@ -137,40 +104,25 @@ p7_sparsemask_Create(int M, int L)
 int
 p7_sparsemask_Reinit(P7_SPARSEMASK *sm, int M, int L)
 {
-  int i,r;
-  int status;
-
-  sm->L  = L;
-  sm->M  = M;
-  sm->Q  = P7_NVF(M);
-		
-  /* seg[], kmem stay at their previous salloc, kalloc
-   * but do we need to reallocate rows for k[] and n[]? 
-   */
-  if (sm->ralloc < L+1) {
-    ESL_REALLOC(sm->k, sizeof(int *) * (L+1));
-    ESL_REALLOC(sm->n, sizeof(int)   * (L+1));
-    sm->ralloc = L+1;
-    sm->n_rrealloc++;
+ switch(sm->simd){
+    case SSE:
+      return p7_sparsemask_Reinit_sse(sm, M, L);
+      break;
+    case AVX:
+      return p7_sparsemask_Reinit_avx(sm, M, L);
+      break;
+    case AVX512:
+      return p7_sparsemask_Reinit_avx512(sm, M, L);
+      break;
+    case NEON:
+      return p7_sparsemask_Reinit_neon(sm, M, L);
+      break;
+    case NEON64:
+      return p7_sparsemask_Reinit_neon64(sm, M, L);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Reinit");  
   }
-
-  sm->S       = 0;
-  sm->nrow    = 0;
-  sm->ncells  = 0;
-  sm->last_i  = sm->L+1;
-  for (r = 0; r < p7_VNF; r++) 
-    sm->last_k[r]  = -1; 
-  /* sn[] are initialized for each sparse row by _StartRow() */
-
-  /* The realloc counters are NOT reset. They keep accumulating during
-   * the life of the object. 
-   */
-  for (i = 1; i <= L; i++)	/* n[0] will always be 0, but reinit n[1..L] */
-    sm->n[i] = 0;
-  return eslOK;
-
- ERROR:
-  return status;
 }
 
 /* Function:  p7_sparsemask_Sizeof()
@@ -179,12 +131,25 @@ p7_sparsemask_Reinit(P7_SPARSEMASK *sm, int M, int L)
 size_t
 p7_sparsemask_Sizeof(const P7_SPARSEMASK *sm)
 {
-  size_t n = sizeof(P7_SPARSEMASK);
-  n += sm->salloc * sizeof(struct p7_sparsemask_seg_s); // <seg>
-  n += sm->ralloc * sizeof(int *);                      // <k>                   
-  n += sm->ralloc * sizeof(int);                        // <n>                   
-  n += sm->kalloc * sizeof(int);                        // <kmem>                
-  return n;
+ switch(sm->simd){
+    case SSE:
+      return p7_sparsemask_Sizeof_sse(sm);
+      break;
+    case AVX:
+      return p7_sparsemask_Sizeof_avx(sm);
+      break;
+    case AVX512:
+      return p7_sparsemask_Sizeof_avx512(sm);
+      break;
+    case NEON:
+      return p7_sparsemask_Sizeof_neon(sm);
+      break;
+    case NEON64:
+      return p7_sparsemask_Sizeof_neon64(sm);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Sizeof");  
+  }
 }
 
 /* Function:  p7_sparsemask_MinSizeof()
@@ -193,12 +158,25 @@ p7_sparsemask_Sizeof(const P7_SPARSEMASK *sm)
 size_t
 p7_sparsemask_MinSizeof(const P7_SPARSEMASK *sm)
 {
-  size_t n = sizeof(P7_SPARSEMASK);
-  n += (sm->S+2)  * sizeof(struct p7_sparsemask_seg_s);  // <seg>; includes sentinels at 0,S+1
-  n += (sm->L+1)  * sizeof(int *);                       // <k>
-  n += (sm->L+1)  * sizeof(int);                         // <n>
-  n += sm->ncells * sizeof(int);                         // <kmem>
-  return n;
+ switch(sm->simd){
+    case SSE:
+      return p7_sparsemask_MinSizeof_sse(sm);
+      break;
+    case AVX:
+      return p7_sparsemask_MinSizeof_avx(sm);
+      break;
+    case AVX512:
+      return p7_sparsemask_MinSizeof_avx512(sm);
+      break;
+    case NEON:
+      return p7_sparsemask_MinSizeof_neon(sm);
+      break;
+    case NEON64:
+      return p7_sparsemask_MinSizeof_neon64(sm);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_MinSizeof");  
+  }
 }
 
 
@@ -230,12 +208,24 @@ p7_sparsemask_Reuse(P7_SPARSEMASK *sm)
 void
 p7_sparsemask_Destroy(P7_SPARSEMASK *sm)
 {
-  if (sm) {
-    if (sm->seg)  free(sm->seg);
-    if (sm->k)    free(sm->k);
-    if (sm->n)    free(sm->n);
-    if (sm->kmem) free(sm->kmem);
-    free(sm);
+  switch(sm->simd){
+    case SSE:
+      p7_sparsemask_Destroy_sse(sm);
+      break;
+    case AVX:
+      p7_sparsemask_Destroy_avx(sm);
+      break;
+    case AVX512:
+      p7_sparsemask_Destroy_avx512(sm);
+      break;
+    case NEON:
+      p7_sparsemask_Destroy_neon(sm);
+      break;
+    case NEON64:
+      p7_sparsemask_Destroy_neon64(sm);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Destroy");  
   }
 }
 /*-------------- end, P7_SPARSEMASK -----------------------------*/
@@ -266,9 +256,46 @@ p7_sparsemask_Destroy(P7_SPARSEMASK *sm)
  * 
  *            <eslEINVAL> on coding errors, failures of contract checks.
  */
+
+// Not sure what needs to be done to make this work for AVX, need to think about it more
 int
 p7_sparsemask_AddAll(P7_SPARSEMASK *sm)
 {
+  int Q= 0;
+ switch(sm->simd){
+    case SSE:
+ #ifdef HAVE_SSE2   
+      Q = sm->Q;
+ #endif     
+ #ifndef HAVE_SSE2
+       esl_fatal("Attempted to call p7_sparsemx_AddAll with SSE SIMD and no SSE SIMD support compiled in\n");
+#endif        
+      break;
+    case AVX:
+#ifdef HAVE_AVX2    
+      Q = sm->Q_AVX;
+#endif      
+#ifndef HAVE_AVX2
+       esl_fatal("Attempted to call p7_sparsemx_AddAll with AVX SIMD and no AVX SIMD support compiled in\n");
+#endif        
+      break;
+    case AVX512:
+#ifdef HAVE_AVX512    
+      Q = sm->Q_AVX_512;
+#endif       
+      #ifndef HAVE_AVX512
+       esl_fatal("Attempted to call p7_sparsemx_AddAll with AVX-512 SIMD and no AVX-512 SIMD support compiled in\n");
+#endif        
+      break;
+    case NEON: case NEON64:
+#ifdef HAVE_NEON
+      Q = sm->Q;
+#endif
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_AddAll");  
+  }
+
   int  i,k;
   int  status;
 
@@ -276,10 +303,11 @@ p7_sparsemask_AddAll(P7_SPARSEMASK *sm)
     {
       if (  (status = p7_sparsemask_StartRow(sm, i))                   != eslOK) return status;
       for (k = sm->M; k >= 1; k--)
-	if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
+	if ((status = p7_sparsemask_Add(sm, (k-1)%Q, (k-1)/Q)) != eslOK) return status;
       if (  (status = p7_sparsemask_FinishRow(sm))                     != eslOK) return status;
     }
   return p7_sparsemask_Finish(sm);
+
 }
 
 
@@ -313,44 +341,33 @@ p7_sparsemask_AddAll(P7_SPARSEMASK *sm)
  *
  *            <eslEINVAL> on coding errors, failures of contract checks.
  */
+
+// Separate versions of these functions for each ISA because they're called from 
+// ISA-specific functions
+
 int
 p7_sparsemask_StartRow(P7_SPARSEMASK *sm, int i)
 {
-  int r;
-  int status;
-  
-#ifdef p7_DEBUGGING
-  if (i < 1 || i > sm->L) ESL_EXCEPTION(eslEINVAL, "i is 1..L: sequence position");
-  if (sm->last_i <= i)    ESL_EXCEPTION(eslEINVAL, "rows need to be added in reverse order L..1");
-#endif
-
-  /* Make sure kmem has enough memory; if not, double it.
-   * Because we know the original allocation was enough to hold
-   * the slots, we know that doubling (even if ncells has filled
-   * the current kalloc) is sufficient.
-   */
-  if (sm->ncells + p7_VNF*sm->Q > sm->kalloc)
-    {
-      int64_t kalloc_req = sm->kalloc * 2;
-      ESL_REALLOC(sm->kmem, sizeof(int) * kalloc_req);
-      sm->kalloc = kalloc_req;
-      sm->n_krealloc++;
-    }
-  
-  for (r = 0; r < p7_VNF; r++)
-    {
-      sm->s[p7_VNF-r-1] = sm->kmem + sm->ncells + r*sm->Q;
-      sm->sn[r]         = 0;
-    }
-  sm->last_i = i;
-  for (r = 0; r < p7_VNF; r++) 
-    sm->last_k[r] = sm->M+1;		/* sentinel to be sure that Add() is called in reverse order M..1 */
-  return eslOK;
-  
- ERROR:
-  return status;
+switch(sm->simd){
+    case SSE:
+      return p7_sparsemask_StartRow_sse(sm, i);
+      break;
+    case AVX:
+      return p7_sparsemask_StartRow_avx(sm, i);
+      break;
+    case AVX512:
+      return p7_sparsemask_StartRow_avx512(sm, i);
+      break;
+    case NEON:
+      return p7_sparsemask_StartRow_neon(sm, i);
+      break;
+    case NEON64:
+      return p7_sparsemask_StartRow_neon64(sm, i);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_StartRow");  
+  }
 }
-
 
 
 /* Function:  p7_sparsemask_Add()
@@ -382,23 +399,26 @@ p7_sparsemask_StartRow(P7_SPARSEMASK *sm, int i)
 int
 p7_sparsemask_Add(P7_SPARSEMASK *sm, int q, int r)
 {
-  int     k = r*sm->Q+q+1;
-
-  //printf("Adding i=%d q=%d r=%d k=%d M=%d\n", sm->last_i, q, r, k, sm->M);
-
-#ifdef p7_DEBUGGING 
-  if (q < 0 || q >= sm->Q)  ESL_EXCEPTION(eslEINVAL, "q is 0..Q-1; striped vector index");
-  if (r < 0 || r >= p7_VNF) ESL_EXCEPTION(eslEINVAL, "r is 0..%d-1; segment index in vectors", p7_VNF);
-  if (sm->last_k[r] == -1)  ESL_EXCEPTION(eslEINVAL, "need to StartRow() before calling Add()");
-  if (sm->last_k[r] <= k)   ESL_EXCEPTION(eslEINVAL, "cells must be added in reverse order M..1");
-#endif
-
-  sm->s[r][sm->sn[r]] = k;
-  sm->sn[r]++;
-  sm->last_k[r] = k;
-  return eslOK;
-}
-
+switch(sm->simd){
+    case SSE:
+      return p7_sparsemask_Add_sse(sm, q, r);
+      break;
+    case AVX:
+      return p7_sparsemask_Add_avx(sm, q, r);
+      break;
+    case AVX512:
+      return p7_sparsemask_Add_avx512(sm, q, r);
+      break;
+    case NEON:
+      return p7_sparsemask_Add_neon(sm, q, r);
+      break;
+    case NEON64:
+      return p7_sparsemask_Add_neon64(sm, q, r);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Add");  
+  }
+ } 
 /* Function:  p7_sparsemask_FinishRow()
  * Synopsis:  Done adding sparse cells on a current row.
  *
@@ -412,26 +432,29 @@ p7_sparsemask_Add(P7_SPARSEMASK *sm, int q, int r)
  *
  * Throws:    (no abnormal error conditions)
  */
+
 int
 p7_sparsemask_FinishRow(P7_SPARSEMASK *sm)
 {
-  int *p;
-  int  r;
-
-  /* s[3] is already where it belongs; so we start at p = kmem + ncells + sn[3] */
-  p = sm->kmem + sm->ncells + sm->sn[p7_VNF-1];
-  sm->n[sm->last_i] = sm->sn[p7_VNF-1];
-  for (r = p7_VNF-2; r >= 0; r--)
-    {
-      memmove(p, sm->s[r], sizeof(int) * sm->sn[r]);
-      p += sm->sn[r];
-      sm->n[sm->last_i] += sm->sn[r];
-    }
-  /* now the slots are invalid; the next StartRow() will reset them */
-  sm->ncells += sm->n[sm->last_i];
-  for (r = 0; r < p7_VNF; r++) 
-    sm->last_k[r]  = -1;	/* that'll suffice to prevent Add() from being called after FinishRow(). */
-  return eslOK;
+ switch(sm->simd){
+    case SSE:
+      return p7_sparsemask_FinishRow_sse(sm);
+      break;
+    case AVX:
+      return p7_sparsemask_FinishRow_avx(sm);
+      break;
+    case AVX512:
+      return p7_sparsemask_FinishRow_avx512(sm);
+      break;
+    case NEON:
+      return p7_sparsemask_FinishRow_neon(sm);
+      break;
+    case NEON64:
+      return p7_sparsemask_FinishRow_neon64(sm);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_FinishRow");  
+  }
 }
 
 /* Function:  p7_sparsemask_Finish()
@@ -464,33 +487,128 @@ p7_sparsemask_FinishRow(P7_SPARSEMASK *sm)
 int
 p7_sparsemask_Finish(P7_SPARSEMASK *sm)
 {
+ switch(sm->simd){
+    case SSE:
+      return p7_sparsemask_Finish_sse(sm);
+      break;
+    case AVX:
+      return p7_sparsemask_Finish_avx(sm);
+      break;
+    case AVX512:
+      return p7_sparsemask_Finish_avx512(sm);
+      break;
+    case NEON:
+      return p7_sparsemask_Finish_neon(sm);
+      break;
+    case NEON64:
+      return p7_sparsemask_Finish_neon64(sm);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Finish");  
+  }
+}
+
+//Old version
+#ifdef NEVER_DEFINE_THIS 
+int
+p7_sparsemask_Finish(P7_SPARSEMASK *sm)
+{
   int i,r;
   int s;
-  int *p;
   int status;
-
+//printf("calling p7_sparsemask_Finish, sm->ncells = %li\n", sm->ncells);
 
   /* Reverse kmem. */
+#ifdef p7_build_SSE 
+  int *p;
   esl_vec_IReverse(sm->kmem, sm->kmem, sm->ncells);
 
   /* Set the k[] pointers; count <S> and <nrow> */
   p = sm->kmem;
   sm->S = sm->nrow = 0;
-  for (i = 1; i <= sm->L; i++)
+#endif
+#ifdef p7_build_AVX2 
+  int *p_AVX;
+  esl_vec_IReverse(sm->kmem_AVX, sm->kmem_AVX, sm->ncells_AVX);
+
+  /* Set the k[] pointers; count <S> and <nrow> */
+  p_AVX = sm->kmem_AVX;
+  sm->S_AVX = sm->nrow_AVX = 0;
+#endif
+#ifdef p7_build_AVX512 
+  int *p_AVX_512;
+  esl_vec_IReverse(sm->kmem_AVX_512, sm->kmem_AVX_512, sm->ncells_AVX_512);
+
+  /* Set the k[] pointers; count <S> and <nrow> */
+  p_AVX_512 = sm->kmem_AVX_512;
+  sm->S_AVX_512 = sm->nrow_AVX_512 = 0;
+#endif
+
+#ifdef p7_build_check_AVX2
+if (sm->ncells != sm->ncells_AVX){
+  printf("p7_sparsemask_Finish found different numbers of cells: %li (SSE) vs %li (AVX)\n", sm->ncells, sm->ncells_AVX);
+}
+int check_index;
+for(check_index = 0; check_index < sm->ncells; check_index++){
+  if(sm->kmem[check_index] != sm->kmem_AVX[check_index]){
+    printf("Sparsemask index miss-match at position %d, %i (SSE) vs. %i (AVX)\n", check_index, sm->kmem[check_index], sm->kmem_AVX[check_index]);
+  }
+}
+#endif  
+#ifdef p7_build_check_AVX512
+//printf("Checking AVX-512 sparsemask\n");
+if (sm->ncells != sm->ncells_AVX_512){
+  printf("p7_sparsemask_Finish found different numbers of cells: %li (SSE) vs %li (AVX-512)\n", sm->ncells, sm->ncells_AVX_512);
+}
+int check_index;
+for(check_index = 0; check_index < sm->ncells; check_index++){
+  if(sm->kmem[check_index] != sm->kmem_AVX_512[check_index]){
+    printf("Sparsemask index miss-match at position %d, %i (SSE) vs. %i (AVX-512)\n", check_index, sm->kmem[check_index], sm->kmem_AVX_512[check_index]);
+  }
+}
+#endif  
+  for (i = 1; i <= sm->L; i++){
+#ifdef p7_build_SSE  
     if (sm->n[i]) 
       {
-	sm->nrow++;
-	sm->k[i] = p;
-	p       += sm->n[i];
-	if (sm->n[i-1] == 0) sm->S++;
+  sm->nrow++;
+  sm->k[i] = p;
+  p       += sm->n[i];
+  if (sm->n[i-1] == 0) sm->S++;
       } 
     else 
       sm->k[i] = NULL;
+#endif
+#ifdef p7_build_AVX2
+     if (sm->n_AVX[i]) 
+      {
+  sm->nrow_AVX++;
+  sm->k_AVX[i] = p_AVX;
+  p_AVX       += sm->n_AVX[i];
+  if (sm->n_AVX[i-1] == 0) sm->S_AVX++;
+      } 
+    else 
+      sm->k_AVX[i] = NULL;
+#endif
+#ifdef p7_build_AVX512
+     if (sm->n_AVX_512[i]) 
+      {
+  sm->nrow_AVX_512++;
+  sm->k_AVX_512[i] = p_AVX_512;
+  p_AVX_512       += sm->n_AVX_512[i];
+  if (sm->n_AVX_512[i-1] == 0) sm->S_AVX_512++;
+      } 
+    else 
+      sm->k_AVX_512[i] = NULL;
+#endif
+  }
 
+ 
   /* Reallocate seg[] if needed. */
+#ifdef p7_build_SSE
   if ( (sm->S+2) > sm->salloc) 
     {
-      ESL_REALLOC(sm->seg, (sm->S+2) * sizeof(struct p7_sparsemask_seg_s)); /* +2, for sentinels */
+      ESL_REALLOC(sm->seg, (sm->S+2) * sizeof(p7_sparsemask_seg_s)); /* +2, for sentinels */
       sm->salloc = sm->S + 2; // inclusive of sentinels
       sm->n_srealloc++;
     }
@@ -504,17 +622,118 @@ p7_sparsemask_Finish(P7_SPARSEMASK *sm)
     }
   ESL_DASSERT1(( s == sm->S+1 ));
   sm->seg[s].ia = sm->seg[s].ib = sm->L+2;
-
-  
-
-  sm->last_i = -1;
+#endif
+#ifdef p7_build_AVX2
+  if ( (sm->S_AVX+2) > sm->salloc_AVX) 
+    {
+      ESL_REALLOC(sm->seg_AVX, (sm->S_AVX+2) * sizeof(p7_sparsemask_seg_s)); /* +2, for sentinels */
+      sm->salloc_AVX = sm->S_AVX + 2; // inclusive of sentinels
+      sm->n_srealloc++;
+    }
+      
+  /* Set seg[] coord pairs. */
+  sm->seg_AVX[0].ia = sm->seg_AVX[0].ib = -1;
+  for (s = 1, i = 1; i <= sm->L; i++)
+    {
+      if (sm->n_AVX[i]   && sm->n_AVX[i-1] == 0)                 sm->seg_AVX[s].ia   = i; 
+      if (sm->n_AVX[i]   && (i == sm->L || sm->n_AVX[i+1] == 0)) sm->seg_AVX[s++].ib = i; 
+    }
+  ESL_DASSERT1(( s == sm->S_AVX+1 ));
+  sm->seg_AVX[s].ia = sm->seg_AVX[s].ib = sm->L+2;
+#endif  
+#ifdef p7_build_AVX512
+  if ( (sm->S_AVX_512+2) > sm->salloc_AVX_512) 
+    {
+      ESL_REALLOC(sm->seg_AVX_512, (sm->S_AVX_512+2) * sizeof(p7_sparsemask_seg_s)); /* +2, for sentinels */
+      sm->salloc_AVX_512 = sm->S_AVX_512 + 2; // inclusive of sentinels
+      sm->n_srealloc++;
+    }
+      
+  /* Set seg[] coord pairs. */
+  sm->seg_AVX_512[0].ia = sm->seg_AVX_512[0].ib = -1;
+  for (s = 1, i = 1; i <= sm->L; i++)
+    {
+      if (sm->n_AVX_512[i]   && sm->n_AVX_512[i-1] == 0)                 sm->seg_AVX_512[s].ia   = i; 
+      if (sm->n_AVX_512[i]   && (i == sm->L || sm->n_AVX_512[i+1] == 0)) sm->seg_AVX_512[s++].ib = i; 
+    }
+  ESL_DASSERT1(( s == sm->S_AVX_512+1 ));
+  sm->seg_AVX_512[s].ia = sm->seg_AVX_512[s].ib = sm->L+2;
+#endif  
+#ifdef p7_build_check_AVX2
+  if(sm->S != sm->S_AVX){
+    printf("SSE reports %d segments, AVX reports %d\n", sm->S, sm->S_AVX);
+  }
+  for(i = 1; i <= sm->S; i++){
+    if (sm->seg[i].ia != sm->seg_AVX[i].ia){
+      printf("ia miss-match at seg[%d]: %d (SSE) vs %d (AVX)\n", i, sm->seg[i].ia, sm->seg_AVX[i].ia);
+    }
+    if (sm->seg[i].ib != sm->seg_AVX[i].ib){
+      printf("ib miss-match at seg[%d]: %d (SSE) vs %d (AVX)\n", i, sm->seg[i].ib, sm->seg_AVX[i].ib);
+    }
+  }  
+#endif   
+ #ifdef p7_build_check_AVX512
+ // printf("Checking AVX-512 sparsemask segments\n");
+  if(sm->S != sm->S_AVX_512){
+    printf("SSE reports %d segments, AVX-512 reports %d\n", sm->S, sm->S_AVX_512);
+  }
+  for(i = 1; i <= sm->S; i++){
+    if (sm->seg[i].ia != sm->seg_AVX_512[i].ia){
+      printf("ia miss-match at seg[%d]: %d (SSE) vs %d (AVX-512)\n", i, sm->seg[i].ia, sm->seg_AVX_512[i].ia);
+    }
+    if (sm->seg[i].ib != sm->seg_AVX_512[i].ib){
+      printf("ib miss-match at seg[%d]: %d (SSE) vs %d (AVX-512)\n", i, sm->seg[i].ib, sm->seg_AVX_512[i].ib);
+    }
+  }  
+#endif   
+ #ifdef p7_build_SSE 
+   sm->last_i = -1;
   for (r = 0; r < p7_VNF; r++) 
     sm->last_k[r] = -1;
+ #endif  
+#ifdef p7_build_AVX2
+   sm->last_i_AVX = -1;
+  for (r = 0; r < p7_VNF_AVX; r++) 
+    sm->last_k_AVX[r] = -1;
+ #endif  
+#ifdef p7_build_AVX512
+   sm->last_i_AVX_512 = -1;
+  for (r = 0; r < p7_VNF_AVX_512; r++) 
+    sm->last_k_AVX_512[r] = -1;
+ #endif  
+#ifndef p7_build_SSE
+#ifdef p7_build_AVX2
+  // if we're running AVX code and not SSE, need to copy some values into the SSE data structure
+  // so the downstream code will see them
+  sm->seg = sm->seg_AVX;
+  sm->k = sm->k_AVX;
+  sm->n = sm->n_AVX;
+  sm->kmem = sm->kmem_AVX;
+  sm->S = sm->S_AVX;
+  sm->nrow = sm->nrow_AVX;
+  sm->ncells = sm->ncells_AVX; 
+#endif
+#ifndef p7_build_AVX2
+#ifdef p7_build_AVX512
+ // if we're running AVX-512 code and not SSE, need to copy some values into the SSE data structure
+  // so the downstream code will see them
+  sm->seg = sm->seg_AVX_512;
+  sm->k = sm->k_AVX_512;
+  sm->n = sm->n_AVX_512;
+  sm->kmem = sm->kmem_AVX_512;
+  sm->S = sm->S_AVX_512;
+  sm->nrow = sm->nrow_AVX_512;
+  sm->ncells = sm->ncells_AVX_512; 
+#endif
+#endif  
+#endif
+
   return eslOK;
 
  ERROR:
   return eslEMEM;
 }
+#endif // NEVER_DEFINE_THIS
 /*----------------- end, P7_SPARSEMASK API ----------------------*/
 
 
@@ -533,24 +752,25 @@ p7_sparsemask_Finish(P7_SPARSEMASK *sm)
 int
 p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm)
 {
-  int i,k,z;
-
-  fprintf(ofp, "# sparse mask: M=%d L=%d Q=%d\n", sm->M, sm->L, sm->Q);
-  fputs("     ", ofp);  for (k = 1; k <= sm->M; k++) fprintf(ofp, "%3d ", k);  fputs(" n \n", ofp);
-  fputs("     ", ofp);  for (k = 1; k <= sm->M; k++) fputs("--- ", ofp);       fputs("---\n", ofp);
-
-  for (i = 1; i <= sm->L; i++)
-    {
-      fprintf(ofp, "%3d: ", i);
-      for (z = 0, k = 1; k <= sm->M; k++)
-	{
-	  while (z < sm->n[i] && sm->k[i][z] < k)  z++;
-	  if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "  X ");
-	  else                                     fprintf(ofp, "  . ");
-	}
-      fprintf(ofp, "%3d\n", sm->n[i]);
-    }
-  return eslOK;
+ switch(sm->simd){
+    case SSE:
+      return p7_sparsemask_Dump_sse(ofp, sm);
+      break;
+    case AVX:
+      return p7_sparsemask_Dump_avx(ofp, sm);
+      break;
+    case AVX512:
+      return p7_sparsemask_Dump_avx512(ofp, sm);
+      break;
+    case NEON: 
+      return p7_sparsemask_Dump_neon(ofp, sm);
+      break;
+    case NEON64: 
+      return p7_sparsemask_Dump_neon64(ofp, sm);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Dump");  
+  }
 }
 
 /* Function:  p7_sparsemask_Compare()
@@ -562,26 +782,25 @@ p7_sparsemask_Dump(FILE *ofp, P7_SPARSEMASK *sm)
 int
 p7_sparsemask_Compare(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2)
 {
-  char msg[] = "P7_SPARSEMASK comparison failed";
-  int  i;
-  int  s;
-
-  if ( (sm1->L      != sm2->L)      ||
-       (sm1->M      != sm2->M)      ||
-       (sm1->S      != sm2->S)      ||
-       (sm1->nrow   != sm2->nrow)   ||
-       (sm1->ncells != sm2->ncells)) 
-    ESL_FAIL(eslFAIL, NULL, msg);
-
-  for (s = 0; s <= sm1->S+1; s++)
-    {
-      if (sm1->seg[s].ia != sm2->seg[s].ia)   ESL_FAIL(eslFAIL, NULL, msg);
-      if (sm1->seg[s].ib != sm2->seg[s].ib)   ESL_FAIL(eslFAIL, NULL, msg);
-    }
-  if ( esl_vec_ICompare(sm1->n, sm2->n, sm1->L+1)    != eslOK)  ESL_FAIL(eslFAIL, NULL, msg);
-  for (i = 0; i <= sm1->L; i++)
-    if ( esl_vec_ICompare(sm1->k[i], sm2->k[i], sm1->n[i]) != eslOK) ESL_FAIL(eslFAIL, NULL, msg);
-  return eslOK;
+switch(sm1->simd){
+    case SSE:
+      return p7_sparsemask_Compare_sse(sm1, sm2);
+      break;
+    case AVX:
+      return p7_sparsemask_Compare_avx(sm1, sm2);
+      break;
+    case AVX512:
+      return p7_sparsemask_Compare_avx512(sm1, sm2);
+      break;
+    case NEON:
+      return p7_sparsemask_Compare_neon(sm1, sm2);
+      break;
+    case NEON64:
+      return p7_sparsemask_Compare_neon64(sm1, sm2);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Compare");  
+  }
 }
 
 
@@ -611,30 +830,25 @@ p7_sparsemask_Compare(const P7_SPARSEMASK *sm1, const P7_SPARSEMASK *sm2)
 int
 p7_sparsemask_Validate(const P7_SPARSEMASK *sm, char *errbuf)
 {
-  int g, i;
-
-  if (errbuf) errbuf[0] = '\0';
-
-  if ( sm->L < 1) ESL_FAIL(eslFAIL, errbuf, "L must be >=1");
-  if ( sm->M < 1) ESL_FAIL(eslFAIL, errbuf, "M must be >=1");
-  if ( sm->S < 0) ESL_FAIL(eslFAIL, errbuf, "S must be >=0");
-
-  for (g = 1; g <= sm->S; g++)
-    {
-      if (sm->seg[g-1].ib >= sm->seg[g].ia)           ESL_FAIL(eslFAIL, errbuf, "seg %d overlaps with previous one", g);  // Note boundary condition, seg[0].ib=-1
-      if (sm->seg[g].ia   >  sm->seg[g].ib)           ESL_FAIL(eslFAIL, errbuf, "ia..ib are not in order for seg %d", g);
-      if (sm->seg[g].ia < 1 || sm->seg[g].ia > sm->L) ESL_FAIL(eslFAIL, errbuf, "ia[%d] is invalid", g);
-      if (sm->seg[g].ib < 1 || sm->seg[g].ib > sm->L) ESL_FAIL(eslFAIL, errbuf, "ib[%d] is invalid", g);
-
-      for (i = sm->seg[g-1].ib+1; i < sm->seg[g].ia; i++)   // Note boundary condition. Sentinel seg[0].ib == -1, so (i = seg[0]+1) means 0
-	if (sm->n[i] != 0) ESL_FAIL(eslFAIL, errbuf, "n[i] != 0 for i unmarked, not in sparse segment");
-      for (i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)
-	if (sm->n[i] == 0) ESL_FAIL(eslFAIL, errbuf, "n[i] == 0 for i supposedly marked in sparse seg");
-    }
-  for (i = sm->seg[sm->S].ib+1; i <= sm->L; i++)
-    if (sm->n[i] != 0) ESL_FAIL(eslFAIL, errbuf, "n[i] != 0 for i unmarked, not in sparse segment");
-
-  return eslOK;
+  switch(sm->simd){
+    case SSE:
+      return p7_sparsemask_Validate_sse(sm, errbuf);
+      break;
+    case AVX:
+      return p7_sparsemask_Validate_avx(sm, errbuf);
+      break;
+    case AVX512:
+      return p7_sparsemask_Validate_avx512(sm, errbuf);
+      break;
+    case NEON:
+      return p7_sparsemask_Validate_neon(sm, errbuf);
+      break;
+    case NEON64:
+      return p7_sparsemask_Validate_neon64(sm, errbuf);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_Validate");  
+  }
 }
 
 /* Function:  p7_sparsemask_SetFromTrace()
@@ -654,57 +868,25 @@ p7_sparsemask_Validate(const P7_SPARSEMASK *sm, char *errbuf)
 int
 p7_sparsemask_SetFromTrace(P7_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const P7_TRACE *tr)
 {
-  float cellprob = 0.5;
-  float rowprob  = 0.2;
-  int   i,k,z;
-  int   status;
-  
-  z = tr->N-1;
-  for (i = sm->L; i >= 1; i--) /* sparsemask api requires building it backwards */
-    {
-      while (tr->i[z] != i) z--; /* find trace position that generated this residue. */
-    
-      if ( (status = p7_sparsemask_StartRow(sm, i)) != eslOK) return status;
-
-      /* If this residue was emitted by the model, at least that cell
-       * must be present; thus the row must be present. 
-       * Tricky: in addition to the actual emitting cell i,k, we may
-       * also need to add one or more delete cells i,k-1... 
-       */
-      if (p7_trace_IsM(tr->st[z]) || p7_trace_IsI(tr->st[z])) 
-	{
-	  while (p7_trace_IsD(tr->st[z+1])) z++;
-	  
-	  for (k = sm->M; k > tr->k[z]; k--) 
-	    if (rng && esl_random(rng) < cellprob)
-	      if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
-
-	  while (p7_trace_IsD(tr->st[z])) {
-	    k = tr->k[z]; 
-	    if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
-	    z--;
-	  }
-
-	  k = tr->k[z];
-	  if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
-	  
-	  for (k = k-1; k >= 1; k--)
-	    if (rng && esl_random(rng) < cellprob)
-	      if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
-	}
-      else
-	{
-	  if (rng && esl_random(rng) < rowprob)
-	    for (k = sm->M; k >= 1; k--)
-	      if (rng && esl_random(rng) < cellprob)
-		if ((status = p7_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status; /* append to k[i] list, increment n[i] count, reallocating as needed; doesn't deal w/ segments (nrow,nseg,i[]) */
-	}
-
-      if ((status = p7_sparsemask_FinishRow(sm)) != eslOK) return status;
-    }
-  if ( (status = p7_sparsemask_Finish(sm)) != eslOK) return status;
-
-  return eslOK;
+  switch(sm->simd){
+    case SSE:
+      return p7_sparsemask_SetFromTrace_sse(sm, rng, tr);
+      break;
+    case AVX:
+      return p7_sparsemask_SetFromTrace_avx(sm, rng, tr);
+      break;
+    case AVX512:
+      return p7_sparsemask_SetFromTrace_avx512(sm, rng, tr);
+      break;
+    case NEON:
+      return p7_sparsemask_SetFromTrace_neon(sm, rng, tr);
+      break;
+    case NEON64:
+      return p7_sparsemask_SetFromTrace_neon64(sm, rng, tr);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemask_SetFromTrace");  
+  }
 }
 /*-------- end, P7_SPARSEMASK debugging tools -------------------*/
 
@@ -740,11 +922,57 @@ p7_sparsemx_Create(P7_SPARSEMASK *sm)
   sx->xmx  = NULL;
   sx->sm   = sm;
   sx->type = p7S_UNSET;
+  if(sm!= NULL){
+    switch(sm->simd){
+      case SSE:
+#ifdef HAVE_SSE2
+         /* We must avoid zero-sized mallocs. If there are no rows or cells, alloc the default sizes */
+        sx->dalloc = ( (sm && sm->ncells)         ? sm->ncells       : default_ncell);
+        sx->xalloc = ( (sm && (sm->nrow + sm->S)) ? sm->nrow + sm->S : default_nx);
+#endif
+#ifndef HAVE_SSE2
+       esl_fatal("Attempted to call p7_sparsemx_Create with SSE SIMD and no SSE SIMD support compiled in\n");
+#endif               
+        break;
+      case AVX:
+#ifdef HAVE_AVX2 
+      /* We must avoid zero-sized mallocs. If there are no rows or cells, alloc the default sizes */
+        sx->dalloc = ( (sm && sm->ncells_AVX)         ? sm->ncells_AVX       : default_ncell);
+        sx->xalloc = ( (sm && (sm->nrow_AVX + sm->S_AVX)) ? sm->nrow_AVX + sm->S_AVX : default_nx);
+ #endif
+ #ifndef HAVE_AVX2
+       esl_fatal("Attempted to call p7_sparsemx_Create with AVX SIMD and no AVX SIMD support compiled in\n");
+#endif          
+        break;  
 
-  /* We must avoid zero-sized mallocs. If there are no rows or cells, alloc the default sizes */
-  sx->dalloc = ( (sm && sm->ncells)         ? sm->ncells       : default_ncell);
-  sx->xalloc = ( (sm && (sm->nrow + sm->S)) ? sm->nrow + sm->S : default_nx);
-
+      case AVX512:
+#ifdef HAVE_AVX512      
+      /* We must avoid zero-sized mallocs. If there are no rows or cells, alloc the default sizes */
+        sx->dalloc = ( (sm && sm->ncells_AVX_512)         ? sm->ncells_AVX_512       : default_ncell);
+        sx->xalloc = ( (sm && (sm->nrow_AVX_512 + sm->S_AVX_512)) ? sm->nrow_AVX_512 + sm->S_AVX_512 : default_nx);
+#endif
+ #ifndef HAVE_AVX512
+       esl_fatal("Attempted to call p7_sparsemx_Create with AVX-512 SIMD and no AVX-512 SIMD support compiled in\n");
+#endif        
+      break;
+      case NEON: case NEON64:
+#ifdef HAVE_NEON
+         /* We must avoid zero-sized mallocs. If there are no rows or cells, alloc the default sizes */
+        sx->dalloc = ( (sm && sm->ncells)         ? sm->ncells       : default_ncell);
+        sx->xalloc = ( (sm && (sm->nrow + sm->S)) ? sm->nrow + sm->S : default_nx);
+#endif
+#ifndef HAVE_NEON
+       esl_fatal("Attempted to call p7_sparsemx_Create with NEON SIMD and no NEON SIMD support compiled in\n");
+#endif      
+        break;
+      default:
+        p7_Fail("Unrecognized SIMD type passed to p7_sparsemx_Create");  
+    }
+  }
+  else{
+    sx->dalloc = default_ncell;
+    sx->xalloc = default_nx;
+  }
   ESL_ALLOC(sx->dp,  sizeof(float) * p7S_NSCELLS * sx->dalloc);
   ESL_ALLOC(sx->xmx, sizeof(float) * p7S_NXCELLS * sx->xalloc);
   return sx;
@@ -1690,7 +1918,6 @@ p7_sparsemx_PlotDomainInference(FILE *ofp, const P7_SPARSEMX *sxd, int ia, int i
 /* also a debugging tool, but in its own section because it's
  * fiddly and complicated
  */
-
 static int
 validate_dimensions(const P7_SPARSEMX *sx, char *errbuf)
 {
@@ -1718,7 +1945,6 @@ validate_dimensions(const P7_SPARSEMX *sx, char *errbuf)
   if (sm->S+2    > sm->salloc)  ESL_FAIL(eslFAIL, errbuf, "seg[] segment allocation too small");
   return eslOK;
 }
-
 
 static int
 validate_no_nan(const P7_SPARSEMX *sx, char *errbuf)
@@ -1955,22 +2181,25 @@ validate_decoding(const P7_SPARSEMX *sx, char *errbuf)
 int
 p7_sparsemx_Validate(const P7_SPARSEMX *sx, char *errbuf)
 {
-  int status;
-
-  if (errbuf) errbuf[0] = '\0';
-
-  if ( (status = validate_dimensions(sx, errbuf)) != eslOK) return status;
-  if ( (status = validate_no_nan    (sx, errbuf)) != eslOK) return status;
-
-  switch (sx->type) {
-  case p7S_UNSET:      ESL_FAIL(eslFAIL, errbuf, "validating an unset sparse DP matrix? probably not what you meant");
-  case p7S_FORWARD:    if ( (status = validate_fwdvit  (sx, errbuf)) != eslOK) return status; break;
-  case p7S_BACKWARD:   if ( (status = validate_backward(sx, errbuf)) != eslOK) return status; break;
-  case p7S_DECODING:   if ( (status = validate_decoding(sx, errbuf)) != eslOK) return status; break;
-  case p7S_VITERBI:    if ( (status = validate_fwdvit  (sx, errbuf)) != eslOK) return status; break;
-  default:             ESL_FAIL(eslFAIL, errbuf, "no such sparse DP matrix type %d", sx->type);
-  }
-  return eslOK;
+switch(sx->sm->simd){
+    case SSE:
+      return p7_sparsemx_Validate_sse(sx, errbuf);
+      break;
+    case AVX:
+      return p7_sparsemx_Validate_avx(sx, errbuf);
+      break;
+    case AVX512:
+      return p7_sparsemx_Validate_avx(sx, errbuf); // FIXME!!!!
+       break;
+    case NEON: 
+      return p7_sparsemx_Validate_neon(sx, errbuf); // FIXME!!!!
+      break;
+    case NEON64: 
+      return p7_sparsemx_Validate_neon64(sx, errbuf); // FIXME!!!!
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_sparsemx_Validate");  
+  } 
 }
 /*----------------- end, P7_SPARSEMX validation -----------------*/
 

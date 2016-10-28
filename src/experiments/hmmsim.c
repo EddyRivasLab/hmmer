@@ -30,6 +30,7 @@
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
+#include "hardware/hardware.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default   env  range  toggles                   reqs    incomp  help                                  docgroup*/
@@ -635,8 +636,9 @@ recalibrate_model(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm)
 
   gm = p7_profile_Create(hmm->M, cfg->abc);
   p7_profile_Config(gm, hmm, cfg->bg);      /* dual-mode multihit; L=0 (no length model needed right now) */
-
-  om = p7_oprofile_Create(gm->M, cfg->abc);
+   P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+  om = p7_oprofile_Create(gm->M, cfg->abc, hw->simd);
   p7_oprofile_Convert(gm, om);	/* om is now *local* multihit */
 
   p7_Lambda(hmm, cfg->bg, &lambda);
@@ -682,7 +684,8 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   float           sc;
   float           nullsc;
   int             status;
-
+   P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   /* Optionally set a custom background, determined by model composition;
    * an experimental hack. 
    */
@@ -723,10 +726,10 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
    */
   if (esl_opt_GetBoolean(go, "--vector"))
     {
-      om = p7_oprofile_Create(gm->M, cfg->abc);
+      om = p7_oprofile_Create(gm->M, cfg->abc, om->simd);
       p7_oprofile_Convert(gm, om);
-      cx = p7_checkptmx_Create(gm->M, L, ESL_MBYTES(32));
-      fx = p7_filtermx_Create(gm->M);
+      cx = p7_checkptmx_Create(gm->M, L, ESL_MBYTES(32), om->simd);
+      fx = p7_filtermx_Create(gm->M, om->simd);
     }
   
   /* Remaining allocation */

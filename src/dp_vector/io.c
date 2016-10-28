@@ -37,9 +37,6 @@
 #include <pthread.h>
 #endif
 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
-
 #include "easel.h"
 #include "esl_alphabet.h"
 
@@ -93,92 +90,25 @@ static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file, SSE: "h3ps
 int
 p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
 {
-  int Q4   = P7_NVF(om->M);
-  int Q8   = P7_NVW(om->M);
-  int Q16  = P7_NVB(om->M);
-  int Q16x = P7_NVB(om->M) + p7O_EXTRA_SB;
-  int n    = strlen(om->name);
-  int x;
-
-  /* <ffp> is the part of the oprofile that MSVFilter() needs */
-  if (fwrite((char *) &(v3f_fmagic),    sizeof(uint32_t), 1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &(om->M),         sizeof(int),      1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &(om->abc->type), sizeof(int),      1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &n,               sizeof(int),      1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) om->name,         sizeof(char),     n+1,         ffp) != n+1)         ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &(om->max_length),sizeof(int),      1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &(om->tbm_b),     sizeof(uint8_t),  1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");  
-  if (fwrite((char *) &(om->tec_b),     sizeof(uint8_t),  1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");  
-  if (fwrite((char *) &(om->tjb_b),     sizeof(uint8_t),  1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");  
-  if (fwrite((char *) &(om->scale_b),   sizeof(float),    1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");  
-  if (fwrite((char *) &(om->base_b),    sizeof(uint8_t),  1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");  
-  if (fwrite((char *) &(om->bias_b),    sizeof(uint8_t),  1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");  
-
-  for (x = 0; x < om->abc->Kp; x++)
-    if (fwrite( (char *) om->sbv[x],    sizeof(__m128i),  Q16x,        ffp) != Q16x)        ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  
-  for (x = 0; x < om->abc->Kp; x++)
-    if (fwrite( (char *) om->rbv[x],    sizeof(__m128i),  Q16,         ffp) != Q16)         ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  
-  if (fwrite((char *) om->evparam,      sizeof(float),    p7_NEVPARAM, ffp) != p7_NEVPARAM) ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) om->offs,         sizeof(off_t),    p7_NOFFSETS, ffp) != p7_NOFFSETS) ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) om->compo,        sizeof(float),    p7_MAXABET,  ffp) != p7_MAXABET)  ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &(v3f_fmagic),    sizeof(uint32_t), 1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed"); /* sentinel */
-
-  /* <pfp> gets the rest of the oprofile */
-  if (fwrite((char *) &(v3f_pmagic),    sizeof(uint32_t), 1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &(om->M),         sizeof(int),      1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &(om->abc->type), sizeof(int),      1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &n,               sizeof(int),      1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) om->name,         sizeof(char),     n+1,         pfp) != n+1)         ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-
-  if (om->acc == NULL) {
-    n = 0;
-    if (fwrite((char *) &n,             sizeof(int),      1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  } else {
-    n = strlen(om->acc);
-    if (fwrite((char *) &n,             sizeof(int),      1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-    if (fwrite((char *) om->acc,        sizeof(char),     n+1,         pfp) != n+1)         ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+switch(om->simd){
+    case SSE:
+      return p7_oprofile_Write_sse(ffp, pfp, om);
+      break;
+    case AVX:
+      return p7_oprofile_Write_avx(ffp, pfp, om);
+      break;
+    case AVX512:
+      return p7_oprofile_Write_avx512(ffp, pfp, om);
+      break;
+    case NEON:
+      return p7_oprofile_Write_neon(ffp, pfp, om);
+      break;
+    case NEON64:
+      return p7_oprofile_Write_neon64(ffp, pfp, om);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Write");  
   }
-
-  if (om->desc == NULL) {
-    n = 0;
-    if (fwrite((char *) &n,             sizeof(int),      1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  } else {
-    n = strlen(om->desc);
-    if (fwrite((char *) &n,             sizeof(int),      1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-    if (fwrite((char *) om->desc,       sizeof(char),     n+1,         pfp) != n+1)         ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  }
-  
-  if (fwrite((char *) om->rf,           sizeof(char),     om->M+2,     pfp) != om->M+2)     ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) om->mm,           sizeof(char),     om->M+2,     pfp) != om->M+2)     ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) om->cs,           sizeof(char),     om->M+2,     pfp) != om->M+2)     ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) om->consensus,    sizeof(char),     om->M+2,     pfp) != om->M+2)     ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-
-  /* ViterbiFilter part */
-  if (fwrite((char *) om->twv,             sizeof(__m128i),  8*Q8,        pfp) != 8*Q8)        ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  for (x = 0; x < om->abc->Kp; x++)
-    if (fwrite( (char *) om->rwv[x],       sizeof(__m128i),  Q8,          pfp) != Q8)          ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  for (x = 0; x < p7O_NXSTATES; x++)
-    if (fwrite( (char *) om->xw[x],        sizeof(int16_t),  p7O_NXTRANS, pfp) != p7O_NXTRANS) ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &(om->scale_w),      sizeof(float),    1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");  
-  if (fwrite((char *) &(om->base_w),       sizeof(int16_t),  1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");  
-  if (fwrite((char *) &(om->ddbound_w),    sizeof(int16_t),  1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &(om->ncj_roundoff), sizeof(float),    1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-
-  /* Forward/Backward part */
-  if (fwrite((char *) om->tfv,          sizeof(__m128),   8*Q4,        pfp) != 8*Q4)        ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  for (x = 0; x < om->abc->Kp; x++)
-    if (fwrite( (char *) om->rfv[x],    sizeof(__m128),   Q4,          pfp) != Q4)          ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  for (x = 0; x < p7O_NXSTATES; x++)
-    if (fwrite( (char *) om->xf[x],     sizeof(float),    p7O_NXTRANS, pfp) != p7O_NXTRANS) ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-
-  if (fwrite((char *)   om->cutoff,     sizeof(float),    p7_NCUTOFFS, pfp) != p7_NCUTOFFS) ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &(om->nj),        sizeof(float),    1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &(om->mode),      sizeof(int),      1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &(om->L)   ,      sizeof(int),      1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
-  if (fwrite((char *) &(v3f_pmagic),    sizeof(uint32_t), 1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed"); /* sentinel */
-  return eslOK;
 }
 /*---------------- end, writing oprofile ------------------------*/
 
@@ -217,6 +147,7 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
  *                              <NULL> if unwanted.
  *            ret_om  - RETURN: newly allocated <om> with MSV filter
  *                      data filled in.
+ *            simd - SIMD ISA that the <om> should be configured for
  *            
  * Returns:   <eslOK> on success. <*ret_om> is allocated here;
  *            caller free's with <p7_oprofile_Destroy()>.
@@ -235,90 +166,27 @@ p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
  * Throws:    <eslEMEM> on allocation error.
  */
 int
-p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om)
+p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc,  P7_OPROFILE **ret_om, SIMD_TYPE simd)
 {
-  P7_OPROFILE  *om = NULL;
-  ESL_ALPHABET *abc = NULL;
-  uint32_t      magic;
-  off_t         roff;
-  int           M, Q16, Q16x;
-  int           x,n;
-  int           alphatype;
-  int           status;
-
-  hfp->errbuf[0] = '\0';
-  if (hfp->ffp == NULL) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no MSV profile file; hmmpress probably wasn't run");
-  if (feof(hfp->ffp))   { status = eslEOF; goto ERROR; }	/* normal EOF: no more profiles */
-  
-  /* keep track of the starting offset of the MSV model */
-  roff = ftello(hfp->ffp);
-
-  if (! fread( (char *) &magic,     sizeof(uint32_t), 1, hfp->ffp)) { status = eslEOF; goto ERROR; }
-  if (magic == v3a_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/a); please hmmpress your HMM file again");
-  if (magic == v3b_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/b); please hmmpress your HMM file again");
-  if (magic == v3c_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/c); please hmmpress your HMM file again");
-  if (magic == v3d_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/d); please hmmpress your HMM file again");
-  if (magic == v3e_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/e); please hmmpress your HMM file again");
-  if (magic != v3f_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
-
-  if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
-  if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
-  Q16  = P7_NVB(M);
-  Q16x = P7_NVB(M) + p7O_EXTRA_SB;
-
-  /* Set or verify alphabet. */
-  if (byp_abc == NULL || *byp_abc == NULL)	{	/* alphabet unknown: whether wanted or unwanted, make a new one */
-    if ((abc = esl_alphabet_Create(alphatype)) == NULL)  ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: alphabet");
-  } else {			/* alphabet already known: verify it against what we see in the HMM */
-    abc = *byp_abc;
-    if (abc->type != alphatype) 
-      ESL_XFAIL(eslEINCOMPAT, hfp->errbuf, "Alphabet type mismatch: was %s, but current profile says %s", 
-		esl_abc_DecodeType(abc->type), esl_abc_DecodeType(alphatype));
+  switch(simd){
+    case SSE:
+      return p7_oprofile_ReadMSV_sse(hfp, byp_abc, ret_om);
+      break;
+    case AVX:
+      return p7_oprofile_ReadMSV_avx(hfp, byp_abc, ret_om);
+      break;
+    case AVX512:
+      return p7_oprofile_ReadMSV_avx512(hfp, byp_abc, ret_om);
+      break;
+    case NEON: 
+      return p7_oprofile_ReadMSV_neon(hfp, byp_abc, ret_om);
+      break;
+    case NEON64:
+      return p7_oprofile_ReadMSV_neon64(hfp, byp_abc, ret_om);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_ReadMSV");  
   }
-  /* Now we know the sizes of things, so we can allocate. */
-  if ((om = p7_oprofile_Create(M, abc)) == NULL)         ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: oprofile");
-  om->M = M;
-  om->roff = roff;
-
-  if (! fread((char *) &n,               sizeof(int),     1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name length");
-  ESL_ALLOC(om->name, sizeof(char) * (n+1));
-  if (! fread((char *) om->name,         sizeof(char),    n+1,         hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name");
-
-  if (! fread((char *) &(om->max_length),sizeof(int),     1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read max_length");
-  if (! fread((char *) &(om->tbm_b),     sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read tbm");
-  if (! fread((char *) &(om->tec_b),     sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read tec");
-  if (! fread((char *) &(om->tjb_b),     sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read tjb");
-  if (! fread((char *) &(om->scale_b),   sizeof(float),   1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read scale");
-  if (! fread((char *) &(om->base_b),    sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read base");
-  if (! fread((char *) &(om->bias_b),    sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read bias");
-  for (x = 0; x < abc->Kp; x++)
-    if (! fread((char *) om->sbv[x],     sizeof(__m128i), Q16x,        hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ssv scores at %d [residue %c]", x, abc->sym[x]); 
-  for (x = 0; x < abc->Kp; x++)
-    if (! fread((char *) om->rbv[x],     sizeof(__m128i), Q16,         hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read msv scores at %d [residue %c]", x, abc->sym[x]); 
-  if (! fread((char *) om->evparam,      sizeof(float),   p7_NEVPARAM, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read stat params");
-  if (! fread((char *) om->offs,         sizeof(off_t),   p7_NOFFSETS, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read hmmpfam offsets");
-  if (! fread((char *) om->compo,        sizeof(float),   p7_MAXABET,  hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model composition");
-
-  /* record ends with magic sentinel, for detecting binary file corruption */
-  if (! fread( (char *) &magic,     sizeof(uint32_t), 1, hfp->ffp))  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no sentinel magic: .h3f file corrupted?");
-  if (magic != v3f_fmagic)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad sentinel magic; .h3f file corrupted?");
-
-  /* keep track of the ending offset of the MSV model */
-  om->eoff = ftello(hfp->ffp) - 1;;
-
-  /* MSV models are always multilocal. ReadRest() might override this later; that's ok. */
-  om->mode = p7_LOCAL;
-  om->nj   = 1.0f;
-
-  if (byp_abc != NULL) *byp_abc = abc;  /* pass alphabet (whether new or not) back to caller, if caller wanted it */
-  *ret_om = om;
-  return eslOK;
-
- ERROR:
-  if (abc != NULL && (byp_abc == NULL || *byp_abc == NULL)) esl_alphabet_Destroy(abc); /* destroy alphabet if we created it here */
-  if (om != NULL) p7_oprofile_Destroy(om);
-  *ret_om = NULL;
-  return status;
 }
 
 
@@ -360,82 +228,29 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
  * Throws:    <eslEMEM> on allocation error.
  */
 int
-p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om)
+p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om, SIMD_TYPE simd)
 {
-  P7_OPROFILE  *om = NULL;
-  ESL_ALPHABET *abc = NULL;
-  uint32_t      magic;
-  off_t         roff;
-  int           M, Q16, Q16x;
-  int           n;
-  int           alphatype;
-  int           status;
-
-  hfp->errbuf[0] = '\0';
-  if (hfp->ffp == NULL) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no MSV profile file; hmmpress probably wasn't run");
-  if (feof(hfp->ffp))   { status = eslEOF; goto ERROR; }	/* normal EOF: no more profiles */
-  
-  /* keep track of the starting offset of the MSV model */
-  roff = ftello(hfp->ffp);
-
-  if (! fread( (char *) &magic,     sizeof(uint32_t), 1, hfp->ffp)) { status = eslEOF; goto ERROR; }
-  if (magic == v3a_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/a); please hmmpress your HMM file again");
-  if (magic == v3b_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/b); please hmmpress your HMM file again");
-  if (magic == v3c_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/c); please hmmpress your HMM file again");
-  if (magic == v3d_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/d); please hmmpress your HMM file again");
-  if (magic == v3e_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/e); please hmmpress your HMM file again");
-  if (magic != v3f_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
-
-  if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
-  if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
-  Q16  = P7_NVB(M);
-  Q16x = P7_NVB(M) + p7O_EXTRA_SB;
-
-  /* Set or verify alphabet. */
-  if (byp_abc == NULL || *byp_abc == NULL)	{	/* alphabet unknown: whether wanted or unwanted, make a new one */
-    if ((abc = esl_alphabet_Create(alphatype)) == NULL)  ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: alphabet");
-  } else {			/* alphabet already known: verify it against what we see in the HMM */
-    abc = *byp_abc;
-    if (abc->type != alphatype) 
-      ESL_XFAIL(eslEINCOMPAT, hfp->errbuf, "Alphabet type mismatch: was %s, but current profile says %s", 
-		esl_abc_DecodeType(abc->type), esl_abc_DecodeType(alphatype));
+  switch(simd){
+    case SSE:
+      return p7_oprofile_ReadInfoMSV_sse(hfp, byp_abc, ret_om);
+      break;
+    case AVX:
+      return p7_oprofile_ReadInfoMSV_avx(hfp, byp_abc, ret_om);
+      break;
+    case AVX512:
+      return p7_oprofile_ReadInfoMSV_avx512(hfp, byp_abc, ret_om);
+      break;
+    case NEON:
+      return p7_oprofile_ReadInfoMSV_neon(hfp, byp_abc, ret_om);
+      break;
+    case NEON64:
+      return p7_oprofile_ReadInfoMSV_neon64(hfp, byp_abc, ret_om);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_ReadInfoMSV");  
   }
-  /* Now we know the sizes of things, so we can allocate. */
-  if ((om = p7_oprofile_Create(M, abc)) == NULL)         ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: oprofile");
-  om->M = M;
-  om->roff = roff;
-
-  /* calculate the remaining length of the msv model */
-  om->name = NULL;
-  if (!fread((char *) &n, sizeof(int), 1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name length");
-  roff += (sizeof(int) * 5);                      /* magic, model size, alphabet type, max length, name length */
-  roff += (sizeof(char) * (n + 1));               /* name string and terminator '\0'                           */
-  roff += (sizeof(float) + sizeof(uint8_t) * 5);  /* transition  costs, bias, scale and base                   */
-  roff += (sizeof(__m128i) * abc->Kp * Q16x);     /* ssv scores                                                */
-  roff += (sizeof(__m128i) * abc->Kp * Q16);      /* msv scores                                                */
-  roff += (sizeof(float) * p7_NEVPARAM);          /* stat params                                               */
-  roff += (sizeof(off_t) * p7_NOFFSETS);          /* hmmscan offsets                                           */
-  roff += (sizeof(float) * p7_MAXABET);           /* model composition                                         */
-  roff += sizeof(uint32_t);			  /* sentinel magic                                            */
-
-  /* keep track of the ending offset of the MSV model */
-  p7_oprofile_Position(hfp, roff);
-  om->eoff = ftello(hfp->ffp) - 1;
-
-  /* MSV models are always multilocal. ReadRest() might override this later; that's ok. */
-  om->mode = p7_LOCAL;
-  om->nj   = 1.0f;
-
-  if (byp_abc != NULL) *byp_abc = abc;  /* pass alphabet (whether new or not) back to caller, if caller wanted it */
-  *ret_om = om;
-  return eslOK;
-
- ERROR:
-  if (abc != NULL && (byp_abc == NULL || *byp_abc == NULL)) esl_alphabet_Destroy(abc); /* destroy alphabet if we created it here */
-  if (om != NULL) p7_oprofile_Destroy(om);
-  *ret_om = NULL;
-  return status;
 }
+
 
 
 /* Function:  p7_oprofile_ReadBlockMSV()
@@ -452,7 +267,7 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
  *            Otherwise return the status of the p7_oprofile_ReadMSV function.
  */
 int
-p7_oprofile_ReadBlockMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *hmmBlock)
+p7_oprofile_ReadBlockMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *hmmBlock, SIMD_TYPE simd)
 {
   int     i;
   int     size = 0;
@@ -461,7 +276,7 @@ p7_oprofile_ReadBlockMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *h
   hmmBlock->count = 0;
   for (i = 0; i < hmmBlock->listSize; ++i)
     {
-      status = p7_oprofile_ReadMSV(hfp, byp_abc, &hmmBlock->list[i]);
+      status = p7_oprofile_ReadMSV(hfp, byp_abc, &hmmBlock->list[i], simd);
       if (status != eslOK) break;
       size += hmmBlock->list[i]->M;
       ++hmmBlock->count;
@@ -505,112 +320,25 @@ p7_oprofile_ReadBlockMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *h
 int
 p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
 {
-  uint32_t      magic;
-  int           M, Q4, Q8;
-  int           x,n;
-  char         *name = NULL;
-  int           alphatype;
-  int           status;
-
-#ifdef HMMER_THREADS
-  /* lock the mutex to prevent other threads from reading from the optimized
-   * profile at the same time.
-   */
-  if (hfp->syncRead)
-    {
-      if (pthread_mutex_lock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex lock failed");
-    }
-#endif
-
-  hfp->errbuf[0] = '\0';
-  if (hfp->pfp == NULL) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no MSV profile file; hmmpress probably wasn't run");
- 
-  /* Position the <hfp->pfp> using offset stored in <om> */
-  if (fseeko(hfp->pfp, om->offs[p7_POFFSET], SEEK_SET) != 0)                       ESL_EXCEPTION(eslESYS, "fseeko() failed");
-   
-  if (! fread( (char *) &magic,          sizeof(uint32_t), 1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read magic");
-  if (magic == v3a_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/a); please hmmpress your HMM file again");
-  if (magic == v3b_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/b); please hmmpress your HMM file again");
-  if (magic == v3c_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/c); please hmmpress your HMM file again");
-  if (magic == v3d_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/d); please hmmpress your HMM file again");
-  if (magic == v3e_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "binary auxfiles are in an outdated HMMER format (3/e); please hmmpress your HMM file again");
-  if (magic != v3f_pmagic) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database file?");
-
-  if (! fread( (char *) &M,              sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
-  if (! fread( (char *) &alphatype,      sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
-  if (! fread( (char *) &n,              sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name length");  
-  if (M         != om->M)                                                          ESL_XFAIL(eslEFORMAT, hfp->errbuf, "p/f model length mismatch");
-  if (alphatype != om->abc->type)                                                  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "p/f alphabet type mismatch");
-
-  ESL_ALLOC(name, sizeof(char) * (n+1));
-  if (! fread( (char *) name,            sizeof(char),     n+1,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name");  
-  if (strcmp(name, om->name) != 0)                                                 ESL_XFAIL(eslEFORMAT, hfp->errbuf, "p/f name mismatch");  
-  
-  if (! fread((char *) &n,               sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read accession length");
-  if (n > 0) {
-    ESL_ALLOC(om->acc, sizeof(char) * (n+1));
-    if (! fread( (char *) om->acc,       sizeof(char),     n+1,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read accession");      
+   switch(om->simd){
+    case SSE:
+      return p7_oprofile_ReadRest_sse(hfp, om);
+      break;
+    case AVX:
+      return p7_oprofile_ReadRest_avx(hfp, om);
+      break;
+    case AVX512:
+      return p7_oprofile_ReadRest_avx512(hfp, om);
+      break;
+    case NEON:
+      return p7_oprofile_ReadRest_neon(hfp, om);
+      break;
+    case NEON64:
+      return p7_oprofile_ReadRest_neon64(hfp, om);
+      break;
+    default:
+      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_ReadRest");  
   }
-  if (! fread((char *) &n,               sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read description length");
-  if (n > 0) {
-    ESL_ALLOC(om->desc, sizeof(char) * (n+1));
-    if (! fread( (char *) om->desc,      sizeof(char),     n+1,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read description");      
-  }
-
-  if (! fread((char *) om->rf,           sizeof(char),     M+2,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read rf annotation");
-  if (! fread((char *) om->mm,           sizeof(char),     M+2,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read mm annotation");
-  if (! fread((char *) om->cs,           sizeof(char),     M+2,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read cs annotation");
-  if (! fread((char *) om->consensus,    sizeof(char),     M+2,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read consensus annotation");
-
-  Q4  = P7_NVF(om->M);
-  Q8  = P7_NVW(om->M);
-
-  if (! fread((char *) om->twv,             sizeof(__m128i),  8*Q8,        hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <tu>, vitfilter transitions");
-  for (x = 0; x < om->abc->Kp; x++)
-    if (! fread( (char *) om->rwv[x],       sizeof(__m128i),  Q8,          hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <ru>[%d], vitfilter emissions for sym %c", x, om->abc->sym[x]);
-  for (x = 0; x < p7O_NXSTATES; x++)
-    if (! fread( (char *) om->xw[x],        sizeof(int16_t),  p7O_NXTRANS, hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <xu>[%d], vitfilter special transitions", x);
-  if (! fread((char *) &(om->scale_w),      sizeof(float),    1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read scale_w");
-  if (! fread((char *) &(om->base_w),       sizeof(int16_t),  1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read base_w");
-  if (! fread((char *) &(om->ddbound_w),    sizeof(int16_t),  1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ddbound_w");
-  if (! fread((char *) &(om->ncj_roundoff), sizeof(float),    1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ddbound_w");
-
-  if (! fread((char *) om->tfv,          sizeof(__m128),   8*Q4,        hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <tf> transitions");
-  for (x = 0; x < om->abc->Kp; x++)
-    if (! fread( (char *) om->rfv[x],    sizeof(__m128),   Q4,          hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <rf>[%d] emissions for sym %c", x, om->abc->sym[x]);
-  for (x = 0; x < p7O_NXSTATES; x++)
-    if (! fread( (char *) om->xf[x],     sizeof(float),    p7O_NXTRANS, hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <xf>[%d] special transitions", x);
-
-  if (! fread((char *)   om->cutoff,     sizeof(float),    p7_NCUTOFFS, hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read Pfam score cutoffs");
-  if (! fread((char *) &(om->nj),        sizeof(float),    1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read nj");
-  if (! fread((char *) &(om->mode),      sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read mode");
-  if (! fread((char *) &(om->L)   ,      sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read L");
-
-  /* record ends with magic sentinel, for detecting binary file corruption */
-  if (! fread( (char *) &magic,     sizeof(uint32_t), 1, hfp->pfp))  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no sentinel magic: .h3p file corrupted?");
-  if (magic != v3f_pmagic)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad sentinel magic; .h3p file corrupted?");
-
-#ifdef HMMER_THREADS
-  if (hfp->syncRead)
-    {
-      if (pthread_mutex_unlock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex unlock failed");
-    }
-#endif
-
-  free(name);
-  return eslOK;
-
- ERROR:
-
-#ifdef HMMER_THREADS
-  if (hfp->syncRead)
-    {
-      if (pthread_mutex_unlock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex unlock failed");
-    }
-#endif
-
-  if (name != NULL) free(name);
-  return status;
 }
 /*----------- end, reading optimized profiles -------------------*/
 
@@ -855,7 +583,9 @@ utest_ReadWrite(P7_HMM *hmm, P7_OPROFILE *om)
 
   /* 2. read the optimized profile back in */
   if ( p7_hmmfile_OpenE(tmpfile, NULL, &hfp, NULL)  != eslOK) esl_fatal(msg);
-  if ( p7_oprofile_ReadMSV(hfp, &abc, &om2)         != eslOK) esl_fatal(msg);
+  P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+  if ( p7_oprofile_ReadMSV(hfp, &abc, &om2, hw->simd)         != eslOK) esl_fatal(msg);
   if ( p7_oprofile_ReadRest(hfp, om2)               != eslOK) esl_fatal(msg);
 
   /* 3. it should be identical to the original  */

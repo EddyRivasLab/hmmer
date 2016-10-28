@@ -16,6 +16,22 @@ LIBOBJS =  p7_engine.o          \
 	   sparse_trace.o       \
 	   sparse_viterbi.o
 
+SSELIBOBJS =  \
+	p7_sparsemx_sse.o\
+
+AVXLIBOBJS = \
+	p7_sparsemx_avx.o\
+
+AVX512LIBOBJS = \
+	p7_sparsemx_avx512.o\
+
+NEONLIBOBJS = \
+	p7_sparsemx_neon.o\
+
+NEON64LIBOBJS = \
+	p7_sparsemx_neon64.o\
+ 
+	
 LIBHDRS =
 
 OBJS =

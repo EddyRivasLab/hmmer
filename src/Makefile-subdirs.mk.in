@@ -12,7 +12,12 @@ includedir   = @includedir@
 
 CC           = @CC@
 CFLAGS       = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
-SIMDFLAGS    = @SIMD_CFLAGS@
+
+SSEFLAGS    =  @SSE_CFLAGS@
+AVXFLAGS = @AVX_CFLAGS@
+AVX512FLAGS = @AVX512_CFLAGS@
+NEONFLAGS = @NEON_CFLAGS@
+NEON64FLAGS = @NEON64_CFLAGS@
 CPPFLAGS     = @CPPFLAGS@
 LDFLAGS      = @LDFLAGS@
 DEFS         = @DEFS@
@@ -66,8 +71,8 @@ tests: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${UTESTS}
 
 # In some subdirs, ${LIBOBJS} is empty. We can't give an empty arg string to 'ar'.
 # Hence the ! -z shell test on ${LIBOBJS} below.
-libhmmer-${MODULE}.stamp: ${LIBOBJS}
-	${QUIET}+if [ ! -z "${LIBOBJS}" ]; then \
+libhmmer-${MODULE}.stamp: ${LIBOBJS} ${SSELIBOBJS} ${AVXLIBOBJS} ${AVX512LIBOBJS} ${NEONLIBOBJS} ${NEON64LIBOBJS}
+	${QUIET}+if [ ! -z "${LIBOBJS} ${SSELIBOBJS} ${AVXLIBOBJS} ${AVX512LIBOBJS} ${NEONLIBOBJS} ${NEON64LIBOBJS}" ]; then \
 	   echo '    ' AR $@ ;\
 	   ${AR} -r ${top_builddir}/src/libhmmer.a $? > /dev/null 2>&1 ;\
 	   ${RANLIB} ${top_builddir}/src/libhmmer.a ;\
@@ -91,8 +96,27 @@ lib${MODULE}.a: ${OBJS}
 	${QUIET_AR}${AR} -r lib${MODULE}.a $? > /dev/null 2>&1 
 	@${RANLIB} lib${MODULE}.a 
 
-${LIBOBJS}:  ${HDRS}
+#include NEONFLAGS and NEON64FLAGS everywhere because nothing will build on
+#ARM without them.  Count on them being empty when building for non-ARM
+${LIBOBJS}:  SIMDFLAGS:= $(SSEFLAGS) $(NEONFLAGS) $(NEON64FLAGS)
+${LIBOBJS}: ${HDRS}
+${SSELIBOBJS}:  SIMDFLAGS:= $(SSEFLAGS) $(NEONFLAGS) $(NEON64FLAGS)
+${LIBOBJS}: ${HDRS}
+${AVXLIBOBJS}:  SIMDFLAGS:= $(AVXFLAGS) $(NEONFLAGS) $(NEON64FLAGS)
+${LIBOBJS}: ${HDRS}
+${AVX512LIBOBJS}:  SIMDFLAGS:= $(AVX512FLAGS) $(NEONFLAGS) $(NEON64FLAGS)
+${LIBOBJS}: ${HDRS}
+${NEONLIBOBJS}:  SIMDFLAGS:= $(NEONFLAGS)
+${LIBOBJS}: ${HDRS}
+${NEON64LIBOBJS}:  SIMDFLAGS:= $(NEON64FLAGS)
+${LIBOBJS}: ${HDRS}
 ${OBJS}:     ${HDRS}
+${OBJS}:  SIMDFLAGS:= $(SSEFLAGS) $(NEONFLAGS) $(NEON64FLAGS)
+${PROGS}:  SIMDFLAGS:= $(SSEFLAGS) $(NEONFLAGS) $(NEON64FLAGS)
+${UTESTS}:  SIMDFLAGS:= $(SSEFLAGS) $(NEONFLAGS) $(NEON64FLAGS)
+${STATS}:  SIMDFLAGS:= $(SSEFLAGS) $(NEONFLAGS) $(NEON64FLAGS)
+${BENCHMARKS}:  SIMDFLAGS:= $(SSEFLAGS) $(NEONFLAGS) $(NEON64FLAGS)
+${EXAMPLES}:  SIMDFLAGS:= $(SSEFLAGS) $(NEONFLAGS) $(NEON64FLAGS)
 
 .c.o:  
 	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -o $@ -c $<
@@ -140,7 +164,7 @@ ${BENCHMARKS}: libhmmer-${MODULE}.stamp  ${MYLIBDEPS}
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
 	if test ${V} ;\
-	   then echo "${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
+	   then echo "${CC} ${CFLAGS} $(NEONFLAGS) ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
 	   else echo '    ' GEN $@ ;\
 	fi ;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
@@ -155,7 +179,7 @@ ${EXAMPLES}: libhmmer-${MODULE}.stamp ${MYLIBDEPS}
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
 	if test ${V} ;\
-	   then echo "${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
+	   then echo "${CC} ${CFLAGS} $(NEONFLAGS) ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
 	   else echo '    ' GEN $@ ;\
 	fi ;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}

@@ -366,12 +366,13 @@ utest_createScoreData(ESL_GETOPTS *go, ESL_RANDOMNESS *r )
   uint8_t scale = 3.0 / eslCONST_LOG2;                    /* scores in units of third-bits */
   int x;
   float max = 0.0;
-
+P7_HARDWARE *hw;
+if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   if ( (abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal(msg);
 
   if (  p7_modelsample(r, 100, abc, &hmm)       != eslOK) esl_fatal(msg);
   if (  (gm = p7_profile_Create (hmm->M, abc))  == NULL ) esl_fatal(msg);
-  if (  (om = p7_oprofile_Create(hmm->M, abc))  == NULL ) esl_fatal(msg);
+  if (  (om = p7_oprofile_Create(hmm->M, abc, hw->simd))  == NULL ) esl_fatal(msg);
 
   for (x = 0; x < gm->abc->K; x++)  max = ESL_MAX(max, esl_vec_FMax(gm->rsc[x], (gm->M+1)*2));
   //based on unbiased_byteify

@@ -122,7 +122,7 @@
 #undef HAVE_ENDIAN_H
 #undef HAVE_INTTYPES_H
 #undef HAVE_STDINT_H
-#undef HAVE_UNISTD_H
+#undef HAVE_UNISTD_HS
 #undef HAVE_SYS_TYPES_H
 #undef HAVE_NETINET_IN_H	/* On FreeBSD, you need netinet/in.h for struct sockaddr_in */
 
@@ -132,10 +132,21 @@
 #undef HAVE_XMMINTRIN_H		/* SSE  */
 #undef HAVE_EMMINTRIN_H		/* SSE2 */
 #undef HAVE_PMMINTRIN_H		/* SSE3 */
+#undef HAVE_ARMNEON_H		/* NEON */
+
+/* What architecture are we running on? */
+#undef intel 
+#undef arm
+#undef arm64
+#undef p7_CPU_ARCH
 
 /* Optional parallel implementations
  */
 #undef HAVE_SSE2
+#undef HAVE_AVX2
+#undef HAVE_AVX512
+#undef HAVE_NEON
+#undef HAVE_NEON64
 #undef HAVE_MPI
 #undef HMMER_PVM
 #undef HMMER_THREADS

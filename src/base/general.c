@@ -7,21 +7,22 @@
  */
 
 #include "p7_config.h"
-
+#include <inttypes.h>
 #include <math.h>
 #include <float.h>
-
+#include "misc/logsum.h"
 #ifdef HAVE_MPI
 #include <mpi.h>
 #endif
-
+#include "dp_vector/simdvec.h"
+#include "base/general.h"
 #include "easel.h"
 
 #include "esl_getopts.h"
 
-#include "base/general.h"
-#include "misc/logsum.h"
-#include "dp_vector/simdvec.h"
+
+
+
 
 /*****************************************************************
  * 1. Miscellaneous functions for H3

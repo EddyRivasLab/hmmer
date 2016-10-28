@@ -15,7 +15,7 @@
 #include "esl_sqio.h"
 
 #include "hmmer.h"
-
+#include "hardware/hardware.h"
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",                          0 },
@@ -57,7 +57,9 @@ main(int argc, char **argv)
   P7_TRACE_METRICS *tmetrics = p7_trace_metrics_Create();
   P7_REFMX         *rmx      = p7_refmx_Create(100,100);
   //  P7_FILTERMX      *ox       = NULL;
-  P7_SPARSEMASK    *sm       = p7_sparsemask_Create(100, 100);
+   P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+  P7_SPARSEMASK    *sm       = p7_sparsemask_Create(100, 100, hw->simd);
   P7_SPARSEMX      *sxv      = p7_sparsemx_Create(NULL);
   int               idx;
   char              errbuf[eslERRBUFSIZE];
@@ -76,7 +78,7 @@ main(int argc, char **argv)
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", ahmmfile, errbuf);
   else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                ahmmfile, errbuf);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, ahmmfile, errbuf);  
-
+  
   while ( (status = p7_hmmfile_Read(ghfp, &abc, &ghmm)) == eslOK) /* <abc> gets set on first read  */
     {
       /* read the counterpart HMM from <ahfp> */
@@ -95,7 +97,8 @@ main(int argc, char **argv)
 
       ggm = p7_profile_Create(ghmm->M,  abc);
       agm = p7_profile_Create(ahmm->M,  abc);
-      aom = p7_oprofile_Create(ahmm->M, abc);
+
+      aom = p7_oprofile_Create(ahmm->M, abc, hw->simd);
 
       p7_profile_ConfigCustom(ggm, ghmm, bg, esl_opt_GetInteger(go, "--gL"), esl_opt_GetReal(go, "--gnj"), esl_opt_GetReal(go, "--gpglocal"));
       p7_profile_ConfigCustom(agm, ahmm, bg, 100,                            esl_opt_GetReal(go, "--anj"), esl_opt_GetReal(go, "--apglocal"));

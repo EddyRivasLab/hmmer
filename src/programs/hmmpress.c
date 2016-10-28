@@ -11,7 +11,7 @@
 #include "esl_getopts.h"
 
 #include "hmmer.h"
-
+#include "hardware/hardware.h"
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",          0 },
@@ -75,7 +75,9 @@ main(int argc, char **argv)
 
       gm = p7_profile_Create(hmm->M, abc);
       p7_profile_Config(gm, hmm, bg);
-      om = p7_oprofile_Create(gm->M, abc);
+      P7_HARDWARE *hw;
+    if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+      om = p7_oprofile_Create(gm->M, abc, hw->simd);
       p7_oprofile_Convert(gm, om);
       
       if ((om->offs[p7_MOFFSET] = ftello(mfp)) == -1) p7_Fail("Failed to ftello() current disk position of HMM db file");

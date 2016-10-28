@@ -81,7 +81,14 @@ typedef struct p7_alidisplay_s {
 
 
 /* 1. The P7_ALIDISPLAY object */
+// Need SSE, AVX, AVX512 versions of Create because it inlines a vector operation
 extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
+extern P7_ALIDISPLAY *p7_alidisplay_Create_sse(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
+extern P7_ALIDISPLAY *p7_alidisplay_Create_avx(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
+extern P7_ALIDISPLAY *p7_alidisplay_Create_avx512(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
+extern P7_ALIDISPLAY *p7_alidisplay_Create_neon(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
+
+
 extern P7_ALIDISPLAY *p7_alidisplay_Clone(const P7_ALIDISPLAY *ad);
 extern size_t         p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad);
 extern int            p7_alidisplay_Serialize(P7_ALIDISPLAY *ad);

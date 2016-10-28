@@ -15,7 +15,7 @@
 
 #include "hmmer.h"
 #include "sandbox/reference_mpl_fwd.h"
-
+#include "hardware/hardware.h"
 static ESL_OPTIONS options[] = {
   /* name           type           default  env  range  toggles reqs incomp  help                                       docgroup*/
   { "-h",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",                   0 },
@@ -37,6 +37,8 @@ static int count_nin_nout_below(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float th
 int 
 main(int argc, char **argv)
 {
+  P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   ESL_GETOPTS    *go         = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
   char           *hmmfile    = esl_opt_GetArg(go, 1);
   P7_HMMFILE     *hfp        = NULL;
@@ -50,9 +52,9 @@ main(int argc, char **argv)
   P7_PROFILE     *gm         = NULL;           /* profile in H4's standard dual-mode local/glocal */
   P7_PROFILE     *lgm        = NULL;           /* profile in local-only mode, emulating H3        */
   P7_OPROFILE    *om         = NULL;
-  P7_FILTERMX    *fx         = p7_filtermx_Create(100);
-  P7_CHECKPTMX   *cx         = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT));
-  P7_SPARSEMASK  *sm         = p7_sparsemask_Create(100, 100);
+  
+  P7_CHECKPTMX   *cx         = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT), hw->simd);
+  P7_SPARSEMASK  *sm         = p7_sparsemask_Create(100, 100, hw->simd);
   P7_REFMX       *vit        = p7_refmx_Create(100, 100);
   P7_REFMX       *fwd        = p7_refmx_Create(100, 100);
   P7_REFMX       *bck        = p7_refmx_Create(100, 100);
@@ -83,8 +85,11 @@ main(int argc, char **argv)
   int             d;
   float           nullsc;
   int             status;
-
+ 
   /* Read in one HMM. Set alphabet to whatever the HMM's alphabet is. */
+
+  P7_FILTERMX    *fx         = p7_filtermx_Create(100, hw->simd);
+
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
@@ -97,8 +102,8 @@ main(int argc, char **argv)
 
   lgm = p7_profile_Create(hmm->M, abc);
   p7_profile_ConfigLocal(lgm, hmm, bg, 100);
-
-  om = p7_oprofile_Create(hmm->M, abc);
+  
+  om = p7_oprofile_Create(hmm->M, abc, hw->simd);
   p7_oprofile_Convert(gm, om);
   
   /* Open sequence file */

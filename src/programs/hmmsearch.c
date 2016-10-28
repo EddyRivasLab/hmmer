@@ -32,7 +32,7 @@
 #endif /*HMMER_THREADS*/
 
 #include "hmmer.h"
-
+#include "hardware/hardware.h"
 typedef struct {
 #ifdef HMMER_THREADS
   ESL_WORK_QUEUE   *queue;
@@ -418,7 +418,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	}
 #endif
     }
-
+   P7_HARDWARE *hw;
+      if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+      
   /* Outer loop: over each query HMM in <hmmfile>. */
   while (hstatus == eslOK) 
     {
@@ -442,7 +444,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       /* Convert to an optimized model */
       gm = p7_profile_Create (hmm->M, abc);
-      om = p7_oprofile_Create(hmm->M, abc);
+      om = p7_oprofile_Create(hmm->M, abc, hw->simd);
       p7_profile_Config(gm, hmm, info->bg); 
       p7_oprofile_Convert(gm, om);          
 
@@ -452,7 +454,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  info[i].th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
 	  info[i].gm  = p7_profile_Clone(gm);
 	  info[i].om  = p7_oprofile_Shadow(om);
-	  info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
+	  info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS, hw->simd); /* L_hint = 100 is just a dummy for now */
 	  p7_pipeline_NewModel(info[i].pli, info[i].om, info[i].bg);
 
 #ifdef HMMER_THREADS

@@ -16,7 +16,7 @@ includedir   = @includedir@
 
 CC           = @CC@
 CFLAGS       = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
-SIMDFLAGS    = @SIMD_CFLAGS@
+#SIMDFLAGS    = @SIMD_CFLAGS@
 CPPFLAGS     = @CPPFLAGS@
 LDFLAGS      = @LDFLAGS@
 DEFS         = @DEFS@

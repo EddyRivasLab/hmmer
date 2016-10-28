@@ -31,7 +31,7 @@
 #include "build/p7_builder.h"
 #include "build/modelstats.h"
 #include "build/evalues.h"
-
+#include "hardware/hardware.h"
 /*****************************************************************
  * 1. p7_Calibrate():  model calibration wrapper 
  *****************************************************************/ 
@@ -111,7 +111,9 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
   }
 
   if (om == NULL) {
-    if ((om     = p7_oprofile_Create(hmm->M, hmm->abc)) == NULL) ESL_XFAIL(eslEMEM, errbuf, "failed to create optimized profile");
+    P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+    if ((om     = p7_oprofile_Create(hmm->M, hmm->abc, hw->simd)) == NULL) ESL_XFAIL(eslEMEM, errbuf, "failed to create optimized profile");
     if ((status = p7_oprofile_Convert(gm, om))         != eslOK) ESL_XFAIL(status,  errbuf, "failed to convert to optimized profile");
   }
 
@@ -252,7 +254,9 @@ p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda)
 int
 p7_MSVMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double *ret_mmu)
 {
-  P7_FILTERMX  *fx      = p7_filtermx_Create(om->M); /* DP matrix: 1 row version */
+   P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+  P7_FILTERMX  *fx      = p7_filtermx_Create(om->M, hw->simd); /* DP matrix: 1 row version */
   ESL_DSQ      *dsq     = NULL;
   double       *xv      = NULL;
   int           i;
@@ -327,7 +331,9 @@ p7_MSVMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lam
 int
 p7_ViterbiMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double *ret_vmu)
 {
-  P7_FILTERMX  *fx      = p7_filtermx_Create(om->M); /* DP matrix: 1 row version */
+   P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+  P7_FILTERMX  *fx      = p7_filtermx_Create(om->M, hw->simd); /* DP matrix: 1 row version */
   ESL_DSQ      *dsq     = NULL;
   double       *xv      = NULL;
   int           i;
@@ -438,7 +444,9 @@ p7_ViterbiMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double
 int
 p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_tau)
 {
-  P7_CHECKPTMX *ox      = p7_checkptmx_Create(om->M, L, ESL_MBYTES(32)); 
+   P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+  P7_CHECKPTMX *ox      = p7_checkptmx_Create(om->M, L, ESL_MBYTES(32), hw->simd); 
   ESL_DSQ      *dsq     = NULL;
   double       *xv      = NULL;
   float         fsc, nullsc;		                  
