@@ -30,7 +30,12 @@
  
 #endif
 
-#if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
+#if p7_CPU_ARCH == arm 
+#include <arm_neon.h>
+#include "esl_neon.h"
+#endif
+
+#if p7_CPU_ARCH == arm64 
 #include <arm_neon.h>
 #include "esl_neon.h"
 #endif
@@ -70,12 +75,14 @@ __m256
 #else
 __m128
 #endif
-#endif /* intel */
-#if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
+#endif // intel 
+#if p7_CPU_ARCH == arm 
+esl_neon_128f_t
+#endif
+#if p7_CPU_ARCH == arm64 
 esl_neon_128f_t
 #endif
 debug_print;
-
 
 typedef struct p7_checkptmx_s {
   int M;	/* current actual query model dimension (consensus positions)         */

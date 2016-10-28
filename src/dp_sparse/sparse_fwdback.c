@@ -1091,6 +1091,16 @@ utest_internal_glocal_exit(void)
       Q=sm->Q;    
       break;
   #endif
+  #ifdef HAVE_NEON
+    case NEON:
+      Q=sm->Q;
+    break;
+  #endif
+  #ifdef HAVE_NEON64
+    case NEON64:
+      Q=sm->Q;
+      break;
+ #endif   
   #ifdef HAVE_AVX2    
     case AVX:
       Q = sm->Q_AVX;

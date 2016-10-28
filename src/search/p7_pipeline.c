@@ -2050,7 +2050,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
   P7_HMM_WINDOWLIST vit_windowlist;
 
   P7_PIPELINE_LONGTARGET_OBJS *pli_tmp = NULL;
-  if(om->simd != SSE && om->simd != NEON){
+  if(om->simd != SSE && om->simd != NEON && om->simd != NEON64){
     esl_fatal("p7_Pipeline_LongTarget only supports SSE and NEON SIMD types at the moment");
   }
 
