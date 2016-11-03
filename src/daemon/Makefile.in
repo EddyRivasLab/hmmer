@@ -9,14 +9,15 @@ OBJS =  cachedb.o\
 	hmmdutils.o\
 	hmmdwrkr.o\
 	hmmpgmd2msa.o\
-	p7_hmmcache.o
+	p7_hmmcache.o\
+	shard.o
 
 HDRS =  
 
 PROGS = hmmc2\
 	hmmpgmd
 
-UTESTS = 
+UTESTS = shard_utest
 
 STATS  = 
 

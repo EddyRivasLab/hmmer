@@ -129,6 +129,17 @@ extern void       p7_engine_Destroy(P7_ENGINE *eng);
 extern int p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg);
 extern int p7_engine_Main        (P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE  *gm);
 
+//! Calls the engine to compare a sequence to an HMM
+/*! Calls the engine to compare a sequence to an HMM
+ * @param eng the engine data structure
+ * @param dsq the sequence to be compared to the HMM
+ * @param L the length of the sequence
+ * @param gm the base model of the HMM
+ * @param om the optimized HMM model
+ * @param bg the background model to use
+ * @return nothing
+ */
+extern void p7_engine_Compare_Sequnce_HMM(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg);
 #endif /*p7ENGINE_INCLUDED*/
 /*****************************************************************
  * @LICENSE@
