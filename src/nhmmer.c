@@ -690,8 +690,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
     else if (status != eslOK)        p7_Fail("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
     else {
+
       /*success; move forward with other necessary steps*/
       if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")) {
+    	if (dbfp->format != eslSQFILE_FASTA) {
+    		p7_Fail("--restrictdb_stkey and --restrictdb_n flags only allowed for fasta formatted files\n");
+    	}
         if (esl_opt_IsUsed(go, "--ssifile"))
           esl_sqfile_OpenSSI(dbfp, esl_opt_GetString(go, "--ssifile"));
         else
@@ -746,9 +750,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 
 
-  if (dbfp->format != eslSQFILE_FASTA && esl_opt_IsUsed(go, "--restrictdb_stkey") ){
-    p7_Fail("--restrictdb_stkey flag only allowed for fasta formatted files\n");
-  }
 
 
   /* Open the results output files */
