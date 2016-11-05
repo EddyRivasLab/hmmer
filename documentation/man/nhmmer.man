@@ -43,9 +43,6 @@ or the target
 may be '-' (a dash character), in which case
 the query file or target database input will be read from a <stdin> pipe instead of from a
 file. Only one input source can come through <stdin>, not both.
-If the query is sequence-based and passed via <stdin>, the
-.B --qformat
-flag must be used.
 If the
 .I <queryfile> 
 contains more than one query, then
@@ -54,7 +51,7 @@ cannot come from <stdin>, because we can't rewind the
 streaming target database to search it with another profile. 
 
 .PP
-If the query is sequence-based, and not from <stdin>,
+If the query is sequence-based,
 a new file containing the HMM(s) built from the input(s) in 
 .I <queryfile>
 may optionally be produced, with the filename set using the 
@@ -151,6 +148,60 @@ characters per line. The default is 120.
 
 
 
+.SH OPTIONS CONTROLLING SINGLE SEQUENCE SCORING
+
+By default, if a query is a single sequence from a file in 
+.IR fasta
+format,
+.B nhmmer 
+uses a search model constructed from that sequence and a standard
+20x20 substitution matrix for residue probabilities, along with two
+additional parameters for position-independent gap open and gap extend
+probabilities. These options allow the default single-sequence scoring
+parameters to be changed, and for single-sequence scoring options to
+be applied to a single sequence coming from an aligned format.
+
+.TP
+.BI --singlemx 
+If a single sequence query comes from a multiple sequence alignment file, 
+such as in 
+.IR stockholm
+format, the search model is by default constructed as is typically done 
+for multiple sequence alignments. This option forces 
+.B nhmmer 
+to use the single-sequence method with substitution score matrix.
+
+.TP
+.BI --mxfile " <mxfile>"
+Obtain residue alignment probabilities from the substitution matrix
+in file
+.IR <mxfile> .
+The default score matrix is DNA1 (this matrix is internal to
+HMMER and does not have to be available as a file). 
+The format of a substitution matrix
+.I <mxfile>
+is the standard format accepted by BLAST, FASTA, and other sequence 
+analysis software.
+
+
+.TP
+.BI --popen " <x>"
+Set the gap open probability for a single sequence query model to 
+.IR <x> .
+The default is 0.02. 
+.I <x> 
+must be >= 0 and < 0.5.
+
+.TP
+.BI --pextend " <x>"
+Set the gap extend probability for a single sequence query model to 
+.IR <x> .
+The default is 0.4. 
+.I <x> 
+must be >= 0 and < 1.0.
+
+
+
 .SH OPTIONS CONTROLLING REPORTING THRESHOLDS
 
 Reporting thresholds control which hits are reported in output files
@@ -242,7 +293,7 @@ highest-scoring known false positive.
 
 .TP
 .B --cut_tc
-Use the NC (trusted cutoff) bit score threshold in the model to set
+Use the TC (trusted cutoff) bit score threshold in the model to set
 per-hit reporting and inclusion
 thresholds. TC thresholds are more stringent than GA, and are
 generally considered to be the score of the lowest-scoring known 
@@ -429,27 +480,30 @@ reduced sensitivity. (minor tuning option)
 
 .SH OTHER OPTIONS
 
-.TP
-.BI --tformat " <s>"
-Assert that the target sequence database file is in format 
-.IR <s> . 
-Accepted formats include 
-.IR fasta , 
-.IR embl , 
-.IR genbank ,
-.IR ddbj , 
-.IR uniprot ,
-.IR stockholm , 
-.IR pfam , 
-.IR a2m , 
-.IR afa , 
-and 
-.IR hmmerfm .
-The default is to autodetect the format of the file. The format
-.I hmmerfm
-indicates that the database file is a binary file produced using
-.I makehmmerdb 
-(this format is not currently autodetected). 
+
+.TP 
+.BI --qhmm " <s>"
+Declare that the input
+.I <queryfile>
+contains one or more profile HMMs, as built by 
+.BR hmmbuild . 
+
+.TP 
+.BI --qfasta " <s>"
+Declare that the input
+.I <queryfile>
+contains one or more unaligned sequences, stored in 
+.IR fasta 
+format. 
+ 
+.TP 
+.BI --qmsa " <s>"
+Declare that the input
+.I <queryfile>
+contains one or more sequence alignments. The format of
+the file may be specified with the  
+.BR --qformat 
+flag.
 
 
 .TP 
@@ -464,6 +518,32 @@ Currently the accepted multiple alignment sequence file formats
 include Stockholm, Aligned FASTA, Clustal, NCBI PSI-BLAST, PHYLIP, 
 Selex, and UCSC SAM A2M. Default is to autodetect the format of
 the file.
+
+.TP
+.BI --tformat " <s>"
+Assert that the target sequence database file is in format 
+.IR <s> . 
+Accepted formats include 
+.IR fasta , 
+.IR embl , 
+.IR genbank ,
+.IR ncbi ,
+.IR ddbj , 
+.IR uniprot ,
+.IR stockholm , 
+.IR pfam , 
+.IR a2m , 
+.IR afa , 
+and 
+.IR fmindex .
+The default is to autodetect the format of the file. The format
+.I ncbi
+indicates that the database file is a binary file produced using
+.I makeblastdb 
+. The format
+.I fmindex
+indicates that the database file is a binary file produced using
+.I makehmmerdb . 
 
 
 .TP
@@ -530,12 +610,12 @@ or when the query is sequence-based.
 
 
 .TP 
-.B --toponly 
+.B --watson 
 Only search the top strand. By default both the query sequence
 and its reverse-complement are searched.
 
 .TP 
-.B --bottomonly 
+.B --crick 
 Only search the bottom (reverse-complement) strand. By 
 default both the query sequence and its reverse-complement are searched.
 

@@ -508,7 +508,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         info[i].th  = p7_tophits_Create();
         info[i].om  = p7_oprofile_Clone(om);
         info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
-        p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
+        status = p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
+        if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
 
 #ifdef HMMER_THREADS
         if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);

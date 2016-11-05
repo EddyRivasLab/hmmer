@@ -591,7 +591,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  else
 	    {
 	      /* Throw away old model. Build new one. */
-	      status = p7_Builder(bld, msa, info[0].bg, ret_hmm, NULL, NULL, &om, NULL, NULL, NULL);
+	      status = p7_Builder(bld, msa, info[0].bg, ret_hmm, NULL, NULL, &om, NULL);
 	      if      (status == eslENORESULT) p7_Fail("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status == eslEFORMAT)   p7_Fail("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status != eslOK)        p7_Fail("Unexpected error constructing new model at iteration %d:",     iteration);
@@ -1113,7 +1113,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  else
 	    {
 	      /* Throw away old model. Build new one. */
-	      status = p7_Builder(bld, msa, bg, ret_hmm, NULL, NULL, &om, NULL, NULL, NULL);
+	      status = p7_Builder(bld, msa, bg, ret_hmm, NULL, NULL, &om, NULL);
 	      if      (status == eslENORESULT) mpi_failure("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status == eslEFORMAT)   mpi_failure("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status != eslOK)        mpi_failure("Unexpected error constructing new model at iteration %d:",     iteration);
