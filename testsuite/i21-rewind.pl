@@ -52,7 +52,7 @@ for $i (0..$#formats) {
    my ($first)  = ( $output =~ /Domain search space  \(domZ\):\s+(\d+)/g);
    my ($second) = ( $output =~ /Domain search space  \(domZ\):\s+(\d+)/g);
 
-   if ($first != $second) {
+   if ($first != 4 || $second != 4) {
       die "FAIL: hmmsearch results failed to build correctly\n";
    }
 }
@@ -75,7 +75,7 @@ for $i (0..$#formats) {
    my ($first)  = ( $output =~ /Domain search space  \(domZ\):\s+(\d+)/g);
    my ($second) = ( $output =~ /Domain search space  \(domZ\):\s+(\d+)/g);
 
-   if ($first != $second) {
+   if ($first != 4 || $second != 4) {
       die "FAIL: hmmsearch results failed to build correctly\n";
    }
 }
@@ -109,9 +109,7 @@ for $i (0..$#formats) {
    my ($first)  = ( $output =~ /Total number of hits:\s+(\d+)/g);
    my ($second) = ( $output =~ /Total number of hits:\s+(\d+)/g);
 
-print "$first / $second\n";
-
-   if ($first != $second) {
+   if ($first != 2 || $second != 2) {
       die "FAIL: hmmsearch results failed to build correctly\n";
    }
 }
