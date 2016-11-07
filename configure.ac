@@ -344,19 +344,6 @@ AC_ARG_ENABLE(AVX-512,[AS_HELP_STRING([--enable-AVX-512],[force use of the AVX-5
 AC_ARG_ENABLE(NEON,[AS_HELP_STRING([--enable-NEON],[force use of the NEON vector instructions])], [enable_neon=yes; user_set_simd=yes], enable_neon=check)
 
 
-#set this to no by default, which causes configure to auto-detect the SIMD ISAs the CPU supports      
-user_set_simd=no  
-# --enable-SSE       Force use of the SSE vector instructions
-AC_ARG_ENABLE(SSE,[AS_HELP_STRING([--enable-SSE],[force use of the SSE vector instructions])], [enable_sse=yes; user_set_simd=yes], enable_sse=check)
-
-# --enable-AVX2       Force use of the AVX2 (Haswell)  vector instructions
-AC_ARG_ENABLE(AVX2,[AS_HELP_STRING([--enable-AVX2],[force use of the AVX2 (Haswell) vector instructions])], [enable_avx2=yes; user_set_simd=yes], enable_avx2=check)
-
-# --enable-AVX-512       Force use of the AVX-512 vector instructions
-AC_ARG_ENABLE(AVX-512,[AS_HELP_STRING([--enable-AVX-512],[force use of the AVX-512 vector instructions])], [enable_avx512=yes; user_set_simd=yes], enable_avx512=check)
-
-
-
 ################################################################
 # 5. Checks for programs, including ${CC} and its ${CFLAGS}.
 #################################################################
