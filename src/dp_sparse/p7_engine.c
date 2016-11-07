@@ -5,6 +5,8 @@
 #include "dp_vector/vitfilter.h"          // Viterbi secondary acceleration filter
 #include "dp_vector/fwdfilter.h"          // Sparsification w/ checkpointed local Forward/Backward
 
+#include "search/modelconfig.h"
+
 /* Sparse DP, dual-mode glocal/local:    */
 #include "dp_sparse/sparse_fwdback.h"     // sparse Forward/Backward
 #include "dp_sparse/sparse_viterbi.h"     // sparse Viterbi
@@ -537,6 +539,31 @@ p7_engine_Main(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm)
 
   return eslOK;
 }
+
+/* Calls the engine to compare a sequence to an HMM.  Heavily cribbed from Seans 0226-px code*/
+void p7_engine_Compare_Sequence_HMM(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg){
+
+    int status;
+    // reset the models for the length of this sequence
+    p7_bg_SetLength(bg, L);           
+    p7_oprofile_ReconfigLength(om, L);
+    
+    // First, the overthruster (filters)
+    status = p7_engine_Overthruster(eng, dsq, L, om, bg);  
+    if (status == eslFAIL) { // filters say no match
+      p7_engine_Reuse(eng);
+      return;
+    }
+
+    // if we get here, run the full comparison
+    p7_profile_SetLength(gm, L);
+    status = p7_engine_Main(eng, dsq, L, gm); 
+
+    p7_engine_Reuse(eng);
+
+}
+
+
 
 /*****************************************************************
  * x. Example
