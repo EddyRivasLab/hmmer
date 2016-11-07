@@ -541,7 +541,7 @@ p7_engine_Main(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm)
 }
 
 /* Calls the engine to compare a sequence to an HMM.  Heavily cribbed from Seans 0226-px code*/
-void p7_engine_Compare_Sequnce_HMM(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg){
+void p7_engine_Compare_Sequence_HMM(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg){
 
     int status;
     // reset the models for the length of this sequence

@@ -75,6 +75,16 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
     */ 
 int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret_object);
 
+//! Searches the shard's directory for the object with the specified id or the next-lowest id object in the shard
+/*! Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns eslOK and a pointer to the 
+   start of the object in ret_object.  If not, returns eslENORESULT and a pointer to the object with the next-lowest id in ret_object.  If id
+   is less than the id of the first object in the shard, returns eslENORESULT and NULL in ret_object.
+	@param the_shard the shard to be searched
+	@param id the id of the object to be found
+	@param ret_object the pointer where the address of the start of the object will be returned
+    */ 
+int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_object);
+
 //! frees memory allocated to a shard
 /*!  Frees the memory allocated to a shard
  * @param the_shard pointer to the shard to be freed

@@ -97,7 +97,8 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
     	 			the_shard->directory[my_sequences].contents_offset = contents_offset;
     	 			the_shard->directory[my_sequences].descriptor_offset = descriptors_offset;
 
-    	 			while(contents_offset + (2*sizeof(int64_t)) + chu->L[i] > contents_buffer_size){
+    	 			while(contents_offset + (2*sizeof(int64_t)) + chu->L[i]  +2 > contents_buffer_size){
+    	 				// +2 for begin-of-sequence and end-of-sequence sentinels around dsq
     	 				// there isn't enough space in the buffer for this sequence, so re-allocate
     	 				ESL_REALLOC(the_shard->contents, (contents_buffer_size + trial_size));
     	 				contents_buffer_size += trial_size;
@@ -109,9 +110,10 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
     	 			contents_pointer += sizeof(int64_t);
     	 			*((int64_t *) contents_pointer) = chu->L[i];
     	 			contents_pointer += sizeof(int64_t);
-    	 			memcpy(contents_pointer, chu->dsq[i], chu->L[i]);
-    	 			contents_pointer += chu->L[i];
-    	 			contents_offset+= chu->L[i] + (2* sizeof(int64_t));
+    	 			memcpy(contents_pointer, chu->dsq[i], (chu->L[i] +2));
+    	 			// +2 for begin-of-sequence and end-of-sequence sentinels around dsq
+    	 			contents_pointer += chu->L[i]+2;
+    	 			contents_offset+= chu->L[i]+2 + (2* sizeof(int64_t));
 
     	 			// now, handle the metadata
 
@@ -179,6 +181,61 @@ void p7_shard_Destroy(P7_SHARD *the_shard){
 
 	// and the base shard object
 	free(the_shard);
+}
+
+/* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns eslOK and a pointer to the 
+   start of the object in ret_object.  If not, returns eslENORESULT and a pointer to the object with the next-lowest id in ret_object.  If id
+   is less than the id of the first object in the shard, returns eslENORESULT and NULL in ret_object */ 
+int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_object){
+	/* binary search on id */
+	uint64_t top, bottom, middle;
+
+	bottom = 0;
+	top = the_shard->num_objects-1;
+	middle = top/2;
+
+	if(id > the_shard->directory[bottom].id){ // the specified id is bigger than the id of any object in the shard
+		ret_object = NULL;
+		return eslENORESULT;
+	}
+
+	while((top > bottom) && (the_shard->directory[middle].id != id)){
+		if(the_shard->directory[middle].id < id){
+			// We're too low
+			bottom = middle+1;
+			middle = bottom + (top -bottom)/2;
+		}
+		else{
+			// We're too high
+			top = middle -1;
+			middle = bottom + (top-bottom)/2;
+		}
+
+	}
+	if(the_shard->directory[middle].id == id){
+		// we've found what we're looking for
+		*ret_object = the_shard->contents + the_shard->directory[middle].contents_offset;
+		return eslOK;
+	}
+
+	// if we get here, we didn't find a match
+	if(the_shard->directory[top].id < id){
+		*ret_object = the_shard->contents + the_shard->directory[top].contents_offset;
+		return eslENORESULT;
+	}
+	else{
+		// test code, take out when verified
+		if (top == 0){
+			p7_Fail("search error in p7_shard_Find_Contents_Nextlow");
+		}
+		if(the_shard->directory[top-1].id > id){
+			*ret_object = the_shard->contents + the_shard->directory[top].contents_offset;
+			return eslENORESULT;
+		}
+		else{
+			p7_Fail("search error in p7_shard_Find_Contents_Nextlow");
+		}
+	}
 }
 
 /* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns eslOK and a pointer to the 
@@ -388,12 +445,13 @@ int shard_compare_dsqdata(P7_SHARD *the_shard, char *basename, uint32_t num_shar
     	 				p7_Fail("Length mismatch at sequence %llu", sequence_count);
     	 			}
 
-    	 			if(memcmp(contents_pointer, chu->dsq[i], L)){
+    	 			if(memcmp(contents_pointer, chu->dsq[i], L+2)){
+    	 				// +2 for begin-of-sequence and end-of-sequence sentinels around dsq
     	 				//sequences don't match
     	 				p7_Fail("Sequence mismatch at sequence %llu", sequence_count);
     	 			}
 
-    	 			contents_pointer += L;
+    	 			contents_pointer += L+2;
 
     	 			// Now, the descriptors
     	 			if(strcmp(chu->name[i], descriptors_pointer)){

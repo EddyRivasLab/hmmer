@@ -139,7 +139,7 @@ extern int p7_engine_Main        (P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFIL
  * @param bg the background model to use
  * @return nothing
  */
-extern void p7_engine_Compare_Sequnce_HMM(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg);
+extern void p7_engine_Compare_Sequence_HMM(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg);
 #endif /*p7ENGINE_INCLUDED*/
 /*****************************************************************
  * @LICENSE@

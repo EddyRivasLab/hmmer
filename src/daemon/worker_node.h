@@ -6,6 +6,7 @@
 
 #include "easel.h" 
 #include "esl_dsqdata.h"
+#include "dp_sparse/p7_engine.h" 
 #include "search/modelconfig.h"
 #include "daemon/shard.h"
 
@@ -21,6 +22,14 @@ typedef struct p7_work_descriptor{
 	pthread_mutex_t lock;
 
 } P7_WORK_DESCRIPTOR;
+
+typedef struct p7_worker_thread_state{
+	P7_ENGINE  *engine; // our engine structure
+	P7_PROFILE *gm;  // our copy of unoptimized model of the HMM we're analyzing
+	P7_OPROFILE *om;  // our copy of optimized model of the HMM we're analyzing
+	P7_BG *bg; // our background model 
+
+} P7_WORKER_THREAD_STATE;
 
 typedef enum p7_search_type{IDLE, SEQUENCE_SEARCH, HMM_SEARCH} P7_SEARCH_TYPE;
 
@@ -44,8 +53,22 @@ typedef struct p7_daemon_workernode_state{
 	//! How many worker threads does this node have?
 	uint32_t num_threads;
 
+	// pthread_t objects set by pthread_create
+	pthread_t *thread_objs;
+
 	// fields above here are set at startup, before any threads start, so don't have to be volatile
+
+	// Thread-local state.  array[num_threads] of P7_WORKER_THREAD_STATE objects.  
+	// Master thread allocates the array.  Workers fill in their contents so that they get allocated on the
+	// proper node's RAM by first-touch policy.
+	// doesn't require synchronization or volatile because each thread only touches its own state object
+	P7_WORKER_THREAD_STATE *thread_state;
+
+
 	// fields below here are written once multithreaded execution begins, so do have to be volatile
+
+
+
 
 	// State used to control work stealing and synchronize
 
@@ -58,12 +81,24 @@ typedef struct p7_daemon_workernode_state{
 	//! Number of threads waiting for the go signal
 	volatile uint32_t num_waiting;
 
+	//! pthread conditional used to release worker threads to process a request. 
+	/*! wait_lock is the associated mutex.
+	* Sequence for a worker thread to wait for the go signal:
+	* 1) lock wait_lock
+	* 2) increment num_waiting
+	* 3) pthread_cond_wait on go
+	* 
+	* Sequence for master to release all threads:
+	* 1) wait for num_waiting = number of worker threads
+	* 2) lock wait_lock
+	* 3) set num_waiting to 0
+	* 4) pthread_cond_broadcast on go
+	* 5) unlock wait_lock.  Use wait_lock here to prevent any possible double-release or missed-release issues 
+	*/ 
+	pthread_cond_t go;
+	
 	//! Flag signaling that it's not worth stealing any more until the next block
 	volatile uint32_t no_steal;
-
-	//! flag used to tell the worker threads to begin work.  Placeholder for more-sophisticated system
-	// that will handle multiple blocks of work in a request and multiple requests.
-	volatile uint32_t go;
 
 	//! flag that tells all the worker threads to exit when they finish what they're currently doing
 	volatile uint32_t shutdown;
@@ -88,6 +123,9 @@ typedef struct p7_daemon_workernode_state{
 	//! Length of the sequence we're comparing against in a one-sequence many-HMM search.  Otherwise 0
 	volatile int64_t compare_L;
 
+	//! which database are we comparing to?
+	volatile uint32_t compare_database;
+
 } P7_DAEMON_WORKERNODE_STATE;
 
 //! Creates and initializes a P7_WORKERNODE_STATE object
@@ -102,15 +140,26 @@ typedef struct p7_daemon_workernode_state{
 */ 
 P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads);
 
+
+//! starts a workernode for the daemon.
+/*! Starts a workernode for the daemon.  Calling this function will perform all startup activities for a workernode, including:
+ * 1) creating and initializing the P7_DAEMON_WORKERNODE_STATE function
+ * 2) reading the appropriate shards from disk and installing them in the workernode
+ * 3) starting the appropriate number of worker threads
+ *
+ * @param num_databases the number of databases that should be loaded into the workernode
+ * @param database_names an array[num_databases] of strings that specify the names of the databases to be loaded
+ * @param num_shards how many shards are the databases divided into?
+ * @param my_shard which shard of each database should be loaded onto this workernode?
+ * @param num_threads how many worker threads should be started?  If = 0, defaults to the number of HW threads -2
+ * (-1 to leave a thread for the OS, -1 for the master thread that handles inter-node communication)
+ * @param workernode pointer used to return the created workernode object
+ * @return eslOK on success, eslFAIL otherwise
+*/
+int p7_daemon_workernode_Setup(uint32_t num_databases, char **database_names, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, P7_DAEMON_WORKERNODE_STATE **workernode);
+
 //! Frees memory used by a P7_WORKERNODE_STATE data structure, cleans up internal pthread locks, etc.
 void p7_daemon_workernode_Destroy(P7_DAEMON_WORKERNODE_STATE *workernode);
-
-//! Creates the worker threads for a workernode.
-/*! Creates the worker threads for a a worker node.  Leaves them spin-waiting on the go variable changing from 0 to 1.
- * TBD: change that to waiting on a pthread condition variable so that threads sleep when idle
- * @return eslOK on success, eslFAIL on failure
- */
- int p7_daemon_workernode_threads_Create(P7_DAEMON_WORKERNODE_STATE *workernode);
 
 //! adds the shard to the P7_DAEMON_WORKERNODE_STATE object in the specified database slot
 /*! the_shard must be a heap allocated object, and may not be freed outside of the shard
@@ -127,7 +176,15 @@ int p7_daemon_set_shard(P7_DAEMON_WORKERNODE_STATE *workernode, P7_SHARD *the_sh
 */
 int p7_daemon_initialize_workrange(P7_DAEMON_WORKERNODE_STATE *workernode, int32_t thread_id, uint64_t start, uint64_t end);
 
+/*! Creates the threads for the workernode */
+int p7_daemon_workernode_create_threads(P7_DAEMON_WORKERNODE_STATE *workernode);
 
+//! Releases all of the worker threads to begin work on a task
+/*! Spin-waits until all of the worker threads are waiting to be released, then asserts the condition variable to release them
+ * @param workernode the workernode state object
+ * @return eslOK on success.  Calls p7_Fail to exit the program on failure.
+ */
+int p7_daemon_workernode_release_threads(P7_DAEMON_WORKERNODE_STATE *workernode);
 
 /* argument data structure for worker threads */
 typedef struct p7_daemon_worker_argument{
@@ -141,6 +198,18 @@ typedef struct p7_daemon_worker_argument{
 
 //! Worker thread that processes searches
 void *p7_daemon_worker_thread(void *worker_argument);
+
+//! Configure the workernode to perform an one-HMM many-amino (hmmsearch-style) search 
+/* Configure the workernode to perform an one-HMM many-amino (hmmsearch-style) search 
+ * @param workernode workernode state object for the node
+ * @param database which database are we searching?
+ * @param start_object which object should we start searching at?  If 0, start at beginning of database
+ * @param end_object which object should we end the search at?  If 0, start at beginning of database. 
+ * @param compare_model the HMM to compare against
+ * @return eslOK on success, eslFAIL on failure
+*/
+int p7_daemon_workernode_setup_hmm_vs_amino(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, P7_PROFILE *compare_model);
+
 
 //! Grab a chunk of work from the worker's queue.
 /*! If there's any work left in the worker's queue, grabs a chunk.  

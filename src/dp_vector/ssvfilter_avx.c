@@ -679,7 +679,7 @@
   int w_AVX = width;                                \
   uint32_t col_AVX;                                     \
   dsq++;                                        \
-                                                \
+	                                        \
   reset()                                       \
   int num_iters_AVX; \
   if (L <= Q_AVX- q_AVX -w_AVX){ \
@@ -691,6 +691,7 @@
   i_AVX = 0; \
   while(num_iters_AVX >=4){ \
   	rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + i_AVX + q_AVX;            \
+  	 \
     step()    \
     i_AVX++; \
 	rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + i_AVX + q_AVX;            \
@@ -706,6 +707,7 @@
   } \
   while(num_iters_AVX >0){ \
   	  rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + i_AVX + q_AVX;            \
+	 \
       step()                                 \
       i_AVX++; \
       num_iters_AVX--; \
@@ -719,6 +721,7 @@ done1_AVX:                                          \
    	num_iters_AVX = Q_AVX - w_AVX; \
    	while (num_iters_AVX >= 4){  \
        rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;        \
+      \
        step() \
        i_AVX++; \
        rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;        \
@@ -734,6 +737,7 @@ done1_AVX:                                          \
    	}\
   	while(num_iters_AVX > 0){ \
   		 rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;        \
+  	 \
          step()    \
          i_AVX++; \
          num_iters_AVX--;      \
@@ -751,6 +755,7 @@ if((L - i2_AVX) < (Q_AVX-w_AVX)){                                         \
  i_AVX = 0; \
  while (num_iters_AVX >= 4){ \
      rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+ \
      step()                                     \
      i_AVX+= 1;  \
      rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
@@ -766,6 +771,7 @@ if((L - i2_AVX) < (Q_AVX-w_AVX)){                                         \
    }                                            \
    while(num_iters_AVX > 0) {  \
    	 rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+\
      step()                                     \
      i_AVX+= 1;  \
      num_iters_AVX--; \
