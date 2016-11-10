@@ -185,7 +185,7 @@ void p7_shard_Destroy(P7_SHARD *the_shard){
 
 /* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns eslOK and a pointer to the 
    start of the object in ret_object.  If not, returns eslENORESULT and a pointer to the object with the next-lowest id in ret_object.  If id
-   is less than the id of the first object in the shard, returns eslENORESULT and NULL in ret_object */ 
+   is less than the id of the first object in the shard, returns eslFAIL and NULL in ret_object */ 
 int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_object){
 	/* binary search on id */
 	uint64_t top, bottom, middle;
@@ -194,9 +194,9 @@ int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_
 	top = the_shard->num_objects-1;
 	middle = top/2;
 
-	if(id > the_shard->directory[bottom].id){ // the specified id is bigger than the id of any object in the shard
+	if(id > the_shard->directory[top].id){ // the specified id is bigger than the id of any object in the shard
 		ret_object = NULL;
-		return eslENORESULT;
+		return eslFAIL;
 	}
 
 	while((top > bottom) && (the_shard->directory[middle].id != id)){
@@ -219,17 +219,17 @@ int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_
 	}
 
 	// if we get here, we didn't find a match
-	if(the_shard->directory[top].id < id){
-		*ret_object = the_shard->contents + the_shard->directory[top].contents_offset;
+	if(the_shard->directory[middle].id < id){
+		*ret_object = the_shard->contents + the_shard->directory[middle].contents_offset;
 		return eslENORESULT;
 	}
 	else{
 		// test code, take out when verified
-		if (top == 0){
+		if (middle == 0){
 			p7_Fail("search error in p7_shard_Find_Contents_Nextlow");
 		}
-		if(the_shard->directory[top-1].id > id){
-			*ret_object = the_shard->contents + the_shard->directory[top].contents_offset;
+		if(the_shard->directory[middle-1].id < id){
+			*ret_object = the_shard->contents + the_shard->directory[middle-1].contents_offset;
 			return eslENORESULT;
 		}
 		else{
@@ -274,17 +274,17 @@ int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret
 	}
 
 	// if we get here, we didn't find a match
-	if(the_shard->directory[top].id > id){
-		*ret_object = the_shard->contents + the_shard->directory[top].contents_offset;
+	if(the_shard->directory[middle].id > id){
+		*ret_object = the_shard->contents + the_shard->directory[middle].contents_offset;
 		return eslENORESULT;
 	}
 	else{
 		// test code, take out when verified
-		if (top == the_shard->num_objects-1){
+		if (middle == the_shard->num_objects-1){
 			p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
 		}
-		if(the_shard->directory[top+1].id > id){
-			*ret_object = the_shard->contents + the_shard->directory[top].contents_offset;
+		if(the_shard->directory[middle+1].id > id){
+			*ret_object = the_shard->contents + the_shard->directory[middle+1].contents_offset;
 			return eslENORESULT;
 		}
 		else{
@@ -328,17 +328,17 @@ int p7_shard_Find_Descriptor_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **r
 	}
 
 	// if we get here, we didn't find a match
-	if(the_shard->directory[top].id > id){
-		*ret_object = the_shard->descriptors + the_shard->directory[top].descriptor_offset;
+	if(the_shard->directory[middle].id > id){
+		*ret_object = the_shard->descriptors + the_shard->directory[middle].descriptor_offset;
 		return eslENORESULT;
 	}
 	else{
 		// test code, take out when verified
-		if (top == the_shard->num_objects-1){
+		if (middle == the_shard->num_objects-1){
 			p7_Fail("search error in p7_shard_Find_Descriptor_Nexthigh");
 		}
-		if(the_shard->directory[top+1].id > id){
-			*ret_object = the_shard->descriptors + the_shard->directory[top].descriptor_offset;
+		if(the_shard->directory[middle+1].id > id){
+			*ret_object = the_shard->descriptors + the_shard->directory[middle+1].descriptor_offset;
 			return eslENORESULT;
 		}
 		else{
