@@ -15,7 +15,7 @@
 #include "base/p7_bg.h"
 #include "base/p7_envelopes.h"
 #include "base/p7_trace.h"
-
+#include "daemon/p7_hitlist.h" //  This probably wants to move somewhere else once we figure out how command-line search will work
 #include "dp_vector/p7_checkptmx.h"
 #include "dp_vector/p7_filtermx.h"
 #include "dp_vector/p7_oprofile.h"
@@ -113,6 +113,12 @@ typedef struct p7_engine_s {
   
   // Backward filter
   int (*bck)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh);
+
+  //! List of hits this engine has found 
+  P7_HITLIST *hitlist;
+
+  //! Pool of hit objects to draw from
+  P7_HITLIST_ENTRY *empty_hit_pool;
 
 } P7_ENGINE;
 

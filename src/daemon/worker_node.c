@@ -94,7 +94,6 @@ int p7_daemon_workernode_Setup(uint32_t num_databases, char **database_names, ui
 	// First, figure out how many threads to create
 	if(num_threads == 0){  // detect number of threads to use
 		esl_threads_CPUCount(&worker_threads);
-		printf("Auto-detected %d hardware threads\n", worker_threads);
 		worker_threads -= 2;  // Leave one spare thread for the worker node master, one for the OS
 	}
 	else{
