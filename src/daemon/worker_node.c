@@ -1,6 +1,7 @@
 //! functions to implement worker nodes of the daemon
 #include <pthread.h>
-
+#include <sys/time.h>
+#include <string.h>
 #include "easel.h"
 #include "esl_threads.h"
 #include "esl_dsqdata.h"
@@ -77,6 +78,9 @@ P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, 
 	workernode->compare_L = 0;
 
 	workernode->compare_database = 0;
+
+	// set up our hitlist
+	workernode->hitlist = p7_hitlist_Create();
 
 	return(workernode); // If we make it this far, we've succeeeded
 
@@ -428,6 +432,14 @@ void *p7_daemon_worker_thread(void *worker_argument){
 				}
 			}
 		
+		// See if we have any hits left that need to be merged into the global list
+		if(workernode->thread_state[my_id].engine->current_hit_chunk->start != NULL){
+		// There's at least one hit in the chunk, so add the chunk to the worker node's hit list and allocate a new one
+
+			p7_hitlist_add_Chunk(workernode->thread_state[my_id].engine->current_hit_chunk, workernode->hitlist);
+			workernode->thread_state[my_id].engine->current_hit_chunk = p7_hit_chunk_Create();
+		}
+
 		// If we get here, there's no work left in the current operation, so suspend until next time	
 		gettimeofday(&end_time, NULL);
   		double start_milliseconds = start_time.tv_usec + (1000000 * start_time.tv_sec);
@@ -508,7 +520,28 @@ void worker_thread_process_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_
 
 		uint64_t L = *((uint64_t *) the_sequence);
 		the_sequence += sizeof(uint64_t);
-		p7_engine_Compare_Sequence_HMM(workernode->thread_state[my_id].engine, (ESL_DSQ *) the_sequence, L, workernode->thread_state[my_id].gm, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg);
+	
+		if(p7_engine_Compare_Sequence_HMM(workernode->thread_state[my_id].engine, (ESL_DSQ *) the_sequence, L, workernode->thread_state[my_id].gm, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg)){
+			// we hit, so record the hit.  Stub, to be replaced with actual hit generation code
+			 P7_HITLIST_ENTRY *the_entry;
+   			 if(workernode->thread_state[my_id].engine->empty_hit_pool == NULL){ // we're out of empty hit entries, allocate some new ones
+      				workernode->thread_state[my_id].engine->empty_hit_pool = p7_hitlist_entry_pool_Create(100);
+    				}
+    			the_entry = workernode->thread_state[my_id].engine->empty_hit_pool;
+    			workernode->thread_state[my_id].engine->empty_hit_pool = workernode->thread_state[my_id].engine->empty_hit_pool->next; // grab the first entry off the free list now that we know there is one
+
+   			// Fake up a hit for comparison purposes.  Do not use for actual analysis
+   			P7_HIT *the_hit = the_entry->hit;
+   			the_hit->seqidx = seq_id;
+   			char *descriptors;
+
+   			// Get the descriptors for this sequence
+   			p7_shard_Find_Descriptor_Nexthigh(workernode->database_shards[workernode->compare_database], seq_id, &descriptors);
+   			the_hit->name = descriptors;
+   			the_hit->acc = descriptors + (strlen(the_hit->name) +1); //+1 for termination character
+			the_hit->desc = the_hit->acc + (strlen(the_hit->acc) +1); //+1 for termination character
+   			p7_add_entry_to_chunk(the_entry, workernode->thread_state[my_id].engine->current_hit_chunk);
+		}
 
 		the_sequence += L+2;  // advance to start of next sequence
 		// +2 for begin-of-sequence and end-of-sequence sentinels around dsq
@@ -522,10 +555,17 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
 	int victim_work = 0; // How much work does it have to do
 	int i;
 
+
+	// start by moving the hits found for the previous chunk onto the global hitlist.
+	if(workernode->thread_state[my_id].engine->current_hit_chunk->start != NULL){
+		// There's at least one hit in the chunk, so add the chunk to the worker node's hit list and allocate a new one
+		p7_hitlist_add_Chunk(workernode->thread_state[my_id].engine->current_hit_chunk, workernode->hitlist);
+		workernode->thread_state[my_id].engine->current_hit_chunk = p7_hit_chunk_Create();
+	}
+
 	if(workernode->no_steal){
 		return 0;  // check this and abort at start to avoid extra searches, locking, unlocking when many threads finish at same time
 	}
-
 
 	// Find the thread with the most remaining work
 	for(i = 0; i < workernode->num_threads; i++){
@@ -560,6 +600,7 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
 		}
 		return(worker_thread_steal(workernode, my_id));  
 	}
+
 	uint64_t stolen_work = (workernode->work[victim_id].end - workernode->work[victim_id].start)/2;
 	uint64_t new_victim_end = workernode->work[victim_id].start + stolen_work;
 //	printf("Initial new_victim_end = %lu\n", new_victim_end);

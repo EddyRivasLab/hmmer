@@ -19,6 +19,8 @@
 
 #include "base/p7_tophits.h"
 
+//#define HITLIST_SANITY_CHECK  // conditionally compiles code to check the hitlist every time it's modified.  
+// don't define for releases, will be slow
 
 #define HITLIST_POOL_SIZE 100 // default size of each engine's hitlist pool
 //! Entry used to form a doubly-linked list of hits
@@ -73,6 +75,10 @@ typedef struct p7_hitlist{
 	//! End of the list of chunks
 	P7_HIT_CHUNK *chunk_list_end;
 
+#ifdef HITLIST_SANITY_CHECK
+	uint64_t num_hits; // counter for number of hits, used to check consistency of the list
+#endif
+
 } P7_HITLIST;
 
 
@@ -115,18 +121,22 @@ int p7_add_entry_to_chunk(P7_HITLIST_ENTRY *the_entry, P7_HIT_CHUNK *the_chunk);
 
 //! returns a pointer to the list of hits in the chunk
 /* @param the_chunk the chunk that we want the hits from */
-inline P7_HITLIST_ENTRY *p7_get_hits_from_chunk(P7_HIT_CHUNK *the_chunk);
+static inline P7_HITLIST_ENTRY *p7_get_hits_from_chunk(P7_HIT_CHUNK *the_chunk){
+	return the_chunk->start;
+}
 
 
 //! returns the id of the first object in the chunk's list of hits
 /* @param the_chunk the hit chunk we want the start id of */
-inline uint64_t p7_get_hit_chunk_start_id(P7_HIT_CHUNK *the_chunk);
+static inline uint64_t p7_get_hit_chunk_start_id(P7_HIT_CHUNK *the_chunk){
+	return(the_chunk->start_id);
+}
 
 //! returns the id of the last object in the chunk's list of hits
 /* @param the_chunk the hit chunk we want the end id of */
-inline uint64_t p7_get_hit_chunk_end_id(P7_HIT_CHUNK *the_chunk);
-
-
+static inline uint64_t p7_get_hit_chunk_end_id(P7_HIT_CHUNK *the_chunk){
+	return(the_chunk->end_id);
+}
 
 
 
@@ -157,21 +167,7 @@ uint32_t p7_hitlist_GetMaxPositionLength(P7_HITLIST *th);
 /*! @param th the hitlist to be searched */
 uint32_t p7_hitlist_GetMaxAccessionLength(P7_HITLIST *th);
 
-/* Function:  p7_hitlist_TabularTargets()
- * Synopsis:  Output parsable table of per-sequence hits.
- *
- * Purpose:   Output a parseable table of reportable per-sequence hits
- *            in hitlist <th> in an easily parsed ASCII
- *            tabular form to stream <ofp>.
- *            
- *            Designed to be concatenated for multiple queries and
- *            multiple top hits list.
- *
- * Returns:   <eslOK> on success.
- * 
- * Throws:    <eslEWRITE> if a write to <ofp> fails; for example, if
- *            the disk fills up.
- */
-int
-p7_hitlist_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_HITLIST *th, double Z, int show_header);
+// dummy output printing function for testing
+void p7_print_hitlist(char *filename, P7_HITLIST *th);
+
 #endif // p7HITLIST_INCLUDED

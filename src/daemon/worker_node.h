@@ -126,6 +126,9 @@ typedef struct p7_daemon_workernode_state{
 	//! which database are we comparing to?
 	volatile uint32_t compare_database;
 
+	//! List of hits this worker node has found.  
+	P7_HITLIST *hitlist;
+
 } P7_DAEMON_WORKERNODE_STATE;
 
 //! Creates and initializes a P7_WORKERNODE_STATE object

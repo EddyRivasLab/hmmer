@@ -85,6 +85,10 @@ int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret
     */ 
 int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_object);
 
+/* Does a binary search on the shard's directory to find the descriptors of the  with the specified id.  If it finds it, returns eslOK and a pointer to the  start of the object in ret_object.  If not, returns eslENORESULT and a pointer to the object with the next-highest id in ret_object.  If id
+   is greater than the id of the last object in the shard, returns eslENORESULT and NULL in ret_object */ 
+int p7_shard_Find_Descriptor_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret_object);
+
 //! frees memory allocated to a shard
 /*!  Frees the memory allocated to a shard
  * @param the_shard pointer to the shard to be freed

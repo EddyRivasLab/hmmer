@@ -1,7 +1,8 @@
 MODULE = daemon
 
 LIBOBJS =  worker_node.o\
-		shard.o
+		shard.o\
+		p7_hitlist.o
 
 LIBHDRS =
 
@@ -12,14 +13,17 @@ OBJS =  cachedb.o\
 	hmmpgmd2msa.o\
 	p7_hmmcache.o\
 	worker_node.o \
-	shard.o
+	shard.o \
+	p7_hitlist.o
 
 HDRS =  
 
 PROGS = hmmc2\
 	hmmpgmd
 
-UTESTS = shard_utest
+UTESTS = shard_utest \
+	hitlist_utest\
+	hitlist_utest2
 
 STATS  = 
 
