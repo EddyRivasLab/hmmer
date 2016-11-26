@@ -143,8 +143,8 @@ fm_updateIntervalForward( const FM_DATA *fm, const FM_CFG *cfg, char c, FM_INTER
   interval_f->lower += (occLT_u - occLT_l);
   interval_f->upper = interval_f->lower + (occ_u - occ_l) - 1;
 
-  interval_bk->lower = abs(fm->C[(int)c]) + occ_l;
-  interval_bk->upper = abs(fm->C[(int)c]) + occ_u - 1;
+  interval_bk->lower = abs((int)(fm->C[(int)c])) + occ_l;
+  interval_bk->upper = abs((int)(fm->C[(int)c])) + occ_u - 1;
 
   return eslOK;
 }
@@ -168,8 +168,8 @@ fm_getSARangeForward( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
   FM_INTERVAL interval_bk;
 
   uint8_t c = inv_alph[(int)query[0]];
-  interval->lower  = interval_bk.lower = abs(fm->C[c]);
-  interval->upper  = interval_bk.upper = abs(fm->C[c+1])-1;
+  interval->lower  = interval_bk.lower = abs((int)(fm->C[c]));
+  interval->upper  = interval_bk.upper = abs((int)(fm->C[c+1]))-1;
 
 
   while (interval_bk.lower>=0 && interval_bk.lower <= interval_bk.upper) {
@@ -194,8 +194,8 @@ fm_updateIntervalReverse( const FM_DATA *fm, const FM_CFG *cfg, char c, FM_INTER
   count1 = fm_getOccCount (fm, cfg, interval->lower-1, c);
   count2 = fm_getOccCount (fm, cfg, interval->upper, c);
 
-  interval->lower = abs(fm->C[(int)c]) + count1;
-  interval->upper = abs(fm->C[(int)c]) + count2 - 1;
+  interval->lower = abs((int)(fm->C[(int)c])) + count1;
+  interval->upper = abs((int)(fm->C[(int)c])) + count2 - 1;
 
   return eslOK;
 }
@@ -217,8 +217,8 @@ fm_getSARangeReverse( const FM_DATA *fm, FM_CFG *cfg, char *query, char *inv_alp
   int i=0;
 
   char c = inv_alph[(int)query[0]];
-  interval->lower  = abs(fm->C[(int)c]);
-  interval->upper  = abs(fm->C[(int)c+1])-1;
+  interval->lower  = abs((int)(fm->C[(int)c]));
+  interval->upper  = abs((int)(fm->C[(int)c+1]))-1;
 
   while (interval->lower>=0 && interval->lower <= interval->upper) {
     c = query[++i];
@@ -566,7 +566,7 @@ fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
   * used to establish the end of the prior range*/
   C[0] = 0;
   for (i=0; i<meta->alph_size; i++) {
-    prevC = abs(C[i]);
+    prevC = abs((int)(C[i]));
 
     cnt = FM_OCC_CNT( sb, num_freq_cnts_sb-1, i);
 

@@ -133,7 +133,7 @@ FM_backtrackSeed(const FM_DATA *fmf, const FM_CFG *fm_cfg, int i) {
   while ( j != fmf->term_loc && (j % fm_cfg->meta->freq_SA)) { //go until we hit a position in the full SA that was sampled during FM index construction
     c = fm_getChar( fm_cfg->meta->alph_type, j, fmf->BWT);
     j = fm_getOccCount (fmf, fm_cfg, j-1, c);
-    j += abs(fmf->C[c]);
+    j += abs((int)(fmf->C[c]));
     len++;
   }
 
@@ -464,7 +464,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
     int fwd_cnt=0;
     int rev_cnt=0;
     interval_f1.lower = interval_f2.lower = interval_bk.lower = fmf->C[i];
-    interval_f1.upper = interval_f2.upper = interval_bk.upper = abs(fmf->C[i+1])-1;
+    interval_f1.upper = interval_f2.upper = interval_bk.upper = abs((int)(fmf->C[i+1]))-1;
 
     if (interval_f1.lower<0 ) //none of that character found
       continue;
