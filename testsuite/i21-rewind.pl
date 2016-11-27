@@ -39,14 +39,14 @@ foreach $easel_prog  (@easel_progs)  { if (! -x "$builddir/easel/miniapps/$easel
 
 # Test hmmsearch.  Make a query with two copies of the hmm. 
 # Should get the same number of hits with both searches
-$cmd = "cat $builddir/testsuite/20aa.hmm $builddir/testsuite/20aa.hmm > $tmppfx.hmm";
+$cmd = "cat $srcddir/testsuite/20aa.hmm $srcdir/testsuite/20aa.hmm > $tmppfx.hmm";
 do_cmd($cmd);
 
 for $i (0..$#formats) {
    $fmt = $formats[$i];
    $ext = $exts[$i];
 
-   $cmd = "$builddir/src/hmmsearch --tformat $fmt $tmppfx.hmm $builddir/testsuite/20aa-alitest$ext 2>&1";
+   $cmd = "$builddir/src/hmmsearch --tformat $fmt $tmppfx.hmm $srcdir/testsuite/20aa-alitest$ext 2>&1";
    $output = do_cmd($cmd);
 
    my ($first)  = ( $output =~ /Domain search space  \(domZ\):\s+(\d+)/g);
@@ -61,7 +61,7 @@ for $i (0..$#formats) {
 # Test phmmer.  Make a query with two copies of a sequence. 
 # Should get the same number of hits with both searches
 unlink ("$tmppfx.fa");
-$cmd = "$builddir/src/hmmemit --seed 10 $builddir/testsuite/20aa.hmm >> $tmppfx.fa";
+$cmd = "$builddir/src/hmmemit --seed 10 $srcdir/testsuite/20aa.hmm >> $tmppfx.fa";
 do_cmd($cmd);
 do_cmd($cmd);  # yes, twice
 
@@ -69,7 +69,7 @@ for $i (0..$#formats) {
    $fmt = $formats[$i];
    $ext = $exts[$i];
 
-   $cmd = "$builddir/src/phmmer --tformat $fmt $tmppfx.fa $builddir/testsuite/20aa-alitest$ext 2>&1";
+   $cmd = "$builddir/src/phmmer --tformat $fmt $tmppfx.fa $srcdir/testsuite/20aa-alitest$ext 2>&1";
    $output = do_cmd($cmd);
 
    my ($first)  = ( $output =~ /Domain search space  \(domZ\):\s+(\d+)/g);
@@ -83,7 +83,7 @@ for $i (0..$#formats) {
 
 # Test nhmmer.  Make a query with two copies of an hmm. 
 # Should get the same number of hits with both searches
-$cmd = "cat $builddir/testsuite/3box.hmm $builddir/testsuite/3box.hmm > $tmppfx.hmm";
+$cmd = "cat $srcdir/testsuite/3box.hmm $srcdir/testsuite/3box.hmm > $tmppfx.hmm";
 do_cmd($cmd);
 
 # the 3box-alitest.fa test was created with:
@@ -103,7 +103,7 @@ for $i (0..$#formats) {
    $fmt = $formats[$i];
    $ext = $exts[$i];
 
-   $cmd = "$builddir/src/nhmmer --tformat $fmt $tmppfx.hmm $builddir/testsuite/3box-alitest$ext 2>&1";
+   $cmd = "$builddir/src/nhmmer --tformat $fmt $tmppfx.hmm $srcdir/testsuite/3box-alitest$ext 2>&1";
    $output = do_cmd($cmd);
 
    my ($first)  = ( $output =~ /Total number of hits:\s+(\d+)/g);
