@@ -64,10 +64,10 @@ endif
 .PHONY: all dev check tests install uninstall distclean clean tags-append
 .FORCE:
 
-all:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS}
-dev:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
-check: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${UTESTS}
-tests: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${UTESTS}
+all:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS}
+dev:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
+check: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${UTESTS}
+tests: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${UTESTS}
 
 # In some subdirs, ${LIBOBJS} is empty. We can't give an empty arg string to 'ar'.
 # Hence the ! -z shell test on ${LIBOBJS} below.

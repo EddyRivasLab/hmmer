@@ -30,34 +30,28 @@ P7_HITLIST_ENTRY *p7_hitlist_entry_Create(){
 
 //! Creates a linked list of num_entries hitlist entries and returns it
 P7_HITLIST_ENTRY *p7_hitlist_entry_pool_Create(uint32_t num_entries){
-	P7_HITLIST_ENTRY *the_list;
+	P7_HITLIST_ENTRY *the_list, *current_entry, *prev_entry;
 	int status; // return value from ESL_ALLOC;
 
-	// do these a single mallocs to save time
-	ESL_ALLOC(the_list, (num_entries * sizeof(P7_HITLIST_ENTRY)));
-	P7_HIT *hits = p7_hit_Create(num_entries);
+	// special-case the first entry
+	ESL_ALLOC(the_list, sizeof(P7_HITLIST_ENTRY));
+	P7_HIT *the_hit = p7_hit_Create(1);
+	the_list->hit = the_hit;
+	the_list->prev = NULL;
+	the_list->next = NULL;
 
+	current_entry = the_list;
 
-	// link the hitlist entries into a list 
-	// special-case the first entry in the list
-	the_list[0].hit = &(hits[0]);
-	the_list[0].prev = NULL;
-	if(num_entries > 1){
-		the_list[0].next = &(the_list[1]);
+	for(int count = 1; count < num_entries; count++){
+		prev_entry = current_entry;
+		ESL_ALLOC(current_entry, sizeof(P7_HITLIST_ENTRY));
+		the_hit = p7_hit_Create(1);
+		current_entry->hit = the_hit;
+		current_entry->prev = prev_entry;
+		prev_entry->next = current_entry;
 	}
 
-	for(int i = 1; i < (num_entries-1); i++){
-		the_list[i].hit = &(hits[i]);
-		the_list[i].prev = &(the_list[i-1]);
-		the_list[i].next = &(the_list[i+1]);
-	}
-
-	// and the last entry in the list
-	the_list[num_entries-1].hit = &(hits[num_entries-1]);
-	if(num_entries > 1){
-		the_list[num_entries-1].prev = &(the_list[num_entries-2]);
-	}
-	the_list[num_entries-1].next = NULL;
+	current_entry->next = NULL; // terminate the list
 
 	return(the_list);
 			// GOTO target used to catch error cases from ESL_ALLOC
@@ -106,6 +100,11 @@ void p7_hit_chunk_Destroy(P7_HIT_CHUNK *the_chunk){
 	//first, free all the hits in the chunk
 	P7_HITLIST_ENTRY *current, *next;
 	current = p7_get_hits_from_chunk(the_chunk);
+
+	if(current->prev != NULL){
+		current ->prev->next = NULL; // if we have a predecessor, terminate its list because we're about to
+		// free everything downstream from us
+	}
 
 	while(current != NULL){  // walk down the list
 		next = current->next; 
@@ -193,6 +192,7 @@ P7_HITLIST *p7_hitlist_Create(){
 	ERROR:
 		p7_Fail("Unable to allocate memory in p7_hitlist_Create");	
 }
+
 
 //! Adds a chunk to a hitlist
 /*! requires: the_chunk contains at least one hit
@@ -421,12 +421,13 @@ void p7_hitlist_Destroy(P7_HITLIST *the_list){
 
 	// Free all of the chunks in the list.
 	// Note that this also fres all of the hitlist entries, so don't need to free them separately
-	P7_HIT_CHUNK *current, *next;
-	current = the_list->chunk_list_start;
+	P7_HIT_CHUNK *current, *prev;
+	current = the_list->chunk_list_end;
+	// walk through the chunk list in reverse order to avoid repeatedly freeing the same hits
 	while(current != NULL){
-		next= current->next;
+		prev= current->prev;
 		p7_hit_chunk_Destroy(current);
-		current = next;
+		current = prev;
 	}
 
 	// free the list's lock

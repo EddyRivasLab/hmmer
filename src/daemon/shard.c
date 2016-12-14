@@ -5,8 +5,116 @@
 #include "esl_dsqdata.h"
 #include "esl_alphabet.h"
 
+#include "hmmer.h"
+#include "hardware/hardware.h"
 #include "base/general.h"
 #include "daemon/shard.h"
+
+//! Reads the HMM file specified by filename, and builds a shard structure out of it.
+/*! 	@param filename the name of the .hmm file containing the database
+  	@param num_shards the number of shards the database will be divided into
+  	@param my_shard which shard of the database should be generated? Must be between 0 and num_shards
+  	@return the new shard  */
+P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t my_shard){
+	//! return value used to tell if many esl routines completed successfully
+	int status;
+
+	// allocate the base object that we're creating
+	P7_SHARD *the_shard;
+	ESL_ALLOC(the_shard, sizeof(P7_SHARD));
+
+	the_shard->data_type = HMM; // Only one possible data type for an HMM file
+
+	uint64_t num_hmms= 0; // Number of HMMs we've put in the database
+	uint64_t hmms_in_file = 0; // Number of HMMs we've seen in the file
+
+	uint64_t directory_size =100; // Number of HMMs we've allocated directory space for
+	ESL_ALLOC(the_shard->directory, (directory_size * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
+
+
+	uint64_t contents_buffer_size = 100 * sizeof(P7_OPROFILE *); // track how much space we've allocated for contents, start with space for 100 pointers
+	uint64_t descriptors_buffer_size = 100 * sizeof(P7_PROFILE *); // and for descriptors
+	ESL_ALLOC(the_shard->contents, contents_buffer_size);
+	ESL_ALLOC(the_shard->descriptors, descriptors_buffer_size);
+
+	uint64_t contents_offset = 0;
+	uint64_t descriptors_offset = 0;
+
+	char *contents_pointer = the_shard->contents;
+	char *descriptors_pointer = the_shard->descriptors;
+
+	ESL_ALPHABET   *abc     = NULL;
+ 	P7_HMMFILE     *hfp     = NULL;
+  	P7_BG          *bg      = NULL;
+  	P7_HMM         *hmm     = NULL;
+  	P7_PROFILE     *gm      = NULL;
+  	P7_OPROFILE    *om      = NULL;
+	P7_HARDWARE *hw =  p7_hardware_Create();
+
+
+	if (p7_hmmfile_OpenE(filename, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", filename);
+
+	while(p7_hmmfile_Read(hfp, &abc, &hmm) == eslOK){
+		// There's another HMM in the file
+		if(hmms_in_file % num_shards == my_shard){
+			// Need to put this HMM in the shard
+
+			// Create all of the standard data structures that define the HMM
+			bg = p7_bg_Create(abc);
+			gm = p7_profile_Create (hmm->M, abc);
+			om = p7_oprofile_Create(hmm->M, abc, hw->simd);
+  			p7_profile_Config   (gm, hmm, bg);
+  			p7_oprofile_Convert (gm, om);
+
+	  		while(num_hmms >= directory_size){
+  				// We need to allocate more space
+  				directory_size = directory_size *2;
+  				ESL_REALLOC(the_shard->directory, (directory_size * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
+  				contents_buffer_size = contents_buffer_size *2;
+  				ESL_REALLOC(the_shard->contents, contents_buffer_size);
+  				descriptors_buffer_size = descriptors_buffer_size *2;
+  				ESL_REALLOC(the_shard->descriptors, descriptors_buffer_size);
+  			}
+
+  			// Create the directory entry for this HMM now that we know there's space
+			the_shard->directory[num_hmms].id = num_hmms;
+    		 	the_shard->directory[num_hmms].contents_offset = contents_offset;
+    	 		the_shard->directory[num_hmms].descriptor_offset = descriptors_offset;
+
+    	 		// copying multi-level data structures into regions of memory that we might realloc is really hard, so instead
+    	 		// we store pointers to each HMM's oprofile and profile in the contents and descriptor structure, respectively
+    	 		P7_OPROFILE **contents_pointer = ((P7_OPROFILE **) the_shard->contents) + num_hmms;
+    	 		*contents_pointer = om;
+    	 		contents_offset += sizeof(P7_OPROFILE *);
+ 	 		P7_PROFILE **descriptors_pointer = ((P7_PROFILE **) the_shard->descriptors) + num_hmms;
+    	 		*descriptors_pointer = gm;
+    	 		descriptors_offset += sizeof(P7_OPROFILE *);
+
+	    	 	num_hmms+= 1; // Increment this last for ease of zero-based addressing
+  		}
+
+  		hmms_in_file++;
+  		// Done with this HMM, so tear down the data structures
+  		p7_hmm_Destroy(hmm);
+  		p7_bg_Destroy(bg);
+		
+	}
+
+
+	// realloc shard's memory buffers down to the actual size needed
+	ESL_REALLOC(the_shard->directory, (num_hmms * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
+	ESL_REALLOC(the_shard->contents, contents_offset);
+	//ESL_REALLOC(the_shard->descriptors, descriptors_offset); 
+	// PUT ME BACK WHEN PROFILE ADDED TO SHARD *************
+
+	// Shard is built, set some final values and return it
+	the_shard->num_objects = num_hmms;
+	return(the_shard);
+
+	// GOTO target used to catch error cases from ESL_ALLOC
+	ERROR:
+		p7_Fail("Unable to allocate memory in p7_shard_Create_hmmfile");
+}
 
 
 P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t my_shard){
@@ -547,3 +655,63 @@ main(int argc, char **argv)
   	return eslOK;
 }
 #endif /*p7SHARD_TESTDRIVE*/
+
+#ifdef p7SHARD2_TESTDRIVE
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+static char usage[]  = "[-options] <hmmfile_name>";
+static char banner[] = "test driver for functions that create and process database shards";
+
+int
+main(int argc, char **argv)
+{
+	ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+	char *hmmfile = esl_opt_GetArg(go, 1);
+	ESL_ALPHABET   *abc     = NULL;
+ 	P7_HMMFILE     *hfp     = NULL;
+  	P7_BG          *bg      = NULL;
+  	P7_HMM         *hmm     = NULL;
+  	P7_PROFILE     *gm      = NULL;
+  	P7_OPROFILE    *om      = NULL;
+	P7_HARDWARE *hw =  p7_hardware_Create();
+
+	// make a shard out of the hmm file
+	P7_SHARD *shard1 = p7_shard_Create_hmmfile(hmmfile, 1, 0);
+	int shard_count = 0;
+
+	if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+
+	P7_OPROFILE **shard_oprofiles = (P7_OPROFILE **) shard1->contents;
+	P7_PROFILE **shard_profiles = (P7_PROFILE **) shard1->descriptors;
+
+	// Now, compare the data in the shard to the data in the file
+	while(p7_hmmfile_Read(hfp, &abc, &hmm) == eslOK){
+		// There's another HMM in the file
+		// First, create all of the standard data structures that define the HMM
+		bg = p7_bg_Create(abc);
+		gm = p7_profile_Create (hmm->M, abc);
+		om = p7_oprofile_Create(hmm->M, abc, hw->simd);
+  		p7_profile_Config   (gm, hmm, bg);
+  		p7_oprofile_Convert (gm, om);
+
+  		if(shard_count >= shard1->num_objects){
+  			p7_Fail("More HMMs found in hmmfile than in shard");
+  		}
+  		P7_PROFILE *shard_profile =  *(shard_profiles + (shard1->directory[shard_count].descriptor_offset / sizeof(P7_PROFILE *)));
+		P7_OPROFILE *shard_oprofile =  *(shard_oprofiles + (shard1->directory[shard_count].contents_offset / sizeof(P7_OPROFILE *)));
+  		p7_oprofile_Compare(shard_oprofile, om, 0.01, "Shard oprofile failed to match HMM oprofile");
+  		p7_profile_Compare(shard_profile, gm, 0.01);
+  		shard_count++;
+  	}
+  	if(shard_count != shard1->num_objects){
+  		p7_Fail("Object number mis-match between shard and hmmfile %d vs %d", shard_count, shard1->num_objects);
+  	}
+    	fprintf(stderr, "#  status = ok\n");
+  	return eslOK;
+}
+
+#endif /*p7SHARD2_TESTDRIVE*/

@@ -65,6 +65,17 @@ typedef struct p7_shard{
  */
 P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t my_shard);
 
+//! Creates a shard from a file of HMMs
+/*! Creates a shard from a set of HMMs
+ * @param filename name of the file containing the HMMs
+ * @param num_shards the number of shards the database will be divided into
+ * @param my_shard the number of the shard that this function should create.  Must be between 0 and num_shards-1
+ *
+ * @return a pointer to the shard, or NULL on failure
+ */
+P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t my_shard);
+
+
 //! Searches the shard's directory for the object with the specified id or the next-highest id object in the shard
 /*! Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns eslOK and a pointer to the 
    start of the object in ret_object.  If not, returns eslENORESULT and a pointer to the object with the next-highest id in ret_object.  If id

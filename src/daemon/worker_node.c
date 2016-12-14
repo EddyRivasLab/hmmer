@@ -5,13 +5,21 @@
 #include "easel.h"
 #include "esl_threads.h"
 #include "esl_dsqdata.h"
+#include "p7_config.h"
 #include "base/general.h"
+#include "hmmer.h"
 #include "dp_sparse/p7_engine.h" 
 #include "search/modelconfig.h"
+#include "daemon/hmmpgmd2.h"
 #include "daemon/shard.h"
 #include "daemon/worker_node.h"
+#ifdef HAVE_MPI
+#include <mpi.h>
+#include "esl_mpi.h"
+#endif /*HAVE_MPI*/
+#include <unistd.h>
 
-#define WORKER_CHUNKSIZE 1024 // Number of sequences to grab at a time from the work queue
+#define WORKER_CHUNKSIZE 16 // Number of sequences to grab at a time from the work queue
 
 P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads){
 
@@ -91,6 +99,8 @@ P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, 
 
 // Performs all startup activity for a worker node
 int p7_daemon_workernode_Setup(uint32_t num_databases, char **database_names, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, P7_DAEMON_WORKERNODE_STATE **workernode){
+	FILE *datafile;
+	char id_string[13];
 
 	int i;
 
@@ -110,7 +120,24 @@ int p7_daemon_workernode_Setup(uint32_t num_databases, char **database_names, ui
 	// Next, read databases from disk and install shards in the workernode
 	for(i = 0; i < num_databases; i++){
 		P7_SHARD *current_shard;
+
+		datafile = fopen(database_names[i], "r");
+		fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
+		printf("%s\n", id_string);
+		fclose(datafile);
+		
+		if(!strncmp(id_string, "HMMER3", 5)){
+			// This is an HMM file
+			current_shard = p7_shard_Create_hmmfile(database_names[i], num_shards, my_shard);
+		}
+		else if(!strncmp(id_string, "Easel dsqdata", 13)){
+			// its a dsqdata file
 		current_shard = p7_shard_Create_dsqdata(database_names[i], num_shards, my_shard);
+		}
+		else{
+			p7_Fail("Couldn't determine type of datafile for database %s in p7_daemon_workernode_setup\n", database_names[i]);
+		}
+
 		if(current_shard == NULL){
 			p7_Fail("Couldn't read shard from disk in p7_daemon_workernode_Start");
 		}
@@ -164,7 +191,7 @@ int p7_daemon_workernode_setup_hmm_vs_amino(P7_DAEMON_WORKERNODE_STATE *workerno
 
 	// figure out where to start and end the search
 	if(start_object == 0){ // implicit "start at first object"
-		real_start = workernode->database_shards[database]->directory[0].id;
+		real_start = the_shard->directory[0].id;
 	}
 	else{
 		p7_shard_Find_Contents_Nexthigh(the_shard, start_object, &(sequence_pointer));
@@ -172,7 +199,7 @@ int p7_daemon_workernode_setup_hmm_vs_amino(P7_DAEMON_WORKERNODE_STATE *workerno
 		// start_object
 	}
 	if(end_object == 0){ // implicit "start at last object"
-		real_end = workernode->database_shards[database]->directory[workernode->database_shards[database]->num_objects -1].id;
+		real_end =the_shard->directory[workernode->database_shards[database]->num_objects -1].id;
 	}
 	else{
 		p7_shard_Find_Contents_Nextlow(the_shard, end_object, &(sequence_pointer));
@@ -316,8 +343,8 @@ int p7_daemon_workernode_create_threads(P7_DAEMON_WORKERNODE_STATE *workernode){
 		p7_Fail("Couldn't create pthread attr structure in p7_daemon_workernode_create_threads");
 	}
 	size_t stacksize;
-	pthread_attr_getstacksize(&attr, &stacksize);
-	printf("Thread stack size = %ld bytes \n", stacksize);
+	//pthread_attr_getstacksize(&attr, &stacksize);
+	//printf("Thread stack size = %ld bytes \n", stacksize);
 
 	for(i = 0; i < workernode->num_threads; i++){
 
@@ -362,6 +389,23 @@ int p7_daemon_workernode_release_threads(P7_DAEMON_WORKERNODE_STATE *workernode)
 	return eslOK;
 }
 
+//! ends a search and resets the workernode state for the next search.
+/*! should be called by the master thread after all worker threads have completed their work */
+void p7_daemon_workernode_end_search(P7_DAEMON_WORKERNODE_STATE *workernode){
+
+	// It is an error to call this thread while the worker threads are working, so don't need to lock anything
+
+	// First, mark the node idle
+	workernode->search_type = IDLE;
+
+	// now, destroy the hitlist used in the last search
+	p7_hitlist_Destroy(workernode->hitlist);
+
+	// and create a new one
+	workernode->hitlist = p7_hitlist_Create();
+}
+
+
 
 /*  Worker thread used by worker nodes.  When created, requires that:
  * 1) the workernode object passed to it is fully created and populated
@@ -384,7 +428,7 @@ void *p7_daemon_worker_thread(void *worker_argument){
 
 	workernode->num_waiting +=1;  //mark that we're now waiting for the go signal
 
-	printf("Worker thread %d about to spin until released\n", my_id);
+	//printf("Worker thread %d about to spin until released\n", my_id);
 	
 	pthread_cond_wait(&(workernode->go), &(workernode->wait_lock)); // wait until master tells us to go
 
@@ -393,7 +437,7 @@ void *p7_daemon_worker_thread(void *worker_argument){
 
 	char *search_pointer = NULL; // Will point into the position in the shard that we're searching on
 
-	printf("Worker thread %d released\n", my_id);
+	//printf("Worker thread %d released\n", my_id);
 	struct timeval start_time, end_time;
 	
 	// Main work loop
@@ -637,4 +681,110 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
 		}
 
 	return 1;
+}
+
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range  toggles reqs incomp  help                               docgroup*/
+  { "-h",        eslARG_NONE,  FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",  0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+static char usage[]  = "[-options] <hmmfile> <seqence database>";
+static char banner[] = "hmmpgmd2, the daemon version of HMMER 4";
+
+// main function that the daemon starts on each worker node
+void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_mpitypes){
+
+#ifndef HAVE_MPI
+	p7_Fail("Attempt to start workernode_main when HMMER was compiled without MPI support")
+#endif
+#ifdef HAVE_MPI
+
+	int status; // return code from ESL routines
+	ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  	char           *hmmfile = esl_opt_GetArg(go, 1);
+  	char           *seqfile = esl_opt_GetArg(go, 2);
+	// first, get the number of shards that each database should be loaded into from the master
+	int num_shards;
+	MPI_Bcast(&num_shards, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+	printf("Rank %d sees %d shards\n", my_rank, num_shards);
+	
+	P7_DAEMON_WORKERNODE_STATE *workernode;
+	// load the databases.  For now, just use one thread/node
+	p7_daemon_workernode_Setup(1, &(seqfile), 1, 0, 1, &workernode);
+
+	// block until everyone is ready to go
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	// Main workernode loop: wait until master broadcasts a command, handle it, repeat until given command to exit
+	P7_DAEMON_COMMAND the_command;
+
+	char *compare_obj_buff;
+	uint64_t compare_obj_buff_length;
+	ESL_ALLOC(compare_obj_buff, 256);  // allocate a default initial buffer so that realloc doesn't crash
+	compare_obj_buff_length = 256;
+
+	while(MPI_Bcast(&the_command, 1, daemon_mpitypes[P7_DAEMON_COMMAND_MPITYPE], 0, MPI_COMM_WORLD) == 
+		MPI_SUCCESS){
+		// We have a command to process
+
+		printf("Worker %d received command with type %d, database %d, object length %lu\n", my_rank, the_command.type, the_command.db, the_command.compare_obj_length);
+
+		switch(the_command.type){
+			case P7_DAEMON_HMM_VS_SEQUENCES: // Master node wants us to compare an HMM to a database of sequences
+				if(compare_obj_buff_length < the_command.compare_obj_length){
+					//need more buffer space
+					ESL_REALLOC(compare_obj_buff, the_command.compare_obj_length); // create buffer to receive the HMM in
+					compare_obj_buff_length = the_command.compare_obj_length; 
+				}
+
+				// Get the HMM
+				MPI_Bcast(compare_obj_buff, the_command.compare_obj_length, MPI_CHAR, 0, MPI_COMM_WORLD);
+			
+				int temp_pos = 0;
+				// Unpack the hmm from the buffer
+				P7_HMM         *hmm     = NULL;
+				ESL_ALPHABET   *abc     = NULL;
+		
+				p7_hmm_mpi_Unpack(compare_obj_buff, compare_obj_buff_length, &temp_pos, MPI_COMM_WORLD, &abc, &hmm);
+				// build the rest of the data structures we need out of it
+		
+				P7_BG          *bg      = NULL;
+  				P7_PROFILE     *gm      = NULL;
+  				P7_OPROFILE    *om      = NULL;
+				P7_ENGINE      *eng     = NULL;
+			
+				bg = p7_bg_Create(abc);
+				
+  				gm = p7_profile_Create (hmm->M, hmm->abc);
+ 				
+ 				eng = p7_engine_Create(hmm->abc, NULL, NULL, gm->M, 400);
+  	
+  				om = p7_oprofile_Create(hmm->M, hmm->abc, eng->hw->simd);
+  	
+  				p7_profile_Config   (gm, hmm, bg);
+  
+  				p7_oprofile_Convert (gm, om);
+
+  				// Ok, we've unpacked the hmm and built all of the profiles we need.  
+
+				break;
+			case P7_DAEMON_SHUTDOWN_WORKERS:
+				// spurious barrier for testing so that master doesn't exit immediately
+				printf("Worker %d received shutdown command", my_rank);
+				sleep(5);
+				MPI_Barrier(MPI_COMM_WORLD);
+				exit(0);
+				break;
+			default:
+				p7_Fail("Worker_node_main received unrecognized command code %d from master", the_command.type);
+		}
+		printf("Done with current command");
+	}
+
+#endif
+	ERROR:
+		p7_Fail("Unable to allocate memory in worker_node_main");
 }

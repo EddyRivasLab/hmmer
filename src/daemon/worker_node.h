@@ -220,6 +220,9 @@ void *p7_daemon_worker_thread(void *worker_argument);
 */
 int p7_daemon_workernode_setup_hmm_vs_amino(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, P7_PROFILE *compare_model);
 
+//! ends a search and resets the workernode state for the next search.
+/*! should be called by the master thread after all worker threads have completed their work */
+void p7_daemon_workernode_end_search(P7_DAEMON_WORKERNODE_STATE *workernode);
 
 //! Grab a chunk of work from the worker's queue.
 /*! If there's any work left in the worker's queue, grabs a chunk.  
@@ -239,7 +242,6 @@ uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_
  * @param workernode the P7_DAEMON_WORKERNODE_STATE structure for this node
  * @param my_id the id of the thread doing the stealing
  * @return 1 if steal succeeds, 0 otherwise  
- ***** CURRENTLY A STUB THAT ALWAYS RETURNS 0 *******
  */
 int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
 
@@ -248,4 +250,7 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
 /*! Iterates through the objects in the shard, starting at the one pointed to by search_pointer and 
  */
 void worker_thread_process_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, char *search_pointer, uint64_t chunk_length);
+
+//! main function called at startup on worker nodes
+void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_mpitypes);
 #endif

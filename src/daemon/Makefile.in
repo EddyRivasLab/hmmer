@@ -13,15 +13,18 @@ OBJS =  cachedb.o\
 	hmmpgmd2msa.o\
 	p7_hmmcache.o\
 	worker_node.o \
+	master_node.o \
 	shard.o \
 	p7_hitlist.o
 
 HDRS =  
 
 PROGS = hmmc2\
-	hmmpgmd
+	hmmpgmd\
+	hmmpgmd2
 
 UTESTS = shard_utest \
+	shard_utest2 \
 	hitlist_utest\
 	hitlist_utest2
 
