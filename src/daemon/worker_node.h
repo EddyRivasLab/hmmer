@@ -218,7 +218,7 @@ void *p7_daemon_worker_thread(void *worker_argument);
  * @param compare_model the HMM to compare against
  * @return eslOK on success, eslFAIL on failure
 */
-int p7_daemon_workernode_setup_hmm_vs_amino(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, P7_PROFILE *compare_model);
+int p7_daemon_workernode_setup_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, P7_PROFILE *compare_model);
 
 //! ends a search and resets the workernode state for the next search.
 /*! should be called by the master thread after all worker threads have completed their work */
@@ -230,9 +230,18 @@ void p7_daemon_workernode_end_search(P7_DAEMON_WORKERNODE_STATE *workernode);
 * @param my_id which thread is asking for the work
 * @param search_pointer pointer to the beginning of the first object in the chunk.  Input value is ignored, pointer value set during execution
 * @return the number of objects in the chunk, or 0 if there is no work available
-****** Currently a stub that just returns the entire work queue as a single chunk *******
 */ 
 uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, char **search_pointer);
+
+//! Grab a chunk of work from the worker's queue.
+/*! If there's any work left in the worker's queue, grabs a chunk.  
+* @param workernode the P7_DAEMON_WORKERNODE_STATE structure for this node
+* @param my_id which thread is asking for the work
+* @param start_index set to the directory index of the first object in the chunk if there is any work available.   
+* @return the number of objects in the chunk, or 0 if there is no work available
+*/ 
+uint64_t worker_thread_get_chunk_by_directory_index(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, uint64_t *start_index);
+
 
 //! Try to steal work from some other thread in the node
 /*! Tries to steal work from some other thread on the node.  If successful, updates the work queues of the stealing thread and
@@ -249,7 +258,9 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
 //! Process a chunk of objects
 /*! Iterates through the objects in the shard, starting at the one pointed to by search_pointer and 
  */
-void worker_thread_process_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, char *search_pointer, uint64_t chunk_length);
+void worker_thread_process_chunk_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, char *search_pointer, uint64_t chunk_length);
+
+void worker_thread_process_chunk_amino_vs_hmm_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, uint64_t start_index, uint64_t chunk_length);
 
 //! main function called at startup on worker nodes
 void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_mpitypes);

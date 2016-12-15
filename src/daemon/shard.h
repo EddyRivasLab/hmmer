@@ -86,6 +86,15 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
     */ 
 int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret_object);
 
+
+/* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns the id.  
+If not, returns the id of the object with the next higher ID.  if there is no such object, returns all ones  */ 
+uint64_t p7_shard_Find_Id_Nexthigh(P7_SHARD *the_shard, uint64_t id);
+uint64_t p7_shard_Find_Index_Nexthigh(P7_SHARD *the_shard, uint64_t id);
+/* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns the ID.  
+If not, returns the ID of the  object with the next-lower ID.  If there is no object with an ID less than or equal to the specified ID, returns all ones*/ 
+uint64_t p7_shard_Find_Id_Nextlow(P7_SHARD *the_shard, uint64_t id);
+
 //! Searches the shard's directory for the object with the specified id or the next-lowest id object in the shard
 /*! Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns eslOK and a pointer to the 
    start of the object in ret_object.  If not, returns eslENORESULT and a pointer to the object with the next-lowest id in ret_object.  If id

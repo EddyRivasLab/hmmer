@@ -19,7 +19,7 @@
 #endif /*HAVE_MPI*/
 #include <unistd.h>
 
-#define WORKER_CHUNKSIZE 16 // Number of sequences to grab at a time from the work queue
+#define WORKER_CHUNKSIZE 1024 // Number of sequences to grab at a time from the work queue
 
 P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads){
 
@@ -123,7 +123,6 @@ int p7_daemon_workernode_Setup(uint32_t num_databases, char **database_names, ui
 
 		datafile = fopen(database_names[i], "r");
 		fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
-		printf("%s\n", id_string);
 		fclose(datafile);
 		
 		if(!strncmp(id_string, "HMMER3", 5)){
@@ -156,10 +155,10 @@ int p7_daemon_workernode_Setup(uint32_t num_databases, char **database_names, ui
 }
 
 // Configures the workernode to perform a search comparing one HMM against a sequence database
-int p7_daemon_workernode_setup_hmm_vs_amino(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, P7_PROFILE *compare_model){
+int p7_daemon_workernode_setup_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, P7_PROFILE *compare_model){
 
 	if(workernode->search_type != IDLE){
-		p7_Fail("p7_daemon_workernode_setup_hmm_vs_amino attempted to set up a new operation on a worker node while an old one was still in progress");
+		p7_Fail("p7_daemon_workernode_setup_hmm_vs_amino_db attempted to set up a new operation on a worker node while an old one was still in progress");
 	}
 
 	workernode->no_steal = 0;  // reset this to allow stealing work for the new search
@@ -168,11 +167,11 @@ int p7_daemon_workernode_setup_hmm_vs_amino(P7_DAEMON_WORKERNODE_STATE *workerno
 	workernode->search_type = SEQUENCE_SEARCH;
 
 	if(database >= workernode->num_databases){
-		p7_Fail("Attempt to compare against non-existent database %d in p7_daemon_workernode_setup_hmm_vs_amino", database);
+		p7_Fail("Attempt to compare against non-existent database %d in p7_daemon_workernode_setup_hmm_vs_amino_db", database);
 	}
 	// set the database we'll compare against.
 	if(workernode->database_shards[database]->data_type != AMINO){
-		p7_Fail("Attempt to set up amino acid comparision against non-amino database in p7_daemon_workernode_setup_hmm_vs_amino");
+		p7_Fail("Attempt to set up amino acid comparision against non-amino database in p7_daemon_workernode_setup_hmm_vs_amino_db");
 	}
 	workernode->compare_database = database;
 
@@ -183,10 +182,10 @@ int p7_daemon_workernode_setup_hmm_vs_amino(P7_DAEMON_WORKERNODE_STATE *workerno
 	char *sequence_pointer;
 	//bounds-check the start and end parameters
 	if((start_object >= the_shard->directory[the_shard->num_objects -1].id) || (end_object >= the_shard->directory[the_shard->num_objects-1].id)){
-		p7_Fail("Attempt to reference out-of-bound object id in p7_daemon_workernode_setup_hmm_vs_amino");
+		p7_Fail("Attempt to reference out-of-bound object id in p7_daemon_workernode_setup_hmm_vs_amino_db");
 	}
 	if(start_object > end_object){
-		p7_Fail("Attempt to create search with start id greater than end id in p7_daemon_workernode_setup_hmm_vs_amino");
+		p7_Fail("Attempt to create search with start id greater than end id in p7_daemon_workernode_setup_hmm_vs_amino_db");
 	}
 
 	// figure out where to start and end the search
@@ -246,6 +245,93 @@ int p7_daemon_workernode_setup_hmm_vs_amino(P7_DAEMON_WORKERNODE_STATE *workerno
 	}
 	return (eslOK);
 }
+
+// Configures the workernode to perform a search comparing one HMM against a sequence database
+int p7_daemon_workernode_setup_amino_vs_hmm_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, ESL_DSQ *compare_sequence){
+
+	if(workernode->search_type != IDLE){
+		p7_Fail("p7_daemon_workernode_setup_amino_vs_hmm_db attempted to set up a new operation on a worker node while an old one was still in progress");
+	}
+
+	workernode->no_steal = 0;  // reset this to allow stealing work for the new search
+	//install the model we'll be comparing against
+	workernode->compare_sequence = compare_sequence;
+	workernode->search_type = HMM_SEARCH;
+
+	if(database >= workernode->num_databases){
+		p7_Fail("Attempt to compare against non-existent database %d in p7_daemon_workernode_setup_amino_vs_hmm_db", database);
+	}
+	// set the database we'll compare against.
+	if(workernode->database_shards[database]->data_type != HMM){
+		p7_Fail("Attempt to set up amino acid comparision against non-HMM database in p7_daemon_workernode_setup_amino_vs_hmm_db");
+	}
+	workernode->compare_database = database;
+
+	// Grab this to avoid multiple re-indexing
+	P7_SHARD *the_shard = workernode->database_shards[database];
+
+	uint64_t real_start, real_end;
+	//bounds-check the start and end parameters
+	if((start_object >= the_shard->directory[the_shard->num_objects -1].id) || (end_object >= the_shard->directory[the_shard->num_objects-1].id)){
+		p7_Fail("Attempt to reference out-of-bound object id in p7_daemon_workernode_setup_amino_vs_hmm_db");
+	}
+	if(start_object > end_object){
+		p7_Fail("Attempt to create search with start id greater than end id in p7_daemon_workernode_setup_amino_vs_hmm_db");
+	}
+
+	// figure out where to start and end the search
+	if(start_object == 0){ // implicit "start at first object"
+		real_start = the_shard->directory[0].id;
+	}
+	else{
+		real_start = p7_shard_Find_Id_Nexthigh(the_shard, start_object);
+		// grab the id of the object in the database whose id is equal to or next greater than
+		// start_object
+	}
+	if(end_object == 0){ // implicit "start at last object"
+		real_end =the_shard->directory[workernode->database_shards[database]->num_objects -1].id;
+	}
+	else{
+		real_end = p7_shard_Find_Id_Nextlow(the_shard, end_object);
+		// grab the id of the object in the database whose id is closest to end_object, but not 
+		// greater 
+	}
+
+	uint64_t task_size = (real_end - real_start)/workernode->num_threads;
+	uint64_t task_start = real_start;
+	uint64_t task_end;
+	uint64_t thread = 0;
+
+	while((thread < workernode->num_threads) && (task_start <= real_end)){
+		
+		// compute end of current task
+		task_end = task_start + task_size;  // one thread's part of the work
+		if(task_end > real_end){
+			task_end = real_end;
+		}
+		else{
+			task_end = p7_shard_Find_Id_Nexthigh(the_shard, task_end);
+			// grab the id of the object in the database whose id is closest to task_end
+			// but not less
+		}
+
+		// don't need to lock here because we only start tasks when the worker is idle
+		workernode->work[thread].start = task_start;
+		workernode->work[thread].end = task_end;
+		task_start = p7_shard_Find_Id_Nexthigh(the_shard, task_end +1);
+		if(task_start == (uint64_t) -1){
+			task_start = real_end; // we've passed out all the work due to rounding effects
+		}
+		thread++;
+	}
+	while(thread < workernode->num_threads){
+		// cleanup loop if we didn't have work for some threads
+		workernode->work[thread].start = 0;
+		workernode->work[thread].end = 0;
+	}
+	return (eslOK);
+}
+
 
 P7_ENGINE_STATS *p7_daemon_workernode_aggregate_stats(P7_DAEMON_WORKERNODE_STATE *workernode){
 	P7_ENGINE_STATS *combined_stats = p7_engine_stats_Create();
@@ -418,7 +504,7 @@ void *p7_daemon_worker_thread(void *worker_argument){
 	uint32_t my_id = my_argument->my_id;
 	P7_DAEMON_WORKERNODE_STATE *workernode = my_argument->workernode;
 
-	printf("Worker thread %d starting up\n", my_id);
+	//printf("Worker thread %d starting up\n", my_id);
 	free(worker_argument); // release our argument now that we're done with it.  
 
 	// Tell the master thread that we're awake and ready to go
@@ -442,40 +528,49 @@ void *p7_daemon_worker_thread(void *worker_argument){
 	
 	// Main work loop
 	while(!workernode->shutdown){
-	// This will need to change when we start handling multiple requests
+
 		gettimeofday(&start_time, NULL);
 	// create the engine object we'll use 
 		P7_ENGINE_STATS *engine_stats = p7_engine_stats_Create();
-		workernode->thread_state[my_id].engine = p7_engine_Create(workernode->compare_model->abc, NULL, engine_stats, workernode->compare_model->M, 400);
-		// Create the models we'll use
-		workernode->thread_state[my_id].bg = p7_bg_Create(workernode->compare_model->abc);
+		switch(workernode->search_type){ // do the right thing for each search type
+		case SEQUENCE_SEARCH:
+			workernode->thread_state[my_id].engine = p7_engine_Create(workernode->compare_model->abc, NULL, engine_stats, workernode->compare_model->M, 400);
+			// Create the models we'll use
+			workernode->thread_state[my_id].bg = p7_bg_Create(workernode->compare_model->abc);
   		
-  		workernode->thread_state[my_id].gm = p7_profile_Create (workernode->compare_model->M, workernode->compare_model->abc);
-  		p7_profile_Copy(workernode->compare_model, workernode->thread_state[my_id].gm);
+  			workernode->thread_state[my_id].gm = p7_profile_Create (workernode->compare_model->M, workernode->compare_model->abc);
+	  		p7_profile_Copy(workernode->compare_model, workernode->thread_state[my_id].gm);
 
 
-  		workernode->thread_state[my_id].om = p7_oprofile_Create(workernode->thread_state[my_id].gm->M, workernode->thread_state[my_id].gm->abc, workernode->thread_state[my_id].engine->hw->simd);		
+  			workernode->thread_state[my_id].om = p7_oprofile_Create(workernode->thread_state[my_id].gm->M, workernode->thread_state[my_id].gm->abc, workernode->thread_state[my_id].engine->hw->simd);		
 
-		p7_oprofile_Convert (workernode->thread_state[my_id].gm, workernode->thread_state[my_id].om);
+			p7_oprofile_Convert (workernode->thread_state[my_id].gm, workernode->thread_state[my_id].om);
 
-		p7_bg_SetFilter(workernode->thread_state[my_id].bg, workernode->thread_state[my_id].om->M, workernode->thread_state[my_id].om->compo);
+			p7_bg_SetFilter(workernode->thread_state[my_id].bg, workernode->thread_state[my_id].om->M, workernode->thread_state[my_id].om->compo);
 		
-		uint64_t sequences_processed = 0;
-		// Sit in this work loop until we're told to exit
-		uint64_t chunk_length;
-		while((chunk_length = worker_thread_get_chunk(workernode, my_id, &(search_pointer))) || !workernode->no_steal){
-			// either we have more work to do in this thread or there might be work to steal
-			if(chunk_length){
-				// there's more work to do that's already been assigned to us.
-				sequences_processed += chunk_length;
-				worker_thread_process_chunk(workernode, my_id, search_pointer, chunk_length);
-			}
-			else{ // we don't have any work to do
-//				printf("Thread %d trying to steal\n", my_id);
-				worker_thread_steal(workernode, my_id); // try to get some more
+			uint64_t sequences_processed = 0;
+		
+			uint64_t chunk_length;
+			while((chunk_length = worker_thread_get_chunk(workernode, my_id, &(search_pointer))) || !workernode->no_steal){
+				// either we have more work to do in this thread or there might be work to steal
+				if(chunk_length){
+					// there's more work to do that's already been assigned to us.
+					sequences_processed += chunk_length;
+					worker_thread_process_chunk_hmm_vs_amino_db(workernode, my_id, search_pointer, chunk_length);
+				}
+				else{ // we don't have any work to do
+					worker_thread_steal(workernode, my_id); // try to get some more
 				}
 			}
-		
+			break;
+		case HMM_SEARCH:
+			printf("HMM search not implemented yet\n");
+			break;
+		case IDLE:
+			p7_Fail("Workernode told to start search of type IDLE");
+			break;
+		}
+
 		// See if we have any hits left that need to be merged into the global list
 		if(workernode->thread_state[my_id].engine->current_hit_chunk->start != NULL){
 		// There's at least one hit in the chunk, so add the chunk to the worker node's hit list and allocate a new one
@@ -489,7 +584,7 @@ void *p7_daemon_worker_thread(void *worker_argument){
   		double start_milliseconds = start_time.tv_usec + (1000000 * start_time.tv_sec);
     		double end_milliseconds = end_time.tv_usec + (1000000 * end_time.tv_sec);
     		double run_time = (end_milliseconds - start_milliseconds)/1000000;
-    	 	printf("Thread %d completed in %lf seconds and processed %lu sequences\n", my_id, run_time, sequences_processed);
+    	 	//printf("Thread %d completed in %lf seconds and processed %lu sequences\n", my_id, run_time, sequences_processed);
 		if(pthread_mutex_lock(&(workernode->wait_lock))){  // Use blocking lock here because we may be waiting a while
 			p7_Fail("Couldn't acquire wait_lock mutex in p7_daemon_worker_thread");
 			}
@@ -535,7 +630,7 @@ uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_
 			if(pthread_mutex_unlock(&(workernode->work[my_id].lock))){
 				p7_Fail("Couldn't unlock work mutex in worker_thread_get_chunk");
 			}
-			p7_Fail("Couldn't find object id %llu in shard during worker_thread_get_chunk");
+			p7_Fail("Couldn't find object id %llu in shard during worker_thread_get_chunk", chunk_start);
 		}
 		else{
 			if(pthread_mutex_unlock(&(workernode->work[my_id].lock))){
@@ -553,8 +648,92 @@ uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_
 	}
 }
 
-// change name when we add comparing a sequence against many HMMS
-void worker_thread_process_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, char *search_pointer, uint64_t chunk_length){
+uint64_t worker_thread_get_chunk_by_index(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, uint64_t *start_index){
+ 
+	while(pthread_mutex_trylock(&(workernode->work[my_id].lock))){
+		// spin-wait until the lock on our queue is cleared.  Should never be locked for long
+	}
+
+	if(workernode->work[my_id].end > workernode->work[my_id].start){
+		// there's work left to do
+		// current stub: return the entire work list  
+		uint64_t chunk_size, next_start;
+
+		if(((workernode->work[my_id].end - workernode->work[my_id].start) * workernode->num_shards) >= WORKER_CHUNKSIZE){
+			chunk_size = WORKER_CHUNKSIZE * workernode->num_shards; // do this because we only process sequences from our shard
+		}
+		else{
+			chunk_size = (workernode->work[my_id].end - workernode->work[my_id].start) +1;
+		}
+		
+		uint64_t chunk_start = workernode->work[my_id].start;
+
+		// compute id of next sequence we'll start at
+		workernode->work[my_id].start= workernode->work[my_id].start + chunk_size; 
+
+		// get pointer to sequence where worker should start searching
+		uint64_t start_index = p7_shard_Find_Index_Nexthigh(workernode->database_shards[workernode->compare_database], chunk_start);
+		if(start_index == (uint64_t) -1){ 
+			if(pthread_mutex_unlock(&(workernode->work[my_id].lock))){
+				p7_Fail("Couldn't unlock work mutex in worker_thread_get_chunk_by_index");
+			}
+			p7_Fail("Couldn't find object id %llu in shard during worker_thread_get_chunk_by_index", chunk_start);
+		}
+		else{
+			if(pthread_mutex_unlock(&(workernode->work[my_id].lock))){
+				p7_Fail("Couldn't unlock work mutex in worker_thread_get_chunk_by_index");
+			}
+			return start_index;
+		}
+
+	}
+	else{
+		if(pthread_mutex_unlock(&(workernode->work[my_id].lock))){
+				p7_Fail("Couldn't unlock work mutex in worker_thread_get_chunk_by_index");
+			}
+		return(0);
+	}
+}
+
+void worker_thread_process_chunk_amino_vs_hmm_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, uint64_t start_index, uint64_t chunk_length){
+	uint64_t i;
+	P7_BG          *bg      = workernode->thread_state[my_id].bg; // get our background model object
+	P7_SHARD *the_shard = workernode->database_shards[workernode->compare_database];
+	P7_OPROFILE **shard_oprofiles = (P7_OPROFILE **) the_shard->contents;
+	P7_PROFILE **shard_profiles = (P7_PROFILE **) the_shard->descriptors;
+	
+	for (i = 0; i < chunk_length; i++){
+		P7_PROFILE *gm =  *(shard_profiles + (the_shard->directory[start_index + i].descriptor_offset / sizeof(P7_PROFILE *)));
+		P7_OPROFILE *om =  *(shard_oprofiles + (the_shard->directory[start_index + i].contents_offset / sizeof(P7_OPROFILE *)));
+
+		p7_bg_SetFilter(bg, om->M, om->compo);
+		if(p7_engine_Compare_Sequence_HMM(workernode->thread_state[my_id].engine, workernode->compare_sequence, workernode->compare_L, gm, om, bg)){
+			// we hit, so record the hit.  Stub, to be replaced with actual hit generation code
+			 P7_HITLIST_ENTRY *the_entry;
+   			 if(workernode->thread_state[my_id].engine->empty_hit_pool == NULL){ // we're out of empty hit entries, allocate some new ones
+      				workernode->thread_state[my_id].engine->empty_hit_pool = p7_hitlist_entry_pool_Create(100);
+    				}
+    			the_entry = workernode->thread_state[my_id].engine->empty_hit_pool;
+    			workernode->thread_state[my_id].engine->empty_hit_pool = workernode->thread_state[my_id].engine->empty_hit_pool->next; // grab the first entry off the free list now that we know there is one
+
+   			// Fake up a hit for comparison purposes.  Do not use for actual analysis
+   			P7_HIT *the_hit = the_entry->hit;
+   			the_hit->seqidx = the_shard->directory[start_index + i].id;
+   			char *descriptors;
+
+   			// add data for this model
+   			the_hit->name = om->name;
+   			the_hit->acc = om->acc;
+			the_hit->desc = om->desc;
+   			p7_add_entry_to_chunk(the_entry, workernode->thread_state[my_id].engine->current_hit_chunk);
+   		}
+
+   	
+	}
+
+}
+
+void worker_thread_process_chunk_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, char *search_pointer, uint64_t chunk_length){
 	uint64_t i;
 	char *the_sequence = search_pointer;
 	for (i = 0; i < chunk_length; i++){
@@ -592,8 +771,6 @@ void worker_thread_process_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_
 	}
 
 }
-
-
 int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id){
 	int victim_id = -1; // which thread are we going to steal from
 	int victim_work = 0; // How much work does it have to do

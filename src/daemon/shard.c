@@ -346,6 +346,55 @@ int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_
 	}
 }
 
+/* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns the ID.  If not, returns the ID of the  object with the next-lower ID.  If there is no object with an ID less than or equal to the specified ID, returns all ones*/ 
+uint64_t p7_shard_Find_Id_Nextlow(P7_SHARD *the_shard, uint64_t id){
+	/* binary search on id */
+	uint64_t top, bottom, middle;
+
+	bottom = 0;
+	top = the_shard->num_objects-1;
+	middle = top/2;
+
+	if(id > the_shard->directory[top].id){ // the specified id is bigger than the id of any object in the shard
+		return((uint64_t) -1);
+	}
+
+	while((top > bottom) && (the_shard->directory[middle].id != id)){
+		if(the_shard->directory[middle].id < id){
+			// We're too low
+			bottom = middle+1;
+			middle = bottom + (top -bottom)/2;
+		}
+		else{
+			// We're too high
+			top = middle -1;
+			middle = bottom + (top-bottom)/2;
+		}
+
+	}
+	if(the_shard->directory[middle].id == id){
+		// we've found what we're looking for
+		return id;
+	}
+
+	// if we get here, we didn't find a match
+	if(the_shard->directory[middle].id < id){
+		return the_shard->directory[middle].id;
+	}
+	else{
+		// test code, take out when verified
+		if (middle == 0){
+			p7_Fail("search error in p7_shard_Find_Contents_Nextlow");
+		}
+		if(the_shard->directory[middle-1].id < id){
+			return the_shard->directory[middle-1].id;
+		
+		}
+		else{
+			p7_Fail("search error in p7_shard_Find_Contents_Nextlow");
+		}
+	}
+}
 /* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns eslOK and a pointer to the 
    start of the object in ret_object.  If not, returns eslENORESULT and a pointer to the object with the next-highest id in ret_object.  If id
    is greater than the id of the last object in the shard, returns eslENORESULT and NULL in ret_object */ 
@@ -394,6 +443,106 @@ int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret
 		if(the_shard->directory[middle+1].id > id){
 			*ret_object = the_shard->contents + the_shard->directory[middle+1].contents_offset;
 			return eslENORESULT;
+		}
+		else{
+			p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
+		}
+	}
+}
+
+/* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns the id.  
+If not, returns the id of the object with the next higher ID.  if there is no such object, returns all ones  */ 
+uint64_t p7_shard_Find_Id_Nexthigh(P7_SHARD *the_shard, uint64_t id){
+	/* binary search on id */
+	uint64_t top, bottom, middle;
+
+	bottom = 0;
+	top = the_shard->num_objects-1;
+	middle = top/2;
+
+	if(id > the_shard->directory[top].id){ // the specified id is bigger than the id of any object in the shard
+		return (uint64_t) -1;
+	}
+
+	while((top > bottom) && (the_shard->directory[middle].id != id)){
+		if(the_shard->directory[middle].id < id){
+			// We're too low
+			bottom = middle+1;
+			middle = bottom + (top -bottom)/2;
+		}
+		else{
+			// We're too high
+			top = middle -1;
+			middle = bottom + (top-bottom)/2;
+		}
+
+	}
+	if(the_shard->directory[middle].id == id){
+		// we've found what we're looking for
+		return id;
+	}
+
+	// if we get here, we didn't find a match
+	if(the_shard->directory[middle].id > id){
+		return the_shard->directory[middle].id;
+	}
+	else{
+		// test code, take out when verified
+		if (middle == the_shard->num_objects-1){
+			p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
+		}
+		if(the_shard->directory[middle+1].id > id){
+			return the_shard->directory[middle+1].id;
+		}
+		else{
+			p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
+		}
+	}
+}
+
+/* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns the corresponding index into the.  
+shard's directory. If not, returns the index of the object with the next higher ID.  if there is no such object, returns all ones  */ 
+uint64_t p7_shard_Find_Index_Nexthigh(P7_SHARD *the_shard, uint64_t id){
+	/* binary search on id */
+	uint64_t top, bottom, middle;
+
+	bottom = 0;
+	top = the_shard->num_objects-1;
+	middle = top/2;
+
+	if(id > the_shard->directory[top].id){ // the specified id is bigger than the id of any object in the shard
+		return (uint64_t) -1;
+	}
+
+	while((top > bottom) && (the_shard->directory[middle].id != id)){
+		if(the_shard->directory[middle].id < id){
+			// We're too low
+			bottom = middle+1;
+			middle = bottom + (top -bottom)/2;
+		}
+		else{
+			// We're too high
+			top = middle -1;
+			middle = bottom + (top-bottom)/2;
+		}
+
+	}
+	if(the_shard->directory[middle].id == id){
+		// we've found what we're looking for
+		return middle;
+	}
+
+	// if we get here, we didn't find a match
+	if(the_shard->directory[middle].id > id){
+		return middle;
+	}
+	else{
+		// test code, take out when verified
+		if (middle == the_shard->num_objects-1){
+			p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
+		}
+		if(the_shard->directory[middle+1].id > id){
+			return middle+1;
 		}
 		else{
 			p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
