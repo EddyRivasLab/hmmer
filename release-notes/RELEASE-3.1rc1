@@ -1,0 +1,26 @@
+HMMER 3.1rc1 release notes 
+HMMER3.1 release candidate 1
+http://hmmer.org/
+TJW, Sun Dec 25 20:39:26 MST 2016
+________________________________________________________________
+
+# Previous release: 3.1b2; 22 Feb 2015
+# This is a temporary issue-tracking document
+# Before release, print for posterity; delete xref's; 
+#    move this note and TO-DO to next notes
+# After release, this becomes the release notes document
+
+
+3.1rc1 includes the following small changes:
+
+-:- Improved autodetection of query format for nhmmer, and
+    of MSA files in general. 
+
+
+Bugfixes:
+
+-:- #h108 nhmmer corrupted by * residues in input seqs 
+
+-:- #h109 Query name, accession, etc missing with "-A" option. Impacted
+          parsing of results with multi-hmm queries. (github Issue #7)
+

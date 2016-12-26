@@ -1,12 +1,12 @@
 ID              h108
 TITLE           nhmmer corrupted by * residues in input seqs
 AFFECTS         3.1b2 and later (probably earlier too)
-FIXED_IN        -
+FIXED_IN        3.1rc1
 STATUS          CLOSED
 XREF            SRE:J15/28
 REPORTED_BY     Robert Raymond (robr@rams.colostate.edu) 22 Apr 2015
 OPENED_DATE     SRE, Sat Apr 25 08:15:27 2015
-CLOSED_DATE     -
+CLOSED_DATE     Sat Apr 25 08:15:27 2015
 DESCRIPTION     
   Original report was for nhmmscan dying with fatal NaN exception in
   fwdback.c. Narrowed to a test case of a DNA sequence
@@ -29,8 +29,6 @@ DESCRIPTION
   noncanonical residues. esl_abc_FExpectScVec() documentation says
   that K, Kp-1, Kp-2 must be set by caller; UpdateFwdEmissionScores()
   was not doing that.  Result: uninitialized scores for -, *, ~.
-  
-
 //
 ID              h107
 TITLE           hmmsim only worked for Amino Acid models

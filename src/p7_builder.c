@@ -139,19 +139,6 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
       default:       bld->prior = p7_prior_CreateLaplace(abc); break;
       }
       if (bld->prior == NULL) goto ERROR;
-      /*
-      if      (go != NULL) {
-        if (esl_opt_IsOn(go, "--tmm"))  bld->prior->tm->alpha[0][0] = esl_opt_GetReal(go, "--tmm"); // TMM
-        if (esl_opt_IsOn(go, "--tmi"))  bld->prior->tm->alpha[0][1] = esl_opt_GetReal(go, "--tmi"); // TMM
-        if (esl_opt_IsOn(go, "--tmd"))  bld->prior->tm->alpha[0][2] = esl_opt_GetReal(go, "--tmd"); // TMM
-
-        if (esl_opt_IsOn(go, "--tim"))  bld->prior->ti->alpha[0][0] = esl_opt_GetReal(go, "--tim"); // TMM
-        if (esl_opt_IsOn(go, "--tii"))  bld->prior->ti->alpha[0][1] = esl_opt_GetReal(go, "--tii"); // TMM
-
-        if (esl_opt_IsOn(go, "--tdm"))  bld->prior->td->alpha[0][0] = esl_opt_GetReal(go, "--tdm"); // TMM
-        if (esl_opt_IsOn(go, "--tdd"))  bld->prior->td->alpha[0][1] = esl_opt_GetReal(go, "--tdd"); // TMM
-      }
-      */
     }
 
 
@@ -870,7 +857,7 @@ build_model(P7_BUILDER *bld, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
 
 
 
-/* set_effective_seqnumber()
+/* effective_seqnumber()
  *
  * <hmm> comes in with weighted observed counts. It goes out with
  * those observed counts rescaled to sum to the "effective sequence
@@ -938,10 +925,6 @@ effective_seqnumber(P7_BUILDER *bld, const ESL_MSA *msa, P7_HMM *hmm, const P7_B
     p7_hmm_Scale(hmm, hmm->eff_nseq / (double) hmm->nseq);
 
   }
-
-  //this re-assignment of the wgt values is done in support of hmmbuild's --seq_weights_e flag
-  for (i = 0; i < msa->nseq; i++)
-    msa->wgt[i] *= (hmm->eff_nseq / (double) hmm->nseq);
 
   return eslOK;
 

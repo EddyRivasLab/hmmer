@@ -828,7 +828,7 @@ p7_hmm_ScaleExponential(P7_HMM *hmm, double exp)
 
     float count = esl_vec_FSum(hmm->mat[k], hmm->abc->K);
     float new_count = pow(count, exp);
-    double scale = count>0 ? new_count / count : 1.0;  /* if no counts in he clumn (strange, but possible), just use default freqs*/
+    double scale = count>0 ? new_count / count : 1.0;  /* if no counts in the column (strange, but possible), just use default freqs*/
 
     esl_vec_FScale(hmm->t[k],   p7H_NTRANSITIONS, scale);
     esl_vec_FScale(hmm->mat[k], hmm->abc->K,      scale);
