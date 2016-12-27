@@ -21,6 +21,6 @@ Bugfixes:
 
 -:- #h108 nhmmer corrupted by * residues in input seqs 
 
--:- #h109 Query name, accession, etc missing with "-A" option. Impacted
-          parsing of results with multi-hmm queries. (github Issue #7)
+-:- github issue 7: Query name, accession, etc missing with "-A" option. 
+    Impacted parsing of results with multi-hmm queries. 
 
