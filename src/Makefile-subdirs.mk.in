@@ -64,10 +64,10 @@ endif
 .PHONY: all dev check tests install uninstall distclean clean tags-append
 .FORCE:
 
-all:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS}
-dev:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
-check: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${UTESTS}
-tests: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${UTESTS}
+all:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS}
+dev:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
+check: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${UTESTS}
+tests: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${UTESTS}
 
 # In some subdirs, ${LIBOBJS} is empty. We can't give an empty arg string to 'ar'.
 # Hence the ! -z shell test on ${LIBOBJS} below.
@@ -125,8 +125,9 @@ ${PROGS}: @EXEC_DEPENDENCY@  libhmmer-${MODULE}.stamp ${MYLIBDEPS}
 	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${LIBS}
 
 ${UTESTS}: libhmmer-${MODULE}.stamp ${MYLIBDEPS}
-	@BASENAME=`echo $@ | sed -e 's/_utest//'| sed -e 's/^p7_//'` ;\
-	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
+	@BASENAME=`echo $@ | sed -e 's/_utest[0-9]*//'| sed -e 's/^p7_//'` ;\
+	FLAGNAME=`echo $@ | sed -e 's/_utest//'| sed -e 's/^p7_//'` ;\
+	DFLAG=`echo $${FLAGNAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
 	if test -e ${srcdir}/p7_$${BASENAME}.c; then \
            DFILE=${srcdir}/p7_$${BASENAME}.c ;\

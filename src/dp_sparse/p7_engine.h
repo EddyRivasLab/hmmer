@@ -15,7 +15,7 @@
 #include "base/p7_bg.h"
 #include "base/p7_envelopes.h"
 #include "base/p7_trace.h"
-
+#include "daemon/p7_hitlist.h" //  This probably wants to move somewhere else once we figure out how command-line search will work
 #include "dp_vector/p7_checkptmx.h"
 #include "dp_vector/p7_filtermx.h"
 #include "dp_vector/p7_oprofile.h"
@@ -114,6 +114,17 @@ typedef struct p7_engine_s {
   // Backward filter
   int (*bck)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh);
 
+
+  //! Current hitlist chunk that we're filling
+  P7_HIT_CHUNK *current_hit_chunk;
+
+  //! List of hits this engine has found.  
+  /*! This is a stub item, will be replaced by a global hitlist as that system gets built */
+  P7_HITLIST *hitlist;
+
+  //! Pool of hit objects to draw from
+  P7_HITLIST_ENTRY *empty_hit_pool;
+
 } P7_ENGINE;
 
 extern P7_ENGINE_PARAMS *p7_engine_params_Create (P7_MPAS_PARAMS *mpas_params);
@@ -139,7 +150,8 @@ extern int p7_engine_Main        (P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFIL
  * @param bg the background model to use
  * @return nothing
  */
-extern void p7_engine_Compare_Sequence_HMM(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg);
+extern int p7_engine_Compare_Sequence_HMM(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg);
+
 #endif /*p7ENGINE_INCLUDED*/
 /*****************************************************************
  * @LICENSE@

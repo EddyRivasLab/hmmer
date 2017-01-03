@@ -5,8 +5,116 @@
 #include "esl_dsqdata.h"
 #include "esl_alphabet.h"
 
+#include "hmmer.h"
+#include "hardware/hardware.h"
 #include "base/general.h"
 #include "daemon/shard.h"
+
+//! Reads the HMM file specified by filename, and builds a shard structure out of it.
+/*! 	@param filename the name of the .hmm file containing the database
+  	@param num_shards the number of shards the database will be divided into
+  	@param my_shard which shard of the database should be generated? Must be between 0 and num_shards
+  	@return the new shard  */
+P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t my_shard){
+	//! return value used to tell if many esl routines completed successfully
+	int status;
+
+	// allocate the base object that we're creating
+	P7_SHARD *the_shard;
+	ESL_ALLOC(the_shard, sizeof(P7_SHARD));
+
+	the_shard->data_type = HMM; // Only one possible data type for an HMM file
+
+	uint64_t num_hmms= 0; // Number of HMMs we've put in the database
+	uint64_t hmms_in_file = 0; // Number of HMMs we've seen in the file
+
+	uint64_t directory_size =100; // Number of HMMs we've allocated directory space for
+	ESL_ALLOC(the_shard->directory, (directory_size * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
+
+
+	uint64_t contents_buffer_size = 100 * sizeof(P7_OPROFILE *); // track how much space we've allocated for contents, start with space for 100 pointers
+	uint64_t descriptors_buffer_size = 100 * sizeof(P7_PROFILE *); // and for descriptors
+	ESL_ALLOC(the_shard->contents, contents_buffer_size);
+	ESL_ALLOC(the_shard->descriptors, descriptors_buffer_size);
+
+	uint64_t contents_offset = 0;
+	uint64_t descriptors_offset = 0;
+
+	char *contents_pointer = the_shard->contents;
+	char *descriptors_pointer = the_shard->descriptors;
+
+	ESL_ALPHABET   *abc     = NULL;
+ 	P7_HMMFILE     *hfp     = NULL;
+  	P7_BG          *bg      = NULL;
+  	P7_HMM         *hmm     = NULL;
+  	P7_PROFILE     *gm      = NULL;
+  	P7_OPROFILE    *om      = NULL;
+	P7_HARDWARE *hw =  p7_hardware_Create();
+
+
+	if (p7_hmmfile_OpenE(filename, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", filename);
+
+	while(p7_hmmfile_Read(hfp, &abc, &hmm) == eslOK){
+		// There's another HMM in the file
+		if(hmms_in_file % num_shards == my_shard){
+			// Need to put this HMM in the shard
+
+			// Create all of the standard data structures that define the HMM
+			bg = p7_bg_Create(abc);
+			gm = p7_profile_Create (hmm->M, abc);
+			om = p7_oprofile_Create(hmm->M, abc, hw->simd);
+  			p7_profile_Config   (gm, hmm, bg);
+  			p7_oprofile_Convert (gm, om);
+
+	  		while(num_hmms >= directory_size){
+  				// We need to allocate more space
+  				directory_size = directory_size *2;
+  				ESL_REALLOC(the_shard->directory, (directory_size * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
+  				contents_buffer_size = contents_buffer_size *2;
+  				ESL_REALLOC(the_shard->contents, contents_buffer_size);
+  				descriptors_buffer_size = descriptors_buffer_size *2;
+  				ESL_REALLOC(the_shard->descriptors, descriptors_buffer_size);
+  			}
+
+  			// Create the directory entry for this HMM now that we know there's space
+			the_shard->directory[num_hmms].id = num_hmms;
+    		 	the_shard->directory[num_hmms].contents_offset = contents_offset;
+    	 		the_shard->directory[num_hmms].descriptor_offset = descriptors_offset;
+
+    	 		// copying multi-level data structures into regions of memory that we might realloc is really hard, so instead
+    	 		// we store pointers to each HMM's oprofile and profile in the contents and descriptor structure, respectively
+    	 		P7_OPROFILE **contents_pointer = ((P7_OPROFILE **) the_shard->contents) + num_hmms;
+    	 		*contents_pointer = om;
+    	 		contents_offset += sizeof(P7_OPROFILE *);
+ 	 		P7_PROFILE **descriptors_pointer = ((P7_PROFILE **) the_shard->descriptors) + num_hmms;
+    	 		*descriptors_pointer = gm;
+    	 		descriptors_offset += sizeof(P7_OPROFILE *);
+
+	    	 	num_hmms+= 1; // Increment this last for ease of zero-based addressing
+  		}
+
+  		hmms_in_file++;
+  		// Done with this HMM, so tear down the data structures
+  		p7_hmm_Destroy(hmm);
+  		p7_bg_Destroy(bg);
+		
+	}
+
+
+	// realloc shard's memory buffers down to the actual size needed
+	ESL_REALLOC(the_shard->directory, (num_hmms * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
+	ESL_REALLOC(the_shard->contents, contents_offset);
+	//ESL_REALLOC(the_shard->descriptors, descriptors_offset); 
+	// PUT ME BACK WHEN PROFILE ADDED TO SHARD *************
+
+	// Shard is built, set some final values and return it
+	the_shard->num_objects = num_hmms;
+	return(the_shard);
+
+	// GOTO target used to catch error cases from ESL_ALLOC
+	ERROR:
+		p7_Fail("Unable to allocate memory in p7_shard_Create_hmmfile");
+}
 
 
 P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t my_shard){
@@ -185,7 +293,7 @@ void p7_shard_Destroy(P7_SHARD *the_shard){
 
 /* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns eslOK and a pointer to the 
    start of the object in ret_object.  If not, returns eslENORESULT and a pointer to the object with the next-lowest id in ret_object.  If id
-   is less than the id of the first object in the shard, returns eslENORESULT and NULL in ret_object */ 
+   is less than the id of the first object in the shard, returns eslFAIL and NULL in ret_object */ 
 int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_object){
 	/* binary search on id */
 	uint64_t top, bottom, middle;
@@ -194,9 +302,9 @@ int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_
 	top = the_shard->num_objects-1;
 	middle = top/2;
 
-	if(id > the_shard->directory[bottom].id){ // the specified id is bigger than the id of any object in the shard
+	if(id > the_shard->directory[top].id){ // the specified id is bigger than the id of any object in the shard
 		ret_object = NULL;
-		return eslENORESULT;
+		return eslFAIL;
 	}
 
 	while((top > bottom) && (the_shard->directory[middle].id != id)){
@@ -219,17 +327,17 @@ int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_
 	}
 
 	// if we get here, we didn't find a match
-	if(the_shard->directory[top].id < id){
-		*ret_object = the_shard->contents + the_shard->directory[top].contents_offset;
+	if(the_shard->directory[middle].id < id){
+		*ret_object = the_shard->contents + the_shard->directory[middle].contents_offset;
 		return eslENORESULT;
 	}
 	else{
 		// test code, take out when verified
-		if (top == 0){
+		if (middle == 0){
 			p7_Fail("search error in p7_shard_Find_Contents_Nextlow");
 		}
-		if(the_shard->directory[top-1].id > id){
-			*ret_object = the_shard->contents + the_shard->directory[top].contents_offset;
+		if(the_shard->directory[middle-1].id < id){
+			*ret_object = the_shard->contents + the_shard->directory[middle-1].contents_offset;
 			return eslENORESULT;
 		}
 		else{
@@ -238,6 +346,55 @@ int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_
 	}
 }
 
+/* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns the ID.  If not, returns the ID of the  object with the next-lower ID.  If there is no object with an ID less than or equal to the specified ID, returns all ones*/ 
+uint64_t p7_shard_Find_Id_Nextlow(P7_SHARD *the_shard, uint64_t id){
+	/* binary search on id */
+	uint64_t top, bottom, middle;
+
+	bottom = 0;
+	top = the_shard->num_objects-1;
+	middle = top/2;
+
+	if(id > the_shard->directory[top].id){ // the specified id is bigger than the id of any object in the shard
+		return((uint64_t) -1);
+	}
+
+	while((top > bottom) && (the_shard->directory[middle].id != id)){
+		if(the_shard->directory[middle].id < id){
+			// We're too low
+			bottom = middle+1;
+			middle = bottom + (top -bottom)/2;
+		}
+		else{
+			// We're too high
+			top = middle -1;
+			middle = bottom + (top-bottom)/2;
+		}
+
+	}
+	if(the_shard->directory[middle].id == id){
+		// we've found what we're looking for
+		return id;
+	}
+
+	// if we get here, we didn't find a match
+	if(the_shard->directory[middle].id < id){
+		return the_shard->directory[middle].id;
+	}
+	else{
+		// test code, take out when verified
+		if (middle == 0){
+			p7_Fail("search error in p7_shard_Find_Contents_Nextlow");
+		}
+		if(the_shard->directory[middle-1].id < id){
+			return the_shard->directory[middle-1].id;
+		
+		}
+		else{
+			p7_Fail("search error in p7_shard_Find_Contents_Nextlow");
+		}
+	}
+}
 /* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns eslOK and a pointer to the 
    start of the object in ret_object.  If not, returns eslENORESULT and a pointer to the object with the next-highest id in ret_object.  If id
    is greater than the id of the last object in the shard, returns eslENORESULT and NULL in ret_object */ 
@@ -274,18 +431,118 @@ int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret
 	}
 
 	// if we get here, we didn't find a match
-	if(the_shard->directory[top].id > id){
-		*ret_object = the_shard->contents + the_shard->directory[top].contents_offset;
+	if(the_shard->directory[middle].id > id){
+		*ret_object = the_shard->contents + the_shard->directory[middle].contents_offset;
 		return eslENORESULT;
 	}
 	else{
 		// test code, take out when verified
-		if (top == the_shard->num_objects-1){
+		if (middle == the_shard->num_objects-1){
 			p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
 		}
-		if(the_shard->directory[top+1].id > id){
-			*ret_object = the_shard->contents + the_shard->directory[top].contents_offset;
+		if(the_shard->directory[middle+1].id > id){
+			*ret_object = the_shard->contents + the_shard->directory[middle+1].contents_offset;
 			return eslENORESULT;
+		}
+		else{
+			p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
+		}
+	}
+}
+
+/* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns the id.  
+If not, returns the id of the object with the next higher ID.  if there is no such object, returns all ones  */ 
+uint64_t p7_shard_Find_Id_Nexthigh(P7_SHARD *the_shard, uint64_t id){
+	/* binary search on id */
+	uint64_t top, bottom, middle;
+
+	bottom = 0;
+	top = the_shard->num_objects-1;
+	middle = top/2;
+
+	if(id > the_shard->directory[top].id){ // the specified id is bigger than the id of any object in the shard
+		return (uint64_t) -1;
+	}
+
+	while((top > bottom) && (the_shard->directory[middle].id != id)){
+		if(the_shard->directory[middle].id < id){
+			// We're too low
+			bottom = middle+1;
+			middle = bottom + (top -bottom)/2;
+		}
+		else{
+			// We're too high
+			top = middle -1;
+			middle = bottom + (top-bottom)/2;
+		}
+
+	}
+	if(the_shard->directory[middle].id == id){
+		// we've found what we're looking for
+		return id;
+	}
+
+	// if we get here, we didn't find a match
+	if(the_shard->directory[middle].id > id){
+		return the_shard->directory[middle].id;
+	}
+	else{
+		// test code, take out when verified
+		if (middle == the_shard->num_objects-1){
+			p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
+		}
+		if(the_shard->directory[middle+1].id > id){
+			return the_shard->directory[middle+1].id;
+		}
+		else{
+			p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
+		}
+	}
+}
+
+/* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns the corresponding index into the.  
+shard's directory. If not, returns the index of the object with the next higher ID.  if there is no such object, returns all ones  */ 
+uint64_t p7_shard_Find_Index_Nexthigh(P7_SHARD *the_shard, uint64_t id){
+	/* binary search on id */
+	uint64_t top, bottom, middle;
+
+	bottom = 0;
+	top = the_shard->num_objects-1;
+	middle = top/2;
+
+	if(id > the_shard->directory[top].id){ // the specified id is bigger than the id of any object in the shard
+		return (uint64_t) -1;
+	}
+
+	while((top > bottom) && (the_shard->directory[middle].id != id)){
+		if(the_shard->directory[middle].id < id){
+			// We're too low
+			bottom = middle+1;
+			middle = bottom + (top -bottom)/2;
+		}
+		else{
+			// We're too high
+			top = middle -1;
+			middle = bottom + (top-bottom)/2;
+		}
+
+	}
+	if(the_shard->directory[middle].id == id){
+		// we've found what we're looking for
+		return middle;
+	}
+
+	// if we get here, we didn't find a match
+	if(the_shard->directory[middle].id > id){
+		return middle;
+	}
+	else{
+		// test code, take out when verified
+		if (middle == the_shard->num_objects-1){
+			p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
+		}
+		if(the_shard->directory[middle+1].id > id){
+			return middle+1;
 		}
 		else{
 			p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
@@ -328,17 +585,17 @@ int p7_shard_Find_Descriptor_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **r
 	}
 
 	// if we get here, we didn't find a match
-	if(the_shard->directory[top].id > id){
-		*ret_object = the_shard->descriptors + the_shard->directory[top].descriptor_offset;
+	if(the_shard->directory[middle].id > id){
+		*ret_object = the_shard->descriptors + the_shard->directory[middle].descriptor_offset;
 		return eslENORESULT;
 	}
 	else{
 		// test code, take out when verified
-		if (top == the_shard->num_objects-1){
+		if (middle == the_shard->num_objects-1){
 			p7_Fail("search error in p7_shard_Find_Descriptor_Nexthigh");
 		}
-		if(the_shard->directory[top+1].id > id){
-			*ret_object = the_shard->descriptors + the_shard->directory[top].descriptor_offset;
+		if(the_shard->directory[middle+1].id > id){
+			*ret_object = the_shard->descriptors + the_shard->directory[middle+1].descriptor_offset;
 			return eslENORESULT;
 		}
 		else{
@@ -547,3 +804,63 @@ main(int argc, char **argv)
   	return eslOK;
 }
 #endif /*p7SHARD_TESTDRIVE*/
+
+#ifdef p7SHARD2_TESTDRIVE
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+static char usage[]  = "[-options] <hmmfile_name>";
+static char banner[] = "test driver for functions that create and process database shards";
+
+int
+main(int argc, char **argv)
+{
+	ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+	char *hmmfile = esl_opt_GetArg(go, 1);
+	ESL_ALPHABET   *abc     = NULL;
+ 	P7_HMMFILE     *hfp     = NULL;
+  	P7_BG          *bg      = NULL;
+  	P7_HMM         *hmm     = NULL;
+  	P7_PROFILE     *gm      = NULL;
+  	P7_OPROFILE    *om      = NULL;
+	P7_HARDWARE *hw =  p7_hardware_Create();
+
+	// make a shard out of the hmm file
+	P7_SHARD *shard1 = p7_shard_Create_hmmfile(hmmfile, 1, 0);
+	int shard_count = 0;
+
+	if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+
+	P7_OPROFILE **shard_oprofiles = (P7_OPROFILE **) shard1->contents;
+	P7_PROFILE **shard_profiles = (P7_PROFILE **) shard1->descriptors;
+
+	// Now, compare the data in the shard to the data in the file
+	while(p7_hmmfile_Read(hfp, &abc, &hmm) == eslOK){
+		// There's another HMM in the file
+		// First, create all of the standard data structures that define the HMM
+		bg = p7_bg_Create(abc);
+		gm = p7_profile_Create (hmm->M, abc);
+		om = p7_oprofile_Create(hmm->M, abc, hw->simd);
+  		p7_profile_Config   (gm, hmm, bg);
+  		p7_oprofile_Convert (gm, om);
+
+  		if(shard_count >= shard1->num_objects){
+  			p7_Fail("More HMMs found in hmmfile than in shard");
+  		}
+  		P7_PROFILE *shard_profile =  *(shard_profiles + (shard1->directory[shard_count].descriptor_offset / sizeof(P7_PROFILE *)));
+		P7_OPROFILE *shard_oprofile =  *(shard_oprofiles + (shard1->directory[shard_count].contents_offset / sizeof(P7_OPROFILE *)));
+  		p7_oprofile_Compare(shard_oprofile, om, 0.01, "Shard oprofile failed to match HMM oprofile");
+  		p7_profile_Compare(shard_profile, gm, 0.01);
+  		shard_count++;
+  	}
+  	if(shard_count != shard1->num_objects){
+  		p7_Fail("Object number mis-match between shard and hmmfile %d vs %d", shard_count, shard1->num_objects);
+  	}
+    	fprintf(stderr, "#  status = ok\n");
+  	return eslOK;
+}
+
+#endif /*p7SHARD2_TESTDRIVE*/

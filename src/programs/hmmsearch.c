@@ -789,6 +789,9 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if (dbfmt == eslSQFILE_UNKNOWN) mpi_failure("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
 
+  P7_HARDWARE *hw;
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+  
   /* Open the target sequence database */
   status = esl_sqfile_Open(cfg->dbfile, dbfmt, p7_SEQDBENV, &dbfp);
   if      (status == eslENOTFOUND) mpi_failure("Failed to open sequence file %s for reading\n",          cfg->dbfile);
@@ -855,13 +858,13 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       /* Convert to an optimized model */
       gm = p7_profile_Create (hmm->M, abc);
-      om = p7_oprofile_Create(hmm->M, abc);
+      om = p7_oprofile_Create(hmm->M, abc, hw->simd);
       p7_profile_Config(gm, hmm, bg);
       p7_oprofile_Convert(gm, om);
 
       /* Create processing pipeline and hit list */
       th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
-      pli = p7_pipeline_Create(go, hmm->M, 100, FALSE, p7_SEARCH_SEQS);
+      pli = p7_pipeline_Create(go, hmm->M, 100, FALSE, p7_SEARCH_SEQS, hw->simd);
       p7_pipeline_NewModel(pli, om, bg);
 
       /* Main loop: */
@@ -1065,7 +1068,9 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   char             errbuf[eslERRBUFSIZE];
 
   w = esl_stopwatch_Create();
-
+  P7_HARDWARE *hw;  // get information about CPU
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+  
   /* Open the target sequence database */
   status = esl_sqfile_Open(cfg->dbfile, dbfmt, p7_SEQDBENV, &dbfp);
   if      (status == eslENOTFOUND) mpi_failure("Failed to open sequence file %s for reading\n",          cfg->dbfile);
@@ -1106,12 +1111,12 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       /* Convert to an optimized model */
       gm = p7_profile_Create (hmm->M, abc);
-      om = p7_oprofile_Create(hmm->M, abc);
+      om = p7_oprofile_Create(hmm->M, abc, hw->simd);
       p7_profile_Config(gm, hmm, bg);
       p7_oprofile_Convert(gm, om);
 
       th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
-      pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
+      pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS, hw->simd); /* L_hint = 100 is just a dummy for now */
       p7_pipeline_NewModel(pli, om, bg);
 
       /* receive a sequence block from the master */

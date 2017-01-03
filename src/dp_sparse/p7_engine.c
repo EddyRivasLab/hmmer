@@ -21,12 +21,14 @@
 
 #include "dp_sparse/p7_engine.h"  // FIXME: we'll move the engine somewhere else, I think
 
+#include "daemon/p7_hitlist.h" //  This probably wants to move somewhere else once we figure out how command-line search will work
 #include "easel.h"
 #include "esl_random.h"
 #include "esl_exponential.h"
 #include "esl_gumbel.h"
 
 #include "hardware/hardware.h"
+#define HIT_POOL_SIZE 100
 
 /*****************************************************************
  * 1. P7_ENGINE_PARAMS: config/control parameters for the Engine.
@@ -251,7 +253,13 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
     }
   }
 
+  // Set up structures for hit tracking
+  eng->current_hit_chunk = p7_hit_chunk_Create();
 
+  eng->hitlist = p7_hitlist_Create();
+
+  eng->empty_hit_pool = p7_hitlist_entry_pool_Create(HIT_POOL_SIZE);
+  
   return eng;
 
  ERROR:
@@ -305,6 +313,9 @@ p7_engine_Reuse(P7_ENGINE *eng)
   eng->fsc    = 0.;
   eng->asc_f  = 0.;
 
+  /* Don't clear out the current hit chunk -- that needs to stay around until we finish the entire search we're doing.
+     Caveat is that the chunk needs to be cleaned manually between searches */
+
   /* F1, F2, F3 are constants, they don't need to be reset. */
   return eslOK;
 }
@@ -334,6 +345,13 @@ p7_engine_Destroy(P7_ENGINE *eng)
 
       if (eng->params) p7_engine_params_Destroy(eng->params);
       if (eng->stats)  p7_engine_stats_Destroy (eng->stats);
+      if(eng->current_hit_chunk) p7_hit_chunk_Destroy(eng->current_hit_chunk);
+      if(eng->hitlist) p7_hitlist_Destroy(eng->hitlist);
+      while(eng->empty_hit_pool != NULL){
+        P7_HITLIST_ENTRY *temp = eng->empty_hit_pool;
+        eng->empty_hit_pool = eng->empty_hit_pool->next;
+        p7_hitlist_entry_Destroy(temp);
+      }
     }
   free(eng);
 }
@@ -541,7 +559,8 @@ p7_engine_Main(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm)
 }
 
 /* Calls the engine to compare a sequence to an HMM.  Heavily cribbed from Seans 0226-px code*/
-void p7_engine_Compare_Sequence_HMM(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg){
+// returns 0 if no hit was found, 1 if a hit was found
+int p7_engine_Compare_Sequence_HMM(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg){
 
     int status;
     // reset the models for the length of this sequence
@@ -552,7 +571,7 @@ void p7_engine_Compare_Sequence_HMM(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROF
     status = p7_engine_Overthruster(eng, dsq, L, om, bg);  
     if (status == eslFAIL) { // filters say no match
       p7_engine_Reuse(eng);
-      return;
+      return 0;
     }
 
     // if we get here, run the full comparison
@@ -561,6 +580,7 @@ void p7_engine_Compare_Sequence_HMM(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROF
 
     p7_engine_Reuse(eng);
 
+    return(1); // for now, everything that reaches the main stage is a hit
 }
 
 

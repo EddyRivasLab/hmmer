@@ -1029,6 +1029,9 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if (dbformat == eslSQFILE_UNKNOWN) mpi_failure("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
 
+  P7_HARDWARE *hw;  // get information about CPU
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+  
   bg    = p7_bg_Create(abc);
 
   /* Initialize builder configuration */
@@ -1143,7 +1146,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	  /* Create new processing pipeline and top hits list; destroy old. (TODO: reuse rather than recreate) */
 	  th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC);
-	  pli = p7_pipeline_Create(go, om->M, 400, FALSE, p7_SEARCH_SEQS); /* 400 is a dummy length for now */
+	  pli = p7_pipeline_Create(go, om->M, 400, FALSE, p7_SEARCH_SEQS, hw->simd); /* 400 is a dummy length for now */
 	  p7_pipeline_NewModel(pli, om, bg);
 
 	  /* Send to all the workers the optimized model to search with */
@@ -1393,7 +1396,9 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
     dbformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
     if (dbformat == eslSQFILE_UNKNOWN) mpi_failure("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
-
+  P7_HARDWARE *hw;  // get information about CPU
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+  
   bg = p7_bg_Create(abc);
 
   /* Initialize builder configuration */
@@ -1452,7 +1457,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	  /* Create new processing pipeline and top hits list; destroy old. (TODO: reuse rather than recreate) */
 	  th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC);
-	  pli = p7_pipeline_Create(go, om->M, 400, FALSE, p7_SEARCH_SEQS); /* 400 is a dummy length for now */
+	  pli = p7_pipeline_Create(go, om->M, 400, FALSE, p7_SEARCH_SEQS,hw->simd); /* 400 is a dummy length for now */
 	  p7_pipeline_NewModel(pli, om, bg);
 
 	  /* receive a sequence block from the master */

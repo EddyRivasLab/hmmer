@@ -65,6 +65,17 @@ typedef struct p7_shard{
  */
 P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t my_shard);
 
+//! Creates a shard from a file of HMMs
+/*! Creates a shard from a set of HMMs
+ * @param filename name of the file containing the HMMs
+ * @param num_shards the number of shards the database will be divided into
+ * @param my_shard the number of the shard that this function should create.  Must be between 0 and num_shards-1
+ *
+ * @return a pointer to the shard, or NULL on failure
+ */
+P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t my_shard);
+
+
 //! Searches the shard's directory for the object with the specified id or the next-highest id object in the shard
 /*! Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns eslOK and a pointer to the 
    start of the object in ret_object.  If not, returns eslENORESULT and a pointer to the object with the next-highest id in ret_object.  If id
@@ -75,6 +86,15 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
     */ 
 int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret_object);
 
+
+/* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns the id.  
+If not, returns the id of the object with the next higher ID.  if there is no such object, returns all ones  */ 
+uint64_t p7_shard_Find_Id_Nexthigh(P7_SHARD *the_shard, uint64_t id);
+uint64_t p7_shard_Find_Index_Nexthigh(P7_SHARD *the_shard, uint64_t id);
+/* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns the ID.  
+If not, returns the ID of the  object with the next-lower ID.  If there is no object with an ID less than or equal to the specified ID, returns all ones*/ 
+uint64_t p7_shard_Find_Id_Nextlow(P7_SHARD *the_shard, uint64_t id);
+
 //! Searches the shard's directory for the object with the specified id or the next-lowest id object in the shard
 /*! Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns eslOK and a pointer to the 
    start of the object in ret_object.  If not, returns eslENORESULT and a pointer to the object with the next-lowest id in ret_object.  If id
@@ -84,6 +104,10 @@ int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret
 	@param ret_object the pointer where the address of the start of the object will be returned
     */ 
 int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_object);
+
+/* Does a binary search on the shard's directory to find the descriptors of the  with the specified id.  If it finds it, returns eslOK and a pointer to the  start of the object in ret_object.  If not, returns eslENORESULT and a pointer to the object with the next-highest id in ret_object.  If id
+   is greater than the id of the last object in the shard, returns eslENORESULT and NULL in ret_object */ 
+int p7_shard_Find_Descriptor_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret_object);
 
 //! frees memory allocated to a shard
 /*!  Frees the memory allocated to a shard
