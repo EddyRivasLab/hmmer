@@ -220,6 +220,17 @@ void *p7_daemon_worker_thread(void *worker_argument);
 */
 int p7_daemon_workernode_setup_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, P7_PROFILE *compare_model);
 
+//! Configure the workernode to perform an one-amino many-HMM (hmmscan-style) search 
+/* Configure the workernode to perform an one-HMM many-HMM (hmmscan-style) search 
+ * @param workernode workernode state object for the node
+ * @param database which database are we searching?
+ * @param start_object which object should we start searching at?  If 0, start at beginning of database
+ * @param end_object which object should we end the search at?  If 0, start at beginning of database. 
+ * @param compare_sequence the sequence to compare against
+ * @return eslOK on success, eslFAIL on failure
+*/
+int p7_daemon_workernode_setup_amino_vs_hmm_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, ESL_DSQ *compare_sequence, int64_t compare_L);
+
 //! ends a search and resets the workernode state for the next search.
 /*! should be called by the master thread after all worker threads have completed their work */
 void p7_daemon_workernode_end_search(P7_DAEMON_WORKERNODE_STATE *workernode);
@@ -232,7 +243,7 @@ void p7_daemon_workernode_end_search(P7_DAEMON_WORKERNODE_STATE *workernode);
 * @return the number of objects in the chunk, or 0 if there is no work available
 */ 
 uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, char **search_pointer);
-
+uint64_t worker_thread_get_chunk_by_index(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, uint64_t *start_index);
 //! Grab a chunk of work from the worker's queue.
 /*! If there's any work left in the worker's queue, grabs a chunk.  
 * @param workernode the P7_DAEMON_WORKERNODE_STATE structure for this node

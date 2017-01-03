@@ -406,12 +406,12 @@ void p7_print_hitlist(char *filename, P7_HITLIST *th){
 	outfile = fopen(filename, "w");
 	uint64_t count = 0;
 	P7_HITLIST_ENTRY *hits = th->hit_list_start;
-
 	while(hits != NULL){
 		fprintf(outfile, "%lu %s %s %s\n", hits->hit->seqidx, hits->hit->name, hits->hit->acc, hits->hit->desc);
 		hits = hits->next;
 		count++;
 	}
+	printf("%lu hits found\n", count);
 	fprintf(outfile, "%lu hits found\n", count);
 }
 

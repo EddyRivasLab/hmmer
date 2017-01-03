@@ -313,6 +313,9 @@ p7_engine_Reuse(P7_ENGINE *eng)
   eng->fsc    = 0.;
   eng->asc_f  = 0.;
 
+  /* Don't clear out the current hit chunk -- that needs to stay around until we finish the entire search we're doing.
+     Caveat is that the chunk needs to be cleaned manually between searches */
+
   /* F1, F2, F3 are constants, they don't need to be reset. */
   return eslOK;
 }
