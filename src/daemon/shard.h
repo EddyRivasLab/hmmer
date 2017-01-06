@@ -53,6 +53,8 @@ typedef struct p7_shard{
 
 	//! Separate blob for the descriptive data
 	char *descriptors;
+
+	ESL_ALPHABET *abc;  // the alphabet used by this database
 } P7_SHARD;
 
 //! Creates a shard from a set of dsqdata files

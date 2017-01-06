@@ -100,7 +100,7 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
 		
 	}
 
-
+	the_shard->abc = abc;  // copy the alphabet into the shard so we can free it when done
 	// realloc shard's memory buffers down to the actual size needed
 	ESL_REALLOC(the_shard->directory, (num_hmms * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
 	ESL_REALLOC(the_shard->contents, contents_offset);
@@ -134,13 +134,13 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
 	P7_SHARD *the_shard;
 	ESL_ALLOC(the_shard, sizeof(P7_SHARD));
 
-
+	ESL_ALPHABET *abc = NULL;
 	//! dsqdata object
 	ESL_DSQDATA    *dd      = NULL;
 
 	// pass NULL to the byp_alphabet input of esl_dsqdata_Open to have it get its alphabet from the dsqdata files
 	// only configure for one reader thread
-	status = esl_dsqdata_Open(NULL, basename, 1, &dd);
+	status = esl_dsqdata_Open(&abc, basename, 1, &dd);
 	if(status != eslOK){
 		p7_Fail("Unable to open dsqdata database %s\n", basename);
 	}
@@ -164,6 +164,7 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
 			p7_Fail("Unsupported alphabet type found in dsqdata file");
 	}
 
+	the_shard->abc = abc;  // save the alphabet in the shard so we can free it when done
 	// Figure out how many sequences should be in the shard when we're done
 	the_shard->num_objects = dd->nseq / num_shards;
  	if (my_shard < (dd->nseq % num_shards)){
@@ -282,6 +283,8 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
 
 /* frees memory allocated to a shard */
 void p7_shard_Destroy(P7_SHARD *the_shard){
+
+	esl_alphabet_Destroy(the_shard->abc);  // free the shard's alphabet
 	// free all of the heap-allocated sub-objects
 	free(the_shard->directory);
 	free(the_shard->contents);
