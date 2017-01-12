@@ -1,7 +1,7 @@
 # nhmmer :: search a DNA model or alignment against a DNA database
-# HMMER 3.1 (February 2013); http://hmmer.org/
-# Copyright (C) 2011 Howard Hughes Medical Institute.
-# Freely distributed under the GNU General Public License (GPLv3).
+# HMMER 3.1 (February 2017); http://hmmer.org/
+# Copyright (C) 2017 Howard Hughes Medical Institute.
+# Freely distributed under the 3-Clause BSD open source license.
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # query HMM file:                  MADE1.hmm
 # target sequence database:        dna_target.fa
