@@ -563,10 +563,14 @@ fi
 if test "y$vector_flags" != "y"; then
   ARM_CFLAGS="$vector_flags"
   NEON_CFLAGS="$vector_flags"
+  NEON64_CFLAGS="$vector_flags"
 fi
 
-AC_SUBST(NEON_CFLAGS)
 AC_SUBST(ARM_CFLAGS)
+AC_SUBST(NEON_CFLAGS)
+AC_SUBST(NEON64_CFLAGS)
+
+
 
 # If we're using SSE, figure out our @SIMD_CFLAGS@
 if test "$impl_choice" = "sse" && test "x$SIMD_CFLAGS" = x; then
