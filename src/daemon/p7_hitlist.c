@@ -411,8 +411,9 @@ void p7_print_hitlist(char *filename, P7_HITLIST *th){
 		hits = hits->next;
 		count++;
 	}
-	printf("%lu hits found\n", count);
+//	printf("%lu hits found\n", count);
 	fprintf(outfile, "%lu hits found\n", count);
+	fclose(outfile);
 }
 
 //! Destroys a hitlist and frees its memory

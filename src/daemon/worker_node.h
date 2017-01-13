@@ -13,10 +13,10 @@
 //! Structure that describes a region of work assigned to a node
 typedef struct p7_work_descriptor{
 	//! object id of the start of this block of work
-	uint64_t start;
+	volatile uint64_t start;
 
 	//! object id of the end of this block of work
-	uint64_t end;
+	volatile uint64_t end;
 
 	//! lock for this descriptor, used for work-stealing
 	pthread_mutex_t lock;
