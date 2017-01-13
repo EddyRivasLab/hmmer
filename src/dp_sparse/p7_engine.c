@@ -429,7 +429,7 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
   if (eng->stats) eng->stats->n_past_msv++;
 
   /* Biased composition HMM, ad hoc, acts as a modified null */
-  if (do_biasfilter)
+  if  (do_biasfilter)
     {
       if ((status = p7_bg_FilterScore(bg, dsq, L, &(eng->biassc))) != eslOK) return status;
       seq_score = (eng->mfsc - eng->biassc) / eslCONST_LOG2;
