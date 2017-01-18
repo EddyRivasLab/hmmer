@@ -45,6 +45,7 @@ typedef struct {
   P7_PIPELINE      *pli;         /* work pipeline                           */
   P7_TOPHITS       *th;          /* top hit results                         */
   P7_OPROFILE      *om;          /* optimized query profile                 */
+  P7_SCOREDATA     *scoredata;   /* hmm-specific data used by nhmmer */
 } WORKER_INFO;
 
 #define REPOPTS     "-E,-T,--cut_ga,--cut_nc,--cut_tc"
@@ -70,6 +71,7 @@ static ESL_OPTIONS options[] = {
   { "--tblout",     eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save parseable table of per-sequence hits to file <f>",        2 },
   { "--domtblout",  eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save parseable table of per-domain hits to file <f>",          2 },
   { "--pfamtblout", eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save table of hits and domains to file, in Pfam format <f>",  99 }, /* not for phmmert */
+  { "--aliscoresout", eslARG_OUTFILE, NULL,NULL,NULL,    NULL,  NULL,  NULL,              "save scores for each position in each alignment to <f>",       2 },
   { "--acc",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "prefer accessions over names in output",                       2 },
   { "--noali",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't output alignments, so output is smaller",                2 },
   { "--notrans",    eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't show the translated DNA sequence in domain alignment",   2 }, /*for phmmert */
@@ -247,6 +249,8 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--tblout")     && fprintf(ofp, "# per-seq hits tabular output:     %s\n",             esl_opt_GetString(go, "--tblout"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--domtblout")  && fprintf(ofp, "# per-dom hits tabular output:     %s\n",             esl_opt_GetString(go, "--domtblout"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--pfamtblout") && fprintf(ofp, "# pfam-style tabular hit output:   %s\n",             esl_opt_GetString(go, "--pfamtblout")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--aliscoresout")  && fprintf(ofp, "# alignment scores output:         %s\n",          esl_opt_GetString(go, "--aliscoresout")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+
   if (esl_opt_IsUsed(go, "--acc")        && fprintf(ofp, "# prefer accessions over names:    yes\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--noali")      && fprintf(ofp, "# show alignments in output:       no\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--notextw")    && fprintf(ofp, "# max ASCII text line length:      unlimited\n")                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -410,12 +414,16 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   FILE            *tblfp    = NULL;              /* output stream for tabular per-seq (--tblout)    */
   FILE            *domtblfp = NULL;              /* output stream for tabular per-dom (--domtblout) */
   FILE            *pfamtblfp= NULL;              /* output stream for pfam tabular output (--pfamtblout)    */
+  FILE            *aliscoresfp  = NULL;            /* output stream for alignment scores (--aliscoresout)   */
+
   P7_HMMFILE      *hfp      = NULL;              /* open input HMM file                             */
   ESL_SQFILE      *dbfp     = NULL;              /* open input sequence file                        */
   P7_HMM          *hmm      = NULL;              /* one HMM query                                   */
   ESL_ALPHABET    *abc      = NULL;              /* digital alphabet                                */
   int              dbfmt    = eslSQFILE_UNKNOWN; /* format code for sequence database file          */
   ESL_STOPWATCH   *w;
+  P7_SCOREDATA    *scoredata = NULL;
+
   int              textw    = 0;
   int              nquery   = 0;
   int              status   = eslOK;
@@ -485,6 +493,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (esl_opt_IsOn(go, "--tblout"))    { if ((tblfp    = fopen(esl_opt_GetString(go, "--tblout"),    "w")) == NULL)  esl_fatal("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblout")); }
   if (esl_opt_IsOn(go, "--domtblout")) { if ((domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)  esl_fatal("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblout")); }
   if (esl_opt_IsOn(go, "--pfamtblout")){ if ((pfamtblfp = fopen(esl_opt_GetString(go, "--pfamtblout"), "w")) == NULL)  esl_fatal("Failed to open pfam-style tabular output file %s for writing\n", esl_opt_GetString(go, "--pfamtblout")); }
+  if (esl_opt_IsOn(go, "--aliscoresout"))  { if ((aliscoresfp  = fopen(esl_opt_GetString(go, "--aliscoresout"),"w")) == NULL)  esl_fatal("Failed to open alignment scores output file %s for writing\n", esl_opt_GetString(go, "--aliscoresout")); }
 
 #ifdef HMMER_THREADS
   /* initialize thread data */
@@ -589,7 +598,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_ProfileConfig(hmm, info->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
       p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
 
-
+      if (esl_opt_IsOn(go, "--aliscoresout") ) {
+        scoredata = p7_hmm_ScoreDataCreate(om, NULL);
+        p7_hmm_ScoreDataComputeRest(om, scoredata);
+      }
 
       /* Create processing pipeline and hit list accumulators */
       tophits_accumulator  = p7_tophits_Create(); 
@@ -620,13 +632,20 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
            info[i].om  = p7_oprofile_Clone(om);
            info[i].ntqsq = qsqDNATxt; /* for printing the DNA target sequence in the domain hits display */
            info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
-           p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
+           status = p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
+           if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
+
+           info[i].pli->do_alignment_score_calc = esl_opt_IsOn(go, "--aliscoresout") ;
+
+           if (esl_opt_IsOn(go, "--aliscoresout") )
+             info[i].scoredata = p7_hmm_ScoreDataClone(scoredata, om->abc->Kp);
+
 
 #ifdef HMMER_THREADS
            if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
 #endif
          }
-	  
+
 #ifdef HMMER_THREADS
          if (ncpus > 0)  sstatus = thread_loop(threadObj, queue, dbfp, wrk->orf_block);
          else            sstatus = serial_loop(info, dbfp, wrk->orf_block);
@@ -676,7 +695,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (tblfp)     p7_tophits_TabularTargets(tblfp,    hmm->name, hmm->acc, tophits_accumulator, pipelinehits_accumulator, (nquery == 1));
       if (domtblfp)  p7_tophits_TabularDomains(domtblfp, hmm->name, hmm->acc, tophits_accumulator, pipelinehits_accumulator, (nquery == 1));
       if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, hmm->name, hmm->acc, tophits_accumulator, pipelinehits_accumulator);
-  
+      if (aliscoresfp) p7_tophits_AliScores(aliscoresfp, hmm->name, tophits_accumulator);
+
       esl_stopwatch_Stop(w);
       p7_pli_Statistics(ofp, pipelinehits_accumulator, w);
       if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -698,7 +718,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       }
 
 
-
+      if (scoredata) {
+        for (i = 0; i < infocnt; ++i)
+          p7_hmm_ScoreDataDestroy(info[i].scoredata);
+        p7_hmm_ScoreDataDestroy(scoredata);
+      }
 	  
       p7_pipeline_Destroy(pipelinehits_accumulator);
       p7_tophits_Destroy(tophits_accumulator);
@@ -761,6 +785,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (tblfp)         fclose(tblfp);
   if (domtblfp)      fclose(domtblfp);
   if (pfamtblfp)     fclose(pfamtblfp);
+  if (aliscoresfp)   fclose(aliscoresfp);
 
   return eslOK;
 
@@ -1349,7 +1374,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      p7_bg_SetLength(bg, dbsq->n);
 	      p7_oprofile_ReconfigLength(om, dbsq->n);
       
-	      p7_Pipeline(pli, om, bg, dbsq, NULL, th);
+	      p7_Pipeline(pli, om, bg, dbsq, NULL, th, NULL);
 
 	      esl_sq_Reuse(dbsq);
 	      p7_pipeline_Reuse(pli);
@@ -1437,8 +1462,8 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, ESL_SQ_BLOCK  *orf_block)
       p7_pli_NewSeq(info->pli, dbsq);
       p7_bg_SetLength(info->bg, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
-      
-      p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->ntqsq, info->th);
+
+      p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->ntqsq, info->th, info->scoredata);
 
       esl_sq_Reuse(dbsq);
       p7_pipeline_Reuse(info->pli);
@@ -1554,9 +1579,9 @@ pipeline_thread(void *arg)
 	  p7_pli_NewSeq(info->pli, dbsq);
 	  p7_bg_SetLength(info->bg, dbsq->n);
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
-	  
-	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->ntqsq, info->th);
-	  
+
+	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->ntqsq, info->th, info->scoredata);
+
 	  esl_sq_Reuse(dbsq);
 	  p7_pipeline_Reuse(info->pli);
 	}

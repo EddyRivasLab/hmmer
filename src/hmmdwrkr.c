@@ -960,7 +960,7 @@ search_thread(void *arg)
 
         p7_bg_SetLength(bg, dbsq.n);
         p7_oprofile_ReconfigLength(om, dbsq.n);
-        p7_Pipeline(pli, om, bg, &dbsq,  info->ntseq, th);
+        p7_Pipeline(pli, om, bg, &dbsq,  info->ntseq, th, NULL);
 
         p7_pipeline_Reuse(pli);
       }
@@ -1053,7 +1053,7 @@ scan_thread(void *arg)
       p7_bg_SetLength(bg, info->seq->n);
       p7_oprofile_ReconfigLength(*om, info->seq->n);
 	      
-      p7_Pipeline(pli, *om, bg, info->seq, info->ntseq, th);
+      p7_Pipeline(pli, *om, bg, info->seq, info->ntseq, th, NULL);
       p7_pipeline_Reuse(pli);
     }
   }

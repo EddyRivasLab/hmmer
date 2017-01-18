@@ -637,6 +637,82 @@ p7_pipeline_Merge(P7_PIPELINE *p1, P7_PIPELINE *p2)
   return eslOK;
 }
 
+/* Function:  p7_pli_computeAliScores()
+ * Synopsis:  Compute per-position scores for the alignment for a domain
+ *
+ * Purpose:   Compute per-position (Viterbi) scores for the alignment for a domain,
+ *            for the purpose of optionally printing these scores out in association
+ *            with each alignment. Such scores can, for example, be used to detangle
+ *            overlapping alignments (from different models)
+ *
+ * Args:      dom             - domain with the alignment for which we wish to compute scores
+ *            seq             - sequence in which domain resides
+ *            data            - contains model's emission and transition values in unstriped form
+ *            K               - alphabet size
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+static int
+p7_pli_computeAliScores(P7_DOMAIN *dom, ESL_DSQ *seq, const P7_SCOREDATA *data, int K)
+{
+  int status;
+  int i, j, k;
+  float sc;
+
+  //Compute score contribution of each position in the alignment to the overall Viterbi score
+  ESL_ALLOC( dom->scores_per_pos, sizeof(float) * dom->ad->N );
+  for (i=0; i<dom->ad->N; i++)  dom->scores_per_pos[i] = 0.0;
+  i = dom->iali - 1;        //sequence position
+  j = dom->ad->hmmfrom - 1; //model position
+  k = 0;
+  while ( k<dom->ad->N) {
+    if (dom->ad->model[k] != '.' && dom->ad->aseq[k] != '-') { //match
+      i++;  j++;
+      // Including the MM cost is a hack. The cost of getting to/from this match
+      // state does matter, but an IM or DM transition would improperly deflate
+      // the score of this column, so just give MM. That amount is offset out of
+      // the score shown for preceding indels
+      dom->scores_per_pos[k] = data->fwd_scores[K * j + seq[i]]
+                             +  (j==1 ? 0 : log(data->fwd_transitions[p7O_MM][j]) );
+      k++;
+    } else if (dom->ad->model[k] == '.' ) { // insert
+      //spin through the insert, accumulating cost;  only assign to final column in gap
+      dom->scores_per_pos[k] = -eslINFINITY;
+
+      sc = log(data->fwd_transitions[p7O_MI][j]);
+      i++; k++;
+      while (k<dom->ad->N && dom->ad->model[k] == '.') { //extend insert
+        dom->scores_per_pos[k] = -eslINFINITY;
+        sc += log(data->fwd_transitions[p7O_II][j]);
+        i++; k++;
+      }
+      sc += log(data->fwd_transitions[p7O_IM][j+1]) - log(data->fwd_transitions[p7O_MM][j+1]);
+      dom->scores_per_pos[k-1] = sc;
+
+    } else if (dom->ad->aseq[k] == '-' ) { // delete
+      dom->scores_per_pos[k] = -eslINFINITY;
+      sc = log(data->fwd_transitions[p7O_MD][j]);
+      j++; k++;
+      while (k<dom->ad->N && dom->ad->aseq[k] == '-')  { //extend delete
+        dom->scores_per_pos[k] = -eslINFINITY;
+        sc += log(data->fwd_transitions[p7O_DD][j]);
+        j++; k++;
+      }
+      sc += log(data->fwd_transitions[p7O_DM][j+1]) - log(data->fwd_transitions[p7O_MM][j+1]);
+      dom->scores_per_pos[k-1] = sc;
+    }
+  }
+
+  return eslOK;
+
+ERROR:
+  return eslEMEM;
+
+}
+
+
 /* Function:  p7_Pipeline()
  * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline.
  *
@@ -665,7 +741,7 @@ p7_pipeline_Merge(P7_PIPELINE *p1, P7_PIPELINE *p2)
  * Xref:      J4/25.
  */
 int
-p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist)
+p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist, const P7_SCOREDATA *data)
 {
   P7_HIT          *hit     = NULL;     /* ptr to the current hit output data      */
   float            usc, vfsc, fwdsc;   /* filter scores                           */
@@ -683,7 +759,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
 
   long             sq_from;        /* start location in query in amino acids */
   long             sq_to;          /* end llocation in query in amino acids */
- 
+
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
   p7_omx_GrowTo(pli->oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
@@ -744,6 +820,10 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   if (pli->ddef->nregions   == 0) return eslOK; /* score passed threshold but there's no discrete domains here       */
   if (pli->ddef->nenvelopes == 0) return eslOK; /* rarer: region was found, stochastic clustered, no envelopes found */
 
+  if (pli->do_alignment_score_calc) {
+    for (d = 0; d < pli->ddef->ndom; d++)
+      p7_pli_computeAliScores(pli->ddef->dcl + d, sq->dsq, data, om->abc->Kp);
+  }
 
   /* Calculate the null2-corrected per-seq score */
   if (pli->do_null2)
@@ -988,83 +1068,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   return eslOK;
 }
 
-
-
-/* Function:  p7_pli_computeAliScores()
- * Synopsis:  Compute per-position scores for the alignment for a domain
- *
- * Purpose:   Compute per-position (Viterbi) scores for the alignment for a domain,
- *            for the purpose of optionally printing these scores out in association
- *            with each alignment. Such scores can, for example, be used to detangle
- *            overlapping alignments (from different models)
- *
- * Args:      dom             - domain with the alignment for which we wish to compute scores
- *            seq             - sequence in which domain resides
- *            data            - contains model's emission and transition values in unstriped form
- *            K               - alphabet size
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    <eslEMEM> on allocation failure.
- */
-static int
-p7_pli_computeAliScores(P7_DOMAIN *dom, ESL_DSQ *seq, const P7_SCOREDATA *data, int K)
-{
-  int status;
-  int i, j, k;
-  float sc;
-
-  //Compute score contribution of each position in the alignment to the overall Viterbi score
-  ESL_ALLOC( dom->scores_per_pos, sizeof(float) * dom->ad->N );
-  for (i=0; i<dom->ad->N; i++)  dom->scores_per_pos[i] = 0.0;
-
-  i = dom->iali - 1;        //sequence position
-  j = dom->ad->hmmfrom - 1; //model position
-  k = 0;
-  while ( k<dom->ad->N) {
-    if (dom->ad->model[k] != '.' && dom->ad->aseq[k] != '-') { //match
-      i++;  j++;
-      // Including the MM cost is a hack. The cost of getting to/from this match
-      // state does matter, but an IM or DM transition would improperly deflate
-      // the score of this column, so just give MM. That amount is offset out of
-      // the score shown for preceding indels
-      dom->scores_per_pos[k] = data->fwd_scores[K * j + seq[i]]
-                             +  (j==1 ? 0 : log(data->fwd_transitions[p7O_MM][j]) );
-      k++;
-    } else if (dom->ad->model[k] == '.' ) { // insert
-      //spin through the insert, accumulating cost;  only assign to final column in gap
-      dom->scores_per_pos[k] = -eslINFINITY;
-
-      sc = log(data->fwd_transitions[p7O_MI][j]);
-      i++; k++;
-      while (k<dom->ad->N && dom->ad->model[k] == '.') { //extend insert
-        dom->scores_per_pos[k] = -eslINFINITY;
-        sc += log(data->fwd_transitions[p7O_II][j]);
-        i++; k++;
-      }
-      sc += log(data->fwd_transitions[p7O_IM][j+1]) - log(data->fwd_transitions[p7O_MM][j+1]);
-      dom->scores_per_pos[k-1] = sc;
-
-    } else if (dom->ad->aseq[k] == '-' ) { // delete
-      dom->scores_per_pos[k] = -eslINFINITY;
-      sc = log(data->fwd_transitions[p7O_MD][j]);
-      j++; k++;
-      while (k<dom->ad->N && dom->ad->aseq[k] == '-')  { //extend delete
-        dom->scores_per_pos[k] = -eslINFINITY;
-        sc += log(data->fwd_transitions[p7O_DD][j]);
-        j++; k++;
-      }
-      sc += log(data->fwd_transitions[p7O_DM][j+1]) - log(data->fwd_transitions[p7O_MM][j+1]);
-      dom->scores_per_pos[k-1] = sc;
-    }
-  }
-
-  return eslOK;
-
-ERROR:
-  return eslEMEM;
-
-}
 
 
 /* Function:  p7_pli_postViterbi_LongTarget()
@@ -1977,7 +1980,7 @@ main(int argc, char **argv)
       p7_bg_SetLength(bg, sq->n);
       p7_oprofile_ReconfigLength(om, sq->n);
   
-      p7_Pipeline(pli, om, bg, sq, NULL, hitlist);
+      p7_Pipeline(pli, om, bg, sq, NULL, hitlist, NULL);
 
       esl_sq_Reuse(sq);
       p7_pipeline_Reuse(pli);
@@ -2118,7 +2121,7 @@ main(int argc, char **argv)
       p7_bg_SetLength(bg, sq->n); /* SetLength() call MUST follow NewModel() call, because NewModel() resets the filter HMM, including its default expected length; see bug #h85 */
       p7_oprofile_ReconfigLength(om, sq->n);
 
-      p7_Pipeline(pli, om, bg, sq, NULL, hitlist);
+      p7_Pipeline(pli, om, bg, sq, NULL, hitlist, NULL);
       
       p7_oprofile_Destroy(om);
       p7_pipeline_Reuse(pli);

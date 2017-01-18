@@ -1702,7 +1702,7 @@ main(int argc, char **argv)
   p7_pli_NewSeq(pli, sq);
   p7_bg_SetLength(bg, sq->n);
   p7_oprofile_ReconfigLength(om, sq->n);
-  p7_Pipeline(pli, om, bg, sq, NULL, hitlist);
+  p7_Pipeline(pli, om, bg, sq, NULL, hitlist, NULL);
 
   if (hitlist->N == 0) { p7_Fail("target sequence doesn't hit"); }
 
