@@ -568,51 +568,117 @@ void *p7_daemon_worker_thread(void *worker_argument){
 			
 			// get the start of the set of sequences we should process
 			char *the_sequence;
-			p7_shard_Find_Contents_Nexthigh(workernode->database_shards[workernode->compare_database], workernode->work[my_id].start,  &(the_sequence));
+			
 
 			while(!workernode->no_steal){
-				while(workernode->work[my_id]. start <= workernode->work[my_id]. end){
-					// grab the sequence Id and length out of the shard
-					workernode->work[my_id].start+= workernode->num_shards;
-
-					uint64_t seq_id = *((uint64_t *) the_sequence);
-					the_sequence += sizeof(uint64_t);
-
-					uint64_t L = *((uint64_t *) the_sequence);
-					the_sequence += sizeof(uint64_t);
-	
-					if(p7_engine_Compare_Sequence_HMM(workernode->thread_state[my_id].engine, (ESL_DSQ *) the_sequence, L, workernode->thread_state[my_id].gm, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg)){
-						// we hit, so record the hit.  Stub, to be replaced with actual hit generation code
-//						printf("Thread %d found hit\n", my_id);
-			 			P7_HITLIST_ENTRY *the_entry;
-   			 			if(workernode->thread_state[my_id].engine->empty_hit_pool == NULL){ // we're out of empty hit entries, allocate some new ones
-		      				workernode->thread_state[my_id].engine->empty_hit_pool = p7_hitlist_entry_pool_Create(100);
-    						}
-    						the_entry = workernode->thread_state[my_id].engine->empty_hit_pool;
-    						workernode->thread_state[my_id].engine->empty_hit_pool = workernode->thread_state[my_id].engine->empty_hit_pool->next; // grab the first entry off the free list now that we know there is one
-
-			   			// Fake up a hit for comparison purposes.  Do not use for actual analysis
-   						P7_HIT *the_hit = the_entry->hit;
-   						the_hit->seqidx = seq_id;
-   						char *descriptors;
-
-			   			// Get the descriptors for this sequence
-   						p7_shard_Find_Descriptor_Nexthigh(workernode->database_shards[workernode->compare_database], seq_id, &descriptors);
-			   			the_hit->name = descriptors;
-   						the_hit->acc = descriptors + (strlen(the_hit->name) +1); //+1 for termination character
-						the_hit->desc = the_hit->acc + (strlen(the_hit->acc) +1); //+1 for termination character
-   						p7_add_entry_to_chunk(the_entry, workernode->thread_state[my_id].engine->current_hit_chunk);
-					}
-
-					the_sequence += L+2;  // advance to start of next sequence
-					// +2 for begin-of-sequence and end-of-sequence sentinels around dsq
-					sequences_processed++;
-				}				
-				// We're out of work, try to get some more
-				if(worker_thread_steal(workernode, my_id)){
-					// there was work to steal, so reset the sequence search pointer
-					p7_shard_Find_Contents_Nexthigh(workernode->database_shards[workernode->compare_database], workernode->work[my_id].start,  &(the_sequence));
+				while(pthread_mutex_trylock(&(workernode->work[my_id].lock))){
+					// spin-wait until the lock on our queue is cleared.  Should never be locked for long
 				}
+				// grab the start and end pointers from our work queue
+				uint64_t start = workernode->work[my_id].start;
+				uint64_t end = workernode->work[my_id].end;
+				pthread_mutex_unlock(&(workernode->work[my_id].lock)); // release lock
+			
+				if((start != -1) && (start <= end)){
+					uint64_t  chunk_end = start + ((end - start) >> 3);  // do 1/8 of remaining work or until we get a hit
+	//				printf("Thread %d found chunk_end = %lu\n", my_id, chunk_end);
+					p7_shard_Find_Contents_Nexthigh(workernode->database_shards[workernode->compare_database], start,  &(the_sequence));
+				//	printf("Thread %d starting search from %lu to %lu\n",my_id, start, chunk_end);
+					while(start <= chunk_end){
+						// grab the sequence Id and length out of the shard
+
+						uint64_t seq_id = *((uint64_t *) the_sequence);
+						the_sequence += sizeof(uint64_t);
+
+						uint64_t L = *((uint64_t *) the_sequence);
+						the_sequence += sizeof(uint64_t);
+	
+						p7_bg_SetLength(workernode->thread_state[my_id].bg, L);           
+    						p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om, L);
+    	
+    						// First, the overthruster filters
+    						int status = p7_engine_Overthruster(workernode->thread_state[my_id].engine, the_sequence, L, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg);  
+    					
+    						if (status == eslFAIL) { // filters say no match, go on to next sequence
+    							start+= workernode->num_shards;
+    						}
+    						else{
+    					//		printf("Thread %d found hit at sequence %lu\n",my_id, seq_id);
+    							// we're about to do a long computation, so verify that we have to
+    							while(pthread_mutex_trylock(&(workernode->work[my_id].lock))){
+							// spin-wait until the lock on our queue is cleared.  Should never be locked for long
+							}
+							// grab the start and end pointers from our work queue
+							workernode->work[my_id].start = start +1;  // update this so other threads steal correctly
+							end = workernode->work[my_id].end;
+							pthread_mutex_unlock(&(workernode->work[my_id].lock)); // release lock
+    							
+							if(end >= start){
+					//			printf("Thread %d found hit at ID %lu and sequence hadn't been stolen\n", my_id, seq_id);
+								// nobody else has stolen this sequence, so finish the work
+								// call main
+ 	   							p7_profile_SetLength(workernode->thread_state[my_id].gm, L);
+   								status = p7_engine_Main(workernode->thread_state[my_id].engine, the_sequence, L, 	workernode->thread_state[my_id].gm); 
+    				
+		    						// we hit, so record the hit.  Stub, to be replaced with actual hit generation code
+			
+	//							printf("Thread %d found hit\n", my_id);
+					 			P7_HITLIST_ENTRY *the_entry;
+   					 			if(workernode->thread_state[my_id].engine->empty_hit_pool == NULL){ 
+   					 			// we're out of empty 	hit  entries, allocate some new ones
+					      				workernode->thread_state[my_id].engine->empty_hit_pool = p7_hitlist_entry_pool_Create(100);
+    								}
+    								the_entry = workernode->thread_state[my_id].engine->empty_hit_pool;
+    								workernode->thread_state[my_id].engine->empty_hit_pool = workernode->thread_state[my_id].engine->empty_hit_pool->next; // grab the first entry off the free list now that we know there is one
+
+				   				// Fake up a hit for comparison purposes.  Do not use for actual analysis
+   								P7_HIT *the_hit = the_entry->hit;
+   								the_hit->seqidx = seq_id;
+   								char *descriptors;
+
+			   					// Get the descriptors for this sequence
+   								p7_shard_Find_Descriptor_Nexthigh(workernode->database_shards[workernode->compare_database], seq_id, &descriptors);
+			   					the_hit->name = descriptors;
+   								the_hit->acc = descriptors + (strlen(the_hit->name) +1); //+1 for termination character
+								the_hit->desc = the_hit->acc + (strlen(the_hit->acc) +1); //+1 for termination character
+   								p7_add_entry_to_chunk(the_entry, workernode->thread_state[my_id].engine->current_hit_chunk);
+   								start+= workernode->num_shards; // increment start now that we're done
+    							}
+    							else{
+    					//			printf("Thread %d found hit at ID %lu, but sequence had been stolen\n",my_id, seq_id);
+    								start = chunk_end +1;  // someone has stolen all our work, so advance past the end of the 
+    								//chunk to force a steal
+    							}
+    						}	
+
+    						// advance to next sequence;
+    						p7_engine_Reuse(workernode->thread_state[my_id].engine);
+						the_sequence += L+2;  // advance to start of next sequence
+						// +2 for begin-of-sequence and end-of-sequence sentinels around dsq
+						sequences_processed++;
+					}
+					// we're done with the chunk of work
+					// update our work queue
+    					while(pthread_mutex_trylock(&(workernode->work[my_id].lock))){
+					// spin-wait until the lock on our queue is cleared.  Should never be locked for long
+					}
+					if(workernode->work[my_id].end >= start){	// there's still work on our queue
+					//	printf("Thread %d found work remaining on its queue at chunk end\n", my_id);			
+						workernode->work[my_id].start = start; // record progress that we've made
+					}
+					else{
+						// no work left on our queue, mark it empty
+				//		printf("Thread %d found no work remaining on its queue at chunk end\n", my_id);
+						workernode->work[my_id].start = -1;
+					}
+					pthread_mutex_unlock(&(workernode->work[my_id].lock)); // release lock
+				}
+
+				else{
+				 // there's no work in the queue, get more
+					worker_thread_steal(workernode, my_id);
+					continue;
+				}	
 			}
 			break;
 		case HMM_SEARCH:
@@ -986,11 +1052,11 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
 	int victim_id = -1; // which thread are we going to steal from
 	int i;
 
-	//printf("Thread %d calling worker_thread_steal\n", my_id);
+//	printf("Thread %d calling worker_thread_steal\n", my_id);
 	// start by moving the hits found for the previous chunk onto the global hitlist.
 	if(workernode->thread_state[my_id].engine->current_hit_chunk->start != NULL){
 		// There's at least one hit in the chunk, so add the chunk to the worker node's hit list and allocate a new one
-	//	printf("Thread %d found hits at steal time\n", my_id);
+//		printf("Thread %d found hits at steal time\n", my_id);
 		p7_hitlist_add_Chunk(workernode->thread_state[my_id].engine->current_hit_chunk, workernode->hitlist);
 		workernode->thread_state[my_id].engine->current_hit_chunk = p7_hit_chunk_Create();
 	}
@@ -1016,11 +1082,16 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
 	}
 
 	if(victim_id == -1){
-	//	printf("Thread %d didn't find a good victim\n", my_id);
+//		printf("Thread %d didn't find a good victim\n", my_id);
 		// we didn't find a good target to steal from
 		workernode->no_steal = 1;  // don't need to lock this because it only makes a 0->1 transition during each search
 		return 0;
 	}
+
+	//debug code, take out when working
+//	if(victim_id == my_id){
+//		printf("Thread %d trying to steal from itself -- problem\n", my_id);
+//	}
 //	printf("Thread %d trying to steal from thread %d, which has %lu work available.\n", my_id, victim_id,workernode->work[i].end - workernode->work[i].start);
 	// If we get this far, we found someone to steal from.
 	while(pthread_mutex_trylock(&(workernode->work[victim_id].lock))){
@@ -1049,6 +1120,7 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
 	else{
 		// take it all
 		stolen_work = work_available;
+		workernode->work[victim_id].start = -1; // mark victim's queue empty
 //		printf("Thread %d trying to steal %lu work from thread %d, all of its available\n", my_id, stolen_work, victim_id);
 	}
 
