@@ -414,7 +414,7 @@ if test "$enable_sse" = "yes" || test "$enable_sse" = "check"; then
      esac   
    fi
 fi
-if test "$enable_sse" = "check" && test "$enable_vmx" != "yes"; then
+if test "$enable_sse" = "check" && test "$enable_vmx" != "yes" && test "$enable_dummy" != "yes"; then
    sre_save_CFLAGS="$CFLAGS"
    sre_save_CPPFLAGS="$CPPFLAGS"
    CFLAGS="$CFLAGS $SSE_CFLAGS"
