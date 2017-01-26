@@ -1,0 +1,8 @@
+Design document for the HMMER 4 HMM model
+
+This document is written in Knitr, a system that allows R code (for
+graph generation) to be embedded into LaTeX files.
+
+To generate a PDF version of the design document, just type "make" in
+the top-level directory.
+
