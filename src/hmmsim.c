@@ -10,7 +10,7 @@
 #include <string.h>
 #include <math.h>
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 #include "mpi.h"
 #endif 
 
@@ -41,7 +41,7 @@ static ESL_OPTIONS options[] = {
   { "-v",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "verbose: print scores",                             1 },
   { "-L",        eslARG_INT,    "100", NULL, "n>0",     NULL,  NULL, NULL, "length of random target seqs",                      1 },
   { "-N",        eslARG_INT,   "1000", NULL, "n>0",     NULL,  NULL, NULL, "number of random target seqs",                      1 },
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
   { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "run as an MPI parallel program",                    1 },
 #endif
   { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,      NULL,  NULL, NULL, "direct output to file <f>, not stdout",             2 },
@@ -123,17 +123,14 @@ struct cfg_s {
 static int  init_master_cfg(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf);
 
 static void serial_master  (ESL_GETOPTS *go, struct cfg_s *cfg);
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 static void mpi_master     (ESL_GETOPTS *go, struct cfg_s *cfg);
 static void mpi_worker     (ESL_GETOPTS *go, struct cfg_s *cfg);
+static int  minimum_mpi_working_buffer(ESL_GETOPTS *go, int N, int *ret_wn);
 #endif 
 static int process_workunit   (ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens, double *ret_mu, double *ret_lambda);
 static int output_result      (ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, int *alilens, double mu, double lambda);
 static int output_filter_power(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, double *scores, double mu, double lambda);
-
-#ifdef HAVE_MPI
-static int minimum_mpi_working_buffer(ESL_GETOPTS *go, int N, int *ret_wn);
-#endif 
 
 static int elide_length_model(P7_PROFILE *gm, P7_BG *bg);
 
@@ -225,7 +222,7 @@ main(int argc, char **argv)
   /* Main body:
    * Handed off to serial version or MPI masters and workers as appropriate.
    */
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
   if (esl_opt_GetBoolean(go, "--mpi")) 
     {
       /* Initialize MPI, figure out who we are, and whether we're running
@@ -245,7 +242,7 @@ main(int argc, char **argv)
       MPI_Finalize();		/* both workers and masters reach this line */
     }
   else
-#endif /*HAVE_MPI*/
+#endif /*HMMER_MPI*/
     {		
       /* No MPI? Then we're just the serial master. */
       serial_master(go, &cfg);
@@ -393,7 +390,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 }
 
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 /* mpi_master()
  * The MPI version of hmmsim.
  * Follows standard pattern for a master/worker load-balanced MPI program (J1/78-79).
@@ -593,7 +590,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
  ERROR:
   p7_Fail("Allocation error in mpi_worker");
 }
-#endif /*HAVE_MPI*/
+#endif /*HMMER_MPI*/
 
 
 /* process_workunit()
@@ -907,7 +904,7 @@ output_filter_power(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hm
 
 
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 /* the pack send/recv buffer must be big enough to hold either an error message or a result vector.
  * it may even grow larger than that, to hold largest HMM we send.
  */
@@ -961,9 +958,3 @@ elide_length_model(P7_PROFILE *gm, P7_BG *bg)
 }
 
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

@@ -13,7 +13,7 @@
 #include "p7_config.h"
 
 #include <string.h>
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 #include <mpi.h>
 #endif
 
@@ -640,9 +640,3 @@ main(int argc, char **argv)
 }
 #endif /*p7PROFILE_TESTDRIVE*/
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

@@ -7,8 +7,6 @@
 # Example: ./i18-nhmmer-generic.pl ..         ..       tmpfoo
 #
 # TJW, Fri Nov 12 11:07:31 EST 2010 [Janelia]
-# SVN $URL$
-# SVN $Id$
 
 BEGIN {
     $builddir  = shift;

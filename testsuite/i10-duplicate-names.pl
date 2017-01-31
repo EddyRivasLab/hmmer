@@ -7,7 +7,6 @@
 # Example:  ./i10-duplicate-names.pl ..         ..       tmpfoo
 #
 # SRE, Sun Dec 13 14:41:31 2009 [Yokohama, Japan]
-# SVN $Id$
 
 BEGIN {
     $builddir = shift;

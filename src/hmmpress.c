@@ -82,7 +82,7 @@ main(int argc, char **argv)
       if ((om->offs[p7_FOFFSET] = ftello(ffp)) == -1) p7_Fail("Failed to ftello() current disk position of MSV db file");
       if ((om->offs[p7_POFFSET] = ftello(pfp)) == -1) p7_Fail("Failed to ftello() current disk position of profile db file");
 
-#ifndef p7_IMPL_DUMMY
+#ifndef p7_ENABLE_DUMMY
       if (esl_newssi_AddKey(nssi, hmm->name, fh, om->offs[p7_MOFFSET], 0, 0) != eslOK)	p7_Fail("Failed to add key %s to SSI index", hmm->name);
       if (hmm->acc) {
 	if (esl_newssi_AddAlias(nssi, hmm->acc, hmm->name) != eslOK) p7_Fail("Failed to add secondary key %s to SSI index", hmm->acc);
@@ -161,10 +161,3 @@ open_db_files(ESL_GETOPTS *go, char *basename, FILE **ret_mfp,  FILE **ret_ffp, 
   return;
 }
 
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

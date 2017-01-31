@@ -1,4 +1,4 @@
-/* Non-optmized implementation of Forward and Backward algorithms.
+/* Non-optimized implementation of Forward and Backward algorithms.
  *
  * Contents:
  *   1. Forward/Backward wrapper API
@@ -7,10 +7,8 @@
  *   5. Unit tests.
  *   6. Test driver.
  *   7. Example.
- *   8. Copyright and license information.
  * 
  * MSF Tue Nov 3, 2009 [Janelia]
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -608,6 +606,3 @@ main(int argc, char **argv)
 }
 #endif /*p7FWDBACK_EXAMPLE*/
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/

@@ -10,9 +10,6 @@
 # Usage:   ./i21-rewind.pl <builddir> <srcdir> <tmpfile prefix>
 # Example: ./i21-rewind.pl ..         ..       tmpfoo
 # 
-# SVN $URL$
-# SVN $Id$
-
 
 BEGIN {
     $builddir  = shift;

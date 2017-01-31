@@ -8,8 +8,6 @@
  *   5. Other routines in the API.
  *   6. Unit tests.
  *   7. Test driver. 
- *   8. Copyright and license.
- * 
  */
 #include "p7_config.h"
 
@@ -1493,11 +1491,4 @@ main(int argc, char **argv)
 #endif /*p7HMM_TESTDRIVE*/
 /*-------------------- end of test driver ---------------------*/
 
-
-/************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- ************************************************************/
 

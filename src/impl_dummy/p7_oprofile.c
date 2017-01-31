@@ -10,7 +10,6 @@
  *   6. Unit tests.
  *   7. Test driver.
  *   8. Example.
- *   9. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -791,6 +790,4 @@ main(int argc, char **argv)
 
 
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
+

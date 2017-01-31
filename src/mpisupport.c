@@ -8,11 +8,10 @@
  *    5. Benchmark driver.
  *    6. Unit tests.
  *    7. Test driver.
- *    8. Copyright and license information.
  */
 #include "p7_config.h"		
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -1735,7 +1734,7 @@ main(int argc, char **argv)
 /*---------------------- end, test driver -----------------------*/
 
 
-#else /*!HAVE_MPI*/
+#else /*!HMMER_MPI*/
 
 /* If we don't have MPI compiled in, provide some nothingness to:
  *   a. prevent Mac OS/X ranlib from bitching about .o file that "has no symbols" 
@@ -1746,14 +1745,7 @@ void p7_mpisupport_DoAbsolutelyNothing(void) { return; }
 #if defined p7MPISUPPORT_TESTDRIVE || p7MPISUPPORT_EXAMPLE || p7MPISUPPORT_BENCHMARK
 int main(void) { return 0; }
 #endif
-#endif /*HAVE_MPI*/
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+#endif /*HMMER_MPI*/
 
 
 

@@ -7,10 +7,8 @@
  *   4. Unit tests
  *   5. Test driver
  *   6. Example
- *   7. Copyright and license information.
  * 
  * MSF Tue Nov 3, 2009 [Janelia]
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -583,9 +581,3 @@ main(int argc, char **argv)
 /*-------------------- end, example -----------------------------*/
 
 
-
-
-
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/

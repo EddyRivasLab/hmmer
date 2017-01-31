@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 #include "mpi.h"
 #endif
 
@@ -131,7 +131,7 @@ static ESL_OPTIONS options[] = {
 #ifdef HMMER_THREADS 
   { "--cpu",     eslARG_INT,    NULL,"HMMER_NCPU","n>=0",NULL,     NULL,  NULL,  "number of parallel CPU workers for multithreads",       8 },
 #endif
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
   { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,  NULL,  "run as an MPI parallel program",                        8 },
 #endif
   { "--stall",   eslARG_NONE,       FALSE, NULL, NULL,    NULL,     NULL,    NULL, "arrest after start: for attaching debugger to process", 8 },
@@ -203,7 +203,7 @@ static void thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, struct cfg_s *c
 static void pipeline_thread(void *arg);
 #endif /*HMMER_THREADS*/
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 static void  mpi_master    (const ESL_GETOPTS *go, struct cfg_s *cfg);
 static void  mpi_worker    (const ESL_GETOPTS *go, struct cfg_s *cfg);
 static void  mpi_init_open_failure(ESL_MSAFILE *afp, int status);
@@ -270,7 +270,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
   if (strcmp(*ret_alifile, "-") == 0 && ! esl_opt_IsOn(go, "--informat"))
     { if (puts("Must specify --informat to read <alifile> from stdin ('-')") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
   if (esl_opt_IsOn(go, "--mpi") && esl_opt_IsOn(go, "--cpu")) 
     {
       int mpisetby = esl_opt_GetSetter(go, "--mpi");
@@ -352,7 +352,7 @@ output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
 #ifdef HMMER_THREADS
   if (esl_opt_IsUsed(go, "--cpu")        && fprintf(cfg->ofp, "# number of worker threads:         %d\n",        esl_opt_GetInteger(go, "--cpu"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
 #endif
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
   if (esl_opt_IsUsed(go, "--mpi")        && fprintf(cfg->ofp, "# parallelization mode:             MPI\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 #endif
   if (esl_opt_IsUsed(go, "--seed"))  {
@@ -452,7 +452,7 @@ main(int argc, char **argv)
   /* Figure out who we are, and send control there: 
    * we might be an MPI master, an MPI worker, or a serial program.
    */
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
   if (esl_opt_GetBoolean(go, "--mpi")) 
     {
       cfg.do_mpi     = TRUE;
@@ -468,7 +468,7 @@ main(int argc, char **argv)
       MPI_Finalize();
     }
   else
-#endif /*HAVE_MPI*/
+#endif /*HMMER_MPI*/
     {
       usual_master(go, &cfg);
       esl_stopwatch_Stop(w);
@@ -693,7 +693,7 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
   return eslFAIL;
 }
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 /* mpi_master()
  * The MPI version of hmmbuild.
  * Follows standard pattern for a master/worker load-balanced MPI program (J1/78-79).
@@ -1040,7 +1040,7 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
   if (bld  != NULL) p7_builder_Destroy(bld);
   return;
 }
-#endif /*HAVE_MPI*/
+#endif /*HMMER_MPI*/
 
 
 static void
@@ -1419,6 +1419,4 @@ set_msa_name(struct cfg_s *cfg, char *errbuf, ESL_MSA *msa)
   return eslOK;
 }
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
+

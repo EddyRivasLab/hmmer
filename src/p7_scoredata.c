@@ -5,8 +5,6 @@
  *   1. The P7_SCOREDATA object: allocation, initialization, destruction.
  *   2. Unit tests.
  *   3. Test driver.
- *   4. Copyright and license.
- *
  */
 #include "p7_config.h"
 
@@ -444,11 +442,6 @@ main(int argc, char **argv)
 }
 #endif /* p7BG_TESTDRIVE */
 
-/************************************************************
- * @LICENSE@
- *
- * SVN $Id: p7_scoredata.c 3784 2011-12-07 21:51:25Z wheelert $
- * SVN $URL: https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk/src/p7_scoredata.c $
- ************************************************************/
+
 
 
