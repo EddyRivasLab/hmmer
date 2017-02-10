@@ -10,8 +10,6 @@
  *   7. The acceleration pipeline, vastly simplified, as one call. 
  *   8. Example 1: search mode (in a sequence db)
  *   9. Example 2: scan mode (in an HMM db)
- *   10. Copyright and license information
- * 
  */
 #include "p7_config.h"
 
@@ -53,7 +51,7 @@
 
 #include "search/modelconfig.h" /* used by the hmmscan workaround */
 #include "search/p7_pipeline.h"
-#include "hardware/hardware.h"
+
 
 /* SRE: FIXME 3.1 in progress */
 static int workaround_get_profile(P7_PIPELINE *pli, const P7_OPROFILE *om, const P7_BG *bg, P7_PROFILE **ret_gm);
@@ -141,7 +139,7 @@ typedef struct {
  * Throws:    <NULL> on allocation failure.
  */
 P7_PIPELINE *
-p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, enum p7_pipemodes_e mode, SIMD_TYPE simd)
+p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, enum p7_pipemodes_e mode)
 {
   P7_PIPELINE *pli  = NULL;
   int          status;
@@ -163,9 +161,9 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, 
   pli->n2sc = NULL;
   pli->wrk  = NULL;
   
-  if ( (pli->fx  = p7_filtermx_Create  (M_hint, simd))                                           == NULL) goto ERROR;
-  if ( (pli->cx  = p7_checkptmx_Create (M_hint, L_hint, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT), simd)) == NULL) goto ERROR; /* p7_RAMLIMIT=256MB, in p7_config.h.in */
-  if ( (pli->sm  = p7_sparsemask_Create(M_hint, L_hint, simd))                                   == NULL) goto ERROR;
+  if ( (pli->fx  = p7_filtermx_Create  (M_hint))                                           == NULL) goto ERROR;
+  if ( (pli->cx  = p7_checkptmx_Create (M_hint, L_hint, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT))) == NULL) goto ERROR; /* p7_RAMLIMIT=256MB, in p7_config.h.in */
+  if ( (pli->sm  = p7_sparsemask_Create(M_hint, L_hint, p7_VDEFAULT))                      == NULL) goto ERROR;
   if ( (pli->sxf = p7_sparsemx_Create  (pli->sm))                                          == NULL) goto ERROR;
   if ( (pli->sxb = p7_sparsemx_Create  (pli->sm))                                          == NULL) goto ERROR;
   if ( (pli->sxd = p7_sparsemx_Create  (pli->sm))                                          == NULL) goto ERROR;
@@ -1613,7 +1611,7 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
      //pli_tmp->gm = p7_profile_Clone(gm); // this keeps the default bg-based scoring.  Used for testing
 
      /* copy over the part of the sparse mask related to the current envelope*/
-     p7_sparsemask_Reinit(pli_tmp->sm, gm->M, env_len);
+     p7_sparsemask_Reinit(pli_tmp->sm, gm->M, env_len, p7_VDEFAULT);
      for (i=env_len; i >= 1; i--)
      {
        ii = i + env_offset - 1;
@@ -2050,19 +2048,17 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
   P7_HMM_WINDOWLIST vit_windowlist;
 
   P7_PIPELINE_LONGTARGET_OBJS *pli_tmp = NULL;
-  if(om->simd != SSE && om->simd != NEON && om->simd != NEON64){
+
+  if (om->simd != SSE && om->simd != NEON) 
     esl_fatal("p7_Pipeline_LongTarget only supports SSE and NEON SIMD types at the moment");
-  }
 
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
   ESL_ALLOC(pli_tmp, sizeof(P7_PIPELINE_LONGTARGET_OBJS));
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   pli_tmp->bg = p7_bg_Clone(bg);
   pli_tmp->gm = p7_profile_Clone(gm);
-  pli_tmp->om = p7_oprofile_Create(gm->M, gm->abc, om->simd);
-  pli_tmp->sm = p7_sparsemask_Create(gm->M, 100, om->simd);
+  pli_tmp->om = p7_oprofile_Create(gm->M, gm->abc);
+  pli_tmp->sm = p7_sparsemask_Create(gm->M, 100, p7_VDEFAULT);
   ESL_ALLOC(pli_tmp->scores, sizeof(float) * om->abc->Kp);
   if ( (pli_tmp->trc = p7_trace_CreateWithPP())            == NULL) { status = eslEMEM; goto ERROR; }
   if ( (pli_tmp->sxf = p7_sparsemx_Create (pli_tmp->sm))   == NULL) { status = eslEMEM; goto ERROR; }
@@ -2565,9 +2561,3 @@ main(int argc, char **argv)
 
 
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

@@ -111,9 +111,4 @@ extern int            p7_alidisplay_Compare(const P7_ALIDISPLAY *ad1, const P7_A
 
 
 #endif /*p7ALIDISPLAY_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

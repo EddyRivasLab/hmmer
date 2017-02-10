@@ -6,12 +6,10 @@
  *    4. Unit tests.
  *    5. Test driver.
  *    6. Example.
- *    7. Copyright and license information.
  *
  * See also: 
  *   modelconfig.c : routines that configure a profile given an HMM
  */
-
 #include "p7_config.h"
 
 #include <stdio.h>
@@ -884,10 +882,3 @@ main(int argc, char **argv)
 }
 #endif /* p7PROFILE_EXAMPLE */
 
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

@@ -3,10 +3,8 @@
  * Contents:
  *   1. Introduction
  *   2. p7_SSVFilter() implementation
- *   3. Copyright and license information
  * 
  * Bjarne Knudsen, CLC Bio
- * SVN $Id$
  */
 
 /*****************************************************************
@@ -405,20 +403,17 @@
  * Ignore the warnings and go look for the calc_band_2 function.
  *
  */
-//#define p7_log_array
 #include "p7_config.h"
+#ifdef eslENABLE_SSE
 
 #include <math.h>
 
-#if p7_CPU_ARCH == intel
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
 
-#include "x86intrin.h"
-#endif /* intel arch */
-
 #include "easel.h"
 #include "esl_sse.h"
+
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
 
@@ -433,9 +428,6 @@
 #define  MAX_BANDS 6
 #endif
 
-/* C doesn't allow ifdefs within macros, so we need to define separate macros for the SSE, AVX, AVX-512 code */
-
-#ifdef HAVE_SSE2
 #define STEP_SINGLE(sv)                         \
   sv   = _mm_subs_epi8(sv, *rsc); rsc++;        \
   xEv  = _mm_max_epu8(xEv, sv);	 
@@ -894,13 +886,11 @@ calc_band_18_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128
 uint8_t
 get_xE_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 {
-
   __m128i xEv;		           /* E state: keeps max for Mk->E as we go                     */
   __m128i beginv;                  /* begin scores                                              */
   uint8_t retval;
   int q;			   /* counter over vectors 0..nq-1                              */
-  int Q        = P7_NVB(om->M);   /* segment length: # of vectors                              */
-
+  int Q        = P7_NVB(om->M);    /* segment length: # of vectors                              */
   int bands;                       /* the number of bands (rounds) to use                       */
   beginv =  _mm_set1_epi8(128);
   xEv    =  beginv;
@@ -933,16 +923,13 @@ get_xE_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   }
   retval = esl_sse_hmax_epu8(xEv); // assign this here to allow checking vs AVX, AVX-512
 
-
- return retval;
-
+  return retval;
 }
 
 
 int
 p7_SSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
 {
-  extern uint64_t SSV_time;
   /* Use 16 bit values to avoid overflow due to moved baseline */
   uint16_t  xE;
   uint16_t  xJ;
@@ -989,14 +976,14 @@ p7_SSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc
   *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
   return eslOK;
 }
-#endif //HAVE_SSE
-#ifndef HAVE_SSE2 //null version of the function to avoid compilation problems if we don't have SSE
-int
-p7_SSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc){
- return eslENORESULT;  
-}
-#endif
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
+
+
+#else // ! eslENABLE_SSE
+
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_ssvfilter_sse_silence_hack(void) { return; }
+#if defined p7SSVFILTER_SSE_TESTDRIVE || p7SSVFILTER_SSE_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_SSE or not
 

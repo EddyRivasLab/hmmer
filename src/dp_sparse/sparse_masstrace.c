@@ -8,9 +8,7 @@
  *   4. Unit tests
  *   5. Test driver
  *   6. Example
- *   7. Copyright, license information.
  */
-
 #include "p7_config.h"
 
 #include "easel.h"
@@ -511,13 +509,11 @@ static void
 utest_approx_masstrace(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L)
 {
   char           msg[]  = "sparse masstrace, approx-masstrace unit test failed";
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   P7_PRIOR      *pri    = NULL;
   P7_HMM        *hmm    = NULL;
   P7_PROFILE    *gm     = p7_profile_Create(M, abc);
   ESL_SQ        *sq     = esl_sq_CreateDigital(abc);       /* space for generated (homologous) target seqs              */
-  P7_OPROFILE   *om     = p7_oprofile_Create(M, abc, hw->simd);
+  P7_OPROFILE   *om     = p7_oprofile_Create(M, abc);
   P7_CHECKPTMX  *ox     = NULL;
   P7_TRACE      *vtr    = p7_trace_CreateWithPP(); /* domain anchor selection in trace_Index() requires a pp-annotated trace */
   P7_TRACE      *str    = p7_trace_Create();
@@ -564,8 +560,8 @@ utest_approx_masstrace(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M,
   if ( p7_oprofile_ReconfigLength(om, sq->n) != eslOK) esl_fatal(msg);
 
   /* Fwd/Bck local filter to calculate the sparse mask */
-  if (  (ox = p7_checkptmx_Create(M, sq->n, ESL_MBYTES(32), hw->simd))    == NULL) esl_fatal(msg);
-  if (  (sm = p7_sparsemask_Create(M, sq->n, hw->simd))                   == NULL) esl_fatal(msg);
+  if (  (ox = p7_checkptmx_Create(M, sq->n, ESL_MBYTES(32)))    == NULL) esl_fatal(msg);
+  if (  (sm = p7_sparsemask_Create(M, sq->n, p7_VDEFAULT))      == NULL) esl_fatal(msg);
 
   if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
   if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
@@ -779,7 +775,7 @@ main(int argc, char **argv)
   p7_profile_Config(gm, hmm, bg);
 
   /* Allocate bands, matrices */
-  sm  = p7_sparsemask_Create(gm->M, sq->n);
+  sm  = p7_sparsemask_Create(gm->M, sq->n, p7_VDEFAULT);
   p7_sparsemask_AddAll(sm);
 
   /* Set the profile and null model's target length models */
@@ -856,14 +852,6 @@ main(int argc, char **argv)
 /*------------------ end, example driver ------------------------*/
 #endif /*p7SPARSE_MASSTRACE_EXAMPLE*/
 
-
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 
 /* 
  *  The probability mass that flows through state X at position i,k is calculated recursively:

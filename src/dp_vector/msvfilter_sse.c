@@ -12,20 +12,19 @@
  *   3. Unit tests
  *   4. Test driver
  *   5. Example
- *   6. Copyright and license information
  */
 #include "p7_config.h"
+#ifdef eslENABLE_SSE
 
 #include <stdio.h>
 #include <math.h>
-#if p7_CPU_ARCH == intel 
+
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
-#include "x86intrin.h"
-#endif
+
 #include "easel.h"
-#include "esl_sse.h"
 #include "esl_gumbel.h"
+#include "esl_sse.h"
 
 #include "base/p7_hmmwindow.h"
 #include "search/p7_pipeline.h"
@@ -36,14 +35,11 @@
 #include "dp_vector/msvfilter.h"
 
 
-
-//uint64_t SSV_time, MSV_time;
-uint64_t full_MSV_calls;
 /*****************************************************************
  * 1. The p7_MSVFilter() DP implementation.
  *****************************************************************/
  
-/* Function:  p7_MSVFilter()
+/* Function:  p7_MSVFilter_sse()
  * Synopsis:  Calculates MSV score, vewy vewy fast, in limited precision.
  *
  * Purpose:   Calculates an approximation of the MSV score for sequence
@@ -56,11 +52,6 @@ uint64_t full_MSV_calls;
  *            
  *            <ox> will be resized if needed. It's fine if it was
  *            just <_Reuse()'d> from a previous, smaller profile.
-
-
-
-
-
  *            The model may be in any mode, because only its match
  *            emission scores will be used. The MSV filter inherently
  *            assumes a multihit local mode, and uses its own special
@@ -77,40 +68,32 @@ uint64_t full_MSV_calls;
  *            this case, this is a high-scoring hit.
  *            <ox> may have been resized.
  *
- * Throws:    <eslEMEML> if <ox> reallocation fails.
+ * Throws:    <eslEMEM> if <ox> reallocation fails.
  */
-
 int
 p7_MSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)
 {
-  #ifdef HAVE_SSE2 // only build this function if we can compile SSE, otherwise make it a null function so that we don't have
-  // missing function problems with the library 
-
   // Don't reuse names to allow use of multiple ISAs at same time for debugging
-  register __m128i mpv;            /* previous row values                                       */
+  register __m128i mpv;      /* previous row values                                       */
   register __m128i xEv;      /* E state: keeps max for Mk->E as we go                     */
   register __m128i xBv;      /* B state: splatted vector of B[i-1] for B->Mk calculations */
   register __m128i sv;       /* temp storage of 1 curr row value in progress              */
   register __m128i biasv;    /* emission bias in a vector                                 */
   __m128i *dp;               /* the dp row memory                                         */
-  __m128i *rsc;        /* will point at om->rbv[x] for residue x[i]                 */
-  __m128i xJv;                     /* vector for states score                                   */
-  __m128i tjbmv;                   /* vector for cost of moving {JN}->B->M                      */
-  __m128i tecv;                    /* vector for E->C  cost                                     */
-  __m128i basev;                   /* offset for scores                                         */
-  __m128i ceilingv;                /* saturated simd value used to test for overflow            */
-  __m128i tempv;                   /* work vector                                               */
-  int Q        = P7_NVB(om->M);    /* segment length: # of vectors                              */
+  __m128i *rsc;              /* will point at om->rbv[x] for residue x[i]                 */
+  __m128i xJv;               /* vector for states score                                   */
+  __m128i tjbmv;             /* vector for cost of moving {JN}->B->M                      */
+  __m128i tecv;              /* vector for E->C  cost                                     */
+  __m128i basev;             /* offset for scores                                         */
+  __m128i ceilingv;          /* saturated simd value used to test for overflow            */
+  __m128i tempv;             /* work vector                                               */
+  int Q        = P7_NVB(om->M);    /* segment length: # of vectors                        */
   int q;         /* counter over vectors 0..nq-1                              */
-
- uint8_t  xJ;                     /* special states' scores                  */
-
- // extern uint64_t full_MSV_calls, SSV_time, MSV_time;
-
+  uint8_t  xJ;                     /* special states' scores                  */
   int i;         /* counter over sequence positions 1..L                      */
   int     cmp;
   int     status;
-//printf("Starting MSVFilter\n");
+
   /* Contract checks */
   ESL_DASSERT1(( om->mode == p7_LOCAL )); /* Production code assumes multilocal mode w/ length model <L> */
   ESL_DASSERT1(( om->L    == L ));	  /*  ... and it's easy to forget to set <om> that way           */
@@ -120,17 +103,10 @@ p7_MSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 
   /* Try highly optimized Knudsen SSV filter first. 
    * Note that SSV doesn't use any main memory (from <ox>) at all! 
-  */
- //  printf("Calling SSVFilter\n");
-//  if (( status = p7_SSVFilter(dsq, L, om, ret_sc)) != eslENORESULT) return status;
-//   uint64_t SSV_start_time = __rdtsc();
-   status = p7_SSVFilter_sse(dsq, L, om, ret_sc);
-//   uint64_t SSV_end_time = __rdtsc();
- //  SSV_time += SSV_end_time - SSV_start_time;
-   if (status != eslENORESULT) return status;
-//full_MSV_calls++;
- // uint64_t MSV_start_time = __rdtsc();
- // uint64_t MSV_end_time;
+   */
+  status = p7_SSVFilter_sse(dsq, L, om, ret_sc);
+  if (status != eslENORESULT) return status;
+
   /* Resize the filter mx as needed */
   if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of MSV filter matrix failed");
 
@@ -143,6 +119,7 @@ p7_MSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.  */
   biasv = _mm_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
   for (q = 0; q < Q; q++) dp[q] = _mm_setzero_si128();
+
   /* saturate simd register for overflow test */
   ceilingv = _mm_cmpeq_epi8(biasv, biasv);
   basev    = _mm_set1_epi8((int8_t) om->base_b);
@@ -150,11 +127,8 @@ p7_MSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   tecv     = _mm_set1_epi8((int8_t) om->tec_b);
   xJv      = _mm_subs_epu8(biasv, biasv);
   xBv      = _mm_subs_epu8(basev, tjbmv);
-  
-//printf("Biases set\n");
-  
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (ox->do_dumping)
     {
       uint8_t xB;
@@ -164,10 +138,8 @@ p7_MSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
     }
 #endif
 
-
   for (i = 1; i <= L; i++)  /* Outer loop over residues*/
     {
-
       rsc = om->rbv[dsq[i]];
       xEv = _mm_setzero_si128();      
 
@@ -210,17 +182,14 @@ p7_MSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
       xEv   = _mm_shuffle_epi32(xEv, _MM_SHUFFLE(0, 0, 0, 0));
 
       /* immediately detect overflow */
-      if (cmp != 0x0000) {
-    //    MSV_end_time = __rdtsc();
-    //    MSV_time += (MSV_end_time - MSV_start_time);
-       *ret_sc = eslINFINITY; return eslERANGE; }
+      if (cmp != 0x0000) { *ret_sc = eslINFINITY; return eslERANGE; }
 
       xEv = _mm_subs_epu8(xEv, tecv);
       xJv = _mm_max_epu8(xJv,xEv);
       xBv = _mm_max_epu8(basev, xJv);
       xBv = _mm_subs_epu8(xBv, tjbmv);
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
       if (ox->do_dumping)
 	{
 	  uint8_t xB, xE;
@@ -239,19 +208,12 @@ p7_MSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   *ret_sc = ((float) (xJ - om->tjb_b) - (float) om->base_b);
   *ret_sc /= om->scale_b;
   *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
-    /*     MSV_end_time = __rdtsc();
-        MSV_time += (MSV_end_time - MSV_start_time); */
   return eslOK;
-  #endif //HAVE_SSE2
-#ifndef HAVE_SSE2
-  return 0;  // put this here so that compiler doesn't complain about reaching the end of function without a return value
-#endif
-  }
-
-/*------------------ end, p7_MSVFilter_SSE() ------------------------*/
+}
+/*------------------ end, p7_MSVFilter_sse() ------------------------*/
 
 
-/* Function:  p7_SSVFilter_longtarget()
+/* Function:  p7_SSVFilter_longtarget_sse()
  * Synopsis:  Finds windows with SSV scores above some threshold (vewy vewy fast, in limited precision)
  *
  * Purpose:   Calculates an approximation of the SSV (single ungapped diagonal)
@@ -295,9 +257,8 @@ p7_MSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
  */
 int
 p7_SSVFilter_longtarget_sse(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_SCOREDATA *msvdata,
-                        P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
+			    P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
-#ifdef HAVE_SSE2
   register __m128i mpv;            /* previous row values                                       */
   register __m128i xEv;            /* E state: keeps max for Mk->E for a single iteration       */
   register __m128i xBv;            /* B state: splatted vector of B[i-1] for B->Mk calculations */
@@ -472,19 +433,17 @@ p7_SSVFilter_longtarget_sse(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTE
 
   } /* end loop over sequence residues 1..L */
   return eslOK;
-#endif /* HAVE_SSE2 */
-#ifndef HAVE_SSE2
-  return 0;
-#endif
 }
-/*------------------ end, p7_SSVFilter_longtarget() ------------------------*/
+/*------------------ end, p7_SSVFilter_longtarget_sse() ------------------------*/
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/
 
+#else // ! eslENABLE_SSE
+
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_msvfilter_sse_silence_hack(void) { return; }
+#if defined p7MSVFILTER_SSE_TESTDRIVE || p7MSVFILTER_SSE_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_SSE or not
 
 

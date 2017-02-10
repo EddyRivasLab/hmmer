@@ -3,7 +3,6 @@
  * Contents:
  *   1. P7_HMMCACHE : a daemon's cached profile database.
  *   2. Benchmark driver.
- *   3. License and copyright information
  */
 #include "p7_config.h"
 
@@ -280,10 +279,3 @@ main(int argc, char **argv)
 /*--------------- end, benchmark driver -------------------------*/
 
 
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

@@ -6,9 +6,6 @@
 #include "easel.h"
 #include "p7_config.h"
 
-#if p7_CPU_ARCH == intel 
-// code to detect x86 SIMD versions
-
 // SSE detection code.  Based on https://software.intel.com/en-us/articles/using-cpuid-to-detect-the-presence-of-sse-41-and-sse-42-instruction-sets
 void get_cpuid_info (CPUIDinfo *Info, uint32_t eax, uint32_t ecx)
 {
@@ -99,7 +96,6 @@ int check_AVX512(CPUIDinfo *Info1, CPUIDinfo *Info2){
     return 1; // If we get here, we have failed to fail, and therefore have succeeded
 }
 
-#endif // p7_CPU_ARCH == intel 
 
 
 P7_HARDWARE * p7_hardware_Create(){
@@ -115,7 +111,6 @@ P7_HARDWARE * p7_hardware_Create(){
   retval->micro_arch = NONE;
   retval->simd = NO_SIMD;
 
-#if p7_CPU_ARCH == intel 
   // Set values for x86 architecture
 
   retval->arch = x86;
@@ -136,7 +131,7 @@ P7_HARDWARE * p7_hardware_Create(){
             retval->simd = SSE;
 	}
 
-#ifdef HAVE_AVX2 // only check for AVX2 support if we compiled in AVX2
+#ifdef eslENABLE_AVX // only check for AVX2 support if we compiled in AVX2
     int avx_support = check_AVX2(&Info1, &Info2, &Info3);
     if(avx_support){
   //    printf("Detected AVX2 support\n");
@@ -144,7 +139,7 @@ P7_HARDWARE * p7_hardware_Create(){
     }
 #endif
 
-#ifdef HAVE_AVX512  // only check for AVX512 support if we compiled in AVX512
+#ifdef eslENABLE_AVX512  // only check for AVX512 support if we compiled in AVX512
     int avx512_support = check_AVX512(&Info1, &Info2);
     if(avx512_support){
    //    printf("Detected AVX-512 support\n");
@@ -152,27 +147,14 @@ P7_HARDWARE * p7_hardware_Create(){
     }
 #endif
 
-#endif //p7_CPU_ARCH == intel 
-
-#if p7_CPU_ARCH == arm
-
+#ifdef eslENABLE_NEON           // SRE TODO: this is fucked up, revisit and fix. hardware.c needs overhaul
   retval->arch = ARM;
   retval->micro_arch = v7; 
   retval->simd = NEON;
-
 #endif
 
-#if p7_CPU_ARCH == arm64
+  return retval;
 
-  retval->arch = ARM;
-  retval->micro_arch = v8;
-  retval->simd = NEON64;
-
-#endif
-
-return retval;
-
-// Error-handling goto for ESL_ALLOC in case malloc fails
 ERROR:
   return NULL;	
 }

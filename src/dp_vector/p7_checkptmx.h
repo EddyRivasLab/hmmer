@@ -9,33 +9,23 @@
  *    3. Notes:
  *       [a] Layout of the matrix, in checkpointed rows
  *       [b] Layout of one row, in vectors and floats
- *    4. Copyright and license information.
  */
 #ifndef p7CHECKPTMX_INCLUDED
 #define p7CHECKPTMX_INCLUDED
-
 #include "p7_config.h"
 
 #include <stdio.h>
 
-#if p7_CPU_ARCH == intel 
+#ifdef eslENABLE_SSE
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
-#ifdef HAVE_AVX2
-#include <immintrin.h>
- #endif
- #ifdef HAVE_AVX512
- #include <immintrin.h>
- #endif
- 
 #endif
 
-#if p7_CPU_ARCH == arm 
-#include <arm_neon.h>
-#include "esl_neon.h"
+#if defined eslENABLE_AVX || defined eslENABLE_AVX512
+#include <x86intrin.h>
 #endif
 
-#if p7_CPU_ARCH == arm64 
+#ifdef eslENABLE_NEON
 #include <arm_neon.h>
 #include "esl_neon.h"
 #endif
@@ -66,28 +56,24 @@ enum p7c_xcells_e {
 #define P7C_DQ(dp, q)     ((dp)[(q) * p7C_NSCELLS + p7C_D])
 #define P7C_IQ(dp, q)     ((dp)[(q) * p7C_NSCELLS + p7C_I])
 
-typedef
-#if p7_CPU_ARCH == intel 
-#if defined HAVE_AVX512
-__m512
-#elif defined HAVE_AVX2
-__m256
-#else
-__m128
+
+// SRE TODO: these are broken. typedef of debug_print assumes only one
+// vector implementation is enabled, but it's possible to have all
+// three of SSE, AVX, AVX512 enabled.
+#if    defined eslENABLE_SSE
+typedef __m128 debug_print;
+#elif defined eslENABLE_AVX
+typedef __m256 debug_print;
+#elif defined eslENABLE_AVX512
+typedef __m512 debug_print;
+#elif defined eslENABLE_NEON
+typedef esl_neon_128f_t debug_print;
 #endif
-#endif // intel 
-#if p7_CPU_ARCH == arm 
-esl_neon_128f_t
-#endif
-#if p7_CPU_ARCH == arm64 
-esl_neon_128f_t
-#endif
-debug_print;
+
 
 typedef struct p7_checkptmx_s {
   int M;	/* current actual query model dimension (consensus positions)         */
   int L;	/* current actual target seq dimension (residues)                     */
-
 
   /* Checkpointed layout, mapping rows 1..R to residues 1..L:                         */
   int R0;	/* # of extra rows: one for fwd[0] boundary, two for bck[prv,cur]     */
@@ -109,7 +95,7 @@ to the next multiple of the vector length.  This should be a small effect unless
 sequence we're comparing to is very short, since this filter uses floats.  Also, the code 
 exceeds the requested memory when necessary, so the request is already not a hard limit. */
 
-#ifdef HAVE_SSE2
+#ifdef eslENABLE_SSE
   /* Raw memory allocation */
   int Qf; /* current actual number of fb vectors = P7_NVF(M)                    */
   int R; /* current actual number of rows (<=Ra+Rb+Rc), excluding R0           */
@@ -123,21 +109,7 @@ exceeds the requested memory when necessary, so the request is already not a har
   int      validR;	/* # of dpf[] rows pointing to valid dp_mem; may be < allocR after GrowTo() */
 #endif
 
-#ifdef HAVE_NEON
-  /* Raw memory allocation */
-  int Qf; /* current actual number of fb vectors = P7_NVF(M)                    */
-  int R; /* current actual number of rows (<=Ra+Rb+Rc), excluding R0           */
-  char    *dp_mem;      /* raw memory allocation, that dp[] rows point into           */
-  int64_t  allocW;      /* alloced width/row, bytes; multiple of p7_VALIGN            */
-  int64_t  nalloc;      /* total # of alloc'ed bytes: nalloc >= (validR)(allocW)      */
-
-  /* Forward/Backward matrix rows */
-  char   **dpf;         /* row ptrs, dpf[0.R0-1,R0..R0+R-1]; aligned on (p7_VALIGN)-byte boundary  */
-  int      allocR;      /* allocated size of dpf[]. R+R0 <= R0+Ra+Rb+rc <= validR <= allocR        */
-  int      validR;      /* # of dpf[] rows pointing to valid dp_mem; may be < allocR after GrowTo() */
-#endif
-
-#ifdef HAVE_AVX2
+#ifdef eslENABLE_AVX
   /* Raw memory allocation */
   int Qf_AVX; /* current actual number of fb vectors = P7_NVF(M)                    */
   int R_AVX; /* current actual number of rows (<=Ra+Rb+Rc), excluding R0           */
@@ -151,7 +123,7 @@ exceeds the requested memory when necessary, so the request is already not a har
   int      validR_AVX;  /* # of dpf[] rows pointing to valid dp_mem; may be < allocR after GrowTo() */
 #endif
 
-#ifdef HAVE_AVX512
+#ifdef eslENABLE_AVX512
   int Qf_AVX_512; /* current actual number of fb vectors = P7_NVF(M)                    */
   int R_AVX_512;  /* current actual number of rows (<=Ra+Rb+Rc), excluding R0           */
   /* Raw memory allocation */
@@ -165,7 +137,21 @@ exceeds the requested memory when necessary, so the request is already not a har
   int      validR_AVX_512;  /* # of dpf[] rows pointing to valid dp_mem; may be < allocR after GrowTo() */
 #endif
 
-#ifdef p7_DEBUGGING
+#ifdef eslENABLE_NEON
+  /* Raw memory allocation */
+  int Qf; /* current actual number of fb vectors = P7_NVF(M)                    */
+  int R; /* current actual number of rows (<=Ra+Rb+Rc), excluding R0           */
+  char    *dp_mem;      /* raw memory allocation, that dp[] rows point into           */
+  int64_t  allocW;      /* alloced width/row, bytes; multiple of p7_VALIGN            */
+  int64_t  nalloc;      /* total # of alloc'ed bytes: nalloc >= (validR)(allocW)      */
+
+  /* Forward/Backward matrix rows */
+  char   **dpf;         /* row ptrs, dpf[0.R0-1,R0..R0+R-1]; aligned on (p7_VALIGN)-byte boundary  */
+  int      allocR;      /* allocated size of dpf[]. R+R0 <= R0+Ra+Rb+rc <= validR <= allocR        */
+  int      validR;      /* # of dpf[] rows pointing to valid dp_mem; may be < allocR after GrowTo() */
+#endif
+
+#if eslDEBUGLEVEL > 0
   /* Info for dumping debugging info, conditionally compiled                        */
   int       do_dumping;		/* TRUE if matrix is in dumping mode                */
   FILE     *dfp;		/* open output stream for debug dumps               */
@@ -178,42 +164,48 @@ exceeds the requested memory when necessary, so the request is already not a har
   P7_REFMX *bck;		/* ... full Backward matrix, ditto                  */
   P7_REFMX *pp;			/* ... full posterior probability matrix, ditto     */
   float     bcksc;		/* Backwards score: which we check against Forward  */
-#endif /*p7_DEBUGGING*/
+#endif // eslDEBUGLEVEL
 } P7_CHECKPTMX;
 
 
-extern P7_CHECKPTMX *p7_checkptmx_Create   (int M, int L, int64_t ramlimit, SIMD_TYPE simd);
-extern int           p7_checkptmx_GrowTo   (P7_CHECKPTMX *ox, int M, int L);
-extern size_t        p7_checkptmx_Sizeof   (const P7_CHECKPTMX *ox);
-extern size_t        p7_checkptmx_MinSizeof(int M, int L, SIMD_TYPE simd);
-extern int           p7_checkptmx_Reuse    (P7_CHECKPTMX *ox);
-extern void          p7_checkptmx_Destroy  (P7_CHECKPTMX *ox);
-
+extern P7_CHECKPTMX *p7_checkptmx_Create       (int M, int L, int64_t ramlimit, SIMD_TYPE simd);
 extern P7_CHECKPTMX *p7_checkptmx_Create_sse   (int M, int L, int64_t ramlimit);
-extern int           p7_checkptmx_GrowTo_sse   (P7_CHECKPTMX *ox, int M, int L);
-extern size_t        p7_checkptmx_Sizeof_sse   (const P7_CHECKPTMX *ox);
-extern size_t        p7_checkptmx_MinSizeof_sse(int M, int L);
-extern int           p7_checkptmx_Reuse_sse    (P7_CHECKPTMX *ox);
-extern void          p7_checkptmx_Destroy_sse  (P7_CHECKPTMX *ox);
-extern int           p7_checkptmx_SetDumpMode_sse(P7_CHECKPTMX *ox, FILE *dfp, int truefalse);
 extern P7_CHECKPTMX *p7_checkptmx_Create_avx   (int M, int L, int64_t ramlimit);
+extern P7_CHECKPTMX *p7_checkptmx_Create_avx512(int M, int L, int64_t ramlimit);
+extern P7_CHECKPTMX *p7_checkptmx_Create_neon  (int M, int L, int64_t ramlimit);
+
+extern int           p7_checkptmx_GrowTo       (P7_CHECKPTMX *ox, int M, int L);
+extern int           p7_checkptmx_GrowTo_sse   (P7_CHECKPTMX *ox, int M, int L);
 extern int           p7_checkptmx_GrowTo_avx   (P7_CHECKPTMX *ox, int M, int L);
+extern int           p7_checkptmx_GrowTo_avx512(P7_CHECKPTMX *ox, int M, int L);
+extern int           p7_checkptmx_GrowTo_neon  (P7_CHECKPTMX *ox, int M, int L);
+
+extern size_t        p7_checkptmx_Sizeof       (const P7_CHECKPTMX *ox);
+extern size_t        p7_checkptmx_Sizeof_sse   (const P7_CHECKPTMX *ox);
 extern size_t        p7_checkptmx_Sizeof_avx   (const P7_CHECKPTMX *ox);
-extern size_t        p7_checkptmx_MinSizeof_avx(int M, int L);
-extern int           p7_checkptmx_Reuse_avx    (P7_CHECKPTMX *ox);
-extern void          p7_checkptmx_Destroy_avx  (P7_CHECKPTMX *ox);
-extern P7_CHECKPTMX *p7_checkptmx_Create_avx512   (int M, int L, int64_t ramlimit);
-extern int           p7_checkptmx_GrowTo_avx512   (P7_CHECKPTMX *ox, int M, int L);
-extern size_t        p7_checkptmx_Sizeof_avx512   (const P7_CHECKPTMX *ox);
+extern size_t        p7_checkptmx_Sizeof_avx512(const P7_CHECKPTMX *ox);
+extern size_t        p7_checkptmx_Sizeof_neon  (const P7_CHECKPTMX *ox);
+
+extern size_t        p7_checkptmx_MinSizeof       (int M, int L, SIMD_TYPE simd);
+extern size_t        p7_checkptmx_MinSizeof_sse   (int M, int L);
+extern size_t        p7_checkptmx_MinSizeof_avx   (int M, int L);
 extern size_t        p7_checkptmx_MinSizeof_avx512(int M, int L);
-extern int           p7_checkptmx_Reuse_avx512    (P7_CHECKPTMX *ox);
-extern void          p7_checkptmx_Destroy_avx512  (P7_CHECKPTMX *ox);
-extern P7_CHECKPTMX *p7_checkptmx_Create_neon   (int M, int L, int64_t ramlimit);
-extern int           p7_checkptmx_GrowTo_neon   (P7_CHECKPTMX *ox, int M, int L);
-extern size_t        p7_checkptmx_Sizeof_neon   (const P7_CHECKPTMX *ox);
-extern size_t        p7_checkptmx_MinSizeof_neon(int M, int L);
-extern int           p7_checkptmx_Reuse_neon    (P7_CHECKPTMX *ox);
+extern size_t        p7_checkptmx_MinSizeof_neon  (int M, int L);
+
+extern int           p7_checkptmx_Reuse       (P7_CHECKPTMX *ox);
+extern int           p7_checkptmx_Reuse_sse   (P7_CHECKPTMX *ox);
+extern int           p7_checkptmx_Reuse_avx   (P7_CHECKPTMX *ox);
+extern int           p7_checkptmx_Reuse_avx512(P7_CHECKPTMX *ox);
+extern int           p7_checkptmx_Reuse_neon  (P7_CHECKPTMX *ox);
+
+extern void          p7_checkptmx_Destroy       (P7_CHECKPTMX *ox);
+extern void          p7_checkptmx_Destroy_sse   (P7_CHECKPTMX *ox);
+extern void          p7_checkptmx_Destroy_avx   (P7_CHECKPTMX *ox);
+extern void          p7_checkptmx_Destroy_avx512(P7_CHECKPTMX *ox);
 extern void          p7_checkptmx_Destroy_neon  (P7_CHECKPTMX *ox);
+
+extern int           p7_checkptmx_SetDumpMode_sse(P7_CHECKPTMX *ox, FILE *dfp, int truefalse);
+
 
 
 void set_row_layout  (P7_CHECKPTMX *ox, int allocL, int maxR); 
@@ -224,11 +216,13 @@ void set_redlined    (P7_CHECKPTMX *ox, int L, double minR);
 double minimum_rows     (int L);
 double checkpointed_rows(int L, int R);
 
-#ifdef p7_DEBUGGING
-extern char *        p7_checkptmx_DecodeX(enum p7c_xcells_e xcode);
-int           p7_checkptmx_DumpFBHeader(P7_CHECKPTMX *ox);
-int           p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, debug_print *dpc, char *pfx);
-#endif /*p7_DEBUGGING*/
+#if eslDEBUGLEVEL > 0
+extern char *p7_checkptmx_DecodeX(enum p7c_xcells_e xcode);
+extern int   p7_checkptmx_DumpFBHeader(P7_CHECKPTMX *ox);
+
+extern int  p7_checkptmx_DumpFBRow     (P7_CHECKPTMX *ox, int rowi, debug_print *dpc, char *pfx);
+extern int  p7_checkptmx_DumpFBRow_neon(P7_CHECKPTMX *ox, int rowi, debug_print *dpc, char *pfx);
+#endif 
 
 /*****************************************************************
  * 3. Notes
@@ -306,9 +300,4 @@ int           p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, debug_print *dp
  */
 
 #endif /*p7CHECKPTMX_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

@@ -8,29 +8,19 @@
  * high scoring sequences, but this indicates that the sequence is a
  * high-scoring hit worth examining more closely anyway.  It will not
  * underflow, in local alignment mode.
- * 
- * Contents:
- *   1. Viterbi filter implementation.
- *   2. Benchmark driver.
- *   3. Unit tests.
- *   4. Test driver.
- *   5. Example.
- *   6. Copyright and license information
  */
 #include "p7_config.h"
+#ifdef eslENABLE_SSE
 
 #include <stdio.h>
 #include <math.h>
 
-#if p7_CPU_ARCH == intel
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
-#endif /* intel arch */
 
 #include "easel.h"
-#include "esl_sse.h"
-
 #include "esl_gumbel.h"
+#include "esl_sse.h"
 
 #include "base/p7_hmmwindow.h"
 #include "search/p7_pipeline.h"
@@ -43,7 +33,7 @@
  * 1. Viterbi filter implementation.
  *****************************************************************/
 
-/* Function:  p7_ViterbiFilter()
+/* Function:  p7_ViterbiFilter_sse()
  * Synopsis:  Calculates Viterbi score, vewy vewy fast, in limited precision.
  *
  * Purpose:   Calculates an approximation of the Viterbi score for sequence
@@ -89,10 +79,7 @@
 int
 p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)
 {
-#ifdef HAVE_SSE2
-//printf("Starting ViterbiFilter\n");
   int i;        /* counter over sequence positions 1..L                      */
-  
   register __m128i mpv, dpv, ipv;  /* previous row values                                       */
   register __m128i sv;		   /* temp storage of 1 curr row value in progress              */
   register __m128i dcv;		   /* delayed storage of D(i,q+1)                               */
@@ -116,7 +103,6 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
                                           /*  ... which you can disable, if you're playing w/ config     */
   /* note however that ViterbiFilter numerics are only guaranteed for local alignment, not glocal        */
 
-
   /* Resize the filter mx as needed */
   if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of Vit filter matrix failed");
   dp = ox->dp;           /* enables MMXf(), IMXf(), DMXf() access macros. Must be set AFTER the GrowTo, because ox->dp may get moved */
@@ -139,13 +125,12 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
   xC   = -32768;
   xE   = -32768;
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
 #endif
 
   for (i = 1; i <= L; i++)
     {
-// check each iteration         
       rsc   = om->rwv[dsq[i]];
       tsc   = om->twv;
       dcv   = _mm_set1_epi16(-32768);      /* "-infinity" */
@@ -163,7 +148,6 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
 
       for (q = 0; q < Q; q++)
       {
-    
         /* Calculate new MMXf(i,q); don't store it yet, hold it in sv. */
         sv   =                    _mm_adds_epi16(xBv, *tsc);  tsc++;
         sv   = _mm_max_epi16 (sv, _mm_adds_epi16(mpv, *tsc)); tsc++;
@@ -220,7 +204,6 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
       Dmax = esl_sse_hmax_epi16(Dmaxv);
       if (Dmax + om->ddbound_w > xB) 
 	{
-   // printf("vitfilter SSE doing DD calc, Dmax = %i\n", Dmax);
 	  /* Now we're obligated to do at least one complete DD path to be sure. */
 	  /* dcv has carried through from end of q loop above */
 	  dcv = _mm_slli_si128(dcv, 2); 
@@ -250,12 +233,11 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
 	}
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
 	{
- //   printf("vitfilter SSE skipping DD calc, Dmax = %i\n", Dmax);
 	  dcv = _mm_slli_si128(dcv, 2);
 	  DMXf(0) = _mm_or_si128(dcv, negInfv);
 	}
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
       if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);   
 #endif
     } /* end loop over sequence residues 1..L */
@@ -269,12 +251,13 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
       *ret_sc -= 3.0; /* the NN/CC/JJ=0,-3nat approximation: see J5/36. That's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ contrib */
     }
   else  *ret_sc = -eslINFINITY;
-#endif // HAVE_SSE2   Leave return so that there's some function to link if we aren't compiling SSE.
   return eslOK;
 }
-/*---------------- end, p7_ViterbiFilter_sse() ----------------------*/
 
-/* Function:  p7_ViterbiFilter_longtarget()
+
+
+
+/* Function:  p7_ViterbiFilter_longtarget_sse()
  * Synopsis:  Finds windows within potentially long sequence blocks with Viterbi
  *            scores above threshold (vewy vewy fast, in limited precision)
  *
@@ -314,9 +297,8 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
  */
 int
 p7_ViterbiFilter_longtarget_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox,
-                            float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
+				float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
 {
-  #ifdef HAVE_SSE2
   register __m128i mpv, dpv, ipv; /* previous row values                                       */
   register __m128i sv;            /* temp storage of 1 curr row value in progress              */
   register __m128i dcv;           /* delayed storage of D(i,q+1)                               */
@@ -383,7 +365,7 @@ p7_ViterbiFilter_longtarget_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om
   xC   = -32768;
   xE   = -32768;
 
-#if p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
 #endif
 
@@ -514,21 +496,24 @@ p7_ViterbiFilter_longtarget_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om
           DMXf(0) = _mm_or_si128(dcv, negInfv);
         }
       }
-#if p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
       if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);
 #endif
   } /* end loop over sequence residues 1..L */
-#endif /* p7_build_SSE */
 
   return eslOK;
-
 }
-/*---------------- end, p7_ViterbiFilter_longtarget() ----------------------*/
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+
+else // ! eslENABLE_SSE
+
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_vitfilter_sse_silence_hack(void) { return; }
+#if defined p7VITFILTER_SSE_TESTDRIVE || p7VITFILTER_SSE_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_SSE or not
+
+
+
 

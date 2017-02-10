@@ -14,7 +14,6 @@
  *    1. Communicating P7_PIPELINE_STATS, accumulated accounting statistics.
  *    2. Unit tests.
  *    3. Test driver.
- *    4. Copyright and license information.
  */
 #include "p7_config.h"		
 
@@ -447,9 +446,3 @@ int main(void) { return 0; }
 #endif
 #endif /*HAVE_MPI*/
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

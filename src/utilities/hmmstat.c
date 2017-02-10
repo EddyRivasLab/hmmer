@@ -4,7 +4,6 @@
  *  ./hmmstat Pfam
  *  
  * SRE, Thu May 24 11:18:20 2007
- * SVN $Id$
  */
 #include "p7_config.h"
 

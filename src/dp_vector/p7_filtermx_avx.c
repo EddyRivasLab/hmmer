@@ -4,30 +4,26 @@
  * Contents:
  *   1. The P7_FILTERMX object
  *   2. Debugging and development routines
- *   3. Copyright and license information
  */
-
 #include "p7_config.h"
+#ifdef eslENABLE_AVX
 
 #include <stdlib.h>
 #include <stdio.h>
 
-#if p7_CPU_ARCH == intel
-#include <xmmintrin.h>
-#include <emmintrin.h>
-#endif /* intel arch */
+#include <x86intrin.h>
 
 #include "easel.h"
 
 #include "dp_vector/simdvec.h"
 #include "dp_vector/p7_filtermx.h"
 #include "hardware/hardware.h"
+
 /*****************************************************************
  * 1. The P7_FILTERMX object.
  *****************************************************************/
 
-
-/* Function:  p7_filtermx_Create()
+/* Function:  p7_filtermx_Create_avx()
  * Synopsis:  Create a one-row DP matrix for MSV, VF.
  *
  * Purpose:   Allocate a reusable, resizeable one-row <P7_FILTERMX>
@@ -52,7 +48,6 @@ p7_filtermx_Create_avx(int allocM)
   /* Contract checks / argument validation */
   ESL_DASSERT1( (allocM >= 1 && allocM <= 100000) );
 
- #ifdef HAVE_AVX2
   ESL_ALLOC(fx, sizeof(P7_FILTERMX));
   fx->simd = AVX;
   fx->dp_AVX    = NULL;
@@ -60,7 +55,7 @@ p7_filtermx_Create_avx(int allocM)
   fx->allocM_AVX = 0;
 
   fx->type      = p7F_NONE;
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   fx->do_dumping= FALSE;
   fx->dfp       = NULL;
 #endif 
@@ -77,14 +72,10 @@ p7_filtermx_Create_avx(int allocM)
  ERROR:
   p7_filtermx_Destroy(fx);
   return NULL;
-  #endif //HAVE_AVX2
- #ifndef HAVE_AVX2
- return NULL;
- #endif   
 }
 
 
-/* Function:  p7_filtermx_GrowTo()
+/* Function:  p7_filtermx_GrowTo_avx()
  * Synopsis:  Resize filter DP matrix for new profile size.
  *
  * Purpose:   Given an existing filter matrix structure <fx>,
@@ -109,7 +100,7 @@ p7_filtermx_GrowTo_avx(P7_FILTERMX *fx, int allocM)
 
   /* Contract checks / argument validation */
   ESL_DASSERT1( (allocM >= 1 && allocM <= 100000) );
-#ifdef HAVE_AVX2
+
   /* is it already big enough? */
   if (allocM <= fx->allocM_AVX) return eslOK;
 
@@ -122,14 +113,10 @@ p7_filtermx_GrowTo_avx(P7_FILTERMX *fx, int allocM)
 
  ERROR:
   return status;
-#endif //HAVE_AVX2
- #ifndef HAVE_AVX2
- return eslENORESULT;
- #endif   
 }
 
 
-/* Function:  p7_filtermx_Sizeof()
+/* Function:  p7_filtermx_Sizeof_avx()
  * Synopsis:  Calculate and return the current size, in bytes.
  *
  * Purpose:   Calculate and return the current allocated size
@@ -143,16 +130,12 @@ size_t
 p7_filtermx_Sizeof_avx(const P7_FILTERMX *fx)
 {
   size_t n = sizeof(P7_FILTERMX);
-
-#ifdef HAVE_AVX2
   n += (sizeof(__m256i) * p7F_NSCELLS * P7_NVW_AVX(fx->allocM_AVX)) + (p7_VALIGN_AVX-1);
-#endif
-
   return n;
 }
 
 
-/* Function:  p7_filtermx_MinSizeof()
+/* Function:  p7_filtermx_MinSizeof_avx()
  * Synopsis:  Calculate minimum size of a filter matrix, in bytes.
  *
  * Purpose:   Calculate and return the minimum allocation size
@@ -163,14 +146,12 @@ size_t
 p7_filtermx_MinSizeof_avx(int M)
 {
   size_t n = sizeof(P7_FILTERMX);
-#ifdef HAVE_AVX2  
   n += (sizeof(__m256i) * p7F_NSCELLS * P7_NVW_AVX(M)) + (p7_VALIGN-1);
-#endif  
   return n;
 }
 
 
-/* Function:  p7_filtermx_Destroy()
+/* Function:  p7_filtermx_Destroy_avx()
  * Synopsis:  Frees a one-row MSV/VF filter DP matrix.
  *
  * Purpose:   Frees the one-row MSV/VF filter DP matrix <fx>.
@@ -180,13 +161,11 @@ p7_filtermx_MinSizeof_avx(int M)
 void
 p7_filtermx_Destroy_avx(P7_FILTERMX *fx)
 {
-  if (fx) {
-#ifdef HAVE_AVX2
-    if (fx->dp_mem_AVX) free(fx->dp_mem_AVX);
-#endif
-
-    free(fx);
-  }
+  if (fx) 
+    {
+      if (fx->dp_mem_AVX) free(fx->dp_mem_AVX);
+      free(fx);
+    }
   return;
 }
   
@@ -195,8 +174,8 @@ p7_filtermx_Destroy_avx(P7_FILTERMX *fx)
  * 2. Debugging and development routines
  *****************************************************************/
 
-#ifdef p7_DEBUGGING
-/* Function:  p7_filtermx_DumpMFRow()
+#if eslDEBUGLEVEL > 0
+/* Function:  p7_filtermx_DumpMFRow_avx()
  * Synopsis:  Dump one row from MSV version of a DP matrix.
  *
  * Purpose:   Dump current row of MSV calculations from DP matrix <fx>
@@ -223,7 +202,6 @@ p7_filtermx_Destroy_avx(P7_FILTERMX *fx)
 int
 p7_filtermx_DumpMFRow_avx(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
-#ifdef HAVE_AVX2  
   int      Q  = P7_NVB_AVX(fx->M);	/* number of vectors in the MSV row */
   uint8_t *v  = NULL;		/* array of scores after unstriping them */
   int      q,z,k;
@@ -274,15 +252,11 @@ p7_filtermx_DumpMFRow_avx(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t x
 ERROR:
   free(v);
   return status;
-#endif //HAVE_AVX2
- #ifndef HAVE_AVX2
- return eslENORESULT;
- #endif     
 }
 
 
 
-/* Function:  p7_filtermx_DumpVFRow()
+/* Function:  p7_filtermx_DumpVFRow_avx()
  * Synopsis:  Dump current row of ViterbiFilter (int16) filter matrix.
  *
  * Purpose:   Dump current row of ViterbiFilter (int16) filter DP
@@ -302,7 +276,6 @@ ERROR:
 int
 p7_filtermx_DumpVFRow_avx(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
 {
-#ifdef HAVE_AVX2  
   __m256i *dp = fx->dp;		/* enable MMXf(q), DMXf(q), IMXf(q) macros */
   int      Q  = P7_NVW_AVX(fx->M);	/* number of vectors in the VF row */
   int16_t *v  = NULL;		/* array of unstriped, uninterleaved scores  */
@@ -360,18 +333,18 @@ p7_filtermx_DumpVFRow_avx(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t x
 ERROR:
   free(v);
   return status;
-#endif //HAVE_AVX2
- #ifndef HAVE_AVX2
- return eslENORESULT;
- #endif   
 }
-#endif /*p7_DEBUGGING*/
+#endif // eslDEBUGLEVEL > 0
 
 
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+#else // ! eslENABLE_AVX
+
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_filtermx_avx_silence_hack(void) { return; }
+#if defined p7FILTERMX_AVX_TESTDRIVE || p7FILTERMX_AVX_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_AVX or not
+
+

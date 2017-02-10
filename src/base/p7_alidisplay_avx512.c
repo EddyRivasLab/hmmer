@@ -9,7 +9,6 @@
  *   5. Unit tests.
  *   6. Test driver.
  *   7. Example.
- *   8. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -65,7 +64,7 @@
 static inline float 
 p7_oprofile_FGetEmission_avx512(const P7_OPROFILE *om, int k, int x)
 {
-#ifdef HAVE_AVX512 
+#ifdef eslENABLE_AVX512 
   union { __m512 v; float p[16]; } u_AVX_512;
   int   Q_AVX_512 = P7_NVF_AVX_512(om->M);
   int   q_AVX_512 = ((k-1) % Q_AVX_512);
@@ -73,7 +72,7 @@ p7_oprofile_FGetEmission_avx512(const P7_OPROFILE *om, int k, int x)
   u_AVX_512.v = om->rfv_AVX_512[x][q_AVX_512];
   return u_AVX_512.p[r_AVX_512];
 #endif
-#ifndef HAVE_AVX512
+#ifndef eslENABLE_AVX512
   return(0);
 #endif   
 }
@@ -249,12 +248,4 @@ p7_alidisplay_Create_avx512(const P7_TRACE *tr, int which, const P7_OPROFILE *om
   return NULL;
 }
 
-
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 

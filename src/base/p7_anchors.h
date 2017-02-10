@@ -73,12 +73,6 @@ extern int  p7_anchors_Sample(ESL_RANDOMNESS *rng, int L, int M, int maxD, P7_AN
 extern int  p7_anchors_SampleFromTrace(P7_ANCHORS *anch, ESL_RANDOMNESS *rng, const P7_TRACE *tr);
 
 #endif /* p7ANCHORS_INCLUDED */
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 
   
   

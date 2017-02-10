@@ -23,9 +23,4 @@ extern int p7_hit_mpi_Recv    (int source, int tag, MPI_Comm comm, char **buf, i
 
 #endif /*HAVE_MPI*/
 #endif /*p7TOPHITS_MPI_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

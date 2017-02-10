@@ -19,9 +19,3 @@ extern int p7_profile_mpi_Recv(int source, int tag,          MPI_Comm comm, char
 
 #endif /*HAVE_MPI*/
 #endif /*p7HMM_MPI_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

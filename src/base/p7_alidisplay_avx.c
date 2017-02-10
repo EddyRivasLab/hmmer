@@ -9,7 +9,6 @@
  *   5. Unit tests.
  *   6. Test driver.
  *   7. Example.
- *   8. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -59,12 +58,10 @@
  * Throws:    <NULL> on allocation failure, or if something's internally corrupt 
  *            in the data.
  */
-
- /* retrieve match odds ratio [k][x] */
 static inline float 
 p7_oprofile_FGetEmission_avx(const P7_OPROFILE *om, int k, int x)
 {
-#ifdef HAVE_AVX2  
+#ifdef eslENABLE_AVX  
   union { __m256 v; float p[8]; } u_AVX;
   int   Q_AVX = P7_NVF_AVX(om->M);
   int   q_AVX = ((k-1) % Q_AVX);
@@ -72,7 +69,7 @@ p7_oprofile_FGetEmission_avx(const P7_OPROFILE *om, int k, int x)
   u_AVX.v = om->rfv_AVX[x][q_AVX];
   return u_AVX.p[r_AVX];
 #endif
-#ifndef HAVE_AVX2
+#ifndef eslENABLE_AVX
   return(0);
 #endif
 }
@@ -247,12 +244,4 @@ p7_alidisplay_Create_avx(const P7_TRACE *tr, int which, const P7_OPROFILE *om, c
   p7_alidisplay_Destroy(ad);
   return NULL;
 }
-
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 

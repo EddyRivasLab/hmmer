@@ -34,14 +34,5 @@ extern int p7_spaecmx_Validate(const P7_SPARSEMX *aec, const P7_ENVELOPES *env, 
  *    ib   |                         |  * . *    . . *    . . .    . * . 
  *    
  */
-
-
-
-
 #endif /*p7SPAECMX_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

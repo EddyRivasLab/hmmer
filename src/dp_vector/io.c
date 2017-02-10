@@ -1,4 +1,4 @@
-/* Saving optimized profiles in two pieces: MSV part and the rest.
+/* Input/output of vectorized profiles.
  * 
  * To accelerate hmmscan, which is limited by speed of HMM input,
  * hmmpress saves an optimized profile in two pieces. One file gets
@@ -11,14 +11,13 @@
  * profile".
  * 
  * Contents:
- *    1. Writing optimized profiles to two files.
- *    2. Reading optimized profiles in two stages.
+ *    1. API for reading and writing vectorized profiles.
+ *    2. CPU dispatching to vector implementations.
  *    3. Utility routines.
  *    4. Benchmark driver.
  *    5. Unit tests.
  *    6. Test driver.
  *    7. Example.
- *    8. Copyright and license information.
  *    
  * TODO:
  *    - crossplatform binary compatibility (endedness and off_t)
@@ -39,6 +38,7 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_cpu.h"
 
 #include "base/p7_hmmfile.h"
 
@@ -65,9 +65,14 @@ static uint32_t  v3b_pmagic = 0xb3e2f0f3; /* 3/b binary profile file, SSE: "3bps
 static uint32_t  v3a_fmagic = 0xe8b3e6f3; /* 3/a binary MSV file, SSE:     "h3fs" = 0x 68 33 66 73  + 0x80808080 */
 static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file, SSE: "h3ps" = 0x 68 33 70 73  + 0x80808080 */
 
+static int io_write_dispatcher(FILE *ffp, FILE *pfp, P7_OPROFILE *om);
+static int io_readmsv_dispatcher    (P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
+static int io_readinfomsv_dispatcher(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
+static int io_readrest_dispatcher   (P7_HMMFILE *hfp, P7_OPROFILE *om);
+
 
 /*****************************************************************
- *# 1. Writing optimized profiles to two files.
+ * 1. API for reading and writing vectorized profiles.
  *****************************************************************/
 
 /* Function:  p7_oprofile_Write()
@@ -88,36 +93,8 @@ static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file, SSE: "h3ps
  *            the disk.
  */
 int
-p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
-{
-switch(om->simd){
-    case SSE:
-      return p7_oprofile_Write_sse(ffp, pfp, om);
-      break;
-    case AVX:
-      return p7_oprofile_Write_avx(ffp, pfp, om);
-      break;
-    case AVX512:
-      return p7_oprofile_Write_avx512(ffp, pfp, om);
-      break;
-    case NEON:
-      return p7_oprofile_Write_neon(ffp, pfp, om);
-      break;
-    case NEON64:
-      return p7_oprofile_Write_neon64(ffp, pfp, om);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Write");  
-  }
-}
-/*---------------- end, writing oprofile ------------------------*/
+(*p7_oprofile_Write)(FILE *ffp, FILE *pfp, P7_OPROFILE *om) = io_write_dispatcher;
 
-
-
-
-/*****************************************************************
- * 2. Reading optimized profiles in two stages.
- *****************************************************************/
 
 /* Function:  p7_oprofile_ReadMSV()
  * Synopsis:  Read MSV filter part of an optimized profile.
@@ -166,28 +143,8 @@ switch(om->simd){
  * Throws:    <eslEMEM> on allocation error.
  */
 int
-p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc,  P7_OPROFILE **ret_om, SIMD_TYPE simd)
-{
-  switch(simd){
-    case SSE:
-      return p7_oprofile_ReadMSV_sse(hfp, byp_abc, ret_om);
-      break;
-    case AVX:
-      return p7_oprofile_ReadMSV_avx(hfp, byp_abc, ret_om);
-      break;
-    case AVX512:
-      return p7_oprofile_ReadMSV_avx512(hfp, byp_abc, ret_om);
-      break;
-    case NEON: 
-      return p7_oprofile_ReadMSV_neon(hfp, byp_abc, ret_om);
-      break;
-    case NEON64:
-      return p7_oprofile_ReadMSV_neon64(hfp, byp_abc, ret_om);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_ReadMSV");  
-  }
-}
+(*p7_oprofile_ReadMSV)(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc,  P7_OPROFILE **ret_om) = io_readmsv_dispatcher;
+
 
 
 /* Function:  p7_oprofile_ReadInfoMSV()
@@ -228,65 +185,8 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc,  P7_OPROFILE **ret_
  * Throws:    <eslEMEM> on allocation error.
  */
 int
-p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om, SIMD_TYPE simd)
-{
-  switch(simd){
-    case SSE:
-      return p7_oprofile_ReadInfoMSV_sse(hfp, byp_abc, ret_om);
-      break;
-    case AVX:
-      return p7_oprofile_ReadInfoMSV_avx(hfp, byp_abc, ret_om);
-      break;
-    case AVX512:
-      return p7_oprofile_ReadInfoMSV_avx512(hfp, byp_abc, ret_om);
-      break;
-    case NEON:
-      return p7_oprofile_ReadInfoMSV_neon(hfp, byp_abc, ret_om);
-      break;
-    case NEON64:
-      return p7_oprofile_ReadInfoMSV_neon64(hfp, byp_abc, ret_om);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_ReadInfoMSV");  
-  }
-}
+(*p7_oprofile_ReadInfoMSV)(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om) = io_readinfomsv_dispatcher;
 
-
-
-/* Function:  p7_oprofile_ReadBlockMSV()
- * Synopsis:  Read the next block of optimized profiles from a hmm file.
- *
- * Purpose:   Reads a block of optimized profiles from open hmm file <hfp> into 
- *            <hmmBlock>.
- *
- * Returns:   <eslOK> on success; the new sequence is stored in <sqBlock>.
- * 
- *            Returns <eslEOF> when there is no profiles left in the
- *            file (including first attempt to read an empty file).
- * 
- *            Otherwise return the status of the p7_oprofile_ReadMSV function.
- */
-int
-p7_oprofile_ReadBlockMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *hmmBlock, SIMD_TYPE simd)
-{
-  int     i;
-  int     size = 0;
-  int     status = eslOK;
-
-  hmmBlock->count = 0;
-  for (i = 0; i < hmmBlock->listSize; ++i)
-    {
-      status = p7_oprofile_ReadMSV(hfp, byp_abc, &hmmBlock->list[i], simd);
-      if (status != eslOK) break;
-      size += hmmBlock->list[i]->M;
-      ++hmmBlock->count;
-    }
-
-  /* EOF will be returned only in the case were no profiles were read */
-  if (status == eslEOF && i > 0) status = eslOK;
-
-  return status;
-}
 
 /* Function:  p7_oprofile_ReadRest()
  * Synopsis:  Read the rest of an optimized profile.
@@ -318,34 +218,212 @@ p7_oprofile_ReadBlockMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *h
  *            <eslEMEM> on allocation error.
  */
 int
-p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
+(*p7_oprofile_ReadRest)(P7_HMMFILE *hfp, P7_OPROFILE *om) = io_readrest_dispatcher;
+
+
+
+/* Function:  p7_oprofile_ReadBlockMSV()
+ * Synopsis:  Read the next block of optimized profiles from a hmm file.
+ *
+ * Purpose:   Reads a block of optimized profiles from open hmm file <hfp> into 
+ *            <hmmBlock>.
+ *
+ * Returns:   <eslOK> on success; the new sequence is stored in <sqBlock>.
+ * 
+ *            Returns <eslEOF> when there is no profiles left in the
+ *            file (including first attempt to read an empty file).
+ * 
+ *            Otherwise return the status of the p7_oprofile_ReadMSV function.
+ */
+int
+p7_oprofile_ReadBlockMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *hmmBlock)
 {
-   switch(om->simd){
-    case SSE:
-      return p7_oprofile_ReadRest_sse(hfp, om);
-      break;
-    case AVX:
-      return p7_oprofile_ReadRest_avx(hfp, om);
-      break;
-    case AVX512:
-      return p7_oprofile_ReadRest_avx512(hfp, om);
-      break;
-    case NEON:
-      return p7_oprofile_ReadRest_neon(hfp, om);
-      break;
-    case NEON64:
-      return p7_oprofile_ReadRest_neon64(hfp, om);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_ReadRest");  
-  }
+  int     i;
+  int     size = 0;
+  int     status = eslOK;
+
+  hmmBlock->count = 0;
+  for (i = 0; i < hmmBlock->listSize; ++i)
+    {
+      status = p7_oprofile_ReadMSV(hfp, byp_abc, &hmmBlock->list[i]);
+      if (status != eslOK) break;
+      size += hmmBlock->list[i]->M;
+      ++hmmBlock->count;
+    }
+
+  /* EOF will be returned only in the case were no profiles were read */
+  if (status == eslEOF && i > 0) status = eslOK;
+
+  return status;
 }
-/*----------- end, reading optimized profiles -------------------*/
+/*-------- end, reading and writing vectorized profiles ---------*/
+
+
+
+
+/*****************************************************************
+ * 2. CPU dispatching to vector implementations
+ *****************************************************************/
+
+static int 
+io_write_dispatcher(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
+{
+#ifdef eslENABLE_AVX512     // fastest first
+  if (esl_cpu_has_avx512())
+    {
+      p7_oprofile_Write = p7_oprofile_Write_avx512;
+      return p7_oprofile_Write_avx512(ffp, pfp, om);
+    }
+#endif
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+      p7_oprofile_Write = p7_oprofile_Write_avx;
+      return p7_oprofile_Write_avx(ffp, pfp, om);
+    }
+#endif
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse())
+    {
+      p7_oprofile_Write = p7_oprofile_Write_sse;
+      return p7_oprofile_Write_sse(ffp, pfp, om);
+    }
+#endif
+#ifdef eslENABLE_NEON
+  p7_oprofile_Write = p7_oprofile_Write_neon;
+  return p7_oprofile_Write_neon(ffp, pfp, om);
+#endif
+  //#ifdef eslENABLE_VMX
+  //p7_oprofile_Write = p7_oprofile_Write_vmx;
+  //return p7_oprofile_Write_vmx(ffp, pfp, om);
+  //#endif
+  p7_Die("io_write_dispatcher found no vector implementation - that shouldn't happen.");
+}
+
+
+
+
+static int 
+io_readmsv_dispatcher(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om)
+{
+#ifdef eslENABLE_AVX512     // fastest first
+  if (esl_cpu_has_avx512())
+    {
+      p7_oprofile_ReadMSV = p7_oprofile_ReadMSV_avx512;
+      return p7_oprofile_ReadMSV_avx512(hfp, byp_abc, ret_om)
+    }
+#endif
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+      p7_oprofile_ReadMSV = p7_oprofile_ReadMSV_avx;
+      return p7_oprofile_ReadMSV_avx(hfp, byp_abc, ret_om);
+    }
+#endif
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse())
+    {
+      p7_oprofile_ReadMSV = p7_oprofile_ReadMSV_sse;
+      return p7_oprofile_ReadMSV_sse(hfp, byp_abc, ret_om);
+    }
+#endif
+#ifdef eslENABLE_NEON
+  p7_oprofile_ReadMSV = p7_oprofile_ReadMSV_neon;
+  return p7_oprofile_ReadMSV_neon(hfp, byp_abc, ret_om);
+#endif
+  //#ifdef eslENABLE_VMX
+  //p7_oprofile_ReadMSV = p7_oprofile_ReadMSV_vmx;
+  //return p7_oprofile_ReadMSV_vmx(ffp, pfp, om);
+  //#endif
+  p7_Die("io_readmsv_dispatcher found no vector implementation - that shouldn't happen.");
+}
+
+
+
+
+static int 
+io_readinfomsv_dispatcher(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om)
+{
+#ifdef eslENABLE_AVX512     // fastest first
+  if (esl_cpu_has_avx512())
+    {
+      p7_oprofile_ReadInfoMSV = p7_oprofile_ReadInfoMSV_avx512;
+      return p7_oprofile_ReadInfoMSV_avx512(hfp, byp_abc, ret_om)
+    }
+#endif
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+      p7_oprofile_ReadInfoMSV = p7_oprofile_ReadInfoMSV_avx;
+      return p7_oprofile_ReadInfoMSV_avx(hfp, byp_abc, ret_om);
+    }
+#endif
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse())
+    {
+      p7_oprofile_ReadInfoMSV = p7_oprofile_ReadInfoMSV_sse;
+      return p7_oprofile_ReadInfoMSV_sse(hfp, byp_abc, ret_om);
+    }
+#endif
+#ifdef eslENABLE_NEON
+  p7_oprofile_ReadInfoMSV = p7_oprofile_ReadInfoMSV_neon;
+  return p7_oprofile_ReadInfoMSV_neon(hfp, byp_abc, ret_om);
+#endif
+  //#ifdef eslENABLE_VMX
+  //p7_oprofile_ReadInfoMSV = p7_oprofile_ReadInfoMSV_vmx;
+  //return p7_oprofile_ReadInfoMSV_vmx(hfp, byp_abc, ret_om);
+  //#endif
+  p7_Die("io_readinfomsv_dispatcher found no vector implementation - that shouldn't happen.");
+}
+
+
+
+
+
+static int
+io_readrest_dispatcher(P7_HMMFILE *hfp, P7_OPROFILE *om)
+{
+#ifdef eslENABLE_AVX512     // fastest first
+  if (esl_cpu_has_avx512())
+    {
+      p7_oprofile_ReadRest = p7_oprofile_ReadRest_avx512;
+      return p7_oprofile_ReadRest_avx512(hfp, om)
+    }
+#endif
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+      p7_oprofile_ReadRest = p7_oprofile_ReadRest_avx;
+      return p7_oprofile_ReadRest_avx(hfp, om);
+    }
+#endif
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse())
+    {
+      p7_oprofile_ReadRest = p7_oprofile_ReadRest_sse;
+      return p7_oprofile_ReadRest_sse(hfp, om);
+    }
+#endif
+#ifdef eslENABLE_NEON
+  p7_oprofile_ReadRest = p7_oprofile_ReadRest_neon;
+  return p7_oprofile_ReadRest_neon(hfp, om);
+#endif
+  //#ifdef eslENABLE_VMX
+  //p7_oprofile_ReadRest = p7_oprofile_ReadRest_vmx;
+  //return p7_oprofile_ReadRest_vmx(hfp, om)
+  //#endif
+  p7_Die("io_readrest_dispatcher found no vector implementation - that shouldn't happen.");
+
+}
+/*----------------- end, cpu dispatching ------------------------*/
+
+
 
 
 /*****************************************************************
  * 3. Utility routines
  *****************************************************************/
+
 /* Function:  p7_oprofile_CreateBlock()
  * Synopsis:  Create a new block of empty <P7_OM_BLOCK>.
  *
@@ -359,13 +437,11 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
 P7_OM_BLOCK *
 p7_oprofile_CreateBlock(int count)
 {
-  int i = 0;
-
-  P7_OM_BLOCK *block = NULL;
-  int status = eslOK;
+  P7_OM_BLOCK *block  = NULL;
+  int          i      = 0;
+  int          status = eslOK;
 
   ESL_ALLOC(block, sizeof(*block));
-
   block->count = 0;
   block->listSize = 0;
   block->list  = NULL;
@@ -374,19 +450,15 @@ p7_oprofile_CreateBlock(int count)
   block->listSize = count;
 
   for (i = 0; i < count; ++i)
-    {
-      block->list[i] = NULL;
-    }
+    block->list[i] = NULL;
 
   return block;
 
  ERROR:
-  if (block != NULL)
-    {
-      if (block->list != NULL)  free(block->list);
-      free(block);
-    }
-  
+  if (block) {
+    if (block->list != NULL)  free(block->list);
+    free(block);
+  }
   return NULL;
 }
 
@@ -441,7 +513,6 @@ p7_oprofile_Position(P7_HMMFILE *hfp, off_t offset)
 
   return eslOK;
 }
-
 /*-------------------- end, utility routines ---------------------*/
 
 
@@ -766,9 +837,3 @@ main(int argc, char **argv)
 }
 #endif /*IO_EXAMPLE*/
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

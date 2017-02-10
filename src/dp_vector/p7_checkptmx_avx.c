@@ -4,26 +4,26 @@
  *    1. API for the P7_CHECKPTMX object
  *    2. Debugging, development routines.
  *    3. Internal routines.
- *    4. Copyright and license information.
  */
 #include "p7_config.h"
+#ifdef eslENABLE_AVX
 
 #include <stdlib.h>
 #include <stdio.h>
+
+#include <x86intrin.h>
 
 #include "easel.h"
 
 #include "dp_vector/simdvec.h"
 #include "dp_vector/p7_checkptmx.h"
-#ifdef HAVE_AVX2
- #include "immintrin.h"
-#endif
+
 
 /*****************************************************************
  * 1. API for the <P7_CHECKPTMX> object
  *****************************************************************/
 
-/* Function:  p7_checkptmx_Create()
+/* Function:  p7_checkptmx_Create_avx()
  * Synopsis:  Allocate a new <P7_CHECKPTMX> object.
  *
  * Purpose:   Allocate a new <P7_CHECKPTMX> checkpointed, striped vector
@@ -58,8 +58,6 @@
 P7_CHECKPTMX *
 p7_checkptmx_Create_avx(int M, int L, int64_t ramlimit)
 {
-#ifdef HAVE_AVX2
-
   P7_CHECKPTMX *ox = NULL;
   int          maxR;
   int          r;
@@ -105,7 +103,7 @@ p7_checkptmx_Create_avx(int M, int L, int64_t ramlimit)
   for (r = 1; r < ox->validR_AVX; r++)
     ox->dpf_AVX[r] = ox->dpf_AVX[0] + r * ox->allocW_AVX;
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   ox->do_dumping     = FALSE;
   ox->dfp            = NULL;
   ox->dump_maxpfx    = 5;	
@@ -129,13 +127,9 @@ p7_checkptmx_Create_avx(int M, int L, int64_t ramlimit)
  ERROR:
   p7_checkptmx_Destroy(ox);
   return NULL;
-#endif //HAVE_AVX2
-#ifndef HAVE_AVX2
-  return NULL;
-#endif    
 }
 
-/* Function:  p7_checkptmx_GrowTo()
+/* Function:  p7_checkptmx_GrowTo_avx()
  * Synopsis:  Resize checkpointed DP matrix for new seq/model comparison.
  *
  * Purpose:   Given an existing checkpointed matrix structure <ox>,
@@ -164,7 +158,6 @@ p7_checkptmx_Create_avx(int M, int L, int64_t ramlimit)
 int
 p7_checkptmx_GrowTo_avx(P7_CHECKPTMX *ox, int M, int L)
 {
- #ifdef HAVE_AVX2 
   int     minR_chk      = (int) ceil(minimum_rows(L)) + ox->R0; /* minimum number of DP rows needed  */
   int     reset_dp_ptrs = FALSE;
   int     maxR;
@@ -182,7 +175,7 @@ p7_checkptmx_GrowTo_avx(P7_CHECKPTMX *ox, int M, int L)
    * grow them too.  Must do this first, because we have an early exit
    * condition coming below.
    */
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (ox->fwd && (status = p7_refmx_GrowTo(ox->fwd, M, L)) != eslOK) goto ERROR;
   if (ox->bck && (status = p7_refmx_GrowTo(ox->bck, M, L)) != eslOK) goto ERROR;
   if (ox->pp  && (status = p7_refmx_GrowTo(ox->pp,  M, L)) != eslOK) goto ERROR;
@@ -246,15 +239,10 @@ p7_checkptmx_GrowTo_avx(P7_CHECKPTMX *ox, int M, int L)
 
  ERROR:
   return status;
-
-  #endif //HAVE_AVX2
-#ifndef HAVE_AVX2
-  return eslENORESULT;
-#endif    
 }
 
 
-/* Function:  p7_checkptmx_Sizeof()
+/* Function:  p7_checkptmx_Sizeof_avx()
  * Synopsis:  Returns size of checkpointed vector DP matrix, in bytes.
  * 
  * Purpose:   Returns the size of the checkpointed vector DP matrix
@@ -275,17 +263,14 @@ p7_checkptmx_GrowTo_avx(P7_CHECKPTMX *ox, int M, int L)
 size_t
 p7_checkptmx_Sizeof_avx(const P7_CHECKPTMX *ox)
 {
-
   size_t n = sizeof(P7_CHECKPTMX);
-#ifdef HAVE_AVX2  
   n += ox->nalloc_AVX + (p7_VALIGN_AVX-1);            /* +31 because of manual alignment */
   n += 
   ox->allocR_AVX  * sizeof(float *);   
- #endif
   return n;
 }
 
-/* Function:  p7_checkptmx_MinSizeof()
+/* Function:  p7_checkptmx_MinSizeof_avx()
  * Synopsis:  Returns minimum required size of a <P7_CHECKPTMX>, in bytes.
  *
  * Purpose:   Calculate and return the minimal required size, in bytes,
@@ -300,7 +285,6 @@ size_t
 p7_checkptmx_MinSizeof_avx(int M, int L)
 {
   size_t n    = sizeof(P7_CHECKPTMX);
-#ifdef HAVE_AVX2  
   int    minR = 3 + (int) ceil(minimum_rows(L));  // 3 = Ra, 2 rows for backwards, 1 for fwd[0]
   
   n += p7_VALIGN_AVX-1;                                                  // dp_mem_AVX has to be hand-aligned for vectors
@@ -308,12 +292,11 @@ p7_checkptmx_MinSizeof_avx(int M, int L)
   // dp_mem_AVX, main: QR supercells; each has p7C_NSCELLS=3 cells, MID; each cell is __m256 vector of eight floats (p7_VNF=4 * float)
   n += minR * (ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN_AVX)); // dp_mem, specials: maintaining vector memory alignment 
   n += minR * sizeof(float *);                                       // dpf[] row ptrs
-#endif 
   return n;
 }
 
 
-/* Function:  p7_checkptmx_Reuse()
+/* Function:  p7_checkptmx_Reuse_avx()
  * Synopsis:  Recycle a checkpointed vector DP matrix.
  *
  * Purpose:   Resets the checkpointed vector DP matrix <ox> for reuse,
@@ -331,8 +314,7 @@ p7_checkptmx_MinSizeof_avx(int M, int L)
 int
 p7_checkptmx_Reuse_avx(P7_CHECKPTMX *ox)
 {
-#ifdef HAVE_AVX2  
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   int status;
 #endif
 
@@ -341,7 +323,7 @@ p7_checkptmx_Reuse_avx(P7_CHECKPTMX *ox)
   ox->R_AVX  = 0;
   ox->Qf_AVX = 0;
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (ox->fwd && (status = p7_refmx_Reuse(ox->fwd)) != eslOK) return status;
   if (ox->bck && (status = p7_refmx_Reuse(ox->bck)) != eslOK) return status;
   if (ox->pp  && (status = p7_refmx_Reuse(ox->pp))  != eslOK) return status;
@@ -349,14 +331,10 @@ p7_checkptmx_Reuse_avx(P7_CHECKPTMX *ox)
 #endif 
 
   return eslOK;
- #endif //HAVE_AVX2
-#ifndef HAVE_AVX2
- return eslENORESULT;
- #endif 
 }
 
 
-/* Function:  p7_checkptmx_Destroy()
+/* Function:  p7_checkptmx_Destroy_avx()
  * Synopsis:  Frees a <P7_CHECKPTMX>.
  *
  * Purpose:   Free the <P7_CHECKPTMX> <ox>. <ox> may be <NULL>,
@@ -365,20 +343,17 @@ p7_checkptmx_Reuse_avx(P7_CHECKPTMX *ox)
 void
 p7_checkptmx_Destroy_avx(P7_CHECKPTMX *ox)
 {
- if (ox) {
-
-#ifdef HAVE_AVX2  
-   if (ox->dp_mem_AVX) free(ox->dp_mem_AVX);
-   if (ox->dpf_AVX)    free(ox->dpf_AVX);
+  if (ox) 
+    {
+      if (ox->dp_mem_AVX) free(ox->dp_mem_AVX);
+      if (ox->dpf_AVX)    free(ox->dpf_AVX);
+#if eslDEBUGLEVEL > 0
+      if (ox->fwd)    p7_refmx_Destroy(ox->fwd);
+      if (ox->bck)    p7_refmx_Destroy(ox->bck);
+      if (ox->pp)     p7_refmx_Destroy(ox->pp);
 #endif
-
-#ifdef p7_DEBUGGING
-   if (ox->fwd)    p7_refmx_Destroy(ox->fwd);
-   if (ox->bck)    p7_refmx_Destroy(ox->bck);
-   if (ox->pp)     p7_refmx_Destroy(ox->pp);
-#endif
-   free(ox);
- }
+      free(ox);
+    }
 }
 /*--------------- end, P7_CHECKPTMX object -----------------------*/
 
@@ -388,9 +363,9 @@ p7_checkptmx_Destroy_avx(P7_CHECKPTMX *ox)
  * 2. Debugging, development routines
  *****************************************************************/
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
 
-/* Function:  p7_checkptmx_DumpFBRow()
+/* Function:  p7_checkptmx_DumpFBRow_avx()
  * Synopsis:  Dump one row from fwd or bck version of the matrix.
  *
  * Purpose:   Dump current row <dpc> of forward or backward calculations from
@@ -405,7 +380,6 @@ p7_checkptmx_Destroy_avx(P7_CHECKPTMX *ox)
 int
 p7_checkptmx_DumpFBRow_avx(P7_CHECKPTMX *ox, int rowi, debug_print *dpc, char *pfx)
 {
-#ifdef HAVE_AVX2  
   union { __m256 v; float x[p7_VNF_AVX]; } u;
   float *v         = NULL;		/*  */
   int    Q         = ox->Qf_AVX;
@@ -462,18 +436,18 @@ p7_checkptmx_DumpFBRow_avx(P7_CHECKPTMX *ox, int rowi, debug_print *dpc, char *p
  ERROR:
   if (v) free(v);
   return status;
-#endif
-#ifndef HAVE_AVX2
-return eslENORESULT;
-#endif  
 }
-
-#endif /*p7_DEBUGGING*/
+#endif // eslDEBUGLEVEL > 0
 /*---------------- end, debugging -------------------------------*/
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+
+
+#else // ! eslENABLE_AVX
+
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_checkptmx_avx_silence_hack(void) { return; }
+#if defined p7CHECKPTMX_AVX_TESTDRIVE || p7CHECKPTMX_AVX_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_AVX or not
+

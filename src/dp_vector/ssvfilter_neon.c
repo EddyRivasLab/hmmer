@@ -10,12 +10,11 @@
  * For Bjarne's notes, see the Intel SSE implementation.
  */
 #include "p7_config.h"
+#ifdef eslENABLE_NEON
 
 #include <math.h>
 
-#if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
 #include <arm_neon.h>
-#endif /* arm/arm64 arch */
 
 #include "easel.h"
 #include "esl_neon.h"
@@ -34,7 +33,6 @@
    bit versions. */
 #define  MAX_BANDS 6
 
-#ifdef HAVE_NEON
 #define STEP_SINGLE(sv)                         \
   sv.s8x16   = vqsubq_s8(sv.s8x16, (*rsc).s8x16); rsc++;        \
   xEv.u8x16  = vmaxq_u8(xEv.u8x16, sv.u8x16);
@@ -523,13 +521,15 @@ p7_SSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_s
 
   return eslOK;
 }
-#endif /* HAVE_NEON */
-#ifndef HAVE_NEON 
-int p7_SSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
-{
-  return eslENORESULT;
-}
-#endif
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
+
+
+
+#else // ! eslENABLE_NEON
+
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_ssvfilter_neon_silence_hack(void) { return; }
+#if defined p7SSVFILTER_NEON_TESTDRIVE || p7SSVFILTER_NEON_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_NEON or not
+

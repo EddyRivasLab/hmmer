@@ -13,7 +13,6 @@
  *    5. Unit tests.
  *    6. Test driver
  *    7. Example
- *    8. Copyright and license information
  */
 #include "p7_config.h"
 
@@ -835,10 +834,3 @@ main(int argc, char **argv)
 }
 #endif /*p7REFERENCE_AEC_ALIGN_EXAMPLE*/
 
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

@@ -14,9 +14,3 @@ extern int p7_alidisplay_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, P
 
 #endif /*HAVE_MPI*/
 #endif /*p7ALIDISPLAY_MPI_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

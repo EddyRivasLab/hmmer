@@ -9,10 +9,9 @@
  *   2. Conversion from generic P7_PROFILE to optimized P7_OPROFILE
  *   3. Conversion from optimized P7_OPROFILE to compact score arrays
  *   4. Debugging and development utilities.
- *   5. Benchmark driver.
- *   6. Example.
  */
 #include "p7_config.h"
+#ifdef eslENABLE_NEON
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,10 +20,9 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_neon.h"
 #include "esl_random.h"
 #include "esl_vectorops.h"
-
-#include "esl_neon.h"
 
 #include "base/p7_bg.h"
 #include "base/p7_hmm.h"
@@ -40,7 +38,7 @@
  * 1. The P7_OPROFILE structure: a score profile.
  *****************************************************************/
 
-/* Function:  p7_oprofile_Create()
+/* Function:  p7_oprofile_Create_neon()
  * Synopsis:  Allocate an optimized profile structure.
  *
  * Purpose:   Allocate for profiles of up to <allocM> nodes for digital alphabet <abc>.
@@ -50,7 +48,6 @@
 P7_OPROFILE *
 p7_oprofile_Create_neon(int allocM, const ESL_ALPHABET *abc)
 {
-#ifdef HAVE_NEON
   P7_OPROFILE *om  = NULL;
   int          nqb = P7_NVB(allocM); /* # of uchar vectors needed for query */
   int          nqw = P7_NVW(allocM); /* # of sword vectors needed for query */
@@ -162,19 +159,14 @@ p7_oprofile_Create_neon(int allocM, const ESL_ALPHABET *abc)
  ERROR:
   p7_oprofile_Destroy(om);
   return NULL;
-#endif /* HAVE_NEON */
-#ifndef HAVE_NEON
-  return NULL;
-#endif
 }
 
-/* Function:  p7_oprofile_Destroy()
+/* Function:  p7_oprofile_Destroy_neon()
  * Synopsis:  Frees an optimized profile structure.
  */
 void
 p7_oprofile_Destroy_neon(P7_OPROFILE *om)
 {
-#ifdef HAVE_NEON
   if (om == NULL) return;
 
   if (! om->is_shadow)
@@ -198,10 +190,9 @@ p7_oprofile_Destroy_neon(P7_OPROFILE *om)
       if (om->consensus) free(om->consensus);
     }
   free(om);
-#endif /* HAVE_NEON */
 }
 
-/* Function:  p7_oprofile_Sizeof()
+/* Function:  p7_oprofile_Sizeof_neon()
  * Synopsis:  Return the allocated size of a <P7_OPROFILE>.
  *
  * Purpose:   Returns the allocated size of a <P7_OPROFILE>,
@@ -215,7 +206,6 @@ size_t
 p7_oprofile_Sizeof_neon(const P7_OPROFILE *om)
 {
   size_t n   = 0;
-#ifdef HAVE_NEON
   int    nqb = om->allocQ16;	/* # of uchar vectors needed for query */
   int    nqw = om->allocQ8;     /* # of sword vectors needed for query */
   int    nqf = om->allocQ4;     /* # of float vectors needed for query */
@@ -244,12 +234,11 @@ p7_oprofile_Sizeof_neon(const P7_OPROFILE *om)
   n  += sizeof(char) * (om->allocM+2);            /* om->mm        */
   n  += sizeof(char) * (om->allocM+2);            /* om->cs        */
   n  += sizeof(char) * (om->allocM+2);            /* om->consensus */
-#endif /* HAVE_NEON */
   return n;
 }
 
 
-/* Function:  p7_oprofile_Clone()
+/* Function:  p7_oprofile_Clone_neon()
  * Synopsis:  Create a new copy of an optimized profile structure.
  *
  * Purpose:   Create a newly allocated copy of <om1>; return ptr to it.
@@ -259,7 +248,6 @@ p7_oprofile_Sizeof_neon(const P7_OPROFILE *om)
 P7_OPROFILE *
 p7_oprofile_Clone_neon(const P7_OPROFILE *om1)
 {
-#ifdef HAVE_NEON
   const ESL_ALPHABET *abc = om1->abc;
   P7_OPROFILE  *om2  = NULL;
   int           nqb  = P7_NVB(om1->allocM); /* # of uchar vectors needed for query */
@@ -391,10 +379,6 @@ p7_oprofile_Clone_neon(const P7_OPROFILE *om1)
  ERROR:
   p7_oprofile_Destroy(om2);
   return NULL;
-#endif /* HAVE_NEON */
-#ifndef HAVE_NEON
-  return NULL;
-#endif
 }
 
 /*----------------- end, P7_OPROFILE structure ------------------*/
@@ -405,7 +389,7 @@ p7_oprofile_Clone_neon(const P7_OPROFILE *om1)
  * 2. Conversion from generic P7_PROFILE to optimized P7_OPROFILE
  *****************************************************************/
 
-/* sf_conversion():
+/* sf_conversion_neon():
  * Original author (SSE version): Bjarne Knudsen
  * 
  * Generates the SSVFilter() parts of the profile <om> scores
@@ -420,7 +404,6 @@ p7_oprofile_Clone_neon(const P7_OPROFILE *om1)
 int
 sf_conversion_neon(P7_OPROFILE *om)
 {
-#ifdef HAVE_NEON
   int     M   = om->M;		/* length of the query                                          */
   int     nq  = P7_NVB(M);      /* segment length; total # of striped vectors needed            */
   int     x;			/* counter over residues                                        */
@@ -459,13 +442,9 @@ sf_conversion_neon(P7_OPROFILE *om)
     }
 
   return eslOK;
-#endif /* HAVE_NEON */
-#ifndef HAVE_NEON
-  return 0;
-#endif
 }
 
-/* mf_conversion(): 
+/* mf_conversion_neon(): 
  * 
  * This builds the MSVFilter() parts of the profile <om>, scores
  * in lspace uchars (16-way parallel), by rescaling, rounding, and
@@ -477,7 +456,6 @@ sf_conversion_neon(P7_OPROFILE *om)
 int
 mf_conversion_neon(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
-#ifdef HAVE_NEON
   int     M   = gm->M;		/* length of the query                                          */
   int     nq  = P7_NVB(M);     /* segment length; total # of striped vectors needed            */
   float   max = 0.0;		/* maximum residue score: used for unsigned emission score bias */
@@ -514,14 +492,10 @@ mf_conversion_neon(const P7_PROFILE *gm, P7_OPROFILE *om)
   sf_conversion_neon(om);
 
   return eslOK;
-#endif /* HAVE_NEON */
-#ifndef HAVE_NEON
-  return 0;
-#endif
 }
 
 
-/* vf_conversion(): 
+/* vf_conversion_neon(): 
  * 
  * This builds the ViterbiFilter() parts of the profile <om>, scores
  * in lspace swords (8-way parallel), by rescaling, rounding, and
@@ -533,7 +507,6 @@ mf_conversion_neon(const P7_PROFILE *gm, P7_OPROFILE *om)
 int
 vf_conversion_neon(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
-#ifdef HAVE_NEON
   int     M   = gm->M;		/* length of the query                                          */
   int     nq  = P7_NVW(M);     /* segment length; total # of striped vectors needed            */
   int     x;			/* counter over residues                                        */
@@ -627,21 +600,16 @@ vf_conversion_neon(const P7_PROFILE *gm, P7_OPROFILE *om)
     }
 
   return eslOK;
-#endif /* HAVE_NEON */
-#ifndef HAVE_NEON
-  return 0;
-#endif
 }
 
 
-/* fb_conversion()
+/* fb_conversion_neon()
  * This builds the Forward/Backward part of the optimized profile <om>,
  * where we use odds ratios (not log-odds scores).
  */
 int
 fb_conversion_neon(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
-#ifdef HAVE_NEON
   int     M   = gm->M;		/* length of the query                                          */
   int     nq  = P7_NVF(M);     /* segment length; total # of striped vectors needed            */
   int     x;			/* counter over residues                                        */
@@ -704,14 +672,10 @@ fb_conversion_neon(const P7_PROFILE *gm, P7_OPROFILE *om)
   om->xf[p7O_J][p7O_MOVE] = expf(gm->xsc[p7P_J][p7P_MOVE]);
 
   return eslOK;
-#endif /* HAVE_NEON */
-#ifndef HAVE_NEON
-  return 0;
-#endif
 }
 
 
-/* Function:  p7_oprofile_Convert()
+/* Function:  p7_oprofile_Convert_neon()
  * Synopsis:  Converts standard profile to an optimized one.
  *
  * Purpose:   Convert a standard profile <gm> to an optimized profile <om>,
@@ -742,7 +706,6 @@ fb_conversion_neon(const P7_PROFILE *gm, P7_OPROFILE *om)
 int
 p7_oprofile_Convert_neon(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
-#ifdef HAVE_NEON
   int status, z;
 
   ESL_DASSERT1(( ! om->is_shadow ));
@@ -778,19 +741,16 @@ p7_oprofile_Convert_neon(const P7_PROFILE *gm, P7_OPROFILE *om)
 
  ERROR:
   return status;
-#endif /* HAVE_NEON */
-#ifndef HAVE_NEON
-  return 0;
-#endif
 }
 
 /*------------ end, conversions to P7_OPROFILE ------------------*/
+
 
 /*******************************************************************
  * 3. Conversion from optimized P7_OPROFILE to compact score arrays
  *******************************************************************/
 
-/* Function:  p7_oprofile_GetFwdTransitionArray()
+/* Function:  p7_oprofile_GetFwdTransitionArray_neon()
  * Synopsis:  Retrieve full 32-bit float transition probabilities from an
  *            optimized profile into a flat array
  *
@@ -810,10 +770,9 @@ p7_oprofile_Convert_neon(const P7_PROFILE *gm, P7_OPROFILE *om)
 int
 p7_oprofile_GetFwdTransitionArray_neon(const P7_OPROFILE *om, int type, float *arr )
 {
-#ifdef HAVE_NEON
-  int     nq  = P7_NVF(om->M);     /* # of striped vectors needed            */
+  int     nq  = P7_NVF(om->M);                  // # of striped vectors needed 
   int i, j;
-  union { esl_neon_128f_t v; float x[4]; } tmp; /* used to align and read simd minivectors               */
+  union { esl_neon_128f_t v; float x[4]; } tmp; // used to align and read simd minivectors 
 
 
   for (i=0; i<nq; i++) {
@@ -825,13 +784,9 @@ p7_oprofile_GetFwdTransitionArray_neon(const P7_OPROFILE *om, int type, float *a
   }
 
   return eslOK;
-#endif /* HAVE_NEON */
-#ifndef HAVE_NEON
-  return 0;
-#endif
 }
 
-/* Function:  p7_oprofile_GetMSVEmissionScoreArray()
+/* Function:  p7_oprofile_GetMSVEmissionScoreArray_neon()
  * Synopsis:  Retrieve MSV residue emission scores from an optimized
  *            profile into an array
  *
@@ -857,12 +812,11 @@ p7_oprofile_GetFwdTransitionArray_neon(const P7_OPROFILE *om, int type, float *a
 int
 p7_oprofile_GetMSVEmissionScoreArray_neon(const P7_OPROFILE *om, uint8_t *arr )
 {
-#ifdef HAVE_NEON
   int x, q, z, k;
-  union { esl_neon_128i_t v; uint8_t i[16]; } tmp; /* used to align and read simd minivectors           */
-  int      M   = om->M;    /* length of the query                                          */
+  union { esl_neon_128i_t v; uint8_t i[16]; } tmp; // used to align and read simd minivectors 
+  int      M   = om->M;                            // length of the query 
   int      K   = om->abc->Kp;
-  int      nq  = P7_NVB(M);     /* segment length; total # of striped vectors needed            */
+  int      nq  = P7_NVB(M);                        // segment length; total # of striped vectors needed   
   int cell_cnt = (om->M + 1) * K;
 
   for (x = 0; x < K ; x++) {
@@ -875,14 +829,10 @@ p7_oprofile_GetMSVEmissionScoreArray_neon(const P7_OPROFILE *om, uint8_t *arr )
   }
 
   return eslOK;
-#endif /* HAVE_NEON */
-#ifndef HAVE_NEON
-  return 0;
-#endif
 }
 
 
-/* Function:  p7_oprofile_GetFwdEmissionScoreArray()
+/* Function:  p7_oprofile_GetFwdEmissionScoreArray_neon()
  * Synopsis:  Retrieve Fwd (float) residue emission scores from an optimized
  *            profile into an array
  *
@@ -907,12 +857,11 @@ p7_oprofile_GetMSVEmissionScoreArray_neon(const P7_OPROFILE *om, uint8_t *arr )
 int
 p7_oprofile_GetFwdEmissionScoreArray_neon(const P7_OPROFILE *om, float *arr )
 {
-#ifdef HAVE_NEON
   int x, q, z, k;
-  union { esl_neon_128f_t v; float f[4]; } tmp; /* used to align and read simd minivectors               */
-  int      M   = om->M;    /* length of the query                                          */
+  union { esl_neon_128f_t v; float f[4]; } tmp; // used to align and read simd minivectors 
+  int      M   = om->M;                         // length of the query
   int      K   = om->abc->Kp;
-  int      nq  = P7_NVF(M);     /* segment length; total # of striped vectors needed            */
+  int      nq  = P7_NVF(M);                     // segment length; total # of striped vectors needed 
   int cell_cnt = (om->M + 1) * K;
 
   for (x = 0; x < K; x++) {
@@ -925,13 +874,9 @@ p7_oprofile_GetFwdEmissionScoreArray_neon(const P7_OPROFILE *om, float *arr )
   }
 
   return eslOK;
-#endif /* HAVE_NEON */
-#ifndef HAVE_NEON
-  return 0;
-#endif
 }
 
-/* Function:  p7_oprofile_GetFwdEmissionArray()
+/* Function:  p7_oprofile_GetFwdEmissionArray_neon()
  * Synopsis:  Retrieve Fwd (float) residue emission values from an optimized
  *            profile into an array
  *
@@ -958,13 +903,12 @@ p7_oprofile_GetFwdEmissionScoreArray_neon(const P7_OPROFILE *om, float *arr )
 int
 p7_oprofile_GetFwdEmissionArray_neon(const P7_OPROFILE *om, P7_BG *bg, float *arr )
 {
-#ifdef HAVE_NEON
   int x, q, z, k;
-  union { esl_neon_128f_t v; float f[4]; } tmp; /* used to align and read simd minivectors               */
-  int      M   = om->M;    /* length of the query                                          */
+  union { esl_neon_128f_t v; float f[4]; } tmp;   // used to align and read simd minivectors 
+  int      M   = om->M;                           // length of the query
   int      Kp  = om->abc->Kp;
   int      K   = om->abc->K;
-  int      nq  = P7_NVF(M);     /* segment length; total # of striped vectors needed            */
+  int      nq  = P7_NVF(M);                       // segment length; total # of striped vectors needed  
   int cell_cnt = (om->M + 1) * Kp;
 
   for (x = 0; x < K; x++) {
@@ -976,15 +920,11 @@ p7_oprofile_GetFwdEmissionArray_neon(const P7_OPROFILE *om, P7_BG *bg, float *ar
       }
   }
 
-  //degeneracy emissions for each position
+  // degeneracy emissions for each position
   for (x = 0; x <= M; x++)
     esl_abc_FExpectScVec(om->abc, arr+Kp*x, bg->f);
 
   return eslOK;
-#endif /* HAVE_NEON */
-#ifndef HAVE_NEON
-  return 0;
-#endif
 }
 /*------------ end, conversions from P7_OPROFILE ------------------*/
 
@@ -993,22 +933,20 @@ p7_oprofile_GetFwdEmissionArray_neon(const P7_OPROFILE *om, P7_BG *bg, float *ar
  * 4. Debugging and development utilities.
  *****************************************************************/
 
-
-/* oprofile_dump_mf()
+/* oprofile_dump_mf_neon()
  * 
  * Dump the MSVFilter part of a profile <om> to <stdout>.
  */
 int
 oprofile_dump_mf_neon(FILE *fp, const P7_OPROFILE *om)
 {
-#ifdef HAVE_NEON
   int     M   = om->M;		/* length of the query                                          */
-  int     nq  = P7_NVB(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVB(M);      /* segment length; total # of striped vectors needed            */
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
   int     k;			/* counter over nodes 1..M                                      */
   int     z;			/* counter within elements of one SIMD minivector               */
-  union { esl_neon_128i_t v; uint8_t i[16]; } tmp; /* used to align and read simd minivectors           */
+  union { esl_neon_128i_t v; uint8_t i[16]; } tmp; /* used to align and read simd minivectors   */
 
   /* Header (rearranged column numbers, in the vectors)  */
   fprintf(fp, "     ");
@@ -1047,24 +985,19 @@ oprofile_dump_mf_neon(FILE *fp, const P7_OPROFILE *om)
   fprintf(fp, "Q:          %4d\n",  nq);  
   fprintf(fp, "M:          %4d\n",  M);  
   return eslOK;
-#endif /* HAVE_NEON */
-#ifndef HAVE_NEON
-  return 0;
-#endif
 }
 
 
 
-/* oprofile_dump_vf()
+/* oprofile_dump_vf_neon()
  * 
  * Dump the ViterbiFilter part of a profile <om> to <stdout>.
  */
 int
 oprofile_dump_vf_neon(FILE *fp, const P7_OPROFILE *om)
 {
-#ifdef HAVE_NEON
   int     M   = om->M;		/* length of the query                                          */
-  int     nq  = P7_NVW(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVW(M);      /* segment length; total # of striped vectors needed            */
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
   int     k;			/* the usual counter over model nodes 1..M                      */
@@ -1072,7 +1005,7 @@ oprofile_dump_vf_neon(FILE *fp, const P7_OPROFILE *om)
   int     z;			/* counter within elements of one SIMD minivector               */
   int     t;			/* counter over transitions 0..7 = p7O_{BM,MM,IM,DM,MD,MI,II,DD}*/
   int     j;			/* counter in interleaved vector arrays in the profile          */
-  union { esl_neon_128i_t v; int16_t i[8]; } tmp; /* used to align and read simd minivectors           */
+  union { esl_neon_128i_t v; int16_t i[8]; } tmp; /* used to align and read simd minivectors    */
 
   /* Emission score header (rearranged column numbers, in the vectors)  */
   fprintf(fp, "     ");
@@ -1175,14 +1108,10 @@ oprofile_dump_vf_neon(FILE *fp, const P7_OPROFILE *om)
   fprintf(fp, "Q:     %6d\n",   nq);  
   fprintf(fp, "M:     %6d\n",   M);  
   return eslOK;
-#endif /* HAVE_NEON */
-#ifndef HAVE_NEON
-  return 0;
-#endif
 }
 
 
-/* oprofile_dump_fb()
+/* oprofile_dump_fb_neon()
  * 
  * Dump the Forward/Backward part of a profile <om> to <stdout>.
  * <width>, <precision> control the floating point output:
@@ -1192,9 +1121,8 @@ oprofile_dump_vf_neon(FILE *fp, const P7_OPROFILE *om)
 int
 oprofile_dump_fb_neon(FILE *fp, const P7_OPROFILE *om, int width, int precision)
 {
-#ifdef HAVE_NEON
   int     M   = om->M;		/* length of the query                                          */
-  int     nq  = P7_NVF(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVF(M);      /* segment length; total # of striped vectors needed            */
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
   int     k;			/* the usual counter over model nodes 1..M                      */
@@ -1202,7 +1130,7 @@ oprofile_dump_fb_neon(FILE *fp, const P7_OPROFILE *om, int width, int precision)
   int     z;			/* counter within elements of one SIMD minivector               */
   int     t;			/* counter over transitions 0..7 = p7O_{BM,MM,IM,DM,MD,MI,II,DD}*/
   int     j;			/* counter in interleaved vector arrays in the profile          */
-  union { esl_neon_128f_t v; float x[4]; } tmp; /* used to align and read simd minivectors               */
+  union { esl_neon_128f_t v; float x[4]; } tmp; /* used to align and read simd minivectors      */
 
   /* Residue emissions */
   for (x = 0; x < om->abc->Kp; x++)
@@ -1299,14 +1227,10 @@ oprofile_dump_fb_neon(FILE *fp, const P7_OPROFILE *om, int width, int precision)
   fprintf(fp, "Q:     %d\n",   nq);  
   fprintf(fp, "M:     %d\n",   M);  
   return eslOK;
-#endif /* HAVE_NEON */
-#ifndef HAVE_NEON
-  return 0;
-#endif
 }
 
 
-/* Function:  p7_oprofile_Compare()
+/* Function:  p7_oprofile_Compare_neon()
  * Synopsis:  Compare two optimized profiles for equality.
  *
  * Purpose:   Compare the contents of <om1> and <om2>; return 
@@ -1332,7 +1256,6 @@ oprofile_dump_fb_neon(FILE *fp, const P7_OPROFILE *om, int width, int precision)
 int
 p7_oprofile_Compare_neon(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg)
 {
-#ifdef HAVE_NEON
   int Q4  = P7_NVF(om1->M);
   int Q8  = P7_NVW(om1->M);
   int Q16 = P7_NVB(om1->M);
@@ -1412,166 +1335,16 @@ p7_oprofile_Compare_neon(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float t
    if (esl_vec_FCompare(om1->compo,   om2->compo,   p7_MAXABET,  tol) != eslOK) ESL_FAIL(eslFAIL, errmsg, "comparison failed: compo vector");
 
    return eslOK;
-#endif /* HAVE_NEON */
-#ifndef HAVE_NEON
-  return 0;
-#endif
 }
-
-
-
 /*------------ end, P7_OPROFILE debugging tools  ----------------*/
 
 
 
-/*****************************************************************
- * 5. Benchmark driver.
- *****************************************************************/
+#else // ! eslENABLE_NEON
 
-#ifdef p7OPROFILE_BENCHMARK
-/* Timing profile conversion.
-   ./benchmark-sse <hmmfile>      
- */
-#include "p7_config.h"
-
-#include "easel.h"
-#include "esl_alphabet.h"
-#include "esl_getopts.h"
-#include "esl_random.h"
-#include "esl_stopwatch.h"
-
-#include "hmmer.h"
-
-static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-L",        eslARG_INT,    "400", NULL, NULL,  NULL,  NULL, NULL, "length of target sequence",                        0 },
-  { "-N",        eslARG_INT, "100000", NULL, NULL,  NULL,  NULL, NULL, "number of conversions to time",                    0 },
-  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-};
-static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for the generic implementation";
-
-int 
-main(int argc, char **argv)
-{
-  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
-  char           *hmmfile = esl_opt_GetArg(go, 1);
-  ESL_STOPWATCH  *w       = esl_stopwatch_Create();
-  ESL_ALPHABET   *abc     = NULL;
-  P7_HMMFILE     *hfp     = NULL;
-  P7_HMM         *hmm     = NULL;
-  P7_BG          *bg      = NULL;
-  P7_PROFILE     *gm      = NULL;
-  P7_OPROFILE    *om      = NULL;
-  int             L       = esl_opt_GetInteger(go, "-L");
-  int             N       = esl_opt_GetInteger(go, "-N");
-  int             i;
-
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
-
-  bg = p7_bg_Create(abc);
-  p7_bg_SetLength(bg, L);
-  gm = p7_profile_Create(hmm->M, abc);
-  p7_profile_ConfigLocal(gm, hmm, bg, L);
-  om = p7_oprofile_Create(gm->M, abc);
-
-  esl_stopwatch_Start(w);
-  for (i = 0; i < N; i++)
-    p7_oprofile_Convert(gm, om);
-  esl_stopwatch_Stop(w);
-  esl_stopwatch_Display(stdout, w, "# CPU time: ");
-  printf("# M = %d\n", gm->M);
-
-  p7_oprofile_Destroy(om);
-  p7_profile_Destroy(gm);
-  p7_bg_Destroy(bg);
-  p7_hmm_Destroy(hmm);
-  p7_hmmfile_Close(hfp);
-  esl_alphabet_Destroy(abc);
-  esl_stopwatch_Destroy(w);
-  esl_getopts_Destroy(go);
-  return 0;
-}
-#endif /*p7OPROFILE_BENCHMARK*/
-/*---------------- end, benchmark driver ------------------------*/
-
-
-
-/*****************************************************************
- * 6. Example
- *****************************************************************/
-#ifdef p7OPROFILE_EXAMPLE
-/* 
- * ./p7_oprofile_example <hmmfile>
- */
-#include "p7_config.h"
-
-#include <stdlib.h>
-
-#include "easel.h"
-#include "esl_alphabet.h"
-#include "esl_getopts.h"
-
-#include "hmmer.h"
-
-static ESL_OPTIONS options[] = {
-   /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
-  {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                            0},
-  { 0,0,0,0,0,0,0,0,0,0},
-};
-static char usage[]  = "[-options]";
-static char banner[] = "example main() for p7_oprofile.c";
-
-int
-main(int argc, char **argv)
-{
-  ESL_GETOPTS  *go      = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  char         *hmmfile = esl_opt_GetArg(go, 1);
-  ESL_ALPHABET *abc     = NULL;
-  P7_HMMFILE   *hfp     = NULL;
-  P7_HMM       *hmm     = NULL;
-  P7_BG        *bg      = NULL;
-  P7_PROFILE   *gm      = NULL;
-  P7_OPROFILE  *om1     = NULL;
-  P7_OPROFILE  *om2     = NULL;
-  int           status;
-  char          errbuf[eslERRBUFSIZE];
-
-  status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
-  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
-  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
-
-  status = p7_hmmfile_Read(hfp, &abc, &hmm);
-  if      (status == eslEFORMAT)   p7_Fail("Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
-  else if (status == eslEINCOMPAT) p7_Fail("HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
-  else if (status == eslEOF)       p7_Fail("Empty HMM file %s? No HMM data found.\n",        hfp->fname);
-  else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s\n",     hfp->fname);
-
-  bg  = p7_bg_Create(abc);
-  gm  = p7_profile_Create(hmm->M, abc);   
-  om1 = p7_oprofile_Create(hmm->M, abc);
-
-  p7_profile_ConfigLocal(gm, hmm, bg, 400);
-  p7_oprofile_Convert(gm, om1);
-  
-  p7_oprofile_Dump(stdout, om1);
-
-  om2 = p7_oprofile_Clone(om1);
-  if (p7_oprofile_Compare(om1, om2, 0.001f, errbuf) != eslOK)    printf ("ERROR %s\n", errbuf);
-
-  p7_oprofile_Destroy(om1);
-  p7_oprofile_Destroy(om2);
-  p7_profile_Destroy(gm);
-  p7_bg_Destroy(bg);
-  p7_hmm_Destroy(hmm);
-  p7_hmmfile_Close(hfp);
-  esl_alphabet_Destroy(abc);
-  esl_getopts_Destroy(go);
-  return eslOK;
-}
-#endif /*p7OPROFILE_EXAMPLE*/
-/*----------------------- end, example --------------------------*/
-
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_oprofile_neon_silence_hack(void) { return; }
+#if defined p7OPROFILE_NEON_TESTDRIVE || p7OPROFILE_NEON_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_NEON or not

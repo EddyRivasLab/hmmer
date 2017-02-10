@@ -4,7 +4,6 @@
  * Contents:
  *   1. Null2 calculation routine.
  *   2. Example
- *   3. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -495,7 +494,7 @@ main(int argc, char **argv)
    * To get it, run checkpointed Fwd/Bck/Decoding
    */
   cx = p7_checkptmx_Create(hmm->M, sq->n, ESL_MBYTES(32));
-  sm = p7_sparsemask_Create(gm->M, sq->n);
+  sm = p7_sparsemask_Create(gm->M, sq->n, p7_VDEFAULT);
   if (esl_opt_GetBoolean(go, "-a")) 
     p7_sparsemask_AddAll(sm);
   else {
@@ -576,13 +575,4 @@ main(int argc, char **argv)
 #endif /*p7SPARSE_NULL2_EXAMPLE*/
 /*---------------------- end, example ---------------------------*/
 
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
-
-  
 

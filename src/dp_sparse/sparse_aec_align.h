@@ -13,12 +13,5 @@ extern int p7_sparse_aec_Align(const P7_PROFILE *gm, const P7_SPARSEMX *asd,
 			       P7_ENVELOPES *env, P7_SPARSEMX *aec, P7_TRACE *tr);
 
 
-
-
 #endif /*p7SPARSE_AEC_ALIGN_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

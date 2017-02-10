@@ -24,9 +24,3 @@ extern int p7_reference_anchors_SetFromTrace(const P7_REFMX *pp, const P7_TRACE 
 
 #endif /*p7REFERENCE_ANCHORS_INCLUDED*/
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

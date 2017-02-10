@@ -1,19 +1,19 @@
 /* Processor-specific initialization of SIMD vector environment.
  * Called by p7_Init() whenever a new thread or process starts.
- * 
  */
-
 #include "p7_config.h"
-#include "easel.h"
-#include "base/general.h"
 
-#if p7_CPU_ARCH == intel
+#ifdef eslENABLE_SSE
 #include <xmmintrin.h>    /* SSE  */
 #include <emmintrin.h>    /* SSE2 */
+#endif
+
 #ifdef HAVE_PMMINTRIN_H
 #include <pmmintrin.h>   /* DENORMAL_MODE */
 #endif
-#endif /* intel arch */
+
+#include "easel.h"
+#include "base/general.h"
 
 #include "dp_vector/simdvec.h"
 
@@ -186,9 +186,4 @@ extern void p7_restripe_float(float *source, float *dest, int length, int source
   }
 
 }
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

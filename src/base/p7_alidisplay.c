@@ -9,7 +9,6 @@
  *   5. Unit tests.
  *   6. Test driver.
  *   7. Example.
- *   8. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -76,7 +75,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
       return(p7_alidisplay_Create_avx512(tr, which, om, sq));
       break;
 
-    case NEON: case NEON64:
+    case NEON: 
       return(p7_alidisplay_Create_neon(tr, which, om, sq));
       exit(0);
       break;
@@ -1345,11 +1344,4 @@ main(int argc, char **argv)
 }
 #endif /*p7ALIDISPLAY_EXAMPLE*/
 
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 

@@ -8,22 +8,14 @@
  * high scoring sequences, but this indicates that the sequence is a
  * high-scoring hit worth examining more closely anyway.  It will not
  * underflow, in local alignment mode.
- * 
- * Contents:
- *   1. Viterbi filter implementation.
- *   2. Benchmark driver.
- *   3. Unit tests.
- *   4. Test driver.
- *   5. Example.
  */
 #include "p7_config.h"
+#ifdef eslENABLE_NEON
 
 #include <stdio.h>
 #include <math.h>
 
-#if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
 #include <arm_neon.h>
-#endif /* arm/arm64 arch */
 
 #include "easel.h"
 #include "esl_gumbel.h"
@@ -39,7 +31,7 @@
  * 1. Viterbi filter implementation.
  *****************************************************************/
 
-/* Function:  p7_ViterbiFilter()
+/* Function:  p7_ViterbiFilter_neon()
  * Synopsis:  Calculates Viterbi score, vewy vewy fast, in limited precision.
  *
  * Purpose:   Calculates an approximation of the Viterbi score for sequence
@@ -71,7 +63,6 @@
 int
 p7_ViterbiFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)
 {
-  #ifdef HAVE_NEON
   register esl_neon_128i_t mpv, dpv, ipv;  /* previous row values                                       */
   register esl_neon_128i_t sv;		   /* temp storage of 1 curr row value in progress              */
   register esl_neon_128i_t dcv;		   /* delayed storage of D(i,q+1)                               */
@@ -120,7 +111,7 @@ p7_ViterbiFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
   xC   = -32768;
   xE   = -32768;
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
 #endif
 
@@ -230,7 +221,7 @@ p7_ViterbiFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
 	  DMXf(0).s16x8 = vextq_s16(negInfv.s16x8, dcv.s16x8, 7);
 	}
 	  
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
 	if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);   
 #endif
     } /* end loop over sequence residues 1..L */
@@ -244,14 +235,12 @@ p7_ViterbiFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
       *ret_sc -= 3.0; /* the NN/CC/JJ=0,-3nat approximation: see J5/36. That's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ contrib */
     }
   else  *ret_sc = -eslINFINITY;
-#endif /* HAVE_NEON */
-  return eslOK;
 }
-/*---------------- end, p7_ViterbiFilter_neon() ----------------------*/
 
 
 
-/* Function:  p7_ViterbiFilter_longtarget()
+
+/* Function:  p7_ViterbiFilter_longtarget_neon()
  * Synopsis:  Finds windows within potentially long sequence blocks with Viterbi
  *            scores above threshold (vewy vewy fast, in limited precision)
  *
@@ -287,7 +276,6 @@ int
 p7_ViterbiFilter_longtarget_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox,
                             float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
 {
-  #ifdef HAVE_NEON
   register esl_neon_128i_t mpv, dpv, ipv; /* previous row values                                       */
   register esl_neon_128i_t sv;            /* temp storage of 1 curr row value in progress              */
   register esl_neon_128i_t dcv;           /* delayed storage of D(i,q+1)                               */
@@ -354,7 +342,7 @@ p7_ViterbiFilter_longtarget_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *o
   xC   = -32768;
   xE   = -32768;
 
-#if p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
 #endif
 
@@ -480,19 +468,21 @@ p7_ViterbiFilter_longtarget_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *o
 	    DMXf(0).s16x8 = vextq_s16(negInfv.s16x8, dcv.s16x8, 7);
 	  }
       }
-#if p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
       if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);
 #endif
   } /* end loop over sequence residues 1..L */
-#endif /* HAVE_NEON */
   return eslOK;
 }
-/*---------------- end, p7_ViterbiFilter_longtarget_neon() ----------------------*/
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 
+
+
+else // ! eslENABLE_NEON
+
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_vitfilter_neon_silence_hack(void) { return; }
+#if defined p7VITFILTER_NEON_TESTDRIVE || p7VITFILTER_NEON_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_NEON or not

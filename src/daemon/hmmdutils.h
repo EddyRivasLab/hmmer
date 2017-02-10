@@ -140,9 +140,3 @@ extern int  process_searchopts(int fd, char *cmdstr, ESL_GETOPTS **ret_opts);
 extern void free_QueueData(QUEUE_DATA *data);
 
 #endif /*p7HMMDUTILS_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

@@ -5,8 +5,6 @@
  *   2. Determination of individual E-value parameters
  *   3. Statistics and specific experiment drivers
  *   4. Benchmark driver
- *   5. Copyright and license information
- * 
  */
 #include "p7_config.h"
 
@@ -669,11 +667,3 @@ main(int argc, char **argv)
 }
 #endif /*p7EVALUES_BENCHMARK*/
 
-
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

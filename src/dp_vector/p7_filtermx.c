@@ -8,7 +8,6 @@
  * Contents:
  *   1. The P7_FILTERMX object
  *   2. Debugging and development routines
- *   3. Copyright and license information
  */
 
 #include "p7_config.h"
@@ -23,6 +22,7 @@
 #include "dp_vector/p7_filtermx.h"
 #include "hardware/hardware.h"
 #include "base/general.h"
+
 /*****************************************************************
  * 1. The P7_FILTERMX object.
  *****************************************************************/
@@ -60,9 +60,6 @@ p7_filtermx_Create(int allocM, SIMD_TYPE simd)
       break;
     case NEON:
       return p7_filtermx_Create_neon(allocM);
-      break;
-    case NEON64:
-      return p7_filtermx_Create_neon64(allocM);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_filtermx_Create");  
@@ -105,9 +102,6 @@ p7_filtermx_GrowTo(P7_FILTERMX *fx, int allocM)
     case NEON:
       return p7_filtermx_GrowTo_neon(fx, allocM);
       break;
-    case NEON64:
-      return p7_filtermx_GrowTo_neon64(fx, allocM);
-      break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_filtermx_GrowTo");  
   }
@@ -141,9 +135,6 @@ p7_filtermx_Sizeof(const P7_FILTERMX *fx)
     case NEON:
       return p7_filtermx_Sizeof_neon(fx);
       break;
-    case NEON64:
-      return p7_filtermx_Sizeof_neon64(fx);
-      break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_filtermx_Sizeof");  
   }
@@ -173,9 +164,6 @@ switch(simd){
     case NEON:
       return p7_filtermx_MinSizeof_neon(M);
       break;
-    case NEON64:
-      return p7_filtermx_MinSizeof_neon64(M);
-      break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_filtermx_MinSizeof");  
   }
@@ -201,7 +189,7 @@ p7_filtermx_Reuse(P7_FILTERMX *fx)
 {
   fx->M         = 0;
   fx->type      = p7F_NONE;
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   fx->do_dumping= FALSE;
   fx->dfp       = NULL;
 #endif
@@ -232,9 +220,6 @@ p7_filtermx_Destroy(P7_FILTERMX *fx)
     case NEON:
       p7_filtermx_Destroy_neon(fx);
       break;
-    case NEON64:
-      p7_filtermx_Destroy_neon64(fx);
-      break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_filtermx_Destroy");  
   }
@@ -258,8 +243,8 @@ p7_filtermx_Destroy(P7_FILTERMX *fx)
  *            To turn off dumping, <truefalse> is <FALSE>, and <dfp>
  *            is <NULL>.
  *            
- *            For this to have any effect, <p7_DEBUGGING> compile-time
- *            flag must be up. If it is not, no dumping will occur,
+ *            For this to have any effect, <eslDEBUGLEVEL> compile-time
+ *            flag must be nonzero. If it is not, no dumping will occur,
  *            and this call is a no-op.
  *            
  * Args:      fx        - DP matrix object to set for diagnostic dumping
@@ -273,14 +258,14 @@ p7_filtermx_Destroy(P7_FILTERMX *fx)
 int
 p7_filtermx_SetDumpMode(P7_FILTERMX *fx, FILE *dfp, int truefalse)
 {
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   fx->do_dumping = truefalse;
   fx->dfp        = dfp;
 #endif
   return eslOK;
 }
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
 /* Function:  p7_filtermx_DumpMFRow()
  * Synopsis:  Dump one row from MSV version of a DP matrix.
  *
@@ -320,9 +305,6 @@ p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, u
       break;
     case NEON:
       return p7_filtermx_DumpMFRow_neon(fx, rowi, xE, xN, xJ, xB, xC);
-      break;
-    case NEON64:
-      return p7_filtermx_DumpMFRow_neon64(fx, rowi, xE, xN, xJ, xB, xC);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_filtermx_DumpMFRow");  
@@ -364,20 +346,9 @@ p7_filtermx_DumpVFRow(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, i
     case NEON:
       return p7_filtermx_DumpVFRow_neon(fx, rowi, xE, xN, xJ, xB, xC);
       break;
-    case NEON64:
-      return p7_filtermx_DumpVFRow_neon64(fx, rowi, xE, xN, xJ, xB, xC);
-      break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_filtermx_DumpVFRow");  
   }
 }
-#endif /*p7_DEBUGGING*/
+#endif // eslDEBUGLEVEL
 
-
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

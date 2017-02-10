@@ -14,10 +14,3 @@ extern int p7_domain_mpi_Unpack  (char *buf, int n, int *pos, MPI_Comm comm, P7_
 
 #endif /*HAVE_MPI*/
 #endif /*p7DOMAIN_MPI_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
-

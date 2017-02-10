@@ -30,9 +30,3 @@ extern int p7_sparse_asc_Decoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *g
 
 
 #endif /*p7SPARSE_ASC_FWDBACK_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

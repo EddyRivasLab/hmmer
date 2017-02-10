@@ -1,4 +1,4 @@
-/* Viterbi filter implementation; SSE version.
+/* Viterbi filter implementation
  * 
  * This is a SIMD vectorized, striped, interleaved, one-row, reduced
  * precision (epi16) implementation of the Viterbi algorithm.
@@ -15,33 +15,13 @@
  *   3. Unit tests.
  *   4. Test driver.
  *   5. Example.
- *   6. Copyright and license information
  */
 #include "p7_config.h"
 
 #include <stdio.h>
 #include <math.h>
 
-#if p7_CPU_ARCH == intel 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
-#ifdef HAVE_AVX512
- #include <immintrin.h>
- //#include "esl_avx_512.h"
-#endif
-#endif /* intel arch */
-
-#if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
-#include <arm_neon.h>
-#endif
 #include "easel.h"
-#include "esl_sse.h"
-
-#ifdef HAVE_AVX2
- #include <immintrin.h>
-// #include "esl_avx.h"
-#endif 
-
 #include "esl_gumbel.h"
 
 #include "base/p7_hmmwindow.h"
@@ -101,7 +81,6 @@
  /* This filter just dispatches to the appropriate SIMD version.  When possible, call that version directly to
   * save the dispatch overhead.
   */
-
 int
 p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)
 {
@@ -117,9 +96,6 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
       break;
     case NEON:
       return p7_ViterbiFilter_neon(dsq, L, om, ox, ret_sc);
-      break;
-    case NEON64:
-      return p7_ViterbiFilter_neon64(dsq, L, om, ox, ret_sc);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_ViterbiFilter");  
@@ -184,9 +160,6 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
       break;
     case NEON:
       return p7_ViterbiFilter_longtarget_neon(dsq, L, om, ox, filtersc, P, windowlist);
-      break;
-    case NEON64:
-      return p7_ViterbiFilter_longtarget_neon64(dsq, L, om, ox, filtersc, P, windowlist);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_ViterbiFilter_longtarget");  
@@ -596,12 +569,4 @@ main(int argc, char **argv)
 }
 #endif /*p7VITFILTER_EXAMPLE*/
 /*-------------------- end, example -----------------------------*/
-
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 

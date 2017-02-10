@@ -1,5 +1,5 @@
-/* SSE versions of functions for formatting, transmitting, and printing single alignments to a
- * profile.
+/* NEON versions of functions for formatting, transmitting, and
+ * printing single alignments to a profile.
  * 
  * Contents:
  *   1. The P7_ALIDISPLAY object.
@@ -9,7 +9,6 @@
  *   5. Unit tests.
  *   6. Test driver.
  *   7. Example.
- *   8. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -29,15 +28,14 @@
 static inline float 
 p7_oprofile_FGetEmission_neon(const P7_OPROFILE *om, int k, int x)
 {
- #ifdef HAVE_NEON 
+#ifdef eslENABLE_NEON
   union { esl_neon_128f_t v; float p[4]; } u;
   int   Q = P7_NVF(om->M);
   int   q = ((k-1) % Q);
   int   r = (k-1)/Q;
   u.v = om->rfv[x][q];
   return u.p[r];
-#endif
-#ifndef HAVE_NEON
+#else
   return(0.0);  // stub so we have something to link
 #endif
 }
@@ -77,7 +75,7 @@ p7_oprofile_FGetEmission_neon(const P7_OPROFILE *om, int k, int x)
 P7_ALIDISPLAY *
 p7_alidisplay_Create_neon(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq)
 {
-#ifdef HAVE_NEON
+#ifdef eslENABLE_NEON
   P7_ALIDISPLAY *ad       = NULL;
   char          *Alphabet = om->abc->sym;
   int            n, pos, z;
@@ -243,17 +241,11 @@ p7_alidisplay_Create_neon(const P7_TRACE *tr, int which, const P7_OPROFILE *om, 
  ERROR:
   p7_alidisplay_Destroy(ad);
   return NULL;
-#endif //HAVE_NEON
-#ifndef HAVE_NEON
+#else // ! eslENABLE_NEON
   return NULL;
 #endif
 }
 
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+
 

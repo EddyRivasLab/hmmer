@@ -9,9 +9,7 @@
  *   2. Debugging and development, for P7_COORDS2
  *   3. P7_COORDS2_HASH: hash table for storing alternative <P7_COORDS2> data.
  *   4. Debugging and development, for P7_COORDS2_HASH
- *   x. Unit tests.
- *   x. Example driver
- *   x. Copyright and license information.
+ *   5. Example driver
  */
 #include "p7_config.h"
 
@@ -695,12 +693,7 @@ p7_coords2_hash_Dump(FILE *ofp, const P7_COORDS2_HASH *ch)
 
 
 /*****************************************************************
- * x. Unit tests.
- *****************************************************************/
-
-
-/*****************************************************************
- * x. Example driver
+ * 5. Example driver
  *****************************************************************/
 #ifdef p7COORDS2_EXAMPLE
 
@@ -752,11 +745,4 @@ main(int argc, char **argv)
 }
 #endif /*p7COORDS2_EXAMPLE*/
 
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 

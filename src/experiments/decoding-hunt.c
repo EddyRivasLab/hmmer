@@ -15,7 +15,7 @@
 
 #include "hmmer.h"
 #include "sandbox/reference_mpl_fwd.h"
-#include "hardware/hardware.h"
+
 static ESL_OPTIONS options[] = {
   /* name           type           default  env  range  toggles reqs incomp  help                                       docgroup*/
   { "-h",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",                   0 },
@@ -37,8 +37,6 @@ static int count_nin_nout_below(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float th
 int 
 main(int argc, char **argv)
 {
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   ESL_GETOPTS    *go         = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
   char           *hmmfile    = esl_opt_GetArg(go, 1);
   P7_HMMFILE     *hfp        = NULL;
@@ -53,8 +51,8 @@ main(int argc, char **argv)
   P7_PROFILE     *lgm        = NULL;           /* profile in local-only mode, emulating H3        */
   P7_OPROFILE    *om         = NULL;
   
-  P7_CHECKPTMX   *cx         = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT), hw->simd);
-  P7_SPARSEMASK  *sm         = p7_sparsemask_Create(100, 100, hw->simd);
+  P7_CHECKPTMX   *cx         = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT));
+  P7_SPARSEMASK  *sm         = p7_sparsemask_Create(100, 100, p7_VDEFAULT);
   P7_REFMX       *vit        = p7_refmx_Create(100, 100);
   P7_REFMX       *fwd        = p7_refmx_Create(100, 100);
   P7_REFMX       *bck        = p7_refmx_Create(100, 100);
@@ -465,17 +463,6 @@ count_nin_nout_below(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *
   if (opt_nout) *opt_nout = nout;
   return eslOK;
 }
-
-
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- * 
- * Incept: SRE, Tue Jan  7 09:40:47 2014 [Janelia Farm] 
- *****************************************************************/
 
 
 

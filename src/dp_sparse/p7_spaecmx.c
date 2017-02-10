@@ -212,12 +212,3 @@ p7_spaecmx_Validate(const P7_SPARSEMX *aec, const P7_ENVELOPES *env, char *errbu
 
   return eslOK;
 }
-
-
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

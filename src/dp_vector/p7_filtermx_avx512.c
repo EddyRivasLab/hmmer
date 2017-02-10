@@ -4,30 +4,27 @@
  * Contents:
  *   1. The P7_FILTERMX object
  *   2. Debugging and development routines
- *   3. Copyright and license information
  */
-
 #include "p7_config.h"
+#ifdef eslENABLE_AVX512
 
 #include <stdlib.h>
 #include <stdio.h>
 
-#if p7_CPU_ARCH == intel
-#include <xmmintrin.h>
-#include <emmintrin.h>
-#endif /* intel arch */
+#include <x86intrin.h>
 
 #include "easel.h"
 
 #include "dp_vector/simdvec.h"
 #include "dp_vector/p7_filtermx.h"
 #include "hardware/hardware.h"
+
+
 /*****************************************************************
  * 1. The P7_FILTERMX object.
  *****************************************************************/
 
-
-/* Function:  p7_filtermx_Create()
+/* Function:  p7_filtermx_Create_avx512()
  * Synopsis:  Create a one-row DP matrix for MSV, VF.
  *
  * Purpose:   Allocate a reusable, resizeable one-row <P7_FILTERMX>
@@ -46,7 +43,6 @@
 P7_FILTERMX *
 p7_filtermx_Create_avx512(int allocM)
 {
- #ifdef HAVE_AVX512 
   P7_FILTERMX *fx = NULL;
   int          status;
 
@@ -65,7 +61,7 @@ p7_filtermx_Create_avx512(int allocM)
   fx->allocM_AVX_512 = 0;
 
   fx->type      = p7F_NONE;
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   fx->do_dumping= FALSE;
   fx->dfp       = NULL;
 #endif 
@@ -82,14 +78,10 @@ p7_filtermx_Create_avx512(int allocM)
  ERROR:
   p7_filtermx_Destroy(fx);
   return NULL;
-  #endif //HAVE_AVX512
-  #ifndef HAVE_AVX512
-  return NULL;
-  #endif
 }
 
 
-/* Function:  p7_filtermx_GrowTo()
+/* Function:  p7_filtermx_GrowTo_avx512()
  * Synopsis:  Resize filter DP matrix for new profile size.
  *
  * Purpose:   Given an existing filter matrix structure <fx>,
@@ -110,7 +102,6 @@ p7_filtermx_Create_avx512(int allocM)
 int
 p7_filtermx_GrowTo_avx512(P7_FILTERMX *fx, int allocM)
 {
-#ifdef HAVE_AVX512
   int status;
 
   /* Contract checks / argument validation */
@@ -124,19 +115,14 @@ p7_filtermx_GrowTo_avx512(P7_FILTERMX *fx, int allocM)
   fx->allocM_AVX_512 = allocM;
   fx->dp_AVX_512     = (__m512i *) ( (unsigned long int) ( (char *) fx->dp_mem_AVX_512 + (p7_VALIGN_AVX_512-1)) & p7_VALIMASK_AVX_512);
 
-
   return eslOK;
 
  ERROR:
   return status;
-#endif //HAVE_AVX512
-#ifndef HAVE_AVX512
-  return eslENORESULT;
-#endif 
 }
 
 
-/* Function:  p7_filtermx_Sizeof()
+/* Function:  p7_filtermx_Sizeof_avx512()
  * Synopsis:  Calculate and return the current size, in bytes.
  *
  * Purpose:   Calculate and return the current allocated size
@@ -151,15 +137,13 @@ p7_filtermx_Sizeof_avx512(const P7_FILTERMX *fx)
 {
   size_t n = sizeof(P7_FILTERMX);
 
-#ifdef HAVE_AVX512
   n += (sizeof(__m512i) * p7F_NSCELLS * P7_NVW_AVX_512(fx->allocM_AVX_512)) + (p7_VALIGN_AVX_512-1);
-#endif
-  return n;
 
+  return n;
 }
 
 
-/* Function:  p7_filtermx_MinSizeof()
+/* Function:  p7_filtermx_MinSizeof_avx512()
  * Synopsis:  Calculate minimum size of a filter matrix, in bytes.
  *
  * Purpose:   Calculate and return the minimum allocation size
@@ -170,13 +154,13 @@ size_t
 p7_filtermx_MinSizeof_avx512(int M)
 {
   size_t n = sizeof(P7_FILTERMX);
-#ifdef HAVE_AVX512  
+
   n += (sizeof(__m512i) * p7F_NSCELLS * P7_NVW_AVX_512(M)) + (p7_VALIGN-1);
- #endif 
+
   return n;
 }
 
-/* Function:  p7_filtermx_Destroy()
+/* Function:  p7_filtermx_Destroy_avx512()
  * Synopsis:  Frees a one-row MSV/VF filter DP matrix.
  *
  * Purpose:   Frees the one-row MSV/VF filter DP matrix <fx>.
@@ -186,12 +170,11 @@ p7_filtermx_MinSizeof_avx512(int M)
 void
 p7_filtermx_Destroy_avx512(P7_FILTERMX *fx)
 {
-  if (fx) {
-#ifdef HAVE_AVX512
-    if (fx->dp_mem_AVX_512) free(fx->dp_mem_AVX_512);
-#endif    
-    free(fx);
-  }
+  if (fx) 
+    {
+      if (fx->dp_mem_AVX_512) free(fx->dp_mem_AVX_512);
+      free(fx);
+    }
   return;
 }
   
@@ -200,8 +183,8 @@ p7_filtermx_Destroy_avx512(P7_FILTERMX *fx)
  * 2. Debugging and development routines
  *****************************************************************/
 
-#ifdef p7_DEBUGGING
-/* Function:  p7_filtermx_DumpMFRow()
+#if eslDEBUGLEVEL > 0
+/* Function:  p7_filtermx_DumpMFRow_avx512()
  * Synopsis:  Dump one row from MSV version of a DP matrix.
  *
  * Purpose:   Dump current row of MSV calculations from DP matrix <fx>
@@ -228,7 +211,6 @@ p7_filtermx_Destroy_avx512(P7_FILTERMX *fx)
 int
 p7_filtermx_DumpMFRow_avx512(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
-#ifdef HAVE_AVX512  
   int      Q  = P7_NVB_AVX_512(fx->M);	/* number of vectors in the MSV row */
   uint8_t *v  = NULL;		/* array of scores after unstriping them */
   int      q,z,k;
@@ -279,15 +261,11 @@ p7_filtermx_DumpMFRow_avx512(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_
 ERROR:
   free(v);
   return status;
-#endif //HAVE_AVX512
-#ifndef HAVE_AVX512
-  return eslENORESULT;
-#endif 
 }
 
 
 
-/* Function:  p7_filtermx_DumpVFRow()
+/* Function:  p7_filtermx_DumpVFRow_avx512()
  * Synopsis:  Dump current row of ViterbiFilter (int16) filter matrix.
  *
  * Purpose:   Dump current row of ViterbiFilter (int16) filter DP
@@ -307,7 +285,6 @@ ERROR:
 int
 p7_filtermx_DumpVFRow_avx512(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
 {
-#ifdef HAVE_AVX512  
   __m512i *dp = fx->dp;		/* enable MMXf(q), DMXf(q), IMXf(q) macros */
   int      Q  = P7_NVW_AVX_512(fx->M);	/* number of vectors in the VF row */
   int16_t *v  = NULL;		/* array of unstriped, uninterleaved scores  */
@@ -365,18 +342,15 @@ p7_filtermx_DumpVFRow_avx512(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_
 ERROR:
   free(v);
   return status;
-#endif //HAVE_AVX512
-#ifndef HAVE_AVX512
-  return eslENORESULT;
-#endif 
 }
-#endif /*p7_DEBUGGING*/
+#endif // eslDEBUGLEVEL
 
 
+#else // ! eslENABLE_AVX512
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_filtermx_avx512_silence_hack(void) { return; }
+#if defined p7FILTERMX_AVX512_TESTDRIVE || p7FILTERMX_AVX512_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_AVX512 or not

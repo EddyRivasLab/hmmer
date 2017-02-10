@@ -1047,11 +1047,3 @@ elide_length_model(P7_PROFILE *gm, P7_BG *bg)
   gm->xsc[p7P_N][p7P_MOVE] =  gm->xsc[p7P_C][p7P_MOVE] = gm->xsc[p7P_J][p7P_MOVE] = log(1.0 - bg->p1);
   return eslOK;
 }
-
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

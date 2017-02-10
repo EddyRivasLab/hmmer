@@ -4,9 +4,11 @@
  *    1. API for the P7_CHECKPTMX object
  *    2. Debugging, development routines.
  *    3. Internal routines.
- *    4. Copyright and license information.
-*    Many of the functions in this file are now dispatch wrappers that just call the appropriate SIMD version of the function
-*   in cases where the correcct version is known, you can achieve (slightly) better performance by calling it directly
+ *
+ * Many of the functions in this file are now dispatch wrappers that
+ * just call the appropriate SIMD version of the function in cases
+ * where the correct version is known, you can achieve (slightly)
+ * better performance by calling it directly
  */
 #include "p7_config.h"
 
@@ -68,7 +70,7 @@ switch(simd){
     case AVX512:
       return p7_checkptmx_Create_avx512(M, L, ramlimit);
       break;
-    case NEON: case NEON64:
+    case NEON: 
       return p7_checkptmx_Create_neon(M, L, ramlimit);
       break;
     default:
@@ -115,7 +117,7 @@ switch(ox->simd){
     case AVX512:
       return p7_checkptmx_GrowTo_avx512(ox, M, L);
       break;
-    case NEON: case NEON64:
+    case NEON: 
       return p7_checkptmx_GrowTo_neon(ox, M, L);
       break;
     default:
@@ -155,7 +157,7 @@ switch(ox->simd){
     case AVX512:
       return p7_checkptmx_Sizeof_avx512(ox);
       break;
-    case NEON: case NEON64:
+    case NEON: 
       return p7_checkptmx_Sizeof_neon(ox);
       break;
     default:
@@ -187,7 +189,7 @@ p7_checkptmx_MinSizeof(int M, int L, SIMD_TYPE simd)
     case AVX512:
       return p7_checkptmx_MinSizeof_avx512(M, L);
       break;
-    case NEON: case NEON64:
+    case NEON: 
       return p7_checkptmx_MinSizeof_neon(M, L);
       break;
     default:
@@ -225,7 +227,7 @@ p7_checkptmx_Reuse(P7_CHECKPTMX *ox)
     case AVX512:
       return p7_checkptmx_Reuse_avx512(ox);
       break;
-    case NEON: case NEON64:
+    case NEON: 
       return p7_checkptmx_Reuse_neon(ox);
       break;
     default:
@@ -253,7 +255,7 @@ p7_checkptmx_Destroy(P7_CHECKPTMX *ox)
     case AVX512:
       p7_checkptmx_Destroy_avx512(ox);
       break;
-    case NEON: case NEON64:
+    case NEON: 
       p7_checkptmx_Destroy_neon(ox);
       break;
     default:
@@ -284,8 +286,8 @@ p7_checkptmx_Destroy(P7_CHECKPTMX *ox)
  *            To turn off dumping, <truefalse> is <FALSE>, and <dfp>
  *            should be <NULL>.
  *            
- *            For this to have effect, <p7_DEBUGGING> compile-time
- *            flag must be on. If it is not, no dumping will occur,
+ *            For this to have effect, <eslDEBUGLEVEL> compile-time
+ *            flag must be nonzero. If it is not, no dumping will occur,
  *            and this call is a no-op.
  *
  * Args:      ox        - DP matrix object to set
@@ -297,7 +299,7 @@ p7_checkptmx_Destroy(P7_CHECKPTMX *ox)
 int
 p7_checkptmx_SetDumpMode(P7_CHECKPTMX *ox, FILE *dfp, int truefalse)
 {
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   ox->do_dumping    = truefalse;
   ox->dfp           = dfp;
 #endif
@@ -305,7 +307,7 @@ p7_checkptmx_SetDumpMode(P7_CHECKPTMX *ox, FILE *dfp, int truefalse)
 }
 
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
 
 /* Function:  p7_checkptmx_DecodeX()
  * Synopsis:  Convert a special X statecode to a string.
@@ -379,7 +381,7 @@ p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, debug_print *dpc, char *pfx)
     case AVX512:
       return p7_checkptmx_DumpFBRow_avx512(ox, rowi, dpc, pfx);
       break;
-    case NEON: case NEON64:
+    case NEON: 
       return p7_checkptmx_DumpFBRow_neon(ox, rowi, dpc, pfx);
       break;
     default:
@@ -387,7 +389,7 @@ p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, debug_print *dpc, char *pfx)
   }
 }
 
-#endif /*p7_DEBUGGING*/
+#endif // eslDEBUGLEVEL
 /*---------------- end, debugging -------------------------------*/
 
 
@@ -525,10 +527,3 @@ checkpointed_rows(int L, int R)
 }
 /*----------------- end, internals ------------------------------*/
 
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

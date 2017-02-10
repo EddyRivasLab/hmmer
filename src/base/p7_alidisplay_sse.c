@@ -1,5 +1,7 @@
 /* SSE versions of functions for formatting, transmitting, and printing single alignments to a
  * profile.
+ *
+ * SRE TODO: I don't yet understand why this is tied to vector code.
  * 
  * Contents:
  *   1. The P7_ALIDISPLAY object.
@@ -9,9 +11,9 @@
  *   5. Unit tests.
  *   6. Test driver.
  *   7. Example.
- *   8. Copyright and license information.
  */
 #include "p7_config.h"
+#ifdef eslENABLE_SSE
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -25,21 +27,17 @@
 #include "base/p7_alidisplay.h"
 #include "base/p7_trace.h"
 #include "dp_vector/p7_oprofile.h"
+
 //  retrieve match odds ratio [k][x]
 static inline float 
 p7_oprofile_FGetEmission_sse(const P7_OPROFILE *om, int k, int x)
 {
- #ifdef HAVE_SSE2 
   union { __m128 v; float p[4]; } u;
   int   Q = P7_NVF(om->M);
   int   q = ((k-1) % Q);
   int   r = (k-1)/Q;
   u.v = om->rfv[x][q];
   return u.p[r];
-#endif
-#ifndef HAVE_SSE2
-  return(0.0);  // stub so we have something to link
-#endif
 }
 
 /*****************************************************************
@@ -47,7 +45,7 @@ p7_oprofile_FGetEmission_sse(const P7_OPROFILE *om, int k, int x)
  *****************************************************************/
 
 
-/* Function:  p7_alidisplay_Create()
+/* Function:  p7_alidisplay_Create_sse()
  * Synopsis:  Create an alignment display, from trace and oprofile.
  *
  * Purpose:   Creates and returns an alignment display for domain number
@@ -77,7 +75,6 @@ p7_oprofile_FGetEmission_sse(const P7_OPROFILE *om, int k, int x)
 P7_ALIDISPLAY *
 p7_alidisplay_Create_sse(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq)
 {
-#ifdef HAVE_SSE2
   P7_ALIDISPLAY *ad       = NULL;
   char          *Alphabet = om->abc->sym;
   int            n, pos, z;
@@ -243,17 +240,14 @@ p7_alidisplay_Create_sse(const P7_TRACE *tr, int which, const P7_OPROFILE *om, c
  ERROR:
   p7_alidisplay_Destroy(ad);
   return NULL;
-#endif //HAVE_SSE2
-#ifndef HAVE_SSE2
-  return NULL;
-#endif
 }
 
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+else // ! eslENABLE_SSE
 
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_alidisplay_sse_silence_hack(void) { return; }
+#if defined p7ALIDISPLAY_SSE_TESTDRIVE || p7ALIDISPLAY_SSE_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_SSE or not

@@ -254,9 +254,4 @@ extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float to
  */
 
 #endif /*p7PROFILE_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

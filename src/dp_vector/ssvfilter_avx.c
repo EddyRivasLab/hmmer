@@ -1,13 +1,10 @@
-
 /* The SSV filter implementation; AVX version.
  * 
  * Contents:
  *   1. Introduction
  *   2. p7_SSVFilter() implementation
- *   3. Copyright and license information
  * 
  * Bjarne Knudsen, CLC Bio
- * SVN $Id$
  */
 
 /*****************************************************************
@@ -400,28 +397,20 @@
  *
  * To better see what is going on, run the preprocessor on this file:
  *
-
  *   gcc -E ssvfilter.c | sed 's/[;:]/&\n/g' | less
  *
  * Ignore the warnings and go look for the calc_band_2 function.
  *
  */
-//#define p7_log_array
 #include "p7_config.h"
+#ifdef eslENABLE_AVX
 
 #include <math.h>
 
-#if p7_CPU_ARCH == intel
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
-#ifdef HAVE_AVX2
- #include<immintrin.h>
- #include"esl_avx.h"
-#endif
-#include "x86intrin.h"
-#endif /* intel arch */
+#include <x86intrin.h>
 
 #include "easel.h"
+#include "esl_avx.h"
 
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
@@ -436,8 +425,6 @@
 #else
 #define  MAX_BANDS 6
 #endif
-
-#ifdef HAVE_AVX2
 
 #define STEP_SINGLE_AVX(sv_AVX) \
   sv_AVX   = _mm256_subs_epi8(sv_AVX, *rsc_AVX); rsc_AVX++;        \
@@ -889,7 +876,7 @@ calc_band_18_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __
 }
 #endif /* MAX_BANDS > 14 */
 
-#endif //HAVE_AVX2
+
 /*****************************************************************
  * 2. p7_SSVFilter() implementation
  *****************************************************************/
@@ -897,16 +884,15 @@ calc_band_18_AVX(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX, __
 uint8_t
 get_xE_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 {
-#ifdef HAVE_AVX2
-  __m256i xEv_AVX;		           /* E state: keeps max for Mk->E as we go                     */
-  __m256i beginv_AVX;                  /* begin scores                                              */
+  __m256i xEv_AVX;		          // E state: keeps max for Mk->E as we go  
+  __m256i beginv_AVX;                     // begin scores                           
   uint8_t retval_AVX;
-  int q_AVX;			   /* counter over vectors 0..nq-1                              */
-  int Q_AVX        = P7_NVB_AVX(om->M);   /* segment length: # of vectors                              */
-
-  int bands_AVX;                       /* the number of bands (rounds) to use                       */
+  int q_AVX;			          // counter over vectors 0..nq-1                              
+  int Q_AVX        = P7_NVB_AVX(om->M);   // segment length: # of vectors 
+  int bands_AVX;                          // number of bands (rounds) to use
   beginv_AVX =  _mm256_set1_epi8(128);
   xEv_AVX    =  beginv_AVX;
+
   /* function pointers for the various number of vectors to use */
   __m256i (*fs_AVX[MAX_BANDS + 1]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register __m256i, __m256i)
     = {NULL
@@ -919,36 +905,27 @@ get_xE_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
        , calc_band_15_AVX, calc_band_16_AVX, calc_band_17_AVX, calc_band_18_AVX
 #endif
   };
+  int last_q;                  // for saving the last q value to find band width            
+  int i;                       // counter for bands   
 
-  int last_q;                  /* for saving the last q value to find band width            */
-  int i;                           /* counter for bands                                         */
-
-  last_q = 0; // reset in case we also ran SSE code
+  last_q = 0;   // reset in case we also ran SSE code
   /* Use the highest number of bands but no more than MAX_BANDS */
   bands_AVX = (Q_AVX + MAX_BANDS - 1) / MAX_BANDS;
   for (i = 0; i < bands_AVX; i++) {
     q_AVX = (Q_AVX * (i + 1)) / bands_AVX;
 
     xEv_AVX = fs_AVX[q_AVX-last_q](dsq, L, om, last_q, beginv_AVX, xEv_AVX);
-
     last_q = q_AVX;
   }
 
- 
   retval_AVX = esl_avx_hmax_epu8(xEv_AVX);
 
   return retval_AVX;
-#endif // HAVE_AVX2
-#ifndef HAVE_AVX2
-  	return 0;  // Stub so there's something to link if we don't have AVX2 support
-#endif
 }
 
-// This function doesn't need conditional compilation, since it doesn't use any SIMD instructions
 int
 p7_SSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
 {
-  extern uint64_t SSV_time;
   /* Use 16 bit values to avoid overflow due to moved baseline */
   uint16_t  xE;
   uint16_t  xJ;
@@ -997,7 +974,13 @@ p7_SSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc
 }
 
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
+
+#else // ! eslENABLE_AVX
+
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_ssvfilter_avx_silence_hack(void) { return; }
+#if defined p7SSVFILTER_AVX_TESTDRIVE || p7SSVFILTER_AVX_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_AVX or not
 

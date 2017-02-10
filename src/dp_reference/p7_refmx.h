@@ -14,7 +14,6 @@
  *    1. The P7_REFMX object and its access macros.
  *    2. Function declarations.
  *    3. Notes on layout of the matrix
- *    4. Copyright and license information.   
  */          
 #ifndef p7REFMX_INCLUDED
 #define p7REFMX_INCLUDED
@@ -185,9 +184,3 @@ extern int   p7_refmx_Validate(P7_REFMX *rmx, char *errbuf);
 
 #endif /*p7REFMX_INCLUDED*/
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

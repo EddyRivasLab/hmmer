@@ -4,30 +4,27 @@
  * Contents:
  *   1. The P7_FILTERMX object
  *   2. Debugging and development routines
- *   3. Copyright and license information
  */
-
 #include "p7_config.h"
+#ifdef eslENABLE_NEON
 
 #include <stdlib.h>
 #include <stdio.h>
 
-#if p7_CPU_ARCH == arm || p7_CPU_ARCH == arm64
 #include <arm_neon.h>
-#include "esl_neon.h"
-#endif
 
 #include "easel.h"
+#include "esl_neon.h"
 
 #include "dp_vector/simdvec.h"
 #include "dp_vector/p7_filtermx.h"
 #include "hardware/hardware.h"
+
 /*****************************************************************
  * 1. The P7_FILTERMX object.
  *****************************************************************/
 
-
-/* Function:  p7_filtermx_Create()
+/* Function:  p7_filtermx_Create_neon()
  * Synopsis:  Create a one-row DP matrix for MSV, VF.
  *
  * Purpose:   Allocate a reusable, resizeable one-row <P7_FILTERMX>
@@ -46,7 +43,6 @@
 P7_FILTERMX *
 p7_filtermx_Create_neon(int allocM)
 {
-#ifdef HAVE_NEON
   P7_FILTERMX *fx = NULL;
   int          status;
 
@@ -62,7 +58,7 @@ p7_filtermx_Create_neon(int allocM)
  
 
   fx->type      = p7F_NONE;
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   fx->do_dumping= FALSE;
   fx->dfp       = NULL;
 #endif 
@@ -80,14 +76,10 @@ p7_filtermx_Create_neon(int allocM)
  ERROR:
   p7_filtermx_Destroy(fx);
   return NULL;
- #endif //HAVE_NEON
- #ifndef HAVE_NEON
- return NULL;
- #endif 
 }
 
 
-/* Function:  p7_filtermx_GrowTo()
+/* Function:  p7_filtermx_GrowTo_neon()
  * Synopsis:  Resize filter DP matrix for new profile size.
  *
  * Purpose:   Given an existing filter matrix structure <fx>,
@@ -108,7 +100,6 @@ p7_filtermx_Create_neon(int allocM)
 int
 p7_filtermx_GrowTo_neon(P7_FILTERMX *fx, int allocM)
 {
-#ifdef HAVE_NEON  
   int status;
 
   /* Contract checks / argument validation */
@@ -125,14 +116,10 @@ p7_filtermx_GrowTo_neon(P7_FILTERMX *fx, int allocM)
 
  ERROR:
   return status;
-#endif //HAVE_NEON
- #ifndef HAVE_NEON
- return eslENORESULT;
- #endif   
 }
 
 
-/* Function:  p7_filtermx_Sizeof()
+/* Function:  p7_filtermx_Sizeof_neon()
  * Synopsis:  Calculate and return the current size, in bytes.
  *
  * Purpose:   Calculate and return the current allocated size
@@ -147,14 +134,12 @@ p7_filtermx_Sizeof_neon(const P7_FILTERMX *fx)
 {
   size_t n = sizeof(P7_FILTERMX);
  
-#ifdef HAVE_NEON
   n += (sizeof(esl_neon_128i_t) * p7F_NSCELLS * P7_NVW(fx->allocM)) + (p7_VALIGN-1);
- #endif 
   return n;
 }
 
 
-/* Function:  p7_filtermx_MinSizeof()
+/* Function:  p7_filtermx_MinSizeof_neon()
  * Synopsis:  Calculate minimum size of a filter matrix, in bytes.
  *
  * Purpose:   Calculate and return the minimum allocation size
@@ -165,17 +150,13 @@ size_t
 p7_filtermx_MinSizeof_neon(int M)
 {
   size_t n = sizeof(P7_FILTERMX);
- #ifdef HAVE_NEON 
-  n += (sizeof(esl_neon_128i_t) * p7F_NSCELLS * P7_NVW(M)) + (p7_VALIGN-1);
- #endif
 
+  n += (sizeof(esl_neon_128i_t) * p7F_NSCELLS * P7_NVW(M)) + (p7_VALIGN-1);
   return n;
 }
 
 
-
-
-/* Function:  p7_filtermx_Destroy()
+/* Function:  p7_filtermx_Destroy_neon()
  * Synopsis:  Frees a one-row MSV/VF filter DP matrix.
  *
  * Purpose:   Frees the one-row MSV/VF filter DP matrix <fx>.
@@ -185,19 +166,17 @@ p7_filtermx_MinSizeof_neon(int M)
 void
 p7_filtermx_Destroy_neon(P7_FILTERMX *fx)
 {
-  if (fx) {
-#ifdef HAVE_NEON
-    if (fx->dp_mem) free(fx->dp_mem);
-#endif
-
-    free(fx);
-  }
+  if (fx) 
+    {
+      if (fx->dp_mem) free(fx->dp_mem);
+      free(fx);
+    }
   return;
 }
   
 
-#ifdef p7_DEBUGGING
-/* Function:  p7_filtermx_DumpMFRow()
+#if eslDEBUGLEVEL > 0
+/* Function:  p7_filtermx_DumpMFRow_neon()
  * Synopsis:  Dump one row from MSV version of a DP matrix.
  *
  * Purpose:   Dump current row of MSV calculations from DP matrix <fx>
@@ -224,7 +203,6 @@ p7_filtermx_Destroy_neon(P7_FILTERMX *fx)
 int
 p7_filtermx_DumpMFRow_neon(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
- #ifdef HAVE_NEON 
   int      Q  = P7_NVB(fx->M);	/* number of vectors in the MSV row */
   uint8_t *v  = NULL;		/* array of scores after unstriping them */
   int      q,z,k;
@@ -275,15 +253,11 @@ p7_filtermx_DumpMFRow_neon(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t 
 ERROR:
   free(v);
   return status;
-#endif //HAVE_NEON
- #ifndef HAVE_NEON
- return eslENORESULT;
- #endif   
 }
 
 
 
-/* Function:  p7_filtermx_DumpVFRow()
+/* Function:  p7_filtermx_DumpVFRow_neon()
  * Synopsis:  Dump current row of ViterbiFilter (int16) filter matrix.
  *
  * Purpose:   Dump current row of ViterbiFilter (int16) filter DP
@@ -303,7 +277,6 @@ ERROR:
 int
 p7_filtermx_DumpVFRow_neon(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
 {
- #ifdef HAVE_NEON 
   esl_neon_128i_t *dp = fx->dp;		/* enable MMXf(q), DMXf(q), IMXf(q) macros */
   int      Q  = P7_NVW(fx->M);	/* number of vectors in the VF row */
   int16_t *v  = NULL;		/* array of unstriped, uninterleaved scores  */
@@ -361,18 +334,16 @@ p7_filtermx_DumpVFRow_neon(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t 
 ERROR:
   free(v);
   return status;
-#endif //HAVE_NEON
- #ifndef HAVE_NEON
- return eslENORESULT;
- #endif   
 }
-#endif /*p7_DEBUGGING*/
+#endif // eslDEBUGLEVEL
 
 
+#else // ! eslENABLE_NEON
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_filtermx_neon_silence_hack(void) { return; }
+#if defined p7FILTERMX_NEON_TESTDRIVE || p7FILTERMX_NEON_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_NEON or not
+

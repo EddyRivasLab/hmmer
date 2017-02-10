@@ -10,21 +10,17 @@
  *   4. Test driver
  *   5. Example
  */
-
-
 #include "p7_config.h"
+#ifdef eslENABLE_NEON
 
 #include <stdio.h>
 #include <math.h>
 
-//#include <arm_neon.h>
+#include <arm_neon.h>
 
 #include "easel.h"
 #include "esl_gumbel.h"
-#ifdef HAVE_NEON
 #include "esl_neon.h" 
-#include <arm_neon.h>
-#endif
 
 #include "base/p7_hmmwindow.h"
 #include "search/p7_pipeline.h"
@@ -39,7 +35,7 @@
  * 1. The p7_MSVFilter() DP implementation.
  *****************************************************************/
  
-/* Function:  p7_MSVFilter()
+/* Function:  p7_MSVFilter_neon()
  * Synopsis:  Calculates MSV score, vewy vewy fast, in limited precision.
  *
  * Purpose:   Calculates an approximation of the MSV score for sequence
@@ -74,7 +70,6 @@
 int
 p7_MSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)
 {
-  #ifdef HAVE_NEON
   register esl_neon_128i_t mpv;            /* previous row values                                       */
   register esl_neon_128i_t xEv;		   /* E state: keeps max for Mk->E as we go                     */
   register esl_neon_128i_t xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
@@ -104,7 +99,7 @@ p7_MSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
   /* Try highly optimized Knudsen SSV filter first. 
    * Note that SSV doesn't use any main memory (from <ox>) at all! 
    */
-  if (( status = p7_SSVFilter(dsq, L, om, ret_sc)) != eslENORESULT) return status;
+  if (( status = p7_SSVFilter_neon(dsq, L, om, ret_sc)) != eslENORESULT) return status;
 
   /* Resize the filter mx as needed */
   if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of MSV filter matrix failed");
@@ -126,7 +121,7 @@ p7_MSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
   xJv.u8x16      = vqsubq_u8(biasv.u8x16, biasv.u8x16);
   xBv.u8x16      = vqsubq_u8(basev.u8x16, tjbmv.u8x16);
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (ox->do_dumping)
     {
       uint8_t xB;
@@ -182,7 +177,7 @@ p7_MSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
       xBv.u8x16 = vmaxq_u8(basev.u8x16, xJv.u8x16);
       xBv.u8x16 = vqsubq_u8(xBv.u8x16, tjbmv.u8x16);
 	  
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
       if (ox->do_dumping)
 	{
 	  uint8_t xB, xE;
@@ -200,10 +195,6 @@ p7_MSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
   *ret_sc /= om->scale_b;
   *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
   return eslOK;
-  #endif /* HAVE_NEON */
-  #ifndef HAVE_NEON
-    return 0;
-  #endif
 }
 /*------------------ end, p7_MSVFilter_neon() ------------------------*/
 
@@ -252,9 +243,8 @@ p7_MSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX 
  */
 int
 p7_SSVFilter_longtarget_neon(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_SCOREDATA *msvdata,
-                        P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
+			     P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
-  #ifdef HAVE_NEON
   register esl_neon_128i_t mpv;            /* previous row values                                       */
   register esl_neon_128i_t xEv;		   /* E state: keeps max for Mk->E for a single iteration       */
   register esl_neon_128i_t xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
@@ -432,21 +422,20 @@ p7_SSVFilter_longtarget_neon(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILT
 	i = target_end; // skip forward
       }
     } /* end loop over sequence residues 1..L */
-  #endif /* HAVE_NEON */
   return eslOK;
-  #ifndef HAVE_NEON
-    return 0;
-  #endif
 }
 /*------------------ end, p7_SSVFilter_longtarget_neon() ------------------------*/
 
 
 
+#else // ! eslENABLE_NEON
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_msvfilter_neon_silence_hack(void) { return; }
+#if defined p7MSVFILTER_NEON_TESTDRIVE || p7MSVFILTER_NEON_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_NEON or not
+
+
 

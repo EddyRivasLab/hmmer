@@ -7,7 +7,6 @@
  *   3. Unit tests
  *   4. Test driver
  *   5. References
- *   6. Copyright and license information
  */
 #include "p7_config.h"
 
@@ -517,9 +516,4 @@ main(int argc, char **argv)
  */
 
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

@@ -114,7 +114,7 @@ static ESL_OPTIONS options[] = {
 //  { "--daemon",     eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  DAEMONOPTS,      "run program as a daemon",                                      12 },
 
 
-  #ifdef HMMER_THREADS
+#ifdef HMMER_THREADS
   { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,         "number of parallel CPU workers to use for multithreads",       12 },
 #endif
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -487,9 +487,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].pli->strand = p7_STRAND_BOTH;
 
 
-        #ifdef HMMER_THREADS
+#ifdef HMMER_THREADS
           if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
-        #endif
+#endif
       }
 
 #ifdef HMMER_THREADS
@@ -877,11 +877,4 @@ pipeline_thread(void *arg)
 }
 #endif   /* HMMER_THREADS */
 
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id: hmmscan.c 3976 2012-04-03 12:09:10Z eddys $
- * SVN $URL: https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk/src/nhmmscan.c $
- *****************************************************************/
 

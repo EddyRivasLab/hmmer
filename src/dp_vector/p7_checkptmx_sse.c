@@ -1,13 +1,12 @@
-
 /* SSE version of implementation of P7_CHECKPTMX: checkpointed, striped vector DP matrix.
  * 
  * Contents:
  *    1. API for the P7_CHECKPTMX object
  *    2. Debugging, development routines.
  *    3. Internal routines.
- *    4. Copyright and license information.
  */
 #include "p7_config.h"
+#ifdef eslENABLE_SSE
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -22,7 +21,7 @@
  * 1. API for the <P7_CHECKPTMX> object
  *****************************************************************/
 
-/* Function:  p7_checkptmx_Create()
+/* Function:  p7_checkptmx_Create_sse()
  * Synopsis:  Allocate a new <P7_CHECKPTMX> object.
  *
  * Purpose:   Allocate a new <P7_CHECKPTMX> checkpointed, striped vector
@@ -57,7 +56,6 @@
 P7_CHECKPTMX *
 p7_checkptmx_Create_sse(int M, int L, int64_t ramlimit)
 {
-#ifdef HAVE_SSE2
   P7_CHECKPTMX *ox = NULL;
   int          maxR;
   int          r;
@@ -71,8 +69,6 @@ p7_checkptmx_Create_sse(int M, int L, int64_t ramlimit)
 
   /* Level 1 allocation: the structure itself */
   ESL_ALLOC(ox, sizeof(P7_CHECKPTMX));
- 
- 
   ox->simd = SSE;
   ox->dp_mem  = NULL;
   ox->dpf     = NULL;
@@ -104,7 +100,7 @@ p7_checkptmx_Create_sse(int M, int L, int64_t ramlimit)
   for (r = 1; r < ox->validR; r++)
     ox->dpf[r] = ox->dpf[0] + r * ox->allocW;
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   ox->do_dumping     = FALSE;
   ox->dfp            = NULL;
   ox->dump_maxpfx    = 5;	
@@ -127,13 +123,9 @@ p7_checkptmx_Create_sse(int M, int L, int64_t ramlimit)
  ERROR:
   p7_checkptmx_Destroy(ox);
   return NULL;
-#endif //HAVE_SSE2
-#ifndef HAVE_SSE2
-  return NULL;
-#endif  
 }
 
-/* Function:  p7_checkptmx_GrowTo()
+/* Function:  p7_checkptmx_GrowTo_sse()
  * Synopsis:  Resize checkpointed DP matrix for new seq/model comparison.
  *
  * Purpose:   Given an existing checkpointed matrix structure <ox>,
@@ -162,7 +154,6 @@ p7_checkptmx_Create_sse(int M, int L, int64_t ramlimit)
 int
 p7_checkptmx_GrowTo_sse(P7_CHECKPTMX *ox, int M, int L)
 {
- #ifdef HAVE_SSE2 
   int     minR_chk      = (int) ceil(minimum_rows(L)) + ox->R0; /* minimum number of DP rows needed  */
   int     reset_dp_ptrs = FALSE;
   int     maxR;
@@ -180,12 +171,11 @@ p7_checkptmx_GrowTo_sse(P7_CHECKPTMX *ox, int M, int L)
    * grow them too.  Must do this first, because we have an early exit
    * condition coming below.
    */
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (ox->fwd && (status = p7_refmx_GrowTo(ox->fwd, M, L)) != eslOK) goto ERROR;
   if (ox->bck && (status = p7_refmx_GrowTo(ox->bck, M, L)) != eslOK) goto ERROR;
   if (ox->pp  && (status = p7_refmx_GrowTo(ox->pp,  M, L)) != eslOK) goto ERROR;
 #endif
-
  
 
   /* Are current allocations satisfactory ? */
@@ -247,14 +237,10 @@ p7_checkptmx_GrowTo_sse(P7_CHECKPTMX *ox, int M, int L)
 
  ERROR:
   return status;
-#endif //HAVE_SSE2
-#ifndef HAVE_SSE2
-  return eslENORESULT;
-#endif
 }
 
 
-/* Function:  p7_checkptmx_Sizeof()
+/* Function:  p7_checkptmx_Sizeof_sse()
  * Synopsis:  Returns size of checkpointed vector DP matrix, in bytes.
  * 
  * Purpose:   Returns the size of the checkpointed vector DP matrix
@@ -276,15 +262,12 @@ size_t
 p7_checkptmx_Sizeof_sse(const P7_CHECKPTMX *ox)
 {
   size_t n = sizeof(P7_CHECKPTMX);
- 
- #ifdef HAVE_SSE2
   n += ox->nalloc + (p7_VALIGN-1);	          /* +15 because of manual alignment */
   n += ox->allocR  * sizeof(float *);	  
-#endif
   return n;
 }
 
-/* Function:  p7_checkptmx_MinSizeof()
+/* Function:  p7_checkptmx_MinSizeof_sse()
  * Synopsis:  Returns minimum required size of a <P7_CHECKPTMX>, in bytes.
  *
  * Purpose:   Calculate and return the minimal required size, in bytes,
@@ -302,17 +285,15 @@ p7_checkptmx_MinSizeof_sse(int M, int L)
   int    Q    = P7_NVF(M);                        // number of vectors needed
   int    minR = 3 + (int) ceil(minimum_rows(L));  // 3 = Ra, 2 rows for backwards, 1 for fwd[0]
 
-#ifdef HAVE_SSE2
   n += p7_VALIGN-1;                                                  // dp_mem has to be hand-aligned for vectors
   n += minR * (sizeof(float) * p7_VNF * Q * p7C_NSCELLS);            // dp_mem, main: QR supercells; each has p7C_NSCELLS=3 cells, MID; each cell is __m128 vector of four floats (p7_VNF=4 * float)
   n += minR * (ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN)); // dp_mem, specials: maintaining vector memory alignment 
   n += minR * sizeof(float *);                                       // dpf[] row ptrs
-#endif 
   return n;
 }
 
 
-/* Function:  p7_checkptmx_Reuse()
+/* Function:  p7_checkptmx_Reuse_sse()
  * Synopsis:  Recycle a checkpointed vector DP matrix.
  *
  * Purpose:   Resets the checkpointed vector DP matrix <ox> for reuse,
@@ -330,16 +311,16 @@ p7_checkptmx_MinSizeof_sse(int M, int L)
 int
 p7_checkptmx_Reuse_sse(P7_CHECKPTMX *ox)
 {
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   int status;
 #endif
-#ifdef HAVE_SSE2
+
   ox->M  = 0;
   ox->L  = 0; 
   ox->R  = 0;
   ox->Qf = 0;
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (ox->fwd && (status = p7_refmx_Reuse(ox->fwd)) != eslOK) return status;
   if (ox->bck && (status = p7_refmx_Reuse(ox->bck)) != eslOK) return status;
   if (ox->pp  && (status = p7_refmx_Reuse(ox->pp))  != eslOK) return status;
@@ -347,14 +328,10 @@ p7_checkptmx_Reuse_sse(P7_CHECKPTMX *ox)
 #endif
 
   return eslOK;
-#endif // HAVE_SSE2
-#ifndef HAVE_SSE2
-  return eslENORESULT;
-#endif
 }
 
 
-/* Function:  p7_checkptmx_Destroy()
+/* Function:  p7_checkptmx_Destroy_sse()
  * Synopsis:  Frees a <P7_CHECKPTMX>.
  *
  * Purpose:   Free the <P7_CHECKPTMX> <ox>. <ox> may be <NULL>,
@@ -363,19 +340,18 @@ p7_checkptmx_Reuse_sse(P7_CHECKPTMX *ox)
 void
 p7_checkptmx_Destroy_sse(P7_CHECKPTMX *ox)
 {
- if (ox) {
-#ifdef HAVE_SSE2  
-   if (ox->dp_mem) free(ox->dp_mem);
-   if (ox->dpf)    free(ox->dpf); 
+  if (ox) 
+    {
+      if (ox->dp_mem) free(ox->dp_mem);
+      if (ox->dpf)    free(ox->dpf); 
 
-#ifdef p7_DEBUGGING
-   if (ox->fwd)    p7_refmx_Destroy(ox->fwd);
-   if (ox->bck)    p7_refmx_Destroy(ox->bck);
-   if (ox->pp)     p7_refmx_Destroy(ox->pp);
-#endif //p7_DEBUGGING
-#endif // HAVE_SSE2  
-   free(ox);
- }
+#if eslDEBUGLEVEL > 0
+      if (ox->fwd)    p7_refmx_Destroy(ox->fwd);
+      if (ox->bck)    p7_refmx_Destroy(ox->bck);
+      if (ox->pp)     p7_refmx_Destroy(ox->pp);
+#endif 
+      free(ox);
+    }
 }
 /*--------------- end, P7_CHECKPTMX object -----------------------*/
 
@@ -385,9 +361,9 @@ p7_checkptmx_Destroy_sse(P7_CHECKPTMX *ox)
  * 2. Debugging, development routines
  *****************************************************************/
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
 
-/* Function:  p7_checkptmx_DumpFBRow()
+/* Function:  p7_checkptmx_DumpFBRow_sse()
  * Synopsis:  Dump one row from fwd or bck version of the matrix.
  *
  * Purpose:   Dump current row <dpc> of forward or backward calculations from
@@ -402,9 +378,8 @@ p7_checkptmx_Destroy_sse(P7_CHECKPTMX *ox)
 int
 p7_checkptmx_DumpFBRow_sse(P7_CHECKPTMX *ox, int rowi, debug_print *dpc, char *pfx)
 {
-#ifdef HAVE_SSE2
   union { __m128 v; float x[p7_VNF]; } u;
-  float *v         = NULL;		/*  */
+  float *v         = NULL;		
   int    Q         = ox->Qf;
   int    M         = ox->M;
   float *xc        = (float *) (dpc + Q*p7C_NSCELLS);
@@ -459,19 +434,16 @@ p7_checkptmx_DumpFBRow_sse(P7_CHECKPTMX *ox, int rowi, debug_print *dpc, char *p
  ERROR:
   if (v) free(v);
   return status;
-#endif //HAVE_SSE2
-#ifndef HAVE_SSE2
-  return eslENORESULT;
-#endif   
 }
-
-#endif /*p7_DEBUGGING*/
+#endif // eslDEBUGLEVEL
 /*---------------- end, debugging -------------------------------*/
 
+#else // ! eslENABLE_SSE
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_checkptmx_sse_silence_hack(void) { return; }
+#if defined p7CHECKPTMX_SSE_TESTDRIVE || p7CHECKPTMX_SSE_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_SSE or not
+

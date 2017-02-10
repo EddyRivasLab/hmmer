@@ -12,23 +12,17 @@
  *   3. Unit tests
  *   4. Test driver
  *   5. Example
- *   6. Copyright and license information
  */
 #include "p7_config.h"
+#ifdef eslENABLE_AVX
 
 #include <stdio.h>
 #include <math.h>
-#if p7_CPU_ARCH == intel 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
-#include "x86intrin.h"
-#ifdef HAVE_AVX2
-  #include <immintrin.h>  /* AVX2 */
-  #include "esl_avx.h"
-#endif
-#endif /* x86 */
+
+#include <x86intrin.h>
+
 #include "easel.h"
-#include "esl_sse.h"
+#include "esl_avx.h"
 #include "esl_gumbel.h"
 
 #include "base/p7_hmmwindow.h"
@@ -44,7 +38,7 @@
  * 1. The p7_MSVFilter() DP implementation.
  *****************************************************************/
  
-/* Function:  p7_MSVFilter()
+/* Function:  p7_MSVFilter_avx()
  * Synopsis:  Calculates MSV score, vewy vewy fast, in limited precision.
  *
  * Purpose:   Calculates an approximation of the MSV score for sequence
@@ -79,28 +73,26 @@
 int
 p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)
 {
-#ifdef HAVE_AVX2 
-  uint8_t  xJ;                     /* special states' scores                  */
-  register __m256i mpv_AVX;            /* previous row values                                       */
-  register __m256i xEv_AVX;      /* E state: keeps max for Mk->E as we go                     */
-  register __m256i xBv_AVX;      /* B state: splatted vector of B[i-1] for B->Mk calculations */
-  register __m256i sv_AVX;       /* temp storage of 1 curr row value in progress              */
-  register __m256i biasv_AVX;    /* emission bias in a vector                                 */
-  __m256i *dp_AVX;               /* the dp row memory                                         */
-  __m256i *rsc_AVX;        /* will point at om->rbv[x] for residue x[i]                 */
-  __m256i xJv_AVX;                     /* vector for states score                                   */
-  __m256i tjbmv_AVX;                   /* vector for cost of moving {JN}->B->M                      */
-  __m256i tecv_AVX;                    /* vector for E->C  cost                                     */
-  __m256i basev_AVX;                   /* offset for scores                                         */
-  __m256i ceilingv_AVX;                /* saturated simd value used to test for overflow            */
-  __m256i tempv_AVX;                   /* work vector                                               */
-  int Q_AVX        = P7_NVB_AVX(om->M);    /* segment length: # of vectors                              */
-  int q_AVX;         /* counter over vectors 0..nq-1                              */
-
-  int i;         /* counter over sequence positions 1..L                      */
+  uint8_t  xJ;                 /* special states' scores                  */
+  register __m256i mpv_AVX;    /* previous row values                                       */
+  register __m256i xEv_AVX;    /* E state: keeps max for Mk->E as we go                     */
+  register __m256i xBv_AVX;    /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register __m256i sv_AVX;     /* temp storage of 1 curr row value in progress              */
+  register __m256i biasv_AVX;  /* emission bias in a vector                                 */
+  __m256i *dp_AVX;             /* the dp row memory                                         */
+  __m256i *rsc_AVX;            /* will point at om->rbv[x] for residue x[i]                 */
+  __m256i xJv_AVX;             /* vector for states score                                   */
+  __m256i tjbmv_AVX;           /* vector for cost of moving {JN}->B->M                      */
+  __m256i tecv_AVX;            /* vector for E->C  cost                                     */
+  __m256i basev_AVX;           /* offset for scores                                         */
+  __m256i ceilingv_AVX;        /* saturated simd value used to test for overflow            */
+  __m256i tempv_AVX;           /* work vector                                               */
+  int Q_AVX        = P7_NVB_AVX(om->M);    /* segment length: # of vectors                  */
+  int q_AVX;                   /* counter over vectors 0..nq-1                              */
+  int i;                       /* counter over sequence positions 1..L                      */
   int     cmp;
   int     status;
-//printf("Starting MSVFilter\n");
+
   /* Contract checks */
   ESL_DASSERT1(( om->mode == p7_LOCAL )); /* Production code assumes multilocal mode w/ length model <L> */
   ESL_DASSERT1(( om->L    == L ));	  /*  ... and it's easy to forget to set <om> that way           */
@@ -110,14 +102,14 @@ p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 
   /* Try highly optimized Knudsen SSV filter first. 
    * Note that SSV doesn't use any main memory (from <ox>) at all! 
-  */
- //extern uint64_t SSV_time;
- uint64_t filter_start_time = __rdtsc();
-   status = p7_SSVFilter_avx(dsq, L, om, ret_sc);
-    uint64_t filter_end_time = __rdtsc();
+   */
+  //extern uint64_t SSV_time;
+  uint64_t filter_start_time = __rdtsc();
+  status = p7_SSVFilter_avx(dsq, L, om, ret_sc);
+  uint64_t filter_end_time = __rdtsc();
   //SSV_time += (filter_end_time - filter_start_time);   
-   if (status != eslENORESULT) return status;
-   extern uint64_t full_MSV_calls;
+  if (status != eslENORESULT) return status;
+  extern uint64_t full_MSV_calls;
   
   full_MSV_calls++;
  
@@ -131,12 +123,10 @@ p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   ox->type = p7F_MSVFILTER;
 
   /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.  */
-
   biasv_AVX = _mm256_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
 
   for (q_AVX = 0; q_AVX < Q_AVX; q_AVX++) dp_AVX[q_AVX] = _mm256_setzero_si256(); 
   /* saturate simd register for overflow test */
-
   ceilingv_AVX = _mm256_cmpeq_epi8(biasv_AVX, biasv_AVX);
   basev_AVX    = _mm256_set1_epi8((int8_t) om->base_b);
   tjbmv_AVX    = _mm256_set1_epi8((int8_t) om->tjb_b + (int8_t) om->tbm_b);
@@ -144,7 +134,7 @@ p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   xJv_AVX      = _mm256_subs_epu8(biasv_AVX, biasv_AVX);
   xBv_AVX      = _mm256_subs_epu8(basev_AVX, tjbmv_AVX);
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (ox->do_dumping)
     {
       uint8_t xB;
@@ -157,7 +147,6 @@ p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
 
   for (i = 1; i <= L; i++)  /* Outer loop over residues*/
     {
-
       rsc_AVX = om->rbv_AVX[dsq[i]];
       xEv_AVX = _mm256_setzero_si256();      
 
@@ -191,22 +180,22 @@ p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
        * max value.  Then the last shuffle will broadcast the max value
        * to all simd elements.
        */
-
       xEv_AVX = _mm256_set1_epi8(esl_avx_hmax_epu8(xEv_AVX));  // broadcast the max byte from original xEv_AVX
       // to all bytes of xEv_AVX
 
       /* immediately detect overflow */
       if (cmp != 0x0000) {
-   //            MSV_end_time = __rdtsc();
-   //     MSV_time += (MSV_end_time - MSV_start_time);
-        *ret_sc = eslINFINITY; return eslERANGE; }
+	//            MSV_end_time = __rdtsc();
+	//     MSV_time += (MSV_end_time - MSV_start_time);
+        *ret_sc = eslINFINITY; return eslERANGE; 
+      }
 
       xEv_AVX = _mm256_subs_epu8(xEv_AVX, tecv_AVX);
       xJv_AVX = _mm256_max_epu8(xJv_AVX,xEv_AVX);
       xBv_AVX = _mm256_max_epu8(basev_AVX, xJv_AVX);
       xBv_AVX = _mm256_subs_epu8(xBv_AVX, tjbmv_AVX);
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
       if (ox->do_dumping)
 	{
 	  uint8_t xB, xE;
@@ -224,19 +213,15 @@ p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
   *ret_sc = ((float) (xJ - om->tjb_b) - (float) om->base_b);
   *ret_sc /= om->scale_b;
   *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
-    /*     MSV_end_time = __rdtsc();
-        MSV_time += (MSV_end_time - MSV_start_time); */
+  /*     MSV_end_time = __rdtsc();
+	 MSV_time += (MSV_end_time - MSV_start_time); */
 
   return eslOK;
-  #endif
-  #ifndef HAVE_AVX2
-  return eslENORESULT;  // Stub so we have something to link if we build without AVX2 support
-  #endif
-  }
+}
+/*------------------ end, p7_MSVFilter_avx() ------------------------*/
 
-/*------------------ end, p7_MSVFilter() ------------------------*/
 
-/* Function:  p7_SSVFilter_longtarget()
+/* Function:  p7_SSVFilter_longtarget_avx()
  * Synopsis:  Finds windows with SSV scores above some threshold (vewy vewy fast, in limited precision)
  *
  * Purpose:   Calculates an approximation of the SSV (single ungapped diagonal)
@@ -280,9 +265,8 @@ p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
  */
 int
 p7_SSVFilter_longtarget_avx(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX *ox, const P7_SCOREDATA *msvdata,
-                        P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
+			    P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
 {
-#ifdef HAVE_AVX2
   register __m128i mpv;            /* previous row values                                       */
   register __m128i xEv;            /* E state: keeps max for Mk->E for a single iteration       */
   register __m128i xBv;            /* B state: splatted vector of B[i-1] for B->Mk calculations */
@@ -457,19 +441,17 @@ p7_SSVFilter_longtarget_avx(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTE
 
   } /* end loop over sequence residues 1..L */
   return eslOK;
-#endif /* HAVE_AVX2 */
-#ifndef HAVE_AVX2
-  return 0;
-#endif
 }
-/*------------------ end, p7_SSVFilter_longtarget() ------------------------*/
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/
+/*------------------ end, p7_SSVFilter_longtarget_avx() ------------------------*/
 
 
+
+#else // ! eslENABLE_AVX
+
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_msvfilter_avx_silence_hack(void) { return; }
+#if defined p7MSVFILTER_AVX_TESTDRIVE || p7MSVFILTER_AVX_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_AVX or not
 

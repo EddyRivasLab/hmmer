@@ -219,14 +219,4 @@ parse_coord_string(const char *cstring, int *ret_start, int *ret_end)
 
 
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- * 
- * Incept: SRE, Tue Jan  7 09:40:47 2014 [Janelia Farm] 
- *****************************************************************/
-
-
 

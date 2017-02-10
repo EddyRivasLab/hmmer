@@ -3,9 +3,8 @@
  * Contents:
  *    1. The <esl_msa_hmmpgmd2msa> function
  *    2. Test driver
- *    3. Copyright and license information
  */
-
+#include "p7_config.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -357,9 +356,4 @@ ERROR:
 
 }
 #endif /*p7HMMPGMD2MSA_TESTDRIVE*/
-
-/************************************************************
- * @LICENSE@
- ************************************************************/
-
 

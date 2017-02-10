@@ -8,7 +8,6 @@
  *    5. Unit tests
  *    6. Test driver
  *    7. Example
- *    8. Copyright and license information
  *
  * Exegesis:
  * 
@@ -516,12 +515,5 @@ main(int argc, char **argv)
 #endif /*p7LOGSUM_EXAMPLE*/
 /*--------------------- end, example ----------------------------*/
 
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id: logsum.c 3474 2011-01-17 13:25:32Z eddys $
- *****************************************************************/
 
 

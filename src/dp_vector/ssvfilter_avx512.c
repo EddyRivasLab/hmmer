@@ -3,10 +3,8 @@
  * Contents:
  *   1. Introduction
  *   2. p7_SSVFilter() implementation
- *   3. Copyright and license information
  * 
  * Bjarne Knudsen, CLC Bio
- * SVN $Id$
  */
 
 /*****************************************************************
@@ -405,21 +403,15 @@
  * Ignore the warnings and go look for the calc_band_2 function.
  *
  */
-//#define p7_log_array
 #include "p7_config.h"
+#ifdef eslENABLE_AVX512
 
 #include <math.h>
 
-#if p7_CPU_ARCH == intel
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
-#ifdef HAVE_AVX512
- #include<immintrin.h>
- #include"esl_avx_512.h"
-#endif
-#include "x86intrin.h"
-#endif /* intel arch */
+#include <x86intrin.h>
+
 #include "easel.h"
+#include "esl_avx512.h"
 
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
@@ -435,8 +427,6 @@
 #define  MAX_BANDS 6
 #endif
 
-
-#ifdef HAVE_AVX512
 #define STEP_SINGLE_AVX_512(sv_AVX_512)                         \
   sv_AVX_512   = _mm512_subs_epi8(sv_AVX_512, *rsc_AVX_512); rsc_AVX_512++;        \
   xEv_AVX_512  = _mm512_max_epu8(xEv_AVX_512, sv_AVX_512);
@@ -521,7 +511,7 @@
   length_check(label)                                           \
   rsc_AVX_512 = om->sbv_AVX_512[dsq[i_AVX_512]] + pos;                                   \
   step()       \
-  sv_AVX_512 = esl_avx_512_leftshift_one(sv_AVX_512); \
+  sv_AVX_512 = esl_avx512_leftshift_one(sv_AVX_512); \
   sv_AVX_512 = _mm512_or_si512(sv_AVX_512, low_byte_128_AVX_512);                                \
   i_AVX_512++;
 
@@ -886,7 +876,7 @@ calc_band_18_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX
   CALC_AVX_512(RESET_18_AVX_512, STEP_BANDS_18_AVX_512, CONVERT_18_AVX_512, 18)
 }
 #endif /* MAX_BANDS > 14 */
-#endif //HAVE_AVX512
+
 
 /*****************************************************************
  * 2. p7_SSVFilter() implementation
@@ -895,14 +885,12 @@ calc_band_18_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX
 uint8_t
 get_xE_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 {
-#ifdef HAVE_AVX512	
-  __m512i xEv_AVX_512;		           /* E state: keeps max for Mk->E as we go                     */
-  __m512i beginv_AVX_512;                  /* begin scores                                              */
+  __m512i xEv_AVX_512;		                  // E state: keeps max for Mk->E as we go   
+  __m512i beginv_AVX_512;                         // begin scores 
   uint8_t retval_AVX_512;
-  int q_AVX_512;			   /* counter over vectors 0..nq-1                              */
-  int Q_AVX_512        = P7_NVB_AVX_512(om->M);   /* segment length: # of vectors                              */
-
-  int bands_AVX_512;                       /* the number of bands (rounds) to use                       */
+  int q_AVX_512;			          // counter over vectors 0..nq-1
+  int Q_AVX_512        = P7_NVB_AVX_512(om->M);   // segment length: # of vectors
+  int bands_AVX_512;                              // the number of bands (rounds) to use
   beginv_AVX_512 =  _mm512_set1_epi8(128);
   xEv_AVX_512    =  beginv_AVX_512;
 
@@ -918,9 +906,8 @@ get_xE_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
        , calc_band_15_AVX_512, calc_band_16_AVX_512, calc_band_17_AVX_512, calc_band_18_AVX_512
 #endif
   };
-
-  int last_q;                  /* for saving the last q value to find band width            */
-  int i;                           /* counter for bands                                         */
+  int last_q;                  // for saving the last q value to find band width 
+  int i;                       // counter for bands                              
 
   last_q = 0;
   /* Use the highest number of bands but no more than MAX_BANDS */
@@ -932,20 +919,14 @@ get_xE_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 
     last_q = q_AVX_512;
   }
-  retval_AVX_512 = esl_avx_512_hmax_epu8(xEv_AVX_512); // assign this here to allow checking vs AVX, AVX-512
+  retval_AVX_512 = esl_avx512_hmax_epu8(xEv_AVX_512); // assign this here to allow checking vs AVX, AVX-512
 
   return retval_AVX_512;
-#endif  //HAVE_AVX512
-#ifndef HAVE_AVI512
-  return 0;  //Stub so there's something to link if we don't have AVX-512 support
-#endif 
 }
 
-// This function doesn't need conditional compilation, since it doesn't use SIMD
 int
 p7_SSVFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
 {
-  extern uint64_t SSV_time;
   /* Use 16 bit values to avoid overflow due to moved baseline */
   uint16_t  xE;
   uint16_t  xJ;
@@ -994,7 +975,13 @@ p7_SSVFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret
 }
 
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
+
+#else // ! eslENABLE_AVX512
+
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_ssvfilter_avx512_silence_hack(void) { return; }
+#if defined p7SSVFILTER_AVX512_TESTDRIVE || p7SSVFILTER_AVX512_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_AVX512 or not
 

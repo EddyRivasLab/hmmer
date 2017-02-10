@@ -3,10 +3,8 @@
  * Contents:
  *   1. Introduction
  *   2. p7_SSVFilter() implementation
- *   3. Copyright and license information
  * 
  * Bjarne Knudsen, CLC Bio
- * SVN $Id$
  */
 
 /*****************************************************************
@@ -410,27 +408,20 @@
 
 #include <math.h>
 
-#ifdef HAVE_SSE2
+#ifdef eslENABLE_SSE
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
 #endif
 
-#ifdef HAVE_AVX2
- #include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
-#include "x86intrin.h"
- #include<immintrin.h>
+#ifdef eslENABLE_AVX
+#include <x86intrin.h>
 #endif
 
-#ifdef HAVE_AVX512 
- #include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
-#include "x86intrin.h"
- #include<immintrin.h>
+#ifdef eslENABLE_AVX512 
+#include <x86intrin.h>
 #endif
 
 #include "easel.h"
-
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
 
@@ -465,16 +456,11 @@ p7_SSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
     case NEON:
       return p7_SSVFilter_neon(dsq, L, om, ret_sc);
       break;
-    case NEON64:
-      return p7_SSVFilter_neon64(dsq, L, om, ret_sc);
-      break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_MSVFilter");  
   }
 }
 
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
+
 

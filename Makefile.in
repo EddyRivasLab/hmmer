@@ -47,7 +47,7 @@ man1ext     = .1
 # Compiler configuration
 #
 CC        = @CC@
-CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
+CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@ 
 LDFLAGS   = -static @LDFLAGS@
 SIMDFLAGS = @SIMD_CFLAGS@
 CPPFLAGS  = @CPPFLAGS@
@@ -163,9 +163,3 @@ TAGS:
 	./makeTAGS.sh
 
 
-################################################################
-# @LICENSE@
-#
-# SVN $URL$
-# SVN $Id$
-################################################################

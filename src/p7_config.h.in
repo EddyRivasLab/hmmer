@@ -132,21 +132,16 @@
 #undef HAVE_XMMINTRIN_H		/* SSE  */
 #undef HAVE_EMMINTRIN_H		/* SSE2 */
 #undef HAVE_PMMINTRIN_H		/* SSE3 */
-#undef HAVE_ARMNEON_H		/* NEON */
-
-/* What architecture are we running on? */
-#undef intel 
-#undef arm
-#undef arm64
-#undef p7_CPU_ARCH
+#undef HAVE_ARMNEON_H		/* NEON */  /* SRE TODO */
 
 /* Optional parallel implementations
  */
-#undef HAVE_SSE2
-#undef HAVE_AVX2
-#undef HAVE_AVX512
-#undef HAVE_NEON
-#undef HAVE_NEON64
+#undef eslENABLE_SSE
+#undef eslENABLE_AVX
+#undef eslENABLE_AVX512
+#undef eslENABLE_NEON
+#undef eslENABLE_VMX
+
 #undef HAVE_MPI
 #undef HMMER_PVM
 #undef HMMER_THREADS
@@ -160,14 +155,8 @@
 /* Debugging and development hooks
  */
 #define p7_DEVELOPMENT  1            // TRUE when code is in development. Allow things like stochastic test failures that would frighten civilians.
-#undef  p7_DEBUGGING                 // TRUE when --enable-debugging is set from ./configure.
 #undef  p7_LOGSUM_SLOWEXACT 	     // TRUE when --enable-exact-logsum is set from ./configure. Replace fast FLogsum() with slow exact one. Testing purposes only! 20x slower. 
 #undef  HAVE_FUNC_ATTRIBUTE_NORETURN // Compiler supports __attribute__ tag, which we use to help w/ clang static analysis.
 
 #endif /*P7_CONFIGH_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

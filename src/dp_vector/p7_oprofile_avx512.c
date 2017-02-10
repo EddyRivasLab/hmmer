@@ -8,24 +8,20 @@
  *   4. Debugging and development utilities.
  *   5. Benchmark driver.
  *   6. Example.
- *   7. Copyright and license information.
  */
 #include "p7_config.h"
+#ifdef eslENABLE_AVX512
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>		/* roundf() */
 
-#if p7_CPU_ARCH == intel 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
-#endif /* intel arch */
+#include <x86intrin.h>		
 
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_random.h"
-#include "esl_sse.h"
 #include "esl_vectorops.h"
 
 #include "base/p7_bg.h"
@@ -41,7 +37,7 @@
  * 1. The P7_OPROFILE structure: a score profile.
  *****************************************************************/
 
-/* Function:  p7_oprofile_Create()
+/* Function:  p7_oprofile_Create_avx512()
  * Synopsis:  Allocate an optimized profile structure.
  * Incept:    SRE, Sun Nov 25 12:03:19 2007 [Casa de Gatos]
  *
@@ -52,15 +48,12 @@
 P7_OPROFILE *
 p7_oprofile_Create_avx512(int allocM, const ESL_ALPHABET *abc)
 {
-#ifdef HAVE_AVX512
   int          status;
   P7_OPROFILE *om  = NULL;
-
   int          nqb_AVX_512 = P7_NVB_AVX_512(allocM); /* # of uchar vectors needed for query */
   int          nqw_AVX_512 = P7_NVW_AVX_512(allocM); /* # of sword vectors needed for query */
   int          nqf_AVX_512 = P7_NVF_AVX_512(allocM); /* # of float vectors needed for query */
   int          nqs_AVX_512 = nqb_AVX_512 + p7O_EXTRA_SB;
-
   int          x;
 
   /* level 0 */
@@ -92,7 +85,6 @@ p7_oprofile_Create_avx512(int allocM, const ESL_ALPHABET *abc)
   om->consensus = NULL;
 
   /* level 1 */
- 
   ESL_ALLOC(om->rbv_mem_AVX_512, sizeof(__m512i) * nqb_AVX_512  * abc->Kp          +63); /* +63 is for manual 64-byte alignment */
   ESL_ALLOC(om->sbv_mem_AVX_512, sizeof(__m512i) * nqs_AVX_512  * abc->Kp          +63); 
   ESL_ALLOC(om->rwv_mem_AVX_512, sizeof(__m512i) * nqw_AVX_512  * abc->Kp          +63);                     
@@ -114,14 +106,11 @@ p7_oprofile_Create_avx512(int allocM, const ESL_ALPHABET *abc)
 
   /* set the rest of the row pointers for match emissions */
   for (x = 1; x < abc->Kp; x++) {
-
     om->rbv_AVX_512[x] = om->rbv_AVX_512[0] + (x * nqb_AVX_512);
     om->sbv_AVX_512[x] = om->sbv_AVX_512[0] + (x * nqs_AVX_512);
     om->rwv_AVX_512[x] = om->rwv_AVX_512[0] + (x * nqw_AVX_512);
     om->rfv_AVX_512[x] = om->rfv_AVX_512[0] + (x * nqf_AVX_512);
-
   }
-
 
   om->allocQ16_AVX_512  = nqb_AVX_512;
   om->allocQ8_AVX_512   = nqw_AVX_512;
@@ -171,22 +160,16 @@ p7_oprofile_Create_avx512(int allocM, const ESL_ALPHABET *abc)
  ERROR:
   p7_oprofile_Destroy(om);
   return NULL;
-#endif //HAVE_AVX512
-#ifndef HAVE_AVX512
-return NULL;
-#endif
-
 }
 
 
-/* Function:  p7_oprofile_Destroy()
+/* Function:  p7_oprofile_Destroy_avx512()
  * Synopsis:  Frees an optimized profile structure.
  * Incept:    SRE, Sun Nov 25 12:22:21 2007 [Casa de Gatos]
  */
 void
 p7_oprofile_Destroy_avx512(P7_OPROFILE *om)
 {
-#ifdef HAVE_AVX512  
   if (om == NULL) return;
 
   if (! om->is_shadow)
@@ -215,13 +198,10 @@ p7_oprofile_Destroy_avx512(P7_OPROFILE *om)
       if (om->consensus) free(om->consensus);
     }
   free(om);
-#endif //HAVE_AVX512
-#ifndef HAVE_AVX512
-return;
-#endif  
+  return;
 }
 
-/* Function:  p7_oprofile_Sizeof()
+/* Function:  p7_oprofile_Sizeof_avx512()
  * Synopsis:  Return the allocated size of a <P7_OPROFILE>.
  * Incept:    SRE, Wed Mar  2 10:09:21 2011 [Janelia]
  *
@@ -236,7 +216,6 @@ size_t
 p7_oprofile_Sizeof_avx512(const P7_OPROFILE *om)
 {
   size_t n   = 0;
-#ifdef HAVE_AVX512  
   int    nqb_AVX_512 = om->allocQ16_AVX_512;  /* # of uchar vectors needed for query */
   int    nqw_AVX_512 = om->allocQ8_AVX_512;     /* # of sword vectors needed for query */
   int    nqf_AVX_512 = om->allocQ4_AVX_512;     /* # of float vectors needed for query */
@@ -266,12 +245,11 @@ p7_oprofile_Sizeof_avx512(const P7_OPROFILE *om)
   n  += sizeof(char) * (om->allocM+2);            /* om->mm        */
   n  += sizeof(char) * (om->allocM+2);            /* om->cs        */
   n  += sizeof(char) * (om->allocM+2);            /* om->consensus */
-#endif //HAVE_AVX512
   return n;
 }
 
 
-/* Function:  p7_oprofile_Clone()
+/* Function:  p7_oprofile_Clone_avx512()
  * Synopsis:  Create a new copy of an optimized profile structure.
  * Incept:    SRE, Sun Nov 25 12:03:19 2007 [Casa de Gatos]
  *
@@ -283,15 +261,12 @@ p7_oprofile_Sizeof_avx512(const P7_OPROFILE *om)
 P7_OPROFILE *
 p7_oprofile_Clone_avx512(const P7_OPROFILE *om1)
 {
-#ifdef HAVE_AVX512  
   const ESL_ALPHABET *abc = om1->abc;
   P7_OPROFILE  *om2  = NULL;
-
   int           nqb_AVX_512  = P7_NVB_AVX_512(om1->allocM); /* # of uchar vectors needed for query */
   int           nqw_AVX_512  = P7_NVW_AVX_512(om1->allocM); /* # of sword vectors needed for query */
   int           nqf_AVX_512  = P7_NVF_AVX_512(om1->allocM); /* # of float vectors needed for query */
   int           nqs_AVX_512  = nqb_AVX_512 + p7O_EXTRA_SB;
-
   size_t        size = sizeof(char) * (om1->allocM+2);
   int           x, y;
   int           status;
@@ -303,7 +278,7 @@ p7_oprofile_Clone_avx512(const P7_OPROFILE *om1)
   om2->sbv_mem_AVX_512   = NULL;
   om2->rwv_mem_AVX_512   = NULL;
   om2->twv_mem_AVX_512   = NULL; 
-   om2->rfv_mem_AVX_512   = NULL;
+  om2->rfv_mem_AVX_512   = NULL;
   om2->tfv_mem_AVX_512   = NULL;
  
   om2->rbv_AVX_512       = NULL;
@@ -324,7 +299,6 @@ p7_oprofile_Clone_avx512(const P7_OPROFILE *om1)
   om2->consensus = NULL;
 
   /* level 1 */
-
   ESL_ALLOC(om2->rbv_mem_AVX_512, sizeof(__m512i) * nqb_AVX_512  * abc->Kp    +63); /* +63 is for manual 32-byte alignment */
   ESL_ALLOC(om2->sbv_mem_AVX_512, sizeof(__m512i) * nqs_AVX_512  * abc->Kp    +63);
   ESL_ALLOC(om2->rwv_mem_AVX_512, sizeof(__m512i) * nqw_AVX_512  * abc->Kp    +63);                     
@@ -338,7 +312,6 @@ p7_oprofile_Clone_avx512(const P7_OPROFILE *om1)
   ESL_ALLOC(om2->rfv_AVX_512, sizeof(__m512  *) * abc->Kp); 
 
   /* align vector memory on vector size boundaries */
-
   om2->rbv_AVX_512[0] = (__m512i *) (((unsigned long int) om2->rbv_mem_AVX_512 + 63) & (~0x3f));
   om2->sbv_AVX_512[0] = (__m512i *) (((unsigned long int) om2->sbv_mem_AVX_512 + 63) & (~0x3f));
   memcpy(om2->rbv_AVX_512[0], om1->rbv_AVX_512[0], sizeof(__m512i) * nqb_AVX_512  * abc->Kp);
@@ -350,8 +323,6 @@ p7_oprofile_Clone_avx512(const P7_OPROFILE *om1)
   om2->tfv_AVX_512    = (__m512 *) (((unsigned long int) om2->tfv_mem_AVX_512 + 63) & (~0x3f));
 
   /* copy the vector data */
-
- 
   memcpy(om2->rfv_AVX_512[0], om1->rfv_AVX_512[0], sizeof(__m512i) * nqf_AVX_512  * abc->Kp);
 
   /* set the rest of the row pointers for match emissions */
@@ -426,12 +397,7 @@ p7_oprofile_Clone_avx512(const P7_OPROFILE *om1)
  ERROR:
   p7_oprofile_Destroy(om2);
   return NULL;
-#endif //HAVE_AVX512
-#ifndef HAVE_AVX512
-return NULL;
-#endif  
 }
-
 /*----------------- end, P7_OPROFILE structure ------------------*/
 
 
@@ -440,7 +406,7 @@ return NULL;
  * 2. Conversion from generic P7_PROFILE to optimized P7_OPROFILE
  *****************************************************************/
 
-/* sf_conversion():
+/* sf_conversion_avx512():
  * Author: Bjarne Knudsen
  * 
  * Generates the SSVFilter() parts of the profile <om> scores
@@ -455,10 +421,9 @@ return NULL;
 int
 sf_conversion_avx512(P7_OPROFILE *om)
 {
-#ifdef HAVE_AVX512
-   int     x;     /* counter over residues                                        */
-  int     q;      /* q counts over total # of striped vectors, 0..nq-1           */
-  int     M   = om->M;		/* length of the query                                          */
+  int     x;             // counter over residues
+  int     q;             // q counts over total # of striped vectors, 0..nq-1
+  int     M   = om->M;	 // length of the query                              
 
   __m512i tmp_AVX_512;
   __m512i tmp2_AVX_512;
@@ -485,8 +450,6 @@ sf_conversion_avx512(P7_OPROFILE *om)
    * is that we wish the transformation to be fast, especially for
    * hmmscan where many models are loaded.
    */
-
-
   tmp_AVX_512 = _mm512_set1_epi8((int8_t) (om->bias_b + 127));
   tmp2_AVX_512  = _mm512_set1_epi8(127);
 
@@ -497,13 +460,9 @@ sf_conversion_avx512(P7_OPROFILE *om)
     }
   
   return eslOK;
-  #endif //HAVE_AVX512
-  #ifndef HAVE_AVX512
-  return eslENORESULT;
-  #endif //HAVE_AVX512
 }
 
-/* mf_conversion(): 
+/* mf_conversion_avx512(): 
  * 
  * This builds the MSVFilter() parts of the profile <om>, scores
  * in lspace uchars (16-way parallel), by rescaling, rounding, and
@@ -515,12 +474,9 @@ sf_conversion_avx512(P7_OPROFILE *om)
 int
 mf_conversion_avx512(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
-#ifdef HAVE_AVX512
-  int     M   = gm->M;		/* length of the query                                          */
-
-  int     nq_AVX_512  = P7_NVB_AVX_512(M);     /* segment length; total # of striped vectors needed            */
-  union { __m512i v; uint8_t i[64]; } tmp_AVX_512; /* used to align and load simd minivectors           */
-
+  int     M   = gm->M;		                   // length of the query 
+  int     nq_AVX_512  = P7_NVB_AVX_512(M);         // segment length; total # of striped vectors needed 
+  union { __m512i v; uint8_t i[64]; } tmp_AVX_512; // used to align and load simd minivectors  
   float   max = 0.0;		/* maximum residue score: used for unsigned emission score bias */
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
@@ -554,32 +510,25 @@ mf_conversion_avx512(const P7_PROFILE *gm, P7_OPROFILE *om)
   sf_conversion_avx512(om);
 
   return eslOK;
-  #endif //HAVE_AVX512
-  #ifndef HAVE_AVX512
-  return eslENORESULT;
-  #endif //HAVE_AVX512
 }
 
 
-/* vf_conversion(): 
+/* vf_conversion_avx512(): 
  * 
  * This builds the ViterbiFilter() parts of the profile <om>, scores
  * in lspace swords (8-way parallel), by rescaling, rounding, and
  * casting the scores in <gm>.
  * 
- * Returns <eslOK> on success;
+ * Returns <eslOK> on success;n
  * throws <eslEINVAL> if <om> hasn't been allocated properly.
  */
 int
 vf_conversion_avx512(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
-#ifdef HAVE_AVX512  
-  int     M   = gm->M;		/* length of the query                                          */
-
-  int     nq_AVX_512  = P7_NVW_AVX_512(M);     /* segment length; total # of striped vectors needed            */
-  union { __m512i v; int16_t i[32]; } tmp_AVX_512; /* used to align and load simd minivectors            */
+  int     M   = gm->M;		                   // length of the query
+  int     nq_AVX_512  = P7_NVW_AVX_512(M);         // segment length; total # of striped vectors needed  
+  union { __m512i v; int16_t i[32]; } tmp_AVX_512; // used to align and load simd minivectors        
   if (nq_AVX_512 > om->allocQ8_AVX_512) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
-
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
   int     k;			/* the usual counter over model nodes 1..M                      */
@@ -591,7 +540,6 @@ vf_conversion_avx512(const P7_PROFILE *gm, P7_OPROFILE *om)
   int     ddtmp;		/* used in finding worst DD transition bound                    */
   int16_t  maxval;		/* used to prevent zero cost II                                 */
   int16_t  val;
-
 
   /* First set the basis for the limited-precision scoring system. 
    * Default: 1/500 bit units, base offset 12000:  range -32768..32767 => -44768..20767 => -89.54..41.53 bits
@@ -614,23 +562,23 @@ vf_conversion_avx512(const P7_PROFILE *gm, P7_OPROFILE *om)
   for (j = 0, k = 1, q = 0; q < nq_AVX_512; q++, k++)
     {
       for (t = p7O_BM; t <= p7O_II; t++) /* this loop of 7 transitions depends on the order in p7o_tsc_e */
-  {
-    switch (t) {
-    case p7O_BM: tg = p7P_LM;  kb = k-1; maxval =  0; break; /* gm has tLMk stored off by one! start from k=0 not 1   */
-    case p7O_MM: tg = p7P_MM;  kb = k-1; maxval =  0; break; /* MM, DM, IM vectors are rotated by -1, start from k=0  */
-    case p7O_IM: tg = p7P_IM;  kb = k-1; maxval =  0; break;
-    case p7O_DM: tg = p7P_DM;  kb = k-1; maxval =  0; break;
-    case p7O_MD: tg = p7P_MD;  kb = k;   maxval =  0; break; /* the remaining ones are straight up  */
-    case p7O_MI: tg = p7P_MI;  kb = k;   maxval =  0; break; 
-    case p7O_II: tg = p7P_II;  kb = k;   maxval = -1; break; 
-    }
+	{
+	  switch (t) {
+	  case p7O_BM: tg = p7P_LM;  kb = k-1; maxval =  0; break; /* gm has tLMk stored off by one! start from k=0 not 1   */
+	  case p7O_MM: tg = p7P_MM;  kb = k-1; maxval =  0; break; /* MM, DM, IM vectors are rotated by -1, start from k=0  */
+	  case p7O_IM: tg = p7P_IM;  kb = k-1; maxval =  0; break;
+	  case p7O_DM: tg = p7P_DM;  kb = k-1; maxval =  0; break;
+	  case p7O_MD: tg = p7P_MD;  kb = k;   maxval =  0; break; /* the remaining ones are straight up  */
+	  case p7O_MI: tg = p7P_MI;  kb = k;   maxval =  0; break; 
+	  case p7O_II: tg = p7P_II;  kb = k;   maxval = -1; break; 
+	  }
 
-    for (z = 0; z < 32; z++) {
-      val      = ((kb+ z*nq_AVX_512 < M) ? wordify(om, P7P_TSC(gm, kb+ z*nq_AVX_512, tg)) : -32768);
-      tmp_AVX_512.i[z] = (val <= maxval) ? val : maxval; /* do not allow an II transition cost of 0, or hell may occur. */
-    }
-    om->twv_AVX_512[j++] = tmp_AVX_512.v;
-  }
+	  for (z = 0; z < 32; z++) {
+	    val      = ((kb+ z*nq_AVX_512 < M) ? wordify(om, P7P_TSC(gm, kb+ z*nq_AVX_512, tg)) : -32768);
+	    tmp_AVX_512.i[z] = (val <= maxval) ? val : maxval; /* do not allow an II transition cost of 0, or hell may occur. */
+	  }
+	  om->twv_AVX_512[j++] = tmp_AVX_512.v;
+	}
     }
 
   /* Finally the DD's, which are at the end of the optimized tsc vector; (j is already sitting there) */
@@ -671,21 +619,16 @@ vf_conversion_avx512(const P7_PROFILE *gm, P7_OPROFILE *om)
     }
 
   return eslOK;
-  #endif //HAVE_AVX512
-  #ifndef HAVE_AVX512
-  return eslENORESULT;
-  #endif //HAVE_AVX512
 }
 
 
-/* fb_conversion()
+/* fb_conversion_avx512()
  * This builds the Forward/Backward part of the optimized profile <om>,
  * where we use odds ratios (not log-odds scores).
  */
 int
 fb_conversion_avx512(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
-  #ifdef HAVE_AVX512
   int     M   = gm->M;		/* length of the query                                          */
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
@@ -695,9 +638,7 @@ fb_conversion_avx512(const P7_PROFILE *gm, P7_OPROFILE *om)
   int     t;			/* counter over transitions 0..7 = p7O_{BM,MM,IM,DM,MD,MI,II,DD}*/
   int     tg;			/* transition index in gm                                       */
   int     j;			/* counter in interleaved vector arrays in the profile          */
-  
   union { __m512 avx512; __m128 sse[4]; float x[16]; } tmp_AVX_512;
-
   int     nq_AVX_512  = P7_NVF_AVX_512(M);     /* segment length; total # of striped vectors needed            */
   if (nq_AVX_512 > om->allocQ4_AVX_512) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
 
@@ -761,19 +702,15 @@ fb_conversion_avx512(const P7_PROFILE *gm, P7_OPROFILE *om)
   om->xf[p7O_J][p7O_MOVE] = expf(gm->xsc[p7P_J][p7P_MOVE]);
 
   return eslOK;
-  #endif //HAVE_AVX512
-  #ifndef HAVE_AVX512
-  return eslENORESULT;
-  #endif //HAVE_AVX512
 }
-
 /*------------ end, conversions to P7_OPROFILE ------------------*/
+
 
 /*******************************************************************
  * 3. Conversion from optimized P7_OPROFILE to compact score arrays
  *******************************************************************/
 
-/* Function:  p7_oprofile_GetFwdTransitionArray()
+/* Function:  p7_oprofile_GetFwdTransitionArray_avx512()
  * Synopsis:  Retrieve full 32-bit float transition probabilities from an
  *            optimized profile into a flat array
  *
@@ -791,12 +728,11 @@ fb_conversion_avx512(const P7_PROFILE *gm, P7_OPROFILE *om)
  * Throws:    (no abnormal error conditions)
  */
 int
-p7_oprofile_GetFwdTransitionArray_avx512(const P7_OPROFILE *om, int type, float *arr )
+p7_oprofile_GetFwdTransitionArray_avx512(const P7_OPROFILE *om, int type, float *arr)
 {
-#ifdef HAVE_AVX512
-  int     nq_AVX_512  = P7_NVF_AVX_512(om->M);     /* # of striped vectors needed            */
+  int     nq_AVX_512  = P7_NVF_AVX_512(om->M);     // # of striped vectors needed 
   int i_AVX_512, j_AVX_512;
-  union { __m512 v; float x[16]; } tmp_AVX_512; /* used to align and read simd minivectors               */
+  union { __m512 v; float x[16]; } tmp_AVX_512;    // used to align and read simd minivectors 
 
 
   for (i_AVX_512=0; i_AVX_512<nq_AVX_512; i_AVX_512++) {
@@ -808,13 +744,9 @@ p7_oprofile_GetFwdTransitionArray_avx512(const P7_OPROFILE *om, int type, float 
   }
 
   return eslOK;
-#endif //HAVE_AVX512
-  #ifndef HAVE_AVX512
-  return eslENORESULT;
-  #endif //HAVE_AVX512
 }
 
-/* Function:  p7_oprofile_GetMSVEmissionScoreArray()
+/* Function:  p7_oprofile_GetMSVEmissionScoreArray_avx512()
  * Synopsis:  Retrieve MSV residue emission scores from an optimized
  *            profile into an array
  *
@@ -840,17 +772,13 @@ p7_oprofile_GetFwdTransitionArray_avx512(const P7_OPROFILE *om, int type, float 
 int
 p7_oprofile_GetMSVEmissionScoreArray_avx512(const P7_OPROFILE *om, uint8_t *arr )
 {
-#ifdef HAVE_AVX512 
   int x, q, z, k;
- int      M   = om->M;    /* length of the query                                          */
-  int      K   = om->abc->Kp;
-
+  int M   = om->M;    
+  int K   = om->abc->Kp;
   union { __m512i v; uint8_t i[64]; } tmp_AVX_512; /* used to align and read simd minivectors           */
   int      nq_AVX_512  = P7_NVB_AVX_512(M);     /* segment length; total # of striped vectors needed            */
-
-  
-
   int cell_cnt = (om->M + 1) * K;
+
   // SSE-striped array
   for (x = 0; x < K ; x++) {
     for (q = 0, k = 1; q < nq_AVX_512; q++, k++) {
@@ -863,15 +791,11 @@ p7_oprofile_GetMSVEmissionScoreArray_avx512(const P7_OPROFILE *om, uint8_t *arr 
   }
 
   return eslOK;
-  #endif //HAVE_AVX512
-  #ifndef HAVE_AVX512
-  return eslENORESULT;
-  #endif //HAVE_AVX512
 }
 
 
-/* Function:  p7_oprofile_GetFwdEmissionScoreArray()
- * Synopsis:  Retrieve Fwd (float) residue emission scores from an optimized
+/* Function:  p7_oprofile_GetFwdEmissionScoreArray_avx512()
+ * Synopsis:  Retrieve Fwd (float) residue emission scorens from an optimized
  *            profile into an array
  *
  * Purpose:   Extract an implicitly 2D array of 32-bit float Fwd residue
@@ -895,7 +819,6 @@ p7_oprofile_GetMSVEmissionScoreArray_avx512(const P7_OPROFILE *om, uint8_t *arr 
 int
 p7_oprofile_GetFwdEmissionScoreArray_avx512(const P7_OPROFILE *om, float *arr )
 {
-  #ifdef HAVE_AVX512
   int x, q, z, k;
   union { __m512 v; __m128 v2[4]; float f[16]; } tmp; /* used to align and read simd minivectors               */
   int      M   = om->M;    /* length of the query                                          */
@@ -907,7 +830,7 @@ p7_oprofile_GetFwdEmissionScoreArray_avx512(const P7_OPROFILE *om, float *arr )
       for (q = 0, k = 1; q < nq; q++, k++) {
         tmp.v = om->rfv_AVX_512[x][q];
         tmp.v2[0] = esl_sse_logf(tmp.v2[0]);  // Slow, but we shouldn't call this function that often
-        tmp.v2[1] = esl_sse_logf(tmp.v2[1]);
+        tmp.v2[1] = esl_sse_logf(tmp.v2[1]);  // SRE TODO: should these really me esl_sse, not esl_avx512??
         tmp.v2[2] = esl_sse_logf(tmp.v2[2]);
         tmp.v2[3] = esl_sse_logf(tmp.v2[3]);
         for (z = 0; z < 16; z++)
@@ -916,13 +839,13 @@ p7_oprofile_GetFwdEmissionScoreArray_avx512(const P7_OPROFILE *om, float *arr )
       }
   }
   return eslOK;
-  #endif //HAVE_AVX512
-  #ifndef HAVE_AVX512
-  return eslENORESULT;
-  #endif //HAVE_AVX512
 }
 
-/* Function:  p7_oprofile_GetFwdEmissionArray()
+// SRE TODO: Nick left a note:
+//    "this function has not been ported to AVX yet"
+// so don't trust this function. If you check it and verify it, remove this note.
+
+/* Function:  p7_oprofile_GetFwdEmissionArray_avx512()
  * Synopsis:  Retrieve Fwd (float) residue emission values from an optimized
  *            profile into an array
  *
@@ -950,12 +873,11 @@ int
 p7_oprofile_GetFwdEmissionArray_avx512(const P7_OPROFILE *om, P7_BG *bg, float *arr )
 {
   int x, q, z, k;
-#ifdef HAVE_AVX512 // this function has not been ported to AVX yet
-  union { __m512 v; __m128 v2[4]; float f[16]; } tmp; /* used to align and read simd minivectors               */
-  int      M   = om->M;    /* length of the query                                          */
+  union { __m512 v; __m128 v2[4]; float f[16]; } tmp; 
+  int      M   = om->M;  
   int      Kp  = om->abc->Kp;
   int      K   = om->abc->K;
-  int      nq  = P7_NVF_AVX_512(M);     /* segment length; total # of striped vectors needed            */
+  int      nq  = P7_NVF_AVX_512(M);    
   int cell_cnt = (om->M + 1) * Kp;
 
   for (x = 0; x < K; x++) {
@@ -971,10 +893,6 @@ p7_oprofile_GetFwdEmissionArray_avx512(const P7_OPROFILE *om, P7_BG *bg, float *
   for (x = 0; x <= M; x++)
     esl_abc_FExpectScVec(om->abc, arr+Kp*x, bg->f);
   return eslOK;
-   #endif //HAVE_AVX512
-  #ifndef HAVE_AVX512
-  return eslENORESULT;
-  #endif //HAVE_AVX512
 }
 /*------------ end, conversions from P7_OPROFILE ------------------*/
 
@@ -983,18 +901,16 @@ p7_oprofile_GetFwdEmissionArray_avx512(const P7_OPROFILE *om, P7_BG *bg, float *
  * 4. Debugging and development utilities.
  *****************************************************************/
 
-
-/* oprofile_dump_mf()
+/* oprofile_dump_mf_avx512()
  * 
  * Dump the MSVFilter part of a profile <om> to <stdout>.
  */
 int
 oprofile_dump_mf_avx512(FILE *fp, const P7_OPROFILE *om)
 {
-  int     M   = om->M;		/* length of the query                                          */
-#ifdef HAVE_AVX512
-  int     nq_AVX_512  = P7_NVB_AVX_512(M);     /* segment length; total # of striped vectors needed            */
-  union { __m512i v; uint8_t i[64]; } tmp_AVX_512; /* used to align and read simd minivectors       */
+  int     M   = om->M;		
+  int     nq_AVX_512  = P7_NVB_AVX_512(M);         // segment length; total # of striped vectors needed  
+  union { __m512i v; uint8_t i[64]; } tmp_AVX_512; // used to align and read simd minivectors       
 
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
@@ -1039,21 +955,16 @@ oprofile_dump_mf_avx512(FILE *fp, const P7_OPROFILE *om)
   fprintf(fp, "Q:          %4d\n",  nq_AVX_512);  
   fprintf(fp, "M:          %4d\n",  M);  
   return eslOK;
-  #endif //HAVE_AVX512
-  #ifndef HAVE_AVX512
-  return eslENORESULT;
-  #endif //HAVE_AVX512
 }
 
 
-/* oprofile_dump_vf()
+/* oprofile_dump_vf_avx512()
  * 
  * Dump the ViterbiFilter part of a profile <om> to <stdout>.
  */
 int
 oprofile_dump_vf_avx512(FILE *fp, const P7_OPROFILE *om)
 {
-#ifdef HAVE_AVX512  
   int     M   = om->M;		/* length of the query                                          */
   int     nq  = P7_NVW(M);     /* segment length; total # of striped vectors needed            */
   int     x;			/* counter over residues                                        */
@@ -1167,14 +1078,10 @@ oprofile_dump_vf_avx512(FILE *fp, const P7_OPROFILE *om)
   fprintf(fp, "M:     %6d\n",   M);  
 
   return eslOK;
- #endif //HAVE_AVX512
-  #ifndef HAVE_AVX512
-  return eslENORESULT;
-  #endif //HAVE_AVX512
 }
 
 
-/* oprofile_dump_fb()
+/* oprofile_dump_fb_avx512()
  * 
  * Dump the Forward/Backward part of a profile <om> to <stdout>.
  * <width>, <precision> control the floating point output:
@@ -1184,7 +1091,6 @@ oprofile_dump_vf_avx512(FILE *fp, const P7_OPROFILE *om)
 int
 oprofile_dump_fb_avx512(FILE *fp, const P7_OPROFILE *om, int width, int precision)
 {
- #ifdef HAVE_AVX512 
   int     M   = om->M;		/* length of the query                                          */
   int     nq  = P7_NVF(M);     /* segment length; total # of striped vectors needed            */
   int     x;			/* counter over residues                                        */
@@ -1195,6 +1101,7 @@ oprofile_dump_fb_avx512(FILE *fp, const P7_OPROFILE *om, int width, int precisio
   int     t;			/* counter over transitions 0..7 = p7O_{BM,MM,IM,DM,MD,MI,II,DD}*/
   int     j;			/* counter in interleaved vector arrays in the profile          */
   union { __m512 v; float x[16]; } tmp; /* used to align and read simd minivectors               */
+
   /* Residue emissions */
   for (x = 0; x < om->abc->Kp; x++)
     {
@@ -1290,13 +1197,9 @@ oprofile_dump_fb_avx512(FILE *fp, const P7_OPROFILE *om, int width, int precisio
   fprintf(fp, "Q:     %d\n",   nq);  
   fprintf(fp, "M:     %d\n",   M);  
   return eslOK;
-   #endif //HAVE_AVX512
-  #ifndef HAVE_AVX512
-  return eslENORESULT;
-  #endif //HAVE_AVX512
 }
 
-/* Function:  p7_oprofile_Compare()
+/* Function:  p7_oprofile_Compare_avx512()
  * Synopsis:  Compare two optimized profiles for equality.
  * Incept:    SRE, Wed Jan 21 13:29:10 2009 [Janelia]
  *
@@ -1323,7 +1226,6 @@ oprofile_dump_fb_avx512(FILE *fp, const P7_OPROFILE *om, int width, int precisio
 int
 p7_oprofile_Compare_avx512(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg)
 {
- #ifdef HAVE_AVX512 
   int q, r, x, y;
 
   int Q4_AVX_512  = P7_NVF_AVX_512(om1->M);
@@ -1379,9 +1281,10 @@ p7_oprofile_Compare_avx512(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float
   for (x = 0; x < om1->abc->Kp; x++)
     for (q = 0; q < Q4_AVX_512; q++)
       {
-  a4_AVX_512.v = om1->rfv_AVX_512[x][q]; b4_AVX_512.v = om2->rfv_AVX_512[x][q];
-  for (r = 0; r < 16; r++) if (esl_FCompare(a4_AVX_512.x[r], b4_AVX_512.x[r], tol) != eslOK)  ESL_FAIL(eslFAIL, errmsg, "comparison failed: rf[%d] elem %d", q, r);
+	a4_AVX_512.v = om1->rfv_AVX_512[x][q]; b4_AVX_512.v = om2->rfv_AVX_512[x][q];
+	for (r = 0; r < 16; r++) if (esl_FCompare(a4_AVX_512.x[r], b4_AVX_512.x[r], tol) != eslOK)  ESL_FAIL(eslFAIL, errmsg, "comparison failed: rf[%d] elem %d", q, r);
       }
+
   for (q = 0; q < 8*Q4_AVX_512; q++)
     {
       a4_AVX_512.v = om1->tfv_AVX_512[q]; b4_AVX_512.v = om2->tfv_AVX_512[q];
@@ -1407,21 +1310,16 @@ p7_oprofile_Compare_avx512(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float
    if (esl_vec_FCompare(om1->compo,   om2->compo,   p7_MAXABET,  tol) != eslOK) ESL_FAIL(eslFAIL, errmsg, "comparison failed: compo vector");
 
    return eslOK;
-    #endif //HAVE_AVX512
-  #ifndef HAVE_AVX512
-  return eslENORESULT;
-  #endif //HAVE_AVX512
 }
-
 /*------------ end, P7_OPROFILE debugging tools  ----------------*/
 
 
+#else // ! eslENABLE_AVX512
 
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_oprofile_avx512_silence_hack(void) { return; }
+#if defined p7OPROFILE_AVX512_TESTDRIVE || p7OPROFILE_AVX512_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_AVX512 or not
 
-
-/*****************************************************************
- * @LICENSE@
- *   
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

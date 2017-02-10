@@ -1,4 +1,4 @@
-/*  SSE versions of Routines for the P7_OPROFILE structure:  
+/* SSE version of routines for the P7_OPROFILE structure:  
  * a search profile in an optimized implementation.
  * 
  * Contents:
@@ -6,21 +6,17 @@
  *   2. Conversion from generic P7_PROFILE to optimized P7_OPROFILE
  *   3. Conversion from optimized P7_OPROFILE to compact score arrays
  *   4. Debugging and development utilities.
- *   5. Benchmark driver.
- *   6. Example.
- *   7. Copyright and license information.
  */
 #include "p7_config.h"
+#ifdef eslENABLE_SSE
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>		/* roundf() */
 
-#if p7_CPU_ARCH == intel
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
-#endif /* intel arch */
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -52,16 +48,12 @@
 P7_OPROFILE *
 p7_oprofile_Create_sse(int allocM, const ESL_ALPHABET *abc)
 {
-#ifdef HAVE_SSE2
-
   int          status;
   P7_OPROFILE *om  = NULL;
   int          nqb = P7_NVB(allocM); /* # of uchar vectors needed for query */
   int          nqw = P7_NVW(allocM); /* # of sword vectors needed for query */
   int          nqf = P7_NVF(allocM); /* # of float vectors needed for query */
   int          nqs = nqb + p7O_EXTRA_SB;
-
-
   int          x;
 
   /* level 0 */
@@ -93,7 +85,7 @@ p7_oprofile_Create_sse(int allocM, const ESL_ALPHABET *abc)
 
   /* level 1 */
   ESL_ALLOC(om->rbv_mem, sizeof(__m128i) * nqb  * abc->Kp          +15); /* +15 is for manual 16-byte alignment */
-    ESL_ALLOC(om->sbv_mem, sizeof(__m128i) * nqs  * abc->Kp          +15); 
+  ESL_ALLOC(om->sbv_mem, sizeof(__m128i) * nqs  * abc->Kp          +15); 
   ESL_ALLOC(om->rwv_mem, sizeof(__m128i) * nqw  * abc->Kp          +15);                     
   ESL_ALLOC(om->twv_mem, sizeof(__m128i) * nqw  * p7O_NTRANS       +15);   
   ESL_ALLOC(om->rfv_mem, sizeof(__m128)  * nqf  * abc->Kp          +15);                     
@@ -164,24 +156,19 @@ p7_oprofile_Create_sse(int allocM, const ESL_ALPHABET *abc)
   om->mode       = p7_NO_MODE;
   om->nj         = 0.0f;
   return om;
+
 ERROR:
   p7_oprofile_Destroy_sse(om);
   return NULL;
-#endif /* HAVE_SSE2 */
-#ifndef HAVE_SSE2
-  return NULL; // Stub so we have something to link when we don't have SSE support
-#endif
- 
 }
 
-/* Function:  p7_oprofile_Destroy()
+/* Function:  p7_oprofile_Destroy_sse()
  * Synopsis:  Frees an optimized profile structure.
  * Incept:    SRE, Sun Nov 25 12:22:21 2007 [Casa de Gatos]
  */
 void
 p7_oprofile_Destroy_sse(P7_OPROFILE *om)
 {
-#ifdef HAVE_SSE2
   if (om == NULL) return;
 
   if (! om->is_shadow)
@@ -205,12 +192,12 @@ p7_oprofile_Destroy_sse(P7_OPROFILE *om)
       if (om->cs)        free(om->cs);
       if (om->consensus) free(om->consensus);
     }
- #endif   
-  free(om);  // This will leave dangling allocated memory if we don't have SSE support, but trying to run the SSE
-  // code without SSE support will fail spectacularly in so many ways that that's the least of our problems  
+
+  free(om);  
 }
 
-/* Function:  p7_oprofile_Sizeof()
+
+/* Function:  p7_oprofile_Sizeof_sse()
  * Synopsis:  Return the allocated size of a <P7_OPROFILE>.
  * Incept:    SRE, Wed Mar  2 10:09:21 2011 [Janelia]
  *
@@ -224,9 +211,7 @@ p7_oprofile_Destroy_sse(P7_OPROFILE *om)
 size_t
 p7_oprofile_Sizeof_sse(const P7_OPROFILE *om)
 {
- 
   size_t n   = 0;
-#ifdef HAVE_SSE2 
   int    nqb = om->allocQ16;  /* # of uchar vectors needed for query */
   int    nqw = om->allocQ8;     /* # of sword vectors needed for query */
   int    nqf = om->allocQ4;     /* # of float vectors needed for query */
@@ -249,18 +234,17 @@ p7_oprofile_Sizeof_sse(const P7_OPROFILE *om)
   n  += sizeof(__m128i *) * om->abc->Kp;          /* om->rbv       */
   n  += sizeof(__m128i *) * om->abc->Kp;          /* om->sbv       */
   n  += sizeof(__m128i *) * om->abc->Kp;          /* om->rwv       */
- n  += sizeof(__m128  *) * om->abc->Kp;          /* om->rfv       */
+  n  += sizeof(__m128  *) * om->abc->Kp;          /* om->rfv       */
 
   n  += sizeof(char) * (om->allocM+2);            /* om->rf        */
   n  += sizeof(char) * (om->allocM+2);            /* om->mm        */
   n  += sizeof(char) * (om->allocM+2);            /* om->cs        */
   n  += sizeof(char) * (om->allocM+2);            /* om->consensus */
-#endif
   return n;
 }
 
 
-/* Function:  p7_oprofile_Clone()
+/* Function:  p7_oprofile_Clone_sse()
  * Synopsis:  Create a new copy of an optimized profile structure.
  * Incept:    SRE, Sun Nov 25 12:03:19 2007 [Casa de Gatos]
  *
@@ -274,8 +258,7 @@ p7_oprofile_Clone_sse(const P7_OPROFILE *om1)
 {
   const ESL_ALPHABET *abc = om1->abc;
   P7_OPROFILE  *om2  = NULL;
-#ifdef HAVE_SSE2
- int           nqb  = P7_NVB(om1->allocM); /* # of uchar vectors needed for query */
+  int           nqb  = P7_NVB(om1->allocM); /* # of uchar vectors needed for query */
   int           nqw  = P7_NVW(om1->allocM); /* # of sword vectors needed for query */
   int           nqf  = P7_NVF(om1->allocM); /* # of float vectors needed for query */
   int           nqs  = nqb + p7O_EXTRA_SB;
@@ -291,14 +274,14 @@ p7_oprofile_Clone_sse(const P7_OPROFILE *om1)
   om2->sbv_mem   = NULL;
   om2->rwv_mem   = NULL;
   om2->twv_mem   = NULL;
-   om2->rfv_mem   = NULL;
+  om2->rfv_mem   = NULL;
   om2->tfv_mem   = NULL;
  
   om2->rbv       = NULL;
   om2->sbv       = NULL;
   om2->rwv       = NULL;
   om2->twv       = NULL;
-    om2->rfv       = NULL;
+  om2->rfv       = NULL;
   om2->tfv       = NULL;
 
   om2->is_shadow = FALSE;  // om1 can be a shadow, but the resulting copy is a full-fledged profile
@@ -332,13 +315,11 @@ p7_oprofile_Clone_sse(const P7_OPROFILE *om1)
   memcpy(om2->sbv[0], om1->sbv[0], sizeof(__m128i) * nqs  * abc->Kp);
   om2->rwv[0] = (__m128i *) (((unsigned long int) om2->rwv_mem + 15) & (~0xf));
   om2->twv    = (__m128i *) (((unsigned long int) om2->twv_mem + 15) & (~0xf));
-   memcpy(om2->rwv[0], om1->rwv[0], sizeof(__m128i) * nqw  * abc->Kp);
-     om2->rfv[0] = (__m128  *) (((unsigned long int) om2->rfv_mem + 15) & (~0xf));
+  memcpy(om2->rwv[0], om1->rwv[0], sizeof(__m128i) * nqw  * abc->Kp);
+  om2->rfv[0] = (__m128  *) (((unsigned long int) om2->rfv_mem + 15) & (~0xf));
   om2->tfv    = (__m128  *) (((unsigned long int) om2->tfv_mem + 15) & (~0xf));
 
   /* copy the vector data */
-
- 
   memcpy(om2->rfv[0], om1->rfv[0], sizeof(__m128i) * nqf  * abc->Kp);
 
   /* set the rest of the row pointers for match emissions */
@@ -347,7 +328,6 @@ p7_oprofile_Clone_sse(const P7_OPROFILE *om1)
     om2->sbv[x] = om2->sbv[0] + (x * nqs);
     om2->rwv[x] = om2->rwv[0] + (x * nqw);
     om2->rfv[x] = om2->rfv[0] + (x * nqf);
- 
   }
   om2->allocQ16  = nqb;
   om2->allocQ8   = nqw;
@@ -407,16 +387,11 @@ p7_oprofile_Clone_sse(const P7_OPROFILE *om1)
   om2->nj         = om1->nj;
   om2->max_length = om1->max_length;
   return om2;
- #endif // HAVE_SSE2
- #ifndef HAVE_SSE2
- return NULL;
- #endif 
 
  ERROR:
   p7_oprofile_Destroy(om2);
   return NULL;
 }
-
 /*----------------- end, P7_OPROFILE structure ------------------*/
 
 
@@ -425,7 +400,7 @@ p7_oprofile_Clone_sse(const P7_OPROFILE *om1)
  * 2. Conversion from generic P7_PROFILE to optimized P7_OPROFILE
  *****************************************************************/
 
-/* sf_conversion():
+/* sf_conversion_sse():
  * Author: Bjarne Knudsen
  * 
  * Generates the SSVFilter() parts of the profile <om> scores
@@ -440,15 +415,13 @@ p7_oprofile_Clone_sse(const P7_OPROFILE *om1)
 int
 sf_conversion_sse(P7_OPROFILE *om)
 {
-   int     x;     /* counter over residues                                        */
-  int     q;      /* q counts over total # of striped vectors, 0..nq-1           */
-  int     M   = om->M;		/* length of the query                                          */
+  int     x;             // counter over residues
+  int     q;             // q counts over total # of striped vectors, 0..nq-1
+  int     M   = om->M;	 // length of the query
 
-
-#ifdef HAVE_SSE2
   __m128i tmp;
   __m128i tmp2;
-  int     nq  = P7_NVB(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVB(M);     // segment length; total # of striped vectors needed   
 
   /* We now want to fill out om->sbv with om->rbv - bias for use in the
    * SSV filter. The only challenge is that the om->rbv values are
@@ -470,7 +443,6 @@ sf_conversion_sse(P7_OPROFILE *om)
    * is that we wish the transformation to be fast, especially for
    * hmmscan where many models are loaded.
    */
-
   tmp = _mm_set1_epi8((int8_t) (om->bias_b + 127));
   tmp2  = _mm_set1_epi8(127);
 
@@ -481,13 +453,9 @@ sf_conversion_sse(P7_OPROFILE *om)
     }
 
   return eslOK;
-#endif // HAVE_SSE2
-#ifndef HAVE_SSE2
-  return eslENORESULT;
-#endif  
 }
 
-/* mf_conversion(): 
+/* mf_conversion_sse(): 
  * 
  * This builds the MSVFilter() parts of the profile <om>, scores
  * in lspace uchars (16-way parallel), by rescaling, rounding, and
@@ -499,11 +467,9 @@ sf_conversion_sse(P7_OPROFILE *om)
 int
 mf_conversion_sse(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
-#ifdef HAVE_SSE2  
   int     M   = gm->M;		/* length of the query                                          */
-  int     nq  = P7_NVB(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVB(M);      /* segment length; total # of striped vectors needed            */
   union { __m128i v; uint8_t i[16]; } tmp; /* used to align and load simd minivectors           */
-
   float   max = 0.0;		/* maximum residue score: used for unsigned emission score bias */
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
@@ -537,14 +503,10 @@ mf_conversion_sse(const P7_PROFILE *gm, P7_OPROFILE *om)
   sf_conversion_sse(om);
 
   return eslOK;
-#endif //HAVE_SSE2
-#ifndef HAVE_SSE2
-  return eslENORESULT;
-#endif  
 }
 
 
-/* vf_conversion(): 
+/* vf_conversion_sse(): 
  * 
  * This builds the ViterbiFilter() parts of the profile <om>, scores
  * in lspace swords (8-way parallel), by rescaling, rounding, and
@@ -556,13 +518,9 @@ mf_conversion_sse(const P7_PROFILE *gm, P7_OPROFILE *om)
 int
 vf_conversion_sse(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
-#ifdef HAVE_SSE2  
   int     M   = gm->M;		/* length of the query                                          */
-  
-  int     nq  = P7_NVW(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVW(M);      /* segment length; total # of striped vectors needed            */
   union { __m128i v; int16_t i[8]; } tmp; /* used to align and load simd minivectors            */
-  if (nq > om->allocQ8) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
-
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
   int     k;			/* the usual counter over model nodes 1..M                      */
@@ -575,6 +533,7 @@ vf_conversion_sse(const P7_PROFILE *gm, P7_OPROFILE *om)
   int16_t  maxval;		/* used to prevent zero cost II                                 */
   int16_t  val;
 
+  if (nq > om->allocQ8) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
 
   /* First set the basis for the limited-precision scoring system. 
    * Default: 1/500 bit units, base offset 12000:  range -32768..32767 => -44768..20767 => -89.54..41.53 bits
@@ -587,8 +546,8 @@ vf_conversion_sse(const P7_PROFILE *gm, P7_OPROFILE *om)
   for (x = 0; x < gm->abc->Kp; x++) {
     for (k = 1, q = 0; q < nq; q++, k++)
       {
-	       for (z = 0; z < 8; z++) tmp.i[z] = ((k+ z*nq <= M) ? wordify(om, P7P_MSC(gm, k+z*nq, x)) : -32768);
-	       om->rwv[x][q]   = tmp.v;
+	for (z = 0; z < 8; z++) tmp.i[z] = ((k+ z*nq <= M) ? wordify(om, P7P_MSC(gm, k+z*nq, x)) : -32768);
+	om->rwv[x][q]   = tmp.v;
       }
   }
 
@@ -653,21 +612,16 @@ vf_conversion_sse(const P7_PROFILE *gm, P7_OPROFILE *om)
     }
 
   return eslOK;
-#endif //HAVE_SSE2
-#ifndef HAVE_SSE2
-  return eslENORESULT;
-#endif
 }
 
 
-/* fb_conversion()
+/* fb_conversion_sse()
  * This builds the Forward/Backward part of the optimized profile <om>,
  * where we use odds ratios (not log-odds scores).
  */
 int
 fb_conversion_sse(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
- #ifdef HAVE_SSE2 
   int     M   = gm->M;		/* length of the query                                          */
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
@@ -730,10 +684,6 @@ fb_conversion_sse(const P7_PROFILE *gm, P7_OPROFILE *om)
   om->xf[p7O_J][p7O_MOVE] = expf(gm->xsc[p7P_J][p7P_MOVE]);
 
   return eslOK;
- #endif // HAVE_SSE2
- #ifndef HAVE_SSE2
-  return eslENORESULT;
-#endif 
 }
 
 /*------------ end, conversions to P7_OPROFILE ------------------*/
@@ -742,7 +692,7 @@ fb_conversion_sse(const P7_PROFILE *gm, P7_OPROFILE *om)
  * 3. Conversion from optimized P7_OPROFILE to compact score arrays
  *******************************************************************/
 
-/* Function:  p7_oprofile_GetFwdTransitionArray()
+/* Function:  p7_oprofile_GetFwdTransitionArray_sse()
  * Synopsis:  Retrieve full 32-bit float transition probabilities from an
  *            optimized profile into a flat array
  *
@@ -762,7 +712,6 @@ fb_conversion_sse(const P7_PROFILE *gm, P7_OPROFILE *om)
 int
 p7_oprofile_GetFwdTransitionArray_sse(const P7_OPROFILE *om, int type, float *arr )
 {
-#ifdef HAVE_SSE2
   int     nq  = P7_NVF(om->M);     /* # of striped vectors needed            */
   int i, j;
   union { __m128 v; float x[4]; } tmp; /* used to align and read simd minivectors               */
@@ -777,13 +726,9 @@ p7_oprofile_GetFwdTransitionArray_sse(const P7_OPROFILE *om, int type, float *ar
   }
 
   return eslOK;
-#endif
-#ifndef HAVE_SSE2
-  return eslENORESULT;
-#endif
 }
 
-/* Function:  p7_oprofile_GetMSVEmissionScoreArray()
+/* Function:  p7_oprofile_GetMSVEmissionScoreArray_sse()
  * Synopsis:  Retrieve MSV residue emission scores from an optimized
  *            profile into an array
  *
@@ -809,12 +754,11 @@ p7_oprofile_GetFwdTransitionArray_sse(const P7_OPROFILE *om, int type, float *ar
 int
 p7_oprofile_GetMSVEmissionScoreArray_sse(const P7_OPROFILE *om, uint8_t *arr )
 {
-#ifdef HAVE_SSE2  
   int x, q, z, k;
- int      M   = om->M;    /* length of the query                                          */
+  int      M   = om->M;                     // length of the query
   int      K   = om->abc->Kp;
-  union { __m128i v; uint8_t i[16]; } tmp; /* used to align and read simd minivectors           */
-  int      nq  = P7_NVB(M);     /* segment length; total # of striped vectors needed            */
+  union { __m128i v; uint8_t i[16]; } tmp;  // used to align and read simd minivectors
+  int      nq  = P7_NVB(M);                 // segment length; total # of striped vectors needed   
 
   int cell_cnt = (om->M + 1) * K;
   for (x = 0; x < K ; x++) {
@@ -827,14 +771,10 @@ p7_oprofile_GetMSVEmissionScoreArray_sse(const P7_OPROFILE *om, uint8_t *arr )
   }
 
   return eslOK;
- #endif //HAVE_SSE2
- #ifndef HAVE_SSE2
-  return eslENORESULT;
-#endif
 }
 
 
-/* Function:  p7_oprofile_GetFwdEmissionScoreArray()
+/* Function:  p7_oprofile_GetFwdEmissionScoreArray_sse()
  * Synopsis:  Retrieve Fwd (float) residue emission scores from an optimized
  *            profile into an array
  *
@@ -859,12 +799,11 @@ p7_oprofile_GetMSVEmissionScoreArray_sse(const P7_OPROFILE *om, uint8_t *arr )
 int
 p7_oprofile_GetFwdEmissionScoreArray_sse(const P7_OPROFILE *om, float *arr )
 {
-#ifdef HAVE_SSE2  
   int x, q, z, k;
-  union { __m128 v; float f[4]; } tmp; /* used to align and read simd minivectors               */
-  int      M   = om->M;    /* length of the query                                          */
+  union { __m128 v; float f[4]; } tmp;   // used to align and read simd minivectors   
+  int      M   = om->M;                  // length of the query
   int      K   = om->abc->Kp;
-  int      nq  = P7_NVF(M);     /* segment length; total # of striped vectors needed            */
+  int      nq  = P7_NVF(M);              // segment length; total # of striped vectors needed 
   int cell_cnt = (om->M + 1) * K;
 
   for (x = 0; x < K; x++) {
@@ -876,13 +815,9 @@ p7_oprofile_GetFwdEmissionScoreArray_sse(const P7_OPROFILE *om, float *arr )
       }
   }
   return eslOK;
-#endif //HAVE_SSE2
- #ifndef HAVE_SSE2
-  return eslENORESULT;
-#endif
 }
 
-/* Function:  p7_oprofile_GetFwdEmissionArray()
+/* Function:  p7_oprofile_GetFwdEmissionArray_sse()
  * Synopsis:  Retrieve Fwd (float) residue emission values from an optimized
  *            profile into an array
  *
@@ -907,15 +842,14 @@ p7_oprofile_GetFwdEmissionScoreArray_sse(const P7_OPROFILE *om, float *arr )
  * Throws:    (no abnormal error conditions)
  */
 int
-p7_oprofile_GetFwdEmissionArray_sse(const P7_OPROFILE *om, P7_BG *bg, float *arr )
+p7_oprofile_GetFwdEmissionArray_sse(const P7_OPROFILE *om, P7_BG *bg, float *arr)
 {
-#ifdef HAVE_SSE2
   int x, q, z, k;
-  union { __m128 v; float f[4]; } tmp; /* used to align and read simd minivectors               */
-  int      M   = om->M;    /* length of the query                                          */
+  union { __m128 v; float f[4]; } tmp;   // used to align and read simd minivectors
+  int      M   = om->M;                  // length of the query
   int      Kp  = om->abc->Kp;
   int      K   = om->abc->K;
-  int      nq  = P7_NVF(M);     /* segment length; total # of striped vectors needed            */
+  int      nq  = P7_NVF(M);              // segment length; total # of striped vectors needed  
   int cell_cnt = (om->M + 1) * Kp;
 
   for (x = 0; x < K; x++) {
@@ -927,14 +861,10 @@ p7_oprofile_GetFwdEmissionArray_sse(const P7_OPROFILE *om, P7_BG *bg, float *arr
       }
   }
 
-  //degeneracy emissions for each position
+  // degeneracy emissions for each position
   for (x = 0; x <= M; x++)
     esl_abc_FExpectScVec(om->abc, arr+Kp*x, bg->f);
   return eslOK;
-#endif //HAVE_SSE2
- #ifndef HAVE_SSE2
-  return eslENORESULT;
-#endif
 }
 /*------------ end, conversions from P7_OPROFILE ------------------*/
 
@@ -943,20 +873,16 @@ p7_oprofile_GetFwdEmissionArray_sse(const P7_OPROFILE *om, P7_BG *bg, float *arr
  * 4. Debugging and development utilities.
  *****************************************************************/
 
-
-/* oprofile_dump_mf()
+/* oprofile_dump_mf_sse()
  * 
  * Dump the MSVFilter part of a profile <om> to <stdout>.
- */
+ */n
 int
 oprofile_dump_mf_sse(FILE *fp, const P7_OPROFILE *om)
 {
-#ifdef HAVE_SSE2  
   int     M   = om->M;		/* length of the query                                          */
-
-  int     nq  = P7_NVB(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVB(M);      /* segment length; total # of striped vectors needed            */
   union { __m128i v; uint8_t i[16]; } tmp; /* used to align and read simd minivectors           */
-
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
   int     k;			/* counter over nodes 1..M                                      */
@@ -999,22 +925,17 @@ oprofile_dump_mf_sse(FILE *fp, const P7_OPROFILE *om)
   fprintf(fp, "Q:          %4d\n",  nq);  
   fprintf(fp, "M:          %4d\n",  M);  
   return eslOK;
-  #endif //HAVE_SSE2
- #ifndef HAVE_SSE2
-  return eslENORESULT;
-#endif
 }
 
 
-/* oprofile_dump_vf()
+/* oprofile_dump_vf_sse()
  * 
  * Dump the ViterbiFilter part of a profile <om> to <stdout>.
  */
 int oprofile_dump_vf_sse(FILE *fp, const P7_OPROFILE *om)
 {
- #ifdef HAVE_SSE2 
   int     M   = om->M;		/* length of the query                                          */
-  int     nq  = P7_NVW(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVW(M);      /* segment length; total # of striped vectors needed            */
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
   int     k;			/* the usual counter over model nodes 1..M                      */
@@ -1022,8 +943,7 @@ int oprofile_dump_vf_sse(FILE *fp, const P7_OPROFILE *om)
   int     z;			/* counter within elements of one SIMD minivector               */
   int     t;			/* counter over transitions 0..7 = p7O_{BM,MM,IM,DM,MD,MI,II,DD}*/
   int     j;			/* counter in interleaved vector arrays in the profile          */
-
-  union { __m128i v; int16_t i[8]; } tmp; /* used to align and read simd minivectors           */
+  union { __m128i v; int16_t i[8]; } tmp; /* used to align and read simd minivectors            */
 
   /* Emission score header (rearranged column numbers, in the vectors)  */
   fprintf(fp, "     ");
@@ -1126,16 +1046,11 @@ int oprofile_dump_vf_sse(FILE *fp, const P7_OPROFILE *om)
   fprintf(fp, "Q:     %6d\n",   nq);  
   fprintf(fp, "M:     %6d\n",   M);  
 
-
   return eslOK;
-  #endif //HAVE_SSE2
- #ifndef HAVE_SSE2
-  return eslENORESULT;
-#endif
 }
 
 
-/* oprofile_dump_fb()
+/* oprofile_dump_fb_sse()
  * 
  * Dump the Forward/Backward part of a profile <om> to <stdout>.
  * <width>, <precision> control the floating point output:
@@ -1145,9 +1060,8 @@ int oprofile_dump_vf_sse(FILE *fp, const P7_OPROFILE *om)
 int
 oprofile_dump_fb_sse(FILE *fp, const P7_OPROFILE *om, int width, int precision)
 {
-#ifdef HAVE_SSE2  
   int     M   = om->M;		/* length of the query                                          */
-  int     nq  = P7_NVF(M);     /* segment length; total # of striped vectors needed            */
+  int     nq  = P7_NVF(M);      /* segment length; total # of striped vectors needed            */
   int     x;			/* counter over residues                                        */
   int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
   int     k;			/* the usual counter over model nodes 1..M                      */
@@ -1156,6 +1070,7 @@ oprofile_dump_fb_sse(FILE *fp, const P7_OPROFILE *om, int width, int precision)
   int     t;			/* counter over transitions 0..7 = p7O_{BM,MM,IM,DM,MD,MI,II,DD}*/
   int     j;			/* counter in interleaved vector arrays in the profile          */
   union { __m128 v; float x[4]; } tmp; /* used to align and read simd minivectors               */
+
   /* Residue emissions */
   for (x = 0; x < om->abc->Kp; x++)
     {
@@ -1252,13 +1167,10 @@ oprofile_dump_fb_sse(FILE *fp, const P7_OPROFILE *om, int width, int precision)
   fprintf(fp, "M:     %d\n",   M);  
 
   return eslOK;
-#endif //HAVE_SSE2
- #ifndef HAVE_SSE2
-  return eslENORESULT;
-#endif
 }
 
-/* Function:  p7_oprofile_Compare()
+
+/* Function:  p7_oprofile_Compare_sse()
  * Synopsis:  Compare two optimized profiles for equality.
  * Incept:    SRE, Wed Jan 21 13:29:10 2009 [Janelia]
  *
@@ -1285,19 +1197,15 @@ oprofile_dump_fb_sse(FILE *fp, const P7_OPROFILE *om, int width, int precision)
 int
 p7_oprofile_Compare_sse(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg)
 {
-  if(om1->simd != om2->simd){
-    ESL_FAIL(eslFAIL, errmsg, "profiles were built for different SIMD ISAs");
-  }
-
-#ifdef HAVE_SSE2 
   int q, r, x, y;
- int Q4  = P7_NVF(om1->M);
+  int Q4  = P7_NVF(om1->M);
   int Q8  = P7_NVW(om1->M);
   int Q16 = P7_NVB(om1->M); 
   union { __m128i v; uint8_t c[16]; } a16, b16;
   union { __m128i v; int16_t w[8];  } a8,  b8;
   union { __m128  v; float   x[4];  } a4,  b4;
 
+  if (om1->simd      != om2->simd)      ESL_FAIL(eslFAIL, errmsg, "profiles were built for different SIMD ISAs");
   if (om1->mode      != om2->mode)      ESL_FAIL(eslFAIL, errmsg, "comparison failed: mode");
   if (om1->L         != om2->L)         ESL_FAIL(eslFAIL, errmsg, "comparison failed: L");
   if (om1->M         != om2->M)         ESL_FAIL(eslFAIL, errmsg, "comparison failed: M");
@@ -1371,17 +1279,15 @@ p7_oprofile_Compare_sse(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float to
    if (esl_vec_FCompare(om1->compo,   om2->compo,   p7_MAXABET,  tol) != eslOK) ESL_FAIL(eslFAIL, errmsg, "comparison failed: compo vector");
 
    return eslOK;
-   #endif //HAVE_SSE2
- #ifndef HAVE_SSE2
-  return eslENORESULT;
-#endif
 }
-
 /*------------ end, P7_OPROFILE debugging tools  ----------------*/
 
-/*****************************************************************
- * @LICENSE@
- *   
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+
+#else // ! eslENABLE_SSE
+
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_oprofile_sse_silence_hack(void) { return; }
+#if defined p7OPROFILE_SSE_TESTDRIVE || p7OPROFILE_SSE_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_SSE or not

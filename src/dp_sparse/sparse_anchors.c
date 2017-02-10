@@ -8,7 +8,6 @@
  *     4. Footnotes 
  *     5. Statistics driver
  *     6. Example
- *     7. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -1087,7 +1086,7 @@ main(int argc, char **argv)
   P7_OPROFILE    *om      = NULL;
   P7_FILTERMX    *fx      = p7_filtermx_Create(100);
   P7_CHECKPTMX   *cx      = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT));
-  P7_SPARSEMASK  *sm      = p7_sparsemask_Create(100, 100);
+  P7_SPARSEMASK  *sm      = p7_sparsemask_Create(100, 100, p7_VDEFAULT);
   P7_ANCHORS     *anch    = p7_anchors_Create();
   P7_ANCHORS     *vanch   = p7_anchors_Create();
   P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
@@ -1304,7 +1303,7 @@ main(int argc, char **argv)
 
   /* Make a sparse mask, <sm> */
   cx = p7_checkptmx_Create(hmm->M, sq->n, ESL_MBYTES(32));
-  sm = p7_sparsemask_Create(gm->M, sq->n);
+  sm = p7_sparsemask_Create(gm->M, sq->n, p7_VDEFAULT);
   if (esl_opt_GetBoolean(go, "-a")) 
     p7_sparsemask_AddAll(sm);
   else {
@@ -1372,9 +1371,3 @@ main(int argc, char **argv)
   return 0;
 }
 #endif /*p7SPARSE_ANCHORS_EXAMPLE*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

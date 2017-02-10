@@ -13,7 +13,6 @@
  * 
  * Contents:
  *   1. MPL Forward.
- *   x. Copyright and license information.
  */
 
 #include "p7_config.h"
@@ -430,11 +429,6 @@ main(int argc, char **argv)
 
 
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+
 
 

@@ -4,7 +4,6 @@
  *    1. Communicating P7_HMM, a core model.
  *    2. Unit tests.
  *    3. Test driver.
- *    4. Copyright and license information.
  */
 #include "p7_config.h"		/* p7_config.h defines HAVE_MPI, if we're using MPI... */
 #ifdef HAVE_MPI			/* and then this #ifdef wraps almost the entire file.  */
@@ -620,12 +619,5 @@ int main(void) { return 0; }
  *     off_t      extended signed int   int64_t      int64_t     
  *     esl_pos_t  signed int            int64_t      int64_t          
  *      
- *****************************************************************/
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
  *****************************************************************/
 

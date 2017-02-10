@@ -23,16 +23,18 @@
  * 1. The P7_SPARSEMASK structure
  *****************************************************************/
 
-/* Maximum width of SIMD vectors in any implementation.
+/* Maximum width of SIMD vectors in any compiled implementation.
  * (Current widest = AVX-512.)  
  * Perhaps this should be in dp_vector/simdvec.h, or even p7_config.h
+ * We could check for what implementations we support.
  */
-#define p7_MAXVB  64  // in bytes
-#define p7_MAXVW  32  // in words (int16)
-#define p7_MAXVF  16  // in floats (or int32)
+#define p7_MAXVB  64       // in bytes
+#define p7_MAXVW  32       // in words (int16)
+#define p7_MAXVF  16       // in floats (or int32)
 
+#define p7_VDEFAULT 4      // default/placeholder V to use in sparsemask_Create(), _Reinit() calls outside vector code
 
-typedef struct p7_sparsemask_seg_s {
+struct p7_sparsemask_seg_s {
     int ia;                // <seg[s]> = ia,ib pairs for each segment <s>, s=1..nseg. 
     int ib;                //    also, seg[0] and seg[nseg+1] contain sentinel values. 
 };

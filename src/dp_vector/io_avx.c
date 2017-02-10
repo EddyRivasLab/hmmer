@@ -1,33 +1,9 @@
-/* Saving optimized profiles in two pieces: MSV part and the rest.
+/* Input/output of vectorized profiles: x86 AVX vector implementation.
  * 
- * To accelerate hmmscan, which is limited by speed of HMM input,
- * hmmpress saves an optimized profile in two pieces. One file gets
- * a bare minimum of information needed to run the MSV filter.
- * The other file gets the rest of the profile. Both files are binary,
- * stored exactly as the <P7_OPROFILE> has the information internally.
- * 
- * By convention, hmmpress calls the two files <hmmfile>.h3f and
- * <hmmfile>.h3p, which nominally stand for "H3 filter" and "H3
- * profile".
- * 
- * Contents:
- *    1. Writing optimized profiles to two files.
- *    2. Reading optimized profiles in two stages.
- *    3. Utility routines.
- *    4. Benchmark driver.
- *    5. Unit tests.
- *    6. Test driver.
- *    7. Example.
- *    8. Copyright and license information.
- *    
- * TODO:
- *    - crossplatform binary compatibility (endedness and off_t)
- *    - Write() could save a tag (model #) instead of name for verifying
- *      that MSV and Rest parts match, saving a malloc for var-lengthed name
- *      in ReadRest().
- *    
+ * This file is conditionally compiled, when eslENABLE_AVX is defined.
  */
 #include "p7_config.h"
+#ifdef eslENABLE_AVX
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,14 +13,11 @@
 #include <pthread.h>
 #endif
 
-#if p7_CPU_ARCH == intel
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
-#endif
+#include <x86intrin.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
-#include "simdvec.h"
+
 #include "base/p7_hmmfile.h"
 
 #include "dp_vector/simdvec.h"
@@ -71,52 +44,22 @@ static uint32_t  v3a_fmagic = 0xe8b3e6f3; /* 3/a binary MSV file, SSE:     "h3fs
 static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file, SSE: "h3ps" = 0x 68 33 70 73  + 0x80808080 */
 
 
-/*****************************************************************
- *# 1. Writing optimized profiles to two files.
- *****************************************************************/
-
-/* Function:  p7_oprofile_Write()
- * Synopsis:  Write an optimized profile in two files.
- *
- * Purpose:   Write the MSV filter part of <om> to open binary stream
- *            <ffp>, and the rest of the model to <pfp>. These two
- *            streams will typically be <.h3f> and <.h3p> files 
- *            being created by hmmpress.
- *
- * Args:      ffp  - open binary stream for saving MSV filter part
- *            pfp  - open binary stream for saving rest of profile
- *            om   - optimized profile to save
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    <eslEWRITE> on any write failure, such as filling
- *            the disk.
+/* Function:  p7_oprofile_Write_avx()
+ * See:       io.c::p7_oprofile_Write()
  */
-
 int
 p7_oprofile_Write_avx(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
 {
-
-#ifdef HAVE_AVX2
-  int Q4   = P7_NVF_AVX(om->M);
-  printf("om->M = %d\n",om->M );
-  int Q8   = P7_NVW_AVX(om->M);
-  printf("om->M = %d\n",om->M );
-  int Q16  = P7_NVB_AVX(om->M);
-  printf("om->M = %d\n",om->M );
-  int Q16x = P7_NVB_AVX(om->M) + p7O_EXTRA_SB;
-  printf("om->M = %d\n",om->M );
   int n    = strlen(om->name);
-  printf("om->M = %d\n",om->M );
   int x;
+  int byte_vector_length        = P7_NVB(om->M,32) * 32;                  // # of 256-bit vectors required to hold M bytes * 32 bytes/vector
+  int padded_byte_vector_length = (P7_NVB(om->M,32) + p7O_EXTRA_SB) * 32; // # of 256-bit vectors required to hold M bytes + extras * 32 bytes/vector
+  int short_vector_length       = P7_NVW(om->M,32) * 16;                  // # of 256-bit vectors required to hold M shorts * 16 shorts/vector
+  int float_vector_length       = P7_NVF(om->M,32) * 8;                   // # of 256-bit vectors required to hold M floats * 8 floats/vector
+  __m128i *tmp_buffer = NULL;  // buffer used for restriping values into 128-bit format
   int status; 
-  int byte_vector_length = P7_NVB_AVX(om->M) * 32; // # of 256-bit vectors required to hold M bytes * 32 bytes/vector
-  int padded_byte_vector_length = (P7_NVB_AVX(om->M) + p7O_EXTRA_SB) * 32; // # of 128-bit vectors required to hold M bytes + extras * 32 bytes/vector
-  int short_vector_length = P7_NVW_AVX(om->M) * 16;  // # of 256-bit vectors required to hold M shorts * 16 shorts/vector
-  int float_vector_length = P7_NVF_AVX(om->M) * 8;  // # of 256-bit vectors required to hold M floats * 8 shorts/vector
 
- __m128i *tmp_buffer;  // buffer used for restriping values into 128-bit format
- ESL_ALLOC(tmp_buffer, sizeof(__m256i) * ESL_MAX((P7_NVF_AVX(om->M) * 8), P7_NVB_AVX(om->M)+ p7O_EXTRA_SB));  
+ ESL_ALLOC(tmp_buffer, sizeof(__m256i) * ESL_MAX((P7_NVF(om->M,32) * 8), P7_NVB(om->M,32)+ p7O_EXTRA_SB));  
  // allocate buffer for the largest size we'll need, which is when
  // we have M floating-point values or when we have a very small M and p70_EXTRA_SB dominates
 
@@ -135,12 +78,12 @@ p7_oprofile_Write_avx(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   if (fwrite((char *) &(om->bias_b),    sizeof(uint8_t),  1,           ffp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");  
 
   for (x = 0; x < om->abc->Kp; x++){
-    p7_restripe_byte((char *) om->sbv_AVX[x], (char *) tmp_buffer, padded_byte_vector_length, 256, 128);
-    if (fwrite( (char *) tmp_buffer,    sizeof(char),  padded_byte_vector_length,        ffp) != padded_byte_vector_length)        ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+    p7_restripe_byte((char *) om->sbv[x], (char *) tmp_buffer, padded_byte_vector_length, 256, 128);
+    if (fwrite( (char *) tmp_buffer,    sizeof(char),  padded_byte_vector_length,  ffp) != padded_byte_vector_length)  ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   } 
   
   for (x = 0; x < om->abc->Kp; x++){
-    p7_restripe_byte((char *) om->rbv_AVX[x], (char *) tmp_buffer, byte_vector_length, 256, 128);
+    p7_restripe_byte((char *) om->rbv[x], (char *) tmp_buffer, byte_vector_length, 256, 128);
     if (fwrite( (char *) tmp_buffer,    sizeof(char),  byte_vector_length,         ffp) != byte_vector_length)         ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   }
   if (fwrite((char *) om->evparam,      sizeof(float),    p7_NEVPARAM, ffp) != p7_NEVPARAM) ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
@@ -179,12 +122,12 @@ p7_oprofile_Write_avx(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   if (fwrite((char *) om->consensus,    sizeof(char),     om->M+2,     pfp) != om->M+2)     ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
 
   /* ViterbiFilter part */
-   p7_restripe_short((int16_t *) om->twv_AVX, (int16_t *) tmp_buffer, short_vector_length*8, 256, 128);
-  if (fwrite((int16_t *) tmp_buffer,             sizeof(int16_t),  short_vector_length*8,        pfp) != short_vector_length*8)        ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+  p7_restripe_short((int16_t *) om->twv, (int16_t *) tmp_buffer, short_vector_length*8, 256, 128);
+  if (fwrite((int16_t *) tmp_buffer,     sizeof(int16_t),  short_vector_length*8,      pfp) != short_vector_length*8) ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   
   for (x = 0; x < om->abc->Kp; x++){
-    p7_restripe_short((int16_t *) om->rwv_AVX[x], (int16_t *) tmp_buffer, short_vector_length, 256, 128);
-    if (fwrite( (int16_t *) tmp_buffer,       sizeof(int16_t), short_vector_length,          pfp) != short_vector_length)          ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+    p7_restripe_short((int16_t *) om->rwv[x], (int16_t *) tmp_buffer, short_vector_length, 256, 128);
+    if (fwrite( (int16_t *) tmp_buffer, sizeof(int16_t), short_vector_length,          pfp) != short_vector_length)   ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   }
   
   for (x = 0; x < p7O_NXSTATES; x++)
@@ -196,12 +139,12 @@ p7_oprofile_Write_avx(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   if (fwrite((char *) &(om->ncj_roundoff), sizeof(float),    1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
 
   /* Forward/Backward part */
-  p7_restripe_float((float*) om->tfv_AVX, (float *) tmp_buffer, float_vector_length*8, 256, 128);
-  if (fwrite((float *) tmp_buffer,          sizeof(float),   8*float_vector_length,        pfp) != 8*float_vector_length)        ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+  p7_restripe_float((float*) om->tfv, (float *) tmp_buffer, float_vector_length*8, 256, 128);
+  if (fwrite((float *) tmp_buffer,       sizeof(float),   8*float_vector_length,    pfp) != 8*float_vector_length)  ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   
   for (x = 0; x < om->abc->Kp; x++){
-    p7_restripe_float((float *) om->rfv_AVX[x], (float *) tmp_buffer, float_vector_length, 256, 128);
-    if (fwrite( (float *) tmp_buffer,    sizeof(float),   float_vector_length,          pfp) != float_vector_length)          ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
+    p7_restripe_float((float *) om->rfv[x], (float *) tmp_buffer, float_vector_length, 256, 128);
+    if (fwrite( (float *) tmp_buffer,    sizeof(float),   float_vector_length,      pfp) != float_vector_length)    ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   }
   for (x = 0; x < p7O_NXSTATES; x++)
     if (fwrite( (char *) om->xf[x],     sizeof(float),    p7O_NXTRANS, pfp) != p7O_NXTRANS) ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
@@ -216,82 +159,31 @@ p7_oprofile_Write_avx(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   return eslOK;
 
  ERROR:
-  p7_Fail("Unable to allocate memory for temporary buffer in p7_oprofile_Write_avx");
-  return eslEMEM;
-#endif
-#ifndef HAVE_AVX2
-  return eslENORESULT;
-#endif 
+  if (tmp_buffer) free(tmp_buffer);
+  return status;
 }
-/*---------------- end, writing oprofile ------------------------*/
 
 
 
 
-/*****************************************************************
- * 2. Reading optimized profiles in two stages.
- *****************************************************************/
 
-/* Function:  p7_oprofile_ReadMSV()
- * Synopsis:  Read MSV filter part of an optimized profile.
- *
- * Purpose:   Read the MSV filter part of a profile from the
- *            <.h3f> file associated with an open HMM file <hfp>.
- *            Allocate a new model, populate it with this minimal
- *            MSV filter information, and return a pointer to it
- *            in <*ret_om>. 
- *            
- *            Our alphabet may get set by the first HMM we read.  If
- *            <*byp_abc> is <NULL> at start, create a new alphabet and
- *            return a pointer to it in <*byp_abc>. If <*byp_abc> is
- *            non-<NULL>, it is assumed to be a pointer to an existing
- *            alphabet; we verify that the HMM's alphabet matches it
- *            and <*ret_abc> isn't changed.  This is the same
- *            convention used by <p7_hmmfile_Read()>.
- *            
- *            The <.h3f> file was opened automatically, if it existed,
- *            when the HMM file was opened with <p7_hmmfile_OpenE()>.
- *            
- *            When no more HMMs remain in the file, return <eslEOF>.
- *
- * Args:      hfp     - open HMM file, with associated .h3p file
- *            byp_abc - BYPASS: <*byp_abc == ESL_ALPHABET *> if known; 
- *                              <*byp_abc == NULL> if desired; 
- *                              <NULL> if unwanted.
- *            ret_om  - RETURN: newly allocated <om> with MSV filter
- *                      data filled in.
- *            
- * Returns:   <eslOK> on success. <*ret_om> is allocated here;
- *            caller free's with <p7_oprofile_Destroy()>.
- *            <*byp_abc> is allocated here if it was requested;
- *            caller free's with <esl_alphabet_Destroy()>.
- *            
- *            Returns <eslEFORMAT> if <hfp> has no <.h3f> file open,
- *            or on any parsing error.
- *            
- *            Returns <eslEINCOMPAT> if the HMM we read is incompatible
- *            with the existing alphabet <*byp_abc> led us to expect.
- *            
- *            On any returned error, <hfp->errbuf> contains an
- *            informative error message.
- *
- * Throws:    <eslEMEM> on allocation error.
+/* Function:  p7_oprofile_ReadMSV_avx()
+ * See:       io.c::p7_oprofile_ReadMSV()
  */
-
 int
 p7_oprofile_ReadMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om)
 {
-#ifdef HAVE_AVX2
   P7_OPROFILE  *om = NULL;
   ESL_ALPHABET *abc = NULL;
   uint32_t      magic;
   off_t         roff;
-  int           M, Q16, Q16x;
+  int           M;
   int           x,n;
   int           alphatype;
+  __m128i      *tmp_buffer = NULL;         // buffer used for restriping values from 128-bit format
+  int           byte_vector_length;        // # of 256-bit vectors required to hold M bytes * 32 bytes/vector
+  int           padded_byte_vector_length; // # of 256-bit vectors required to hold M bytes + extras * 32 bytes/vector
   int           status;
- __m128i *tmp_buffer;  // buffer used for restriping values from 128-bit format
-
 
   hfp->errbuf[0] = '\0';
   if (hfp->ffp == NULL) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no MSV profile file; hmmpress probably wasn't run");
@@ -310,12 +202,11 @@ p7_oprofile_ReadMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
 
   if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");  
-  Q16  = P7_NVB_AVX(M);
-  Q16x = P7_NVB_AVX(M) + p7O_EXTRA_SB;
-  ESL_ALLOC(tmp_buffer, sizeof(__m256i) * ESL_MAX((P7_NVF_AVX(M) * 8), P7_NVB_AVX(M)+ p7O_EXTRA_SB)); // allocate temporary buffer now that
-  // we know M
-  int byte_vector_length = P7_NVB_AVX(M) * 32; // # of 256-bit vectors required to hold M bytes * 32 bytes/vector
-  int padded_byte_vector_length = (P7_NVB_AVX(M) + p7O_EXTRA_SB) * 32; // # of 256-bit vectors required to hold M bytes + extras * 32 bytes/vector
+
+  ESL_ALLOC(tmp_buffer, sizeof(__m256i) * ESL_MAX((P7_NVF(M,32) * 8), P7_NVB(M,32)+ p7O_EXTRA_SB)); // allocate temporary buffer now that we know M
+  byte_vector_length        = P7_NVB(M,32) * 32;                  // # of 256-bit vectors required to hold M bytes * 32 bytes/vector
+  padded_byte_vector_length = (P7_NVB(M,32) + p7O_EXTRA_SB) * 32; // # of 256-bit vectors required to hold M bytes + extras * 32 bytes/vector
+
   /* Set or verify alphabet. */
   if (byp_abc == NULL || *byp_abc == NULL)	{	/* alphabet unknown: whether wanted or unwanted, make a new one */
     if ((abc = esl_alphabet_Create(alphatype)) == NULL)  ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: alphabet");
@@ -325,15 +216,15 @@ p7_oprofile_ReadMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
       ESL_XFAIL(eslEINCOMPAT, hfp->errbuf, "Alphabet type mismatch: was %s, but current profile says %s", 
 		esl_abc_DecodeType(abc->type), esl_abc_DecodeType(alphatype));
   }
+
   /* Now we know the sizes of things, so we can allocate. */
-  if ((om = p7_oprofile_Create(M, abc, AVX)) == NULL)         ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: oprofile");
+  if ((om = p7_oprofile_Create(M, abc)) == NULL) ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: oprofile");
   om->M = M;
   om->roff = roff;
 
   if (! fread((char *) &n,               sizeof(int),     1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name length");
   ESL_ALLOC(om->name, sizeof(char) * (n+1));
   if (! fread((char *) om->name,         sizeof(char),    n+1,         hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name");
-
   if (! fread((char *) &(om->max_length),sizeof(int),     1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read max_length");
   if (! fread((char *) &(om->tbm_b),     sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read tbm");
   if (! fread((char *) &(om->tec_b),     sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read tec");
@@ -344,14 +235,13 @@ p7_oprofile_ReadMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
   
   for (x = 0; x < abc->Kp; x++){
     if (! fread((char *) tmp_buffer,     sizeof(char), padded_byte_vector_length,        hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ssv scores at %d [residue %c]", x, abc->sym[x]); 
-     p7_restripe_byte((char *) tmp_buffer, (char*) om->sbv_AVX[x], padded_byte_vector_length, 128, 256);
+    p7_restripe_byte((char *) tmp_buffer, (char*) om->sbv[x], padded_byte_vector_length, 128, 256);
   }
   for (x = 0; x < abc->Kp; x++){
     if (! fread((char *) tmp_buffer,     sizeof(char), byte_vector_length,         hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read msv scores at %d [residue %c]", x, abc->sym[x]); 
-    p7_restripe_byte((char *) tmp_buffer, (char *) om->rbv_AVX[x], byte_vector_length, 128, 256);
+    p7_restripe_byte((char *) tmp_buffer, (char *) om->rbv[x], byte_vector_length, 128, 256);
   }
   
-
   if (! fread((char *) om->evparam,      sizeof(float),   p7_NEVPARAM, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read stat params");
   if (! fread((char *) om->offs,         sizeof(off_t),   p7_NOFFSETS, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read hmmpfam offsets");
   if (! fread((char *) om->compo,        sizeof(float),   p7_MAXABET,  hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model composition");
@@ -367,68 +257,30 @@ p7_oprofile_ReadMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
   om->mode = p7_LOCAL;
   om->nj   = 1.0f;
 
+  free(tmp_buffer);
   if (byp_abc != NULL) *byp_abc = abc;  /* pass alphabet (whether new or not) back to caller, if caller wanted it */
   *ret_om = om;
-  free(tmp_buffer);
   return eslOK;
 
  ERROR:
-  if (abc != NULL && (byp_abc == NULL || *byp_abc == NULL)) esl_alphabet_Destroy(abc); /* destroy alphabet if we created it here */
-  if (om != NULL) p7_oprofile_Destroy(om);
+  if (abc && (byp_abc == NULL || *byp_abc == NULL)) esl_alphabet_Destroy(abc); /* destroy alphabet if we created it here */
+  if (om)         p7_oprofile_Destroy(om);
+  if (tmp_buffer) free(tmp_buffer);
   *ret_om = NULL;
   return status;
-#endif
-#ifndef HAVE_AVX2
-  return eslENORESULT;
-#endif    
 }
 
-/* Function:  p7_oprofile_ReadInfoMSV()
- * Synopsis:  Read MSV filter info, but not the scores.
- *
- * Purpose:   Read just enough of the MSV filter header from the
- *            <.h3f> file associated with an open HMM file <hfp>
- *            to skip ahead to the next MSV filter. Allocate a new
- *            model, populate it with just the file offsets of this
- *            model and return a pointer to it in <*ret_om>. 
- *            
- *            The <.h3f> file was opened automatically, if it existed,
- *            when the HMM file was opened with <p7_hmmfile_OpenE()>.
- *            
- *            When no more HMMs remain in the file, return <eslEOF>.
- *
- * Args:      hfp     - open HMM file, with associated .h3p file
- *            byp_abc - BYPASS: <*byp_abc == ESL_ALPHABET *> if known; 
- *                              <*byp_abc == NULL> if desired; 
- *                              <NULL> if unwanted.
- *            ret_om  - RETURN: newly allocated <om> with partial MSV
- *                      filter data filled in.
- *            
- * Returns:   <eslOK> on success. <*ret_om> is allocated here;
- *            caller free's with <p7_oprofile_Destroy()>.
- *            <*byp_abc> is allocated here if it was requested;
- *            caller free's with <esl_alphabet_Destroy()>.
- *            
- *            Returns <eslEFORMAT> if <hfp> has no <.h3f> file open,
- *            or on any parsing error.
- *            
- *            Returns <eslEINCOMPAT> if the HMM we read is incompatible
- *            with the existing alphabet <*byp_abc> led us to expect.
- *            
- *            On any returned error, <hfp->errbuf> contains an
- *            informative error message.
- *
- * Throws:    <eslEMEM> on allocation error.
+/* Function:  p7_oprofile_ReadInfoMSV_avx()
+ * See:       io.c::p7_oprofile_ReadInfoMSV()
  */
 int
 p7_oprofile_ReadInfoMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om)
 {
-#ifdef HAVE_AVX2
   P7_OPROFILE  *om = NULL;
   ESL_ALPHABET *abc = NULL;
   uint32_t      magic;
   off_t         roff;
-  int           M, Q16, Q16x;
+  int           M;
   int           n;
   int           alphatype;
   int           status;
@@ -450,8 +302,6 @@ p7_oprofile_ReadInfoMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE
 
   if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");
-  Q16  = P7_NVB(M);
-  Q16x = P7_NVB(M) + p7O_EXTRA_SB;
 
   /* Set or verify alphabet. */
   if (byp_abc == NULL || *byp_abc == NULL)      {       /* alphabet unknown: whether wanted or unwanted, make a new one */
@@ -462,25 +312,24 @@ p7_oprofile_ReadInfoMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE
       ESL_XFAIL(eslEINCOMPAT, hfp->errbuf, "Alphabet type mismatch: was %s, but current profile says %s",
                 esl_abc_DecodeType(abc->type), esl_abc_DecodeType(alphatype));
   }
+
   /* Now we know the sizes of things, so we can allocate. */
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure");
-  if ((om = p7_oprofile_Create(M, abc, hw->simd)) == NULL)         ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: oprofile");
+  if ((om = p7_oprofile_Create(M, abc)) == NULL)         ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: oprofile");
   om->M = M;
   om->roff = roff;
 
   /* calculate the remaining length of the msv model */
   om->name = NULL;
   if (!fread((char *) &n, sizeof(int), 1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name length");
-  roff += (sizeof(int) * 5);                      /* magic, model size, alphabet type, max length, name length */
-  roff += (sizeof(char) * (n + 1));               /* name string and terminator '\0'                           */
-  roff += (sizeof(float) + sizeof(uint8_t) * 5);  /* transition  costs, bias, scale and base                   */
-  roff += (sizeof(__m128i) * abc->Kp * Q16x);     /* ssv scores                                                */
-  roff += (sizeof(__m128i) * abc->Kp * Q16);      /* msv scores                                                */
-  roff += (sizeof(float) * p7_NEVPARAM);          /* stat params                                               */
-  roff += (sizeof(off_t) * p7_NOFFSETS);          /* hmmscan offsets                                           */
-  roff += (sizeof(float) * p7_MAXABET);           /* model composition                                         */
-  roff += sizeof(uint32_t);                       /* sentinel magic                                            */
+  roff += (sizeof(int) * 5);                                            // magic, model size, alphabet type, max length, name length 
+  roff += (sizeof(char) * (n + 1));                                     // name string and terminator '\0'
+  roff += (sizeof(float) + sizeof(uint8_t) * 5);                        // transition  costs, bias, scale and base
+  roff += (sizeof(__m128i) * abc->Kp * (P7_NVB(M,16) + p7O_EXTRA_SB));  // ssv scores
+  roff += (sizeof(__m128i) * abc->Kp *  P7_NVB(M,16));                  // msv scores
+  roff += (sizeof(float) * p7_NEVPARAM);                                // stat params
+  roff += (sizeof(off_t) * p7_NOFFSETS);                                // hmmscan offsets
+  roff += (sizeof(float) * p7_MAXABET);                                 // model composition
+  roff += sizeof(uint32_t);                                             // sentinel magic
 
   /* keep track of the ending offset of the MSV model */
   p7_oprofile_Position(hfp, roff);
@@ -499,52 +348,24 @@ p7_oprofile_ReadInfoMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE
   if (om != NULL) p7_oprofile_Destroy(om);
   *ret_om = NULL;
   return status;
-#endif /* HAVE_AVX2 */
-#ifndef HAVE_AVX2
-  return 0;
-#endif
 }
 
-/* Function:  p7_oprofile_ReadRest()
- * Synopsis:  Read the rest of an optimized profile.
- *
- * Purpose:   Read the rest of an optimized profile <om> from
- *            the <.h3p> file associated with an open HMM
- *            file <hfp>. 
- *            
- *            This is the second part of a two-part calling sequence.
- *            The <om> here must be the result of a previous
- *            successful <p7_oprofile_ReadMSV()> call on the same
- *            open <hfp>.
- *
- * Args:      hfp - open HMM file, from which we've previously
- *                  called <p7_oprofile_ReadMSV()>.
- *            om  - optimized profile that was successfully
- *                  returned by  <p7_oprofile_ReadMSV()>.
- *
- * Returns:   <eslOK> on success, and <om> is now a complete
- *            optimized profile.
- *            
- *            Returns <eslEFORMAT> if <hfp> has no <.h3p> file open,
- *            or on any parsing error, and set <hfp->errbuf> to
- *            an informative error message.
- *
- * Throws:    <eslESYS> if an <fseek()> fails to reposition the
- *            binary <.h3p> file.
- *            
- *            <eslEMEM> on allocation error.
+/* Function:  p7_oprofile_ReadRest_avx()
+ * See:       io.c::p7_oprofile_ReadRest()
  */
 int
 p7_oprofile_ReadRest_avx(P7_HMMFILE *hfp, P7_OPROFILE *om)
 {
-#ifdef HAVE_AVX2
   uint32_t      magic;
   int           M, Q4, Q8;
   int           x,n;
   char         *name = NULL;
   int           alphatype;
+  __m128i      *tmp_buffer = NULL;    // buffer used for restriping values from 128-bit format
+  int           short_vector_length;  // # of 256-bit AVX vectors required to hold M shorts * 16 shorts/vector
+  int           float_vector_length;  // # of 256-bit AVX vectors required to hold M floats * 8 floats/vector
   int           status;
-__m128i *tmp_buffer;  // buffer used for restriping values from 128-bit format
+
 #ifdef HMMER_THREADS
   /* lock the mutex to prevent other threads from reading from the optimized
    * profile at the same time.
@@ -554,12 +375,14 @@ __m128i *tmp_buffer;  // buffer used for restriping values from 128-bit format
       if (pthread_mutex_lock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex lock failed");
     }
 #endif
+
   hfp->errbuf[0] = '\0';
   if (hfp->pfp == NULL) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no MSV profile file; hmmpress probably wasn't run");
 
-  ESL_ALLOC(tmp_buffer, sizeof(__m256i) * ESL_MAX((P7_NVF_AVX(om->M) * 8), P7_NVB_AVX(om->M)+ p7O_EXTRA_SB)); // allocate temporary buffer
-  int short_vector_length = P7_NVW_AVX(om->M) * 16;  // # of 126-bit vectors required to hold M shorts * 8 shorts/vector
-  int float_vector_length = P7_NVF_AVX(om->M) * 8;  // # of 126-bit vectors required to hold M floats * 4 shorts/vector
+  ESL_ALLOC(tmp_buffer, sizeof(__m256i) * ESL_MAX((P7_NVF(om->M,32) * 8), P7_NVB(om->M,32)+ p7O_EXTRA_SB)); 
+  short_vector_length = P7_NVW(om->M,32) * 16;  
+  float_vector_length = P7_NVF(om->M,32) * 8;   
+
   /* Position the <hfp->pfp> using offset stored in <om> */
   if (fseeko(hfp->pfp, om->offs[p7_POFFSET], SEEK_SET) != 0)                       ESL_EXCEPTION(eslESYS, "fseeko() failed");
    
@@ -580,7 +403,6 @@ __m128i *tmp_buffer;  // buffer used for restriping values from 128-bit format
   ESL_ALLOC(name, sizeof(char) * (n+1));
   if (! fread( (char *) name,            sizeof(char),     n+1,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name");  
   if (strcmp(name, om->name) != 0)                                                 ESL_XFAIL(eslEFORMAT, hfp->errbuf, "p/f name mismatch");  
-  
   if (! fread((char *) &n,               sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read accession length");
   if (n > 0) {
     ESL_ALLOC(om->acc, sizeof(char) * (n+1));
@@ -597,14 +419,11 @@ __m128i *tmp_buffer;  // buffer used for restriping values from 128-bit format
   if (! fread((char *) om->cs,           sizeof(char),     M+2,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read cs annotation");
   if (! fread((char *) om->consensus,    sizeof(char),     M+2,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read consensus annotation");
 
-  Q4  = P7_NVF(om->M);
-  Q8  = P7_NVW(om->M);
-
   if (! fread((int16_t *) tmp_buffer,             sizeof(int16_t),  8*short_vector_length,        hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <tu>, vitfilter transitions"); 
-  p7_restripe_short((int16_t *) tmp_buffer, (int16_t*) om->twv_AVX, short_vector_length *8, 128, 256);
+  p7_restripe_short((int16_t *) tmp_buffer, (int16_t*) om->twv, short_vector_length *8, 128, 256);
    for (x = 0; x < om->abc->Kp; x++){
     if (! fread( (char *) tmp_buffer,    sizeof(int16_t), short_vector_length,          hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <ru>[%d], vitfilter emissions for sym %c", x, om->abc->sym[x]);
-    p7_restripe_short((int16_t *) tmp_buffer, (int16_t*) om->rwv_AVX[x], short_vector_length, 128, 256);
+    p7_restripe_short((int16_t *) tmp_buffer, (int16_t*) om->rwv[x], short_vector_length, 128, 256);
   }
   for (x = 0; x < p7O_NXSTATES; x++)
     if (! fread( (char *) om->xw[x],        sizeof(int16_t),  p7O_NXTRANS, hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <xu>[%d], vitfilter special transitions", x);
@@ -614,10 +433,10 @@ __m128i *tmp_buffer;  // buffer used for restriping values from 128-bit format
   if (! fread((char *) &(om->ncj_roundoff), sizeof(float),    1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ddbound_w");
 
   if (! fread((char *) tmp_buffer,          sizeof(float),   8*float_vector_length,        hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <tf> transitions");
-  p7_restripe_float((float *) tmp_buffer, (float*) om->tfv_AVX, float_vector_length *8, 128, 256);
+  p7_restripe_float((float *) tmp_buffer, (float*) om->tfv, float_vector_length *8, 128, 256);
   for (x = 0; x < om->abc->Kp; x++){
     if (! fread( (char *) tmp_buffer,    sizeof(float),   float_vector_length,          hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <rf>[%d] emissions for sym %c", x, om->abc->sym[x]);
-  p7_restripe_float((float *) tmp_buffer, (float*) om->rfv_AVX[x], float_vector_length, 128, 256);
+    p7_restripe_float((float *) tmp_buffer, (float*) om->rfv[x], float_vector_length, 128, 256);
   }
   for (x = 0; x < p7O_NXSTATES; x++)
     if (! fread( (char *) om->xf[x],     sizeof(float),    p7O_NXTRANS, hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <xf>[%d] special transitions", x);
@@ -643,26 +462,23 @@ __m128i *tmp_buffer;  // buffer used for restriping values from 128-bit format
   return eslOK;
 
  ERROR:
-
 #ifdef HMMER_THREADS
-  if (hfp->syncRead)
-    {
-      if (pthread_mutex_unlock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex unlock failed");
-    }
+  if (hfp->syncRead) {
+    if (pthread_mutex_unlock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex unlock failed");
+  }
 #endif
-
-  if (name != NULL) free(name);
+  if (name)       free(name);
+  if (tmp_buffer) free(tmp_buffer);
   return status;
-#endif  //HAVE_AVX2
-#ifndef HAVE_AVX2
-  return eslENORESULT;
-#endif  
 }
 /*----------- end, reading optimized profiles -------------------*/
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/
+
+#else // ! eslENABLE_AVX
+
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_io_avx_silence_hack(void) { return; }
+#if defined p7IO_AVX_TESTDRIVE || p7IO_AVX_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_AVX or not

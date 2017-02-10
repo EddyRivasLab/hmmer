@@ -55,9 +55,7 @@
  *    1. Using P7_SPARSEMX for ASC calculations.
  *    2. Debugging and development tools.
  *    3. Debugging and dev: Validation routine.
- *    4. Copyright and license information.
  */
-
 #include "p7_config.h"
 
 #include <stdio.h>
@@ -1339,7 +1337,7 @@ main(int argc, char **argv)
   P7_TRACE       *vtr     = NULL;
   P7_FILTERMX    *fx      = p7_filtermx_Create(100);
   P7_CHECKPTMX   *cx      = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT));
-  P7_SPARSEMASK  *sm      = p7_sparsemask_Create(100, 100);
+  P7_SPARSEMASK  *sm      = p7_sparsemask_Create(100, 100, p7_VDEFAULT);
   float          *wrk     = NULL;
   P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
   float           fsc, vsc, asc;
@@ -1453,9 +1451,3 @@ main(int argc, char **argv)
 }
 #endif /*p7SPASCMX_STATS*/
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

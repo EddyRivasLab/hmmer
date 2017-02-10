@@ -117,9 +117,3 @@ extern int p7_hit_Compare(const P7_HIT *h1, const P7_HIT *h2, float tol);
 
 
 #endif /*p7TOPHITS_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

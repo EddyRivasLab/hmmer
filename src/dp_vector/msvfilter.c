@@ -1,4 +1,4 @@
-/* The MSV filter implementation; SSE version.
+/* The MSV filter
  * 
  * A "filter" is a one-row, O(M), DP implementation that calculates an
  * approximated nat score (i.e. in limited precision - here, uchar)
@@ -12,24 +12,24 @@
  *   3. Unit tests
  *   4. Test driver
  *   5. Example
- *   6. Copyright and license information
  */
 #include "p7_config.h"
 
 #include <stdio.h>
 #include <math.h>
 
-#if p7_CPU_ARCH == intel
+#ifdef eslENABLE_SSE
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
-#ifdef HAVE_AVX2
-#include "x86intrin.h"
-  #include <immintrin.h>  /* AVX2 */
 #endif
-#ifdef HAVE_AVX512
-  #include <immintrin.h>  /* AVX-512 */
+
+#ifdef eslENABLE_AVX
+#include <x86intrin.h>
 #endif
-#endif /* intel */
+
+#ifdef eslENABLE_AVX512
+#include <x86intrin.h>  /* AVX-512 */
+#endif
  
 #include "easel.h"
 #include "esl_sse.h"
@@ -104,9 +104,6 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
     case NEON:
       return p7_MSVFilter_neon(dsq, L, om, ox, ret_sc);
       break;
-    case NEON64:
-      return p7_MSVFilter_neon64(dsq, L, om, ox, ret_sc);
-      break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_MSVFilter");  
   }
@@ -174,9 +171,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTERMX 
       break;
     case NEON: 
       return p7_SSVFilter_longtarget_neon(dsq, L, om, ox, msvdata, bg, P, windowlist);
-      break;
-    case NEON64: 
-      return p7_SSVFilter_longtarget_neon64(dsq, L, om, ox, msvdata, bg, P, windowlist);
       break;
     default:
       p7_Fail("Unrecognized SIMD type passed to p7_SSVFilter_longtarget");  
@@ -419,7 +413,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
-static char banner[] = "test driver for the SSE MSVFilter() implementation";
+static char banner[] = "test driver for MSVFilter()";
 
 int
 main(int argc, char **argv)
@@ -597,12 +591,6 @@ main(int argc, char **argv)
 /*---------------------- end, example ---------------------------*/
 
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/
 
 
 

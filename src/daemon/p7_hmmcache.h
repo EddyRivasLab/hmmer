@@ -28,9 +28,4 @@ extern int    p7_hmmcache_SetNumericNames(P7_HMMCACHE *cache);
 extern void   p7_hmmcache_Close          (P7_HMMCACHE *cache);
 
 #endif /*p7HMMCACHE_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

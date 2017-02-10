@@ -9,29 +9,17 @@
  * high-scoring hit worth examining more closely anyway.  It will not
  * underflow, in local alignment mode.
  * 
- * Contents:
- *   1. Viterbi filter implementation.
- *   2. Benchmark driver.
- *   3. Unit tests.
- *   4. Test driver.
- *   5. Example.
- *   6. Copyright and license information
  */
 #include "p7_config.h"
+#ifdef eslENABLE_AVX
 
 #include <stdio.h>
 #include <math.h>
 
+#include <x86intrin.h>
+
 #include "easel.h"
-#include "esl_sse.h"
-
-#if p7_CPU_ARCH == intel
-#include <immintrin.h>
-#ifdef HAVE_AVX2
-  #include "esl_avx.h"
-#endif
-#endif /* intel arch */
-
+#include "esl_avx.h"
 #include "esl_gumbel.h"
 
 #include "base/p7_hmmwindow.h"
@@ -45,7 +33,7 @@
  * 1. Viterbi filter implementation.
  *****************************************************************/
 
-/* Function:  p7_ViterbiFilter()
+/* Function:  p7_ViterbiFilter_avx()
  * Synopsis:  Calculates Viterbi score, vewy vewy fast, in limited precision.
  *
  * Purpose:   Calculates an approximation of the Viterbi score for sequence
@@ -91,25 +79,21 @@
 int
 p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)
 {
-#ifdef HAVE_AVX2
-//printf("Starting ViterbiFilter\n");
-  int i;        /* counter over sequence positions 1..L                      */
-  
-  register __m256i mpv_AVX, dpv_AVX, ipv_AVX; /*  prvious row values                                       */
-  register __m256i sv_AVX;       /* temp storage of 1 curr row value in progress              */
-  register __m256i dcv_AVX;      /* delayed storage of D(i,q+1)                               */
-  register __m256i xEv_AVX;      /* E state: keeps max for Mk->E as we go                     */
-  register __m256i xBv_AVX;      /* B state: splatted vector of B[i-1] for B->Mk calculations */
-  register __m256i Dmaxv_AVX;          /* keeps track of maximum D cell on row                      */
-  int16_t  xE_AVX, xB_AVX, xC_AVX, xJ_AVX, xN_AVX;     /* special states' scores                                    */
-  int16_t  Dmax_AVX;       /* maximum D cell score on row                               */
-  int q_AVX;         /* counter over vectors 0..nq-1                              */
-  int Q_AVX        = P7_NVW_AVX(om->M);    /* segment length: # of vectors                              */
+  int i;                                      /* counter over sequence positions 1..L                      */
+  register __m256i mpv_AVX, dpv_AVX, ipv_AVX; /* previous row values                                       */
+  register __m256i sv_AVX;                    /* temp storage of 1 curr row value in progress              */
+  register __m256i dcv_AVX;                   /* delayed storage of D(i,q+1)                               */
+  register __m256i xEv_AVX;                   /* E state: keeps max for Mk->E as we go                     */
+  register __m256i xBv_AVX;                   /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register __m256i Dmaxv_AVX;                 /* keeps track of maximum D cell on row                      */
+  int16_t  xE_AVX, xB_AVX, xC_AVX, xJ_AVX, xN_AVX;   /* special states' scores                             */
+  int16_t  Dmax_AVX;                          /* maximum D cell score on row                               */
+  int q_AVX;                                  /* counter over vectors 0..nq-1                              */
+  int Q_AVX        = P7_NVW_AVX(om->M);       /* segment length: # of vectors                              */
   __m256i *dp_AVX;
   __m256i *rsc_AVX;        /* will point at om->ru[x] for residue x[i]                  */
   __m256i *tsc_AVX;        /* will point into (and step thru) om->tu                    */
   __m256i negInfv_AVX;
-
   int     status;
 
   /* Contract checks */
@@ -118,7 +102,6 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
   ESL_DASSERT1(( om->nj   == 1.0f ));	  /*  ... hence the check                                        */
                                           /*  ... which you can disable, if you're playing w/ config     */
   /* note however that ViterbiFilter numerics are only guaranteed for local alignment, not glocal        */
-
 
   /* Resize the filter mx as needed */
   if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of Vit filter matrix failed");
@@ -143,7 +126,7 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
   xC_AVX   = -32768;
   xE_AVX   = -32768;
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
 #endif
 
@@ -166,16 +149,15 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
       mpv_AVX = _mm256_or_si256(mpv_AVX, negInfv_AVX);
       
       dpv_AVX = DMX_AVXf(Q_AVX-1);  
-       dpv_AVX = esl_avx_leftshift_two(dpv_AVX);
-       dpv_AVX = _mm256_or_si256(dpv_AVX, negInfv_AVX);
+      dpv_AVX = esl_avx_leftshift_two(dpv_AVX);
+      dpv_AVX = _mm256_or_si256(dpv_AVX, negInfv_AVX);
       
       ipv_AVX = IMX_AVXf(Q_AVX-1);  
       ipv_AVX = esl_avx_leftshift_two(ipv_AVX);
-       ipv_AVX = _mm256_or_si256(ipv_AVX, negInfv_AVX);
+      ipv_AVX = _mm256_or_si256(ipv_AVX, negInfv_AVX);
 
       for (q_AVX = 0; q_AVX < Q_AVX; q_AVX++)
       {
-    
         /* Calculate new MMXf(i,q); don't store it yet, hold it in sv. */
         sv_AVX   =                    _mm256_adds_epi16(xBv_AVX, *tsc_AVX);  tsc_AVX++;
         sv_AVX   = _mm256_max_epi16 (sv_AVX, _mm256_adds_epi16(mpv_AVX, *tsc_AVX)); tsc_AVX++;
@@ -231,60 +213,50 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
        *   max_k D(i,k) is why we tracked Dmaxv;
        *   xB(i) was just calculated above.
        */
-      
-      // compute Dmax_AVX = horizontal 16-bit max of Dmaxv_AVX
       Dmax_AVX = esl_avx_hmax_epi16(Dmaxv_AVX);
-
       if (Dmax_AVX + om->ddbound_w > xB_AVX) 
-  {
-
-  
-//printf("vitfilter AVX doing DD calc, Dmax_AVX = %i\n", Dmax_AVX);
-    /* Now we're obligated to do at least one complete DD path to be sure. */
-    /* dcv has carried through from end of q loop above */
-      dcv_AVX = esl_avx_leftshift_two(dcv_AVX);
+	{
+	  /* Now we're obligated to do at least one complete DD path to be sure. */
+	  /* dcv has carried through from end of q loop above */
+	  dcv_AVX = esl_avx_leftshift_two(dcv_AVX);
  
-    dcv_AVX = _mm256_or_si256(dcv_AVX, negInfv_AVX);
-    tsc_AVX = om->twv_AVX + 7*Q_AVX;  /* set tsc to start of the DD's */
-    for (q_AVX = 0; q_AVX < Q_AVX; q_AVX++) 
-      {
-        DMX_AVXf(q_AVX) = _mm256_max_epi16(dcv_AVX, DMX_AVXf(q_AVX));  
-        dcv_AVX     = _mm256_adds_epi16(DMX_AVXf(q_AVX), *tsc_AVX); tsc_AVX++;
-      }
+	  dcv_AVX = _mm256_or_si256(dcv_AVX, negInfv_AVX);
+	  tsc_AVX = om->twv_AVX + 7*Q_AVX;  /* set tsc to start of the DD's */
+	  for (q_AVX = 0; q_AVX < Q_AVX; q_AVX++) 
+	    {
+	      DMX_AVXf(q_AVX) = _mm256_max_epi16(dcv_AVX, DMX_AVXf(q_AVX));  
+	      dcv_AVX     = _mm256_adds_epi16(DMX_AVXf(q_AVX), *tsc_AVX); tsc_AVX++;
+	    }
 
-    /* We may have to do up to three more passes; the check
-     * is for whether crossing a segment boundary can improve
-     * our score. 
-     */
-    do {
-         dcv_AVX = esl_avx_leftshift_two(dcv_AVX);
+	  /* We may have to do up to three more passes; the check
+	   * is for whether crossing a segment boundary can improve
+	   * our score. 
+	   */
+	  do {
+	    dcv_AVX = esl_avx_leftshift_two(dcv_AVX);
  
-      dcv_AVX = _mm256_or_si256(dcv_AVX, negInfv_AVX);
-      tsc_AVX = om->twv_AVX + 7*Q_AVX;  /* set tsc to start of the DD's */
-      for (q_AVX = 0; q_AVX < Q_AVX; q_AVX++) 
-        {
-            __m256i check1 = _mm256_cmpgt_epi16(dcv_AVX, DMX_AVXf(q_AVX));
-            int cont = _mm256_movemask_epi8(check1); // Continue if any of the 16-bit field s in dcv are greater than 
-            // the one we compared to
-            if (cont == 0) break;
-            DMX_AVXf(q_AVX) = _mm256_max_epi16(dcv_AVX, DMX_AVXf(q_AVX));  
-            dcv_AVX   = _mm256_adds_epi16(DMX_AVXf(q_AVX), *tsc_AVX); tsc_AVX++;
-         }     
-    } while (q_AVX == Q_AVX);
-  }
+	    dcv_AVX = _mm256_or_si256(dcv_AVX, negInfv_AVX);
+	    tsc_AVX = om->twv_AVX + 7*Q_AVX;  /* set tsc to start of the DD's */
+	    for (q_AVX = 0; q_AVX < Q_AVX; q_AVX++) 
+	      {
+		__m256i check1 = _mm256_cmpgt_epi16(dcv_AVX, DMX_AVXf(q_AVX));
+		int cont = _mm256_movemask_epi8(check1); // Continue if any of the 16-bit field s in dcv are greater than the one we compared to
+		if (cont == 0) break;
+		DMX_AVXf(q_AVX) = _mm256_max_epi16(dcv_AVX, DMX_AVXf(q_AVX));  
+		dcv_AVX   = _mm256_adds_epi16(DMX_AVXf(q_AVX), *tsc_AVX); tsc_AVX++;
+	      }     
+	  } while (q_AVX == Q_AVX);
+	}
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
-  {
-//printf("vitfilter AVX skipping DD calc Dmax_AVX = %i\n", Dmax_AVX);
-  dcv_AVX = esl_avx_leftshift_two(dcv_AVX);
-   
-    DMX_AVXf(0) = _mm256_or_si256(dcv_AVX, negInfv_AVX);
-  }
+	{
+	  dcv_AVX = esl_avx_leftshift_two(dcv_AVX);
+	  DMX_AVXf(0) = _mm256_or_si256(dcv_AVX, negInfv_AVX);
+	}
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
       if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);   
 #endif
     } /* end loop over sequence residues 1..L */
-
 
   /* finally C->T */
   if (xC_AVX > -32768)
@@ -295,65 +267,23 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
       *ret_sc -= 3.0; /* the NN/CC/JJ=0,-3nat approximation: see J5/36. That's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ contrib */
     }
   else  *ret_sc = -eslINFINITY;
-#endif // HAVE_AVX2. Leave the return statement so that there's a function to link if we don't have AVX2 support
   return eslOK;
 }
 
-/* Function:  p7_ViterbiFilter_longtarget()
- * Synopsis:  Finds windows within potentially long sequence blocks with Viterbi
- *            scores above threshold (vewy vewy fast, in limited precision)
- *
- * Purpose:   Calculates an approximation of the Viterbi score for regions
- *            of sequence <dsq>, using optimized profile <om>, and a pre-
- *            allocated one-row DP matrix <ox>, and captures the positions
- *            at which such regions exceed the score required to be
- *            significant in the eyes of the calling function (usually
- *            p=0.001).
- *
- *            The resulting landmarks are converted to subsequence
- *            windows by the calling function
- *
- *            The model must be in a local alignment mode; other modes
- *            cannot provide the necessary guarantee of no underflow.
- *
- *            This is a striped SIMD Viterbi implementation using Intel
- *            SSE/SSE2 integer intrinsics \citep{Farrar07}, in reduced
- *            precision (signed words, 16 bits).
- *
- * Args:      dsq     - digital target sequence, 1..L
- *            L       - length of dsq in residues
- *            om      - optimized profile
- *            ox      - DP matrix
- *            filtersc   - null or bias correction, required for translating a P-value threshold into a score threshold
- *            P          - p-value below which a region is captured as being above threshold
- *            windowlist - RETURN: preallocated array of hit windows (start and end of diagonal) for the above-threshold areas
- *
- * Returns:   <eslOK> on success;
- *
- * Throws:    <eslEINVAL> if <ox> allocation is too small, or if
- *            profile isn't in a local alignment mode. (Must be in local
- *            alignment mode because that's what helps us guarantee
- *            limited dynamic range.)
- *
- * Xref:      See p7_ViterbiFilter()
- */
-int
-p7_ViterbiFilter_longtarget_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox,
-                            float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
-{
-#ifdef HAVE_AVX2
-  /* Not yet ported, but we need a dummy for the linker */
-  return 0;
-#endif /* HAVE_AVX2 */
-#ifndef HAVE_AVX2
-  return 0;
-#endif
-}
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+
+// SRE TODO: 
+// p7_ViterbiFilter_longtarget() is not implemented.
+
+
+
+
+else // ! eslENABLE_AVX
+
+/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
+void p7_vitfilter_avx_silence_hack(void) { return; }
+#if defined p7VITFILTER_AVX_TESTDRIVE || p7VITFILTER_AVX_EXAMPLE
+int main(void) { return 0; }
+#endif 
+#endif // eslENABLE_AVX or not
 

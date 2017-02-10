@@ -25,9 +25,7 @@
  *   4. Unit tests
  *   5. Test driver
  *   6. Example
- *   7. Copyright and license information
  */
-
 #include "p7_config.h"
 
 #include <stdio.h>
@@ -40,7 +38,7 @@
 
 #include "dp_sparse/p7_sparsemx.h"
 #include "dp_sparse/sparse_envscore.h"
-#include "hardware/hardware.h"
+
 /*****************************************************************
  * 1. Exact calculation, by sparse DP
  *****************************************************************/
@@ -499,9 +497,8 @@ p7_sparse_envscore_IntersectedMask(P7_SPARSEMASK *osm, int iae, int ibe, int kae
   ESL_DASSERT1( (ibe >= 1 && ibe <= osm->L && ibe >= iae) );
   ESL_DASSERT1( (kae >= 1 && kae <= osm->M) );
   ESL_DASSERT1( (kbe >= 1 && kbe <= osm->M && kbe >= kae) );
- P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
-  if ( (sm = p7_sparsemask_Create(osm->M, osm->L, hw->simd)) == NULL) { *ret_sm = NULL; return eslEMEM; }
+
+  if ( (sm = p7_sparsemask_Create(osm->M, osm->L, p7_VDEFAULT)) == NULL) { *ret_sm = NULL; return eslEMEM; }
 
   /* Remember, API for Add() is designed for production use, in a vector Backwards;
    * so we go back through i's and z's, and pass (q,r) vector coords
@@ -713,15 +710,13 @@ create_envdoctored_profile(const P7_HMM *ohmm, const P7_PROFILE *ogm, const P7_B
 static void
 utest_engine(int do_intersected_mask, char *msg, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N, int do_unihit, int do_glocal)
 {
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   int            do_zeroed_emissions = (do_intersected_mask ? FALSE : TRUE ); /* exclusive, one or the other */
   P7_HMM        *hmm   = NULL;
   P7_PROFILE    *gm    = p7_profile_Create(M, abc);
-  P7_OPROFILE   *om    = p7_oprofile_Create(M, abc, hw->simd);
+  P7_OPROFILE   *om    = p7_oprofile_Create(M, abc)
   ESL_SQ        *sq    = esl_sq_CreateDigital(abc);
-  P7_CHECKPTMX  *ox    = p7_checkptmx_Create(M, L, ESL_MBYTES(32), hw->simd);
-  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L, hw->simd);
+  P7_CHECKPTMX  *ox    = p7_checkptmx_Create(M, L, ESL_MBYTES(32));
+  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L, p7_VDEFAULT);
   P7_SPARSEMX   *sx    = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxf   = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxb   = p7_sparsemx_Create(NULL);
@@ -767,7 +762,6 @@ utest_engine(int do_intersected_mask, char *msg, ESL_RANDOMNESS *rng, ESL_ALPHAB
 
       /* Fwd/Bck local filter to calculate the sparse mask */
       if ( p7_checkptmx_GrowTo(ox, M, sq->n)                                 != eslOK) esl_fatal(msg);
-      if ( p7_sparsemask_Reinit(sm, M, sq->n)                                != eslOK) esl_fatal(msg);
       if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
       if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
       if ( p7_sparsemask_Validate(sm, errbuf)                                != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
@@ -1039,7 +1033,7 @@ main(int argc, char **argv)
 
   /* Use f/b filter to create sparse mask */
   ox = p7_checkptmx_Create(hmm->M, sq->n, ESL_MBYTES(32));
-  sm = p7_sparsemask_Create(gm->M, sq->n);
+  sm = p7_sparsemask_Create(gm->M, sq->n, p7_VDEFAULT);
   p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL);
   p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH);
   
@@ -1112,11 +1106,3 @@ main(int argc, char **argv)
 
 #endif /*p7SPARSE_ENVSCORE_EXAMPLE*/
 /*---------------- end, example main()  ------------------------*/
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/
-

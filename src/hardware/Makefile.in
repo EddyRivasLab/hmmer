@@ -1,7 +1,7 @@
 MODULE = hardware
 
-LIBOBJS =  \
-        hardware.o
+LIBOBJS =  
+#        hardware.o
 
 LIBHDRS =  
 
@@ -29,10 +29,4 @@ SHELL        = /bin/sh
 
 include ../Makefile-subdirs.mk
 
-################################################################
-# @LICENSE@
-#
-# SVN $URL$
-# SVN $Id$
-################################################################
 
