@@ -129,6 +129,8 @@ typedef struct p7_daemon_workernode_state{
 	//! List of hits this worker node has found.  
 	P7_HITLIST *hitlist;
 
+	uint64_t num_sequences;
+	uint64_t *sequences_processed; // used to check that we've processed every sequence, for debugging
 } P7_DAEMON_WORKERNODE_STATE;
 
 //! Creates and initializes a P7_WORKERNODE_STATE object

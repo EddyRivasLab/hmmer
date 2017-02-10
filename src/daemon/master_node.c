@@ -25,8 +25,8 @@ P7_DAEMON_MASTERNODE_STATE *p7_daemon_masternode_Create(uint32_t num_shards){
 	ESL_ALLOC(the_node->work_queues, num_shards * sizeof(P7_MASTER_WORK_DESCRIPTOR));
 
 	the_node->num_shards = num_shards;
-
-	for(int i = 0; i < num_shards; i++){
+	int i;
+	for(i = 0; i < num_shards; i++){
 		the_node->work_queues[i].start = (uint64_t) -1;
 		the_node->work_queues[i].end = 0;
 	}

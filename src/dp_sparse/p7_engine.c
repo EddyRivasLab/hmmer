@@ -30,6 +30,12 @@
 #include "hardware/hardware.h"
 #define HIT_POOL_SIZE 100
 
+// Comment these out to move computation to backhalf.  Just defining them to zero won't have any effect
+//#define ENGINE_MSV_TOPHALF 
+//#define ENGINE_BIAS_TOPHALF 
+//#define ENGINE_VIT_TOPHALF 
+//#define ENGINE_FWD_TOPHALF 
+//#define ENGINE_BCK_TOPHALF 
 /*****************************************************************
  * 1. P7_ENGINE_PARAMS: config/control parameters for the Engine.
  *****************************************************************/
@@ -477,9 +483,182 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
   return eslOK;
 }
 
+/* 
+ To experiment with work-stealing techniques, we divide the Overthruster into two pieces: tophalf and bottomhalf.
+ Both will contain identical code, with ifdefs that control which filter stage is in each half.
+ The work-stealing code will then have the form:
+ p7_engine_Overthruster_tophalf()
+ <Synchronize with work queue to make sure task not stolen>
+ p7_engine_Overthruster_bottomhalf()
+ p7_engine_Main()
+
+ Note: these functions use the engine object to pass data between filters.  This code will not work if you call
+ tophalf() on multiple comparisons before calling bottomhalf.
+
+ Note: These function require that ENGINE_MSV_TOPHALF, ENGINE_BIAS_TOPHALF, ENGINE_VIT_TOPHALF, ENGINE_FWD_TOPHALF, and ENGINE_BCK_TOPHALF be defined such that the first N stages of the engine are handled by tophalf() and the remaining 5-N stages are handled by bottomhalf.  Other configurations will produce nonsensical results
+*/ 
+int
+p7_engine_Overthruster_tophalf(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg, float *P)
+{
+  float sparsify_thresh  = (eng->params ? eng->params->sparsify_thresh : p7_SPARSIFY_THRESH);
+  float seq_score;
+  //float P;
+  int   status;
+
+  if (L == 0) return eslFAIL;
+
+#ifdef ENGINE_MSV_TOPHALF
+  if ((status = p7_bg_NullOne(bg, dsq, L, &(eng->nullsc))) != eslOK) return status; 
+
+  /* First level: SSV and MSV filters */
+  status = eng->msv(dsq, L, om, eng->fx, &(eng->mfsc));
+  if (status != eslOK && status != eslERANGE) return status;
+
+  seq_score = (eng->mfsc - eng->nullsc) / eslCONST_LOG2;          
+  *P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  if (*P > eng->F1) return eslFAIL;
+  if (eng->stats) eng->stats->n_past_msv++;
+#endif
+
+#ifdef ENGINE_BIAS_TOPHALF
+  int   do_biasfilter    = (eng->params ? eng->params->do_biasfilter   : p7_ENGINE_DO_BIASFILTER);
+  /* Biased composition HMM, ad hoc, acts as a modified null */
+  if  (do_biasfilter)
+    {
+      if ((status = p7_bg_FilterScore(bg, dsq, L, &(eng->biassc))) != eslOK) return status;
+      seq_score = (eng->mfsc - eng->biassc) / eslCONST_LOG2;
+      *P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+      if (*P > eng->F1) return eslFAIL;
+    }
+  else eng->biassc = eng->nullsc;
+  if (eng->stats) eng->stats->n_past_bias++;
+#endif
+
+  // TODO: in scan mode, you have to load the rest of the oprofile now,
+  // configure its length model, and get GA/TC/NC thresholds.
+
+#ifdef ENGINE_VIT_TOPHALF 
+  /* Second level: ViterbiFilter(), multihit with <om> */
+  if (*P > eng->F2)
+    {
+      if (eng->stats) eng->stats->n_ran_vit++;
+
+      //printf("P = %.4f. Running Vit Filter\n", P);
+
+      status = eng->vit(dsq, L, om, eng->fx, &(eng->vfsc));  
+      if (status != eslOK && status != eslERANGE) return status;
+
+      seq_score = (eng->vfsc - eng->biassc) / eslCONST_LOG2;
+      *P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
+      if (*P > eng->F2) return eslFAIL;
+    }
+  if (eng->stats) eng->stats->n_past_vit++;
+#endif
 
 
+#ifdef ENGINE_FWD_TOPHALF 
+  /* Checkpointed vectorized Forward, local-only.
+   */
+  status = eng->fwd(dsq, L, om, eng->cx, &(eng->ffsc));
+  if (status != eslOK) return status;
 
+  seq_score = (eng->ffsc - eng->biassc) / eslCONST_LOG2;
+  *P  = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
+  if (*P > eng->F3) return eslFAIL;
+  if (eng->stats) eng->stats->n_past_fwd++;
+#endif
+
+#ifdef ENGINE_BCK_TOPHALF  
+  /* Sequence has passed all acceleration filters.
+   * Calculate the sparse mask, by checkpointed vectorized decoding.
+   */
+  eng->bck(dsq, L, om, eng->cx, eng->sm, sparsify_thresh);
+#endif
+
+  return eslOK;
+}
+
+int
+p7_engine_Overthruster_bottomhalf(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg, float *P)
+{
+  float sparsify_thresh  = (eng->params ? eng->params->sparsify_thresh : p7_SPARSIFY_THRESH);
+  float seq_score;
+  //float P;
+  int   status;
+
+  if (L == 0) return eslFAIL;
+
+#ifndef ENGINE_MSV_TOPHALF
+
+  if ((status = p7_bg_NullOne(bg, dsq, L, &(eng->nullsc))) != eslOK) return status; 
+
+  /* First level: SSV and MSV filters */
+  status = eng->msv(dsq, L, om, eng->fx, &(eng->mfsc));
+  if (status != eslOK && status != eslERANGE) return status;
+
+  seq_score = (eng->mfsc - eng->nullsc) / eslCONST_LOG2;          
+  *P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  if (*P > eng->F1) return eslFAIL;
+  if (eng->stats) eng->stats->n_past_msv++;
+#endif
+
+#ifndef ENGINE_BIAS_TOPHALF
+  int   do_biasfilter    = (eng->params ? eng->params->do_biasfilter   : p7_ENGINE_DO_BIASFILTER);
+  /* Biased composition HMM, ad hoc, acts as a modified null */
+  if  (do_biasfilter)
+    {
+      if ((status = p7_bg_FilterScore(bg, dsq, L, &(eng->biassc))) != eslOK) return status;
+      seq_score = (eng->mfsc - eng->biassc) / eslCONST_LOG2;
+      *P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+      if (*P > eng->F1) return eslFAIL;
+    }
+  else eng->biassc = eng->nullsc;
+  if (eng->stats) eng->stats->n_past_bias++;
+#endif
+
+  // TODO: in scan mode, you have to load the rest of the oprofile now,
+  // configure its length model, and get GA/TC/NC thresholds.
+
+#ifndef ENGINE_VIT_TOPHALF
+  /* Second level: ViterbiFilter(), multihit with <om> */
+  if (*P > eng->F2)
+    {
+      if (eng->stats) eng->stats->n_ran_vit++;
+
+      //printf("P = %.4f. Running Vit Filter\n", P);
+
+      status = eng->vit(dsq, L, om, eng->fx, &(eng->vfsc));  
+      if (status != eslOK && status != eslERANGE) return status;
+
+      seq_score = (eng->vfsc - eng->biassc) / eslCONST_LOG2;
+      *P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
+      if (*P > eng->F2) return eslFAIL;
+    }
+  if (eng->stats) eng->stats->n_past_vit++;
+#endif
+
+
+#ifndef ENGINE_FWD_TOPHALF
+  /* Checkpointed vectorized Forward, local-only.
+   */
+  status = eng->fwd(dsq, L, om, eng->cx, &(eng->ffsc));
+  if (status != eslOK) return status;
+
+  seq_score = (eng->ffsc - eng->biassc) / eslCONST_LOG2;
+  *P  = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
+  if (*P > eng->F3) return eslFAIL;
+  if (eng->stats) eng->stats->n_past_fwd++;
+#endif
+
+#ifndef ENGINE_BCK_TOPHALF  
+  /* Sequence has passed all acceleration filters.
+   * Calculate the sparse mask, by checkpointed vectorized decoding.
+   */
+  eng->bck(dsq, L, om, eng->cx, eng->sm, sparsify_thresh);
+#endif
+
+  return eslOK;
+}
 
   // om is assumed to be complete, w/ GA/NC/TC thresholds set, and w/ length model set.
   // Use dsq, L -- not sq -- so subseqs can be processed (should help longtarget/nhmmer)
@@ -531,10 +710,10 @@ p7_engine_Main(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm)
   p7_sparse_anchors_SetFromTrace(eng->sxd, eng->tr, eng->vanch);
   p7_trace_Reuse(eng->tr);
   p7_sparse_Anchors(eng->rng, dsq, L, gm,
-		    eng->vsc, eng->fsc, eng->sxf, eng->sxd, eng->vanch,
-		    eng->tr, &(eng->wrkM), eng->ahash,  
-		    eng->asf, eng->anch, &(eng->asc_f), 
-		    mpas_params);
+        eng->vsc, eng->fsc, eng->sxf, eng->sxd, eng->vanch,
+        eng->tr, &(eng->wrkM), eng->ahash,  
+        eng->asf, eng->anch, &(eng->asc_f), 
+        mpas_params);
 
   /* Remaining ASC calculations. MPAS already did <asf> for us. */
   p7_sparse_asc_Backward(dsq, L, gm, eng->anch->a, eng->anch->D, eng->sm,    eng->asb, /*asc_b=*/NULL);
@@ -611,21 +790,21 @@ trace_dump_runlengths(P7_TRACE *tr)
   for (z = 0; z < tr->N; z++)
     {
       if (! in_domain && p7_trace_IsMain(tr->st[z]))
-	{
-	  in_domain = TRUE;
-	  nrun      = 1;
-	  last_st   = tr->st[z];
-	} 
+  {
+    in_domain = TRUE;
+    nrun      = 1;
+    last_st   = tr->st[z];
+  } 
       else if (in_domain)
-	{
-	  if   (tr->st[z] == last_st) nrun++;
-	  else {
-	    printf("%5d %-2s ", nrun, p7_trace_DecodeStatetype(last_st));
-	    last_st = tr->st[z];
-	    nrun    = 1;
-	  }
-	  if (tr->st[z] == p7T_E) { printf("\n"); in_domain = FALSE; }
-	}
+  {
+    if   (tr->st[z] == last_st) nrun++;
+    else {
+      printf("%5d %-2s ", nrun, p7_trace_DecodeStatetype(last_st));
+      last_st = tr->st[z];
+      nrun    = 1;
+    }
+    if (tr->st[z] == p7T_E) { printf("\n"); in_domain = FALSE; }
+  }
     }
   return eslOK;
 }
@@ -692,10 +871,10 @@ main(int argc, char **argv)
 
       status = p7_engine_Overthruster(eng, sq->dsq, sq->n, om, bg);
       if      (status == eslFAIL) { 
-	//printf("skip\n");
-	p7_engine_Reuse(eng);
-	esl_sq_Reuse(sq); 
-	continue; 
+  //printf("skip\n");
+  p7_engine_Reuse(eng);
+  esl_sq_Reuse(sq); 
+  continue; 
       }
       else if (status != eslOK)   p7_Fail("overthruster failed with code %d\n", status);
 
@@ -710,9 +889,9 @@ main(int argc, char **argv)
       esl_sq_Reuse(sq);
     }
   if      (status == eslEFORMAT) esl_fatal("Parse failed (sequence file %s)\n%s\n",
-					   sqfp->filename, sqfp->get_error(sqfp));     
+             sqfp->filename, sqfp->get_error(sqfp));     
   else if (status != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
-					   status, sqfp->filename);
+             status, sqfp->filename);
 
   
   p7_engine_Destroy(eng);

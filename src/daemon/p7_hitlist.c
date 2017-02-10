@@ -41,8 +41,8 @@ P7_HITLIST_ENTRY *p7_hitlist_entry_pool_Create(uint32_t num_entries){
 	the_list->next = NULL;
 
 	current_entry = the_list;
-
-	for(int count = 1; count < num_entries; count++){
+	int count;
+	for(count = 1; count < num_entries; count++){
 		prev_entry = current_entry;
 		ESL_ALLOC(current_entry, sizeof(P7_HITLIST_ENTRY));
 		the_hit = p7_hit_Create(1);
