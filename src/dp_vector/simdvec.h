@@ -9,9 +9,19 @@
 #ifndef p7SIMDVEC_INCLUDED
 #define p7SIMDVEC_INCLUDED
 
-/* In calculating Q, the number of vectors (of width V bytes) we need
- * in a row for a model of length M, we have to make sure there's at
- * least 2, or a striped implementation fails.
+/* P7_NV*() macros
+ * These are for calculating Q, the number of vectors (of width V bytes)
+ * that we need in a DP or profile row for a model of length M. 
+ * 
+ * Q must be at least 2, or a striped implementation fails.
+ * 
+ * Data structures hold Q and V information, set by any SIMD vector
+ * routine that stores or modifies data. We assume that all SIMD
+ * vector routines called in the same process use the same SIMD ISA.
+ *
+ * Q and V are sufficient to enable (slow) serial access to striped
+ * memory in a SIMD ISA-independent fashion, so data structure
+ * debugging code is typically ISA-independent.
  * 
  *             V (bytes)
  *             ---------
@@ -25,6 +35,29 @@
 #define P7_NVW(M,V)   ( ESL_MAX(2, ((((M)-1) / (V/2)) + 1)))  
 #define P7_NVF(M,V)   ( ESL_MAX(2, ((((M)-1) / (V/4)) + 1)))  
 
+/* p7_MAXV* constants
+ * 
+ * Data structures are allocated in an ISA-independent fashion, by
+ * allocating for the maximum size required by any runtime-available
+ * ISA. For one row, that's something like: 
+ *      P7_NVB(M,p7_MAXVB) * p7_MAXVB bytes.
+ * or similar for words, floats.
+ *
+ * Vector memory is aligned on p7_MAXVB byte boundaries.
+ */
+#if     defined(eslENABLE_AVX512)  // 512b vector ISAs, widths:
+#define p7_MAXVB  64               //    ... in bytes
+#define p7_MAXVW  32               //    ... in words (int16)
+#define p7_MAXVF  16               //    ... in floats (or int32)
+#elseif defined(eslENABLE_AVX)     // 256b vector ISAs:
+#define p7_MAXVB  32
+#define p7_MAXVW  16
+#define p7_MAXVF   8
+#else                              // 128b vector ISAs (SSE,VMX,NEON) :
+#define p7_MAXVB  16
+#define p7_MAXVW   8
+#define p7_MAXVF   4
+#endif
 
 
 
