@@ -1,14 +1,9 @@
-/* Implementation of P7_CHECKPTMX: checkpointed, striped vector DP matrix.
+/* P7_CHECKPTMX: checkpointed, striped vector DP matrix.
  * 
  * Contents:
  *    1. API for the P7_CHECKPTMX object
  *    2. Debugging, development routines.
  *    3. Internal routines.
- *
- * Many of the functions in this file are now dispatch wrappers that
- * just call the appropriate SIMD version of the function in cases
- * where the correct version is known, you can achieve (slightly)
- * better performance by calling it directly
  */
 #include "p7_config.h"
 
@@ -18,8 +13,8 @@
 #include "easel.h"
 
 #include "dp_vector/simdvec.h"
-#include "dp_vector/p7_checkptmx.h"
-#include "hardware/hardware.h"
+#include "do_vector/p7_checkptmx.h"
+
 
 /*****************************************************************
  * 1. API for the <P7_CHECKPTMX> object
@@ -34,16 +29,16 @@
  *            of up to length <M> and a target sequence of up to
  *            length <L>.
  *            
- *            Try to keep the allocation within <ramlimit> bytes in
- *            memory.  For example, <ramlimit=ESL_MBYTES(128)>, sets a
+ *            Try to keep the allocation within <redline> bytes in
+ *            memory.  For example, <redline=ESL_MBYTES(128)>, sets a
  *            recommended memory limit of 128 MiB. Allocation can
  *            exceed this, if even a fully checkpointed <MxL>
  *            comparison requires it -- but in this case, any
- *            subsequent <p7_checkptmx_GrowTo()> call that attempts to
- *            reuse the matrix will try to reallocated it back
- *            downwards to the <ramlimit>.
+ *            subsequent <p7_checkptmx_Reinit()> call that attempts to
+ *            reuse the matrix will try to reallocate it back
+ *            downwards to the <redline>.
  *            
- *            Choice of <ramlimit> should take into account how many
+ *            Choice of <redline> should take into account how many
  *            parallel threads there are, because each one will likely
  *            have its own <P7_CHECKPTMX> allocation.
  *            
@@ -58,42 +53,91 @@
  * Throws:    <NULL> on allocation failure.
  */
 P7_CHECKPTMX *
-p7_checkptmx_Create(int M, int L, int64_t ramlimit, SIMD_TYPE simd)
+p7_checkptmx_Create(int M, int L, int64_t redline)
 {
-switch(simd){
-    case SSE:
-      return p7_checkptmx_Create_sse(M, L, ramlimit);
-      break;
-    case AVX:
-      return p7_checkptmx_Create_avx(M, L, ramlimit);
-      break;
-    case AVX512:
-      return p7_checkptmx_Create_avx512(M, L, ramlimit);
-      break;
-    case NEON: 
-      return p7_checkptmx_Create_neon(M, L, ramlimit);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_Create");  
-  }
+  P7_CHECKPTMX *ox = NULL;
+  int           maxR;
+  int           r;
+  int           status;
+  
+  /* Validity of integer variable ranges may depend on design spec:                  */
+  ESL_DASSERT1( (M <= 100000) );       /* design spec says  model length M <= 100000 */
+  ESL_DASSERT1( (L <= 100000) );       /*           ... and   seq length L <= 100000 */
+  ESL_DASSERT1( (L >  0) );
+  ESL_DASSERT1( (M >  0) );
+
+  /* Level 1 allocation: the structure itself */
+  ESL_ALLOC(ox, sizeof(P7_CHECKPTMX));
+  ox->dp_mem  = NULL;
+  ox->dpf     = NULL;
+
+  /* Set checkpointed row layout: allocR, R{abc}, L{abc} fields */
+  ox->R0          = 3;	  // fwd[0]; bck[prv,cur] 
+  ox->allocW      = sizeof(float) * (P7_NVF(M,p7_MAXVF) * p7C_NSCELLS * p7_MAXVF);
+  ox->allocW     += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN);    // specials are scalar. maintain vector mem alignment
+  ox->redline     = redline;                                            
+
+  maxR            = (int) (ox->redline / ox->allocW);
+  set_row_layout(ox, L, maxR);
+  ox->allocR      = ox->R0 + ox->Ra + ox->Rb + ox->Rc;
+  ox->validR      = ox->allocR;
+
+  ESL_DASSERT1(( ox->allocW % p7_MAXVF == 0 )); /* verify that concat'ed rows will stay aligned */
+
+  /* Level 2 allocations: row pointers and dp cell memory */
+  ox->nalloc = ox->allocR * ox->allocW;                   // in bytes
+  ox->dp_mem = esl_alloc_aligned(ox->nalloc, p7_VALIGN);  // dp_mem is aligned vector memory
+  if (ox->dp_mem == NULL) { status = eslEMEM; goto ERROR; }
+
+  ESL_ALLOC( ox->dpf, sizeof(float **) * ox->allocR);    
+  for (r = 0; r < ox->validR; r++)
+    ox->dpf[r] = ox->dp_mem + (r * ox->allocW);
+
+#if eslDEBUGLEVEL > 0
+  ox->do_dumping     = FALSE;
+  ox->dfp            = NULL;
+  ox->dump_maxpfx    = 5;	
+  ox->dump_width     = 9;
+  ox->dump_precision = 4;
+  ox->dump_flags     = p7_DEFAULT;
+  ox->fwd            = NULL;
+  ox->bck            = NULL;
+  ox->pp             = NULL;
+  ox->bcksc          = 0.0f;
+#endif
+
+  ox->M  = 0;
+  ox->L  = 0;
+  ox->R  = 0; 
+  ox->Q  = 0;
+  ox->V  = 0;  // until striped data are valid. Gets set by vector DP code.
+  return ox;
+
+ ERROR:
+  p7_checkptmx_Destroy(ox);
+  return NULL;
 }
 
-/* Function:  p7_checkptmx_GrowTo()
- * Synopsis:  Resize checkpointed DP matrix for new seq/model comparison.
+/* Function:  p7_checkptmx_Reinit()
+ * Synopsis:  Reinitialize checkpointed DP matrix for a new comparison.
  *
  * Purpose:   Given an existing checkpointed matrix structure <ox>,
  *            and the dimensions <M> and <L> of a new comparison,
- *            reallocate and reinitialize <ox>.
+ *            reinitialize <ox> for that comparison, reallocating
+ *            if needed.
  *
- *            Essentially the same as free'ing the previous matrix and
- *            creating a new one -- but minimizes expensive memory
- *            allocation/reallocation calls.
- *            
- *            Usually <ox> only grows. The exception is if <ox> is
- *            redlined (over its recommended allocation) and the new
- *            problem size <M,L> can fit in the preset recommended
- *            allocation, then <ox> is reallocated down to the smaller
- *            recommended size.
+ *            Essentially equivalent to _Create(), but while reusing
+ *            previous space and minimizing expensive reallocations.
+ *            Should only be called in a context similar to a
+ *            _Create() call. For efficiency, old data are not copied
+ *            to new internal allocations, so any existing data may be
+ *            lost.
+ *
+ *            Usually <ox> only grows. However, if <ox> is redlined
+ *            (over its recommended allocation) and the new problem
+ *            size <M,L> can fit in the preset recommended allocation,
+ *            then <ox> is reallocated down to the smaller recommended
+ *            size.
  *            
  * Args:      ox    - existing checkpointed matrix
  *            M     - new query profile length
@@ -105,24 +149,104 @@ switch(simd){
  *            now undefined, and the caller should not use it. 
  */
 int
-p7_checkptmx_GrowTo(P7_CHECKPTMX *ox, int M, int L)
+p7_checkptmx_Reinit(P7_CHECKPTMX *ox, int M, int L)
 {
-switch(ox->simd){
-    case SSE:
-      return p7_checkptmx_GrowTo_sse(ox, M, L);
-      break;
-    case AVX:
-      return p7_checkptmx_GrowTo_avx(ox, M, L);
-      break;
-    case AVX512:
-      return p7_checkptmx_GrowTo_avx512(ox, M, L);
-      break;
-    case NEON: 
-      return p7_checkptmx_GrowTo_neon(ox, M, L);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_Growto");  
-  }
+  int     minR_chk      = (int) ceil(minimum_rows(L)) + ox->R0; // minimum number of DP rows needed  
+  int     reset_dp_ptrs = FALSE;
+  int     maxR;
+  int64_t W;			/* minimum row width needed, bytes */
+  int     r;
+  int     status;
+
+  /* Validity of integer variable ranges may depend on design spec:                  */
+  ESL_DASSERT1( (M <= 100000) );       /* design spec says, model length M <= 100000 */
+  ESL_DASSERT1( (L <= 100000) );       /*           ... and,  seq length L <= 100000 */
+  ESL_DASSERT1( (L >  0) );
+  ESL_DASSERT1( (M >  0) );
+
+  /* Reset data-specific stuff for a new comparison */
+  ox->M = 0;
+  ox->L = 0;
+  ox->R = 0;
+  ox->Q = 0;
+  ox->V = 0;
+
+  /* If we're debugging and we have stored copies of any matrices,
+   * reset and realloc them too.  Must do this first, because we have an early 
+   * successful exit condition coming below.
+   *  (SRE TODO: these should be _Reinit() calls, combining Reuse and GrowTo)
+   */
+#if eslDEBUGLEVEL > 0
+  if (ox->fwd && (status = p7_refmx_Reuse(ox->fwd)) != eslOK) return status;
+  if (ox->bck && (status = p7_refmx_Reuse(ox->bck)) != eslOK) return status;
+  if (ox->pp  && (status = p7_refmx_Reuse(ox->pp))  != eslOK) return status;
+  ox->bcksc = 0.0f;
+#endif
+#if eslDEBUGLEVEL > 0
+  if (ox->fwd && (status = p7_refmx_GrowTo(ox->fwd, M, L)) != eslOK) goto ERROR;
+  if (ox->bck && (status = p7_refmx_GrowTo(ox->bck, M, L)) != eslOK) goto ERROR;
+  if (ox->pp  && (status = p7_refmx_GrowTo(ox->pp,  M, L)) != eslOK) goto ERROR;
+#endif
+ 
+  /* Calculate W, the minimum row width needed by the NEW allocation, in bytes */
+  W  = sizeof(float) * (P7_NVF(M,p7_MAXVF) * p7C_NSCELLS * p7_MAXVF);  // vector part, aligned for any vector ISA
+  W += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN);            // specials are scalar. maintain vector mem alignment
+
+  /* Are the current allocations satisfactory? */
+  if (W <= ox->allocW && ox->nalloc <= ox->redline)
+    {
+      if      (L + ox->R0 <= ox->validR) { set_full        (ox, L);             return eslOK; }
+      else if (minR_chk   <= ox->validR) { set_checkpointed(ox, L, ox->validR); return eslOK; }
+    }
+
+  /* Do individual matrix rows need to be expanded, by resetting ox->dpf ptrs into dp_mem? */
+  if ( W > ox->allocW) 
+    {
+      ox->allocW    = W;
+      ox->validR    = (int) (ox->nalloc / ox->allocW); // validR is still guaranteed to be <= allocR after this
+      reset_dp_ptrs = TRUE;
+    }
+
+  /* Does matrix dp_mem need reallocation, either up or down? */
+  maxR  = (int) (ox->nalloc / ox->allocW);                      // max rows if we use up to the current allocation size.      
+  if ( (ox->nalloc > ox->ramlimit && minR_chk <= maxR) ||       // we were redlined, and current alloc will work: so downsize 
+       minR_chk > ox->validR)				        // not enough memory for needed rows: so upsize                   
+    {
+      set_row_layout(ox, L, maxR); 
+      ox->validR = ox->R0 + ox->Ra + ox->Rb + ox->Rc;      // this may be > allocR now; we'll reallocate dp[] next, if so 
+      ox->nalloc = ox->validR * ox->allocW;
+
+      esl_alloc_free(ox->dp_mem);
+      ox->dp_mem = esl_alloc_aligned(ox->dp_mem, ox->nalloc, p7_VALIGN);
+      if (ox->dp_mem == NULL) { status = eslEMEM; goto ERROR; }
+
+      reset_dp_ptrs = TRUE;
+    }
+  else  // current validR will suffice, either full or checkpointed; but we still need to calculate a layout 
+    {
+      if   (L+ox->R0 <= ox->validR) set_full(ox, L); 
+      else                          set_checkpointed(ox, L, ox->validR);
+    }
+  
+  /* Does the array of row ptrs need reallocation? */
+  if (ox->validR > ox->allocR)
+    {
+      ESL_REALLOC(ox->dpf, sizeof(float *) * ox->validR);
+      ox->allocR    = ox->validR;
+      reset_dp_ptrs = TRUE;
+    }
+
+  /* Do the row ptrs need to be reset? */
+  if (reset_dp_ptrs)
+    {
+      for (r = 0; r < ox->validR; r++)
+	ox->dpf[r] = ox->dp_mem + (r * ox->allocW);
+    }
+
+  return eslOK;
+
+ ERROR:
+  return status;
 }
 
 
@@ -147,22 +271,10 @@ switch(ox->simd){
 size_t
 p7_checkptmx_Sizeof(const P7_CHECKPTMX *ox)
 {
-switch(ox->simd){
-    case SSE:
-      return p7_checkptmx_Sizeof_sse(ox);
-      break;
-    case AVX:
-      return p7_checkptmx_Sizeof_avx(ox);
-      break;
-    case AVX512:
-      return p7_checkptmx_Sizeof_avx512(ox);
-      break;
-    case NEON: 
-      return p7_checkptmx_Sizeof_neon(ox);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_Sxzeof");  
-  }
+  size_t n = sizeof(P7_CHECKPTMX);
+  n += ox->nalloc;                     // neglects alignment overhead of up to p7_VALIGN bytes
+  n += ox->allocR  * sizeof(float *);	  
+  return n;
 }
 
 /* Function:  p7_checkptmx_MinSizeof()
@@ -177,63 +289,19 @@ switch(ox->simd){
  *            allocation strategies.
  */
 size_t
-p7_checkptmx_MinSizeof(int M, int L, SIMD_TYPE simd)
+p7_checkptmx_MinSizeof(int M, int L)
 {
-  switch(simd){
-    case SSE:
-      return p7_checkptmx_MinSizeof_sse(M, L);
-      break;
-    case AVX:
-      return p7_checkptmx_MinSizeof_avx(M, L);
-      break;
-    case AVX512:
-      return p7_checkptmx_MinSizeof_avx512(M, L);
-      break;
-    case NEON: 
-      return p7_checkptmx_MinSizeof_neon(M, L);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_MinSizeof");  
-  }
+  size_t n    = sizeof(P7_CHECKPTMX);
+  int    Q    = P7_NVF(M,p7_MAXVF);               // number of vectors needed
+  int    minR = 3 + (int) ceil(minimum_rows(L));  // 3 = Ra, 2 rows for backwards, 1 for fwd[0]
+
+  n += minR * (sizeof(float) * Q * p7C_NSCELLS * p7_MAXVF);          // each row: Q supercells. Each supercell: p7C_NSCELLS=3 vectors MDI. Each vector: <= p7_MAXVF floats
+  n += minR * (ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN)); // dp_mem, specials: maintaining vector memory alignment 
+  n += minR * sizeof(float *);                                       // dpf[] row ptrs
+  return n;
 }
 
 
-/* Function:  p7_checkptmx_Reuse()
- * Synopsis:  Recycle a checkpointed vector DP matrix.
- *
- * Purpose:   Resets the checkpointed vector DP matrix <ox> for reuse,
- *            minimizing free/malloc wastefulness. All information
- *            specific to the DP problem we just computed is
- *            reinitialized. All allocations (and information about
- *            those allocations) are preserved.
- *            
- *            Caller will still need to call <p7_checkptmx_GrowTo()>
- *            before each new DP, to be sure that the allocations are
- *            sufficient, and checkpointed rows are laid out.
- *
- * Returns:   <eslOK> on success.
- */
-int
-p7_checkptmx_Reuse(P7_CHECKPTMX *ox)
-{
-
- switch(ox->simd){
-    case SSE:
-      return p7_checkptmx_Reuse_sse(ox);
-      break;
-    case AVX:
-      return p7_checkptmx_Reuse_avx(ox);
-      break;
-    case AVX512:
-      return p7_checkptmx_Reuse_avx512(ox);
-      break;
-    case NEON: 
-      return p7_checkptmx_Reuse_neon(ox);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_Reuse");  
-  } 
-}
 
 
 /* Function:  p7_checkptmx_Destroy()
@@ -245,22 +313,17 @@ p7_checkptmx_Reuse(P7_CHECKPTMX *ox)
 void
 p7_checkptmx_Destroy(P7_CHECKPTMX *ox)
 {
- switch(ox->simd){
-    case SSE:
-      p7_checkptmx_Destroy_sse(ox);
-      break;
-    case AVX:
-      p7_checkptmx_Destroy_avx(ox);
-      break;
-    case AVX512:
-      p7_checkptmx_Destroy_avx512(ox);
-      break;
-    case NEON: 
-      p7_checkptmx_Destroy_neon(ox);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_Destroy");  
-  }
+  if (ox)
+    {
+      if (ox->dp_mem) esl_alloc_free(ox->dp_mem);
+      if (ox->dpf)    free(ox->dpf);
+
+#if eslDEBUGLEVEL > 0
+      if (ox->fwd)    p7_refmx_Destroy(ox->fwd);
+      if (ox->bck)    p7_refmx_Destroy(ox->bck);
+      if (ox->pp)     p7_refmx_Destroy(ox->pp);
+#endif
+    }
 }
 /*--------------- end, P7_CHECKPTMX object -----------------------*/
 
@@ -269,6 +332,44 @@ p7_checkptmx_Destroy(P7_CHECKPTMX *ox)
 /*****************************************************************
  * 2. Debugging, development routines
  *****************************************************************/
+#if eslDEBUGLEVEL > 0
+
+/* checkptmx_DecodeX()
+ * Converts a special X statecode to a string.
+ * Used below in _DumpFBHeader()
+ */
+static char *
+checkptmx_DecodeX(enum p7c_xcells_e xcode)
+{
+  switch (xcode) {
+  case p7C_E:     return "E"; 
+  case p7C_N:     return "N"; 
+  case p7C_JJ:    return "JJ"; 
+  case p7C_J:     return "J"; 
+  case p7C_B:     return "B"; 
+  case p7C_CC:    return "CC"; 
+  case p7C_C:     return "C"; 
+  case p7C_SCALE: return "SCALE"; 
+  default:        return "?";
+  }
+}
+
+
+/* checkptmx_get_val()
+ * Access a score in a striped vector row.
+ * Used below in _DumpFBRow() 
+ */
+static float
+checkptmx_get_val(P7_CHECKPTMX *ox, float *dpc, int k, p7c_scells_e s, int logify)
+{
+  if (k == 0) return 0.0;
+  int q = (k-1) % ox->V;
+  int r = (k-1) / ox->V;
+  if (logify) return esl_logf(dpc[(q*p7C_NSCELLS + s)*ox->V + r]);
+  else        return          dpc[(q*p7C_NSCELLS + s)*ox->V + r];
+}
+
+
 
 /* Function:  p7_checkptmx_SetDumpMode()
  * Synopsis:  Toggle dump mode flag in a P7_CHECKPTMX.
@@ -276,7 +377,7 @@ p7_checkptmx_Destroy(P7_CHECKPTMX *ox)
  * Purpose:   Toggles whether DP matrix rows will be dumped for examination
  *            during <p7_ForwardFilter()>, <p7_BackwardFilter()>.
  *            Dumping has to be done row by row, on the fly during the
- *            DP calculations, not afterwards, because these routines
+ *            DP calculations, not afterwards, because the DP routines
  *            are memory efficient (checkpointed) and they do not save
  *            all their rows.
  * 
@@ -297,42 +398,18 @@ p7_checkptmx_Destroy(P7_CHECKPTMX *ox)
  * Returns:   <eslOK> on success.
  */
 int
-p7_checkptmx_SetDumpMode(P7_CHECKPTMX *ox, FILE *dfp, int truefalse)
+p7_checkptmx_SetDumpMode(P7_CHECKPTMX *ox, FILE *dfp, int true_or_false)
 {
-#if eslDEBUGLEVEL > 0
-  ox->do_dumping    = truefalse;
+  ox->do_dumping    = true_or_false;
   ox->dfp           = dfp;
-#endif
   return eslOK;
 }
 
 
-#if eslDEBUGLEVEL > 0
-
-/* Function:  p7_checkptmx_DecodeX()
- * Synopsis:  Convert a special X statecode to a string.
- */
-char *
-p7_checkptmx_DecodeX(enum p7c_xcells_e xcode)
-{
-  switch (xcode) {
-  case p7C_E:     return "E"; 
-  case p7C_N:     return "N"; 
-  case p7C_JJ:    return "JJ"; 
-  case p7C_J:     return "J"; 
-  case p7C_B:     return "B"; 
-  case p7C_CC:    return "CC"; 
-  case p7C_C:     return "C"; 
-  case p7C_SCALE: return "SCALE"; 
-  default:        return "?";
-  }
-}
-
 /* Function:  p7_checkptmx_DumpFBHeader()
  * Synopsis:  Prints the header of the fwd/bck dumps.
  *
- * Purpose:   Print the header that accompanies 
- *            <p7_checkptmx_DumpFBRow()>.
+ * Purpose:   Print the header that accompanies <p7_checkptmx_DumpFBRow()>.
  */
 int
 p7_checkptmx_DumpFBHeader(P7_CHECKPTMX *ox)
@@ -356,6 +433,7 @@ p7_checkptmx_DumpFBHeader(P7_CHECKPTMX *ox)
   return eslOK;
 }
 
+
 /* Function:  p7_checkptmx_DumpFBRow()
  * Synopsis:  Dump one row from fwd or bck version of the matrix.
  *
@@ -367,28 +445,47 @@ p7_checkptmx_DumpFBHeader(P7_CHECKPTMX *ox)
  *            fwd rows, both of which it is dumping; they need to be
  *            labeled something like "fwd" and "bck" to distinguish
  *            them in the debugging dump.)
+ *
+ *            Independent of vector ISA. A vectorized caller passes
+ *            the striped row <dpc> cast to <float *>, and we access
+ *            it here by translating to normal coords k=1..M.
  */
 int
-p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, debug_print *dpc, char *pfx)
+p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, float *dpc, char *pfx)
 {
-  switch(ox->simd){
-    case SSE:
-      return p7_checkptmx_DumpFBRow_sse(ox, rowi, dpc, pfx);
-      break;
-    case AVX:
-      return p7_checkptmx_DumpFBRow_avx(ox, rowi, dpc, pfx);
-      break;
-    case AVX512:
-      return p7_checkptmx_DumpFBRow_avx512(ox, rowi, dpc, pfx);
-      break;
-    case NEON: 
-      return p7_checkptmx_DumpFBRow_neon(ox, rowi, dpc, pfx);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_checkptmx_DumpFBRow");  
-  }
-}
+  float *xc        = dpc + (ox->Q * p7C_NSCELLS);
+  int    logify    = (ox->dump_flags & p7_SHOW_LOG) ? TRUE : FALSE;
+  int    maxpfx    = ox->dump_maxpfx;
+  int    width     = ox->dump_width;
+  int    precision = ox->dump_precision;
+  float  val;
+  int    k,z;
 
+  /* Line 1. M cells, unstriped */
+  fprintf(ox->dfp, "%*s %3d M", maxpfx, pfx, rowi);
+  for (k = 0; k <= M; k++) 
+    fprintf(ox->dfp, " %*.*f", width, precision, checkptmx_get_val(ox, dpc, k, p7C_M, logify));
+
+  /* Line 1 end: specials */
+  for (z = 0; z < p7C_NXCELLS; z++)
+    fprintf(ox->dfp, " %*.*f", width, precision, (logify ? esl_logf(xc[z]) : xc[z]));
+  fputc('\n', ox->dfp);
+
+  /* Line 2: I cells, unstriped */
+  fprintf(ox->dfp, "%*s %3d I", maxpfx, pfx, rowi);
+  for (k = 0; k <= M; k++) 
+    fprintf(ox->dfp, " %*.*f", width, precision, checkptmx_get_val(ox, dpc, k, p7C_I, logify));
+  fputc('\n', ox->dfp);
+
+  /* Line 3. D cells, unstriped */
+  fprintf(ox->dfp, "%*s %3d D", maxpfx, pfx, rowi);
+  for (k = 0; k <= M; k++)
+    fprintf(ox->dfp, " %*.*f", width, precision, checkptmx_get_val(ox, dpc, k, p7C_D, logify));
+  fputc('\n', ox->dfp);
+  fputc('\n', ox->dfp);
+
+  return eslOK;
+}
 #endif // eslDEBUGLEVEL
 /*---------------- end, debugging -------------------------------*/
 

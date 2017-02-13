@@ -43,20 +43,23 @@
  *      P7_NVB(M,p7_MAXVB) * p7_MAXVB bytes.
  * or similar for words, floats.
  *
- * Vector memory is aligned on p7_MAXVB byte boundaries.
+ * Vector memory is aligned on p7_VALIGN byte boundaries.
  */
-#if     defined(eslENABLE_AVX512)  // 512b vector ISAs, widths:
-#define p7_MAXVB  64               //    ... in bytes
-#define p7_MAXVW  32               //    ... in words (int16)
-#define p7_MAXVF  16               //    ... in floats (or int32)
-#elseif defined(eslENABLE_AVX)     // 256b vector ISAs:
-#define p7_MAXVB  32
-#define p7_MAXVW  16
-#define p7_MAXVF   8
-#else                              // 128b vector ISAs (SSE,VMX,NEON) :
-#define p7_MAXVB  16
-#define p7_MAXVW   8
-#define p7_MAXVF   4
+#if     defined(eslENABLE_AVX512)  // If we support up to 512b vector ISAs, then:
+#define p7_MAXVB   64              // max vector width in bytes
+#define p7_MAXVW   32              //                ... in words (int16)
+#define p7_MAXVF   16              //                ... in floats (or int32)
+#define p7_VALIGN  64              // memory alignment (same as MAXVB, less error prone)
+#elseif defined(eslENABLE_AVX)     // Or for up to 256b vector ISAs:
+#define p7_VALIGN  32
+#define p7_MAXVB   32
+#define p7_MAXVW   16
+#define p7_MAXVF    8
+#else                              // Or for 128b vector ISAs (SSE,VMX,NEON) :
+#define p7_VALIGN  16
+#define p7_MAXVB   16
+#define p7_MAXVW    8
+#define p7_MAXVF    4
 #endif
 
 

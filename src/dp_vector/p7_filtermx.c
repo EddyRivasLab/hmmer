@@ -68,7 +68,7 @@ p7_filtermx_Create(int allocM)
   
   if (allocM) {
     /* VF needs, in bytes:         3 MDI cells *     Qmax vectors         * bytes/vector; (aligned) */
-    fx->dp     = esl_alloc_aligned(p7F_NSCELLS * P7_NVW(allocM, p7_MAXVW) * p7_MAXVW,     p7_MAXVB);
+    fx->dp     = esl_alloc_aligned(p7F_NSCELLS * P7_NVW(allocM, p7_MAXVW) * p7_MAXVW,     p7_VALIGN);
     if (fx->dp == NULL) { status = eslEMEM; goto ERROR; }
     fx->allocM = allocM;
   }
@@ -125,7 +125,7 @@ p7_filtermx_Reinit(P7_FILTERMX *fx, int allocM)
   /* Reallocate if needed */
   if (allocM > fx->allocM) {
     free(fx->dp);
-    fx->dp     = esl_alloc_aligned(p7F_NSCELLS * P7_NVW(allocM, p7_MAXVW) * p7_MAXVW,  p7_MAXVB);
+    fx->dp     = esl_alloc_aligned(p7F_NSCELLS * P7_NVW(allocM, p7_MAXVW) * p7_MAXVW,  p7_VALIGN);
     if (fx->dp == NULL) { status = eslEMEM; goto ERROR; }
     fx->allocM = allocM;
   }
@@ -209,7 +209,7 @@ p7_filtermx_Sizeof(const P7_FILTERMX *fx)
 {
   size_t n = sizeof(P7_FILTERMX);
   n       += p7F_NSCELLS * P7_NVW(fx->allocM, p7_MAXVW) * p7_MAXVW; 
-  // neglects any alignment overhead, which may be up to p7_MAXVB bytes.
+  // neglects any alignment overhead, which may be up to p7_VALIGN bytes.
   return n;
 }
 
