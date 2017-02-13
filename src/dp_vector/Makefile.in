@@ -16,18 +16,12 @@ SSE_OBJS = \
 	fwdfilter_sse.o    \
 	io_sse.o           \
 	msvfilter_sse.o    \
-	p7_checkptmx_sse.o \
-	p7_filtermx_sse.o  \
-	p7_oprofile_sse.o  \
 	ssvfilter_sse.o    \
 	vitfilter_sse.o
 
 AVX_OBJS = \
 	io_avx.o           \
 	msvfilter_avx.o    \
-	p7_checkptmx_avx.o \
-	p7_filtermx_avx.o  \
-	p7_oprofile_avx.o  \
 	ssvfilter_avx.o    \
 	vitfilter_avx.o    \
 	fwdfilter_avx.o
@@ -35,9 +29,6 @@ AVX_OBJS = \
 AVX512_OBJS = \
 	io_avx512.o           \
 	msvfilter_avx512.o    \
-	p7_checkptmx_avx512.o \
-	p7_filtermx_avx512.o  \
-	p7_oprofile_avx512.o  \
 	ssvfilter_avx512.o    \
 	vitfilter_avx512.o    \
 	fwdfilter_avx512.o
@@ -45,9 +36,6 @@ AVX512_OBJS = \
 NEON_OBJS= \
 	io_neon.o           \
 	msvfilter_neon.o    \
-	p7_checkptmx_neon.o \
-	p7_filtermx_neon.o  \
-	p7_oprofile_neon.o  \
 	ssvfilter_neon.o    \
 	vitfilter_neon.o    \
 	fwdfilter_neon.o
