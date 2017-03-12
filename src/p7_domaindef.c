@@ -366,8 +366,8 @@ p7_domaindef_ByViterbi(P7_PROFILE *gm, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_
  *            using <fwd> and <bck> matrices as workspace for the
  *            necessary full-matrix DP calculations. Caller provides a
  *            new or reused <ddef> object to hold these results.
- *             A <bg> is provided for (possible) use
- *            in null3 score correction (used in nhmmer), and a boolean
+ *            A <bg> is provided for (possible) use in biased-composition
+ *            score correction (used in nhmmer), and a boolean
  *            <long_target> argument is provided to allow nhmmer-
  *            specific modifications to the behavior of this function
  *            (TRUE -> from nhmmer).
@@ -780,12 +780,10 @@ reparameterize_model (P7_BG *bg, P7_OPROFILE *om, const ESL_SQ *sq, int start, i
  * working space and heuristic thresholds.
  *
  * If <long_target> is TRUE, the calling function  optionally
- * passes in three allocated arrays (bgf_arr, scores_arr,
+ * passes in three allocated arrays (bg_tmp, scores_arr,
  * fwd_emissions_arr) used for temporary storage in
- * reparameterize_model(), and a previously computed array block_bg
- * of residue frequencies for the long_target block from which this
- * envelope came (if scores_arr is NULL, reparameterization is not
- * done, and the domcorrection, used to determine null2, is not
+ * reparameterize_model(). If scores_arr is NULL, reparameterization
+ * is not done, and the domcorrection, used to determine null2, is not
  * computed).
  * 
  * Returns <eslOK> if a domain was successfully identified, scored,

@@ -69,6 +69,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   int            status;
   char           n1,n2,n3;
   int            j;
+
   ESL_SQ         *ntorfseqtxt = NULL;
   
   /* First figure out which piece of the trace (from first match to last match) 
@@ -1109,7 +1110,7 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
   if (i     != subL+1)     ESL_XEXCEPTION(eslECORRUPT, "backconverted subseq didn't end at expected length (%s/%s)",        ad->sqname, ad->hmmname);
 
   /* Set up <sq> annotation as a subseq of a source sequence */
-  if ((status = esl_sq_FormatName(sq, "%s/%ld-%ld", ad->sqname, ad->sqfrom, ad->sqto))                      != eslOK) goto ERROR;
+  if ((status = esl_sq_FormatName(sq, "%s/%" PRId64 "-%" PRId64 "", ad->sqname, ad->sqfrom, ad->sqto))                      != eslOK) goto ERROR;
   if ((status = esl_sq_FormatDesc(sq, "[subseq from] %s", ad->sqdesc[0] != '\0' ? ad->sqdesc : ad->sqname)) != eslOK) goto ERROR;
   if ((status = esl_sq_SetSource (sq, ad->sqname))                                                          != eslOK) goto ERROR;
   if (ad->sqacc[0]  != '\0') { if ((status = esl_sq_SetAccession  (sq, ad->sqacc)) != eslOK) goto ERROR; }
@@ -1178,9 +1179,9 @@ p7_alidisplay_Dump(FILE *fp, const P7_ALIDISPLAY *ad)
   fprintf(fp, "sqname  = %s\n",  ad->sqname);
   fprintf(fp, "sqacc   = %s\n",  ad->sqacc[0]  == '\0' ? "[none]" : ad->sqacc);
   fprintf(fp, "sqdesc  = %s\n",  ad->sqdesc[0] == '\0' ? "[none]" : ad->sqdesc);
-  fprintf(fp, "sqfrom  = %ld\n", ad->sqfrom);
-  fprintf(fp, "sqto    = %ld\n", ad->sqto);
-  fprintf(fp, "L       = %ld\n", ad->L);
+  fprintf(fp, "sqfrom  = %" PRId64 "\n", ad->sqfrom);
+  fprintf(fp, "sqto    = %" PRId64 "\n", ad->sqto);
+  fprintf(fp, "L       = %" PRId64 "\n", ad->L);
   fprintf(fp, "\n");
 
   fprintf(fp, "size    = %d bytes\n",  (int) p7_alidisplay_Sizeof(ad));

@@ -597,9 +597,9 @@ typedef struct p7_alidisplay_s {
   char *sqname;			/* name of target sequence              */
   char *sqacc;			/* accession of target seq; or [0]='\0' */
   char *sqdesc;			/* description of targ seq; or [0]='\0' */
-  long  sqfrom;			/* start position on sequence (1..L)    */
-  long  sqto;		    /* end position on sequence   (1..L)    */
-  long  L;			/* length of sequence                   */
+  int64_t  sqfrom;			/* start position on sequence (1..L)    */
+  int64_t  sqto;		    /* end position on sequence   (1..L)    */
+  int64_t  L;			/* length of sequence                   */
 
   int   memsize;                /* size of allocated block of memory    */
   char *mem;			/* memory used for the char data above  */
@@ -611,9 +611,9 @@ typedef struct p7_alidisplay_s {
  *****************************************************************/
 
 typedef struct p7_dom_s { 
-  int            ienv, jenv;
-  int            iali, jali;
-  int            iorf, jorf; /*Used in translated search to capture the range in the DNA sequence of the ORF containing the match to a protein query */
+  int64_t        ienv, jenv;
+  int64_t        iali, jali;
+  int64_t        iorf, jorf; /*Used in translated search to capture the range in the DNA sequence of the ORF containing the match to a protein query */
   float          envsc;  	/* Forward score in envelope ienv..jenv; NATS; without null2 correction       */
   float          domcorrection;	/* null2 score when calculating a per-domain score; NATS                      */
   float          dombias;	/* FLogsum(0, log(bg->omega) + domcorrection): null2 score contribution; NATS */
@@ -1508,7 +1508,7 @@ extern int         p7_builder_LoadScoreSystem(P7_BUILDER *bld, const char *matri
 extern int         p7_builder_SetScoreSystem (P7_BUILDER *bld, const char *mxfile, const char *env, double popen, double pextend, P7_BG *bg);
 extern void        p7_builder_Destroy(P7_BUILDER *bld);
 
-extern int p7_Builder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om, ESL_MSA **opt_postmsa, FILE *seqweights_w_fp, FILE *seqweights_e_fp);
+extern int p7_Builder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om, ESL_MSA **opt_postmsa);
 extern int p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq,   P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE  **opt_tr,    P7_PROFILE **opt_gm, P7_OPROFILE **opt_om); 
 extern int p7_Builder_MaxLength      (P7_HMM *hmm, double emit_thresh);
 
@@ -1632,10 +1632,6 @@ extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCORE
                                      P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
                                      const ESL_SQ *sq, int complementarity,
                                      const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg
-/*                                     , ESL_STOPWATCH *ssv_watch_master
-                                     , ESL_STOPWATCH *postssv_watch_master
-                                     , ESL_STOPWATCH *watch_slave
-*/
                                      );
 
 

@@ -406,7 +406,7 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
   P7_HIT  *ori1    = h1->unsrt;    /* original base of h1's data */
   P7_HIT  *new2;
   int      i,j,k;
-  uint64_t Nalloc = h1->Nalloc + h2->Nalloc;
+  uint64_t Nalloc = h1->N + h2->N;
   int      status;
 
   if(h2->N <= 0) return eslOK;
@@ -477,14 +477,16 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
 int
 p7_tophits_GetMaxPositionLength(P7_TOPHITS *h)
 {
-  int i, max, n;
-  char buffer [11];
+  int64_t i;
+  int max = 0;
+  int n;
+  char buffer [13];
 
-  for (max = 0, i = 0; i < h->N; i++) {
+  for (i = 0; i < h->N; i++) {
     if (h->unsrt[i].dcl[0].iali > 0) {
-      n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].iali);
+      n = sprintf (buffer, "%" PRId64 "", h->unsrt[i].dcl[0].iali);
       max = ESL_MAX(n, max);
-      n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].jali);
+      n = sprintf (buffer, "%" PRId64 "", h->unsrt[i].dcl[0].jali);
       max = ESL_MAX(n, max);
     }
   }
@@ -1174,7 +1176,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 
         if (pli->long_targets) 
         {
-          if (fprintf(ofp, "%c %9.2g %6.1f %5.1f  %-*s %*d %*d ",
+          if (fprintf(ofp, "%c %9.2g %6.1f %5.1f  %-*s %*" PRId64 " %*" PRId64 "",
           newness,
           exp(th->hit[h]->lnP), // * pli->Z,
           th->hit[h]->score,
@@ -1332,7 +1334,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
           ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
            if (fprintf(ofp, " %3s   %6s %5s %9s %7s %7s %2s %9s %9s %2s %9s %9s %2s %9s %9s %2s %9s %9s %2s %5s %2s %4s\n",  "---", "------", "-----", "---------", "-------", "-------", "  ", "---------", "---------", "  ", "---------", "---------", "  ", "---------", "---------", "  ", "---------", "---------", "  ", "-----", "  ", "----")  < 0)
           ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-	}
+        }
         else {
           if (th->hit[h]->dcl[0].ad->ntseq != NULL) {
                /* The domain table is  char wide:
@@ -1347,12 +1349,12 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                  ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
           }
           else {
-	          /* The domain table is 101 char wide:
+                 /* The domain table is 101 char wide:
                     #     score  bias  c-Evalue  i-Evalue hmmfrom   hmmto    alifrom  ali to    envfrom  env to     acc
                    ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
                      1 ?  123.4  23.1   9.7e-11    6.8e-9       3    1230 ..       1     492 []       2     490 .] 0.90
                    123 ! 1234.5 123.4 123456789 123456789 1234567 1234567 .. 1234567 1234567 [] 1234567 1234568 .] 0.12
-	          */
+                 */
               if (fprintf(ofp, " %3s   %6s %5s %9s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",    "#",  "score",  "bias",  "c-Evalue",  "i-Evalue", "hmmfrom",  "hmm to", "  ", "alifrom",  "ali to", "  ", "envfrom",  "env to", "  ",  "acc")  < 0)
                   ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
               if (fprintf(ofp, " %3s   %6s %5s %9s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "---", "------", "-----", "---------", "---------", "-------", "-------", "  ", "-------", "-------", "  ", "-------", "-------", "  ", "----")  < 0)
@@ -1360,7 +1362,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
           }
         }
       }
-  
+
       nd = 0;
       for (d = 0; d < th->hit[h]->ndom; d++)
           if (th->hit[h]->dcl[d].is_reported)
@@ -1369,7 +1371,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
             if (pli->long_targets)
             {
 
-               if (fprintf(ofp, " %c %6.1f %5.1f %9.2g %9d %9d %c%c %9ld %9ld %c%c %9d %9d %c%c %9ld    %4.2f\n",
+               if (fprintf(ofp, " %c %6.1f %5.1f %9.2g %9d %9d %c%c %9" PRId64 " %9" PRId64 " %c%c %9" PRId64 " %9" PRId64 " %c%c %9" PRId64 "    %4.2f\n",
                     //nd,
                     th->hit[h]->dcl[d].is_included ? '!' : '?',
                     th->hit[h]->dcl[d].bitscore,
@@ -1407,7 +1409,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                          (th->hit[h]->dcl[d].ad->hmmfrom == 1) ? '[' : '.',
                          (th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M ) ? ']' : '.') < 0)
                              ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-         	 }
+                 }
                  else
                  {
                    if (fprintf(ofp, " %3d %c %6.1f %5.1f %9.2g %9.2g %7d %7d %c%c",
@@ -1423,12 +1425,11 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                          (th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M ) ? ']' : '.') < 0)
                              ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
                  }  
-			
-			  /* if ntseq is NULL then we are not using nhmmscant so print amino sequence, otherwise we are using nhmmscant */
-			  /* and if option set to print amino sequence then print it */	
+              /* if ntseq is NULL then we are not using nhmmscant so print amino sequence, otherwise we are using nhmmscant */
+              /* and if option set to print amino sequence then print it */	
               if( th->hit[h]->dcl[d].ad->ntseq != NULL && pli->show_translated_sequence) 
                  {
-                    if (fprintf(ofp, " %9ld %9ld %c%c",
+                    if (fprintf(ofp, " %9" PRId64 " %9" PRId64 " %c%c",
                        (th->hit[h]->dcl[d].ad->sqfrom+2)/3,
                        (th->hit[h]->dcl[d].ad->sqto+2)/3,
                        (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
@@ -1438,26 +1439,26 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 
               if( th->hit[h]->dcl[d].ad->ntseq != NULL)  
                  {
-                   if (fprintf(ofp, " %9ld %9ld %c%c",
+                   if (fprintf(ofp, " %9" PRId64 " %9" PRId64 " %c%c",
                       th->hit[h]->dcl[d].ad->sqfrom,
                       th->hit[h]->dcl[d].ad->sqto,
                       (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
-				      (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L*3) ? ']' : '.') < 0)
+                      (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L*3) ? ']' : '.') < 0)
                           ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-                 }	
+                 }
               else
                  {
-                   if (fprintf(ofp, " %7ld %7ld %c%c",
+                     if (fprintf(ofp, " %7" PRId64 " %7" PRId64 " %c%c",
                        th->hit[h]->dcl[d].ad->sqfrom,
                        th->hit[h]->dcl[d].ad->sqto,
                       (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
-				      (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.') < 0)
+                      (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.') < 0)
                           ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
                 }
-						
+
               if( th->hit[h]->dcl[d].ad->ntseq != NULL)  
                 {
-                 if (fprintf(ofp, " %9d %9d %c%c",
+                 if (fprintf(ofp, " %9" PRId64 " %9" PRId64 " %c%c",
                     th->hit[h]->dcl[d].ienv,
                     th->hit[h]->dcl[d].jenv,
                     (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
@@ -1466,36 +1467,36 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                 }
               else
                 {
-                 if (fprintf(ofp, " %7d %7d %c%c",
+                   if (fprintf(ofp, " %7" PRId64 " %7" PRId64 " %c%c",
                     th->hit[h]->dcl[d].ienv,
                     th->hit[h]->dcl[d].jenv,
                     (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
                     (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.') < 0)
-                       ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");						   
+                       ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
                 }
 
-	      if( th->hit[h]->dcl[d].ad->ntseq != NULL)  
+             if( th->hit[h]->dcl[d].ad->ntseq != NULL)  
                 {
-                   if (fprintf(ofp, " %9d %9d %c%c",
+                   if (fprintf(ofp, " %9" PRId64 " %9" PRId64 " %c%c",
                        th->hit[h]->dcl[d].iorf,
                        th->hit[h]->dcl[d].jorf,
-		               (th->hit[h]->dcl[d].iorf == 1) ? '[' : '.',
+                       (th->hit[h]->dcl[d].iorf == 1) ? '[' : '.',
                        (th->hit[h]->dcl[d].jorf == th->hit[h]->dcl[d].ad->L*3) ? ']' : '.') < 0)
                           ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
 
                    int frame = p7_tophits_frame(th->hit[h]->dcl[d].iorf, th->hit[h]->dcl[d].jorf);
                    if (fprintf(ofp, " %+5d", frame) < 0) 
                           ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
- 
+
                 }
 
               if( th->hit[h]->dcl[d].ad->ntseq != NULL) {
- 	        if (fprintf(ofp, "    %4.2f\n",
+                if (fprintf(ofp, "    %4.2f\n",
                   (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv))))) < 0)
                         ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
               }
-              else {										
-	        if (fprintf(ofp, " %4.2f\n",
+              else {
+               if (fprintf(ofp, " %4.2f\n",
                   (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv))))) < 0)
                         ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
               }
@@ -1738,7 +1739,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
         d    = th->hit[h]->best_domain;
         if (pli->long_targets) 
         {
-            if (fprintf(ofp, "%-*s %-*s %-*s %-*s %7d %7d %*d %*d %*d %*d %*ld %6s %9.2g %6.1f %5.1f  %s\n",
+            if (fprintf(ofp, "%-*s %-*s %-*s %-*s %7d %7d %*" PRId64 " %*" PRId64 " %*" PRId64 " %*" PRId64 " %*" PRId64 " %6s %9.2g %6.1f %5.1f  %s\n",
                 tnamew, th->hit[h]->name,
                 taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
                 qnamew, qname,
@@ -1764,7 +1765,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
           {
 
                 int frame = p7_tophits_frame(th->hit[h]->dcl[d].iorf, th->hit[h]->dcl[d].jorf);
-                 if (fprintf(ofp, "%-*s %-*s %-*s %-*s %9d %9d %+5d %9.2g %6.1f %5.1f\n",
+                 if (fprintf(ofp, "%-*s %-*s %-*s %-*s %9" PRId64 " %9" PRId64 " %+5d %9.2g %6.1f %5.1f\n",
                 tnamew, th->hit[h]->name,
                 taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
                 qnamew, qname,
@@ -1880,9 +1881,8 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 
               if (th->hit[h]->dcl[d].ad->ntseq != NULL)
               {
-
                 int frame = p7_tophits_frame(th->hit[h]->dcl[d].iorf, th->hit[h]->dcl[d].jorf);
-                if (fprintf(ofp, "%-*s %-*s %15ld %-*s %-*s %5d %6d %9.2g %6.1f %5.1f %3d %3d %9.2g %6.1f %5.1f %5d %5d %9ld %9ld %9ld %9ld %9d %9d %9d %9d %+5d %4.2f %s\n",
+                if (fprintf(ofp, "%-*s %-*s %15ld %-*s %-*s %5d %6d %9.2g %6.1f %5.1f %3d %3d %9.2g %6.1f %5.1f %5d %5d %9" PRId64 " %9" PRId64 " %9" PRId64 " %9" PRId64 " %9" PRId64 " %9" PRId64 " %9" PRId64 " %9" PRId64 " %+5d %4.2f %s\n",
                 tnamew, th->hit[h]->name,
                 taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
                 th->hit[h]->target_len,
@@ -1915,7 +1915,7 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
               }
               else
               {
-                if (fprintf(ofp, "%-*s %-*s %5d %-*s %-*s %5d %9.2g %6.1f %5.1f %3d %3d %9.2g %9.2g %6.1f %5.1f %5d %5d %5ld %5ld %5d %5d %4.2f %s\n",
+                if (fprintf(ofp, "%-*s %-*s %5d %-*s %-*s %5d %9.2g %6.1f %5.1f %3d %3d %9.2g %9.2g %6.1f %5.1f %5d %5d %5" PRId64 " %5" PRId64 " %5" PRId64 " %5" PRId64 " %4.2f %s\n",
                 tnamew, th->hit[h]->name,
                 taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
                 tlen,
@@ -2003,7 +2003,7 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
       if (th->hit[h]->flags & p7_IS_REPORTED)
       {
           //d    = th->hit[h]->best_domain;
-          if (fprintf(ofp, "%-*s  %-*s %-*s %6.1f %9.2g %5.1f %7d %7d %s %*d %*d %*d %*d %*ld   %s\n",
+          if (fprintf(ofp, "%-*s  %-*s %-*s %6.1f %9.2g %5.1f %7d %7d %s %*" PRId64 " %*" PRId64 " %*" PRId64 " %*" PRId64 " %*" PRId64 "   %s\n",
           tnamew, th->hit[h]->name,
           taccw, ( pli->mode == p7_SCAN_MODELS ? th->hit[h]->acc : qacc ),
           qnamew, qname,
@@ -2096,7 +2096,7 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
       {
         domhit = domHitlist->hit[h];
 
-        if (fprintf(ofp, "%-*s  %6.1f %9.2g %5d %5.1f %6d %6d %6ld %6ld %6d %6d     %s\n",
+        if (fprintf(ofp, "%-*s  %6.1f %9.2g %5d %5.1f %6" PRId64 " %6" PRId64 " %6" PRId64 " %6" PRId64 " %6d %6d     %s\n",
               tnamew, domHitlist->hit[h]->name,
               domhit->dcl[0].bitscore,
               exp(domhit->dcl[0].lnP) * pli->Z, //i-Evalue
@@ -2149,7 +2149,7 @@ p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th )
     hit = th->hit[h];
     if (hit->flags & p7_IS_REPORTED)
     {
-      fprintf (ofp, "%s %s %d %d :", qname, hit->name, hit->dcl[0].iali, hit->dcl[0].jali);
+      fprintf (ofp, "%s %s %" PRId64 " %" PRId64 " :", qname, hit->name, hit->dcl[0].iali, hit->dcl[0].jali);
 
       scores = hit->dcl[0].scores_per_pos;
       for (i=0; i<hit->dcl[0].ad->N; i++) {

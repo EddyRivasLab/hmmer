@@ -21,8 +21,7 @@ binary file may be used as a target database for the DNA search tool
 Using default settings in 
 .IR nhmmer ,
 this yields a roughly 10-fold acceleration with small loss of 
-sensitivity on benchmarks. (This method has been extensively tested, 
-but should still be treated as somewhat experimental.)
+sensitivity on benchmarks. 
 
 
 .SH OPTIONS
@@ -78,6 +77,7 @@ Accepted formats include
 .IR fasta , 
 .IR embl , 
 .IR genbank ,
+.IR ncbi ,
 .IR ddbj , 
 .IR uniprot ,
 .IR stockholm , 

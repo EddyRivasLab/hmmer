@@ -652,6 +652,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	if ( p7_tophits_Alignment(info->th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK) 
 	  {
+	    esl_msa_SetName     (msa, om->name, -1);   // don't use qsq->name; it's optional in a ESL_SQ, and SingleBuilder took care of naming model.
+	    if (qsq->acc[0]  != '\0') esl_msa_SetAccession(msa, qsq->acc,  -1);
+	    if (qsq->desc[0] != '\0') esl_msa_SetDesc     (msa, qsq->desc, -1);
+	    esl_msa_FormatAuthor(msa, "phmmer (HMMER %s)", HMMER_VERSION);
+
 	    if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	    else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 
@@ -1159,6 +1164,13 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	if ( p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK) 
 	  {
+	    esl_msa_SetName     (msa, om->name, -1);   // don't use qsq->name; it's optional in a ESL_SQ, and SingleBuilder took care of naming model.
+	    if (qsq->acc[0]  != '\0') esl_msa_SetAccession(msa, qsq->acc,  -1);
+	    if (qsq->desc[0] != '\0') esl_msa_SetDesc     (msa, qsq->desc, -1);
+	    esl_msa_FormatAuthor(msa, "phmmer (HMMER %s)", HMMER_VERSION);
+
+	    esl_msa_FormatAuthor(msa, "phmmer (HMMER %s)", HMMER_VERSION);
+
 	    if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	    else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 

@@ -550,7 +550,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 0; i < info->th->N; i++) {
           if ( (info->th->hit[i]->flags & p7_IS_REPORTED) || info->th->hit[i]->flags & p7_IS_INCLUDED) {
               info->pli->n_output++;
-              info->pli->pos_output += abs(info->th->hit[i]->dcl[0].jali - info->th->hit[i]->dcl[0].iali) + 1;
+              info->pli->pos_output += 1 + (info->th->hit[i]->dcl[0].jali > info->th->hit[i]->dcl[0].iali ? info->th->hit[i]->dcl[0].jali - info->th->hit[i]->dcl[0].iali : info->th->hit[i]->dcl[0].iali - info->th->hit[i]->dcl[0].jali) ;
           }
       }
 
@@ -681,7 +681,9 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
       //reverse complement
       if (info->pli->strands != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL )
       {
-        p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, sq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
+        status = p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, sq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
+        if (status != eslOK) p7_Fail(info->pli->errbuf);
+
         p7_pipeline_Reuse(info->pli); // prepare for next search
         seq_len = info->qsq->n;
       }
@@ -689,7 +691,9 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
 
 
       if (info->pli->strands != p7_STRAND_BOTTOMONLY) {
-        p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, info->qsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
+        status = p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, info->qsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
+        if (status != eslOK) p7_Fail(info->pli->errbuf);
+
         p7_pipeline_Reuse(info->pli);
         seq_len += info->qsq->n;
       }
@@ -853,13 +857,17 @@ pipeline_thread(void *arg)
         //reverse complement
         if (info->pli->strands != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL )
         {
-          p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, sq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
+          status = p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, sq_revcmp, p7_COMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
+          if (status != eslOK) p7_Fail(info->pli->errbuf);
+
           p7_pipeline_Reuse(info->pli); // prepare for next search
           seq_len = info->qsq->n;
         }
 #endif
         if (info->pli->strands != p7_STRAND_BOTTOMONLY) {
-          p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, info->qsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
+          status = p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, info->qsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
+          if (status != eslOK) p7_Fail(info->pli->errbuf);
+
           p7_pipeline_Reuse(info->pli);
           seq_len += info->qsq->n;
         }

@@ -231,7 +231,10 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
 
   /* use the tophits and trace info above to produce an alignment */
   if ( (status = p7_tophits_Alignment(&th, hmm->abc, &qsq, &qtr, extra_sqcnt, p7_ALL_CONSENSUS_COLS, &msa)) != eslOK) goto ERROR;
-
+  esl_msa_SetName     (msa, hmm->name, -1);
+  esl_msa_SetAccession(msa, hmm->acc,  -1);
+  esl_msa_SetDesc     (msa, hmm->desc, -1);
+  esl_msa_FormatAuthor(msa, "hmmpgmd (HMMER %s)", HMMER_VERSION);
 
   /* free memory */
   if (qtr != NULL) free(qtr);

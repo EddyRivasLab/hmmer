@@ -1182,7 +1182,6 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
 
   P7_OPROFILE   *om;
   ESL_ALPHABET  *abc = NULL;
-
   /* Main loop: */
   while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK)
     {
@@ -1190,7 +1189,8 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
       p7_bg_SetLength(info->bg, info->qsq->n);
       p7_oprofile_ReconfigLength(om, info->qsq->n);
 
-      p7_Pipeline(info->pli, om, info->bg, info->qsq, NULL, info->th, NULL);
+      status = p7_Pipeline(info->pli, om, info->bg, info->qsq, NULL, info->th, NULL);
+      if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
 
       p7_oprofile_Destroy(om);
       p7_pipeline_Reuse(info->pli);
@@ -1274,29 +1274,30 @@ pipeline_thread(void *arg)
   /* loop until all blocks have been processed */
   block = (P7_OM_BLOCK *) newBlock;
   while (block->count > 0)
-    {
+  {
       /* Main loop: */
-      for (i = 0; i < block->count; ++i)
-	{
-	  P7_OPROFILE *om = block->list[i];
+    for (i = 0; i < block->count; ++i)
+    {
+      P7_OPROFILE *om = block->list[i];
 
-	  p7_pli_NewModel(info->pli, om, info->bg);
-	  p7_bg_SetLength(info->bg, info->qsq->n);
-	  p7_oprofile_ReconfigLength(om, info->qsq->n);
+      p7_pli_NewModel(info->pli, om, info->bg);
+      p7_bg_SetLength(info->bg, info->qsq->n);
+      p7_oprofile_ReconfigLength(om, info->qsq->n);
 
-	  p7_Pipeline(info->pli, om, info->bg, info->qsq, NULL, info->th, NULL);
+      status = p7_Pipeline(info->pli, om, info->bg, info->qsq, NULL, info->th, NULL);
+      if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
 
-	  p7_oprofile_Destroy(om);
-	  p7_pipeline_Reuse(info->pli);
+      p7_oprofile_Destroy(om);
+      p7_pipeline_Reuse(info->pli);
 
-	  block->list[i] = NULL;
-	}
-
-      status = esl_workqueue_WorkerUpdate(info->queue, block, &newBlock);
-      if (status != eslOK) esl_fatal("Work queue worker failed");
-
-      block = (P7_OM_BLOCK *) newBlock;
+      block->list[i] = NULL;
     }
+
+    status = esl_workqueue_WorkerUpdate(info->queue, block, &newBlock);
+    if (status != eslOK) esl_fatal("Work queue worker failed");
+
+    block = (P7_OM_BLOCK *) newBlock;
+  }
 
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
   if (status != eslOK) esl_fatal("Work queue worker failed");

@@ -823,15 +823,12 @@ int
 p7_hmm_ScaleExponential(P7_HMM *hmm, double exp)
 {
 
-//  printf ("\n==================\nTry exp = %.4f\n", exp);
   int k;
   for (k = 1; k <= hmm->M; k++) {
 
     float count = esl_vec_FSum(hmm->mat[k], hmm->abc->K);
     float new_count = pow(count, exp);
-    double scale = new_count / count;
-
-    //printf ("column %d : cnt: %.1f,  new_cnt: %.1f,  scale: %.4f\n", k, count, new_count, scale );
+    double scale = count>0 ? new_count / count : 1.0;  /* if no counts in the column (strange, but possible), just use default freqs*/
 
     esl_vec_FScale(hmm->t[k],   p7H_NTRANSITIONS, scale);
     esl_vec_FScale(hmm->mat[k], hmm->abc->K,      scale);

@@ -157,7 +157,7 @@ getFMHits( FM_DATA *fm, FM_CFG *cfg, FM_INTERVAL *interval, int block_id, int hi
     while ( j != fm->term_loc && (j % cfg->meta->freq_SA)) { //go until we hit a position in the full SA that was sampled during FM index construction
       uint8_t c = fm_getChar( cfg->meta->alph_type, j, fm->BWT);
       j = fm_getOccCount (fm, cfg, j-1, c);
-      j += abs(fm->C[c]);
+      j += abs((int)(fm->C[c]));
       len++;
     }
 

@@ -225,9 +225,9 @@ and you'll see some output that looks like:
 \begin{samepage}
 \begin{sreoutput}
 # hmmbuild :: profile HMM construction from multiple sequence alignments
-# HMMER 3.1 (February 2013); http://hmmer.org/
-# Copyright (C) 2011 Howard Hughes Medical Institute.
-# Freely distributed under the GNU General Public License (GPLv3).
+# HMMER 3.1 (February 2017); http://hmmer.org/
+# Copyright (C) 2017 Howard Hughes Medical Institute.
+# Freely distributed under the 3-Clause BSD open source license.
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # input alignment file:             globins4.sto
 # output HMM file:                  globins4.hmm
@@ -348,9 +348,9 @@ ran, on what, and with what options:
 % tutorial regression: globins4.out
 \begin{sreoutput}
 # hmmsearch :: search profile(s) against a sequence database
-# HMMER 3.1 (February 2013); http://hmmer.org/
-# Copyright (C) 2011 Howard Hughes Medical Institute.
-# Freely distributed under the GNU General Public License (GPLv3).
+# HMMER 3.1 (February 2017); http://hmmer.org/
+# Copyright (C) 2017 Howard Hughes Medical Institute.
+# Freely distributed under the 3-Clause BSD open source license.
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # query HMM file:                  globins4.hmm
 # target sequence database:        uniprot\_sprot.fasta
@@ -976,9 +976,9 @@ thresholds is marked with a \ccode{+}, and nothing is marked with a
 \begin{samepage}
 \begin{sreoutput}
 # jackhmmer :: iteratively search a protein sequence against a protein database
-# HMMER 3.1 (February 2013); http://hmmer.org/
-# Copyright (C) 2011 Howard Hughes Medical Institute.
-# Freely distributed under the GNU General Public License (GPLv3).
+# HMMER 3.1 (February 2017); http://hmmer.org/
+# Copyright (C) 2017 Howard Hughes Medical Institute.
+# Freely distributed under the 3-Clause BSD open source license.
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # query sequence file:             HBB_HUMAN
 # target sequence database:        uniprot_sprot.fasta
@@ -1142,9 +1142,9 @@ and you'll see some output that looks like:
 \begin{samepage}
 \begin{sreoutput}
 # hmmbuild :: profile HMM construction from multiple sequence alignments
-# HMMER 3.1 (February 2013); http://hmmer.org/
-# Copyright (C) 2011 Howard Hughes Medical Institute.
-# Freely distributed under the GNU General Public License (GPLv3).
+# HMMER 3.1 (February 2017); http://hmmer.org/
+# Copyright (C) 2017 Howard Hughes Medical Institute.
+# Freely distributed under the 3-Clause BSD open source license.
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # input alignment file:             tutorial/MADE1.sto
 # output HMM file:                  MADE1.hmm
@@ -1403,9 +1403,14 @@ of sequences, you may wish to annotate all the instances of a collection of HMMs
 found in a single sequence.
 
 In the case of proteins, \prog{hmmscan} is for annotating all the different
-known/detectable domains in a given protein sequence. It takes a single query
-sequence and an HMM database as input. The HMM database might be Pfam,
-SMART, or TIGRFams, for example, or another collection of your choice.
+known/detectable domains in a given protein sequence. It takes as input 
+a query file containing one or more solitary sequences, and an HMM database.
+The HMM database might be Pfam, SMART, or TIGRFams, for example, or another 
+collection of your choice. (An aside: both \prog{hmmsearch} and
+\prog{hmmscan} can compare a set of HMMs to a set of sequences. Due to
+disk access patterns of the two tools, you should
+only use \prog{hmmscan} when the number of HMMs substantially exceeds the 
+number of sequences.)
 
 In the case of DNA, the same purpose is met with \prog{nhmmscan}. In this case,
 the HMM database might be Dfam (a database of HMMs for transposable element
@@ -1478,11 +1483,11 @@ This reduces the time to build all of Pfam to about 40 seconds.
 
 \subsubsection{Step 2: compress and index the flatfile with hmmpress}
 
-The \prog{hmmscan} program has to read a lot of profile HMMs in a
-hurry, and HMMER's ASCII flatfiles are bulky. To accelerate this,
-\prog{hmmscan} uses binary compression and indexing of the flatfiles.
-To use \prog{hmmscan}, you must first compress and index your HMM
-database with the \prog{hmmpress} program:
+The programs \prog{hmmscan} and \prog{nhmmscan} have to read a lot of profile
+HMMs in a hurry, and HMMER's ASCII flatfiles are bulky. To accelerate this,
+both programs depend on binary compression and indexing of the flatfiles.
+To use \prog{hmmscan} and  \prog{nhmmscan}, you must first compress and index
+your HMM database with the \prog{hmmpress} program:
 
 \user{hmmpress minifam}
 
@@ -1531,9 +1536,9 @@ The header and the first section of the output will look like:
 \begin{samepage}
 \begin{sreoutput}
 # hmmscan :: search sequence(s) against a profile database
-# HMMER 3.1 (February 2013); http://hmmer.org/
-# Copyright (C) 2011 Howard Hughes Medical Institute.
-# Freely distributed under the GNU General Public License (GPLv3).
+# HMMER 3.1 (February 2017); http://hmmer.org/
+# Copyright (C) 2017 Howard Hughes Medical Institute.
+# Freely distributed under the 3-Clause BSD open source license.
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # query sequence file:             7LESS_DROME
 # target HMM database:             minifam

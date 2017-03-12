@@ -47,7 +47,7 @@ AC_PREREQ(2.63)
 # 2. AC_INIT
 ################################################################
 
-AC_INIT(HMMER, 3.1b3, sean@eddylab.org, hmmer)
+AC_INIT(HMMER, 3.1rc1, sean@eddylab.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -66,7 +66,7 @@ fi
 # The four AC_INIT args set these output variables and preprocessor symbols:
 #     PACKAGE_NAME      <package>     e.g. "HMMER"
 #     PACKAGE_VERSION   <version>     e.g. "3.0"
-#     PACKAGE_BUGREPORT <bug-report>  e.g. "eddys@janelia.hhmi.org"
+#     PACKAGE_BUGREPORT <bug-report>  e.g. "sean@eddylab.org"
 #     PACKAGE_TARNAME   <tarname>     e.g. "hmmer"
 # From them, it derives one more:
 #     PACKAGE_STRING    <package> <version>, e.g. "HMMER 3.0"
@@ -83,18 +83,18 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="May 2016"
-HMMER_COPYRIGHT="Copyright (C) 2016 Howard Hughes Medical Institute."
+HMMER_DATE="January 2017"
+HMMER_COPYRIGHT="Copyright (C) 2017 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
-EASEL_DATE="May 2016"
-EASEL_COPYRIGHT="Copyright (C) 2016 Howard Hughes Medical Institute."
+EASEL_DATE="January 2017"
+EASEL_COPYRIGHT="Copyright (C) 2017 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
-EASEL_VERSION="0.42"
+EASEL_VERSION="0.44"
 EASEL_URL="http://bioeasel.org/"
 
 # Output variables  (AC_OUTPUT replaces @var@ in input files, such as Makefiles)
@@ -414,7 +414,7 @@ if test "$enable_sse" = "yes" || test "$enable_sse" = "check"; then
      esac   
    fi
 fi
-if test "$enable_sse" = "check" && test "$enable_vmx" != "yes"; then
+if test "$enable_sse" = "check" && test "$enable_vmx" != "yes" && test "$enable_dummy" != "yes"; then
    sre_save_CFLAGS="$CFLAGS"
    sre_save_CPPFLAGS="$CPPFLAGS"
    CFLAGS="$CFLAGS $SSE_CFLAGS"
@@ -563,10 +563,14 @@ fi
 if test "y$vector_flags" != "y"; then
   ARM_CFLAGS="$vector_flags"
   NEON_CFLAGS="$vector_flags"
+  NEON64_CFLAGS="$vector_flags"
 fi
 
-AC_SUBST(NEON_CFLAGS)
 AC_SUBST(ARM_CFLAGS)
+AC_SUBST(NEON_CFLAGS)
+AC_SUBST(NEON64_CFLAGS)
+
+
 
 # If we're using SSE, figure out our @SIMD_CFLAGS@
 if test "$impl_choice" = "sse" && test "x$SIMD_CFLAGS" = x; then
@@ -844,6 +848,24 @@ AC_TYPE_OFF_T
 #
 AX_GCC_FUNC_ATTRIBUTE(noreturn)
 
+# HAVE_FUNC_ATTRIBUTE_FORMAT
+#   
+#   We have some printf()-style functions that use varargs.
+#   Apparently when you do something like 
+#           int64_t bigint;
+#           my_printf("%d", bigint);
+#   a compiler can't normally detect the size mismatch between the
+#   specifier (%d) and the argument (bigint). Usually this isn't a
+#   problem (apparently most platforms cast appropriately) but we had
+#   problems on ARM. gcc-like compilers allow declaring an attribute
+#   of format(printf, <string_index>, <first-to-check>), enabling the
+#   compiler to typecheck printf()-like arguments, and warn appropriately.
+#   We only need or use this in development.
+#
+# This gets set in the Easel esl_config.h.
+AX_GCC_FUNC_ATTRIBUTE(format)
+
+
 
 ################################################################
 # 11. Checks for functions, defining HAVE_FOO when foo is found
@@ -851,19 +873,26 @@ AX_GCC_FUNC_ATTRIBUTE(noreturn)
 
 AC_CHECK_FUNCS(mkstemp)
 AC_CHECK_FUNCS(popen)
+AC_CHECK_FUNCS(putenv)
 AC_CHECK_FUNCS(strcasecmp)
+AC_CHECK_FUNCS(strsep)
 AC_CHECK_FUNCS(times)
 AC_CHECK_FUNCS(getpid)
 AC_CHECK_FUNCS(sysctl)
 AC_CHECK_FUNCS(sysconf)
 AC_CHECK_FUNCS(getcwd)
+AC_CHECK_FUNCS(chmod)
 AC_CHECK_FUNCS(stat)
 AC_CHECK_FUNCS(fstat)
+AC_CHECK_FUNCS(erfc)
 
-AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
-AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))
-AC_CHECK_FUNCS(htons, , AC_CHECK_LIB(socket, htons))
-AC_CHECK_FUNCS(htonl, , AC_CHECK_LIB(socket, htonl))
+AC_SEARCH_LIBS(ntohs,     socket)
+AC_SEARCH_LIBS(ntohl,     socket)
+AC_SEARCH_LIBS(htons,     socket)
+AC_SEARCH_LIBS(htonl,     socket)
+AC_SEARCH_LIBS(socket,    socket)
+AC_SEARCH_LIBS(inet_pton, nsl)
+
 AC_FUNC_FSEEKO
 
 
@@ -936,10 +965,4 @@ if test "$impl_choice" = "dummy"; then
   AC_MSG_WARN([It is slow, about 100x slower than real H3, and is NOT intended for production use!])
   AC_MSG_WARN([It only intended to show the basics of how HMMER3 works, portably.])
 fi
-
-
-#################################################################
-# @LICENSE@
-# xref autoconf macro archive: //www.gnu.org/software/ac-archive/
-#################################################################
 
