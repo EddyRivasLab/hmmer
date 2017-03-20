@@ -114,17 +114,6 @@ typedef struct p7_engine_s {
   // Backward filter
   int (*bck)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh);
 
-
-  //! Current hitlist chunk that we're filling
-  P7_HIT_CHUNK *current_hit_chunk;
-
-  //! List of hits this engine has found.  
-  /*! This is a stub item, will be replaced by a global hitlist as that system gets built */
-  P7_HITLIST *hitlist;
-
-  //! Pool of hit objects to draw from
-  P7_HITLIST_ENTRY *empty_hit_pool;
-
 } P7_ENGINE;
 
 extern P7_ENGINE_PARAMS *p7_engine_params_Create (P7_MPAS_PARAMS *mpas_params);

@@ -1,0 +1,33 @@
+top_srcdir     = ..
+srcdir         = .
+
+
+QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
+QUIET_SUBDIR1 = 
+ifndef V
+	QUIET_SUBDIR0 = +@subdir=
+	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
+		        ${MAKE} -C $$subdir
+endif
+
+
+.PHONY: all clean distclean tags-append
+
+all:
+	${QUIET_SUBDIR0}profmark  ${QUIET_SUBDIR1} all
+	${QUIET_SUBDIR0}speed     ${QUIET_SUBDIR1} all
+
+clean:
+	${QUIET_SUBDIR0}profmark  ${QUIET_SUBDIR1} clean
+	${QUIET_SUBDIR0}speed     ${QUIET_SUBDIR1} clean
+	-rm -f *~
+
+distclean:
+	${QUIET_SUBDIR0}profmark  ${QUIET_SUBDIR1} distclean
+	${QUIET_SUBDIR0}speed     ${QUIET_SUBDIR1} distclean
+	-rm -f Makefile
+
+tags-append:
+	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.in
+	${QUIET_SUBDIR0}profmark  ${QUIET_SUBDIR1} tags-append
+	${QUIET_SUBDIR0}speed     ${QUIET_SUBDIR1} tags-append

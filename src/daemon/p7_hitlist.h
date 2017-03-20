@@ -18,11 +18,13 @@
 #define p7HITLIST_INCLUDED
 
 #include "base/p7_tophits.h"
+#include "esl_red_black.h"
 
 //#define HITLIST_SANITY_CHECK  // conditionally compiles code to check the hitlist every time it's modified.  
 // don't define for releases, will be slow
+struct p7_daemon_workernode_state;
 
-#define HITLIST_POOL_SIZE 100 // default size of each engine's hitlist pool
+#define HITLIST_POOL_SIZE 1000 // default size of each engine's hitlist pool
 //! Entry used to form a doubly-linked list of hits
 /*! Invariant: hits in the list are required to be sorted in ascending order by object id  */
 typedef struct p7_hitlist_entry{
@@ -84,12 +86,15 @@ typedef struct p7_hitlist{
 
 //Functions to create and manipulate P7_HITLIST_ENTRY objects
 
+
+ESL_RED_BLACK_DOUBLEKEY *p7_get_hit_tree_entry_from_pool(struct p7_daemon_workernode_state *workernode, uint32_t my_id);
+
 //! Creates a P7_HITLIST_ENTRY object and its included P7_HIT object
 P7_HITLIST_ENTRY *p7_hitlist_entry_Create();
 
 
-//! Creates a linked list of num_entries hitlist entries and returns it
-P7_HITLIST_ENTRY *p7_hitlist_entry_pool_Create(uint32_t num_entries);
+//! Creates a linked list of num_entries esl_red_black_doublekey nodes whose contents are hitlist entries and returns it
+ESL_RED_BLACK_DOUBLEKEY *p7_hitlist_entry_pool_Create(uint32_t num_entries);
 
 //! Destroys a P7_HITLIST_ENTRY object and its included P7_HIT object.
 /*! NOTE:  do not call the base p7_hit_Destroy function on the P7_HIT object in a P7_HITLIST_ENTRY.  
@@ -111,12 +116,13 @@ P7_HIT_CHUNK * p7_hit_chunk_Create();
 
 //! destroy a hit chunk and free its memory
 /*! @param the_chunk the chunk to be destroyed */
-void p7_hit_chunk_Destroy(P7_HIT_CHUNK *the_chunk);
+void p7_hit_chunk_Destroy(P7_HIT_CHUNK *the_chunk, struct p7_daemon_workernode_state *workernode);
 
 //! adds a hitlist entry to the chunk
 /*! @param  the_entry the entry to be added
  * @param the_chunk the chunk the entry should be added to
  * @return eslOK on success, fails program on failure */
+
 int p7_add_entry_to_chunk(P7_HITLIST_ENTRY *the_entry, P7_HIT_CHUNK *the_chunk); 
 
 //! returns a pointer to the list of hits in the chunk
@@ -147,7 +153,7 @@ P7_HITLIST *p7_hitlist_Create();
 
 //! Destroys a hitlist and frees its memory
 /*! @param the_list the list to be destroyed */
-void p7_hitlist_Destroy(P7_HITLIST *the_list);
+void p7_hitlist_Destroy(P7_HITLIST *the_list, struct p7_daemon_workernode_state *workernode);
 
 //! Adds a chunk to a hitlist
 /*! @param the_chunk the chunk to be added
@@ -169,5 +175,5 @@ uint32_t p7_hitlist_GetMaxAccessionLength(P7_HITLIST *th);
 
 // dummy output printing function for testing
 void p7_print_hitlist(char *filename, P7_HITLIST *th);
-
+void p7_print_and_recycle_hit_tree(char *filename, ESL_RED_BLACK_DOUBLEKEY *tree, struct p7_daemon_workernode_state *workernode);
 #endif // p7HITLIST_INCLUDED

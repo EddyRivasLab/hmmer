@@ -1,0 +1,46 @@
+MODULE = programs
+
+PROGS  = hmmalign\
+	 hmmbuild\
+	 hmmemit\
+	 hmmpress\
+	 hmmscan\
+	 hmmsearch\
+	 jackhmmer\
+	 phmmer\
+	 nhmmer
+#	 nhmmscan
+
+LIBOBJS =
+
+LIBHDRS = 
+
+OBJS =
+
+HDRS =
+
+UTESTS = 
+
+STATS  = 
+
+BENCHMARKS = 
+
+EXAMPLES =
+
+LIBTMP = 
+
+top_srcdir   = ../..
+top_builddir = ../..
+srcdir       = .
+
+SHELL        = /bin/sh
+
+include ../Makefile-subdirs.mk
+
+################################################################
+# @LICENSE@
+#
+# SVN $URL$
+# SVN $Id$
+################################################################
+

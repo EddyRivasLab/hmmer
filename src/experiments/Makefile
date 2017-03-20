@@ -1,0 +1,41 @@
+MODULE = experiments
+
+OBJS = 
+
+HDRS = 
+
+PROGS = decoding-animate \
+	decoding-hunt \
+	decoding-study \
+	hmmsim \
+        sim-alignment
+
+UTESTS = 
+
+STATS  = 
+
+BENCHMARKS = 
+
+EXAMPLES =
+
+LIBOBJS = 
+
+LIBHDRS =  
+
+LIBTMP = 
+
+top_srcdir   = ../..
+top_builddir = ../..
+srcdir       = .
+
+SHELL        = /bin/sh
+
+include ../Makefile-subdirs.mk
+
+################################################################
+# @LICENSE@
+#
+# SVN $URL$
+# SVN $Id$
+################################################################
+

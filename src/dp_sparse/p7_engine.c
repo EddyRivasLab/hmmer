@@ -28,14 +28,14 @@
 #include "esl_gumbel.h"
 
 #include "hardware/hardware.h"
-#define HIT_POOL_SIZE 100
+
 
 // Comment these out to move computation to backhalf.  Just defining them to zero won't have any effect
-//#define ENGINE_MSV_TOPHALF 
-//#define ENGINE_BIAS_TOPHALF 
-//#define ENGINE_VIT_TOPHALF 
-//#define ENGINE_FWD_TOPHALF 
-//#define ENGINE_BCK_TOPHALF 
+#define ENGINE_MSV_TOPHALF 
+#define ENGINE_BIAS_TOPHALF 
+#define ENGINE_VIT_TOPHALF 
+#define ENGINE_FWD_TOPHALF 
+#define ENGINE_BCK_TOPHALF 
 /*****************************************************************
  * 1. P7_ENGINE_PARAMS: config/control parameters for the Engine.
  *****************************************************************/
@@ -258,13 +258,6 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
         break;
     }
   }
-
-  // Set up structures for hit tracking
-  eng->current_hit_chunk = p7_hit_chunk_Create();
-
-  eng->hitlist = p7_hitlist_Create();
-
-  eng->empty_hit_pool = p7_hitlist_entry_pool_Create(HIT_POOL_SIZE);
   
   return eng;
 
@@ -351,13 +344,6 @@ p7_engine_Destroy(P7_ENGINE *eng)
 
       if (eng->params) p7_engine_params_Destroy(eng->params);
       if (eng->stats)  p7_engine_stats_Destroy (eng->stats);
-      if(eng->current_hit_chunk) p7_hit_chunk_Destroy(eng->current_hit_chunk);
-      if(eng->hitlist) p7_hitlist_Destroy(eng->hitlist);
-      while(eng->empty_hit_pool != NULL){
-        P7_HITLIST_ENTRY *temp = eng->empty_hit_pool;
-        eng->empty_hit_pool = eng->empty_hit_pool->next;
-        p7_hitlist_entry_Destroy(temp);
-      }
     }
   free(eng);
 }

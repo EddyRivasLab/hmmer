@@ -1,0 +1,47 @@
+MODULE = build
+
+LIBOBJS =  build.o\
+	   evalues.o\
+	   eweight.o\
+	   modelsample.o\
+	   modelstats.o\
+	   p7_builder.o\
+	   seqmodel.o
+
+LIBHDRS =  
+
+OBJS = 
+
+HDRS =
+
+PROGS =
+
+UTESTS = build_utest       \
+	 modelsample_utest \
+	 seqmodel_utest 
+
+STATS  = evalues_stats
+
+BENCHMARKS = evalues_benchmark
+
+EXAMPLES = build_example       \
+	   modelsample_example \
+	   seqmodel_example
+
+LIBTMP = 
+
+top_srcdir   = ../..
+top_builddir = ../..
+srcdir       = .
+
+SHELL        = /bin/sh
+
+include ../Makefile-subdirs.mk
+
+################################################################
+# @LICENSE@
+#
+# SVN $URL$
+# SVN $Id$
+################################################################
+

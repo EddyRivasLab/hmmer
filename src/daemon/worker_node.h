@@ -4,7 +4,8 @@
 
 #include <pthread.h>
 
-#include "easel.h" 
+#include "easel.h"
+#include "esl_red_black.h"
 #include "esl_dsqdata.h"
 #include "dp_sparse/p7_engine.h" 
 #include "search/modelconfig.h"
@@ -23,19 +24,48 @@ typedef struct p7_work_descriptor{
 
 } P7_WORK_DESCRIPTOR;
 
+typedef struct p7_work_chunk{
+	uint64_t start;
+	uint64_t end;
+	struct p7_work_chunk *next;
+} P7_WORK_CHUNK;
+
+typedef struct p7_backend_queue_entry{
+	ESL_DSQ *sequence;  // The sequence the backend should process, if we're doing a one-HMM, many-sequence comparison
+	int L;  // Sequence length if we're doing a one-HMM, many-sequence comparison
+
+	// profile and oprofile links to go here if this idea pans out well enough to justify it
+
+	uint64_t seq_id;
+	float biassc;  // Bias score computed by frontend, if things got that far
+	float P;  //P score calculated by earlier stages of the engine.  Needed in some cases depending on where we draw the
+	// frontend-backend split
+	P7_SPARSEMASK *sm;
+	struct p7_backend_queue_entry *next; // Next item in the list
+} P7_BACKEND_QUEUE_ENTRY;
+
+typedef enum p7_thread_mode{FRONTEND, BACKEND} P7_THREAD_MODE;
+
 typedef struct p7_worker_thread_state{
 	P7_ENGINE  *engine; // our engine structure
+	P7_THREAD_MODE mode; // are we processing front-end or back-end comparisons
 	P7_PROFILE *gm;  // our copy of unoptimized model of the HMM we're analyzing
 	P7_OPROFILE *om;  // our copy of optimized model of the HMM we're analyzing
 	P7_BG *bg; // our background model 
-
-} P7_WORKER_THREAD_STATE;
+	ESL_RED_BLACK_DOUBLEKEY *empty_hit_pool; // This thread's pool of hit entries
+	
+	//! lock on our hitlist
+	pthread_mutex_t hits_lock;
+	ESL_RED_BLACK_DOUBLEKEY *my_hits;  // unordered list of hits (via the large pointers) that this thread has generated
+	// node's master thread is responsible for pulling nodes out of this list and inserting them into an ordered tree
+	uint64_t comparisons_queued;
+} P7_WORKER_THREAD_STATE; 
 
 typedef enum p7_search_type{IDLE, SEQUENCE_SEARCH, HMM_SEARCH} P7_SEARCH_TYPE;
 
 //! Structure that holds the state required to manage a worker node
 typedef struct p7_daemon_workernode_state{
-
+	P7_HARDWARE *hw;  // Information about the machine we're running on
 	// static information about the worker node.  Shouldn't change after initialization
 
 	//! How many databases have been loaded into the daemon?
@@ -52,6 +82,15 @@ typedef struct p7_daemon_workernode_state{
 
 	//! How many worker threads does this node have?
 	uint32_t num_threads;
+
+	//! Lock to prevent multiple threads from changing the number of backend threads simultaneously
+	pthread_mutex_t backend_threads_lock;
+
+	//! How many of the worker threads are processing back-end (long) comparisons
+	uint32_t num_backend_threads;
+
+	//! how deep can the backend queue get before we add a thread to the number processing backend comparisons?
+	uint32_t backend_threshold;
 
 	// pthread_t objects set by pthread_create
 	pthread_t *thread_objs;
@@ -126,9 +165,29 @@ typedef struct p7_daemon_workernode_state{
 	//! which database are we comparing to?
 	volatile uint32_t compare_database;
 
-	//! List of hits this worker node has found.  
-	P7_HITLIST *hitlist;
+	//! lock on the list of hits this node has found
+	pthread_mutex_t hit_tree_lock;
 
+	//! Red-black tree of hits that the workernode has found.  Used to keep hits sorted.  
+	ESL_RED_BLACK_DOUBLEKEY *hit_tree;
+
+	//! lock on the empty hit pool
+	pthread_mutex_t empty_hit_pool_lock;
+	
+	//! Pool of hit objects to draw from
+  	ESL_RED_BLACK_DOUBLEKEY *empty_hit_pool;
+	
+  	P7_WORK_CHUNK *global_queue, *global_chunk_pool; // Global work queue 
+
+  	/* Deadlock prevention: We sometimes lock this lock while we have one of the worker threads' local queues locked
+  	   Therefore, never try to lock a local work queue while the global queue is locked */
+  	pthread_mutex_t global_queue_lock;
+
+  	pthread_mutex_t backend_queue_lock; // lock to synchronize access to the backend queue
+  	P7_BACKEND_QUEUE_ENTRY *backend_queue;  // list of comparisons waiting to be run through the backend
+  	uint64_t backend_queue_depth; // number of entries on the backend queue
+  	pthread_mutex_t backend_pool_lock;
+  	P7_BACKEND_QUEUE_ENTRY *backend_pool;  // pool of free backend queue entries 
 	uint64_t num_sequences;
 	uint64_t *sequences_processed; // used to check that we've processed every sequence, for debugging
 } P7_DAEMON_WORKERNODE_STATE;
@@ -143,7 +202,7 @@ typedef struct p7_daemon_workernode_state{
  * @param num_threads the number of threads that will run on this worker node
  * @return an initialized P7_WORKERNODE_STATE object, or NULL on failure
 */ 
-P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads);
+P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, uint32_t backend_queue_threshold);
 
 
 //! starts a workernode for the daemon.
@@ -161,7 +220,7 @@ P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, 
  * @param workernode pointer used to return the created workernode object
  * @return eslOK on success, eslFAIL otherwise
 */
-int p7_daemon_workernode_Setup(uint32_t num_databases, char **database_names, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, P7_DAEMON_WORKERNODE_STATE **workernode);
+int p7_daemon_workernode_Setup(uint32_t num_databases, char **database_names, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, uint32_t backend_queue_threshold, P7_DAEMON_WORKERNODE_STATE **workernode);
 
 //! Frees memory used by a P7_WORKERNODE_STATE data structure, cleans up internal pthread locks, etc.
 void p7_daemon_workernode_Destroy(P7_DAEMON_WORKERNODE_STATE *workernode);
@@ -210,6 +269,7 @@ typedef struct p7_daemon_worker_argument{
 
 //! Worker thread that processes searches
 void *p7_daemon_worker_thread(void *worker_argument);
+void *p7_daemon_worker_thread_twophase(void *worker_argument);
 
 //! Configure the workernode to perform an one-HMM many-amino (hmmsearch-style) search 
 /* Configure the workernode to perform an one-HMM many-amino (hmmsearch-style) search 
@@ -244,7 +304,8 @@ void p7_daemon_workernode_end_search(P7_DAEMON_WORKERNODE_STATE *workernode);
 * @param search_pointer pointer to the beginning of the first object in the chunk.  Input value is ignored, pointer value set during execution
 * @return the number of objects in the chunk, or 0 if there is no work available
 */ 
-uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, char **search_pointer);
+uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, volatile uint64_t *start, volatile uint64_t *end);
+uint64_t worker_thread_get_chunk_old(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, char **search_pointer);
 uint64_t worker_thread_get_chunk_by_index(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, uint64_t *start_index);
 //! Grab a chunk of work from the worker's queue.
 /*! If there's any work left in the worker's queue, grabs a chunk.  
@@ -277,4 +338,14 @@ void worker_thread_process_chunk_amino_vs_hmm_db(P7_DAEMON_WORKERNODE_STATE *wor
 
 //! main function called at startup on worker nodes
 void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_mpitypes);
+
+int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
+void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
+
+void worker_node_increase_backend_threads(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
+P7_BACKEND_QUEUE_ENTRY *p7_backend_pool_Create(int num_entries);
+P7_BACKEND_QUEUE_ENTRY *p7_get_backend_queue_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode);
+P7_BACKEND_QUEUE_ENTRY *p7_get_backend_queue_entry_from_queue(P7_DAEMON_WORKERNODE_STATE *workernode);
+void p7_put_backend_queue_entry_in_pool(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry);
+void p7_put_backend_queue_entry_in_queue(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry);
 #endif

@@ -70,7 +70,7 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
 	P7_DAEMON_WORKERNODE_STATE *workernode;
 
 	// load the databases.  For now, just use one thread/node
-	p7_daemon_workernode_Setup(1, &(seqfile), 1, 0, 1, &workernode);
+	p7_daemon_workernode_Setup(1, &(seqfile), 1, 0, 1, 10, &workernode);
 
 
 #ifdef HAVE_MPI

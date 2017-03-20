@@ -1,0 +1,81 @@
+MODULE = dp_sparse
+
+LIBOBJS =  p7_engine.o          \
+	   p7_sparsemx.o        \
+	   p7_spascmx.o         \
+	   p7_spaecmx.o         \
+	   sparse_aec_align.o   \
+	   sparse_anchors.o     \
+	   sparse_asc_fwdback.o \
+	   sparse_decoding.o    \
+	   sparse_envelopes.o   \
+	   sparse_envscore.o    \
+	   sparse_fwdback.o     \
+	   sparse_masstrace.o   \
+	   sparse_null2.o       \
+	   sparse_trace.o       \
+	   sparse_viterbi.o
+
+SSELIBOBJS =  \
+	p7_sparsemx_sse.o\
+
+AVXLIBOBJS = \
+	p7_sparsemx_avx.o\
+
+AVX512LIBOBJS = \
+	p7_sparsemx_avx512.o\
+
+NEONLIBOBJS = \
+	p7_sparsemx_neon.o\
+
+NEON64LIBOBJS = \
+	p7_sparsemx_neon64.o\
+ 
+	
+LIBHDRS =
+
+OBJS =
+
+HDRS =  
+
+PROGS =  
+
+UTESTS = sparse_aec_align_utest   \
+	 sparse_asc_fwdback_utest \
+	 sparse_decoding_utest    \
+         sparse_envscore_utest    \
+         sparse_fwdback_utest     \
+         sparse_masstrace_utest
+
+STATS  =  p7_spascmx_stats     \
+	  sparse_anchors_stats
+
+BENCHMARKS = sparse_fwdback_benchmark
+
+EXAMPLES = p7_engine_example          \
+	   sparse_anchors_example     \
+	   sparse_envelopes_example   \
+	   sparse_envscore_example    \
+           sparse_fwdback_example     \
+           sparse_masstrace_example   \
+	   sparse_null2_example       \
+           sparse_trace_example       \
+	   sparse_asc_fwdback_example \
+	   sparse_aec_align_example
+
+LIBTMP = 
+
+top_srcdir   = ../..
+top_builddir = ../..
+srcdir       = .
+
+
+include ../Makefile-subdirs.mk
+
+################################################################
+# @LICENSE@
+#
+# SVN $URL$
+# SVN $Id$
+################################################################
+

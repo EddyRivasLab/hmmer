@@ -1,0 +1,45 @@
+MODULE = search
+
+LIBOBJS =  modelconfig.o     \
+	   p7_mpas.o         \
+	   p7_pipeline.o     \
+	   p7_pipeline_mpi.o \
+	   tophits_output.o  \
+	   tophits_output_tabular.o
+
+LIBHDRS =  
+
+OBJS =
+
+HDRS =
+
+PROGS =
+
+UTESTS =  modelconfig_utest \
+	  p7_pipeline_mpi_utest
+
+STATS  =  
+
+BENCHMARKS =
+
+EXAMPLES = p7_pipeline_example \
+	   p7_pipeline_example2
+
+LIBTMP = 
+
+
+top_srcdir   = ../..
+top_builddir = ../..
+srcdir       = .
+
+SHELL        = /bin/sh
+
+include ../Makefile-subdirs.mk
+
+################################################################
+# @LICENSE@
+#
+# SVN $URL$
+# SVN $Id$
+################################################################
+
