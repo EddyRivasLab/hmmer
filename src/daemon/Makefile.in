@@ -24,9 +24,7 @@ PROGS = hmmc2\
 	hmmpgmd2
 
 UTESTS = shard_utest \
-	shard_utest2 \
-	hitlist_utest\
-	hitlist_utest2
+	shard_utest2 
 
 STATS  = 
 
