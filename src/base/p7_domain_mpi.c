@@ -150,6 +150,10 @@ p7_domain_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, P7_DOMAIN **ret_
   P7_DOMAIN *dcl = NULL;
   int        d;
   int        status;
+  if(ndom == 0){  // Nick's testing code because H4 doesn't have real hits left
+    *ret_dcl = NULL;
+    return eslOK;
+  }
 
   ESL_ALLOC(dcl, sizeof(P7_DOMAIN) * ndom);
   for (d = 0; d < ndom; d++) dcl[d].ad = NULL;

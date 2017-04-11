@@ -108,7 +108,7 @@ P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, 
   
   // hitlist starts out empty
   workernode->hit_tree = NULL;
-
+  workernode->hits_in_tree = 0;
   // initialize the empty hit pool lock
   if(pthread_mutex_init(&(workernode->empty_hit_pool_lock), NULL)){
     p7_Fail("Unable to create mutex in p7_daemon_workernode_Create");
@@ -1332,6 +1332,7 @@ void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
       // Fake up a hit for comparison purposes.  Do not use for actual analysis
       P7_HIT *the_hit = (P7_HIT *) the_hit_entry->contents;
       the_hit->seqidx = the_entry->seq_id;
+      the_hit->sortkey = the_hit_entry->key; // need to fix this to sort on score when we make hits work
       char *descriptors;
 
       // Get the descriptors for this sequence
@@ -1880,14 +1881,31 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
       p7_Fail("Attempt to start workernode_main when HMMER was compiled without MPI support")
 #endif
 #ifdef HAVE_MPI
-
   int status; // return code from ESL routines
+  char *send_buf; // MPI buffer used to send hits to master
+  int send_buf_length = 100000;
+
+  // default to 100k, send code will resize as necessary
+  ESL_ALLOC(send_buf, send_buf_length * sizeof(char));
+
+
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
   // first, get the number of shards that each database should be loaded into from the master
   int num_shards;
-  MPI_Bcast(&num_shards, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+
+  // All nodes must create these communicators in the same order for things to work right
+  MPI_Comm hmmer_control_comm, hmmer_hits_comm;
+  if(MPI_Comm_dup(MPI_COMM_WORLD, &hmmer_control_comm) != MPI_SUCCESS){
+    p7_Fail("Couldn't create MPI Communicator");
+  }
+  if(MPI_Comm_dup(MPI_COMM_WORLD, &hmmer_hits_comm) != MPI_SUCCESS){
+    p7_Fail("Couldn't create MPI Communicator");
+  }
+
+  MPI_Bcast(&num_shards, 1, MPI_INT, 0, hmmer_control_comm);
 
   printf("Rank %d sees %d shards\n", my_rank, num_shards);
     
@@ -1896,7 +1914,7 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
   p7_daemon_workernode_Setup(1, &(seqfile), 1, 0, 1, 2, &workernode);
 
   // block until everyone is ready to go
-  MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Barrier(hmmer_control_comm);
 
   // Main workernode loop: wait until master broadcasts a command, handle it, repeat until given command to exit
   P7_DAEMON_COMMAND the_command;
@@ -1906,7 +1924,7 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
   ESL_ALLOC(compare_obj_buff, 256);  // allocate a default initial buffer so that realloc doesn't crash
   compare_obj_buff_length = 256;
 
-  while(MPI_Bcast(&the_command, 1, daemon_mpitypes[P7_DAEMON_COMMAND_MPITYPE], 0, MPI_COMM_WORLD) == 
+  while(MPI_Bcast(&the_command, 1, daemon_mpitypes[P7_DAEMON_COMMAND_MPITYPE], 0, hmmer_control_comm) == 
       MPI_SUCCESS){
         // We have a command to process
 
@@ -1921,14 +1939,14 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
         }
 
         // Get the HMM
-        MPI_Bcast(compare_obj_buff, the_command.compare_obj_length, MPI_CHAR, 0, MPI_COMM_WORLD);
-
+        MPI_Bcast(compare_obj_buff, the_command.compare_obj_length, MPI_CHAR, 0, hmmer_control_comm);
+printf("Worker %d received HMM\n", my_rank);
         int temp_pos = 0;
         // Unpack the hmm from the buffer
         P7_HMM         *hmm     = NULL;
         ESL_ALPHABET   *abc     = NULL;
 
-        p7_hmm_mpi_Unpack(compare_obj_buff, compare_obj_buff_length, &temp_pos, MPI_COMM_WORLD, &abc, &hmm);
+        p7_hmm_mpi_Unpack(compare_obj_buff, compare_obj_buff_length, &temp_pos, hmmer_control_comm, &abc, &hmm);
         // build the rest of the data structures we need out of it
 
         P7_BG          *bg      = NULL;
@@ -1947,15 +1965,79 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
         p7_profile_Config   (gm, hmm, bg);
 
         p7_oprofile_Convert (gm, om);
-
+        ESL_RED_BLACK_DOUBLEKEY *last_hit_tree;
         // Ok, we've unpacked the hmm and built all of the profiles we need.  
+        p7_daemon_workernode_setup_hmm_vs_amino_db(workernode, 0, 0, 0, gm);
+        //printf("setup complete\n");
+        p7_daemon_workernode_release_threads(workernode);
 
+        while(workernode->num_waiting != workernode->num_threads){
+          int thread;
+          ESL_RED_BLACK_DOUBLEKEY *hits, *hit_temp;
+          for(thread = 0; thread < workernode->num_threads; thread++){
+            if(workernode->thread_state[thread].my_hits != NULL){
+              // This thread has hits that we need to put in the tree
+              while(pthread_mutex_trylock(&(workernode->thread_state[thread].hits_lock))){
+              // spin-wait until the lock on the hitlist is cleared.  Should never be locked for long
+              //printf("Thread %d spin-waiting on hit_tree_lock\n", my_id);
+              }
+              // grab the hits out of the workernode
+              hits = workernode->thread_state[thread].my_hits;
+              workernode->thread_state[thread].my_hits = NULL;
+              pthread_mutex_unlock(&(workernode->thread_state[thread].hits_lock));
+              while(hits != NULL){
+                hit_temp = hits->large;
+                hits->large = workernode->hit_tree;
+                workernode->hit_tree = hits;
+                workernode->hits_in_tree++;
+                hits = hit_temp;
+              }
+            }
+          }
+          if(workernode->hits_in_tree > 100){ // make this a parameter
+            if(p7_mpi_send_and_recycle_unsorted_hits(workernode->hit_tree, 0, HMMER_HIT_MPI_TAG, hmmer_hits_comm, &send_buf, &send_buf_length, workernode) != eslOK){
+              p7_Fail("Failed to send hit messages to master\n");
+            }
+            workernode->hit_tree = NULL;
+            workernode->hits_in_tree = 0;
+            printf("Worker %d sent hits\n", my_rank);
+          }
+        }
+        int thread;
+        ESL_RED_BLACK_DOUBLEKEY *hits, *hit_temp;
+        for(thread = 0; thread < workernode->num_threads; thread++){
+          if(workernode->thread_state[thread].my_hits != NULL){
+            // This thread has hits that we need to put in the tree
+            while(pthread_mutex_trylock(&(workernode->thread_state[thread].hits_lock))){
+            // spin-wait until the lock on the hitlist is cleared.  Should never be locked for long
+            //printf("Thread %d spin-waiting on hit_tree_lock\n", my_id);
+            }
+            // grab the hits out of the workernode
+            hits = workernode->thread_state[thread].my_hits;
+            workernode->thread_state[thread].my_hits = NULL;
+            pthread_mutex_unlock(&(workernode->thread_state[thread].hits_lock));
+            while(hits != NULL){
+              hit_temp = hits->large;
+              hits->large = workernode->hit_tree;
+              workernode->hit_tree = hits;
+              workernode->hits_in_tree++;
+              hits = hit_temp;
+            }
+          }
+        }
+        if(p7_mpi_send_and_recycle_unsorted_hits(workernode->hit_tree, 0, HMMER_HIT_FINAL_MPI_TAG, hmmer_hits_comm, &send_buf, &send_buf_length, workernode) != eslOK){
+          p7_Fail("Failed to send hit messages to master\n");
+        }
+        workernode->hit_tree = NULL;
+        workernode->hits_in_tree = 0;
+        printf("Worker %d sent final hits\n", my_rank);
+printf("Worker %d finished search\n", my_rank);
         break;
       case P7_DAEMON_SHUTDOWN_WORKERS:
         // spurious barrier for testing so that master doesn't exit immediately
         printf("Worker %d received shutdown command", my_rank);
         sleep(5);
-        MPI_Barrier(MPI_COMM_WORLD);
+        MPI_Barrier(hmmer_control_comm);
         exit(0);
         break;
       default:

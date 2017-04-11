@@ -28,7 +28,8 @@ int main(int argc, char **argv){
 	printf("Hmmpgmd2 was compiled without MPI support, and does nothing without that support\n");
 #endif	
 #ifdef HAVE_MPI
-	MPI_Init(NULL, NULL);
+	int provided;
+	MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
 
 	int num_nodes;
 	MPI_Comm_size(MPI_COMM_WORLD, &num_nodes);

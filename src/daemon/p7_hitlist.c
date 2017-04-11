@@ -1,10 +1,17 @@
 //! Functions to create and manipulate P7_HITLIST, P7_HIT_CHUNK, and P7_HITLIST_ENTRY objects
 #include <string.h>
 #include <pthread.h>
+#ifdef HAVE_MPI
+blump
+#include <mpi.h>
+#include "esl_mpi.h"
+#endif /*HAVE_MPI*/
+
 #include "easel.h"
 #include "daemon/p7_hitlist.h"
 #include "esl_red_black.h"
 #include "daemon/worker_node.h"
+#include "daemon/master_node.h"
 #include "base/p7_tophits.h"
 
 //! Creates a P7_HITLIST_ENTRY object and its included P7_HIT object
@@ -81,6 +88,30 @@ ESL_RED_BLACK_DOUBLEKEY *p7_get_hit_tree_entry_from_pool(P7_DAEMON_WORKERNODE_ST
 }
 
 
+/*! NOTE: NOT THREADSAFE.  ASSUMES ONLY ONE THREAD PULLING ENTRIES FROM POOL */
+ESL_RED_BLACK_DOUBLEKEY *p7_get_hit_tree_entry_from_masternode_pool(P7_DAEMON_MASTERNODE_STATE *masternode){
+  ESL_RED_BLACK_DOUBLEKEY *the_entry;
+
+  if(masternode->empty_hit_pool== NULL){
+    // allocate some more
+
+    //printf("Thread %d found no entries in global pool, allocating more\n",my_id);
+    // global free hit pool is empty, allocate new ones
+    masternode->empty_hit_pool = p7_hitlist_entry_pool_Create(HITLIST_POOL_SIZE);
+  }  
+
+  // grab the first free hit off of the pool now that we know there is one 
+  the_entry = masternode->empty_hit_pool;
+  masternode->empty_hit_pool = the_entry->large;
+
+  /* Clean up the small and large pointers to prevent broken trees */
+  the_entry->parent = NULL;
+  the_entry->small = NULL;
+  the_entry->large = NULL;
+  return the_entry;
+}
+
+
 ESL_RED_BLACK_DOUBLEKEY *p7_hitlist_entry_pool_Create(uint32_t num_entries){
   if(num_entries == 0){
     p7_Fail("Creating 0 entries in p7_hitlist_entry_pool_Create is not allowed\n");
@@ -142,7 +173,6 @@ P7_HITLIST_ENTRY *p7_hitlist_entry_pool_Create_old(uint32_t num_entries){
     p7_Fail("Unable to allocate memory in p7_hitlist_entry_pool_Create");
 }
 
-
 //! Destroys a P7_HITLIST_ENTRY object and its included P7_HIT object.
 /*! NOTE:  do not call the base p7_hit_Destroy function on the P7_HIT object in a P7_HITLIST_ENTRY.  
  * p7_hit_Destroy calls free on some of the objects internal to the P7_HIT object.  In the hitlist, these are pointers 
@@ -177,9 +207,10 @@ P7_HIT_CHUNK * p7_hit_chunk_Create(){
   ERROR:
     p7_Fail("Unable to allocate memory in p7_hitlist_entry_Create");  
 }
-
+/* old code, will be purged after design finalizes  */
 //! destroy a hit chunk and free its memory
 /*! @param the_chunk the chunk to be destroyed */
+/*
 void p7_hit_chunk_Destroy(P7_HIT_CHUNK *the_chunk, struct p7_daemon_workernode_state *workernode){
   //first, free all the hits in the chunk
   P7_HITLIST_ENTRY *current, *next;
@@ -217,6 +248,7 @@ void p7_hit_chunk_Destroy(P7_HIT_CHUNK *the_chunk, struct p7_daemon_workernode_s
   free(the_chunk);
 
 }
+*/
 
 //! adds a hitlist entry to the chunk.  Requires that hits be added in either ascending  or descending order of object id
 /*! @param  the_entry the entry to be added
@@ -563,12 +595,12 @@ void p7_hitlist_Destroy(P7_HITLIST *the_list, struct p7_daemon_workernode_state 
   P7_HIT_CHUNK *current, *prev;
   current = the_list->chunk_list_end;
   // walk through the chunk list in reverse order to avoid repeatedly freeing the same hits
-  while(current != NULL){
+/*  while(current != NULL){
     prev= current->prev;
     p7_hit_chunk_Destroy(current, workernode);
     current = prev;
   }
-
+*/
   // free the list's lock
   pthread_mutex_destroy(&(the_list->lock));
   free(the_list);
@@ -727,6 +759,132 @@ p7_hitlist_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_HITLIST *th, do
   return eslOK;
 }
 
+
+
+int p7_mpi_send_and_recycle_unsorted_hits(ESL_RED_BLACK_DOUBLEKEY *hits, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc, struct p7_daemon_workernode_state *workernode){
+
+  ESL_RED_BLACK_DOUBLEKEY *current = hits; //start at the beginning of the list
+  ESL_RED_BLACK_DOUBLEKEY *current2, *last;
+  uint32_t sendsize = 0;
+  uint32_t pos = 0; // start at the beginning of the buffer
+  int my_size; // size of the current hit
+  int status; // return code from ESL_REALLOC
+  int hits_in_message;
+  last = NULL;
+
+  while(current != NULL){ // there's still at least one hit left in the list
+    //First, figure out how many hits we can send in one buffer
+    current2 = current;
+    hits_in_message = 0;
+
+    //First item in the message is the number of hits in the message, which takes one int of space
+    //the call to MPI_pack_size overwrites any previous value in sendsize
+    if (MPI_Pack_size(1, MPI_INT, comm, &sendsize)  != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "mpi pack size failed");
+
+    while((sendsize < HIT_MESSAGE_LIMIT) && current2 != NULL){
+       // compute the amount of space required to hold the current hit
+      if(p7_hit_mpi_PackSize((const P7_HIT *) current2->contents, 1, comm, &my_size) != eslOK){
+        return eslFAIL;
+      }
+      sendsize += my_size;
+      current2 = current2->large;
+      hits_in_message++;
+    }
+    printf("Found %d hits to send\n", hits_in_message);
+    // make sure we have enough buffer space for the message
+    while(*nalloc < sendsize){ // the buffer is too small for us to add the current hit to it
+      *nalloc = 2* *nalloc;  // the max this can grow to should be ~ 2 * the message size limit we've defined
+      ESL_REALLOC(*buf, *nalloc);
+    }
+
+    // Now that we know how many hits will fit, pack them into the buffer
+    //First item is the number of hits in the buffer
+    if ( MPI_Pack(&hits_in_message, 1, MPI_INT, *buf, *nalloc, &pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "mpi pack failed");
+
+    int i;
+    for(i = 0; i < hits_in_message; i++){
+      if(p7_hit_mpi_Pack((const P7_HIT *) current->contents, 1, *buf, *nalloc, &pos, comm) != eslOK){
+        return eslFAIL;
+      }
+      last = current;
+      current = current->large;
+    }
+
+    // Now that we've packed the buffer, send it
+    // send to master node, which is rank 0
+    if ( MPI_Send(*buf, sendsize, MPI_PACKED, 0, tag, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "mpi send failed");
+
+    //Reset pos to the beginning of the buffer in case there are more hits left
+    pos = 0;
+  }
+
+  // Last, put the current hits back on the free pool
+  while(pthread_mutex_trylock(&(workernode->empty_hit_pool_lock))){
+  } // spin-wait on the hit pool lock, which should never be locked long
+
+  last->large = workernode->empty_hit_pool;
+  workernode->empty_hit_pool = hits;
+
+  pthread_mutex_unlock(&(workernode->empty_hit_pool_lock));
+
+  return eslOK;  // We haven't failed, therefore have succeeded
+
+ERROR:
+  return eslFAIL;
+}
+
+int p7_mpi_recv_and_sort_hits(MPI_Comm comm, char **buf, int *nalloc, struct p7_daemon_masternode_state *masternode){
+
+  MPI_Status mpistatus;
+  int message_size;
+  int status; // return value from ESL_REALLOC
+  int last_message = 0; // use this to track whether we've received a last hit message from a worker
+  // Probe will block until we get a message and then return status that we can use to determine message sender and length
+  // Wait for a message from any source that has the right tag
+
+  if (MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &mpistatus)  != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "mpi probe failed");
+  if(mpistatus.MPI_TAG == HMMER_HIT_FINAL_MPI_TAG){
+    printf("Master saw last tag message from worker\n");
+    last_message = 1;
+  }
+
+  if ( MPI_Get_count(&mpistatus, MPI_PACKED, &message_size) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "mpi get count failed");
+  printf("Hit thread receiving message of length %d\n", message_size);
+
+  /* Make sure the receive buffer is allocated appropriately */
+  if (*buf == NULL || message_size > *nalloc) 
+    {
+      ESL_REALLOC(*buf, sizeof(char) * message_size);
+      *nalloc = message_size; 
+    }
+
+  // copy the message into the buffer
+  if (MPI_Recv(*buf, message_size, MPI_PACKED, mpistatus.MPI_SOURCE, mpistatus.MPI_TAG, comm, &mpistatus) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "mpi recv failed");
+  
+  int pos = 0; // start at the beginning of the buffer
+  int num_hits;
+
+  //Get the number of hits that the buffer contains
+  if (MPI_Unpack(*buf, *nalloc, &pos, &num_hits, 1, MPI_INT, comm) != 0) ESL_EXCEPTION(eslESYS, "mpi unpack failed");
+  printf("Message contained %d hits\n",num_hits);
+  int i;
+  // Pull each hit out of the buffer and put it in the hit tree
+  for(i=0; i < num_hits; i++){
+    ESL_RED_BLACK_DOUBLEKEY *the_entry =  p7_get_hit_tree_entry_from_masternode_pool(masternode);
+    p7_hit_mpi_Unpack(*buf, *nalloc, &pos, comm, (P7_HIT *) the_entry->contents, 1);
+    the_entry->key = ((P7_HIT *) the_entry->contents)->sortkey;
+    // don't need to lock this as we're the only thread that accesses it until the search completes
+    masternode->hit_tree = esl_red_black_doublekey_insert(masternode->hit_tree, the_entry);
+  }
+  if(last_message){
+    // Record that this was the last hit message from some worker.  Do this here to prevent
+    // other threads from deciding the search is over too early
+    masternode->worker_nodes_done++;  // only one thread writes this variable
+  }
+  return eslOK; // We've reached the end of this message
+ERROR:  // handle errors in ESL_REALLOC
+  return eslFAIL;
+}
 
 /******************************************************************************************************************************/
 /*                                                                                      Tests                                                                                                     */

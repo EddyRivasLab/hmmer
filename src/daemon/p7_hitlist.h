@@ -23,8 +23,17 @@
 //#define HITLIST_SANITY_CHECK  // conditionally compiles code to check the hitlist every time it's modified.  
 // don't define for releases, will be slow
 struct p7_daemon_workernode_state;
+struct p7_daemon_masternode_state;
+
+//defines for tags on hit messages
+#define HMMER_HIT_MPI_TAG 0x1
+#define HMMER_HIT_FINAL_MPI_TAG 0x2
+
 
 #define HITLIST_POOL_SIZE 1000 // default size of each engine's hitlist pool
+#define HIT_MESSAGE_LIMIT 100000 // soft upper limit on the size of each message containing hits. When sending hits, we create a new
+//message whenever the current one exceeds this limit, so actual maximum size is limit + sizeof(last hit) -1
+
 //! Entry used to form a doubly-linked list of hits
 /*! Invariant: hits in the list are required to be sorted in ascending order by object id  */
 typedef struct p7_hitlist_entry{
@@ -89,6 +98,9 @@ typedef struct p7_hitlist{
 
 ESL_RED_BLACK_DOUBLEKEY *p7_get_hit_tree_entry_from_pool(struct p7_daemon_workernode_state *workernode, uint32_t my_id);
 
+
+/*! NOTE: NOT THREADSAFE.  ASSUMES ONLY ONE THREAD PULLING ENTRIES FROM POOL */
+ESL_RED_BLACK_DOUBLEKEY *p7_get_hit_tree_entry_from_masternode_pool(struct p7_daemon_masternode_state *masternode);
 //! Creates a P7_HITLIST_ENTRY object and its included P7_HIT object
 P7_HITLIST_ENTRY *p7_hitlist_entry_Create();
 
@@ -176,4 +188,32 @@ uint32_t p7_hitlist_GetMaxAccessionLength(P7_HITLIST *th);
 // dummy output printing function for testing
 void p7_print_hitlist(char *filename, P7_HITLIST *th);
 void p7_print_and_recycle_hit_tree(char *filename, ESL_RED_BLACK_DOUBLEKEY *tree, struct p7_daemon_workernode_state *workernode);
+
+
+// Functions to send and receive hits using the tree-based data structures
+
+//! Takes an unsorted list of hits (red-black tree objects, chained through the large pointer) and sends them via MPI
+/*! also recycles the red-black tree objects, returning them to the workernode structure
+    @param hits the list of hits to be sent.  Hits may be sent as multiple messages
+    @param nhits the number of hits in the list (needed so that we can make it the first item in the message)
+    @param dest the destination MPI process that the hits should be sent to (master node)
+	@param tag the tag to apply to MPI messages
+	@param comm the MPI communicator to use
+	@param buf pointer to the buffer that will hold the message.  Typed as pointer-to-pointer to allow re-allocation of the buffer if needed
+	@param nalloc size of the buffer in bytes.  May be updated if the buffer is resized.
+	@param workernode the workernode structure that the red-black tree entries should be recycled into 
+	@return ESLOK if the data is sent successfully, ESLFAIL if not */
+
+int p7_mpi_send_and_recycle_unsorted_hits(ESL_RED_BLACK_DOUBLEKEY *hits, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc, struct p7_daemon_workernode_state *workernode);
+
+
+//! Receives an unsorted list of hits via MPI and adds them to the master node's sorted tree of hits
+/*! @param comm the MPI communicater to use
+	@param buf the buffer that will hold the hit objects once received.  This buffer provides the raw storage for the hits, which will
+	also be inserted into red-black tree objects and added to the master node's hit tree.  This is a pointer-to-pointer so that the buffer can be resized if necessary
+	@param nalloc the size of the buffer in bytes.  May be updated if the buffer is resized.
+	@masternode the masternode structure that will contain the sorted hit tree. */
+
+int p7_mpi_recv_and_sort_hits(MPI_Comm comm, char **buf, int *nalloc, struct p7_daemon_masternode_state *masternode);
+
 #endif // p7HITLIST_INCLUDED

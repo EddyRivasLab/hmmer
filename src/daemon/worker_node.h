@@ -171,6 +171,8 @@ typedef struct p7_daemon_workernode_state{
 	//! Red-black tree of hits that the workernode has found.  Used to keep hits sorted.  
 	ESL_RED_BLACK_DOUBLEKEY *hit_tree;
 
+	uint64_t hits_in_tree;
+	
 	//! lock on the empty hit pool
 	pthread_mutex_t empty_hit_pool_lock;
 	
