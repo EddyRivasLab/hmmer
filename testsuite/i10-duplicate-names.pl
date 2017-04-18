@@ -1,12 +1,15 @@
 #! /usr/bin/perl
 
-# Check that we can deal with profiles and sequences that contain
-# duplicate names, both as queries and targets. 
+# Check how we handle duplicate names, for both queries and targets.
+# Indexing HMM or sequence files does require unique names/accessions.
+# Aside from SSI indexes, other HMMER operations do not require unique
+# names/accessions.
 #
 # Usage:    ./i10-duplicate-names.pl <builddir> <srcdir> <tmpfile prefix>
 # Example:  ./i10-duplicate-names.pl ..         ..       tmpfoo
 #
 # SRE, Sun Dec 13 14:41:31 2009 [Yokohama, Japan]
+
 
 BEGIN {
     $builddir = shift;
@@ -61,8 +64,10 @@ close SEQ1;
 # Build profiles from the test alignments
 @output = `$builddir/src/hmmbuild $tmppfx.hmm $tmppfx.sto 2>&1`;
 if ($? != 0) { die "FAIL: hmmbuild failed\n"; }
+
+# You can't hmmpress a file with duplicate HMM names; SSI indexing will reject it.
 @output = `$builddir/src/hmmpress $tmppfx.hmm             2>&1`;
-if ($? != 0) { die "FAIL: hmmpress failed\n"; }
+if ($? == 0) { die "FAIL: hmmpress should reject indexing an HMM file with duplicate names\n"; }
 
 
 
@@ -90,13 +95,8 @@ if ($? != 0) { die "FAIL: hmmsearch failed\n"; }
 if ($h3::ntbl != 4) { die "FAIL: on expected number of hits, hmmsearch\n"; } 
 
 
+# hmmscan requires hmmpress'd databases, so it can't handle dup names/accessions.
 
-# hmmscan should show four results
-$output = `$builddir/src/hmmscan --tblout $tmppfx.tbl $tmppfx.hmm $tmppfx.fa 2>&1`;
-if ($? != 0) { die "FAIL: hmmscan failed\n"; }
-
-&h3::ParseTbl("$tmppfx.tbl");
-if ($h3::ntbl != 4) { die "FAIL: on expected number of hits, hmmscan\n"; } 
 
 print "ok\n";
 unlink "$tmppfx.sto";
