@@ -1,4 +1,4 @@
-# Process this file with autoconf to produce the HMMER configure script.
+# Process this file with autoconf to produce the HMMER3 configure script.
 #
 # This is synchronized with Easel's configure script, so that HMMER
 # configures Easel in addition to itself. This saves having to do a
@@ -38,7 +38,10 @@
 #  14. AC_OUTPUT
 #
 # This obeys "standard configure.ac layout" according to autoconf manual.
-
+#
+# To update config.guess and config.sub from GNU:
+#    wget -O config.guess 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD'
+#    wget -O config.sub   'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD'
 
 
 ################################################################
@@ -53,16 +56,10 @@ AC_PREREQ(2.63)
 # Our extra macros are with Easel, in easel/m4
 # Though it's sort of standard to expect them in m4/. Hope nobody gets confused.
 #
-m4_include([easel/m4/ax_check_gnu_make.m4])
-
 m4_include([easel/m4/ax_compiler_vendor.m4])
-m4_include([easel/m4/ax_check_compile_flag.m4])
 m4_include([easel/m4/ax_gcc_func_attribute.m4])
 
 m4_include([easel/m4/esl_sse.m4])
-m4_include([easel/m4/esl_avx.m4])
-m4_include([easel/m4/esl_avx512.m4])
-m4_include([easel/m4/esl_neon.m4])
 m4_include([easel/m4/esl_vmx.m4])
 
 m4_include([easel/m4/ax_mpi.m4])
@@ -74,7 +71,7 @@ m4_include([easel/m4/ax_pthread.m4])
 ################################################################
 
 AC_INIT(HMMER, 3.1rc1, sean@eddylab.org, hmmer)
-AC_MSG_NOTICE([Configuring HMMER for your system.])
+AC_MSG_NOTICE([Configuring HMMER3 for your system.])
 
 # remember if the user is overriding CFLAGS
 esl_cflags_env_set=no
