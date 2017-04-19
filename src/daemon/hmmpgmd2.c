@@ -29,7 +29,7 @@ int main(int argc, char **argv){
 #endif	
 #ifdef HAVE_MPI
 	int provided;
-	MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
+	MPI_Init_thread(NULL, NULL, MPI_THREAD_FUNNELED, &provided);
 
 	int num_nodes;
 	MPI_Comm_size(MPI_COMM_WORLD, &num_nodes);
@@ -58,6 +58,18 @@ int main(int argc, char **argv){
 	// now, define the type
 	MPI_Type_create_struct(3, blocklen1, disp1, temp1, &(daemon_mpitypes[P7_DAEMON_COMMAND_MPITYPE]));
 	MPI_Type_commit(&(daemon_mpitypes[P7_DAEMON_COMMAND_MPITYPE]));
+
+	// P7_DAEMON_CHUNK_REPLY is two unsigned 64-bit ints
+	P7_DAEMON_CHUNK_REPLY the_reply;
+	MPI_Datatype temp2[2] = {MPI_UNSIGNED_LONG_LONG, MPI_UNSIGNED_LONG_LONG};
+	MPI_Aint disp2[2];
+
+	disp2[0] = (MPI_Aint)&(the_reply.start) - (MPI_Aint)&(the_reply);
+	disp2[1] = (MPI_Aint)&(the_reply.end) - (MPI_Aint)&(the_reply.start);
+
+	int blocklen2[2] = {1,1};
+	MPI_Type_create_struct(2, blocklen2, disp2, temp2, &(daemon_mpitypes[P7_DAEMON_CHUNK_REPLY_MPITYPE]));
+	MPI_Type_commit(&(daemon_mpitypes[P7_DAEMON_CHUNK_REPLY_MPITYPE]));
 
 	if(my_rank == 0){
 		// I'm the master node

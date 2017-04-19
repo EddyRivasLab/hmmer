@@ -88,7 +88,7 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
     	 		contents_offset += sizeof(P7_OPROFILE *);
  	 		P7_PROFILE **descriptors_pointer = ((P7_PROFILE **) the_shard->descriptors) + num_hmms;
     	 		*descriptors_pointer = gm;
-    	 		descriptors_offset += sizeof(P7_OPROFILE *);
+    	 		descriptors_offset += sizeof(P7_PROFILE *);
 
 	    	 	num_hmms+= 1; // Increment this last for ease of zero-based addressing
   		}
@@ -258,9 +258,10 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
     	 		}
     	 		sequence_count++;
     	 	}
+
     	 	esl_dsqdata_Recycle(dd, chu);
 	}	
-
+ 	//printf("Sequences took %lu bytes\n", contents_offset);
 	// Check that we got as many sequences as we expected
 	if (my_sequences != the_shard->num_objects){
 		p7_Fail("Mis-match between expected sequence count of %d and actual sequence count of %d in p7_shard_Create_dsqdata", the_shard->num_objects, my_sequences);

@@ -123,41 +123,6 @@ void p7_hitlist_entry_Destroy(P7_HITLIST_ENTRY *the_entry);
 
 //Functions to create and manipulate P7_HIT_CHUNK objects
 
-//! create and return an empty hit chunk
-P7_HIT_CHUNK * p7_hit_chunk_Create();
-
-//! destroy a hit chunk and free its memory
-/*! @param the_chunk the chunk to be destroyed */
-void p7_hit_chunk_Destroy(P7_HIT_CHUNK *the_chunk, struct p7_daemon_workernode_state *workernode);
-
-//! adds a hitlist entry to the chunk
-/*! @param  the_entry the entry to be added
- * @param the_chunk the chunk the entry should be added to
- * @return eslOK on success, fails program on failure */
-
-int p7_add_entry_to_chunk(P7_HITLIST_ENTRY *the_entry, P7_HIT_CHUNK *the_chunk); 
-
-//! returns a pointer to the list of hits in the chunk
-/* @param the_chunk the chunk that we want the hits from */
-static inline P7_HITLIST_ENTRY *p7_get_hits_from_chunk(P7_HIT_CHUNK *the_chunk){
-	return the_chunk->start;
-}
-
-
-//! returns the id of the first object in the chunk's list of hits
-/* @param the_chunk the hit chunk we want the start id of */
-static inline uint64_t p7_get_hit_chunk_start_id(P7_HIT_CHUNK *the_chunk){
-	return(the_chunk->start_id);
-}
-
-//! returns the id of the last object in the chunk's list of hits
-/* @param the_chunk the hit chunk we want the end id of */
-static inline uint64_t p7_get_hit_chunk_end_id(P7_HIT_CHUNK *the_chunk){
-	return(the_chunk->end_id);
-}
-
-
-
 // Functions to create and manipolate P7_HITLIST objects
 
 //! creates and returns a new, empty hitlist
@@ -167,27 +132,9 @@ P7_HITLIST *p7_hitlist_Create();
 /*! @param the_list the list to be destroyed */
 void p7_hitlist_Destroy(P7_HITLIST *the_list, struct p7_daemon_workernode_state *workernode);
 
-//! Adds a chunk to a hitlist
-/*! @param the_chunk the chunk to be added
- *  @param the_list the hitlist the chunk should be added to
- *  @return eslOK on success  */
-int p7_hitlist_add_Chunk(P7_HIT_CHUNK *the_chunk, P7_HITLIST *the_list);
-
-//! Returns the length of the longest name of any of the hits in th
-/*! @param th the hitlist to be searched */
-uint32_t p7_hitlist_GetMaxNameLength(P7_HITLIST *th);
-
-//! Returns the length of the longest position of any of the hits in th
-/*! @param th the hitlist to be searched */
-uint32_t p7_hitlist_GetMaxPositionLength(P7_HITLIST *th);
-
-//! Returns the length of the longest accession of any of the hits in th
-/*! @param th the hitlist to be searched */
-uint32_t p7_hitlist_GetMaxAccessionLength(P7_HITLIST *th);
-
 // dummy output printing function for testing
 void p7_print_hitlist(char *filename, P7_HITLIST *th);
-void p7_print_and_recycle_hit_tree(char *filename, ESL_RED_BLACK_DOUBLEKEY *tree, struct p7_daemon_workernode_state *workernode);
+void p7_print_and_recycle_hit_tree(char *filename, ESL_RED_BLACK_DOUBLEKEY *tree, struct p7_daemon_masternode_state *masternode);
 
 
 // Functions to send and receive hits using the tree-based data structures

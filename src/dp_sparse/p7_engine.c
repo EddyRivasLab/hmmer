@@ -419,7 +419,7 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   if (P > eng->F1) return eslFAIL;
   if (eng->stats) eng->stats->n_past_msv++;
-
+  
   /* Biased composition HMM, ad hoc, acts as a modified null */
   if  (do_biasfilter)
     {
@@ -679,7 +679,6 @@ int
 p7_engine_Main(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm)
 {
   P7_MPAS_PARAMS *mpas_params     = (eng->params && eng->params->mpas_params ? eng->params->mpas_params : NULL);
-
   eng->used_main = TRUE;  // This flag causes engine_Reuse() to reuse all of the engine, 
                           // not just the structures used by the Overthruster.
 

@@ -89,9 +89,6 @@ typedef struct p7_daemon_workernode_state{
 	//! How many of the worker threads are processing back-end (long) comparisons
 	uint32_t num_backend_threads;
 
-	//! how deep can the backend queue get before we add a thread to the number processing backend comparisons?
-	uint32_t backend_threshold;
-
 	// pthread_t objects set by pthread_create
 	pthread_t *thread_objs;
 
@@ -116,6 +113,9 @@ typedef struct p7_daemon_workernode_state{
 
 	//! lock on the variable that counts the number of threads that are waiting to start
 	pthread_mutex_t wait_lock;
+
+	uint64_t chunk_size; // How much work should the queue hand out at a time?  
+	// is function of search size
 
 	//! Number of threads waiting for the go signal
 	volatile uint32_t num_waiting;
@@ -202,9 +202,11 @@ typedef struct p7_daemon_workernode_state{
  * @param num_shards the number of shards each database will be divided into
  * @param my_shard the shard of each database that this worker node will process
  * @param num_threads the number of threads that will run on this worker node
+ * @param databases_only: if non-zero, just load the databases into the workernode and don't start any threads.  Used to load databases
+ * into the master node
  * @return an initialized P7_WORKERNODE_STATE object, or NULL on failure
 */ 
-P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, uint32_t backend_queue_threshold);
+P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads);
 
 
 //! starts a workernode for the daemon.
@@ -222,7 +224,7 @@ P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, 
  * @param workernode pointer used to return the created workernode object
  * @return eslOK on success, eslFAIL otherwise
 */
-int p7_daemon_workernode_Setup(uint32_t num_databases, char **database_names, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, uint32_t backend_queue_threshold, P7_DAEMON_WORKERNODE_STATE **workernode);
+int p7_daemon_workernode_Setup(uint32_t num_databases, char **database_names, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, P7_DAEMON_WORKERNODE_STATE **workernode);
 
 //! Frees memory used by a P7_WORKERNODE_STATE data structure, cleans up internal pthread locks, etc.
 void p7_daemon_workernode_Destroy(P7_DAEMON_WORKERNODE_STATE *workernode);
@@ -231,16 +233,6 @@ void p7_daemon_workernode_Destroy(P7_DAEMON_WORKERNODE_STATE *workernode);
 /*! the_shard must be a heap allocated object, and may not be freed outside of the shard
  * @return eslOK on success, esl error code on failure */
 int p7_daemon_set_shard(P7_DAEMON_WORKERNODE_STATE *workernode, P7_SHARD *the_shard, uint32_t database_id);
-
-//! Sets the initial work range for a worker thread
-/*! Sets the initial work range for a worker thread
- * MUST ONLY BE CALLED WHEN THE NODE IS IDLE.  DOES NO LOCKING.
- * @param thread_id id of the thread to be initialized
- * @param start object index that the thread should start processing
- * @param end object index of the last index the thread should process.  Must be > start
- * @return eslOK on success, an esl error code on failure
-*/
-int p7_daemon_initialize_workrange(P7_DAEMON_WORKERNODE_STATE *workernode, int32_t thread_id, uint64_t start, uint64_t end);
 
 /*! Creates the threads for the workernode */
 int p7_daemon_workernode_create_threads(P7_DAEMON_WORKERNODE_STATE *workernode);
@@ -271,7 +263,6 @@ typedef struct p7_daemon_worker_argument{
 
 //! Worker thread that processes searches
 void *p7_daemon_worker_thread(void *worker_argument);
-void *p7_daemon_worker_thread_twophase(void *worker_argument);
 
 //! Configure the workernode to perform an one-HMM many-amino (hmmsearch-style) search 
 /* Configure the workernode to perform an one-HMM many-amino (hmmsearch-style) search 
@@ -307,16 +298,6 @@ void p7_daemon_workernode_end_search(P7_DAEMON_WORKERNODE_STATE *workernode);
 * @return the number of objects in the chunk, or 0 if there is no work available
 */ 
 uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, volatile uint64_t *start, volatile uint64_t *end);
-uint64_t worker_thread_get_chunk_old(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, char **search_pointer);
-uint64_t worker_thread_get_chunk_by_index(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, uint64_t *start_index);
-//! Grab a chunk of work from the worker's queue.
-/*! If there's any work left in the worker's queue, grabs a chunk.  
-* @param workernode the P7_DAEMON_WORKERNODE_STATE structure for this node
-* @param my_id which thread is asking for the work
-* @param start_index set to the directory index of the first object in the chunk if there is any work available.   
-* @return the number of objects in the chunk, or 0 if there is no work available
-*/ 
-uint64_t worker_thread_get_chunk_by_directory_index(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, uint64_t *start_index);
 
 
 //! Try to steal work from some other thread in the node
@@ -330,13 +311,6 @@ uint64_t worker_thread_get_chunk_by_directory_index(P7_DAEMON_WORKERNODE_STATE *
  */
 int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
 
-
-//! Process a chunk of objects
-/*! Iterates through the objects in the shard, starting at the one pointed to by search_pointer and 
- */
-void worker_thread_process_chunk_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, char *search_pointer, uint64_t chunk_length);
-
-void worker_thread_process_chunk_amino_vs_hmm_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, uint64_t start_index, uint64_t chunk_length);
 
 //! main function called at startup on worker nodes
 void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_mpitypes);

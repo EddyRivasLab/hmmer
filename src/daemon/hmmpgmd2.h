@@ -23,14 +23,18 @@ typedef struct p7_daemon_command{
 	uint64_t compare_obj_length; // How long (in bytes) is the object we'll be comparing against (sequence or HMM)?
 } P7_DAEMON_COMMAND;
 
+typedef struct p7_daemon_chunk_reply{
+	uint64_t start;
+	uint64_t end;
+} P7_DAEMON_CHUNK_REPLY;
 
 // Constants used for defining custom MPI types
 
 // the number of custom types we use
-#define P7_NUM_DAEMON_MPITYPES 1
+#define P7_NUM_DAEMON_MPITYPES 2
 
 // constants defining the index at which each type is stored in the array of MPI_Datatypes we create
 #define P7_DAEMON_COMMAND_MPITYPE 0
-
+#define P7_DAEMON_CHUNK_REPLY_MPITYPE 1
 
 #endif
