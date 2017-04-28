@@ -1923,7 +1923,7 @@ p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th )
         if (scores[i] == -eslINFINITY)
           fprintf (ofp, " >");
         else
-          fprintf (ofp, " %.3f", scores[i]);
+          fprintf (ofp, " %.3f", scores[i] * eslCONST_LOG2R);
 
       }
       fprintf (ofp, "\n");
