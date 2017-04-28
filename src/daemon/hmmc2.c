@@ -165,7 +165,7 @@ int
 main(int argc, char *argv[])
 {
   int              i, j;
-  int              n;
+  uint64_t              n;
   int              eod;
   int              size;
   char            *seq;
