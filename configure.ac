@@ -32,6 +32,12 @@
 #  12. checks for system services
 #  13. AC_CONFIG_FILES
 #  14. AC_OUTPUT
+#
+# Use full 3-arg form of AC_DEFINE() macros. autoheader chokes if you
+# don't.  We don't use autoheader (we only use autoconf, out of the
+# GNU build tools, to limit complexity) but some packagers do, such
+# as Debian.
+
 
 
 ################################################################
@@ -113,18 +119,17 @@ AC_SUBST(EASEL_VERSION)
 AC_SUBST(EASEL_URL)
 
 # Preprocessor symbols (replace #undefs in p7config.h)
-AC_DEFINE_UNQUOTED(HMMER_DATE,      "$HMMER_DATE")
-AC_DEFINE_UNQUOTED(HMMER_COPYRIGHT, "$HMMER_COPYRIGHT")
-AC_DEFINE_UNQUOTED(HMMER_LICENSE,   "$HMMER_LICENSE")
-AC_DEFINE_UNQUOTED(HMMER_VERSION,   "$HMMER_VERSION")
-AC_DEFINE_UNQUOTED(HMMER_URL,       "$HMMER_URL")
+AC_DEFINE_UNQUOTED([HMMER_DATE],      ["$HMMER_DATE"],      [Release date])
+AC_DEFINE_UNQUOTED([HMMER_COPYRIGHT], ["$HMMER_COPYRIGHT"], [Brief copyright statement])
+AC_DEFINE_UNQUOTED([HMMER_LICENSE],   ["$HMMER_LICENSE"],   [Brief license statement])
+AC_DEFINE_UNQUOTED([HMMER_VERSION],   ["$HMMER_VERSION"],   [Version number])
+AC_DEFINE_UNQUOTED([HMMER_URL],       ["$HMMER_URL"],       [HMMER web site])
 
-AC_DEFINE_UNQUOTED(EASEL_DATE,      "$EASEL_DATE")
-AC_DEFINE_UNQUOTED(EASEL_COPYRIGHT, "$EASEL_COPYRIGHT")
-AC_DEFINE_UNQUOTED(EASEL_LICENSE,   "$EASEL_LICENSE")
-AC_DEFINE_UNQUOTED(EASEL_VERSION,   "$EASEL_VERSION")
+AC_DEFINE_UNQUOTED([EASEL_DATE],      ["$EASEL_DATE"],      [Easel release date])
+AC_DEFINE_UNQUOTED([EASEL_COPYRIGHT], ["$EASEL_COPYRIGHT"], [Easel copyright])
+AC_DEFINE_UNQUOTED([EASEL_LICENSE],   ["$EASEL_LICENSE"],   [Easel license])
+AC_DEFINE_UNQUOTED([EASEL_VERSION],   ["$EASEL_VERSION"],   [Easel version])
 
-AC_DEFINE(eslLIBRARY)
 
 # Figure out what host we're compiling on.
 # Three GNU scripts must be included in the distro: 
@@ -167,11 +172,11 @@ AS_HELP_STRING([--enable-debugging=x],[also set diagnostics verbosity level to <
 enable_debugging=$enableval, enable_debugging=no)
 
 case $enable_debugging in
-   yes)  AC_DEFINE(eslDEBUGLEVEL, 0);;
-     1)  AC_DEFINE(eslDEBUGLEVEL, 1);;
-     2)  AC_DEFINE(eslDEBUGLEVEL, 2);;
-     3)  AC_DEFINE(eslDEBUGLEVEL, 3);;
-    no)  AC_DEFINE(eslDEBUGLEVEL, 0);;
+   yes)  AC_DEFINE(eslDEBUGLEVEL, 1, [debugging on (low verbosity)]);;
+     1)  AC_DEFINE(eslDEBUGLEVEL, 1, [debugging on (low verbosty)]);;
+     2)  AC_DEFINE(eslDEBUGLEVEL, 2, [debugging on (moderate verbosity)]);;
+     3)  AC_DEFINE(eslDEBUGLEVEL, 3, [debugging on (high verbosity)]);;
+    no)  AC_DEFINE(eslDEBUGLEVEL, 0, [debugging off]);;
      *)  AC_MSG_ERROR([Unknown argument to --enable-debugging: $enable_debugging]);;
 esac
 
@@ -282,8 +287,8 @@ case $enable_threads in
 esac
  
 AS_IF([test "x$check_threads" != xno],
-      [ACX_PTHREAD([AC_DEFINE(HMMER_THREADS)
-                    AC_DEFINE(HAVE_PTHREAD)
+      [ACX_PTHREAD([AC_DEFINE(HMMER_THREADS, 1, [Use POSIX threads])
+                    AC_DEFINE(HAVE_PTHREAD,  1, [Use POSIX threads])
                     AC_SUBST(PTHREAD_LIBS)
                     AC_SUBST(PTHREAD_CFLAGS)],
                    [if test "x$enable_threads" != xcheck; then
@@ -362,7 +367,7 @@ AC_PROG_INSTALL
 
 # MPI :  set @CC@ to mpicc, sets @MPILIBS@, defines HAVE_MPI. 
 if test "$enable_mpi" = "yes"; then
-   ACX_MPI([AC_DEFINE(HAVE_MPI)
+   ACX_MPI([AC_DEFINE(HAVE_MPI, 1, [Use MPI (Message Passing Interface) parallelism])
             AC_SUBST([MPI_UTESTS], ["mpi_utest"])
             AC_SUBST([MPI_BENCHMARKS], ["mpi_benchmark"])],
            AC_MSG_ERROR([MPI library not found for --enable-mpi]))
@@ -388,7 +393,7 @@ CHECK_GNU_MAKE
 # superaggressive and problematic in many respects. Use -O3 instead.
 #
 if test "$enable_debugging" != "no"; then
-   AC_DEFINE(p7_DEBUGGING,  1)
+   AC_DEFINE(p7_DEBUGGING,  1, [Debugging mode on])
    if test "$GCC" = "yes" && test "$sre_cflags_env_set" = "no"; then
       CFLAGS="-g -Wall"
    fi
@@ -453,7 +458,7 @@ AC_MSG_CHECKING([whether AVX2 is supported])
          test2 = _mm256_set1_epi8(111);
          test2 = _mm256_adds_epi8(test1, test2);
       ]])],
-  [AC_DEFINE([HAVE_AVX2])
+  [AC_DEFINE([HAVE_AVX2], 1, [Support AVX2 (Advanced Vector Extensions) instructions])
   haveavx=yes])
   AC_MSG_RESULT([$haveavx])
   CFLAGS="$sre_save_cflags"
@@ -479,7 +484,7 @@ AC_MSG_CHECKING([whether AVX-512 is supported])
          test2 = _mm512_set1_epi8(111);
          test2 = _mm512_adds_epi8(test1, test2);
       ]])],
-  [AC_DEFINE([HAVE_AVX512])
+  [AC_DEFINE([HAVE_AVX512], 1, [Support AVX-512 vector instructions])
   haveavx512=yes])
   AC_MSG_RESULT([$haveavx512])
   CFLAGS="$sre_save_cflags"
@@ -626,7 +631,7 @@ if test "$impl_choice" = "sse"; then
                                        __m128i b;
                                        b = _mm_castps_si128(a);
                                        a = _mm_castsi128_ps(b);]])],
-                    [AC_DEFINE([HAVE_SSE2_CAST])
+                    [AC_DEFINE([HAVE_SSE2_CAST], 1, [Support SSE2 cast function])
                      ssecast=yes])
   AC_MSG_RESULT([$ssecast])
   CFLAGS="$sre_save_cflags"
@@ -703,7 +708,7 @@ if test "$impl_choice" = "sse"; then
  				 [[_MM_SET_FLUSH_ZERO_MODE (_MM_FLUSH_ZERO_ON);
 				 ]])],
 	[ AC_MSG_RESULT([yes])
-          AC_DEFINE([HAVE_FLUSH_ZERO_MODE])],
+          AC_DEFINE([HAVE_FLUSH_ZERO_MODE], 1, [Processor supports flush-to-zero mode])],
 	[ AC_MSG_RESULT([no])]
   )
   CFLAGS="$sre_save_cflags"
@@ -712,21 +717,21 @@ fi
 # Now, we can enable the appropriate optimized implementation.
 case "$impl_choice" in 
 sse)  AC_MSG_NOTICE([Activating Intel/AMD SSE optimized DP implementation])
-      AC_DEFINE([HAVE_SSE2])
-      AC_DEFINE([p7_IMPL_SSE])
+      AC_DEFINE([HAVE_SSE2], 1, [Support SSE2 vector instructions])
+      AC_DEFINE([p7_IMPL_SSE], 1, [Use SSE vector implementation])
       AC_SUBST([HMMERIMPLLIB], ["impl_sse/libhmmerimpl.a"])
       IMPL_CHOICE="sse"
       ;;
 
 vmx)  AC_MSG_NOTICE([Activating Altivec/VMX optimized DP implementation])
-      AC_DEFINE([HAVE_VMX])
-      AC_DEFINE([p7_IMPL_VMX])
+      AC_DEFINE([HAVE_VMX], 1, [Support Altivec/VMX vector instructions])
+      AC_DEFINE([p7_IMPL_VMX], 1, [Use Altivec/VMX vector implementation])
       AC_SUBST([HMMERIMPLLIB], ["impl_vmx/libhmmerimpl.a"])
       IMPL_CHOICE="vmx"
       ;;
 
 *)    AC_MSG_NOTICE([Activating "dummy" implementation])
-      AC_DEFINE([p7_IMPL_DUMMY])
+      AC_DEFINE([p7_IMPL_DUMMY], 1, [No vector implementation supported])
       AC_SUBST([HMMERIMPLLIB], ["impl_dummy/libhmmerimpl.a"])
       IMPL_CHOICE="dummy"
       ;;
@@ -753,7 +758,7 @@ AC_PATH_PROG(HAVE_GZIP, "gzip", "no")
 if test "${HAVE_GZIP}" = "no"; then
   AC_MSG_WARN([gzip not found])
 else
-  AC_DEFINE(HAVE_GZIP)
+  AC_DEFINE(HAVE_GZIP, 1, [Support external gzip decompression])
 fi
 
 ################################################################
@@ -923,6 +928,8 @@ AC_CONFIG_FILES([src/Makefile])
 AC_CONFIG_FILES([testsuite/Makefile])
 AC_CONFIG_FILES([profmark/Makefile])
 AC_CONFIG_FILES([src/impl_${impl_choice}/Makefile])
+
+AC_CONFIG_HEADERS([easel/decoy_config.h])   # Put this first to keep gnu 'autoheader' from overwriting a real config file.
 AC_CONFIG_HEADERS([src/p7_config.h])
 AC_CONFIG_HEADERS([easel/esl_config.h])
 AC_CONFIG_HEADERS([libdivsufsort/divsufsort.h])
