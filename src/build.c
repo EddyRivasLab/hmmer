@@ -229,13 +229,8 @@ do_modelmask( ESL_MSA *msa)
   for (i = 1; i <= msa->alen; i++) {
     for (j = 0; j < msa->nseq; j++) {
       if (msa->mm[i-1] == 'm') {
-#ifdef eslAUGMENT_ALPHABET
         if (msa->ax[j][i] != msa->abc->K && msa->ax[j][i] != msa->abc->Kp-1) // if not gap
           msa->ax[j][i] = msa->abc->Kp-3; //that's the degenerate "any character" (N for DNA, X for protein)
-#else
-        if (msa->aseq[j][i] != '-' && msa->aseq[j][i] != '.') // if not gap
-          msa->aseq[j][i] = 'N';
-#endif
       }
     }
   }

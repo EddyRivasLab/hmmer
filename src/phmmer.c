@@ -335,10 +335,6 @@ main(int argc, char **argv)
 
 
   /* is the range restricted? */
-#ifndef eslAUGMENT_SSI
-  if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")  || esl_opt_IsUsed(go, "--ssifile")  )
-    p7_Fail("Unable to use range-control options unless an SSI index file is available. See 'esl_sfetch --index'\n");
-#else
   if (esl_opt_IsUsed(go, "--restrictdb_stkey") )
     if ((cfg.firstseq_key = esl_opt_GetString(go, "--restrictdb_stkey")) == NULL)  p7_Fail("Failure capturing --restrictdb_stkey\n");
 
@@ -347,8 +343,6 @@ main(int argc, char **argv)
 
   if ( cfg.n_targetseq != -1 && cfg.n_targetseq < 1 )
     p7_Fail("--restrictdb_n must be >= 1\n");
-#endif
-
 
   /* Figure out who we are, and send control there: 
    * we might be an MPI master, an MPI worker, or a serial program.

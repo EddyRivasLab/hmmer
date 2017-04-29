@@ -636,9 +636,8 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
   P7_OPROFILE   *om        = NULL;
   P7_SCOREDATA  *scoredata = NULL;   /* hmm-specific data used by nhmmer */
   ESL_ALPHABET  *abc = NULL;
-
-#ifdef eslAUGMENT_ALPHABET
   ESL_SQ        *sq_revcmp = NULL;
+
   if (info->pli->strands != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL ) {
     sq_revcmp =  esl_sq_CreateDigital(info->qsq->abc);
     esl_sq_Copy(info->qsq,sq_revcmp);
@@ -646,8 +645,6 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
 
     info->pli->nres += info->qsq->n;
   }
-#endif /*eslAUGMENT_ALPHABET*/
-
 
   /* Main loop: */
   while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK)
@@ -675,7 +672,6 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
 
       scoredata = p7_hmm_ScoreDataCreate(om, FALSE);
 
-#ifdef eslAUGMENT_ALPHABET
       //reverse complement
       if (info->pli->strands != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL )
       {
@@ -685,8 +681,6 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
         p7_pipeline_Reuse(info->pli); // prepare for next search
         seq_len = info->qsq->n;
       }
-#endif
-
 
       if (info->pli->strands != p7_STRAND_BOTTOMONLY) {
         status = p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, info->qsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
@@ -708,22 +702,13 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
 
       p7_oprofile_Destroy(om);
       p7_hmm_ScoreDataDestroy(scoredata);
-
-
-
-
   }
 
   esl_alphabet_Destroy(abc);
-#ifdef eslAUGMENT_ALPHABET
   esl_sq_Destroy(sq_revcmp);
-#endif
-
-  if (info->fwd_emissions != NULL) free(info->fwd_emissions);
-
+  if (info->fwd_emissions) free(info->fwd_emissions);
 
 ERROR:
-
   return status;
 }
 
@@ -792,11 +777,7 @@ pipeline_thread(void *arg)
 
   int seq_len = 0;
   int prev_hit_cnt = 0;
-
-#ifdef eslAUGMENT_ALPHABET
   ESL_SQ        *sq_revcmp = NULL;
-#endif /*eslAUGMENT_ALPHABET*/
-  
 
   impl_Init();
 
@@ -808,7 +789,6 @@ pipeline_thread(void *arg)
   status = esl_workqueue_WorkerUpdate(info->queue, NULL, &newBlock);
   if (status != eslOK) esl_fatal("Work queue worker failed");
 
-#ifdef eslAUGMENT_ALPHABET
   //reverse complement
   if (info->pli->strands != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL ) {
     sq_revcmp =  esl_sq_CreateDigital(info->qsq->abc);
@@ -816,8 +796,6 @@ pipeline_thread(void *arg)
     esl_sq_ReverseComplement(sq_revcmp);
     info->pli->nres += info->qsq->n;
   }
-#endif /*eslAUGMENT_ALPHABET*/
-
 
   /* loop until all blocks have been processed */
   block = (P7_OM_BLOCK *) newBlock;
@@ -850,8 +828,6 @@ pipeline_thread(void *arg)
 
         scoredata = p7_hmm_ScoreDataCreate(om, FALSE);
 
-
-#ifdef eslAUGMENT_ALPHABET
         //reverse complement
         if (info->pli->strands != p7_STRAND_TOPONLY && info->qsq->abc->complement != NULL )
         {
@@ -861,7 +837,7 @@ pipeline_thread(void *arg)
           p7_pipeline_Reuse(info->pli); // prepare for next search
           seq_len = info->qsq->n;
         }
-#endif
+
         if (info->pli->strands != p7_STRAND_BOTTOMONLY) {
           status = p7_Pipeline_LongTarget(info->pli, om, scoredata, info->bg, info->th, 0, info->qsq, p7_NOCOMPLEMENT, NULL, NULL, NULL/*, NULL, NULL, NULL*/);
           if (status != eslOK) p7_Fail(info->pli->errbuf);
@@ -891,10 +867,8 @@ pipeline_thread(void *arg)
       block = (P7_OM_BLOCK *) newBlock;
   }
 
-#ifdef eslAUGMENT_ALPHABET
-  esl_sq_Destroy(sq_revcmp);
-#endif
 
+  esl_sq_Destroy(sq_revcmp);
   if (info->fwd_emissions != NULL) free(info->fwd_emissions);
 
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
@@ -905,11 +879,8 @@ pipeline_thread(void *arg)
 
 
 ERROR:
-
   esl_fatal("Error allocating memory in work queue");
   return;
-
-
 }
 #endif   /* HMMER_THREADS */
 

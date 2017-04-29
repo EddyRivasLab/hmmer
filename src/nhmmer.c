@@ -437,11 +437,6 @@ main(int argc, char **argv)
       }
   }
 
-
-#ifndef eslAUGMENT_SSI
-  if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")  || esl_opt_IsUsed(go, "--ssifile")  )
-    p7_Fail("Unable to use range-control options unless an SSI index file is available. See 'esl_sfetch --index'\n");
-#else
   if (esl_opt_IsUsed(go, "--restrictdb_stkey") )
     if ((cfg.firstseq_key = esl_opt_GetString(go, "--restrictdb_stkey")) == NULL)  p7_Fail("Failure capturing --restrictdb_stkey\n");
 
@@ -450,9 +445,6 @@ main(int argc, char **argv)
 
   if ( cfg.n_targetseq != -1 && cfg.n_targetseq < 1 )
     p7_Fail("--restrictdb_n must be >= 1\n");
-
-#endif
-
 
   status = serial_master(go, &cfg);
 
@@ -1310,13 +1302,10 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
   int      wstatus = eslOK;
   int seq_id = 0;
   ESL_SQ   *dbsq   =  esl_sq_CreateDigital(info->om->abc);
-#ifdef eslAUGMENT_ALPHABET
   ESL_SQ   *dbsq_revcmp;
-
 
   if (dbsq->abc->complement != NULL)
     dbsq_revcmp =  esl_sq_CreateDigital(info->om->abc);
-#endif /*eslAUGMENT_ALPHABET*/
 
   wstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
 
@@ -1333,7 +1322,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
       } else {
         info->pli->nres -= dbsq->n;
       }
-#ifdef eslAUGMENT_ALPHABET
+
       //reverse complement
       if (info->pli->strands != p7_STRAND_TOPONLY && dbsq->abc->complement != NULL )
       {
@@ -1345,7 +1334,6 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
           info->pli->nres += dbsq_revcmp->W;
 
       }
-#endif /*eslAUGMENT_ALPHABET*/
 
       wstatus = esl_sqio_ReadWindow(dbfp, info->om->max_length, info->pli->block_length, dbsq);
       if (wstatus == eslEOD) { // no more left of this sequence ... move along to the next sequence.
@@ -1556,7 +1544,6 @@ pipeline_thread(void *arg)
         info->pli->nres -= dbsq->n;
       }
 
-#ifdef eslAUGMENT_ALPHABET
       //reverse complement
       if (info->pli->strands != p7_STRAND_TOPONLY && dbsq->abc->complement != NULL)
       {
@@ -1566,9 +1553,6 @@ pipeline_thread(void *arg)
 
           info->pli->nres += dbsq->W;
       }
-
-#endif /*eslAUGMENT_ALPHABET*/
-
     }
 
       status = esl_workqueue_WorkerUpdate(info->queue, block, &newBlock);

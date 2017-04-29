@@ -42,6 +42,12 @@
 # To update config.guess and config.sub from GNU:
 #    wget -O config.guess 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD'
 #    wget -O config.sub   'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD'
+#
+# Use full 3-arg form of AC_DEFINE() macros. autoheader chokes if you
+# don't.  We don't use autoheader (we only use autoconf, out of the
+# GNU build tools, to limit complexity) but some packagers do, such
+# as Debian.
+
 
 
 ################################################################
@@ -134,18 +140,17 @@ AC_SUBST(EASEL_LICENSE)
 AC_SUBST(EASEL_VERSION)
 AC_SUBST(EASEL_URL)
 
-AC_DEFINE_UNQUOTED(HMMER_DATE,      "$HMMER_DATE")
-AC_DEFINE_UNQUOTED(HMMER_COPYRIGHT, "$HMMER_COPYRIGHT")
-AC_DEFINE_UNQUOTED(HMMER_LICENSE,   "$HMMER_LICENSE")
-AC_DEFINE_UNQUOTED(HMMER_VERSION,   "$HMMER_VERSION")
-AC_DEFINE_UNQUOTED(HMMER_URL,       "$HMMER_URL")
+AC_DEFINE_UNQUOTED([HMMER_DATE],      ["$HMMER_DATE"],      [Release date])
+AC_DEFINE_UNQUOTED([HMMER_COPYRIGHT], ["$HMMER_COPYRIGHT"], [Brief copyright statement])
+AC_DEFINE_UNQUOTED([HMMER_LICENSE],   ["$HMMER_LICENSE"],   [Brief license statement])
+AC_DEFINE_UNQUOTED([HMMER_VERSION],   ["$HMMER_VERSION"],   [Version number])
+AC_DEFINE_UNQUOTED([HMMER_URL],       ["$HMMER_URL"],       [HMMER web site])
 
-AC_DEFINE_UNQUOTED(EASEL_DATE,      "$EASEL_DATE")
-AC_DEFINE_UNQUOTED(EASEL_COPYRIGHT, "$EASEL_COPYRIGHT")
-AC_DEFINE_UNQUOTED(EASEL_LICENSE,   "$EASEL_LICENSE")
-AC_DEFINE_UNQUOTED(EASEL_VERSION,   "$EASEL_VERSION")
+AC_DEFINE_UNQUOTED([EASEL_DATE],      ["$EASEL_DATE"],      [Easel release date])
+AC_DEFINE_UNQUOTED([EASEL_COPYRIGHT], ["$EASEL_COPYRIGHT"], [Easel copyright])
+AC_DEFINE_UNQUOTED([EASEL_LICENSE],   ["$EASEL_LICENSE"],   [Easel license])
+AC_DEFINE_UNQUOTED([EASEL_VERSION],   ["$EASEL_VERSION"],   [Easel version])
 
-AC_DEFINE(eslLIBRARY)
 
 # Figure out what host we're compiling on.
 # Three GNU scripts must be included in the distro: 
@@ -179,11 +184,11 @@ AC_ARG_ENABLE(debugging,
   enable_debugging=no)
 
 case $enable_debugging in
-   yes)  AC_DEFINE(eslDEBUGLEVEL, 1);;
-     1)  AC_DEFINE(eslDEBUGLEVEL, 1);;
-     2)  AC_DEFINE(eslDEBUGLEVEL, 2);;
-     3)  AC_DEFINE(eslDEBUGLEVEL, 3);;
-    no)  AC_DEFINE(eslDEBUGLEVEL, 0);;
+   yes)  AC_DEFINE(eslDEBUGLEVEL, 1, [debugging on (low verbosity)]);;
+     1)  AC_DEFINE(eslDEBUGLEVEL, 1, [debugging on (low verbosty)]);;
+     2)  AC_DEFINE(eslDEBUGLEVEL, 2, [debugging on (moderate verbosity)]);;
+     3)  AC_DEFINE(eslDEBUGLEVEL, 3, [debugging on (high verbosity)]);;
+    no)  AC_DEFINE(eslDEBUGLEVEL, 0, [debugging off]);;
      *)  AC_MSG_ERROR([Unknown argument to --enable-debugging: $enable_debugging]);;
 esac
 
@@ -209,8 +214,6 @@ if test "$enable_dummy"   = "yes"; then n=$((n++)); fi
 if (( $n > 0 )); then
   AC_MSG_ERROR([Select only one implementation: sse, vmx, or dummy])
 fi
-
-
 
 
 ################################################################
@@ -253,6 +256,7 @@ else
 fi
 
 
+
 # MPI parallelization.
 #   If MPI support is available, AX_MPI macro sets @MPICC@ and @MPILIBS@.
 #   
@@ -263,8 +267,8 @@ fi
 if test "$enable_mpi" = "yes"; then
   AX_MPI([
     CC=$MPICC
-    AC_DEFINE(HAVE_MPI)
-    AC_DEFINE(HMMER_MPI)
+    AC_DEFINE(HAVE_MPI, 1, [Use MPI parallelization])
+    AC_DEFINE(HMMER_MPI, 1, [Use MPI parallelization])
     AC_SUBST([MPI_UTESTS], ["mpi_utest"])
     AC_SUBST([MPI_BENCHMARKS], ["mpi_benchmark"])
     ],
@@ -277,8 +281,8 @@ fi
 #
 if test "$enable_threads" != "no"; then
   AX_PTHREAD([
-      AC_DEFINE(HAVE_PTHREAD)
-      AC_DEFINE(HMMER_THREADS)
+      AC_DEFINE(HAVE_PTHREAD, 1, [Use POSIX threads])
+      AC_DEFINE(HMMER_THREADS, 1, [Use POSIX threads])
       AC_SUBST(PTHREAD_LIBS)
       AC_SUBST(PTHREAD_CFLAGS)
     ],[
@@ -312,7 +316,7 @@ fi
 #
 if test "$enable_vmx" = "yes" || test "$enable_vmx" = "check"; then
   ESL_VMX([
-    AC_DEFINE(eslENABLE_VMX)
+    AC_DEFINE(eslENABLE_VMX, 1, [Enable Altivec/VMX vector implementation])
     AC_SUBST([HMMERIMPLLIB], ["impl_vmx/libhmmerimpl.a"])
     VMX_CFLAGS=$esl_vmx_cflags
     AC_SUBST(VMX_CFLAGS)
@@ -328,7 +332,7 @@ fi
 
 if test "$enable_sse" = "yes" || test "$enable_sse" = "check"; then
   ESL_SSE([
-    AC_DEFINE(eslENABLE_SSE)
+    AC_DEFINE(eslENABLE_SSE, 1, [Enable SSE vector implementation])
     AC_SUBST([HMMERIMPLLIB], ["impl_sse/libhmmerimpl.a"])
     SSE_CFLAGS=$esl_sse_cflags
     AC_SUBST(SSE_CFLAGS)
@@ -349,13 +353,14 @@ sse)  AC_MSG_NOTICE([Activating Intel/AMD SSE vector DP implementation])
 vmx)  AC_MSG_NOTICE([Activating Altivec/VMX vector DP implementation])   
       ;;
 *)    AC_MSG_NOTICE([Activating "dummy" implementation])
-      AC_DEFINE([eslENABLE_DUMMY])
+      AC_DEFINE([eslENABLE_DUMMY], 1, [No vector implementation enabled])
       AC_SUBST([HMMERIMPLLIB], ["impl_dummy/libhmmerimpl.a"])
       impl_choice="dummy"
       ;;
 esac
 IMPL_CHOICE=$impl_choice
 AC_SUBST(IMPL_CHOICE)
+
 
 
 # Easel has additional vector implementations that HMMER3 does not
@@ -376,7 +381,7 @@ if test "$impl_choice" = "sse"; then
  				 [[_MM_SET_FLUSH_ZERO_MODE (_MM_FLUSH_ZERO_ON);
 				 ]])],
 	[ AC_MSG_RESULT([yes])
-          AC_DEFINE([HAVE_FLUSH_ZERO_MODE])],
+          AC_DEFINE([HAVE_FLUSH_ZERO_MODE], 1, [Processor supports flush-to-zero mode])],
 	[ AC_MSG_RESULT([no])]
   )
   CFLAGS="$esl_save_cflags"
@@ -400,7 +405,7 @@ AC_PATH_PROG(HAVE_GZIP, "gzip", "no")
 if test "${HAVE_GZIP}" = "no"; then
   AC_MSG_WARN([gzip not found])
 else
-  AC_DEFINE(HAVE_GZIP)
+  AC_DEFINE(HAVE_GZIP, 1, [Support external gzip decompression])
 fi
 
 ################################################################
@@ -554,9 +559,6 @@ AC_SYS_LARGEFILE
 # 13. Config subdirs and files
 ################################################################
 
-AC_CONFIG_HEADERS([src/p7_config.h])
-
-
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([src/Makefile])
 AC_CONFIG_FILES([testsuite/Makefile])
@@ -571,7 +573,6 @@ if test -d release-notes; then
   AC_CONFIG_FILES(release-notes/LICENSE.sh)
 fi
 
-AC_CONFIG_HEADERS([easel/esl_config.h])
 AC_CONFIG_FILES([easel/Makefile])
 AC_CONFIG_FILES([easel/miniapps/Makefile])
 AC_CONFIG_FILES([easel/testsuite/Makefile])
@@ -579,8 +580,13 @@ if test -d "easel/documentation"; then
   AC_CONFIG_FILES([easel/documentation/Makefile])
 fi    
 
-AC_CONFIG_HEADERS([libdivsufsort/divsufsort.h])
 AC_CONFIG_FILES([libdivsufsort/Makefile])
+
+AC_CONFIG_HEADERS([easel/decoy_config.h])   # Put this first to keep gnu 'autoheader' from overwriting a real config file.
+AC_CONFIG_HEADERS([src/p7_config.h])
+AC_CONFIG_HEADERS([easel/esl_config.h])
+AC_CONFIG_HEADERS([libdivsufsort/divsufsort.h])
+
 
 # the following incantation establishes a symlink of
 # src/impl_{whatever} to src/impl in the *build* directory.

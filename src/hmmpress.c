@@ -66,7 +66,7 @@ main(int argc, char **argv)
 
   if (hfp->do_stdin || hfp->do_gzip) p7_Fail("HMM file %s must be a normal file, not gzipped or a stdin pipe", hmmfile);
 
-  dbf = open_dbfiles(go, hmmfile);  // After this, before any Die or Fail, we have to close_dbfiles(). Don't leave partial/corrupt files.
+  dbf = open_dbfiles(go, hmmfile);  // After this, we have to close_dbfiles() before exiting with any error. Don't leave partial/corrupt files.
 
   if (( status = esl_newssi_AddFile(dbf->nssi, hfp->fname, 0, &fh)) != eslOK) /* 0 = format code (HMMs don't have any yet) */
      ESL_XFAIL(status, errbuf, "Failed to add HMM file %s to new SSI index\n", hfp->fname);
