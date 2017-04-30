@@ -185,7 +185,7 @@ AC_ARG_ENABLE(debugging,
 
 case $enable_debugging in
    yes)  AC_DEFINE(eslDEBUGLEVEL, 1, [debugging on (low verbosity)]);;
-     1)  AC_DEFINE(eslDEBUGLEVEL, 1, [debugging on (low verbosty)]);;
+     1)  AC_DEFINE(eslDEBUGLEVEL, 1, [debugging on (low verbosity)]);;
      2)  AC_DEFINE(eslDEBUGLEVEL, 2, [debugging on (moderate verbosity)]);;
      3)  AC_DEFINE(eslDEBUGLEVEL, 3, [debugging on (high verbosity)]);;
     no)  AC_DEFINE(eslDEBUGLEVEL, 0, [debugging off]);;
