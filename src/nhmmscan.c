@@ -377,6 +377,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (hstatus == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets", cfg->hmmfile);
   else if (hstatus != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s", cfg->hmmfile); 
 
+  if (om->max_length == -1) p7_Fail("No MAXL field in model(s); is this an old model format?\nnhmmer/hmmscan require HMMER 3.1 models or later.");
+
   p7_oprofile_Destroy(om);
   p7_hmmfile_Close(hfp);
 
