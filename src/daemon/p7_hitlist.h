@@ -25,10 +25,6 @@
 struct p7_daemon_workernode_state;
 struct p7_daemon_masternode_state;
 
-//defines for tags on hit messages
-#define HMMER_HIT_MPI_TAG 0x1
-#define HMMER_HIT_FINAL_MPI_TAG 0x2
-
 
 #define HITLIST_POOL_SIZE 1000 // default size of each engine's hitlist pool
 #define HIT_MESSAGE_LIMIT 100000 // soft upper limit on the size of each message containing hits. When sending hits, we create a new

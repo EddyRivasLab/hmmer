@@ -14,7 +14,7 @@
 #include "esl_mpi.h"
 #endif /*HAVE_MPI*/
 
-
+#define __NICK_CHECK_OUTPUT
 #include <unistd.h> // for testing
 
 
@@ -78,13 +78,14 @@ ERROR:
   p7_Fail("Unable to allocate memory in p7_daemon_masternode_Create");  
 }
 
-void p7_daemon_masternode_Setup(uint32_t num_databases, char **database_names, P7_DAEMON_MASTERNODE_STATE *masternode){
+void p7_daemon_masternode_Setup(uint32_t num_shards, uint32_t num_databases, char **database_names, P7_DAEMON_MASTERNODE_STATE *masternode){
    // Next, read databases from disk and install shards in the workernode
   
   int i, status;
   FILE *datafile;
   char id_string[13];
 
+  masternode->num_shards = num_shards;
   masternode->num_databases = num_databases;
   ESL_ALLOC(masternode->database_shards, num_databases*sizeof(P7_SHARD *));
 
@@ -143,7 +144,8 @@ ERROR:
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                               docgroup*/
   { "-h",        eslARG_NONE,  FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",  0 },
-  { "-n",       eslARG_INT,    "1",   NULL, NULL,  NULL,  NULL, NULL, "set max width of ASCII text output lines", 0 },
+  { "-n",       eslARG_INT,    "1",   NULL, NULL,  NULL,  NULL, NULL, "number of searches to run (default 1)", 0 },
+  { "-c",       eslARG_INT,    "0",   NULL, NULL,  NULL,  NULL, NULL, "number of worker cores to use per node (default all)", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -172,12 +174,16 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
   int num_nodes;
   MPI_Comm_size(MPI_COMM_WORLD, &num_nodes);
 
+  if(num_nodes < 2){
+    p7_Fail("Found 0 worker ranks.  Please re-run with at least 2 MPI ranks so that there can be a master and at least one worker rank.");
+  }
+
   // Set up the masternode state object for this node
   P7_DAEMON_MASTERNODE_STATE *masternode;
   masternode = p7_daemon_masternode_Create(num_shards, num_nodes -1);
 
   // load the databases
-  p7_daemon_masternode_Setup(2, database_names, masternode);
+  p7_daemon_masternode_Setup(num_shards, 2, database_names, masternode);
 
   printf("Using %d worker nodes \n", num_nodes -1);
 
@@ -193,7 +199,7 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
   MPI_Bcast(&num_shards, 1, MPI_INT, 0, hmmer_control_comm);
 #endif
 
-  printf("Master node sees %d shards\n", num_shards);
+ //printf("Master node sees %d shards\n", num_shards);
   
   // Create hit processing thread
   P7_DAEMON_MASTERNODE_HIT_THREAD_ARGUMENT hit_argument;
@@ -213,15 +219,31 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
   P7_PROFILE *hmm;
   int hmm_length, pack_position;
 
-    uint64_t search_start, search_end;
+  uint64_t search_start, search_end;
 
-    // For testing, search the entire database
-    P7_SHARD *database_shard = masternode->database_shards[1];
-    P7_SHARD *hmm_shard = masternode->database_shards[0];
+  // For testing, search the entire database
+  P7_SHARD *database_shard = masternode->database_shards[1];
+  P7_SHARD *hmm_shard = masternode->database_shards[0];
+ 
+  search_start = database_shard->directory[0].id;
+  search_end = database_shard->directory[database_shard->num_objects -1].id;
 
-    search_start = database_shard->directory[0].id;
-    search_end = database_shard->directory[database_shard->num_objects -1].id;
-
+// Temp code to generate a random list of sequence names out of the sequence database
+  /*
+  char* name;
+  int rand_id, seq;
+  uint32_t rand_seed;
+  struct timeval current_time;
+  gettimeofday(&current_time, NULL);
+  ESL_RANDOMNESS *rng;
+  rng = esl_randomness_Create (current_time.tv_usec); // use number of microseconds in the current time as a "random" seed
+  // Yes, this is way overkill for just sampling some sequences to create a benchmark, but it's about as easy as doing it the "bad" way
+  for (seq = 0; seq < 50; seq++){
+    rand_id = esl_rnd_Roll(rng, database_shard->num_objects); // generate a random index into the database
+    p7_shard_Find_Descriptor_Nexthigh(database_shard, rand_id, &name); // get pointer to the name of the indexed sequence
+    printf("%s\n", name);
+  }
+  */
 #ifdef HAVE_MPI 
   // block until everyone is ready to go
   MPI_Barrier(hmmer_control_comm);
@@ -246,9 +268,26 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
   the_command.db = 0;
   char outfile_name[255];
   int search;
+
   for(search = 0; search < num_searches; search++){
     gettimeofday(&start, NULL);
+  
+    uint64_t search_start, search_end, chunk_size;
     
+    // For now_search the entire database
+    search_start = database_shard->directory[0].id;
+    search_end = database_shard->directory[database_shard->num_objects -1].id;
+    chunk_size = ((search_end - search_start) / (masternode->num_worker_nodes * 128)) + 1; // round this up to avoid small amount of leftover work at the end
+
+    // set up the work queues
+    int which_shard;
+    for(which_shard = 0; which_shard < masternode->num_shards; which_shard++){
+      masternode->work_queues[which_shard].start = search_start;
+      masternode->work_queues[which_shard].end = search_end;
+      masternode->work_queues[which_shard].chunk_size = chunk_size;
+    }
+
+
     while(pthread_mutex_trylock(&(masternode->hit_wait_lock))){  // Acquire this to prevent races
     }
     masternode->hit_tree = NULL; // Clear any dangling hit tree
@@ -258,12 +297,13 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
     pthread_cond_broadcast(&(masternode->go)); // signal hit processing thread to start
 
     hmm = ((P7_PROFILE **) hmm_shard->descriptors)[search * search_increment];
-    strcpy(outfile_name, hmm->name);
+    strcpy(outfile_name, "/tmp/");
+    strcat(outfile_name, hmm->name);
     strcat(outfile_name, ".hits");
     p7_profile_mpi_PackSize(hmm, hmmer_control_comm, &hmm_length); // get the length of the profile
     the_command.compare_obj_length = hmm_length;
 
-    if(hmm_length > hmm_buffer_size){ // need to grow th esend buffer
+    if(hmm_length > hmm_buffer_size){ // need to grow the send buffer
       ESL_REALLOC(hmmbuffer, hmm_length); 
     }
     pack_position = 0; // initialize this to the start of the buffer 
@@ -284,15 +324,21 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
     buffer_handle = &(buffer);
 
     while(masternode->worker_nodes_done < masternode->num_worker_nodes){
-      p7_masternode_message_handler(masternode, buffer_handle);  //Poll for incoming messages
+      p7_masternode_message_handler(masternode, buffer_handle, daemon_mpitypes);  //Poll for incoming messages
     }
     ESL_RED_BLACK_DOUBLEKEY *old_tree = masternode->hit_tree;
-    p7_print_and_recycle_hit_tree("outfile_name", old_tree, masternode);
+    p7_print_and_recycle_hit_tree(outfile_name, old_tree, masternode);
     gettimeofday(&end, NULL);
     printf("%s, %f\n", hmm->name, ((float)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0);
+    char commandstring[255];
+
+#ifdef __NICK_CHECK_OUTPUT
+    sprintf(commandstring, "cp %s /n/eddyfs01/home/npcarter/%s", outfile_name, outfile_name);
+    system(commandstring);
+#endif    
   }
 
-  printf("Master node sending shutdown\n");
+//  printf("Master node sending shutdown\n");
   the_command.type = P7_DAEMON_SHUTDOWN_WORKERS;
   // Now, send shutdown
   MPI_Bcast(&the_command, 1, daemon_mpitypes[P7_DAEMON_COMMAND_MPITYPE], 0, hmmer_control_comm);
@@ -406,7 +452,7 @@ int p7_masternode_sort_hits(P7_DAEMON_MESSAGE *the_message, P7_DAEMON_MASTERNODE
     the_entry->key = ((P7_HIT *) the_entry->contents)->sortkey;
     // don't need to lock this as we're the only thread that accesses it until the search completes
     masternode->hit_tree = esl_red_black_doublekey_insert(masternode->hit_tree, the_entry);
-  }
+  } 
   
   return last_message; // We've reached the end of this message, so return 1 if it was the last message from a node
 
@@ -415,7 +461,7 @@ ERROR:  // handle errors in ESL_REALLOC
 }
 
 //! handles incoming messages to the master node
-void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DAEMON_MESSAGE **buffer_handle){
+void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DAEMON_MESSAGE **buffer_handle, MPI_Datatype *daemon_mpitypes){
   int status;
 
   if(*buffer_handle == NULL){
@@ -443,7 +489,9 @@ void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DA
   }
 
   int message_length;
-  
+  uint32_t requester_shard;
+  P7_DAEMON_CHUNK_REPLY the_reply;
+
   if(found_message){
     switch((*buffer_handle)->status.MPI_TAG){
       case HMMER_HIT_MPI_TAG:
@@ -476,6 +524,42 @@ void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DA
         masternode->full_hit_message_pool = *buffer_handle;
         (*buffer_handle) = NULL;  // Make sure we grab a new buffer next time
         pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
+
+        break;
+      case HMMER_WORK_REQUEST_TAG:
+
+        if(MPI_Recv(&requester_shard, 1, MPI_UNSIGNED, (*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->status)) != MPI_SUCCESS){
+          p7_Fail("MPI_Recv failed in p7_masternode_message_handler\n");
+        }
+ //       printf("Masternode received shard %d from worker\n", requester_shard);
+
+        if(requester_shard >= masternode->num_shards){
+          p7_Fail("Out-of-range shard %d sent in work request", requester_shard);
+        }
+
+ //       printf("Masternode received work request with queue start = %lu and queue end = %lu\n", masternode->work_queues[requester_shard].start, masternode->work_queues[requester_shard].end);
+        // Get some work out of the queue
+        if(masternode->work_queues[requester_shard].end > masternode->work_queues[requester_shard].start){
+          // There's work left to give out
+          the_reply.start = masternode->work_queues[requester_shard].start;
+          the_reply.end = the_reply.start + masternode->work_queues[requester_shard].chunk_size;
+      
+          if(the_reply.end > masternode->work_queues[requester_shard].end){
+            // We've reached the end of the work queue
+            the_reply.end = masternode->work_queues[requester_shard].end;
+            masternode->work_queues[requester_shard].start = -1;  // mark the queue empty
+          }
+          else{
+            masternode->work_queues[requester_shard].start = the_reply.end + 1;
+          }
+        }
+        else{
+          the_reply.start = -1;
+          the_reply.end = -1;
+        }
+ //       printf("Masternode sending chunk with start = %lu and end = %lu to node %d", the_reply.start, the_reply.end, (*buffer_handle)->status.MPI_SOURCE);
+        //send the reply
+        if ( MPI_Send(&the_reply, 1, daemon_mpitypes[P7_DAEMON_COMMAND_MPITYPE],  (*buffer_handle)->status.MPI_SOURCE, HMMER_WORK_REPLY_TAG, MPI_COMM_WORLD) != MPI_SUCCESS) p7_Fail("MPI send failed in p7_masternode_message_handler");
 
         break;
       default:

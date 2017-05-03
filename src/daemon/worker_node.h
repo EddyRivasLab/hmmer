@@ -10,6 +10,7 @@
 #include "dp_sparse/p7_engine.h" 
 #include "search/modelconfig.h"
 #include "daemon/shard.h"
+#include "daemon/hmmpgmd2.h"
 
 //! Structure that describes a region of work assigned to a node
 typedef struct p7_work_descriptor{
@@ -61,12 +62,14 @@ typedef struct p7_worker_thread_state{
 	uint64_t comparisons_queued;
 } P7_WORKER_THREAD_STATE; 
 
-typedef enum p7_search_type{IDLE, SEQUENCE_SEARCH, HMM_SEARCH} P7_SEARCH_TYPE;
+typedef enum p7_search_type{IDLE, SEQUENCE_SEARCH, SEQUENCE_SEARCH_CONTINUE, HMM_SEARCH} P7_SEARCH_TYPE;
 
 //! Structure that holds the state required to manage a worker node
 typedef struct p7_daemon_workernode_state{
 	P7_HARDWARE *hw;  // Information about the machine we're running on
 	// static information about the worker node.  Shouldn't change after initialization
+
+	uint32_t my_rank;
 
 	//! How many databases have been loaded into the daemon?
 	uint32_t num_databases;
@@ -185,6 +188,12 @@ typedef struct p7_daemon_workernode_state{
   	   Therefore, never try to lock a local work queue while the global queue is locked */
   	pthread_mutex_t global_queue_lock;
 
+
+  	pthread_mutex_t work_request_lock;
+  	volatile int work_requested; // flag to prevent multiple requests for more work from going out at a time
+  	volatile int request_work;  // flag set when main thread should request more work
+  	volatile int master_queue_empty;
+
   	pthread_mutex_t backend_queue_lock; // lock to synchronize access to the backend queue
   	P7_BACKEND_QUEUE_ENTRY *backend_queue;  // list of comparisons waiting to be run through the backend
   	uint64_t backend_queue_depth; // number of entries on the backend queue
@@ -274,7 +283,7 @@ void *p7_daemon_worker_thread(void *worker_argument);
  * @return eslOK on success, eslFAIL on failure
 */
 int p7_daemon_workernode_setup_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, P7_PROFILE *compare_model);
-
+int p7_daemon_workernode_add_work_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint64_t start_object, uint64_t end_object);
 //! Configure the workernode to perform an one-amino many-HMM (hmmscan-style) search 
 /* Configure the workernode to perform an one-HMM many-HMM (hmmscan-style) search 
  * @param workernode workernode state object for the node
@@ -311,7 +320,8 @@ uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_
  */
 int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
 
-
+void p7_workernode_request_Work(uint32_t my_shard);
+void p7_workernode_wait_for_Work(P7_DAEMON_CHUNK_REPLY *the_reply, MPI_Datatype *daemon_mpitypes);
 //! main function called at startup on worker nodes
 void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_mpitypes);
 

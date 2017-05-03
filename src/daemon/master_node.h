@@ -19,6 +19,9 @@ typedef struct p7_master_work_descriptor{
   //! object id of the end of this block of work
   uint64_t end;
 
+  //! size of the work chunk to return for each request
+  uint64_t chunk_size;
+
 } P7_MASTER_WORK_DESCRIPTOR;
 
 
@@ -78,10 +81,10 @@ void *p7_daemon_master_hit_thread(void *worker_argument);
 P7_DAEMON_MASTERNODE_STATE *p7_daemon_masternode_Create(uint32_t num_shards, int num_worker_nodes);
 
 //! loads databases into a masternode object
-void p7_daemon_masternode_Setup(uint32_t num_databases, char **database_names, P7_DAEMON_MASTERNODE_STATE *masternode);
+void p7_daemon_masternode_Setup(uint32_t num_shards, uint32_t num_databases, char **database_names, P7_DAEMON_MASTERNODE_STATE *masternode);
 
 //! processes a message full of hits
 int p7_masternode_sort_hits(P7_DAEMON_MESSAGE *the_message, P7_DAEMON_MASTERNODE_STATE *masternode);
 
 //! handles incoming messages to the master node
-void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DAEMON_MESSAGE **buffer_handle);
+void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DAEMON_MESSAGE **buffer_handle, MPI_Datatype *daemon_mpitypes);

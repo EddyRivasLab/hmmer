@@ -13,6 +13,7 @@ blump
 #include "daemon/worker_node.h"
 #include "daemon/master_node.h"
 #include "base/p7_tophits.h"
+#include "daemon/hmmpgmd2.h"
 
 //! Creates a P7_HITLIST_ENTRY object and its included P7_HIT object
 P7_HITLIST_ENTRY *p7_hitlist_entry_Create(){
@@ -250,6 +251,26 @@ int p7_mpi_send_and_recycle_unsorted_hits(ESL_RED_BLACK_DOUBLEKEY *hits, int des
   int hits_in_message;
   last = NULL;
 
+  if(hits == NULL){ // empty hit list so just return
+    if(tag != HMMER_HIT_FINAL_MPI_TAG){
+      p7_Fail("p7_mpi_send_and_recycle_unsorted_hits called on empty hitlist when we weren't at the end of a search\n");
+    }
+    else{
+      // Prepare and send empty message with final hit tag so that masternode knows we're done
+      sendsize = 0;
+      pos = 0;
+      if (MPI_Pack_size(1, MPI_INT, comm, &sendsize)  != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "mpi pack size failed"); 
+
+      while(*nalloc < sendsize){ // the buffer is too small for us to add an integer to it
+        *nalloc = 2* *nalloc;  // the max this can grow to should be ~ 2 * the message size limit we've defined
+        ESL_REALLOC(*buf, *nalloc);
+      }
+      int temp =0; // need to pass pointer to data to MPI_Pack
+      if ( MPI_Pack(&temp, 1, MPI_INT, *buf, *nalloc, &pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "mpi pack failed");
+      if ( MPI_Send(*buf, sendsize, MPI_PACKED, 0, tag, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "mpi send failed");
+      return eslOK;
+    }
+  }
   while(current != NULL){ // there's still at least one hit left in the list
     sendsize = 0; //start at the beginning of an empty send buffer
     pos = 0;

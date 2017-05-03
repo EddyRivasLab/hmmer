@@ -18,7 +18,8 @@
 #include "esl_mpi.h"
 #endif /*HAVE_MPI*/
 #include <unistd.h>
-
+#include <time.h>
+#define WORK_REQUEST_THRESHOLD 3
 #define BACKEND_INCREMENT_FACTOR 7
 //#define TEST_SEQUENCES
 P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads){
@@ -165,8 +166,14 @@ P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, 
   }
 
   workernode->backend_queue = NULL;
-
-
+  workernode->backend_queue_depth = 0;
+ 
+  workernode->work_requested = 0; // no work has been requested thus far
+  workernode->request_work =0;
+  workernode->master_queue_empty =0;
+  if(pthread_mutex_init(&(workernode->work_request_lock), NULL)){
+    p7_Fail("Unable to create mutex in p7_daemon_workernode_Create");
+  }
   return(workernode); // If we make it this far, we've succeeeded
 
   // GOTO target used to catch error cases from ESL_ALLOC because we're too low-tech to write in C++
@@ -233,7 +240,9 @@ int p7_daemon_workernode_Setup(uint32_t num_databases, char **database_names, ui
 
 // Configures the workernode to perform a search comparing one HMM against a sequence database
 int p7_daemon_workernode_setup_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, P7_PROFILE *compare_model){
-
+if(workernode->global_queue == NULL){
+    printf("Found NULL global queue in p7_daemon_workernode_setup_hmm_vs_amino_db\n");
+  }
   if(workernode->search_type != IDLE){
     p7_Fail("p7_daemon_workernode_setup_hmm_vs_amino_db attempted to set up a new operation on a worker node while an old one was still in progress");
   }
@@ -260,8 +269,8 @@ int p7_daemon_workernode_setup_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *worke
   uint64_t real_start, real_end;
   char *sequence_pointer;
   //bounds-check the start and end parameters
-  if((start_object >= the_shard->directory[the_shard->num_objects -1].id) || (end_object >= the_shard->directory[the_shard->num_objects-1].id)){
-    p7_Fail("Attempt to reference out-of-bound object id in p7_daemon_workernode_setup_hmm_vs_amino_db");
+  if((start_object > the_shard->directory[the_shard->num_objects -1].id) || (end_object > the_shard->directory[the_shard->num_objects-1].id)){
+    p7_Fail("Attempt to reference out-of-bound object id in p7_daemon_workernode_setup_hmm_vs_amino_db.  Start object = %lu, end object = %lu\n", start_object, end_object);
   }
   if(start_object > end_object){
     p7_Fail("Attempt to create search with start id greater than end id in p7_daemon_workernode_setup_hmm_vs_amino_db");
@@ -286,13 +295,14 @@ int p7_daemon_workernode_setup_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *worke
     //end_object, but not greater 
   }
 
-  workernode->chunk_size = (real_end - real_start) / workernode->num_threads; //Threads will grab equal shares of the work
+  workernode->chunk_size = (real_end - real_start) / (workernode->num_threads * 32); //Threads will grab equal shares of the work
   // and then steal 
   //printf("set chunk size to %lu\n", workernode->chunk_size);
   //set up global queue.  Don't need to lock here because we only set up searches when the workernode is idle
   workernode->global_queue->start = real_start;
   workernode->global_queue->end = real_end;
 
+//  printf("Workernode starting search with start = %lu and end = %lu\n", workernode->global_queue->start, workernode->global_queue->end);
   for(i = 0; i < workernode->num_threads; i++){
     workernode->thread_state[i].mode = FRONTEND; // all threads start out processing front-end comparisons
     workernode->thread_state[i].comparisons_queued = 0; // reset this
@@ -307,10 +317,55 @@ int p7_daemon_workernode_setup_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *worke
     workernode->sequences_processed[index] = 0;
   } 
 #endif
-
+  workernode->work_requested = 0; // no work has been requested thus far
+  workernode->request_work = 0;
+  workernode->master_queue_empty =0;
   return (eslOK);
 }
 
+// Adds work to a search comparing one HMM against a sequence database
+int p7_daemon_workernode_add_work_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint64_t start_object, uint64_t end_object){
+if(workernode->global_queue == NULL){
+    printf("Found NULL global queue in p7_daemon_workernode_add_work_hmm_vs_amino_db\n");
+  }
+  int i;
+ while(pthread_mutex_trylock(&(workernode->global_queue_lock))){
+    // spin-wait until the lock on global queue is cleared.  Should never be locked for long
+  }
+
+  workernode->no_steal = 0;  // reset this to allow stealing work for the new search
+  //install the model we'll be comparing against
+  workernode->search_type = SEQUENCE_SEARCH_CONTINUE;
+
+  workernode->chunk_size = (end_object - start_object) / workernode->num_threads; //Threads will grab equal shares of the work
+  // and then steal 
+  //printf("set chunk size to %lu\n", workernode->chunk_size);
+  //set up global queue.  Don't need to lock here because we only set up searches when the workernode is idle
+  if(workernode->global_queue->end <  workernode->global_queue->start){
+    // There's currently no work on the global queue
+    workernode->global_queue->end = end_object;
+    workernode->global_queue->start = start_object;
+  }
+  else{
+    // need to push a new work chunk onto the queue
+    P7_WORK_CHUNK *temp = workernode->global_chunk_pool;
+      if(temp == NULL){
+        p7_Fail("Couldn't get a work chunk in worker_thread_front_end_sequence_search_loop\n");
+      }
+
+    // pop the head of the free chunk Pool
+    workernode->global_chunk_pool = workernode->global_chunk_pool->next;
+    // splice the new chunk onto the global work queue
+    temp->next = workernode->global_queue;
+    workernode->global_queue = temp;
+
+    // Fill in the chunk's start, end pointers
+    workernode->global_queue->start = start_object;
+    workernode->global_queue->end = end_object;
+  }
+  pthread_mutex_unlock(&(workernode->global_queue_lock)); // release lock        
+  return (eslOK);
+}
 
 // Configures the workernode to perform a search comparing one amino sequence against an HMM database
 int p7_daemon_workernode_setup_amino_vs_hmm_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, ESL_DSQ *compare_sequence, int64_t compare_L){
@@ -397,6 +452,10 @@ int p7_daemon_workernode_setup_amino_vs_hmm_db(P7_DAEMON_WORKERNODE_STATE *worke
     workernode->work[thread].end = 0;
     thread++;
   }
+
+  workernode->work_requested = 0; // no work has been requested thus far
+  workernode->request_work = 0;
+  workernode->master_queue_empty =0;
   return (eslOK);
 }
 
@@ -509,11 +568,8 @@ ERROR:
 
 // Releases the worer threads to begin processing a request
 int p7_daemon_workernode_release_threads(P7_DAEMON_WORKERNODE_STATE *workernode){
-  while(workernode->num_waiting < workernode->num_threads){
-    // spin util the workers are ready to go
-  }
   while(pthread_mutex_trylock(&(workernode->wait_lock))){
-    // spin-wait until the waiting lock is available.  We should only stall here breifly while the last worker thread
+    // spin-wait until the waiting lock is available.  We should only stall here breifly while a worker thread
     // sets up to wait on the go condition, if ever.
   }
 
@@ -599,7 +655,7 @@ void *p7_daemon_worker_thread(void *worker_argument){
     engine_stats->n_ran_vit   = 0;
     engine_stats->n_past_vit  = 0;
     engine_stats->n_past_fwd  = 0;
-
+    int stop;
     gettimeofday(&start_time, NULL);
     uint64_t chunk_length, sequences_processed; 
     switch(workernode->search_type){ // do the right thing for each search type
@@ -619,7 +675,8 @@ void *p7_daemon_worker_thread(void *worker_argument){
         p7_bg_SetFilter(workernode->thread_state[my_id].bg, workernode->thread_state[my_id].om->M, workernode->thread_state[my_id].om->compo);
 
         sequences_processed = 0;
-        int stop = 0;
+      case SEQUENCE_SEARCH_CONTINUE:  // used when we get additional work chunks for an ongoing search
+        stop = 0;
         while(stop == 0){
           switch(workernode->thread_state[my_id].mode){
             case FRONTEND:
@@ -685,6 +742,7 @@ int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
   P = &P_backer; // set this up to pass info between tophalf and bottomhalf
   int stop =0;
 
+ // printf("Rank %d thread %d entering front-end loop\n", workernode->my_rank, my_id);
 
   while(1){ // stop condition codes in loop body call return directly
 
@@ -713,6 +771,7 @@ int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
         return 1;
         }
         else{
+   //       printf("Rank %d thread %d didn't find front-end work but did find back-end work, so switching to backend\n", workernode->my_rank, my_id);
           // there are backend queue entries to process, switch to backend mode to handle them
           while(pthread_mutex_trylock(&(workernode->backend_threads_lock))){
           // Wait for the lock
@@ -740,14 +799,20 @@ int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
     }
           
     //printf("Thread %d found start = %lu and end %lu\n", my_id, start, end);
-
-    if((start != -1) && (start <= end)){
+ /*   if((start == -1) || (start > end)){
+      printf("Rank %d thread %d found start=%lu and end = %lu, and thus no work to do\n", workernode->my_rank, my_id, start, end);
+    } */
+     if((start != -1) && (start <= end)){
       uint64_t chunk_end = end; // process sequences until we see a long operation
-
+  //    printf("%lu, %lu\n", start, end);
       // get pointer to first sequence to search
       p7_shard_Find_Contents_Nexthigh(workernode->database_shards[workernode->compare_database], start,  &(the_sequence));
-//      printf("Thread %d starting front-end search from %lu to %lu\n",my_id, start, chunk_end);
+/*      if(the_sequence == NULL){
+        printf("about to search bad sequence\n");
+      }
+     printf("Rank %d thread %d starting front-end search from %lu to %lu\n",workernode->my_rank, my_id, start, chunk_end); */
       while(start <= chunk_end){
+//        printf("%lu, %lu\n", start, end);
         // grab the sequence Id and length out of the shard
         chunk_end = workernode->work[my_id].end; // update this to reduce redundant work.
         // don't need to lock because we aren't writing anything and will do a locked check before processing hits
@@ -864,7 +929,7 @@ int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
 }
 
 void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id){
-  //printf("Thread %d starting back end search loop\n", my_id);
+//  printf("Rank %d thread %d starting back end search loop\n", workernode->my_rank, my_id);
   P7_BACKEND_QUEUE_ENTRY *the_entry = p7_get_backend_queue_entry_from_queue(workernode);
   /*if(the_entry == NULL){
     printf("Thread %d found no entries on queue when starting backend loop\n", my_id);
@@ -1000,7 +1065,9 @@ uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_
  while(pthread_mutex_trylock(&(workernode->global_queue_lock))){
     // spin-wait until the lock on global queue is cleared.  Should never be locked for long
   }
-
+  if(workernode->global_queue == NULL){
+    printf("Found NULL global queue in worker_thread_get_chunk\n");
+  }
   // See if there's any work in the queue
   while(workernode->global_queue->end < workernode->global_queue->start){
     // there's no work in the object at the front of the queue
@@ -1017,6 +1084,17 @@ uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_
     else{
       // work queue is empty
       pthread_mutex_unlock(&(workernode->global_queue_lock));
+      if(!workernode->work_requested && !workernode->master_queue_empty && !workernode->request_work){
+        // request more work from master because nobody else has
+        while(pthread_mutex_trylock(&(workernode->work_request_lock))){
+          // spin-wait until the lock on global queue is cleared.  Should never be locked for long
+        }
+        if(!workernode->work_requested && !workernode->master_queue_empty && !workernode->request_work){
+          // re-check whether we should send a request once we've locked the request variable lock to avoid race conditions
+          workernode->request_work = 1;
+        }
+        pthread_mutex_unlock(&(workernode->work_request_lock));
+      }
       return(0);
     }
   }
@@ -1045,7 +1123,36 @@ uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_
       workernode->global_queue = temp;
     }
   }
+  // see if we should request more work
+  P7_WORK_CHUNK *current;
+  current = workernode->global_queue;
+  int need_more_work = 1;
+  int queue_depth = 0;
+  while(current != NULL){
+    if(((current->start + WORK_REQUEST_THRESHOLD) < current->end)|| queue_depth >= WORK_REQUEST_THRESHOLD){
+      // There's enough work left in the queue that we don't need any more
+      need_more_work = 0;
+      current = NULL;
+    }
+    else{
+      current = current->next;
+      queue_depth += 1;
+    }
+  }
+  if(need_more_work && !workernode->work_requested && !workernode->master_queue_empty && !workernode->request_work){
+    // We need more work and nobody else has requested some
+    while(pthread_mutex_trylock(&(workernode->work_request_lock))){
+      // spin-wait until the lock on global queue is cleared.  Should never be locked for long
+    }
+    if(!workernode->work_requested && !workernode->master_queue_empty && !workernode->request_work){
+      // re-check whether we should send a request once we've locked the request variable lock to avoid race conditions
+      workernode->request_work = 1;
+    }
+    pthread_mutex_unlock(&(workernode->work_request_lock));
+  }
+
   //printf("Get_chunk returning chunk of range %lu to %lu\n", my_start, my_end);
+ // printf("Get_chunk about to return %lu %lu with chunksize %lu\n", my_start, my_end, workernode->chunk_size);
   *start = my_start;
   *end = my_end;
   pthread_mutex_unlock(&(workernode->global_queue_lock));
@@ -1099,7 +1206,7 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
   }
 
   if(victim_id == -1){
-    //      printf("Thread %d didn't find a good victim\n", my_id);
+   //     printf("Thread %d didn't find a good victim\n", my_id);
     // we didn't find a good target to steal from
     workernode->no_steal = 1;  // don't need to lock this because it only makes a 0->1 transition during each search
     return 0;
@@ -1160,7 +1267,7 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
     printf("Error: stealer start and victim end not sequential\n");
   }
 
-  //printf("Stealer start was %lu, stealer end was %lu\n", my_new_start, my_new_end);
+//  printf("Stealer start was %lu, stealer end was %lu\n", my_new_start, my_new_end);
   while(pthread_mutex_trylock(&(workernode->work[my_id].lock))){
     // spin-wait until the lock on our queue is cleared.  Should never be locked for long
   }
@@ -1235,9 +1342,13 @@ P7_BACKEND_QUEUE_ENTRY *p7_get_backend_queue_entry_from_queue(P7_DAEMON_WORKERNO
   while(pthread_mutex_trylock(&(workernode->backend_queue_lock))){
         // spin-wait until the lock on our queue is cleared.  Should never be locked for long
   }
-
-
   the_entry = workernode->backend_queue;
+
+  if((the_entry == NULL) && (workernode->backend_queue_depth != 0)){
+    printf("Inconsistent empty queue state found\n");
+  }
+
+  
   if(the_entry!= NULL){
     workernode->backend_queue = workernode->backend_queue->next;
     workernode->backend_queue_depth -= 1;  // if there was a valid entry in the queue, decrement the count of operations in the queue
@@ -1274,12 +1385,35 @@ void p7_put_backend_queue_entry_in_queue(P7_DAEMON_WORKERNODE_STATE *workernode,
 }
 
 
+// NOTE!! Only call this procedure from the main (control) thread.  It sends MPI messages, and we've told
+// MPI that only one thread per node will do that
+void p7_workernode_request_Work(uint32_t my_shard){
+  uint32_t buf;
+  buf = my_shard;  // copy this into a place we can take the address of
+//  printf("Workernode sending shard %d to master\n", my_shard);
+  if ( MPI_Send(&buf, 1, MPI_UNSIGNED, 0, HMMER_WORK_REQUEST_TAG, MPI_COMM_WORLD) != MPI_SUCCESS){
+    p7_Fail("MPI send failed in p7_workernode_request_Work");
+  }
+}
+
+// NOTE!! Only call this procedure from the main (control) thread.  It sends MPI messages, and we've told
+// MPI that only one thread per node will do that
+void p7_workernode_wait_for_Work(P7_DAEMON_CHUNK_REPLY *the_reply, MPI_Datatype *daemon_mpitypes){
+
+  MPI_Status status;
+  // Wait for a reply message from the master node
+  if(MPI_Recv(the_reply, 1, daemon_mpitypes[P7_DAEMON_CHUNK_REPLY_MPITYPE], 0, HMMER_WORK_REPLY_TAG, MPI_COMM_WORLD, &status) != MPI_SUCCESS){
+          p7_Fail("MPI_Recv failed in p7_masternode_message_handler\n");
+        }
+  return; // return data gets passed through the_reply
+}
 
 // used by Easel argument processor
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                               docgroup*/
   { "-h",        eslARG_NONE,  FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",  0 },
-   { "-n",       eslARG_INT,    "1",   NULL, NULL,  NULL,  NULL, NULL, "set max width of ASCII text output lines", 0 },
+    { "-n",       eslARG_INT,    "1",   NULL, NULL,  NULL,  NULL, NULL, "number of searches to run (default 1)", 0 },
+   { "-c",       eslARG_INT,    "0",   NULL, NULL,  NULL,  NULL, NULL, "number of compute cores to use per node (default = all of them)", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -1296,7 +1430,7 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
   int status; // return code from ESL routines
   char *send_buf; // MPI buffer used to send hits to master
   int send_buf_length = 100000;
-
+ struct timeval start, end;
   // default to 100k, send code will resize as necessary
   ESL_ALLOC(send_buf, send_buf_length * sizeof(char));
 
@@ -1304,6 +1438,13 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
+  uint32_t num_worker_cores;
+  if(esl_opt_IsUsed(go, "-c")){
+    num_worker_cores = esl_opt_GetInteger(go, "-c");
+  }
+  else{
+    num_worker_cores = 0;  // default to the number that the hardware reports
+  }
   // first, get the number of shards that each database should be loaded into from the master
   int num_shards;
 
@@ -1319,11 +1460,12 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
 
   MPI_Bcast(&num_shards, 1, MPI_INT, 0, hmmer_control_comm);
 
-  printf("Rank %d sees %d shards\n", my_rank, num_shards);
+//  printf("Rank %d sees %d shards\n", my_rank, num_shards);
     
   P7_DAEMON_WORKERNODE_STATE *workernode;
-  p7_daemon_workernode_Setup(1, &(seqfile), 1, 0, 35, &workernode);
-
+  p7_daemon_workernode_Setup(1, &(seqfile), 1, 0, num_worker_cores, &workernode);
+  workernode->my_rank = my_rank;
+ //printf("Worker %d ready to go\n", my_rank);
   // block until everyone is ready to go
   MPI_Barrier(hmmer_control_comm);
 
@@ -1339,10 +1481,11 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
       MPI_SUCCESS){
         // We have a command to process
 
-  //  printf("Worker %d received command with type %d, database %d, object length %lu\n", my_rank, the_command.type, the_command.db, the_command.compare_obj_length);
+//    printf("Worker %d received command with type %d, database %d, object length %lu\n", my_rank, the_command.type, the_command.db, the_command.compare_obj_length);
 
     switch(the_command.type){
       case P7_DAEMON_HMM_VS_SEQUENCES: // Master node wants us to compare an HMM to a database of sequences
+        gettimeofday(&start, NULL);
         if(compare_obj_buff_length < the_command.compare_obj_length){
           //need more buffer space
           ESL_REALLOC(compare_obj_buff, the_command.compare_obj_length); // create buffer to receive the HMM in
@@ -1352,6 +1495,9 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
         // Get the HMM
         MPI_Bcast(compare_obj_buff, the_command.compare_obj_length, MPI_CHAR, 0, hmmer_control_comm);
 //printf("Worker %d received HMM\n", my_rank);
+
+        // request some work to start off with 
+        p7_workernode_request_Work(workernode->my_shard);
         int temp_pos = 0;
         // Unpack the hmm from the buffer
         P7_HMM         *hmm     = NULL;
@@ -1372,43 +1518,135 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
 
         p7_oprofile_Convert (gm, om);
         ESL_RED_BLACK_DOUBLEKEY *last_hit_tree;
+
+        // Wait to get an initial work range back from the master
+        P7_DAEMON_CHUNK_REPLY work_reply;
+        p7_workernode_wait_for_Work(&work_reply, daemon_mpitypes);
+
+//      printf("Worker node %d received chunk with start = %lu and end = %lu\n", my_rank, work_reply.start, work_reply.end);
         // Ok, we've unpacked the hmm and built all of the profiles we need.  
-        p7_daemon_workernode_setup_hmm_vs_amino_db(workernode, 0, 0, 0, gm);
-        //printf("setup complete\n");
-        p7_daemon_workernode_release_threads(workernode);
+        p7_daemon_workernode_setup_hmm_vs_amino_db(workernode, the_command.db, work_reply.start, work_reply.end, gm);
+  //      printf("setup complete\n");
 
         while(workernode->num_waiting != workernode->num_threads){
-          int thread;
-          ESL_RED_BLACK_DOUBLEKEY *hits, *hit_temp;
-          for(thread = 0; thread < workernode->num_threads; thread++){
-            if(workernode->thread_state[thread].my_hits != NULL){
-              // This thread has hits that we need to put in the tree
-              while(pthread_mutex_trylock(&(workernode->thread_state[thread].hits_lock))){
-              // spin-wait until the lock on the hitlist is cleared.  Should never be locked for long
-              //printf("Thread %d spin-waiting on hit_tree_lock\n", my_id);
+          // spin until al worker threads are ready to go 
+        }
+
+        p7_daemon_workernode_release_threads(workernode);
+        int stop = 0;
+        uint32_t works_requested =0;
+        uint32_t works_received =0;
+        while(stop == 0){
+
+          while(workernode->num_waiting != workernode->num_threads){
+            int thread;
+            if(workernode->work_requested){ // We've asked for work, see if it's arrived
+              //printf("polling for work\n");
+              int found_message = 0;
+              MPI_Status temp_status;
+            
+
+              if(MPI_Iprobe(MPI_ANY_SOURCE, HMMER_WORK_REPLY_TAG, MPI_COMM_WORLD, &found_message, &(temp_status)) != MPI_SUCCESS){
+                p7_Fail("MPI_Iprobe failed in p7_workernode_main\n");
               }
-              // grab the hits out of the workernode
-              hits = workernode->thread_state[thread].my_hits;
-              workernode->thread_state[thread].my_hits = NULL;
-              pthread_mutex_unlock(&(workernode->thread_state[thread].hits_lock));
-              while(hits != NULL){
-                hit_temp = hits->large;
-                hits->large = workernode->hit_tree;
-                workernode->hit_tree = hits;
-                workernode->hits_in_tree++;
-                hits = hit_temp;
+              if(found_message){ // we have some work to receive
+                //printf("Thread %d receiving work\n", my_rank);
+                p7_workernode_wait_for_Work(&work_reply, daemon_mpitypes);
+                works_received++;
+                while(pthread_mutex_trylock(&(workernode->work_request_lock))){ // grab the lock on the work request variables
+                }
+                //printf("Worker node %d received chunk with %d threads waiting, start = %lu and end = %lu\n", my_rank, workernode->num_waiting, work_reply.start, work_reply.end);
+                if(work_reply.start != -1){
+                  //We got more work from the master node
+                  p7_daemon_workernode_add_work_hmm_vs_amino_db(workernode, work_reply.start, work_reply.end);
+                  p7_daemon_workernode_release_threads(workernode); // tell any paused threads to go
+                }
+                else{
+                  workernode->master_queue_empty = 1;  // The master is out of work to give
+                }
+                workernode->work_requested = 0; // no more pending work
+                pthread_mutex_unlock(&(workernode->work_request_lock));
               }
+              
+            }
+
+            if(workernode->request_work && !workernode->master_queue_empty){ // Our queue is low, so request work
+              //printf("Requesting work\n");
+              p7_workernode_request_Work(workernode->my_shard);
+              works_requested++;
+              while(pthread_mutex_trylock(&(workernode->work_request_lock))){ // grab the lock on the work request variables
+              }
+              //printf("Thread %d requesting work\n", my_rank);              
+              workernode->request_work = 0;  // We've requested work
+              workernode->work_requested = 1; // flag so that we check for incoming work
+              pthread_mutex_unlock(&(workernode->work_request_lock));
+            }
+            ESL_RED_BLACK_DOUBLEKEY *hits, *hit_temp;
+            for(thread = 0; thread < workernode->num_threads; thread++){
+              if(workernode->thread_state[thread].my_hits != NULL){
+                // This thread has hits that we need to put in the tree
+                while(pthread_mutex_trylock(&(workernode->thread_state[thread].hits_lock))){
+                // spin-wait until the lock on the hitlist is cleared.  Should never be locked for long
+                //printf("Thread %d spin-waiting on hit_tree_lock\n", my_id);
+                }
+                // grab the hits out of the workernode
+                hits = workernode->thread_state[thread].my_hits;
+                workernode->thread_state[thread].my_hits = NULL;
+                pthread_mutex_unlock(&(workernode->thread_state[thread].hits_lock));
+                while(hits != NULL){
+                  hit_temp = hits->large;
+                  hits->large = workernode->hit_tree;
+                  workernode->hit_tree = hits;
+                  workernode->hits_in_tree++;
+                  hits = hit_temp;
+                }
+              }
+            }
+            if(workernode->hits_in_tree > 1000){ // make this a parameter
+              if(p7_mpi_send_and_recycle_unsorted_hits(workernode->hit_tree, 0, HMMER_HIT_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length, workernode) != eslOK){
+                p7_Fail("Failed to send hit messages to master\n");
+              }
+              workernode->hit_tree = NULL;
+              workernode->hits_in_tree = 0;
+        //     printf("Worker %d sent hits\n", my_rank);
             }
           }
-          if(workernode->hits_in_tree > 1000){ // make this a parameter
-            if(p7_mpi_send_and_recycle_unsorted_hits(workernode->hit_tree, 0, HMMER_HIT_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length, workernode) != eslOK){
-              p7_Fail("Failed to send hit messages to master\n");
+          if(!workernode->master_queue_empty){
+           // printf("Rank %d requesting work because all threads waiting\n", my_rank);
+            if(!workernode->work_requested){
+              // nobody has sent a request already, so send one
+              p7_workernode_request_Work(workernode->my_shard);
+              works_requested++;
             }
-            workernode->hit_tree = NULL;
-            workernode->hits_in_tree = 0;
-       //     printf("Worker %d sent hits\n", my_rank);
+
+            p7_workernode_wait_for_Work(&work_reply, daemon_mpitypes);
+            works_received++;
+            while(pthread_mutex_trylock(&(workernode->work_request_lock))){ // grab the lock on the work request variables
+              }
+            workernode->work_requested = 0; // we've processed the outstanding request
+            pthread_mutex_unlock(&(workernode->work_request_lock));
+
+            if(work_reply.start != -1){
+              //We got more work from the master node
+              p7_daemon_workernode_add_work_hmm_vs_amino_db(workernode, work_reply.start, work_reply.end);
+              p7_daemon_workernode_release_threads(workernode); // tell any paused threads to go
+            }
+            else{
+              // Master has no work left, we're done
+              stop = 1;
+            }
+          }
+          else{ // we're out of work and the master queue is empty, so we're done
+            stop = 1;
           }
         }
+        if(works_requested != works_received){
+          printf("Rank %d had work request/receive mis-match %u vs. %u\n", my_rank, works_requested, works_received);
+        }
+        if(workernode->work_requested){
+          printf("Rank %d had work request outstanding at end of search\n", my_rank);
+        }
+//       printf("Worker %d getting ready to send hits at end of search\n", my_rank);
         int thread;
         ESL_RED_BLACK_DOUBLEKEY *hits, *hit_temp;
         for(thread = 0; thread < workernode->num_threads; thread++){
@@ -1431,18 +1669,22 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
             }
           }
         }
+ //       printf("Workernode %d found %d hits to send at end of search\n", my_rank, workernode->hits_in_tree++);
         if(p7_mpi_send_and_recycle_unsorted_hits(workernode->hit_tree, 0, HMMER_HIT_FINAL_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length, workernode) != eslOK){
           p7_Fail("Failed to send hit messages to master\n");
         }
         workernode->hit_tree = NULL;
         workernode->hits_in_tree = 0;
-        //  printf("Worker %d sent final hits\n", my_rank);
+ //     printf("Worker %d sent final hits\n", my_rank);
         p7_daemon_workernode_end_search(workernode);
-//        printf("Worker %d finished search\n", my_rank);
+        gettimeofday(&end, NULL);
+        printf("Rank %d, %f\n", my_rank, ((float)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0);
+  
+ //       printf("Worker %d finished search\n", my_rank);
         break;
       case P7_DAEMON_SHUTDOWN_WORKERS:
         // spurious barrier for testing so that master doesn't exit immediately
-        printf("Worker %d received shutdown command\n", my_rank);
+ //       printf("Worker %d received shutdown command\n", my_rank);
         MPI_Barrier(hmmer_control_comm);
         exit(0);
         break;

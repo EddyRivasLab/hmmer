@@ -37,4 +37,10 @@ typedef struct p7_daemon_chunk_reply{
 #define P7_DAEMON_COMMAND_MPITYPE 0
 #define P7_DAEMON_CHUNK_REPLY_MPITYPE 1
 
+//defines for message tags
+#define HMMER_HIT_MPI_TAG 0x1
+#define HMMER_HIT_FINAL_MPI_TAG 0x2
+#define HMMER_WORK_REQUEST_TAG 0x3
+#define HMMER_WORK_REPLY_TAG 0x4
+
 #endif
