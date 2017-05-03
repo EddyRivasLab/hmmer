@@ -244,8 +244,8 @@ int p7_mpi_send_and_recycle_unsorted_hits(ESL_RED_BLACK_DOUBLEKEY *hits, int des
 
   ESL_RED_BLACK_DOUBLEKEY *current = hits; //start at the beginning of the list
   ESL_RED_BLACK_DOUBLEKEY *current2, *last;
-  uint32_t sendsize;
-  uint32_t pos;
+  int sendsize;
+  int pos;
   int my_size; // size of the current hit
   int status; // return code from ESL_REALLOC
   int hits_in_message;

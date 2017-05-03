@@ -456,8 +456,6 @@ int p7_masternode_sort_hits(P7_DAEMON_MESSAGE *the_message, P7_DAEMON_MASTERNODE
   
   return last_message; // We've reached the end of this message, so return 1 if it was the last message from a node
 
-ERROR:  // handle errors in ESL_REALLOC
-  return eslFAIL;
 }
 
 //! handles incoming messages to the master node

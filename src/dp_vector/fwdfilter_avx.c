@@ -91,8 +91,8 @@ static inline int   posterior_decode_row_avx(P7_CHECKPTMX *ox, int rowi, P7_SPAR
 
 #ifdef p7_DEBUGGING
 static inline float backward_row_zero_avx(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
-       void  save_debug_row_pp_avx(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
-       void  save_debug_row_fb_avx(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
+       void  save_debug_row_pp_avx(P7_CHECKPTMX *ox,               __m256 *dpc, int i);
+       void  save_debug_row_fb_avx(P7_CHECKPTMX *ox, P7_REFMX *gx, __m256 *dpc, int i, float totscale);
 #endif
 
 /*****************************************************************
@@ -183,8 +183,8 @@ p7_ForwardFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
 
 
 #ifdef p7_DEBUGGING
-  if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, 0, dpp, "f1 O"); 
-  if (ox->fwd)        save_debug_row_fb_avx(ox, ox->fwd, dpp, 0, totsc); 
+  if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, 0, (debug_print *) dpp_AVX, "f1 O"); 
+  if (ox->fwd)        save_debug_row_fb_avx(ox, ox->fwd, dpp_AVX, 0, totsc_AVX); 
 #endif
 
   /* Phase one: the "a" region: all rows in this region are saved */
@@ -197,8 +197,8 @@ p7_ForwardFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
       dpp_AVX = dpc_AVX;   /* current row becomes prev row */
 
 #ifdef p7_DEBUGGING
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, dpc, "f1 O"); 
-      if (ox->fwd)        save_debug_row_fb_avx(ox, ox->fwd, dpc, i, totsc); 
+      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (debug_print *) dpc_AVX, "f1 O"); 
+      if (ox->fwd)        save_debug_row_fb_avx(ox, ox->fwd, dpc_AVX, i, totsc_AVX); 
 #endif
     }
 
@@ -227,8 +227,8 @@ p7_ForwardFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
       dpp_AVX = dpc_AVX;
 
 #ifdef p7_DEBUGGING
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, dpc, w ? "f1 X" : "f1 O"); 
-      if (ox->fwd)        save_debug_row_fb_avx(ox, ox->fwd, dpc, i, totsc); 
+      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (debug_print *) dpc_AVX, w ? "f1 X" : "f1 O"); 
+      if (ox->fwd)        save_debug_row_fb_avx(ox, ox->fwd, dpc_AVX, i, totsc_AVX); 
 #endif
 
     }
@@ -418,12 +418,12 @@ p7_BackwardFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
     */
    float xN;
    ox->R--;
-   fwd = (__m128 *) ox->dpf[ox->R0];
-   bck = (__m128 *) ox->dpf[i%2];	       
-   xN = backward_row_zero(dsq[1], om, ox); 
-   if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, 0, fwd, "f2 O"); p7_checkptmx_DumpFBRow(ox, 0, bck, "bck"); }
-   if (ox->bck)        save_debug_row_fb_avx(ox, ox->bck, bck, 0, ox->bcksc); 
-   if ((status = posterior_decode_row(ox, 0, sm, sm_thresh, Tvalue)) != eslOK) return status;
+   fwd_AVX = (__m256 *) ox->dpf_AVX[ox->R0];
+   bck_AVX = (__m256 *) ox->dpf_AVX[i%2];	       
+   xN = backward_row_zero_avx(dsq[1], om, ox); 
+   if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, 0, (debug_print *) fwd_AVX, "f2 O"); p7_checkptmx_DumpFBRow(ox, 0, (debug_print *) bck_AVX, "bck"); }
+   if (ox->bck)        save_debug_row_fb_avx(ox, ox->bck, bck_AVX, 0, ox->bcksc); 
+   if ((status = posterior_decode_row_avx(ox, 0, sm, sm_thresh, Tvalue)) != eslOK) return status;
    ox->bcksc += xN;
 #endif
 
@@ -978,9 +978,9 @@ posterior_decode_row_avx(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm
 
   for (q = 0; q < Q; q++) 
     {
-      P7C_MQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7C_MQ(fwd, q), P7C_MQ(bck, q)));
-      P7C_DQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7C_DQ(fwd, q), P7C_DQ(bck, q)));
-      P7C_IQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7C_IQ(fwd, q), P7C_IQ(bck, q)));
+      P7C_MQ(fwd, q) = _mm256_mul_ps(cv, _mm256_mul_ps(P7C_MQ(fwd, q), P7C_MQ(bck, q)));
+      P7C_DQ(fwd, q) = _mm256_mul_ps(cv, _mm256_mul_ps(P7C_DQ(fwd, q), P7C_DQ(bck, q)));
+      P7C_IQ(fwd, q) = _mm256_mul_ps(cv, _mm256_mul_ps(P7C_IQ(fwd, q), P7C_IQ(bck, q)));
     }
 
   if (ox->pp)  save_debug_row_pp_avx(ox, fwd, rowi);
@@ -1017,7 +1017,7 @@ static inline float
 backward_row_zero_avx(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
 {
 
-#ifdef p7_DBUGGING
+#ifdef p7_DEBUGGING
   int          Q     = ox->Qf_AVX;
   __m256       *dpc  = (__m256 *) ox->dpf_AVX[0];
   __m256       *dpp  = (__m256 *) ox->dpf_AVX[1];
@@ -1032,7 +1032,7 @@ backward_row_zero_avx(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
 
   /* On "previous" row i+1: include emission prob, and sum to get xBv, xB. */
   dp  = dpp;
-  tp  = om->tfv;
+  tp  = om->tfv_AVX;
   for (q = 0; q < Q; q++)
     {
       *dp = _mm256_mul_ps(*dp, *rp); rp++;

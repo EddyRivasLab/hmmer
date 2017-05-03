@@ -185,8 +185,8 @@ p7_sparsemask_Sizeof_neon64(const P7_SPARSEMASK *sm)
   n += sm->ralloc * sizeof(int *);                      // <k>                   
   n += sm->ralloc * sizeof(int);                        // <n>                   
   n += sm->kalloc * sizeof(int);                        // <kmem>                
-  return n;
  #endif
+   return n;
 }
 
 /* Function:  p7_sparsemask_MinSizeof()

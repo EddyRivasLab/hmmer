@@ -854,7 +854,7 @@ int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
             the_entry->sm = workernode->thread_state[my_id].engine->sm;
             workernode->thread_state[my_id].engine->sm = temp_mask;
             // populate the fields
-            the_entry->sequence = the_sequence;
+            the_entry->sequence = (ESL_DSQ *) the_sequence;
             the_entry->L = L;
             the_entry->P = *P;
             the_entry->biassc = workernode->thread_state[my_id].engine->biassc;
@@ -1388,7 +1388,7 @@ void p7_put_backend_queue_entry_in_queue(P7_DAEMON_WORKERNODE_STATE *workernode,
 // NOTE!! Only call this procedure from the main (control) thread.  It sends MPI messages, and we've told
 // MPI that only one thread per node will do that
 void p7_workernode_request_Work(uint32_t my_shard){
-  uint32_t buf;
+  uint32_t buf=0;
   buf = my_shard;  // copy this into a place we can take the address of
 //  printf("Workernode sending shard %d to master\n", my_shard);
   if ( MPI_Send(&buf, 1, MPI_UNSIGNED, 0, HMMER_WORK_REQUEST_TAG, MPI_COMM_WORLD) != MPI_SUCCESS){
@@ -1482,6 +1482,15 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
         // We have a command to process
 
 //    printf("Worker %d received command with type %d, database %d, object length %lu\n", my_rank, the_command.type, the_command.db, the_command.compare_obj_length);
+    int temp_pos = 0;
+  
+    P7_HMM         *hmm     = NULL;
+    ESL_ALPHABET   *abc     = NULL;
+
+    P7_BG          *bg      = NULL;
+    P7_PROFILE     *gm      = NULL;
+    P7_OPROFILE    *om      = NULL;
+    P7_ENGINE      *eng     = NULL;
 
     switch(the_command.type){
       case P7_DAEMON_HMM_VS_SEQUENCES: // Master node wants us to compare an HMM to a database of sequences
@@ -1498,15 +1507,6 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
 
         // request some work to start off with 
         p7_workernode_request_Work(workernode->my_shard);
-        int temp_pos = 0;
-        // Unpack the hmm from the buffer
-        P7_HMM         *hmm     = NULL;
-        ESL_ALPHABET   *abc     = NULL;
-
-        P7_BG          *bg      = NULL;
-        P7_PROFILE     *gm      = NULL;
-        P7_OPROFILE    *om      = NULL;
-        P7_ENGINE      *eng     = NULL;
 
         p7_profile_mpi_Unpack(compare_obj_buff, compare_obj_buff_length, &temp_pos, hmmer_control_comm, &abc, &gm);
 

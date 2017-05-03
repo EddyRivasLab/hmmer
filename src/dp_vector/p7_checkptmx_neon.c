@@ -13,7 +13,7 @@
 #include <stdio.h>
 
 #include "easel.h"
-
+#include "esl_neon.h"
 #include "dp_vector/simdvec.h"
 #include "dp_vector/p7_checkptmx.h"
 
@@ -401,10 +401,12 @@ p7_checkptmx_Destroy_neon(P7_CHECKPTMX *ox)
  *            labeled something like "fwd" and "bck" to distinguish
  *            them in the debugging dump.)
  */
+
 int
-p7_checkptmx_DumpFBRow_neon(P7_CHECKPTMX *ox, int rowi, esl_neon_128f_t *dpc, char *pfx)
+p7_checkptmx_DumpFBRow_neon(P7_CHECKPTMX *ox, int rowi, char *dpc_char, char *pfx)
 {
 #ifdef HAVE_NEON
+  esl_neon_128f_t dpc = (esl_neon_128f *) dpc_char;
   union { esl_neon_128f_t v; float x[p7_VNF]; } u;
   float *v         = NULL;		/*  */
   int    Q         = ox->Qf;
@@ -460,13 +462,12 @@ p7_checkptmx_DumpFBRow_neon(P7_CHECKPTMX *ox, int rowi, esl_neon_128f_t *dpc, ch
 
  ERROR:
   if (v) free(v);
-  return status;
-#endif //HAVE_NEON
+  return status; 
+#endif
 #ifndef HAVE_NEON
   return eslENORESULT;
-#endif   
+#endif
 }
-
 #endif /*p7_DEBUGGING*/
 /*---------------- end, debugging -------------------------------*/
 

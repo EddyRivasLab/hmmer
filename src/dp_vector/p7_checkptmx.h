@@ -66,23 +66,23 @@ enum p7c_xcells_e {
 #define P7C_DQ(dp, q)     ((dp)[(q) * p7C_NSCELLS + p7C_D])
 #define P7C_IQ(dp, q)     ((dp)[(q) * p7C_NSCELLS + p7C_I])
 
-typedef
+//typedef
 #if p7_CPU_ARCH == intel 
 #if defined HAVE_AVX512
-__m512
+#define debug_print __m512
 #elif defined HAVE_AVX2
-__m256
+#define debug_print __m256
 #else
-__m128
+#define debug_print __m128
 #endif
 #endif // intel 
 #if p7_CPU_ARCH == arm 
-esl_neon_128f_t
+#define debug_print esl_neon_128f_t
 #endif
 #if p7_CPU_ARCH == arm64 
-esl_neon_128f_t
+#define debug_print esl_neon_128f_t
 #endif
-debug_print;
+//debug_print;
 
 typedef struct p7_checkptmx_s {
   int M;	/* current actual query model dimension (consensus positions)         */

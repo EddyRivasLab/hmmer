@@ -85,8 +85,8 @@ static inline int   posterior_decode_row_sse(P7_CHECKPTMX *ox, int rowi, P7_SPAR
 
 #ifdef p7_DEBUGGING
 inline float backward_row_zero_sse(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
-       void  save_debug_row_pp_sse(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
-       void  save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
+       void  save_debug_row_pp_sse(P7_CHECKPTMX *ox,               __m128 *dpc, int i);
+       void  save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float totscale);
 #endif
 
 /*****************************************************************
@@ -168,7 +168,7 @@ p7_ForwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
   xc[p7C_SCALE] = 1.;
 
 #ifdef p7_DEBUGGING
-  if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, 0, dpp, "f1 O"); 
+  if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, 0, (debug_print *) dpp, "f1 O"); 
   if (ox->fwd)        save_debug_row_fb_sse(ox, ox->fwd, dpp, 0, totsc); 
 #endif
 
@@ -182,7 +182,7 @@ p7_ForwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
 
 
 #ifdef p7_DEBUGGING
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, dpc, "f1 O"); 
+      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (debug_print *) dpc, "f1 O"); 
       if (ox->fwd)        save_debug_row_fb_sse(ox, ox->fwd, dpc, i, totsc); 
 #endif
     }
@@ -293,7 +293,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
 
 #ifdef p7_DEBUGGING
   ox->bcksc = logf(xf[p7C_SCALE]);
-  if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, L, fwd, "f2 O"); if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, L, bck, "bck");  }
+  if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, L, (debug_print *) fwd, "f2 O"); if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, L, (debug_print *) bck, "bck");  }
   if (ox->bck)          save_debug_row_fb_sse(ox, ox->bck, bck, L, ox->bcksc); 
 
 #endif
@@ -310,7 +310,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
       fwd = (__m128 *) ox->dpf[ox->R0+ox->R];    /* get free row memory from top of stack */
       forward_row_sse(dsq[i], om, dpp, fwd, Q);      /* calculate fwd[L-1]                    */
 #ifdef p7_DEBUGGING
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, fwd, "f2 X");
+      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (debug_print *) fwd, "f2 X");
 #endif
 
       /* Compute bck[L-1] from bck[L]. */
@@ -320,7 +320,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
       backward_row_main_sse(dsq[i+1], om, dpp, bck, Q, xf[p7C_SCALE]);
 #ifdef p7_DEBUGGING
       ox->bcksc += logf(xf[p7C_SCALE]);
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, bck, "bck");
+      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (debug_print *) bck, "bck");
       if (ox->bck)        save_debug_row_fb_sse(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
       /* And decode. */
@@ -345,7 +345,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
       backward_row_main_sse(dsq[i+1], om, dpp, bck, Q, xf[p7C_SCALE]);
 #ifdef p7_DEBUGGING
       ox->bcksc += logf(xf[p7C_SCALE]);
-      if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i, fwd, "f2 O");	p7_checkptmx_DumpFBRow(ox, i, bck, "bck"); }
+      if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i, (debug_print *) fwd, "f2 O");	p7_checkptmx_DumpFBRow(ox, i, (debug_print *) bck, "bck"); }
       if (ox->bck)        save_debug_row_fb_sse(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
       /* And decode checkpointed row i. */
@@ -373,7 +373,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
 	  backward_row_main_sse(dsq[i2+1], om, dpp, bck, Q, xf[p7C_SCALE]);
 #ifdef p7_DEBUGGING
 	  ox->bcksc += logf(xf[p7C_SCALE]);
-	  if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i2, fwd, "f2 X"); p7_checkptmx_DumpFBRow(ox, i2, bck, "bck"); }
+	  if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i2, (debug_print *) fwd, "f2 X"); p7_checkptmx_DumpFBRow(ox, i2, (debug_print *) bck, "bck"); }
 	  if (ox->bck)        save_debug_row_fb_sse(ox, ox->bck, bck, i2, ox->bcksc); 
 #endif
 
@@ -395,7 +395,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
        backward_row_main_sse(dsq[i+1], om, dpp, bck, Q, xf[p7C_SCALE]);
 #ifdef p7_DEBUGGING
        ox->bcksc += logf(xf[p7C_SCALE]);
-       if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i, fwd, "f2 O"); p7_checkptmx_DumpFBRow(ox, i, bck, "bck"); }
+       if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, i, (debug_print *) fwd, "f2 O"); p7_checkptmx_DumpFBRow(ox, i, (debug_print *) bck, "bck"); }
        if (ox->bck)        save_debug_row_fb_sse(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
        if ((status = posterior_decode_row_sse(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
@@ -413,10 +413,10 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
    ox->R--;
    fwd = (__m128 *) ox->dpf[ox->R0];
    bck = (__m128 *) ox->dpf[i%2];	       
-   xN = backward_row_zero(dsq[1], om, ox); 
-   if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, 0, fwd, "f2 O"); p7_checkptmx_DumpFBRow(ox, 0, bck, "bck"); }
+   xN = backward_row_zero_sse(dsq[1], om, ox); 
+   if (ox->do_dumping) { p7_checkptmx_DumpFBRow(ox, 0, (debug_print *) fwd, "f2 O"); p7_checkptmx_DumpFBRow(ox, 0, (debug_print *) bck, "bck"); }
    if (ox->bck)        save_debug_row_fb_sse(ox, ox->bck, bck, 0, ox->bcksc); 
-   if ((status = posterior_decode_row(ox, 0, sm, sm_thresh, Tvalue)) != eslOK) return status;
+   if ((status = posterior_decode_row_sse(ox, 0, sm, sm_thresh, Tvalue)) != eslOK) return status;
    ox->bcksc += xN;
 #endif
 
@@ -968,7 +968,7 @@ posterior_decode_row_sse(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm
       P7C_IQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7C_IQ(fwd, q), P7C_IQ(bck, q)));
     }
 
-  if (ox->pp)  save_debug_row_sse(ox, fwd, rowi);
+  if (ox->pp)  save_debug_row_pp_sse(ox, fwd, rowi);
 #endif
   return eslOK;
 }
@@ -1054,7 +1054,7 @@ return 0.0;
 }
 
 void
-save_debug_row_pp_sse(P7_CHECKPTMX *ox, debug_print *dpc, int i)
+save_debug_row_pp_sse(P7_CHECKPTMX *ox, __m128 *dpc, int i)
 {
 #ifdef HAVE_SSE2
 #ifdef p7_DEBUGGING  
@@ -1107,7 +1107,7 @@ save_debug_row_pp_sse(P7_CHECKPTMX *ox, debug_print *dpc, int i)
  * space.
  */
 void
-save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale)
+save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float totscale)
 {
 #ifdef HAVE_SSE2  
 #ifdef p7_DEBUGGING  
@@ -1145,7 +1145,8 @@ save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, f
       u.v = P7C_IQ(dpc, q); for (z = 0; z < p7_VNF; z++) { k = q+Q*z+1; if (k <= ox->M) P7R_MX(gx,i,k,p7R_IL) = logf(u.x[z]) + totscale; }
     }
 #endif   //p7_DEBUGGING
-#endif // HAVE_SSE2    
+#endif // HAVE_SSE2   
+
 }
 /*****************************************************************
  * @LICENSE@

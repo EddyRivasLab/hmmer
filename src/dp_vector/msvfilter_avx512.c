@@ -141,8 +141,8 @@ p7_MSVFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERM
   if (ox->do_dumping)
     {
       uint8_t xB;
-      xB = _mm_extract_epi16(xBv, 0);
-      xJ = _mm_extract_epi16(xJv, 0);
+      xB = _mm_extract_epi16(xBv_AVX_512, 0);
+      xJ = _mm_extract_epi16(xJv_AVX_512, 0);
       p7_filtermx_DumpMFRow(ox, 0, 0, 0, xJ, xB, xJ);
     }
 #endif
@@ -237,9 +237,9 @@ p7_MSVFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERM
       if (ox->do_dumping)
 	{
 	  uint8_t xB, xE;
-	  xB = _mm_extract_epi16(xBv, 0);
-	  xE = _mm_extract_epi16(xEv, 0);
-	  xJ = _mm_extract_epi16(xJv, 0);
+	  xB = _mm_extract_epi16(xBv_AVX_512, 0);
+	  xE = _mm_extract_epi16(xEv_AVX_512, 0);
+	  xJ = _mm_extract_epi16(xJv_AVX_512, 0);
 	  p7_filtermx_DumpMFRow(ox, i, xE, 0, xJ, xB, xJ);
 	}
 #endif

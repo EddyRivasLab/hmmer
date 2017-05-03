@@ -249,7 +249,7 @@ p7_filtermx_DumpMFRow_avx(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t x
 
   /* Unpack and unstripe, then print M's. */
   for (q = 0; q < Q; q++) {
-    tmp.v = fx->dp[q];
+    tmp.v = fx->dp_AVX[q];
     for (z = 0; z < 32; z++) v[q+Q*z+1] = tmp.i[z]; 
   }
   fprintf(fx->dfp, "%4d M ", rowi);
@@ -303,7 +303,7 @@ int
 p7_filtermx_DumpVFRow_avx(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
 {
 #ifdef HAVE_AVX2  
-  __m256i *dp = fx->dp;		/* enable MMXf(q), DMXf(q), IMXf(q) macros */
+  __m256i *dp_AVX = (__m256i *) fx->dp;		/* enable MMXf(q), DMXf(q), IMXf(q) macros */
   int      Q  = P7_NVW_AVX(fx->M);	/* number of vectors in the VF row */
   int16_t *v  = NULL;		/* array of unstriped, uninterleaved scores  */
   int      q,z,k;

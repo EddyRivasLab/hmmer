@@ -144,7 +144,7 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
   xE_AVX   = -32768;
 
 #ifdef p7_DEBUGGING
-  if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, 0, xE, 0, xJ, xB, xC); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
+  if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, 0, xE_AVX, 0, xJ_AVX, xB_AVX, xC_AVX); /* first 0 is <rowi>: do header. second 0 is xN: always 0 here. */
 #endif
 
   for (i = 1; i <= L; i++)
@@ -281,7 +281,7 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
   }
 
 #ifdef p7_DEBUGGING
-      if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, i, xE, 0, xJ, xB, xC);   
+      if (ox->do_dumping) p7_filtermx_DumpVFRow(ox, i, xE_AVX, 0, xJ_AVX, xB_AVX, xC_AVX);   
 #endif
     } /* end loop over sequence residues 1..L */
 

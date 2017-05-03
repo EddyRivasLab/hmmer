@@ -15,7 +15,7 @@ libdir       = ${exec_prefix}/lib
 includedir   = ${prefix}/include
 
 CC           = mpicc
-CFLAGS       = -O3 -pthread -fPIC
+CFLAGS       = -g -Wall -pthread -fPIC
 #SIMDFLAGS    = @SIMD_CFLAGS@
 CPPFLAGS     = 
 LDFLAGS      = 
