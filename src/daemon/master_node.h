@@ -1,6 +1,16 @@
 //! header file for functions and datatypes used by the master node of a daemon
 #include "esl_red_black.h"
 #include "shard.h"
+#include "p7_config.h"
+
+// This is a hack to get the code to compile if we aren't building with MPI support
+// Without this, functions that have MPI parameters cause errors
+#ifndef HAVE_MPI
+typedef char MPI_Status;
+typedef char MPI_Datatype;
+#endif
+
+
 //Data structure used by the master node's control thread to receive messages and pass them to the hit 
 //processing thread
 typedef struct p7_daemon_message{

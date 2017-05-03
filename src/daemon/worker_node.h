@@ -3,7 +3,7 @@
 #define WORKER_NODE_INCLUDED
 
 #include <pthread.h>
-
+#include "p7_config.h"
 #include "easel.h"
 #include "esl_red_black.h"
 #include "esl_dsqdata.h"
@@ -11,6 +11,12 @@
 #include "search/modelconfig.h"
 #include "daemon/shard.h"
 #include "daemon/hmmpgmd2.h"
+
+// This is a hack to get the code to compile if we aren't building with MPI support
+// Without this, functions that have MPI_Datatype parameters cause errors
+#ifndef HAVE_MPI
+typedef char MPI_Datatype;
+#endif
 
 //! Structure that describes a region of work assigned to a node
 typedef struct p7_work_descriptor{

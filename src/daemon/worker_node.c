@@ -1388,24 +1388,33 @@ void p7_put_backend_queue_entry_in_queue(P7_DAEMON_WORKERNODE_STATE *workernode,
 // NOTE!! Only call this procedure from the main (control) thread.  It sends MPI messages, and we've told
 // MPI that only one thread per node will do that
 void p7_workernode_request_Work(uint32_t my_shard){
+#ifndef HAVE_MPI
+      p7_Fail("Attempt to call p7_workernode_request_Work when HMMER was compiled without MPI support");
+#endif
+#ifdef HAVE_MPI
   uint32_t buf=0;
   buf = my_shard;  // copy this into a place we can take the address of
 //  printf("Workernode sending shard %d to master\n", my_shard);
   if ( MPI_Send(&buf, 1, MPI_UNSIGNED, 0, HMMER_WORK_REQUEST_TAG, MPI_COMM_WORLD) != MPI_SUCCESS){
     p7_Fail("MPI send failed in p7_workernode_request_Work");
   }
+#endif
 }
 
 // NOTE!! Only call this procedure from the main (control) thread.  It sends MPI messages, and we've told
 // MPI that only one thread per node will do that
 void p7_workernode_wait_for_Work(P7_DAEMON_CHUNK_REPLY *the_reply, MPI_Datatype *daemon_mpitypes){
-
+#ifndef HAVE_MPI
+      p7_Fail("Attempt to call p7_workernode_wait_for_Work when HMMER was compiled without MPI support");
+#endif
+#ifdef HAVE_MPI
   MPI_Status status;
   // Wait for a reply message from the master node
   if(MPI_Recv(the_reply, 1, daemon_mpitypes[P7_DAEMON_CHUNK_REPLY_MPITYPE], 0, HMMER_WORK_REPLY_TAG, MPI_COMM_WORLD, &status) != MPI_SUCCESS){
           p7_Fail("MPI_Recv failed in p7_masternode_message_handler\n");
         }
   return; // return data gets passed through the_reply
+#endif
 }
 
 // used by Easel argument processor
@@ -1424,7 +1433,7 @@ static char banner[] = "hmmpgmd2, the daemon version of HMMER 4";
 void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_mpitypes){
 
 #ifndef HAVE_MPI
-      p7_Fail("Attempt to start workernode_main when HMMER was compiled without MPI support")
+      p7_Fail("Attempt to start workernode_main when HMMER was compiled without MPI support");
 #endif
 #ifdef HAVE_MPI
   int status; // return code from ESL routines

@@ -241,7 +241,11 @@ void p7_hitlist_Destroy(P7_HITLIST *the_list, struct p7_daemon_workernode_state 
 }
 
 int p7_mpi_send_and_recycle_unsorted_hits(ESL_RED_BLACK_DOUBLEKEY *hits, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc, struct p7_daemon_workernode_state *workernode){
-
+#ifndef HAVE_MPI
+  p7_Fail("Attempt to call p7_mpi_send_and_recycle_unsorted_hits when HMMER was compiled without MPI support");
+  return 0;
+#endif
+#ifdef HAVE_MPI 
   ESL_RED_BLACK_DOUBLEKEY *current = hits; //start at the beginning of the list
   ESL_RED_BLACK_DOUBLEKEY *current2, *last;
   int sendsize;
@@ -334,6 +338,7 @@ int p7_mpi_send_and_recycle_unsorted_hits(ESL_RED_BLACK_DOUBLEKEY *hits, int des
 
 ERROR:
   return eslFAIL;
+#endif
 }
 
 

@@ -153,8 +153,10 @@ static char usage[]  = "[-options] <hmmfile> <seqence database>";
 static char banner[] = "hmmpgmd2, the daemon version of HMMER 4";
 //! main function called on the master node at startup
 void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
-
-
+#ifndef HAVE_MPI
+  p7_Fail("Master_node_main requires MPI and HMMER was compiled without MPI support");
+#endif
+#ifdef HAVE_MPI
   int num_shards = 1; // Change this to calculate number of shards based on database size
 
 
@@ -187,7 +189,6 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
 
   printf("Using %d worker nodes \n", num_nodes -1);
 
-#ifdef HAVE_MPI
    // All nodes must create these communicators in the same order for things to work right
   MPI_Comm hmmer_control_comm, hmmer_hits_comm;
   if(MPI_Comm_dup(MPI_COMM_WORLD, &hmmer_control_comm) != MPI_SUCCESS){
@@ -197,7 +198,6 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
     p7_Fail("Couldn't create MPI Communicator");
   }
   MPI_Bcast(&num_shards, 1, MPI_INT, 0, hmmer_control_comm);
-#endif
 
  //printf("Master node sees %d shards\n", num_shards);
   
@@ -244,7 +244,6 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
     printf("%s\n", name);
   }
   */
-#ifdef HAVE_MPI 
   // block until everyone is ready to go
   MPI_Barrier(hmmer_control_comm);
 
@@ -429,7 +428,11 @@ void *p7_daemon_master_hit_thread(void *argument){
 }
 
 int p7_masternode_sort_hits(P7_DAEMON_MESSAGE *the_message, P7_DAEMON_MASTERNODE_STATE *masternode){
-
+#ifndef HAVE_MPI
+  p7_Fail("Attempt to call p7_masternode_sort_hits when HMMER was compiled without MPI support");
+  return 0;
+#endif
+#ifdef HAVE_MPI
   int last_message = 0; // use this to track whether we've received a last hit message from a worker
   // Probe will block until we get a message and then return status that we can use to determine message sender and length
   // Wait for a message from any source that has the right tag
@@ -455,13 +458,16 @@ int p7_masternode_sort_hits(P7_DAEMON_MESSAGE *the_message, P7_DAEMON_MASTERNODE
   } 
   
   return last_message; // We've reached the end of this message, so return 1 if it was the last message from a node
-
+#endif
 }
 
 //! handles incoming messages to the master node
 void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DAEMON_MESSAGE **buffer_handle, MPI_Datatype *daemon_mpitypes){
   int status;
-
+#ifndef HAVE_MPI
+  p7_Fail("Attempt to call p7_masternode_message_handler when HMMER was compiled without MPI support");
+#endif
+#ifdef HAVE_MPI
   if(*buffer_handle == NULL){
     //Try to grab a message buffer from the empty message pool
     while(pthread_mutex_trylock(&(masternode->empty_hit_message_pool_lock))){
@@ -569,4 +575,5 @@ void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DA
   ERROR:  // handle errors in ESL_REALLOC
     p7_Fail("Couldn't realloc memory in p7_masternode_message_handler");  
     return;
+#endif    
 }

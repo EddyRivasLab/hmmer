@@ -16,7 +16,7 @@
 
 #ifndef p7HITLIST_INCLUDED
 #define p7HITLIST_INCLUDED
-
+#include "p7_config.h"
 #include "base/p7_tophits.h"
 #include "esl_red_black.h"
 
@@ -29,6 +29,12 @@ struct p7_daemon_masternode_state;
 #define HITLIST_POOL_SIZE 1000 // default size of each engine's hitlist pool
 #define HIT_MESSAGE_LIMIT 100000 // soft upper limit on the size of each message containing hits. When sending hits, we create a new
 //message whenever the current one exceeds this limit, so actual maximum size is limit + sizeof(last hit) -1
+
+// This is a hack to get the code to compile if we aren't building with MPI support
+// Without this, functions that have MPI_Comm parameters cause errors
+#ifndef HAVE_MPI
+typedef char MPI_Comm;
+#endif
 
 //! Entry used to form a doubly-linked list of hits
 /*! Invariant: hits in the list are required to be sorted in ascending order by object id  */
