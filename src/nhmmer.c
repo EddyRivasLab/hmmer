@@ -1364,7 +1364,9 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
 
 
   if (dbsq) esl_sq_Destroy(dbsq);
+#ifdef eslAUGMENT_ALPHABET
   if (dbsq_revcmp) esl_sq_Destroy(dbsq_revcmp);
+#endif /*eslAUGMENT_ALPHABET*/
 
   return wstatus;
 
