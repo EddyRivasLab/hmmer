@@ -18,14 +18,12 @@
  *    5. Unit tests.
  *    6. Test driver.
  *    7. Example.
- *    8. Copyright and license information.
  *    
  * TODO:
  *    - crossplatform binary compatibility (endedness and off_t)
  *    - Write() could save a tag (model #) instead of name for verifying
  *      that MSV and Rest parts match, saving a malloc for var-lengthed name
  *      in ReadRest().
- *    
  */
 #include "p7_config.h"
 
@@ -1021,9 +1019,3 @@ main(int argc, char **argv)
 }
 #endif /*IO_EXAMPLE*/
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $URL: https://svn.janelia.org/eddylab/eddys/src/hmmer/branches/3.1/src/impl_sse/io.c $
- * SVN $Id: io.c 3960 2012-03-22 21:42:50Z wheelert $
- *****************************************************************/

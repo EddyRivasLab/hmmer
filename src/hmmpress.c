@@ -95,7 +95,7 @@ main(int argc, char **argv)
       if ((om->offs[p7_FOFFSET] = ftello(dbf->ffp)) == -1) ESL_XFAIL(eslESYS, errbuf, "Failed to ftello() current disk position of MSV db file");   
       if ((om->offs[p7_POFFSET] = ftello(dbf->pfp)) == -1) ESL_XFAIL(eslESYS, errbuf, "Failed to ftello() current disk position of profile db file"); 
 
-#ifndef p7_IMPL_DUMMY
+#ifndef p7_ENABLE_DUMMY
       if ((status = esl_newssi_AddKey(dbf->nssi, hmm->name, fh, om->offs[p7_MOFFSET], 0, 0)) != eslOK) ESL_XFAIL(status, errbuf, "Failed to add key %s to SSI index", hmm->name); 
       if (hmm->acc) {
 	if ((status = esl_newssi_AddAlias(dbf->nssi, hmm->acc, hmm->name))                   != eslOK) ESL_XFAIL(status, errbuf, "Failed to add secondary key %s to SSI index", hmm->acc); 
@@ -192,7 +192,6 @@ open_dbfiles(ESL_GETOPTS *go, char *basename)
   exit(1);
 }
 
-
 /* If status != eslOK, then in addition to free'ing memory, also
  * remove the four output files.
  */
@@ -231,3 +230,4 @@ close_dbfiles(struct dbfiles *dbf, int status)
  * SVN $URL$
  * SVN $Id$
  *****************************************************************/
+

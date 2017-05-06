@@ -9,7 +9,6 @@
  * documentation.
  * 
  * SRE, Fri Jan 12 08:46:02 2007
- * SVN $Id$
  */
 
 #include "p7_config.h"

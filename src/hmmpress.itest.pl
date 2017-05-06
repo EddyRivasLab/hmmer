@@ -12,7 +12,7 @@
 #   ../src/hmmpress minifam.hmm
 # 
 # SRE, Thu Nov 12 08:47:56 2009 [Janelia]
-# SVN $Id$
+
 
 $hmmpress = shift;		# The hmmpress executable. example: "./hmmpress"
 $minifam  = shift;		# An HMM database.         example: "../testsuite/minifam.hmm"

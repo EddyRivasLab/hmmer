@@ -3,12 +3,9 @@
  * Contents:
  *   1. Viterbi traceback
  *   2. Example.
- *   3. Copyright and license information.
  *   
  * SRE, Fri Aug 15 09:17:11 2008 [Janelia]
- * SVN $Id$
  */
-
 #include "p7_config.h"
 
 #include "easel.h"
@@ -64,7 +61,7 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
   int     sprv, scur;		/* previous, current state in trace */
   int     status;
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (tr->N != 0) ESL_EXCEPTION(eslEINVAL, "trace isn't empty: forgot to Reuse()?");
 #endif
 
@@ -269,6 +266,4 @@ main(int argc, char **argv)
 
 
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
+

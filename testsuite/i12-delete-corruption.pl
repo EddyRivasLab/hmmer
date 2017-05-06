@@ -11,7 +11,6 @@
 # The hmmalign --allcol option is gone (as of 25 May 2010).
 #
 # SRE, Tue Mar  2 11:11:07 2010 [Janelia]
-# SVN $Id$
 
 
 BEGIN {

@@ -6,9 +6,7 @@
  *   3. Unit tests.
  *   4. Test driver.
  *   5. Example.
- *   6. Copyright and license information.
  */
-
 #include "p7_config.h"
 
 #include "easel.h"
@@ -825,9 +823,4 @@ main(int argc, char **argv)
 #endif /*p7GENERIC_FWDBACK_EXAMPLE*/
 /*-------------------- end, example -----------------------------*/
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id$  
- *****************************************************************/
+

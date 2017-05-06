@@ -5,8 +5,6 @@
 # Rob Finn found as a bug in Jan 2011.
 # 
 # SRE, Sat Jan  8 09:29:18 2011 [Casa de Gatos] xref J7/50
-# SVN $URL$
-# SVN $Id$
 
 use IO::Socket;
 

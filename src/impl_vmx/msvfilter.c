@@ -12,10 +12,8 @@
  *   3. Unit tests
  *   4. Test driver
  *   5. Example
- *   6. Copyright and license information
  * 
  * SRE, Sun Nov 25 11:26:48 2007 [Casa de Gatos]
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -123,7 +121,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   xJv = vec_subs(biasv, biasv);
   xBv = vec_subs(basev, tjbmv);
 
-#if p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (ox->debugging)
 	{
 	  unsigned char xB;
@@ -182,7 +180,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
       xBv = vec_max(basev, xJv);
       xBv = vec_subs(xBv, tjbmv);
 	  
-#if p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
       if (ox->debugging)
       {
         unsigned char xB, xE;
@@ -878,9 +876,3 @@ main(int argc, char **argv)
 #endif /*p7MSVFILTER_EXAMPLE*/
 /*---------------------- end, example ---------------------------*/
 
-
-
-
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/

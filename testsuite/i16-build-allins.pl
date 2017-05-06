@@ -6,7 +6,7 @@
 # Example: ./i16-build-allins.pl ..         ..       tmpfoo
 #
 # SRE, Sun Jun 13 12:09:54 2010 [UA231 IAD->SAN]
-# SVN $Id$
+
 
 BEGIN {
     $builddir  = shift;

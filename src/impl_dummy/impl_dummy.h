@@ -2,7 +2,6 @@
  * routines: structures, declarations, and macros.
  * 
  * MSF, Oct 27, 2009 [Janelia]
- * SVN $Id$
  */
 #ifndef P7_IMPL_DUMMY_INCLUDED
 #define P7_IMPL_DUMMY_INCLUDED
@@ -156,9 +155,6 @@ impl_ThreadInit(void)
 
 #endif /* P7_IMPL_DUMMY_INCLUDED */
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
 
 /* 
  * Currently (and this remains in flux as of 14 Dec 07) an optimized

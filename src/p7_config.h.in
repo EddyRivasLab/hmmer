@@ -102,11 +102,11 @@
 #undef _LARGEFILE_SOURCE
 
 /* Choice of optimized implementation (one and only one must be set)
+ * These are also identically defined in Easel esl_config.h.in
  */
-#undef p7_IMPL_SSE
-#undef p7_IMPL_VMX
-#undef p7_IMPL_DUMMY
-
+#undef eslENABLE_SSE
+#undef eslENABLE_VMX
+#undef eslENABLE_DUMMY
 
 /* System headers
  */
@@ -116,20 +116,12 @@
 
 /* Optional parallel implementations
  */
-#undef HAVE_SSE2
-#undef HAVE_MPI
-#undef HMMER_PVM
+#undef HMMER_MPI
 #undef HMMER_THREADS
-#undef HAVE_PTHREAD_ATTR_SETSCOPE
-#undef HAVE_PTHREAD_SETCONCURRENCY
 
 /* Optional processor specific support
  */
 #undef HAVE_FLUSH_ZERO_MODE
-
-/* Debugging hooks
- */
-#undef p7_DEBUGGING
 
 #endif /*P7_CONFIGH_INCLUDED*/
 

@@ -510,14 +510,6 @@ main(int argc,  char *argv[])
 ERROR:
   printf ("failure allocating memory for hits\n");
   exit(status);
-
-
 }
 
 
-
-
-
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/

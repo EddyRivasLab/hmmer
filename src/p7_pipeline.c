@@ -5,8 +5,6 @@
  *   2. Pipeline API
  *   3. Example 1: search mode (in a sequence db)
  *   4. Example 2: scan mode (in an HMM db)
- *   5. Copyright and license information
- * 
  */
 #include "p7_config.h"
 
@@ -2061,10 +2059,3 @@ main(int argc, char **argv)
 /*--------------- end, scan mode (HMM db) example ---------------*/
 
 
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

@@ -19,9 +19,7 @@
  *    3. Unit tests.
  *    4. Test driver.
  *    5. Example.
- *    6. Copyright and license.
  */
-
 #include "p7_config.h"
 
 #include <string.h>
@@ -583,7 +581,6 @@ main(int argc, char **argv)
   ESL_GETOPTS  *go        = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   char         *msafile   = esl_opt_GetArg(go, 1);
   int           fmt       = eslMSAFILE_UNKNOWN;
-  int           alphatype = eslUNKNOWN;
   ESL_ALPHABET *abc       = NULL;
   ESL_MSAFILE  *afp       = NULL;
   ESL_MSA      *msa       = NULL;
@@ -597,9 +594,9 @@ main(int argc, char **argv)
   int           status;
   
   /* Standard idioms for opening and reading a digital MSA. (See esl_msa.c example). */
-  if      (esl_opt_GetBoolean(go, "--rna"))   alphatype = eslRNA;
-  else if (esl_opt_GetBoolean(go, "--dna"))   alphatype = eslDNA;
-  else if (esl_opt_GetBoolean(go, "--amino")) alphatype = eslAMINO;
+  if      (esl_opt_GetBoolean(go, "--rna"))   abc = esl_alphabet_Create(eslRNA);
+  else if (esl_opt_GetBoolean(go, "--dna"))   abc = esl_alphabet_Create(eslDNA);
+  else if (esl_opt_GetBoolean(go, "--amino")) abc = esl_alphabet_Create(eslAMINO);
 
   if ((status = esl_msafile_Open(&abc, msafile, NULL, fmt, NULL, &afp)) != eslOK)
     esl_msafile_OpenFailure(afp, status);
@@ -666,11 +663,5 @@ main(int argc, char **argv)
 
 #endif /*p7BUILD_EXAMPLE*/
 
-
-
-
-/************************************************************
- * @LICENSE@
- ************************************************************/
 
 
