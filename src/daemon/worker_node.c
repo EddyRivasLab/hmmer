@@ -295,7 +295,10 @@ if(workernode->global_queue == NULL){
     //end_object, but not greater 
   }
 
-  workernode->chunk_size = (real_end - real_start) / (workernode->num_threads * 32); //Threads will grab equal shares of the work
+  workernode->chunk_size = (real_end - real_start) / (workernode->num_threads); //Threads will grab equal shares of the work
+  if(workernode->chunk_size < 1){
+    workernode->chunk_size = 1;  // handle cases that round down to 0
+  }
   // and then steal 
   //printf("set chunk size to %lu\n", workernode->chunk_size);
   //set up global queue.  Don't need to lock here because we only set up searches when the workernode is idle
@@ -337,7 +340,10 @@ if(workernode->global_queue == NULL){
   //install the model we'll be comparing against
   workernode->search_type = SEQUENCE_SEARCH_CONTINUE;
 
-  workernode->chunk_size = (end_object - start_object) / workernode->num_threads; //Threads will grab equal shares of the work
+  workernode->chunk_size = (end_object - start_object) / (workernode->num_threads); //Threads will grab equal shares of the work
+  if(workernode->chunk_size < 1){
+    workernode->chunk_size = 1; // handle cases that round down to 0
+  }
   // and then steal 
   //printf("set chunk size to %lu\n", workernode->chunk_size);
   //set up global queue.  Don't need to lock here because we only set up searches when the workernode is idle

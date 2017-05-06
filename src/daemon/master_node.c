@@ -361,7 +361,6 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
 
 
 void *p7_daemon_master_hit_thread(void *argument){
-  printf("Hit thread created\n");
   int status; // return code from ESL_ALLOC
   //unpack the argument
 
@@ -394,13 +393,26 @@ void *p7_daemon_master_hit_thread(void *argument){
     
     while(masternode->worker_nodes_done < masternode->num_worker_nodes){
       if(masternode->full_hit_message_pool != NULL){
-        P7_DAEMON_MESSAGE *the_message;
+
+        P7_DAEMON_MESSAGE *the_message, *prev;
+        prev = NULL;
         while(pthread_mutex_trylock(&(masternode->full_hit_message_pool_lock))){
           // spin to acquire the lock
         }
         // printf("Sorting hits from buffer %p, next is %p\n", masternode->full_hit_message_pool, masternode->full_hit_message_pool->next);
         the_message = (P7_DAEMON_MESSAGE *) masternode->full_hit_message_pool;
-        masternode->full_hit_message_pool = the_message->next;
+        while(the_message->next != NULL){
+          prev = the_message;
+          the_message = the_message->next; // find the last message in the list so that we sort messages in order.  First message
+          // on the list is the last one we received
+        }
+        if(prev == NULL){
+          // there was only one message in the pool
+          masternode->full_hit_message_pool = NULL;
+        }
+        else{ // take the last message off the list
+          prev->next = NULL;
+        }
 
         pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
 
@@ -456,7 +468,9 @@ int p7_masternode_sort_hits(P7_DAEMON_MESSAGE *the_message, P7_DAEMON_MASTERNODE
     // don't need to lock this as we're the only thread that accesses it until the search completes
     masternode->hit_tree = esl_red_black_doublekey_insert(masternode->hit_tree, the_entry);
   } 
-  
+ /* if(last_message){
+    printf("Masternode sorted hits from Rank %d's last message\n", the_message->status.MPI_SOURCE);
+  } */
   return last_message; // We've reached the end of this message, so return 1 if it was the last message from a node
 #endif
 }

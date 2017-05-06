@@ -14,14 +14,14 @@ bindir       = ${exec_prefix}/bin
 libdir       = ${exec_prefix}/lib
 includedir   = ${prefix}/include
 
-CC           = icc
+CC           = mpicc
 CFLAGS       = -O3 -pthread -fPIC
 #SIMDFLAGS    = @SIMD_CFLAGS@
 CPPFLAGS     = 
 LDFLAGS      = 
 DEFS         = -DHAVE_CONFIG_H
-LIBS         = -lhmmer -leasel -ldivsufsort -lrt    -lm
-MPILIBS      = 
+LIBS         = -lhmmer -leasel -ldivsufsort    -lm
+MPILIBS      =  
 
 AR           = /usr/bin/ar 
 RANLIB       = ranlib
