@@ -2,9 +2,9 @@
 ## fwdfilter : vectorized Forwards/Backwards filter
 
 ```
-  SSVFilter -> MSVFilter -> VitFilter -> ForwardFilter -> BackwardFilter
-                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                                                 (you are here)
+  SSVFilter -> VitFilter -> ForwardFilter -> BackwardFilter
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                   (you are here)
 ```
 
 The Forward/Backward filter is the last step in the acceleration

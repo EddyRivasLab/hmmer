@@ -85,7 +85,7 @@
  *            this case, this is a high-scoring hit.
  *            <ox> may have been resized.
  *
- * Throws:    <eslEMEML> if <ox> reallocation fails.
+ * Throws:    <eslEMEM> if <ox> reallocation fails.
  */
 
 int

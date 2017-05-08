@@ -1,30 +1,21 @@
-/* The SSV filter implementation: ARM NEON version.
- * 
- * Contents:
- *   1. Bjarne's magic macros
- *   2. p7_SSVFilter() implementation
- * 
- * Original author:    Bjarne Knudsen (CLCbio, Aarhus, Denmark)
- * Ported to ARM NEON: Tyler Camp (University of Texas, Austin)
+/* SSV filter, ARM NEON vector implementation.
+ * Adapted from SSE version by Tyler Camp (University of Texas, Austin)
  *
- * For Bjarne's notes, see the Intel SSE implementation.
+ * See ssvfilter.md for notes.
+ *
+ * This file is conditionally compiled when eslENABLE_AVX is defined.
  */
 #include "p7_config.h"
 #ifdef eslENABLE_NEON
 
-#include <math.h>
-
 #include <arm_neon.h>
+#include <math.h>
 
 #include "easel.h"
 #include "esl_neon.h"
 
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
-
-/*****************************************************************
- * 1. Bjarne's magic macros
- *****************************************************************/
 
 /* Note that some ifdefs below has to be changed if these values are
    changed. These values are chosen based on some simple speed
@@ -429,9 +420,6 @@ calc_band_neon_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, esl_n
 #endif /* MAX_BANDS > 14 */
 
 
-/*****************************************************************
- * 2. p7_SSVFilter() implementation
- *****************************************************************/
 
 uint8_t
 get_xE_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
@@ -481,11 +469,13 @@ p7_SSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_s
 
   if (om->tjb_b + om->tbm_b + om->tec_b + om->bias_b >= 127) {
     /* the optimizations are not guaranteed to work under these
-       conditions (see comments at start of file) */
+       conditions (see ssvfilter.md) */
     return eslENORESULT;
   }
 
   xE = get_xE_neon(dsq, L, om);
+
+  // SRE TODO REVISIT : All this needs to be rechecked and rethought for H4.
   if (xE >= 255 - om->bias_b)
     {
       /* We have an overflow. */
