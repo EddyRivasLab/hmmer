@@ -636,9 +636,7 @@ recalibrate_model(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm)
 
   gm = p7_profile_Create(hmm->M, cfg->abc);
   p7_profile_Config(gm, hmm, cfg->bg);      /* dual-mode multihit; L=0 (no length model needed right now) */
-   P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
-  om = p7_oprofile_Create(gm->M, cfg->abc, hw->simd);
+  om = p7_oprofile_Create(gm->M, cfg->abc);
   p7_oprofile_Convert(gm, om);	/* om is now *local* multihit */
 
   p7_Lambda(hmm, cfg->bg, &lambda);
@@ -684,8 +682,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   float           sc;
   float           nullsc;
   int             status;
-   P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+
   /* Optionally set a custom background, determined by model composition;
    * an experimental hack. 
    */
@@ -726,9 +723,9 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
    */
   if (esl_opt_GetBoolean(go, "--vector"))
     {
-      om = p7_oprofile_Create(gm->M, cfg->abc, om->simd);
+      om = p7_oprofile_Create(gm->M, cfg->abc);
       p7_oprofile_Convert(gm, om);
-      cx = p7_checkptmx_Create(gm->M, L, ESL_MBYTES(32), om->simd);
+      cx = p7_checkptmx_Create(gm->M, L, ESL_MBYTES(32));
       fx = p7_filtermx_Create(gm->M, om->simd);
     }
   
@@ -783,8 +780,8 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
       p7_bg_NullOne(cfg->bg, dsq, L, &nullsc);
       scores[i] = (sc - nullsc) / eslCONST_LOG2;
 
-      if (cx) p7_checkptmx_Reuse(cx);
-      if (fx) p7_filtermx_Reuse(fx);
+      //if (cx) p7_checkptmx_Reuse(cx);
+      //if (fx) p7_filtermx_Reuse(fx);
       p7_refmx_Reuse(rmx);
     }
   status      = eslOK;

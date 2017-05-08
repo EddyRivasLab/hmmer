@@ -22,18 +22,18 @@
 #include "esl_mpi.h"
 #endif /*HAVE_MPI*/
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 #include <unistd.h>
 #include "esl_threads.h"
 #include "esl_workqueue.h"
-#endif /*HMMER_THREADS*/
+#endif /*HAVE_PTHREAD*/
 
 #include "hmmer.h"
 
 typedef struct {
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   ESL_WORK_QUEUE   *queue;
-#endif /*HMMER_THREADS*/
+#endif /*HAVE_PTHREAD*/
   P7_BG            *bg;
   P7_PIPELINE      *pli;
   P7_TOPHITS       *th;
@@ -47,7 +47,7 @@ typedef struct {
 #define INCDOMOPTS  "--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 #define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 
-#if defined (HMMER_THREADS) && defined (HAVE_MPI)
+#if defined (HAVE_PTHREAD) && defined (HAVE_MPI)
 #define CPUOPTS     "--mpi"
 #define MPIOPTS     "--cpu"
 #else
@@ -115,7 +115,7 @@ static ESL_OPTIONS options[] = {
   { "--tformat",    eslARG_STRING,      NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert target <seqdb> is in format <s>>: no autodetection",   12 },
   { "--daemon",     eslARG_NONE,        NULL, NULL, NULL,      NULL,  NULL,  DAEMONOPTS,        "run program as a daemon",                                     12 },
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   { "--cpu",        eslARG_INT,  NULL,"HMMER_NCPU", "n>=0",NULL,  NULL,  CPUOPTS,           "number of parallel CPU workers to use for multithreads",      12 },
 #endif
 #ifdef HAVE_MPI
@@ -143,12 +143,12 @@ struct cfg_s {
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp);
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 #define BLOCK_SIZE 1000
 
 static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
 static void pipeline_thread(void *arg);
-#endif /*HMMER_THREADS*/
+#endif /*HAVE_PTHREAD*/
 
 #ifdef HAVE_MPI
 static int  mpi_master   (ESL_GETOPTS *go, struct cfg_s *cfg);
@@ -277,7 +277,7 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   if (esl_opt_IsUsed(go, "--qformat")   && fprintf(ofp, "# query <seqfile> format asserted: %s\n",            esl_opt_GetString(go, "--qformat"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--tformat")   && fprintf(ofp, "# target <seqdb> format asserted:  %s\n",            esl_opt_GetString(go, "--tformat"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--daemon")    && fprintf(ofp, "run as a daemon process\n")                                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   if (esl_opt_IsUsed(go, "--cpu")       && fprintf(ofp, "# number of worker threads:        %d\n",            esl_opt_GetInteger(go, "--cpu"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
 #endif
 #ifdef HAVE_MPI
@@ -377,13 +377,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              ncpus    = 0;
   int              infocnt  = 0;
   WORKER_INFO     *info     = NULL;
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   ESL_SQ_BLOCK    *block    = NULL;
   ESL_THREADS     *threadObj= NULL;
   ESL_WORK_QUEUE  *queue    = NULL;
 #endif
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+
   /* Initializations */
   abc     = esl_alphabet_Create(eslAMINO);
   w       = esl_stopwatch_Create();
@@ -454,7 +453,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status != eslOK)        p7_Fail ("Unexpected error %d opening sequence file %s\n", status, cfg->qfile);
   qsq  = esl_sq_CreateDigital(abc);
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   /* initialize thread data */
   if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
   else                           esl_threads_CPUCount(&ncpus);
@@ -480,12 +479,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       info[i].gm    = NULL;
       info[i].om    = NULL;
       info[i].bg    = p7_bg_Clone(bg);
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
       info[i].queue = queue;
 #endif
     }
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   for (i = 0; i < ncpus * 2; ++i)
     {
       block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, abc);
@@ -537,12 +536,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS, hw->simd); /* L_hint = 100 is just a dummy for now */
 	  p7_pipeline_NewModel(info[i].pli, info[i].om, info[i].bg);
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 	  if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
 #endif
 	}
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
       if (ncpus > 0) sstatus = thread_loop(threadObj, queue, dbfp);
       else           sstatus = serial_loop(info, dbfp);
 #else
@@ -629,7 +628,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   for (i = 0; i < infocnt; ++i)
     p7_bg_Destroy(info[i].bg);
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   if (ncpus > 0)
     {
       esl_workqueue_Reset(queue);
@@ -662,7 +661,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	p7_bg_Destroy(info[i].bg);
       free(info);
     }
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   if (ncpus > 0)
     {
       if (queue)     {
@@ -1369,7 +1368,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
   return sstatus;
 }
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 static int
 thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
 {
@@ -1469,6 +1468,6 @@ pipeline_thread(void *arg)
   esl_threads_Finished(obj, workeridx);
   return;
 }
-#endif   /* HMMER_THREADS */
+#endif   /* HAVE_PTHREAD */
 
 

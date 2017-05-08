@@ -323,7 +323,7 @@ p7_SSVFilter_longtarget_avx(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_FILTE
   float invP = esl_gumbel_invsurv(P, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
 
   p7_bg_SetLength(bg, om->max_length);
-  p7_oprofile_ReconfigMSVLength(om, om->max_length);
+  p7_oprofile_ReconfigSSVLength(om, om->max_length);
   p7_bg_NullOne  (bg, dsq, om->max_length, &nullsc);
 
   sc_thresh = (int) ceil( ( ( nullsc  + (invP * eslCONST_LOG2) + 3.0 )  * om->scale_b ) + om->base_b +  om->tec_b  + om->tjb_b );

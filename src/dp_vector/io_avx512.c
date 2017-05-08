@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 #include <pthread.h>
 #endif
 
@@ -137,11 +137,11 @@ p7_oprofile_Write_avx512(FILE *ffp, FILE *pfp, P7_OPROFILE *om)
   if (fwrite((char *) &(om->ncj_roundoff), sizeof(float),    1,           pfp) != 1)           ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
 
   /* Forward/Backward part */
-  p7_restripe_float((float*) om->tfv, (float *) tmp_buffer, float_vector_length*8, 256, 128);
+  p7_restripe_float(om->tfv, (float *) tmp_buffer, float_vector_length*8, 256, 128);
   if (fwrite((float *) tmp_buffer,          sizeof(float),   8*float_vector_length,        pfp) != 8*float_vector_length)        ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   
   for (x = 0; x < om->abc->Kp; x++){
-    p7_restripe_float((float *) om->rfv[x], (float *) tmp_buffer, float_vector_length, 256, 128);
+    p7_restripe_float(om->rfv[x], (float *) tmp_buffer, float_vector_length, 256, 128);
     if (fwrite( (float *) tmp_buffer,    sizeof(float),   float_vector_length, pfp) != float_vector_length) ESL_EXCEPTION_SYS(eslEWRITE, "oprofile write failed");
   }
 
@@ -346,9 +346,7 @@ p7_oprofile_ReadInfoMSV_avx512(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROF
                 esl_abc_DecodeType(abc->type), esl_abc_DecodeType(alphatype));
   }
   /* Now we know the sizes of things, so we can allocate. */
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure");
-  if ((om = p7_oprofile_Create(M, abc, hw->simd)) == NULL)         ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: oprofile");
+  if ((om = p7_oprofile_Create(M, abc)) == NULL)   ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed: oprofile");
   om->M = M;
   om->roff = roff;
 
@@ -426,7 +424,7 @@ p7_oprofile_ReadRest_avx512(P7_HMMFILE *hfp, P7_OPROFILE *om)
   __m128i      *tmp_buffer = NULL;    // buffer used for restriping values from 128-bit format
   int           status;
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   /* lock the mutex to prevent other threads from reading from the optimized
    * profile at the same time.
    */
@@ -493,10 +491,10 @@ p7_oprofile_ReadRest_avx512(P7_HMMFILE *hfp, P7_OPROFILE *om)
   if (! fread((char *) &(om->ncj_roundoff), sizeof(float),    1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ddbound_w");
 
   if (! fread((char *) tmp_buffer,          sizeof(float),   8*float_vector_length,        hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <tf> transitions");
-  p7_restripe_float((float *) tmp_buffer, (float*) om->tfv, float_vector_length *8, 128, 256);
+  p7_restripe_float((float *) tmp_buffer, om->tfv, float_vector_length *8, 128, 256);
   for (x = 0; x < om->abc->Kp; x++){
     if (! fread( (char *) tmp_buffer,    sizeof(float),   float_vector_length,          hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read <rf>[%d] emissions for sym %c", x, om->abc->sym[x]);
-  p7_restripe_float((float *) tmp_buffer, (float*) om->rfv[x], float_vector_length, 128, 256);
+  p7_restripe_float((float *) tmp_buffer, om->rfv[x], float_vector_length, 128, 256);
   }
 
   for (x = 0; x < p7O_NXSTATES; x++)
@@ -510,7 +508,7 @@ p7_oprofile_ReadRest_avx512(P7_HMMFILE *hfp, P7_OPROFILE *om)
   if (! fread( (char *) &magic,     sizeof(uint32_t), 1, hfp->pfp))  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no sentinel magic: .h3p file corrupted?");
   if (magic != v3f_pmagic)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad sentinel magic; .h3p file corrupted?");
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   if (hfp->syncRead)
     {
       if (pthread_mutex_unlock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex unlock failed");
@@ -522,7 +520,7 @@ p7_oprofile_ReadRest_avx512(P7_HMMFILE *hfp, P7_OPROFILE *om)
   return eslOK;
 
  ERROR:
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   if (hfp->syncRead) {
     if (pthread_mutex_unlock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex unlock failed");
   }

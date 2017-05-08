@@ -455,7 +455,7 @@ main(int argc, char **argv)
   P7_OPROFILE    *om      = NULL;
   P7_FILTERMX    *fx      = p7_filtermx_Create(100);
   P7_CHECKPTMX   *cx      = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT));
-  P7_SPARSEMASK  *sm      = p7_sparsemask_Create(100, 100, p7_VDEFAULT);
+  P7_SPARSEMASK  *sm      = p7_sparsemask_Create(100, 100);
   P7_ANCHORS     *anch    = p7_anchors_Create();
   P7_REFMX       *rxf     = p7_refmx_Create(100,100);
   P7_REFMX       *rxd     = p7_refmx_Create(100,100);
@@ -580,8 +580,8 @@ main(int argc, char **argv)
 	  p7_anchors_Reuse(anch);
 	}
 
-      p7_filtermx_Reuse(fx);
-      p7_checkptmx_Reuse(cx);
+      //p7_filtermx_Reuse(fx);
+      //p7_checkptmx_Reuse(cx);
       p7_sparsemask_Reuse(sm);
       esl_sq_Reuse(sq);
     }

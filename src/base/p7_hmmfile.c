@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 #include <pthread.h>
 #endif
 
@@ -227,7 +227,7 @@ p7_hmmfile_OpenBuffer(char *buffer, int size, P7_HMMFILE **ret_hfp)
   hfp->do_stdin     = FALSE;
   hfp->newly_opened = TRUE;  /* well, it will be, real soon now */
   hfp->is_pressed   = FALSE;
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   hfp->syncRead     = FALSE;
 #endif
   hfp->parser       = NULL;
@@ -297,7 +297,7 @@ open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only, 
   hfp->do_stdin     = FALSE;
   hfp->newly_opened = TRUE;  /* well, it will be, real soon now */
   hfp->is_pressed   = FALSE;
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   hfp->syncRead     = FALSE;
 #endif
   hfp->parser       = NULL;
@@ -495,13 +495,13 @@ p7_hmmfile_Close(P7_HMMFILE *hfp)
   if (hfp->fname != NULL) free(hfp->fname);
   if (hfp->efp   != NULL) esl_fileparser_Destroy(hfp->efp);
   if (hfp->ssi   != NULL) esl_ssi_Close(hfp->ssi);
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   if (hfp->syncRead)      pthread_mutex_destroy (&hfp->readMutex);
 #endif
   free(hfp);
 }
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 /* Function:  p7_hmmfile_CreateLock()
  *
  * Purpose:   Create a lock to synchronize readers

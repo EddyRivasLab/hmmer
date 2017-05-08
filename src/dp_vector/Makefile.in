@@ -1,44 +1,42 @@
 MODULE = dp_vector
 
 OBJS = \
-	fwdfilter.o       \
-	io.o              \
-	msvfilter.o       \
+	simdvec.o         \
 	p7_checkptmx.o    \
 	p7_filtermx.o     \
 	p7_oprofile.o     \
+	p7_oprofile_qc.o  \
+	fwdfilter.o       \
+	io.o              \
 	p7_oprofile_mpi.o \
-	simdvec.o         \
 	ssvfilter.o       \
 	vitfilter.o
 
 SSE_OBJS = \
 	fwdfilter_sse.o    \
 	io_sse.o           \
-	msvfilter_sse.o    \
 	ssvfilter_sse.o    \
 	vitfilter_sse.o
 
 AVX_OBJS = \
+	fwdfilter_avx.o    \
 	io_avx.o           \
-	msvfilter_avx.o    \
 	ssvfilter_avx.o    \
-	vitfilter_avx.o    \
-	fwdfilter_avx.o
+	vitfilter_avx.o    
+
 
 AVX512_OBJS = \
+	fwdfilter_avx512.o    \
 	io_avx512.o           \
-	msvfilter_avx512.o    \
 	ssvfilter_avx512.o    \
-	vitfilter_avx512.o    \
-	fwdfilter_avx512.o
+	vitfilter_avx512.o    
 
-NEON_OBJS= \
+
+NEON_OBJS = \
+	fwdfilter_neon.o    \
 	io_neon.o           \
-	msvfilter_neon.o    \
 	ssvfilter_neon.o    \
-	vitfilter_neon.o    \
-	fwdfilter_neon.o
+	vitfilter_neon.o    
 
 HDRS =
 
@@ -47,25 +45,28 @@ PROGS =
 UTESTS = \
 	fwdfilter_utest       \
 	io_utest              \
-	msvfilter_utest       \
 	p7_oprofile_mpi_utest \
 	vitfilter_utest
+#	msvfilter_utest       \
+
 
 STATS  = fwdfilter_stats
 
 BENCHMARKS = \
 	fwdfilter_benchmark    \
 	io_benchmark           \
-	msvfilter_benchmark    \
 	p7_oprofile_benchmark  \
 	vitfilter_benchmark
+#	msvfilter_benchmark    \
+
 
 EXAMPLES = \
 	fwdfilter_example \
 	io_example \
-	msvfilter_example \
 	p7_oprofile_example \
 	vitfilter_example
+#	msvfilter_example \
+
 
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@

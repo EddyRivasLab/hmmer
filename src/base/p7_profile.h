@@ -133,6 +133,8 @@ extern int         p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float
 extern char       *p7_profile_DecodeT(int tidx);
 extern int         p7_profile_GetMutePathLogProb(const P7_PROFILE *gm, double *ret_mute_lnp);
 extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol);
+extern int         p7_profile_SameAsSSV(P7_PROFILE *gm, float scale_b);
+extern int         p7_profile_SameAsVF (P7_PROFILE *gm, float scale_w);
 
 
 /* Whereas the core HMM is a model of a single global alignment to a

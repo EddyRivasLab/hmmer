@@ -7,7 +7,7 @@
  * "primary" vector implementation. Other vector implementations
  * follow it with less commentary.
  *
- * This file is conditionally compiled, when eslENABLE_NEON is defined.
+ * This file is conditionally compiled when eslENABLE_NEON is defined.
  *
  * Contents:
  *    1. Forward and Backward filter: NEON implementations.
@@ -39,8 +39,8 @@ static inline int   posterior_decode_row_neon(P7_CHECKPTMX *ox, int rowi, P7_SPA
 
 #if eslDEBUGLEVEL > 0
 static inline float backward_row_zero_neon(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
-static        void  save_debug_row_pp_neon(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
-static        void  save_debug_row_fb_neon(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
+static        void  save_debug_row_pp_neon(P7_CHECKPTMX *ox,               esl_neon_128f_t *dpc, int i);
+static        void  save_debug_row_fb_neon(P7_CHECKPTMX *ox, P7_REFMX *gx, esl_neon_128f_t *dpc, int i, float totscale);
 #endif
 
 
@@ -54,7 +54,7 @@ static        void  save_debug_row_fb_neon(P7_CHECKPTMX *ox, P7_REFMX *gx, debug
 int
 p7_ForwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc)
 {
-  int              Q     = P7_NVF(om->M, 16); /* segment length; # of MDI vectors on each row      */
+  int              Q     = P7_Q(om->M, 4);    /* segment length; # of MDI vectors on each row      */
   esl_neon_128f_t *dpp   = NULL;              /* dpp=prev row. start on dpf[2]; rows 0,1=Backwards */
   esl_neon_128f_t *dpc   = NULL;              /* dpc points at current row                         */
   float           *xc    = NULL;              /* specials E,N,JJ,J,B,CC,C,SCALE                    */
@@ -67,21 +67,20 @@ p7_ForwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
   int     b;                                  /* counter down through checkpointed blocks, Rb+Rc..1 */
   int     w;                                  /* counter down through rows in a checkpointed block  */
 
-  ox->Qf = Q;
-
-  /* Make sure <ox> is allocated big enough.
-   * DO NOT set any ptrs into the matrix until after this potential reallocation!
+  /* First make sure <ox> is allocated big enough.
+   * (DO NOT set any ptrs into the matrix until after this potential reallocation!)
+   * Then set the size of the problem in <ox> immediately, not later,
+   * because debugging dumps need this information, for example.
+   * (Ditto for any debugging copy of the fwd mx).
    */
-  p7_checkptmx_GrowTo(ox, om->M, L);
-  dpp =  (esl_neon_128f_t *) ox->dpf[ox->R0-1]; 
-  xc  =  (float *) (dpp + Q*p7C_NSCELLS);       
-
-  /* Set the size of the problem in <ox> now, not later
-   * Debugging dumps need this information, for example
-   * (Ditto for any debugging copy of the fwd mx)
-   */
+  p7_checkptmx_Reinit(ox, om->M, L);
   ox->M  = om->M;       
   ox->L  = L;
+  ox->V  = p7_VWIDTH_NEON / sizeof(float);
+  ox->Qf = Q = P7_Q(om->M, ox->V);
+  dpp    =  (esl_neon_128f_t *) ox->dpf[ox->R0-1]; 
+  xc     =  (float *) (dpp + Q*p7C_NSCELLS);       
+
 #if eslDEBUGLEVEL > 0
   ox->dump_flags |= p7_SHOW_LOG;                     /* also sets for Backward dumps, since <ox> shared */
   if (ox->do_dumping)  p7_checkptmx_DumpFBHeader(ox);
@@ -96,7 +95,7 @@ p7_ForwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
   xc[p7C_SCALE] = 1.;                      
 
 #if eslDEBUGLEVEL > 0
-  if (ox->do_dumping) p7_checkptmx_DumpFBRow_neon(ox, 0, dpp, "f1 O"); 
+  if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, 0, (float *) dpp, "f1 O"); 
   if (ox->fwd)        save_debug_row_fb_neon(ox, ox->fwd, dpp, 0, totsc); 
 #endif
 
@@ -109,7 +108,7 @@ p7_ForwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
       dpp = dpc;    // current row becomes prev row
 
 #if eslDEBUGLEVEL > 0
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow_neon(ox, i, dpc, "f1 O"); 
+      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (float *) dpc, "f1 O"); 
       if (ox->fwd)        save_debug_row_fb_neon(ox, ox->fwd, dpc, i, totsc); 
 #endif
     }
@@ -131,7 +130,7 @@ p7_ForwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
       dpp = dpc;
 
 #if eslDEBUGLEVEL > 0
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow_neon(ox, i, dpc, w ? "f1 X" : "f1 O"); 
+      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (float *) dpc, w ? "f1 X" : "f1 O"); 
       if (ox->fwd)        save_debug_row_fb_neon(ox, ox->fwd, dpc, i, totsc); 
 #endif
     }
@@ -152,7 +151,7 @@ p7_ForwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
 int
 p7_BackwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh)
 {
-  int              Q = ox->Qf;
+  int              Q = ox->Q;
   esl_neon_128f_t *fwd;
   esl_neon_128f_t *bck;
   esl_neon_128f_t *dpp;
@@ -161,7 +160,7 @@ p7_BackwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHEC
   int              i, b, w, i2;
   int              status;
 
-  p7_sparsemask_Reinit(sm, om->M, L, 4);  // 4 = width of NEON vectors, in floats
+  p7_sparsemask_Reinit(sm, om->M, L);
 
 #if eslDEBUGLEVEL > 0
    if (ox->bck) { ox->bck->M = om->M; ox->bck->L = L; ox->bck->type = p7R_BACKWARD; }
@@ -182,8 +181,8 @@ p7_BackwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHEC
 #if eslDEBUGLEVEL > 0
   ox->bcksc = logf(xf[p7C_SCALE]);
   if (ox->do_dumping) { 
-    p7_checkptmx_DumpFBRow_neon(ox, L, fwd, "f2 O"); 
-    p7_checkptmx_DumpFBRow_neon(ox, L, bck, "bck");  
+    p7_checkptmx_DumpFBRow(ox, L, (float *) fwd, "f2 O"); 
+    p7_checkptmx_DumpFBRow(ox, L, (float *) bck, "bck");  
   }
   if (ox->bck) save_debug_row_fb_neon(ox, ox->bck, bck, L, ox->bcksc); 
 #endif
@@ -200,7 +199,7 @@ p7_BackwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHEC
       fwd = (esl_neon_128f_t *) ox->dpf[ox->R0+ox->R];    /* get free row memory from top of stack */
       forward_row_neon(dsq[i], om, dpp, fwd, Q);          /* calculate fwd[L-1]                    */
 #if eslDEBUGLEVEL > 0
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow_neon(ox, i, fwd, "f2 X");
+      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (float *) fwd, "f2 X");
 #endif
 
       /* Compute bck[L-1] from bck[L]. */
@@ -210,7 +209,7 @@ p7_BackwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHEC
       backward_row_main_neon(dsq[i+1], om, dpp, bck, Q, xf[p7C_SCALE]);
 #if eslDEBUGLEVEL > 0
       ox->bcksc += logf(xf[p7C_SCALE]);
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow_neon(ox, i, bck, "bck");
+      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, bck, "bck");
       if (ox->bck)        save_debug_row_fb_neon(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
 
@@ -238,8 +237,8 @@ p7_BackwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHEC
 #if eslDEBUGLEVEL > 0
       ox->bcksc += logf(xf[p7C_SCALE]);
       if (ox->do_dumping) { 
-        p7_checkptmx_DumpFBRow_neon(ox, i, fwd, "f2 O");    
-        p7_checkptmx_DumpFBRow_neon(ox, i, bck, "bck"); 
+        p7_checkptmx_DumpFBRow(ox, i, (float *) fwd, "f2 O");    
+        p7_checkptmx_DumpFBRow(ox, i, (float *) bck, "bck"); 
       }
       if (ox->bck)        save_debug_row_fb_neon(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
@@ -271,8 +270,8 @@ p7_BackwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHEC
 #if eslDEBUGLEVEL > 0
           ox->bcksc += logf(xf[p7C_SCALE]);
           if (ox->do_dumping) { 
-            p7_checkptmx_DumpFBRow_neon(ox, i2, fwd, "f2 X"); 
-            p7_checkptmx_DumpFBRow_neon(ox, i2, bck, "bck"); 
+            p7_checkptmx_DumpFBRow(ox, i2, (float *) fwd, "f2 X"); 
+            p7_checkptmx_DumpFBRow(ox, i2, (float *) bck, "bck"); 
           }
           if (ox->bck)        save_debug_row_fb_neon(ox, ox->bck, bck, i2, ox->bcksc); 
 #endif
@@ -297,8 +296,8 @@ p7_BackwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHEC
 #if eslDEBUGLEVEL > 0
        ox->bcksc += logf(xf[p7C_SCALE]);
        if (ox->do_dumping) { 
-         p7_checkptmx_DumpFBRow_neon(ox, i, fwd, "f2 O");
-         p7_checkptmx_DumpFBRow_neon(ox, i, bck, "bck"); 
+         p7_checkptmx_DumpFBRow(ox, i, (float *) fwd, "f2 O");
+         p7_checkptmx_DumpFBRow(ox, i, (float *) bck, "bck"); 
        }
        if (ox->bck)        save_debug_row_fb_neon(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
@@ -320,8 +319,8 @@ p7_BackwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHEC
    bck = (esl_neon_128f_t *) ox->dpf[i%2];             
    xN = backward_row_zero_neon(dsq[1], om, ox); 
    if (ox->do_dumping) { 
-     p7_checkptmx_DumpFBRow_neon(ox, 0, fwd, "f2 O");
-     p7_checkptmx_DumpFBRow_neon(ox, 0, bck, "bck"); 
+     p7_checkptmx_DumpFBRow(ox, 0, (float *) fwd, "f2 O");
+     p7_checkptmx_DumpFBRow(ox, 0, (float *) bck, "bck"); 
    }
    if (ox->bck)        save_debug_row_fb_neon(ox, ox->bck, bck, 0, ox->bcksc); 
    if ((status = posterior_decode_row_neon(ox, 0, sm, sm_thresh, Tvalue)) != eslOK)  return status;
@@ -342,11 +341,11 @@ p7_BackwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHEC
 static inline float
 forward_row_neon(ESL_DSQ xi, const P7_OPROFILE *om, const esl_neon_128f_t *dpp, esl_neon_128f_t *dpc, int Q)
 {
-  const  esl_neon_128f_t *rp   = om->rfv[xi];
+  const  esl_neon_128f_t *rp   = (esl_neon_128f_t *) om->rfv[xi];
   esl_neon_128f_t         place;
   place.f32x4 = vdupq_n_f32(0);
   const    esl_neon_128f_t  zerov = place;
-  const    esl_neon_128f_t *tp    = om->tfv;
+  const    esl_neon_128f_t *tp    = (esl_neon_128f_t *) om->tfv;
   const    float           *xp    = (float *) (dpp + Q * p7C_NSCELLS);
   float                    *xc    = (float *) (dpc + Q * p7C_NSCELLS);
   esl_neon_128f_t           dcv;
@@ -403,7 +402,7 @@ forward_row_neon(ESL_DSQ xi, const P7_OPROFILE *om, const esl_neon_128f_t *dpp, 
    */
   dcv            = esl_neon_rightshift_float(dcv, zerov);
   P7C_DQ(dpc, 0) = zerov;
-  tp             = om->tfv + 7*Q;       /* set tp to start of the DD's */
+  tp             = ((esl_neon_128f_t *) om->tfv) + 7*Q;       /* set tp to start of the DD's */
   for (q = 0; q < Q; q++) 
     {
       P7C_DQ(dpc,q).f32x4 = vaddq_f32(dcv.f32x4, P7C_DQ(dpc,q).f32x4);  
@@ -423,7 +422,7 @@ forward_row_neon(ESL_DSQ xi, const P7_OPROFILE *om, const esl_neon_128f_t *dpp, 
       for (j = 1; j < 4; j++)
         {
           dcv = esl_neon_rightshift_float(dcv, zerov);
-          tp  = om->tfv + 7*Q;  /* reset tp to start of the DD's */
+          tp  = ((esl_neon_128f_t *) om->tfv) + 7*Q;  /* reset tp to start of the DD's */
           for (q = 0; q < Q; q++) 
             { /* note, extend dcv, not DMO(q); only adding DD paths now */
               P7C_DQ(dpc,q).f32x4 = vaddq_f32(dcv.f32x4, P7C_DQ(dpc,q).f32x4);  
@@ -438,7 +437,7 @@ forward_row_neon(ESL_DSQ xi, const P7_OPROFILE *om, const esl_neon_128f_t *dpp, 
           register esl_neon_128f_t cv = zerov;  /* keeps track of whether any DD's change DMO(q) */
 
           dcv = esl_neon_rightshift_float(dcv, zerov);
-          tp  = om->tfv + 7*Q;  /* set tp to start of the DD's */
+          tp  = ((esl_neon_128f_t *) om->tfv) + 7*Q;  /* set tp to start of the DD's */
           for (q = 0; q < Q; q++) 
             { /* using cmpgt below tests if DD changed any DMO(q) *without* conditional branch */
               sv.f32x4            = vaddq_f32(dcv.f32x4, P7C_DQ(dpc,q).f32x4);
@@ -498,8 +497,8 @@ forward_row_neon(ESL_DSQ xi, const P7_OPROFILE *om, const esl_neon_128f_t *dpp, 
 static inline void
 backward_row_main_neon(ESL_DSQ xi, const P7_OPROFILE *om, esl_neon_128f_t *dpp, esl_neon_128f_t *dpc, int Q, float scalefactor)
 {
-  const esl_neon_128f_t *rp       = om->rfv[xi];              /* emission scores on row i+1, for bck; xi = dsq[i+1]  */
-  float       * const xc = (float *) (dpc + Q * p7C_NSCELLS); /* E N JJ J B CC C SCALE */
+  const esl_neon_128f_t *rp       = (esl_neon_128f_t *) om->rfv[xi];  /* emission scores on row i+1, for bck; xi = dsq[i+1]  */
+  float       * const xc = (float *) (dpc + Q * p7C_NSCELLS);         /* E N JJ J B CC C SCALE */
   const float * const xp = (float *) (dpp + Q * p7C_NSCELLS);
   const esl_neon_128f_t *tp, *tpdd;
   esl_neon_128f_t place;
@@ -518,7 +517,7 @@ backward_row_main_neon(ESL_DSQ xi, const P7_OPROFILE *om, esl_neon_128f_t *dpp, 
    */
   dp  = dpp;
   xBv = zerov;
-  tp  = om->tfv;                /* on first transition vector */
+  tp  = (esl_neon_128f_t *) om->tfv;                /* on first transition vector */
   for (q = 0; q < Q; q++)
     {
       (*dp).f32x4 = vmulq_f32((*dp).f32x4, (*rp).f32x4); rp++;
@@ -534,11 +533,11 @@ backward_row_main_neon(ESL_DSQ xi, const P7_OPROFILE *om, esl_neon_128f_t *dpp, 
 
   /* Initialize for the row calculation */
   mpv  = esl_neon_leftshift_float(*dpp,       zerov); /* [1 5 9 13] -> [5 9 13 x], M(i+1,k+1) * e(M_k+1, x_{i+1}) */
-  tmmv = esl_neon_leftshift_float(om->tfv[1], zerov);
-  timv = esl_neon_leftshift_float(om->tfv[2], zerov);
-  tdmv = esl_neon_leftshift_float(om->tfv[3], zerov);
+  tmmv = esl_neon_leftshift_float((esl_neon_128f_t) om->tfv[1], zerov);
+  timv = esl_neon_leftshift_float((esl_neon_128f_t) om->tfv[2], zerov);
+  tdmv = esl_neon_leftshift_float((esl_neon_128f_t) om->tfv[3], zerov);
   xEv.f32x4  = vdupq_n_f32(xc[p7C_E]);
-  tp   = om->tfv + 7*Q - 1;
+  tp   = ((esl_neon_128f_t *) om->tfv) + 7*Q - 1;
   tpdd = tp + Q;
   dcv  = zerov;
   for (q = Q-1; q >= 0; q--)
@@ -582,7 +581,7 @@ backward_row_L_neon(const P7_OPROFILE *om,  esl_neon_128f_t *dpc, int Q, float s
 
   xEv.f32x4  = vdupq_n_f32(xc[p7C_E]);
   dp   = dpc + Q*p7C_NSCELLS - 1;
-  tpdd = om->tfv + 8*Q - 1;
+  tpdd = ((esl_neon_128f_t *) om->tfv) + 8*Q - 1;
   dcv  = zerov;
   for (q = Q-1; q >= 0; q--) 
     {
@@ -616,9 +615,9 @@ backward_row_finish_neon(const P7_OPROFILE *om, esl_neon_128f_t *dpc, int Q, esl
     { /* Full serialization */
       for (j = 1; j < 4; j++)
         {
-          dcv = esl_neon_leftshift_float(dcv, zerov); /* [1 5 9 13] => [5 9 13 *]          */
-          tp  = om->tfv + 8*Q - 1;                    /* <*tp> now the [4 8 12 x] TDD quad */
-          dp  = dpc + Q*p7C_NSCELLS - 2;              /* init to point at D(i,q) vector    */
+          dcv = esl_neon_leftshift_float(dcv, zerov);     /* [1 5 9 13] => [5 9 13 *]          */
+          tp  = ((esl_neon_128f_t *) om->tfv) + 8*Q - 1;  /* <*tp> now the [4 8 12 x] TDD quad */
+          dp  = dpc + Q*p7C_NSCELLS - 2;                  /* init to point at D(i,q) vector    */
           for (q = Q-1; q >= 0; q--)
             {
               dcv.f32x4 = vmulq_f32(dcv.f32x4, (*tp).f32x4); tp--;
@@ -633,7 +632,7 @@ backward_row_finish_neon(const P7_OPROFILE *om, esl_neon_128f_t *dpc, int Q, esl
       for (j = 1; j < 4; j++)
         {
           dcv = esl_neon_leftshift_float(dcv, zerov);
-          tp  = om->tfv + 8*Q - 1;      
+          tp  = ((esl_neon_128f_t *) om->tfv) + 8*Q - 1;      
           dp  = dpc + Q*p7C_NSCELLS - 2;
           cv.u32x4  = vreinterpretq_u32_f32(zerov.f32x4);
           for (q = Q-1; q >= 0; q--)
@@ -655,7 +654,7 @@ backward_row_finish_neon(const P7_OPROFILE *om, esl_neon_128f_t *dpc, int Q, esl
    * these couldn't be added to M until we'd finished calculating D values on row.
    */
   dcv = esl_neon_leftshift_float(P7C_DQ(dpc, 0), zerov);
-  tp  = om->tfv + 7*Q - 3;       
+  tp  = ((esl_neon_128f_t *) om->tfv) + 7*Q - 3;       
   dp  = dpc + (Q-1)*p7C_NSCELLS; 
   for (q = Q-1; q >= 0; q--)
     {
@@ -697,7 +696,7 @@ backward_row_rescale_neon(float *xc, esl_neon_128f_t *dpc, int Q, float scalefac
 static inline int
 posterior_decode_row_neon(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm_thresh, float overall_sc)
 {
-  int                     Q         = ox->Qf;
+  int                     Q         = ox->Q;
   esl_neon_128f_t        *fwd       = (esl_neon_128f_t *) ox->dpf[ox->R0 + ox->R];
   const  esl_neon_128f_t *bck       = (esl_neon_128f_t *) ox->dpf[rowi%2];
   float                  *xf        = (float *) (fwd + Q*p7C_NSCELLS);
@@ -786,10 +785,10 @@ posterior_decode_row_neon(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float s
 static inline float
 backward_row_zero_neon(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
 {
-  int                    Q    = ox->Qf;
+  int                    Q    = ox->Q;
   esl_neon_128f_t       *dpc  = (esl_neon_128f_t *) ox->dpf[0];
   esl_neon_128f_t       *dpp  = (esl_neon_128f_t *) ox->dpf[1];
-  const esl_neon_128f_t *rp   = om->rfv[x1];
+  const esl_neon_128f_t *rp   = (esl_neon_128f_t *) om->rfv[x1];
   esl_neon_128f_t        place;
   place.f32x4 = vdupq_n_f32(0); 
   const esl_neon_128f_t zerov = place;
@@ -802,7 +801,7 @@ backward_row_zero_neon(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
 
   /* On "previous" row i+1: include emission prob, and sum to get xBv, xB. */
   dp  = dpp;
-  tp  = om->tfv;
+  tp  = (esl_neon_128f_t *) om->tfv;
   for (q = 0; q < Q; q++)
     {
       (*dp).f32x4 = vmulq_f32((*dp).f32x4, (*rp).f32x4); rp++;
@@ -832,10 +831,10 @@ backward_row_zero_neon(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
 
 
 void
-save_debug_row_pp_neon(P7_CHECKPTMX *ox, debug_print *dpc, int i)
+save_debug_row_pp_neon(P7_CHECKPTMX *ox, esl_neon_128f_t *dpc, int i)
 {
   union { esl_neon_128f_t v; float x[4]; } u;  // 4 = number of floats per NEON vector
-  int      Q  = ox->Qf;
+  int      Q  = ox->Q;
   float  *xc  = (float *) (dpc + Q*p7C_NSCELLS);
   int     q,k,z,s;
 
@@ -872,10 +871,10 @@ save_debug_row_pp_neon(P7_CHECKPTMX *ox, debug_print *dpc, int i)
 }
 
 void
-save_debug_row_fb_neon(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale)
+save_debug_row_fb_neon(P7_CHECKPTMX *ox, P7_REFMX *gx, esl_neon_128f_t *dpc, int i, float totscale)
 {
   union { esl_neon_128f_t v; float x[4]; } u;  // 4 = number of floats in NEON vector
-  int      Q  = ox->Qf;
+  int      Q  = ox->Q;
   float  *xc  = (float *) (dpc + Q*p7C_NSCELLS);
   int     q,k,z;
 

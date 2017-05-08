@@ -838,7 +838,7 @@ main(int argc, char **argv)
 
   /* Use f/b filter to create sparse mask */
   ox = p7_checkptmx_Create(hmm->M, sq->n, ESL_MBYTES(32));
-  sm  = p7_sparsemask_Create(gm->M, sq->n, p7_VDEFAULT);
+  sm  = p7_sparsemask_Create(gm->M, sq->n);
   if (esl_opt_GetBoolean(go, "-a"))  
     p7_sparsemask_AddAll(sm);
   else {

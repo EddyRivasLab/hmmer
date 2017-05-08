@@ -274,14 +274,12 @@ fi
 #   If MPI support is available, AX_MPI macro sets @MPICC@ and @MPILIBS@.
 #   
 #   We set @CC@ to mpicc (TODO: may be better to use AX_PROG_CC_MPI)
-#      define HAVE_MPI for Easel,
-#      define HMMER_MPI for HMMER.
+#   Define HAVE_MPI
 #        
 if test "$enable_mpi" = "yes"; then
   AX_MPI([
     CC=$MPICC
     AC_DEFINE(HAVE_MPI)
-    AC_DEFINE(HMMER_MPI)
     ],
     AC_MSG_ERROR([MPI library not found for --enable-mpi]))
 fi
@@ -292,7 +290,6 @@ fi
 if test "$enable_threads" != "no"; then
   AX_PTHREAD([
       AC_DEFINE(HAVE_PTHREAD)
-      AC_DEFINE(HMMER_THREADS)
       AC_SUBST(PTHREAD_LIBS)
       AC_SUBST(PTHREAD_CFLAGS)
     ],[
@@ -391,24 +388,34 @@ if test "$enable_vmx" = "yes" || test "$enable_vmx" = "check"; then
     ])
 fi
 
-  
 
-# For x86 processors check if the flush to zero macro is available
-# in order to avoid the performance penalty dealing with sub-normal
-# values in the floating point calculations.
-if test "$impl_choice" = "sse"; then
-  AC_MSG_CHECKING([whether _MM_SET_FLUSH_ZERO_MODE is supported])
-  esl_save_cflags="$CFLAGS"
-  CFLAGS="$CFLAGS $SSE_CFLAGS"
-  AC_COMPILE_IFELSE(  [AC_LANG_PROGRAM([[#include <xmmintrin.h>]],
- 				 [[_MM_SET_FLUSH_ZERO_MODE (_MM_FLUSH_ZERO_ON);
-				 ]])],
-	[ AC_MSG_RESULT([yes])
-          AC_DEFINE([HAVE_FLUSH_ZERO_MODE])],
-	[ AC_MSG_RESULT([no])]
-  )
-  CFLAGS="$esl_save_cflags"
-fi
+# For x86 platforms, check if we can set floating point math to not
+# use denormalized floats. On some platforms, denormalized math incurs
+# a large performance penalty. See HMMER's simdvec.md for notes.
+#
+esl_save_cflags="$CFLAGS"
+CFLAGS="$CFLAGS $SSE_CFLAGS"
+
+AC_MSG_CHECKING([whether flush-to-zero (FTZ) is supported])
+AC_COMPILE_IFELSE(
+  [AC_LANG_PROGRAM(
+    [#include <xmmintrin.h>],
+    [_MM_SET_FLUSH_ZERO_MODE (_MM_FLUSH_ZERO_ON);])], 
+  [ AC_MSG_RESULT([yes])
+    AC_DEFINE([HAVE_FLUSH_ZERO_MODE])],
+  [ AC_MSG_RESULT([no]) ])
+
+AC_MSG_CHECKING([whether denormals-are-zero (DAZ) is supported])
+AC_COMPILE_IFELSE(
+  [AC_LANG_PROGRAM(
+    [#include <pmmintrin.h>],
+    [_MM_SET_DENORMALS_ZERO_MODE (_MM_DENORMALS_ZERO_ON);])], 
+  [ AC_MSG_RESULT([yes])
+    AC_DEFINE([HAVE_DENORMALS_ZERO_MODE])],
+  [ AC_MSG_RESULT([no]) ])
+
+CFLAGS="$esl_save_cflags"
+
 
 
 # Define HAVE_GZIP if gzip is in $PATH (or if HAVE_GZIP is already set)
@@ -448,11 +455,11 @@ AC_SEARCH_LIBS(clock_gettime, [rt posix4])
 ################################################################
 # Defines HAVE_SYS_TYPES_H, HAVE_STDINT_H, etc.
 AC_CHECK_HEADERS([ \
-  endian.h\
-  inttypes.h\
-  stdint.h\
-  unistd.h\
-  sys/types.h\
+  endian.h     \
+  inttypes.h   \
+  stdint.h     \
+  unistd.h     \
+  sys/types.h  \
   netinet/in.h
 ])  
 
@@ -531,22 +538,20 @@ AX_GCC_FUNC_ATTRIBUTE(format)
 # 11. Checks for functions, defining HAVE_FOO when foo is found
 #################################################################
 
-# AC_CHECK_FUNCS() is supposed to accept newline-delimited lists, 
-# but it doesn't seem to.
-AC_CHECK_FUNCS(mkstemp)
-AC_CHECK_FUNCS(popen)
-AC_CHECK_FUNCS(putenv)
-AC_CHECK_FUNCS(strcasecmp)
-AC_CHECK_FUNCS(strsep)
-AC_CHECK_FUNCS(times)
-AC_CHECK_FUNCS(getpid)
-AC_CHECK_FUNCS(sysctl)
-AC_CHECK_FUNCS(sysconf)
-AC_CHECK_FUNCS(getcwd)
-AC_CHECK_FUNCS(chmod)
-AC_CHECK_FUNCS(stat)
-AC_CHECK_FUNCS(fstat)
-AC_CHECK_FUNCS(erfc)
+# multiline argument to AC_CHECK_FUNCS needs the \'s
+AC_CHECK_FUNCS([ \
+  aligned_alloc  \
+  erfc           \
+  getpid         \
+  _mm_malloc     \
+  popen          \
+  posix_memalign \
+  strcasecmp     \
+  strsep         \
+  sysconf        \
+  sysctl         \
+  times          \
+])
 
 AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
 AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))

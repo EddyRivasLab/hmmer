@@ -561,7 +561,7 @@ utest_approx_masstrace(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M,
 
   /* Fwd/Bck local filter to calculate the sparse mask */
   if (  (ox = p7_checkptmx_Create(M, sq->n, ESL_MBYTES(32)))    == NULL) esl_fatal(msg);
-  if (  (sm = p7_sparsemask_Create(M, sq->n, p7_VDEFAULT))      == NULL) esl_fatal(msg);
+  if (  (sm = p7_sparsemask_Create(M, sq->n))                   == NULL) esl_fatal(msg);
 
   if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL) != eslOK) esl_fatal(msg);
   if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
@@ -775,7 +775,7 @@ main(int argc, char **argv)
   p7_profile_Config(gm, hmm, bg);
 
   /* Allocate bands, matrices */
-  sm  = p7_sparsemask_Create(gm->M, sq->n, p7_VDEFAULT);
+  sm  = p7_sparsemask_Create(gm->M, sq->n);
   p7_sparsemask_AddAll(sm);
 
   /* Set the profile and null model's target length models */

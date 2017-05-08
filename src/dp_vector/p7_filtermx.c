@@ -1,32 +1,31 @@
-/* P7_FILTERMX: one-row of DP memory for MSV and Viterbi filters.
+/* P7_FILTERMX: one-row of DP memory for SSV and Viterbi filters.
  * 
+ * Independent of vector ISA. (Do not add any ISA-specific code.)
+ *
  *   1. The P7_FILTERMX object
  *   2. Debugging and development routines
  */
-
 #include "p7_config.h"
 
 #include <stdlib.h>
 #include <stdio.h>
 
-
 #include "easel.h"
-#include "esl_random.h"
+#include "esl_alloc.h"
 
 #include "dp_vector/simdvec.h"
 #include "dp_vector/p7_filtermx.h"
 
-#include "base/general.h"
 
 /*****************************************************************
  * 1. The P7_FILTERMX object.
  *****************************************************************/
 
 /* Function:  p7_filtermx_Create()
- * Synopsis:  Create a one-row DP matrix for MSV, VF.
+ * Synopsis:  Create a one-row DP matrix for SSV, VF.
  *
  * Purpose:   Allocate a reusable, resizeable one-row <P7_FILTERMX>
- *            suitable for MSV and Viterbi filter calculations on 
+ *            suitable for SSV and Viterbi filter calculations on 
  *            query profiles of up to <allocM> consensus positions.
  *            
  *            <allocM> must be $\leq$ 100,000. This is a design
@@ -50,10 +49,10 @@ P7_FILTERMX *
 p7_filtermx_Create(int allocM)
 {
   P7_FILTERMX *fx = NULL;
-  int status;
+  int          status;
 
   /* Contract checks / argument validation */
-  ESL_DASSERT1( (allocM >= 0 && allocM <= 100000) ); // 0 is ok here, gives you a shell.
+  ESL_DASSERT1( (allocM >= 0 && allocM <= 100000) ); // 0 is ok here; gives you a shell.
 
   ESL_ALLOC(fx, sizeof(P7_FILTERMX));
   fx->M         = 0;
@@ -67,16 +66,16 @@ p7_filtermx_Create(int allocM)
 #endif 
   
   if (allocM) {
-    /* VF needs, in bytes:         3 MDI cells *     Qmax vectors         * bytes/vector; (aligned) */
-    fx->dp     = esl_alloc_aligned(p7F_NSCELLS * P7_NVW(allocM, p7_MAXVW) * p7_MAXVW,     p7_VALIGN);
-    if (fx->dp == NULL) { status = eslEMEM; goto ERROR; }
+    /* VF needs, in bytes:         3 MDI cells *     maxQw vectors        * bytes/vector; (aligned) */
+    fx->dp     = esl_alloc_aligned(p7F_NSCELLS * P7_Q(allocM, p7_VMAX_VF) * p7_VWIDTH,    p7_VALIGN);
+    if (fx->dp == NULL) goto ERROR;
     fx->allocM = allocM;
   }
   return fx;
 
  ERROR:
   p7_filtermx_Destroy(fx);
-  return status;
+  return NULL;
 }
 
 
@@ -107,7 +106,6 @@ p7_filtermx_Create(int allocM)
 int
 p7_filtermx_Reinit(P7_FILTERMX *fx, int allocM)
 {
-  char *p;
   int   status;
 
   /* Contract checks / argument validation */
@@ -125,7 +123,8 @@ p7_filtermx_Reinit(P7_FILTERMX *fx, int allocM)
   /* Reallocate if needed */
   if (allocM > fx->allocM) {
     free(fx->dp);
-    fx->dp     = esl_alloc_aligned(p7F_NSCELLS * P7_NVW(allocM, p7_MAXVW) * p7_MAXVW,  p7_VALIGN);
+    /*                             3 MDI cells *   maxQw vectors/row      * bytes/vector; aligned */ 
+    fx->dp     = esl_alloc_aligned(p7F_NSCELLS * P7_Q(allocM, p7_VMAX_VF) * p7_VWIDTH,    p7_VALIGN);
     if (fx->dp == NULL) { status = eslEMEM; goto ERROR; }
     fx->allocM = allocM;
   }
@@ -150,11 +149,11 @@ p7_filtermx_Reinit(P7_FILTERMX *fx, int allocM)
  *            like debugging comparisons and dumps.
  *
  *            Independent of vector ISA, because all it needs to
- *            unstripe is the vector width <V>. Works for MSVFilter,
+ *            unstripe is the vector width <V>. Works for SSVFilter,
  *            Vitfilter, and SSV_longtarget matrices.
  *
- *            MSV and SSV matrices only have p7F_M scores. If a D or I
- *            score is asked for, returns 0.
+ *            SSV matrices only have p7F_M scores. If a D or I score
+ *            is asked for, returns 0.
  *
  *            If k==0, returns 0, as a special case that we use in
  *            debugging dumps to sync to the output of
@@ -166,7 +165,7 @@ p7_filtermx_Reinit(P7_FILTERMX *fx, int allocM)
  * Returns:   the score
  */
 int
-p7_filtermx_GetScore(P7_FILTERMX *fx, int k, enum p7f_scells_e s)
+p7_filtermx_GetScore(const P7_FILTERMX *fx, int k, enum p7f_scells_e s)
 {
   int q, r;
 
@@ -176,22 +175,23 @@ p7_filtermx_GetScore(P7_FILTERMX *fx, int k, enum p7f_scells_e s)
 
   if (k == 0) return 0;
 
-  if (fx->type == p7F_MSVFILTER || fx->type == p7F_SSVFILTER)
+  if (fx->type == p7F_SSVFILTER)
     {
       if (s != p7F_M) return 0;
       uint8_t *dp = (uint8_t *) fx->dp;
-      int      q  = (k-1) % fx->V;
-      int      r  = (k-1) / fx->V;
+      q  = (k-1) % fx->V;
+      r  = (k-1) / fx->V;
       return dp[q*fx->V + r];
     }
   else if (fx->type == p7F_VITFILTER)
     {
       int16_t *dp = (int16_t *) fx->dp;
-      int      q  = (k-1) % fx->V;
-      int      r  = (k-1) / fx->V;
-      return dp[ (q*P7F_NSCELLS + s) * fx->V + r];
+      q  = (k-1) % fx->V;
+      r  = (k-1) / fx->V;
+      return dp[ (q*p7F_NSCELLS + s) * fx->V + r];
     }
-  
+  //NOTREACHED
+  return 0;
 }
 
 /* Function:  p7_filtermx_Sizeof()
@@ -208,7 +208,8 @@ size_t
 p7_filtermx_Sizeof(const P7_FILTERMX *fx)
 {
   size_t n = sizeof(P7_FILTERMX);
-  n       += p7F_NSCELLS * P7_NVW(fx->allocM, p7_MAXVW) * p7_MAXVW; 
+  n       += p7F_NSCELLS * P7_Q(fx->allocM, p7_VMAX_VF) * p7_VWIDTH; 
+  // that's:    MDI      *   max vectors/row            * bytes/vector 
   // neglects any alignment overhead, which may be up to p7_VALIGN bytes.
   return n;
 }
@@ -225,16 +226,17 @@ size_t
 p7_filtermx_MinSizeof(int M)
 {
   size_t n = sizeof(P7_FILTERMX);
-  n       += p7F_NSCELLS * P7_NVW(fx->allocM, p7_MAXVW) * p7_MAXVW; 
+  n       += p7F_NSCELLS * P7_Q(M, p7_VMAX_VF) * p7_VWIDTH; 
+  // that's:    MDI      *   max vectors/row   * bytes/vector 
   // neglects any alignment overhead
   return n;
 }
 
 
 /* Function:  p7_filtermx_Destroy()
- * Synopsis:  Frees a one-row MSV/VF filter DP matrix.
+ * Synopsis:  Frees a one-row SSV/VF filter DP matrix.
  *
- * Purpose:   Frees the one-row MSV/VF filter DP matrix <fx>.
+ * Purpose:   Frees the one-row SSV/VF filter DP matrix <fx>.
  */
 void
 p7_filtermx_Destroy(P7_FILTERMX *fx)
@@ -283,13 +285,13 @@ p7_filtermx_SetDumpMode(P7_FILTERMX *fx, FILE *dfp, int truefalse)
 
 
 /* Function:  p7_filtermx_DumpMFRow()
- * Synopsis:  Dump one row from MSV version of a DP matrix.
+ * Synopsis:  Dump one row from SSV version of a DP matrix.
  *
- * Purpose:   Dump current row of MSV calculations from DP matrix <fx>
+ * Purpose:   Dump current row of SSV calculations from DP matrix <fx>
  *            for diagnostics, and include the values of specials
  *            <xE>, etc. The index <rowi> for the current row is used
  *            as a row label. This routine has to be specialized for
- *            the layout of the MSVFilter() row, because it's all
+ *            the layout of the SSVFilter() row, because it's all
  *            match scores dp[0..q..Q-1], rather than triplets of
  *            M,D,I.
  * 
@@ -307,7 +309,9 @@ p7_filtermx_SetDumpMode(P7_FILTERMX *fx, FILE *dfp, int truefalse)
 int
 p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
-  ESL_DASSERT1(( fx->type == p7F_MSVFILTER || fx->type == p7F_SSVFILTER ));
+  int k;
+
+  ESL_DASSERT1(( fx->type == p7F_SSVFILTER ));
   ESL_DASSERT1(( fx->V &&  !(fx->V & (fx->V-1)) ));     // V is set, to a power of two.
   ESL_DASSERT1(( fx->M ));
   
@@ -324,7 +328,7 @@ p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, u
 
   /* Unstripe and print match scores. */
   fprintf(fx->dfp, "%4d M ", rowi);
-  for (k = 0; k <= fx->M; k++) fprintf(fx->dfp, "%3d ", p7_filtermx_GetScore(fx, k, p7F_M);
+  for (k = 0; k <= fx->M; k++) fprintf(fx->dfp, "%3d ", p7_filtermx_GetScore(fx, k, p7F_M));
 
   /* Specials */
   fprintf(fx->dfp, "%3d %3d %3d %3d %3d\n", xE, xN, xJ, xB, xC);
@@ -363,6 +367,8 @@ p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, u
 int
 p7_filtermx_DumpVFRow(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
 {
+  int k;
+
   ESL_DASSERT1(( fx->type == p7F_VITFILTER ));
   ESL_DASSERT1(( fx->V &&  !(fx->V & (fx->V-1)) ));     // V is set, to a power of two.
   ESL_DASSERT1(( fx->M ));

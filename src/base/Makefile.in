@@ -24,12 +24,6 @@ OBJS =  \
 	p7_tophits_mpi.o    \
 	p7_trace.o
 
-SSE_OBJS    =  p7_alidisplay_sse.o
-AVX_OBJS    =  p7_alidisplay_avx.o
-AVX512_OBJS =  p7_alidisplay_avx512.o
-NEON_OBJS   =  p7_alidisplay_neon.o
-VMX_OBJS    =
-
 HDRS =
 
 PROGS =

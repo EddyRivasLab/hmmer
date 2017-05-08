@@ -1337,7 +1337,7 @@ main(int argc, char **argv)
   P7_TRACE       *vtr     = NULL;
   P7_FILTERMX    *fx      = p7_filtermx_Create(100);
   P7_CHECKPTMX   *cx      = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT));
-  P7_SPARSEMASK  *sm      = p7_sparsemask_Create(100, 100, p7_VDEFAULT);
+  P7_SPARSEMASK  *sm      = p7_sparsemask_Create(100, 100);
   float          *wrk     = NULL;
   P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
   float           fsc, vsc, asc;
@@ -1422,8 +1422,8 @@ main(int argc, char **argv)
 	}
 
       esl_sq_Reuse(sq);
-      p7_filtermx_Reuse(fx);
-      p7_checkptmx_Reuse(cx);
+      //p7_filtermx_Reuse(fx);
+      //p7_checkptmx_Reuse(cx);
       p7_sparsemask_Reuse(sm);
     }
   if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     

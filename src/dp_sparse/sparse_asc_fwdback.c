@@ -1350,10 +1350,10 @@ utest_generation(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
   P7_PRIOR      *pri   = NULL;
   P7_HMM        *hmm   = NULL;
   P7_PROFILE    *gm    = p7_profile_Create(M, abc);
-  P7_OPROFILE   *om    = p7_oprofile_Create(M, abc, hw->simd);
+  P7_OPROFILE   *om    = p7_oprofile_Create(M, abc);
   ESL_SQ        *sq    = esl_sq_CreateDigital(abc);
   P7_CHECKPTMX  *cx    = p7_checkptmx_Create(M, 100, ESL_MBYTES(32));
-  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, 100, p7_VDEFAULT);
+  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, 100);
   P7_TRACE      *tr    = p7_trace_Create();
   P7_SPARSEMX   *sxf   = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxd   = p7_sparsemx_Create(NULL);
@@ -1395,7 +1395,7 @@ utest_generation(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
       if ( p7_oprofile_ReconfigLength(om, sq->n) != eslOK) esl_fatal(msg);
 
       /* Use vector local checkpointed F/B/D to set sparse mask */
-      if ( p7_checkptmx_GrowTo(cx, gm->M, sq->n)                             != eslOK) esl_fatal(msg);
+      if ( p7_checkptmx_Reinit(cx, gm->M, sq->n)                             != eslOK) esl_fatal(msg);
       if ( p7_ForwardFilter (sq->dsq, sq->n, om, cx, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
       if ( p7_BackwardFilter(sq->dsq, sq->n, om, cx, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
 
@@ -1442,7 +1442,7 @@ utest_generation(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
       p7_sparsemx_Reuse(sxd);
       p7_trace_Reuse(tr);
       p7_sparsemask_Reuse(sm);
-      p7_checkptmx_Reuse(cx);
+      //p7_checkptmx_Reuse(cx);
       esl_sq_Reuse(sq);
     }
 
@@ -1495,7 +1495,7 @@ utest_compare_reference(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *a
   ESL_SQ        *sq    = esl_sq_CreateDigital(abc);
   P7_PROFILE    *gm    = p7_profile_Create(M, abc);
   P7_TRACE      *gtr   = p7_trace_Create();
-  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L, p7_VDEFAULT)
+  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L);
   P7_ANCHORS    *anch  = p7_anchors_Create();
   P7_REFMX      *afu   = p7_refmx_Create(100,100);
   P7_REFMX      *afd   = p7_refmx_Create(100,100);
@@ -1527,8 +1527,8 @@ utest_compare_reference(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *a
       if ( p7_profile_SetLength(gm, sq->n) != eslOK) esl_fatal(msg);
 
       /* Mark all cells in sparse mask */
-      if ( p7_sparsemask_Reinit(sm, M, sq->n, p7_VDEFAULT) != eslOK) esl_fatal(msg);
-      if ( p7_sparsemask_AddAll(sm)                        != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_Reinit(sm, M, sq->n) != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_AddAll(sm)           != eslOK) esl_fatal(msg);
 
       //p7_trace_DumpAnnotated(stdout, gtr, gm, sq->dsq);
       
@@ -1657,8 +1657,8 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
     {
       if ( p7_modelsample_SinglePathedSeq(rng, M, bg, &hmm, &gm, &dsq, &L, &tr, &anch, &D, &tsc) != eslOK) esl_fatal(msg);
 
-      if ((sm = p7_sparsemask_Create(M, L, p7_VDEFAULT)) == NULL)  esl_fatal(msg);
-      if ( p7_sparsemask_SetFromTrace(sm, rng, tr)       != eslOK) esl_fatal(msg);
+      if ((sm = p7_sparsemask_Create(M, L))         == NULL)  esl_fatal(msg);
+      if ( p7_sparsemask_SetFromTrace(sm, rng, tr)  != eslOK) esl_fatal(msg);
 
       if ( p7_sparse_asc_Forward (dsq, L, gm, anch, D, sm, asf, &fsc)      != eslOK) esl_fatal(msg);
       if ( p7_sparse_asc_Backward(dsq, L, gm, anch, D, sm, asb, &bsc)      != eslOK) esl_fatal(msg);
@@ -1778,15 +1778,15 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
     {
       if ( p7_modelsample_AnchoredUni(rng, M, bg, &hmm, &gm, &dsq, &L, &gtr, &anch, &D, &gsc) != eslOK) esl_fatal(msg);
 
-      if ((sm = p7_sparsemask_Create(gm->M, L, p7_VDEFAULT)) == NULL) esl_fatal(msg);
+      if ((sm = p7_sparsemask_Create(gm->M, L)) == NULL) esl_fatal(msg);
       
       if (idx%2) {
-	if ((om = p7_oprofile_Create(hmm->M, abc, hw->simd)) == NULL)  esl_fatal(msg);
+	if ((om = p7_oprofile_Create(hmm->M, abc)) == NULL)  esl_fatal(msg);
 	if ( p7_oprofile_Convert(gm, om)           != eslOK) esl_fatal(msg);
 	if ( p7_oprofile_ReconfigMultihit(om, L)   != eslOK) esl_fatal(msg);
 	om->mode = p7_LOCAL;
 
-	if ((cx = p7_checkptmx_Create(hmm->M, L, ESL_MBYTES(32), hw->simd))      == NULL)  esl_fatal(msg);
+	if ((cx = p7_checkptmx_Create(hmm->M, L, ESL_MBYTES(32)))      == NULL)  esl_fatal(msg);
 	if ( p7_ForwardFilter (dsq, L, om, cx, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
 	if ( p7_BackwardFilter(dsq, L, om, cx, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
 
@@ -1901,15 +1901,15 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc
     {
       if ( p7_modelsample_AnchoredLocal(rng, M, bg, &hmm, &gm, &dsq, &L, &gtr, &anch, &D, &gsc) != eslOK) esl_fatal(msg);
 
-      if ((sm = p7_sparsemask_Create(gm->M, L, p7_VDEFAULT)) == NULL) esl_fatal(msg);
+      if ((sm = p7_sparsemask_Create(gm->M, L)) == NULL) esl_fatal(msg);
       
       if (idx%2) {
-	if ((om = p7_oprofile_Create(hmm->M, abc, hw->simd)) == NULL)  esl_fatal(msg);
+	if ((om = p7_oprofile_Create(hmm->M, abc)) == NULL)  esl_fatal(msg);
 	if ( p7_oprofile_Convert(gm, om)           != eslOK) esl_fatal(msg);
 	if ( p7_oprofile_ReconfigMultihit(om, 0)   != eslOK) esl_fatal(msg);
 	om->mode = p7_LOCAL;
 
-	if ((cx = p7_checkptmx_Create(hmm->M, L, ESL_MBYTES(32), hw->simd))      == NULL)  esl_fatal(msg);
+	if ((cx = p7_checkptmx_Create(hmm->M, L, ESL_MBYTES(32)))      == NULL)  esl_fatal(msg);
 	if ( p7_ForwardFilter (dsq, L, om, cx, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
 	if ( p7_BackwardFilter(dsq, L, om, cx, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
 
@@ -2021,15 +2021,15 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
     {
       if ( p7_modelsample_AnchoredMulti(rng, M, bg, &hmm, &gm, &dsq, &L, &gtr, &anch, &D, &gsc) != eslOK) esl_fatal(msg);
 
-      if ((sm = p7_sparsemask_Create(gm->M, L, p7_VDEFAULT)) == NULL) esl_fatal(msg);
+      if ((sm = p7_sparsemask_Create(gm->M, L)) == NULL) esl_fatal(msg);
       
       if (idx%2) {
-	if ((om = p7_oprofile_Create(hmm->M, abc, hw->simd)) == NULL)  esl_fatal(msg);
+	if ((om = p7_oprofile_Create(hmm->M, abc)) == NULL)  esl_fatal(msg);
 	if ( p7_oprofile_Convert(gm, om)           != eslOK) esl_fatal(msg);
 	if ( p7_oprofile_ReconfigMultihit(om, 0)   != eslOK) esl_fatal(msg);
 	om->mode = p7_LOCAL;
 
-	if ((cx = p7_checkptmx_Create(hmm->M, L, ESL_MBYTES(32), hw->simd))      == NULL)  esl_fatal(msg);
+	if ((cx = p7_checkptmx_Create(hmm->M, L, ESL_MBYTES(32)))      == NULL)  esl_fatal(msg);
 	if ( p7_ForwardFilter (dsq, L, om, cx, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
 	if ( p7_BackwardFilter(dsq, L, om, cx, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
 
@@ -2112,7 +2112,7 @@ utest_emulated_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *ab
   int            idx;
   P7_OPROFILE   *om;
   P7_CHECKPTMX  *cx;
-  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M,L, p7_VDEFAULT);
+  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M,L);
   P7_SPARSEMX   *sxf   = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxd   = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *asf   = p7_sparsemx_Create(NULL);
@@ -2140,9 +2140,9 @@ utest_emulated_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *ab
       } while (sq->n > L * 10); /* allow many domains, but keep sequence length from getting ridiculous; long seqs do have higher abs error per cell */
       if ( p7_profile_SetLength(gm, sq->n) != eslOK) esl_fatal(msg);
 
-      if ((om = p7_oprofile_Create(hmm->M, abc, hw->simd))                             == NULL)  esl_fatal(msg);
+      if ((om = p7_oprofile_Create(hmm->M, abc))                             == NULL)  esl_fatal(msg);
       if ( p7_oprofile_Convert(gm, om)                                       != eslOK) esl_fatal(msg);
-      if ((cx = p7_checkptmx_Create(hmm->M, sq->n, ESL_MBYTES(32), hw->simd))          == NULL)  esl_fatal(msg);
+      if ((cx = p7_checkptmx_Create(hmm->M, sq->n, ESL_MBYTES(32)))          == NULL)  esl_fatal(msg);
       if ( p7_ForwardFilter (sq->dsq, sq->n, om, cx, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
       if ( p7_BackwardFilter(sq->dsq, sq->n, om, cx, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
 
@@ -2381,7 +2381,7 @@ main(int argc, char **argv)
    * To get it, run checkpointed Fwd/Bck/Decoding
    */
   cx = p7_checkptmx_Create(hmm->M, sq->n, ESL_MBYTES(32));
-  sm = p7_sparsemask_Create(gm->M, sq->n, p7_VDEFAULT);
+  sm = p7_sparsemask_Create(gm->M, sq->n);
   if (esl_opt_GetBoolean(go, "-a")) 
     p7_sparsemask_AddAll(sm);
   else {

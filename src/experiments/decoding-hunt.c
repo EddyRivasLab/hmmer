@@ -52,7 +52,7 @@ main(int argc, char **argv)
   P7_OPROFILE    *om         = NULL;
   
   P7_CHECKPTMX   *cx         = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT));
-  P7_SPARSEMASK  *sm         = p7_sparsemask_Create(100, 100, p7_VDEFAULT);
+  P7_SPARSEMASK  *sm         = p7_sparsemask_Create(100, 100);
   P7_REFMX       *vit        = p7_refmx_Create(100, 100);
   P7_REFMX       *fwd        = p7_refmx_Create(100, 100);
   P7_REFMX       *bck        = p7_refmx_Create(100, 100);
@@ -101,7 +101,7 @@ main(int argc, char **argv)
   lgm = p7_profile_Create(hmm->M, abc);
   p7_profile_ConfigLocal(lgm, hmm, bg, 100);
   
-  om = p7_oprofile_Create(hmm->M, abc, hw->simd);
+  om = p7_oprofile_Create(hmm->M, abc);
   p7_oprofile_Convert(gm, om);
   
   /* Open sequence file */
@@ -227,8 +227,8 @@ main(int argc, char **argv)
 	  p7_refmx_Reuse(mpl_l);
 	}
 
-      p7_filtermx_Reuse(fx);
-      p7_checkptmx_Reuse(cx);
+      //p7_filtermx_Reuse(fx);
+      //p7_checkptmx_Reuse(cx);
       p7_sparsemask_Reuse(sm);
       esl_sq_Reuse(sq);
     }

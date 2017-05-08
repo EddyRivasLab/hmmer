@@ -13,11 +13,11 @@
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 #include <unistd.h>
 #include "esl_threads.h"
 #include "esl_workqueue.h"
-#endif /*HMMER_THREADS*/
+#endif /*HAVE_PTHREAD*/
 
 #include "hmmer.h"
 
@@ -31,9 +31,9 @@
 
 
 typedef struct {
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   ESL_WORK_QUEUE   *queue;
-#endif /*HMMER_THREADS*/
+#endif /*HAVE_PTHREAD*/
   ESL_SQ           *qsq;
   P7_BG            *bg;	         /* null model                              */
   P7_PIPELINE      *pli;         /* work pipeline                           */
@@ -114,7 +114,7 @@ static ESL_OPTIONS options[] = {
 //  { "--daemon",     eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  DAEMONOPTS,      "run program as a daemon",                                      12 },
 
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,         "number of parallel CPU workers to use for multithreads",       12 },
 #endif
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -140,11 +140,11 @@ static char banner[] = "search DNA sequence(s) against a DNA profile database";
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop  (WORKER_INFO *info, P7_HMMFILE *hfp);
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 #define BLOCK_SIZE 1
 static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, P7_HMMFILE *hfp);
 static void pipeline_thread(void *arg);
-#endif /*HMMER_THREADS*/
+#endif /*HAVE_PTHREAD*/
 
 
 /* process_commandline()
@@ -268,7 +268,7 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--w_beta")     && fprintf(ofp, "# window length beta value:        %g\n",             esl_opt_GetReal(go, "--w_beta"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--w_length")   && fprintf(ofp, "# window length :                  %d\n",             esl_opt_GetInteger(go, "--w_length")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 //  if (esl_opt_IsUsed(go, "--daemon")    && fprintf(ofp, "run as a daemon process\n")                                                                < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   if (esl_opt_IsUsed(go, "--cpu")       && fprintf(ofp, "# number of worker threads:        %d\n",            esl_opt_GetInteger(go, "--cpu"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
 #endif
   if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -338,7 +338,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   int              infocnt  = 0;
   WORKER_INFO     *info     = NULL;
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   P7_OM_BLOCK     *block    = NULL;
   ESL_THREADS     *threadObj= NULL;
   ESL_WORK_QUEUE  *queue    = NULL;
@@ -407,7 +407,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
  
   output_header(ofp, go, cfg->hmmfile, cfg->seqfile);
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   /* initialize thread data */
   if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
   else                           esl_threads_CPUCount(&ncpus);
@@ -425,12 +425,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   for (i = 0; i < infocnt; ++i)
     {
       info[i].bg    = p7_bg_Create(abc);
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
       info[i].queue = queue;
 #endif
     }
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   for (i = 0; i < ncpus * 2; ++i)
     {
       block = p7_oprofile_CreateBlock(BLOCK_SIZE);
@@ -455,7 +455,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
       if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n",           status, cfg->hmmfile);  
   
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
       /* if we are threaded, create a lock to prevent multiple readers */
       if (ncpus > 0)
       {
@@ -487,12 +487,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].pli->strand = p7_STRAND_BOTH;
 
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
           if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
 #endif
       }
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
       if (ncpus > 0)  hstatus = thread_loop(threadObj, queue, hfp);
       else	      hstatus = serial_loop(info, hfp);
 #else
@@ -588,7 +588,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   for (i = 0; i < infocnt; ++i)
     p7_bg_Destroy(info[i].bg);
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   if (ncpus > 0)
     {
       esl_workqueue_Reset(queue);
@@ -706,7 +706,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
   return status;
 }
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 static int
 thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, P7_HMMFILE *hfp)
 {
@@ -875,6 +875,6 @@ pipeline_thread(void *arg)
   esl_threads_Finished(obj, workeridx);
   return;
 }
-#endif   /* HMMER_THREADS */
+#endif   /* HAVE_PTHREAD */
 
 

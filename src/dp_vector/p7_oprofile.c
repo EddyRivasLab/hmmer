@@ -1,44 +1,30 @@
-/* Routines for the P7_OPROFILE structure:  
- * a search profile in an optimized implementation.
+/* P7_OPROFILE: a search profile in vectorized form.
  * 
+ * Independent of vector ISA. (Do not add any ISA-specific code.)
+ * See notes in p7_oprofile.md.
+ *
  * Contents:
  *   1. The P7_OPROFILE object: allocation, initialization, destruction.
  *   2. Conversion from generic P7_PROFILE to optimized P7_OPROFILE
- *   3. Conversion from optimized P7_OPROFILE to compact score arrays
- *   4. Debugging and development utilities.
- *   5. Benchmark driver.
- *   6. Example.
- *
- *  Change since HMMER3:  Many of the routines in this file are now front-ends that check the SIMD architecture
- *  that the program is running on and call a routine that uses the appropriate ISA.  See p7_oprofile_sse.c, p7_oprofile_avx.c, etc.
- *  Note that you will get (slightly) better performance if you call the appropriate SIMD routine directly when possible.  For example,
- *  if you call any of the SIMD oprofile routines from within the SSE version of a filter, you can save time by just calling the SSE version
- *  of the function.
+ *   3. Coordinate transformation helpers
+ *   4. Debugging and development utilities
+ *   5. Benchmark driver
+ *   6. Example
  */
-
 #include "p7_config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>		/* roundf() */
-
+#include <math.h>		
 
 #include "easel.h"
-#include "esl_alphabet.h"
-#include "esl_random.h"
-#include "esl_sse.h"
-#include "esl_neon.h"
+#include "esl_alloc.h"      
 #include "esl_vectorops.h"
 
-#include "base/p7_bg.h"
-#include "base/p7_hmm.h"
 #include "base/p7_profile.h"
 
-#include "build/modelsample.h"
-#include "search/modelconfig.h"
-
-#include "hardware/hardware.h"
+#include "dp_vector/simdvec.h"
 #include "dp_vector/p7_oprofile.h"
 
 /*****************************************************************
@@ -54,25 +40,104 @@
  * Throws:    <NULL> on allocation error.
  */
 P7_OPROFILE *
-p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc, SIMD_TYPE simd)
+p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
 {
-  switch(simd){
-    case SSE:
-      return p7_oprofile_Create_sse(allocM, abc);
-      break;
-    case AVX:
-      return p7_oprofile_Create_avx(allocM, abc);
-      break;
-    case AVX512:
-      return p7_oprofile_Create_avx512(allocM, abc);
-      break;
-    case NEON:
-      return p7_oprofile_Create_neon(allocM, abc);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Create");  
+  P7_OPROFILE *om     = NULL;
+  int          maxQb  = P7_Q(allocM,p7_VMAX_SSV); // max number of int8_t vectors needed for query
+  int          maxQw  = P7_Q(allocM,p7_VMAX_VF);  //    ... of int16 vectors
+  int          maxQf  = P7_Q(allocM,p7_VMAX_FB);  //    ... of float vectors 
+  int          x;
+  int          status;
+
+  /* level 0 */
+  ESL_ALLOC(om, sizeof(P7_OPROFILE));
+  om->rbv       = NULL;
+  om->rbv_mem   = NULL; 
+  om->rwv       = NULL;
+  om->twv       = NULL;
+  om->rwv_mem   = NULL;
+  om->twv_mem   = NULL;
+  om->rfv       = NULL;
+  om->tfv       = NULL;
+  om->rfv_mem   = NULL;
+  om->tfv_mem   = NULL;
+  om->name      = NULL;
+  om->acc       = NULL;
+  om->desc      = NULL;
+  om->rf        = NULL;
+  om->mm        = NULL;
+  om->cs        = NULL;
+  om->consensus = NULL;
+
+  /* level 1 */
+  /* Vector memory has to be aligned. */
+  /* Knudsen SSV implementation requires p7O_EXTRA_SB vectors slop at end of rbv */
+  om->rbv_mem = esl_alloc_aligned( abc->Kp *  (maxQb+p7O_EXTRA_SB)  * p7_VWIDTH,  p7_VALIGN);
+  om->rwv_mem = esl_alloc_aligned( abc->Kp *     maxQw              * p7_VWIDTH,  p7_VALIGN);
+  om->twv_mem = esl_alloc_aligned( p7O_NTRANS *  maxQw              * p7_VWIDTH,  p7_VALIGN);
+  om->rfv_mem = esl_alloc_aligned( abc->Kp *     maxQf              * p7_VWIDTH,  p7_VALIGN);
+  om->tfv_mem = esl_alloc_aligned( p7O_NTRANS *  maxQf              * p7_VWIDTH,  p7_VALIGN);
+
+  /* Arrays of pointers into that aligned memory don't themselves need to be aligned  */
+  ESL_ALLOC(om->rbv, sizeof(float *) * abc->Kp); 
+  ESL_ALLOC(om->rwv, sizeof(float *) * abc->Kp); 
+  ESL_ALLOC(om->rfv, sizeof(float *) * abc->Kp); 
+
+  /* set row pointers for match emissions */
+  for (x = 0; x < abc->Kp; x++) {
+    om->rbv[x] = om->rbv_mem + (x * maxQb);
+    om->rwv[x] = om->rwv_mem + (x * maxQw);
+    om->rfv[x] = om->rfv_mem + (x * maxQf);
   }
+
+  /* Remaining initializations */
+  om->tauBM     = 0;
+  om->tauCT     = 0;
+  om->scale_b   = 0.0f;
+
+  om->scale_w      = 0.0f;
+  om->base_w       = 0;
+  om->ddbound_w    = 0;
+
+  for (x = 0; x < p7_NOFFSETS; x++) om->offs[x]    = -1;
+  for (x = 0; x < p7_NEVPARAM; x++) om->evparam[x] = p7_EVPARAM_UNSET;
+  for (x = 0; x < p7_NCUTOFFS; x++) om->cutoff[x]  = p7_CUTOFF_UNSET;
+  for (x = 0; x < p7_MAXABET;  x++) om->compo[x]   = p7_COMPO_UNSET;
+
+  /* in a P7_OPROFILE, we always allocate for the optional RF, CS annotation.  
+   * we only rely on the leading \0 to signal that it's unused, but 
+   * we initialize all this memory to zeros to shut valgrind up about 
+   * fwrite'ing uninitialized memory in the io functions.
+   */
+  ESL_ALLOC(om->rf,          sizeof(char) * (allocM+2));
+  ESL_ALLOC(om->mm,          sizeof(char) * (allocM+2));
+  ESL_ALLOC(om->cs,          sizeof(char) * (allocM+2));
+  ESL_ALLOC(om->consensus,   sizeof(char) * (allocM+2));
+  memset(om->rf,       '\0', sizeof(char) * (allocM+2));
+  memset(om->mm,       '\0', sizeof(char) * (allocM+2));
+  memset(om->cs,       '\0', sizeof(char) * (allocM+2));
+  memset(om->consensus,'\0', sizeof(char) * (allocM+2));
+
+  om->abc        = abc;
+  om->L          = 0;
+  om->M          = 0;
+  om->V          = 0;
+  om->max_length = -1;
+  om->allocM     = allocM;
+  om->allocQb    = maxQb;
+  om->allocQw    = maxQw;
+  om->allocQf    = maxQf;
+  om->mode       = p7_NO_MODE;
+  om->nj         = 0.0f;
+  om->is_shadow  = FALSE;
+  return om;
+
+ERROR:
+  p7_oprofile_Destroy(om);
+  return NULL;
 }
+
+
 
 /* Function:  p7_oprofile_IsLocal()
  * Synopsis:  Returns TRUE if profile is in local alignment mode.
@@ -86,38 +151,12 @@ p7_oprofile_IsLocal(const P7_OPROFILE *om)
 }
 
 
-
-/* Function:  p7_oprofile_Destroy()
- * Synopsis:  Frees an optimized profile structure.
- * Incept:    SRE, Sun Nov 25 12:22:21 2007 [Casa de Gatos]
- */
-void
-p7_oprofile_Destroy(P7_OPROFILE *om)
-{
- switch(om->simd){
-    case SSE:
-      p7_oprofile_Destroy_sse(om);
-      break;
-    case AVX:
-      p7_oprofile_Destroy_avx(om);
-      break;
-    case AVX512:
-      p7_oprofile_Destroy_avx512(om);
-      break;
-    case NEON:
-      p7_oprofile_Destroy_neon(om);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Destroy");  
-  }
-}
-
 /* Function:  p7_oprofile_Sizeof()
  * Synopsis:  Return the allocated size of a <P7_OPROFILE>.
  * Incept:    SRE, Wed Mar  2 10:09:21 2011 [Janelia]
  *
  * Purpose:   Returns the allocated size of a <P7_OPROFILE>,
- *            in bytes.
+ *            in bytes. Neglects alignment overhead.
  *            
  *            Very roughly, M*284 bytes, for a model of length M; 60KB
  *            for a typical model; 30MB for a design limit M=100K
@@ -126,54 +165,33 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
 size_t
 p7_oprofile_Sizeof(const P7_OPROFILE *om)
 {
- switch(om->simd){
-    case SSE:
-      return p7_oprofile_Sizeof_sse(om);
-      break;
-    case AVX:
-      return p7_oprofile_Sizeof_avx(om);
-      break;
-    case AVX512:
-      return p7_oprofile_Sizeof_avx512(om);
-      break;
-    case NEON:
-      return p7_oprofile_Sizeof_neon(om);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Sizeof");  
-  }
+  size_t n   = 0;
+  int    nqs = om->allocQb + p7O_EXTRA_SB; // Knudsen SSV has p7O_EXTRA_SB vectors of trailing slop
+
+  /* Stuff below mirrors the allocations's in p7_oprofile_Create(); so
+   * even though we could write this more compactly, the
+   * correspondence to _Create() helps maintainability and clarity.
+   */
+  n  += sizeof(P7_OPROFILE);
+  n  += om->abc->Kp * nqs          * p7_VWIDTH;   // om->rbv_mem   
+  n  += om->abc->Kp * om->allocQw  * p7_VWIDTH;   // om->rwv_mem
+  n  += p7O_NTRANS  * om->allocQw  * p7_VWIDTH;   // om->twv_mem
+  n  += om->abc->Kp * om->allocQf  * p7_VWIDTH;   // om->rfv_mem
+  n  += p7O_NTRANS  * om->allocQf  * p7_VWIDTH;   // om->tfv_mem
+ 
+  n  += sizeof(float *) * om->abc->Kp;            // om->rbv
+  n  += sizeof(float *) * om->abc->Kp;            // om->rwv
+  n  += sizeof(float *) * om->abc->Kp;            // om->rfv
+
+  n  += sizeof(char) * (om->allocM+2);            // om->rf
+  n  += sizeof(char) * (om->allocM+2);            // om->mm
+  n  += sizeof(char) * (om->allocM+2);            // om->cs
+  n  += sizeof(char) * (om->allocM+2);            // om->consensus
+  return n;
 }
 
 
-/* Function:  p7_oprofile_Clone()
- * Synopsis:  Create a new copy of an optimized profile structure.
- * Incept:    SRE, Sun Nov 25 12:03:19 2007 [Casa de Gatos]
- *
- * Purpose:   Create a newly allocated copy of <om1> and return a ptr
- *            to it.
- *            
- * Throws:    <NULL> on allocation error.
- */
-P7_OPROFILE *
-p7_oprofile_Clone(const P7_OPROFILE *om1)
-{
-  switch(om1->simd){
-    case SSE:
-      return p7_oprofile_Clone_sse(om1);
-      break;
-    case AVX:
-      return p7_oprofile_Clone_avx(om1);
-      break;
-    case AVX512:
-      return p7_oprofile_Clone_avx512(om1);
-      break;
-    case NEON:
-      return p7_oprofile_Clone_neon(om1);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Clone");  
-  }
-}
+
 
 /* Function:  p7_oprofile_Shadow()
  * Synopsis:  Create a shadow of an optimized profile, for use in multithreading
@@ -225,8 +243,41 @@ p7_oprofile_Shadow(const P7_OPROFILE *om1)
 
 
 
+/* Function:  p7_oprofile_Destroy()
+ * Synopsis:  Frees an optimized profile structure.
+ * Incept:    SRE, Sun Nov 25 12:22:21 2007 [Casa de Gatos]
+ */
+void
+p7_oprofile_Destroy(P7_OPROFILE *om)
+{
+  if (om == NULL) return;
 
+  if (! om->is_shadow)
+    {    
+      /* aligned allocations need the corresponding free */
+      if (om->rbv_mem)   esl_alloc_free(om->rbv_mem);
+      if (om->rwv_mem)   esl_alloc_free(om->rwv_mem);
+      if (om->twv_mem)   esl_alloc_free(om->twv_mem);
+      if (om->rfv_mem)   esl_alloc_free(om->rfv_mem);
+      if (om->tfv_mem)   esl_alloc_free(om->tfv_mem);
+
+      if (om->rbv)       free(om->rbv);
+      if (om->rwv)       free(om->rwv);
+      if (om->rfv)       free(om->rfv);
+
+      if (om->name)      free(om->name);
+      if (om->acc)       free(om->acc);
+      if (om->desc)      free(om->desc);
+      if (om->rf)        free(om->rf);
+      if (om->mm)        free(om->mm);
+      if (om->cs)        free(om->cs);
+      if (om->consensus) free(om->consensus);
+    }
+
+  free(om);  
+}
 /*----------------- end, P7_OPROFILE structure ------------------*/
+
 
 
 
@@ -234,165 +285,185 @@ p7_oprofile_Shadow(const P7_OPROFILE *om1)
  * 2. Conversion from generic P7_PROFILE to optimized P7_OPROFILE
  *****************************************************************/
 
-/* biased_byteify()
- * Converts original log-odds residue score to a rounded biased uchar cost.
- * Match emission scores for MSVFilter get this treatment.
- * e.g. a score of +3.2, with scale 3.0 and bias 12, becomes 2.
- *    3.2*3 = 9.6; rounded = 10; bias-10 = 2.
- * When used, we add the bias, then subtract this cost.
- * (A cost of +255 is our -infinity "prohibited event")
+/* byteify()
+ * Converts a log-odds score to a rounded scaled int8_t
+ * in the range -128..127.
  */
-uint8_t
-biased_byteify(P7_OPROFILE *om, float sc)
+static int8_t
+byteify(P7_OPROFILE *om, float sc)
 {
-  uint8_t b;
-  sc  = -1.0f * roundf(om->scale_b * sc);
-  int32_t q = round(sc);
-  uint8_t b1 = (uint8_t) q;                              /* ugh. sc is now an integer cost represented in a float...           */
-  b   = (sc > 255 - om->bias_b) ? 255 : b1 + om->bias_b; /* and now we cast, saturate, and bias it to an unsigned char cost... */
-  return b;
+  sc  = roundf(om->scale_b * sc);
+  ESL_DASSERT1(( sc >= -128. && sc <= 127. ));
+  if      (sc >=  127.) return  127;
+  else if (sc <= -128.) return -128;
+  else                  return (int8_t) sc;
 }
  
-/* unbiased_byteify()
- * Convert original transition score to a rounded uchar cost
- * Transition scores for MSVFilter get this treatment.
- * e.g. a score of -2.1, with scale 3.0, becomes a cost of 6.
- * (A cost of +255 is our -infinity "prohibited event")
- */
-uint8_t 
-unbiased_byteify(P7_OPROFILE *om, float sc)
-{
-  uint8_t b;
-  sc  = -1.0f * roundf(om->scale_b * sc);       /* ugh. sc is now an integer cost represented in a float...    */
-  uint32_t q = round(sc);
-  b   = (sc > 255.) ? 255 : (uint8_t) q;        /* and now we cast and saturate it to an unsigned char cost... */
-  return b;
-}
  
 /* wordify()
- * Converts log probability score to a rounded signed 16-bit integer cost.
+ * Converts log probability score to a rounded scaled int16_t.
  * Both emissions and transitions for ViterbiFilter get this treatment.
  * No bias term needed, because we use signed words. 
  *   e.g. a score of +3.2, with scale 500.0, becomes +1600.
  */
-int16_t 
+static int16_t 
 wordify(P7_OPROFILE *om, float sc)
 {
   sc  = roundf(om->scale_w * sc);
+  ESL_DASSERT1(( sc >= -32768. && sc <= 32767. ));
   if      (sc >=  32767.0) return  32767;
   else if (sc <= -32768.0) return -32768;
   else return (int16_t) sc;
 }
 
 
-/* sf_conversion():
- * Author: Bjarne Knudsen
+/* ssv_conversion():
  * 
- * Generates the SSVFilter() parts of the profile <om> scores
- * from the completed MSV score.  This includes calculating 
- * special versions of the match scores for using the the
- * ssv filter.
+ * Build SSVFilter() parts of profile <om>: scaled int8_t scores.
+ * ISA-independent striping; all it needs is the vector width, om->V bytes.
+ *
+ * xref J2/66, J4/138: analysis of original MSVFilter() scoring system 
  *
  * Returns:   <eslOK> on success.
  *
  * Throws:    (no abnormal error conditions)
- * 
- * This function should probably never be called.  It should always be possible
- * to call the correct SIMD version directly, but it's included for completeness
- *
  */
 static int
-sf_conversion(P7_OPROFILE *om)
+ssv_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
- switch(om->simd){
-    case SSE:
-      return sf_conversion_sse(om);
-      break;
-    case AVX:
-      return sf_conversion_avx(om);
-      break;
-    case AVX512:
-      return sf_conversion_avx512(om);
-      break;
-    case NEON:
-      sf_conversion_neon(om);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to sf_conversion");
-      return 0; // just here to silence compiler warning  
-  }
- return eslOK;
+  int     M = gm->M;                // query profile length
+  int     V = om->V;                // number of int8 scores per vector
+  int     Q = P7_Q(M, V);           // # of striped vectors per row
+  float  *rsc[p7_VMAX_SSV];         // ptrs into unstriped gm->rsc[x], one ptr per stripe (vector element)
+  int8_t *rbv;                      // ptr that traverses thru om->rbv[x], striped
+  int     x, q, z;
+
+  ESL_DASSERT1(( V >  0           ));
+  ESL_DASSERT1(( M <= om->allocM  ));
+  ESL_DASSERT1(( Q <= om->allocQb ));
+
+  om->scale_b = 3.0 / eslCONST_LOG2;                               // scores in third-bits. byteify() needs scale_b
+  om->tauBM   = logf(2.0f / ((float) M * (float) (M+1)));  
+  om->tauCT   = logf(2.0f / ((float) (gm->L+2)));                  // SSV length model, single-hit, no J state. 
+
+  for (x = 0; x < gm->abc->Kp; x++)
+    {
+      rbv = om->rbv[x];
+      for (z = 0; z < V; z++)  
+        rsc[z] = gm->rsc[x] + p7P_NR * (Q*z + 1);
+
+      for (q = 0; q < Q; q++)
+        for (z = 0; z < V; z++)
+          {
+            *rbv = (q+1+Q*z <= M) ? byteify(om, *rsc[z]) : -128;  // REVISIT: do we need a special sentinel?
+            rbv++;                             // access pattern constructs striped vectors in a float array
+            rsc[z] += p7P_NR;
+          }
+      // SRE REVISIT: I think we also need to deal with p7O_EXTRA_SB here.
+
+    }
+  return eslOK;
 }
 
-/* mf_conversion(): 
+/* vit_conversion(): 
  * 
- * This builds the MSVFilter() parts of the profile <om>, scores
- * in lspace uchars (16-way parallel), by rescaling, rounding, and
- * casting the scores in <gm>.
+ * Builds ViterbiFilter() parts of profile <om>: scaled int16_t scores.
  * 
- * Returns <eslOK> on success;
- * throws <eslEINVAL> if <om> hasn't been allocated properly.
+ * xref J4/138 for analysis of limited-precision scoring scheme, and
+ * choice of default 1/500 bit units, base offset 12000, enabling
+ * score range of -44768..20767 => -89.54..41.53 bits.
  * 
- * This function should probably never be called.  It should always be possible
- * to call the correct SIMD version directly, but it's included for completeness
- *
+ * Returns <eslOK> on success.
  */
 static int
-mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
+vit_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
-  switch(om->simd){
-    case SSE:
-      return mf_conversion_sse(gm, om);
-      break;
-    case AVX:
-      return mf_conversion_avx(gm, om);
-      break;
-    case AVX512:
-      return mf_conversion_avx512(gm, om);
-      break;
-    case NEON:
-      mf_conversion_neon(gm, om);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to mf_conversion"); 
-      return 0; // just here to silence compiler warnings 
-  }
- return eslOK;
+  int      M = gm->M;                 // model length M
+  int      V = om->V/2;               // # of int16 elements per vector
+  int      Q = P7_Q(M, V);            // # of striped int16 vectors per row
+  float   *rsc[p7_VMAX_VF];           // ptrs into unstriped gm->rsc[x], one ptr per stripe (vector element)
+  int16_t *rwv;                       // ptr that traverses thru om->rwv[x], striped
+  int16_t *twv;                       // ptr that traverses thru om->twv
+  int      tg;                        // transition index in <gm>
+  int      kb;                        // possibly offset k for loading om's TSC vectors
+  int      ddtmp;		      // used in finding worst DD transition bound 
+  int16_t  maxval;		      // used to prevent zero cost II
+  int      x, q, z, t, k;
+
+  om->scale_w = 500.0 / eslCONST_LOG2;    // 1/500 bit units
+  om->base_w  = 12000;                    // base score offset
+
+  /* striped match scores */
+  for (x = 0; x < gm->abc->Kp; x++)
+    {
+      rwv = om->rwv[x];
+      for (z = 0; z < V; z++)                
+        rsc[z] = gm->rsc[x] + p7P_NR * (Q*z + 1);
+
+      for (q = 0; q < Q; q++)
+        for (z = 0; z < V; z++)
+          {
+            *rwv = (q+1+Q*z <= M) ? wordify(om, *rsc[z]) : -32768;  // REVISIT: do we need a special sentinel?
+            rwv++;                             // access pattern constructs striped vectors in a float array
+            rsc[z] += p7P_NR;
+          }
+    }
+
+  /* Transition costs, all but the DD's. */ 
+  twv = om->twv;
+  for (q = 0; q < Q; q++)
+    {
+      for (t = p7O_BM; t <= p7O_II; t++) /* this loop of 7 transitions depends on the order in p7o_tsc_e */
+	{
+	  switch (t) {
+	  case p7O_BM: tg = p7P_LM;  kb = q;   maxval =  0; break; /* gm has tLMk stored off by one! start from k=0 not 1   */
+	  case p7O_MM: tg = p7P_MM;  kb = q;   maxval =  0; break; /* MM, DM, IM vectors are rotated by -1, start from k=0  */
+	  case p7O_IM: tg = p7P_IM;  kb = q;   maxval =  0; break;
+	  case p7O_DM: tg = p7P_DM;  kb = q;   maxval =  0; break;
+	  case p7O_MD: tg = p7P_MD;  kb = q+1; maxval =  0; break; /* the remaining ones are straight up  */
+	  case p7O_MI: tg = p7P_MI;  kb = q+1; maxval =  0; break; 
+	  case p7O_II: tg = p7P_II;  kb = q+1; maxval = -1; break; 
+	  }
+
+	  for (z = 0; z < V; z++) {  // do not allow II transition cost of 0, or all hell breaks loose.
+	    *twv =  ESL_MIN(maxval, ((kb+ z*Q < M) ? wordify(om, P7P_TSC(gm, kb + z*Q, tg)) : -32768));
+            twv++;
+          }
+	}
+    }
+
+  /* Finally the DD's, which are at the end of the optimized tsc vector; <twv> is already sitting there */
+  for (q = 0; q < Q; q++)
+    {
+      for (z = 0; z < V; z++) {
+        *twv = (( (q+1) + z*Q < M) ? wordify(om, P7P_TSC(gm, (q+1) + z*Q, p7P_DD)) : -32768);
+        twv++;
+      }
+    }
+
+  /* Specials. (Actually in same order in om and gm, but we copy in general form anyway.)  */
+  /* See notes on the 3 nat approximation, for why the N/J/C loop transitions are hardcoded zero */
+  om->xw[p7O_E][p7O_LOOP] = wordify(om, gm->xsc[p7P_E][p7P_LOOP]);  
+  om->xw[p7O_E][p7O_MOVE] = wordify(om, gm->xsc[p7P_E][p7P_MOVE]);
+  om->xw[p7O_N][p7O_MOVE] = wordify(om, gm->xsc[p7P_N][p7P_MOVE]);
+  om->xw[p7O_N][p7O_LOOP] = 0;                                        /* ~ wordify(om, gm->xsc[p7P_N][p7P_LOOP]); */
+  om->xw[p7O_C][p7O_MOVE] = wordify(om, gm->xsc[p7P_C][p7P_MOVE]);
+  om->xw[p7O_C][p7O_LOOP] = 0;                                        /* ~ wordify(om, gm->xsc[p7P_C][p7P_LOOP]); */
+  om->xw[p7O_J][p7O_MOVE] = wordify(om, gm->xsc[p7P_J][p7P_MOVE]);
+  om->xw[p7O_J][p7O_LOOP] = 0;                                        /* ~ wordify(om, gm->xsc[p7P_J][p7P_LOOP]); */
+
+  /* Transition score bound for "lazy F" DD path evaluation (xref J2/52) */
+  om->ddbound_w = -32768;	
+  for (k = 2; k < M-1; k++) 
+    {
+      ddtmp         = (int) wordify(om, P7P_TSC(gm, k,   p7P_DD));
+      ddtmp        += (int) wordify(om, P7P_TSC(gm, k+1, p7P_DM));
+      ddtmp        -= (int) wordify(om, P7P_TSC(gm, k+1, p7P_LM));
+      om->ddbound_w = ESL_MAX(om->ddbound_w, ddtmp);
+    }
+
+  return eslOK;
 }
-
-
-/* vf_conversion(): 
- * 
- * This builds the ViterbiFilter() parts of the profile <om>, scores
- * in lspace swords (8-way parallel), by rescaling, rounding, and
- * casting the scores in <gm>.
- * 
- * Returns <eslOK> on success;
- * throws <eslEINVAL> if <om> hasn't been allocated properly.
- */
-static int
-vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
-{
- switch(om->simd){
-    case SSE:
-      return vf_conversion_sse(gm, om);
-      break;
-    case AVX:
-      return vf_conversion_avx(gm, om);
-      break;
-    case AVX512:
-      return vf_conversion_avx512(gm, om);
-      break;
-    case NEON:
-      vf_conversion_neon(gm, om);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to vf_conversion");  
-      return 0; // just here to silence compiler warnings
-  }
- return eslOK;
-}
-
 
 /* fb_conversion()
  * This builds the Forward/Backward part of the optimized profile <om>,
@@ -401,24 +472,75 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 static int
 fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
-  switch(om->simd){
-    case SSE:
-      return fb_conversion_sse(gm, om);
-      break;
-    case AVX:
-      return fb_conversion_avx(gm, om);
-      break;
-    case AVX512:
-      return fb_conversion_avx512(gm, om);
-      break;
-    case NEON:
-      fb_conversion_neon(gm, om);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to fb_conversion");  
-      return 0; // just here to silence compler warnings
-  }
- return eslOK;
+  int M = gm->M;               // query profile length
+  int V = om->V/4;             // number of floats per vector
+  int Q = P7_Q(M, V);          // number of striped float vectors per profile row
+  float *rfv;                  // steps through the serialized (vector-independent) striped match score vector
+  float *tfv;                  // steps through transition score vector
+  int    x,k,q,z,kb,t,tg;
+  
+  ESL_DASSERT1(( om->allocQf >= Q ));
+
+  /* striped match scores: start at k=1 */
+  for (x = 0; x < gm->abc->Kp; x++)
+    {
+      rfv = om->rfv[x];
+      for (k = 1, q = 0; q < Q; q++, k++)
+        for (z = 0; z < V; z++) 
+          {
+            *rfv = (k + z*Q <= M) ? P7P_MSC(gm, k+z*Q, x) : -eslINFINITY;
+            *rfv = expf(*rfv);  // convert score to odds ratio
+            rfv++;
+          }
+    }
+  
+  /* Transition scores, all but the DD's. */
+  tfv = om->tfv;
+  for (k = 1, q = 0; q < Q; q++, k++)
+    {
+      for (t = p7O_BM; t <= p7O_II; t++) /* this loop of 7 transitions depends on the order in the definition of p7o_tsc_e */
+	{
+	  switch (t) {
+	  case p7O_BM: tg = p7P_LM;  kb = k-1; break; /* gm has tBMk stored off by one! start from k=0 not 1 */
+	  case p7O_MM: tg = p7P_MM;  kb = k-1; break; /* MM, DM, IM quads are rotated by -1, start from k=0  */
+	  case p7O_IM: tg = p7P_IM;  kb = k-1; break;
+	  case p7O_DM: tg = p7P_DM;  kb = k-1; break;
+	  case p7O_MD: tg = p7P_MD;  kb = k;   break; /* the remaining ones are straight up  */
+	  case p7O_MI: tg = p7P_MI;  kb = k;   break; 
+	  case p7O_II: tg = p7P_II;  kb = k;   break; 
+	  }
+
+	  for (z = 0; z < Q; z++) 
+            {
+              *tfv = (kb+z*Q < M) ? P7P_TSC(gm, kb+z*Q, tg) : -eslINFINITY;
+              *tfv = expf(*tfv);
+              tfv++;
+            }
+	}
+    }
+  
+  /* Finally the DD's, which are at the end of the optimized tfv vector; (<tfv> is already sitting there) */
+  for (k = 1, q = 0; q < Q; q++, k++)
+    for (z = 0; z < V; z++) 
+      {
+        *tfv = (k+z*Q < M) ? P7P_TSC(gm, k+z*Q, p7P_DD) : -eslINFINITY;
+        *tfv = expf(*tfv);
+        tfv++;
+      }
+
+  /* Specials. (These are actually in exactly the same order in om and
+   *  gm, but we copy in general form anyway.)
+   */
+  om->xf[p7O_E][p7O_LOOP] = expf(gm->xsc[p7P_E][p7P_LOOP]);  
+  om->xf[p7O_E][p7O_MOVE] = expf(gm->xsc[p7P_E][p7P_MOVE]);
+  om->xf[p7O_N][p7O_LOOP] = expf(gm->xsc[p7P_N][p7P_LOOP]);
+  om->xf[p7O_N][p7O_MOVE] = expf(gm->xsc[p7P_N][p7P_MOVE]);
+  om->xf[p7O_C][p7O_LOOP] = expf(gm->xsc[p7P_C][p7P_LOOP]);
+  om->xf[p7O_C][p7O_MOVE] = expf(gm->xsc[p7P_C][p7P_MOVE]);
+  om->xf[p7O_J][p7O_LOOP] = expf(gm->xsc[p7P_J][p7P_LOOP]);
+  om->xf[p7O_J][p7O_MOVE] = expf(gm->xsc[p7P_J][p7P_MOVE]);
+
+  return eslOK;
 }
 
 
@@ -454,7 +576,8 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 int
 p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
-  int status, z;
+  int z;
+  int status;
 
   ESL_DASSERT1(( ! om->is_shadow ));
   ESL_DASSERT1(( gm->abc->type == om->abc->type));
@@ -466,41 +589,17 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
 
   om->L          = gm->L;
   om->M          = gm->M;
+  om->V          = p7_simdvec_Width();  
   om->nj         = gm->nj;
   om->max_length = gm->max_length;
 
-  switch (om->simd) {
-  case SSE:
-    if ((status =  mf_conversion_sse(gm, om)) != eslOK) return status;   /* MSVFilter()'s information     */
-    if ((status =  vf_conversion_sse(gm, om)) != eslOK) return status;   /* ViterbiFilter()'s information */
-    if ((status =  fb_conversion_sse(gm, om)) != eslOK) return status;   /* ForwardFilter()'s information */
-    break;
+  if (( status =  ssv_conversion(gm, om)) != eslOK) goto ERROR;
+  if (( status =  vit_conversion(gm, om)) != eslOK) goto ERROR;
+  if (( status =   fb_conversion(gm, om)) != eslOK) goto ERROR;
 
-  case AVX:
-    if ((status =  mf_conversion_avx(gm, om)) != eslOK) return status;   /* MSVFilter()'s information     */
-    if ((status =  vf_conversion_avx(gm, om)) != eslOK) return status;   /* ViterbiFilter()'s information */
-    if ((status =  fb_conversion_avx(gm, om)) != eslOK) return status;   /* ForwardFilter()'s information */
-    break;
-
-  case AVX512:
-    if ((status =  mf_conversion_avx512(gm, om)) != eslOK) return status;   /* MSVFilter()'s information     */
-    if ((status =  vf_conversion_avx512(gm, om)) != eslOK) return status;   /* ViterbiFilter()'s information */
-    if ((status =  fb_conversion_avx512(gm, om)) != eslOK) return status;   /* ForwardFilter()'s information */
-    break;
-
-  case NEON:
-    if ((status =  mf_conversion_neon(gm, om)) != eslOK) return status;   /* MSVFilter()'s information     */
-    if ((status =  vf_conversion_neon(gm, om)) != eslOK) return status;   /* ViterbiFilter()'s information */
-    if ((status =  fb_conversion_neon(gm, om)) != eslOK) return status;   /* ForwardFilter()'s information */
-    break;
-
-  default:
-    p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Convert");  
-  }
-
-  if (om->name != NULL) free(om->name);
-  if (om->acc  != NULL) free(om->acc);
-  if (om->desc != NULL) free(om->desc);
+  if (om->name) free(om->name);
+  if (om->acc)  free(om->acc);
+  if (om->desc) free(om->desc);
   if ((status = esl_strdup(gm->name, -1, &(om->name))) != eslOK) goto ERROR;
   if ((status = esl_strdup(gm->acc,  -1, &(om->acc)))  != eslOK) goto ERROR;
   if ((status = esl_strdup(gm->desc, -1, &(om->desc))) != eslOK) goto ERROR;
@@ -540,30 +639,30 @@ int
 p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L)
 {
   int status;
-  if ((status = p7_oprofile_ReconfigMSVLength (om, L)) != eslOK) return status;
+  if ((status = p7_oprofile_ReconfigSSVLength (om, L)) != eslOK) return status;
   if ((status = p7_oprofile_ReconfigRestLength(om, L)) != eslOK) return status;
   return eslOK;
 }
 
-/* Function:  p7_oprofile_ReconfigMSVLength()
- * Synopsis:  Set the target sequence length of the MSVFilter part of the model.
+/* Function:  p7_oprofile_ReconfigSSVLength()
+ * Synopsis:  Set the target sequence length of the SSVFilter part of the model.
  * Incept:    SRE, Tue Dec 16 13:39:17 2008 [Janelia]
  *
  * Purpose:   Given an  already configured model <om>, quickly reset its
  *            expected length distribution for a new mean target sequence
  *            length of <L>, only for the part of the model that's used
- *            for the accelerated MSV filter.
+ *            for the accelerated SSV filter.
  *            
  *            The acceleration pipeline uses this to defer reconfiguring the
  *            length distribution of the main model, mostly because hmmscan
- *            reads the model in two pieces, MSV part first, then the rest.
+ *            reads the model in two pieces, SSV part first, then the rest.
  *
  * Returns:   <eslOK> on success.
  */
 int
-p7_oprofile_ReconfigMSVLength(P7_OPROFILE *om, int L)
+p7_oprofile_ReconfigSSVLength(P7_OPROFILE *om, int L)
 {
-  om->tjb_b = unbiased_byteify(om, logf(3.0f / (float) (L+3)));
+  om->tauCT = byteify(om, logf(2.0f / (float) (L+2)));
   om->L     = L;
   return eslOK;
 }
@@ -574,10 +673,10 @@ p7_oprofile_ReconfigMSVLength(P7_OPROFILE *om, int L)
  *
  * Purpose:   Given an  already configured model <om>, quickly reset its
  *            expected length distribution for a new mean target sequence
- *            length of <L>, for everything except the MSV filter part
+ *            length of <L>, for everything except the SSV filter part
  *            of the model.
  *            
- *            Calling <p7_oprofile_ReconfigMSVLength()> then
+ *            Calling <p7_oprofile_ReconfigSSVLength()> then
  *            <p7_oprofile_ReconfigRestLength()> is equivalent to
  *            just calling <p7_oprofile_ReconfigLength()>. The two
  *            part version is used in the acceleration pipeline.
@@ -598,8 +697,7 @@ p7_oprofile_ReconfigRestLength(P7_OPROFILE *om, int L)
 
   /* ViterbiFilter() parameters: lspace signed 16-bit ints */
   om->xw[p7O_N][p7O_MOVE] =  om->xw[p7O_C][p7O_MOVE] = om->xw[p7O_J][p7O_MOVE] = wordify(om, logf(pmove));
-  /* om->xw[p7O_N][p7O_LOOP] =  om->xw[p7O_C][p7O_LOOP] = om->xw[p7O_J][p7O_LOOP] = wordify(om, logf(ploop)); */ /* 3nat approx in force: these stay 0 */
-  /* om->ncj_roundoff        = (om->scale_w * logf(ploop)) - om->xw[p7O_N][p7O_LOOP];                         */ /* and this does too                  */
+  /* NCJ loop parameters stay zero: 3 nat approximation in force */
 
   om->L = L;
   return eslOK;
@@ -665,268 +763,411 @@ p7_oprofile_ReconfigUnihit(P7_OPROFILE *om, int L)
 }
 /*------------ end, conversions to P7_OPROFILE ------------------*/
 
-/*******************************************************************
- * 3. Conversion from optimized P7_OPROFILE to compact score arrays
- *******************************************************************/
 
-/* Function:  p7_oprofile_GetFwdTransitionArray()
- * Synopsis:  Retrieve full 32-bit float transition probabilities from an
- *            optimized profile into a flat array
+/*****************************************************************
+ * 2. Coordinate transformation helpers
+ *****************************************************************/
+
+/* Function:  p7_oprofile_y_from_tk()
+ * Synopsis:  Get index into transition array, given k.
+ * Incept:    SRE, Wed Feb 22 17:15:40 2017 [Johnny Cash, Further On Up the Road]
  *
- * Purpose:   Extract an array of <type> (e.g. p7O_II) transition probabilities
- *            from the underlying <om> profile. In SIMD implementations,
- *            these are striped and interleaved, making them difficult to
- *            directly access.
- *
- * Args:      <om>   - optimized profile, containing transition information
- *            <type> - transition type (e.g. p7O_II)
- *            <arr>  - preallocated array into which floats will be placed
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    (no abnormal error conditions)
+ * Purpose:   Get a scalar index <y> into a vector profile's striped
+ *            transition array, either <twv> or <tfv>, given the
+ *            transition type <t> (p7O_MM, etc.) and the node <k>, and
+ *            given striped segment length <Q> (the number of vectors
+ *            in one row of scores 1..M) and vector width <V> (the
+ *            number of scores per vector: om->V/2 for int16 scores
+ *            in <twv>, om->V/4 for float scores in <tfv>).
+ *            
+ *            This function understands all the optimizations of the
+ *            order that the vector transition scores are stored in;
+ *            see notes in simdvec.md.
+ *            
+ *            Intended as a convenience. Slow; do not use in
+ *            performance-critical code.
+ *            
+ * Args:      t = transition index p7O_MM, etc; see enum p7o_tsc_e
+ *            k = node index, 1..M
+ *            Q = number of vectors in one striped row for 1..M
+ *            V = number of scores per vector (om->V/2 or om->V/4)
+ *            
+ * Returns:   array index <y> directly; 0..8QV-1 (p7O_NTRANS = 8)
  */
 int
-p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
+p7_oprofile_y_from_tk(int t, int k, int Q, int V) 
 {
-  switch(om->simd){
-    case SSE:
-      return p7_oprofile_GetFwdTransitionArray_sse(om, type, arr);
-      break;
-    case AVX:
-      return p7_oprofile_GetFwdTransitionArray_avx(om, type, arr);
-      break;
-    case AVX512:
-      return p7_oprofile_GetFwdTransitionArray_avx512(om, type, arr);
-      break;
-    case NEON:
-      return p7_oprofile_GetFwdTransitionArray_neon(om, type, arr);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_GetFwdTransitionArray");  
-  }
+  if (t == p7O_DD) 
+    return Q*(p7O_NTRANS-1) + ((k-1)%Q)*V + ((k-1)/Q);
+  else if (t == p7O_MM || t == p7O_IM || t == p7O_DM)
+    return ((k%Q) * (p7O_NTRANS-1) + t) * V + (k/Q);
+  else
+    return ( ((k-1)%Q) * (p7O_NTRANS-1) + t) * V + ((k-1)/Q);
+}
+
+
+/* Function:  p7_oprofile_y_from_tqz()
+ * Synopsis:  Get index into transition array, given q,z
+ * Incept:    SRE, Wed Feb 22 17:22:51 2017 [Bear McCreary, Battlestar Galactica]
+ *
+ * Purpose:   Get a scalar index <y> into a vector profile's striped
+ *            transition array (either <twv> or <tfv>), given the
+ *            transition type <t> (e.g. <p7O_MM>; see the <enum
+ *            p7o_tsc_e>) and vector coords <q,z>, and also given 
+ *            striped segment length <Q> and vector width <V> (in
+ *            scores per vector).
+ *
+ * Args:      t = transition index p7O_MM, etc; see enum p7o_tsc_e
+ *            q = vector index 0..Q-1
+ *            z = element index in vector, 0..V-1
+ *            Q = number of vectors in one striped row for 1..M
+ *            V = number of scores per vector (om->V/2 or om->V/4)
+ *
+ * Returns:   the index <y>, directly: 0..8QV-1.
+ */
+int
+p7_oprofile_y_from_tqz(int t, int q, int z, int Q, int V)
+{
+  if (t == p7O_DD)
+    return Q * (p7O_NTRANS-1) + q*V + z;
+  else
+    return (q * (p7O_NTRANS-1) + t) * V + z;
+}
+
+
+/* Function:  p7_oprofile_k_from_tqz()
+ * Synopsis:  Get model position k, given transition score coords t,q,z
+ * Incept:    SRE, Wed Feb 22 17:30:57 2017 [Mountain Goats, 1 Samuel 15:23]
+ *
+ * Purpose:   Given striped vector coords for a transition score -
+ *            transition type <t>, vector index <q>, element <z> -
+ *            return the model position <k> that this score 
+ *            corresponds to.
+ * 
+ *            One row of striped vectors holds QV values, with QV >=
+ *            M. The out of bounds values for k=M+1..QV are set to
+ *            sentinel values.  The caller may need to check whether
+ *            it gets back a <k > M> here, to do something special to
+ *            it.
+ *
+ *            This function understands all the jiggery-pokery that
+ *            goes into the optimized ordering of the striped vector
+ *            scores; see simdvec.md for notes.
+ *
+ * Args:      t = transition index p7O_MM, etc; see enum p7o_tsc_e
+ *            q = vector index 0..Q-1
+ *            z = element index in vector, 0..V-1
+ *            Q = number of vectors in one striped row for 1..M
+ *            V = number of scores per vector (om->V/2 or om->V/4)
+ *
+ * Returns:   model position <k> (1..QV), directly.
+ *            Note that k>M is possible, because the striped vectors
+ *            may be padded with unused sentinel values.
+ */
+int
+p7_oprofile_k_from_tqz(int t, int q, int z, int Q, int V)
+{
+  if (t == p7O_MM || t == p7O_IM || t == p7O_DM) 
+    {
+      if (q == 0 && z == 0) return Q*V; // deals with circular permutation of the t_*M's. 
+      else                  return z*Q + q;
+    }
+  else
+    return z*Q + q + 1;
+}
+
+/* Function:  p7_oprofile_tqz_from_y()
+ * Synopsis:  Calculate t,q,z transition vector coords, given scalar position y
+ * Incept:    SRE, Wed Feb 22 17:39:17 2017 [Hamilton, Burn]
+ *
+ * Purpose:   Given a scalar index <y> into a transition score vector
+ *            (either <om->twv> or <om->tfv>), translate to vector coords:
+ *            transition type <*ret_t>, vector index <*ret_q>, element <*ret_z>.
+ *
+ * Args:      y      : position in <twv> or <tfv> score array; 0..8QV-1
+ *            Q      : segment length (number of vectors per striped 1..M row)
+ *            V      : number of scores per vector, om->V/2 for <twv>, om->V/4 for <tfv>
+ *            *ret_t : RETURN: transition type, e.g. p7O_MM; see p7o_tsc_e
+ *            *ret_q : RETURN: vector index, 0..Q-1
+ *            *ret_z : RETURN: element index in vector, 0..V-1
+ *
+ * Returns:   <eslOK> on success, and <*ret_t>, <*ret_q>, <*ret_z> are
+ *            the result.
+ */
+int
+p7_oprofile_tqz_from_y(int y, int Q, int V, int *ret_t, int *ret_q, int *ret_z)
+{
+  if (y < (p7O_NTRANS-1) * V * Q) // not DD
+    {
+      *ret_t = y % (V*Q);  
+      *ret_q = y / (V*Q);
+      *ret_z = y % V;
+    }
+  else 
+    { // DD are all contiguous, so just rebase the y coord, and find tqz using normal macros.
+      y      = y - (p7O_NTRANS-1) * V * Q;
+      *ret_t = p7O_DD;
+      *ret_q = P7_Q_FROM_Y(y,V);
+      *ret_z = P7_Z_FROM_Y(y,V);
+    }
   return eslOK;
-
 }
+/*------- end, striped coordinate translation helpers -----------*/
 
-/* Function:  p7_oprofile_GetMSVEmissionScoreArray()
- * Synopsis:  Retrieve MSV residue emission scores from an optimized
- *            profile into an array
- *
- * Purpose:   Extract an implicitly 2D array of 8-bit int MSV residue
- *            emission scores from an optimized profile <om>. <arr> must
- *            be allocated by the calling function to be of size
- *            ( om->abc->Kp * ( om->M  + 1 )), and indexing into the array
- *            is done as  [om->abc->Kp * i +  c ] for character c at
- *            position i.
- *
- *            In SIMD implementations, the residue scores are striped
- *            and interleaved, making them somewhat difficult to
- *            directly access. Faster access is desired, for example,
- *            in SSV back-tracking of a high-scoring diagonal
- *
- * Args:      <om>   - optimized profile, containing transition information
- *            <arr>  - preallocated array into which scores will be placed
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    (no abnormal error conditions)
- */
-int
-p7_oprofile_GetMSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr )
-{
-  switch(om->simd){
-    case SSE:
-      return p7_oprofile_GetMSVEmissionScoreArray_sse(om, arr);
-      break;
-    case AVX:
-      return p7_oprofile_GetMSVEmissionScoreArray_avx(om, arr);
-      break;
-    case AVX512:
-      return p7_oprofile_GetMSVEmissionScoreArray_avx512(om, arr);
-      break;
-    case NEON:
-      return p7_oprofile_GetMSVEmissionScoreArray_neon(om, arr);
-      break; 
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_GetMSVEmissionScoreArray");  
-  }
-}
-
-
-
-/* Function:  p7_oprofile_GetFwdEmissionScoreArray()
- * Synopsis:  Retrieve Fwd (float) residue emission scores from an optimized
- *            profile into an array
- *
- * Purpose:   Extract an implicitly 2D array of 32-bit float Fwd residue
- *            emission scores from an optimized profile <om>. <arr> must
- *            be allocated by the calling function to be of size
- *            ( om->abc->Kp * ( om->M  + 1 )), and indexing into the array
- *            is done as  [om->abc->Kp * i +  c ] for character c at
- *            position i.
- *
- *            In SIMD implementations, the residue scores are striped
- *            and interleaved, making them somewhat difficult to
- *            directly access.
- *
- * Args:      <om>   - optimized profile, containing transition information
- *            <arr>  - preallocated array into which scores will be placed
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    (no abnormal error conditions)
- */
-int
-p7_oprofile_GetFwdEmissionScoreArray(const P7_OPROFILE *om, float *arr )
-{
-  switch(om->simd){
-    case SSE:
-      return p7_oprofile_GetFwdEmissionScoreArray_sse(om, arr);
-      break;
-    case AVX:
-      return p7_oprofile_GetFwdEmissionScoreArray_avx(om, arr);
-      break;
-    case AVX512:
-      return p7_oprofile_GetFwdEmissionScoreArray_avx512(om, arr);
-      break;
-    case NEON:
-      return p7_oprofile_GetFwdEmissionScoreArray_neon(om, arr);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_GetFwdEmissionScoreArray");  
-  }
-}
-
-/* Function:  p7_oprofile_GetFwdEmissionArray()
- * Synopsis:  Retrieve Fwd (float) residue emission values from an optimized
- *            profile into an array
- *
- * Purpose:   Extract an implicitly 2D array of 32-bit float Fwd residue
- *            emission values from an optimized profile <om>, converting
- *            back to emission values based on the background. <arr> must
- *            be allocated by the calling function to be of size
- *            ( om->abc->Kp * ( om->M  + 1 )), and indexing into the array
- *            is done as  [om->abc->Kp * i +  c ] for character c at
- *            position i.
- *
- *            In SIMD implementations, the residue scores are striped
- *            and interleaved, making them somewhat difficult to
- *            directly access.
- *
- * Args:      <om>   - optimized profile, containing transition information
- *            <bg>   - background frequencies
- *            <arr>  - preallocated array into which scores will be placed
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    (no abnormal error conditions)
- */
-int
-p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, P7_BG *bg, float *arr )
-{
-  switch(om->simd){
-    case SSE:
-      return p7_oprofile_GetFwdEmissionArray_sse(om, bg, arr);
-      break;
-    case AVX:
-      return p7_oprofile_GetFwdEmissionArray_avx(om, bg, arr);
-      break;
-    case AVX512:
-      return p7_oprofile_GetFwdEmissionArray_avx512(om, bg, arr);
-      break;
-    case NEON:
-      return p7_oprofile_GetFwdEmissionArray_neon(om, bg, arr);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_GetFwdEmissionArray");  
-  }
-}
-/*------------ end, conversions from P7_OPROFILE ------------------*/
 
 
 /*****************************************************************
- * 4. Debugging and development utilities.
+ * 1. Debugging and development utilities.
  *****************************************************************/
 
 
-/* oprofile_dump_mf()
+static char *
+oprofile_decode_t(int t)
+{
+  switch (t) {
+  case p7O_BM: return "t_BM";
+  case p7O_MM: return "t_MM";
+  case p7O_IM: return "t_IM";
+  case p7O_DM: return "t_DM";
+  case p7O_MD: return "t_MD";
+  case p7O_MI: return "t_MI";
+  case p7O_II: return "t_II";
+  case p7O_DD: return "t_DD";
+  }
+  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such oprofile transition type code %d", t);
+  return NULL;
+}
+
+/* oprofile_dump_ssv()
  * 
- * Dump the MSVFilter part of a profile <om> to <stdout>.
+ * Dump the SSVFilter part of a profile <om> to stream <fp>.
  */
 static int
-oprofile_dump_mf(FILE *fp, const P7_OPROFILE *om)
+oprofile_dump_ssv(FILE *fp, const P7_OPROFILE *om)
 {
- switch(om->simd){
-    case SSE:
-      return oprofile_dump_mf_sse(fp, om);
-      break;
-    case AVX:
-      return oprofile_dump_mf_avx(fp, om);
-      break;
-    case AVX512:
-      return oprofile_dump_mf_sse(fp, om);
-      break;
-    case NEON:
-      return oprofile_dump_mf_neon(fp, om);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to oprofile_dump_mf");
-  }
+  int M = om->M;        // query profile length
+  int V = om->V;        // number of int8 MSV scores per vector
+  int Q = P7_Q(M, V);   // number of vectors in one profile row
+  int q,z,x,k;
+
+  /* Header (striped column numbers, bracketed/arranged in vectors)  */
+  fprintf(fp, "     ");
+  for (q = 0; q < Q; q++)
+    {
+      fprintf(fp, "[ ");
+      for (z = 0; z < V; z++) 
+        {
+          k = P7_K_FROM_QZ(q,z,V);
+          if (k <= M) fprintf(fp, "%4d ", k);
+          else        fprintf(fp, "%4s ", "xx");
+        }
+      fprintf(fp, "]");
+    }
+  fprintf(fp, "\n");
+
+  /* Table of SSV residue emissions, one row per residue, including degeneracies */
+  for (x = 0; x < om->abc->Kp; x++)
+    {
+      fprintf(fp, "(%c): ", om->abc->sym[x]); 
+
+      for (q = 0; q < Q; q++)
+        {
+          fprintf(fp, "[ ");
+          for (z = 0; z < V; z++) 
+            fprintf(fp, "%4d ", om->rbv[x][ P7_Y_FROM_QZ(q,z,V) ]);
+          fprintf(fp, "]");
+        }
+      fprintf(fp, "\n");
+    }
+  fprintf(fp, "\n");
+  
+  fprintf(fp, "tau_NB,JB,CT: %.3f\n",  om->tauCT);
+  fprintf(fp, "tau_BMk:      %.3f\n",  om->tauBM);
+  fprintf(fp, "scale:        %.2f\n", om->scale_b);
+  fprintf(fp, "Q:            %4d\n",  Q);  
+  fprintf(fp, "M:            %4d\n",  M);  
+  fprintf(fp, "V:            %4d\n",  V);  
+  return eslOK;
 }
 
 /* oprofile_dump_vf()
  * 
- * Dump the ViterbiFilter part of a profile <om> to <stdout>.
+ * Dump the ViterbiFilter part of a profile <om> to stream <fp>.
  */
 static int
 oprofile_dump_vf(FILE *fp, const P7_OPROFILE *om)
 {
-  switch(om->simd){
-    case SSE:
-      return oprofile_dump_vf_sse(fp, om);
-      break;
-    case AVX:
-      return oprofile_dump_vf_avx(fp, om);
-      break;
-    case AVX512:
-      return oprofile_dump_vf_sse(fp, om);
-      break;
-    case NEON:
-      return oprofile_dump_vf_neon(fp, om);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to oprofile_dump_vf");
-  }
+  int M = om->M;        // query profile length
+  int V = om->V/2;      // vector width: number of int16's per vector (om->V is in bytes)
+  int Q = P7_Q(M, V);   // striped segment width: number of vectors to hold M floats
+  int q,z,k,x,t;
+
+  /* Emission score header (rearranged column numbers, in the vectors)  */
+  fprintf(fp, "     ");
+  for (q = 0; q < Q; q++)
+    {
+      fprintf(fp, "[ ");
+      for (z = 0; z < V; z++) 
+        {
+          k = P7_K_FROM_QZ(q,z,V);
+          if (k <= M) fprintf(fp, "%6d ", k);     
+          else        fprintf(fp, "%6s ", "xx");
+        }
+      fprintf(fp, "]");
+    }
+  fprintf(fp, "\n");
+
+   /* Table of VF residue emissions, one row per residue, including degeneracies */
+  for (x = 0; x < om->abc->Kp; x++)
+    {
+      fprintf(fp, "(%c): ", om->abc->sym[x]); 
+
+      /* Match emission scores only (insert emissions are assumed zero by design) */
+      for (q = 0; q < Q; q++)
+	{
+	  fprintf(fp, "[ ");
+	  for (z = 0; z < V; z++)
+            fprintf(fp, "%6d ", om->rwv[x][ P7_Y_FROM_QZ(q,z,V) ]);
+	  fprintf(fp, "]");
+	}
+      fprintf(fp, "\n");
+    }
+  fprintf(fp, "\n");
+
+  /* Transitions */
+  for (t = 0; t < p7O_NTRANS; t++)
+    {
+      /* For each transition type, a header line that shows k=1..M coord system in striped vectors */
+      fprintf(fp, "\n%s: ", oprofile_decode_t(t));
+      for (q = 0; q < Q; q++)
+        {
+          fprintf(fp, "[ ");
+	  for (z = 0; z < V; z++) 
+            {
+              k = p7_oprofile_k_from_tqz(t, q, z, Q, V);
+              if (k <= M) fprintf(fp, "%6d ", k);
+              else        fprintf(fp, "%6s ", "xx");
+            }
+	  fprintf(fp, "]");
+        }
+      fprintf(fp, "\n     ");	  
+
+      /* Then, a line of the striped vector scores themselves */
+      for (q = 0; q < Q; q++)
+	{
+	  fprintf(fp, "[ ");
+	  for (z = 0; z < V; z++) 
+            fprintf(fp, "%6d ", om->twv[ p7_oprofile_y_from_tqz(t, q, z, Q, V) ]);
+	  fprintf(fp, "]");
+	}
+      fprintf(fp, "\n");	  
+    }
+  fprintf(fp, "\n");	  
+
+  fprintf(fp, "E->C: %6d    E->J: %6d\n", om->xw[p7O_E][p7O_MOVE], om->xw[p7O_E][p7O_LOOP]);
+  fprintf(fp, "N->B: %6d    N->N: %6d\n", om->xw[p7O_N][p7O_MOVE], om->xw[p7O_N][p7O_LOOP]);
+  fprintf(fp, "J->B: %6d    J->J: %6d\n", om->xw[p7O_J][p7O_MOVE], om->xw[p7O_J][p7O_LOOP]);
+  fprintf(fp, "C->T: %6d    C->C: %6d\n", om->xw[p7O_C][p7O_MOVE], om->xw[p7O_C][p7O_LOOP]);
+
+  fprintf(fp, "scale: %6.2f\n", om->scale_w);
+  fprintf(fp, "base:  %6d\n",   om->base_w);
+  fprintf(fp, "bound: %6d\n",   om->ddbound_w);
+  fprintf(fp, "Q:     %6d\n",   Q);  
+  fprintf(fp, "M:     %6d\n",   M);  
+  fprintf(fp, "V:     %6d\n",   V);  
+
+  return eslOK;
 }
 
 
 /* oprofile_dump_fb()
  * 
- * Dump the Forward/Backward part of a profile <om> to <stdout>.
- * <width>, <precision> control the floating point output:
- *  8,5 is a reasonable choice for prob space,
- *  5,2 is reasonable for log space.
+ * Dump the Forward/Backward part of a profile <om> to stream <fp>.
  */
 static int
-oprofile_dump_fb(FILE *fp, const P7_OPROFILE *om, int width, int precision)
+oprofile_dump_fb(FILE *fp, const P7_OPROFILE *om)
 {
-  switch(om->simd){
-    case SSE:
-      return oprofile_dump_fb_sse(fp, om, width, precision);
-      break;
-    case AVX:
-      return oprofile_dump_fb_avx(fp, om, width, precision);
-      break;
-    case AVX512:
-      return oprofile_dump_fb_sse(fp, om, width, precision);
-      break;
-    case NEON:
-      return oprofile_dump_fb_neon(fp, om, width, precision);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to oprofile_dump_fb");
-  }
+  int M         = om->M;        // query profile length
+  int V         = om->V/4;      // vector width: number of floats per vector (om->V is in bytes)
+  int Q         = P7_Q(M,V);    // striped segment width: number of vectors to hold M floats.
+  int width     = 8;
+  int precision = 5;
+  int q,z,k,x,t;
+
+
+  /* Emission score header (rearranged column numbers) */
+  fprintf(fp, "     ");
+  for (q = 0; q < Q; q++)
+    {
+      fprintf(fp, "[ ");
+      for (z = 0; z < V; z++) 
+        {
+          k = P7_K_FROM_QZ(q,z,V);
+          if (k <= M) fprintf(fp, "%*d ", width, k);     
+          else        fprintf(fp, "%*s ", width, "xx");
+        }
+      fprintf(fp, "]");
+    }
+  fprintf(fp, "\n");
+
+  /* Table of FB residue odds ratios, one row per residue, including degeneracies.
+   * Match only; insert emissions are assumed zero by design.
+   */
+  for (x = 0; x < om->abc->Kp; x++)
+    {
+      fprintf(fp, "(%c): ", om->abc->sym[x]); 
+
+      for (q = 0; q < Q; q++)
+	{
+	  fprintf(fp, "[ ");
+	  for (z = 0; z < V; z++) 
+            fprintf(fp, "%*.*f ", width, precision, om->rfv[x][ P7_Y_FROM_QZ(q,z,V) ]);
+	  fprintf(fp, "]");
+	}
+      fprintf(fp, "\n");
+    }
+  fprintf(fp, "\n");
+
+  /* Transitions */
+  for (t = 0; t < p7O_NTRANS; t++)
+    {
+      /* For each transition type, a header line that shows k=1..M coord system in striped vectors */
+      fprintf(fp, "\n%s: ", oprofile_decode_t(t));
+      for (q = 0; q < Q; q++)
+        {
+          fprintf(fp, "[ ");
+	  for (z = 0; z < V; z++) 
+            {
+              k = p7_oprofile_k_from_tqz(t, q, z, Q, V);
+              if (k <= M) fprintf(fp, "%*d ", width, k);
+              else        fprintf(fp, "%*s ", width, "xx");
+            }
+	  fprintf(fp, "]");
+        }
+      fprintf(fp, "\n     ");	  
+
+      /* Then, a line of the striped vector scores themselves */
+      for (q = 0; q < Q; q++)
+	{
+	  fprintf(fp, "[ ");
+	  for (z = 0; z < V; z++) 
+            fprintf(fp, "%*.*f ", width, precision, om->tfv[ p7_oprofile_y_from_tqz(t, q, z, Q, V) ]);
+	  fprintf(fp, "]");
+	}
+      fprintf(fp, "\n");	  
+    }
+  fprintf(fp, "\n");	  
+  
+  /* Specials */
+  fprintf(fp, "E->C: %*.*f    E->J: %*.*f\n", width, precision, om->xf[p7O_E][p7O_MOVE], width, precision, om->xf[p7O_E][p7O_LOOP]);
+  fprintf(fp, "N->B: %*.*f    N->N: %*.*f\n", width, precision, om->xf[p7O_N][p7O_MOVE], width, precision, om->xf[p7O_N][p7O_LOOP]);
+  fprintf(fp, "J->B: %*.*f    J->J: %*.*f\n", width, precision, om->xf[p7O_J][p7O_MOVE], width, precision, om->xf[p7O_J][p7O_LOOP]);
+  fprintf(fp, "C->T: %*.*f    C->C: %*.*f\n", width, precision, om->xf[p7O_C][p7O_MOVE], width, precision, om->xf[p7O_C][p7O_LOOP]);
+  fprintf(fp, "Q:     %d\n",   Q);  
+  fprintf(fp, "M:     %d\n",   M);  
+  fprintf(fp, "V:     %d\n",   V);  
+
+  return eslOK;
 }
 
 
@@ -953,79 +1194,16 @@ p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om)
   fprintf(fp, "Dump of a <P7_OPROFILE> ::\n");
 
   fprintf(fp, "\n  -- float part, odds ratios for Forward/Backward:\n");
-  if ((status = oprofile_dump_fb(fp, om, 8, 5)) != eslOK) return status;
+  if ((status = oprofile_dump_fb(fp, om)) != eslOK) return status;
 
-  fprintf(fp, "\n  -- sword part, log odds for ViterbiFilter(): \n");
-  if ((status = oprofile_dump_vf(fp, om))       != eslOK) return status;
+  fprintf(fp, "\n  -- int16 part, log odds for ViterbiFilter(): \n");
+  if ((status = oprofile_dump_vf(fp, om)) != eslOK) return status;
 
-  fprintf(fp, "\n  -- uchar part, log odds for MSVFilter(): \n");
-  if ((status = oprofile_dump_mf(fp, om))       != eslOK) return status;
+  fprintf(fp, "\n  -- int8 part, log odds for SSVFilter(): \n");
+  if ((status = oprofile_dump_ssv(fp, om)) != eslOK) return status;
 
   return eslOK;
 }
-
-
-/* Function:  p7_oprofile_Sample()
- * Synopsis:  Sample a random profile.
- *
- * Purpose:   Sample a random profile of <M> nodes for alphabet <abc>,
- *            using <r> as the source of random numbers. Parameterize
- *            it for generation of target sequences of mean length
- *            <L>. Calculate its log-odds scores using background
- *            model <bg>.
- *            
- *            Caller may optionally obtain the corresponding hmm by
- *            passing a non-<NULL> <opt_hmm>, and/or the corresponding
- *            profile by passing a non-<NULL> <opt_gm>. If the <gm> is
- *            obtained, it is configured for local-only mode and for a
- *            target length of <L>, so that its scores will match the
- *            <om> (as closely as roundoff allows).
- *            
- * Args:      r       - random number generator
- *            abc     - emission alphabet 
- *            bg      - background frequency model
- *            M       - size of sampled profile, in nodes
- *            L       - configured target seq mean length
- *            opt_hmm - optRETURN: sampled HMM
- *            opt_gm  - optRETURN: sampled normal profile, (local,L) mode
- *            opt_om  - RETURN: optimized profile, length config'ed to L
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    (no abnormal error conditions)
- */
-int
-p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, int M, int L,
-		   P7_HMM **opt_hmm, P7_PROFILE **opt_gm, P7_OPROFILE **ret_om)
-{
-  P7_HMM         *hmm  = NULL;
-  P7_PROFILE     *gm   = NULL;
-  P7_OPROFILE    *om   = NULL;
-  int             status;
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  { status = eslEMEM; goto ERROR; }
-
-  if ((gm = p7_profile_Create (M, abc)) == NULL)  { status = eslEMEM; goto ERROR; }
-  if ((om = p7_oprofile_Create(M, abc, hw->simd)) == NULL)  { status = eslEMEM; goto ERROR; }
-
-  if ((status = p7_modelsample(r, M, abc, &hmm))        != eslOK) goto ERROR;
-  if ((status = p7_profile_ConfigLocal(gm, hmm, bg, L)) != eslOK) goto ERROR;
-  if ((status = p7_oprofile_Convert(gm, om))            != eslOK) goto ERROR;
-  if ((status = p7_oprofile_ReconfigLength(om, L))      != eslOK) goto ERROR;
-
-  if (opt_hmm != NULL) *opt_hmm = hmm; else p7_hmm_Destroy(hmm);
-  if (opt_gm  != NULL) *opt_gm  = gm;  else p7_profile_Destroy(gm);
-  *ret_om = om;
-  return eslOK;
-
- ERROR:
-  if (opt_hmm != NULL) *opt_hmm = NULL;
-  if (opt_gm  != NULL) *opt_gm  = NULL;
-  *ret_om = NULL;
-  return status;
-}
-
-
 /* Function:  p7_oprofile_Compare()
  * Synopsis:  Compare two optimized profiles for equality.
  * Incept:    SRE, Wed Jan 21 13:29:10 2009 [Janelia]
@@ -1037,8 +1215,12 @@ p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, 
  *            Floating point comparisons are done to a tolerance
  *            of <tol> using <esl_FCompare()>.
  *            
- *            If a comparison fails, an informative error message is
- *            left in <errmsg> to indicate why.
+ *            Both profiles must have the same striping (the same
+ *            vector width V).
+ *            
+ *            If a comparison fails, a mildly informative error
+ *            message is left in <errmsg> buffer, if caller provides
+ *            it.
  *            
  *            Internal allocation sizes are not compared, only the
  *            data.
@@ -1046,144 +1228,101 @@ p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, 
  * Args:      om1    - one optimized profile to compare
  *            om2    - the other
  *            tol    - floating point comparison tolerance; see <esl_FCompare()>
- *            errmsg - ptr to array of at least <eslERRBUFSIZE> characters.
+ *            errmsg - ptr to array of at least <eslERRBUFSIZE> characters, or NULL.
  *            
  * Returns:   <eslOK> on effective equality;  <eslFAIL> on difference.
  */
 int
 p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg)
 {
+  int Qb = P7_Q(om1->M, om1->V);
+  int Qw = P7_Q(om1->M, om1->V/2);
+  int Qf = P7_Q(om1->M, om1->V/4);
+  int Vb = om1->V;
+  int Vw = om1->V/2;
+  int Vf = om1->V/4;
+  int x,q,z,y,t;
+
+  if (om1->L         != om2->L)         ESL_FAIL(eslFAIL, errmsg, "comparison failed: L");
+  if (om1->M         != om2->M)         ESL_FAIL(eslFAIL, errmsg, "comparison failed: M");
+  if (om1->V         != om2->V)         ESL_FAIL(eslFAIL, errmsg, "comparison failed: V");
+
+  if (om1->mode      != om2->mode)      ESL_FAIL(eslFAIL, errmsg, "comparison failed: mode");
+  if (om1->nj        != om2->nj)        ESL_FAIL(eslFAIL, errmsg, "comparison failed: nj");
+  if (om1->abc->type != om2->abc->type) ESL_FAIL(eslFAIL, errmsg, "comparison failed: alphabet type");
+
+  /* SSVFilter() part */
+  for (x = 0; x < om1->abc->Kp; x++)
+    for (y = 0; y < Qb * Vb; y++)        // includes sentinel values, if any, not just <M>
+      if (om1->rbv[x][y] != om2->rbv[x][y])
+	ESL_FAIL(eslFAIL, errmsg, "comparison failed: SSV rbv[%c][%d][%d] (k=%d)", 
+                 om1->abc->sym[x], P7_Q_FROM_Y(y,Vb), P7_Z_FROM_Y(y,Vb), P7_K_FROM_Y(y,Qb,Vb));
+
+  if (om1->tauBM    != om2->tauBM)    ESL_FAIL(eslFAIL, errmsg, "comparison failed: tauBM");
+  if (om1->tauCT    != om2->tauCT)    ESL_FAIL(eslFAIL, errmsg, "comparison failed: tauJB");
+  if (om1->scale_b  != om2->scale_b)  ESL_FAIL(eslFAIL, errmsg, "comparison failed: scale_b");
  
-  switch(om1->simd){
-    case SSE:
-      return p7_oprofile_Compare_sse(om1, om2, tol, errmsg);
-      break;
-    case AVX:
-      return p7_oprofile_Compare_avx(om1, om2, tol, errmsg);
-      break;
-    case AVX512:
-      return p7_oprofile_Compare_avx512(om1, om2, tol, errmsg);
-      break;
-    case NEON:
-      return p7_oprofile_Compare_neon(om1, om2, tol, errmsg);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_oprofile_Compare");
-  }
-}
-
-
-/* Function:  p7_profile_SameAsMF()
- * Synopsis:  Set a generic profile's scores to give MSV scores.
- *
- * Purpose:   Set a generic profile's scores so that the reference Viterbi
- *            implementation will give the same score as <p7_MSVFilter()>.
- *            All t_MM scores = 0; all other core transitions = -inf;
- *            multihit local mode; all <t_BMk> entries uniformly <log 2/(M(M+1))>;
- *            <tCC, tNN, tJJ> scores 0; total approximated later as -3;
- *            rounded in the same way as the 8-bit limited precision.
- *
- * Returns:   <eslOK> on success.
- */
-int
-p7_profile_SameAsMF(const P7_OPROFILE *om, P7_PROFILE *gm)
-{
-  int    k,x;
-  float  tbm = roundf(om->scale_b * (log(2.0f / ((float) gm->M * (float) (gm->M+1)))));
-
-  /* Transitions */
-  esl_vec_FSet(gm->tsc, p7P_NTRANS * gm->M, -eslINFINITY);
-  for (k = 1; k <  gm->M; k++) P7P_TSC(gm, k, p7P_MM)  = 0.0f;
-  for (k = 0; k <  gm->M; k++) P7P_TSC(gm, k, p7P_LM) = tbm;
   
-  /* Emissions */
-  for (x = 0; x < gm->abc->Kp; x++)
-    for (k = 0; k <= gm->M; k++)
+  /* ViterbiFilter() part */
+  for (x = 0; x < om1->abc->Kp; x++)
+    for (y = 0; y < Qw * Vw; y++)
+      if (om1->rwv[x][y] != om2->rwv[x][y])
+	ESL_FAIL(eslFAIL, errmsg, "comparison failed: VF rwv[%c][%d][%d] (k=%d)", 
+                 om1->abc->sym[x], P7_Q_FROM_Y(y,Vw), P7_Z_FROM_Y(y,Vw), P7_K_FROM_Y(y,Qw,Vw));
+
+  for (y = 0; y < Qw * Vw * p7O_NTRANS; y++)
+    if (om1->twv[y] != om2->twv[y])
       {
-	gm->rsc[x][k*2]   = (gm->rsc[x][k*2] <= -eslINFINITY) ? -eslINFINITY : roundf(om->scale_b * gm->rsc[x][k*2]);
-	gm->rsc[x][k*2+1] = 0;	/* insert score: VF makes it zero no matter what. */
-      }	
+        p7_oprofile_tqz_from_y(y, Qw, Vw, &t, &q, &z);
+        ESL_FAIL(eslFAIL, errmsg, "comparison failed: VF twv[%s][%d][%d] (k=%d)", 
+                 oprofile_decode_t(t), q, z, p7_oprofile_k_from_tqz(t, q, z, Qw, Vw));
+      }
 
-   /* Specials */
-  for (k = 0; k < p7P_NXSTATES; k++)
-    for (x = 0; x < p7P_NXTRANS; x++)
-      gm->xsc[k][x] = (gm->xsc[k][x] <= -eslINFINITY) ? -eslINFINITY : roundf(om->scale_b * gm->xsc[k][x]);
+  for (x = 0; x < p7O_NXSTATES; x++)
+    for (y = 0; y < p7O_NXTRANS; y++)
+      if (om1->xw[x][y] != om2->xw[x][y]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: xw[%d][%d]", x, y);
+  if (om1->scale_w   != om2->scale_w)   ESL_FAIL(eslFAIL, errmsg, "comparison failed: scale");
+  if (om1->base_w    != om2->base_w)    ESL_FAIL(eslFAIL, errmsg, "comparison failed: base");
+  if (om1->ddbound_w != om2->ddbound_w) ESL_FAIL(eslFAIL, errmsg, "comparison failed: ddbound_w");
 
-  /* NN, CC, JJ hardcoded 0 in limited precision */
-  gm->xsc[p7P_N][p7P_LOOP] =  gm->xsc[p7P_J][p7P_LOOP] =  gm->xsc[p7P_C][p7P_LOOP] = 0;
+  /* Forward/Backward part */
+  for (x = 0; x < om1->abc->Kp; x++)
+    for (y = 0; y < Qf * Vf; y++)
+      if (esl_FCompare(om1->rfv[x][y], om2->rfv[x][y], tol) != eslOK)
+        ESL_FAIL(eslFAIL, errmsg, "comparison failed: FB rfv[%c][%d][%d] (k=%d)",
+                 om1->abc->sym[x], P7_Q_FROM_Y(y,Vf), P7_Z_FROM_Y(y,Vf), P7_K_FROM_Y(y,Qf,Vf));
 
-  return eslOK;
-}
-
-
-/* Function:  p7_profile_SameAsVF()
- * Synopsis:  Round a generic profile to match ViterbiFilter scores.
- *
- * Purpose:   Round all the scores in a generic (lspace) <P7_PROFILE> <gm> in
- *            exactly the same way that the scores in the
- *            <P7_OPROFILE> <om> were rounded. Then we can test that two profiles
- *            give identical internal scores in testing, say,
- *            <p7_ViterbiFilter()> against <p7_GViterbi()>. 
- *            
- *            The 3nat approximation is used; NN=CC=JJ=0, and 3 nats are
- *            subtracted at the end to account for their contribution.
- *            
- *            To convert a generic Viterbi score <gsc> calculated with this profile
- *            to a nat score that should match ViterbiFilter() exactly,
- *            do <(gsc / om->scale_w) - 3.0>.
- *
- *            <gm> must be the same profile that <om> was constructed from.
- * 
- *            <gm> is irrevocably altered by this call. 
- *            
- *            Do not call this more than once on any given <gm>! 
- *
- * Args:      <om>  - optimized profile, containing scale information.
- *            <gm>  - generic profile that <om> was built from.          
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    (no abnormal error conditions)
- */
-int
-p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm)
-{
-  int k;
-  int x;
-
-  /* Transitions */
-  /* <= -eslINFINITY test is used solely to silence compiler. really testing == -eslINFINITY */
-  for (x = 0; x < gm->M*p7P_NTRANS; x++)
-    gm->tsc[x] = (gm->tsc[x] <= -eslINFINITY) ? -eslINFINITY : roundf(om->scale_w * gm->tsc[x]);
-  
-  /* Enforce the rule that no II can be 0; max of -1 */
-  for (x = p7P_II; x < gm->M*p7P_NTRANS; x += p7P_NTRANS) 
-    if (gm->tsc[x] == 0.0) gm->tsc[x] = -1.0;
-
-  /* Emissions */
-  for (x = 0; x < gm->abc->Kp; x++)
-    for (k = 0; k <= gm->M; k++)
+  for (y = 0; y < Qf * Vf * p7O_NTRANS; y++)
+    if (om1->tfv[y] != om2->tfv[y])
       {
-	gm->rsc[x][k*2]   = (gm->rsc[x][k*2]   <= -eslINFINITY) ? -eslINFINITY : roundf(om->scale_w * gm->rsc[x][k*2]);
-	gm->rsc[x][k*2+1] = 0.0;	/* insert score: VF makes it zero no matter what. */
-      }	
+        p7_oprofile_tqz_from_y(y, Qf, Vf, &t, &q, &z);
+        ESL_FAIL(eslFAIL, errmsg, "comparison failed: VF twv[%s][%d][%d] (k=%d)", 
+                 oprofile_decode_t(t), q, z, p7_oprofile_k_from_tqz(t, q, z, Qf, Vf));
+      }
 
-  /* Specials */
-  for (k = 0; k < p7P_NXSTATES; k++)
-    for (x = 0; x < p7P_NXTRANS; x++)
-      gm->xsc[k][x] = (gm->xsc[k][x] <= -eslINFINITY) ? -eslINFINITY : roundf(om->scale_w * gm->xsc[k][x]);
+  for (x = 0; x < p7O_NXSTATES; x++)
+    if (esl_vec_FCompare(om1->xf[x], om2->xf[x], p7O_NXTRANS, tol) != eslOK) ESL_FAIL(eslFAIL, errmsg, "comparison failed: xf[%d] vector", x);
+   for (x = 0; x < p7_NOFFSETS; x++)
+     if (om1->offs[x] != om2->offs[x]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: offs[%d]", x);
 
-  /* 3nat approximation: NN, CC, JJ hardcoded 0 in limited precision */
-  gm->xsc[p7P_N][p7P_LOOP] =  gm->xsc[p7P_J][p7P_LOOP] =  gm->xsc[p7P_C][p7P_LOOP] = 0.0;
+   if (esl_strcmp(om1->name,      om2->name)      != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: name");
+   if (esl_strcmp(om1->acc,       om2->acc)       != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: acc");
+   if (esl_strcmp(om1->desc,      om2->desc)      != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: desc");
+   if (esl_strcmp(om1->rf,        om2->rf)        != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: ref");
+   if (esl_strcmp(om1->mm,        om2->mm)        != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: mm");
+   if (esl_strcmp(om1->cs,        om2->cs)        != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: cs");
+   if (esl_strcmp(om1->consensus, om2->consensus) != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: consensus");
+   
+   if (esl_vec_FCompare(om1->evparam, om2->evparam, p7_NEVPARAM, tol) != eslOK) ESL_FAIL(eslFAIL, errmsg, "comparison failed: evparam vector");
+   if (esl_vec_FCompare(om1->cutoff,  om2->cutoff,  p7_NCUTOFFS, tol) != eslOK) ESL_FAIL(eslFAIL, errmsg, "comparison failed: cutoff vector");
+   if (esl_vec_FCompare(om1->compo,   om2->compo,   p7_MAXABET,  tol) != eslOK) ESL_FAIL(eslFAIL, errmsg, "comparison failed: compo vector");
 
-  return eslOK;
+   return eslOK;
 }
 /*------------ end, P7_OPROFILE debugging tools  ----------------*/
 
-
-
 /*****************************************************************
- * 5. Benchmark driver.
+ * 4. Benchmark driver.
  *****************************************************************/
 
 #ifdef p7OPROFILE_BENCHMARK
@@ -1258,7 +1397,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 6. Example
+ * 5. Example
  *****************************************************************/
 #ifdef p7OPROFILE_EXAMPLE
 /* 
@@ -1316,9 +1455,6 @@ main(int argc, char **argv)
   p7_oprofile_Convert(gm, om1);
   
   p7_oprofile_Dump(stdout, om1);
-
-  om2 = p7_oprofile_Clone(om1);
-  if (p7_oprofile_Compare(om1, om2, 0.001f, errbuf) != eslOK)    printf ("ERROR %s\n", errbuf);
 
   p7_oprofile_Destroy(om1);
   p7_oprofile_Destroy(om2);

@@ -163,7 +163,7 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, 
   
   if ( (pli->fx  = p7_filtermx_Create  (M_hint))                                           == NULL) goto ERROR;
   if ( (pli->cx  = p7_checkptmx_Create (M_hint, L_hint, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT))) == NULL) goto ERROR; /* p7_RAMLIMIT=256MB, in p7_config.h.in */
-  if ( (pli->sm  = p7_sparsemask_Create(M_hint, L_hint, p7_VDEFAULT))                      == NULL) goto ERROR;
+  if ( (pli->sm  = p7_sparsemask_Create(M_hint, L_hint))                                   == NULL) goto ERROR;
   if ( (pli->sxf = p7_sparsemx_Create  (pli->sm))                                          == NULL) goto ERROR;
   if ( (pli->sxb = p7_sparsemx_Create  (pli->sm))                                          == NULL) goto ERROR;
   if ( (pli->sxd = p7_sparsemx_Create  (pli->sm))                                          == NULL) goto ERROR;
@@ -303,8 +303,8 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, 
 int
 p7_pipeline_Reuse(P7_PIPELINE *pli)
 {
-  p7_filtermx_Reuse  (pli->fx);
-  p7_checkptmx_Reuse (pli->cx);
+  //p7_filtermx_Reuse  (pli->fx);
+  //p7_checkptmx_Reuse (pli->cx);
   p7_sparsemask_Reuse(pli->sm);
   p7_sparsemx_Reuse  (pli->sxf);
   p7_sparsemx_Reuse  (pli->sxb);
@@ -925,7 +925,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
       if (dcl[d].bitscore > dcl[best_d].bitscore) best_d = d;
 
       /* Viterbi alignment of the domain */
-      dcl[d].ad = p7_alidisplay_Create(pli->tr, d, om, sq);
+      dcl[d].ad = p7_alidisplay_Create(pli->tr, d, gm, sq);
 
       /* We're initializing a P7_DOMAIN structure in dcl[d] by hand, without a Create().
        * We're responsible for initiazing all elements of this structure.
@@ -1481,7 +1481,7 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
 
 
   /* Parse with Forward and obtain its real Forward score. */
-  p7_checkptmx_Reuse (pli->cx);
+  //p7_checkptmx_Reuse (pli->cx);
   p7_ForwardFilter(subseq, window_len, om, pli->cx, &fwdsc);
   seq_score = (fwdsc - filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
@@ -1611,7 +1611,7 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
      //pli_tmp->gm = p7_profile_Clone(gm); // this keeps the default bg-based scoring.  Used for testing
 
      /* copy over the part of the sparse mask related to the current envelope*/
-     p7_sparsemask_Reinit(pli_tmp->sm, gm->M, env_len, p7_VDEFAULT);
+     p7_sparsemask_Reinit(pli_tmp->sm, gm->M, env_len);
      for (i=env_len; i >= 1; i--)
      {
        ii = i + env_offset - 1;
@@ -1725,7 +1725,7 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
             if ((status = esl_sq_SetDesc     (pli_tmp->tmpseq, seq_desc))   != eslOK) goto ERROR;
           }
           /* Viterbi alignment of the domain */
-          dcl_tmp->ad = p7_alidisplay_Create(pli_tmp->trc, dd, pli_tmp->om, pli_tmp->tmpseq); // it's ok to use the om instead of the gm here; it doesn't depend on updated fwd scores
+          dcl_tmp->ad = p7_alidisplay_Create(pli_tmp->trc, dd, gm, pli_tmp->tmpseq);
 
 
           pli_tmp->trc->sqfrom[dd] += env_offset - 1;
@@ -2049,8 +2049,8 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
 
   P7_PIPELINE_LONGTARGET_OBJS *pli_tmp = NULL;
 
-  if (om->simd != SSE && om->simd != NEON) 
-    esl_fatal("p7_Pipeline_LongTarget only supports SSE and NEON SIMD types at the moment");
+  //if (om->simd != SSE && om->simd != NEON) 
+  //esl_fatal("p7_Pipeline_LongTarget only supports SSE and NEON SIMD types at the moment");
 
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
@@ -2058,7 +2058,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
   pli_tmp->bg = p7_bg_Clone(bg);
   pli_tmp->gm = p7_profile_Clone(gm);
   pli_tmp->om = p7_oprofile_Create(gm->M, gm->abc);
-  pli_tmp->sm = p7_sparsemask_Create(gm->M, 100, p7_VDEFAULT);
+  pli_tmp->sm = p7_sparsemask_Create(gm->M, 100);
   ESL_ALLOC(pli_tmp->scores, sizeof(float) * om->abc->Kp);
   if ( (pli_tmp->trc = p7_trace_CreateWithPP())            == NULL) { status = eslEMEM; goto ERROR; }
   if ( (pli_tmp->sxf = p7_sparsemx_Create (pli_tmp->sm))   == NULL) { status = eslEMEM; goto ERROR; }
@@ -2075,7 +2075,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
   /* Set false target length. This is a conservative estimate of the length of window that'll
    * soon be passed on to later phases of the pipeline;  used to recover some bits of the score
    * that we would miss if we left length parameters set to the full target length */
-  p7_oprofile_ReconfigMSVLength(om, om->max_length);
+  p7_oprofile_ReconfigSSVLength(om, om->max_length);
 
   /* First level filter: the SSV filter, with <om>.
    * This variant of SSV will scan a long sequence and find
@@ -2121,11 +2121,10 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
 
       // Compute standard MSV to ensure that bias doesn't overcome SSV score when MSV
       // would have survived it
-      p7_oprofile_ReconfigMSVLength(om, window_len);
-      p7_MSVFilter(subseq, window_len, om, pli->fx, &usc);
-
-      P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-      if (P > pli->F1 ) continue;
+      p7_oprofile_ReconfigSSVLength(om, window_len);
+      // p7_MSVFilter(subseq, window_len, om, pli->fx, &usc);  SRE TODO REVISIT 
+      // P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+      // if (P > pli->F1 ) continue;
 
       pli->stats.pos_past_msv += window_len;
 

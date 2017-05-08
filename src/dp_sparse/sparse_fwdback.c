@@ -443,7 +443,7 @@ main(int argc, char **argv)
   p7_profile_Config(gm, hmm, bg);
   p7_profile_SetLength(gm, L);
 
-  sm  = p7_sparsemask_Create(gm->M, L, p7_VDEFAULT);
+  sm  = p7_sparsemask_Create(gm->M, L);
   p7_sparsemask_AddAll(sm);
 
   /* Baseline time. */
@@ -602,7 +602,7 @@ utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L,
   P7_OPROFILE   *om     = p7_oprofile_Create(M, abc);
   ESL_DSQ       *dsq    = malloc(sizeof(ESL_DSQ) * (L+2));
   P7_CHECKPTMX  *ox     = p7_checkptmx_Create(M, L, ESL_MBYTES(32));
-  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L, p7_VDEFAULT);
+  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L);
   P7_SPARSEMX   *sxv    = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxf    = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxb    = p7_sparsemx_Create(sm);
@@ -626,7 +626,7 @@ utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L,
       if (esl_rsq_xfIID(rng, bg->f, abc->K, L, dsq)      != eslOK) esl_fatal(msg);
 
       /* Fwd/Bck local filter to calculate the sparse mask */
-      if ( p7_checkptmx_GrowTo(ox, M, L)                             != eslOK) esl_fatal(msg);
+      if ( p7_checkptmx_Reinit(ox, M, L)                             != eslOK) esl_fatal(msg);
       if ( p7_ForwardFilter (dsq, L, om, ox, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
       if ( p7_BackwardFilter(dsq, L, om, ox, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
 
@@ -661,7 +661,7 @@ utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L,
       if ( p7_sparsemx_Reuse(sxv)  != eslOK) esl_fatal(msg);
       if ( p7_sparsemx_Reuse(sxf)  != eslOK) esl_fatal(msg);
       if ( p7_sparsemx_Reuse(sxb)  != eslOK) esl_fatal(msg);
-      if ( p7_checkptmx_Reuse(ox)  != eslOK) esl_fatal(msg);
+      //if ( p7_checkptmx_Reuse(ox)  != eslOK) esl_fatal(msg);
       if ( p7_sparsemask_Reuse(sm) != eslOK) esl_fatal(msg); 
     }
 
@@ -702,7 +702,7 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
   P7_HMM        *hmm    = NULL;
   P7_PROFILE    *gm     = p7_profile_Create(M, abc);
   ESL_SQ        *sq     = esl_sq_CreateDigital(abc);       /* space for generated (homologous) target seqs              */
-  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L, p7_VDEFAULT);
+  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L);
   P7_SPARSEMX   *sxv    = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxf    = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxb    = p7_sparsemx_Create(sm);
@@ -734,8 +734,8 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
       if ( p7_profile_SetLength(gm, sq->n) != eslOK) esl_fatal(msg);
 
       /* Mark all cells in sparse mask */
-      if ( p7_sparsemask_Reinit(sm, M, sq->n, p7_VDEFAULT) != eslOK) esl_fatal(msg);
-      if ( p7_sparsemask_AddAll(sm)                        != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_Reinit(sm, M, sq->n) != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_AddAll(sm)           != eslOK) esl_fatal(msg);
 
       /* Sparse DP calculations  */
       if ( p7_SparseViterbi (sq->dsq, sq->n, gm, sm, sxv, str, &vsc_s) != eslOK) esl_fatal(msg);
@@ -839,7 +839,7 @@ utest_reference_constrained(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, i
   P7_REFMX      *rxb    = p7_refmx_Create(M, L);
   P7_TRACE      *rtr    = p7_trace_Create();
   P7_TRACE      *str    = p7_trace_Create();
-  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L, p7_VDEFAULT);
+  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L);
   P7_SPARSEMX   *sxv    = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxf    = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxb    = p7_sparsemx_Create(sm);
@@ -871,7 +871,7 @@ utest_reference_constrained(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, i
       if ( p7_ReferenceViterbi (sq->dsq, sq->n, gm, rxv, rtr,  &vsc_r) != eslOK) esl_fatal(msg);
       
       /* Use the reference Viterbi trace to create a sparse mask */
-      if ( p7_sparsemask_Reinit(sm, M, sq->n, p7_VDEFAULT)  != eslOK) esl_fatal(msg);
+      if ( p7_sparsemask_Reinit(sm, M, sq->n)  != eslOK) esl_fatal(msg);
       p7_sparsemask_SetFromTrace(sm, rng, rtr);
 
       /* Sparse DP calculations, in which we know the reference Viterbi trace will be scored */
@@ -958,7 +958,7 @@ utest_singlepath(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int N
   ESL_SQ        *sq    = esl_sq_CreateDigital(abc);
   P7_TRACE      *gtr   = p7_trace_Create();           /* generated trace */
   P7_TRACE      *vtr   = p7_trace_Create();	      /* viterbi trace */
-  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, M, p7_VDEFAULT);  /* exact initial alloc size doesn't matter */
+  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, M);  /* exact initial alloc size doesn't matter */
   P7_SPARSEMX   *sxv   = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxf   = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxb   = p7_sparsemx_Create(NULL);
@@ -982,7 +982,7 @@ utest_singlepath(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int N
       //p7_trace_DumpAnnotated(stdout, gtr, gm, sq->dsq);
 
       /* Build a randomized sparse mask around that trace */
-      if ( p7_sparsemask_Reinit(sm, M, sq->n, p7_VDEFAULT)  != eslOK) esl_fatal(msg); 
+      if ( p7_sparsemask_Reinit(sm, M, sq->n)  != eslOK) esl_fatal(msg); 
       p7_sparsemask_SetFromTrace(sm, rng, gtr);
 
       //p7_sparsemask_Dump(stdout, sm);
@@ -1057,7 +1057,7 @@ utest_internal_glocal_exit(void)
   P7_BG        *bg      = p7_bg_Create(abc);
   P7_HMM       *hmm     = NULL;
   P7_PROFILE   *gm      = p7_profile_Create(M, abc);
-  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M,L,p7_VDEFAULT);
+  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M,L);
   P7_SPARSEMX   *sxv    = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxf    = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxb    = p7_sparsemx_Create(NULL);
@@ -1326,7 +1326,7 @@ main(int argc, char **argv)
 
   /* Use f/b filter to create sparse mask */
   ox = p7_checkptmx_Create(hmm->M, sq->n, ESL_MBYTES(32));
-  sm  = p7_sparsemask_Create(gm->M, sq->n, p7_VDEFAULT);
+  sm  = p7_sparsemask_Create(gm->M, sq->n);
   if (esl_opt_GetBoolean(go, "-a"))  
     p7_sparsemask_AddAll(sm);
   else {

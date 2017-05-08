@@ -14,6 +14,7 @@
 #ifndef P7_CONFIGH_INCLUDED
 #define P7_CONFIGH_INCLUDED
 
+#include "esl_config.h"
 
 /*****************************************************************
  * 1. Default parameters.
@@ -75,26 +76,6 @@
 #define p7_MAXDCHLET  20      /* maximum # Dirichlet components in mixture prior */
 
 
-/*****************************************************************
- * 4. The following constants define our SIMD vector layout and memory
- *    alignment.  Although SSE, Altivec/VMX are 128b/16B vectors, we
- *    must anticipate different vector sizes.  For example, Intel AVX
- *    is already roadmapped out to 1024b/128B vectors.  See note [1]
- *    in src/impl_{sse/vmx}.h on memory alignment, SIMD vectors, and
- *    malloc(). We need these constants and macros not only in the
- *    vector implementation, but also in the P7_SPARSEMASK code that
- *    interfaces with the vector f/b filter, which is why we need
- *    these constants in the general config.h.
- *****************************************************************/
-
-#define p7_VALIGN   16		/* Vector memory must be aligned on 16-byte boundaries   */
-#define p7_VNF      4		/* Number of floats per SIMD vector (Forward, Backward)  */
-#define p7_VNW      8		/* Number of shorts (words) per SIMD vector (Viterbi)    */
-#define p7_VNB      16		/* Number of bytes per SIMD vector (SSV, MSV)            */
-#define p7_VALIMASK (~0xf)      /* Ptrs are aligned using & p7_VALIMASK                  */
-
-
-
 
 /*****************************************************************
  * 5. The final section isn't meant to be human editable at all.
@@ -109,54 +90,10 @@
 #undef HMMER_LICENSE
 #undef HMMER_URL
 
-/* Large file support (must precede any header file inclusion.)
- */
-#undef _FILE_OFFSET_BITS
-#undef _LARGE_FILES
-#undef _LARGEFILE_SOURCE
-
-/* System headers
- */
-#undef HAVE_STRINGS_H
-
-#undef HAVE_ENDIAN_H
-#undef HAVE_INTTYPES_H
-#undef HAVE_STDINT_H
-#undef HAVE_UNISTD_HS
-#undef HAVE_SYS_TYPES_H
-#undef HAVE_NETINET_IN_H	/* On FreeBSD, you need netinet/in.h for struct sockaddr_in */
-
-#undef HAVE_SYS_PARAM_H		/* On OpenBSD, sys/sysctl.h needs sys/param.h */
-#undef HAVE_SYS_SYSCTL_H
-
-#undef HAVE_XMMINTRIN_H		/* SSE  */
-#undef HAVE_EMMINTRIN_H		/* SSE2 */
-#undef HAVE_PMMINTRIN_H		/* SSE3 */
-#undef HAVE_ARMNEON_H		/* NEON */  /* SRE TODO */
-
-/* Optional parallel implementations
- */
-#undef eslENABLE_SSE
-#undef eslENABLE_AVX
-#undef eslENABLE_AVX512
-#undef eslENABLE_NEON
-#undef eslENABLE_VMX
-
-#undef HAVE_MPI
-#undef HMMER_PVM
-#undef HMMER_THREADS
-#undef HAVE_PTHREAD_ATTR_SETSCOPE
-#undef HAVE_PTHREAD_SETCONCURRENCY
-
-/* Optional processor specific support
- */
-#undef HAVE_FLUSH_ZERO_MODE
-
 /* Debugging and development hooks
  */
 #define p7_DEVELOPMENT  1            // TRUE when code is in development. Allow things like stochastic test failures that would frighten civilians.
 #undef  p7_LOGSUM_SLOWEXACT 	     // TRUE when --enable-exact-logsum is set from ./configure. Replace fast FLogsum() with slow exact one. Testing purposes only! 20x slower. 
-#undef  HAVE_FUNC_ATTRIBUTE_NORETURN // Compiler supports __attribute__ tag, which we use to help w/ clang static analysis.
 
 #endif /*P7_CONFIGH_INCLUDED*/
 

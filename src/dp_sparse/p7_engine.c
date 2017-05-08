@@ -1,9 +1,11 @@
 #include "p7_config.h"
 
 /* SIMD-vectorized acceleration filters, local only: */
-#include "dp_vector/msvfilter.h"          // MSV/SSV primary acceleration filter
+#include "dp_vector/msvfilter.h"          // SSV primary acceleration filter
 #include "dp_vector/vitfilter.h"          // Viterbi secondary acceleration filter
 #include "dp_vector/fwdfilter.h"          // Sparsification w/ checkpointed local Forward/Backward
+#include "dp_vector/p7_filtermx.h"        // DP matrix for SSV, VF
+#include "dp_vector/p7_checkptmx.h"       // DP matrix for FB
 
 /* Sparse DP, dual-mode glocal/local:    */
 #include "dp_sparse/sparse_fwdback.h"     // sparse Forward/Backward
@@ -131,8 +133,8 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
    * The initial allocation can be anything.
    */
   eng->fx    = p7_filtermx_Create  (M_hint);
-  eng->cx    = p7_checkptmx_Create (M_hint, L_hint, ESL_MBYTES(sparsify_ramlimit))
-  eng->sm    = p7_sparsemask_Create(M_hint, L_hint, p7_VDEFAULT);
+  eng->cx    = p7_checkptmx_Create (M_hint, L_hint, ESL_MBYTES(sparsify_ramlimit));
+  eng->sm    = p7_sparsemask_Create(M_hint, L_hint);
   eng->sxf   = p7_sparsemx_Create(eng->sm);
   eng->sxd   = p7_sparsemx_Create(eng->sm);
   eng->asf   = p7_sparsemx_Create(eng->sm);
@@ -169,7 +171,6 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
 
 
 int
-
 p7_engine_Reuse(P7_ENGINE *eng)
 {
   int      rng_reproducible = (eng->params ? eng->params->rng_reproducible : p7_ENGINE_REPRODUCIBLE);
@@ -179,8 +180,6 @@ p7_engine_Reuse(P7_ENGINE *eng)
   if (rng_reproducible) 
     esl_randomness_Init(eng->rng, rng_seed);
 
-  if ((status = p7_filtermx_Reuse  (eng->fx))    != eslOK) return status;
-  if ((status = p7_checkptmx_Reuse (eng->cx))    != eslOK) return status;
   if ((status = p7_sparsemask_Reuse(eng->sm))    != eslOK) return status;
 
   /* Most Reuse()'s are cheap, but the p7_anchorhash_Reuse() is a little

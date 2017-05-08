@@ -343,13 +343,11 @@ main(int argc, char **argv)
 static void
 utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
 {
- P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   P7_HMM      *hmm = NULL;
   P7_PROFILE  *gm  = NULL;
   P7_OPROFILE *om  = NULL;
   ESL_DSQ     *dsq = malloc(sizeof(ESL_DSQ) * (L+2));
-  P7_FILTERMX *ox  = p7_filtermx_Create(M, hw->simd);
+  P7_FILTERMX *ox  = p7_filtermx_Create(M);
   P7_REFMX    *gx  = p7_refmx_Create(M, L);
   float sc1, sc2;
 
@@ -373,7 +371,7 @@ utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
       sc2 = sc2 / om->scale_b - 3.0f;
       if (fabs(sc1-sc2) > 0.001) esl_fatal("msv filter unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
 
-      p7_filtermx_Reuse(ox);
+      //p7_filtermx_Reuse(ox);
       p7_refmx_Reuse(gx);
     }
 
@@ -570,7 +568,7 @@ main(int argc, char **argv)
 	  puts("\n");
 	}
       
-      p7_filtermx_Reuse(ox);
+      //p7_filtermx_Reuse(ox);
       esl_sq_Reuse(sq);
     }
 

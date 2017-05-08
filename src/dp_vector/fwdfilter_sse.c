@@ -2,7 +2,7 @@
  * 
  * See fwdfilter.md for notes.
  *
- * This file is conditionally compiled, when eslENABLE_SSE is defined.
+ * This file is conditionally compiled when eslENABLE_SSE is defined.
  *
  * Contents:
  *    1. Forward and Backward filter: SSE implementations.
@@ -39,8 +39,8 @@ static inline int   posterior_decode_row_sse(P7_CHECKPTMX *ox, int rowi, P7_SPAR
 
 #if eslDEBUGLEVEL > 0
 static inline float backward_row_zero_sse(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
-static        void  save_debug_row_pp_sse(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
-static        void  save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
+static        void  save_debug_row_pp_sse(P7_CHECKPTMX *ox,               __m128 *dpc, int i);
+static        void  save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float totscale);
 #endif
 
 /*****************************************************************
@@ -53,32 +53,30 @@ static        void  save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_
 int
 p7_ForwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc)
 {
-  int           Q     = P7_NVF(om->M, 16);    // segment length; # of MDI vectors on each row
   __m128       *dpp   = NULL;                 // dpp=prev row. start on dpf[2]; rows 0,1=Backwards
   __m128       *dpc   = NULL;                 // dpc points at current row
   const __m128  zerov = _mm_setzero_ps();     
   float        *xc    = NULL;                 // specials E,N,JJ,J,B,CC,C,SCALE    
   float         totsc = 0.0f;                 // accumulates Forward score in nats 
+  int     Q;                                  // segment length; # of MDI vectors on each row
   int     q;                                  // counter over vectors 0..Q-1
   int     i;                                  // counter over residues/rows 1..L 
   int     b;                                  // counter down through checkpointed blocks, Rb+Rc..1
   int     w;                                  // counter down through rows in a checkpointed block
 
-  ox->Qf = Q;
-
-  /* Make sure <ox> is allocated big enough.
-   * DO NOT set any ptrs into the matrix until after this potential reallocation!
+  /* First make sure <ox> is allocated big enough.
+   * (DO NOT set any ptrs into the matrix until after this potential reallocation!)
+   * Then set the size of the problem in <ox> immediately, not later,
+   * because debugging dumps need this information, for example.
+   * (Ditto for any debugging copy of the fwd mx).
    */
-  p7_checkptmx_GrowTo(ox, om->M, L);
-  dpp =  (__m128 *) ox->dpf[ox->R0-1];    // dpp=prev row. start on dpf[2]; rows 0,1=Backwards
-  xc  =  (float *) (dpp + Q*p7C_NSCELLS); // specials E,N,JJ,J,B,CC,C,SCALE 
-
-  /* Set the size of the problem in <ox> now, not later
-   * Debugging dumps need this information, for example
-   * (Ditto for any debugging copy of the fwd mx)
-   */
+  p7_checkptmx_Reinit(ox, om->M, L);
   ox->M  = om->M;       
   ox->L  = L;
+  ox->V  = p7_VWIDTH_SSE / sizeof(float);
+  ox->Q  = Q = P7_Q(om->M, ox->V);               // Q, just for shorthand avoidance of ox->Q everywhere below.
+  dpp    =  (__m128 *) ox->dpf[ox->R0-1];        // dpp=prev row. start on dpf[2]; rows 0,1=Backwards
+  xc     =  (float *) (dpp + ox->Q*p7C_NSCELLS); // specials E,N,JJ,J,B,CC,C,SCALE 
  
 #if eslDEBUGLEVEL > 0
   ox->dump_flags |= p7_SHOW_LOG;                     // also sets for Backward dumps, since <ox> shared 
@@ -94,7 +92,7 @@ p7_ForwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
   xc[p7C_SCALE] = 1.;
 
 #if eslDEBUGLEVEL > 0
-  if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, 0, dpp, "f1 O"); 
+  if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, 0, (float *) dpp, "f1 O"); 
   if (ox->fwd)        save_debug_row_fb_sse(ox, ox->fwd, dpp, 0, totsc); 
 #endif
 
@@ -107,7 +105,7 @@ p7_ForwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
       dpp = dpc;         // current row becomes prev row
 
 #if eslDEBUGLEVEL > 0
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, dpc, "f1 O"); 
+      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (float *) dpc, "f1 O"); 
       if (ox->fwd)        save_debug_row_fb_sse(ox, ox->fwd, dpc, i, totsc); 
 #endif
     }
@@ -130,7 +128,7 @@ p7_ForwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
       dpp = dpc;
 
 #if eslDEBUGLEVEL > 0
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, dpc, w ? "f1 X" : "f1 O"); 
+      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (float *) dpc, w ? "f1 X" : "f1 O"); 
       if (ox->fwd)        save_debug_row_fb_sse(ox, ox->fwd, dpc, i, totsc); 
 #endif
     }
@@ -153,16 +151,16 @@ int
 p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh)
 {
   float  *xf;
-  int Q = ox->Qf;
   __m128 *fwd;
   __m128 *bck;
   __m128 *dpp;
+  int     Q    = ox->Q;     // short/clarity
   int     i;
   float   Tvalue;
   int     b, w, i2;
   int     status;
 
-  p7_sparsemask_Reinit(sm, om->M, L, 4);  // 4 = width of SSE vectors in floats
+  p7_sparsemask_Reinit(sm, om->M, L);
 
   /* Contract checks */
   //ESL_DASSERT1(( om->mode == p7_LOCAL )); /* Production code assumes multilocal mode w/ length model <L> */
@@ -192,8 +190,8 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
 #if eslDEBUGLEVEL > 0
   ox->bcksc = logf(xf[p7C_SCALE]);
   if (ox->do_dumping) { 
-    p7_checkptmx_DumpFBRow(ox, L, fwd, "f2 O"); 
-    if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, L, bck, "bck");  
+    p7_checkptmx_DumpFBRow(ox, L, (float *) fwd, "f2 O"); 
+    if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, L, (float *) bck, "bck");  
   }
   if (ox->bck) save_debug_row_fb_sse(ox, ox->bck, bck, L, ox->bcksc); 
 #endif
@@ -210,7 +208,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
       fwd = (__m128 *) ox->dpf[ox->R0+ox->R];    // get free row memory from top of stack
       forward_row_sse(dsq[i], om, dpp, fwd, Q);  // calculate fwd[L-1]
 #if eslDEBUGLEVEL > 0
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, fwd, "f2 X");
+      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (float *) fwd, "f2 X");
 #endif
 
       /* Compute bck[L-1] from bck[L]. */
@@ -220,7 +218,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
       backward_row_main_sse(dsq[i+1], om, dpp, bck, Q, xf[p7C_SCALE]);
 #if eslDEBUGLEVEL > 0
       ox->bcksc += logf(xf[p7C_SCALE]);
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, bck, "bck");
+      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (float *) bck, "bck");
       if (ox->bck)        save_debug_row_fb_sse(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
       /* And decode. */
@@ -247,8 +245,8 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
 #if eslDEBUGLEVEL > 0
       ox->bcksc += logf(xf[p7C_SCALE]);
       if (ox->do_dumping) { 
-        p7_checkptmx_DumpFBRow(ox, i, fwd, "f2 O");
-        p7_checkptmx_DumpFBRow(ox, i, bck, "bck"); 
+        p7_checkptmx_DumpFBRow(ox, i, (float *) fwd, "f2 O");
+        p7_checkptmx_DumpFBRow(ox, i, (float *) bck, "bck"); 
       }
       if (ox->bck) save_debug_row_fb_sse(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
@@ -278,8 +276,8 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
 #if eslDEBUGLEVEL > 0
           ox->bcksc += logf(xf[p7C_SCALE]);
           if (ox->do_dumping) { 
-            p7_checkptmx_DumpFBRow(ox, i2, fwd, "f2 X"); 
-            p7_checkptmx_DumpFBRow(ox, i2, bck, "bck"); 
+            p7_checkptmx_DumpFBRow(ox, i2, (float *) fwd, "f2 X"); 
+            p7_checkptmx_DumpFBRow(ox, i2, (float *) bck, "bck"); 
           }
           if (ox->bck) save_debug_row_fb_sse(ox, ox->bck, bck, i2, ox->bcksc); 
 #endif
@@ -302,8 +300,8 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
 #if eslDEBUGLEVEL > 0
       ox->bcksc += logf(xf[p7C_SCALE]);
       if (ox->do_dumping) { 
-        p7_checkptmx_DumpFBRow(ox, i, fwd, "f2 O"); 
-        p7_checkptmx_DumpFBRow(ox, i, bck, "bck"); 
+        p7_checkptmx_DumpFBRow(ox, i, (float *) fwd, "f2 O"); 
+        p7_checkptmx_DumpFBRow(ox, i, (float *) bck, "bck"); 
       }
       if (ox->bck) save_debug_row_fb_sse(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
@@ -324,15 +322,15 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
   bck = (__m128 *) ox->dpf[i%2];              
   xN = backward_row_zero_sse(dsq[1], om, ox); 
   if (ox->do_dumping) { 
-    p7_checkptmx_DumpFBRow(ox, 0, fwd, "f2 O"); 
-    p7_checkptmx_DumpFBRow(ox, 0, bck, "bck"); 
+    p7_checkptmx_DumpFBRow(ox, 0, (float *) fwd, "f2 O"); 
+    p7_checkptmx_DumpFBRow(ox, 0, (float *) bck, "bck"); 
   }
   if (ox->bck) save_debug_row_fb_sse(ox, ox->bck, bck, 0, ox->bcksc); 
-  if ((status = posterior_decode_row(ox, 0, sm, sm_thresh, Tvalue)) != eslOK) return status;
+  if ((status = posterior_decode_row_sse(ox, 0, sm, sm_thresh, Tvalue)) != eslOK) return status;
   ox->bcksc += xN;
 #endif
 
-  p7_sparsemask_Finish_sse(sm);
+  p7_sparsemask_Finish(sm);
   return eslOK;
 }
 /*----------- end forward/backward API calls --------------------*/
@@ -350,7 +348,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
  * <om>   query model
  * <dpp>  ptr to previous row; may be a tmp row or a checkpointed row.
  * <dpc>  ptr to current row; ditto.
- * Q      number of vectors in <dpp>, <dpc>; ox->Qf.
+ * Q      number of vectors in <dpp>, <dpc>; ox->Q.
  * 
  * Upon return, <dpc> contains scaled Forward values.
  * Returns log(scalevalue), for the caller to accumulate
@@ -359,9 +357,9 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
 static inline float
 forward_row_sse(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dpc, int Q)
 {
-  const    __m128 *rp   = om->rfv[xi];
+  const    __m128 *rp   = (__m128 *) om->rfv[xi];
   const    __m128 zerov = _mm_setzero_ps();
-  const    __m128 *tp   = om->tfv;
+  const    __m128 *tp   = (__m128 *) om->tfv;
   const    float  *xp   = (float *) (dpp + Q * p7C_NSCELLS);
   float           *xc   = (float *) (dpc + Q * p7C_NSCELLS);
   __m128          dcv   = _mm_setzero_ps();
@@ -414,7 +412,7 @@ forward_row_sse(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dp
    */
   dcv            = esl_sse_rightshift_ps(dcv, zerov);
   P7C_DQ(dpc, 0) = zerov;
-  tp             = om->tfv + 7*Q;       /* set tp to start of the DD's */
+  tp             = ((__m128 *) om->tfv) + 7*Q;       /* set tp to start of the DD's */
   for (q = 0; q < Q; q++) 
     {
       P7C_DQ(dpc,q) = _mm_add_ps(dcv, P7C_DQ(dpc,q));   
@@ -434,7 +432,7 @@ forward_row_sse(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dp
       for (j = 1; j < 4; j++) // 4 = vector width, in floats
         {
           dcv = esl_sse_rightshift_ps(dcv, zerov);
-          tp  = om->tfv + 7*Q;  /* reset tp to start of the DD's */
+          tp  = ((__m128 *) om->tfv) + 7*Q;  /* reset tp to start of the DD's */
           for (q = 0; q < Q; q++) 
             { /* note, extend dcv, not DMO(q); only adding DD paths now */
               P7C_DQ(dpc,q) = _mm_add_ps(dcv, P7C_DQ(dpc,q));   
@@ -449,7 +447,7 @@ forward_row_sse(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dp
           register __m128 cv = zerov;   /* keeps track of whether any DD's change DMO(q) */
 
           dcv = esl_sse_rightshift_ps(dcv, zerov);
-          tp  = om->tfv + 7*Q;  /* set tp to start of the DD's */
+          tp  = ((__m128 *) om->tfv) + 7*Q;  /* set tp to start of the DD's */
           for (q = 0; q < Q; q++) 
             { /* using cmpgt below tests if DD changed any DMO(q) *without* conditional branch */
               sv            = _mm_add_ps(dcv, P7C_DQ(dpc,q));         
@@ -508,7 +506,7 @@ forward_row_sse(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dp
  * <om>        = query model
  * <dpp>       = 'previous' row i+1
  * <dpc>       = current row i
- * Q           = number of vectors in row; ox->Qf
+ * Q           = number of vectors in row; ox->Q
  * scalefactor = scalefactor that Forward set for this row.
  *
  * Upon return, <dpc> contains backwards values. 
@@ -522,7 +520,7 @@ forward_row_sse(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dp
 static inline void
 backward_row_main_sse(ESL_DSQ xi, const P7_OPROFILE *om, __m128 *dpp, __m128 *dpc, int Q, float scalefactor)
 {
-  const __m128 *rp       = om->rfv[xi];                       // emission scores on row i+1, for bck; xi = dsq[i+1]  
+  const __m128 *rp       = (__m128 *) om->rfv[xi];            // emission scores on row i+1, for bck; xi = dsq[i+1]  
   float       * const xc = (float *) (dpc + Q * p7C_NSCELLS); // E N JJ J B CC C SCALE 
   const float * const xp = (float *) (dpp + Q * p7C_NSCELLS);
   const __m128 *tp, *tpdd;
@@ -540,7 +538,7 @@ backward_row_main_sse(ESL_DSQ xi, const P7_OPROFILE *om, __m128 *dpp, __m128 *dp
    */
   dp  = dpp;
   xBv = zerov;
-  tp  = om->tfv;                /* on first transition vector */
+  tp  = (__m128 *) om->tfv;                /* on first transition vector */
   for (q = 0; q < Q; q++)
     {
       *dp = _mm_mul_ps(*dp, *rp); rp++;
@@ -556,11 +554,11 @@ backward_row_main_sse(ESL_DSQ xi, const P7_OPROFILE *om, __m128 *dpp, __m128 *dp
 
   /* Initialize for the row calculation */
   mpv  = esl_sse_leftshift_ps(*dpp,       zerov); /* [1 5 9 13] -> [5 9 13 x], M(i+1,k+1) * e(M_k+1, x_{i+1}) */
-  tmmv = esl_sse_leftshift_ps(om->tfv[1], zerov);
-  timv = esl_sse_leftshift_ps(om->tfv[2], zerov);
-  tdmv = esl_sse_leftshift_ps(om->tfv[3], zerov);
+  tmmv = esl_sse_leftshift_ps( ((__m128 *) om->tfv)[1], zerov);
+  timv = esl_sse_leftshift_ps( ((__m128 *) om->tfv)[2], zerov);
+  tdmv = esl_sse_leftshift_ps( ((__m128 *) om->tfv)[3], zerov);
   xEv  = _mm_set1_ps(xc[p7C_E]);
-  tp   = om->tfv + 7*Q - 1;
+  tp   = ((__m128 *) om->tfv) + 7*Q - 1;
   tpdd = tp + Q;
   dcv  = zerov;
   for (q = Q-1; q >= 0; q--)
@@ -608,7 +606,7 @@ backward_row_L_sse(const P7_OPROFILE *om,  __m128 *dpc, int Q, float scalefactor
 
   xEv  = _mm_set1_ps(xc[p7C_E]);
   dp   = dpc + Q*p7C_NSCELLS - 1;
-  tpdd = om->tfv + 8*Q - 1;
+  tpdd = ((__m128 *) om->tfv) + 8*Q - 1;
   dcv  = zerov;
   for (q = Q-1; q >= 0; q--) 
     {
@@ -642,7 +640,7 @@ backward_row_L_sse(const P7_OPROFILE *om,  __m128 *dpc, int Q, float scalefactor
  * 
  * <om>  = query model
  * <dpc> = current row, partially calculated
- * Q     = width of rows in # vectors; ox->Qf
+ * Q     = width of rows in # vectors; ox->Q
  * dcv   = the first D vector [1 5 9 13] from caller's earlier calculation
  */
 static inline void
@@ -664,7 +662,7 @@ backward_row_finish_sse(const P7_OPROFILE *om, __m128 *dpc, int Q, __m128 dcv)
       for (j = 1; j < 4; j++)
         {
           dcv = esl_sse_leftshift_ps(dcv, zerov); /* [1 5 9 13] => [5 9 13 *]          */
-          tp  = om->tfv + 8*Q - 1;                /* <*tp> now the [4 8 12 x] TDD quad */
+          tp  = ((__m128 *) om->tfv) + 8*Q - 1;   /* <*tp> now the [4 8 12 x] TDD quad */
           dp  = dpc + Q*p7C_NSCELLS - 2;          /* init to point at D(i,q) vector    */
           for (q = Q-1; q >= 0; q--)
             {
@@ -680,7 +678,7 @@ backward_row_finish_sse(const P7_OPROFILE *om, __m128 *dpc, int Q, __m128 dcv)
       for (j = 1; j < 4; j++) // 4 = vector width in floats
         {
           dcv = esl_sse_leftshift_ps(dcv, zerov);
-          tp  = om->tfv + 8*Q - 1;      
+          tp  = ((__m128 *) om->tfv) + 8*Q - 1;      
           dp  = dpc + Q*p7C_NSCELLS - 2;
           cv  = zerov;
           for (q = Q-1; q >= 0; q--)
@@ -699,7 +697,7 @@ backward_row_finish_sse(const P7_OPROFILE *om, __m128 *dpc, int Q, __m128 dcv)
    * these couldn't be added to M until we'd finished calculating D values on row.
    */
   dcv = esl_sse_leftshift_ps(P7C_DQ(dpc, 0), zerov);
-  tp  = om->tfv + 7*Q - 3;       
+  tp  = ((__m128 *) om->tfv) + 7*Q - 3;       
   dp  = dpc + (Q-1)*p7C_NSCELLS; 
   for (q = Q-1; q >= 0; q--)
     {
@@ -717,7 +715,7 @@ backward_row_finish_sse(const P7_OPROFILE *om, __m128 *dpc, int Q, __m128 dcv)
  * 
  * xc          - ptr to specials on row (floats)
  * dpc         - ptr to vectors for row      
- * Q           - number of vectors; ox->Qf
+ * Q           - number of vectors; ox->Q
  * scalefactor - scalefactor that Forward set for this row
  *
  * Upon return, values in current row <dpc> have been rescaled.
@@ -799,7 +797,7 @@ backward_row_rescale_sse(float *xc, __m128 *dpc, int Q, float scalefactor)
 static inline int
 posterior_decode_row_sse(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm_thresh, float overall_sc)
 {
-  int             Q        = ox->Qf;
+  int             Q        = ox->Q;
   __m128        *fwd       = (__m128 *) ox->dpf[ox->R0 + ox->R]; /* a calculated fwd row R has been popped off */
   const  __m128 *bck       = (__m128 *) ox->dpf[rowi%2];
   float         *xf        = (float *) (fwd + Q*p7C_NSCELLS);
@@ -863,7 +861,7 @@ posterior_decode_row_sse(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm
       P7C_IQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7C_IQ(fwd, q), P7C_IQ(bck, q)));
     }
 
-  if (ox->pp)  save_debug_row_sse(ox, fwd, rowi);
+  if (ox->pp)  save_debug_row_pp_sse(ox, fwd, rowi);
 #endif
   return eslOK;
 }
@@ -900,10 +898,10 @@ posterior_decode_row_sse(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm
 static inline float
 backward_row_zero_sse(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
 {
-  int          Q     = ox->Qf;
+  int          Q     = ox->Q;
   __m128       *dpc  = (__m128 *) ox->dpf[0];
   __m128       *dpp  = (__m128 *) ox->dpf[1];
-  const __m128 *rp   = om->rfv[x1];
+  const __m128 *rp   = (__m128 *) om->rfv[x1];
   const __m128 zerov = _mm_setzero_ps();
   float        *xc   = (float *) (dpc + Q * p7C_NSCELLS); /* special states on current row i  */
   float        *xp   = (float *) (dpp + Q * p7C_NSCELLS); /* special states on "previous" row i+1 */
@@ -914,7 +912,7 @@ backward_row_zero_sse(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
 
   /* On "previous" row i+1: include emission prob, and sum to get xBv, xB. */
   dp  = dpp;
-  tp  = om->tfv;
+  tp  = (__m128 *) om->tfv;
   for (q = 0; q < Q; q++)
     {
       *dp = _mm_mul_ps(*dp, *rp); rp++;
@@ -943,10 +941,10 @@ backward_row_zero_sse(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
 }
 
 static void
-save_debug_row_pp_sse(P7_CHECKPTMX *ox, debug_print *dpc, int i)
+save_debug_row_pp_sse(P7_CHECKPTMX *ox, __m128 *dpc, int i)
 {
   union { __m128 v; float x[4]; } u;  // 4 = number of floats per SSE vector
-  int      Q  = ox->Qf;
+  int      Q  = ox->Q;
   float  *xc  = (float *) (dpc + Q*p7C_NSCELLS);
   int     q,k,z,s;
 
@@ -993,10 +991,10 @@ save_debug_row_pp_sse(P7_CHECKPTMX *ox, debug_print *dpc, int i)
  * space.
  */
 static void
-save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale)
+save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float totscale)
 {
   union { __m128 v; float x[4]; } u;  // 4 = number of floats per SSE vector
-  int      Q  = ox->Qf;
+  int      Q  = ox->Q;
   float  *xc  = (float *) (dpc + Q*p7C_NSCELLS);
   int     q,k,z;
 

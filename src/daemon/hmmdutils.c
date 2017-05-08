@@ -16,9 +16,9 @@
 #include <syslog.h>
 #include <assert.h>
 
-#ifndef HMMER_THREADS
+#ifndef HAVE_PTHREAD   // SRE: FIXME: this shouldn't break a build
 #error "Program requires pthreads be enabled."
-#endif /*HMMER_THREADS*/
+#endif 
 
 #include "easel.h"
 #include "esl_alphabet.h"

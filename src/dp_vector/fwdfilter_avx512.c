@@ -38,8 +38,8 @@ static inline int   posterior_decode_row_avx512(P7_CHECKPTMX *ox, int rowi, P7_S
 
 #if eslDEBUGLEVEL > 0
 static inline float backward_row_zero_avx512(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
-static        void  save_debug_row_pp_avx512(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
-static        void  save_debug_row_fb_avx512(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
+static        void  save_debug_row_pp_avx512(P7_CHECKPTMX *ox,               __m512 *dpc, int i);
+static        void  save_debug_row_fb_avx512(P7_CHECKPTMX *ox, P7_REFMX *gx, __m512 *dpc, int i, float totscale);
 #endif
 
 /*****************************************************************
@@ -52,33 +52,31 @@ static        void  save_debug_row_fb_avx512(P7_CHECKPTMX *ox, P7_REFMX *gx, deb
 int
 p7_ForwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc)
 {
-  int           Q     = P7_NVF(om->M, 64);   // segment length; # of MDI vectors on each row
   __m512       *dpp   = NULL;                // dpp=prev row. start on dpf[2]; rows 0,1=Backwards
   __m512       *dpc   = NULL;                // dpc points at current row
   const __m512  zerov = _mm512_setzero_ps();     
   float        *xc    = NULL;                // specials E,N,JJ,J,B,CC,C,SCALE
   float         totsc = 0.0f;                // accumulates Forward score in nats
-  int           q;                           // counter over vectors 0..Q-1
+  int     Q;                                 // segment length; # of MDI vectors on each row
+  int     q;                                 // counter over vectors 0..Q-1
   int     i;			             // counter over residues/rows 1..L
   int     b;			             // counter down through checkpointed blocks, Rb+Rc..1
   int     w;			             // counter down through rows in a checkpointed block
 
-  ox->Qf = Q;
-
-  /* Make sure <ox> is allocated big enough.
-   * DO NOT set any ptrs into the matrix until after this potential reallocation!
+  /* First make sure <ox> is allocated big enough.
+   * (DO NOT set any ptrs into the matrix until after this potential reallocation!)
+   * Then set the size of the problem in <ox> immediately, not later,
+   * because debugging dumps need this information, for example.
+   * (Ditto for any debugging copy of the fwd mx).
    */
-  p7_checkptmx_GrowTo(ox, om->M, L);
-  dpp =  (__m512 *) ox->dpf[ox->R0-1];    
-  xc  =  (float *) (dpp + Q*p7C_NSCELLS); 
-
-  /* Set the size of the problem in <ox> now, not later
-   * Debugging dumps need this information, for example
-   * (Ditto for any debugging copy of the fwd mx)
-   */
+  p7_checkptmx_Reinit(ox, om->M, L);
   ox->M  = om->M;	
   ox->L  = L;
- 
+  ox->V  = p7_VWIDTH_AVX512 / sizeof(float);
+  ox->Q  = Q = P7_Q(om->M, ox->V);     
+  dpp    =  (__m512 *) ox->dpf[ox->R0-1];    
+  xc     =  (float *) (dpp + Q*p7C_NSCELLS); 
+
 #if eslDEBUGLEVEL > 0
   ox->dump_flags |= p7_SHOW_LOG;                     /* also sets for Backward dumps, since <ox> shared */
   if (ox->do_dumping) p7_checkptmx_DumpFBHeader(ox);
@@ -93,7 +91,7 @@ p7_ForwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHE
   xc[p7C_SCALE] = 1.;
 
 #if eslDEBUGLEVEL > 0
-  if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, 0, dpp, "f1 O"); 
+  if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, 0, (float *) dpp, "f1 O"); 
   if (ox->fwd)        save_debug_row_fb_avx512(ox, ox->fwd, dpp, 0, totsc); 
 #endif
 
@@ -106,7 +104,7 @@ p7_ForwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHE
       dpp = dpc;   /* current row becomes prev row */                     
 
 #if eslDEBUGLEVEL > 0
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, dpc, "f1 O"); 
+      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (float *) dpc, "f1 O"); 
       if (ox->fwd)        save_debug_row_fb_avx512(ox, ox->fwd, dpc, i, totsc); 
 #endif
     }
@@ -129,7 +127,7 @@ p7_ForwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHE
       dpp = dpc;
 
 #if eslDEBUGLEVEL > 0
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, dpc, w ? "f1 X" : "f1 O"); 
+      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (float *) dpc, w ? "f1 X" : "f1 O"); 
       if (ox->fwd)        save_debug_row_fb_avx512(ox, ox->fwd, dpc, i, totsc); 
 #endif
     }
@@ -152,16 +150,16 @@ int
 p7_BackwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh)
 {
   float  *xf;
-  int Q = ox->Qf;
   __m512 *fwd;
   __m512 *bck;
   __m512 *dpp;
+  int     Q     = ox->Q;
   int     i;
   float   Tvalue;
   int     b, w, i2;
   int     status;
 
-  p7_sparsemask_Reinit(sm, om->M, L, 16); // 16 = width of AVX512 vectors, in floats
+  p7_sparsemask_Reinit(sm, om->M, L);
 
 #if eslDEBUGLEVEL > 0
    if (ox->bck) { ox->bck->M = om->M; ox->bck->L = L; ox->bck->type = p7R_BACKWARD; }
@@ -182,8 +180,8 @@ p7_BackwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
 #if eslDEBUGLEVEL > 0
   ox->bcksc = logf(xf[p7C_SCALE]);
   if (ox->do_dumping) {
-    p7_checkptmx_DumpFBRow(ox, L, fwd, "f2 O"); 
-    p7_checkptmx_DumpFBRow(ox, L, bck, "bck");  
+    p7_checkptmx_DumpFBRow(ox, L, (float *) fwd, "f2 O"); 
+    p7_checkptmx_DumpFBRow(ox, L, (float *) bck, "bck");  
   }
   if (ox->bck) save_debug_row_fb_avx512(ox, ox->bck, bck, L, ox->bcksc); 
 #endif
@@ -200,7 +198,7 @@ p7_BackwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
        fwd = (__m512 *) ox->dpf[ox->R0+ox->R];        // get free row memory from top of stack
        forward_row_avx512(dsq[i], om, dpp, fwd, Q);   // calculate fwd[L-1] 
 #if eslDEBUGLEVEL > 0
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, fwd, "f2 X");
+       if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (float *) fwd, "f2 X");
 #endif
 
        /* Compute bck[L-1] from bck[L]. */
@@ -210,7 +208,7 @@ p7_BackwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
        backward_row_main_avx512(dsq[i+1], om, dpp, bck, Q, xf[p7C_SCALE]);
 #if eslDEBUGLEVEL > 0
       ox->bcksc += logf(xf[p7C_SCALE]);
-      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, bck, "bck");
+      if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (float *) bck, "bck");
       if (ox->bck)        save_debug_row_fb_avx512(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
 
@@ -237,8 +235,8 @@ p7_BackwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
 #if eslDEBUGLEVEL > 0
       ox->bcksc += logf(xf[p7C_SCALE]);
       if (ox->do_dumping) { 
-        p7_checkptmx_DumpFBRow(ox, i, fwd, "f2 O"); 
-        p7_checkptmx_DumpFBRow(ox, i, bck, "bck"); 
+        p7_checkptmx_DumpFBRow(ox, i, (float *) fwd, "f2 O"); 
+        p7_checkptmx_DumpFBRow(ox, i, (float *) bck, "bck"); 
       }
       if (ox->bck) save_debug_row_fb_avx512(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
@@ -285,8 +283,8 @@ p7_BackwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
 #if eslDEBUGLEVEL > 0
       ox->bcksc += logf(xf[p7C_SCALE]);
       if (ox->do_dumping) { 
-        p7_checkptmx_DumpFBRow(ox, i, fwd, "f2 O"); 
-        p7_checkptmx_DumpFBRow(ox, i, bck, "bck"); 
+        p7_checkptmx_DumpFBRow(ox, i, (float *) fwd, "f2 O"); 
+        p7_checkptmx_DumpFBRow(ox, i, (float *) bck, "bck"); 
       }
       if (ox->bck) save_debug_row_fb_avx512(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
@@ -308,15 +306,15 @@ p7_BackwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
    bck = (__m128 *) ox->dpf[i%2];	       
    xN = backward_row_zero_avx512(dsq[1], om, ox); 
    if (ox->do_dumping) { 
-     p7_checkptmx_DumpFBRow(ox, 0, fwd, "f2 O"); 
-     p7_checkptmx_DumpFBRow(ox, 0, bck, "bck"); 
+     p7_checkptmx_DumpFBRow(ox, 0, (float *) fwd, "f2 O"); 
+     p7_checkptmx_DumpFBRow(ox, 0, (float *) bck, "bck"); 
    }
    if (ox->bck)        save_debug_row_fb_avx512(ox, ox->bck, bck, 0, ox->bcksc); 
-   if ((status = posterior_decode_row(ox, 0, sm, sm_thresh, Tvalue)) != eslOK) return status;
+   if ((status = posterior_decode_row_avx512(ox, 0, sm, sm_thresh, Tvalue)) != eslOK) return status;
    ox->bcksc += xN;
 #endif
 
-   p7_sparsemask_Finish_avx512(sm);
+   p7_sparsemask_Finish(sm);
    return eslOK;
 }
 /*----------- end forward/backward API calls --------------------*/
@@ -330,9 +328,9 @@ p7_BackwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
 static inline float
 forward_row_avx512(ESL_DSQ xi, const P7_OPROFILE *om, const __m512 *dpp, __m512 *dpc, int Q)
 {
-  const    __m512 *rp   = om->rfv[xi];
+  const    __m512 *rp   = (__m512 *) mom->rfv[xi];
   const    __m512 zerov = _mm512_setzero_ps();
-  const    __m512 *tp   = om->tfv;
+  const    __m512 *tp   = (__m512 *) om->tfv;
   const    float  *xp   = (float *) (dpp + Q * p7C_NSCELLS);
   float           *xc   = (float *) (dpc + Q * p7C_NSCELLS);
   __m512          dcv   = _mm512_setzero_ps();
@@ -390,7 +388,7 @@ forward_row_avx512(ESL_DSQ xi, const P7_OPROFILE *om, const __m512 *dpp, __m512 
   // nature of x86.  For consistency with myself, I'm sticking to function names that match the direction of the 
   // shift instruction
   P7C_DQ(dpc, 0) = zerov;
-  tp             = om->tfv + 7*Q; /* set tp to start of the DD's */
+  tp             = ((__m512 *) om->tfv) + 7*Q; /* set tp to start of the DD's */
   for (q = 0; q < Q; q++) 
     {
       P7C_DQ(dpc,q) = _mm512_add_ps(dcv, P7C_DQ(dpc,q)); 
@@ -410,7 +408,7 @@ forward_row_avx512(ESL_DSQ xi, const P7_OPROFILE *om, const __m512 *dpp, __m512 
       for (j = 1; j < 16; j++)  
         { 
           dcv = esl_avx512_leftshift_ps(dcv);
-          tp  = om->tfv + 7*Q;  /* reset tp to start of the DD's */
+          tp  = ((__m512 *) om->tfv) + 7*Q;  /* reset tp to start of the DD's */
           for (q = 0; q < Q; q++) 
             { /* note, extend dcv, not DMO(q); only adding DD paths now */
               P7C_DQ(dpc,q) = _mm512_add_ps(dcv, P7C_DQ(dpc,q)); 
@@ -425,7 +423,7 @@ forward_row_avx512(ESL_DSQ xi, const P7_OPROFILE *om, const __m512 *dpp, __m512 
           register __mmask16 cv = 0; /* keeps track of whether any DD's change DMO(q) */
 
           dcv = esl_avx512_leftshift_ps(dcv);
-          tp  = om->tfv + 7*Q;  /* set tp to start of the DD's */
+          tp  = ((__m512 *) om->tfv) + 7*Q;  /* set tp to start of the DD's */
           for (q = 0; q < Q; q++) 
             { /* using cmpgt below tests if DD changed any DMO(q) *without* conditional branch */
               sv            = _mm512_add_ps(dcv, P7C_DQ(dpc,q)); 
@@ -479,7 +477,7 @@ forward_row_avx512(ESL_DSQ xi, const P7_OPROFILE *om, const __m512 *dpp, __m512 
 static inline void
 backward_row_main_avx512(ESL_DSQ xi, const P7_OPROFILE *om, __m512 *dpp, __m512 *dpc, int Q, float scalefactor)
 {
-  const __m512 *rp       = om->rfv[xi];                       // emission scores on row i+1, for bck; xi = dsq[i+1]
+  const __m512 *rp       = (__m512 *) om->rfv[xi];            // emission scores on row i+1, for bck; xi = dsq[i+1]
   float       * const xc = (float *) (dpc + Q * p7C_NSCELLS); // E N JJ J B CC C SCALE
   const float * const xp = (float *) (dpp + Q * p7C_NSCELLS);
   const __m512 *tp, *tpdd;
@@ -497,7 +495,7 @@ backward_row_main_avx512(ESL_DSQ xi, const P7_OPROFILE *om, __m512 *dpp, __m512 
    */
   dp  = dpp;
   xBv = zerov;
-  tp  = om->tfv;    /* on first transition vector */
+  tp  = (__m512 *) om->tfv;    /* on first transition vector */
   for (q = 0; q < Q; q++)
     {
       *dp = _mm512_mul_ps(*dp, *rp); rp++;
@@ -513,11 +511,11 @@ backward_row_main_avx512(ESL_DSQ xi, const P7_OPROFILE *om, __m512 *dpp, __m512 
 
   /* Initialize for the row calculation */
   mpv  = esl_avx512_rightshift_ps(*dpp      ); /* [1 5 9 13] -> [5 9 13 x], M(i+1,k+1) * e(M_k+1, x_{i+1}) */
-  tmmv = esl_avx512_rightshift_ps(om->tfv[1]);
-  timv = esl_avx512_rightshift_ps(om->tfv[2]);
-  tdmv = esl_avx512_rightshift_ps(om->tfv[3]);
+  tmmv = esl_avx512_rightshift_ps((__m512) om->tfv[1]);
+  timv = esl_avx512_rightshift_ps((__m512) om->tfv[2]);
+  tdmv = esl_avx512_rightshift_ps((__m512) om->tfv[3]);
   xEv  = _mm512_set1_ps(xc[p7C_E]);
-  tp   = om->tfv + 7*Q - 1;
+  tp   = ((__m512 *) om->tfv) + 7*Q - 1;
   tpdd = tp + Q;
   dcv  = zerov;
   for (q = Q-1; q >= 0; q--)
@@ -559,7 +557,7 @@ backward_row_L_avx512(const P7_OPROFILE *om,  __m512 *dpc, int Q, float scalefac
 
   xEv  = _mm512_set1_ps(xc[p7C_E]);
   dp   = dpc + Q*p7C_NSCELLS - 1;
-  tpdd = om->tfv + 8*Q - 1;
+  tpdd = ((__m512 *) om->tfv) + 8*Q - 1;
   dcv  = zerov;
   for (q = Q-1; q >= 0; q--) 
     {
@@ -592,8 +590,8 @@ backward_row_finish_avx512(const P7_OPROFILE *om, __m512 *dpc, int Q, __m512 dcv
     { /* Full serialization */
       for (j = 1; j < 16; j++)
   {
-    dcv = esl_avx512_rightshift_ps(dcv); /* [1 5 9 13] => [5 9 13 *]          */
-    tp  = om->tfv + 8*Q - 1;            /* <*tp> now the [4 8 12 x] TDD quad */
+    dcv = esl_avx512_rightshift_ps(dcv);    /* [1 5 9 13] => [5 9 13 *]          */
+    tp  = ((__m512 *) om->tfv) + 8*Q - 1;   /* <*tp> now the [4 8 12 x] TDD quad */
     dp  = dpc + Q*p7C_NSCELLS - 2;          /* init to point at D(i,q) vector    */
     for (q = Q-1; q >= 0; q--)
       {
@@ -608,7 +606,7 @@ backward_row_finish_avx512(const P7_OPROFILE *om, __m512 *dpc, int Q, __m512 dcv
       for (j = 1; j < 16; j++)
   {
     dcv = esl_avx512_rightshift_ps(dcv);
-    tp  = om->tfv + 8*Q - 1;  
+    tp  = ((__m512 *) om->tfv) + 8*Q - 1;  
     dp  = dpc + Q*p7C_NSCELLS - 2;
     __mmask16 cv  = 0;
     for (q = Q-1; q >= 0; q--)
@@ -627,7 +625,7 @@ backward_row_finish_avx512(const P7_OPROFILE *om, __m512 *dpc, int Q, __m512 dcv
    * these couldn't be added to M until we'd finished calculating D values on row.
    */
   dcv = esl_avx512_rightshift_ps(P7C_DQ(dpc, 0));
-  tp  = om->tfv + 7*Q - 3;   
+  tp  = ((__m512 *) om->tfv) + 7*Q - 3;   
   dp  = dpc + (Q-1)*p7C_NSCELLS; 
   for (q = Q-1; q >= 0; q--)
     {
@@ -667,7 +665,7 @@ backward_row_rescale_avx512(float *xc, __m512 *dpc, int Q, float scalefactor)
 static inline int
 posterior_decode_row_avx512(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm_thresh, float overall_sc)
 {
-  int             Q        = ox->Qf;
+  int             Q        = ox->Q;
   __m512        *fwd       = (__m512 *) ox->dpf[ox->R0 + ox->R]; /* a calculated fwd row R has been popped off */
   const  __m512 *bck       = (__m512 *) ox->dpf[rowi%2];
   float         *xf        = (float *) (fwd + Q*p7C_NSCELLS);
@@ -699,7 +697,7 @@ posterior_decode_row_avx512(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float
   pnonhomology = (xf[p7C_N] * xb[p7C_N] + xf[p7C_JJ] * xb[p7C_JJ] + xf[p7C_CC] * xb[p7C_CC]) * scaleterm;
   if (pnonhomology <= 1.0f - sm_thresh) 
     {
-      if ((status = p7_sparsemask_StartRow_avx512(sm, rowi)) != eslOK) return status;
+      if ((status = p7_sparsemask_StartRow(sm, rowi)) != eslOK) return status;
       for (q = Q-1; q >= 0; q--)             // reverse, because SPARSEMASK is entirely in reversed order 
         {
           pv       =                _mm512_mul_ps(P7C_MQ(fwd, q), P7C_MQ(bck, q));
@@ -712,9 +710,9 @@ posterior_decode_row_avx512(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float
  
           for (r = 0; r < 16; r++)   // 16 = number of floats per avx512 vector
             if ( maskbits & (1<<r)) 
-              if ((status = p7_sparsemask_Add_avx512(sm, q, r)) != eslOK) return status;
+              if ((status = p7_sparsemask_Add(sm, q, r)) != eslOK) return status;
         }
-      if ((status = p7_sparsemask_FinishRow_avx512(sm)) != eslOK) return status;
+      if ((status = p7_sparsemask_FinishRow(sm)) != eslOK) return status;
     }
 
 #if eslDEBUGLEVEL > 0
@@ -748,10 +746,10 @@ posterior_decode_row_avx512(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float
 static inline float
 backward_row_zero_avx512(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
 {
-  int          Q     = ox->Qf;
+  int          Q     = ox->Q;
   __m512       *dpc  = (__m512 *) ox->dpf[0];
   __m512       *dpp  = (__m512 *) ox->dpf[1];
-  const __m512 *rp   = om->rfv[x1];
+  const __m512 *rp   = (__m512 *) om->rfv[x1];
   const __m512 zerov = _mm512_setzero_ps();
   float        *xc   = (float *) (dpc + Q * p7C_NSCELLS); /* special states on current row i  */
   float        *xp   = (float *) (dpp + Q * p7C_NSCELLS); /* special states on "previous" row i+1 */
@@ -762,7 +760,7 @@ backward_row_zero_avx512(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
 
   /* On "previous" row i+1: include emission prob, and sum to get xBv, xB. */
   dp  = dpp;
-  tp  = om->tfv;
+  tp  = (__m512 *) om->tfv;
   for (q = 0; q < Q; q++)
     {
       *dp = _mm512_mul_ps(*dp, *rp); rp++;
@@ -795,7 +793,7 @@ static void
 save_debug_row_pp_avx512(P7_CHECKPTMX *ox, __m512 *dpc, int i)
 {
   union { __m512 v; float x[16]; } u;  // 16 = number of floats per AVX512 vector
-  int      Q  = ox->Qf;
+  int      Q  = ox->Q;
   float  *xc  = (float *) (dpc + Q*p7C_NSCELLS);
   int     q,k,z,s;
 

@@ -1,19 +1,16 @@
 MODULE = programs
 
-PROGS  = hmmalign\
-	 hmmbuild\
-	 hmmemit\
-	 hmmpress\
-	 hmmscan\
-	 hmmsearch\
-	 jackhmmer\
-	 phmmer\
+PROGS  = hmmalign  \
+	 hmmbuild  \
+	 hmmemit   \
+	 hmmpress  \
+	 hmmscan   \
+	 hmmsearch \
+	 jackhmmer \
+	 phmmer    \
 	 nhmmer
 #	 nhmmscan
 
-LIBOBJS =
-
-LIBHDRS = 
 
 OBJS =
 
@@ -26,8 +23,6 @@ STATS  =
 BENCHMARKS = 
 
 EXAMPLES =
-
-LIBTMP = 
 
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@

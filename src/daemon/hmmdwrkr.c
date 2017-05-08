@@ -18,9 +18,9 @@
 #include <syslog.h>
 #include <time.h>
 
-#ifndef HMMER_THREADS
+#ifndef HAVE_PTHREAD  // SRE FIXME: shouldn't break a build just because pthreads isn't around.
 #error "Program requires pthreads be enabled."
-#endif /*HMMER_THREADS*/
+#endif 
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -531,8 +531,7 @@ search_thread(void *arg)
   /* set up the dummy description and accession fields */
   dbsq.desc = "";
   dbsq.acc  = "";
-   P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+
   /* process a query sequence or hmm */
   if (info->seq != NULL) {
     bld = p7_builder_Create(NULL, info->abc);
@@ -560,14 +559,14 @@ search_thread(void *arg)
     p7_builder_Destroy(bld);
   } else {
     gm = p7_profile_Create (info->hmm->M, info->abc);
-    om = p7_oprofile_Create(info->hmm->M, info->abc, hw->simd);
+    om = p7_oprofile_Create(info->hmm->M, info->abc);
     p7_profile_Config(gm, info->hmm, bg);
     p7_oprofile_Convert(gm, om);
   }
 
   /* Create processing pipeline and hit list */
   th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
-  pli = p7_pipeline_Create(info->opts, om->M, 100, FALSE, p7_SEARCH_SEQS, hw->simd);
+  pli = p7_pipeline_Create(info->opts, om->M, 100, FALSE, p7_SEARCH_SEQS);
   p7_pipeline_NewModel(pli, om, bg);
 
   if (pli->Z_setby == p7_ZSETBY_NTARGETS) pli->Z = info->db_Z;
@@ -635,7 +634,6 @@ search_thread(void *arg)
   esl_stopwatch_Destroy(w);
 
   esl_threads_Finished(obj, workeridx);
-  free(hw);
   pthread_exit(NULL);
   return;
 }
@@ -648,14 +646,11 @@ scan_thread(void *arg)
   int               workeridx;
   WORKER_INFO      *info;
   ESL_THREADS      *obj;
-
   ESL_STOPWATCH    *w;
-
   P7_BG            *bg       = NULL;         /* null model                     */
   P7_PIPELINE      *pli      = NULL;         /* work pipeline                  */
   P7_TOPHITS       *th       = NULL;         /* top hit results                */
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+
   obj = (ESL_THREADS *) arg;
   esl_threads_Started(obj, &workeridx);
 
@@ -669,7 +664,7 @@ scan_thread(void *arg)
 
   /* Create processing pipeline and hit list */
   th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
-  pli = p7_pipeline_Create(info->opts, 100, 100, FALSE, p7_SCAN_MODELS, hw->simd);
+  pli = p7_pipeline_Create(info->opts, 100, 100, FALSE, p7_SCAN_MODELS);
   
   p7_pipeline_NewSeq(pli, info->seq);
 
@@ -720,7 +715,6 @@ scan_thread(void *arg)
 
   /* clean up */
   p7_bg_Destroy(bg);
-  free(hw);
   esl_stopwatch_Stop(w);
   info->elapsed = w->elapsed;
 

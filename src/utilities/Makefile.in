@@ -1,18 +1,14 @@
 MODULE = utilities
 
+OBJS =
+
+HDRS =
+
 PROGS =  alimask    \
 	 hmmconvert \
 	 hmmfetch   \
 	 hmmlogo    \
 	 hmmstat 
-
-LIBOBJS = 
-
-LIBHDRS = 
-
-OBJS =
-
-HDRS =
 
 UTESTS = 
 
@@ -21,8 +17,6 @@ STATS  =
 BENCHMARKS = 
 
 EXAMPLES =
-
-LIBTMP =
 
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@

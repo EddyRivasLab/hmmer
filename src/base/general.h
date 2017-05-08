@@ -39,8 +39,6 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 /* MEA traceback routines have to check consistency, all path transitions must be nonzero */
 #define P7_DELTAT(val, tsc) ( ((tsc) == -eslINFINITY) ? -eslINFINITY : (val))
 
-#define p7O_EXTRA_SB 17    /* see ssvfilter.c for explanation */
-
 /* Which strand(s) should be searched */
 enum p7_strands_e {    p7_STRAND_TOPONLY  = 0, p7_STRAND_BOTTOMONLY = 1,  p7_STRAND_BOTH = 2};
 

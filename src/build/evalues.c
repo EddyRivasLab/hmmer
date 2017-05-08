@@ -29,7 +29,8 @@
 #include "build/p7_builder.h"
 #include "build/modelstats.h"
 #include "build/evalues.h"
-#include "hardware/hardware.h"
+
+
 /*****************************************************************
  * 1. p7_Calibrate():  model calibration wrapper 
  *****************************************************************/ 
@@ -109,9 +110,7 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
   }
 
   if (om == NULL) {
-    P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
-    if ((om     = p7_oprofile_Create(hmm->M, hmm->abc, hw->simd)) == NULL) ESL_XFAIL(eslEMEM, errbuf, "failed to create optimized profile");
+    if ((om     = p7_oprofile_Create(hmm->M, hmm->abc)) == NULL) ESL_XFAIL(eslEMEM, errbuf, "failed to create optimized profile");
     if ((status = p7_oprofile_Convert(gm, om))         != eslOK) ESL_XFAIL(status,  errbuf, "failed to convert to optimized profile");
   }
 
@@ -252,16 +251,12 @@ p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda)
 int
 p7_MSVMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double *ret_mmu)
 {
-   P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
-  P7_FILTERMX  *fx      = p7_filtermx_Create(om->M, hw->simd); /* DP matrix: 1 row version */
+  P7_FILTERMX  *fx      = p7_filtermx_Create(om->M); /* DP matrix: 1 row version */
   ESL_DSQ      *dsq     = NULL;
   double       *xv      = NULL;
+  float         maxsc   = 127. / om->scale_b; /* if score overflows, use this */
   int           i;
   float         sc, nullsc;
-#ifndef p7_IMPL_DUMMY
-  float         maxsc   = (255 - om->base_b) / om->scale_b; /* if score overflows, use this */
-#endif
   int           status;
 
   if (!fx) { status = eslEMEM; goto ERROR; }
@@ -277,14 +272,11 @@ p7_MSVMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lam
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
 
       status = p7_MSVFilter(dsq, L, om, fx, &sc); 
-#ifndef p7_IMPL_DUMMY
-      if (status == eslERANGE) { sc = maxsc; status = eslOK; }
-#endif
-      if (status != eslOK)     goto ERROR;
+      if      (status == eslERANGE) { sc = maxsc; status = eslOK; }
+      else if (status != eslOK)       goto ERROR;
 
       xv[i] = (sc - nullsc) / eslCONST_LOG2;
-
-      p7_filtermx_Reuse(fx);
+      //p7_filtermx_Reuse(fx);
     }
 
   if ((status = esl_gumbel_FitCompleteLoc(xv, N, lambda, ret_mmu))  != eslOK) goto ERROR;
@@ -329,16 +321,12 @@ p7_MSVMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lam
 int
 p7_ViterbiMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double *ret_vmu)
 {
-   P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
-  P7_FILTERMX  *fx      = p7_filtermx_Create(om->M, hw->simd); /* DP matrix: 1 row version */
+  P7_FILTERMX  *fx      = p7_filtermx_Create(om->M); /* DP matrix: 1 row version */
   ESL_DSQ      *dsq     = NULL;
   double       *xv      = NULL;
+  float         maxsc   = (32767.0 - om->base_w) / om->scale_w; /* if score overflows, use this [J4/139] */
   int           i;
   float         sc, nullsc;
-#ifndef p7_IMPL_DUMMY
-  float         maxsc   = (32767.0 - om->base_w) / om->scale_w; /* if score overflows, use this [J4/139] */
-#endif
   int           status;
 
   if (!fx) { status = eslEMEM; goto ERROR; }
@@ -354,14 +342,11 @@ p7_ViterbiMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
 
       status = p7_ViterbiFilter(dsq, L, om, fx, &sc); 
-#ifndef p7_IMPL_DUMMY
-      if (status == eslERANGE) { sc = maxsc; status = eslOK; }
-#endif
-      if (status != eslOK)     goto ERROR;
+      if      (status == eslERANGE) { sc = maxsc; status = eslOK; }
+      else if (status != eslOK)       goto ERROR;
 
       xv[i] = (sc - nullsc) / eslCONST_LOG2;
-
-      p7_filtermx_Reuse(fx);
+      //p7_filtermx_Reuse(fx);
     }
 
   if ((status = esl_gumbel_FitCompleteLoc(xv, N, lambda, ret_vmu))  != eslOK) goto ERROR;
@@ -442,9 +427,7 @@ p7_ViterbiMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double
 int
 p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double tailp, double *ret_tau)
 {
-   P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
-  P7_CHECKPTMX *ox      = p7_checkptmx_Create(om->M, L, ESL_MBYTES(32), hw->simd); 
+  P7_CHECKPTMX *ox      = p7_checkptmx_Create(om->M, L, ESL_MBYTES(32));
   ESL_DSQ      *dsq     = NULL;
   double       *xv      = NULL;
   float         fsc, nullsc;		                  
@@ -467,7 +450,7 @@ p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambd
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
       xv[i] = (fsc - nullsc) / eslCONST_LOG2;
 
-      p7_checkptmx_Reuse(ox);
+      //p7_checkptmx_Reuse(ox);
     }
   if ((status = esl_gumbel_FitComplete(xv, N, &gmu, &glam)) != eslOK) goto ERROR;
 

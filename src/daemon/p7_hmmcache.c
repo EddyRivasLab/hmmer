@@ -62,8 +62,7 @@ p7_hmmcache_Open(char *hmmfile, P7_HMMCACHE **ret_cache, char *errbuf)
   P7_PROFILE  *gm       = NULL;
   P7_OPROFILE *om       = NULL;     
   int          status;
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+
   if (errbuf) errbuf[0] = '\0';
 
   ESL_ALLOC(cache, sizeof(P7_HMMCACHE));
@@ -89,7 +88,7 @@ p7_hmmcache_Open(char *hmmfile, P7_HMMCACHE **ret_cache, char *errbuf)
       if ( (    gm = p7_profile_Create(hmm->M, cache->abc)) == NULL)  { status = eslEMEM; goto ERROR; }
       if ( (status = p7_profile_Config(gm, hmm, bg)) != eslOK) goto ERROR;
  
-      if ( (status = p7_oprofile_ReadMSV (hfp, &(cache->abc), &om, hw->simd)) != eslOK || /* eslEFORMAT: hfp->errbuf | eslEINCOMPAT | eslEOF */
+      if ( (status = p7_oprofile_ReadMSV (hfp, &(cache->abc), &om)) != eslOK || /* eslEFORMAT: hfp->errbuf | eslEINCOMPAT | eslEOF */
 	   (status = p7_oprofile_ReadRest(hfp, om))                 != eslOK)   /* eslEFORMAT: hfp->errbuf */
 	{
 	  if (status == eslEOF) ESL_XFAIL(eslEFORMAT, errbuf, "Premature EOF in vectorized profile files");

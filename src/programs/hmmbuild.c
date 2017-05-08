@@ -21,23 +21,23 @@
 #include "esl_stopwatch.h"
 #include "esl_vectorops.h"
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 #include <unistd.h>
 #include "esl_threads.h"
 #include "esl_workqueue.h"
-#endif /*HMMER_THREADS*/
+#endif /*HAVE_PTHREAD*/
 
 #include "hmmer.h"
 
 typedef struct {
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   ESL_WORK_QUEUE   *queue;
-#endif /*HMMER_THREADS*/
+#endif /*HAVE_PTHREAD*/
   P7_BG	           *bg;
   P7_BUILDER       *bld;
 } WORKER_INFO;
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 typedef struct {
   int         nali;
   int         processed;
@@ -56,7 +56,7 @@ typedef struct _pending_s {
   double      entropy;
   struct _pending_s *next;
 } PENDING_ITEM;
-#endif /*HMMER_THREADS*/
+#endif /*HAVE_PTHREAD*/
 
 #define ALPHOPTS "--amino,--dna,--rna"                         /* Exclusive options for alphabet choice */
 #define CONOPTS "--fast,--hand"                                /* Exclusive options for model construction                    */
@@ -114,7 +114,7 @@ static ESL_OPTIONS options[] = {
   { "--Eft",     eslARG_REAL,  "0.04", NULL,"0<x<1",     NULL,    NULL,      NULL, "tail mass for Forward exponential tail tau fit",       6 },   
 
 /* Other options */
-#ifdef HMMER_THREADS 
+#ifdef HAVE_PTHREAD 
   { "--cpu",     eslARG_INT,    NULL,"HMMER_NCPU","n>=0",NULL,     NULL,  NULL,  "number of parallel CPU workers for multithreads",       8 },
 #endif
 #ifdef HAVE_MPI
@@ -165,10 +165,10 @@ static char banner[] = "profile HMM construction from multiple sequence alignmen
 
 static int  usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg);
 static void serial_loop  (WORKER_INFO *info, struct cfg_s *cfg, const ESL_GETOPTS *go);
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 static void thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, struct cfg_s *cfg, const ESL_GETOPTS *go);
 static void pipeline_thread(void *arg);
-#endif /*HMMER_THREADS*/
+#endif /*HAVE_PTHREAD*/
 
 #ifdef HAVE_MPI
 static void  mpi_master    (const ESL_GETOPTS *go, struct cfg_s *cfg);
@@ -314,7 +314,7 @@ output_header(const ESL_GETOPTS *go, const struct cfg_s *cfg)
   if (esl_opt_IsUsed(go, "--maxinsertlen")  && fprintf(cfg->ofp, "# max insert length:                %d\n",         esl_opt_GetInteger (go, "--maxinsertlen"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   if (esl_opt_IsUsed(go, "--cpu")        && fprintf(cfg->ofp, "# number of worker threads:         %d\n",        esl_opt_GetInteger(go, "--cpu"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
 #endif
 #ifdef HAVE_MPI
@@ -439,7 +439,7 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
   int              ncpus    = 0;
   int              infocnt  = 0;
   WORKER_INFO     *info     = NULL;
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   WORK_ITEM       *item     = NULL;
   ESL_THREADS     *threadObj= NULL;
   ESL_WORK_QUEUE  *queue    = NULL;
@@ -487,7 +487,7 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
   output_header(go, cfg);                                  /* cheery output header                                */
   output_result(cfg, NULL, 0, NULL, NULL, NULL, 0.0);	   /* tabular results header (with no args, special-case) */
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   /* initialize thread data */
   if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
   else                                   esl_threads_CPUCount(&ncpus);
@@ -527,13 +527,13 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
       info[i].bld->w_beta     = (go != NULL && esl_opt_IsOn (go, "--w_beta"))   ?  esl_opt_GetReal   (go, "--w_beta")    : p7_DEFAULT_WINDOW_BETA;
       if ( info[i].bld->w_beta < 0 || info[i].bld->w_beta > 1  ) esl_fatal("Invalid window-length beta value\n");
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
       info[i].queue = queue;
       if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
 #endif
     }
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   for (i = 0; i < ncpus * 2; ++i)
     {
       ESL_ALLOC(item, sizeof(*item));
@@ -550,7 +550,7 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
     }
 #endif
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   if (ncpus > 0)  thread_loop(threadObj, queue, cfg, go);
   else            serial_loop(info, cfg, go);
 #else
@@ -563,7 +563,7 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_builder_Destroy(info[i].bld);
     }
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   if (ncpus > 0)
     {
       esl_workqueue_Reset(queue);
@@ -979,7 +979,7 @@ serial_loop(WORKER_INFO *info, struct cfg_s *cfg, const ESL_GETOPTS *go)
     }
 }
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 static void
 thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, struct cfg_s *cfg, const ESL_GETOPTS *go)
 {
@@ -1176,7 +1176,7 @@ pipeline_thread(void *arg)
   esl_threads_Finished(obj, workeridx);
   return;
 }
-#endif   /* HMMER_THREADS */
+#endif   /* HAVE_PTHREAD */
  
 
 

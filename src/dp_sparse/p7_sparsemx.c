@@ -62,34 +62,24 @@
  * Synopsis:  Creates a new P7_SPARSEMASK object.
  *
  * Purpose:   Create a new <P7_SPARSEMASK> for a comparison of a profile
- *            of length <M> to a sequence of length <L>, where the
- *            vectorized Forward/Backward filter is using SIMD vectors
- *            of width <V> floats each. Return a ptr to the new
- *            object.
+ *            of length <M> to a sequence of length <L>. Return a ptr to
+ *            the new object.
  *            
- *            In test/debug code that's independent of the vectorized
- *            Forward/Backward filter, you can set V to whatever width
- *            you want: 4 is a good choice (SSE, NEON widths) and 8 or
- *            16 (AVX, AVX512 widths) are also typical choices. I
- *            don't think the code cares if it's a multiple of four,
- *            any V>=1 should work.
- *
  *            The allocation will generally be for (much) less than <ML> cells;
  *            the API for creating the sparse mask will grow the structure
  *            appropriately. The structure does require at least $O(M)$ cells
- *            of temporary storage, in four "slots" used to sort input
+ *            of temporary storage, in <V> "slots" used to sort input
  *            from striped vector code.  
  *
  * Args:      M       - model length
  *            L       - sequence length
- *            V       - width of vectors, in floats (SSE=4; AVX512=16)
  *
  * Returns:   a pointer to a new <P7_SPARSEMASK>
  *
  * Throws:    <NULL> on allocation failure.
  */
 P7_SPARSEMASK *
-p7_sparsemask_Create(int M, int L, int V)
+p7_sparsemask_Create(int M, int L)
 {
   P7_SPARSEMASK *sm             = NULL;
   int            default_salloc = 8;
@@ -101,8 +91,8 @@ p7_sparsemask_Create(int M, int L, int V)
   sm->L      = L;
   sm->M      = M;
 
-  sm->Q      = P7_NVF(M, V*4);  // V*4 because the macro takes vector width in *bytes*, V here is *floats*
-  sm->V      = V;               // V*Q ~ M; row of len M is striped into Q vectors of width V floats.
+  sm->V      = P7_V_FB;            
+  sm->Q      = P7_Q(M, sm->V);   // V*Q ~ M; row of len M is striped into Q vectors of width V floats.
     
   sm->seg    = NULL;
   sm->k      = NULL;
@@ -159,16 +149,15 @@ p7_sparsemask_Create(int M, int L, int V)
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_sparsemask_Reinit(P7_SPARSEMASK *sm, int M, int L, int V)
+p7_sparsemask_Reinit(P7_SPARSEMASK *sm, int M, int L)
 {
   int i,r;
   int status;
 
   sm->L  = L;
   sm->M  = M; 
-
-  sm->Q  = P7_NVF(M, V*4);
-  sm->V  = V;
+  sm->V  = P7_V_FB;
+  sm->Q  = P7_Q(M, sm->V);
     
   /* seg[], kmem stay at their previous salloc, kalloc
    * but check if we need to reallocate rows for k[] and n[] 
@@ -493,8 +482,8 @@ p7_sparsemask_Finish(P7_SPARSEMASK *sm)
   /* Reallocate seg[] if needed. */
   if ( (sm->S+2) > sm->salloc) 
     {
-      ESL_REALLOC(sm->seg, (sm->S+2) * sizeof(p7_sparsemask_seg_s)); // +2, for sentinels 
-      sm->salloc = sm->S + 2;                                        // also inclusive of sentinels
+      ESL_REALLOC(sm->seg, (sm->S+2) * sizeof(struct p7_sparsemask_seg_s)); // +2, for sentinels 
+      sm->salloc = sm->S + 2;                                               // also inclusive of sentinels
       sm->n_srealloc++;
     }
       
@@ -699,6 +688,7 @@ p7_sparsemask_Validate(const P7_SPARSEMASK *sm, char *errbuf)
 int
 p7_sparsemask_SetFromTrace(P7_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const P7_TRACE *tr)
 {
+  float cellprob = 0.5;
   float rowprob  = 0.2;
   int   i,k,z;
   int   status;
@@ -1759,10 +1749,10 @@ validate_dimensions(const P7_SPARSEMX *sx, char *errbuf)
   int   ncells = 0;
   int   i;
 
-  if ( sm->M <= 0)                      ESL_FAIL(eslFAIL, errbuf, "nonpositive M");
-  if ( sm->L <= 0)                      ESL_FAIL(eslFAIL, errbuf, "nonpositive L");
-  if ( sm->V <= 0)                      ESL_FAIL(eslFAIL, errbuf, "nonpositive V");
-  if ( sm->Q != P7_NVF(sm->M,sm->V*4))  ESL_FAIL(eslFAIL, errbuf, "bad Q");          // the *4 is because V is # of floats, macro takes # of bytes
+  if ( sm->M <= 0)                  ESL_FAIL(eslFAIL, errbuf, "nonpositive M");
+  if ( sm->L <= 0)                  ESL_FAIL(eslFAIL, errbuf, "nonpositive L");
+  if ( sm->V <= 0)                  ESL_FAIL(eslFAIL, errbuf, "nonpositive V");
+  if ( sm->Q != P7_Q(sm->M,sm->V))  ESL_FAIL(eslFAIL, errbuf, "bad Q");          
 
   for (r=0, g=0, i = 1; i <= sm->L; i++) {
     if (sm->n[i] && !sm->n[i-1]) g++; /* segment count */

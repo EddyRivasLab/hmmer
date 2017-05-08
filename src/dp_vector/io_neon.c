@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 #include <pthread.h>
 #endif
 
@@ -331,7 +331,7 @@ p7_oprofile_ReadRest_neon(P7_HMMFILE *hfp, P7_OPROFILE *om)
   int           alphatype;
   int           status;
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   /* lock the mutex to prevent other threads from reading from the optimized
    * profile at the same time.
    */
@@ -408,7 +408,7 @@ p7_oprofile_ReadRest_neon(P7_HMMFILE *hfp, P7_OPROFILE *om)
   if (! fread( (char *) &magic,     sizeof(uint32_t), 1, hfp->pfp))  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "no sentinel magic: .h3p file corrupted?");
   if (magic != v3f_pmagic)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad sentinel magic; .h3p file corrupted?");
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   if (hfp->syncRead) {
     if (pthread_mutex_unlock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex unlock failed");
   }
@@ -417,7 +417,7 @@ p7_oprofile_ReadRest_neon(P7_HMMFILE *hfp, P7_OPROFILE *om)
   return eslOK;
 
  ERROR:
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   if (hfp->syncRead) {
     if (pthread_mutex_unlock (&hfp->readMutex) != 0) ESL_EXCEPTION(eslESYS, "mutex unlock failed");
   }

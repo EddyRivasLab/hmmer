@@ -301,7 +301,7 @@ utest_overwrite(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L)
 
   /* F/B filter to calculate the sparse mask */
   if ( (ox = p7_checkptmx_Create(gm->M, sq->n, ESL_MBYTES(32)))          == NULL)  esl_fatal(msg);
-  if ( (sm = p7_sparsemask_Create(gm->M, sq->n, p7_VDEFAULT))            == NULL)  esl_fatal(msg);
+  if ( (sm = p7_sparsemask_Create(gm->M, sq->n))                         == NULL)  esl_fatal(msg);
   if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
   if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
 
@@ -343,7 +343,7 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
   P7_PROFILE    *gm    = p7_profile_Create(M, abc);
   P7_OPROFILE   *om    = p7_oprofile_Create(M, abc);
   P7_CHECKPTMX  *ox    = p7_checkptmx_Create(M, L, ESL_MBYTES(32));
-  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L, p7_VDEFAULT);
+  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L);
   P7_SPARSEMX   *sxf   = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxb   = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxd   = p7_sparsemx_Create(sm);
@@ -408,7 +408,7 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
 	  }
 	}
       
-      p7_checkptmx_Reuse(ox);
+      //p7_checkptmx_Reuse(ox);
       p7_sparsemask_Reuse(sm);
       p7_sparsemx_Reuse(sxf);
       p7_sparsemx_Reuse(sxb);
@@ -481,8 +481,8 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
 
   /* Fwd/Bck local filter to calculate the sparse mask */
   if (  (ox = p7_checkptmx_Create(M, sq->n, ESL_MBYTES(32)))             == NULL)  esl_fatal(msg);
-  if (  (sm = p7_sparsemask_Create(M, sq->n, p7_VDEFAULT))               == NULL)  esl_fatal(msg);
-  if ( p7_checkptmx_GrowTo(ox, M, sq->n)                                 != eslOK) esl_fatal(msg);
+  if (  (sm = p7_sparsemask_Create(M, sq->n))                            == NULL)  esl_fatal(msg);
+  if ( p7_checkptmx_Reinit(ox, M, sq->n)                                 != eslOK) esl_fatal(msg);
   if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
   if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
 

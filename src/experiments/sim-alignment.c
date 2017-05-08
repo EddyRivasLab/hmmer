@@ -57,7 +57,7 @@ main(int argc, char **argv)
   P7_TRACE_METRICS *tmetrics = p7_trace_metrics_Create();
   P7_REFMX         *rmx      = p7_refmx_Create(100,100);
   //  P7_FILTERMX      *ox       = NULL;
-  P7_SPARSEMASK    *sm       = p7_sparsemask_Create(100, 100, p7_VDEFAULT);
+  P7_SPARSEMASK    *sm       = p7_sparsemask_Create(100, 100);
   P7_SPARSEMX      *sxv      = p7_sparsemx_Create(NULL);
   int               idx;
   char              errbuf[eslERRBUFSIZE];
@@ -113,7 +113,7 @@ main(int argc, char **argv)
 
 	  p7_bg_SetLength(bg, sq->n);
 	  p7_profile_SetLength(agm, sq->n);
-	  p7_sparsemask_Reinit(sm, agm->M, sq->n, p7_VDEFAULT);
+	  p7_sparsemask_Reinit(sm, agm->M, sq->n);
 	  p7_sparsemask_AddAll(sm);
 
 	  if (esl_opt_GetBoolean(go, "--vit"))  p7_ReferenceViterbi(sq->dsq, sq->n, agm,     rmx, testtr, /*opt_vsc=*/NULL);

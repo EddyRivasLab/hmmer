@@ -46,7 +46,7 @@ static int bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om
  *            score in nats.
  *            
  *            <ox> will be reallocated, if needed, for the MxL problem;
- *            caller does not need to call <p7_checkptmx_GrowTo()> itself.
+ *            caller does not need to call <p7_checkptmx_Reinit()> itself.
  *  
  * Args:      dsq    - digital target sequence, 1..L
  *            L      - length of dsq, residues
@@ -308,7 +308,7 @@ main(int argc, char **argv)
    */
   fx  = p7_filtermx_Create  (gm->M);
   ox  = p7_checkptmx_Create (gm->M, 500, ESL_MBYTES(32));  
-  sm  = p7_sparsemask_Create(gm->M, 500, p7_VDEFAULT);
+  sm  = p7_sparsemask_Create(gm->M, 500);
 
   printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s\n",
 	 "target seq", "query profile", "score", "P-value", "MSV (KB)", "VF (KB)", "CHK (MB)", "SM (MB)", "SP (MB)", "REF (MB)");
@@ -335,12 +335,12 @@ main(int argc, char **argv)
       p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH);
 
       /* Calculate minimum memory requirements for each step */
-      msvmem = (double) ( P7_NVB(om->M) * sizeof(__m128i))    / 1024.;  
-      vfmem  = (double) p7_filtermx_MinSizeof(om->M)          / 1024.;
-      fbmem  = (double) p7_checkptmx_MinSizeof(om->M, sq->n)  / 1024. / 1024.;
-      smmem  = (double) p7_sparsemask_MinSizeof(sm)           / 1024. / 1024.;
-      spmem  = (double) p7_sparsemx_MinSizeof(sm)             / 1024. / 1024.;
-      refmem = (double) p7_refmx_MinSizeof(om->M, sq->n)      / 1024. / 1024.;
+      msvmem = (double) ( P7_Q(om->M, om->V) * sizeof(__m128i)) / 1024.;  
+      vfmem  = (double) p7_filtermx_MinSizeof(om->M)            / 1024.;
+      fbmem  = (double) p7_checkptmx_MinSizeof(om->M, sq->n)    / 1024. / 1024.;
+      smmem  = (double) p7_sparsemask_MinSizeof(sm)             / 1024. / 1024.;
+      spmem  = (double) p7_sparsemx_MinSizeof(sm)               / 1024. / 1024.;
+      refmem = (double) p7_refmx_MinSizeof(om->M, sq->n)        / 1024. / 1024.;
 
       fsc  =  (fraw-nullsc) / eslCONST_LOG2;
       P    = esl_exp_surv(fsc,   om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
@@ -359,8 +359,8 @@ main(int argc, char **argv)
     NEXT_SEQ:
       esl_sq_Reuse(sq);
       p7_sparsemask_Reuse(sm);
-      p7_checkptmx_Reuse(ox);
-      p7_filtermx_Reuse(fx);
+      //p7_checkptmx_Reuse(ox);
+      //p7_filtermx_Reuse(fx);
     }
 
   printf("# SPARSEMASK: kmem reallocs: %d\n", sm->n_krealloc);
@@ -451,7 +451,7 @@ main(int argc, char **argv)
   p7_oprofile_Convert(gm, om);
 
   ox  = p7_checkptmx_Create (om->M, L, ESL_MBYTES(32));
-  sm  = p7_sparsemask_Create(om->M, L, p7_VDEFAULT);
+  sm  = p7_sparsemask_Create(om->M, L);
 
   /* Baseline time. */
   esl_stopwatch_Start(w);
@@ -471,7 +471,7 @@ main(int argc, char **argv)
 	  esl_vec_IReverse(sm->kmem, sm->kmem, sm->ncells);
 	}
 
-      p7_checkptmx_Reuse(ox);
+      //p7_checkptmx_Reuse(ox);
       p7_sparsemask_Reuse(sm);
     }
   esl_stopwatch_Stop(w);
@@ -533,7 +533,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
   P7_REFMX      *fwd    = p7_refmx_Create   (M, L);
   P7_REFMX      *bck    = p7_refmx_Create   (M, L);
   P7_REFMX      *pp     = p7_refmx_Create   (M, L);
-  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L, p7_VDEFAULT);
+  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L);
   float          tol2   = ( p7_logsum_IsSlowExact() ? 0.001  : 0.1);   /* absolute agreement of reference (log-space) and vector (prob-space) depends on whether we're using LUT-based logsum() */
   float          fsc1, fsc2;
   float          bsc2;
@@ -581,7 +581,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
 	
       if ( p7_profile_SetLength(gm, tL)       != eslOK) esl_fatal(msg);
       if ( p7_oprofile_ReconfigLength(om, tL) != eslOK) esl_fatal(msg); 
-      if ( p7_checkptmx_GrowTo(ox,  M, tL)    != eslOK) esl_fatal(msg);
+      if ( p7_checkptmx_Reinit(ox,  M, tL)    != eslOK) esl_fatal(msg);
       
       p7_ForwardFilter (dsq, tL, om, ox, &fsc1);
       p7_BackwardFilter(dsq, tL, om, ox,  sm, p7_SPARSIFY_THRESH);
@@ -621,7 +621,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
       p7_refmx_Reuse(fwd);
       p7_refmx_Reuse(bck);
       p7_refmx_Reuse(pp);
-      p7_checkptmx_Reuse(ox);
+      //p7_checkptmx_Reuse(ox);
       p7_sparsemask_Reuse(sm);
     }
 
@@ -806,7 +806,7 @@ main(int argc, char **argv)
    */
   ox  = p7_checkptmx_Create (gm->M, 500, ESL_MBYTES(32));  
   gx  = p7_refmx_Create     (gm->M, 500);
-  sm  = p7_sparsemask_Create(gm->M, 500, p7_VDEFAULT);
+  sm  = p7_sparsemask_Create(gm->M, 500);
 #if eslDEBUGLEVEL > 0
   /* When the eslDEBUGLEVEL is nonzero, <ox> matrix has the ability to
    * record generic, complete <fwd>, <bck>, and <pp> matrices, for
@@ -876,7 +876,7 @@ main(int argc, char **argv)
       esl_sq_Reuse(sq);
       p7_refmx_Reuse(gx);
       p7_sparsemask_Reuse(sm);
-      p7_checkptmx_Reuse(ox);
+      //p7_checkptmx_Reuse(ox);
     }
 
 #if eslDEBUGLEVEL > 0

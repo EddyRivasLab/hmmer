@@ -1,13 +1,8 @@
 MODULE = hardware
 
-LIBOBJS =  
-#        hardware.o
+OBJS =  
 
-LIBHDRS =  
-
-OBJS =
-
-HDRS =
+HDRS =  
 
 PROGS = 
 
@@ -15,11 +10,9 @@ UTESTS =
 
 STATS  =
 
-
 BENCHMARKS = 
-EXAMPLES = 
 
-LIBTMP =
+EXAMPLES = 
 
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@

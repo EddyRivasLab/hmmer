@@ -1,3 +1,7 @@
+/* P7_FILTERMX: one-row of DP memory for MSV and Viterbi filters.
+ * 
+ * Independent of vector ISA. (Do not add any ISA-specific code.)
+ */
 #ifndef p7FILTERMX_INCLUDED
 #define p7FILTERMX_INCLUDED
 #include "p7_config.h"
@@ -33,9 +37,9 @@ enum p7f_scells_e { p7F_M = 0, p7F_D = 1, p7F_I = 2 };
 #define DMXf(q)   (dp[(q) * p7F_NSCELLS + p7F_D])
 #define IMXf(q)   (dp[(q) * p7F_NSCELLS + p7F_I])
 
-extern P7_FILTERMX *p7_filtermx_Create(int allocM)
+extern P7_FILTERMX *p7_filtermx_Create(int allocM);
 extern int          p7_filtermx_Reinit(P7_FILTERMX *fx, int allocM);
-extern int          p7_filtermx_GetScore(P7_FILTERMX *fx, int k, enum p7f_scells_e s);
+extern int          p7_filtermx_GetScore(const P7_FILTERMX *fx, int k, enum p7f_scells_e s);
 extern size_t       p7_filtermx_Sizeof(const P7_FILTERMX *fx);
 extern size_t       p7_filtermx_MinSizeof(int M);
 extern void         p7_filtermx_Destroy(P7_FILTERMX *fx);

@@ -18,21 +18,11 @@
 
 #include "base/p7_trace.h"
 #include "dp_reference/p7_refmx.h"
+#include "dp_vector/simdvec.h"
 
 /*****************************************************************
  * 1. The P7_SPARSEMASK structure
  *****************************************************************/
-
-/* Maximum width of SIMD vectors in any compiled implementation.
- * (Current widest = AVX-512.)  
- * Perhaps this should be in dp_vector/simdvec.h, or even p7_config.h
- * We could check for what implementations we support.
- */
-#define p7_MAXVB  64       // in bytes
-#define p7_MAXVW  32       // in words (int16)
-#define p7_MAXVF  16       // in floats (or int32)
-
-#define p7_VDEFAULT 4      // default/placeholder V to use in sparsemask_Create(), _Reinit() calls outside vector code
 
 struct p7_sparsemask_seg_s {
     int ia;                // <seg[s]> = ia,ib pairs for each segment <s>, s=1..nseg. 
@@ -44,8 +34,8 @@ typedef struct {
   int      M;		  // profile has 1..M positions 
 
   /* Dimensions that depend on SIMD vector size, in the interface to vectorized fb filter */
-  int      Q;		  // number of striped vectors in fwdfilter; width of each striped segment; size of "slots"
   int      V;             // width of a SIMD vector in floats (4 for SSE, for example); # of "slots"
+  int      Q;		  // number of striped vectors in fwdfilter; width of each striped segment; size of "slots"
 
   struct p7_sparsemask_seg_s *seg;         
   int    **k;		  // k[0,1..L] = ptrs into kmem, rows of sparse k indices; k[0]=NULL; k[i]=NULL if n[i]=0 
@@ -60,12 +50,12 @@ typedef struct {
 
   /* "Slots" are used to convert striped vectors in f/b filter into correct M..1 cell index order in <kmem>; see note [3] */
   /* These array sizes (and last_k, below) must be able to hold up to the maximum vector width in floats: AVX-512, 16 floats. */
-  int  *s[p7_MAXVF];      // slot pointers s[0..V-1] into <kmem>, for temporary storage of a striped vector row's sparse cells 
-  int   sn[p7_MAXVF];     // number of sparse cells stored so far in each slot; sn[0..V-1]
+  int  *s[p7_VMAX_FB];   // slot pointers s[0..V-1] into <kmem>, for temporary storage of a striped vector row's sparse cells 
+  int   sn[p7_VMAX_FB];  // number of sparse cells stored so far in each slot; sn[0..V-1]
 
   /* These are used for argument validation; the construction API is a little counterintuitive because i,q run in reverse */
-  int   last_i;           // i of last StartRow(i) call; rows must be added in L..1 order; initialized to L+1 
-  int   last_k[p7_MAXVF]; // k of last cell added in slot r; cells must be added in M..1 order; initialized to M+1 or -1 
+  int   last_i;             // i of last StartRow(i) call; rows must be added in L..1 order; initialized to L+1 
+  int   last_k[p7_VMAX_FB]; // k of last cell added in slot r; cells must be added in M..1 order; initialized to M+1 or -1 
 
   /* memory allocation profiling, statistics */
   int   n_krealloc;	  // number of times we reallocated <kmem> in this instance of the structure 
@@ -137,8 +127,8 @@ typedef struct {
  *****************************************************************/
 
 /* P7_SPARSEMASK object management */
-extern P7_SPARSEMASK *p7_sparsemask_Create   (int M, int L, int V);
-extern int            p7_sparsemask_Reinit   (P7_SPARSEMASK *sm, int M, int L, int V);
+extern P7_SPARSEMASK *p7_sparsemask_Create   (int M, int L);
+extern int            p7_sparsemask_Reinit   (P7_SPARSEMASK *sm, int M, int L);
 extern size_t         p7_sparsemask_Sizeof   (const P7_SPARSEMASK *sm);
 extern size_t         p7_sparsemask_MinSizeof(const P7_SPARSEMASK *sm);
 extern int            p7_sparsemask_Reuse    (P7_SPARSEMASK *sm);

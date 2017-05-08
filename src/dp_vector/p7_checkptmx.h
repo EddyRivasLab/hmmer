@@ -1,11 +1,7 @@
-/* P7_CHECKPTMX is the striped SIMD vector, checkpointed DP matrix
- * used by the vectorized local Forwards/Backwards calculation that
- * builds our sparse mask, for subsequent postprocessing with the more
- * complex glocal/local model.
+/* P7_CHECKPTMX: checkpointed, striped vector DP matrix.
  * 
- * Contents:
- *    1. The P7_CHECKPTMX object and its access macros
- *    2. Function declarations
+ * Independent of vector ISA. (Do not add any ISA-specific code.)
+ * See p7_checkptmx.md for notes.
  */
 #ifndef p7CHECKPTMX_INCLUDED
 #define p7CHECKPTMX_INCLUDED
@@ -37,9 +33,21 @@ enum p7c_xcells_e {
 #define P7C_IQ(dp, q)     ((dp)[(q) * p7C_NSCELLS + p7C_I])
 
 typedef struct p7_checkptmx_s {
-  int M;	/* current actual query model dimension (consensus positions)         */
-  int L;	/* current actual target seq dimension (residues)                     */
-  int V;        /* width of striped vectors. 0 if no striped data set yet             */
+  /* Aligned memory allocation (for all rows):                                       */
+  int M;	/* current actual query model dimension (consensus positions)        */
+  int L;	/* current actual target seq dimension (residues)                    */
+  int V;        /* width of striped vectors, in # elements. 0: no striping set yet   */
+  int Q;        /* current actual number of fb vectors = P7_NVF(M)                   */
+  int R;        /* current actual number of rows (<=Ra+Rb+Rc), excluding R0          */
+  float   *dp_mem;     /* raw memory allocation, that dp[] rows point into           */
+  int64_t  allocW;     /* alloced width/row, bytes; multiple of p7_MAXVF             */
+  int64_t  nalloc;     /* total # of alloc'ed bytes: nalloc >= (validR)(allocW)      */
+  int64_t  redline;    /* recommended RAM limit on dp_mem; can temporarily exceed it */
+
+  /* Forward/Backward matrix rows:                                                     */
+  float  **dpf;		/* row ptrs, dpf[0.R0-1,R0..R0+R-1], aligned memory            */
+  int      allocR;	/* allocated dpf[]. R+R0 <= R0+Ra+Rb+rc <= validR <= allocR    */
+  int      validR;	/* # dpf[] rows on valid dp_mem; maybe < allocR after Reinit() */
 
   /* Checkpointed layout, mapping rows 1..R to residues 1..L:                         */
   int R0;	/* # of extra rows: one for fwd[0] boundary, two for bck[prv,cur]     */
@@ -49,19 +57,6 @@ typedef struct p7_checkptmx_s {
   int La;	/* residues 1..La are in "all" region                                 */
   int Lb;      	/* residues La+1..La+Lb are in "between" region                       */
   int Lc;	/* residues La+Lb+1..La+Lb+Lc=L are in "checkpointed" region          */
-
-  /* Aligned memory allocation (for all rows):                                        */
-  int      Q;           /* current actual number of fb vectors = P7_NVF(M)            */
-  int      R;           /* current actual number of rows (<=Ra+Rb+Rc), excluding R0   */
-  float   *dp_mem;	/* raw memory allocation, that dp[] rows point into           */
-  int64_t  allocW;	/* alloced width/row, bytes; multiple of p7_MAXVF             */
-  int64_t  nalloc;	/* total # of alloc'ed bytes: nalloc >= (validR)(allocW)      */
-  int64_t  redline;     /* recommended RAM limit on dp_mem; can temporarily exceed it */
-
-  /* Forward/Backward matrix rows:                                                     */
-  float  **dpf;		/* row ptrs, dpf[0.R0-1,R0..R0+R-1], aligned memory            */
-  int      allocR;	/* allocated dpf[]. R+R0 <= R0+Ra+Rb+rc <= validR <= allocR    */
-  int      validR;	/* # dpf[] rows on valid dp_mem; maybe < allocR after Reinit() */
 
 #if eslDEBUGLEVEL > 0
   /* Info for dumping debugging info, conditionally compiled                        */
@@ -83,7 +78,7 @@ typedef struct p7_checkptmx_s {
 extern P7_CHECKPTMX *p7_checkptmx_Create(int M, int L, int64_t redline);
 extern int           p7_checkptmx_Reinit(P7_CHECKPTMX *ox, int M, int L);
 extern size_t        p7_checkptmx_Sizeof(const P7_CHECKPTMX *ox);
-extern size_t        p7_checkptmx_MinSizeof(int M, int L)
+extern size_t        p7_checkptmx_MinSizeof(int M, int L);
 extern void          p7_checkptmx_Destroy(P7_CHECKPTMX *ox);
 
 #if eslDEBUGLEVEL > 0

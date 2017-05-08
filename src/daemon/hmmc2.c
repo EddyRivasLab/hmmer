@@ -3,7 +3,7 @@
 
 #include "p7_config.h"
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -190,8 +190,6 @@ main(int argc, char *argv[])
   struct sockaddr_in   serv_addr;
 
   p7_Init();
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   /* set up defaults */
   strcpy(serv_ip, "127.0.0.1");
   serv_port = SERVER_PORT;
@@ -453,7 +451,7 @@ main(int argc, char *argv[])
           exit(1);
         }
 
-        pli = p7_pipeline_Create(go, 100, 100, FALSE, (esl_opt_IsUsed(go, "--seqdb")) ? p7_SEARCH_SEQS : p7_SCAN_MODELS, hw->simd);
+        pli = p7_pipeline_Create(go, 100, 100, FALSE, (esl_opt_IsUsed(go, "--seqdb")) ? p7_SEARCH_SEQS : p7_SCAN_MODELS);
         stats = (HMMD_SEARCH_STATS *)data;
 
         /* copy the search stats */
@@ -575,7 +573,7 @@ main(int argc, char *argv[])
   return 0;
 }
 
-#endif /*HMMER_THREADS*/
+#endif /*HAVE_PTHREAD*/
 
 
 

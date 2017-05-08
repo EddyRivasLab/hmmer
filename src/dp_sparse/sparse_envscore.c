@@ -498,7 +498,7 @@ p7_sparse_envscore_IntersectedMask(P7_SPARSEMASK *osm, int iae, int ibe, int kae
   ESL_DASSERT1( (kae >= 1 && kae <= osm->M) );
   ESL_DASSERT1( (kbe >= 1 && kbe <= osm->M && kbe >= kae) );
 
-  if ( (sm = p7_sparsemask_Create(osm->M, osm->L, p7_VDEFAULT)) == NULL) { *ret_sm = NULL; return eslEMEM; }
+  if ( (sm = p7_sparsemask_Create(osm->M, osm->L)) == NULL) { *ret_sm = NULL; return eslEMEM; }
 
   /* Remember, API for Add() is designed for production use, in a vector Backwards;
    * so we go back through i's and z's, and pass (q,r) vector coords
@@ -716,7 +716,7 @@ utest_engine(int do_intersected_mask, char *msg, ESL_RANDOMNESS *rng, ESL_ALPHAB
   P7_OPROFILE   *om    = p7_oprofile_Create(M, abc)
   ESL_SQ        *sq    = esl_sq_CreateDigital(abc);
   P7_CHECKPTMX  *ox    = p7_checkptmx_Create(M, L, ESL_MBYTES(32));
-  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L, p7_VDEFAULT);
+  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L);
   P7_SPARSEMX   *sx    = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxf   = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxb   = p7_sparsemx_Create(NULL);
@@ -761,7 +761,7 @@ utest_engine(int do_intersected_mask, char *msg, ESL_RANDOMNESS *rng, ESL_ALPHAB
       if ( p7_oprofile_ReconfigLength(om, sq->n) != eslOK) esl_fatal(msg);
 
       /* Fwd/Bck local filter to calculate the sparse mask */
-      if ( p7_checkptmx_GrowTo(ox, M, sq->n)                                 != eslOK) esl_fatal(msg);
+      if ( p7_checkptmx_Reinit(ox, M, sq->n)                                 != eslOK) esl_fatal(msg);
       if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
       if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
       if ( p7_sparsemask_Validate(sm, errbuf)                                != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
@@ -849,7 +849,7 @@ utest_engine(int do_intersected_mask, char *msg, ESL_RANDOMNESS *rng, ESL_ALPHAB
       p7_sparsemx_Reuse(sxb);
       p7_sparsemx_Reuse(sxf);
       p7_sparsemask_Reuse(sm);
-      p7_checkptmx_Reuse(ox);
+      //p7_checkptmx_Reuse(ox);
     }
 
   p7_masstrace_Destroy(mt);
@@ -1033,7 +1033,7 @@ main(int argc, char **argv)
 
   /* Use f/b filter to create sparse mask */
   ox = p7_checkptmx_Create(hmm->M, sq->n, ESL_MBYTES(32));
-  sm = p7_sparsemask_Create(gm->M, sq->n, p7_VDEFAULT);
+  sm = p7_sparsemask_Create(gm->M, sq->n);
   p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL);
   p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH);
   
