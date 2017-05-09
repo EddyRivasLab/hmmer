@@ -1,4 +1,4 @@
-/* Viterbi filter implementation
+/* Viterbi filter.
  * 
  * This is a SIMD vectorized, striped, interleaved, one-row, reduced
  * precision (epi16) implementation of the Viterbi algorithm.
@@ -10,29 +10,30 @@
  * underflow, in local alignment mode.
  * 
  * Contents:
- *   1. Viterbi filter implementation.
- *   2. Benchmark driver.
- *   3. Unit tests.
- *   4. Test driver.
- *   5. Example.
+ *   1. ViterbiFilter() API.
+ *   2. CPU dispatching to vector implementations.
+ *   3. Benchmark driver.
+ *   4. Unit tests.
+ *   5. Test driver.
+ *   6. Example.
  */
 #include "p7_config.h"
 
-#include <stdio.h>
-#include <math.h>
-
 #include "easel.h"
-#include "esl_gumbel.h"
+#include "esl_cpu.h"
 
 #include "base/p7_hmmwindow.h"
-#include "search/p7_pipeline.h"
-
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/p7_filtermx.h"
 #include "dp_vector/vitfilter.h"
 
+
+static int vitfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc);
+static int vitfilter_longtarget_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
+                                           float filtersc, double P, P7_HMM_WINDOWLIST *windowlist);
+
 /*****************************************************************
- * 1. Viterbi filter implementation.
+ * 1. ViterbiFilter() API
  *****************************************************************/
 
 /* Function:  p7_ViterbiFilter()
@@ -51,10 +52,6 @@
  *            
  *            The model must be in a local alignment mode; other modes
  *            cannot provide the necessary guarantee of no underflow.
- *            
- *            This is a striped SIMD Viterbi implementation using Intel
- *            SSE/SSE2 integer intrinsics \citep{Farrar07}, in reduced
- *            precision (signed words, 16 bits).
  *
  * Args:      dsq     - digital target sequence, 1..L
  *            L       - length of dsq in residues          
@@ -78,37 +75,14 @@
  *            J9/110-111 for reimplementation with P7_FILTERMX, memory share w/ checkpointed DP matrix
  *            J10/101 for separating P7_FILTERMX from P7_CHECKPTMX again: don't share these
  */
- /* This filter just dispatches to the appropriate SIMD version.  When possible, call that version directly to
-  * save the dispatch overhead.
-  */
 int
-p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)
-{
-  switch(om->simd){
-    case SSE:
-      return p7_ViterbiFilter_sse(dsq, L, om, ox, ret_sc);
-      break;
-    case AVX:
-      return p7_ViterbiFilter_avx(dsq, L, om, ox, ret_sc);
-      break;
-    case AVX512:
-      return p7_ViterbiFilter_avx512(dsq, L, om, ox, ret_sc);
-      break;
-    case NEON:
-      return p7_ViterbiFilter_neon(dsq, L, om, ox, ret_sc);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_ViterbiFilter");  
-  }
-
-}
-/*---------------- end, p7_ViterbiFilter() ----------------------*/
+(*p7_ViterbiFilter)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc) =
+  vitfilter_dispatcher;
 
 
 
 /* Function:  p7_ViterbiFilter_longtarget()
- * Synopsis:  Finds windows within potentially long sequence blocks with Viterbi
- *            scores above threshold (vewy vewy fast, in limited precision)
+ * Synopsis:  Viterbi filter for finding high-scoring windows in long sequences.
  *
  * Purpose:   Calculates an approximation of the Viterbi score for regions
  *            of sequence <dsq>, using optimized profile <om>, and a pre-
@@ -118,19 +92,15 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
  *            p=0.001).
  *
  *            The resulting landmarks are converted to subsequence
- *            windows by the calling function
+ *            windows by the calling function.
  *
  *            The model must be in a local alignment mode; other modes
  *            cannot provide the necessary guarantee of no underflow.
  *
- *            This is a striped SIMD Viterbi implementation using Intel
- *            SSE/SSE2 integer intrinsics \citep{Farrar07}, in reduced
- *            precision (signed words, 16 bits).
- *
- * Args:      dsq     - digital target sequence, 1..L
- *            L       - length of dsq in residues
- *            om      - optimized profile
- *            ox      - DP matrix
+ * Args:      dsq        - digital target sequence, 1..L
+ *            L          - length of dsq in residues
+ *            om         - optimized profile
+ *            ox         - DP matrix
  *            filtersc   - null or bias correction, required for translating a P-value threshold into a score threshold
  *            P          - p-value below which a region is captured as being above threshold
  *            windowlist - RETURN: preallocated array of hit windows (start and end of diagonal) for the above-threshold areas
@@ -141,35 +111,106 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *
  *            profile isn't in a local alignment mode. (Must be in local
  *            alignment mode because that's what helps us guarantee
  *            limited dynamic range.)
- *
- * Xref:      See p7_ViterbiFilter()
  */
 int
-p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox,
-                            float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
-{
-  switch(om->simd){
-    case SSE:
-      return p7_ViterbiFilter_longtarget_sse(dsq, L, om, ox, filtersc, P, windowlist);
-      break;
-    case AVX:
-      return p7_ViterbiFilter_longtarget_avx(dsq, L, om, ox, filtersc, P, windowlist);
-      break;
-    case AVX512:
-      return p7_ViterbiFilter_longtarget_avx512(dsq, L, om, ox, filtersc, P, windowlist);
-      break;
-    case NEON:
-      return p7_ViterbiFilter_longtarget_neon(dsq, L, om, ox, filtersc, P, windowlist);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_ViterbiFilter_longtarget");  
-    }
+(*p7_ViterbiFilter_longtarget)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox,
+                               float filtersc, double P, P7_HMM_WINDOWLIST *windowlist) =
+  vitfilter_longtarget_dispatcher;
 
-}
+
 
 
 /*****************************************************************
- * 2. Benchmark driver.
+ * 2. CPU dispatching to vector implementations.
+ *****************************************************************/
+
+static int
+vitfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)
+{
+#ifdef eslENABLE_AVX512  // Fastest first.
+  if (esl_cpu_has_avx512())
+    {
+      p7_ViterbiFilter = p7_ViterbiFilter_sse;
+      return p7_ViterbiFilter_sse(dsq, L, om, ox, ret_sc);
+    }
+#endif
+
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+      p7_ViterbiFilter = p7_ViterbiFilter_avx;
+      return p7_ViterbiFilter_avx(dsq, L, om, ox, ret_sc);
+    }
+#endif
+
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse())
+    {
+      p7_ViterbiFilter = p7_ViterbiFilter_sse;
+      return p7_ViterbiFilter_sse(dsq, L, om, ox, ret_sc);
+    }
+#endif
+  
+#ifdef eslENABLE_NEON
+  p7_ViterbiFilter = p7_ViterbiFilter_neon;
+  return p7_ViterbiFilter_neon(dsq, L, om, ox, ret_sc);
+#endif
+
+  //#ifdef eslENABLE_VMX
+  //  p7_ViterbFilter = p7_ViterbiFilter_vmx;
+  //  return p7_ViterbiFilter_vmx(dsq, L, om, ox, ret_sc);
+  //#endif
+
+  p7_Die("vitfilter_dispatcher found no vector implementation - that shouldn't happen.");
+}
+
+
+static int
+vitfilter_longtarget_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
+                                float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
+{
+#ifdef eslENABLE_AVX512  // Fastest first.
+  if (esl_cpu_has_avx512())
+    {
+      p7_ViterbiFilter_longtarget = p7_ViterbiFilter_longtarget_sse;
+      return p7_ViterbiFilter_longtarget_sse(dsq, L, om, ox, filtersc, P, windowlist);
+    }
+#endif
+
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+      p7_ViterbiFilter_longtarget = p7_ViterbiFilter_longtarget_avx;
+      return p7_ViterbiFilter_longtarget_avx(dsq, L, om, ox, filtersc, P, windowlist);
+    }
+#endif
+
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse())
+    {
+      p7_ViterbiFilter_longtarget = p7_ViterbiFilter_longtarget_sse;
+      return p7_ViterbiFilter_longtarget_sse(dsq, L, om, ox, filtersc, P, windowlist);
+    }
+#endif
+  
+#ifdef eslENABLE_NEON
+  p7_ViterbiFilter_longtarget = p7_ViterbiFilter_longtarget_neon;
+  return p7_ViterbiFilter_longtarget_neon(dsq, L, om, ox, filtersc, P, windowlist);
+#endif
+
+  //#ifdef eslENABLE_VMX
+  //  p7_ViterbFilter_longtarget = p7_ViterbiFilter_longtarget_vmx;
+  //  return p7_ViterbiFilter_longtarget_vmx(dsq, L, om, ox, filtersc, P, windowlist);
+  //#endif
+
+  p7_Die("vitfilter_dispatcher found no vector implementation - that shouldn't happen.");
+}
+
+
+
+
+/*****************************************************************
+ * 3. Benchmark driver.
  *****************************************************************/
 #ifdef p7VITFILTER_BENCHMARK
 /* -c, -x are used for debugging, testing; see msvfilter.c for explanation 
@@ -296,7 +337,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 3. Unit tests.
+ * 4. Unit tests.
  *****************************************************************/
 #ifdef p7VITFILTER_TESTDRIVE
 #include "esl_random.h"
@@ -368,7 +409,7 @@ utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
 
 
 /*****************************************************************
- * 4. Test driver
+ * 5. Test driver
  *****************************************************************/
 #ifdef p7VITFILTER_TESTDRIVE
 #include "p7_config.h"
@@ -444,7 +485,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 5. Example
+ * 6. Example
  *****************************************************************/
 #ifdef p7VITFILTER_EXAMPLE
 /* A minimal example.

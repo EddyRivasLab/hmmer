@@ -15,19 +15,15 @@
 
 #include "easel.h"
 #include "esl_cpu.h"
-#include "esl_vectorops.h"
-
-#include "dp_reference/p7_refmx.h"
-#include "dp_sparse/p7_sparsemx.h"
 
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/p7_checkptmx.h"
+#include "dp_sparse/p7_sparsemx.h"
 #include "dp_vector/fwdfilter.h"
 
 
 static int fwdfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc);
 static int bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh);
-
 
 
 
@@ -63,8 +59,8 @@ static int bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om
  * Xref:      For layout of checkpointed <ox> see exegesis in p7_checkptmx.h.
  */
 int 
-(*p7_ForwardFilter)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc) = fwdfilter_dispatcher;
-
+(*p7_ForwardFilter)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc) =
+  fwdfilter_dispatcher;
 
 
 /* Function:  p7_BackwardFilter()
@@ -94,7 +90,8 @@ int
  *            <eslEMEM> on allocation failure.
  */
 int
-(*p7_BackwardFilter)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh) = bckfilter_dispatcher;
+(*p7_BackwardFilter)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh) =
+  bckfilter_dispatcher;
 
 /*----------- end forward/backward API calls --------------------*/
 
@@ -103,7 +100,6 @@ int
 /*****************************************************************
  * 2. CPU dispatching to vector implementations.
  *****************************************************************/
-
 
 static int 
 fwdfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc)
