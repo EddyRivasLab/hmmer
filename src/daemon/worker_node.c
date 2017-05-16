@@ -37,7 +37,9 @@ P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, 
   workernode->my_shard = my_shard;
 
   workernode->hw = p7_hardware_Create();  // get information about the machine we're running on
-
+  if(workernode->hw == NULL){
+    p7_Fail("Unable to allocate memory in p7_daemon_workernode_Create\n");
+  }
   // allocate array[num_databases] of pointers to shards
   ESL_ALLOC(workernode->database_shards, (num_databases * sizeof(P7_SHARD *)));
   for(i = 0; i < num_databases; i++){
@@ -116,7 +118,9 @@ P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, 
   
   // Create enough hit objects for a large search
   workernode->empty_hit_pool = p7_hitlist_entry_pool_Create(500000);
-
+  if(workernode->empty_hit_pool == NULL){
+    p7_Fail("Unable to allocate memory in p7_daemon_workernode_Create\n");
+  }
   // allocate the work chunk descriptors we'll need
   workernode->global_chunk_pool = (P7_WORK_CHUNK *) malloc((num_threads +1) * sizeof(P7_WORK_CHUNK));
 
@@ -154,15 +158,11 @@ P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, 
   if(pthread_mutex_init(&(workernode->backend_threads_lock), NULL)){
     p7_Fail("Unable to create mutex in p7_daemon_workernode_Create");
   }
-  // this is far more backend queue entries than we should ever need, but setting it large to start
-  // with will simplify experimentation
-  workernode->backend_pool = p7_backend_pool_Create((workernode->num_threads +3) << BACKEND_INCREMENT_FACTOR);
-  // set up the sparsemasks in the backend pool entries
-  P7_BACKEND_QUEUE_ENTRY *temp = workernode->backend_pool;
 
-  while(temp != NULL){
-    temp->sm = p7_sparsemask_Create(400, 400, workernode->hw->simd);
-    temp = temp->next;
+  workernode->backend_pool = p7_backend_pool_Create(workernode->num_threads *10, workernode);
+  
+  if(workernode->backend_pool == NULL){
+    p7_Fail("Unable to allocate memory in p7_daemon_workernode_Create\n");
   }
 
   workernode->backend_queue = NULL;
@@ -200,7 +200,9 @@ int p7_daemon_workernode_Setup(uint32_t num_databases, char **database_names, ui
 
   // Then, create the workernode object
   *workernode = p7_daemon_workernode_Create(num_databases, num_shards, my_shard, worker_threads);
-
+  if(workernode == NULL){
+    p7_Fail("Unable to allocate memory in p7_daemon_workernode_Setup\n");
+  }
   // Next, read databases from disk and install shards in the workernode
   for(i = 0; i < num_databases; i++){
     P7_SHARD *current_shard;
@@ -212,10 +214,16 @@ int p7_daemon_workernode_Setup(uint32_t num_databases, char **database_names, ui
     if(!strncmp(id_string, "HMMER3", 5)){
       // This is an HMM file
       current_shard = p7_shard_Create_hmmfile(database_names[i], num_shards, my_shard);
+      if(current_shard == NULL){
+        p7_Fail("Unable to allocate memory in p7_daemon_workernode_Setup\n");
+      }
     }
     else if(!strncmp(id_string, "Easel dsqdata", 13)){
       // its a dsqdata file
       current_shard = p7_shard_Create_dsqdata(database_names[i], num_shards, my_shard);
+      if(current_shard == NULL){
+        p7_Fail("Unable to allocate memory in p7_daemon_workernode_Setup\n");
+      }
     }
     else{
       p7_Fail("Couldn't determine type of datafile for database %s in p7_daemon_workernode_setup\n", database_names[i]);
@@ -335,6 +343,7 @@ if(workernode->global_queue == NULL){
  while(pthread_mutex_trylock(&(workernode->global_queue_lock))){
     // spin-wait until the lock on global queue is cleared.  Should never be locked for long
   }
+ //      printf("Rank %d master thread locked global queue\n", workernode->my_rank);
 
   workernode->no_steal = 0;  // reset this to allow stealing work for the new search
   //install the model we'll be comparing against
@@ -356,7 +365,7 @@ if(workernode->global_queue == NULL){
     // need to push a new work chunk onto the queue
     P7_WORK_CHUNK *temp = workernode->global_chunk_pool;
       if(temp == NULL){
-        p7_Fail("Couldn't get a work chunk in worker_thread_front_end_sequence_search_loop\n");
+        p7_Fail("Couldn't get a work chunk in p7_daemon_workernode_add_work_hmm_vs_amino_db\n");
       }
 
     // pop the head of the free chunk Pool
@@ -369,14 +378,16 @@ if(workernode->global_queue == NULL){
     workernode->global_queue->start = start_object;
     workernode->global_queue->end = end_object;
   }
-  pthread_mutex_unlock(&(workernode->global_queue_lock)); // release lock        
+  pthread_mutex_unlock(&(workernode->global_queue_lock)); // release lock
+//    printf("Rank %d master thread unlocked global queue\n", workernode->my_rank);
+        
   return (eslOK);
 }
 
 // Configures the workernode to perform a search comparing one amino sequence against an HMM database
 int p7_daemon_workernode_setup_amino_vs_hmm_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, ESL_DSQ *compare_sequence, int64_t compare_L){
 
-
+  printf("Calling workernode_setup_amino_vs_hmm_db\n");
   if(workernode->search_type != IDLE){
     p7_Fail("p7_daemon_workernode_setup_amino_vs_hmm_db attempted to set up a new operation on a worker node while an old one was still in progress");
   }
@@ -475,6 +486,9 @@ int p7_daemon_workernode_setup_amino_vs_hmm_db(P7_DAEMON_WORKERNODE_STATE *worke
 
 P7_ENGINE_STATS *p7_daemon_workernode_aggregate_stats(P7_DAEMON_WORKERNODE_STATE *workernode){
   P7_ENGINE_STATS *combined_stats = p7_engine_stats_Create();
+  if(combined_stats == NULL){
+    p7_Fail("Unable to allocate memory in p7_workernode_aggregate_stats\n");
+  }
   int i;
   for(i = 0; i < workernode->num_threads; i++){
     combined_stats->n_past_msv += workernode->thread_state[i].engine->stats->n_past_msv;
@@ -489,37 +503,66 @@ P7_ENGINE_STATS *p7_daemon_workernode_aggregate_stats(P7_DAEMON_WORKERNODE_STATE
 
 void p7_daemon_workernode_Destroy(P7_DAEMON_WORKERNODE_STATE *workernode){
   int i;
-
+printf("Freeing shards\n");
   // free all the shards
   for(i = 0; i < workernode->num_shards; i++){
     if(workernode->database_shards[i] != NULL){
       p7_shard_Destroy(workernode->database_shards[i]);
     }
   }
-
-  // clean up the work descriptor locks
+printf("freeing work descriptors\n");
+  // clean up the work descriptor array
   for(i= 0; i < workernode->num_threads; i++){
     pthread_mutex_destroy(&(workernode->work[i].lock));
   }
-
-  // free the work descriptors
   free(workernode->work);
+printf("Freeing backend queue entries\n");
+  // Free the backend queue entries
+  P7_BACKEND_QUEUE_ENTRY *current, *next;
+  current = workernode->backend_pool;
+  while(current != NULL){
+    next = current->next;
+    p7_sparsemask_Destroy(current->sm);
+    free(current);
+    current = next;
+   }
+
+
+    
+printf("Freeing workernode state\n");
+  //Free the workernode state objects
+  for(i = 0; i < workernode->num_threads; i++){
+    if(workernode->thread_state[i].engine != NULL){
+      p7_engine_Destroy(workernode->thread_state[i].engine);
+    }
+   if(workernode->thread_state[i].gm != NULL){
+      p7_profile_Destroy(workernode->thread_state[i].gm);
+    }
+    if(workernode->thread_state[i].om != NULL){
+      p7_oprofile_Destroy(workernode->thread_state[i].om);
+    }
+    if(workernode->thread_state[i].bg != NULL){
+      p7_bg_Destroy(workernode->thread_state[i].bg);
+    } 
+    pthread_join(workernode->thread_objs[i], NULL); 
+  }
+ free(workernode->thread_objs);
 
   // clean up the wait lock
   pthread_mutex_destroy(&(workernode->wait_lock));
 
-  if(workernode->compare_model){
+printf("Freeing compare model\n");
+  if(workernode->compare_model != NULL){
     P7_PROFILE *the_model = workernode->compare_model;
     p7_profile_Destroy(the_model);
   }
 
+printf("Freeing compare sequence\n");
   if(workernode->compare_sequence){
     free(workernode->compare_sequence);
   }
 
-  // free up the space allocated for pthread objects
-  free(workernode->thread_objs);
-    
+printf("Freeing workernode\n");
   //finally, free the workernode structure itself
   free(workernode);
 }
@@ -564,6 +607,7 @@ int p7_daemon_workernode_create_threads(P7_DAEMON_WORKERNODE_STATE *workernode){
     if(pthread_create(&(workernode->thread_objs[i]), &attr, p7_daemon_worker_thread, (void *) the_argument)){
       p7_Fail("Unable to create thread %d in p7_daemon_workernode_create_threads", i);
     }
+    pthread_attr_destroy(&attr);
   }
 
   return eslOK;
@@ -606,7 +650,23 @@ void p7_daemon_workernode_end_search(P7_DAEMON_WORKERNODE_STATE *workernode){
   }
   free(workernode->sequences_processed);
 #endif
+  int i;
+  // Destroy or recycle models
+  for(i = 0; i < workernode->num_threads; i++){
+    p7_profile_Destroy(workernode->thread_state[i].gm);
+    workernode->thread_state[i].gm = NULL;
+    p7_oprofile_Destroy(workernode->thread_state[i].om);
+    workernode->thread_state[i].om = NULL;
+    p7_bg_Destroy(workernode->thread_state[i].bg);
+    workernode->thread_state[i].bg = NULL;
 
+  }
+
+  if(workernode->compare_model != NULL){
+    esl_alphabet_Destroy((ESL_ALPHABET *) workernode->compare_model->abc);
+    p7_profile_Destroy(workernode->compare_model);
+    workernode->compare_model = NULL;
+  }
   // First, mark the node idle
   workernode->search_type = IDLE;
 
@@ -629,7 +689,7 @@ void *p7_daemon_worker_thread(void *worker_argument){
   P7_DAEMON_WORKERNODE_STATE *workernode = my_argument->workernode;
 
   //printf("Worker thread %d starting up\n", my_id);
-  free(worker_argument); // release our argument now that we're done with it.  
+ // free(worker_argument); // release our argument now that we're done with it.  
 
   // Tell the master thread that we're awake and ready to go
   if(pthread_mutex_lock(&(workernode->wait_lock))){  // Use blocking lock here because we may be waiting a while
@@ -642,9 +702,21 @@ void *p7_daemon_worker_thread(void *worker_argument){
   // create the engine object we'll use 
   ESL_ALPHABET *temp_abc = esl_alphabet_Create(eslAMINO); // All we use the alphabet for in engine_Create is setting the size of the
   // wrkKp field, so use the biggest alphabet 
+  if(temp_abc == NULL){
+    p7_Fail("Unable to allocate memory in p7_daemon_worker_thread\n");
+  }
   P7_ENGINE_STATS *engine_stats = p7_engine_stats_Create();
+  if(engine_stats == NULL){
+    p7_Fail("Unable to allocate memory in p7_daemon_worker_thread\n");
+  }
   workernode->thread_state[my_id].engine = p7_engine_Create(temp_abc, NULL, engine_stats, 400, 400);
+  if(workernode->thread_state[my_id].engine == NULL){
+    p7_Fail("Unable to allocate memory in p7_daemon_worker_thread\n");
+  }
   workernode->thread_state[my_id].empty_hit_pool = p7_hitlist_entry_pool_Create(HITLIST_POOL_SIZE);
+   if(workernode->thread_state[my_id].empty_hit_pool == NULL){
+    p7_Fail("Unable to allocate memory in p7_daemon_worker_thread\n");
+  }
   pthread_cond_wait(&(workernode->go), &(workernode->wait_lock)); // wait until master tells us to go
 
   pthread_mutex_unlock(&(workernode->wait_lock));  // We come out of pthread_cond_wait holding the lock,
@@ -666,22 +738,35 @@ void *p7_daemon_worker_thread(void *worker_argument){
     uint64_t chunk_length, sequences_processed; 
     switch(workernode->search_type){ // do the right thing for each search type
       case SEQUENCE_SEARCH:
+      case SEQUENCE_SEARCH_CONTINUE:     
+ 
+        // Create any models we need. Check every time to avoid race condition between requests for more work at the start of a search
+        // and threads starting up
+        if(workernode->thread_state[my_id].bg == NULL){
+          workernode->thread_state[my_id].bg = p7_bg_Create(workernode->compare_model->abc);
+          if(workernode->thread_state[my_id].bg == NULL){
+            p7_Fail("Unable to allocate memory in p7_daemon_worker_thread\n");
+          }
+        }
+        if(workernode->thread_state[my_id].gm == NULL){
+          workernode->thread_state[my_id].gm = p7_profile_Create (workernode->compare_model->M, workernode->compare_model->abc);
+          if(workernode->thread_state[my_id].gm == NULL){
+            p7_Fail("Unable to allocate memory in p7_daemon_worker_thread\n");
+          }
+          p7_profile_Copy(workernode->compare_model, workernode->thread_state[my_id].gm);
+        }
+        if(workernode->thread_state[my_id].om == NULL){
+          workernode->thread_state[my_id].om = p7_oprofile_Create(workernode->thread_state[my_id].gm->M, workernode->thread_state[my_id].gm->abc, workernode->thread_state[my_id].engine->hw->simd);      
+          if(workernode->thread_state[my_id].om == NULL){
+            p7_Fail("Unable to allocate memory in p7_daemon_worker_thread\n");
+          }
 
-        // Create the models we'll use
-        workernode->thread_state[my_id].bg = p7_bg_Create(workernode->compare_model->abc);
+          p7_oprofile_Convert (workernode->thread_state[my_id].gm, workernode->thread_state[my_id].om);
 
-        workernode->thread_state[my_id].gm = p7_profile_Create (workernode->compare_model->M, workernode->compare_model->abc);
-        p7_profile_Copy(workernode->compare_model, workernode->thread_state[my_id].gm);
-
-
-        workernode->thread_state[my_id].om = p7_oprofile_Create(workernode->thread_state[my_id].gm->M, workernode->thread_state[my_id].gm->abc, workernode->thread_state[my_id].engine->hw->simd);      
-
-        p7_oprofile_Convert (workernode->thread_state[my_id].gm, workernode->thread_state[my_id].om);
-
-        p7_bg_SetFilter(workernode->thread_state[my_id].bg, workernode->thread_state[my_id].om->M, workernode->thread_state[my_id].om->compo);
+          p7_bg_SetFilter(workernode->thread_state[my_id].bg, workernode->thread_state[my_id].om->M, workernode->thread_state[my_id].om->compo);
+        }
 
         sequences_processed = 0;
-      case SEQUENCE_SEARCH_CONTINUE:  // used when we get additional work chunks for an ongoing search
         stop = 0;
         while(stop == 0){
           switch(workernode->thread_state[my_id].mode){
@@ -751,6 +836,7 @@ int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
  // printf("Rank %d thread %d entering front-end loop\n", workernode->my_rank, my_id);
 
   while(1){ // stop condition codes in loop body call return directly
+ 
 
     // Try to grab some work from the global queue
     while(pthread_mutex_trylock(&(workernode->work[my_id].lock))){
@@ -774,6 +860,7 @@ int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
         // no more work, stop looping
         if(workernode->backend_queue_depth == 0){
         // There are also no backend queue entries to process
+        p7_engine_Reuse(workernode->thread_state[my_id].engine); // scrub the engine for next time
         return 1;
         }
         else{
@@ -788,6 +875,7 @@ int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
             workernode->thread_state[my_id].mode = BACKEND;
           }
           pthread_mutex_unlock(&(workernode->backend_threads_lock));
+          p7_engine_Reuse(workernode->thread_state[my_id].engine); // scrub the engine for next time
           return 0;
         }
       }
@@ -822,7 +910,7 @@ int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
         // grab the sequence Id and length out of the shard
         chunk_end = workernode->work[my_id].end; // update this to reduce redundant work.
         // don't need to lock because we aren't writing anything and will do a locked check before processing hits
-
+ 
         uint64_t seq_id = *((uint64_t *) the_sequence);
         the_sequence += sizeof(uint64_t);
         uint64_t L = *((uint64_t *) the_sequence);
@@ -902,6 +990,8 @@ int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
             // spin-wait until the lock on the global queue is cleared.  Should never be locked for long
             // Locking global while we have a local queue lock is ok, must never do this in the other order
             }
+//           printf("Rank %d thread %d locked global queue\n", workernode->my_rank, my_id);
+
             //printf("Thread %d trying to grab work chunk\n", my_id);
             P7_WORK_CHUNK *temp = workernode->global_chunk_pool;
             if(temp == NULL){
@@ -918,8 +1008,11 @@ int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
             workernode->global_queue->start = p7_shard_Find_Index_Nexthigh(workernode->database_shards[workernode->compare_database], start + 1);
             workernode->global_queue->end = end;
 //            printf("Thread %d pushed range from %lu to %lu onto queue\n", my_id, workernode->global_queue->start, workernode->global_queue->end);
-            pthread_mutex_unlock(&(workernode->global_queue_lock)); // release lock               
+            pthread_mutex_unlock(&(workernode->global_queue_lock)); // release lock  
+//          printf("Rank %d thread %d unlocked global queue\n", workernode->my_rank, my_id);
+             
           }
+          p7_engine_Reuse(workernode->thread_state[my_id].engine);
           return(0);
         }
 
@@ -940,7 +1033,9 @@ void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
   /*if(the_entry == NULL){
     printf("Thread %d found no entries on queue when starting backend loop\n", my_id);
   }*/
-
+  if(my_id > 34){
+    printf("My_id of %u passed to back end search loop\n", my_id);
+  }
   ESL_RED_BLACK_DOUBLEKEY *the_hit_entry;
   while(the_entry != NULL){
     // do the backend comparison 
@@ -1003,6 +1098,8 @@ void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
 
       pthread_mutex_unlock(&(workernode->thread_state[my_id].hits_lock));
     }
+
+
     p7_put_backend_queue_entry_in_pool(workernode, the_entry); // Put the entry back in the free pool
     p7_engine_Reuse(workernode->thread_state[my_id].engine);  // Reset engine structure for next comparison
     the_entry = p7_get_backend_queue_entry_from_queue(workernode); //see if there's another backend operation to do
@@ -1071,6 +1168,7 @@ uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_
  while(pthread_mutex_trylock(&(workernode->global_queue_lock))){
     // spin-wait until the lock on global queue is cleared.  Should never be locked for long
   }
+//  printf("Rank %d thread %d locked global queue\n", workernode->my_rank, my_id);
   if(workernode->global_queue == NULL){
     printf("Found NULL global queue in worker_thread_get_chunk\n");
   }
@@ -1090,6 +1188,7 @@ uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_
     else{
       // work queue is empty
       pthread_mutex_unlock(&(workernode->global_queue_lock));
+//        printf("Rank %d thread %d unlocked global queue\n", workernode->my_rank, my_id);
       if(!workernode->work_requested && !workernode->master_queue_empty && !workernode->request_work){
         // request more work from master because nobody else has
         while(pthread_mutex_trylock(&(workernode->work_request_lock))){
@@ -1162,6 +1261,8 @@ uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_
   *start = my_start;
   *end = my_end;
   pthread_mutex_unlock(&(workernode->global_queue_lock));
+ //         printf("Rank %d thread %d unlocked global queue\n", workernode->my_rank, my_id);
+
   return(1); // signal that we found work
 }
 
@@ -1292,31 +1393,29 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
 
 // Creates a set of empty P7_BACKEND_QUEUE_ENTRY objects, links them into a list, and returns a pointer to the head of the list 
 // Fails with an error if unable to allocate memory
-P7_BACKEND_QUEUE_ENTRY *p7_backend_pool_Create(int num_entries){
+P7_BACKEND_QUEUE_ENTRY *p7_backend_pool_Create(int num_entries, P7_DAEMON_WORKERNODE_STATE *workernode){
   if(num_entries == 0){
     p7_Fail("Requesting the allocation of 0 P7_BACKEND_QUEUE_ENTRY objects is not allowed\n");
   }
   int status;  // secret return code used inside ESL_ALLOC;
-  P7_BACKEND_QUEUE_ENTRY *the_entries;
+  P7_BACKEND_QUEUE_ENTRY *the_entry, *prev;
 
-  ESL_ALLOC(the_entries, num_entries * sizeof(P7_HIT_CHUNK));
-
+  prev = NULL;
   int i;
-  for(i = 0; i< (num_entries-1); i++){
-    the_entries[i].sequence = NULL;
-    the_entries[i].L = 0;
-    the_entries[i].biassc = 0.0;
-    the_entries[i].next = &(the_entries[i+1]);
-    the_entries[i].sm = NULL;
+  for(i = 0; i< (num_entries); i++){
+    ESL_ALLOC(the_entry, sizeof(P7_BACKEND_QUEUE_ENTRY));
+    the_entry->sequence = NULL;
+    the_entry->L = 0;
+    the_entry->biassc = 0.0;
+    the_entry->next = prev;
+    the_entry->sm = p7_sparsemask_Create(400, 400, workernode->hw->simd);
+    if(the_entry->sm == NULL){
+      p7_Fail("Unable to allocate memory in p7_daemon_workernode_Create\n");
+    }
+    prev = the_entry;
   }
 
-  //special-case the last entry
-  the_entries[num_entries-1].sequence = NULL;
-  the_entries[num_entries-1].L = 0;
-  the_entries[num_entries-1].biassc = 0.0;
-  the_entries[num_entries-1].next = NULL;
-  the_entries[num_entries-1].sm = NULL;
-  return(the_entries);
+  return the_entry;
   // GOTO target used to catch error cases from ESL_ALLOC
 ERROR:
   p7_Fail("Unable to allocate memory in p7_backend_pool_Create");  
@@ -1331,7 +1430,11 @@ P7_BACKEND_QUEUE_ENTRY *p7_get_backend_queue_entry_from_pool(P7_DAEMON_WORKERNOD
         // spin-wait until the lock on our queue is cleared.  Should never be locked for long
   }
   if(workernode->backend_pool == NULL){
-    p7_Fail("Pool of backend queue entries was empty\n");
+    workernode->backend_pool = p7_backend_pool_Create(workernode->num_threads * 10, workernode);
+  
+    if(workernode->backend_pool == NULL){
+      p7_Fail("Unable to allocate memory in p7_daemon_get_backend_queue_entry_from_pool\n");
+    }   
   }
 
   the_entry = workernode->backend_pool;
@@ -1445,12 +1548,14 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
   int status; // return code from ESL routines
   char *send_buf; // MPI buffer used to send hits to master
   int send_buf_length = 100000;
- struct timeval start, end;
+// struct timeval start, end;
   // default to 100k, send code will resize as necessary
   ESL_ALLOC(send_buf, send_buf_length * sizeof(char));
 
-
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  if(go == NULL){
+    p7_Fail("Unable to allocate memory in worker_node_main\n");
+  }
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
   uint32_t num_worker_cores;
@@ -1502,14 +1607,13 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
     P7_HMM         *hmm     = NULL;
     ESL_ALPHABET   *abc     = NULL;
 
-    P7_BG          *bg      = NULL;
-    P7_PROFILE     *gm      = NULL;
-    P7_OPROFILE    *om      = NULL;
-    P7_ENGINE      *eng     = NULL;
+      P7_PROFILE     *gm      = NULL;
+//    P7_OPROFILE    *om      = NULL;
+//    P7_ENGINE      *eng     = NULL;
 
     switch(the_command.type){
       case P7_DAEMON_HMM_VS_SEQUENCES: // Master node wants us to compare an HMM to a database of sequences
-        gettimeofday(&start, NULL);
+//        gettimeofday(&start, NULL);
         if(compare_obj_buff_length < the_command.compare_obj_length){
           //need more buffer space
           ESL_REALLOC(compare_obj_buff, the_command.compare_obj_length); // create buffer to receive the HMM in
@@ -1525,13 +1629,6 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
 
         p7_profile_mpi_Unpack(compare_obj_buff, compare_obj_buff_length, &temp_pos, hmmer_control_comm, &abc, &gm);
 
-        bg = p7_bg_Create(abc);
-
-        eng = p7_engine_Create(abc, NULL, NULL, gm->M, 400);
-
-        om = p7_oprofile_Create(gm->M, gm->abc, eng->hw->simd); 
-
-        p7_oprofile_Convert (gm, om);
         ESL_RED_BLACK_DOUBLEKEY *last_hit_tree;
 
         // Wait to get an initial work range back from the master
@@ -1568,8 +1665,6 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
                 //printf("Thread %d receiving work\n", my_rank);
                 p7_workernode_wait_for_Work(&work_reply, daemon_mpitypes);
                 works_received++;
-                while(pthread_mutex_trylock(&(workernode->work_request_lock))){ // grab the lock on the work request variables
-                }
                 //printf("Worker node %d received chunk with %d threads waiting, start = %lu and end = %lu\n", my_rank, workernode->num_waiting, work_reply.start, work_reply.end);
                 if(work_reply.start != -1){
                   //We got more work from the master node
@@ -1578,6 +1673,8 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
                 }
                 else{
                   workernode->master_queue_empty = 1;  // The master is out of work to give
+                }
+                while(pthread_mutex_trylock(&(workernode->work_request_lock))){ // grab the lock on the work request variables
                 }
                 workernode->work_requested = 0; // no more pending work
                 pthread_mutex_unlock(&(workernode->work_request_lock));
@@ -1684,7 +1781,7 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
             }
           }
         }
- //       printf("Workernode %d found %d hits to send at end of search\n", my_rank, workernode->hits_in_tree++);
+//        printf("Workernode %d found %d hits to send at end of search\n", my_rank, workernode->hits_in_tree++);
         if(p7_mpi_send_and_recycle_unsorted_hits(workernode->hit_tree, 0, HMMER_HIT_FINAL_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length, workernode) != eslOK){
           p7_Fail("Failed to send hit messages to master\n");
         }
@@ -1692,8 +1789,8 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
         workernode->hits_in_tree = 0;
  //     printf("Worker %d sent final hits\n", my_rank);
         p7_daemon_workernode_end_search(workernode);
-        gettimeofday(&end, NULL);
-        printf("Rank %d, %f\n", my_rank, ((float)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0);
+//        gettimeofday(&end, NULL);
+//        printf("Rank %d, %f\n", my_rank, ((float)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0);
   
  //       printf("Worker %d finished search\n", my_rank);
         break;
@@ -1701,6 +1798,9 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
         // spurious barrier for testing so that master doesn't exit immediately
  //       printf("Worker %d received shutdown command\n", my_rank);
         MPI_Barrier(hmmer_control_comm);
+        workernode->shutdown = 1; // tell threads to shut down
+        p7_daemon_workernode_release_threads(workernode); // release any waiting threads to process the shutdown
+        p7_daemon_workernode_Destroy(workernode);
         exit(0);
         break;
       default:

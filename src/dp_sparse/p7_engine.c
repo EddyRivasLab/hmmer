@@ -545,7 +545,7 @@ p7_engine_Overthruster_tophalf(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE 
 #ifdef ENGINE_FWD_TOPHALF 
   /* Checkpointed vectorized Forward, local-only.
    */
-  status = eng->fwd(dsq, L, om, eng->cx, &(eng->ffsc));
+  status = eng->fwd(dsq, L, (const P7_OPROFILE *) om, eng->cx, &(eng->ffsc));
   if (status != eslOK) return status;
 
   seq_score = (eng->ffsc - eng->biassc) / eslCONST_LOG2;

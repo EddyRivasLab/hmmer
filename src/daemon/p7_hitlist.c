@@ -68,12 +68,19 @@ ESL_RED_BLACK_DOUBLEKEY *p7_get_hit_tree_entry_from_pool(P7_DAEMON_WORKERNODE_ST
         //printf("Thread %d found entries gone after lock, creating more\n",my_id);
         // the global free pool was empty by the time we acquired the lock
         workernode->thread_state[my_id].empty_hit_pool = p7_hitlist_entry_pool_Create(HITLIST_POOL_SIZE);
+        if(workernode->thread_state[my_id].empty_hit_pool == NULL){
+          p7_Fail("Unable to allocate memory in p7_get_hit_tree_entry_from_pool");
+        }
       }
     }
     else{
       //printf("Thread %d found no entries in global pool, allocating more\n",my_id);
       // global free hit pool is empty, allocate new ones
       workernode->thread_state[my_id].empty_hit_pool = p7_hitlist_entry_pool_Create(HITLIST_POOL_SIZE);
+
+      if(workernode->thread_state[my_id].empty_hit_pool == NULL){
+        p7_Fail("Unable to allocate memory in p7_get_hit_tree_entry_from_pool");
+      }
     }
   }
   
@@ -99,6 +106,10 @@ ESL_RED_BLACK_DOUBLEKEY *p7_get_hit_tree_entry_from_masternode_pool(P7_DAEMON_MA
     //printf("Thread %d found no entries in global pool, allocating more\n",my_id);
     // global free hit pool is empty, allocate new ones
     masternode->empty_hit_pool = p7_hitlist_entry_pool_Create(HITLIST_POOL_SIZE);
+
+    if(masternode->empty_hit_pool == NULL){
+      p7_Fail("Unable to allocate memory in p7_get_hit_tree_entry_from_masternode_pool");
+    }
   }  
 
   // grab the first free hit off of the pool now that we know there is one 
@@ -121,9 +132,14 @@ ESL_RED_BLACK_DOUBLEKEY *p7_hitlist_entry_pool_Create(uint32_t num_entries){
   // allocate all the hits in one big lump
   P7_HIT *hits = p7_hit_Create(num_entries);
 
+  if(hits == NULL){
+    p7_Fail("Unable to allocate memory in p7_hitlist_entry_pool_Create");
+  }
   // create the tree nodes
   ESL_RED_BLACK_DOUBLEKEY *pool = esl_red_black_doublekey_pool_Create(num_entries);
-
+  if(hits == NULL){
+    p7_Fail("Unable to allocate memory in p7_hitlist_entry_pool_Create");
+  }
   // make the hits the contents of the tree nodes
   int i;
   for(i = 0; i < num_entries; i++){
@@ -192,51 +208,50 @@ void p7_print_and_recycle_hit_tree(char *filename, ESL_RED_BLACK_DOUBLEKEY *tree
   tail_ptr = NULL;
   head = &head_ptr; // need someplace to write return values
   tail = &tail_ptr;
-
-  if(esl_red_black_doublekey_convert_to_sorted_linked(tree, head, tail) != eslOK){
-    p7_Fail("Conversion of tree to linked list failed\n");
-  }
   FILE *outfile;
   outfile = fopen(filename, "w");
   uint64_t count = 0;
-  current = tail_ptr; //start at low end of list
-  while(current != NULL){
-    current_hit = (P7_HIT *) current->contents;
-    fprintf(outfile, "%lu %s %s %s\n", current_hit->seqidx, current_hit->name, current_hit->acc, current_hit->desc);
-    count++;
-    current = current->large;
-  }
-  fprintf(outfile, "%lu hits found\n", count);
-  fclose(outfile);
 
+  if(tree != NULL){  // There were hits to print
+
+    if(esl_red_black_doublekey_convert_to_sorted_linked(tree, head, tail) != eslOK){
+      p7_Fail("Conversion of tree to linked list failed\n");
+    }
+    
+    current = tail_ptr; //start at low end of list
+    while(current != NULL){
+      current_hit = (P7_HIT *) current->contents;
+      fprintf(outfile, "%lu %s %s %s\n", current_hit->seqidx, current_hit->name, current_hit->acc, current_hit->desc);
+      count++;
+      current = current->large;
+    }
   // Now, recycle the hits
-  // First, get the lock on the pool.  Spin-wait because the list should never be locked for long
-  //while(pthread_mutex_trylock(&(workernode->empty_hit_pool_lock))){
-  //}
   (*head)->large = masternode->empty_hit_pool; // add any hits already in the pool to the end of the list
   masternode->empty_hit_pool = *tail; // empty pool starts at the small end of the list;
-  //pthread_mutex_unlock(&(workernode->empty_hit_pool_lock)); 
+  (*tail)->small = NULL;  // break the circular list that convert_to_sorted_linked creates so that we don't infinite-loop trying to free it
+  masternode->hit_tree = NULL;
+  } 
+  fprintf(outfile, "%lu hits found\n", count);
+  fclose(outfile);
 
 }
 
 
 //! Destroys a hitlist and frees its memory
 /*! @param the_list the list to be destroyed */
-void p7_hitlist_Destroy(P7_HITLIST *the_list, struct p7_daemon_workernode_state *workernode){
-
-  // Free all of the chunks in the list.
-  // Note that this also fres all of the hitlist entries, so don't need to free them separately
-  P7_HIT_CHUNK *current, *prev;
-  current = the_list->chunk_list_end;
-  // walk through the chunk list in reverse order to avoid repeatedly freeing the same hits
-/*  while(current != NULL){
-    prev= current->prev;
-    p7_hit_chunk_Destroy(current, workernode);
-    current = prev;
+void p7_hitlist_Destroy(ESL_RED_BLACK_DOUBLEKEY *the_list){
+  if(the_list == NULL){
+    return; // list was already empty
   }
-*/
-  // free the list's lock
-  pthread_mutex_destroy(&(the_list->lock));
+  // Recursively destroy sub-trees
+  if(the_list->small != NULL){
+    p7_hitlist_Destroy(the_list->small);
+  }
+  if(the_list->large != NULL){
+    p7_hitlist_Destroy(the_list->large);
+  }
+  //Now, free the root node
+  p7_hit_Destroy((P7_HIT *) the_list->contents, 1);
   free(the_list);
 }
 
@@ -336,7 +351,8 @@ int p7_mpi_send_and_recycle_unsorted_hits(ESL_RED_BLACK_DOUBLEKEY *hits, int des
 
   return eslOK;  // We haven't failed, therefore have succeeded
 
-ERROR:
+ERROR: 
+  p7_Fail("Unable to allocate memory in p7_mpi_send_and_recycle_unsorted_hits");
   return eslFAIL;
 #endif
 }

@@ -37,6 +37,9 @@ P7_DAEMON_MASTERNODE_STATE *p7_daemon_masternode_Create(uint32_t num_shards, int
 
   // pre-allocate enough hits for a large search 
   the_node->empty_hit_pool = p7_hitlist_entry_pool_Create(500000);
+  if(the_node->empty_hit_pool == NULL){
+    p7_Fail("Unable to allocate memory in p7_daemon_masternode_Create\n");
+  }
   the_node->hit_tree = NULL; // starts out empty
 
   the_node->num_worker_nodes = num_worker_nodes;
@@ -48,6 +51,9 @@ P7_DAEMON_MASTERNODE_STATE *p7_daemon_masternode_Create(uint32_t num_shards, int
   for(i = 0; i < 10; i++){
     P7_DAEMON_MESSAGE *the_message;
     the_message = p7_daemon_message_Create();
+    if(the_message == NULL){
+      p7_Fail("Unable to allocate memory in p7_daemon_masternode_Create\n");
+    }
     the_message->next = (P7_DAEMON_MESSAGE *) the_node->empty_hit_message_pool;
     the_node->empty_hit_message_pool = the_message;
   }
@@ -67,7 +73,7 @@ P7_DAEMON_MASTERNODE_STATE *p7_daemon_masternode_Create(uint32_t num_shards, int
       p7_Fail("Unable to create mutex in p7_daemon_masternode_Create");
     }
 
-
+  the_node->hit_thread_ready = 0;
   // init the go contition variable
   pthread_cond_init(&(the_node->go), NULL);
   the_node->shutdown = 0; // Don't shutdown immediately
@@ -78,6 +84,54 @@ ERROR:
   p7_Fail("Unable to allocate memory in p7_daemon_masternode_Create");  
 }
 
+void p7_daemon_masternode_Destroy(P7_DAEMON_MASTERNODE_STATE *masternode){
+  int i;
+ // printf("Calling masternode_destroy\n");
+  // Clean up the database shards
+  for(i = 0; i < masternode->num_databases; i++){
+    p7_shard_Destroy(masternode->database_shards[i]);
+  }
+  free(masternode->database_shards);
+
+  // and the message pools
+  P7_DAEMON_MESSAGE *current, *next;
+  int empty_messages = 0;
+  int full_messages = 0;
+  //printf("Freeing message buffers\n");
+  current = (P7_DAEMON_MESSAGE *) masternode->empty_hit_message_pool;
+  while(current != NULL){
+    empty_messages++;
+    next = current->next;
+    free(current->buffer);
+    free(current);
+    current = next;
+  }
+
+  current = (P7_DAEMON_MESSAGE *) masternode->full_hit_message_pool;
+  while(current != NULL){
+    full_messages++;
+    next = current->next;
+    free(current->buffer);
+    free(current);
+    current = next;
+  }
+
+ // printf("Freed %d empty and %d full message buffers\n", empty_messages, full_messages);
+
+    //Free the hit list
+  p7_hitlist_Destroy(masternode->hit_tree);
+  // and the free hit pool
+ // p7_hitlist_Destroy(masternode->empty_hit_pool);
+  // clean up the pthread mutexes
+  pthread_mutex_destroy(&(masternode->empty_hit_message_pool_lock));
+  pthread_mutex_destroy(&(masternode->full_hit_message_pool_lock));
+  pthread_mutex_destroy(&(masternode->hit_wait_lock));
+
+  free(masternode->work_queues);
+
+  // and finally, the base object
+  free(masternode);
+}
 void p7_daemon_masternode_Setup(uint32_t num_shards, uint32_t num_databases, char **database_names, P7_DAEMON_MASTERNODE_STATE *masternode){
    // Next, read databases from disk and install shards in the workernode
   
@@ -99,17 +153,19 @@ void p7_daemon_masternode_Setup(uint32_t num_shards, uint32_t num_databases, cha
     if(!strncmp(id_string, "HMMER3", 5)){
       // This is an HMM file
       current_shard = p7_shard_Create_hmmfile(database_names[i], 1, 0);
+      if(current_shard == NULL){
+        p7_Fail("Unable to allocate memory in p7_daemon_masternode_Create\n");
+      }
     }
     else if(!strncmp(id_string, "Easel dsqdata", 13)){
       // its a dsqdata file
       current_shard = p7_shard_Create_dsqdata(database_names[i], 1, 0);
+      if(current_shard == NULL){
+        p7_Fail("Unable to allocate memory in p7_daemon_masternode_Create\n");
+      }
     }
     else{
       p7_Fail("Couldn't determine type of datafile for database %s in p7_daemon_workernode_setup\n", database_names[i]);
-    }
-
-    if(current_shard == NULL){
-      p7_Fail("Couldn't read shard from disk in p7_daemon_workernode_Start");
     }
 
     if(i > masternode->num_databases){
@@ -161,10 +217,14 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
 
 
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  if(go == NULL){
+    p7_Fail("Unable to allocate memory in master_node_main\n");
+  }
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
 
   uint64_t num_searches = esl_opt_GetInteger(go, "-n");
+  esl_getopts_Destroy(go); // done with the options now
 
   ESL_ALPHABET   *abc     = NULL;
   int status; // return code from ESL routines
@@ -183,6 +243,9 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
   // Set up the masternode state object for this node
   P7_DAEMON_MASTERNODE_STATE *masternode;
   masternode = p7_daemon_masternode_Create(num_shards, num_nodes -1);
+  if(masternode == NULL){
+    p7_Fail("Unable to allocate memory in master_node_main\n");
+  }
 
   // load the databases
   p7_daemon_masternode_Setup(num_shards, 2, database_names, masternode);
@@ -252,23 +315,28 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
     p7_Fail("Couldn't create pthread attr structure in master_node_main");
   }
   if(pthread_create(&(masternode->hit_thread_object), &attr, p7_daemon_master_hit_thread, (void *) &hit_argument)){
-      p7_Fail("Unable to create hit thread in master_node_main");
-    }
+    p7_Fail("Unable to create hit thread in master_node_main");
+  }
+  if(pthread_attr_destroy(&attr)){
+    p7_Fail("Couldn't destroy pthread attr structure in master_node_main");
+  }
 
-  while(pthread_mutex_trylock(&(masternode->hit_wait_lock))){  // Acquire this to make cond_wait work
-    }
-  pthread_cond_wait(&masternode->go, &(masternode->hit_wait_lock)); // wait until hit processing thread is ready to start
-  pthread_mutex_unlock(&(masternode->hit_wait_lock));
-
- 
+  while(!masternode->hit_thread_ready){
+    // wait for the hit thread to start up;
+  }
   struct timeval start, end;
   P7_DAEMON_COMMAND the_command;
   the_command.type = P7_DAEMON_HMM_VS_SEQUENCES;
   the_command.db = 0;
   char outfile_name[255];
   int search;
+  P7_DAEMON_MESSAGE *buffer, **buffer_handle; //Use this to avoid need to re-aquire message buffer
+  // when we poll and don't find a message
+  buffer = NULL;
+  buffer_handle = &(buffer);
 
   for(search = 0; search < num_searches; search++){
+    masternode->hit_messages_received = 0;
     gettimeofday(&start, NULL);
   
     uint64_t search_start, search_end, chunk_size;
@@ -276,6 +344,8 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
     // For now_search the entire database
     search_start = database_shard->directory[0].id;
     search_end = database_shard->directory[database_shard->num_objects -1].id;
+//    chunk_size = 35;
+
     chunk_size = ((search_end - search_start) / (masternode->num_worker_nodes * 128)) + 1; // round this up to avoid small amount of leftover work at the end
 
     // set up the work queues
@@ -317,20 +387,16 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
     // Now, broadcast the HMM
     MPI_Bcast(hmmbuffer, the_command.compare_obj_length, MPI_CHAR, 0, hmmer_control_comm);
 
-    P7_DAEMON_MESSAGE *buffer, **buffer_handle; //Use this to avoid need to re-aquire message buffer
-    // when we poll and don't find a message
-    buffer = NULL;
-    buffer_handle = &(buffer);
-
     while(masternode->worker_nodes_done < masternode->num_worker_nodes){
       p7_masternode_message_handler(masternode, buffer_handle, daemon_mpitypes);  //Poll for incoming messages
     }
+
     ESL_RED_BLACK_DOUBLEKEY *old_tree = masternode->hit_tree;
     p7_print_and_recycle_hit_tree(outfile_name, old_tree, masternode);
     gettimeofday(&end, NULL);
     printf("%s, %f\n", hmm->name, ((float)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0);
     char commandstring[255];
-
+//    printf("Masternode received %d hit messages\n", masternode->hit_messages_received);
 #ifdef __NICK_CHECK_OUTPUT
     sprintf(commandstring, "cp %s /n/eddyfs01/home/npcarter/%s", outfile_name, outfile_name);
     system(commandstring);
@@ -350,6 +416,16 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
 
   // spurious barrier for testing so that master doesn't exit immediately
   MPI_Barrier(hmmer_control_comm);
+
+  // Clean up memory
+
+  // there may be a dangling message buffer that's neither on the empty or full lists, so deal with it.
+  if(buffer != NULL){
+    free(buffer->buffer);
+    free(buffer);
+  }
+  free(hmmbuffer); 
+  p7_daemon_masternode_Destroy(masternode);
 #endif
 
   
@@ -369,15 +445,7 @@ void *p7_daemon_master_hit_thread(void *argument){
 
   MPI_Comm hmmer_hits_comm = the_argument->hmmer_hits_comm;
   P7_DAEMON_MASTERNODE_STATE *masternode = the_argument->masternode;
-
-  char **buf; //receive buffer
-  char *buffer_memory;
-  int nalloc = 100000;
-  ESL_ALLOC(buffer_memory, nalloc * sizeof(char));  // Start out with 100k and see how that works
-  buf = &buffer_memory;
-
-
-  pthread_cond_broadcast(&(masternode->go)); // Tell master thread we're ready to start
+  masternode->hit_thread_ready = 1; // tell master we're ready to go
 
   while(1){ // go until master tells us to exit
     while(pthread_mutex_trylock(&(masternode->hit_wait_lock))){  // Need to lock this to call pthread_cond_wait
@@ -427,6 +495,7 @@ void *p7_daemon_master_hit_thread(void *argument){
         // Put the message back on the empty list now that we've dealt with it.
         the_message->next = (P7_DAEMON_MESSAGE *) masternode->empty_hit_message_pool;
         masternode->empty_hit_message_pool = the_message;
+ //       printf("Putting buffer at %p on empty hit message pool, previous was %p\n", the_message, the_message->next);
         pthread_mutex_unlock(&(masternode->empty_hit_message_pool_lock));
       }
     }
@@ -463,6 +532,13 @@ int p7_masternode_sort_hits(P7_DAEMON_MESSAGE *the_message, P7_DAEMON_MASTERNODE
   // Pull each hit out of the buffer and put it in the hit tree
   for(i=0; i < num_hits; i++){
     ESL_RED_BLACK_DOUBLEKEY *the_entry =  p7_get_hit_tree_entry_from_masternode_pool(masternode);
+    P7_HIT *the_hit = (P7_HIT *) the_entry->contents;
+    if(the_hit != NULL){
+      free(the_hit->name);
+      free(the_hit->desc);
+      free(the_hit->acc);
+      p7_domain_Destroy(the_hit->dcl, 1);
+    }
     p7_hit_mpi_Unpack(the_message->buffer, the_message->length, &pos, MPI_COMM_WORLD, (P7_HIT *) the_entry->contents, 1);
     the_entry->key = ((P7_HIT *) the_entry->contents)->sortkey;
     // don't need to lock this as we're the only thread that accesses it until the search completes
@@ -482,6 +558,7 @@ void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DA
   p7_Fail("Attempt to call p7_masternode_message_handler when HMMER was compiled without MPI support");
 #endif
 #ifdef HAVE_MPI
+  int hit_messages_received = 0;
   if(*buffer_handle == NULL){
     //Try to grab a message buffer from the empty message pool
     while(pthread_mutex_trylock(&(masternode->empty_hit_message_pool_lock))){
@@ -490,11 +567,14 @@ void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DA
     if(masternode->empty_hit_message_pool != NULL){
       (*buffer_handle) = (P7_DAEMON_MESSAGE *) masternode->empty_hit_message_pool;
       masternode->empty_hit_message_pool = (*buffer_handle)->next;
-  //    printf("Grabbing new message buffer at %p, next is at %p\n", (*buffer_handle), masternode->empty_hit_message_pool);
+   //   printf("Grabbing new message buffer at %p, next is at %p\n", (*buffer_handle), masternode->empty_hit_message_pool);
     }
     else{ // need to create a new message buffer because they're all full.  THis should be rare
-//      printf("Allocating new message buffer because there were none available");
+   //    printf("Allocating new message buffer because there were none available");
       *buffer_handle = (P7_DAEMON_MESSAGE *) p7_daemon_message_Create();
+      if(buffer_handle == NULL){
+        p7_Fail("Unable to allocate memory in p7_masternode_message_handler\n");
+      }
     }
     pthread_mutex_unlock(&(masternode->empty_hit_message_pool_lock));
   }
@@ -514,6 +594,7 @@ void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DA
     switch((*buffer_handle)->status.MPI_TAG){
       case HMMER_HIT_MPI_TAG:
       case HMMER_HIT_FINAL_MPI_TAG:
+        masternode->hit_messages_received++;
 //        printf("Polling code found message");
         if(MPI_Get_count(&(*buffer_handle)->status, MPI_PACKED, &message_length) != MPI_SUCCESS){
           p7_Fail("MPI_Get_count failed in p7_masternode_message_handler\n");
@@ -537,7 +618,7 @@ void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DA
         while(pthread_mutex_trylock(&(masternode->full_hit_message_pool_lock))){
         // spin to acquire the lock
         }
-//        printf("Putting buffer at %p on hit message pool, previous value was %p\n", (*buffer_handle), masternode->full_hit_message_pool);
+  //      printf("Putting buffer at %p on hit message pool, previous value was %p\n", (*buffer_handle), masternode->full_hit_message_pool);
         (*buffer_handle)->next = (P7_DAEMON_MESSAGE *) masternode->full_hit_message_pool;
         masternode->full_hit_message_pool = *buffer_handle;
         (*buffer_handle) = NULL;  // Make sure we grab a new buffer next time

@@ -116,7 +116,7 @@ ESL_RED_BLACK_DOUBLEKEY *p7_hitlist_entry_pool_Create(uint32_t num_entries);
  * into the daemon's data shard, so freeing them will break things very badly
  * @param the_entry the hitlist entry to be destroyed.
  */
-void p7_hitlist_entry_Destroy(P7_HITLIST_ENTRY *the_entry);
+//void p7_hitlist_entry_Destroy(P7_HITLIST_ENTRY *the_entry);
 
 
 
@@ -132,7 +132,7 @@ P7_HITLIST *p7_hitlist_Create();
 
 //! Destroys a hitlist and frees its memory
 /*! @param the_list the list to be destroyed */
-void p7_hitlist_Destroy(P7_HITLIST *the_list, struct p7_daemon_workernode_state *workernode);
+void p7_hitlist_Destroy(ESL_RED_BLACK_DOUBLEKEY *the_list);
 
 // dummy output printing function for testing
 void p7_print_hitlist(char *filename, P7_HITLIST *th);

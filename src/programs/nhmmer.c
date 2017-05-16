@@ -722,11 +722,11 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
   int seq_id = 0;
   P7_DOMAIN *dcl;
   ESL_SQ   *dbsq   =  esl_sq_CreateDigital(info->om->abc);
-#ifdef eslAUGMENT_ALPHABET
+
   ESL_SQ   *dbsq_revcmp;
   if (dbsq->abc->complement != NULL)
     dbsq_revcmp =  esl_sq_CreateDigital(info->om->abc);
-#endif /*eslAUGMENT_ALPHABET*/
+
 
 
   wstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
@@ -760,7 +760,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
       } else {
         info->pli->stats.nres -= dbsq->n;
       }
-#ifdef eslAUGMENT_ALPHABET
+
       //reverse complement
       if (info->pli->strand != p7_STRAND_TOPONLY && dbsq->abc->complement != NULL )
       {
@@ -785,7 +785,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
           info->pli->stats.nres += dbsq_revcmp->W;
 
       }
-#endif /*eslAUGMENT_ALPHABET*/
+
 
       wstatus = esl_sqio_ReadWindow(dbfp, info->om->max_length, info->pli->block_length, dbsq);
       if (wstatus == eslEOD) { // no more left of this sequence ... move along to the next sequence.
@@ -955,7 +955,7 @@ pipeline_thread(void *arg)
         info->pli->stats.nres -= dbsq->n;
       }
 
-#ifdef eslAUGMENT_ALPHABET
+
       //reverse complement
       if (info->pli->strand != p7_STRAND_TOPONLY && dbsq->abc->complement != NULL)
       {
@@ -979,7 +979,6 @@ pipeline_thread(void *arg)
           info->pli->stats.nres += dbsq->W;
       }
 
-#endif /*eslAUGMENT_ALPHABET*/
 
     }
 

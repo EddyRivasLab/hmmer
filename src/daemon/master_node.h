@@ -37,7 +37,7 @@ typedef struct p7_master_work_descriptor{
 
 //! Structure that holds the state required to manage a master node
 typedef struct p7_daemon_masternode_state{
-  
+  int hit_messages_received;
   //! How many databases have been loaded into the daemon?
   uint32_t num_databases;
 
@@ -61,7 +61,8 @@ typedef struct p7_daemon_masternode_state{
   volatile int worker_nodes_done; // how many worker nodes are done with the current search?
 
   pthread_t hit_thread_object;
-
+  volatile int hit_thread_ready;
+  
   pthread_mutex_t empty_hit_message_pool_lock, full_hit_message_pool_lock, hit_wait_lock;
   volatile P7_DAEMON_MESSAGE *empty_hit_message_pool;  // data structures to hold MPI messages containing hits
   volatile P7_DAEMON_MESSAGE *full_hit_message_pool;   // MPI messages containing hits for the hit thread to process
@@ -89,6 +90,9 @@ void *p7_daemon_master_hit_thread(void *worker_argument);
 //! Creates and returns a P7_DAEMON_MASTERNODE_STATE object
 /*! @param num_shards the number of shards each database is divided into */
 P7_DAEMON_MASTERNODE_STATE *p7_daemon_masternode_Create(uint32_t num_shards, int num_worker_nodes);
+
+//! frees the masternode and all contained structures
+void p7_daemon_masternode_Destroy(P7_DAEMON_MASTERNODE_STATE *masternode);
 
 //! loads databases into a masternode object
 void p7_daemon_masternode_Setup(uint32_t num_shards, uint32_t num_databases, char **database_names, P7_DAEMON_MASTERNODE_STATE *masternode);

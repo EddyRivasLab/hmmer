@@ -130,7 +130,8 @@ int
 p7_ForwardFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc)
 {
 //  printf("Calling ForwardFilter\n");
-  #ifdef HAVE_AVX2
+  //printf("L = %d\n", L);
+  #ifdef HAVE_AVX2 
   int           Q_AVX     = P7_NVF_AVX(om->M);                   /* segment length; # of MDI vectors on each row      */
   __m256       *dpp_AVX   = NULL;                            /* dpp=prev row. start on dpf[2]; rows 0,1=Backwards */
   __m256       *dpc_AVX   = NULL;                    /* dpc points at current row         */

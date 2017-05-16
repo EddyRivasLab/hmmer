@@ -335,7 +335,7 @@ int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
 void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
 
 void worker_node_increase_backend_threads(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
-P7_BACKEND_QUEUE_ENTRY *p7_backend_pool_Create(int num_entries);
+P7_BACKEND_QUEUE_ENTRY *p7_backend_pool_Create(int num_entries, P7_DAEMON_WORKERNODE_STATE *workernode);
 P7_BACKEND_QUEUE_ENTRY *p7_get_backend_queue_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode);
 P7_BACKEND_QUEUE_ENTRY *p7_get_backend_queue_entry_from_queue(P7_DAEMON_WORKERNODE_STATE *workernode);
 void p7_put_backend_queue_entry_in_pool(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry);

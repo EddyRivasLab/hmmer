@@ -170,6 +170,7 @@ p7_oprofile_Create_avx(int allocM, const ESL_ALPHABET *abc)
 
  ERROR:
   p7_oprofile_Destroy(om);
+  printf("p7_Oprofile_Create_avx reached error state");
   return NULL;
 #endif //HAVE_AVX2
 #ifndef  HAVE_AVX2
