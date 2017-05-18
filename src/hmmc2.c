@@ -1,6 +1,5 @@
-/* hmmd: hmmc2 deamon client.
+/* daemon client.
  */
-
 #include "p7_config.h"
 
 #ifdef HMMER_THREADS
@@ -182,7 +181,7 @@ usage(char *pgm)
 int main(int argc, char *argv[])
 {
   int              i, j;
-  int              n;
+  uint64_t              n;
   int              eod;
   int              eof;
   int              size;
@@ -617,11 +616,6 @@ int main(int argc, char *argv[])
 
 #endif /*HMMER_THREADS*/
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+
 
 

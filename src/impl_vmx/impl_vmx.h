@@ -2,16 +2,14 @@
  * routines: structures, declarations, and macros.
  * 
  * SRE, Sun Nov 25 11:23:02 2007
- * SVN $Id$
  */
 #ifndef P7_IMPL_VMX_INCLUDED
 #define P7_IMPL_VMX_INCLUDED
+#include "p7_config.h"
 
 #ifndef __APPLE_ALTIVEC__
 #include <altivec.h>
 #endif
-
-#include "p7_config.h"
 
 #include "esl_alphabet.h"
 #include "esl_random.h"
@@ -352,13 +350,9 @@ static inline void
 impl_ThreadInit(void)
 {
 }
-  
-
 #endif /* P7_IMPL_VMX_INCLUDED */
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
+
 
 /* 
  * Currently (and this remains in flux as of 14 Dec 07) an optimized

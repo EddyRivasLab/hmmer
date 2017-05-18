@@ -10,9 +10,6 @@
 # Usage:   ./i21-rewind.pl <builddir> <srcdir> <tmpfile prefix>
 # Example: ./i21-rewind.pl ..         ..       tmpfoo
 # 
-# SVN $URL$
-# SVN $Id$
-
 
 BEGIN {
     $builddir  = shift;
@@ -39,7 +36,7 @@ foreach $easel_prog  (@easel_progs)  { if (! -x "$builddir/easel/miniapps/$easel
 
 # Test hmmsearch.  Make a query with two copies of the hmm. 
 # Should get the same number of hits with both searches
-$cmd = "cat $srcddir/testsuite/20aa.hmm $srcdir/testsuite/20aa.hmm > $tmppfx.hmm";
+$cmd = "cat $srcdir/testsuite/20aa.hmm $srcdir/testsuite/20aa.hmm > $tmppfx.hmm";
 do_cmd($cmd);
 
 for $i (0..$#formats) {

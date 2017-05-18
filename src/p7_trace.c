@@ -9,7 +9,6 @@
  *   6. Counting traces into new HMMs
  *   7. Unit tests
  *   8. Test driver
- *   9. Copyright and license information
  * 
  * Stylistic note: elements in a trace path are usually indexed by z.
  */
@@ -1634,10 +1633,4 @@ main(int argc, char **argv)
 /*--------------------- end, test driver ------------------------*/
 
 
-/************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id: p7_trace.c 3474 2011-01-17 13:25:32Z eddys $
- ************************************************************/
 

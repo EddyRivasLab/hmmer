@@ -5,9 +5,7 @@
  *   2. Debugging aids
  *   3. Unit tests
  *   4. Test driver
- *   5. Copyright and license information
  */
-
 #include "p7_config.h"
 #include "hmmer.h"
 
@@ -490,9 +488,3 @@ main(int argc, char **argv)
 
 
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

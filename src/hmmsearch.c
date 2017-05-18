@@ -20,23 +20,23 @@
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 #include "mpi.h"
 #include "esl_mpi.h"
-#endif /*HAVE_MPI*/
+#endif 
 
 #ifdef HMMER_THREADS
 #include <unistd.h>
 #include "esl_threads.h"
 #include "esl_workqueue.h"
-#endif /*HMMER_THREADS*/
+#endif 
 
 #include "hmmer.h"
 
 typedef struct {
 #ifdef HMMER_THREADS
   ESL_WORK_QUEUE   *queue;
-#endif /*HMMER_THREADS*/
+#endif 
   P7_BG            *bg;	         /* null model                              */
   P7_PIPELINE      *pli;         /* work pipeline                           */
   P7_TOPHITS       *th;          /* top hit results                         */
@@ -49,7 +49,7 @@ typedef struct {
 #define INCDOMOPTS  "--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 #define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 
-#if defined (HMMER_THREADS) && defined (HAVE_MPI)
+#if defined (HMMER_THREADS) && defined (HMMER_MPI)
 #define CPUOPTS     "--mpi"
 #define MPIOPTS     "--cpu"
 #else
@@ -101,7 +101,7 @@ static ESL_OPTIONS options[] = {
 #ifdef HMMER_THREADS 
   { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,         "number of parallel CPU workers to use for multithreads",      12 },
 #endif
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
   { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,"--mpi", NULL,            "arrest after start: for debugging MPI under gdb",             12 },  
   { "--mpi",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  MPIOPTS,         "run as an MPI parallel program",                              12 },
 #endif
@@ -143,17 +143,18 @@ struct cfg_s {
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs);
+
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
 
 static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, int n_targetseqs);
 static void pipeline_thread(void *arg);
-#endif /*HMMER_THREADS*/
+#endif 
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 static int  mpi_master   (ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  mpi_worker   (ESL_GETOPTS *go, struct cfg_s *cfg);
-#endif /*HAVE_MPI*/
+#endif 
 
 
 static int
@@ -265,7 +266,7 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
 #ifdef HMMER_THREADS
   if (esl_opt_IsUsed(go, "--cpu")        && fprintf(ofp, "# number of worker threads:        %d\n",             esl_opt_GetInteger(go, "--cpu"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
 #endif
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
   if (esl_opt_IsUsed(go, "--mpi")        && fprintf(ofp, "# MPI:                             on\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 #endif
   if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -295,11 +296,6 @@ main(int argc, char **argv)
   process_commandline(argc, argv, &go, &cfg.hmmfile, &cfg.dbfile);    
 
 /* is the range restricted? */
-
-#ifndef eslAUGMENT_SSI
-  if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")  || esl_opt_IsUsed(go, "--ssifile")  )
-    p7_Fail("Unable to use range-control options unless an SSI index file is available. See 'esl_sfetch --index'\n");
-#else
   if (esl_opt_IsUsed(go, "--restrictdb_stkey") )
     if ((cfg.firstseq_key = esl_opt_GetString(go, "--restrictdb_stkey")) == NULL)  p7_Fail("Failure capturing --restrictdb_stkey\n");
 
@@ -309,13 +305,11 @@ main(int argc, char **argv)
   if ( cfg.n_targetseq != -1 && cfg.n_targetseq < 1 )
     p7_Fail("--restrictdb_n must be >= 1\n");
 
-#endif
-
 
   /* Figure out who we are, and send control there: 
    * we might be an MPI master, an MPI worker, or a serial program.
    */
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
   /* pause the execution of the programs execution until the user has a
    * chance to attach with a debugger and send a signal to resume execution
    * i.e. (gdb) signal SIGCONT
@@ -335,7 +329,7 @@ main(int argc, char **argv)
       MPI_Finalize();
     }
   else
-#endif /*HAVE_MPI*/
+#endif /*HMMER_MPI*/
     {
       status = serial_master(go, &cfg);
     }
@@ -644,7 +638,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   return eslFAIL;
 }
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 
 /* Define common tags used by the MPI master/slave processes */
 #define HMMER_ERROR_TAG          1
@@ -1294,7 +1288,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   return eslOK;
 }
-#endif /*HAVE_MPI*/
+#endif /*HMMER_MPI*/
 
 static int
 serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
@@ -1439,7 +1433,4 @@ pipeline_thread(void *arg)
 #endif   /* HMMER_THREADS */
  
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
 

@@ -6,7 +6,6 @@
 # Example: ./i14-hmmemit-consensus.pl ..         ..       tmpfoo
 #
 # SRE, Fri May 14 11:34:28 2010 [Janelia]
-# SVN $Id$
 
 
 BEGIN {

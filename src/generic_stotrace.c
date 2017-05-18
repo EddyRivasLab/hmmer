@@ -6,12 +6,9 @@
  *   3. Unit tests.
  *   4. Test driver.
  *   5. Example.
- *   6. Copyright and license information.
  *
  * SRE, Fri Aug 15 10:50:55 2008 [Janelia]
- * SVN $Id$
  */
-
 #include "p7_config.h"
 
 #include "easel.h"
@@ -522,6 +519,3 @@ main(int argc, char **argv)
 /*----------------------- end, example --------------------------*/
 
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/

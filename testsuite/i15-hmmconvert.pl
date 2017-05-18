@@ -6,7 +6,6 @@
 # Example: ./i15-hmmconvert.pl ..         ..       tmpfoo
 #
 # SRE, Tue May 18 13:32:40 2010 [Janelia]
-# SVN $Id$
 
 BEGIN {
     $builddir  = shift;

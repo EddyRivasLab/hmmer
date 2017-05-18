@@ -135,7 +135,7 @@ static ESL_OPTIONS options[] = {
   { "--dna",        eslARG_NONE,        FALSE, NULL, NULL,   NULL,  NULL,  "--rna",       "input alignment is DNA sequence data",                         8 },
   { "--rna",        eslARG_NONE,        FALSE, NULL, NULL,   NULL,  NULL,  "--dna",         "input alignment is RNA sequence data",                         8 },
 
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
   /* Control of FM pruning/extension */
   { "--seed_max_depth",    eslARG_INT,          "15", NULL, NULL,    NULL,  NULL, NULL,          "seed length at which bit threshold must be met",             9 },
   { "--seed_sc_thresh",    eslARG_REAL,         "15", NULL, NULL,    NULL,  NULL, NULL,          "Default req. score for FM seed (bits)",                      9 },
@@ -227,7 +227,7 @@ static char banner[] = "search a DNA model, alignment, or sequence against a DNA
 
 static int  serial_master  (ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop    (WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs );
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
   static int  serial_loop_FM (WORKER_INFO *info, ESL_SQFILE *dbfp);
 #endif
 #ifdef HMMER_THREADS
@@ -235,7 +235,7 @@ static int  serial_loop    (WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, E
 
 static int  thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs);
 static void pipeline_thread(void *arg);
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
 static int  thread_loop_FM(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
 static void pipeline_thread_FM(void *arg);
 #endif
@@ -362,7 +362,7 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *queryfile, char *seqfile, 
   if (esl_opt_IsUsed(go, "--dna")        && fprintf(ofp, "# input query is asserted as:      DNA\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--rna")        && fprintf(ofp, "# input query is asserted as:      RNA\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
   if (esl_opt_IsUsed(go, "--seed_max_depth")    && fprintf(ofp, "# FM Seed length:                  %d\n",             esl_opt_GetInteger(go, "--seed_max_depth"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--seed_sc_thresh")    && fprintf(ofp, "# FM score threshhold (bits):      %g\n",             esl_opt_GetReal(go, "--seed_sc_thresh"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--seed_sc_density")   && fprintf(ofp, "# FM score density (bits/pos):     %g\n",             esl_opt_GetReal(go, "--seed_sc_density"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -439,11 +439,6 @@ main(int argc, char **argv)
       }
   }
 
-
-#ifndef eslAUGMENT_SSI
-  if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")  || esl_opt_IsUsed(go, "--ssifile")  )
-    p7_Fail("Unable to use range-control options unless an SSI index file is available. See 'esl_sfetch --index'\n");
-#else
   if (esl_opt_IsUsed(go, "--restrictdb_stkey") )
     if ((cfg.firstseq_key = esl_opt_GetString(go, "--restrictdb_stkey")) == NULL)  p7_Fail("Failure capturing --restrictdb_stkey\n");
 
@@ -452,9 +447,6 @@ main(int argc, char **argv)
 
   if ( cfg.n_targetseq != -1 && cfg.n_targetseq < 1 )
     p7_Fail("--restrictdb_n must be >= 1\n");
-
-#endif
-
 
   status = serial_master(go, &cfg);
 
@@ -713,7 +705,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    */
   if (dbfp == NULL ) {
 
-#if !defined (p7_IMPL_SSE)
+#if !defined (eslENABLE_SSE)
     p7_Fail("fmindex is a valid sequence database file format only on systems supporting SSE vector instructions\n");
 #endif
 
@@ -775,7 +767,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
   if (ncpus > 0) {
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
       if (dbformat == eslSQFILE_FMINDEX)
         threadObj = esl_threads_Create(&pipeline_thread_FM);
       else
@@ -818,7 +810,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 #ifdef HMMER_THREADS
       for (i = 0; i < ncpus * 2; ++i) {
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
         if (dbformat == eslSQFILE_FMINDEX) {
           ESL_ALLOC(fminfo, sizeof(FM_THREAD_INFO));
           if (fminfo == NULL)           esl_fatal("Failed to allocate FM thread info");
@@ -924,7 +916,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       /* seqfile may need to be rewound (multiquery mode) */
       if (nquery > 1) {
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
         if (dbformat == eslSQFILE_FMINDEX) { //rewind
           if (fsetpos(fm_meta->fp, &fm_basepos) != 0)  ESL_EXCEPTION(eslESYS, "rewind via fsetpos() failed");
         }
@@ -958,7 +950,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_ProfileConfig(hmm, info->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
       p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
 
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
       if (dbformat == eslSQFILE_FMINDEX) {
         //capture a measure of score density multiplied by something I conjecture to be related to
         //the expected longest common subsequence (sqrt(M)).  If less than a default target
@@ -992,7 +984,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
           //set method specific --F1, if it wasn't set at command line
           if (!esl_opt_IsOn(go, "--F1") ) {
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
             if (dbformat == eslSQFILE_FMINDEX)
               info[i].pli->F1 = 0.03;
             else
@@ -1000,7 +992,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
               info[i].pli->F1 = 0.02;
           }
 
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
           info[i].fm_cfg = fm_cfg;
 #endif
           status = p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
@@ -1035,7 +1027,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       id_length_list = init_id_length(1000);
 
 #ifdef HMMER_THREADS
-  #if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
       if (dbformat == eslSQFILE_FMINDEX) {
         for(i=0; i<fm_cfg->meta->seq_count; i++)
           add_id_length(id_length_list, fm_cfg->meta->seq_data[i].target_id, fm_cfg->meta->seq_data[i].target_start + fm_cfg->meta->seq_data[i].length - 1);
@@ -1044,18 +1036,18 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         else            sstatus = serial_loop_FM (info, dbfp);
       }
       else
-  #endif //defined (p7_IMPL_SSE)
+#endif //defined (eslENABLE_SSE)
       {
         if (ncpus > 0)  sstatus = thread_loop    (info, id_length_list, threadObj, queue, dbfp, cfg->firstseq_key, cfg->n_targetseq);
         else            sstatus = serial_loop    (info, id_length_list, dbfp, cfg->firstseq_key, cfg->n_targetseq);
       }
 
 #else //HMMER_THREADS
-  #if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
       if (dbformat == eslSQFILE_FMINDEX)
         sstatus = serial_loop_FM (info, dbfp);
       else
-  #endif // defined (p7_IMPL_SSE)
+#endif // defined (eslENABLE_SSE)
         sstatus = serial_loop    (info, id_length_list, dbfp, cfg->firstseq_key, cfg->n_targetseq);
 #endif //HMMER_THREADS
 
@@ -1081,7 +1073,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     	    resCnt *= 2;
 
       } else {
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
         if (dbformat == eslSQFILE_FMINDEX) {
           resCnt = 2 * fm_meta->char_count;
         }
@@ -1106,7 +1098,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           p7_oprofile_Destroy(info[i].om);
       }
 
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
       if (dbformat == eslSQFILE_FMINDEX) {
         info[0].pli->nseqs = fm_meta->seq_data[fm_meta->seq_count-1].target_id + 1;
         info[0].pli->nres  = resCnt;
@@ -1226,7 +1218,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #ifdef HMMER_THREADS
   if (ncpus > 0) {
       esl_workqueue_Reset(queue);
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
       if (dbformat == eslSQFILE_FMINDEX) {
         while (esl_workqueue_Remove(queue, (void **) &fminfo) == eslOK) {
           if (fminfo) {
@@ -1263,7 +1255,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   esl_alphabet_Destroy(abc);
   esl_stopwatch_Destroy(w);
 
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
   if (dbformat == eslSQFILE_FMINDEX) {
     fclose(fm_meta->fp);
     fm_configDestroy(fm_cfg); // will cascade to destroy meta and alphabet, too
@@ -1293,7 +1285,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    if (dfamtblfp)     fclose(dfamtblfp);
    if (aliscoresfp)   fclose(aliscoresfp);
 
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
    if (dbformat == eslSQFILE_FMINDEX) {
      fm_configDestroy(fm_cfg);
    }
@@ -1312,13 +1304,10 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
   int      wstatus = eslOK;
   int seq_id = 0;
   ESL_SQ   *dbsq   =  esl_sq_CreateDigital(info->om->abc);
-#ifdef eslAUGMENT_ALPHABET
   ESL_SQ   *dbsq_revcmp;
-
 
   if (dbsq->abc->complement != NULL)
     dbsq_revcmp =  esl_sq_CreateDigital(info->om->abc);
-#endif /*eslAUGMENT_ALPHABET*/
 
   wstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
 
@@ -1335,7 +1324,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
       } else {
         info->pli->nres -= dbsq->n;
       }
-#ifdef eslAUGMENT_ALPHABET
+
       //reverse complement
       if (info->pli->strands != p7_STRAND_TOPONLY && dbsq->abc->complement != NULL )
       {
@@ -1347,7 +1336,6 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
           info->pli->nres += dbsq_revcmp->W;
 
       }
-#endif /*eslAUGMENT_ALPHABET*/
 
       wstatus = esl_sqio_ReadWindow(dbfp, info->om->max_length, info->pli->block_length, dbsq);
       if (wstatus == eslEOD) { // no more left of this sequence ... move along to the next sequence.
@@ -1371,7 +1359,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
 }
 
 
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
 static int
 serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp)
 {
@@ -1406,7 +1394,7 @@ serial_loop_FM(WORKER_INFO *info, ESL_SQFILE *dbfp)
   return wstatus;
 
 }
-#endif //#if defined (p7_IMPL_SSE)
+#endif //#if defined (eslENABLE_SSE)
 
 #ifdef HMMER_THREADS
 static int
@@ -1558,7 +1546,6 @@ pipeline_thread(void *arg)
         info->pli->nres -= dbsq->n;
       }
 
-#ifdef eslAUGMENT_ALPHABET
       //reverse complement
       if (info->pli->strands != p7_STRAND_TOPONLY && dbsq->abc->complement != NULL)
       {
@@ -1568,9 +1555,6 @@ pipeline_thread(void *arg)
 
           info->pli->nres += dbsq->W;
       }
-
-#endif /*eslAUGMENT_ALPHABET*/
-
     }
 
       status = esl_workqueue_WorkerUpdate(info->queue, block, &newBlock);
@@ -1588,7 +1572,7 @@ pipeline_thread(void *arg)
 }
 
 
-#if defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
 static int
 thread_loop_FM(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
 {
@@ -1692,7 +1676,7 @@ pipeline_thread_FM(void *arg)
   esl_threads_Finished(obj, workeridx);
   return;
 }
-#endif //#if defined (p7_IMPL_SSE)
+#endif //#if defined (eslENABLE_SSE)
 
 
 #endif   /* HMMER_THREADS */
@@ -1770,10 +1754,6 @@ assign_Lengths(P7_TOPHITS *th, ID_LENGTH_LIST *id_length_list) {
 
   return eslOK;
 }
-
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
 
 
 

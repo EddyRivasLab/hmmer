@@ -6,11 +6,6 @@
  *   2. Interval / range computation
  *   3. Functions related to the original sequence
  *   4. FM data initialization, configuration, and reading from file
- *
- *  # 5. Unit tests.
- *  # 6. Test driver.
- *  # 7. Copyright and license.
- *
  */
 #include "p7_config.h"
 
@@ -729,7 +724,7 @@ ERROR:
 int
 fm_configDestroy(FM_CFG *cfg ) {
   if (cfg) {
-#if   defined (p7_IMPL_SSE)
+#if defined (eslENABLE_SSE)
     if (cfg->fm_chars_mem)         free(cfg->fm_chars_mem);
     if (cfg->fm_masks_mem)         free(cfg->fm_masks_mem);
     if (cfg->fm_reverse_masks_mem) free(cfg->fm_reverse_masks_mem);
@@ -768,10 +763,5 @@ fm_metaDestroy(FM_METADATA *meta ) {
   return eslOK;
 }
 
-/************************************************************
- * @LICENSE@
- *
- * SVN $Id: fm_general.c 3784 2011-12-07 21:51:25Z wheelert $
- * SVN $URL: https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk/src/fm_general.c $
- ************************************************************/
+
 

@@ -8,7 +8,6 @@
 # Example: ./i11-hmmalign-mapali.pl ..         ..       tmpfoo
 #
 # SRE, Mon Dec 21 14:38:17 2009 [Janelia]
-# SVN $Id$
 
 $builddir   = shift;
 $srcdir     = shift;

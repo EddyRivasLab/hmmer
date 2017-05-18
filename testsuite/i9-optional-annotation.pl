@@ -8,7 +8,6 @@
 # Example: ./i9-optional-annotation.pl ..         ..       tmpfoo
 #
 # SRE, Sun Nov 29 11:49:39 2009
-# SVN $Id$
 
 BEGIN {
     $builddir  = shift;
