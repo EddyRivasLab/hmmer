@@ -2,10 +2,11 @@ MODULE = search
 
 OBJS =  modelconfig.o     \
 	p7_mpas.o         \
-	p7_pipeline.o     \
-	p7_pipeline_mpi.o \
 	tophits_output.o  \
 	tophits_output_tabular.o
+#	p7_pipeline.o     \       SRE REVISIT
+#	p7_pipeline_mpi.o \
+
 
 HDRS =
 

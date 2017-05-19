@@ -537,7 +537,7 @@ main(int argc, char **argv)
       if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
 
       esl_stopwatch_Start(w);
-      while (p7_oprofile_ReadMSV(hfp, &abc, &om)  == eslOK &&
+      while (p7_oprofile_ReadSSV(hfp, &abc, &om)  == eslOK &&
 	     p7_oprofile_ReadRest(hfp, om)       == eslOK)
 	{
 	  if (!esl_opt_GetBoolean(go, "-b"))

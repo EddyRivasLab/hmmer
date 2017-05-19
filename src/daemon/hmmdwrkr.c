@@ -109,7 +109,7 @@ print_timings(int i, double elapsed, P7_PIPELINE *pli)
 
   fprintf (stdout, "%2d %9" PRId64 " %9" PRId64 " %7" PRId64 " %7" PRId64 " %6" PRId64 " %5" PRId64 " %s\n",
            i, pli->stats.nseqs, pli->stats.nres, 
-	   pli->stats.n_past_msv, pli->stats.n_past_bias, pli->stats.n_past_vit, pli->stats.n_past_fwd, buf1);
+	   pli->stats.n_past_ssv, pli->stats.n_past_bias, pli->stats.n_past_vit, pli->stats.n_past_fwd, buf1);
 }
 
 static int
@@ -747,7 +747,7 @@ send_results(int fd, ESL_STOPWATCH *w, WORKER_INFO *info)
 
   stats.nmodels     = info->pli->stats.nmodels;
   stats.nseqs       = info->pli->stats.nseqs;
-  stats.n_past_msv  = info->pli->stats.n_past_msv;
+  stats.n_past_ssv  = info->pli->stats.n_past_ssv;
   stats.n_past_bias = info->pli->stats.n_past_bias;
   stats.n_past_vit  = info->pli->stats.n_past_vit;
   stats.n_past_fwd  = info->pli->stats.n_past_fwd;

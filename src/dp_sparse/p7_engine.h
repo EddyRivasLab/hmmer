@@ -44,7 +44,7 @@ typedef struct p7_engine_params_s {
  * Statistics collection for the Engine.
  */
 typedef struct p7_engine_stats_s {
-  int n_past_msv;
+  int n_past_ssv;
   int n_past_bias;
   int n_ran_vit;
   int n_past_vit;
@@ -79,7 +79,7 @@ typedef struct p7_engine_s {
 
   float           nullsc; // null raw score
   float           biassc; // ad hoc "bias filter" score, acts as modified null
-  float           mfsc;   // MSV raw score
+  float           sfsc;   // SSV raw score
   float           vfsc;   // ViterbiFilter raw score, complete sequence
   float           ffsc;   // ForwardFilter raw score, complete sequence
   float           vsc;    // sparse Viterbi score

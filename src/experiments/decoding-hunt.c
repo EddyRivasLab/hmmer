@@ -86,7 +86,7 @@ main(int argc, char **argv)
  
   /* Read in one HMM. Set alphabet to whatever the HMM's alphabet is. */
 
-  P7_FILTERMX    *fx         = p7_filtermx_Create(100, hw->simd);
+  P7_FILTERMX    *fx         = p7_filtermx_Create(100);
 
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
@@ -365,7 +365,7 @@ acceleration_filter(ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg,
 
   p7_MSVFilter(dsq, L, om, fx, &usc);
   seq_score = (usc - nullsc) / eslCONST_LOG2;
-  P = esl_gumbel_surv(seq_score, om->evparam[p7_MMU], om->evparam[p7_MLAMBDA]);
+  P = esl_gumbel_surv(seq_score, om->evparam[p7_SMU], om->evparam[p7_MLAMBDA]);
   if (P > F1) return eslFAIL;
 
   p7_ViterbiFilter(dsq, L, om, fx, &vitsc);  

@@ -44,7 +44,7 @@ typedef struct p7_pipeline_stats_s {
   uint64_t      nseqs;	        /* # of sequences searched                  */
   uint64_t      nres;	        /* # of residues searched                   */
   uint64_t      nnodes;	        /* # of model nodes searched                */
-  uint64_t      n_past_msv;	/* # comparisons that pass MSVFilter()      */
+  uint64_t      n_past_ssv;	/* # comparisons that pass MSVFilter()      */
   uint64_t      n_past_bias;	/* # comparisons that pass bias filter      */
   uint64_t      n_past_vit;	/* # comparisons that pass ViterbiFilter()  */
   uint64_t      n_past_fwd;	/* # comparisons that pass ForwardFilter()  */

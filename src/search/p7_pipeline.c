@@ -551,7 +551,7 @@ p7_pipeline_stats_Init(P7_PIPELINE_STATS *stats)
   stats->nres          = 0;
   stats->nnodes        = 0;
 
-  stats->n_past_msv    = 0;
+  stats->n_past_ssv    = 0;
   stats->n_past_bias   = 0;
   stats->n_past_vit    = 0;
   stats->n_past_fwd    = 0;
@@ -591,7 +591,7 @@ p7_pipeline_stats_Merge(P7_PIPELINE *p1, const P7_PIPELINE_STATS *stats)
       p1->stats.nnodes  += stats->nnodes;
     }
 
-  p1->stats.n_past_msv  += stats->n_past_msv;
+  p1->stats.n_past_ssv  += stats->n_past_ssv;
   p1->stats.n_past_bias += stats->n_past_bias;
   p1->stats.n_past_vit  += stats->n_past_vit;
   p1->stats.n_past_fwd  += stats->n_past_fwd;
@@ -667,8 +667,8 @@ p7_pipeline_WriteStats(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
   } else { // typical case output
 
       fprintf(ofp, "Passed MSV filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",
-          pli->stats.n_past_msv,
-          (double) pli->stats.n_past_msv / ntargets,
+          pli->stats.n_past_ssv,
+          (double) pli->stats.n_past_ssv / ntargets,
           pli->F1 * ntargets,
           pli->F1);
 
@@ -798,16 +798,16 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
   /* First level filter: the SSV and MSV filters */
   p7_MSVFilter(sq->dsq, sq->n, om, pli->fx, &usc);
   seq_score = (usc - nullsc) / eslCONST_LOG2;
-  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_MLAMBDA]);
   if (P > pli->F1) return eslOK;
-  pli->stats.n_past_msv++;
+  pli->stats.n_past_ssv++;
 
   /* biased composition HMM filtering */
   if (pli->do_biasfilter)
     {
       p7_bg_FilterScore(bg, sq->dsq, sq->n, &filtersc);
       seq_score = (usc - filtersc) / eslCONST_LOG2;
-      P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+      P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_MLAMBDA]);
       if (P > pli->F1) return eslOK;
     }
   else filtersc = nullsc;
@@ -1908,7 +1908,7 @@ p7_pipeline_postSSV_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om
       bias_filtersc -= nullsc; // doing this because I'll be modifying the bias part of filtersc based on length, then adding nullsc back in.
       filtersc =  nullsc + (bias_filtersc * (float)(( F1_L>window_len ? 1.0 : (float)F1_L/window_len)));
       seq_score = (usc - filtersc) / eslCONST_LOG2;
-      P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+      P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_MLAMBDA]);
       if (P > pli->F1) return eslOK;
   } else {
     bias_filtersc = 0; // mullsc will be added in later
@@ -2118,7 +2118,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
       // would have survived it
 
       // p7_MSVFilter(subseq, window_len, om, pli->fx, &usc);  SRE TODO REVISIT 
-      // P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+      // P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_SMU],  om->evparam[p7_MLAMBDA]);
       // if (P > pli->F1 ) continue;
 
       pli->stats.pos_past_msv += window_len;
@@ -2267,7 +2267,7 @@ p7_pipeline_AccelerationFilter(ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg,
 
   p7_MSVFilter(dsq, L, om, fx, &usc);
   seq_score = (usc - nullsc) / eslCONST_LOG2;
-  P = esl_gumbel_surv(seq_score, om->evparam[p7_MMU], om->evparam[p7_MLAMBDA]);
+  P = esl_gumbel_surv(seq_score, om->evparam[p7_SMU], om->evparam[p7_MLAMBDA]);
   if (P > F1) return eslFAIL;
 
   p7_ViterbiFilter(dsq, L, om, fx, &vitsc);  
@@ -2499,7 +2499,7 @@ main(int argc, char **argv)
   if (! pli->Z_is_fixed && hfp->is_pressed) { pli->Z_is_fixed = TRUE; pli->Z = hfp->ssi->nprimary; }
 
   /* Read (partial) of each HMM in file */
-  while (p7_oprofile_ReadMSV(hfp, &abc, &om) == eslOK) 
+  while (p7_oprofile_ReadSSV(hfp, &abc, &om) == eslOK) 
     {
       /* One time only initiazation after abc becomes known */
       if (bg == NULL) 

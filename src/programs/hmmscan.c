@@ -379,7 +379,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
   if (! hfp->is_pressed)           p7_Fail("Failed to open binary auxfiles for %s: use hmmpress first\n",             hfp->fname);
 
-  hstatus = p7_oprofile_ReadMSV(hfp, &abc, &om);
+  hstatus = p7_oprofile_ReadSSV(hfp, &abc, &om);
   if      (hstatus == eslEFORMAT)   p7_Fail("bad format, binary auxfiles, %s:\n%s",     cfg->hmmfile, hfp->errbuf);
   else if (hstatus == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets", cfg->hmmfile);
   else if (hstatus != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s", cfg->hmmfile); 
@@ -673,7 +673,7 @@ int next_block(P7_HMMFILE *hfp, BLOCK_LIST *list, MSV_BLOCK *block)
   block->length = 0;
   block->count = 0;
 
-  while (block->length < MAX_BLOCK_SIZE && (status = p7_oprofile_ReadInfoMSV(hfp, &abc, &om)) == eslOK)
+  while (block->length < MAX_BLOCK_SIZE && (status = p7_oprofile_ReadInfoSSV(hfp, &abc, &om)) == eslOK)
     {
       if (block->count == 0) block->offset = om->roff;
       block->length = om->eoff - block->offset + 1;
@@ -775,7 +775,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status != eslOK)        mpi_failure("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
   if (! hfp->is_pressed)           mpi_failure("Failed to open binary auxfiles for %s: use hmmpress first\n",             hfp->fname);
   
-  hstatus = p7_oprofile_ReadMSV(hfp, &abc, &om);
+  hstatus = p7_oprofile_ReadSSV(hfp, &abc, &om);
   if      (hstatus == eslEFORMAT)   mpi_failure("bad format, binary auxfiles, %s",            cfg->hmmfile);
   else if (hstatus == eslEINCOMPAT) mpi_failure("HMM file %s contains different alphabets",   cfg->hmmfile);
   else if (hstatus != eslOK)        mpi_failure("Unexpected error in reading HMMs from %s",   cfg->hmmfile); 
@@ -1026,7 +1026,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status != eslOK)        mpi_failure("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
   if (! hfp->is_pressed)           mpi_failure("Failed to open binary dbs for HMM file %s: use hmmpress first\n",         hfp->fname);
 
-  hstatus = p7_oprofile_ReadMSV(hfp, &abc, &om);
+  hstatus = p7_oprofile_ReadSSV(hfp, &abc, &om);
   if      (hstatus == eslEFORMAT)   mpi_failure("bad file format in HMM file %s",             cfg->hmmfile);
   else if (hstatus == eslEINCOMPAT) mpi_failure("HMM file %s contains different alphabets",   cfg->hmmfile);
   else if (hstatus != eslOK)        mpi_failure("Unexpected error in reading HMMs from %s",   cfg->hmmfile); 
@@ -1078,7 +1078,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  hstatus = p7_oprofile_Position(hfp, block.offset);
 	  if (hstatus != eslOK) mpi_failure("Cannot position optimized model to %ld\n", block.offset);
 
-	  while (count > 0 && (hstatus = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK)
+	  while (count > 0 && (hstatus = p7_oprofile_ReadSSV(hfp, &abc, &om)) == eslOK)
 	    {
 	      length = om->eoff - block.offset + 1;
 
@@ -1166,7 +1166,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
   int            status;
 
   /* Main loop: */
-  while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK)
+  while ((status = p7_oprofile_ReadSSV(hfp, &abc, &om)) == eslOK)
     {
       p7_pipeline_NewModel(info->pli, om, info->bg);
       p7_bg_SetLength(info->bg, info->qsq->n);
@@ -1203,7 +1203,7 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, P7_HMMFILE *hfp)
   while (sstatus == eslOK)
     {
       block = (P7_OM_BLOCK *) newBlock;
-      sstatus = p7_oprofile_ReadBlockMSV(hfp, &abc, block, hw->simd);
+      sstatus = p7_oprofile_ReadBlockSSV(hfp, &abc, block);
       if (sstatus == eslEOF)
 	{
 	  if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;

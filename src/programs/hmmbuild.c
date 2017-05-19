@@ -936,7 +936,6 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
 static void
 serial_loop(WORKER_INFO *info, struct cfg_s *cfg, const ESL_GETOPTS *go)
 {
-  P7_BUILDER *bld         = NULL;
   ESL_MSA    *msa         = NULL;
   ESL_SQ     *sq          = NULL;
   ESL_MSA    *postmsa     = NULL;

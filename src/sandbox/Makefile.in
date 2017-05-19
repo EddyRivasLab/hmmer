@@ -1,7 +1,8 @@
 MODULE = sandbox
 
-OBJS =  reference_mpl.o     \
-        reference_mpl_fwd.o 
+OBJS = 
+#	reference_mpl.o     \  SRE REVISIT
+#	reference_mpl_fwd.o 
 
 HDRS =
 

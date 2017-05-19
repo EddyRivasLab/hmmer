@@ -461,7 +461,7 @@ main(int argc, char *argv[])
 
         pli->stats.nmodels     = stats->nmodels;
         pli->stats.nseqs       = stats->nseqs;
-        pli->stats.n_past_msv  = stats->n_past_msv;
+        pli->stats.n_past_ssv  = stats->n_past_ssv;
         pli->stats.n_past_bias = stats->n_past_bias;
         pli->stats.n_past_vit  = stats->n_past_vit;
         pli->stats.n_past_fwd  = stats->n_past_fwd;

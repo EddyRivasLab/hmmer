@@ -1,7 +1,7 @@
 #include "p7_config.h"
 
 /* SIMD-vectorized acceleration filters, local only: */
-#include "dp_vector/msvfilter.h"          // SSV primary acceleration filter
+#include "dp_vector/ssvfilter.h"          // SSV primary acceleration filter
 #include "dp_vector/vitfilter.h"          // Viterbi secondary acceleration filter
 #include "dp_vector/fwdfilter.h"          // Sparsification w/ checkpointed local Forward/Backward
 #include "dp_vector/p7_filtermx.h"        // DP matrix for SSV, VF
@@ -72,7 +72,7 @@ p7_engine_stats_Create(void)
   int              status;
 
   ESL_ALLOC(stats, sizeof(P7_ENGINE_STATS));
-  stats->n_past_msv  = 0;
+  stats->n_past_ssv  = 0;
   stats->n_past_bias = 0;
   stats->n_ran_vit   = 0;
   stats->n_past_vit  = 0;
@@ -151,7 +151,7 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
 
   eng->nullsc = 0.;
   eng->biassc = 0.;
-  eng->mfsc   = 0.;
+  eng->sfsc   = 0.;
   eng->vfsc   = 0.;
 
   eng->ffsc   = 0.;
@@ -204,7 +204,7 @@ p7_engine_Reuse(P7_ENGINE *eng)
 
   eng->nullsc = 0.;
   eng->biassc = 0.;
-  eng->mfsc   = 0.;
+  eng->sfsc   = 0.;
   eng->vfsc   = 0.;
 
   eng->ffsc   = 0.;
@@ -270,13 +270,13 @@ p7_engine_Destroy(P7_ENGINE *eng)
  *            steps:
  *               <nullsc>  : null model raw score, nats;     = 0 if not reached.
  *               <biassc>  : ad hoc bias filter score, nats; = 0 if not reached.
- *               <mfsc>    : SSV/MSV filter raw score, nats; = -eslINFINITY if not reached.
+ *               <sfsc>    : SSV filter raw score, nats;     = -eslINFINITY if not reached.
  *               <vfsc>    : Viterbi filter raw score, nats; = -eslINFINITY if not reached.
  *               <ffsc>    : Forward filter raw score, nats; = -eslINFINITY if not reached.
  * 
  *            If the bias filter is off, biassc = nullsc.
  *
- *            If the MSV filter score is so high that it satisfies
+ *            If the SSV filter score is so high that it satisfies
  *            both F1 and F2 thresholds, the Viterbi filter step is
  *            skipped. 
  *            
@@ -286,7 +286,7 @@ p7_engine_Destroy(P7_ENGINE *eng)
  *            reached (in which case the score will come out as -inf).
  *            
  *            If the <eng> is collecting statistics in a non-NULL
- *            <eng->stats>, its <n_past_msv>, <n_past_bias>,
+ *            <eng->stats>, its <n_past_ssv>, <n_past_bias>,
  *            <n_past_vit>, <n_ran_vit>, <n_past_fwd> counters can advance here.
  *            
  *            The O(M) filter DP matrix <eng->fx> and the O(M sqrt L) checkpoint
@@ -308,21 +308,21 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
 
   if ((status = p7_bg_NullOne(bg, dsq, L, &(eng->nullsc))) != eslOK) return status; 
 
-  /* First level: SSV and MSV filters */
-  status = p7_MSVFilter(dsq, L, om, eng->fx, &(eng->mfsc));
+  /* First level: SSV filter */
+  status = p7_SSVFilter(dsq, L, om, &(eng->sfsc));
   if (status != eslOK && status != eslERANGE) return status;
 
-  seq_score = (eng->mfsc - eng->nullsc) / eslCONST_LOG2;          
-  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  seq_score = (eng->sfsc - eng->nullsc) / eslCONST_LOG2;          
+  P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_MLAMBDA]);
   if (P > eng->F1) return eslFAIL;
-  if (eng->stats) eng->stats->n_past_msv++;
+  if (eng->stats) eng->stats->n_past_ssv++;
 
   /* Biased composition HMM, ad hoc, acts as a modified null */
   if (do_biasfilter)
     {
       if ((status = p7_bg_FilterScore(bg, dsq, L, &(eng->biassc))) != eslOK) return status;
-      seq_score = (eng->mfsc - eng->biassc) / eslCONST_LOG2;
-      P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+      seq_score = (eng->sfsc - eng->biassc) / eslCONST_LOG2;
+      P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_MLAMBDA]);
       if (P > eng->F1) return eslFAIL;
     }
   else eng->biassc = eng->nullsc;

@@ -137,7 +137,7 @@ p7_pipeline_stats_mpi_Pack(const P7_PIPELINE_STATS *stats, char *buf, int n, int
       if (MPI_Pack((void *) &stats->nres,          1, MPI_UINT64_T, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed"); 
       if (MPI_Pack((void *) &stats->nnodes,        1, MPI_UINT64_T, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed"); 
 
-      if (MPI_Pack((void *) &stats->n_past_msv,    1, MPI_UINT64_T, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed"); 
+      if (MPI_Pack((void *) &stats->n_past_ssv,    1, MPI_UINT64_T, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed"); 
       if (MPI_Pack((void *) &stats->n_past_bias,   1, MPI_UINT64_T, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed"); 
       if (MPI_Pack((void *) &stats->n_past_vit,    1, MPI_UINT64_T, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed"); 
       if (MPI_Pack((void *) &stats->n_past_fwd,    1, MPI_UINT64_T, buf, n, pos, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack failed"); 
@@ -184,7 +184,7 @@ p7_pipeline_stats_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, P7_PIPEL
   if (MPI_Unpack(buf, n, pos, &(stats->nres),          1, MPI_UINT64_T, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "unpack failed"); 
   if (MPI_Unpack(buf, n, pos, &(stats->nnodes),        1, MPI_UINT64_T, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "unpack failed"); 
 
-  if (MPI_Unpack(buf, n, pos, &(stats->n_past_msv),    1, MPI_UINT64_T, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "unpack failed"); 
+  if (MPI_Unpack(buf, n, pos, &(stats->n_past_ssv),    1, MPI_UINT64_T, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "unpack failed"); 
   if (MPI_Unpack(buf, n, pos, &(stats->n_past_bias),   1, MPI_UINT64_T, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "unpack failed"); 
   if (MPI_Unpack(buf, n, pos, &(stats->n_past_vit),    1, MPI_UINT64_T, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "unpack failed"); 
   if (MPI_Unpack(buf, n, pos, &(stats->n_past_fwd),    1, MPI_UINT64_T, comm) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "unpack failed"); 
@@ -289,7 +289,7 @@ pipeline_stats_Sample(ESL_RANDOMNESS *rng, P7_PIPELINE_STATS *stats)
   stats->nseqs         = esl_rnd_Roll(rng, 100);
   stats->nres          = esl_rnd_Roll(rng, 100);
   stats->nnodes        = esl_rnd_Roll(rng, 100);
-  stats->n_past_msv    = esl_rnd_Roll(rng, 100);
+  stats->n_past_ssv    = esl_rnd_Roll(rng, 100);
   stats->n_past_bias   = esl_rnd_Roll(rng, 100);
   stats->n_past_vit    = esl_rnd_Roll(rng, 100);
   stats->n_past_fwd    = esl_rnd_Roll(rng, 100);
@@ -309,7 +309,7 @@ pipeline_stats_Compare(P7_PIPELINE_STATS *s1, P7_PIPELINE_STATS *s2)
   if (s1->nseqs         != s2->nseqs)         return eslFAIL;
   if (s1->nres          != s2->nres)          return eslFAIL;
   if (s1->nnodes        != s2->nnodes)        return eslFAIL;
-  if (s1->n_past_msv    != s2->n_past_msv)    return eslFAIL;
+  if (s1->n_past_ssv    != s2->n_past_ssv)    return eslFAIL;
   if (s1->n_past_bias   != s2->n_past_bias)   return eslFAIL;
   if (s1->n_past_vit    != s2->n_past_vit)    return eslFAIL;
   if (s1->n_past_fwd    != s2->n_past_fwd)    return eslFAIL;

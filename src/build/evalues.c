@@ -20,7 +20,7 @@
 
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/p7_checkptmx.h"
-#include "dp_vector/msvfilter.h"
+#include "dp_vector/ssvfilter.h"
 #include "dp_vector/vitfilter.h"
 #include "dp_vector/fwdfilter.h"
 
@@ -82,7 +82,7 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
   int             EfL    = ((cfg_b != NULL) ? cfg_b->EfL    : 100);
   int             EfN    = ((cfg_b != NULL) ? cfg_b->EfN    : 200);
   double          Eft    = ((cfg_b != NULL) ? cfg_b->Eft    : 0.04);
-  double          lambda, mmu, vmu, tau;
+  double          lambda, smu, vmu, tau;
   int             status;
   
   /* Configure any objects we need
@@ -116,7 +116,7 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
 
   /* The calibration steps themselves */
   if ((status = p7_Lambda(hmm, bg, &lambda))                          != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine lambda");
-  if ((status = p7_MSVMu    (r, om, bg, EmL, EmN, lambda, &mmu))      != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine msv mu");
+  if ((status = p7_SSVMu    (r, om, bg, EmL, EmN, lambda, &smu))      != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine msv mu");
   if ((status = p7_ViterbiMu(r, om, bg, EvL, EvN, lambda, &vmu))      != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine vit mu");
   if ((status = p7_Tau      (r, om, bg, EfL, EfN, lambda, Eft, &tau)) != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine fwd tau");
 
@@ -124,7 +124,7 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
   hmm->evparam[p7_MLAMBDA] = om->evparam[p7_MLAMBDA] = lambda;
   hmm->evparam[p7_VLAMBDA] = om->evparam[p7_VLAMBDA] = lambda;
   hmm->evparam[p7_FLAMBDA] = om->evparam[p7_FLAMBDA] = lambda;
-  hmm->evparam[p7_MMU]     = om->evparam[p7_MMU]     = mmu;
+  hmm->evparam[p7_SMU]     = om->evparam[p7_SMU]     = smu;
   hmm->evparam[p7_VMU]     = om->evparam[p7_VMU]     = vmu;
   hmm->evparam[p7_FTAU]    = om->evparam[p7_FTAU]    = tau;
   hmm->flags              |= p7H_STATS;
@@ -133,7 +133,7 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
     gm->evparam[p7_MLAMBDA] = lambda;
     gm->evparam[p7_VLAMBDA] = lambda;
     gm->evparam[p7_FLAMBDA] = lambda;
-    gm->evparam[p7_MMU]     = mmu;
+    gm->evparam[p7_SMU]     = smu;
     gm->evparam[p7_VMU]     = vmu;
     gm->evparam[p7_FTAU]    = tau;
   }
@@ -204,8 +204,8 @@ p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda)
 }
 
 
-/* Function:  p7_MSVMu()
- * Synopsis:  Determines the local MSV Gumbel mu parameter for a model.
+/* Function:  p7_SSVMu()
+ * Synopsis:  Determines the local SSV Gumbel mu parameter for a model.
  * Incept:    SRE, Mon Aug  6 13:00:57 2007 [Janelia]
  *
  * Purpose:   Given model <om> configured for local alignment (typically
@@ -235,7 +235,7 @@ p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda)
  *            L       :  length of sequences to simulate
  *            N	      :  number of sequences to simulate		
  *            lambda  :  known Gumbel lambda parameter
- *            ret_mmu :  RETURN: ML estimate of location param mu
+ *            ret_smu :  RETURN: ML estimate of location param mu
  *
  * Returns:   <eslOK> on success, and <ret_mu> contains the ML estimate
  *            of $\mu$.
@@ -249,9 +249,8 @@ p7_Lambda(P7_HMM *hmm, P7_BG *bg, double *ret_lambda)
  *            eventually - need to be sure that fix applies here too.
  */
 int
-p7_MSVMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double *ret_mmu)
+p7_SSVMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambda, double *ret_smu)
 {
-  P7_FILTERMX  *fx      = p7_filtermx_Create(om->M); /* DP matrix: 1 row version */
   ESL_DSQ      *dsq     = NULL;
   double       *xv      = NULL;
   float         maxsc   = 127. / om->scale_b; /* if score overflows, use this */
@@ -259,7 +258,6 @@ p7_MSVMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lam
   float         sc, nullsc;
   int           status;
 
-  if (!fx) { status = eslEMEM; goto ERROR; }
   ESL_ALLOC(xv,  sizeof(double)  * N);
   ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
 
@@ -271,23 +269,20 @@ p7_MSVMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lam
       if ((status = esl_rsq_xfIID(r, bg->f, om->abc->K, L, dsq)) != eslOK) goto ERROR;
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
 
-      status = p7_MSVFilter(dsq, L, om, fx, &sc); 
+      status = p7_SSVFilter(dsq, L, om, &sc); 
       if      (status == eslERANGE) { sc = maxsc; status = eslOK; }
       else if (status != eslOK)       goto ERROR;
 
       xv[i] = (sc - nullsc) / eslCONST_LOG2;
-      //p7_filtermx_Reuse(fx);
     }
 
-  if ((status = esl_gumbel_FitCompleteLoc(xv, N, lambda, ret_mmu))  != eslOK) goto ERROR;
-  p7_filtermx_Destroy(fx);
+  if ((status = esl_gumbel_FitCompleteLoc(xv, N, lambda, ret_smu))  != eslOK) goto ERROR;
   free(xv);
   free(dsq);
   return eslOK;
 
  ERROR:
-  *ret_mmu = 0.0;
-  if (fx) p7_filtermx_Destroy(fx);
+  *ret_smu = 0.0;
   if (xv) free(xv);
   if (dsq) free(dsq);
   return status;
@@ -298,8 +293,8 @@ p7_MSVMu(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lam
  * Synopsis:  Determines the local Viterbi Gumbel mu parameter for a model.
  * Incept:    SRE, Tue May 19 10:26:19 2009 [Janelia]
  *
- * Purpose:   Identical to p7_MSVMu(), above, except that it fits
- *            Viterbi scores instead of MSV scores. 
+ * Purpose:   Identical to p7_SSVMu(), above, except that it fits
+ *            Viterbi scores instead of SSV scores. 
  *
  *            The difference between the two mus is small, but can be
  *            up to ~1 bit or so for large, low-info models [J4/126] so
@@ -532,7 +527,7 @@ main(int argc, char **argv)
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
   double          lambda  = 0.0;
-  double          mmu     = 0.0;
+  double          smu     = 0.0;
   double          vmu     = 0.0;
   double          ftau    = 0.0;
   int             Z       = esl_opt_GetInteger(go, "-Z");
@@ -567,11 +562,11 @@ main(int argc, char **argv)
 
       for (iteration = 0; iteration < Z; iteration++)
 	{
-	  if (do_msv) p7_MSVMu     (r, om, bg, EmL, EmN, lambda,       &mmu);
+	  if (do_msv) p7_SSVMu     (r, om, bg, EmL, EmN, lambda,       &smu);
 	  if (do_vit) p7_ViterbiMu (r, om, bg, EvL, EvN, lambda,       &vmu);
 	  if (do_fwd) p7_Tau       (r, om, bg, EfL, EfN, lambda, Eft,  &ftau);
       
-	  printf("%s %.4f %.4f %.4f %.4f\n", hmm->name, lambda, mmu, vmu, ftau);
+	  printf("%s %.4f %.4f %.4f %.4f\n", hmm->name, lambda, smu, vmu, ftau);
 	}
 
       p7_hmm_Destroy(hmm);      

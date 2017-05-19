@@ -379,7 +379,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
   if (! hfp->is_pressed)           p7_Fail("Failed to open binary auxfiles for %s: use hmmpress first\n",             hfp->fname);
 
-  hstatus = p7_oprofile_ReadMSV(hfp, &abc, &om);
+  hstatus = p7_oprofile_ReadSSV(hfp, &abc, &om);
   if      (hstatus == eslEFORMAT)   p7_Fail("bad format, binary auxfiles, %s:\n%s",     cfg->hmmfile, hfp->errbuf);
   else if (hstatus == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets", cfg->hmmfile);
   else if (hstatus != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s", cfg->hmmfile); 
@@ -644,7 +644,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
 
 
   /* Main loop: */
-  while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK)
+  while ((status = p7_oprofile_ReadSSV(hfp, &abc, &om)) == eslOK)
   {
       seq_len = 0;
 
@@ -727,7 +727,7 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, P7_HMMFILE *hfp)
   while (sstatus == eslOK)
   {
       block = (P7_OM_BLOCK *) newBlock;
-      sstatus = p7_oprofile_ReadBlockMSV(hfp, &abc, block);
+      sstatus = p7_oprofile_ReadBlockSSV(hfp, &abc, block);
 
       if (sstatus == eslEOF)
       {

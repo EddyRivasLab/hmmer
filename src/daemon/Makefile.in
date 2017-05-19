@@ -1,18 +1,20 @@
 MODULE = daemon
 
-OBJS =  cachedb.o     \
-	hmmc2.o       \
-	hmmdmstr.o    \
-	hmmdutils.o   \
-	hmmdwrkr.o    \
-	hmmpgmd.o     \
-	hmmpgmd2msa.o \
-	p7_hmmcache.o
+OBJS =  
+#	cachedb.o     \    SRE REVISIT
+#	hmmdmstr.o    \
+#	hmmdutils.o   \
+#	hmmdwrkr.o    \
+#	hmmpgmd2msa.o \
+#	p7_hmmcache.o \
+#	hmmc2.o       \
+#	hmmpgmd.o     \
 
 HDRS =  
 
-PROGS = hmmc2\
-	hmmpgmd
+PROGS = 
+#	hmmc2\   SRE REVISIT
+#	hmmpgmd  
 
 UTESTS = 
 

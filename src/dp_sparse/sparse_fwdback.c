@@ -1072,31 +1072,7 @@ utest_internal_glocal_exit(void)
   float          vsc_r, fsc_r, bsc_r, tsc_r;
   int            i;
   float          tol = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
-  int Q; 
-  switch(hw->simd){ // get the correct Q value depending on what SIMD ISA we're using
-#ifdef eslENABLE_SSE  
-    case SSE:
-      Q=sm->Q;    
-      break;
-#endif
-#ifdef eslENABLE_NEON
-    case NEON:
-      Q=sm->Q;
-    break;
-#endif
-#ifdef eslENABLE_AVX    
-    case AVX:
-      Q = sm->Q_AVX;
-      break;
-#endif
-#ifdef eslENABLE_AVX512   
-    case AVX512:
-      Q = sm->Q_AVX_512;
-      break;
-#endif
-    default:
-      esl_fatal("Unknown SIMD type used in utest_internal_glocal_exit\n");    
-  }
+  int            Q   = sm->Q; 
 
   /* Create the 40aa A-YA-Y test model */
   if ( esl_abc_CreateDsq(abc, qseq, &qsq)                                                != eslOK) esl_fatal(msg);

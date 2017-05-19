@@ -324,7 +324,7 @@ main(int argc, char **argv)
       /* Filter insig hits, partially simulating the real pipeline */
       p7_MSVFilter(sq->dsq, sq->n, om, fx, &msvsc);
       msvsc = (msvsc - nullsc) / eslCONST_LOG2;
-      P     =  esl_gumbel_surv(msvsc,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+      P     =  esl_gumbel_surv(msvsc,  om->evparam[p7_SMU],  om->evparam[p7_MLAMBDA]);
       if (P > 0.02) goto NEXT_SEQ;
 
       p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fraw);

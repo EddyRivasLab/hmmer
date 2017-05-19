@@ -438,13 +438,13 @@ p7_oprofile_ReadInfoSSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
  *            
  *            This is the second part of a two-part calling sequence.
  *            The <om> here must be the result of a previous
- *            successful <p7_oprofile_ReadMSV()> call on the same
+ *            successful <p7_oprofile_ReadSSV()> call on the same
  *            open <hfp>.
  *
  * Args:      hfp - open HMM file, from which we've previously
- *                  called <p7_oprofile_ReadMSV()>.
+ *                  called <p7_oprofile_ReadSSV()>.
  *            om  - optimized profile that was successfully
- *                  returned by  <p7_oprofile_ReadMSV()>.
+ *                  returned by  <p7_oprofile_ReadSSV()>.
  *
  * Returns:   <eslOK> on success, and <om> is now a complete
  *            optimized profile.
@@ -575,7 +575,7 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
  *            Returns <eslEOF> when there is no profiles left in the
  *            file (including first attempt to read an empty file).
  * 
- *            Otherwise return the status of the p7_oprofile_ReadMSV function.
+ *            Otherwise return the status of the p7_oprofile_ReadSSV function.
  */
 int
 p7_oprofile_ReadBlockSSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *hmmBlock)

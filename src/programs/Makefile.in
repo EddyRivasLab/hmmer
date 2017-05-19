@@ -3,12 +3,12 @@ MODULE = programs
 PROGS  = hmmalign  \
 	 hmmbuild  \
 	 hmmemit   \
-	 hmmpress  \
-	 hmmscan   \
-	 hmmsearch \
-	 jackhmmer \
-	 phmmer    \
-	 nhmmer
+	 hmmpress  
+#	 hmmscan   \  SRE REVISIT
+#	 hmmsearch \
+#	 jackhmmer \
+#	 phmmer    \
+#	 nhmmer
 #	 nhmmscan
 
 

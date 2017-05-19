@@ -793,7 +793,7 @@ init_results(SEARCH_RESULTS *results)
 
   results->stats.nmodels     = 0;
   results->stats.nseqs       = 0;
-  results->stats.n_past_msv  = 0;
+  results->stats.n_past_ssv  = 0;
   results->stats.n_past_bias = 0;
   results->stats.n_past_vit  = 0;
   results->stats.n_past_fwd  = 0;
@@ -830,7 +830,7 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
       results->stats.nreported    += worker->stats.nreported;
       results->stats.nincluded    += worker->stats.nincluded;
 
-      results->stats.n_past_msv   += worker->stats.n_past_msv;
+      results->stats.n_past_ssv   += worker->stats.n_past_ssv;
       results->stats.n_past_bias  += worker->stats.n_past_bias;
       results->stats.n_past_vit   += worker->stats.n_past_vit;
       results->stats.n_past_fwd   += worker->stats.n_past_fwd;
@@ -937,7 +937,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
     pli = p7_pipeline_Create(query->opts, 100, 100, FALSE, mode);
     pli->stats.nmodels     = results->stats.nmodels;
     pli->stats.nseqs       = results->stats.nseqs;
-    pli->stats.n_past_msv  = results->stats.n_past_msv;
+    pli->stats.n_past_ssv  = results->stats.n_past_ssv;
     pli->stats.n_past_bias = results->stats.n_past_bias;
     pli->stats.n_past_vit  = results->stats.n_past_vit;
     pli->stats.n_past_fwd  = results->stats.n_past_fwd;
