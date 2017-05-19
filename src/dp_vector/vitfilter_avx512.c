@@ -330,10 +330,7 @@ p7_ViterbiFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FIL
 }
 
 
-// SRE TODO:  p7_ViterbiFilter_longtarget_avx512() not implemented yet.
-
-
-else // ! eslENABLE_AVX512
+#else // ! eslENABLE_AVX512
 
 /* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
 void p7_vitfilter_avx512_silence_hack(void) { return; }

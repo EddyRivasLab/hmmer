@@ -16,7 +16,8 @@ typedef struct p7_filtermx_s {
   int      M;			// current profile size: determines width of <dp> row    
   int      V;                   // width of striped vectors. 0 if no striped data set yet
 
-  char    *dp;			// aligned, one row of DP memory: >= 3*P7_NVW(M) vectors 
+                                // SRE REVISIT: char? only because it's both int8_t, int16_t
+  char    *dp;			// aligned, one row of DP memory: >= 3*Qf vectors 
   int      allocM;		// <dp_mem> is allocated to hold up to M=allocM
 
   enum p7f_mxtype_e type;	// p7F_NONE | p7F_SSVFILTER | p7F_MSVFILTER | p7F_VITFILTER 

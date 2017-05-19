@@ -32,9 +32,7 @@ typedef struct p7_oprofile_s {
   /* SSVFilter uses scaled int8_t scores: e.g. 16x per 128b vector                   */
   int8_t  **rbv;                /* match scores [x=0..Kp-1][q=0..Qb-1]               */
   int8_t   *rbv_mem;            /* one aligned allocation that <rbv> ptrs point into */
-
   float     tauBM;              /* constant B->Mk score:    log 2/M(M+1)             */  
-  float     tauCT;              /* constant NCJ move score: log 2/(L+2), singlehit   */
   float     scale_b;            /* typically 3 / log2: scores scale to 1/3 bits      */
 
   /* ViterbiFilter uses scaled int16_t scores: e.g. 8x per 128b vector               */
@@ -120,11 +118,9 @@ extern P7_OPROFILE *p7_oprofile_Shadow (const P7_OPROFILE *om);
 extern void         p7_oprofile_Destroy(P7_OPROFILE *om);
 
 extern int          p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om);
-extern int          p7_oprofile_ReconfigLength    (P7_OPROFILE *om, int L);
-extern int          p7_oprofile_ReconfigSSVLength (P7_OPROFILE *om, int L);
-extern int          p7_oprofile_ReconfigRestLength(P7_OPROFILE *om, int L);
-extern int          p7_oprofile_ReconfigMultihit  (P7_OPROFILE *om, int L);
-extern int          p7_oprofile_ReconfigUnihit    (P7_OPROFILE *om, int L);
+extern int          p7_oprofile_ReconfigLength  (P7_OPROFILE *om, int L);
+extern int          p7_oprofile_ReconfigMultihit(P7_OPROFILE *om, int L);
+extern int          p7_oprofile_ReconfigUnihit  (P7_OPROFILE *om, int L);
 
 extern int p7_oprofile_y_from_tk (int t, int k,        int Q, int V);
 extern int p7_oprofile_y_from_tqz(int t, int q, int z, int Q, int V);

@@ -110,7 +110,7 @@
 
 #define CONVERT_STEP_AVX(step, length_check, label, sv_AVX, pos)        \
   length_check(label)                                           \
-  rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + pos;                                   \
+  rsc_AVX = om->rbv[dsq[i_AVX]] + pos;                                   \
   step()       \
   sv_AVX = esl_avx_leftshift_one(sv_AVX); \
   sv_AVX = _mm256_or_si256(sv_AVX, low_byte_128_AVX);                                \
@@ -279,22 +279,22 @@
   } \
   i_AVX = 0; \
   while(num_iters_AVX >=4){ \
-  	rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + i_AVX + q_AVX;            \
+  	rsc_AVX = om->rbv[dsq[i_AVX]] + i_AVX + q_AVX;            \
     step()    \
     i_AVX++; \
-	rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + i_AVX + q_AVX;            \
+	rsc_AVX = om->rbv[dsq[i_AVX]] + i_AVX + q_AVX;            \
     step()    \
     i_AVX++; \
-    	rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + i_AVX + q_AVX;            \
+    	rsc_AVX = om->rbv[dsq[i_AVX]] + i_AVX + q_AVX;            \
     step()    \
     i_AVX++; \
-    rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + i_AVX + q_AVX;            \
+    rsc_AVX = om->rbv[dsq[i_AVX]] + i_AVX + q_AVX;            \
     step()    \
     i_AVX++; \
     num_iters_AVX -= 4; \
   } \
   while(num_iters_AVX >0){ \
-  	  rsc_AVX = om->sbv_AVX[dsq[i_AVX]] + i_AVX + q_AVX;            \
+  	  rsc_AVX = om->rbv[dsq[i_AVX]] + i_AVX + q_AVX;            \
       step()                                 \
       i_AVX++; \
       num_iters_AVX--; \
@@ -307,22 +307,22 @@ done1_AVX:                                          \
    	i_AVX = 0; \
    	num_iters_AVX = Q_AVX - w_AVX; \
    	while (num_iters_AVX >= 4){  \
-       rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;        \
+       rsc_AVX = om->rbv[dsq[i2_AVX + i_AVX]] + i_AVX;        \
        step() \
        i_AVX++; \
-       rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;        \
+       rsc_AVX = om->rbv[dsq[i2_AVX + i_AVX]] + i_AVX;        \
        step() \
        i_AVX++; \
-       rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;        \
+       rsc_AVX = om->rbv[dsq[i2_AVX + i_AVX]] + i_AVX;        \
        step() \
        i_AVX++; \
-       rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;        \
+       rsc_AVX = om->rbv[dsq[i2_AVX + i_AVX]] + i_AVX;        \
        step() \
        i_AVX++; \
        num_iters_AVX-= 4; \
    	}\
   	while(num_iters_AVX > 0){ \
-  		 rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;        \
+  		 rsc_AVX = om->rbv[dsq[i2_AVX + i_AVX]] + i_AVX;        \
          step()    \
          i_AVX++; \
          num_iters_AVX--;      \
@@ -339,22 +339,22 @@ if((L - i2_AVX) < (Q_AVX-w_AVX)){                                         \
  } \
  i_AVX = 0; \
  while (num_iters_AVX >= 4){ \
-     rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+     rsc_AVX = om->rbv[dsq[i2_AVX + i_AVX]] + i_AVX;            \
      step()                                     \
      i_AVX+= 1;  \
-     rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+     rsc_AVX = om->rbv[dsq[i2_AVX + i_AVX]] + i_AVX;            \
      step()                                     \
      i_AVX+= 1;  \
-     rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+     rsc_AVX = om->rbv[dsq[i2_AVX + i_AVX]] + i_AVX;            \
      step()                                     \
      i_AVX+= 1;  \
-     rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+     rsc_AVX = om->rbv[dsq[i2_AVX + i_AVX]] + i_AVX;            \
      step()                                     \
      i_AVX+= 1;  \
      num_iters_AVX -= 4; \
    }                                            \
    while(num_iters_AVX > 0) {  \
-   	 rsc_AVX = om->sbv_AVX[dsq[i2_AVX + i_AVX]] + i_AVX;            \
+   	 rsc_AVX = om->rbv[dsq[i2_AVX + i_AVX]] + i_AVX;            \
      step()                                     \
      i_AVX+= 1;  \
      num_iters_AVX--; \

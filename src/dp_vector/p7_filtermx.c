@@ -149,8 +149,7 @@ p7_filtermx_Reinit(P7_FILTERMX *fx, int allocM)
  *            like debugging comparisons and dumps.
  *
  *            Independent of vector ISA, because all it needs to
- *            unstripe is the vector width <V>. Works for SSVFilter,
- *            Vitfilter, and SSV_longtarget matrices.
+ *            unstripe is the vector width <V>. 
  *
  *            SSV matrices only have p7F_M scores. If a D or I score
  *            is asked for, returns 0.

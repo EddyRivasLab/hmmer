@@ -110,7 +110,7 @@
 
 #define CONVERT_STEP(step, length_check, label, sv, pos)        \
   length_check(label)                                           \
-  rsc = om->sbv[dsq[i]] + pos;                                   \
+  rsc = om->rbv[dsq[i]] + pos;                                   \
   step()                                                        \
   sv.s8x16 = vextq_s8(beginv.s8x16, sv.s8x16, 15);  \
                              \
@@ -275,7 +275,7 @@
                                                 \
   for (i = 0; i < L && i < Q - q - w; i++)      \
     {                                           \
-      rsc = om->sbv[dsq[i]] + i + q;            \
+      rsc = om->rbv[dsq[i]] + i + q;            \
       step()                                    \
     }                                           \
                                                 \
@@ -287,7 +287,7 @@ done1:                                          \
    {                                            \
      for (i = 0; i < Q - w; i++)                \
        {                                        \
-         rsc = om->sbv[dsq[i2 + i]] + i;        \
+         rsc = om->rbv[dsq[i2 + i]] + i;        \
          step()                                 \
        }                                        \
                                                 \
@@ -297,7 +297,7 @@ done1:                                          \
                                                 \
  for (i = 0; i2 + i < L && i < Q - w; i++)      \
    {                                            \
-     rsc = om->sbv[dsq[i2 + i]] + i;            \
+     rsc = om->rbv[dsq[i2 + i]] + i;            \
      step()                                     \
    }                                            \
                                                 \

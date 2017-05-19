@@ -29,8 +29,6 @@
 
 
 static int vitfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc);
-static int vitfilter_longtarget_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
-                                           float filtersc, double P, P7_HMM_WINDOWLIST *windowlist);
 
 /*****************************************************************
  * 1. ViterbiFilter() API
@@ -81,41 +79,6 @@ int
 
 
 
-/* Function:  p7_ViterbiFilter_longtarget()
- * Synopsis:  Viterbi filter for finding high-scoring windows in long sequences.
- *
- * Purpose:   Calculates an approximation of the Viterbi score for regions
- *            of sequence <dsq>, using optimized profile <om>, and a pre-
- *            allocated one-row DP matrix <ox>, and captures the positions
- *            at which such regions exceed the score required to be
- *            significant in the eyes of the calling function (usually
- *            p=0.001).
- *
- *            The resulting landmarks are converted to subsequence
- *            windows by the calling function.
- *
- *            The model must be in a local alignment mode; other modes
- *            cannot provide the necessary guarantee of no underflow.
- *
- * Args:      dsq        - digital target sequence, 1..L
- *            L          - length of dsq in residues
- *            om         - optimized profile
- *            ox         - DP matrix
- *            filtersc   - null or bias correction, required for translating a P-value threshold into a score threshold
- *            P          - p-value below which a region is captured as being above threshold
- *            windowlist - RETURN: preallocated array of hit windows (start and end of diagonal) for the above-threshold areas
- *
- * Returns:   <eslOK> on success;
- *
- * Throws:    <eslEINVAL> if <ox> allocation is too small, or if
- *            profile isn't in a local alignment mode. (Must be in local
- *            alignment mode because that's what helps us guarantee
- *            limited dynamic range.)
- */
-int
-(*p7_ViterbiFilter_longtarget)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox,
-                               float filtersc, double P, P7_HMM_WINDOWLIST *windowlist) =
-  vitfilter_longtarget_dispatcher;
 
 
 
@@ -159,48 +122,6 @@ vitfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
   //#ifdef eslENABLE_VMX
   //  p7_ViterbFilter = p7_ViterbiFilter_vmx;
   //  return p7_ViterbiFilter_vmx(dsq, L, om, ox, ret_sc);
-  //#endif
-
-  p7_Die("vitfilter_dispatcher found no vector implementation - that shouldn't happen.");
-}
-
-
-static int
-vitfilter_longtarget_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, 
-                                float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
-{
-#ifdef eslENABLE_AVX512  // Fastest first.
-  if (esl_cpu_has_avx512())
-    {
-      p7_ViterbiFilter_longtarget = p7_ViterbiFilter_longtarget_sse;
-      return p7_ViterbiFilter_longtarget_sse(dsq, L, om, ox, filtersc, P, windowlist);
-    }
-#endif
-
-#ifdef eslENABLE_AVX
-  if (esl_cpu_has_avx())
-    {
-      p7_ViterbiFilter_longtarget = p7_ViterbiFilter_longtarget_avx;
-      return p7_ViterbiFilter_longtarget_avx(dsq, L, om, ox, filtersc, P, windowlist);
-    }
-#endif
-
-#ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse())
-    {
-      p7_ViterbiFilter_longtarget = p7_ViterbiFilter_longtarget_sse;
-      return p7_ViterbiFilter_longtarget_sse(dsq, L, om, ox, filtersc, P, windowlist);
-    }
-#endif
-  
-#ifdef eslENABLE_NEON
-  p7_ViterbiFilter_longtarget = p7_ViterbiFilter_longtarget_neon;
-  return p7_ViterbiFilter_longtarget_neon(dsq, L, om, ox, filtersc, P, windowlist);
-#endif
-
-  //#ifdef eslENABLE_VMX
-  //  p7_ViterbFilter_longtarget = p7_ViterbiFilter_longtarget_vmx;
-  //  return p7_ViterbiFilter_longtarget_vmx(dsq, L, om, ox, filtersc, P, windowlist);
   //#endif
 
   p7_Die("vitfilter_dispatcher found no vector implementation - that shouldn't happen.");

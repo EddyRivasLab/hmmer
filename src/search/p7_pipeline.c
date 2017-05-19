@@ -2072,11 +2072,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
   p7_hmmwindow_init(&msv_windowlist);
 
 
-  /* Set false target length. This is a conservative estimate of the length of window that'll
-   * soon be passed on to later phases of the pipeline;  used to recover some bits of the score
-   * that we would miss if we left length parameters set to the full target length */
-  p7_oprofile_ReconfigSSVLength(om, om->max_length);
-
   /* First level filter: the SSV filter, with <om>.
    * This variant of SSV will scan a long sequence and find
    * short high-scoring regions.
@@ -2121,7 +2116,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
 
       // Compute standard MSV to ensure that bias doesn't overcome SSV score when MSV
       // would have survived it
-      p7_oprofile_ReconfigSSVLength(om, window_len);
+
       // p7_MSVFilter(subseq, window_len, om, pli->fx, &usc);  SRE TODO REVISIT 
       // P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
       // if (P > pli->F1 ) continue;

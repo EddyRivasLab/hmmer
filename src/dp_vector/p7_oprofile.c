@@ -92,7 +92,6 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
 
   /* Remaining initializations */
   om->tauBM     = 0;
-  om->tauCT     = 0;
   om->scale_b   = 0.0f;
 
   om->scale_w      = 0.0f;
@@ -292,11 +291,9 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
 static int8_t
 byteify(P7_OPROFILE *om, float sc)
 {
-  sc  = roundf(om->scale_b * sc);
-  ESL_DASSERT1(( sc >= -128. && sc <= 127. ));
-  if      (sc >=  127.) return  127;
-  else if (sc <= -128.) return -128;
-  else                  return (int8_t) sc;
+  sc  = roundf(om->scale_b * sc);               // Design assures that scores are -128..127.
+  assert(sc >= -128. && sc <= 127.);            // Trust but verify.
+  return (int8_t) sc;
 }
  
  
@@ -310,10 +307,8 @@ static int16_t
 wordify(P7_OPROFILE *om, float sc)
 {
   sc  = roundf(om->scale_w * sc);
-  ESL_DASSERT1(( sc >= -32768. && sc <= 32767. ));
-  if      (sc >=  32767.0) return  32767;
-  else if (sc <= -32768.0) return -32768;
-  else return (int16_t) sc;
+  assert(sc >= -32768. && sc <= 32767.);
+  return (int16_t) sc;
 }
 
 
@@ -342,9 +337,8 @@ ssv_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   ESL_DASSERT1(( M <= om->allocM  ));
   ESL_DASSERT1(( Q <= om->allocQb ));
 
-  om->scale_b = 3.0 / eslCONST_LOG2;                               // scores in third-bits. byteify() needs scale_b
-  om->tauBM   = logf(2.0f / ((float) M * (float) (M+1)));  
-  om->tauCT   = logf(2.0f / ((float) (gm->L+2)));                  // SSV length model, single-hit, no J state. 
+  om->scale_b = 3.0 / eslCONST_LOG2;                        // scores in third-bits. byteify() needs scale_b
+  om->tauBM   = logf(2.0f / ((float) M * (float) (M+1)));   // Local alignment, uniform fragment length model.
 
   for (x = 0; x < gm->abc->Kp; x++)
     {
@@ -355,12 +349,11 @@ ssv_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
       for (q = 0; q < Q; q++)
         for (z = 0; z < V; z++)
           {
-            *rbv = (q+1+Q*z <= M) ? byteify(om, *rsc[z]) : -128;  // REVISIT: do we need a special sentinel?
+            *rbv = (q+1+Q*z <= M) ? byteify(om, *rsc[z]) : -128; 
             rbv++;                             // access pattern constructs striped vectors in a float array
             rsc[z] += p7P_NR;
           }
       // SRE REVISIT: I think we also need to deal with p7O_EXTRA_SB here.
-
     }
   return eslOK;
 }
@@ -628,6 +621,10 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
  *            This doesn't affect the length distribution of the null
  *            model. That must also be reset, using <p7_bg_SetLength()>.
  *            
+ *            Not needed for SSV filter. SSV filter calculates its
+ *            length model, rather than saving precalculated params in
+ *            <om>.
+ *            
  *            We want this routine to run as fast as possible, because
  *            this call is in the critical path: it must be called at
  *            each new target sequence in a database search.
@@ -637,54 +634,6 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
  */
 int
 p7_oprofile_ReconfigLength(P7_OPROFILE *om, int L)
-{
-  int status;
-  if ((status = p7_oprofile_ReconfigSSVLength (om, L)) != eslOK) return status;
-  if ((status = p7_oprofile_ReconfigRestLength(om, L)) != eslOK) return status;
-  return eslOK;
-}
-
-/* Function:  p7_oprofile_ReconfigSSVLength()
- * Synopsis:  Set the target sequence length of the SSVFilter part of the model.
- * Incept:    SRE, Tue Dec 16 13:39:17 2008 [Janelia]
- *
- * Purpose:   Given an  already configured model <om>, quickly reset its
- *            expected length distribution for a new mean target sequence
- *            length of <L>, only for the part of the model that's used
- *            for the accelerated SSV filter.
- *            
- *            The acceleration pipeline uses this to defer reconfiguring the
- *            length distribution of the main model, mostly because hmmscan
- *            reads the model in two pieces, SSV part first, then the rest.
- *
- * Returns:   <eslOK> on success.
- */
-int
-p7_oprofile_ReconfigSSVLength(P7_OPROFILE *om, int L)
-{
-  om->tauCT = byteify(om, logf(2.0f / (float) (L+2)));
-  om->L     = L;
-  return eslOK;
-}
-
-/* Function:  p7_oprofile_ReconfigRestLength()
- * Synopsis:  Set the target sequence length of the main profile.
- * Incept:    SRE, Tue Dec 16 13:41:30 2008 [Janelia]
- *
- * Purpose:   Given an  already configured model <om>, quickly reset its
- *            expected length distribution for a new mean target sequence
- *            length of <L>, for everything except the SSV filter part
- *            of the model.
- *            
- *            Calling <p7_oprofile_ReconfigSSVLength()> then
- *            <p7_oprofile_ReconfigRestLength()> is equivalent to
- *            just calling <p7_oprofile_ReconfigLength()>. The two
- *            part version is used in the acceleration pipeline.
- *
- * Returns:   <eslOK> on success.           
- */
-int
-p7_oprofile_ReconfigRestLength(P7_OPROFILE *om, int L)
 {
   float pmove, ploop;
   
@@ -981,8 +930,7 @@ oprofile_dump_ssv(FILE *fp, const P7_OPROFILE *om)
     }
   fprintf(fp, "\n");
   
-  fprintf(fp, "tau_NB,JB,CT: %.3f\n",  om->tauCT);
-  fprintf(fp, "tau_BMk:      %.3f\n",  om->tauBM);
+  fprintf(fp, "tau_BMk:      %.3f\n", om->tauBM);
   fprintf(fp, "scale:        %.2f\n", om->scale_b);
   fprintf(fp, "Q:            %4d\n",  Q);  
   fprintf(fp, "M:            %4d\n",  M);  
@@ -1259,7 +1207,6 @@ p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, c
                  om1->abc->sym[x], P7_Q_FROM_Y(y,Vb), P7_Z_FROM_Y(y,Vb), P7_K_FROM_Y(y,Qb,Vb));
 
   if (om1->tauBM    != om2->tauBM)    ESL_FAIL(eslFAIL, errmsg, "comparison failed: tauBM");
-  if (om1->tauCT    != om2->tauCT)    ESL_FAIL(eslFAIL, errmsg, "comparison failed: tauJB");
   if (om1->scale_b  != om2->scale_b)  ESL_FAIL(eslFAIL, errmsg, "comparison failed: scale_b");
  
   

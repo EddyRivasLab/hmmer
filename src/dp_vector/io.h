@@ -10,40 +10,11 @@
 #include "base/p7_hmmfile.h"
 #include "dp_vector/p7_oprofile.h"
 
-extern int (*p7_oprofile_Write)      (FILE *ffp, FILE *pfp, P7_OPROFILE *om);
-extern int (*p7_oprofile_ReadMSV)    (P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
-extern int (*p7_oprofile_ReadInfoMSV)(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
-extern int (*p7_oprofile_ReadRest)   (P7_HMMFILE *hfp, P7_OPROFILE *om);
-
-#ifdef eslENABLE_SSE
-extern int p7_oprofile_Write_sse      (FILE *ffp, FILE *pfp, P7_OPROFILE *om);
-extern int p7_oprofile_ReadMSV_sse    (P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
-extern int p7_oprofile_ReadInfoMSV_sse(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
-extern int p7_oprofile_ReadRest_sse   (P7_HMMFILE *hfp, P7_OPROFILE *om);
-#endif
-
-#ifdef eslENABLE_AVX
-extern int p7_oprofile_Write_avx      (FILE *ffp, FILE *pfp, P7_OPROFILE *om);
-extern int p7_oprofile_ReadMSV_avx    (P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
-extern int p7_oprofile_ReadInfoMSV_avx(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
-extern int p7_oprofile_ReadRest_avx   (P7_HMMFILE *hfp, P7_OPROFILE *om);
-#endif
-
-#ifdef eslENABLE_AVX512
-extern int p7_oprofile_Write_avx512      (FILE *ffp, FILE *pfp, P7_OPROFILE *om);
-extern int p7_oprofile_ReadMSV_avx512    (P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
-extern int p7_oprofile_ReadInfoMSV_avx512(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
-extern int p7_oprofile_ReadRest_avx512   (P7_HMMFILE *hfp, P7_OPROFILE *om);
-#endif
-
-#ifdef eslENABLE_NEON
-extern int p7_oprofile_Write_neon      (FILE *ffp, FILE *pfp, P7_OPROFILE *om);
-extern int p7_oprofile_ReadMSV_neon    (P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
-extern int p7_oprofile_ReadInfoMSV_neon(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
-extern int p7_oprofile_ReadRest_neon   (P7_HMMFILE *hfp, P7_OPROFILE *om);
-#endif
-
-extern int p7_oprofile_ReadBlockMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *hmmBlock);
+extern int p7_oprofile_Write       (FILE *ffp, FILE *pfp, P7_OPROFILE *om);
+extern int p7_oprofile_ReadSSV     (P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
+extern int p7_oprofile_ReadInfoSSV (P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_om);
+extern int p7_oprofile_ReadRest    (P7_HMMFILE *hfp, P7_OPROFILE *om);
+extern int p7_oprofile_ReadBlockSSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *hmmBlock);
 
 extern P7_OM_BLOCK *p7_oprofile_CreateBlock(int size);
 extern void         p7_oprofile_DestroyBlock(P7_OM_BLOCK *block);

@@ -1,5 +1,5 @@
 /* SSV filter, x86 SSE vector implementation.
- * Contributed by Bjarne Knudsen (CLC Bio), and modified since.
+ * Contributed by Bjarne Knudsen (CLC Bio); modified since.
  * 
  * See ssvfilter.md for notes.
  *
@@ -29,8 +29,8 @@
 #endif
 
 #define STEP_SINGLE(sv)                         \
-  sv   = _mm_subs_epi8(sv, *rsc); rsc++;        \
-  xEv  = _mm_max_epu8(xEv, sv);	 
+  sv   = _mm_adds_epi8(sv, *rsc); rsc++;        \
+  xEv  = _mm_max_epi8(xEv, sv);	 
 
 #define LENGTH_CHECK(label)                     \
   if (i >= L) goto label;
@@ -110,10 +110,10 @@
 
 #define CONVERT_STEP(step, length_check, label, sv, pos)        \
   length_check(label)                                           \
-  rsc = om->sbv[dsq[i]] + pos;                                   \
+  rsc = (__m128i *) om->rbv[dsq[i]] + pos;                      \
   step()                                                        \
   sv = _mm_slli_si128(sv, 1);                                   \
-  sv = _mm_or_si128(sv, low_byte_128);                                \
+  sv = _mm_or_si128(sv, low_byte_128);                          \
   i++;
 
 #define CONVERT_1(step, LENGTH_CHECK, label)            \
@@ -265,108 +265,106 @@
 #define CALC(reset, step, convert, width)       \
   int i;                                        \
   int i2;                                       \
-  int Q        = P7_NVB(om->M);                \
+  int Q        = P7_Q(om->M, p7_VWIDTH_SSE);    \
   __m128i *rsc;                                 \
-                                                \
-  __m128i low_byte_128 = _mm_setzero_si128();                                            \
-  low_byte_128 = _mm_insert_epi16(low_byte_128, 128, 0); \
+  __m128i low_byte_128 = _mm_insert_epi8( _mm_setzero_si128(), -128, 0); \
   int w = width;                                \
   dsq++;                                        \
                                                 \
   reset()                                       \
-  int num_iters; \
-  if (L <= Q- q -w){ \
-  	num_iters = L;  \
-  }  \
-  else{  \
-  	num_iters = Q -q -w; \
-  } \
-  i = 0; \
-  while(num_iters >=4){ \
-  	rsc = om->sbv[dsq[i]] + i + q;            \
-    step()    \
-    i++; \
-	rsc = om->sbv[dsq[i]] + i + q;            \
-    step()    \
-    i++; \
-    rsc = om->sbv[dsq[i]] + i + q;            \
-    step()    \
-    i++; \
-    rsc = om->sbv[dsq[i]] + i + q;            \
-    step()    \
-    i++; \
-    num_iters -= 4; \
-  } \
-  while(num_iters >0){ \
-  	  rsc = om->sbv[dsq[i]] + i + q;            \
-      step()                                 \
-      i++; \
-      num_iters--; \
-  }  \
-  i = Q - q - w;                                \
-  convert(step, LENGTH_CHECK, done1)            \
-done1:                                          \
- for (i2 = Q - q; i2 < L - Q; i2 += Q)          \
-   {                                            \
-   	i = 0; \
-   	num_iters = Q - w; \
-   	while (num_iters >= 4){  \
-       rsc = om->sbv[dsq[i2 + i]] + i;        \
-       step() \
-       i++; \
-       rsc = om->sbv[dsq[i2 + i]] + i;        \
-       step() \
-       i++; \
-       rsc = om->sbv[dsq[i2 + i]] + i;        \
-       step() \
-       i++; \
-       rsc = om->sbv[dsq[i2 + i]] + i;        \
-       step() \
-       i++; \
-       num_iters-= 4; \
-   	}\
-  	while(num_iters > 0){ \
-  		 rsc = om->sbv[dsq[i2 + i]] + i;        \
-         step()    \
-         i++; \
-         num_iters--;      \
-  	} \
-                                               \
-     i += i2;                                   \
-     convert(step, NO_CHECK, ) \
-   }                                            \
-if((L - i2) < (Q-w)){                                         \
- 	num_iters = L -i2; \
- 	} \
- else{  \
- 	num_iters = Q - w; \
- } \
- i = 0; \
- while (num_iters >= 4){ \
-     rsc = om->sbv[dsq[i2 + i]] + i;            \
-     step()                                     \
-     i+= 1;  \
-     rsc = om->sbv[dsq[i2 + i]] + i;            \
-     step()                                     \
-     i+= 1;  \
-     rsc = om->sbv[dsq[i2 + i]] + i;            \
-     step()                                     \
-     i+= 1;  \
-     rsc = om->sbv[dsq[i2 + i]] + i;            \
-     step()                                     \
-     i+= 1;  \
-     num_iters -= 4; \
-   }                                            \
-   while(num_iters > 0) {  \
-   	 rsc = om->sbv[dsq[i2 + i]] + i;            \
-     step()                                     \
-     i+= 1;  \
-     num_iters--; \
-   } \
- i+=i2;                                         \
- convert(step, LENGTH_CHECK, done2)             \
-done2:                                          \
-	return xEv;
+  int num_iters;                                \
+  if (L <= Q-q-w) {                             \
+    num_iters = L;                              \
+  }                                             \
+  else{                                         \
+    num_iters = Q -q -w;                        \
+  }                                             \
+  i = 0;                                        \
+  while(num_iters >=4){                         \
+    rsc = (__m128i *) om->rbv[dsq[i]] + i + q;  \
+    step()                                      \
+      i++;                                       \
+    rsc = (__m128i *) om->rbv[dsq[i]] + i + q;   \
+    step()                                       \
+      i++;                                       \
+    rsc = (__m128i *) om->rbv[dsq[i]] + i + q;   \
+    step()                                       \
+      i++;                                       \
+    rsc = (__m128i *) om->rbv[dsq[i]] + i + q;   \
+    step()                                       \
+      i++;                                       \
+    num_iters -= 4;                              \
+  }                                              \
+  while(num_iters >0){                           \
+    rsc = (__m128i *) om->rbv[dsq[i]] + i + q;   \
+    step()                                       \
+      i++;                                       \
+    num_iters--;                                 \
+  }                                              \
+  i = Q - q - w;                                 \
+  convert(step, LENGTH_CHECK, done1)             \
+  done1:                                         \
+  for (i2 = Q - q; i2 < L - Q; i2 += Q)          \
+    {                                            \
+     i = 0;                                     \
+     num_iters = Q - w;                         \
+     while (num_iters >= 4){                    \
+       rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;      \
+       step()                                           \
+         i++;                                            \
+       rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;       \
+       step()                                            \
+         i++;                                            \
+       rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;       \
+       step()                                            \
+         i++;                                            \
+       rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;       \
+       step()                                            \
+         i++;                                            \
+       num_iters-= 4;                                    \
+     }                                                   \
+     while(num_iters > 0){                               \
+       rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;       \
+       step()                                            \
+         i++;                                            \
+       num_iters--;                                      \
+     }                                                   \
+                                                         \
+     i += i2;                                            \
+     convert(step, NO_CHECK, )                                \
+       }                                                      \
+  if((L - i2) < (Q-w)){                                       \
+    num_iters = L -i2;                                        \
+  }                                                           \
+  else{                                                       \
+    num_iters = Q - w;                                        \
+  }                                                           \
+  i = 0;                                                      \
+  while (num_iters >= 4){                                     \
+    rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;               \
+    step()                                                    \
+      i+= 1;                                                  \
+    rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;               \
+    step()                                                    \
+      i+= 1;                                                  \
+    rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;               \
+    step()                                                    \
+      i+= 1;                                                  \
+    rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;               \
+    step()                                                    \
+      i+= 1;                                                  \
+    num_iters -= 4;                                           \
+  }                                                           \
+  while(num_iters > 0) {                                      \
+    rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;               \
+    step()                                                    \
+      i+= 1;                                                  \
+    num_iters--;                                              \
+  }                                                           \
+  i+=i2;                                                      \
+  convert(step, LENGTH_CHECK, done2)                          \
+  done2:                                                      \
+  return xEv;
 
 __m128i
 calc_band_1_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
@@ -481,99 +479,79 @@ calc_band_18_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128
 
 
 
-uint8_t
-get_xE_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
-{
-  __m128i xEv;		           /* E state: keeps max for Mk->E as we go                     */
-  __m128i beginv;                  /* begin scores                                              */
-  uint8_t retval;
-  int q;			   /* counter over vectors 0..nq-1                              */
-  int Q        = P7_NVB(om->M);    /* segment length: # of vectors                              */
-  int bands;                       /* the number of bands (rounds) to use                       */
-  beginv =  _mm_set1_epi8(128);
-  xEv    =  beginv;
+/* Function:  p7_SSVFilter_sse()
+ * Synopsis:  SSV filter; x86 SSE version.
+ * Incept:    SRE, Fri May 19 06:49:12 2017 [Saiun, Yoshida Brothers]
+ *
+ * Purpose:   Calculates approximate SSV score for digital sequence
+ *            <dsq>, of length <L>, compared to vector profile
+ *            <om>. Return SSV raw score, in nats, in <ret_sc>.
+ *            
+ *            Raw score does not yet include null model terms.
+ *            
+ *            Score may overflow (and will, on high scoring
+ *            sequences); in this case, <*ret_sc> is <eslINFINITY> and
+ *            a status of <eslERANGE> is returned. 
+ *            
+ *            The model <om> may be in any mode. 
 
+ *
+ * Args:      
+ *
+ * Returns:   
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Xref:      
+ */
+
+
+
+
+
+int
+p7_SSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
+{
+  int     Q       = P7_Q(om->M, p7_VWIDTH_SSE);  // segment length: # of vectors                  
+  __m128i beginv  = _mm_set1_epi8(-128);         // initialization of each set of diagonals
+  __m128i xEv     = beginv; 	                 // E state: keeps max for Mk->E as we go    
+  int     last_q  = 0;                           // for saving the last q value to find band width           
+  int8_t  xE;                                    // DP max, before conversion to nats
+  int     q;			                 // counter over vectors 0..nq-1  
+  int     bands;                                 // number of bands (rounds) to use   
+  int     i;                                     // counter for bands                     
   /* function pointers for the various number of vectors to use */
   __m128i (*fs[MAX_BANDS + 1]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register __m128i, __m128i)
-    = {NULL
-       , calc_band_1_sse,  calc_band_2_sse,  calc_band_3_sse,  calc_band_4_sse,  calc_band_5_sse,  calc_band_6_sse
+    = {NULL, calc_band_1_sse,  calc_band_2_sse,  calc_band_3_sse,  calc_band_4_sse,  calc_band_5_sse,  calc_band_6_sse
 #if MAX_BANDS > 6
-       , calc_band_7_sse,  calc_band_8_sse,  calc_band_9_sse,  calc_band_10_sse, calc_band_11_sse, calc_band_12_sse, calc_band_13_sse
-       , calc_band_14_sse
+       , calc_band_7_sse,  calc_band_8_sse,  calc_band_9_sse,  calc_band_10_sse, calc_band_11_sse, calc_band_12_sse, calc_band_13_sse, calc_band_14_sse
 #endif
 #if MAX_BANDS > 14
        , calc_band_15_sse, calc_band_16_sse, calc_band_17_sse, calc_band_18_sse
 #endif
   };
 
-  int last_q;                  /* for saving the last q value to find band width            */
-  int i;                           /* counter for bands                                         */
-
   last_q = 0;
   /* Use the highest number of bands but no more than MAX_BANDS */
   bands = (Q + MAX_BANDS - 1) / MAX_BANDS;
   for (i = 0; i < bands; i++) {
     q = (Q * (i + 1)) / bands;
-
     xEv = fs[q-last_q](dsq, L, om, last_q, beginv, xEv);
-
     last_q = q;
   }
-  retval = esl_sse_hmax_epu8(xEv); // assign this here to allow checking vs AVX, AVX-512
+  xE = esl_sse_hmax_epi8(xEv); 
 
-  return retval;
-}
-
-
-int
-p7_SSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
-{
-  /* Use 16 bit values to avoid overflow due to moved baseline */
-  uint16_t  xE;
-  uint16_t  xJ;
-
-  if (om->tjb_b + om->tbm_b + om->tec_b + om->bias_b >= 127) {
-    /* the optimizations are not guaranteed to work under these
-       conditions (see ssvfilter.md) */
-    return eslENORESULT;
-  }
-
-  xE = get_xE_sse(dsq, L, om);
-
-  // SRE TODO REVISIT : All this needs to be rechecked and rethought for H4.
-  if (xE >= 255 - om->bias_b)
-    {
-      /* We have an overflow. */
-      *ret_sc = eslINFINITY;
-      if (om->base_b - om->tjb_b - om->tbm_b < 128) 
-        {
-          /* The original MSV filter may not overflow, so we are not sure our result is correct */
-          return eslENORESULT;
-        }
-
-      /* We know that the overflow will also occur in the original MSV filter */ 
-      return eslERANGE;
-    }
-
-  xE += om->base_b - om->tjb_b - om->tbm_b;
-  xE -= 128;
-
-  if (xE >= 255 - om->bias_b)
-    {
-      /* We know that the result will overflow in the original MSV filter */
+  if (xE == 255)
+    { 
       *ret_sc = eslINFINITY;
       return eslERANGE;
     }
-
-  xJ = xE - om->tec_b;
-
-  if (xJ > om->base_b)  return eslENORESULT; /* The J state could have been used, so doubt about score */
-
-  /* finally C->T, and add our missing precision on the NN,CC,JJ back */
-  *ret_sc = ((float) (xJ - om->tjb_b) - (float) om->base_b);
-  *ret_sc /= om->scale_b;
-  *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
-  return eslOK;
+  else
+    {
+      *ret_sc = (float) xE / om->scale_b + om->tauBM - 2.0;   // 2.0 is the tauNN/tauCC "2 nat approximation"
+      *ret_sc += 2.0 * logf(2.0 / (float) (L + 2));           // tauNB, tauCT
+      return eslOK;
+    }
 }
 
 
