@@ -746,8 +746,12 @@ p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol)
  *            this routine sets: all t_MM scores = 0; all other core
  *            transitions = -inf; all <t_BMk> entries uniformly <log
  *            2/(M(M+1))>; <tCC, tNN, tJJ> scores 0 (caller will apply
- *            the 2 nat approximation); rounded in the same way as the
- *            8-bit limited precision.
+ *            the 2 nat approximation). 
+ *
+ *            Match emission scores are scaled and rounded, emulating
+ *            SSV filter's 8-bit limited precision. tau_BMk, tau_NB|CT
+ *            remain in full precision, because SSVFilter also keeps
+ *            them in full precision.
  *            
  *            To convert a generic Viterbi score <gsc> calculated with
  *            this profile to a nat score that should match
@@ -762,7 +766,7 @@ int
 p7_profile_SameAsSSV(P7_PROFILE *gm, float scale_b)
 {
   int    k,x;
-  float  tbm = roundf(scale_b * (log(2.0f / ((float) gm->M * (float) (gm->M+1)))));
+  float  tbm = scale_b * (log(2.0f / ((float) gm->M * (float) (gm->M+1))));
 
   /* Transitions */
   esl_vec_FSet(gm->tsc, p7P_NTRANS * gm->M, -eslINFINITY);
@@ -780,7 +784,7 @@ p7_profile_SameAsSSV(P7_PROFILE *gm, float scale_b)
    /* Specials */
   for (k = 0; k < p7P_NXSTATES; k++)
     for (x = 0; x < p7P_NXTRANS; x++)
-      gm->xsc[k][x] = (gm->xsc[k][x] <= -eslINFINITY) ? -eslINFINITY : roundf(scale_b * gm->xsc[k][x]);
+      gm->xsc[k][x] = (gm->xsc[k][x] <= -eslINFINITY) ? -eslINFINITY : scale_b * gm->xsc[k][x];
 
   /* NN, CC, JJ hardcoded 0 in limited precision */
   gm->xsc[p7P_N][p7P_LOOP] =  gm->xsc[p7P_J][p7P_LOOP] =  gm->xsc[p7P_C][p7P_LOOP] = 0;

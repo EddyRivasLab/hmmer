@@ -10,7 +10,7 @@
 
 #include "simdvec.h"
 
-enum p7f_mxtype_e { p7F_NONE = 0, p7F_SSVFILTER = 1, p7F_MSVFILTER = 2, p7F_VITFILTER = 3 };
+enum p7f_mxtype_e { p7F_NONE = 0, p7F_SSVFILTER = 1, p7F_VITFILTER = 2 };
                                 
 typedef struct p7_filtermx_s {  
   int      M;			// current profile size: determines width of <dp> row    

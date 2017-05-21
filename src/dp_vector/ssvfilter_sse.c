@@ -14,6 +14,7 @@
 #include "easel.h"
 #include "esl_sse.h"
 
+#include "dp_vector/p7_filtermx.h"
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
 
@@ -28,92 +29,93 @@
 #define  MAX_BANDS 6
 #endif
 
-#define STEP_SINGLE(sv)                         \
-  sv   = _mm_adds_epi8(sv, *rsc); rsc++;        \
-  xEv  = _mm_max_epi8(xEv, sv);	 
 
-#define LENGTH_CHECK(label)                     \
+#define STEP_SINGLE(sv)                   \
+  sv   = _mm_adds_epi8(sv, *rsc); rsc++;  \
+  xEv  = _mm_max_epi8(xEv, sv);     
+
+#define LENGTH_CHECK(label) \
   if (i >= L) goto label;
 
 #define NO_CHECK(label)
 
-#define STEP_BANDS_1()                          \
-  STEP_SINGLE(sv00) 
+#define STEP_BANDS_1() \
+  STEP_SINGLE(sv00)  
 
-#define STEP_BANDS_2()                          \
-  STEP_BANDS_1()                                \
+#define STEP_BANDS_2() \
+  STEP_BANDS_1()       \
   STEP_SINGLE(sv01)
 
-#define STEP_BANDS_3()                          \
-  STEP_BANDS_2()                                \
+#define STEP_BANDS_3() \
+  STEP_BANDS_2()       \
   STEP_SINGLE(sv02)
 
-#define STEP_BANDS_4()                          \
-  STEP_BANDS_3()                                \
+#define STEP_BANDS_4() \
+  STEP_BANDS_3()       \
   STEP_SINGLE(sv03)
 
-#define STEP_BANDS_5()                          \
-  STEP_BANDS_4()                                \
+#define STEP_BANDS_5() \
+  STEP_BANDS_4()       \
   STEP_SINGLE(sv04)
 
-#define STEP_BANDS_6()                          \
-  STEP_BANDS_5()                                \
+#define STEP_BANDS_6() \
+  STEP_BANDS_5()       \
   STEP_SINGLE(sv05)
 
-#define STEP_BANDS_7()                          \
-  STEP_BANDS_6()                                \
+#define STEP_BANDS_7() \
+  STEP_BANDS_6()       \
   STEP_SINGLE(sv06)
 
-#define STEP_BANDS_8()                          \
-  STEP_BANDS_7()                                \
+#define STEP_BANDS_8() \
+  STEP_BANDS_7()       \
   STEP_SINGLE(sv07)
 
-#define STEP_BANDS_9()                          \
-  STEP_BANDS_8()                                \
+#define STEP_BANDS_9() \
+  STEP_BANDS_8()       \
   STEP_SINGLE(sv08)
 
-#define STEP_BANDS_10()                         \
-  STEP_BANDS_9()                                \
+#define STEP_BANDS_10() \
+  STEP_BANDS_9()        \
   STEP_SINGLE(sv09)
 
-#define STEP_BANDS_11()                         \
-  STEP_BANDS_10()                               \
+#define STEP_BANDS_11() \
+  STEP_BANDS_10()       \
   STEP_SINGLE(sv10)
 
-#define STEP_BANDS_12()                         \
-  STEP_BANDS_11()                               \
+#define STEP_BANDS_12() \
+  STEP_BANDS_11()       \
   STEP_SINGLE(sv11)
 
-#define STEP_BANDS_13()                         \
-  STEP_BANDS_12()                               \
+#define STEP_BANDS_13() \
+  STEP_BANDS_12()       \
   STEP_SINGLE(sv12)
 
-#define STEP_BANDS_14()                         \
-  STEP_BANDS_13()                               \
+#define STEP_BANDS_14() \
+  STEP_BANDS_13()       \
   STEP_SINGLE(sv13)
 
-#define STEP_BANDS_15()                         \
-  STEP_BANDS_14()                               \
+#define STEP_BANDS_15() \
+  STEP_BANDS_14()       \
   STEP_SINGLE(sv14)
 
-#define STEP_BANDS_16()                         \
-  STEP_BANDS_15()                               \
+#define STEP_BANDS_16() \
+  STEP_BANDS_15()       \
   STEP_SINGLE(sv15)
 
-#define STEP_BANDS_17()                         \
-  STEP_BANDS_16()                               \
+#define STEP_BANDS_17() \
+  STEP_BANDS_16()       \
   STEP_SINGLE(sv16)
 
-#define STEP_BANDS_18()                         \
-  STEP_BANDS_17()                               \
+#define STEP_BANDS_18() \
+  STEP_BANDS_17()       \
   STEP_SINGLE(sv17)
 
-#define CONVERT_STEP(step, length_check, label, sv, pos)        \
-  length_check(label)                                           \
-  rsc = (__m128i *) om->rbv[dsq[i]] + pos;                      \
-  step()                                                        \
-  sv = _mm_slli_si128(sv, 1);                                   \
-  sv = _mm_or_si128(sv, low_byte_128);                          \
+#define CONVERT_STEP(step, length_check, label, sv, pos) \
+  length_check(label)                                    \
+  rsc = (__m128i *) om->rbv[dsq[i]] + pos;               \
+  step()                                                 \
+  sv = _mm_slli_si128(sv, 1);                            \
+  sv = _mm_or_si128(sv, low_byte_128);                   \
   i++;
 
 #define CONVERT_1(step, LENGTH_CHECK, label)            \
@@ -187,183 +189,176 @@
   CONVERT_STEP(step, LENGTH_CHECK, label, sv17, Q - 18) \
   CONVERT_17(step, LENGTH_CHECK, label)
 
-#define RESET_1()                               \
+#define RESET_1()                 \
   register __m128i sv00 = beginv;
 
-#define RESET_2()                               \
-  RESET_1()                                     \
+#define RESET_2()                 \
+  RESET_1()                       \
   register __m128i sv01 = beginv;
 
-#define RESET_3()                               \
-  RESET_2()                                     \
+#define RESET_3()                 \
+  RESET_2()                       \
   register __m128i sv02 = beginv;
 
-#define RESET_4()                               \
-  RESET_3()                                     \
+#define RESET_4()                 \
+  RESET_3()                       \
   register __m128i sv03 = beginv;
 
-#define RESET_5()                               \
-  RESET_4()                                     \
+#define RESET_5()                 \
+  RESET_4()                       \
   register __m128i sv04 = beginv;
 
-#define RESET_6()                               \
-  RESET_5()                                     \
+#define RESET_6()                 \
+  RESET_5()                       \
   register __m128i sv05 = beginv;
 
-#define RESET_7()                               \
-  RESET_6()                                     \
+#define RESET_7()                 \
+  RESET_6()                       \
   register __m128i sv06 = beginv;
 
-#define RESET_8()                               \
-  RESET_7()                                     \
+#define RESET_8()                 \
+  RESET_7()                       \
   register __m128i sv07 = beginv;
 
-#define RESET_9()                               \
-  RESET_8()                                     \
+#define RESET_9()                 \
+  RESET_8()                       \
   register __m128i sv08 = beginv;
 
-#define RESET_10()                              \
-  RESET_9()                                     \
+#define RESET_10()                \
+  RESET_9()                       \
   register __m128i sv09 = beginv;
 
-#define RESET_11()                              \
-  RESET_10()                                    \
+#define RESET_11()                \
+  RESET_10()                      \
   register __m128i sv10 = beginv;
 
-#define RESET_12()                              \
-  RESET_11()                                    \
+#define RESET_12()                \
+  RESET_11()                      \
   register __m128i sv11 = beginv;
 
-#define RESET_13()                              \
-  RESET_12()                                    \
+#define RESET_13()                \
+  RESET_12()                      \
   register __m128i sv12 = beginv;
 
-#define RESET_14()                              \
-  RESET_13()                                    \
+#define RESET_14()                \
+  RESET_13()                      \
   register __m128i sv13 = beginv;
 
-#define RESET_15()                              \
-  RESET_14()                                    \
+#define RESET_15()                \
+  RESET_14()                      \
   register __m128i sv14 = beginv;
 
-#define RESET_16()                              \
-  RESET_15()                                    \
+#define RESET_16()                \
+  RESET_15()                      \
   register __m128i sv15 = beginv;
 
-#define RESET_17()                              \
-  RESET_16()                                    \
+#define RESET_17()                \
+  RESET_16()                      \
   register __m128i sv16 = beginv;
 
-#define RESET_18()                              \
-  RESET_17()                                    \
+#define RESET_18()                \
+  RESET_17()                      \
   register __m128i sv17 = beginv;
 
 
-// We've applied 4:1 loop unrolling to the CALC
-// routines to reduce loop overhead.  Reduces 
-// total program run time by up to 13% on the AVX version
+/* Original Knudsen CALC() was simpler. (Look back in git for comparison.)
+ * Nick Carter applied an additional optimization, using 4:1 loop
+ * unrolling to reduce loop overhead, a 13% runtime improvement in the
+ * AVX version.
+ */
 #define CALC(reset, step, convert, width)       \
-  int i;                                        \
-  int i2;                                       \
-  int Q        = P7_Q(om->M, p7_VWIDTH_SSE);    \
+  __m128i  low_byte_128 = _mm_insert_epi8( _mm_setzero_si128(), -128, 0); \
+  int      Q            = P7_Q(om->M, p7_VWIDTH_SSE);                     \
+  int      w            = width;                \
+  int      i,i2;                                \
   __m128i *rsc;                                 \
-  __m128i low_byte_128 = _mm_insert_epi8( _mm_setzero_si128(), -128, 0); \
-  int w = width;                                \
-  dsq++;                                        \
+  int      num_iters;                           \
                                                 \
+  dsq++;                                        \
   reset()                                       \
-  int num_iters;                                \
-  if (L <= Q-q-w) {                             \
-    num_iters = L;                              \
-  }                                             \
-  else{                                         \
-    num_iters = Q -q -w;                        \
-  }                                             \
+  if (L <= Q-q-w)  num_iters = L;               \
+  else             num_iters = Q-q-w;           \
   i = 0;                                        \
-  while(num_iters >=4){                         \
+  while (num_iters >= 4) {                      \
     rsc = (__m128i *) om->rbv[dsq[i]] + i + q;  \
     step()                                      \
-      i++;                                       \
-    rsc = (__m128i *) om->rbv[dsq[i]] + i + q;   \
-    step()                                       \
-      i++;                                       \
-    rsc = (__m128i *) om->rbv[dsq[i]] + i + q;   \
-    step()                                       \
-      i++;                                       \
-    rsc = (__m128i *) om->rbv[dsq[i]] + i + q;   \
-    step()                                       \
-      i++;                                       \
-    num_iters -= 4;                              \
-  }                                              \
-  while(num_iters >0){                           \
-    rsc = (__m128i *) om->rbv[dsq[i]] + i + q;   \
-    step()                                       \
-      i++;                                       \
-    num_iters--;                                 \
-  }                                              \
-  i = Q - q - w;                                 \
-  convert(step, LENGTH_CHECK, done1)             \
-  done1:                                         \
-  for (i2 = Q - q; i2 < L - Q; i2 += Q)          \
-    {                                            \
-     i = 0;                                     \
-     num_iters = Q - w;                         \
-     while (num_iters >= 4){                    \
-       rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;      \
-       step()                                           \
-         i++;                                            \
-       rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;       \
-       step()                                            \
-         i++;                                            \
-       rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;       \
-       step()                                            \
-         i++;                                            \
-       rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;       \
-       step()                                            \
-         i++;                                            \
-       num_iters-= 4;                                    \
-     }                                                   \
-     while(num_iters > 0){                               \
-       rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;       \
-       step()                                            \
-         i++;                                            \
-       num_iters--;                                      \
-     }                                                   \
-                                                         \
-     i += i2;                                            \
-     convert(step, NO_CHECK, )                                \
-       }                                                      \
-  if((L - i2) < (Q-w)){                                       \
-    num_iters = L -i2;                                        \
-  }                                                           \
-  else{                                                       \
-    num_iters = Q - w;                                        \
-  }                                                           \
-  i = 0;                                                      \
-  while (num_iters >= 4){                                     \
-    rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;               \
-    step()                                                    \
-      i+= 1;                                                  \
-    rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;               \
-    step()                                                    \
-      i+= 1;                                                  \
-    rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;               \
-    step()                                                    \
-      i+= 1;                                                  \
-    rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;               \
-    step()                                                    \
-      i+= 1;                                                  \
-    num_iters -= 4;                                           \
-  }                                                           \
-  while(num_iters > 0) {                                      \
-    rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;               \
-    step()                                                    \
-      i+= 1;                                                  \
-    num_iters--;                                              \
-  }                                                           \
-  i+=i2;                                                      \
-  convert(step, LENGTH_CHECK, done2)                          \
-  done2:                                                      \
+    i++;                                        \
+    rsc = (__m128i *) om->rbv[dsq[i]] + i + q;  \
+    step()                                      \
+    i++;                                        \
+    rsc = (__m128i *) om->rbv[dsq[i]] + i + q;  \
+    step()                                      \
+    i++;                                        \
+    rsc = (__m128i *) om->rbv[dsq[i]] + i + q;  \
+    step()                                      \
+    i++;                                        \
+    num_iters -= 4;                             \
+  }                                             \
+  while (num_iters > 0) {                       \
+    rsc = (__m128i *) om->rbv[dsq[i]] + i + q;  \
+    step()                                      \
+    i++;                                        \
+    num_iters--;                                \
+  }                                             \
+  i = Q - q - w;                                \
+  convert(step, LENGTH_CHECK, done1)            \
+done1:                                          \
+  for (i2 = Q - q; i2 < L - Q; i2 += Q)         \
+    {                                           \
+      i = 0;                                    \
+      num_iters = Q - w;                        \
+      while (num_iters >= 4) {                       \
+        rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;  \
+        step()                                       \
+        i++;                                         \
+        rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;  \
+        step()                                       \
+        i++;                                         \
+        rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;  \
+        step()                                       \
+          i++;                                       \
+        rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;  \
+        step()                                       \
+        i++;                                         \
+        num_iters-= 4;                               \
+      }                                              \
+      while (num_iters > 0) {                        \
+        rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i;  \
+        step()                                       \
+        i++;                                         \
+        num_iters--;                                 \
+      }                                              \
+                                                \
+      i += i2;                                  \
+      convert(step, NO_CHECK, )                 \
+    }                                           \
+  if ((L-i2) < (Q-w))   num_iters = L-i2;       \
+  else                  num_iters = Q - w;      \
+  i = 0;                                        \
+  while (num_iters >= 4) {                      \
+    rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i; \
+    step()                                      \
+    i+= 1;                                      \
+    rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i; \
+    step()                                      \
+    i+= 1;                                      \
+    rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i; \
+    step()                                      \
+    i+= 1;                                      \
+    rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i; \
+    step()                                      \
+    i+= 1;                                      \
+    num_iters -= 4;                             \
+  }                                             \
+  while (num_iters > 0) {                       \
+    rsc = (__m128i *) om->rbv[dsq[i2 + i]] + i; \
+    step()                                      \
+    i+= 1;                                      \
+    num_iters--;                                \
+  }                                             \
+  i+=i2;                                        \
+  convert(step, LENGTH_CHECK, done2)            \
+done2:                                          \
   return xEv;
 
 __m128i
@@ -482,33 +477,7 @@ calc_band_18_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128
 /* Function:  p7_SSVFilter_sse()
  * Synopsis:  SSV filter; x86 SSE version.
  * Incept:    SRE, Fri May 19 06:49:12 2017 [Saiun, Yoshida Brothers]
- *
- * Purpose:   Calculates approximate SSV score for digital sequence
- *            <dsq>, of length <L>, compared to vector profile
- *            <om>. Return SSV raw score, in nats, in <ret_sc>.
- *            
- *            Raw score does not yet include null model terms.
- *            
- *            Score may overflow (and will, on high scoring
- *            sequences); in this case, <*ret_sc> is <eslINFINITY> and
- *            a status of <eslERANGE> is returned. 
- *            
- *            The model <om> may be in any mode. 
-
- *
- * Args:      
- *
- * Returns:   
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      
  */
-
-
-
-
-
 int
 p7_SSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
 {
@@ -539,24 +508,83 @@ p7_SSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc
     xEv = fs[q-last_q](dsq, L, om, last_q, beginv, xEv);
     last_q = q;
   }
-  xE = esl_sse_hmax_epi8(xEv); 
+  xE = esl_sse_hmax_epi8(xEv);  
 
-  if (xE == 255)
-    { 
+  if (xE == 127)  // Overflow on high scoring sequences is expected.
+    {             // Pass filter, but score is unknown.
       *ret_sc = eslINFINITY;
       return eslERANGE;
     }
   else
-    {
-      *ret_sc = (float) xE / om->scale_b + om->tauBM - 2.0;   // 2.0 is the tauNN/tauCC "2 nat approximation"
-      *ret_sc += 2.0 * logf(2.0 / (float) (L + 2));           // tauNB, tauCT
+    {                         //v  Add +128 back onto the diagonal score. DP calculated it from -128 baseline.
+      *ret_sc = ((float) xE + 128.) / om->scale_b + om->tauBM - 2.0;   // 2.0 is the tauNN/tauCC "2 nat approximation"
+      *ret_sc += 2.0 * logf(2.0 / (float) (L + 2));                    // tauNB, tauCT
       return eslOK;
     }
 }
 
 
-#else // ! eslENABLE_SSE
+/* Function:  p7_SSVFilter_base_sse()
+ * Synopsis:  SSV filter; base (non-Knudsen) version; x86 SSE vectorized.
+ * Incept:    SRE, Sat May 20 12:32:46 2017 [Alexi Murdoch, Home]
+ *
+ * Throws:    <eslEMEM> if reallocation of <fx> fails.
+ */
+int
+p7_SSVFilter_base_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *fx, float *ret_sc)
+{
+  int      Q    = P7_Q(om->M, p7_VWIDTH_SSE);
+  __m128i  hv   = _mm_set1_epi8(-128);
+  __m128i  mask = _mm_insert_epi8( _mm_setzero_si128(), -128, 0);
+  __m128i *dp;
+  __m128i *rbv;
+  __m128i  mpv;
+  __m128i  sv;
+  int8_t   h;
+  int      i,q;
+  int      status;
 
+  if (( status = p7_filtermx_Reinit(fx, om->M) ) != eslOK) goto FAILURE;
+  fx->M    = om->M;
+  fx->V    = p7_VWIDTH_SSE;
+  fx->type = p7F_SSVFILTER;
+  dp       = (__m128i *) fx->dp;
+
+  mpv = hv;
+  for (q = 0; q < Q; q++)
+    dp[q] = hv;
+
+  for (i = 1; i <= L; i++)
+    {
+      rbv = (__m128i *) om->rbv[dsq[i]];
+      for (q = 0; q < Q; q++)
+        {
+          sv    = _mm_adds_epi8(mpv, rbv[q]);
+          hv    = _mm_max_epi8(hv, sv);
+          mpv   = dp[q];
+          dp[q] = sv;
+        }
+      mpv = _mm_slli_si128(sv, 1); 
+      mpv = _mm_or_si128(mpv, mask);
+    }
+  h = esl_sse_hmax_epi8(hv);
+
+  if (h == 127)  
+    { *ret_sc = eslINFINITY; return eslERANGE; }
+  else
+    { 
+      *ret_sc = ((float) h + 128.) / om->scale_b + om->tauBM - 2.0;   // 2.0 is the tauNN/tauCC "2 nat approximation"
+      *ret_sc += 2.0 * logf(2.0 / (float) (L + 2));                   
+      return eslOK;
+    }
+
+ FAILURE:
+  *ret_sc = -eslINFINITY;
+  return status;
+}
+
+
+#else // ! eslENABLE_SSE
 /* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
 void p7_ssvfilter_sse_silence_hack(void) { return; }
 #if defined p7SSVFILTER_SSE_TESTDRIVE || p7SSVFILTER_SSE_EXAMPLE

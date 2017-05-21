@@ -56,11 +56,9 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   om->rwv       = NULL;
   om->twv       = NULL;
   om->rwv_mem   = NULL;
-  om->twv_mem   = NULL;
   om->rfv       = NULL;
   om->tfv       = NULL;
   om->rfv_mem   = NULL;
-  om->tfv_mem   = NULL;
   om->name      = NULL;
   om->acc       = NULL;
   om->desc      = NULL;
@@ -74,20 +72,23 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   /* Knudsen SSV implementation requires p7O_EXTRA_SB vectors slop at end of rbv */
   om->rbv_mem = esl_alloc_aligned( abc->Kp *  (maxQb+p7O_EXTRA_SB)  * p7_VWIDTH,  p7_VALIGN);
   om->rwv_mem = esl_alloc_aligned( abc->Kp *     maxQw              * p7_VWIDTH,  p7_VALIGN);
-  om->twv_mem = esl_alloc_aligned( p7O_NTRANS *  maxQw              * p7_VWIDTH,  p7_VALIGN);
+  om->twv     = esl_alloc_aligned( p7O_NTRANS *  maxQw              * p7_VWIDTH,  p7_VALIGN);
   om->rfv_mem = esl_alloc_aligned( abc->Kp *     maxQf              * p7_VWIDTH,  p7_VALIGN);
-  om->tfv_mem = esl_alloc_aligned( p7O_NTRANS *  maxQf              * p7_VWIDTH,  p7_VALIGN);
+  om->tfv     = esl_alloc_aligned( p7O_NTRANS *  maxQf              * p7_VWIDTH,  p7_VALIGN);
 
   /* Arrays of pointers into that aligned memory don't themselves need to be aligned  */
   ESL_ALLOC(om->rbv, sizeof(float *) * abc->Kp); 
   ESL_ALLOC(om->rwv, sizeof(float *) * abc->Kp); 
   ESL_ALLOC(om->rfv, sizeof(float *) * abc->Kp); 
 
-  /* set row pointers for match emissions */
+  /* set row pointers for match emissions.
+   * these are float arrays, but aligned & sized to allow casting
+   * vectors of up to width p7_VMAX_*.
+   */
   for (x = 0; x < abc->Kp; x++) {
-    om->rbv[x] = om->rbv_mem + (x * maxQb);
-    om->rwv[x] = om->rwv_mem + (x * maxQw);
-    om->rfv[x] = om->rfv_mem + (x * maxQf);
+    om->rbv[x] = om->rbv_mem + (x * p7_VMAX_SSV * (maxQb + p7O_EXTRA_SB));
+    om->rwv[x] = om->rwv_mem + (x * p7_VMAX_VF  *  maxQw);
+    om->rfv[x] = om->rfv_mem + (x * p7_VMAX_FB  *  maxQf);
   }
 
   /* Remaining initializations */
@@ -174,9 +175,9 @@ p7_oprofile_Sizeof(const P7_OPROFILE *om)
   n  += sizeof(P7_OPROFILE);
   n  += om->abc->Kp * nqs          * p7_VWIDTH;   // om->rbv_mem   
   n  += om->abc->Kp * om->allocQw  * p7_VWIDTH;   // om->rwv_mem
-  n  += p7O_NTRANS  * om->allocQw  * p7_VWIDTH;   // om->twv_mem
+  n  += p7O_NTRANS  * om->allocQw  * p7_VWIDTH;   // om->twv
   n  += om->abc->Kp * om->allocQf  * p7_VWIDTH;   // om->rfv_mem
-  n  += p7O_NTRANS  * om->allocQf  * p7_VWIDTH;   // om->tfv_mem
+  n  += p7O_NTRANS  * om->allocQf  * p7_VWIDTH;   // om->tfv
  
   n  += sizeof(float *) * om->abc->Kp;            // om->rbv
   n  += sizeof(float *) * om->abc->Kp;            // om->rwv
@@ -256,9 +257,9 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
       /* aligned allocations need the corresponding free */
       if (om->rbv_mem)   esl_alloc_free(om->rbv_mem);
       if (om->rwv_mem)   esl_alloc_free(om->rwv_mem);
-      if (om->twv_mem)   esl_alloc_free(om->twv_mem);
+      if (om->twv    )   esl_alloc_free(om->twv);
       if (om->rfv_mem)   esl_alloc_free(om->rfv_mem);
-      if (om->tfv_mem)   esl_alloc_free(om->tfv_mem);
+      if (om->tfv)       esl_alloc_free(om->tfv);
 
       if (om->rbv)       free(om->rbv);
       if (om->rwv)       free(om->rwv);
@@ -291,9 +292,10 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
 static int8_t
 byteify(P7_OPROFILE *om, float sc)
 {
-  sc  = roundf(om->scale_b * sc);               // Design assures that scores are -128..127.
-  assert(sc >= -128. && sc <= 127.);            // Trust but verify.
-  return (int8_t) sc;
+  sc  = roundf(om->scale_b * sc);  
+  if      (sc < -128.) return -128;          // can happen for sc = -inf. Otherwise shouldn't happen.
+  else if (sc >  127.) return 127;
+  else                 return (int8_t) sc;
 }
  
  
@@ -307,8 +309,9 @@ static int16_t
 wordify(P7_OPROFILE *om, float sc)
 {
   sc  = roundf(om->scale_w * sc);
-  assert(sc >= -32768. && sc <= 32767.);
-  return (int16_t) sc;
+  if      (sc < -32768.) return -32768;
+  else if (sc >  32727.) return  32767;
+  else                   return (int16_t) sc;
 }
 
 
@@ -329,9 +332,7 @@ ssv_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   int     M = gm->M;                // query profile length
   int     V = om->V;                // number of int8 scores per vector
   int     Q = P7_Q(M, V);           // # of striped vectors per row
-  float  *rsc[p7_VMAX_SSV];         // ptrs into unstriped gm->rsc[x], one ptr per stripe (vector element)
-  int8_t *rbv;                      // ptr that traverses thru om->rbv[x], striped
-  int     x, q, z;
+  int     x, k, q, z;
 
   ESL_DASSERT1(( V >  0           ));
   ESL_DASSERT1(( M <= om->allocM  ));
@@ -342,19 +343,14 @@ ssv_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 
   for (x = 0; x < gm->abc->Kp; x++)
     {
-      rbv = om->rbv[x];
-      for (z = 0; z < V; z++)  
-        rsc[z] = gm->rsc[x] + p7P_NR * (Q*z + 1);
-
-      for (q = 0; q < Q; q++)
-        for (z = 0; z < V; z++)
-          {
-            *rbv = (q+1+Q*z <= M) ? byteify(om, *rsc[z]) : -128; 
-            rbv++;                             // access pattern constructs striped vectors in a float array
-            rsc[z] += p7P_NR;
-          }
-      // SRE REVISIT: I think we also need to deal with p7O_EXTRA_SB here.
-    }
+      for (k = 1; k <= gm->M; k++)
+        om->rbv[x][P7_Y_FROM_K(k,Q,V)] = byteify(om, P7P_MSC(gm, k, x));
+      for (  ; k <= Q*V; k++)
+        om->rbv[x][P7_Y_FROM_K(k,Q,V)] = -128;
+      for (q = Q; q < Q + p7O_EXTRA_SB; q++)                                    // Knudsen's SSV needs to have p7O_EXTRA_SB vector copies appended, circularly permuted
+        for (z = 0; z < V; z++)                                                 // If rbv were a vector array, this would be
+          om->rbv[x][P7_Y_FROM_QZ(q,z,V)] = om->rbv[x][P7_Y_FROM_QZ(q%Q,z,V)];  //   for (q = Q; q < Q + p7O_EXTRA_SB; q++) rbv[x][q] = rbv[x][q%Q]
+    }                                                                           // but since it's an ISA-independent float array, y coords are used instead.
   return eslOK;
 }
 
@@ -371,16 +367,16 @@ ssv_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 static int
 vit_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
-  int      M = gm->M;                 // model length M
-  int      V = om->V/2;               // # of int16 elements per vector
-  int      Q = P7_Q(M, V);            // # of striped int16 vectors per row
-  float   *rsc[p7_VMAX_VF];           // ptrs into unstriped gm->rsc[x], one ptr per stripe (vector element)
-  int16_t *rwv;                       // ptr that traverses thru om->rwv[x], striped
-  int16_t *twv;                       // ptr that traverses thru om->twv
-  int      tg;                        // transition index in <gm>
-  int      kb;                        // possibly offset k for loading om's TSC vectors
-  int      ddtmp;		      // used in finding worst DD transition bound 
-  int16_t  maxval;		      // used to prevent zero cost II
+  int      M  = gm->M;                 // model length M
+  int      Vw = om->V/sizeof(int16_t); // # of int16 elements per vector
+  int      Q  = P7_Q(M, Vw);           // # of striped int16 vectors per row
+  float   *rsc[p7_VMAX_VF];            // ptrs into unstriped gm->rsc[x], one ptr per stripe (vector element)
+  int16_t *rwv;                        // ptr that traverses thru om->rwv[x], striped
+  int16_t *twv;                        // ptr that traverses thru om->twv
+  int      tg;                         // transition index in <gm>
+  int      kb;                         // possibly offset k for loading om's TSC vectors
+  int      ddtmp;		       // used in finding worst DD transition bound 
+  int16_t  maxval;		       // used to prevent zero cost II
   int      x, q, z, t, k;
 
   om->scale_w = 500.0 / eslCONST_LOG2;    // 1/500 bit units
@@ -390,11 +386,11 @@ vit_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   for (x = 0; x < gm->abc->Kp; x++)
     {
       rwv = om->rwv[x];
-      for (z = 0; z < V; z++)                
+      for (z = 0; z < Vw; z++)                
         rsc[z] = gm->rsc[x] + p7P_NR * (Q*z + 1);
 
       for (q = 0; q < Q; q++)
-        for (z = 0; z < V; z++)
+        for (z = 0; z < Vw; z++)
           {
             *rwv = (q+1+Q*z <= M) ? wordify(om, *rsc[z]) : -32768;  // REVISIT: do we need a special sentinel?
             rwv++;                             // access pattern constructs striped vectors in a float array
@@ -418,7 +414,7 @@ vit_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 	  case p7O_II: tg = p7P_II;  kb = q+1; maxval = -1; break; 
 	  }
 
-	  for (z = 0; z < V; z++) {  // do not allow II transition cost of 0, or all hell breaks loose.
+	  for (z = 0; z < Vw; z++) {  // do not allow II transition cost of 0, or all hell breaks loose.
 	    *twv =  ESL_MIN(maxval, ((kb+ z*Q < M) ? wordify(om, P7P_TSC(gm, kb + z*Q, tg)) : -32768));
             twv++;
           }
@@ -428,7 +424,7 @@ vit_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   /* Finally the DD's, which are at the end of the optimized tsc vector; <twv> is already sitting there */
   for (q = 0; q < Q; q++)
     {
-      for (z = 0; z < V; z++) {
+      for (z = 0; z < Vw; z++) {
         *twv = (( (q+1) + z*Q < M) ? wordify(om, P7P_TSC(gm, (q+1) + z*Q, p7P_DD)) : -32768);
         twv++;
       }
@@ -465,11 +461,11 @@ vit_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 static int
 fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 {
-  int M = gm->M;               // query profile length
-  int V = om->V/4;             // number of floats per vector
-  int Q = P7_Q(M, V);          // number of striped float vectors per profile row
-  float *rfv;                  // steps through the serialized (vector-independent) striped match score vector
-  float *tfv;                  // steps through transition score vector
+  int M  = gm->M;               // query profile length
+  int Vf = om->V/sizeof(float); // number of floats per vector
+  int Q  = P7_Q(M, Vf);         // number of striped float vectors per profile row
+  float *rfv;                   // steps through the serialized (vector-independent) striped match score vector
+  float *tfv;                   // steps through transition score vector
   int    x,k,q,z,kb,t,tg;
   
   ESL_DASSERT1(( om->allocQf >= Q ));
@@ -479,7 +475,7 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
     {
       rfv = om->rfv[x];
       for (k = 1, q = 0; q < Q; q++, k++)
-        for (z = 0; z < V; z++) 
+        for (z = 0; z < Vf; z++) 
           {
             *rfv = (k + z*Q <= M) ? P7P_MSC(gm, k+z*Q, x) : -eslINFINITY;
             *rfv = expf(*rfv);  // convert score to odds ratio
@@ -503,7 +499,7 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 	  case p7O_II: tg = p7P_II;  kb = k;   break; 
 	  }
 
-	  for (z = 0; z < Q; z++) 
+	  for (z = 0; z < Vf; z++) 
             {
               *tfv = (kb+z*Q < M) ? P7P_TSC(gm, kb+z*Q, tg) : -eslINFINITY;
               *tfv = expf(*tfv);
@@ -514,7 +510,7 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   
   /* Finally the DD's, which are at the end of the optimized tfv vector; (<tfv> is already sitting there) */
   for (k = 1, q = 0; q < Q; q++, k++)
-    for (z = 0; z < V; z++) 
+    for (z = 0; z < Vf; z++) 
       {
         *tfv = (k+z*Q < M) ? P7P_TSC(gm, k+z*Q, p7P_DD) : -eslINFINITY;
         *tfv = expf(*tfv);
@@ -906,7 +902,7 @@ oprofile_dump_ssv(FILE *fp, const P7_OPROFILE *om)
       fprintf(fp, "[ ");
       for (z = 0; z < V; z++) 
         {
-          k = P7_K_FROM_QZ(q,z,V);
+          k = P7_K_FROM_QZ(q,z,Q);
           if (k <= M) fprintf(fp, "%4d ", k);
           else        fprintf(fp, "%4s ", "xx");
         }
@@ -930,11 +926,11 @@ oprofile_dump_ssv(FILE *fp, const P7_OPROFILE *om)
     }
   fprintf(fp, "\n");
   
-  fprintf(fp, "tau_BMk:      %.3f\n", om->tauBM);
-  fprintf(fp, "scale:        %.2f\n", om->scale_b);
-  fprintf(fp, "Q:            %4d\n",  Q);  
-  fprintf(fp, "M:            %4d\n",  M);  
-  fprintf(fp, "V:            %4d\n",  V);  
+  fprintf(fp, "tau_BMk: %8.3f\n",  om->tauBM);
+  fprintf(fp, "scale:   %7.2f\n",  om->scale_b);
+  fprintf(fp, "Q:       %4d\n",    Q);  
+  fprintf(fp, "M:       %4d\n",    M);  
+  fprintf(fp, "V:       %4d\n",    V);  
   return eslOK;
 }
 
@@ -957,7 +953,7 @@ oprofile_dump_vf(FILE *fp, const P7_OPROFILE *om)
       fprintf(fp, "[ ");
       for (z = 0; z < V; z++) 
         {
-          k = P7_K_FROM_QZ(q,z,V);
+          k = P7_K_FROM_QZ(q,z,Q);
           if (k <= M) fprintf(fp, "%6d ", k);     
           else        fprintf(fp, "%6s ", "xx");
         }
@@ -998,7 +994,7 @@ oprofile_dump_vf(FILE *fp, const P7_OPROFILE *om)
             }
 	  fprintf(fp, "]");
         }
-      fprintf(fp, "\n     ");	  
+      fprintf(fp, "\n      ");	  
 
       /* Then, a line of the striped vector scores themselves */
       for (q = 0; q < Q; q++)
@@ -1016,8 +1012,9 @@ oprofile_dump_vf(FILE *fp, const P7_OPROFILE *om)
   fprintf(fp, "N->B: %6d    N->N: %6d\n", om->xw[p7O_N][p7O_MOVE], om->xw[p7O_N][p7O_LOOP]);
   fprintf(fp, "J->B: %6d    J->J: %6d\n", om->xw[p7O_J][p7O_MOVE], om->xw[p7O_J][p7O_LOOP]);
   fprintf(fp, "C->T: %6d    C->C: %6d\n", om->xw[p7O_C][p7O_MOVE], om->xw[p7O_C][p7O_LOOP]);
+  fprintf(fp, "\n");
 
-  fprintf(fp, "scale: %6.2f\n", om->scale_w);
+  fprintf(fp, "scale: %9.2f\n", om->scale_w);
   fprintf(fp, "base:  %6d\n",   om->base_w);
   fprintf(fp, "bound: %6d\n",   om->ddbound_w);
   fprintf(fp, "Q:     %6d\n",   Q);  
@@ -1050,7 +1047,7 @@ oprofile_dump_fb(FILE *fp, const P7_OPROFILE *om)
       fprintf(fp, "[ ");
       for (z = 0; z < V; z++) 
         {
-          k = P7_K_FROM_QZ(q,z,V);
+          k = P7_K_FROM_QZ(q,z,Q);
           if (k <= M) fprintf(fp, "%*d ", width, k);     
           else        fprintf(fp, "%*s ", width, "xx");
         }
@@ -1092,7 +1089,7 @@ oprofile_dump_fb(FILE *fp, const P7_OPROFILE *om)
             }
 	  fprintf(fp, "]");
         }
-      fprintf(fp, "\n     ");	  
+      fprintf(fp, "\n      ");	  
 
       /* Then, a line of the striped vector scores themselves */
       for (q = 0; q < Q; q++)
@@ -1111,6 +1108,8 @@ oprofile_dump_fb(FILE *fp, const P7_OPROFILE *om)
   fprintf(fp, "N->B: %*.*f    N->N: %*.*f\n", width, precision, om->xf[p7O_N][p7O_MOVE], width, precision, om->xf[p7O_N][p7O_LOOP]);
   fprintf(fp, "J->B: %*.*f    J->J: %*.*f\n", width, precision, om->xf[p7O_J][p7O_MOVE], width, precision, om->xf[p7O_J][p7O_LOOP]);
   fprintf(fp, "C->T: %*.*f    C->C: %*.*f\n", width, precision, om->xf[p7O_C][p7O_MOVE], width, precision, om->xf[p7O_C][p7O_LOOP]);
+  fprintf(fp, "\n");
+
   fprintf(fp, "Q:     %d\n",   Q);  
   fprintf(fp, "M:     %d\n",   M);  
   fprintf(fp, "V:     %d\n",   V);  
@@ -1365,13 +1364,13 @@ static ESL_OPTIONS options[] = {
   {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                            0},
   { 0,0,0,0,0,0,0,0,0,0},
 };
-static char usage[]  = "[-options]";
+static char usage[]  = "[-options] <hmmfile>";
 static char banner[] = "example main() for p7_oprofile.c";
 
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS  *go      = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_GETOPTS  *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   char         *hmmfile = esl_opt_GetArg(go, 1);
   ESL_ALPHABET *abc     = NULL;
   P7_HMMFILE   *hfp     = NULL;

@@ -13,8 +13,8 @@ OBJS = \
 #	p7_oprofile_mpi.o \
 
 SSE_OBJS = \
-	fwdfilter_sse.o    \
 	ssvfilter_sse.o    \
+	fwdfilter_sse.o    \
 	vitfilter_sse.o
 
 AVX_OBJS = \
@@ -47,19 +47,18 @@ UTESTS = \
 STATS  = fwdfilter_stats
 
 BENCHMARKS = \
+	ssvfilter_benchmark    \
+	vitfilter_benchmark    \
 	fwdfilter_benchmark    \
 	io_benchmark           \
-	p7_oprofile_benchmark  \
-	vitfilter_benchmark
-#	msvfilter_benchmark    \
-
+	p7_oprofile_benchmark  
 
 EXAMPLES = \
-	fwdfilter_example \
-	io_example \
-	p7_oprofile_example \
-	vitfilter_example
-#	msvfilter_example \
+	ssvfilter_example   \
+	vitfilter_example   \
+	fwdfilter_example   \
+	io_example          \
+	p7_oprofile_example 
 
 
 top_srcdir   = @top_srcdir@

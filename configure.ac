@@ -634,11 +634,11 @@ HMMER configuration:
              LIBS : ${LIBGSL} ${MPILIBS} ${PTHREAD_LIBS} ${LIBS}
 
   Vector implementations enabled:
-              sse : $esl_have_sse
-              avx : $esl_have_avx
-           avx512 : $esl_have_avx512
-             neon : $esl_have_neon
-              vmx : $esl_have_vmx
+              sse : $enable_sse
+              avx : $enable_avx
+           avx512 : $enable_avx512
+             neon : $enable_neon
+              vmx : $enable_vmx
 "
 
 

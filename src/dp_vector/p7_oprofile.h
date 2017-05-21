@@ -37,9 +37,8 @@ typedef struct p7_oprofile_s {
 
   /* ViterbiFilter uses scaled int16_t scores: e.g. 8x per 128b vector               */
   int16_t **rwv;                /* match scores [x=0..Kp-1][q=0..Qw-1]               */
-  int16_t  *twv;                /* transition score blocks [8*Qw]                    */
+  int16_t  *twv;                /* transition score blocks [8*Qw] (aligned alloc)    */
   int16_t  *rwv_mem;            /* aligned allocation for <rwv>                      */
-  int16_t  *twv_mem;            /* aligned allocation for <twv>                      */
 
   int16_t   xw[p7O_NXSTATES][p7O_NXTRANS]; /* ENJC state transition costs            */
   float     scale_w;            /* score units: typically 500 / log(2), 1/500 bits   */
@@ -48,9 +47,8 @@ typedef struct p7_oprofile_s {
 
   /* Forward, Backward use single-precision floats: e.g. 4x per 128b vector          */
   float  **rfv;                 /* match scores [x=0..Kp-1][q=0..Qf-1]               */
-  float  *tfv;                  /* transition probability blocks [8*Qf]              */
+  float  *tfv;                  /* transition probability blocks [8*Qf] (aligned)    */
   float  *rfv_mem;              /* aligned allocation for <rfv>                      */
-  float  *tfv_mem;              /* aligned allocation for <tfv>                      */
   
   float    xf[p7O_NXSTATES][p7O_NXTRANS]; /* ENJC transition costs                   */
 

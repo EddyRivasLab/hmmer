@@ -4,12 +4,14 @@
 
 #include "easel.h"
 
+#include "dp_vector/p7_filtermx.h"
 #include "dp_vector/p7_oprofile.h"
 
 extern int (*p7_SSVFilter)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
 
 #ifdef eslENABLE_SSE
-extern int p7_SSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
+extern int p7_SSVFilter_sse     (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
+extern int p7_SSVFilter_base_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *fx, float *ret_sc);
 #endif
 
 #ifdef eslENABLE_AVX

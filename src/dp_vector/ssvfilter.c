@@ -10,6 +10,8 @@
  * Contents:
  *   1. p7_SSVFilter() API
  *   2. CPU dispatching to vector implementations.
+ *   3. Benchmark driver
+ *   4. Example.
  */
 #include "p7_config.h"
 
@@ -107,3 +109,253 @@ ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *re
   p7_Die("ssvfilter_dispatcher found no vector implementation - that shouldn't happen.");
 }
 
+
+
+/*****************************************************************
+ * 3. Benchmark driver
+ *****************************************************************/
+#ifdef p7SSVFILTER_BENCHMARK
+
+/* The benchmark driver an additional non-benchmarking options
+ * to facilitate small-scale (by-eye) comparison of SSV scores against
+ * other implementations, for debugging purposes.
+ * The -x option compares against an emulation that should give
+ * exactly the same scores. The emulation is achieved by jiggering the
+ * fp scores in a generic profile to disallow gaps, have the same
+ * rounding and precision as the int8_t's SSVFilter() is using, and
+ * to make the same post-hoc corrections for the NN, CC, JJ
+ * contributions to the final nat score; under these contrived
+ * circumstances, p7_ReferenceViterbi() gives the same scores as
+ * p7_MSVFilter().
+ * 
+ * For using -x, you probably also want to limit the number of
+ * generated target sequences, using -N10 or -N100 for example.
+ */
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+#include "esl_randomseq.h"
+#include "esl_stopwatch.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline version, not production version",         0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
+  { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "equate scores to trusted implementation (debug)",  0 },
+  { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                     0 },
+  { "-N",        eslARG_INT, "200000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                     0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile>";
+static char banner[] = "benchmark driver for SSVFilter() implementation";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  ESL_STOPWATCH  *w       = esl_stopwatch_Create();
+  ESL_RANDOMNESS *r       = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET   *abc     = NULL;
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_BG          *bg      = NULL;
+  P7_PROFILE     *gm      = NULL;
+  P7_OPROFILE    *om      = NULL;
+  P7_FILTERMX    *fx      = NULL;
+  P7_REFMX       *gx      = NULL;
+  int             L       = esl_opt_GetInteger(go, "-L");
+  int             N       = esl_opt_GetInteger(go, "-N");
+  ESL_DSQ       **dsq     = malloc(N * sizeof(ESL_DSQ *));
+  int             i;
+  float           sc1, sc2;
+  double          base_time, bench_time, Mcs;
+
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+
+  bg = p7_bg_Create(abc);
+  p7_bg_SetLength(bg, L);
+  gm = p7_profile_Create(hmm->M, abc);
+  p7_profile_ConfigUnilocal(gm, hmm, bg, L);  // unilocal, to match SSV model.
+  om = p7_oprofile_Create(gm->M, abc);
+  p7_oprofile_Convert(gm, om);
+  p7_oprofile_ReconfigLength(om, L);
+
+  if (esl_opt_GetBoolean(go, "-x")) p7_profile_SameAsSSV(gm, om->scale_b);
+
+  fx = p7_filtermx_Create(gm->M);
+  gx = p7_refmx_Create(gm->M, L);
+
+  /* Generate the random seqs and hold them in memory. */
+  for (i = 0; i < N; i++)
+    {
+      dsq[i] = malloc(sizeof(ESL_DSQ) * (L+2));
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq[i]);
+    }
+
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++)
+    {
+      if (esl_opt_GetBoolean(go, "-b"))      p7_SSVFilter_base_sse(dsq[i], L, om, fx, &sc1);   
+      else                                   p7_SSVFilter(dsq[i], L, om, &sc1);   
+
+      /* -x option: compare generic to fast score in a way that should give exactly the same result */
+      if (esl_opt_GetBoolean(go, "-x"))
+	{
+	  p7_ReferenceViterbi(dsq[i], L, gm, gx, NULL, &sc2); 
+	  sc2 /= om->scale_b;
+          sc2 -= 2.0;
+	  printf("%.4f %.4f\n", sc1, sc2);  
+	}
+    }
+  esl_stopwatch_Stop(w);
+  Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) w->elapsed;
+  esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  printf("# M    = %d\n", gm->M);
+  printf("# %.1f Mc/s\n", Mcs);
+
+  for (i = 0; i < N; i++) free(dsq[i]);
+  free(dsq);
+  p7_filtermx_Destroy(fx);
+  p7_refmx_Destroy(gx);
+  p7_oprofile_Destroy(om);
+  p7_profile_Destroy(gm);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  p7_hmmfile_Close(hfp);
+  esl_alphabet_Destroy(abc);
+  esl_stopwatch_Destroy(w);
+  esl_randomness_Destroy(r);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7SSVFILTER_BENCHMARK*/
+/*-------------- end, benchmark driver --------------------------*/
+
+
+
+
+/*****************************************************************
+ * 4. Example
+ *****************************************************************/
+#ifdef p7SSVFILTER_EXAMPLE
+
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_gumbel.h"
+#include "esl_sq.h"
+#include "esl_sqio.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "-1",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "output in one line awkable format",                0 },
+  { "-P",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "output in profmark format",                        0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options] <hmmfile> <seqfile>";
+static char banner[] = "example of SSV filter algorithm";
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  char           *seqfile = esl_opt_GetArg(go, 2);
+  ESL_ALPHABET   *abc     = NULL;
+  P7_HMMFILE     *hfp     = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_BG          *bg      = NULL;
+  P7_FILTERMX    *fx      = p7_filtermx_Create(100);
+  P7_PROFILE     *gm      = NULL;
+  P7_OPROFILE    *om      = NULL;
+  ESL_SQ         *sq      = NULL;
+  ESL_SQFILE     *sqfp    = NULL;
+  int             format  = eslSQFILE_UNKNOWN;
+  float           sfraw, nullsc, sfscore;
+  double          P;
+  int             status;
+
+  /* Read in one HMM */
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+
+  /* Read in one sequence */
+  sq     = esl_sq_CreateDigital(abc);
+  status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
+  if      (status == eslENOTFOUND) p7_Fail("No such file.");
+  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+
+  /* create default null model, then create and optimize profile */
+  bg = p7_bg_Create(abc);
+  p7_bg_SetLength(bg, sq->n);
+  gm = p7_profile_Create(hmm->M, abc);
+  p7_profile_ConfigLocal(gm, hmm, bg, sq->n);
+  om = p7_oprofile_Create(gm->M, abc);
+  p7_oprofile_Convert(gm, om);
+
+  //p7_oprofile_Dump(stdout, om);                      // dumps the optimized profile
+
+  while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
+    {
+      p7_oprofile_ReconfigLength(om, sq->n);
+      p7_profile_SetLength      (gm, sq->n);
+      p7_bg_SetLength(bg,            sq->n);
+      
+      p7_SSVFilter  (sq->dsq, sq->n, om, &sfraw);
+      //p7_SSVFilter_base_sse(sq->dsq, sq->n, om, fx, &sfraw);
+
+
+      p7_bg_NullOne (bg, sq->dsq, sq->n, &nullsc);
+      sfscore = (sfraw - nullsc) / eslCONST_LOG2;
+      P       = esl_gumbel_surv(sfscore,  om->evparam[p7_SMU],  om->evparam[p7_MLAMBDA]);
+
+      if (esl_opt_GetBoolean(go, "-1"))
+	{
+	  printf("%-30s\t%-20s\t%9.2g\t%7.2f\n", sq->name, hmm->name, P, sfscore);
+	}
+      else if (esl_opt_GetBoolean(go, "-P"))
+	{ /* output suitable for direct use in profmark benchmark postprocessors: */
+	  printf("%g\t%.2f\t%s\t%s\n", P, sfscore, sq->name, hmm->name);
+	}
+      else
+	{
+	  printf("target sequence:      %s\n",        sq->name);
+	  printf("SSV filter raw score: %.2f nats\n", sfraw);
+	  printf("null score:           %.2f nats\n", nullsc);
+	  printf("per-seq score:        %.2f bits\n", sfscore);
+	  printf("P-value:              %g\n",        P);
+	}
+      
+      esl_sq_Reuse(sq);
+    }
+
+  /* cleanup */
+  p7_filtermx_Destroy(fx);
+  esl_sq_Destroy(sq);
+  esl_sqfile_Close(sqfp);
+  p7_oprofile_Destroy(om);
+  p7_profile_Destroy(gm);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  p7_hmmfile_Close(hfp);
+  esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7SSVFILTER_EXAMPLE*/
+/*-------------------- end, example ---------------------------*/
