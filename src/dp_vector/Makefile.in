@@ -37,11 +37,12 @@ HDRS =
 PROGS =
 
 UTESTS = \
+	ssvfilter_utest       \
+	vitfilter_utest       \
 	fwdfilter_utest       \
-	io_utest              \
-	vitfilter_utest
+	io_utest
 #	p7_oprofile_mpi_utest \
-#	msvfilter_utest       \
+
 
 
 STATS  = fwdfilter_stats

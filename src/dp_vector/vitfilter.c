@@ -180,10 +180,10 @@ main(int argc, char **argv)
   P7_REFMX       *gx      = NULL;
   int             L       = esl_opt_GetInteger(go, "-L");
   int             N       = esl_opt_GetInteger(go, "-N");
-  ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
+  ESL_DSQ       **dsq     = malloc(N * sizeof(ESL_DSQ *));
   int             i;
   float           sc1, sc2;
-  double          base_time, bench_time, Mcs;
+  double          Mcs;
 
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
@@ -196,34 +196,33 @@ main(int argc, char **argv)
   p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
 
-  if (esl_opt_GetBoolean(go, "-x")) p7_profile_SameAsVF(om, gm);
+  if (esl_opt_GetBoolean(go, "-x")) p7_profile_SameAsVF(gm, om->scale_w);
 
   ox = p7_filtermx_Create(om->M);
   gx = p7_refmx_Create(gm->M, L);
 
-  /* Get a baseline time: how long it takes just to generate the sequences */
-  esl_stopwatch_Start(w);
-  for (i = 0; i < N; i++)
-    esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-  esl_stopwatch_Stop(w);
-  base_time = w->user;
 
-  /* Run the benchmark */
+  for (i = 0; i < N; i++)
+    {
+      dsq[i] = malloc(sizeof(ESL_DSQ) * (L+2));
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq[i]);
+    }
+
+
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
-      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-      p7_ViterbiFilter(dsq, L, om, ox, &sc1);   
+      p7_ViterbiFilter(dsq[i], L, om, ox, &sc1);   
 
       if (esl_opt_GetBoolean(go, "-c")) 
 	{
-	  p7_ReferenceViterbi(dsq, L, gm, gx, NULL, &sc2); 
+	  p7_ReferenceViterbi(dsq[i], L, gm, gx, NULL, &sc2); 
 	  printf("%.4f %.4f\n", sc1, sc2);  
 	}
 
       if (esl_opt_GetBoolean(go, "-x"))
 	{
-	  p7_ReferenceViterbi(dsq, L, gm, gx, NULL, &sc2); 
+	  p7_ReferenceViterbi(dsq[i], L, gm, gx, NULL, &sc2); 
 	  sc2 /= om->scale_w;
 	  if (om->mode == p7_UNILOCAL)   sc2 -= 2.0; /* that's ~ L \log \frac{L}{L+2}, for our NN,CC,JJ */
 	  else if (om->mode == p7_LOCAL) sc2 -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
@@ -231,12 +230,12 @@ main(int argc, char **argv)
 	}
     }
   esl_stopwatch_Stop(w);
-  bench_time = w->user - base_time;
-  Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) bench_time;
+  Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) w->elapsed;
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
-  printf("# M    = %d\n",   gm->M);
+  printf("# M    = %d\n", gm->M);
   printf("# %.1f Mc/s\n", Mcs);
 
+  for (i = 0; i < N; i++) free(dsq[i]);
   free(dsq);
   p7_filtermx_Destroy(ox);
   p7_refmx_Destroy(gx);
@@ -292,7 +291,7 @@ utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
   float sc1, sc2;
 
   p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om);
-  p7_profile_SameAsVF(om, gm);	/* round and scale the scores in <gm> the same as in <om> */
+  p7_profile_SameAsVF(gm, om->scale_w);	/* round and scale the scores in <gm> the same as in <om> */
 
 #if 0
   p7_oprofile_Dump(stdout, om);                   // dumps the optimized profile
@@ -346,7 +345,7 @@ utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose",                                     0 },
   { "-L",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
   { "-M",        eslARG_INT,    "145", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },

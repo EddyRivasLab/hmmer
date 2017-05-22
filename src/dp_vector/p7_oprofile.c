@@ -774,7 +774,7 @@ int
 p7_oprofile_y_from_tqz(int t, int q, int z, int Q, int V)
 {
   if (t == p7O_DD)
-    return Q * (p7O_NTRANS-1) + q*V + z;
+    return Q * V * (p7O_NTRANS-1) + q*V + z;
   else
     return (q * (p7O_NTRANS-1) + t) * V + z;
 }

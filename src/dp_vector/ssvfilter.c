@@ -8,9 +8,11 @@
  * implementations.
 
  * Contents:
- *   1. p7_SSVFilter() API
+ *   1. SSVFilter() API.
  *   2. CPU dispatching to vector implementations.
- *   3. Benchmark driver
+ *   3. Benchmark driver.
+ *   4. Unit tests.
+ *   5. Test driver.
  *   4. Example.
  */
 #include "p7_config.h"
@@ -126,7 +128,7 @@ ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *re
  * to make the same post-hoc corrections for the NN, CC, JJ
  * contributions to the final nat score; under these contrived
  * circumstances, p7_ReferenceViterbi() gives the same scores as
- * p7_MSVFilter().
+ * p7_SSVFilter().
  * 
  * For using -x, you probably also want to limit the number of
  * generated target sequences, using -N10 or -N100 for example.
@@ -238,6 +240,141 @@ main(int argc, char **argv)
 }
 #endif /*p7SSVFILTER_BENCHMARK*/
 /*-------------- end, benchmark driver --------------------------*/
+
+/*****************************************************************
+ * 3. Unit tests
+ *****************************************************************/
+#ifdef p7SSVFILTER_TESTDRIVE
+#include "esl_random.h"
+#include "esl_randomseq.h"
+
+#include "search/modelconfig.h"
+#include "dp_reference/p7_refmx.h"
+#include "dp_reference/reference_viterbi.h"
+
+/* utest_comparison()
+ * 
+ * SSV is tested against reference Viterbi, after configuring a
+ * generic profile such that its scores should match SSV scores,
+ * using p7_profile_SameAsSSV().
+ *
+ * We sample a random model of length <M>, and score <N> random test
+ * sequences of length <L>. 
+ * 
+ * Because SSV scores can overflow, we don't sample high-scoring
+ * homologs for this test. If a random sequence happens to overflow,
+ * that's ok, we skip the score comparison for those rarities.
+ */
+static void
+utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
+{
+  P7_HMM      *hmm = NULL;
+  P7_PROFILE  *gm  = NULL;
+  P7_OPROFILE *om  = NULL;
+  ESL_DSQ     *dsq = malloc(sizeof(ESL_DSQ) * (L+2));
+  P7_REFMX    *gx  = p7_refmx_Create(M, L);
+  float        sc1, sc2;
+  int          status;
+
+  p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om);
+  p7_profile_ConfigUnilocal(gm, hmm, bg, L);            // unilocal, to match SSV model
+  p7_profile_SameAsSSV(gm, om->scale_b);
+
+  while (N--)
+    {
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
+
+      status = p7_SSVFilter       (dsq, L, om,           &sc1);
+      if      (status == eslERANGE) continue;
+      else if (status != eslOK)     esl_fatal("SSVFilter unit test failed.");
+
+      p7_ReferenceViterbi(dsq, L, gm, gx, NULL, &sc2);
+      sc2 = sc2 / om->scale_b - 2.0f;
+      if (fabs(sc1-sc2) > 0.001) esl_fatal("ssv filter unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
+
+      p7_refmx_Reuse(gx);
+    }
+
+  free(dsq);
+  p7_hmm_Destroy(hmm);
+  p7_refmx_Destroy(gx);
+  p7_profile_Destroy(gm);
+  p7_oprofile_Destroy(om);
+}
+#endif /*p7SSVFILTER_TESTDRIVE*/
+/*-------------------- end, unit tests --------------------------*/
+
+
+
+
+/*****************************************************************
+ * 4. Test driver
+ *****************************************************************/
+#ifdef p7SSVFILTER_TESTDRIVE
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+
+#include "hmmer.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose",                                     0 },
+  { "-L",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
+  { "-M",        eslARG_INT,    "145", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
+  { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "test driver for the SSE SSVFilter() implementation";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET   *abc  = NULL;
+  P7_BG          *bg   = NULL;
+  int             M    = esl_opt_GetInteger(go, "-M");
+  int             L    = esl_opt_GetInteger(go, "-L");
+  int             N    = esl_opt_GetInteger(go, "-N");
+
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
+
+  /* First round of tests for DNA alphabets.  */
+  if ((abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal("failed to create alphabet");
+  if ((bg = p7_bg_Create(abc))            == NULL)  esl_fatal("failed to create null model");
+
+  if (esl_opt_GetBoolean(go, "-v")) printf("SSVFilter() tests, DNA\n");
+  utest_comparison(r, abc, bg, M, L, N);   /* normal sized models */
+  utest_comparison(r, abc, bg, 1, L, 10);  /* size 1 models       */
+  utest_comparison(r, abc, bg, M, 1, 10);  /* size 1 sequences    */
+
+  esl_alphabet_Destroy(abc);
+  p7_bg_Destroy(bg);
+
+  if ((abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("failed to create alphabet");
+  if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to create null model");
+
+  if (esl_opt_GetBoolean(go, "-v")) printf("SSVFilter() tests, protein\n");
+  utest_comparison(r, abc, bg, M, L, N);   
+  utest_comparison(r, abc, bg, 1, L, 10);  
+  utest_comparison(r, abc, bg, M, 1, 10);  
+
+  esl_alphabet_Destroy(abc);
+  p7_bg_Destroy(bg);
+  esl_getopts_Destroy(go);
+  esl_randomness_Destroy(r);
+
+  fprintf(stderr, "#  status = ok\n");
+  return eslOK;
+}
+#endif /*p7SSVFILTER_TESTDRIVE*/
 
 
 
