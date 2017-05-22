@@ -64,10 +64,9 @@ You need to clone both the HMMER and Easel repositories, as follows:
 and to build:
 
 ```bash
-   $ ./configure
-   $ make
+   % ./configure
+   % make
 ```
-
 
 Our [git workflow](https://github.com/EddyRivasLab/hmmer/wiki/Git-workflow)
 includes three main branches:
@@ -85,7 +84,4 @@ branch.
 
 Visit our
 [issues tracking page at github](https://github.com/EddyRivasLab/hmmer/issues).
-
-
-
 
