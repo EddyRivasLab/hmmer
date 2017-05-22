@@ -36,13 +36,13 @@ typedef struct p7_checkptmx_s {
   /* Aligned memory allocation (for all rows):                                       */
   int M;	/* current actual query model dimension (consensus positions)        */
   int L;	/* current actual target seq dimension (residues)                    */
-  int V;        /* width of striped vectors, in # elements. 0: no striping set yet   */
-  int Q;        /* current actual number of fb vectors = P7_NVF(M)                   */
+  int Vf;       /* width of striped vectors, in # floats. 0: no striping set yet     */
+  int Q;        /* current actual number of fb vectors = P7_Q(M,V)                   */
   int R;        /* current actual number of rows (<=Ra+Rb+Rc), excluding R0          */
   float   *dp_mem;     /* raw memory allocation, that dp[] rows point into           */
-  int64_t  allocW;     /* alloced width/row, bytes; multiple of p7_MAXVF             */
-  int64_t  nalloc;     /* total # of alloc'ed bytes: nalloc >= (validR)(allocW)      */
-  int64_t  redline;    /* recommended RAM limit on dp_mem; can temporarily exceed it */
+  int64_t  allocW;     /* alloced width/row, cells (floats); multiple of p7_VMAX_FB  */
+  int64_t  allocN;     /* total # of alloc'ed cells: allocN >= (validR)(allocW)      */
+  int64_t  redline;    /* recommended alloc limit (floats); can temporarily exceed it*/
 
   /* Forward/Backward matrix rows:                                                     */
   float  **dpf;		/* row ptrs, dpf[0.R0-1,R0..R0+R-1], aligned memory            */

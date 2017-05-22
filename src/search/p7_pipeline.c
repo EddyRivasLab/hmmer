@@ -303,8 +303,6 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, 
 int
 p7_pipeline_Reuse(P7_PIPELINE *pli)
 {
-  //p7_filtermx_Reuse  (pli->fx);
-  //p7_checkptmx_Reuse (pli->cx);
   p7_sparsemask_Reuse(pli->sm);
   p7_sparsemx_Reuse  (pli->sxf);
   p7_sparsemx_Reuse  (pli->sxb);
@@ -798,7 +796,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
   /* First level filter: the SSV and MSV filters */
   p7_MSVFilter(sq->dsq, sq->n, om, pli->fx, &usc);
   seq_score = (usc - nullsc) / eslCONST_LOG2;
-  P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_MLAMBDA]);
+  P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
   if (P > pli->F1) return eslOK;
   pli->stats.n_past_ssv++;
 
@@ -807,7 +805,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
     {
       p7_bg_FilterScore(bg, sq->dsq, sq->n, &filtersc);
       seq_score = (usc - filtersc) / eslCONST_LOG2;
-      P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_MLAMBDA]);
+      P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
       if (P > pli->F1) return eslOK;
     }
   else filtersc = nullsc;
@@ -1481,7 +1479,6 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
 
 
   /* Parse with Forward and obtain its real Forward score. */
-  //p7_checkptmx_Reuse (pli->cx);
   p7_ForwardFilter(subseq, window_len, om, pli->cx, &fwdsc);
   seq_score = (fwdsc - filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
@@ -1908,7 +1905,7 @@ p7_pipeline_postSSV_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om
       bias_filtersc -= nullsc; // doing this because I'll be modifying the bias part of filtersc based on length, then adding nullsc back in.
       filtersc =  nullsc + (bias_filtersc * (float)(( F1_L>window_len ? 1.0 : (float)F1_L/window_len)));
       seq_score = (usc - filtersc) / eslCONST_LOG2;
-      P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_MLAMBDA]);
+      P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
       if (P > pli->F1) return eslOK;
   } else {
     bias_filtersc = 0; // mullsc will be added in later
@@ -2118,7 +2115,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
       // would have survived it
 
       // p7_MSVFilter(subseq, window_len, om, pli->fx, &usc);  SRE TODO REVISIT 
-      // P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_SMU],  om->evparam[p7_MLAMBDA]);
+      // P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
       // if (P > pli->F1 ) continue;
 
       pli->stats.pos_past_msv += window_len;
@@ -2267,7 +2264,7 @@ p7_pipeline_AccelerationFilter(ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg,
 
   p7_MSVFilter(dsq, L, om, fx, &usc);
   seq_score = (usc - nullsc) / eslCONST_LOG2;
-  P = esl_gumbel_surv(seq_score, om->evparam[p7_SMU], om->evparam[p7_MLAMBDA]);
+  P = esl_gumbel_surv(seq_score, om->evparam[p7_SMU], om->evparam[p7_SLAMBDA]);
   if (P > F1) return eslFAIL;
 
   p7_ViterbiFilter(dsq, L, om, fx, &vitsc);  

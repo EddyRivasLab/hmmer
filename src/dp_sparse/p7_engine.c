@@ -313,7 +313,7 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
   if (status != eslOK && status != eslERANGE) return status;
 
   seq_score = (eng->sfsc - eng->nullsc) / eslCONST_LOG2;          
-  P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_MLAMBDA]);
+  P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
   if (P > eng->F1) return eslFAIL;
   if (eng->stats) eng->stats->n_past_ssv++;
 
@@ -322,7 +322,7 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
     {
       if ((status = p7_bg_FilterScore(bg, dsq, L, &(eng->biassc))) != eslOK) return status;
       seq_score = (eng->sfsc - eng->biassc) / eslCONST_LOG2;
-      P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_MLAMBDA]);
+      P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
       if (P > eng->F1) return eslFAIL;
     }
   else eng->biassc = eng->nullsc;

@@ -227,8 +227,6 @@ main(int argc, char **argv)
 	  p7_refmx_Reuse(mpl_l);
 	}
 
-      //p7_filtermx_Reuse(fx);
-      //p7_checkptmx_Reuse(cx);
       p7_sparsemask_Reuse(sm);
       esl_sq_Reuse(sq);
     }
@@ -365,7 +363,7 @@ acceleration_filter(ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg,
 
   p7_MSVFilter(dsq, L, om, fx, &usc);
   seq_score = (usc - nullsc) / eslCONST_LOG2;
-  P = esl_gumbel_surv(seq_score, om->evparam[p7_SMU], om->evparam[p7_MLAMBDA]);
+  P = esl_gumbel_surv(seq_score, om->evparam[p7_SMU], om->evparam[p7_SLAMBDA]);
   if (P > F1) return eslFAIL;
 
   p7_ViterbiFilter(dsq, L, om, fx, &vitsc);  

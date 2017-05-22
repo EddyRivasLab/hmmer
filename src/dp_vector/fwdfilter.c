@@ -197,9 +197,8 @@ bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
  * 3. Stats driver: memory requirement profiling 
  *****************************************************************/
 
-/* In production pipeline, there are up to four sorts of DP matrices
+/* In production pipeline, there are up to three sorts of DP matrices
  * in play:
- *    MSV   MSV filter
  *    VF    Viterbi filter
  *    CHK   checkpointed Forward/Backward
  *    SP    sparse DP
@@ -211,13 +210,14 @@ bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
  * We count it separately here because we will typically have one
  * mask, for up to four (V/F/B/D) matrices in play.
  *    
- * MSV and VF are O(M).
+ * SSV is O(1) and has no DP matrix. (All calculations in registers.)
+ * VF is O(M).
  * CHK is O(M \sqrt L)
  * SP and SM are O(L) when a nonzero sparsity posterior threshold is used in the f/b filter.
  * REF is O(ML). 
  * 
  * The goal of this driver is to characterize the minimal memory
- * requirements for each, and in particular, for sparse DP.  MSV, VF,
+ * requirements for each, and in particular, for sparse DP.  VF,
  * CHK, and REF minimal requirements are completely determined by
  * dimensions M and L. The requirement of SP, though, is an empirical
  * question of how many sparse cells get included by the f/b filter.
@@ -275,8 +275,8 @@ main(int argc, char **argv)
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
-  float           fraw, nullsc, fsc, msvsc;
-  float           msvmem, vfmem, fbmem, smmem, spmem, refmem;
+  float           fraw, nullsc, fsc, ssvsc;
+  float           vfmem, fbmem, smmem, spmem, refmem;
   double          P;
   int             status;
 
@@ -306,10 +306,10 @@ main(int argc, char **argv)
   ox  = p7_checkptmx_Create (gm->M, 500, ESL_MBYTES(32));  
   sm  = p7_sparsemask_Create(gm->M, 500);
 
+  printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s\n",
+	 "target seq", "query profile", "score", "P-value", "VF (KB)", "CHK (MB)", "SM (MB)", "SP (MB)", "REF (MB)");
   printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s\n",
-	 "target seq", "query profile", "score", "P-value", "MSV (KB)", "VF (KB)", "CHK (MB)", "SM (MB)", "SP (MB)", "REF (MB)");
-  printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s\n",
-	 "----------------------------", "------------------------------",  "---------", "---------", "---------", "---------", "---------", "---------", "---------", "---------");
+	 "----------------------------", "------------------------------",  "---------", "---------", "---------", "---------", "---------", "---------", "---------");
   
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
@@ -317,21 +317,20 @@ main(int argc, char **argv)
       p7_profile_SetLength      (gm, sq->n);
       p7_bg_SetLength(bg,            sq->n);
 
-      p7_checkptmx_GrowTo (ox, om->M, sq->n); 
+      p7_checkptmx_Reinit(ox, om->M, sq->n); 
 
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
 
       /* Filter insig hits, partially simulating the real pipeline */
-      p7_MSVFilter(sq->dsq, sq->n, om, fx, &msvsc);
-      msvsc = (msvsc - nullsc) / eslCONST_LOG2;
-      P     =  esl_gumbel_surv(msvsc,  om->evparam[p7_SMU],  om->evparam[p7_MLAMBDA]);
+      p7_SSVFilter(sq->dsq, sq->n, om, &msvsc);
+      ssvsc = (ssvsc - nullsc) / eslCONST_LOG2;
+      P     =  esl_gumbel_surv(ssvsc,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
       if (P > 0.02) goto NEXT_SEQ;
 
       p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fraw);
       p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH);
 
       /* Calculate minimum memory requirements for each step */
-      msvmem = (double) ( P7_Q(om->M, om->V) * sizeof(__m128i)) / 1024.;  
       vfmem  = (double) p7_filtermx_MinSizeof(om->M)            / 1024.;
       fbmem  = (double) p7_checkptmx_MinSizeof(om->M, sq->n)    / 1024. / 1024.;
       smmem  = (double) p7_sparsemask_MinSizeof(sm)             / 1024. / 1024.;
@@ -341,11 +340,10 @@ main(int argc, char **argv)
       fsc  =  (fraw-nullsc) / eslCONST_LOG2;
       P    = esl_exp_surv(fsc,   om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
 
-      printf("%-30s %-30s %9.2f %9.2g %9.3f %9.3f %9.3f %9.3f %9.3f %9.3f\n",
+      printf("%-30s %-30s %9.2f %9.2g %9.3f %9.3f %9.3f %9.3f %9.3f\n",
 	     sq->name,
 	     hmm->name,
 	     fsc, P,
-	     msvmem,
 	     vfmem,
 	     fbmem, 
 	     smmem,
@@ -355,8 +353,6 @@ main(int argc, char **argv)
     NEXT_SEQ:
       esl_sq_Reuse(sq);
       p7_sparsemask_Reuse(sm);
-      //p7_checkptmx_Reuse(ox);
-      //p7_filtermx_Reuse(fx);
     }
 
   printf("# SPARSEMASK: kmem reallocs: %d\n", sm->n_krealloc);
@@ -403,7 +399,7 @@ main(int argc, char **argv)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-F",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "only benchmark Forward",                         0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                   0 },
   { "-N",        eslARG_INT,   "2000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                   0 },
@@ -429,7 +425,7 @@ main(int argc, char **argv)
   P7_SPARSEMASK  *sm      = NULL;
   int             L       = esl_opt_GetInteger(go, "-L");
   int             N       = esl_opt_GetInteger(go, "-N");
-  ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
+  ESL_DSQ       **dsq     = malloc(N * sizeof(ESL_DSQ *));
   int             i;
   float           sc;
   double          base_time, bench_time, Mcs;
@@ -450,34 +446,33 @@ main(int argc, char **argv)
   ox  = p7_checkptmx_Create (om->M, L, ESL_MBYTES(32));
   sm  = p7_sparsemask_Create(om->M, L);
 
-  /* Baseline time. */
-  esl_stopwatch_Start(w);
-  for (i = 0; i < N; i++) esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-  esl_stopwatch_Stop(w);
-  base_time = w->user;
+  for (i = 0; i < N; i++) 
+    {
+      dsq[i] = malloc(sizeof(ESL_DSQ) * (L+2));
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq[i]);
+    }
 
-  /* Benchmark time. */
+
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
-      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-      p7_ForwardFilter(dsq, L, om, ox, &sc);
-      if (! esl_opt_GetBoolean(go, "-F")) 
-	{
-	  p7_BackwardFilter(dsq, L, om, ox, sm, p7_SPARSIFY_THRESH);
+      p7_ForwardFilter(dsq[i], L, om, ox, &sc);
+      if (! esl_opt_GetBoolean(go, "-F"))                             // Backward filter depends on having run Forward first.
+        {                                                             // You can't run it separately.
+	  p7_BackwardFilter(dsq[i], L, om, ox, sm, p7_SPARSIFY_THRESH);
 	  esl_vec_IReverse(sm->kmem, sm->kmem, sm->ncells);
 	}
-
-      //p7_checkptmx_Reuse(ox);
       p7_sparsemask_Reuse(sm);
     }
   esl_stopwatch_Stop(w);
-  bench_time = w->user - base_time;
-  Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) bench_time;
+
+
+  Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) w->elapsed;
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
-  printf("# M    = %d\n",   gm->M);
+  printf("# M    = %d\n", gm->M);
   printf("# %.1f Mc/s\n", Mcs);
 
+  for (i = 0; i < N; i++) free(dsq[i]);
   free(dsq);
   p7_checkptmx_Destroy(ox);
   p7_sparsemask_Destroy(sm);
@@ -618,7 +613,6 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
       p7_refmx_Reuse(fwd);
       p7_refmx_Reuse(bck);
       p7_refmx_Reuse(pp);
-      //p7_checkptmx_Reuse(ox);
       p7_sparsemask_Reuse(sm);
     }
 
@@ -655,7 +649,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-L",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
   { "-M",        eslARG_INT,    "145", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
   { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
@@ -793,7 +787,7 @@ main(int argc, char **argv)
   /* create default null model, then create and optimize profile */
   bg = p7_bg_Create(abc);               
   gm = p7_profile_Create(hmm->M, abc); 
-  p7_profile_Config(gm, hmm, bg);
+  p7_profile_ConfigLocal(gm, hmm, bg, 100);  // local-only, so reference will match the filter
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
   /* p7_oprofile_Dump(stdout, om);  */
@@ -801,7 +795,8 @@ main(int argc, char **argv)
   /* Initially allocate matrices for a default sequence size, 500; 
    * we resize as needed for each individual target seq 
    */
-  ox  = p7_checkptmx_Create (gm->M, 500, ESL_MBYTES(32));  
+  ox  = p7_checkptmx_Create (gm->M, 4, 100);
+  //  ox  = p7_checkptmx_Create (gm->M, 500, ESL_MBYTES(32));  
   gx  = p7_refmx_Create     (gm->M, 500);
   sm  = p7_sparsemask_Create(gm->M, 500);
 #if eslDEBUGLEVEL > 0
@@ -822,7 +817,7 @@ main(int argc, char **argv)
       p7_bg_SetLength(bg,            sq->n);
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
 
-      p7_checkptmx_GrowTo  (ox, om->M, sq->n); 
+      p7_checkptmx_Reinit(ox, om->M, sq->n); 
     
       p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fraw);
       p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH);
@@ -873,7 +868,6 @@ main(int argc, char **argv)
       esl_sq_Reuse(sq);
       p7_refmx_Reuse(gx);
       p7_sparsemask_Reuse(sm);
-      //p7_checkptmx_Reuse(ox);
     }
 
 #if eslDEBUGLEVEL > 0

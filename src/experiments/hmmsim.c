@@ -644,7 +644,7 @@ recalibrate_model(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm)
   p7_ViterbiMu(cfg->r, om, cfg->bg, EvL, EvN, lambda,      &vmu);
   p7_Tau      (cfg->r, om, cfg->bg, EfL, EfN, lambda, Eft, &ftau);
 
-  hmm->evparam[p7_MLAMBDA] = lambda;
+  hmm->evparam[p7_SLAMBDA] = lambda;
   hmm->evparam[p7_VLAMBDA] = lambda;
   hmm->evparam[p7_FLAMBDA] = lambda;
   hmm->evparam[p7_SMU]     = mmu;
@@ -780,8 +780,6 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
       p7_bg_NullOne(cfg->bg, dsq, L, &nullsc);
       scores[i] = (sc - nullsc) / eslCONST_LOG2;
 
-      //if (cx) p7_checkptmx_Reuse(cx);
-      //if (fx) p7_filtermx_Reuse(fx);
       p7_refmx_Reuse(rmx);
     }
   status      = eslOK;
@@ -816,7 +814,7 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
 
   /* fetch statistical params from HMM for expected distribution */
   if       (esl_opt_GetBoolean(go, "--vit")) { pmu = hmm->evparam[p7_VMU];  plambda = hmm->evparam[p7_VLAMBDA]; }
-  else if  (esl_opt_GetBoolean(go, "--msv")) { pmu = hmm->evparam[p7_SMU];  plambda = hmm->evparam[p7_MLAMBDA]; }
+  else if  (esl_opt_GetBoolean(go, "--msv")) { pmu = hmm->evparam[p7_SMU];  plambda = hmm->evparam[p7_SLAMBDA]; }
   else if  (esl_opt_GetBoolean(go, "--fwd")) { pmu = hmm->evparam[p7_FTAU]; plambda = hmm->evparam[p7_FLAMBDA]; }
 
   /* Optional output of scores/alignment lengths: */
@@ -974,7 +972,7 @@ output_filter_power(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hm
   double pmu, plambda;
 
   if       (esl_opt_GetBoolean(go, "--vit")) { pmu = hmm->evparam[p7_VMU];  plambda = hmm->evparam[p7_VLAMBDA]; do_gumbel = TRUE;  }
-  else if  (esl_opt_GetBoolean(go, "--msv")) { pmu = hmm->evparam[p7_SMU];  plambda = hmm->evparam[p7_MLAMBDA]; do_gumbel = TRUE;  }
+  else if  (esl_opt_GetBoolean(go, "--msv")) { pmu = hmm->evparam[p7_SMU];  plambda = hmm->evparam[p7_SLAMBDA]; do_gumbel = TRUE;  }
   else if  (esl_opt_GetBoolean(go, "--fwd")) { pmu = hmm->evparam[p7_FTAU]; plambda = hmm->evparam[p7_FLAMBDA]; do_gumbel = FALSE; }
   else     ESL_FAIL(eslEINVAL, errbuf, "can only use --ffile with viterbi, msv, or fwd scores");
 

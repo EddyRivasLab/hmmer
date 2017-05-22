@@ -524,7 +524,7 @@ p7_profile_Dump(FILE *fp, P7_PROFILE *gm)
     {
       fputs("# statistical parameters\n", fp);
       fprintf(fp, "   msv mu     = %.4f\n", gm->evparam[p7_SMU]);
-      fprintf(fp, "   msv lambda = %.4f\n", gm->evparam[p7_MLAMBDA]);
+      fprintf(fp, "   msv lambda = %.4f\n", gm->evparam[p7_SLAMBDA]);
       fprintf(fp, "   vit mu     = %.4f\n", gm->evparam[p7_VMU]);
       fprintf(fp, "   vit lambda = %.4f\n", gm->evparam[p7_VLAMBDA]);
       fprintf(fp, "   fwd tau    = %.4f\n", gm->evparam[p7_FTAU]);

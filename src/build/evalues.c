@@ -121,7 +121,7 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
   if ((status = p7_Tau      (r, om, bg, EfL, EfN, lambda, Eft, &tau)) != eslOK) ESL_XFAIL(status,  errbuf, "failed to determine fwd tau");
 
   /* Store results */
-  hmm->evparam[p7_MLAMBDA] = om->evparam[p7_MLAMBDA] = lambda;
+  hmm->evparam[p7_SLAMBDA] = om->evparam[p7_SLAMBDA] = lambda;
   hmm->evparam[p7_VLAMBDA] = om->evparam[p7_VLAMBDA] = lambda;
   hmm->evparam[p7_FLAMBDA] = om->evparam[p7_FLAMBDA] = lambda;
   hmm->evparam[p7_SMU]     = om->evparam[p7_SMU]     = smu;
@@ -130,7 +130,7 @@ p7_Calibrate(P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **b
   hmm->flags              |= p7H_STATS;
 
   if (gm != NULL) {
-    gm->evparam[p7_MLAMBDA] = lambda;
+    gm->evparam[p7_SLAMBDA] = lambda;
     gm->evparam[p7_VLAMBDA] = lambda;
     gm->evparam[p7_FLAMBDA] = lambda;
     gm->evparam[p7_SMU]     = smu;
@@ -444,8 +444,6 @@ p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambd
       if ((status = p7_ForwardFilter(dsq, L, om, ox, &fsc))      != eslOK) goto ERROR;
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))          != eslOK) goto ERROR;   
       xv[i] = (fsc - nullsc) / eslCONST_LOG2;
-
-      //p7_checkptmx_Reuse(ox);
     }
   if ((status = esl_gumbel_FitComplete(xv, N, &gmu, &glam)) != eslOK) goto ERROR;
 

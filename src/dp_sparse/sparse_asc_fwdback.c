@@ -1442,7 +1442,6 @@ utest_generation(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
       p7_sparsemx_Reuse(sxd);
       p7_trace_Reuse(tr);
       p7_sparsemask_Reuse(sm);
-      //p7_checkptmx_Reuse(cx);
       esl_sq_Reuse(sq);
     }
 

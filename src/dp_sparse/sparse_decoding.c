@@ -375,7 +375,7 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
       if ( p7_oprofile_ReconfigLength(om, sq->n)   != eslOK) esl_fatal(msg);
 
       /* F/B filter to calculate the sparse mask */
-      if ( p7_checkptmx_GrowTo (ox,  gm->M, sq->n)                           != eslOK) esl_fatal(msg);
+      if ( p7_checkptmx_Reinit (ox,  gm->M, sq->n)                           != eslOK) esl_fatal(msg);
       if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
       if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg); // sparse mask is _Reinit'ed here.
 
@@ -408,7 +408,6 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
 	  }
 	}
       
-      //p7_checkptmx_Reuse(ox);
       p7_sparsemask_Reuse(sm);
       p7_sparsemx_Reuse(sxf);
       p7_sparsemx_Reuse(sxb);

@@ -305,7 +305,6 @@ p7_tracealign_ComputeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, int N, P7_TRA
       }
       p7_trace_Index(tr[idx]);
 
-      //p7_checkptmx_Reuse(cx);
       p7_sparsemask_Reuse(sm);
       p7_sparsemx_Reuse(sx1);
       p7_sparsemx_Reuse(sx2);

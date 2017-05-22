@@ -849,7 +849,6 @@ utest_engine(int do_intersected_mask, char *msg, ESL_RANDOMNESS *rng, ESL_ALPHAB
       p7_sparsemx_Reuse(sxb);
       p7_sparsemx_Reuse(sxf);
       p7_sparsemask_Reuse(sm);
-      //p7_checkptmx_Reuse(ox);
     }
 
   p7_masstrace_Destroy(mt);

@@ -1422,8 +1422,6 @@ main(int argc, char **argv)
 	}
 
       esl_sq_Reuse(sq);
-      //p7_filtermx_Reuse(fx);
-      //p7_checkptmx_Reuse(cx);
       p7_sparsemask_Reuse(sm);
     }
   if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     

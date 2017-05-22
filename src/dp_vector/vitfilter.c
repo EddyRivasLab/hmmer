@@ -134,11 +134,6 @@ vitfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
  * 3. Benchmark driver.
  *****************************************************************/
 #ifdef p7VITFILTER_BENCHMARK
-/* -c, -x are used for debugging, testing; see msvfilter.c for explanation 
-   ./vitfilter_benchmark <hmmfile>          runs benchmark 
-   ./vitfilter_benchmark -N100 -c <hmmfile> compare scores to generic impl
-   ./vitfilter_benchmark -N100 -x <hmmfile> compare scores to exact emulation
- */
 #include "p7_config.h"
 
 #include "easel.h"
@@ -154,7 +149,7 @@ static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
   { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-x", "compare scores to generic implementation (debug)", 0 }, 
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-c", "equate scores to trusted implementation (debug)",  0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                     0 },
   { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                     0 },

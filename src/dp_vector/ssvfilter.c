@@ -459,7 +459,7 @@ main(int argc, char **argv)
 
       p7_bg_NullOne (bg, sq->dsq, sq->n, &nullsc);
       sfscore = (sfraw - nullsc) / eslCONST_LOG2;
-      P       = esl_gumbel_surv(sfscore,  om->evparam[p7_SMU],  om->evparam[p7_MLAMBDA]);
+      P       = esl_gumbel_surv(sfscore,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
 
       if (esl_opt_GetBoolean(go, "-1"))
 	{

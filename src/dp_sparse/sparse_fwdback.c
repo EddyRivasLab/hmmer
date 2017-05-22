@@ -661,7 +661,6 @@ utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L,
       if ( p7_sparsemx_Reuse(sxv)  != eslOK) esl_fatal(msg);
       if ( p7_sparsemx_Reuse(sxf)  != eslOK) esl_fatal(msg);
       if ( p7_sparsemx_Reuse(sxb)  != eslOK) esl_fatal(msg);
-      //if ( p7_checkptmx_Reuse(ox)  != eslOK) esl_fatal(msg);
       if ( p7_sparsemask_Reuse(sm) != eslOK) esl_fatal(msg); 
     }
 

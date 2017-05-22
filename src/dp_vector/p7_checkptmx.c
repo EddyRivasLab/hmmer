@@ -208,13 +208,13 @@ p7_checkptmx_Create(int M, int L, int64_t redline)
   /* Set checkpointed row layout: allocR, R{abc}, L{abc} fields */
   ox->R0          = 3;	  // fwd[0]; bck[prv,cur] 
 
-  /* Calculate allocW, the allocated width (in bytes) of each vector row */
-  /*                       maxQf        *  3 MDI cells * bytes/vector    */
-  ox->allocW      = P7_Q(M, p7_VMAX_FB) * p7C_NSCELLS  * p7_VWIDTH;         // in bytes
-  ox->allocW     += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN);    // specials are scalar. maintain vector mem alignment
-  ox->redline     = redline;                                            
+  /* Calculate allocW, the allocated width (in cells, floats) of each vector row */
+  /*                       maxQf        *  3 MDI cells * floats/vector    */
+  ox->allocW      = P7_Q(M, p7_VMAX_FB) * p7C_NSCELLS  * p7_VMAX_FB;        
+  ox->allocW     += ESL_UPROUND(p7C_NXCELLS, p7_VMAX_FB);    // specials are scalar. maintain vector mem alignment
+  ox->redline     = redline / sizeof(float);                 // redline, allocW, allocN are all in <float> units, internally.                             
 
-  maxR            = (int) (ox->redline / ox->allocW);
+  maxR            = ox->redline / ox->allocW;
   set_row_layout(ox, L, maxR);
   ox->allocR      = ox->R0 + ox->Ra + ox->Rb + ox->Rc;
   ox->validR      = ox->allocR;
@@ -222,14 +222,14 @@ p7_checkptmx_Create(int M, int L, int64_t redline)
   ESL_DASSERT1(( ox->allocW % p7_VMAX_FB == 0 )); /* verify that concat'ed rows will stay aligned */
 
   /* Level 2 allocations: row pointers and dp cell memory */
-  ox->nalloc = ox->allocR * ox->allocW;                   // in bytes
-  ox->dp_mem = esl_alloc_aligned(ox->nalloc, p7_VALIGN);  // dp_mem is aligned vector memory
+  ox->allocN = ox->allocR * ox->allocW; 
+  ox->dp_mem = esl_alloc_aligned(sizeof(float) * ox->allocN, p7_VALIGN);  // dp_mem is aligned vector memory
   if (ox->dp_mem == NULL) { status = eslEMEM; goto ERROR; }
 
   ESL_ALLOC( ox->dpf, sizeof(float **) * ox->allocR);    
   for (r = 0; r < ox->validR; r++)
-    ox->dpf[r] = ox->dp_mem + (r * ox->allocW);
-
+    ox->dpf[r] = ox->dp_mem + (r * ox->allocW);  
+  
 #if eslDEBUGLEVEL > 0
   ox->do_dumping     = FALSE;
   ox->dfp            = NULL;
@@ -247,7 +247,7 @@ p7_checkptmx_Create(int M, int L, int64_t redline)
   ox->L  = 0;
   ox->R  = 0; 
   ox->Q  = 0;
-  ox->V  = 0;  // until striped data are valid. Gets set by vector DP code.
+  ox->Vf = 0;  // until striped data are valid. Gets set by vector DP code.
   return ox;
 
  ERROR:
@@ -302,11 +302,11 @@ p7_checkptmx_Reinit(P7_CHECKPTMX *ox, int M, int L)
   ESL_DASSERT1( (M >  0) );
 
   /* Reset data-specific stuff for a new comparison */
-  ox->M = 0;
-  ox->L = 0;
-  ox->R = 0;
-  ox->Q = 0;
-  ox->V = 0;
+  ox->M  = 0;
+  ox->L  = 0;
+  ox->R  = 0;
+  ox->Q  = 0;
+  ox->Vf = 0;
 
   /* If we're debugging and we have stored copies of any matrices,
    * reset and realloc them too.  Must do this first, because we have an early 
@@ -325,13 +325,13 @@ p7_checkptmx_Reinit(P7_CHECKPTMX *ox, int M, int L)
   if (ox->pp  && (status = p7_refmx_GrowTo(ox->pp,  M, L)) != eslOK) goto ERROR;
 #endif
  
-  /* Calculate W, the minimum row width needed by the NEW allocation, in bytes */
-  /*         maxQf        *  3 MDI cells * bytes/vector                        */
-  W  = P7_Q(M,p7_VMAX_FB) * p7C_NSCELLS  * p7_VWIDTH;        // vector part, aligned for any vector ISA
-  W += ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN);  // specials are scalar. maintain vector mem alignment
+  /* Calculate W, minimum row width needed by NEW allocation, in floats (cells) */
+  /*         maxQf        *  3 MDI cells * cells/vector                         */
+  W  = P7_Q(M,p7_VMAX_FB) * p7C_NSCELLS  * p7_VMAX_FB;       // vector part, aligned for any vector ISA
+  W += ESL_UPROUND(p7C_NXCELLS, p7_VMAX_FB);                 // specials are scalar. maintain vector mem alignment
 
   /* Are the current allocations satisfactory? */
-  if (W <= ox->allocW && ox->nalloc <= ox->redline)
+  if (W <= ox->allocW && ox->allocN <= ox->redline)
     {
       if      (L + ox->R0 <= ox->validR) { set_full        (ox, L);             return eslOK; }
       else if (minR_chk   <= ox->validR) { set_checkpointed(ox, L, ox->validR); return eslOK; }
@@ -341,21 +341,21 @@ p7_checkptmx_Reinit(P7_CHECKPTMX *ox, int M, int L)
   if ( W > ox->allocW) 
     {
       ox->allocW    = W;
-      ox->validR    = (int) (ox->nalloc / ox->allocW); // validR is still guaranteed to be <= allocR after this
+      ox->validR    = ox->allocN / ox->allocW; // validR is still guaranteed to be <= allocR after this
       reset_dp_ptrs = TRUE;
     }
 
   /* Does matrix dp_mem need reallocation, either up or down? */
-  maxR  = (int) (ox->nalloc / ox->allocW);                      // max rows if we use up to the current allocation size.      
-  if ( (ox->nalloc > ox->redline && minR_chk <= maxR) ||        // we were redlined, and current alloc will work: so downsize 
+  maxR  = ox->allocN / ox->allocW;                              // max rows if we use up to the current allocation size.      
+  if ( (ox->allocN > ox->redline && minR_chk <= maxR) ||        // we were redlined, and current alloc will work: so downsize 
        minR_chk > ox->validR)				        // not enough memory for needed rows: so upsize                   
     {
       set_row_layout(ox, L, maxR); 
       ox->validR = ox->R0 + ox->Ra + ox->Rb + ox->Rc;      // this may be > allocR now; we'll reallocate dp[] next, if so 
-      ox->nalloc = ox->validR * ox->allocW;
+      ox->allocN = ox->validR * ox->allocW;
 
       esl_alloc_free(ox->dp_mem);
-      ox->dp_mem = esl_alloc_aligned(ox->nalloc, p7_VALIGN);
+      ox->dp_mem = esl_alloc_aligned(sizeof(float) * ox->allocN, p7_VALIGN);
       if (ox->dp_mem == NULL) { status = eslEMEM; goto ERROR; }
 
       reset_dp_ptrs = TRUE;
@@ -410,7 +410,7 @@ size_t
 p7_checkptmx_Sizeof(const P7_CHECKPTMX *ox)
 {
   size_t n = sizeof(P7_CHECKPTMX);
-  n += ox->nalloc;                     // neglects alignment overhead of up to p7_VALIGN bytes
+  n += ox->allocN  * sizeof(float);     // neglects alignment overhead of up to p7_VALIGN bytes
   n += ox->allocR  * sizeof(float *);	  
   return n;
 }
@@ -433,9 +433,9 @@ p7_checkptmx_MinSizeof(int M, int L)
   int    Q    = P7_Q(M,p7_VMAX_FB);               // number of vectors needed
   int    minR = 3 + (int) ceil(minimum_rows(L));  // 3 = Ra, 2 rows for backwards, 1 for fwd[0]
 
-  n += minR * (Q * p7C_NSCELLS * p7_VWIDTH);                         // each row: Q supercells. Each supercell: p7C_NSCELLS=3 vectors MDI. Each vector: p7_VWIDTH bytes
-  n += minR * (ESL_UPROUND(sizeof(float) * p7C_NXCELLS, p7_VALIGN)); // dp_mem, specials: maintaining vector memory alignment 
-  n += minR * sizeof(float *);                                       // dpf[] row ptrs
+  n += minR * (Q * p7C_NSCELLS * p7_VMAX_FB);         // each row: Q supervectors. Each supervector: p7C_NSCELLS=3 vectors MDI. Each vector: p7_VMAX_FB cells
+  n += minR * (ESL_UPROUND(p7C_NXCELLS, p7_VMAX_FB)); // dp_mem, specials: maintaining vector memory alignment 
+  n += minR * sizeof(float *);                        // dpf[] row ptrs
   return n;
 }
 
@@ -501,10 +501,10 @@ static float
 checkptmx_get_val(P7_CHECKPTMX *ox, float *dpc, int k, enum p7c_scells_e s, int logify)
 {
   if (k == 0) return 0.0;
-  int q = (k-1) % ox->V;
-  int r = (k-1) / ox->V;
-  if (logify) return esl_logf(dpc[(q*p7C_NSCELLS + s)*ox->V + r]);
-  else        return          dpc[(q*p7C_NSCELLS + s)*ox->V + r];
+  int q = P7_Q_FROM_K(k,ox->Q);
+  int z = P7_Z_FROM_K(k,ox->Q);
+  if (logify) return esl_logf(dpc[(q*p7C_NSCELLS + s)*ox->Vf + z]);
+  else        return          dpc[(q*p7C_NSCELLS + s)*ox->Vf + z];
 }
 
 
@@ -591,7 +591,7 @@ p7_checkptmx_DumpFBHeader(P7_CHECKPTMX *ox)
 int
 p7_checkptmx_DumpFBRow(P7_CHECKPTMX *ox, int rowi, float *dpc, char *pfx)
 {
-  float *xc        = dpc + (ox->Q * p7C_NSCELLS);
+  float *xc        = dpc + ox->Vf * ox->Q * p7C_NSCELLS;
   int    logify    = (ox->dump_flags & p7_SHOW_LOG) ? TRUE : FALSE;
   int    maxpfx    = ox->dump_maxpfx;
   int    width     = ox->dump_width;

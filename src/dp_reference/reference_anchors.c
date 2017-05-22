@@ -580,8 +580,6 @@ main(int argc, char **argv)
 	  p7_anchors_Reuse(anch);
 	}
 
-      //p7_filtermx_Reuse(fx);
-      //p7_checkptmx_Reuse(cx);
       p7_sparsemask_Reuse(sm);
       esl_sq_Reuse(sq);
     }
