@@ -433,7 +433,7 @@ calc_band_12(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i be
   CALC(RESET_12, STEP_BANDS_12, CONVERT_12, 12)
 }
 
-static__m128i
+static __m128i
 calc_band_13(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_13, STEP_BANDS_13, CONVERT_13, 13)
@@ -546,7 +546,7 @@ p7_SSVFilter_base_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
 
   if (( status = p7_filtermx_Reinit(fx, om->M) ) != eslOK) goto FAILURE;
   fx->M    = om->M;
-  fx->V    = p7_VWIDTH_SSE;
+  fx->Vw   = p7_VWIDTH_SSE / sizeof(int16_t); // A hack. FILTERMX wants Vw in units of int16_t. 
   fx->type = p7F_SSVFILTER;
   dp       = (__m128i *) fx->dp;
 

@@ -14,13 +14,12 @@ enum p7f_mxtype_e { p7F_NONE = 0, p7F_SSVFILTER = 1, p7F_VITFILTER = 2 };
                                 
 typedef struct p7_filtermx_s {  
   int      M;			// current profile size: determines width of <dp> row    
-  int      V;                   // width of striped vectors. 0 if no striped data set yet
+  int      Vw;                  // width of striped vectors, in int16_t's.  0 if no striped data set yet
 
-                                // SRE REVISIT: char? only because it's both int8_t, int16_t
-  char    *dp;			// aligned, one row of DP memory: >= 3*Qf vectors 
+  int16_t *dp;			// aligned, one row of DP memory: >= 3*Qf vectors. 
   int      allocM;		// <dp_mem> is allocated to hold up to M=allocM
 
-  enum p7f_mxtype_e type;	// p7F_NONE | p7F_SSVFILTER | p7F_MSVFILTER | p7F_VITFILTER 
+  enum p7f_mxtype_e type;	// p7F_NONE | p7F_SSVFILTER | p7F_VITFILTER 
 
 #if eslDEBUGLEVEL > 0
   int      do_dumping;		// TRUE if we're dumping each row for diagnostics 
@@ -47,8 +46,8 @@ extern void         p7_filtermx_Destroy(P7_FILTERMX *fx);
 
 #if eslDEBUGLEVEL > 0
 extern int p7_filtermx_SetDumpMode(P7_FILTERMX *fx, FILE *dfp, int truefalse);
-extern int p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
-extern int p7_filtermx_DumpVFRow(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
+extern int p7_filtermx_DumpSSVRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
+extern int p7_filtermx_DumpVFRow (const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
 #endif
 
 #endif /*p7FILTERMX_INCLUDED*/

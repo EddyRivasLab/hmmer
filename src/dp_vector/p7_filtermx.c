@@ -56,7 +56,7 @@ p7_filtermx_Create(int allocM)
 
   ESL_ALLOC(fx, sizeof(P7_FILTERMX));
   fx->M         = 0;
-  fx->V         = 0;
+  fx->Vw        = 0;
   fx->dp        = NULL;
   fx->allocM    = 0;
   fx->type      = p7F_NONE;
@@ -113,12 +113,9 @@ p7_filtermx_Reinit(P7_FILTERMX *fx, int allocM)
 
   /* Reinitialization to an empty structure */
   fx->M          = 0;
-  fx->V          = 0;
+  fx->Vw         = 0;
   fx->type       = p7F_NONE;
-#if eslDEBUGLEVEL > 0
-  fx->do_dumping = FALSE;
-  fx->dfp        = NULL;
-#endif 
+  // But don't change debugging status (do_dumping, dfp)
 
   /* Reallocate if needed */
   if (allocM > fx->allocM) {
@@ -166,28 +163,28 @@ p7_filtermx_Reinit(P7_FILTERMX *fx, int allocM)
 int
 p7_filtermx_GetScore(const P7_FILTERMX *fx, int k, enum p7f_scells_e s)
 {
-  int q, r;
+  int Q;
+  int q, z;
 
   ESL_DASSERT1(( k >= 0 &&  k <= fx->allocM ));
-  ESL_DASSERT1(( fx->V &&  !(fx->V & (fx->V-1)) ));     // V is set, to a power of two.
-  ESL_DASSERT1(( fx->M ));                              // matrix has to have some data in it
+  ESL_DASSERT1(( fx->Vw &&  !(fx->Vw & (fx->Vw-1)) ));     // Vw is set to a power of two.
+  ESL_DASSERT1(( fx->M ));                                 // matrix has to have some data in it
 
   if (k == 0) return 0;
 
   if (fx->type == p7F_SSVFILTER)
     {
       if (s != p7F_M) return 0;
-      uint8_t *dp = (uint8_t *) fx->dp;
-      q  = (k-1) % fx->V;
-      r  = (k-1) / fx->V;
-      return dp[q*fx->V + r];
+      Q = P7_Q(fx->M, fx->Vw * 2);
+      int8_t *dp = (int8_t *) fx->dp;          // Baseline SSV filter hacks and recasts.
+      return dp[P7_Y_FROM_K(k,Q,fx->Vw*2)];
     }
   else if (fx->type == p7F_VITFILTER)
     {
-      int16_t *dp = (int16_t *) fx->dp;
-      q  = (k-1) % fx->V;
-      r  = (k-1) / fx->V;
-      return dp[ (q*p7F_NSCELLS + s) * fx->V + r];
+      Q = P7_Q(fx->M, fx->Vw);
+      q = P7_Q_FROM_K(k,Q);
+      z = P7_Z_FROM_K(k,Q);
+      return fx->dp[ (q * p7F_NSCELLS + s) * fx->Vw + z];
     }
   //NOTREACHED
   return 0;
@@ -283,7 +280,7 @@ p7_filtermx_SetDumpMode(P7_FILTERMX *fx, FILE *dfp, int truefalse)
 }
 
 
-/* Function:  p7_filtermx_DumpMFRow()
+/* Function:  p7_filtermx_DumpSSVRow()
  * Synopsis:  Dump one row from SSV version of a DP matrix.
  *
  * Purpose:   Dump current row of SSV calculations from DP matrix <fx>
@@ -298,20 +295,16 @@ p7_filtermx_SetDumpMode(P7_FILTERMX *fx, FILE *dfp, int truefalse)
  * 
  *            The output format is coordinated with <p7_refmx_Dump()> to
  *            facilitate comparison to a known answer.
- *            
- *            This also works for an SSV filter row, for SSV implementations
- *            that use a single row of DP memory (like <_longtarget>). 
- *            The Knudsen assembly code SSV does not use any RAM.
  *
  * Returns:   <eslOK> on success.
  */
 int
-p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
+p7_filtermx_DumpSSVRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
   int k;
 
   ESL_DASSERT1(( fx->type == p7F_SSVFILTER ));
-  ESL_DASSERT1(( fx->V &&  !(fx->V & (fx->V-1)) ));     // V is set, to a power of two.
+  ESL_DASSERT1(( fx->Vw &&  !(fx->Vw & (fx->Vw-1)) ));     // V is set, to a power of two.
   ESL_DASSERT1(( fx->M ));
   
   /* Header (if we're on the 0th row)  */
@@ -369,7 +362,7 @@ p7_filtermx_DumpVFRow(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, i
   int k;
 
   ESL_DASSERT1(( fx->type == p7F_VITFILTER ));
-  ESL_DASSERT1(( fx->V &&  !(fx->V & (fx->V-1)) ));     // V is set, to a power of two.
+  ESL_DASSERT1(( fx->Vw &&  !(fx->Vw & (fx->Vw-1)) ));     // V is set, to a power of two.
   ESL_DASSERT1(( fx->M ));
 
   /* Header (if we're on the 0th row) */

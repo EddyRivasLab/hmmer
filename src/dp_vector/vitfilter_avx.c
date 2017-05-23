@@ -63,7 +63,9 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
 
   /* Matrix type and size must be set early, not late: debugging dump functions need this information. */
   ox->M    = om->M;
+  ox->Vw   = p7_VWIDTH_AVX / sizeof(int16_t);
   ox->type = p7F_VITFILTER;
+  ESL_DASSERT1(( ox->Vw = om->V / sizeof(int16_t)));
 
   /* We need a vector with 1 leftmost element set to -infinity (-32768) */
   negInfv = _mm256_setzero_si256();

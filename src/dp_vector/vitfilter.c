@@ -423,6 +423,9 @@ static ESL_OPTIONS options[] = {
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
   { "-1",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "output in one line awkable format",                0 },
   { "-P",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "output in profmark format",                        0 },
+#if eslDEBUGLEVEL > 0
+  { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump vector DP matrix for examination (verbose)", 0 },
+#endif
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -469,13 +472,11 @@ main(int argc, char **argv)
   p7_oprofile_Convert(gm, om);
 
   ox = p7_filtermx_Create(gm->M);
-
-  /* Useful to place and compile in for debugging: 
-     p7_oprofile_Dump(stdout, om);                      // dumps the optimized profile
-     p7_filtermx_SetDumpMode(ox, stdout, TRUE);         // makes the fast DP algorithms dump their matrices
-     p7_refmx_Dump(stdout, gx);                         // dumps a generic DP matrix
-  */
-
+#if eslDEBUGLEVEL > 0
+  if (esl_opt_GetBoolean(go, "-D"))
+      p7_filtermx_SetDumpMode(ox, stdout, TRUE);         // makes VF dump its DP matrix rows as it goes
+#endif
+  
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
       p7_oprofile_ReconfigLength(om, sq->n);
