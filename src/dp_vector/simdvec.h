@@ -8,6 +8,8 @@
  */
 #ifndef p7SIMDVEC_INCLUDED
 #define p7SIMDVEC_INCLUDED
+#include "easel.h"
+
 
 /* Actual vector widths (in # of elements) that our SSV, VF, and F/B
  * filters use. These are runtime queries, using cpu dispatching.
@@ -52,7 +54,7 @@
 #define p7_VMAX_SSV   64           //                 ... in int8's
 #define p7_VMAX_VF    32           //                 ... in int16's
 #define p7_VMAX_FB    16           //                 ... in floats 
-#elseif defined(eslENABLE_AVX)     // Or for supporting up to 256b vector ISAs:
+#elif   defined(eslENABLE_AVX)     // Or for supporting up to 256b vector ISAs:
 #define p7_VALIGN     32
 #define p7_VWIDTH     32
 #define p7_VMAX_SSV   32

@@ -497,6 +497,7 @@ main(int argc, char **argv)
 	}
       else
 	{
+          printf("vector code used:     %s\n",        esl_cpu_Get());
 	  printf("target sequence:      %s\n",        sq->name);
 	  printf("vit filter raw score: %.2f nats\n", vfraw);
 	  printf("null score:           %.2f nats\n", nullsc);

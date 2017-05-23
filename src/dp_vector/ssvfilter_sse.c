@@ -14,7 +14,7 @@
 #include "easel.h"
 #include "esl_sse.h"
 
-#include "dp_vector/p7_filtermx.h"
+#include "dp_vector/p7_filtermx.h"   // Only needed for the baseline vector implementation, not production. Production is O(1) memory.
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
 
@@ -328,7 +328,6 @@ done1:                                          \
         i++;                                         \
         num_iters--;                                 \
       }                                              \
-                                                \
       i += i2;                                  \
       convert(step, NO_CHECK, )                 \
     }                                           \
@@ -361,112 +360,112 @@ done1:                                          \
 done2:                                          \
   return xEv;
 
-__m128i
-calc_band_1_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_1(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_1, STEP_BANDS_1, CONVERT_1, 1)
 }
 
-__m128i
-calc_band_2_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_2(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_2, STEP_BANDS_2, CONVERT_2, 2)
 }
 
-__m128i
-calc_band_3_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_3(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_3, STEP_BANDS_3, CONVERT_3, 3)
 }
 
-__m128i
-calc_band_4_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_4(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_4, STEP_BANDS_4, CONVERT_4, 4)
 }
 
-__m128i
-calc_band_5_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_5(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_5, STEP_BANDS_5, CONVERT_5, 5)
 }
 
-__m128i
-calc_band_6_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_6(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_6, STEP_BANDS_6, CONVERT_6, 6)
 }
 
 #if MAX_BANDS > 6 /* Only include needed functions to limit object file size */
-__m128i
-calc_band_7_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_7(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_7, STEP_BANDS_7, CONVERT_7, 7)
 }
 
-__m128i
-calc_band_8_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_8(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_8, STEP_BANDS_8, CONVERT_8, 8)
 }
 
-__m128i
-calc_band_9_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_9(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_9, STEP_BANDS_9, CONVERT_9, 9)
 }
 
-__m128i
-calc_band_10_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_10(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_10, STEP_BANDS_10, CONVERT_10, 10)
 }
 
-__m128i
-calc_band_11_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_11(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_11, STEP_BANDS_11, CONVERT_11, 11)
 }
 
-__m128i
-calc_band_12_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_12(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_12, STEP_BANDS_12, CONVERT_12, 12)
 }
 
-__m128i
-calc_band_13_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static__m128i
+calc_band_13(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_13, STEP_BANDS_13, CONVERT_13, 13)
 }
 
-__m128i
-calc_band_14_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_14(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_14, STEP_BANDS_14, CONVERT_14, 14)
 }
 #endif /* MAX_BANDS > 6 */
 #if MAX_BANDS > 14
-__m128i
-calc_band_15_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_15(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_15, STEP_BANDS_15, CONVERT_15, 15)
 }
 
-__m128i
-calc_band_16_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_16(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_16, STEP_BANDS_16, CONVERT_16, 16)
 }
 
-__m128i
-calc_band_17_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_17(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_17, STEP_BANDS_17, CONVERT_17, 17)
 }
 
-__m128i
-calc_band_18_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m128i
+calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
 {
   CALC(RESET_18, STEP_BANDS_18, CONVERT_18, 18)
 }
@@ -477,6 +476,7 @@ calc_band_18_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128
 /* Function:  p7_SSVFilter_sse()
  * Synopsis:  SSV filter; x86 SSE version.
  * Incept:    SRE, Fri May 19 06:49:12 2017 [Saiun, Yoshida Brothers]
+ * See:       ssvfilter.c::p7_SSVFilter()
  */
 int
 p7_SSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
@@ -491,23 +491,23 @@ p7_SSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc
   int     i;                                     // counter for bands                     
   /* function pointers for the various number of vectors to use */
   __m128i (*fs[MAX_BANDS + 1]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register __m128i, __m128i)
-    = {NULL, calc_band_1_sse,  calc_band_2_sse,  calc_band_3_sse,  calc_band_4_sse,  calc_band_5_sse,  calc_band_6_sse
+    = {NULL, calc_band_1,  calc_band_2,  calc_band_3,  calc_band_4,  calc_band_5,  calc_band_6
 #if MAX_BANDS > 6
-       , calc_band_7_sse,  calc_band_8_sse,  calc_band_9_sse,  calc_band_10_sse, calc_band_11_sse, calc_band_12_sse, calc_band_13_sse, calc_band_14_sse
+           , calc_band_7,  calc_band_8,  calc_band_9,  calc_band_10, calc_band_11, calc_band_12, calc_band_13, calc_band_14
 #endif
 #if MAX_BANDS > 14
-       , calc_band_15_sse, calc_band_16_sse, calc_band_17_sse, calc_band_18_sse
+          , calc_band_15, calc_band_16, calc_band_17, calc_band_18
 #endif
   };
 
-  last_q = 0;
   /* Use the highest number of bands but no more than MAX_BANDS */
   bands = (Q + MAX_BANDS - 1) / MAX_BANDS;
-  for (i = 0; i < bands; i++) {
-    q = (Q * (i + 1)) / bands;
-    xEv = fs[q-last_q](dsq, L, om, last_q, beginv, xEv);
-    last_q = q;
-  }
+  for (i = 0; i < bands; i++) 
+    {
+      q      = (Q * (i + 1)) / bands;
+      xEv    = fs[q-last_q](dsq, L, om, last_q, beginv, xEv);
+      last_q = q;
+    }
   xE = esl_sse_hmax_epi8(xEv);  
 
   if (xE == 127)  // Overflow on high scoring sequences is expected.
@@ -571,13 +571,18 @@ p7_SSVFilter_base_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
 
   if (h == 127)  
     { *ret_sc = eslINFINITY; return eslERANGE; }
-  else
+  else if (h > -128)
     { 
       *ret_sc = ((float) h + 128.) / om->scale_b + om->tauBM - 2.0;   // 2.0 is the tauNN/tauCC "2 nat approximation"
       *ret_sc += 2.0 * logf(2.0 / (float) (L + 2));                   
       return eslOK;
     }
-
+  else 
+    {
+      *ret_sc = -eslINFINITY;
+      return eslOK;
+    }
+    
  FAILURE:
   *ret_sc = -eslINFINITY;
   return status;
@@ -591,4 +596,11 @@ void p7_ssvfilter_sse_silence_hack(void) { return; }
 int main(void) { return 0; }
 #endif 
 #endif // eslENABLE_SSE or not
+
+
+
+
+
+
+
 

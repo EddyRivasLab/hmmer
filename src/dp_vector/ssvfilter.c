@@ -137,6 +137,7 @@ ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *re
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_cpu.h"
 #include "esl_getopts.h"
 #include "esl_random.h"
 #include "esl_randomseq.h"
@@ -177,7 +178,7 @@ main(int argc, char **argv)
   ESL_DSQ       **dsq     = malloc(N * sizeof(ESL_DSQ *));
   int             i;
   float           sc1, sc2;
-  double          base_time, bench_time, Mcs;
+  double          Mcs;
 
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
@@ -222,6 +223,7 @@ main(int argc, char **argv)
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
   printf("# M    = %d\n", gm->M);
   printf("# %.1f Mc/s\n", Mcs);
+  printf("# implementation: %s\n", esl_cpu_Get());
 
   for (i = 0; i < N; i++) free(dsq[i]);
   free(dsq);
@@ -388,6 +390,7 @@ main(int argc, char **argv)
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_cpu.h"
 #include "esl_getopts.h"
 #include "esl_gumbel.h"
 #include "esl_sq.h"
@@ -471,6 +474,7 @@ main(int argc, char **argv)
 	}
       else
 	{
+          printf("vector code used:     %s\n",        esl_cpu_Get());
 	  printf("target sequence:      %s\n",        sq->name);
 	  printf("SSV filter raw score: %.2f nats\n", sfraw);
 	  printf("null score:           %.2f nats\n", nullsc);

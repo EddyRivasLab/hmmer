@@ -326,7 +326,7 @@ if test "$enable_sse" = "yes" || test "$enable_sse" = "check"; then
     enable_sse=yes
     ],[
     if test "$enable_sse" = "yes"; then
-      AC_MSG_FAILURE([Unable to compile our SSE implementation. Try another compiler?])
+      AC_MSG_FAILURE([Unable to compile SSE. Try another compiler, or --disable-sse])
     fi
     enable_sse=no
     ])
@@ -340,7 +340,7 @@ if test "$enable_avx" = "yes" || test "$enable_avx" = "check"; then
     enable_avx=yes
     ],[
     if test "$enable_avx" = "yes"; then
-      AC_MSG_FAILURE([Unable to compile our AVX implementation. Try another compiler?])
+      AC_MSG_FAILURE([Unable to compile AVX. Try another compiler, or --disable-avx])
     fi
     enable_avx=no
     ])
@@ -354,7 +354,7 @@ if test "$enable_avx512" = "yes" || test "$enable_avx512" = "check"; then
     enable_avx512=yes
     ],[
     if test "$enable_avx512" = "yes"; then
-      AC_MSG_FAILURE([Unable to compile our AVX512 implementation. Try another compiler?])
+      AC_MSG_FAILURE([Unable to compile AVX-512. Try another compiler, or --disable-avx512])
     fi
     enable_avx512=no
     ])
@@ -368,7 +368,7 @@ if test "$enable_neon" = "yes" || test "$enable_neon" = "check"; then
     enable_neon=yes
     ],[
     if test "$enable_neon" = "yes"; then
-      AC_MSG_FAILURE([Unable to compile our NEON implementation. Try another compiler?])
+      AC_MSG_FAILURE([Unable to compile ARM NEON. Try another compiler, or --disable-neon])       
     fi
     enable_neon=no
     ])
@@ -382,7 +382,7 @@ if test "$enable_vmx" = "yes" || test "$enable_vmx" = "check"; then
     enable_vmx=yes
     ],[
     if test "$enable_vmx" = "yes"; then
-      AC_MSG_FAILURE([Unable to compile our Altivec/VMX implementation. Try another compiler?])
+       AC_MSG_FAILURE([Unable to compile Altivec/VMX. Try another compiler, or --disable-vmx])
     fi
     enable_vmx=no
     ])

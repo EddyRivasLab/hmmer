@@ -74,9 +74,9 @@ p7_ForwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
   ox->M   = om->M;       
   ox->L   = L;
   ox->Vf  = p7_VWIDTH_SSE / sizeof(float);
-  ox->Q   = Q = P7_Q(om->M, ox->Vf);              // Q, just for shorthand avoidance of ox->Q everywhere below.
-  dpp     =  (__m128 *) ox->dpf[ox->R0-1];        // dpp=prev row. start on dpf[2]; rows 0,1=Backwards
-  xc      =  ox->dpf[ox->R0-1] + ox->Vf*Q*p7C_NSCELLS; // specials E,N,JJ,J,B,CC,C,SCALE 
+  ox->Q   = Q = P7_Q(om->M, ox->Vf);             // Q, just for shorthand avoidance of ox->Q everywhere below.
+  dpp     = (__m128 *) ox->dpf[ox->R0-1];        // dpp=prev row. start on dpf[2]; rows 0,1=Backwards
+  xc      = (float *)  (dpp + Q*p7C_NSCELLS);    // specials E,N,JJ,J,B,CC,C,SCALE 
  
 #if eslDEBUGLEVEL > 0
   ox->dump_flags |= p7_SHOW_LOG;                     // also sets for Backward dumps, since <ox> shared 
@@ -133,7 +133,7 @@ p7_ForwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
 #endif
     }
 
-  xc  = (float *) dpc + ox->Vf * Q * p7C_NSCELLS;
+  xc  = (float *) (dpc + Q * p7C_NSCELLS);
 
   ESL_DASSERT1( (ox->R == ox->Ra+ox->Rb+ox->Rc) );
   ESL_DASSERT1( ( (! isnan(xc[p7C_C])) && (! isinf(xc[p7C_C]))) );
@@ -357,8 +357,8 @@ forward_row_sse(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dp
   const    __m128 *rp   = (__m128 *) om->rfv[xi];
   const    __m128 zerov = _mm_setzero_ps();
   const    __m128 *tp   = (__m128 *) om->tfv;
-  const    float  *xp   = ((float *) dpp) + om->V / sizeof(float) * Q * p7C_NSCELLS;
-  float           *xc   = ((float *) dpc) + om->V / sizeof(float) * Q * p7C_NSCELLS;
+  const    float  *xp   = (float *) (dpp + Q * p7C_NSCELLS);
+  float           *xc   = (float *) (dpc + Q * p7C_NSCELLS);
   __m128          dcv   = _mm_setzero_ps();
   __m128          xEv   = _mm_setzero_ps();
   __m128          xBv   = _mm_set1_ps(xp[p7C_B]);
@@ -518,8 +518,8 @@ static inline void
 backward_row_main_sse(ESL_DSQ xi, const P7_OPROFILE *om, __m128 *dpp, __m128 *dpc, int Q, float scalefactor)
 {
   const __m128 *rp       = (__m128 *) om->rfv[xi];            // emission scores on row i+1, for bck; xi = dsq[i+1]  
-  float       * const xc = (float *) dpc + om->V / sizeof(float) * Q * p7C_NSCELLS; // E N JJ J B CC C SCALE 
-  const float * const xp = (float *) dpp + om->V / sizeof(float) * Q * p7C_NSCELLS;
+  float       * const xc = (float *) (dpc + Q * p7C_NSCELLS); // E N JJ J B CC C SCALE 
+  const float * const xp = (float *) (dpp + Q * p7C_NSCELLS);
   const __m128 *tp, *tpdd;
   const __m128  zerov = _mm_set1_ps(0.0f);
   __m128        xBv;
@@ -588,7 +588,7 @@ static inline void
 backward_row_L_sse(const P7_OPROFILE *om,  __m128 *dpc, int Q, float scalefactor)
 {
   const __m128  zerov = _mm_setzero_ps();
-  float        *xc    = (float *) dpc + om->V / sizeof(float) * Q * p7C_NSCELLS;
+  float        *xc    = (float *) (dpc + Q * p7C_NSCELLS);
   const __m128 *tpdd;
   __m128       *dp;
   __m128       xEv, dcv;
@@ -900,8 +900,8 @@ backward_row_zero_sse(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
   __m128       *dpp  = (__m128 *) ox->dpf[1];
   const __m128 *rp   = (__m128 *) om->rfv[x1];
   const __m128 zerov = _mm_setzero_ps();
-  float        *xc   = ox->dpf[0] + ox->Vf * Q * p7C_NSCELLS; /* special states on current row i  */
-  float        *xp   = ox->dpf[1] + ox->Vf * Q * p7C_NSCELLS; /* special states on "previous" row i+1 */
+  float        *xc   = (float *) (dpc + Q * p7C_NSCELLS); /* special states on current row i      */
+  float        *xp   = (float *) (dpp + Q * p7C_NSCELLS); /* special states on "previous" row i+1 */
   __m128       *dp;
   __m128       *tp;
   __m128        xBv  = zerov;
@@ -942,7 +942,7 @@ save_debug_row_pp_sse(P7_CHECKPTMX *ox, __m128 *dpc, int i)
 {
   union { __m128 v; float x[4]; } u;  // 4 = number of floats per SSE vector
   int      Q  = ox->Q;
-  float  *xc  = (float *) dpc + ox->Vf*Q*p7C_NSCELLS;
+  float  *xc  = (float *) (dpc + Q*p7C_NSCELLS);
   int     q,k,z,s;
 
   if (! ox->pp) return;
@@ -992,7 +992,7 @@ save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float 
 {
   union { __m128 v; float x[4]; } u;  // 4 = number of floats per SSE vector
   int      Q  = ox->Q;
-  float  *xc  = (float *) dpc + ox->Vf*Q*p7C_NSCELLS;
+  float  *xc  = (float *) (dpc + Q*p7C_NSCELLS);
   int     q,k,z;
 
   if (! gx) return;

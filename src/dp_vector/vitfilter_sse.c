@@ -35,46 +35,7 @@
 
 /* Function:  p7_ViterbiFilter_sse()
  * Synopsis:  Calculates Viterbi score, vewy vewy fast, in limited precision.
- *
- * Purpose:   Calculates an approximation of the Viterbi score for sequence
- *            <dsq> of length <L> residues, using optimized profile <om>,
- *            and a preallocated one-row DP matrix <ox>. Return the 
- *            estimated Viterbi score (in nats) in <ret_sc>.
- *            
- *            Score may overflow (and will, on high-scoring
- *            sequences), but will not underflow. 
- *            
- *            <ox> will be resized if needed. It's fine if it was just
- *            <_Reuse()'d> from a previous, smaller profile comparison.
- *            
- *            The model must be in a local alignment mode; other modes
- *            cannot provide the necessary guarantee of no underflow.
- *            
- *            This is a striped SIMD Viterbi implementation using Intel
- *            SSE/SSE2 integer intrinsics \citep{Farrar07}, in reduced
- *            precision (signed words, 16 bits).
- *
- * Args:      dsq     - digital target sequence, 1..L
- *            L       - length of dsq in residues          
- *            om      - optimized profile
- *            ox      - DP matrix
- *            ret_sc  - RETURN: Viterbi score (in nats)          
- *
- * Returns:   <eslOK> on success;
- *            <eslERANGE> if the score overflows; in this case
- *            <*ret_sc> is <eslINFINITY>, and the sequence can 
- *            be treated as a high-scoring hit.
- *            <ox> may be reallocated.
- *
- * Xref:      [Farrar07] for ideas behind striped SIMD DP.
- *            J2/46-47 for layout of HMMER's striped SIMD DP.
- *            J2/50 for single row DP.
- *            J2/60 for reduced precision (epu8)
- *            J2/65 for initial benchmarking
- *            J2/66 for precision maximization
- *            J4/138-140 for reimplementation in 16-bit precision
- *            J9/110-111 for reimplementation with P7_FILTERMX, memory share w/ checkpointed DP matrix
- *            J10/101 for separating P7_FILTERMX from P7_CHECKPTMX again: don't share these
+ * See:       vitfilter.c::p7_ViterbiFilter()
  */
 int
 p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)
@@ -105,7 +66,7 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
 
   /* Resize the filter mx as needed */
   if (( status = p7_filtermx_Reinit(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of Vit filter matrix failed");
-  dp = (__m128i *) ox->dp;           /* enables MMXf(), IMXf(), DMXf() access macros. Must be set AFTER the GrowTo, because ox->dp may get moved */
+  dp = (__m128i *) ox->dp;       /* enables MMXf(), IMXf(), DMXf() access macros. Must be set AFTER the Reinit, because ox->dp may get moved */
 
   /* Matrix type and size must be set early, not late: debugging dump functions need this information. */
   ox->M    = om->M;
@@ -168,7 +129,7 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
         DMXf(q) = dcv;
 
         /* Calculate the next D(i,q+1) partially: M->D only;
-               * delay storage, holding it in dcv
+         * delay storage, holding it in dcv
          */
         dcv   = _mm_adds_epi16(sv, *tsc);  tsc++;
         Dmaxv = _mm_max_epi16(dcv, Dmaxv);
@@ -233,7 +194,7 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
 	}
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
 	{
-	  dcv = _mm_slli_si128(dcv, 2);
+	  dcv     = _mm_slli_si128(dcv, 2);
 	  DMXf(0) = _mm_or_si128(dcv, negInfv);
 	}
 

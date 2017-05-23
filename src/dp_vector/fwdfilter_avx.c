@@ -1,17 +1,14 @@
 /* Forwards/Backwards filters: x86 AVX vector implementation.
  *
- * See fwdfilter.md for notes.
- *
- * Refer to fwdfilter_sse.c for more fully commented code. That's our
- * "primary" vector implementation. Other vector implementations
- * follow it with less commentary.
- *
  * This file is conditionally compiled, when eslENABLE_AVX is defined.
  *
  * Contents:
  *    1. Forward and Backward filter: AVX implementations.
  *    2. Internal functions: inlined recursions.
  *    3. Internal debugging tools.
+ *
+ * See fwdfilter.md for notes, and fwdfilter_sse.c, the "primary"
+ * vector implementation, for more fully commented code.
  */
 #include "p7_config.h"
 #ifdef eslENABLE_AVX
@@ -73,8 +70,8 @@ p7_ForwardFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
   p7_checkptmx_Reinit(ox, om->M, L);
   ox->M  = om->M;       
   ox->L  = L;
-  ox->V  = p7_VWIDTH_AVX / sizeof(float); 
-  ox->Q  = Q = P7_Q(om->M, ox->V);
+  ox->Vf = p7_VWIDTH_AVX / sizeof(float); 
+  ox->Q  = Q = P7_Q(om->M, ox->Vf);
   dpp    =  (__m256 *) ox->dpf[ox->R0-1];   
   xc     =  (float *) (dpp + Q*p7C_NSCELLS);
 
@@ -152,14 +149,13 @@ p7_ForwardFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
 int
 p7_BackwardFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh)
 {
-  float  *xf;
   int     Q    = ox->Q;
+  float  *xf;
   __m256 *fwd;
   __m256 *bck;
   __m256 *dpp;
-  int     i; 
   float   Tvalue;
-  int     b, w, i2;
+  int     i, b, w, i2;
   int     status;
 
   p7_sparsemask_Reinit(sm, om->M, L);
@@ -214,7 +210,6 @@ p7_BackwardFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
       if (ox->do_dumping) p7_checkptmx_DumpFBRow(ox, i, (float *) bck, "bck");
       if (ox->bck)        save_debug_row_fb_avx(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
-
       /* And decode. */
       if ( (status = posterior_decode_row_avx(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
       dpp = bck;
@@ -230,7 +225,6 @@ p7_BackwardFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
       ox->R--;
       fwd = (__m256 *) ox->dpf[ox->R0+ox->R];        // pop checkpointed forward row off "stack"
       xf  = (float *) (fwd + Q*p7C_NSCELLS);
-      Tvalue = xf[p7C_C] * om->xf[p7O_C][p7O_MOVE];  // i.e. scaled fwd[L] val at T state = scaled overall score
 
       /* Calculate bck[i]; <dpp> is already bck[i+1] */
       bck = (__m256 *) ox->dpf[i%2];                 // get available tmp memory for row
@@ -243,7 +237,6 @@ p7_BackwardFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
       }
       if (ox->bck) save_debug_row_fb_avx(ox, ox->bck, bck, i, ox->bcksc); 
 #endif
-
       /* And decode checkpointed row i. */
       if ( (status = posterior_decode_row_avx(ox, i, sm, sm_thresh, Tvalue)) != eslOK) return status;
       
@@ -276,7 +269,6 @@ p7_BackwardFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
           }
           if (ox->bck) save_debug_row_fb_avx(ox, ox->bck, bck, i2, ox->bcksc); 
 #endif
-
           if ((status = posterior_decode_row_avx(ox, i2, sm, sm_thresh, Tvalue)) != eslOK) return status;
           dpp = bck;
         }
@@ -525,10 +517,10 @@ backward_row_main_avx(ESL_DSQ xi, const P7_OPROFILE *om, __m256 *dpp, __m256 *dp
   xc[p7C_E]              = xc[p7C_C] * om->xf[p7O_E][p7O_MOVE] + xc[p7C_J] * om->xf[p7O_E][p7O_LOOP];
 
   /* Initialize for the row calculation */
-  mpv  = esl_avx_rightshift_ps(*dpp      ); /* [1 5 9 13] -> [5 9 13 x], M(i+1,k+1) * e(M_k+1, x_{i+1}) */
-  tmmv = esl_avx_rightshift_ps((__m256) om->tfv[1]);
-  timv = esl_avx_rightshift_ps((__m256) om->tfv[2]);
-  tdmv = esl_avx_rightshift_ps((__m256) om->tfv[3]);
+  mpv  = esl_avx_rightshift_ps(*dpp); /* [1 5 9 13] -> [5 9 13 x], M(i+1,k+1) * e(M_k+1, x_{i+1}) */
+  tmmv = esl_avx_rightshift_ps( ((__m256 *) om->tfv)[1]);
+  timv = esl_avx_rightshift_ps( ((__m256 *) om->tfv)[2]);
+  tdmv = esl_avx_rightshift_ps( ((__m256 *) om->tfv)[3]);
   xEv  = _mm256_set1_ps(xc[p7C_E]);
   tp   = ((__m256 *) om->tfv) + 7*Q - 1;
   tpdd = tp + Q;
@@ -604,9 +596,9 @@ backward_row_finish_avx(const P7_OPROFILE *om, __m256 *dpc, int Q, __m256 dcv)
     { /* Full serialization */
       for (j = 1; j < 8; j++)
         {
-          dcv = esl_avx_rightshift_ps(dcv);    /* [1 5 9 13] => [5 9 13 *]          */
-          tp  = ((_m256 *) om->tfv) + 8*Q - 1; /* <*tp> now the [4 8 12 x] TDD quad */
-          dp  = dpc + Q*p7C_NSCELLS - 2;       /* init to point at D(i,q) vector    */
+          dcv = esl_avx_rightshift_ps(dcv);     /* [1 5 9 13] => [5 9 13 *]          */
+          tp  = ((__m256 *) om->tfv) + 8*Q - 1; /* <*tp> now the [4 8 12 x] TDD quad */
+          dp  = dpc + Q*p7C_NSCELLS - 2;        /* init to point at D(i,q) vector    */
           for (q = Q-1; q >= 0; q--)
             {
               dcv = _mm256_mul_ps(dcv, *tp); tp--;
@@ -743,9 +735,9 @@ posterior_decode_row_avx(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm
 
   for (q = 0; q < Q; q++) 
     {
-      P7C_MQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7C_MQ(fwd, q), P7C_MQ(bck, q)));
-      P7C_DQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7C_DQ(fwd, q), P7C_DQ(bck, q)));
-      P7C_IQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7C_IQ(fwd, q), P7C_IQ(bck, q)));
+      P7C_MQ(fwd, q) = _mm256_mul_ps(cv, _mm256_mul_ps(P7C_MQ(fwd, q), P7C_MQ(bck, q)));
+      P7C_DQ(fwd, q) = _mm256_mul_ps(cv, _mm256_mul_ps(P7C_DQ(fwd, q), P7C_DQ(bck, q)));
+      P7C_IQ(fwd, q) = _mm256_mul_ps(cv, _mm256_mul_ps(P7C_IQ(fwd, q), P7C_IQ(bck, q)));
     }
 
   if (ox->pp)  save_debug_row_pp_avx(ox, fwd, rowi);
