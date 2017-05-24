@@ -31,7 +31,6 @@
  * all the necessary working memory and heuristic thresholds.
  *   
  * SRE, Thu Jan 24 09:28:01 2008 [Janelia]
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -1079,7 +1078,8 @@ main(int argc, char **argv)
   /* retrieve and display results */
   for (d = 0; d < ddef->ndom; d++)
     {
-      printf("domain %-4d : %4d %4d  %6.2f  %6.2f\n", d+1, 
+      printf("domain %-4d : %4" PRId64 " %4" PRId64 "  %6.2f  %6.2f\n", 
+	     d+1, 
 	     ddef->dcl[d].ienv,
 	     ddef->dcl[d].jenv,
 	     ddef->dcl[d].envsc,

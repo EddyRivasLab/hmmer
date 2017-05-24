@@ -1,7 +1,6 @@
 /* Miscellaneous summary statistics calculated for HMMs and profiles.
  * 
  * SRE, Fri May  4 11:43:20 2007 [Janelia]
- * SVN $Id$
  */
 
 #include "p7_config.h"
@@ -255,7 +254,3 @@ p7_hmm_CompositionKLDist(P7_HMM *hmm, P7_BG *bg, float *ret_KL, float **opt_avp)
 }
 
 
-
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/

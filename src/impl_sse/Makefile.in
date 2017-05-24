@@ -11,8 +11,8 @@ libdir      = @libdir@
 includedir  = @includedir@
 
 CC          = @CC@
-CFLAGS      = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
-SIMDFLAGS   = @SIMD_CFLAGS@
+CFLAGS      = @CFLAGS@ @PTHREAD_CFLAGS@ 
+SSE_CFLAGS  = @SSE_CFLAGS@
 CPPFLAGS    = @CPPFLAGS@
 LDFLAGS     = @LDFLAGS@
 DEFS        = @DEFS@
@@ -106,7 +106,7 @@ libhmmer-impl.stamp: ${OBJS}
 ${OBJS}:   ${HDRS} ../hmmer.h 
 
 .c.o:  
-	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -o $@ -c $<
+	${QUIET_CC}${CC} ${CFLAGS} ${SSE_CFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -o $@ -c $<
 
 ${UTESTS}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
 	@BASENAME=`echo $@ | sed -e 's/_utest//'| sed -e 's/^p7_//'` ;\
@@ -118,10 +118,10 @@ ${UTESTS}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
 	if test ${V} ;\
-	   then echo "${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
+	   then echo "${CC} ${CFLAGS} ${SSE_CFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
 	   else echo '    ' GEN $@ ;\
 	fi ;\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
+	${CC} ${CFLAGS} ${SSE_CFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 ${BENCHMARKS}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
 	@BASENAME=`echo $@ | sed -e 's/_benchmark//' | sed -e 's/^p7_//'`;\
@@ -133,7 +133,7 @@ ${BENCHMARKS}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
 	if test ${V} ;\
-	   then echo "${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
+	   then echo "${CC} ${CFLAGS} ${SSE_CFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
 	   else echo '    ' GEN $@ ;\
 	fi ;\
 	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
@@ -148,10 +148,10 @@ ${EXAMPLES}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
            DFILE=${srcdir}/$${BASENAME}.c ;\
 	fi;\
 	if test ${V} ;\
-	   then echo "${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
+	   then echo "${CC} ${CFLAGS} ${SSE_CFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
 	   else echo '    ' GEN $@ ;\
 	fi ;\
-	${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
+	${CC} ${CFLAGS} ${SSE_CFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 
 install:
@@ -178,10 +178,5 @@ clean:
 	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi;\
 	done
 
-################################################################
-# @LICENSE@
-#
-# SVN $URL$
-# SVN $Id$
-################################################################
+
 

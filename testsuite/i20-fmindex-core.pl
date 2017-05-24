@@ -5,8 +5,6 @@
 # Usage:   ./i20-fmindex-core.pl <builddir> <srcdir> <tmpfile prefix>
 # Example: ./i20-fmindex-core.pl ..         ..       tmpfoo
 #
-# SVN $URL$
-# SVN $Id$
 
 BEGIN {
     $builddir  = shift;

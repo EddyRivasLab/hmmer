@@ -6,7 +6,6 @@
  *    3. Tabular (parsable) output of pipeline results.
  *    4. Benchmark driver.
  *    5. Test driver.
- *    6. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -2462,10 +2461,4 @@ main(int argc, char **argv)
 #endif /*p7TOPHITS_TESTDRIVE*/
 
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 

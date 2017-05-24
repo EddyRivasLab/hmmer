@@ -2154,10 +2154,5 @@ setup_workerside_comm(ESL_GETOPTS *opts, WORKERSIDE_ARGS *args)
 
 #endif /*HMMER_THREADS*/
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+
 

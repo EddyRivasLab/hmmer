@@ -438,7 +438,7 @@ main(int argc, char **argv)
   ESL_RANDOMNESS *r   = esl_randomness_CreateFast(42);
 
 
-#if !defined (p7_IMPL_SSE)
+#if !defined (eslENABLE_SSE)
     p7_Fail("The hmmerfm sequence database file format is valid only on systems supporting SSE vector instructions\n");
 #endif
 

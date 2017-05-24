@@ -1,7 +1,6 @@
 /* hmmpgmd: hmmer deamon searchs against a sequence database.
  * 
  * MSF, Thu Aug 12, 2010 [Janelia]
- * SVN $Id$
  */
 #include "p7_config.h"
 

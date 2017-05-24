@@ -1,7 +1,3 @@
-/*
- * SVN $URL$
- * SVN $Id$
- */
 #ifndef P7_HMMPGMD_INCLUDED
 #define P7_HMMPGMD_INCLUDED
 
@@ -139,7 +135,3 @@ extern void master_process(ESL_GETOPTS *go);
   }
 
 #endif /*P7_HMMPGMD_INCLUDED*/
-
-/************************************************************
- * @LICENSE@
- ************************************************************/

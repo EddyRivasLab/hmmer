@@ -3,17 +3,17 @@
  * Contents:
  *    1. The <esl_msa_hmmpgmd2msa> function
  *    2. Test driver
- *    3. Copyright and license information
- *
  */
-
+#include "p7_config.h"
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <hmmer.h>
-#include <hmmpgmd.h>
-#include <esl_sqio.h>
+
+#include "hmmer.h"
+#include "hmmpgmd.h"
+
+#include "esl_sqio.h"
 
 
 /******************************************************************************
@@ -657,8 +657,5 @@ ERROR:
 }
 #endif
 
-/************************************************************
- * @LICENSE@
- ************************************************************/
 
 

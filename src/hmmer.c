@@ -4,10 +4,8 @@
  *   1. Miscellaneous functions for H3
  *   2. Unit tests
  *   3. Test driver
- *   4. License and copyright 
  *
  * SRE, Fri Jan 12 13:19:38 2007 [Janelia] [Franz Ferdinand, eponymous]
- * SVN $Id$
  */
 
 #include "p7_config.h"
@@ -241,6 +239,4 @@ main(int argc, char **argv)
 
 
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
+

@@ -19,7 +19,6 @@
  *   16. P7_PIPELINE:    H3's accelerated seq/profile comparison pipeline
  *   17. P7_BUILDER:     configuration options for new HMM construction.
  *   18. Declaration of functions in HMMER's exposed API.
- *   19. Copyright and license information.
  *   
  * Also, see impl_{sse,vmx}/impl_{sse,vmx}.h for additional API
  * specific to the acceleration layer; in particular, the P7_OPROFILE
@@ -27,12 +26,11 @@
  */
 #ifndef P7_HMMERH_INCLUDED
 #define P7_HMMERH_INCLUDED
-
 #include "p7_config.h"
 
 #include <stdio.h>		/* FILE */
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 #include "mpi.h"
 #endif
 
@@ -584,8 +582,8 @@ typedef struct p7_alidisplay_s {
   char *mline;                  /* "identities", conservation +'s, etc. */
   char *aseq;                   /* aligned target sequence              */
   char *ntseq;                  /* nucleotide target sequence if nhmmscant */
-  char *ppline;			        /* posterior prob annotation; or NULL   */
-  int   N;			            /* length of strings                    */
+  char *ppline;		        /* posterior prob annotation; or NULL   */
+  int   N;		        /* length of strings                    */
 
   char *hmmname;		/* name of HMM                          */
   char *hmmacc;			/* accession of HMM; or [0]='\0'        */
@@ -597,8 +595,8 @@ typedef struct p7_alidisplay_s {
   char *sqname;			/* name of target sequence              */
   char *sqacc;			/* accession of target seq; or [0]='\0' */
   char *sqdesc;			/* description of targ seq; or [0]='\0' */
-  int64_t  sqfrom;			/* start position on sequence (1..L)    */
-  int64_t  sqto;		    /* end position on sequence   (1..L)    */
+  int64_t  sqfrom;		/* start position on sequence (1..L)    */
+  int64_t  sqto;  	        /* end position on sequence   (1..L)    */
   int64_t  L;			/* length of sequence                   */
 
   int   memsize;                /* size of allocated block of memory    */
@@ -822,9 +820,9 @@ typedef struct p7_hmm_window_list_s {
 /*****************************************************************
  * 14. The optimized implementation.
  *****************************************************************/
-#if   defined (p7_IMPL_SSE)
+#if   defined (eslENABLE_SSE)
 #include "impl_sse/impl_sse.h"
-#elif defined (p7_IMPL_VMX)
+#elif defined (eslENABLE_VMX)
 #include "impl_vmx/impl_vmx.h"
 #else
 #include "impl_dummy/impl_dummy.h"
@@ -975,7 +973,7 @@ typedef struct fm_diaglist_s {
  * must precede other types
  */
 typedef struct {
-#if   defined (p7_IMPL_SSE)
+#if   defined (eslENABLE_SSE)
   /* mask arrays, and 16-byte-offsets into them */
   __m128i *fm_masks_mem;
   __m128i *fm_masks_v;
@@ -993,7 +991,7 @@ typedef struct {
   __m128i fm_m11;  //00 00 00 11
 
   /* no non-__m128i- elements above this line */
-#endif //#if   defined (p7_IMPL_SSE)
+#endif //#if   defined (eslENABLE_SSE)
 
   /*counter, to compute FM-index speed*/
   int occCallCnt;
@@ -1015,7 +1013,7 @@ typedef struct {
 } FM_CFG;
 
 
-#if   defined (p7_IMPL_SSE)
+#if   defined (eslENABLE_SSE)
 //used to convert from a byte array to an __m128i
 typedef union {
         uint8_t bytes[16];
@@ -1165,7 +1163,7 @@ typedef union {
   } while (0)
 
 
-#endif  // if  defined (p7_IMPL_SSE)
+#endif  // if  defined (eslENABLE_SSE)
 
 /*****************************************************************
  * 16. P7_PIPELINE: H3's accelerated seq/profile comparison pipeline
@@ -1438,7 +1436,7 @@ extern int    p7_hmm_CompositionKLDist(P7_HMM *hmm, P7_BG *bg, float *ret_KL, fl
 
 
 /* mpisupport.c */
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 extern int p7_hmm_MPISend(P7_HMM *hmm, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc);
 extern int p7_hmm_MPIPackSize(P7_HMM *hmm, MPI_Comm comm, int *ret_n);
 extern int p7_hmm_MPIPack(P7_HMM *hmm, char *buf, int n, int *position, MPI_Comm comm);
@@ -1460,7 +1458,7 @@ extern int p7_oprofile_MPIPackSize(P7_OPROFILE *om, MPI_Comm comm, int *ret_n);
 extern int p7_oprofile_MPIPack(P7_OPROFILE *om, char *buf, int n, int *pos, MPI_Comm comm);
 extern int p7_oprofile_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **abc, P7_OPROFILE **ret_om);
 extern int p7_oprofile_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL_ALPHABET **abc, P7_OPROFILE **ret_om);
-#endif /*HAVE_MPI*/
+#endif /*HMMER_MPI*/
 
 /* tracealign.c */
 extern int p7_tracealign_Seqs(ESL_SQ **sq,           P7_TRACE **tr, int nseq, int M,  int optflags, P7_HMM *hmm, ESL_MSA **ret_msa);
@@ -1795,13 +1793,6 @@ extern int fm_configInit      (FM_CFG *cfg, ESL_GETOPTS *go);
 extern int fm_getOccCount     (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c);
 extern int fm_getOccCountLT   (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
 
-
-
 #endif /*P7_HMMERH_INCLUDED*/
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- ************************************************************/
+
