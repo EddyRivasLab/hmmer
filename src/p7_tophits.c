@@ -1694,6 +1694,12 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
   int posw   = (pli->long_targets ? ESL_MAX(7, p7_tophits_GetMaxPositionLength(th)) : 0);
   int h,d;
 
+  int64_t sqfrom;
+  int64_t sqto;
+  int64_t lowest;
+  int64_t highest;
+  int i;
+
   if (show_header)
   {
       if (pli->long_targets) 
@@ -1709,13 +1715,13 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
       {
         if (th->N > 0 && th->hit[0]->ndom > 0 && th->hit[0]->dcl[0].ad->ntseq != NULL)
         {
-          if (fprintf(ofp, "#%*s %47s\n", tnamew+qnamew+taccw+qaccw+2, "", "----------------- full sequence ---------------") < 0)
+          if (fprintf(ofp, "#%*s %47s\n", tnamew+qnamew+taccw+qaccw+2, "", "-------------------------- full sequence ------------------------") < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-sequence hit list: write failed");
-          if (fprintf(ofp, "#%-*s %-*s %-*s %-*s %9s %9s %5s %9s %6s %5s\n",
-            tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession",  " orf from", "   orf to", "frame", "  E-value", " score", " bias") < 0)
+          if (fprintf(ofp, "#%-*s %-*s %-*s %-*s%9s %9s %9s %9s %5s %9s %6s %5s\n",
+            tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession",  " ali from", "   ali to", " orf from", "   orf to", "frame", "  E-value", " score", " bias") < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-sequence hit list: write failed");
-          if (fprintf(ofp, "#%*s %*s %*s %*s %9s %9s %5s %9s %6s %5s\n",
-            tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", "---------", "---------", "-----", "---------", "------", "-----") < 0)
+          if (fprintf(ofp, "#%*s %*s %*s %*s %9s %9s %9s %9s %5s %9s %6s %5s\n",
+            tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------",  "---------", "---------","---------", "---------", "-----", "---------", "------", "-----") < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-sequence hit list: write failed");
         }
         else
@@ -1765,11 +1771,51 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
           {
 
                 int frame = p7_tophits_frame(th->hit[h]->dcl[d].iorf, th->hit[h]->dcl[d].jorf);
-                 if (fprintf(ofp, "%-*s %-*s %-*s %-*s %9" PRId64 " %9" PRId64 " %+5d %9.2g %6.1f %5.1f\n",
+
+                //get domain with earliest DNA location and domain at fartherest
+                //end of DNA and use their start and end locations on the DNA as
+                //the start and end of hit location on DNA. Also take account of
+                //whether the hit is on the reverse strand when reporting the 
+                //start and end location
+                for (i = 0; i < th->hit[h]->ndom; i++){
+                    sqfrom = th->hit[h]->dcl[i].ad->sqfrom;
+                    sqto = th->hit[h]->dcl[i].ad->sqto;
+                    if (i==0){
+                        if (frame > 0) {
+                            lowest = sqfrom;
+                            highest = sqto;
+                        } else {
+                            highest = sqfrom;
+                            lowest = sqto;
+                        }
+                    }
+                    if (frame > 0){
+                        if (sqfrom < lowest)
+                            lowest = sqfrom;
+                        if (sqto > highest)
+                            highest = sqto;
+                    } else {
+                        if (sqto < lowest)
+                            lowest = sqto;
+                        if (sqfrom > highest)
+                            highest = sqfrom;
+                    }
+                }
+                if (frame > 0){
+                    sqfrom = lowest;
+                    sqto = highest;
+                } else {
+                    sqfrom = highest;
+                    sqto = lowest;
+                }
+
+                if (fprintf(ofp, "%-*s %-*s %-*s %-*s %9" PRId64 " %9" PRId64 " %9" PRId64 " %9" PRId64 " %+5d %9.2g %6.1f %5.1f\n",
                 tnamew, th->hit[h]->name,
                 taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
                 qnamew, qname,
                 qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
+                sqfrom,
+                sqto,
                 th->hit[h]->dcl[d].iorf,
                 th->hit[h]->dcl[d].jorf,
                 frame,
