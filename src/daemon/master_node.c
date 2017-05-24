@@ -250,7 +250,7 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
   // load the databases
   p7_daemon_masternode_Setup(num_shards, 2, database_names, masternode);
 
-  printf("Using %d worker nodes \n", num_nodes -1);
+  //printf("Workers, %d\n", num_nodes -1);
 
    // All nodes must create these communicators in the same order for things to work right
   MPI_Comm hmmer_control_comm, hmmer_hits_comm;
@@ -292,8 +292,8 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
   search_end = database_shard->directory[database_shard->num_objects -1].id;
 
 // Temp code to generate a random list of sequence names out of the sequence database
-  /*
-  char* name;
+  
+/*  char* name;
   int rand_id, seq;
   uint32_t rand_seed;
   struct timeval current_time;
@@ -306,7 +306,7 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
     p7_shard_Find_Descriptor_Nexthigh(database_shard, rand_id, &name); // get pointer to the name of the indexed sequence
     printf("%s\n", name);
   }
-  */
+*/  
   // block until everyone is ready to go
   MPI_Barrier(hmmer_control_comm);
 
@@ -346,7 +346,7 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
     search_end = database_shard->directory[database_shard->num_objects -1].id;
 //    chunk_size = 35;
 
-    chunk_size = ((search_end - search_start) / (masternode->num_worker_nodes * 128)) + 1; // round this up to avoid small amount of leftover work at the end
+    chunk_size = ((search_end - search_start) / (masternode->num_worker_nodes * 128 )) +1; // round this up to avoid small amount of leftover work at the end
 
     // set up the work queues
     int which_shard;
@@ -357,13 +357,13 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
     }
 
 
-    while(pthread_mutex_trylock(&(masternode->hit_wait_lock))){  // Acquire this to prevent races
+    while(pthread_mutex_trylock(&(masternode->hit_wait_lock))){  // Wait until hit thread is sitting at cond_wait
     }
     masternode->hit_tree = NULL; // Clear any dangling hit tree
     masternode->worker_nodes_done = 0;  // None of the workers are finished at search start time
-    pthread_mutex_unlock(&(masternode->hit_wait_lock));
-
+ 
     pthread_cond_broadcast(&(masternode->go)); // signal hit processing thread to start
+    pthread_mutex_unlock(&(masternode->hit_wait_lock));
 
     hmm = ((P7_PROFILE **) hmm_shard->descriptors)[search * search_increment];
     strcpy(outfile_name, "/tmp/");
@@ -445,23 +445,23 @@ void *p7_daemon_master_hit_thread(void *argument){
 
   MPI_Comm hmmer_hits_comm = the_argument->hmmer_hits_comm;
   P7_DAEMON_MASTERNODE_STATE *masternode = the_argument->masternode;
+  while(pthread_mutex_trylock(&(masternode->hit_wait_lock))){  // Acquire this lock to prevent race on first go signal
+    }
+
+
   masternode->hit_thread_ready = 1; // tell master we're ready to go
 
   while(1){ // go until master tells us to exit
-    while(pthread_mutex_trylock(&(masternode->hit_wait_lock))){  // Need to lock this to call pthread_cond_wait
-    }
-
     pthread_cond_wait(&(masternode->go), &(masternode->hit_wait_lock)); // wait until master tells us to go
-    pthread_mutex_unlock(&(masternode->hit_wait_lock));  // We come out of pthread_cond_wait holding the lock, so unlock
-
+    //printf("Hit processing thread starting up\n");
     if(masternode->shutdown){
-      printf("Exiting hit processing thread");
+    //  printf("Exiting hit processing thread");
       pthread_exit(NULL);
     }
     
     while(masternode->worker_nodes_done < masternode->num_worker_nodes){
       if(masternode->full_hit_message_pool != NULL){
-
+//        printf("Hit processing thread found hits to sort\n");
         P7_DAEMON_MESSAGE *the_message, *prev;
         prev = NULL;
         while(pthread_mutex_trylock(&(masternode->full_hit_message_pool_lock))){
@@ -486,6 +486,7 @@ void *p7_daemon_master_hit_thread(void *argument){
 
         if(p7_masternode_sort_hits(the_message, masternode) != 0){
           //this hit message was the last one from a thread
+//          printf("Masternode incrementing worker_nodes_done\n");
           masternode->worker_nodes_done++; //we're the only thread that changes this during a search
         }
         while(pthread_mutex_trylock(&(masternode->empty_hit_message_pool_lock))){
@@ -523,7 +524,11 @@ int p7_masternode_sort_hits(P7_DAEMON_MESSAGE *the_message, P7_DAEMON_MASTERNODE
   int num_hits;
   if(the_message->status.MPI_TAG == HMMER_HIT_FINAL_MPI_TAG){
     // this is the last hit message from a thread;
+//    printf("Master sorting final hits from %d\n", the_message->status.MPI_SOURCE);
     last_message = 1;
+  }
+  else{
+//    printf("Master sorting non-final hits from %d\n", the_message->status.MPI_SOURCE);
   }
   //Get the number of hits that the buffer contains
   if (MPI_Unpack(the_message->buffer, the_message->length, &pos, &num_hits, 1, MPI_INT, MPI_COMM_WORLD) != 0) ESL_EXCEPTION(eslESYS, "mpi unpack failed");
@@ -595,7 +600,10 @@ void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DA
       case HMMER_HIT_MPI_TAG:
       case HMMER_HIT_FINAL_MPI_TAG:
         masternode->hit_messages_received++;
-//        printf("Polling code found message");
+//        printf("Polling code received hits from %d\n",(*buffer_handle)->status.MPI_SOURCE);
+//        if((*buffer_handle)->status.MPI_TAG == HMMER_HIT_FINAL_MPI_TAG){
+//          printf("And it was the final hit message\n");
+//        }
         if(MPI_Get_count(&(*buffer_handle)->status, MPI_PACKED, &message_length) != MPI_SUCCESS){
           p7_Fail("MPI_Get_count failed in p7_masternode_message_handler\n");
         }
@@ -623,7 +631,7 @@ void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DA
         masternode->full_hit_message_pool = *buffer_handle;
         (*buffer_handle) = NULL;  // Make sure we grab a new buffer next time
         pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
-
+//        printf("Masternode message thread put hits in full pool\n");
         break;
       case HMMER_WORK_REQUEST_TAG:
 

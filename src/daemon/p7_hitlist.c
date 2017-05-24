@@ -224,7 +224,7 @@ void p7_print_and_recycle_hit_tree(char *filename, ESL_RED_BLACK_DOUBLEKEY *tree
       fprintf(outfile, "%lu %s %s %s\n", current_hit->seqidx, current_hit->name, current_hit->acc, current_hit->desc);
       count++;
       current = current->large;
-    }
+      } 
   // Now, recycle the hits
   (*head)->large = masternode->empty_hit_pool; // add any hits already in the pool to the end of the list
   masternode->empty_hit_pool = *tail; // empty pool starts at the small end of the list;

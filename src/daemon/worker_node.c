@@ -303,7 +303,7 @@ if(workernode->global_queue == NULL){
     //end_object, but not greater 
   }
 
-  workernode->chunk_size = (real_end - real_start) / (workernode->num_threads); //Threads will grab equal shares of the work
+  workernode->chunk_size = (real_end - real_start) / ((workernode->num_threads) * 16); //Threads will grab equal shares of the work
   if(workernode->chunk_size < 1){
     workernode->chunk_size = 1;  // handle cases that round down to 0
   }
@@ -349,7 +349,7 @@ if(workernode->global_queue == NULL){
   //install the model we'll be comparing against
   workernode->search_type = SEQUENCE_SEARCH_CONTINUE;
 
-  workernode->chunk_size = (end_object - start_object) / (workernode->num_threads); //Threads will grab equal shares of the work
+  workernode->chunk_size = ((end_object - start_object) / (workernode->num_threads) * 16); //Threads will grab equal shares of the work
   if(workernode->chunk_size < 1){
     workernode->chunk_size = 1; // handle cases that round down to 0
   }
@@ -365,7 +365,18 @@ if(workernode->global_queue == NULL){
     // need to push a new work chunk onto the queue
     P7_WORK_CHUNK *temp = workernode->global_chunk_pool;
       if(temp == NULL){
-        p7_Fail("Couldn't get a work chunk in p7_daemon_workernode_add_work_hmm_vs_amino_db\n");
+         workernode->global_chunk_pool = (P7_WORK_CHUNK *) malloc((workernode->num_threads +1) * sizeof(P7_WORK_CHUNK));
+
+        for(i = 0; i < (workernode->num_threads); i++){
+          workernode->global_chunk_pool[i].start = -1;
+          workernode->global_chunk_pool[i].end = 0;
+          workernode->global_chunk_pool[i].next = &(workernode->global_chunk_pool[i+1]);
+        }
+        // special-case the last entry
+        workernode->global_chunk_pool[workernode->num_threads].start = -1;
+        workernode->global_chunk_pool[workernode->num_threads].end = 0;
+        workernode->global_chunk_pool[workernode->num_threads].next = NULL;
+        temp = workernode->global_chunk_pool;        
       }
 
     // pop the head of the free chunk Pool
@@ -503,20 +514,20 @@ P7_ENGINE_STATS *p7_daemon_workernode_aggregate_stats(P7_DAEMON_WORKERNODE_STATE
 
 void p7_daemon_workernode_Destroy(P7_DAEMON_WORKERNODE_STATE *workernode){
   int i;
-printf("Freeing shards\n");
+//printf("Freeing shards\n");
   // free all the shards
   for(i = 0; i < workernode->num_shards; i++){
     if(workernode->database_shards[i] != NULL){
       p7_shard_Destroy(workernode->database_shards[i]);
     }
   }
-printf("freeing work descriptors\n");
+//printf("freeing work descriptors\n");
   // clean up the work descriptor array
   for(i= 0; i < workernode->num_threads; i++){
     pthread_mutex_destroy(&(workernode->work[i].lock));
   }
   free(workernode->work);
-printf("Freeing backend queue entries\n");
+//printf("Freeing backend queue entries\n");
   // Free the backend queue entries
   P7_BACKEND_QUEUE_ENTRY *current, *next;
   current = workernode->backend_pool;
@@ -529,7 +540,7 @@ printf("Freeing backend queue entries\n");
 
 
     
-printf("Freeing workernode state\n");
+//printf("Freeing workernode state\n");
   //Free the workernode state objects
   for(i = 0; i < workernode->num_threads; i++){
     if(workernode->thread_state[i].engine != NULL){
@@ -551,18 +562,18 @@ printf("Freeing workernode state\n");
   // clean up the wait lock
   pthread_mutex_destroy(&(workernode->wait_lock));
 
-printf("Freeing compare model\n");
+//printf("Freeing compare model\n");
   if(workernode->compare_model != NULL){
     P7_PROFILE *the_model = workernode->compare_model;
     p7_profile_Destroy(the_model);
   }
 
-printf("Freeing compare sequence\n");
+//printf("Freeing compare sequence\n");
   if(workernode->compare_sequence){
     free(workernode->compare_sequence);
   }
 
-printf("Freeing workernode\n");
+//printf("Freeing workernode\n");
   //finally, free the workernode structure itself
   free(workernode);
 }
@@ -994,8 +1005,19 @@ int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
 
             //printf("Thread %d trying to grab work chunk\n", my_id);
             P7_WORK_CHUNK *temp = workernode->global_chunk_pool;
-            if(temp == NULL){
-              p7_Fail("Couldn't get a work chunk in worker_thread_front_end_sequence_search_loop\n");
+            if(temp == NULL){ // allocate more chunks
+              workernode->global_chunk_pool = (P7_WORK_CHUNK *) malloc((workernode->num_threads +1) * sizeof(P7_WORK_CHUNK));
+              int i;
+              for(i = 0; i < (workernode->num_threads); i++){
+                workernode->global_chunk_pool[i].start = -1;
+                workernode->global_chunk_pool[i].end = 0;
+                workernode->global_chunk_pool[i].next = &(workernode->global_chunk_pool[i+1]);
+              }
+              // special-case the last entry
+              workernode->global_chunk_pool[workernode->num_threads].start = -1;
+              workernode->global_chunk_pool[workernode->num_threads].end = 0;
+              workernode->global_chunk_pool[workernode->num_threads].next = NULL;
+              temp = workernode->global_chunk_pool;        
             }
 
             // pop the head of the free chunk Pool
@@ -1033,9 +1055,9 @@ void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
   /*if(the_entry == NULL){
     printf("Thread %d found no entries on queue when starting backend loop\n", my_id);
   }*/
-  if(my_id > 34){
+ /* if(my_id > 34){
     printf("My_id of %u passed to back end search loop\n", my_id);
-  }
+  } */
   ESL_RED_BLACK_DOUBLEKEY *the_hit_entry;
   while(the_entry != NULL){
     // do the backend comparison 
@@ -1579,16 +1601,16 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
   }
 
   MPI_Bcast(&num_shards, 1, MPI_INT, 0, hmmer_control_comm);
-
+//  printf("Rank %d saw initial broadcast\n", my_rank);
 //  printf("Rank %d sees %d shards\n", my_rank, num_shards);
     
   P7_DAEMON_WORKERNODE_STATE *workernode;
   p7_daemon_workernode_Setup(1, &(seqfile), 1, 0, num_worker_cores, &workernode);
   workernode->my_rank = my_rank;
- //printf("Worker %d ready to go\n", my_rank);
+ 
   // block until everyone is ready to go
   MPI_Barrier(hmmer_control_comm);
-
+//meaprintf("Worker %d ready to go\n", my_rank);
   // Main workernode loop: wait until master broadcasts a command, handle it, repeat until given command to exit
   P7_DAEMON_COMMAND the_command;
 
@@ -1601,7 +1623,7 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
       MPI_SUCCESS){
         // We have a command to process
 
-//    printf("Worker %d received command with type %d, database %d, object length %lu\n", my_rank, the_command.type, the_command.db, the_command.compare_obj_length);
+ //   printf("Worker %d received command with type %d, database %d, object length %lu\n", my_rank, the_command.type, the_command.db, the_command.compare_obj_length);
     int temp_pos = 0;
   
     P7_HMM         *hmm     = NULL;
@@ -1787,7 +1809,7 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
         }
         workernode->hit_tree = NULL;
         workernode->hits_in_tree = 0;
- //     printf("Worker %d sent final hits\n", my_rank);
+//        printf("Worker %d sent final hits\n", my_rank);
         p7_daemon_workernode_end_search(workernode);
 //        gettimeofday(&end, NULL);
 //        printf("Rank %d, %f\n", my_rank, ((float)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0);
@@ -1806,7 +1828,7 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
       default:
         p7_Fail("Worker_node_main received unrecognized command code %d from master", the_command.type);
     }
-//    printf("Done with current command\n");
+  //      printf("Worker %d done with current command\n", my_rank);
   }
 
 #endif
