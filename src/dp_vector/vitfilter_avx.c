@@ -15,9 +15,6 @@
 #include "esl_avx.h"
 #include "esl_gumbel.h"
 
-#include "base/p7_hmmwindow.h"
-#include "search/p7_pipeline.h"
-
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/p7_filtermx.h"
 
@@ -45,8 +42,8 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
   int      q;                             /* counter over vectors 0..nq-1                              */
   int      Q = P7_Q(om->M, p7_VWIDTH_AVX / sizeof(int16_t));  /* segment length: # of vectors          */
   __m256i *dp;
-  __m256i *rsc;                          /* will point at om->ru[x] for residue x[i]                  */
-  __m256i *tsc;                          /* will point into (and step thru) om->tu                    */
+  __m256i *rsc;                          /* will point at om->rwv[x] for residue x[i]                  */
+  __m256i *tsc;                          /* will point into (and step thru) om->tu                     */
   __m256i negInfv;
   int     status;
 

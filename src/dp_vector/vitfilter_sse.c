@@ -15,14 +15,12 @@
 #include <stdio.h>
 #include <math.h>
 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
+#include <x86intrin.h>
 
 #include "easel.h"
 #include "esl_gumbel.h"
 #include "esl_sse.h"
 
-#include "base/p7_hmmwindow.h"
 #include "search/p7_pipeline.h"
 
 #include "dp_vector/p7_oprofile.h"

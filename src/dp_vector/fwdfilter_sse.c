@@ -181,7 +181,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
   i = L;
   ox->R--;
   fwd = (__m128 *) ox->dpf[ox->R0 + ox->R];      // pop row for fwd[L] off the checkpointed stack
-  xf  = (float *) fwd + ox->Vf*Q*p7C_NSCELLS;
+  xf  = (float *) (fwd + Q*p7C_NSCELLS);
   Tvalue = xf[p7C_C] * om->xf[p7O_C][p7O_MOVE];  // i.e. scaled fwd[L] val at T state = scaled overall score
   bck = (__m128 *) ox->dpf[i%2];                 // get tmp space for bck[L]
   backward_row_L_sse(om, bck, Q, xf[p7C_SCALE]); // calculate bck[L] row
@@ -211,7 +211,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
 #endif
 
       /* Compute bck[L-1] from bck[L]. */
-      xf  = (float *) fwd + ox->Vf*Q*p7C_NSCELLS;
+      xf  = (float *) (fwd + Q*p7C_NSCELLS);
       dpp = (__m128 *) ox->dpf[(i+1)%2]; 
       bck = (__m128 *) ox->dpf[i%2];             // get space for bck[L-1]
       backward_row_main_sse(dsq[i+1], om, dpp, bck, Q, xf[p7C_SCALE]);
@@ -234,7 +234,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
       /* We know current row i (r=R0+R-1) ends a block and is checkpointed in fwd. */
       ox->R--;
       fwd = (__m128 *) ox->dpf[ox->R0+ox->R];        // pop checkpointed forward row off "stack" 
-      xf  = ox->dpf[ox->R0+ox->R] + ox->Vf * Q * p7C_NSCELLS;
+      xf  = (float *)  (fwd + Q * p7C_NSCELLS);
 
       /* Calculate bck[i]; <dpp> is already bck[i+1] */
       bck = (__m128 *) ox->dpf[i%2];        // get available tmp memory for row
@@ -267,7 +267,7 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
         {
           ox->R--;
           fwd = (__m128 *) ox->dpf[ox->R0+ox->R]; // pop just-calculated forward row i2 off "stack"
-          xf  = ox->dpf[ox->R0+ox->R] + ox->Vf * Q * p7C_NSCELLS;
+          xf  = (float *)  (fwd + Q * p7C_NSCELLS);
           bck = (__m128 *) ox->dpf[i2%2];         // get available for calculating bck[i2] 
           backward_row_main_sse(dsq[i2+1], om, dpp, bck, Q, xf[p7C_SCALE]);
 #if eslDEBUGLEVEL > 0
@@ -284,16 +284,17 @@ p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECK
         }
       i -= w;
     }
-
   /* now i=La as we leave the checkpointed regions; or i=L-1 if there was no checkpointing */
-  /* The uncheckpointed "a" region */
+
+  /* the uncheckpointed "a" region */
   for (; i >= 1; i--)
     {
       ox->R--; 
       fwd = (__m128 *) ox->dpf[ox->R0+ox->R]; // pop off calculated row fwd[i]
-      xf  = ox->dpf[ox->R0+ox->R] + ox->Vf * Q * p7C_NSCELLS;
+      xf  = (float *)  (fwd + Q * p7C_NSCELLS);
       bck = (__m128 *) ox->dpf[i%2];          // get open space for bck[i]
       backward_row_main_sse(dsq[i+1], om, dpp, bck, Q, xf[p7C_SCALE]);
+
 #if eslDEBUGLEVEL > 0
       ox->bcksc += logf(xf[p7C_SCALE]);
       if (ox->do_dumping) { 
@@ -526,8 +527,8 @@ backward_row_main_sse(ESL_DSQ xi, const P7_OPROFILE *om, __m128 *dpp, __m128 *dp
   __m128       *dp;
   __m128        xEv;
   __m128        dcv, mcv, ipv, mpv;
+  __m128        tmmv, timv, tdmv;    /* copies of transition prob quads; a leftshift is needed as boundary cond */
   int           q;
-  __m128 tmmv, timv, tdmv;                                 /* copies of transition prob quads; a leftshift is needed as boundary cond */
  
   /* On "previous" row i+1: include emission prob, and sum to get xBv, xB. 
    * This invalidates <dpp> as a backwards row; its values are now
