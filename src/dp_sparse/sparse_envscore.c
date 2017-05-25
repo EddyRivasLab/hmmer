@@ -713,7 +713,7 @@ utest_engine(int do_intersected_mask, char *msg, ESL_RANDOMNESS *rng, ESL_ALPHAB
   int            do_zeroed_emissions = (do_intersected_mask ? FALSE : TRUE ); /* exclusive, one or the other */
   P7_HMM        *hmm   = NULL;
   P7_PROFILE    *gm    = p7_profile_Create(M, abc);
-  P7_OPROFILE   *om    = p7_oprofile_Create(M, abc)
+  P7_OPROFILE   *om    = p7_oprofile_Create(M, abc);
   ESL_SQ        *sq    = esl_sq_CreateDigital(abc);
   P7_CHECKPTMX  *ox    = p7_checkptmx_Create(M, L, ESL_MBYTES(32));
   P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L);

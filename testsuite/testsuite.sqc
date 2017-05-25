@@ -77,7 +77,6 @@
 
 1 exercise fwdfilter            @src/dp_vector/fwdfilter_utest@
 1 exercise vector_io            @src/dp_vector/io_utest@
-1 exercise msvfilter            @src/dp_vector/msvfilter_utest@
 1 exercise vitfilter            @src/dp_vector/vitfilter_utest@
 
 1 exercise emit                 @src/misc/emit_utest@

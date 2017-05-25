@@ -1,17 +1,14 @@
 /* Forwards/Backwards filters: x86 AVX-512 vector implementation.
  *
- * See fwdfilter.md for notes.
- *
- * Refer to fwdfilter_sse.c for more fully commented code. That's our
- * "primary" vector implementation. Other vector implementations
- * follow it with less commentary.
- *
  * This file is conditionally compiled, when eslENABLE_AVX512 is defined.
  *
  * Contents:
  *    1. Forward and Backward filter: AVX-512 implementations.
  *    2. Internal functions: inlined recursions.
  *    3. Internal debugging tools.
+ *
+ * See fwdfilter.md for notes, and fwdfilter_sse.c, the "primary"
+ * vector implementation, for more fully commented code.
  */
 #include "p7_config.h"
 #ifdef eslENABLE_AVX512
@@ -72,8 +69,8 @@ p7_ForwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHE
   p7_checkptmx_Reinit(ox, om->M, L);
   ox->M  = om->M;	
   ox->L  = L;
-  ox->V  = p7_VWIDTH_AVX512 / sizeof(float);
-  ox->Q  = Q = P7_Q(om->M, ox->V);     
+  ox->Vf = p7_VWIDTH_AVX512 / sizeof(float);
+  ox->Q  = Q = P7_Q(om->M, ox->Vf);     
   dpp    =  (__m512 *) ox->dpf[ox->R0-1];    
   xc     =  (float *) (dpp + Q*p7C_NSCELLS); 
 
@@ -132,7 +129,7 @@ p7_ForwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHE
 #endif
     }
 
-  xc     = (float *) (dpc + Q*p7C_NSCELLS);
+  xc  = (float *) (dpc + Q*p7C_NSCELLS);
 
   ESL_DASSERT1( (ox->R == ox->Ra+ox->Rb+ox->Rc) );
   ESL_DASSERT1( ( (! isnan(xc[p7C_C])) && (! isinf(xc[p7C_C]))) );
@@ -227,7 +224,6 @@ p7_BackwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
       ox->R--;
       fwd = (__m512 *) ox->dpf[ox->R0+ox->R];        // pop checkpointed forward row off "stack"
       xf  = (float *) (fwd + Q*p7C_NSCELLS);
-      Tvalue = xf[p7C_C] * om->xf[p7O_C][p7O_MOVE];  // i.e. scaled fwd[L] val at T state = scaled overall score
 
       /* Calculate bck[i]; <dpp> is already bck[i+1] */
       bck = (__m512 *) ox->dpf[i%2];                // get available tmp memory for row
@@ -302,8 +298,8 @@ p7_BackwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
     */
    float xN;
    ox->R--;
-   fwd = (__m128 *) ox->dpf[ox->R0];
-   bck = (__m128 *) ox->dpf[i%2];	       
+   fwd = (__m512 *) ox->dpf[ox->R0];
+   bck = (__m512 *) ox->dpf[i%2];	       
    xN = backward_row_zero_avx512(dsq[1], om, ox); 
    if (ox->do_dumping) { 
      p7_checkptmx_DumpFBRow(ox, 0, (float *) fwd, "f2 O"); 
@@ -328,7 +324,7 @@ p7_BackwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
 static inline float
 forward_row_avx512(ESL_DSQ xi, const P7_OPROFILE *om, const __m512 *dpp, __m512 *dpc, int Q)
 {
-  const    __m512 *rp   = (__m512 *) mom->rfv[xi];
+  const    __m512 *rp   = (__m512 *) om->rfv[xi];
   const    __m512 zerov = _mm512_setzero_ps();
   const    __m512 *tp   = (__m512 *) om->tfv;
   const    float  *xp   = (float *) (dpp + Q * p7C_NSCELLS);
@@ -511,9 +507,9 @@ backward_row_main_avx512(ESL_DSQ xi, const P7_OPROFILE *om, __m512 *dpp, __m512 
 
   /* Initialize for the row calculation */
   mpv  = esl_avx512_rightshift_ps(*dpp      ); /* [1 5 9 13] -> [5 9 13 x], M(i+1,k+1) * e(M_k+1, x_{i+1}) */
-  tmmv = esl_avx512_rightshift_ps((__m512) om->tfv[1]);
-  timv = esl_avx512_rightshift_ps((__m512) om->tfv[2]);
-  tdmv = esl_avx512_rightshift_ps((__m512) om->tfv[3]);
+  tmmv = esl_avx512_rightshift_ps( ((__m512 *) om->tfv)[1]);
+  timv = esl_avx512_rightshift_ps( ((__m512 *) om->tfv)[2]);
+  tdmv = esl_avx512_rightshift_ps( ((__m512 *) om->tfv)[3]);
   xEv  = _mm512_set1_ps(xc[p7C_E]);
   tp   = ((__m512 *) om->tfv) + 7*Q - 1;
   tpdd = tp + Q;
@@ -726,9 +722,9 @@ posterior_decode_row_avx512(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float
 
   for (q = 0; q < Q; q++) 
     {
-      P7C_MQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7C_MQ(fwd, q), P7C_MQ(bck, q)));
-      P7C_DQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7C_DQ(fwd, q), P7C_DQ(bck, q)));
-      P7C_IQ(fwd, q) = _mm_mul_ps(cv, _mm_mul_ps(P7C_IQ(fwd, q), P7C_IQ(bck, q)));
+      P7C_MQ(fwd, q) = _mm512_mul_ps(cv, _mm512_mul_ps(P7C_MQ(fwd, q), P7C_MQ(bck, q)));
+      P7C_DQ(fwd, q) = _mm512_mul_ps(cv, _mm512_mul_ps(P7C_DQ(fwd, q), P7C_DQ(bck, q)));
+      P7C_IQ(fwd, q) = _mm512_mul_ps(cv, _mm512_mul_ps(P7C_IQ(fwd, q), P7C_IQ(bck, q)));
     }
 
   if (ox->pp)  save_debug_row_pp_avx512(ox, fwd, rowi);
@@ -833,10 +829,10 @@ save_debug_row_pp_avx512(P7_CHECKPTMX *ox, __m512 *dpc, int i)
 
 
 static void
-save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, __m512 *dpc, int i, float totscale)
+save_debug_row_fb_avx512(P7_CHECKPTMX *ox, P7_REFMX *gx, __m512 *dpc, int i, float totscale)
 {
   union { __m512 v; float x[16]; } u;  // 16 = number of floats per AVX512 vector
-  int      Q  = ox->Qf;
+  int      Q  = ox->Q;
   float  *xc  = (float *) (dpc + Q*p7C_NSCELLS);
   int     q,k,z;
 
