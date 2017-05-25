@@ -14,23 +14,23 @@ OBJS = \
 
 SSE_OBJS = \
 	ssvfilter_sse.o    \
+	vitfilter_sse.o    \
 	fwdfilter_sse.o    \
-	vitfilter_sse.o
 
 AVX_OBJS = \
-	fwdfilter_avx.o    \
 	ssvfilter_avx.o    \
-	vitfilter_avx.o    
+	vitfilter_avx.o    \
+	fwdfilter_avx.o    
 
 AVX512_OBJS = \
-	fwdfilter_avx512.o    \
 	ssvfilter_avx512.o    \
-	vitfilter_avx512.o    
+	vitfilter_avx512.o    \
+	fwdfilter_avx512.o
 
 NEON_OBJS = \
-	fwdfilter_neon.o    \
 	ssvfilter_neon.o    \
-	vitfilter_neon.o    
+	vitfilter_neon.o    \
+	fwdfilter_neon.o
 
 HDRS =
 

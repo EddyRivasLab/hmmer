@@ -1,13 +1,5 @@
-/* Viterbi filter implementation: ARM NEON version.
- * 
- * This is a SIMD vectorized, striped, interleaved, one-row, reduced
- * precision (16-bit integer) implementation of the Viterbi algorithm.
- * 
- * It calculates a close approximation of the Viterbi score, in
- * limited precision (signed words: 16 bits) and range. It may overflow on
- * high scoring sequences, but this indicates that the sequence is a
- * high-scoring hit worth examining more closely anyway.  It will not
- * underflow, in local alignment mode.
+/* Viterbi filter implementation, ARM NEON version.
+ * See vitfilter_sse.c for more detailed commentary.
  */
 #include "p7_config.h"
 #ifdef eslENABLE_NEON
@@ -21,7 +13,6 @@
 #include "esl_gumbel.h"
 #include "esl_neon.h"
 
-#include "base/p7_hmmwindow.h"
 #include "search/p7_pipeline.h"
 
 #include "dp_vector/p7_oprofile.h"
@@ -33,32 +24,7 @@
 
 /* Function:  p7_ViterbiFilter_neon()
  * Synopsis:  Calculates Viterbi score, vewy vewy fast, in limited precision.
- *
- * Purpose:   Calculates an approximation of the Viterbi score for sequence
- *            <dsq> of length <L> residues, using optimized profile <om>,
- *            and a preallocated one-row DP matrix <ox>. Return the 
- *            estimated Viterbi score (in nats) in <ret_sc>.
- *            
- *            Score may overflow (and will, on high-scoring
- *            sequences), but will not underflow. 
- *            
- *            <ox> will be resized if needed. It's fine if it was just
- *            <_Reuse()'d> from a previous, smaller profile comparison.
- *            
- *            The model must be in a local alignment mode; other modes
- *            cannot provide the necessary guarantee of no underflow.
- *
- * Args:      dsq     - digital target sequence, 1..L
- *            L       - length of dsq in residues          
- *            om      - optimized profile
- *            ox      - DP matrix
- *            ret_sc  - RETURN: Viterbi score (in nats)          
- *
- * Returns:   <eslOK> on success;
- *            <eslERANGE> if the score overflows; in this case
- *            <*ret_sc> is <eslINFINITY>, and the sequence can 
- *            be treated as a high-scoring hit.
- *            <ox> may be reallocated.
+ * See:       vitfilter.c::p7_ViterbiFilter()
  */
 int
 p7_ViterbiFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)
@@ -73,7 +39,7 @@ p7_ViterbiFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
   int16_t  Dmax;		           /* maximum D cell score on row                               */
   int i;			           /* counter over sequence positions 1..L                      */
   int q;			           /* counter over vectors 0..nq-1                              */
-  int Q  = P7_NVW(om->M);                  /* segment length: # of vectors                              */
+  int Q  = P7_Q(om->M, p7_VWIDTH_NEON / sizeof(int16_t));  /* segment length: # of vectors              */
   esl_neon_128i_t *dp;
   esl_neon_128i_t *rsc;			   /* will point at om->ru[x] for residue x[i]                  */
   esl_neon_128i_t *tsc;			   /* will point into (and step thru) om->tu                    */
@@ -89,17 +55,18 @@ p7_ViterbiFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
 
 
   /* Resize the filter mx as needed */
-  if (( status = p7_filtermx_GrowTo(ox, om->M))    != eslOK) ESL_EXCEPTION(status, "Reallocation of Vit filter matrix failed");
-  dp = ox->dp;           /* enables MMXf(), IMXf(), DMXf() access macros. Must be set AFTER the GrowTo, because ox->dp may get moved */
+  if (( status = p7_filtermx_Reinit(ox, om->M)) != eslOK) ESL_EXCEPTION(status, "Reallocation of Vit filter matrix failed");
+  dp = (esl_neon_128i_t *) ox->dp;   /* enables MMXf(), IMXf(), DMXf() access macros. Must be set AFTER the Reinit(), because ox->dp may get moved */
 
   /* Matrix type and size must be set early, not late: debugging dump functions need this information. */
   ox->M    = om->M;
+  ox->Vw   = p7_VWIDTH_NEON / sizeof(int16_t);
   ox->type = p7F_VITFILTER;
+  ESL_DASSERT1(( ox->Vw = om->V / sizeof(int16_t)));
 
   /* -infinity is -32768 */
   negInfv.s16x8 = vdupq_n_s16(0);
   negInfv.s16x8 = vsetq_lane_s16(-32768, negInfv.s16x8, 7);  /* negInfv = 16-byte vector, 14 0 bytes + 2-byte value=-32768, for an OR operation. */
-
 
   /* Initialization. In unsigned arithmetic, -infinity is -32768
    */
@@ -117,8 +84,8 @@ p7_ViterbiFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
 
   for (i = 1; i <= L; i++)
     {
-      rsc   = om->rwv[dsq[i]];
-      tsc   = om->twv;
+      rsc   = (esl_neon_128i_t *) om->rwv[dsq[i]];
+      tsc   = (esl_neon_128i_t *) om->twv;
       dcv.s16x8   = vdupq_n_s16(-32768);      /* "-infinity" */
       xEv.s16x8   = vdupq_n_s16(-32768);     
       Dmaxv.s16x8 = vdupq_n_s16(-32768);     
@@ -193,7 +160,7 @@ p7_ViterbiFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
 	  /* Now we're obligated to do at least one complete DD path to be sure. */
 	  /* dcv has carried through from end of q loop above */
 	  dcv.s16x8 = vextq_s16(negInfv.s16x8, dcv.s16x8, 7); 
-	  tsc = om->twv + 7*Q;	/* set tsc to start of the DD's */
+	  tsc = (esl_neon_128i_t *) om->twv + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
 	      DMXf(q).s16x8 = vmaxq_s16(dcv.s16x8, DMXf(q).s16x8);	
@@ -206,7 +173,7 @@ p7_ViterbiFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
 	   */
 	  do {
 	    dcv.s16x8 = vextq_s16(negInfv.s16x8, dcv.s16x8, 7); 
-	    tsc = om->twv + 7*Q;	/* set tsc to start of the DD's */
+	    tsc = (esl_neon_128i_t *) om->twv + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
 		if (! esl_neon_any_gt_s16(dcv, DMXf(q))) break;
@@ -235,6 +202,7 @@ p7_ViterbiFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
       *ret_sc -= 3.0; /* the NN/CC/JJ=0,-3nat approximation: see J5/36. That's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ contrib */
     }
   else  *ret_sc = -eslINFINITY;
+  return eslOK;
 }
 
 
