@@ -2,6 +2,7 @@
  * Adapted from SSE version by Nick Carter
  * 
  * See ssvfilter.md for notes.
+ * See ssvfilter_sse.c for a version with more explanation & commentary.
  *
  * This file is conditionally compiled when eslENABLE_AVX512 is defined.
  */
@@ -17,563 +18,499 @@
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
 
-/* Note that some ifdefs below has to be changed if these values are
-   changed. These values are chosen based on some simple speed
-   tests. Apparently, two registers are generally used for something
-   else, leaving 14 registers on 64 bit versions and 6 registers on 32
-   bit versions. */
 #ifdef __x86_64__ /* 64 bit version */
 #define  MAX_BANDS 14
 #else
 #define  MAX_BANDS 6
 #endif
 
-#define STEP_SINGLE_AVX_512(sv_AVX_512)                         \
-  sv_AVX_512   = _mm512_subs_epi8(sv_AVX_512, *rsc_AVX_512); rsc_AVX_512++;        \
-  xEv_AVX_512  = _mm512_max_epu8(xEv_AVX_512, sv_AVX_512);
+#define STEP_SINGLE(sv)                     \
+  sv   = _mm512_adds_epi8(sv, *rsc); rsc++; \
+  xEv  = _mm512_max_epi8(xEv, sv);
 
-#define LENGTH_CHECK_AVX_512(label)                     \
-  if (i_AVX_512 >= L) goto label;
+#define LENGTH_CHECK(label) \
+  if (i >= L) goto label;
 
 #define NO_CHECK(label)
 
-#define STEP_BANDS_1_AVX_512()                          \
-  STEP_SINGLE_AVX_512(sv00_AVX_512) 
+#define STEP_BANDS_1()  \
+  STEP_SINGLE(sv00) 
 
-#define STEP_BANDS_2_AVX_512()                          \
-  STEP_BANDS_1_AVX_512()                                \
-  STEP_SINGLE_AVX_512(sv01_AVX_512)
+#define STEP_BANDS_2()  \
+  STEP_BANDS_1()        \
+  STEP_SINGLE(sv01)
 
-#define STEP_BANDS_3_AVX_512()                          \
-  STEP_BANDS_2_AVX_512()                                \
-  STEP_SINGLE_AVX_512(sv02_AVX_512)
+#define STEP_BANDS_3()  \
+  STEP_BANDS_2()        \
+  STEP_SINGLE(sv02)
 
-#define STEP_BANDS_4_AVX_512()                          \
-  STEP_BANDS_3_AVX_512()                                \
-  STEP_SINGLE_AVX_512(sv03_AVX_512)
+#define STEP_BANDS_4()  \
+  STEP_BANDS_3()        \
+  STEP_SINGLE(sv03)
 
-#define STEP_BANDS_5_AVX_512()                          \
-  STEP_BANDS_4_AVX_512()                                \
-  STEP_SINGLE_AVX_512(sv04_AVX_512)
+#define STEP_BANDS_5()  \
+  STEP_BANDS_4()        \
+  STEP_SINGLE(sv04)
 
-#define STEP_BANDS_6_AVX_512()                          \
-  STEP_BANDS_5_AVX_512()                                \
-  STEP_SINGLE_AVX_512(sv05_AVX_512)
+#define STEP_BANDS_6()  \
+  STEP_BANDS_5()        \
+  STEP_SINGLE(sv05)
 
-#define STEP_BANDS_7_AVX_512()                          \
-  STEP_BANDS_6_AVX_512()                                \
-  STEP_SINGLE_AVX_512(sv06_AVX_512)
+#define STEP_BANDS_7()  \
+  STEP_BANDS_6()        \
+  STEP_SINGLE(sv06)
 
-#define STEP_BANDS_8_AVX_512()                          \
-  STEP_BANDS_7_AVX_512()                                \
-  STEP_SINGLE_AVX_512(sv07_AVX_512)
+#define STEP_BANDS_8()  \
+  STEP_BANDS_7()        \
+  STEP_SINGLE(sv07)
 
-#define STEP_BANDS_9_AVX_512()                          \
-  STEP_BANDS_8_AVX_512()                                \
-  STEP_SINGLE_AVX_512(sv08_AVX_512)
+#define STEP_BANDS_9()  \
+  STEP_BANDS_8()        \
+  STEP_SINGLE(sv08)
 
-#define STEP_BANDS_10_AVX_512()                         \
-  STEP_BANDS_9_AVX_512()                                \
-  STEP_SINGLE_AVX_512(sv09_AVX_512)
+#define STEP_BANDS_10() \
+  STEP_BANDS_9()        \
+  STEP_SINGLE(sv09)
 
-#define STEP_BANDS_11_AVX_512()                         \
-  STEP_BANDS_10_AVX_512()                               \
-  STEP_SINGLE_AVX_512(sv10_AVX_512)
+#define STEP_BANDS_11() \
+  STEP_BANDS_10()       \
+  STEP_SINGLE(sv10)
 
-#define STEP_BANDS_12_AVX_512()                         \
-  STEP_BANDS_11_AVX_512()                               \
-  STEP_SINGLE_AVX_512(sv11_AVX_512)
+#define STEP_BANDS_12() \
+  STEP_BANDS_11()       \
+  STEP_SINGLE(sv11)
 
-#define STEP_BANDS_13_AVX_512()                         \
-  STEP_BANDS_12_AVX_512()                               \
-  STEP_SINGLE_AVX_512(sv12_AVX_512)
+#define STEP_BANDS_13() \
+  STEP_BANDS_12()       \
+  STEP_SINGLE(sv12)
 
-#define STEP_BANDS_14_AVX_512()                         \
-  STEP_BANDS_13_AVX_512()                               \
-  STEP_SINGLE_AVX_512(sv13_AVX_512)
+#define STEP_BANDS_14() \
+  STEP_BANDS_13()       \
+  STEP_SINGLE(sv13)
 
-#define STEP_BANDS_15_AVX_512()                         \
-  STEP_BANDS_14_AVX_512()                               \
-  STEP_SINGLE_AVX_512(sv14_AVX_512)
+#define STEP_BANDS_15() \
+  STEP_BANDS_14()       \
+  STEP_SINGLE(sv14)
 
-#define STEP_BANDS_16_AVX_512()                         \
-  STEP_BANDS_15_AVX_512()                               \
-  STEP_SINGLE_AVX_512(sv15_AVX_512)
+#define STEP_BANDS_16() \
+  STEP_BANDS_15()       \
+  STEP_SINGLE(sv15)
 
-#define STEP_BANDS_17_AVX_512()                         \
-  STEP_BANDS_16_AVX_512()                               \
-  STEP_SINGLE_AVX_512(sv16_AVX_512)
+#define STEP_BANDS_17() \
+  STEP_BANDS_16()       \
+  STEP_SINGLE(sv16)
 
-#define STEP_BANDS_18_AVX_512()                         \
-  STEP_BANDS_17_AVX_512()                               \
-  STEP_SINGLE_AVX_512(sv17_AVX_512) 
+#define STEP_BANDS_18() \
+  STEP_BANDS_17()       \
+  STEP_SINGLE(sv17) 
 
-#define CONVERT_STEP_AVX_512(step, length_check, label, sv_AVX_512, pos)        \
-  length_check(label)                                           \
-  rsc_AVX_512 = om->rbv[dsq[i_AVX_512]] + pos;                                   \
-  step()       \
-  sv_AVX_512 = esl_avx512_leftshift_one(sv_AVX_512); \
-  sv_AVX_512 = _mm512_or_si512(sv_AVX_512, low_byte_128_AVX_512);                                \
-  i_AVX_512++;
+#define CONVERT_STEP(step, length_check, label, sv, pos) \
+  length_check(label)                                    \
+  rsc = (__m512i *) om->rbv[dsq[i]] + pos;               \
+  step()                                                 \
+  sv = esl_avx512_leftshift_one(sv);                     \
+  sv = _mm512_or_si512(sv, low_byte_128);                \
+  i++;
 
-#define CONVERT_1_AVX_512(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv00_AVX_512, Q_AVX_512 - 1) 
+#define CONVERT_1(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv00, Q - 1) 
 
-#define CONVERT_2_AVX_512(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv01_AVX_512, Q_AVX_512 - 2)  \
-  CONVERT_1_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_2(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv01, Q - 2)  \
+  CONVERT_1(step, LENGTH_CHECK, label)
 
-#define CONVERT_3_AVX_512(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv02_AVX_512, Q_AVX_512 - 3)  \
-  CONVERT_2_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_3(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv02, Q - 3)  \
+  CONVERT_2(step, LENGTH_CHECK, label)
 
-#define CONVERT_4_AVX_512(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv03_AVX_512, Q_AVX_512 - 4)  \
-  CONVERT_3_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_4(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv03, Q - 4)  \
+  CONVERT_3(step, LENGTH_CHECK, label)
 
-#define CONVERT_5_AVX_512(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv04_AVX_512, Q_AVX_512 - 5)  \
-  CONVERT_4_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_5(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv04, Q - 5)  \
+  CONVERT_4(step, LENGTH_CHECK, label)
 
-#define CONVERT_6_AVX_512(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv05_AVX_512, Q_AVX_512 - 6)  \
-  CONVERT_5_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_6(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv05, Q - 6)  \
+  CONVERT_5(step, LENGTH_CHECK, label)
 
-#define CONVERT_7_AVX_512(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv06_AVX_512, Q_AVX_512 - 7)  \
-  CONVERT_6_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_7(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv06, Q - 7)  \
+  CONVERT_6(step, LENGTH_CHECK, label)
 
-#define CONVERT_8_AVX_512(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv07_AVX_512, Q_AVX_512 - 8)  \
-  CONVERT_7_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_8(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv07, Q - 8)  \
+  CONVERT_7(step, LENGTH_CHECK, label)
 
-#define CONVERT_9_AVX_512(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv08_AVX_512, Q_AVX_512 - 9)  \
-  CONVERT_8_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_9(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv08, Q - 9)  \
+  CONVERT_8(step, LENGTH_CHECK, label)
 
-#define CONVERT_10_AVX_512(step, LENGTH_CHECK, label)           \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv09_AVX_512, Q_AVX_512 - 10) \
-  CONVERT_9_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_10(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv09, Q - 10) \
+  CONVERT_9(step, LENGTH_CHECK, label)
 
-#define CONVERT_11_AVX_512(step, LENGTH_CHECK, label)           \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv10_AVX_512, Q_AVX_512 - 11) \
-  CONVERT_10_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_11(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv10, Q - 11) \
+  CONVERT_10(step, LENGTH_CHECK, label)
 
-#define CONVERT_12_AVX_512(step, LENGTH_CHECK, label)           \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv11_AVX_512, Q_AVX_512 - 12) \
-  CONVERT_11_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_12(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv11, Q - 12) \
+  CONVERT_11(step, LENGTH_CHECK, label)
 
-#define CONVERT_13_AVX_512(step, LENGTH_CHECK, label)           \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv12_AVX_512, Q_AVX_512 - 13) \
-  CONVERT_12_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_13(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv12, Q - 13) \
+  CONVERT_12(step, LENGTH_CHECK, label)
 
-#define CONVERT_14_AVX_512(step, LENGTH_CHECK, label)           \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv13_AVX_512, Q_AVX_512 - 14) \
-  CONVERT_13_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_14(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv13, Q - 14) \
+  CONVERT_13(step, LENGTH_CHECK, label)
 
-#define CONVERT_15_AVX_512(step, LENGTH_CHECK, label)           \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv14_AVX_512, Q_AVX_512 - 15) \
-  CONVERT_14_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_15(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv14, Q - 15) \
+  CONVERT_14(step, LENGTH_CHECK, label)
 
-#define CONVERT_16_AVX_512(step, LENGTH_CHECK, label)           \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv15_AVX_512, Q_AVX_512 - 16) \
-  CONVERT_15_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_16(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv15, Q - 16) \
+  CONVERT_15(step, LENGTH_CHECK, label)
 
-#define CONVERT_17_AVX_512(step, LENGTH_CHECK, label)           \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv16_AVX_512, Q_AVX_512 - 17) \
-  CONVERT_16_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_17(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv16, Q - 17) \
+  CONVERT_16(step, LENGTH_CHECK, label)
 
-#define CONVERT_18_AVX_512(step, LENGTH_CHECK, label)           \
-  CONVERT_STEP_AVX_512(step, LENGTH_CHECK, label, sv17_AVX_512, Q_AVX_512 - 18) \
-  CONVERT_17_AVX_512(step, LENGTH_CHECK, label)
+#define CONVERT_18(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv17, Q - 18) \
+  CONVERT_17(step, LENGTH_CHECK, label)
 
-#define RESET_1_AVX_512()                               \
-  register __m512i sv00_AVX_512 = beginv_AVX_512;
+#define RESET_1()                  \
+  register __m512i sv00 = beginv;
 
-#define RESET_2_AVX_512()                              \
-  RESET_1_AVX_512()                                     \
-  register __m512i sv01_AVX_512 = beginv_AVX_512;
+#define RESET_2()                  \
+  RESET_1()                        \
+  register __m512i sv01 = beginv;
 
-#define RESET_3_AVX_512()                               \
-  RESET_2_AVX_512()                                     \
-  register __m512i sv02_AVX_512 = beginv_AVX_512;
+#define RESET_3()                  \
+  RESET_2()                        \
+  register __m512i sv02 = beginv;
 
-#define RESET_4_AVX_512()                               \
-  RESET_3_AVX_512()                                     \
-  register __m512i sv03_AVX_512 = beginv_AVX_512;
+#define RESET_4()                  \
+  RESET_3()                        \
+  register __m512i sv03 = beginv;
 
-#define RESET_5_AVX_512()                               \
-  RESET_4_AVX_512()                                     \
-  register __m512i sv04_AVX_512 = beginv_AVX_512;
+#define RESET_5()                  \
+  RESET_4()                        \
+  register __m512i sv04 = beginv;
 
-#define RESET_6_AVX_512()                           \
-   RESET_5_AVX_512()                                     \
-  register __m512i sv05_AVX_512 = beginv_AVX_512;
+#define RESET_6()                  \
+   RESET_5()                       \
+  register __m512i sv05 = beginv;
 
-#define RESET_7_AVX_512()                               \
-  RESET_6_AVX_512()                                     \
-  register __m512i sv06_AVX_512 = beginv_AVX_512;
+#define RESET_7()                  \
+  RESET_6()                        \
+  register __m512i sv06 = beginv;
 
-#define RESET_8_AVX_512()                               \
-  RESET_7_AVX_512()                                     \
-  register __m512i sv07_AVX_512 = beginv_AVX_512;
+#define RESET_8()                  \
+  RESET_7()                        \
+  register __m512i sv07 = beginv;
 
-#define RESET_9_AVX_512()                               \
-  RESET_8_AVX_512()                                     \
-  register __m512i sv08_AVX_512 = beginv_AVX_512;
+#define RESET_9()                  \
+  RESET_8()                        \
+  register __m512i sv08 = beginv;
 
-#define RESET_10_AVX_512()                               \
-  RESET_9_AVX_512()                                     \
-  register __m512i sv09_AVX_512 = beginv_AVX_512;
+#define RESET_10()                 \
+  RESET_9()                        \
+  register __m512i sv09 = beginv;
 
-#define RESET_11_AVX_512()                               \
-  RESET_10_AVX_512()                                     \
-  register __m512i sv10_AVX_512 = beginv_AVX_512;
+#define RESET_11()                 \
+  RESET_10()                       \
+  register __m512i sv10 = beginv;
 
-#define RESET_12_AVX_512()                               \
-  RESET_11_AVX_512()                                     \
-  register __m512i sv11_AVX_512 = beginv_AVX_512;
+#define RESET_12()                 \
+  RESET_11()                       \
+  register __m512i sv11 = beginv;
 
-#define RESET_13_AVX_512()                               \
-  RESET_12_AVX_512()                                     \
-  register __m512i sv12_AVX_512 = beginv_AVX_512;
+#define RESET_13()                 \
+  RESET_12()                       \
+  register __m512i sv12 = beginv;
 
-#define RESET_14_AVX_512()                               \
-  RESET_13_AVX_512()                                     \
-  register __m512i sv13_AVX_512 = beginv_AVX_512;
+#define RESET_14()                 \
+  RESET_13()                       \
+  register __m512i sv13 = beginv;
 
-#define RESET_15_AVX_512()                               \
-  RESET_14_AVX_512()                                     \
-  register __m512i sv14_AVX_512 = beginv_AVX_512;
+#define RESET_15()                 \
+  RESET_14()                       \
+  register __m512i sv14 = beginv;
 
-#define RESET_16_AVX_512()                               \
-  RESET_15_AVX_512()                                     \
-  register __m512i sv15_AVX_512 = beginv_AVX_512;
+#define RESET_16()                 \
+  RESET_15()                       \
+  register __m512i sv15 = beginv;
 
-#define RESET_17_AVX_512()                               \
-  RESET_16_AVX_512()                                     \
-  register __m512i sv16_AVX_512 = beginv_AVX_512;
+#define RESET_17()                 \
+  RESET_16()                       \
+  register __m512i sv16 = beginv;
 
-#define RESET_18_AVX_512()                               \
-  RESET_17_AVX_512()                                     \
-  register __m512i sv17_AVX_512 = beginv_AVX_512;
+#define RESET_18()                 \
+  RESET_17()                       \
+  register __m512i sv17 = beginv;
 
-#define CALC_AVX_512(reset, step, convert, width)       \
-  int i_AVX_512;                                        \
-  int i2_AVX_512;                                       \
-  int Q_AVX_512        = P7_NVB_AVX_512(om->M);                \
-  __m512i *rsc_AVX_512;                                 \
-  __m512i low_byte_128_AVX_512; \
-  __mmask64 low_byte_mask = 0x0000000000000001; \
-  low_byte_128_AVX_512 = _mm512_setzero_si512();                                            \
-  low_byte_128_AVX_512 = _mm512_mask_blend_epi8(low_byte_mask, low_byte_128_AVX_512, beginv_AVX_512);                     \
-  int w_AVX_512 = width;                                \
-uint32_t col_AVX_512;                                              \
-  dsq++;                                        \
-                                                \
-  reset()                                       \
-  int num_iters_AVX_512; \
-  if (L <= Q_AVX_512- q_AVX_512 -w_AVX_512){ \
-  	num_iters_AVX_512 = L;  \
-  }  \
-  else{  \
-  	num_iters_AVX_512 = Q_AVX_512 -q_AVX_512 -w_AVX_512; \
-  } \
-  i_AVX_512 = 0; \
-  while(num_iters_AVX_512 >=4){ \
-  	rsc_AVX_512 = om->rbv[dsq[i_AVX_512]] + i_AVX_512 + q_AVX_512;            \
-    step()    \
-    i_AVX_512++; \
-	rsc_AVX_512 = om->rbv[dsq[i_AVX_512]] + i_AVX_512 + q_AVX_512;            \
-    step()    \
-    i_AVX_512++; \
-    	rsc_AVX_512 = om->rbv[dsq[i_AVX_512]] + i_AVX_512 + q_AVX_512;            \
-    step()    \
-    i_AVX_512++; \
-    rsc_AVX_512 = om->rbv[dsq[i_AVX_512]] + i_AVX_512 + q_AVX_512;            \
-    step()    \
-    i_AVX_512++; \
-    num_iters_AVX_512 -= 4; \
-  } \
-  while(num_iters_AVX_512 >0){ \
-  	  rsc_AVX_512 = om->rbv[dsq[i_AVX_512]] + i_AVX_512 + q_AVX_512;            \
-      step()                                 \
-      i_AVX_512++; \
-      num_iters_AVX_512--; \
-  }  \
-  i_AVX_512 = Q_AVX_512 - q_AVX_512 - w_AVX_512;                                \
-  convert(step, LENGTH_CHECK_AVX_512, done1)            \
-done1:                                          \
- for (i2_AVX_512 = Q_AVX_512 - q_AVX_512; i2_AVX_512 < L - Q_AVX_512; i2_AVX_512 += Q_AVX_512)          \
-   {                                            \
-  	i_AVX_512 = 0; \
-   	num_iters_AVX_512 = Q_AVX_512 - w_AVX_512; \
-   	while (num_iters_AVX_512 >= 4){  \
-       rsc_AVX_512 = om->rbv[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;        \
-       step() \
-       i_AVX_512++; \
-       rsc_AVX_512 = om->rbv[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;        \
-       step() \
-       i_AVX_512++; \
-       rsc_AVX_512 = om->rbv[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;        \
-       step() \
-       i_AVX_512++; \
-       rsc_AVX_512 = om->rbv[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;        \
-       step() \
-       i_AVX_512++; \
-       num_iters_AVX_512-= 4; \
-   	}\
-  	while(num_iters_AVX_512 > 0){ \
-  		 rsc_AVX_512 = om->rbv[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;        \
-         step()    \
-         i_AVX_512++; \
-         num_iters_AVX_512--;      \
-  	} \
-                           \
-     i_AVX_512 += i2_AVX_512;                                   \
-     convert(step, NO_CHECK, )                  \
-   }                                            \
-	if((L - i2_AVX_512) < (Q_AVX_512-w_AVX_512)){                                         \
- 		num_iters_AVX_512 = L -i2_AVX_512; \
- 		} \
- 	else{  \
- 		num_iters_AVX_512 = Q_AVX_512 - w_AVX_512; \
- 	} \
- 	i_AVX_512 = 0; \
- 	while (num_iters_AVX_512 >= 4){ \
-     	rsc_AVX_512 = om->rbv[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;            \
-     	step()                                     \
-     	i_AVX_512+= 1;  \
-     	rsc_AVX_512 = om->rbv[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;            \
-     	step()                                     \
-     	i_AVX_512+= 1;  \
-     	rsc_AVX_512 = om->rbv[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;            \
-     	step()                                     \
-     	i_AVX_512+= 1;  \
-     	rsc_AVX_512 = om->rbv[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;            \
-     	step()                                     \
-     	i_AVX_512+= 1;  \
-     	num_iters_AVX_512 -= 4; \
-   	}                                            \
-   	while(num_iters_AVX_512 > 0) {  \
-   	 	rsc_AVX_512 = om->rbv[dsq[i2_AVX_512 + i_AVX_512]] + i_AVX_512;            \
-     	step()                                     \
-     	i_AVX_512+= 1;  \
-     	num_iters_AVX_512--; \
-   	} \
-                                       \
- i_AVX_512+=i2_AVX_512;                                         \
- convert(step, LENGTH_CHECK_AVX_512, done2)             \
+#define CALC(reset, step, convert, width)      \
+  __m512i  low_byte_128 = _mm512_mask_blend_epi8(0x1, _mm512_setzero_si512(), beginv); \
+  int      Q            = P7_Q(om->M, p7_VWIDTH_AVX512);                               \
+  int      w            = width;               \
+  int      i, i2;                              \
+  __m512i *rsc;                                \
+  int      num_iters;                          \
+                                               \
+  dsq++;                                       \
+  reset()                                      \
+  if (L <= Q-q-w) num_iters = L;               \
+  else  	  num_iters = Q-q-w;           \
+  i = 0;                                       \
+  while (num_iters >=4) {                      \
+    rsc = (__m512i *) om->rbv[dsq[i]] + i + q; \
+    step()                                     \
+    i++;                                       \
+    rsc = (__m512i *) om->rbv[dsq[i]] + i + q; \
+    step()                                     \
+    i++;                                       \
+    rsc = (__m512i *) om->rbv[dsq[i]] + i + q; \
+    step()                                     \
+    i++;                                       \
+    rsc = (__m512i *) om->rbv[dsq[i]] + i + q; \
+    step()                                     \
+    i++;                                       \
+    num_iters -= 4;                            \
+  }                                            \
+  while (num_iters >0) {                       \
+    rsc = (__m512i *) om->rbv[dsq[i]] + i + q; \
+    step()                                     \
+    i++;                                       \
+    num_iters--;                               \
+  }                                            \
+  i = Q - q - w;                               \
+  convert(step, LENGTH_CHECK, done1)           \
+done1:                                         \
+  for (i2 = Q - q; i2 < L - Q; i2 += Q)        \
+   {                                           \
+     i = 0;                                    \
+     num_iters = Q - w;                        \
+     while (num_iters >= 4) {                  \
+       rsc = (__m512i *) om->rbv[dsq[i2 + i]] + i; \
+       step()                                      \
+       i++;                                        \
+       rsc = (__m512i *) om->rbv[dsq[i2 + i]] + i; \
+       step()                                      \
+       i++;                                        \
+       rsc = (__m512i *) om->rbv[dsq[i2 + i]] + i; \
+       step()                                      \
+       i++;                                        \
+       rsc = (__m512i *) om->rbv[dsq[i2 + i]] + i; \
+       step()                                      \
+       i++;                                        \
+       num_iters-= 4;                              \
+     }                                             \
+     while (num_iters > 0) {                       \
+       rsc = (__m512i *) om->rbv[dsq[i2 + i]] + i; \
+       step()                                      \
+       i++;                                        \
+       num_iters--;                                \
+     }                                             \
+     i += i2;                                      \
+     convert(step, NO_CHECK, )                     \
+   }                                               \
+  if (L-i2 < Q-w)  num_iters = L-i2;            \
+  else 		   num_iters = Q-w;             \
+  i = 0;                                        \
+  while (num_iters >= 4) {                      \
+    rsc = (__m512i *) om->rbv[dsq[i2 + i]] + i; \
+    step()                                      \
+    i+= 1;                                      \
+    rsc = (__m512i *) om->rbv[dsq[i2 + i]] + i; \
+    step()                                      \
+    i+= 1;                                      \
+    rsc = (__m512i *) om->rbv[dsq[i2 + i]] + i; \
+    step()                                      \
+    i+= 1;                                      \
+    rsc = (__m512i *) om->rbv[dsq[i2 + i]] + i; \
+    step()                                      \
+    i+= 1;                                      \
+    num_iters -= 4;                             \
+  }                                             \
+  while (num_iters > 0) {                       \
+    rsc = (__m512i *) om->rbv[dsq[i2 + i]] + i; \
+    step()                                      \
+    i+= 1;                                      \
+    num_iters--;                                \
+  }                                             \
+  i+=i2;                                        \
+  convert(step, LENGTH_CHECK, done2)            \
 done2:                                          \
-	return xEv_AVX_512;
+  return xEv;
 
-__m512i
-calc_band_1_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_1(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_1_AVX_512, STEP_BANDS_1_AVX_512, CONVERT_1_AVX_512, 1)
+  CALC(RESET_1, STEP_BANDS_1, CONVERT_1, 1)
 }
 
-__m512i
-calc_band_2_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_2(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_2_AVX_512, STEP_BANDS_2_AVX_512, CONVERT_2_AVX_512, 2)
+  CALC(RESET_2, STEP_BANDS_2, CONVERT_2, 2)
 }
 
-__m512i
-calc_band_3_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_3(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_3_AVX_512, STEP_BANDS_3_AVX_512, CONVERT_3_AVX_512, 3)
+  CALC(RESET_3, STEP_BANDS_3, CONVERT_3, 3)
 }
 
-__m512i
-calc_band_4_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_4(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_4_AVX_512, STEP_BANDS_4_AVX_512, CONVERT_4_AVX_512, 4)
+  CALC(RESET_4, STEP_BANDS_4, CONVERT_4, 4)
 }
 
-__m512i
-calc_band_5_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_5(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_5_AVX_512, STEP_BANDS_5_AVX_512, CONVERT_5_AVX_512, 5)
+  CALC(RESET_5, STEP_BANDS_5, CONVERT_5, 5)
 }
 
-__m512i
-calc_band_6_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_6(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_6_AVX_512, STEP_BANDS_6_AVX_512, CONVERT_6_AVX_512, 6)
+  CALC(RESET_6, STEP_BANDS_6, CONVERT_6, 6)
 }
 
 #if MAX_BANDS > 6 /* Only include needed functions to limit object file size */
-__m512i
-calc_band_7_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_7(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_7_AVX_512, STEP_BANDS_7_AVX_512, CONVERT_7_AVX_512, 7)
+  CALC(RESET_7, STEP_BANDS_7, CONVERT_7, 7)
 }
 
-__m512i
-calc_band_8_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_8(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_8_AVX_512, STEP_BANDS_8_AVX_512, CONVERT_8_AVX_512, 8)
+  CALC(RESET_8, STEP_BANDS_8, CONVERT_8, 8)
 }
 
-__m512i
-calc_band_9_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_9(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_9_AVX_512, STEP_BANDS_9_AVX_512, CONVERT_9_AVX_512, 9)
+  CALC(RESET_9, STEP_BANDS_9, CONVERT_9, 9)
 }
 
-__m512i
-calc_band_10_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_10(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_10_AVX_512, STEP_BANDS_10_AVX_512, CONVERT_10_AVX_512, 10)
+  CALC(RESET_10, STEP_BANDS_10, CONVERT_10, 10)
 }
 
-__m512i
-calc_band_11_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_11(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_11_AVX_512, STEP_BANDS_11_AVX_512, CONVERT_11_AVX_512, 11)
+  CALC(RESET_11, STEP_BANDS_11, CONVERT_11, 11)
 }
 
-__m512i
-calc_band_12_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_12(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_12_AVX_512, STEP_BANDS_12_AVX_512, CONVERT_12_AVX_512, 12)
+  CALC(RESET_12, STEP_BANDS_12, CONVERT_12, 12)
 }
 
-__m512i
-calc_band_13_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_13(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_13_AVX_512, STEP_BANDS_13_AVX_512, CONVERT_13_AVX_512, 13)
+  CALC(RESET_13, STEP_BANDS_13, CONVERT_13, 13)
 }
 
-__m512i
-calc_band_14_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_14(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_14_AVX_512, STEP_BANDS_14_AVX_512, CONVERT_14_AVX_512, 14)
+  CALC(RESET_14, STEP_BANDS_14, CONVERT_14, 14)
 }
 #endif /* MAX_BANDS > 6 */
 #if MAX_BANDS > 14
-__m512i
-calc_band_15_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_15(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_15_AVX_512, STEP_BANDS_15_AVX_512, CONVERT_15_AVX_512, 15)
+  CALC(RESET_15, STEP_BANDS_15, CONVERT_15, 15)
 }
 
-__m512i
-calc_band_16_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_16(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_16_AVX_512, STEP_BANDS_16_AVX_512, CONVERT_16_AVX_512, 16)
+  CALC(RESET_16, STEP_BANDS_16, CONVERT_16, 16)
 }
 
-__m512i
-calc_band_17_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_17(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_17_AVX_512, STEP_BANDS_17_AVX_512, CONVERT_17_AVX_512, 17)
+  CALC(RESET_17, STEP_BANDS_17, CONVERT_17, 17)
 }
 
-__m512i
-calc_band_18_AVX_512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q_AVX_512, __m512i beginv_AVX_512, register __m512i xEv_AVX_512)
+static __m512i
+calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
 {
-  CALC_AVX_512(RESET_18_AVX_512, STEP_BANDS_18_AVX_512, CONVERT_18_AVX_512, 18)
+  CALC(RESET_18, STEP_BANDS_18, CONVERT_18, 18)
 }
 #endif /* MAX_BANDS > 14 */
 
 
-
-uint8_t
-get_xE_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
-{
-  __m512i xEv_AVX_512;		                  // E state: keeps max for Mk->E as we go   
-  __m512i beginv_AVX_512;                         // begin scores 
-  uint8_t retval_AVX_512;
-  int q_AVX_512;			          // counter over vectors 0..nq-1
-  int Q_AVX_512        = P7_NVB_AVX_512(om->M);   // segment length: # of vectors
-  int bands_AVX_512;                              // the number of bands (rounds) to use
-  beginv_AVX_512 =  _mm512_set1_epi8(128);
-  xEv_AVX_512    =  beginv_AVX_512;
-
-  /* function pointers for the various number of vectors to use */
-  __m512i (*fs_AVX_512[MAX_BANDS + 1]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register __m512i, __m512i)
-    = {NULL
-       , calc_band_1_AVX_512,  calc_band_2_AVX_512,  calc_band_3_AVX_512,  calc_band_4_AVX_512,  calc_band_5_AVX_512,  calc_band_6_AVX_512
-#if MAX_BANDS > 6
-       , calc_band_7_AVX_512,  calc_band_8_AVX_512,  calc_band_9_AVX_512,  calc_band_10_AVX_512, calc_band_11_AVX_512, calc_band_12_AVX_512,
-        calc_band_13_AVX_512, calc_band_14_AVX_512
-#endif
-#if MAX_BANDS > 14
-       , calc_band_15_AVX_512, calc_band_16_AVX_512, calc_band_17_AVX_512, calc_band_18_AVX_512
-#endif
-  };
-  int last_q;                  // for saving the last q value to find band width 
-  int i;                       // counter for bands                              
-
-  last_q = 0;
-  /* Use the highest number of bands but no more than MAX_BANDS */
-  bands_AVX_512 = (Q_AVX_512 + MAX_BANDS - 1) / MAX_BANDS;
-  for (i = 0; i < bands_AVX_512; i++) {
-    q_AVX_512 = (Q_AVX_512 * (i + 1)) / bands_AVX_512;
-
-    xEv_AVX_512 = fs_AVX_512[q_AVX_512-last_q](dsq, L, om, last_q, beginv_AVX_512, xEv_AVX_512);
-
-    last_q = q_AVX_512;
-  }
-  retval_AVX_512 = esl_avx512_hmax_epu8(xEv_AVX_512); // assign this here to allow checking vs AVX, AVX-512
-
-  return retval_AVX_512;
-}
-
+/* Function:  p7_SSVFilter_avx512()
+ * Synopsis:  SSV filter; x86 AVX-512 version. 
+ * See:       ssvfilter.c::p7_SSVFilter()
+ */
 int
 p7_SSVFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
 {
-  /* Use 16 bit values to avoid overflow due to moved baseline */
-  uint16_t  xE;
-  uint16_t  xJ;
+  int     Q      = P7_Q(om->M, p7_VWIDTH_AVX512); // segment length: # of vectors
+  __m512i beginv = _mm512_set1_epi8(-128);        // initialization of each set of diagonals
+  __m512i xEv    = beginv;                        // keeps max for Mk->E as we go
+  int     last_q = 0;                             // for saving the last q value to find band width 
+  int8_t  xE;                                     // DP max, before conversion to float, nats    
+  int     q;			                  // counter over vectors 0..nq-1
+  int     bands;                                  // the number of bands (rounds) to use
+  int     i;                                      // counter for bands                              
+  __m512i (*fs[MAX_BANDS + 1]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register __m512i, __m512i)
+    = {NULL, calc_band_1,  calc_band_2,  calc_band_3,  calc_band_4,  calc_band_5,  calc_band_6
+#if MAX_BANDS > 6
+           , calc_band_7,  calc_band_8,  calc_band_9,  calc_band_10, calc_band_11, calc_band_12, calc_band_13, calc_band_14
+#endif
+#if MAX_BANDS > 14
+          , calc_band_15, calc_band_16, calc_band_17, calc_band_18
+#endif
+  };
 
-  if (om->tjb_b + om->tbm_b + om->tec_b + om->bias_b >= 127) {
-    /* the optimizations are not guaranteed to work under these
-       conditions (see ssvfilter.md) */
-    return eslENORESULT;
-  }
-
-  xE = get_xE_avx512(dsq, L, om);
-
-  // SRE TODO REVISIT : All this needs to be rechecked and rethought for H4.
-  if (xE >= 255 - om->bias_b)
+  bands = (Q + MAX_BANDS - 1) / MAX_BANDS;
+  for (i = 0; i < bands; i++) 
     {
-      /* We have an overflow. */
-      *ret_sc = eslINFINITY;
-      if (om->base_b - om->tjb_b - om->tbm_b < 128) 
-        {
-          /* The original MSV filter may not overflow, so we are not sure our result is correct */
-          return eslENORESULT;
-        }
-
-      /* We know that the overflow will also occur in the original MSV filter */ 
-      return eslERANGE;
+      q   = (Q * (i + 1)) / bands;
+      xEv = fs[q-last_q](dsq, L, om, last_q, beginv, xEv);
+      last_q = q;
     }
+  xE = esl_avx512_hmax_epi8(xEv);
 
-  xE += om->base_b - om->tjb_b - om->tbm_b;
-  xE -= 128;
-
-  if (xE >= 255 - om->bias_b)
-    {
-      /* We know that the result will overflow in the original MSV filter */
+  if (xE == 127)  // Overflow on high scoring sequences is expected.
+    {             // Pass filter, but score is unknown.
       *ret_sc = eslINFINITY;
       return eslERANGE;
     }
-
-  xJ = xE - om->tec_b;
-
-  if (xJ > om->base_b)  return eslENORESULT; /* The J state could have been used, so doubt about score */
-
-  /* finally C->T, and add our missing precision on the NN,CC,JJ back */
-  *ret_sc = ((float) (xJ - om->tjb_b) - (float) om->base_b);
-  *ret_sc /= om->scale_b;
-  *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
-  return eslOK;
+  else if (xE > -128)
+    {                         //v  Add +128 back onto the diagonal score. DP calculated it from -128 baseline.
+      *ret_sc = ((float) xE + 128.) / om->scale_b + om->tauBM - 2.0;   // 2.0 is the tauNN/tauCC "2 nat approximation"
+      *ret_sc += 2.0 * logf(2.0 / (float) (L + 2));                    // tauNB, tauCT
+      return eslOK;
+    }
+  else 
+    {
+      *ret_sc = -eslINFINITY;
+      return eslOK;
+    }
 }
-
-
 
 #else // ! eslENABLE_AVX512
 

@@ -336,7 +336,6 @@ ssv_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 
   ESL_DASSERT1(( V >  0           ));
   ESL_DASSERT1(( M <= om->allocM  ));
-  ESL_DASSERT1(( Q <= om->allocQb ));
 
   om->scale_b = 3.0 / eslCONST_LOG2;                        // scores in third-bits. byteify() needs scale_b
   om->tauBM   = logf(2.0f / ((float) M * (float) (M+1)));   // Local alignment, uniform fragment length model.
@@ -468,8 +467,6 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   float *tfv;                   // steps through transition score vector
   int    x,k,q,z,kb,t,tg;
   
-  ESL_DASSERT1(( om->allocQf >= Q ));
-
   /* striped match scores: start at k=1 */
   for (x = 0; x < gm->abc->Kp; x++)
     {
