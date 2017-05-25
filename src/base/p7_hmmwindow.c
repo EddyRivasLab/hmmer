@@ -70,12 +70,3 @@ ERROR:
   return NULL;
 }
 
-
-/************************************************************
- * @LICENSE@
- *
- * SVN $Id: p7_hmmwindow.c 3784 2011-12-07 21:51:25Z wheelert $
- * SVN $URL: https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk/src/p7_hmmwindow.c $
- ************************************************************/
-
-

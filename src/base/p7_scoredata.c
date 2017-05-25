@@ -5,7 +5,6 @@
  *   1. The P7_SCOREDATA object: allocation, initialization, destruction.
  *   2. Unit tests.
  *   3. Test driver.
- *   4. Copyright and license.
  */
 #include "p7_config.h"
 
@@ -67,7 +66,7 @@ scoredata_GetMSVScoreArrays(P7_OPROFILE *om, P7_SCOREDATA *data, int do_opt_ext 
   data->M = om->M;
 
   ESL_ALLOC(data->msv_scores, (om->M + 1) * K * sizeof(uint8_t));
-  p7_oprofile_GetMSVEmissionScoreArray(om, data->msv_scores);
+  //  p7_oprofile_GetMSVEmissionScoreArray(om, data->msv_scores); // SRE TODO - REVISIT - I BROKE IT
 
   if (do_opt_ext) {
     ESL_ALLOC(max_scores, (om->M + 1) * sizeof(uint8_t));
@@ -306,14 +305,14 @@ p7_hmm_ScoreDataComputeRest(P7_OPROFILE *om, P7_SCOREDATA *data )
   float *t_iis;
 
   ESL_ALLOC(data->fwd_scores, sizeof(float) *  om->abc->Kp * (om->M+1));
-  p7_oprofile_GetFwdEmissionScoreArray(om, data->fwd_scores);
+  // p7_oprofile_GetFwdEmissionScoreArray(om, data->fwd_scores);  // SRE: REVISIT THIS, I BROKE IT
 
   //2D array, holding all the transition scores/costs
   ESL_ALLOC(data->fwd_transitions, sizeof(float*) * p7O_NTRANS);
 
   for (i=0; i<p7O_NTRANS; i++) {
     ESL_ALLOC(data->fwd_transitions[i], sizeof(float) * (om->M+1));
-    p7_oprofile_GetFwdTransitionArray(om, i, data->fwd_transitions[i] );
+    // p7_oprofile_GetFwdTransitionArray(om, i, data->fwd_transitions[i] ); // SRE: REVISIT: I BROKE IT
   }
   t_mis = data->fwd_transitions[p7O_MI];
   t_iis = data->fwd_transitions[p7O_II];
@@ -366,13 +365,12 @@ utest_createScoreData(ESL_GETOPTS *go, ESL_RANDOMNESS *r )
   uint8_t scale = 3.0 / eslCONST_LOG2;                    /* scores in units of third-bits */
   int x;
   float max = 0.0;
-P7_HARDWARE *hw;
-if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+
   if ( (abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal(msg);
 
   if (  p7_modelsample(r, 100, abc, &hmm)       != eslOK) esl_fatal(msg);
   if (  (gm = p7_profile_Create (hmm->M, abc))  == NULL ) esl_fatal(msg);
-  if (  (om = p7_oprofile_Create(hmm->M, abc, hw->simd))  == NULL ) esl_fatal(msg);
+  if (  (om = p7_oprofile_Create(hmm->M, abc))  == NULL ) esl_fatal(msg);
 
   for (x = 0; x < gm->abc->K; x++)  max = ESL_MAX(max, esl_vec_FMax(gm->rsc[x], (gm->M+1)*2));
   //based on unbiased_byteify
@@ -385,7 +383,6 @@ if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information 
   p7_profile_Destroy(gm);
   p7_hmm_Destroy(hmm);
   esl_alphabet_Destroy(abc);
-
 }
 #endif /*p7BG_TESTDRIVE*/
 
@@ -434,11 +431,5 @@ main(int argc, char **argv)
 }
 #endif /* p7SCOREDATA_TESTDRIVE */
 
-/************************************************************
- * @LICENSE@
- *
- * SVN $Id: p7_scoredata.c 3784 2011-12-07 21:51:25Z wheelert $
- * SVN $URL: https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk/src/p7_scoredata.c $
- ************************************************************/
 
 

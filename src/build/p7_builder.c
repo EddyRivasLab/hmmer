@@ -4,7 +4,6 @@
  *    1. P7_BUILDER: allocation, initialization, destruction
  *    2. Standardized model construction API.
  *    3. Internal functions.
- *    4. Copyright and license information
  */   
 #include "p7_config.h"
 
@@ -997,18 +996,6 @@ make_post_msa(P7_BUILDER *bld, const ESL_MSA *premsa, const P7_HMM *hmm, P7_TRAC
   return status;
 }
 
-
-
-
 /*---------------- end, internal functions ----------------------*/
 
 
-
-
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

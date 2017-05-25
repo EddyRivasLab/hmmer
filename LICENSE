@@ -1,8 +1,8 @@
 HMMER - Biological sequence analysis with profile hidden Markov models
 
-Copyright (C) 1992-2016 Sean R. Eddy
-Copyright (C) 2000-2016 Howard Hughes Medical Institute
-Copyright (C) 2015-2016 President and Fellows of Harvard College
+Copyright (C) 1992-2017 Sean R. Eddy
+Copyright (C) 2015-2017 President and Fellows of Harvard College
+Copyright (C) 2000-2017 Howard Hughes Medical Institute
 Copyright (C) 1992-2006 Washington University School of Medicine
 Copyright (C) 1992-1994 MRC Laboratory of Molecular Biology
 
@@ -47,6 +47,8 @@ development team and the Eddy/Rivas laboratories at Harvard
 University, whose current and past members include:
 
    Sean Eddy            HHMI | Harvard University
+   Tyler Camp           University of Texas, Austin
+   Nick Carter          HHMI | Harvard University
    Sergi Castellano     Max Planck Leipzig, Germany
    Goran Ceric          HHMI Janelia Research Campus
    Alex Coventry        Cornell University
@@ -74,6 +76,9 @@ places in source files. These include:
    IBM TJ Watson Research Center   Yorktown Heights, NY
    X Consortium                    Cambridge, MA
    
+   Yuta Mori         divsufsort suffix tree library
+
+
 HMMER uses the Easel software library, which is also open source and
 BSD licensed. See lib/easel/LICENSE.
 

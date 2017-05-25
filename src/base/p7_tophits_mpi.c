@@ -5,7 +5,6 @@
  *    2. Communicating P7_HIT
  *    3. Unit tests.
  *    4. Test driver.
- *    5. Copyright and license information
  */
 #include "p7_config.h"
 #ifdef HAVE_MPI
@@ -906,9 +905,3 @@ int main(void) { return 0; }
 #endif
 #endif /*HAVE_MPI*/
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

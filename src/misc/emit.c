@@ -1,13 +1,13 @@
 /* Emitting (sampling) sequences from an HMM, in either core or
  * profile form.
  * 
+ * Contents:
  *    1. Exported API: sequence emission routines
  *    2. Private functions
  *    3. Stats driver
  *    4. Unit tests
  *    5. Test driver
  *    6. Example
- *    5. Copyright and license information.
  */
 
 #include "p7_config.h"
@@ -806,12 +806,5 @@ main(int argc, char **argv)
 }
 #endif /*p7EMIT_EXAMPLE*/
 /*---------------------- end, example ---------------------------*/
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/
 
 

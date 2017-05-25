@@ -11,9 +11,7 @@
  *   4. Unit tests
  *   5. Test driver
  *   6. Example
- *   7. Copyright and license information
  */
-
 #include "p7_config.h"
 
 #include "easel.h"
@@ -1952,15 +1950,6 @@ parse_coord_string(const char *cstring, int *ret_start, int *ret_end)
   esl_regexp_Destroy(re);
   return eslOK;
 }
-
-
 #endif /*p7REFERENCE_FWDBACK_EXAMPLE*/
 /*-------------------- end, example -----------------------------*/
 
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

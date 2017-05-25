@@ -19,9 +19,4 @@ extern int p7_sparse_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 
 
 #endif /*p7SPARSE_AEC_ALIGN_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

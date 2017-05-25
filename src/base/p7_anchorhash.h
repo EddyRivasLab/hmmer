@@ -101,12 +101,6 @@ extern int            p7_anchorhash_Get    (const P7_ANCHORHASH *ah, int32_t key
 extern int            p7_anchorhash_Dump   (FILE *ofp, const P7_ANCHORHASH *ah);
 
 #endif /*p7ANCHORHASH_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 
   
   

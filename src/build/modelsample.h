@@ -45,10 +45,4 @@ extern int     p7_modelsample_AnchoredMulti(ESL_RANDOMNESS *rng, int M, const P7
 					    P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
 					    P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc);
 #endif /*p7MODELSAMPLE_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 

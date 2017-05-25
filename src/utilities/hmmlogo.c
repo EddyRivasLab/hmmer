@@ -3,8 +3,6 @@
  * Contents:
  *   1. logo value functions
  *   2. hmmlogo application
- *   3. Copyright and license information
- *
  */
 #include "p7_config.h"
 
@@ -319,11 +317,6 @@ main(int argc, char **argv)
   if (del_P)    free(del_P);
   exit(status);
 }
-
 /*---------------- end, hmmlogo application ----------------------*/
-
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
 
 

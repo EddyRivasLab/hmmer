@@ -1,9 +1,11 @@
 #include "p7_config.h"
 
 /* SIMD-vectorized acceleration filters, local only: */
-#include "dp_vector/msvfilter.h"          // MSV/SSV primary acceleration filter
+#include "dp_vector/ssvfilter.h"          // SSV primary acceleration filter
 #include "dp_vector/vitfilter.h"          // Viterbi secondary acceleration filter
 #include "dp_vector/fwdfilter.h"          // Sparsification w/ checkpointed local Forward/Backward
+#include "dp_vector/p7_filtermx.h"        // DP matrix for SSV, VF
+#include "dp_vector/p7_checkptmx.h"       // DP matrix for FB
 
 /* Sparse DP, dual-mode glocal/local:    */
 #include "dp_sparse/sparse_fwdback.h"     // sparse Forward/Backward
@@ -24,7 +26,6 @@
 #include "esl_exponential.h"
 #include "esl_gumbel.h"
 
-#include "hardware/hardware.h"
 
 /*****************************************************************
  * 1. P7_ENGINE_PARAMS: config/control parameters for the Engine.
@@ -71,7 +72,7 @@ p7_engine_stats_Create(void)
   int              status;
 
   ESL_ALLOC(stats, sizeof(P7_ENGINE_STATS));
-  stats->n_past_msv  = 0;
+  stats->n_past_ssv  = 0;
   stats->n_past_bias = 0;
   stats->n_ran_vit   = 0;
   stats->n_past_vit  = 0;
@@ -126,18 +127,14 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
    */
   eng->params = (prm   ? prm   : NULL);
   eng->stats  = (stats ? stats : NULL);
-
   eng->rng    = esl_randomness_CreateFast(rng_seed);
-
-
-  eng->hw = p7_hardware_Create();  // get information about the machine we're running on
 
   /* All DP algorithms resize their input mx's as needed. 
    * The initial allocation can be anything.
    */
-  eng->fx    = p7_filtermx_Create  ( M_hint, eng->hw->simd );
-  eng->cx    = p7_checkptmx_Create ( M_hint, L_hint, ESL_MBYTES(sparsify_ramlimit), eng->hw->simd);
-  eng->sm    = p7_sparsemask_Create( M_hint, L_hint, eng->hw->simd);
+  eng->fx    = p7_filtermx_Create  (M_hint);
+  eng->cx    = p7_checkptmx_Create (M_hint, L_hint, ESL_MBYTES(sparsify_ramlimit));
+  eng->sm    = p7_sparsemask_Create(M_hint, L_hint);
   eng->sxf   = p7_sparsemx_Create(eng->sm);
   eng->sxd   = p7_sparsemx_Create(eng->sm);
   eng->asf   = p7_sparsemx_Create(eng->sm);
@@ -154,7 +151,7 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
 
   eng->nullsc = 0.;
   eng->biassc = 0.;
-  eng->mfsc   = 0.;
+  eng->sfsc   = 0.;
   eng->vfsc   = 0.;
 
   eng->ffsc   = 0.;
@@ -165,91 +162,6 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
   eng->F1     = 0.02;
   eng->F2     = 0.001;
   eng->F3     = 1e-5;
-
-// Configure pipeline to use the right versions of each filter based on the SIMD we have
-  if(eng->hw->arch == x86){
-    //See what SIMD we support
-    switch(eng->hw->simd){
-      case SSE:
-#ifndef HAVE_SSE2
-      p7_Fail("Error: Your system seems to only support the SSE SIMD instructions, but you don't have support for those instructions compiled into HMMER.  HMMER requires SIMD support to run.  Please re-compile HMMER with SSE support.");  
-#endif
-      // If we have SSE versions of the filters, configure the engine to use them
-      //printf("Using SSE instructions\n");
-      eng->msv = p7_MSVFilter_sse; 
-      eng->vit = p7_ViterbiFilter_sse;
-      eng->fwd = p7_ForwardFilter_sse;
-      eng->bck = p7_BackwardFilter_sse;
-      break;
-
-      case AVX:
-#ifndef HAVE_AVX2
-#ifdef HAVE_SSE2
-      printf("Warning: your system supports the AVX2 instructions, but HMMER was only compiled with support for the SSE instructions.  Re-compiling HMMER with AVX2 support will increase performance.\n");
-      eng->msv = p7_MSVFilter_sse; 
-      eng->vit = p7_ViterbiFilter_sse;
-      eng->fwd = p7_ForwardFilter_sse;
-      eng->bck = p7_BackwardFilter_sse;
-#endif
-#ifndef HAVE_SSE2     
-      p7_Fail("Error: Your system seems to support the AVX2 SIMD instructions, but HMMER was not compiled with support for either AVX2 or the older SSE instructions.  HMMER requires SIMD support to run.  Please re-compile HMMER with AVX2 or SSE support.");
-      exit(0);
-#endif
-#endif 
-#ifdef HAVE_AVX2      
-      //printf("Using AVX instructions\n");
-      eng->msv = p7_MSVFilter_avx; 
-      eng->vit = p7_ViterbiFilter_avx;
-      eng->fwd = p7_ForwardFilter_avx;
-      eng->bck = p7_BackwardFilter_avx;
-#endif      
-      break;
-
-      case AVX512:
-#ifndef HAVE_AVX512
-#ifdef HAVE_AVX2      
-      printf("Warning: your system supports the AVX-512 instructions, but HMMER was only compiled with support for AVX2.  Re-compiling HMMER with AVX-512 support will improve performance \n");
-      eng->msv = p7_MSVFilter_avx; 
-      eng->vit = p7_ViterbiFilter_avx;
-      eng->fwd = p7_ForwardFilter_avx;
-      eng->bck = p7_BackwardFilter_avx;
-      break;
-#endif  //HAVE_AVX2
-#ifndef HAVE_AVX2
-#ifdef HAVE_SSE2
-      printf("Warning: your system supports the AVX-512 instructions, but HMMER was only compiled with support for the SSE instructions.  Re-compiling HMMER with AVX-512 or AVX2 support will increase performance.\n");
-      eng->msv = p7_MSVFilter_sse; 
-      eng->vit = p7_ViterbiFilter_sse;
-      eng->fwd = p7_ForwardFilter_sse;
-      eng->bck = p7_BackwardFilter_sse;
-      break;
-#endif // HAVE_SSE2
-#ifndef HAVE_SSE2      
-      p7_Fail("Error: Your system seems to support the AVX-512 SIMD instructions, but HMMER was not compiled with support for AVX-512, AVX2, or the older SSE instructions.  HMMER requires SIMD support to run.  Please re-compile HMMER with AVX-512, AVX2, or SSE support.");
-      exit(0);
-#endif // HAVE_SSE2
-#endif //HAVE_AVX2
-#endif // HAVE_AVX512
-#ifdef HAVE_AVX512      
-     // printf("Using AVX-512 instructions\n");
-      eng->msv = p7_MSVFilter_avx512; 
-      eng->vit = p7_ViterbiFilter_avx512;
-      eng->fwd = p7_ForwardFilter_avx512;
-      eng->bck = p7_BackwardFilter_avx512;
-#endif      
-      case NEON:
-          eng->msv = p7_MSVFilter_neon; 
-      eng->vit = p7_ViterbiFilter_neon;
-      eng->fwd = p7_ForwardFilter_neon;
-      eng->bck = p7_BackwardFilter_neon;
-        break;
-      case NO_SIMD:
-        p7_Fail("Couldn't determine which SIMD ISA to use\n");
-        break;
-    }
-  }
-
-
   return eng;
 
  ERROR:
@@ -259,7 +171,6 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
 
 
 int
-
 p7_engine_Reuse(P7_ENGINE *eng)
 {
   int      rng_reproducible = (eng->params ? eng->params->rng_reproducible : p7_ENGINE_REPRODUCIBLE);
@@ -269,8 +180,6 @@ p7_engine_Reuse(P7_ENGINE *eng)
   if (rng_reproducible) 
     esl_randomness_Init(eng->rng, rng_seed);
 
-  if ((status = p7_filtermx_Reuse  (eng->fx))    != eslOK) return status;
-  if ((status = p7_checkptmx_Reuse (eng->cx))    != eslOK) return status;
   if ((status = p7_sparsemask_Reuse(eng->sm))    != eslOK) return status;
 
   /* Most Reuse()'s are cheap, but the p7_anchorhash_Reuse() is a little
@@ -295,7 +204,7 @@ p7_engine_Reuse(P7_ENGINE *eng)
 
   eng->nullsc = 0.;
   eng->biassc = 0.;
-  eng->mfsc   = 0.;
+  eng->sfsc   = 0.;
   eng->vfsc   = 0.;
 
   eng->ffsc   = 0.;
@@ -361,13 +270,13 @@ p7_engine_Destroy(P7_ENGINE *eng)
  *            steps:
  *               <nullsc>  : null model raw score, nats;     = 0 if not reached.
  *               <biassc>  : ad hoc bias filter score, nats; = 0 if not reached.
- *               <mfsc>    : SSV/MSV filter raw score, nats; = -eslINFINITY if not reached.
+ *               <sfsc>    : SSV filter raw score, nats;     = -eslINFINITY if not reached.
  *               <vfsc>    : Viterbi filter raw score, nats; = -eslINFINITY if not reached.
  *               <ffsc>    : Forward filter raw score, nats; = -eslINFINITY if not reached.
  * 
  *            If the bias filter is off, biassc = nullsc.
  *
- *            If the MSV filter score is so high that it satisfies
+ *            If the SSV filter score is so high that it satisfies
  *            both F1 and F2 thresholds, the Viterbi filter step is
  *            skipped. 
  *            
@@ -377,7 +286,7 @@ p7_engine_Destroy(P7_ENGINE *eng)
  *            reached (in which case the score will come out as -inf).
  *            
  *            If the <eng> is collecting statistics in a non-NULL
- *            <eng->stats>, its <n_past_msv>, <n_past_bias>,
+ *            <eng->stats>, its <n_past_ssv>, <n_past_bias>,
  *            <n_past_vit>, <n_ran_vit>, <n_past_fwd> counters can advance here.
  *            
  *            The O(M) filter DP matrix <eng->fx> and the O(M sqrt L) checkpoint
@@ -399,21 +308,21 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
 
   if ((status = p7_bg_NullOne(bg, dsq, L, &(eng->nullsc))) != eslOK) return status; 
 
-  /* First level: SSV and MSV filters */
-  status = eng->msv(dsq, L, om, eng->fx, &(eng->mfsc));
+  /* First level: SSV filter */
+  status = p7_SSVFilter(dsq, L, om, &(eng->sfsc));
   if (status != eslOK && status != eslERANGE) return status;
 
-  seq_score = (eng->mfsc - eng->nullsc) / eslCONST_LOG2;          
-  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  seq_score = (eng->sfsc - eng->nullsc) / eslCONST_LOG2;          
+  P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
   if (P > eng->F1) return eslFAIL;
-  if (eng->stats) eng->stats->n_past_msv++;
+  if (eng->stats) eng->stats->n_past_ssv++;
 
   /* Biased composition HMM, ad hoc, acts as a modified null */
   if (do_biasfilter)
     {
       if ((status = p7_bg_FilterScore(bg, dsq, L, &(eng->biassc))) != eslOK) return status;
-      seq_score = (eng->mfsc - eng->biassc) / eslCONST_LOG2;
-      P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+      seq_score = (eng->sfsc - eng->biassc) / eslCONST_LOG2;
+      P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
       if (P > eng->F1) return eslFAIL;
     }
   else eng->biassc = eng->nullsc;
@@ -427,9 +336,7 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
     {
       if (eng->stats) eng->stats->n_ran_vit++;
 
-      //printf("P = %.4f. Running Vit Filter\n", P);
-
-      status = eng->vit(dsq, L, om, eng->fx, &(eng->vfsc));  
+      status = p7_ViterbiFilter(dsq, L, om, eng->fx, &(eng->vfsc));  
       if (status != eslOK && status != eslERANGE) return status;
 
       seq_score = (eng->vfsc - eng->biassc) / eslCONST_LOG2;
@@ -441,7 +348,7 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
 
   /* Checkpointed vectorized Forward, local-only.
    */
-  status = eng->fwd(dsq, L, om, eng->cx, &(eng->ffsc));
+  status = p7_ForwardFilter(dsq, L, om, eng->cx, &(eng->ffsc));
   if (status != eslOK) return status;
 
   seq_score = (eng->ffsc - eng->biassc) / eslCONST_LOG2;
@@ -452,7 +359,7 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
   /* Sequence has passed all acceleration filters.
    * Calculate the sparse mask, by checkpointed vectorized decoding.
    */
-  eng->bck(dsq, L, om, eng->cx, eng->sm, sparsify_thresh);
+  p7_BackwardFilter(dsq, L, om, eng->cx, eng->sm, sparsify_thresh);
 
   return eslOK;
 }
@@ -683,10 +590,5 @@ main(int argc, char **argv)
 
 #endif /*p7ENGINE_EXAMPLE*/
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+
 

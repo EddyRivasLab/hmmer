@@ -3,9 +3,7 @@
  * Reference: 
  *    L. Steven Johnson, "Remote Protein Homology Detection Using Hidden Markov Models",
  *    Ph.D. thesis, Washington University School of Medicine, 2006.
- *    
  */
-
 #include "p7_config.h"
 
 #include "easel.h"
@@ -98,13 +96,6 @@ p7_EntropyWeight(const P7_HMM *hmm, const P7_BG *bg, const P7_PRIOR *pri, double
   return status;
 }
 
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$   
- * SVN $URL$
- *****************************************************************/
 
 
 

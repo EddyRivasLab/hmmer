@@ -9,7 +9,6 @@
  *    1. Pack/unpack of P7_ALIDISPLAY, alignment display information.
  *    2. Unit tests.
  *    3. Test driver.
- *    4. Copyright and license information.
  */
 #include "p7_config.h"
 #ifdef HAVE_MPI
@@ -312,9 +311,3 @@ int main(void) { return 0; }
 #endif
 #endif /*HAVE_MPI*/
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

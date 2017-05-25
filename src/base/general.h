@@ -19,7 +19,7 @@
 #define p7_NEVPARAM 6	/* number of statistical parameters stored in models                      */
 #define p7_NCUTOFFS 6	/* number of Pfam score cutoffs stored in models                          */
 #define p7_NOFFSETS 3	/* number of disk offsets stored in models for hmmscan's fast model input */
-enum p7_evparams_e {    p7_MMU  = 0, p7_MLAMBDA = 1,     p7_VMU = 2,  p7_VLAMBDA = 3, p7_FTAU = 4, p7_FLAMBDA = 5 };
+enum p7_evparams_e {    p7_SMU  = 0, p7_SLAMBDA = 1,     p7_VMU = 2,  p7_VLAMBDA = 3, p7_FTAU = 4, p7_FLAMBDA = 5 };
 enum p7_cutoffs_e  {     p7_GA1 = 0,     p7_GA2 = 1,     p7_TC1 = 2,      p7_TC2 = 3,  p7_NC1 = 4,     p7_NC2 = 5 };
 enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 
@@ -38,8 +38,6 @@ enum p7_offsets_e  { p7_MOFFSET = 0, p7_FOFFSET = 1, p7_POFFSET = 2 };
 
 /* MEA traceback routines have to check consistency, all path transitions must be nonzero */
 #define P7_DELTAT(val, tsc) ( ((tsc) == -eslINFINITY) ? -eslINFINITY : (val))
-
-#define p7O_EXTRA_SB 17    /* see ssvfilter.c for explanation */
 
 /* Which strand(s) should be searched */
 enum p7_strands_e {    p7_STRAND_TOPONLY  = 0, p7_STRAND_BOTTOMONLY = 1,  p7_STRAND_BOTH = 2};
@@ -78,9 +76,3 @@ extern int          p7_AminoFrequencies(float *f);
 
 #endif /*p7GENERAL_INCLUDED*/
 
-/************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- ************************************************************/

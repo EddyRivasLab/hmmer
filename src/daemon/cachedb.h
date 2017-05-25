@@ -44,9 +44,4 @@ extern int    p7_seqcache_Open(char *seqfile, P7_SEQCACHE **ret_cache, char *err
 extern void   p7_seqcache_Close(P7_SEQCACHE *cache);
 
 #endif /*p7CACHEDB_INCLUDED*/
-/************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- ************************************************************/
+

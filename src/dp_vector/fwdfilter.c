@@ -1,102 +1,34 @@
 /* Forwards/Backwards filters
- *
- * This is code in the acceleration pipeline:
- * SSVFilter -> MSVFilter -> VitFilter -> ForwardFilter -> BackwardFilter
- *                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
- *                                                (you are here)
- *
- * Striped SIMD vector implementation [Farrar07], using checkpointing 
- * to guarantee O(M sqrt L) memory [Grice97,TarnasHughey98,Newberg08],
- * in probability space using sparse rescaling [Eddy11].
- *
- * Called in two pieces. p7_ForwardFilter() returns the Forward score
- * in nats. Caller chooses whether or not to proceed with Backward and
- * posterior decoding. If caller proceeds, p7_BackwardFilter() does
- * Backward and posterior decoding. Based on the posterior decoding
- * probabilities on each row i, it determines which cells are to be
- * added to the sparse DP mask for subsequent local/glocal
- * reprocessing.  The sparse DP mask is returned in a <P7_SPARSEMASK>
- * structure.
  * 
- * Any cell (i,k) with total posterior probability (i.e., summed over
- * M,D,I) >= sm_thresh is marked and included in the sparse mask.
- * Cells needed for glocal entry/exit delete paths (G->DDDD->Mk,
- * Mk->DDDD->E) are not marked, because the filter only uses local
- * alignment, not glocal. The default for sm_thresh is
- * <p7_SPARSIFY_THRESH>, in <p7_config.h.in>; currently set
- * to 0.01.
- *
- * ForwardFilter() and BackwardFilter() are a dependent pair, sharing
- * the same DP matrix object. They must be called sequentially,
- * because BackwardFilter() is doing posterior decoding on the fly,
- * and for this it needs both forward and backward scores; it uses
- * checkpointed Forward rows that have been stored by the preceding
- * ForwardFilter() call.
- * 
- * Prob-space implementations using sparse rescaling require multihit
- * local alignment mode for numeric range reasons. Unihit or glocal
- * will result in errors due to underflow.
+ * See fwdfilter.md for notes.
  *
  * Contents:
  *    1. ForwardFilter() and BackwardFilter() API.
- *    2. Internal functions: inlined recursions.
- *    3. Debugging tools.
- *    4. Stats driver (memory requirements)
- *    5. Benchmark driver.
- *    6. Unit tests.
- *    7. Test driver.
- *    8. Example.
- *    9. Notes
- *       a. On debugging and testing methods.
- *       b. On running time, in theory and in practice.
- *       c. Copyright and license information.
+ *    2. CPU dispatching to vector implementations.
+ *    3. Stats driver (memory requirements)
+ *    4. Benchmark driver.
+ *    5. Unit tests.
+ *    6. Test driver.
+ *    7. Example.
  */
-
 #include "p7_config.h"
-#if p7_CPU_ARCH == intel 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
-#endif
-#include "easel.h"
-#include "esl_vectorops.h"
 
-#include "dp_reference/p7_refmx.h"
-#include "dp_sparse/p7_sparsemx.h"
+#include "easel.h"
+#include "esl_cpu.h"
 
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/p7_checkptmx.h"
+#include "dp_sparse/p7_sparsemx.h"
 #include "dp_vector/fwdfilter.h"
 
 
-/* vectorized DP recursions are tediously lengthy, so for some
- * semblance of clarity, they're broken out into one-page-ish
- * chunks, using static inlined functions.
- */
+static int fwdfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc);
+static int bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh);
 
-#ifdef p7_DEBUGGING
-static inline float backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
-extern inline float backward_row_zero_sse(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
-extern inline float backward_row_zero_avx(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
-extern inline float backward_row_zero_avx512(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
-extern inline float backward_row_zero_neon(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
-extern inline float backward_row_zero_neon64(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox);
-static        void  save_debug_row_pp(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
-extern void  save_debug_row_pp_sse(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
-extern void  save_debug_row_pp_avx(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
-extern void  save_debug_row_pp_avx512(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
-extern void  save_debug_row_pp_neon(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
-extern void  save_debug_row_pp_neon64(P7_CHECKPTMX *ox,               debug_print *dpc, int i);
-static void  save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
-extern void  save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
-extern void  save_debug_row_fb_avx(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
-extern void  save_debug_row_fb_avx512(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
-extern void  save_debug_row_fb_neon(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
-extern void  save_debug_row_fb_neon64(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale);
 
-#endif
 
 /*****************************************************************
- * 1. Forward and Backward API calls
+ * 1. ForwardFilter, BackwardFilter API calls
  *****************************************************************/
 
 /* Function:  p7_ForwardFilter()
@@ -110,7 +42,7 @@ extern void  save_debug_row_fb_neon64(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_prin
  *            score in nats.
  *            
  *            <ox> will be reallocated, if needed, for the MxL problem;
- *            caller does not need to call <p7_checkptmx_GrowTo()> itself.
+ *            caller does not need to call <p7_checkptmx_Reinit()> itself.
  *  
  * Args:      dsq    - digital target sequence, 1..L
  *            L      - length of dsq, residues
@@ -126,35 +58,9 @@ extern void  save_debug_row_fb_neon64(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_prin
  * 
  * Xref:      For layout of checkpointed <ox> see exegesis in p7_checkptmx.h.
  */
-
- /* Note: This is just a dispatch function that calls the correct SIMD version of the filter
-  * Whenever possible, you should call the SIMD version directly to avoid the dispatch
-     overhead.  */
-
-int
-p7_ForwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc)
-{
-switch(om->simd){
-    case SSE:
-      return p7_ForwardFilter_sse(dsq, L, om, ox, opt_sc);
-      break;
-    case AVX:
-      return p7_ForwardFilter_avx(dsq, L, om, ox, opt_sc);
-      break;
-    case AVX512:
-      return p7_ForwardFilter_avx512(dsq, L, om, ox, opt_sc);
-      break;
-    case NEON:
-      return p7_ForwardFilter_neon(dsq, L, om, ox, opt_sc);
-      break;
-    case NEON64:
-      return p7_ForwardFilter_neon64(dsq, L, om, ox, opt_sc);
-      break;
-   default:
-      p7_Fail("Unrecognized SIMD type passed to p7_ForwardFilter");  
-  }
-
-}
+int 
+(*p7_ForwardFilter)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc) =
+  fwdfilter_dispatcher;
 
 
 /* Function:  p7_BackwardFilter()
@@ -184,173 +90,115 @@ switch(om->simd){
  *            <eslEMEM> on allocation failure.
  */
 int
-p7_BackwardFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh)
-{
-switch(om->simd){
-    case SSE:
-      return p7_BackwardFilter_sse(dsq, L, om, ox, sm, sm_thresh);
-      break;
-    case AVX:
-      return p7_BackwardFilter_avx(dsq, L, om, ox, sm, sm_thresh);
-      break;
-    case AVX512:
-      return p7_BackwardFilter_avx512(dsq, L, om, ox, sm, sm_thresh);
-      break;
-    case NEON:
-      return p7_BackwardFilter_neon(dsq, L, om, ox, sm, sm_thresh);
-      break;
-    case NEON64:
-      return p7_BackwardFilter_neon64(dsq, L, om, ox, sm, sm_thresh);
-      break;
-   default:
-      p7_Fail("Unrecognized SIMD type passed to p7_BackwardFilter");  
-  }
-   
-}
+(*p7_BackwardFilter)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh) =
+  bckfilter_dispatcher;
+
 /*----------- end forward/backward API calls --------------------*/
 
 
 
 /*****************************************************************
- * 2. Internal functions: inlined recursions
+ * 2. CPU dispatching to vector implementations.
  *****************************************************************/
 
-
-
-/*****************************************************************
- * 3. Debugging tools
- *****************************************************************/
-#ifdef p7_DEBUGGING
-
-/* backward_row_zero()
- * 
- * Slightly peculiar but true: in production code we don't
- * need to calculate backward row 0, because we're only doing
- * posterior decoding on residues 1..L.  We only need row 0
- * if we need a complete Backward calculation -- which happens
- * when we're in debugging mode, and we're going to test the
- * Backwards score or compare the Backwards matrix to the
- * reference implementation.
- * 
- * x1  - residue dsq[1] on row 1
- * om  - query model
- * ox  - DP matrix; dpf[0] is the current Backward row
- * 
- * Upon return, ox->dpf[0] (backward row 0) has been calculated.
- * Returns the log of the value in the N cell at row 0. When this 
- * is added to the sum of the logs of all the scalefactors (which
- * the caller has been accumulating in <ox->bcksc>), then
- * the <ox->bcksc> value is finished and equal to the Backwards
- * raw score in nats.
- */
-static inline float
-backward_row_zero(ESL_DSQ x1, const P7_OPROFILE *om, P7_CHECKPTMX *ox)
+static int 
+fwdfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc)
 {
- switch(om->simd){
-    case SSE:
-      return backward_row_zero_sse(x1, om, ox);
-      break;
-    case AVX:
-      return backward_row_zero_avx(x1, om, ox);
-      break;
-    case AVX512:
-      return backward_row_zero_avx512(x1, om, ox);
-      break;
-    case NEON:
-      return backward_row_zero_neon(x1, om, ox);
-      break;
-    case NEON64:
-      return backward_row_zero_neon64(x1, om, ox);
-      break;
-   default:
-      p7_Fail("Unrecognized SIMD type passed to backward_row_zero");  
-  }
-}
-
-
-/* save_debug_row_pp()
- * 
- * Debugging only. Transfer posterior decoding values from a
- * vectorized row to appropriate row of <ox->pp>, as probabilities.
- *
- * Zero wherever there's no emission:
- *   all values on row 0 
- *   all D states
- *   all E,B states
- * Zero in row positions that can't be reached in some state:
- *   all insert states on row 1
- *   J(1),C(1)
- *   N(L), J(L) on row L
- * Zero wherever there's no state:
- *   D1, IM states
- */
-static void
-save_debug_row_pp(P7_CHECKPTMX *ox, debug_print *dpc, int i)
-{
-  switch(ox->simd){
-    case SSE:
-      return save_debug_row_pp_sse(ox, dpc, i);
-      break;
-    case AVX:
-      return save_debug_row_pp_avx(ox, dpc, i);
-      break;
-    case AVX512:
-      return save_debug_row_pp_avx512(ox, dpc, i);
-      break;
-    case NEON:
-      return save_debug_row_pp_neon(ox, dpc, i);
-      break;
-    case NEON64:
-      return save_debug_row_pp_neon64(ox, dpc, i);
-      break;
-   default:
-      p7_Fail("Unrecognized SIMD type passed to save_debug_row_pp");  
-  }
-}
-
-/* save_debug_row_fb()
- * 
- * Debugging only. Transfer posterior decoding values (sparse scaled,
- * prob space) from a vectorized row, to appropriate row of <ox->fwd>
- * or <ox->bck> (log space, inclusive of partial sum of scalefactors);
- * <ox->fwd> and <ox->bck> should be identical (within numerical error
- * tolerance) to a reference implementation Forward/Backward in log
- * space.
- */
-static void
-save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float totscale)
-{
-  switch(ox->simd){
-    case SSE:
-      return save_debug_row_fb_sse(ox, gx, dpc, i, totscale);
-      break;
-    case AVX:
-      return save_debug_row_fb_avx(ox, gx, dpc, i, totscale);
-      break;
-    case AVX512:
-      return save_debug_row_fb_avx512(ox, gx, dpc, i, totscale);
-      break;
-    case NEON:
-      return save_debug_row_fb_neon(ox, gx, dpc, i, totscale);
-      break;
-    case NEON64:
-      return save_debug_row_fb_neon64(ox, gx, dpc, i, totscale);
-      break;
-   default:
-      p7_Fail("Unrecognized SIMD type passed to save_debug_row_fb");  
-  } 
-}
+  /* When a platform supports more than one vector implementation, 
+   * put fastest one first to prefer enabling it over others.
+   */
+#ifdef eslENABLE_AVX512
+  if (esl_cpu_has_avx512())
+    {
+      p7_ForwardFilter = p7_ForwardFilter_sse;
+      return p7_ForwardFilter_sse(dsq, L, om, ox, opt_sc);
+    }
 #endif
-/*---------------- end, debugging tools -------------------------*/
+
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+      p7_ForwardFilter = p7_ForwardFilter_avx;
+      return p7_ForwardFilter_avx(dsq, L, om, ox, opt_sc);
+    }
+#endif
+
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse())
+    {
+      p7_ForwardFilter = p7_ForwardFilter_sse;
+      return p7_ForwardFilter_sse(dsq, L, om, ox, opt_sc);
+    }
+#endif
+  
+#ifdef eslENABLE_NEON
+  p7_ForwardFilter = p7_ForwardFilter_neon;
+  return p7_ForwardFilter_neon(dsq, L, om, ox, opt_sc);
+#endif
+
+  //#ifdef eslENABLE_VMX
+  //  p7_ForwardFilter = p7_ForwardFilter_vmx;
+  //  return p7_ForwardFilter_vmx(dsq, L, om, ox, opt_sc);
+  //#endif
+
+  p7_Die("fwdfilter_dispatcher found no vector implementation - that shouldn't happen.");
+}
+
+
+
+
+static int
+bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh)
+{
+#ifdef eslENABLE_AVX512
+  if (esl_cpu_has_avx512())
+    {
+      p7_BackwardFilter = p7_BackwardFilter_sse;
+      return p7_BackwardFilter_sse(dsq, L, om, ox, sm, sm_thresh);
+    }
+#endif
+
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+      p7_BackwardFilter = p7_BackwardFilter_avx;
+      return p7_BackwardFilter_avx(dsq, L, om, ox, sm, sm_thresh);
+    }
+#endif
+
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse())
+    {
+      p7_BackwardFilter = p7_BackwardFilter_sse;
+      return p7_BackwardFilter_sse(dsq, L, om, ox, sm, sm_thresh);
+    }
+#endif
+  
+#ifdef eslENABLE_NEON
+  p7_BackwardFilter = p7_BackwardFilter_neon;
+  return p7_BackwardFilter_neon(dsq, L, om, ox, sm, sm_thresh);
+#endif
+
+  //#ifdef eslENABLE_VMX
+  //  p7_BackwardFilter = p7_BackwardFilter_vmx;
+  //  return p7_BackwardFilter_vmx(dsq, L, om, ox, sm, sm_thresh);
+  //#endif
+
+  p7_Die("bckfilter_dispatcher found no vector implementation - that shouldn't happen.");
+}
+
+
+
+
+
 
 
 /*****************************************************************
- * 4. Stats driver: memory requirement profiling 
+ * 3. Stats driver: memory requirement profiling 
  *****************************************************************/
 
-/* In production pipeline, there are up to four sorts of DP matrices
+/* In production pipeline, there are up to three sorts of DP matrices
  * in play:
- *    MSV   MSV filter
  *    VF    Viterbi filter
  *    CHK   checkpointed Forward/Backward
  *    SP    sparse DP
@@ -362,13 +210,14 @@ save_debug_row_fb(P7_CHECKPTMX *ox, P7_REFMX *gx, debug_print *dpc, int i, float
  * We count it separately here because we will typically have one
  * mask, for up to four (V/F/B/D) matrices in play.
  *    
- * MSV and VF are O(M).
+ * SSV is O(1) and has no DP matrix. (All calculations in registers.)
+ * VF is O(M).
  * CHK is O(M \sqrt L)
  * SP and SM are O(L) when a nonzero sparsity posterior threshold is used in the f/b filter.
  * REF is O(ML). 
  * 
  * The goal of this driver is to characterize the minimal memory
- * requirements for each, and in particular, for sparse DP.  MSV, VF,
+ * requirements for each, and in particular, for sparse DP.  VF,
  * CHK, and REF minimal requirements are completely determined by
  * dimensions M and L. The requirement of SP, though, is an empirical
  * question of how many sparse cells get included by the f/b filter.
@@ -426,8 +275,8 @@ main(int argc, char **argv)
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
   int             format  = eslSQFILE_UNKNOWN;
-  float           fraw, nullsc, fsc, msvsc;
-  float           msvmem, vfmem, fbmem, smmem, spmem, refmem;
+  float           fraw, nullsc, fsc, ssvsc;
+  float           vfmem, fbmem, smmem, spmem, refmem;
   double          P;
   int             status;
 
@@ -457,10 +306,10 @@ main(int argc, char **argv)
   ox  = p7_checkptmx_Create (gm->M, 500, ESL_MBYTES(32));  
   sm  = p7_sparsemask_Create(gm->M, 500);
 
+  printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s\n",
+	 "target seq", "query profile", "score", "P-value", "VF (KB)", "CHK (MB)", "SM (MB)", "SP (MB)", "REF (MB)");
   printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s\n",
-	 "target seq", "query profile", "score", "P-value", "MSV (KB)", "VF (KB)", "CHK (MB)", "SM (MB)", "SP (MB)", "REF (MB)");
-  printf("# %-28s %-30s %9s %9s %9s %9s %9s %9s %9s %9s\n",
-	 "----------------------------", "------------------------------",  "---------", "---------", "---------", "---------", "---------", "---------", "---------", "---------");
+	 "----------------------------", "------------------------------",  "---------", "---------", "---------", "---------", "---------", "---------", "---------");
   
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
@@ -468,36 +317,33 @@ main(int argc, char **argv)
       p7_profile_SetLength      (gm, sq->n);
       p7_bg_SetLength(bg,            sq->n);
 
-      p7_checkptmx_GrowTo (ox, om->M, sq->n); 
-      p7_sparsemask_Reinit(sm, gm->M, sq->n);
+      p7_checkptmx_Reinit(ox, om->M, sq->n); 
 
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
 
       /* Filter insig hits, partially simulating the real pipeline */
-      p7_MSVFilter(sq->dsq, sq->n, om, fx, &msvsc);
-      msvsc = (msvsc - nullsc) / eslCONST_LOG2;
-      P     =  esl_gumbel_surv(msvsc,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+      p7_SSVFilter(sq->dsq, sq->n, om, &msvsc);
+      ssvsc = (ssvsc - nullsc) / eslCONST_LOG2;
+      P     =  esl_gumbel_surv(ssvsc,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
       if (P > 0.02) goto NEXT_SEQ;
 
       p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fraw);
       p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH);
 
       /* Calculate minimum memory requirements for each step */
-      msvmem = (double) ( P7_NVB(om->M) * sizeof(__m128i))    / 1024.;  
-      vfmem  = (double) p7_filtermx_MinSizeof(om->M)          / 1024.;
-      fbmem  = (double) p7_checkptmx_MinSizeof(om->M, sq->n)  / 1024. / 1024.;
-      smmem  = (double) p7_sparsemask_MinSizeof(sm)           / 1024. / 1024.;
-      spmem  = (double) p7_sparsemx_MinSizeof(sm)             / 1024. / 1024.;
-      refmem = (double) p7_refmx_MinSizeof(om->M, sq->n)      / 1024. / 1024.;
+      vfmem  = (double) p7_filtermx_MinSizeof(om->M)            / 1024.;
+      fbmem  = (double) p7_checkptmx_MinSizeof(om->M, sq->n)    / 1024. / 1024.;
+      smmem  = (double) p7_sparsemask_MinSizeof(sm)             / 1024. / 1024.;
+      spmem  = (double) p7_sparsemx_MinSizeof(sm)               / 1024. / 1024.;
+      refmem = (double) p7_refmx_MinSizeof(om->M, sq->n)        / 1024. / 1024.;
 
       fsc  =  (fraw-nullsc) / eslCONST_LOG2;
       P    = esl_exp_surv(fsc,   om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
 
-      printf("%-30s %-30s %9.2f %9.2g %9.3f %9.3f %9.3f %9.3f %9.3f %9.3f\n",
+      printf("%-30s %-30s %9.2f %9.2g %9.3f %9.3f %9.3f %9.3f %9.3f\n",
 	     sq->name,
 	     hmm->name,
 	     fsc, P,
-	     msvmem,
 	     vfmem,
 	     fbmem, 
 	     smmem,
@@ -507,8 +353,6 @@ main(int argc, char **argv)
     NEXT_SEQ:
       esl_sq_Reuse(sq);
       p7_sparsemask_Reuse(sm);
-      p7_checkptmx_Reuse(ox);
-      p7_filtermx_Reuse(fx);
     }
 
   printf("# SPARSEMASK: kmem reallocs: %d\n", sm->n_krealloc);
@@ -536,9 +380,8 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 5. Benchmark
+ * 4. Benchmark
  *****************************************************************/
-/* Difference between gcc -g vs. icc -O3 is large! */
 
 #ifdef p7FWDFILTER_BENCHMARK
 #include "p7_config.h"
@@ -549,13 +392,14 @@ main(int argc, char **argv)
 #include "esl_random.h"
 #include "esl_randomseq.h"
 #include "esl_stopwatch.h"
+#include "esl_vectorops.h"
 
 #include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-F",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "only benchmark Forward",                         0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                   0 },
   { "-N",        eslARG_INT,   "2000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                   0 },
@@ -581,10 +425,10 @@ main(int argc, char **argv)
   P7_SPARSEMASK  *sm      = NULL;
   int             L       = esl_opt_GetInteger(go, "-L");
   int             N       = esl_opt_GetInteger(go, "-N");
-  ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
+  ESL_DSQ       **dsq     = malloc(N * sizeof(ESL_DSQ *));
   int             i;
   float           sc;
-  double          base_time, bench_time, Mcs;
+  double          Mcs;
 
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
@@ -602,37 +446,33 @@ main(int argc, char **argv)
   ox  = p7_checkptmx_Create (om->M, L, ESL_MBYTES(32));
   sm  = p7_sparsemask_Create(om->M, L);
 
-  /* Baseline time. */
-  esl_stopwatch_Start(w);
-  for (i = 0; i < N; i++) esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-  esl_stopwatch_Stop(w);
-  base_time = w->user;
+  for (i = 0; i < N; i++) 
+    {
+      dsq[i] = malloc(sizeof(ESL_DSQ) * (L+2));
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq[i]);
+    }
 
-  /* Benchmark time. */
+
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
-      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
-
-      p7_sparsemask_Reinit(sm, om->M, L);
-
-      p7_ForwardFilter(dsq, L, om, ox, &sc);
-      if (! esl_opt_GetBoolean(go, "-F")) 
-	{
-	  p7_BackwardFilter(dsq, L, om, ox, sm, p7_SPARSIFY_THRESH);
+      p7_ForwardFilter(dsq[i], L, om, ox, &sc);
+      if (! esl_opt_GetBoolean(go, "-F"))                             // Backward filter depends on having run Forward first.
+        {                                                             // You can't run it separately.
+	  p7_BackwardFilter(dsq[i], L, om, ox, sm, p7_SPARSIFY_THRESH);
 	  esl_vec_IReverse(sm->kmem, sm->kmem, sm->ncells);
 	}
-
-      p7_checkptmx_Reuse(ox);
       p7_sparsemask_Reuse(sm);
     }
   esl_stopwatch_Stop(w);
-  bench_time = w->user - base_time;
-  Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) bench_time;
+
+
+  Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) w->elapsed;
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
-  printf("# M    = %d\n",   gm->M);
+  printf("# M    = %d\n", gm->M);
   printf("# %.1f Mc/s\n", Mcs);
 
+  for (i = 0; i < N; i++) free(dsq[i]);
   free(dsq);
   p7_checkptmx_Destroy(ox);
   p7_sparsemask_Destroy(sm);
@@ -673,31 +513,29 @@ main(int argc, char **argv)
 static void
 utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N, int64_t ramlimit)
 {
-  char         msg[]  = "fbfilter scores unit test failed";
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
-  P7_HMM      *hmm    = NULL;
-  P7_PROFILE  *gm     = NULL;
-  P7_OPROFILE *om     = NULL;
-  ESL_DSQ     *dsqmem = malloc(sizeof(ESL_DSQ) * (L+2));
-  ESL_DSQ     *dsq    = NULL;
-  int          tL     = 0;
-  ESL_SQ      *sq     = esl_sq_CreateDigital(abc);
-  P7_CHECKPTMX *ox    = p7_checkptmx_Create(M, L, ramlimit, hw->simd);
-  P7_REFMX    *fwd    = p7_refmx_Create   (M, L);
-  P7_REFMX    *bck    = p7_refmx_Create   (M, L);
-  P7_REFMX    *pp     = p7_refmx_Create   (M, L);
-  P7_SPARSEMASK *sm   = p7_sparsemask_Create(M, L, hw->simd);
-  float        tol2   = ( p7_logsum_IsSlowExact() ? 0.001  : 0.1);   /* absolute agreement of reference (log-space) and vector (prob-space) depends on whether we're using LUT-based logsum() */
-  float fsc1, fsc2;
-  float bsc2;
-#ifdef p7_DEBUGGING
-  float        bsc1;
-  float        tol1   = 0.0001;	                                     /* forward and backward scores from same implementation type should agree with high tolerance */
-  float        ptol   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01);  /* posterior decoding values differ by no more than this */
+  char           msg[]  = "fwdfilter scores unit test failed";
+  P7_HMM        *hmm    = NULL;
+  P7_PROFILE    *gm     = NULL;
+  P7_OPROFILE   *om     = NULL;
+  ESL_DSQ       *dsqmem = malloc(sizeof(ESL_DSQ) * (L+2));
+  ESL_DSQ       *dsq    = NULL;
+  int            tL     = 0;
+  ESL_SQ        *sq     = esl_sq_CreateDigital(abc);
+  P7_CHECKPTMX  *ox     = p7_checkptmx_Create(M, L, ramlimit);
+  P7_REFMX      *fwd    = p7_refmx_Create   (M, L);
+  P7_REFMX      *bck    = p7_refmx_Create   (M, L);
+  P7_REFMX      *pp     = p7_refmx_Create   (M, L);
+  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L);
+  float          tol2   = ( p7_logsum_IsSlowExact() ? 0.001  : 0.1);   /* absolute agreement of reference (log-space) and vector (prob-space) depends on whether we're using LUT-based logsum() */
+  float          fsc1, fsc2;
+  float          bsc2;
+#if eslDEBUGLEVEL > 0
+  float          bsc1;
+  float          tol1   = 0.0001;	                               /* forward and backward scores from same implementation type should agree with high tolerance */
+  float          ptol   = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01);  /* posterior decoding values differ by no more than this */
 #endif
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   /* We set the debugging tools to record full pp, fwd, bck matrices
    * for comparison to reference implementation: 
    */
@@ -735,9 +573,8 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
 	
       if ( p7_profile_SetLength(gm, tL)       != eslOK) esl_fatal(msg);
       if ( p7_oprofile_ReconfigLength(om, tL) != eslOK) esl_fatal(msg); 
-      if ( p7_checkptmx_GrowTo(ox,  M, tL)    != eslOK) esl_fatal(msg);
-      if ( p7_sparsemask_Reinit(sm,M, tL)     != eslOK) esl_fatal(msg);
-
+      if ( p7_checkptmx_Reinit(ox,  M, tL)    != eslOK) esl_fatal(msg);
+      
       p7_ForwardFilter (dsq, tL, om, ox, &fsc1);
       p7_BackwardFilter(dsq, tL, om, ox,  sm, p7_SPARSIFY_THRESH);
 
@@ -745,7 +582,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
       p7_ReferenceBackward(dsq, tL, gm, bck,  &bsc2);
       p7_ReferenceDecoding(dsq, tL, gm, fwd, bck, pp);
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
       /* vector Forward and Backward scores should agree with high tolerance.
        * Backward score is only available in debugging mode 
        */
@@ -759,7 +596,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
       /* Reference and vector implementations should agree depending on logsum */
       if (fabs(fsc1-fsc2) > tol2) esl_fatal(msg);
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
       /* Compare all DP cell values to reference implementation,
        * in fwd, bck, and pp matrices. Note the need for CompareLocal()
        * for the Backward matrix comparison, because the zero B->G
@@ -776,7 +613,6 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
       p7_refmx_Reuse(fwd);
       p7_refmx_Reuse(bck);
       p7_refmx_Reuse(pp);
-      p7_checkptmx_Reuse(ox);
       p7_sparsemask_Reuse(sm);
     }
 
@@ -813,7 +649,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-L",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
   { "-M",        eslARG_INT,    "145", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
   { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
@@ -890,7 +726,7 @@ static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
   { "-1",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "output in one line awkable format",                0 },
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump vector DP matrices for examination (verbose)",0 },
   { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump recorded forward matrix",                     0 },
   { "-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump recorded backward matrix",                    0 },
@@ -925,7 +761,7 @@ main(int argc, char **argv)
   float           gmem, cmem, bmem;
   double          P, gP;
   int             status;
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   int             store_pp   = FALSE;
   char           *diplotfile = esl_opt_GetString(go, "--diplot");
   FILE           *difp       = NULL;
@@ -943,7 +779,7 @@ main(int argc, char **argv)
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
   else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (diplotfile && (difp = fopen(diplotfile, "w")) == NULL) p7_Fail("couldn't open %s for writing", diplotfile);
   if (difp || esl_opt_GetBoolean(go, "-P")) store_pp = TRUE;
 #endif
@@ -951,7 +787,7 @@ main(int argc, char **argv)
   /* create default null model, then create and optimize profile */
   bg = p7_bg_Create(abc);               
   gm = p7_profile_Create(hmm->M, abc); 
-  p7_profile_Config(gm, hmm, bg);
+  p7_profile_ConfigLocal(gm, hmm, bg, 100);  // local-only, so reference will match the filter
   om = p7_oprofile_Create(gm->M, abc);
   p7_oprofile_Convert(gm, om);
   /* p7_oprofile_Dump(stdout, om);  */
@@ -959,11 +795,12 @@ main(int argc, char **argv)
   /* Initially allocate matrices for a default sequence size, 500; 
    * we resize as needed for each individual target seq 
    */
-  ox  = p7_checkptmx_Create (gm->M, 500, ESL_MBYTES(32));  
+  ox  = p7_checkptmx_Create (gm->M, 4, 100);
+  //  ox  = p7_checkptmx_Create (gm->M, 500, ESL_MBYTES(32));  
   gx  = p7_refmx_Create     (gm->M, 500);
   sm  = p7_sparsemask_Create(gm->M, 500);
-#ifdef p7_DEBUGGING
-  /* When the p7_DEBUGGING flag is up, <ox> matrix has the ability to
+#if eslDEBUGLEVEL > 0
+  /* When the eslDEBUGLEVEL is nonzero, <ox> matrix has the ability to
    * record generic, complete <fwd>, <bck>, and <pp> matrices, for
    * comparison to reference implementation, even when checkpointing.
    */
@@ -978,11 +815,9 @@ main(int argc, char **argv)
       p7_oprofile_ReconfigLength(om, sq->n);
       p7_profile_SetLength      (gm, sq->n);
       p7_bg_SetLength(bg,            sq->n);
-
-      p7_checkptmx_GrowTo  (ox, om->M, sq->n); 
-      p7_sparsemask_Reinit(sm, gm->M, sq->n);
-
       p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
+
+      p7_checkptmx_Reinit(ox, om->M, sq->n); 
     
       p7_ForwardFilter (sq->dsq, sq->n, om, ox, &fraw);
       p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH);
@@ -991,7 +826,7 @@ main(int argc, char **argv)
       p7_ReferenceBackward(sq->dsq, sq->n, gm, gx, &gbraw);
 
       bsc = 0.0;		/* Backward score only available in debugging mode */
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
       if (esl_opt_GetBoolean(go, "-F")) p7_refmx_Dump(stdout, ox->fwd);
       if (esl_opt_GetBoolean(go, "-B")) p7_refmx_Dump(stdout, ox->bck);
       if (esl_opt_GetBoolean(go, "-P")) p7_refmx_Dump(stdout, ox->pp);
@@ -1015,7 +850,7 @@ main(int argc, char **argv)
 	  printf("query model:               %s\n",        hmm->name);
 	  printf("target sequence:           %s\n",        sq->name);
 	  printf("fwd filter raw score:      %.4f nats\n", fraw);
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
 	  printf("bck filter raw score:      %.4f nats\n", ox->bcksc);
 #endif
 	  printf("null score:                %.2f nats\n", nullsc);
@@ -1033,10 +868,9 @@ main(int argc, char **argv)
       esl_sq_Reuse(sq);
       p7_refmx_Reuse(gx);
       p7_sparsemask_Reuse(sm);
-      p7_checkptmx_Reuse(ox);
     }
 
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (difp) fclose(difp);
 #endif
   esl_sq_Destroy(sq);
@@ -1055,92 +889,6 @@ main(int argc, char **argv)
 }
 #endif /*p7FWDFILTER_EXAMPLE*/
 /*---------------------- end, example ---------------------------*/
-
-/*****************************************************************
- * 9. Notes
- *****************************************************************/
-
-/* [a.]  On debugging and testing methods.
- * 
- *    When compiled with <p7_DEBUGGING> (specifically, when
- *    fwdfilter.c and p7_checkptmx.[ch] are thus compiled), the
- *    <P7_CHECKPTMX> structure is augmented with additional fields for
- *    debugging dumps and unit test comparisons.
- *    
- *   %% Dumping vector matrices for examination
- *      The values from the vectorized <P7_CHECKPTMX> can be dumped
- *      during DP calculations by calling <p7_checkptmx_SetDumpMode()>
- *      on the object. Dumping has to happen during DP, not after,
- *      because of the way checkpointing discards rows as it goes (and
- *      for posterior decoding, the implementation never stores a row
- *      at all). Dumped rows are prefixed by a tag "f1 O", "f1 X", "f2
- *      O", "f2 X", or "bck", indicating backward (bck), first pass
- *      Forward (f1), second pass Forward (f2), checkpointed rows (O)
- *      that get saved and recalled, and discarded rows (X) that get
- *      recalculated in the second Forward pass.
- *      
- *      This capability is most useful for examining small DP matrices
- *      by hand; see fwdfilter_example, -D option.
- *      
- *   %% Saving matrices for comparison to reference
- *      With the <p7_DEBUGGING> compile flag, a caller may
- *      additionally provide an allocated <P7_REFMX> to the
- *      <P7_CHECKPTMX>, to enable storage of all DP matrix values in a
- *      form suitable for a <p7_refmx_Compare()> call against <P7_REFMX>
- *      DP matrices calculated by the reference implementation.
- *      Caller does something like <ox->fwd = p7_refmx_Create(M,L)> to
- *      save a Forward matrix, and/or analogously for <ox->bck> and/or
- *      <ox->pp> for Backward and Decoding.
- *      
- *      This capability is most useful for unit tests and automated
- *      comparison to the reference implementation. See utest_scores().
- *      
- *   %% High-precision comparison to reference
- *      Normally the reference implementation uses a table-driven
- *      log-sum-exp approximation (see misc/logsum.c), in order to do
- *      stable numerical calculations in log space. This introduces
- *      nonnegligible numerical error into DP calculations, so
- *      comparisons between a probability space vector implementation
- *      and the reference implementation must allow a large amount of
- *      numeric slop. At a cost of about 20x in speed, if the
- *      p7_LOGSUM_SLOWEXACT flag is compiled in, the p7_FLogsum()
- *      function uses the (more) exact calculation, allowing DP cells
- *      values to be compared more stringently.
- *      
- *      This capability is reflected in unit tests that set tolerances
- *      for floating-point comparison, after checking the flag with a
- *      <p7_logsum_IsSlowExact()> call. See utest_scores() for
- *      example.
- */
-
-/* [b.] Running time, in theory and in practice.
- *
- *    Checkpointing requires more time in theory, but in practice you
- *    probably won't notice. The checkpointing method requires
- *    recalculation of Forward rows that weren't checkpointed, meaning
- *    up to two Forwards passes (plus one Backwards and one posterior
- *    decoding pass) over the DP matrix, rather than one each. First,
- *    using the Forward score as a filter minimizes this penalty:
- *    relatively few sequences pass on to the BackwardFilter
- *    call. Second, memory management in the checkpointed P7_CHECKPTMX
- *    structure uses "partial checkpointing" to minimize the use of
- *    checkpointing; for most comparisons, of all but the longest
- *    query/target combinations, DP calculations will fit in the
- *    available memory, and checkpointing is not invoked. And finally,
- *    the implementation here has been further optimized, such that
- *    it's actually slightly faster (with checkpointing) than the
- *    original HMMER3.0 implementation of Forward and Backward without
- *    checkpointing.
- * 
- */
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
-
 
 
 

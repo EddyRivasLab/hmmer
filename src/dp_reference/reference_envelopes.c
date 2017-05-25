@@ -20,7 +20,6 @@
  *    4. Unit tests.
  *    5. Test driver.
  *    6. Example.
- *    7. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -1002,13 +1001,3 @@ main(int argc, char **argv)
 }
 #endif /*p7REFERENCE_ENVELOPES_EXAMPLE*/
 
-
-
-
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

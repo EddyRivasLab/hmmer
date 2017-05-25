@@ -18,9 +18,4 @@ extern int p7_emit_SimpleConsensus(const P7_HMM *hmm, ESL_SQ *sq);
 extern int p7_emit_FancyConsensus (const P7_HMM *hmm, float min_lower, float min_upper, ESL_SQ *sq);
 
 #endif /*p7EMIT_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

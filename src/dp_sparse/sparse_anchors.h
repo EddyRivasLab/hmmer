@@ -30,11 +30,4 @@ extern int p7_sparse_AnchorsGlobal(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int 
 
 extern int p7_sparse_anchors_SetFromTrace(const P7_SPARSEMX *sxd, const P7_TRACE *tr, P7_ANCHORS *anch);
 
-
 #endif /*p7SPARSE_ANCHORS_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

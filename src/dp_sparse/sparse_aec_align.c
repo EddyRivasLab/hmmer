@@ -26,13 +26,11 @@
  *   6. Unit tests.
  *   7. Test driver.
  *   8. Example.
- *   9. Copyright and licence information.
  */
 #include "p7_config.h"
 
 #include "easel.h"
 #include "esl_vectorops.h"
-
 
 #include "base/p7_profile.h"
 #include "base/p7_envelopes.h"
@@ -740,7 +738,7 @@ aec_trace(const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_ENVELOPES *env, cons
 #ifdef p7SPARSE_AEC_ALIGN_TESTDRIVE
 
 #include "hmmer.h"
-#include "hardware/hardware.h"
+
 /* "compare_reference" test
  *
  */
@@ -762,9 +760,7 @@ utest_compare_reference(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int
   P7_REFMX        *rpd   = p7_refmx_Create(M, 20);       // ASC posterior decoding DOWN
   P7_ENVELOPES    *renv  = p7_envelopes_Create();        // Envelopes calculated by reference impl
   P7_ENVELOPES    *senv  = p7_envelopes_Create();        // Envelopes calculated by sparse impl
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
-  P7_SPARSEMASK   *sm    = p7_sparsemask_Create(M, M, hw->simd);
+  P7_SPARSEMASK   *sm    = p7_sparsemask_Create(M, M);
   P7_SPARSEMX     *asf   = p7_sparsemx_Create(NULL);     // sparse ASC Forward
   P7_SPARSEMX     *asx   = p7_sparsemx_Create(NULL);     // sparse ASC Backward, and AEC alignment
   P7_SPARSEMX     *asd   = p7_sparsemx_Create(NULL);     // sparse ASC Decoding
@@ -904,9 +900,7 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N, in
       
       if (be_verbose) p7_trace_DumpAnnotated(stdout, gtr, gm, dsq);
 
-      P7_HARDWARE *hw;
-      if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
-      if (( sm = p7_sparsemask_Create(M, L, hw->simd)) == NULL) esl_fatal(msg);
+      if (( sm = p7_sparsemask_Create(M, L))                      == NULL) esl_fatal(msg);
       if (idx%2) { if ( p7_sparsemask_AddAll(sm)                 != eslOK) esl_fatal(msg); }
       else       { if ( p7_sparsemask_SetFromTrace(sm, rng, gtr) != eslOK) esl_fatal(msg); }
 
@@ -1214,11 +1208,3 @@ main(int argc, char **argv)
   return 0;
 }
 #endif /*p7SPARSE_AEC_ALIGN_EXAMPLE */
-
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

@@ -24,8 +24,6 @@
 
 #include "search/p7_mpas.h"
 
-#include "hardware/hardware.h"
-
 
 /* P7_ENGINE_PARAMS 
  * Configuration/control settings for the Engine.
@@ -46,7 +44,7 @@ typedef struct p7_engine_params_s {
  * Statistics collection for the Engine.
  */
 typedef struct p7_engine_stats_s {
-  int n_past_msv;
+  int n_past_ssv;
   int n_past_bias;
   int n_ran_vit;
   int n_past_vit;
@@ -59,8 +57,6 @@ typedef struct p7_engine_stats_s {
  */
 typedef struct p7_engine_s {
   ESL_RANDOMNESS *rng;    // Random number generator; used for MPAS sampling
-
-  P7_HARDWARE *hw;  // Information about the machine we're running on
 
   P7_FILTERMX    *fx;     // one-row vectorized DP for MSV, Vit filters. O(M) mem
   P7_CHECKPTMX   *cx;     // Checkpointed vector local F/B/D matrix.     O(M \sqrt L) mem.  (p7_SPARSIFY_RAMLIMIT = 128M)
@@ -83,7 +79,7 @@ typedef struct p7_engine_s {
 
   float           nullsc; // null raw score
   float           biassc; // ad hoc "bias filter" score, acts as modified null
-  float           mfsc;   // MSV raw score
+  float           sfsc;   // SSV raw score
   float           vfsc;   // ViterbiFilter raw score, complete sequence
   float           ffsc;   // ForwardFilter raw score, complete sequence
   float           vsc;    // sparse Viterbi score
@@ -96,23 +92,6 @@ typedef struct p7_engine_s {
 
   P7_ENGINE_PARAMS *params; // config/control parameters for the Engine
   P7_ENGINE_STATS  *stats;  // optional stats collection for the Engine, or NULL
-
-  //pointers to the filter routines in the engine.  Used to allow us to compile a binary with support for multiple
-  //variants of the hardware and select the best one at runtime
-
-  //MSV filter
-  int (*msv)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc);
-  
-  //SSV filter is called from within MSV, so don't need apointer to it.
-
-  // Viterbi filter
-  int (*vit)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc);
-
-  // Forward filter
-  int (*fwd)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc);
-  
-  // Backward filter
-  int (*bck)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh);
 
 } P7_ENGINE;
 
@@ -130,9 +109,4 @@ extern int p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFI
 extern int p7_engine_Main        (P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE  *gm);
 
 #endif /*p7ENGINE_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

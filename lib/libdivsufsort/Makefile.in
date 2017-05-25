@@ -13,7 +13,7 @@ MAKEFILE			= Makefile
 
 # options
 CC        = @CC@
-CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
+CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@ 
 CPPFLAGS  = @CPPFLAGS@
 MPILIBS   = @MPILIBS@
 AR        = @AR@ rc

@@ -16,9 +16,9 @@
 #include <syslog.h>
 #include <assert.h>
 
-#ifndef HMMER_THREADS
+#ifndef HAVE_PTHREAD   // SRE: FIXME: this shouldn't break a build
 #error "Program requires pthreads be enabled."
-#endif /*HMMER_THREADS*/
+#endif 
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -195,11 +195,3 @@ free_QueueData(QUEUE_DATA *data)
   memset(data, 0, sizeof(*data));
   free(data);
 }
-
-/*****************************************************************
- * @LICENSE@
- *
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

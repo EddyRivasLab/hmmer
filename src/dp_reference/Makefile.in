@@ -1,19 +1,15 @@
 MODULE = dp_reference
 
-LIBOBJS =  p7_refmx.o               \
-	   reference_viterbi.o      \
-	   reference_trace.o        \
-	   reference_fwdback.o      \
-	   reference_decoding.o     \
-	   reference_anchors.o      \
-	   reference_envelopes.o    \
-	   reference_asc_fwdback.o  \
-	   reference_asc_decoding.o \
-	   reference_aec_align.o    
-
-LIBHDRS =  
-
-OBJS =
+OBJS =  p7_refmx.o               \
+	reference_viterbi.o      \
+	reference_trace.o        \
+	reference_fwdback.o      \
+	reference_decoding.o     \
+	reference_anchors.o      \
+	reference_envelopes.o    \
+	reference_asc_fwdback.o  \
+	reference_asc_decoding.o \
+	reference_aec_align.o    
 
 HDRS =
 
@@ -41,8 +37,6 @@ EXAMPLES = reference_anchors_example      \
            reference_viterbi_example
 
 
-LIBTMP = 
-
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@
 srcdir       = @srcdir@
@@ -51,10 +45,4 @@ SHELL        = /bin/sh
 
 include ../Makefile-subdirs.mk
 
-################################################################
-# @LICENSE@
-#
-# SVN $URL$
-# SVN $Id$
-################################################################
 

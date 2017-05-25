@@ -11,7 +11,6 @@
  *   8. Unit tests
  *   9. Test driver
  *  10. Example
- *  11. Copyright and license information
  * 
  * Stylistic note: elements in a trace path are usually indexed by z.
  */
@@ -2480,10 +2479,3 @@ main(int argc, char **argv)
   return 0;
 }
 #endif /*p7TRACE_EXAMPLE*/
-
-
-
-/************************************************************
- * @LICENSE@
- ************************************************************/
-

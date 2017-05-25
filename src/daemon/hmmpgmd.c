@@ -7,9 +7,9 @@
 #include <string.h>
 #include <signal.h>
 
-#ifndef HMMER_THREADS
+#ifndef HAVE_PTHREAD  // SRE FIXME
 #error "Program requires pthreads be enabled."
-#endif /*HMMER_THREADS*/
+#endif 
 
 #include "easel.h"
 #include "esl_getopts.h"
@@ -216,8 +216,4 @@ main(int argc, char **argv)
  *    cat my.hmm | pbcopy   
  */
 
-
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
 

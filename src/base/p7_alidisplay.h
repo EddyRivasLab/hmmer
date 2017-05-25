@@ -1,6 +1,6 @@
 /* Structure: P7_ALIDISPLAY
  * 
- * Alignment of a sequence domain to an HMM, formatted for printing.
+ * Alignment of a sequence domain to a profile, formatted for printing.
  * 
  * A homology domain produces a chunk of P7_TRACE:
  *     ... B -> {GL} -> {MD}k1 -> ... {MD}k2 -> E ...
@@ -38,7 +38,6 @@
  */
 #ifndef p7ALIDISPLAY_INCLUDED
 #define p7ALIDISPLAY_INCLUDED
-
 #include "p7_config.h"
 
 #include <stdio.h>
@@ -49,7 +48,7 @@
 #include "esl_sq.h"
 
 #include "base/p7_trace.h"
-#include "dp_vector/p7_oprofile.h"
+#include "base/p7_profile.h"
 
 typedef struct p7_alidisplay_s {
   char *rfline;                 /* reference coord info; or NULL        */
@@ -81,14 +80,7 @@ typedef struct p7_alidisplay_s {
 
 
 /* 1. The P7_ALIDISPLAY object */
-// Need SSE, AVX, AVX512 versions of Create because it inlines a vector operation
-extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
-extern P7_ALIDISPLAY *p7_alidisplay_Create_sse(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
-extern P7_ALIDISPLAY *p7_alidisplay_Create_avx(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
-extern P7_ALIDISPLAY *p7_alidisplay_Create_avx512(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
-extern P7_ALIDISPLAY *p7_alidisplay_Create_neon(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq);
-
-
+extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_PROFILE *gm, const ESL_SQ *sq);
 extern P7_ALIDISPLAY *p7_alidisplay_Clone(const P7_ALIDISPLAY *ad);
 extern size_t         p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad);
 extern int            p7_alidisplay_Serialize(P7_ALIDISPLAY *ad);
@@ -111,9 +103,4 @@ extern int            p7_alidisplay_Compare(const P7_ALIDISPLAY *ad1, const P7_A
 
 
 #endif /*p7ALIDISPLAY_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

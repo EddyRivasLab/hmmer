@@ -60,9 +60,4 @@ extern int    p7_bg_FilterScore(P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret
 
 
 #endif /*p7BG_INCLUDED*/
-/************************************************************
- * @LICENSE@
- *
- * SVN $Id: hmmer.h 4252 2012-10-12 22:59:55Z eddys $
- * SVN $URL: https://svn.janelia.org/eddylab/eddys/src/hmmer/trunk/src/hmmer.h $
- ************************************************************/
+

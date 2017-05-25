@@ -16,9 +16,4 @@ extern int p7_tracealign_ComputeTraces(P7_HMM *hmm, ESL_SQ  **sq, int offset, in
 extern int p7_tracealign_getMSAandStats(P7_HMM *hmm, ESL_SQ  **sq, int N, ESL_MSA **ret_msa, float **ret_pp, float **ret_relent, float **ret_scores );
 
 #endif /*p7TRACEALIGN_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

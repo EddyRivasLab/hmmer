@@ -8,7 +8,6 @@
  *   2. Choice selection for stochastic traces
  *   3. Traceback engine
  *   4. Exposed API, wrappers around the engine
- *   5. Copyright and license information
  */
 #include "p7_config.h"
 
@@ -411,11 +410,3 @@ p7_reference_trace_Stochastic(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PRO
 }
 
 /*----------------- end, API wrappers ---------------------------*/
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/
-

@@ -55,9 +55,7 @@
  *    1. Using P7_SPARSEMX for ASC calculations.
  *    2. Debugging and development tools.
  *    3. Debugging and dev: Validation routine.
- *    4. Copyright and license information.
  */
-
 #include "p7_config.h"
 
 #include <stdio.h>
@@ -1424,8 +1422,6 @@ main(int argc, char **argv)
 	}
 
       esl_sq_Reuse(sq);
-      p7_filtermx_Reuse(fx);
-      p7_checkptmx_Reuse(cx);
       p7_sparsemask_Reuse(sm);
     }
   if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
@@ -1453,9 +1449,3 @@ main(int argc, char **argv)
 }
 #endif /*p7SPASCMX_STATS*/
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

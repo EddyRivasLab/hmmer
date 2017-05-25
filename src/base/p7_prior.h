@@ -25,10 +25,4 @@ extern void       p7_prior_Destroy(P7_PRIOR *pri);
 extern int        p7_ParameterEstimation(P7_HMM *hmm, const P7_PRIOR *pri);
 
 #endif /*p7PRIOR_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 

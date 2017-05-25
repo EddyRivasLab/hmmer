@@ -23,10 +23,3 @@ extern int p7_sparse_envscore_IntersectedMask(P7_SPARSEMASK *osm, int iae, int i
 #endif /*p7SPARSE_ENVSCORE_INCLUDED*/
 
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
-

@@ -6,12 +6,10 @@
  *    4. Unit tests.
  *    5. Test driver.
  *    6. Example.
- *    7. Copyright and license information.
  *
  * See also: 
  *   modelconfig.c : routines that configure a profile given an HMM
  */
-
 #include "p7_config.h"
 
 #include <stdio.h>
@@ -525,8 +523,8 @@ p7_profile_Dump(FILE *fp, P7_PROFILE *gm)
   else 
     {
       fputs("# statistical parameters\n", fp);
-      fprintf(fp, "   msv mu     = %.4f\n", gm->evparam[p7_MMU]);
-      fprintf(fp, "   msv lambda = %.4f\n", gm->evparam[p7_MLAMBDA]);
+      fprintf(fp, "   msv mu     = %.4f\n", gm->evparam[p7_SMU]);
+      fprintf(fp, "   msv lambda = %.4f\n", gm->evparam[p7_SLAMBDA]);
       fprintf(fp, "   vit mu     = %.4f\n", gm->evparam[p7_VMU]);
       fprintf(fp, "   vit lambda = %.4f\n", gm->evparam[p7_VLAMBDA]);
       fprintf(fp, "   fwd tau    = %.4f\n", gm->evparam[p7_FTAU]);
@@ -735,6 +733,133 @@ p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol)
 
 
 
+/* Function:  p7_profile_SameAsSSV()
+ * Synopsis:  Round a generic profile's scores to give SSV scores.
+ *
+ * Purpose:   Set a generic profile's scores so that the reference
+ *            Viterbi implementation will give the same score as
+ *            <p7_SSVFilter()>, by rescaling and rounding using a
+ *            factor of <scale_b> (that is, pass <om->scale_b> from
+ *            the vector profile you're matching to).
+ *
+ *            Caller must first set <gm> to unihit local mode. Then
+ *            this routine sets: all t_MM scores = 0; all other core
+ *            transitions = -inf; all <t_BMk> entries uniformly <log
+ *            2/(M(M+1))>; <tCC, tNN, tJJ> scores 0 (caller will apply
+ *            the 2 nat approximation). 
+ *
+ *            Match emission scores are scaled and rounded, emulating
+ *            SSV filter's 8-bit limited precision. tau_BMk, tau_NB|CT
+ *            remain in full precision, because SSVFilter also keeps
+ *            them in full precision.
+ *            
+ *            To convert a generic Viterbi score <gsc> calculated with
+ *            this profile to a nat score that should match
+ *            SSVFilter() exactly, do <(gsc / om->scale_b) - 2.0>.
+ *            
+ *            <gm> is irrevocably altered. You can only call this once
+ *            on a given <gm>.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_profile_SameAsSSV(P7_PROFILE *gm, float scale_b)
+{
+  int    k,x;
+  float  tbm = scale_b * (log(2.0f / ((float) gm->M * (float) (gm->M+1))));
+
+  /* Transitions */
+  esl_vec_FSet(gm->tsc, p7P_NTRANS * gm->M, -eslINFINITY);
+  for (k = 1; k <  gm->M; k++) P7P_TSC(gm, k, p7P_MM) = 0.0f;
+  for (k = 0; k <  gm->M; k++) P7P_TSC(gm, k, p7P_LM) = tbm;
+  
+  /* Emissions */
+  for (x = 0; x < gm->abc->Kp; x++)
+    for (k = 0; k <= gm->M; k++)
+      {
+	gm->rsc[x][k*2]   = (gm->rsc[x][k*2] <= -eslINFINITY) ? -eslINFINITY : roundf(scale_b * gm->rsc[x][k*2]);
+	gm->rsc[x][k*2+1] = 0;	/* insert scores are implicitly zero in the filters. */
+      }	
+
+   /* Specials */
+  for (k = 0; k < p7P_NXSTATES; k++)
+    for (x = 0; x < p7P_NXTRANS; x++)
+      gm->xsc[k][x] = (gm->xsc[k][x] <= -eslINFINITY) ? -eslINFINITY : scale_b * gm->xsc[k][x];
+
+  /* NN, CC, JJ hardcoded 0 in limited precision */
+  gm->xsc[p7P_N][p7P_LOOP] =  gm->xsc[p7P_J][p7P_LOOP] =  gm->xsc[p7P_C][p7P_LOOP] = 0;
+
+  return eslOK;
+}
+
+
+/* Function:  p7_profile_SameAsVF()
+ * Synopsis:  Round a generic profile to match ViterbiFilter scores.
+ *
+ * Purpose:   Round all the scores in a generic (lspace) <P7_PROFILE> <gm> in
+ *            exactly the same way that the scores in a
+ *            <P7_OPROFILE>, by rescaling and rounding using a factor
+ *            of <scale_w> (that is, pass <om->scale_w> from the vector 
+ *            profile you're matching). Then we can test that two profiles
+ *            give identical internal scores in testing, say,
+ *            <p7_ViterbiFilter()> against <p7_GViterbi()>. 
+ *            
+ *            The 3nat approximation is used; NN=CC=JJ=0, and 3 nats are
+ *            subtracted at the end to account for their contribution.
+ *            
+ *            To convert a generic Viterbi score <gsc> calculated with this profile
+ *            to a nat score that should match ViterbiFilter() exactly,
+ *            do <(gsc / om->scale_w) - 3.0>.
+ *
+ *            <gm> must be the same profile that <om> was constructed from.
+ * 
+ *            <gm> is irrevocably altered by this call. 
+ *            
+ *            Do not call this more than once on any given <gm>! 
+ *
+ * Args:      <gm>      - generic profile that <om> was built from.          
+ *            <scale_w> - i.e. <om->scale_w> from a vector profile we're matching to
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+p7_profile_SameAsVF(P7_PROFILE *gm, float scale_w)
+{
+  int k;
+  int x;
+
+  /* Transitions */
+  /* <= -eslINFINITY test is used solely to silence compiler about floating point comparison.
+   * really testing == -eslINFINITY 
+   */
+  for (x = 0; x < gm->M*p7P_NTRANS; x++)
+    gm->tsc[x] = (gm->tsc[x] <= -eslINFINITY) ? -eslINFINITY : roundf(scale_w * gm->tsc[x]);
+  
+  /* Enforce the rule that no II can be 0; max of -1 */
+  for (x = p7P_II; x < gm->M*p7P_NTRANS; x += p7P_NTRANS) 
+    if (gm->tsc[x] == 0.0) gm->tsc[x] = -1.0;
+
+  /* Emissions */
+  for (x = 0; x < gm->abc->Kp; x++)
+    for (k = 0; k <= gm->M; k++)
+      {
+	gm->rsc[x][k*2]   = (gm->rsc[x][k*2]   <= -eslINFINITY) ? -eslINFINITY : roundf(scale_w * gm->rsc[x][k*2]);
+	gm->rsc[x][k*2+1] = 0.0;	/* insert score: VF makes it zero no matter what. */
+      }	
+
+  /* Specials */
+  for (k = 0; k < p7P_NXSTATES; k++)
+    for (x = 0; x < p7P_NXTRANS; x++)
+      gm->xsc[k][x] = (gm->xsc[k][x] <= -eslINFINITY) ? -eslINFINITY : roundf(scale_w * gm->xsc[k][x]);
+
+  /* 3nat approximation: NN, CC, JJ hardcoded 0 in limited precision */
+  gm->xsc[p7P_N][p7P_LOOP] =  gm->xsc[p7P_J][p7P_LOOP] =  gm->xsc[p7P_C][p7P_LOOP] = 0.0;
+  return eslOK;
+}
+
+
+
+
 /*****************************************************************
  * 4. Unit tests
  *****************************************************************/
@@ -884,10 +1009,3 @@ main(int argc, char **argv)
 }
 #endif /* p7PROFILE_EXAMPLE */
 
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

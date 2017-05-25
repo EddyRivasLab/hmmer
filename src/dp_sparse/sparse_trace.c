@@ -8,7 +8,6 @@
  *   3. Traceback engine, shared by Viterbi and stochastic
  *   4. Exposed API, wrappers around the engine
  *   5. Example
- *   6. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -726,7 +725,7 @@ p7_sparse_trace_StochasticSeg(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PRO
       tr->M = sxf->sm->M;
     }
   
-#if p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   if (tr->N)
     {
       int z;
@@ -897,12 +896,3 @@ main(int argc, char **argv)
 #endif /*p7SPARSE_TRACE_EXAMPLE*/
 /*------------------ end, example driver ------------------------*/
 
-
-
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/ 

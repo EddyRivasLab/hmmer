@@ -149,9 +149,4 @@ extern int    p7_spascmx_Validate(const P7_SPARSEMX *asx, const P7_ANCHOR *anch,
 
 
 #endif /*p7SPASCMX_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

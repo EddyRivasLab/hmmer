@@ -41,13 +41,13 @@ if (! -x "$builddir/src/daemon/hmmc2")       { die "FAIL: didn't find hmmc2 exec
 
 
 # Verify that threads are enabled in p7_config.h
-# by looking for "#define HMMER_THREADS"
+# by looking for "#define HAVE_PTHREAD"
 # if not found, threads are not enabled and this
 # test would fail, but we return ok status because
 # we don't want the full testsuite to fail.
-$have_threads = `cat $builddir/src/p7_config.h | grep "^#define HMMER_THREADS"`;
+$have_threads = `cat $builddir/src/p7_config.h | grep "^#define HAVE_PTHREAD"`;
 if($have_threads eq "") { 
-    printf("HMMER_THREADS not defined in p7_config.h\n"); 
+    printf("HAVE_PTHREAD not defined in p7_config.h\n"); 
     exit 0;
 }
 

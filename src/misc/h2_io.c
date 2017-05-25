@@ -1,9 +1,5 @@
 /* Input/output of HMMER3 HMMs in HMMER2 save file formats:
  * for backwards compatibility.
- * 
- * Contents:
- *    1. Writing profiles in HMMER2 format.
- *    2. Copyright and license information
  */
 #include "p7_config.h"
 
@@ -243,9 +239,3 @@ printprob(FILE *fp, int fieldwidth, float p, float null)
   return eslOK;
 }
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

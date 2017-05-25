@@ -8,7 +8,8 @@
 # assumed to be in <srcdir>/autobuild/<cmdscript>.
 #
 # <srcdir> is the root of a buildable copy of the HMMER source tree;
-# it may be an SVN working copy, a distro, or an SVN export.
+# it may be a git working copy, a distro, or an git archive
+# on its way to being a distro.
 #
 # If <srcdir>/ab-<cmdscript> exists and a Makefile is found there,
 # it is assumed to be a previous build; a "make distclean" is done and

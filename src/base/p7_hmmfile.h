@@ -7,7 +7,7 @@
 
 #include <stdio.h>
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 #include <pthread.h>
 #endif
 
@@ -50,7 +50,7 @@ typedef struct p7_hmmfile_s {
   FILE         *ffp;		/* MSV part of the optimized profile */
   FILE         *pfp;		/* rest of the optimized profile     */
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   int              syncRead;
   pthread_mutex_t  readMutex;
 #endif
@@ -76,7 +76,7 @@ extern int  p7_hmmfile_Open     (char *filename, char *env, P7_HMMFILE **ret_hfp
 extern int  p7_hmmfile_OpenNoDB (char *filename, char *env, P7_HMMFILE **ret_hfp); /* deprecated */
 extern int  p7_hmmfile_OpenBuffer(char *buffer, int size, P7_HMMFILE **ret_hfp);
 extern void p7_hmmfile_Close(P7_HMMFILE *hfp);
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 extern int  p7_hmmfile_CreateLock(P7_HMMFILE *hfp);
 #endif
 extern int  p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm);
@@ -87,9 +87,3 @@ extern int  p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key);
 extern int  p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset);
 
 #endif /*p7HMMFILE_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

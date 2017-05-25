@@ -47,7 +47,7 @@ man1ext     = .1
 # Compiler configuration
 #
 CC        = @CC@
-CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
+CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@ 
 LDFLAGS   = -static @LDFLAGS@
 SIMDFLAGS = @SIMD_CFLAGS@
 CPPFLAGS  = @CPPFLAGS@
@@ -110,6 +110,20 @@ check:
 pdf:
 	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} pdf
 
+# cscope: build cscope indices (code browsing aid, for developers)
+#    find -L: follow symlinks (so you index Easel too)
+#  cscope -b: build index
+#         -k: don't index /usr/include ("kernel mode")
+#         -q: build inverted index (enable fast symbol lookup)
+#         -u: unconditionally rebuild the index (not just changed files)
+cscope:
+	find -L . -name '*.[ch]' > cscope.files
+	cscope -b -k -q -u
+
+# TAGS: build etags indices (another code browsing aid)
+TAGS:
+	./makeTAGS.sh
+
 # install: installs the binaries in ${bindir}/
 #          When man pages are done, will install man pages in MANDIR/man1/  (e.g. if MANSUFFIX is 1)
 #          Creates these directories if they don't exist.
@@ -159,13 +173,6 @@ ifneq (,$(wildcard ./documentation/release-notes/LICENSE.sh))
 	-rm -f documentation/release-notes/LICENSE.sh
 endif
 
-TAGS:
-	./makeTAGS.sh
 
 
-################################################################
-# @LICENSE@
-#
-# SVN $URL$
-# SVN $Id$
-################################################################
+

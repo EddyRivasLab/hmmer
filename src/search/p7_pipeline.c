@@ -10,8 +10,6 @@
  *   7. The acceleration pipeline, vastly simplified, as one call. 
  *   8. Example 1: search mode (in a sequence db)
  *   9. Example 2: scan mode (in an HMM db)
- *   10. Copyright and license information
- * 
  */
 #include "p7_config.h"
 
@@ -53,7 +51,7 @@
 
 #include "search/modelconfig.h" /* used by the hmmscan workaround */
 #include "search/p7_pipeline.h"
-#include "hardware/hardware.h"
+
 
 /* SRE: FIXME 3.1 in progress */
 static int workaround_get_profile(P7_PIPELINE *pli, const P7_OPROFILE *om, const P7_BG *bg, P7_PROFILE **ret_gm);
@@ -141,7 +139,7 @@ typedef struct {
  * Throws:    <NULL> on allocation failure.
  */
 P7_PIPELINE *
-p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, enum p7_pipemodes_e mode, SIMD_TYPE simd)
+p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, enum p7_pipemodes_e mode)
 {
   P7_PIPELINE *pli  = NULL;
   int          status;
@@ -163,9 +161,9 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, 
   pli->n2sc = NULL;
   pli->wrk  = NULL;
   
-  if ( (pli->fx  = p7_filtermx_Create  (M_hint, simd))                                           == NULL) goto ERROR;
-  if ( (pli->cx  = p7_checkptmx_Create (M_hint, L_hint, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT), simd)) == NULL) goto ERROR; /* p7_RAMLIMIT=256MB, in p7_config.h.in */
-  if ( (pli->sm  = p7_sparsemask_Create(M_hint, L_hint, simd))                                   == NULL) goto ERROR;
+  if ( (pli->fx  = p7_filtermx_Create  (M_hint))                                           == NULL) goto ERROR;
+  if ( (pli->cx  = p7_checkptmx_Create (M_hint, L_hint, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT))) == NULL) goto ERROR; /* p7_RAMLIMIT=256MB, in p7_config.h.in */
+  if ( (pli->sm  = p7_sparsemask_Create(M_hint, L_hint))                                   == NULL) goto ERROR;
   if ( (pli->sxf = p7_sparsemx_Create  (pli->sm))                                          == NULL) goto ERROR;
   if ( (pli->sxb = p7_sparsemx_Create  (pli->sm))                                          == NULL) goto ERROR;
   if ( (pli->sxd = p7_sparsemx_Create  (pli->sm))                                          == NULL) goto ERROR;
@@ -305,8 +303,6 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, 
 int
 p7_pipeline_Reuse(P7_PIPELINE *pli)
 {
-  p7_filtermx_Reuse  (pli->fx);
-  p7_checkptmx_Reuse (pli->cx);
   p7_sparsemask_Reuse(pli->sm);
   p7_sparsemx_Reuse  (pli->sxf);
   p7_sparsemx_Reuse  (pli->sxb);
@@ -553,7 +549,7 @@ p7_pipeline_stats_Init(P7_PIPELINE_STATS *stats)
   stats->nres          = 0;
   stats->nnodes        = 0;
 
-  stats->n_past_msv    = 0;
+  stats->n_past_ssv    = 0;
   stats->n_past_bias   = 0;
   stats->n_past_vit    = 0;
   stats->n_past_fwd    = 0;
@@ -593,7 +589,7 @@ p7_pipeline_stats_Merge(P7_PIPELINE *p1, const P7_PIPELINE_STATS *stats)
       p1->stats.nnodes  += stats->nnodes;
     }
 
-  p1->stats.n_past_msv  += stats->n_past_msv;
+  p1->stats.n_past_ssv  += stats->n_past_ssv;
   p1->stats.n_past_bias += stats->n_past_bias;
   p1->stats.n_past_vit  += stats->n_past_vit;
   p1->stats.n_past_fwd  += stats->n_past_fwd;
@@ -669,8 +665,8 @@ p7_pipeline_WriteStats(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
   } else { // typical case output
 
       fprintf(ofp, "Passed MSV filter:           %15" PRId64 "  (%.6g); expected %.1f (%.6g)\n",
-          pli->stats.n_past_msv,
-          (double) pli->stats.n_past_msv / ntargets,
+          pli->stats.n_past_ssv,
+          (double) pli->stats.n_past_ssv / ntargets,
           pli->F1 * ntargets,
           pli->F1);
 
@@ -800,16 +796,16 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
   /* First level filter: the SSV and MSV filters */
   p7_MSVFilter(sq->dsq, sq->n, om, pli->fx, &usc);
   seq_score = (usc - nullsc) / eslCONST_LOG2;
-  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
   if (P > pli->F1) return eslOK;
-  pli->stats.n_past_msv++;
+  pli->stats.n_past_ssv++;
 
   /* biased composition HMM filtering */
   if (pli->do_biasfilter)
     {
       p7_bg_FilterScore(bg, sq->dsq, sq->n, &filtersc);
       seq_score = (usc - filtersc) / eslCONST_LOG2;
-      P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+      P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
       if (P > pli->F1) return eslOK;
     }
   else filtersc = nullsc;
@@ -927,7 +923,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const 
       if (dcl[d].bitscore > dcl[best_d].bitscore) best_d = d;
 
       /* Viterbi alignment of the domain */
-      dcl[d].ad = p7_alidisplay_Create(pli->tr, d, om, sq);
+      dcl[d].ad = p7_alidisplay_Create(pli->tr, d, gm, sq);
 
       /* We're initializing a P7_DOMAIN structure in dcl[d] by hand, without a Create().
        * We're responsible for initiazing all elements of this structure.
@@ -1483,7 +1479,6 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
 
 
   /* Parse with Forward and obtain its real Forward score. */
-  p7_checkptmx_Reuse (pli->cx);
   p7_ForwardFilter(subseq, window_len, om, pli->cx, &fwdsc);
   seq_score = (fwdsc - filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
@@ -1727,7 +1722,7 @@ p7_pipeline_postViterbi_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE
             if ((status = esl_sq_SetDesc     (pli_tmp->tmpseq, seq_desc))   != eslOK) goto ERROR;
           }
           /* Viterbi alignment of the domain */
-          dcl_tmp->ad = p7_alidisplay_Create(pli_tmp->trc, dd, pli_tmp->om, pli_tmp->tmpseq); // it's ok to use the om instead of the gm here; it doesn't depend on updated fwd scores
+          dcl_tmp->ad = p7_alidisplay_Create(pli_tmp->trc, dd, gm, pli_tmp->tmpseq);
 
 
           pli_tmp->trc->sqfrom[dd] += env_offset - 1;
@@ -1910,7 +1905,7 @@ p7_pipeline_postSSV_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om
       bias_filtersc -= nullsc; // doing this because I'll be modifying the bias part of filtersc based on length, then adding nullsc back in.
       filtersc =  nullsc + (bias_filtersc * (float)(( F1_L>window_len ? 1.0 : (float)F1_L/window_len)));
       seq_score = (usc - filtersc) / eslCONST_LOG2;
-      P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+      P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
       if (P > pli->F1) return eslOK;
   } else {
     bias_filtersc = 0; // mullsc will be added in later
@@ -2050,19 +2045,17 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
   P7_HMM_WINDOWLIST vit_windowlist;
 
   P7_PIPELINE_LONGTARGET_OBJS *pli_tmp = NULL;
-  if(om->simd != SSE && om->simd != NEON && om->simd != NEON64){
-    esl_fatal("p7_Pipeline_LongTarget only supports SSE and NEON SIMD types at the moment");
-  }
+
+  //if (om->simd != SSE && om->simd != NEON) 
+  //esl_fatal("p7_Pipeline_LongTarget only supports SSE and NEON SIMD types at the moment");
 
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
   ESL_ALLOC(pli_tmp, sizeof(P7_PIPELINE_LONGTARGET_OBJS));
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   pli_tmp->bg = p7_bg_Clone(bg);
   pli_tmp->gm = p7_profile_Clone(gm);
-  pli_tmp->om = p7_oprofile_Create(gm->M, gm->abc, om->simd);
-  pli_tmp->sm = p7_sparsemask_Create(gm->M, 100, om->simd);
+  pli_tmp->om = p7_oprofile_Create(gm->M, gm->abc);
+  pli_tmp->sm = p7_sparsemask_Create(gm->M, 100);
   ESL_ALLOC(pli_tmp->scores, sizeof(float) * om->abc->Kp);
   if ( (pli_tmp->trc = p7_trace_CreateWithPP())            == NULL) { status = eslEMEM; goto ERROR; }
   if ( (pli_tmp->sxf = p7_sparsemx_Create (pli_tmp->sm))   == NULL) { status = eslEMEM; goto ERROR; }
@@ -2075,11 +2068,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
   vit_windowlist.windows = NULL;
   p7_hmmwindow_init(&msv_windowlist);
 
-
-  /* Set false target length. This is a conservative estimate of the length of window that'll
-   * soon be passed on to later phases of the pipeline;  used to recover some bits of the score
-   * that we would miss if we left length parameters set to the full target length */
-  p7_oprofile_ReconfigMSVLength(om, om->max_length);
 
   /* First level filter: the SSV filter, with <om>.
    * This variant of SSV will scan a long sequence and find
@@ -2125,11 +2113,10 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFILE *om, P7_SCO
 
       // Compute standard MSV to ensure that bias doesn't overcome SSV score when MSV
       // would have survived it
-      p7_oprofile_ReconfigMSVLength(om, window_len);
-      p7_MSVFilter(subseq, window_len, om, pli->fx, &usc);
 
-      P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-      if (P > pli->F1 ) continue;
+      // p7_MSVFilter(subseq, window_len, om, pli->fx, &usc);  SRE TODO REVISIT 
+      // P = esl_gumbel_surv( (usc-nullsc)/eslCONST_LOG2,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
+      // if (P > pli->F1 ) continue;
 
       pli->stats.pos_past_msv += window_len;
 
@@ -2277,7 +2264,7 @@ p7_pipeline_AccelerationFilter(ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg,
 
   p7_MSVFilter(dsq, L, om, fx, &usc);
   seq_score = (usc - nullsc) / eslCONST_LOG2;
-  P = esl_gumbel_surv(seq_score, om->evparam[p7_MMU], om->evparam[p7_MLAMBDA]);
+  P = esl_gumbel_surv(seq_score, om->evparam[p7_SMU], om->evparam[p7_SLAMBDA]);
   if (P > F1) return eslFAIL;
 
   p7_ViterbiFilter(dsq, L, om, fx, &vitsc);  
@@ -2509,7 +2496,7 @@ main(int argc, char **argv)
   if (! pli->Z_is_fixed && hfp->is_pressed) { pli->Z_is_fixed = TRUE; pli->Z = hfp->ssi->nprimary; }
 
   /* Read (partial) of each HMM in file */
-  while (p7_oprofile_ReadMSV(hfp, &abc, &om) == eslOK) 
+  while (p7_oprofile_ReadSSV(hfp, &abc, &om) == eslOK) 
     {
       /* One time only initiazation after abc becomes known */
       if (bg == NULL) 
@@ -2565,9 +2552,3 @@ main(int argc, char **argv)
 
 
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

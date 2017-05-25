@@ -6,7 +6,6 @@
  *    2. Making trial anchor sets (from traces, for example)
  *    3. Statistics collection driver
  *    4. Example
- *    5. License and copyright information.
  */
 #include "p7_config.h"
 
@@ -581,8 +580,6 @@ main(int argc, char **argv)
 	  p7_anchors_Reuse(anch);
 	}
 
-      p7_filtermx_Reuse(fx);
-      p7_checkptmx_Reuse(cx);
       p7_sparsemask_Reuse(sm);
       esl_sq_Reuse(sq);
     }
@@ -784,9 +781,3 @@ main(int argc, char **argv)
 #endif /*p7REFERENCE_ANCHORS_EXAMPLE*/
 
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

@@ -10,9 +10,7 @@
  *   2. Unit tests.
  *   3. Test driver.
  *   4. Example.
- *   5. Copyright and license information.
  */
-
 #include "p7_config.h"
 
 #include <math.h>
@@ -894,9 +892,3 @@ main(int argc, char **argv)
 #endif /*p7REFERENCE_DECODING_EXAMPLE*/
 /*------------------ end, example driver ------------------------*/
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

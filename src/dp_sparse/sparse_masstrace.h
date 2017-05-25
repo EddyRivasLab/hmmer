@@ -16,9 +16,3 @@ extern int p7_SparseMasstrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, c
 			      int *ret_iae, int *ret_ibe, int *ret_kae, int *ret_kbe);
 
 #endif /*p7SPARSE_MASSTRACE_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

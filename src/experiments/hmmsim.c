@@ -636,20 +636,18 @@ recalibrate_model(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm)
 
   gm = p7_profile_Create(hmm->M, cfg->abc);
   p7_profile_Config(gm, hmm, cfg->bg);      /* dual-mode multihit; L=0 (no length model needed right now) */
-   P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
-  om = p7_oprofile_Create(gm->M, cfg->abc, hw->simd);
+  om = p7_oprofile_Create(gm->M, cfg->abc);
   p7_oprofile_Convert(gm, om);	/* om is now *local* multihit */
 
   p7_Lambda(hmm, cfg->bg, &lambda);
-  p7_MSVMu    (cfg->r, om, cfg->bg, EmL, EmN, lambda,      &mmu);
+  p7_SSVMu    (cfg->r, om, cfg->bg, EmL, EmN, lambda,      &mmu);
   p7_ViterbiMu(cfg->r, om, cfg->bg, EvL, EvN, lambda,      &vmu);
   p7_Tau      (cfg->r, om, cfg->bg, EfL, EfN, lambda, Eft, &ftau);
 
-  hmm->evparam[p7_MLAMBDA] = lambda;
+  hmm->evparam[p7_SLAMBDA] = lambda;
   hmm->evparam[p7_VLAMBDA] = lambda;
   hmm->evparam[p7_FLAMBDA] = lambda;
-  hmm->evparam[p7_MMU]     = mmu;
+  hmm->evparam[p7_SMU]     = mmu;
   hmm->evparam[p7_VMU]     = vmu;
   hmm->evparam[p7_FTAU]    = ftau;
   hmm->flags              |= p7H_STATS;
@@ -684,8 +682,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   float           sc;
   float           nullsc;
   int             status;
-   P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+
   /* Optionally set a custom background, determined by model composition;
    * an experimental hack. 
    */
@@ -726,9 +723,9 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
    */
   if (esl_opt_GetBoolean(go, "--vector"))
     {
-      om = p7_oprofile_Create(gm->M, cfg->abc, om->simd);
+      om = p7_oprofile_Create(gm->M, cfg->abc);
       p7_oprofile_Convert(gm, om);
-      cx = p7_checkptmx_Create(gm->M, L, ESL_MBYTES(32), om->simd);
+      cx = p7_checkptmx_Create(gm->M, L, ESL_MBYTES(32));
       fx = p7_filtermx_Create(gm->M, om->simd);
     }
   
@@ -783,8 +780,6 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
       p7_bg_NullOne(cfg->bg, dsq, L, &nullsc);
       scores[i] = (sc - nullsc) / eslCONST_LOG2;
 
-      if (cx) p7_checkptmx_Reuse(cx);
-      if (fx) p7_filtermx_Reuse(fx);
       p7_refmx_Reuse(rmx);
     }
   status      = eslOK;
@@ -819,7 +814,7 @@ output_result(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, dou
 
   /* fetch statistical params from HMM for expected distribution */
   if       (esl_opt_GetBoolean(go, "--vit")) { pmu = hmm->evparam[p7_VMU];  plambda = hmm->evparam[p7_VLAMBDA]; }
-  else if  (esl_opt_GetBoolean(go, "--msv")) { pmu = hmm->evparam[p7_MMU];  plambda = hmm->evparam[p7_MLAMBDA]; }
+  else if  (esl_opt_GetBoolean(go, "--msv")) { pmu = hmm->evparam[p7_SMU];  plambda = hmm->evparam[p7_SLAMBDA]; }
   else if  (esl_opt_GetBoolean(go, "--fwd")) { pmu = hmm->evparam[p7_FTAU]; plambda = hmm->evparam[p7_FLAMBDA]; }
 
   /* Optional output of scores/alignment lengths: */
@@ -977,7 +972,7 @@ output_filter_power(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hm
   double pmu, plambda;
 
   if       (esl_opt_GetBoolean(go, "--vit")) { pmu = hmm->evparam[p7_VMU];  plambda = hmm->evparam[p7_VLAMBDA]; do_gumbel = TRUE;  }
-  else if  (esl_opt_GetBoolean(go, "--msv")) { pmu = hmm->evparam[p7_MMU];  plambda = hmm->evparam[p7_MLAMBDA]; do_gumbel = TRUE;  }
+  else if  (esl_opt_GetBoolean(go, "--msv")) { pmu = hmm->evparam[p7_SMU];  plambda = hmm->evparam[p7_SLAMBDA]; do_gumbel = TRUE;  }
   else if  (esl_opt_GetBoolean(go, "--fwd")) { pmu = hmm->evparam[p7_FTAU]; plambda = hmm->evparam[p7_FLAMBDA]; do_gumbel = FALSE; }
   else     ESL_FAIL(eslEINVAL, errbuf, "can only use --ffile with viterbi, msv, or fwd scores");
 
@@ -1047,11 +1042,3 @@ elide_length_model(P7_PROFILE *gm, P7_BG *bg)
   gm->xsc[p7P_N][p7P_MOVE] =  gm->xsc[p7P_C][p7P_MOVE] = gm->xsc[p7P_J][p7P_MOVE] = log(1.0 - bg->p1);
   return eslOK;
 }
-
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

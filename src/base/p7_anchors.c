@@ -7,7 +7,6 @@
  *   3. Debugging and development tools
  *   4. Unit tests
  *   5. Test driver
- *   6. Copyright and license information
  */
 #include "p7_config.h"
 
@@ -535,11 +534,4 @@ main(int argc, char **argv)
 #endif /*p7ANCHORS_TESTDRIVE*/
 /*-------------------- end of test driver ---------------------*/
 
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 

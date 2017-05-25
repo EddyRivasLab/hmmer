@@ -7,9 +7,7 @@
  *   1. The <P7_REFMX> object
  *   2. Debugging aids
  *   3. Validation 
- *   4. Copyright and license information.
  */
-
 #include "p7_config.h"
 
 #include <stdio.h>
@@ -1129,9 +1127,4 @@ p7_refmx_Validate(P7_REFMX *rmx, char *errbuf)
 /*------------------ end, validation ----------------------------*/
 
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/
+

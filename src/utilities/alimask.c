@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#undef HMMER_THREADS
+#undef HAVE_PTHREAD
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -442,8 +442,3 @@ main(int argc, char **argv)
    return eslFAIL;
 }
 
-
-
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/

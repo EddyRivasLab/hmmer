@@ -17,7 +17,6 @@
  * Contents:
  *    1. Envelope definition API call   
  *    2. Example driver
- *    3. Copyright and license information
  */ 
 #include "p7_config.h"
 
@@ -388,10 +387,3 @@ main(int argc, char **argv)
 #endif /*p7SPARSE_ENVELOPES_EXAMPLE*/
 /*---------------------- end, example ---------------------------*/
 
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

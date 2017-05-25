@@ -26,9 +26,3 @@ extern int p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th );
 
 
 #endif /*p7TOPHITS_OUTPUT_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

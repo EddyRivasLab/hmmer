@@ -7,7 +7,6 @@
  *   4. Unit tests
  *   5. Test driver
  *   6. Example 
- *   7. Copyright and license information
  */
 #include "p7_config.h"
 
@@ -598,14 +597,12 @@ static void
 utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
 {
   char           msg[]  = "sparse fwdback 'randomseq' unit test failed";
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   P7_HMM        *hmm    = NULL;
   P7_PROFILE    *gm     = p7_profile_Create(M, abc);
-  P7_OPROFILE   *om     = p7_oprofile_Create(M, abc, hw->simd);
+  P7_OPROFILE   *om     = p7_oprofile_Create(M, abc);
   ESL_DSQ       *dsq    = malloc(sizeof(ESL_DSQ) * (L+2));
-  P7_CHECKPTMX  *ox     = p7_checkptmx_Create(M, L, ESL_MBYTES(32), hw->simd);
-  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L,hw->simd);
+  P7_CHECKPTMX  *ox     = p7_checkptmx_Create(M, L, ESL_MBYTES(32));
+  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L);
   P7_SPARSEMX   *sxv    = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxf    = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxb    = p7_sparsemx_Create(sm);
@@ -629,8 +626,7 @@ utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L,
       if (esl_rsq_xfIID(rng, bg->f, abc->K, L, dsq)      != eslOK) esl_fatal(msg);
 
       /* Fwd/Bck local filter to calculate the sparse mask */
-      if ( p7_checkptmx_GrowTo(ox, M, L)                             != eslOK) esl_fatal(msg);
-      if ( p7_sparsemask_Reinit(sm, M, L)                            != eslOK) esl_fatal(msg);
+      if ( p7_checkptmx_Reinit(ox, M, L)                             != eslOK) esl_fatal(msg);
       if ( p7_ForwardFilter (dsq, L, om, ox, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
       if ( p7_BackwardFilter(dsq, L, om, ox, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
 
@@ -665,7 +661,6 @@ utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L,
       if ( p7_sparsemx_Reuse(sxv)  != eslOK) esl_fatal(msg);
       if ( p7_sparsemx_Reuse(sxf)  != eslOK) esl_fatal(msg);
       if ( p7_sparsemx_Reuse(sxb)  != eslOK) esl_fatal(msg);
-      if ( p7_checkptmx_Reuse(ox)  != eslOK) esl_fatal(msg);
       if ( p7_sparsemask_Reuse(sm) != eslOK) esl_fatal(msg); 
     }
 
@@ -702,13 +697,11 @@ utest_randomseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L,
 static void
 utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
 {
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   char           msg[]  = "sparse fwdback, compare-reference unit test failed";
   P7_HMM        *hmm    = NULL;
   P7_PROFILE    *gm     = p7_profile_Create(M, abc);
   ESL_SQ        *sq     = esl_sq_CreateDigital(abc);       /* space for generated (homologous) target seqs              */
-  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L, hw->simd);
+  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L);
   P7_SPARSEMX   *sxv    = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxf    = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxb    = p7_sparsemx_Create(sm);
@@ -837,8 +830,6 @@ static void
 utest_reference_constrained(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
 {
   char           msg[]  = "sparse fwdback, reference-constrained unit test failed";
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   P7_HMM        *hmm    = NULL;
   P7_PROFILE    *gm     = p7_profile_Create(M, abc);
   ESL_SQ        *sq     = esl_sq_CreateDigital(abc);       /* space for generated (homologous) target seqs              */
@@ -847,7 +838,7 @@ utest_reference_constrained(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, i
   P7_REFMX      *rxb    = p7_refmx_Create(M, L);
   P7_TRACE      *rtr    = p7_trace_Create();
   P7_TRACE      *str    = p7_trace_Create();
-  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L, hw->simd);
+  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M, L);
   P7_SPARSEMX   *sxv    = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxf    = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxb    = p7_sparsemx_Create(sm);
@@ -961,14 +952,12 @@ static void
 utest_singlepath(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int N)
 {
   char           msg[] = "sparse fwdback singlepath unit test failed";
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   P7_HMM        *hmm   = NULL;
   P7_PROFILE    *gm    = p7_profile_Create(M, abc);
   ESL_SQ        *sq    = esl_sq_CreateDigital(abc);
   P7_TRACE      *gtr   = p7_trace_Create();           /* generated trace */
   P7_TRACE      *vtr   = p7_trace_Create();	      /* viterbi trace */
-  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, M, hw->simd);  /* exact initial alloc size doesn't matter */
+  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, M);  /* exact initial alloc size doesn't matter */
   P7_SPARSEMX   *sxv   = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxf   = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxb   = p7_sparsemx_Create(NULL);
@@ -1054,8 +1043,6 @@ static void
 utest_internal_glocal_exit(void)
 {
   char          msg[]   = "sparse fwdback, internal-glocal-exit utest failed";
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   ESL_ALPHABET *abc     = esl_alphabet_Create(eslAMINO);
   char          qseq[]  = "ACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWY";
   char          tseq[]  = "ACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTV";
@@ -1069,7 +1056,7 @@ utest_internal_glocal_exit(void)
   P7_BG        *bg      = p7_bg_Create(abc);
   P7_HMM       *hmm     = NULL;
   P7_PROFILE   *gm      = p7_profile_Create(M, abc);
-  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M,L,hw->simd);
+  P7_SPARSEMASK *sm     = p7_sparsemask_Create(M,L);
   P7_SPARSEMX   *sxv    = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxf    = p7_sparsemx_Create(NULL);
   P7_SPARSEMX   *sxb    = p7_sparsemx_Create(NULL);
@@ -1084,36 +1071,7 @@ utest_internal_glocal_exit(void)
   float          vsc_r, fsc_r, bsc_r, tsc_r;
   int            i;
   float          tol = ( p7_logsum_IsSlowExact() ? 0.0001 : 0.01 );
-  int Q; 
-  switch(hw->simd){ // get the correct Q value depending on what SIMD ISA we're using
-  #ifdef HAVE_SSE2  
-    case SSE:
-      Q=sm->Q;    
-      break;
-  #endif
-  #ifdef HAVE_NEON
-    case NEON:
-      Q=sm->Q;
-    break;
-  #endif
-  #ifdef HAVE_NEON64
-    case NEON64:
-      Q=sm->Q;
-      break;
- #endif   
-  #ifdef HAVE_AVX2    
-    case AVX:
-      Q = sm->Q_AVX;
-      break;
-  #endif
-  #ifdef HAVE_AVX512   
-    case AVX512:
-      Q = sm->Q_AVX_512;
-      break;
-  #endif
-    default:
-      esl_fatal("Unknown SIMD type used in utest_internal_glocal_exit\n");    
-  }
+  int            Q   = sm->Q; 
 
   /* Create the 40aa A-YA-Y test model */
   if ( esl_abc_CreateDsq(abc, qseq, &qsq)                                                != eslOK) esl_fatal(msg);
@@ -1414,12 +1372,4 @@ main(int argc, char **argv)
   return 0;
 }
 #endif /*p7SPARSE_FWDBACK_EXAMPLE*/
-/*------------------ end, example driver ------------------------*/
 
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

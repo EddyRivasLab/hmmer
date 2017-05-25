@@ -3,10 +3,9 @@
  * Contents:
  *   1. Miscellaneous functions for H3
  *   2. Error handling (Die, Fail)
- *   3. License and copyright 
  */
-
 #include "p7_config.h"
+
 #include <inttypes.h>
 #include <math.h>
 #include <float.h>
@@ -278,9 +277,4 @@ p7_Fail(char *format, ...)
 
 
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

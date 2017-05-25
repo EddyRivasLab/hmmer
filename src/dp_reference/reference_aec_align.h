@@ -13,9 +13,4 @@ extern int p7_reference_AEC_Align(const P7_PROFILE *gm, P7_ENVELOPES *env, const
 
 #endif /*p7REFERENCE_AEC_ALIGN_INCLUDED*/
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/ 
+

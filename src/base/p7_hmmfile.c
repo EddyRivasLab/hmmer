@@ -10,7 +10,6 @@
  *     7. Unit tests.
  *     8. Test driver.
  *     9. Example.
- *    10. Copyright and license.
  */
 #include "p7_config.h"
 
@@ -18,7 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 #include <pthread.h>
 #endif
 
@@ -228,7 +227,7 @@ p7_hmmfile_OpenBuffer(char *buffer, int size, P7_HMMFILE **ret_hfp)
   hfp->do_stdin     = FALSE;
   hfp->newly_opened = TRUE;  /* well, it will be, real soon now */
   hfp->is_pressed   = FALSE;
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   hfp->syncRead     = FALSE;
 #endif
   hfp->parser       = NULL;
@@ -298,7 +297,7 @@ open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only, 
   hfp->do_stdin     = FALSE;
   hfp->newly_opened = TRUE;  /* well, it will be, real soon now */
   hfp->is_pressed   = FALSE;
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   hfp->syncRead     = FALSE;
 #endif
   hfp->parser       = NULL;
@@ -496,13 +495,13 @@ p7_hmmfile_Close(P7_HMMFILE *hfp)
   if (hfp->fname != NULL) free(hfp->fname);
   if (hfp->efp   != NULL) esl_fileparser_Destroy(hfp->efp);
   if (hfp->ssi   != NULL) esl_ssi_Close(hfp->ssi);
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   if (hfp->syncRead)      pthread_mutex_destroy (&hfp->readMutex);
 #endif
   free(hfp);
 }
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 /* Function:  p7_hmmfile_CreateLock()
  *
  * Purpose:   Create a lock to synchronize readers
@@ -610,11 +609,11 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
   }
   if (hmm->flags & p7H_STATS) {
     if (format == p7_HMMFILE_3a)  {        /* reverse compatibility */
-      if (fprintf(fp, "STATS LOCAL     VLAMBDA %f\n", hmm->evparam[p7_MLAMBDA]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
-      if (fprintf(fp, "STATS LOCAL         VMU %f\n", hmm->evparam[p7_MMU])     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+      if (fprintf(fp, "STATS LOCAL     VLAMBDA %f\n", hmm->evparam[p7_SLAMBDA]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+      if (fprintf(fp, "STATS LOCAL         VMU %f\n", hmm->evparam[p7_SMU])     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
       if (fprintf(fp, "STATS LOCAL        FTAU %f\n", hmm->evparam[p7_FTAU])    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
     } else {        /* default stats lines */
-      if (fprintf(fp, "STATS LOCAL MSV      %8.4f %8.5f\n", hmm->evparam[p7_MMU],  hmm->evparam[p7_MLAMBDA]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+      if (fprintf(fp, "STATS LOCAL MSV      %8.4f %8.5f\n", hmm->evparam[p7_SMU],  hmm->evparam[p7_SLAMBDA]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
       if (fprintf(fp, "STATS LOCAL VITERBI  %8.4f %8.5f\n", hmm->evparam[p7_VMU],  hmm->evparam[p7_VLAMBDA]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
       if (fprintf(fp, "STATS LOCAL FORWARD  %8.4f %8.5f\n", hmm->evparam[p7_FTAU], hmm->evparam[p7_FLAMBDA]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
     }
@@ -764,10 +763,10 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
 
   /* E-value stats */
   size += ((hmm->flags & p7H_STATS) ?
-             ((format == p7_HMMFILE_3a) ? ( 75 + sprintf(buff, "%f", hmm->evparam[p7_MLAMBDA]) +
-                                                 sprintf(buff, "%f", hmm->evparam[p7_MMU])     +
+             ((format == p7_HMMFILE_3a) ? ( 75 + sprintf(buff, "%f", hmm->evparam[p7_SLAMBDA]) +
+                                                 sprintf(buff, "%f", hmm->evparam[p7_SMU])     +
                                                  sprintf(buff, "%f", hmm->evparam[p7_FTAU])) :
-                                          ( 75 + sprintf(buff, "%8.4f", hmm->evparam[p7_MMU])  + sprintf(buff, "%8.5f", hmm->evparam[p7_MLAMBDA]) +
+                                          ( 75 + sprintf(buff, "%8.4f", hmm->evparam[p7_SMU])  + sprintf(buff, "%8.5f", hmm->evparam[p7_SLAMBDA]) +
                                                  sprintf(buff, "%8.4f", hmm->evparam[p7_VMU])  + sprintf(buff, "%8.5f", hmm->evparam[p7_VLAMBDA]) +
                                                  sprintf(buff, "%8.4f", hmm->evparam[p7_FTAU]) + sprintf(buff, "%8.5f", hmm->evparam[p7_FLAMBDA])))
              : 0); /* No STATS */
@@ -890,14 +889,14 @@ p7_hmmfile_WriteToString(char **ascii_hmm, int format, P7_HMM *hmm)
   /* E-value stats */
   if (hmm->flags & p7H_STATS) {
     if (format == p7_HMMFILE_3a){
-      if ((offset =sprintf(hmmstring + coffset, "STATS LOCAL     VLAMBDA %f\n", hmm->evparam[p7_MLAMBDA]))                               < 0) { status = eslEWRITE; goto ERROR; }
+      if ((offset =sprintf(hmmstring + coffset, "STATS LOCAL     VLAMBDA %f\n", hmm->evparam[p7_SLAMBDA]))                               < 0) { status = eslEWRITE; goto ERROR; }
       coffset += offset;
-      if ((offset =sprintf(hmmstring + coffset, "STATS LOCAL         VMU %f\n", hmm->evparam[p7_MMU]))                                   < 0) { status = eslEWRITE; goto ERROR; }
+      if ((offset =sprintf(hmmstring + coffset, "STATS LOCAL         VMU %f\n", hmm->evparam[p7_SMU]))                                   < 0) { status = eslEWRITE; goto ERROR; }
       coffset += offset;
       if ((offset =sprintf(hmmstring + coffset, "STATS LOCAL        FTAU %f\n", hmm->evparam[p7_FTAU]))                                  < 0) { status = eslEWRITE; goto ERROR; }
       coffset += offset;
     }else{
-      if ((offset =sprintf(hmmstring + coffset, "STATS LOCAL MSV      %8.4f %8.5f\n", hmm->evparam[p7_MMU],  hmm->evparam[p7_MLAMBDA]))  < 0) { status = eslEWRITE; goto ERROR; }
+      if ((offset =sprintf(hmmstring + coffset, "STATS LOCAL MSV      %8.4f %8.5f\n", hmm->evparam[p7_SMU],  hmm->evparam[p7_SLAMBDA]))  < 0) { status = eslEWRITE; goto ERROR; }
       coffset += offset;
       if ((offset = sprintf(hmmstring + coffset, "STATS LOCAL VITERBI  %8.4f %8.5f\n", hmm->evparam[p7_VMU],  hmm->evparam[p7_VLAMBDA])) < 0) { status = eslEWRITE; goto ERROR; }
       coffset += offset;
@@ -1111,8 +1110,8 @@ p7_hmmfile_WriteBinary(FILE *fp, int format, P7_HMM *hmm)
   if (format == p7_HMMFILE_3a)
   {  /* reverse compatibility; 3/a format stored LAMBDA, MU, TAU */
     float oldparam[3];
-    oldparam[0] = hmm->evparam[p7_MLAMBDA];
-    oldparam[1] = hmm->evparam[p7_MMU];
+    oldparam[0] = hmm->evparam[p7_SLAMBDA];
+    oldparam[1] = hmm->evparam[p7_SMU];
     oldparam[2] = hmm->evparam[p7_FTAU];
     if (fwrite((char *) oldparam, sizeof(float), 3, fp) != 3) ESL_EXCEPTION_SYS(eslEWRITE, "hmm binary write failed");
   }
@@ -1464,7 +1463,7 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok4, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* lambda */
       if (strcasecmp(tok1, "LOCAL") == 0)
         {
-    if      (strcasecmp(tok2, "MSV")     == 0)  { hmm->evparam[p7_MMU]  = atof(tok3); hmm->evparam[p7_MLAMBDA] = atof(tok4); statstracker |= 0x1; }
+    if      (strcasecmp(tok2, "MSV")     == 0)  { hmm->evparam[p7_SMU]  = atof(tok3); hmm->evparam[p7_SLAMBDA] = atof(tok4); statstracker |= 0x1; }
     else if (strcasecmp(tok2, "VITERBI") == 0)  { hmm->evparam[p7_VMU]  = atof(tok3); hmm->evparam[p7_VLAMBDA] = atof(tok4); statstracker |= 0x2; }
     else if (strcasecmp(tok2, "FORWARD") == 0)  { hmm->evparam[p7_FTAU] = atof(tok3); hmm->evparam[p7_FLAMBDA] = atof(tok4); statstracker |= 0x4; }
     else ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 3", tok2);
@@ -1477,8 +1476,8 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok3, NULL))   != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Too few fields on STATS line"); /* value */
       if (strcasecmp(tok1, "LOCAL") == 0)
         {
-    if      (strcasecmp(tok2, "VLAMBDA") == 0)  { hmm->evparam[p7_MLAMBDA] = hmm->evparam[p7_VLAMBDA] = hmm->evparam[p7_FLAMBDA] = atof(tok3);  statstracker |= 0x1; }
-    else if (strcasecmp(tok2, "VMU")     == 0)  {                            hmm->evparam[p7_MMU]     = hmm->evparam[p7_VMU]     = atof(tok3);  statstracker |= 0x2; }
+    if      (strcasecmp(tok2, "VLAMBDA") == 0)  { hmm->evparam[p7_SLAMBDA] = hmm->evparam[p7_VLAMBDA] = hmm->evparam[p7_FLAMBDA] = atof(tok3);  statstracker |= 0x1; }
+    else if (strcasecmp(tok2, "VMU")     == 0)  {                            hmm->evparam[p7_SMU]     = hmm->evparam[p7_VMU]     = atof(tok3);  statstracker |= 0x2; }
     else if (strcasecmp(tok2, "FTAU")    == 0)  {                                                       hmm->evparam[p7_FTAU]    = atof(tok3);  statstracker |= 0x4; }
     else ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 3", tok2);
         } else ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Failed to parse STATS, %s unrecognized as field 2", tok1);
@@ -1737,8 +1736,8 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
     hmm->evparam[p7_FTAU]    = hmm->evparam[2];
     hmm->evparam[p7_VLAMBDA] = hmm->evparam[0];
     hmm->evparam[p7_VMU]     = hmm->evparam[1];
-    hmm->evparam[p7_MLAMBDA] = hmm->evparam[p7_VLAMBDA];
-    hmm->evparam[p7_MMU]     = hmm->evparam[p7_VMU];
+    hmm->evparam[p7_SLAMBDA] = hmm->evparam[p7_VLAMBDA];
+    hmm->evparam[p7_SMU]     = hmm->evparam[p7_VMU];
   }
   if (! fread((char *) hmm->cutoff,  sizeof(float), p7_NCUTOFFS, hfp->f))                            ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read Pfam score cutoffs");
   if ((hmm->flags & p7H_COMPO) && ! fread((char *) hmm->compo, sizeof(float), hmm->abc->K, hfp->f))  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model composition");
@@ -2442,9 +2441,9 @@ utest_io_3a(char *tmpfile, P7_HMM *hmm)
    * Rearrange stats params to satisfy 3/a's constraints: vmu=mmu, mlambda=vlambda=flambda 
    */
   esl_vec_FCopy(hmm->evparam, p7_NEVPARAM, oldparam);
-  hmm->evparam[p7_VMU]     = hmm->evparam[p7_MMU];
-  hmm->evparam[p7_VLAMBDA] = hmm->evparam[p7_MLAMBDA];
-  hmm->evparam[p7_FLAMBDA] = hmm->evparam[p7_MLAMBDA];
+  hmm->evparam[p7_VMU]     = hmm->evparam[p7_SMU];
+  hmm->evparam[p7_VLAMBDA] = hmm->evparam[p7_SLAMBDA];
+  hmm->evparam[p7_FLAMBDA] = hmm->evparam[p7_SLAMBDA];
 
   utest_io_30(tmpfile, p7_HMMFILE_3a, hmm);
   
@@ -2592,10 +2591,4 @@ main(int argc, char **argv)
 /*----------------------- end, example --------------------------*/
 
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 
