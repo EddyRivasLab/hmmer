@@ -428,7 +428,7 @@ main(int argc, char **argv)
   ESL_DSQ       **dsq     = malloc(N * sizeof(ESL_DSQ *));
   int             i;
   float           sc;
-  double          base_time, bench_time, Mcs;
+  double          Mcs;
 
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
