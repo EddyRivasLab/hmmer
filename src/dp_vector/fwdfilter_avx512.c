@@ -571,7 +571,6 @@ backward_row_L_avx512(const P7_OPROFILE *om,  __m512 *dpc, int Q, float scalefac
 static inline void
 backward_row_finish_avx512(const P7_OPROFILE *om, __m512 *dpc, int Q, __m512 dcv)
 {
-  const __m512 zerov = _mm512_setzero_ps();
   const __m512 *tp;
   __m512       *dp;
   int           j,q;
@@ -585,36 +584,36 @@ backward_row_finish_avx512(const P7_OPROFILE *om, __m512 *dpc, int Q, __m512 dcv
   if (om->M < 100)
     { /* Full serialization */
       for (j = 1; j < 16; j++)
-  {
-    dcv = esl_avx512_rightshift_ps(dcv);    /* [1 5 9 13] => [5 9 13 *]          */
-    tp  = ((__m512 *) om->tfv) + 8*Q - 1;   /* <*tp> now the [4 8 12 x] TDD quad */
-    dp  = dpc + Q*p7C_NSCELLS - 2;          /* init to point at D(i,q) vector    */
-    for (q = Q-1; q >= 0; q--)
-      {
-        dcv = _mm512_mul_ps(dcv, *tp); tp--;
-        *dp = _mm512_add_ps(*dp, dcv); dp -= p7C_NSCELLS;
-      }
-  }
+        {
+          dcv = esl_avx512_rightshift_ps(dcv);    /* [1 5 9 13] => [5 9 13 *]          */
+          tp  = ((__m512 *) om->tfv) + 8*Q - 1;   /* <*tp> now the [4 8 12 x] TDD quad */
+          dp  = dpc + Q*p7C_NSCELLS - 2;          /* init to point at D(i,q) vector    */
+          for (q = Q-1; q >= 0; q--)
+            {
+              dcv = _mm512_mul_ps(dcv, *tp); tp--;
+              *dp = _mm512_add_ps(*dp, dcv); dp -= p7C_NSCELLS;
+            }
+        }
     }
   else
     { /* With check for early convergence */
       __m512 sv;
       for (j = 1; j < 16; j++)
-  {
-    dcv = esl_avx512_rightshift_ps(dcv);
-    tp  = ((__m512 *) om->tfv) + 8*Q - 1;  
-    dp  = dpc + Q*p7C_NSCELLS - 2;
-    __mmask16 cv  = 0;
-    for (q = Q-1; q >= 0; q--)
-      { /* using cmpgt below tests if DD changed any DMO(q) without conditional branch (i.e. no if) */
-        dcv  = _mm512_mul_ps(dcv, *tp); tp--;
-        sv   = _mm512_add_ps(*dp, dcv);
-        cv            = _mm512_kor(cv,_mm512_cmp_ps_mask(sv, P7C_DQ(dpc,q), 14));   // 14 = code for compare greater than
-        *dp  = sv; 
-        dp  -= p7C_NSCELLS;
-      }
-    if (! cv) break; /* if no DD path changed DQ(q) in this segment, then done, no more segments needed */
-  }
+        {
+          dcv = esl_avx512_rightshift_ps(dcv);
+          tp  = ((__m512 *) om->tfv) + 8*Q - 1;  
+          dp  = dpc + Q*p7C_NSCELLS - 2;
+          __mmask16 cv  = 0;
+          for (q = Q-1; q >= 0; q--)
+            { /* using cmpgt below tests if DD changed any DMO(q) without conditional branch (i.e. no if) */
+              dcv  = _mm512_mul_ps(dcv, *tp); tp--;
+              sv   = _mm512_add_ps(*dp, dcv);
+              cv            = _mm512_kor(cv,_mm512_cmp_ps_mask(sv, P7C_DQ(dpc,q), 14));   // 14 = code for compare greater than
+              *dp  = sv; 
+              dp  -= p7C_NSCELLS;
+            }
+          if (! cv) break; /* if no DD path changed DQ(q) in this segment, then done, no more segments needed */
+        }
     }
 
   /* Finally, M->D path contribution

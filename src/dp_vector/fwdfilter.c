@@ -110,8 +110,8 @@ fwdfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
 #ifdef eslENABLE_AVX512
   if (esl_cpu_has_avx512())
     {
-      p7_ForwardFilter = p7_ForwardFilter_sse;
-      return p7_ForwardFilter_sse(dsq, L, om, ox, opt_sc);
+      p7_ForwardFilter = p7_ForwardFilter_avx512;
+      return p7_ForwardFilter_avx512(dsq, L, om, ox, opt_sc);
     }
 #endif
 
@@ -153,8 +153,8 @@ bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
 #ifdef eslENABLE_AVX512
   if (esl_cpu_has_avx512())
     {
-      p7_BackwardFilter = p7_BackwardFilter_sse;
-      return p7_BackwardFilter_sse(dsq, L, om, ox, sm, sm_thresh);
+      p7_BackwardFilter = p7_BackwardFilter_avx512;
+      return p7_BackwardFilter_avx512(dsq, L, om, ox, sm, sm_thresh);
     }
 #endif
 

@@ -93,8 +93,8 @@ vitfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
 #ifdef eslENABLE_AVX512  // Fastest first.
   if (esl_cpu_has_avx512())
     {
-      p7_ViterbiFilter = p7_ViterbiFilter_sse;
-      return p7_ViterbiFilter_sse(dsq, L, om, ox, ret_sc);
+      p7_ViterbiFilter = p7_ViterbiFilter_avx512;
+      return p7_ViterbiFilter_avx512(dsq, L, om, ox, ret_sc);
     }
 #endif
 
