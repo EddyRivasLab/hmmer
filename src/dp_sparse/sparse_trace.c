@@ -729,8 +729,12 @@ p7_sparse_trace_StochasticSeg(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PRO
   if (tr->N)
     {
       int z;
-      for (z = 0;       z < tr->N; z++) if (tr->i[z]) break;  if (tr->i[z] != sxf->sm->seg[g].ia) esl_fatal("bad trace");
-      for (z = tr->N-1; z >= 0;    z--) if (tr->i[z]) break;  if (tr->i[z] != sxf->sm->seg[g].ib) esl_fatal("bad trace");
+
+      for (z = 0;       z < tr->N; z++) if (tr->i[z]) break;  
+      if (tr->i[z] != sxf->sm->seg[g].ia) esl_fatal("bad trace");
+
+      for (z = tr->N-1; z >= 0;    z--) if (tr->i[z]) break; 
+      if (tr->i[z] != sxf->sm->seg[g].ib) esl_fatal("bad trace");
     }
 #endif
 

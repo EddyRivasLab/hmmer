@@ -212,8 +212,10 @@ emit_alignment(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM
   p7_tracealign_Seqs(sq, tr, N, hmm->M, optflags, hmm, &msa);
   esl_msafile_Write(ofp, msa, outfmt);
   
-  for (i = 0; i < N; i++) p7_trace_Destroy(tr[i]);  free(tr);
-  for (i = 0; i < N; i++) esl_sq_Destroy(sq[i]);    free(sq);
+  for (i = 0; i < N; i++) p7_trace_Destroy(tr[i]);  
+  for (i = 0; i < N; i++) esl_sq_Destroy(sq[i]);    
+  free(tr);
+  free(sq);
   esl_msa_Destroy(msa);
   return;
 }
