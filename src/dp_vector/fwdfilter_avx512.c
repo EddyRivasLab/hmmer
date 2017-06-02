@@ -260,7 +260,14 @@ p7_BackwardFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CH
           xf  = (float *) (fwd + Q*p7C_NSCELLS);
           bck = (__m512 *) ox->dpf[i2%2];         // get available for calculating bck[i2]
           backward_row_main_avx512(dsq[i2+1], om, dpp, bck, Q, xf[p7C_SCALE]);
-          
+#if eslDEBUGLEVEL > 0
+          ox->bcksc += logf(xf[p7C_SCALE]);
+          if (ox->do_dumping) { 
+            p7_checkptmx_DumpFBRow(ox, i2, (float *) fwd, "f2 X"); 
+            p7_checkptmx_DumpFBRow(ox, i2, (float *) bck, "bck"); 
+          }
+          if (ox->bck) save_debug_row_fb_avx512(ox, ox->bck, bck, i2, ox->bcksc); 
+#endif
           if ((status = posterior_decode_row_avx512(ox, i2, sm, sm_thresh, Tvalue)) != eslOK) return status;
           dpp = bck;
         }

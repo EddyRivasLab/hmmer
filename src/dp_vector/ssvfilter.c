@@ -225,10 +225,11 @@ main(int argc, char **argv)
     }
   esl_stopwatch_Stop(w);
   Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) w->elapsed;
+  printf("# implementation: %s\n", esl_cpu_Get());
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
   printf("# M    = %d\n", gm->M);
   printf("# %.1f Mc/s\n", Mcs);
-  printf("# implementation: %s\n", esl_cpu_Get());
+
 
   for (i = 0; i < N; i++) free(dsq[i]);
   free(dsq);
