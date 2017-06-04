@@ -112,8 +112,7 @@
   length_check(label)                                    \
   rsc = (__m256i *) om->rbv[dsq[i]] + pos;               \
   step()                                                 \
-  sv = esl_avx_leftshift_one(sv);                        \
-  sv = _mm256_or_si256(sv, low_byte_128);                \
+  sv = esl_avx_rightshift_int8(sv, neginfmask);          \
   i++;
 
 #define CONVERT_1(step, LENGTH_CHECK, label)            \
@@ -259,9 +258,9 @@
   register __m256i sv17 = beginv;
 
 #define CALC(reset, step, convert, width)       \
-  __m256i  low_byte_128 = _mm256_insert_epi8( _mm256_setzero_si256(), -128, 0); \
-  int      Q            = P7_Q(om->M, p7_VWIDTH_AVX);                           \
-  int      w            = width;                \
+  __m256i  neginfmask = _mm256_insert_epi8( _mm256_setzero_si256(), -128, 0); \
+  int      Q          = P7_Q(om->M, p7_VWIDTH_AVX);                           \
+  int      w          = width;                  \
   int      i, i2;                               \
   __m256i *rsc;                                 \
   int      num_iters;                           \

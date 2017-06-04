@@ -44,7 +44,7 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
   __m256i *dp;
   __m256i *rsc;                          /* will point at om->rwv[x] for residue x[i]                  */
   __m256i *tsc;                          /* will point into (and step thru) om->tu                     */
-  __m256i negInfv;
+  __m256i neginfmask = _mm256_insert_epi16(_mm256_setzero_si256(), -32768, 0);
   int     status;
 
   /* Contract checks */
@@ -63,10 +63,6 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
   ox->Vw   = p7_VWIDTH_AVX / sizeof(int16_t);
   ox->type = p7F_VITFILTER;
   ESL_DASSERT1(( ox->Vw = om->V / sizeof(int16_t)));
-
-  /* We need a vector with 1 leftmost element set to -infinity (-32768) */
-  negInfv = _mm256_setzero_si256();
-  negInfv = _mm256_insert_epi16(negInfv, -32768, 0);
 
   /* Initialization. In unsigned arithmetic, -infinity is -32768 */
   for (q = 0; q < Q; q++)
@@ -94,9 +90,9 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
        * Because x86 is littlendian, this means a left bit shift.
        * Zeros shift on automatically; replace it with -32768.
        */
-      mpv = MMXf(Q-1);  mpv = esl_avx_leftshift_two(mpv);   mpv = _mm256_or_si256(mpv, negInfv);
-      dpv = DMXf(Q-1);  dpv = esl_avx_leftshift_two(dpv);   dpv = _mm256_or_si256(dpv, negInfv);
-      ipv = IMXf(Q-1);  ipv = esl_avx_leftshift_two(ipv);   ipv = _mm256_or_si256(ipv, negInfv);
+      mpv = MMXf(Q-1);  mpv = esl_avx_rightshift_int16(mpv, neginfmask); 
+      dpv = DMXf(Q-1);  dpv = esl_avx_rightshift_int16(dpv, neginfmask);
+      ipv = IMXf(Q-1);  ipv = esl_avx_rightshift_int16(ipv, neginfmask);
 
       for (q = 0; q < Q; q++)
       {
@@ -143,8 +139,7 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
       Dmax = esl_avx_hmax_epi16(Dmaxv);
       if (Dmax + om->ddbound_w > xB) 
 	{
-	  dcv = esl_avx_leftshift_two(dcv);
-	  dcv = _mm256_or_si256(dcv, negInfv);
+	  dcv = esl_avx_rightshift_int16(dcv, neginfmask);
 	  tsc = (__m256i *) om->twv + 7*Q;  
 	  for (q = 0; q < Q; q++) 
 	    {
@@ -153,8 +148,7 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
 	    }
 
 	  do {
-	    dcv = esl_avx_leftshift_two(dcv);
-	    dcv = _mm256_or_si256(dcv, negInfv);
+	    dcv = esl_avx_rightshift_int16(dcv, neginfmask);
 	    tsc = (__m256i *) om->twv + 7*Q;  /* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
@@ -166,8 +160,7 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
 	}
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
 	{
-	  dcv     = esl_avx_leftshift_two(dcv);
-	  DMXf(0) = _mm256_or_si256(dcv, negInfv);
+	  DMXf(0) = esl_avx_rightshift_int16(dcv, neginfmask);
 	}
 
 #if eslDEBUGLEVEL > 0

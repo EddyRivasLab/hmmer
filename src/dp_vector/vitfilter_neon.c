@@ -102,11 +102,11 @@ p7_ViterbiFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
       for (q = 0; q < Q; q++)
       {
         /* Calculate new MMXf(i,q); don't store it yet, hold it in sv. */
-        sv.s16x8   =                    vqaddq_s16(xBv.s16x8, (*tsc).s16x8);  tsc++;
+        sv.s16x8   =                     vqaddq_s16(xBv.s16x8, (*tsc).s16x8);  tsc++;
         sv.s16x8   = vmaxq_s16(sv.s16x8, vqaddq_s16(mpv.s16x8, (*tsc).s16x8)); tsc++;
         sv.s16x8   = vmaxq_s16(sv.s16x8, vqaddq_s16(ipv.s16x8, (*tsc).s16x8)); tsc++;
         sv.s16x8   = vmaxq_s16(sv.s16x8, vqaddq_s16(dpv.s16x8, (*tsc).s16x8)); tsc++;
-        sv.s16x8   = vqaddq_s16(sv.s16x8, (*rsc).s16x8);                      rsc++;
+        sv.s16x8   = vqaddq_s16(sv.s16x8, (*rsc).s16x8);                       rsc++;
         xEv.s16x8  = vmaxq_s16(xEv.s16x8, sv.s16x8);
 
         /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
@@ -119,10 +119,10 @@ p7_ViterbiFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
         /* Do the delayed stores of {MD}(i,q) now that memory is usable */
 	MMXf(q) = sv;
         DMXf(q) = dcv;
+
         /* Calculate the next D(i,q+1) partially: M->D only;
 	 * delay storage, holding it in dcv
          */
-   
      	dcv.s16x8   = vqaddq_s16(sv.s16x8, (*tsc).s16x8);  tsc++;
         Dmaxv.s16x8 = vmaxq_s16(dcv.s16x8, Dmaxv.s16x8);
 
@@ -184,7 +184,6 @@ p7_ViterbiFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
 	}
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
 	{
-	  
 	  DMXf(0).s16x8 = vextq_s16(negInfv.s16x8, dcv.s16x8, 7);
 	}
 	  
