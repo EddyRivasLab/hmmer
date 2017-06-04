@@ -368,9 +368,9 @@ forward_row_sse(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dp
   int    q;
   int    j;
 
-  mpv = esl_sse_rightshift_ps(P7C_MQ(dpp, Q-1), zerov); 
-  ipv = esl_sse_rightshift_ps(P7C_IQ(dpp, Q-1), zerov); 
-  dpv = esl_sse_rightshift_ps(P7C_DQ(dpp, Q-1), zerov); 
+  mpv = esl_sse_rightshiftz_float(P7C_MQ(dpp, Q-1));
+  ipv = esl_sse_rightshiftz_float(P7C_IQ(dpp, Q-1));
+  dpv = esl_sse_rightshiftz_float(P7C_DQ(dpp, Q-1));
 
   /* DP recursion for main states, all but the D->D path */
   for (q = 0; q < Q; q++)
@@ -408,7 +408,7 @@ forward_row_sse(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dp
   /* We're almost certainly're obligated to do at least one complete 
    * DD path to be sure: 
    */
-  dcv            = esl_sse_rightshift_ps(dcv, zerov);
+  dcv            = esl_sse_rightshiftz_float(dcv);
   P7C_DQ(dpc, 0) = zerov;
   tp             = ((__m128 *) om->tfv) + 7*Q;       /* set tp to start of the DD's */
   for (q = 0; q < Q; q++) 
@@ -429,7 +429,7 @@ forward_row_sse(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dp
     {                         // Fully serialized version 
       for (j = 1; j < 4; j++) // 4 = vector width, in floats
         {
-          dcv = esl_sse_rightshift_ps(dcv, zerov);
+          dcv = esl_sse_rightshiftz_float(dcv);
           tp  = ((__m128 *) om->tfv) + 7*Q;  /* reset tp to start of the DD's */
           for (q = 0; q < Q; q++) 
             { /* note, extend dcv, not DMO(q); only adding DD paths now */
@@ -444,7 +444,7 @@ forward_row_sse(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dp
         {
           register __m128 cv = zerov;   /* keeps track of whether any DD's change DMO(q) */
 
-          dcv = esl_sse_rightshift_ps(dcv, zerov);
+          dcv = esl_sse_rightshiftz_float(dcv);
           tp  = ((__m128 *) om->tfv) + 7*Q;  /* set tp to start of the DD's */
           for (q = 0; q < Q; q++) 
             { /* using cmpgt below tests if DD changed any DMO(q) *without* conditional branch */
@@ -551,10 +551,10 @@ backward_row_main_sse(ESL_DSQ xi, const P7_OPROFILE *om, __m128 *dpp, __m128 *dp
   xc[p7C_E]              = xc[p7C_C] * om->xf[p7O_E][p7O_MOVE] + xc[p7C_J] * om->xf[p7O_E][p7O_LOOP];
 
   /* Initialize for the row calculation */
-  mpv  = esl_sse_leftshift_ps(*dpp,       zerov); /* [1 5 9 13] -> [5 9 13 x], M(i+1,k+1) * e(M_k+1, x_{i+1}) */
-  tmmv = esl_sse_leftshift_ps( ((__m128 *) om->tfv)[1], zerov);
-  timv = esl_sse_leftshift_ps( ((__m128 *) om->tfv)[2], zerov);
-  tdmv = esl_sse_leftshift_ps( ((__m128 *) om->tfv)[3], zerov);
+  mpv  = esl_sse_leftshiftz_float(*dpp); /* [1 5 9 13] -> [5 9 13 x], M(i+1,k+1) * e(M_k+1, x_{i+1}) */
+  tmmv = esl_sse_leftshiftz_float( ((__m128 *) om->tfv)[1]);
+  timv = esl_sse_leftshiftz_float( ((__m128 *) om->tfv)[2]);
+  tdmv = esl_sse_leftshiftz_float( ((__m128 *) om->tfv)[3]);
   xEv  = _mm_set1_ps(xc[p7C_E]);
   tp   = ((__m128 *) om->tfv) + 7*Q - 1;
   tpdd = tp + Q;
@@ -659,7 +659,7 @@ backward_row_finish_sse(const P7_OPROFILE *om, __m128 *dpc, int Q, __m128 dcv)
     { /* Full serialization */
       for (j = 1; j < 4; j++)
         {
-          dcv = esl_sse_leftshift_ps(dcv, zerov); /* [1 5 9 13] => [5 9 13 *]          */
+          dcv = esl_sse_leftshiftz_float(dcv);     /* [1 5 9 13] => [5 9 13 *]          */
           tp  = ((__m128 *) om->tfv) + 8*Q - 1;   /* <*tp> now the [4 8 12 x] TDD quad */
           dp  = dpc + Q*p7C_NSCELLS - 2;          /* init to point at D(i,q) vector    */
           for (q = Q-1; q >= 0; q--)
@@ -675,7 +675,7 @@ backward_row_finish_sse(const P7_OPROFILE *om, __m128 *dpc, int Q, __m128 dcv)
       __m128 cv;  /* keeps track of whether any DD addition changes DQ(q) value */
       for (j = 1; j < 4; j++) // 4 = vector width in floats
         {
-          dcv = esl_sse_leftshift_ps(dcv, zerov);
+          dcv = esl_sse_leftshiftz_float(dcv);
           tp  = ((__m128 *) om->tfv) + 8*Q - 1;      
           dp  = dpc + Q*p7C_NSCELLS - 2;
           cv  = zerov;
@@ -694,7 +694,7 @@ backward_row_finish_sse(const P7_OPROFILE *om, __m128 *dpc, int Q, __m128 dcv)
   /* Finally, M->D path contribution
    * these couldn't be added to M until we'd finished calculating D values on row.
    */
-  dcv = esl_sse_leftshift_ps(P7C_DQ(dpc, 0), zerov);
+  dcv = esl_sse_leftshiftz_float(P7C_DQ(dpc, 0));
   tp  = ((__m128 *) om->tfv) + 7*Q - 3;       
   dp  = dpc + (Q-1)*p7C_NSCELLS; 
   for (q = Q-1; q >= 0; q--)
