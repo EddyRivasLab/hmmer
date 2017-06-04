@@ -75,9 +75,11 @@
 1 exercise sparse_envscore	@src/dp_sparse/sparse_decoding_utest@
 1 exercise sparse_masstrace	@src/dp_sparse/sparse_masstrace_utest@
 
+1 exercise ssvfilter            @src/dp_vector/ssvfilter_utest@
+1 exercise vitfilter            @src/dp_vector/vitfilter_utest@
 1 exercise fwdfilter            @src/dp_vector/fwdfilter_utest@
 1 exercise vector_io            @src/dp_vector/io_utest@
-1 exercise vitfilter            @src/dp_vector/vitfilter_utest@
+
 
 1 exercise emit                 @src/misc/emit_utest@
 1 exercise logsum               @src/misc/logsum_utest@
