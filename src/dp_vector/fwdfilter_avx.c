@@ -380,20 +380,8 @@ forward_row_avx(ESL_DSQ xi, const P7_OPROFILE *om, const __m256 *dpp, __m256 *dp
       P7C_IQ(dpc, q) = _mm256_add_ps(sv, _mm256_mul_ps(ipv, *tp)); tp++;
     }
 
-  /* Now the DD paths. We would rather not serialize them but 
-   * in an accurate Forward calculation, we have few options.
-   * dcv has carried through from end of q loop above; store it 
-   * in first pass, we add M->D and D->D path into DMX.
-   */ 
-  /* We're almost certainly're obligated to do at least one complete 
-   * DD path to be sure: 
-   */
+  /* Now the DD paths. */ 
   dcv            = esl_avx_rightshiftz_float(dcv);  
-  // Function naming issue: The esl_sse_(right/left)shift_ps functions 
-  // describe the direction of logical shift of the vectors.  The esl_avx_leftshift functions that I wrote for
-  // other filters talk about the direction of the shift instruction, which is influenced by the little-endian 
-  // nature of x86.  For consistency with myself, I'm sticking to function names that match the direction of the 
-  // shift instruction.
   P7C_DQ(dpc, 0) = zerov;
   tp             = ((__m256 *) om->tfv) + 7*Q; /* set tp to start of the DD's */
   for (q = 0; q < Q; q++) 
@@ -402,14 +390,7 @@ forward_row_avx(ESL_DSQ xi, const P7_OPROFILE *om, const __m256 *dpp, __m256 *dp
       dcv           = _mm256_mul_ps(P7C_DQ(dpc,q), *tp); tp++; /* extend DMO(q), so we include M->D and D->D paths */
     }
   
-  /* now. on small models, it seems best (empirically) to just go
-   * ahead and serialize. on large models, we can do a bit better,
-   * by testing for when dcv (DD path) accrued to DMO(q) is below
-   * machine epsilon for all q, in which case we know DMO(q) are all
-   * at their final values. The tradeoff point is (empirically) somewhere around M=100,
-   * at least on my desktop. We don't worry about the conditional here;
-   * it's outside any inner loops.
-   */
+  /* on small models, it seems best (empirically) to serialize. */
   if (om->M < 100)
     {  // Fully serialized version 
       for (j = 1; j < 8; j++)  // 8 = vector width, in floats

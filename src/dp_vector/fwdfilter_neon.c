@@ -529,7 +529,7 @@ backward_row_main_neon(ESL_DSQ xi, const P7_OPROFILE *om, esl_neon_128f_t *dpp, 
   xc[p7C_E]              = xc[p7C_C] * om->xf[p7O_E][p7O_MOVE] + xc[p7C_J] * om->xf[p7O_E][p7O_LOOP];
 
   /* Initialize for the row calculation */
-  mpv  = esl_neon_leftshift_float(*dpp,       zerov); /* [1 5 9 13] -> [5 9 13 x], M(i+1,k+1) * e(M_k+1, x_{i+1}) */
+  mpv  = esl_neon_leftshift_float(*dpp, zerov); /* [1 5 9 13] -> [5 9 13 x], M(i+1,k+1) * e(M_k+1, x_{i+1}) */
   tmmv = esl_neon_leftshift_float( ((esl_neon_128f_t *) om->tfv)[1], zerov);
   timv = esl_neon_leftshift_float( ((esl_neon_128f_t *) om->tfv)[2], zerov);
   tdmv = esl_neon_leftshift_float( ((esl_neon_128f_t *) om->tfv)[3], zerov);

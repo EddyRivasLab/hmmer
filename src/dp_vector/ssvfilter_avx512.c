@@ -108,8 +108,7 @@
   length_check(label)                                    \
   rsc = (__m512i *) om->rbv[dsq[i]] + pos;               \
   step()                                                 \
-  sv = esl_avx512_leftshift_one(sv);                     \
-  sv = _mm512_or_si512(sv, low_byte_128);                \
+  sv = esl_avx512_rightshift_int8(sv, neginfmask);       \
   i++;
 
 #define CONVERT_1(step, LENGTH_CHECK, label)            \
@@ -255,9 +254,9 @@
   register __m512i sv17 = beginv;
 
 #define CALC(reset, step, convert, width)      \
-  __m512i  low_byte_128 = _mm512_mask_blend_epi8(0x1, _mm512_setzero_si512(), beginv); \
-  int      Q            = P7_Q(om->M, p7_VWIDTH_AVX512);                               \
-  int      w            = width;               \
+  __m512i  neginfmask = _mm512_mask_blend_epi8(0x1, _mm512_setzero_si512(), beginv); \
+  int      Q          = P7_Q(om->M, p7_VWIDTH_AVX512);                               \
+  int      w          = width;                 \
   int      i, i2;                              \
   __m512i *rsc;                                \
   int      num_iters;                          \

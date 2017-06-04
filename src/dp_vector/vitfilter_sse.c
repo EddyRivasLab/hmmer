@@ -94,11 +94,10 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
       Dmaxv = _mm_set1_epi16(-32768);     
       xBv   = _mm_set1_epi16(xB);
 
-      /* Right shifts by 1 value (2 bytes). 4,8,12,x becomes x,4,8,12. 
-       */
-      mpv = MMXf(Q-1);  mpv = esl_sse_rightshift_int16(mpv, neginfmask);
-      dpv = DMXf(Q-1);  dpv = esl_sse_rightshift_int16(dpv, neginfmask);
-      ipv = IMXf(Q-1);  ipv = esl_sse_rightshift_int16(ipv, neginfmask);
+      /* Right shifts by 1 value (2 bytes). 4,8,12,x becomes x,4,8,12. */
+      mpv = esl_sse_rightshift_int16(MMXf(Q-1), neginfmask);
+      dpv = esl_sse_rightshift_int16(DMXf(Q-1), neginfmask);
+      ipv = esl_sse_rightshift_int16(IMXf(Q-1), neginfmask);
 
       for (q = 0; q < Q; q++)
       {

@@ -87,12 +87,11 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
       xBv   = _mm256_set1_epi16(xB);
 
       /* Right shifts by 1 value (2 bytes). 4,8,12,x becomes x,4,8,12. 
-       * Because x86 is littlendian, this means a left bit shift.
-       * Zeros shift on automatically; replace it with -32768.
+       * Shift x=-32768 on as -inf using neginfmask.
        */
-      mpv = MMXf(Q-1);  mpv = esl_avx_rightshift_int16(mpv, neginfmask); 
-      dpv = DMXf(Q-1);  dpv = esl_avx_rightshift_int16(dpv, neginfmask);
-      ipv = IMXf(Q-1);  ipv = esl_avx_rightshift_int16(ipv, neginfmask);
+      mpv = esl_avx_rightshift_int16(MMXf(Q-1), neginfmask); 
+      dpv = esl_avx_rightshift_int16(DMXf(Q-1), neginfmask);
+      ipv = esl_avx_rightshift_int16(IMXf(Q-1), neginfmask);
 
       for (q = 0; q < Q; q++)
       {

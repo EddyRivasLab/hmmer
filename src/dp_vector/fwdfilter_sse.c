@@ -405,7 +405,7 @@ forward_row_sse(ESL_DSQ xi, const P7_OPROFILE *om, const __m128 *dpp, __m128 *dp
    * dcv has carried through from end of q loop above; store it 
    * in first pass, we add M->D and D->D path into DMX.
    */ 
-  /* We're almost certainly're obligated to do at least one complete 
+  /* We're almost certainly obligated to do at least one complete 
    * DD path to be sure: 
    */
   dcv            = esl_sse_rightshiftz_float(dcv);

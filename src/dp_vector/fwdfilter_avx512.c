@@ -344,9 +344,9 @@ forward_row_avx512(ESL_DSQ xi, const P7_OPROFILE *om, const __m512 *dpp, __m512 
   int    q;
   int    j;
 
-  mpv = esl_avx512_leftshift_ps(P7C_MQ(dpp, Q-1)); 
-  ipv = esl_avx512_leftshift_ps(P7C_IQ(dpp, Q-1)); 
-  dpv = esl_avx512_leftshift_ps(P7C_DQ(dpp, Q-1)); 
+  mpv = esl_avx512_rightshiftz_float(P7C_MQ(dpp, Q-1)); 
+  ipv = esl_avx512_rightshiftz_float(P7C_IQ(dpp, Q-1)); 
+  dpv = esl_avx512_rightshiftz_float(P7C_DQ(dpp, Q-1)); 
 
   /* DP recursion for main states, all but the D->D path */
   for (q = 0; q < Q; q++)
@@ -376,20 +376,8 @@ forward_row_avx512(ESL_DSQ xi, const P7_OPROFILE *om, const __m512 *dpp, __m512 
       P7C_IQ(dpc, q) = _mm512_add_ps(sv, _mm512_mul_ps(ipv, *tp)); tp++;
     }
 
-  /* Now the DD paths. We would rather not serialize them but 
-   * in an accurate Forward calculation, we have few options.
-   * dcv has carried through from end of q loop above; store it 
-   * in first pass, we add M->D and D->D path into DMX.
-   */ 
-  /* We're almost certainly're obligated to do at least one complete 
-   * DD path to be sure: 
-   */
-  dcv            = esl_avx512_leftshift_ps(dcv);  
-  // Function naming issue: The esl_sse_(right/left)shift_ps functions 
-  // describe the direction of logical shift of the vectors.  The esl_avx_leftshift functions that I wrote for
-  // other filters talk about the direction of the shift instruction, which is influenced by the little-endian 
-  // nature of x86.  For consistency with myself, I'm sticking to function names that match the direction of the 
-  // shift instruction
+  /* Now the DD paths. */
+  dcv            = esl_avx512_rightshiftz_float(dcv);  
   P7C_DQ(dpc, 0) = zerov;
   tp             = ((__m512 *) om->tfv) + 7*Q; /* set tp to start of the DD's */
   for (q = 0; q < Q; q++) 
@@ -398,19 +386,12 @@ forward_row_avx512(ESL_DSQ xi, const P7_OPROFILE *om, const __m512 *dpp, __m512 
       dcv           = _mm512_mul_ps(P7C_DQ(dpc,q), *tp); tp++; /* extend DMO(q), so we include M->D and D->D paths */
     }
   
-  /* now. on small models, it seems best (empirically) to just go
-   * ahead and serialize. on large models, we can do a bit better,
-   * by testing for when dcv (DD path) accrued to DMO(q) is below
-   * machine epsilon for all q, in which case we know DMO(q) are all
-   * at their final values. The tradeoff point is (empirically) somewhere around M=100,
-   * at least on my desktop. We don't worry about the conditional here;
-   * it's outside any inner loops.
-   */
+  /* on small models, it seems best (empirically) to serialize. */
   if (om->M < 100)
     {     /* Fully serialized version */
       for (j = 1; j < 16; j++)  
         { 
-          dcv = esl_avx512_leftshift_ps(dcv);
+          dcv = esl_avx512_rightshiftz_float(dcv);
           tp  = ((__m512 *) om->tfv) + 7*Q;  /* reset tp to start of the DD's */
           for (q = 0; q < Q; q++) 
             { /* note, extend dcv, not DMO(q); only adding DD paths now */
@@ -425,7 +406,7 @@ forward_row_avx512(ESL_DSQ xi, const P7_OPROFILE *om, const __m512 *dpp, __m512 
         {
           register __mmask16 cv = 0; /* keeps track of whether any DD's change DMO(q) */
 
-          dcv = esl_avx512_leftshift_ps(dcv);
+          dcv = esl_avx512_rightshiftz_float(dcv);
           tp  = ((__m512 *) om->tfv) + 7*Q;  /* set tp to start of the DD's */
           for (q = 0; q < Q; q++) 
             { /* using cmpgt below tests if DD changed any DMO(q) *without* conditional branch */
@@ -513,10 +494,10 @@ backward_row_main_avx512(ESL_DSQ xi, const P7_OPROFILE *om, __m512 *dpp, __m512 
   xc[p7C_E]              = xc[p7C_C] * om->xf[p7O_E][p7O_MOVE] + xc[p7C_J] * om->xf[p7O_E][p7O_LOOP];
 
   /* Initialize for the row calculation */
-  mpv  = esl_avx512_rightshift_ps(*dpp      ); /* [1 5 9 13] -> [5 9 13 x], M(i+1,k+1) * e(M_k+1, x_{i+1}) */
-  tmmv = esl_avx512_rightshift_ps( ((__m512 *) om->tfv)[1]);
-  timv = esl_avx512_rightshift_ps( ((__m512 *) om->tfv)[2]);
-  tdmv = esl_avx512_rightshift_ps( ((__m512 *) om->tfv)[3]);
+  mpv  = esl_avx512_leftshiftz_float(*dpp      ); /* [1 5 9 13] -> [5 9 13 x], M(i+1,k+1) * e(M_k+1, x_{i+1}) */
+  tmmv = esl_avx512_leftshiftz_float( ((__m512 *) om->tfv)[1]);
+  timv = esl_avx512_leftshiftz_float( ((__m512 *) om->tfv)[2]);
+  tdmv = esl_avx512_leftshiftz_float( ((__m512 *) om->tfv)[3]);
   xEv  = _mm512_set1_ps(xc[p7C_E]);
   tp   = ((__m512 *) om->tfv) + 7*Q - 1;
   tpdd = tp + Q;
@@ -592,7 +573,7 @@ backward_row_finish_avx512(const P7_OPROFILE *om, __m512 *dpc, int Q, __m512 dcv
     { /* Full serialization */
       for (j = 1; j < 16; j++)
         {
-          dcv = esl_avx512_rightshift_ps(dcv);    /* [1 5 9 13] => [5 9 13 *]          */
+          dcv = esl_avx512_leftshiftz_float(dcv);    /* [1 5 9 13] => [5 9 13 *]          */
           tp  = ((__m512 *) om->tfv) + 8*Q - 1;   /* <*tp> now the [4 8 12 x] TDD quad */
           dp  = dpc + Q*p7C_NSCELLS - 2;          /* init to point at D(i,q) vector    */
           for (q = Q-1; q >= 0; q--)
@@ -607,7 +588,7 @@ backward_row_finish_avx512(const P7_OPROFILE *om, __m512 *dpc, int Q, __m512 dcv
       __m512 sv;
       for (j = 1; j < 16; j++)
         {
-          dcv = esl_avx512_rightshift_ps(dcv);
+          dcv = esl_avx512_leftshiftz_float(dcv);
           tp  = ((__m512 *) om->tfv) + 8*Q - 1;  
           dp  = dpc + Q*p7C_NSCELLS - 2;
           __mmask16 cv  = 0;
@@ -626,7 +607,7 @@ backward_row_finish_avx512(const P7_OPROFILE *om, __m512 *dpc, int Q, __m512 dcv
   /* Finally, M->D path contribution
    * these couldn't be added to M until we'd finished calculating D values on row.
    */
-  dcv = esl_avx512_rightshift_ps(P7C_DQ(dpc, 0));
+  dcv = esl_avx512_leftshiftz_float(P7C_DQ(dpc, 0));
   tp  = ((__m512 *) om->tfv) + 7*Q - 3;   
   dp  = dpc + (Q-1)*p7C_NSCELLS; 
   for (q = Q-1; q >= 0; q--)

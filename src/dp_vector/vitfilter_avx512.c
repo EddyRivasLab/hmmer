@@ -44,7 +44,7 @@ p7_ViterbiFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FIL
   __m512i *dp;
   __m512i *rsc;                    // will point at om->rwv[x] for residue x[i]
   __m512i *tsc;                    // will point into (and step thru) om->tu 
-  __m512i negInfv;
+  __m512i neginfmask = _mm512_inserti64x4(_mm512_setzero_si512(), _mm256_insert_epi16(_mm256_setzero_si256(), -32768, 0), 0);
   int     status;
 
   /* Contract checks */
@@ -63,9 +63,6 @@ p7_ViterbiFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FIL
   ox->Vw   = p7_VWIDTH_AVX512 / sizeof(int16_t);
   ox->type = p7F_VITFILTER;
   ESL_DASSERT1(( ox->Vw = om->V / sizeof(int16_t)));
-
-  // -infinity is -32768. We need -32768 in the low 16 bits of negInfv
-  negInfv = _mm512_inserti64x4(_mm512_setzero_si512(), _mm256_insert_epi16(_mm256_setzero_si256(), -32768, 0), 0);
 
   /* Initialization. In unsigned arithmetic, -infinity is -32768n  */
   for (q = 0; q < Q; q++)
@@ -91,11 +88,11 @@ p7_ViterbiFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FIL
 
       /* Right shifts by 1 value (2 bytes). 4,8,12,x becomes x,4,8,12. 
        * Because ia32 is littlendian, this means a left bit shift.
-       * Zeros shift on automatically; replace it with -32768.
+       * Shift on x=-32768 as -inf.
        */
-      mpv = MMXf(Q-1);        mpv = esl_avx512_leftshift_two(mpv);      mpv = _mm512_or_si512(mpv, negInfv);
-      dpv = DMXf(Q-1);        dpv = esl_avx512_leftshift_two(dpv);      dpv = _mm512_or_si512(dpv, negInfv);
-      ipv = IMXf(Q-1);        ipv = esl_avx512_leftshift_two(ipv);      ipv = _mm512_or_si512(ipv, negInfv);
+      mpv = esl_avx512_rightshift_int16(MMXf(Q-1), neginfmask);
+      dpv = esl_avx512_rightshift_int16(DMXf(Q-1), neginfmask);
+      ipv = esl_avx512_rightshift_int16(IMXf(Q-1), neginfmask);
 
       for (q = 0; q < Q; q++)
         {
@@ -142,8 +139,7 @@ p7_ViterbiFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FIL
       Dmax = esl_avx512_hmax_epi16(Dmaxv);
       if (Dmax + om->ddbound_w > xB) 
 	{
-	  dcv = esl_avx512_leftshift_two(dcv);
-	  dcv = _mm512_or_si512(dcv, negInfv);
+	  dcv = esl_avx512_rightshift_int16(dcv, neginfmask);
 	  tsc = (__m512i *) om->twv + 7*Q;  /* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
@@ -152,8 +148,7 @@ p7_ViterbiFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FIL
 	    }
 
 	  do {
-	    dcv = esl_avx512_leftshift_two(dcv);
-	    dcv = _mm512_or_si512(dcv, negInfv);
+	    dcv = esl_avx512_rightshift_int16(dcv, neginfmask);
 	    tsc = (__m512i*) om->twv + 7*Q;  /* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
@@ -167,8 +162,7 @@ p7_ViterbiFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FIL
 	}
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
 	{
-	  dcv = esl_avx512_leftshift_two(dcv);
-	  DMXf(0) = _mm512_or_si512(dcv, negInfv);
+	  DMXf(0) = esl_avx512_rightshift_int16(dcv, neginfmask);
 	}
 
 #if eslDEBUGLEVEL > 0
