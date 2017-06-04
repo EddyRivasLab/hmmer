@@ -114,8 +114,7 @@
   length_check(label)                                    \
   rsc = (__m128i *) om->rbv[dsq[i]] + pos;               \
   step()                                                 \
-  sv = _mm_slli_si128(sv, 1);                            \
-  sv = _mm_or_si128(sv, low_byte_128);                   \
+  sv = esl_sse_rightshift_int8(sv, neginfmask);          \
   i++;
 
 #define CONVERT_1(step, LENGTH_CHECK, label)            \
@@ -267,9 +266,9 @@
  * AVX version.
  */
 #define CALC(reset, step, convert, width)       \
-  __m128i  low_byte_128 = _mm_insert_epi8( _mm_setzero_si128(), -128, 0); \
-  int      Q            = P7_Q(om->M, p7_VWIDTH_SSE);                     \
-  int      w            = width;                \
+  __m128i  neginfmask = _mm_insert_epi8( _mm_setzero_si128(), -128, 0); \
+  int      Q          = P7_Q(om->M, p7_VWIDTH_SSE);                     \
+  int      w          = width;                  \
   int      i,i2;                                \
   __m128i *rsc;                                 \
   int      num_iters;                           \
@@ -533,9 +532,9 @@ p7_SSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc
 int
 p7_SSVFilter_base_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *fx, float *ret_sc)
 {
-  int      Q    = P7_Q(om->M, p7_VWIDTH_SSE);
-  __m128i  hv   = _mm_set1_epi8(-128);
-  __m128i  mask = _mm_insert_epi8( _mm_setzero_si128(), -128, 0);
+  int      Q          = P7_Q(om->M, p7_VWIDTH_SSE);
+  __m128i  hv         = _mm_set1_epi8(-128);
+  __m128i  neginfmask = _mm_insert_epi8( _mm_setzero_si128(), -128, 0);
   __m128i *dp;
   __m128i *rbv;
   __m128i  mpv;
@@ -564,8 +563,7 @@ p7_SSVFilter_base_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
           mpv   = dp[q];
           dp[q] = sv;
         }
-      mpv = _mm_slli_si128(sv, 1); 
-      mpv = _mm_or_si128(mpv, mask);
+      mpv = esl_sse_rightshift_int8(sv, neginfmask);
     }
   h = esl_sse_hmax_epi8(hv);
 

@@ -138,13 +138,9 @@ happens when a denormal is the _input_ to an FP instruction.  Our
 `configure.ac` checks for support of the relevant macros that set
 these bits, and if they are supported, `p7_simdvec_Init()` sets them.
 
-We currently only enable flush-to-zero mode(s) on x86 platforms.  The
-situation on other architectures is unclear; we believe it to be low
-priority, but we should look into it more closely.
-
 On ARM processors, NEON vector instructions
 [always use flush-to-zero mode](http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0473c/CJAJBEAF.html).
-To enable flush-to-zero in scalar floating point computation, you would set
+To enable flush-to-zero in _scalar_ floating point computation, you would set
 bit 24 in the ARM floating point control register (FPSCR).  This
 single FTZ bit controls both input and output, so it's equivalent to
 the x86 FTZ+DAZ combo. Because our main concern is with the vectorized
@@ -156,38 +152,82 @@ PowerPC processors appear to compute denormals in hardware at close to
 normal speed, and we are currently unaware of any runtime method for
 setting a PowerPC processor to flush-to-zero mode.
 
+Therefore we currently only enable flush-to-zero mode(s) on x86
+platforms.  We have not yet considered what happens on architectures
+other than x86, ARM, and Power.
 
-### on memory alignment, SIMD vectors, and malloc()
 
-Yes, the C99 standard says malloc() must return a pointer "suitably
-aligned so that it may be aligned to a pointer of any type of object"
-(C99 7.20.3). Yes, __m128 vectors are 16 bytes. Yes, you'd think
-malloc() ought to be required return a pointer aligned on a 16-byte
-boundary. But, no, malloc() doesn't have to do this; malloc() will
-return improperly aligned memory on many systems.  Reason: vectors are
-officially considered "out of scope" of the C99 language.
+---------------
 
-So vector memory has to be manually aligned. For 16-byte alignment,
-the idiom looks like the following, where for any to-be-aligned
-ptr, we first allocate a raw (unaligned) memory space that's 15
-bytes larger than we need, then set the aligned ptr into that space;
-and when we free, we free the raw memory ptr:
+### memory alignment
 
-```
-  raw_mem = malloc(n + 15);
-  ptr     = (__m128 *) ( ((uintptr_t) raw_mem + 15) & (~0xf));
-```
-  
-More generally, for vector width W (in bytes):
+Vector memory has to be aligned to the vector width (in bytes).  SSE
+vectors, for example, must be aligned on a 16-byte boundary. 
 
-```
-  raw_mem = malloc(n + W - 1);
-  ptr     = (__m256 *) ( ((uintptr_t) raw_mem + W - 1) & (~(W - 1)));
-```
+We don't rely on `malloc()` for this. The C99 standard does say that
+`malloc()` must return a pointer "suitably aligned so that it may be
+aligned to a pointer of any type of object" (C99 7.20.3), but SIMD
+vectors are officially considered out of scope of the C99
+specification, and `malloc()` can return unaligned memory.
 
-Technically, the result of casting a non-NULL pointer to an integer
-type is undefined (C99 6.3.2.3), but this idiom for manual memory
-alignment is in widespread use, and seems generally safe.
+Our `esl_alloc_aligned()` function portably allocates suitably aligned
+memory, for up to 256-byte alignment.
 
-See also: posix_memalign(), as an alternative.
+---------------
+
+### "left" and "right" shifts, and endianness
+
+We describe the Farrar striped SIMD vector dynamic programming with
+values in SIMD vectors arranged in _memory order_, regardless of the
+endianness of the underlying implementation. Our implementation relies
+on memory order, because we access DP rows and other striped data both
+as scalar arrays and vectors. For example, an $M=14$ model striped in
+$V=4$ width vectors has its elements in this order, where we can
+access striped vectors by index $q$ or scalars by index $y$:
  
+```
+  q =      0             1             2           3
+      [ 1 5 9 13 ] [ 2 6 10 14 ] [ 3 7 11 x ] [ 4 8 12 x ]
+  y =   0 1 2 3...                            ...13 14 
+```
+
+Our functions are named according to this depiction. For example,
+striped DP algorithms have steps where they need to shift values in a
+vector to the right while shifting $-inf$ on, turning `[ 4 8 12 x ]`
+into `[ x 4 8 12 ]`, for example. We call this a "right shift".
+However, on a little-endian architecture (such as x86), this actually
+uses a left shift instruction. 
+
+This is potentially confusing, so here's a brief explanation of
+endianness and SIMD vectors.
+
+Consider a 4-byte integer `ABCD`, where `A` is the most significant
+(largest) byte and `D` is the least significant byte. Suppose we have
+an array of four such integers, indexed 0..3. On little-endian (LE)
+versus big-endian (BE) architectures, these 16 bytes are laid out in
+memory (with addresses increasing from left to right) as:
+
+```
+  in memory:
+  LE:  [ ( 0D 0C 0B 0A ) ( 1D 1C 1B 1A ) ( 2D 2C 2B 2A ) ( 3D 3C 3B 3A ) ]
+  BE:  [ ( 0A 0B 0C 0D ) ( 1A 1B 1C 1D ) ( 2A 2B 2C 2D ) ( 3A 3B 3C 3D ) ]
+```
+
+Loaded into a 128-bit vector register, these 16 bytes are treated as a
+single 16-byte integer. Registers are generally depicted in big-endian
+order on all architectures (whether BE or LE), with the most
+significant bit (MSB) b=128 on the left and least significant bit
+(LSB) b=0 on the right. Therefore:
+
+```
+  in register:
+    b= 128                                             0
+  LE:  [ 3A 3B 3C 3D 2A 2B 2C 2D 1A 1B 1C 1D 0A 0B 0C 0D ]
+  BE:  [ 0A 0B 0C 0D 1A 1B 1C 1D 2A 2B 2C 2D 3A 3B 3C 3D ]
+```
+
+Some sources say that registers have no endianness: that bit $b$
+simply has value $2^b$. But the order that the register is depicted
+matters, because it determines the naming convention of vector
+intrinsics that shift bits "left" or "right".
+

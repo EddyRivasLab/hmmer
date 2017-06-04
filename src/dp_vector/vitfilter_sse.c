@@ -52,7 +52,7 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
   __m128i *dp;
   __m128i *rsc;			   /* will point at om->ru[x] for residue x[i]                  */
   __m128i *tsc;			   /* will point into (and step thru) om->tu                    */
-  __m128i negInfv;
+  __m128i neginfmask = _mm_insert_epi16( _mm_setzero_si128(), -32768, 0);
   int     status;
 
   /* Contract checks */
@@ -72,13 +72,7 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
   ox->type = p7F_VITFILTER;
   ESL_DASSERT1(( ox->Vw = om->V / sizeof(int16_t)));
 
-
-  /* -infinity is -32768 */
-  negInfv = _mm_set1_epi16(-32768);
-  negInfv = _mm_srli_si128(negInfv, 14);  /* negInfv = 16-byte vector, 14 0 bytes + 2-byte value=-32768, for an OR operation. */
-
-  /* Initialization. In int16_t, our -infinity is -32768
-   */
+  /* Initialization. In int16_t, our -infinity is -32768  */
   for (q = 0; q < Q; q++)
     MMXf(q) = IMXf(q) = DMXf(q) = _mm_set1_epi16(-32768);
   xN   = om->base_w;
@@ -101,12 +95,10 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
       xBv   = _mm_set1_epi16(xB);
 
       /* Right shifts by 1 value (2 bytes). 4,8,12,x becomes x,4,8,12. 
-       * Because ia32 is littlendian, this means a left bit shift.
-       * Zeros shift on automatically; replace it with -32768.
        */
-      mpv = MMXf(Q-1);  mpv = _mm_slli_si128(mpv, 2);  mpv = _mm_or_si128(mpv, negInfv);
-      dpv = DMXf(Q-1);  dpv = _mm_slli_si128(dpv, 2);  dpv = _mm_or_si128(dpv, negInfv);
-      ipv = IMXf(Q-1);  ipv = _mm_slli_si128(ipv, 2);  ipv = _mm_or_si128(ipv, negInfv);
+      mpv = MMXf(Q-1);  mpv = esl_sse_rightshift_int16(mpv, neginfmask);
+      dpv = DMXf(Q-1);  dpv = esl_sse_rightshift_int16(dpv, neginfmask);
+      ipv = IMXf(Q-1);  ipv = esl_sse_rightshift_int16(ipv, neginfmask);
 
       for (q = 0; q < Q; q++)
       {
@@ -168,8 +160,7 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
 	{
 	  /* Now we're obligated to do at least one complete DD path to be sure. */
 	  /* dcv has carried through from end of q loop above */
-	  dcv = _mm_slli_si128(dcv, 2); 
-	  dcv = _mm_or_si128(dcv, negInfv);
+          dcv = esl_sse_rightshift_int16(dcv, neginfmask);
 	  tsc = (__m128i *) om->twv + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
@@ -182,8 +173,7 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
 	   * our score. 
 	   */
 	  do {
-	    dcv = _mm_slli_si128(dcv, 2);
-	    dcv = _mm_or_si128(dcv, negInfv);
+            dcv = esl_sse_rightshift_int16(dcv, neginfmask);
 	    tsc = (__m128i *) om->twv + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
@@ -195,8 +185,7 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
 	}
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
 	{
-	  dcv     = _mm_slli_si128(dcv, 2);
-	  DMXf(0) = _mm_or_si128(dcv, negInfv);
+	  DMXf(0) = esl_sse_rightshift_int16(dcv, neginfmask);
 	}
 
 #if eslDEBUGLEVEL > 0
