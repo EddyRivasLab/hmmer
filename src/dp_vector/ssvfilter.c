@@ -77,8 +77,8 @@ ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *re
 #ifdef eslENABLE_AVX512  // Fastest first.
   if (esl_cpu_has_avx512())
     {
-      p7_SSVFilter = p7_SSVFilter_sse;
-      return p7_SSVFilter_sse(dsq, L, om, ret_sc);
+      p7_SSVFilter = p7_SSVFilter_avx512;
+      return p7_SSVFilter_avx512(dsq, L, om, ret_sc);
     }
 #endif
 
