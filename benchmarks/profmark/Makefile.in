@@ -68,6 +68,9 @@ distclean: clean
 clean:
 	-rm -f *.o *~ ${PROGS} 
 	-rm -f *.gcno
+	${QUIET}for prog in ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do \
+	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi ;\
+	done
 
 tags-append:
 	etags -o ${top_srcdir}/TAGS -a ${srcdir}/x-*
