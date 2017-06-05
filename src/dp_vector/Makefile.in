@@ -45,7 +45,8 @@ UTESTS = \
 
 
 
-STATS  = fwdfilter_stats
+STATS  = 
+# fwdfilter_stats
 
 BENCHMARKS = \
 	ssvfilter_benchmark    \
